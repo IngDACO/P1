@@ -10,7 +10,7 @@ from core.bs_logic import find_bs_step
 from core.report import generate_report
 from core.excel_io import export_survey_excel, import_survey_excel
 
-st.set_page_config(page_title="Survey Analyzer", layout="wide", page_icon="📐")
+st.set_page_config(page_title="Survey Analyzer", layout="wide", page_icon="ð")
 
 SURVEY_COLS = ["WR", "FR", "OR", "WL", "FL", "OL"]
 USER_ONLY   = {
@@ -21,15 +21,15 @@ USER_ONLY   = {
     "RAIL":  "Ancho de la cabeza del riel (mm)",
 }
 
-# ══════════════════════════════════════════════════════
+# ââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 # TRUCO CLAVE: para que number_input tome el valor del
 # session_state, la key debe ser "inp_PARAM" y el valor
 # inicial debe estar en st.session_state["inp_PARAM"]
 # ANTES de que Streamlit renderice el widget.
-# ══════════════════════════════════════════════════════
+# ââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 def _init_state():
     if "initialized" not in st.session_state:
-        # PDF params — inicializar claves de inputs en 0.0
+        # PDF params â inicializar claves de inputs en 0.0
         for p in PDF_PARAMS:
             st.session_state[f"inp_{p}"] = 0.0
         # User params
@@ -45,16 +45,16 @@ def _init_state():
 
 _init_state()
 
-# ══════════════════════════════════════════════════════
+# ââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 # SIDEBAR
-# ══════════════════════════════════════════════════════
+# ââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 with st.sidebar:
-    st.markdown("## 📋 Valores extraídos del PDF")
+    st.markdown("## ð Valores extraÃ­dos del PDF")
     if st.session_state.pdf_extracted:
         found   = {k:v for k,v in st.session_state.pdf_extracted.items() if v is not None}
         missing = [k for k,v in st.session_state.pdf_extracted.items() if v is None]
         st.markdown(f"**Archivo:** `{st.session_state.last_pdf_name}`")
-        st.markdown(f"✅ Encontrados: **{len(found)}** / {len(st.session_state.pdf_extracted)}")
+        st.markdown(f"â Encontrados: **{len(found)}** / {len(st.session_state.pdf_extracted)}")
         if missing:
             st.warning(f"Faltantes: `{'`, `'.join(missing)}`")
         st.markdown("---")
@@ -64,59 +64,59 @@ with st.sidebar:
             if desc:
                 st.caption(desc)
     else:
-        st.info("Carga un PDF para ver los valores aquí.")
+        st.info("Carga un PDF para ver los valores aquÃ­.")
     st.markdown("---")
-    st.caption("🔴 Rojo oscuro = mínimo fuera de límite")
-    st.caption("🔴 Rojo claro  = fuera de límite")
+    st.caption("ð´ Rojo oscuro = mÃ­nimo fuera de lÃ­mite")
+    st.caption("ð´ Rojo claro  = fuera de lÃ­mite")
 
-# ══════════════════════════════════════════════════════
-# TÍTULO
-# ══════════════════════════════════════════════════════
-st.title("📐 Elevator Survey Analyzer")
+# ââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+# TÃTULO
+# ââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+st.title("ð Elevator Survey Analyzer")
 
-# ══════════════════════════════════════════════════════
-# PASO 1 — CARGAR PDF
-# ══════════════════════════════════════════════════════
+# ââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+# PASO 1 â CARGAR PDF
+# ââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 st.header("1. Cargar planos")
 col_brand, col_pdf = st.columns([1, 3])
 brand    = col_brand.selectbox("Marca", ["Schindler"])
 pdf_file = col_pdf.file_uploader("PDF de planos", type=["pdf"])
 
 if pdf_file is not None and pdf_file.name != st.session_state.last_pdf_name:
-    with st.spinner("⏳ Extrayendo datos del PDF..."):
+    with st.spinner("â³ Extrayendo datos del PDF..."):
         extracted = extract_from_pdf(pdf_file)
 
     st.session_state.pdf_extracted = extracted
     st.session_state.last_pdf_name = pdf_file.name
 
     # CLAVE: escribir directamente en las claves de session_state
-    # que usan los number_input como key — esto actualiza los widgets
+    # que usan los number_input como key â esto actualiza los widgets
     for p in PDF_PARAMS:
         if extracted.get(p) is not None:
             st.session_state[f"inp_{p}"] = float(extracted[p])
 
     found   = sum(1 for v in extracted.values() if v is not None)
     missing = [k for k,v in extracted.items() if v is None]
-    st.success(f"✅ {found}/{len(extracted)} parámetros encontrados.")
+    st.success(f"â {found}/{len(extracted)} parÃ¡metros encontrados.")
     if missing:
-        st.warning(f"⚠️ Ingresar manualmente: **{', '.join(missing)}**")
+        st.warning(f"â ï¸ Ingresar manualmente: **{', '.join(missing)}**")
     st.rerun()  # forzar re-render para que los number_input muestren los valores
 
 elif pdf_file and pdf_file.name == st.session_state.last_pdf_name:
-    st.info(f"📄 Datos de: **{pdf_file.name}** — ver sidebar.")
+    st.info(f"ð Datos de: **{pdf_file.name}** â ver sidebar.")
 
-# ══════════════════════════════════════════════════════
-# PASO 2 — PARÁMETROS
-# ══════════════════════════════════════════════════════
-st.header("2. Parámetros del proyecto")
+# ââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+# PASO 2 â PARÃMETROS
+# ââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+st.header("2. ParÃ¡metros del proyecto")
 
-with st.expander("📄 Parámetros del PDF (editables)", expanded=True):
+with st.expander("ð ParÃ¡metros del PDF (editables)", expanded=True):
     for i in range(0, len(PDF_PARAMS), 4):
         row_params = PDF_PARAMS[i:i+4]
         cols = st.columns(4)
         for j, p in enumerate(row_params):
             # Al usar key=f"inp_{p}", Streamlit lee y escribe
-            # automáticamente en st.session_state[f"inp_{p}"]
+            # automÃ¡ticamente en st.session_state[f"inp_{p}"]
             cols[j].number_input(
                 label = p,
                 step  = 0.5,
@@ -124,7 +124,7 @@ with st.expander("📄 Parámetros del PDF (editables)", expanded=True):
                 key   = f"inp_{p}",
             )
 
-with st.expander("✏️ Parámetros del usuario", expanded=True):
+with st.expander("âï¸ ParÃ¡metros del usuario", expanded=True):
     cols = st.columns(len(USER_ONLY))
     for j, (p, desc) in enumerate(USER_ONLY.items()):
         cols[j].number_input(
@@ -134,10 +134,10 @@ with st.expander("✏️ Parámetros del usuario", expanded=True):
             key   = f"inp_{p}",
         )
 
-st.subheader("Configuración")
+st.subheader("ConfiguraciÃ³n")
 c1, c2 = st.columns(2)
 omega_side = c1.radio("Lado del Omega", ["R","L"], horizontal=True)
-wall_yn    = c2.radio("¿Hay pared limitante?", ["N","Y"], horizontal=True)
+wall_yn    = c2.radio("Â¿Hay pared limitante?", ["N","Y"], horizontal=True)
 
 wall_stop, wall_side = None, None
 if wall_yn == "Y":
@@ -145,21 +145,21 @@ if wall_yn == "Y":
     wall_stop = wc1.number_input("Parada limitante", min_value=1, step=1, value=1)
     wall_side = wc2.radio("Lado de la pared", ["R","L"], horizontal=True)
 
-# ══════════════════════════════════════════════════════
-# PASO 3 — MATRIZ SURVEY
-# ══════════════════════════════════════════════════════
+# ââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+# PASO 3 â MATRIZ SURVEY
+# ââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 st.header("3. Matriz SURVEY")
 
 sc1, sc2, sc3 = st.columns([1, 2, 2])
 
 ns = sc1.number_input(
-    "Número de paradas (NS)",
+    "NÃºmero de paradas (NS)",
     min_value=2, max_value=50,
     step=1,
     key="ns"
 )
 
-# Ajustar tamaño si NS cambió
+# Ajustar tamaÃ±o si NS cambiÃ³
 current_ns = len(st.session_state.survey_df)
 if int(st.session_state.ns) != current_ns:
     old_df = st.session_state.survey_df.copy()
@@ -171,18 +171,18 @@ if int(st.session_state.ns) != current_ns:
     st.rerun()
 
 # Cargar Excel
-uploaded_excel = sc2.file_uploader("📂 Cargar matriz (.xlsx)", type=["xlsx"], key="excel_uploader")
+uploaded_excel = sc2.file_uploader("ð Cargar matriz (.xlsx)", type=["xlsx"], key="excel_uploader")
 if uploaded_excel is not None:
     try:
         imported = import_survey_excel(uploaded_excel)
         st.session_state.survey_df = imported.copy()
         st.session_state["ns"] = len(imported)
-        sc2.success("✅ Matriz cargada.")
+        sc2.success("â Matriz cargada.")
         st.rerun()
     except Exception as e:
         sc2.error(f"Error: {e}")
 
-# Data editor — key fija, datos desde session_state
+# Data editor â key fija, datos desde session_state
 st.caption("Ingresa o edita las medidas en campo (mm).")
 edited_df = st.data_editor(
     st.session_state.survey_df,
@@ -197,19 +197,19 @@ st.session_state.survey_df = edited_df.copy()
 info_dict = {p: st.session_state.get(f"inp_{p}", 0.0) for p in list(PDF_PARAMS) + list(USER_ONLY.keys())}
 excel_bytes = export_survey_excel(edited_df, info_dict)
 sc3.download_button(
-    label     = "💾 Guardar matriz (.xlsx)",
+    label     = "ð¾ Guardar matriz (.xlsx)",
     data      = excel_bytes,
     file_name = "survey_matrix.xlsx",
     mime      = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     use_container_width=True
 )
 
-# ══════════════════════════════════════════════════════
-# PASO 4 — CALCULAR
-# ══════════════════════════════════════════════════════
-st.header("4. Cálculo y Optimización")
+# ââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+# PASO 4 â CALCULAR
+# ââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+st.header("4. CÃ¡lculo y OptimizaciÃ³n")
 
-if st.button("🚀 Calcular", type="primary", use_container_width=True):
+if st.button("ð Calcular", type="primary", use_container_width=True):
 
     # Leer valores directamente del session_state (donde los widgets escriben)
     all_params = {p: st.session_state.get(f"inp_{p}", 0.0) for p in list(PDF_PARAMS) + list(USER_ONLY.keys())}
@@ -218,7 +218,7 @@ if st.button("🚀 Calcular", type="primary", use_container_width=True):
     all_params["WALL_STOP"]     = wall_stop
     all_params["WALL_SIDE"]     = wall_side
 
-    # Totales = última fila
+    # Totales = Ãºltima fila
     last = st.session_state.survey_df.iloc[-1]
     for col in SURVEY_COLS:
         all_params[f"{col[0]}{col[1]}T"] = float(last[col])
@@ -226,14 +226,16 @@ if st.button("🚀 Calcular", type="primary", use_container_width=True):
     try:
         limits = calculate_limits(all_params)
     except Exception as e:
-        st.error(f"Error en cálculo: {e}")
+        st.error(f"Error en cÃ¡lculo: {e}")
         st.stop()
 
     all_params.update(limits)
 
-    with st.expander("📊 Parámetros calculados", expanded=False):
+    with st.expander("ð ParÃ¡metros calculados", expanded=False):
         st.dataframe(
-            pd.DataFrame([{"Parámetro": k, "Valor": round(v, 3)} for k, v in limits.items()]),
+            pd.DataFrame([{"ParÃ¡metro": k, "Valor": round(v, 3) if isinstance(v, (int, float)) else v}
+                for k, v in limits.items()
+            ]),
             use_container_width=True, hide_index=True
         )
 
@@ -271,9 +273,9 @@ if st.button("🚀 Calcular", type="primary", use_container_width=True):
     for col in SURVEY_COLS:
         summary.append({
             "Columna":        col,
-            "Límite (mm)":    round(lim_map[col], 2),
-            "Fuera límite":   analysis[f"{col}_OFF_COUNT"],
-            "Mínimo (mm)":    round(analysis[f"MIN_{col}"], 2),
+            "LÃ­mite (mm)":    round(lim_map[col], 2),
+            "Fuera lÃ­mite":   analysis[f"{col}_OFF_COUNT"],
+            "MÃ­nimo (mm)":    round(analysis[f"MIN_{col}"], 2),
             "Diferencia(mm)": round(analysis[f"DIF_{col}"], 2),
         })
     st.dataframe(pd.DataFrame(summary), use_container_width=True, hide_index=True)
@@ -282,9 +284,9 @@ if st.button("🚀 Calcular", type="primary", use_container_width=True):
         f"**MAX OFF FB:** {analysis['MAX_OFF_FB']:.2f} mm"
     )
 
-    # Optimización
-    st.subheader("🔍 Optimización")
-    with st.spinner("Buscando combinación óptima..."):
+    # OptimizaciÃ³n
+    st.subheader("ð OptimizaciÃ³n")
+    with st.spinner("Buscando combinaciÃ³n Ã³ptima..."):
         opt_result = optimize(survey_adj, limits, all_params)
 
     best          = opt_result.get("best")
@@ -294,13 +296,13 @@ if st.button("🚀 Calcular", type="primary", use_container_width=True):
     if best:
         n_sol = len(all_solutions)
         st.success(
-            f"✅ Se encontraron **{n_sol} solución(es) óptima(s)** con "
-            f"**{best['total_off']} valor(es) fuera de límite**"
+            f"â Se encontraron **{n_sol} soluciÃ³n(es) Ã³ptima(s)** con "
+            f"**{best['total_off']} valor(es) fuera de lÃ­mite**"
         )
 
-        # ── Mostrar TODAS las soluciones ──
+        # ââ Mostrar TODAS las soluciones ââ
         for idx_sol, sol in enumerate(all_solutions):
-            sol_label = f"Solución {idx_sol+1} — RL = {sol['rl']} mm  |  FB = {sol['fb']} mm"
+            sol_label = f"SoluciÃ³n {idx_sol+1} â RL = {sol['rl']} mm  |  FB = {sol['fb']} mm"
             with st.expander(sol_label, expanded=(idx_sol == 0)):
                 sol_df  = pd.DataFrame(sol["matrix"])
                 sol_min = {f"MIN_{c}": min(sol_df[c]) for c in SURVEY_COLS}
@@ -313,18 +315,18 @@ if st.button("🚀 Calcular", type="primary", use_container_width=True):
                     col_vals = [r[col] for r in sol["matrix"]]
                     sol_sum.append({
                         "Columna":       col,
-                        "Límite (mm)":   round(lim_map[col], 2),
-                        "Fuera límite":  sum(1 for v in col_vals if v < lim_map[col]),
-                        "Mínimo (mm)":   round(min(col_vals), 2),
-                        "Dif vs Límite": round(lim_map[col] - min(col_vals), 2),
+                        "LÃ­mite (mm)":   round(lim_map[col], 2),
+                        "Fuera lÃ­mite":  sum(1 for v in col_vals if v < lim_map[col]),
+                        "MÃ­nimo (mm)":   round(min(col_vals), 2),
+                        "Dif vs LÃ­mite": round(lim_map[col] - min(col_vals), 2),
                     })
                 st.dataframe(pd.DataFrame(sol_sum), use_container_width=True, hide_index=True)
 
-        # ── Log del optimizador ──
-        with st.expander(f"📋 Log del optimizador ({len(step_log)} pasos evaluados)", expanded=False):
+        # ââ Log del optimizador ââ
+        with st.expander(f"ð Log del optimizador ({len(step_log)} pasos evaluados)", expanded=False):
             valid_steps = [s for s in step_log if s.get("status") == "VALID"]
             skip_steps  = [s for s in step_log if s.get("status") == "SKIP"]
-            st.caption(f"Válidos: {len(valid_steps)}  |  Omitidos: {len(skip_steps)}")
+            st.caption(f"VÃ¡lidos: {len(valid_steps)}  |  Omitidos: {len(skip_steps)}")
             if valid_steps:
                 opt_pairs = {(s["rl"], s["fb"]) for s in all_solutions}
                 log_rows  = []
@@ -336,26 +338,26 @@ if st.button("🚀 Calcular", type="primary", use_container_width=True):
                         "WR": obc.get("WR",0), "FR": obc.get("FR",0),
                         "OR": obc.get("OR",0), "WL": obc.get("WL",0),
                         "FL": obc.get("FL",0), "OL": obc.get("OL",0),
-                        "Óptimo": "✅" if (s["rl"], s["fb"]) in opt_pairs else "",
+                        "Ãptimo": "â" if (s["rl"], s["fb"]) in opt_pairs else "",
                     })
                 st.dataframe(pd.DataFrame(log_rows), use_container_width=True, hide_index=True)
     else:
-        st.error("No se encontró combinación válida.")
+        st.error("No se encontrÃ³ combinaciÃ³n vÃ¡lida.")
         opt_result = {"best": None, "all_solutions": [], "step_log": step_log}
 
     # BSR vs BS
-    st.subheader("📏 Análisis BSR vs BS")
+    st.subheader("ð AnÃ¡lisis BSR vs BS")
     bs_result = find_bs_step(
         all_params["BSR"], all_params["BS"],
         limits["LIMIT_ZB"], limits["LIMIT_OB"]
     )
     if not bs_result.get("needed"):
-        st.success("BSR ≥ BS — No se requiere ajuste de shaft.")
+        st.success("BSR â¥ BS â No se requiere ajuste de shaft.")
     elif bs_result.get("step") is None:
-        st.error(f"No se encontró paso. DIF BS = {bs_result.get('dif_original')} mm")
+        st.error(f"No se encontrÃ³ paso. DIF BS = {bs_result.get('dif_original')} mm")
     else:
         st.success(
-            f"✅ Paso: **{bs_result['step']} mm**  |  "
+            f"â Paso: **{bs_result['step']} mm**  |  "
             f"Rango: **{bs_result['range']}**  |  Zona: **{bs_result['range_name']}**"
         )
 
@@ -369,16 +371,16 @@ if st.button("🚀 Calcular", type="primary", use_container_width=True):
         "optimizer_result": opt_result,
         "bs_result":       bs_result,
     }
-    st.success("✅ Cálculo completado.")
+    st.success("â CÃ¡lculo completado.")
 
-# ══════════════════════════════════════════════════════
-# PASO 5 — REPORTE PDF
-# ══════════════════════════════════════════════════════
+# ââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+# PASO 5 â REPORTE PDF
+# ââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 st.header("5. Reporte")
 
 if st.session_state.calc_results:
     r = st.session_state.calc_results
-    if st.button("📄 Generar reporte PDF", use_container_width=True):
+    if st.button("ð Generar reporte PDF", use_container_width=True):
         with st.spinner("Generando reporte..."):
             pdf_bytes = generate_report(
                 project_params   = r["all_params"],
@@ -392,11 +394,11 @@ if st.session_state.calc_results:
                 survey_cols      = SURVEY_COLS,
             )
         st.download_button(
-            label     = "⬇️ Descargar reporte PDF",
+            label     = "â¬ï¸ Descargar reporte PDF",
             data      = pdf_bytes,
             file_name = "survey_report.pdf",
             mime      = "application/pdf",
             use_container_width=True
         )
 else:
-    st.info("Realiza el cálculo primero para poder generar el reporte.")
+    st.info("Realiza el cÃ¡lculo primero para poder generar el reporte.")
