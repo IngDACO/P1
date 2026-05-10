@@ -145,6 +145,13 @@ if wall_yn == "Y":
     wall_stop = wc1.number_input("Parada limitante", min_value=1, step=1, value=1)
     wall_side = wc2.radio("Lado de la pared", ["R","L"], horizontal=True)
 
+# ── Muros de la apertura ────────────────────────────────────
+wl1, wl2 = st.columns(2)
+wall_left  = wl1.number_input("Muro izquierdo de la apertura (mm)", min_value=0.0, step=0.5, value=st.session_state.get("wall_left_val", 0.0))
+wall_right = wl2.number_input("Muro derecho de la apertura (mm)",   min_value=0.0, step=0.5, value=st.session_state.get("wall_right_val", 0.0))
+st.session_state["wall_left_val"]  = wall_left
+st.session_state["wall_right_val"] = wall_right
+
 # ══════════════════════════════════════════════════════
 # PASO 3 — MATRIZ SURVEY
 # ══════════════════════════════════════════════════════
@@ -217,6 +224,8 @@ if st.button("🚀 Calcular", type="primary", use_container_width=True):
     all_params["WALL_LIMITING"] = (wall_yn == "Y")
     all_params["WALL_STOP"]     = wall_stop
     all_params["WALL_SIDE"]     = wall_side
+    all_params["WALL_LEFT"]     = st.session_state.get("wall_left_val",  0.0)
+    all_params["WALL_RIGHT"]    = st.session_state.get("wall_right_val", 0.0)
 
     # Totales = última fila
     last = st.session_state.survey_df.iloc[-1]
