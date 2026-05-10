@@ -7,10 +7,10 @@ def calculate_limits(p: dict) -> dict:
 
     c["LIMIT_WR"] = p["SF2"] + (p["RAIL"] / 2)
     c["LIMIT_FR"] = p["TKSW"] - 150
-    c["LIMIT_OR"] = (p["BT"] / 2) + p["FRAME"]
+    c["LIMIT_OR"] = p["WALL_RIGHT"] - p["SF2"] - (p["RAIL"] / 2)
     c["LIMIT_WL"] = p["SF1"] + (p["RAIL"] / 2)
     c["LIMIT_FL"] = p["TKSW"] - 150
-    c["LIMIT_OL"] = (p["BT"] / 2) + p["FRAME"]
+    c["LIMIT_OL"] = p["WALL_LEFT"]  - p["SF1"] - (p["RAIL"] / 2)
 
     # ── LIMIT OB y LIMIT ZB ──────────────────────────────────────
     # OB está del lado del Omega.
@@ -72,10 +72,10 @@ def apply_offsets(survey: list, offsets: dict) -> list:
         adjusted.append({
             "WR": row["WR"] + offsets["Offset_WR"],
             "FR": row["FR"] + offsets["Offset_FR"],
-            "OR": row["OR"] + offsets["Offset_OR"],
+            "OR": row["OR"] - offsets["Offset_OR"],
             "WL": row["WL"] + offsets["Offset_WL"],
             "FL": row["FL"] + offsets["Offset_FL"],
-            "OL": row["OL"] + offsets["Offset_OL"],
+            "OL": row["OL"] - offsets["Offset_OL"],
         })
     return adjusted
 
