@@ -319,31 +319,7 @@ def generate_report(project_params, calculated, survey_original,
     valid_steps = [s for s in step_log if s.get("status") == "VALID"]
     skip_steps  = [s for s in step_log if s.get("status") == "SKIP"]
 
-    story += [Paragraph(f"Total combinaciones evaluadas: {len(step_log)}  |  Válidas: {len(valid_steps)}  |  Omitidas: {len(skip_steps)}", styles["Note"]), sp(3)]
-
-    # Pasos SKIP
-    if skip_steps:
-        story += [Paragraph("Pasos omitidos (SKIP):", styles["SubHead2"]), sp(2)]
-        skip_rows  = [[
-            Paragraph("<b>RL</b>",   styles["Normal2"]),
-            Paragraph("<b>FB</b>",   styles["Normal2"]),
-            Paragraph("<b>Razón</b>", styles["Normal2"]),
-        ]]
-        for s in skip_steps:
-            skip_rows.append([
-                Paragraph(str(s["rl"]),      styles["Mono"]),
-                Paragraph(str(s["fb"]) if s["fb"] is not None else "—", styles["Mono"]),
-                Paragraph(s.get("reason",""), styles["Mono"]),
-            ])
-        t_skip = Table(skip_rows, colWidths=[W*0.15, W*0.15, W*0.70])
-        t_skip.setStyle(TableStyle([
-            ("GRID",       (0,0),(-1,-1), 0.3, colors.lightgrey),
-            ("BACKGROUND", (0,0),(-1,0),  colors.HexColor("#f5cba7")),
-            ("BACKGROUND", (0,1),(-1,-1), colors.HexColor("#fef9e7")),
-            ("TOPPADDING", (0,0),(-1,-1), 2),("BOTTOMPADDING",(0,0),(-1,-1),2),
-            ("LEFTPADDING",(0,0),(-1,-1), 4),
-        ]))
-        story += [t_skip, sp(6)]
+    story += [Paragraph(f"Total combinaciones evaluadas: {len(step_log)}  |  Válidas: {len(valid_steps)}", styles["Note"]), sp(3)]
 
     # Pasos VÁLIDOS — solo mostrar los que tienen el menor número de OFF
     best_total = best["total_off"] if best else None
