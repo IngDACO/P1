@@ -191,10 +191,10 @@ def generate_report(project_params, calculated, survey_original,
     story += [_section_header("3. LÍMITES GEOMÉTRICOS", styles), sp(4)]
     lwr = fv("SF2") + fv("RAIL")/2
     lfr = fv("TKSW") - 150
-    lor = fv("BT")/2 + fv("FRAME")
+    lor = fv("WALL_RIGHT") - fv("SF2") - fv("RAIL")/2
     lwl = fv("SF1") + fv("RAIL")/2
     lfl = fv("TKSW") - 150
-    lol = fv("BT")/2 + fv("FRAME")
+    lol = fv("WALL_LEFT")  - fv("SF1") - fv("RAIL")/2
     lob_raw = (fv("SG") - fv("TG")/2) * 0.3
     omega   = p.get("OMEGA_SIDE", "R")
     # Z siempre opuesto al Omega:
@@ -213,8 +213,8 @@ def generate_report(project_params, calculated, survey_original,
         Paragraph("3.1  Límites laterales", styles["SubHead"]),
         _calc_block("LIMIT WR",  "LIMIT WR = SF2 + (RAIL / 2)",    f"{fs('SF2')} + ({fs('RAIL')} / 2)", f"LIMIT WR = {lwr:.2f} mm", styles), sp(3),
         _calc_block("LIMIT WL",  "LIMIT WL = SF1 + (RAIL / 2)",    f"{fs('SF1')} + ({fs('RAIL')} / 2)", f"LIMIT WL = {lwl:.2f} mm", styles), sp(3),
-        _calc_block("LIMIT OR",  "LIMIT OR = (BT / 2) + FRAME",    f"({fs('BT')} / 2) + {fs('FRAME')}", f"LIMIT OR = {lor:.2f} mm", styles), sp(3),
-        _calc_block("LIMIT OL",  "LIMIT OL = (BT / 2) + FRAME",    f"({fs('BT')} / 2) + {fs('FRAME')}", f"LIMIT OL = {lol:.2f} mm", styles), sp(6),
+        _calc_block("LIMIT OR",  "LIMIT OR = Muro derecho − SF2 − (RAIL / 2)",  f"{fs('WALL_RIGHT')} − {fs('SF2')} − ({fs('RAIL')} / 2)", f"LIMIT OR = {lor:.2f} mm", styles), sp(3),
+        _calc_block("LIMIT OL",  "LIMIT OL = Muro izquierdo − SF1 − (RAIL / 2)", f"{fs('WALL_LEFT')} − {fs('SF1')} − ({fs('RAIL')} / 2)", f"LIMIT OL = {lol:.2f} mm", styles), sp(6),
         Paragraph("3.2  Límites frontales", styles["SubHead"]),
         _calc_block("LIMIT FR",  "LIMIT FR = TKSW - 150",          f"{fs('TKSW')} - 150",               f"LIMIT FR = {lfr:.2f} mm", styles), sp(3),
         _calc_block("LIMIT FL",  "LIMIT FL = TKSW - 150",          f"{fs('TKSW')} - 150",               f"LIMIT FL = {lfl:.2f} mm", styles), sp(6),
@@ -317,7 +317,6 @@ def generate_report(project_params, calculated, survey_original,
     story += [Paragraph("7.2  Log de todos los pasos evaluados", styles["SubHead"]), sp(3)]
 
     valid_steps = [s for s in step_log if s.get("status") == "VALID"]
-    skip_steps  = [s for s in step_log if s.get("status") == "SKIP"]
 
     story += [Paragraph(f"Total combinaciones evaluadas: {len(step_log)}  |  Válidas: {len(valid_steps)}", styles["Note"]), sp(3)]
 
@@ -402,9 +401,9 @@ def generate_report(project_params, calculated, survey_original,
         n_sol = len(all_solutions)
         story += [
             _calc_block("Resumen de optimización",
-                "Criterio: menor número total de valores fuera de límite",
-                f"Soluciones óptimas encontradas: {n_sol}  |  Valores fuera de límite: {best['total_off']}",
-                f"{'Solución única' if n_sol==1 else f'{n_sol} soluciones con el mismo resultado óptimo'}",
+                "Criterio 1: menor número de valores fuera de límite\nCriterio 2 (desempate): menor desplazamiento total |RL| + |FB|",
+                f"Candidatos con mínimo OFF: {n_sol}  |  Valores fuera de límite: {best['total_off']}",
+                f"Seleccionado: RL={best['rl']:.1f} mm, FB={best['fb']:.1f} mm  |  Desplazamiento total = {abs(best['rl'])+abs(best['fb']):.1f} mm",
                 styles, ok=(best["total_off"]==0)),
             sp(6),
         ]
