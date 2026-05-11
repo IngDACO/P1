@@ -128,8 +128,14 @@ def optimize(survey_adjusted: list, limits: dict, params: dict) -> dict:
                 # Mismo mínimo: agregar a la lista
                 best_solutions.append(solution)
 
+    # Desempate: de las soluciones con el mismo mínimo OFF, elegir la de menor desplazamiento total
+    if best_solutions:
+        best_selected = min(best_solutions, key=lambda s: abs(s["rl"]) + abs(s["fb"]))
+    else:
+        best_selected = None
+
     return {
-        "best":           best_solutions[0] if best_solutions else None,
+        "best":           best_selected,
         "all_solutions":  best_solutions,
         "step_log":       step_log,
         "best_total_off": best_total_off,
