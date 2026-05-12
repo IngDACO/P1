@@ -337,19 +337,35 @@ if st.button("🚀 Calcular", type="primary", use_container_width=True):
             skip_steps  = [s for s in step_log if s.get("status") == "SKIP"]
             st.caption(f"Válidos: {len(valid_steps)}  |  Omitidos: {len(skip_steps)}")
             if valid_steps:
-                opt_pairs = {(s["rl"], s["fb"]) for s in all_solutions}
-                log_rows  = []
+                opt_pairs  = {(s["rl"], s["fb"]) for s in all_solutions}
+                best_pair  = (best["rl"], best["fb"]) if best else None
+                log_rows   = []
                 for s in valid_steps:
                     obc = s.get("off_by_col", {})
+                    pair = (s["rl"], s["fb"])
+                    if pair == best_pair:
+                        estado = "⭐ SELECCIONADA"
+                    elif pair in opt_pairs:
+                        estado = "✅ ÓPTIMA"
+                    else:
+                        estado = ""
                     log_rows.append({
                         "RL": s["rl"], "FB": s["fb"],
                         "Total OFF": s["total_off"],
                         "WR": obc.get("WR",0), "FR": obc.get("FR",0),
                         "OR": obc.get("OR",0), "WL": obc.get("WL",0),
                         "FL": obc.get("FL",0), "OL": obc.get("OL",0),
-                        "Óptimo": "✅" if (s["rl"], s["fb"]) in opt_pairs else "",
+                        "Estado": estado,
                     })
-                st.dataframe(pd.DataFrame(log_rows), use_container_width=True, hide_index=True)
+                df_log = pd.DataFrame(log_rows)
+                def _highlight(row):
+                    if row["Estado"] == "⭐ SELECCIONADA":
+                        return ["background-color:#7b5c00;color:white;font-weight:bold"] * len(row)
+                    if row["Estado"] == "✅ ÓPTIMA":
+                        return ["background-color:#1a3a2a;color:#a8e6cf"] * len(row)
+                    return [""] * len(row)
+                st.dataframe(df_log.style.apply(_highlight, axis=1),
+                             use_container_width=True, hide_index=True)
     else:
         st.error("No se encontró combinación válida.")
         opt_result = {"best": None, "all_solutions": [], "step_log": step_log}
