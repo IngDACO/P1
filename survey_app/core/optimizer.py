@@ -7,12 +7,27 @@ import numpy as np
 
 
 def optimize(survey_adjusted: list, limits: dict, params: dict) -> dict:
-    cols    = ["WR", "FR", "OR", "WL", "FL", "OL"]
-    lim_map = {
-        "WR": limits["LIMIT_WR"], "FR": limits["LIMIT_FR"],
-        "OR": limits["LIMIT_OR"], "WL": limits["LIMIT_WL"],
-        "FL": limits["LIMIT_FL"], "OL": limits["LIMIT_OL"],
-    }
+    # Parámetros de pared — se leen primero para definir columnas activas
+    wall      = params.get("WALL_LIMITING", False)
+    wall_stop = params.get("WALL_STOP", None)
+    wall_side = params.get("WALL_SIDE", None)
+    tsw       = params.get("TSW", 0)
+    fs        = params.get("FS", None)
+
+    # Columnas y límites activos: OR/OL solo cuando hay pared limitante
+    if wall:
+        cols    = ["WR", "FR", "OR", "WL", "FL", "OL"]
+        lim_map = {
+            "WR": limits["LIMIT_WR"], "FR": limits["LIMIT_FR"],
+            "OR": limits["LIMIT_OR"], "WL": limits["LIMIT_WL"],
+            "FL": limits["LIMIT_FL"], "OL": limits["LIMIT_OL"],
+        }
+    else:
+        cols    = ["WR", "FR", "WL", "FL"]
+        lim_map = {
+            "WR": limits["LIMIT_WR"], "FR": limits["LIMIT_FR"],
+            "WL": limits["LIMIT_WL"], "FL": limits["LIMIT_FL"],
+        }
 
     max_rl  = limits["MAX_OFF_RL"]
     max_fb  = limits["MAX_OFF_FB"]
@@ -21,12 +36,6 @@ def optimize(survey_adjusted: list, limits: dict, params: dict) -> dict:
 
     limit_r = limits.get("LIMIT_R", max_rl)
     limit_l = limits.get("LIMIT_L", max_rl)
-
-    wall      = params.get("WALL_LIMITING", False)
-    wall_stop = params.get("WALL_STOP", None)
-    wall_side = params.get("WALL_SIDE", None)
-    tsw       = params.get("TSW", 0)
-    fs        = params.get("FS", None)
 
     best_total_off = None   # mínimo encontrado hasta ahora
     best_solutions = []     # TODAS las soluciones con ese mínimo
