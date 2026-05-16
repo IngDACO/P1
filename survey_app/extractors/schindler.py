@@ -30,13 +30,13 @@ VALID_RANGES = {
     "TSW":  (50,   500),
     "TKSW": (500,  3000),
     "TS":   (500,  5000),
-    "SF1":  (50,   800),
-    "SF2":  (50,   800),
-    "SG":   (50,   800),
+    "SF1":  (20,   800),
+    "SF2":  (20,   800),
+    "SG":   (20,   800),
     "TG":   (50,   500),
     "BGS":  (500,  3000),
-    "BKF1": (50,   1200),
-    "BKF2": (50,   1200),
+    "BKF1": (20,   1200),
+    "BKF2": (20,   1200),
 }
 
 PARAM_DESCRIPTIONS = {
@@ -115,22 +115,49 @@ def _extract_from_text(text: str, found: dict):
         else:
             found[k] = v
 
-    # ── Paso 4: Buscar PARAM sin '=' (valor en línea siguiente) ──
-    # Caso: 550BKF1\n200  →  BKF1=200
-    # Caso: 62 50BKF2\n936 →  BKF2=936
+    # ── Paso 4: BKF1/BKF2 — múltiples formatos observados en PDFs Schindler ──
+    # Los planos CAD colocan el valor en tres posiciones distintas:
+    #   A) Misma línea sin '=':   "BKF1 200"
+    #   B) Valor en línea anterior al label:  "170\nBKF2"  (NORTH SYD)
+    #   C) Valor en línea siguiente al label: "BKF2\n936"  (AGECARE)
+    # Cuando B y C ambos existen, se prefiere el mayor (heurística: el valor
+    # real suele ser más grande que el número flotante adyacente de otro elemento).
     for param in ["BKF1", "BKF2"]:
         if found.get(param) is not None:
             continue
-        # Patrón permisivo: el nombre puede tener cualquier cosa antes
-        m = re.search(
-            rf'{re.escape(param)}\s*\n\s*(\d+)',
-            text,
-            re.MULTILINE
-        )
-        if m:
-            v = float(m.group(1))
-            if _in_range(param, v):
-                found[param] = v
+
+        lines = text.split('\n')
+        for i, line in enumerate(lines):
+            stripped = line.strip()
+
+            # A) Misma línea con o sin '=': "BKF1 200" o "BKF1=200"
+            m = re.search(rf'\b{re.escape(param)}\s*=?\s*(\d+)', stripped)
+            if m:
+                v = float(m.group(1))
+                if _in_range(param, v):
+                    found[param] = v
+                    break
+
+            # B y C) Label solo en su propia línea → buscar número antes y después
+            if stripped == param:
+                candidates = []
+                # Valor en línea anterior
+                if i > 0:
+                    m = re.search(r'(\d+)\s*$', lines[i - 1].strip())
+                    if m:
+                        v = float(m.group(1))
+                        if _in_range(param, v):
+                            candidates.append(v)
+                # Valor en línea siguiente (solo si la línea es un número puro)
+                if i < len(lines) - 1:
+                    m = re.fullmatch(r'\s*(\d+)\s*', lines[i + 1])
+                    if m:
+                        v = float(m.group(1))
+                        if _in_range(param, v):
+                            candidates.append(v)
+                if candidates:
+                    found[param] = max(candidates)
+                    break
 
 
 def extract_from_pdf(pdf_file) -> dict:
