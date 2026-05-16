@@ -251,7 +251,7 @@ if st.button("🚀 Calcular", type="primary", use_container_width=True):
     # Matriz ajustada
     survey_adj    = apply_offsets(st.session_state.survey_df.to_dict("records"), limits)
     survey_adj_df = pd.DataFrame(survey_adj)
-    analysis      = analyze_matrix(survey_adj, limits)
+    analysis      = analyze_matrix(survey_adj, limits, wall_limiting=(wall_yn == "Y"))
     all_params.update(analysis)
     limits.update(analysis)
 

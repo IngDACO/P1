@@ -80,10 +80,11 @@ def apply_offsets(survey: list, offsets: dict) -> list:
     return adjusted
 
 
-def analyze_matrix(survey: list, limits: dict) -> dict:
+def analyze_matrix(survey: list, limits: dict, wall_limiting: bool = True) -> dict:
     """
     Analiza la matriz ajustada contra los límites.
     Retorna off-counts, mínimos y diferencias.
+    wall_limiting=False → MAX OFF RL excluye DIF OR y DIF OL (Caso 2).
     """
     cols    = ["WR", "FR", "OR", "WL", "FL", "OL"]
     lim_map = {
@@ -105,10 +106,15 @@ def analyze_matrix(survey: list, limits: dict) -> dict:
         result[f"MIN_{col}"]       = min_val
         result[f"DIF_{col}"]       = lim - min_val
 
-    result["MAX_OFF_RL"] = max(
-        result["DIF_WR"], result["DIF_OR"],
-        result["DIF_WL"], result["DIF_OL"]
-    )
+    if wall_limiting:
+        result["MAX_OFF_RL"] = max(
+            result["DIF_WR"], result["DIF_OR"],
+            result["DIF_WL"], result["DIF_OL"]
+        )
+    else:
+        # Caso 2: OR/OL no limitan el desplazamiento RL
+        result["MAX_OFF_RL"] = max(result["DIF_WR"], result["DIF_WL"])
+
     result["MAX_OFF_FB"] = max(result["DIF_FR"], result["DIF_FL"])
 
     return result

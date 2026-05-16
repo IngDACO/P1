@@ -6,9 +6,16 @@ Maneja todos los casos especiales identificados en el PDF real:
   3. Parámetros pegados:       TKSW=965TS=1750 → ambos separados
   4. Sin '=' valor en línea siguiente: BKF1\n200 → BKF1=200
   5. Valor partido por salto:  TKS=30\n62  → TKS=3062
+Fuentes: pypdf (primario) + pdfplumber (fallback, mejor layout).
 """
 from pypdf import PdfReader
 import re
+
+try:
+    import pdfplumber as _pdfplumber
+    _HAS_PDFPLUMBER = True
+except ImportError:
+    _HAS_PDFPLUMBER = False
 
 # Orden de mayor a menor longitud para evitar matches parciales
 PARAMS = sorted([
@@ -115,22 +122,21 @@ def _extract_from_text(text: str, found: dict):
         else:
             found[k] = v
 
-    # ── Paso 4: BKF1/BKF2 — múltiples formatos observados en PDFs Schindler ──
-    # Los planos CAD colocan el valor en tres posiciones distintas:
-    #   A) Misma línea sin '=':   "BKF1 200"
-    #   B) Valor en línea anterior al label:  "170\nBKF2"  (NORTH SYD)
-    #   C) Valor en línea siguiente al label: "BKF2\n936"  (AGECARE)
-    # Cuando B y C ambos existen, se prefiere el mayor (heurística: el valor
-    # real suele ser más grande que el número flotante adyacente de otro elemento).
-    for param in ["BKF1", "BKF2"]:
+    # ── Paso 4: búsqueda por líneas para todos los params aún no encontrados ──
+    # Cubre casos donde el valor no está junto al label con '=':
+    #   A) Misma línea sin '=':          "SF1 179"  /  "TKS 3062"
+    #   B) Valor en línea anterior:      "170\nBKF2"
+    #   C) Valor en línea siguiente:     "BKF2\n936"
+    # Cuando B y C coexisten, se prefiere el mayor.
+    lines = text.split('\n')
+    for param in PARAMS:
         if found.get(param) is not None:
             continue
 
-        lines = text.split('\n')
         for i, line in enumerate(lines):
             stripped = line.strip()
 
-            # A) Misma línea con o sin '=': "BKF1 200" o "BKF1=200"
+            # A) Misma línea con o sin '='
             m = re.search(rf'\b{re.escape(param)}\s*=?\s*(\d+)', stripped)
             if m:
                 v = float(m.group(1))
@@ -138,17 +144,15 @@ def _extract_from_text(text: str, found: dict):
                     found[param] = v
                     break
 
-            # B y C) Label solo en su propia línea → buscar número antes y después
+            # B y C) Label solo en su propia línea → número antes o después
             if stripped == param:
                 candidates = []
-                # Valor en línea anterior
                 if i > 0:
                     m = re.search(r'(\d+)\s*$', lines[i - 1].strip())
                     if m:
                         v = float(m.group(1))
                         if _in_range(param, v):
                             candidates.append(v)
-                # Valor en línea siguiente (solo si la línea es un número puro)
                 if i < len(lines) - 1:
                     m = re.fullmatch(r'\s*(\d+)\s*', lines[i + 1])
                     if m:
@@ -165,18 +169,33 @@ def extract_from_pdf(pdf_file) -> dict:
     Extrae parámetros del PDF Schindler.
     pdf_file: path string o file-like object.
     Retorna dict {param: float|None}.
+    Intenta primero con pypdf; si quedan params sin encontrar, reintenta con pdfplumber.
     """
     found = {p: None for p in PARAMS}
 
+    # ── Fuente 1: pypdf ───────────────────────────────────
     try:
         reader = PdfReader(pdf_file)
         for page in reader.pages:
             text = page.extract_text() or ""
             _extract_from_text(text, found)
-            # Salir temprano si ya encontramos todo
             if all(v is not None for v in found.values()):
-                break
+                return found
     except Exception as e:
-        print(f"[Schindler extractor] Error: {e}")
+        print(f"[Schindler/pypdf] Error: {e}")
+
+    # ── Fuente 2: pdfplumber (mejor preservación de layout) ──
+    if _HAS_PDFPLUMBER and any(v is None for v in found.values()):
+        try:
+            if hasattr(pdf_file, "seek"):
+                pdf_file.seek(0)
+            with _pdfplumber.open(pdf_file) as pdf:
+                for page in pdf.pages:
+                    text = page.extract_text() or ""
+                    _extract_from_text(text, found)
+                    if all(v is not None for v in found.values()):
+                        break
+        except Exception as e:
+            print(f"[Schindler/pdfplumber] Error: {e}")
 
     return found

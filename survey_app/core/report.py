@@ -290,9 +290,15 @@ def generate_report(project_params, calculated, survey_original,
             styles, ok=(dif_v<=0)), sp(3)]
 
     max_rl = analysis["MAX_OFF_RL"]; max_fb = analysis["MAX_OFF_FB"]
+    wall_lim_flag = p.get("WALL_LIMITING", True)
+    if wall_lim_flag:
+        max_rl_formula = "MAX OFF RL = max(DIF WR, DIF OR, DIF WL, DIF OL)"
+        max_rl_subst   = f"max({analysis['DIF_WR']:.2f}, {analysis['DIF_OR']:.2f}, {analysis['DIF_WL']:.2f}, {analysis['DIF_OL']:.2f})"
+    else:
+        max_rl_formula = "MAX OFF RL = max(DIF WR, DIF WL)  [OR/OL excluidos — sin pared limitante]"
+        max_rl_subst   = f"max({analysis['DIF_WR']:.2f}, {analysis['DIF_WL']:.2f})"
     story += [sp(3),
-        _calc_block("MAX OFF RL", "MAX OFF RL = max(DIF WR, DIF OR, DIF WL, DIF OL)",
-            f"max({analysis['DIF_WR']:.2f}, {analysis['DIF_OR']:.2f}, {analysis['DIF_WL']:.2f}, {analysis['DIF_OL']:.2f})",
+        _calc_block("MAX OFF RL", max_rl_formula, max_rl_subst,
             f"MAX OFF RL = {max_rl:.2f} mm", styles), sp(3),
         _calc_block("MAX OFF FB", "MAX OFF FB = max(DIF FR, DIF FL)",
             f"max({analysis['DIF_FR']:.2f}, {analysis['DIF_FL']:.2f})",
