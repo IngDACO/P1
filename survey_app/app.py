@@ -118,7 +118,7 @@ with st.expander("📄 Parámetros del PDF (editables)", expanded=True):
             # Al usar key=f"inp_{p}", Streamlit lee y escribe
             # automáticamente en st.session_state[f"inp_{p}"]
             cols[j].number_input(
-                label = p,
+                label = f"{p} (mm)",
                 step  = 0.5,
                 help  = PARAM_DESCRIPTIONS.get(p, ""),
                 key   = f"inp_{p}",
@@ -128,7 +128,7 @@ with st.expander("✏️ Parámetros del usuario", expanded=True):
     cols = st.columns(len(USER_ONLY))
     for j, (p, desc) in enumerate(USER_ONLY.items()):
         cols[j].number_input(
-            label = p,
+            label = f"{p} (mm)",
             step  = 0.5,
             help  = desc,
             key   = f"inp_{p}",
@@ -261,7 +261,9 @@ if st.button("🚀 Calcular", type="primary", use_container_width=True):
     def highlight(df, lm, mv):
         styles = pd.DataFrame("", index=df.index, columns=df.columns)
         for col in df.columns:
-            lim     = lm.get(col, 9999)
+            if col not in lm:
+                continue
+            lim     = lm[col]
             min_val = mv.get(f"MIN_{col}")
             for idx in df.index:
                 v = df.at[idx, col]
@@ -309,16 +311,32 @@ if st.button("🚀 Calcular", type="primary", use_container_width=True):
             f"**{best['total_off']} valor(es) fuera de límite**"
         )
 
-        # ── Mostrar TODAS las soluciones ──
-        for idx_sol, sol in enumerate(all_solutions):
-            sol_label = f"Solución {idx_sol+1} — RL = {sol['rl']} mm  |  FB = {sol['fb']} mm"
+        # ── Mostrar TODAS las soluciones — mejor primero ──
+        best_pair = (best["rl"], best["fb"])
+        sorted_solutions = sorted(
+            all_solutions,
+            key=lambda s: (0 if (s["rl"], s["fb"]) == best_pair else 1, abs(s["rl"]) + abs(s["fb"]))
+        )
+        for idx_sol, sol in enumerate(sorted_solutions):
+            is_best   = (sol["rl"], sol["fb"]) == best_pair
+            sol_label = f"{'⭐ ' if is_best else ''}Solución {idx_sol+1} — RL = {sol['rl']} mm  |  FB = {sol['fb']} mm"
             with st.expander(sol_label, expanded=(idx_sol == 0)):
                 sol_df  = pd.DataFrame(sol["matrix"])
                 sol_min = {f"MIN_{c}": min(sol_df[c]) for c in SURVEY_COLS}
+                # Caso 2: agregar CUT OR / CUT OL cuando no hay pared limitante
+                if wall_yn == "N":
+                    lor_v = lim_map["OR"]
+                    lol_v = lim_map["OL"]
+                    sol_df.insert(3, "CUT OR", sol_df["OR"].apply(
+                        lambda v: round(v - lor_v, 1) if v - lor_v > 0 else ""))
+                    sol_df.insert(7, "CUT OL", sol_df["OL"].apply(
+                        lambda v: round(v - lol_v, 1) if v - lol_v > 0 else ""))
                 st.dataframe(
                     sol_df.style.apply(lambda df, m=sol_min: highlight(df, lim_map, m), axis=None),
                     use_container_width=True
                 )
+                if wall_yn == "N":
+                    st.caption("CUT OR / CUT OL: valor a cortar si OR/OL supera el límite (> 0). Blanco = dentro del límite.")
                 sol_sum = []
                 for col in SURVEY_COLS:
                     col_vals = [r[col] for r in sol["matrix"]]
@@ -357,6 +375,11 @@ if st.button("🚀 Calcular", type="primary", use_container_width=True):
                         "FL": obc.get("FL",0), "OL": obc.get("OL",0),
                         "Estado": estado,
                     })
+                log_rows = (
+                    [r for r in log_rows if r["Estado"] == "⭐ SELECCIONADA"] +
+                    [r for r in log_rows if r["Estado"] == "✅ ÓPTIMA"] +
+                    [r for r in log_rows if r["Estado"] == ""]
+                )
                 df_log = pd.DataFrame(log_rows)
                 def _highlight(row):
                     if row["Estado"] == "⭐ SELECCIONADA":

@@ -100,7 +100,11 @@ def _survey_table(df, lim_map, min_vals, styles):
     header = [Paragraph("<b>#</b>", styles["Normal2"])] + [Paragraph(f"<b>{c}</b>", styles["Normal2"]) for c in cols]
     rows   = [header]
     for idx, row in df.iterrows():
-        rows.append([Paragraph(str(idx+1), styles["Normal2"])] + [Paragraph(f"{row[c]:.1f}", styles["Normal2"]) for c in cols])
+        cells = [Paragraph(str(idx+1), styles["Normal2"])]
+        for c in cols:
+            val = row[c]
+            cells.append(Paragraph(f"{val:.1f}" if isinstance(val, (int, float)) else str(val), styles["Normal2"]))
+        rows.append(cells)
     col_w = [12*mm] + [(W-12*mm)/len(cols)]*len(cols)
     t = Table(rows, colWidths=col_w)
     cmds = [
@@ -113,8 +117,10 @@ def _survey_table(df, lim_map, min_vals, styles):
     ]
     for ri,(_, row) in enumerate(df.iterrows(), start=1):
         for ci, col in enumerate(cols, start=1):
-            val = row[col]; lim = lim_map.get(col,9999); min_val = min_vals.get(f"MIN_{col}")
-            if lim!=9999 and val<lim:
+            if col not in lim_map:
+                continue
+            val = row[col]; lim = lim_map[col]; min_val = min_vals.get(f"MIN_{col}")
+            if isinstance(val, (int, float)) and val < lim:
                 if min_val is not None and abs(val-min_val)<0.001:
                     cmds += [("BACKGROUND",(ci,ri),(ci,ri),C_RED_DARK),("TEXTCOLOR",(ci,ri),(ci,ri),C_WHITE),("FONTNAME",(ci,ri),(ci,ri),"Helvetica-Bold")]
                 else:
@@ -397,8 +403,16 @@ def generate_report(project_params, calculated, survey_original,
 
     # Resultado final optimizador
     story += [Paragraph("7.3  Resultado final", styles["SubHead"]), sp(3)]
+    wall_limiting = p.get("WALL_LIMITING", False)
+
     if best:
-        n_sol = len(all_solutions)
+        n_sol     = len(all_solutions)
+        best_pair_r = (best["rl"], best["fb"])
+        # Ordenar: mejor solución primero
+        sorted_sols = sorted(
+            all_solutions,
+            key=lambda s: (0 if (s["rl"], s["fb"]) == best_pair_r else 1, abs(s["rl"]) + abs(s["fb"]))
+        )
         story += [
             _calc_block("Resumen de optimización",
                 "Criterio 1: menor número de valores fuera de límite\nCriterio 2 (desempate): menor desplazamiento total |RL| + |FB|",
@@ -407,16 +421,30 @@ def generate_report(project_params, calculated, survey_original,
                 styles, ok=(best["total_off"]==0)),
             sp(6),
         ]
-        # Mostrar TODAS las soluciones
-        for idx_sol, sol in enumerate(all_solutions):
+        for idx_sol, sol in enumerate(sorted_sols):
+            is_best = (sol["rl"], sol["fb"]) == best_pair_r
+            prefix  = "⭐ SELECCIONADA — " if is_best else ""
             story += [
-                _subheader(f"Solución {idx_sol+1} de {n_sol} — RL = {sol['rl']} mm  |  FB = {sol['fb']} mm", styles),
+                _subheader(f"{prefix}Solución {idx_sol+1} de {n_sol} — RL = {sol['rl']} mm  |  FB = {sol['fb']} mm", styles),
                 sp(3),
                 Paragraph("Matriz con desplazamientos aplicados:", styles["Note"]), sp(3),
             ]
             sol_df  = pd.DataFrame(sol["matrix"])
             sol_min = {f"MIN_{c}": min(sol_df[c]) for c in survey_cols}
+            # Caso 2: agregar CUT OR / CUT OL cuando no hay pared limitante
+            if not wall_limiting:
+                lor_v = lim_map["OR"]
+                lol_v = lim_map["OL"]
+                sol_df.insert(3, "CUT OR", sol_df["OR"].apply(
+                    lambda v: f"{v - lor_v:.1f}" if v - lor_v > 0 else ""))
+                sol_df.insert(7, "CUT OL", sol_df["OL"].apply(
+                    lambda v: f"{v - lol_v:.1f}" if v - lol_v > 0 else ""))
             story  += [_survey_table(sol_df, lim_map, sol_min, styles), sp(3)]
+            if not wall_limiting:
+                story += [Paragraph(
+                    "CUT OR = OR − LIMIT OR  /  CUT OL = OL − LIMIT OL  "
+                    "(valor a cortar si supera el límite; vacío = dentro del límite)",
+                    styles["Note"]), sp(3)]
             sol_sum = []
             for col in survey_cols:
                 cv = [r[col] for r in sol["matrix"]]
