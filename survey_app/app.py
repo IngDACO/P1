@@ -267,7 +267,9 @@ if st.button("🚀 Calcular", type="primary", use_container_width=True):
     cut_cols = ["OR", "OL"] if wall_yn == "N" else []
 
     def highlight(df, lm, mv, cc=cut_cols):
-        styles = pd.DataFrame("", index=df.index, columns=df.columns)
+        styles  = pd.DataFrame("", index=df.index, columns=df.columns)
+        idx_list = list(df.index)
+        last_i   = idx_list[-1] if idx_list else None
         for col in df.columns:
             if col not in lm:
                 continue
@@ -277,14 +279,20 @@ if st.button("🚀 Calcular", type="primary", use_container_width=True):
                 v = df.at[idx, col]
                 if not isinstance(v, (int, float)):
                     continue
+                # Límite efectivo: −70 en el último nivel si controlador activo
+                eff_lim = lim
+                if ctrl_in_frame and idx == last_i:
+                    if col == "OR" and ctrl_side == "R":
+                        eff_lim = lim - 70
+                    elif col == "OL" and ctrl_side == "L":
+                        eff_lim = lim - 70
                 if col in cc:
-                    # Caso 2: resaltar naranja si v > límite (requiere corte)
-                    if v > lim:
+                    if v > eff_lim:
                         styles.at[idx, col] = "background-color:#e67e22;color:white;font-weight:bold"
                 else:
-                    if min_val is not None and abs(v - min_val) < 0.001 and v < lim:
+                    if min_val is not None and abs(v - min_val) < 0.001 and v < eff_lim:
                         styles.at[idx, col] = "background-color:#c0392b;color:white;font-weight:bold"
-                    elif v < lim:
+                    elif v < eff_lim:
                         styles.at[idx, col] = "background-color:#f1948a"
         return styles
 
@@ -346,12 +354,17 @@ if st.button("🚀 Calcular", type="primary", use_container_width=True):
                 sol_min = {f"MIN_{c}": min(sol_df[c]) for c in SURVEY_COLS}
                 # Caso 2: agregar CUT OR / CUT OL cuando no hay pared limitante
                 if wall_yn == "N":
-                    lor_v = lim_map["OR"]
-                    lol_v = lim_map["OL"]
-                    sol_df.insert(3, "CUT OR", sol_df["OR"].apply(
-                        lambda v: round(v - lor_v, 1) if v - lor_v > 0 else ""))
-                    sol_df.insert(7, "CUT OL", sol_df["OL"].apply(
-                        lambda v: round(v - lol_v, 1) if v - lol_v > 0 else ""))
+                    lor_v        = lim_map["OR"]
+                    lol_v        = lim_map["OL"]
+                    last_sol_idx = len(sol_df) - 1
+                    cut_or_vals, cut_ol_vals = [], []
+                    for i, (or_v, ol_v) in enumerate(zip(sol_df["OR"], sol_df["OL"])):
+                        or_lim = lor_v - 70 if (ctrl_in_frame and ctrl_side == "R" and i == last_sol_idx) else lor_v
+                        ol_lim = lol_v - 70 if (ctrl_in_frame and ctrl_side == "L" and i == last_sol_idx) else lol_v
+                        cut_or_vals.append(round(or_v - or_lim, 1) if or_v - or_lim > 0 else "")
+                        cut_ol_vals.append(round(ol_v - ol_lim, 1) if ol_v - ol_lim > 0 else "")
+                    sol_df.insert(3, "CUT OR", cut_or_vals)
+                    sol_df.insert(7, "CUT OL", cut_ol_vals)
                 st.dataframe(
                     sol_df.style.apply(lambda df, m=sol_min: highlight(df, lim_map, m), axis=None),
                     use_container_width=True

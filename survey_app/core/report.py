@@ -97,12 +97,14 @@ def _param_table(data_dict, styles, cols=4):
 
 C_ORANGE = colors.HexColor("#e67e22")
 
-def _survey_table(df, lim_map, min_vals, styles, cut_cols=None):
+def _survey_table(df, lim_map, min_vals, styles, cut_cols=None,
+                  ctrl_in_frame=False, ctrl_side=None):
     """
-    cut_cols: columnas tratadas como 'requiere corte' (Caso 2 — OR/OL).
-    Para esas columnas: naranja cuando val > lim; sin rojo cuando val < lim.
+    cut_cols: columnas OR/OL en Caso 2 — naranja si val > eff_lim.
+    ctrl_in_frame / ctrl_side: reducen el límite −70 mm en la última fila.
     """
-    cut_cols = cut_cols or []
+    cut_cols     = cut_cols or []
+    last_data_ri = len(df)      # último ri (1-based) = número de filas de datos
     cols   = list(df.columns)
     header = [Paragraph("<b>#</b>", styles["Normal2"])] + [Paragraph(f"<b>{c}</b>", styles["Normal2"]) for c in cols]
     rows   = [header]
@@ -129,14 +131,20 @@ def _survey_table(df, lim_map, min_vals, styles, cut_cols=None):
             val = row[col]; lim = lim_map[col]; min_val = min_vals.get(f"MIN_{col}")
             if not isinstance(val, (int, float)):
                 continue
+            # Límite efectivo: −70 en último nivel si controlador activo
+            eff_lim = lim
+            if ctrl_in_frame and ri == last_data_ri:
+                if col == "OR" and ctrl_side == "R":
+                    eff_lim = lim - 70
+                elif col == "OL" and ctrl_side == "L":
+                    eff_lim = lim - 70
             if col in cut_cols:
-                # Caso 2: naranja si supera el límite (requiere corte)
-                if val > lim:
+                if val > eff_lim:
                     cmds += [("BACKGROUND",(ci,ri),(ci,ri),C_ORANGE),
                               ("TEXTCOLOR",(ci,ri),(ci,ri),C_WHITE),
                               ("FONTNAME",(ci,ri),(ci,ri),"Helvetica-Bold")]
             else:
-                if val < lim:
+                if val < eff_lim:
                     if min_val is not None and abs(val-min_val)<0.001:
                         cmds += [("BACKGROUND",(ci,ri),(ci,ri),C_RED_DARK),("TEXTCOLOR",(ci,ri),(ci,ri),C_WHITE),("FONTNAME",(ci,ri),(ci,ri),"Helvetica-Bold")]
                     else:
@@ -410,10 +418,13 @@ def generate_report(project_params, calculated, survey_original,
     # ── 6. MATRIZ AJUSTADA ───────────────────────────────────
     story += [_section_header("6. MATRIZ SURVEY AJUSTADA Y ANÁLISIS", styles), sp(4)]
     min_vals = {f"MIN_{c}": analysis[f"MIN_{c}"] for c in survey_cols}
-    wall_limiting = p.get("WALL_LIMITING", False)
-    rpt_cut_cols  = ["OR", "OL"] if not wall_limiting else []
+    wall_limiting  = p.get("WALL_LIMITING", False)
+    rpt_cut_cols   = ["OR", "OL"] if not wall_limiting else []
+    rpt_ctrl       = p.get("CTRL_IN_FRAME", False)
+    rpt_ctrl_side  = p.get("CTRL_SIDE", None)
     story += [_survey_table(survey_adjusted, lim_map, min_vals, styles,
-                            cut_cols=rpt_cut_cols), sp(6)]
+                            cut_cols=rpt_cut_cols,
+                            ctrl_in_frame=rpt_ctrl, ctrl_side=rpt_ctrl_side), sp(6)]
 
     # DIF por columna
     story += [Paragraph("6.1  Diferencias respecto a límites (columna por columna)", styles["SubHead"]), sp(3)]
@@ -579,16 +590,22 @@ def generate_report(project_params, calculated, survey_original,
             ]
             sol_df  = pd.DataFrame(sol["matrix"])
             sol_min = {f"MIN_{c}": min(sol_df[c]) for c in survey_cols}
-            # Caso 2: agregar CUT OR / CUT OL cuando no hay pared limitante
+            # Caso 2: agregar CUT OR / CUT OL con ajuste de controlador en último nivel
             if not wall_limiting:
-                lor_v = lim_map["OR"]
-                lol_v = lim_map["OL"]
-                sol_df.insert(3, "CUT OR", sol_df["OR"].apply(
-                    lambda v: f"{v - lor_v:.1f}" if v - lor_v > 0 else ""))
-                sol_df.insert(7, "CUT OL", sol_df["OL"].apply(
-                    lambda v: f"{v - lol_v:.1f}" if v - lol_v > 0 else ""))
+                lor_v        = lim_map["OR"]
+                lol_v        = lim_map["OL"]
+                last_sol_idx = len(sol_df) - 1
+                cut_or_vals, cut_ol_vals = [], []
+                for i, (or_v, ol_v) in enumerate(zip(sol_df["OR"], sol_df["OL"])):
+                    or_lim = lor_v - 70 if (rpt_ctrl and rpt_ctrl_side == "R" and i == last_sol_idx) else lor_v
+                    ol_lim = lol_v - 70 if (rpt_ctrl and rpt_ctrl_side == "L" and i == last_sol_idx) else lol_v
+                    cut_or_vals.append(f"{or_v - or_lim:.1f}" if or_v - or_lim > 0 else "")
+                    cut_ol_vals.append(f"{ol_v - ol_lim:.1f}" if ol_v - ol_lim > 0 else "")
+                sol_df.insert(3, "CUT OR", cut_or_vals)
+                sol_df.insert(7, "CUT OL", cut_ol_vals)
             story  += [_survey_table(sol_df, lim_map, sol_min, styles,
-                                     cut_cols=rpt_cut_cols), sp(3)]
+                                     cut_cols=rpt_cut_cols,
+                                     ctrl_in_frame=rpt_ctrl, ctrl_side=rpt_ctrl_side), sp(3)]
             if not wall_limiting:
                 story += [Paragraph(
                     "CUT OR = OR − LIMIT OR  /  CUT OL = OL − LIMIT OL  "
