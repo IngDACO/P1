@@ -290,9 +290,15 @@ if st.button("🚀 Calcular", type="primary", use_container_width=True):
             "Diferencia(mm)": round(analysis[f"DIF_{col}"], 2),
         })
     st.dataframe(pd.DataFrame(summary), use_container_width=True, hide_index=True)
+    bc_calc      = limits.get("BC_CALC", 0.0)
+    dif_tsw_fs   = limits.get("DIF_TSW_FS", 0.0)
+    fb_max_back  = limits.get("FB_MAX_BACK", 0.0)
     st.info(
         f"**MAX OFF RL:** {analysis['MAX_OFF_RL']:.2f} mm  |  "
-        f"**MAX OFF FB:** {analysis['MAX_OFF_FB']:.2f} mm"
+        f"**MAX OFF FB:** {analysis['MAX_OFF_FB']:.2f} mm  |  "
+        f"**BC_CALC:** {bc_calc:.2f} mm  |  "
+        f"**DIF TSW-FS:** {dif_tsw_fs:.2f} mm  |  "
+        f"**FB máx. hacia atrás:** {fb_max_back:.2f} mm"
     )
 
     # Optimización

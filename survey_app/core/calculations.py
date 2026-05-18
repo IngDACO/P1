@@ -54,6 +54,22 @@ def calculate_limits(p: dict) -> dict:
     c["TL"]   = c["CS"] + p["TKS"] + p["TSW"]
     c["TLBC"] = c["TL"] + p["BC"]
 
+    # ── Restricción FB hacia atrás ────────────────────────────────
+    # BC_CALC = espacio libre detrás de la cabina (fondo del hueco)
+    #   TS      = profundidad total del hueco
+    #   TKSW    = pared frontal → eje de rieles
+    #   TK/2    = eje de rieles → fondo de cabina
+    #   25      = holgura mínima de seguridad
+    c["BC_CALC"]    = p["TS"] - p["TKSW"] - (p["TK"] / 2) - 25
+    # DIF_TSW_FS: cuánto supera FS al valor de plano TSW
+    dif_tsw_fs      = p.get("FS", 0.0) - p.get("TSW", 0.0)
+    c["DIF_TSW_FS"] = dif_tsw_fs
+    # Máximo desplazamiento FB hacia atrás permitido
+    if dif_tsw_fs > c["BC_CALC"] or c["BC_CALC"] <= 0:
+        c["FB_MAX_BACK"] = 0.0   # no se puede desplazar hacia atrás
+    else:
+        c["FB_MAX_BACK"] = float(c["BC_CALC"])
+
     return c
 
 

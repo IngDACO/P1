@@ -34,6 +34,10 @@ def optimize(survey_adjusted: list, limits: dict, params: dict) -> dict:
     rl_steps = np.arange(-max_rl, max_rl + 0.5, 0.5)
     fb_steps = np.arange(-max_fb, max_fb + 0.5, 0.5)
 
+    # ── Restricción FB hacia atrás (pre-calculada en calculate_limits) ──
+    # fb > 0 → desplazamiento hacia atrás; fb < 0 → hacia adelante
+    fb_max_back = limits.get("FB_MAX_BACK", float("inf"))
+
     limit_r = limits.get("LIMIT_R", max_rl)
     limit_l = limits.get("LIMIT_L", max_rl)
 
@@ -59,6 +63,15 @@ def optimize(survey_adjusted: list, limits: dict, params: dict) -> dict:
             continue
 
         for fb in fb_steps:
+            # Validar límite FB hacia atrás
+            if fb > fb_max_back:
+                step_log.append({
+                    "rl": float(rl), "fb": float(fb), "status": "SKIP",
+                    "reason": f"FB={fb:.1f} > FB_MAX_BACK={fb_max_back:.1f}",
+                    "total_off": None, "off_by_col": {}, "min_by_col": {},
+                })
+                continue
+
             # Aplicar desplazamientos
             modified = []
             for row in survey_adjusted:
