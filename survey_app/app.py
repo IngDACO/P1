@@ -147,6 +147,14 @@ if wall_yn == "Y":
     wall_stop = wc1.number_input("Parada limitante", min_value=1, step=1, value=1)
     wall_side = wc2.radio("Lado de la pared", ["R","L"], horizontal=True)
 
+# ── Controlador en el frame ──────────────────────────────────
+cc1, cc2 = st.columns(2)
+ctrl_yn       = cc1.radio("¿Controlador hace parte del frame?", ["N", "Y"], horizontal=True)
+ctrl_in_frame = (ctrl_yn == "Y")
+ctrl_side     = None
+if ctrl_in_frame:
+    ctrl_side = cc2.radio("Lado del controlador", ["R", "L"], horizontal=True)
+
 # ══════════════════════════════════════════════════════
 # PASO 3 — MATRIZ SURVEY
 # ══════════════════════════════════════════════════════
@@ -220,6 +228,8 @@ if st.button("🚀 Calcular", type="primary", use_container_width=True):
     all_params["WALL_STOP"]     = wall_stop
     all_params["WALL_SIDE"]     = wall_side
     all_params["OFFSET_SIDE"]   = offset_side
+    all_params["CTRL_IN_FRAME"] = ctrl_in_frame
+    all_params["CTRL_SIDE"]     = ctrl_side
 
     # Totales = última fila
     last = st.session_state.survey_df.iloc[-1]
