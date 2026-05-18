@@ -67,6 +67,7 @@ with st.sidebar:
     st.markdown("---")
     st.caption("🔴 Rojo oscuro = mínimo fuera de límite")
     st.caption("🔴 Rojo claro  = fuera de límite")
+    st.caption("🟠 Naranja     = OR/OL requiere corte (Caso 2)")
 
 # ══════════════════════════════════════════════════════
 # TÍTULO
@@ -257,7 +258,11 @@ if st.button("🚀 Calcular", type="primary", use_container_width=True):
     lim_map  = {c: limits[f"LIMIT_{c}"] for c in SURVEY_COLS}
     min_vals = {f"MIN_{c}": analysis[f"MIN_{c}"] for c in SURVEY_COLS}
 
-    def highlight(df, lm, mv):
+    # cut_cols: columnas que en Caso 2 no cuentan como OFF sino como "requiere corte"
+    # Para esas columnas: naranja cuando v > lim (requiere corte), sin rojo cuando v < lim
+    cut_cols = ["OR", "OL"] if wall_yn == "N" else []
+
+    def highlight(df, lm, mv, cc=cut_cols):
         styles = pd.DataFrame("", index=df.index, columns=df.columns)
         for col in df.columns:
             if col not in lm:
@@ -266,10 +271,17 @@ if st.button("🚀 Calcular", type="primary", use_container_width=True):
             min_val = mv.get(f"MIN_{col}")
             for idx in df.index:
                 v = df.at[idx, col]
-                if min_val is not None and abs(v - min_val) < 0.001 and v < lim:
-                    styles.at[idx, col] = "background-color:#c0392b;color:white;font-weight:bold"
-                elif v < lim:
-                    styles.at[idx, col] = "background-color:#f1948a"
+                if not isinstance(v, (int, float)):
+                    continue
+                if col in cc:
+                    # Caso 2: resaltar naranja si v > límite (requiere corte)
+                    if v > lim:
+                        styles.at[idx, col] = "background-color:#e67e22;color:white;font-weight:bold"
+                else:
+                    if min_val is not None and abs(v - min_val) < 0.001 and v < lim:
+                        styles.at[idx, col] = "background-color:#c0392b;color:white;font-weight:bold"
+                    elif v < lim:
+                        styles.at[idx, col] = "background-color:#f1948a"
         return styles
 
     st.subheader("Matriz SURVEY ajustada")

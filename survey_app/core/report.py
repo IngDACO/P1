@@ -95,7 +95,14 @@ def _param_table(data_dict, styles, cols=4):
     t.setStyle(TableStyle([("GRID",(0,0),(-1,-1),0.3,colors.lightgrey),("BACKGROUND",(0,0),(-1,-1),C_GREY),("TOPPADDING",(0,0),(-1,-1),3),("BOTTOMPADDING",(0,0),(-1,-1),3),("LEFTPADDING",(0,0),(-1,-1),4)]))
     return t
 
-def _survey_table(df, lim_map, min_vals, styles):
+C_ORANGE = colors.HexColor("#e67e22")
+
+def _survey_table(df, lim_map, min_vals, styles, cut_cols=None):
+    """
+    cut_cols: columnas tratadas como 'requiere corte' (Caso 2 — OR/OL).
+    Para esas columnas: naranja cuando val > lim; sin rojo cuando val < lim.
+    """
+    cut_cols = cut_cols or []
     cols   = list(df.columns)
     header = [Paragraph("<b>#</b>", styles["Normal2"])] + [Paragraph(f"<b>{c}</b>", styles["Normal2"]) for c in cols]
     rows   = [header]
@@ -120,11 +127,20 @@ def _survey_table(df, lim_map, min_vals, styles):
             if col not in lim_map:
                 continue
             val = row[col]; lim = lim_map[col]; min_val = min_vals.get(f"MIN_{col}")
-            if isinstance(val, (int, float)) and val < lim:
-                if min_val is not None and abs(val-min_val)<0.001:
-                    cmds += [("BACKGROUND",(ci,ri),(ci,ri),C_RED_DARK),("TEXTCOLOR",(ci,ri),(ci,ri),C_WHITE),("FONTNAME",(ci,ri),(ci,ri),"Helvetica-Bold")]
-                else:
-                    cmds.append(("BACKGROUND",(ci,ri),(ci,ri),C_RED_BG))
+            if not isinstance(val, (int, float)):
+                continue
+            if col in cut_cols:
+                # Caso 2: naranja si supera el límite (requiere corte)
+                if val > lim:
+                    cmds += [("BACKGROUND",(ci,ri),(ci,ri),C_ORANGE),
+                              ("TEXTCOLOR",(ci,ri),(ci,ri),C_WHITE),
+                              ("FONTNAME",(ci,ri),(ci,ri),"Helvetica-Bold")]
+            else:
+                if val < lim:
+                    if min_val is not None and abs(val-min_val)<0.001:
+                        cmds += [("BACKGROUND",(ci,ri),(ci,ri),C_RED_DARK),("TEXTCOLOR",(ci,ri),(ci,ri),C_WHITE),("FONTNAME",(ci,ri),(ci,ri),"Helvetica-Bold")]
+                    else:
+                        cmds.append(("BACKGROUND",(ci,ri),(ci,ri),C_RED_BG))
     t.setStyle(TableStyle(cmds)); return t
 
 def _diagram_block(title, lines, styles):
@@ -382,7 +398,10 @@ def generate_report(project_params, calculated, survey_original,
     # ── 6. MATRIZ AJUSTADA ───────────────────────────────────
     story += [_section_header("6. MATRIZ SURVEY AJUSTADA Y ANÁLISIS", styles), sp(4)]
     min_vals = {f"MIN_{c}": analysis[f"MIN_{c}"] for c in survey_cols}
-    story += [_survey_table(survey_adjusted, lim_map, min_vals, styles), sp(6)]
+    wall_limiting = p.get("WALL_LIMITING", False)
+    rpt_cut_cols  = ["OR", "OL"] if not wall_limiting else []
+    story += [_survey_table(survey_adjusted, lim_map, min_vals, styles,
+                            cut_cols=rpt_cut_cols), sp(6)]
 
     # DIF por columna
     story += [Paragraph("6.1  Diferencias respecto a límites (columna por columna)", styles["SubHead"]), sp(3)]
@@ -519,8 +538,6 @@ def generate_report(project_params, calculated, survey_original,
 
     # Resultado final optimizador
     story += [Paragraph("7.3  Resultado final", styles["SubHead"]), sp(3)]
-    wall_limiting = p.get("WALL_LIMITING", False)
-
     if best:
         n_sol     = len(all_solutions)
         best_pair_r = (best["rl"], best["fb"])
@@ -555,7 +572,8 @@ def generate_report(project_params, calculated, survey_original,
                     lambda v: f"{v - lor_v:.1f}" if v - lor_v > 0 else ""))
                 sol_df.insert(7, "CUT OL", sol_df["OL"].apply(
                     lambda v: f"{v - lol_v:.1f}" if v - lol_v > 0 else ""))
-            story  += [_survey_table(sol_df, lim_map, sol_min, styles), sp(3)]
+            story  += [_survey_table(sol_df, lim_map, sol_min, styles,
+                                     cut_cols=rpt_cut_cols), sp(3)]
             if not wall_limiting:
                 story += [Paragraph(
                     "CUT OR = OR − LIMIT OR  /  CUT OL = OL − LIMIT OL  "
