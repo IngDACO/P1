@@ -14,10 +14,11 @@ st.set_page_config(page_title="Survey Analyzer", layout="wide", page_icon="📐"
 
 SURVEY_COLS = ["WR", "FR", "OR", "WL", "FL", "OL"]
 USER_ONLY   = {
-    "BSR":   "Ancho real del hueco medido en obra (mm)",
-    "FS":    "Distancia frontal de seguridad (mm)",
-    "FRAME": "Marco de puerta de entrada (mm)",
-    "RAIL":  "Ancho de la cabeza del riel (mm)",
+    "BSR":          "Ancho real del hueco medido en obra (mm)",
+    "FS":           "Distancia frontal de seguridad (mm)",
+    "FRAME":        "Marco de puerta de entrada (mm)",
+    "RAIL":         "Ancho de la cabeza del riel (mm)",
+    "OFFSET_CABIN": "Offset de cabina (mm)",
 }
 
 # ══════════════════════════════════════════════════════
@@ -135,22 +136,16 @@ with st.expander("✏️ Parámetros del usuario", expanded=True):
         )
 
 st.subheader("Configuración")
-c1, c2 = st.columns(2)
-omega_side = c1.radio("Lado del Omega", ["R","L"], horizontal=True)
-wall_yn    = c2.radio("¿Hay pared limitante?", ["N","Y"], horizontal=True)
+c1, c2, c3 = st.columns(3)
+omega_side   = c1.radio("Lado del Omega",       ["R", "L"], horizontal=True)
+wall_yn      = c2.radio("¿Hay pared limitante?",["N", "Y"], horizontal=True)
+offset_side  = c3.radio("Lado offset cabina",   ["R", "L"], horizontal=True)
 
 wall_stop, wall_side = None, None
 if wall_yn == "Y":
     wc1, wc2  = st.columns(2)
     wall_stop = wc1.number_input("Parada limitante", min_value=1, step=1, value=1)
     wall_side = wc2.radio("Lado de la pared", ["R","L"], horizontal=True)
-
-# ── Muros de la apertura ────────────────────────────────────
-wl1, wl2 = st.columns(2)
-wall_left  = wl1.number_input("Muro izquierdo de la apertura (mm)", min_value=0.0, step=0.5, value=st.session_state.get("wall_left_val", 0.0))
-wall_right = wl2.number_input("Muro derecho de la apertura (mm)",   min_value=0.0, step=0.5, value=st.session_state.get("wall_right_val", 0.0))
-st.session_state["wall_left_val"]  = wall_left
-st.session_state["wall_right_val"] = wall_right
 
 # ══════════════════════════════════════════════════════
 # PASO 3 — MATRIZ SURVEY
@@ -224,8 +219,7 @@ if st.button("🚀 Calcular", type="primary", use_container_width=True):
     all_params["WALL_LIMITING"] = (wall_yn == "Y")
     all_params["WALL_STOP"]     = wall_stop
     all_params["WALL_SIDE"]     = wall_side
-    all_params["WALL_LEFT"]     = st.session_state.get("wall_left_val",  0.0)
-    all_params["WALL_RIGHT"]    = st.session_state.get("wall_right_val", 0.0)
+    all_params["OFFSET_SIDE"]   = offset_side
 
     # Totales = última fila
     last = st.session_state.survey_df.iloc[-1]

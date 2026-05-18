@@ -40,8 +40,9 @@ C:\Users\diego\P1\survey_app\
 `TKSW, BKS, TKA, TKS, TSW, BGS, BKF1, BKF2, BS, BT, BK, TK, TS, SF1, SF2, SG, TG`
 
 ### Del usuario (app.py — USER_ONLY)
-`BSR, FS, FRAME, RAIL`  
-⚠️ `BC` fue **eliminado** de inputs — ahora se calcula como `BC_CALC`
+`BSR, FS, FRAME, RAIL, OFFSET_CABIN`  
+⚠️ `BC` fue **eliminado** de inputs — ahora se calcula como `BC_CALC`  
+⚠️ `WALL_LEFT` / `WALL_RIGHT` fueron **eliminados** — reemplazados por `OFFSET_CABIN` + `OFFSET_SIDE`
 
 ### Configuración
 - `OMEGA_SIDE`: R o L (lado del Omega)
@@ -62,8 +63,9 @@ LIMIT_WR = SF2 + RAIL/2
 LIMIT_WL = SF1 + RAIL/2
 LIMIT_FR = TKSW - 150
 LIMIT_FL = TKSW - 150
-LIMIT_OR = WALL_RIGHT - SF2 - RAIL/2
-LIMIT_OL = WALL_LEFT  - SF1 - RAIL/2
+base     = BKS/2 + RAIL/2 - BT/2 - FRAME
+LIMIT_OR = base + OFFSET_CABIN  (si OFFSET_SIDE=L)  |  base - OFFSET_CABIN  (si OFFSET_SIDE=R)
+LIMIT_OL = base - OFFSET_CABIN  (si OFFSET_SIDE=L)  |  base + OFFSET_CABIN  (si OFFSET_SIDE=R)
 ```
 
 ### Límites Omega/Z (dependen de OMEGA_SIDE)

@@ -7,10 +7,20 @@ def calculate_limits(p: dict) -> dict:
 
     c["LIMIT_WR"] = p["SF2"] + (p["RAIL"] / 2)
     c["LIMIT_FR"] = p["TKSW"] - 150
-    c["LIMIT_OR"] = p["WALL_RIGHT"] - p["SF2"] - (p["RAIL"] / 2)
     c["LIMIT_WL"] = p["SF1"] + (p["RAIL"] / 2)
     c["LIMIT_FL"] = p["TKSW"] - 150
-    c["LIMIT_OL"] = p["WALL_LEFT"]  - p["SF1"] - (p["RAIL"] / 2)
+
+    # ── LIMIT OR / LIMIT OL — basados en geometría de cabina ────────
+    # Base común = (BKS/2) + (RAIL/2) - (BT/2) - FRAME
+    # Lado offset L → LIMIT OR = base + OFFSET_CABIN  /  LIMIT OL = base - OFFSET_CABIN
+    # Lado offset R → LIMIT OR = base - OFFSET_CABIN  /  LIMIT OL = base + OFFSET_CABIN
+    _base_or_ol = (p["BKS"] / 2) + (p["RAIL"] / 2) - (p["BT"] / 2) - p["FRAME"]
+    if p.get("OFFSET_SIDE", "R") == "L":
+        c["LIMIT_OR"] = _base_or_ol + p["OFFSET_CABIN"]
+        c["LIMIT_OL"] = _base_or_ol - p["OFFSET_CABIN"]
+    else:  # R
+        c["LIMIT_OR"] = _base_or_ol - p["OFFSET_CABIN"]
+        c["LIMIT_OL"] = _base_or_ol + p["OFFSET_CABIN"]
 
     # ── LIMIT OB y LIMIT ZB ──────────────────────────────────────
     # OB está del lado del Omega.

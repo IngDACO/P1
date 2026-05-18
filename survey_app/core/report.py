@@ -183,15 +183,15 @@ def _dg_bc_calc(ts, tksw, tk, bc_calc):
     ]
 
 
-def _dg_lateral_limits(lwl, lol, lwr, lor, bks, wall_left, wall_right):
+def _dg_lateral_limits(lwl, lol, lwr, lor, bks, offset_cabin, offset_side):
     return [
         "  Seccion transversal del hueco (no proporcional, vista superior):",
         "",
-        "  muro izq                  CABINA                    muro der",
-        "     |  LIMIT OL  LIMIT WL  [--BKS--]  LIMIT WR  LIMIT OR  |",
-        "     +---[OL]------[WL]-----[       ]-----[WR]------[OR]----+",
+        f"  Cabina desplazada hacia: {offset_side}   OFFSET_CABIN = {offset_cabin:.0f} mm",
         "",
-        f"    WALL_LEFT  = {wall_left:.0f} mm   |   WALL_RIGHT = {wall_right:.0f} mm",
+        "     LIMIT OL  LIMIT WL  [---BKS---]  LIMIT WR  LIMIT OR",
+        "  ---[OL]------[WL]------[  CABINA ]-----[WR]------[OR]---",
+        "",
         f"    LIMIT OL   = {lol:.1f} mm   |   LIMIT OR   = {lor:.1f} mm",
         f"    LIMIT WL   = {lwl:.1f} mm   |   LIMIT WR   = {lwr:.1f} mm",
         f"    BKS (dist. entre rieles de cabina) = {bks:.0f} mm",
@@ -283,7 +283,7 @@ def generate_report(project_params, calculated, survey_original,
     story += [Paragraph("1.1  Extraídos del PDF", styles["SubHead"])]
     story += [_param_table({k: p.get(k) for k in ["BS","BT","BK","BKS","TK","TKA","TKS","TSW","TKSW","TS","SF1","SF2","SG","TG","BGS","BKF1","BKF2"]}, styles), sp(6)]
     story += [Paragraph("1.2  Ingresados por el usuario", styles["SubHead"])]
-    story += [_param_table({k: p.get(k) for k in ["BSR","FS","FRAME","RAIL","OMEGA_SIDE"]}, styles, cols=3), sp(8)]
+    story += [_param_table({k: p.get(k) for k in ["BSR","FS","FRAME","RAIL","OFFSET_CABIN","OFFSET_SIDE","OMEGA_SIDE"]}, styles, cols=4), sp(8)]
 
     # ── 2. DIMENSIONES DE CABINA ─────────────────────────────
     story += [_section_header("2. DIMENSIONES DE CABINA", styles), sp(4)]
@@ -316,10 +316,13 @@ def generate_report(project_params, calculated, survey_original,
     story += [_section_header("3. LÍMITES GEOMÉTRICOS", styles), sp(4)]
     lwr = fv("SF2") + fv("RAIL")/2
     lfr = fv("TKSW") - 150
-    lor = fv("WALL_RIGHT") - fv("SF2") - fv("RAIL")/2
     lwl = fv("SF1") + fv("RAIL")/2
     lfl = fv("TKSW") - 150
-    lol = fv("WALL_LEFT")  - fv("SF1") - fv("RAIL")/2
+    _base_ol = fv("BKS")/2 + fv("RAIL")/2 - fv("BT")/2 - fv("FRAME")
+    _off_c   = fv("OFFSET_CABIN")
+    _off_s   = p.get("OFFSET_SIDE", "R")
+    lor = _base_ol + _off_c if _off_s == "L" else _base_ol - _off_c
+    lol = _base_ol - _off_c if _off_s == "L" else _base_ol + _off_c
     lob_raw = (fv("SG") - fv("TG")/2) * 0.3
     omega   = p.get("OMEGA_SIDE", "R")
     # Z siempre opuesto al Omega:
@@ -338,11 +341,20 @@ def generate_report(project_params, calculated, survey_original,
         Paragraph("3.1  Límites laterales", styles["SubHead"]),
         _calc_block("LIMIT WR",  "LIMIT WR = SF2 + (RAIL / 2)",    f"{fs('SF2')} + ({fs('RAIL')} / 2)", f"LIMIT WR = {lwr:.2f} mm", styles), sp(3),
         _calc_block("LIMIT WL",  "LIMIT WL = SF1 + (RAIL / 2)",    f"{fs('SF1')} + ({fs('RAIL')} / 2)", f"LIMIT WL = {lwl:.2f} mm", styles), sp(3),
-        _calc_block("LIMIT OR",  "LIMIT OR = Muro derecho − SF2 − (RAIL / 2)",  f"{fs('WALL_RIGHT')} − {fs('SF2')} − ({fs('RAIL')} / 2)", f"LIMIT OR = {lor:.2f} mm", styles), sp(3),
-        _calc_block("LIMIT OL",  "LIMIT OL = Muro izquierdo − SF1 − (RAIL / 2)", f"{fs('WALL_LEFT')} − {fs('SF1')} − ({fs('RAIL')} / 2)", f"LIMIT OL = {lol:.2f} mm", styles), sp(6),
+        _calc_block("Base OR/OL", "Base = (BKS/2) + (RAIL/2) − (BT/2) − FRAME",
+            f"({fs('BKS')}/2) + ({fs('RAIL')}/2) − ({fs('BT')}/2) − {fs('FRAME')}",
+            f"Base = {(fv('BKS')/2 + fv('RAIL')/2 - fv('BT')/2 - fv('FRAME')):.2f} mm", styles), sp(3),
+        _calc_block("LIMIT OR",
+            f"LIMIT OR = Base {'+ OFFSET_CABIN' if p.get('OFFSET_SIDE','R')=='L' else '− OFFSET_CABIN'}  (offset lado {p.get('OFFSET_SIDE','R')})",
+            f"{(fv('BKS')/2 + fv('RAIL')/2 - fv('BT')/2 - fv('FRAME')):.2f} {'+' if p.get('OFFSET_SIDE','R')=='L' else '−'} {fs('OFFSET_CABIN')}",
+            f"LIMIT OR = {lor:.2f} mm", styles), sp(3),
+        _calc_block("LIMIT OL",
+            f"LIMIT OL = Base {'− OFFSET_CABIN' if p.get('OFFSET_SIDE','R')=='L' else '+ OFFSET_CABIN'}  (offset lado {p.get('OFFSET_SIDE','R')})",
+            f"{(fv('BKS')/2 + fv('RAIL')/2 - fv('BT')/2 - fv('FRAME')):.2f} {'−' if p.get('OFFSET_SIDE','R')=='L' else '+'} {fs('OFFSET_CABIN')}",
+            f"LIMIT OL = {lol:.2f} mm", styles), sp(6),
         _diagram_block("Seccion transversal — Limites laterales",
             _dg_lateral_limits(lwl, lol, lwr, lor, fv("BKS"),
-                               fv("WALL_LEFT"), fv("WALL_RIGHT")), styles), sp(6),
+                               fv("OFFSET_CABIN"), p.get("OFFSET_SIDE","R")), styles), sp(6),
         Paragraph("3.2  Límites frontales", styles["SubHead"]),
         _calc_block("LIMIT FR",  "LIMIT FR = TKSW - 150",          f"{fs('TKSW')} - 150",               f"LIMIT FR = {lfr:.2f} mm", styles), sp(3),
         _calc_block("LIMIT FL",  "LIMIT FL = TKSW - 150",          f"{fs('TKSW')} - 150",               f"LIMIT FL = {lfl:.2f} mm", styles), sp(6),
