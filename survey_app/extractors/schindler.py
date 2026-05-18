@@ -6,9 +6,8 @@ Casos especiales manejados:
   2. Números pegados antes:      110TKSW=965     → TKSW=965
   3. Parámetros pegados:         TKSW=965TS=1750 → ambos separados
   4. Sin '=' valor en línea sig: BKF2\n936       → BKF2=936
-  5. Valor partido por salto:    TKS=30\n62      → TKS=3062
-  6. Saltos Windows CRLF:        TKS=30\r\n62    → TKS=3062
-  7. Valor ANTES del label:      170BKF2 30BKF1  → BKF2=170, BKF1=30
+  5. Valor ANTES del label:      170BKF2 30BKF1  → BKF2=170, BKF1=30
+  6. Elementos PDF separados:    SF1=51 | 1175   → SF1=51  (visitor_text separa por posición XY)
 """
 from pypdf import PdfReader
 import re
@@ -28,7 +27,7 @@ VALID_RANGES = {
     "BKS":  (500,  3000),
     "TK":   (500,  3000),
     "TKA":  (50,   500),
-    "TKS":  (500,  8000),
+    "TKS":  (5,    150),   # umbral cabina → umbral rellano: típico 20-80 mm
     "TSW":  (50,   500),
     "TKSW": (500,  3000),
     "TS":   (500,  5000),
@@ -67,13 +66,93 @@ def _in_range(param: str, value: float) -> bool:
     return lo <= value <= hi
 
 
+# ── Extracción posicional con visitor_text ───────────────────────
+_CHAR_W  = 8.0   # ancho estimado por carácter (pts) — conservador
+_GAP_TH  = 50.0  # gap horizontal mínimo (pts) para insertar espacio separador
+_Y_TOL   = 20.0  # tolerancia vertical (pts) para agrupar en misma línea
+
+
+def _page_text_positional(page) -> str:
+    """
+    Extrae el texto de una página usando visitor_text para obtener
+    posiciones XY de cada elemento.
+
+    Agrupa elementos por línea (misma Y ± _Y_TOL) y dentro de cada línea
+    inserta un espacio entre elementos cuyo gap horizontal supera _GAP_TH.
+    Esto evita que anotaciones CAD distantes se concatenen con los valores
+    de los parámetros (ej. SF1=51 + 1175 → "SF1=51 1175" en lugar de
+    "SF1=511175").
+
+    Si el visitor falla, cae silenciosamente a extract_text() convencional.
+    """
+    elements: list[tuple[float, float, str]] = []   # (y, x, text)
+
+    def _visitor(text, cm, tm, fontdict, fontSize):
+        if not text:
+            return
+        t = text.replace('\n', '').replace('\r', '')
+        if not t:
+            return
+        x = float(tm[4])
+        y = float(tm[5])
+        elements.append((y, x, t))
+
+    try:
+        page.extract_text(visitor_text=_visitor)
+    except Exception:
+        return page.extract_text() or ""
+
+    if not elements:
+        return page.extract_text() or ""
+
+    # Ordenar: Y descendente (arriba primero), X ascendente (izquierda primero)
+    elements.sort(key=lambda e: (-round(e[0] / _Y_TOL) * _Y_TOL, e[1]))
+
+    # Agrupar por Y (tolerancia _Y_TOL)
+    lines: list[list[tuple[float, str]]] = []   # cada línea: [(x, text), ...]
+    cur_y: float | None = None
+    cur_line: list[tuple[float, str]] = []
+
+    for y, x, txt in elements:
+        if cur_y is None or abs(y - cur_y) > _Y_TOL:
+            if cur_line:
+                lines.append(cur_line)
+            cur_line = [(x, txt)]
+            cur_y = y
+        else:
+            cur_line.append((x, txt))
+    if cur_line:
+        lines.append(cur_line)
+
+    # Construir texto: elementos de la misma línea se unen;
+    # si el gap entre el final estimado de uno y el inicio del siguiente
+    # supera _GAP_TH, se inserta un espacio.
+    result_lines: list[str] = []
+    for line in lines:
+        line.sort(key=lambda e: e[0])   # de izquierda a derecha
+        out = ""
+        prev_x_end: float | None = None
+        for x, txt in line:
+            if prev_x_end is not None:
+                gap = x - prev_x_end
+                if gap > _GAP_TH:
+                    out += " "
+            out += txt
+            prev_x_end = x + len(txt) * _CHAR_W
+        if out.strip():
+            result_lines.append(out)
+
+    return "\n".join(result_lines)
+
+
 def _extract_from_text(text: str, found: dict) -> None:
     """Extrae parámetros del texto y actualiza `found` in-place."""
 
     # ── Paso 1: Normalizar saltos de línea ─────────────────────────
     # CRLF (Windows) y CR sueltos → LF
     text = text.replace('\r\n', '\n').replace('\r', '\n')
-    # Unir dígito-salto-dígito: TKS=30\n62 → TKS=3062
+    # Unir dígito-salto-dígito: TKS=30\n62 → TKS=3062  (fallback, no debería ocurrir
+    # con extracción posicional, pero se mantiene para seguridad)
     normalized = re.sub(r'(\d)\n(\d)', r'\1\2', text)
     normalized = re.sub(r'  +', ' ', normalized)
 
@@ -96,7 +175,7 @@ def _extract_from_text(text: str, found: dict) -> None:
         else:
             # Truncar para casos como BS=19981272 → 1998
             raw = m.group(2)
-            for length in (4, 3):
+            for length in (4, 3, 2):
                 if len(raw) > length:
                     candidate = float(raw[:length])
                     if _in_range(k, candidate):
@@ -155,13 +234,15 @@ def _extract_from_text(text: str, found: dict) -> None:
 def extract_from_pdf(pdf_file) -> dict:
     """
     Extrae parámetros del PDF Schindler.
-    Una sola pasada con pypdf modo normal — rápido y suficiente.
+    Usa visitor_text para reconstruir el texto con separación posicional
+    (evita que anotaciones CAD distantes se concatenen con valores de parámetros).
+    Fallback a extract_text() convencional si el visitor no retorna datos.
     """
     found: dict = {p: None for p in PARAMS}
     try:
         reader = PdfReader(pdf_file)
         for page in reader.pages:
-            text = page.extract_text() or ""
+            text = _page_text_positional(page)
             _extract_from_text(text, found)
             if all(v is not None for v in found.values()):
                 break
