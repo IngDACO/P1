@@ -127,6 +127,102 @@ def _survey_table(df, lim_map, min_vals, styles):
                     cmds.append(("BACKGROUND",(ci,ri),(ci,ri),C_RED_BG))
     t.setStyle(TableStyle(cmds)); return t
 
+def _diagram_block(title, lines, styles):
+    """Caja esquemática con texto monoespaciado (esquema no proporcional)."""
+    content = [[Paragraph(f"<b>{title}</b>", styles["SubHead2"])]]
+    for line in lines:
+        safe = line.replace("&","&amp;").replace("<","&lt;").replace(">","&gt;")
+        content.append([Paragraph(safe, styles["Mono"])])
+    t = Table(content, colWidths=[W])
+    t.setStyle(TableStyle([
+        ("BACKGROUND",    (0,0), (-1,0),  C_HEADER),
+        ("TEXTCOLOR",     (0,0), (-1,0),  C_WHITE),
+        ("BACKGROUND",    (0,1), (-1,-1), colors.HexColor("#f4f7fb")),
+        ("GRID",          (0,0), (-1,-1), 0.4, colors.HexColor("#b0c0d8")),
+        ("TOPPADDING",    (0,0), (-1,-1), 3),
+        ("BOTTOMPADDING", (0,0), (-1,-1), 3),
+        ("LEFTPADDING",   (0,0), (-1,-1), 8),
+    ]))
+    return t
+
+
+def _dg_bc_calc(ts, tksw, tk, bc_calc):
+    tk2 = tk / 2
+    return [
+        "  Vista lateral del hueco (no proporcional):",
+        "",
+        "  pared                                          fondo del hueco",
+        "  frontal                                               |",
+        "    |                                                   |",
+        "    +--------+---------------------------+----------+---+",
+        "    |        |         CABINA            |  BC_CALC |25 |",
+        "    | [TKSW] |        [TK / 2]           |          |mm |",
+        "    +--------+---------------------------+----------+---+",
+        "",
+        f"    TKSW    = {tksw:.0f} mm",
+        f"    TK/2    = {tk2:.0f} mm",
+        f"    BC_CALC = {bc_calc:.0f} mm   (espacio libre detras de cabina)",
+        f"    25 mm   (holgura minima de seguridad al fondo)",
+        f"    TS      = {ts:.0f} mm  =  {tksw:.0f} + {tk2:.0f} + {bc_calc:.0f} + 25",
+    ]
+
+
+def _dg_lateral_limits(lwl, lol, lwr, lor, bks, wall_left, wall_right):
+    return [
+        "  Seccion transversal del hueco (no proporcional, vista superior):",
+        "",
+        "  muro izq                  CABINA                    muro der",
+        "     |  LIMIT OL  LIMIT WL  [--BKS--]  LIMIT WR  LIMIT OR  |",
+        "     +---[OL]------[WL]-----[       ]-----[WR]------[OR]----+",
+        "",
+        f"    WALL_LEFT  = {wall_left:.0f} mm   |   WALL_RIGHT = {wall_right:.0f} mm",
+        f"    LIMIT OL   = {lol:.1f} mm   |   LIMIT OR   = {lor:.1f} mm",
+        f"    LIMIT WL   = {lwl:.1f} mm   |   LIMIT WR   = {lwr:.1f} mm",
+        f"    BKS (dist. entre rieles de cabina) = {bks:.0f} mm",
+    ]
+
+
+def _dg_rl(lr, ll, max_rl):
+    return [
+        "  (no proporcional)   RL < 0 = hacia der.   |   RL > 0 = hacia izq.",
+        "",
+        "         SKIP                VALIDO                 SKIP",
+        "  <-----------[------------------------------------]----------->  RL (mm)",
+        f"          -LIMIT_R                            +LIMIT_L",
+        f"          = {-lr:.1f} mm                        = +{ll:.1f} mm",
+        "",
+        f"  Rango total evaluado: -{max_rl:.1f} mm  a  +{max_rl:.1f} mm  (paso 0.5 mm)",
+    ]
+
+
+def _dg_fb(max_fb, fb_max_back, bc_calc, dif_tsw_fs):
+    lines = ["  (no proporcional)   FB < 0 = hacia adelante   |   FB > 0 = hacia atras", ""]
+    if fb_max_back <= 0:
+        lines += [
+            "           VALIDO              |              SKIP",
+            "  <----------------------------|]-------------------------------->  FB (mm)",
+            f"  -MAX_OFF_FB={-max_fb:.1f}              0                      +MAX_OFF_FB=+{max_fb:.1f}",
+            f"                         FB_MAX_BACK = 0.0  (sin desplazamiento hacia atras)",
+        ]
+    elif fb_max_back >= max_fb:
+        lines += [
+            "                     VALIDO  (BC_CALC no restringe el rango FB)",
+            "  <----------------------------------------------------------->  FB (mm)",
+            f"  -MAX_OFF_FB={-max_fb:.1f}                         +MAX_OFF_FB=+{max_fb:.1f}",
+        ]
+    else:
+        lines += [
+            "             VALIDO                              |   SKIP",
+            "  <-------------------------------------[--------]------------>  FB (mm)",
+            f"  -MAX_OFF_FB={-max_fb:.1f}             FB_MAX_BACK=+{fb_max_back:.1f}   +MAX_OFF_FB=+{max_fb:.1f}",
+        ]
+    lines += [
+        "",
+        f"  BC_CALC = {bc_calc:.1f} mm  |  DIF_TSW_FS = {dif_tsw_fs:.1f} mm  |  FB_MAX_BACK = {fb_max_back:.1f} mm",
+    ]
+    return lines
+
+
 def _summary_table(summary_list, styles):
     if not summary_list: return sp(2)
     header = [Paragraph(f"<b>{k}</b>", styles["Normal2"]) for k in summary_list[0]]
@@ -171,13 +267,14 @@ def generate_report(project_params, calculated, survey_original,
     story += [Paragraph("1.1  Extraídos del PDF", styles["SubHead"])]
     story += [_param_table({k: p.get(k) for k in ["BS","BT","BK","BKS","TK","TKA","TKS","TSW","TKSW","TS","SF1","SF2","SG","TG","BGS","BKF1","BKF2"]}, styles), sp(6)]
     story += [Paragraph("1.2  Ingresados por el usuario", styles["SubHead"])]
-    story += [_param_table({k: p.get(k) for k in ["BSR","BC","FS","FRAME","RAIL","OMEGA_SIDE"]}, styles, cols=3), sp(8)]
+    story += [_param_table({k: p.get(k) for k in ["BSR","FS","FRAME","RAIL","OMEGA_SIDE"]}, styles, cols=3), sp(8)]
 
     # ── 2. DIMENSIONES DE CABINA ─────────────────────────────
     story += [_section_header("2. DIMENSIONES DE CABINA", styles), sp(4)]
-    cs   = fv("TK") + fv("TKA")
-    tl   = cs + fv("TKS") + fv("TSW")
-    tlbc = tl + fv("BC")
+    cs        = fv("TK") + fv("TKA")
+    tl        = cs + fv("TKS") + fv("TSW")
+    bc_calc_v = fv("BC_CALC")
+    tlbc      = tl + bc_calc_v
     story += [
         _calc_block("CS — Profundidad total de cabina",
             "CS = TK + TKA",
@@ -187,10 +284,16 @@ def generate_report(project_params, calculated, survey_original,
             "TL = CS + TKS + TSW",
             f"{cs:.2f} + {fs('TKS')} + {fs('TSW')}",
             f"TL = {tl:.2f} mm", styles), sp(3),
-        _calc_block("TLBC — Longitud total con buffer",
-            "TLBC = TL + BC",
-            f"{tl:.2f} + {fs('BC')}",
-            f"TLBC = {tlbc:.2f} mm", styles), sp(8),
+        _calc_block("BC_CALC — Espacio libre detras de la cabina",
+            "BC_CALC = TS - TKSW - (TK / 2) - 25",
+            f"{fs('TS')} - {fs('TKSW')} - ({fs('TK')} / 2) - 25",
+            f"BC_CALC = {bc_calc_v:.2f} mm", styles), sp(3),
+        _calc_block("TLBC — Longitud total con espacio trasero",
+            "TLBC = TL + BC_CALC",
+            f"{tl:.2f} + {bc_calc_v:.2f}",
+            f"TLBC = {tlbc:.2f} mm", styles), sp(4),
+        _diagram_block("Perfil longitudinal del hueco",
+            _dg_bc_calc(fv("TS"), fv("TKSW"), fv("TK"), bc_calc_v), styles), sp(8),
     ]
 
     # ── 3. LÍMITES GEOMÉTRICOS ───────────────────────────────
@@ -221,6 +324,9 @@ def generate_report(project_params, calculated, survey_original,
         _calc_block("LIMIT WL",  "LIMIT WL = SF1 + (RAIL / 2)",    f"{fs('SF1')} + ({fs('RAIL')} / 2)", f"LIMIT WL = {lwl:.2f} mm", styles), sp(3),
         _calc_block("LIMIT OR",  "LIMIT OR = Muro derecho − SF2 − (RAIL / 2)",  f"{fs('WALL_RIGHT')} − {fs('SF2')} − ({fs('RAIL')} / 2)", f"LIMIT OR = {lor:.2f} mm", styles), sp(3),
         _calc_block("LIMIT OL",  "LIMIT OL = Muro izquierdo − SF1 − (RAIL / 2)", f"{fs('WALL_LEFT')} − {fs('SF1')} − ({fs('RAIL')} / 2)", f"LIMIT OL = {lol:.2f} mm", styles), sp(6),
+        _diagram_block("Seccion transversal — Limites laterales",
+            _dg_lateral_limits(lwl, lol, lwr, lor, fv("BKS"),
+                               fv("WALL_LEFT"), fv("WALL_RIGHT")), styles), sp(6),
         Paragraph("3.2  Límites frontales", styles["SubHead"]),
         _calc_block("LIMIT FR",  "LIMIT FR = TKSW - 150",          f"{fs('TKSW')} - 150",               f"LIMIT FR = {lfr:.2f} mm", styles), sp(3),
         _calc_block("LIMIT FL",  "LIMIT FL = TKSW - 150",          f"{fs('TKSW')} - 150",               f"LIMIT FL = {lfl:.2f} mm", styles), sp(6),
@@ -322,7 +428,11 @@ def generate_report(project_params, calculated, survey_original,
         Paragraph(f"  • Si RL > 0: |RL| ≤ LIMIT L = {ll:.2f} mm", styles["Normal2"]),
         Paragraph(f"  • Pared limitante: {'Sí — Parada ' + str(p.get('WALL_STOP','?')) + ' lado ' + str(p.get('WALL_SIDE','?')) if p.get('WALL_LIMITING') else 'No aplica'}", styles["Normal2"]),
         Paragraph(f"  • TSW={fs('TSW')} vs FS={fs('FS')} — Validación activa: {'Sí' if fv('TSW') < fv('FS') and p.get('WALL_LIMITING') else 'No'}", styles["Normal2"]),
-        sp(6),
+        sp(4),
+        _diagram_block("Diagrama de rango RL",
+            _dg_rl(lr, ll, max_rl), styles), sp(4),
+        _diagram_block("Diagrama de rango FB",
+            _dg_fb(max_fb, fv("FB_MAX_BACK"), fv("BC_CALC"), fv("DIF_TSW_FS")), styles), sp(6),
     ]
 
     # Tabla de todos los pasos
