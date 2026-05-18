@@ -15,7 +15,6 @@ st.set_page_config(page_title="Survey Analyzer", layout="wide", page_icon="📐"
 SURVEY_COLS = ["WR", "FR", "OR", "WL", "FL", "OL"]
 USER_ONLY   = {
     "BSR":   "Ancho real del hueco medido en obra (mm)",
-    "BC":    "Distancia buffer a cabina (mm)",
     "FS":    "Distancia frontal de seguridad (mm)",
     "FRAME": "Marco de puerta de entrada (mm)",
     "RAIL":  "Ancho de la cabeza del riel (mm)",

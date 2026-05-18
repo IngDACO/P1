@@ -49,11 +49,6 @@ def calculate_limits(p: dict) -> dict:
     c["Offset_OR"] = c["Offset_WR"]
     c["Offset_OL"] = c["Offset_WL"]
 
-    # ── Dimensiones de cabina ────────────────────────────────────
-    c["CS"]   = p["TK"] + p["TKA"]
-    c["TL"]   = c["CS"] + p["TKS"] + p["TSW"]
-    c["TLBC"] = c["TL"] + p["BC"]
-
     # ── Restricción FB hacia atrás ────────────────────────────────
     # BC_CALC = espacio libre detrás de la cabina (fondo del hueco)
     #   TS      = profundidad total del hueco
@@ -69,6 +64,11 @@ def calculate_limits(p: dict) -> dict:
         c["FB_MAX_BACK"] = 0.0   # no se puede desplazar hacia atrás
     else:
         c["FB_MAX_BACK"] = float(c["BC_CALC"])
+
+    # ── Dimensiones de cabina ────────────────────────────────────
+    c["CS"]   = p["TK"] + p["TKA"]
+    c["TL"]   = c["CS"] + p["TKS"] + p["TSW"]
+    c["TLBC"] = c["TL"] + c["BC_CALC"]
 
     return c
 
