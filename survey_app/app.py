@@ -348,7 +348,9 @@ if st.button("🚀 Calcular", type="primary", use_container_width=True):
         )
         for idx_sol, sol in enumerate(sorted_solutions):
             is_best   = (sol["rl"], sol["fb"]) == best_pair
-            sol_label = f"{'⭐ ' if is_best else ''}Solución {idx_sol+1} — RL = {sol['rl']} mm  |  FB = {sol['fb']} mm"
+            fb_ap     = sol.get("fb_applied", sol["fb"])
+            fb_suffix = f"  |  FB aplic. = {fb_ap:.1f} mm" if abs(fb_ap - sol["fb"]) > 0.01 else ""
+            sol_label = f"{'⭐ ' if is_best else ''}Solución {idx_sol+1} — RL = {sol['rl']} mm  |  FB = {sol['fb']} mm{fb_suffix}"
             with st.expander(sol_label, expanded=(idx_sol == 0)):
                 sol_df  = pd.DataFrame(sol["matrix"])
                 sol_min = {f"MIN_{c}": min(sol_df[c]) for c in SURVEY_COLS}
@@ -374,12 +376,14 @@ if st.button("🚀 Calcular", type="primary", use_container_width=True):
                 sol_sum = []
                 for col in SURVEY_COLS:
                     col_vals = [r[col] for r in sol["matrix"]]
+                    lim_c = lim_map[col]; mn_c = min(col_vals)
+                    dif_c = mn_c - lim_c if col in ("OR", "OL") else lim_c - mn_c
                     sol_sum.append({
                         "Columna":       col,
-                        "Límite (mm)":   round(lim_map[col], 2),
-                        "Fuera límite":  sum(1 for v in col_vals if v < lim_map[col]),
-                        "Mínimo (mm)":   round(min(col_vals), 2),
-                        "Dif vs Límite": round(lim_map[col] - min(col_vals), 2),
+                        "Límite (mm)":   round(lim_c, 2),
+                        "Fuera límite":  sum(1 for v in col_vals if v < lim_c),
+                        "Mínimo (mm)":   round(mn_c, 2),
+                        "Dif vs Límite": round(dif_c, 2),
                     })
                 st.dataframe(pd.DataFrame(sol_sum), use_container_width=True, hide_index=True)
 

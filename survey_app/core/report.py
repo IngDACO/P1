@@ -431,22 +431,23 @@ def generate_report(project_params, calculated, survey_original,
     for col in survey_cols:
         lim   = lim_map[col]; min_v = analysis[f"MIN_{col}"]
         dif_v = analysis[f"DIF_{col}"]; off_c = analysis[f"{col}_OFF_COUNT"]
+        if col in ("OR", "OL"):
+            # DIF = MIN − LIMIT: negativo = sin violación; positivo = supera límite (requiere corte)
+            formula_text = f"DIF {col} = MIN {col} − LIMIT {col}"
+            subst_text   = f"{min_v:.2f} − {lim:.2f}"
+        else:
+            formula_text = f"DIF {col} = LIMIT {col} − MIN {col}"
+            subst_text   = f"{lim:.2f} − {min_v:.2f}"
         story += [_calc_block(f"DIF {col}",
-            f"DIF {col} = LIMIT {col} − MIN {col}",
-            f"{lim:.2f} − {min_v:.2f}",
+            formula_text, subst_text,
             f"DIF {col} = {dif_v:.2f} mm  |  {off_c} valor(es) fuera de límite",
             styles, ok=(dif_v<=0)), sp(3)]
 
     max_rl = analysis["MAX_OFF_RL"]; max_fb = analysis["MAX_OFF_FB"]
-    wall_lim_flag = p.get("WALL_LIMITING", True)
-    if wall_lim_flag:
-        max_rl_formula = "MAX OFF RL = max(DIF WR, DIF OR, DIF WL, DIF OL)"
-        max_rl_subst   = f"max({analysis['DIF_WR']:.2f}, {analysis['DIF_OR']:.2f}, {analysis['DIF_WL']:.2f}, {analysis['DIF_OL']:.2f})"
-    else:
-        max_rl_formula = "MAX OFF RL = max(DIF WR, DIF WL)  [OR/OL excluidos — sin pared limitante]"
-        max_rl_subst   = f"max({analysis['DIF_WR']:.2f}, {analysis['DIF_WL']:.2f})"
     story += [sp(3),
-        _calc_block("MAX OFF RL", max_rl_formula, max_rl_subst,
+        _calc_block("MAX OFF RL",
+            "MAX OFF RL = max(DIF WR, DIF WL)  [OR/OL gestionados como restricción dura en optimizador]",
+            f"max({analysis['DIF_WR']:.2f}, {analysis['DIF_WL']:.2f})",
             f"MAX OFF RL = {max_rl:.2f} mm", styles), sp(3),
         _calc_block("MAX OFF FB", "MAX OFF FB = max(DIF FR, DIF FL)",
             f"max({analysis['DIF_FR']:.2f}, {analysis['DIF_FL']:.2f})",
@@ -469,7 +470,7 @@ def generate_report(project_params, calculated, survey_original,
         Paragraph(f"  • Si RL < 0: |RL| ≤ LIMIT R = {lr:.2f} mm", styles["Normal2"]),
         Paragraph(f"  • Si RL > 0: |RL| ≤ LIMIT L = {ll:.2f} mm", styles["Normal2"]),
         Paragraph(f"  • Pared limitante: {'Sí — Parada ' + str(p.get('WALL_STOP','?')) + ' lado ' + str(p.get('WALL_SIDE','?')) if p.get('WALL_LIMITING') else 'No aplica'}", styles["Normal2"]),
-        Paragraph(f"  • TSW={fs('TSW')} vs FS={fs('FS')} — Validación activa: {'Sí' if fv('TSW') < fv('FS') and p.get('WALL_LIMITING') else 'No'}", styles["Normal2"]),
+        Paragraph(f"  • TSW={fs('TSW')} vs FS={fs('FS')} — FS−TSW={fv('FS')-fv('TSW'):.1f} mm — FB extra activo: {'Sí' if fv('FS') > fv('TSW') and p.get('WALL_LIMITING') else 'No'}", styles["Normal2"]),
         Paragraph(
             f"  • Controlador en frame: {'Sí — lado ' + str(p.get('CTRL_SIDE','?')) + ' → último nivel: LIMIT_O' + str(p.get('CTRL_SIDE','?')) + ' − 70 mm' if p.get('CTRL_IN_FRAME') else 'No'}",
             styles["Normal2"]),
@@ -510,26 +511,34 @@ def generate_report(project_params, calculated, survey_original,
 
     # Encabezado
     hdr = [
-        Paragraph("<b>RL</b>",    styles["Normal2"]),
-        Paragraph("<b>FB</b>",    styles["Normal2"]),
-        Paragraph("<b>OFF</b>",   styles["Normal2"]),
-        Paragraph("<b>WR</b>",    styles["Normal2"]),
-        Paragraph("<b>FR</b>",    styles["Normal2"]),
-        Paragraph("<b>OR</b>",    styles["Normal2"]),
-        Paragraph("<b>WL</b>",    styles["Normal2"]),
-        Paragraph("<b>FL</b>",    styles["Normal2"]),
-        Paragraph("<b>OL</b>",    styles["Normal2"]),
-        Paragraph("<b>Estado</b>", styles["Normal2"]),
+        Paragraph("<b>RL</b>",      styles["Normal2"]),
+        Paragraph("<b>FB</b>",      styles["Normal2"]),
+        Paragraph("<b>FB aplic.</b>",styles["Normal2"]),
+        Paragraph("<b>OFF</b>",     styles["Normal2"]),
+        Paragraph("<b>WR</b>",      styles["Normal2"]),
+        Paragraph("<b>FR</b>",      styles["Normal2"]),
+        Paragraph("<b>OR</b>",      styles["Normal2"]),
+        Paragraph("<b>WL</b>",      styles["Normal2"]),
+        Paragraph("<b>FL</b>",      styles["Normal2"]),
+        Paragraph("<b>OL</b>",      styles["Normal2"]),
+        Paragraph("<b>Estado</b>",  styles["Normal2"]),
     ]
     valid_rows = [hdr]
     for s in min_off_steps:
-        obc     = s.get("off_by_col", {})
-        is_opt  = (s["rl"], s["fb"]) in opt_pairs
-        estado  = Paragraph("✅ ÓPTIMO" if is_opt else "", styles["Normal2"])
+        obc        = s.get("off_by_col", {})
+        fb_aplic   = s.get("fb_applied", s["fb"])
+        is_opt     = (s["rl"], s["fb"]) in opt_pairs
+        estado     = Paragraph("✅ ÓPTIMO" if is_opt else "", styles["Normal2"])
+        fb_extra   = abs(fb_aplic - s["fb"]) > 0.01
+        fb_aplic_p = Paragraph(
+            f'<font color="#e67e22"><b>{fb_aplic:.1f}*</b></font>' if fb_extra
+            else f"{fb_aplic:.1f}",
+            styles["Mono"])
         row = [
-            Paragraph(f"{s['rl']:.1f}",      styles["Mono"]),
-            Paragraph(f"{s['fb']:.1f}",      styles["Mono"]),
-            Paragraph(f"{s['total_off']}",   styles["Mono"]),
+            Paragraph(f"{s['rl']:.1f}",     styles["Mono"]),
+            Paragraph(f"{s['fb']:.1f}",     styles["Mono"]),
+            fb_aplic_p,
+            Paragraph(f"{s['total_off']}",  styles["Mono"]),
             Paragraph(f"{obc.get('WR',0)}", styles["Mono"]),
             Paragraph(f"{obc.get('FR',0)}", styles["Mono"]),
             Paragraph(f"{obc.get('OR',0)}", styles["Mono"]),
@@ -540,7 +549,7 @@ def generate_report(project_params, calculated, survey_original,
         ]
         valid_rows.append(row)
 
-    cw = [W*0.09]*9 + [W*0.19]
+    cw = [W*0.08]*10 + [W*0.20]
     t_valid = Table(valid_rows, colWidths=cw)
     cmds_v = [
         ("GRID",       (0,0),(-1,-1), 0.3, colors.lightgrey),
@@ -556,7 +565,7 @@ def generate_report(project_params, calculated, survey_original,
             cmds_v.append(("BACKGROUND", (0,ri),(-1,ri), C_BEST))
             cmds_v.append(("FONTNAME",   (0,ri),(-1,ri), "Helvetica-Bold"))
         obc = s.get("off_by_col",{})
-        for ci, col in enumerate(["WR","FR","OR","WL","FL","OL"], start=3):
+        for ci, col in enumerate(["WR","FR","OR","WL","FL","OL"], start=4):
             if obc.get(col, 0) > 0:
                 cmds_v.append(("BACKGROUND",(ci,ri),(ci,ri), C_RED_BG))
     t_valid.setStyle(TableStyle(cmds_v))
@@ -574,17 +583,19 @@ def generate_report(project_params, calculated, survey_original,
         )
         story += [
             _calc_block("Resumen de optimización",
-                "Criterio 1: menor número de valores fuera de límite\nCriterio 2 (desempate): menor desplazamiento total |RL| + |FB|",
+                "Criterio 1: menor número de valores fuera de límite\nCriterio 2 (desempate): menor desplazamiento total |RL| + |FB aplicado|",
                 f"Candidatos con mínimo OFF: {n_sol}  |  Valores fuera de límite: {best['total_off']}",
-                f"Seleccionado: RL={best['rl']:.1f} mm, FB={best['fb']:.1f} mm  |  Desplazamiento total = {abs(best['rl'])+abs(best['fb']):.1f} mm",
+                f"Seleccionado: RL={best['rl']:.1f} mm, FB iterado={best['fb']:.1f} mm, FB aplicado={best.get('fb_applied', best['fb']):.1f} mm",
                 styles, ok=(best["total_off"]==0)),
             sp(6),
         ]
         for idx_sol, sol in enumerate(sorted_sols):
-            is_best = (sol["rl"], sol["fb"]) == best_pair_r
-            prefix  = "⭐ SELECCIONADA — " if is_best else ""
+            is_best   = (sol["rl"], sol["fb"]) == best_pair_r
+            prefix    = "⭐ SELECCIONADA — " if is_best else ""
+            fb_ap     = sol.get("fb_applied", sol["fb"])
+            fb_suffix = f"  |  FB aplic. = {fb_ap:.1f} mm" if abs(fb_ap - sol["fb"]) > 0.01 else ""
             story += [
-                _subheader(f"{prefix}Solución {idx_sol+1} de {n_sol} — RL = {sol['rl']} mm  |  FB = {sol['fb']} mm", styles),
+                _subheader(f"{prefix}Solución {idx_sol+1} de {n_sol} — RL = {sol['rl']} mm  |  FB = {sol['fb']} mm{fb_suffix}", styles),
                 sp(3),
                 Paragraph("Matriz con desplazamientos aplicados:", styles["Note"]), sp(3),
             ]
@@ -613,13 +624,15 @@ def generate_report(project_params, calculated, survey_original,
                     styles["Note"]), sp(3)]
             sol_sum = []
             for col in survey_cols:
-                cv = [r[col] for r in sol["matrix"]]
+                cv  = [r[col] for r in sol["matrix"]]
+                lim = lim_map[col]; mn = min(cv)
+                dif = mn - lim if col in ("OR", "OL") else lim - mn
                 sol_sum.append({
                     "Columna":       col,
-                    "Límite (mm)":   f"{lim_map[col]:.2f}",
-                    "Fuera límite":  sum(1 for v in cv if v < lim_map[col]),
-                    "Mínimo (mm)":   f"{min(cv):.2f}",
-                    "Dif vs Límite": f"{lim_map[col]-min(cv):.2f}",
+                    "Límite (mm)":   f"{lim:.2f}",
+                    "Fuera límite":  sum(1 for v in cv if v < lim),
+                    "Mínimo (mm)":   f"{mn:.2f}",
+                    "Dif vs Límite": f"{dif:.2f}",
                 })
             story += [_summary_table(sol_sum, styles), sp(6)]
     else:

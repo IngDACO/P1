@@ -29,29 +29,45 @@ def optimize(survey_adjusted: list, limits: dict, params: dict) -> dict:
             "WL": limits["LIMIT_WL"], "FL": limits["LIMIT_FL"],
         }
 
-    max_rl  = limits["MAX_OFF_RL"]
-    max_fb  = limits["MAX_OFF_FB"]
+    # lim_map completo para chequeos de pared (OR/OL siempre disponibles)
+    full_lim_map = {
+        "WR": limits["LIMIT_WR"], "FR": limits["LIMIT_FR"],
+        "OR": limits["LIMIT_OR"], "WL": limits["LIMIT_WL"],
+        "FL": limits["LIMIT_FL"], "OL": limits["LIMIT_OL"],
+    }
+
+    max_rl   = limits["MAX_OFF_RL"]
+    max_fb   = limits["MAX_OFF_FB"]
     rl_steps = np.arange(-max_rl, max_rl + 0.5, 0.5)
     fb_steps = np.arange(-max_fb, max_fb + 0.5, 0.5)
 
-    # ── Restricción FB hacia atrás (pre-calculada en calculate_limits) ──
-    # fb > 0 → desplazamiento hacia atrás; fb < 0 → hacia adelante
+    # ── Restricción FB hacia atrás ───────────────────────────────────
     fb_max_back = limits.get("FB_MAX_BACK", float("inf"))
 
     # ── Controlador en el frame ──────────────────────────────────────
     ctrl_in_frame = params.get("CTRL_IN_FRAME", False)
-    ctrl_side     = params.get("CTRL_SIDE", None)   # "R", "L" o None
+    ctrl_side     = params.get("CTRL_SIDE", None)
     last_row_idx  = len(survey_adjusted) - 1
-    # Límites base OR/OL (siempre disponibles aunque Caso 2 no los use en cols)
     full_lim_or   = limits.get("LIMIT_OR", 0)
     full_lim_ol   = limits.get("LIMIT_OL", 0)
 
     limit_r = limits.get("LIMIT_R", max_rl)
     limit_l = limits.get("LIMIT_L", max_rl)
 
-    best_total_off = None   # mínimo encontrado hasta ahora
-    best_solutions = []     # TODAS las soluciones con ese mínimo
+    best_total_off = None
+    best_solutions = []
     step_log       = []
+
+    # ── Helper: aplica desplazamientos (rl_, fb_) a survey_adjusted ──
+    def _apply(rl_, fb_):
+        return [{
+            "WR": row["WR"] + rl_,
+            "FR": row["FR"] + fb_,
+            "OR": row["OR"] + rl_,
+            "WL": row["WL"] - rl_,
+            "FL": row["FL"] + fb_,
+            "OL": row["OL"] - rl_,
+        } for row in survey_adjusted]
 
     for rl in rl_steps:
         # Validar rango RL
@@ -70,6 +86,12 @@ def optimize(survey_adjusted: list, limits: dict, params: dict) -> dict:
             })
             continue
 
+        # Dirección hacia la pared (se evalúa por cada rl, fuera del loop fb)
+        toward_wall = (
+            wall and wall_stop is not None and wall_side is not None and
+            ((wall_side == "R" and rl < 0) or (wall_side == "L" and rl > 0))
+        )
+
         for fb in fb_steps:
             # Validar límite FB hacia atrás
             if fb > fb_max_back:
@@ -80,19 +102,26 @@ def optimize(survey_adjusted: list, limits: dict, params: dict) -> dict:
                 })
                 continue
 
-            # Aplicar desplazamientos
-            modified = []
-            for row in survey_adjusted:
-                modified.append({
-                    "WR": row["WR"] + rl,
-                    "FR": row["FR"] + fb,
-                    "OR": row["OR"] + rl,
-                    "WL": row["WL"] - rl,
-                    "FL": row["FL"] + fb,
-                    "OL": row["OL"] - rl,
-                })
+            # ── Paso 1: desplazamientos iniciales ────────────────────
+            modified   = _apply(rl, fb)
+            fb_applied = fb
 
-            # Contar valores fuera de límite (fila por fila para soportar límites variables)
+            # ── Paso 2: FB extra si RL va hacia la pared ─────────────
+            # Condiciones:
+            #   a) RL apunta hacia el lado de la pared
+            #   b) FS > TSW
+            #   c) OR/OL en el nivel crítico (WALL_STOP) está fuera de límite
+            # → fb_applied = min(fb + (FS − TSW), FB_MAX_BACK)
+            if toward_wall and fs is not None and fs > tsw:
+                stop_idx  = int(wall_stop) - 1
+                check_col = "OR" if wall_side == "R" else "OL"
+                if 0 <= stop_idx < len(modified):
+                    if modified[stop_idx][check_col] < full_lim_map[check_col]:
+                        extra      = fs - tsw
+                        fb_applied = min(fb + extra, fb_max_back)
+                        modified   = _apply(rl, fb_applied)
+
+            # ── Paso 3: contar valores fuera de límite ────────────────
             off_by_col = {}
             min_by_col = {}
             total_off  = 0
@@ -102,7 +131,6 @@ def optimize(survey_adjusted: list, limits: dict, params: dict) -> dict:
                 off      = 0
                 for row_idx, v in enumerate(col_vals):
                     eff_lim = lim
-                    # Controlador: último nivel usa límite reducido 70 mm
                     if ctrl_in_frame and row_idx == last_row_idx:
                         if col == "OR" and ctrl_side == "R":
                             eff_lim = lim - 70
@@ -114,7 +142,7 @@ def optimize(survey_adjusted: list, limits: dict, params: dict) -> dict:
                 total_off      += off
                 min_by_col[col] = round(min(col_vals), 2)
 
-            # Caso 2: controlador activo sobre OR/OL (no están en cols, chequeo extra)
+            # Caso 2: controlador activo sobre OR/OL (no están en cols)
             if ctrl_in_frame and ctrl_side in ("R", "L"):
                 ctrl_col = "OR" if ctrl_side == "R" else "OL"
                 if ctrl_col not in cols:
@@ -124,29 +152,32 @@ def optimize(survey_adjusted: list, limits: dict, params: dict) -> dict:
                         off_by_col[ctrl_col] = off_by_col.get(ctrl_col, 0) + 1
                         total_off += 1
 
-            # Validar pared limitante
+            # ── Paso 4: chequeo duro de pared ─────────────────────────
+            # Se evalúa sobre el modified final (post-FB extra si aplica).
+            # Si OR/OL en la parada crítica sigue bajo el límite → SKIP.
             wall_fail   = False
             wall_reason = ""
             if wall and fs is not None and tsw < fs:
                 stop_idx = int(wall_stop) - 1
                 if 0 <= stop_idx < len(modified):
                     stop_row = modified[stop_idx]
-                    if wall_side == "R" and stop_row["OR"] < lim_map["OR"]:
+                    if wall_side == "R" and stop_row["OR"] < full_lim_map["OR"]:
                         wall_fail   = True
                         wall_reason = (f"Pared: OR parada {wall_stop}="
-                                       f"{stop_row['OR']:.1f} < LIMIT OR={lim_map['OR']:.1f}")
-                    if wall_side == "L" and stop_row["OL"] < lim_map["OL"]:
+                                       f"{stop_row['OR']:.1f} < LIMIT OR={full_lim_map['OR']:.1f}")
+                    if wall_side == "L" and stop_row["OL"] < full_lim_map["OL"]:
                         wall_fail   = True
                         wall_reason = (f"Pared: OL parada {wall_stop}="
-                                       f"{stop_row['OL']:.1f} < LIMIT OL={lim_map['OL']:.1f}")
+                                       f"{stop_row['OL']:.1f} < LIMIT OL={full_lim_map['OL']:.1f}")
 
             log_entry = {
-                "rl":         float(rl),
-                "fb":         float(fb),
-                "total_off":  total_off,
-                "off_by_col": off_by_col.copy(),
-                "min_by_col": min_by_col.copy(),
-                "wall_fail":  wall_fail,
+                "rl":          float(rl),
+                "fb":          float(fb),
+                "fb_applied":  float(fb_applied),   # FB efectivo (puede incluir extra FS-TSW)
+                "total_off":   total_off,
+                "off_by_col":  off_by_col.copy(),
+                "min_by_col":  min_by_col.copy(),
+                "wall_fail":   wall_fail,
                 "wall_reason": wall_reason,
             }
 
@@ -163,24 +194,22 @@ def optimize(survey_adjusted: list, limits: dict, params: dict) -> dict:
             solution = {
                 "rl":         float(rl),
                 "fb":         float(fb),
+                "fb_applied": float(fb_applied),
                 "total_off":  total_off,
                 "matrix":     modified,
                 "off_by_col": off_by_col.copy(),
                 "min_by_col": min_by_col.copy(),
             }
 
-            # ── Guardar todas las soluciones óptimas ──
             if best_total_off is None or total_off < best_total_off:
-                # Nuevo mínimo: reiniciar lista de soluciones
                 best_total_off = total_off
                 best_solutions = [solution]
             elif total_off == best_total_off:
-                # Mismo mínimo: agregar a la lista
                 best_solutions.append(solution)
 
-    # Desempate: de las soluciones con el mismo mínimo OFF, elegir la de menor desplazamiento total
+    # Desempate: menor desplazamiento total
     if best_solutions:
-        best_selected = min(best_solutions, key=lambda s: abs(s["rl"]) + abs(s["fb"]))
+        best_selected = min(best_solutions, key=lambda s: abs(s["rl"]) + abs(s["fb_applied"]))
     else:
         best_selected = None
 

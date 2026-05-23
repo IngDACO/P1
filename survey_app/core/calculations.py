@@ -110,7 +110,14 @@ def analyze_matrix(survey: list, limits: dict, wall_limiting: bool = True) -> di
     """
     Analiza la matriz ajustada contra los límites.
     Retorna off-counts, mínimos y diferencias.
-    wall_limiting=False → MAX OFF RL excluye DIF OR y DIF OL (Caso 2).
+
+    Convención de signos:
+      WR, FR, WL, FL → DIF = LIMIT − MIN  (positivo = bajo límite = requiere corrección)
+      OR, OL         → DIF = MIN − LIMIT  (positivo = supera límite = requiere corte;
+                                            negativo = bajo límite = sin violación)
+    MAX_OFF_RL = max(DIF_WR, DIF_WL) en ambos casos.
+      OR/OL no aportan: en Caso 1 su DIF es negativo y la restricción se
+      maneja como SKIP duro en el optimizador; en Caso 2 ya estaban excluidos.
     """
     cols    = ["WR", "FR", "OR", "WL", "FL", "OL"]
     lim_map = {
@@ -130,17 +137,12 @@ def analyze_matrix(survey: list, limits: dict, wall_limiting: bool = True) -> di
         min_val  = min(values)
         result[f"{col}_OFF_COUNT"] = len(off_vals)
         result[f"MIN_{col}"]       = min_val
-        result[f"DIF_{col}"]       = lim - min_val
+        if col in ("OR", "OL"):
+            result[f"DIF_{col}"] = min_val - lim   # positivo = supera límite
+        else:
+            result[f"DIF_{col}"] = lim - min_val   # positivo = bajo límite
 
-    if wall_limiting:
-        result["MAX_OFF_RL"] = max(
-            result["DIF_WR"], result["DIF_OR"],
-            result["DIF_WL"], result["DIF_OL"]
-        )
-    else:
-        # Caso 2: OR/OL no limitan el desplazamiento RL
-        result["MAX_OFF_RL"] = max(result["DIF_WR"], result["DIF_WL"])
-
+    result["MAX_OFF_RL"] = max(result["DIF_WR"], result["DIF_WL"])
     result["MAX_OFF_FB"] = max(result["DIF_FR"], result["DIF_FL"])
 
     return result
