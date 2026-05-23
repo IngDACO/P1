@@ -152,6 +152,10 @@ OR/OL son dimensiones que NO deben superar el límite máximo.
   CUT = v − LIMIT               (cuánto hay que cortar, solo cuando v > lim)
 ```
 ⚠️ WR/WL/FR/FL usan el criterio OPUESTO: fuera de límite = v < LIMIT (clearance mínimo).
+⚠️ Esta dirección (v > LIMIT) aplica en AMBOS casos (Caso 1 y Caso 2).
+   La diferencia entre casos es solo el COLOR y si cuentan como OFF en el optimizador:
+   - Caso 1: rojo claro (OR/OL cuentan como OFF completo)
+   - Caso 2: naranja (OR/OL NO cuentan como OFF; se muestran columnas CUT OR/OL)
 
 ---
 
@@ -227,7 +231,7 @@ Paso 4: línea a línea:
 
 ---
 
-## Versiones desplegadas (v16 = actual)
+## Versiones desplegadas (v17 = actual)
 | Ver | Cambio principal |
 |---|---|
 | v5 | Extractor: CRLF fix, caso D valor-antes-label, sin pdfplumber |
@@ -240,3 +244,4 @@ Paso 4: línea a línea:
 | v12 | Optimizer: 4-step flow, FB extra wall, fb_applied tracking, MAX_OFF_RL = max(DIF_WR,DIF_WL) |
 | v13-14 | Wall limiting: DIF OR/OL con MAX, fb_applied en soluciones y log |
 | v16 | Fix OR/OL: fuera de límite = v > LIMIT, DIF = MAX − LIMIT, CUT = v − LIMIT |
+| v17 | Fix OR/OL highlight Caso 1: v > LIMIT en ambos casos; rojo en Caso 1, naranja en Caso 2 |

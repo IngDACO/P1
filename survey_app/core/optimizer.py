@@ -63,10 +63,10 @@ def optimize(survey_adjusted: list, limits: dict, params: dict) -> dict:
         return [{
             "WR": row["WR"] + rl_,
             "FR": row["FR"] + fb_,
-            "OR": row["OR"] + rl_,
+            "OR": row["OR"] - rl_,   # rl>0 → resta OR  / rl<0 → suma OR
             "WL": row["WL"] - rl_,
             "FL": row["FL"] + fb_,
-            "OL": row["OL"] - rl_,
+            "OL": row["OL"] + rl_,   # rl>0 → suma OL  / rl<0 → resta OL
         } for row in survey_adjusted]
 
     for rl in rl_steps:
