@@ -142,9 +142,9 @@ def _survey_table(df, lim_map, min_vals, styles, cut_cols=None,
                 elif col == "OL" and ctrl_side == "L":
                     eff_lim = lim - 70
             if col in cut_cols:
-                # OR/OL Caso 2: naranja si supera límite;
-                # naranja oscuro (rojo) en el valor máximo
-                if val > eff_lim:
+                # OR/OL Caso 2: naranja si está bajo el límite (gap insuficiente → requiere corte);
+                # naranja oscuro en el valor máximo (DIF = LIMIT − MAX)
+                if val < eff_lim:
                     if max_val is not None and abs(val - max_val) < 0.001:
                         cmds += [("BACKGROUND",(ci,ri),(ci,ri),C_RED_DARK),
                                   ("TEXTCOLOR",(ci,ri),(ci,ri),C_WHITE),
@@ -444,9 +444,9 @@ def generate_report(project_params, calculated, survey_original,
         max_v = analysis.get(f"MAX_{col}", min_v)
         dif_v = analysis[f"DIF_{col}"]; off_c = analysis[f"{col}_OFF_COUNT"]
         if col in ("OR", "OL"):
-            # DIF = MAX − LIMIT: positivo = el valor máximo supera el límite (requiere corte)
-            formula_text = f"DIF {col} = MAX {col} − LIMIT {col}"
-            subst_text   = f"{max_v:.2f} − {lim:.2f}"
+            # DIF = LIMIT − MAX: positivo = incluso el MAX está bajo el límite (requiere corte)
+            formula_text = f"DIF {col} = LIMIT {col} − MAX {col}"
+            subst_text   = f"{lim:.2f} − {max_v:.2f}"
         else:
             formula_text = f"DIF {col} = LIMIT {col} − MIN {col}"
             subst_text   = f"{lim:.2f} − {min_v:.2f}"
@@ -623,8 +623,8 @@ def generate_report(project_params, calculated, survey_original,
                 for i, (or_v, ol_v) in enumerate(zip(sol_df["OR"], sol_df["OL"])):
                     or_lim = lor_v - 70 if (rpt_ctrl and rpt_ctrl_side == "R" and i == last_sol_idx) else lor_v
                     ol_lim = lol_v - 70 if (rpt_ctrl and rpt_ctrl_side == "L" and i == last_sol_idx) else lol_v
-                    cut_or_vals.append(f"{or_v - or_lim:.1f}" if or_v - or_lim > 0 else "")
-                    cut_ol_vals.append(f"{ol_v - ol_lim:.1f}" if ol_v - ol_lim > 0 else "")
+                    cut_or_vals.append(f"{or_lim - or_v:.1f}" if or_lim - or_v > 0 else "")
+                    cut_ol_vals.append(f"{ol_lim - ol_v:.1f}" if ol_lim - ol_v > 0 else "")
                 sol_df.insert(3, "CUT OR", cut_or_vals)
                 sol_df.insert(7, "CUT OL", cut_ol_vals)
             story  += [_survey_table(sol_df, lim_map, sol_min, styles,
@@ -632,16 +632,16 @@ def generate_report(project_params, calculated, survey_original,
                                      ctrl_in_frame=rpt_ctrl, ctrl_side=rpt_ctrl_side), sp(3)]
             if not wall_limiting:
                 story += [Paragraph(
-                    "CUT OR = OR − LIMIT OR  /  CUT OL = OL − LIMIT OL  "
-                    "(valor a cortar si supera el límite; vacío = dentro del límite)",
+                    "CUT OR = LIMIT OR − OR  /  CUT OL = LIMIT OL − OL  "
+                    "(déficit vs límite mínimo; positivo = gap insuficiente → requiere corte; vacío = dentro del límite)",
                     styles["Note"]), sp(3)]
             sol_sum = []
             for col in survey_cols:
                 cv  = [r[col] for r in sol["matrix"]]
                 lim = lim_map[col]
                 if col in ("OR", "OL"):
-                    ext = max(cv); dif = ext - lim
-                    off = sum(1 for v in cv if v > lim)
+                    ext = max(cv); dif = lim - ext
+                    off = sum(1 for v in cv if v < lim)
                     lbl = "Máximo (mm)"
                 else:
                     ext = min(cv); dif = lim - ext
