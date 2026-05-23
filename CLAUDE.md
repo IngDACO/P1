@@ -228,7 +228,7 @@ PARED FRONTAL                                          PARED FONDO
 | Aspecto | Caso 1 (WALL_LIMITING=True) | Caso 2 (WALL_LIMITING=False) |
 |---|---|---|
 | OR/OL en conteo OFF | Sí (v > lim) | **No** (se gestionan como restricción dura) |
-| MAX_OFF_RL fórmula | max(DIF_WR, DIF_WL) en ambos casos | max(DIF_WR, DIF_WL) |
+| MAX_OFF_RL fórmula | max(DIF_WR, DIF_WL, max(0,DIF_OR), max(0,DIF_OL)) | max(DIF_WR, DIF_WL, max(0,DIF_OR), max(0,DIF_OL)) |
 | Columnas optimizer | WR FR OR WL FL OL | WR FR WL FL |
 | Color OR/OL en tabla | Naranja si v > lim | **Naranja si v > lim** (requiere corte) |
 | Columnas extra | — | CUT OR = OR−LIMIT_OR, CUT OL = OL−LIMIT_OL |
@@ -306,6 +306,7 @@ Paso 4: línea a línea:
 | v10 | Extractor: visitor_text con posiciones XY evita concatenación anotaciones CAD; TKS rango (5,150) |
 | v11 | Extractor: two-pass (visitor + plain text) para recuperar BKF1/BKF2 caso-D |
 | v12 | Optimizer: 4-step flow, FB extra wall, fb_applied tracking, MAX_OFF_RL = max(DIF_WR,DIF_WL) |
+| v22 | Fix MAX_OFF_RL: incluye max(0,DIF_OR) y max(0,DIF_OL) para barrido correcto cuando OR/OL exceden límite |
 | v13-14 | Wall limiting: DIF OR/OL con MAX, fb_applied en soluciones y log |
 | v16 | Fix OR/OL: fuera de límite = v > LIMIT, DIF = MAX − LIMIT, CUT = v − LIMIT |
 | v17 | Fix OR/OL highlight Caso 1: v > LIMIT en ambos casos; rojo en Caso 1, naranja en Caso 2 |

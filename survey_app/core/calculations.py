@@ -149,7 +149,12 @@ def analyze_matrix(survey: list, limits: dict, wall_limiting: bool = True) -> di
             result[f"{col}_OFF_COUNT"] = sum(1 for v in values if v < lim)
             result[f"DIF_{col}"]       = lim - min_val
 
-    result["MAX_OFF_RL"] = max(result["DIF_WR"], result["DIF_WL"])
+    result["MAX_OFF_RL"] = max(
+        result["DIF_WR"],
+        result["DIF_WL"],
+        max(0.0, result["DIF_OR"]),   # OR sobre límite → necesita rl > 0
+        max(0.0, result["DIF_OL"]),   # OL sobre límite → necesita rl < 0
+    )
     result["MAX_OFF_FB"] = max(result["DIF_FR"], result["DIF_FL"])
 
     return result
