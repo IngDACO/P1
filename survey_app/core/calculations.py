@@ -134,15 +134,19 @@ def analyze_matrix(survey: list, limits: dict, wall_limiting: bool = True) -> di
         values  = [row[col] for row in survey]
         lim     = lim_map[col]
         min_val = min(values)
+        max_val = max(values)
         result[f"MIN_{col}"] = min_val
+        result[f"MAX_{col}"] = max_val
         if col in ("OR", "OL"):
             # OR/OL: fuera de límite = v > lim (supera el límite → requiere corte)
+            # DIF = MAX − LIMIT: positivo = el peor valor supera el límite
             result[f"{col}_OFF_COUNT"] = sum(1 for v in values if v > lim)
-            result[f"DIF_{col}"]       = min_val - lim   # positivo = supera límite
+            result[f"DIF_{col}"]       = max_val - lim
         else:
             # WR, FR, WL, FL: fuera de límite = v < lim (bajo el mínimo requerido)
+            # DIF = LIMIT − MIN: positivo = el peor valor está bajo el límite
             result[f"{col}_OFF_COUNT"] = sum(1 for v in values if v < lim)
-            result[f"DIF_{col}"]       = lim - min_val   # positivo = bajo límite
+            result[f"DIF_{col}"]       = lim - min_val
 
     result["MAX_OFF_RL"] = max(result["DIF_WR"], result["DIF_WL"])
     result["MAX_OFF_FB"] = max(result["DIF_FR"], result["DIF_FL"])

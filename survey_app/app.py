@@ -261,13 +261,14 @@ if st.button("🚀 Calcular", type="primary", use_container_width=True):
 
     lim_map  = {c: limits[f"LIMIT_{c}"] for c in SURVEY_COLS}
     min_vals = {f"MIN_{c}": analysis[f"MIN_{c}"] for c in SURVEY_COLS}
+    max_vals = {f"MAX_{c}": analysis.get(f"MAX_{c}", analysis[f"MIN_{c}"]) for c in SURVEY_COLS}
 
     # cut_cols: columnas que en Caso 2 no cuentan como OFF sino como "requiere corte"
     # Para esas columnas: naranja cuando v > lim (requiere corte), sin rojo cuando v < lim
     cut_cols = ["OR", "OL"] if wall_yn == "N" else []
 
-    def highlight(df, lm, mv, cc=cut_cols):
-        styles  = pd.DataFrame("", index=df.index, columns=df.columns)
+    def highlight(df, lm, mv, cc=cut_cols, mxv=max_vals):
+        styles   = pd.DataFrame("", index=df.index, columns=df.columns)
         idx_list = list(df.index)
         last_i   = idx_list[-1] if idx_list else None
         for col in df.columns:
@@ -275,11 +276,11 @@ if st.button("🚀 Calcular", type="primary", use_container_width=True):
                 continue
             lim     = lm[col]
             min_val = mv.get(f"MIN_{col}")
+            max_val = mxv.get(f"MAX_{col}")
             for idx in df.index:
                 v = df.at[idx, col]
                 if not isinstance(v, (int, float)):
                     continue
-                # Límite efectivo: −70 en el último nivel si controlador activo
                 eff_lim = lim
                 if ctrl_in_frame and idx == last_i:
                     if col == "OR" and ctrl_side == "R":
@@ -287,8 +288,13 @@ if st.button("🚀 Calcular", type="primary", use_container_width=True):
                     elif col == "OL" and ctrl_side == "L":
                         eff_lim = lim - 70
                 if col in cc:
+                    # OR/OL Caso 2: naranja si supera límite;
+                    # naranja oscuro en el valor máximo (el de mayor corte)
                     if v > eff_lim:
-                        styles.at[idx, col] = "background-color:#e67e22;color:white;font-weight:bold"
+                        if max_val is not None and abs(v - max_val) < 0.001:
+                            styles.at[idx, col] = "background-color:#c0392b;color:white;font-weight:bold"
+                        else:
+                            styles.at[idx, col] = "background-color:#e67e22;color:white;font-weight:bold"
                 else:
                     if min_val is not None and abs(v - min_val) < 0.001 and v < eff_lim:
                         styles.at[idx, col] = "background-color:#c0392b;color:white;font-weight:bold"
@@ -354,6 +360,7 @@ if st.button("🚀 Calcular", type="primary", use_container_width=True):
             with st.expander(sol_label, expanded=(idx_sol == 0)):
                 sol_df  = pd.DataFrame(sol["matrix"])
                 sol_min = {f"MIN_{c}": min(sol_df[c]) for c in SURVEY_COLS}
+                sol_max = {f"MAX_{c}": max(sol_df[c]) for c in SURVEY_COLS}
                 # Caso 2: agregar CUT OR / CUT OL cuando no hay pared limitante
                 if wall_yn == "N":
                     lor_v        = lim_map["OR"]
@@ -368,7 +375,7 @@ if st.button("🚀 Calcular", type="primary", use_container_width=True):
                     sol_df.insert(3, "CUT OR", cut_or_vals)
                     sol_df.insert(7, "CUT OL", cut_ol_vals)
                 st.dataframe(
-                    sol_df.style.apply(lambda df, m=sol_min: highlight(df, lim_map, m), axis=None),
+                    sol_df.style.apply(lambda df, m=sol_min, mx=sol_max: highlight(df, lim_map, m, mxv=mx), axis=None),
                     use_container_width=True
                 )
                 if wall_yn == "N":
@@ -376,13 +383,22 @@ if st.button("🚀 Calcular", type="primary", use_container_width=True):
                 sol_sum = []
                 for col in SURVEY_COLS:
                     col_vals = [r[col] for r in sol["matrix"]]
-                    lim_c = lim_map[col]; mn_c = min(col_vals)
-                    dif_c = mn_c - lim_c if col in ("OR", "OL") else lim_c - mn_c
+                    lim_c = lim_map[col]
+                    if col in ("OR", "OL"):
+                        ext_c = max(col_vals)
+                        dif_c = ext_c - lim_c
+                        off_c = sum(1 for v in col_vals if v > lim_c)
+                        lbl   = "Máximo (mm)"
+                    else:
+                        ext_c = min(col_vals)
+                        dif_c = lim_c - ext_c
+                        off_c = sum(1 for v in col_vals if v < lim_c)
+                        lbl   = "Mínimo (mm)"
                     sol_sum.append({
                         "Columna":       col,
                         "Límite (mm)":   round(lim_c, 2),
-                        "Fuera límite":  sum(1 for v in col_vals if v < lim_c),
-                        "Mínimo (mm)":   round(mn_c, 2),
+                        "Fuera límite":  off_c,
+                        lbl:             round(ext_c, 2),
                         "Dif vs Límite": round(dif_c, 2),
                     })
                 st.dataframe(pd.DataFrame(sol_sum), use_container_width=True, hide_index=True)

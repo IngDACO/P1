@@ -98,13 +98,15 @@ def _param_table(data_dict, styles, cols=4):
 C_ORANGE = colors.HexColor("#e67e22")
 
 def _survey_table(df, lim_map, min_vals, styles, cut_cols=None,
-                  ctrl_in_frame=False, ctrl_side=None):
+                  ctrl_in_frame=False, ctrl_side=None, max_vals=None):
     """
     cut_cols: columnas OR/OL en Caso 2 — naranja si val > eff_lim.
     ctrl_in_frame / ctrl_side: reducen el límite −70 mm en la última fila.
+    max_vals: dict {MAX_OR, MAX_OL, ...} — resaltado oscuro en el valor máximo de cut_cols.
     """
     cut_cols     = cut_cols or []
-    last_data_ri = len(df)      # último ri (1-based) = número de filas de datos
+    max_vals     = max_vals or {}
+    last_data_ri = len(df)
     cols   = list(df.columns)
     header = [Paragraph("<b>#</b>", styles["Normal2"])] + [Paragraph(f"<b>{c}</b>", styles["Normal2"]) for c in cols]
     rows   = [header]
@@ -128,10 +130,11 @@ def _survey_table(df, lim_map, min_vals, styles, cut_cols=None,
         for ci, col in enumerate(cols, start=1):
             if col not in lim_map:
                 continue
-            val = row[col]; lim = lim_map[col]; min_val = min_vals.get(f"MIN_{col}")
+            val = row[col]; lim = lim_map[col]
+            min_val = min_vals.get(f"MIN_{col}")
+            max_val = max_vals.get(f"MAX_{col}")
             if not isinstance(val, (int, float)):
                 continue
-            # Límite efectivo: −70 en último nivel si controlador activo
             eff_lim = lim
             if ctrl_in_frame and ri == last_data_ri:
                 if col == "OR" and ctrl_side == "R":
@@ -139,10 +142,17 @@ def _survey_table(df, lim_map, min_vals, styles, cut_cols=None,
                 elif col == "OL" and ctrl_side == "L":
                     eff_lim = lim - 70
             if col in cut_cols:
+                # OR/OL Caso 2: naranja si supera límite;
+                # naranja oscuro (rojo) en el valor máximo
                 if val > eff_lim:
-                    cmds += [("BACKGROUND",(ci,ri),(ci,ri),C_ORANGE),
-                              ("TEXTCOLOR",(ci,ri),(ci,ri),C_WHITE),
-                              ("FONTNAME",(ci,ri),(ci,ri),"Helvetica-Bold")]
+                    if max_val is not None and abs(val - max_val) < 0.001:
+                        cmds += [("BACKGROUND",(ci,ri),(ci,ri),C_RED_DARK),
+                                  ("TEXTCOLOR",(ci,ri),(ci,ri),C_WHITE),
+                                  ("FONTNAME",(ci,ri),(ci,ri),"Helvetica-Bold")]
+                    else:
+                        cmds += [("BACKGROUND",(ci,ri),(ci,ri),C_ORANGE),
+                                  ("TEXTCOLOR",(ci,ri),(ci,ri),C_WHITE),
+                                  ("FONTNAME",(ci,ri),(ci,ri),"Helvetica-Bold")]
             else:
                 if val < eff_lim:
                     if min_val is not None and abs(val-min_val)<0.001:
@@ -418,23 +428,25 @@ def generate_report(project_params, calculated, survey_original,
     # ── 6. MATRIZ AJUSTADA ───────────────────────────────────
     story += [_section_header("6. MATRIZ SURVEY AJUSTADA Y ANÁLISIS", styles), sp(4)]
     min_vals = {f"MIN_{c}": analysis[f"MIN_{c}"] for c in survey_cols}
+    max_vals = {f"MAX_{c}": analysis.get(f"MAX_{c}", analysis[f"MIN_{c}"]) for c in survey_cols}
     wall_limiting  = p.get("WALL_LIMITING", False)
     rpt_cut_cols   = ["OR", "OL"] if not wall_limiting else []
     rpt_ctrl       = p.get("CTRL_IN_FRAME", False)
     rpt_ctrl_side  = p.get("CTRL_SIDE", None)
     story += [_survey_table(survey_adjusted, lim_map, min_vals, styles,
-                            cut_cols=rpt_cut_cols,
+                            cut_cols=rpt_cut_cols, max_vals=max_vals,
                             ctrl_in_frame=rpt_ctrl, ctrl_side=rpt_ctrl_side), sp(6)]
 
     # DIF por columna
     story += [Paragraph("6.1  Diferencias respecto a límites (columna por columna)", styles["SubHead"]), sp(3)]
     for col in survey_cols:
         lim   = lim_map[col]; min_v = analysis[f"MIN_{col}"]
+        max_v = analysis.get(f"MAX_{col}", min_v)
         dif_v = analysis[f"DIF_{col}"]; off_c = analysis[f"{col}_OFF_COUNT"]
         if col in ("OR", "OL"):
-            # DIF = MIN − LIMIT: negativo = sin violación; positivo = supera límite (requiere corte)
-            formula_text = f"DIF {col} = MIN {col} − LIMIT {col}"
-            subst_text   = f"{min_v:.2f} − {lim:.2f}"
+            # DIF = MAX − LIMIT: positivo = el valor máximo supera el límite (requiere corte)
+            formula_text = f"DIF {col} = MAX {col} − LIMIT {col}"
+            subst_text   = f"{max_v:.2f} − {lim:.2f}"
         else:
             formula_text = f"DIF {col} = LIMIT {col} − MIN {col}"
             subst_text   = f"{lim:.2f} − {min_v:.2f}"
@@ -601,6 +613,7 @@ def generate_report(project_params, calculated, survey_original,
             ]
             sol_df  = pd.DataFrame(sol["matrix"])
             sol_min = {f"MIN_{c}": min(sol_df[c]) for c in survey_cols}
+            sol_max = {f"MAX_{c}": max(sol_df[c]) for c in survey_cols}
             # Caso 2: agregar CUT OR / CUT OL con ajuste de controlador en último nivel
             if not wall_limiting:
                 lor_v        = lim_map["OR"]
@@ -615,7 +628,7 @@ def generate_report(project_params, calculated, survey_original,
                 sol_df.insert(3, "CUT OR", cut_or_vals)
                 sol_df.insert(7, "CUT OL", cut_ol_vals)
             story  += [_survey_table(sol_df, lim_map, sol_min, styles,
-                                     cut_cols=rpt_cut_cols,
+                                     cut_cols=rpt_cut_cols, max_vals=sol_max,
                                      ctrl_in_frame=rpt_ctrl, ctrl_side=rpt_ctrl_side), sp(3)]
             if not wall_limiting:
                 story += [Paragraph(
@@ -625,13 +638,20 @@ def generate_report(project_params, calculated, survey_original,
             sol_sum = []
             for col in survey_cols:
                 cv  = [r[col] for r in sol["matrix"]]
-                lim = lim_map[col]; mn = min(cv)
-                dif = mn - lim if col in ("OR", "OL") else lim - mn
+                lim = lim_map[col]
+                if col in ("OR", "OL"):
+                    ext = max(cv); dif = ext - lim
+                    off = sum(1 for v in cv if v > lim)
+                    lbl = "Máximo (mm)"
+                else:
+                    ext = min(cv); dif = lim - ext
+                    off = sum(1 for v in cv if v < lim)
+                    lbl = "Mínimo (mm)"
                 sol_sum.append({
                     "Columna":       col,
                     "Límite (mm)":   f"{lim:.2f}",
-                    "Fuera límite":  sum(1 for v in cv if v < lim),
-                    "Mínimo (mm)":   f"{mn:.2f}",
+                    "Fuera límite":  off,
+                    lbl:             f"{ext:.2f}",
                     "Dif vs Límite": f"{dif:.2f}",
                 })
             story += [_summary_table(sol_sum, styles), sp(6)]
