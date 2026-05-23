@@ -138,11 +138,11 @@ def analyze_matrix(survey: list, limits: dict, wall_limiting: bool = True) -> di
         result[f"MIN_{col}"] = min_val
         result[f"MAX_{col}"] = max_val
         if col in ("OR", "OL"):
-            # OR/OL: fuera de límite = v < lim (bajo el límite → requiere corte)
-            # DIF = LIMIT − MAX: positivo = incluso el MAX está bajo el límite (cut needed)
-            #                     negativo = MAX supera el límite (sin violación)
-            result[f"{col}_OFF_COUNT"] = sum(1 for v in values if v < lim)
-            result[f"DIF_{col}"]       = lim - max_val
+            # OR/OL: fuera de límite = v > lim (supera el límite → requiere corte)
+            # DIF = MAX − LIMIT: positivo = el máximo supera el límite (cut needed)
+            #                    negativo = el máximo está bajo el límite (sin violación)
+            result[f"{col}_OFF_COUNT"] = sum(1 for v in values if v > lim)
+            result[f"DIF_{col}"]       = max_val - lim
         else:
             # WR, FR, WL, FL: fuera de límite = v < lim (bajo el mínimo requerido)
             # DIF = LIMIT − MIN: positivo = el peor valor está bajo el límite

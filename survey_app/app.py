@@ -288,9 +288,9 @@ if st.button("🚀 Calcular", type="primary", use_container_width=True):
                     elif col == "OL" and ctrl_side == "L":
                         eff_lim = lim - 70
                 if col in cc:
-                    # OR/OL Caso 2: naranja si está bajo el límite (gap insuficiente → requiere corte);
-                    # naranja oscuro en el valor máximo (DIF = LIMIT − MAX)
-                    if v < eff_lim:
+                    # OR/OL Caso 2: naranja si supera el límite (v > lim → requiere corte);
+                    # naranja oscuro en el valor máximo (mayor corte)
+                    if v > eff_lim:
                         if max_val is not None and abs(v - max_val) < 0.001:
                             styles.at[idx, col] = "background-color:#c0392b;color:white;font-weight:bold"
                         else:
@@ -370,8 +370,8 @@ if st.button("🚀 Calcular", type="primary", use_container_width=True):
                     for i, (or_v, ol_v) in enumerate(zip(sol_df["OR"], sol_df["OL"])):
                         or_lim = lor_v - 70 if (ctrl_in_frame and ctrl_side == "R" and i == last_sol_idx) else lor_v
                         ol_lim = lol_v - 70 if (ctrl_in_frame and ctrl_side == "L" and i == last_sol_idx) else lol_v
-                        cut_or_vals.append(round(or_lim - or_v, 1) if or_lim - or_v > 0 else "")
-                        cut_ol_vals.append(round(ol_lim - ol_v, 1) if ol_lim - ol_v > 0 else "")
+                        cut_or_vals.append(round(or_v - or_lim, 1) if or_v - or_lim > 0 else "")
+                        cut_ol_vals.append(round(ol_v - ol_lim, 1) if ol_v - ol_lim > 0 else "")
                     sol_df.insert(3, "CUT OR", cut_or_vals)
                     sol_df.insert(7, "CUT OL", cut_ol_vals)
                 st.dataframe(
@@ -379,15 +379,15 @@ if st.button("🚀 Calcular", type="primary", use_container_width=True):
                     use_container_width=True
                 )
                 if wall_yn == "N":
-                    st.caption("CUT OR / CUT OL: déficit vs límite mínimo (LIMIT − OR/OL). Positivo = gap insuficiente → requiere corte. Blanco = dentro del límite.")
+                    st.caption("CUT OR / CUT OL: valor a cortar si OR/OL supera el límite (OR/OL − LIMIT). Positivo = requiere corte. Blanco = dentro del límite.")
                 sol_sum = []
                 for col in SURVEY_COLS:
                     col_vals = [r[col] for r in sol["matrix"]]
                     lim_c = lim_map[col]
                     if col in ("OR", "OL"):
                         ext_c = max(col_vals)
-                        dif_c = lim_c - ext_c
-                        off_c = sum(1 for v in col_vals if v < lim_c)
+                        dif_c = ext_c - lim_c
+                        off_c = sum(1 for v in col_vals if v > lim_c)
                         lbl   = "Máximo (mm)"
                     else:
                         ext_c = min(col_vals)
