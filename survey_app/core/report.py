@@ -261,6 +261,120 @@ def _dg_fb(max_fb, fb_max_back, bc_calc, dif_tsw_fs):
     return lines
 
 
+def _violations_block(surv_list, lim_map, survey_cols, styles,
+                       ctrl_in_frame=False, ctrl_side=None):
+    """
+    Devuelve elementos de story con el análisis de violaciones:
+      - Tabla resumen: col | límite | criterio | # viol | niveles | DIF | estado
+      - Matriz por nivel: # | WR | FR | OR | WL | FL | OL | viol.
+    Verde = dentro de límite, Rojo = fuera de límite.
+    """
+    elements = []
+    last_i   = len(surv_list) - 1
+
+    # ── Calcular violaciones ────────────────────────────────────────
+    col_viols = {}       # col → lista de niveles (1-based) que violan
+    cell_data  = {}      # (i, col) → (viol, val, eff_lim, excess)
+    for col in survey_cols:
+        if col not in lim_map:
+            continue
+        lim = lim_map[col]
+        col_viols[col] = []
+        for i, row in enumerate(surv_list):
+            v  = row.get(col, 0) if isinstance(row, dict) else float(row[col])
+            el = lim
+            if ctrl_in_frame and i == last_i:
+                if col == "OR" and ctrl_side == "R":   el -= 70
+                elif col == "OL" and ctrl_side == "L": el -= 70
+            if col in ("OR", "OL"):
+                viol   = v > el
+                excess = round(v - el, 1)
+            else:
+                viol   = v < el
+                excess = round(el - v, 1)
+            if viol:
+                col_viols[col].append(i + 1)
+            cell_data[(i, col)] = (viol, round(v, 1), el, excess)
+
+    # ── Tabla resumen por columna ───────────────────────────────────
+    hdr_s = [Paragraph(f"<b>{h}</b>", styles["Normal2"]) for h in
+             ["Col.", "Límite", "Criterio", "# Viol.", "Niveles incumplidos", "DIF (mm)", "Estado"]]
+    rows_s = [hdr_s]
+    for col in survey_cols:
+        if col not in lim_map:
+            continue
+        lim   = lim_map[col]
+        viols = col_viols.get(col, [])
+        n     = len(viols)
+        crit  = "v > LIM" if col in ("OR", "OL") else "v < LIM"
+        vals  = [row.get(col, 0) if isinstance(row, dict) else float(row[col])
+                 for row in surv_list]
+        dif   = max(vals) - lim if col in ("OR", "OL") else lim - min(vals)
+        rows_s.append([
+            Paragraph(f"<b>{col}</b>",                                      styles["Normal2"]),
+            Paragraph(f"{lim:.1f}",                                         styles["Normal2"]),
+            Paragraph(crit,                                                  styles["Normal2"]),
+            Paragraph(str(n),                                                styles["Normal2"]),
+            Paragraph(", ".join(str(l) for l in viols) if viols else "—",  styles["Normal2"]),
+            Paragraph(f"{dif:.2f}",                                         styles["Normal2"]),
+            Paragraph("❌" if n else "✅",                                   styles["Normal2"]),
+        ])
+    cw_s = [20*mm, 20*mm, 22*mm, 16*mm, 44*mm, 26*mm, 22*mm]
+    t_s  = Table(rows_s, colWidths=cw_s)
+    cmds_s = [
+        ("GRID",         (0,0), (-1,-1), 0.3, colors.lightgrey),
+        ("BACKGROUND",   (0,0), (-1,0),  C_SUBHEAD),
+        ("TEXTCOLOR",    (0,0), (-1,0),  C_WHITE),
+        ("FONTNAME",     (0,0), (-1,0),  "Helvetica-Bold"),
+        ("BACKGROUND",   (0,1), (-1,-1), C_GREY),
+        ("TOPPADDING",   (0,0), (-1,-1), 3),
+        ("BOTTOMPADDING",(0,0), (-1,-1), 3),
+        ("LEFTPADDING",  (0,0), (-1,-1), 4),
+    ]
+    for ri, col in enumerate(survey_cols, start=1):
+        if col_viols.get(col):
+            cmds_s.append(("BACKGROUND", (0,ri), (-1,ri), C_RED_BG))
+    t_s.setStyle(TableStyle(cmds_s))
+    elements += [t_s, sp(4)]
+
+    # ── Matriz por nivel ────────────────────────────────────────────
+    ncols  = len(survey_cols)
+    hdr_l  = ([Paragraph("<b>#</b>",    styles["Normal2"])] +
+               [Paragraph(f"<b>{c}</b>", styles["Normal2"]) for c in survey_cols] +
+               [Paragraph("<b>Viol.</b>", styles["Normal2"])])
+    rows_l = [hdr_l]
+    cmds_l = [
+        ("GRID",         (0,0), (-1,-1), 0.3, colors.lightgrey),
+        ("BACKGROUND",   (0,0), (-1,0),  C_SUBHEAD),
+        ("TEXTCOLOR",    (0,0), (-1,0),  C_WHITE),
+        ("FONTNAME",     (0,0), (-1,0),  "Helvetica-Bold"),
+        ("TOPPADDING",   (0,0), (-1,-1), 3),
+        ("BOTTOMPADDING",(0,0), (-1,-1), 3),
+        ("LEFTPADDING",  (0,0), (-1,-1), 3),
+        ("ALIGN",        (0,0), (-1,-1), "CENTER"),
+    ]
+    cw_l = [12*mm] + [(W - 26*mm) / ncols] * ncols + [14*mm]
+    for i in range(len(surv_list)):
+        n_viol = 0
+        cells  = [Paragraph(str(i + 1), styles["Normal2"])]
+        for ci, col in enumerate(survey_cols, start=1):
+            viol, val, el, excess = cell_data.get((i, col), (False, 0, 0, 0))
+            cells.append(Paragraph(f"{val:.1f}", styles["Normal2"]))
+            cmds_l.append(("BACKGROUND", (ci, i+1), (ci, i+1),
+                            C_RED_BG if viol else C_GREEN_BG))
+            if viol:
+                n_viol += 1
+        cells.append(Paragraph(str(n_viol) if n_viol else "✓", styles["Normal2"]))
+        if n_viol:
+            cmds_l.append(("BACKGROUND", (ncols+1, i+1), (ncols+1, i+1), C_RED_BG))
+        rows_l.append(cells)
+    t_l = Table(rows_l, colWidths=cw_l)
+    t_l.setStyle(TableStyle(cmds_l))
+    elements.append(t_l)
+
+    return elements
+
+
 def _summary_table(summary_list, styles):
     if not summary_list: return sp(2)
     header = [Paragraph(f"<b>{k}</b>", styles["Normal2"]) for k in summary_list[0]]
@@ -467,7 +581,25 @@ def generate_report(project_params, calculated, survey_original,
             f"MAX OFF RL = {max_rl:.2f} mm", styles), sp(3),
         _calc_block("MAX OFF FB", "MAX OFF FB = max(DIF FR, DIF FL)",
             f"max({analysis['DIF_FR']:.2f}, {analysis['DIF_FL']:.2f})",
-            f"MAX OFF FB = {max_fb:.2f} mm", styles), sp(8)]
+            f"MAX OFF FB = {max_fb:.2f} mm", styles), sp(6)]
+
+    # ── 6.2 ESTADO INICIAL — límites incumplidos ─────────────────
+    story += [
+        Paragraph("6.2  Estado inicial — límites incumplidos antes de la optimización",
+                  styles["SubHead"]),
+        sp(2),
+        Paragraph(
+            "Análisis del estado de la cabina ajustada ANTES de aplicar cualquier "
+            "desplazamiento de optimización. Permite identificar qué límites se incumplen "
+            "y en qué niveles, como punto de partida para evaluar las mejoras obtenidas.",
+            styles["Note"]),
+        sp(3),
+    ]
+    surv_list_adj = (survey_adjusted.to_dict("records")
+                     if hasattr(survey_adjusted, "to_dict") else list(survey_adjusted))
+    story += _violations_block(surv_list_adj, lim_map, survey_cols, styles,
+                                rpt_ctrl, rpt_ctrl_side)
+    story += [sp(8)]
 
     # ── 7. OPTIMIZACIÓN — CADA PASO ─────────────────────────
     story += [PageBreak(), _section_header("7. OPTIMIZACIÓN — TRAZABILIDAD COMPLETA DE CADA PASO", styles), sp(4)]
@@ -644,17 +776,20 @@ def generate_report(project_params, calculated, survey_original,
                 cv  = [r[col] for r in sol["matrix"]]
                 lim = lim_map[col]
                 if col in ("OR", "OL"):
-                    ext = max(cv); dif = ext - lim
-                    off = sum(1 for v in cv if v > lim)
-                    lbl = "Máximo (mm)"
+                    ext   = max(cv); dif = ext - lim
+                    off   = sum(1 for v in cv if v > lim)
+                    lbl   = "Máximo (mm)"
+                    viols = [str(i+1) for i,v in enumerate(cv) if v > lim]
                 else:
-                    ext = min(cv); dif = lim - ext
-                    off = sum(1 for v in cv if v < lim)
-                    lbl = "Mínimo (mm)"
+                    ext   = min(cv); dif = lim - ext
+                    off   = sum(1 for v in cv if v < lim)
+                    lbl   = "Mínimo (mm)"
+                    viols = [str(i+1) for i,v in enumerate(cv) if v < lim]
                 sol_sum.append({
                     "Columna":       col,
                     "Límite (mm)":   f"{lim:.2f}",
                     "Fuera límite":  off,
+                    "Niveles":       ", ".join(viols) if viols else "—",
                     lbl:             f"{ext:.2f}",
                     "Dif vs Límite": f"{dif:.2f}",
                 })

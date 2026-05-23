@@ -312,15 +312,30 @@ if st.button("🚀 Calcular", type="primary", use_container_width=True):
         use_container_width=True
     )
 
-    st.subheader("Resumen por columna")
+    st.subheader("Resumen por columna — Estado inicial")
+    _last_adj = len(survey_adj) - 1
     summary = []
     for col in SURVEY_COLS:
+        lim_c = lim_map[col]
+        _viols = []
+        for _i, _row in enumerate(survey_adj):
+            _v = _row[col]; _el = lim_c
+            if ctrl_in_frame and _i == _last_adj:
+                if col == "OR" and ctrl_side == "R":   _el -= 70
+                elif col == "OL" and ctrl_side == "L": _el -= 70
+            if col in ("OR", "OL"):
+                if _v > _el: _viols.append(str(_i + 1))
+            else:
+                if _v < _el: _viols.append(str(_i + 1))
+        _ext = round(analysis.get(f"MAX_{col}", analysis[f"MIN_{col}"]), 2) \
+               if col in ("OR", "OL") else round(analysis[f"MIN_{col}"], 2)
         summary.append({
-            "Columna":        col,
-            "Límite (mm)":    round(lim_map[col], 2),
-            "Fuera límite":   analysis[f"{col}_OFF_COUNT"],
-            "Mínimo (mm)":    round(analysis[f"MIN_{col}"], 2),
-            "Diferencia(mm)": round(analysis[f"DIF_{col}"], 2),
+            "Columna":             col,
+            "Límite (mm)":         round(lim_c, 2),
+            "Fuera límite":        analysis[f"{col}_OFF_COUNT"],
+            "Niveles incumplidos": ", ".join(_viols) if _viols else "—",
+            "Min / Max (mm)":      _ext,
+            "Diferencia (mm)":     round(analysis[f"DIF_{col}"], 2),
         })
     st.dataframe(pd.DataFrame(summary), use_container_width=True, hide_index=True)
     bc_calc      = limits.get("BC_CALC", 0.0)
@@ -393,15 +408,18 @@ if st.button("🚀 Calcular", type="primary", use_container_width=True):
                         dif_c = ext_c - lim_c
                         off_c = sum(1 for v in col_vals if v > lim_c)
                         lbl   = "Máximo (mm)"
+                        viols_s = [str(i+1) for i,v in enumerate(col_vals) if v > lim_c]
                     else:
                         ext_c = min(col_vals)
                         dif_c = lim_c - ext_c
                         off_c = sum(1 for v in col_vals if v < lim_c)
                         lbl   = "Mínimo (mm)"
+                        viols_s = [str(i+1) for i,v in enumerate(col_vals) if v < lim_c]
                     sol_sum.append({
                         "Columna":       col,
                         "Límite (mm)":   round(lim_c, 2),
                         "Fuera límite":  off_c,
+                        "Niveles":       ", ".join(viols_s) if viols_s else "—",
                         lbl:             round(ext_c, 2),
                         "Dif vs Límite": round(dif_c, 2),
                     })
