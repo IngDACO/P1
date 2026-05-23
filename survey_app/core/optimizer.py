@@ -109,19 +109,23 @@ def optimize(survey_adjusted: list, limits: dict, params: dict) -> dict:
             # ── Paso 2: FB extra si RL va hacia la pared ─────────────
             # Condiciones:
             #   a) RL apunta hacia el lado de la pared
-            #   b) FS > TSW
-            #   c) OR/OL en el nivel crítico (WALL_STOP) está fuera de límite
+            #   b) OR/OL en el nivel crítico (WALL_STOP) supera el límite (fuera de límite)
+            #   c) FS > TSW  →  hay espacio extra disponible hacia atrás
             # → fb_applied = min(fb + (FS − TSW), FB_MAX_BACK)
-            if toward_wall and fs is not None and fs > tsw:
+            if toward_wall:
                 stop_idx  = int(wall_stop) - 1
                 check_col = "OR" if wall_side == "R" else "OL"
                 if 0 <= stop_idx < len(modified):
-                    if modified[stop_idx][check_col] < full_lim_map[check_col]:
-                        extra      = fs - tsw
-                        fb_applied = min(fb + extra, fb_max_back)
-                        modified   = _apply(rl, fb_applied)
+                    if modified[stop_idx][check_col] > full_lim_map[check_col]:
+                        # OR/OL supera límite → intentar FB extra para esquivar la pared
+                        if fs is not None and fs > tsw:
+                            extra      = fs - tsw
+                            fb_applied = min(fb + extra, fb_max_back)
+                            modified   = _apply(rl, fb_applied)
 
             # ── Paso 3: contar valores fuera de límite ────────────────
+            # WR/WL/FR/FL: fuera de límite = v < lim  (clearance insuficiente)
+            # OR/OL:        fuera de límite = v > lim  (dimensión supera máximo → requiere corte)
             off_by_col = {}
             min_by_col = {}
             total_off  = 0
@@ -136,8 +140,12 @@ def optimize(survey_adjusted: list, limits: dict, params: dict) -> dict:
                             eff_lim = lim - 70
                         elif col == "OL" and ctrl_side == "L":
                             eff_lim = lim - 70
-                    if v < eff_lim:
-                        off += 1
+                    if col in ("OR", "OL"):
+                        if v > eff_lim:
+                            off += 1
+                    else:
+                        if v < eff_lim:
+                            off += 1
                 off_by_col[col] = off
                 total_off      += off
                 min_by_col[col] = round(min(col_vals), 2)
@@ -148,27 +156,28 @@ def optimize(survey_adjusted: list, limits: dict, params: dict) -> dict:
                 if ctrl_col not in cols:
                     ctrl_base_lim = (full_lim_or if ctrl_side == "R" else full_lim_ol) - 70
                     last_v        = modified[last_row_idx][ctrl_col]
-                    if last_v < ctrl_base_lim:
+                    if last_v > ctrl_base_lim:   # OR/OL: fuera de límite = v > lim
                         off_by_col[ctrl_col] = off_by_col.get(ctrl_col, 0) + 1
                         total_off += 1
 
             # ── Paso 4: chequeo duro de pared ─────────────────────────
             # Se evalúa sobre el modified final (post-FB extra si aplica).
-            # Si OR/OL en la parada crítica sigue bajo el límite → SKIP.
+            # Solo aplica cuando RL va hacia la pared (toward_wall).
+            # Si OR/OL en la parada crítica sigue superando el límite → SKIP.
             wall_fail   = False
             wall_reason = ""
-            if wall and fs is not None and tsw < fs:
+            if toward_wall:
                 stop_idx = int(wall_stop) - 1
                 if 0 <= stop_idx < len(modified):
                     stop_row = modified[stop_idx]
-                    if wall_side == "R" and stop_row["OR"] < full_lim_map["OR"]:
+                    if wall_side == "R" and stop_row["OR"] > full_lim_map["OR"]:
                         wall_fail   = True
                         wall_reason = (f"Pared: OR parada {wall_stop}="
-                                       f"{stop_row['OR']:.1f} < LIMIT OR={full_lim_map['OR']:.1f}")
-                    if wall_side == "L" and stop_row["OL"] < full_lim_map["OL"]:
+                                       f"{stop_row['OR']:.1f} > LIMIT OR={full_lim_map['OR']:.1f}")
+                    if wall_side == "L" and stop_row["OL"] > full_lim_map["OL"]:
                         wall_fail   = True
                         wall_reason = (f"Pared: OL parada {wall_stop}="
-                                       f"{stop_row['OL']:.1f} < LIMIT OL={full_lim_map['OL']:.1f}")
+                                       f"{stop_row['OL']:.1f} > LIMIT OL={full_lim_map['OL']:.1f}")
 
             log_entry = {
                 "rl":          float(rl),
