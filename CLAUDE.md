@@ -182,14 +182,29 @@ Función helper `_diagram_block(title, lines, styles)` — caja ASCII monoespaci
 
 ## extractors/schindler.py — extract_from_pdf()
 
-Usa **pypdf modo normal** (un solo paso). ~20-25s por PDF CAD.  
-**NO usar:** pdfplumber (da valores erróneos), pypdf layout mode (71s).
+Usa **visitor_text de pypdf** para reconstruir texto con separación posicional.  
+**NO usar:** pdfplumber (valores erróneos), pypdf layout mode (71s).
 
-### Pipeline de extracción
+### _page_text_positional(page) — paso previo clave (v10)
 ```
-Paso 1: CRLF → LF, unir dígito-\n-dígito  (fix: TKS=30\r\n62 → TKS=3062)
-Paso 2: separar parámetros concatenados   (fix: TKSW=965TS=1750)
-Paso 3: regex PARAM=VALUE                 (fix: BS=19981272 → truncar a BS=1998)
+- Recolecta (y, x, texto) de cada elemento via visitor_text callback
+- Agrupa elementos por línea (Y ± 20 pts = misma línea)
+- Dentro de cada línea, inserta espacio si gap horizontal > 50 pts
+  (CHAR_W=8 pts/char → evita concatenar "SF1=51" con "1175" separado)
+- Fallback a page.extract_text() si visitor no retorna datos
+```
+Esto resuelve: SF1=51 + anotación 1175 → "SF1=51 1175" (ya no "SF1=511175")
+              TKS=30 + anotación 70 a distinto Y → líneas separadas (no "TKS=3070")
+
+### VALID_RANGES importantes
+- TKS: (5, 150) — umbral cabina→rellano, típico 20-80 mm (era (500,8000) → BUG)
+- Truncación: intenta 4, 3, 2 dígitos si valor fuera de rango
+
+### Pipeline de extracción (después de _page_text_positional)
+```
+Paso 1: CRLF → LF, unir dígito-\n-dígito  (fallback de seguridad)
+Paso 2: separar parámetros pegados         (fix: TKSW=965TS=1750)
+Paso 3: regex PARAM=VALUE                  (fix: BS=19981272 → truncar a BS=1998)
 Paso 4: línea a línea:
   A) valor DESPUÉS del label  (PARAM=valor o PARAM valor)
   D) valor ANTES del label    (170BKF2 → BKF2=170)  ← Caso especial Schindler CAD
@@ -198,7 +213,7 @@ Paso 4: línea a línea:
 
 ---
 
-## Versiones desplegadas (v9 = actual)
+## Versiones desplegadas (v10 = actual)
 | Ver | Cambio principal |
 |---|---|
 | v5 | Extractor: CRLF fix, caso D valor-antes-label, sin pdfplumber |
@@ -206,3 +221,4 @@ Paso 4: línea a línea:
 | v7 | BC eliminado de inputs usuario, calculado automáticamente |
 | v8 | Diagramas ASCII en reporte PDF (secciones 2, 3, 7) |
 | v9 | Caso 2: OR/OL naranja cuando requieren corte, sin rojo por debajo límite |
+| v10 | Extractor: visitor_text con posiciones XY evita concatenación anotaciones CAD; TKS rango (5,150) |

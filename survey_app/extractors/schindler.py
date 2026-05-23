@@ -233,17 +233,33 @@ def _extract_from_text(text: str, found: dict) -> None:
 
 def extract_from_pdf(pdf_file) -> dict:
     """
-    Extrae parámetros del PDF Schindler.
-    Usa visitor_text para reconstruir el texto con separación posicional
-    (evita que anotaciones CAD distantes se concatenen con valores de parámetros).
-    Fallback a extract_text() convencional si el visitor no retorna datos.
+    Extrae parámetros del PDF Schindler.  Estrategia de dos pasadas:
+
+    Pasada 1 — visitor_text (texto posicional):
+      Reconstruye el texto respetando posiciones XY. Evita que anotaciones
+      CAD distantes se concatenen con valores de parámetros
+      (ej. SF1=51 + anotación 1175 → "SF1=51 1175" en lugar de "SF1=511175").
+
+    Pasada 2 — extract_text() convencional (fallback para None restantes):
+      Algunos valores (BKF1, BKF2) aparecen como cotas ANTES del label en
+      el plano ("170BKF2") en una línea que extract_text() reconstruye
+      correctamente pero que el visitor separa por posición.  Como `found`
+      no sobreescribe valores ya hallados, SF1/TKS encontrados en la pasada 1
+      no se ven afectados por las concatenaciones del texto plano.
     """
     found: dict = {p: None for p in PARAMS}
     try:
         reader = PdfReader(pdf_file)
         for page in reader.pages:
-            text = _page_text_positional(page)
-            _extract_from_text(text, found)
+            # Pasada 1: extracción posicional
+            text_pos = _page_text_positional(page)
+            _extract_from_text(text_pos, found)
+
+            # Pasada 2: texto plano para parámetros aún no encontrados
+            if any(v is None for v in found.values()):
+                text_plain = page.extract_text() or ""
+                _extract_from_text(text_plain, found)
+
             if all(v is not None for v in found.values()):
                 break
     except Exception as e:
