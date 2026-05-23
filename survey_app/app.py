@@ -230,6 +230,7 @@ if st.button("🚀 Calcular", type="primary", use_container_width=True):
     all_params["OFFSET_SIDE"]   = offset_side
     all_params["CTRL_IN_FRAME"] = ctrl_in_frame
     all_params["CTRL_SIDE"]     = ctrl_side
+    all_params["NS"]            = int(st.session_state.ns)
 
     # Totales = última fila
     last = st.session_state.survey_df.iloc[-1]

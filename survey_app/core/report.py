@@ -419,7 +419,63 @@ def generate_report(project_params, calculated, survey_original,
     story += [Paragraph("1.1  Extraídos del PDF", styles["SubHead"])]
     story += [_param_table({k: p.get(k) for k in ["BS","BT","BK","BKS","TK","TKA","TKS","TSW","TKSW","TS","SF1","SF2","SG","TG","BGS","BKF1","BKF2"]}, styles), sp(6)]
     story += [Paragraph("1.2  Ingresados por el usuario", styles["SubHead"])]
-    story += [_param_table({k: p.get(k) for k in ["BSR","FS","FRAME","RAIL","OFFSET_CABIN","OFFSET_SIDE","OMEGA_SIDE"]}, styles, cols=4), sp(8)]
+    story += [_param_table({k: p.get(k) for k in ["BSR","FS","FRAME","RAIL","OFFSET_CABIN"]}, styles, cols=5), sp(6)]
+
+    # ── 1.3  Condiciones y configuración ──────────────────────
+    story += [Paragraph("1.3  Condiciones y configuración del proyecto", styles["SubHead"])]
+    wall_lim   = p.get("WALL_LIMITING", False)
+    ctrl_fr    = p.get("CTRL_IN_FRAME", False)
+    wall_stop_ = p.get("WALL_STOP")
+    wall_side_ = p.get("WALL_SIDE")
+    ctrl_s_    = p.get("CTRL_SIDE")
+    ns_        = p.get("NS", "—")
+
+    def _yn(b):   return "SÍ" if b else "NO"
+    def _side(s): return str(s) if s else "—"
+
+    cfg_rows = [
+        [Paragraph("<b>Condición / Parámetro</b>", styles["Normal2"]),
+         Paragraph("<b>Valor</b>",                 styles["Normal2"]),
+         Paragraph("<b>Condición / Parámetro</b>", styles["Normal2"]),
+         Paragraph("<b>Valor</b>",                 styles["Normal2"])],
+        [Paragraph("Número de paradas (NS)",        styles["Normal2"]),
+         Paragraph(str(ns_),                        styles["Normal2"]),
+         Paragraph("Lado del Omega",                styles["Normal2"]),
+         Paragraph(_side(p.get("OMEGA_SIDE")),      styles["Normal2"])],
+        [Paragraph("Lado offset cabina",            styles["Normal2"]),
+         Paragraph(_side(p.get("OFFSET_SIDE")),     styles["Normal2"]),
+         Paragraph("Offset cabina (mm)",            styles["Normal2"]),
+         Paragraph(f"{p.get('OFFSET_CABIN', 0):.1f}", styles["Normal2"])],
+        [Paragraph("¿Pared limitante?",             styles["Normal2"]),
+         Paragraph(_yn(wall_lim),                   styles["Normal2"]),
+         Paragraph("Parada limitante / Lado pared", styles["Normal2"]),
+         Paragraph(f"{int(wall_stop_) if wall_stop_ is not None else '—'} / {_side(wall_side_)}", styles["Normal2"])],
+        [Paragraph("¿Controlador en frame?",        styles["Normal2"]),
+         Paragraph(_yn(ctrl_fr),                    styles["Normal2"]),
+         Paragraph("Lado del controlador",          styles["Normal2"]),
+         Paragraph(_side(ctrl_s_),                  styles["Normal2"])],
+    ]
+    cfg_cw = [W*0.35, W*0.15, W*0.35, W*0.15]
+    cfg_t  = Table(cfg_rows, colWidths=cfg_cw)
+    cfg_cmds = [
+        ("GRID",          (0,0), (-1,-1), 0.3, colors.lightgrey),
+        ("BACKGROUND",    (0,0), (-1,0),  C_HEADER),
+        ("TEXTCOLOR",     (0,0), (-1,0),  C_WHITE),
+        ("FONTNAME",      (0,0), (-1,0),  "Helvetica-Bold"),
+        ("BACKGROUND",    (0,1), (-1,-1), C_GREY),
+        ("TOPPADDING",    (0,0), (-1,-1), 4),
+        ("BOTTOMPADDING", (0,0), (-1,-1), 4),
+        ("LEFTPADDING",   (0,0), (-1,-1), 5),
+    ]
+    # Highlight SÍ values using source booleans (Paragraph has no .text attribute)
+    if wall_lim:   # row 3, col 1
+        cfg_cmds += [("BACKGROUND",(1,3),(1,3),colors.HexColor("#d4efdf")),
+                     ("FONTNAME",  (1,3),(1,3),"Helvetica-Bold")]
+    if ctrl_fr:    # row 4, col 1
+        cfg_cmds += [("BACKGROUND",(1,4),(1,4),colors.HexColor("#d4efdf")),
+                     ("FONTNAME",  (1,4),(1,4),"Helvetica-Bold")]
+    cfg_t.setStyle(TableStyle(cfg_cmds))
+    story += [cfg_t, sp(8)]
 
     # ── 2. DIMENSIONES DE CABINA ─────────────────────────────
     story += [_section_header("2. DIMENSIONES DE CABINA", styles), sp(4)]
