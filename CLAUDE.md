@@ -39,10 +39,15 @@ C:\Users\diego\P1\survey_app\
 ### Del PDF (schindler.py los extrae)
 `TKSW, BKS, TKA, TKS, TSW, BGS, BKF1, BKF2, BS, BT, BK, TK, TS, SF1, SF2, SG, TG`
 
+⚠️ **BT = apertura de la puerta de rellano** (NO es el ancho de la cabina)  
+⚠️ **BS = SF1 + BKS + 2×RAIL + SF2** = ancho total del hueco según plano  
+⚠️ **Ancho del bloque cabina = BKS + 2×RAIL** (tratado como un solo bloque)
+
 ### Del usuario (app.py — USER_ONLY)
 `BSR, FS, FRAME, RAIL, OFFSET_CABIN`  
 ⚠️ `BC` fue **eliminado** de inputs — ahora se calcula como `BC_CALC`  
-⚠️ `WALL_LEFT` / `WALL_RIGHT` fueron **eliminados** — reemplazados por `OFFSET_CABIN` + `OFFSET_SIDE`
+⚠️ `WALL_LEFT` / `WALL_RIGHT` fueron **eliminados** — reemplazados por `OFFSET_CABIN` + `OFFSET_SIDE`  
+⚠️ **BSR** = ancho real del hueco medido en obra (puede diferir de BS)
 
 ### Configuración
 - `OMEGA_SIDE`: R o L (lado del Omega)
@@ -159,6 +164,65 @@ OR/OL son dimensiones que NO deben superar el límite máximo.
 
 ---
 
+## Geometría física — los dos cajones
+
+### El hueco (caja grande, fijo)
+```
+Ancho total  = SF1 + BKS + 2×RAIL + SF2  =  BS  (plano)  /  BSR  (obra)
+Profundidad  = TS
+Pared frontal → centro riel = TKSW (diseño) / FR·FL (campo, varía por nivel)
+```
+
+### El bloque cabina (caja chica, se posiciona)
+```
+Ancho        = BKS + 2×RAIL   (rieles + guías, tratado como un solo bloque)
+Profundidad  = TL = TS − BC_CALC   (= CS + TKS + TSW)
+```
+
+### Sección transversal (vista superior)
+```
+PARED IZQ                                                    PARED DER
+  │←── SF1 ──→│←─RAIL─│←────── BKS ──────→│─RAIL─→│←── SF2 ──→│
+  │←─── WL ──→│←──────── BKS + 2×RAIL ───────────→│←─── WR ───→│
+  │                      BLOQUE CABINA                            │
+  │←───────────────────────── BS ────────────────────────────────→│
+```
+
+### OR / OL — apertura de la puerta de rellano (en cada piso)
+```
+  │←─ OL ─→│←──────── BT ────────→│←─ OR ─→│
+             PUERTA DE RELLANO
+
+  OR/OL se miden en la apertura donde va la puerta de rellano.
+  Si OR o OL > LIMIT → la puerta no entra → hay que CORTAR físicamente ✂️
+  BT = apertura de puerta (NO es el ancho de la cabina)
+  CUT = v − LIMIT  (cuánto hay que cortar cuando v > LIMIT)
+```
+
+### Perfil longitudinal (vista lateral)
+```
+PARED FRONTAL                                          PARED FONDO
+  │←── FR ──→● centro riel                                  │
+  │           ├──────────── TL ────────────────┤←─BC_CALC─→│
+  │           │        BLOQUE CABINA            │            │
+  │←──────────────────────── TS ──────────────────────────→│
+
+  FR/FL = distancia pared frontal → centro riel, medida en campo nivel a nivel
+  LIMIT_FR = LIMIT_FL = TKSW − 150  (mínimo aceptable)
+```
+
+### Los 6 valores del survey
+| Col | Mide | Fuera de límite |
+|-----|------|-----------------|
+| WR  | Espacio bloque → pared derecha | v < LIMIT (muy poco espacio) |
+| WL  | Espacio bloque → pared izquierda | v < LIMIT (muy poco espacio) |
+| FR  | Pared frontal → centro riel derecho | v < LIMIT (riel muy cerca de la pared) |
+| FL  | Pared frontal → centro riel izquierdo | v < LIMIT (riel muy cerca de la pared) |
+| OR  | Espacio derecho en apertura de puerta | v > LIMIT (hay que cortar) |
+| OL  | Espacio izquierdo en apertura de puerta | v > LIMIT (hay que cortar) |
+
+---
+
 ## Caso 1 vs Caso 2 — diferencias clave
 
 | Aspecto | Caso 1 (WALL_LIMITING=True) | Caso 2 (WALL_LIMITING=False) |
@@ -245,3 +309,7 @@ Paso 4: línea a línea:
 | v13-14 | Wall limiting: DIF OR/OL con MAX, fb_applied en soluciones y log |
 | v16 | Fix OR/OL: fuera de límite = v > LIMIT, DIF = MAX − LIMIT, CUT = v − LIMIT |
 | v17 | Fix OR/OL highlight Caso 1: v > LIMIT en ambos casos; rojo en Caso 1, naranja en Caso 2 |
+| v18 | Fix optimizer _apply: OR -= rl, OL += rl (signos correctos) |
+| v19 | Fix wall limiting: todas las comparaciones OR/OL corregidas a v > LIMIT |
+| v20 | Estado inicial: sección 6.2 en reporte + "Niveles incumplidos" en app y reporte |
+| v21 | Sección 1.3 en reporte: condiciones y configuración del proyecto (NS, pared, ctrl, omega) |
