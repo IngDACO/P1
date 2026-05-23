@@ -142,22 +142,36 @@ WL -= rl;  FL += fb;  OL -= rl
 
 ---
 
+## Convención OR/OL — IMPORTANTE (no cambiar sin confirmar)
+```
+OR/OL son dimensiones que NO deben superar el límite máximo.
+  fuera de límite = v > LIMIT   (la dimensión excede el máximo → requiere corte físico)
+  dentro del límite = v ≤ LIMIT
+  DIF = MAX(col) − LIMIT        (positivo = requiere corte, negativo = sin violación)
+  OFF_COUNT = sum(v > lim)
+  CUT = v − LIMIT               (cuánto hay que cortar, solo cuando v > lim)
+```
+⚠️ WR/WL/FR/FL usan el criterio OPUESTO: fuera de límite = v < LIMIT (clearance mínimo).
+
+---
+
 ## Caso 1 vs Caso 2 — diferencias clave
 
 | Aspecto | Caso 1 (WALL_LIMITING=True) | Caso 2 (WALL_LIMITING=False) |
 |---|---|---|
-| OR/OL en conteo OFF | Sí | **No** |
-| MAX_OFF_RL fórmula | max(DIF_WR, DIF_OR, DIF_WL, DIF_OL) | max(DIF_WR, DIF_WL) |
+| OR/OL en conteo OFF | Sí (v > lim) | **No** (se gestionan como restricción dura) |
+| MAX_OFF_RL fórmula | max(DIF_WR, DIF_WL) en ambos casos | max(DIF_WR, DIF_WL) |
 | Columnas optimizer | WR FR OR WL FL OL | WR FR WL FL |
-| Color OR/OL en tabla | Rojo si v < lim | **Naranja si v > lim** (requiere corte) |
+| Color OR/OL en tabla | Naranja si v > lim | **Naranja si v > lim** (requiere corte) |
 | Columnas extra | — | CUT OR = OR−LIMIT_OR, CUT OL = OL−LIMIT_OL |
 
 ---
 
 ## Colores en tablas (app y reporte)
-- 🔴 Rojo oscuro `#c0392b`: valor mínimo fuera de límite
-- 🔴 Rojo claro `#f1948a`: fuera de límite
-- 🟠 Naranja `#e67e22`: OR/OL requieren corte (Caso 2, v > lim)
+- 🔴 Rojo oscuro `#c0392b`: valor mínimo fuera de límite (WR/WL/FR/FL)
+- 🔴 Rojo claro `#f1948a`: fuera de límite (WR/WL/FR/FL, v < lim)
+- 🟠 Naranja oscuro `#c0392b`: OR/OL — valor máximo requiere corte (v > lim)
+- 🟠 Naranja `#e67e22`: OR/OL requieren corte (v > lim)
 - 🟢 Verde `#d4efdf`: solución óptima en log
 
 ---
@@ -213,7 +227,7 @@ Paso 4: línea a línea:
 
 ---
 
-## Versiones desplegadas (v10 = actual)
+## Versiones desplegadas (v16 = actual)
 | Ver | Cambio principal |
 |---|---|
 | v5 | Extractor: CRLF fix, caso D valor-antes-label, sin pdfplumber |
@@ -222,3 +236,7 @@ Paso 4: línea a línea:
 | v8 | Diagramas ASCII en reporte PDF (secciones 2, 3, 7) |
 | v9 | Caso 2: OR/OL naranja cuando requieren corte, sin rojo por debajo límite |
 | v10 | Extractor: visitor_text con posiciones XY evita concatenación anotaciones CAD; TKS rango (5,150) |
+| v11 | Extractor: two-pass (visitor + plain text) para recuperar BKF1/BKF2 caso-D |
+| v12 | Optimizer: 4-step flow, FB extra wall, fb_applied tracking, MAX_OFF_RL = max(DIF_WR,DIF_WL) |
+| v13-14 | Wall limiting: DIF OR/OL con MAX, fb_applied en soluciones y log |
+| v16 | Fix OR/OL: fuera de límite = v > LIMIT, DIF = MAX − LIMIT, CUT = v − LIMIT |

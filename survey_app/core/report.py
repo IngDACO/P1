@@ -141,19 +141,23 @@ def _survey_table(df, lim_map, min_vals, styles, cut_cols=None,
                     eff_lim = lim - 70
                 elif col == "OL" and ctrl_side == "L":
                     eff_lim = lim - 70
-            if col in cut_cols:
-                # OR/OL Caso 2: naranja si supera el límite (v > lim → requiere corte);
-                # naranja oscuro en el valor máximo (mayor corte)
+            if col in ("OR", "OL"):
+                # OR/OL: siempre fuera de límite = val > lim (dimensión supera máximo → requiere corte)
+                # Caso 2 (cut_cols): naranja. Caso 1: rojo (cuenta como OFF completo)
                 if val > eff_lim:
                     if max_val is not None and abs(val - max_val) < 0.001:
                         cmds += [("BACKGROUND",(ci,ri),(ci,ri),C_RED_DARK),
                                   ("TEXTCOLOR",(ci,ri),(ci,ri),C_WHITE),
                                   ("FONTNAME",(ci,ri),(ci,ri),"Helvetica-Bold")]
                     else:
-                        cmds += [("BACKGROUND",(ci,ri),(ci,ri),C_ORANGE),
-                                  ("TEXTCOLOR",(ci,ri),(ci,ri),C_WHITE),
-                                  ("FONTNAME",(ci,ri),(ci,ri),"Helvetica-Bold")]
+                        if col in cut_cols:  # Caso 2: naranja
+                            cmds += [("BACKGROUND",(ci,ri),(ci,ri),C_ORANGE),
+                                      ("TEXTCOLOR",(ci,ri),(ci,ri),C_WHITE),
+                                      ("FONTNAME",(ci,ri),(ci,ri),"Helvetica-Bold")]
+                        else:               # Caso 1: rojo claro
+                            cmds.append(("BACKGROUND",(ci,ri),(ci,ri),C_RED_BG))
             else:
+                # WR, WL, FR, FL: fuera de límite = val < lim (clearance insuficiente)
                 if val < eff_lim:
                     if min_val is not None and abs(val-min_val)<0.001:
                         cmds += [("BACKGROUND",(ci,ri),(ci,ri),C_RED_DARK),("TEXTCOLOR",(ci,ri),(ci,ri),C_WHITE),("FONTNAME",(ci,ri),(ci,ri),"Helvetica-Bold")]

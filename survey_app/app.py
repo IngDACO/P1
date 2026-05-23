@@ -287,15 +287,19 @@ if st.button("🚀 Calcular", type="primary", use_container_width=True):
                         eff_lim = lim - 70
                     elif col == "OL" and ctrl_side == "L":
                         eff_lim = lim - 70
-                if col in cc:
-                    # OR/OL Caso 2: naranja si supera el límite (v > lim → requiere corte);
-                    # naranja oscuro en el valor máximo (mayor corte)
+                if col in ("OR", "OL"):
+                    # OR/OL: siempre fuera de límite = v > lim (dimensión supera máximo → requiere corte)
+                    # Caso 2 (cut_cols): naranja. Caso 1: rojo (cuenta como OFF completo)
                     if v > eff_lim:
                         if max_val is not None and abs(v - max_val) < 0.001:
                             styles.at[idx, col] = "background-color:#c0392b;color:white;font-weight:bold"
                         else:
-                            styles.at[idx, col] = "background-color:#e67e22;color:white;font-weight:bold"
+                            if col in cc:  # Caso 2
+                                styles.at[idx, col] = "background-color:#e67e22;color:white;font-weight:bold"
+                            else:          # Caso 1
+                                styles.at[idx, col] = "background-color:#f1948a"
                 else:
+                    # WR, WL, FR, FL: fuera de límite = v < lim (clearance insuficiente)
                     if min_val is not None and abs(v - min_val) < 0.001 and v < eff_lim:
                         styles.at[idx, col] = "background-color:#c0392b;color:white;font-weight:bold"
                     elif v < eff_lim:
