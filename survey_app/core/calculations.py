@@ -1,3 +1,33 @@
+"""
+Cálculos geométricos del survey:
+  - calculate_limits(): límites laterales, frontales, Omega/Z, restricción FB atrás
+  - apply_offsets(): ajusta la matriz survey con los offsets calculados
+  - analyze_matrix(): cuenta violaciones, MIN/MAX/DIF por columna
+  - validate_inputs(): validación previa de parámetros (opcional)
+"""
+
+
+def validate_inputs(p: dict) -> list:
+    """
+    Devuelve una lista de strings con problemas encontrados en los parámetros.
+    Lista vacía = todo bien.  El llamador decide si avisar o detener.
+    """
+    issues = []
+    required_positive = ["BKS", "TKSW", "TS", "TK", "SF1", "SF2", "RAIL"]
+    for k in required_positive:
+        v = p.get(k)
+        if v is None or float(v) <= 0:
+            issues.append(f"{k} debe ser > 0 (actual: {v})")
+    # BSR debería estar definido (puede igualar BS)
+    if p.get("BSR") is None or float(p.get("BSR", 0)) <= 0:
+        issues.append("BSR debe estar definido y > 0")
+    # FS debería ser ≥ TSW para que tenga sentido la lógica de pared
+    fs, tsw = p.get("FS"), p.get("TSW")
+    if fs is not None and tsw is not None and float(fs) < float(tsw):
+        issues.append(f"FS ({fs}) < TSW ({tsw}): no hay espacio frontal de seguridad")
+    return issues
+
+
 def calculate_limits(p: dict) -> dict:
     """
     Calcula todos los límites y valores derivados.
@@ -69,9 +99,11 @@ def calculate_limits(p: dict) -> dict:
     # DIF_TSW_FS: cuánto supera FS al valor de plano TSW
     dif_tsw_fs      = p.get("FS", 0.0) - p.get("TSW", 0.0)
     c["DIF_TSW_FS"] = dif_tsw_fs
-    # Máximo desplazamiento FB hacia atrás permitido
+    # Máximo desplazamiento FB hacia atrás permitido.
+    # Si DIF_TSW_FS > BC_CALC, la cabina ya consumió todo el espacio trasero
+    # disponible (FS está más adelante de lo que cabe), → no se puede mover más atrás.
     if dif_tsw_fs > c["BC_CALC"] or c["BC_CALC"] <= 0:
-        c["FB_MAX_BACK"] = 0.0   # no se puede desplazar hacia atrás
+        c["FB_MAX_BACK"] = 0.0
     else:
         c["FB_MAX_BACK"] = float(c["BC_CALC"])
 
@@ -86,38 +118,33 @@ def calculate_limits(p: dict) -> dict:
 def apply_offsets(survey: list, offsets: dict) -> list:
     """
     Ajusta la matriz SURVEY aplicando los offsets.
-    WR → Offset_WR
-    FR → Offset_FR
-    OR → Offset_OR  (= Offset_WR)
-    WL → Offset_WL
-    FL → Offset_FL
-    OL → Offset_OL  (= Offset_WL)
+    WR → Offset_WR (suma)         OR → Offset_OR  (resta)
+    FR → Offset_FR (suma)         FL → Offset_FL  (suma)
+    WL → Offset_WL (suma)         OL → Offset_OL  (resta)
     """
-    adjusted = []
-    for row in survey:
-        adjusted.append({
-            "WR": row["WR"] + offsets["Offset_WR"],
-            "FR": row["FR"] + offsets["Offset_FR"],
-            "OR": row["OR"] - offsets["Offset_OR"],
-            "WL": row["WL"] + offsets["Offset_WL"],
-            "FL": row["FL"] + offsets["Offset_FL"],
-            "OL": row["OL"] - offsets["Offset_OL"],
-        })
-    return adjusted
+    return [{
+        "WR": row["WR"] + offsets["Offset_WR"],
+        "FR": row["FR"] + offsets["Offset_FR"],
+        "OR": row["OR"] - offsets["Offset_OR"],
+        "WL": row["WL"] + offsets["Offset_WL"],
+        "FL": row["FL"] + offsets["Offset_FL"],
+        "OL": row["OL"] - offsets["Offset_OL"],
+    } for row in survey]
 
 
 def analyze_matrix(survey: list, limits: dict, wall_limiting: bool = True) -> dict:
     """
     Analiza la matriz ajustada contra los límites.
-    Retorna off-counts, mínimos y diferencias.
+    Retorna off-counts, mínimos, máximos y diferencias por columna.
 
     Convención de signos:
       WR, FR, WL, FL → DIF = LIMIT − MIN  (positivo = bajo límite = requiere corrección)
-      OR, OL         → DIF = MIN − LIMIT  (positivo = supera límite = requiere corte;
-                                            negativo = bajo límite = sin violación)
-    MAX_OFF_RL = max(DIF_WR, DIF_WL) en ambos casos.
-      OR/OL no aportan: en Caso 1 su DIF es negativo y la restricción se
-      maneja como SKIP duro en el optimizador; en Caso 2 ya estaban excluidos.
+      OR, OL         → DIF = MAX − LIMIT  (positivo = supera límite = requiere corte)
+
+    MAX_OFF_RL define el rango de barrido del optimizador. Incluye:
+      - DIF_WR y DIF_WL siempre
+      - DIF_OR y DIF_OL solo cuando wall_limiting=True (porque solo en Caso 1
+        cuentan como violación; en Caso 2 son informativos)
     """
     cols    = ["WR", "FR", "OR", "WL", "FL", "OL"]
     lim_map = {
@@ -138,9 +165,8 @@ def analyze_matrix(survey: list, limits: dict, wall_limiting: bool = True) -> di
         result[f"MIN_{col}"] = min_val
         result[f"MAX_{col}"] = max_val
         if col in ("OR", "OL"):
-            # OR/OL: fuera de límite = v > lim (supera el límite → requiere corte)
-            # DIF = MAX − LIMIT: positivo = el máximo supera el límite (cut needed)
-            #                    negativo = el máximo está bajo el límite (sin violación)
+            # OR/OL: fuera de límite = v > lim (supera límite → requiere corte)
+            # DIF = MAX − LIMIT: positivo = el máximo supera el límite
             result[f"{col}_OFF_COUNT"] = sum(1 for v in values if v > lim)
             result[f"DIF_{col}"]       = max_val - lim
         else:
@@ -149,12 +175,13 @@ def analyze_matrix(survey: list, limits: dict, wall_limiting: bool = True) -> di
             result[f"{col}_OFF_COUNT"] = sum(1 for v in values if v < lim)
             result[f"DIF_{col}"]       = lim - min_val
 
-    result["MAX_OFF_RL"] = max(
-        result["DIF_WR"],
-        result["DIF_WL"],
-        max(0.0, result["DIF_OR"]),   # OR sobre límite → necesita rl > 0
-        max(0.0, result["DIF_OL"]),   # OL sobre límite → necesita rl < 0
-    )
+    # ── MAX_OFF_RL: rango del barrido lateral ────────────────────
+    # En Caso 1 (wall_limiting=True): OR/OL cuentan como OFF → DIF_OR/OL aportan
+    # En Caso 2 (wall_limiting=False): OR/OL no cuentan → solo WR/WL definen el rango
+    base_rl = [result["DIF_WR"], result["DIF_WL"]]
+    if wall_limiting:
+        base_rl += [max(0.0, result["DIF_OR"]), max(0.0, result["DIF_OL"])]
+    result["MAX_OFF_RL"] = max(base_rl)
     result["MAX_OFF_FB"] = max(result["DIF_FR"], result["DIF_FL"])
 
     return result

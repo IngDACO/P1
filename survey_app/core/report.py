@@ -11,25 +11,30 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import mm
 from reportlab.platypus import (
     SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle,
-    HRFlowable, PageBreak, KeepTogether
+    HRFlowable, PageBreak,
 )
 from reportlab.lib.enums import TA_CENTER, TA_LEFT
 
+from core.highlighting import (
+    cell_state, ctrl_applies_to_cell, reportlab_commands, OR_OL_COLS,
+)
+
+# ── Paleta de colores ────────────────────────────────────────
 C_HEADER   = colors.HexColor("#1a3a5c")
 C_SUBHEAD  = colors.HexColor("#2e6da4")
-C_ACCENT   = colors.HexColor("#e8f0fa")
 C_RED_BG   = colors.HexColor("#f1948a")
 C_RED_DARK = colors.HexColor("#c0392b")
 C_GREEN_BG = colors.HexColor("#eafaf1")
 C_GREEN    = colors.HexColor("#1e8449")
-C_YELLOW   = colors.HexColor("#fef9e7")
 C_GREY     = colors.HexColor("#f5f5f5")
 C_FORMULA  = colors.HexColor("#f0f4ff")
+C_ORANGE   = colors.HexColor("#e67e22")
+C_BEST     = colors.HexColor("#d4efdf")
 C_WHITE    = colors.white
 C_BLACK    = colors.black
-C_BEST     = colors.HexColor("#d4efdf")
 
-W = 170*mm
+W = 170 * mm
+
 
 def _styles():
     s = getSampleStyleSheet()
@@ -46,17 +51,31 @@ def _styles():
     s.add(ParagraphStyle("Mono",         fontSize=8,  textColor=C_BLACK,    alignment=TA_LEFT,   fontName="Courier",        spaceAfter=1))
     return s
 
+
 def sp(n=5): return Spacer(1, n)
+
 
 def _section_header(text, styles):
     t = Table([[Paragraph(text, styles["SectionHead"])]], colWidths=[W])
-    t.setStyle(TableStyle([("BACKGROUND",(0,0),(-1,-1),C_HEADER),("TOPPADDING",(0,0),(-1,-1),5),("BOTTOMPADDING",(0,0),(-1,-1),5),("LEFTPADDING",(0,0),(-1,-1),8)]))
+    t.setStyle(TableStyle([
+        ("BACKGROUND",    (0,0),(-1,-1), C_HEADER),
+        ("TOPPADDING",    (0,0),(-1,-1), 5),
+        ("BOTTOMPADDING", (0,0),(-1,-1), 5),
+        ("LEFTPADDING",   (0,0),(-1,-1), 8),
+    ]))
     return t
+
 
 def _subheader(text, styles):
     t = Table([[Paragraph(text, styles["SectionHead"])]], colWidths=[W])
-    t.setStyle(TableStyle([("BACKGROUND",(0,0),(-1,-1),C_SUBHEAD),("TOPPADDING",(0,0),(-1,-1),3),("BOTTOMPADDING",(0,0),(-1,-1),3),("LEFTPADDING",(0,0),(-1,-1),8)]))
+    t.setStyle(TableStyle([
+        ("BACKGROUND",    (0,0),(-1,-1), C_SUBHEAD),
+        ("TOPPADDING",    (0,0),(-1,-1), 3),
+        ("BOTTOMPADDING", (0,0),(-1,-1), 3),
+        ("LEFTPADDING",   (0,0),(-1,-1), 8),
+    ]))
     return t
+
 
 def _calc_block(label, formula, substitution, result_str, styles, ok=None):
     if ok is True:    res_color = "#1e8449"
@@ -64,112 +83,113 @@ def _calc_block(label, formula, substitution, result_str, styles, ok=None):
     else:             res_color = "#1a5276"
     rows = [
         [Paragraph(f"<b>{label}</b>", styles["Normal2"]), ""],
-        [Paragraph(f"  Fórmula:       {formula}",      styles["FormulaLine"]), ""],
+        [Paragraph(f"  Fórmula:       {formula}",        styles["FormulaLine"]), ""],
         [Paragraph(f"  Sustitución:   = {substitution}", styles["FormulaLine"]), ""],
         [Paragraph(f'  <font color="{res_color}"><b>Resultado:      {result_str}</b></font>', styles["ResultLine"]), ""],
     ]
     t = Table(rows, colWidths=[W*0.7, W*0.3])
     t.setStyle(TableStyle([
-        ("BACKGROUND",(0,0),(-1,-1), C_FORMULA),
-        ("BACKGROUND",(0,3),(1,3),   C_GREEN_BG if ok else (C_RED_BG if ok is False else C_FORMULA)),
-        ("GRID",      (0,0),(-1,-1), 0.3, colors.HexColor("#c8d8f0")),
-        ("SPAN",      (0,0),(1,0)), ("SPAN",(0,1),(1,1)),
-        ("SPAN",      (0,2),(1,2)), ("SPAN",(0,3),(1,3)),
-        ("TOPPADDING",(0,0),(-1,-1),2),("BOTTOMPADDING",(0,0),(-1,-1),2),
-        ("LEFTPADDING",(0,0),(-1,-1),6),
+        ("BACKGROUND",   (0,0),(-1,-1), C_FORMULA),
+        ("BACKGROUND",   (0,3),(1,3),   C_GREEN_BG if ok else (C_RED_BG if ok is False else C_FORMULA)),
+        ("GRID",         (0,0),(-1,-1), 0.3, colors.HexColor("#c8d8f0")),
+        ("SPAN",         (0,0),(1,0)), ("SPAN",(0,1),(1,1)),
+        ("SPAN",         (0,2),(1,2)), ("SPAN",(0,3),(1,3)),
+        ("TOPPADDING",   (0,0),(-1,-1), 2),
+        ("BOTTOMPADDING",(0,0),(-1,-1), 2),
+        ("LEFTPADDING",  (0,0),(-1,-1), 6),
     ]))
     return t
+
 
 def _param_table(data_dict, styles, cols=4):
     items = [(k, f"{v:.2f}" if isinstance(v, float) else str(v))
              for k,v in data_dict.items() if v is not None]
-    if not items: return sp(2)
+    if not items:
+        return sp(2)
     rows, row = [], []
-    for i,(k,v) in enumerate(items):
+    for i, (k, v) in enumerate(items):
         row += [Paragraph(f"<b>{k}</b>", styles["Normal2"]), Paragraph(v, styles["Normal2"])]
-        if (i+1) % cols == 0: rows.append(row); row=[]
+        if (i + 1) % cols == 0:
+            rows.append(row); row = []
     if row:
-        while len(row) < cols*2: row.append(Paragraph("", styles["Normal2"]))
+        while len(row) < cols * 2:
+            row.append(Paragraph("", styles["Normal2"]))
         rows.append(row)
-    t = Table(rows, colWidths=[W/(cols*2)]*cols*2)
-    t.setStyle(TableStyle([("GRID",(0,0),(-1,-1),0.3,colors.lightgrey),("BACKGROUND",(0,0),(-1,-1),C_GREY),("TOPPADDING",(0,0),(-1,-1),3),("BOTTOMPADDING",(0,0),(-1,-1),3),("LEFTPADDING",(0,0),(-1,-1),4)]))
+    t = Table(rows, colWidths=[W/(cols*2)] * cols * 2)
+    t.setStyle(TableStyle([
+        ("GRID",         (0,0),(-1,-1), 0.3, colors.lightgrey),
+        ("BACKGROUND",   (0,0),(-1,-1), C_GREY),
+        ("TOPPADDING",   (0,0),(-1,-1), 3),
+        ("BOTTOMPADDING",(0,0),(-1,-1), 3),
+        ("LEFTPADDING",  (0,0),(-1,-1), 4),
+    ]))
     return t
 
-C_ORANGE = colors.HexColor("#e67e22")
 
 def _survey_table(df, lim_map, min_vals, styles, cut_cols=None,
                   ctrl_in_frame=False, ctrl_side=None, max_vals=None):
     """
-    cut_cols: columnas OR/OL en Caso 2 — naranja si val > eff_lim.
-    ctrl_in_frame / ctrl_side: reducen el límite −70 mm en la última fila.
-    max_vals: dict {MAX_OR, MAX_OL, ...} — resaltado oscuro en el valor máximo de cut_cols.
+    Tabla SURVEY con resaltado.  Usa core.highlighting para decidir colores.
+    cut_cols: columnas OR/OL en Caso 2 (naranja en lugar de rojo).
     """
-    cut_cols     = cut_cols or []
-    max_vals     = max_vals or {}
-    last_data_ri = len(df)
+    cut_cols = cut_cols or []
+    max_vals = max_vals or {}
+    total_rows = len(df)
     cols   = list(df.columns)
-    header = [Paragraph("<b>#</b>", styles["Normal2"])] + [Paragraph(f"<b>{c}</b>", styles["Normal2"]) for c in cols]
-    rows   = [header]
+    header = [Paragraph("<b>#</b>", styles["Normal2"])] + \
+             [Paragraph(f"<b>{c}</b>", styles["Normal2"]) for c in cols]
+    rows = [header]
     for idx, row in df.iterrows():
-        cells = [Paragraph(str(idx+1), styles["Normal2"])]
+        cells = [Paragraph(str(idx + 1), styles["Normal2"])]
         for c in cols:
             val = row[c]
-            cells.append(Paragraph(f"{val:.1f}" if isinstance(val, (int, float)) else str(val), styles["Normal2"]))
+            cells.append(Paragraph(
+                f"{val:.1f}" if isinstance(val, (int, float)) else str(val),
+                styles["Normal2"],
+            ))
         rows.append(cells)
-    col_w = [12*mm] + [(W-12*mm)/len(cols)]*len(cols)
+    col_w = [12*mm] + [(W - 12*mm) / len(cols)] * len(cols)
     t = Table(rows, colWidths=col_w)
     cmds = [
-        ("GRID",(0,0),(-1,-1),0.3,colors.lightgrey),
-        ("BACKGROUND",(0,0),(-1,0),C_SUBHEAD),("TEXTCOLOR",(0,0),(-1,0),C_WHITE),
-        ("FONTNAME",(0,0),(-1,0),"Helvetica-Bold"),
-        ("BACKGROUND",(0,1),(0,-1),C_GREY),
-        ("TOPPADDING",(0,0),(-1,-1),3),("BOTTOMPADDING",(0,0),(-1,-1),3),
-        ("LEFTPADDING",(0,0),(-1,-1),4),("ALIGN",(0,0),(-1,-1),"CENTER"),
+        ("GRID",         (0,0),(-1,-1), 0.3, colors.lightgrey),
+        ("BACKGROUND",   (0,0),(-1,0),  C_SUBHEAD),
+        ("TEXTCOLOR",    (0,0),(-1,0),  C_WHITE),
+        ("FONTNAME",     (0,0),(-1,0),  "Helvetica-Bold"),
+        ("BACKGROUND",   (0,1),(0,-1),  C_GREY),
+        ("TOPPADDING",   (0,0),(-1,-1), 3),
+        ("BOTTOMPADDING",(0,0),(-1,-1), 3),
+        ("LEFTPADDING",  (0,0),(-1,-1), 4),
+        ("ALIGN",        (0,0),(-1,-1), "CENTER"),
     ]
-    for ri,(_, row) in enumerate(df.iterrows(), start=1):
-        for ci, col in enumerate(cols, start=1):
+    for ri_off, (_, row) in enumerate(df.iterrows()):
+        ri = ri_off + 1
+        for ci_off, col in enumerate(cols):
+            ci = ci_off + 1
             if col not in lim_map:
                 continue
-            val = row[col]; lim = lim_map[col]
-            min_val = min_vals.get(f"MIN_{col}")
-            max_val = max_vals.get(f"MAX_{col}")
+            val = row[col]
             if not isinstance(val, (int, float)):
                 continue
-            eff_lim = lim
-            if ctrl_in_frame and ri == last_data_ri:
-                if col == "OR" and ctrl_side == "R":
-                    eff_lim = lim - 70
-                elif col == "OL" and ctrl_side == "L":
-                    eff_lim = lim - 70
-            if col in ("OR", "OL"):
-                # OR/OL: siempre fuera de límite = val > lim (dimensión supera máximo → requiere corte)
-                # Caso 2 (cut_cols): naranja. Caso 1: rojo (cuenta como OFF completo)
-                if val > eff_lim:
-                    if max_val is not None and abs(val - max_val) < 0.001:
-                        cmds += [("BACKGROUND",(ci,ri),(ci,ri),C_RED_DARK),
-                                  ("TEXTCOLOR",(ci,ri),(ci,ri),C_WHITE),
-                                  ("FONTNAME",(ci,ri),(ci,ri),"Helvetica-Bold")]
-                    else:
-                        if col in cut_cols:  # Caso 2: naranja
-                            cmds += [("BACKGROUND",(ci,ri),(ci,ri),C_ORANGE),
-                                      ("TEXTCOLOR",(ci,ri),(ci,ri),C_WHITE),
-                                      ("FONTNAME",(ci,ri),(ci,ri),"Helvetica-Bold")]
-                        else:               # Caso 1: rojo claro
-                            cmds.append(("BACKGROUND",(ci,ri),(ci,ri),C_RED_BG))
-            else:
-                # WR, WL, FR, FL: fuera de límite = val < lim (clearance insuficiente)
-                if val < eff_lim:
-                    if min_val is not None and abs(val-min_val)<0.001:
-                        cmds += [("BACKGROUND",(ci,ri),(ci,ri),C_RED_DARK),("TEXTCOLOR",(ci,ri),(ci,ri),C_WHITE),("FONTNAME",(ci,ri),(ci,ri),"Helvetica-Bold")]
-                    else:
-                        cmds.append(("BACKGROUND",(ci,ri),(ci,ri),C_RED_BG))
-    t.setStyle(TableStyle(cmds)); return t
+            state = cell_state(
+                value       = val,
+                col         = col,
+                lim         = lim_map[col],
+                min_val     = min_vals.get(f"MIN_{col}"),
+                max_val     = max_vals.get(f"MAX_{col}"),
+                in_cut_cols = col in cut_cols,
+                ctrl_applies= ctrl_applies_to_cell(ri_off, total_rows, col, ctrl_in_frame, ctrl_side),
+            )
+            for attr, value in reportlab_commands(state, colors):
+                cmds.append((attr, (ci, ri), (ci, ri), value))
+    t.setStyle(TableStyle(cmds))
+    return t
+
 
 def _diagram_block(title, lines, styles):
     """Caja esquemática con texto monoespaciado (esquema no proporcional)."""
     content = [[Paragraph(f"<b>{title}</b>", styles["SubHead2"])]]
     for line in lines:
-        safe = line.replace("&","&amp;").replace("<","&lt;").replace(">","&gt;")
+        safe = line.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
         content.append([Paragraph(safe, styles["Mono"])])
     t = Table(content, colWidths=[W])
     t.setStyle(TableStyle([
@@ -184,39 +204,50 @@ def _diagram_block(title, lines, styles):
     return t
 
 
+# ── Diagramas ASCII actualizados ───────────────────────────────
 def _dg_bc_calc(ts, tksw, tk, bc_calc):
     tk2 = tk / 2
     return [
-        "  Vista lateral del hueco (no proporcional):",
+        "  Perfil longitudinal (vista lateral, no proporcional):",
         "",
-        "  pared                                          fondo del hueco",
-        "  frontal                                               |",
-        "    |                                                   |",
-        "    +--------+---------------------------+----------+---+",
-        "    |        |         CABINA            |  BC_CALC |25 |",
-        "    | [TKSW] |        [TK / 2]           |          |mm |",
-        "    +--------+---------------------------+----------+---+",
+        "  PARED                                              FONDO",
+        "  FRONTAL                                            HUECO",
+        "    |                                                  |",
+        "    |<-- TKSW -->@-- TK/2 --|-- ... --|<-- BC_CALC -->|",
+        "    |          riel         |  cabina |               |25|",
+        "    +---------------------------------+---------------+--+",
+        "    |        BLOQUE CABINA = TL                       |  |",
+        "    +-------------------------------------------------+--+",
         "",
-        f"    TKSW    = {tksw:.0f} mm",
-        f"    TK/2    = {tk2:.0f} mm",
+        f"    TKSW    = {tksw:.0f} mm   (pared frontal -> centro riel)",
+        f"    TK/2    = {tk2:.0f} mm   (centro riel -> fondo cabina)",
         f"    BC_CALC = {bc_calc:.0f} mm   (espacio libre detras de cabina)",
-        f"    25 mm   (holgura minima de seguridad al fondo)",
-        f"    TS      = {ts:.0f} mm  =  {tksw:.0f} + {tk2:.0f} + {bc_calc:.0f} + 25",
+        f"    25 mm    (holgura minima de seguridad al fondo)",
+        f"    TS      = {ts:.0f} mm  =  TKSW + TK/2 + BC_CALC + 25",
     ]
 
 
-def _dg_lateral_limits(lwl, lol, lwr, lor, bks, offset_cabin, offset_side):
+def _dg_lateral_limits(lwl, lol, lwr, lor, bks, rail, offset_cabin, offset_side):
     return [
-        "  Seccion transversal del hueco (no proporcional, vista superior):",
+        "  Seccion transversal (vista superior, no proporcional):",
         "",
         f"  Cabina desplazada hacia: {offset_side}   OFFSET_CABIN = {offset_cabin:.0f} mm",
         "",
-        "     LIMIT OL  LIMIT WL  [---BKS---]  LIMIT WR  LIMIT OR",
-        "  ---[OL]------[WL]------[  CABINA ]-----[WR]------[OR]---",
+        "  PARED IZQ                                            PARED DER",
+        "    |<-- WL -->|<-RAIL-|<---- BKS ---->|-RAIL->|<-- WR -->|",
+        "    |          | Rail L              Rail R    |          |",
+        "    |          +------------------------------+           |",
+        "    |          |       BLOQUE CABINA          |           |",
+        "    |          |       (BKS + 2*RAIL)         |           |",
+        "    |          +------------------------------+           |",
+        "    |          |<-OL->|<- BT (puerta) ->|<-OR->|          |",
+        "    |          +------------------------------+           |",
         "",
-        f"    LIMIT OL   = {lol:.1f} mm   |   LIMIT OR   = {lor:.1f} mm",
-        f"    LIMIT WL   = {lwl:.1f} mm   |   LIMIT WR   = {lwr:.1f} mm",
-        f"    BKS (dist. entre rieles de cabina) = {bks:.0f} mm",
+        f"    LIMIT WL = {lwl:.1f} mm   |   LIMIT WR = {lwr:.1f} mm",
+        f"    LIMIT OL = {lol:.1f} mm   |   LIMIT OR = {lor:.1f} mm",
+        f"    BKS = {bks:.0f} mm   |   RAIL = {rail:.0f} mm",
+        "",
+        "  OR/OL: si v > LIMIT -> requiere CORTE en la apertura de la puerta",
     ]
 
 
@@ -267,14 +298,13 @@ def _violations_block(surv_list, lim_map, survey_cols, styles,
     Devuelve elementos de story con el análisis de violaciones:
       - Tabla resumen: col | límite | criterio | # viol | niveles | DIF | estado
       - Matriz por nivel: # | WR | FR | OR | WL | FL | OL | viol.
-    Verde = dentro de límite, Rojo = fuera de límite.
     """
     elements = []
-    last_i   = len(surv_list) - 1
+    total_rows = len(surv_list)
 
-    # ── Calcular violaciones ────────────────────────────────────────
-    col_viols = {}       # col → lista de niveles (1-based) que violan
-    cell_data  = {}      # (i, col) → (viol, val, eff_lim, excess)
+    # ── Calcular violaciones ────────────────────────────────────
+    col_viols = {}
+    cell_data = {}
     for col in survey_cols:
         if col not in lim_map:
             continue
@@ -283,10 +313,9 @@ def _violations_block(surv_list, lim_map, survey_cols, styles,
         for i, row in enumerate(surv_list):
             v  = row.get(col, 0) if isinstance(row, dict) else float(row[col])
             el = lim
-            if ctrl_in_frame and i == last_i:
-                if col == "OR" and ctrl_side == "R":   el -= 70
-                elif col == "OL" and ctrl_side == "L": el -= 70
-            if col in ("OR", "OL"):
+            if ctrl_applies_to_cell(i, total_rows, col, ctrl_in_frame, ctrl_side):
+                el -= 70
+            if col in OR_OL_COLS:
                 viol   = v > el
                 excess = round(v - el, 1)
             else:
@@ -296,7 +325,7 @@ def _violations_block(surv_list, lim_map, survey_cols, styles,
                 col_viols[col].append(i + 1)
             cell_data[(i, col)] = (viol, round(v, 1), el, excess)
 
-    # ── Tabla resumen por columna ───────────────────────────────────
+    # ── Tabla resumen por columna ───────────────────────────────
     hdr_s = [Paragraph(f"<b>{h}</b>", styles["Normal2"]) for h in
              ["Col.", "Límite", "Criterio", "# Viol.", "Niveles incumplidos", "DIF (mm)", "Estado"]]
     rows_s = [hdr_s]
@@ -306,18 +335,18 @@ def _violations_block(surv_list, lim_map, survey_cols, styles,
         lim   = lim_map[col]
         viols = col_viols.get(col, [])
         n     = len(viols)
-        crit  = "v > LIM" if col in ("OR", "OL") else "v < LIM"
+        crit  = "v > LIM" if col in OR_OL_COLS else "v < LIM"
         vals  = [row.get(col, 0) if isinstance(row, dict) else float(row[col])
                  for row in surv_list]
-        dif   = max(vals) - lim if col in ("OR", "OL") else lim - min(vals)
+        dif   = max(vals) - lim if col in OR_OL_COLS else lim - min(vals)
         rows_s.append([
-            Paragraph(f"<b>{col}</b>",                                      styles["Normal2"]),
-            Paragraph(f"{lim:.1f}",                                         styles["Normal2"]),
-            Paragraph(crit,                                                  styles["Normal2"]),
-            Paragraph(str(n),                                                styles["Normal2"]),
-            Paragraph(", ".join(str(l) for l in viols) if viols else "—",  styles["Normal2"]),
-            Paragraph(f"{dif:.2f}",                                         styles["Normal2"]),
-            Paragraph("❌" if n else "✅",                                   styles["Normal2"]),
+            Paragraph(f"<b>{col}</b>",                                       styles["Normal2"]),
+            Paragraph(f"{lim:.1f}",                                          styles["Normal2"]),
+            Paragraph(crit,                                                   styles["Normal2"]),
+            Paragraph(str(n),                                                 styles["Normal2"]),
+            Paragraph(", ".join(str(l) for l in viols) if viols else "—",   styles["Normal2"]),
+            Paragraph(f"{dif:.2f}",                                          styles["Normal2"]),
+            Paragraph("FAIL" if n else "OK",                                  styles["Normal2"]),
         ])
     cw_s = [20*mm, 20*mm, 22*mm, 16*mm, 44*mm, 26*mm, 22*mm]
     t_s  = Table(rows_s, colWidths=cw_s)
@@ -333,15 +362,15 @@ def _violations_block(surv_list, lim_map, survey_cols, styles,
     ]
     for ri, col in enumerate(survey_cols, start=1):
         if col_viols.get(col):
-            cmds_s.append(("BACKGROUND", (0,ri), (-1,ri), C_RED_BG))
+            cmds_s.append(("BACKGROUND", (0, ri), (-1, ri), C_RED_BG))
     t_s.setStyle(TableStyle(cmds_s))
     elements += [t_s, sp(4)]
 
-    # ── Matriz por nivel ────────────────────────────────────────────
-    ncols  = len(survey_cols)
-    hdr_l  = ([Paragraph("<b>#</b>",    styles["Normal2"])] +
-               [Paragraph(f"<b>{c}</b>", styles["Normal2"]) for c in survey_cols] +
-               [Paragraph("<b>Viol.</b>", styles["Normal2"])])
+    # ── Matriz por nivel ────────────────────────────────────────
+    ncols = len(survey_cols)
+    hdr_l = ([Paragraph("<b>#</b>", styles["Normal2"])] +
+              [Paragraph(f"<b>{c}</b>", styles["Normal2"]) for c in survey_cols] +
+              [Paragraph("<b>Viol.</b>", styles["Normal2"])])
     rows_l = [hdr_l]
     cmds_l = [
         ("GRID",         (0,0), (-1,-1), 0.3, colors.lightgrey),
@@ -364,7 +393,7 @@ def _violations_block(surv_list, lim_map, survey_cols, styles,
                             C_RED_BG if viol else C_GREEN_BG))
             if viol:
                 n_viol += 1
-        cells.append(Paragraph(str(n_viol) if n_viol else "✓", styles["Normal2"]))
+        cells.append(Paragraph(str(n_viol) if n_viol else "OK", styles["Normal2"]))
         if n_viol:
             cmds_l.append(("BACKGROUND", (ncols+1, i+1), (ncols+1, i+1), C_RED_BG))
         rows_l.append(cells)
@@ -376,12 +405,23 @@ def _violations_block(surv_list, lim_map, survey_cols, styles,
 
 
 def _summary_table(summary_list, styles):
-    if not summary_list: return sp(2)
+    if not summary_list:
+        return sp(2)
     header = [Paragraph(f"<b>{k}</b>", styles["Normal2"]) for k in summary_list[0]]
     rows   = [header] + [[Paragraph(str(v), styles["Normal2"]) for v in item.values()] for item in summary_list]
-    t = Table(rows, colWidths=[W/len(summary_list[0])]*len(summary_list[0]))
-    t.setStyle(TableStyle([("GRID",(0,0),(-1,-1),0.3,colors.lightgrey),("BACKGROUND",(0,0),(-1,0),C_SUBHEAD),("TEXTCOLOR",(0,0),(-1,0),C_WHITE),("FONTNAME",(0,0),(-1,0),"Helvetica-Bold"),("BACKGROUND",(0,1),(-1,-1),C_GREY),("TOPPADDING",(0,0),(-1,-1),3),("BOTTOMPADDING",(0,0),(-1,-1),3),("LEFTPADDING",(0,0),(-1,-1),4)]))
+    t = Table(rows, colWidths=[W/len(summary_list[0])] * len(summary_list[0]))
+    t.setStyle(TableStyle([
+        ("GRID",         (0,0),(-1,-1), 0.3, colors.lightgrey),
+        ("BACKGROUND",   (0,0),(-1,0),  C_SUBHEAD),
+        ("TEXTCOLOR",    (0,0),(-1,0),  C_WHITE),
+        ("FONTNAME",     (0,0),(-1,0),  "Helvetica-Bold"),
+        ("BACKGROUND",   (0,1),(-1,-1), C_GREY),
+        ("TOPPADDING",   (0,0),(-1,-1), 3),
+        ("BOTTOMPADDING",(0,0),(-1,-1), 3),
+        ("LEFTPADDING",  (0,0),(-1,-1), 4),
+    ]))
     return t
+
 
 # ════════════════════════════════════════════════════════════
 def generate_report(project_params, calculated, survey_original,
@@ -402,7 +442,7 @@ def generate_report(project_params, calculated, survey_original,
     def fv(key):
         v = p.get(key, calculated.get(key, 0.0))
         return float(v) if v is not None else 0.0
-    def fs(key, d=2):
+    def fstr(key, d=2):
         v = p.get(key, calculated.get(key, 0.0))
         return f"{float(v):.{d}f}" if v is not None else "0.00"
 
@@ -411,15 +451,25 @@ def generate_report(project_params, calculated, survey_original,
         [Paragraph("ELEVATOR SURVEY ANALYZER", styles["ReportTitle"])],
         [Paragraph("Reporte de cálculo con trazabilidad completa — incluyendo cada paso del optimizador", styles["ReportSub"])]
     ], colWidths=[W])
-    tt.setStyle(TableStyle([("BACKGROUND",(0,0),(-1,-1),C_HEADER),("TOPPADDING",(0,0),(-1,-1),10),("BOTTOMPADDING",(0,0),(-1,-1),10)]))
-    story += [tt, sp(4), Paragraph(f"Generado: {datetime.now().strftime('%d/%m/%Y  %H:%M')}", styles["SmallCenter"]), sp(10)]
+    tt.setStyle(TableStyle([
+        ("BACKGROUND",    (0,0),(-1,-1), C_HEADER),
+        ("TOPPADDING",    (0,0),(-1,-1), 10),
+        ("BOTTOMPADDING", (0,0),(-1,-1), 10),
+    ]))
+    story += [tt, sp(4),
+              Paragraph(f"Generado: {datetime.now().strftime('%d/%m/%Y  %H:%M')}", styles["SmallCenter"]),
+              sp(10)]
 
     # ── 1. PARÁMETROS DE ENTRADA ─────────────────────────────
     story += [_section_header("1. PARÁMETROS DE ENTRADA", styles), sp(4)]
     story += [Paragraph("1.1  Extraídos del PDF", styles["SubHead"])]
-    story += [_param_table({k: p.get(k) for k in ["BS","BT","BK","BKS","TK","TKA","TKS","TSW","TKSW","TS","SF1","SF2","SG","TG","BGS","BKF1","BKF2"]}, styles), sp(6)]
+    story += [_param_table({k: p.get(k) for k in
+        ["BS","BT","BK","BKS","TK","TKA","TKS","TSW","TKSW","TS","SF1","SF2","SG","TG","BGS","BKF1","BKF2"]
+    }, styles), sp(6)]
     story += [Paragraph("1.2  Ingresados por el usuario", styles["SubHead"])]
-    story += [_param_table({k: p.get(k) for k in ["BSR","FS","FRAME","RAIL","OFFSET_CABIN"]}, styles, cols=5), sp(6)]
+    story += [_param_table({k: p.get(k) for k in
+        ["BSR","FS","FRAME","RAIL","OFFSET_CABIN"]
+    }, styles, cols=5), sp(6)]
 
     # ── 1.3  Condiciones y configuración ──────────────────────
     story += [Paragraph("1.3  Condiciones y configuración del proyecto", styles["SubHead"])]
@@ -430,7 +480,7 @@ def generate_report(project_params, calculated, survey_original,
     ctrl_s_    = p.get("CTRL_SIDE")
     ns_        = p.get("NS", "—")
 
-    def _yn(b):   return "SÍ" if b else "NO"
+    def _yn(b):   return "SI" if b else "NO"
     def _side(s): return str(s) if s else "—"
 
     cfg_rows = [
@@ -446,11 +496,11 @@ def generate_report(project_params, calculated, survey_original,
          Paragraph(_side(p.get("OFFSET_SIDE")),     styles["Normal2"]),
          Paragraph("Offset cabina (mm)",            styles["Normal2"]),
          Paragraph(f"{p.get('OFFSET_CABIN', 0):.1f}", styles["Normal2"])],
-        [Paragraph("¿Pared limitante?",             styles["Normal2"]),
+        [Paragraph("Pared limitante?",              styles["Normal2"]),
          Paragraph(_yn(wall_lim),                   styles["Normal2"]),
          Paragraph("Parada limitante / Lado pared", styles["Normal2"]),
          Paragraph(f"{int(wall_stop_) if wall_stop_ is not None else '—'} / {_side(wall_side_)}", styles["Normal2"])],
-        [Paragraph("¿Controlador en frame?",        styles["Normal2"]),
+        [Paragraph("Controlador en frame?",         styles["Normal2"]),
          Paragraph(_yn(ctrl_fr),                    styles["Normal2"]),
          Paragraph("Lado del controlador",          styles["Normal2"]),
          Paragraph(_side(ctrl_s_),                  styles["Normal2"])],
@@ -467,13 +517,12 @@ def generate_report(project_params, calculated, survey_original,
         ("BOTTOMPADDING", (0,0), (-1,-1), 4),
         ("LEFTPADDING",   (0,0), (-1,-1), 5),
     ]
-    # Highlight SÍ values using source booleans (Paragraph has no .text attribute)
-    if wall_lim:   # row 3, col 1
-        cfg_cmds += [("BACKGROUND",(1,3),(1,3),colors.HexColor("#d4efdf")),
-                     ("FONTNAME",  (1,3),(1,3),"Helvetica-Bold")]
-    if ctrl_fr:    # row 4, col 1
-        cfg_cmds += [("BACKGROUND",(1,4),(1,4),colors.HexColor("#d4efdf")),
-                     ("FONTNAME",  (1,4),(1,4),"Helvetica-Bold")]
+    if wall_lim:
+        cfg_cmds += [("BACKGROUND",(1,3),(1,3), C_GREEN_BG),
+                     ("FONTNAME",  (1,3),(1,3), "Helvetica-Bold")]
+    if ctrl_fr:
+        cfg_cmds += [("BACKGROUND",(1,4),(1,4), C_GREEN_BG),
+                     ("FONTNAME",  (1,4),(1,4), "Helvetica-Bold")]
     cfg_t.setStyle(TableStyle(cfg_cmds))
     story += [cfg_t, sp(8)]
 
@@ -486,15 +535,15 @@ def generate_report(project_params, calculated, survey_original,
     story += [
         _calc_block("CS — Profundidad total de cabina",
             "CS = TK + TKA",
-            f"{fs('TK')} + {fs('TKA')}",
+            f"{fstr('TK')} + {fstr('TKA')}",
             f"CS = {cs:.2f} mm", styles), sp(3),
-        _calc_block("TL — Longitud total cabina a umbral",
+        _calc_block("TL — Profundidad del bloque cabina (riel a riel)",
             "TL = CS + TKS + TSW",
-            f"{cs:.2f} + {fs('TKS')} + {fs('TSW')}",
+            f"{cs:.2f} + {fstr('TKS')} + {fstr('TSW')}",
             f"TL = {tl:.2f} mm", styles), sp(3),
         _calc_block("BC_CALC — Espacio libre detras de la cabina",
             "BC_CALC = TS - TKSW - (TK / 2) - 25",
-            f"{fs('TS')} - {fs('TKSW')} - ({fs('TK')} / 2) - 25",
+            f"{fstr('TS')} - {fstr('TKSW')} - ({fstr('TK')} / 2) - 25",
             f"BC_CALC = {bc_calc_v:.2f} mm", styles), sp(3),
         _calc_block("TLBC — Longitud total con espacio trasero",
             "TLBC = TL + BC_CALC",
@@ -506,9 +555,9 @@ def generate_report(project_params, calculated, survey_original,
 
     # ── 3. LÍMITES GEOMÉTRICOS ───────────────────────────────
     story += [_section_header("3. LÍMITES GEOMÉTRICOS", styles), sp(4)]
-    lwr = fv("SF2") + fv("RAIL")/2
+    lwr = fv("SF2") + fv("RAIL") / 2
     lfr = fv("TKSW") - 150
-    lwl = fv("SF1") + fv("RAIL")/2
+    lwl = fv("SF1") + fv("RAIL") / 2
     lfl = fv("TKSW") - 150
     _base_ol = fv("BKS")/2 + fv("RAIL")/2 - fv("BT")/2 - fv("FRAME")
     _off_c   = fv("OFFSET_CABIN")
@@ -517,9 +566,6 @@ def generate_report(project_params, calculated, survey_original,
     lol = _base_ol - _off_c if _off_s == "L" else _base_ol + _off_c
     lob_raw = (fv("SG") - fv("TG")/2) * 0.3
     omega   = p.get("OMEGA_SIDE", "R")
-    # Z siempre opuesto al Omega:
-    # Omega=R → Z=L → LIMIT ZB usa SF1
-    # Omega=L → Z=R → LIMIT ZB usa SF2
     if omega == "R":
         lzb_raw = fv("SF1") * 0.3
         lob, lzb, lr, ll = lor, lol, lob_raw, lzb_raw
@@ -527,36 +573,40 @@ def generate_report(project_params, calculated, survey_original,
     else:
         lzb_raw = fv("SF2") * 0.3
         lob, lzb, lr, ll = lol, lor, lzb_raw, lob_raw
-        z_side, zb_sf   = "R", "SF2" 
+        z_side, zb_sf   = "R", "SF2"
 
     story += [
         Paragraph("3.1  Límites laterales", styles["SubHead"]),
-        _calc_block("LIMIT WR",  "LIMIT WR = SF2 + (RAIL / 2)",    f"{fs('SF2')} + ({fs('RAIL')} / 2)", f"LIMIT WR = {lwr:.2f} mm", styles), sp(3),
-        _calc_block("LIMIT WL",  "LIMIT WL = SF1 + (RAIL / 2)",    f"{fs('SF1')} + ({fs('RAIL')} / 2)", f"LIMIT WL = {lwl:.2f} mm", styles), sp(3),
-        _calc_block("Base OR/OL", "Base = (BKS/2) + (RAIL/2) − (BT/2) − FRAME",
-            f"({fs('BKS')}/2) + ({fs('RAIL')}/2) − ({fs('BT')}/2) − {fs('FRAME')}",
-            f"Base = {(fv('BKS')/2 + fv('RAIL')/2 - fv('BT')/2 - fv('FRAME')):.2f} mm", styles), sp(3),
+        _calc_block("LIMIT WR",  "LIMIT WR = SF2 + (RAIL / 2)",
+            f"{fstr('SF2')} + ({fstr('RAIL')} / 2)", f"LIMIT WR = {lwr:.2f} mm", styles), sp(3),
+        _calc_block("LIMIT WL",  "LIMIT WL = SF1 + (RAIL / 2)",
+            f"{fstr('SF1')} + ({fstr('RAIL')} / 2)", f"LIMIT WL = {lwl:.2f} mm", styles), sp(3),
+        _calc_block("Base OR/OL", "Base = (BKS/2) + (RAIL/2) - (BT/2) - FRAME",
+            f"({fstr('BKS')}/2) + ({fstr('RAIL')}/2) - ({fstr('BT')}/2) - {fstr('FRAME')}",
+            f"Base = {_base_ol:.2f} mm", styles), sp(3),
         _calc_block("LIMIT OR",
-            f"LIMIT OR = Base {'+ OFFSET_CABIN' if p.get('OFFSET_SIDE','R')=='L' else '− OFFSET_CABIN'}  (offset lado {p.get('OFFSET_SIDE','R')})",
-            f"{(fv('BKS')/2 + fv('RAIL')/2 - fv('BT')/2 - fv('FRAME')):.2f} {'+' if p.get('OFFSET_SIDE','R')=='L' else '−'} {fs('OFFSET_CABIN')}",
+            f"LIMIT OR = Base {'+ OFFSET_CABIN' if _off_s=='L' else '- OFFSET_CABIN'}  (offset lado {_off_s})",
+            f"{_base_ol:.2f} {'+' if _off_s=='L' else '-'} {fstr('OFFSET_CABIN')}",
             f"LIMIT OR = {lor:.2f} mm", styles), sp(3),
         _calc_block("LIMIT OL",
-            f"LIMIT OL = Base {'− OFFSET_CABIN' if p.get('OFFSET_SIDE','R')=='L' else '+ OFFSET_CABIN'}  (offset lado {p.get('OFFSET_SIDE','R')})",
-            f"{(fv('BKS')/2 + fv('RAIL')/2 - fv('BT')/2 - fv('FRAME')):.2f} {'−' if p.get('OFFSET_SIDE','R')=='L' else '+'} {fs('OFFSET_CABIN')}",
+            f"LIMIT OL = Base {'- OFFSET_CABIN' if _off_s=='L' else '+ OFFSET_CABIN'}  (offset lado {_off_s})",
+            f"{_base_ol:.2f} {'-' if _off_s=='L' else '+'} {fstr('OFFSET_CABIN')}",
             f"LIMIT OL = {lol:.2f} mm", styles), sp(6),
         _diagram_block("Seccion transversal — Limites laterales",
-            _dg_lateral_limits(lwl, lol, lwr, lor, fv("BKS"),
-                               fv("OFFSET_CABIN"), p.get("OFFSET_SIDE","R")), styles), sp(6),
+            _dg_lateral_limits(lwl, lol, lwr, lor, fv("BKS"), fv("RAIL"),
+                               fv("OFFSET_CABIN"), _off_s), styles), sp(6),
         Paragraph("3.2  Límites frontales", styles["SubHead"]),
-        _calc_block("LIMIT FR",  "LIMIT FR = TKSW - 150",          f"{fs('TKSW')} - 150",               f"LIMIT FR = {lfr:.2f} mm", styles), sp(3),
-        _calc_block("LIMIT FL",  "LIMIT FL = TKSW - 150",          f"{fs('TKSW')} - 150",               f"LIMIT FL = {lfl:.2f} mm", styles), sp(6),
+        _calc_block("LIMIT FR",  "LIMIT FR = TKSW - 150",
+            f"{fstr('TKSW')} - 150", f"LIMIT FR = {lfr:.2f} mm", styles), sp(3),
+        _calc_block("LIMIT FL",  "LIMIT FL = TKSW - 150",
+            f"{fstr('TKSW')} - 150", f"LIMIT FL = {lfl:.2f} mm", styles), sp(6),
         Paragraph("3.3  Límites Omega / Zona B", styles["SubHead"]),
-        _calc_block("LIMIT OB (raw)", "LIMIT OB = (SG − (TG/2)) × 0.3",
-            f"({fs('SG')} − ({fs('TG')}/2)) × 0.3",
+        _calc_block("LIMIT OB (raw)", "LIMIT OB = (SG - (TG/2)) x 0.3",
+            f"({fstr('SG')} - ({fstr('TG')}/2)) x 0.3",
             f"LIMIT OB raw = {lob_raw:.2f} mm", styles), sp(3),
         _calc_block("LIMIT ZB (raw)",
-            f"LIMIT ZB = {zb_sf} × 0.3  (Z lado {z_side}, opuesto al Omega={omega})",
-            f"{fs(zb_sf)} × 0.3",
+            f"LIMIT ZB = {zb_sf} x 0.3  (Z lado {z_side}, opuesto al Omega={omega})",
+            f"{fstr(zb_sf)} x 0.3",
             f"LIMIT ZB raw = {lzb_raw:.2f} mm", styles), sp(4),
         Paragraph(
             f"<b>Omega lado {omega}  |  Z lado {z_side}:</b>  "
@@ -571,20 +621,20 @@ def generate_report(project_params, calculated, survey_original,
     bsr = fv("BSR"); bs  = fv("BS")
     off_fr = lfr - frt
     off_fl = lfl - flt
-    off_wr = lwr - wrt + (bsr - bs)/2
-    off_wl = lwl - wlt + (bsr - bs)/2
+    off_wr = lwr - wrt + (bsr - bs) / 2
+    off_wl = lwl - wlt + (bsr - bs) / 2
     story += [
         Paragraph("Totales de la última fila de la matriz SURVEY:", styles["Note"]),
         _param_table({"WRT": wrt, "FRT": frt, "ORT": fv("ORT"), "WLT": wlt, "FLT": flt, "OLT": fv("OLT")}, styles, cols=3), sp(4),
-        _calc_block("Offset FR", "Offset FR = LIMIT FR − FRT",
-            f"{lfr:.2f} − {frt:.2f}", f"Offset FR = {off_fr:.2f} mm", styles), sp(3),
-        _calc_block("Offset FL", "Offset FL = LIMIT FL − FLT",
-            f"{lfl:.2f} − {flt:.2f}", f"Offset FL = {off_fl:.2f} mm", styles), sp(3),
-        _calc_block("Offset WR", "Offset WR = LIMIT WR − WRT + ((BSR−BS)/2)",
-            f"{lwr:.2f} − {wrt:.2f} + (({bsr:.2f}−{bs:.2f})/2) = {lwr:.2f} − {wrt:.2f} + {(bsr-bs)/2:.2f}",
+        _calc_block("Offset FR", "Offset FR = LIMIT FR - FRT",
+            f"{lfr:.2f} - {frt:.2f}", f"Offset FR = {off_fr:.2f} mm", styles), sp(3),
+        _calc_block("Offset FL", "Offset FL = LIMIT FL - FLT",
+            f"{lfl:.2f} - {flt:.2f}", f"Offset FL = {off_fl:.2f} mm", styles), sp(3),
+        _calc_block("Offset WR", "Offset WR = LIMIT WR - WRT + ((BSR-BS)/2)",
+            f"{lwr:.2f} - {wrt:.2f} + (({bsr:.2f}-{bs:.2f})/2)",
             f"Offset WR = {off_wr:.2f} mm", styles), sp(3),
-        _calc_block("Offset WL", "Offset WL = LIMIT WL − WLT + ((BSR−BS)/2)",
-            f"{lwl:.2f} − {wlt:.2f} + (({bsr:.2f}−{bs:.2f})/2) = {lwl:.2f} − {wlt:.2f} + {(bsr-bs)/2:.2f}",
+        _calc_block("Offset WL", "Offset WL = LIMIT WL - WLT + ((BSR-BS)/2)",
+            f"{lwl:.2f} - {wlt:.2f} + (({bsr:.2f}-{bs:.2f})/2)",
             f"Offset WL = {off_wl:.2f} mm", styles), sp(3),
         _calc_block("Offset OR", "Offset OR = Offset WR  (mismo desplazamiento lateral)",
             f"= {off_wr:.2f} mm",
@@ -617,29 +667,33 @@ def generate_report(project_params, calculated, survey_original,
         lim   = lim_map[col]; min_v = analysis[f"MIN_{col}"]
         max_v = analysis.get(f"MAX_{col}", min_v)
         dif_v = analysis[f"DIF_{col}"]; off_c = analysis[f"{col}_OFF_COUNT"]
-        if col in ("OR", "OL"):
-            # DIF = MAX − LIMIT: positivo = el máximo supera el límite (requiere corte)
-            formula_text = f"DIF {col} = MAX {col} − LIMIT {col}"
-            subst_text   = f"{max_v:.2f} − {lim:.2f}"
+        if col in OR_OL_COLS:
+            formula_text = f"DIF {col} = MAX {col} - LIMIT {col}"
+            subst_text   = f"{max_v:.2f} - {lim:.2f}"
         else:
-            formula_text = f"DIF {col} = LIMIT {col} − MIN {col}"
-            subst_text   = f"{lim:.2f} − {min_v:.2f}"
+            formula_text = f"DIF {col} = LIMIT {col} - MIN {col}"
+            subst_text   = f"{lim:.2f} - {min_v:.2f}"
         story += [_calc_block(f"DIF {col}",
             formula_text, subst_text,
             f"DIF {col} = {dif_v:.2f} mm  |  {off_c} valor(es) fuera de límite",
-            styles, ok=(dif_v<=0)), sp(3)]
+            styles, ok=(dif_v <= 0)), sp(3)]
 
     max_rl = analysis["MAX_OFF_RL"]; max_fb = analysis["MAX_OFF_FB"]
+    if wall_limiting:
+        max_rl_formula = "MAX OFF RL = max(DIF WR, DIF WL, max(0,DIF OR), max(0,DIF OL))  [Caso 1: OR/OL cuentan]"
+        max_rl_subst   = (f"max({analysis['DIF_WR']:.2f}, {analysis['DIF_WL']:.2f}, "
+                          f"{max(0.0,analysis['DIF_OR']):.2f}, {max(0.0,analysis['DIF_OL']):.2f})")
+    else:
+        max_rl_formula = "MAX OFF RL = max(DIF WR, DIF WL)  [Caso 2: OR/OL no cuentan como OFF]"
+        max_rl_subst   = f"max({analysis['DIF_WR']:.2f}, {analysis['DIF_WL']:.2f})"
     story += [sp(3),
-        _calc_block("MAX OFF RL",
-            "MAX OFF RL = max(DIF WR, DIF WL)  [OR/OL gestionados como restricción dura en optimizador]",
-            f"max({analysis['DIF_WR']:.2f}, {analysis['DIF_WL']:.2f})",
+        _calc_block("MAX OFF RL", max_rl_formula, max_rl_subst,
             f"MAX OFF RL = {max_rl:.2f} mm", styles), sp(3),
         _calc_block("MAX OFF FB", "MAX OFF FB = max(DIF FR, DIF FL)",
             f"max({analysis['DIF_FR']:.2f}, {analysis['DIF_FL']:.2f})",
             f"MAX OFF FB = {max_fb:.2f} mm", styles), sp(6)]
 
-    # ── 6.2 ESTADO INICIAL — límites incumplidos ─────────────────
+    # ── 6.2 ESTADO INICIAL ─────────────────────────────────────
     story += [
         Paragraph("6.2  Estado inicial — límites incumplidos antes de la optimización",
                   styles["SubHead"]),
@@ -657,26 +711,26 @@ def generate_report(project_params, calculated, survey_original,
                                 rpt_ctrl, rpt_ctrl_side)
     story += [sp(8)]
 
-    # ── 7. OPTIMIZACIÓN — CADA PASO ─────────────────────────
+    # ── 7. OPTIMIZACIÓN ───────────────────────────────────────
     story += [PageBreak(), _section_header("7. OPTIMIZACIÓN — TRAZABILIDAD COMPLETA DE CADA PASO", styles), sp(4)]
 
     story += [
         Paragraph("7.1  Parámetros del optimizador", styles["SubHead"]),
         _calc_block("Rango de búsqueda RL",
-            "RL ∈ [−MAX OFF RL, +MAX OFF RL]  paso 0.5 mm",
+            "RL ∈ [-MAX OFF RL, +MAX OFF RL]  paso 0.5 mm",
             f"[{-max_rl:.2f}, {max_rl:.2f}]",
             f"Total pasos RL evaluados: {int(max_rl*2/0.5)+1}", styles), sp(3),
         _calc_block("Rango de búsqueda FB",
-            "FB ∈ [−MAX OFF FB, +MAX OFF FB]  paso 0.5 mm",
+            "FB ∈ [-MAX OFF FB, +MAX OFF FB]  paso 0.5 mm",
             f"[{-max_fb:.2f}, {max_fb:.2f}]",
             f"Total pasos FB evaluados: {int(max_fb*2/0.5)+1}", styles), sp(4),
         Paragraph("Restricciones aplicadas en cada paso:", styles["SubHead2"]),
-        Paragraph(f"  • Si RL < 0: |RL| ≤ LIMIT R = {lr:.2f} mm", styles["Normal2"]),
-        Paragraph(f"  • Si RL > 0: |RL| ≤ LIMIT L = {ll:.2f} mm", styles["Normal2"]),
-        Paragraph(f"  • Pared limitante: {'Sí — Parada ' + str(p.get('WALL_STOP','?')) + ' lado ' + str(p.get('WALL_SIDE','?')) if p.get('WALL_LIMITING') else 'No aplica'}", styles["Normal2"]),
-        Paragraph(f"  • TSW={fs('TSW')} vs FS={fs('FS')} — FS−TSW={fv('FS')-fv('TSW'):.1f} mm — FB extra activo: {'Sí' if fv('FS') > fv('TSW') and p.get('WALL_LIMITING') else 'No'}", styles["Normal2"]),
+        Paragraph(f"  - Si RL < 0: |RL| <= LIMIT R = {lr:.2f} mm", styles["Normal2"]),
+        Paragraph(f"  - Si RL > 0: |RL| <= LIMIT L = {ll:.2f} mm", styles["Normal2"]),
+        Paragraph(f"  - Pared limitante: {'Si - Parada ' + str(p.get('WALL_STOP','?')) + ' lado ' + str(p.get('WALL_SIDE','?')) if wall_limiting else 'No aplica'}", styles["Normal2"]),
+        Paragraph(f"  - TSW={fstr('TSW')} vs FS={fstr('FS')} - FS-TSW={fv('FS')-fv('TSW'):.1f} mm - FB extra activo: {'Si' if fv('FS') > fv('TSW') and wall_limiting else 'No'}", styles["Normal2"]),
         Paragraph(
-            f"  • Controlador en frame: {'Sí — lado ' + str(p.get('CTRL_SIDE','?')) + ' → último nivel: LIMIT_O' + str(p.get('CTRL_SIDE','?')) + ' − 70 mm' if p.get('CTRL_IN_FRAME') else 'No'}",
+            f"  - Controlador en frame: {'Si - lado ' + str(p.get('CTRL_SIDE','?')) + ' -> ultimo nivel: LIMIT_O' + str(p.get('CTRL_SIDE','?')) + ' - 70 mm' if rpt_ctrl else 'No'}",
             styles["Normal2"]),
         sp(4),
         _diagram_block("Diagrama de rango RL",
@@ -685,16 +739,16 @@ def generate_report(project_params, calculated, survey_original,
             _dg_fb(max_fb, fv("FB_MAX_BACK"), fv("BC_CALC"), fv("DIF_TSW_FS")), styles), sp(6),
     ]
 
-    # Tabla de todos los pasos
+    # ── 7.2  Log de todos los pasos ─────────────────────────────
     story += [Paragraph("7.2  Log de todos los pasos evaluados", styles["SubHead"]), sp(3)]
 
     valid_steps = [s for s in step_log if s.get("status") == "VALID"]
 
     story += [Paragraph(f"Total combinaciones evaluadas: {len(step_log)}  |  Válidas: {len(valid_steps)}", styles["Note"]), sp(3)]
 
-    # Pasos VÁLIDOS — solo mostrar los que tienen el menor número de OFF
     best_total = best["total_off"] if best else None
-    min_off_steps = [s for s in valid_steps if s.get("total_off") == best_total] if best_total is not None else valid_steps
+    min_off_steps = [s for s in valid_steps if s.get("total_off") == best_total] \
+                    if best_total is not None else valid_steps
 
     story += [
         Paragraph(
@@ -709,30 +763,16 @@ def generate_report(project_params, calculated, survey_original,
         sp(2)
     ]
 
-    best_rl = best["rl"] if best else None
-    best_fb = best["fb"] if best else None
     opt_pairs = {(s["rl"], s["fb"]) for s in all_solutions}
 
-    # Encabezado
-    hdr = [
-        Paragraph("<b>RL</b>",      styles["Normal2"]),
-        Paragraph("<b>FB</b>",      styles["Normal2"]),
-        Paragraph("<b>FB aplic.</b>",styles["Normal2"]),
-        Paragraph("<b>OFF</b>",     styles["Normal2"]),
-        Paragraph("<b>WR</b>",      styles["Normal2"]),
-        Paragraph("<b>FR</b>",      styles["Normal2"]),
-        Paragraph("<b>OR</b>",      styles["Normal2"]),
-        Paragraph("<b>WL</b>",      styles["Normal2"]),
-        Paragraph("<b>FL</b>",      styles["Normal2"]),
-        Paragraph("<b>OL</b>",      styles["Normal2"]),
-        Paragraph("<b>Estado</b>",  styles["Normal2"]),
-    ]
+    hdr = [Paragraph(f"<b>{h}</b>", styles["Normal2"]) for h in
+           ["RL", "FB", "FB aplic.", "OFF", "WR", "FR", "OR", "WL", "FL", "OL", "Estado"]]
     valid_rows = [hdr]
     for s in min_off_steps:
         obc        = s.get("off_by_col", {})
         fb_aplic   = s.get("fb_applied", s["fb"])
         is_opt     = (s["rl"], s["fb"]) in opt_pairs
-        estado     = Paragraph("✅ ÓPTIMO" if is_opt else "", styles["Normal2"])
+        estado     = Paragraph("OPTIMO" if is_opt else "", styles["Normal2"])
         fb_extra   = abs(fb_aplic - s["fb"]) > 0.01
         fb_aplic_p = Paragraph(
             f'<font color="#e67e22"><b>{fb_aplic:.1f}*</b></font>' if fb_extra
@@ -761,41 +801,46 @@ def generate_report(project_params, calculated, survey_original,
         ("TEXTCOLOR",  (0,0),(-1,0),  C_WHITE),
         ("FONTNAME",   (0,0),(-1,0),  "Helvetica-Bold"),
         ("BACKGROUND", (0,1),(-1,-1), C_GREY),
-        ("TOPPADDING", (0,0),(-1,-1), 2),("BOTTOMPADDING",(0,0),(-1,-1),2),
-        ("LEFTPADDING",(0,0),(-1,-1), 3),("FONTSIZE",(0,1),(-1,-1),7),
+        ("TOPPADDING", (0,0),(-1,-1), 2),
+        ("BOTTOMPADDING",(0,0),(-1,-1),2),
+        ("LEFTPADDING",(0,0),(-1,-1), 3),
+        ("FONTSIZE",   (0,1),(-1,-1), 7),
     ]
     for ri, s in enumerate(min_off_steps, start=1):
         if (s["rl"], s["fb"]) in opt_pairs:
             cmds_v.append(("BACKGROUND", (0,ri),(-1,ri), C_BEST))
             cmds_v.append(("FONTNAME",   (0,ri),(-1,ri), "Helvetica-Bold"))
-        obc = s.get("off_by_col",{})
+        obc = s.get("off_by_col", {})
         for ci, col in enumerate(["WR","FR","OR","WL","FL","OL"], start=4):
             if obc.get(col, 0) > 0:
-                cmds_v.append(("BACKGROUND",(ci,ri),(ci,ri), C_RED_BG))
+                cmds_v.append(("BACKGROUND", (ci,ri),(ci,ri), C_RED_BG))
     t_valid.setStyle(TableStyle(cmds_v))
     story += [t_valid, sp(6)]
 
-    # Resultado final optimizador
+    # ── 7.3  Resultado final ────────────────────────────────────
     story += [Paragraph("7.3  Resultado final", styles["SubHead"]), sp(3)]
     if best:
         n_sol     = len(all_solutions)
         best_pair_r = (best["rl"], best["fb"])
-        # Ordenar: mejor solución primero
+        # Ordenar consistente con el optimizer: usar fb_applied
         sorted_sols = sorted(
             all_solutions,
-            key=lambda s: (0 if (s["rl"], s["fb"]) == best_pair_r else 1, abs(s["rl"]) + abs(s["fb"]))
+            key=lambda s: (
+                0 if (s["rl"], s["fb"]) == best_pair_r else 1,
+                abs(s["rl"]) + abs(s.get("fb_applied", s["fb"]))
+            )
         )
         story += [
             _calc_block("Resumen de optimización",
                 "Criterio 1: menor número de valores fuera de límite\nCriterio 2 (desempate): menor desplazamiento total |RL| + |FB aplicado|",
                 f"Candidatos con mínimo OFF: {n_sol}  |  Valores fuera de límite: {best['total_off']}",
                 f"Seleccionado: RL={best['rl']:.1f} mm, FB iterado={best['fb']:.1f} mm, FB aplicado={best.get('fb_applied', best['fb']):.1f} mm",
-                styles, ok=(best["total_off"]==0)),
+                styles, ok=(best["total_off"] == 0)),
             sp(6),
         ]
         for idx_sol, sol in enumerate(sorted_sols):
             is_best   = (sol["rl"], sol["fb"]) == best_pair_r
-            prefix    = "⭐ SELECCIONADA — " if is_best else ""
+            prefix    = "SELECCIONADA - " if is_best else ""
             fb_ap     = sol.get("fb_applied", sol["fb"])
             fb_suffix = f"  |  FB aplic. = {fb_ap:.1f} mm" if abs(fb_ap - sol["fb"]) > 0.01 else ""
             story += [
@@ -806,7 +851,6 @@ def generate_report(project_params, calculated, survey_original,
             sol_df  = pd.DataFrame(sol["matrix"])
             sol_min = {f"MIN_{c}": min(sol_df[c]) for c in survey_cols}
             sol_max = {f"MAX_{c}": max(sol_df[c]) for c in survey_cols}
-            # Caso 2: agregar CUT OR / CUT OL con ajuste de controlador en último nivel
             if not wall_limiting:
                 lor_v        = lim_map["OR"]
                 lol_v        = lim_map["OL"]
@@ -824,14 +868,14 @@ def generate_report(project_params, calculated, survey_original,
                                      ctrl_in_frame=rpt_ctrl, ctrl_side=rpt_ctrl_side), sp(3)]
             if not wall_limiting:
                 story += [Paragraph(
-                    "CUT OR = OR − LIMIT OR  /  CUT OL = OL − LIMIT OL  "
+                    "CUT OR = OR - LIMIT OR  /  CUT OL = OL - LIMIT OL  "
                     "(valor a cortar si supera el límite; vacío = dentro del límite)",
                     styles["Note"]), sp(3)]
             sol_sum = []
             for col in survey_cols:
                 cv  = [r[col] for r in sol["matrix"]]
                 lim = lim_map[col]
-                if col in ("OR", "OL"):
+                if col in OR_OL_COLS:
                     ext   = max(cv); dif = ext - lim
                     off   = sum(1 for v in cv if v > lim)
                     lbl   = "Máximo (mm)"
@@ -851,32 +895,34 @@ def generate_report(project_params, calculated, survey_original,
                 })
             story += [_summary_table(sol_sum, styles), sp(6)]
     else:
-        story += [Paragraph("⚠️ No se encontró combinación válida.", styles["Normal2"]), sp(8)]
+        story += [Paragraph("No se encontró combinación válida.", styles["Normal2"]), sp(8)]
 
     # ── 8. BSR vs BS ─────────────────────────────────────────
     story += [PageBreak(), _section_header("8. ANÁLISIS BSR vs BS", styles), sp(4)]
     if not bs_result.get("needed"):
-        story += [_calc_block("Condición","BSR ≥ BS  →  Sin ajuste requerido",
-            f"{fs('BSR')} ≥ {fs('BS')}", "No se requiere ajuste de shaft", styles, ok=True), sp(6)]
+        story += [_calc_block("Condición", "BSR >= BS  ->  Sin ajuste requerido",
+            f"{fstr('BSR')} >= {fstr('BS')}", "No se requiere ajuste de shaft",
+            styles, ok=True), sp(6)]
     else:
         dif_bs = bs_result.get("dif_original", 0)
         story += [
-            _calc_block("DIF BS","DIF BS = BS − BSR  (cuando BSR < BS)",
-                f"{fs('BS')} − {fs('BSR')}", f"DIF BS = {dif_bs:.2f} mm", styles, ok=False), sp(4),
+            _calc_block("DIF BS", "DIF BS = BS - BSR  (cuando BSR < BS)",
+                f"{fstr('BS')} - {fstr('BSR')}", f"DIF BS = {dif_bs:.2f} mm",
+                styles, ok=False), sp(4),
             Paragraph("Búsqueda del paso en los 3 rangos (paso 0.5 mm):", styles["SubHead2"]),
-            _calc_block("Rango 1 — Zona ZB","Ciclos de 0 hasta LIMIT ZB",
-                f"[0  →  {lzb:.2f}]","Buscando paso donde la resta de DIF BS llega a 0", styles), sp(3),
-            _calc_block("Rango 2 — Zona OB","Ciclos de LIMIT ZB hasta (LIMIT ZB + LIMIT OB)",
-                f"[{lzb:.2f}  →  {lzb+lob:.2f}]","Buscando paso donde la resta de DIF BS llega a 0", styles), sp(3),
-            _calc_block("Rango 3 — Zona extendida","Ciclos de (LIMIT ZB + LIMIT OB) hasta 1000",
-                f"[{lzb+lob:.2f}  →  1000]","Buscando paso donde la resta de DIF BS llega a 0", styles), sp(4),
+            _calc_block("Rango 1 — Zona ZB", "Ciclos de 0 hasta LIMIT ZB",
+                f"[0  ->  {lzb:.2f}]", "Buscando paso donde la resta de DIF BS llega a 0", styles), sp(3),
+            _calc_block("Rango 2 — Zona OB", "Ciclos de LIMIT ZB hasta (LIMIT ZB + LIMIT OB)",
+                f"[{lzb:.2f}  ->  {lzb+lob:.2f}]", "Buscando paso donde la resta de DIF BS llega a 0", styles), sp(3),
+            _calc_block("Rango 3 — Zona extendida", "Ciclos de (LIMIT ZB + LIMIT OB) hasta 1000",
+                f"[{lzb+lob:.2f}  ->  1000]", "Buscando paso donde la resta de DIF BS llega a 0", styles), sp(4),
         ]
         if bs_result.get("step") is not None:
-            story += [_calc_block("✅ Resultado","Paso encontrado",
+            story += [_calc_block("Resultado", "Paso encontrado",
                 f"Rango: {bs_result.get('range')}  |  Zona: {bs_result.get('range_name')}",
                 f"Paso = {bs_result.get('step')} mm", styles, ok=True)]
         else:
-            story += [Paragraph("⚠️ No se encontró paso en ningún rango.", styles["Normal2"])]
+            story += [Paragraph("No se encontró paso en ningún rango.", styles["Normal2"])]
         story.append(sp(8))
 
     # ── PIE ──────────────────────────────────────────────────

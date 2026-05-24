@@ -23,11 +23,12 @@ C:\Users\diego\P1\survey_app\
 ├── app.py                  # UI Streamlit — SOLO presentación, sin lógica
 ├── requirements.txt        # pypdf, pandas, numpy, openpyxl, reportlab, streamlit
 ├── core/
-│   ├── calculations.py     # calculate_limits(), apply_offsets(), analyze_matrix()
+│   ├── calculations.py     # calculate_limits(), apply_offsets(), analyze_matrix(), validate_inputs()
 │   ├── optimizer.py        # optimize() — itera RL×FB, aplica restricciones
+│   ├── highlighting.py     # cell_state(), streamlit_style(), reportlab_commands() — lógica compartida
 │   ├── report.py           # generate_report() — ReportLab PDF con diagramas ASCII
-│   ├── bs_logic.py         # find_bs_step() — análisis BSR vs BS
-│   └── excel_io.py         # export/import survey Excel
+│   ├── bs_logic.py         # find_bs_step() — análisis BSR vs BS (refactorizado con _scan_range)
+│   └── excel_io.py         # export/import survey Excel (con hojas INFO + CONFIG)
 └── extractors/
     └── schindler.py        # extract_from_pdf() — pypdf CAD PDF parser
 ```
@@ -313,6 +314,7 @@ Paso 4: línea a línea:
 | v12 | Optimizer: 4-step flow, FB extra wall, fb_applied tracking, MAX_OFF_RL = max(DIF_WR,DIF_WL) |
 | v22 | Fix MAX_OFF_RL: incluye max(0,DIF_OR) y max(0,DIF_OL) para barrido correcto cuando OR/OL exceden límite |
 | v23 | Fix wall limiting: FB extra evade el muro → quita SKIP duro y excluye OR/OL del nivel evadido del conteo |
+| v24 | Refactor mayor: highlighting compartido (core/highlighting.py), excel guarda/restaura config completa, validate_inputs, max_by_col en optimizer, bs_logic refactorizado, diagramas ASCII corregidos, fix MAX_OFF_RL display, tiebreaker consistente |
 | v13-14 | Wall limiting: DIF OR/OL con MAX, fb_applied en soluciones y log |
 | v16 | Fix OR/OL: fuera de límite = v > LIMIT, DIF = MAX − LIMIT, CUT = v − LIMIT |
 | v17 | Fix OR/OL highlight Caso 1: v > LIMIT en ambos casos; rojo en Caso 1, naranja en Caso 2 |
