@@ -131,8 +131,13 @@ Caso 2 (WALL_LIMITING=False): cols = [WR, FR, WL, FL]   ← OR/OL NO cuentan com
 1. RL < 0 y |RL| > LIMIT_R  → SKIP
 2. RL > 0 y |RL| > LIMIT_L  → SKIP
 3. FB > FB_MAX_BACK          → SKIP   (restricción espacio trasero)
-4. Pared limitante (si wall=True y tsw < fs):
-   - Verifica OR o OL en parada específica vs límite → SKIP si falla
+4. Pared limitante (si wall=True y RL va hacia la pared):
+   a) OR/OL en WALL_STOP > LIMIT y FS > TSW
+      → aplica FB extra = FS−TSW (cabina evade el muro físicamente)
+      → el nivel WALL_STOP queda evadido: OR/OL de ese nivel NO cuentan
+      → NO hay SKIP duro (muro superado)
+   b) OR/OL en WALL_STOP > LIMIT y FS ≤ TSW (sin espacio para evadir)
+      → SKIP duro
 ```
 
 ### Cómo se aplican los desplazamientos en cada paso
@@ -307,6 +312,7 @@ Paso 4: línea a línea:
 | v11 | Extractor: two-pass (visitor + plain text) para recuperar BKF1/BKF2 caso-D |
 | v12 | Optimizer: 4-step flow, FB extra wall, fb_applied tracking, MAX_OFF_RL = max(DIF_WR,DIF_WL) |
 | v22 | Fix MAX_OFF_RL: incluye max(0,DIF_OR) y max(0,DIF_OL) para barrido correcto cuando OR/OL exceden límite |
+| v23 | Fix wall limiting: FB extra evade el muro → quita SKIP duro y excluye OR/OL del nivel evadido del conteo |
 | v13-14 | Wall limiting: DIF OR/OL con MAX, fb_applied en soluciones y log |
 | v16 | Fix OR/OL: fuera de límite = v > LIMIT, DIF = MAX − LIMIT, CUT = v − LIMIT |
 | v17 | Fix OR/OL highlight Caso 1: v > LIMIT en ambos casos; rojo en Caso 1, naranja en Caso 2 |

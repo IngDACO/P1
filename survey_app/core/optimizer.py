@@ -103,29 +103,34 @@ def optimize(survey_adjusted: list, limits: dict, params: dict) -> dict:
                 continue
 
             # ── Paso 1: desplazamientos iniciales ────────────────────
-            modified   = _apply(rl, fb)
-            fb_applied = fb
+            modified         = _apply(rl, fb)
+            fb_applied       = fb
+            fb_extra_applied = False
+            wall_stop_idx    = int(wall_stop) - 1 if wall_stop is not None else -1
+            wall_check_col   = ("OR" if wall_side == "R" else "OL") if wall_side else None
 
             # ── Paso 2: FB extra si RL va hacia la pared ─────────────
             # Condiciones:
             #   a) RL apunta hacia el lado de la pared
-            #   b) OR/OL en el nivel crítico (WALL_STOP) supera el límite (fuera de límite)
+            #   b) OR/OL en el nivel crítico (WALL_STOP) supera el límite
             #   c) FS > TSW  →  hay espacio extra disponible hacia atrás
-            # → fb_applied = min(fb + (FS − TSW), FB_MAX_BACK)
-            if toward_wall:
-                stop_idx  = int(wall_stop) - 1
-                check_col = "OR" if wall_side == "R" else "OL"
-                if 0 <= stop_idx < len(modified):
-                    if modified[stop_idx][check_col] > full_lim_map[check_col]:
-                        # OR/OL supera límite → intentar FB extra para esquivar la pared
-                        if fs is not None and fs > tsw:
-                            extra      = fs - tsw
-                            fb_applied = min(fb + extra, fb_max_back)
-                            modified   = _apply(rl, fb_applied)
+            # Si se puede aplicar FB extra → la cabina evade el muro físicamente
+            # → el muro deja de ser restricción dura para este paso
+            if toward_wall and wall_check_col and 0 <= wall_stop_idx < len(modified):
+                if modified[wall_stop_idx][wall_check_col] > full_lim_map[wall_check_col]:
+                    if fs is not None and fs > tsw:
+                        extra          = fs - tsw
+                        new_fb_applied = min(fb + extra, fb_max_back)
+                        if new_fb_applied > fb_applied + 0.001:  # realmente se movió atrás
+                            fb_applied       = new_fb_applied
+                            modified         = _apply(rl, fb_applied)
+                            fb_extra_applied = True
 
             # ── Paso 3: contar valores fuera de límite ────────────────
             # WR/WL/FR/FL: fuera de límite = v < lim  (clearance insuficiente)
             # OR/OL:        fuera de límite = v > lim  (dimensión supera máximo → requiere corte)
+            # Excepción: si FB extra fue aplicado, OR/OL en el nivel de la pared
+            #            quedan evadidos → no se cuentan como violación en ese nivel
             off_by_col = {}
             min_by_col = {}
             total_off  = 0
@@ -140,6 +145,9 @@ def optimize(survey_adjusted: list, limits: dict, params: dict) -> dict:
                             eff_lim = lim - 70
                         elif col == "OL" and ctrl_side == "L":
                             eff_lim = lim - 70
+                    # Nivel de pared evadido por FB extra → no contar
+                    if fb_extra_applied and row_idx == wall_stop_idx and col == wall_check_col:
+                        continue
                     if col in ("OR", "OL"):
                         if v > eff_lim:
                             off += 1
@@ -161,15 +169,14 @@ def optimize(survey_adjusted: list, limits: dict, params: dict) -> dict:
                         total_off += 1
 
             # ── Paso 4: chequeo duro de pared ─────────────────────────
-            # Se evalúa sobre el modified final (post-FB extra si aplica).
-            # Solo aplica cuando RL va hacia la pared (toward_wall).
-            # Si OR/OL en la parada crítica sigue superando el límite → SKIP.
+            # Solo aplica cuando RL va hacia la pared Y el FB extra NO fue aplicado.
+            # Si FB extra fue aplicado → la cabina evadió el muro → no hay falla dura.
+            # Si OR/OL en la parada crítica sigue superando el límite sin evasión → SKIP.
             wall_fail   = False
             wall_reason = ""
-            if toward_wall:
-                stop_idx = int(wall_stop) - 1
-                if 0 <= stop_idx < len(modified):
-                    stop_row = modified[stop_idx]
+            if toward_wall and not fb_extra_applied:
+                if 0 <= wall_stop_idx < len(modified):
+                    stop_row = modified[wall_stop_idx]
                     if wall_side == "R" and stop_row["OR"] > full_lim_map["OR"]:
                         wall_fail   = True
                         wall_reason = (f"Pared: OR parada {wall_stop}="
