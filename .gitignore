@@ -10,6 +10,8 @@ __pycache__/
 
 # Streamlit
 .streamlit/secrets.toml
+survey_app/.streamlit/secrets.toml
+**/.streamlit/secrets.toml
 
 # IDEs
 .vscode/

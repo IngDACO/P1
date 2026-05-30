@@ -14,6 +14,7 @@ from core.bs_logic     import find_bs_step
 from core.report       import generate_report
 from core.excel_io     import export_survey_excel, import_survey_excel
 from core.highlighting import cell_state, ctrl_applies_to_cell, streamlit_style, OR_OL_COLS
+from core.chat_agent   import get_chat_response
 
 st.set_page_config(page_title="Survey Analyzer", layout="wide", page_icon="📐")
 
@@ -53,6 +54,7 @@ def _init_state():
     st.session_state["survey_df"]      = pd.DataFrame({c: [0.0]*6 for c in SURVEY_COLS})
     st.session_state["survey_original_input"] = None   # snapshot al momento del cálculo
     st.session_state["calc_results"]   = None
+    st.session_state["chat_history"]   = []
     st.session_state["initialized"]    = True
 
 _init_state()
@@ -556,3 +558,47 @@ if st.session_state.calc_results:
         )
 else:
     st.info("Realiza el cálculo primero para poder generar el reporte.")
+
+# ══════════════════════════════════════════════════════
+# PASO 6 — ASISTENTE IA
+# ══════════════════════════════════════════════════════
+st.header("6. Asistente técnico")
+st.caption(
+    "Experto en instalación de elevadores Schindler. "
+    "Responde preguntas sobre la app, parámetros, tolerancias y procedimientos."
+    + (" — 🔗 Con contexto del cálculo actual." if st.session_state.calc_results else "")
+)
+
+# ── Historial de mensajes ──────────────────────────────
+chat_container = st.container()
+with chat_container:
+    for msg in st.session_state.chat_history:
+        with st.chat_message(msg["role"], avatar="🧑‍🔧" if msg["role"] == "user" else "🤖"):
+            st.markdown(msg["content"])
+
+# ── Input del usuario ──────────────────────────────────
+if prompt := st.chat_input("Escribe tu pregunta técnica aquí…"):
+    # Mostrar mensaje del usuario
+    st.session_state.chat_history.append({"role": "user", "content": prompt})
+    with st.chat_message("user", avatar="🧑‍🔧"):
+        st.markdown(prompt)
+
+    # Obtener respuesta del agente
+    with st.chat_message("assistant", avatar="🤖"):
+        with st.spinner("Consultando al experto…"):
+            r = st.session_state.calc_results
+            response = get_chat_response(
+                user_message = prompt,
+                history      = st.session_state.chat_history[:-1],  # sin el último (ya es el actual)
+                calc_results = r,
+                all_params   = r["all_params"] if r else None,
+            )
+        st.markdown(response)
+
+    st.session_state.chat_history.append({"role": "assistant", "content": response})
+
+# ── Botón limpiar historial ────────────────────────────
+if st.session_state.chat_history:
+    if st.button("🗑 Limpiar conversación", use_container_width=False):
+        st.session_state.chat_history = []
+        st.rerun()
