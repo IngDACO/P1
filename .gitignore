@@ -38,3 +38,6 @@ dist/
 
 # Logs
 *.log
+
+# Screenshots temporales
+*.png
