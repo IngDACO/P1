@@ -9,6 +9,8 @@ Flujo en cada paso (rl, fb):
   Paso 2: si RL va hacia la pared Y OR/OL en WALL_STOP > LIMIT Y FS > TSW
           → aplicar FB extra = FS − TSW (cabina evade el muro físicamente)
           → fb_extra_applied = True
+  Paso 2b: si fb_extra_applied Y |RL| > FRAME → SKIP
+           (apertura de cabina quedaría tapada por la pared limitante)
   Paso 3: contar violaciones (excluye OR/OL del nivel evadido)
   Paso 4: SKIP duro solo si va hacia pared, OR/OL > LIMIT y NO se pudo evadir
 """
@@ -22,6 +24,7 @@ def optimize(survey_adjusted: list, limits: dict, params: dict) -> dict:
     wall_side = params.get("WALL_SIDE", None)
     tsw       = params.get("TSW", 0)
     fs        = params.get("FS", None)
+    frame     = float(params.get("FRAME", 0))
 
     # ── Columnas activas según caso ────────────────────────────
     # Caso 1 (wall): OR/OL cuentan como OFF completo
@@ -129,6 +132,28 @@ def optimize(survey_adjusted: list, limits: dict, params: dict) -> dict:
                             fb_applied       = float(new_fb_applied)
                             modified         = _apply(rl, fb_applied)
                             fb_extra_applied = True
+
+            # ── Paso 2b: restricción apertura de cabina ──────────
+            # Si la cabina evadió la pared con FB extra y el RL hacia la pared
+            # supera FRAME, la apertura de la cabina queda tapada → SKIP.
+            if fb_extra_applied and toward_wall and frame > 0 and abs(rl) > frame:
+                step_log.append({
+                    "rl":               float(rl),
+                    "fb":               float(fb),
+                    "fb_applied":       float(fb_applied),
+                    "fb_extra_applied": True,
+                    "status":           "SKIP",
+                    "reason":           (f"Apertura tapada: |RL|={abs(rl):.1f} > "
+                                        f"FRAME={frame:.1f}"),
+                    "skip_type":        "frame_opening",
+                    "total_off":        None,
+                    "off_by_col":       {},
+                    "min_by_col":       {},
+                    "max_by_col":       {},
+                    "wall_fail":        False,
+                    "wall_reason":      "",
+                })
+                continue
 
             # ── Paso 3: contar valores fuera de límite ────────────
             off_by_col = {}

@@ -137,7 +137,11 @@ Caso 2 (WALL_LIMITING=False): cols = [WR, FR, WL, FL]   ← OR/OL NO cuentan com
       → aplica FB extra = FS−TSW (cabina evade el muro físicamente)
       → el nivel WALL_STOP queda evadido: OR/OL de ese nivel NO cuentan
       → NO hay SKIP duro (muro superado)
-   b) OR/OL en WALL_STOP > LIMIT y FS ≤ TSW (sin espacio para evadir)
+   b) fb_extra_applied=True Y |RL| > FRAME
+      → SKIP [skip_type=frame_opening]
+      (al empujar hacia la pared más que FRAME, la apertura de la cabina
+       queda tapada por el muro limitante — apertura siempre debe ser visible)
+   c) OR/OL en WALL_STOP > LIMIT y FS ≤ TSW (sin espacio para evadir)
       → SKIP duro
 ```
 
@@ -315,6 +319,7 @@ Paso 4: línea a línea:
 | v22 | Fix MAX_OFF_RL: incluye max(0,DIF_OR) y max(0,DIF_OL) para barrido correcto cuando OR/OL exceden límite |
 | v23 | Fix wall limiting: FB extra evade el muro → quita SKIP duro y excluye OR/OL del nivel evadido del conteo |
 | v24 | Refactor mayor: highlighting compartido (core/highlighting.py), excel guarda/restaura config completa, validate_inputs, max_by_col en optimizer, bs_logic refactorizado, diagramas ASCII corregidos, fix MAX_OFF_RL display, tiebreaker consistente |
+| v25 | Optimizer: Paso 2b — cuando fb_extra_applied y \|RL\| > FRAME → SKIP (apertura cabina tapada por pared limitante) |
 | v13-14 | Wall limiting: DIF OR/OL con MAX, fb_applied en soluciones y log |
 | v16 | Fix OR/OL: fuera de límite = v > LIMIT, DIF = MAX − LIMIT, CUT = v − LIMIT |
 | v17 | Fix OR/OL highlight Caso 1: v > LIMIT en ambos casos; rojo en Caso 1, naranja en Caso 2 |

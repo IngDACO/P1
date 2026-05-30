@@ -449,14 +449,16 @@ if st.button("🚀 Calcular", type="primary", use_container_width=True):
 
         # Log del optimizador
         with st.expander(f"📋 Log del optimizador ({len(step_log)} pasos evaluados)", expanded=False):
-            valid_steps = [s for s in step_log if s.get("status") == "VALID"]
-            skip_steps  = [s for s in step_log if s.get("status") == "SKIP"]
-            skip_phys   = [s for s in skip_steps if s.get("skip_type", "").startswith("physical")]
-            skip_wall   = [s for s in skip_steps if s.get("skip_type") == "wall"]
+            valid_steps  = [s for s in step_log if s.get("status") == "VALID"]
+            skip_steps   = [s for s in step_log if s.get("status") == "SKIP"]
+            skip_phys    = [s for s in skip_steps if s.get("skip_type", "").startswith("physical")]
+            skip_wall    = [s for s in skip_steps if s.get("skip_type") == "wall"]
+            skip_frame   = [s for s in skip_steps if s.get("skip_type") == "frame_opening"]
             st.caption(
                 f"Válidos: {len(valid_steps)}  |  "
                 f"Omitidos por límite físico (RL/FB): {len(skip_phys)}  |  "
-                f"Omitidos por pared: {len(skip_wall)}"
+                f"Omitidos por pared: {len(skip_wall)}  |  "
+                f"Omitidos por apertura tapada: {len(skip_frame)}"
             )
             if valid_steps:
                 opt_pairs = {(s["rl"], s["fb"]) for s in all_solutions}
