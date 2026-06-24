@@ -121,16 +121,33 @@ def optimize(survey_adjusted: list, limits: dict, params: dict) -> dict:
             fb_extra_applied = False
 
             # ── Paso 2: FB extra si va hacia la pared ────────────
-            # Si OR/OL en WALL_STOP > LIMIT y FS > TSW → mover atrás para evadir el muro.
-            # La posición objetivo es FS−TSW desde el neutro (posición absoluta).
-            # Si el loop ya trajo un fb > 0, solo se aplica la diferencia restante
-            # (fs−tsw) − fb, no el total otra vez.
+            # Condición: RL implica colisión (OR/OL en WALL_STOP > LIMIT) y FS > TSW.
+            # El extra exacto depende de cuánto FR/FL del piso limitante ya supera
+            # su propio límite gracias al fb actual del loop:
+            #   excess       = FR/FL_piso_limitante − LIMIT_FR/FL   (puede ser negativo)
+            #   extra_needed = max(0, FS−TSW − excess)
+            # Casos:
+            #   1) Piso limitante es el más crítico en FR/FL (excess ≈ 0) → extra completo
+            #   2) Otro piso más crítico ya empujó fb; wall_stop lleva ventaja → extra reducido
+            #   3) Sin violación FR/FL (fb=0); wall_stop ya está sobre límite → extra reducido
             # Tras la evasión, el nivel WALL_STOP queda fuera del conteo OR/OL.
             if toward_wall and 0 <= wall_stop_idx < len(modified):
                 if modified[wall_stop_idx][wall_check_col] > wall_lim_val:
                     if fs is not None and fs > tsw:
-                        target_fb      = min(fs - tsw, fb_max_back)   # posición absoluta objetivo
-                        new_fb_applied = target_fb                     # solo lo que falta desde fb actual
+                        # Columna frontal del lado de la pared (FR si R, FL si L)
+                        fb_col     = "FR" if wall_side == "R" else "FL"
+                        fb_lim_val = full_lim_map[fb_col]
+
+                        # Valor FR/FL en el piso limitante con el (rl, fb) actual
+                        fr_at_wall = modified[wall_stop_idx][fb_col]
+
+                        # Cuánto ya supera el límite frontal en ese piso
+                        excess = fr_at_wall - fb_lim_val
+
+                        # Push extra necesario para completar la evasión
+                        extra_needed   = max(0.0, (fs - tsw) - excess)
+                        new_fb_applied = min(fb + extra_needed, fb_max_back)
+
                         if new_fb_applied > fb_applied + 1e-3:
                             fb_applied       = float(new_fb_applied)
                             modified         = _apply(rl, fb_applied)
