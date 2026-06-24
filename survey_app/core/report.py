@@ -19,6 +19,10 @@ from core.highlighting import (
     cell_state, ctrl_applies_to_cell, reportlab_commands, OR_OL_COLS,
 )
 
+# ── Color para bloques de interpretación IA ──────────────
+C_IA_BG     = colors.HexColor("#f0f7ff")
+C_IA_BORDER = colors.HexColor("#2e6da4")
+
 # ── Paleta de colores ────────────────────────────────────────
 C_HEADER   = colors.HexColor("#1a3a5c")
 C_SUBHEAD  = colors.HexColor("#2e6da4")
@@ -122,6 +126,28 @@ def _param_table(data_dict, styles, cols=4):
         ("TOPPADDING",   (0,0),(-1,-1), 3),
         ("BOTTOMPADDING",(0,0),(-1,-1), 3),
         ("LEFTPADDING",  (0,0),(-1,-1), 4),
+    ]))
+    return t
+
+
+def _ia_block(text, styles, title="🤖 Interpretación técnica"):
+    """Bloque visual para la interpretación generada por IA."""
+    if not text or text.startswith("[Interpretación no disponible"):
+        return sp(2)
+    rows = [
+        [Paragraph(f"<b>{title}</b>", styles["Note"])],
+        [Paragraph(text, styles["Normal2"])],
+    ]
+    t = Table(rows, colWidths=[W])
+    t.setStyle(TableStyle([
+        ("BACKGROUND",    (0,0),(-1,0),  C_IA_BORDER),
+        ("TEXTCOLOR",     (0,0),(-1,0),  C_WHITE),
+        ("BACKGROUND",    (0,1),(-1,-1), C_IA_BG),
+        ("BOX",           (0,0),(-1,-1), 0.8, C_IA_BORDER),
+        ("TOPPADDING",    (0,0),(-1,-1), 4),
+        ("BOTTOMPADDING", (0,0),(-1,-1), 4),
+        ("LEFTPADDING",   (0,0),(-1,-1), 8),
+        ("RIGHTPADDING",  (0,0),(-1,-1), 8),
     ]))
     return t
 
@@ -426,7 +452,8 @@ def _summary_table(summary_list, styles):
 # ════════════════════════════════════════════════════════════
 def generate_report(project_params, calculated, survey_original,
                     survey_adjusted, lim_map, analysis,
-                    optimizer_result, bs_result, survey_cols):
+                    optimizer_result, bs_result, survey_cols,
+                    interpretation=None):
 
     best          = optimizer_result.get("best")          if optimizer_result else None
     all_solutions = optimizer_result.get("all_solutions", []) if optimizer_result else []
@@ -438,6 +465,7 @@ def generate_report(project_params, calculated, survey_original,
     styles = _styles()
     story  = []
     p      = project_params
+    ia     = interpretation or {}   # dict con interpretaciones por sección
 
     def fv(key):
         v = p.get(key, calculated.get(key, 0.0))
@@ -524,7 +552,9 @@ def generate_report(project_params, calculated, survey_original,
         cfg_cmds += [("BACKGROUND",(1,4),(1,4), C_GREEN_BG),
                      ("FONTNAME",  (1,4),(1,4), "Helvetica-Bold")]
     cfg_t.setStyle(TableStyle(cfg_cmds))
-    story += [cfg_t, sp(8)]
+    story += [cfg_t, sp(4)]
+    story += [_ia_block(ia.get("parametros"), styles,
+                        "🤖 Interpretación — Geometría y configuración del proyecto"), sp(8)]
 
     # ── 2. DIMENSIONES DE CABINA ─────────────────────────────
     story += [_section_header("2. DIMENSIONES DE CABINA", styles), sp(4)]
@@ -709,7 +739,11 @@ def generate_report(project_params, calculated, survey_original,
                      if hasattr(survey_adjusted, "to_dict") else list(survey_adjusted))
     story += _violations_block(surv_list_adj, lim_map, survey_cols, styles,
                                 rpt_ctrl, rpt_ctrl_side)
-    story += [sp(8)]
+    story += [sp(4),
+              _ia_block(ia.get("estado_inicial"), styles,
+                        "🤖 Interpretación — Estado inicial del hueco"), sp(3),
+              _ia_block(ia.get("desplazamientos"), styles,
+                        "🤖 Interpretación — Desplazamientos requeridos"), sp(8)]
 
     # ── 7. OPTIMIZACIÓN ───────────────────────────────────────
     story += [PageBreak(), _section_header("7. OPTIMIZACIÓN — TRAZABILIDAD COMPLETA DE CADA PASO", styles), sp(4)]
@@ -895,7 +929,14 @@ def generate_report(project_params, calculated, survey_original,
                 })
             story += [_summary_table(sol_sum, styles), sp(6)]
     else:
-        story += [Paragraph("No se encontró combinación válida.", styles["Normal2"]), sp(8)]
+        story += [Paragraph("No se encontró combinación válida.", styles["Normal2"]), sp(4)]
+
+    story += [_ia_block(ia.get("solucion_optima"), styles,
+                        "🤖 Interpretación — Solución óptima encontrada"), sp(3)]
+    if ia.get("evasion_pared"):
+        story += [_ia_block(ia.get("evasion_pared"), styles,
+                            "🤖 Interpretación — Evasión de pared limitante"), sp(3)]
+    story += [sp(4)]
 
     # ── 8. BSR vs BS ─────────────────────────────────────────
     story += [PageBreak(), _section_header("8. ANÁLISIS BSR vs BS", styles), sp(4)]
@@ -923,7 +964,20 @@ def generate_report(project_params, calculated, survey_original,
                 f"Paso = {bs_result.get('step')} mm", styles, ok=True)]
         else:
             story += [Paragraph("No se encontró paso en ningún rango.", styles["Normal2"])]
-        story.append(sp(8))
+        story.append(sp(4))
+
+    story += [_ia_block(ia.get("bsr_vs_bs"), styles,
+                        "🤖 Interpretación — Análisis BSR vs BS"), sp(6)]
+
+    # ── 9. CONSIDERACIONES FINALES ───────────────────────────
+    if ia.get("consideraciones"):
+        story += [
+            _section_header("9. CONSIDERACIONES FINALES Y PUNTOS A VERIFICAR EN CAMPO", styles),
+            sp(4),
+            _ia_block(ia.get("consideraciones"), styles,
+                      "🤖 Puntos críticos para el equipo de instalación"),
+            sp(8),
+        ]
 
     # ── PIE ──────────────────────────────────────────────────
     story += [sp(8), HRFlowable(width="100%", thickness=0.5, color=colors.lightgrey), sp(4),

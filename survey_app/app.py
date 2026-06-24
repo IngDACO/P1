@@ -14,7 +14,8 @@ from core.bs_logic     import find_bs_step
 from core.report       import generate_report
 from core.excel_io     import export_survey_excel, import_survey_excel
 from core.highlighting import cell_state, ctrl_applies_to_cell, streamlit_style, OR_OL_COLS
-from core.chat_agent   import get_chat_response
+from core.chat_agent      import get_chat_response
+from core.interpretation  import generate_interpretation
 
 st.set_page_config(page_title="Survey Analyzer", layout="wide", page_icon="📐")
 
@@ -516,6 +517,18 @@ if st.button("🚀 Calcular", type="primary", use_container_width=True):
             f"Rango: **{bs_result['range']}**  |  Zona: **{bs_result['range_name']}**"
         )
 
+    # ── Interpretación IA ─────────────────────────────────
+    with st.spinner("🤖 Generando interpretación técnica con IA..."):
+        interpretation = generate_interpretation(
+            calc_results = {
+                "limits":           limits,
+                "analysis":         analysis,
+                "optimizer_result": opt_result,
+                "bs_result":        bs_result,
+            },
+            all_params = all_params,
+        )
+
     # ── Persistir para el reporte ─────────────────────────
     st.session_state.calc_results = {
         "all_params":       all_params,
@@ -526,8 +539,9 @@ if st.button("🚀 Calcular", type="primary", use_container_width=True):
         "analysis":         analysis,
         "optimizer_result": opt_result,
         "bs_result":        bs_result,
+        "interpretation":   interpretation,
     }
-    st.success("✅ Cálculo completado.")
+    st.success("✅ Cálculo e interpretación completados.")
 
 # ══════════════════════════════════════════════════════
 # PASO 5 — REPORTE PDF
@@ -548,6 +562,7 @@ if st.session_state.calc_results:
                 optimizer_result = r["optimizer_result"],
                 bs_result        = r["bs_result"],
                 survey_cols      = SURVEY_COLS,
+                interpretation   = r.get("interpretation"),
             )
         st.download_button(
             label     = "⬇️ Descargar reporte PDF",
