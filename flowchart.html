@@ -2,860 +2,485 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<title>Survey Analyzer — Diagrama de Flujo v24</title>
+<title>Survey Analyzer — Diagrama de Flujo v27</title>
 <style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:#0d1117;color:#c9d1d9;padding:32px 24px 80px}
+h1{text-align:center;font-size:1.5rem;font-weight:700;color:#f0f6fc;letter-spacing:.05em;margin-bottom:6px}
+.subtitle{text-align:center;font-size:.78rem;color:#8b949e;margin-bottom:40px}
 
-  body {
-    font-family: 'Segoe UI', system-ui, sans-serif;
-    background: #0d1117;
-    color: #c9d1d9;
-    padding: 32px 24px 64px;
-  }
+/* layout */
+.flow{display:flex;flex-direction:column;align-items:center;gap:0;max-width:1200px;margin:0 auto}
+.row{display:flex;align-items:flex-start;justify-content:center;gap:14px;width:100%}
 
-  h1 {
-    text-align: center;
-    font-size: 1.5rem;
-    font-weight: 700;
-    color: #f0f6fc;
-    letter-spacing: 0.05em;
-    margin-bottom: 8px;
-  }
-  .subtitle {
-    text-align: center;
-    font-size: 0.8rem;
-    color: #8b949e;
-    margin-bottom: 40px;
-  }
+/* arrows */
+.arrow-v{display:flex;flex-direction:column;align-items:center;color:#484f58;font-size:1.3rem;padding:3px 0}
+.arrow-v .line{width:2px;height:24px;background:#30363d}
+.arrow-h{display:flex;align-items:center;color:#484f58;font-size:1.1rem;padding-top:16px;flex-shrink:0}
 
-  /* ── Layout principal ── */
-  .flow {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 0;
-    max-width: 1200px;
-    margin: 0 auto;
-  }
+/* step label */
+.step-label{display:flex;align-items:center;gap:10px;margin-bottom:10px;width:100%;max-width:1100px}
+.step-num{background:#21262d;border:1.5px solid #30363d;border-radius:20px;padding:4px 14px;font-size:.7rem;font-weight:700;color:#8b949e;letter-spacing:.06em;white-space:nowrap;flex-shrink:0}
+.step-line{flex:1;height:1px;background:linear-gradient(to right,#30363d,transparent)}
 
-  /* ── Fila horizontal ── */
-  .row {
-    display: flex;
-    align-items: flex-start;
-    justify-content: center;
-    gap: 16px;
-    width: 100%;
-  }
+/* nodes */
+.node{border-radius:10px;padding:12px 16px;font-size:.76rem;line-height:1.55;position:relative;flex-shrink:0}
+.node .node-title{font-size:.7rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;margin-bottom:5px;display:flex;align-items:center;gap:6px}
+.node ul{list-style:none;padding-left:4px}
+.node ul li::before{content:'›';margin-right:5px;opacity:.5}
 
-  /* ── Flecha vertical ── */
-  .arrow-v {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 0;
-    color: #484f58;
-    font-size: 1.4rem;
-    line-height: 1;
-    padding: 4px 0;
-  }
-  .arrow-v .line { width: 2px; height: 28px; background: #30363d; }
+.node-input  {background:#161b22;border:1.5px solid #388bfd;color:#a5d6ff;width:210px}
+.node-input .node-title{color:#388bfd}
+.node-process{background:#161b22;border:1.5px solid #3fb950;color:#aff5b4;width:250px}
+.node-process .node-title{color:#3fb950}
+.node-decision{background:#161b22;border:1.5px solid #e3b341;color:#f2cc60;width:230px}
+.node-decision .node-title{color:#e3b341}
+.node-output {background:#161b22;border:1.5px solid #bc8cff;color:#d2a8ff;width:240px}
+.node-output .node-title{color:#bc8cff}
+.node-module {background:#161b22;border:1.5px solid #ff7b72;color:#ffa198;width:200px}
+.node-module .node-title{color:#ff7b72}
+.node-shared {background:#161b22;border:1.5px solid #39d353;color:#aff5b4;width:220px}
+.node-shared .node-title{color:#39d353}
+.node-chat   {background:#161b22;border:1.5px solid #f778ba;color:#ffadda;width:300px}
+.node-chat .node-title{color:#f778ba}
 
-  /* ── Flecha horizontal ── */
-  .arrow-h {
-    display: flex;
-    align-items: center;
-    color: #484f58;
-    font-size: 1.2rem;
-    padding-top: 18px;
-    flex-shrink: 0;
-  }
+/* optimizer box */
+.opt-box{background:#0d1117;border:1.5px dashed #30363d;border-radius:12px;padding:14px;width:100%;max-width:880px}
+.opt-box .opt-title{font-size:.68rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#484f58;margin-bottom:12px;text-align:center}
+.opt-steps{display:flex;flex-direction:column;gap:7px;align-items:center}
+.opt-step{background:#161b22;border-radius:8px;padding:9px 14px;font-size:.73rem;line-height:1.5;width:100%;max-width:740px;display:flex;gap:10px;align-items:flex-start}
+.opt-step .si{font-size:.95rem;flex-shrink:0;margin-top:1px}
+.opt-step.s-loop {border-left:3px solid #388bfd}
+.opt-step.s-check{border-left:3px solid #e3b341}
+.opt-step.s-wall {border-left:3px solid #ff7b72}
+.opt-step.s-frame{border-left:3px solid #f778ba}
+.opt-step.s-count{border-left:3px solid #3fb950}
+.opt-step.s-out  {border-left:3px solid #bc8cff}
 
-  /* ── Nodo base ── */
-  .node {
-    border-radius: 10px;
-    padding: 14px 18px;
-    font-size: 0.78rem;
-    line-height: 1.55;
-    position: relative;
-    flex-shrink: 0;
-  }
-  .node .node-title {
-    font-size: 0.72rem;
-    font-weight: 700;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    margin-bottom: 6px;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-  }
-  .node ul {
-    list-style: none;
-    padding-left: 4px;
-  }
-  .node ul li::before {
-    content: '›';
-    margin-right: 6px;
-    opacity: 0.5;
-  }
+/* physical diagram */
+.phys-diagram{display:flex;gap:20px;width:100%;max-width:880px;justify-content:center}
+.phys-box{background:#161b22;border:1.5px solid #30363d;border-radius:10px;padding:13px 16px;font-size:.72rem;flex:1;max-width:420px}
+.phys-box h4{font-size:.68rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#8b949e;margin-bottom:8px}
+.phys-ascii{font-family:'Courier New',monospace;font-size:.7rem;line-height:1.6;color:#c9d1d9;white-space:pre}
+.phys-legend{margin-top:9px;font-size:.69rem;line-height:1.8;color:#8b949e}
+.phys-legend span{color:#c9d1d9}
 
-  /* ── Colores por tipo ── */
-  .node-input {
-    background: #161b22;
-    border: 1.5px solid #388bfd;
-    color: #a5d6ff;
-    width: 220px;
-  }
-  .node-input .node-title { color: #388bfd; }
+/* modules grid */
+.modules-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;width:100%;max-width:980px}
+.mod-card{background:#161b22;border:1.5px solid #21262d;border-radius:8px;padding:10px 12px;font-size:.7rem;line-height:1.6}
+.mod-card .mod-name{font-weight:700;font-size:.73rem;margin-bottom:5px;padding-bottom:5px;border-bottom:1px solid #21262d}
+.mod-card .mod-fn{color:#8b949e}
+.mod-card .mod-fn span{color:#79c0ff}
+.mod-extract  {border-color:#388bfd}.mod-extract  .mod-name{color:#388bfd}
+.mod-calc     {border-color:#3fb950}.mod-calc     .mod-name{color:#3fb950}
+.mod-opt      {border-color:#e3b341}.mod-opt      .mod-name{color:#e3b341}
+.mod-highlight{border-color:#39d353}.mod-highlight .mod-name{color:#39d353}
+.mod-bs       {border-color:#ff7b72}.mod-bs       .mod-name{color:#ff7b72}
+.mod-report   {border-color:#bc8cff}.mod-report   .mod-name{color:#bc8cff}
+.mod-excel    {border-color:#56d364}.mod-excel    .mod-name{color:#56d364}
+.mod-chat2    {border-color:#f778ba}.mod-chat2    .mod-name{color:#f778ba}
 
-  .node-process {
-    background: #161b22;
-    border: 1.5px solid #3fb950;
-    color: #aff5b4;
-    width: 260px;
-  }
-  .node-process .node-title { color: #3fb950; }
+/* highlight legend */
+.hl-legend{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;font-size:.73rem;width:100%;max-width:880px}
+.hl-item{display:flex;align-items:center;gap:7px;background:#161b22;border-radius:6px;padding:7px 12px}
+.hl-dot{width:13px;height:13px;border-radius:3px;flex-shrink:0}
+.hl-extreme{background:#7b0c0c}
+.hl-out{background:#c0392b}
+.hl-cut{background:#c07800}
+.hl-ok{background:#1a3a2a;border:1px solid #3fb950}
 
-  .node-decision {
-    background: #161b22;
-    border: 1.5px solid #e3b341;
-    color: #f2cc60;
-    width: 240px;
-  }
-  .node-decision .node-title { color: #e3b341; }
+/* chat section */
+.chat-box{background:#0d1117;border:1.5px dashed #f778ba44;border-radius:12px;padding:14px;width:100%;max-width:880px}
+.chat-box .chat-title{font-size:.68rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#f778ba88;margin-bottom:12px;text-align:center}
+.chat-steps{display:flex;flex-direction:column;gap:7px;align-items:center}
+.chat-step{background:#161b22;border-radius:8px;padding:9px 14px;font-size:.73rem;line-height:1.5;width:100%;max-width:740px;display:flex;gap:10px;align-items:flex-start}
+.chat-step.c-in   {border-left:3px solid #388bfd}
+.chat-step.c-ctx  {border-left:3px solid #3fb950}
+.chat-step.c-conf {border-left:3px solid #e3b341}
+.chat-step.c-api  {border-left:3px solid #f778ba}
+.chat-step.c-out  {border-left:3px solid #bc8cff}
 
-  .node-output {
-    background: #161b22;
-    border: 1.5px solid #bc8cff;
-    color: #d2a8ff;
-    width: 240px;
-  }
-  .node-output .node-title { color: #bc8cff; }
+/* spacer */
+.spacer{height:14px}
+.spacer-sm{height:7px}
 
-  .node-module {
-    background: #161b22;
-    border: 1.5px solid #ff7b72;
-    color: #ffa198;
-    width: 200px;
-  }
-  .node-module .node-title { color: #ff7b72; }
-
-  .node-shared {
-    background: #161b22;
-    border: 1.5px solid #39d353;
-    color: #aff5b4;
-    width: 220px;
-  }
-  .node-shared .node-title { color: #39d353; }
-
-  /* ── Etiqueta de paso ── */
-  .step-label {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin-bottom: 12px;
-    width: 100%;
-    max-width: 1100px;
-  }
-  .step-num {
-    background: #21262d;
-    border: 1.5px solid #30363d;
-    border-radius: 20px;
-    padding: 4px 14px;
-    font-size: 0.72rem;
-    font-weight: 700;
-    color: #8b949e;
-    letter-spacing: 0.06em;
-    white-space: nowrap;
-    flex-shrink: 0;
-  }
-  .step-line {
-    flex: 1;
-    height: 1px;
-    background: linear-gradient(to right, #30363d, transparent);
-  }
-
-  /* ── Subdiagrama del optimizador ── */
-  .opt-box {
-    background: #0d1117;
-    border: 1.5px dashed #30363d;
-    border-radius: 12px;
-    padding: 16px;
-    width: 100%;
-    max-width: 900px;
-  }
-  .opt-box .opt-title {
-    font-size: 0.7rem;
-    font-weight: 700;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    color: #484f58;
-    margin-bottom: 14px;
-    text-align: center;
-  }
-  .opt-steps {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    align-items: center;
-  }
-  .opt-step {
-    background: #161b22;
-    border-radius: 8px;
-    padding: 10px 16px;
-    font-size: 0.75rem;
-    line-height: 1.5;
-    width: 100%;
-    max-width: 760px;
-    display: flex;
-    gap: 12px;
-    align-items: flex-start;
-  }
-  .opt-step .step-icon {
-    font-size: 1rem;
-    flex-shrink: 0;
-    margin-top: 1px;
-  }
-  .opt-step.step-loop  { border-left: 3px solid #388bfd; }
-  .opt-step.step-check { border-left: 3px solid #e3b341; }
-  .opt-step.step-wall  { border-left: 3px solid #ff7b72; }
-  .opt-step.step-count { border-left: 3px solid #3fb950; }
-  .opt-step.step-out   { border-left: 3px solid #bc8cff; }
-
-  /* ── Diagrama físico ── */
-  .phys-diagram {
-    display: flex;
-    gap: 24px;
-    width: 100%;
-    max-width: 900px;
-    justify-content: center;
-  }
-  .phys-box {
-    background: #161b22;
-    border: 1.5px solid #30363d;
-    border-radius: 10px;
-    padding: 14px 18px;
-    font-size: 0.74rem;
-    flex: 1;
-    max-width: 420px;
-  }
-  .phys-box h4 {
-    font-size: 0.7rem;
-    font-weight: 700;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: #8b949e;
-    margin-bottom: 10px;
-  }
-  .phys-ascii {
-    font-family: 'Courier New', monospace;
-    font-size: 0.72rem;
-    line-height: 1.6;
-    color: #c9d1d9;
-    white-space: pre;
-  }
-  .phys-legend {
-    margin-top: 10px;
-    font-size: 0.7rem;
-    line-height: 1.8;
-    color: #8b949e;
-  }
-  .phys-legend span { color: #c9d1d9; }
-
-  /* ── Módulos resumen ── */
-  .modules-grid {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 12px;
-    width: 100%;
-    max-width: 1000px;
-  }
-  .mod-card {
-    background: #161b22;
-    border: 1.5px solid #21262d;
-    border-radius: 8px;
-    padding: 12px 14px;
-    font-size: 0.72rem;
-    line-height: 1.6;
-  }
-  .mod-card .mod-name {
-    font-weight: 700;
-    font-size: 0.75rem;
-    margin-bottom: 6px;
-    padding-bottom: 6px;
-    border-bottom: 1px solid #21262d;
-  }
-  .mod-card .mod-fn { color: #8b949e; }
-  .mod-card .mod-fn span { color: #79c0ff; }
-
-  /* colores por módulo */
-  .mod-extract  { border-color: #388bfd; } .mod-extract  .mod-name { color: #388bfd; }
-  .mod-calc     { border-color: #3fb950; } .mod-calc     .mod-name { color: #3fb950; }
-  .mod-opt      { border-color: #e3b341; } .mod-opt      .mod-name { color: #e3b341; }
-  .mod-highlight{ border-color: #39d353; } .mod-highlight .mod-name { color: #39d353; }
-  .mod-bs       { border-color: #ff7b72; } .mod-bs       .mod-name { color: #ff7b72; }
-  .mod-report   { border-color: #bc8cff; } .mod-report   .mod-name { color: #bc8cff; }
-  .mod-excel    { border-color: #56d364; } .mod-excel    .mod-name { color: #56d364; }
-  .mod-app      { border-color: #8b949e; } .mod-app      .mod-name { color: #c9d1d9; }
-
-  /* ── Highlight legend ── */
-  .hl-legend {
-    display: flex;
-    gap: 16px;
-    justify-content: center;
-    flex-wrap: wrap;
-    font-size: 0.75rem;
-    width: 100%;
-    max-width: 900px;
-  }
-  .hl-item {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    background: #161b22;
-    border-radius: 6px;
-    padding: 8px 14px;
-  }
-  .hl-dot {
-    width: 14px; height: 14px;
-    border-radius: 3px;
-    flex-shrink: 0;
-  }
-  .hl-extreme { background: #7b0c0c; }
-  .hl-out     { background: #c0392b; }
-  .hl-cut     { background: #c07800; }
-  .hl-ok      { background: #1a3a2a; border: 1px solid #3fb950; }
-
-  /* ── Spacer ── */
-  .spacer { height: 16px; }
-  .spacer-sm { height: 8px; }
-
-  /* ── Connector lines (decorativo) ── */
-  .connector {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0;
-    width: 100%;
-    max-width: 900px;
-  }
-  .conn-line { flex: 1; height: 1px; background: #21262d; }
-  .conn-dot {
-    width: 6px; height: 6px;
-    border-radius: 50%;
-    background: #30363d;
-    flex-shrink: 0;
-  }
+/* version badge */
+.ver-badge{display:inline-block;background:#21262d;border:1px solid #30363d;border-radius:12px;padding:3px 10px;font-size:.65rem;color:#8b949e;margin-left:8px}
 </style>
 </head>
 <body>
-
-<h1>📐 Elevator Survey Analyzer</h1>
-<p class="subtitle">Diagrama de Flujo Completo — v24 | IngDACO/P1</p>
+<h1>📐 Elevator Survey Analyzer <span class="ver-badge">v27</span></h1>
+<p class="subtitle">Diagrama de Flujo Completo — IngDACO/P1</p>
 
 <div class="flow">
 
-  <!-- ════════════════════════════════════════ PASO 1 ════ -->
-  <div class="step-label">
-    <div class="step-num">PASO 1 — ENTRADA DE DATOS</div>
-    <div class="step-line"></div>
+<!-- ══ PASO 1 ══ -->
+<div class="step-label"><div class="step-num">PASO 1 — ENTRADA DE DATOS</div><div class="step-line"></div></div>
+<div class="row">
+  <div class="node node-input">
+    <div class="node-title">📄 PDF de Planos</div>
+    <ul><li>Formato Schindler</li><li>Subida por usuario</li><li>pypdf (visitor_text)</li></ul>
   </div>
-
-  <div class="row">
-    <!-- PDF -->
-    <div class="node node-input">
-      <div class="node-title">📄 PDF de Planos</div>
-      <ul>
-        <li>Formato Schindler</li>
-        <li>Subida por el usuario</li>
-        <li>Extrae con <strong>pdfplumber</strong></li>
-      </ul>
-    </div>
-
-    <div class="arrow-h">→</div>
-
-    <!-- Extractor -->
-    <div class="node node-process">
-      <div class="node-title">🔍 extractors/schindler.py</div>
-      <ul>
-        <li>Regex sobre texto plano del PDF</li>
-        <li>BT · BKS · TKSW · TS · TK · TL</li>
-        <li>BC · SF1 · SF2 · BS · TSW</li>
-        <li>LIMIT_ZB · LIMIT_OB</li>
-        <li>Parámetros ausentes → alerta</li>
-      </ul>
-    </div>
-
-    <div class="arrow-h">→</div>
-
-    <!-- Usuario -->
-    <div class="node node-input">
-      <div class="node-title">✏️ Parámetros Usuario</div>
-      <ul>
-        <li>BSR — ancho real en obra</li>
-        <li>FS — distancia frontal</li>
-        <li>FRAME — marco de puerta</li>
-        <li>RAIL — cabeza del riel</li>
-        <li>OFFSET_CABIN</li>
-      </ul>
-    </div>
-
-    <div class="arrow-h">→</div>
-
-    <!-- Config -->
-    <div class="node node-decision">
-      <div class="node-title">⚙️ Configuración</div>
-      <ul>
-        <li>OMEGA_SIDE (R / L)</li>
-        <li>WALL_LIMITING (N / Y)</li>
-        <li>&nbsp;&nbsp;└ WALL_STOP · WALL_SIDE</li>
-        <li>OFFSET_SIDE (R / L)</li>
-        <li>CTRL_IN_FRAME (N / Y)</li>
-        <li>&nbsp;&nbsp;└ CTRL_SIDE (R / L)</li>
-      </ul>
-    </div>
+  <div class="arrow-h">→</div>
+  <div class="node node-process">
+    <div class="node-title">🔍 extractors/schindler.py</div>
+    <ul>
+      <li>Reconstrucción posicional XY</li>
+      <li>BT · BKS · TKSW · TS · TK · TL</li>
+      <li>BC · SF1 · SF2 · BS · TSW</li>
+      <li>LIMIT_ZB · LIMIT_OB</li>
+      <li>Parámetros ausentes → alerta</li>
+    </ul>
   </div>
-
-  <div class="arrow-v"><div class="line"></div>▼</div>
-
-  <!-- Matriz Survey -->
-  <div class="node node-input" style="width:480px;">
-    <div class="node-title">📊 Matriz SURVEY &nbsp;(NS × 6 celdas, medidas en campo)</div>
-    <div style="display:flex; gap:32px; margin-top:4px;">
-      <div>
-        <div style="color:#8b949e; font-size:0.68rem; margin-bottom:4px;">COLUMNAS</div>
-        <code style="font-size:0.78rem; letter-spacing:0.08em;">WR &nbsp; FR &nbsp; OR &nbsp; WL &nbsp; FL &nbsp; OL</code>
-      </div>
-      <div style="font-size:0.72rem; color:#8b949e;">
-        <div>Editable en UI (data_editor)</div>
-        <div>Importable desde .xlsx</div>
-        <div>Exportable a .xlsx</div>
-      </div>
-    </div>
+  <div class="arrow-h">→</div>
+  <div class="node node-input">
+    <div class="node-title">✏️ Parámetros Usuario</div>
+    <ul><li>BSR — ancho real obra</li><li>FS — distancia frontal</li><li>FRAME — marco puerta</li><li>RAIL — cabeza riel</li><li>OFFSET_CABIN</li></ul>
   </div>
-
-  <div class="spacer"></div>
-
-  <!-- ════════════════════════════════════════ PASO 2 ════ -->
-  <div class="step-label">
-    <div class="step-num">PASO 2 — VALIDACIÓN Y LÍMITES</div>
-    <div class="step-line"></div>
+  <div class="arrow-h">→</div>
+  <div class="node node-decision">
+    <div class="node-title">⚙️ Configuración</div>
+    <ul>
+      <li>OMEGA_SIDE (R / L)</li>
+      <li>WALL_LIMITING (N / Y)</li>
+      <li>&nbsp;&nbsp;└ WALL_STOP · WALL_SIDE</li>
+      <li>OFFSET_SIDE (R / L)</li>
+      <li>CTRL_IN_FRAME (N / Y)</li>
+      <li>&nbsp;&nbsp;└ CTRL_SIDE (R / L)</li>
+    </ul>
   </div>
+</div>
+<div class="arrow-v"><div class="line"></div>▼</div>
+<div class="node node-input" style="width:460px">
+  <div class="node-title">📊 Matriz SURVEY &nbsp;(NS × 6 — medidas en campo)</div>
+  <div style="display:flex;gap:28px;margin-top:4px">
+    <div><code style="font-size:.76rem;letter-spacing:.08em">WR &nbsp;FR &nbsp;OR &nbsp;WL &nbsp;FL &nbsp;OL</code></div>
+    <div style="font-size:.7rem;color:#8b949e">Editable · Importable .xlsx · Exportable .xlsx</div>
+  </div>
+</div>
+<div class="spacer"></div>
 
-  <div class="row">
-    <div class="node node-decision" style="width:220px;">
-      <div class="node-title">🛡 validate_inputs()</div>
-      <ul>
-        <li>BKS, TKSW, TS, TK,</li>
-        <li>SF1, SF2, RAIL, BSR &gt; 0</li>
-        <li>FS ≥ TSW</li>
-        <li>Falla → st.stop()</li>
-      </ul>
-    </div>
-
-    <div class="arrow-h">→</div>
-
-    <div class="node node-process" style="width:310px;">
-      <div class="node-title">📐 calculate_limits()</div>
-      <ul>
-        <li>BC_CALC = TS − TK</li>
-        <li>TL = TS − BC_CALC &nbsp;(prof. bloque cabina)</li>
-        <li>CABIN_W = BKS + 2×RAIL &nbsp;(ancho bloque)</li>
-        <li>FB_MAX_BACK = FS − TSW</li>
-        <li>LIMIT_WR/WL · LIMIT_FR/FL · LIMIT_OR/OL</li>
-        <li>LIMIT_ZB · LIMIT_OB &nbsp;(BSR vs BS)</li>
-      </ul>
-    </div>
-
-    <div class="arrow-h">→</div>
-
-    <div class="node node-process" style="width:230px;">
-      <div class="node-title">↔ apply_offsets()</div>
-      <ul>
-        <li>Aplica OFFSET_CABIN</li>
-        <li>al lado seleccionado</li>
-        <li>→ survey_adj (NS×6)</li>
-      </ul>
-    </div>
-
-    <div class="arrow-h">→</div>
-
-    <div class="node node-process" style="width:230px;">
-      <div class="node-title">📈 analyze_matrix()</div>
-      <ul>
-        <li>MIN / MAX por columna</li>
-        <li>DIF · OFF_COUNT</li>
-        <li>MAX_OFF_RL ← Caso 1/2</li>
-        <li>MAX_OFF_FB</li>
-      </ul>
+<!-- ══ PASO 2 ══ -->
+<div class="step-label"><div class="step-num">PASO 2 — VALIDACIÓN Y LÍMITES</div><div class="step-line"></div></div>
+<div class="row">
+  <div class="node node-decision" style="width:210px">
+    <div class="node-title">🛡 validate_inputs()</div>
+    <ul><li>BKS TKSW TS TK SF1 SF2 RAIL BSR &gt; 0</li><li>FS ≥ TSW</li><li>Falla → st.stop()</li></ul>
+  </div>
+  <div class="arrow-h">→</div>
+  <div class="node node-process" style="width:300px">
+    <div class="node-title">📐 calculate_limits()</div>
+    <ul>
+      <li>BC_CALC · TL · CABIN_W = BKS+2×RAIL</li>
+      <li>FB_MAX_BACK = FS − TSW</li>
+      <li>LIMIT_WR/WL · LIMIT_FR/FL · LIMIT_OR/OL</li>
+      <li>LIMIT_ZB · LIMIT_OB</li>
+    </ul>
+  </div>
+  <div class="arrow-h">→</div>
+  <div class="node node-process" style="width:210px">
+    <div class="node-title">↔ apply_offsets()</div>
+    <ul><li>OFFSET_CABIN al lado seleccionado</li><li>OR/OL: RESTAN el offset</li><li>→ survey_adj (NS×6)</li></ul>
+  </div>
+  <div class="arrow-h">→</div>
+  <div class="node node-process" style="width:210px">
+    <div class="node-title">📈 analyze_matrix()</div>
+    <ul><li>MIN/MAX por columna</li><li>DIF · OFF_COUNT</li><li>MAX_OFF_RL ← Caso 1/2</li><li>MAX_OFF_FB</li></ul>
+  </div>
+</div>
+<div class="spacer-sm"></div>
+<div class="row">
+  <div class="node node-decision" style="width:420px">
+    <div class="node-title">⚖️ MAX OFF RL — Caso 1 vs Caso 2</div>
+    <div style="display:flex;gap:18px;font-size:.73rem;margin-top:4px">
+      <div><div style="color:#e3b341;margin-bottom:3px">Caso 1 — Pared limitante</div><code>max(DIF_WR, DIF_WL, max(0,DIF_OR), max(0,DIF_OL))</code></div>
+      <div style="width:1px;background:#30363d"></div>
+      <div><div style="color:#8b949e;margin-bottom:3px">Caso 2 — Sin pared</div><code>max(DIF_WR, DIF_WL)</code><div style="color:#8b949e;font-size:.67rem">OR/OL → solo requieren corte</div></div>
     </div>
   </div>
+</div>
+<div class="arrow-v"><div class="line"></div>▼</div>
 
-  <!-- Caso 1 vs 2 -->
-  <div class="spacer-sm"></div>
-  <div class="row">
-    <div class="node node-decision" style="width:430px; margin-top:0;">
-      <div class="node-title">⚖️ MAX OFF RL — Caso 1 vs Caso 2</div>
-      <div style="display:flex; gap:20px; font-size:0.74rem; margin-top:4px;">
-        <div>
-          <div style="color:#e3b341; margin-bottom:4px;">Caso 1 — Pared limitante</div>
-          <code>max(DIF_WR, DIF_WL,</code><br>
-          <code>&nbsp;&nbsp;&nbsp;&nbsp;max(0,DIF_OR), max(0,DIF_OL))</code>
-        </div>
-        <div style="width:1px; background:#30363d;"></div>
-        <div>
-          <div style="color:#8b949e; margin-bottom:4px;">Caso 2 — Sin pared</div>
-          <code>max(DIF_WR, DIF_WL)</code><br>
-          <div style="color:#8b949e; font-size:0.68rem;">OR/OL → sólo requieren corte</div>
-        </div>
+<!-- ══ PASO 3 ══ -->
+<div class="step-label"><div class="step-num">PASO 3 — OPTIMIZACIÓN</div><div class="step-line"></div></div>
+<div class="opt-box">
+  <div class="opt-title">optimizer.py — Grid Search RL × FB (paso 0.5 mm)</div>
+  <div class="opt-steps">
+    <div class="opt-step s-loop">
+      <div class="si">🔄</div>
+      <div><strong>Rango de búsqueda</strong><br>
+        RL ∈ [−MAX_OFF_RL, +MAX_OFF_RL] &nbsp;|&nbsp; FB ∈ [−MAX_OFF_FB, +FB_MAX_BACK]<br>
+        <span style="color:#8b949e;font-size:.69rem">Constantes por RL: wall_active · wall_stop_idx · wall_check_col · wall_lim_val · toward_wall</span>
       </div>
     </div>
-  </div>
-
-  <div class="arrow-v"><div class="line"></div>▼</div>
-
-  <!-- ════════════════════════════════════════ PASO 3 ════ -->
-  <div class="step-label">
-    <div class="step-num">PASO 3 — OPTIMIZACIÓN</div>
-    <div class="step-line"></div>
-  </div>
-
-  <div class="opt-box">
-    <div class="opt-title">optimizer.py — Grid Search RL × FB (paso 0.5 mm)</div>
-    <div class="opt-steps">
-
-      <div class="opt-step step-loop">
-        <div class="step-icon">🔄</div>
-        <div>
-          <strong>Rango de búsqueda</strong><br>
-          RL ∈ [−MAX_OFF_RL, +MAX_OFF_RL] &nbsp;|&nbsp;
-          FB ∈ [−MAX_OFF_FB, +FB_MAX_BACK]<br>
-          <span style="color:#8b949e; font-size:0.7rem;">Constantes por iteración RL: wall_active, wall_stop_idx, wall_check_col, wall_lim_val, toward_wall</span>
-        </div>
+    <div class="arrow-v"><div class="line" style="height:10px"></div>▼</div>
+    <div class="opt-step s-check">
+      <div class="si">🚫</div>
+      <div><strong>Paso 1 — Límites físicos de RL</strong><br>
+        |RL| &gt; LIMIT_R (o LIMIT_L) → <span style="color:#e3b341">SKIP</span> <code style="font-size:.68rem">[physical_rl]</code>
       </div>
-
-      <div class="arrow-v"><div class="line" style="height:12px;"></div>▼</div>
-
-      <div class="opt-step step-check">
-        <div class="step-icon">🚫</div>
-        <div>
-          <strong>PASO 1 — Límites físicos de RL</strong><br>
-          ¿RL viola SF1, SF2, TKSW, etc.?
-          → <span style="color:#e3b341;">SKIP</span> <code style="font-size:0.7rem;">[skip_type=physical_rl]</code>
-        </div>
-      </div>
-
-      <div class="arrow-v"><div class="line" style="height:12px;"></div>▼</div>
-
-      <div class="opt-step step-wall">
-        <div class="step-icon">🏗</div>
-        <div>
-          <strong>PASO 2 — FB extra por pared limitante</strong><br>
-          Si <code>wall_active</code> AND OR/OL del nivel wall_stop &gt; LIMIT:<br>
-          &nbsp;&nbsp;extra = FS − TSW<br>
-          &nbsp;&nbsp;fb_applied = min(fb + extra, fb_max_back)<br>
-          &nbsp;&nbsp;fb_extra_applied = True &nbsp;← cabina evade físicamente la pared
-        </div>
-      </div>
-
-      <div class="arrow-v"><div class="line" style="height:12px;"></div>▼</div>
-
-      <div class="opt-step step-count">
-        <div class="step-icon">🔢</div>
-        <div>
-          <strong>PASO 3 — Contar violaciones</strong><br>
-          Para cada celda (nivel, col):<br>
-          &nbsp;&nbsp;• ctrl_applies? → eff_lim = LIMIT − 70<br>
-          &nbsp;&nbsp;• Si fb_extra_applied AND nivel=wall_stop AND col=wall_check_col → <em>saltar</em> (evadida)<br>
-          &nbsp;&nbsp;• OR/OL: v &gt; eff_lim → OFF &nbsp;|&nbsp; WR/WL/FR/FL: v &lt; eff_lim → OFF
-        </div>
-      </div>
-
-      <div class="arrow-v"><div class="line" style="height:12px;"></div>▼</div>
-
-      <div class="opt-step step-check">
-        <div class="step-icon">🧱</div>
-        <div>
-          <strong>PASO 4 — Hard SKIP por pared (sin evasión)</strong><br>
-          Si <code>wall_active</code> AND NOT fb_extra_applied AND OR/OL &gt; LIMIT
-          → <span style="color:#e3b341;">SKIP</span> <code style="font-size:0.7rem;">[skip_type=wall]</code>
-        </div>
-      </div>
-
-      <div class="arrow-v"><div class="line" style="height:12px;"></div>▼</div>
-
-      <div class="opt-step step-out">
-        <div class="step-icon">✅</div>
-        <div>
-          <strong>Registro VALID → Actualizar mejor</strong><br>
-          Objetivo: minimizar <code>total_off</code><br>
-          Tiebreaker: min(<code>|rl|</code> + <code>|fb_applied|</code>)<br>
-          Salida: <code>best</code> · <code>all_solutions</code> · <code>step_log</code>
-        </div>
-      </div>
-
     </div>
-  </div>
-
-  <div class="spacer"></div>
-
-  <!-- ════════════════════════════════════════ PASO 4 ════ -->
-  <div class="step-label">
-    <div class="step-num">PASO 4 — BSR vs BS</div>
-    <div class="step-line"></div>
-  </div>
-
-  <div class="row">
-    <div class="node node-process" style="width:520px;">
-      <div class="node-title">📏 bs_logic.py — find_bs_step()</div>
-      <div style="display:flex; gap:24px;">
-        <div>
-          <div style="color:#3fb950; margin-bottom:4px; font-size:0.7rem;">BSR ≥ BS</div>
-          No se requiere ajuste de shaft
-        </div>
-        <div style="width:1px; background:#30363d;"></div>
-        <div>
-          <div style="color:#ff7b72; margin-bottom:4px; font-size:0.7rem;">BSR &lt; BS → dif = BS − BSR</div>
-          Barre 3 rangos (paso 0.5 mm):<br>
-          <code style="font-size:0.7rem;">[0, ZB] → [ZB, ZB+OB] → [ZB+OB, 1000]</code><br>
-          dif −= val; cuando dif ≤ 0 → retorna step
-        </div>
+    <div class="arrow-v"><div class="line" style="height:10px"></div>▼</div>
+    <div class="opt-step s-check">
+      <div class="si">🚫</div>
+      <div><strong>Paso 1b — Límite físico de FB</strong><br>
+        FB &gt; FB_MAX_BACK → <span style="color:#e3b341">SKIP</span> <code style="font-size:.68rem">[physical_fb]</code>
+      </div>
+    </div>
+    <div class="arrow-v"><div class="line" style="height:10px"></div>▼</div>
+    <div class="opt-step s-wall">
+      <div class="si">🏗</div>
+      <div><strong>Paso 2 — FB extra por pared limitante</strong><br>
+        Si <code>wall_active</code> AND OR/OL en wall_stop &gt; LIMIT AND FS &gt; TSW:<br>
+        &nbsp;&nbsp;extra = FS − TSW &nbsp;|&nbsp; fb_applied = min(fb + extra, fb_max_back)<br>
+        &nbsp;&nbsp;<code>fb_extra_applied = True</code> ← cabina evade físicamente la pared
+      </div>
+    </div>
+    <div class="arrow-v"><div class="line" style="height:10px"></div>▼</div>
+    <div class="opt-step s-frame">
+      <div class="si">🚪</div>
+      <div><strong>Paso 2b — Apertura de cabina (★ v25)</strong><br>
+        Si <code>fb_extra_applied</code> AND |RL| &gt; FRAME → <span style="color:#f778ba">SKIP</span> <code style="font-size:.68rem">[frame_opening]</code><br>
+        <span style="color:#8b949e;font-size:.69rem">La apertura de cabina quedaría tapada por la pared limitante</span>
+      </div>
+    </div>
+    <div class="arrow-v"><div class="line" style="height:10px"></div>▼</div>
+    <div class="opt-step s-count">
+      <div class="si">🔢</div>
+      <div><strong>Paso 3 — Contar violaciones</strong><br>
+        Por cada celda (nivel, col):<br>
+        &nbsp;&nbsp;• ctrl_applies? → eff_lim = LIMIT − 70<br>
+        &nbsp;&nbsp;• Si fb_extra_applied AND nivel=wall_stop AND col=wall_check_col → saltar (evadida)<br>
+        &nbsp;&nbsp;• OR/OL: v &gt; eff_lim → OFF &nbsp;|&nbsp; WR/WL/FR/FL: v &lt; eff_lim → OFF
+      </div>
+    </div>
+    <div class="arrow-v"><div class="line" style="height:10px"></div>▼</div>
+    <div class="opt-step s-check">
+      <div class="si">🧱</div>
+      <div><strong>Paso 4 — Hard SKIP por pared (sin evasión)</strong><br>
+        Si <code>wall_active</code> AND NOT fb_extra_applied AND OR/OL &gt; LIMIT → <span style="color:#e3b341">SKIP</span> <code style="font-size:.68rem">[wall]</code>
+      </div>
+    </div>
+    <div class="arrow-v"><div class="line" style="height:10px"></div>▼</div>
+    <div class="opt-step s-out">
+      <div class="si">✅</div>
+      <div><strong>Registro VALID → Actualizar mejor</strong><br>
+        Objetivo: min <code>total_off</code> &nbsp;|&nbsp; Tiebreaker: min(<code>|rl|</code> + <code>|fb_applied|</code>)<br>
+        Salida: <code>best</code> · <code>all_solutions</code> · <code>step_log</code>
       </div>
     </div>
   </div>
+</div>
+<div class="spacer"></div>
 
-  <div class="spacer"></div>
-
-  <!-- ════════════════════════════════════════ HIGHLIGHTING ════ -->
-  <div class="step-label">
-    <div class="step-num">MÓDULO COMPARTIDO — HIGHLIGHTING</div>
-    <div class="step-line"></div>
+<!-- ══ PASO 4 ══ -->
+<div class="step-label"><div class="step-num">PASO 4 — BSR vs BS</div><div class="step-line"></div></div>
+<div class="node node-process" style="width:510px">
+  <div class="node-title">📏 bs_logic.py — find_bs_step()</div>
+  <div style="display:flex;gap:20px">
+    <div><div style="color:#3fb950;margin-bottom:3px;font-size:.69rem">BSR ≥ BS</div>No se requiere ajuste</div>
+    <div style="width:1px;background:#30363d"></div>
+    <div><div style="color:#ff7b72;margin-bottom:3px;font-size:.69rem">BSR &lt; BS → dif = BS − BSR</div>
+      Barre 3 rangos (paso 0.5 mm):<br>
+      <code style="font-size:.69rem">[0,ZB] → [ZB, ZB+OB] → [ZB+OB, 1000]</code><br>
+      dif −= val; dif ≤ 0 → retorna step
+    </div>
   </div>
+</div>
+<div class="spacer"></div>
 
-  <div class="node node-shared" style="width:700px;">
-    <div class="node-title">🎨 core/highlighting.py — Lógica unificada (app.py + report.py)</div>
-    <div style="display:flex; gap:24px; font-size:0.74rem; margin-top:4px;">
-      <div style="flex:1;">
-        <div style="color:#39d353; margin-bottom:4px;">cell_state(value, col, lim, ...)</div>
-        <code>eff_lim = lim − 70 si ctrl_applies</code><br>
-        OR/OL: v &gt; eff_lim<br>
-        &nbsp;&nbsp;v == MAX → <strong>"extreme"</strong><br>
-        &nbsp;&nbsp;in_cut_cols → <strong>"cut"</strong> (Caso 2)<br>
-        &nbsp;&nbsp;else → <strong>"out"</strong><br>
-        WR/WL/FR/FL: v &lt; eff_lim<br>
-        &nbsp;&nbsp;v == MIN → <strong>"extreme"</strong><br>
-        &nbsp;&nbsp;else → <strong>"out"</strong>
+<!-- ══ HIGHLIGHTING ══ -->
+<div class="step-label"><div class="step-num">MÓDULO COMPARTIDO — HIGHLIGHTING</div><div class="step-line"></div></div>
+<div class="node node-shared" style="width:700px">
+  <div class="node-title">🎨 core/highlighting.py — Lógica unificada (app.py + report.py)</div>
+  <div style="display:flex;gap:22px;font-size:.73rem;margin-top:4px">
+    <div style="flex:1">
+      <div style="color:#39d353;margin-bottom:3px">cell_state(value, col, lim, ...)</div>
+      <code>eff_lim = lim − 70 si ctrl_applies</code><br>
+      OR/OL v &gt; eff_lim: MAX→<strong>"extreme"</strong> · cut_cols→<strong>"cut"</strong> · else→<strong>"out"</strong><br>
+      WR/WL/FR/FL v &lt; eff_lim: MIN→<strong>"extreme"</strong> · else→<strong>"out"</strong>
+    </div>
+    <div style="width:1px;background:#21262d"></div>
+    <div style="flex:1">
+      <div style="color:#39d353;margin-bottom:3px">Salidas</div>
+      <code>streamlit_style(state)</code> → CSS DataFrames<br>
+      <code>reportlab_commands(state)</code> → PDF cells
+    </div>
+  </div>
+</div>
+<div class="spacer-sm"></div>
+<div class="hl-legend">
+  <div class="hl-item"><div class="hl-dot hl-extreme"></div>Rojo oscuro — peor valor (extreme)</div>
+  <div class="hl-item"><div class="hl-dot hl-out"></div>Rojo — fuera de límite</div>
+  <div class="hl-item"><div class="hl-dot hl-cut"></div>Naranja — OR/OL requiere corte (Caso 2)</div>
+  <div class="hl-item"><div class="hl-dot hl-ok"></div>Sin color — dentro de límite</div>
+</div>
+<div class="spacer"></div>
+
+<!-- ══ PASO 5 ══ -->
+<div class="step-label"><div class="step-num">PASO 5 — REPORTE PDF</div><div class="step-line"></div></div>
+<div class="node node-output" style="width:720px">
+  <div class="node-title">📄 core/report.py — generate_report() — ReportLab</div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 22px;font-size:.73rem;margin-top:4px">
+    <div>§ 1.1 Parámetros del proyecto</div><div>§ 5 &nbsp;MAX OFF RL/FB + fórmula Caso 1/2</div>
+    <div>§ 1.2 Parámetros calculados</div><div>§ 6.1 Solución óptima — matriz + resumen</div>
+    <div>§ 1.3 Condiciones de configuración</div><div>§ 6.2 Otras soluciones óptimas</div>
+    <div>§ 2 &nbsp;Matriz SURVEY original (colores)</div><div>§ 7 &nbsp;BSR vs BS — resultado y rangos</div>
+    <div>§ 3 &nbsp;Matriz SURVEY ajustada (colores)</div><div>§ 8 &nbsp;Diagrama ASCII posicionamiento</div>
+    <div>§ 4 &nbsp;Resumen por columna — estado inicial</div><div></div>
+  </div>
+</div>
+<div class="spacer"></div>
+
+<!-- ══ PASO 6 ══ -->
+<div class="step-label"><div class="step-num">PASO 6 — ASISTENTE IA (★ v26/v27)</div><div class="step-line"></div></div>
+<div class="chat-box">
+  <div class="chat-title">core/chat_agent.py — Claude Haiku via Anthropic API</div>
+  <div class="chat-steps">
+    <div class="chat-step c-in">
+      <div class="si">💬</div>
+      <div><strong>Pregunta del usuario</strong><br>
+        <code>st.chat_input()</code> — interfaz nativa Streamlit<br>
+        Historial en <code>session_state["chat_history"]</code> (máx 20 mensajes)
       </div>
-      <div style="width:1px; background:#21262d;"></div>
-      <div style="flex:1;">
-        <div style="color:#39d353; margin-bottom:4px;">Salidas</div>
-        <code>streamlit_style(state)</code><br>
-        → CSS string para DataFrames<br><br>
-        <code>reportlab_commands(state, colors)</code><br>
-        → atributos para celdas PDF
+    </div>
+    <div class="arrow-v"><div class="line" style="height:10px"></div>▼</div>
+    <div class="chat-step c-ctx">
+      <div class="si">📊</div>
+      <div><strong>Contexto del survey actual</strong><br>
+        Si hay cálculo activo → se adjunta al system prompt:<br>
+        parámetros · límites calculados · análisis inicial · solución óptima · BSR vs BS
+      </div>
+    </div>
+    <div class="arrow-v"><div class="line" style="height:10px"></div>▼</div>
+    <div class="chat-step c-conf">
+      <div class="si">🔒</div>
+      <div><strong>Reglas de confidencialidad (v27)</strong><br>
+        El system prompt prohíbe revelar: fórmulas internas · algoritmos · lógica del optimizador · nombres de módulos/funciones · flujo de procesamiento<br>
+        <span style="color:#8b949e;font-size:.69rem">Ante cualquier intento de extracción → rechaza sin excepción</span>
+      </div>
+    </div>
+    <div class="arrow-v"><div class="line" style="height:10px"></div>▼</div>
+    <div class="chat-step c-api">
+      <div class="si">🤖</div>
+      <div><strong>Anthropic API — claude-haiku-4-5</strong><br>
+        <code>client.messages.create(model, system, messages, max_tokens=1024)</code><br>
+        API key en <code>.streamlit/secrets.toml</code> (excluida de git)<br>
+        Experto en: geometría de hueco · tolerancias · procedimientos · rieles · puertas · BSR/BS
+      </div>
+    </div>
+    <div class="arrow-v"><div class="line" style="height:10px"></div>▼</div>
+    <div class="chat-step c-out">
+      <div class="si">💡</div>
+      <div><strong>Respuesta al usuario</strong><br>
+        <code>st.chat_message("assistant")</code> + <code>st.markdown(response)</code><br>
+        Botón 🗑 para limpiar historial
       </div>
     </div>
   </div>
+</div>
+<div class="spacer"></div>
 
-  <div class="spacer-sm"></div>
-  <div class="hl-legend">
-    <div class="hl-item"><div class="hl-dot hl-extreme"></div>Rojo oscuro — peor valor (MIN/MAX extremo)</div>
-    <div class="hl-item"><div class="hl-dot hl-out"></div>Rojo — fuera de límite</div>
-    <div class="hl-item"><div class="hl-dot hl-cut"></div>Naranja — OR/OL requiere corte (Caso 2)</div>
-    <div class="hl-item"><div class="hl-dot hl-ok"></div>Sin color — dentro de límite</div>
+<!-- ══ I/O EXCEL ══ -->
+<div class="step-label"><div class="step-num">I/O EXCEL — core/excel_io.py</div><div class="step-line"></div></div>
+<div class="row">
+  <div class="node node-module" style="width:330px">
+    <div class="node-title">💾 export_survey_excel()</div>
+    <ul>
+      <li>Hoja <strong>SURVEY</strong>: WR FR OR WL FL OL × NS</li>
+      <li>Hoja <strong>INFO</strong>: todos los parámetros numéricos</li>
+      <li>Hoja <strong>CONFIG</strong>: OMEGA_SIDE · WALL_LIMITING · WALL_STOP · WALL_SIDE · OFFSET_SIDE · CTRL_IN_FRAME · CTRL_SIDE · NS</li>
+    </ul>
   </div>
-
-  <div class="spacer"></div>
-
-  <!-- ════════════════════════════════════════ PASO 5 ════ -->
-  <div class="step-label">
-    <div class="step-num">PASO 5 — REPORTE PDF</div>
-    <div class="step-line"></div>
+  <div class="arrow-h" style="color:#388bfd">⇄</div>
+  <div class="node node-module" style="width:330px">
+    <div class="node-title">📂 import_survey_excel()</div>
+    <ul>
+      <li>Retorna <code>{"df", "info", "config"}</code></li>
+      <li>Restaura matriz + parámetros a UI</li>
+      <li>Restaura configuración a session_state</li>
+    </ul>
   </div>
+</div>
+<div class="spacer"></div>
 
-  <div class="node node-output" style="width:740px;">
-    <div class="node-title">📄 core/report.py — generate_report() — ReportLab</div>
-    <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px 24px; font-size:0.74rem; margin-top:4px;">
-      <div>§ 1.1 Parámetros del proyecto</div>
-      <div>§ 5 &nbsp; MAX OFF RL / FB + fórmula Caso 1/2</div>
-      <div>§ 1.2 Parámetros calculados</div>
-      <div>§ 6.1 Solución óptima — matriz + resumen</div>
-      <div>§ 1.3 Condiciones de configuración</div>
-      <div>§ 6.2 Otras soluciones óptimas</div>
-      <div>§ 2 &nbsp; Matriz SURVEY original (colores)</div>
-      <div>§ 7 &nbsp; BSR vs BS — resultado y rangos</div>
-      <div>§ 3 &nbsp; Matriz SURVEY ajustada (colores)</div>
-      <div>§ 8 &nbsp; Diagrama ASCII posicionamiento</div>
-      <div>§ 4 &nbsp; Resumen por columna — estado inicial</div>
-      <div></div>
-    </div>
-  </div>
-
-  <div class="spacer"></div>
-
-  <!-- ════════════════════════════════════════ EXCEL I/O ════ -->
-  <div class="step-label">
-    <div class="step-num">I/O EXCEL — core/excel_io.py</div>
-    <div class="step-line"></div>
-  </div>
-
-  <div class="row">
-    <div class="node node-module" style="width:340px;">
-      <div class="node-title">💾 export_survey_excel()</div>
-      <ul>
-        <li>Hoja <strong>SURVEY</strong>: WR FR OR WL FL OL × NS</li>
-        <li>Hoja <strong>INFO</strong>: todos los parámetros numéricos</li>
-        <li>Hoja <strong>CONFIG</strong>: OMEGA_SIDE, WALL_LIMITING,<br>
-            &nbsp;&nbsp;WALL_STOP, WALL_SIDE, OFFSET_SIDE,<br>
-            &nbsp;&nbsp;CTRL_IN_FRAME, CTRL_SIDE, NS</li>
-      </ul>
-    </div>
-
-    <div class="arrow-h" style="color:#388bfd;">⇄</div>
-
-    <div class="node node-module" style="width:340px;">
-      <div class="node-title">📂 import_survey_excel()</div>
-      <ul>
-        <li>Retorna <code>{"df", "info", "config"}</code></li>
-        <li>Restaura matriz + parámetros a UI</li>
-        <li>Restaura configuración a session_state</li>
-        <li>Radios y números se actualizan solos</li>
-      </ul>
-    </div>
-  </div>
-
-  <div class="spacer"></div>
-
-  <!-- ════════════════════════════════════════ FÍSICA ════ -->
-  <div class="step-label">
-    <div class="step-num">REFERENCIA — GEOMETRÍA FÍSICA</div>
-    <div class="step-line"></div>
-  </div>
-
-  <div class="phys-diagram">
-    <div class="phys-box">
-      <h4>Eje Lateral (izquierda ↔ derecha)</h4>
-      <div class="phys-ascii">┌──────────────────────────────────┐
+<!-- ══ FÍSICA ══ -->
+<div class="step-label"><div class="step-num">REFERENCIA — GEOMETRÍA FÍSICA</div><div class="step-line"></div></div>
+<div class="phys-diagram">
+  <div class="phys-box">
+    <h4>Eje Lateral (izquierda ↔ derecha)</h4>
+    <div class="phys-ascii">┌──────────────────────────────────┐
 │  SF1 │◄── BKS + 2×RAIL ──►│ SF2  │ ← BS
 │      │   CABIN BLOCK        │      │
 │  WL  │                      │  WR  │
 │  OL  │ [apert. puertas] [ap]│  OR  │
 └──────────────────────────────────┘</div>
-      <div class="phys-legend">
-        <span>BT</span> = apertura de puertas (NO = ancho cabina)<br>
-        <span>WR/WL</span> &lt; LIMIT → violación lateral<br>
-        <span>OR/OL</span> &gt; LIMIT → requiere corte físico<br>
-        <span>BS</span> = SF1 + BKS + 2×RAIL + SF2
-      </div>
+    <div class="phys-legend">
+      <span>BT</span> = apertura de puertas (NO = ancho cabina)<br>
+      <span>WR/WL</span> &lt; LIMIT → violación lateral<br>
+      <span>OR/OL</span> &gt; LIMIT → requiere corte · max RL hacia pared = FRAME<br>
+      <span>BS</span> = SF1 + BKS + 2×RAIL + SF2
     </div>
-
-    <div class="phys-box">
-      <h4>Eje Frontal (adelante ↔ atrás)</h4>
-      <div class="phys-ascii">┌────────────────────────────────┐
+  </div>
+  <div class="phys-box">
+    <h4>Eje Frontal (adelante ↔ atrás)</h4>
+    <div class="phys-ascii">┌────────────────────────────────┐
 │  FS   │  TKSW  │     TL      │ ← TS
 │ front │  rail  │ cabin body  │
 │       │●       │             │
 └────────────────────────────────┘
-  ●  = centro del riel</div>
-      <div class="phys-legend">
-        <span>FR/FL</span> = dist. pared frontal → centro riel<br>
-        <span>FR/FL</span> &lt; LIMIT → violación frontal<br>
-        <span>FB_MAX_BACK</span> = FS − TSW (máx desplaz. atrás)<br>
-        <span>TL</span> = TS − BC_CALC (prof. bloque cabina)
-      </div>
+  ● = centro del riel</div>
+    <div class="phys-legend">
+      <span>FR/FL</span> = dist. pared frontal → centro riel<br>
+      <span>FR/FL</span> &lt; LIMIT → violación frontal<br>
+      <span>FB_MAX_BACK</span> = FS − TSW (máx desplaz. atrás)<br>
+      <span>TL</span> = TS − BC_CALC (prof. bloque cabina)
     </div>
   </div>
+</div>
+<div class="spacer"></div>
 
-  <div class="spacer"></div>
-
-  <!-- ════════════════════════════════════════ MÓDULOS ════ -->
-  <div class="step-label">
-    <div class="step-num">ARQUITECTURA DE MÓDULOS</div>
-    <div class="step-line"></div>
+<!-- ══ MÓDULOS ══ -->
+<div class="step-label"><div class="step-num">ARQUITECTURA DE MÓDULOS</div><div class="step-line"></div></div>
+<div class="modules-grid">
+  <div class="mod-card mod-extract">
+    <div class="mod-name">🔍 extractors/schindler.py</div>
+    <div class="mod-fn"><span>extract_from_pdf()</span><br>pypdf visitor_text XY<br>14 parámetros del PDF</div>
   </div>
-
-  <div class="modules-grid">
-    <div class="mod-card mod-app">
-      <div class="mod-name">📱 app.py</div>
-      <div class="mod-fn">UI Streamlit<br>
-        <span>Orquesta todos los módulos</span><br>
-        session_state management<br>
-        Pasos 1→5
-      </div>
-    </div>
-
-    <div class="mod-card mod-extract">
-      <div class="mod-name">🔍 extractors/schindler.py</div>
-      <div class="mod-fn">
-        <span>extract_from_pdf()</span><br>
-        pdfplumber + regex<br>
-        14 parámetros del PDF
-      </div>
-    </div>
-
-    <div class="mod-card mod-calc">
-      <div class="mod-name">📐 core/calculations.py</div>
-      <div class="mod-fn">
-        <span>validate_inputs()</span><br>
-        <span>calculate_limits()</span><br>
-        <span>apply_offsets()</span><br>
-        <span>analyze_matrix()</span>
-      </div>
-    </div>
-
-    <div class="mod-card mod-opt">
-      <div class="mod-name">🔍 core/optimizer.py</div>
-      <div class="mod-fn">
-        <span>optimize()</span><br>
-        Grid search RL×FB<br>
-        Wall limiting logic<br>
-        step_log + tiebreaker
-      </div>
-    </div>
-
-    <div class="mod-card mod-highlight">
-      <div class="mod-name">🎨 core/highlighting.py</div>
-      <div class="mod-fn">
-        <span>cell_state()</span><br>
-        <span>streamlit_style()</span><br>
-        <span>reportlab_commands()</span><br>
-        Lógica unificada (★ v24)
-      </div>
-    </div>
-
-    <div class="mod-card mod-bs">
-      <div class="mod-name">📏 core/bs_logic.py</div>
-      <div class="mod-fn">
-        <span>find_bs_step()</span><br>
-        3 rangos ZB → OB → Ext<br>
-        Barrido triangular 0.5mm
-      </div>
-    </div>
-
-    <div class="mod-card mod-report">
-      <div class="mod-name">📄 core/report.py</div>
-      <div class="mod-fn">
-        <span>generate_report()</span><br>
-        ReportLab PDF<br>
-        8 secciones
-      </div>
-    </div>
-
-    <div class="mod-card mod-excel">
-      <div class="mod-name">📊 core/excel_io.py</div>
-      <div class="mod-fn">
-        <span>export_survey_excel()</span><br>
-        <span>import_survey_excel()</span><br>
-        openpyxl · 3 hojas
-      </div>
-    </div>
+  <div class="mod-card mod-calc">
+    <div class="mod-name">📐 core/calculations.py</div>
+    <div class="mod-fn"><span>validate_inputs()</span><br><span>calculate_limits()</span><br><span>apply_offsets()</span><br><span>analyze_matrix()</span></div>
   </div>
-
-  <!-- Footer -->
-  <div class="spacer"></div>
-  <div style="font-size:0.68rem; color:#484f58; text-align:center;">
-    v24 — IngDACO/P1 &nbsp;·&nbsp; Streamlit + pdfplumber + ReportLab + openpyxl
+  <div class="mod-card mod-opt">
+    <div class="mod-name">🔍 core/optimizer.py</div>
+    <div class="mod-fn"><span>optimize()</span><br>Grid search RL×FB<br>5 pasos · wall · frame<br>step_log + tiebreaker</div>
   </div>
+  <div class="mod-card mod-highlight">
+    <div class="mod-name">🎨 core/highlighting.py</div>
+    <div class="mod-fn"><span>cell_state()</span><br><span>streamlit_style()</span><br><span>reportlab_commands()</span><br>Lógica unificada</div>
+  </div>
+  <div class="mod-card mod-bs">
+    <div class="mod-name">📏 core/bs_logic.py</div>
+    <div class="mod-fn"><span>find_bs_step()</span><br>3 rangos ZB→OB→Ext<br>Barrido 0.5 mm</div>
+  </div>
+  <div class="mod-card mod-report">
+    <div class="mod-name">📄 core/report.py</div>
+    <div class="mod-fn"><span>generate_report()</span><br>ReportLab PDF<br>8 secciones</div>
+  </div>
+  <div class="mod-card mod-excel">
+    <div class="mod-name">📊 core/excel_io.py</div>
+    <div class="mod-fn"><span>export_survey_excel()</span><br><span>import_survey_excel()</span><br>openpyxl · 3 hojas</div>
+  </div>
+  <div class="mod-card mod-chat2">
+    <div class="mod-name">🤖 core/chat_agent.py</div>
+    <div class="mod-fn"><span>get_chat_response()</span><br>Anthropic claude-haiku<br>System prompt experto<br>Confidencialidad v27</div>
+  </div>
+</div>
+
+<div class="spacer"></div>
+<div style="font-size:.66rem;color:#484f58;text-align:center">
+  v27 — IngDACO/P1 &nbsp;·&nbsp; Streamlit · pypdf · ReportLab · openpyxl · Anthropic
+</div>
 
 </div>
 </body>

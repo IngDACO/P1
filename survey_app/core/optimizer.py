@@ -122,12 +122,15 @@ def optimize(survey_adjusted: list, limits: dict, params: dict) -> dict:
 
             # ── Paso 2: FB extra si va hacia la pared ────────────
             # Si OR/OL en WALL_STOP > LIMIT y FS > TSW → mover atrás para evadir el muro.
+            # La posición objetivo es FS−TSW desde el neutro (posición absoluta).
+            # Si el loop ya trajo un fb > 0, solo se aplica la diferencia restante
+            # (fs−tsw) − fb, no el total otra vez.
             # Tras la evasión, el nivel WALL_STOP queda fuera del conteo OR/OL.
             if toward_wall and 0 <= wall_stop_idx < len(modified):
                 if modified[wall_stop_idx][wall_check_col] > wall_lim_val:
                     if fs is not None and fs > tsw:
-                        extra          = fs - tsw
-                        new_fb_applied = min(fb + extra, fb_max_back)
+                        target_fb      = min(fs - tsw, fb_max_back)   # posición absoluta objetivo
+                        new_fb_applied = target_fb                     # solo lo que falta desde fb actual
                         if new_fb_applied > fb_applied + 1e-3:
                             fb_applied       = float(new_fb_applied)
                             modified         = _apply(rl, fb_applied)
