@@ -17,7 +17,9 @@ from core.highlighting import cell_state, ctrl_applies_to_cell, streamlit_style,
 from core.chat_agent      import get_chat_response
 from core.interpretation  import generate_interpretation
 
-st.set_page_config(page_title="Survey Analyzer", layout="wide", page_icon="📐")
+APP_VERSION = "v30"
+
+st.set_page_config(page_title=f"COPEX Survey Analyzer {APP_VERSION}", layout="wide", page_icon="📐")
 
 SURVEY_COLS = ["WR", "FR", "OR", "WL", "FL", "OL"]
 USER_ONLY = {
@@ -64,7 +66,21 @@ _init_state()
 # SIDEBAR
 # ══════════════════════════════════════════════════════
 with st.sidebar:
-    st.markdown("## 📋 Valores extraídos del PDF")
+    # ── Cabecera COPEX ─────────────────────────────────
+    st.markdown(f"""
+    <div style="background:linear-gradient(135deg,#1a3a5c,#2e6da4);
+                padding:14px 16px;border-radius:8px;margin-bottom:12px;">
+        <div style="color:white;font-size:1.7rem;font-weight:900;
+                    letter-spacing:0.18em;font-family:'Segoe UI',sans-serif;
+                    line-height:1.1;">COPEX</div>
+        <div style="color:#b0c8e8;font-size:0.72rem;margin-top:2px;">
+            Elevator Survey Analyzer &nbsp;·&nbsp; {APP_VERSION}
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # ── Valores extraídos del PDF ───────────────────────
+    st.markdown("#### 📋 Valores del PDF")
     if st.session_state.pdf_extracted:
         found   = {k:v for k,v in st.session_state.pdf_extracted.items() if v is not None}
         missing = [k for k,v in st.session_state.pdf_extracted.items() if v is None]
@@ -80,15 +96,72 @@ with st.sidebar:
                 st.caption(desc)
     else:
         st.info("Carga un PDF para ver los valores aquí.")
+
+    # ── Leyenda ────────────────────────────────────────
     st.markdown("---")
-    st.caption("🔴 Rojo oscuro = peor valor fuera de límite (MIN/MAX)")
+    st.caption("🔴 Rojo oscuro = peor valor fuera de límite")
     st.caption("🔴 Rojo claro  = fuera de límite")
     st.caption("🟠 Naranja     = OR/OL requiere corte (Caso 2)")
 
+    # ══════════════════════════════════════════════════
+    # ASISTENTE IA — desplegable en sidebar
+    # ══════════════════════════════════════════════════
+    st.markdown("---")
+    with st.expander("🤖 Asistente Técnico COPEX", expanded=False):
+        ctx_label = "🔗 Con contexto del cálculo actual." if st.session_state.calc_results else "Sin cálculo activo."
+        st.caption(f"Experto en instalación de elevadores Schindler. {ctx_label}")
+
+        # Historial
+        for msg in st.session_state.chat_history:
+            with st.chat_message(msg["role"],
+                                 avatar="🧑‍🔧" if msg["role"] == "user" else "🤖"):
+                st.markdown(msg["content"])
+
+        # Input
+        if prompt := st.chat_input("Escribe tu pregunta…", key="sidebar_chat_input"):
+            st.session_state.chat_history.append({"role": "user", "content": prompt})
+            with st.chat_message("user", avatar="🧑‍🔧"):
+                st.markdown(prompt)
+            with st.chat_message("assistant", avatar="🤖"):
+                with st.spinner("Consultando…"):
+                    _r = st.session_state.calc_results
+                    _response = get_chat_response(
+                        user_message = prompt,
+                        history      = st.session_state.chat_history[:-1],
+                        calc_results = _r,
+                        all_params   = _r["all_params"] if _r else None,
+                    )
+                st.markdown(_response)
+            st.session_state.chat_history.append({"role": "assistant", "content": _response})
+
+        # Limpiar
+        if st.session_state.chat_history:
+            if st.button("🗑 Limpiar conversación", use_container_width=True, key="clear_chat_sb"):
+                st.session_state.chat_history = []
+                st.rerun()
+
 # ══════════════════════════════════════════════════════
-# TÍTULO
+# CABECERA PRINCIPAL
 # ══════════════════════════════════════════════════════
-st.title("📐 Elevator Survey Analyzer")
+st.markdown(f"""
+<div style="background:linear-gradient(135deg,#1a3a5c 0%,#2e6da4 100%);
+            padding:22px 32px;border-radius:12px;margin-bottom:24px;
+            display:flex;justify-content:space-between;align-items:center;">
+    <div>
+        <div style="color:white;font-size:2.4rem;font-weight:900;
+                    letter-spacing:0.2em;font-family:'Segoe UI',sans-serif;
+                    line-height:1.0;">COPEX</div>
+        <div style="color:#b0c8e8;font-size:1rem;margin-top:4px;font-weight:400;">
+            Elevator Survey Analyzer
+        </div>
+    </div>
+    <div style="text-align:right;">
+        <div style="color:#b0c8e8;font-size:0.8rem;">Versión</div>
+        <div style="color:white;font-size:1.4rem;font-weight:700;
+                    font-family:'Courier New',monospace;">{APP_VERSION}</div>
+    </div>
+</div>
+""", unsafe_allow_html=True)
 
 # ══════════════════════════════════════════════════════
 # PASO 1 — CARGAR PDF
@@ -573,47 +646,3 @@ if st.session_state.calc_results:
         )
 else:
     st.info("Realiza el cálculo primero para poder generar el reporte.")
-
-# ══════════════════════════════════════════════════════
-# PASO 6 — ASISTENTE IA
-# ══════════════════════════════════════════════════════
-st.header("6. Asistente técnico")
-st.caption(
-    "Experto en instalación de elevadores Schindler. "
-    "Responde preguntas sobre la app, parámetros, tolerancias y procedimientos."
-    + (" — 🔗 Con contexto del cálculo actual." if st.session_state.calc_results else "")
-)
-
-# ── Historial de mensajes ──────────────────────────────
-chat_container = st.container()
-with chat_container:
-    for msg in st.session_state.chat_history:
-        with st.chat_message(msg["role"], avatar="🧑‍🔧" if msg["role"] == "user" else "🤖"):
-            st.markdown(msg["content"])
-
-# ── Input del usuario ──────────────────────────────────
-if prompt := st.chat_input("Escribe tu pregunta técnica aquí…"):
-    # Mostrar mensaje del usuario
-    st.session_state.chat_history.append({"role": "user", "content": prompt})
-    with st.chat_message("user", avatar="🧑‍🔧"):
-        st.markdown(prompt)
-
-    # Obtener respuesta del agente
-    with st.chat_message("assistant", avatar="🤖"):
-        with st.spinner("Consultando al experto…"):
-            r = st.session_state.calc_results
-            response = get_chat_response(
-                user_message = prompt,
-                history      = st.session_state.chat_history[:-1],  # sin el último (ya es el actual)
-                calc_results = r,
-                all_params   = r["all_params"] if r else None,
-            )
-        st.markdown(response)
-
-    st.session_state.chat_history.append({"role": "assistant", "content": response})
-
-# ── Botón limpiar historial ────────────────────────────
-if st.session_state.chat_history:
-    if st.button("🗑 Limpiar conversación", use_container_width=False):
-        st.session_state.chat_history = []
-        st.rerun()
