@@ -16,6 +16,7 @@ from core.excel_io     import export_survey_excel, import_survey_excel
 from core.highlighting import cell_state, ctrl_applies_to_cell, streamlit_style, OR_OL_COLS
 from core.chat_agent      import get_chat_response
 from core.interpretation  import generate_interpretation
+from core.email_notify    import send_usage_notification
 
 APP_VERSION = "v30"
 
@@ -58,6 +59,8 @@ def _init_state():
     st.session_state["survey_original_input"] = None   # snapshot al momento del cálculo
     st.session_state["calc_results"]   = None
     st.session_state["chat_history"]   = []
+    st.session_state["proyecto"]       = ""
+    st.session_state["ingeniero"]      = ""
     st.session_state["initialized"]    = True
 
 _init_state()
@@ -162,6 +165,13 @@ st.markdown(f"""
     </div>
 </div>
 """, unsafe_allow_html=True)
+
+# ── Identificación del proyecto ───────────────────────
+_id1, _id2 = st.columns(2)
+_id1.text_input("🏗 Nombre del proyecto / Cliente", key="proyecto",
+                placeholder="Ej: Edificio Centro, Cliente ABC…")
+_id2.text_input("👷 Ingeniero responsable", key="ingeniero",
+                placeholder="Nombre del técnico que realiza el survey")
 
 # ══════════════════════════════════════════════════════
 # PASO 1 — CARGAR PDF
@@ -614,6 +624,16 @@ if st.button("🚀 Calcular", type="primary", use_container_width=True):
         "bs_result":        bs_result,
         "interpretation":   interpretation,
     }
+    # ── Notificación por correo ───────────────────────────
+    send_usage_notification(
+        proyecto   = st.session_state.get("proyecto", ""),
+        ingeniero  = st.session_state.get("ingeniero", ""),
+        all_params = all_params,
+        analysis   = analysis,
+        opt_result = opt_result,
+        bs_result  = bs_result,
+    )
+
     st.success("✅ Cálculo e interpretación completados.")
 
 # ══════════════════════════════════════════════════════

@@ -1,0 +1,147 @@
+"""
+Notificación por correo cada vez que se ejecuta un cálculo en la app.
+Envía resumen técnico a diegoaco93@gmail.com via Gmail SMTP.
+"""
+import smtplib
+import traceback
+from datetime import datetime
+from email.mime.multipart import MIMEMultipart
+from email.mime.text      import MIMEText
+
+import streamlit as st
+
+
+def _secrets():
+    return (
+        st.secrets.get("GMAIL_USER",     ""),
+        st.secrets.get("GMAIL_APP_PASS", ""),
+        st.secrets.get("NOTIFY_TO",      ""),
+    )
+
+
+def send_usage_notification(
+    proyecto:    str,
+    ingeniero:   str,
+    all_params:  dict,
+    analysis:    dict,
+    opt_result:  dict,
+    bs_result:   dict,
+) -> bool:
+    """
+    Envía correo de seguimiento con resumen del cálculo.
+    Retorna True si se envió OK, False si hubo error.
+    """
+    gmail_user, gmail_pass, notify_to = _secrets()
+    if not gmail_user or not gmail_pass or not notify_to:
+        return False
+
+    best = opt_result.get("best") if opt_result else None
+    ts   = datetime.now().strftime("%d/%m/%Y  %H:%M")
+
+    # ── Construir cuerpo HTML ─────────────────────────────
+    def row(label, value, highlight=False):
+        bg = "#fff3cd" if highlight else "#f8f9fa"
+        return (f'<tr><td style="padding:5px 10px;background:{bg};'
+                f'font-weight:bold;width:45%">{label}</td>'
+                f'<td style="padding:5px 10px;background:{bg}">{value}</td></tr>')
+
+    sol_html = ""
+    if best:
+        fb_ap  = best.get("fb_applied", best["fb"])
+        extra  = abs(fb_ap - best["fb"]) > 0.01
+        fb_str = f"{fb_ap:.1f} mm" + (" ⚠️ (con push extra por pared)" if extra else "")
+        sol_html = f"""
+        <h3 style="color:#1a3a5c;margin-top:20px">Solución óptima</h3>
+        <table style="border-collapse:collapse;width:100%;font-size:14px">
+          {row("RL (desplazamiento lateral)", f"{best['rl']:+.1f} mm", True)}
+          {row("FB (desplazamiento frontal)", fb_str, True)}
+          {row("Valores fuera de límite",     str(best['total_off']), best['total_off'] > 0)}
+          {row("OFF por columna",             str(best.get('off_by_col', {})))}
+        </table>"""
+    else:
+        sol_html = "<p style='color:red'>No se encontró solución válida.</p>"
+
+    bs_html = ""
+    if bs_result:
+        if not bs_result.get("needed"):
+            bs_html = row("BSR vs BS", "BSR ≥ BS — Sin ajuste requerido ✅")
+        elif bs_result.get("step"):
+            bs_html = row("BSR vs BS",
+                f"Paso: {bs_result['step']} mm — Zona: {bs_result.get('range_name')} ⚠️", True)
+        else:
+            bs_html = row("BSR vs BS",
+                f"DIF = {bs_result.get('dif_original')} mm — No encontrado en rangos ❌", True)
+
+    p = all_params
+    html = f"""
+    <html><body style="font-family:'Segoe UI',Arial,sans-serif;color:#212529;max-width:680px;margin:0 auto">
+
+    <div style="background:linear-gradient(135deg,#1a3a5c,#2e6da4);padding:20px 28px;border-radius:8px">
+        <div style="color:white;font-size:1.6rem;font-weight:900;letter-spacing:0.15em">COPEX</div>
+        <div style="color:#b0c8e8;font-size:0.85rem">Elevator Survey Analyzer — Notificación de uso</div>
+    </div>
+
+    <div style="background:#e8f4f8;padding:10px 20px;border-left:4px solid #2e6da4;margin:16px 0">
+        <strong>Fecha:</strong> {ts}<br>
+        <strong>Proyecto:</strong> {proyecto or '(no especificado)'}<br>
+        <strong>Ingeniero:</strong> {ingeniero or '(no especificado)'}
+    </div>
+
+    <h3 style="color:#1a3a5c">Parámetros principales</h3>
+    <table style="border-collapse:collapse;width:100%;font-size:14px">
+      {row("BS (plano)",        f"{p.get('BS', '—')} mm")}
+      {row("BSR (obra)",        f"{p.get('BSR', '—')} mm")}
+      {row("BKS",              f"{p.get('BKS', '—')} mm")}
+      {row("BT",               f"{p.get('BT', '—')} mm")}
+      {row("RAIL",             f"{p.get('RAIL', '—')} mm")}
+      {row("FRAME",            f"{p.get('FRAME', '—')} mm")}
+      {row("SF1 / SF2",        f"{p.get('SF1', '—')} / {p.get('SF2', '—')} mm")}
+      {row("TS",               f"{p.get('TS', '—')} mm")}
+      {row("TKSW / TSW / FS",  f"{p.get('TKSW', '—')} / {p.get('TSW', '—')} / {p.get('FS', '—')} mm")}
+      {row("Paradas (NS)",     str(p.get('NS', '—')))}
+      {row("Pared limitante",  f"{'Sí — Parada ' + str(p.get('WALL_STOP')) + ' lado ' + str(p.get('WALL_SIDE')) if p.get('WALL_LIMITING') else 'No'}")}
+      {row("Ctrl en frame",    f"{'Sí — lado ' + str(p.get('CTRL_SIDE')) if p.get('CTRL_IN_FRAME') else 'No'}")}
+    </table>
+
+    <h3 style="color:#1a3a5c;margin-top:20px">Estado inicial del survey</h3>
+    <table style="border-collapse:collapse;width:100%;font-size:14px">
+      {''.join(row(col, f"OFF: {analysis.get(col+'_OFF_COUNT',0)}  |  DIF: {round(analysis.get('DIF_'+col,0),1)} mm",
+               analysis.get(col+'_OFF_COUNT',0) > 0)
+               for col in ['WR','WL','FR','FL','OR','OL'])}
+      {row("MAX OFF RL", f"{round(analysis.get('MAX_OFF_RL',0),1)} mm", analysis.get('MAX_OFF_RL',0) > 0)}
+      {row("MAX OFF FB", f"{round(analysis.get('MAX_OFF_FB',0),1)} mm", analysis.get('MAX_OFF_FB',0) > 0)}
+    </table>
+
+    {sol_html}
+
+    <h3 style="color:#1a3a5c;margin-top:20px">Análisis BSR vs BS</h3>
+    <table style="border-collapse:collapse;width:100%;font-size:14px">
+      {bs_html}
+    </table>
+
+    <div style="margin-top:24px;padding:10px 16px;background:#f0f7ff;
+                border-radius:6px;font-size:12px;color:#666">
+        Notificación automática generada por COPEX Survey Analyzer.<br>
+        El PDF completo se genera cuando el usuario hace clic en "Generar reporte PDF".
+    </div>
+    </body></html>
+    """
+
+    # ── Enviar via Gmail SMTP ─────────────────────────────
+    try:
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = f"COPEX Survey — {proyecto or 'Sin proyecto'} | {ts}"
+        msg["From"]    = gmail_user
+        msg["To"]      = notify_to
+        msg.attach(MIMEText(html, "html", "utf-8"))
+
+        with smtplib.SMTP("smtp.gmail.com", 587) as server:
+            server.ehlo()
+            server.starttls()
+            server.login(gmail_user, gmail_pass)
+            server.sendmail(gmail_user, notify_to, msg.as_bytes())
+        return True
+
+    except Exception:
+        traceback.print_exc()
+        return False
