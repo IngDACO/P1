@@ -17,6 +17,7 @@ from core.highlighting import cell_state, ctrl_applies_to_cell, streamlit_style,
 from core.chat_agent      import get_chat_response
 from core.interpretation  import generate_interpretation
 from core.email_notify    import send_usage_notification
+from core.diagrams        import render_diagrams_html
 
 try:
     APP_VERSION = open(os.path.join(os.path.dirname(__file__), "VERSION")).read().strip()
@@ -588,6 +589,14 @@ if st.button("🚀 Calcular", type="primary", use_container_width=True):
     else:
         st.error("No se encontró combinación válida.")
         opt_result = {"best": None, "all_solutions": [], "step_log": step_log}
+
+    # ── Diagrama físico ───────────────────────────────────
+    st.subheader("📐 Diagrama de posicionamiento")
+    best_sol = opt_result.get("best") if opt_result else None
+    st.markdown(
+        render_diagrams_html(all_params, limits, best_sol),
+        unsafe_allow_html=True,
+    )
 
     # ── BSR vs BS ─────────────────────────────────────────
     st.subheader("📏 Análisis BSR vs BS")
