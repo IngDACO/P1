@@ -7,6 +7,9 @@ import traceback
 from datetime import datetime
 from email.mime.multipart import MIMEMultipart
 from email.mime.text      import MIMEText
+from email.mime.base      import MIMEBase
+from email.mime.application import MIMEApplication
+from email             import encoders
 
 import streamlit as st
 
@@ -19,6 +22,35 @@ def _secrets():
     )
 
 
+def _matrix_html(df) -> str:
+    """Convierte el DataFrame de la matriz survey en tabla HTML para el correo."""
+    if df is None:
+        return ""
+    try:
+        cols = list(df.columns)
+        header = "".join(
+            f'<th style="background:#1a3a5c;color:white;padding:5px 10px">{c}</th>'
+            for c in ["#"] + cols
+        )
+        rows_html = ""
+        for i, (_, row) in enumerate(df.iterrows()):
+            bg = "#f8f9fa" if i % 2 == 0 else "#ffffff"
+            cells = f'<td style="padding:4px 10px;background:{bg};text-align:center">{i+1}</td>'
+            cells += "".join(
+                f'<td style="padding:4px 10px;background:{bg};text-align:center">{row[c]:.1f}</td>'
+                for c in cols
+            )
+            rows_html += f"<tr>{cells}</tr>"
+        return f"""
+        <h3 style="color:#1a3a5c;margin-top:20px">Matriz SURVEY ingresada (mm)</h3>
+        <table style="border-collapse:collapse;font-size:13px;width:100%">
+          <tr>{header}</tr>
+          {rows_html}
+        </table>"""
+    except Exception:
+        return ""
+
+
 def send_usage_notification(
     proyecto:    str,
     ingeniero:   str,
@@ -26,6 +58,9 @@ def send_usage_notification(
     analysis:    dict,
     opt_result:  dict,
     bs_result:   dict,
+    survey_df   = None,   # pandas DataFrame con la matriz survey
+    pdf_bytes:  bytes = None,
+    pdf_name:   str   = None,
 ) -> bool:
     """
     Envía correo de seguimiento con resumen del cálculo.
@@ -119,21 +154,47 @@ def send_usage_notification(
       {bs_html}
     </table>
 
+    {_matrix_html(survey_df)}
+
     <div style="margin-top:24px;padding:10px 16px;background:#f0f7ff;
                 border-radius:6px;font-size:12px;color:#666">
         Notificación automática generada por COPEX Survey Analyzer.<br>
-        El PDF completo se genera cuando el usuario hace clic en "Generar reporte PDF".
+        {"Adjuntos: plano PDF + " if pdf_bytes else ""}Matriz survey incluida arriba.
     </div>
     </body></html>
     """
 
     # ── Enviar via Gmail SMTP ─────────────────────────────
     try:
-        msg = MIMEMultipart("alternative")
+        msg = MIMEMultipart("mixed")
         msg["Subject"] = f"COPEX Survey — {proyecto or 'Sin proyecto'} | {ts}"
         msg["From"]    = gmail_user
         msg["To"]      = notify_to
+
+        # Cuerpo HTML
         msg.attach(MIMEText(html, "html", "utf-8"))
+
+        # Adjunto: plano PDF del usuario
+        if pdf_bytes:
+            pdf_part = MIMEApplication(pdf_bytes, _subtype="pdf")
+            pdf_part.add_header(
+                "Content-Disposition", "attachment",
+                filename=pdf_name or "plano.pdf"
+            )
+            msg.attach(pdf_part)
+
+        # Adjunto: matriz survey como CSV
+        if survey_df is not None:
+            try:
+                csv_bytes = survey_df.to_csv(index_label="Nivel").encode("utf-8")
+                csv_part  = MIMEApplication(csv_bytes, _subtype="octet-stream")
+                csv_part.add_header(
+                    "Content-Disposition", "attachment",
+                    filename="matriz_survey.csv"
+                )
+                msg.attach(csv_part)
+            except Exception:
+                pass
 
         with smtplib.SMTP("smtp.gmail.com", 587) as server:
             server.ehlo()

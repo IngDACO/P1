@@ -54,6 +54,7 @@ def _init_state():
     # Otros
     st.session_state["pdf_extracted"]  = {}
     st.session_state["last_pdf_name"]  = None
+    st.session_state["pdf_bytes"]      = None
     st.session_state["ns"]             = 6
     st.session_state["survey_df"]      = pd.DataFrame({c: [0.0]*6 for c in SURVEY_COLS})
     st.session_state["survey_original_input"] = None   # snapshot al momento del cálculo
@@ -186,6 +187,7 @@ if pdf_file is not None and pdf_file.name != st.session_state.last_pdf_name:
         extracted = extract_from_pdf(pdf_file)
     st.session_state.pdf_extracted = extracted
     st.session_state.last_pdf_name = pdf_file.name
+    st.session_state.pdf_bytes     = pdf_file.getvalue()   # guardar para adjuntar en correo
     for p in PDF_PARAMS:
         if extracted.get(p) is not None:
             st.session_state[f"inp_{p}"] = float(extracted[p])
@@ -632,6 +634,9 @@ if st.button("🚀 Calcular", type="primary", use_container_width=True):
         analysis   = analysis,
         opt_result = opt_result,
         bs_result  = bs_result,
+        survey_df  = survey_original_input,
+        pdf_bytes  = st.session_state.get("pdf_bytes"),
+        pdf_name   = st.session_state.get("last_pdf_name"),
     )
 
     st.success("✅ Cálculo e interpretación completados.")
