@@ -616,7 +616,7 @@ if st.button("🚀 Calcular", type="primary", use_container_width=True):
             f"Rango: **{bs_result['range']}**  |  Zona: **{bs_result['range_name']}**"
         )
 
-    # ── Interpretación IA ─────────────────────────────────
+    # ── Interpretación IA (obligatoria para el PDF) ───────
     with st.spinner("🤖 Generando interpretación técnica con IA..."):
         interpretation = generate_interpretation(
             calc_results = {
@@ -626,6 +626,16 @@ if st.button("🚀 Calcular", type="primary", use_container_width=True):
                 "bs_result":        bs_result,
             },
             all_params = all_params,
+        )
+
+    if interpretation.get("_ok"):
+        st.success("🤖 Interpretación técnica generada correctamente.")
+    else:
+        st.error(
+            f"⚠️ **No se pudo generar la interpretación técnica:** {interpretation.get('_error')}\n\n"
+            "El reporte PDF **requiere** la interpretación, por lo que no se podrá generar "
+            "hasta resolver esto. Verifica que `ANTHROPIC_API_KEY` esté configurada en los "
+            "**Secrets de Streamlit Cloud** (Settings → Secrets)."
         )
 
     # ── Persistir para el reporte ─────────────────────────
@@ -661,8 +671,15 @@ if st.button("🚀 Calcular", type="primary", use_container_width=True):
 st.header("5. Reporte")
 
 if st.session_state.calc_results:
-    r = st.session_state.calc_results
-    if st.button("📄 Generar reporte PDF", use_container_width=True):
+    r       = st.session_state.calc_results
+    interp  = r.get("interpretation") or {}
+    if not interp.get("_ok"):
+        st.error(
+            "🚫 **No se puede generar el reporte PDF sin la interpretación técnica.**\n\n"
+            f"Motivo: {interp.get('_error', 'interpretación no disponible')}.\n\n"
+            "Configura `ANTHROPIC_API_KEY` en los Secrets de Streamlit Cloud y vuelve a calcular."
+        )
+    elif st.button("📄 Generar reporte PDF", use_container_width=True):
         with st.spinner("Generando reporte..."):
             pdf_bytes = generate_report(
                 project_params   = r["all_params"],

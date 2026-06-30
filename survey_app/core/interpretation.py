@@ -175,6 +175,8 @@ def generate_interpretation(calc_results: dict, all_params: dict) -> dict:
             if key not in data:
                 data[key] = None
 
+        data["_ok"]    = True
+        data["_error"] = None
         return data
 
     except anthropic.AuthenticationError:
@@ -186,7 +188,10 @@ def generate_interpretation(calc_results: dict, all_params: dict) -> dict:
 
 
 def _fallback(reason: str) -> dict:
-    """Retorna interpretación vacía con nota de error para no bloquear el PDF."""
+    """Retorna interpretación vacía marcada como fallida."""
     msg = f"[Interpretación no disponible: {reason}]"
-    return {key: (None if key == "evasion_pared" else msg)
-            for key in INTERPRETATION_SCHEMA}
+    d = {key: (None if key == "evasion_pared" else msg)
+         for key in INTERPRETATION_SCHEMA}
+    d["_ok"]    = False
+    d["_error"] = reason
+    return d
