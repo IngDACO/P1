@@ -18,7 +18,7 @@ from reportlab.lib.enums import TA_CENTER, TA_LEFT
 from core.highlighting import (
     cell_state, ctrl_applies_to_cell, reportlab_commands, OR_OL_COLS,
 )
-from core.diagrams import lateral_svg, frontal_svg
+from core.diagrams import floor_plan_svg
 
 # ── Color para bloques de interpretación IA ──────────────
 C_IA_BG     = colors.HexColor("#f0f7ff")
@@ -956,19 +956,32 @@ def generate_report(project_params, calculated, survey_original,
                             "🤖 Interpretación — Evasión de pared limitante"), sp(3)]
     story += [sp(4)]
 
-    # ── 7.4 DIAGRAMA FÍSICO ───────────────────────────────────
-    story += [PageBreak(), _section_header("8. DIAGRAMA DE POSICIONAMIENTO", styles), sp(4)]
+    # ── 8. DIAGRAMA DE POSICIONAMIENTO — PLANTA POR PISO ──────
+    story += [PageBreak(), _section_header("8. DIAGRAMA DE POSICIONAMIENTO — PLANTA POR PISO", styles), sp(2),
+              Paragraph("Vista superior del encaje de la cabina en el shaft, piso a piso "
+                        "(matriz de la solución seleccionada). Verde = dentro de límite, "
+                        "naranja = al límite, rojo = fuera.", styles["Note"]), sp(4)]
     diag_sol = best if best else None
-    lat_draw = _svg_flowable(lateral_svg(p, calculated, diag_sol), W)
-    fro_draw = _svg_flowable(frontal_svg(p, calculated, diag_sol), W)
-    if lat_draw is not None:
-        story += [Paragraph("8.1  Vista superior — sección transversal (eje lateral)", styles["SubHead"]),
-                  sp(2), lat_draw, sp(8)]
-    if fro_draw is not None:
-        story += [Paragraph("8.2  Vista lateral — perfil longitudinal (eje frontal)", styles["SubHead"]),
-                  sp(2), fro_draw, sp(8)]
-    if lat_draw is None and fro_draw is None:
-        story += [Paragraph("Diagrama no disponible en este entorno.", styles["Note"]), sp(6)]
+    if diag_sol and diag_sol.get("matrix"):
+        mat        = diag_sol["matrix"]
+        n_fl       = len(mat)
+        rpt_limmap = {c: lim_map[c] for c in ["WR", "FR", "OR", "WL", "FL", "OL"]}
+        c_in_frame = p.get("CTRL_IN_FRAME", False)
+        c_side     = p.get("CTRL_SIDE", None)
+        drawn = 0
+        for i, row in enumerate(mat):
+            svg  = floor_plan_svg(p, calculated, row, i, rpt_limmap,
+                                  c_in_frame, c_side, is_last=(i == n_fl - 1))
+            draw = _svg_flowable(svg, W * 0.66)
+            if draw is not None:
+                story += [draw, sp(6)]
+                drawn += 1
+                if drawn % 2 == 0 and i < n_fl - 1:
+                    story += [PageBreak()]
+        if drawn == 0:
+            story += [Paragraph("Diagrama no disponible en este entorno.", styles["Note"]), sp(6)]
+    else:
+        story += [Paragraph("No hay solución para graficar.", styles["Note"]), sp(6)]
 
     # ── 9. BSR vs BS ─────────────────────────────────────────
     story += [PageBreak(), _section_header("9. ANÁLISIS BSR vs BS", styles), sp(4)]

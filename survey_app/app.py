@@ -18,7 +18,7 @@ from core.highlighting import cell_state, ctrl_applies_to_cell, streamlit_style,
 from core.chat_agent      import get_chat_response
 from core.interpretation  import generate_interpretation
 from core.email_notify    import send_usage_notification
-from core.diagrams        import render_diagrams_html
+from core.diagrams        import render_floor_plans_html
 
 try:
     APP_VERSION = open(os.path.join(os.path.dirname(__file__), "VERSION")).read().strip()
@@ -591,14 +591,20 @@ if st.button("🚀 Calcular", type="primary", use_container_width=True):
         st.error("No se encontró combinación válida.")
         opt_result = {"best": None, "all_solutions": [], "step_log": step_log}
 
-    # ── Diagrama físico ───────────────────────────────────
-    st.subheader("📐 Diagrama de posicionamiento")
+    # ── Diagrama físico — planta por piso ─────────────────
+    st.subheader("📐 Diagrama de posicionamiento — planta por piso")
+    st.caption("Vista superior de cómo encaja la cabina en el shaft en cada piso "
+               "(matriz de la solución seleccionada). Verde = dentro de límite, "
+               "naranja = al límite, rojo = fuera.")
     best_sol = opt_result.get("best") if opt_result else None
-    components.html(
-        render_diagrams_html(all_params, limits, best_sol),
-        height=720,
-        scrolling=False,
-    )
+    if best_sol and best_sol.get("matrix"):
+        n_floors = len(best_sol["matrix"])
+        components.html(
+            render_floor_plans_html(all_params, limits, best_sol, lim_map,
+                                    ctrl_in_frame, ctrl_side),
+            height=min(398 * n_floors + 20, 8000),
+            scrolling=True,
+        )
 
     # ── BSR vs BS ─────────────────────────────────────────
     st.subheader("📏 Análisis BSR vs BS")
