@@ -18,7 +18,10 @@ from core.chat_agent      import get_chat_response
 from core.interpretation  import generate_interpretation
 from core.email_notify    import send_usage_notification
 
-APP_VERSION = "v30"
+try:
+    APP_VERSION = open(os.path.join(os.path.dirname(__file__), "VERSION")).read().strip()
+except Exception:
+    APP_VERSION = "v?"
 
 st.set_page_config(page_title=f"COPEX Survey Analyzer {APP_VERSION}", layout="wide", page_icon="📐")
 
