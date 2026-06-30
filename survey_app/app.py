@@ -3,6 +3,7 @@ Survey Analyzer — UI Streamlit.
 Solo presentación: toda la lógica de cálculo vive en core/.
 """
 import streamlit as st
+import streamlit.components.v1 as components
 import pandas as pd
 import sys, os
 sys.path.insert(0, os.path.dirname(__file__))
@@ -593,9 +594,10 @@ if st.button("🚀 Calcular", type="primary", use_container_width=True):
     # ── Diagrama físico ───────────────────────────────────
     st.subheader("📐 Diagrama de posicionamiento")
     best_sol = opt_result.get("best") if opt_result else None
-    st.markdown(
+    components.html(
         render_diagrams_html(all_params, limits, best_sol),
-        unsafe_allow_html=True,
+        height=720,
+        scrolling=False,
     )
 
     # ── BSR vs BS ─────────────────────────────────────────

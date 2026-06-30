@@ -18,6 +18,7 @@ from reportlab.lib.enums import TA_CENTER, TA_LEFT
 from core.highlighting import (
     cell_state, ctrl_applies_to_cell, reportlab_commands, OR_OL_COLS,
 )
+from core.diagrams import lateral_svg, frontal_svg
 
 # ── Color para bloques de interpretación IA ──────────────
 C_IA_BG     = colors.HexColor("#f0f7ff")
@@ -128,6 +129,23 @@ def _param_table(data_dict, styles, cols=4):
         ("LEFTPADDING",  (0,0),(-1,-1), 4),
     ]))
     return t
+
+
+def _svg_flowable(svg_str, max_width):
+    """Convierte un SVG (string) en un flowable Drawing escalado al ancho dado."""
+    try:
+        from svglib.svglib import svg2rlg
+        drawing = svg2rlg(io.BytesIO(svg_str.encode("utf-8")))
+        if drawing is None or drawing.width <= 0:
+            return None
+        sc = max_width / drawing.width
+        drawing.width  *= sc
+        drawing.height *= sc
+        drawing.scale(sc, sc)
+        drawing.hAlign = "CENTER"
+        return drawing
+    except Exception:
+        return None
 
 
 def _ia_block(text, styles, title="🤖 Interpretación técnica"):
@@ -938,8 +956,22 @@ def generate_report(project_params, calculated, survey_original,
                             "🤖 Interpretación — Evasión de pared limitante"), sp(3)]
     story += [sp(4)]
 
-    # ── 8. BSR vs BS ─────────────────────────────────────────
-    story += [PageBreak(), _section_header("8. ANÁLISIS BSR vs BS", styles), sp(4)]
+    # ── 7.4 DIAGRAMA FÍSICO ───────────────────────────────────
+    story += [PageBreak(), _section_header("8. DIAGRAMA DE POSICIONAMIENTO", styles), sp(4)]
+    diag_sol = best if best else None
+    lat_draw = _svg_flowable(lateral_svg(p, calculated, diag_sol), W)
+    fro_draw = _svg_flowable(frontal_svg(p, calculated, diag_sol), W)
+    if lat_draw is not None:
+        story += [Paragraph("8.1  Vista superior — sección transversal (eje lateral)", styles["SubHead"]),
+                  sp(2), lat_draw, sp(8)]
+    if fro_draw is not None:
+        story += [Paragraph("8.2  Vista lateral — perfil longitudinal (eje frontal)", styles["SubHead"]),
+                  sp(2), fro_draw, sp(8)]
+    if lat_draw is None and fro_draw is None:
+        story += [Paragraph("Diagrama no disponible en este entorno.", styles["Note"]), sp(6)]
+
+    # ── 9. BSR vs BS ─────────────────────────────────────────
+    story += [PageBreak(), _section_header("9. ANÁLISIS BSR vs BS", styles), sp(4)]
     if not bs_result.get("needed"):
         story += [_calc_block("Condición", "BSR >= BS  ->  Sin ajuste requerido",
             f"{fstr('BSR')} >= {fstr('BS')}", "No se requiere ajuste de shaft",
@@ -969,10 +1001,10 @@ def generate_report(project_params, calculated, survey_original,
     story += [_ia_block(ia.get("bsr_vs_bs"), styles,
                         "🤖 Interpretación — Análisis BSR vs BS"), sp(6)]
 
-    # ── 9. CONSIDERACIONES FINALES ───────────────────────────
+    # ── 10. CONSIDERACIONES FINALES ──────────────────────────
     if ia.get("consideraciones"):
         story += [
-            _section_header("9. CONSIDERACIONES FINALES Y PUNTOS A VERIFICAR EN CAMPO", styles),
+            _section_header("10. CONSIDERACIONES FINALES Y PUNTOS A VERIFICAR EN CAMPO", styles),
             sp(4),
             _ia_block(ia.get("consideraciones"), styles,
                       "🤖 Puntos críticos para el equipo de instalación"),
