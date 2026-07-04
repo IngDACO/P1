@@ -14,6 +14,8 @@ import streamlit as st
 
 HEADERS = ["Nombre", "PIN", "Proyecto", "Ubicacion",
            "Clock In", "Clock Out", "Horas", "Estado"]
+USERS_HEADERS = ["Nombre", "PIN", "Activo"]
+USERS_SHEET   = "Usuarios"
 FMT = "%Y-%m-%d %H:%M:%S"
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 
@@ -59,6 +61,56 @@ def is_configured() -> bool:
     return ws is not None
 
 
+def _get_users_ws():
+    """Devuelve (worksheet 'Usuarios', None) o (None, error). La crea si no existe."""
+    ws_main, err = _get_worksheet()
+    if err:
+        return None, err
+    ss = ws_main.spreadsheet
+    try:
+        uws = ss.worksheet(USERS_SHEET)
+    except Exception:
+        try:
+            uws = ss.add_worksheet(title=USERS_SHEET, rows=200, cols=3)
+            uws.append_row(USERS_HEADERS)
+        except Exception as e:
+            return None, f"No se pudo crear la hoja de usuarios: {e}"
+    # Asegurar cabecera
+    try:
+        if not uws.row_values(1):
+            uws.append_row(USERS_HEADERS)
+    except Exception:
+        pass
+    return uws, None
+
+
+def validate_user(nombre: str, pin: str) -> tuple:
+    """Verifica Nombre+PIN contra la hoja 'Usuarios'. Devuelve (ok, mensaje)."""
+    uws, err = _get_users_ws()
+    if err:
+        return False, err
+    try:
+        recs = uws.get_all_records(numericise_ignore=['all'])
+    except Exception as e:
+        return False, f"Error leyendo usuarios: {e}"
+
+    nombre = (nombre or "").strip()
+    pin    = str(pin or "").strip()
+
+    if not recs:
+        return False, ("No hay usuarios autorizados. Agrega Nombre + PIN en la "
+                       "pestaña 'Usuarios' de la hoja de Google.")
+
+    for r in recs:
+        if (str(r.get("Nombre", "")).strip().lower() == nombre.lower()
+                and str(r.get("PIN", "")).strip() == pin):
+            activo = str(r.get("Activo", "SI")).strip().upper()
+            if activo in ("", "SI", "SÍ", "YES", "Y", "TRUE", "1", "X"):
+                return True, "ok"
+            return False, f"Usuario '{nombre}' está inactivo."
+    return False, "Nombre o PIN incorrecto (o no autorizado)."
+
+
 def _now() -> str:
     return datetime.now().strftime(FMT)
 
@@ -72,6 +124,10 @@ def clock_in(nombre: str, pin: str, proyecto: str, ubicacion: str) -> tuple:
     pin    = str(pin or "").strip()
     if not nombre or not pin:
         return False, "Ingresa nombre y PIN."
+
+    vok, vmsg = validate_user(nombre, pin)
+    if not vok:
+        return False, vmsg
 
     try:
         records = ws.get_all_records(numericise_ignore=['all'])
@@ -104,6 +160,10 @@ def clock_out(nombre: str, pin: str, nota: str = "") -> tuple:
     pin    = str(pin or "").strip()
     if not nombre or not pin:
         return False, "Ingresa nombre y PIN."
+
+    vok, vmsg = validate_user(nombre, pin)
+    if not vok:
+        return False, vmsg
 
     try:
         records = ws.get_all_records(numericise_ignore=['all'])

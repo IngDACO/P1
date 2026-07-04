@@ -19,7 +19,8 @@ def render_timeclock_tab():
         )
         return
 
-    st.caption("Registra tu entrada y salida. Los fichajes se guardan en Google Sheets.")
+    st.caption("Registra tu entrada y salida. Solo usuarios autorizados (Nombre + PIN "
+               "en la pestaña 'Usuarios' de la hoja) pueden fichar.")
 
     # ── Identificación ──────────────────────────────────────
     c1, c2 = st.columns(2)
