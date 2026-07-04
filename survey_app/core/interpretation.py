@@ -4,8 +4,12 @@ Usa la API de Anthropic (Claude) para analizar todos los datos y retornar
 texto interpretativo estructurado por sección, listo para incluir en el PDF.
 """
 import json
-import anthropic
 import streamlit as st
+
+try:
+    import anthropic
+except Exception:                 # que un fallo de la librería NO tumbe toda la app
+    anthropic = None
 
 MODEL      = "claude-haiku-4-5"
 MAX_TOKENS = 4096
@@ -145,6 +149,8 @@ def generate_interpretation(calc_results: dict, all_params: dict) -> dict:
     Retorna un dict con claves de INTERPRETATION_SCHEMA.
     En caso de error retorna un dict con mensajes de fallback.
     """
+    if anthropic is None:
+        return _fallback("librería anthropic no disponible en el entorno.")
     api_key = st.secrets.get("ANTHROPIC_API_KEY", "")
     if not api_key:
         return _fallback("API key no configurada.")
@@ -278,6 +284,8 @@ def _build_user_payload(calc_results: dict, all_params: dict) -> str:
 
 def generate_user_interpretation(calc_results: dict, all_params: dict) -> dict:
     """Interpretación orientada al cliente para el informe descargable."""
+    if anthropic is None:
+        return _user_fallback("librería anthropic no disponible en el entorno.")
     api_key = st.secrets.get("ANTHROPIC_API_KEY", "")
     if not api_key:
         return _user_fallback("API key no configurada.")

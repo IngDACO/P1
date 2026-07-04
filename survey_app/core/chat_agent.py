@@ -2,8 +2,12 @@
 Agente experto en instalación de elevadores Schindler.
 Usa la API de Anthropic (Claude) con contexto completo del survey actual.
 """
-import anthropic
 import streamlit as st
+
+try:
+    import anthropic
+except Exception:
+    anthropic = None
 
 MODEL       = "claude-haiku-4-5"
 MAX_TOKENS  = 1024
@@ -320,6 +324,8 @@ def get_chat_response(
 
     history: lista de dicts {"role": "user"|"assistant", "content": str}
     """
+    if anthropic is None:
+        return "⚠️ La librería anthropic no está disponible en el entorno."
     api_key = st.secrets.get("ANTHROPIC_API_KEY", "")
     if not api_key:
         return "⚠️ API key no configurada. Agrega ANTHROPIC_API_KEY en .streamlit/secrets.toml"
