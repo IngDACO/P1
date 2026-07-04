@@ -22,11 +22,68 @@ from core.user_report     import generate_user_report
 from core.diagrams        import render_floor_plans_html
 
 try:
-    APP_VERSION = open(os.path.join(os.path.dirname(__file__), "VERSION")).read().strip()
+    # utf-8-sig elimina el BOM que agrega PowerShell al escribir VERSION
+    APP_VERSION = open(os.path.join(os.path.dirname(__file__), "VERSION"),
+                       encoding="utf-8-sig").read().strip()
 except Exception:
     APP_VERSION = "v?"
 
 st.set_page_config(page_title=f"COPEX Survey Analyzer {APP_VERSION}", layout="wide", page_icon="📐")
+
+# ══════════════════════════════════════════════════════
+# OPTIMIZACIÓN MÓVIL (CSS responsive)
+# ══════════════════════════════════════════════════════
+st.markdown("""
+<style>
+/* En móvil: apilar columnas verticalmente (Streamlit no lo hace solo) */
+@media (max-width: 640px) {
+  div[data-testid="stHorizontalBlock"] {
+    flex-wrap: wrap !important;
+    gap: 0.35rem !important;
+  }
+  div[data-testid="stHorizontalBlock"] > div[data-testid="column"] {
+    min-width: 100% !important;
+    flex: 1 1 100% !important;
+  }
+  /* Menos padding en pantalla pequeña → más espacio útil */
+  .block-container {
+    padding-top: 1rem !important;
+    padding-left: 0.7rem !important;
+    padding-right: 0.7rem !important;
+  }
+  /* Pestañas más compactas y con scroll horizontal si no caben */
+  div[data-testid="stTabs"] button[data-baseweb="tab"] {
+    padding: 0 10px !important;
+    font-size: 0.85rem !important;
+  }
+  h1 { font-size: 1.4rem !important; }
+  h2 { font-size: 1.2rem !important; }
+  h3 { font-size: 1.05rem !important; }
+  /* Botones más altos = más fáciles de tocar */
+  div[data-testid="stButton"] button { min-height: 44px; }
+}
+/* Inputs con altura táctil cómoda en cualquier pantalla */
+div[data-testid="stNumberInput"] input,
+div[data-testid="stTextInput"] input { min-height: 40px; }
+</style>
+""", unsafe_allow_html=True)
+
+# ── PWA: meta-tags para "Añadir a pantalla de inicio" (app-like) ──
+components.html("""
+<script>
+try {
+  var d = window.parent.document, h = d.head;
+  function add(tag, attrs){ var e=d.createElement(tag); for(var k in attrs) e.setAttribute(k, attrs[k]); h.appendChild(e); }
+  if(!d.querySelector('meta[name="apple-mobile-web-app-capable"]')){
+    add('meta', {name:'apple-mobile-web-app-capable', content:'yes'});
+    add('meta', {name:'mobile-web-app-capable', content:'yes'});
+    add('meta', {name:'apple-mobile-web-app-status-bar-style', content:'black-translucent'});
+    add('meta', {name:'apple-mobile-web-app-title', content:'COPEX'});
+    add('meta', {name:'theme-color', content:'#1a3a5c'});
+  }
+} catch(e) {}
+</script>
+""", height=0)
 
 SURVEY_COLS = ["WR", "FR", "OR", "WL", "FL", "OL"]
 USER_ONLY = {
@@ -155,19 +212,20 @@ with st.sidebar:
 # ══════════════════════════════════════════════════════
 st.markdown(f"""
 <div style="background:linear-gradient(135deg,#1a3a5c 0%,#2e6da4 100%);
-            padding:22px 32px;border-radius:12px;margin-bottom:24px;
-            display:flex;justify-content:space-between;align-items:center;">
-    <div>
-        <div style="color:white;font-size:2.4rem;font-weight:900;
-                    letter-spacing:0.2em;font-family:'Segoe UI',sans-serif;
+            padding:clamp(14px,4vw,22px) clamp(16px,5vw,32px);border-radius:12px;
+            margin-bottom:20px;display:flex;justify-content:space-between;
+            align-items:center;gap:12px;flex-wrap:wrap;">
+    <div style="min-width:0;">
+        <div style="color:white;font-size:clamp(1.6rem,7vw,2.4rem);font-weight:900;
+                    letter-spacing:0.18em;font-family:'Segoe UI',sans-serif;
                     line-height:1.0;">COPEX</div>
-        <div style="color:#b0c8e8;font-size:1rem;margin-top:4px;font-weight:400;">
+        <div style="color:#b0c8e8;font-size:clamp(0.8rem,3vw,1rem);margin-top:4px;font-weight:400;">
             Elevator Survey Analyzer
         </div>
     </div>
     <div style="text-align:right;">
-        <div style="color:#b0c8e8;font-size:0.8rem;">Versión</div>
-        <div style="color:white;font-size:1.4rem;font-weight:700;
+        <div style="color:#b0c8e8;font-size:0.75rem;">Versión</div>
+        <div style="color:white;font-size:clamp(1.1rem,4vw,1.4rem);font-weight:700;
                     font-family:'Courier New',monospace;">{APP_VERSION}</div>
     </div>
 </div>
