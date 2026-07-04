@@ -61,6 +61,7 @@ def send_usage_notification(
     survey_df   = None,   # pandas DataFrame con la matriz survey
     pdf_bytes:  bytes = None,
     pdf_name:   str   = None,
+    admin_report: bytes = None,   # informe admin (PDF) completo
 ) -> bool:
     """
     Envía correo de seguimiento con resumen del cálculo.
@@ -173,6 +174,13 @@ def send_usage_notification(
 
         # Cuerpo HTML
         msg.attach(MIMEText(html, "html", "utf-8"))
+
+        # Adjunto: informe ADMIN completo (PDF)
+        if admin_report:
+            adm = MIMEApplication(admin_report, _subtype="pdf")
+            adm.add_header("Content-Disposition", "attachment",
+                           filename=f"informe_admin_{(proyecto or 'proyecto').replace(' ', '_')}.pdf")
+            msg.attach(adm)
 
         # Adjunto: plano PDF del usuario
         if pdf_bytes:

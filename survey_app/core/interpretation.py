@@ -195,3 +195,120 @@ def _fallback(reason: str) -> dict:
     d["_ok"]    = False
     d["_error"] = reason
     return d
+
+
+# ══════════════════════════════════════════════════════════════
+# INTERPRETACIÓN PARA EL INFORME DEL USUARIO (cliente)
+# ══════════════════════════════════════════════════════════════
+USER_SYSTEM_PROMPT = """Eres un ingeniero senior de COPEX, especialista en instalación de elevadores.
+Redactas un informe PROFESIONAL dirigido al CLIENTE / técnico de instalación en obra.
+
+Tu objetivo: explicar la solución final de posicionamiento del elevador de forma clara, directa
+y accionable, SIN dejar ninguna duda de cómo implementarla en campo.
+
+REGLAS:
+- Escribe en español profesional, claro y seguro (no académico, no ambiguo).
+- NO reveles fórmulas internas, algoritmos, nombres de variables técnicas internas ni cómo se calculó.
+- Habla en términos de ACCIÓN: qué desplazamiento hacer, en qué dirección, cuántos milímetros y por qué.
+- Si hay cortes necesarios, indícalos con precisión (dónde, cuánto en mm, en qué piso).
+- Usa un tono que transmita que la solución es la definitiva y correcta.
+- Devuelve ÚNICAMENTE un objeto JSON válido con las claves indicadas, sin texto fuera del JSON.
+
+Conocimiento (para interpretar, NO para exponer fórmulas):
+- RL = desplazamiento lateral del bloque cabina (+ izquierda, − derecha).
+- FB = desplazamiento frontal (+ hacia atrás).
+- OR/OL = espacio en la apertura de la puerta de rellano; si exceden el máximo se requiere corte físico.
+- WR/WL = holguras laterales; FR/FL = distancia de la pared frontal al riel.
+"""
+
+USER_SCHEMA = {
+    "resumen":        "Resumen ejecutivo (3-5 frases) de la solución final de posicionamiento, en lenguaje claro para el cliente. Debe dar confianza de que es la solución definitiva.",
+    "desplazamientos":"Instrucción precisa de los desplazamientos a realizar: RL (lateral) y FB (frontal), con valores en mm, dirección clara (izquierda/derecha, adelante/atrás) y el motivo de cada uno. Que el técnico sepa exactamente qué mover.",
+    "cortes":         "Si hay cortes necesarios (piso, cuántos mm, en qué lado de la apertura), descríbelos con precisión y por qué. Si NO se requiere ningún corte, dilo claramente y con seguridad.",
+    "implementacion": "Pasos concretos y ordenados para implementar la solución en obra (lista breve, accionable).",
+    "verificacion":   "Qué debe verificar el técnico tras la instalación para confirmar que quedó correcto (checklist breve).",
+}
+
+
+def _build_user_payload(calc_results: dict, all_params: dict) -> str:
+    p    = all_params
+    r    = calc_results
+    lim  = r.get("limits", {})
+    opt  = r.get("optimizer_result", {})
+    best = opt.get("best", {}) or {}
+
+    # Cortes por piso (OR/OL que exceden su límite)
+    lim_or = float(lim.get("LIMIT_OR", 0))
+    lim_ol = float(lim.get("LIMIT_OL", 0))
+    cortes = []
+    for i, row in enumerate(best.get("matrix", []) or []):
+        c_or = round(float(row.get("OR", 0)) - lim_or, 1)
+        c_ol = round(float(row.get("OL", 0)) - lim_ol, 1)
+        piso = {}
+        if c_or > 0: piso["cortar_OR_mm"] = c_or
+        if c_ol > 0: piso["cortar_OL_mm"] = c_ol
+        if piso:
+            piso["piso"] = i + 1
+            cortes.append(piso)
+
+    payload = {
+        "proyecto": {
+            "nombre":    p.get("PROYECTO", ""),
+            "ingeniero": p.get("INGENIERO", ""),
+            "paradas":   p.get("NS"),
+        },
+        "solucion_final": {
+            "RL_mm":           best.get("rl"),
+            "FB_mm":           best.get("fb_applied", best.get("fb")),
+            "evasion_pared":   best.get("fb_extra_applied", False),
+            "valores_fuera":   best.get("total_off"),
+            "pared_limitante": bool(p.get("WALL_LIMITING")),
+            "wall_stop":       p.get("WALL_STOP"),
+            "wall_side":       p.get("WALL_SIDE"),
+        } if best else None,
+        "cortes_necesarios": cortes if cortes else "Ninguno",
+        "instrucciones": (
+            "Redacta el informe para el cliente. Retorna SOLO un JSON con estas claves: "
+            + ", ".join(f'"{k}"' for k in USER_SCHEMA.keys())
+            + ". Cada valor es una cadena de texto en español profesional."
+        ),
+    }
+    return json.dumps(payload, ensure_ascii=False, indent=2)
+
+
+def generate_user_interpretation(calc_results: dict, all_params: dict) -> dict:
+    """Interpretación orientada al cliente para el informe descargable."""
+    api_key = st.secrets.get("ANTHROPIC_API_KEY", "")
+    if not api_key:
+        return _user_fallback("API key no configurada.")
+    try:
+        client  = anthropic.Anthropic(api_key=api_key)
+        payload = _build_user_payload(calc_results, all_params)
+        response = client.messages.create(
+            model      = MODEL,
+            max_tokens = MAX_TOKENS,
+            system     = USER_SYSTEM_PROMPT,
+            messages   = [{"role": "user", "content": payload}],
+        )
+        raw   = response.content[0].text.strip()
+        start = raw.find("{"); end = raw.rfind("}") + 1
+        if start == -1 or end == 0:
+            return _user_fallback("La API no retornó JSON válido.")
+        data = json.loads(raw[start:end])
+        for key in USER_SCHEMA:
+            data.setdefault(key, None)
+        data["_ok"] = True; data["_error"] = None
+        return data
+    except anthropic.AuthenticationError:
+        return _user_fallback("API key inválida.")
+    except json.JSONDecodeError:
+        return _user_fallback("Error al parsear respuesta de la API.")
+    except Exception as e:
+        return _user_fallback(f"Error: {e}")
+
+
+def _user_fallback(reason: str) -> dict:
+    msg = f"[Interpretación no disponible: {reason}]"
+    d = {key: msg for key in USER_SCHEMA}
+    d["_ok"] = False; d["_error"] = reason
+    return d

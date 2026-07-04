@@ -16,8 +16,9 @@ from core.report       import generate_report
 from core.excel_io     import export_survey_excel, import_survey_excel
 from core.highlighting import cell_state, ctrl_applies_to_cell, streamlit_style, OR_OL_COLS
 from core.chat_agent      import get_chat_response
-from core.interpretation  import generate_interpretation
+from core.interpretation  import generate_interpretation, generate_user_interpretation
 from core.email_notify    import send_usage_notification
+from core.user_report     import generate_user_report
 from core.diagrams        import render_floor_plans_html
 
 try:
@@ -384,6 +385,8 @@ with tab_survey:
         all_params["CTRL_IN_FRAME"] = ctrl_in_frame
         all_params["CTRL_SIDE"]     = ctrl_side
         all_params["NS"]            = int(st.session_state.ns)
+        all_params["PROYECTO"]      = st.session_state.get("proyecto", "")
+        all_params["INGENIERO"]     = st.session_state.get("ingeniero", "")
 
         # Totales = última fila de la matriz
         last = survey_original_input.iloc[-1]
@@ -627,92 +630,117 @@ with tab_survey:
                 f"Rango: **{bs_result['range']}**  |  Zona: **{bs_result['range_name']}**"
             )
 
-        # ── Interpretación IA (obligatoria para el PDF) ───────
-        with st.spinner("🤖 Generando interpretación técnica con IA..."):
-            interpretation = generate_interpretation(
-                calc_results = {
-                    "limits":           limits,
-                    "analysis":         analysis,
-                    "optimizer_result": opt_result,
-                    "bs_result":        bs_result,
-                },
-                all_params = all_params,
-            )
-
-        if interpretation.get("_ok"):
-            st.success("🤖 Interpretación técnica generada correctamente.")
-        else:
-            st.error(
-                f"⚠️ **No se pudo generar la interpretación técnica:** {interpretation.get('_error')}\n\n"
-                "El reporte PDF **requiere** la interpretación, por lo que no se podrá generar "
-                "hasta resolver esto. Verifica que `ANTHROPIC_API_KEY` esté configurada en los "
-                "**Secrets de Streamlit Cloud** (Settings → Secrets)."
-            )
-
-        # ── Persistir para el reporte ─────────────────────────
-        st.session_state.calc_results = {
-            "all_params":       all_params,
+        # ── Interpretaciones IA (admin + usuario) ─────────────
+        _calc_for_ia = {
             "limits":           limits,
-            "survey_orig":      survey_original_input,
-            "survey_adj":       survey_adj_df,
-            "lim_map":          lim_map,
             "analysis":         analysis,
             "optimizer_result": opt_result,
             "bs_result":        bs_result,
-            "interpretation":   interpretation,
         }
-        # ── Notificación por correo ───────────────────────────
+        with st.spinner("🤖 Generando interpretación técnica con IA..."):
+            interpretation = generate_interpretation(_calc_for_ia, all_params)
+        with st.spinner("🤖 Generando interpretación del informe de cliente..."):
+            interpretation_user = generate_user_interpretation(_calc_for_ia, all_params)
+
+        if interpretation.get("_ok"):
+            st.success("🤖 Interpretaciones generadas correctamente.")
+        else:
+            st.error(
+                f"⚠️ **No se pudo generar la interpretación técnica:** {interpretation.get('_error')}\n\n"
+                "Los informes **requieren** la interpretación IA. Verifica que "
+                "`ANTHROPIC_API_KEY` esté configurada en los **Secrets de Streamlit Cloud**."
+            )
+
+        # ── Persistir para los reportes ───────────────────────
+        st.session_state.calc_results = {
+            "all_params":          all_params,
+            "limits":              limits,
+            "survey_orig":         survey_original_input,
+            "survey_adj":          survey_adj_df,
+            "lim_map":             lim_map,
+            "analysis":            analysis,
+            "optimizer_result":    opt_result,
+            "bs_result":           bs_result,
+            "interpretation":      interpretation,
+            "interpretation_user": interpretation_user,
+        }
+
+        # ── Informe ADMIN (completo) → correo interno ─────────
+        admin_pdf = None
+        if interpretation.get("_ok"):
+            try:
+                with st.spinner("📄 Preparando informe interno de administración..."):
+                    admin_pdf = generate_report(
+                        project_params   = all_params,
+                        calculated       = limits,
+                        survey_original  = survey_original_input,
+                        survey_adjusted  = survey_adj_df,
+                        lim_map          = lim_map,
+                        analysis         = analysis,
+                        optimizer_result = opt_result,
+                        bs_result        = bs_result,
+                        survey_cols      = SURVEY_COLS,
+                        interpretation   = interpretation,
+                    )
+            except Exception as e:
+                st.warning(f"No se pudo generar el informe admin para el correo: {e}")
+
+        # ── Notificación por correo (con informe admin adjunto) ─
         send_usage_notification(
-            proyecto   = st.session_state.get("proyecto", ""),
-            ingeniero  = st.session_state.get("ingeniero", ""),
-            all_params = all_params,
-            analysis   = analysis,
-            opt_result = opt_result,
-            bs_result  = bs_result,
-            survey_df  = survey_original_input,
-            pdf_bytes  = st.session_state.get("pdf_bytes"),
-            pdf_name   = st.session_state.get("last_pdf_name"),
+            proyecto        = st.session_state.get("proyecto", ""),
+            ingeniero       = st.session_state.get("ingeniero", ""),
+            all_params      = all_params,
+            analysis        = analysis,
+            opt_result      = opt_result,
+            bs_result       = bs_result,
+            survey_df       = survey_original_input,
+            pdf_bytes       = st.session_state.get("pdf_bytes"),
+            pdf_name        = st.session_state.get("last_pdf_name"),
+            admin_report    = admin_pdf,
         )
+        if admin_pdf:
+            st.info("📧 Informe interno de administración enviado por correo.")
 
         st.success("✅ Cálculo e interpretación completados.")
 
     # ══════════════════════════════════════════════════════
-    # PASO 5 — REPORTE PDF
+    # PASO 5 — INFORME DEL CLIENTE
     # ══════════════════════════════════════════════════════
-    st.header("5. Reporte")
+    st.header("5. Informe del cliente")
+    st.caption("Informe profesional para entregar al cliente (solución final, diagramas e "
+               "instrucciones de implementación). El informe técnico interno se envía "
+               "automáticamente por correo a administración.")
 
     if st.session_state.calc_results:
-        r       = st.session_state.calc_results
-        interp  = r.get("interpretation") or {}
-        if not interp.get("_ok"):
+        r          = st.session_state.calc_results
+        interp     = r.get("interpretation") or {}
+        interp_usr = r.get("interpretation_user") or {}
+        if not interp_usr.get("_ok"):
             st.error(
-                "🚫 **No se puede generar el reporte PDF sin la interpretación técnica.**\n\n"
-                f"Motivo: {interp.get('_error', 'interpretación no disponible')}.\n\n"
+                "🚫 **No se puede generar el informe sin la interpretación IA.**\n\n"
+                f"Motivo: {interp_usr.get('_error', interp.get('_error', 'no disponible'))}.\n\n"
                 "Configura `ANTHROPIC_API_KEY` en los Secrets de Streamlit Cloud y vuelve a calcular."
             )
-        elif st.button("📄 Generar reporte PDF", use_container_width=True):
-            with st.spinner("Generando reporte..."):
-                pdf_bytes = generate_report(
-                    project_params   = r["all_params"],
-                    calculated       = r["limits"],
-                    survey_original  = r["survey_orig"],
-                    survey_adjusted  = r["survey_adj"],
-                    lim_map          = r["lim_map"],
-                    analysis         = r["analysis"],
-                    optimizer_result = r["optimizer_result"],
-                    bs_result        = r["bs_result"],
-                    survey_cols      = SURVEY_COLS,
-                    interpretation   = r.get("interpretation"),
+        elif st.button("📄 Generar informe del cliente", use_container_width=True):
+            with st.spinner("Generando informe del cliente..."):
+                user_pdf = generate_user_report(
+                    project_params      = r["all_params"],
+                    calculated          = r["limits"],
+                    optimizer_result    = r["optimizer_result"],
+                    lim_map             = r["lim_map"],
+                    survey_cols         = SURVEY_COLS,
+                    interpretation_user = r.get("interpretation_user"),
                 )
+            proj = (r["all_params"].get("PROYECTO") or "cliente").replace(" ", "_")
             st.download_button(
-                label     = "⬇️ Descargar reporte PDF",
-                data      = pdf_bytes,
-                file_name = "survey_report.pdf",
+                label     = "⬇️ Descargar informe del cliente",
+                data      = user_pdf,
+                file_name = f"informe_{proj}.pdf",
                 mime      = "application/pdf",
                 use_container_width=True
             )
     else:
-        st.info("Realiza el cálculo primero para poder generar el reporte.")
+        st.info("Realiza el cálculo primero para poder generar el informe.")
 
 
 with tab_plumb:
