@@ -172,7 +172,8 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-tab_survey, tab_plumb = st.tabs(["📐 Survey de elevador", "🔩 Líneas de plomada"])
+tab_survey, tab_plumb, tab_clock = st.tabs(
+    ["📐 Survey de elevador", "🔩 Líneas de plomada", "⏱ Fichaje"])
 
 with tab_survey:
 
@@ -717,3 +718,7 @@ with tab_survey:
 with tab_plumb:
     from core.plumb_ui import render_plumb_tab
     render_plumb_tab()
+
+with tab_clock:
+    from core.timeclock_ui import render_timeclock_tab
+    render_timeclock_tab()
