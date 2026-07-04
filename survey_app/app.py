@@ -28,7 +28,15 @@ try:
 except Exception:
     APP_VERSION = "v?"
 
-st.set_page_config(page_title=f"COPEX Survey Analyzer {APP_VERSION}", layout="wide", page_icon="📐")
+# Favicon = ícono COPEX (lado servidor, reemplaza el ícono de Streamlit)
+try:
+    from PIL import Image
+    _PAGE_ICON = Image.open(os.path.join(os.path.dirname(__file__), "static", "icon-192.png"))
+except Exception:
+    _PAGE_ICON = "📐"
+
+st.set_page_config(page_title=f"COPEX Survey Analyzer {APP_VERSION}",
+                   layout="wide", page_icon=_PAGE_ICON)
 
 # ══════════════════════════════════════════════════════
 # OPTIMIZACIÓN MÓVIL (CSS responsive)
