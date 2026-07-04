@@ -68,13 +68,17 @@ div[data-testid="stTextInput"] input { min-height: 40px; }
 </style>
 """, unsafe_allow_html=True)
 
-# ── PWA: meta-tags para "Añadir a pantalla de inicio" (app-like) ──
+# ── PWA: manifest + íconos + meta-tags (instalable con ícono COPEX) ──
 components.html("""
 <script>
 try {
   var d = window.parent.document, h = d.head;
+  var base = window.parent.location.origin + '/app/static/';
   function add(tag, attrs){ var e=d.createElement(tag); for(var k in attrs) e.setAttribute(k, attrs[k]); h.appendChild(e); }
-  if(!d.querySelector('meta[name="apple-mobile-web-app-capable"]')){
+  if(!d.querySelector('link[rel="manifest"]')){
+    add('link', {rel:'manifest', href: base + 'manifest.webmanifest'});
+    add('link', {rel:'apple-touch-icon', href: base + 'icon-192.png'});
+    add('link', {rel:'icon', type:'image/png', sizes:'512x512', href: base + 'icon-512.png'});
     add('meta', {name:'apple-mobile-web-app-capable', content:'yes'});
     add('meta', {name:'mobile-web-app-capable', content:'yes'});
     add('meta', {name:'apple-mobile-web-app-status-bar-style', content:'black-translucent'});
