@@ -74,7 +74,7 @@ def clock_in(nombre: str, pin: str, proyecto: str, ubicacion: str) -> tuple:
         return False, "Ingresa nombre y PIN."
 
     try:
-        records = ws.get_all_records()
+        records = ws.get_all_records(numericise_ignore=['all'])
     except Exception as e:
         return False, f"Error leyendo la hoja: {e}"
 
@@ -86,8 +86,10 @@ def clock_in(nombre: str, pin: str, proyecto: str, ubicacion: str) -> tuple:
             return False, f"Ya tienes un clock in abierto desde {r.get('Clock In')}. Haz clock out primero."
 
     try:
+        # value_input_option="RAW" → el PIN se guarda como texto (conserva ceros a la izq.)
         ws.append_row([nombre, pin, proyecto or "", ubicacion or "",
-                       _now(), "", "", "ABIERTO"])
+                       _now(), "", "", "ABIERTO"],
+                      value_input_option="RAW")
     except Exception as e:
         return False, f"Error escribiendo el fichaje: {e}"
     return True, f"✅ Clock IN registrado a las {_now()}."
@@ -104,7 +106,7 @@ def clock_out(nombre: str, pin: str, nota: str = "") -> tuple:
         return False, "Ingresa nombre y PIN."
 
     try:
-        records = ws.get_all_records()
+        records = ws.get_all_records(numericise_ignore=['all'])
     except Exception as e:
         return False, f"Error leyendo la hoja: {e}"
 
@@ -151,6 +153,6 @@ def get_records() -> list:
     if err:
         return []
     try:
-        return ws.get_all_records()
+        return ws.get_all_records(numericise_ignore=['all'])
     except Exception:
         return []
