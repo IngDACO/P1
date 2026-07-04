@@ -20,45 +20,53 @@ FMT = "%Y-%m-%d %H:%M:%S"
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 
 
-def _get_worksheet():
-    """Devuelve (worksheet, None) o (None, mensaje_error)."""
+def _secrets_present() -> bool:
+    """Chequeo barato (sin llamada a la API): ¿existen los secrets necesarios?"""
     try:
-        import gspread
-        from google.oauth2.service_account import Credentials
+        return bool(st.secrets.get("gcp_service_account")) and \
+               bool(st.secrets.get("TIMECLOCK_SHEET_ID"))
     except Exception:
-        return None, "Falta la librería gspread/google-auth en el entorno."
+        return False
 
-    creds_info = st.secrets.get("gcp_service_account")
-    sheet_id   = st.secrets.get("TIMECLOCK_SHEET_ID")
-    if not creds_info:
-        return None, "No hay credenciales de Google (gcp_service_account) en los Secrets."
-    if not sheet_id:
-        return None, "Falta TIMECLOCK_SHEET_ID en los Secrets."
 
+@st.cache_resource(show_spinner=False)
+def _cached_ws():
+    """Abre y cachea la worksheet. Se autentica UNA vez (no en cada rerun).
+    Si falla, lanza excepción → no se cachea → se reintenta en la próxima llamada."""
+    import gspread
+    from google.oauth2.service_account import Credentials
+
+    creds_info = dict(st.secrets["gcp_service_account"])
+    sheet_id   = st.secrets["TIMECLOCK_SHEET_ID"]
+    creds  = Credentials.from_service_account_info(creds_info, scopes=SCOPES)
+    client = gspread.authorize(creds)
+    ws     = client.open_by_key(sheet_id).sheet1
+
+    # Asegurar cabecera (solo la primera vez, al cachear)
     try:
-        creds  = Credentials.from_service_account_info(dict(creds_info), scopes=SCOPES)
-        client = __import__("gspread").authorize(creds)
-        ws     = client.open_by_key(sheet_id).sheet1
-    except Exception as e:
-        return None, f"No se pudo abrir la hoja: {e}"
-
-    # Asegurar cabecera
-    try:
-        first = ws.row_values(1)
-        if first != HEADERS:
-            if not first:
-                ws.append_row(HEADERS)
-            elif first[:1] and first[0] != "Nombre":
-                ws.insert_row(HEADERS, 1)
+        if not ws.row_values(1):
+            ws.append_row(HEADERS)
     except Exception:
         pass
+    return ws
 
-    return ws, None
+
+def _get_worksheet():
+    """Devuelve (worksheet, None) o (None, mensaje_error)."""
+    if not _secrets_present():
+        return None, ("El fichaje no está conectado: faltan credenciales "
+                      "(gcp_service_account) o TIMECLOCK_SHEET_ID en los Secrets.")
+    try:
+        return _cached_ws(), None
+    except Exception as e:
+        # Error transitorio de la API (rate limit, red…). No es falta de config.
+        return None, f"Conexión temporalmente no disponible con Google Sheets: {e}"
 
 
 def is_configured() -> bool:
-    ws, _ = _get_worksheet()
-    return ws is not None
+    """Solo revisa si los secrets están presentes — sin llamar a la API
+    (evita falsos negativos por límites de rate de Google)."""
+    return _secrets_present()
 
 
 def _get_users_ws():
