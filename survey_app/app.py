@@ -6,6 +6,7 @@ import streamlit as st
 import streamlit.components.v1 as components
 import pandas as pd
 import sys, os
+from datetime import date
 sys.path.insert(0, os.path.dirname(__file__))
 
 from extractors.schindler import extract_from_pdf, PARAMS as PDF_PARAMS, PARAM_DESCRIPTIONS
@@ -20,6 +21,7 @@ from core.interpretation  import generate_interpretation, generate_user_interpre
 from core.email_notify    import send_usage_notification
 from core.user_report     import generate_user_report
 from core.diagrams        import render_floor_plans_html
+from core.schedule        import build_schedule, detect_flags, schedule_svg, schedule_table
 
 try:
     # utf-8-sig elimina el BOM que agrega PowerShell al escribir VERSION
@@ -735,6 +737,16 @@ with tab_survey:
             "interpretation_user": interpretation_user,
         }
 
+        # ── Cronograma automático según el proyecto ───────────
+        _flags = detect_flags(st.session_state.calc_results)
+        _auto  = build_schedule(int(st.session_state.ns), date.today(), _flags)
+        st.session_state.calc_results["schedule"] = _auto
+        st.session_state["sched_rows"] = [
+            {"Actividad": a["nombre"], "Duración (d)": int(a["duracion"]), "Peso (%)": a["peso"]}
+            for a in _auto["activities"]
+        ]
+        st.session_state["sched_start"] = date.today()
+
         # ── Informe ADMIN (completo) → correo interno ─────────
         admin_pdf = None
         if interpretation.get("_ok"):
@@ -751,6 +763,7 @@ with tab_survey:
                         bs_result        = bs_result,
                         survey_cols      = SURVEY_COLS,
                         interpretation   = interpretation,
+                        schedule         = _auto,
                     )
             except Exception as e:
                 st.warning(f"No se pudo generar el informe admin para el correo: {e}")
@@ -774,9 +787,55 @@ with tab_survey:
         st.success("✅ Cálculo e interpretación completados.")
 
     # ══════════════════════════════════════════════════════
-    # PASO 5 — INFORME DEL CLIENTE
+    # PASO 5 — GESTIÓN DE PROYECTO (cronograma + curva S)
     # ══════════════════════════════════════════════════════
-    st.header("5. Informe del cliente")
+    st.header("5. Gestión de proyecto")
+    if st.session_state.calc_results:
+        st.caption("Cronograma y curva S generados automáticamente según el proyecto "
+                   "(escalados por NS y por los hallazgos del análisis). Ajusta duraciones "
+                   "y pesos si lo necesitas — la curva S se recalcula sola.")
+
+        if "sched_start" not in st.session_state:
+            st.session_state["sched_start"] = date.today()
+
+        gc1, gc2 = st.columns([1, 2])
+        start = gc1.date_input("Fecha de inicio del proyecto", key="sched_start")
+
+        # Editor de actividades (nombre bloqueado; duración y peso editables)
+        sched_rows = st.session_state.get("sched_rows", [])
+        if sched_rows:
+            edited = st.data_editor(
+                pd.DataFrame(sched_rows),
+                use_container_width=True, hide_index=True, num_rows="fixed",
+                disabled=["Actividad"], key="sched_editor",
+            )
+            st.session_state["sched_rows"] = edited.to_dict("records")
+
+            custom = [{"nombre": r["Actividad"],
+                       "duracion": r.get("Duración (d)", 1),
+                       "peso":     r.get("Peso (%)", 1)}
+                      for r in st.session_state["sched_rows"]]
+            sched = build_schedule(int(st.session_state.ns), start, {}, custom_rows=custom)
+            st.session_state.calc_results["schedule"] = sched
+
+            m1, m2, m3 = st.columns(3)
+            m1.metric("Duración total", f"{sched['total_dias']} días")
+            m2.metric("Inicio",       sched["start_date"].strftime("%d/%m/%Y"))
+            m3.metric("Fin estimado", sched["fecha_fin"].strftime("%d/%m/%Y"))
+
+            components.html(
+                '<!DOCTYPE html><html><body style="margin:0;background:transparent">'
+                + schedule_svg(sched) + '</body></html>',
+                height=140 + len(sched["activities"]) * 22 + 200,
+                scrolling=False,
+            )
+    else:
+        st.info("Realiza el cálculo primero para generar el cronograma.")
+
+    # ══════════════════════════════════════════════════════
+    # PASO 6 — INFORME DEL CLIENTE
+    # ══════════════════════════════════════════════════════
+    st.header("6. Informe del cliente")
     st.caption("Informe profesional para entregar al cliente (solución final, diagramas e "
                "instrucciones de implementación). El informe técnico interno se envía "
                "automáticamente por correo a administración.")
@@ -800,6 +859,7 @@ with tab_survey:
                     lim_map             = r["lim_map"],
                     survey_cols         = SURVEY_COLS,
                     interpretation_user = r.get("interpretation_user"),
+                    schedule            = r.get("schedule"),
                 )
             proj = (r["all_params"].get("PROYECTO") or "cliente").replace(" ", "_")
             st.download_button(

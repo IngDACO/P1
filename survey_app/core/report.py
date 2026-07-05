@@ -19,6 +19,7 @@ from core.highlighting import (
     cell_state, ctrl_applies_to_cell, reportlab_commands, OR_OL_COLS,
 )
 from core.diagrams import floor_plan_svg
+from core.schedule import schedule_svg, schedule_table
 
 # ── Color para bloques de interpretación IA ──────────────
 C_IA_BG     = colors.HexColor("#f0f7ff")
@@ -471,7 +472,7 @@ def _summary_table(summary_list, styles):
 def generate_report(project_params, calculated, survey_original,
                     survey_adjusted, lim_map, analysis,
                     optimizer_result, bs_result, survey_cols,
-                    interpretation=None):
+                    interpretation=None, schedule=None):
 
     best          = optimizer_result.get("best")          if optimizer_result else None
     all_solutions = optimizer_result.get("all_solutions", []) if optimizer_result else []
@@ -1023,6 +1024,36 @@ def generate_report(project_params, calculated, survey_original,
                       "🤖 Puntos críticos para el equipo de instalación"),
             sp(8),
         ]
+
+    # ── 11. CRONOGRAMA Y CURVA S ─────────────────────────────
+    if schedule and schedule.get("activities"):
+        story += [PageBreak(), _section_header("11. GESTIÓN DE PROYECTO — CRONOGRAMA Y CURVA S", styles), sp(2),
+                  Paragraph(f"Inicio: {schedule['start_date'].strftime('%d/%m/%Y')}  |  "
+                            f"Fin estimado: {schedule['fecha_fin'].strftime('%d/%m/%Y')}  |  "
+                            f"Duración: {schedule['total_dias']} días", styles["Note"]), sp(4)]
+        sdraw = _svg_flowable(schedule_svg(schedule), W)
+        if sdraw is not None:
+            story += [sdraw, sp(6)]
+        srows = schedule_table(schedule)
+        thead = [Paragraph(f"<b>{h}</b>", styles["Normal2"]) for h in
+                 ["Actividad", "Inicio", "Fin", "Días", "Peso %"]]
+        trows = [thead]
+        for r in srows:
+            trows.append([
+                Paragraph(str(r["Actividad"]), styles["Normal2"]),
+                Paragraph(r["Inicio"], styles["Normal2"]),
+                Paragraph(r["Fin"], styles["Normal2"]),
+                Paragraph(str(r["Duración (d)"]), styles["Normal2"]),
+                Paragraph(str(r["Peso (%)"]), styles["Normal2"]),
+            ])
+        stab = Table(trows, colWidths=[W*0.42, W*0.16, W*0.16, W*0.10, W*0.16])
+        stab.setStyle(TableStyle([
+            ("GRID", (0,0),(-1,-1), 0.3, colors.lightgrey),
+            ("BACKGROUND", (0,0),(-1,0), C_SUBHEAD),
+            ("TEXTCOLOR", (0,0),(-1,0), C_WHITE),
+            ("TOPPADDING", (0,0),(-1,-1), 3), ("BOTTOMPADDING", (0,0),(-1,-1), 3),
+        ]))
+        story += [stab, sp(8)]
 
     # ── PIE ──────────────────────────────────────────────────
     story += [sp(8), HRFlowable(width="100%", thickness=0.5, color=colors.lightgrey), sp(4),

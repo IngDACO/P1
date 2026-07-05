@@ -18,6 +18,7 @@ from reportlab.lib.enums import TA_CENTER, TA_LEFT
 
 from core.diagrams import floor_plan_svg
 from core.report import _svg_flowable
+from core.schedule import schedule_svg, schedule_table
 
 W          = 170 * mm
 C_COPEX    = colors.HexColor("#1a3a5c")
@@ -67,7 +68,7 @@ def _ia_text(text, styles):
 
 
 def generate_user_report(project_params, calculated, optimizer_result,
-                         lim_map, survey_cols, interpretation_user):
+                         lim_map, survey_cols, interpretation_user, schedule=None):
     buf = io.BytesIO()
     doc = SimpleDocTemplate(buf, pagesize=A4,
         leftMargin=20 * mm, rightMargin=20 * mm, topMargin=16 * mm, bottomMargin=16 * mm)
@@ -200,11 +201,42 @@ def generate_user_report(project_params, calculated, optimizer_result,
                 if drawn % 2 == 0 and i < n - 1:
                     story += [PageBreak()]
 
+    # ── Cronograma y curva S ────────────────────────────────
+    if schedule and schedule.get("activities"):
+        story += [PageBreak(), _section("6. Cronograma y curva S del proyecto", styles), _sp(4),
+                  Paragraph(f"Inicio: <b>{schedule['start_date'].strftime('%d/%m/%Y')}</b>  ·  "
+                            f"Fin estimado: <b>{schedule['fecha_fin'].strftime('%d/%m/%Y')}</b>  ·  "
+                            f"Duración total: <b>{schedule['total_dias']} días</b>.", styles["UBody"]), _sp(4)]
+        sdraw = _svg_flowable(schedule_svg(schedule), W)
+        if sdraw is not None:
+            story += [sdraw, _sp(6)]
+        # tabla de actividades
+        srows = schedule_table(schedule)
+        thead = [Paragraph(f"<b>{h}</b>", styles["UCell"]) for h in
+                 ["Actividad", "Inicio", "Fin", "Días", "Peso %"]]
+        trows = [thead]
+        for r in srows:
+            trows.append([
+                Paragraph(str(r["Actividad"]), styles["UInfo"]),
+                Paragraph(r["Inicio"], styles["UCell"]),
+                Paragraph(r["Fin"], styles["UCell"]),
+                Paragraph(str(r["Duración (d)"]), styles["UCell"]),
+                Paragraph(str(r["Peso (%)"]), styles["UCell"]),
+            ])
+        st = Table(trows, colWidths=[W * 0.40, W * 0.16, W * 0.16, W * 0.12, W * 0.16])
+        st.setStyle(TableStyle([
+            ("GRID", (0, 0), (-1, -1), 0.4, colors.lightgrey),
+            ("BACKGROUND", (0, 0), (-1, 0), C_COPEX2),
+            ("TEXTCOLOR", (0, 0), (-1, 0), C_WHITE),
+            ("TOPPADDING", (0, 0), (-1, -1), 3), ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+        ]))
+        story += [st, _sp(10)]
+
     # ── Implementación y verificación ───────────────────────
-    story += [PageBreak(), _section("6. Implementación en obra", styles), _sp(5)]
+    story += [PageBreak(), _section("7. Implementación en obra", styles), _sp(5)]
     story += list(_ia_text(ia.get("implementacion"), styles))
     story += [_sp(10)]
-    story += [_section("7. Verificación final", styles), _sp(5)]
+    story += [_section("8. Verificación final", styles), _sp(5)]
     story += list(_ia_text(ia.get("verificacion"), styles))
 
     # ── Pie ─────────────────────────────────────────────────
