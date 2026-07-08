@@ -146,13 +146,14 @@ _init_state()
 # ══════════════════════════════════════════════════════
 # LOGIN — barrera de acceso
 # ══════════════════════════════════════════════════════
-from core.auth_ui import render_login, render_user_bar, render_user_management
+from core.auth_ui import render_login, render_user_bar, render_owner_panel, render_group_panel
 from core.auth import can_reports, can_manage_users
 
 if not render_login():
     st.stop()
 
-_ROL = st.session_state.auth["rol"]
+_ROL   = st.session_state.auth["rol"]
+_GRUPO = st.session_state.auth.get("grupo", "")
 
 # ══════════════════════════════════════════════════════
 # SIDEBAR
@@ -174,12 +175,6 @@ with st.sidebar:
     # ── Usuario logueado ────────────────────────────────
     render_user_bar()
     st.markdown("---")
-
-    # ── Gestión de usuarios (solo propietario) ──────────
-    if can_manage_users(_ROL):
-        with st.expander("👥 Gestión de usuarios"):
-            render_user_management()
-        st.markdown("---")
 
     # ── Valores extraídos del PDF ───────────────────────
     st.markdown("#### 📋 Valores del PDF")
@@ -266,8 +261,17 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-tab_survey, tab_plumb, tab_rail, tab_clock = st.tabs(
-    ["📐 Survey de elevador", "🔩 Líneas de plomada", "✂️ Corte de rieles", "⏱ Fichaje"])
+_tab_labels = ["📐 Survey de elevador", "🔩 Líneas de plomada",
+               "✂️ Corte de rieles", "⏱ Fichaje"]
+_extra = None
+if _ROL == "propietario":
+    _tab_labels.append("👑 Administración"); _extra = "owner"
+elif _ROL == "administrador":
+    _tab_labels.append("🛠 Mi grupo");       _extra = "grupo"
+
+_tabs = st.tabs(_tab_labels)
+tab_survey, tab_plumb, tab_rail, tab_clock = _tabs[0], _tabs[1], _tabs[2], _tabs[3]
+tab_extra = _tabs[4] if len(_tabs) > 4 else None
 
 with tab_survey:
 
@@ -910,3 +914,10 @@ with tab_rail:
 with tab_clock:
     from core.timeclock_ui import render_timeclock_tab
     render_timeclock_tab()
+
+if tab_extra is not None:
+    with tab_extra:
+        if _extra == "owner":
+            render_owner_panel()
+        elif _extra == "grupo":
+            render_group_panel(_GRUPO)

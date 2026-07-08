@@ -1,20 +1,13 @@
 """
-UI de login y gestión de usuarios.
+UI de login, barra de usuario y paneles de gestión (propietario / administrador).
 """
+import os
 import streamlit as st
 import pandas as pd
 
 from core import auth
 
-
-def _banner():
-    st.markdown("""
-    <div style="background:linear-gradient(135deg,#1a3a5c,#2e6da4);padding:20px 28px;
-                border-radius:12px;margin-bottom:18px;text-align:center;">
-      <div style="color:white;font-size:2rem;font-weight:900;letter-spacing:0.2em;">COPEX</div>
-      <div style="color:#b0c8e8;font-size:0.9rem;">Elevator Survey Analyzer</div>
-    </div>
-    """, unsafe_allow_html=True)
+_LOGO = os.path.join(os.path.dirname(os.path.dirname(__file__)), "static", "icon-512.png")
 
 
 def render_login() -> bool:
@@ -22,12 +15,20 @@ def render_login() -> bool:
     if st.session_state.get("auth"):
         return True
 
-    _banner()
+    # ── Logo COPEX centrado ─────────────────────────────────
+    c = st.columns([1, 1, 1])
+    with c[1]:
+        if os.path.exists(_LOGO):
+            st.image(_LOGO, use_container_width=True)
+        else:
+            st.markdown("<h1 style='text-align:center;letter-spacing:.2em;color:#1a3a5c'>COPEX</h1>",
+                        unsafe_allow_html=True)
+    st.markdown("<p style='text-align:center;color:#888;margin-top:-8px'>Elevator Survey Analyzer</p>",
+                unsafe_allow_html=True)
 
     if not auth.is_configured():
         st.error("🔒 El acceso no está conectado a Google Sheets. "
-                 "Configura las credenciales (gcp_service_account + TIMECLOCK_SHEET_ID) "
-                 "en los Secrets de Streamlit Cloud.")
+                 "Configura los Secrets (gcp_service_account + TIMECLOCK_SHEET_ID) en Streamlit Cloud.")
         return False
 
     try:
@@ -63,7 +64,8 @@ def render_login() -> bool:
                 res = auth.verify_login(u, p)
                 if res.get("ok"):
                     st.session_state["auth"] = {
-                        "usuario": res["usuario"], "rol": res["rol"], "nombre": res["nombre"]
+                        "usuario": res["usuario"], "rol": res["rol"],
+                        "nombre": res["nombre"], "grupo": res.get("grupo", ""),
                     }
                     st.rerun()
                 else:
@@ -72,57 +74,136 @@ def render_login() -> bool:
 
 
 def render_user_bar():
-    """Muestra el usuario logueado + botón de salir (en el sidebar)."""
+    """Usuario logueado + grupo + botón salir (sidebar)."""
     a = st.session_state.get("auth", {})
     rol_lbl = {"propietario": "👑 Propietario", "administrador": "🛠 Administrador",
                "campo": "🔧 Campo"}.get(a.get("rol"), a.get("rol", ""))
-    st.markdown(f"**{a.get('nombre','')}**  \n{rol_lbl}")
+    grupo = a.get("grupo") or ("todos" if a.get("rol") == "propietario" else "—")
+    st.markdown(f"**{a.get('nombre','')}**  \n{rol_lbl}  \n🏢 {grupo}")
     if st.button("🚪 Cerrar sesión", use_container_width=True, key="logout_btn"):
-        for k in list(st.session_state.keys()):
-            if k == "auth":
-                del st.session_state[k]
+        if "auth" in st.session_state:
+            del st.session_state["auth"]
         st.rerun()
 
 
-def render_user_management():
-    """Panel de gestión de usuarios (solo propietario)."""
-    st.markdown("#### 👥 Gestión de usuarios")
-    users = auth.list_users()
-    if users:
-        st.dataframe(pd.DataFrame(users), hide_index=True, use_container_width=True)
+# ════════════════════════════════════════════════════════════
+# PANEL DEL PROPIETARIO — grupos + todos los usuarios
+# ════════════════════════════════════════════════════════════
+def render_owner_panel():
+    st.markdown("### 👑 Administración")
+    sec_g, sec_u = st.tabs(["🏢 Grupos", "👥 Usuarios"])
 
-    with st.expander("➕ Crear usuario"):
-        u  = st.text_input("Usuario", key="mu_u")
-        nm = st.text_input("Nombre", key="mu_n")
-        rl = st.selectbox("Rol", auth.ROLES, key="mu_rol")
-        pw = st.text_input("Contraseña", type="password", key="mu_p")
-        if st.button("Crear", key="mu_add"):
-            ok, msg = auth.add_user(u, pw, rl, nm)
-            (st.success if ok else st.error)(msg)
-            if ok:
-                st.rerun()
-
-    if users:
-        with st.expander("🔑 Modificar usuario"):
-            unames = [x["Usuario"] for x in users]
-            sel = st.selectbox("Usuario", unames, key="mu_sel")
-            np_ = st.text_input("Nueva contraseña", type="password", key="mu_np")
-            if st.button("Cambiar contraseña", key="mu_chp"):
-                if np_:
-                    ok, msg = auth.set_password(sel, np_)
-                    (st.success if ok else st.error)(msg)
-                else:
-                    st.warning("Ingresa la nueva contraseña.")
-            nr = st.selectbox("Cambiar rol a", auth.ROLES, key="mu_nr")
-            if st.button("Aplicar rol", key="mu_chr"):
-                ok, msg = auth.set_role(sel, nr)
+    # ── Grupos ──────────────────────────────────────────────
+    with sec_g:
+        grupos = auth.list_groups()
+        if grupos:
+            st.dataframe(pd.DataFrame(grupos), hide_index=True, use_container_width=True)
+        else:
+            st.info("Aún no hay grupos. Crea el primero abajo.")
+        with st.form("form_grupo", clear_on_submit=True):
+            gn = st.text_input("Nombre del grupo (empresa cliente)")
+            gd = st.text_input("Descripción (opcional)")
+            if st.form_submit_button("➕ Crear grupo"):
+                ok, msg = auth.add_group(gn, gd)
                 (st.success if ok else st.error)(msg)
-                if ok:
-                    st.rerun()
-            c1, c2, c3 = st.columns(3)
-            if c1.button("Activar", key="mu_act"):
-                ok, msg = auth.set_active(sel, True);  (st.success if ok else st.error)(msg); st.rerun()
-            if c2.button("Desactivar", key="mu_deact"):
-                ok, msg = auth.set_active(sel, False); (st.success if ok else st.error)(msg); st.rerun()
-            if c3.button("Eliminar", key="mu_del"):
-                ok, msg = auth.delete_user(sel);       (st.success if ok else st.error)(msg); st.rerun()
+                if ok: st.rerun()
+        if grupos:
+            gsel = st.selectbox("Eliminar grupo", [g["Grupo"] for g in grupos], key="del_g_sel")
+            if st.button("🗑 Eliminar grupo", key="del_g_btn"):
+                ok, msg = auth.delete_group(gsel)
+                (st.success if ok else st.error)(msg)
+                if ok: st.rerun()
+
+    # ── Usuarios (todos) ────────────────────────────────────
+    with sec_u:
+        users = auth.list_users()
+        if users:
+            st.dataframe(pd.DataFrame(users), hide_index=True, use_container_width=True)
+        grupo_opts = [""] + [g["Grupo"] for g in auth.list_groups()]
+
+        with st.expander("➕ Crear usuario"):
+            with st.form("form_user", clear_on_submit=True):
+                u  = st.text_input("Usuario")
+                nm = st.text_input("Nombre")
+                rl = st.selectbox("Rol", auth.ROLES)
+                gr = st.selectbox("Grupo", grupo_opts,
+                                  help="Propietario puede ir sin grupo; admin y campo requieren grupo.")
+                pw = st.text_input("Contraseña", type="password")
+                if st.form_submit_button("Crear usuario"):
+                    ok, msg = auth.add_user(u, pw, rl, nm, gr)
+                    (st.success if ok else st.error)(msg)
+                    if ok: st.rerun()
+
+        if users:
+            with st.expander("🔑 Modificar usuario"):
+                sel = st.selectbox("Usuario", [x["Usuario"] for x in users], key="ow_sel")
+                np_ = st.text_input("Nueva contraseña", type="password", key="ow_np")
+                if st.button("Cambiar contraseña", key="ow_chp"):
+                    if np_:
+                        ok, msg = auth.set_password(sel, np_); (st.success if ok else st.error)(msg)
+                    else:
+                        st.warning("Ingresa la contraseña.")
+                cr1, cr2 = st.columns(2)
+                nr = cr1.selectbox("Rol", auth.ROLES, key="ow_nr")
+                if cr1.button("Aplicar rol", key="ow_chr"):
+                    ok, msg = auth.set_role(sel, nr); (st.success if ok else st.error)(msg); st.rerun()
+                ng = cr2.selectbox("Grupo", grupo_opts, key="ow_ng")
+                if cr2.button("Aplicar grupo", key="ow_chg"):
+                    ok, msg = auth.set_group(sel, ng); (st.success if ok else st.error)(msg); st.rerun()
+                a1, a2, a3 = st.columns(3)
+                if a1.button("Activar", key="ow_act"):
+                    ok, msg = auth.set_active(sel, True);  (st.success if ok else st.error)(msg); st.rerun()
+                if a2.button("Desactivar", key="ow_de"):
+                    ok, msg = auth.set_active(sel, False); (st.success if ok else st.error)(msg); st.rerun()
+                if a3.button("Eliminar", key="ow_del"):
+                    ok, msg = auth.delete_user(sel);       (st.success if ok else st.error)(msg); st.rerun()
+
+
+# ════════════════════════════════════════════════════════════
+# PANEL DEL ADMINISTRADOR — su grupo (proyectos + usuarios de campo)
+# ════════════════════════════════════════════════════════════
+def render_group_panel(grupo: str):
+    st.markdown(f"### 🛠 Grupo: {grupo or '(sin grupo)'}")
+    if not grupo:
+        st.warning("Tu cuenta no tiene un grupo asignado. Contacta al propietario.")
+        return
+
+    sec_p, sec_u = st.tabs(["📁 Proyectos", "🔧 Usuarios de campo"])
+
+    with sec_p:
+        st.info("Gestión de proyectos — próximamente. Aquí llevarás el control de "
+                "los proyectos de tu grupo.")
+
+    with sec_u:
+        users = auth.list_users(grupo=grupo)
+        campo = [u for u in users if u["Rol"].lower() == "campo"]
+        if campo:
+            st.dataframe(pd.DataFrame(campo)[["Usuario", "Nombre", "Activo"]],
+                         hide_index=True, use_container_width=True)
+        else:
+            st.info("Aún no tienes usuarios de campo.")
+
+        with st.expander("➕ Crear usuario de campo"):
+            with st.form("form_campo", clear_on_submit=True):
+                u  = st.text_input("Usuario")
+                nm = st.text_input("Nombre")
+                pw = st.text_input("Contraseña", type="password")
+                if st.form_submit_button("Crear"):
+                    ok, msg = auth.add_user(u, pw, "campo", nm, grupo)
+                    (st.success if ok else st.error)(msg)
+                    if ok: st.rerun()
+
+        if campo:
+            with st.expander("🔑 Modificar usuario de campo"):
+                sel = st.selectbox("Usuario", [x["Usuario"] for x in campo], key="gp_sel")
+                np_ = st.text_input("Nueva contraseña", type="password", key="gp_np")
+                if st.button("Cambiar contraseña", key="gp_chp"):
+                    if np_:
+                        ok, msg = auth.set_password(sel, np_); (st.success if ok else st.error)(msg)
+                b1, b2, b3 = st.columns(3)
+                if b1.button("Activar", key="gp_act"):
+                    ok, msg = auth.set_active(sel, True);  (st.success if ok else st.error)(msg); st.rerun()
+                if b2.button("Desactivar", key="gp_de"):
+                    ok, msg = auth.set_active(sel, False); (st.success if ok else st.error)(msg); st.rerun()
+                if b3.button("Eliminar", key="gp_del"):
+                    ok, msg = auth.delete_user(sel);       (st.success if ok else st.error)(msg); st.rerun()

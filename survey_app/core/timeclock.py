@@ -13,7 +13,7 @@ from datetime import datetime
 import streamlit as st
 
 HEADERS = ["Nombre", "PIN", "Proyecto", "Ubicacion",
-           "Clock In", "Clock Out", "Horas", "Estado"]
+           "Clock In", "Clock Out", "Horas", "Estado", "Grupo"]
 USERS_HEADERS = ["Nombre", "PIN", "Activo"]
 USERS_SHEET   = "Usuarios"
 FMT = "%Y-%m-%d %H:%M:%S"
@@ -42,10 +42,16 @@ def _cached_ws():
     client = gspread.authorize(creds)
     ws     = client.open_by_key(sheet_id).sheet1
 
-    # Asegurar cabecera (solo la primera vez, al cachear)
+    # Asegurar cabecera + migración de la columna Grupo
     try:
-        if not ws.row_values(1):
+        header = ws.row_values(1)
+        if not header:
             ws.append_row(HEADERS)
+        elif "Grupo" not in header:
+            need = len(HEADERS)
+            if ws.col_count < need:
+                ws.add_cols(need - ws.col_count)
+            ws.update_cell(1, need, "Grupo")
     except Exception:
         pass
     return ws
@@ -123,55 +129,46 @@ def _now() -> str:
     return datetime.now().strftime(FMT)
 
 
-def clock_in(nombre: str, pin: str, proyecto: str, ubicacion: str) -> tuple:
-    """Registra un clock in. Devuelve (ok, mensaje)."""
+def clock_in(nombre: str, proyecto: str, ubicacion: str, grupo: str = "") -> tuple:
+    """Registra un clock in con la identidad del login. Devuelve (ok, mensaje)."""
     ws, err = _get_worksheet()
     if err:
         return False, err
     nombre = (nombre or "").strip()
-    pin    = str(pin or "").strip()
-    if not nombre or not pin:
-        return False, "Ingresa nombre y PIN."
-
-    vok, vmsg = validate_user(nombre, pin)
-    if not vok:
-        return False, vmsg
+    grupo  = (grupo or "").strip()
+    if not nombre:
+        return False, "No hay usuario en sesión."
 
     try:
         records = ws.get_all_records(numericise_ignore=['all'])
     except Exception as e:
         return False, f"Error leyendo la hoja: {e}"
 
-    # ¿Ya hay una sesión abierta para este nombre+PIN?
+    # ¿Ya hay una sesión abierta para este nombre+grupo?
     for r in records:
         if (str(r.get("Nombre", "")).strip() == nombre
-                and str(r.get("PIN", "")).strip() == pin
+                and str(r.get("Grupo", "")).strip() == grupo
                 and str(r.get("Estado", "")).strip().upper() == "ABIERTO"):
             return False, f"Ya tienes un clock in abierto desde {r.get('Clock In')}. Haz clock out primero."
 
     try:
-        # value_input_option="RAW" → el PIN se guarda como texto (conserva ceros a la izq.)
-        ws.append_row([nombre, pin, proyecto or "", ubicacion or "",
-                       _now(), "", "", "ABIERTO"],
+        ws.append_row([nombre, "", proyecto or "", ubicacion or "",
+                       _now(), "", "", "ABIERTO", grupo],
                       value_input_option="RAW")
     except Exception as e:
         return False, f"Error escribiendo el fichaje: {e}"
     return True, f"✅ Clock IN registrado a las {_now()}."
 
 
-def clock_out(nombre: str, pin: str, nota: str = "") -> tuple:
-    """Cierra la sesión abierta del nombre+PIN. Devuelve (ok, mensaje)."""
+def clock_out(nombre: str, grupo: str = "", nota: str = "") -> tuple:
+    """Cierra la sesión abierta del nombre+grupo. Devuelve (ok, mensaje)."""
     ws, err = _get_worksheet()
     if err:
         return False, err
     nombre = (nombre or "").strip()
-    pin    = str(pin or "").strip()
-    if not nombre or not pin:
-        return False, "Ingresa nombre y PIN."
-
-    vok, vmsg = validate_user(nombre, pin)
-    if not vok:
-        return False, vmsg
+    grupo  = (grupo or "").strip()
+    if not nombre:
+        return False, "No hay usuario en sesión."
 
     try:
         records = ws.get_all_records(numericise_ignore=['all'])
@@ -183,13 +180,13 @@ def clock_out(nombre: str, pin: str, nota: str = "") -> tuple:
     target_in  = None
     for idx, r in enumerate(records):
         if (str(r.get("Nombre", "")).strip() == nombre
-                and str(r.get("PIN", "")).strip() == pin
+                and str(r.get("Grupo", "")).strip() == grupo
                 and str(r.get("Estado", "")).strip().upper() == "ABIERTO"):
             target_row = idx + 2   # +2: fila 1 = cabecera, records 0-indexado
             target_in  = str(r.get("Clock In", ""))
 
     if target_row is None:
-        return False, "No hay un clock in abierto para ese nombre + PIN."
+        return False, "No tienes un clock in abierto."
 
     out_ts = _now()
     horas  = ""

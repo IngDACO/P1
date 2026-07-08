@@ -1,5 +1,6 @@
 """
 UI de la pestaña de fichaje (clock in / clock out).
+La identidad viene del login; ya no se pide usuario + PIN.
 """
 import streamlit as st
 
@@ -11,21 +12,18 @@ def render_timeclock_tab():
 
     if not timeclock.is_configured():
         st.warning(
-            "⚠️ El fichaje aún no está conectado a Google Sheets.\n\n"
-            "Falta configurar las credenciales (`gcp_service_account`) y "
-            "`TIMECLOCK_SHEET_ID` en los **Secrets de Streamlit Cloud**. "
-            "Una vez configurado, esta pestaña quedará operativa."
+            "⚠️ El fichaje aún no está conectado a Google Sheets. "
+            "Configura los Secrets en Streamlit Cloud."
         )
         return
 
-    st.caption("Registra tu entrada y salida. Solo usuarios autorizados (Nombre + PIN "
-               "en la pestaña 'Usuarios' de la hoja) pueden fichar.")
+    a       = st.session_state.get("auth", {})
+    nombre  = a.get("nombre") or a.get("usuario") or ""
+    grupo   = a.get("grupo", "")
 
-    # ── Identificación ──────────────────────────────────────
-    c1, c2 = st.columns(2)
-    nombre = c1.text_input("Nombre", key="tc_nombre", placeholder="Tu nombre")
-    pin    = c2.text_input("PIN", key="tc_pin", type="password",
-                           placeholder="PIN personal", max_chars=8)
+    st.caption(f"Fichando como **{nombre}**"
+               + (f"  ·  grupo **{grupo}**" if grupo else "")
+               + ". Tus fichajes son privados.")
 
     c3, c4 = st.columns(2)
     proyecto  = c3.text_input("Proyecto / Cliente", key="tc_proyecto",
@@ -33,14 +31,13 @@ def render_timeclock_tab():
     ubicacion = c4.text_input("Ubicación / Nota", key="tc_ubicacion",
                               placeholder="Obra, ubicación o comentario")
 
-    # ── Botones ─────────────────────────────────────────────
     b1, b2 = st.columns(2)
     if b1.button("🟢 Clock IN", use_container_width=True, key="tc_in"):
-        ok, msg = timeclock.clock_in(nombre, pin, proyecto, ubicacion)
+        ok, msg = timeclock.clock_in(nombre, proyecto, ubicacion, grupo)
         (st.success if ok else st.error)(msg)
 
     if b2.button("🔴 Clock OUT", use_container_width=True, key="tc_out"):
-        ok, msg = timeclock.clock_out(nombre, pin, ubicacion)
+        ok, msg = timeclock.clock_out(nombre, grupo, ubicacion)
         (st.success if ok else st.error)(msg)
 
     st.markdown("---")
