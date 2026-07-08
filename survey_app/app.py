@@ -144,6 +144,17 @@ def _init_state():
 _init_state()
 
 # ══════════════════════════════════════════════════════
+# LOGIN — barrera de acceso
+# ══════════════════════════════════════════════════════
+from core.auth_ui import render_login, render_user_bar, render_user_management
+from core.auth import can_reports, can_manage_users
+
+if not render_login():
+    st.stop()
+
+_ROL = st.session_state.auth["rol"]
+
+# ══════════════════════════════════════════════════════
 # SIDEBAR
 # ══════════════════════════════════════════════════════
 with st.sidebar:
@@ -159,6 +170,16 @@ with st.sidebar:
         </div>
     </div>
     """, unsafe_allow_html=True)
+
+    # ── Usuario logueado ────────────────────────────────
+    render_user_bar()
+    st.markdown("---")
+
+    # ── Gestión de usuarios (solo propietario) ──────────
+    if can_manage_users(_ROL):
+        with st.expander("👥 Gestión de usuarios"):
+            render_user_management()
+        st.markdown("---")
 
     # ── Valores extraídos del PDF ───────────────────────
     st.markdown("#### 📋 Valores del PDF")
@@ -833,44 +854,49 @@ with tab_survey:
         st.info("Realiza el cálculo primero para generar el cronograma.")
 
     # ══════════════════════════════════════════════════════
-    # PASO 6 — INFORME DEL CLIENTE
+    # PASO 6 — INFORME DEL CLIENTE  (solo propietario / administrador)
     # ══════════════════════════════════════════════════════
-    st.header("6. Informe del cliente")
-    st.caption("Informe profesional para entregar al cliente (solución final, diagramas e "
-               "instrucciones de implementación). El informe técnico interno se envía "
-               "automáticamente por correo a administración.")
-
-    if st.session_state.calc_results:
-        r          = st.session_state.calc_results
-        interp     = r.get("interpretation") or {}
-        interp_usr = r.get("interpretation_user") or {}
-        if not interp_usr.get("_ok"):
-            st.error(
-                "🚫 **No se puede generar el informe sin la interpretación IA.**\n\n"
-                f"Motivo: {interp_usr.get('_error', interp.get('_error', 'no disponible'))}.\n\n"
-                "Configura `ANTHROPIC_API_KEY` en los Secrets de Streamlit Cloud y vuelve a calcular."
-            )
-        elif st.button("📄 Generar informe del cliente", use_container_width=True):
-            with st.spinner("Generando informe del cliente..."):
-                user_pdf = generate_user_report(
-                    project_params      = r["all_params"],
-                    calculated          = r["limits"],
-                    optimizer_result    = r["optimizer_result"],
-                    lim_map             = r["lim_map"],
-                    survey_cols         = SURVEY_COLS,
-                    interpretation_user = r.get("interpretation_user"),
-                    schedule            = r.get("schedule"),
-                )
-            proj = (r["all_params"].get("PROYECTO") or "cliente").replace(" ", "_")
-            st.download_button(
-                label     = "⬇️ Descargar informe del cliente",
-                data      = user_pdf,
-                file_name = f"informe_{proj}.pdf",
-                mime      = "application/pdf",
-                use_container_width=True
-            )
+    if not can_reports(_ROL):
+        st.header("6. Informe del cliente")
+        st.caption("🔒 La descarga de informes está disponible para administración "
+                   "(propietario / administrador).")
     else:
-        st.info("Realiza el cálculo primero para poder generar el informe.")
+        st.header("6. Informe del cliente")
+        st.caption("Informe profesional para entregar al cliente (solución final, diagramas e "
+                   "instrucciones de implementación). El informe técnico interno se envía "
+                   "automáticamente por correo a administración.")
+
+        if st.session_state.calc_results:
+            r          = st.session_state.calc_results
+            interp     = r.get("interpretation") or {}
+            interp_usr = r.get("interpretation_user") or {}
+            if not interp_usr.get("_ok"):
+                st.error(
+                    "🚫 **No se puede generar el informe sin la interpretación IA.**\n\n"
+                    f"Motivo: {interp_usr.get('_error', interp.get('_error', 'no disponible'))}.\n\n"
+                    "Configura `ANTHROPIC_API_KEY` en los Secrets de Streamlit Cloud y vuelve a calcular."
+                )
+            elif st.button("📄 Generar informe del cliente", use_container_width=True):
+                with st.spinner("Generando informe del cliente..."):
+                    user_pdf = generate_user_report(
+                        project_params      = r["all_params"],
+                        calculated          = r["limits"],
+                        optimizer_result    = r["optimizer_result"],
+                        lim_map             = r["lim_map"],
+                        survey_cols         = SURVEY_COLS,
+                        interpretation_user = r.get("interpretation_user"),
+                        schedule            = r.get("schedule"),
+                    )
+                proj = (r["all_params"].get("PROYECTO") or "cliente").replace(" ", "_")
+                st.download_button(
+                    label     = "⬇️ Descargar informe del cliente",
+                    data      = user_pdf,
+                    file_name = f"informe_{proj}.pdf",
+                    mime      = "application/pdf",
+                    use_container_width=True
+                )
+        else:
+            st.info("Realiza el cálculo primero para poder generar el informe.")
 
 
 with tab_plumb:
