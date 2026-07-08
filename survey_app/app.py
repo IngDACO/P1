@@ -261,19 +261,26 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-_tab_labels = ["📐 Survey de elevador", "🔩 Líneas de plomada",
-               "✂️ Corte de rieles", "⏱ Fichaje"]
-_extra = None
+# Navegación con selector (NO st.tabs → evita el bug de mezcla de contenido).
+# Solo se renderiza la sección seleccionada; no hay paneles ocultos que se filtren.
+_L_SURVEY = "📐 Survey de elevador"
+_L_PLUMB  = "🔩 Líneas de plomada"
+_L_RAIL   = "✂️ Corte de rieles"
+_L_CLOCK  = "⏱ Fichaje"
+_L_OWNER  = "👑 Administración"
+_L_GRUPO  = "🛠 Mi grupo"
+
+_nav = [_L_SURVEY, _L_PLUMB, _L_RAIL, _L_CLOCK]
 if _ROL == "propietario":
-    _tab_labels.append("👑 Administración"); _extra = "owner"
+    _nav.append(_L_OWNER)
 elif _ROL == "administrador":
-    _tab_labels.append("🛠 Mi grupo");       _extra = "grupo"
+    _nav.append(_L_GRUPO)
 
-_tabs = st.tabs(_tab_labels)
-tab_survey, tab_plumb, tab_rail, tab_clock = _tabs[0], _tabs[1], _tabs[2], _tabs[3]
-tab_extra = _tabs[4] if len(_tabs) > 4 else None
+_seccion = st.radio("Navegación", _nav, horizontal=True,
+                    key="main_nav", label_visibility="collapsed")
+st.markdown("---")
 
-with tab_survey:
+if _seccion == _L_SURVEY:
 
     # ── Identificación del proyecto ───────────────────────
     _id1, _id2 = st.columns(2)
@@ -903,21 +910,20 @@ with tab_survey:
             st.info("Realiza el cálculo primero para poder generar el informe.")
 
 
-with tab_plumb:
+elif _seccion == _L_PLUMB:
     from core.plumb_ui import render_plumb_tab
     render_plumb_tab()
 
-with tab_rail:
+elif _seccion == _L_RAIL:
     from core.rail_cut_ui import render_rail_cut_tab
     render_rail_cut_tab()
 
-with tab_clock:
+elif _seccion == _L_CLOCK:
     from core.timeclock_ui import render_timeclock_tab
     render_timeclock_tab()
 
-if tab_extra is not None:
-    with tab_extra:
-        if _extra == "owner":
-            render_owner_panel()
-        elif _extra == "grupo":
-            render_group_panel(_GRUPO)
+elif _seccion == _L_OWNER:
+    render_owner_panel()
+
+elif _seccion == _L_GRUPO:
+    render_group_panel(_GRUPO)
