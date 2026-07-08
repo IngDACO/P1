@@ -11,33 +11,62 @@ from core.plumb import compute_plumb, plumb_table, plumb_svg
 
 def render_plumb_tab():
     st.markdown("### 🔩 Cálculo de líneas de plomada")
-    st.caption("Herramienta independiente. Ingresa las medidas y obtén la tabla de "
-               "posiciones de las plomadas y el diagrama de la plantilla.")
+    st.caption("Carga el PDF del plano para autocompletar los valores que se pueden leer, "
+               "o ingresa todo a mano.")
+
+    # ── Valores por defecto en session_state ────────────────
+    _defs = {"plb_bks": 1200.0, "plb_rail": 12.0, "plb_tksw": 1315.0, "plb_lt": 800.0,
+             "plb_sf1": 51.0,   "plb_sf2": 260.0, "plb_bsr": 1586.0,  "plb_bs": 1597.0,
+             "plb_sg": 400.0,   "plb_tg": 100.0}
+    for _k, _v in _defs.items():
+        st.session_state.setdefault(_k, _v)
+
+    # ── Carga de PDF → autocompleta lo que trae el plano ────
+    pdf = st.file_uploader("📄 PDF de planos (autocompleta del plano)", type=["pdf"], key="plb_pdf")
+    if pdf is not None and pdf.name != st.session_state.get("plb_pdf_name"):
+        from extractors.schindler import extract_from_pdf
+        with st.spinner("Leyendo el plano..."):
+            ex = extract_from_pdf(pdf)
+        st.session_state["plb_pdf_name"] = pdf.name
+        mapping = {"BKS": "plb_bks", "TKSW": "plb_tksw", "SF1": "plb_sf1", "SF2": "plb_sf2",
+                   "BS": "plb_bs", "SG": "plb_sg", "TG": "plb_tg"}
+        found = []
+        for src, key in mapping.items():
+            if ex.get(src) is not None:
+                st.session_state[key] = float(ex[src]); found.append(src)
+        if found:
+            st.success(f"✅ Del plano: **{', '.join(found)}**. "
+                       "Completa RAIL, LengthTemplate y BSR (no vienen en el plano).")
+        else:
+            st.warning("No se encontraron valores en el plano. Ingrésalos manualmente.")
+        st.rerun()
+    elif pdf is not None:
+        st.caption(f"📄 Plano cargado: **{pdf.name}**")
 
     # ── Entradas principales ────────────────────────────────
-    st.markdown("**Entradas principales**")
+    st.markdown("**Entradas principales**  ·  📄 = del plano · ✏️ = manual")
     c1, c2, c3, c4 = st.columns(4)
-    bks  = c1.number_input("BKS (mm)",            value=1200.0, step=0.5, key="plb_bks")
-    rail = c2.number_input("RAIL (mm)",           value=12.0,   step=0.5, key="plb_rail")
-    tksw = c3.number_input("TKSW (mm)",           value=1315.0, step=0.5, key="plb_tksw")
-    lt   = c4.number_input("LengthTemplate (mm)", value=800.0,  step=0.5, key="plb_lt")
+    bks  = c1.number_input("📄 BKS (mm)",            step=0.5, key="plb_bks")
+    rail = c2.number_input("✏️ RAIL (mm)",           step=0.5, key="plb_rail")
+    tksw = c3.number_input("📄 TKSW (mm)",           step=0.5, key="plb_tksw")
+    lt   = c4.number_input("✏️ LengthTemplate (mm)", step=0.5, key="plb_lt")
 
     # ── Entradas para líneas verticales ─────────────────────
     st.markdown("**Entradas para líneas de referencia**")
     d1, d2, d3, d4 = st.columns(4)
-    sf1 = d1.number_input("SF1 (mm)", value=51.0,   step=0.5, key="plb_sf1")
-    sf2 = d2.number_input("SF2 (mm)", value=260.0,  step=0.5, key="plb_sf2")
-    bsr = d3.number_input("BSR (mm)", value=1586.0, step=0.5, key="plb_bsr")
-    bs  = d4.number_input("BS (mm)",  value=1597.0, step=0.5, key="plb_bs")
+    sf1 = d1.number_input("📄 SF1 (mm)", step=0.5, key="plb_sf1")
+    sf2 = d2.number_input("📄 SF2 (mm)", step=0.5, key="plb_sf2")
+    bsr = d3.number_input("✏️ BSR (mm)", step=0.5, key="plb_bsr")
+    bs  = d4.number_input("📄 BS (mm)",  step=0.5, key="plb_bs")
 
     # ── Entradas condicionales (BSR < BS) ───────────────────
     needs = bsr < bs
     if needs:
         st.info("BSR < BS → se aplica desplazamiento. Ingresa SG, TG y el lado del Omega.")
         e1, e2, e3 = st.columns(3)
-        sg    = e1.number_input("SG (mm)", value=400.0, step=0.5, key="plb_sg")
-        tg    = e2.number_input("TG (mm)", value=100.0, step=0.5, key="plb_tg")
-        omega = e3.radio("Lado del Omega", ["R", "L"], horizontal=True, key="plb_omega")
+        sg    = e1.number_input("📄 SG (mm)", step=0.5, key="plb_sg")
+        tg    = e2.number_input("📄 TG (mm)", step=0.5, key="plb_tg")
+        omega = e3.radio("✏️ Lado del Omega", ["R", "L"], horizontal=True, key="plb_omega")
     else:
         sg, tg, omega = 0.0, 0.0, "R"
 
