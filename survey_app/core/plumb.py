@@ -25,6 +25,22 @@ STEP  = 0.5
 EPS   = 1e-9
 RMAX  = 1000.0
 
+# Nombres propios de cada línea (V1..V6 son solo claves internas)
+LINE_NAMES = {
+    "V1": "Plomo riel izquierdo",
+    "V2": "Plomo riel derecho",
+    "V3": "Pared teórica izquierda",
+    "V4": "Pared real izquierda",
+    "V5": "Pared teórica derecha",
+    "V6": "Pared real derecha",
+}
+# Versión corta para el diagrama (poco espacio)
+LINE_SHORT = {
+    "V1": "Riel I",  "V2": "Riel D",
+    "V3": "Teór I",  "V5": "Teór D",
+    "V4": "Real I",  "V6": "Real D",
+}
+
 
 def _search_paso(dif: float, limit_zb: float, limit_ob: float):
     """Búsqueda lineal (resta 0.5 constante) sobre 3 rangos. Devuelve (paso, rango, fuera_rango)."""
@@ -235,8 +251,8 @@ def plumb_svg(res: dict) -> str:
                  f'stroke="{col}" stroke-width="2"{dash}/>')
         # etiqueta arriba (altura alterna para no chocar)
         ly = MT - 6 if i % 2 == 0 else MT - 18
-        p.append(f'<text x="{xf:.1f}" y="{ly:.1f}" text-anchor="middle" font-size="9" '
-                 f'fill="{col}" font-weight="bold">{name}</text>')
+        p.append(f'<text x="{xf:.1f}" y="{ly:.1f}" text-anchor="middle" font-size="8.5" '
+                 f'fill="{col}" font-weight="bold">{LINE_SHORT.get(name, name)}</text>')
         p.append(f'<text x="{xf:.1f}" y="{MT+ph+12:.1f}" text-anchor="middle" font-size="8" '
                  f'fill="{col}">{_n(d["x"])}</text>')
 
@@ -251,8 +267,8 @@ def plumb_svg(res: dict) -> str:
 
     # Leyenda
     ly = VH - 34
-    leg = [("V1/V2 rieles", "#185FA5"), ("V3/V5 referencia", "#888888"),
-           ("V4/V6 ajustadas", "#3B6D11"), ("DBPW", "#6b3fa0"), ("RW", "#BA7517")]
+    leg = [("Plomos de riel", "#185FA5"), ("Paredes teóricas", "#888888"),
+           ("Paredes reales", "#3B6D11"), ("DBPW", "#6b3fa0"), ("RW", "#BA7517")]
     lx = ML
     for txt, c in leg:
         p.append(f'<rect x="{lx:.1f}" y="{ly:.1f}" width="12" height="8" fill="{c}"/>')
@@ -265,21 +281,12 @@ def plumb_svg(res: dict) -> str:
 def plumb_table(res: dict) -> list:
     """Devuelve filas para una tabla (lista de dicts)."""
     rows = []
-    labels = {
-        "V1": "Plomada riel izq. (x=0)",
-        "V2": "Plomada riel der. (x=DBP)",
-        "V3": "Referencia externa izq.",
-        "V4": "Ajustada izq. (desplazable)",
-        "V5": "Referencia externa der.",
-        "V6": "Ajustada der. (desplazable)",
-    }
     for name, d in res["lines"].items():
         moved = abs(d["x"] - d["x0"]) > 1e-6
         rows.append({
-            "Línea":        name,
-            "Descripción":  labels[name],
+            "Línea":          LINE_NAMES.get(name, name),
             "X inicial (mm)": round(d["x0"], 2),
             "X final (mm)":   round(d["x"], 2),
-            "Desplazada":   "Sí" if moved else "—",
+            "Desplazada":     "Sí" if moved else "—",
         })
     return rows
