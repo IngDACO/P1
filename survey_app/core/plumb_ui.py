@@ -14,12 +14,11 @@ def render_plumb_tab():
     st.caption("Carga el PDF del plano para autocompletar los valores que se pueden leer, "
                "o ingresa todo a mano.")
 
-    # ── Valores por defecto en session_state ────────────────
-    _defs = {"plb_bks": 1200.0, "plb_rail": 12.0, "plb_tksw": 1315.0, "plb_lt": 800.0,
-             "plb_sf1": 51.0,   "plb_sf2": 260.0, "plb_bsr": 1586.0,  "plb_bs": 1597.0,
-             "plb_sg": 400.0,   "plb_tg": 100.0}
-    for _k, _v in _defs.items():
-        st.session_state.setdefault(_k, _v)
+    # ── Inicializar en 0 (sin valores residuales de ejemplo) ─
+    _keys = ["plb_bks", "plb_rail", "plb_tksw", "plb_lt", "plb_sf1", "plb_sf2",
+             "plb_bsr", "plb_bs", "plb_sg", "plb_tg"]
+    for _k in _keys:
+        st.session_state.setdefault(_k, 0.0)
 
     # ── Carga de PDF → autocompleta lo que trae el plano ────
     pdf = st.file_uploader("📄 PDF de planos (autocompleta del plano)", type=["pdf"], key="plb_pdf")
