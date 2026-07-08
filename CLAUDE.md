@@ -20,42 +20,53 @@ Hace: git push → ZIP → rclone Drive. Streamlit redeploy es automático.
 ## Estructura de archivos
 ```
 C:\Users\diego\P1\survey_app\
-├── app.py                  # UI Streamlit — 3 pestañas (Survey / Plomadas / Fichaje)
-├── VERSION                 # texto "vNN" — se actualiza solo en cada deploy, lo lee app.py
+├── app.py                  # UI Streamlit — login + navegación por rol (NO st.tabs, ver abajo)
+├── VERSION                 # texto "vNN" — se actualiza solo en cada deploy, lo lee app.py (utf-8-sig)
 ├── requirements.txt        # streamlit, pypdf, pandas, numpy, openpyxl, reportlab,
 │                           #   anthropic, svglib, gspread, google-auth
 ├── .streamlit/
-│   └── secrets.toml        # LOCAL (gitignored): ANTHROPIC_API_KEY, GMAIL_*, gcp_service_account, TIMECLOCK_SHEET_ID
+│   ├── secrets.toml        # LOCAL (gitignored): ANTHROPIC_API_KEY, GMAIL_*, gcp_service_account, TIMECLOCK_SHEET_ID
+│   └── config.toml         # enableStaticServing = true (para el manifest/íconos PWA)
+├── static/                 # PWA: manifest.webmanifest + icon-192/512.png (COPEX) — versionados (ver .gitignore)
 ├── core/
 │   ├── calculations.py     # calculate_limits(), apply_offsets(), analyze_matrix(), validate_inputs()
-│   ├── optimizer.py        # optimize() — itera RL×FB, aplica restricciones (incluye frame_opening)
-│   ├── highlighting.py     # cell_state(), streamlit_style(), reportlab_commands() — lógica compartida
-│   ├── bs_logic.py         # find_bs_step() — análisis BSR vs BS (triangular, _scan_range)
-│   ├── excel_io.py         # export/import survey Excel (hojas INFO + CONFIG)
-│   ├── diagrams.py         # floor_plan_svg() — planta por piso (SVG, svglib-compat)
-│   ├── report.py           # generate_report() — INFORME ADMIN (completo, ReportLab)
-│   ├── user_report.py      # generate_user_report() — INFORME CLIENTE (limpio, branding COPEX)
-│   ├── interpretation.py   # IA: generate_interpretation() (admin) + generate_user_interpretation() (cliente)
-│   ├── chat_agent.py       # get_chat_response() — asistente experto (sidebar), con confidencialidad
-│   ├── email_notify.py     # send_usage_notification() — correo interno con informe admin adjunto
-│   ├── plumb.py            # compute_plumb(), plumb_svg(), plumb_table() — líneas de plomada
-│   ├── plumb_ui.py         # render_plumb_tab() — UI pestaña plomadas
-│   ├── timeclock.py        # clock_in/out, validate_user — fichaje en Google Sheets
-│   └── timeclock_ui.py     # render_timeclock_tab() — UI pestaña fichaje
+│   ├── optimizer.py        # optimize() — itera RL×FB (incluye frame_opening + FB extra preciso)
+│   ├── highlighting.py     # cell_state(), streamlit_style(), reportlab_commands()
+│   ├── bs_logic.py         # find_bs_step() — BSR vs BS (triangular)
+│   ├── excel_io.py         # export/import survey Excel
+│   ├── diagrams.py         # floor_plan_svg() — planta por piso (SVG sin markers)
+│   ├── schedule.py         # build_schedule/schedule_svg — cronograma Gantt + curva S (v51)
+│   ├── report.py           # generate_report() — INFORME ADMIN (completo)
+│   ├── user_report.py      # generate_user_report() — INFORME CLIENTE (limpio, COPEX)
+│   ├── interpretation.py   # IA: interpretación admin (7 secc) + cliente (5 secc); anthropic LAZY import
+│   ├── chat_agent.py       # get_chat_response() — asistente experto (sidebar), confidencialidad; anthropic LAZY
+│   ├── email_notify.py     # send_usage_notification() — correo interno + informe admin adjunto
+│   ├── plumb.py            # compute_plumb/plumb_svg/plumb_table — plomadas (LINE_NAMES v58)
+│   ├── plumb_ui.py         # render_plumb_tab() — plomadas (lee PDF autocompleta, v57)
+│   ├── rail_cut.py         # extract_lf + compute_case1/case2 — corte de rieles (v52)
+│   ├── rail_cut_ui.py      # render_rail_cut_tab() — corte de rieles
+│   ├── timeclock.py        # clock_in/out — fichaje por login+grupo (sin PIN, v54)
+│   ├── timeclock_ui.py     # render_timeclock_tab() — fichaje (usa identidad del login)
+│   ├── auth.py             # login, roles, grupos (Google Sheets, PBKDF2) — v53/v54
+│   └── auth_ui.py          # render_login/user_bar/owner_panel/group_panel — v53/v54
 └── extractors/
     └── schindler.py        # extract_from_pdf() — pypdf CAD PDF parser
+
+C:\Users\diego\copex_mobile\   # App Android (Capacitor) — carga la URL de Streamlit; ver sección Móvil
 ```
 
-**Versión (v35+):** `app.py` lee `survey_app/VERSION`. El script `backup_survey.ps1`
-escribe `"vNN"` en ese archivo antes de cada commit → la versión mostrada se
-actualiza sola. No hardcodear la versión en `app.py`.
+**Versión (v35+):** `app.py` lee `survey_app/VERSION` con `utf-8-sig` (evita el BOM que agrega
+PowerShell). `backup_survey.ps1` escribe `"vNN"` antes de cada commit → se actualiza sola.
 
-## Las 3 pestañas (app.py, v40+)
-El survey completo va envuelto en `with tab_survey:` (Paso 1→5). Las otras dos
-pestañas llaman a funciones de render. El sidebar (banner COPEX + chat IA) es global.
-```
-tab_survey, tab_plumb, tab_clock = st.tabs(["📐 Survey de elevador", "🔩 Líneas de plomada", "⏱ Fichaje"])
-```
+## NAVEGACIÓN — NO usar st.tabs ⚠️ (v56)
+`st.tabs` causaba **mezcla de contenido** entre pestañas (bug de Streamlit con contenido pesado
++ reruns; también con tabs anidados). Se reemplazó por un **selector `st.radio` horizontal** que
+renderiza SOLO la sección activa (`if/elif _seccion == ...`). El survey completo va bajo
+`if _seccion == _L_SURVEY:` (Paso 1→6). **No volver a introducir `st.tabs`** (ni anidados).
+
+Secciones visibles según el rol (ver Login/Roles):
+- Todos: 📐 Survey · 🔩 Plomadas · ✂️ Corte de rieles · ⏱ Fichaje
+- Propietario: + 👑 Administración   |   Administrador: + 🛠 Mi grupo   |   Campo: sin extra y sin descargar informes
 
 ---
 
@@ -416,37 +427,92 @@ survey_df, pdf_bytes, pdf_name, admin_report)` — Gmail SMTP (`smtplib`, puerto
 
 ---
 
-## plumb.py — líneas de plomada (pestaña 2, v40)
-Herramienta INDEPENDIENTE del survey. `compute_plumb(inp)` + `plumb_svg(res)` + `plumb_table(res)`.
+## plumb.py — líneas de plomada (v40, PDF v57, nombres v58)
+Herramienta INDEPENDIENTE. `compute_plumb(inp)` + `plumb_svg(res)` + `plumb_table(res)`.
 Entradas: BKS, RAIL, TKSW, LengthTemplate, SF1, SF2, BSR, BS (+ SG, TG, OMEGA_SIDE si BSR<BS).
+**Vista SUPERIOR (planta), pared frontal como referencia:**
 ```
-DBP = BKS + RAIL     DBPW = TKSW − 150     RW = DBPW − LengthTemplate
-P=(DBP/2, RW)  C1=(0, DBPW)  C2=(DBP, DBPW)   d1,d2 = distancias diagonales
-6 líneas verticales: V1=0, V2=DBP, V3=−(SF1+RAIL/2), V5=DBP+(SF2+RAIL/2)
-                     V4=V3−(BSR−BS)/2, V6=V5+(BSR−BS)/2   (V4/V6 desplazables)
+DBP  = BKS + RAIL           = distancia entre los plomos (separación lateral)
+DBPW = TKSW − 150           = distancia del plomo a la pared frontal (profundidad)
+RW   = DBPW − LengthTemplate = distancia del template a la pared frontal
+P=(DBP/2, RW) = centro del template   C1=(0,DBPW), C2=(DBP,DBPW) = puntos de los plomos
+d1,d2 = cuerdas diagonales del template a cada plomo (se miden en obra)
+TKSW=pared frontal→centro riel · SG=centro contrapeso→pared omega · TG=grosor contrapeso
 ```
-**Desplazamiento (si BSR<BS):** ⚠️ búsqueda LINEAL propia (resta 0.5 constante → paso≈dif),
-distinta de bs_logic (triangular) — NO reutilizar find_bs_step aquí.
-- Z está del lado OPUESTO al Omega: Omega R → Z izq (V4) → `LIMIT_ZB = SF1×0.3`;
-  Omega L → Z der (V6) → `LIMIT_ZB = SF2×0.3`.
-- `LIMIT_OB = (SG − TG/2)×0.3`.
-- Se sacrifica PRIMERO Z, luego Omega: `desp_z = −min(paso, LIMIT_ZB)`, `desp_omega = +max(0, paso−LIMIT_ZB)`.
+**6 líneas (claves internas V1..V6; nombres propios en `LINE_NAMES`, v58):**
+```
+V1=0  Plomo riel izq      V2=DBP  Plomo riel der
+V3=−(SF1+RAIL/2) Pared teórica izq     V5=DBP+(SF2+RAIL/2) Pared teórica der
+V4=V3−(BSR−BS)/2 Pared REAL izq        V6=V5+(BSR−BS)/2   Pared REAL der   (V4/V6 desplazables)
+```
+**Desplazamiento (si BSR<BS):** ⚠️ búsqueda LINEAL propia (resta 0.5 → paso≈dif),
+distinta de bs_logic (triangular) — NO reutilizar find_bs_step.
+- Z opuesto al Omega: Omega R → Z izq (V4) → `LIMIT_ZB=SF1×0.3`; Omega L → Z der (V6) → `SF2×0.3`.
+- `LIMIT_OB=(SG−TG/2)×0.3`. Se sacrifica PRIMERO Z, luego Omega:
+  `desp_z=−min(paso,LIMIT_ZB)`, `desp_omega=+max(0,paso−LIMIT_ZB)`.
+- `plumb_ui`: carga PDF autocompleta 📄 BKS/TKSW/SF1/SF2/BS/SG/TG; ✏️ RAIL/LengthTemplate/BSR/Omega manuales.
+  Inputs inician en 0 (sin residuales, v59).
 
 ---
 
-## timeclock.py — fichaje clock in/out (pestaña 3, v41-v45)
-Persistencia en **Google Sheets** (cuenta de servicio). Requiere secrets
-`TIMECLOCK_SHEET_ID` + `[gcp_service_account]` (JSON de la service account).
-La hoja debe estar **compartida como Editor** con el `client_email` del bot.
-- Hoja principal (`sheet1`): Nombre|PIN|Proyecto|Ubicacion|Clock In|Clock Out|Horas|Estado.
-- Hoja `Usuarios`: Nombre|PIN|Activo — **autenticación real** (v43); solo autorizados fichan.
-- `clock_in()` crea sesión ABIERTA (bloquea doble in); `clock_out()` cierra y calcula horas.
-- ⚠️ **PIN como texto**: escribir con `value_input_option="RAW"` y leer con
-  `get_all_records(numericise_ignore=['all'])` — si no, Sheets convierte "0042"→42 (pierde ceros).
-- ⚠️ **Conexión cacheada** (`@st.cache_resource` en `_cached_ws`) y `is_configured()` solo
-  revisa si los secrets existen (NO llama a la API) — evita falsos "no conectado" por rate-limit (v44).
-- UI (v45): **sin registro visible** — cada usuario solo ficha, no ve datos de otros. El historial
-  solo se consulta en la hoja de Google (administración).
+## rail_cut.py — corte de rieles (v52)
+Herramienta INDEPENDIENTE. Lee **LFKK, LFGK** del PDF (`extract_lf`, reusa `_page_text_positional`).
+Pregunta nº de elevadores y el caso:
+- **Caso 1** (riel a cortar = primero instalado, abajo): `A = n2500·2500 + n5000·5000` (mismo para
+  todos); por elevador `L` → `RC=L+LFKK`, `RCW=L+LFGK`, `CutRC=RC−A`, `CutRCW=RCW−A`.
+- **Caso 2** (último instalado, arriba): usuario llena matriz RZ/RO/RF/RB por elevador. Sub-caso:
+  penúltimo ENCIMA del FFL → `CutR* = LF − R*`; DEBAJO → `CutR* = LF + R*` (LFKK para RZ/RO, LFGK para RF/RB).
+- Salida: matriz columnas=elevadores, filas=Cut*.
+
+---
+
+## schedule.py — gestión de proyecto: cronograma + curva S (v51)
+En el survey, al Calcular. `build_schedule(ns, start_date, flags, custom_rows)` + `schedule_svg` + `schedule_table`.
+- Actividades estándar de instalación; duraciones **escalan con NS**; peso con distribución en "S".
+- `detect_flags()`: agrega "cortes" si OR/OL de la solución > límite, y "ajuste shaft" si BSR<BS.
+- Curva S = % acumulado planificado por día (progreso lineal por actividad). Editable (fecha inicio + tabla).
+- Se incluye en app + informe cliente + informe admin. SVG sin markers (svglib-compat).
+
+---
+
+## timeclock.py — fichaje (v41-v45; por login v54)
+Google Sheets (cuenta de servicio). Hoja principal `sheet1`:
+Nombre|PIN|Proyecto|Ubicacion|Clock In|Clock Out|Horas|Estado|**Grupo**.
+- v54: **sin usuario+PIN** — usa la identidad del login (`session_state.auth`) + su Grupo.
+  `clock_in(nombre, proyecto, ubicacion, grupo)` / `clock_out(nombre, grupo, nota)`.
+  Empareja sesión abierta por Nombre+Grupo. (La antigua hoja `Usuarios`/PIN quedó obsoleta.)
+- ⚠️ Textos como RAW + `get_all_records(numericise_ignore=['all'])` (conserva ceros).
+- ⚠️ Conexión cacheada (`@st.cache_resource`); `is_configured()` solo revisa secrets (no API).
+- Migración: `_cached_ws` agrega la columna Grupo al final si falta (resize + update_cell).
+
+---
+
+## auth.py / auth_ui.py — login, roles y grupos multi-empresa (v53/v54)
+Login con **usuario+contraseña**, contraseñas **PBKDF2-SHA256** (nunca texto plano). Google Sheets:
+- Hoja `Login`: Usuario|Password|Rol|Nombre|Activo|**Grupo** ('Grupo' al final = migración segura).
+- Hoja `Grupos`: Grupo|Descripcion|Activo.
+- **Roles:** `propietario` (ve TODO, gestiona grupos+usuarios), `administrador` (solo su grupo:
+  proyectos [vacío] + usuarios de campo), `campo` (4 secciones operativas, SIN descargar informes).
+- **Multi-tenant:** grupos AISLADOS (cada empresa cliente). Admin/campo pertenecen a UN grupo;
+  propietario global (sin grupo). Propietario crea grupos + admins; admin crea sus usuarios de campo.
+- **Bootstrap:** si la hoja Login está VACÍA → formulario "crear propietario" (una sola vez).
+  ⚠️ No vaciar la hoja Login (reabriría el bootstrap).
+- `render_login()` (con **logo COPEX** = static/icon-512.png) devuelve True si hay sesión; si no, st.stop.
+- Gate en app.py: `if not render_login(): st.stop()`. `_ROL`, `_GRUPO` de `session_state.auth`.
+- Sesión en `session_state` (recargar página = re-login; sin cookies por ahora).
+- ⚠️ Paneles owner/admin usan sub-navegación con **radio** (NO st.tabs anidado → causaba mezcla).
+
+---
+
+## Móvil / PWA (Fase 1) + App Android Capacitor
+**PWA (v47-v50):** CSS responsive (columnas se apilan en móvil), banner con `clamp()`,
+manifest + íconos COPEX (`static/`, `enableStaticServing=true`), favicon COPEX vía `page_icon`
+(imagen PIL). ⚠️ En Streamlit Cloud el ícono de app *instalada* es limitado (no controlamos el
+`<head>` del servidor) → la app nativa real es el camino fiable.
+**App Android (`C:\Users\diego\copex_mobile`):** Capacitor (Node + JDK 21 + Android SDK API 36).
+`capacitor.config.json` con `server.url` = la URL de Streamlit (WebView que carga la web).
+Ícono/splash COPEX vía `@capacitor/assets`. Build: `gradlew assembleDebug` → APK en
+`android/app/build/outputs/apk/debug/`. Solo prueba local (sin publicar en tiendas).
 
 ---
 
@@ -466,7 +532,7 @@ Local: mismos valores en `survey_app/.streamlit/secrets.toml` (gitignored).
 
 ---
 
-## Versiones desplegadas (v46 = actual)
+## Versiones desplegadas (v59 = actual)
 | Ver | Cambio principal |
 |---|---|
 | v5 | Extractor: CRLF fix, caso D valor-antes-label, sin pdfplumber |
@@ -510,3 +576,16 @@ Local: mismos valores en `survey_app/.streamlit/secrets.toml` (gitignored).
 | v44 | Fix fichaje intermitente: cachear conexión; is_configured solo revisa secrets |
 | v45 | Fichaje: quitar registro visible en la app (privacidad); usuarios solo fichan |
 | v46 | DOS informes: usuario (cliente, descargable) + admin (completo, auto-email) |
+| v47 | Fase 1 móvil: CSS responsive (columnas se apilan), meta-tags PWA, fix BOM en VERSION |
+| v48 | Robustez: anthropic import diferido (no tumba la app si la librería falla) |
+| v49 | PWA completo: manifest + íconos COPEX + static serving (enableStaticServing) |
+| v50 | Favicon COPEX como page_icon (imagen, lado servidor) |
+| v51 | Gestión de proyecto: cronograma Gantt + curva S (auto por NS + cortes/shaft), editable, en app + informes |
+| v52 | Pestaña Corte de rieles: lee LFKK/LFGK del PDF; Caso 1 y Caso 2 (encima/debajo) |
+| v53 | Login con roles (propietario/administrador/campo); PBKDF2; primer-uso crea propietario |
+| v54 | Multi-empresa: grupos aislados; paneles propietario/admin; fichaje por login+grupo (sin PIN); logo COPEX en login |
+| v55 | Fix mezcla de pestañas: quitar st.tabs anidados en paneles (radio) |
+| v56 | Fix DEFINITIVO mezcla: navegación con radio (solo renderiza sección activa) en vez de st.tabs |
+| v57 | Plomadas: carga de PDF autocompleta BKS/TKSW/SF1/SF2/BS/SG/TG del plano |
+| v58 | Plomadas: renombrar V1-V6 por nombres propios (plomos de riel, paredes teóricas/reales) |
+| v59 | Plomadas: inputs inician en 0 (sin valores residuales de ejemplo) |
