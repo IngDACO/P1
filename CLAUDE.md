@@ -427,7 +427,7 @@ survey_df, pdf_bytes, pdf_name, admin_report)` — Gmail SMTP (`smtplib`, puerto
 
 ---
 
-## plumb.py — líneas de plomada (v40, PDF v57, nombres v58)
+## plumb.py — líneas de plomada (v40, PDF v57, nombres v58, encaje v61)
 Herramienta INDEPENDIENTE. `compute_plumb(inp)` + `plumb_svg(res)` + `plumb_table(res)`.
 Entradas: BKS, RAIL, TKSW, LengthTemplate, SF1, SF2, BSR, BS (+ SG, TG, OMEGA_SIDE si BSR<BS).
 **Vista SUPERIOR (planta), pared frontal como referencia:**
@@ -443,13 +443,20 @@ TKSW=pared frontal→centro riel · SG=centro contrapeso→pared omega · TG=gro
 ```
 V1=0  Plomo riel izq      V2=DBP  Plomo riel der
 V3=−(SF1+RAIL/2) Pared teórica izq     V5=DBP+(SF2+RAIL/2) Pared teórica der
-V4=V3−(BSR−BS)/2 Pared REAL izq        V6=V5+(BSR−BS)/2   Pared REAL der   (V4/V6 desplazables)
+V4=V3−(BSR−BS)/2 Pared REAL izq        V6=V5+(BSR−BS)/2   Pared REAL der   ⚠️ FIJAS (shaft real)
 ```
-**Desplazamiento (si BSR<BS):** ⚠️ búsqueda LINEAL propia (resta 0.5 → paso≈dif),
-distinta de bs_logic (triangular) — NO reutilizar find_bs_step.
-- Z opuesto al Omega: Omega R → Z izq (V4) → `LIMIT_ZB=SF1×0.3`; Omega L → Z der (V6) → `SF2×0.3`.
-- `LIMIT_OB=(SG−TG/2)×0.3`. Se sacrifica PRIMERO Z, luego Omega:
-  `desp_z=−min(paso,LIMIT_ZB)`, `desp_omega=+max(0,paso−LIMIT_ZB)`.
+**Encaje del conjunto (v61) — ⚠️ modelo corregido:**
+- Las paredes REALES **V4/V6 son FIJAS** (definen el shaft real, separadas BSR). NUNCA se mueven.
+- Se mueve el **CONJUNTO rígido** = plomos V1/V2 + paredes teóricas V3/V5 + template P/C1/C2,
+  conservando sus distancias internas (un solo desplazamiento `desp` aplicado a todos).
+- **BSR > BS:** el conjunto se **centra** (holgura `(BSR−BS)/2` a cada lado) → `desp=0`, `{"centrado":True}`.
+- **BSR < BS:** el conjunto **se acerca al lado Z** (Z opuesto al Omega: Omega R→Z izq, Omega L→Z der):
+  `LIMIT_ZB=SF1×0.3` (Z izq) | `SF2×0.3` (Z der); `LIMIT_OB=(SG−TG/2)×0.3`; `dif=BS−BSR`.
+  `z_sac=min(dif,LIMIT_ZB)` (Z primero), `omega_sac=max(0,dif−LIMIT_ZB)` (resto→Omega).
+  Si `omega_sac>LIMIT_OB` → no cabe (`fuera_rango`). La pared teórica del lado Z queda `z_sac` por
+  fuera de su pared real; `desp` = lo que haga falta para lograrlo.
+- **BS se lee del plano** (no se deriva de BKS+2·RAIL+SF1+SF2, aunque esa igualdad se cumple).
+- (histórico: hasta v60 movía V4/V6 con búsqueda lineal — ERA INCORRECTO, deformaba el shaft.)
 - `plumb_ui`: carga PDF autocompleta 📄 BKS/TKSW/SF1/SF2/BS/SG/TG; ✏️ RAIL/LengthTemplate/BSR/Omega manuales.
   Inputs inician en 0 (sin residuales, v59).
 
@@ -532,7 +539,7 @@ Local: mismos valores en `survey_app/.streamlit/secrets.toml` (gitignored).
 
 ---
 
-## Versiones desplegadas (v59 = actual)
+## Versiones desplegadas (v61 = actual)
 | Ver | Cambio principal |
 |---|---|
 | v5 | Extractor: CRLF fix, caso D valor-antes-label, sin pdfplumber |
@@ -589,3 +596,5 @@ Local: mismos valores en `survey_app/.streamlit/secrets.toml` (gitignored).
 | v57 | Plomadas: carga de PDF autocompleta BKS/TKSW/SF1/SF2/BS/SG/TG del plano |
 | v58 | Plomadas: renombrar V1-V6 por nombres propios (plomos de riel, paredes teóricas/reales) |
 | v59 | Plomadas: inputs inician en 0 (sin valores residuales de ejemplo) |
+| v60 | Consolidar conocimiento (CLAUDE.md v47-v59) + agente IA con nuevas funciones |
+| v61 | Plomadas ENCAJE: paredes reales V4/V6 fijas + conjunto rígido se centra (BSR>BS) o sacrifica Z→Omega (BSR<BS) |
