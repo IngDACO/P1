@@ -86,17 +86,27 @@ def render_plumb_tab():
                    f"P→C2 = **{res['d2']:.2f} mm**")
 
         disp = res["displacement"]
-        if disp:
-            warn = "  ⚠️ FUERA DE RANGO (> 1000)" if disp["fuera_rango"] else ""
+        if disp and disp.get("centrado"):
+            st.success(
+                f"BSR > BS → el conjunto se **centra** dentro del shaft real "
+                f"(holgura {disp['holgura_lado']:.1f} mm a cada lado). Paredes reales fijas."
+            )
+        elif disp:
+            if disp["fuera_rango"]:
+                st.error(
+                    f"⚠️ NO CABE: hay que sacrificar {disp['omega_sacrificio']:.1f} mm del lado Omega, "
+                    f"pero LIMIT_OB = {disp['limit_ob']:.1f} mm."
+                )
             st.info(
-                f"**Desplazamiento (BSR < BS):**  Z = {disp['linea_z']} (lado {disp['z_side']}), "
-                f"Omega = {disp['linea_omega']}  |  LIMIT_ZB = {disp['limit_zb']:.1f}, "
-                f"LIMIT_OB = {disp['limit_ob']:.1f}  |  DIF_BS = {disp['dif_bs']:.1f}  |  "
-                f"paso = {disp['paso']:.1f} ({disp['rango']})  |  "
-                f"desp_Z = {disp['desp_z']:.1f}, desp_Omega = {disp['desp_omega']:.1f}{warn}"
+                f"**Encaje (BSR < BS):**  el conjunto se acerca al lado **Z ({disp['z_side']})**, "
+                f"Omega ({disp['omega_side']}) del otro lado.  |  "
+                f"DIF = {disp['dif_bs']:.1f} mm  |  "
+                f"LIMIT_ZB = {disp['limit_zb']:.1f}, LIMIT_OB = {disp['limit_ob']:.1f}  |  "
+                f"sacrificio Z = {disp['z_sacrificio']:.1f}, sacrificio Omega = {disp['omega_sacrificio']:.1f}  |  "
+                f"desplazamiento del conjunto = {disp['desp_conjunto']:.1f} mm"
             )
         else:
-            st.success("BSR ≥ BS → sin desplazamiento (V4/V6 en posición inicial).")
+            st.success("BSR = BS → el conjunto queda en su posición inicial (sin desplazar).")
 
         st.subheader("📋 Tabla de posiciones")
         st.dataframe(pd.DataFrame(plumb_table(res)), use_container_width=True, hide_index=True)

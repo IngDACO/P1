@@ -8,22 +8,24 @@ Entrada (independiente del survey):
 Salida:
   - DBP, DBPW, RW
   - Punto P, cortes C1/C2, distancias diagonales
-  - 6 líneas verticales V1..V6 (posición X), con V4/V6 desplazadas si BSR<BS
+  - 6 líneas verticales V1..V6 (posición X)
 
-Lógica de desplazamiento (BSR < BS):
-  - Z está del lado opuesto al Omega:  Omega R → Z L,  Omega L → Z R
-  - LIMIT_ZB = SF1×0.3 (si Z izquierda)  |  SF2×0.3 (si Z derecha)
-  - LIMIT_OB = (SG − TG/2) × 0.3
-  - Búsqueda lineal (paso 0.5) del `paso` sobre 3 rangos → paso ≈ (BS − BSR)
-  - Se sacrifica primero Z, luego Omega:
-        desp_z     = −min(paso, LIMIT_ZB)
-        desp_omega = +max(0, paso − LIMIT_ZB)
+Modelo de encaje:
+  El CONJUNTO rígido (plomos V1/V2 + paredes teóricas V3/V5 + template P/C1/C2)
+  conserva sus distancias internas y se mueve como un bloque para encajar dentro
+  del shaft real. Las paredes REALES V4/V6 son FIJAS (definen el shaft real).
+  - BSR > BS → el conjunto se centra (holgura (BSR−BS)/2 a cada lado).
+  - BSR < BS → el conjunto se acerca al lado Z (Z opuesto al Omega):
+        Z está del lado opuesto al Omega:  Omega R → Z L,  Omega L → Z R
+        LIMIT_ZB = SF1×0.3 (si Z izq) | SF2×0.3 (si Z der);  LIMIT_OB = (SG − TG/2)×0.3
+        dif = BS − BSR
+        sacrificio Z     = min(dif, LIMIT_ZB)         (se sacrifica Z primero)
+        sacrificio Omega = max(0, dif − LIMIT_ZB)     (el resto lo absorbe Omega)
+        Si sacrificio Omega > LIMIT_OB → no cabe (fuera de rango).
 """
 import math
 
-STEP  = 0.5
-EPS   = 1e-9
-RMAX  = 1000.0
+EPS = 1e-9
 
 # Nombres propios de cada línea (V1..V6 son solo claves internas)
 LINE_NAMES = {
@@ -40,48 +42,6 @@ LINE_SHORT = {
     "V3": "Teór I",  "V5": "Teór D",
     "V4": "Real I",  "V6": "Real D",
 }
-
-
-def _search_paso(dif: float, limit_zb: float, limit_ob: float):
-    """Búsqueda lineal (resta 0.5 constante) sobre 3 rangos. Devuelve (paso, rango, fuera_rango)."""
-    rem  = dif
-    cur  = STEP
-    paso = 0.0
-    rango = "Ninguno"
-
-    # Rango 1: [0, LIMIT_ZB]
-    while cur <= limit_zb + EPS and rem > EPS:
-        rem -= STEP
-        paso = cur
-        if rem <= EPS:
-            rango = "Rango 1 [0, ZB]"
-            break
-        cur += STEP
-
-    # Rango 2: (LIMIT_ZB, LIMIT_ZB + LIMIT_OB]
-    if rango == "Ninguno":
-        while cur <= (limit_zb + limit_ob) + EPS and rem > EPS:
-            rem -= STEP
-            paso = cur
-            if rem <= EPS:
-                rango = "Rango 2 (ZB, ZB+OB]"
-                break
-            cur += STEP
-
-    # Rango 3: (LIMIT_ZB + LIMIT_OB, 1000]
-    if rango == "Ninguno":
-        while cur <= RMAX + EPS and rem > EPS:
-            rem -= STEP
-            paso = cur
-            if rem <= EPS:
-                rango = "Rango 3 (ZB+OB, 1000]"
-                break
-            cur += STEP
-
-    fuera = rem > EPS
-    if fuera:
-        rango = "FUERA DE RANGO (> 1000)"
-    return paso, rango, fuera
 
 
 def compute_plumb(inp: dict) -> dict:
@@ -102,74 +62,74 @@ def compute_plumb(inp: dict) -> dict:
     d1 = math.hypot(P[0] - C1[0], P[1] - C1[1])
     d2 = math.hypot(P[0] - C2[0], P[1] - C2[1])
 
-    # ── 6 líneas verticales (posición inicial) ──────────────
+    # ── Líneas (posición inicial del conjunto) ──────────────
+    # Conjunto RÍGIDO (se mueve junto): plomos V1/V2, paredes teóricas V3/V5, template P/C1/C2.
+    # Paredes REALES V4/V6 = el shaft real → FIJAS (nunca se mueven).
     rail2 = rail / 2.0
-    half  = (bsr - bs) / 2.0     # negativo cuando BSR < BS
+    half  = (bsr - bs) / 2.0        # (BSR−BS)/2 : >0 si shaft real más grande
 
     x_v1 = 0.0
     x_v2 = dbp
-    x_v3 = 0.0 - (sf1 + rail2)
-    x_v4 = x_v3 - half
-    x_v5 = dbp + (sf2 + rail2)
-    x_v6 = x_v5 + half
+    x_v3 = 0.0 - (sf1 + rail2)      # pared teórica izq  (conjunto)
+    x_v5 = dbp + (sf2 + rail2)      # pared teórica der  (conjunto)
+    x_v4 = x_v3 - half              # pared REAL izq  (fija)
+    x_v6 = x_v5 + half              # pared REAL der  (fija)
 
-    x_v4_final = x_v4
-    x_v6_final = x_v6
-
+    desp = 0.0                      # desplazamiento único del conjunto
     displacement = None
 
-    # ── Desplazamiento si BSR < BS ──────────────────────────
+    # ── Encaje del conjunto dentro del shaft real ───────────
     if bsr < bs:
+        # Shaft real más pequeño → el conjunto no cabe: se acerca al lado Z
+        # (sacrifica hasta LIMIT_ZB) y el resto lo absorbe Omega.
         sg    = float(inp.get("SG", 0));  tg = float(inp.get("TG", 0))
         omega = str(inp.get("OMEGA_SIDE", "R")).upper()
         omega = omega if omega in ("R", "L") else "R"
 
-        z_side      = "L" if omega == "R" else "R"
-        linea_z     = "V4" if z_side == "L" else "V6"   # V3/V4 = izquierda
-        linea_omega = "V6" if z_side == "L" else "V4"
-
+        z_side   = "L" if omega == "R" else "R"     # Z opuesto al Omega
         limit_zb = (sf1 if z_side == "L" else sf2) * 0.3
         limit_ob = (sg - tg / 2.0) * 0.3
-        dif      = bs - bsr
+        dif      = bs - bsr                          # cuánto sobra el conjunto
 
-        paso, rango, fuera = _search_paso(dif, limit_zb, limit_ob)
+        z_sac     = min(dif, limit_zb)               # sacrificio lado Z (≤ LIMIT_ZB)
+        omega_sac = max(0.0, dif - limit_zb)         # resto → lado Omega
+        fuera     = omega_sac > limit_ob + EPS       # no cabe ni sacrificando ambos
 
-        # Se sacrifica primero Z, luego Omega
-        desp_z     = -min(paso, limit_zb)
-        desp_omega = +max(0.0, paso - limit_zb)
-
-        if linea_z == "V4":
-            x_v4_final = x_v4 + desp_z
-            x_v6_final = x_v6 + desp_omega
-        else:  # linea_z == V6
-            x_v6_final = x_v6 + desp_z
-            x_v4_final = x_v4 + desp_omega
+        # Desplazar el CONJUNTO hacia el lado Z (paredes reales fijas):
+        # la pared teórica del lado Z queda z_sac por fuera de su pared real.
+        if z_side == "L":
+            desp = (x_v4 - z_sac) - x_v3
+        else:
+            desp = (x_v6 + z_sac) - x_v5
 
         displacement = {
-            "omega_side":  omega,
-            "z_side":      z_side,
-            "linea_z":     linea_z,
-            "linea_omega": linea_omega,
-            "limit_zb":    limit_zb,
-            "limit_ob":    limit_ob,
-            "dif_bs":      dif,
-            "paso":        paso,
-            "rango":       rango,
-            "fuera_rango": fuera,
-            "desp_z":      desp_z,
-            "desp_omega":  desp_omega,
+            "omega_side": omega, "z_side": z_side,
+            "limit_zb": limit_zb, "limit_ob": limit_ob, "dif_bs": dif,
+            "z_sacrificio": z_sac, "omega_sacrificio": omega_sac,
+            "desp_conjunto": desp, "fuera_rango": fuera,
         }
+    elif bsr > bs:
+        # Shaft real más grande → el conjunto ya queda centrado en su posición
+        # inicial (holgura half a cada lado). desp = 0.
+        displacement = {"centrado": True, "holgura_lado": half}
+
+    # ── Aplicar el desplazamiento SOLO al conjunto (V4/V6 fijas) ──
+    x_v1f = x_v1 + desp;  x_v2f = x_v2 + desp
+    x_v3f = x_v3 + desp;  x_v5f = x_v5 + desp
+    Pf  = (P[0] + desp, P[1])
+    C1f = (C1[0] + desp, C1[1])
+    C2f = (C2[0] + desp, C2[1])
 
     return {
         "dbp": dbp, "dbpw": dbpw, "rw": rw,
-        "P": P, "C1": C1, "C2": C2, "d1": d1, "d2": d2,
+        "P": Pf, "C1": C1f, "C2": C2f, "d1": d1, "d2": d2,
         "lines": {
-            "V1": {"x0": x_v1, "x": x_v1},
-            "V2": {"x0": x_v2, "x": x_v2},
-            "V3": {"x0": x_v3, "x": x_v3},
-            "V4": {"x0": x_v4, "x": x_v4_final},
-            "V5": {"x0": x_v5, "x": x_v5},
-            "V6": {"x0": x_v6, "x": x_v6_final},
+            "V1": {"x0": x_v1, "x": x_v1f},
+            "V2": {"x0": x_v2, "x": x_v2f},
+            "V3": {"x0": x_v3, "x": x_v3f},
+            "V4": {"x0": x_v4, "x": x_v4},     # pared real izq — FIJA
+            "V5": {"x0": x_v5, "x": x_v5f},
+            "V6": {"x0": x_v6, "x": x_v6},     # pared real der — FIJA
         },
         "displacement": displacement,
     }
