@@ -116,20 +116,26 @@ def compute_plumb(inp: dict) -> dict:
     # ── Aplicar el desplazamiento SOLO al conjunto (V4/V6 fijas) ──
     x_v1f = x_v1 + desp;  x_v2f = x_v2 + desp
     x_v3f = x_v3 + desp;  x_v5f = x_v5 + desp
-    Pf  = (P[0] + desp, P[1])
-    C1f = (C1[0] + desp, C1[1])
-    C2f = (C2[0] + desp, C2[1])
+
+    # ── Eje CERO = pared REAL izquierda (V4) ────────────────
+    # Todo el sistema se mide desde V4 (referencia física fija en obra).
+    off = x_v4
+    def _o(x):
+        return x - off
 
     return {
         "dbp": dbp, "dbpw": dbpw, "rw": rw,
-        "P": Pf, "C1": C1f, "C2": C2f, "d1": d1, "d2": d2,
+        "P":  (_o(P[0]  + desp), P[1]),
+        "C1": (_o(C1[0] + desp), C1[1]),
+        "C2": (_o(C2[0] + desp), C2[1]),
+        "d1": d1, "d2": d2,
         "lines": {
-            "V1": {"x0": x_v1, "x": x_v1f},
-            "V2": {"x0": x_v2, "x": x_v2f},
-            "V3": {"x0": x_v3, "x": x_v3f},
-            "V4": {"x0": x_v4, "x": x_v4},     # pared real izq — FIJA
-            "V5": {"x0": x_v5, "x": x_v5f},
-            "V6": {"x0": x_v6, "x": x_v6},     # pared real der — FIJA
+            "V1": {"x0": _o(x_v1), "x": _o(x_v1f)},
+            "V2": {"x0": _o(x_v2), "x": _o(x_v2f)},
+            "V3": {"x0": _o(x_v3), "x": _o(x_v3f)},
+            "V4": {"x0": _o(x_v4), "x": _o(x_v4)},   # = 0  (pared real izq = eje cero)
+            "V5": {"x0": _o(x_v5), "x": _o(x_v5f)},
+            "V6": {"x0": _o(x_v6), "x": _o(x_v6)},   # pared real der — FIJA
         },
         "displacement": displacement,
     }
