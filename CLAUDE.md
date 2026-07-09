@@ -427,7 +427,7 @@ survey_df, pdf_bytes, pdf_name, admin_report)` — Gmail SMTP (`smtplib`, puerto
 
 ---
 
-## plumb.py — líneas de plomada (v40, PDF v57, nombres v58, encaje v61)
+## plumb.py — líneas de plomada (v40, PDF v57, nombres v58, encaje v61, eje-cero V4 v62)
 Herramienta INDEPENDIENTE. `compute_plumb(inp)` + `plumb_svg(res)` + `plumb_table(res)`.
 Entradas: BKS, RAIL, TKSW, LengthTemplate, SF1, SF2, BSR, BS (+ SG, TG, OMEGA_SIDE si BSR<BS).
 **Vista SUPERIOR (planta), pared frontal como referencia:**
@@ -445,6 +445,9 @@ V1=0  Plomo riel izq      V2=DBP  Plomo riel der
 V3=−(SF1+RAIL/2) Pared teórica izq     V5=DBP+(SF2+RAIL/2) Pared teórica der
 V4=V3−(BSR−BS)/2 Pared REAL izq        V6=V5+(BSR−BS)/2   Pared REAL der   ⚠️ FIJAS (shaft real)
 ```
+**⚠️ EJE CERO = pared REAL izquierda (V4, v62):** al final se resta `x_v4` a todas las X →
+V4=0 y el shaft real va de 0 a BSR. Referencia física fija en obra. Las X pueden ser negativas
+(pared teórica por fuera de la real = sacrificio lado Z).
 **Encaje del conjunto (v61) — ⚠️ modelo corregido:**
 - Las paredes REALES **V4/V6 son FIJAS** (definen el shaft real, separadas BSR). NUNCA se mueven.
 - Se mueve el **CONJUNTO rígido** = plomos V1/V2 + paredes teóricas V3/V5 + template P/C1/C2,
@@ -539,7 +542,7 @@ Local: mismos valores en `survey_app/.streamlit/secrets.toml` (gitignored).
 
 ---
 
-## Versiones desplegadas (v61 = actual)
+## Versiones desplegadas (v62 = actual)
 | Ver | Cambio principal |
 |---|---|
 | v5 | Extractor: CRLF fix, caso D valor-antes-label, sin pdfplumber |
@@ -598,3 +601,4 @@ Local: mismos valores en `survey_app/.streamlit/secrets.toml` (gitignored).
 | v59 | Plomadas: inputs inician en 0 (sin valores residuales de ejemplo) |
 | v60 | Consolidar conocimiento (CLAUDE.md v47-v59) + agente IA con nuevas funciones |
 | v61 | Plomadas ENCAJE: paredes reales V4/V6 fijas + conjunto rígido se centra (BSR>BS) o sacrifica Z→Omega (BSR<BS) |
+| v62 | Plomadas: eje CERO = pared real izquierda (V4=0); shaft real de 0 a BSR |
