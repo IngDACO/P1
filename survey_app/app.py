@@ -22,6 +22,7 @@ from core.email_notify    import send_usage_notification
 from core.user_report     import generate_user_report
 from core.diagrams        import render_floor_plans_html
 from core.schedule        import build_schedule, detect_flags, schedule_svg, schedule_table
+from core.plumb           import compute_plumb, plumb_svg, plumb_table
 
 try:
     # utf-8-sig elimina el BOM que agrega PowerShell al escribir VERSION
@@ -101,11 +102,12 @@ try {
 
 SURVEY_COLS = ["WR", "FR", "OR", "WL", "FL", "OL"]
 USER_ONLY = {
-    "BSR":          "Ancho real del hueco medido en obra (mm)",
-    "FS":           "Distancia frontal de seguridad (mm)",
-    "FRAME":        "Marco de puerta de entrada (mm)",
-    "RAIL":         "Ancho de la cabeza del riel (mm)",
-    "OFFSET_CABIN": "Offset de cabina (mm)",
+    "BSR":            "Ancho real del hueco medido en obra (mm)",
+    "FS":             "Distancia frontal de seguridad (mm)",
+    "FRAME":          "Marco de puerta de entrada (mm)",
+    "RAIL":           "Ancho de la cabeza del riel (mm)",
+    "OFFSET_CABIN":   "Offset de cabina (mm)",
+    "LengthTemplate": "Longitud del template de plomada (mm) — para el esquema de plomado",
 }
 
 # ══════════════════════════════════════════════════════
@@ -734,6 +736,46 @@ if _seccion == _L_SURVEY:
                 f"Rango: **{bs_result['range']}**  |  Zona: **{bs_result['range_name']}**"
             )
 
+        # ── Plomado definitivo (con el desplazamiento del survey) ──
+        st.subheader("🔩 Plomado definitivo (según el survey)")
+        st.caption("Esquema de plomado con los desplazamientos que determinó el survey. "
+                   "El conjunto (plomos + paredes teóricas + template) se mueve; las paredes "
+                   "reales quedan fijas (eje cero = pared real izquierda).")
+        plumb_res = None
+        if best_sol is not None:
+            try:
+                _plumb_inp = {
+                    "BKS":  all_params["BKS"],  "RAIL": all_params["RAIL"],
+                    "TKSW": all_params["TKSW"], "LengthTemplate": all_params.get("LengthTemplate", 0.0),
+                    "SF1":  all_params["SF1"],  "SF2":  all_params["SF2"],
+                    "BSR":  all_params["BSR"],  "BS":   all_params["BS"],
+                }
+                _sdisp    = {"rl": best_sol["rl"], "fb": best_sol["fb_applied"]}
+                plumb_res = compute_plumb(_plumb_inp, survey_disp=_sdisp)
+                st.info(
+                    f"Desplazamiento aplicado:  lateral (rl) = **{best_sol['rl']:.1f} mm**  ·  "
+                    f"frontal (fb) = **{best_sol['fb_applied']:.1f} mm**."
+                )
+                pm1, pm2, pm3 = st.columns(3)
+                pm1.metric("DBP",  f"{plumb_res['dbp']:.1f} mm")
+                pm2.metric("DBPW", f"{plumb_res['dbpw']:.1f} mm")
+                pm3.metric("RW",   f"{plumb_res['rw']:.1f} mm")
+                st.dataframe(pd.DataFrame(plumb_table(plumb_res)),
+                             use_container_width=True, hide_index=True)
+                components.html(
+                    '<!DOCTYPE html><html><body style="margin:0;background:transparent">'
+                    + plumb_svg(plumb_res) + '</body></html>',
+                    height=460, scrolling=False,
+                )
+                if float(all_params.get("LengthTemplate", 0.0)) <= 0:
+                    st.info("💡 Ingresa **LengthTemplate** en los parámetros para ver el "
+                            "template completo (punto P, cortes C1/C2 y diagonales).")
+            except Exception as e:
+                plumb_res = None
+                st.warning(f"No se pudo generar el plomado definitivo: {e}")
+        else:
+            st.caption("Se mostrará cuando el survey encuentre una solución válida.")
+
         # ── Interpretaciones IA (admin + usuario) ─────────────
         _calc_for_ia = {
             "limits":           limits,
@@ -767,6 +809,7 @@ if _seccion == _L_SURVEY:
             "bs_result":           bs_result,
             "interpretation":      interpretation,
             "interpretation_user": interpretation_user,
+            "plumb":               plumb_res,
         }
 
         # ── Cronograma automático según el proyecto ───────────
@@ -796,6 +839,7 @@ if _seccion == _L_SURVEY:
                         survey_cols      = SURVEY_COLS,
                         interpretation   = interpretation,
                         schedule         = _auto,
+                        plumb            = plumb_res,
                     )
             except Exception as e:
                 st.warning(f"No se pudo generar el informe admin para el correo: {e}")
@@ -897,6 +941,7 @@ if _seccion == _L_SURVEY:
                         survey_cols         = SURVEY_COLS,
                         interpretation_user = r.get("interpretation_user"),
                         schedule            = r.get("schedule"),
+                        plumb               = r.get("plumb"),
                     )
                 proj = (r["all_params"].get("PROYECTO") or "cliente").replace(" ", "_")
                 st.download_button(

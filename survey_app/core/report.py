@@ -20,6 +20,7 @@ from core.highlighting import (
 )
 from core.diagrams import floor_plan_svg
 from core.schedule import schedule_svg, schedule_table
+from core.plumb    import plumb_svg, plumb_table
 
 # ── Color para bloques de interpretación IA ──────────────
 C_IA_BG     = colors.HexColor("#f0f7ff")
@@ -472,7 +473,7 @@ def _summary_table(summary_list, styles):
 def generate_report(project_params, calculated, survey_original,
                     survey_adjusted, lim_map, analysis,
                     optimizer_result, bs_result, survey_cols,
-                    interpretation=None, schedule=None):
+                    interpretation=None, schedule=None, plumb=None):
 
     best          = optimizer_result.get("best")          if optimizer_result else None
     all_solutions = optimizer_result.get("all_solutions", []) if optimizer_result else []
@@ -1054,6 +1055,40 @@ def generate_report(project_params, calculated, survey_original,
             ("TOPPADDING", (0,0),(-1,-1), 3), ("BOTTOMPADDING", (0,0),(-1,-1), 3),
         ]))
         story += [stab, sp(8)]
+
+    # ── 12. ESQUEMA DE PLOMADO DEFINITIVO ────────────────────
+    if plumb:
+        _pd = plumb.get("displacement") or {}
+        story += [PageBreak(),
+                  _section_header("12. ESQUEMA DE PLOMADO DEFINITIVO", styles), sp(2),
+                  Paragraph("Plomado con los desplazamientos determinados por el survey. El conjunto "
+                            "(plomos + paredes teóricas + template) se desplaza en bloque; las paredes "
+                            "reales quedan fijas. Eje cero = pared real izquierda.", styles["Note"]), sp(2)]
+        if _pd.get("origen") == "survey":
+            story += [Paragraph(
+                f"Desplazamiento aplicado: lateral (rl) = {_pd.get('rl', 0):.1f} mm · "
+                f"frontal (fb) = {_pd.get('fb', 0):.1f} mm.   "
+                f"DBP = {plumb['dbp']:.1f} mm · DBPW = {plumb['dbpw']:.1f} mm · RW = {plumb['rw']:.1f} mm.",
+                styles["Normal2"]), sp(4)]
+        pdraw = _svg_flowable(plumb_svg(plumb), W)
+        if pdraw is not None:
+            story += [pdraw, sp(6)]
+        phead = [Paragraph(f"<b>{h}</b>", styles["Normal2"]) for h in
+                 ["Línea", "X inicial (mm)", "X final (mm)", "Desplazada"]]
+        ptrows = [phead]
+        for r in plumb_table(plumb):
+            ptrows.append([Paragraph(str(r["Línea"]), styles["Normal2"]),
+                           Paragraph(str(r["X inicial (mm)"]), styles["Normal2"]),
+                           Paragraph(str(r["X final (mm)"]), styles["Normal2"]),
+                           Paragraph(str(r["Desplazada"]), styles["Normal2"])])
+        ptab = Table(ptrows, colWidths=[W*0.40, W*0.20, W*0.20, W*0.20])
+        ptab.setStyle(TableStyle([
+            ("GRID", (0,0),(-1,-1), 0.3, colors.lightgrey),
+            ("BACKGROUND", (0,0),(-1,0), C_SUBHEAD),
+            ("TEXTCOLOR", (0,0),(-1,0), C_WHITE),
+            ("TOPPADDING", (0,0),(-1,-1), 3), ("BOTTOMPADDING", (0,0),(-1,-1), 3),
+        ]))
+        story += [ptab, sp(8)]
 
     # ── PIE ──────────────────────────────────────────────────
     story += [sp(8), HRFlowable(width="100%", thickness=0.5, color=colors.lightgrey), sp(4),

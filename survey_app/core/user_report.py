@@ -19,6 +19,7 @@ from reportlab.lib.enums import TA_CENTER, TA_LEFT
 from core.diagrams import floor_plan_svg
 from core.report import _svg_flowable
 from core.schedule import schedule_svg, schedule_table
+from core.plumb    import plumb_svg, plumb_table
 
 W          = 170 * mm
 C_COPEX    = colors.HexColor("#1a3a5c")
@@ -68,7 +69,8 @@ def _ia_text(text, styles):
 
 
 def generate_user_report(project_params, calculated, optimizer_result,
-                         lim_map, survey_cols, interpretation_user, schedule=None):
+                         lim_map, survey_cols, interpretation_user, schedule=None,
+                         plumb=None):
     buf = io.BytesIO()
     doc = SimpleDocTemplate(buf, pagesize=A4,
         leftMargin=20 * mm, rightMargin=20 * mm, topMargin=16 * mm, bottomMargin=16 * mm)
@@ -238,6 +240,38 @@ def generate_user_report(project_params, calculated, optimizer_result,
     story += [_sp(10)]
     story += [_section("8. Verificación final", styles), _sp(5)]
     story += list(_ia_text(ia.get("verificacion"), styles))
+
+    # ── Esquema de plomado definitivo ───────────────────────
+    if plumb:
+        _pd = plumb.get("displacement") or {}
+        story += [PageBreak(), _section("9. Esquema de plomado definitivo", styles), _sp(4),
+                  Paragraph("Ubicación final de las líneas de plomada con los desplazamientos del "
+                            "análisis. El conjunto (plomos, paredes teóricas y template) se desplaza "
+                            "en bloque; las paredes reales quedan fijas. El eje cero es la pared real "
+                            "izquierda.", styles["UBody"]), _sp(4)]
+        if _pd.get("origen") == "survey":
+            story += [Paragraph(
+                f"Desplazamiento aplicado: lateral = <b>{_pd.get('rl', 0):.1f} mm</b> · "
+                f"frontal = <b>{_pd.get('fb', 0):.1f} mm</b>.", styles["UBody"]), _sp(4)]
+        pdraw = _svg_flowable(plumb_svg(plumb), W)
+        if pdraw is not None:
+            story += [pdraw, _sp(6)]
+        phead = [Paragraph(f"<b>{h}</b>", styles["UCell"]) for h in
+                 ["Línea", "X inicial (mm)", "X final (mm)", "Desplazada"]]
+        ptrows = [phead]
+        for r in plumb_table(plumb):
+            ptrows.append([Paragraph(str(r["Línea"]), styles["UInfo"]),
+                           Paragraph(str(r["X inicial (mm)"]), styles["UCell"]),
+                           Paragraph(str(r["X final (mm)"]), styles["UCell"]),
+                           Paragraph(str(r["Desplazada"]), styles["UCell"])])
+        ptab = Table(ptrows, colWidths=[W * 0.40, W * 0.20, W * 0.20, W * 0.20])
+        ptab.setStyle(TableStyle([
+            ("GRID", (0, 0), (-1, -1), 0.4, colors.lightgrey),
+            ("BACKGROUND", (0, 0), (-1, 0), C_COPEX2),
+            ("TEXTCOLOR", (0, 0), (-1, 0), C_WHITE),
+            ("TOPPADDING", (0, 0), (-1, -1), 3), ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+        ]))
+        story += [ptab, _sp(10)]
 
     # ── Pie ─────────────────────────────────────────────────
     story += [_sp(14), HRFlowable(width="100%", thickness=0.5, color=colors.lightgrey), _sp(4),

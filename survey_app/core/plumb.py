@@ -44,16 +44,27 @@ LINE_SHORT = {
 }
 
 
-def compute_plumb(inp: dict) -> dict:
-    """Calcula todas las magnitudes de plomada. `inp` es un dict con las entradas."""
+def compute_plumb(inp: dict, survey_disp: dict = None) -> dict:
+    """Calcula todas las magnitudes de plomada. `inp` es un dict con las entradas.
+
+    Modo independiente (survey_disp=None): el encaje lo resuelve el propio plomado
+    (centrado si BSR>BS, sacrificio Z→Omega si BSR<BS).
+
+    Modo integrado al survey (survey_disp={"rl":.., "fb":..}): el desplazamiento del
+    conjunto lo determina el SURVEY (NO se usa la lógica Z/Omega):
+      - lateral: el conjunto se desplaza −rl  (rl<0 = derecha → X+)
+      - profundidad: DBPW = TKSW − 150 + fb   (fb>0 aleja los plomos de la pared frontal)
+    """
     bks  = float(inp["BKS"]);  rail = float(inp["RAIL"])
     tksw = float(inp["TKSW"]); lt   = float(inp["LengthTemplate"])
     sf1  = float(inp["SF1"]);  sf2  = float(inp["SF2"])
     bsr  = float(inp["BSR"]);  bs   = float(inp["BS"])
 
+    fb = float(survey_disp.get("fb", 0.0)) if survey_disp else 0.0
+
     # ── Base ────────────────────────────────────────────────
     dbp  = bks + rail
-    dbpw = tksw - 150.0
+    dbpw = tksw - 150.0 + fb        # +fb (survey): plomos se alejan de la pared frontal
     rw   = dbpw - lt
 
     P  = (dbp / 2.0, rw)
@@ -78,8 +89,15 @@ def compute_plumb(inp: dict) -> dict:
     desp = 0.0                      # desplazamiento único del conjunto
     displacement = None
 
-    # ── Encaje del conjunto dentro del shaft real ───────────
-    if bsr < bs:
+    if survey_disp is not None:
+        # ── Desplazamiento determinado por el SURVEY (no Z/Omega) ──
+        rl   = float(survey_disp.get("rl", 0.0))
+        desp = -rl                  # rl<0 (derecha) → conjunto a la derecha (X+)
+        displacement = {
+            "origen": "survey", "rl": rl, "fb": fb, "desp_conjunto": desp,
+        }
+    # ── Encaje del conjunto dentro del shaft real (modo independiente) ──
+    elif bsr < bs:
         # Shaft real más pequeño → el conjunto no cabe: se acerca al lado Z
         # (sacrifica hasta LIMIT_ZB) y el resto lo absorbe Omega.
         sg    = float(inp.get("SG", 0));  tg = float(inp.get("TG", 0))
