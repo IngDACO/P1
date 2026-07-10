@@ -460,6 +460,14 @@ V4=0 y el shaft real va de 0 a BSR. Referencia física fija en obra. Las X puede
   fuera de su pared real; `desp` = lo que haga falta para lograrlo.
 - **BS se lee del plano** (no se deriva de BKS+2·RAIL+SF1+SF2, aunque esa igualdad se cumple).
 - (histórico: hasta v60 movía V4/V6 con búsqueda lineal — ERA INCORRECTO, deformaba el shaft.)
+
+**Integración con el survey (v63):** `compute_plumb(inp, survey_disp={"rl":..,"fb":..})`.
+Cuando `survey_disp` viene del survey, NO usa Z/Omega: el conjunto se desplaza `−rl` (lateral,
+rl<0=derecha) y la profundidad `DBPW = TKSW−150 + fb` (fb>0 aleja de la pared frontal). El survey
+agrega input **LengthTemplate** (en `USER_ONLY`), tras calcular muestra el "plomado definitivo"
+(`app.py`, guardado en `calc_results["plumb"]`) y lo embebe en ambos informes (`report.py` §12,
+`user_report.py` §9) vía `_svg_flowable(plumb_svg(...))`. La pestaña de plomado manual sigue usando
+`compute_plumb(inp)` (sin survey_disp) → modo independiente intacto.
 - `plumb_ui`: carga PDF autocompleta 📄 BKS/TKSW/SF1/SF2/BS/SG/TG; ✏️ RAIL/LengthTemplate/BSR/Omega manuales.
   Inputs inician en 0 (sin residuales, v59).
 
@@ -542,7 +550,7 @@ Local: mismos valores en `survey_app/.streamlit/secrets.toml` (gitignored).
 
 ---
 
-## Versiones desplegadas (v62 = actual)
+## Versiones desplegadas (v63 = actual)
 | Ver | Cambio principal |
 |---|---|
 | v5 | Extractor: CRLF fix, caso D valor-antes-label, sin pdfplumber |
@@ -602,3 +610,4 @@ Local: mismos valores en `survey_app/.streamlit/secrets.toml` (gitignored).
 | v60 | Consolidar conocimiento (CLAUDE.md v47-v59) + agente IA con nuevas funciones |
 | v61 | Plomadas ENCAJE: paredes reales V4/V6 fijas + conjunto rígido se centra (BSR>BS) o sacrifica Z→Omega (BSR<BS) |
 | v62 | Plomadas: eje CERO = pared real izquierda (V4=0); shaft real de 0 a BSR |
+| v63 | Integrar plomado al survey (input LengthTemplate; plomado definitivo con rl/fb del survey, en app + ambos informes); pestaña manual intacta |
