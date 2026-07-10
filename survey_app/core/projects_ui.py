@@ -1,0 +1,253 @@
+"""
+UI del panel de administración de proyectos (rol administrador).
+Navegación con st.radio (NO st.tabs) para evitar mezcla de contenido.
+"""
+import pandas as pd
+import streamlit as st
+
+from core import projects as P
+from core import auth
+
+
+_ESTADO_EMOJI = {
+    "Planificado": "🕓", "En progreso": "🚧", "Completado": "✅",
+    "En pausa": "⏸", "Cancelado": "🚫",
+}
+
+
+def _field_users(grupo):
+    """Usuarios de campo del grupo (para asignar a un proyecto)."""
+    try:
+        return [u["Usuario"] for u in auth.list_users(grupo)
+                if str(u.get("Rol", "")) == "campo"]
+    except Exception:
+        return []
+
+
+def render_admin_projects(grupo: str):
+    st.markdown(f"### 📁 Proyectos — {grupo}")
+    if not P.is_configured():
+        st.warning("La gestión de proyectos necesita Google Sheets configurado "
+                   "(gcp_service_account + TIMECLOCK_SHEET_ID en los Secrets).")
+        return
+
+    sec = st.radio("Sección", ["📊 Proyectos", "🗂 Agrupaciones"],
+                   horizontal=True, key="adminproj_sec", label_visibility="collapsed")
+    st.markdown("---")
+    if sec == "📊 Proyectos":
+        _panel_proyectos(grupo)
+    else:
+        _panel_agrupaciones(grupo)
+
+
+# ── Panel de proyectos ───────────────────────────────────────────
+def _panel_proyectos(grupo: str):
+    proys = P.list_projects(grupo=grupo)
+    if not proys:
+        st.info("Todavía no hay proyectos en este grupo. Los proyectos se crean desde "
+                "la pestaña **Survey** con el botón **💾 Guardar como proyecto** "
+                "(tras calcular).")
+        return
+
+    # Resumen de estado
+    ags = {a["ID"]: a["Nombre"] for a in P.list_groupings(grupo=grupo)}
+    horas = P.project_hours_bulk(grupo)   # 1 sola lectura del fichaje
+    rows = []
+    for p in proys:
+        est = str(p.get("Estado", ""))
+        rows.append({
+            "ID":        p.get("ID"),
+            "Proyecto":  p.get("Nombre"),
+            "Cliente":   p.get("Cliente"),
+            "Estado":    f"{_ESTADO_EMOJI.get(est, '')} {est}".strip(),
+            "Avance %":  P._num(p.get("Avance")),
+            "Horas":     horas.get(str(p.get("Nombre", "")), 0.0),
+            "Agrupación": ags.get(str(p.get("AgrupacionID", "")), ""),
+        })
+    st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+
+    # Detalle / edición
+    st.markdown("#### 🔎 Abrir proyecto")
+    idmap = {f"{p.get('ID')} · {p.get('Nombre')}": p.get("ID") for p in proys}
+    sel = st.selectbox("Proyecto", list(idmap.keys()), key="adminproj_sel")
+    if sel:
+        _detalle_proyecto(idmap[sel], grupo)
+
+
+def _detalle_proyecto(pid: str, grupo: str):
+    prj = P.get_project(pid)
+    if not prj:
+        st.error("Proyecto no encontrado.")
+        return
+
+    avance = P._num(prj.get("Avance"))
+    est    = str(prj.get("Estado", ""))
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Estado", f"{_ESTADO_EMOJI.get(est,'')} {est}".strip())
+    c2.metric("Avance", f"{avance:.0f}%")
+    c3.metric("Horas trabajadas", f"{P.project_hours(prj.get('Nombre'), grupo):.1f}")
+    st.progress(min(1.0, avance / 100.0))
+
+    # ── Editar datos ──
+    with st.form(f"edit_{pid}"):
+        st.markdown("**Datos del proyecto**")
+        e1, e2 = st.columns(2)
+        nombre   = e1.text_input("Nombre", value=prj.get("Nombre", ""))
+        cliente  = e2.text_input("Cliente", value=prj.get("Cliente", ""))
+        ubic     = e1.text_input("Ubicación", value=prj.get("Ubicacion", ""))
+        modelo   = e2.text_input("Modelo", value=prj.get("Modelo", ""))
+        ing      = e1.text_input("Ingeniero", value=prj.get("Ingeniero", ""))
+        f_ini    = e2.text_input("Fecha inicio", value=prj.get("FechaInicio", ""))
+        f_fin    = e1.text_input("Fecha fin estimada", value=prj.get("FechaFinEst", ""))
+
+        campos_disp = _field_users(grupo)
+        actuales = [x.strip() for x in str(prj.get("CampoAsignados", "")).split(";") if x.strip()]
+        # opciones = union para no perder asignados que ya no estén en la lista
+        opts = sorted(set(campos_disp) | set(actuales))
+        asignados = st.multiselect("Usuarios de campo asignados", opts, default=actuales)
+
+        ags = P.list_groupings(grupo=grupo)
+        ag_opts = ["(ninguna)"] + [f"{a['ID']} · {a['Nombre']}" for a in ags]
+        ag_cur  = str(prj.get("AgrupacionID", ""))
+        ag_idx  = next((i for i, a in enumerate(ags) if a["ID"] == ag_cur), None)
+        ag_sel  = st.selectbox("Agrupación", ag_opts,
+                               index=(ag_idx + 1) if ag_idx is not None else 0)
+        peso    = st.number_input("Peso en la agrupación", min_value=0.0, step=1.0,
+                                  value=P._num(prj.get("PesoEnAgrupacion")))
+        est_man = st.selectbox("Estado manual (override)", P.ESTADOS_MANUAL,
+                               index=P.ESTADOS_MANUAL.index(str(prj.get("EstadoManual", "")))
+                               if str(prj.get("EstadoManual", "")) in P.ESTADOS_MANUAL else 0)
+
+        if st.form_submit_button("💾 Guardar cambios", use_container_width=True):
+            ag_id = "" if ag_sel == "(ninguna)" else ag_sel.split(" · ")[0]
+            P.update_project(pid, {
+                "Nombre": nombre, "Cliente": cliente, "Ubicacion": ubic, "Modelo": modelo,
+                "Ingeniero": ing, "FechaInicio": f_ini, "FechaFinEst": f_fin,
+                "CampoAsignados": ";".join(asignados),
+                "AgrupacionID": ag_id, "PesoEnAgrupacion": peso,
+            })
+            P.set_estado_manual(pid, est_man)
+            st.success("Cambios guardados.")
+            st.rerun()
+
+    # ── Actividades (avance por el campo) ──
+    st.markdown("**Actividades del cronograma** (el avance lo actualiza el campo)")
+    acts = P.list_activities(pid)
+    if acts:
+        st.dataframe(pd.DataFrame([{
+            "Orden":  P._num(a.get("Orden")),
+            "Actividad": a.get("Nombre"),
+            "Peso %": P._num(a.get("Peso")),
+            "Avance %": P._num(a.get("Avance")),
+            "Inicio real": a.get("FechaInicioReal", ""),
+            "Fin real": a.get("FechaFinReal", ""),
+        } for a in acts]), use_container_width=True, hide_index=True)
+    else:
+        st.caption("Sin actividades registradas.")
+
+    # ── Eliminar ──
+    with st.expander("🗑 Eliminar proyecto"):
+        st.warning("Esto elimina el proyecto y sus actividades. No se puede deshacer.")
+        if st.button("Eliminar definitivamente", key=f"del_{pid}"):
+            ok, msg = P.delete_project(pid)
+            (st.success if ok else st.error)(msg)
+            if ok:
+                st.rerun()
+
+
+# ── Panel de agrupaciones ────────────────────────────────────────
+def _panel_agrupaciones(grupo: str):
+    ags = P.list_groupings(grupo=grupo)
+    if ags:
+        rows = []
+        for a in ags:
+            pr = P.grouping_progress(a["ID"])
+            rows.append({
+                "ID": a["ID"], "Agrupación": a["Nombre"],
+                "Proyectos": pr["n_proyectos"], "Avance %": pr["avance"],
+                "Descripción": a.get("Descripcion", ""),
+            })
+        st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+    else:
+        st.info("No hay agrupaciones. Crea una para agrupar varios elevadores con pesos.")
+
+    st.markdown("#### ➕ Nueva agrupación")
+    with st.form("nueva_agr"):
+        nom = st.text_input("Nombre de la agrupación")
+        des = st.text_input("Descripción (opcional)")
+        if st.form_submit_button("Crear agrupación"):
+            if not nom.strip():
+                st.error("El nombre es obligatorio.")
+            else:
+                ok, msg = P.create_grouping(grupo, nom.strip(), des.strip())
+                (st.success if ok else st.error)(f"Agrupación creada ({msg})" if ok else msg)
+                if ok:
+                    st.rerun()
+
+    if ags:
+        st.markdown("#### 🗑 Eliminar agrupación")
+        delmap = {f"{a['ID']} · {a['Nombre']}": a["ID"] for a in ags}
+        d = st.selectbox("Agrupación", list(delmap.keys()), key="del_agr_sel")
+        st.caption("Los proyectos no se borran; solo se desagrupan.")
+        if st.button("Eliminar agrupación"):
+            ok, msg = P.delete_grouping(delmap[d])
+            (st.success if ok else st.error)(msg)
+            if ok:
+                st.rerun()
+
+
+# ── Pestaña del usuario de CAMPO: mis proyectos ──────────────────
+def render_field_projects(usuario: str, grupo: str):
+    st.markdown("### 📋 Mis proyectos")
+    if not P.is_configured():
+        st.warning("La gestión de proyectos necesita Google Sheets configurado.")
+        return
+
+    proys = P.list_projects_for_field(usuario, grupo=grupo)
+    if not proys:
+        st.info("No tienes proyectos asignados todavía. El administrador te asigna a un proyecto.")
+        return
+
+    idmap = {f"{p.get('Nombre')} ({p.get('ID')}) — {p.get('Estado')}": p.get("ID")
+             for p in proys}
+    sel = st.selectbox("Proyecto asignado", list(idmap.keys()), key="fieldproj_sel")
+    if not sel:
+        return
+    pid = idmap[sel]
+    prj = P.get_project(pid)
+    if not prj:
+        st.error("Proyecto no encontrado.")
+        return
+
+    avance = P._num(prj.get("Avance"))
+    est    = str(prj.get("Estado", ""))
+    c1, c2 = st.columns(2)
+    c1.metric("Estado", f"{_ESTADO_EMOJI.get(est,'')} {est}".strip())
+    c2.metric("Avance del proyecto", f"{avance:.0f}%")
+    st.progress(min(1.0, avance / 100.0))
+    if prj.get("Ubicacion"):
+        st.caption(f"📍 {prj.get('Ubicacion')}  ·  Cliente: {prj.get('Cliente','—')}")
+
+    st.markdown("#### Actividades — actualiza tu avance")
+    acts = P.list_activities(pid)
+    if not acts:
+        st.caption("Este proyecto no tiene actividades registradas.")
+        return
+    for a in acts:
+        orden  = a.get("Orden")
+        nombre = a.get("Nombre")
+        cur    = P._num(a.get("Avance"))
+        icon   = "✅" if cur >= 100 else ("🚧" if cur > 0 else "🕓")
+        with st.expander(f"{icon} {orden}. {nombre} — {cur:.0f}%"):
+            new = st.slider("Avance %", 0, 100, int(cur), key=f"act_{pid}_{orden}")
+            fc1, fc2 = st.columns(2)
+            fi = fc1.text_input("Inicio real (YYYY-MM-DD)", value=a.get("FechaInicioReal", ""),
+                                key=f"fi_{pid}_{orden}")
+            ff = fc2.text_input("Fin real (YYYY-MM-DD)", value=a.get("FechaFinReal", ""),
+                                key=f"ff_{pid}_{orden}")
+            nota = st.text_input("Nota", value=a.get("Nota", ""), key=f"nt_{pid}_{orden}")
+            if st.button("💾 Guardar avance", key=f"sv_{pid}_{orden}"):
+                ok, msg = P.update_activity_progress(pid, orden, new, fi, ff, nota)
+                (st.success if ok else st.error)(msg)
+                if ok:
+                    st.rerun()

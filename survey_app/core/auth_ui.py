@@ -214,7 +214,7 @@ def render_group_panel(grupo: str):
                    horizontal=True, key="grupo_sec", label_visibility="collapsed")
     st.markdown("---")
     if sec == "📁 Proyectos":
-        st.info("Gestión de proyectos — próximamente. Aquí llevarás el control de "
-                "los proyectos de tu grupo.")
+        from core.projects_ui import render_admin_projects
+        render_admin_projects(grupo)
     else:
         _grupo_usuarios(grupo)

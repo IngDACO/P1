@@ -23,6 +23,7 @@ from core.user_report     import generate_user_report
 from core.diagrams        import render_floor_plans_html
 from core.schedule        import build_schedule, detect_flags, schedule_svg, schedule_table
 from core.plumb           import compute_plumb, plumb_svg, plumb_table, plumb_checks
+from core                 import projects as projects_data
 
 try:
     # utf-8-sig elimina el BOM que agrega PowerShell al escribir VERSION
@@ -271,8 +272,11 @@ _L_RAIL   = "✂️ Corte de rieles"
 _L_CLOCK  = "⏱ Fichaje"
 _L_OWNER  = "👑 Administración"
 _L_GRUPO  = "🛠 Mi grupo"
+_L_FIELDPROJ = "📋 Mis proyectos"
 
 _nav = [_L_SURVEY, _L_PLUMB, _L_RAIL, _L_CLOCK]
+if _ROL == "campo":
+    _nav.append(_L_FIELDPROJ)
 if _ROL == "propietario":
     _nav.append(_L_OWNER)
 elif _ROL == "administrador":
@@ -957,6 +961,63 @@ if _seccion == _L_SURVEY:
         else:
             st.info("Realiza el cálculo primero para poder generar el informe.")
 
+    # ══════════════════════════════════════════════════════
+    # PASO 7 — GUARDAR COMO PROYECTO  (solo administrador / propietario)
+    # ══════════════════════════════════════════════════════
+    if _ROL in ("administrador", "propietario"):
+        st.header("7. Guardar como proyecto")
+        if not st.session_state.get("calc_results"):
+            st.info("Calcula primero: el proyecto se inicia con este survey.")
+        elif not projects_data.is_configured():
+            st.caption("🔒 Requiere Google Sheets configurado para guardar proyectos.")
+        elif not _GRUPO:
+            st.caption("🔒 Tu cuenta no tiene grupo asignado; no se pueden crear proyectos.")
+        else:
+            r  = st.session_state.calc_results
+            ap = r["all_params"]
+            _campos = []
+            try:
+                from core.auth import list_users
+                _campos = [u["Usuario"] for u in list_users(_GRUPO)
+                           if str(u.get("Rol", "")) == "campo"]
+            except Exception:
+                pass
+            with st.form("save_project"):
+                st.caption("Se guarda el survey completo (parámetros, matriz, interpretaciones "
+                           "y cronograma). El avance lo alimentará el equipo de campo.")
+                pc1, pc2 = st.columns(2)
+                pj_nom = pc1.text_input("Nombre del proyecto", value=ap.get("PROYECTO", ""))
+                pj_cli = pc2.text_input("Cliente")
+                pj_ubi = pc1.text_input("Ubicación")
+                pj_mod = pc2.text_input("Modelo de elevador")
+                pj_ing = pc1.text_input("Ingeniero", value=ap.get("INGENIERO", ""))
+                pj_asg = st.multiselect("Usuarios de campo asignados", _campos)
+                if st.form_submit_button("💾 Guardar como proyecto", use_container_width=True):
+                    if not pj_nom.strip():
+                        st.error("El nombre del proyecto es obligatorio.")
+                    else:
+                        sched = r.get("schedule") or {}
+                        _sd = sched.get("start_date"); _ff = sched.get("fecha_fin")
+                        matriz = (r["survey_orig"].to_dict("records")
+                                  if hasattr(r.get("survey_orig"), "to_dict") else [])
+                        ok, res = projects_data.create_project(
+                            grupo=_GRUPO, nombre=pj_nom.strip(), cliente=pj_cli,
+                            ubicacion=pj_ubi, modelo=pj_mod, ns=int(ap.get("NS", 0) or 0),
+                            ingeniero=pj_ing, campo_asignados=pj_asg,
+                            fecha_inicio=(_sd.strftime("%Y-%m-%d") if _sd else ""),
+                            fecha_fin_est=(_ff.strftime("%Y-%m-%d") if _ff else ""),
+                            params=ap, matriz=matriz,
+                            interp={"admin": r.get("interpretation"),
+                                    "user":  r.get("interpretation_user")},
+                            activities=sched.get("activities", []),
+                            creado_por=st.session_state.auth.get("usuario", ""),
+                        )
+                        if ok:
+                            st.success(f"✅ Proyecto **{res}** guardado. "
+                                       "Gestiónalo en 🛠 Mi grupo → Proyectos.")
+                        else:
+                            st.error(f"No se pudo guardar: {res}")
+
 
 elif _seccion == _L_PLUMB:
     from core.plumb_ui import render_plumb_tab
@@ -969,6 +1030,10 @@ elif _seccion == _L_RAIL:
 elif _seccion == _L_CLOCK:
     from core.timeclock_ui import render_timeclock_tab
     render_timeclock_tab()
+
+elif _seccion == _L_FIELDPROJ:
+    from core.projects_ui import render_field_projects
+    render_field_projects(st.session_state.auth.get("usuario", ""), _GRUPO)
 
 elif _seccion == _L_OWNER:
     render_owner_panel()
