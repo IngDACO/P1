@@ -13,7 +13,7 @@ Escrituras RAW + lecturas con numericise_ignore=['all'] (conserva textos/JSON/ce
 """
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, date
 
 import streamlit as st
 
@@ -432,3 +432,27 @@ def grouping_progress(gid: str) -> dict:
         avance = round(sum(_num(p.get("PesoEnAgrupacion")) * _num(p.get("Avance"))
                            for p in proys) / tot_peso, 1)
     return {"avance": avance, "n_proyectos": len(proys), "peso_total": tot_peso}
+
+
+# ── Cronograma planificado + curva S real ────────────────────────
+def project_schedule(pid: str):
+    """Reconstruye el cronograma PLANIFICADO (de las actividades guardadas) y calcula
+    la curva S REAL (del avance de cada actividad). Devuelve {sched, real, today_day} o None."""
+    from core.schedule import build_schedule, real_scurve
+    prj  = get_project(pid)
+    acts = list_activities(pid)
+    if not prj or not acts:
+        return None
+    try:
+        y, m, d = str(prj.get("FechaInicio", "")).split("-")
+        start = date(int(y), int(m), int(d))
+    except Exception:
+        start = date.today()
+    custom = [{"nombre":   a.get("Nombre", ""),
+               "duracion": _num(a.get("DuracionDias")) or 1.0,
+               "peso":     _num(a.get("Peso"))} for a in acts]
+    sched     = build_schedule(1, start, {}, custom_rows=custom)
+    avances   = [_num(a.get("Avance")) for a in acts]
+    real      = real_scurve(sched, avances)
+    today_day = (date.today() - start).days
+    return {"sched": sched, "real": real, "today_day": today_day}

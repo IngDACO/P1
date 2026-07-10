@@ -108,13 +108,35 @@ def build_schedule(ns: int, start_date: date, flags: dict,
     }
 
 
+def real_scurve(sched: dict, avances: list) -> list:
+    """Curva S REAL (avance ganado): Σ peso_i · (avance_i/100) · frac_planificada_i(d).
+    `avances` = lista alineada con sched['activities'] (avance % 0-100 de cada actividad).
+    Crece a medida que el campo sube los %. Siempre ≤ la curva planificada."""
+    acts  = sched["activities"]
+    total = max(1, sched["total_dias"])
+    curve = []
+    d = 0.0
+    while d <= total + 0.001:
+        pct = 0.0
+        for a, av in zip(acts, avances):
+            frac = (d - a["inicio"]) / a["duracion"] if a["duracion"] else 1.0
+            frac = min(1.0, max(0.0, frac))
+            pct += a["peso"] * (float(av) / 100.0) * frac
+        curve.append((d, round(pct, 1)))
+        d += 1.0
+    return curve
+
+
 def _esc(s: str) -> str:
     return str(s).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
-def schedule_svg(sched: dict) -> str:
+def schedule_svg(sched: dict, real_curve: list = None, today_day: float = None) -> str:
     """SVG con Gantt (arriba) + curva S (abajo) compartiendo el eje de tiempo.
-    Sin <marker>/<defs> → compatible con Streamlit y svglib."""
+    Sin <marker>/<defs> → compatible con Streamlit y svglib.
+
+    Si `real_curve` (de real_scurve) viene, se superpone la curva REAL (verde) sobre la
+    planificada (naranja) y se marca la línea `today_day` ("HOY") para comparar."""
     acts  = sched["activities"]
     total = max(1, sched["total_dias"])
     start = sched["start_date"]
@@ -178,13 +200,34 @@ def schedule_svg(sched: dict) -> str:
         p.append(f'<text x="{ML-6:.1f}" y="{yy+3:.1f}" text-anchor="end" font-size="8" fill="#999">{pct}%</text>')
     p.append(f'<text x="{ML-6:.1f}" y="{sc_top-4:.1f}" text-anchor="end" font-size="8.5" '
              f'fill="#BA7517" font-weight="bold">Avance</text>')
-    # polilínea de la curva S
+    # polilínea de la curva S planificada
     pts = " ".join(f"{sx(dd):.1f},{sy(pc):.1f}" for dd, pc in sched["scurve"])
     p.append(f'<polyline points="{pts}" fill="none" stroke="#BA7517" stroke-width="2.5"/>')
     # puntos
     for dd, pc in sched["scurve"]:
         if int(dd) % max(1, step) == 0:
             p.append(f'<circle cx="{sx(dd):.1f}" cy="{sy(pc):.1f}" r="2.2" fill="#BA7517"/>')
+
+    # ── Curva S REAL superpuesta + línea HOY ────────────────
+    if real_curve:
+        rpts = " ".join(f"{sx(dd):.1f},{sy(pc):.1f}" for dd, pc in real_curve)
+        p.append(f'<polyline points="{rpts}" fill="none" stroke="#2e8b57" stroke-width="2.5"/>')
+        for dd, pc in real_curve:
+            if int(dd) % max(1, step) == 0:
+                p.append(f'<circle cx="{sx(dd):.1f}" cy="{sy(pc):.1f}" r="2.2" fill="#2e8b57"/>')
+        # leyenda (arriba a la derecha del área de la curva)
+        lgx = VW - MR - 140
+        lgy = sc_top + 9
+        p.append(f'<rect x="{lgx:.1f}" y="{lgy-6:.1f}" width="12" height="3" fill="#BA7517"/>')
+        p.append(f'<text x="{lgx+16:.1f}" y="{lgy:.1f}" font-size="8" fill="#666">Planificada</text>')
+        p.append(f'<rect x="{lgx+78:.1f}" y="{lgy-6:.1f}" width="12" height="3" fill="#2e8b57"/>')
+        p.append(f'<text x="{lgx+94:.1f}" y="{lgy:.1f}" font-size="8" fill="#666">Real</text>')
+    if today_day is not None and 0 <= today_day <= total:
+        hx = sx(today_day)
+        p.append(f'<line x1="{hx:.1f}" y1="{sc_top:.1f}" x2="{hx:.1f}" y2="{sc_top+sc_h:.1f}" '
+                 f'stroke="#c0392b" stroke-width="1.2" stroke-dasharray="4,3"/>')
+        p.append(f'<text x="{hx:.1f}" y="{sc_top-4:.1f}" text-anchor="middle" font-size="8" '
+                 f'fill="#c0392b" font-weight="bold">HOY</text>')
 
     # ── Eje X (fechas) ──────────────────────────────────────
     xaxis_y = sc_top + sc_h

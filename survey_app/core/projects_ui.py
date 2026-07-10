@@ -4,9 +4,11 @@ Navegación con st.radio (NO st.tabs) para evitar mezcla de contenido.
 """
 import pandas as pd
 import streamlit as st
+import streamlit.components.v1 as components
 
 from core import projects as P
 from core import auth
+from core.schedule import schedule_svg
 
 
 _ESTADO_EMOJI = {
@@ -87,6 +89,20 @@ def _detalle_proyecto(pid: str, grupo: str):
     c2.metric("Avance", f"{avance:.0f}%")
     c3.metric("Horas trabajadas", f"{P.project_hours(prj.get('Nombre'), grupo):.1f}")
     st.progress(min(1.0, avance / 100.0))
+
+    # ── Cronograma: curva S planificada vs real ──
+    ps = P.project_schedule(pid)
+    if ps and ps["sched"].get("activities"):
+        st.markdown("**📆 Cronograma — curva S planificada vs real**")
+        st.caption("Naranja = planificada (original) · Verde = real (avance del campo) · "
+                   "línea roja = HOY.")
+        n = len(ps["sched"]["activities"])
+        components.html(
+            '<!DOCTYPE html><html><body style="margin:0;background:transparent">'
+            + schedule_svg(ps["sched"], real_curve=ps["real"], today_day=ps["today_day"])
+            + '</body></html>',
+            height=int(280 + n * 22), scrolling=False,
+        )
 
     # ── Editar datos ──
     with st.form(f"edit_{pid}"):
