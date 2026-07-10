@@ -7,9 +7,7 @@ import traceback
 from datetime import datetime
 from email.mime.multipart import MIMEMultipart
 from email.mime.text      import MIMEText
-from email.mime.base      import MIMEBase
 from email.mime.application import MIMEApplication
-from email             import encoders
 
 import streamlit as st
 

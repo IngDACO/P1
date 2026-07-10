@@ -268,7 +268,7 @@ def _dg_bc_calc(ts, tksw, tk, bc_calc):
         f"    TKSW    = {tksw:.0f} mm   (pared frontal -> centro riel)",
         f"    TK/2    = {tk2:.0f} mm   (centro riel -> fondo cabina)",
         f"    BC_CALC = {bc_calc:.0f} mm   (espacio libre detras de cabina)",
-        f"    25 mm    (holgura minima de seguridad al fondo)",
+        "    25 mm    (holgura minima de seguridad al fondo)",
         f"    TS      = {ts:.0f} mm  =  TKSW + TK/2 + BC_CALC + 25",
     ]
 
@@ -303,7 +303,7 @@ def _dg_rl(lr, ll, max_rl):
         "",
         "         SKIP                VALIDO                 SKIP",
         "  <-----------[------------------------------------]----------->  RL (mm)",
-        f"          -LIMIT_R                            +LIMIT_L",
+        "          -LIMIT_R                            +LIMIT_L",
         f"          = {-lr:.1f} mm                        = +{ll:.1f} mm",
         "",
         f"  Rango total evaluado: -{max_rl:.1f} mm  a  +{max_rl:.1f} mm  (paso 0.5 mm)",
@@ -317,7 +317,7 @@ def _dg_fb(max_fb, fb_max_back, bc_calc, dif_tsw_fs):
             "           VALIDO              |              SKIP",
             "  <----------------------------|]-------------------------------->  FB (mm)",
             f"  -MAX_OFF_FB={-max_fb:.1f}              0                      +MAX_OFF_FB=+{max_fb:.1f}",
-            f"                         FB_MAX_BACK = 0.0  (sin desplazamiento hacia atras)",
+            "                         FB_MAX_BACK = 0.0  (sin desplazamiento hacia atras)",
         ]
     elif fb_max_back >= max_fb:
         lines += [

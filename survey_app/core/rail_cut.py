@@ -16,7 +16,10 @@ CASO 2 — el riel a cortar es el ÚLTIMO instalado (el de más arriba):
       penúltimo POR DEBAJO del FFL:  CutR* = LF + R*
     (LFKK para RZ/RO ; LFGK para RF/RB)
 """
+import logging
 import re
+
+logger = logging.getLogger(__name__)
 
 
 # ── Extracción de LFKK / LFGK del PDF ────────────────────────
@@ -37,7 +40,7 @@ def extract_lf(pdf_file) -> dict:
             if m:
                 result[key] = float(m.group(1).replace(",", "."))
     except Exception as e:
-        print(f"[rail_cut] extracción LF: {e}")
+        logger.warning("rail_cut: extracción LF falló: %s", e)
     return result
 
 

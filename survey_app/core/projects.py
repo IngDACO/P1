@@ -12,9 +12,12 @@ Reusa la conexión del fichaje (core.timeclock._get_worksheet) y la misma hoja d
 Escrituras RAW + lecturas con numericise_ignore=['all'] (conserva textos/JSON/ceros).
 """
 import json
+import logging
 from datetime import datetime
 
 from core import timeclock
+
+logger = logging.getLogger(__name__)
 
 PROJECTS_SHEET   = "Proyectos"
 ACTIVITIES_SHEET = "Actividades"
@@ -59,6 +62,7 @@ def _get_ws(title, headers):
             w.append_row(headers)
         return w, None
     except Exception as e:
+        logger.warning("projects: no se pudo abrir la hoja %s: %s", title, e)
         return None, f"No se pudo abrir la hoja {title}: {e}"
 
 
@@ -190,14 +194,15 @@ def create_project(grupo, nombre, cliente="", ubicacion="", modelo="", ns=0,
     ]
     pws.append_row(row, value_input_option="RAW")
 
-    # Actividades del cronograma
-    for i, a in enumerate(activities or []):
-        aws.append_row([
-            pid, str(i + 1), a.get("nombre", a.get("Nombre", f"Actividad {i+1}")),
-            str(a.get("duracion", a.get("DuracionDias", 0))),
-            str(a.get("peso", a.get("Peso", 0))),
-            "0", "", "", "",
-        ], value_input_option="RAW")
+    # Actividades del cronograma (batch: 1 sola llamada a la API)
+    act_rows = [[
+        pid, str(i + 1), a.get("nombre", a.get("Nombre", f"Actividad {i+1}")),
+        str(a.get("duracion", a.get("DuracionDias", 0))),
+        str(a.get("peso", a.get("Peso", 0))),
+        "0", "", "", "",
+    ] for i, a in enumerate(activities or [])]
+    if act_rows:
+        aws.append_rows(act_rows, value_input_option="RAW")
     return True, pid
 
 
@@ -243,7 +248,8 @@ def get_project_full(pid: str) -> dict:
     def _load(key):
         try:
             return json.loads(r.get(key) or ("[]" if "Matriz" in key else "{}"))
-        except Exception:
+        except Exception as e:
+            logger.warning("projects: JSON inválido en %s de %s: %s", key, pid, e)
             return {} if "Matriz" not in key else []
     r["params"]     = _load("ParamsJSON")
     r["matriz"]     = _load("MatrizJSON")

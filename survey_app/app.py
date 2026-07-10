@@ -21,7 +21,7 @@ from core.interpretation  import generate_interpretation, generate_user_interpre
 from core.email_notify    import send_usage_notification
 from core.user_report     import generate_user_report
 from core.diagrams        import render_floor_plans_html
-from core.schedule        import build_schedule, detect_flags, schedule_svg, schedule_table
+from core.schedule        import build_schedule, detect_flags, schedule_svg
 from core.plumb           import compute_plumb, plumb_svg, plumb_table, plumb_checks
 from core                 import projects as projects_data
 
@@ -150,7 +150,7 @@ _init_state()
 # LOGIN — barrera de acceso
 # ══════════════════════════════════════════════════════
 from core.auth_ui import render_login, render_user_bar, render_owner_panel, render_group_panel
-from core.auth import can_reports, can_manage_users
+from core.auth import can_reports
 
 if not render_login():
     st.stop()

@@ -139,7 +139,7 @@ def _parse_config_value(key: str, raw: str):
         return s.lower() in ("true", "1", "yes", "y", "sí", "si")
     if key in ("WALL_STOP", "NS"):
         try:    return int(float(s))
-        except: return None
+        except Exception: return None
     if key in ("OMEGA_SIDE", "WALL_SIDE", "OFFSET_SIDE", "CTRL_SIDE"):
         return s if s in ("R", "L") else None
     return s
@@ -177,7 +177,7 @@ def import_survey_excel(file) -> dict:
             v = row.iloc[1] if len(row) > 1 else None
             if k and pd.notna(v):
                 try:    result["info"][k] = float(v)
-                except: pass
+                except Exception: pass
     except Exception:
         pass
 

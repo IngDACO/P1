@@ -10,7 +10,10 @@ Casos especiales manejados:
   6. Elementos PDF separados:    SF1=51 | 1175   → SF1=51  (visitor_text separa por posición XY)
 """
 from pypdf import PdfReader
+import logging
 import re
+
+logger = logging.getLogger(__name__)
 
 # ── Parámetros a buscar (de mayor a menor longitud) ──────────────
 PARAMS = sorted([
@@ -263,5 +266,5 @@ def extract_from_pdf(pdf_file) -> dict:
             if all(v is not None for v in found.values()):
                 break
     except Exception as e:
-        print(f"[Schindler extractor] Error: {e}")
+        logger.warning("Schindler extractor: %s", e)
     return found
