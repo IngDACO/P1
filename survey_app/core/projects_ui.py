@@ -99,7 +99,8 @@ def _detalle_proyecto(pid: str, grupo: str):
         n = len(ps["sched"]["activities"])
         components.html(
             '<!DOCTYPE html><html><body style="margin:0;background:transparent">'
-            + schedule_svg(ps["sched"], real_curve=ps["real"], today_day=ps["today_day"])
+            + schedule_svg(ps["sched"], real_curve=ps["real"],
+                           today_day=ps["today_day"], avances=ps.get("avances"))
             + '</body></html>',
             height=int(280 + n * 22), scrolling=False,
         )

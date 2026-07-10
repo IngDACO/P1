@@ -108,15 +108,16 @@ def build_schedule(ns: int, start_date: date, flags: dict,
     }
 
 
-def real_scurve(sched: dict, avances: list) -> list:
+def real_scurve(sched: dict, avances: list, upto_day=None) -> list:
     """Curva S REAL (avance ganado): Σ peso_i · (avance_i/100) · frac_planificada_i(d).
     `avances` = lista alineada con sched['activities'] (avance % 0-100 de cada actividad).
-    Crece a medida que el campo sube los %. Siempre ≤ la curva planificada."""
+    Se construye SOLO hasta `upto_day` (p.ej. hoy): no se extiende hasta la fecha final."""
     acts  = sched["activities"]
     total = max(1, sched["total_dias"])
+    top   = total if upto_day is None else max(0, min(int(upto_day), total))
     curve = []
     d = 0.0
-    while d <= total + 0.001:
+    while d <= top + 0.001:
         pct = 0.0
         for a, av in zip(acts, avances):
             frac = (d - a["inicio"]) / a["duracion"] if a["duracion"] else 1.0
@@ -131,12 +132,15 @@ def _esc(s: str) -> str:
     return str(s).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
-def schedule_svg(sched: dict, real_curve: list = None, today_day: float = None) -> str:
+def schedule_svg(sched: dict, real_curve: list = None, today_day: float = None,
+                 avances: list = None) -> str:
     """SVG con Gantt (arriba) + curva S (abajo) compartiendo el eje de tiempo.
     Sin <marker>/<defs> → compatible con Streamlit y svglib.
 
     Si `real_curve` (de real_scurve) viene, se superpone la curva REAL (verde) sobre la
-    planificada (naranja) y se marca la línea `today_day` ("HOY") para comparar."""
+    planificada (naranja) y se marca la línea `today_day` ("HOY").
+    Si `avances` viene (alineado con las actividades), cada barra del Gantt se "llena"
+    según el % de avance de esa actividad (verde si 100%). Sin `avances`, barra sólida."""
     acts  = sched["activities"]
     total = max(1, sched["total_dias"])
     start = sched["start_date"]
@@ -183,11 +187,24 @@ def schedule_svg(sched: dict, real_curve: list = None, today_day: float = None) 
         p.append(f'<text x="6" y="{y+rowH*0.68:.1f}" font-size="9.5" fill="#333">{_esc(nm)}</text>')
         # barra
         x0 = sx(a["inicio"]); x1 = sx(a["inicio"] + a["duracion"])
-        p.append(f'<rect x="{x0:.1f}" y="{y+3:.1f}" width="{max(2,x1-x0):.1f}" height="{rowH-8}" '
-                 f'rx="3" fill="#2e6da4"/>')
-        # peso al final de la barra
-        p.append(f'<text x="{x1+4:.1f}" y="{y+rowH*0.68:.1f}" font-size="8" fill="#2e6da4">'
-                 f'{a["peso"]:.0f}%</text>')
+        w  = max(2, x1 - x0)
+        if avances is not None:
+            av = max(0.0, min(100.0, float(avances[i]) if i < len(avances) else 0.0))
+            # fondo tenue (planificado) + relleno según avance
+            p.append(f'<rect x="{x0:.1f}" y="{y+3:.1f}" width="{w:.1f}" height="{rowH-8}" '
+                     f'rx="3" fill="#dbe6f2" stroke="#2e6da4" stroke-width="0.7"/>')
+            fw = w * av / 100.0
+            if fw > 0.5:
+                col = "#27ae60" if av >= 100 else "#2e6da4"
+                p.append(f'<rect x="{x0:.1f}" y="{y+3:.1f}" width="{fw:.1f}" height="{rowH-8}" '
+                         f'rx="3" fill="{col}"/>')
+            p.append(f'<text x="{x1+4:.1f}" y="{y+rowH*0.68:.1f}" font-size="8" fill="#2e6da4">'
+                     f'{a["peso"]:.0f}% · {av:.0f}%</text>')
+        else:
+            p.append(f'<rect x="{x0:.1f}" y="{y+3:.1f}" width="{w:.1f}" height="{rowH-8}" '
+                     f'rx="3" fill="#2e6da4"/>')
+            p.append(f'<text x="{x1+4:.1f}" y="{y+rowH*0.68:.1f}" font-size="8" fill="#2e6da4">'
+                     f'{a["peso"]:.0f}%</text>')
 
     # ── Curva S ─────────────────────────────────────────────
     sc_top = gantt_top + gantt_h + gap

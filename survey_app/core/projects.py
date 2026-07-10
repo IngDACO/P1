@@ -453,6 +453,6 @@ def project_schedule(pid: str):
                "peso":     _num(a.get("Peso"))} for a in acts]
     sched     = build_schedule(1, start, {}, custom_rows=custom)
     avances   = [_num(a.get("Avance")) for a in acts]
-    real      = real_scurve(sched, avances)
     today_day = (date.today() - start).days
-    return {"sched": sched, "real": real, "today_day": today_day}
+    real      = real_scurve(sched, avances, upto_day=today_day)   # se corta en HOY
+    return {"sched": sched, "real": real, "today_day": today_day, "avances": avances}
