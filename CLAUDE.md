@@ -15,6 +15,14 @@ Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
 ```
 Hace: git push → ZIP → rclone Drive. Streamlit redeploy es automático.
 
+### ⚠️ Entorno de Streamlit Cloud (NO romper) — v66
+- **Python 3.12** en Streamlit Cloud (Settings → Python version). **NO usar 3.14**: solo tiene ruedas
+  nativas de versiones bleeding-edge que **segfaultean** (pasó en v65 con pandas 3.0/reportlab 5.0/
+  numpy 2.5/pyarrow 25 → `Segmentation fault`, no una excepción Python).
+- **`requirements.txt` va PINEADO** con topes de major (pandas<2.3, numpy<2, reportlab<5, svglib<2,
+  lxml<6, pillow<12, pyarrow<18). NO volver a dejar todo `>=` sin tope.
+- Un segfault en los logs = problema de dependencias/entorno, **nunca** del código Python.
+
 ---
 
 ## Estructura de archivos
@@ -572,7 +580,7 @@ Local: mismos valores en `survey_app/.streamlit/secrets.toml` (gitignored).
 
 ---
 
-## Versiones desplegadas (v65 = actual)
+## Versiones desplegadas (v68 = actual)
 | Ver | Cambio principal |
 |---|---|
 | v5 | Extractor: CRLF fix, caso D valor-antes-label, sin pdfplumber |
@@ -635,3 +643,6 @@ Local: mismos valores en `survey_app/.streamlit/secrets.toml` (gitignored).
 | v63 | Integrar plomado al survey (input LengthTemplate; plomado definitivo con rl/fb del survey, en app + ambos informes); pestaña manual intacta |
 | v64 | Plomadas: distancias de verificación en campo (plomo↔pared real) como cotas + tabla, en app y ambos informes |
 | v65 | Gestión de proyectos: projects.py/projects_ui.py (Sheets), panel admin, "Guardar como proyecto" en survey, "Mis proyectos" para campo, agrupaciones con peso |
+| v66 | Fix segfault: requirements pineado a majors estables + Python 3.12 en Streamlit Cloud |
+| v67 | Fichaje: el proyecto se elige de desplegable de proyectos asignados (horas atadas al proyecto) |
+| v68 | Limpieza (revisión completa): borrar carpetas muertas, imports sin usar, except:/f-strings, print→logging, projects append_rows batch |
