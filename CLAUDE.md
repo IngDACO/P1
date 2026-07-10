@@ -468,6 +468,10 @@ agrega input **LengthTemplate** (en `USER_ONLY`), tras calcular muestra el "plom
 (`app.py`, guardado en `calc_results["plumb"]`) y lo embebe en ambos informes (`report.py` §12,
 `user_report.py` §9) vía `_svg_flowable(plumb_svg(...))`. La pestaña de plomado manual sigue usando
 `compute_plumb(inp)` (sin survey_disp) → modo independiente intacto.
+
+**Verificación en campo (v64):** `res["verif"]` = distancias plomo↔pared real (pared real izq→plomo izq
+= X final de V1; plomo der→pared real der = V6−V2). `plumb_checks(res)` da la tabla; `plumb_svg` dibuja
+las cotas abajo. Se muestran en pestaña manual, survey y ambos informes. (di + DBP + dd = BSR.)
 - `plumb_ui`: carga PDF autocompleta 📄 BKS/TKSW/SF1/SF2/BS/SG/TG; ✏️ RAIL/LengthTemplate/BSR/Omega manuales.
   Inputs inician en 0 (sin residuales, v59).
 
@@ -550,7 +554,7 @@ Local: mismos valores en `survey_app/.streamlit/secrets.toml` (gitignored).
 
 ---
 
-## Versiones desplegadas (v63 = actual)
+## Versiones desplegadas (v64 = actual)
 | Ver | Cambio principal |
 |---|---|
 | v5 | Extractor: CRLF fix, caso D valor-antes-label, sin pdfplumber |
@@ -611,3 +615,4 @@ Local: mismos valores en `survey_app/.streamlit/secrets.toml` (gitignored).
 | v61 | Plomadas ENCAJE: paredes reales V4/V6 fijas + conjunto rígido se centra (BSR>BS) o sacrifica Z→Omega (BSR<BS) |
 | v62 | Plomadas: eje CERO = pared real izquierda (V4=0); shaft real de 0 a BSR |
 | v63 | Integrar plomado al survey (input LengthTemplate; plomado definitivo con rl/fb del survey, en app + ambos informes); pestaña manual intacta |
+| v64 | Plomadas: distancias de verificación en campo (plomo↔pared real) como cotas + tabla, en app y ambos informes |
