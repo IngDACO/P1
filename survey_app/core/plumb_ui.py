@@ -6,7 +6,7 @@ import streamlit as st
 import streamlit.components.v1 as components
 import pandas as pd
 
-from core.plumb import compute_plumb, plumb_table, plumb_svg
+from core.plumb import compute_plumb, plumb_table, plumb_svg, plumb_checks
 
 
 def render_plumb_tab():
@@ -117,3 +117,8 @@ def render_plumb_tab():
             + plumb_svg(res) + '</body></html>',
             height=460, scrolling=False,
         )
+
+        st.subheader("📏 Verificación en campo — distancias plomo ↔ pared real")
+        st.caption("Mide en obra desde cada pared real hasta el plomo correspondiente.")
+        st.dataframe(pd.DataFrame(plumb_checks(res)),
+                     use_container_width=True, hide_index=True)

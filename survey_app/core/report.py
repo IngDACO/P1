@@ -20,7 +20,7 @@ from core.highlighting import (
 )
 from core.diagrams import floor_plan_svg
 from core.schedule import schedule_svg, schedule_table
-from core.plumb    import plumb_svg, plumb_table
+from core.plumb    import plumb_svg, plumb_table, plumb_checks
 
 # ── Color para bloques de interpretación IA ──────────────
 C_IA_BG     = colors.HexColor("#f0f7ff")
@@ -1088,7 +1088,24 @@ def generate_report(project_params, calculated, survey_original,
             ("TEXTCOLOR", (0,0),(-1,0), C_WHITE),
             ("TOPPADDING", (0,0),(-1,-1), 3), ("BOTTOMPADDING", (0,0),(-1,-1), 3),
         ]))
-        story += [ptab, sp(8)]
+        story += [ptab, sp(6)]
+
+        # Distancias de verificación en campo (plomo ↔ pared real)
+        story += [Paragraph("<b>Verificación en campo — distancias plomo ↔ pared real</b>",
+                            styles["Normal2"]), sp(2)]
+        chead = [Paragraph(f"<b>{h}</b>", styles["Normal2"]) for h in ["Medida", "Distancia (mm)"]]
+        ctrows = [chead]
+        for r in plumb_checks(plumb):
+            ctrows.append([Paragraph(str(r["Medida"]), styles["Normal2"]),
+                           Paragraph(str(r["Distancia (mm)"]), styles["Normal2"])])
+        ctab = Table(ctrows, colWidths=[W*0.72, W*0.28])
+        ctab.setStyle(TableStyle([
+            ("GRID", (0,0),(-1,-1), 0.3, colors.lightgrey),
+            ("BACKGROUND", (0,0),(-1,0), C_SUBHEAD),
+            ("TEXTCOLOR", (0,0),(-1,0), C_WHITE),
+            ("TOPPADDING", (0,0),(-1,-1), 3), ("BOTTOMPADDING", (0,0),(-1,-1), 3),
+        ]))
+        story += [ctab, sp(8)]
 
     # ── PIE ──────────────────────────────────────────────────
     story += [sp(8), HRFlowable(width="100%", thickness=0.5, color=colors.lightgrey), sp(4),

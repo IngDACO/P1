@@ -19,7 +19,7 @@ from reportlab.lib.enums import TA_CENTER, TA_LEFT
 from core.diagrams import floor_plan_svg
 from core.report import _svg_flowable
 from core.schedule import schedule_svg, schedule_table
-from core.plumb    import plumb_svg, plumb_table
+from core.plumb    import plumb_svg, plumb_table, plumb_checks
 
 W          = 170 * mm
 C_COPEX    = colors.HexColor("#1a3a5c")
@@ -271,7 +271,24 @@ def generate_user_report(project_params, calculated, optimizer_result,
             ("TEXTCOLOR", (0, 0), (-1, 0), C_WHITE),
             ("TOPPADDING", (0, 0), (-1, -1), 3), ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
         ]))
-        story += [ptab, _sp(10)]
+        story += [ptab, _sp(6)]
+
+        # Distancias de verificación en campo (plomo ↔ pared real)
+        story += [Paragraph("<b>Verificación en campo — distancias plomo ↔ pared real</b>",
+                            styles["UBody"]), _sp(2)]
+        chead = [Paragraph(f"<b>{h}</b>", styles["UCell"]) for h in ["Medida", "Distancia (mm)"]]
+        ctrows = [chead]
+        for r in plumb_checks(plumb):
+            ctrows.append([Paragraph(str(r["Medida"]), styles["UInfo"]),
+                           Paragraph(str(r["Distancia (mm)"]), styles["UCell"])])
+        ctab = Table(ctrows, colWidths=[W * 0.72, W * 0.28])
+        ctab.setStyle(TableStyle([
+            ("GRID", (0, 0), (-1, -1), 0.4, colors.lightgrey),
+            ("BACKGROUND", (0, 0), (-1, 0), C_COPEX2),
+            ("TEXTCOLOR", (0, 0), (-1, 0), C_WHITE),
+            ("TOPPADDING", (0, 0), (-1, -1), 3), ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+        ]))
+        story += [ctab, _sp(10)]
 
     # ── Pie ─────────────────────────────────────────────────
     story += [_sp(14), HRFlowable(width="100%", thickness=0.5, color=colors.lightgrey), _sp(4),

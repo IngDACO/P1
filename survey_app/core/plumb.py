@@ -141,6 +141,15 @@ def compute_plumb(inp: dict, survey_disp: dict = None) -> dict:
     def _o(x):
         return x - off
 
+    # Posiciones finales (medidas desde la pared real izquierda = eje cero)
+    v1f = _o(x_v1f); v2f = _o(x_v2f); v6f = _o(x_v6)
+
+    # ── Distancias de verificación en campo: plomo ↔ pared real ──
+    verif = {
+        "plomo_izq_pared_izq": v1f,          # pared real izq → plomo izq
+        "plomo_der_pared_der": v6f - v2f,    # plomo der → pared real der
+    }
+
     return {
         "dbp": dbp, "dbpw": dbpw, "rw": rw,
         "P":  (_o(P[0]  + desp), P[1]),
@@ -148,13 +157,14 @@ def compute_plumb(inp: dict, survey_disp: dict = None) -> dict:
         "C2": (_o(C2[0] + desp), C2[1]),
         "d1": d1, "d2": d2,
         "lines": {
-            "V1": {"x0": _o(x_v1), "x": _o(x_v1f)},
-            "V2": {"x0": _o(x_v2), "x": _o(x_v2f)},
+            "V1": {"x0": _o(x_v1), "x": v1f},
+            "V2": {"x0": _o(x_v2), "x": v2f},
             "V3": {"x0": _o(x_v3), "x": _o(x_v3f)},
             "V4": {"x0": _o(x_v4), "x": _o(x_v4)},   # = 0  (pared real izq = eje cero)
             "V5": {"x0": _o(x_v5), "x": _o(x_v5f)},
-            "V6": {"x0": _o(x_v6), "x": _o(x_v6)},   # pared real der — FIJA
+            "V6": {"x0": _o(x_v6), "x": v6f},        # pared real der — FIJA
         },
+        "verif": verif,
         "displacement": displacement,
     }
 
@@ -249,6 +259,24 @@ def plumb_svg(res: dict) -> str:
         p.append(f'<line x1="{cx-4:.1f}" y1="{cy+4:.1f}" x2="{cx+4:.1f}" y2="{cy-4:.1f}" stroke="#6b3fa0" stroke-width="2"/>')
         p.append(f'<text x="{cx:.1f}" y="{cy+16:.1f}" text-anchor="middle" font-size="8" fill="#6b3fa0">{lbl}</text>')
 
+    # Cotas de verificación en campo: pared real ↔ plomo
+    vf = res.get("verif")
+    if vf:
+        yd = MT + ph + 26
+        pairs = [
+            (0.0,              lines["V1"]["x"], vf.get("plomo_izq_pared_izq", 0.0)),
+            (lines["V2"]["x"], lines["V6"]["x"], vf.get("plomo_der_pared_der", 0.0)),
+        ]
+        for xa, xb, val in pairs:
+            xas, xbs = sx(xa), sx(xb)
+            p.append(f'<line x1="{xas:.1f}" y1="{yd:.1f}" x2="{xbs:.1f}" y2="{yd:.1f}" '
+                     f'stroke="#B5651D" stroke-width="1"/>')
+            for xe in (xas, xbs):
+                p.append(f'<line x1="{xe:.1f}" y1="{yd-3:.1f}" x2="{xe:.1f}" y2="{yd+3:.1f}" '
+                         f'stroke="#B5651D" stroke-width="1"/>')
+            p.append(f'<text x="{(xas+xbs)/2:.1f}" y="{yd-3:.1f}" text-anchor="middle" '
+                     f'font-size="8" fill="#B5651D">{_n(val)}</text>')
+
     # Leyenda
     ly = VH - 34
     leg = [("Plomos de riel", "#185FA5"), ("Paredes teóricas", "#888888"),
@@ -274,3 +302,14 @@ def plumb_table(res: dict) -> list:
             "Desplazada":     "Sí" if moved else "—",
         })
     return rows
+
+
+def plumb_checks(res: dict) -> list:
+    """Distancias de verificación en campo: de cada plomo a su pared real (mm)."""
+    v = res.get("verif") or {}
+    return [
+        {"Medida": "Pared real izquierda → plomo riel izquierdo",
+         "Distancia (mm)": round(v.get("plomo_izq_pared_izq", 0.0), 1)},
+        {"Medida": "Plomo riel derecho → pared real derecha",
+         "Distancia (mm)": round(v.get("plomo_der_pared_der", 0.0), 1)},
+    ]

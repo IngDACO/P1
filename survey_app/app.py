@@ -22,7 +22,7 @@ from core.email_notify    import send_usage_notification
 from core.user_report     import generate_user_report
 from core.diagrams        import render_floor_plans_html
 from core.schedule        import build_schedule, detect_flags, schedule_svg, schedule_table
-from core.plumb           import compute_plumb, plumb_svg, plumb_table
+from core.plumb           import compute_plumb, plumb_svg, plumb_table, plumb_checks
 
 try:
     # utf-8-sig elimina el BOM que agrega PowerShell al escribir VERSION
@@ -767,6 +767,9 @@ if _seccion == _L_SURVEY:
                     + plumb_svg(plumb_res) + '</body></html>',
                     height=460, scrolling=False,
                 )
+                st.markdown("**📏 Verificación en campo — distancias plomo ↔ pared real**")
+                st.dataframe(pd.DataFrame(plumb_checks(plumb_res)),
+                             use_container_width=True, hide_index=True)
                 if float(all_params.get("LengthTemplate", 0.0)) <= 0:
                     st.info("💡 Ingresa **LengthTemplate** en los parámetros para ver el "
                             "template completo (punto P, cortes C1/C2 y diagonales).")
