@@ -502,6 +502,11 @@ En el survey, al Calcular. `build_schedule(ns, start_date, flags, custom_rows)` 
 - `detect_flags()`: agrega "cortes" si OR/OL de la solución > límite, y "ajuste shaft" si BSR<BS.
 - Curva S = % acumulado planificado por día (progreso lineal por actividad). Editable (fecha inicio + tabla).
 - Se incluye en app + informe cliente + informe admin. SVG sin markers (svglib-compat).
+- **Curva S REAL vs planificada (v70):** `real_scurve(sched, avances)` = avance ganado
+  `Σ peso·(avance/100)·frac` (crece con los % del campo, siempre ≤ planificada). `schedule_svg(sched,
+  real_curve, today_day)` superpone la real (verde) sobre la planificada (naranja) + línea "HOY".
+  `projects.project_schedule(pid)` reconstruye el plan de las actividades guardadas. Se ve en el
+  detalle del proyecto del admin.
 
 ---
 
@@ -519,7 +524,10 @@ Paso 7, solo administrador/propietario). Persistencia en Google Sheets (misma ho
 - **Campo** (📋 Mis proyectos): ve asignados (`list_projects_for_field`), actualiza Avance% por actividad (`update_activity_progress` recalcula proyecto). `render_field_projects`.
 - **Horas**: del fichaje por nombre de proyecto (`project_hours`, `project_hours_bulk`=1 lectura).
 - Reusa `timeclock._get_worksheet`; RAW + `numericise_ignore`; navegación con radio.
-- Pendiente (pulir): fichaje con dropdown de proyectos asignados; curva S real vs planificada (ya hay datos).
+- ⚠️ **Lecturas CACHEADAS (v69):** `_records(title)`/`_fichaje_records()` con `@st.cache_data(ttl=20)`;
+  las escrituras llaman `_invalidate()`. Sin esto, cada rerun/slider re-leía las hojas → APIError 429
+  (rate limit). Las rutas de ESCRITURA (`_find_row`, `_next_project_id`, borrado) leen FRESCO.
+- Fichaje con dropdown de proyectos asignados (v67). Curva S real vs planificada en el detalle (v70).
 
 ---
 
@@ -580,7 +588,7 @@ Local: mismos valores en `survey_app/.streamlit/secrets.toml` (gitignored).
 
 ---
 
-## Versiones desplegadas (v68 = actual)
+## Versiones desplegadas (v70 = actual)
 | Ver | Cambio principal |
 |---|---|
 | v5 | Extractor: CRLF fix, caso D valor-antes-label, sin pdfplumber |
@@ -646,3 +654,5 @@ Local: mismos valores en `survey_app/.streamlit/secrets.toml` (gitignored).
 | v66 | Fix segfault: requirements pineado a majors estables + Python 3.12 en Streamlit Cloud |
 | v67 | Fichaje: el proyecto se elige de desplegable de proyectos asignados (horas atadas al proyecto) |
 | v68 | Limpieza (revisión completa): borrar carpetas muertas, imports sin usar, except:/f-strings, print→logging, projects append_rows batch |
+| v69 | Fix rate-limit Sheets (APIError 429): cachear lecturas de proyectos con st.cache_data(ttl=20) + invalidar al escribir |
+| v70 | Proyectos: curva S real vs planificada + línea HOY en el detalle del admin (real_scurve, project_schedule) |
