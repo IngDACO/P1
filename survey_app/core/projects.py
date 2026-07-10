@@ -15,6 +15,8 @@ import json
 import logging
 from datetime import datetime
 
+import streamlit as st
+
 from core import timeclock
 
 logger = logging.getLogger(__name__)
@@ -71,6 +73,51 @@ def _activities_ws(): return _get_ws(ACTIVITIES_SHEET, ACTIVITIES_HEADERS)
 def _groupings_ws():  return _get_ws(GROUPINGS_SHEET,  GROUPINGS_HEADERS)
 
 
+# ── Lecturas CACHEADAS (evitan golpear la API en cada rerun) ─────
+# Google Sheets limita ~60 lecturas/min. Sin caché, cada slider/rerun re-leía
+# las hojas y disparaba APIError (429). Se cachea 20s y se invalida al escribir.
+_HEADERS_BY_TITLE = {
+    PROJECTS_SHEET:   PROJECTS_HEADERS,
+    ACTIVITIES_SHEET: ACTIVITIES_HEADERS,
+    GROUPINGS_SHEET:  GROUPINGS_HEADERS,
+}
+
+
+@st.cache_data(ttl=20, show_spinner=False)
+def _records(title):
+    """Registros de una hoja (cacheados). Solo lecturas de DISPLAY."""
+    w, err = _get_ws(title, _HEADERS_BY_TITLE.get(title, []))
+    if err or w is None:
+        return []
+    try:
+        return w.get_all_records(numericise_ignore=["all"])
+    except Exception as e:
+        logger.warning("projects: lectura de %s falló: %s", title, e)
+        return []
+
+
+@st.cache_data(ttl=20, show_spinner=False)
+def _fichaje_records():
+    """Registros del fichaje (cacheados) para sumar horas."""
+    ws, err = timeclock._get_worksheet()
+    if err or ws is None:
+        return []
+    try:
+        return ws.get_all_records(numericise_ignore=["all"])
+    except Exception as e:
+        logger.warning("projects: lectura de fichaje falló: %s", e)
+        return []
+
+
+def _invalidate():
+    """Limpia el caché de lecturas tras una escritura, para reflejar el cambio."""
+    for fn in (_records, _fichaje_records):
+        try:
+            fn.clear()
+        except Exception:
+            pass
+
+
 # ── Helpers de dominio ───────────────────────────────────────────
 def _num(v, default=0.0):
     try:
@@ -123,11 +170,8 @@ def _find_row(ws, header, value):
 
 # ── Agrupaciones ─────────────────────────────────────────────────
 def list_groupings(grupo: str = None) -> list:
-    gws, err = _groupings_ws()
-    if err:
-        return []
     out = []
-    for r in gws.get_all_records(numericise_ignore=["all"]):
+    for r in _records(GROUPINGS_SHEET):
         if grupo is not None and str(r.get("Grupo", "")) != str(grupo):
             continue
         out.append(r)
@@ -151,6 +195,7 @@ def create_grouping(grupo: str, nombre: str, descripcion: str = "") -> tuple:
             return False, "Ya existe una agrupación con ese nombre en el grupo."
     gid = f"AGR-{mx + 1:04d}"
     gws.append_row([gid, grupo, nombre, descripcion], value_input_option="RAW")
+    _invalidate()
     return True, gid
 
 
@@ -162,6 +207,7 @@ def delete_grouping(gid: str) -> tuple:
     if row is None:
         return False, "Agrupación no encontrada."
     gws.delete_rows(row)
+    _invalidate()
     return True, "Agrupación eliminada."
 
 
@@ -203,15 +249,13 @@ def create_project(grupo, nombre, cliente="", ubicacion="", modelo="", ns=0,
     ] for i, a in enumerate(activities or [])]
     if act_rows:
         aws.append_rows(act_rows, value_input_option="RAW")
+    _invalidate()
     return True, pid
 
 
 def list_projects(grupo: str = None, agrupacion_id: str = None) -> list:
-    pws, err = _projects_ws()
-    if err:
-        return []
     out = []
-    for r in pws.get_all_records(numericise_ignore=["all"]):
+    for r in _records(PROJECTS_SHEET):
         if grupo is not None and str(r.get("Grupo", "")) != str(grupo):
             continue
         if agrupacion_id is not None and str(r.get("AgrupacionID", "")) != str(agrupacion_id):
@@ -231,10 +275,7 @@ def list_projects_for_field(usuario: str, grupo: str = None) -> list:
 
 
 def get_project(pid: str) -> dict:
-    pws, err = _projects_ws()
-    if err:
-        return {}
-    for r in pws.get_all_records(numericise_ignore=["all"]):
+    for r in _records(PROJECTS_SHEET):
         if str(r.get("ID", "")) == str(pid):
             return r
     return {}
@@ -269,6 +310,7 @@ def update_project(pid: str, fields: dict) -> tuple:
     for k, v in fields.items():
         if k in _PCOL:
             pws.update_cell(row, _PCOL[k], str(v))
+    _invalidate()
     return True, "Proyecto actualizado."
 
 
@@ -300,15 +342,13 @@ def delete_project(pid: str) -> tuple:
         for i in range(len(recs) - 1, -1, -1):
             if str(recs[i].get("ProyectoID", "")) == str(pid):
                 aws.delete_rows(i + 2)
+    _invalidate()
     return True, "Proyecto eliminado."
 
 
 # ── Actividades ──────────────────────────────────────────────────
 def list_activities(pid: str) -> list:
-    aws, err = _activities_ws()
-    if err:
-        return []
-    out = [r for r in aws.get_all_records(numericise_ignore=["all"])
+    out = [r for r in _records(ACTIVITIES_SHEET)
            if str(r.get("ProyectoID", "")) == str(pid)]
     out.sort(key=lambda r: _num(r.get("Orden")))
     return out
@@ -338,50 +378,46 @@ def update_activity_progress(pid: str, orden, avance, fecha_inicio="", fecha_fin
     if nota is not None:
         aws.update_cell(target, _ACOL["Nota"], nota)
 
-    # Recalcular avance + estado del proyecto
-    acts = list_activities(pid)
-    nuevo = compute_avance(acts)
-    prj = get_project(pid)
+    # Recalcular el avance del proyecto EN MEMORIA (recs ya leídas, sin re-leer)
+    proj_acts = []
+    for r in recs:
+        if str(r.get("ProyectoID", "")) != str(pid):
+            continue
+        rr = dict(r)
+        if str(rr.get("Orden", "")) == str(orden):
+            rr["Avance"] = avance
+        proj_acts.append(rr)
+    nuevo  = compute_avance(proj_acts)
+    prj    = get_project(pid)                       # cacheado
     manual = str(prj.get("EstadoManual", "")) if prj else ""
     update_project(pid, {"Avance": nuevo, "Estado": derive_estado(nuevo, manual)})
+    # update_project ya invalida el caché de lecturas
     return True, f"Avance actualizado. Proyecto: {nuevo}%"
 
 
 # ── Horas trabajadas (desde el fichaje) ──────────────────────────
 def project_hours(proyecto_nombre: str, grupo: str = None) -> float:
     """Suma de horas del fichaje asociadas al proyecto (por nombre, opcionalmente grupo)."""
-    ws, err = timeclock._get_worksheet()
-    if err:
-        return 0.0
     total = 0.0
-    try:
-        for r in ws.get_all_records(numericise_ignore=["all"]):
-            if str(r.get("Proyecto", "")) != str(proyecto_nombre):
-                continue
-            if grupo is not None and str(r.get("Grupo", "")) != str(grupo):
-                continue
-            total += _num(r.get("Horas"))
-    except Exception:
-        return 0.0
+    for r in _fichaje_records():
+        if str(r.get("Proyecto", "")) != str(proyecto_nombre):
+            continue
+        if grupo is not None and str(r.get("Grupo", "")) != str(grupo):
+            continue
+        total += _num(r.get("Horas"))
     return round(total, 2)
 
 
 def project_hours_bulk(grupo: str = None) -> dict:
-    """{nombre_proyecto: horas} leyendo el fichaje UNA sola vez (para la lista)."""
-    ws, err = timeclock._get_worksheet()
-    if err:
-        return {}
+    """{nombre_proyecto: horas} (fichaje cacheado, 1 lectura para la lista)."""
     out = {}
-    try:
-        for r in ws.get_all_records(numericise_ignore=["all"]):
-            if grupo is not None and str(r.get("Grupo", "")) != str(grupo):
-                continue
-            nom = str(r.get("Proyecto", ""))
-            if not nom:
-                continue
-            out[nom] = out.get(nom, 0.0) + _num(r.get("Horas"))
-    except Exception:
-        return {}
+    for r in _fichaje_records():
+        if grupo is not None and str(r.get("Grupo", "")) != str(grupo):
+            continue
+        nom = str(r.get("Proyecto", ""))
+        if not nom:
+            continue
+        out[nom] = out.get(nom, 0.0) + _num(r.get("Horas"))
     return {k: round(v, 2) for k, v in out.items()}
 
 
