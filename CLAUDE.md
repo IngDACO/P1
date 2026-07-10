@@ -497,6 +497,24 @@ En el survey, al Calcular. `build_schedule(ns, start_date, flags, custom_rows)` 
 
 ---
 
+## projects.py / projects_ui.py — gestión de proyectos (v65)
+**Proyecto = 1 elevador.** Se inicia con el survey (botón **💾 Guardar como proyecto** en app.py,
+Paso 7, solo administrador/propietario). Persistencia en Google Sheets (misma hoja del fichaje):
+- **Proyectos**: ID(PRJ-####)·Grupo·Nombre·Cliente·Ubicacion·Modelo·NS·Estado·EstadoManual·
+  FechaInicio·FechaFinEst·Ingeniero·CampoAsignados(`;`)·Avance·AgrupacionID·PesoEnAgrupacion·
+  **ParamsJSON·MatrizJSON·InterpJSON** (survey completo re-abrible; los derivados se recalculan)·CreadoPor·Creado.
+- **Actividades**: ProyectoID·Orden·Nombre·DuracionDias·Peso·**Avance**·FechaInicioReal·FechaFinReal·Nota.
+- **Agrupaciones** (AGR-####): varios proyectos con peso; `grouping_progress` = Σ(peso·avance)/Σpeso.
+- **Avance proyecto** = `compute_avance` = Σ(peso_act·avance_act)/Σpeso. **Estado**: auto (0=Planificado,
+  1-99=En progreso,100=Completado) + override manual (En pausa/Cancelado) vía `derive_estado`.
+- **Admin** (🛠 Mi grupo → 📁 Proyectos): lista con estado/avance/horas, editar datos/asignados/agrupación/peso/estado, agrupaciones. `render_admin_projects`.
+- **Campo** (📋 Mis proyectos): ve asignados (`list_projects_for_field`), actualiza Avance% por actividad (`update_activity_progress` recalcula proyecto). `render_field_projects`.
+- **Horas**: del fichaje por nombre de proyecto (`project_hours`, `project_hours_bulk`=1 lectura).
+- Reusa `timeclock._get_worksheet`; RAW + `numericise_ignore`; navegación con radio.
+- Pendiente (pulir): fichaje con dropdown de proyectos asignados; curva S real vs planificada (ya hay datos).
+
+---
+
 ## timeclock.py — fichaje (v41-v45; por login v54)
 Google Sheets (cuenta de servicio). Hoja principal `sheet1`:
 Nombre|PIN|Proyecto|Ubicacion|Clock In|Clock Out|Horas|Estado|**Grupo**.
@@ -554,7 +572,7 @@ Local: mismos valores en `survey_app/.streamlit/secrets.toml` (gitignored).
 
 ---
 
-## Versiones desplegadas (v64 = actual)
+## Versiones desplegadas (v65 = actual)
 | Ver | Cambio principal |
 |---|---|
 | v5 | Extractor: CRLF fix, caso D valor-antes-label, sin pdfplumber |
@@ -616,3 +634,4 @@ Local: mismos valores en `survey_app/.streamlit/secrets.toml` (gitignored).
 | v62 | Plomadas: eje CERO = pared real izquierda (V4=0); shaft real de 0 a BSR |
 | v63 | Integrar plomado al survey (input LengthTemplate; plomado definitivo con rl/fb del survey, en app + ambos informes); pestaña manual intacta |
 | v64 | Plomadas: distancias de verificación en campo (plomo↔pared real) como cotas + tabla, en app y ambos informes |
+| v65 | Gestión de proyectos: projects.py/projects_ui.py (Sheets), panel admin, "Guardar como proyecto" en survey, "Mis proyectos" para campo, agrupaciones con peso |
