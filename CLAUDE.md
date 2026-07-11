@@ -527,6 +527,8 @@ Paso 7, solo administrador/propietario). Persistencia en Google Sheets (misma ho
   1-99=En progreso,100=Completado) + override manual (En pausa/Cancelado) vía `derive_estado`.
 - **Admin** (🛠 Mi grupo → 📁 Proyectos): lista con estado/avance/horas, editar datos/asignados/agrupación/peso/estado, agrupaciones. `render_admin_projects`.
 - **Campo** (📋 Mis proyectos): ve asignados (`list_projects_for_field`), actualiza Avance% por actividad (`update_activity_progress` recalcula proyecto). `render_field_projects`.
+- **Propietario** (👑 Administración → 📁 Proyectos): ve TODOS los proyectos de todos los grupos
+  (`render_owner_projects`, `list_projects()` sin filtro). `_detalle_proyecto` toma el grupo del propio proyecto. (v73)
 - **Horas**: del fichaje por nombre de proyecto (`project_hours`, `project_hours_bulk`=1 lectura).
 - Reusa `timeclock._get_worksheet`; RAW + `numericise_ignore`; navegación con radio.
 - ⚠️ **Lecturas CACHEADAS (v69):** `_records(title)`/`_fichaje_records()` con `@st.cache_data(ttl=20)`;
@@ -593,7 +595,7 @@ Local: mismos valores en `survey_app/.streamlit/secrets.toml` (gitignored).
 
 ---
 
-## Versiones desplegadas (v72 = actual)
+## Versiones desplegadas (v73 = actual)
 | Ver | Cambio principal |
 |---|---|
 | v5 | Extractor: CRLF fix, caso D valor-antes-label, sin pdfplumber |
@@ -663,3 +665,4 @@ Local: mismos valores en `survey_app/.streamlit/secrets.toml` (gitignored).
 | v70 | Proyectos: curva S real vs planificada + línea HOY en el detalle del admin (real_scurve, project_schedule) |
 | v71 | Proyectos: curva real se corta en HOY (upto_day) + barras del Gantt se llenan por %avance |
 | v72 | Proyectos: proyección avance-vs-fecha (earned value: desvío hoy, días adelanto/retraso, fin proyectado por SPI) |
+| v73 | Propietario ve todos los proyectos de todos los grupos (👑 Administración → 📁 Proyectos) |
