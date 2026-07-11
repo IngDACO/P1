@@ -507,6 +507,11 @@ En el survey, al Calcular. `build_schedule(ns, start_date, flags, custom_rows)` 
   real_curve, today_day)` superpone la real (verde) sobre la planificada (naranja) + línea "HOY".
   `projects.project_schedule(pid)` reconstruye el plan de las actividades guardadas. Se ve en el
   detalle del proyecto del admin.
+- **Real cortada en HOY (v71):** `real_scurve(..., upto_day)` no se extiende a la fecha final.
+  Barras del Gantt se "llenan" según %avance (`schedule_svg(..., avances=)`, verde al 100%).
+- **Proyección avance-vs-fecha (v72):** `schedule_projection(sched, avances, today_day)` (earned value):
+  EV=Σpeso·avance/100, PV=curva S hoy, desvío=EV−PV, dias_gap=hoy−día(plan=EV) (brecha horizontal),
+  SPI=EV/PV, fin proyectado=inicio+total/SPI. Tarjetas en el detalle del admin.
 
 ---
 
@@ -588,7 +593,7 @@ Local: mismos valores en `survey_app/.streamlit/secrets.toml` (gitignored).
 
 ---
 
-## Versiones desplegadas (v70 = actual)
+## Versiones desplegadas (v72 = actual)
 | Ver | Cambio principal |
 |---|---|
 | v5 | Extractor: CRLF fix, caso D valor-antes-label, sin pdfplumber |
@@ -656,3 +661,5 @@ Local: mismos valores en `survey_app/.streamlit/secrets.toml` (gitignored).
 | v68 | Limpieza (revisión completa): borrar carpetas muertas, imports sin usar, except:/f-strings, print→logging, projects append_rows batch |
 | v69 | Fix rate-limit Sheets (APIError 429): cachear lecturas de proyectos con st.cache_data(ttl=20) + invalidar al escribir |
 | v70 | Proyectos: curva S real vs planificada + línea HOY en el detalle del admin (real_scurve, project_schedule) |
+| v71 | Proyectos: curva real se corta en HOY (upto_day) + barras del Gantt se llenan por %avance |
+| v72 | Proyectos: proyección avance-vs-fecha (earned value: desvío hoy, días adelanto/retraso, fin proyectado por SPI) |
