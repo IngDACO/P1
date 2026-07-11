@@ -105,6 +105,32 @@ def _detalle_proyecto(pid: str, grupo: str):
             height=int(280 + n * 22), scrolling=False,
         )
 
+        # ── Proyección avance vs fecha (earned value) ──
+        proj = ps.get("proj")
+        if proj and proj.get("pv", 0) > 0:
+            dv, dg = proj["desvio"], proj["dias_gap"]
+            icon = "🟢" if dv >= 1 else ("🔴" if dv <= -1 else "🟡")
+            st.markdown(f"**🔮 Proyección (avance vs fecha)**  {icon}")
+            q1, q2, q3 = st.columns(3)
+            q1.metric("Desvío hoy", f"{dv:+.0f}%",
+                      help="Avance real − planificado a la fecha de hoy")
+            q2.metric("Estado hoy",
+                      "En fecha" if abs(dg) < 0.5
+                      else f"{abs(dg):.0f} d {'retraso' if dg > 0 else 'adelanto'}")
+            if proj["proj_dias"] is not None and proj["fecha_proj"]:
+                q3.metric("Fin proyectado", proj["fecha_proj"].strftime("%d/%m/%Y"))
+                pdi = proj["proj_dias"]
+                fin = ("a tiempo" if abs(pdi) < 0.5
+                       else f"**{abs(pdi):.0f} días de {'retraso' if pdi > 0 else 'adelanto'}**")
+                st.caption(f"A este ritmo (SPI = {proj['spi']}) terminarías {fin}.  "
+                           f"Real {proj['ev']:.0f}% vs planificado {proj['pv']:.0f}% "
+                           f"al día {proj['today_day']} de {proj['total']}.")
+            else:
+                q3.metric("Fin proyectado", "—")
+                st.caption(f"Real {proj['ev']:.0f}% vs planificado {proj['pv']:.0f}% "
+                           f"al día {proj['today_day']} de {proj['total']}. Sin avance suficiente "
+                           "para proyectar la fecha de fin.")
+
     # ── Editar datos ──
     with st.form(f"edit_{pid}"):
         st.markdown("**Datos del proyecto**")

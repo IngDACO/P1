@@ -438,7 +438,7 @@ def grouping_progress(gid: str) -> dict:
 def project_schedule(pid: str):
     """Reconstruye el cronograma PLANIFICADO (de las actividades guardadas) y calcula
     la curva S REAL (del avance de cada actividad). Devuelve {sched, real, today_day} o None."""
-    from core.schedule import build_schedule, real_scurve
+    from core.schedule import build_schedule, real_scurve, schedule_projection
     prj  = get_project(pid)
     acts = list_activities(pid)
     if not prj or not acts:
@@ -455,4 +455,6 @@ def project_schedule(pid: str):
     avances   = [_num(a.get("Avance")) for a in acts]
     today_day = (date.today() - start).days
     real      = real_scurve(sched, avances, upto_day=today_day)   # se corta en HOY
-    return {"sched": sched, "real": real, "today_day": today_day, "avances": avances}
+    proj      = schedule_projection(sched, avances, today_day)
+    return {"sched": sched, "real": real, "today_day": today_day,
+            "avances": avances, "proj": proj}

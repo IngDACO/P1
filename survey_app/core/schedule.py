@@ -128,6 +128,69 @@ def real_scurve(sched: dict, avances: list, upto_day=None) -> list:
     return curve
 
 
+def _scurve_at(sched: dict, day: float) -> float:
+    """% planificado (curva S) en un día dado (interpolado)."""
+    sc = sched["scurve"]
+    if day <= sc[0][0]:
+        return sc[0][1]
+    if day >= sc[-1][0]:
+        return sc[-1][1]
+    for (d0, p0), (d1, p1) in zip(sc, sc[1:]):
+        if d0 <= day <= d1:
+            return p0 if d1 == d0 else p0 + (p1 - p0) * (day - d0) / (d1 - d0)
+    return sc[-1][1]
+
+
+def _day_at_pct(sched: dict, pct: float) -> float:
+    """Día en que la curva S planificada alcanza un % dado (inverso, interpolado)."""
+    sc = sched["scurve"]
+    pct = max(0.0, min(100.0, pct))
+    if pct <= sc[0][1]:
+        return sc[0][0]
+    if pct >= sc[-1][1]:
+        return sc[-1][0]
+    for (d0, p0), (d1, p1) in zip(sc, sc[1:]):
+        if p0 <= pct <= p1:
+            return d0 if p1 == p0 else d0 + (d1 - d0) * (pct - p0) / (p1 - p0)
+    return sc[-1][0]
+
+
+def schedule_projection(sched: dict, avances: list, today_day) -> dict:
+    """Proyección avance-vs-fecha (earned value).
+      EV (real)  = Σ peso·avance/100  (lo efectivamente hecho)
+      PV (plan)  = curva S en hoy
+      desvío     = EV − PV  (+ adelantado, − atrasado)
+      dias_gap   = hoy − día en que el plan alcanzaba EV  (+ retraso, − adelanto)
+      SPI        = EV / PV ;  fin proyectado = inicio + total/SPI
+    """
+    acts  = sched["activities"]
+    total = max(1, sched["total_dias"])
+    start = sched["start_date"]
+
+    ev = round(sum(a["peso"] * (float(av) / 100.0) for a, av in zip(acts, avances)), 1)
+    t_c = max(0, min(int(today_day), total))
+    pv  = round(_scurve_at(sched, t_c), 1)
+    desvio = round(ev - pv, 1)
+
+    d_equiv  = _day_at_pct(sched, ev)
+    dias_gap = round(float(today_day) - d_equiv, 1)     # + retraso, − adelanto
+
+    spi = (ev / pv) if pv > 0 else None
+    if spi and spi > 0:
+        proj_total = total / spi
+        proj_dias  = round(proj_total - total, 1)         # + tarde, − antes
+        fecha_proj = start + timedelta(days=int(round(proj_total)))
+    else:
+        proj_dias, fecha_proj = None, None
+
+    return {
+        "ev": ev, "pv": pv, "desvio": desvio, "dias_gap": dias_gap,
+        "spi": round(spi, 2) if spi else None,
+        "proj_dias": proj_dias, "fecha_proj": fecha_proj,
+        "today_day": t_c, "total": total,
+    }
+
+
 def _esc(s: str) -> str:
     return str(s).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
