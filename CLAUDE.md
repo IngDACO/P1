@@ -536,6 +536,21 @@ Paso 7, solo administrador/propietario). Persistencia en Google Sheets (misma ho
   (rate limit). Las rutas de ESCRITURA (`_find_row`, `_next_project_id`, borrado) leen FRESCO.
 - Fichaje con dropdown de proyectos asignados (v67). Curva S real vs planificada en el detalle (v70).
 
+## drive_store.py — documentos de proyecto en Google Drive (v74)
+OAuth de USUARIO (no service account) con scope **`drive.file`** (solo toca archivos que la app crea →
+sin verificación de Google). Secrets `[gdrive]` client_id/client_secret/refresh_token (opc root_folder_id).
+Usa **google-auth + requests** (sin deps nuevas). Estructura: `COPEX Proyectos / <PRJ-id> / archivos`.
+- `upload(pid, filename, bytes, mime)` (multipart) · `download(id)` (cacheado 5min) · `delete(id)` ·
+  `project_folder(pid)` (cacheado). Descargas pasan por la app (archivos privados en el Drive del dueño).
+- Metadatos en hoja **Documentos** (`projects.list_documents/add_document/delete_document_record`):
+  ProyectoID·Nombre·Tipo·DriveID·SubidoPor·Fecha. Tipos: plano/informe_cliente/informe_admin/matriz_survey/
+  foto/certificado/otro.
+- **Permisos** (`_documentos_section`, lee session_state.auth): admin/propietario = todo (subir/ver/borrar);
+  **campo** = solo sube **fotos** y solo ve plano/informe_cliente/matriz_survey/foto. Aislamiento por grupo
+  (solo acceden a proyectos de su grupo).
+- **Auto-archivo** al "Guardar como proyecto" (app.py): plano (pdf_bytes) + matriz_survey (CSV) + informe_cliente (PDF).
+- Token OAuth: script `C:\Users\diego\get_drive_token.py` (una vez). Consent screen en Producción (no expira).
+
 ---
 
 ## timeclock.py — fichaje (v41-v45; por login v54)
@@ -595,7 +610,7 @@ Local: mismos valores en `survey_app/.streamlit/secrets.toml` (gitignored).
 
 ---
 
-## Versiones desplegadas (v73 = actual)
+## Versiones desplegadas (v74 = actual)
 | Ver | Cambio principal |
 |---|---|
 | v5 | Extractor: CRLF fix, caso D valor-antes-label, sin pdfplumber |
@@ -666,3 +681,4 @@ Local: mismos valores en `survey_app/.streamlit/secrets.toml` (gitignored).
 | v71 | Proyectos: curva real se corta en HOY (upto_day) + barras del Gantt se llenan por %avance |
 | v72 | Proyectos: proyección avance-vs-fecha (earned value: desvío hoy, días adelanto/retraso, fin proyectado por SPI) |
 | v73 | Propietario ve todos los proyectos de todos los grupos (👑 Administración → 📁 Proyectos) |
+| v74 | Documentos por proyecto en Google Drive (drive_store.py, hoja Documentos, permisos por rol, auto-archivo plano+matriz+informe) |
