@@ -24,6 +24,7 @@ from core.diagrams        import render_floor_plans_html
 from core.schedule        import build_schedule, detect_flags, schedule_svg
 from core.plumb           import compute_plumb, plumb_svg, plumb_table, plumb_checks
 from core                 import projects as projects_data
+from core                 import drive_store
 
 try:
     # utf-8-sig elimina el BOM que agrega PowerShell al escribir VERSION
@@ -1015,6 +1016,39 @@ if _seccion == _L_SURVEY:
                         if ok:
                             st.success(f"✅ Proyecto **{res}** guardado. "
                                        "Gestiónalo en 🛠 Mi grupo → Proyectos.")
+                            # ── Auto-archivo en Drive: plano + matriz + informe cliente ──
+                            if drive_store.is_configured():
+                                _usr = st.session_state.auth.get("usuario", "")
+                                with st.spinner("Archivando documentos en Drive..."):
+                                    try:
+                                        pb = st.session_state.get("pdf_bytes")
+                                        if pb:
+                                            fid = drive_store.upload(res, "plano.pdf", pb, "application/pdf")
+                                            projects_data.add_document(res, "plano.pdf", "plano", fid, _usr)
+                                    except Exception as e:
+                                        st.caption(f"(plano no archivado: {e})")
+                                    try:
+                                        csv = r["survey_orig"].to_csv(index=False).encode("utf-8")
+                                        fid = drive_store.upload(res, "matriz_survey.csv", csv, "text/csv")
+                                        projects_data.add_document(res, "matriz_survey.csv",
+                                                                   "matriz_survey", fid, _usr)
+                                    except Exception as e:
+                                        st.caption(f"(matriz no archivada: {e})")
+                                    try:
+                                        if (r.get("interpretation_user") or {}).get("_ok"):
+                                            pdfb = generate_user_report(
+                                                project_params=r["all_params"], calculated=r["limits"],
+                                                optimizer_result=r["optimizer_result"], lim_map=r["lim_map"],
+                                                survey_cols=SURVEY_COLS,
+                                                interpretation_user=r.get("interpretation_user"),
+                                                schedule=r.get("schedule"), plumb=r.get("plumb"))
+                                            fid = drive_store.upload(res, "informe_cliente.pdf",
+                                                                     pdfb, "application/pdf")
+                                            projects_data.add_document(res, "informe_cliente.pdf",
+                                                                       "informe_cliente", fid, _usr)
+                                    except Exception as e:
+                                        st.caption(f"(informe cliente no archivado: {e})")
+                                st.caption("📎 Documentos base archivados en Drive.")
                         else:
                             st.error(f"No se pudo guardar: {res}")
 

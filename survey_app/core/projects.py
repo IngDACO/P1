@@ -36,6 +36,8 @@ ACTIVITIES_HEADERS = [
     "FechaInicioReal", "FechaFinReal", "Nota",
 ]
 GROUPINGS_HEADERS = ["ID", "Grupo", "Nombre", "Descripcion"]
+DOCUMENTS_SHEET   = "Documentos"
+DOCUMENTS_HEADERS = ["ProyectoID", "Nombre", "Tipo", "DriveID", "SubidoPor", "Fecha"]
 
 _PCOL = {h: i + 1 for i, h in enumerate(PROJECTS_HEADERS)}
 _ACOL = {h: i + 1 for i, h in enumerate(ACTIVITIES_HEADERS)}
@@ -80,6 +82,7 @@ _HEADERS_BY_TITLE = {
     PROJECTS_SHEET:   PROJECTS_HEADERS,
     ACTIVITIES_SHEET: ACTIVITIES_HEADERS,
     GROUPINGS_SHEET:  GROUPINGS_HEADERS,
+    DOCUMENTS_SHEET:  DOCUMENTS_HEADERS,
 }
 
 
@@ -458,3 +461,36 @@ def project_schedule(pid: str):
     proj      = schedule_projection(sched, avances, today_day)
     return {"sched": sched, "real": real, "today_day": today_day,
             "avances": avances, "proj": proj}
+
+
+# ── Documentos del proyecto (metadatos; los archivos viven en Drive) ──
+def _documents_ws():
+    return _get_ws(DOCUMENTS_SHEET, DOCUMENTS_HEADERS)
+
+
+def list_documents(pid: str) -> list:
+    return [r for r in _records(DOCUMENTS_SHEET)
+            if str(r.get("ProyectoID", "")) == str(pid)]
+
+
+def add_document(pid, nombre, tipo, drive_id, subido_por="") -> tuple:
+    dws, err = _documents_ws()
+    if err:
+        return False, err
+    dws.append_row([pid, nombre, tipo, drive_id, subido_por,
+                    datetime.now().strftime("%Y-%m-%d %H:%M:%S")], value_input_option="RAW")
+    _invalidate()
+    return True, "Documento registrado."
+
+
+def delete_document_record(pid, drive_id) -> tuple:
+    dws, err = _documents_ws()
+    if err:
+        return False, err
+    recs = dws.get_all_records(numericise_ignore=["all"])
+    for i, r in enumerate(recs):
+        if str(r.get("ProyectoID", "")) == str(pid) and str(r.get("DriveID", "")) == str(drive_id):
+            dws.delete_rows(i + 2)
+            _invalidate()
+            return True, "Documento eliminado."
+    return False, "Registro no encontrado."

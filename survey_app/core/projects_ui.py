@@ -8,6 +8,7 @@ import streamlit.components.v1 as components
 
 from core import projects as P
 from core import auth
+from core import drive_store
 from core.schedule import schedule_svg
 
 
@@ -15,6 +16,67 @@ _ESTADO_EMOJI = {
     "Planificado": "🕓", "En progreso": "🚧", "Completado": "✅",
     "En pausa": "⏸", "Cancelado": "🚫",
 }
+
+# Documentos: tipos y permisos por rol
+_DOC_TIPOS  = ["plano", "informe_cliente", "informe_admin", "matriz_survey",
+               "foto", "certificado", "otro"]
+_CAMPO_VER  = {"plano", "informe_cliente", "matriz_survey", "foto"}   # campo puede consultar
+_CAMPO_SUBE = ["foto"]                                                # campo solo sube fotos
+_DOC_ICON   = {"plano": "📐", "informe_cliente": "📄", "informe_admin": "📑",
+               "matriz_survey": "📊", "foto": "📷", "certificado": "🏅", "otro": "📎"}
+
+
+def _documentos_section(pid: str):
+    """Sección 📎 Documentos con permisos por rol (leído de session_state.auth)."""
+    st.markdown("**📎 Documentos**")
+    if not drive_store.is_configured():
+        st.caption("🔒 Almacenamiento en Drive no configurado (faltan los secrets `[gdrive]`).")
+        return
+    a = st.session_state.get("auth", {})
+    rol, usuario = a.get("rol", ""), a.get("usuario", "")
+    es_campo     = rol == "campo"
+    ver_tipos    = _CAMPO_VER if es_campo else set(_DOC_TIPOS)
+    sube_tipos   = _CAMPO_SUBE if es_campo else _DOC_TIPOS
+    puede_borrar = rol in ("administrador", "propietario")
+
+    docs = [d for d in P.list_documents(pid) if str(d.get("Tipo", "")) in ver_tipos]
+    if docs:
+        for d in docs:
+            did = str(d.get("DriveID", ""))
+            cols = st.columns([5, 2, 1] if puede_borrar else [6, 2])
+            cols[0].write(f"{_DOC_ICON.get(str(d.get('Tipo')), '📎')} {d.get('Nombre')}  "
+                          f"· _{d.get('Tipo')}_")
+            try:
+                cols[1].download_button("⬇️ Descargar", data=drive_store.download(did),
+                                        file_name=str(d.get("Nombre")),
+                                        key=f"dl_{pid}_{did}", use_container_width=True)
+            except Exception:
+                cols[1].caption("no disponible")
+            if puede_borrar and cols[2].button("🗑", key=f"deld_{pid}_{did}",
+                                               use_container_width=True):
+                drive_store.delete(did)
+                P.delete_document_record(pid, did)
+                st.rerun()
+    else:
+        st.caption("Sin documentos todavía.")
+
+    with st.expander("➕ Subir documento"):
+        if es_campo:
+            st.caption("Como usuario de campo, solo puedes subir **fotos**.")
+        up   = st.file_uploader("Archivo", key=f"updoc_{pid}")
+        tipo = st.selectbox("Tipo", sube_tipos, key=f"uptipo_{pid}")
+        if st.button("Subir", key=f"upbtn_{pid}"):
+            if up is None:
+                st.error("Elige un archivo primero.")
+            else:
+                try:
+                    fid = drive_store.upload(pid, up.name, up.getvalue(),
+                                             up.type or "application/octet-stream")
+                    P.add_document(pid, up.name, tipo, fid, usuario)
+                    st.success("Documento subido.")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"No se pudo subir: {e}")
 
 
 def _field_users(grupo):
@@ -190,6 +252,9 @@ def _detalle_proyecto(pid: str, grupo: str = None):
     else:
         st.caption("Sin actividades registradas.")
 
+    # ── Documentos ──
+    _documentos_section(pid)
+
     # ── Eliminar ──
     with st.expander("🗑 Eliminar proyecto"):
         st.warning("Esto elimina el proyecto y sus actividades. No se puede deshacer.")
@@ -310,7 +375,6 @@ def render_field_projects(usuario: str, grupo: str):
     acts = P.list_activities(pid)
     if not acts:
         st.caption("Este proyecto no tiene actividades registradas.")
-        return
     for a in acts:
         orden  = a.get("Orden")
         nombre = a.get("Nombre")
@@ -329,3 +393,7 @@ def render_field_projects(usuario: str, grupo: str):
                 (st.success if ok else st.error)(msg)
                 if ok:
                     st.rerun()
+
+    # ── Documentos (campo: sube fotos, consulta planos/informe cliente/matriz/fotos) ──
+    st.markdown("---")
+    _documentos_section(pid)
