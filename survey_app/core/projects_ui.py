@@ -76,11 +76,13 @@ def _panel_proyectos(grupo: str):
         _detalle_proyecto(idmap[sel], grupo)
 
 
-def _detalle_proyecto(pid: str, grupo: str):
+def _detalle_proyecto(pid: str, grupo: str = None):
     prj = P.get_project(pid)
     if not prj:
         st.error("Proyecto no encontrado.")
         return
+    # El grupo se toma del propio proyecto (así el propietario puede abrir cualquiera)
+    grupo = str(prj.get("Grupo", "")) or (grupo or "")
 
     avance = P._num(prj.get("Avance"))
     est    = str(prj.get("Estado", ""))
@@ -237,6 +239,39 @@ def _panel_agrupaciones(grupo: str):
             (st.success if ok else st.error)(msg)
             if ok:
                 st.rerun()
+
+
+# ── Panel del PROPIETARIO: todos los proyectos (todos los grupos) ──
+def render_owner_projects():
+    st.markdown("### 📁 Todos los proyectos")
+    if not P.is_configured():
+        st.warning("La gestión de proyectos necesita Google Sheets configurado.")
+        return
+    proys = P.list_projects()   # todos los grupos
+    if not proys:
+        st.info("Aún no hay proyectos en ningún grupo.")
+        return
+    ags = {a["ID"]: a["Nombre"] for a in P.list_groupings()}
+    rows = []
+    for p in proys:
+        est = str(p.get("Estado", ""))
+        rows.append({
+            "ID":        p.get("ID"),
+            "Grupo":     p.get("Grupo"),
+            "Proyecto":  p.get("Nombre"),
+            "Cliente":   p.get("Cliente"),
+            "Estado":    f"{_ESTADO_EMOJI.get(est, '')} {est}".strip(),
+            "Avance %":  P._num(p.get("Avance")),
+            "Horas":     P.project_hours(p.get("Nombre"), p.get("Grupo")),
+            "Agrupación": ags.get(str(p.get("AgrupacionID", "")), ""),
+        })
+    st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+
+    st.markdown("#### 🔎 Abrir proyecto")
+    idmap = {f"{p.get('Grupo')} · {p.get('ID')} · {p.get('Nombre')}": p.get("ID") for p in proys}
+    sel = st.selectbox("Proyecto", list(idmap.keys()), key="ownerproj_sel")
+    if sel:
+        _detalle_proyecto(idmap[sel])
 
 
 # ── Pestaña del usuario de CAMPO: mis proyectos ──────────────────

@@ -157,13 +157,16 @@ def _owner_usuarios():
 def render_owner_panel():
     st.markdown("### 👑 Administración")
     # Sub-navegación con radio (NO st.tabs anidado → evita mezcla de contenido)
-    sec = st.radio("Sección", ["🏢 Grupos", "👥 Usuarios"],
+    sec = st.radio("Sección", ["🏢 Grupos", "👥 Usuarios", "📁 Proyectos"],
                    horizontal=True, key="owner_sec", label_visibility="collapsed")
     st.markdown("---")
     if sec == "🏢 Grupos":
         _owner_grupos()
-    else:
+    elif sec == "👥 Usuarios":
         _owner_usuarios()
+    else:
+        from core.projects_ui import render_owner_projects
+        render_owner_projects()
 
 
 # ════════════════════════════════════════════════════════════
