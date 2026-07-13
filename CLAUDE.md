@@ -564,10 +564,13 @@ Avisa a un usuario de campo al **asignarlo** a un proyecto (crear/editar), con l
 - Contacto por usuario en hoja Login: cols **Email, TelegramChatID** (`auth.get_user/set_contact`).
 - `notify_assignment(usuario, prj)` → `notify_user` → envía por los canales configurados y con dato.
   Degrada con gracia (sin secrets/sin contacto → no envía, no rompe).
-- **Vinculación Telegram** (auto-servicio, sin webhook): el usuario abre `t.me/<bot>?start=<code>` (code=
-  usuario saneado) → pulsa Start → la app llama `getUpdates` y matchea el code → guarda el chat_id
-  (`telegram_find_chat_by_code`). UI: `projects_ui.render_notification_setup` (en 📋 Mis proyectos) +
-  email al crear/editar usuario de campo (auth_ui).
+- **Vinculación Telegram** (sin webhook): el usuario abre `t.me/<bot>?start=<code>` (code=usuario saneado)
+  → pulsa Start → la app llama `getUpdates` y matchea el code → guarda el chat_id (`telegram_find_chat_by_code`).
+- **Contacto OBLIGATORIO para campo + solo el ADMIN lo edita (v79):** email+Telegram son requeridos para
+  usuarios de campo. Email obligatorio al crear. El admin/propietario gestiona email y **vincula el Telegram**
+  del usuario (tras que el usuario pulse Start) en `auth_ui._field_contact_ui` (en 🛠 Mi grupo → Usuarios y
+  👑 Administración → Usuarios). **Bloqueo duro** en app.py: un campo sin ambos NO puede usar la app (pantalla
+  de bloqueo con el link de Start; `_contact_ok` cachea). No hay self-service para el campo.
 - Disparadores: `projects_ui._detalle_proyecto` (nuevos asignados al editar) y `app.py` (al crear proyecto).
 
 ## timeclock.py — fichaje (v41-v45; por login v54)
@@ -633,7 +636,7 @@ Local: mismos valores en `survey_app/.streamlit/secrets.toml` (gitignored).
 
 ---
 
-## Versiones desplegadas (v77 = actual)
+## Versiones desplegadas (v79 = actual)
 | Ver | Cambio principal |
 |---|---|
 | v5 | Extractor: CRLF fix, caso D valor-antes-label, sin pdfplumber |
@@ -707,4 +710,6 @@ Local: mismos valores en `survey_app/.streamlit/secrets.toml` (gitignored).
 | v74 | Documentos por proyecto en Google Drive (drive_store.py, hoja Documentos, permisos por rol, auto-archivo plano+matriz+informe) |
 | v75 | Sesión única por cuenta (licencias, "primero gana"): token+heartbeat en Login; 2do login bloqueado; opción forzar |
 | v76 | Fix curva S real: llega al avance real total en HOY (reparte sobre ventana real, no la planificada) |
-| v77 | Notificaciones email + Telegram al asignar proyecto a usuario de campo (notify.py, contacto en Login, auto-servicio de vinculación) |
+| v77 | Notificaciones email + Telegram al asignar proyecto a usuario de campo (notify.py, contacto en Login) |
+| v78 | Notificaciones: sección en la barra lateral (luego revertida en v79) |
+| v79 | Contacto (email+Telegram) OBLIGATORIO para campo y gestionado SOLO por el admin; bloqueo duro; tabla usuarios sin hash |
