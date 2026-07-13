@@ -502,8 +502,12 @@ En el survey, al Calcular. `build_schedule(ns, start_date, flags, custom_rows)` 
 - `detect_flags()`: agrega "cortes" si OR/OL de la solución > límite, y "ajuste shaft" si BSR<BS.
 - Curva S = % acumulado planificado por día (progreso lineal por actividad). Editable (fecha inicio + tabla).
 - Se incluye en app + informe cliente + informe admin. SVG sin markers (svglib-compat).
-- **Curva S REAL vs planificada (v70):** `real_scurve(sched, avances)` = avance ganado
-  `Σ peso·(avance/100)·frac` (crece con los % del campo, siempre ≤ planificada). `schedule_svg(sched,
+- **Curva S REAL vs planificada (v70, fix v76):** `real_scurve(sched, avances, upto_day, windows)` =
+  avance GANADO `Σ peso·(avance/100)` acumulado, **cortado en HOY**, que **llega al avance real total
+  en HOY**. Reparte el ganado de cada actividad sobre su ventana REAL `[inicio_real, fin_real]` (de las
+  fechas del campo, `windows`) o sobre `[inicio, hoy]` si no hay fechas. ⚠️ v76 corrigió el bug donde
+  repartía sobre la ventana PLANIFICADA → descontaba al futuro el trabajo hecho antes de su fecha (o con
+  el proyecto recién creado) y la curva daba ~0 aunque el avance fuera alto. `schedule_svg(sched,
   real_curve, today_day)` superpone la real (verde) sobre la planificada (naranja) + línea "HOY".
   `projects.project_schedule(pid)` reconstruye el plan de las actividades guardadas. Se ve en el
   detalle del proyecto del admin.
@@ -616,7 +620,7 @@ Local: mismos valores en `survey_app/.streamlit/secrets.toml` (gitignored).
 
 ---
 
-## Versiones desplegadas (v75 = actual)
+## Versiones desplegadas (v76 = actual)
 | Ver | Cambio principal |
 |---|---|
 | v5 | Extractor: CRLF fix, caso D valor-antes-label, sin pdfplumber |
@@ -689,3 +693,4 @@ Local: mismos valores en `survey_app/.streamlit/secrets.toml` (gitignored).
 | v73 | Propietario ve todos los proyectos de todos los grupos (👑 Administración → 📁 Proyectos) |
 | v74 | Documentos por proyecto en Google Drive (drive_store.py, hoja Documentos, permisos por rol, auto-archivo plano+matriz+informe) |
 | v75 | Sesión única por cuenta (licencias, "primero gana"): token+heartbeat en Login; 2do login bloqueado; opción forzar |
+| v76 | Fix curva S real: llega al avance real total en HOY (reparte sobre ventana real, no la planificada) |
