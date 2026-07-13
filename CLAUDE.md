@@ -567,7 +567,7 @@ Nombre|PIN|Proyecto|Ubicacion|Clock In|Clock Out|Horas|Estado|**Grupo**.
 
 ## auth.py / auth_ui.py — login, roles y grupos multi-empresa (v53/v54)
 Login con **usuario+contraseña**, contraseñas **PBKDF2-SHA256** (nunca texto plano). Google Sheets:
-- Hoja `Login`: Usuario|Password|Rol|Nombre|Activo|**Grupo** ('Grupo' al final = migración segura).
+- Hoja `Login`: Usuario|Password|Rol|Nombre|Activo|Grupo|**SessionToken|SessionTime** (cols nuevas al final = migración segura, `_get_login_ws` agrega faltantes).
 - Hoja `Grupos`: Grupo|Descripcion|Activo.
 - **Roles:** `propietario` (ve TODO, gestiona grupos+usuarios), `administrador` (solo su grupo:
   proyectos [vacío] + usuarios de campo), `campo` (4 secciones operativas, SIN descargar informes).
@@ -578,6 +578,12 @@ Login con **usuario+contraseña**, contraseñas **PBKDF2-SHA256** (nunca texto p
 - `render_login()` (con **logo COPEX** = static/icon-512.png) devuelve True si hay sesión; si no, st.stop.
 - Gate en app.py: `if not render_login(): st.stop()`. `_ROL`, `_GRUPO` de `session_state.auth`.
 - Sesión en `session_state` (recargar página = re-login; sin cookies por ahora).
+- **Sesión ÚNICA por cuenta (v75, licencias, "primero gana"):** `start_session` guarda un token +
+  timestamp; un 2do login se BLOQUEA mientras la sesión activa siga viva (`_session_active`:
+  token no vacío y heartbeat < `SESSION_TIMEOUT`=180s). `heartbeat(usuario, token)` (throttled 50s en
+  app.py) marca vida; si el token fue desplazado → expulsión. `end_session` libera al salir. Botón
+  "🔓 cerrar la otra sesión e iniciar aquí" (force) para recuperación legítima tras un refresh.
+  Un usuario solo NUNCA es expulsado (no hay competidor); solo se expulsan cuentas compartidas.
 - ⚠️ Paneles owner/admin usan sub-navegación con **radio** (NO st.tabs anidado → causaba mezcla).
 
 ---
@@ -610,7 +616,7 @@ Local: mismos valores en `survey_app/.streamlit/secrets.toml` (gitignored).
 
 ---
 
-## Versiones desplegadas (v74 = actual)
+## Versiones desplegadas (v75 = actual)
 | Ver | Cambio principal |
 |---|---|
 | v5 | Extractor: CRLF fix, caso D valor-antes-label, sin pdfplumber |
@@ -682,3 +688,4 @@ Local: mismos valores en `survey_app/.streamlit/secrets.toml` (gitignored).
 | v72 | Proyectos: proyección avance-vs-fecha (earned value: desvío hoy, días adelanto/retraso, fin proyectado por SPI) |
 | v73 | Propietario ve todos los proyectos de todos los grupos (👑 Administración → 📁 Proyectos) |
 | v74 | Documentos por proyecto en Google Drive (drive_store.py, hoja Documentos, permisos por rol, auto-archivo plano+matriz+informe) |
+| v75 | Sesión única por cuenta (licencias, "primero gana"): token+heartbeat en Login; 2do login bloqueado; opción forzar |
