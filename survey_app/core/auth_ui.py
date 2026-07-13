@@ -2,11 +2,59 @@
 UI de login, barra de usuario y paneles de gestión (propietario / administrador).
 """
 import os
+import re
 import time
 import streamlit as st
 import pandas as pd
 
 from core import auth
+
+_USER_COLS = ["Usuario", "Nombre", "Rol", "Grupo", "Activo", "Email"]  # tabla sin hash/tokens
+
+
+def _field_contact_ui(campo_users, key_prefix="cc"):
+    """Gestión de contacto OBLIGATORIO (email + Telegram) de usuarios de campo — solo admin/owner.
+    El Telegram lo vincula el admin DESPUÉS de que el usuario pulse Start en el bot."""
+    from core import notify
+    if not campo_users:
+        return
+    faltan = [u["Usuario"] for u in campo_users
+              if not (str(u.get("Email", "")).strip() and str(u.get("TelegramChatID", "")).strip())]
+    with st.expander("📇 Contacto de campo (email + Telegram — OBLIGATORIO)", expanded=bool(faltan)):
+        if faltan:
+            st.warning("⚠️ Sin contacto completo (no pueden usar la app): " + ", ".join(faltan))
+        sel = st.selectbox("Usuario de campo", [u["Usuario"] for u in campo_users],
+                           key=f"{key_prefix}_sel")
+        rec = auth.get_user(sel)
+        em  = st.text_input("📧 Email", value=str(rec.get("Email", "")), key=f"{key_prefix}_em")
+        if st.button("Guardar email", key=f"{key_prefix}_emb"):
+            ok, msg = auth.set_contact(sel, email=em)
+            (st.success if ok else st.error)(msg)
+            if ok:
+                st.rerun()
+        st.markdown("**📨 Telegram**")
+        tg = str(rec.get("TelegramChatID", "")).strip()
+        if not notify.telegram_configured() or not notify.bot_username():
+            st.caption("Telegram no configurado (falta el bot en Secrets).")
+        elif tg:
+            st.success("✅ Telegram vinculado.")
+            if st.button("Desvincular Telegram", key=f"{key_prefix}_tgu"):
+                auth.set_contact(sel, telegram="")
+                st.rerun()
+        else:
+            bot  = notify.bot_username()
+            code = re.sub(r"[^A-Za-z0-9_-]", "", sel) or "user"
+            st.caption("1) El usuario abre el bot y pulsa **Start** (envíale este link):")
+            st.code(f"https://t.me/{bot}?start={code}")
+            st.caption("2) Cuando lo haya hecho, pulsa:")
+            if st.button("🔗 Vincular Telegram de este usuario", key=f"{key_prefix}_tgl"):
+                cid = notify.telegram_find_chat_by_code(code)
+                if cid:
+                    auth.set_contact(sel, telegram=cid)
+                    st.success("✅ Telegram vinculado.")
+                    st.rerun()
+                else:
+                    st.error("No encontré su mensaje. Asegúrate de que pulsó Start y reintenta.")
 
 _LOGO = os.path.join(os.path.dirname(os.path.dirname(__file__)), "static", "icon-512.png")
 
@@ -139,7 +187,9 @@ def _owner_grupos():
 def _owner_usuarios():
     users = auth.list_users()
     if users:
-        st.dataframe(pd.DataFrame(users), hide_index=True, use_container_width=True)
+        _df   = pd.DataFrame(users)
+        _cols = [c for c in _USER_COLS if c in _df.columns]
+        st.dataframe(_df[_cols] if _cols else _df, hide_index=True, use_container_width=True)
     grupo_opts = [""] + [g["Grupo"] for g in auth.list_groups()]
 
     with st.expander("➕ Crear usuario"):
@@ -150,10 +200,19 @@ def _owner_usuarios():
             gr = st.selectbox("Grupo", grupo_opts,
                               help="Propietario puede ir sin grupo; admin y campo requieren grupo.")
             pw = st.text_input("Contraseña", type="password")
+            em = st.text_input("📧 Email (obligatorio para campo)")
             if st.form_submit_button("Crear usuario"):
-                ok, msg = auth.add_user(u, pw, rl, nm, gr)
-                (st.success if ok else st.error)(msg)
-                if ok: st.rerun()
+                if rl == "campo" and not em.strip():
+                    st.error("El email es obligatorio para usuarios de campo.")
+                else:
+                    ok, msg = auth.add_user(u, pw, rl, nm, gr)
+                    if ok and em.strip():
+                        auth.set_contact(u, email=em)
+                    (st.success if ok else st.error)(msg)
+                    if ok: st.rerun()
+
+    _campo = [x for x in users if str(x.get("Rol", "")).lower() == "campo"]
+    _field_contact_ui(_campo, key_prefix="ow_cc")
 
     if users:
         with st.expander("🔑 Modificar usuario"):
@@ -202,8 +261,11 @@ def _grupo_usuarios(grupo):
     users = auth.list_users(grupo=grupo)
     campo = [u for u in users if u["Rol"].lower() == "campo"]
     if campo:
-        st.dataframe(pd.DataFrame(campo)[["Usuario", "Nombre", "Activo"]],
-                     hide_index=True, use_container_width=True)
+        _rows = [{"Usuario": u["Usuario"], "Nombre": u["Nombre"], "Activo": u["Activo"],
+                  "Contacto": "✅" if (str(u.get("Email", "")).strip()
+                                       and str(u.get("TelegramChatID", "")).strip())
+                              else "⚠️ falta"} for u in campo]
+        st.dataframe(pd.DataFrame(_rows), hide_index=True, use_container_width=True)
     else:
         st.info("Aún no tienes usuarios de campo.")
 
@@ -212,24 +274,20 @@ def _grupo_usuarios(grupo):
             u  = st.text_input("Usuario")
             nm = st.text_input("Nombre")
             pw = st.text_input("Contraseña", type="password")
-            em = st.text_input("📧 Email (para avisos, opcional)")
+            em = st.text_input("📧 Email (OBLIGATORIO)")
+            st.caption("El Telegram se vincula abajo, después de crearlo (el usuario pulsa Start en el bot).")
             if st.form_submit_button("Crear"):
-                ok, msg = auth.add_user(u, pw, "campo", nm, grupo)
-                if ok and em.strip():
-                    auth.set_contact(u, email=em)
-                (st.success if ok else st.error)(msg)
-                if ok: st.rerun()
+                if not em.strip():
+                    st.error("El email es obligatorio para usuarios de campo.")
+                else:
+                    ok, msg = auth.add_user(u, pw, "campo", nm, grupo)
+                    if ok:
+                        auth.set_contact(u, email=em)
+                    (st.success if ok else st.error)(msg)
+                    if ok:
+                        st.rerun()
 
-    if campo:
-        with st.expander("📧 Contacto de un usuario de campo (para avisos)"):
-            selc = st.selectbox("Usuario", [x["Usuario"] for x in campo], key="gp_contact_sel")
-            _rc  = auth.get_user(selc)
-            em2  = st.text_input("Email", value=str(_rc.get("Email", "")), key="gp_contact_em")
-            _tg  = str(_rc.get("TelegramChatID", "")).strip()
-            st.caption(f"Telegram: {'✅ vinculado' if _tg else '— (lo vincula el propio usuario)'}")
-            if st.button("Guardar email", key="gp_contact_save"):
-                ok, msg = auth.set_contact(selc, email=em2)
-                (st.success if ok else st.error)(msg)
+    _field_contact_ui(campo, key_prefix="gp_cc")
 
     if campo:
         with st.expander("🔑 Modificar usuario de campo"):

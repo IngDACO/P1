@@ -152,7 +152,7 @@ _init_state()
 # LOGIN — barrera de acceso
 # ══════════════════════════════════════════════════════
 from core.auth_ui import render_login, render_user_bar, render_owner_panel, render_group_panel
-from core.auth import can_reports, heartbeat
+from core.auth import can_reports, heartbeat, get_user
 
 if not render_login():
     st.stop()
@@ -169,6 +169,31 @@ if _time.time() - st.session_state.get("_hb_last", 0) > 50:
         st.session_state.pop("auth", None)
         st.warning("🔒 Tu sesión se cerró: esta cuenta se abrió en otro dispositivo "
                    "(o expiró por inactividad). Vuelve a iniciar sesión.")
+        st.stop()
+
+# ── Contacto OBLIGATORIO para usuarios de campo (email + Telegram) ──
+if _ROL == "campo" and not st.session_state.get("_contact_ok"):
+    _rec = get_user(st.session_state.auth.get("usuario", ""))
+    _has_mail = bool(str(_rec.get("Email", "")).strip())
+    _has_tg   = bool(str(_rec.get("TelegramChatID", "")).strip())
+    if _has_mail and _has_tg:
+        st.session_state["_contact_ok"] = True
+    else:
+        st.markdown("### 🔒 Falta configurar tu contacto")
+        st.warning("Tu cuenta de campo necesita **email y Telegram** para usar la app. "
+                   "El **email** lo carga tu administrador.")
+        _pend = ([] if _has_mail else ["📧 Email (lo carga tu administrador)"]) + \
+                ([] if _has_tg else ["📨 Telegram"])
+        st.info("Pendiente: " + "  ·  ".join(_pend))
+        if not _has_tg and notify.telegram_configured() and notify.bot_username():
+            import re as _re
+            _bot  = notify.bot_username()
+            _code = _re.sub(r"[^A-Za-z0-9_-]", "", st.session_state.auth.get("usuario", "")) or "user"
+            st.markdown(f"**Tu único paso:** abre el bot y pulsa **Start** → "
+                        f"[t.me/{_bot}](https://t.me/{_bot}?start={_code})")
+            st.caption("Después, tu administrador te vincula. Recarga cuando esté listo.")
+        if st.button("🔄 Ya está listo — revisar"):
+            st.rerun()
         st.stop()
 
 # ══════════════════════════════════════════════════════
@@ -190,8 +215,6 @@ with st.sidebar:
 
     # ── Usuario logueado ────────────────────────────────
     render_user_bar()
-    from core.projects_ui import render_notification_setup
-    render_notification_setup(st.session_state.auth.get("usuario", ""))
     st.markdown("---")
 
     # ── Valores extraídos del PDF ───────────────────────

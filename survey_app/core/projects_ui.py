@@ -2,8 +2,6 @@
 UI del panel de administración de proyectos (rol administrador).
 Navegación con st.radio (NO st.tabs) para evitar mezcla de contenido.
 """
-import re
-
 import pandas as pd
 import streamlit as st
 import streamlit.components.v1 as components
@@ -353,46 +351,6 @@ def render_owner_projects():
     sel = st.selectbox("Proyecto", list(idmap.keys()), key="ownerproj_sel")
     if sel:
         _detalle_proyecto(idmap[sel])
-
-
-def render_notification_setup(usuario: str):
-    """Que el propio usuario configure su email y vincule Telegram (avisos de proyectos)."""
-    if not notify.any_channel_configured():
-        return
-    with st.expander("🔔 Notificaciones — recibe avisos cuando te asignen un proyecto"):
-        rec      = auth.get_user(usuario)
-        cur_mail = str(rec.get("Email", "")).strip()
-        cur_tg   = str(rec.get("TelegramChatID", "")).strip()
-
-        if notify.email_configured():
-            mail = st.text_input("📧 Tu email para avisos", value=cur_mail, key=f"nm_{usuario}")
-            if st.button("Guardar email", key=f"nmb_{usuario}"):
-                ok, msg = auth.set_contact(usuario, email=mail)
-                (st.success if ok else st.error)(msg)
-                if ok:
-                    st.rerun()
-
-        if notify.telegram_configured() and notify.bot_username():
-            st.markdown("**📨 Telegram**")
-            if cur_tg:
-                st.success("✅ Telegram vinculado.")
-                if st.button("Desvincular", key=f"tgu_{usuario}"):
-                    auth.set_contact(usuario, telegram="")
-                    st.rerun()
-            else:
-                bot  = notify.bot_username()
-                code = re.sub(r"[^A-Za-z0-9_-]", "", usuario) or "user"
-                st.markdown(f"1) Abre el bot y pulsa **Start**: "
-                            f"[t.me/{bot}](https://t.me/{bot}?start={code})")
-                st.caption("2) Vuelve aquí y pulsa vincular:")
-                if st.button("🔗 Vincular mi Telegram", key=f"tgl_{usuario}"):
-                    cid = notify.telegram_find_chat_by_code(code)
-                    if cid:
-                        auth.set_contact(usuario, telegram=cid)
-                        st.success("✅ Telegram vinculado.")
-                        st.rerun()
-                    else:
-                        st.error("No encontré tu mensaje. Pulsa **Start** en el bot y reintenta.")
 
 
 # ── Pestaña del usuario de CAMPO: mis proyectos ──────────────────
