@@ -25,6 +25,7 @@ from core.schedule        import build_schedule, detect_flags, schedule_svg
 from core.plumb           import compute_plumb, plumb_svg, plumb_table, plumb_checks
 from core                 import projects as projects_data
 from core                 import drive_store
+from core                 import notify
 
 try:
     # utf-8-sig elimina el BOM que agrega PowerShell al escribir VERSION
@@ -1027,6 +1028,22 @@ if _seccion == _L_SURVEY:
                         if ok:
                             st.success(f"✅ Proyecto **{res}** guardado. "
                                        "Gestiónalo en 🛠 Mi grupo → Proyectos.")
+                            # ── Avisar a los usuarios de campo asignados ──
+                            if pj_asg and notify.any_channel_configured():
+                                _pinfo = {"Nombre": pj_nom.strip(), "Cliente": pj_cli,
+                                          "Ubicacion": pj_ubi,
+                                          "FechaInicio": (_sd.strftime("%Y-%m-%d") if _sd else ""),
+                                          "FechaFinEst": (_ff.strftime("%Y-%m-%d") if _ff else "")}
+                                _nn = 0
+                                for un in pj_asg:
+                                    try:
+                                        rr = notify.notify_assignment(un, _pinfo)
+                                        if rr.get("email") or rr.get("telegram"):
+                                            _nn += 1
+                                    except Exception:
+                                        pass
+                                if _nn:
+                                    st.caption(f"📨 {_nn} usuario(s) de campo notificado(s).")
                             # ── Auto-archivo en Drive: plano + matriz + informe cliente ──
                             if drive_store.is_configured():
                                 _usr = st.session_state.auth.get("usuario", "")

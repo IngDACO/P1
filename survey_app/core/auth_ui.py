@@ -212,10 +212,24 @@ def _grupo_usuarios(grupo):
             u  = st.text_input("Usuario")
             nm = st.text_input("Nombre")
             pw = st.text_input("Contraseña", type="password")
+            em = st.text_input("📧 Email (para avisos, opcional)")
             if st.form_submit_button("Crear"):
                 ok, msg = auth.add_user(u, pw, "campo", nm, grupo)
+                if ok and em.strip():
+                    auth.set_contact(u, email=em)
                 (st.success if ok else st.error)(msg)
                 if ok: st.rerun()
+
+    if campo:
+        with st.expander("📧 Contacto de un usuario de campo (para avisos)"):
+            selc = st.selectbox("Usuario", [x["Usuario"] for x in campo], key="gp_contact_sel")
+            _rc  = auth.get_user(selc)
+            em2  = st.text_input("Email", value=str(_rc.get("Email", "")), key="gp_contact_em")
+            _tg  = str(_rc.get("TelegramChatID", "")).strip()
+            st.caption(f"Telegram: {'✅ vinculado' if _tg else '— (lo vincula el propio usuario)'}")
+            if st.button("Guardar email", key="gp_contact_save"):
+                ok, msg = auth.set_contact(selc, email=em2)
+                (st.success if ok else st.error)(msg)
 
     if campo:
         with st.expander("🔑 Modificar usuario de campo"):

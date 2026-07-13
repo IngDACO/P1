@@ -18,14 +18,14 @@ from core import timeclock
 LOGIN_SHEET   = "Login"
 # Columnas nuevas al final para no romper filas existentes (migración segura).
 LOGIN_HEADERS = ["Usuario", "Password", "Rol", "Nombre", "Activo", "Grupo",
-                 "SessionToken", "SessionTime"]
+                 "SessionToken", "SessionTime", "Email", "TelegramChatID"]
 GROUPS_SHEET   = "Grupos"
 GROUPS_HEADERS = ["Grupo", "Descripcion", "Activo"]
 ROLES         = ["propietario", "administrador", "campo"]
 _ACTIVE_OK    = ("", "SI", "SÍ", "YES", "Y", "TRUE", "1", "X")
 # Columnas (1-based) en la hoja Login
 _COL = {"Usuario": 1, "Password": 2, "Rol": 3, "Nombre": 4, "Activo": 5, "Grupo": 6,
-        "SessionToken": 7, "SessionTime": 8}
+        "SessionToken": 7, "SessionTime": 8, "Email": 9, "TelegramChatID": 10}
 
 # Sesión ÚNICA por cuenta ("primero gana"): un segundo login se bloquea mientras la
 # sesión activa siga viva. El heartbeat marca vida; si se abandona > SESSION_TIMEOUT s,
@@ -241,6 +241,33 @@ def heartbeat(usuario: str, token: str) -> bool:
     except Exception:
         pass
     return True
+
+
+def get_user(usuario: str) -> dict:
+    """Registro del usuario (dict) o {} si no existe/no se puede leer."""
+    lws, err = _get_login_ws()
+    if err:
+        return {}
+    _, rec = _find_row(lws, usuario)
+    return rec or {}
+
+
+def set_contact(usuario: str, email: str = None, telegram: str = None) -> tuple:
+    """Actualiza Email y/o TelegramChatID del usuario (para notificaciones)."""
+    lws, err = _get_login_ws()
+    if err:
+        return False, err
+    row, _ = _find_row(lws, usuario)
+    if row is None:
+        return False, "Usuario no encontrado."
+    try:
+        if email is not None:
+            lws.update_cell(row, _COL["Email"], str(email).strip())
+        if telegram is not None:
+            lws.update_cell(row, _COL["TelegramChatID"], str(telegram).strip())
+    except Exception as e:
+        return False, f"Error guardando contacto: {e}"
+    return True, "Contacto actualizado."
 
 
 def end_session(usuario: str, token: str = None):
