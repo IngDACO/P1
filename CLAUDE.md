@@ -557,6 +557,19 @@ Usa **google-auth + requests** (sin deps nuevas). Estructura: `COPEX Proyectos /
 
 ---
 
+## notify.py — notificaciones email + Telegram (v77)
+Avisa a un usuario de campo al **asignarlo** a un proyecto (crear/editar), con los datos del proyecto.
+- **Email**: Gmail SMTP (reusa `GMAIL_USER`/`GMAIL_APP_PASS`). **Telegram**: Bot API con
+  `TELEGRAM_BOT_TOKEN` + `TELEGRAM_BOT_USERNAME` (secrets). Solo `requests`+`smtplib` (sin deps nuevas).
+- Contacto por usuario en hoja Login: cols **Email, TelegramChatID** (`auth.get_user/set_contact`).
+- `notify_assignment(usuario, prj)` → `notify_user` → envía por los canales configurados y con dato.
+  Degrada con gracia (sin secrets/sin contacto → no envía, no rompe).
+- **Vinculación Telegram** (auto-servicio, sin webhook): el usuario abre `t.me/<bot>?start=<code>` (code=
+  usuario saneado) → pulsa Start → la app llama `getUpdates` y matchea el code → guarda el chat_id
+  (`telegram_find_chat_by_code`). UI: `projects_ui.render_notification_setup` (en 📋 Mis proyectos) +
+  email al crear/editar usuario de campo (auth_ui).
+- Disparadores: `projects_ui._detalle_proyecto` (nuevos asignados al editar) y `app.py` (al crear proyecto).
+
 ## timeclock.py — fichaje (v41-v45; por login v54)
 Google Sheets (cuenta de servicio). Hoja principal `sheet1`:
 Nombre|PIN|Proyecto|Ubicacion|Clock In|Clock Out|Horas|Estado|**Grupo**.
@@ -620,7 +633,7 @@ Local: mismos valores en `survey_app/.streamlit/secrets.toml` (gitignored).
 
 ---
 
-## Versiones desplegadas (v76 = actual)
+## Versiones desplegadas (v77 = actual)
 | Ver | Cambio principal |
 |---|---|
 | v5 | Extractor: CRLF fix, caso D valor-antes-label, sin pdfplumber |
@@ -694,3 +707,4 @@ Local: mismos valores en `survey_app/.streamlit/secrets.toml` (gitignored).
 | v74 | Documentos por proyecto en Google Drive (drive_store.py, hoja Documentos, permisos por rol, auto-archivo plano+matriz+informe) |
 | v75 | Sesión única por cuenta (licencias, "primero gana"): token+heartbeat en Login; 2do login bloqueado; opción forzar |
 | v76 | Fix curva S real: llega al avance real total en HOY (reparte sobre ventana real, no la planificada) |
+| v77 | Notificaciones email + Telegram al asignar proyecto a usuario de campo (notify.py, contacto en Login, auto-servicio de vinculación) |
