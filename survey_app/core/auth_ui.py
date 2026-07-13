@@ -2,6 +2,7 @@
 UI de login, barra de usuario y paneles de gestión (propietario / administrador).
 """
 import os
+import time
 import streamlit as st
 import pandas as pd
 
@@ -60,16 +61,37 @@ def render_login() -> bool:
             st.markdown("#### Iniciar sesión")
             u = st.text_input("Usuario", key="login_u")
             p = st.text_input("Contraseña", type="password", key="login_p")
-            if st.button("Iniciar sesión", type="primary", use_container_width=True):
+
+            def _do_login(force=False):
                 res = auth.verify_login(u, p)
-                if res.get("ok"):
-                    st.session_state["auth"] = {
-                        "usuario": res["usuario"], "rol": res["rol"],
-                        "nombre": res["nombre"], "grupo": res.get("grupo", ""),
-                    }
-                    st.rerun()
-                else:
+                if not res.get("ok"):
                     st.error(res.get("error", "Error de autenticación."))
+                    return
+                if force:
+                    auth.end_session(res["usuario"], None)   # cerrar la otra sesión
+                ses_ok, tok = auth.start_session(res["usuario"])
+                if not ses_ok:
+                    st.session_state["_blocked_user"] = res["usuario"]
+                    st.error(f"🔒 {tok}")
+                    return
+                st.session_state.pop("_blocked_user", None)
+                st.session_state["auth"] = {
+                    "usuario": res["usuario"], "rol": res["rol"],
+                    "nombre": res["nombre"], "grupo": res.get("grupo", ""),
+                    "token": tok,
+                }
+                st.session_state["_hb_last"] = time.time()
+                st.rerun()
+
+            if st.button("Iniciar sesión", type="primary", use_container_width=True):
+                _do_login(force=False)
+
+            if st.session_state.get("_blocked_user"):
+                st.caption("Si eres **tú** y dejaste la sesión abierta en otro dispositivo, "
+                           "puedes cerrarla e iniciar aquí.")
+                if st.button("🔓 Cerrar la otra sesión e iniciar aquí",
+                             use_container_width=True):
+                    _do_login(force=True)
     return False
 
 
@@ -81,6 +103,10 @@ def render_user_bar():
     grupo = a.get("grupo") or ("todos" if a.get("rol") == "propietario" else "—")
     st.markdown(f"**{a.get('nombre','')}**  \n{rol_lbl}  \n🏢 {grupo}")
     if st.button("🚪 Cerrar sesión", use_container_width=True, key="logout_btn"):
+        try:
+            auth.end_session(a.get("usuario", ""), a.get("token"))   # libera la cuenta
+        except Exception:
+            pass
         if "auth" in st.session_state:
             del st.session_state["auth"]
         st.rerun()

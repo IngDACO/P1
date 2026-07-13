@@ -10,18 +10,27 @@ Contraseñas encriptadas con PBKDF2-SHA256 (nunca en texto plano).
 import hashlib
 import hmac
 import os
+import time
+import uuid
 
 from core import timeclock
 
 LOGIN_SHEET   = "Login"
-# 'Grupo' va al final para no romper filas existentes (migración segura)
-LOGIN_HEADERS = ["Usuario", "Password", "Rol", "Nombre", "Activo", "Grupo"]
+# Columnas nuevas al final para no romper filas existentes (migración segura).
+LOGIN_HEADERS = ["Usuario", "Password", "Rol", "Nombre", "Activo", "Grupo",
+                 "SessionToken", "SessionTime"]
 GROUPS_SHEET   = "Grupos"
 GROUPS_HEADERS = ["Grupo", "Descripcion", "Activo"]
 ROLES         = ["propietario", "administrador", "campo"]
 _ACTIVE_OK    = ("", "SI", "SÍ", "YES", "Y", "TRUE", "1", "X")
 # Columnas (1-based) en la hoja Login
-_COL = {"Usuario": 1, "Password": 2, "Rol": 3, "Nombre": 4, "Activo": 5, "Grupo": 6}
+_COL = {"Usuario": 1, "Password": 2, "Rol": 3, "Nombre": 4, "Activo": 5, "Grupo": 6,
+        "SessionToken": 7, "SessionTime": 8}
+
+# Sesión ÚNICA por cuenta ("primero gana"): un segundo login se bloquea mientras la
+# sesión activa siga viva. El heartbeat marca vida; si se abandona > SESSION_TIMEOUT s,
+# la cuenta se libera sola.
+SESSION_TIMEOUT = 180
 
 
 # ── Hash de contraseñas ──────────────────────────────────────
@@ -60,15 +69,17 @@ def _get_login_ws():
         header = lws.row_values(1)
         if not header:
             lws.append_row(LOGIN_HEADERS)
-        elif "Grupo" not in header:
-            # Migración: agregar columna Grupo al final sin mover datos existentes.
-            need = _COL["Grupo"]
-            try:
-                if lws.col_count < need:
-                    lws.add_cols(need - lws.col_count)
-            except Exception:
-                pass
-            lws.update_cell(1, need, "Grupo")
+        else:
+            # Migración: agregar columnas faltantes al final sin mover datos existentes.
+            for h in LOGIN_HEADERS:
+                if h not in header:
+                    need = _COL[h]
+                    try:
+                        if lws.col_count < need:
+                            lws.add_cols(need - lws.col_count)
+                    except Exception:
+                        pass
+                    lws.update_cell(1, need, h)
         return lws, None
     except Exception as e:
         return None, f"No se pudo abrir la hoja Login: {e}"
@@ -181,6 +192,71 @@ def verify_login(usuario: str, pw: str) -> dict:
                         "grupo":   str(r.get("Grupo", "")).strip()}
             return {"ok": False, "error": "Contraseña incorrecta."}
     return {"ok": False, "error": "Usuario no encontrado."}
+
+
+# ── Sesión única por cuenta ("primero gana") ─────────────────
+def _session_active(rec) -> bool:
+    """¿La cuenta tiene una sesión viva? (token no vacío y heartbeat reciente)."""
+    if not str(rec.get("SessionToken", "")).strip():
+        return False
+    try:
+        t = int(float(rec.get("SessionTime", 0)))
+    except Exception:
+        t = 0
+    return (int(time.time()) - t) < SESSION_TIMEOUT
+
+
+def start_session(usuario: str) -> tuple:
+    """Intenta abrir sesión única. (True, token) si la cuenta está libre;
+    (False, motivo) si ya hay una sesión activa en otro dispositivo."""
+    lws, err = _get_login_ws()
+    if err:
+        return False, err
+    row, rec = _find_row(lws, usuario)
+    if row is None:
+        return False, "Usuario no encontrado."
+    if _session_active(rec):
+        return False, "Esta cuenta ya tiene una sesión activa en otro dispositivo."
+    token = uuid.uuid4().hex
+    try:
+        lws.update_cell(row, _COL["SessionToken"], token)
+        lws.update_cell(row, _COL["SessionTime"], str(int(time.time())))
+    except Exception as e:
+        return False, f"No se pudo iniciar sesión: {e}"
+    return True, token
+
+
+def heartbeat(usuario: str, token: str) -> bool:
+    """Marca vida si el token sigue vigente. False si fue desplazado (o expiró y lo tomó otro)."""
+    lws, err = _get_login_ws()
+    if err:
+        return True   # error transitorio de la API → no expulsar
+    row, rec = _find_row(lws, usuario)
+    if row is None:
+        return False
+    if str(rec.get("SessionToken", "")).strip() != str(token):
+        return False
+    try:
+        lws.update_cell(row, _COL["SessionTime"], str(int(time.time())))
+    except Exception:
+        pass
+    return True
+
+
+def end_session(usuario: str, token: str = None):
+    """Libera la cuenta al cerrar sesión (solo si el token coincide, o forzado si token=None)."""
+    lws, err = _get_login_ws()
+    if err:
+        return
+    row, rec = _find_row(lws, usuario)
+    if row is None:
+        return
+    if token is None or str(rec.get("SessionToken", "")).strip() == str(token):
+        try:
+            lws.update_cell(row, _COL["SessionToken"], "")
+            lws.update_cell(row, _COL["SessionTime"], "")
+        except Exception:
+            pass
 
 
 # ── Gestión de usuarios ──────────────────────────────────────

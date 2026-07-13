@@ -151,13 +151,24 @@ _init_state()
 # LOGIN — barrera de acceso
 # ══════════════════════════════════════════════════════
 from core.auth_ui import render_login, render_user_bar, render_owner_panel, render_group_panel
-from core.auth import can_reports
+from core.auth import can_reports, heartbeat
 
 if not render_login():
     st.stop()
 
 _ROL   = st.session_state.auth["rol"]
 _GRUPO = st.session_state.auth.get("grupo", "")
+
+# ── Sesión única: heartbeat (throttled) + expulsión si otro toma la cuenta ──
+import time as _time
+if _time.time() - st.session_state.get("_hb_last", 0) > 50:
+    st.session_state["_hb_last"] = _time.time()
+    _a = st.session_state.auth
+    if not heartbeat(_a.get("usuario", ""), _a.get("token", "")):
+        st.session_state.pop("auth", None)
+        st.warning("🔒 Tu sesión se cerró: esta cuenta se abrió en otro dispositivo "
+                   "(o expiró por inactividad). Vuelve a iniciar sesión.")
+        st.stop()
 
 # ══════════════════════════════════════════════════════
 # SIDEBAR
