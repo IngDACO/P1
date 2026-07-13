@@ -190,6 +190,8 @@ with st.sidebar:
 
     # ── Usuario logueado ────────────────────────────────
     render_user_bar()
+    from core.projects_ui import render_notification_setup
+    render_notification_setup(st.session_state.auth.get("usuario", ""))
     st.markdown("---")
 
     # ── Valores extraídos del PDF ───────────────────────

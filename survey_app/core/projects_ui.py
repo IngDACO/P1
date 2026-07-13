@@ -398,7 +398,6 @@ def render_notification_setup(usuario: str):
 # ── Pestaña del usuario de CAMPO: mis proyectos ──────────────────
 def render_field_projects(usuario: str, grupo: str):
     st.markdown("### 📋 Mis proyectos")
-    render_notification_setup(usuario)
     if not P.is_configured():
         st.warning("La gestión de proyectos necesita Google Sheets configurado.")
         return
