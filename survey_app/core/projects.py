@@ -171,6 +171,15 @@ def _find_row(ws, header, value):
     return None
 
 
+def _col_letter(n: int) -> str:
+    """Índice de columna (1-based) → letra(s) A1 (1→A, 27→AA)."""
+    s = ""
+    while n > 0:
+        n, r = divmod(n - 1, 26)
+        s = chr(65 + r) + s
+    return s
+
+
 # ── Agrupaciones ─────────────────────────────────────────────────
 def list_groupings(grupo: str = None) -> list:
     out = []
@@ -310,9 +319,14 @@ def update_project(pid: str, fields: dict) -> tuple:
     row = _find_row(pws, "ID", pid)
     if row is None:
         return False, "Proyecto no encontrado."
-    for k, v in fields.items():
-        if k in _PCOL:
-            pws.update_cell(row, _PCOL[k], str(v))
+    # Una sola llamada a la API (batch) en vez de N update_cell → evita rate limit.
+    batch = [{"range": f"{_col_letter(_PCOL[k])}{row}", "values": [[str(v)]]}
+             for k, v in fields.items() if k in _PCOL]
+    if batch:
+        try:
+            pws.batch_update(batch, value_input_option="RAW")
+        except Exception as e:
+            return False, f"Error actualizando: {e}"
     _invalidate()
     return True, "Proyecto actualizado."
 

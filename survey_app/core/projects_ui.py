@@ -228,13 +228,13 @@ def _detalle_proyecto(pid: str, grupo: str = None):
 
         if st.form_submit_button("💾 Guardar cambios", use_container_width=True):
             ag_id = "" if ag_sel == "(ninguna)" else ag_sel.split(" · ")[0]
-            P.update_project(pid, {
+            P.update_project(pid, {   # todo en UNA escritura (batch) → sin rate limit
                 "Nombre": nombre, "Cliente": cliente, "Ubicacion": ubic, "Modelo": modelo,
                 "Ingeniero": ing, "FechaInicio": f_ini, "FechaFinEst": f_fin,
                 "CampoAsignados": ";".join(asignados),
                 "AgrupacionID": ag_id, "PesoEnAgrupacion": peso,
+                "EstadoManual": est_man, "Estado": P.derive_estado(avance, est_man),
             })
-            P.set_estado_manual(pid, est_man)
             # Notificar a los usuarios de campo recién asignados
             nuevos = [x for x in asignados if x not in actuales]
             _sent = 0
