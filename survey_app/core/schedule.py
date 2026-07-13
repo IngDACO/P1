@@ -108,10 +108,14 @@ def build_schedule(ns: int, start_date: date, flags: dict,
     }
 
 
-def real_scurve(sched: dict, avances: list, upto_day=None) -> list:
-    """Curva S REAL (avance ganado): Σ peso_i · (avance_i/100) · frac_planificada_i(d).
-    `avances` = lista alineada con sched['activities'] (avance % 0-100 de cada actividad).
-    Se construye SOLO hasta `upto_day` (p.ej. hoy): no se extiende hasta la fecha final."""
+def real_scurve(sched: dict, avances: list, upto_day=None, windows=None) -> list:
+    """Curva S REAL = avance GANADO acumulado, construido SOLO hasta HOY (`upto_day`).
+
+    Cada actividad aporta `peso·(avance/100)`, repartido sobre su ventana REAL
+    [inicio_real, fin_real] si se conoce; si no, sobre [inicio_proyecto (0), hoy].
+    Clave: en el día de HOY la curva llega al **avance real total** (no se descuenta
+    al futuro aunque el trabajo se haya hecho antes de la fecha planificada).
+    `windows` = lista alineada con las actividades, cada una (s_day, f_day) o None."""
     acts  = sched["activities"]
     total = max(1, sched["total_dias"])
     top   = total if upto_day is None else max(0, min(int(upto_day), total))
@@ -119,10 +123,22 @@ def real_scurve(sched: dict, avances: list, upto_day=None) -> list:
     d = 0.0
     while d <= top + 0.001:
         pct = 0.0
-        for a, av in zip(acts, avances):
-            frac = (d - a["inicio"]) / a["duracion"] if a["duracion"] else 1.0
-            frac = min(1.0, max(0.0, frac))
-            pct += a["peso"] * (float(av) / 100.0) * frac
+        for i, (a, av) in enumerate(zip(acts, avances)):
+            e = a["peso"] * (float(av) / 100.0)          # avance ganado de la actividad
+            if e <= 0:
+                continue
+            s_raw, f_raw = (windows[i] if windows and i < len(windows) else (None, None))
+            s = 0.0 if s_raw is None else float(s_raw)    # inicio real, o inicio del proyecto
+            f = top  if f_raw is None else float(f_raw)   # fin real, o HOY (en curso)
+            s = min(max(0.0, s), top)
+            f = min(max(s, f), top)
+            if d >= f:
+                frac = 1.0
+            elif d <= s:
+                frac = 0.0
+            else:
+                frac = (d - s) / (f - s) if f > s else 1.0
+            pct += e * frac
         curve.append((d, round(pct, 1)))
         d += 1.0
     return curve

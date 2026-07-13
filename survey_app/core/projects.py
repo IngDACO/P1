@@ -457,8 +457,18 @@ def project_schedule(pid: str):
     sched     = build_schedule(1, start, {}, custom_rows=custom)
     avances   = [_num(a.get("Avance")) for a in acts]
     today_day = (date.today() - start).days
-    real      = real_scurve(sched, avances, upto_day=today_day)   # se corta en HOY
-    proj      = schedule_projection(sched, avances, today_day)
+
+    def _day_off(s):
+        try:
+            y, m, dd = str(s).split("-")
+            return (date(int(y), int(m), int(dd)) - start).days
+        except Exception:
+            return None
+    windows = [(_day_off(a.get("FechaInicioReal")), _day_off(a.get("FechaFinReal")))
+               for a in acts]
+
+    real = real_scurve(sched, avances, upto_day=today_day, windows=windows)  # se corta en HOY
+    proj = schedule_projection(sched, avances, today_day)
     return {"sched": sched, "real": real, "today_day": today_day,
             "avances": avances, "proj": proj}
 
