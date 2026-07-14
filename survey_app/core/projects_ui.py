@@ -10,7 +10,42 @@ from core import projects as P
 from core import auth
 from core import drive_store
 from core import notify
+from core import alerts
 from core.schedule import schedule_svg
+
+
+def _alerts_section(pid, grupo, project_name="", allow_report=False):
+    """Alarmas abiertas del proyecto + resolver; si allow_report, el campo puede reportar."""
+    if not alerts.is_configured():
+        return
+    usuario = st.session_state.get("auth", {}).get("usuario", "")
+    abiertas = alerts.list_alerts(pid, "abierta")
+    st.markdown(f"**{'🔴 ' + str(len(abiertas)) if abiertas else '🔔'} Alarmas / avisos**")
+    if abiertas:
+        for al in abiertas:
+            emo = "🔴" if str(al.get("Tipo")) == "problema" else "🔵"
+            c = st.columns([6, 1])
+            c[0].write(f"{emo} _{al.get('Fecha')}_ · **{al.get('CreadoPor')}**: {al.get('Mensaje')}")
+            if c[1].button("✅", key=f"resolv_{al.get('ID')}", help="Marcar resuelta"):
+                ok, msg = alerts.resolve_alert(al.get("ID"), usuario)
+                if ok:
+                    st.rerun()
+                else:
+                    st.error(msg)
+    else:
+        st.caption("Sin alarmas abiertas.")
+    if allow_report:
+        with st.expander("🔴 Reportar un problema al administrador"):
+            msg = st.text_area("Describe el problema o inconveniente en obra", key=f"rep_{pid}")
+            if st.button("Enviar alarma", key=f"repb_{pid}"):
+                if not msg.strip():
+                    st.error("Escribe el problema.")
+                else:
+                    with st.spinner("Enviando alarma..."):
+                        ok, res = alerts.report_problem(pid, grupo, msg.strip(), usuario, project_name)
+                    (st.success if ok else st.error)("Alarma enviada al administrador." if ok else res)
+                    if ok:
+                        st.rerun()
 
 
 _ESTADO_EMOJI = {
@@ -117,12 +152,15 @@ def _panel_proyectos(grupo: str):
     # Resumen de estado
     ags = {a["ID"]: a["Nombre"] for a in P.list_groupings(grupo=grupo)}
     horas = P.project_hours_bulk(grupo)   # 1 sola lectura del fichaje
+    alarmas = alerts.open_counts_all() if alerts.is_configured() else {}
     rows = []
     for p in proys:
         est = str(p.get("Estado", ""))
+        _na = alarmas.get(str(p.get("ID", "")), 0)
         rows.append({
             "ID":        p.get("ID"),
             "Proyecto":  p.get("Nombre"),
+            "🔔":        f"🔴 {_na}" if _na else "",
             "Cliente":   p.get("Cliente"),
             "Estado":    f"{_ESTADO_EMOJI.get(est, '')} {est}".strip(),
             "Avance %":  P._num(p.get("Avance")),
@@ -154,6 +192,9 @@ def _detalle_proyecto(pid: str, grupo: str = None):
     c2.metric("Avance", f"{avance:.0f}%")
     c3.metric("Horas trabajadas", f"{P.project_hours(prj.get('Nombre'), grupo):.1f}")
     st.progress(min(1.0, avance / 100.0))
+
+    # ── Alarmas / avisos del proyecto ──
+    _alerts_section(pid, grupo, prj.get("Nombre", ""), allow_report=False)
 
     # ── Cronograma: curva S planificada vs real ──
     ps = P.project_schedule(pid)
@@ -248,8 +289,25 @@ def _detalle_proyecto(pid: str, grupo: str = None):
                             _sent += 1
                     except Exception:
                         pass
+            # Aviso de cambio al campo ya asignado (los nuevos ya recibieron la asignación)
+            try:
+                alerts.notify_change(pid, grupo, "Se actualizaron los datos del proyecto.",
+                                     st.session_state.get("auth", {}).get("usuario", ""),
+                                     [x for x in asignados if x not in nuevos], nombre)
+            except Exception:
+                pass
             st.toast("Cambios guardados." + (f"  📨 {_sent} notificado(s)." if _sent else ""))
             st.rerun()
+
+    # helper: avisar al campo asignado de un cambio del admin
+    _asig_now = [x.strip() for x in str(prj.get("CampoAsignados", "")).split(";") if x.strip()]
+    def _aviso_cambio(txt):
+        try:
+            alerts.notify_change(pid, grupo, txt,
+                                 st.session_state.get("auth", {}).get("usuario", ""),
+                                 _asig_now, prj.get("Nombre", ""))
+        except Exception:
+            pass
 
     # ── Actividades: tabla EDITABLE (nombre/días/peso/orden); avance = campo ──
     st.markdown("**Actividades del cronograma** — tabla editable · el avance lo pone el campo")
@@ -285,6 +343,7 @@ def _detalle_proyecto(pid: str, grupo: str = None):
             ok, msg = P.save_activities(pid, edits)
             (st.success if ok else st.error)(msg)
             if ok:
+                _aviso_cambio("Se actualizó la tabla de actividades del cronograma.")
                 st.rerun()
     else:
         st.caption("Sin actividades registradas.")
@@ -303,6 +362,7 @@ def _detalle_proyecto(pid: str, grupo: str = None):
                     ok, msg = P.add_activity(pid, an.strip(), ad, ap)
                     (st.success if ok else st.error)(msg)
                     if ok:
+                        _aviso_cambio(f"Se agregó la actividad: {an.strip()}.")
                         st.rerun()
         if acts:
             st.markdown("**🗑 Eliminar actividad**")
@@ -313,6 +373,7 @@ def _detalle_proyecto(pid: str, grupo: str = None):
                 ok, msg = P.delete_activity(pid, _dmap[dsel])
                 (st.success if ok else st.error)(msg)
                 if ok:
+                    _aviso_cambio("Se eliminó una actividad del cronograma.")
                     st.rerun()
 
     # ── Documentos ──
@@ -380,13 +441,16 @@ def render_owner_projects():
         st.info("Aún no hay proyectos en ningún grupo.")
         return
     ags = {a["ID"]: a["Nombre"] for a in P.list_groupings()}
+    alarmas = alerts.open_counts_all() if alerts.is_configured() else {}
     rows = []
     for p in proys:
         est = str(p.get("Estado", ""))
+        _na = alarmas.get(str(p.get("ID", "")), 0)
         rows.append({
             "ID":        p.get("ID"),
             "Grupo":     p.get("Grupo"),
             "Proyecto":  p.get("Nombre"),
+            "🔔":        f"🔴 {_na}" if _na else "",
             "Cliente":   p.get("Cliente"),
             "Estado":    f"{_ESTADO_EMOJI.get(est, '')} {est}".strip(),
             "Avance %":  P._num(p.get("Avance")),
@@ -433,6 +497,9 @@ def render_field_projects(usuario: str, grupo: str):
     st.progress(min(1.0, avance / 100.0))
     if prj.get("Ubicacion"):
         st.caption(f"📍 {prj.get('Ubicacion')}  ·  Cliente: {prj.get('Cliente','—')}")
+
+    # ── Alarmas: reportar problema + ver avisos ──
+    _alerts_section(pid, grupo, prj.get("Nombre", ""), allow_report=True)
 
     st.markdown("#### Actividades — actualiza tu avance")
     acts = P.list_activities(pid)
