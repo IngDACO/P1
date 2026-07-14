@@ -532,7 +532,11 @@ Paso 7, solo administrador/propietario). Persistencia en Google Sheets (misma ho
   + override manual (En pausa/Cancelado) vía `derive_estado`.
 - **Admin agrega/elimina actividades (v82):** `add_activity(pid,nombre,dur,peso)` / `delete_activity(pid,orden)`
   → `_recompute_project_avance` (compute_avance sobre las actividades actuales) + update_project. La curva S
-  se reconstruye sola (project_schedule). Tabla muestra Peso% normalizado. UI en el detalle del proyecto.
+  se reconstruye sola (project_schedule).
+- **Tabla de actividades EDITABLE (v83):** `st.data_editor` (num_rows fixed) — editar Nombre/Días/Peso y
+  reordenar (columna Orden editable); Avance de solo lectura (campo). `save_activities(pid, edits)` escribe
+  todo en 1 `batch_update` (localiza cada fila por su Orden original `orden0`) + recomputa. Reordenar =
+  cambiar el número de Orden (list_activities ordena por Orden).
 - **Admin** (🛠 Mi grupo → 📁 Proyectos): lista con estado/avance/horas, editar datos/asignados/agrupación/peso/estado, agrupaciones. `render_admin_projects`.
 - **Campo** (📋 Mis proyectos): ve asignados (`list_projects_for_field`), actualiza Avance% por actividad (`update_activity_progress` recalcula proyecto). `render_field_projects`.
 - **Propietario** (👑 Administración → 📁 Proyectos): ve TODOS los proyectos de todos los grupos
@@ -640,7 +644,7 @@ Local: mismos valores en `survey_app/.streamlit/secrets.toml` (gitignored).
 
 ---
 
-## Versiones desplegadas (v82 = actual)
+## Versiones desplegadas (v83 = actual)
 | Ver | Cambio principal |
 |---|---|
 | v5 | Extractor: CRLF fix, caso D valor-antes-label, sin pdfplumber |
@@ -720,3 +724,4 @@ Local: mismos valores en `survey_app/.streamlit/secrets.toml` (gitignored).
 | v80 | Fix: guardar proyecto borraba las actividades (rate limit por ~16 update_cell) → update_project usa batch_update (1 llamada) |
 | v81 | Fix: list_users no devolvía Email/TelegramChatID → el admin veía "contacto falta" con datos ya cargados |
 | v82 | Admin agrega/elimina actividades del cronograma con recálculo automático del % y de la curva S |
+| v83 | Tabla de actividades totalmente editable (data_editor): nombre/días/peso + reordenar; guardado en 1 batch |
