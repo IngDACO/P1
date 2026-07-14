@@ -527,8 +527,12 @@ Paso 7, solo administrador/propietario). Persistencia en Google Sheets (misma ho
   **ParamsJSON·MatrizJSON·InterpJSON** (survey completo re-abrible; los derivados se recalculan)·CreadoPor·Creado.
 - **Actividades**: ProyectoID·Orden·Nombre·DuracionDias·Peso·**Avance**·FechaInicioReal·FechaFinReal·Nota.
 - **Agrupaciones** (AGR-####): varios proyectos con peso; `grouping_progress` = Σ(peso·avance)/Σpeso.
-- **Avance proyecto** = `compute_avance` = Σ(peso_act·avance_act)/Σpeso. **Estado**: auto (0=Planificado,
-  1-99=En progreso,100=Completado) + override manual (En pausa/Cancelado) vía `derive_estado`.
+- **Avance proyecto** = `compute_avance` = Σ(peso_act·avance_act)/Σpeso (**escala-invariante** → agregar/
+  eliminar actividades recalcula el % solo). **Estado**: auto (0=Planificado,1-99=En progreso,100=Completado)
+  + override manual (En pausa/Cancelado) vía `derive_estado`.
+- **Admin agrega/elimina actividades (v82):** `add_activity(pid,nombre,dur,peso)` / `delete_activity(pid,orden)`
+  → `_recompute_project_avance` (compute_avance sobre las actividades actuales) + update_project. La curva S
+  se reconstruye sola (project_schedule). Tabla muestra Peso% normalizado. UI en el detalle del proyecto.
 - **Admin** (🛠 Mi grupo → 📁 Proyectos): lista con estado/avance/horas, editar datos/asignados/agrupación/peso/estado, agrupaciones. `render_admin_projects`.
 - **Campo** (📋 Mis proyectos): ve asignados (`list_projects_for_field`), actualiza Avance% por actividad (`update_activity_progress` recalcula proyecto). `render_field_projects`.
 - **Propietario** (👑 Administración → 📁 Proyectos): ve TODOS los proyectos de todos los grupos
@@ -636,7 +640,7 @@ Local: mismos valores en `survey_app/.streamlit/secrets.toml` (gitignored).
 
 ---
 
-## Versiones desplegadas (v81 = actual)
+## Versiones desplegadas (v82 = actual)
 | Ver | Cambio principal |
 |---|---|
 | v5 | Extractor: CRLF fix, caso D valor-antes-label, sin pdfplumber |
@@ -715,3 +719,4 @@ Local: mismos valores en `survey_app/.streamlit/secrets.toml` (gitignored).
 | v79 | Contacto (email+Telegram) OBLIGATORIO para campo y gestionado SOLO por el admin; bloqueo duro; tabla usuarios sin hash |
 | v80 | Fix: guardar proyecto borraba las actividades (rate limit por ~16 update_cell) → update_project usa batch_update (1 llamada) |
 | v81 | Fix: list_users no devolvía Email/TelegramChatID → el admin veía "contacto falta" con datos ya cargados |
+| v82 | Admin agrega/elimina actividades del cronograma con recálculo automático del % y de la curva S |
