@@ -33,7 +33,8 @@ C:\Users\diego\P1\survey_app\
 ├── requirements.txt        # streamlit, pypdf, pandas, numpy, openpyxl, reportlab,
 │                           #   anthropic, svglib, gspread, google-auth
 ├── .streamlit/
-│   ├── secrets.toml        # LOCAL (gitignored): ANTHROPIC_API_KEY, GMAIL_*, gcp_service_account, TIMECLOCK_SHEET_ID
+│   ├── secrets.toml        # LOCAL (gitignored): ANTHROPIC_API_KEY, GMAIL_*, gcp_service_account, TIMECLOCK_SHEET_ID,
+│   │                       #   [gdrive] (docs), TELEGRAM_BOT_TOKEN/USERNAME (avisos), APP_URL
 │   └── config.toml         # enableStaticServing = true (para el manifest/íconos PWA)
 ├── static/                 # PWA: manifest.webmanifest + icon-192/512.png (COPEX) — versionados (ver .gitignore)
 ├── core/
@@ -55,10 +56,18 @@ C:\Users\diego\P1\survey_app\
 │   ├── rail_cut_ui.py      # render_rail_cut_tab() — corte de rieles
 │   ├── timeclock.py        # clock_in/out — fichaje por login+grupo (sin PIN, v54)
 │   ├── timeclock_ui.py     # render_timeclock_tab() — fichaje (usa identidad del login)
-│   ├── auth.py             # login, roles, grupos (Google Sheets, PBKDF2) — v53/v54
-│   └── auth_ui.py          # render_login/user_bar/owner_panel/group_panel — v53/v54
+│   ├── auth.py             # login, roles, grupos, sesión única, contacto (Sheets, PBKDF2) — v53+
+│   ├── auth_ui.py          # render_login/user_bar/owner_panel(grupos/usuarios/proyectos/rieles)/group_panel
+│   ├── projects.py         # gestión de proyectos: Proyectos/Actividades/Agrupaciones/Documentos (Sheets) — v65+
+│   ├── projects_ui.py      # panel admin/propietario/campo + docs + alarmas + cronograma real vs plan
+│   ├── drive_store.py      # documentos por proyecto en Google Drive (OAuth drive.file) — v74
+│   ├── notify.py           # notificaciones email + Telegram (asignación, avisos) — v77
+│   ├── alerts.py           # alarmas/avisos por proyecto (campo↔admin) — v88
+│   ├── belting.py          # compute_belting/belting_svg — belting (DSTS) — v86
+│   ├── belting_ui.py       # render_belting_tab()
+│   └── rails.py            # catálogo de rieles (referencia→medidas) para autocompletar RAIL — v84
 └── extractors/
-    └── schindler.py        # extract_from_pdf() — pypdf CAD PDF parser
+    └── schindler.py        # extract_from_pdf() + extract_car_guide_rail() + extract_belting() — pypdf CAD PDF
 
 C:\Users\diego\copex_mobile\   # App Android (Capacitor) — carga la URL de Streamlit; ver sección Móvil
 ```
