@@ -455,6 +455,35 @@ def delete_activity(pid, orden) -> tuple:
     return True, "Actividad eliminada."
 
 
+def save_activities(pid, edits) -> tuple:
+    """Guarda ediciones de la tabla (nombre/días/peso/orden) en UNA sola escritura (batch).
+    `edits`: lista de dicts con 'orden0' (orden original, para localizar la fila) +
+    los campos nuevos (Nombre/DuracionDias/Peso/Orden). Preserva el Avance (lo pone el campo)."""
+    aws, err = _activities_ws()
+    if err:
+        return False, err
+    recs = aws.get_all_records(numericise_ignore=["all"])
+    rowmap = {str(r.get("Orden", "")): i + 2
+              for i, r in enumerate(recs) if str(r.get("ProyectoID", "")) == str(pid)}
+    batch = []
+    for e in edits:
+        row = rowmap.get(str(e.get("orden0")))
+        if row is None:
+            continue
+        for field in ("Nombre", "DuracionDias", "Peso", "Orden"):
+            if field in e and field in _ACOL:
+                batch.append({"range": f"{_col_letter(_ACOL[field])}{row}",
+                              "values": [[str(e[field])]]})
+    if batch:
+        try:
+            aws.batch_update(batch, value_input_option="RAW")
+        except Exception as ex:
+            return False, f"Error guardando actividades: {ex}"
+    _invalidate()
+    _recompute_project_avance(pid)
+    return True, "Actividades actualizadas."
+
+
 # ── Horas trabajadas (desde el fichaje) ──────────────────────────
 def project_hours(proyecto_nombre: str, grupo: str = None) -> float:
     """Suma de horas del fichaje asociadas al proyecto (por nombre, opcionalmente grupo)."""

@@ -251,23 +251,45 @@ def _detalle_proyecto(pid: str, grupo: str = None):
             st.toast("Cambios guardados." + (f"  📨 {_sent} notificado(s)." if _sent else ""))
             st.rerun()
 
-    # ── Actividades (avance = campo; agregar/eliminar = admin) ──
-    st.markdown("**Actividades del cronograma** (avance = campo · agregar/eliminar = admin)")
+    # ── Actividades: tabla EDITABLE (nombre/días/peso/orden); avance = campo ──
+    st.markdown("**Actividades del cronograma** — tabla editable · el avance lo pone el campo")
     acts = P.list_activities(pid)
     if acts:
-        _totp = sum(P._num(a.get("Peso")) for a in acts) or 1.0
-        st.dataframe(pd.DataFrame([{
-            "Orden":  int(P._num(a.get("Orden"))),
+        _adf = pd.DataFrame([{
+            "Orden": int(P._num(a.get("Orden"))),
             "Actividad": a.get("Nombre"),
-            "Peso %": round(P._num(a.get("Peso")) * 100.0 / _totp, 1),
+            "Días": int(P._num(a.get("DuracionDias")) or 1),
+            "Peso": P._num(a.get("Peso")),
             "Avance %": P._num(a.get("Avance")),
-            "Inicio real": a.get("FechaInicioReal", ""),
-            "Fin real": a.get("FechaFinReal", ""),
-        } for a in acts]), use_container_width=True, hide_index=True)
+        } for a in acts])
+        _edited = st.data_editor(
+            _adf, use_container_width=True, hide_index=True, num_rows="fixed",
+            key=f"acted_{pid}", disabled=["Avance %"],
+            column_config={
+                "Orden": st.column_config.NumberColumn("Orden", min_value=1, step=1,
+                                                       help="Cambia el número para reordenar"),
+                "Días":  st.column_config.NumberColumn("Días", min_value=1, step=1),
+                "Peso":  st.column_config.NumberColumn("Peso", min_value=0.0, step=1.0,
+                                                       help="Peso relativo (el % se calcula proporcional)"),
+            })
+        st.caption("Edita nombre, días, peso y el orden; el avance % es de solo lectura (lo actualiza el campo).")
+        if st.button("💾 Guardar tabla de actividades", key=f"savetbl_{pid}"):
+            edits = []
+            for i, a in enumerate(acts):
+                r = _edited.iloc[i]
+                edits.append({"orden0": a.get("Orden"),
+                              "Nombre": str(r["Actividad"]).strip(),
+                              "DuracionDias": int(r["Días"]),
+                              "Peso": float(r["Peso"]),
+                              "Orden": int(r["Orden"])})
+            ok, msg = P.save_activities(pid, edits)
+            (st.success if ok else st.error)(msg)
+            if ok:
+                st.rerun()
     else:
         st.caption("Sin actividades registradas.")
 
-    with st.expander("✏️ Agregar / eliminar actividad (recalcula el % automáticamente)"):
+    with st.expander("➕ Agregar / 🗑 eliminar actividad (recalcula el % automáticamente)"):
         with st.form(f"addact_{pid}", clear_on_submit=True):
             st.markdown("**➕ Agregar actividad**")
             an = st.text_input("Nombre")
