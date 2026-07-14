@@ -644,7 +644,16 @@ Local: mismos valores en `survey_app/.streamlit/secrets.toml` (gitignored).
 
 ---
 
-## Versiones desplegadas (v83 = actual)
+## rails.py — catálogo de rieles + autocompletar RAIL (v84)
+Hoja **Rieles** (`Referencia | AnchoDiente | AlturaDiente`), gestionada por el **propietario**
+(👑 Administración → 🚆 Rieles: `auth_ui._owner_rieles`). `get_rail(ref)` → {ancho,altura} (cacheado).
+`schindler.extract_car_guide_rail(pdf)` lee el código del **CAR GUIDE RAIL** del plano (misma fila que la
+etiqueta en la extracción posicional; excluye COUNTERWEIGHT; regex `T\d{2,3}-\d/[A-Z]` tipo `T75-3/B`).
+Al cargar el plano en el survey (app.py), autocompleta **RAIL = AnchoDiente** del catálogo; si el código no
+está en el catálogo o no se detecta → aviso + entrada manual. (AnchoDiente=ancho del diente=RAIL;
+AlturaDiente=altura del diente desde la espalda, guardada para uso futuro.)
+
+## Versiones desplegadas (v84 = actual)
 | Ver | Cambio principal |
 |---|---|
 | v5 | Extractor: CRLF fix, caso D valor-antes-label, sin pdfplumber |
@@ -725,3 +734,4 @@ Local: mismos valores en `survey_app/.streamlit/secrets.toml` (gitignored).
 | v81 | Fix: list_users no devolvía Email/TelegramChatID → el admin veía "contacto falta" con datos ya cargados |
 | v82 | Admin agrega/elimina actividades del cronograma con recálculo automático del % y de la curva S |
 | v83 | Tabla de actividades totalmente editable (data_editor): nombre/días/peso + reordenar; guardado en 1 batch |
+| v84 | Catálogo de rieles (hoja Rieles, gestión propietario); lee código CAR GUIDE RAIL del plano → autocompleta RAIL |
