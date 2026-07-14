@@ -297,20 +297,34 @@ def extract_car_guide_rail(pdf_file) -> str:
     return None
 
 
-_HQ_RE = re.compile(r"\bHQ\s*=\s*(\d+(?:\.\d+)?)")
+_HQ_RE  = re.compile(r"\bHQ\s*=\s*(\d+(?:\.\d+)?)")
+# valor con tolerancia tipo "85 -20/0" → nominal 85
+_VAL_TOL = re.compile(r"(\d+)\s*[-+]?\d+\s*/\s*[-+]?\d*")
 
 
 def extract_belting(pdf_file) -> dict:
-    """Datos para el belting. Devuelve {'HQ': mm|None, 'HGP': None}.
-    HQ del texto 'HQ= 14045'. HGP se ingresa a mano por ahora (tabla HKP/HGP ambigua)."""
+    """Datos para el belting. Devuelve {'HQ': mm|None, 'HGP': mm|None}.
+    HQ del texto 'HQ= 14045'. HGP = 2º valor de la fila 'HKP/HGP [mm]' (el 1º es HKP)."""
     out = {"HQ": None, "HGP": None}
     try:
         if hasattr(pdf_file, "seek"):
             pdf_file.seek(0)
         for page in PdfReader(pdf_file).pages:
-            m = _HQ_RE.search(_page_text_positional(page)) or _HQ_RE.search(page.extract_text() or "")
-            if m:
-                out["HQ"] = float(m.group(1))
+            txt = _page_text_positional(page)
+            if out["HQ"] is None:
+                m = _HQ_RE.search(txt) or _HQ_RE.search(page.extract_text() or "")
+                if m:
+                    out["HQ"] = float(m.group(1))
+            if out["HGP"] is None:
+                for line in txt.split("\n"):
+                    if "HKP/HGP" in line.upper():
+                        vals = _VAL_TOL.findall(line.upper().split("HKP/HGP", 1)[1])
+                        if len(vals) >= 2:
+                            out["HGP"] = float(vals[1])   # HGP = 2º (HKP es el 1º)
+                        elif vals:
+                            out["HGP"] = float(vals[0])
+                        break
+            if out["HQ"] is not None and out["HGP"] is not None:
                 break
     except Exception as e:
         logger.warning("extract_belting: %s", e)

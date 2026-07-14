@@ -26,12 +26,16 @@ def render_belting_tab():
         with st.spinner("Leyendo el plano..."):
             ex = extract_belting(pdf)
         st.session_state["belt_pdf_name"] = pdf.name
+        _found = []
         if ex.get("HQ") is not None:
-            st.session_state["belt_hq"] = float(ex["HQ"])
-            st.success(f"✅ HQ (travel height) = **{ex['HQ']:.0f} mm** del plano. "
-                       "Ingresa HGP y los HGPR de cada elevador.")
+            st.session_state["belt_hq"] = float(ex["HQ"]);  _found.append(f"HQ={ex['HQ']:.0f}")
+        if ex.get("HGP") is not None:
+            st.session_state["belt_hgp"] = float(ex["HGP"]); _found.append(f"HGP={ex['HGP']:.0f}")
+        if _found:
+            st.success(f"✅ Del plano: **{', '.join(_found)} mm**. "
+                       "Ingresa los HGPR reales de cada elevador.")
         else:
-            st.warning("No se encontró HQ en el plano. Ingrésalo a mano.")
+            st.warning("No se encontraron HQ/HGP en el plano. Ingrésalos a mano.")
         st.rerun()
     elif pdf is not None:
         st.caption(f"📄 Plano cargado: **{pdf.name}**")
@@ -40,7 +44,7 @@ def render_belting_tab():
     st.markdown("**Datos**  ·  📄 = del plano · ✏️ = manual")
     c1, c2 = st.columns(2)
     hq  = c1.number_input("📄 HQ — travel height (mm)", step=1.0, key="belt_hq")
-    hgp = c2.number_input("✏️ HGP — striker↔buffer de diseño (mm)", step=0.5, key="belt_hgp")
+    hgp = c2.number_input("📄 HGP — striker↔buffer de diseño (mm)", step=0.5, key="belt_hgp")
 
     ne = st.number_input("Número de elevadores", min_value=1, max_value=12, step=1, key="belt_ns")
 
