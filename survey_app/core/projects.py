@@ -412,6 +412,49 @@ def update_activity_progress(pid: str, orden, avance, fecha_inicio="", fecha_fin
     return True, f"Avance actualizado. Proyecto: {nuevo}%"
 
 
+def _recompute_project_avance(pid):
+    """Recalcula el avance y el estado del proyecto según sus actividades actuales."""
+    acts   = list_activities(pid)
+    nuevo  = compute_avance(acts)
+    prj    = get_project(pid)
+    manual = str(prj.get("EstadoManual", "")) if prj else ""
+    update_project(pid, {"Avance": nuevo, "Estado": derive_estado(nuevo, manual)})
+    return nuevo
+
+
+def add_activity(pid, nombre, duracion=1, peso=0) -> tuple:
+    """Agrega una actividad al final del cronograma (avance 0) y recalcula el % del proyecto."""
+    aws, err = _activities_ws()
+    if err:
+        return False, err
+    acts  = list_activities(pid)
+    orden = int(max([_num(a.get("Orden")) for a in acts], default=0) + 1)
+    aws.append_row([pid, str(orden), str(nombre), str(int(_num(duracion) or 1)),
+                    str(_num(peso)), "0", "", "", ""], value_input_option="RAW")
+    _invalidate()
+    _recompute_project_avance(pid)
+    return True, "Actividad agregada."
+
+
+def delete_activity(pid, orden) -> tuple:
+    """Elimina una actividad y recalcula el % del proyecto."""
+    aws, err = _activities_ws()
+    if err:
+        return False, err
+    recs = aws.get_all_records(numericise_ignore=["all"])
+    target = None
+    for i, r in enumerate(recs):
+        if str(r.get("ProyectoID", "")) == str(pid) and str(r.get("Orden", "")) == str(orden):
+            target = i + 2
+            break
+    if target is None:
+        return False, "Actividad no encontrada."
+    aws.delete_rows(target)
+    _invalidate()
+    _recompute_project_avance(pid)
+    return True, "Actividad eliminada."
+
+
 # ── Horas trabajadas (desde el fichaje) ──────────────────────────
 def project_hours(proyecto_nombre: str, grupo: str = None) -> float:
     """Suma de horas del fichaje asociadas al proyecto (por nombre, opcionalmente grupo)."""

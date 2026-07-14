@@ -251,20 +251,47 @@ def _detalle_proyecto(pid: str, grupo: str = None):
             st.toast("Cambios guardados." + (f"  📨 {_sent} notificado(s)." if _sent else ""))
             st.rerun()
 
-    # ── Actividades (avance por el campo) ──
-    st.markdown("**Actividades del cronograma** (el avance lo actualiza el campo)")
+    # ── Actividades (avance = campo; agregar/eliminar = admin) ──
+    st.markdown("**Actividades del cronograma** (avance = campo · agregar/eliminar = admin)")
     acts = P.list_activities(pid)
     if acts:
+        _totp = sum(P._num(a.get("Peso")) for a in acts) or 1.0
         st.dataframe(pd.DataFrame([{
-            "Orden":  P._num(a.get("Orden")),
+            "Orden":  int(P._num(a.get("Orden"))),
             "Actividad": a.get("Nombre"),
-            "Peso %": P._num(a.get("Peso")),
+            "Peso %": round(P._num(a.get("Peso")) * 100.0 / _totp, 1),
             "Avance %": P._num(a.get("Avance")),
             "Inicio real": a.get("FechaInicioReal", ""),
             "Fin real": a.get("FechaFinReal", ""),
         } for a in acts]), use_container_width=True, hide_index=True)
     else:
         st.caption("Sin actividades registradas.")
+
+    with st.expander("✏️ Agregar / eliminar actividad (recalcula el % automáticamente)"):
+        with st.form(f"addact_{pid}", clear_on_submit=True):
+            st.markdown("**➕ Agregar actividad**")
+            an = st.text_input("Nombre")
+            ac1, ac2 = st.columns(2)
+            ad = ac1.number_input("Duración (días)", min_value=1, value=2, step=1)
+            ap = ac2.number_input("Peso (relativo a las demás)", min_value=0.0, value=10.0, step=1.0)
+            if st.form_submit_button("Agregar"):
+                if not an.strip():
+                    st.error("El nombre es obligatorio.")
+                else:
+                    ok, msg = P.add_activity(pid, an.strip(), ad, ap)
+                    (st.success if ok else st.error)(msg)
+                    if ok:
+                        st.rerun()
+        if acts:
+            st.markdown("**🗑 Eliminar actividad**")
+            _dmap = {f"{int(P._num(a.get('Orden')))} · {a.get('Nombre')}": a.get("Orden")
+                     for a in acts}
+            dsel = st.selectbox("Actividad a eliminar", list(_dmap.keys()), key=f"delact_{pid}")
+            if st.button("Eliminar", key=f"delactb_{pid}"):
+                ok, msg = P.delete_activity(pid, _dmap[dsel])
+                (st.success if ok else st.error)(msg)
+                if ok:
+                    st.rerun()
 
     # ── Documentos ──
     _documentos_section(pid)
