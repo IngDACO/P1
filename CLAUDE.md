@@ -496,6 +496,14 @@ Pregunta nº de elevadores y el caso:
 
 ---
 
+## belting.py / belting_ui.py — belting (v86)
+Herramienta INDEPENDIENTE (pestaña 🎗 Belting). Altura a la que dejar la cabina bajo el FFL del piso más
+alto para instalar los belts. **DSTS = HGPR − HGP − HQ/1000** (todo mm; HQ/1000 = elongación del belt;
+DSTS>0 = baja la cabina). **Por elevador** (HGPR por elevador). `compute_belting` + `belting_svg` (diagrama).
+- Del plano: **HQ** (`extract_belting`, regex `HQ=\s*(\d+)` → autocompleta). **HGP**: manual por ahora
+  (la tabla `HKP/HGP [mm]` del plano es ambigua — pendiente confirmar cuál valor es HGP para auto-leerlo).
+- HGPR: manual, uno por elevador.
+
 ## schedule.py — gestión de proyecto: cronograma + curva S (v51)
 En el survey, al Calcular. `build_schedule(ns, start_date, flags, custom_rows)` + `schedule_svg` + `schedule_table`.
 - Actividades estándar de instalación; duraciones **escalan con NS**; peso con distribución en "S".
@@ -653,7 +661,7 @@ Al cargar el plano en el survey (app.py), autocompleta **RAIL = AlturaDiente** (
 espalda) del catálogo; si el código no está o no se detecta → aviso + entrada manual. **RAIL = AlturaDiente**
 (NO el ancho); AnchoDiente se guarda como dato secundario.
 
-## Versiones desplegadas (v85 = actual)
+## Versiones desplegadas (v86 = actual)
 | Ver | Cambio principal |
 |---|---|
 | v5 | Extractor: CRLF fix, caso D valor-antes-label, sin pdfplumber |
@@ -736,3 +744,4 @@ espalda) del catálogo; si el código no está o no se detecta → aviso + entra
 | v83 | Tabla de actividades totalmente editable (data_editor): nombre/días/peso + reordenar; guardado en 1 batch |
 | v84 | Catálogo de rieles (hoja Rieles, gestión propietario); lee código CAR GUIDE RAIL del plano → autocompleta RAIL |
 | v85 | Fix: RAIL = altura del diente desde la espalda (no el ancho) |
+| v86 | Nueva pestaña Belting: DSTS = HGPR − HGP − HQ/1000 por elevador; HQ del plano, HGP/HGPR manual; diagrama |
