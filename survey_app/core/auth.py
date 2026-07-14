@@ -303,6 +303,8 @@ def list_users(grupo: str = None) -> list:
             "Nombre":  str(r.get("Nombre", "")),
             "Grupo":   g,
             "Activo":  str(r.get("Activo", "SI")),
+            "Email":          str(r.get("Email", "")),
+            "TelegramChatID": str(r.get("TelegramChatID", "")),
         })
     return out
 
