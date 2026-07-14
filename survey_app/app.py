@@ -307,12 +307,13 @@ st.markdown(f"""
 _L_SURVEY = "📐 Survey de elevador"
 _L_PLUMB  = "🔩 Líneas de plomada"
 _L_RAIL   = "✂️ Corte de rieles"
+_L_BELT   = "🎗 Belting"
 _L_CLOCK  = "⏱ Fichaje"
 _L_OWNER  = "👑 Administración"
 _L_GRUPO  = "🛠 Mi grupo"
 _L_FIELDPROJ = "📋 Mis proyectos"
 
-_nav = [_L_SURVEY, _L_PLUMB, _L_RAIL, _L_CLOCK]
+_nav = [_L_SURVEY, _L_PLUMB, _L_RAIL, _L_BELT, _L_CLOCK]
 if _ROL == "campo":
     _nav.append(_L_FIELDPROJ)
 if _ROL == "propietario":
@@ -1140,6 +1141,10 @@ elif _seccion == _L_PLUMB:
 elif _seccion == _L_RAIL:
     from core.rail_cut_ui import render_rail_cut_tab
     render_rail_cut_tab()
+
+elif _seccion == _L_BELT:
+    from core.belting_ui import render_belting_tab
+    render_belting_tab()
 
 elif _seccion == _L_CLOCK:
     from core.timeclock_ui import render_timeclock_tab

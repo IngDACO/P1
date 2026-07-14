@@ -295,3 +295,23 @@ def extract_car_guide_rail(pdf_file) -> str:
     except Exception as e:
         logger.warning("extract_car_guide_rail: %s", e)
     return None
+
+
+_HQ_RE = re.compile(r"\bHQ\s*=\s*(\d+(?:\.\d+)?)")
+
+
+def extract_belting(pdf_file) -> dict:
+    """Datos para el belting. Devuelve {'HQ': mm|None, 'HGP': None}.
+    HQ del texto 'HQ= 14045'. HGP se ingresa a mano por ahora (tabla HKP/HGP ambigua)."""
+    out = {"HQ": None, "HGP": None}
+    try:
+        if hasattr(pdf_file, "seek"):
+            pdf_file.seek(0)
+        for page in PdfReader(pdf_file).pages:
+            m = _HQ_RE.search(_page_text_positional(page)) or _HQ_RE.search(page.extract_text() or "")
+            if m:
+                out["HQ"] = float(m.group(1))
+                break
+    except Exception as e:
+        logger.warning("extract_belting: %s", e)
+    return out
