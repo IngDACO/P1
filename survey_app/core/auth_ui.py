@@ -242,16 +242,75 @@ def _owner_usuarios():
 def render_owner_panel():
     st.markdown("### 👑 Administración")
     # Sub-navegación con radio (NO st.tabs anidado → evita mezcla de contenido)
-    sec = st.radio("Sección", ["🏢 Grupos", "👥 Usuarios", "📁 Proyectos"],
+    sec = st.radio("Sección", ["🏢 Grupos", "👥 Usuarios", "📁 Proyectos", "🚆 Rieles"],
                    horizontal=True, key="owner_sec", label_visibility="collapsed")
     st.markdown("---")
     if sec == "🏢 Grupos":
         _owner_grupos()
     elif sec == "👥 Usuarios":
         _owner_usuarios()
-    else:
+    elif sec == "📁 Proyectos":
         from core.projects_ui import render_owner_projects
         render_owner_projects()
+    else:
+        _owner_rieles()
+
+
+def _owner_rieles():
+    """Catálogo de rieles: referencia → medidas (para autocompletar RAIL desde el plano)."""
+    from core import rails
+    st.markdown("#### 🚆 Catálogo de rieles")
+    st.caption("Al cargar un plano, el lector detecta el código del **CAR GUIDE RAIL** y "
+               "autocompleta **RAIL** con el *ancho del diente* de esta tabla.")
+    if not rails.is_configured():
+        st.warning("Necesita Google Sheets configurado.")
+        return
+    data = rails.list_rieles()
+    if data:
+        st.dataframe(pd.DataFrame([{
+            "Referencia": r.get("Referencia"),
+            "Ancho diente (RAIL)": r.get("AnchoDiente"),
+            "Altura diente desde espalda": r.get("AlturaDiente"),
+        } for r in data]), hide_index=True, use_container_width=True)
+    else:
+        st.info("Catálogo vacío. Agrega el primer riel abajo.")
+
+    with st.expander("➕ Agregar riel", expanded=not data):
+        with st.form("form_riel", clear_on_submit=True):
+            ref = st.text_input("Referencia (ej. T75-3/B)")
+            rc1, rc2 = st.columns(2)
+            anc = rc1.number_input("Ancho del diente (RAIL) mm", min_value=0.0, step=0.5)
+            alt = rc2.number_input("Altura del diente desde la espalda (mm)", min_value=0.0, step=0.5)
+            if st.form_submit_button("Agregar"):
+                if not ref.strip():
+                    st.error("La referencia es obligatoria.")
+                else:
+                    ok, msg = rails.add_riel(ref.strip(), anc, alt)
+                    (st.success if ok else st.error)(msg)
+                    if ok:
+                        st.rerun()
+
+    if data:
+        with st.expander("✏️ Editar / 🗑 eliminar riel"):
+            refs = [r.get("Referencia") for r in data]
+            sel  = st.selectbox("Referencia", refs, key="riel_sel")
+            _cur = rails.get_rail(sel) or {}
+            ec1, ec2 = st.columns(2)
+            ea = ec1.number_input("Ancho diente (RAIL)", min_value=0.0, step=0.5,
+                                  value=float(_cur.get("ancho") or 0.0), key="riel_ea")
+            el = ec2.number_input("Altura diente desde espalda", min_value=0.0, step=0.5,
+                                  value=float(_cur.get("altura") or 0.0), key="riel_el")
+            b1, b2 = st.columns(2)
+            if b1.button("💾 Guardar", key="riel_save"):
+                ok, msg = rails.update_riel(sel, ea, el)
+                (st.success if ok else st.error)(msg)
+                if ok:
+                    st.rerun()
+            if b2.button("🗑 Eliminar", key="riel_del"):
+                ok, msg = rails.delete_riel(sel)
+                (st.success if ok else st.error)(msg)
+                if ok:
+                    st.rerun()
 
 
 # ════════════════════════════════════════════════════════════

@@ -268,3 +268,30 @@ def extract_from_pdf(pdf_file) -> dict:
     except Exception as e:
         logger.warning("Schindler extractor: %s", e)
     return found
+
+
+# Código de riel tipo T75-3/B (con tolerancia a espacios que mete el CAD)
+_RAIL_CODE = re.compile(r"T\s?\d{2,3}\s?-?\s?\d?\s?/?\s?[A-Z]", re.IGNORECASE)
+
+
+def extract_car_guide_rail(pdf_file) -> str:
+    """Devuelve el código del riel de CABINA (ej. 'T75-3/B') leído del plano, o None.
+
+    El código está en la MISMA fila que la etiqueta 'CAR GUIDE RAIL' (extracción
+    posicional). Se excluye la fila de 'COUNTERWEIGHT GUIDE RAIL'.
+    """
+    try:
+        if hasattr(pdf_file, "seek"):
+            pdf_file.seek(0)
+        reader = PdfReader(pdf_file)
+        for page in reader.pages:
+            for line in _page_text_positional(page).split("\n"):
+                U = line.upper()
+                if "CAR GUIDE RAIL" in U and "COUNTERWEIGHT" not in U:
+                    after = U.split("CAR GUIDE RAIL", 1)[1]
+                    m = _RAIL_CODE.search(after)
+                    if m:
+                        return m.group(0).replace(" ", "")
+    except Exception as e:
+        logger.warning("extract_car_guide_rail: %s", e)
+    return None

@@ -350,6 +350,27 @@ if _seccion == _L_SURVEY:
         for p in PDF_PARAMS:
             if extracted.get(p) is not None:
                 st.session_state[f"inp_{p}"] = float(extracted[p])
+        # ── Riel de cabina: leer referencia del plano → autocompletar RAIL del catálogo ──
+        st.session_state["rail_ref_msg"] = ""
+        try:
+            from extractors.schindler import extract_car_guide_rail
+            from core import rails
+            _code = extract_car_guide_rail(pdf_file)
+            if _code:
+                _info = rails.get_rail(_code) if rails.is_configured() else None
+                if _info and _info.get("ancho"):
+                    st.session_state["inp_RAIL"] = float(_info["ancho"])
+                    st.session_state["rail_ref_msg"] = (
+                        f"✅ Riel de cabina **{_code}** → RAIL = **{_info['ancho']} mm** (del catálogo).")
+                else:
+                    st.session_state["rail_ref_msg"] = (
+                        f"⚠️ Riel **{_code}** detectado pero **no está en el catálogo de Rieles**. "
+                        "Ingresa RAIL a mano o agrégalo al catálogo.")
+            else:
+                st.session_state["rail_ref_msg"] = (
+                    "ℹ️ No se detectó el código del riel de cabina; ingresa RAIL a mano.")
+        except Exception:
+            pass
         found   = sum(1 for v in extracted.values() if v is not None)
         missing = [k for k,v in extracted.items() if v is None]
         st.success(f"✅ {found}/{len(extracted)} parámetros encontrados.")
@@ -358,6 +379,11 @@ if _seccion == _L_SURVEY:
         st.rerun()
     elif pdf_file and pdf_file.name == st.session_state.last_pdf_name:
         st.info(f"📄 Datos de: **{pdf_file.name}** — ver sidebar.")
+
+    if st.session_state.get("rail_ref_msg"):
+        _m = st.session_state["rail_ref_msg"]
+        (st.success if _m.startswith("✅") else
+         st.warning if _m.startswith("⚠️") else st.info)(_m)
 
     # ══════════════════════════════════════════════════════
     # PASO 2 — PARÁMETROS
