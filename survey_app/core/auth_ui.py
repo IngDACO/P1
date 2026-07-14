@@ -261,7 +261,7 @@ def _owner_rieles():
     from core import rails
     st.markdown("#### 🚆 Catálogo de rieles")
     st.caption("Al cargar un plano, el lector detecta el código del **CAR GUIDE RAIL** y "
-               "autocompleta **RAIL** con el *ancho del diente* de esta tabla.")
+               "autocompleta **RAIL** con la *altura del diente desde la espalda* de esta tabla.")
     if not rails.is_configured():
         st.warning("Necesita Google Sheets configurado.")
         return
@@ -269,8 +269,8 @@ def _owner_rieles():
     if data:
         st.dataframe(pd.DataFrame([{
             "Referencia": r.get("Referencia"),
-            "Ancho diente (RAIL)": r.get("AnchoDiente"),
-            "Altura diente desde espalda": r.get("AlturaDiente"),
+            "Altura diente desde espalda (RAIL)": r.get("AlturaDiente"),
+            "Ancho diente": r.get("AnchoDiente"),
         } for r in data]), hide_index=True, use_container_width=True)
     else:
         st.info("Catálogo vacío. Agrega el primer riel abajo.")
@@ -279,8 +279,9 @@ def _owner_rieles():
         with st.form("form_riel", clear_on_submit=True):
             ref = st.text_input("Referencia (ej. T75-3/B)")
             rc1, rc2 = st.columns(2)
-            anc = rc1.number_input("Ancho del diente (RAIL) mm", min_value=0.0, step=0.5)
-            alt = rc2.number_input("Altura del diente desde la espalda (mm)", min_value=0.0, step=0.5)
+            alt = rc1.number_input("Altura del diente desde la espalda (RAIL) mm",
+                                   min_value=0.0, step=0.5)
+            anc = rc2.number_input("Ancho del diente (mm)", min_value=0.0, step=0.5)
             if st.form_submit_button("Agregar"):
                 if not ref.strip():
                     st.error("La referencia es obligatoria.")
@@ -296,10 +297,10 @@ def _owner_rieles():
             sel  = st.selectbox("Referencia", refs, key="riel_sel")
             _cur = rails.get_rail(sel) or {}
             ec1, ec2 = st.columns(2)
-            ea = ec1.number_input("Ancho diente (RAIL)", min_value=0.0, step=0.5,
-                                  value=float(_cur.get("ancho") or 0.0), key="riel_ea")
-            el = ec2.number_input("Altura diente desde espalda", min_value=0.0, step=0.5,
+            el = ec1.number_input("Altura diente desde espalda (RAIL)", min_value=0.0, step=0.5,
                                   value=float(_cur.get("altura") or 0.0), key="riel_el")
+            ea = ec2.number_input("Ancho diente", min_value=0.0, step=0.5,
+                                  value=float(_cur.get("ancho") or 0.0), key="riel_ea")
             b1, b2 = st.columns(2)
             if b1.button("💾 Guardar", key="riel_save"):
                 ok, msg = rails.update_riel(sel, ea, el)

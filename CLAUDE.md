@@ -649,11 +649,11 @@ Hoja **Rieles** (`Referencia | AnchoDiente | AlturaDiente`), gestionada por el *
 (👑 Administración → 🚆 Rieles: `auth_ui._owner_rieles`). `get_rail(ref)` → {ancho,altura} (cacheado).
 `schindler.extract_car_guide_rail(pdf)` lee el código del **CAR GUIDE RAIL** del plano (misma fila que la
 etiqueta en la extracción posicional; excluye COUNTERWEIGHT; regex `T\d{2,3}-\d/[A-Z]` tipo `T75-3/B`).
-Al cargar el plano en el survey (app.py), autocompleta **RAIL = AnchoDiente** del catálogo; si el código no
-está en el catálogo o no se detecta → aviso + entrada manual. (AnchoDiente=ancho del diente=RAIL;
-AlturaDiente=altura del diente desde la espalda, guardada para uso futuro.)
+Al cargar el plano en el survey (app.py), autocompleta **RAIL = AlturaDiente** (altura del diente desde la
+espalda) del catálogo; si el código no está o no se detecta → aviso + entrada manual. **RAIL = AlturaDiente**
+(NO el ancho); AnchoDiente se guarda como dato secundario.
 
-## Versiones desplegadas (v84 = actual)
+## Versiones desplegadas (v85 = actual)
 | Ver | Cambio principal |
 |---|---|
 | v5 | Extractor: CRLF fix, caso D valor-antes-label, sin pdfplumber |
@@ -735,3 +735,4 @@ AlturaDiente=altura del diente desde la espalda, guardada para uso futuro.)
 | v82 | Admin agrega/elimina actividades del cronograma con recálculo automático del % y de la curva S |
 | v83 | Tabla de actividades totalmente editable (data_editor): nombre/días/peso + reordenar; guardado en 1 batch |
 | v84 | Catálogo de rieles (hoja Rieles, gestión propietario); lee código CAR GUIDE RAIL del plano → autocompleta RAIL |
+| v85 | Fix: RAIL = altura del diente desde la espalda (no el ancho) |

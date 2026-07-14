@@ -358,10 +358,11 @@ if _seccion == _L_SURVEY:
             _code = extract_car_guide_rail(pdf_file)
             if _code:
                 _info = rails.get_rail(_code) if rails.is_configured() else None
-                if _info and _info.get("ancho"):
-                    st.session_state["inp_RAIL"] = float(_info["ancho"])
+                if _info and _info.get("altura"):
+                    st.session_state["inp_RAIL"] = float(_info["altura"])
                     st.session_state["rail_ref_msg"] = (
-                        f"✅ Riel de cabina **{_code}** → RAIL = **{_info['ancho']} mm** (del catálogo).")
+                        f"✅ Riel de cabina **{_code}** → RAIL = **{_info['altura']} mm** "
+                        "(altura del diente desde la espalda, del catálogo).")
                 else:
                     st.session_state["rail_ref_msg"] = (
                         f"⚠️ Riel **{_code}** detectado pero **no está en el catálogo de Rieles**. "
