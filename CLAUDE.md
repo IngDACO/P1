@@ -573,6 +573,16 @@ Usa **google-auth + requests** (sin deps nuevas). Estructura: `COPEX Proyectos /
 
 ---
 
+## alerts.py — alarmas/avisos por proyecto (v88)
+Hoja **Alarmas** (`ID·ProyectoID·Grupo·Origen·Tipo·Mensaje·CreadoPor·Fecha·Estado·ResueltoPor·FechaResuelta`).
+Dos flujos:
+- **problema (campo→admin):** `report_problem` → alarma abierta + Telegram/email a admins del grupo + propietarios
+  (`_admins_and_owners`). El campo lo reporta en 📋 Mis proyectos.
+- **cambio (admin→campo):** `notify_change` (auto al guardar datos/actividades/agregar/eliminar en projects_ui) →
+  aviso in-app + Telegram/email al campo asignado.
+Estado abierta/resuelta; `resolve_alert` (batch). UI `projects_ui._alerts_section` (detalle admin + Mis proyectos
+campo, resolver/apagar). Badge 🔴 N en las listas (`open_counts_all`, cacheado). Reusa notify.py.
+
 ## notify.py — notificaciones email + Telegram (v77)
 Avisa a un usuario de campo al **asignarlo** a un proyecto (crear/editar), con los datos del proyecto.
 - **Email**: Gmail SMTP (reusa `GMAIL_USER`/`GMAIL_APP_PASS`). **Telegram**: Bot API con
@@ -661,7 +671,7 @@ Al cargar el plano en el survey (app.py), autocompleta **RAIL = AlturaDiente** (
 espalda) del catálogo; si el código no está o no se detecta → aviso + entrada manual. **RAIL = AlturaDiente**
 (NO el ancho); AnchoDiente se guarda como dato secundario.
 
-## Versiones desplegadas (v87 = actual)
+## Versiones desplegadas (v88 = actual)
 | Ver | Cambio principal |
 |---|---|
 | v5 | Extractor: CRLF fix, caso D valor-antes-label, sin pdfplumber |
@@ -746,3 +756,4 @@ espalda) del catálogo; si el código no está o no se detecta → aviso + entra
 | v85 | Fix: RAIL = altura del diente desde la espalda (no el ancho) |
 | v86 | Nueva pestaña Belting: DSTS = HGPR − HGP − HQ/1000 por elevador; HQ del plano, HGP/HGPR manual; diagrama |
 | v87 | Belting: HGP también se autocompleta del plano (2º valor de la fila HKP/HGP) |
+| v88 | Sistema de alarmas por proyecto: campo reporta problema→admin, admin cambia→campo; in-app + Telegram, resolver/apagar, badges |
