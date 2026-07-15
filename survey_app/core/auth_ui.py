@@ -432,16 +432,25 @@ def _grupo_usuarios(grupo):
 
 
 def render_group_panel(grupo: str):
-    st.markdown(f"### 🛠 Grupo: {grupo or '(sin grupo)'}")
     if not grupo:
+        st.markdown("### 🛠 Mi grupo")
         st.warning("Tu cuenta no tiene un grupo asignado. Contacta al propietario.")
         return
 
-    sec = st.radio("Sección", ["📁 Proyectos", "🔧 Usuarios de campo"],
+    from core import projects_ui as PU
+    PU.render_group_header(grupo)        # banda de marca + KPIs (centro de control)
+
+    if not PU.P.is_configured():
+        st.warning("La gestión del grupo necesita Google Sheets configurado "
+                   "(gcp_service_account + TIMECLOCK_SHEET_ID en los Secrets).")
+        return
+
+    sec = st.radio("Sección", ["📊 Proyectos", "🗂 Agrupaciones", "🔧 Usuarios de campo"],
                    horizontal=True, key="grupo_sec", label_visibility="collapsed")
     st.markdown("---")
-    if sec == "📁 Proyectos":
-        from core.projects_ui import render_admin_projects
-        render_admin_projects(grupo)
+    if sec == "📊 Proyectos":
+        PU._panel_proyectos(grupo)
+    elif sec == "🗂 Agrupaciones":
+        PU._panel_agrupaciones(grupo)
     else:
         _grupo_usuarios(grupo)

@@ -554,7 +554,13 @@ Paso 7, solo administrador/propietario). Persistencia en Google Sheets (misma ho
   reordenar (columna Orden editable); Avance de solo lectura (campo). `save_activities(pid, edits)` escribe
   todo en 1 `batch_update` (localiza cada fila por su Orden original `orden0`) + recomputa. Reordenar =
   cambiar el número de Orden (list_activities ordena por Orden).
-- **Admin** (🛠 Mi grupo → 📁 Proyectos): lista con estado/avance/horas, editar datos/asignados/agrupación/peso/estado, agrupaciones. `render_admin_projects`.
+- **Admin** (🛠 Mi grupo): **centro de control** (v94) — `auth_ui.render_group_panel` llama
+  `projects_ui.render_group_header` (banda de marca del grupo + fila de KPIs: activos, avance promedio,
+  **en riesgo** por proyección SPI, alarmas abiertas, horas) y una nav única de 3 (📊 Proyectos · 🗂
+  Agrupaciones · 🔧 Usuarios de campo). Proyectos = **cartera de tarjetas** (`_portfolio_html`: punto de
+  estado, nombre/cliente, píldora de estado, barra de avance, horas, badge de alarmas) + selector "Abrir
+  proyecto" → `_detalle_proyecto` (con cabecera de estado). Helpers: `_kpis`, `_estado_colors`,
+  `_ESTADO_COLOR`. (Se eliminó `render_admin_projects` y su sub-radio; KPI "en riesgo" usa `project_schedule`.)
 - **Campo** (📋 Mis proyectos): ve asignados (`list_projects_for_field`), actualiza Avance% por actividad (`update_activity_progress` recalcula proyecto). `render_field_projects`.
 - **Propietario** (👑 Administración → 📁 Proyectos): ve TODOS los proyectos de todos los grupos
   (`render_owner_projects`, `list_projects()` sin filtro). `_detalle_proyecto` toma el grupo del propio proyecto. (v73)
@@ -716,7 +722,7 @@ Al cargar el plano en el survey (app.py), autocompleta **RAIL = AlturaDiente** (
 espalda) del catálogo; si el código no está o no se detecta → aviso + entrada manual. **RAIL = AlturaDiente**
 (NO el ancho); AnchoDiente se guarda como dato secundario.
 
-## Versiones desplegadas (v93 = actual)
+## Versiones desplegadas (v94 = actual)
 | Ver | Cambio principal |
 |---|---|
 | v5 | Extractor: CRLF fix, caso D valor-antes-label, sin pdfplumber |
@@ -807,3 +813,4 @@ espalda) del catálogo; si el código no está o no se detecta → aviso + entra
 | v91 | Panel propietario 📚 Manuales (subir/quitar self-service en Drive + hoja Manuales, PDF/ZIP) + agente separado por rol (campo/gestión) |
 | v92 | Reducción de llamadas a Sheets: handle de worksheet cacheado (get_sheet) + auth list_users/get_user cacheados + ttl 20→30 (menos APIError 429) |
 | v93 | UI: sidebar sin "Valores del PDF" ni leyenda de colores; orden de pestañas por rol (panel del rol primero; propietario sin Fichaje) |
+| v94 | UI "Mi grupo" como centro de control: banda de marca + KPIs (activos/avance/en riesgo/alarmas/horas) + cartera de tarjetas + nav única de 3 |

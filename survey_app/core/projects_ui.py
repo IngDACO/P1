@@ -53,6 +53,89 @@ _ESTADO_EMOJI = {
     "En pausa": "⏸", "Cancelado": "🚫",
 }
 
+# Colores de estado para las píldoras/barras (bg suave, texto oscuro de la misma familia)
+_ESTADO_COLOR = {
+    "En progreso": ("#e6f1fb", "#185fa5", "#2e6da4"),
+    "Planificado": ("#f1f0ec", "#5f5e5a", "#888780"),
+    "Completado":  ("#eaf3de", "#3b6d11", "#639922"),
+    "En pausa":    ("#faeeda", "#854f0b", "#ba7517"),
+    "Cancelado":   ("#fcebeb", "#a32d2d", "#e24b4a"),
+}
+
+
+def _estado_colors(est):
+    return _ESTADO_COLOR.get(est, ("#f1f0ec", "#5f5e5a", "#888780"))
+
+
+# ══════════════════════════════════════════════════════════════════════
+# CENTRO DE CONTROL DEL GRUPO — cabecera con marca + KPIs
+# ══════════════════════════════════════════════════════════════════════
+def _kpis(grupo=None) -> dict:
+    """Métricas de salud del grupo (1 lectura de cada hoja, todo cacheado)."""
+    proys   = P.list_projects(grupo=grupo)
+    horas   = P.project_hours_bulk(grupo)
+    alarmas = alerts.open_counts_all() if alerts.is_configured() else {}
+    ids     = {str(p.get("ID", "")) for p in proys}
+    activos = [p for p in proys if str(p.get("Estado", "")) not in ("Completado", "Cancelado")]
+    avances = [P._num(p.get("Avance")) for p in proys]
+    riesgo  = 0
+    for p in activos:
+        try:
+            ps = P.project_schedule(p.get("ID"))
+            pr = ps.get("proj") if ps else None
+            if pr and pr.get("pv", 0) > 0 and pr.get("dias_gap", 0) > 0.5:
+                riesgo += 1
+        except Exception:
+            pass
+    return {
+        "total":   len(proys),
+        "activos": len(activos),
+        "avg":     round(sum(avances) / len(avances)) if avances else 0,
+        "riesgo":  riesgo,
+        "alarmas": sum(v for k, v in alarmas.items() if k in ids),
+        "horas":   round(sum(horas.get(str(p.get("Nombre", "")), 0.0) for p in proys)),
+    }
+
+
+def _kpi_card(label, value, color=None):
+    col = f"color:{color};" if color else ""
+    return (
+        '<div style="background:#ffffff;border:1px solid #e6e9ef;border-radius:12px;'
+        'padding:12px 14px;flex:1;min-width:104px;">'
+        f'<div style="font-size:12.5px;color:#6b7280;line-height:1.2;">{label}</div>'
+        f'<div style="font-size:26px;font-weight:700;margin-top:2px;{col}">{value}</div>'
+        '</div>'
+    )
+
+
+def render_group_header(grupo: str):
+    """Banda de marca del grupo + fila de KPIs (centro de control del admin)."""
+    st.markdown(
+        '<div style="background:linear-gradient(135deg,#1a3a5c 0%,#2e6da4 100%);'
+        'padding:14px 18px;border-radius:12px;display:flex;align-items:center;gap:12px;'
+        'margin-bottom:14px;">'
+        '<span style="font-size:26px;line-height:1;">🏢</span>'
+        '<div style="min-width:0;">'
+        f'<div style="color:#fff;font-size:1.25rem;font-weight:800;line-height:1.1;">{grupo}</div>'
+        '<div style="color:#b0c8e8;font-size:0.8rem;margin-top:2px;">Centro de control del grupo</div>'
+        '</div></div>',
+        unsafe_allow_html=True,
+    )
+    if not P.is_configured():
+        return
+    k = _kpis(grupo)
+    cards = (
+        _kpi_card("Proyectos activos", k["activos"])
+        + _kpi_card("Avance promedio", f'{k["avg"]}%')
+        + _kpi_card("En riesgo", k["riesgo"], "#c0392b" if k["riesgo"] else "#1f2937")
+        + _kpi_card("Alarmas abiertas", k["alarmas"], "#d97706" if k["alarmas"] else "#1f2937")
+        + _kpi_card("Horas registradas", k["horas"])
+    )
+    st.markdown(
+        f'<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:6px;">{cards}</div>',
+        unsafe_allow_html=True,
+    )
+
 # Documentos: tipos y permisos por rol
 _DOC_TIPOS  = ["plano", "informe_cliente", "informe_admin", "matriz_survey",
                "foto", "certificado", "otro"]
@@ -124,22 +207,6 @@ def _field_users(grupo):
         return []
 
 
-def render_admin_projects(grupo: str):
-    st.markdown(f"### 📁 Proyectos — {grupo}")
-    if not P.is_configured():
-        st.warning("La gestión de proyectos necesita Google Sheets configurado "
-                   "(gcp_service_account + TIMECLOCK_SHEET_ID en los Secrets).")
-        return
-
-    sec = st.radio("Sección", ["📊 Proyectos", "🗂 Agrupaciones"],
-                   horizontal=True, key="adminproj_sec", label_visibility="collapsed")
-    st.markdown("---")
-    if sec == "📊 Proyectos":
-        _panel_proyectos(grupo)
-    else:
-        _panel_agrupaciones(grupo)
-
-
 # ── Panel de proyectos ───────────────────────────────────────────
 def _panel_proyectos(grupo: str):
     proys = P.list_projects(grupo=grupo)
@@ -149,32 +216,65 @@ def _panel_proyectos(grupo: str):
                 "(tras calcular).")
         return
 
-    # Resumen de estado
+    # ── Cartera de proyectos (lista de tarjetas) ──
     ags = {a["ID"]: a["Nombre"] for a in P.list_groupings(grupo=grupo)}
     horas = P.project_hours_bulk(grupo)   # 1 sola lectura del fichaje
     alarmas = alerts.open_counts_all() if alerts.is_configured() else {}
-    rows = []
-    for p in proys:
-        est = str(p.get("Estado", ""))
-        _na = alarmas.get(str(p.get("ID", "")), 0)
-        rows.append({
-            "ID":        p.get("ID"),
-            "Proyecto":  p.get("Nombre"),
-            "🔔":        f"🔴 {_na}" if _na else "",
-            "Cliente":   p.get("Cliente"),
-            "Estado":    f"{_ESTADO_EMOJI.get(est, '')} {est}".strip(),
-            "Avance %":  P._num(p.get("Avance")),
-            "Horas":     horas.get(str(p.get("Nombre", "")), 0.0),
-            "Agrupación": ags.get(str(p.get("AgrupacionID", "")), ""),
-        })
-    st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+    st.markdown(f"**Cartera — {len(proys)} proyecto(s)**")
+    st.markdown(_portfolio_html(proys, horas, alarmas, ags), unsafe_allow_html=True)
 
-    # Detalle / edición
+    # ── Abrir proyecto (detalle / edición) ──
     st.markdown("#### 🔎 Abrir proyecto")
     idmap = {f"{p.get('ID')} · {p.get('Nombre')}": p.get("ID") for p in proys}
-    sel = st.selectbox("Proyecto", list(idmap.keys()), key="adminproj_sel")
+    sel = st.selectbox("Proyecto", list(idmap.keys()), key="adminproj_sel",
+                       label_visibility="collapsed")
     if sel:
+        st.markdown("---")
         _detalle_proyecto(idmap[sel], grupo)
+
+
+def _portfolio_html(proys, horas, alarmas, ags) -> str:
+    """Lista de tarjetas de proyecto: punto de estado, nombre/cliente, píldora,
+    barra de avance, horas y badge de alarmas."""
+    parts = []
+    for p in proys:
+        est = str(p.get("Estado", ""))
+        bg, fg, bar = _estado_colors(est)
+        av  = P._num(p.get("Avance"))
+        nom = str(p.get("Nombre", "")) or "(sin nombre)"
+        pid = str(p.get("ID", ""))
+        hrs = horas.get(str(p.get("Nombre", "")), 0.0)
+        na  = alarmas.get(pid, 0)
+        ag  = ags.get(str(p.get("AgrupacionID", "")), "")
+        sub = f"{pid} · {str(p.get('Cliente','')) or '—'}" + (f" · {ag}" if ag else "")
+        alarm = (f'<div style="width:44px;text-align:center;flex:none;color:#c0392b;'
+                 f'font-size:12.5px;font-weight:600;">🔔 {na}</div>'
+                 if na else '<div style="width:44px;flex:none;"></div>')
+        parts.append(
+            '<div style="display:flex;align-items:center;gap:12px;padding:11px 14px;'
+            'border:1px solid #e6e9ef;border-radius:10px;margin-bottom:8px;background:#fff;">'
+            f'<div style="width:9px;height:9px;border-radius:50%;background:{bar};flex:none;"></div>'
+            '<div style="flex:1;min-width:0;">'
+            f'<div style="font-size:14px;font-weight:600;color:#1f2937;white-space:nowrap;'
+            f'overflow:hidden;text-overflow:ellipsis;">{nom}</div>'
+            f'<div style="font-size:12px;color:#6b7280;white-space:nowrap;overflow:hidden;'
+            f'text-overflow:ellipsis;">{sub}</div>'
+            '</div>'
+            f'<span style="font-size:12px;padding:3px 10px;border-radius:20px;background:{bg};'
+            f'color:{fg};white-space:nowrap;flex:none;">{_ESTADO_EMOJI.get(est,"")} {est}</span>'
+            '<div style="width:118px;flex:none;">'
+            '<div style="display:flex;justify-content:space-between;font-size:11.5px;'
+            f'color:#6b7280;margin-bottom:3px;"><span>Avance</span>'
+            f'<span style="color:#1f2937;font-weight:600;">{av:.0f}%</span></div>'
+            '<div style="height:6px;background:#eef1f5;border-radius:20px;overflow:hidden;">'
+            f'<div style="height:100%;width:{av:.0f}%;background:{bar};"></div></div>'
+            '</div>'
+            f'<div style="width:54px;text-align:right;flex:none;font-size:12px;color:#6b7280;">'
+            f'⏱ {hrs:.0f}h</div>'
+            + alarm +
+            '</div>'
+        )
+    return "".join(parts)
 
 
 def _detalle_proyecto(pid: str, grupo: str = None):
@@ -187,10 +287,24 @@ def _detalle_proyecto(pid: str, grupo: str = None):
 
     avance = P._num(prj.get("Avance"))
     est    = str(prj.get("Estado", ""))
-    c1, c2, c3 = st.columns(3)
-    c1.metric("Estado", f"{_ESTADO_EMOJI.get(est,'')} {est}".strip())
-    c2.metric("Avance", f"{avance:.0f}%")
-    c3.metric("Horas trabajadas", f"{P.project_hours(prj.get('Nombre'), grupo):.1f}")
+    _bg, _fg, _bar = _estado_colors(est)
+    _cli  = str(prj.get("Cliente", "")) or "—"
+    _ubic = f' · 📍 {prj.get("Ubicacion")}' if prj.get("Ubicacion") else ""
+    st.markdown(
+        f'<div style="border:1px solid #e6e9ef;border-left:4px solid {_bar};border-radius:10px;'
+        'padding:12px 16px;margin-bottom:10px;background:#fff;">'
+        '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;'
+        'flex-wrap:wrap;">'
+        f'<div style="font-size:1.15rem;font-weight:800;color:#1f2937;">{prj.get("Nombre","")}</div>'
+        f'<span style="font-size:12px;padding:3px 11px;border-radius:20px;background:{_bg};'
+        f'color:{_fg};white-space:nowrap;">{_ESTADO_EMOJI.get(est,"")} {est}</span></div>'
+        f'<div style="font-size:12.5px;color:#6b7280;margin-top:3px;">{_cli}{_ubic}</div>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+    c1, c2 = st.columns(2)
+    c1.metric("Avance", f"{avance:.0f}%")
+    c2.metric("Horas trabajadas", f"{P.project_hours(prj.get('Nombre'), grupo):.1f}")
     st.progress(min(1.0, avance / 100.0))
 
     # ── Alarmas / avisos del proyecto ──
