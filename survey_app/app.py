@@ -217,34 +217,9 @@ with st.sidebar:
     render_user_bar()
     st.markdown("---")
 
-    # ── Valores extraídos del PDF ───────────────────────
-    st.markdown("#### 📋 Valores del PDF")
-    if st.session_state.pdf_extracted:
-        found   = {k:v for k,v in st.session_state.pdf_extracted.items() if v is not None}
-        missing = [k for k,v in st.session_state.pdf_extracted.items() if v is None]
-        st.markdown(f"**Archivo:** `{st.session_state.last_pdf_name}`")
-        st.markdown(f"✅ Encontrados: **{len(found)}** / {len(st.session_state.pdf_extracted)}")
-        if missing:
-            st.warning(f"Faltantes: `{'`, `'.join(missing)}`")
-        st.markdown("---")
-        for k, v in sorted(found.items()):
-            st.markdown(f"**{k}** = `{v:.0f}` mm")
-            desc = PARAM_DESCRIPTIONS.get(k, "")
-            if desc:
-                st.caption(desc)
-    else:
-        st.info("Carga un PDF para ver los valores aquí.")
-
-    # ── Leyenda ────────────────────────────────────────
-    st.markdown("---")
-    st.caption("🔴 Rojo oscuro = peor valor fuera de límite")
-    st.caption("🔴 Rojo claro  = fuera de límite")
-    st.caption("🟠 Naranja     = OR/OL requiere corte (Caso 2)")
-
     # ══════════════════════════════════════════════════
     # ASISTENTE IA — desplegable en sidebar
     # ══════════════════════════════════════════════════
-    st.markdown("---")
     _agente_lbl = "Asistente de campo" if _ROL == "campo" else "Asistente de gestión"
     with st.expander(f"🤖 {_agente_lbl} COPEX", expanded=False):
         ctx_label = "🔗 Con contexto del cálculo actual." if st.session_state.calc_results else "Sin cálculo activo."
@@ -318,13 +293,16 @@ _L_OWNER  = "👑 Administración"
 _L_GRUPO  = "🛠 Mi grupo"
 _L_FIELDPROJ = "📋 Mis proyectos"
 
-_nav = [_L_SURVEY, _L_PLUMB, _L_RAIL, _L_BELT, _L_CLOCK]
-if _ROL == "campo":
-    _nav.append(_L_FIELDPROJ)
+# Orden de las pestañas por rol (el panel de cada rol va primero).
+_HERR = [_L_SURVEY, _L_PLUMB, _L_RAIL, _L_BELT]   # herramientas comunes
 if _ROL == "propietario":
-    _nav.append(_L_OWNER)
+    _nav = [_L_OWNER] + _HERR                      # sin fichaje
 elif _ROL == "administrador":
-    _nav.append(_L_GRUPO)
+    _nav = [_L_GRUPO, _L_CLOCK] + _HERR
+elif _ROL == "campo":
+    _nav = [_L_FIELDPROJ, _L_CLOCK] + _HERR
+else:
+    _nav = _HERR + [_L_CLOCK]
 
 _seccion = st.radio("Navegación", _nav, horizontal=True,
                     key="main_nav", label_visibility="collapsed")
