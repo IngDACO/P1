@@ -91,7 +91,32 @@ def project_folder(pid: str) -> str:
     return _find_folder(pid, parent=root) or _create_folder(pid, parent=root)
 
 
+@st.cache_data(ttl=600, show_spinner=False)
+def folder(name: str) -> str:
+    """Id de una subcarpeta con nombre `name` bajo la raíz (la crea si no existe).
+    Útil para almacenes que no son de un proyecto (p. ej. 'COPEX Manuales')."""
+    root = _root_id()
+    return _find_folder(name, parent=root) or _create_folder(name, parent=root)
+
+
 # ── Archivos ─────────────────────────────────────────────────────
+def upload_to(folder_id: str, filename: str, data: bytes,
+              mime: str = "application/octet-stream") -> str:
+    """Sube bytes a una carpeta cualquiera. Devuelve el fileId de Drive."""
+    b = "===COPEXDOC==="
+    meta = {"name": filename, "parents": [folder_id]}
+    head = (f"--{b}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n"
+            + json.dumps(meta)
+            + f"\r\n--{b}\r\nContent-Type: {mime}\r\n\r\n").encode("utf-8")
+    tail = f"\r\n--{b}--".encode("utf-8")
+    body = head + (data or b"") + tail
+    r = requests.post(_UPLOAD,
+                      headers={**_headers(), "Content-Type": f"multipart/related; boundary={b}"},
+                      params={"uploadType": "multipart", "fields": "id"}, data=body)
+    r.raise_for_status()
+    return r.json()["id"]
+
+
 def upload(pid: str, filename: str, data: bytes, mime: str = "application/octet-stream") -> str:
     """Sube bytes a la carpeta del proyecto. Devuelve el fileId de Drive."""
     folder = project_folder(pid)

@@ -582,15 +582,26 @@ Usa **google-auth + requests** (sin deps nuevas). Estructura: `COPEX Proyectos /
 
 ---
 
-## manuals.py — banco de manuales para el agente IA (v90)
-Fragmentos (chunks) de cada manual en `survey_app/manuals/*.json.gz`
-(`{nombre, chunks:[{manual,seccion,page,text}]}`). `_index()` (cache_resource) carga y arma **BM25 en
-Python puro** (sin deps ni APIs). `search(query,k)` / `context_for(query)` → fragmentos relevantes.
-`chat_agent.get_chat_response` recupera los fragmentos de la pregunta y los agrega al system prompt; el
-agente responde citando **manual · sección · página** (sin copiar páginas enteras). Pre-cargados: KONE
-Monospace (722 frags), S5500 Install (358 frags). Para agregar manuales hoy: extraer local + commit a
-`manuals/` (script en el historial). **Pendiente:** panel del propietario 📚 Manuales (subir/quitar
-self-service, Drive) + separar agente campo/admin.
+## manuals.py — banco de manuales para el agente IA (v90/v91)
+Fragmentos (chunks) de cada manual como `{nombre, chunks:[{manual,seccion,page,text}]}` (.json.gz).
+`_index()` (cache_resource) fusiona **dos orígenes** y arma **BM25 en Python puro** (sin deps ni APIs):
+1. **Pre-cargados** en el repo `survey_app/manuals/*.json.gz` (KONE Monospace 722 frags, S5500 358).
+2. **Subidos por el propietario** (v91, self-service): PDF/ZIP → `_chunks_from_upload` (pypdf, ~180
+   palabras/chunk, sección por heurística de título en mayúsculas, página) → `.json.gz` a **Drive**
+   (`drive_store.folder("COPEX Manuales")` + `upload_to`), registrado en la hoja **`Manuales`**
+   (ID,Nombre,DriveID,NumFrags,Fecha,SubidoPor). `_drive_chunks()` los descarga y los mete al índice.
+`search(query,k)` / `context_for(query)` → fragmentos relevantes. Gestión: `add_manual`/`delete_manual`/
+`list_uploaded`/`repo_manual_names`; `_refresh()` invalida `_drive_records` + `_index`. Panel propietario
+**📚 Manuales** (`auth_ui._owner_manuales`): lista pre-cargados (solo lectura) + subidos (tabla, subir, quitar).
+`chat_agent.get_chat_response` recupera los fragmentos de la pregunta, los agrega al system prompt y el
+agente responde citando **manual · sección · página** (sin copiar páginas enteras).
+
+## Agente separado por rol (v91)
+`chat_agent._PERSONA` → persona según el rol de quien pregunta: **campo** (foco en ejecución en obra,
+manuales, uso de la app en terreno: avance/alarmas/fichaje/documentos) vs **administrador/propietario**
+(foco en gestión de proyectos: cronograma, curva S, EVM/SPI, actividades, asignaciones, interpretación).
+`get_chat_response(..., rol=...)`; `app.py` pasa `rol=_ROL` y renombra el asistente ("de campo"/"de gestión").
+Conocimiento base y regla de **confidencialidad** son comunes a ambos.
 
 ## alerts.py — alarmas/avisos por proyecto (v88)
 Hoja **Alarmas** (`ID·ProyectoID·Grupo·Origen·Tipo·Mensaje·CreadoPor·Fecha·Estado·ResueltoPor·FechaResuelta`).
@@ -690,7 +701,7 @@ Al cargar el plano en el survey (app.py), autocompleta **RAIL = AlturaDiente** (
 espalda) del catálogo; si el código no está o no se detecta → aviso + entrada manual. **RAIL = AlturaDiente**
 (NO el ancho); AnchoDiente se guarda como dato secundario.
 
-## Versiones desplegadas (v90 = actual)
+## Versiones desplegadas (v91 = actual)
 | Ver | Cambio principal |
 |---|---|
 | v5 | Extractor: CRLF fix, caso D valor-antes-label, sin pdfplumber |
@@ -778,3 +789,4 @@ espalda) del catálogo; si el código no está o no se detecta → aviso + entra
 | v88 | Sistema de alarmas por proyecto: campo reporta problema→admin, admin cambia→campo; in-app + Telegram, resolver/apagar, badges |
 | v89 | Respaldo: CLAUDE.md (estructura + módulos nuevos) + agente IA al día (belting, rieles, proyectos, docs, alarmas, sesión única) |
 | v90 | Banco de manuales para el agente (BM25 en Python puro); pre-cargados KONE Monospace + S5500; cita manual/sección/página |
+| v91 | Panel propietario 📚 Manuales (subir/quitar self-service en Drive + hoja Manuales, PDF/ZIP) + agente separado por rol (campo/gestión) |

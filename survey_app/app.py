@@ -245,9 +245,13 @@ with st.sidebar:
     # ASISTENTE IA — desplegable en sidebar
     # ══════════════════════════════════════════════════
     st.markdown("---")
-    with st.expander("🤖 Asistente Técnico COPEX", expanded=False):
+    _agente_lbl = "Asistente de campo" if _ROL == "campo" else "Asistente de gestión"
+    with st.expander(f"🤖 {_agente_lbl} COPEX", expanded=False):
         ctx_label = "🔗 Con contexto del cálculo actual." if st.session_state.calc_results else "Sin cálculo activo."
-        st.caption(f"Experto en instalación de elevadores Schindler. {ctx_label}")
+        _foco = ("Enfocado en la instalación en obra y el uso de la app en terreno."
+                 if _ROL == "campo"
+                 else "Enfocado en la gestión de proyectos e interpretación de resultados.")
+        st.caption(f"{_foco} {ctx_label}")
 
         # Historial
         for msg in st.session_state.chat_history:
@@ -268,6 +272,7 @@ with st.sidebar:
                         history      = st.session_state.chat_history[:-1],
                         calc_results = _r,
                         all_params   = _r["all_params"] if _r else None,
+                        rol          = _ROL,
                     )
                 st.markdown(_response)
             st.session_state.chat_history.append({"role": "assistant", "content": _response})

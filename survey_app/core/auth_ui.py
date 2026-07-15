@@ -242,7 +242,8 @@ def _owner_usuarios():
 def render_owner_panel():
     st.markdown("### 👑 Administración")
     # Sub-navegación con radio (NO st.tabs anidado → evita mezcla de contenido)
-    sec = st.radio("Sección", ["🏢 Grupos", "👥 Usuarios", "📁 Proyectos", "🚆 Rieles"],
+    sec = st.radio("Sección",
+                   ["🏢 Grupos", "👥 Usuarios", "📁 Proyectos", "🚆 Rieles", "📚 Manuales"],
                    horizontal=True, key="owner_sec", label_visibility="collapsed")
     st.markdown("---")
     if sec == "🏢 Grupos":
@@ -252,8 +253,73 @@ def render_owner_panel():
     elif sec == "📁 Proyectos":
         from core.projects_ui import render_owner_projects
         render_owner_projects()
-    else:
+    elif sec == "🚆 Rieles":
         _owner_rieles()
+    else:
+        _owner_manuales()
+
+
+def _owner_manuales():
+    """Banco de manuales para el agente de IA: subir/quitar (self-service)."""
+    from core import manuals
+    st.markdown("#### 📚 Banco de manuales del asistente")
+    st.caption("El asistente de IA consulta estos manuales para responder dudas técnicas de "
+               "instalación y **cita la fuente** (manual · sección · página).")
+
+    # Pre-cargados (repo, solo lectura)
+    pre = manuals.repo_manual_names()
+    if pre:
+        st.markdown("**Pre-cargados** (incluidos en la app):")
+        for nm in pre:
+            st.markdown(f"- 📖 {nm}")
+
+    if not manuals.storage_available():
+        st.info("Para subir manuales nuevos hace falta Google Drive + Sheets configurados "
+                "(mismos secrets que documentos y fichaje).")
+        return
+
+    # Subidos por el propietario (Drive)
+    st.markdown("---")
+    st.markdown("**Subidos por ti:**")
+    ups = manuals.list_uploaded()
+    if ups:
+        st.dataframe(pd.DataFrame([{
+            "Manual": r.get("Nombre"),
+            "Fragmentos": r.get("NumFrags"),
+            "Fecha": r.get("Fecha"),
+            "Por": r.get("SubidoPor"),
+        } for r in ups]), hide_index=True, use_container_width=True)
+        with st.expander("🗑 Quitar un manual"):
+            opciones = {f"{r.get('Nombre')}  ·  {r.get('Fecha')}": r.get("ID") for r in ups}
+            sel = st.selectbox("Manual", list(opciones.keys()), key="man_del_sel")
+            if st.button("🗑 Eliminar", key="man_del_btn"):
+                if manuals.delete_manual(opciones[sel]):
+                    st.success("Manual eliminado.")
+                    st.rerun()
+                else:
+                    st.error("No se pudo eliminar.")
+    else:
+        st.info("Aún no has subido manuales. Agrega el primero abajo.")
+
+    with st.expander("➕ Subir manual", expanded=not ups):
+        st.caption("Acepta un PDF con texto (no escaneado) o un ZIP con varios PDFs. "
+                   "Evita PDFs enormes (>50 MB): se procesan en el navegador.")
+        up = st.file_uploader("Archivo (PDF o ZIP)", type=["pdf", "zip"], key="man_up_file")
+        nombre = st.text_input("Nombre del manual (ej. 'KONE MonoSpace')", key="man_up_name")
+        if st.button("📥 Procesar y guardar", key="man_up_btn", disabled=up is None):
+            if up is None:
+                st.error("Selecciona un archivo.")
+            else:
+                nm = nombre.strip() or up.name.rsplit(".", 1)[0]
+                with st.spinner("Extrayendo texto e indexando…"):
+                    n, err = manuals.add_manual(
+                        up.getvalue(), up.name, nm,
+                        subido_por=st.session_state.auth.get("usuario", ""))
+                if err:
+                    st.error(err)
+                else:
+                    st.success(f"Manual «{nm}» agregado: {n} fragmentos indexados.")
+                    st.rerun()
 
 
 def _owner_rieles():

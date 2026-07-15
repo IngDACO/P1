@@ -275,6 +275,37 @@ Puedes explicar CÓMO USAR estas funciones y QUÉ SIGNIFICAN los resultados, per
 internamente (fórmulas, algoritmos, código) — sigue aplicando la regla de confidencialidad de arriba.
 """
 
+# ── Personas según el rol de quien pregunta ─────────────────────────────
+# El agente se adapta a su interlocutor: uno para el técnico de campo (foco
+# en la ejecución en obra) y otro para el administrador/propietario (foco en
+# la gestión de proyectos e interpretación). El resto del conocimiento y la
+# regla de confidencialidad son comunes.
+_PERSONA = {
+    "campo": (
+        "## TU INTERLOCUTOR: TÉCNICO DE CAMPO\n"
+        "Estás asistiendo a un TÉCNICO que está EN OBRA instalando el elevador. Enfócate en:\n"
+        "- Procedimientos de instalación paso a paso, medidas, herramientas y seguridad, apoyándote en "
+        "los MANUALES (cítalos).\n"
+        "- Interpretar los resultados del survey, plomado, belting y corte de rieles para EJECUTARLOS en el hueco.\n"
+        "- Cómo usar la app en terreno: actualizar el % de avance de sus actividades, reportar un problema/alarma "
+        "al administrador, fichar horas (clock in/out) y consultar los documentos del proyecto (planos, informe, fotos).\n"
+        "La gestión de cronogramas, curvas S, informes internos y usuarios NO es su función; si pregunta por eso, "
+        "explícale que lo ve el administrador. Lenguaje práctico, claro y directo, como para alguien trabajando en el hueco."
+    ),
+    "administrador": (
+        "## TU INTERLOCUTOR: ADMINISTRADOR\n"
+        "Estás asistiendo a un ADMINISTRADOR que gestiona los proyectos de su grupo. Enfócate en:\n"
+        "- Gestión de proyectos: cronograma, avance, curva S real vs planificada, proyección de días de adelanto/"
+        "retraso (EVM/SPI), actividades editables, asignación de técnicos de campo, documentos y alarmas.\n"
+        "- Interpretación de los resultados del survey para tomar decisiones y coordinar la obra.\n"
+        "- Dudas técnicas de instalación (apóyate en los manuales y cítalos) para orientar a su equipo.\n"
+        "Tono profesional y orientado a la toma de decisiones. Puedes explicar QUÉ significan las métricas de un "
+        "proyecto (SPI, desvío, días de adelanto/retraso) sin revelar cómo se calculan internamente."
+    ),
+}
+# El propietario tiene visión global: usa el mismo asistente que el administrador.
+_PERSONA["propietario"] = _PERSONA["administrador"]
+
 
 def _build_context_block(calc_results: dict | None, all_params: dict | None) -> str:
     """Construye un bloque de contexto con los datos actuales del survey."""
@@ -354,11 +385,14 @@ def get_chat_response(
     history:       list,
     calc_results:  dict | None,
     all_params:    dict | None,
+    rol:           str = "administrador",
 ) -> str:
     """
     Envía el mensaje del usuario a Claude y devuelve la respuesta.
 
     history: lista de dicts {"role": "user"|"assistant", "content": str}
+    rol:     rol de quien pregunta ("campo" | "administrador" | "propietario"),
+             selecciona la persona del agente (campo vs gestión).
     """
     if anthropic is None:
         return "⚠️ La librería anthropic no está disponible en el entorno."
@@ -368,9 +402,10 @@ def get_chat_response(
 
     client = anthropic.Anthropic(api_key=api_key)
 
-    # Sistema con contexto del survey actual
+    # Persona según el rol + contexto del survey actual
+    persona       = _PERSONA.get(rol, _PERSONA["administrador"])
     context_block = _build_context_block(calc_results, all_params)
-    system = SYSTEM_PROMPT + context_block
+    system = SYSTEM_PROMPT + "\n\n" + persona + context_block
 
     # Banco de manuales: agrega los fragmentos relevantes a la pregunta
     try:
