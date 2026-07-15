@@ -31,25 +31,16 @@ def is_configured() -> bool:
 
 
 def _ws():
-    ws, err = timeclock._get_worksheet()
-    if err:
-        return None, err
+    if not timeclock._secrets_present():
+        return None, "Google Sheets no está configurado."
     try:
-        ss = ws.spreadsheet
-        try:
-            w = ss.worksheet(ALERTS_SHEET)
-        except Exception:
-            w = ss.add_worksheet(title=ALERTS_SHEET, rows=500, cols=len(ALERTS_HEADERS))
-            w.append_row(ALERTS_HEADERS)
-        if not w.row_values(1):
-            w.append_row(ALERTS_HEADERS)
-        return w, None
+        return timeclock.get_sheet(ALERTS_SHEET, tuple(ALERTS_HEADERS)), None
     except Exception as e:
         logger.warning("alerts: no se pudo abrir la hoja: %s", e)
         return None, f"No se pudo abrir la hoja {ALERTS_SHEET}: {e}"
 
 
-@st.cache_data(ttl=20, show_spinner=False)
+@st.cache_data(ttl=30, show_spinner=False)
 def _records():
     w, err = _ws()
     if err or w is None:

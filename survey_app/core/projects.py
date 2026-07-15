@@ -52,19 +52,10 @@ def is_configured() -> bool:
 
 # ── Worksheets (crea la pestaña si no existe) ────────────────────
 def _get_ws(title, headers):
-    ws, err = timeclock._get_worksheet()
-    if err:
-        return None, err
+    if not timeclock._secrets_present():
+        return None, "Google Sheets no está configurado."
     try:
-        ss = ws.spreadsheet
-        try:
-            w = ss.worksheet(title)
-        except Exception:
-            w = ss.add_worksheet(title=title, rows=500, cols=len(headers))
-            w.append_row(headers)
-        if not w.row_values(1):
-            w.append_row(headers)
-        return w, None
+        return timeclock.get_sheet(title, tuple(headers)), None
     except Exception as e:
         logger.warning("projects: no se pudo abrir la hoja %s: %s", title, e)
         return None, f"No se pudo abrir la hoja {title}: {e}"
@@ -86,7 +77,7 @@ _HEADERS_BY_TITLE = {
 }
 
 
-@st.cache_data(ttl=20, show_spinner=False)
+@st.cache_data(ttl=30, show_spinner=False)
 def _records(title):
     """Registros de una hoja (cacheados). Solo lecturas de DISPLAY."""
     w, err = _get_ws(title, _HEADERS_BY_TITLE.get(title, []))
@@ -99,7 +90,7 @@ def _records(title):
         return []
 
 
-@st.cache_data(ttl=20, show_spinner=False)
+@st.cache_data(ttl=30, show_spinner=False)
 def _fichaje_records():
     """Registros del fichaje (cacheados) para sumar horas."""
     ws, err = timeclock._get_worksheet()

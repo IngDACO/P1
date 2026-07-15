@@ -13,6 +13,8 @@ import os
 import time
 import uuid
 
+import streamlit as st
+
 from core import timeclock
 
 LOGIN_SHEET   = "Login"
@@ -56,51 +58,48 @@ def is_configured() -> bool:
 
 
 def _get_login_ws():
-    ws, err = timeclock._get_worksheet()
-    if err:
-        return None, err
+    # El handle (y la migración de columnas) se cachea una vez por proceso en
+    # timeclock.get_sheet → no re-lee la cabecera en cada llamada.
+    if not timeclock._secrets_present():
+        return None, "El acceso no está configurado (faltan credenciales en Secrets)."
     try:
-        ss = ws.spreadsheet
-        try:
-            lws = ss.worksheet(LOGIN_SHEET)
-        except Exception:
-            lws = ss.add_worksheet(title=LOGIN_SHEET, rows=200, cols=len(LOGIN_HEADERS))
-            lws.append_row(LOGIN_HEADERS)
-        header = lws.row_values(1)
-        if not header:
-            lws.append_row(LOGIN_HEADERS)
-        else:
-            # Migración: agregar columnas faltantes al final sin mover datos existentes.
-            for h in LOGIN_HEADERS:
-                if h not in header:
-                    need = _COL[h]
-                    try:
-                        if lws.col_count < need:
-                            lws.add_cols(need - lws.col_count)
-                    except Exception:
-                        pass
-                    lws.update_cell(1, need, h)
-        return lws, None
+        return timeclock.get_sheet(LOGIN_SHEET, tuple(LOGIN_HEADERS)), None
     except Exception as e:
         return None, f"No se pudo abrir la hoja Login: {e}"
 
 
 def _get_groups_ws():
-    ws, err = timeclock._get_worksheet()
-    if err:
-        return None, err
+    if not timeclock._secrets_present():
+        return None, "El acceso no está configurado (faltan credenciales en Secrets)."
     try:
-        ss = ws.spreadsheet
-        try:
-            gws = ss.worksheet(GROUPS_SHEET)
-        except Exception:
-            gws = ss.add_worksheet(title=GROUPS_SHEET, rows=100, cols=len(GROUPS_HEADERS))
-            gws.append_row(GROUPS_HEADERS)
-        if not gws.row_values(1):
-            gws.append_row(GROUPS_HEADERS)
-        return gws, None
+        return timeclock.get_sheet(GROUPS_SHEET, tuple(GROUPS_HEADERS)), None
     except Exception as e:
         return None, f"No se pudo abrir la hoja Grupos: {e}"
+
+
+# ── Lectura CACHEADA del sheet Login (para rutas de display, no de sesión) ──
+# list_users / get_user se llaman en CADA rerun de los paneles (p. ej. el
+# dropdown de asignar campo, la gestión de contacto). Sin caché, cada slider
+# disparaba una lectura del sheet. Se cachea 30 s y se invalida al escribir.
+# OJO: las rutas críticas de sesión ("primero gana": start_session, heartbeat,
+# end_session, verify_login) NO usan este caché — leen fresco para no permitir
+# una 2ª sesión con datos vencidos.
+@st.cache_data(ttl=30, show_spinner=False)
+def _login_records_cached():
+    lws, err = _get_login_ws()
+    if err or lws is None:
+        return []
+    try:
+        return lws.get_all_records(numericise_ignore=["all"])
+    except Exception:
+        return []
+
+
+def _invalidate_login():
+    try:
+        _login_records_cached.clear()
+    except Exception:
+        pass
 
 
 # ── Gestión de grupos ────────────────────────────────────────
@@ -244,12 +243,13 @@ def heartbeat(usuario: str, token: str) -> bool:
 
 
 def get_user(usuario: str) -> dict:
-    """Registro del usuario (dict) o {} si no existe/no se puede leer."""
-    lws, err = _get_login_ws()
-    if err:
-        return {}
-    _, rec = _find_row(lws, usuario)
-    return rec or {}
+    """Registro del usuario (dict) o {} si no existe/no se puede leer (cacheado).
+    Uso para contacto/display; las rutas de sesión leen fresco vía _find_row."""
+    usuario = (usuario or "").strip().lower()
+    for r in _login_records_cached():
+        if str(r.get("Usuario", "")).strip().lower() == usuario:
+            return r
+    return {}
 
 
 def set_contact(usuario: str, email: str = None, telegram: str = None) -> tuple:
@@ -267,6 +267,7 @@ def set_contact(usuario: str, email: str = None, telegram: str = None) -> tuple:
             lws.update_cell(row, _COL["TelegramChatID"], str(telegram).strip())
     except Exception as e:
         return False, f"Error guardando contacto: {e}"
+    _invalidate_login()
     return True, "Contacto actualizado."
 
 
@@ -288,12 +289,9 @@ def end_session(usuario: str, token: str = None):
 
 # ── Gestión de usuarios ──────────────────────────────────────
 def list_users(grupo: str = None) -> list:
-    """Todos los usuarios, o solo los de un grupo si se indica."""
-    lws, err = _get_login_ws()
-    if err:
-        return []
+    """Todos los usuarios, o solo los de un grupo si se indica (lectura cacheada)."""
     out = []
-    for r in _records(lws):
+    for r in _login_records_cached():
         g = str(r.get("Grupo", "")).strip()
         if grupo is not None and g.lower() != grupo.strip().lower():
             continue
@@ -330,6 +328,7 @@ def add_user(usuario: str, pw: str, rol: str, nombre: str = "",
                        value_input_option="RAW")
     except Exception as e:
         return False, f"Error creando usuario: {e}"
+    _invalidate_login()
     return True, f"Usuario '{usuario}' creado ({rol})."
 
 
@@ -344,6 +343,7 @@ def set_group(usuario: str, grupo: str) -> tuple:
         lws.update_cell(row, _COL["Grupo"], (grupo or "").strip())
     except Exception as e:
         return False, f"Error: {e}"
+    _invalidate_login()
     return True, f"Grupo de '{usuario}' → {grupo or '(sin grupo)'}."
 
 
@@ -360,6 +360,7 @@ def set_password(usuario: str, pw: str) -> tuple:
         lws.update_cell(row, 2, hash_password(pw))
     except Exception as e:
         return False, f"Error: {e}"
+    _invalidate_login()
     return True, f"Contraseña de '{usuario}' actualizada."
 
 
@@ -376,6 +377,7 @@ def set_role(usuario: str, rol: str) -> tuple:
         lws.update_cell(row, 3, rol)
     except Exception as e:
         return False, f"Error: {e}"
+    _invalidate_login()
     return True, f"Rol de '{usuario}' → {rol}."
 
 
@@ -390,6 +392,7 @@ def set_active(usuario: str, activo: bool) -> tuple:
         lws.update_cell(row, 5, "SI" if activo else "NO")
     except Exception as e:
         return False, f"Error: {e}"
+    _invalidate_login()
     return True, f"'{usuario}' {'activado' if activo else 'desactivado'}."
 
 
@@ -404,6 +407,7 @@ def delete_user(usuario: str) -> tuple:
         lws.delete_rows(row)
     except Exception as e:
         return False, f"Error: {e}"
+    _invalidate_login()
     return True, f"Usuario '{usuario}' eliminado."
 
 

@@ -69,6 +69,39 @@ def _get_worksheet():
         return None, f"Conexión temporalmente no disponible con Google Sheets: {e}"
 
 
+@st.cache_resource(show_spinner=False)
+def get_sheet(title: str, headers: tuple):
+    """Devuelve el handle de una pestaña por título, cacheado como recurso.
+
+    Crea la hoja y asegura/migra la cabecera UNA SOLA VEZ por proceso. Antes,
+    cada módulo (auth, projects, alerts, manuals…) hacía `ss.worksheet(title)`
+    (metadata) + `row_values(1)` (cabecera) en CADA lectura → 2 llamadas extra
+    por lectura. Con esto esas comprobaciones ocurren una vez y luego se reutiliza
+    el handle. Si la API falla, lanza excepción → NO se cachea → se reintenta."""
+    ws = _cached_ws()                      # conexión cacheada; lanza si la API falla
+    ss = ws.spreadsheet
+    try:
+        w = ss.worksheet(title)
+    except Exception:
+        w = ss.add_worksheet(title=title, rows=500, cols=len(headers))
+        w.append_row(list(headers))
+        return w
+    head = w.row_values(1)
+    if not head:
+        w.append_row(list(headers))
+    else:
+        # Migración: agrega columnas faltantes en su posición canónica.
+        for i, h in enumerate(headers, start=1):
+            if h not in head:
+                try:
+                    if w.col_count < i:
+                        w.add_cols(i - w.col_count)
+                    w.update_cell(1, i, h)
+                except Exception:
+                    pass
+    return w
+
+
 def is_configured() -> bool:
     """Solo revisa si los secrets están presentes — sin llamar a la API
     (evita falsos negativos por límites de rate de Google)."""
@@ -77,25 +110,12 @@ def is_configured() -> bool:
 
 def _get_users_ws():
     """Devuelve (worksheet 'Usuarios', None) o (None, error). La crea si no existe."""
-    ws_main, err = _get_worksheet()
-    if err:
-        return None, err
-    ss = ws_main.spreadsheet
+    if not _secrets_present():
+        return None, "El fichaje no está conectado (faltan credenciales en Secrets)."
     try:
-        uws = ss.worksheet(USERS_SHEET)
-    except Exception:
-        try:
-            uws = ss.add_worksheet(title=USERS_SHEET, rows=200, cols=3)
-            uws.append_row(USERS_HEADERS)
-        except Exception as e:
-            return None, f"No se pudo crear la hoja de usuarios: {e}"
-    # Asegurar cabecera
-    try:
-        if not uws.row_values(1):
-            uws.append_row(USERS_HEADERS)
-    except Exception:
-        pass
-    return uws, None
+        return get_sheet(USERS_SHEET, tuple(USERS_HEADERS)), None
+    except Exception as e:
+        return None, f"No se pudo abrir la hoja de usuarios: {e}"
 
 
 def validate_user(nombre: str, pin: str) -> tuple:

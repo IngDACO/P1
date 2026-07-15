@@ -49,19 +49,10 @@ def storage_available() -> bool:
 
 def _index_ws():
     from core import timeclock
-    ws, err = timeclock._get_worksheet()
-    if err or ws is None:
+    if not timeclock._secrets_present():
         return None
     try:
-        ss = ws.spreadsheet
-        try:
-            w = ss.worksheet(_SHEET)
-        except Exception:
-            w = ss.add_worksheet(title=_SHEET, rows=100, cols=len(_HEADERS))
-            w.append_row(_HEADERS)
-        if not w.row_values(1):
-            w.append_row(_HEADERS)
-        return w
+        return timeclock.get_sheet(_SHEET, tuple(_HEADERS))
     except Exception:
         return None
 
