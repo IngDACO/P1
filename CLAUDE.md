@@ -582,6 +582,16 @@ Usa **google-auth + requests** (sin deps nuevas). Estructura: `COPEX Proyectos /
 
 ---
 
+## manuals.py — banco de manuales para el agente IA (v90)
+Fragmentos (chunks) de cada manual en `survey_app/manuals/*.json.gz`
+(`{nombre, chunks:[{manual,seccion,page,text}]}`). `_index()` (cache_resource) carga y arma **BM25 en
+Python puro** (sin deps ni APIs). `search(query,k)` / `context_for(query)` → fragmentos relevantes.
+`chat_agent.get_chat_response` recupera los fragmentos de la pregunta y los agrega al system prompt; el
+agente responde citando **manual · sección · página** (sin copiar páginas enteras). Pre-cargados: KONE
+Monospace (722 frags), S5500 Install (358 frags). Para agregar manuales hoy: extraer local + commit a
+`manuals/` (script en el historial). **Pendiente:** panel del propietario 📚 Manuales (subir/quitar
+self-service, Drive) + separar agente campo/admin.
+
 ## alerts.py — alarmas/avisos por proyecto (v88)
 Hoja **Alarmas** (`ID·ProyectoID·Grupo·Origen·Tipo·Mensaje·CreadoPor·Fecha·Estado·ResueltoPor·FechaResuelta`).
 Dos flujos:
@@ -680,7 +690,7 @@ Al cargar el plano en el survey (app.py), autocompleta **RAIL = AlturaDiente** (
 espalda) del catálogo; si el código no está o no se detecta → aviso + entrada manual. **RAIL = AlturaDiente**
 (NO el ancho); AnchoDiente se guarda como dato secundario.
 
-## Versiones desplegadas (v89 = actual)
+## Versiones desplegadas (v90 = actual)
 | Ver | Cambio principal |
 |---|---|
 | v5 | Extractor: CRLF fix, caso D valor-antes-label, sin pdfplumber |
@@ -767,3 +777,4 @@ espalda) del catálogo; si el código no está o no se detecta → aviso + entra
 | v87 | Belting: HGP también se autocompleta del plano (2º valor de la fila HKP/HGP) |
 | v88 | Sistema de alarmas por proyecto: campo reporta problema→admin, admin cambia→campo; in-app + Telegram, resolver/apagar, badges |
 | v89 | Respaldo: CLAUDE.md (estructura + módulos nuevos) + agente IA al día (belting, rieles, proyectos, docs, alarmas, sesión única) |
+| v90 | Banco de manuales para el agente (BM25 en Python puro); pre-cargados KONE Monospace + S5500; cita manual/sección/página |
