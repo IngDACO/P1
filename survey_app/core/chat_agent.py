@@ -267,6 +267,10 @@ Roles/grupos: cada empresa cliente es un grupo aislado; nadie ve datos de otro g
 activa por cuenta a la vez (no se comparten cuentas). La app se usa también desde el móvil (instalable) y
 hay versión Android.
 
+Tienes acceso a un **banco de manuales** de instalación (de distintas marcas de elevadores). Para dudas
+técnicas de instalación en obra, apóyate en los fragmentos de los manuales que se te proporcionen (cuando
+apliquen) y cita la fuente (manual / sección / página). Si algo no está en los fragmentos, dilo.
+
 Puedes explicar CÓMO USAR estas funciones y QUÉ SIGNIFICAN los resultados, pero NUNCA cómo se calculan
 internamente (fórmulas, algoritmos, código) — sigue aplicando la regla de confidencialidad de arriba.
 """
@@ -367,6 +371,21 @@ def get_chat_response(
     # Sistema con contexto del survey actual
     context_block = _build_context_block(calc_results, all_params)
     system = SYSTEM_PROMPT + context_block
+
+    # Banco de manuales: agrega los fragmentos relevantes a la pregunta
+    try:
+        from core import manuals
+        if manuals.is_available():
+            man_ctx = manuals.context_for(user_message, k=6)
+            if man_ctx:
+                system += (
+                    "\n\n## FRAGMENTOS DE LOS MANUALES (referencia — úsalos y CÍTALOS)\n"
+                    "Responde apoyándote en estos fragmentos cuando apliquen, e indica de qué manual/"
+                    "sección/página sale la información. Si la pregunta NO se cubre aquí, dilo y responde "
+                    "con tu conocimiento general, sin inventar detalles ni copiar páginas enteras.\n\n"
+                    + man_ctx)
+    except Exception:
+        pass
 
     # Construir historial (limitar para no saturar tokens)
     trimmed = history[-(MAX_HISTORY):]
