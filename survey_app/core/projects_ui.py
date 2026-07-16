@@ -71,6 +71,22 @@ def _estado_colors(est):
 # ══════════════════════════════════════════════════════════════════════
 # CENTRO DE CONTROL DEL GRUPO — cabecera con marca + KPIs
 # ══════════════════════════════════════════════════════════════════════
+def _delays(proys) -> dict:
+    """{pid: días de retraso} para proyectos activos atrasados según la proyección (SPI)."""
+    out = {}
+    for p in proys:
+        if str(p.get("Estado", "")) in ("Completado", "Cancelado"):
+            continue
+        try:
+            ps = P.project_schedule(p.get("ID"))
+            pr = ps.get("proj") if ps else None
+            if pr and pr.get("pv", 0) > 0 and pr.get("dias_gap", 0) > 0.5:
+                out[str(p.get("ID", ""))] = pr["dias_gap"]
+        except Exception:
+            pass
+    return out
+
+
 def _kpis(grupo=None) -> dict:
     """Métricas de salud del grupo (1 lectura de cada hoja, todo cacheado)."""
     proys   = P.list_projects(grupo=grupo)
@@ -79,20 +95,11 @@ def _kpis(grupo=None) -> dict:
     ids     = {str(p.get("ID", "")) for p in proys}
     activos = [p for p in proys if str(p.get("Estado", "")) not in ("Completado", "Cancelado")]
     avances = [P._num(p.get("Avance")) for p in proys]
-    riesgo  = 0
-    for p in activos:
-        try:
-            ps = P.project_schedule(p.get("ID"))
-            pr = ps.get("proj") if ps else None
-            if pr and pr.get("pv", 0) > 0 and pr.get("dias_gap", 0) > 0.5:
-                riesgo += 1
-        except Exception:
-            pass
     return {
         "total":   len(proys),
         "activos": len(activos),
         "avg":     round(sum(avances) / len(avances)) if avances else 0,
-        "riesgo":  riesgo,
+        "riesgo":  len(_delays(proys)),
         "alarmas": sum(v for k, v in alarmas.items() if k in ids),
         "horas":   round(sum(horas.get(str(p.get("Nombre", "")), 0.0) for p in proys)),
     }
@@ -221,8 +228,11 @@ def _panel_proyectos(grupo: str):
     ags = {a["ID"]: a["Nombre"] for a in P.list_groupings(grupo=grupo)}
     horas = P.project_hours_bulk(grupo)   # 1 sola lectura del fichaje
     alarmas = alerts.open_counts_all() if alerts.is_configured() else {}
-    st.markdown(f"**Cartera — {len(proys)} proyecto(s)**")
-    st.markdown(_portfolio_html(proys, horas, alarmas, ags), unsafe_allow_html=True)
+    delays = _delays(proys)               # {pid: días de retraso}
+    _nr = len(delays)
+    st.markdown(f"**Cartera — {len(proys)} proyecto(s)**"
+                + (f"  ·  🔴 {_nr} con retraso" if _nr else ""))
+    st.markdown(_portfolio_html(proys, horas, alarmas, ags, delays), unsafe_allow_html=True)
 
     # ── Abrir proyecto (detalle / edición) ──
     st.markdown("#### 🔎 Abrir proyecto")
@@ -234,9 +244,11 @@ def _panel_proyectos(grupo: str):
         _detalle_proyecto(idmap[sel], grupo)
 
 
-def _portfolio_html(proys, horas, alarmas, ags) -> str:
-    """Lista de tarjetas de proyecto: punto de estado, nombre/cliente, píldora,
-    barra de avance, horas y badge de alarmas."""
+def _portfolio_html(proys, horas, alarmas, ags, delays=None) -> str:
+    """Lista de tarjetas de proyecto: punto de estado, nombre/cliente, ubicación,
+    píldora, barra de avance, horas y badges de alarmas y retraso.
+    Los proyectos con retraso (delays) se distinguen con borde rojo + badge ⏰."""
+    delays = delays or {}
     parts = []
     for p in proys:
         est = str(p.get("Estado", ""))
@@ -248,19 +260,34 @@ def _portfolio_html(proys, horas, alarmas, ags) -> str:
         na  = alarmas.get(pid, 0)
         ag  = ags.get(str(p.get("AgrupacionID", "")), "")
         sub = f"{pid} · {str(p.get('Cliente','')) or '—'}" + (f" · {ag}" if ag else "")
+        ubic = str(p.get("Ubicacion", "") or "")
+        ubic_html = (f'<div style="font-size:11.5px;white-space:nowrap;overflow:hidden;'
+                     f'text-overflow:ellipsis;">{maps.maps_link_html(ubic, ubic, color="#2e6da4")}</div>'
+                     if ubic else "")
         alarm = (f'<div style="width:44px;text-align:center;flex:none;color:#c0392b;'
                  f'font-size:12.5px;font-weight:600;">🔔 {na}</div>'
                  if na else '<div style="width:44px;flex:none;"></div>')
+        # Retraso → borde rojo + badge de días
+        d = delays.get(pid)
+        card_border = "border:1px solid #e6e9ef"
+        retraso_badge = ""
+        if d:
+            card_border = "border:1px solid #e6e9ef;border-left:4px solid #c0392b"
+            retraso_badge = (f'<span style="font-size:12px;padding:3px 9px;border-radius:20px;'
+                             f'background:#fcebeb;color:#a32d2d;white-space:nowrap;flex:none;'
+                             f'font-weight:600;">⏰ {d:.0f} d</span>')
         parts.append(
-            '<div style="display:flex;align-items:center;gap:12px;padding:11px 14px;'
-            'border:1px solid #e6e9ef;border-radius:10px;margin-bottom:8px;background:#fff;">'
+            f'<div style="display:flex;align-items:center;gap:12px;padding:11px 14px;'
+            f'{card_border};border-radius:10px;margin-bottom:8px;background:#fff;">'
             f'<div style="width:9px;height:9px;border-radius:50%;background:{bar};flex:none;"></div>'
             '<div style="flex:1;min-width:0;">'
             f'<div style="font-size:14px;font-weight:600;color:#1f2937;white-space:nowrap;'
             f'overflow:hidden;text-overflow:ellipsis;">{nom}</div>'
             f'<div style="font-size:12px;color:#6b7280;white-space:nowrap;overflow:hidden;'
             f'text-overflow:ellipsis;">{sub}</div>'
+            + ubic_html +
             '</div>'
+            + retraso_badge +
             f'<span style="font-size:12px;padding:3px 10px;border-radius:20px;background:{bg};'
             f'color:{fg};white-space:nowrap;flex:none;">{_ESTADO_EMOJI.get(est,"")} {est}</span>'
             '<div style="width:118px;flex:none;">'
@@ -557,22 +584,30 @@ def render_owner_projects():
         return
     ags = {a["ID"]: a["Nombre"] for a in P.list_groupings()}
     alarmas = alerts.open_counts_all() if alerts.is_configured() else {}
+    delays = _delays(proys)
     rows = []
     for p in proys:
         est = str(p.get("Estado", ""))
-        _na = alarmas.get(str(p.get("ID", "")), 0)
+        pid = str(p.get("ID", ""))
+        _na = alarmas.get(pid, 0)
+        _d  = delays.get(pid)
+        ubic = str(p.get("Ubicacion", "") or "")
         rows.append({
             "ID":        p.get("ID"),
             "Grupo":     p.get("Grupo"),
             "Proyecto":  p.get("Nombre"),
             "🔔":        f"🔴 {_na}" if _na else "",
             "Cliente":   p.get("Cliente"),
+            "Ubicación": ubic,
+            "🗺":        maps.maps_url(ubic),
             "Estado":    f"{_ESTADO_EMOJI.get(est, '')} {est}".strip(),
+            "⏰ Retraso": f"{_d:.0f} d" if _d else "",
             "Avance %":  P._num(p.get("Avance")),
             "Horas":     P.project_hours(p.get("Nombre"), p.get("Grupo")),
             "Agrupación": ags.get(str(p.get("AgrupacionID", "")), ""),
         })
-    st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+    st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True,
+                 column_config={"🗺": st.column_config.LinkColumn("🗺", display_text="Abrir")})
 
     st.markdown("#### 🔎 Abrir proyecto")
     idmap = {f"{p.get('Grupo')} · {p.get('ID')} · {p.get('Nombre')}": p.get("ID") for p in proys}
