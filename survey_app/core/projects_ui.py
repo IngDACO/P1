@@ -11,6 +11,7 @@ from core import auth
 from core import drive_store
 from core import notify
 from core import alerts
+from core import maps
 from core.schedule import schedule_svg
 
 
@@ -289,7 +290,7 @@ def _detalle_proyecto(pid: str, grupo: str = None):
     est    = str(prj.get("Estado", ""))
     _bg, _fg, _bar = _estado_colors(est)
     _cli  = str(prj.get("Cliente", "")) or "—"
-    _ubic = f' · 📍 {prj.get("Ubicacion")}' if prj.get("Ubicacion") else ""
+    _ubic = (" · " + maps.maps_link_html(prj.get("Ubicacion"))) if prj.get("Ubicacion") else ""
     st.markdown(
         f'<div style="border:1px solid #e6e9ef;border-left:4px solid {_bar};border-radius:10px;'
         'padding:12px 16px;margin-bottom:10px;background:#fff;">'
@@ -610,7 +611,9 @@ def render_field_projects(usuario: str, grupo: str):
     c2.metric("Avance del proyecto", f"{avance:.0f}%")
     st.progress(min(1.0, avance / 100.0))
     if prj.get("Ubicacion"):
-        st.caption(f"📍 {prj.get('Ubicacion')}  ·  Cliente: {prj.get('Cliente','—')}")
+        st.caption(f"{maps.maps_link_md(prj.get('Ubicacion'))}  ·  Cliente: {prj.get('Cliente','—')}")
+    elif prj.get("Cliente"):
+        st.caption(f"Cliente: {prj.get('Cliente','—')}")
 
     # ── Alarmas: reportar problema + ver avisos ──
     _alerts_section(pid, grupo, prj.get("Nombre", ""), allow_report=True)

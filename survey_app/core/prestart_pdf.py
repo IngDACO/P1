@@ -15,6 +15,7 @@ from reportlab.platypus import (
 )
 
 from core.prestart import CHECKS_S1, CHECKS_S3
+from core import maps
 
 C_DARK  = colors.HexColor("#1a3a5c")
 C_MED   = colors.HexColor("#2e6da4")
@@ -105,10 +106,13 @@ def generate_prestart_pdf(data: dict) -> bytes:
     # ── Datos ──
     f = data.get("fecha")
     fecha_s = f.strftime("%d/%m/%Y") if hasattr(f, "strftime") else str(f)
+    loc = str(data.get("location", "") or "")
+    loc_url = maps.maps_url(loc)
+    loc_para = Paragraph(f'<a href="{loc_url}" color="#2e6da4">{loc}</a>' if loc_url else "—", st["PSInfo"])
     info = Table([
         [Paragraph("<b>Proyecto</b>", st["PSInfo"]), Paragraph(str(data.get("proyecto_nombre", "—")), st["PSInfo"]),
          Paragraph("<b>Fecha</b>", st["PSInfo"]), Paragraph(fecha_s, st["PSInfo"])],
-        [Paragraph("<b>Location</b>", st["PSInfo"]), Paragraph(str(data.get("location", "—") or "—"), st["PSInfo"]),
+        [Paragraph("<b>Location</b>", st["PSInfo"]), loc_para,
          Paragraph("<b>Hora</b>", st["PSInfo"]), Paragraph(str(data.get("hora", "—") or "—"), st["PSInfo"])],
         [Paragraph("<b>Facilitated by</b>", st["PSInfo"]), Paragraph(str(data.get("facilitador", "—") or "—"), st["PSInfo"]),
          Paragraph("", st["PSInfo"]), Paragraph("", st["PSInfo"])],

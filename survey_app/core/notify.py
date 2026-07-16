@@ -112,12 +112,17 @@ def notify_user(usuario: str, subject: str, lines: list, link: str = None) -> di
 
 def notify_assignment(usuario: str, prj: dict) -> dict:
     """Avisa a un usuario de campo que le asignaron un proyecto (con sus datos)."""
+    from core import maps
     nombre = prj.get("Nombre") or prj.get("nombre") or ""
     subject = f"📋 Nuevo proyecto asignado: {nombre}"
+    _ubic = str(prj.get("Ubicacion", "") or "")
+    _ubic_url = maps.maps_url(_ubic)
+    _ubic_line = (f'Ubicación: <a href="{_ubic_url}">{_ubic}</a>' if _ubic_url
+                  else f"Ubicación: {_ubic or '—'}")
     lines = [
         f"Te asignaron al proyecto <b>{nombre}</b>.",
         f"Cliente: {prj.get('Cliente', '—')}",
-        f"Ubicación: {prj.get('Ubicacion', '—')}",
+        _ubic_line,
         f"Inicio: {prj.get('FechaInicio', '—')}  ·  Fin est.: {prj.get('FechaFinEst', '—')}",
         "Ábrelo en la app → 📋 Mis proyectos.",
     ]

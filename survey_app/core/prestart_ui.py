@@ -9,6 +9,7 @@ from datetime import datetime, date
 
 from core import prestart as PS
 from core import projects as P
+from core import maps
 
 
 def _initials(nombre: str) -> str:
@@ -55,6 +56,8 @@ def render_prestart_tab():
     f_fecha = c1.date_input("Date", value=date.today(), key="ps_fecha")
     f_hora  = c2.text_input("Time", value=datetime.now().strftime("%H:%M"), key="ps_hora")
     f_loc   = c3.text_input("Location", value=str(prj.get("Ubicacion", "")), key="ps_loc")
+    if f_loc.strip():
+        c3.caption(maps.maps_link_md(f_loc, "ver en Maps"))
     f_fac   = st.text_input("Facilitated by", value=nombre or usuario, key="ps_fac")
 
     st.markdown("---")
