@@ -54,6 +54,8 @@ C:\Users\diego\P1\survey_app\
 │   ├── plumb_ui.py         # render_plumb_tab() — plomadas (lee PDF autocompleta, v57)
 │   ├── rail_cut.py         # extract_lf + compute_case1/case2 — corte de rieles (v52)
 │   ├── rail_cut_ui.py      # render_rail_cut_tab() — corte de rieles
+│   ├── buffer_cut.py       # extract_hkp + compute_buffer_cut — corte de buffers (v96)
+│   ├── buffer_cut_ui.py    # render_buffer_cut_tab() — corte de buffers
 │   ├── timeclock.py        # clock_in/out — fichaje por login+grupo (sin PIN, v54)
 │   ├── timeclock_ui.py     # render_timeclock_tab() — fichaje (usa identidad del login)
 │   ├── auth.py             # login, roles, grupos, sesión única, contacto (Sheets, PBKDF2) — v53+
@@ -503,6 +505,13 @@ Pregunta nº de elevadores y el caso:
   penúltimo ENCIMA del FFL → `CutR* = LF − R*`; DEBAJO → `CutR* = LF + R*` (LFKK para RZ/RO, LFGK para RF/RB).
 - Salida: matriz columnas=elevadores, filas=Cut*.
 
+## buffer_cut.py / buffer_cut_ui.py — corte de buffers (v96)
+Herramienta INDEPENDIENTE (pestaña 🛡 Corte de buffers). Sencilla. Del plano lee **HKP** (`extract_hkp`
+= **1er** valor de la fila `HKP/HGP`; el 2º es HGP) = distancia sticker de cabina ↔ buffer de cabina
+sirviendo el 1er nivel. El usuario indica **cuántos buffers** hay y el **HKPR** real de cada uno.
+`compute_buffer_cut(hkp, hkpr_list)` → por buffer **CutBuffer = HKP − HKPR** (mm); marca `warn` si <0
+(el real supera al plano → nada que cortar, revisar en obra). Solo pestaña (no va a los informes).
+
 ---
 
 ## belting.py / belting_ui.py — belting (v86)
@@ -722,7 +731,7 @@ Al cargar el plano en el survey (app.py), autocompleta **RAIL = AlturaDiente** (
 espalda) del catálogo; si el código no está o no se detecta → aviso + entrada manual. **RAIL = AlturaDiente**
 (NO el ancho); AnchoDiente se guarda como dato secundario.
 
-## Versiones desplegadas (v95 = actual)
+## Versiones desplegadas (v96 = actual)
 | Ver | Cambio principal |
 |---|---|
 | v5 | Extractor: CRLF fix, caso D valor-antes-label, sin pdfplumber |
@@ -815,3 +824,4 @@ espalda) del catálogo; si el código no está o no se detecta → aviso + entra
 | v93 | UI: sidebar sin "Valores del PDF" ni leyenda de colores; orden de pestañas por rol (panel del rol primero; propietario sin Fichaje) |
 | v94 | UI "Mi grupo" como centro de control: banda de marca + KPIs (activos/avance/en riesgo/alarmas/horas) + cartera de tarjetas + nav única de 3 |
 | v95 | Drive: `drive_store.is_available()` (chequeo OAuth cacheado) → un solo aviso limpio al archivar si Drive está desconectado (en vez de 3 errores crudos) |
+| v96 | Nueva herramienta 🛡 Corte de buffers: lee HKP del plano (1er valor de HKP/HGP), N buffers + HKPR real, CutBuffer = HKP − HKPR |

@@ -287,6 +287,7 @@ st.markdown(f"""
 _L_SURVEY = "📐 Survey de elevador"
 _L_PLUMB  = "🔩 Líneas de plomada"
 _L_RAIL   = "✂️ Corte de rieles"
+_L_BUFFER = "🛡 Corte de buffers"
 _L_BELT   = "🎗 Belting"
 _L_CLOCK  = "⏱ Fichaje"
 _L_OWNER  = "👑 Administración"
@@ -294,7 +295,7 @@ _L_GRUPO  = "🛠 Mi grupo"
 _L_FIELDPROJ = "📋 Mis proyectos"
 
 # Orden de las pestañas por rol (el panel de cada rol va primero).
-_HERR = [_L_SURVEY, _L_PLUMB, _L_RAIL, _L_BELT]   # herramientas comunes
+_HERR = [_L_SURVEY, _L_PLUMB, _L_RAIL, _L_BUFFER, _L_BELT]   # herramientas comunes
 if _ROL == "propietario":
     _nav = [_L_OWNER] + _HERR                      # sin fichaje
 elif _ROL == "administrador":
@@ -1133,6 +1134,10 @@ elif _seccion == _L_PLUMB:
 elif _seccion == _L_RAIL:
     from core.rail_cut_ui import render_rail_cut_tab
     render_rail_cut_tab()
+
+elif _seccion == _L_BUFFER:
+    from core.buffer_cut_ui import render_buffer_cut_tab
+    render_buffer_cut_tab()
 
 elif _seccion == _L_BELT:
     from core.belting_ui import render_belting_tab

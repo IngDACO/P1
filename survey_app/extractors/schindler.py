@@ -329,3 +329,25 @@ def extract_belting(pdf_file) -> dict:
     except Exception as e:
         logger.warning("extract_belting: %s", e)
     return out
+
+
+def extract_hkp(pdf_file) -> dict:
+    """Para el corte de buffers. Devuelve {'HKP': mm|None}.
+    HKP = 1er valor de la fila 'HKP/HGP [mm]' (el 2º es HGP)."""
+    out = {"HKP": None}
+    try:
+        if hasattr(pdf_file, "seek"):
+            pdf_file.seek(0)
+        for page in PdfReader(pdf_file).pages:
+            txt = _page_text_positional(page)
+            for line in txt.split("\n"):
+                if "HKP/HGP" in line.upper():
+                    vals = _VAL_TOL.findall(line.upper().split("HKP/HGP", 1)[1])
+                    if vals:
+                        out["HKP"] = float(vals[0])   # HKP = 1º (HGP es el 2º)
+                    break
+            if out["HKP"] is not None:
+                break
+    except Exception as e:
+        logger.warning("extract_hkp: %s", e)
+    return out
