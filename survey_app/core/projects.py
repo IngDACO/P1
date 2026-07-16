@@ -30,6 +30,7 @@ PROJECTS_HEADERS = [
     "Estado", "EstadoManual", "FechaInicio", "FechaFinEst", "Ingeniero",
     "CampoAsignados", "Avance", "AgrupacionID", "PesoEnAgrupacion",
     "ParamsJSON", "MatrizJSON", "InterpJSON", "CreadoPor", "Creado",
+    "Instrucciones", "InduccionLinks",
 ]
 ACTIVITIES_HEADERS = [
     "ProyectoID", "Orden", "Nombre", "DuracionDias", "Peso", "Avance",
@@ -218,7 +219,8 @@ def delete_grouping(gid: str) -> tuple:
 def create_project(grupo, nombre, cliente="", ubicacion="", modelo="", ns=0,
                    ingeniero="", campo_asignados=None, fecha_inicio="", fecha_fin_est="",
                    params=None, matriz=None, interp=None, activities=None,
-                   creado_por="", agrupacion_id="", peso_agrupacion=0) -> tuple:
+                   creado_por="", agrupacion_id="", peso_agrupacion=0,
+                   instrucciones="", induccion_links="") -> tuple:
     """Crea un proyecto (fila en Proyectos + filas en Actividades). Devuelve (ok, id|error)."""
     pws, err = _projects_ws()
     if err:
@@ -240,6 +242,7 @@ def create_project(grupo, nombre, cliente="", ubicacion="", modelo="", ns=0,
         json.dumps(matriz or [], ensure_ascii=False, default=str),
         json.dumps(interp or {}, ensure_ascii=False, default=str),
         creado_por, datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        str(instrucciones or ""), str(induccion_links or ""),
     ]
     pws.append_row(row, value_input_option="RAW")
 
@@ -254,6 +257,11 @@ def create_project(grupo, nombre, cliente="", ubicacion="", modelo="", ns=0,
         aws.append_rows(act_rows, value_input_option="RAW")
     _invalidate()
     return True, pid
+
+
+def parse_links(text) -> list:
+    """Lista de links (uno por línea) desde el texto de InduccionLinks."""
+    return [l.strip() for l in str(text or "").splitlines() if l.strip()]
 
 
 def list_projects(grupo: str = None, agrupacion_id: str = None) -> list:

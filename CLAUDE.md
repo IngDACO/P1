@@ -595,6 +595,12 @@ Paso 7, solo administrador/propietario). Persistencia en Google Sheets (misma ho
   retraso}, reusado por el KPI "en riesgo" y las tarjetas), `_estado_colors`, `_ESTADO_COLOR`.
 - **Propietario** (👑 Administración → 📁 Proyectos): tabla de TODOS los proyectos con **Ubicación** + columna
   🗺 (`st.column_config.LinkColumn` a Maps) + columna **⏰ Retraso** (días, v99). `render_owner_projects`.
+- **Instrucciones + Inducciones (v100):** columnas `Instrucciones` e `InduccionLinks` en Proyectos (se migran
+  solas vía `get_sheet`). Se llenan al crear (survey → Guardar como proyecto) y se editan en el detalle.
+  `projects_ui._induccion_section` las muestra (links clickeables) en el detalle (admin, con botón "reenviar")
+  y en 📋 Mis proyectos (campo, solo lectura). Los links de inducción se envían por Telegram/email a los
+  usuarios de campo **al asignarlos** (`notify.notify_assignment` los incluye) y con `notify.notify_induction`
+  (reenvío). `projects.parse_links` (uno por línea).
 - **Campo** (📋 Mis proyectos): ve asignados (`list_projects_for_field`), actualiza Avance% por actividad (`update_activity_progress` recalcula proyecto). `render_field_projects`.
 - **Propietario** (👑 Administración → 📁 Proyectos): ve TODOS los proyectos de todos los grupos
   (`render_owner_projects`, `list_projects()` sin filtro). `_detalle_proyecto` toma el grupo del propio proyecto. (v73)
@@ -756,7 +762,7 @@ Al cargar el plano en el survey (app.py), autocompleta **RAIL = AlturaDiente** (
 espalda) del catálogo; si el código no está o no se detecta → aviso + entrada manual. **RAIL = AlturaDiente**
 (NO el ancho); AnchoDiente se guarda como dato secundario.
 
-## Versiones desplegadas (v99 = actual)
+## Versiones desplegadas (v100 = actual)
 | Ver | Cambio principal |
 |---|---|
 | v5 | Extractor: CRLF fix, caso D valor-antes-label, sin pdfplumber |
@@ -853,3 +859,4 @@ espalda) del catálogo; si el código no está o no se detecta → aviso + entra
 | v97 | Nueva pestaña 🦺 Pre-Start diario (Daily Pre-Start CI Liftworx digitalizado): checks + asistentes → PDF (marca=grupo) archivado en Drive+hoja PreStarts; near miss=YES abre alarma |
 | v98 | Ubicaciones enlazadas a Google Maps (maps.py, URL de búsqueda sin API key): detalle de proyecto, Mis proyectos, PDF+input del Pre-Start, notificación de asignación |
 | v99 | Vista de lista: ubicación (Maps) en tarjetas del admin + tabla del propietario (LinkColumn); tarjetas marcan retraso (borde rojo + badge ⏰ días) vía `_delays` |
+| v100 | Proyecto: campos Instrucciones particulares + Inducciones (links) al crear/editar; links enviados por Telegram/email a los campo asignados; visibles dentro del proyecto |

@@ -1043,6 +1043,12 @@ if _seccion == _L_SURVEY:
                 pj_mod = pc2.text_input("Modelo de elevador")
                 pj_ing = pc1.text_input("Ingeniero", value=ap.get("INGENIERO", ""))
                 pj_asg = st.multiselect("Usuarios de campo asignados", _campos)
+                pj_instr = st.text_area("📌 Instrucciones particulares del proyecto",
+                                        placeholder="Indicaciones específicas para el equipo…")
+                pj_ind = st.text_area("📝 Inducciones (un link por línea)",
+                                      placeholder="https://...\nhttps://...",
+                                      help="Se enviarán por Telegram/email a los usuarios de campo "
+                                           "asignados para que las diligencien.")
                 if st.form_submit_button("💾 Guardar como proyecto", use_container_width=True):
                     if not pj_nom.strip():
                         st.error("El nombre del proyecto es obligatorio.")
@@ -1062,6 +1068,7 @@ if _seccion == _L_SURVEY:
                                     "user":  r.get("interpretation_user")},
                             activities=sched.get("activities", []),
                             creado_por=st.session_state.auth.get("usuario", ""),
+                            instrucciones=pj_instr, induccion_links=pj_ind,
                         )
                         if ok:
                             st.success(f"✅ Proyecto **{res}** guardado. "
@@ -1071,7 +1078,8 @@ if _seccion == _L_SURVEY:
                                 _pinfo = {"Nombre": pj_nom.strip(), "Cliente": pj_cli,
                                           "Ubicacion": pj_ubi,
                                           "FechaInicio": (_sd.strftime("%Y-%m-%d") if _sd else ""),
-                                          "FechaFinEst": (_ff.strftime("%Y-%m-%d") if _ff else "")}
+                                          "FechaFinEst": (_ff.strftime("%Y-%m-%d") if _ff else ""),
+                                          "InduccionLinks": pj_ind}
                                 _nn = 0
                                 for un in pj_asg:
                                     try:

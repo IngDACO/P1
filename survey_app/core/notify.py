@@ -124,6 +124,21 @@ def notify_assignment(usuario: str, prj: dict) -> dict:
         f"Cliente: {prj.get('Cliente', '—')}",
         _ubic_line,
         f"Inicio: {prj.get('FechaInicio', '—')}  ·  Fin est.: {prj.get('FechaFinEst', '—')}",
-        "Ábrelo en la app → 📋 Mis proyectos.",
     ]
+    _links = [l.strip() for l in str(prj.get("InduccionLinks", "") or "").splitlines() if l.strip()]
+    if _links:
+        lines.append("📝 <b>Inducciones a completar:</b>")
+        lines += [f'• <a href="{l}">{l}</a>' for l in _links]
+    lines.append("Ábrelo en la app → 📋 Mis proyectos.")
     return notify_user(usuario, subject, lines, _sec("APP_URL", _APP_URL_DEFAULT))
+
+
+def notify_induction(usuario: str, project_name: str, links: list) -> dict:
+    """Envía (o reenvía) los links de inducción de un proyecto a un usuario de campo."""
+    links = [str(l).strip() for l in (links or []) if str(l).strip()]
+    if not links:
+        return {"email": False, "telegram": False}
+    subject = f"📝 Inducciones del proyecto {project_name}"
+    lines = [f"Completa las inducciones del proyecto <b>{project_name}</b>:"]
+    lines += [f'• <a href="{l}">{l}</a>' for l in links]
+    return notify_user(usuario, subject, lines)

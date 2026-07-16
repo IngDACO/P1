@@ -305,6 +305,36 @@ def _portfolio_html(proys, horas, alarmas, ags, delays=None) -> str:
     return "".join(parts)
 
 
+def _induccion_section(pid, prj, grupo=None, allow_send=False):
+    """Muestra instrucciones particulares + inducciones (links) del proyecto.
+    Si allow_send, el admin puede (re)enviarlas por Telegram/email a los asignados."""
+    instr = str(prj.get("Instrucciones", "") or "").strip()
+    links = P.parse_links(prj.get("InduccionLinks", ""))
+    if not instr and not links:
+        return
+    with st.expander("📌 Instrucciones e inducciones del proyecto", expanded=bool(links)):
+        if instr:
+            st.markdown("**Instrucciones particulares**")
+            st.markdown(instr)
+        if links:
+            st.markdown("**Inducciones a diligenciar**")
+            for l in links:
+                st.markdown(f"- [{l}]({l})")
+            if allow_send and notify.any_channel_configured():
+                asignados = [x.strip() for x in str(prj.get("CampoAsignados", "")).split(";") if x.strip()]
+                if asignados and st.button("📨 Reenviar inducción a los asignados",
+                                           key=f"send_ind_{pid}"):
+                    n = 0
+                    for un in asignados:
+                        try:
+                            rr = notify.notify_induction(un, prj.get("Nombre", ""), links)
+                            if rr.get("email") or rr.get("telegram"):
+                                n += 1
+                        except Exception:
+                            pass
+                    st.success(f"📨 Enviado a {n} usuario(s) de campo.")
+
+
 def _detalle_proyecto(pid: str, grupo: str = None):
     prj = P.get_project(pid)
     if not prj:
@@ -334,6 +364,9 @@ def _detalle_proyecto(pid: str, grupo: str = None):
     c1.metric("Avance", f"{avance:.0f}%")
     c2.metric("Horas trabajadas", f"{P.project_hours(prj.get('Nombre'), grupo):.1f}")
     st.progress(min(1.0, avance / 100.0))
+
+    # ── Instrucciones e inducciones ──
+    _induccion_section(pid, prj, grupo, allow_send=True)
 
     # ── Alarmas / avisos del proyecto ──
     _alerts_section(pid, grupo, prj.get("Nombre", ""), allow_report=False)
@@ -390,6 +423,10 @@ def _detalle_proyecto(pid: str, grupo: str = None):
         ing      = e1.text_input("Ingeniero", value=prj.get("Ingeniero", ""))
         f_ini    = e2.text_input("Fecha inicio", value=prj.get("FechaInicio", ""))
         f_fin    = e1.text_input("Fecha fin estimada", value=prj.get("FechaFinEst", ""))
+        instr    = st.text_area("📌 Instrucciones particulares", value=prj.get("Instrucciones", ""))
+        ind      = st.text_area("📝 Inducciones (un link por línea)",
+                                value=prj.get("InduccionLinks", ""),
+                                help="Al asignar un usuario de campo se le envían por Telegram/email.")
 
         campos_disp = _field_users(grupo)
         actuales = [x.strip() for x in str(prj.get("CampoAsignados", "")).split(";") if x.strip()]
@@ -417,13 +454,14 @@ def _detalle_proyecto(pid: str, grupo: str = None):
                 "CampoAsignados": ";".join(asignados),
                 "AgrupacionID": ag_id, "PesoEnAgrupacion": peso,
                 "EstadoManual": est_man, "Estado": P.derive_estado(avance, est_man),
+                "Instrucciones": instr, "InduccionLinks": ind,
             })
             # Notificar a los usuarios de campo recién asignados
             nuevos = [x for x in asignados if x not in actuales]
             _sent = 0
             if nuevos:
                 _info = {"Nombre": nombre, "Cliente": cliente, "Ubicacion": ubic,
-                         "FechaInicio": f_ini, "FechaFinEst": f_fin}
+                         "FechaInicio": f_ini, "FechaFinEst": f_fin, "InduccionLinks": ind}
                 for un in nuevos:
                     try:
                         rr = notify.notify_assignment(un, _info)
@@ -649,6 +687,9 @@ def render_field_projects(usuario: str, grupo: str):
         st.caption(f"{maps.maps_link_md(prj.get('Ubicacion'))}  ·  Cliente: {prj.get('Cliente','—')}")
     elif prj.get("Cliente"):
         st.caption(f"Cliente: {prj.get('Cliente','—')}")
+
+    # ── Instrucciones e inducciones del proyecto (solo lectura) ──
+    _induccion_section(pid, prj, grupo, allow_send=False)
 
     # ── Alarmas: reportar problema + ver avisos ──
     _alerts_section(pid, grupo, prj.get("Nombre", ""), allow_report=True)
