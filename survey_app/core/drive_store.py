@@ -37,6 +37,21 @@ def is_configured() -> bool:
         return False
 
 
+@st.cache_data(ttl=120, show_spinner=False)
+def is_available() -> bool:
+    """True si Drive está configurado Y las credenciales OAuth funcionan.
+    Fuerza un refresh del token (cacheado 120 s) para detectar credenciales
+    inválidas (invalid_client / invalid_grant) sin reventar 3 subidas."""
+    if not is_configured():
+        return False
+    try:
+        _headers()      # refresca el token; lanza si las credenciales son inválidas
+        return True
+    except Exception as e:
+        logger.warning("drive_store: credenciales OAuth no válidas: %s", e)
+        return False
+
+
 @st.cache_resource(show_spinner=False)
 def _credentials():
     from google.oauth2.credentials import Credentials

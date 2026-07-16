@@ -1082,37 +1082,46 @@ if _seccion == _L_SURVEY:
                                     st.caption(f"📨 {_nn} usuario(s) de campo notificado(s).")
                             # ── Auto-archivo en Drive: plano + matriz + informe cliente ──
                             if drive_store.is_configured():
-                                _usr = st.session_state.auth.get("usuario", "")
-                                with st.spinner("Archivando documentos en Drive..."):
-                                    try:
-                                        pb = st.session_state.get("pdf_bytes")
-                                        if pb:
-                                            fid = drive_store.upload(res, "plano.pdf", pb, "application/pdf")
-                                            projects_data.add_document(res, "plano.pdf", "plano", fid, _usr)
-                                    except Exception as e:
-                                        st.caption(f"(plano no archivado: {e})")
-                                    try:
-                                        csv = r["survey_orig"].to_csv(index=False).encode("utf-8")
-                                        fid = drive_store.upload(res, "matriz_survey.csv", csv, "text/csv")
-                                        projects_data.add_document(res, "matriz_survey.csv",
-                                                                   "matriz_survey", fid, _usr)
-                                    except Exception as e:
-                                        st.caption(f"(matriz no archivada: {e})")
-                                    try:
-                                        if (r.get("interpretation_user") or {}).get("_ok"):
-                                            pdfb = generate_user_report(
-                                                project_params=r["all_params"], calculated=r["limits"],
-                                                optimizer_result=r["optimizer_result"], lim_map=r["lim_map"],
-                                                survey_cols=SURVEY_COLS,
-                                                interpretation_user=r.get("interpretation_user"),
-                                                schedule=r.get("schedule"), plumb=r.get("plumb"))
-                                            fid = drive_store.upload(res, "informe_cliente.pdf",
-                                                                     pdfb, "application/pdf")
-                                            projects_data.add_document(res, "informe_cliente.pdf",
-                                                                       "informe_cliente", fid, _usr)
-                                    except Exception as e:
-                                        st.caption(f"(informe cliente no archivado: {e})")
-                                st.caption("📎 Documentos base archivados en Drive.")
+                                if not drive_store.is_available():
+                                    st.caption("📎 Documentos no archivados: Google Drive no está "
+                                               "conectado (revisa las credenciales OAuth en Secrets).")
+                                else:
+                                    _usr = st.session_state.auth.get("usuario", "")
+                                    _fallos = []
+                                    with st.spinner("Archivando documentos en Drive..."):
+                                        try:
+                                            pb = st.session_state.get("pdf_bytes")
+                                            if pb:
+                                                fid = drive_store.upload(res, "plano.pdf", pb, "application/pdf")
+                                                projects_data.add_document(res, "plano.pdf", "plano", fid, _usr)
+                                        except Exception:
+                                            _fallos.append("plano")
+                                        try:
+                                            csv = r["survey_orig"].to_csv(index=False).encode("utf-8")
+                                            fid = drive_store.upload(res, "matriz_survey.csv", csv, "text/csv")
+                                            projects_data.add_document(res, "matriz_survey.csv",
+                                                                       "matriz_survey", fid, _usr)
+                                        except Exception:
+                                            _fallos.append("matriz")
+                                        try:
+                                            if (r.get("interpretation_user") or {}).get("_ok"):
+                                                pdfb = generate_user_report(
+                                                    project_params=r["all_params"], calculated=r["limits"],
+                                                    optimizer_result=r["optimizer_result"], lim_map=r["lim_map"],
+                                                    survey_cols=SURVEY_COLS,
+                                                    interpretation_user=r.get("interpretation_user"),
+                                                    schedule=r.get("schedule"), plumb=r.get("plumb"))
+                                                fid = drive_store.upload(res, "informe_cliente.pdf",
+                                                                         pdfb, "application/pdf")
+                                                projects_data.add_document(res, "informe_cliente.pdf",
+                                                                           "informe_cliente", fid, _usr)
+                                        except Exception:
+                                            _fallos.append("informe cliente")
+                                    if _fallos:
+                                        st.caption("📎 Documentos base archivados, salvo: "
+                                                   + ", ".join(_fallos) + ".")
+                                    else:
+                                        st.caption("📎 Documentos base archivados en Drive.")
                         else:
                             st.error(f"No se pudo guardar: {res}")
 
