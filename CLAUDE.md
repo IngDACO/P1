@@ -56,6 +56,9 @@ C:\Users\diego\P1\survey_app\
 │   ├── rail_cut_ui.py      # render_rail_cut_tab() — corte de rieles
 │   ├── buffer_cut.py       # extract_hkp + compute_buffer_cut — corte de buffers (v96)
 │   ├── buffer_cut_ui.py    # render_buffer_cut_tab() — corte de buffers
+│   ├── prestart.py         # submit()/list — Daily Pre-Start: hoja PreStarts + Drive + alarma (v97)
+│   ├── prestart_pdf.py     # generate_prestart_pdf() — PDF del pre-start (marca=grupo)
+│   ├── prestart_ui.py      # render_prestart_tab() — pestaña 🦺 Pre-Start diario
 │   ├── timeclock.py        # clock_in/out — fichaje por login+grupo (sin PIN, v54)
 │   ├── timeclock_ui.py     # render_timeclock_tab() — fichaje (usa identidad del login)
 │   ├── auth.py             # login, roles, grupos, sesión única, contacto (Sheets, PBKDF2) — v53+
@@ -514,6 +517,18 @@ sirviendo el 1er nivel. El usuario indica **cuántos buffers** hay y el **HKPR**
 
 ---
 
+## prestart.py / prestart_pdf.py / prestart_ui.py — Daily Pre-Start (v97)
+Pestaña **🦺 Pre-Start diario** (herramienta común, todos los roles; el selector de proyecto se adapta:
+campo=asignados, admin=grupo, propietario=todos). Digitaliza el formato "Daily Pre-Start" de CI Liftworx:
+encabezado (Date/Time/Location/Facilitated by), **1** Planned work (4 checks YES/NO + notas SWMS),
+**2** near miss/hazard (YES/NO + desc), **3** Shaft Protection (3 checks YES/NO/N-A), **4** General Notes,
+**5** Attendees (Print Name + Initial). Checks en `prestart.CHECKS_S1`/`CHECKS_S3`.
+- `submit(data)`: genera el PDF (`prestart_pdf`, **marca = nombre del grupo**) → lo sube a la carpeta del
+  proyecto en Drive (`drive_store.upload` + `projects.add_document` tipo `prestart`, best-effort) → registra
+  fila en la hoja **`PreStarts`** → si `near_miss==YES` abre alarma (`alerts.report_problem`). Devuelve pdf
+  bytes para descargar. Nombre de archivo: **`ddmmyyyy AB CD.pdf`** (fecha + iniciales de asistentes,
+  `filename_for`). Lecturas cacheadas (ttl 30). El historial de pre-starts se lista por proyecto.
+
 ## belting.py / belting_ui.py — belting (v86)
 Herramienta INDEPENDIENTE (pestaña 🎗 Belting). Altura a la que dejar la cabina bajo el FFL del piso más
 alto para instalar los belts. **DSTS = HGPR − HGP − HQ/1000** (todo mm; HQ/1000 = elongación del belt;
@@ -731,7 +746,7 @@ Al cargar el plano en el survey (app.py), autocompleta **RAIL = AlturaDiente** (
 espalda) del catálogo; si el código no está o no se detecta → aviso + entrada manual. **RAIL = AlturaDiente**
 (NO el ancho); AnchoDiente se guarda como dato secundario.
 
-## Versiones desplegadas (v96 = actual)
+## Versiones desplegadas (v97 = actual)
 | Ver | Cambio principal |
 |---|---|
 | v5 | Extractor: CRLF fix, caso D valor-antes-label, sin pdfplumber |
@@ -825,3 +840,4 @@ espalda) del catálogo; si el código no está o no se detecta → aviso + entra
 | v94 | UI "Mi grupo" como centro de control: banda de marca + KPIs (activos/avance/en riesgo/alarmas/horas) + cartera de tarjetas + nav única de 3 |
 | v95 | Drive: `drive_store.is_available()` (chequeo OAuth cacheado) → un solo aviso limpio al archivar si Drive está desconectado (en vez de 3 errores crudos) |
 | v96 | Nueva herramienta 🛡 Corte de buffers: lee HKP del plano (1er valor de HKP/HGP), N buffers + HKPR real, CutBuffer = HKP − HKPR |
+| v97 | Nueva pestaña 🦺 Pre-Start diario (Daily Pre-Start CI Liftworx digitalizado): checks + asistentes → PDF (marca=grupo) archivado en Drive+hoja PreStarts; near miss=YES abre alarma |

@@ -289,13 +289,14 @@ _L_PLUMB  = "🔩 Líneas de plomada"
 _L_RAIL   = "✂️ Corte de rieles"
 _L_BUFFER = "🛡 Corte de buffers"
 _L_BELT   = "🎗 Belting"
+_L_PRESTART = "🦺 Pre-Start diario"
 _L_CLOCK  = "⏱ Fichaje"
 _L_OWNER  = "👑 Administración"
 _L_GRUPO  = "🛠 Mi grupo"
 _L_FIELDPROJ = "📋 Mis proyectos"
 
 # Orden de las pestañas por rol (el panel de cada rol va primero).
-_HERR = [_L_SURVEY, _L_PLUMB, _L_RAIL, _L_BUFFER, _L_BELT]   # herramientas comunes
+_HERR = [_L_SURVEY, _L_PLUMB, _L_RAIL, _L_BUFFER, _L_BELT, _L_PRESTART]   # herramientas comunes
 if _ROL == "propietario":
     _nav = [_L_OWNER] + _HERR                      # sin fichaje
 elif _ROL == "administrador":
@@ -1142,6 +1143,10 @@ elif _seccion == _L_BUFFER:
 elif _seccion == _L_BELT:
     from core.belting_ui import render_belting_tab
     render_belting_tab()
+
+elif _seccion == _L_PRESTART:
+    from core.prestart_ui import render_prestart_tab
+    render_prestart_tab()
 
 elif _seccion == _L_CLOCK:
     from core.timeclock_ui import render_timeclock_tab
