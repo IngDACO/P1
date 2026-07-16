@@ -775,7 +775,15 @@ Al cargar el plano en el survey (app.py), autocompleta **RAIL = AlturaDiente** (
 espalda) del catálogo; si el código no está o no se detecta → aviso + entrada manual. **RAIL = AlturaDiente**
 (NO el ancho); AnchoDiente se guarda como dato secundario.
 
-## Versiones desplegadas (v101 = actual)
+## Fix NS desde el plano (v102)
+NS (número de paradas) volvía a quedar pegado en un default de 6 y **no se leía del PDF**. Fix:
+`extractors.schindler.extract_number_of_stops(pdf)` (regex `NUMBER OF STOPS\s+(\d{1,2})` sobre texto
+posicional + plano) → app.py, al cargar el PDF, setea `st.session_state["ns"]` (2–50) y muestra caption
+`ns_msg`. El default de init pasó de **6 → 2** (mínimo neutro; el NS real sale del plano). La lógica de
+resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NORTH SYD y AGECARE → NS=6
+(coincide con travel/floor-height HQ/HE).
+
+## Versiones desplegadas (v102 = actual)
 | Ver | Cambio principal |
 |---|---|
 | v5 | Extractor: CRLF fix, caso D valor-antes-label, sin pdfplumber |
@@ -874,3 +882,4 @@ espalda) del catálogo; si el código no está o no se detecta → aviso + entra
 | v99 | Vista de lista: ubicación (Maps) en tarjetas del admin + tabla del propietario (LinkColumn); tarjetas marcan retraso (borde rojo + badge ⏰ días) vía `_delays` |
 | v100 | Proyecto: campos Instrucciones particulares + Inducciones (links) al crear/editar; links enviados por Telegram/email a los campo asignados; visibles dentro del proyecto |
 | v101 | Agente admin con radar del grupo (admin_digest): "Resumen del día" al ingresar (pendientes: retrasos/alarmas/vencimientos/near miss/sin asignar/sin contacto) + agente responde portafolio, recomienda, recuerda vencimientos, redacta |
+| v102 | Fix: NS se lee del plano (NUMBER OF STOPS) al cargar el PDF; default de init 6→2 (ya no queda pegado en 6) |

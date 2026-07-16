@@ -270,6 +270,26 @@ def extract_from_pdf(pdf_file) -> dict:
     return found
 
 
+# Número de paradas: "NUMBER OF STOPS 6" (el número va justo después del rótulo)
+_NS_RE = re.compile(r"NUMBER\s+OF\s+STOPS\s+(\d{1,2})\b")
+
+
+def extract_number_of_stops(pdf_file):
+    """Número de paradas (NUMBER OF STOPS) leído del plano, o None."""
+    try:
+        if hasattr(pdf_file, "seek"):
+            pdf_file.seek(0)
+        reader = PdfReader(pdf_file)
+        for page in reader.pages:
+            for src in (_page_text_positional(page), page.extract_text() or ""):
+                m = _NS_RE.search(src.upper())
+                if m:
+                    return int(m.group(1))
+    except Exception as e:
+        logger.warning("extract_number_of_stops: %s", e)
+    return None
+
+
 # Código de riel tipo T75-3/B (con tolerancia a espacios que mete el CAD)
 _RAIL_CODE = re.compile(r"T\s?\d{2,3}\s?-?\s?\d?\s?/?\s?[A-Z]", re.IGNORECASE)
 

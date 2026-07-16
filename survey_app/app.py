@@ -137,8 +137,8 @@ def _init_state():
     st.session_state["pdf_extracted"]  = {}
     st.session_state["last_pdf_name"]  = None
     st.session_state["pdf_bytes"]      = None
-    st.session_state["ns"]             = 6
-    st.session_state["survey_df"]      = pd.DataFrame({c: [0.0]*6 for c in SURVEY_COLS})
+    st.session_state["ns"]             = 2   # mínimo neutro; el NS real sale del plano (NUMBER OF STOPS)
+    st.session_state["survey_df"]      = pd.DataFrame({c: [0.0]*2 for c in SURVEY_COLS})
     st.session_state["survey_original_input"] = None   # snapshot al momento del cálculo
     st.session_state["calc_results"]   = None
     st.session_state["chat_history"]   = []
@@ -359,6 +359,19 @@ if _seccion == _L_SURVEY:
                     "ℹ️ No se detectó el código del riel de cabina; ingresa RAIL a mano.")
         except Exception:
             pass
+        # ── Número de paradas: NUMBER OF STOPS del plano → NS ──
+        st.session_state["ns_msg"] = ""
+        try:
+            from extractors.schindler import extract_number_of_stops
+            _ns = extract_number_of_stops(pdf_file)
+            if _ns and 2 <= _ns <= 50:
+                st.session_state["ns"] = int(_ns)
+                st.session_state["ns_msg"] = f"✅ NUMBER OF STOPS del plano → NS = **{_ns}**."
+            else:
+                st.session_state["ns_msg"] = ("ℹ️ No se detectó NUMBER OF STOPS en el plano; "
+                                              "ingresa NS a mano.")
+        except Exception:
+            pass
         found   = sum(1 for v in extracted.values() if v is not None)
         missing = [k for k,v in extracted.items() if v is None]
         st.success(f"✅ {found}/{len(extracted)} parámetros encontrados.")
@@ -432,6 +445,8 @@ if _seccion == _L_SURVEY:
     sc1, sc2, sc3 = st.columns([1, 2, 2])
 
     sc1.number_input("Número de paradas (NS)", min_value=2, max_value=50, step=1, key="ns")
+    if st.session_state.get("ns_msg"):
+        sc1.caption(st.session_state["ns_msg"])
 
     # Ajustar tamaño si NS cambió
     current_ns = len(st.session_state.survey_df)
