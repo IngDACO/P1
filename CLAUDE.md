@@ -657,6 +657,19 @@ Fragmentos (chunks) de cada manual como `{nombre, chunks:[{manual,seccion,page,t
 `chat_agent.get_chat_response` recupera los fragmentos de la pregunta, los agrega al system prompt y el
 agente responde citando **manual · sección · página** (sin copiar páginas enteras).
 
+## admin_digest.py + agente admin con radar del grupo (v101)
+El **agente del administrador** vigila el grupo (empresa cliente) al que pertenece y da un resumen de
+pendientes al ingresar. `core/admin_digest.py` (determinístico, todo sobre lecturas cacheadas):
+- `group_digest(grupo)` → hechos pendientes: retrasos (SPI), alarmas abiertas, **vencidos/por vencer** (≤7 d
+  por FechaFinEst), **near miss** de pre-starts ≤7 d, **campo sin contacto**, **sin asignar**, panorama.
+- `digest_text(d)` (hechos en texto, fallback sin IA) · `group_snapshot_text(grupo)` (portafolio compacto en vivo).
+`chat_agent.admin_briefing(grupo)` redacta el resumen con IA sobre los hechos (fallback = `digest_text`).
+`get_chat_response(..., grupo)` inyecta `group_snapshot_text` al system del admin → responde preguntas del
+portafolio, recomienda acciones, recuerda vencimientos y redacta mensajes (persona admin ampliada, "usa SOLO
+los datos provistos, no inventes"). UI: `projects_ui.render_group_header` → `_resumen_del_dia` (expander
+"🔔 Resumen del día": chips de pendientes + briefing IA cacheado por sesión en `st.session_state[_brief_<grupo>]`
++ botón actualizar). Solo el rol administrador (el propietario no tiene un único grupo).
+
 ## Agente separado por rol (v91)
 `chat_agent._PERSONA` → persona según el rol de quien pregunta: **campo** (foco en ejecución en obra,
 manuales, uso de la app en terreno: avance/alarmas/fichaje/documentos) vs **administrador/propietario**
@@ -762,7 +775,7 @@ Al cargar el plano en el survey (app.py), autocompleta **RAIL = AlturaDiente** (
 espalda) del catálogo; si el código no está o no se detecta → aviso + entrada manual. **RAIL = AlturaDiente**
 (NO el ancho); AnchoDiente se guarda como dato secundario.
 
-## Versiones desplegadas (v100 = actual)
+## Versiones desplegadas (v101 = actual)
 | Ver | Cambio principal |
 |---|---|
 | v5 | Extractor: CRLF fix, caso D valor-antes-label, sin pdfplumber |
@@ -860,3 +873,4 @@ espalda) del catálogo; si el código no está o no se detecta → aviso + entra
 | v98 | Ubicaciones enlazadas a Google Maps (maps.py, URL de búsqueda sin API key): detalle de proyecto, Mis proyectos, PDF+input del Pre-Start, notificación de asignación |
 | v99 | Vista de lista: ubicación (Maps) en tarjetas del admin + tabla del propietario (LinkColumn); tarjetas marcan retraso (borde rojo + badge ⏰ días) vía `_delays` |
 | v100 | Proyecto: campos Instrucciones particulares + Inducciones (links) al crear/editar; links enviados por Telegram/email a los campo asignados; visibles dentro del proyecto |
+| v101 | Agente admin con radar del grupo (admin_digest): "Resumen del día" al ingresar (pendientes: retrasos/alarmas/vencimientos/near miss/sin asignar/sin contacto) + agente responde portafolio, recomienda, recuerda vencimientos, redacta |

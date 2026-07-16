@@ -248,6 +248,7 @@ with st.sidebar:
                         calc_results = _r,
                         all_params   = _r["all_params"] if _r else None,
                         rol          = _ROL,
+                        grupo        = _GRUPO,
                     )
                 st.markdown(_response)
             st.session_state.chat_history.append({"role": "assistant", "content": _response})

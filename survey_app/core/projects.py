@@ -264,6 +264,22 @@ def parse_links(text) -> list:
     return [l.strip() for l in str(text or "").splitlines() if l.strip()]
 
 
+def delays_for(proys) -> dict:
+    """{pid: días de retraso} para proyectos activos atrasados según la proyección (SPI)."""
+    out = {}
+    for p in proys:
+        if str(p.get("Estado", "")) in ("Completado", "Cancelado"):
+            continue
+        try:
+            ps = project_schedule(p.get("ID"))
+            pr = ps.get("proj") if ps else None
+            if pr and pr.get("pv", 0) > 0 and pr.get("dias_gap", 0) > 0.5:
+                out[str(p.get("ID", ""))] = pr["dias_gap"]
+        except Exception:
+            pass
+    return out
+
+
 def list_projects(grupo: str = None, agrupacion_id: str = None) -> list:
     out = []
     for r in _records(PROJECTS_SHEET):

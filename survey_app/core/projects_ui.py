@@ -72,19 +72,8 @@ def _estado_colors(est):
 # CENTRO DE CONTROL DEL GRUPO — cabecera con marca + KPIs
 # ══════════════════════════════════════════════════════════════════════
 def _delays(proys) -> dict:
-    """{pid: días de retraso} para proyectos activos atrasados según la proyección (SPI)."""
-    out = {}
-    for p in proys:
-        if str(p.get("Estado", "")) in ("Completado", "Cancelado"):
-            continue
-        try:
-            ps = P.project_schedule(p.get("ID"))
-            pr = ps.get("proj") if ps else None
-            if pr and pr.get("pv", 0) > 0 and pr.get("dias_gap", 0) > 0.5:
-                out[str(p.get("ID", ""))] = pr["dias_gap"]
-        except Exception:
-            pass
-    return out
+    """{pid: días de retraso} (proyección SPI). Delega en core.projects.delays_for."""
+    return P.delays_for(proys)
 
 
 def _kpis(grupo=None) -> dict:
@@ -143,6 +132,40 @@ def render_group_header(grupo: str):
         f'<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:6px;">{cards}</div>',
         unsafe_allow_html=True,
     )
+    _resumen_del_dia(grupo)
+
+
+def _resumen_del_dia(grupo: str):
+    """Resumen del día del grupo: chips de pendientes + briefing IA (1 vez por sesión)."""
+    from core import admin_digest
+    try:
+        d = admin_digest.group_digest(grupo)
+    except Exception:
+        return
+    with st.expander("🔔 Resumen del día", expanded=True):
+        chips = []
+        if d["vencidos"]:           chips.append(f"⛔ {len(d['vencidos'])} vencido(s)")
+        if d["por_vencer"]:         chips.append(f"📅 {len(d['por_vencer'])} por vencer")
+        if d["retrasos"]:           chips.append(f"🔴 {len(d['retrasos'])} en retraso")
+        if d["alarmas"]:            chips.append(f"🔔 {sum(a['n'] for a in d['alarmas'])} alarma(s)")
+        if d["near_miss"]:          chips.append(f"🦺 {len(d['near_miss'])} near miss")
+        if d["sin_asignar"]:        chips.append(f"👷 {len(d['sin_asignar'])} sin asignar")
+        if d["campo_sin_contacto"]: chips.append(f"📇 {len(d['campo_sin_contacto'])} sin contacto")
+        if chips:
+            st.markdown("  ".join(f"`{c}`" for c in chips))
+        else:
+            st.success("Sin pendientes urgentes. ✅")
+
+        key = f"_brief_{grupo}"
+        if key not in st.session_state:
+            with st.spinner("Preparando tu resumen…"):
+                from core import chat_agent
+                st.session_state[key] = chat_agent.admin_briefing(grupo)
+        st.markdown(st.session_state[key])
+        if st.button("🔄 Actualizar resumen", key=f"brief_ref_{grupo}"):
+            st.session_state.pop(key, None)
+            st.rerun()
+
 
 # Documentos: tipos y permisos por rol
 _DOC_TIPOS  = ["plano", "informe_cliente", "informe_admin", "matriz_survey",

@@ -294,13 +294,19 @@ _PERSONA = {
     ),
     "administrador": (
         "## TU INTERLOCUTOR: ADMINISTRADOR\n"
-        "Estás asistiendo a un ADMINISTRADOR que gestiona los proyectos de su grupo. Enfócate en:\n"
+        "Estás asistiendo a un ADMINISTRADOR que gestiona los proyectos de su grupo (empresa cliente). Enfócate en:\n"
         "- Gestión de proyectos: cronograma, avance, curva S real vs planificada, proyección de días de adelanto/"
         "retraso (EVM/SPI), actividades editables, asignación de técnicos de campo, documentos y alarmas.\n"
         "- Interpretación de los resultados del survey para tomar decisiones y coordinar la obra.\n"
         "- Dudas técnicas de instalación (apóyate en los manuales y cítalos) para orientar a su equipo.\n"
         "Tono profesional y orientado a la toma de decisiones. Puedes explicar QUÉ significan las métricas de un "
-        "proyecto (SPI, desvío, días de adelanto/retraso) sin revelar cómo se calculan internamente."
+        "proyecto (SPI, desvío, días de adelanto/retraso) sin revelar cómo se calculan internamente.\n\n"
+        "Cuando se te dé el ESTADO EN VIVO DEL GRUPO, úsalo para: (1) responder preguntas del portafolio "
+        "(quién está en un proyecto, horas, avance, actividades, cuál va más atrasado, vencimientos); "
+        "(2) dar recomendaciones y ACCIONES concretas según el estado (reasignar, revisar cronograma, atender "
+        "una alarma, completar contacto de campo); (3) recordar vencimientos de la semana; (4) redactar borradores "
+        "de mensajes para el equipo de campo o el cliente cuando te lo pidan. Usa SOLO los datos provistos; si "
+        "algo no aparece, dilo y no lo inventes (no inventes proyectos, personas ni fechas)."
     ),
 }
 # El propietario tiene visión global: usa el mismo asistente que el administrador.
@@ -386,6 +392,7 @@ def get_chat_response(
     calc_results:  dict | None,
     all_params:    dict | None,
     rol:           str = "administrador",
+    grupo:         str = "",
 ) -> str:
     """
     Envía el mensaje del usuario a Claude y devuelve la respuesta.
@@ -393,6 +400,7 @@ def get_chat_response(
     history: lista de dicts {"role": "user"|"assistant", "content": str}
     rol:     rol de quien pregunta ("campo" | "administrador" | "propietario"),
              selecciona la persona del agente (campo vs gestión).
+    grupo:   grupo del admin → se le inyecta el estado en vivo de su portafolio.
     """
     if anthropic is None:
         return "⚠️ La librería anthropic no está disponible en el entorno."
@@ -406,6 +414,16 @@ def get_chat_response(
     persona       = _PERSONA.get(rol, _PERSONA["administrador"])
     context_block = _build_context_block(calc_results, all_params)
     system = SYSTEM_PROMPT + "\n\n" + persona + context_block
+
+    # Estado en vivo del grupo (para el administrador)
+    if rol == "administrador" and grupo:
+        try:
+            from core import admin_digest
+            snap = admin_digest.group_snapshot_text(grupo)
+            if snap:
+                system += "\n\n" + snap
+        except Exception:
+            pass
 
     # Banco de manuales: agrega los fragmentos relevantes a la pregunta
     try:
@@ -441,3 +459,34 @@ def get_chat_response(
         return "⚠️ Límite de rate alcanzado. Intenta en unos segundos."
     except Exception as e:
         return f"⚠️ Error al contactar la API: {e}"
+
+
+def admin_briefing(grupo: str) -> str:
+    """Resumen ejecutivo de lo más relevante pendiente del grupo (al ingresar el admin).
+    Redacta con IA sobre los hechos del `admin_digest`; si no hay IA, devuelve los hechos."""
+    try:
+        from core import admin_digest
+        d = admin_digest.group_digest(grupo)
+        facts = admin_digest.digest_text(d)
+    except Exception as e:
+        return f"No se pudo armar el resumen: {e}"
+
+    api_key = st.secrets.get("ANTHROPIC_API_KEY", "") if anthropic is not None else ""
+    if not api_key:
+        return facts   # fallback determinístico (sin IA)
+
+    system = (
+        SYSTEM_PROMPT + "\n\n" + _PERSONA["administrador"] + "\n\n"
+        "Genera un RESUMEN EJECUTIVO muy breve (viñetas, máximo ~8 líneas) de lo más relevante que el "
+        "administrador tiene PENDIENTE hoy en su grupo, priorizando lo urgente (vencidos, retrasos, alarmas, "
+        "near miss) y cerrando con 1-2 acciones sugeridas. Concreto y accionable. Usa SOLO los datos provistos; "
+        "no inventes. Si no hay pendientes, dilo en una línea.")
+    try:
+        client = anthropic.Anthropic(api_key=api_key)
+        resp = client.messages.create(
+            model=MODEL, max_tokens=600, system=system,
+            messages=[{"role": "user",
+                       "content": "Datos del grupo hoy:\n\n" + facts + "\n\nDame el resumen de pendientes."}])
+        return resp.content[0].text
+    except Exception:
+        return facts   # ante cualquier fallo de API, muestra los hechos
