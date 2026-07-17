@@ -56,6 +56,97 @@ def _field_contact_ui(campo_users, key_prefix="cc"):
                 else:
                     st.error("No encontré su mensaje. Asegúrate de que pulsó Start y reintenta.")
 
+def render_credenciales(usuario, grupo, editable=False, key_prefix="cr"):
+    """Tickets/credenciales de un usuario. editable=True → admin gestiona (agregar/editar/
+    eliminar, subir foto/documento); editable=False → solo lectura (el propio usuario)."""
+    from core import credentials as C
+    if not C.is_configured():
+        st.info("Las credenciales necesitan Google Sheets configurado.")
+        return
+    creds = C.list_for(usuario)
+    if creds:
+        st.dataframe(pd.DataFrame([{
+            "Tipo": r.get("Tipo"), "Número": r.get("Numero"), "Clase": r.get("Clase"),
+            "Emisión": r.get("Emision") or "—", "Vence": r.get("Vencimiento") or "—",
+            "Estado": C.status_label(r.get("Vencimiento")),
+        } for r in creds]), hide_index=True, use_container_width=True)
+        for r in creds:
+            did = str(r.get("DriveID", "")).strip()
+            if did:
+                try:
+                    from core import drive_store
+                    st.download_button(f"⬇️ {r.get('Tipo')} — {r.get('Archivo', 'archivo')}",
+                                       data=drive_store.download(did),
+                                       file_name=r.get("Archivo", "credencial"),
+                                       key=f"{key_prefix}_dl_{r.get('ID')}")
+                except Exception:
+                    pass
+    else:
+        st.caption("Sin credenciales registradas.")
+
+    if not editable:
+        return
+    admin_usr = st.session_state.get("auth", {}).get("usuario", "")
+
+    with st.expander("➕ Agregar credencial"):
+        with st.form(f"{key_prefix}_add_{usuario}", clear_on_submit=True):
+            tipo = st.selectbox("Tipo", C.CATALOGO, key=f"{key_prefix}_tipo")
+            tipo_otro = st.text_input("Especifica (si elegiste 'Otro')", key=f"{key_prefix}_tipootro")
+            c1, c2 = st.columns(2)
+            num   = c1.text_input("Número")
+            clase = c2.selectbox("Clase (para licencia)", C.CLASES_LICENCIA, key=f"{key_prefix}_clase")
+            c3, c4 = st.columns(2)
+            emi = c3.text_input("Emisión (YYYY-MM-DD)")
+            ven = c4.text_input("Vencimiento (YYYY-MM-DD, vacío si no vence)")
+            arch = st.file_uploader("Foto o documento (opcional)",
+                                    type=["pdf", "png", "jpg", "jpeg"], key=f"{key_prefix}_file")
+            nota = st.text_input("Nota")
+            if st.form_submit_button("Agregar"):
+                t = tipo_otro.strip() if (tipo == "Otro" and tipo_otro.strip()) else tipo
+                did, fname = "", ""
+                if arch is not None:
+                    fname = arch.name
+                    did = C.upload_file(usuario, t, arch.name, arch.getvalue(),
+                                        arch.type or "application/octet-stream")
+                    if not did:
+                        st.warning("No se pudo subir el archivo a Drive; se guarda el resto.")
+                ok, msg = C.add(usuario, grupo, t, num, clase, emi, ven, did, fname, nota, admin_usr)
+                (st.success if ok else st.error)(msg)
+                if ok:
+                    st.rerun()
+
+    if creds:
+        with st.expander("✏️ Editar / 🗑 eliminar credencial"):
+            idmap = {f"{r.get('Tipo')} · {r.get('Numero') or 's/n'} ({r.get('ID')})": r for r in creds}
+            sel = st.selectbox("Credencial", list(idmap.keys()), key=f"{key_prefix}_esel")
+            r = idmap[sel]
+            c1, c2 = st.columns(2)
+            enum = c1.text_input("Número", value=r.get("Numero", ""), key=f"{key_prefix}_enum")
+            even = c2.text_input("Vencimiento (YYYY-MM-DD)", value=r.get("Vencimiento", ""),
+                                 key=f"{key_prefix}_even")
+            enota = st.text_input("Nota", value=r.get("Nota", ""), key=f"{key_prefix}_enota")
+            b1, b2 = st.columns(2)
+            if b1.button("💾 Guardar", key=f"{key_prefix}_eupd"):
+                ok, msg = C.update(r.get("ID"), {"Numero": enum, "Vencimiento": even, "Nota": enota,
+                                                 "ActualizadoPor": admin_usr})
+                (st.success if ok else st.error)(msg)
+                if ok:
+                    st.rerun()
+            if b2.button("🗑 Eliminar", key=f"{key_prefix}_edel"):
+                ok, msg = C.delete(r.get("ID"))
+                (st.success if ok else st.error)(msg)
+                if ok:
+                    st.rerun()
+
+
+def render_my_credentials():
+    """Vista de solo lectura de las credenciales del usuario logueado."""
+    a = st.session_state.get("auth", {})
+    st.markdown("### 🎫 Mis credenciales")
+    st.caption("Tus tickets y credenciales registrados por tu administrador. Muéstralos en obra si te los piden.")
+    render_credenciales(a.get("usuario", ""), a.get("grupo", ""), editable=False, key_prefix="mycr")
+
+
 _LOGO = os.path.join(os.path.dirname(os.path.dirname(__file__)), "static", "icon-512.png")
 
 
@@ -237,6 +328,14 @@ def _owner_usuarios():
                 ok, msg = auth.set_active(sel, False); (st.success if ok else st.error)(msg); st.rerun()
             if a3.button("Eliminar", key="ow_del"):
                 ok, msg = auth.delete_user(sel);       (st.success if ok else st.error)(msg); st.rerun()
+
+    # ── Credenciales / tickets (propietario gestiona cualquier usuario) ──
+    if users:
+        st.markdown("---")
+        st.markdown("#### 🎫 Credenciales / tickets")
+        cusel = st.selectbox("Usuario", [x["Usuario"] for x in users], key="ow_credsel")
+        _cu = next((x for x in users if x["Usuario"] == cusel), {})
+        render_credenciales(cusel, _cu.get("Grupo", ""), editable=True, key_prefix="owcr")
 
 
 def render_owner_panel():
@@ -434,6 +533,23 @@ def _grupo_usuarios(grupo):
                 ok, msg = auth.set_active(sel, False); (st.success if ok else st.error)(msg); st.rerun()
             if b3.button("Eliminar", key="gp_del"):
                 ok, msg = auth.delete_user(sel);       (st.success if ok else st.error)(msg); st.rerun()
+
+    # ── Credenciales / tickets ──
+    st.markdown("---")
+    st.markdown("#### 🎫 Credenciales / tickets")
+    from core import credentials as C
+    # Aviso de vencimientos (email/Telegram) una vez por sesión
+    if C.is_configured() and not st.session_state.get(f"_credaviso_{grupo}"):
+        st.session_state[f"_credaviso_{grupo}"] = True
+        try:
+            C.notify_expiring(grupo)
+        except Exception:
+            pass
+    if users:
+        cusel = st.selectbox("Usuario", [x["Usuario"] for x in users], key="gp_credsel")
+        render_credenciales(cusel, grupo, editable=True, key_prefix="gpcr")
+    else:
+        st.caption("Crea usuarios para gestionar sus credenciales.")
 
 
 def render_group_panel(grupo: str):

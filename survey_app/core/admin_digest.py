@@ -91,6 +91,15 @@ def group_digest(grupo) -> dict:
                 for p in activos
                 if not [x for x in str(p.get("CampoAsignados", "")).split(";") if x.strip()]]
 
+    # Credenciales por vencer/vencidas del grupo
+    cred_venc = []
+    try:
+        from core import credentials
+        if credentials.is_configured():
+            cred_venc = credentials.expiring(grupo)
+    except Exception:
+        pass
+
     avances = [P._num(p.get("Avance")) for p in proys]
     return {
         "grupo": grupo,
@@ -101,11 +110,12 @@ def group_digest(grupo) -> dict:
         "por_vencer": sorted(por_vencer, key=lambda x: x["dias"]),
         "vencidos": sorted(vencidos, key=lambda x: x["dias"]),
         "near_miss": near, "campo_sin_contacto": campo_sin, "sin_asignar": sin_asig,
+        "cred_venc": cred_venc,
     }
 
 
 _PENDING_KEYS = ("retrasos", "alarmas", "por_vencer", "vencidos",
-                 "near_miss", "campo_sin_contacto", "sin_asignar")
+                 "near_miss", "campo_sin_contacto", "sin_asignar", "cred_venc")
 
 
 def has_pending(d) -> bool:
@@ -134,6 +144,11 @@ def digest_text(d) -> str:
     if d["campo_sin_contacto"]:
         L.append("Campo sin contacto completo (no se les puede notificar): "
                  + ", ".join(d["campo_sin_contacto"]))
+    if d.get("cred_venc"):
+        L.append("Credenciales por vencer/vencidas: "
+                 + "; ".join(f"{c['usuario']} · {c['tipo']} "
+                             f"({'VENCIDA' if c['dias'] < 0 else f'en {c['dias']} d'})"
+                             for c in d["cred_venc"]))
     if len(L) == 1:
         L.append("Sin pendientes urgentes.")
     return "\n".join(L)

@@ -775,6 +775,19 @@ Al cargar el plano en el survey (app.py), autocompleta **RAIL = AlturaDiente** (
 espalda) del catálogo; si el código no está o no se detecta → aviso + entrada manual. **RAIL = AlturaDiente**
 (NO el ancho); AnchoDiente se guarda como dato secundario.
 
+## Credenciales / tickets por usuario (v104)
+`core/credentials.py` — hoja **`Credenciales`** (ID,Usuario,Grupo,Tipo,Numero,Clase,Emision,Vencimiento,
+DriveID,Archivo,Nota,UltimoAviso,ActualizadoPor,Fecha; migra sola). Catálogo AU (`CATALOGO`: White Card,
+Forklift LF, Dogging DG, Rigging RB/RI/RA, EWP/Boom WP, Working at Heights, First Aid, Driver License +
+clases, Otro). `status(venc)` = vigente/por_vencer(≤30 d)/vencido/''; `expiring(grupo)`; CRUD `add/update/
+delete`; `upload_file` (foto/documento a Drive, carpeta "COPEX Credenciales"); `notify_expiring(grupo)`
+(avisa admin/propietario + usuario dueño, deduplicado por UltimoAviso <25 d).
+- Gestión (admin en 🔧 Usuarios, propietario en 👥 Usuarios): `auth_ui.render_credenciales(usuario,grupo,
+  editable=True)` — agregar (al crear el usuario o luego)/editar/eliminar + subir foto o documento. El aviso
+  de vencimientos se dispara 1 vez por sesión al abrir el panel del admin.
+- El usuario ve las suyas: `auth_ui.render_my_credentials` → nav **🎫 Mis credenciales** (campo y conductor).
+- **Radar:** `admin_digest.group_digest` añade `cred_venc` → chip 🎫 en el Resumen del día + el briefing IA.
+
 ## Rol conductor + fichaje de 2 relojes + cronómetro (v103)
 Nuevo rol **`conductor`** (auth.ROLES). Ficha con DOS relojes en paralelo (hoja fichaje gana columna
 **`Tipo`** = `general`|`proyecto`, migra sola en `_cached_ws`; filas viejas = proyecto):
@@ -801,7 +814,7 @@ posicional + plano) → app.py, al cargar el PDF, setea `st.session_state["ns"]`
 resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NORTH SYD y AGECARE → NS=6
 (coincide con travel/floor-height HQ/HE).
 
-## Versiones desplegadas (v103 = actual)
+## Versiones desplegadas (v104 = actual)
 | Ver | Cambio principal |
 |---|---|
 | v5 | Extractor: CRLF fix, caso D valor-antes-label, sin pdfplumber |
@@ -902,3 +915,4 @@ resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NOR
 | v101 | Agente admin con radar del grupo (admin_digest): "Resumen del día" al ingresar (pendientes: retrasos/alarmas/vencimientos/near miss/sin asignar/sin contacto) + agente responde portafolio, recomienda, recuerda vencimientos, redacta |
 | v102 | Fix: NS se lee del plano (NUMBER OF STOPS) al cargar el PDF; default de init 6→2 (ya no queda pegado en 6) |
 | v103 | Rol conductor (2 relojes: jornada general + segmentos por proyecto, columna Tipo) + cronómetro en vivo para todos + reporte admin de horas del grupo (Mi grupo → ⏱ Horas) |
+| v104 | Credenciales/tickets por usuario (White Card, Forklift, Dogging/Rigging, licencia…): vencimiento+estado, foto/documento a Drive, radar en Resumen del día, avisos email/Telegram a admin+usuario; usuario ve las suyas (🎫 Mis credenciales) |

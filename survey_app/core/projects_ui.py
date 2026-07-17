@@ -151,6 +151,7 @@ def _resumen_del_dia(grupo: str):
         if d["near_miss"]:          chips.append(f"🦺 {len(d['near_miss'])} near miss")
         if d["sin_asignar"]:        chips.append(f"👷 {len(d['sin_asignar'])} sin asignar")
         if d["campo_sin_contacto"]: chips.append(f"📇 {len(d['campo_sin_contacto'])} sin contacto")
+        if d.get("cred_venc"):      chips.append(f"🎫 {len(d['cred_venc'])} credenciales")
         if chips:
             st.markdown("  ".join(f"`{c}`" for c in chips))
         else:
