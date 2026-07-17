@@ -743,3 +743,66 @@ def render_field_projects(usuario: str, grupo: str):
     # ── Documentos (campo: sube fotos, consulta planos/informe cliente/matriz/fotos) ──
     st.markdown("---")
     _documentos_section(pid)
+
+
+# ── Vista del CONDUCTOR: proyectos del grupo (solo lectura, datos básicos) ──
+def render_conductor_projects(grupo: str):
+    st.markdown("### 📋 Proyectos del grupo")
+    st.caption("Datos básicos para ubicarte y fichar. No incluye avances ni actividades.")
+    if not P.is_configured():
+        st.warning("La lista de proyectos necesita Google Sheets configurado.")
+        return
+    proys = P.list_projects(grupo=grupo)
+    if not proys:
+        st.info("No hay proyectos en el grupo.")
+        return
+    rows = [{
+        "ID":        p.get("ID"),
+        "Proyecto":  p.get("Nombre"),
+        "Cliente":   p.get("Cliente"),
+        "Ubicación": str(p.get("Ubicacion", "") or ""),
+        "🗺":        maps.maps_url(p.get("Ubicacion")),
+    } for p in proys]
+    st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True,
+                 column_config={"🗺": st.column_config.LinkColumn("🗺", display_text="Abrir")})
+
+
+# ── Reporte del ADMIN: horas de TODOS los usuarios del grupo ──
+def render_group_hours(grupo: str):
+    from datetime import datetime
+    from core import timeclock
+    st.markdown("#### ⏱ Horas del grupo")
+    if not timeclock.is_configured():
+        st.warning("El fichaje necesita Google Sheets configurado.")
+        return
+    st.caption("Total de horas por usuario (jornada general de conductores + horas por proyecto). "
+               "**Sin asignar** = tiempo de jornada no imputado a un proyecto (transporte/espera).")
+
+    per = st.radio("Periodo", ["Hoy", "Semana", "Mes", "Todo"], horizontal=True,
+                   key="gh_per", label_visibility="collapsed")
+    now = datetime.now()
+    if per == "Hoy":
+        days = (now - now.replace(hour=0, minute=0, second=0, microsecond=0)).total_seconds() / 86400.0
+    else:
+        days = {"Semana": 7, "Mes": 30, "Todo": None}[per]
+
+    data = timeclock.group_hours(grupo, days=days)
+    if not data:
+        st.info("Sin fichajes en el periodo.")
+        return
+
+    st.dataframe(pd.DataFrame([{
+        "Usuario":       d["usuario"],
+        "Jornada (h)":   d["general"],
+        "Proyectos (h)": d["proyecto"],
+        "Sin asignar (h)": d["sin_asignar"],
+    } for d in data]), use_container_width=True, hide_index=True)
+
+    with st.expander("🔎 Desglose por proyecto"):
+        for d in data:
+            if d["por_proyecto"]:
+                st.markdown(f"**{d['usuario']}**")
+                st.dataframe(pd.DataFrame(
+                    [{"Proyecto": k, "Horas": v} for k, v in
+                     sorted(d["por_proyecto"].items(), key=lambda x: -x[1])],
+                ), use_container_width=True, hide_index=True)

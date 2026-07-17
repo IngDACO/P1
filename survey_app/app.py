@@ -295,6 +295,7 @@ _L_CLOCK  = "⏱ Fichaje"
 _L_OWNER  = "👑 Administración"
 _L_GRUPO  = "🛠 Mi grupo"
 _L_FIELDPROJ = "📋 Mis proyectos"
+_L_CONDPROJ  = "📋 Proyectos"
 
 # Orden de las pestañas por rol (el panel de cada rol va primero).
 _HERR = [_L_SURVEY, _L_PLUMB, _L_RAIL, _L_BUFFER, _L_BELT, _L_PRESTART]   # herramientas comunes
@@ -304,6 +305,8 @@ elif _ROL == "administrador":
     _nav = [_L_GRUPO, _L_CLOCK] + _HERR
 elif _ROL == "campo":
     _nav = [_L_FIELDPROJ, _L_CLOCK] + _HERR
+elif _ROL == "conductor":
+    _nav = [_L_CLOCK, _L_CONDPROJ]                 # fichaje (2 relojes) + proyectos (solo lectura)
 else:
     _nav = _HERR + [_L_CLOCK]
 
@@ -1179,6 +1182,10 @@ elif _seccion == _L_CLOCK:
 elif _seccion == _L_FIELDPROJ:
     from core.projects_ui import render_field_projects
     render_field_projects(st.session_state.auth.get("usuario", ""), _GRUPO)
+
+elif _seccion == _L_CONDPROJ:
+    from core.projects_ui import render_conductor_projects
+    render_conductor_projects(_GRUPO)
 
 elif _seccion == _L_OWNER:
     render_owner_panel()

@@ -8,15 +8,19 @@ Requiere en los Secrets de Streamlit:
 Esquema de la hoja (una fila por sesión de trabajo):
   Nombre | PIN | Proyecto | Ubicacion | Clock In | Clock Out | Horas | Estado
 """
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import streamlit as st
 
 HEADERS = ["Nombre", "PIN", "Proyecto", "Ubicacion",
-           "Clock In", "Clock Out", "Horas", "Estado", "Grupo"]
+           "Clock In", "Clock Out", "Horas", "Estado", "Grupo", "Tipo"]
 USERS_HEADERS = ["Nombre", "PIN", "Activo"]
 USERS_SHEET   = "Usuarios"
 FMT = "%Y-%m-%d %H:%M:%S"
+# Tipo de fichaje: 'general' (jornada del conductor) | 'proyecto' (segmento por proyecto).
+# Filas antiguas sin Tipo se tratan como 'proyecto'.
+TIPO_GENERAL  = "general"
+TIPO_PROYECTO = "proyecto"
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 
 
@@ -42,16 +46,17 @@ def _cached_ws():
     client = gspread.authorize(creds)
     ws     = client.open_by_key(sheet_id).sheet1
 
-    # Asegurar cabecera + migración de la columna Grupo
+    # Asegurar cabecera + migrar columnas faltantes (Grupo, Tipo, …)
     try:
         header = ws.row_values(1)
         if not header:
             ws.append_row(HEADERS)
-        elif "Grupo" not in header:
-            need = len(HEADERS)
-            if ws.col_count < need:
-                ws.add_cols(need - ws.col_count)
-            ws.update_cell(1, need, "Grupo")
+        else:
+            for i, h in enumerate(HEADERS, start=1):
+                if h not in header:
+                    if ws.col_count < i:
+                        ws.add_cols(i - ws.col_count)
+                    ws.update_cell(1, i, h)
     except Exception:
         pass
     return ws
@@ -149,13 +154,21 @@ def _now() -> str:
     return datetime.now().strftime(FMT)
 
 
-def clock_in(nombre: str, proyecto: str, ubicacion: str, grupo: str = "") -> tuple:
-    """Registra un clock in con la identidad del login. Devuelve (ok, mensaje)."""
+def _tipo_of(r) -> str:
+    """Tipo de una fila; vacío se trata como 'proyecto' (compat filas antiguas)."""
+    return (str(r.get("Tipo", "")).strip().lower() or TIPO_PROYECTO)
+
+
+def clock_in(nombre: str, proyecto: str, ubicacion: str, grupo: str = "",
+             tipo: str = TIPO_PROYECTO) -> tuple:
+    """Registra un clock in (tipo 'general' o 'proyecto'). Devuelve (ok, mensaje).
+    Un usuario puede tener a la vez UNA sesión general y UNA de proyecto abiertas."""
     ws, err = _get_worksheet()
     if err:
         return False, err
     nombre = (nombre or "").strip()
     grupo  = (grupo or "").strip()
+    tipo   = (tipo or TIPO_PROYECTO).strip().lower()
     if not nombre:
         return False, "No hay usuario en sesión."
 
@@ -164,29 +177,34 @@ def clock_in(nombre: str, proyecto: str, ubicacion: str, grupo: str = "") -> tup
     except Exception as e:
         return False, f"Error leyendo la hoja: {e}"
 
-    # ¿Ya hay una sesión abierta para este nombre+grupo?
+    # ¿Ya hay una sesión abierta del MISMO tipo para este nombre+grupo?
     for r in records:
         if (str(r.get("Nombre", "")).strip() == nombre
                 and str(r.get("Grupo", "")).strip() == grupo
-                and str(r.get("Estado", "")).strip().upper() == "ABIERTO"):
-            return False, f"Ya tienes un clock in abierto desde {r.get('Clock In')}. Haz clock out primero."
+                and str(r.get("Estado", "")).strip().upper() == "ABIERTO"
+                and _tipo_of(r) == tipo):
+            etq = "jornada" if tipo == TIPO_GENERAL else "proyecto"
+            return False, f"Ya tienes un clock in de {etq} abierto desde {r.get('Clock In')}."
 
     try:
         ws.append_row([nombre, "", proyecto or "", ubicacion or "",
-                       _now(), "", "", "ABIERTO", grupo],
+                       _now(), "", "", "ABIERTO", grupo, tipo],
                       value_input_option="RAW")
     except Exception as e:
         return False, f"Error escribiendo el fichaje: {e}"
-    return True, f"✅ Clock IN registrado a las {_now()}."
+    etq = "Jornada (general)" if tipo == TIPO_GENERAL else "Proyecto"
+    return True, f"✅ Clock IN {etq} a las {_now()}."
 
 
-def clock_out(nombre: str, grupo: str = "", nota: str = "") -> tuple:
-    """Cierra la sesión abierta del nombre+grupo. Devuelve (ok, mensaje)."""
+def clock_out(nombre: str, grupo: str = "", nota: str = "",
+              tipo: str = TIPO_PROYECTO) -> tuple:
+    """Cierra la sesión abierta (del tipo indicado) de nombre+grupo. Devuelve (ok, mensaje)."""
     ws, err = _get_worksheet()
     if err:
         return False, err
     nombre = (nombre or "").strip()
     grupo  = (grupo or "").strip()
+    tipo   = (tipo or TIPO_PROYECTO).strip().lower()
     if not nombre:
         return False, "No hay usuario en sesión."
 
@@ -195,18 +213,20 @@ def clock_out(nombre: str, grupo: str = "", nota: str = "") -> tuple:
     except Exception as e:
         return False, f"Error leyendo la hoja: {e}"
 
-    # Buscar la sesión abierta más reciente (de abajo hacia arriba)
+    # Buscar la sesión abierta más reciente del tipo (de abajo hacia arriba)
     target_row = None
     target_in  = None
     for idx, r in enumerate(records):
         if (str(r.get("Nombre", "")).strip() == nombre
                 and str(r.get("Grupo", "")).strip() == grupo
-                and str(r.get("Estado", "")).strip().upper() == "ABIERTO"):
+                and str(r.get("Estado", "")).strip().upper() == "ABIERTO"
+                and _tipo_of(r) == tipo):
             target_row = idx + 2   # +2: fila 1 = cabecera, records 0-indexado
             target_in  = str(r.get("Clock In", ""))
 
     if target_row is None:
-        return False, "No tienes un clock in abierto."
+        etq = "jornada" if tipo == TIPO_GENERAL else "proyecto"
+        return False, f"No tienes un clock in de {etq} abierto."
 
     out_ts = _now()
     horas  = ""
@@ -241,3 +261,95 @@ def get_records() -> list:
         return ws.get_all_records(numericise_ignore=['all'])
     except Exception:
         return []
+
+
+def _num(v) -> float:
+    try:
+        return float(str(v).replace(",", ".").strip() or 0)
+    except Exception:
+        return 0.0
+
+
+def elapsed_seconds(clock_in_str) -> int:
+    """Segundos transcurridos desde un Clock In (para el cronómetro)."""
+    try:
+        return max(0, int((datetime.now() - datetime.strptime(str(clock_in_str), FMT)).total_seconds()))
+    except Exception:
+        return 0
+
+
+def open_sessions(nombre: str, grupo: str = "") -> dict:
+    """{'general': {clock_in,proyecto}|None, 'proyecto': {...}|None} de sesiones ABIERTAS."""
+    out = {TIPO_GENERAL: None, TIPO_PROYECTO: None}
+    ws, err = _get_worksheet()
+    if err or ws is None:
+        return out
+    nombre = (nombre or "").strip()
+    grupo  = (grupo or "").strip()
+    try:
+        for r in ws.get_all_records(numericise_ignore=['all']):
+            if (str(r.get("Nombre", "")).strip() == nombre
+                    and str(r.get("Grupo", "")).strip() == grupo
+                    and str(r.get("Estado", "")).strip().upper() == "ABIERTO"):
+                out[_tipo_of(r)] = {"clock_in": str(r.get("Clock In", "")),
+                                    "proyecto": str(r.get("Proyecto", ""))}
+    except Exception:
+        pass
+    return out
+
+
+def switch_project(nombre: str, grupo: str, new_proyecto: str, ubicacion: str = "") -> tuple:
+    """Cambia de proyecto en 1 toque: cierra el segmento activo (si hay) y abre el nuevo."""
+    clock_out(nombre, grupo, tipo=TIPO_PROYECTO)   # si no hay, se ignora el error
+    return clock_in(nombre, new_proyecto, ubicacion, grupo, tipo=TIPO_PROYECTO)
+
+
+def group_hours(grupo: str, days=None) -> list:
+    """Resumen de horas por usuario del grupo (para el admin). days=None=todo, 7=semana.
+    Devuelve [{usuario, general, proyecto, sin_asignar, por_proyecto{nombre:horas}}]. Las
+    sesiones abiertas cuentan con el tiempo transcurrido hasta ahora."""
+    ws, err = _get_worksheet()
+    if err or ws is None:
+        return []
+    try:
+        records = ws.get_all_records(numericise_ignore=['all'])
+    except Exception:
+        return []
+    grupo = (grupo or "").strip()
+    desde = (datetime.now() - timedelta(days=days)) if days else None
+    agg = {}
+    for r in records:
+        if str(r.get("Grupo", "")).strip() != grupo:
+            continue
+        nombre = str(r.get("Nombre", "")).strip()
+        if not nombre:
+            continue
+        ci = str(r.get("Clock In", ""))
+        if desde:
+            try:
+                if datetime.strptime(ci, FMT) < desde:
+                    continue
+            except Exception:
+                continue
+        estado = str(r.get("Estado", "")).strip().upper()
+        h = round(elapsed_seconds(ci) / 3600.0, 2) if estado == "ABIERTO" else _num(r.get("Horas"))
+        if h <= 0:
+            continue
+        a = agg.setdefault(nombre, {"general": 0.0, "proyecto": 0.0, "por": {}})
+        if _tipo_of(r) == TIPO_GENERAL:
+            a["general"] += h
+        else:
+            a["proyecto"] += h
+            pn = str(r.get("Proyecto", "")) or "(sin proyecto)"
+            a["por"][pn] = a["por"].get(pn, 0.0) + h
+    out = []
+    for nombre, a in agg.items():
+        out.append({
+            "usuario": nombre,
+            "general": round(a["general"], 2),
+            "proyecto": round(a["proyecto"], 2),
+            "sin_asignar": round(max(0.0, a["general"] - a["proyecto"]), 2),
+            "por_proyecto": {k: round(v, 2) for k, v in a["por"].items()},
+        })
+    out.sort(key=lambda x: -(x["general"] or x["proyecto"]))
+    return out

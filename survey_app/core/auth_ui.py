@@ -386,28 +386,33 @@ def _owner_rieles():
 def _grupo_usuarios(grupo):
     users = auth.list_users(grupo=grupo)
     campo = [u for u in users if u["Rol"].lower() == "campo"]
-    if campo:
-        _rows = [{"Usuario": u["Usuario"], "Nombre": u["Nombre"], "Activo": u["Activo"],
-                  "Contacto": "✅" if (str(u.get("Email", "")).strip()
-                                       and str(u.get("TelegramChatID", "")).strip())
-                              else "⚠️ falta"} for u in campo]
+    gente = [u for u in users if u["Rol"].lower() in ("campo", "conductor")]
+    if gente:
+        _rows = [{"Usuario": u["Usuario"], "Nombre": u["Nombre"],
+                  "Rol": u["Rol"], "Activo": u["Activo"],
+                  "Contacto": ("—" if u["Rol"].lower() == "conductor"
+                               else ("✅" if (str(u.get("Email", "")).strip()
+                                              and str(u.get("TelegramChatID", "")).strip())
+                                     else "⚠️ falta"))} for u in gente]
         st.dataframe(pd.DataFrame(_rows), hide_index=True, use_container_width=True)
     else:
-        st.info("Aún no tienes usuarios de campo.")
+        st.info("Aún no tienes usuarios de campo ni conductores.")
 
-    with st.expander("➕ Crear usuario de campo"):
+    with st.expander("➕ Crear usuario (campo o conductor)"):
         with st.form("form_campo", clear_on_submit=True):
             u  = st.text_input("Usuario")
             nm = st.text_input("Nombre")
             pw = st.text_input("Contraseña", type="password")
-            em = st.text_input("📧 Email (OBLIGATORIO)")
-            st.caption("El Telegram se vincula abajo, después de crearlo (el usuario pulsa Start en el bot).")
+            rl = st.selectbox("Rol", ["campo", "conductor"], key="gp_newrol")
+            em = st.text_input("📧 Email (OBLIGATORIO para campo)")
+            st.caption("Campo: el Telegram se vincula abajo tras crearlo. "
+                       "Conductor: no requiere email/Telegram.")
             if st.form_submit_button("Crear"):
-                if not em.strip():
+                if rl == "campo" and not em.strip():
                     st.error("El email es obligatorio para usuarios de campo.")
                 else:
-                    ok, msg = auth.add_user(u, pw, "campo", nm, grupo)
-                    if ok:
+                    ok, msg = auth.add_user(u, pw, rl, nm, grupo)
+                    if ok and rl == "campo" and em.strip():
                         auth.set_contact(u, email=em)
                     (st.success if ok else st.error)(msg)
                     if ok:
@@ -415,9 +420,9 @@ def _grupo_usuarios(grupo):
 
     _field_contact_ui(campo, key_prefix="gp_cc")
 
-    if campo:
-        with st.expander("🔑 Modificar usuario de campo"):
-            sel = st.selectbox("Usuario", [x["Usuario"] for x in campo], key="gp_sel")
+    if gente:
+        with st.expander("🔑 Modificar usuario (campo / conductor)"):
+            sel = st.selectbox("Usuario", [x["Usuario"] for x in gente], key="gp_sel")
             np_ = st.text_input("Nueva contraseña", type="password", key="gp_np")
             if st.button("Cambiar contraseña", key="gp_chp"):
                 if np_:
@@ -445,12 +450,15 @@ def render_group_panel(grupo: str):
                    "(gcp_service_account + TIMECLOCK_SHEET_ID en los Secrets).")
         return
 
-    sec = st.radio("Sección", ["📊 Proyectos", "🗂 Agrupaciones", "🔧 Usuarios de campo"],
+    sec = st.radio("Sección",
+                   ["📊 Proyectos", "🗂 Agrupaciones", "⏱ Horas", "🔧 Usuarios de campo"],
                    horizontal=True, key="grupo_sec", label_visibility="collapsed")
     st.markdown("---")
     if sec == "📊 Proyectos":
         PU._panel_proyectos(grupo)
     elif sec == "🗂 Agrupaciones":
         PU._panel_agrupaciones(grupo)
+    elif sec == "⏱ Horas":
+        PU.render_group_hours(grupo)
     else:
         _grupo_usuarios(grupo)
