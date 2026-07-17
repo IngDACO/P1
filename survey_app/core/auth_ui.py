@@ -321,6 +321,12 @@ def _owner_usuarios():
             ng = cr2.selectbox("Grupo", grupo_opts, key="ow_ng")
             if cr2.button("Aplicar grupo", key="ow_chg"):
                 ok, msg = auth.set_group(sel, ng); (st.success if ok else st.error)(msg); st.rerun()
+            _curo = next((x for x in users if x["Usuario"] == sel), {})
+            taro = st.number_input("💵 Tarifa por hora (mano de obra)", min_value=0.0, step=1.0,
+                                   value=float(str(_curo.get("TarifaHora", "") or 0).replace(",", ".") or 0),
+                                   key="ow_tar")
+            if st.button("Guardar tarifa", key="ow_savetar"):
+                ok, msg = auth.set_rate(sel, taro); (st.success if ok else st.error)(msg); st.rerun()
             a1, a2, a3 = st.columns(3)
             if a1.button("Activar", key="ow_act"):
                 ok, msg = auth.set_active(sel, True);  (st.success if ok else st.error)(msg); st.rerun()
@@ -526,6 +532,13 @@ def _grupo_usuarios(grupo):
             if st.button("Cambiar contraseña", key="gp_chp"):
                 if np_:
                     ok, msg = auth.set_password(sel, np_); (st.success if ok else st.error)(msg)
+            _cur = next((x for x in gente if x["Usuario"] == sel), {})
+            tar = st.number_input("💵 Tarifa por hora (para costear la mano de obra)",
+                                  min_value=0.0, step=1.0,
+                                  value=float(str(_cur.get("TarifaHora", "") or 0).replace(",", ".") or 0),
+                                  key="gp_tar")
+            if st.button("Guardar tarifa", key="gp_savetar"):
+                ok, msg = auth.set_rate(sel, tar); (st.success if ok else st.error)(msg); st.rerun()
             b1, b2, b3 = st.columns(3)
             if b1.button("Activar", key="gp_act"):
                 ok, msg = auth.set_active(sel, True);  (st.success if ok else st.error)(msg); st.rerun()
@@ -567,7 +580,7 @@ def render_group_panel(grupo: str):
         return
 
     sec = st.radio("Sección",
-                   ["📊 Proyectos", "🗂 Agrupaciones", "⏱ Horas", "🔧 Usuarios de campo"],
+                   ["📊 Proyectos", "🗂 Agrupaciones", "⏱ Horas", "💰 Gastos", "🔧 Usuarios de campo"],
                    horizontal=True, key="grupo_sec", label_visibility="collapsed")
     st.markdown("---")
     if sec == "📊 Proyectos":
@@ -576,5 +589,7 @@ def render_group_panel(grupo: str):
         PU._panel_agrupaciones(grupo)
     elif sec == "⏱ Horas":
         PU.render_group_hours(grupo)
+    elif sec == "💰 Gastos":
+        PU.render_group_expenses(grupo)
     else:
         _grupo_usuarios(grupo)

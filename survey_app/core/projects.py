@@ -30,7 +30,7 @@ PROJECTS_HEADERS = [
     "Estado", "EstadoManual", "FechaInicio", "FechaFinEst", "Ingeniero",
     "CampoAsignados", "Avance", "AgrupacionID", "PesoEnAgrupacion",
     "ParamsJSON", "MatrizJSON", "InterpJSON", "CreadoPor", "Creado",
-    "Instrucciones", "InduccionLinks",
+    "Instrucciones", "InduccionLinks", "Presupuesto",
 ]
 ACTIVITIES_HEADERS = [
     "ProyectoID", "Orden", "Nombre", "DuracionDias", "Peso", "Avance",
@@ -220,7 +220,7 @@ def create_project(grupo, nombre, cliente="", ubicacion="", modelo="", ns=0,
                    ingeniero="", campo_asignados=None, fecha_inicio="", fecha_fin_est="",
                    params=None, matriz=None, interp=None, activities=None,
                    creado_por="", agrupacion_id="", peso_agrupacion=0,
-                   instrucciones="", induccion_links="") -> tuple:
+                   instrucciones="", induccion_links="", presupuesto="") -> tuple:
     """Crea un proyecto (fila en Proyectos + filas en Actividades). Devuelve (ok, id|error)."""
     pws, err = _projects_ws()
     if err:
@@ -242,7 +242,7 @@ def create_project(grupo, nombre, cliente="", ubicacion="", modelo="", ns=0,
         json.dumps(matriz or [], ensure_ascii=False, default=str),
         json.dumps(interp or {}, ensure_ascii=False, default=str),
         creado_por, datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        str(instrucciones or ""), str(induccion_links or ""),
+        str(instrucciones or ""), str(induccion_links or ""), str(presupuesto or ""),
     ]
     pws.append_row(row, value_input_option="RAW")
 

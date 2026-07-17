@@ -152,6 +152,7 @@ def _resumen_del_dia(grupo: str):
         if d["sin_asignar"]:        chips.append(f"👷 {len(d['sin_asignar'])} sin asignar")
         if d["campo_sin_contacto"]: chips.append(f"📇 {len(d['campo_sin_contacto'])} sin contacto")
         if d.get("cred_venc"):      chips.append(f"🎫 {len(d['cred_venc'])} credenciales")
+        if d.get("sobre_presupuesto"): chips.append(f"💸 {len(d['sobre_presupuesto'])} sobre presupuesto")
         if chips:
             st.markdown("  ".join(f"`{c}`" for c in chips))
         else:
@@ -469,6 +470,8 @@ def _detalle_proyecto(pid: str, grupo: str = None):
         est_man = st.selectbox("Estado manual (override)", P.ESTADOS_MANUAL,
                                index=P.ESTADOS_MANUAL.index(str(prj.get("EstadoManual", "")))
                                if str(prj.get("EstadoManual", "")) in P.ESTADOS_MANUAL else 0)
+        presup  = st.number_input("💰 Presupuesto del proyecto (0 = sin presupuesto)",
+                                  min_value=0.0, step=100.0, value=P._num(prj.get("Presupuesto")))
 
         if st.form_submit_button("💾 Guardar cambios", use_container_width=True):
             ag_id = "" if ag_sel == "(ninguna)" else ag_sel.split(" · ")[0]
@@ -478,7 +481,7 @@ def _detalle_proyecto(pid: str, grupo: str = None):
                 "CampoAsignados": ";".join(asignados),
                 "AgrupacionID": ag_id, "PesoEnAgrupacion": peso,
                 "EstadoManual": est_man, "Estado": P.derive_estado(avance, est_man),
-                "Instrucciones": instr, "InduccionLinks": ind,
+                "Instrucciones": instr, "InduccionLinks": ind, "Presupuesto": presup,
             })
             # Notificar a los usuarios de campo recién asignados
             nuevos = [x for x in asignados if x not in actuales]
@@ -579,6 +582,9 @@ def _detalle_proyecto(pid: str, grupo: str = None):
                 if ok:
                     _aviso_cambio("Se eliminó una actividad del cronograma.")
                     st.rerun()
+
+    # ── Gastos / compras ──
+    render_expenses(pid, grupo, can_delete=True, key_prefix="adm")
 
     # ── Documentos ──
     _documentos_section(pid)
@@ -741,6 +747,10 @@ def render_field_projects(usuario: str, grupo: str):
                 if ok:
                     st.rerun()
 
+    # ── Gastos / compras (campo carga recibos) ──
+    st.markdown("---")
+    render_expenses(pid, grupo, can_delete=False, key_prefix="fld")
+
     # ── Documentos (campo: sube fotos, consulta planos/informe cliente/matriz/fotos) ──
     st.markdown("---")
     _documentos_section(pid)
@@ -766,6 +776,110 @@ def render_conductor_projects(grupo: str):
     } for p in proys]
     st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True,
                  column_config={"🗺": st.column_config.LinkColumn("🗺", display_text="Abrir")})
+
+    # ── Cargar recibos (combustible, peajes, materiales…) ──
+    st.markdown("---")
+    idmap = {f"{p.get('Nombre')} ({p.get('ID')})": p.get("ID") for p in proys}
+    sel = st.selectbox("Cargar recibo al proyecto", list(idmap.keys()), key="cond_exp_sel")
+    if sel:
+        render_expenses(idmap[sel], grupo, can_delete=False, key_prefix="cond")
+
+
+# ── Gastos / compras por proyecto (admin, campo, conductor) ──
+def render_expenses(pid, grupo, can_delete=False, key_prefix="ex"):
+    from core import expenses as E
+    if not E.is_configured():
+        return
+    st.markdown("#### 💰 Gastos / compras")
+    cost = E.project_cost(pid, grupo)
+    m1, m2, m3 = st.columns(3)
+    m1.metric("Compras", f"${cost['compras']:,.0f}")
+    m2.metric("Mano de obra", f"${cost['mano_obra']:,.0f}")
+    m3.metric("Costo total", f"${cost['total']:,.0f}")
+    if cost["presupuesto"] > 0:
+        st.progress(min(1.0, (cost["pct"] or 0) / 100.0))
+        txt = f"Presupuesto ${cost['presupuesto']:,.0f} · {cost['pct']}% consumido"
+        (st.error if cost["over"] else st.caption)(txt + (" ⛔ SOBRE PRESUPUESTO" if cost["over"] else ""))
+
+    with st.expander("➕ Cargar recibo"):
+        with st.form(f"{key_prefix}_add_{pid}", clear_on_submit=True):
+            c1, c2 = st.columns(2)
+            cat = c1.selectbox("Categoría", E.CATEGORIAS, key=f"{key_prefix}_cat")
+            val = c2.number_input("Valor total del recibo", min_value=0.0, step=1.0, key=f"{key_prefix}_val")
+            prov = c1.text_input("Proveedor", key=f"{key_prefix}_prov")
+            desc = c2.text_input("Descripción", key=f"{key_prefix}_desc")
+            f = st.file_uploader("Foto / PDF del recibo", type=["pdf", "png", "jpg", "jpeg"],
+                                 key=f"{key_prefix}_file")
+            if st.form_submit_button("Guardar recibo"):
+                if val <= 0:
+                    st.error("Ingresa el valor del recibo.")
+                else:
+                    did, fn = "", ""
+                    if f is not None:
+                        fn = f.name
+                        did = E.upload_receipt(pid, f.name, f.getvalue(), f.type or "application/octet-stream")
+                    ok, msg = E.add(pid, grupo, val, cat, prov, desc, did, fn,
+                                    st.session_state.get("auth", {}).get("usuario", ""))
+                    (st.success if ok else st.error)(msg)
+                    if ok:
+                        st.rerun()
+
+    items = E.project_expenses(pid)["items"]
+    if items:
+        st.dataframe(pd.DataFrame([{
+            "Fecha": r.get("Fecha"), "Categoría": r.get("Categoria"),
+            "Proveedor": r.get("Proveedor"), "Descripción": r.get("Descripcion"),
+            "Valor": E._num(r.get("Valor")), "Por": r.get("CreadoPor"),
+        } for r in items]), hide_index=True, use_container_width=True)
+        with st.expander(f"📎 Recibos ({len(items)})"):
+            for r in items:
+                did = str(r.get("DriveID", "")).strip()
+                cc = st.columns([5, 1])
+                lbl = f"{r.get('Fecha')} · {r.get('Categoria')} · ${E._num(r.get('Valor')):.0f}"
+                if did:
+                    try:
+                        from core import drive_store
+                        cc[0].download_button("⬇️ " + lbl, data=drive_store.download(did),
+                                              file_name=r.get("Archivo", "recibo"),
+                                              key=f"{key_prefix}_dl_{r.get('ID')}")
+                    except Exception:
+                        cc[0].caption(lbl)
+                else:
+                    cc[0].caption(lbl + " (sin archivo)")
+                if can_delete and cc[1].button("🗑", key=f"{key_prefix}_del_{r.get('ID')}"):
+                    ok, msg = E.delete(r.get("ID"))
+                    (st.success if ok else st.error)(msg)
+                    if ok:
+                        st.rerun()
+
+
+# ── Reporte del ADMIN: gastos de todos los proyectos del grupo ──
+def render_group_expenses(grupo: str):
+    from core import expenses as E
+    st.markdown("#### 💰 Gastos del grupo")
+    if not E.is_configured():
+        st.warning("Los gastos necesitan Google Sheets configurado.")
+        return
+    ge = E.group_expenses(grupo)
+    filas = ge["proyectos"]
+    if not filas:
+        st.info("No hay proyectos en el grupo.")
+        return
+    df = pd.DataFrame([{
+        "Proyecto": f["nombre"], "Compras": f["compras"], "Mano de obra": f["mano_obra"],
+        "Costo total": f["total"], "Presupuesto": f["presupuesto"],
+        "% ": f["pct"] if f["pct"] is not None else "",
+    } for f in filas])
+    st.dataframe(df, use_container_width=True, hide_index=True)
+    tot = sum(f["total"] for f in filas)
+    st.metric("Costo total del grupo", f"${tot:,.0f}")
+    if ge["por_categoria"]:
+        st.markdown("**Compras por categoría**")
+        st.dataframe(pd.DataFrame([{"Categoría": k, "Total": v}
+                                   for k, v in sorted(ge["por_categoria"].items(), key=lambda x: -x[1])],
+                                  ), hide_index=True, use_container_width=True)
+    st.download_button("⬇️ Exportar CSV (contabilidad)", data=df.to_csv(index=False).encode("utf-8"),
+                       file_name=f"gastos_{grupo}.csv", mime="text/csv", key="ge_csv")
 
 
 # ── Reporte del ADMIN: horas de TODOS los usuarios del grupo ──

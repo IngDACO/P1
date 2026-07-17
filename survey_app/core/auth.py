@@ -20,14 +20,15 @@ from core import timeclock
 LOGIN_SHEET   = "Login"
 # Columnas nuevas al final para no romper filas existentes (migración segura).
 LOGIN_HEADERS = ["Usuario", "Password", "Rol", "Nombre", "Activo", "Grupo",
-                 "SessionToken", "SessionTime", "Email", "TelegramChatID"]
+                 "SessionToken", "SessionTime", "Email", "TelegramChatID", "TarifaHora"]
 GROUPS_SHEET   = "Grupos"
 GROUPS_HEADERS = ["Grupo", "Descripcion", "Activo"]
 ROLES         = ["propietario", "administrador", "campo", "conductor"]
 _ACTIVE_OK    = ("", "SI", "SÍ", "YES", "Y", "TRUE", "1", "X")
 # Columnas (1-based) en la hoja Login
 _COL = {"Usuario": 1, "Password": 2, "Rol": 3, "Nombre": 4, "Activo": 5, "Grupo": 6,
-        "SessionToken": 7, "SessionTime": 8, "Email": 9, "TelegramChatID": 10}
+        "SessionToken": 7, "SessionTime": 8, "Email": 9, "TelegramChatID": 10,
+        "TarifaHora": 11}
 
 # Sesión ÚNICA por cuenta ("primero gana"): un segundo login se bloquea mientras la
 # sesión activa siga viva. El heartbeat marca vida; si se abandona > SESSION_TIMEOUT s,
@@ -303,8 +304,37 @@ def list_users(grupo: str = None) -> list:
             "Activo":  str(r.get("Activo", "SI")),
             "Email":          str(r.get("Email", "")),
             "TelegramChatID": str(r.get("TelegramChatID", "")),
+            "TarifaHora":     str(r.get("TarifaHora", "")),
         })
     return out
+
+
+def set_rate(usuario: str, tarifa) -> tuple:
+    """Tarifa por hora del usuario (para costear la mano de obra)."""
+    lws, err = _get_login_ws()
+    if err:
+        return False, err
+    row, _ = _find_row(lws, usuario)
+    if row is None:
+        return False, "Usuario no encontrado."
+    try:
+        lws.update_cell(row, _COL["TarifaHora"], str(tarifa))
+    except Exception as e:
+        return False, f"Error: {e}"
+    _invalidate_login()
+    return True, f"Tarifa de '{usuario}' actualizada."
+
+
+def rate_map(grupo: str = None) -> dict:
+    """{Nombre: tarifa/hora} de los usuarios del grupo (el fichaje usa el Nombre)."""
+    m = {}
+    for u in list_users(grupo):
+        key = u.get("Nombre", "") or u.get("Usuario", "")
+        try:
+            m[key] = float(str(u.get("TarifaHora", "") or 0).replace(",", "."))
+        except Exception:
+            m[key] = 0.0
+    return m
 
 
 def add_user(usuario: str, pw: str, rol: str, nombre: str = "",

@@ -100,6 +100,15 @@ def group_digest(grupo) -> dict:
     except Exception:
         pass
 
+    # Proyectos sobre presupuesto
+    sobre_pres = []
+    try:
+        from core import expenses
+        if expenses.is_configured():
+            sobre_pres = expenses.over_budget(grupo)
+    except Exception:
+        pass
+
     avances = [P._num(p.get("Avance")) for p in proys]
     return {
         "grupo": grupo,
@@ -110,12 +119,13 @@ def group_digest(grupo) -> dict:
         "por_vencer": sorted(por_vencer, key=lambda x: x["dias"]),
         "vencidos": sorted(vencidos, key=lambda x: x["dias"]),
         "near_miss": near, "campo_sin_contacto": campo_sin, "sin_asignar": sin_asig,
-        "cred_venc": cred_venc,
+        "cred_venc": cred_venc, "sobre_presupuesto": sobre_pres,
     }
 
 
 _PENDING_KEYS = ("retrasos", "alarmas", "por_vencer", "vencidos",
-                 "near_miss", "campo_sin_contacto", "sin_asignar", "cred_venc")
+                 "near_miss", "campo_sin_contacto", "sin_asignar", "cred_venc",
+                 "sobre_presupuesto")
 
 
 def has_pending(d) -> bool:
@@ -149,6 +159,9 @@ def digest_text(d) -> str:
                  + "; ".join(f"{c['usuario']} · {c['tipo']} "
                              f"({'VENCIDA' if c['dias'] < 0 else f'en {c['dias']} d'})"
                              for c in d["cred_venc"]))
+    if d.get("sobre_presupuesto"):
+        L.append("Sobre presupuesto: "
+                 + "; ".join(f"{x['nombre']} ({x['pct']}%)" for x in d["sobre_presupuesto"]))
     if len(L) == 1:
         L.append("Sin pendientes urgentes.")
     return "\n".join(L)

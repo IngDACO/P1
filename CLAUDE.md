@@ -775,6 +775,21 @@ Al cargar el plano en el survey (app.py), autocompleta **RAIL = AlturaDiente** (
 espalda) del catálogo; si el código no está o no se detecta → aviso + entrada manual. **RAIL = AlturaDiente**
 (NO el ancho); AnchoDiente se guarda como dato secundario.
 
+## Control de costos por proyecto: gastos + mano de obra (v105)
+`core/expenses.py` — hoja **`Gastos`** (ID,ProyectoID,Grupo,Fecha,Categoria,Proveedor,Descripcion,Valor,
+DriveID,Archivo,CreadoPor,Creado; migra sola). Recibos por proyecto (foto/PDF a Drive, carpeta "COPEX
+Recibos") + valor + categoría (`CATEGORIAS`). Los cargan **admin, campo y conductor**.
+- **Costo total = compras + mano de obra.** `labor_cost(pid,grupo)` = Σ (horas de cada persona en el proyecto
+  × su **tarifa/hora**). Tarifa **por usuario**: columna `Login.TarifaHora` (v105; `auth.set_rate`,
+  `auth.rate_map` {Nombre:tarifa}, incluida en `list_users`). El fichaje se cruza por Nombre.
+- **Presupuesto por proyecto**: columna `Proyectos.Presupuesto` (editable en el detalle). `project_cost` →
+  {compras, mano_obra, total, presupuesto, pct, over}. Sobre presupuesto entra al **radar** (`sobre_presupuesto`
+  en admin_digest → chip 💸 en Resumen del día + briefing).
+- UI (`projects_ui`): `render_expenses(pid,grupo,can_delete)` (panel de costos + cargar recibo + lista +
+  descargar/eliminar) en el detalle admin (can_delete), 📋 Mis proyectos (campo) y 📋 Proyectos (conductor,
+  selector). Reporte del admin: 🛠 Mi grupo → **💰 Gastos** (`render_group_expenses`: por proyecto compras/MO/
+  total/presupuesto/%, desglose por categoría, **export CSV**). Tarifa se fija en 🔧/👥 Usuarios (`set_rate`).
+
 ## Credenciales / tickets por usuario (v104)
 `core/credentials.py` — hoja **`Credenciales`** (ID,Usuario,Grupo,Tipo,Numero,Clase,Emision,Vencimiento,
 DriveID,Archivo,Nota,UltimoAviso,ActualizadoPor,Fecha; migra sola). Catálogo AU (`CATALOGO`: White Card,
@@ -814,7 +829,7 @@ posicional + plano) → app.py, al cargar el PDF, setea `st.session_state["ns"]`
 resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NORTH SYD y AGECARE → NS=6
 (coincide con travel/floor-height HQ/HE).
 
-## Versiones desplegadas (v104 = actual)
+## Versiones desplegadas (v105 = actual)
 | Ver | Cambio principal |
 |---|---|
 | v5 | Extractor: CRLF fix, caso D valor-antes-label, sin pdfplumber |
@@ -916,3 +931,4 @@ resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NOR
 | v102 | Fix: NS se lee del plano (NUMBER OF STOPS) al cargar el PDF; default de init 6→2 (ya no queda pegado en 6) |
 | v103 | Rol conductor (2 relojes: jornada general + segmentos por proyecto, columna Tipo) + cronómetro en vivo para todos + reporte admin de horas del grupo (Mi grupo → ⏱ Horas) |
 | v104 | Credenciales/tickets por usuario (White Card, Forklift, Dogging/Rigging, licencia…): vencimiento+estado, foto/documento a Drive, radar en Resumen del día, avisos email/Telegram a admin+usuario; usuario ve las suyas (🎫 Mis credenciales) |
+| v105 | Control de costos por proyecto: recibos (foto/PDF+valor+categoría, los cargan admin/campo/conductor) + mano de obra (tarifa/hora POR USUARIO) + presupuesto+alerta; reporte de gastos del grupo (💰 Gastos) con CSV; radar sobre-presupuesto |
