@@ -775,6 +775,16 @@ Al cargar el plano en el survey (app.py), autocompleta **RAIL = AlturaDiente** (
 espalda) del catálogo; si el código no está o no se detecta → aviso + entrada manual. **RAIL = AlturaDiente**
 (NO el ancho); AnchoDiente se guarda como dato secundario.
 
+## Fix import de Excel (v111)
+`st.session_state.ns cannot be modified after the widget with key ns is instantiated`. El import de la matriz
+escribia **claves de widgets YA creados** en la misma pasada: `ns` (Paso 3), todos los `inp_*` (Paso 2) y los
+`cfg_*` (Paso 2). Fallaba en el primero; los demas habrian fallado igual -> el import estaba roto entero.
+Fix (patron "pendiente + rerun"): el import guarda `st.session_state["_import_pending"] = {ns, params, cfg}`
+y hace rerun; al inicio de la seccion Survey, ANTES de crear cualquier widget, se aplica y se borra.
+`survey_df` si se escribe directo (no es clave de widget; el editor usa key="survey_editor").
+REGLA: nunca escribir st.session_state[clave_de_widget] despues de instanciar ese widget; usar pendiente+rerun
+(la carga de PDF ya lo hacia bien porque ocurre en el Paso 1, antes de los widgets).
+
 ## Survey: resultados persistentes (v110)
 **Bug estructural corregido.** Todo el Paso 4 (matriz ajustada, resumen, soluciones del optimizador, log,
 diagramas de planta, BSR vs BS, plomado definitivo) se dibujaba DENTRO de `if st.button("Calcular")`, asi que
@@ -900,7 +910,7 @@ posicional + plano) → app.py, al cargar el PDF, setea `st.session_state["ns"]`
 resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NORTH SYD y AGECARE → NS=6
 (coincide con travel/floor-height HQ/HE).
 
-## Versiones desplegadas (v110 = actual)
+## Versiones desplegadas (v111 = actual)
 | Ver | Cambio principal |
 |---|---|
 | v5 | Extractor: CRLF fix, caso D valor-antes-label, sin pdfplumber |
@@ -1002,6 +1012,7 @@ resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NOR
 | v102 | Fix: NS se lee del plano (NUMBER OF STOPS) al cargar el PDF; default de init 6→2 (ya no queda pegado en 6) |
 | v103 | Rol conductor (2 relojes: jornada general + segmentos por proyecto, columna Tipo) + cronómetro en vivo para todos + reporte admin de horas del grupo (Mi grupo → ⏱ Horas) |
 | v104 | Credenciales/tickets por usuario (White Card, Forklift, Dogging/Rigging, licencia…): vencimiento+estado, foto/documento a Drive, radar en Resumen del día, avisos email/Telegram a admin+usuario; usuario ve las suyas (🎫 Mis credenciales) |
+| v111 | Fix: importar la matriz desde Excel fallaba (escribia claves de widgets ya instanciados) |
 | v110 | Survey: los resultados dejan de borrarse al interactuar (render fuera del boton + aviso de calculo obsoleto) |
 | v109 | Limpieza de codigo muerto (flujo PIN viejo + 6 funciones sin uso); sin imports muertos |
 | v108 | Auditoria de llamadas #2: cachear open_sessions/group_hours (fichaje) + list_groups + group_expenses; escrituras siguen leyendo fresco |

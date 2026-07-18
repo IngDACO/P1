@@ -317,6 +317,18 @@ st.markdown("---")
 
 if _seccion == _L_SURVEY:
 
+    # ── Aplicar valores importados (Excel) ANTES de crear los widgets ──
+    # Streamlit prohíbe escribir st.session_state[k] de un widget ya instanciado,
+    # así que el import deja los valores "pendientes" y se aplican aquí, arriba del todo.
+    _pend = st.session_state.pop("_import_pending", None)
+    if _pend:
+        if _pend.get("ns"):
+            st.session_state["ns"] = int(_pend["ns"])
+        for _k, _v in (_pend.get("params") or {}).items():
+            st.session_state[f"inp_{_k}"] = float(_v)
+        for _k, _v in (_pend.get("cfg") or {}).items():
+            st.session_state[_k] = _v
+
     # ── Identificación del proyecto ───────────────────────
     _id1, _id2 = st.columns(2)
     _id1.text_input("🏗 Nombre del proyecto / Cliente", key="proyecto",
@@ -468,24 +480,28 @@ if _seccion == _L_SURVEY:
     if uploaded_excel is not None:
         try:
             imported = import_survey_excel(uploaded_excel)
+            # survey_df NO es clave de widget (el editor usa key="survey_editor") → seguro.
             st.session_state.survey_df = imported["df"].copy()
-            st.session_state["ns"]     = len(imported["df"])
-            # Restaurar parámetros numéricos
-            for k, v in imported.get("info", {}).items():
-                if k in PDF_PARAMS or k in USER_ONLY:
-                    st.session_state[f"inp_{k}"] = float(v)
-            # Restaurar configuración
+
+            # El resto SÍ son claves de widgets ya instanciados (ns, inp_*, cfg_*):
+            # se dejan pendientes y se aplican arriba del todo en el próximo rerun.
+            _params = {k: float(v) for k, v in (imported.get("info") or {}).items()
+                       if k in PDF_PARAMS or k in USER_ONLY}
             cfg = imported.get("config", {})
-            if cfg.get("OMEGA_SIDE")   in ("R", "L"): st.session_state.cfg_omega_side  = cfg["OMEGA_SIDE"]
-            if cfg.get("OFFSET_SIDE")  in ("R", "L"): st.session_state.cfg_offset_side = cfg["OFFSET_SIDE"]
+            _cfg = {}
+            if cfg.get("OMEGA_SIDE")  in ("R", "L"): _cfg["cfg_omega_side"]  = cfg["OMEGA_SIDE"]
+            if cfg.get("OFFSET_SIDE") in ("R", "L"): _cfg["cfg_offset_side"] = cfg["OFFSET_SIDE"]
             if "WALL_LIMITING" in cfg:
-                st.session_state.cfg_wall_yn = "Y" if cfg["WALL_LIMITING"] else "N"
-            if cfg.get("WALL_STOP") is not None:      st.session_state.cfg_wall_stop = int(cfg["WALL_STOP"])
-            if cfg.get("WALL_SIDE") in ("R", "L"):    st.session_state.cfg_wall_side = cfg["WALL_SIDE"]
+                _cfg["cfg_wall_yn"] = "Y" if cfg["WALL_LIMITING"] else "N"
+            if cfg.get("WALL_STOP") is not None:     _cfg["cfg_wall_stop"] = int(cfg["WALL_STOP"])
+            if cfg.get("WALL_SIDE") in ("R", "L"):   _cfg["cfg_wall_side"] = cfg["WALL_SIDE"]
             if "CTRL_IN_FRAME" in cfg:
-                st.session_state.cfg_ctrl_yn = "Y" if cfg["CTRL_IN_FRAME"] else "N"
-            if cfg.get("CTRL_SIDE") in ("R", "L"):    st.session_state.cfg_ctrl_side = cfg["CTRL_SIDE"]
-            sc2.success("✅ Matriz y configuración cargadas.")
+                _cfg["cfg_ctrl_yn"] = "Y" if cfg["CTRL_IN_FRAME"] else "N"
+            if cfg.get("CTRL_SIDE") in ("R", "L"):   _cfg["cfg_ctrl_side"] = cfg["CTRL_SIDE"]
+
+            st.session_state["_import_pending"] = {
+                "ns": len(imported["df"]), "params": _params, "cfg": _cfg,
+            }
             st.rerun()
         except Exception as e:
             sc2.error(f"Error al importar Excel: {e}")
