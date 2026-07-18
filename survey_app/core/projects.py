@@ -370,21 +370,6 @@ def update_project(pid: str, fields: dict) -> tuple:
             return False, f"Error actualizando: {e}"
     _invalidate()
     return True, "Proyecto actualizado."
-
-
-def set_estado_manual(pid: str, estado_manual: str) -> tuple:
-    if estado_manual not in ESTADOS_MANUAL:
-        return False, "Estado manual inválido."
-    prj = get_project(pid)
-    if not prj:
-        return False, "Proyecto no encontrado."
-    avance = _num(prj.get("Avance"))
-    return update_project(pid, {
-        "EstadoManual": estado_manual,
-        "Estado":       derive_estado(avance, estado_manual),
-    })
-
-
 def delete_project(pid: str) -> tuple:
     pws, err = _projects_ws()
     if err:

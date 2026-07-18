@@ -124,15 +124,6 @@ def is_available() -> bool:
     return _index()["n"] > 0
 
 
-def manual_names() -> list:
-    seen = []
-    for c in _index()["chunks"]:
-        m = c.get("manual", "")
-        if m and m not in seen:
-            seen.append(m)
-    return seen
-
-
 def search(query, k=6) -> list:
     """Top-k fragmentos por BM25 para la consulta."""
     idx = _index()

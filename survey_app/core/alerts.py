@@ -75,10 +75,6 @@ def list_alerts(pid, estado=None) -> list:
     return out
 
 
-def open_count(pid) -> int:
-    return len(list_alerts(pid, "abierta"))
-
-
 def open_counts_all() -> dict:
     """{ProyectoID: nº alarmas abiertas} de todos los proyectos (1 lectura, para badges)."""
     d = {}

@@ -775,6 +775,17 @@ Al cargar el plano en el survey (app.py), autocompleta **RAIL = AlturaDiente** (
 espalda) del catálogo; si el código no está o no se detecta → aviso + entrada manual. **RAIL = AlturaDiente**
 (NO el ancho); AnchoDiente se guarda como dato secundario.
 
+## Limpieza de codigo muerto (v109)
+Auditoria: se listaron todas las `def` y se conto su uso real en el repo. Eliminado (0 referencias):
+- `timeclock.validate_user` + `_get_users_ws` + `USERS_SHEET`/`USERS_HEADERS` -> **flujo viejo de PIN**
+  (el login por PIN se reemplazo por auth en v53). Al borrarlo, la app ya NO puede recrear la pestana
+  `Usuarios` del Sheets.
+- `timeclock.get_records`, `auth.can_manage_users`, `manuals.manual_names`, `alerts.open_count`,
+  `projects.set_estado_manual`, `session_cookie.available`.
+Verificado tras la limpieza: los 40 modulos compilan e importan; no hay imports sin usar.
+Pestanas del Sheets en uso: Sheet1(fichaje), Login, Grupos, Proyectos, Actividades, Agrupaciones,
+Documentos, Rieles, Alarmas, Manuales, PreStarts, Credenciales, Gastos. **`Usuarios` ya no se usa.**
+
 ## Auditoria de llamadas #2 (v108)
 Auditoria completa de `get_all_records` por funcion contenedora (display vs escritura). Hallazgos y fix:
 - `timeclock.open_sessions` y `timeclock.group_hours` leian la hoja ENTERA **en cada render** (pestana de
@@ -873,7 +884,7 @@ posicional + plano) → app.py, al cargar el PDF, setea `st.session_state["ns"]`
 resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NORTH SYD y AGECARE → NS=6
 (coincide con travel/floor-height HQ/HE).
 
-## Versiones desplegadas (v108 = actual)
+## Versiones desplegadas (v109 = actual)
 | Ver | Cambio principal |
 |---|---|
 | v5 | Extractor: CRLF fix, caso D valor-antes-label, sin pdfplumber |
@@ -975,6 +986,7 @@ resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NOR
 | v102 | Fix: NS se lee del plano (NUMBER OF STOPS) al cargar el PDF; default de init 6→2 (ya no queda pegado en 6) |
 | v103 | Rol conductor (2 relojes: jornada general + segmentos por proyecto, columna Tipo) + cronómetro en vivo para todos + reporte admin de horas del grupo (Mi grupo → ⏱ Horas) |
 | v104 | Credenciales/tickets por usuario (White Card, Forklift, Dogging/Rigging, licencia…): vencimiento+estado, foto/documento a Drive, radar en Resumen del día, avisos email/Telegram a admin+usuario; usuario ve las suyas (🎫 Mis credenciales) |
+| v109 | Limpieza de codigo muerto (flujo PIN viejo + 6 funciones sin uso); sin imports muertos |
 | v108 | Auditoria de llamadas #2: cachear open_sessions/group_hours (fichaje) + list_groups + group_expenses; escrituras siguen leyendo fresco |
 | v107 | Lote 2: matriz de compliance + tarjetas y resumen multi-grupo del propietario + dashboard de agrupacion + reconstruir proyecto + briefing por Telegram/email + login con cookies + ronda de optimizacion |
 | v106 | Fichaje identificado por USUARIO (no por nombre) + adelantos marcados + presupuesto al crear + graficas de costos + reenvio de inducciones al editar |

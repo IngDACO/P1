@@ -14,8 +14,6 @@ import streamlit as st
 
 HEADERS = ["Nombre", "PIN", "Proyecto", "Ubicacion",
            "Clock In", "Clock Out", "Horas", "Estado", "Grupo", "Tipo", "Usuario"]
-USERS_HEADERS = ["Nombre", "PIN", "Activo"]
-USERS_SHEET   = "Usuarios"
 FMT = "%Y-%m-%d %H:%M:%S"
 # Tipo de fichaje: 'general' (jornada del conductor) | 'proyecto' (segmento por proyecto).
 # Filas antiguas sin Tipo se tratan como 'proyecto'.
@@ -111,43 +109,6 @@ def is_configured() -> bool:
     """Solo revisa si los secrets están presentes — sin llamar a la API
     (evita falsos negativos por límites de rate de Google)."""
     return _secrets_present()
-
-
-def _get_users_ws():
-    """Devuelve (worksheet 'Usuarios', None) o (None, error). La crea si no existe."""
-    if not _secrets_present():
-        return None, "El fichaje no está conectado (faltan credenciales en Secrets)."
-    try:
-        return get_sheet(USERS_SHEET, tuple(USERS_HEADERS)), None
-    except Exception as e:
-        return None, f"No se pudo abrir la hoja de usuarios: {e}"
-
-
-def validate_user(nombre: str, pin: str) -> tuple:
-    """Verifica Nombre+PIN contra la hoja 'Usuarios'. Devuelve (ok, mensaje)."""
-    uws, err = _get_users_ws()
-    if err:
-        return False, err
-    try:
-        recs = uws.get_all_records(numericise_ignore=['all'])
-    except Exception as e:
-        return False, f"Error leyendo usuarios: {e}"
-
-    nombre = (nombre or "").strip()
-    pin    = str(pin or "").strip()
-
-    if not recs:
-        return False, ("No hay usuarios autorizados. Agrega Nombre + PIN en la "
-                       "pestaña 'Usuarios' de la hoja de Google.")
-
-    for r in recs:
-        if (str(r.get("Nombre", "")).strip().lower() == nombre.lower()
-                and str(r.get("PIN", "")).strip() == pin):
-            activo = str(r.get("Activo", "SI")).strip().upper()
-            if activo in ("", "SI", "SÍ", "YES", "Y", "TRUE", "1", "X"):
-                return True, "ok"
-            return False, f"Usuario '{nombre}' está inactivo."
-    return False, "Nombre o PIN incorrecto (o no autorizado)."
 
 
 def _now() -> str:
@@ -261,17 +222,6 @@ def clock_out(nombre: str, grupo: str = "", nota: str = "",
 
     _invalidate_records()
     return True, f"✅ Clock OUT a las {out_ts}. Horas trabajadas: {horas}."
-
-
-def get_records() -> list:
-    """Devuelve todas las filas como lista de dicts (para mostrar)."""
-    ws, err = _get_worksheet()
-    if err:
-        return []
-    try:
-        return ws.get_all_records(numericise_ignore=['all'])
-    except Exception:
-        return []
 
 
 def _num(v) -> float:

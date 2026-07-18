@@ -25,10 +25,6 @@ def _mgr():
         return None
 
 
-def available() -> bool:
-    return _mgr() is not None
-
-
 def load() -> tuple:
     """(usuario, token) de la cookie, o (None, None)."""
     m = _mgr()

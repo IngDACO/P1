@@ -489,6 +489,3 @@ def delete_user(usuario: str) -> tuple:
 def can_reports(rol: str) -> bool:
     return rol in ("propietario", "administrador")
 
-
-def can_manage_users(rol: str) -> bool:
-    return rol == "propietario"
