@@ -1,0 +1,16 @@
+{
+  "pestana": "Usuarios",
+  "respaldado": "2026-07-19T08:39:25",
+  "contenido": [
+    [
+      "Nombre",
+      "PIN",
+      "Activo"
+    ],
+    [
+      "Diego",
+      "1234",
+      "SI"
+    ]
+  ]
+}

@@ -775,6 +775,22 @@ Al cargar el plano en el survey (app.py), autocompleta **RAIL = AlturaDiente** (
 espalda) del catálogo; si el código no está o no se detecta → aviso + entrada manual. **RAIL = AlturaDiente**
 (NO el ancho); AnchoDiente se guarda como dato secundario.
 
+## Survey: resultados persistentes (v110)
+**Bug estructural corregido.** Todo el Paso 4 (matriz ajustada, resumen, soluciones del optimizador, log,
+diagramas de planta, BSR vs BS, plomado definitivo) se dibujaba DENTRO de `if st.button("Calcular")`, asi que
+cualquier interaccion posterior (cambiar un dato, descargar, abrir un expander, el chat) lo borraba y obligaba
+a recalcular. Refactor en `app.py`:
+- `_render_survey_results(r)`: funcion nueva con TODO el render, lee de `st.session_state.calc_results`.
+  Se llama FUERA del boton -> los resultados sobreviven a los reruns.
+- El boton ahora solo COMPUTA y guarda. Los efectos secundarios (optimize, find_bs_step, compute_plumb,
+  generate_interpretation/user, generate_report + send_usage_notification por correo) siguen DENTRO del boton
+  para que NO se repitan en cada rerun (antes: re-envio de correo / re-llamadas a la IA imposibles; ahora
+  garantizado por construccion).
+- `_survey_signature()`: huella md5 de parametros+config+matriz. Se guarda en `_calc_sig` al calcular; si al
+  redibujar la huella cambio, avisa "resultados del calculo anterior, pulsa Calcular".
+Verificado: orden sig<render<boton<render-persistente<PASO5, efectos secundarios dentro del boton, y cero
+nombres indefinidos en la funcion de render (chequeo AST).
+
 ## Limpieza de codigo muerto (v109)
 Auditoria: se listaron todas las `def` y se conto su uso real en el repo. Eliminado (0 referencias):
 - `timeclock.validate_user` + `_get_users_ws` + `USERS_SHEET`/`USERS_HEADERS` -> **flujo viejo de PIN**
@@ -884,7 +900,7 @@ posicional + plano) → app.py, al cargar el PDF, setea `st.session_state["ns"]`
 resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NORTH SYD y AGECARE → NS=6
 (coincide con travel/floor-height HQ/HE).
 
-## Versiones desplegadas (v109 = actual)
+## Versiones desplegadas (v110 = actual)
 | Ver | Cambio principal |
 |---|---|
 | v5 | Extractor: CRLF fix, caso D valor-antes-label, sin pdfplumber |
@@ -986,6 +1002,7 @@ resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NOR
 | v102 | Fix: NS se lee del plano (NUMBER OF STOPS) al cargar el PDF; default de init 6→2 (ya no queda pegado en 6) |
 | v103 | Rol conductor (2 relojes: jornada general + segmentos por proyecto, columna Tipo) + cronómetro en vivo para todos + reporte admin de horas del grupo (Mi grupo → ⏱ Horas) |
 | v104 | Credenciales/tickets por usuario (White Card, Forklift, Dogging/Rigging, licencia…): vencimiento+estado, foto/documento a Drive, radar en Resumen del día, avisos email/Telegram a admin+usuario; usuario ve las suyas (🎫 Mis credenciales) |
+| v110 | Survey: los resultados dejan de borrarse al interactuar (render fuera del boton + aviso de calculo obsoleto) |
 | v109 | Limpieza de codigo muerto (flujo PIN viejo + 6 funciones sin uso); sin imports muertos |
 | v108 | Auditoria de llamadas #2: cachear open_sessions/group_hours (fichaje) + list_groups + group_expenses; escrituras siguen leyendo fresco |
 | v107 | Lote 2: matriz de compliance + tarjetas y resumen multi-grupo del propietario + dashboard de agrupacion + reconstruir proyecto + briefing por Telegram/email + login con cookies + ronda de optimizacion |

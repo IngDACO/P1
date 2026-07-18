@@ -551,6 +551,276 @@ if _seccion == _L_SURVEY:
     # ══════════════════════════════════════════════════════
     st.header("4. Cálculo y Optimización")
 
+    def _survey_signature():
+        """Huella de las entradas (parámetros + configuración + matriz).
+        Si cambia respecto al último cálculo, los resultados en pantalla están obsoletos."""
+        import hashlib, json as _json
+        base = {
+            "params": {p: st.session_state.get(f"inp_{p}", 0.0)
+                       for p in list(PDF_PARAMS) + list(USER_ONLY.keys())},
+            "cfg": [omega_side, offset_side, wall_limiting, wall_stop, wall_side,
+                    ctrl_in_frame, ctrl_side, int(st.session_state.ns)],
+            "matriz": st.session_state.survey_df.to_dict("records"),
+        }
+        return hashlib.md5(_json.dumps(base, sort_keys=True, default=str).encode()).hexdigest()
+
+    def _render_survey_results(r):
+        """Dibuja TODOS los resultados del cálculo leyendo de `calc_results`.
+
+        Vive FUERA del botón a propósito: antes todo esto se dibujaba dentro del
+        `if st.button("Calcular")`, así que cualquier interacción posterior (cambiar
+        un dato, descargar un informe, abrir un desplegable) borraba los resultados
+        y obligaba a recalcular. Ahora persisten entre reruns.
+        """
+        all_params = r["all_params"]
+        limits     = r["limits"]
+        analysis   = r["analysis"]
+        lim_map    = r["lim_map"]
+        opt_result = r.get("optimizer_result") or {}
+        bs_result  = r.get("bs_result") or {}
+        plumb_res  = r.get("plumb")
+        interpretation = r.get("interpretation") or {}
+
+        survey_adj_df = r["survey_adj"]
+        survey_adj    = survey_adj_df.to_dict("records")
+        wall_limiting_ = bool(all_params.get("WALL_LIMITING"))
+        ctrl_in_frame_ = bool(all_params.get("CTRL_IN_FRAME"))
+        ctrl_side_     = all_params.get("CTRL_SIDE")
+        cut_cols       = ["OR", "OL"] if not wall_limiting_ else []
+        min_vals = {f"MIN_{c}": analysis[f"MIN_{c}"] for c in SURVEY_COLS}
+        max_vals = {f"MAX_{c}": analysis.get(f"MAX_{c}", analysis[f"MIN_{c}"]) for c in SURVEY_COLS}
+        highlight = make_highlighter(lim_map, min_vals, max_vals, cut_cols,
+                                     ctrl_in_frame_, ctrl_side_)
+
+        with st.expander("📊 Parámetros calculados", expanded=False):
+            st.dataframe(
+                pd.DataFrame([
+                    {"Parámetro": k, "Valor": round(v, 3) if isinstance(v, (int, float)) else v}
+                    for k, v in limits.items()
+                ]),
+                use_container_width=True, hide_index=True
+            )
+
+        st.subheader("Matriz SURVEY ajustada")
+        st.dataframe(survey_adj_df.style.apply(highlight, axis=None),
+                     use_container_width=True)
+
+        st.subheader("Resumen por columna — Estado inicial")
+        summary = []
+        for col in SURVEY_COLS:
+            lim_c = lim_map[col]
+            viols = []
+            for i, row in enumerate(survey_adj):
+                v  = row[col]
+                el = lim_c
+                if ctrl_applies_to_cell(i, len(survey_adj), col, ctrl_in_frame_, ctrl_side_):
+                    el -= 70
+                if col in OR_OL_COLS:
+                    if v > el: viols.append(str(i + 1))
+                else:
+                    if v < el: viols.append(str(i + 1))
+            ext = round(analysis.get(f"MAX_{col}", analysis[f"MIN_{col}"]), 2) \
+                  if col in OR_OL_COLS else round(analysis[f"MIN_{col}"], 2)
+            summary.append({
+                "Columna":             col,
+                "Límite (mm)":         round(lim_c, 2),
+                "Fuera límite":        analysis[f"{col}_OFF_COUNT"],
+                "Niveles incumplidos": ", ".join(viols) if viols else "—",
+                "Min / Max (mm)":      ext,
+                "Diferencia (mm)":     round(analysis[f"DIF_{col}"], 2),
+            })
+        st.dataframe(pd.DataFrame(summary), use_container_width=True, hide_index=True)
+
+        st.info(
+            f"**MAX OFF RL:** {analysis['MAX_OFF_RL']:.2f} mm  |  "
+            f"**MAX OFF FB:** {analysis['MAX_OFF_FB']:.2f} mm  |  "
+            f"**BC_CALC:** {limits.get('BC_CALC', 0):.2f} mm  |  "
+            f"**DIF TSW-FS:** {limits.get('DIF_TSW_FS', 0):.2f} mm  |  "
+            f"**FB máx. hacia atrás:** {limits.get('FB_MAX_BACK', 0):.2f} mm"
+        )
+
+        # ── Optimización ──────────────────────────────────────
+        st.subheader("🔍 Optimización")
+        best          = opt_result.get("best")
+        all_solutions = opt_result.get("all_solutions", [])
+        step_log      = opt_result.get("step_log", [])
+
+        if best:
+            st.success(
+                f"✅ Se encontraron **{len(all_solutions)} solución(es) óptima(s)** con "
+                f"**{best['total_off']} valor(es) fuera de límite**"
+            )
+            best_pair = (best["rl"], best["fb"])
+            sorted_solutions = sorted(
+                all_solutions,
+                key=lambda s: (
+                    0 if (s["rl"], s["fb"]) == best_pair else 1,
+                    abs(s["rl"]) + abs(s.get("fb_applied", s["fb"]))
+                )
+            )
+            for idx_sol, sol in enumerate(sorted_solutions):
+                is_best   = (sol["rl"], sol["fb"]) == best_pair
+                fb_ap     = sol.get("fb_applied", sol["fb"])
+                fb_suffix = f"  |  FB aplic. = {fb_ap:.1f} mm" if abs(fb_ap - sol["fb"]) > 0.01 else ""
+                sol_label = f"{'⭐ ' if is_best else ''}Solución {idx_sol+1} — RL = {sol['rl']} mm  |  FB = {sol['fb']} mm{fb_suffix}"
+                with st.expander(sol_label, expanded=(idx_sol == 0)):
+                    sol_df  = pd.DataFrame(sol["matrix"])
+                    sol_min = {f"MIN_{c}": min(sol_df[c]) for c in SURVEY_COLS}
+                    sol_max = {f"MAX_{c}": max(sol_df[c]) for c in SURVEY_COLS}
+                    if not wall_limiting_:
+                        lor_v        = lim_map["OR"]
+                        lol_v        = lim_map["OL"]
+                        last_sol_idx = len(sol_df) - 1
+                        cut_or_vals, cut_ol_vals = [], []
+                        for i, (or_v, ol_v) in enumerate(zip(sol_df["OR"], sol_df["OL"])):
+                            or_lim = lor_v - 70 if (ctrl_in_frame_ and ctrl_side_ == "R" and i == last_sol_idx) else lor_v
+                            ol_lim = lol_v - 70 if (ctrl_in_frame_ and ctrl_side_ == "L" and i == last_sol_idx) else lol_v
+                            cut_or_vals.append(round(or_v - or_lim, 1) if or_v - or_lim > 0 else "")
+                            cut_ol_vals.append(round(ol_v - ol_lim, 1) if ol_v - ol_lim > 0 else "")
+                        sol_df.insert(3, "CUT OR", cut_or_vals)
+                        sol_df.insert(7, "CUT OL", cut_ol_vals)
+                    sol_highlighter = make_highlighter(lim_map, sol_min, sol_max, cut_cols,
+                                                       ctrl_in_frame_, ctrl_side_)
+                    st.dataframe(sol_df.style.apply(sol_highlighter, axis=None),
+                                 use_container_width=True)
+                    if not wall_limiting_:
+                        st.caption("CUT OR / CUT OL: valor a cortar si OR/OL supera el límite (OR/OL − LIMIT). Positivo = requiere corte. Blanco = dentro del límite.")
+                    sol_sum = []
+                    for col in SURVEY_COLS:
+                        col_vals = [x[col] for x in sol["matrix"]]
+                        lim_c = lim_map[col]
+                        if col in OR_OL_COLS:
+                            ext_c = max(col_vals); dif_c = ext_c - lim_c
+                            off_c = sum(1 for v in col_vals if v > lim_c)
+                            lbl   = "Máximo (mm)"
+                            viols_s = [str(i+1) for i, v in enumerate(col_vals) if v > lim_c]
+                        else:
+                            ext_c = min(col_vals); dif_c = lim_c - ext_c
+                            off_c = sum(1 for v in col_vals if v < lim_c)
+                            lbl   = "Mínimo (mm)"
+                            viols_s = [str(i+1) for i, v in enumerate(col_vals) if v < lim_c]
+                        sol_sum.append({
+                            "Columna":       col,
+                            "Límite (mm)":   round(lim_c, 2),
+                            "Fuera límite":  off_c,
+                            "Niveles":       ", ".join(viols_s) if viols_s else "—",
+                            lbl:             round(ext_c, 2),
+                            "Dif vs Límite": round(dif_c, 2),
+                        })
+                    st.dataframe(pd.DataFrame(sol_sum), use_container_width=True, hide_index=True)
+
+            with st.expander(f"📋 Log del optimizador ({len(step_log)} pasos evaluados)", expanded=False):
+                valid_steps  = [s for s in step_log if s.get("status") == "VALID"]
+                skip_steps   = [s for s in step_log if s.get("status") == "SKIP"]
+                skip_phys    = [s for s in skip_steps if s.get("skip_type", "").startswith("physical")]
+                skip_wall    = [s for s in skip_steps if s.get("skip_type") == "wall"]
+                skip_frame   = [s for s in skip_steps if s.get("skip_type") == "frame_opening"]
+                st.caption(
+                    f"Válidos: {len(valid_steps)}  |  "
+                    f"Omitidos por límite físico (RL/FB): {len(skip_phys)}  |  "
+                    f"Omitidos por pared: {len(skip_wall)}  |  "
+                    f"Omitidos por apertura tapada: {len(skip_frame)}"
+                )
+                if valid_steps:
+                    opt_pairs = {(s["rl"], s["fb"]) for s in all_solutions}
+                    best_p    = (best["rl"], best["fb"])
+                    log_rows  = []
+                    for s in valid_steps:
+                        obc  = s.get("off_by_col", {})
+                        pair = (s["rl"], s["fb"])
+                        if pair == best_p:        estado = "⭐ SELECCIONADA"
+                        elif pair in opt_pairs:   estado = "✅ ÓPTIMA"
+                        else:                     estado = ""
+                        log_rows.append({
+                            "RL": s["rl"], "FB": s["fb"],
+                            "FB aplic.": s.get("fb_applied", s["fb"]),
+                            "Total OFF": s["total_off"],
+                            "WR": obc.get("WR", 0), "FR": obc.get("FR", 0),
+                            "OR": obc.get("OR", 0), "WL": obc.get("WL", 0),
+                            "FL": obc.get("FL", 0), "OL": obc.get("OL", 0),
+                            "Estado": estado,
+                        })
+                    log_rows = (
+                        [x for x in log_rows if x["Estado"] == "⭐ SELECCIONADA"] +
+                        [x for x in log_rows if x["Estado"] == "✅ ÓPTIMA"] +
+                        [x for x in log_rows if x["Estado"] == ""]
+                    )
+                    df_log = pd.DataFrame(log_rows)
+                    def _hl(row):
+                        if row["Estado"] == "⭐ SELECCIONADA":
+                            return ["background-color:#7b5c00;color:white;font-weight:bold"] * len(row)
+                        if row["Estado"] == "✅ ÓPTIMA":
+                            return ["background-color:#1a3a2a;color:#a8e6cf"] * len(row)
+                        return [""] * len(row)
+                    st.dataframe(df_log.style.apply(_hl, axis=1),
+                                 use_container_width=True, hide_index=True)
+        else:
+            st.error("No se encontró combinación válida.")
+
+        # ── Diagrama físico — planta por piso ─────────────────
+        st.subheader("📐 Diagrama de posicionamiento — planta por piso")
+        st.caption("Vista superior de cómo encaja la cabina en el shaft en cada piso "
+                   "(matriz de la solución seleccionada). Verde = dentro de límite, "
+                   "naranja = al límite, rojo = fuera.")
+        if best and best.get("matrix"):
+            n_floors = len(best["matrix"])
+            components.html(
+                render_floor_plans_html(all_params, limits, best, lim_map,
+                                        ctrl_in_frame_, ctrl_side_),
+                height=min(398 * n_floors + 20, 8000),
+                scrolling=True,
+            )
+
+        # ── BSR vs BS ─────────────────────────────────────────
+        st.subheader("📏 Análisis BSR vs BS")
+        if not bs_result.get("needed"):
+            st.success("BSR ≥ BS — No se requiere ajuste de shaft.")
+        elif bs_result.get("step") is None:
+            st.error(f"No se encontró paso. DIF BS = {bs_result.get('dif_original')} mm")
+        else:
+            st.success(
+                f"✅ Paso: **{bs_result['step']} mm**  |  "
+                f"Rango: **{bs_result['range']}**  |  Zona: **{bs_result['range_name']}**"
+            )
+
+        # ── Plomado definitivo (con el desplazamiento del survey) ──
+        st.subheader("🔩 Plomado definitivo (según el survey)")
+        st.caption("Esquema de plomado con los desplazamientos que determinó el survey. "
+                   "El conjunto (plomos + paredes teóricas + template) se mueve; las paredes "
+                   "reales quedan fijas (eje cero = pared real izquierda).")
+        if plumb_res and best:
+            st.info(
+                f"Desplazamiento aplicado:  lateral (rl) = **{best['rl']:.1f} mm**  ·  "
+                f"frontal (fb) = **{best['fb_applied']:.1f} mm**."
+            )
+            pm1, pm2, pm3 = st.columns(3)
+            pm1.metric("DBP",  f"{plumb_res['dbp']:.1f} mm")
+            pm2.metric("DBPW", f"{plumb_res['dbpw']:.1f} mm")
+            pm3.metric("RW",   f"{plumb_res['rw']:.1f} mm")
+            st.dataframe(pd.DataFrame(plumb_table(plumb_res)),
+                         use_container_width=True, hide_index=True)
+            components.html(
+                '<!DOCTYPE html><html><body style="margin:0;background:transparent">'
+                + plumb_svg(plumb_res) + '</body></html>',
+                height=460, scrolling=False,
+            )
+            st.markdown("**📏 Verificación en campo — distancias plomo ↔ pared real**")
+            st.dataframe(pd.DataFrame(plumb_checks(plumb_res)),
+                         use_container_width=True, hide_index=True)
+            if float(all_params.get("LengthTemplate", 0.0)) <= 0:
+                st.info("💡 Ingresa **LengthTemplate** en los parámetros para ver el "
+                        "template completo (punto P, cortes C1/C2 y diagonales).")
+        else:
+            st.caption("Se mostrará cuando el survey encuentre una solución válida.")
+
+        # ── Estado de las interpretaciones IA ─────────────────
+        if not interpretation.get("_ok"):
+            st.error(
+                f"⚠️ **No se pudo generar la interpretación técnica:** {interpretation.get('_error')}\n\n"
+                "Los informes **requieren** la interpretación IA. Verifica que "
+                "`ANTHROPIC_API_KEY` esté configurada en los **Secrets de Streamlit Cloud**."
+            )
+
     if st.button("🚀 Calcular", type="primary", use_container_width=True):
 
         # Snapshot del survey ANTES de hacer cualquier ajuste
@@ -590,232 +860,29 @@ if _seccion == _L_SURVEY:
 
         all_params.update(limits)
 
-        with st.expander("📊 Parámetros calculados", expanded=False):
-            st.dataframe(
-                pd.DataFrame([
-                    {"Parámetro": k, "Valor": round(v, 3) if isinstance(v, (int, float)) else v}
-                    for k, v in limits.items()
-                ]),
-                use_container_width=True, hide_index=True
-            )
-
-        # Matriz ajustada
+        # Matriz ajustada + análisis
         survey_adj    = apply_offsets(survey_original_input.to_dict("records"), limits)
         survey_adj_df = pd.DataFrame(survey_adj)
         analysis      = analyze_matrix(survey_adj, limits, wall_limiting=wall_limiting)
         all_params.update(analysis)
         limits.update(analysis)
-
-        lim_map  = {c: limits[f"LIMIT_{c}"] for c in SURVEY_COLS}
-        min_vals = {f"MIN_{c}": analysis[f"MIN_{c}"] for c in SURVEY_COLS}
-        max_vals = {f"MAX_{c}": analysis.get(f"MAX_{c}", analysis[f"MIN_{c}"]) for c in SURVEY_COLS}
-
-        # En Caso 2 OR/OL no son OFF: se muestran en naranja (CUT)
-        cut_cols = ["OR", "OL"] if not wall_limiting else []
-
-        highlight = make_highlighter(lim_map, min_vals, max_vals, cut_cols, ctrl_in_frame, ctrl_side)
-
-        st.subheader("Matriz SURVEY ajustada")
-        st.dataframe(survey_adj_df.style.apply(highlight, axis=None),
-                     use_container_width=True)
-
-        st.subheader("Resumen por columna — Estado inicial")
-        last_adj = len(survey_adj) - 1
-        summary  = []
-        for col in SURVEY_COLS:
-            lim_c = lim_map[col]
-            viols = []
-            for i, row in enumerate(survey_adj):
-                v  = row[col]
-                el = lim_c
-                if ctrl_applies_to_cell(i, len(survey_adj), col, ctrl_in_frame, ctrl_side):
-                    el -= 70
-                if col in OR_OL_COLS:
-                    if v > el: viols.append(str(i + 1))
-                else:
-                    if v < el: viols.append(str(i + 1))
-            ext = round(analysis.get(f"MAX_{col}", analysis[f"MIN_{col}"]), 2) \
-                  if col in OR_OL_COLS else round(analysis[f"MIN_{col}"], 2)
-            summary.append({
-                "Columna":             col,
-                "Límite (mm)":         round(lim_c, 2),
-                "Fuera límite":        analysis[f"{col}_OFF_COUNT"],
-                "Niveles incumplidos": ", ".join(viols) if viols else "—",
-                "Min / Max (mm)":      ext,
-                "Diferencia (mm)":     round(analysis[f"DIF_{col}"], 2),
-            })
-        st.dataframe(pd.DataFrame(summary), use_container_width=True, hide_index=True)
-
-        st.info(
-            f"**MAX OFF RL:** {analysis['MAX_OFF_RL']:.2f} mm  |  "
-            f"**MAX OFF FB:** {analysis['MAX_OFF_FB']:.2f} mm  |  "
-            f"**BC_CALC:** {limits.get('BC_CALC', 0):.2f} mm  |  "
-            f"**DIF TSW-FS:** {limits.get('DIF_TSW_FS', 0):.2f} mm  |  "
-            f"**FB máx. hacia atrás:** {limits.get('FB_MAX_BACK', 0):.2f} mm"
-        )
+        lim_map = {c: limits[f"LIMIT_{c}"] for c in SURVEY_COLS}
 
         # ── Optimización ──────────────────────────────────────
-        st.subheader("🔍 Optimización")
-        with st.spinner("Buscando combinación óptima..."):
+        with st.spinner("🔍 Buscando combinación óptima..."):
             opt_result = optimize(survey_adj, limits, all_params)
-
-        best          = opt_result.get("best")
-        all_solutions = opt_result.get("all_solutions", [])
-        step_log      = opt_result.get("step_log", [])
-
-        if best:
-            n_sol = len(all_solutions)
-            st.success(
-                f"✅ Se encontraron **{n_sol} solución(es) óptima(s)** con "
-                f"**{best['total_off']} valor(es) fuera de límite**"
-            )
-
-            # Ordenar usando el mismo criterio que el optimizer (fb_applied)
-            best_pair = (best["rl"], best["fb"])
-            sorted_solutions = sorted(
-                all_solutions,
-                key=lambda s: (
-                    0 if (s["rl"], s["fb"]) == best_pair else 1,
-                    abs(s["rl"]) + abs(s.get("fb_applied", s["fb"]))
-                )
-            )
-            for idx_sol, sol in enumerate(sorted_solutions):
-                is_best   = (sol["rl"], sol["fb"]) == best_pair
-                fb_ap     = sol.get("fb_applied", sol["fb"])
-                fb_suffix = f"  |  FB aplic. = {fb_ap:.1f} mm" if abs(fb_ap - sol["fb"]) > 0.01 else ""
-                sol_label = f"{'⭐ ' if is_best else ''}Solución {idx_sol+1} — RL = {sol['rl']} mm  |  FB = {sol['fb']} mm{fb_suffix}"
-                with st.expander(sol_label, expanded=(idx_sol == 0)):
-                    sol_df  = pd.DataFrame(sol["matrix"])
-                    sol_min = {f"MIN_{c}": min(sol_df[c]) for c in SURVEY_COLS}
-                    sol_max = {f"MAX_{c}": max(sol_df[c]) for c in SURVEY_COLS}
-                    if not wall_limiting:
-                        lor_v        = lim_map["OR"]
-                        lol_v        = lim_map["OL"]
-                        last_sol_idx = len(sol_df) - 1
-                        cut_or_vals, cut_ol_vals = [], []
-                        for i, (or_v, ol_v) in enumerate(zip(sol_df["OR"], sol_df["OL"])):
-                            or_lim = lor_v - 70 if (ctrl_in_frame and ctrl_side == "R" and i == last_sol_idx) else lor_v
-                            ol_lim = lol_v - 70 if (ctrl_in_frame and ctrl_side == "L" and i == last_sol_idx) else lol_v
-                            cut_or_vals.append(round(or_v - or_lim, 1) if or_v - or_lim > 0 else "")
-                            cut_ol_vals.append(round(ol_v - ol_lim, 1) if ol_v - ol_lim > 0 else "")
-                        sol_df.insert(3, "CUT OR", cut_or_vals)
-                        sol_df.insert(7, "CUT OL", cut_ol_vals)
-                    sol_highlighter = make_highlighter(lim_map, sol_min, sol_max, cut_cols, ctrl_in_frame, ctrl_side)
-                    st.dataframe(sol_df.style.apply(sol_highlighter, axis=None),
-                                 use_container_width=True)
-                    if not wall_limiting:
-                        st.caption("CUT OR / CUT OL: valor a cortar si OR/OL supera el límite (OR/OL − LIMIT). Positivo = requiere corte. Blanco = dentro del límite.")
-                    sol_sum = []
-                    for col in SURVEY_COLS:
-                        col_vals = [r[col] for r in sol["matrix"]]
-                        lim_c = lim_map[col]
-                        if col in OR_OL_COLS:
-                            ext_c = max(col_vals); dif_c = ext_c - lim_c
-                            off_c = sum(1 for v in col_vals if v > lim_c)
-                            lbl   = "Máximo (mm)"
-                            viols_s = [str(i+1) for i,v in enumerate(col_vals) if v > lim_c]
-                        else:
-                            ext_c = min(col_vals); dif_c = lim_c - ext_c
-                            off_c = sum(1 for v in col_vals if v < lim_c)
-                            lbl   = "Mínimo (mm)"
-                            viols_s = [str(i+1) for i,v in enumerate(col_vals) if v < lim_c]
-                        sol_sum.append({
-                            "Columna":       col,
-                            "Límite (mm)":   round(lim_c, 2),
-                            "Fuera límite":  off_c,
-                            "Niveles":       ", ".join(viols_s) if viols_s else "—",
-                            lbl:             round(ext_c, 2),
-                            "Dif vs Límite": round(dif_c, 2),
-                        })
-                    st.dataframe(pd.DataFrame(sol_sum), use_container_width=True, hide_index=True)
-
-            # Log del optimizador
-            with st.expander(f"📋 Log del optimizador ({len(step_log)} pasos evaluados)", expanded=False):
-                valid_steps  = [s for s in step_log if s.get("status") == "VALID"]
-                skip_steps   = [s for s in step_log if s.get("status") == "SKIP"]
-                skip_phys    = [s for s in skip_steps if s.get("skip_type", "").startswith("physical")]
-                skip_wall    = [s for s in skip_steps if s.get("skip_type") == "wall"]
-                skip_frame   = [s for s in skip_steps if s.get("skip_type") == "frame_opening"]
-                st.caption(
-                    f"Válidos: {len(valid_steps)}  |  "
-                    f"Omitidos por límite físico (RL/FB): {len(skip_phys)}  |  "
-                    f"Omitidos por pared: {len(skip_wall)}  |  "
-                    f"Omitidos por apertura tapada: {len(skip_frame)}"
-                )
-                if valid_steps:
-                    opt_pairs = {(s["rl"], s["fb"]) for s in all_solutions}
-                    best_p    = (best["rl"], best["fb"])
-                    log_rows  = []
-                    for s in valid_steps:
-                        obc  = s.get("off_by_col", {})
-                        pair = (s["rl"], s["fb"])
-                        if pair == best_p:        estado = "⭐ SELECCIONADA"
-                        elif pair in opt_pairs:   estado = "✅ ÓPTIMA"
-                        else:                     estado = ""
-                        log_rows.append({
-                            "RL": s["rl"], "FB": s["fb"],
-                            "FB aplic.": s.get("fb_applied", s["fb"]),
-                            "Total OFF": s["total_off"],
-                            "WR": obc.get("WR",0), "FR": obc.get("FR",0),
-                            "OR": obc.get("OR",0), "WL": obc.get("WL",0),
-                            "FL": obc.get("FL",0), "OL": obc.get("OL",0),
-                            "Estado": estado,
-                        })
-                    # Ordenar: seleccionada → óptimas → resto
-                    log_rows = (
-                        [r for r in log_rows if r["Estado"] == "⭐ SELECCIONADA"] +
-                        [r for r in log_rows if r["Estado"] == "✅ ÓPTIMA"] +
-                        [r for r in log_rows if r["Estado"] == ""]
-                    )
-                    df_log = pd.DataFrame(log_rows)
-                    def _hl(row):
-                        if row["Estado"] == "⭐ SELECCIONADA":
-                            return ["background-color:#7b5c00;color:white;font-weight:bold"] * len(row)
-                        if row["Estado"] == "✅ ÓPTIMA":
-                            return ["background-color:#1a3a2a;color:#a8e6cf"] * len(row)
-                        return [""] * len(row)
-                    st.dataframe(df_log.style.apply(_hl, axis=1),
-                                 use_container_width=True, hide_index=True)
-        else:
-            st.error("No se encontró combinación válida.")
-            opt_result = {"best": None, "all_solutions": [], "step_log": step_log}
-
-        # ── Diagrama físico — planta por piso ─────────────────
-        st.subheader("📐 Diagrama de posicionamiento — planta por piso")
-        st.caption("Vista superior de cómo encaja la cabina en el shaft en cada piso "
-                   "(matriz de la solución seleccionada). Verde = dentro de límite, "
-                   "naranja = al límite, rojo = fuera.")
-        best_sol = opt_result.get("best") if opt_result else None
-        if best_sol and best_sol.get("matrix"):
-            n_floors = len(best_sol["matrix"])
-            components.html(
-                render_floor_plans_html(all_params, limits, best_sol, lim_map,
-                                        ctrl_in_frame, ctrl_side),
-                height=min(398 * n_floors + 20, 8000),
-                scrolling=True,
-            )
+        best_sol = opt_result.get("best")
+        if not best_sol:
+            opt_result = {"best": None, "all_solutions": [],
+                          "step_log": opt_result.get("step_log", [])}
 
         # ── BSR vs BS ─────────────────────────────────────────
-        st.subheader("📏 Análisis BSR vs BS")
         bs_result = find_bs_step(
             all_params["BSR"], all_params["BS"],
             limits["LIMIT_ZB"], limits["LIMIT_OB"]
         )
-        if not bs_result.get("needed"):
-            st.success("BSR ≥ BS — No se requiere ajuste de shaft.")
-        elif bs_result.get("step") is None:
-            st.error(f"No se encontró paso. DIF BS = {bs_result.get('dif_original')} mm")
-        else:
-            st.success(
-                f"✅ Paso: **{bs_result['step']} mm**  |  "
-                f"Rango: **{bs_result['range']}**  |  Zona: **{bs_result['range_name']}**"
-            )
 
         # ── Plomado definitivo (con el desplazamiento del survey) ──
-        st.subheader("🔩 Plomado definitivo (según el survey)")
-        st.caption("Esquema de plomado con los desplazamientos que determinó el survey. "
-                   "El conjunto (plomos + paredes teóricas + template) se mueve; las paredes "
-                   "reales quedan fijas (eje cero = pared real izquierda).")
         plumb_res = None
         if best_sol is not None:
             try:
@@ -827,32 +894,9 @@ if _seccion == _L_SURVEY:
                 }
                 _sdisp    = {"rl": best_sol["rl"], "fb": best_sol["fb_applied"]}
                 plumb_res = compute_plumb(_plumb_inp, survey_disp=_sdisp)
-                st.info(
-                    f"Desplazamiento aplicado:  lateral (rl) = **{best_sol['rl']:.1f} mm**  ·  "
-                    f"frontal (fb) = **{best_sol['fb_applied']:.1f} mm**."
-                )
-                pm1, pm2, pm3 = st.columns(3)
-                pm1.metric("DBP",  f"{plumb_res['dbp']:.1f} mm")
-                pm2.metric("DBPW", f"{plumb_res['dbpw']:.1f} mm")
-                pm3.metric("RW",   f"{plumb_res['rw']:.1f} mm")
-                st.dataframe(pd.DataFrame(plumb_table(plumb_res)),
-                             use_container_width=True, hide_index=True)
-                components.html(
-                    '<!DOCTYPE html><html><body style="margin:0;background:transparent">'
-                    + plumb_svg(plumb_res) + '</body></html>',
-                    height=460, scrolling=False,
-                )
-                st.markdown("**📏 Verificación en campo — distancias plomo ↔ pared real**")
-                st.dataframe(pd.DataFrame(plumb_checks(plumb_res)),
-                             use_container_width=True, hide_index=True)
-                if float(all_params.get("LengthTemplate", 0.0)) <= 0:
-                    st.info("💡 Ingresa **LengthTemplate** en los parámetros para ver el "
-                            "template completo (punto P, cortes C1/C2 y diagonales).")
             except Exception as e:
                 plumb_res = None
                 st.warning(f"No se pudo generar el plomado definitivo: {e}")
-        else:
-            st.caption("Se mostrará cuando el survey encuentre una solución válida.")
 
         # ── Interpretaciones IA (admin + usuario) ─────────────
         _calc_for_ia = {
@@ -866,16 +910,7 @@ if _seccion == _L_SURVEY:
         with st.spinner("🤖 Generando interpretación del informe de cliente..."):
             interpretation_user = generate_user_interpretation(_calc_for_ia, all_params)
 
-        if interpretation.get("_ok"):
-            st.success("🤖 Interpretaciones generadas correctamente.")
-        else:
-            st.error(
-                f"⚠️ **No se pudo generar la interpretación técnica:** {interpretation.get('_error')}\n\n"
-                "Los informes **requieren** la interpretación IA. Verifica que "
-                "`ANTHROPIC_API_KEY` esté configurada en los **Secrets de Streamlit Cloud**."
-            )
-
-        # ── Persistir para los reportes ───────────────────────
+        # ── Persistir para el render y los reportes ───────────
         st.session_state.calc_results = {
             "all_params":          all_params,
             "limits":              limits,
@@ -889,6 +924,7 @@ if _seccion == _L_SURVEY:
             "interpretation_user": interpretation_user,
             "plumb":               plumb_res,
         }
+        st.session_state["_calc_sig"] = _survey_signature()
 
         # ── Cronograma automático según el proyecto ───────────
         _flags = detect_flags(st.session_state.calc_results)
@@ -937,8 +973,16 @@ if _seccion == _L_SURVEY:
         )
         if admin_pdf:
             st.info("📧 Informe interno de administración enviado por correo.")
-
+        if interpretation.get("_ok"):
+            st.success("🤖 Interpretaciones generadas correctamente.")
         st.success("✅ Cálculo e interpretación completados.")
+
+    # ── Resultados: se dibujan SIEMPRE que haya un cálculo guardado ──
+    if st.session_state.calc_results:
+        if st.session_state.get("_calc_sig") and st.session_state["_calc_sig"] != _survey_signature():
+            st.warning("⚠️ Cambiaste parámetros, configuración o la matriz desde el último cálculo. "
+                       "Lo de abajo corresponde al cálculo anterior — pulsa **🚀 Calcular** para actualizarlo.")
+        _render_survey_results(st.session_state.calc_results)
 
     # ══════════════════════════════════════════════════════
     # PASO 5 — GESTIÓN DE PROYECTO (cronograma + curva S)
