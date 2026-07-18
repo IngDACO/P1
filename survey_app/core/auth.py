@@ -243,6 +243,28 @@ def heartbeat(usuario: str, token: str) -> bool:
     return True
 
 
+def validate_session(usuario: str, token: str) -> dict:
+    """Para el login persistente (cookie): si el token coincide con la sesión viva
+    del usuario, devuelve sus datos de login; si no, {}."""
+    if not (str(usuario).strip() and str(token).strip()):
+        return {}
+    lws, err = _get_login_ws()
+    if err:
+        return {}
+    _, rec = _find_row(lws, usuario)
+    if not rec:
+        return {}
+    if str(rec.get("SessionToken", "")).strip() != str(token).strip():
+        return {}
+    if str(rec.get("Activo", "SI")).strip().upper() not in _ACTIVE_OK:
+        return {}
+    return {"usuario": str(rec.get("Usuario", "")),
+            "rol":     str(rec.get("Rol", "campo")).strip().lower(),
+            "nombre":  str(rec.get("Nombre", "")) or usuario,
+            "grupo":   str(rec.get("Grupo", "")).strip(),
+            "token":   token}
+
+
 def get_user(usuario: str) -> dict:
     """Registro del usuario (dict) o {} si no existe/no se puede leer (cacheado).
     Uso para contacto/display; las rutas de sesión leen fresco vía _find_row."""

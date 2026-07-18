@@ -10,6 +10,8 @@ cliente (grupo) al que pertenece el admin — sin IA. Dos salidas:
 import logging
 from datetime import date, datetime
 
+import streamlit as st
+
 from core import projects as P
 from core import alerts
 from core import auth
@@ -40,6 +42,7 @@ def _base(grupo) -> dict:
     }
 
 
+@st.cache_data(ttl=60, show_spinner=False)
 def group_digest(grupo) -> dict:
     b = _base(grupo)
     proys, activos, delays, horas, alarmas = (b["proys"], b["activos"], b["delays"],
@@ -165,6 +168,34 @@ def digest_text(d) -> str:
     if len(L) == 1:
         L.append("Sin pendientes urgentes.")
     return "\n".join(L)
+
+
+@st.cache_data(ttl=60, show_spinner=False)
+def owner_digest() -> list:
+    """Resumen por grupo para el propietario: [{grupo, activos, avance, retrasos,
+    alarmas, vencidos, cred_venc, sobre_presupuesto, pendientes}]."""
+    out = []
+    try:
+        grupos = [g["Grupo"] for g in auth.list_groups()]
+    except Exception:
+        grupos = []
+    for g in grupos:
+        try:
+            d = group_digest(g)
+        except Exception:
+            continue
+        out.append({
+            "grupo": g,
+            "activos": d["n_activos"], "avance": d["avance_prom"],
+            "retrasos": len(d["retrasos"]),
+            "alarmas": sum(a["n"] for a in d["alarmas"]),
+            "vencidos": len(d["vencidos"]),
+            "cred_venc": len(d.get("cred_venc", [])),
+            "sobre_presupuesto": len(d.get("sobre_presupuesto", [])),
+            "pendientes": has_pending(d),
+        })
+    out.sort(key=lambda x: -(x["retrasos"] + x["alarmas"] + x["vencidos"]))
+    return out
 
 
 def group_snapshot_text(grupo, max_proys=30) -> str:

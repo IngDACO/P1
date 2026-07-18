@@ -93,7 +93,7 @@ def _kpis(grupo=None) -> dict:
         "total":   len(proys),
         "activos": len(activos),
         "avg":     round(sum(avances) / len(avances)) if avances else 0,
-        "riesgo":  len(_delays(proys)),
+        "riesgo":  len(P.delays_of_group(grupo)),
         "alarmas": sum(v for k, v in alarmas.items() if k in ids),
         "horas":   round(sum(horas.get(str(p.get("Nombre", "")), 0.0) for p in proys)),
     }
@@ -169,9 +169,23 @@ def _resumen_del_dia(grupo: str):
                 from core import chat_agent
                 st.session_state[key] = chat_agent.admin_briefing(grupo)
         st.markdown(st.session_state[key])
-        if st.button("🔄 Actualizar resumen", key=f"brief_ref_{grupo}"):
+        b1, b2 = st.columns(2)
+        if b1.button("🔄 Actualizar resumen", key=f"brief_ref_{grupo}"):
             st.session_state.pop(key, None)
             st.rerun()
+        if b2.button("📨 Enviármelo por Telegram/email", key=f"brief_send_{grupo}"):
+            from core import notify
+            _u = st.session_state.get("auth", {}).get("usuario", "")
+            _txt = st.session_state.get(key, "")
+            try:
+                rr = notify.notify_user(_u, f"🔔 Resumen del día — {grupo}",
+                                        [l for l in str(_txt).split("\n") if l.strip()])
+                if rr.get("email") or rr.get("telegram"):
+                    st.success("📨 Resumen enviado.")
+                else:
+                    st.warning("No tienes email/Telegram configurado en tu usuario.")
+            except Exception as e:
+                st.error(f"No se pudo enviar: {e}")
 
 
 # Documentos: tipos y permisos por rol
@@ -258,8 +272,8 @@ def _panel_proyectos(grupo: str):
     ags = {a["ID"]: a["Nombre"] for a in P.list_groupings(grupo=grupo)}
     horas = P.project_hours_bulk(grupo)   # 1 sola lectura del fichaje
     alarmas = alerts.open_counts_all() if alerts.is_configured() else {}
-    delays = _delays(proys)               # {pid: días de retraso}
-    aheads = _aheads(proys)               # {pid: días de adelanto}
+    delays = P.delays_of_group(grupo)     # {pid: días de retraso} (cacheado)
+    aheads = P.aheads_of_group(grupo)     # {pid: días de adelanto} (cacheado)
     _nr, _na = len(delays), len(aheads)
     st.markdown(f"**Cartera — {len(proys)} proyecto(s)**"
                 + (f"  ·  🔴 {_nr} con retraso" if _nr else "")
@@ -277,7 +291,8 @@ def _panel_proyectos(grupo: str):
         _detalle_proyecto(idmap[sel], grupo)
 
 
-def _portfolio_html(proys, horas, alarmas, ags, delays=None, aheads=None) -> str:
+def _portfolio_html(proys, horas, alarmas, ags, delays=None, aheads=None,
+                    show_group=False) -> str:
     """Lista de tarjetas de proyecto: punto de estado, nombre/cliente, ubicación,
     píldora, barra de avance, horas y badges de alarmas / retraso / adelanto.
     Retraso → borde rojo + badge ⏰ · Adelanto → borde verde + badge ⏩."""
@@ -294,6 +309,8 @@ def _portfolio_html(proys, horas, alarmas, ags, delays=None, aheads=None) -> str
         na  = alarmas.get(pid, 0)
         ag  = ags.get(str(p.get("AgrupacionID", "")), "")
         sub = f"{pid} · {str(p.get('Cliente','')) or '—'}" + (f" · {ag}" if ag else "")
+        if show_group and p.get("Grupo"):
+            sub = f"🏢 {p.get('Grupo')} · " + sub
         ubic = str(p.get("Ubicacion", "") or "")
         ubic_html = (f'<div style="font-size:11.5px;white-space:nowrap;overflow:hidden;'
                      f'text-overflow:ellipsis;">{maps.maps_link_html(ubic, ubic, color="#2e6da4")}</div>'
@@ -607,6 +624,35 @@ def _detalle_proyecto(pid: str, grupo: str = None):
                     _aviso_cambio("Se eliminó una actividad del cronograma.")
                     st.rerun()
 
+    # ── Reconstruir el survey guardado ──
+    with st.expander("🔄 Reconstruir proyecto en el Survey (regenerar informes)"):
+        st.caption("Carga los parámetros y la matriz guardados en la pestaña 📐 Survey. "
+                   "Luego pulsa **Calcular** allí para regenerar diagramas e informes.")
+        if st.button("🔄 Cargar este proyecto en el Survey", key=f"rebuild_{pid}"):
+            full = P.get_project_full(pid)
+            params, matriz = full.get("params") or {}, full.get("matriz") or []
+            if not params:
+                st.error("Este proyecto no tiene parámetros guardados.")
+            else:
+                for k, v in params.items():
+                    try:
+                        st.session_state[f"inp_{k}"] = float(v)
+                    except Exception:
+                        pass
+                if params.get("NS"):
+                    try:
+                        st.session_state["ns"] = int(float(params["NS"]))
+                    except Exception:
+                        pass
+                if matriz:
+                    try:
+                        st.session_state["survey_df"] = pd.DataFrame(matriz)
+                    except Exception:
+                        pass
+                st.session_state["proyecto"]  = str(prj.get("Nombre", ""))
+                st.session_state["ingeniero"] = str(prj.get("Ingeniero", ""))
+                st.success("✅ Cargado. Ve a **📐 Survey** y pulsa **Calcular** para regenerar todo.")
+
     # ── Gastos / compras ──
     render_expenses(pid, grupo, can_delete=True, key_prefix="adm")
 
@@ -624,6 +670,54 @@ def _detalle_proyecto(pid: str, grupo: str = None):
 
 
 # ── Panel de agrupaciones ────────────────────────────────────────
+def _dashboard_agrupacion(ag, grupo):
+    """Vista consolidada de una agrupación: avance ponderado, proyectos, horas y costo."""
+    from core import expenses as E
+    aid = ag["ID"]
+    proys = P.list_projects(grupo=grupo, agrupacion_id=aid)
+    if not proys:
+        st.info("Esta agrupación aún no tiene proyectos asignados.")
+        return
+    pr = P.grouping_progress(aid)
+    delays = P.delays_of_group(grupo)
+    aheads = P.aheads_of_group(grupo)
+    horas = P.project_hours_bulk(grupo)
+
+    tot_h = sum(horas.get(str(p.get("Nombre", "")), 0.0) for p in proys)
+    costos = [E.project_cost(p.get("ID"), grupo) for p in proys] if E.is_configured() else []
+    tot_c = sum(c["total"] for c in costos)
+    tot_pres = sum(c["presupuesto"] for c in costos)
+
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("Avance consolidado", f"{pr['avance']:.0f}%")
+    m2.metric("Elevadores", pr["n_proyectos"])
+    m3.metric("Horas", f"{tot_h:.0f}")
+    m4.metric("Costo total", f"${tot_c:,.0f}")
+    st.progress(min(1.0, pr["avance"] / 100.0))
+    if tot_pres > 0:
+        _p = round(100 * tot_c / tot_pres)
+        (st.error if tot_c > tot_pres else st.caption)(
+            f"Presupuesto agrupación ${tot_pres:,.0f} · {_p}% consumido"
+            + (" ⛔ SOBRE PRESUPUESTO" if tot_c > tot_pres else ""))
+
+    rows = []
+    for i, p in enumerate(proys):
+        pid = str(p.get("ID", ""))
+        c = costos[i] if costos else {"total": 0}
+        rows.append({
+            "Proyecto": p.get("Nombre"), "Estado": p.get("Estado"),
+            "Avance %": P._num(p.get("Avance")),
+            "Peso": P._num(p.get("PesoEnAgrupacion")),
+            "⏰/⏩": (f"⏰ {delays[pid]:.0f} d" if pid in delays
+                     else (f"⏩ {aheads[pid]:.0f} d" if pid in aheads else "en fecha")),
+            "Horas": horas.get(str(p.get("Nombre", "")), 0.0),
+            "Costo": c.get("total", 0),
+        })
+    st.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True)
+    st.bar_chart(pd.DataFrame({"Avance %": [r["Avance %"] for r in rows]},
+                              index=[r["Proyecto"] for r in rows]))
+
+
 def _panel_agrupaciones(grupo: str):
     ags = P.list_groupings(grupo=grupo)
     if ags:
@@ -636,6 +730,13 @@ def _panel_agrupaciones(grupo: str):
                 "Descripción": a.get("Descripcion", ""),
             })
         st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+        # Dashboard consolidado de una agrupación
+        st.markdown("#### 📊 Dashboard de agrupación")
+        _amap = {f"{a['ID']} · {a['Nombre']}": a for a in ags}
+        _asel = st.selectbox("Agrupación", list(_amap.keys()), key="agr_dash_sel",
+                             label_visibility="collapsed")
+        if _asel:
+            _dashboard_agrupacion(_amap[_asel], grupo)
     else:
         st.info("No hay agrupaciones. Crea una para agrupar varios elevadores con pesos.")
 
@@ -701,8 +802,19 @@ def render_owner_projects():
             "Horas":     P.project_hours(p.get("Nombre"), p.get("Grupo")),
             "Agrupación": ags.get(str(p.get("AgrupacionID", "")), ""),
         })
-    st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True,
-                 column_config={"🗺": st.column_config.LinkColumn("🗺", display_text="Abrir")})
+    # Cartera de tarjetas (mismo look del admin) + tabla detallada abajo
+    _hb = {}
+    for p in proys:
+        _hb[str(p.get("Nombre", ""))] = P.project_hours(p.get("Nombre"), p.get("Grupo"))
+    st.markdown(f"**Cartera — {len(proys)} proyecto(s)**"
+                + (f"  ·  🔴 {len(delays)} con retraso" if delays else "")
+                + (f"  ·  🟢 {len(aheads)} adelantado(s)" if aheads else ""))
+    st.markdown(_portfolio_html(proys, _hb, alarmas, ags, delays, aheads, show_group=True),
+                unsafe_allow_html=True)
+
+    with st.expander("📋 Ver tabla detallada"):
+        st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True,
+                     column_config={"🗺": st.column_config.LinkColumn("🗺", display_text="Abrir")})
 
     st.markdown("#### 🔎 Abrir proyecto")
     idmap = {f"{p.get('Grupo')} · {p.get('ID')} · {p.get('Nombre')}": p.get("ID") for p in proys}

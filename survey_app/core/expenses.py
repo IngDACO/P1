@@ -119,6 +119,7 @@ def project_cost(pid, grupo) -> dict:
             "presupuesto": pres, "pct": pct, "over": bool(pres > 0 and total > pres)}
 
 
+@st.cache_data(ttl=60, show_spinner=False)
 def over_budget(grupo) -> list:
     """Proyectos del grupo sobre presupuesto (para el radar del admin)."""
     from core import projects as P

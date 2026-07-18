@@ -155,6 +155,21 @@ def render_login() -> bool:
     if st.session_state.get("auth"):
         return True
 
+    # ── Login persistente: restaurar desde la cookie (si la sesión sigue viva) ──
+    if not st.session_state.get("_cookie_tried"):
+        st.session_state["_cookie_tried"] = True
+        try:
+            from core import session_cookie
+            _u, _t = session_cookie.load()
+            if _u and _t:
+                _a = auth.validate_session(_u, _t)
+                if _a:
+                    st.session_state["auth"] = _a
+                    st.session_state["_hb_last"] = time.time()
+                    st.rerun()
+        except Exception:
+            pass
+
     # ── Logo COPEX centrado ─────────────────────────────────
     c = st.columns([1, 1, 1])
     with c[1]:
@@ -220,6 +235,11 @@ def render_login() -> bool:
                     "token": tok,
                 }
                 st.session_state["_hb_last"] = time.time()
+                try:    # login persistente (sobrevive el refresco)
+                    from core import session_cookie
+                    session_cookie.save(res["usuario"], tok)
+                except Exception:
+                    pass
                 st.rerun()
 
             if st.button("Iniciar sesión", type="primary", use_container_width=True):
@@ -244,6 +264,11 @@ def render_user_bar():
     if st.button("🚪 Cerrar sesión", use_container_width=True, key="logout_btn"):
         try:
             auth.end_session(a.get("usuario", ""), a.get("token"))   # libera la cuenta
+        except Exception:
+            pass
+        try:
+            from core import session_cookie
+            session_cookie.clear()
         except Exception:
             pass
         if "auth" in st.session_state:
@@ -348,10 +373,12 @@ def render_owner_panel():
     st.markdown("### 👑 Administración")
     # Sub-navegación con radio (NO st.tabs anidado → evita mezcla de contenido)
     sec = st.radio("Sección",
-                   ["🏢 Grupos", "👥 Usuarios", "📁 Proyectos", "🚆 Rieles", "📚 Manuales"],
+                   ["🌐 Resumen", "🏢 Grupos", "👥 Usuarios", "📁 Proyectos", "🚆 Rieles", "📚 Manuales"],
                    horizontal=True, key="owner_sec", label_visibility="collapsed")
     st.markdown("---")
-    if sec == "🏢 Grupos":
+    if sec == "🌐 Resumen":
+        _owner_resumen()
+    elif sec == "🏢 Grupos":
         _owner_grupos()
     elif sec == "👥 Usuarios":
         _owner_usuarios()
@@ -362,6 +389,32 @@ def render_owner_panel():
         _owner_rieles()
     else:
         _owner_manuales()
+
+
+def _owner_resumen():
+    """Resumen multi-grupo del propietario: estado de cada empresa cliente."""
+    from core import admin_digest
+    st.markdown("#### 🌐 Resumen de todos los grupos")
+    from core import projects as _P
+    if not _P.is_configured():
+        st.warning("Necesita Google Sheets configurado.")
+        return
+    with st.spinner("Reuniendo el estado de cada grupo…"):
+        data = admin_digest.owner_digest()
+    if not data:
+        st.info("Aún no hay grupos con datos.")
+        return
+    st.dataframe(pd.DataFrame([{
+        "Grupo": d["grupo"], "Activos": d["activos"], "Avance %": d["avance"],
+        "🔴 Retraso": d["retrasos"], "🔔 Alarmas": d["alarmas"],
+        "⛔ Vencidos": d["vencidos"], "🎫 Credenciales": d["cred_venc"],
+        "💸 Sobre pres.": d["sobre_presupuesto"],
+    } for d in data]), hide_index=True, use_container_width=True)
+    _urg = [d for d in data if d["pendientes"]]
+    if _urg:
+        st.warning("Grupos con pendientes: " + ", ".join(d["grupo"] for d in _urg))
+    else:
+        st.success("Ningún grupo tiene pendientes urgentes. ✅")
 
 
 def _owner_manuales():
@@ -559,6 +612,15 @@ def _grupo_usuarios(grupo):
         except Exception:
             pass
     if users:
+        # Matriz de compliance: usuarios × credenciales con semáforo
+        try:
+            tipos, filas = C.matrix(grupo)
+            if tipos:
+                with st.expander("🗂 Matriz de compliance (usuarios × credenciales)", expanded=True):
+                    st.caption("🟢 vigente · 🟡 por vencer (≤30 d) · 🔴 vencido · — no registrada")
+                    st.dataframe(pd.DataFrame(filas), hide_index=True, use_container_width=True)
+        except Exception:
+            pass
         cusel = st.selectbox("Usuario", [x["Usuario"] for x in users], key="gp_credsel")
         render_credenciales(cusel, grupo, editable=True, key_prefix="gpcr")
     else:

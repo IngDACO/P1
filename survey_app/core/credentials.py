@@ -119,6 +119,28 @@ def list_group(grupo) -> list:
     return [r for r in _records() if str(r.get("Grupo", "")) == g]
 
 
+def matrix(grupo) -> tuple:
+    """Matriz de compliance: (tipos, filas) = usuarios × credenciales con semáforo.
+    Celda: 🟢 vigente · 🟡 por vencer · 🔴 vencido · — no tiene."""
+    from core import auth
+    creds = list_group(grupo)
+    tipos = sorted({str(c.get("Tipo", "")) for c in creds if str(c.get("Tipo", "")).strip()})
+    filas = []
+    for u in auth.list_users(grupo):
+        fila = {"Usuario": u.get("Nombre") or u.get("Usuario"), "Rol": u.get("Rol", "")}
+        for t in tipos:
+            mias = [c for c in creds
+                    if str(c.get("Usuario", "")) == u.get("Usuario") and str(c.get("Tipo", "")) == t]
+            if not mias:
+                fila[t] = "—"
+            else:
+                sts = [status(c.get("Vencimiento")) for c in mias]
+                fila[t] = ("🔴" if "vencido" in sts
+                           else "🟡" if "por_vencer" in sts else "🟢")
+        filas.append(fila)
+    return tipos, filas
+
+
 def expiring(grupo, days=DIAS_AVISO) -> list:
     """Credenciales del grupo por vencer (≤days) o vencidas, ordenadas por urgencia."""
     out = []

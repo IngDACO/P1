@@ -775,6 +775,27 @@ Al cargar el plano en el survey (app.py), autocompleta **RAIL = AlturaDiente** (
 espalda) del catálogo; si el código no está o no se detecta → aviso + entrada manual. **RAIL = AlturaDiente**
 (NO el ancho); AnchoDiente se guarda como dato secundario.
 
+## Lote 2 + extras (v107)
+- **Matriz de compliance:** `credentials.matrix(grupo)` -> (tipos, filas) usuarios x credenciales con
+  semaforo (verde vigente / amarillo por vencer / rojo vencido / - no registrada). En admin -> Usuarios -> Credenciales.
+- **Panel del propietario con tarjetas:** `render_owner_projects` usa `_portfolio_html(show_group=True)`
+  (badge del grupo en el subtitulo) + la tabla queda en un expander.
+- **Resumen multi-grupo del propietario:** `admin_digest.owner_digest()` (cacheado 60 s) -> nueva seccion
+  Administracion -> "Resumen": por grupo activos/avance/retrasos/alarmas/vencidos/credenciales/sobre presupuesto.
+- **Dashboard de agrupacion:** `projects_ui._dashboard_agrupacion` en el panel de Agrupaciones: avance
+  consolidado ponderado, elevadores, horas, costo total vs presupuesto sumado, tabla por proyecto + barras.
+- **Reconstruir proyecto:** en el detalle, "Cargar este proyecto en el Survey" restaura ParamsJSON+MatrizJSON
+  a session_state (inp_*, ns, survey_df) para recalcular y regenerar informes.
+- **Briefing por Telegram/email:** boton "Enviarmelo" en el Resumen del dia (usa notify.notify_user).
+  Limitacion: Streamlit no tiene cron, se envia a demanda (no a una hora fija).
+- **Login persistente con cookies:** `core/session_cookie.py` (extra-streamlit-components, import PEREZOSO
+  con fallback: sin la libreria la app funciona igual). Guarda `usuario|token` 7 dias; al abrir valida con
+  `auth.validate_session(usuario, token)` contra la hoja Login (token = el de la sesion unica) y restaura.
+  Se limpia al cerrar sesion. Dependencia nueva en requirements.
+- **Ronda de optimizacion (como v92):** `projects.gaps_by_group` (cache 60 s) evita reconstruir el cronograma
+  de cada proyecto varias veces por render (KPIs + tarjetas + tabla + radar); `admin_digest.group_digest` y
+  `expenses.over_budget` cacheados 60 s. Nuevos helpers `delays_of_group` / `aheads_of_group`.
+
 ## Lote de mejoras + fichaje por USUARIO (v106)
 - ⚠️ **Fichaje identificado por Usuario (login), no por Nombre.** Columna `Usuario` en la hoja de fichaje
   (migra sola). `timeclock._matches(r,usuario,nombre,grupo)`: usa `Usuario`; las filas ANTIGUAS (sin
@@ -841,7 +862,7 @@ posicional + plano) → app.py, al cargar el PDF, setea `st.session_state["ns"]`
 resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NORTH SYD y AGECARE → NS=6
 (coincide con travel/floor-height HQ/HE).
 
-## Versiones desplegadas (v106 = actual)
+## Versiones desplegadas (v107 = actual)
 | Ver | Cambio principal |
 |---|---|
 | v5 | Extractor: CRLF fix, caso D valor-antes-label, sin pdfplumber |
@@ -943,5 +964,6 @@ resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NOR
 | v102 | Fix: NS se lee del plano (NUMBER OF STOPS) al cargar el PDF; default de init 6→2 (ya no queda pegado en 6) |
 | v103 | Rol conductor (2 relojes: jornada general + segmentos por proyecto, columna Tipo) + cronómetro en vivo para todos + reporte admin de horas del grupo (Mi grupo → ⏱ Horas) |
 | v104 | Credenciales/tickets por usuario (White Card, Forklift, Dogging/Rigging, licencia…): vencimiento+estado, foto/documento a Drive, radar en Resumen del día, avisos email/Telegram a admin+usuario; usuario ve las suyas (🎫 Mis credenciales) |
+| v107 | Lote 2: matriz de compliance + tarjetas y resumen multi-grupo del propietario + dashboard de agrupacion + reconstruir proyecto + briefing por Telegram/email + login con cookies + ronda de optimizacion |
 | v106 | Fichaje identificado por USUARIO (no por nombre) + adelantos marcados + presupuesto al crear + graficas de costos + reenvio de inducciones al editar |
 | v105 | Control de costos por proyecto: recibos (foto/PDF+valor+categoría, los cargan admin/campo/conductor) + mano de obra (tarifa/hora POR USUARIO) + presupuesto+alerta; reporte de gastos del grupo (💰 Gastos) con CSV; radar sobre-presupuesto |

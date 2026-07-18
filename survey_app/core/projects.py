@@ -281,6 +281,13 @@ def _gaps_for(proys) -> dict:
     return out
 
 
+@st.cache_data(ttl=60, show_spinner=False)
+def gaps_by_group(grupo) -> dict:
+    """{pid: dias_gap} del grupo, CACHEADO 60 s. El cronograma de cada proyecto se
+    reconstruía varias veces por render (KPIs + tarjetas + tabla + radar)."""
+    return _gaps_for(list_projects(grupo=grupo))
+
+
 def delays_for(proys) -> dict:
     """{pid: días de RETRASO} (proyección SPI)."""
     return {k: v for k, v in _gaps_for(proys).items() if v > 0.5}
@@ -289,6 +296,14 @@ def delays_for(proys) -> dict:
 def aheads_for(proys) -> dict:
     """{pid: días de ADELANTO} (proyección SPI)."""
     return {k: abs(v) for k, v in _gaps_for(proys).items() if v < -0.5}
+
+
+def delays_of_group(grupo) -> dict:
+    return {k: v for k, v in gaps_by_group(grupo).items() if v > 0.5}
+
+
+def aheads_of_group(grupo) -> dict:
+    return {k: abs(v) for k, v in gaps_by_group(grupo).items() if v < -0.5}
 
 
 def list_projects(grupo: str = None, agrupacion_id: str = None) -> list:
