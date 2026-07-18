@@ -202,6 +202,7 @@ def clock_in(nombre: str, proyecto: str, ubicacion: str, grupo: str = "",
                       value_input_option="RAW")
     except Exception as e:
         return False, f"Error escribiendo el fichaje: {e}"
+    _invalidate_records()
     etq = "Jornada (general)" if tipo == TIPO_GENERAL else "Proyecto"
     return True, f"✅ Clock IN {etq} a las {_now()}."
 
@@ -258,6 +259,7 @@ def clock_out(nombre: str, grupo: str = "", nota: str = "",
     except Exception as e:
         return False, f"Error actualizando el fichaje: {e}"
 
+    _invalidate_records()
     return True, f"✅ Clock OUT a las {out_ts}. Horas trabajadas: {horas}."
 
 
@@ -279,6 +281,26 @@ def _num(v) -> float:
         return 0.0
 
 
+@st.cache_data(ttl=20, show_spinner=False)
+def _cached_records() -> list:
+    """Filas del fichaje CACHEADAS (solo para lecturas de display: estado del reloj,
+    resumen de horas). Las rutas de ESCRITURA leen fresco. Se invalida al fichar."""
+    ws, err = _get_worksheet()
+    if err or ws is None:
+        return []
+    try:
+        return ws.get_all_records(numericise_ignore=['all'])
+    except Exception:
+        return []
+
+
+def _invalidate_records():
+    try:
+        _cached_records.clear()
+    except Exception:
+        pass
+
+
 def elapsed_seconds(clock_in_str) -> int:
     """Segundos transcurridos desde un Clock In (para el cronómetro)."""
     try:
@@ -290,11 +312,8 @@ def elapsed_seconds(clock_in_str) -> int:
 def open_sessions(nombre: str, grupo: str = "", usuario: str = "") -> dict:
     """{'general': {clock_in,proyecto}|None, 'proyecto': {...}|None} de sesiones ABIERTAS."""
     out = {TIPO_GENERAL: None, TIPO_PROYECTO: None}
-    ws, err = _get_worksheet()
-    if err or ws is None:
-        return out
     try:
-        for r in ws.get_all_records(numericise_ignore=['all']):
+        for r in _cached_records():          # lectura cacheada (display)
             if (_matches(r, usuario, nombre, grupo)
                     and str(r.get("Estado", "")).strip().upper() == "ABIERTO"):
                 out[_tipo_of(r)] = {"clock_in": str(r.get("Clock In", "")),
@@ -315,13 +334,7 @@ def group_hours(grupo: str, days=None) -> list:
     """Resumen de horas por usuario del grupo (para el admin). days=None=todo, 7=semana.
     Devuelve [{usuario, general, proyecto, sin_asignar, por_proyecto{nombre:horas}}]. Las
     sesiones abiertas cuentan con el tiempo transcurrido hasta ahora."""
-    ws, err = _get_worksheet()
-    if err or ws is None:
-        return []
-    try:
-        records = ws.get_all_records(numericise_ignore=['all'])
-    except Exception:
-        return []
+    records = _cached_records()             # lectura cacheada (display)
     grupo = (grupo or "").strip()
     desde = (datetime.now() - timedelta(days=days)) if days else None
     agg = {}

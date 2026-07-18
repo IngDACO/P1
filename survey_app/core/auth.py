@@ -104,12 +104,28 @@ def _invalidate_login():
 
 
 # ── Gestión de grupos ────────────────────────────────────────
-def list_groups(only_active: bool = False) -> list:
+@st.cache_data(ttl=60, show_spinner=False)
+def _group_records() -> list:
     gws, err = _get_groups_ws()
-    if err:
+    if err or gws is None:
         return []
+    try:
+        return gws.get_all_records(numericise_ignore=["all"])
+    except Exception:
+        return []
+
+
+def _invalidate_groups():
+    try:
+        _group_records.clear()
+    except Exception:
+        pass
+
+
+def list_groups(only_active: bool = False) -> list:
+    """Grupos (lectura CACHEADA: se llamaba en cada render de los paneles del propietario)."""
     out = []
-    for r in gws.get_all_records(numericise_ignore=["all"]):
+    for r in _group_records():
         activo = str(r.get("Activo", "SI")).strip().upper() in _ACTIVE_OK
         if only_active and not activo:
             continue
@@ -133,6 +149,7 @@ def add_group(nombre: str, descripcion: str = "") -> tuple:
         gws.append_row([nombre, descripcion, "SI"], value_input_option="RAW")
     except Exception as e:
         return False, f"Error creando grupo: {e}"
+    _invalidate_groups()
     return True, f"Grupo '{nombre}' creado."
 
 
@@ -144,6 +161,7 @@ def delete_group(nombre: str) -> tuple:
         if str(r.get("Grupo", "")).strip().lower() == (nombre or "").strip().lower():
             try:
                 gws.delete_rows(i + 2)
+                _invalidate_groups()
                 return True, f"Grupo '{nombre}' eliminado."
             except Exception as e:
                 return False, f"Error: {e}"

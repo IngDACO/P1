@@ -134,6 +134,7 @@ def over_budget(grupo) -> list:
     return out
 
 
+@st.cache_data(ttl=60, show_spinner=False)
 def group_expenses(grupo) -> dict:
     """Costos de todos los proyectos del grupo + desglose por categoría."""
     from core import projects as P
