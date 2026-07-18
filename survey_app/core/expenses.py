@@ -101,7 +101,9 @@ def labor_cost(pid, grupo) -> float:
              if estado == "ABIERTO" else _num(r.get("Horas")))
         if h <= 0:
             continue
-        total += h * rates.get(str(r.get("Nombre", "")), 0.0)
+        # Tarifa por USUARIO; filas antiguas (sin Usuario) caen al Nombre.
+        clave = str(r.get("Usuario", "")).strip() or str(r.get("Nombre", "")).strip()
+        total += h * rates.get(clave, 0.0)
     return round(total, 2)
 
 

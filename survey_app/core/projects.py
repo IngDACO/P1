@@ -264,8 +264,9 @@ def parse_links(text) -> list:
     return [l.strip() for l in str(text or "").splitlines() if l.strip()]
 
 
-def delays_for(proys) -> dict:
-    """{pid: días de retraso} para proyectos activos atrasados según la proyección (SPI)."""
+def _gaps_for(proys) -> dict:
+    """{pid: dias_gap} de la proyección (SPI) de los proyectos activos.
+    dias_gap > 0 = retraso, < 0 = adelanto."""
     out = {}
     for p in proys:
         if str(p.get("Estado", "")) in ("Completado", "Cancelado"):
@@ -273,11 +274,21 @@ def delays_for(proys) -> dict:
         try:
             ps = project_schedule(p.get("ID"))
             pr = ps.get("proj") if ps else None
-            if pr and pr.get("pv", 0) > 0 and pr.get("dias_gap", 0) > 0.5:
-                out[str(p.get("ID", ""))] = pr["dias_gap"]
+            if pr and pr.get("pv", 0) > 0:
+                out[str(p.get("ID", ""))] = pr.get("dias_gap", 0)
         except Exception:
             pass
     return out
+
+
+def delays_for(proys) -> dict:
+    """{pid: días de RETRASO} (proyección SPI)."""
+    return {k: v for k, v in _gaps_for(proys).items() if v > 0.5}
+
+
+def aheads_for(proys) -> dict:
+    """{pid: días de ADELANTO} (proyección SPI)."""
+    return {k: abs(v) for k, v in _gaps_for(proys).items() if v < -0.5}
 
 
 def list_projects(grupo: str = None, agrupacion_id: str = None) -> list:

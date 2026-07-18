@@ -77,7 +77,7 @@ def _render_normal(nombre, usuario, grupo):
     st.caption(f"Fichando como **{nombre}**" + (f"  ·  grupo **{grupo}**" if grupo else "")
                + ". Tus fichajes son privados.")
 
-    sess = timeclock.open_sessions(nombre, grupo)
+    sess = timeclock.open_sessions(nombre, grupo, usuario)
     _aviso_olvido(sess)
     abierto = sess.get(timeclock.TIPO_PROYECTO)
     if abierto:
@@ -110,12 +110,12 @@ def _render_normal(nombre, usuario, grupo):
         if not proyecto:
             st.error("Elige o escribe el proyecto antes de fichar.")
         else:
-            ok, msg = timeclock.clock_in(nombre, proyecto, ubicacion, grupo)
+            ok, msg = timeclock.clock_in(nombre, proyecto, ubicacion, grupo, usuario=usuario)
             (st.success if ok else st.error)(msg)
             if ok:
                 st.rerun()
     if b2.button("🔴 Clock OUT", use_container_width=True, key="tc_out"):
-        ok, msg = timeclock.clock_out(nombre, grupo, ubicacion)
+        ok, msg = timeclock.clock_out(nombre, grupo, ubicacion, usuario=usuario)
         (st.success if ok else st.error)(msg)
         if ok:
             st.rerun()
@@ -128,7 +128,7 @@ def _render_normal(nombre, usuario, grupo):
 def _render_conductor(nombre, usuario, grupo):
     st.caption(f"Conductor: **{nombre}**" + (f"  ·  grupo **{grupo}**" if grupo else "")
                + ". Jornada general + segmentos por proyecto.")
-    sess = timeclock.open_sessions(nombre, grupo)
+    sess = timeclock.open_sessions(nombre, grupo, usuario)
     _aviso_olvido(sess)
     gen = sess.get(timeclock.TIPO_GENERAL)
     prj = sess.get(timeclock.TIPO_PROYECTO)
@@ -141,14 +141,14 @@ def _render_conductor(nombre, usuario, grupo):
         if st.button("🔴 Clock OUT jornada", use_container_width=True, key="cd_gen_out"):
             # cerrar también el segmento de proyecto si sigue abierto
             if prj:
-                timeclock.clock_out(nombre, grupo, tipo=timeclock.TIPO_PROYECTO)
-            ok, msg = timeclock.clock_out(nombre, grupo, tipo=timeclock.TIPO_GENERAL)
+                timeclock.clock_out(nombre, grupo, tipo=timeclock.TIPO_PROYECTO, usuario=usuario)
+            ok, msg = timeclock.clock_out(nombre, grupo, tipo=timeclock.TIPO_GENERAL, usuario=usuario)
             (st.success if ok else st.error)(msg)
             if ok:
                 st.rerun()
     else:
         if st.button("🟢 Clock IN jornada", use_container_width=True, key="cd_gen_in", type="primary"):
-            ok, msg = timeclock.clock_in(nombre, "", "", grupo, tipo=timeclock.TIPO_GENERAL)
+            ok, msg = timeclock.clock_in(nombre, "", "", grupo, tipo=timeclock.TIPO_GENERAL, usuario=usuario)
             (st.success if ok else st.error)(msg)
             if ok:
                 st.rerun()
@@ -173,7 +173,7 @@ def _render_conductor(nombre, usuario, grupo):
         _chronometer(prj["clock_in"], "⏱ En este proyecto:", color="#1e8449")
         c1, c2 = st.columns(2)
         if c1.button("🔴 Clock OUT proyecto", use_container_width=True, key="cd_prj_out"):
-            ok, msg = timeclock.clock_out(nombre, grupo, tipo=timeclock.TIPO_PROYECTO)
+            ok, msg = timeclock.clock_out(nombre, grupo, tipo=timeclock.TIPO_PROYECTO, usuario=usuario)
             (st.success if ok else st.error)(msg)
             if ok:
                 st.rerun()
@@ -183,7 +183,7 @@ def _render_conductor(nombre, usuario, grupo):
             nuevo = c2.selectbox("Cambiar a otro proyecto", ["—"] + opts, key="cd_switch_sel")
             if c2.button("🔄 Cambiar de proyecto", use_container_width=True, key="cd_switch"):
                 if nuevo and nuevo != "—":
-                    ok, msg = timeclock.switch_project(nombre, grupo, nuevo)
+                    ok, msg = timeclock.switch_project(nombre, grupo, nuevo, usuario=usuario)
                     (st.success if ok else st.error)(msg)
                     if ok:
                         st.rerun()
@@ -196,7 +196,7 @@ def _render_conductor(nombre, usuario, grupo):
             if not sel:
                 st.error("Elige el proyecto.")
             else:
-                ok, msg = timeclock.clock_in(nombre, sel, "", grupo, tipo=timeclock.TIPO_PROYECTO)
+                ok, msg = timeclock.clock_in(nombre, sel, "", grupo, tipo=timeclock.TIPO_PROYECTO, usuario=usuario)
                 (st.success if ok else st.error)(msg)
                 if ok:
                     st.rerun()

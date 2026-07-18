@@ -326,14 +326,18 @@ def set_rate(usuario: str, tarifa) -> tuple:
 
 
 def rate_map(grupo: str = None) -> dict:
-    """{Nombre: tarifa/hora} de los usuarios del grupo (el fichaje usa el Nombre)."""
+    """Tarifas/hora indexadas por **Usuario** y también por Nombre (respaldo para
+    los fichajes antiguos, anteriores a la columna Usuario)."""
     m = {}
     for u in list_users(grupo):
-        key = u.get("Nombre", "") or u.get("Usuario", "")
         try:
-            m[key] = float(str(u.get("TarifaHora", "") or 0).replace(",", "."))
+            v = float(str(u.get("TarifaHora", "") or 0).replace(",", "."))
         except Exception:
-            m[key] = 0.0
+            v = 0.0
+        if u.get("Usuario"):
+            m[u["Usuario"]] = v
+        if u.get("Nombre"):
+            m.setdefault(u["Nombre"], v)
     return m
 
 

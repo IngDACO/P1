@@ -1069,6 +1069,9 @@ if _seccion == _L_SURVEY:
                                       placeholder="https://...\nhttps://...",
                                       help="Se enviarán por Telegram/email a los usuarios de campo "
                                            "asignados para que las diligencien.")
+                pj_pres = st.number_input("💰 Presupuesto del proyecto (0 = sin presupuesto)",
+                                          min_value=0.0, step=100.0,
+                                          help="Se compara contra compras + mano de obra.")
                 if st.form_submit_button("💾 Guardar como proyecto", use_container_width=True):
                     if not pj_nom.strip():
                         st.error("El nombre del proyecto es obligatorio.")
@@ -1089,6 +1092,7 @@ if _seccion == _L_SURVEY:
                             activities=sched.get("activities", []),
                             creado_por=st.session_state.auth.get("usuario", ""),
                             instrucciones=pj_instr, induccion_links=pj_ind,
+                            presupuesto=pj_pres,
                         )
                         if ok:
                             st.success(f"✅ Proyecto **{res}** guardado. "

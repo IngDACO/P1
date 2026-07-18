@@ -775,6 +775,18 @@ Al cargar el plano en el survey (app.py), autocompleta **RAIL = AlturaDiente** (
 espalda) del catálogo; si el código no está o no se detecta → aviso + entrada manual. **RAIL = AlturaDiente**
 (NO el ancho); AnchoDiente se guarda como dato secundario.
 
+## Lote de mejoras + fichaje por USUARIO (v106)
+- ⚠️ **Fichaje identificado por Usuario (login), no por Nombre.** Columna `Usuario` en la hoja de fichaje
+  (migra sola). `timeclock._matches(r,usuario,nombre,grupo)`: usa `Usuario`; las filas ANTIGUAS (sin
+  Usuario) caen al `Nombre`. clock_in/clock_out/open_sessions/switch_project aceptan `usuario=`;
+  `group_hours` agrupa por usuario (devuelve `usuario` + `nombre`). `auth.rate_map` indexa por Usuario **y**
+  por Nombre (respaldo); `expenses.labor_cost` costea por Usuario. Evita mezclar horas de homónimos.
+- **Adelantos:** `projects._gaps_for` → `delays_for` (gap>0.5) y **`aheads_for`** (gap<-0.5). Tarjetas del
+  admin: retraso = borde rojo + ⏰ N d; **adelanto = borde verde + ⏩ N d**. Tabla del propietario: columna ⏩.
+- **Presupuesto al crear** el proyecto (survey → Guardar como proyecto, `create_project(presupuesto=)`).
+- **Gráficas de costos** en 💰 Gastos: barras costo por proyecto (compras vs MO) y por categoría (st.bar_chart).
+- **Reenvío de inducciones**: si el admin cambia `InduccionLinks` al editar, se reenvían a los ya asignados.
+
 ## Control de costos por proyecto: gastos + mano de obra (v105)
 `core/expenses.py` — hoja **`Gastos`** (ID,ProyectoID,Grupo,Fecha,Categoria,Proveedor,Descripcion,Valor,
 DriveID,Archivo,CreadoPor,Creado; migra sola). Recibos por proyecto (foto/PDF a Drive, carpeta "COPEX
@@ -829,7 +841,7 @@ posicional + plano) → app.py, al cargar el PDF, setea `st.session_state["ns"]`
 resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NORTH SYD y AGECARE → NS=6
 (coincide con travel/floor-height HQ/HE).
 
-## Versiones desplegadas (v105 = actual)
+## Versiones desplegadas (v106 = actual)
 | Ver | Cambio principal |
 |---|---|
 | v5 | Extractor: CRLF fix, caso D valor-antes-label, sin pdfplumber |
@@ -931,4 +943,5 @@ resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NOR
 | v102 | Fix: NS se lee del plano (NUMBER OF STOPS) al cargar el PDF; default de init 6→2 (ya no queda pegado en 6) |
 | v103 | Rol conductor (2 relojes: jornada general + segmentos por proyecto, columna Tipo) + cronómetro en vivo para todos + reporte admin de horas del grupo (Mi grupo → ⏱ Horas) |
 | v104 | Credenciales/tickets por usuario (White Card, Forklift, Dogging/Rigging, licencia…): vencimiento+estado, foto/documento a Drive, radar en Resumen del día, avisos email/Telegram a admin+usuario; usuario ve las suyas (🎫 Mis credenciales) |
+| v106 | Fichaje identificado por USUARIO (no por nombre) + adelantos marcados + presupuesto al crear + graficas de costos + reenvio de inducciones al editar |
 | v105 | Control de costos por proyecto: recibos (foto/PDF+valor+categoría, los cargan admin/campo/conductor) + mano de obra (tarifa/hora POR USUARIO) + presupuesto+alerta; reporte de gastos del grupo (💰 Gastos) con CSV; radar sobre-presupuesto |

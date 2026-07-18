@@ -76,6 +76,11 @@ def _delays(proys) -> dict:
     return P.delays_for(proys)
 
 
+def _aheads(proys) -> dict:
+    """{pid: días de adelanto} (proyección SPI)."""
+    return P.aheads_for(proys)
+
+
 def _kpis(grupo=None) -> dict:
     """Métricas de salud del grupo (1 lectura de cada hoja, todo cacheado)."""
     proys   = P.list_projects(grupo=grupo)
@@ -254,10 +259,13 @@ def _panel_proyectos(grupo: str):
     horas = P.project_hours_bulk(grupo)   # 1 sola lectura del fichaje
     alarmas = alerts.open_counts_all() if alerts.is_configured() else {}
     delays = _delays(proys)               # {pid: días de retraso}
-    _nr = len(delays)
+    aheads = _aheads(proys)               # {pid: días de adelanto}
+    _nr, _na = len(delays), len(aheads)
     st.markdown(f"**Cartera — {len(proys)} proyecto(s)**"
-                + (f"  ·  🔴 {_nr} con retraso" if _nr else ""))
-    st.markdown(_portfolio_html(proys, horas, alarmas, ags, delays), unsafe_allow_html=True)
+                + (f"  ·  🔴 {_nr} con retraso" if _nr else "")
+                + (f"  ·  🟢 {_na} adelantado(s)" if _na else ""))
+    st.markdown(_portfolio_html(proys, horas, alarmas, ags, delays, aheads),
+                unsafe_allow_html=True)
 
     # ── Abrir proyecto (detalle / edición) ──
     st.markdown("#### 🔎 Abrir proyecto")
@@ -269,11 +277,12 @@ def _panel_proyectos(grupo: str):
         _detalle_proyecto(idmap[sel], grupo)
 
 
-def _portfolio_html(proys, horas, alarmas, ags, delays=None) -> str:
+def _portfolio_html(proys, horas, alarmas, ags, delays=None, aheads=None) -> str:
     """Lista de tarjetas de proyecto: punto de estado, nombre/cliente, ubicación,
-    píldora, barra de avance, horas y badges de alarmas y retraso.
-    Los proyectos con retraso (delays) se distinguen con borde rojo + badge ⏰."""
+    píldora, barra de avance, horas y badges de alarmas / retraso / adelanto.
+    Retraso → borde rojo + badge ⏰ · Adelanto → borde verde + badge ⏩."""
     delays = delays or {}
+    aheads = aheads or {}
     parts = []
     for p in proys:
         est = str(p.get("Estado", ""))
@@ -292,8 +301,8 @@ def _portfolio_html(proys, horas, alarmas, ags, delays=None) -> str:
         alarm = (f'<div style="width:44px;text-align:center;flex:none;color:#c0392b;'
                  f'font-size:12.5px;font-weight:600;">🔔 {na}</div>'
                  if na else '<div style="width:44px;flex:none;"></div>')
-        # Retraso → borde rojo + badge de días
-        d = delays.get(pid)
+        # Retraso (rojo) / adelanto (verde) → borde + badge de días
+        d, adel = delays.get(pid), aheads.get(pid)
         card_border = "border:1px solid #e6e9ef"
         retraso_badge = ""
         if d:
@@ -301,6 +310,11 @@ def _portfolio_html(proys, horas, alarmas, ags, delays=None) -> str:
             retraso_badge = (f'<span style="font-size:12px;padding:3px 9px;border-radius:20px;'
                              f'background:#fcebeb;color:#a32d2d;white-space:nowrap;flex:none;'
                              f'font-weight:600;">⏰ {d:.0f} d</span>')
+        elif adel:
+            card_border = "border:1px solid #e6e9ef;border-left:4px solid #1e8449"
+            retraso_badge = (f'<span style="font-size:12px;padding:3px 9px;border-radius:20px;'
+                             f'background:#eaf3de;color:#3b6d11;white-space:nowrap;flex:none;'
+                             f'font-weight:600;">⏩ {adel:.0f} d</span>')
         parts.append(
             f'<div style="display:flex;align-items:center;gap:12px;padding:11px 14px;'
             f'{card_border};border-radius:10px;margin-bottom:8px;background:#fff;">'
@@ -496,6 +510,16 @@ def _detalle_proyecto(pid: str, grupo: str = None):
                             _sent += 1
                     except Exception:
                         pass
+            # Si cambiaron las inducciones, reenviarlas a los ya asignados
+            if str(ind).strip() != str(prj.get("InduccionLinks", "")).strip():
+                _links = P.parse_links(ind)
+                if _links:
+                    for un in [x for x in asignados if x not in nuevos]:
+                        try:
+                            notify.notify_induction(un, nombre, _links)
+                        except Exception:
+                            pass
+
             # Aviso de cambio al campo ya asignado (los nuevos ya recibieron la asignación)
             try:
                 alerts.notify_change(pid, grupo, "Se actualizaron los datos del proyecto.",
@@ -653,12 +677,14 @@ def render_owner_projects():
     ags = {a["ID"]: a["Nombre"] for a in P.list_groupings()}
     alarmas = alerts.open_counts_all() if alerts.is_configured() else {}
     delays = _delays(proys)
+    aheads = _aheads(proys)
     rows = []
     for p in proys:
         est = str(p.get("Estado", ""))
         pid = str(p.get("ID", ""))
         _na = alarmas.get(pid, 0)
         _d  = delays.get(pid)
+        _ad = aheads.get(pid)
         ubic = str(p.get("Ubicacion", "") or "")
         rows.append({
             "ID":        p.get("ID"),
@@ -670,6 +696,7 @@ def render_owner_projects():
             "🗺":        maps.maps_url(ubic),
             "Estado":    f"{_ESTADO_EMOJI.get(est, '')} {est}".strip(),
             "⏰ Retraso": f"{_d:.0f} d" if _d else "",
+            "⏩ Adelanto": f"{_ad:.0f} d" if _ad else "",
             "Avance %":  P._num(p.get("Avance")),
             "Horas":     P.project_hours(p.get("Nombre"), p.get("Grupo")),
             "Agrupación": ags.get(str(p.get("AgrupacionID", "")), ""),
@@ -873,11 +900,21 @@ def render_group_expenses(grupo: str):
     st.dataframe(df, use_container_width=True, hide_index=True)
     tot = sum(f["total"] for f in filas)
     st.metric("Costo total del grupo", f"${tot:,.0f}")
+
+    # ── Gráficas ──
+    _conc = [f for f in filas if f["total"] > 0]
+    if _conc:
+        st.markdown("**Costo por proyecto** (compras vs mano de obra)")
+        st.bar_chart(pd.DataFrame(
+            {"Compras": [f["compras"] for f in _conc],
+             "Mano de obra": [f["mano_obra"] for f in _conc]},
+            index=[f["nombre"] for f in _conc]))
     if ge["por_categoria"]:
         st.markdown("**Compras por categoría**")
-        st.dataframe(pd.DataFrame([{"Categoría": k, "Total": v}
-                                   for k, v in sorted(ge["por_categoria"].items(), key=lambda x: -x[1])],
-                                  ), hide_index=True, use_container_width=True)
+        _cat = dict(sorted(ge["por_categoria"].items(), key=lambda x: -x[1]))
+        st.bar_chart(pd.DataFrame({"Total": list(_cat.values())}, index=list(_cat.keys())))
+        st.dataframe(pd.DataFrame([{"Categoría": k, "Total": v} for k, v in _cat.items()]),
+                     hide_index=True, use_container_width=True)
     st.download_button("⬇️ Exportar CSV (contabilidad)", data=df.to_csv(index=False).encode("utf-8"),
                        file_name=f"gastos_{grupo}.csv", mime="text/csv", key="ge_csv")
 
@@ -907,7 +944,8 @@ def render_group_hours(grupo: str):
         return
 
     st.dataframe(pd.DataFrame([{
-        "Usuario":       d["usuario"],
+        "Usuario":       d.get("nombre") or d["usuario"],
+        "Login":         d["usuario"],
         "Jornada (h)":   d["general"],
         "Proyectos (h)": d["proyecto"],
         "Sin asignar (h)": d["sin_asignar"],
@@ -916,7 +954,7 @@ def render_group_hours(grupo: str):
     with st.expander("🔎 Desglose por proyecto"):
         for d in data:
             if d["por_proyecto"]:
-                st.markdown(f"**{d['usuario']}**")
+                st.markdown(f"**{d.get('nombre') or d['usuario']}**")
                 st.dataframe(pd.DataFrame(
                     [{"Proyecto": k, "Horas": v} for k, v in
                      sorted(d["por_proyecto"].items(), key=lambda x: -x[1])],
