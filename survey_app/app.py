@@ -322,12 +322,15 @@ if _seccion == _L_SURVEY:
     # así que el import deja los valores "pendientes" y se aplican aquí, arriba del todo.
     _pend = st.session_state.pop("_import_pending", None)
     if _pend:
+        if _pend.get("df") is not None:
+            st.session_state["survey_df"] = _pend["df"]
         if _pend.get("ns"):
             st.session_state["ns"] = int(_pend["ns"])
         for _k, _v in (_pend.get("params") or {}).items():
             st.session_state[f"inp_{_k}"] = float(_v)
         for _k, _v in (_pend.get("cfg") or {}).items():
             st.session_state[_k] = _v
+        st.success("✅ Matriz, parámetros y configuración cargados desde el Excel.")
 
     # ── Identificación del proyecto ───────────────────────
     _id1, _id2 = st.columns(2)
@@ -477,14 +480,14 @@ if _seccion == _L_SURVEY:
 
     # Cargar Excel
     uploaded_excel = sc2.file_uploader("📂 Cargar matriz (.xlsx)", type=["xlsx"], key="excel_uploader")
-    if uploaded_excel is not None:
+    # ⚠️ GUARDA obligatoria: el file_uploader conserva el archivo entre reruns, así que
+    # sin esta condición el import se repetiría en CADA rerun y pisaría los valores del
+    # PDF o los que escriba el usuario. Mismo patrón que la carga de PDF.
+    _xls_id = f"{uploaded_excel.name}:{uploaded_excel.size}" if uploaded_excel is not None else None
+    if uploaded_excel is not None and _xls_id != st.session_state.get("last_excel_id"):
         try:
             imported = import_survey_excel(uploaded_excel)
-            # survey_df NO es clave de widget (el editor usa key="survey_editor") → seguro.
-            st.session_state.survey_df = imported["df"].copy()
-
-            # El resto SÍ son claves de widgets ya instanciados (ns, inp_*, cfg_*):
-            # se dejan pendientes y se aplican arriba del todo en el próximo rerun.
+            # Nada se modifica hasta tener TODO parseado; se aplica en el próximo rerun.
             _params = {k: float(v) for k, v in (imported.get("info") or {}).items()
                        if k in PDF_PARAMS or k in USER_ONLY}
             cfg = imported.get("config", {})
@@ -501,9 +504,12 @@ if _seccion == _L_SURVEY:
 
             st.session_state["_import_pending"] = {
                 "ns": len(imported["df"]), "params": _params, "cfg": _cfg,
+                "df": imported["df"].copy(),
             }
+            st.session_state["last_excel_id"] = _xls_id
             st.rerun()
         except Exception as e:
+            st.session_state["last_excel_id"] = _xls_id   # no reintentar en bucle
             sc2.error(f"Error al importar Excel: {e}")
 
     st.caption("Ingresa o edita las medidas en campo (mm).")
