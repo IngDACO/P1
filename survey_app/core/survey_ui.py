@@ -35,6 +35,8 @@ from core                 import projects as projects_data
 from core                 import drive_store
 from core                 import notify
 from core.field_pack      import field_pack_pdf
+from core.auth            import get_user as auth_get_user
+from core                 import credentials
 from core.auth import can_reports
 
 SURVEY_COLS = ["WR", "FR", "OR", "WL", "FL", "OL"]
@@ -853,7 +855,7 @@ def render_survey_tab(_ROL, _GRUPO):
     if _fase == _FASE_DATOS:
         # PASO 1 — CARGAR PDF
         # ══════════════════════════════════════════════════════
-        st.header("1. Cargar planos")
+        st.header("📄 Plano del elevador")
         col_brand, col_pdf = st.columns([1, 3])
         col_brand.selectbox("Marca", ["Schindler"], key="brand")   # placeholder p/ futura expansión
         pdf_file = col_pdf.file_uploader("PDF de planos", type=["pdf"])
@@ -919,7 +921,7 @@ def render_survey_tab(_ROL, _GRUPO):
         # ══════════════════════════════════════════════════════
         # PASO 2 — PARÁMETROS
         # ══════════════════════════════════════════════════════
-        st.header("2. Parámetros del proyecto")
+        st.header("⚙️ Parámetros")
 
         # Marca por campo: ✅ leído del plano · ✏️ a completar a mano.
         # (Recupera la señal que se perdió al quitar el panel del sidebar en v93.)
@@ -1003,7 +1005,7 @@ def render_survey_tab(_ROL, _GRUPO):
         # ══════════════════════════════════════════════════════
         # PASO 3 — MATRIZ SURVEY
         # ══════════════════════════════════════════════════════
-        st.header("3. Matriz SURVEY")
+        st.header("📊 Matriz del survey")
 
         sc1, sc2, sc3 = st.columns([1, 2, 2])
 
@@ -1150,7 +1152,7 @@ def render_survey_tab(_ROL, _GRUPO):
 
     else:
 
-        st.header("4. Resultados del cálculo")
+        st.header("✅ Resultados")
         if not st.session_state.calc_results:
             st.info("Aún no hay cálculo. Ve a **📝 Datos del survey**, completa la "
                     "información y pulsa **🚀 Calcular y ver resultados**.")
@@ -1166,7 +1168,7 @@ def render_survey_tab(_ROL, _GRUPO):
 
         # PASO 5 — GESTIÓN DE PROYECTO (cronograma + curva S)
         # ══════════════════════════════════════════════════════
-        st.header("5. Gestión de proyecto")
+        st.header("📅 Cronograma")
         if st.session_state.calc_results:
             st.caption("Cronograma y curva S generados automáticamente según el proyecto "
                        "(escalados por NS y por los hallazgos del análisis). Ajusta duraciones "
@@ -1213,11 +1215,11 @@ def render_survey_tab(_ROL, _GRUPO):
         # PASO 6 — INFORME DEL CLIENTE  (solo propietario / administrador)
         # ══════════════════════════════════════════════════════
         if not can_reports(_ROL):
-            st.header("6. Informe del cliente")
+            st.header("📄 Informe del cliente")
             st.caption("🔒 La descarga de informes está disponible para administración "
                        "(propietario / administrador).")
         else:
-            st.header("6. Informe del cliente")
+            st.header("📄 Informe del cliente")
             st.caption("Informe profesional para entregar al cliente (solución final, diagramas e "
                        "instrucciones de implementación). El informe técnico interno se envía "
                        "automáticamente por correo a administración.")
@@ -1259,7 +1261,7 @@ def render_survey_tab(_ROL, _GRUPO):
         # PASO 7 — GUARDAR COMO PROYECTO  (solo administrador / propietario)
         # ══════════════════════════════════════════════════════
         if _ROL in ("administrador", "propietario"):
-            st.header("7. Guardar como proyecto")
+            st.header("💾 Guardar como proyecto")
             if not st.session_state.get("calc_results"):
                 st.info("Calcula primero: el proyecto se inicia con este survey.")
             elif not projects_data.is_configured():
@@ -1276,6 +1278,45 @@ def render_survey_tab(_ROL, _GRUPO):
                                if str(u.get("Rol", "")) == "campo"]
                 except Exception:
                     pass
+                # ── Asignacion de campo FUERA del form ──────────────
+                # Va fuera a proposito: dentro de un st.form los widgets no
+                # actualizan session_state hasta el submit, y el aviso de
+                # credenciales/contacto solo sirve ANTES de guardar.
+                pj_asg = st.multiselect("👷 Usuarios de campo asignados", _campos,
+                                        key="pj_asg_sel")
+                if pj_asg:
+                    _sin_contacto, _cred_mal = [], []
+                    for _u in pj_asg:
+                        try:
+                            _info = auth_get_user(_u) or {}
+                            if not (str(_info.get("Email", "")).strip()
+                                    and str(_info.get("TelegramChatID", "")).strip()):
+                                _sin_contacto.append(_u)
+                        except Exception:
+                            pass
+                        try:
+                            for _c in credentials.list_for(_u):
+                                _e = credentials.status(_c.get("Vencimiento"))
+                                if _e in ("vencido", "por_vencer"):
+                                    _cred_mal.append(
+                                        f"{_u} — {_c.get('Tipo','credencial')}: "
+                                        f"{credentials.status_label(_c.get('Vencimiento'))}"
+                                        + (f" ({_c.get('Vencimiento')})"
+                                           if _c.get("Vencimiento") else ""))
+                        except Exception:
+                            pass
+                    if _cred_mal:
+                        st.warning("🎫 **Credenciales a revisar antes de mandarlos a obra:**\n\n"
+                                   + "\n".join(f"- {x}" for x in _cred_mal)
+                                   + "\n\nPuedes guardar igualmente; el aviso es informativo.")
+                    if _sin_contacto:
+                        st.warning(
+                            "📵 **Sin contacto completo (email + Telegram):** "
+                            + ", ".join(_sin_contacto)
+                            + ". No recibirán la asignación ni las inducciones, y sin "
+                              "contacto no pueden usar la app. Complétalo en "
+                              "🛠 Mi grupo → Usuarios.")
+
                 with st.form("save_project"):
                     st.caption("Se guarda el survey completo (parámetros, matriz, interpretaciones "
                                "y cronograma). El avance lo alimentará el equipo de campo.")
@@ -1285,7 +1326,6 @@ def render_survey_tab(_ROL, _GRUPO):
                     pj_ubi = pc1.text_input("Ubicación", value=st.session_state.get("ubicacion", ""))
                     pj_mod = pc2.text_input("Modelo de elevador")
                     pj_ing = pc1.text_input("Ingeniero", value=ap.get("INGENIERO", ""))
-                    pj_asg = st.multiselect("Usuarios de campo asignados", _campos)
                     pj_instr = st.text_area("📌 Instrucciones particulares del proyecto",
                                             placeholder="Indicaciones específicas para el equipo…")
                     pj_ind = st.text_area("📝 Inducciones (un link por línea)",
@@ -1347,6 +1387,9 @@ def render_survey_tab(_ROL, _GRUPO):
                                     "id": res, "nombre": pj_nom.strip()}
                                 st.success(f"✅ Proyecto **{res}** guardado.")
                                 # ── Avisar a los usuarios de campo asignados ──
+                                if pj_asg and not notify.any_channel_configured():
+                                    st.caption("📨 Sin canales de aviso configurados "
+                                               "(Gmail / Telegram): no se envió nada.")
                                 if pj_asg and notify.any_channel_configured():
                                     _pinfo = {"Nombre": pj_nom.strip(), "Cliente": pj_cli,
                                               "Ubicacion": pj_ubi,
@@ -1361,8 +1404,15 @@ def render_survey_tab(_ROL, _GRUPO):
                                                 _nn += 1
                                         except Exception:
                                             pass
-                                    if _nn:
+                                    if _nn == len(pj_asg):
                                         st.caption(f"📨 {_nn} usuario(s) de campo notificado(s).")
+                                    elif _nn:
+                                        st.warning(f"📨 Notificados {_nn} de {len(pj_asg)}. "
+                                                   "Al resto le falta email o Telegram.")
+                                    else:
+                                        st.warning("📵 No se pudo notificar a ningún usuario "
+                                                   "asignado: revisa su email y Telegram en "
+                                                   "🛠 Mi grupo → Usuarios.")
                                 # ── Auto-archivo en Drive: plano + matriz + informe cliente ──
                                 if drive_store.is_configured():
                                     if not drive_store.is_available():

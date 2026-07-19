@@ -777,6 +777,27 @@ Al cargar el plano en el survey (app.py), autocompleta **RAIL = AlturaDiente** (
 espalda) del catálogo; si el código no está o no se detecta → aviso + entrada manual. **RAIL = AlturaDiente**
 (NO el ancho); AnchoDiente se guarda como dato secundario.
 
+## Survey: chequeo al asignar campo + fin de la numeracion (v127)
+Revision de INTEGRACION del Survey. Se asignaban usuarios de campo **sin mirar nada de lo que la app
+ya sabe de ellos**, y la app lo sabe todo (v79 contacto, v104 credenciales):
+- **Credenciales**: aviso si algun asignado tiene una credencial **vencida o por vencer**
+  (`credentials.list_for` + `status`). Informativo, NO bloquea (un ticket puede estar en tramite).
+- **Contacto**: aviso si falta email o Telegram. Sin ellos no reciben la asignacion NI las inducciones,
+  y ademas no pueden usar la app (bloqueo duro de v79).
+- ⚠️ **El selector de campo se saco FUERA del `st.form`**: dentro de un form los widgets NO escriben en
+  session_state hasta el submit, asi que un aviso "en vivo" ahi dentro es imposible. Ahora el aviso
+  aparece al elegir, ANTES de guardar, que es cuando sirve.
+- **Fallo silencioso corregido**: el resultado de la notificacion se mostraba con `if _nn:` → si no se
+  notificaba a NADIE no se decia nada y parecia que habia salido. Ahora informa siempre: todos / parcial
+  / ninguno, y avisa aparte si no hay canales configurados.
+- **Numeracion 1-7 eliminada** (herencia del scroll unico anterior a v114): en Datos se veia 1,2,3 y en
+  Resultados 4,5,6,7 sin que existieran los otros. Titulos con icono y sin numero.
+### ⚠️ Error que cometi
+Llame `credentials.status_label(_estado)` cuando su firma es `status_label(vencimiento)` — recibe la
+FECHA, no el estado. `status_label("vencido")` devuelve **"—"** (porque `status("vencido")` no parsea y
+da ""), asi que el aviso habria mostrado "White Card: —" en vez de "🔴 vencido". Lo caza **inspeccionar
+la firma y probar la funcion con datos reales**, no asumir por el nombre.
+
 ## Survey lote 3: cierre de ciclo, paquete de obra y duplicados (v126)
 - **`core/field_pack.py` → `field_pack_pdf(...)`**: UN PDF con lo que necesita quien va a terreno —
   cabecera del proyecto, isometrica del hueco, plantas por piso a escala y el replanteo de plomadas
@@ -1192,7 +1213,7 @@ posicional + plano) → app.py, al cargar el PDF, setea `st.session_state["ns"]`
 resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NORTH SYD y AGECARE → NS=6
 (coincide con travel/floor-height HQ/HE).
 
-## Versiones desplegadas (v126 = actual)
+## Versiones desplegadas (v127 = actual)
 | Ver | Cambio principal |
 |---|---|
 | v5 | Extractor: CRLF fix, caso D valor-antes-label, sin pdfplumber |
@@ -1294,6 +1315,7 @@ resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NOR
 | v102 | Fix: NS se lee del plano (NUMBER OF STOPS) al cargar el PDF; default de init 6→2 (ya no queda pegado en 6) |
 | v103 | Rol conductor (2 relojes: jornada general + segmentos por proyecto, columna Tipo) + cronómetro en vivo para todos + reporte admin de horas del grupo (Mi grupo → ⏱ Horas) |
 | v104 | Credenciales/tickets por usuario (White Card, Forklift, Dogging/Rigging, licencia…): vencimiento+estado, foto/documento a Drive, radar en Resumen del día, avisos email/Telegram a admin+usuario; usuario ve las suyas (🎫 Mis credenciales) |
+| v127 | Survey: aviso de credenciales vencidas y contacto faltante al asignar campo (fuera del form) + notificacion deja de fallar en silencio + numeracion 1-7 eliminada |
 | v126 | Survey lote 3: paquete de obra en 1 PDF (field_pack.py) + boton que abre el proyecto recien creado (navegacion real) + aviso de proyecto duplicado |
 | v125 | Survey lote 2: extraido de app.py a core/survey_ui.py (1243 lineas, cuerpo identico); app.py 1650->321 lineas; imports huerfanos podados |
 | v124 | Survey lote 1: el log del optimizador pasa a ser solo del propietario (era visible para campo) + leyenda de color en las tablas (faltaba desde v93) |
