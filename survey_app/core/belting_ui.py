@@ -2,6 +2,10 @@
 UI de la pestaña de Belting (herramienta independiente).
 Del plano: HQ (autocompletado). Del usuario: HGP y HGPR por elevador.
 DSTS = HGPR − HGP − HQ/1000 (mm), por elevador.
+
+v129/v130: los resultados vivían dentro de `if st.button(...)` y se perdían con
+cualquier interacción (bug de v110). Ahora el botón solo calcula; el render,
+el PDF y el guardado contra el proyecto van fuera.
 """
 import pandas as pd
 import streamlit as st
@@ -9,6 +13,10 @@ import streamlit.components.v1 as components
 
 from core.belting import compute_belting, belting_svg
 from core import plan_store
+from core.tool_pdf import tool_pdf
+from core.tool_save_ui import render_guardar
+
+_K = "belt_res"
 
 
 def render_belting_tab():
@@ -56,22 +64,48 @@ def render_belting_tab():
         v = cols[i % len(cols)].number_input(f"HGPR elevador {i+1}", step=0.5, key=f"belt_hgpr_{i}")
         hgpr_list.append(v)
 
-    # ── Cálculo ─────────────────────────────────────────────
-    if st.button("🎗 Calcular belting", type="primary", use_container_width=True, key="belt_calc"):
-        results = compute_belting(hgp, hq, hgpr_list)
-        st.subheader("📋 Resultados (DSTS por elevador)")
-        st.dataframe(pd.DataFrame([{
-            "Elevador":  r["elevador"],
-            "HGPR (mm)": r["hgpr"],
-            "DSTS (mm)": r["dsts"],
-            "Posición":  f"{abs(r['dsts']):.0f} mm {'por debajo' if r['dsts'] >= 0 else 'por encima'} del FFL top",
-        } for r in results]), use_container_width=True, hide_index=True)
-        st.caption(f"DSTS = HGPR − HGP({hgp:.0f}) − HQ({hq:.0f})/1000  "
-                   f"= HGPR − {hgp + hq / 1000.0:.1f} mm")
+    # ── Cálculo (solo computa; el render va fuera) ──────────
+    if st.button("🎗 Calcular belting", type="primary", use_container_width=True,
+                 key="belt_calc"):
+        st.session_state[_K] = {"results": compute_belting(hgp, hq, hgpr_list),
+                                "hgp": hgp, "hq": hq}
 
-        st.subheader("📐 Diagrama")
-        components.html(
-            '<!DOCTYPE html><html><body style="margin:0;background:transparent">'
-            + belting_svg(results) + '</body></html>',
-            height=330, scrolling=False,
-        )
+    est = st.session_state.get(_K)
+    if not est:
+        return
+    results, _hgp, _hq = est["results"], est["hgp"], est["hq"]
+
+    # ── Resultado (persistente entre reruns) ────────────────
+    filas = [{
+        "Elevador":  r["elevador"],
+        "HGPR (mm)": r["hgpr"],
+        "DSTS (mm)": r["dsts"],
+        "Posición":  f"{abs(r['dsts']):.0f} mm "
+                     f"{'por debajo' if r['dsts'] >= 0 else 'por encima'} del FFL top",
+    } for r in results]
+    st.subheader("📋 Resultados (DSTS por elevador)")
+    st.dataframe(pd.DataFrame(filas), use_container_width=True, hide_index=True)
+    _formula = (f"DSTS = HGPR − HGP({_hgp:.0f}) − HQ({_hq:.0f})/1000 "
+                f"= HGPR − {_hgp + _hq / 1000.0:.1f} mm")
+    st.caption(_formula)
+
+    svg = belting_svg(results)
+    st.subheader("📐 Diagrama")
+    components.html(
+        '<!DOCTYPE html><html><body style="margin:0;background:transparent">'
+        + svg + '</body></html>', height=330, scrolling=False)
+
+    # ── PDF + guardar contra el proyecto ────────────────────
+    _resumen = ", ".join(f"E{r['elevador']}: DSTS {r['dsts']}" for r in results)
+    pdf_bytes = tool_pdf(
+        "Belting — posición de la cabina",
+        meta={"HQ (travel)": f"{_hq:.0f} mm", "HGP (diseño)": f"{_hgp:.0f} mm",
+              "Elevadores": str(len(results))},
+        svgs=[svg],
+        tablas=[("DSTS por elevador", filas)],
+        notas=[_formula,
+               "DSTS > 0 = bajar la cabina esa distancia bajo el FFL del piso más alto."])
+    render_guardar(herramienta="belting", titulo_pdf="belting",
+                   pdf_bytes=pdf_bytes, resumen=_resumen,
+                   datos={"hgp": _hgp, "hq": _hq, "results": results},
+                   nombre_archivo="belting.pdf", key="belt")

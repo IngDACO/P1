@@ -86,3 +86,136 @@ def compute_case2(lfkk: float, lfgk: float, rows: list, subcaso: str) -> list:
             "CutRB": float(lfgk) + sign * rb,
         })
     return out
+
+
+# ══════════════════════════════════════════════════════════
+#  Diagrama de cortes (v130)
+# ══════════════════════════════════════════════════════════
+def _mm(v) -> str:
+    try:
+        v = float(v)
+    except Exception:
+        return str(v)
+    return f"{v:.0f}" if abs(v - round(v)) < 0.05 else f"{v:.1f}"
+
+
+def rail_cut_svg(res: dict, caso: int = 1, n2500: int = 0, n5000: int = 0) -> str:
+    """Diagrama de los cortes de riel.
+
+    Hasta v129 esta herramienta daba SOLO numeros para una operacion
+    irreversible. Ahora se ve de donde sale el corte.
+
+    CASO 1 — alzado real: la pila de rieles estandar instalados (A) frente a la
+    longitud requerida por elevador (RC / RCW). Lo que sobresale es el corte.
+    CASO 2 — barras comparativas de los cuatro cortes por elevador: ahi no hay
+    pila que dibujar, los valores vienen medidos en obra.
+    """
+    elevs = (res or {}).get("elevadores") or []
+    if not elevs:
+        return '<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"></svg>'
+
+    cab = ('<text x="18" y="26" font-size="11" fill="#1f2937" font-weight="bold">'
+           'CORTE DE RIELES</text>')
+
+    if caso == 1:
+        A = float(res.get("A") or 0)
+        req = []
+        for e in elevs:
+            req += [float(e["RC"]), float(e["RCW"])]
+        vmax = max([A] + req) or 1.0
+
+        n = len(elevs)
+        paso = max(130, min(200, 640 // max(1, n)))
+        VW = max(470, 100 + paso * n + 30)
+        VH, TOP, ALTO = 366, 74, 196
+        esc = ALTO / vmax
+        base = TOP + ALTO
+        p = [f'<svg viewBox="0 0 {VW} {VH}" xmlns="http://www.w3.org/2000/svg" '
+             f'style="width:100%;max-width:{VW}px;font-family:Arial,Helvetica,sans-serif;'
+             f'display:block;margin:0 auto">',
+             f'<rect x="0" y="0" width="{VW}" height="{VH}" fill="#ffffff"/>', cab,
+             f'<text x="18" y="40" font-size="8" fill="#7a8699">'
+             f'Caso 1 &#183; pila instalada A = {_mm(A)} mm '
+             f'({n2500}&#215;2500 + {n5000}&#215;5000) &#183; corte = requerido &#8722; A</text>']
+
+        yA = base - A * esc
+        p.append(f'<line x1="74" y1="{yA:.1f}" x2="{VW-24}" y2="{yA:.1f}" '
+                 f'stroke="#1a3a5c" stroke-width="1.2" stroke-dasharray="9,3,2,3"/>')
+        p.append(f'<text x="{VW-22}" y="{yA-4:.1f}" text-anchor="end" font-size="8.5" '
+                 f'fill="#1a3a5c">A {_mm(A)}</text>')
+
+        acum = 0.0
+        for seg in [5000.0] * int(n5000) + [2500.0] * int(n2500):
+            y0 = base - (acum + seg) * esc
+            p.append(f'<rect x="30" y="{y0:.1f}" width="36" height="{seg*esc:.1f}" '
+                     f'fill="#eef2f7" stroke="#8a94a6" stroke-width="0.9"/>')
+            if seg * esc > 13:
+                p.append(f'<text x="48" y="{y0+seg*esc/2+3:.1f}" text-anchor="middle" '
+                         f'font-size="7.5" fill="#7a8699">{_mm(seg)}</text>')
+            acum += seg
+
+        for i, e in enumerate(elevs):
+            cx = 100 + paso * i
+            for j, (lbl, largo, corte) in enumerate(
+                    (("RC", e["RC"], e["CutRC"]), ("RCW", e["RCW"], e["CutRCW"]))):
+                x = cx + j * 48
+                largo, corte = float(largo), float(corte)
+                y0 = base - largo * esc
+                p.append(f'<rect x="{x:.1f}" y="{y0:.1f}" width="36" '
+                         f'height="{largo*esc:.1f}" fill="#f7fafd" '
+                         f'stroke="#1a3a5c" stroke-width="1.1"/>')
+                if abs(corte) > 0.05:
+                    yc0, yc1 = (y0, yA) if corte > 0 else (yA, y0)
+                    p.append(f'<rect x="{x:.1f}" y="{min(yc0,yc1):.1f}" width="36" '
+                             f'height="{abs(yc1-yc0):.1f}" fill="#fcebeb" '
+                             f'stroke="#c0392b" stroke-width="0.8"/>')
+                    p.append(f'<text x="{x+18:.1f}" y="{(yc0+yc1)/2+3:.1f}" '
+                             f'text-anchor="middle" font-size="8.5" fill="#c0392b" '
+                             f'font-weight="bold">{_mm(corte)}</text>')
+                p.append(f'<text x="{x+18:.1f}" y="{base+14:.1f}" text-anchor="middle" '
+                         f'font-size="7.5" fill="#1f2937">{lbl}</text>')
+            p.append(f'<text x="{cx+42:.1f}" y="{base+31:.1f}" text-anchor="middle" '
+                     f'font-size="8.5" fill="#1f2937" font-weight="bold">Elev. {i+1}</text>')
+            p.append(f'<text x="{cx+42:.1f}" y="{base+43:.1f}" text-anchor="middle" '
+                     f'font-size="7.5" fill="#7a8699">L {_mm(e["L"])}</text>')
+
+        p.append(f'<rect x="18" y="{VH-26}" width="9" height="9" fill="#fcebeb" '
+                 f'stroke="#c0392b" stroke-width="0.7"/>')
+        # ⚠️ La app NO documenta que significa el signo de Cut* (solo muestra el
+        # numero crudo), asi que la leyenda describe lo que SI se sabe —la
+        # diferencia contra A— en vez de afirmar una direccion de corte.
+        p.append(f'<text x="32" y="{VH-18}" font-size="8" fill="#7a8699">'
+                 f'diferencia contra A (mismo valor con signo que la tabla)</text>')
+        p.append("</svg>")
+        return "".join(p)
+
+    claves = [("CutRZ", "RZ"), ("CutRO", "RO"), ("CutRF", "RF"), ("CutRB", "RB")]
+    vals = [abs(float(e.get(k) or 0)) for e in elevs for k, _ in claves]
+    vmax = max(vals) or 1.0
+    n = len(elevs)
+    paso = max(160, min(230, 660 // max(1, n)))
+    VW = max(480, 74 + paso * n + 30)
+    VH, TOP, LARGO = 300, 78, 126
+    p = [f'<svg viewBox="0 0 {VW} {VH}" xmlns="http://www.w3.org/2000/svg" '
+         f'style="width:100%;max-width:{VW}px;font-family:Arial,Helvetica,sans-serif;'
+         f'display:block;margin:0 auto">',
+         f'<rect x="0" y="0" width="{VW}" height="{VH}" fill="#ffffff"/>', cab,
+         f'<text x="18" y="40" font-size="8" fill="#7a8699">'
+         f'Caso 2 &#183; corte por riel y elevador (barras a escala comun)</text>']
+    for i, e in enumerate(elevs):
+        cx = 64 + paso * i
+        for j, (k, lbl) in enumerate(claves):
+            v = float(e.get(k) or 0)
+            y = TOP + j * 30
+            w = abs(v) / vmax * LARGO
+            col = "#c0392b" if v < 0 else "#1a3a5c"
+            p.append(f'<rect x="{cx:.1f}" y="{y:.1f}" width="{max(1.5,w):.1f}" '
+                     f'height="15" fill="{col}" fill-opacity="0.82"/>')
+            p.append(f'<text x="{cx-6:.1f}" y="{y+12:.1f}" text-anchor="end" '
+                     f'font-size="8" fill="#7a8699">{lbl}</text>')
+            p.append(f'<text x="{cx+max(1.5,w)+5:.1f}" y="{y+12:.1f}" font-size="8.5" '
+                     f'fill="{col}">{_mm(v)}</text>')
+        p.append(f'<text x="{cx+LARGO/2:.1f}" y="{TOP+4*30+16:.1f}" text-anchor="middle" '
+                 f'font-size="8.5" fill="#1f2937" font-weight="bold">Elevador {i+1}</text>')
+    p.append("</svg>")
+    return "".join(p)

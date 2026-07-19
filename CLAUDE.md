@@ -782,6 +782,25 @@ Al cargar el plano en el survey (app.py), autocompleta **RAIL = AlturaDiente** (
 espalda) del catálogo; si el código no está o no se detecta → aviso + entrada manual. **RAIL = AlturaDiente**
 (NO el ancho); AnchoDiente se guarda como dato secundario.
 
+## Herramientas de calculo, parte 2: las cuatro completas (v130)
+Cierra lo empezado en v129. Ahora **Plomadas, Corte de rieles, Corte de buffers y Belting** comparten:
+resultados persistentes, dibujo tecnico, PDF (`tool_pdf`) y guardado contra el proyecto
+(`tool_save_ui` → hoja `Calculos` + Drive).
+- **Fix del bug v110 en las tres restantes.** En Plomadas colgaban **80 lineas** del boton (los 4
+  graficos CAD de v123 se borraban al tocar nada); en Rieles dos bloques y en Belting uno. Patron
+  aplicado: el boton SOLO computa y guarda en `session_state`; el render vive fuera.
+  Verificado por AST: ningun bloque de mas de 6 lineas cuelga ya de un `st.button`, salvo el de Rieles
+  Caso 2 que es **solo computo** (arma `rows` y llama a compute_case2), sin render.
+- **`rail_cut.rail_cut_svg(res, caso, n2500, n5000)`** — diagrama nuevo. Caso 1 es alzado REAL: la pila
+  de rieles estandar instalados (A) contra la longitud requerida por elevador (RC/RCW); lo que
+  sobresale es la diferencia. Caso 2 son barras comparativas, porque ahi no hay pila que dibujar (los
+  valores vienen medidos en obra) — dibujar una geometria inventada seria mentir.
+- ⚠️ **Signo de Cut\*: la app NO documenta que significa** (la UI solo mostraba el numero crudo). Con
+  datos de prueba realistas los cortes salen NEGATIVOS. La leyenda del dibujo dice "diferencia contra A
+  (mismo valor con signo que la tabla)" en vez de "material a cortar": describe lo que se sabe sin
+  afirmar una direccion de corte que no esta definida en ninguna parte. **PENDIENTE de confirmar con el
+  usuario** — es una decision de dominio, y es una operacion irreversible.
+
 ## Herramientas de calculo, parte 1: registro en el proyecto (v129)
 Las cuatro herramientas (Plomadas, Corte de rieles, Corte de buffers, Belting) eran **islas**: ni PDF,
 ni descarga, ni rastro en el proyecto. Calculabas, mirabas y ahi moria.
@@ -1265,7 +1284,7 @@ posicional + plano) → app.py, al cargar el PDF, setea `st.session_state["ns"]`
 resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NORTH SYD y AGECARE → NS=6
 (coincide con travel/floor-height HQ/HE).
 
-## Versiones desplegadas (v129 = actual)
+## Versiones desplegadas (v130 = actual)
 | Ver | Cambio principal |
 |---|---|
 | v5 | Extractor: CRLF fix, caso D valor-antes-label, sin pdfplumber |
@@ -1367,6 +1386,7 @@ resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NOR
 | v102 | Fix: NS se lee del plano (NUMBER OF STOPS) al cargar el PDF; default de init 6→2 (ya no queda pegado en 6) |
 | v103 | Rol conductor (2 relojes: jornada general + segmentos por proyecto, columna Tipo) + cronómetro en vivo para todos + reporte admin de horas del grupo (Mi grupo → ⏱ Horas) |
 | v104 | Credenciales/tickets por usuario (White Card, Forklift, Dogging/Rigging, licencia…): vencimiento+estado, foto/documento a Drive, radar en Resumen del día, avisos email/Telegram a admin+usuario; usuario ve las suyas (🎫 Mis credenciales) |
+| v130 | Herramientas 2/2: Plomadas, Rieles y Belting con resultados persistentes (fix v110), diagrama nuevo de corte de rieles, PDF y guardado en el proyecto |
 | v129 | Herramientas 1/2: hoja Calculos (cada uso alimenta el proyecto) + PDF y guardado comunes + fix del bug v110 en las 4 + Corte de buffers completo con diagrama nuevo |
 | v128 | Plano UNICO de la sesion (se subia el mismo PDF en 5 herramientas) + paquete de obra descargable desde el detalle del proyecto (survey_calc.recalcular) |
 | v127 | Survey: aviso de credenciales vencidas y contacto faltante al asignar campo (fuera del form) + notificacion deja de fallar en silencio + numeracion 1-7 eliminada |

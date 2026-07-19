@@ -4,7 +4,11 @@ UI de la pestaña de corte de rieles.
 import streamlit as st
 import pandas as pd
 
-from core.rail_cut import extract_lf, compute_case1, compute_case2
+from core.rail_cut import (extract_lf, compute_case1, compute_case2,
+                           rail_cut_svg)
+import streamlit.components.v1 as components
+from core.tool_pdf import tool_pdf
+from core.tool_save_ui import render_guardar
 from core import plan_store
 
 
@@ -79,16 +83,50 @@ def render_rail_cut_tab():
                                 num_rows="fixed", disabled=["Elevador"], key="rc_L_editor")
         st.session_state["rc_L_df"] = L_edit
 
-        if st.button("✂️ Calcular cortes (Caso 1)", type="primary", use_container_width=True, key="rc_calc1"):
+        # El boton SOLO computa: antes todo el resultado colgaba de aqui y se
+        # perdia con cualquier interaccion (bug estructural de v110).
+        if st.button("✂️ Calcular cortes (Caso 1)", type="primary",
+                     use_container_width=True, key="rc_calc1"):
             L_list = [float(x) for x in L_edit["L (mm)"].tolist()]
-            res = compute_case1(lfkk, lfgk, n2500, n5000, L_list)
+            st.session_state["rc_res"] = {
+                "caso": 1, "res": compute_case1(lfkk, lfgk, n2500, n5000, L_list),
+                "n2500": int(n2500), "n5000": int(n5000), "n": int(n)}
+
+        _e = st.session_state.get("rc_res")
+        if _e and _e.get("caso") == 1:
+            res = _e["res"]
             st.success(f"A = {res['A']:.0f} mm")
-            mat = _result_matrix(["CutRC", "CutRCW"], res["elevadores"], n)
+            mat = _result_matrix(["CutRC", "CutRCW"], res["elevadores"], _e["n"])
             st.subheader("Resultado — cortes (mm)")
             st.dataframe(mat, use_container_width=True)
             with st.expander("Detalle (RC, RCW)"):
-                det = _result_matrix(["RC", "RCW"], res["elevadores"], n)
+                det = _result_matrix(["RC", "RCW"], res["elevadores"], _e["n"])
                 st.dataframe(det, use_container_width=True)
+
+            svg = rail_cut_svg(res, caso=1, n2500=_e["n2500"], n5000=_e["n5000"])
+            st.subheader("📐 Diagrama de cortes")
+            components.html(
+                '<!DOCTYPE html><html><body style="margin:0;background:transparent">'
+                + svg + '</body></html>', height=390, scrolling=False)
+
+            _filas = [{"Elevador": i + 1, "L (mm)": round(x["L"], 1),
+                       "RC (mm)": round(x["RC"], 1), "CutRC (mm)": round(x["CutRC"], 1),
+                       "RCW (mm)": round(x["RCW"], 1), "CutRCW (mm)": round(x["CutRCW"], 1)}
+                      for i, x in enumerate(res["elevadores"])]
+            _pdf = tool_pdf(
+                "Corte de rieles — Caso 1",
+                meta={"A (pila instalada)": f"{res['A']:.0f} mm",
+                      "Composición": f"{_e['n2500']}×2500 + {_e['n5000']}×5000",
+                      "LFKK / LFGK": f"{lfkk:.0f} / {lfgk:.0f} mm"},
+                svgs=[svg], tablas=[("Cortes por elevador", _filas)],
+                notas=["Caso 1: el riel a cortar es el primero instalado (abajo). "
+                       "CutRC = RC − A, CutRCW = RCW − A."])
+            render_guardar(herramienta="rieles", titulo_pdf="corte de rieles",
+                           pdf_bytes=_pdf,
+                           resumen=("Caso 1 · A " + f"{res['A']:.0f} · "
+                                    + ", ".join(f"E{i+1}: {x['CutRC']:.0f}/{x['CutRCW']:.0f}"
+                                                for i, x in enumerate(res["elevadores"]))),
+                           datos=res, nombre_archivo="corte_rieles_caso1.pdf", key="rc1")
 
     # ════════════════════════════════════════════════════════
     # CASO 2
@@ -113,14 +151,43 @@ def render_rail_cut_tab():
                                  num_rows="fixed", disabled=["Riel"], key="rc_in_editor")
         st.session_state["rc_in_df"] = in_edit
 
-        if st.button("✂️ Calcular cortes (Caso 2)", type="primary", use_container_width=True, key="rc_calc2"):
+        if st.button("✂️ Calcular cortes (Caso 2)", type="primary",
+                     use_container_width=True, key="rc_calc2"):
             rows = []
             for i in range(n):
                 col = in_edit[f"Elevador {i+1}"].tolist()
                 rows.append({"RZ": col[0], "RO": col[1], "RF": col[2], "RB": col[3]})
-            res = compute_case2(lfkk, lfgk, rows, subcaso)
-            signo = "LFKK/LFGK − R" if subcaso == "encima" else "LFKK/LFGK + R"
-            st.success(f"Sub-caso: {sub}  →  {signo}")
-            mat = _result_matrix(["CutRZ", "CutRO", "CutRF", "CutRB"], res, n)
+            st.session_state["rc_res"] = {
+                "caso": 2, "res": compute_case2(lfkk, lfgk, rows, subcaso),
+                "subcaso": subcaso, "sub": sub, "n": int(n)}
+
+        _e = st.session_state.get("rc_res")
+        if _e and _e.get("caso") == 2:
+            res = _e["res"]
+            signo = "LFKK/LFGK − R" if _e["subcaso"] == "encima" else "LFKK/LFGK + R"
+            st.success(f"Sub-caso: {_e['sub']}  →  {signo}")
+            mat = _result_matrix(["CutRZ", "CutRO", "CutRF", "CutRB"], res, _e["n"])
             st.subheader("Resultado — cortes (mm)")
             st.dataframe(mat, use_container_width=True)
+
+            svg = rail_cut_svg({"elevadores": res}, caso=2)
+            st.subheader("📐 Diagrama de cortes")
+            components.html(
+                '<!DOCTYPE html><html><body style="margin:0;background:transparent">'
+                + svg + '</body></html>', height=330, scrolling=False)
+
+            _filas = [{"Elevador": i + 1,
+                       **{k: round(float(x.get(k) or 0), 1)
+                          for k in ("CutRZ", "CutRO", "CutRF", "CutRB")}}
+                      for i, x in enumerate(res)]
+            _pdf = tool_pdf(
+                "Corte de rieles — Caso 2",
+                meta={"Sub-caso": _e["sub"], "Fórmula": signo,
+                      "LFKK / LFGK": f"{lfkk:.0f} / {lfgk:.0f} mm"},
+                svgs=[svg], tablas=[("Cortes por elevador", _filas)],
+                notas=["Caso 2: el riel a cortar es el último instalado (arriba)."])
+            render_guardar(herramienta="rieles", titulo_pdf="corte de rieles",
+                           pdf_bytes=_pdf,
+                           resumen=f"Caso 2 ({_e['subcaso']}) · {len(res)} elevador(es)",
+                           datos={"subcaso": _e["subcaso"], "elevadores": res},
+                           nombre_archivo="corte_rieles_caso2.pdf", key="rc2")
