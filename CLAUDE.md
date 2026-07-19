@@ -782,6 +782,25 @@ Al cargar el plano en el survey (app.py), autocompleta **RAIL = AlturaDiente** (
 espalda) del catálogo; si el código no está o no se detecta → aviso + entrada manual. **RAIL = AlturaDiente**
 (NO el ancho); AnchoDiente se guarda como dato secundario.
 
+## Agente IA al dia + limpieza (v133)
+⚠️ **El agente llevaba ~35 versiones desactualizado.** Auditoria de su SYSTEM_PROMPT contra las
+funciones reales: **desconocia 11** — Corte de buffers (v96), Pre-Start (v97), Maps (v98),
+instrucciones/inducciones (v100), rol conductor (v103), credenciales (v104), gastos y presupuesto
+(v105-106), paquete de obra (v126), plano unico (v128) y la hoja Calculos (v129). Ademas **no
+mencionaba ni una pestaña por su nombre**, asi que tampoco sabia guiar por la interfaz.
+Es un fallo INVISIBLE: el agente no dice "eso no existe", responde con lo que sabe o improvisa, y
+nadie nota que su conocimiento esta congelado. Afecta a los tres roles a diario.
+- Reescrita la seccion "FUNCIONES DE LA APP COPEX" del prompt: las 5 herramientas de calculo (con sus
+  dibujos, ficha de replanteo, plano compartido y guardado en el proyecto), gestion de proyectos
+  (Mi grupo, detalle en 4 pestañas, Mis proyectos, Administracion) y obra/seguridad/costos (Pre-Start,
+  credenciales, gastos, fichaje de 2 relojes, Maps, documentos, alarmas, inducciones).
+- **Navegacion POR ROL**: el prompt indica que ve cada rol, para que el agente diga donde esta cada
+  cosa segun con quien habla, y avise si esa persona no tiene acceso.
+- Intactas: la regla de CONFIDENCIALIDAD y las personas por rol (`_PERSONA`, v91).
+- Se elimino `toolruns.list_group`: escrita en v129 para una vista de grupo que nunca se construyo.
+⚠️ **REGLA:** al anadir un modulo o pestaña, actualizar el SYSTEM_PROMPT del agente en el MISMO lote.
+Un chequeo barato: buscar en `chat_agent.py` las palabras clave de cada funcion nueva.
+
 ## Detalle de proyecto: 11 secciones -> 4 pestañas (v132)
 `_detalle_proyecto` eran **314 lineas con 11 secciones apiladas en un scroll unico** — el mismo problema
 que tenia el Survey antes de v114. Misma solucion: sub-navegacion con **`st.radio`** (NUNCA `st.tabs`,
@@ -1320,7 +1339,7 @@ posicional + plano) → app.py, al cargar el PDF, setea `st.session_state["ns"]`
 resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NORTH SYD y AGECARE → NS=6
 (coincide con travel/floor-height HQ/HE).
 
-## Versiones desplegadas (v132 = actual)
+## Versiones desplegadas (v133 = actual)
 | Ver | Cambio principal |
 |---|---|
 | v5 | Extractor: CRLF fix, caso D valor-antes-label, sin pdfplumber |
@@ -1422,6 +1441,7 @@ resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NOR
 | v102 | Fix: NS se lee del plano (NUMBER OF STOPS) al cargar el PDF; default de init 6→2 (ya no queda pegado en 6) |
 | v103 | Rol conductor (2 relojes: jornada general + segmentos por proyecto, columna Tipo) + cronómetro en vivo para todos + reporte admin de horas del grupo (Mi grupo → ⏱ Horas) |
 | v104 | Credenciales/tickets por usuario (White Card, Forklift, Dogging/Rigging, licencia…): vencimiento+estado, foto/documento a Drive, radar en Resumen del día, avisos email/Telegram a admin+usuario; usuario ve las suyas (🎫 Mis credenciales) |
+| v133 | Agente IA al dia: desconocia 11 funciones (todo desde v96) y no sabia guiar por la interfaz; ahora tambien navega por rol. Quitada toolruns.list_group (huerfana) |
 | v132 | Detalle de proyecto reorganizado: 11 secciones en scroll unico -> 4 pestañas (Estado/Datos/Costos/Archivos) con cabecera fija |
 | v131 | Mi grupo: historial de calculos de herramientas en el detalle del proyecto (la hoja Calculos se escribia desde v129 pero nadie la leia) |
 | v130 | Herramientas 2/2: Plomadas, Rieles y Belting con resultados persistentes (fix v110), diagrama nuevo de corte de rieles, PDF y guardado en el proyecto |

@@ -75,13 +75,6 @@ def list_for(pid: str) -> list:
     return sorted(out, key=lambda r: str(r.get("Fecha", "")), reverse=True)
 
 
-def list_group(grupo: str, herramienta: str = None) -> list:
-    out = [r for r in _records() if str(r.get("Grupo", "")) == str(grupo)]
-    if herramienta:
-        out = [r for r in out if str(r.get("Herramienta", "")) == herramienta]
-    return sorted(out, key=lambda r: str(r.get("Fecha", "")), reverse=True)
-
-
 def _next_id() -> str:
     """Lee FRESCO a propósito: es ruta de escritura (regla de v108)."""
     w = _ws()
