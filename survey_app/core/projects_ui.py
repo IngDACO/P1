@@ -651,6 +651,7 @@ def _detalle_proyecto(pid: str, grupo: str = None):
                         pass
                 st.session_state["proyecto"]  = str(prj.get("Nombre", ""))
                 st.session_state["ingeniero"] = str(prj.get("Ingeniero", ""))
+                st.session_state["_rebuilt_from"] = str(prj.get("Nombre", ""))
                 st.success("✅ Cargado. Ve a **📐 Survey** y pulsa **Calcular** para regenerar todo.")
 
     # ── Gastos / compras ──

@@ -104,6 +104,17 @@ try {
 """, height=0)
 
 SURVEY_COLS = ["WR", "FR", "OR", "WL", "FL", "OL"]
+
+# Agrupación de los parámetros del plano por significado (en vez de una grilla plana
+# de 17 números iguales). Lo que no esté aquí se muestra igual, bajo "Otros".
+_GRUPOS_PARAM = [
+    ("🏗 Hueco",           ["BS", "TS"]),
+    ("🛗 Cabina",          ["BK", "TK", "BKS"]),
+    ("🚪 Puerta / umbral", ["BT", "TKA", "TKS", "TSW"]),
+    ("📍 Frontal",         ["TKSW", "BKF1", "BKF2"]),
+    ("↔️ Laterales",       ["SF1", "SF2"]),
+    ("⚖️ Contrapeso",      ["BGS", "SG", "TG"]),
+]
 USER_ONLY = {
     "BSR":            "Ancho real del hueco medido en obra (mm)",
     "FS":             "Distancia frontal de seguridad (mm)",
@@ -320,6 +331,19 @@ if _seccion == _L_SURVEY:
     # ── Aplicar valores importados (Excel) ANTES de crear los widgets ──
     # Streamlit prohíbe escribir st.session_state[k] de un widget ya instanciado,
     # así que el import deja los valores "pendientes" y se aplican aquí, arriba del todo.
+    # ── Empezar de cero (se procesa ANTES de crear los widgets) ──
+    if st.session_state.pop("_reset_survey", False):
+        for _k in [k for k in list(st.session_state.keys())
+                   if k.startswith("inp_") or k.startswith("cfg_")]:
+            st.session_state.pop(_k, None)
+        for _k in ("ns", "calc_results", "pdf_extracted", "last_pdf_name", "pdf_bytes",
+                   "last_excel_id", "_calc_sig", "ns_msg", "rail_ref_msg",
+                   "proyecto", "ingeniero", "sched_rows", "sched_start", "_rebuilt_from"):
+            st.session_state.pop(_k, None)
+        st.session_state["ns"]        = 2
+        st.session_state["survey_df"] = pd.DataFrame({c: [0.0] * 2 for c in SURVEY_COLS})
+        st.session_state["calc_results"] = None
+
     _pend = st.session_state.pop("_import_pending", None)
     if _pend:
         if _pend.get("df") is not None:
@@ -332,12 +356,24 @@ if _seccion == _L_SURVEY:
             st.session_state[_k] = _v
         st.success("✅ Matriz, parámetros y configuración cargados desde el Excel.")
 
+    # Aviso cuando se llega desde "Reconstruir proyecto" (Mi grupo → detalle)
+    if st.session_state.get("_rebuilt_from"):
+        st.info(f"📥 Cargaste el proyecto **{st.session_state['_rebuilt_from']}**. "
+                "Pulsa **🚀 Calcular** para regenerar diagramas e informes.")
+
     # ── Identificación del proyecto ───────────────────────
     _id1, _id2 = st.columns(2)
     _id1.text_input("🏗 Nombre del proyecto / Cliente", key="proyecto",
                     placeholder="Ej: Edificio Centro, Cliente ABC…")
     _id2.text_input("👷 Ingeniero responsable", key="ingeniero",
                     placeholder="Nombre del técnico que realiza el survey")
+
+    with st.expander("🧹 Empezar un survey nuevo"):
+        st.caption("Borra parámetros, matriz, configuración y resultados de esta sesión. "
+                   "No afecta a los proyectos ya guardados.")
+        if st.button("🧹 Limpiar todo y empezar de cero", key="btn_reset_survey"):
+            st.session_state["_reset_survey"] = True
+            st.rerun()
 
     # ══════════════════════════════════════════════════════
     # PASO 1 — CARGAR PDF
@@ -410,18 +446,51 @@ if _seccion == _L_SURVEY:
     # ══════════════════════════════════════════════════════
     st.header("2. Parámetros del proyecto")
 
-    with st.expander("📄 Parámetros del PDF (editables)", expanded=True):
-        for i in range(0, len(PDF_PARAMS), 4):
-            cols = st.columns(4)
-            for j, p in enumerate(PDF_PARAMS[i:i+4]):
-                cols[j].number_input(
-                    label = f"{p} (mm)",
+    # Marca por campo: ✅ leído del plano · ✏️ a completar a mano.
+    # (Recupera la señal que se perdió al quitar el panel del sidebar en v93.)
+    _ext = st.session_state.get("pdf_extracted") or {}
+
+    def _mark(p):
+        if not _ext or p not in _ext:
+            return ""
+        return "✅ " if _ext.get(p) is not None else "✏️ "
+
+    if _ext:
+        _found = [p for p, v in _ext.items() if v is not None]
+        _miss  = [p for p, v in _ext.items() if v is None]
+        _r1, _r2 = st.columns([1, 2])
+        _r1.metric("Leídos del plano", f"{len(_found)}/{len(_ext)}")
+        if _miss:
+            _r2.warning("✏️ Completa a mano: **" + "**, **".join(_miss) + "**")
+        else:
+            _r2.success("✅ El plano aportó todos los parámetros.")
+
+    with st.expander("📄 Parámetros del plano (editables)", expanded=True):
+        _pendientes = list(PDF_PARAMS)
+        for _titulo, _lista in _GRUPOS_PARAM:
+            _ps = [p for p in _lista if p in _pendientes]
+            if not _ps:
+                continue
+            st.markdown(f"**{_titulo}**")
+            _cols = st.columns(4)
+            for j, p in enumerate(_ps):
+                _cols[j % 4].number_input(
+                    label = f"{_mark(p)}{p} (mm)",
                     step  = 0.5,
                     help  = PARAM_DESCRIPTIONS.get(p, ""),
                     key   = f"inp_{p}",
                 )
+                _pendientes.remove(p)
+        if _pendientes:      # cualquier parámetro nuevo que no esté agrupado
+            st.markdown("**Otros**")
+            _cols = st.columns(4)
+            for j, p in enumerate(_pendientes):
+                _cols[j % 4].number_input(
+                    label = f"{_mark(p)}{p} (mm)", step = 0.5,
+                    help  = PARAM_DESCRIPTIONS.get(p, ""), key = f"inp_{p}",
+                )
 
-    with st.expander("✏️ Parámetros del usuario", expanded=True):
+    with st.expander("✏️ Parámetros medidos en obra", expanded=True):
         cols = st.columns(len(USER_ONLY))
         for j, (p, desc) in enumerate(USER_ONLY.items()):
             cols[j].number_input(
@@ -431,7 +500,7 @@ if _seccion == _L_SURVEY:
                 key   = f"inp_{p}",
             )
 
-    st.subheader("Configuración")
+    st.markdown("**⚙️ Configuración**")
     c1, c2, c3 = st.columns(3)
     c1.radio("Lado del Omega",        ["R", "L"], horizontal=True, key="cfg_omega_side")
     c2.radio("¿Hay pared limitante?", ["N", "Y"], horizontal=True, key="cfg_wall_yn")
@@ -947,6 +1016,7 @@ if _seccion == _L_SURVEY:
             "plumb":               plumb_res,
         }
         st.session_state["_calc_sig"] = _survey_signature()
+        st.session_state.pop("_rebuilt_from", None)
 
         # ── Cronograma automático según el proyecto ───────────
         _flags = detect_flags(st.session_state.calc_results)

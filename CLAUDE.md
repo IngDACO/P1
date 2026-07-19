@@ -775,6 +775,17 @@ Al cargar el plano en el survey (app.py), autocompleta **RAIL = AlturaDiente** (
 espalda) del catálogo; si el código no está o no se detecta → aviso + entrada manual. **RAIL = AlturaDiente**
 (NO el ancho); AnchoDiente se guarda como dato secundario.
 
+## Survey: estetica e integracion (v113)
+- **Marca por campo ✅/✏️** en los parametros del plano + metrica "Leidos del plano: X/17" y aviso con los
+  que faltan. Recupera la senal perdida en v93 al quitar el panel del sidebar (sin volver a ocupar el sidebar).
+- **Parametros agrupados por significado** (`_GRUPOS_PARAM`): Hueco / Cabina / Puerta-umbral / Frontal /
+  Laterales / Contrapeso, en vez de una grilla plana de 17 numeros. Lo no agrupado cae en "Otros".
+- **Configuracion** con titulo propio; "Parametros del usuario" -> "Parametros medidos en obra".
+- **Boton "Empezar un survey nuevo"** (expander con aviso): limpia inp_*/cfg_*/ns/matriz/resultados de la
+  sesion. Se procesa ANTES de crear los widgets (misma regla que el import).
+- **Integracion con Reconstruir proyecto:** projects_ui marca `_rebuilt_from`; el Survey muestra
+  "Cargaste el proyecto X, pulsa Calcular" y el aviso se limpia al calcular.
+
 ## Fix CRITICO: el import de Excel se repetia en cada rerun (v112)
 Regresion introducida por v111. El `file_uploader` CONSERVA el archivo entre reruns; el bloque de import
 estaba bajo `if uploaded_excel is not None:` (sin guarda). Antes de v111 no se notaba porque el import
@@ -920,7 +931,7 @@ posicional + plano) → app.py, al cargar el PDF, setea `st.session_state["ns"]`
 resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NORTH SYD y AGECARE → NS=6
 (coincide con travel/floor-height HQ/HE).
 
-## Versiones desplegadas (v112 = actual)
+## Versiones desplegadas (v113 = actual)
 | Ver | Cambio principal |
 |---|---|
 | v5 | Extractor: CRLF fix, caso D valor-antes-label, sin pdfplumber |
@@ -1022,6 +1033,7 @@ resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NOR
 | v102 | Fix: NS se lee del plano (NUMBER OF STOPS) al cargar el PDF; default de init 6→2 (ya no queda pegado en 6) |
 | v103 | Rol conductor (2 relojes: jornada general + segmentos por proyecto, columna Tipo) + cronómetro en vivo para todos + reporte admin de horas del grupo (Mi grupo → ⏱ Horas) |
 | v104 | Credenciales/tickets por usuario (White Card, Forklift, Dogging/Rigging, licencia…): vencimiento+estado, foto/documento a Drive, radar en Resumen del día, avisos email/Telegram a admin+usuario; usuario ve las suyas (🎫 Mis credenciales) |
+| v113 | Survey: marca de origen PDF/manual por campo + parametros agrupados + boton nuevo survey + aviso al reconstruir |
 | v112 | Fix CRITICO: el import de Excel se repetia en cada rerun y pisaba los valores del PDF (faltaba guarda por archivo) |
 | v111 | Fix: importar la matriz desde Excel fallaba (escribia claves de widgets ya instanciados) |
 | v110 | Survey: los resultados dejan de borrarse al interactuar (render fuera del boton + aviso de calculo obsoleto) |
