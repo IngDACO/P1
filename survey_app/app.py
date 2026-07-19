@@ -1183,15 +1183,15 @@ if _seccion == _L_SURVEY:
 
         # Cargar Excel
         uploaded_excel = sc2.file_uploader("📂 Cargar matriz (.xlsx)", type=["xlsx"], key="excel_uploader")
-    # Por defecto solo se importa la MATRIZ: si ya cargaste el plano, los parámetros del
-    # PDF mandan y no deben ser pisados por los que venían guardados en el Excel.
-    _imp_todo = sc2.checkbox("Restaurar también parámetros y configuración del Excel",
-                             value=False, key="excel_imp_todo",
-                             help="Desmarcado: solo se importa la matriz de medidas.")
-    if st.session_state.get("last_excel_id") and sc2.button("🔄 Volver a importar el Excel",
-                                                            key="btn_reimport_xls"):
-        st.session_state.pop("last_excel_id", None)
-        st.rerun()
+        # Por defecto solo se importa la MATRIZ: si ya cargaste el plano, los parámetros del
+        # PDF mandan y no deben ser pisados por los que venían guardados en el Excel.
+        _imp_todo = sc2.checkbox("Restaurar también parámetros y configuración del Excel",
+                                 value=False, key="excel_imp_todo",
+                                 help="Desmarcado: solo se importa la matriz de medidas.")
+        if st.session_state.get("last_excel_id") and sc2.button("🔄 Volver a importar el Excel",
+                                                                key="btn_reimport_xls"):
+            st.session_state.pop("last_excel_id", None)
+            st.rerun()
         # ⚠️ GUARDA obligatoria: el file_uploader conserva el archivo entre reruns, así que
         # sin esta condición el import se repetiría en CADA rerun y pisaría los valores del
         # PDF o los que escriba el usuario. Mismo patrón que la carga de PDF.

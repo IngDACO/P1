@@ -775,6 +775,24 @@ Al cargar el plano en el survey (app.py), autocompleta **RAIL = AlturaDiente** (
 espalda) del catálogo; si el código no está o no se detecta → aviso + entrada manual. **RAIL = AlturaDiente**
 (NO el ancho); AnchoDiente se guarda como dato secundario.
 
+## Fix CRITICO: indentacion rompio las 2 fases del Survey (v120)
+Regresion de **v118** que se detecto en produccion: `NameError: sc2` al entrar a Resultados, los 7 pasos
+saliendo en la fase Datos y **la matriz del survey invisible**. Un solo error de indentacion los causaba
+los tres. En el paso 3, el bloque del checkbox del Excel (lineas 1186-1194) quedo a **4 espacios en vez
+de 8**, o sea FUERA de `if _fase == _FASE_DATOS:`. Consecuencias en cadena:
+1. Ese bloque pasaba a ejecutarse en AMBAS fases → en Resultados `sc2` no existe → NameError.
+2. El `if` de la fase Datos **terminaba** en la linea 1185, asi que todo lo posterior (pasos 4-7) dejo de
+   estar dentro de la fase.
+3. Peor: las lineas siguientes (a 8 espacios) quedaron absorbidas como cuerpo del `if ... sc2.button(
+   "Volver a importar el Excel")`, que esta a 4 → el editor de la matriz y el import de Excel solo
+   existian dentro de esa rama, **y despues de un `st.rerun()`** → codigo inalcanzable. Por eso no se veia
+   la matriz y por eso cargar un Excel no hacia nada.
+Fix: reindentar 1186-1194 (+4). Verificado por AST: la fase Datos cubre los pasos 1-3 (1015-1307) y el
+`else` los pasos 4-7 (1312-1542).
+⚠️ **Chequeo que conviene repetir tras tocar el Survey** (detecta la clase de bug de v114/v118): comparar
+por AST los nombres que una fase USA y solo la otra ASIGNA. Ambas direcciones deben dar vacio. Un
+`py_compile` NO detecta nada de esto: el archivo compila perfecto, el error es semantico.
+
 ## Dibujos del survey: plano tecnico a escala + isometrica (v119)
 `floor_plan_svg` reescrito. Antes era un esquema con holguras FALSEADAS (`_clearance_px` comprimia el
 valor a 14-92 px) y globos de color: se veia infantil y ademas **enganaba** (una holgura de 5 mm y otra
@@ -1033,7 +1051,7 @@ posicional + plano) → app.py, al cargar el PDF, setea `st.session_state["ns"]`
 resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NORTH SYD y AGECARE → NS=6
 (coincide con travel/floor-height HQ/HE).
 
-## Versiones desplegadas (v119 = actual)
+## Versiones desplegadas (v120 = actual)
 | Ver | Cambio principal |
 |---|---|
 | v5 | Extractor: CRLF fix, caso D valor-antes-label, sin pdfplumber |
@@ -1135,6 +1153,7 @@ resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NOR
 | v102 | Fix: NS se lee del plano (NUMBER OF STOPS) al cargar el PDF; default de init 6→2 (ya no queda pegado en 6) |
 | v103 | Rol conductor (2 relojes: jornada general + segmentos por proyecto, columna Tipo) + cronómetro en vivo para todos + reporte admin de horas del grupo (Mi grupo → ⏱ Horas) |
 | v104 | Credenciales/tickets por usuario (White Card, Forklift, Dogging/Rigging, licencia…): vencimiento+estado, foto/documento a Drive, radar en Resumen del día, avisos email/Telegram a admin+usuario; usuario ve las suyas (🎫 Mis credenciales) |
+| v120 | Fix CRITICO: indentacion de v118 rompia las 2 fases del Survey (NameError sc2, matriz invisible, import de Excel inalcanzable) |
 | v119 | Dibujos del survey rehechos: planta a escala real con cotas/achurado/cajetin + detalle ampliado automatico + ambos desplazamientos + vista isometrica del hueco |
 | v118 | Fix: al cambiar de fase se perdian parametros/NS/config (Streamlit descarta widgets no renderizados) + el Excel ya no pisa los valores del PDF salvo que lo pidas |
 | v117 | Fix: crash (AttributeError) tras 'Empezar un survey nuevo' — el reset borraba claves leidas por atributo |
