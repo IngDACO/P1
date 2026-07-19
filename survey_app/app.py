@@ -20,7 +20,7 @@ from core.chat_agent      import get_chat_response
 from core.interpretation  import generate_interpretation, generate_user_interpretation
 from core.email_notify    import send_usage_notification
 from core.user_report     import generate_user_report
-from core.diagrams        import render_floor_plans_html
+from core.diagrams        import render_floor_plans_html, floors_with_issues, floor_plans_pdf
 from core.schedule        import build_schedule, detect_flags, schedule_svg
 from core.plumb           import compute_plumb, plumb_svg, plumb_table, plumb_checks
 from core                 import projects as projects_data
@@ -364,6 +364,16 @@ if _seccion == _L_SURVEY:
         st.session_state["survey_df"] = pd.DataFrame({c: [0.0] * 2 for c in SURVEY_COLS})
         st.session_state["calc_results"] = None
 
+    # ── Duplicar para el siguiente elevador (conserva parámetros, limpia la matriz) ──
+    if st.session_state.pop("_dup_survey", False):
+        _nsd = int(st.session_state.get("ns", 2))
+        st.session_state["survey_df"]    = pd.DataFrame({c: [0.0] * _nsd for c in SURVEY_COLS})
+        st.session_state["calc_results"] = None
+        for _k in ("_calc_sig", "sched_rows", "sched_start", "_diag_pdf", "_rebuilt_from"):
+            st.session_state.pop(_k, None)
+        st.session_state["_dup_msg"] = True
+        st.session_state["_fase_pending"] = "📝 Datos del survey"
+
     _pend = st.session_state.pop("_import_pending", None)
     if _pend:
         if _pend.get("df") is not None:
@@ -375,6 +385,10 @@ if _seccion == _L_SURVEY:
         for _k, _v in (_pend.get("cfg") or {}).items():
             st.session_state[_k] = _v
         st.success("✅ Matriz, parámetros y configuración cargados desde el Excel.")
+
+    if st.session_state.pop("_dup_msg", False):
+        st.success("📑 Survey duplicado: se conservaron parámetros y configuración. "
+                   "Ingresa la matriz del siguiente elevador y calcula.")
 
     # Aviso cuando se llega desde "Reconstruir proyecto" (Mi grupo → detalle)
     if st.session_state.get("_rebuilt_from"):
@@ -478,6 +492,24 @@ if _seccion == _L_SURVEY:
         highlight = make_highlighter(lim_map, min_vals, max_vals, cut_cols,
                                      ctrl_in_frame_, ctrl_side_)
 
+        # ── Resumen ejecutivo: lo importante de un vistazo ──
+        _b = opt_result.get("best")
+        if _b:
+            _off = int(_b.get("total_off", 0))
+            e1, e2, e3, e4 = st.columns(4)
+            e1.metric("Lateral (RL)",  f"{_b['rl']:+.1f} mm")
+            e2.metric("Frontal (FB)",  f"{_b.get('fb_applied', _b['fb']):+.1f} mm")
+            e3.metric("Fuera de límite", _off)
+            e4.metric("Soluciones óptimas", len(opt_result.get("all_solutions", [])))
+            if _off == 0:
+                st.success("✅ Solución encontrada **sin valores fuera de límite**.")
+            else:
+                _cols_off = [c for c in SURVEY_COLS if (_b.get("off_by_col") or {}).get(c, 0)]
+                st.warning(f"⚠️ La solución activa deja **{_off} valor(es) fuera de límite**"
+                           + (f" en: **{', '.join(_cols_off)}**." if _cols_off else "."))
+        else:
+            st.error("❌ No se encontró ninguna combinación válida con estos parámetros.")
+
         with st.expander("📊 Parámetros calculados", expanded=False):
             st.dataframe(
                 pd.DataFrame([
@@ -544,6 +576,45 @@ if _seccion == _L_SURVEY:
                     abs(s["rl"]) + abs(s.get("fb_applied", s["fb"]))
                 )
             )
+
+            # ── Solución ACTIVA: el optimizador propone, pero decide el ingeniero ──
+            _idx_act = next((k for k, s in enumerate(sorted_solutions)
+                             if (s["rl"], s["fb"]) == best_pair), 0)
+            if len(sorted_solutions) > 1:
+                _lbl = [f"RL {s['rl']:+.0f} · FB {s.get('fb_applied', s['fb']):+.0f} · "
+                        f"{s['total_off']} fuera" for s in sorted_solutions]
+                _sel = st.selectbox(
+                    "🎯 Solución activa — se usa en diagramas, plomado e informes",
+                    range(len(_lbl)), index=_idx_act, format_func=lambda k: _lbl[k],
+                    key="sol_activa",
+                )
+                if _sel != _idx_act:
+                    _nueva = sorted_solutions[_sel]
+                    r["optimizer_result"]["best"] = _nueva
+                    try:   # el plomado depende del desplazamiento → recalcular
+                        r["plumb"] = compute_plumb(
+                            {"BKS": all_params["BKS"],  "RAIL": all_params["RAIL"],
+                             "TKSW": all_params["TKSW"],
+                             "LengthTemplate": all_params.get("LengthTemplate", 0.0),
+                             "SF1": all_params["SF1"], "SF2": all_params["SF2"],
+                             "BSR": all_params["BSR"], "BS": all_params["BS"]},
+                            survey_disp={"rl": _nueva["rl"], "fb": _nueva["fb_applied"]})
+                    except Exception:
+                        r["plumb"] = None
+                    st.rerun()
+
+                with st.expander("⚖️ Comparar soluciones lado a lado", expanded=False):
+                    _comp = []
+                    for k, s in enumerate(sorted_solutions):
+                        _obc = s.get("off_by_col", {}) or {}
+                        _comp.append({
+                            "": "🎯" if k == _idx_act else "",
+                            "#": k + 1, "RL": s["rl"], "FB": s["fb"],
+                            "FB aplic.": s.get("fb_applied", s["fb"]),
+                            "Fuera": s["total_off"],
+                            **{c: _obc.get(c, 0) for c in SURVEY_COLS},
+                        })
+                    st.dataframe(pd.DataFrame(_comp), hide_index=True, use_container_width=True)
             for idx_sol, sol in enumerate(sorted_solutions):
                 is_best   = (sol["rl"], sol["fb"]) == best_pair
                 fb_ap     = sol.get("fb_applied", sol["fb"])
@@ -650,12 +721,44 @@ if _seccion == _L_SURVEY:
                    "naranja = al límite, rojo = fuera.")
         if best and best.get("matrix"):
             n_floors = len(best["matrix"])
-            components.html(
-                render_floor_plans_html(all_params, limits, best, lim_map,
-                                        ctrl_in_frame_, ctrl_side_),
-                height=min(398 * n_floors + 20, 8000),
-                scrolling=True,
+            _prob = floors_with_issues(best, lim_map)
+            _modo = st.radio(
+                "Pisos a mostrar",
+                ["Con incidencias", "Todos", "Elegir"],
+                horizontal=True, key="diag_modo", label_visibility="collapsed",
             )
+            if _modo == "Con incidencias":
+                _floors = _prob or list(range(n_floors))
+                st.caption(f"Mostrando {len(_floors)} de {n_floors} pisos"
+                           + ("" if _prob else " (ninguno tiene incidencias: se muestran todos)"))
+            elif _modo == "Todos":
+                _floors = list(range(n_floors))
+            else:
+                _floors = st.multiselect(
+                    "Pisos", list(range(n_floors)),
+                    default=_prob[:1] or [0], key="diag_pisos",
+                    format_func=lambda i: f"Piso {i + 1}",
+                )
+            if _floors:
+                components.html(
+                    render_floor_plans_html(all_params, limits, best, lim_map,
+                                            ctrl_in_frame_, ctrl_side_, floors=_floors),
+                    height=min(398 * len(_floors) + 20, 8000),
+                    scrolling=True,
+                )
+                # Exportar los diagramas sueltos (para mandar a obra sin el informe)
+                if st.button("📄 Preparar PDF de estos diagramas", key="btn_diag_pdf"):
+                    with st.spinner("Generando PDF de diagramas..."):
+                        st.session_state["_diag_pdf"] = floor_plans_pdf(
+                            all_params, limits, best, lim_map, ctrl_in_frame_, ctrl_side_,
+                            floors=_floors,
+                            titulo=f"Diagramas de posicionamiento — "
+                                   f"{all_params.get('PROYECTO') or 'Survey'}")
+                if st.session_state.get("_diag_pdf"):
+                    st.download_button("⬇️ Descargar diagramas (PDF)",
+                                       data=st.session_state["_diag_pdf"],
+                                       file_name="diagramas_posicionamiento.pdf",
+                                       mime="application/pdf", key="dl_diag_pdf")
 
         # ── BSR vs BS ─────────────────────────────────────────
         st.subheader("📏 Análisis BSR vs BS")
@@ -813,6 +916,10 @@ if _seccion == _L_SURVEY:
         }
         st.session_state["_calc_sig"] = _survey_signature()
         st.session_state.pop("_rebuilt_from", None)
+        # El nº de soluciones y los diagramas cambian: descartar lo derivado del cálculo previo
+        st.session_state.pop("sol_activa", None)
+        st.session_state.pop("_diag_pdf", None)
+        st.session_state.pop("diag_pisos", None)
 
         # ── Cronograma automático según el proyecto ───────────
         _flags = detect_flags(st.session_state.calc_results)
@@ -1104,11 +1211,51 @@ if _seccion == _L_SURVEY:
         # ══════════════════════════════════════════════════════
 
         st.markdown("---")
+
+        # ── ¿Listo para calcular? Estado de cada entrada ──
+        _ex   = st.session_state.get("pdf_extracted") or {}
+        _falt = [p for p, v in _ex.items() if v is None] if _ex else []
+        _nsv  = int(st.session_state.get("ns", 2))
+        _chips = [
+            ("✅ Plano cargado" if _ex else "⚪ Sin plano (parámetros a mano)"),
+            ("✅ Parámetros completos" if (_ex and not _falt)
+             else (f"⚠️ {len(_falt)} parámetro(s) sin leer" if _falt else "✏️ Parámetros manuales")),
+            f"✅ Matriz: {_nsv} niveles",
+        ]
+        st.markdown("  ".join(f"`{c}`" for c in _chips))
+
+        # Validación temprana: avisar ANTES de pulsar Calcular
+        try:
+            _c0  = _cfg_from_state()
+            _ap0 = {p: st.session_state.get(f"inp_{p}", 0.0)
+                    for p in list(PDF_PARAMS) + list(USER_ONLY.keys())}
+            _ap0.update({"OMEGA_SIDE": _c0["omega_side"], "WALL_LIMITING": _c0["wall_limiting"],
+                         "WALL_STOP": _c0["wall_stop"], "WALL_SIDE": _c0["wall_side"],
+                         "OFFSET_SIDE": _c0["offset_side"], "CTRL_IN_FRAME": _c0["ctrl_in_frame"],
+                         "CTRL_SIDE": _c0["ctrl_side"], "NS": _c0["ns"]})
+            _last0 = st.session_state.survey_df.iloc[-1]
+            for _col in SURVEY_COLS:
+                _ap0[f"{_col[0]}{_col[1]}T"] = float(_last0[_col])
+            _iss0 = validate_inputs(_ap0)
+        except Exception:
+            _iss0 = []
+        if _iss0:
+            with st.expander(f"⚠️ {len(_iss0)} aviso(s) en los parámetros", expanded=False):
+                for _x in _iss0:
+                    st.warning(_x)
+
         if st.button("🚀 Calcular y ver resultados", type="primary",
                      use_container_width=True, key="btn_calc_datos"):
             _do_calculo()
             st.session_state["_fase_pending"] = _FASE_RES
             st.rerun()
+
+        with st.expander("📑 Duplicar para el siguiente elevador"):
+            st.caption("Conserva parámetros y configuración de este survey y limpia la matriz "
+                       "y los resultados. Útil cuando hay varios elevadores en el mismo hueco.")
+            if st.button("📑 Duplicar survey", key="btn_dup_survey"):
+                st.session_state["_dup_survey"] = True
+                st.rerun()
 
 
     else:

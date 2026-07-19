@@ -154,15 +154,37 @@ def floor_plan_svg(params: dict, limits: dict, row: dict, floor_idx: int,
     return "".join(p)
 
 
+def floors_with_issues(solution: dict | None, lim_map: dict) -> list:
+    """Índices de los pisos con algún valor fuera de límite (para no dibujarlos todos)."""
+    if not solution or not solution.get("matrix"):
+        return []
+    out = []
+    for i, row in enumerate(solution["matrix"]):
+        for col, lim in (lim_map or {}).items():
+            v = row.get(col)
+            if v is None:
+                continue
+            fuera = (v > lim) if col in ("OR", "OL") else (v < lim)
+            if fuera:
+                out.append(i)
+                break
+    return out
+
+
 def render_floor_plans_html(params: dict, limits: dict, solution: dict | None,
-                            lim_map: dict, ctrl_in_frame=False, ctrl_side=None) -> str:
-    """HTML con la planta de TODOS los pisos (matriz solución) para components.html."""
+                            lim_map: dict, ctrl_in_frame=False, ctrl_side=None,
+                            floors=None) -> str:
+    """HTML con la planta de los pisos (matriz solución) para components.html.
+    `floors`: lista de índices a dibujar (None = todos). El índice real del piso se
+    conserva, así las etiquetas siguen siendo correctas aunque se filtre."""
     if not solution or not solution.get("matrix"):
         return "<p style='color:#888;font-family:system-ui'>No hay solución para graficar.</p>"
     mat = solution["matrix"]
     n   = len(mat)
     blocks = []
     for i, row in enumerate(mat):
+        if floors is not None and i not in floors:
+            continue
         svg = floor_plan_svg(params, limits, row, i, lim_map,
                              ctrl_in_frame, ctrl_side, is_last=(i == n - 1))
         blocks.append(f'<div style="margin-bottom:18px">{svg}</div>')
@@ -172,3 +194,48 @@ def render_floor_plans_html(params: dict, limits: dict, solution: dict | None,
         + "".join(blocks) +
         '</body></html>'
     )
+
+
+def floor_plans_pdf(params: dict, limits: dict, solution: dict | None, lim_map: dict,
+                    ctrl_in_frame=False, ctrl_side=None, floors=None,
+                    titulo="Diagramas de posicionamiento") -> bytes | None:
+    """PDF suelto con los diagramas de planta (para enviar a obra sin el informe completo)."""
+    if not solution or not solution.get("matrix"):
+        return None
+    try:
+        import io as _io
+        from reportlab.lib.pagesizes import A4
+        from reportlab.lib.units import mm
+        from reportlab.lib.styles import getSampleStyleSheet
+        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, PageBreak
+        from core.report import _svg_flowable
+    except Exception:
+        return None
+
+    buf = _io.BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=A4, leftMargin=15 * mm, rightMargin=15 * mm,
+                            topMargin=14 * mm, bottomMargin=14 * mm)
+    W  = doc.width
+    ss = getSampleStyleSheet()
+    story = [Paragraph(titulo, ss["Title"]), Spacer(1, 8)]
+    mat, n = solution["matrix"], len(solution["matrix"])
+    puestos = 0
+    for i, row in enumerate(mat):
+        if floors is not None and i not in floors:
+            continue
+        svg = floor_plan_svg(params, limits, row, i, lim_map,
+                             ctrl_in_frame, ctrl_side, is_last=(i == n - 1))
+        dib = _svg_flowable(svg, W)
+        if dib is None:
+            continue
+        if puestos and puestos % 2 == 0:
+            story.append(PageBreak())
+        story += [Paragraph(f"Piso {i + 1}", ss["Heading3"]), dib, Spacer(1, 10)]
+        puestos += 1
+    if not puestos:
+        return None
+    try:
+        doc.build(story)
+    except Exception:
+        return None
+    return buf.getvalue()

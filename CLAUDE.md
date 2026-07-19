@@ -775,6 +775,22 @@ Al cargar el plano en el survey (app.py), autocompleta **RAIL = AlturaDiente** (
 espalda) del catálogo; si el código no está o no se detecta → aviso + entrada manual. **RAIL = AlturaDiente**
 (NO el ancho); AnchoDiente se guarda como dato secundario.
 
+## Survey mas pro: 8 mejoras (v115)
+1. **Solucion ACTIVA elegible** (`sol_activa`): el optimizador propone varias soluciones optimas pero antes
+   diagramas/plomado/informe usaban SIEMPRE `best`. Ahora un selectbox permite elegir otra por criterio de
+   obra; al cambiar se escribe `calc_results["optimizer_result"]["best"]` y se RECALCULA el plomado, asi
+   todo lo aguas abajo (diagramas, informes, guardar proyecto) queda consistente.
+2. **Resumen ejecutivo** arriba de los resultados: RL, FB, nº fuera de limite, nº de soluciones + semaforo.
+3. **Checklist listo-para-calcular** en la fase Datos (plano / parametros / matriz).
+4. **Diagrama con filtro de pisos**: `diagrams.floors_with_issues` + `render_floor_plans_html(floors=...)`
+   (conserva el indice real del piso, asi las etiquetas siguen bien). Modos: Con incidencias / Todos / Elegir.
+5. **Validacion temprana**: `validate_inputs` tambien en la fase Datos, no solo al calcular.
+6. **Duplicar para el siguiente elevador** (opcional): conserva parametros+config, limpia matriz y resultados.
+7. **Comparar soluciones lado a lado** (tabla con RL/FB/OFF por columna).
+8. **Exportar diagramas sueltos a PDF**: `diagrams.floor_plans_pdf` (reusa `report._svg_flowable`), se genera
+   bajo demanda con un boton (no en cada rerun).
+Al recalcular se descartan `sol_activa`, `_diag_pdf` y `diag_pisos` (evita indices fuera de rango/PDF viejo).
+
 ## Survey en 2 fases (v114)
 Los 7 pasos en scroll unico se reorganizaron en **2 fases** con `st.radio` (NO st.tabs):
 **📝 Datos del survey** (pasos 1-3: plano, parametros, matriz) y **📊 Resultados e informes** (4-7:
@@ -944,7 +960,7 @@ posicional + plano) → app.py, al cargar el PDF, setea `st.session_state["ns"]`
 resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NORTH SYD y AGECARE → NS=6
 (coincide con travel/floor-height HQ/HE).
 
-## Versiones desplegadas (v114 = actual)
+## Versiones desplegadas (v115 = actual)
 | Ver | Cambio principal |
 |---|---|
 | v5 | Extractor: CRLF fix, caso D valor-antes-label, sin pdfplumber |
@@ -1046,6 +1062,7 @@ resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NOR
 | v102 | Fix: NS se lee del plano (NUMBER OF STOPS) al cargar el PDF; default de init 6→2 (ya no queda pegado en 6) |
 | v103 | Rol conductor (2 relojes: jornada general + segmentos por proyecto, columna Tipo) + cronómetro en vivo para todos + reporte admin de horas del grupo (Mi grupo → ⏱ Horas) |
 | v104 | Credenciales/tickets por usuario (White Card, Forklift, Dogging/Rigging, licencia…): vencimiento+estado, foto/documento a Drive, radar en Resumen del día, avisos email/Telegram a admin+usuario; usuario ve las suyas (🎫 Mis credenciales) |
+| v115 | Survey pro: solucion activa elegible, resumen ejecutivo, checklist, filtro de pisos, validacion temprana, duplicar, comparar soluciones, exportar diagramas |
 | v114 | Survey en 2 fases (Datos / Resultados) con salto automatico al calcular; config leida de session_state |
 | v113 | Survey: marca de origen PDF/manual por campo + parametros agrupados + boton nuevo survey + aviso al reconstruir |
 | v112 | Fix CRITICO: el import de Excel se repetia en cada rerun y pisaba los valores del PDF (faltaba guarda por archivo) |
