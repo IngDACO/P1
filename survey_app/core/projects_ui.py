@@ -14,6 +14,7 @@ from core import alerts
 from core import maps
 from core.schedule import schedule_svg
 from core import survey_calc
+from core import toolruns
 from core.field_pack import field_pack_pdf
 
 
@@ -250,6 +251,44 @@ def _documentos_section(pid: str):
                     st.rerun()
                 except Exception as e:
                     st.error(f"No se pudo subir: {e}")
+
+
+def _calculos_section(pid: str):
+    """Historial de cálculos de las herramientas para este proyecto.
+
+    v129/v130 hicieron que Plomadas, Corte de rieles, Corte de buffers y Belting
+    escribieran en la hoja `Calculos`… pero NADIE la leía: los datos entraban y
+    no había forma de verlos. Esto cierra ese lazo, que es justo lo que se pidió
+    ("cada vez que se use una herramienta debe alimentar la base del proyecto").
+    """
+    st.markdown("**🧮 Cálculos de herramientas**")
+    if not toolruns.is_configured():
+        st.caption("🔒 Requiere Google Sheets configurado.")
+        return
+
+    runs = toolruns.list_for(pid)
+    if not runs:
+        st.caption("Sin cálculos guardados. Desde 🔩 Plomadas, ✂️ Corte de rieles, "
+                   "🛡 Corte de buffers o 🎗 Belting, pulsa **Guardar en el proyecto**.")
+        return
+
+    for r in runs:
+        clave = str(r.get("Herramienta", ""))
+        icono = toolruns.HERRAMIENTAS.get(clave, clave or "🧮")
+        did   = str(r.get("DriveID", ""))
+        cols  = st.columns([5, 2]) if did else [st.container()]
+        with cols[0]:
+            st.write(f"{icono}  ·  **{r.get('Fecha', '')}**  ·  {r.get('Usuario', '')}")
+            if str(r.get("Resumen", "")).strip():
+                st.caption(str(r.get("Resumen")))
+        if did:
+            try:
+                cols[1].download_button(
+                    "⬇️ PDF", data=drive_store.download(did),
+                    file_name=str(r.get("Archivo") or f"{r.get('ID')}.pdf"),
+                    key=f"dlcal_{pid}_{r.get('ID')}", use_container_width=True)
+            except Exception:
+                cols[1].caption("PDF no disponible")
 
 
 def _field_users(grupo):
@@ -699,6 +738,9 @@ def _detalle_proyecto(pid: str, grupo: str = None):
 
     # ── Gastos / compras ──
     render_expenses(pid, grupo, can_delete=True, key_prefix="adm")
+
+    # ── Cálculos de herramientas ──
+    _calculos_section(pid)
 
     # ── Documentos ──
     _documentos_section(pid)

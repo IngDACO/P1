@@ -782,6 +782,21 @@ Al cargar el plano en el survey (app.py), autocompleta **RAIL = AlturaDiente** (
 espalda) del catálogo; si el código no está o no se detecta → aviso + entrada manual. **RAIL = AlturaDiente**
 (NO el ancho); AnchoDiente se guarda como dato secundario.
 
+## Mi grupo: el historial de calculos por fin se ve (v131)
+⚠️ **Cabo suelto de v129/v130 detectado al revisar Mi grupo:** las cuatro herramientas escribian en la
+hoja `Calculos`, pero **NADIE la leia** — `toolruns.list_for()` no se llamaba en ningun sitio. Los datos
+entraban y no habia forma de verlos, asi que "cada uso alimenta la base del proyecto" estaba a medias.
+- **`projects_ui._calculos_section(pid)`**: en el detalle del proyecto, historial de calculos (fecha,
+  herramienta, quien, resumen) con **descarga del PDF archivado** desde Drive. Mismo patron que
+  `_documentos_section`.
+REGLA: al anadir una tabla/hoja nueva, comprobar en el mismo lote que algo la LEE. Escribir sin leer
+pasa los tests (la escritura funciona) y deja la funcionalidad muerta.
+### Medicion del detalle de proyecto (pendiente de decidir)
+`_detalle_proyecto` = **314 lineas con 11 secciones apiladas en un solo scroll** (instrucciones,
+alarmas, cronograma, proyeccion, editar, actividades, paquete de obra, reconstruir, gastos, calculos,
+documentos, eliminar). Es el mismo problema que tenia el Survey antes de v114 (7 pasos en scroll unico)
+y la solucion conocida que funciono fue sub-navegacion con **radio** (NO st.tabs, regla de v56).
+
 ## Herramientas de calculo, parte 2: las cuatro completas (v130)
 Cierra lo empezado en v129. Ahora **Plomadas, Corte de rieles, Corte de buffers y Belting** comparten:
 resultados persistentes, dibujo tecnico, PDF (`tool_pdf`) y guardado contra el proyecto
@@ -1284,7 +1299,7 @@ posicional + plano) → app.py, al cargar el PDF, setea `st.session_state["ns"]`
 resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NORTH SYD y AGECARE → NS=6
 (coincide con travel/floor-height HQ/HE).
 
-## Versiones desplegadas (v130 = actual)
+## Versiones desplegadas (v131 = actual)
 | Ver | Cambio principal |
 |---|---|
 | v5 | Extractor: CRLF fix, caso D valor-antes-label, sin pdfplumber |
@@ -1386,6 +1401,7 @@ resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NOR
 | v102 | Fix: NS se lee del plano (NUMBER OF STOPS) al cargar el PDF; default de init 6→2 (ya no queda pegado en 6) |
 | v103 | Rol conductor (2 relojes: jornada general + segmentos por proyecto, columna Tipo) + cronómetro en vivo para todos + reporte admin de horas del grupo (Mi grupo → ⏱ Horas) |
 | v104 | Credenciales/tickets por usuario (White Card, Forklift, Dogging/Rigging, licencia…): vencimiento+estado, foto/documento a Drive, radar en Resumen del día, avisos email/Telegram a admin+usuario; usuario ve las suyas (🎫 Mis credenciales) |
+| v131 | Mi grupo: historial de calculos de herramientas en el detalle del proyecto (la hoja Calculos se escribia desde v129 pero nadie la leia) |
 | v130 | Herramientas 2/2: Plomadas, Rieles y Belting con resultados persistentes (fix v110), diagrama nuevo de corte de rieles, PDF y guardado en el proyecto |
 | v129 | Herramientas 1/2: hoja Calculos (cada uso alimenta el proyecto) + PDF y guardado comunes + fix del bug v110 en las 4 + Corte de buffers completo con diagrama nuevo |
 | v128 | Plano UNICO de la sesion (se subia el mismo PDF en 5 herramientas) + paquete de obra descargable desde el detalle del proyecto (survey_calc.recalcular) |
