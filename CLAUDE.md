@@ -775,6 +775,23 @@ Al cargar el plano en el survey (app.py), autocompleta **RAIL = AlturaDiente** (
 espalda) del catálogo; si el código no está o no se detecta → aviso + entrada manual. **RAIL = AlturaDiente**
 (NO el ancho); AnchoDiente se guarda como dato secundario.
 
+## Survey lote 1: confidencialidad del log + leyenda de color (v124)
+Revision del Survey tras v113-v123. Dos incoherencias encontradas por inspeccion:
+- ⚠️ **El log del optimizador estaba a la vista de TODOS los roles**, incluido `campo` (el Survey esta en
+  `_HERR`, herramientas comunes). Expone los pasos evaluados, los descartes y por que → es la logica
+  propietaria que el agente IA tiene PROHIBIDO revelar (v27) y que el informe del cliente excluye a
+  proposito. En el Survey solo estaban protegidos el paso 6 (informe) y el 7 (guardar). Ahora el log es
+  **solo del propietario** (decision del usuario; ni el administrador del grupo cliente lo ve).
+  El reindentado del bloque (45 lineas) se hizo por AST y se VERIFICO por AST que el `with` quedara
+  dentro del `if _ROL` — es el mismo patron que causo v120, no se toca a mano.
+- **Las tablas llevaban color sin leyenda desde v93** (se quito del sidebar y nunca se repuso): celdas en
+  rojo/naranja sin nada que explicara el criterio. Nuevo `_leyenda_matriz()` bajo la matriz ajustada y
+  bajo la matriz de cada solucion. Usa las MISMAS palabras que los planos ("fuera de limite") para que
+  tabla y dibujo se lean como un solo lenguaje, y recuerda el criterio opuesto: WR·WL·FR·FL incumplen por
+  DEBAJO del limite, OR·OL por ENCIMA.
+Verificado que `cell_state` (tablas) y `_c` (dibujos) marcan EXACTAMENTE las mismas celdas, incluido el
+ajuste −70 del controlador en el ultimo nivel → no habia que tocar logica, solo paleta y palabras.
+
 ## Plomado: planta a escala + 2 vistas 3D + ficha de replanteo (v123)
 `plumb_svg` reescrito y 3 funciones nuevas en `core/plumb.py`. Mismo tratamiento CAD que las plantas.
 ⚠️ **El fallo de fondo: el dibujo NO estaba a escala.** `sx` y `sy` mapeaban X e Y a rangos distintos →
@@ -1123,7 +1140,7 @@ posicional + plano) → app.py, al cargar el PDF, setea `st.session_state["ns"]`
 resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NORTH SYD y AGECARE → NS=6
 (coincide con travel/floor-height HQ/HE).
 
-## Versiones desplegadas (v123 = actual)
+## Versiones desplegadas (v124 = actual)
 | Ver | Cambio principal |
 |---|---|
 | v5 | Extractor: CRLF fix, caso D valor-antes-label, sin pdfplumber |
@@ -1225,6 +1242,7 @@ resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NOR
 | v102 | Fix: NS se lee del plano (NUMBER OF STOPS) al cargar el PDF; default de init 6→2 (ya no queda pegado en 6) |
 | v103 | Rol conductor (2 relojes: jornada general + segmentos por proyecto, columna Tipo) + cronómetro en vivo para todos + reporte admin de horas del grupo (Mi grupo → ⏱ Horas) |
 | v104 | Credenciales/tickets por usuario (White Card, Forklift, Dogging/Rigging, licencia…): vencimiento+estado, foto/documento a Drive, radar en Resumen del día, avisos email/Telegram a admin+usuario; usuario ve las suyas (🎫 Mis credenciales) |
+| v124 | Survey lote 1: el log del optimizador pasa a ser solo del propietario (era visible para campo) + leyenda de color en las tablas (faltaba desde v93) |
 | v123 | Plomado con tratamiento CAD: planta a escala real (antes vertical 1.7x distorsionada) + isometrica con los hilos cayendo + detalle 3D + ficha de replanteo + cierre di+DBP+dd=BSR + aviso de BS incoherente |
 | v122 | Fix: los displays redondeaban a entero valores que el optimizador da en pasos de 0.5 mm (dos soluciones distintas daban la misma etiqueta); cotas con formato adaptativo `_mm` |
 | v121 | Fix CRITICO geometria de los planos: FL/FR van al eje de rieles (cuerpo TK centrado), la cabina ya no se sale del hueco; apertura posicionada con OL/OR reales + marcos |

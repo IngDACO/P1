@@ -492,6 +492,30 @@ if _seccion == _L_SURVEY:
         }
         return hashlib.md5(_json.dumps(base, sort_keys=True, default=str).encode()).hexdigest()
 
+    def _leyenda_matriz():
+        """Clave de color de las tablas.
+
+        Se quito del sidebar en v93 y nunca se repuso: desde entonces las celdas
+        salian coloreadas sin que nada explicara que significan. Usa las MISMAS
+        palabras que los planos ("fuera de limite") para que tabla y dibujo se
+        lean como un solo lenguaje.
+        """
+        st.markdown(
+            '<div style="display:flex;flex-wrap:wrap;gap:14px;align-items:center;'
+            'font-size:0.78rem;color:#5f6b7a;margin:-6px 0 10px 2px">'
+            '<span><span style="display:inline-block;width:11px;height:11px;'
+            'background:#c0392b;border-radius:2px;vertical-align:-1px"></span> '
+            'fuera de límite — el valor más crítico de su columna</span>'
+            '<span><span style="display:inline-block;width:11px;height:11px;'
+            'background:#f1948a;border-radius:2px;vertical-align:-1px"></span> '
+            'fuera de límite</span>'
+            '<span><span style="display:inline-block;width:11px;height:11px;'
+            'background:#e67e22;border-radius:2px;vertical-align:-1px"></span> '
+            'requiere corte (OR/OL)</span>'
+            '<span style="opacity:.85">WR·WL·FR·FL incumplen por <b>debajo</b> '
+            'del límite; OR·OL por <b>encima</b>.</span>'
+            '</div>', unsafe_allow_html=True)
+
     def _render_survey_results(r):
         """Dibuja TODOS los resultados del cálculo leyendo de `calc_results`.
 
@@ -550,6 +574,7 @@ if _seccion == _L_SURVEY:
         st.subheader("Matriz SURVEY ajustada")
         st.dataframe(survey_adj_df.style.apply(highlight, axis=None),
                      use_container_width=True)
+        _leyenda_matriz()
 
         st.subheader("Resumen por columna — Estado inicial")
         summary = []
@@ -671,6 +696,7 @@ if _seccion == _L_SURVEY:
                                                        ctrl_in_frame_, ctrl_side_)
                     st.dataframe(sol_df.style.apply(sol_highlighter, axis=None),
                                  use_container_width=True)
+                    _leyenda_matriz()
                     if not wall_limiting_:
                         st.caption("CUT OR / CUT OL: valor a cortar si OR/OL supera el límite (OR/OL − LIMIT). Positivo = requiere corte. Blanco = dentro del límite.")
                     sol_sum = []
@@ -697,51 +723,55 @@ if _seccion == _L_SURVEY:
                         })
                     st.dataframe(pd.DataFrame(sol_sum), use_container_width=True, hide_index=True)
 
-            with st.expander(f"📋 Log del optimizador ({len(step_log)} pasos evaluados)", expanded=False):
-                valid_steps  = [s for s in step_log if s.get("status") == "VALID"]
-                skip_steps   = [s for s in step_log if s.get("status") == "SKIP"]
-                skip_phys    = [s for s in skip_steps if s.get("skip_type", "").startswith("physical")]
-                skip_wall    = [s for s in skip_steps if s.get("skip_type") == "wall"]
-                skip_frame   = [s for s in skip_steps if s.get("skip_type") == "frame_opening"]
-                st.caption(
-                    f"Válidos: {len(valid_steps)}  |  "
-                    f"Omitidos por límite físico (RL/FB): {len(skip_phys)}  |  "
-                    f"Omitidos por pared: {len(skip_wall)}  |  "
-                    f"Omitidos por apertura tapada: {len(skip_frame)}"
-                )
-                if valid_steps:
-                    opt_pairs = {(s["rl"], s["fb"]) for s in all_solutions}
-                    best_p    = (best["rl"], best["fb"])
-                    log_rows  = []
-                    for s in valid_steps:
-                        obc  = s.get("off_by_col", {})
-                        pair = (s["rl"], s["fb"])
-                        if pair == best_p:        estado = "⭐ SELECCIONADA"
-                        elif pair in opt_pairs:   estado = "✅ ÓPTIMA"
-                        else:                     estado = ""
-                        log_rows.append({
-                            "RL": s["rl"], "FB": s["fb"],
-                            "FB aplic.": s.get("fb_applied", s["fb"]),
-                            "Total OFF": s["total_off"],
-                            "WR": obc.get("WR", 0), "FR": obc.get("FR", 0),
-                            "OR": obc.get("OR", 0), "WL": obc.get("WL", 0),
-                            "FL": obc.get("FL", 0), "OL": obc.get("OL", 0),
-                            "Estado": estado,
-                        })
-                    log_rows = (
-                        [x for x in log_rows if x["Estado"] == "⭐ SELECCIONADA"] +
-                        [x for x in log_rows if x["Estado"] == "✅ ÓPTIMA"] +
-                        [x for x in log_rows if x["Estado"] == ""]
+            # El log expone la traza del optimizador (pasos, descartes y por que).
+            # Es logica propietaria: misma regla que ya aplica el agente IA y que
+            # excluye el informe del cliente. Solo el propietario lo ve.
+            if _ROL == "propietario":
+                with st.expander(f"📋 Log del optimizador ({len(step_log)} pasos evaluados)", expanded=False):
+                    valid_steps  = [s for s in step_log if s.get("status") == "VALID"]
+                    skip_steps   = [s for s in step_log if s.get("status") == "SKIP"]
+                    skip_phys    = [s for s in skip_steps if s.get("skip_type", "").startswith("physical")]
+                    skip_wall    = [s for s in skip_steps if s.get("skip_type") == "wall"]
+                    skip_frame   = [s for s in skip_steps if s.get("skip_type") == "frame_opening"]
+                    st.caption(
+                        f"Válidos: {len(valid_steps)}  |  "
+                        f"Omitidos por límite físico (RL/FB): {len(skip_phys)}  |  "
+                        f"Omitidos por pared: {len(skip_wall)}  |  "
+                        f"Omitidos por apertura tapada: {len(skip_frame)}"
                     )
-                    df_log = pd.DataFrame(log_rows)
-                    def _hl(row):
-                        if row["Estado"] == "⭐ SELECCIONADA":
-                            return ["background-color:#7b5c00;color:white;font-weight:bold"] * len(row)
-                        if row["Estado"] == "✅ ÓPTIMA":
-                            return ["background-color:#1a3a2a;color:#a8e6cf"] * len(row)
-                        return [""] * len(row)
-                    st.dataframe(df_log.style.apply(_hl, axis=1),
-                                 use_container_width=True, hide_index=True)
+                    if valid_steps:
+                        opt_pairs = {(s["rl"], s["fb"]) for s in all_solutions}
+                        best_p    = (best["rl"], best["fb"])
+                        log_rows  = []
+                        for s in valid_steps:
+                            obc  = s.get("off_by_col", {})
+                            pair = (s["rl"], s["fb"])
+                            if pair == best_p:        estado = "⭐ SELECCIONADA"
+                            elif pair in opt_pairs:   estado = "✅ ÓPTIMA"
+                            else:                     estado = ""
+                            log_rows.append({
+                                "RL": s["rl"], "FB": s["fb"],
+                                "FB aplic.": s.get("fb_applied", s["fb"]),
+                                "Total OFF": s["total_off"],
+                                "WR": obc.get("WR", 0), "FR": obc.get("FR", 0),
+                                "OR": obc.get("OR", 0), "WL": obc.get("WL", 0),
+                                "FL": obc.get("FL", 0), "OL": obc.get("OL", 0),
+                                "Estado": estado,
+                            })
+                        log_rows = (
+                            [x for x in log_rows if x["Estado"] == "⭐ SELECCIONADA"] +
+                            [x for x in log_rows if x["Estado"] == "✅ ÓPTIMA"] +
+                            [x for x in log_rows if x["Estado"] == ""]
+                        )
+                        df_log = pd.DataFrame(log_rows)
+                        def _hl(row):
+                            if row["Estado"] == "⭐ SELECCIONADA":
+                                return ["background-color:#7b5c00;color:white;font-weight:bold"] * len(row)
+                            if row["Estado"] == "✅ ÓPTIMA":
+                                return ["background-color:#1a3a2a;color:#a8e6cf"] * len(row)
+                            return [""] * len(row)
+                        st.dataframe(df_log.style.apply(_hl, axis=1),
+                                     use_container_width=True, hide_index=True)
         else:
             st.error("No se encontró combinación válida.")
 
