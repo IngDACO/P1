@@ -775,6 +775,19 @@ Al cargar el plano en el survey (app.py), autocompleta **RAIL = AlturaDiente** (
 espalda) del catálogo; si el código no está o no se detecta → aviso + entrada manual. **RAIL = AlturaDiente**
 (NO el ancho); AnchoDiente se guarda como dato secundario.
 
+## Survey en 2 fases (v114)
+Los 7 pasos en scroll unico se reorganizaron en **2 fases** con `st.radio` (NO st.tabs):
+**📝 Datos del survey** (pasos 1-3: plano, parametros, matriz) y **📊 Resultados e informes** (4-7:
+resultados, cronograma, informe cliente, guardar proyecto). Al pulsar "Calcular y ver resultados" se
+computa y salta solo a Resultados (via `_fase_pending` + rerun, porque no se puede escribir la clave de
+un widget ya instanciado). En Resultados hay boton "Recalcular con los datos actuales".
+**Cambio tecnico obligado:** el computo usaba variables locales del paso 2 (`omega_side`, `wall_limiting`,
+`ctrl_side`...) que NO existen cuando esa fase no se renderiza -> nuevo `_cfg_from_state()` que lee la
+configuracion de session_state (fuente de verdad). Lo usan `_survey_signature()` y `_do_calculo()`.
+El bloque del boton se convirtio en la funcion `_do_calculo()`, invocable desde ambas fases.
+Definidos fuera de las fases (accesibles a las dos): make_highlighter, _survey_signature,
+_render_survey_results, _do_calculo.
+
 ## Survey: estetica e integracion (v113)
 - **Marca por campo ✅/✏️** en los parametros del plano + metrica "Leidos del plano: X/17" y aviso con los
   que faltan. Recupera la senal perdida en v93 al quitar el panel del sidebar (sin volver a ocupar el sidebar).
@@ -931,7 +944,7 @@ posicional + plano) → app.py, al cargar el PDF, setea `st.session_state["ns"]`
 resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NORTH SYD y AGECARE → NS=6
 (coincide con travel/floor-height HQ/HE).
 
-## Versiones desplegadas (v113 = actual)
+## Versiones desplegadas (v114 = actual)
 | Ver | Cambio principal |
 |---|---|
 | v5 | Extractor: CRLF fix, caso D valor-antes-label, sin pdfplumber |
@@ -1033,6 +1046,7 @@ resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NOR
 | v102 | Fix: NS se lee del plano (NUMBER OF STOPS) al cargar el PDF; default de init 6→2 (ya no queda pegado en 6) |
 | v103 | Rol conductor (2 relojes: jornada general + segmentos por proyecto, columna Tipo) + cronómetro en vivo para todos + reporte admin de horas del grupo (Mi grupo → ⏱ Horas) |
 | v104 | Credenciales/tickets por usuario (White Card, Forklift, Dogging/Rigging, licencia…): vencimiento+estado, foto/documento a Drive, radar en Resumen del día, avisos email/Telegram a admin+usuario; usuario ve las suyas (🎫 Mis credenciales) |
+| v114 | Survey en 2 fases (Datos / Resultados) con salto automatico al calcular; config leida de session_state |
 | v113 | Survey: marca de origen PDF/manual por campo + parametros agrupados + boton nuevo survey + aviso al reconstruir |
 | v112 | Fix CRITICO: el import de Excel se repetia en cada rerun y pisaba los valores del PDF (faltaba guarda por archivo) |
 | v111 | Fix: importar la matriz desde Excel fallaba (escribia claves de widgets ya instanciados) |
