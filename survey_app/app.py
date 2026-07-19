@@ -20,7 +20,8 @@ from core.chat_agent      import get_chat_response
 from core.interpretation  import generate_interpretation, generate_user_interpretation
 from core.email_notify    import send_usage_notification
 from core.user_report     import generate_user_report
-from core.diagrams        import render_floor_plans_html, floors_with_issues, floor_plans_pdf
+from core.diagrams        import (render_floor_plans_html, floors_with_issues,
+                                  floor_plans_pdf, shaft_iso_svg)
 from core.schedule        import build_schedule, detect_flags, schedule_svg
 from core.plumb           import compute_plumb, plumb_svg, plumb_table, plumb_checks
 from core                 import projects as projects_data
@@ -748,6 +749,14 @@ if _seccion == _L_SURVEY:
         if best and best.get("matrix"):
             n_floors = len(best["matrix"])
             _prob = floors_with_issues(best, lim_map)
+
+            with st.expander("🧊 Vista isométrica del hueco", expanded=False):
+                components.html(
+                    shaft_iso_svg(all_params, limits, best, n_floors, lim_map,
+                                  proyecto=str(st.session_state.get("proyecto", ""))),
+                    height=730, scrolling=False,
+                )
+
             _modo = st.radio(
                 "Pisos a mostrar",
                 ["Con incidencias", "Todos", "Elegir"],
@@ -769,7 +778,7 @@ if _seccion == _L_SURVEY:
                 components.html(
                     render_floor_plans_html(all_params, limits, best, lim_map,
                                             ctrl_in_frame_, ctrl_side_, floors=_floors),
-                    height=min(398 * len(_floors) + 20, 8000),
+                    height=min(500 * len(_floors) + 20, 8000),
                     scrolling=True,
                 )
                 # Exportar los diagramas sueltos (para mandar a obra sin el informe)

@@ -973,7 +973,10 @@ def generate_report(project_params, calculated, survey_original,
         drawn = 0
         for i, row in enumerate(mat):
             svg  = floor_plan_svg(p, calculated, row, i, rpt_limmap,
-                                  c_in_frame, c_side, is_last=(i == n_fl - 1))
+                                  c_in_frame, c_side, is_last=(i == n_fl - 1),
+                                  rl=best.get("rl", 0),
+                                  fb=best.get("fb_applied", best.get("fb", 0)),
+                                  n_floors=n_fl, proyecto=str(p.get("PROYECTO", "")))
             draw = _svg_flowable(svg, W * 0.66)
             if draw is not None:
                 story += [draw, sp(6)]

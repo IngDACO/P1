@@ -23,7 +23,7 @@ from reportlab.platypus import (
 )
 from reportlab.lib.enums import TA_CENTER, TA_LEFT
 
-from core.diagrams import floor_plan_svg
+from core.diagrams import floor_plan_svg, shaft_iso_svg
 from core.report import _svg_flowable
 from core.schedule import schedule_svg, schedule_table
 from core.plumb    import plumb_svg, plumb_table, plumb_checks
@@ -393,17 +393,29 @@ def generate_user_report(project_params, calculated, optimizer_result,
 
     # ── Diagramas de planta por piso ────────────────────────
     if best and best.get("matrix"):
-        story += [PageBreak(), _section("5. Diagramas de planta por piso", styles), _sp(4),
-                  Paragraph("Vista superior del encaje de la cabina en el hueco, piso a piso. "
-                            "Verde = correcto, naranja = al límite, rojo = requiere ajuste/corte.",
+        story += [PageBreak(), _section("5. Diagramas del hueco", styles), _sp(4),
+                  Paragraph("Plantas a proporción real, con cotas acotadas contra su límite. "
+                            "Las cotas en <b>rojo</b> son las que quedan fuera de límite; el "
+                            "resto cumple. Cuando una holgura es muy ajustada se añade un "
+                            "<b>Detalle</b> ampliado de esa esquina.",
                             styles["UInfo"]), _sp(6)]
         mat = best["matrix"]
         n   = len(mat)
         rpt_lim = {c: lim_map[c] for c in ["WR", "FR", "OR", "WL", "FL", "OL"]}
         c_in = p.get("CTRL_IN_FRAME", False); c_side = p.get("CTRL_SIDE")
+
+        _iso = _svg_flowable(shaft_iso_svg(p, calculated, best, n, rpt_lim,
+                                           proyecto=meta["proyecto"]), W * 0.52)
+        if _iso is not None:
+            story += [_iso, _sp(10), PageBreak()]
+
         drawn = 0
         for i, mrow in enumerate(mat):
-            svg  = floor_plan_svg(p, calculated, mrow, i, rpt_lim, c_in, c_side, is_last=(i == n - 1))
+            svg  = floor_plan_svg(p, calculated, mrow, i, rpt_lim, c_in, c_side,
+                                  is_last=(i == n - 1),
+                                  rl=best.get("rl", 0),
+                                  fb=best.get("fb_applied", best.get("fb", 0)),
+                                  n_floors=n, proyecto=meta["proyecto"])
             draw = _svg_flowable(svg, W * 0.66)
             if draw is not None:
                 story += [draw, _sp(6)]

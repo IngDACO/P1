@@ -43,7 +43,7 @@ C:\Users\diego\P1\survey_app\
 │   ├── highlighting.py     # cell_state(), streamlit_style(), reportlab_commands()
 │   ├── bs_logic.py         # find_bs_step() — BSR vs BS (triangular)
 │   ├── excel_io.py         # export/import survey Excel
-│   ├── diagrams.py         # floor_plan_svg() — planta por piso (SVG sin markers)
+│   ├── diagrams.py         # floor_plan_svg() planta técnica a escala + shaft_iso_svg() isométrica (v119)
 │   ├── schedule.py         # build_schedule/schedule_svg — cronograma Gantt + curva S (v51)
 │   ├── report.py           # generate_report() — INFORME ADMIN (completo)
 │   ├── user_report.py      # generate_user_report() — INFORME CLIENTE (limpio, COPEX)
@@ -775,6 +775,39 @@ Al cargar el plano en el survey (app.py), autocompleta **RAIL = AlturaDiente** (
 espalda) del catálogo; si el código no está o no se detecta → aviso + entrada manual. **RAIL = AlturaDiente**
 (NO el ancho); AnchoDiente se guarda como dato secundario.
 
+## Dibujos del survey: plano tecnico a escala + isometrica (v119)
+`floor_plan_svg` reescrito. Antes era un esquema con holguras FALSEADAS (`_clearance_px` comprimia el
+valor a 14-92 px) y globos de color: se veia infantil y ademas **enganaba** (una holgura de 5 mm y otra
+de 200 mm se dibujaban casi igual).
+- **Proporcion REAL:** una sola escala mm→px para ancho y profundidad, derivada de la geometria que ya
+  existia (`ancho = WL + BKS+2·RAIL + WR`, `prof = TS`, `TL`, `BC_CALC`). Lo que se ve es lo que hay.
+- **Lenguaje de plano:** muros achurados, cotas con lineas de extension + marcas diagonales, jerarquia de
+  grosores (muro 2.4 / cabina 1.6 / cotas 0.6), ejes eje-punto, cajetin (PISO n/N, proyecto) y leyenda.
+  **El rojo se reserva** a las cotas fuera de limite (antes todo era de colores y no destacaba nada).
+- **Cotas cortas:** a escala real 45 mm ≈ 12 px y el numero no cabe entre las marcas → `_dim_h/_dim_v`
+  detectan el vano <36 px y sacan el valor afuera con directriz (solucion estandar de dibujo tecnico).
+- **DETALLE automatico** cuando la holgura minima del piso es <25 mm: amplia esa esquina con **escala
+  propia calculada** (llena el recuadro; ×3 a ×40) y marca el punto en el dibujo principal. Es la razon
+  de ser de la escala real: lo critico se amplia en vez de falsear todo el plano.
+- **Ambos desplazamientos:** OFFSET_CABIN como cota entre el eje de la cabina y el eje de la apertura;
+  RL/FB con contorno fantasma "POS. DISENO" **solo si el desplazamiento supera 2 px** — si no, iria
+  cota sobre cota ilegible, asi que los valores van a un recuadro DESPLAZAMIENTO siempre legible.
+- **`shaft_iso_svg(params, limits, solution, ns, lim_map, proyecto, h_piso)`** — isometrica 30° del hueco
+  completo: pisos apilados, puertas en la pared de acceso, cabina como bloque solido y **niveles con
+  incidencia en rojo** (reusa `floors_with_issues`, clave `matrix`). Lienzo VERTICAL (460×700).
+  ⚠️ **Planta a escala real pero ALTURA COMPRIMIDA y declarado en el subtitulo:** sin comprimir, 18 m
+  contra 1,3 m dan una astilla ilegible; comprimida al maximo deja de leerse como hueco. El presupuesto
+  reparte el alto entre el rombo de la base y la columna (`kz = (VH-200-diam)/H`; **no poner un piso
+  minimo a kz**, pisa el presupuesto y desborda el lienzo).
+  ⚠️ En isometrica con Z arriba solo se dibujan las caras que MIRAN al observador (esquina inferior =
+  `x=max, y=max`); dibujar las traseras saca cunas por fuera del solido.
+- Integrado en: app (expander "🧊 Vista isometrica", alto 730; plantas 500 px/piso), informe cliente
+  (§5 "Diagramas del hueco", isometrica + plantas) e informe admin. `report.py`/`user_report.py` pasan
+  `rl`/`fb`/`n_floors`/`proyecto`.
+- Se eliminaron `_clearance_px`, `_label_box`, `_state` y `_f` (0 usos tras el cambio).
+- Verificado: SVG valido, sin `<defs>/<marker>/<pattern>`, `svg2rlg` lo convierte y **los 24 textos
+  (incluidas las cotas rotadas) llegan al PDF**; PDF real de 3 paginas generado.
+
 ## Fix: perdida de datos al cambiar de fase + Excel pisando el PDF (v118)
 **1. CRITICO — Streamlit descarta el estado de un widget que NO se renderiza en el rerun.** Con el Survey en
 2 fases (v114), al pasar a "Resultados" los `inp_*`, `ns`, `cfg_*` y proyecto/cliente/ubicacion/ingeniero
@@ -1000,7 +1033,7 @@ posicional + plano) → app.py, al cargar el PDF, setea `st.session_state["ns"]`
 resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NORTH SYD y AGECARE → NS=6
 (coincide con travel/floor-height HQ/HE).
 
-## Versiones desplegadas (v118 = actual)
+## Versiones desplegadas (v119 = actual)
 | Ver | Cambio principal |
 |---|---|
 | v5 | Extractor: CRLF fix, caso D valor-antes-label, sin pdfplumber |
@@ -1102,6 +1135,7 @@ resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NOR
 | v102 | Fix: NS se lee del plano (NUMBER OF STOPS) al cargar el PDF; default de init 6→2 (ya no queda pegado en 6) |
 | v103 | Rol conductor (2 relojes: jornada general + segmentos por proyecto, columna Tipo) + cronómetro en vivo para todos + reporte admin de horas del grupo (Mi grupo → ⏱ Horas) |
 | v104 | Credenciales/tickets por usuario (White Card, Forklift, Dogging/Rigging, licencia…): vencimiento+estado, foto/documento a Drive, radar en Resumen del día, avisos email/Telegram a admin+usuario; usuario ve las suyas (🎫 Mis credenciales) |
+| v119 | Dibujos del survey rehechos: planta a escala real con cotas/achurado/cajetin + detalle ampliado automatico + ambos desplazamientos + vista isometrica del hueco |
 | v118 | Fix: al cambiar de fase se perdian parametros/NS/config (Streamlit descarta widgets no renderizados) + el Excel ya no pisa los valores del PDF salvo que lo pidas |
 | v117 | Fix: crash (AttributeError) tras 'Empezar un survey nuevo' — el reset borraba claves leidas por atributo |
 | v116 | Informe del cliente rediseñado como presentacion: portada a sangre, pie con paginacion, nº de informe, veredicto, KPIs, glosario, alcance, conclusiones+firma |
