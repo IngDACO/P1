@@ -46,6 +46,9 @@ C:\Users\diego\P1\survey_app\
 │   ├── survey_ui.py        # render_survey_tab(_ROL,_GRUPO) — TODA la seccion Survey (v125)
 │   ├── field_pack.py       # field_pack_pdf() — paquete de obra en 1 PDF (v126)
 │   ├── plan_store.py       # plano UNICO de la sesion, compartido por 5 herramientas (v128)
+│   ├── toolruns.py         # hoja Calculos: cada uso de una herramienta alimenta el proyecto (v129)
+│   ├── tool_pdf.py         # PDF comun de las 4 herramientas de calculo (v129)
+│   ├── tool_save_ui.py     # bloque compartido descargar + guardar en el proyecto (v129)
 │   ├── survey_calc.py      # recalcular() — solucion determinista desde ParamsJSON (v128)
 │   ├── diagrams.py         # floor_plan_svg() planta técnica a escala + shaft_iso_svg() isométrica (v119)
 │   ├── schedule.py         # build_schedule/schedule_svg — cronograma Gantt + curva S (v51)
@@ -779,6 +782,29 @@ Al cargar el plano en el survey (app.py), autocompleta **RAIL = AlturaDiente** (
 espalda) del catálogo; si el código no está o no se detecta → aviso + entrada manual. **RAIL = AlturaDiente**
 (NO el ancho); AnchoDiente se guarda como dato secundario.
 
+## Herramientas de calculo, parte 1: registro en el proyecto (v129)
+Las cuatro herramientas (Plomadas, Corte de rieles, Corte de buffers, Belting) eran **islas**: ni PDF,
+ni descarga, ni rastro en el proyecto. Calculabas, mirabas y ahi moria.
+### ⚠️ Bug estructural encontrado en LAS CUATRO (mismo que v110)
+Los resultados se calculaban y dibujaban **dentro de `if st.button(...)`**, asi que desaparecian con
+cualquier interaccion. En Plomadas colgaban **80 lineas** del boton: los 4 graficos CAD de v123 se
+borraban al tocar nada. Ademas hacia IMPOSIBLE un boton de guardar (al pulsarlo se perdia todo).
+Patron correcto: el boton solo COMPUTA y guarda en `session_state`; el render vive FUERA.
+### Infraestructura nueva (comun a las 4)
+- **`core/toolruns.py`** — hoja **`Calculos`** (ID·ProyectoID·Grupo·Herramienta·Fecha·Usuario·Resumen·
+  DatosJSON·Archivo·DriveID). `registrar()` archiva el PDF en Drive + lo registra como documento del
+  proyecto + escribe la fila. Mismo patron que `prestart.submit` (Drive en best-effort: si falla, la
+  fila igual se guarda). Lecturas cacheadas ttl 30 + invalidacion al escribir; `_next_id` lee FRESCO.
+- **`core/tool_pdf.py`** — `tool_pdf(titulo, meta, svgs, tablas, notas)`: un solo generador para las
+  cuatro, asi comparten cara entre si y con el paquete de obra del Survey.
+- **`core/tool_save_ui.py`** — `render_guardar(...)`: descarga + selector de proyecto (por rol, mismo
+  criterio que el Pre-Start) + guardado. Vive en un sitio para no divergir en cuatro.
+### Hecho en esta version
+- **🛡 Corte de buffers** completo: persistencia, **diagrama nuevo** (`buffer_cut.buffer_cut_svg`:
+  alzado con el nivel HKP del plano, el HKPR real de cada buffer y el material a cortar achurado en
+  rojo; escala vertical ajustada al rango y declarado en el pie), PDF y guardado en el proyecto.
+- PENDIENTE en v130: Plomadas, Corte de rieles (necesita dibujo) y Belting.
+
 ## Plano unico de la sesion + paquete de obra desde el proyecto (v128)
 **El hallazgo de integracion mas grande de la app:** Survey, Plomadas, Corte de rieles, Corte de buffers
 y Belting tenian **cinco `file_uploader` distintos**, asi que el tecnico subia el MISMO plano hasta cinco
@@ -1239,7 +1265,7 @@ posicional + plano) → app.py, al cargar el PDF, setea `st.session_state["ns"]`
 resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NORTH SYD y AGECARE → NS=6
 (coincide con travel/floor-height HQ/HE).
 
-## Versiones desplegadas (v128 = actual)
+## Versiones desplegadas (v129 = actual)
 | Ver | Cambio principal |
 |---|---|
 | v5 | Extractor: CRLF fix, caso D valor-antes-label, sin pdfplumber |
@@ -1341,6 +1367,7 @@ resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NOR
 | v102 | Fix: NS se lee del plano (NUMBER OF STOPS) al cargar el PDF; default de init 6→2 (ya no queda pegado en 6) |
 | v103 | Rol conductor (2 relojes: jornada general + segmentos por proyecto, columna Tipo) + cronómetro en vivo para todos + reporte admin de horas del grupo (Mi grupo → ⏱ Horas) |
 | v104 | Credenciales/tickets por usuario (White Card, Forklift, Dogging/Rigging, licencia…): vencimiento+estado, foto/documento a Drive, radar en Resumen del día, avisos email/Telegram a admin+usuario; usuario ve las suyas (🎫 Mis credenciales) |
+| v129 | Herramientas 1/2: hoja Calculos (cada uso alimenta el proyecto) + PDF y guardado comunes + fix del bug v110 en las 4 + Corte de buffers completo con diagrama nuevo |
 | v128 | Plano UNICO de la sesion (se subia el mismo PDF en 5 herramientas) + paquete de obra descargable desde el detalle del proyecto (survey_calc.recalcular) |
 | v127 | Survey: aviso de credenciales vencidas y contacto faltante al asignar campo (fuera del form) + notificacion deja de fallar en silencio + numeracion 1-7 eliminada |
 | v126 | Survey lote 3: paquete de obra en 1 PDF (field_pack.py) + boton que abre el proyecto recien creado (navegacion real) + aviso de proyecto duplicado |

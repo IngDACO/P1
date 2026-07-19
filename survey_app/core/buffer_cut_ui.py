@@ -1,12 +1,23 @@
 """
 UI de la pestaña de corte de buffers.
+
+⚠️ v129: los resultados se calculaban y dibujaban DENTRO de `if st.button(...)`,
+así que desaparecían con cualquier interacción posterior — el mismo bug
+estructural que se corrigió en el Survey en v110, y que además hacía imposible
+añadir un botón de "guardar en el proyecto" (al pulsarlo se perdía todo).
+Ahora el botón solo CALCULA y guarda en session_state; el render vive fuera.
 """
 import streamlit as st
+import streamlit.components.v1 as components
 import pandas as pd
 
-from core.buffer_cut import compute_buffer_cut
+from core.buffer_cut import compute_buffer_cut, buffer_cut_svg
 from extractors.schindler import extract_hkp
 from core import plan_store
+from core.tool_pdf import tool_pdf
+from core.tool_save_ui import render_guardar
+
+_K = "bc_res"
 
 
 def render_buffer_cut_tab():
@@ -46,19 +57,47 @@ def render_buffer_cut_tab():
                           num_rows="fixed", disabled=["Buffer"], key="bc_editor")
     st.session_state["bc_df"] = edit
 
-    # ── 4. Calcular ─────────────────────────────────────────
-    if st.button("🛡 Calcular cortes", type="primary", use_container_width=True, key="bc_calc"):
+    # ── 4. Calcular (solo computa; el render va fuera) ──────
+    if st.button("🛡 Calcular cortes", type="primary", use_container_width=True,
+                 key="bc_calc"):
         hkpr_list = [float(x) for x in edit["HKPR (mm)"].tolist()]
-        res = compute_buffer_cut(hkp, hkpr_list)
-        st.success(f"HKP = {res['HKP']:.0f} mm   ·   CutBuffer = HKP − HKPR")
-        rows = [{
-            "Buffer":        f"Buffer {b['n']}",
-            "HKPR (mm)":     round(b["HKPR"], 1),
-            "Corte (mm)":    b["CutBuffer"],
-            "":              "⚠️ revisar" if b["warn"] else "",
-        } for b in res["buffers"]]
-        st.subheader("Resultado — cortes (mm)")
-        st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
-        if any(b["warn"] for b in res["buffers"]):
-            st.warning("⚠️ Un corte negativo significa que el HKPR real supera al HKP del plano: "
-                       "no hay nada que cortar en ese buffer, revísalo en obra.")
+        st.session_state[_K] = compute_buffer_cut(hkp, hkpr_list)
+
+    res = st.session_state.get(_K)
+    if not res:
+        return
+
+    # ── 5. Resultado (persistente entre reruns) ─────────────
+    st.success(f"HKP = {res['HKP']:.0f} mm   ·   CutBuffer = HKP − HKPR")
+    filas = [{
+        "Buffer":     f"Buffer {b['n']}",
+        "HKPR (mm)":  round(b["HKPR"], 1),
+        "Corte (mm)": b["CutBuffer"],
+        "Estado":     "⚠️ revisar" if b["warn"] else "OK",
+    } for b in res["buffers"]]
+    st.subheader("Resultado — cortes (mm)")
+    st.dataframe(pd.DataFrame(filas), use_container_width=True, hide_index=True)
+
+    svg = buffer_cut_svg(res)
+    st.subheader("📐 Diagrama de cortes")
+    components.html(
+        '<!DOCTYPE html><html><body style="margin:0;background:transparent">'
+        + svg + '</body></html>', height=330, scrolling=False)
+
+    if any(b["warn"] for b in res["buffers"]):
+        st.warning("⚠️ Un corte negativo significa que el HKPR real supera al HKP del plano: "
+                   "no hay nada que cortar en ese buffer, revísalo en obra.")
+
+    # ── 6. PDF + guardar contra el proyecto ─────────────────
+    _cortes = ", ".join(f"B{b['n']}: {b['CutBuffer']}" for b in res["buffers"])
+    pdf_bytes = tool_pdf(
+        "Corte de buffers",
+        meta={"HKP del plano": f"{res['HKP']:.0f} mm",
+              "Buffers": str(len(res["buffers"]))},
+        svgs=[svg],
+        tablas=[("Cortes por buffer", filas)],
+        notas=["Corte = HKP − HKPR. Un valor negativo indica que el buffer real "
+               "supera al del plano: no hay nada que cortar, revisar en obra."])
+    render_guardar(herramienta="buffers", titulo_pdf="corte de buffers",
+                   pdf_bytes=pdf_bytes, resumen=f"HKP {res['HKP']:.0f} · {_cortes}",
+                   datos=res, nombre_archivo="corte_buffers.pdf", key="bc")
