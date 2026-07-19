@@ -469,290 +469,302 @@ def _detalle_proyecto(pid: str, grupo: str = None):
     c2.metric("Horas trabajadas", f"{P.project_hours(prj.get('Nombre'), grupo):.1f}")
     st.progress(min(1.0, avance / 100.0))
 
-    # ── Instrucciones e inducciones ──
-    _induccion_section(pid, prj, grupo, allow_send=True)
+    # ── Sub-navegacion: 11 secciones en un scroll unico era el mismo
+    # problema que tenia el Survey antes de v114. Radio, NO st.tabs (v56).
+    _sec = st.radio("Sección del proyecto",
+                    ["📊 Estado", "✏️ Datos", "💰 Costos", "📎 Archivos"],
+                    horizontal=True, key="prj_detalle_sec",
+                    label_visibility="collapsed")
+    st.markdown("---")
 
-    # ── Alarmas / avisos del proyecto ──
-    _alerts_section(pid, grupo, prj.get("Nombre", ""), allow_report=False)
+    if _sec == "📊 Estado":
+        # ── Alarmas / avisos del proyecto ──
+        _alerts_section(pid, grupo, prj.get("Nombre", ""), allow_report=False)
 
-    # ── Cronograma: curva S planificada vs real ──
-    ps = P.project_schedule(pid)
-    if ps and ps["sched"].get("activities"):
-        st.markdown("**📆 Cronograma — curva S planificada vs real**")
-        st.caption("Naranja = planificada (original) · Verde = real (avance del campo) · "
-                   "línea roja = HOY.")
-        n = len(ps["sched"]["activities"])
-        components.html(
-            '<!DOCTYPE html><html><body style="margin:0;background:transparent">'
-            + schedule_svg(ps["sched"], real_curve=ps["real"],
-                           today_day=ps["today_day"], avances=ps.get("avances"))
-            + '</body></html>',
-            height=int(280 + n * 22), scrolling=False,
-        )
+        # ── Cronograma: curva S planificada vs real ──
+        ps = P.project_schedule(pid)
+        if ps and ps["sched"].get("activities"):
+            st.markdown("**📆 Cronograma — curva S planificada vs real**")
+            st.caption("Naranja = planificada (original) · Verde = real (avance del campo) · "
+                       "línea roja = HOY.")
+            n = len(ps["sched"]["activities"])
+            components.html(
+                '<!DOCTYPE html><html><body style="margin:0;background:transparent">'
+                + schedule_svg(ps["sched"], real_curve=ps["real"],
+                               today_day=ps["today_day"], avances=ps.get("avances"))
+                + '</body></html>',
+                height=int(280 + n * 22), scrolling=False,
+            )
 
-        # ── Proyección avance vs fecha (earned value) ──
-        proj = ps.get("proj")
-        if proj and proj.get("pv", 0) > 0:
-            dv, dg = proj["desvio"], proj["dias_gap"]
-            icon = "🟢" if dv >= 1 else ("🔴" if dv <= -1 else "🟡")
-            st.markdown(f"**🔮 Proyección (avance vs fecha)**  {icon}")
-            q1, q2, q3 = st.columns(3)
-            q1.metric("Desvío hoy", f"{dv:+.0f}%",
-                      help="Avance real − planificado a la fecha de hoy")
-            q2.metric("Estado hoy",
-                      "En fecha" if abs(dg) < 0.5
-                      else f"{abs(dg):.0f} d {'retraso' if dg > 0 else 'adelanto'}")
-            if proj["proj_dias"] is not None and proj["fecha_proj"]:
-                q3.metric("Fin proyectado", proj["fecha_proj"].strftime("%d/%m/%Y"))
-                pdi = proj["proj_dias"]
-                fin = ("a tiempo" if abs(pdi) < 0.5
-                       else f"**{abs(pdi):.0f} días de {'retraso' if pdi > 0 else 'adelanto'}**")
-                st.caption(f"A este ritmo (SPI = {proj['spi']}) terminarías {fin}.  "
-                           f"Real {proj['ev']:.0f}% vs planificado {proj['pv']:.0f}% "
-                           f"al día {proj['today_day']} de {proj['total']}.")
-            else:
-                q3.metric("Fin proyectado", "—")
-                st.caption(f"Real {proj['ev']:.0f}% vs planificado {proj['pv']:.0f}% "
-                           f"al día {proj['today_day']} de {proj['total']}. Sin avance suficiente "
-                           "para proyectar la fecha de fin.")
+            # ── Proyección avance vs fecha (earned value) ──
+            proj = ps.get("proj")
+            if proj and proj.get("pv", 0) > 0:
+                dv, dg = proj["desvio"], proj["dias_gap"]
+                icon = "🟢" if dv >= 1 else ("🔴" if dv <= -1 else "🟡")
+                st.markdown(f"**🔮 Proyección (avance vs fecha)**  {icon}")
+                q1, q2, q3 = st.columns(3)
+                q1.metric("Desvío hoy", f"{dv:+.0f}%",
+                          help="Avance real − planificado a la fecha de hoy")
+                q2.metric("Estado hoy",
+                          "En fecha" if abs(dg) < 0.5
+                          else f"{abs(dg):.0f} d {'retraso' if dg > 0 else 'adelanto'}")
+                if proj["proj_dias"] is not None and proj["fecha_proj"]:
+                    q3.metric("Fin proyectado", proj["fecha_proj"].strftime("%d/%m/%Y"))
+                    pdi = proj["proj_dias"]
+                    fin = ("a tiempo" if abs(pdi) < 0.5
+                           else f"**{abs(pdi):.0f} días de {'retraso' if pdi > 0 else 'adelanto'}**")
+                    st.caption(f"A este ritmo (SPI = {proj['spi']}) terminarías {fin}.  "
+                               f"Real {proj['ev']:.0f}% vs planificado {proj['pv']:.0f}% "
+                               f"al día {proj['today_day']} de {proj['total']}.")
+                else:
+                    q3.metric("Fin proyectado", "—")
+                    st.caption(f"Real {proj['ev']:.0f}% vs planificado {proj['pv']:.0f}% "
+                               f"al día {proj['today_day']} de {proj['total']}. Sin avance suficiente "
+                               "para proyectar la fecha de fin.")
 
-    # ── Editar datos ──
-    with st.form(f"edit_{pid}"):
-        st.markdown("**Datos del proyecto**")
-        e1, e2 = st.columns(2)
-        nombre   = e1.text_input("Nombre", value=prj.get("Nombre", ""))
-        cliente  = e2.text_input("Cliente", value=prj.get("Cliente", ""))
-        ubic     = e1.text_input("Ubicación", value=prj.get("Ubicacion", ""))
-        modelo   = e2.text_input("Modelo", value=prj.get("Modelo", ""))
-        ing      = e1.text_input("Ingeniero", value=prj.get("Ingeniero", ""))
-        f_ini    = e2.text_input("Fecha inicio", value=prj.get("FechaInicio", ""))
-        f_fin    = e1.text_input("Fecha fin estimada", value=prj.get("FechaFinEst", ""))
-        instr    = st.text_area("📌 Instrucciones particulares", value=prj.get("Instrucciones", ""))
-        ind      = st.text_area("📝 Inducciones (un link por línea)",
-                                value=prj.get("InduccionLinks", ""),
-                                help="Al asignar un usuario de campo se le envían por Telegram/email.")
+    elif _sec == "✏️ Datos":
+        # ── Instrucciones e inducciones ──
+        _induccion_section(pid, prj, grupo, allow_send=True)
 
-        campos_disp = _field_users(grupo)
-        actuales = [x.strip() for x in str(prj.get("CampoAsignados", "")).split(";") if x.strip()]
-        # opciones = union para no perder asignados que ya no estén en la lista
-        opts = sorted(set(campos_disp) | set(actuales))
-        asignados = st.multiselect("Usuarios de campo asignados", opts, default=actuales)
 
-        ags = P.list_groupings(grupo=grupo)
-        ag_opts = ["(ninguna)"] + [f"{a['ID']} · {a['Nombre']}" for a in ags]
-        ag_cur  = str(prj.get("AgrupacionID", ""))
-        ag_idx  = next((i for i, a in enumerate(ags) if a["ID"] == ag_cur), None)
-        ag_sel  = st.selectbox("Agrupación", ag_opts,
-                               index=(ag_idx + 1) if ag_idx is not None else 0)
-        peso    = st.number_input("Peso en la agrupación", min_value=0.0, step=1.0,
-                                  value=P._num(prj.get("PesoEnAgrupacion")))
-        est_man = st.selectbox("Estado manual (override)", P.ESTADOS_MANUAL,
-                               index=P.ESTADOS_MANUAL.index(str(prj.get("EstadoManual", "")))
-                               if str(prj.get("EstadoManual", "")) in P.ESTADOS_MANUAL else 0)
-        presup  = st.number_input("💰 Presupuesto del proyecto (0 = sin presupuesto)",
-                                  min_value=0.0, step=100.0, value=P._num(prj.get("Presupuesto")))
+        # ── Editar datos ──
+        with st.form(f"edit_{pid}"):
+            st.markdown("**Datos del proyecto**")
+            e1, e2 = st.columns(2)
+            nombre   = e1.text_input("Nombre", value=prj.get("Nombre", ""))
+            cliente  = e2.text_input("Cliente", value=prj.get("Cliente", ""))
+            ubic     = e1.text_input("Ubicación", value=prj.get("Ubicacion", ""))
+            modelo   = e2.text_input("Modelo", value=prj.get("Modelo", ""))
+            ing      = e1.text_input("Ingeniero", value=prj.get("Ingeniero", ""))
+            f_ini    = e2.text_input("Fecha inicio", value=prj.get("FechaInicio", ""))
+            f_fin    = e1.text_input("Fecha fin estimada", value=prj.get("FechaFinEst", ""))
+            instr    = st.text_area("📌 Instrucciones particulares", value=prj.get("Instrucciones", ""))
+            ind      = st.text_area("📝 Inducciones (un link por línea)",
+                                    value=prj.get("InduccionLinks", ""),
+                                    help="Al asignar un usuario de campo se le envían por Telegram/email.")
 
-        if st.form_submit_button("💾 Guardar cambios", use_container_width=True):
-            ag_id = "" if ag_sel == "(ninguna)" else ag_sel.split(" · ")[0]
-            P.update_project(pid, {   # todo en UNA escritura (batch) → sin rate limit
-                "Nombre": nombre, "Cliente": cliente, "Ubicacion": ubic, "Modelo": modelo,
-                "Ingeniero": ing, "FechaInicio": f_ini, "FechaFinEst": f_fin,
-                "CampoAsignados": ";".join(asignados),
-                "AgrupacionID": ag_id, "PesoEnAgrupacion": peso,
-                "EstadoManual": est_man, "Estado": P.derive_estado(avance, est_man),
-                "Instrucciones": instr, "InduccionLinks": ind, "Presupuesto": presup,
-            })
-            # Notificar a los usuarios de campo recién asignados
-            nuevos = [x for x in asignados if x not in actuales]
-            _sent = 0
-            if nuevos:
-                _info = {"Nombre": nombre, "Cliente": cliente, "Ubicacion": ubic,
-                         "FechaInicio": f_ini, "FechaFinEst": f_fin, "InduccionLinks": ind}
-                for un in nuevos:
-                    try:
-                        rr = notify.notify_assignment(un, _info)
-                        if rr.get("email") or rr.get("telegram"):
-                            _sent += 1
-                    except Exception:
-                        pass
-            # Si cambiaron las inducciones, reenviarlas a los ya asignados
-            if str(ind).strip() != str(prj.get("InduccionLinks", "")).strip():
-                _links = P.parse_links(ind)
-                if _links:
-                    for un in [x for x in asignados if x not in nuevos]:
+            campos_disp = _field_users(grupo)
+            actuales = [x.strip() for x in str(prj.get("CampoAsignados", "")).split(";") if x.strip()]
+            # opciones = union para no perder asignados que ya no estén en la lista
+            opts = sorted(set(campos_disp) | set(actuales))
+            asignados = st.multiselect("Usuarios de campo asignados", opts, default=actuales)
+
+            ags = P.list_groupings(grupo=grupo)
+            ag_opts = ["(ninguna)"] + [f"{a['ID']} · {a['Nombre']}" for a in ags]
+            ag_cur  = str(prj.get("AgrupacionID", ""))
+            ag_idx  = next((i for i, a in enumerate(ags) if a["ID"] == ag_cur), None)
+            ag_sel  = st.selectbox("Agrupación", ag_opts,
+                                   index=(ag_idx + 1) if ag_idx is not None else 0)
+            peso    = st.number_input("Peso en la agrupación", min_value=0.0, step=1.0,
+                                      value=P._num(prj.get("PesoEnAgrupacion")))
+            est_man = st.selectbox("Estado manual (override)", P.ESTADOS_MANUAL,
+                                   index=P.ESTADOS_MANUAL.index(str(prj.get("EstadoManual", "")))
+                                   if str(prj.get("EstadoManual", "")) in P.ESTADOS_MANUAL else 0)
+            presup  = st.number_input("💰 Presupuesto del proyecto (0 = sin presupuesto)",
+                                      min_value=0.0, step=100.0, value=P._num(prj.get("Presupuesto")))
+
+            if st.form_submit_button("💾 Guardar cambios", use_container_width=True):
+                ag_id = "" if ag_sel == "(ninguna)" else ag_sel.split(" · ")[0]
+                P.update_project(pid, {   # todo en UNA escritura (batch) → sin rate limit
+                    "Nombre": nombre, "Cliente": cliente, "Ubicacion": ubic, "Modelo": modelo,
+                    "Ingeniero": ing, "FechaInicio": f_ini, "FechaFinEst": f_fin,
+                    "CampoAsignados": ";".join(asignados),
+                    "AgrupacionID": ag_id, "PesoEnAgrupacion": peso,
+                    "EstadoManual": est_man, "Estado": P.derive_estado(avance, est_man),
+                    "Instrucciones": instr, "InduccionLinks": ind, "Presupuesto": presup,
+                })
+                # Notificar a los usuarios de campo recién asignados
+                nuevos = [x for x in asignados if x not in actuales]
+                _sent = 0
+                if nuevos:
+                    _info = {"Nombre": nombre, "Cliente": cliente, "Ubicacion": ubic,
+                             "FechaInicio": f_ini, "FechaFinEst": f_fin, "InduccionLinks": ind}
+                    for un in nuevos:
                         try:
-                            notify.notify_induction(un, nombre, _links)
+                            rr = notify.notify_assignment(un, _info)
+                            if rr.get("email") or rr.get("telegram"):
+                                _sent += 1
                         except Exception:
                             pass
+                # Si cambiaron las inducciones, reenviarlas a los ya asignados
+                if str(ind).strip() != str(prj.get("InduccionLinks", "")).strip():
+                    _links = P.parse_links(ind)
+                    if _links:
+                        for un in [x for x in asignados if x not in nuevos]:
+                            try:
+                                notify.notify_induction(un, nombre, _links)
+                            except Exception:
+                                pass
 
-            # Aviso de cambio al campo ya asignado (los nuevos ya recibieron la asignación)
+                # Aviso de cambio al campo ya asignado (los nuevos ya recibieron la asignación)
+                try:
+                    alerts.notify_change(pid, grupo, "Se actualizaron los datos del proyecto.",
+                                         st.session_state.get("auth", {}).get("usuario", ""),
+                                         [x for x in asignados if x not in nuevos], nombre)
+                except Exception:
+                    pass
+                st.toast("Cambios guardados." + (f"  📨 {_sent} notificado(s)." if _sent else ""))
+                st.rerun()
+
+        # helper: avisar al campo asignado de un cambio del admin
+        _asig_now = [x.strip() for x in str(prj.get("CampoAsignados", "")).split(";") if x.strip()]
+        def _aviso_cambio(txt):
             try:
-                alerts.notify_change(pid, grupo, "Se actualizaron los datos del proyecto.",
+                alerts.notify_change(pid, grupo, txt,
                                      st.session_state.get("auth", {}).get("usuario", ""),
-                                     [x for x in asignados if x not in nuevos], nombre)
+                                     _asig_now, prj.get("Nombre", ""))
             except Exception:
                 pass
-            st.toast("Cambios guardados." + (f"  📨 {_sent} notificado(s)." if _sent else ""))
-            st.rerun()
 
-    # helper: avisar al campo asignado de un cambio del admin
-    _asig_now = [x.strip() for x in str(prj.get("CampoAsignados", "")).split(";") if x.strip()]
-    def _aviso_cambio(txt):
-        try:
-            alerts.notify_change(pid, grupo, txt,
-                                 st.session_state.get("auth", {}).get("usuario", ""),
-                                 _asig_now, prj.get("Nombre", ""))
-        except Exception:
-            pass
-
-    # ── Actividades: tabla EDITABLE (nombre/días/peso/orden); avance = campo ──
-    st.markdown("**Actividades del cronograma** — tabla editable · el avance lo pone el campo")
-    acts = P.list_activities(pid)
-    if acts:
-        _adf = pd.DataFrame([{
-            "Orden": int(P._num(a.get("Orden"))),
-            "Actividad": a.get("Nombre"),
-            "Días": int(P._num(a.get("DuracionDias")) or 1),
-            "Peso": P._num(a.get("Peso")),
-            "Avance %": P._num(a.get("Avance")),
-        } for a in acts])
-        _edited = st.data_editor(
-            _adf, use_container_width=True, hide_index=True, num_rows="fixed",
-            key=f"acted_{pid}", disabled=["Avance %"],
-            column_config={
-                "Orden": st.column_config.NumberColumn("Orden", min_value=1, step=1,
-                                                       help="Cambia el número para reordenar"),
-                "Días":  st.column_config.NumberColumn("Días", min_value=1, step=1),
-                "Peso":  st.column_config.NumberColumn("Peso", min_value=0.0, step=1.0,
-                                                       help="Peso relativo (el % se calcula proporcional)"),
-            })
-        st.caption("Edita nombre, días, peso y el orden; el avance % es de solo lectura (lo actualiza el campo).")
-        if st.button("💾 Guardar tabla de actividades", key=f"savetbl_{pid}"):
-            edits = []
-            for i, a in enumerate(acts):
-                r = _edited.iloc[i]
-                edits.append({"orden0": a.get("Orden"),
-                              "Nombre": str(r["Actividad"]).strip(),
-                              "DuracionDias": int(r["Días"]),
-                              "Peso": float(r["Peso"]),
-                              "Orden": int(r["Orden"])})
-            ok, msg = P.save_activities(pid, edits)
-            (st.success if ok else st.error)(msg)
-            if ok:
-                _aviso_cambio("Se actualizó la tabla de actividades del cronograma.")
-                st.rerun()
-    else:
-        st.caption("Sin actividades registradas.")
-
-    with st.expander("➕ Agregar / 🗑 eliminar actividad (recalcula el % automáticamente)"):
-        with st.form(f"addact_{pid}", clear_on_submit=True):
-            st.markdown("**➕ Agregar actividad**")
-            an = st.text_input("Nombre")
-            ac1, ac2 = st.columns(2)
-            ad = ac1.number_input("Duración (días)", min_value=1, value=2, step=1)
-            ap = ac2.number_input("Peso (relativo a las demás)", min_value=0.0, value=10.0, step=1.0)
-            if st.form_submit_button("Agregar"):
-                if not an.strip():
-                    st.error("El nombre es obligatorio.")
-                else:
-                    ok, msg = P.add_activity(pid, an.strip(), ad, ap)
-                    (st.success if ok else st.error)(msg)
-                    if ok:
-                        _aviso_cambio(f"Se agregó la actividad: {an.strip()}.")
-                        st.rerun()
+        # ── Actividades: tabla EDITABLE (nombre/días/peso/orden); avance = campo ──
+        st.markdown("**Actividades del cronograma** — tabla editable · el avance lo pone el campo")
+        acts = P.list_activities(pid)
         if acts:
-            st.markdown("**🗑 Eliminar actividad**")
-            _dmap = {f"{int(P._num(a.get('Orden')))} · {a.get('Nombre')}": a.get("Orden")
-                     for a in acts}
-            dsel = st.selectbox("Actividad a eliminar", list(_dmap.keys()), key=f"delact_{pid}")
-            if st.button("Eliminar", key=f"delactb_{pid}"):
-                ok, msg = P.delete_activity(pid, _dmap[dsel])
+            _adf = pd.DataFrame([{
+                "Orden": int(P._num(a.get("Orden"))),
+                "Actividad": a.get("Nombre"),
+                "Días": int(P._num(a.get("DuracionDias")) or 1),
+                "Peso": P._num(a.get("Peso")),
+                "Avance %": P._num(a.get("Avance")),
+            } for a in acts])
+            _edited = st.data_editor(
+                _adf, use_container_width=True, hide_index=True, num_rows="fixed",
+                key=f"acted_{pid}", disabled=["Avance %"],
+                column_config={
+                    "Orden": st.column_config.NumberColumn("Orden", min_value=1, step=1,
+                                                           help="Cambia el número para reordenar"),
+                    "Días":  st.column_config.NumberColumn("Días", min_value=1, step=1),
+                    "Peso":  st.column_config.NumberColumn("Peso", min_value=0.0, step=1.0,
+                                                           help="Peso relativo (el % se calcula proporcional)"),
+                })
+            st.caption("Edita nombre, días, peso y el orden; el avance % es de solo lectura (lo actualiza el campo).")
+            if st.button("💾 Guardar tabla de actividades", key=f"savetbl_{pid}"):
+                edits = []
+                for i, a in enumerate(acts):
+                    r = _edited.iloc[i]
+                    edits.append({"orden0": a.get("Orden"),
+                                  "Nombre": str(r["Actividad"]).strip(),
+                                  "DuracionDias": int(r["Días"]),
+                                  "Peso": float(r["Peso"]),
+                                  "Orden": int(r["Orden"])})
+                ok, msg = P.save_activities(pid, edits)
                 (st.success if ok else st.error)(msg)
                 if ok:
-                    _aviso_cambio("Se eliminó una actividad del cronograma.")
+                    _aviso_cambio("Se actualizó la tabla de actividades del cronograma.")
+                    st.rerun()
+        else:
+            st.caption("Sin actividades registradas.")
+
+        with st.expander("➕ Agregar / 🗑 eliminar actividad (recalcula el % automáticamente)"):
+            with st.form(f"addact_{pid}", clear_on_submit=True):
+                st.markdown("**➕ Agregar actividad**")
+                an = st.text_input("Nombre")
+                ac1, ac2 = st.columns(2)
+                ad = ac1.number_input("Duración (días)", min_value=1, value=2, step=1)
+                ap = ac2.number_input("Peso (relativo a las demás)", min_value=0.0, value=10.0, step=1.0)
+                if st.form_submit_button("Agregar"):
+                    if not an.strip():
+                        st.error("El nombre es obligatorio.")
+                    else:
+                        ok, msg = P.add_activity(pid, an.strip(), ad, ap)
+                        (st.success if ok else st.error)(msg)
+                        if ok:
+                            _aviso_cambio(f"Se agregó la actividad: {an.strip()}.")
+                            st.rerun()
+            if acts:
+                st.markdown("**🗑 Eliminar actividad**")
+                _dmap = {f"{int(P._num(a.get('Orden')))} · {a.get('Nombre')}": a.get("Orden")
+                         for a in acts}
+                dsel = st.selectbox("Actividad a eliminar", list(_dmap.keys()), key=f"delact_{pid}")
+                if st.button("Eliminar", key=f"delactb_{pid}"):
+                    ok, msg = P.delete_activity(pid, _dmap[dsel])
+                    (st.success if ok else st.error)(msg)
+                    if ok:
+                        _aviso_cambio("Se eliminó una actividad del cronograma.")
+                        st.rerun()
+        # ── Eliminar ──
+        with st.expander("🗑 Eliminar proyecto"):
+            st.warning("Esto elimina el proyecto y sus actividades. No se puede deshacer.")
+            if st.button("Eliminar definitivamente", key=f"del_{pid}"):
+                ok, msg = P.delete_project(pid)
+                (st.success if ok else st.error)(msg)
+                if ok:
                     st.rerun()
 
-    # ── Paquete de obra directo (sin pasar por el Survey) ──
-    # El proyecto guarda ParamsJSON+MatrizJSON pero NO la solucion (es derivada),
-    # asi que se recalcula con survey_calc.recalcular (misma secuencia que el
-    # Survey, verificada identica) y se arma el PDF de terreno.
-    with st.expander("🧰 Paquete de obra (PDF para terreno)"):
-        st.caption("Isométrica del hueco, plantas a escala y replanteo de plomadas "
-                   "con la ficha de medidas. Se regenera desde el survey guardado.")
-        _kp = f"pack_{pid}"
-        if st.button("Preparar paquete de obra", key=f"btnpack_{pid}"):
-            with st.spinner("Recalculando el survey y generando el paquete..."):
-                _full = P.get_project_full(pid)
-                _res = survey_calc.recalcular(_full.get("params") or {},
-                                              _full.get("matriz") or [])
-                if not _res:
-                    st.session_state[_kp] = None
+    elif _sec == "💰 Costos":
+        # ── Gastos / compras ──
+        render_expenses(pid, grupo, can_delete=True, key_prefix="adm")
+
+    elif _sec == "📎 Archivos":
+        # ── Paquete de obra directo (sin pasar por el Survey) ──
+        # El proyecto guarda ParamsJSON+MatrizJSON pero NO la solucion (es derivada),
+        # asi que se recalcula con survey_calc.recalcular (misma secuencia que el
+        # Survey, verificada identica) y se arma el PDF de terreno.
+        with st.expander("🧰 Paquete de obra (PDF para terreno)"):
+            st.caption("Isométrica del hueco, plantas a escala y replanteo de plomadas "
+                       "con la ficha de medidas. Se regenera desde el survey guardado.")
+            _kp = f"pack_{pid}"
+            if st.button("Preparar paquete de obra", key=f"btnpack_{pid}"):
+                with st.spinner("Recalculando el survey y generando el paquete..."):
+                    _full = P.get_project_full(pid)
+                    _res = survey_calc.recalcular(_full.get("params") or {},
+                                                  _full.get("matriz") or [])
+                    if not _res:
+                        st.session_state[_kp] = None
+                    else:
+                        st.session_state[_kp] = field_pack_pdf(
+                            _res["all_params"], _res["limits"], _res["best"], _res["lim_map"],
+                            plumb=_res["plumb"],
+                            ctrl_in_frame=bool(_res["all_params"].get("CTRL_IN_FRAME")),
+                            ctrl_side=_res["all_params"].get("CTRL_SIDE"),
+                            meta={"proyecto": str(prj.get("Nombre", "")),
+                                  "cliente": str(prj.get("Cliente", "")),
+                                  "ubicacion": str(prj.get("Ubicacion", ""))})
+            if st.session_state.get(_kp):
+                st.download_button("⬇️ Descargar paquete de obra (PDF)",
+                                   data=st.session_state[_kp],
+                                   file_name=f"paquete_obra_{pid}.pdf",
+                                   mime="application/pdf", key=f"dlpack_{pid}",
+                                   use_container_width=True)
+            elif _kp in st.session_state:
+                st.warning("No se pudo regenerar: al proyecto le faltan parámetros o matriz, "
+                           "o el survey no encuentra solución con esos datos.")
+
+        # ── Reconstruir el survey guardado ──
+        with st.expander("🔄 Reconstruir proyecto en el Survey (regenerar informes)"):
+            st.caption("Carga los parámetros y la matriz guardados en la pestaña 📐 Survey. "
+                       "Luego pulsa **Calcular** allí para regenerar diagramas e informes.")
+            if st.button("🔄 Cargar este proyecto en el Survey", key=f"rebuild_{pid}"):
+                full = P.get_project_full(pid)
+                params, matriz = full.get("params") or {}, full.get("matriz") or []
+                if not params:
+                    st.error("Este proyecto no tiene parámetros guardados.")
                 else:
-                    st.session_state[_kp] = field_pack_pdf(
-                        _res["all_params"], _res["limits"], _res["best"], _res["lim_map"],
-                        plumb=_res["plumb"],
-                        ctrl_in_frame=bool(_res["all_params"].get("CTRL_IN_FRAME")),
-                        ctrl_side=_res["all_params"].get("CTRL_SIDE"),
-                        meta={"proyecto": str(prj.get("Nombre", "")),
-                              "cliente": str(prj.get("Cliente", "")),
-                              "ubicacion": str(prj.get("Ubicacion", ""))})
-        if st.session_state.get(_kp):
-            st.download_button("⬇️ Descargar paquete de obra (PDF)",
-                               data=st.session_state[_kp],
-                               file_name=f"paquete_obra_{pid}.pdf",
-                               mime="application/pdf", key=f"dlpack_{pid}",
-                               use_container_width=True)
-        elif _kp in st.session_state:
-            st.warning("No se pudo regenerar: al proyecto le faltan parámetros o matriz, "
-                       "o el survey no encuentra solución con esos datos.")
+                    for k, v in params.items():
+                        try:
+                            st.session_state[f"inp_{k}"] = float(v)
+                        except Exception:
+                            pass
+                    if params.get("NS"):
+                        try:
+                            st.session_state["ns"] = int(float(params["NS"]))
+                        except Exception:
+                            pass
+                    if matriz:
+                        try:
+                            st.session_state["survey_df"] = pd.DataFrame(matriz)
+                        except Exception:
+                            pass
+                    st.session_state["proyecto"]  = str(prj.get("Nombre", ""))
+                    st.session_state["ingeniero"] = str(prj.get("Ingeniero", ""))
+                    st.session_state["_rebuilt_from"] = str(prj.get("Nombre", ""))
+                    st.success("✅ Cargado. Ve a **📐 Survey** y pulsa **Calcular** para regenerar todo.")
+        # ── Cálculos de herramientas ──
+        _calculos_section(pid)
 
-    # ── Reconstruir el survey guardado ──
-    with st.expander("🔄 Reconstruir proyecto en el Survey (regenerar informes)"):
-        st.caption("Carga los parámetros y la matriz guardados en la pestaña 📐 Survey. "
-                   "Luego pulsa **Calcular** allí para regenerar diagramas e informes.")
-        if st.button("🔄 Cargar este proyecto en el Survey", key=f"rebuild_{pid}"):
-            full = P.get_project_full(pid)
-            params, matriz = full.get("params") or {}, full.get("matriz") or []
-            if not params:
-                st.error("Este proyecto no tiene parámetros guardados.")
-            else:
-                for k, v in params.items():
-                    try:
-                        st.session_state[f"inp_{k}"] = float(v)
-                    except Exception:
-                        pass
-                if params.get("NS"):
-                    try:
-                        st.session_state["ns"] = int(float(params["NS"]))
-                    except Exception:
-                        pass
-                if matriz:
-                    try:
-                        st.session_state["survey_df"] = pd.DataFrame(matriz)
-                    except Exception:
-                        pass
-                st.session_state["proyecto"]  = str(prj.get("Nombre", ""))
-                st.session_state["ingeniero"] = str(prj.get("Ingeniero", ""))
-                st.session_state["_rebuilt_from"] = str(prj.get("Nombre", ""))
-                st.success("✅ Cargado. Ve a **📐 Survey** y pulsa **Calcular** para regenerar todo.")
+        # ── Documentos ──
+        _documentos_section(pid)
 
-    # ── Gastos / compras ──
-    render_expenses(pid, grupo, can_delete=True, key_prefix="adm")
-
-    # ── Cálculos de herramientas ──
-    _calculos_section(pid)
-
-    # ── Documentos ──
-    _documentos_section(pid)
-
-    # ── Eliminar ──
-    with st.expander("🗑 Eliminar proyecto"):
-        st.warning("Esto elimina el proyecto y sus actividades. No se puede deshacer.")
-        if st.button("Eliminar definitivamente", key=f"del_{pid}"):
-            ok, msg = P.delete_project(pid)
-            (st.success if ok else st.error)(msg)
-            if ok:
-                st.rerun()
 
 
 # ── Panel de agrupaciones ────────────────────────────────────────
