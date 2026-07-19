@@ -174,6 +174,8 @@ def _init_state():
     st.session_state["calc_results"]   = None
     st.session_state["chat_history"]   = []
     st.session_state["proyecto"]       = ""
+    st.session_state["cliente"]        = ""
+    st.session_state["ubicacion"]      = ""
     st.session_state["ingeniero"]      = ""
     st.session_state["initialized"]    = True
 
@@ -358,7 +360,8 @@ if _seccion == _L_SURVEY:
             st.session_state.pop(_k, None)
         for _k in ("ns", "calc_results", "pdf_extracted", "last_pdf_name", "pdf_bytes",
                    "last_excel_id", "_calc_sig", "ns_msg", "rail_ref_msg",
-                   "proyecto", "ingeniero", "sched_rows", "sched_start", "_rebuilt_from"):
+                   "proyecto", "cliente", "ubicacion", "ingeniero", "sched_rows",
+                   "sched_start", "_rebuilt_from"):
             st.session_state.pop(_k, None)
         st.session_state["ns"]        = 2
         st.session_state["survey_df"] = pd.DataFrame({c: [0.0] * 2 for c in SURVEY_COLS})
@@ -397,10 +400,16 @@ if _seccion == _L_SURVEY:
 
     # ── Identificación del proyecto ───────────────────────
     _id1, _id2 = st.columns(2)
-    _id1.text_input("🏗 Nombre del proyecto / Cliente", key="proyecto",
-                    placeholder="Ej: Edificio Centro, Cliente ABC…")
-    _id2.text_input("👷 Ingeniero responsable", key="ingeniero",
-                    placeholder="Nombre del técnico que realiza el survey")
+    _id1.text_input("🏗 Proyecto", key="proyecto", placeholder="Ej: Torre Central")
+    _id2.text_input("🏢 Cliente", key="cliente", placeholder="Empresa / constructora")
+    _id3, _id4 = st.columns(2)
+    _id3.text_input("📍 Ubicación de la obra", key="ubicacion",
+                    placeholder="Dirección — aparece en el informe")
+    _id4.text_input("👷 Ingeniero responsable", key="ingeniero",
+                    placeholder="Quien realiza el survey")
+    if st.session_state.get("ubicacion", "").strip():
+        from core import maps as _maps
+        _id3.caption(_maps.maps_link_md(st.session_state["ubicacion"], "ver en Maps"))
 
     with st.expander("🧹 Empezar un survey nuevo"):
         st.caption("Borra parámetros, matriz, configuración y resultados de esta sesión. "
@@ -828,6 +837,8 @@ if _seccion == _L_SURVEY:
         all_params["NS"]            = _c["ns"]
         all_params["PROYECTO"]      = st.session_state.get("proyecto", "")
         all_params["INGENIERO"]     = st.session_state.get("ingeniero", "")
+        all_params["CLIENTE"]       = st.session_state.get("cliente", "")
+        all_params["UBICACION"]     = st.session_state.get("ubicacion", "")
 
         # Totales = última fila de la matriz
         last = survey_original_input.iloc[-1]
@@ -1391,8 +1402,8 @@ if _seccion == _L_SURVEY:
                                "y cronograma). El avance lo alimentará el equipo de campo.")
                     pc1, pc2 = st.columns(2)
                     pj_nom = pc1.text_input("Nombre del proyecto", value=ap.get("PROYECTO", ""))
-                    pj_cli = pc2.text_input("Cliente")
-                    pj_ubi = pc1.text_input("Ubicación")
+                    pj_cli = pc2.text_input("Cliente", value=st.session_state.get("cliente", ""))
+                    pj_ubi = pc1.text_input("Ubicación", value=st.session_state.get("ubicacion", ""))
                     pj_mod = pc2.text_input("Modelo de elevador")
                     pj_ing = pc1.text_input("Ingeniero", value=ap.get("INGENIERO", ""))
                     pj_asg = st.multiselect("Usuarios de campo asignados", _campos)

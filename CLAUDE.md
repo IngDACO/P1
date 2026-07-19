@@ -775,6 +775,24 @@ Al cargar el plano en el survey (app.py), autocompleta **RAIL = AlturaDiente** (
 espalda) del catálogo; si el código no está o no se detecta → aviso + entrada manual. **RAIL = AlturaDiente**
 (NO el ancho); AnchoDiente se guarda como dato secundario.
 
+## Informe del CLIENTE rediseñado como presentacion (v116)
+`core/user_report.py` reescrito en forma (el contenido tecnico se conserva). Concepto: documento visual,
+no una lista de secciones.
+- **Portada a sangre** dibujada en el canvas (`_portada`): azul COPEX, logo (`static/icon-512.png`),
+  titulo grande y ficha del proyecto (cliente, proyecto, ubicacion, nº informe, fecha, paradas, preparado por).
+- **Pie con paginacion "X de Y"** + barra de acento lateral en todas las paginas de contenido:
+  `_NumeradoCanvas` (2 pasadas, receta estandar de ReportLab). La portada no lleva pie.
+- **Nº de informe automatico**: `numero_informe()` -> `INF-AAAAMMDD-HHMM` (unico y ordenable, sin estado).
+- **Separadores de seccion tipo diapositiva** (`_section`): numero grande + titulo sobre banda azul.
+- **Veredicto con semaforo** (`_veredicto`) al inicio Y en conclusiones: apto / apto con observaciones /
+  sin solucion, derivado de `total_off`.
+- **Tarjetas KPI** (`_kpi_cards`), **callouts** (`_callout`) para lo accionable, **tablas cebra** (`_zebra`).
+- **Secciones nuevas**: 10 Alcance y metodologia + limitaciones, 11 Glosario en tarjetas 2 columnas,
+  12 Conclusiones + bloque de firma (preparado por / recibido por). Indice de contenidos tras el veredicto.
+- **Datos ampliados**: el Survey ahora pide Proyecto / Cliente / Ubicacion / Ingeniero (antes 'Proyecto o
+  Cliente' en un solo campo). Van a `all_params` (CLIENTE/UBICACION) y prellenan el guardado de proyecto.
+Validado generando un PDF real: 8 paginas con portada, nº informe, glosario, alcance, conclusiones y firma.
+
 ## Survey mas pro: 8 mejoras (v115)
 1. **Solucion ACTIVA elegible** (`sol_activa`): el optimizador propone varias soluciones optimas pero antes
    diagramas/plomado/informe usaban SIEMPRE `best`. Ahora un selectbox permite elegir otra por criterio de
@@ -960,7 +978,7 @@ posicional + plano) → app.py, al cargar el PDF, setea `st.session_state["ns"]`
 resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NORTH SYD y AGECARE → NS=6
 (coincide con travel/floor-height HQ/HE).
 
-## Versiones desplegadas (v115 = actual)
+## Versiones desplegadas (v116 = actual)
 | Ver | Cambio principal |
 |---|---|
 | v5 | Extractor: CRLF fix, caso D valor-antes-label, sin pdfplumber |
@@ -1062,6 +1080,7 @@ resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NOR
 | v102 | Fix: NS se lee del plano (NUMBER OF STOPS) al cargar el PDF; default de init 6→2 (ya no queda pegado en 6) |
 | v103 | Rol conductor (2 relojes: jornada general + segmentos por proyecto, columna Tipo) + cronómetro en vivo para todos + reporte admin de horas del grupo (Mi grupo → ⏱ Horas) |
 | v104 | Credenciales/tickets por usuario (White Card, Forklift, Dogging/Rigging, licencia…): vencimiento+estado, foto/documento a Drive, radar en Resumen del día, avisos email/Telegram a admin+usuario; usuario ve las suyas (🎫 Mis credenciales) |
+| v116 | Informe del cliente rediseñado como presentacion: portada a sangre, pie con paginacion, nº de informe, veredicto, KPIs, glosario, alcance, conclusiones+firma |
 | v115 | Survey pro: solucion activa elegible, resumen ejecutivo, checklist, filtro de pisos, validacion temprana, duplicar, comparar soluciones, exportar diagramas |
 | v114 | Survey en 2 fases (Datos / Resultados) con salto automatico al calcular; config leida de session_state |
 | v113 | Survey: marca de origen PDF/manual por campo + parametros agrupados + boton nuevo survey + aviso al reconstruir |
