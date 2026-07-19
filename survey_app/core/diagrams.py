@@ -30,6 +30,20 @@ ReportLab (svglib.svg2rlg).
 
 
 
+def _mm(v) -> str:
+    """mm para cotas: entero si lo es, 1 decimal si no.
+
+    El optimizador barre RL/FB en pasos de 0.5 mm y esos medios milimetros se
+    propagan a la matriz (WL += rl, FR += fb...). Con .0f, una holgura real de
+    71.5 se rotulaba "72": la cota afirmaba un valor que no es el medido.
+    """
+    try:
+        v = float(v)
+    except Exception:
+        return str(v)
+    return f"{v:.0f}" if abs(v - round(v)) < 0.05 else f"{v:.1f}"
+
+
 def _n(v, d=0.0) -> float:
     try:
         return float(v)
@@ -236,7 +250,7 @@ def floor_plan_svg(params: dict, limits: dict, row: dict, floor_idx: int,
                  f'stroke="#2e6da4" stroke-width="0.7" stroke-dasharray="9,3,2,3"/>')
         _lado = "R" if d_ejes > 0 else "L"
         p.append(_dim_h(min(eje_cab, eje_ap), max(eje_cab, eje_ap), cy1 - 22,
-                        f"EJES {abs(d_ejes):.0f}→{_lado}",
+                        f"EJES {_mm(abs(d_ejes))}→{_lado}",
                         color="#2e6da4", tcolor="#2e6da4"))
 
     # ── Cotas (rojo si incumple) ───────────────────
@@ -244,25 +258,25 @@ def floor_plan_svg(params: dict, limits: dict, row: dict, floor_idx: int,
         return "#c0392b" if ((v > lim) if es_max else (v < lim)) else "#1f2937"
 
     yd = y0 - mur - 16
-    p.append(_dim_h(x0, cx0, yd, f"WL {wl:.0f}", tcolor=_c(wl, lim_wl),
+    p.append(_dim_h(x0, cx0, yd, f"WL {_mm(wl)}", tcolor=_c(wl, lim_wl),
                     ext_desde=y0 - mur, hacia="izq"))
-    p.append(_dim_h(cx0 + cw, x1, yd, f"WR {wr:.0f}", tcolor=_c(wr, lim_wr),
+    p.append(_dim_h(cx0 + cw, x1, yd, f"WR {_mm(wr)}", tcolor=_c(wr, lim_wr),
                     ext_desde=y0 - mur, hacia="der"))
 
     xd = x0 - mur - 26
     # FL/FR: pared frontal → EJE DE RIELES (que es justo lo que se mide en obra)
-    p.append(_dim_v(y_rl, y1, xd, f"FL {fl:.0f}", tcolor=_c(fl, lim_fl), ext_desde=x0 - mur))
-    p.append(_dim_v(y_rr, y1, x1 + mur + 16, f"FR {fr:.0f}", tcolor=_c(fr, lim_fr),
+    p.append(_dim_v(y_rl, y1, xd, f"FL {_mm(fl)}", tcolor=_c(fl, lim_fl), ext_desde=x0 - mur))
+    p.append(_dim_v(y_rr, y1, x1 + mur + 16, f"FR {_mm(fr)}", tcolor=_c(fr, lim_fr),
                     ext_desde=x1 + mur))
-    p.append(_dim_v(cy0, cy1, x1 + mur + 42, f"TK {tk:.0f}", ext_desde=x1 + mur))
+    p.append(_dim_v(cy0, cy1, x1 + mur + 42, f"TK {_mm(tk)}", ext_desde=x1 + mur))
     bc_dib = prof_int - (eje_riel + tk / 2)            # holgura trasera dibujada
     if bc_dib * esc > 3:
-        p.append(_dim_v(y0, cy0, xd - 20, f"BC {bc_dib:.0f}", ext_desde=x0 - mur))
+        p.append(_dim_v(y0, cy0, xd - 20, f"BC {_mm(bc_dib)}", ext_desde=x0 - mur))
 
     yo = y1 + mur + 34
-    p.append(_dim_h(cx0, dx0, yo, f"OL {ol:.0f}", tcolor=_c(ol, lim_ol, True),
+    p.append(_dim_h(cx0, dx0, yo, f"OL {_mm(ol)}", tcolor=_c(ol, lim_ol, True),
                     ext_desde=y1 + mur, hacia="izq"))
-    p.append(_dim_h(dx1, cx0 + cw, yo, f"OR {orr:.0f}", tcolor=_c(orr, lim_or, True),
+    p.append(_dim_h(dx1, cx0 + cw, yo, f"OR {_mm(orr)}", tcolor=_c(orr, lim_or, True),
                     ext_desde=y1 + mur, hacia="der"))
 
     # Rótulos de orientación
@@ -289,7 +303,7 @@ def floor_plan_svg(params: dict, limits: dict, row: dict, floor_idx: int,
         p.append(f'<rect x="{mx+gap:.1f}" y="{my+6:.1f}" width="{max(24, bx+bw-16-(mx+gap)):.1f}" '
                  f'height="40" fill="#f7fafd" stroke="#1a3a5c" stroke-width="1.4"/>')
         col = "#c0392b" if crit[0] < crit[2] else "#1f2937"
-        p.append(_dim_h(mx, mx + gap, my + 62, f"{crit[0]:.0f} mm", tcolor=col, ext_desde=my + 52))
+        p.append(_dim_h(mx, mx + gap, my + 62, f"{_mm(crit[0])} mm", tcolor=col, ext_desde=my + 52))
         # marca en el dibujo principal
         p.append(f'<circle cx="{(x0 if crit[1] == "WL" else x1):.1f}" '
                  f'cy="{cy0+ch/2:.1f}" r="9" '
@@ -303,9 +317,9 @@ def floor_plan_svg(params: dict, limits: dict, row: dict, floor_idx: int,
         p.append(f'<text x="{dxb+6}" y="{dyb+15}" font-size="8" fill="#1a3a5c" '
                  f'font-weight="bold">DESPLAZAMIENTO</text>')
         p.append(f'<text x="{dxb+6}" y="{dyb+30}" font-size="8" fill="#1f2937">'
-                 f'RL {_rl:+.0f} mm  (lateral)</text>')
+                 f'RL {_rl:+.1f} mm  (lateral)</text>')
         p.append(f'<text x="{dxb+6}" y="{dyb+44}" font-size="8" fill="#1f2937">'
-                 f'FB {_fb:+.0f} mm  (frontal)</text>')
+                 f'FB {_fb:+.1f} mm  (frontal)</text>')
 
     # ── Cajetín ────────────────────────────────────────────
     tx, ty, tw, th = 492, 336, 152, 86

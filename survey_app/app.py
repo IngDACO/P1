@@ -608,7 +608,10 @@ if _seccion == _L_SURVEY:
             _idx_act = next((k for k, s in enumerate(sorted_solutions)
                              if (s["rl"], s["fb"]) == best_pair), 0)
             if len(sorted_solutions) > 1:
-                _lbl = [f"RL {s['rl']:+.0f} · FB {s.get('fb_applied', s['fb']):+.0f} · "
+                # ⚠️ .1f obligatorio: el optimizador barre en pasos de 0.5 mm, así que
+                # RL/FB pueden ser x.5. Con .0f, RL −6.0 y RL −6.5 daban la MISMA
+                # etiqueta y las soluciones no se podían distinguir en el desplegable.
+                _lbl = [f"RL {s['rl']:+.1f} · FB {s.get('fb_applied', s['fb']):+.1f} · "
                         f"{s['total_off']} fuera" for s in sorted_solutions]
                 _sel = st.selectbox(
                     "🎯 Solución activa — se usa en diagramas, plomado e informes",
@@ -646,7 +649,7 @@ if _seccion == _L_SURVEY:
                 is_best   = (sol["rl"], sol["fb"]) == best_pair
                 fb_ap     = sol.get("fb_applied", sol["fb"])
                 fb_suffix = f"  |  FB aplic. = {fb_ap:.1f} mm" if abs(fb_ap - sol["fb"]) > 0.01 else ""
-                sol_label = f"{'⭐ ' if is_best else ''}Solución {idx_sol+1} — RL = {sol['rl']} mm  |  FB = {sol['fb']} mm{fb_suffix}"
+                sol_label = f"{'⭐ ' if is_best else ''}Solución {idx_sol+1} — RL = {sol['rl']:+.1f} mm  |  FB = {sol['fb']:+.1f} mm{fb_suffix}"
                 with st.expander(sol_label, expanded=(idx_sol == 0)):
                     sol_df  = pd.DataFrame(sol["matrix"])
                     sol_min = {f"MIN_{c}": min(sol_df[c]) for c in SURVEY_COLS}

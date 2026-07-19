@@ -775,6 +775,22 @@ Al cargar el plano en el survey (app.py), autocompleta **RAIL = AlturaDiente** (
 espalda) del catálogo; si el código no está o no se detecta → aviso + entrada manual. **RAIL = AlturaDiente**
 (NO el ancho); AnchoDiente se guarda como dato secundario.
 
+## El optimizador trabaja en pasos de 0.5 mm — NO redondear al mostrar (v122)
+Pregunta del usuario: "la solucion activa redondea los valores?". Respuesta: **el dato NO se redondea
+en ningun punto del calculo**; el selectbox guarda el dict completo (`r["optimizer_result"]["best"] =
+_nueva`). Pero **varias PANTALLAS si redondeaban a entero**, y una de ellas causaba un problema real:
+- `optimizer.optimize` barre `np.arange(-max_rl, max_rl+0.5, 0.5)` → **RL y FB pueden ser x.5**.
+- La etiqueta del selector de solucion activa usaba `:+.0f` → **RL −6.0 y RL −6.5 daban la MISMA
+  etiqueta** y las soluciones no se podian distinguir en el desplegable. Ahora `:+.1f`.
+- Esos medios milimetros se PROPAGAN a la matriz (`WL += rl`, `FR += fb`...), asi que las cotas del
+  plano con `.0f` rotulaban 71.5 como "72": la cota afirmaba un valor que no era el medido.
+- Nuevo helper **`diagrams._mm(v)`**: entero si el valor lo es, 1 decimal si no. Aplicado a
+  WL/WR/FL/FR/OL/OR/TK/BC, a la cota EJES y al Detalle. Asi las cotas siguen limpias donde el valor es
+  entero y revelan el medio milimetro donde existe.
+- Ya estaban bien (`.1f`): la metrica RL/FB del resumen, el informe cliente y el informe admin.
+⚠️ REGLA: cualquier display de RL/FB o de la matriz va con **al menos 1 decimal**. Con `.0f` no solo se
+pierde precision: se pueden volver INDISTINGUIBLES dos soluciones distintas.
+
 ## Fix CRITICO de geometria en los dibujos (v121)
 Los planos de v119 salian con **la cabina fuera del hueco** (se escapaba por arriba del muro de fondo).
 Dos suposiciones mias, mal:
@@ -1076,7 +1092,7 @@ posicional + plano) → app.py, al cargar el PDF, setea `st.session_state["ns"]`
 resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NORTH SYD y AGECARE → NS=6
 (coincide con travel/floor-height HQ/HE).
 
-## Versiones desplegadas (v121 = actual)
+## Versiones desplegadas (v122 = actual)
 | Ver | Cambio principal |
 |---|---|
 | v5 | Extractor: CRLF fix, caso D valor-antes-label, sin pdfplumber |
@@ -1178,6 +1194,7 @@ resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NOR
 | v102 | Fix: NS se lee del plano (NUMBER OF STOPS) al cargar el PDF; default de init 6→2 (ya no queda pegado en 6) |
 | v103 | Rol conductor (2 relojes: jornada general + segmentos por proyecto, columna Tipo) + cronómetro en vivo para todos + reporte admin de horas del grupo (Mi grupo → ⏱ Horas) |
 | v104 | Credenciales/tickets por usuario (White Card, Forklift, Dogging/Rigging, licencia…): vencimiento+estado, foto/documento a Drive, radar en Resumen del día, avisos email/Telegram a admin+usuario; usuario ve las suyas (🎫 Mis credenciales) |
+| v122 | Fix: los displays redondeaban a entero valores que el optimizador da en pasos de 0.5 mm (dos soluciones distintas daban la misma etiqueta); cotas con formato adaptativo `_mm` |
 | v121 | Fix CRITICO geometria de los planos: FL/FR van al eje de rieles (cuerpo TK centrado), la cabina ya no se sale del hueco; apertura posicionada con OL/OR reales + marcos |
 | v120 | Fix CRITICO: indentacion de v118 rompia las 2 fases del Survey (NameError sc2, matriz invisible, import de Excel inalcanzable) |
 | v119 | Dibujos del survey rehechos: planta a escala real con cotas/achurado/cajetin + detalle ampliado automatico + ambos desplazamientos + vista isometrica del hueco |
