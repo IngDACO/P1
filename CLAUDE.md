@@ -775,6 +775,16 @@ Al cargar el plano en el survey (app.py), autocompleta **RAIL = AlturaDiente** (
 espalda) del catálogo; si el código no está o no se detecta → aviso + entrada manual. **RAIL = AlturaDiente**
 (NO el ancho); AnchoDiente se guarda como dato secundario.
 
+## Fix: crash tras "Empezar un survey nuevo" (v117)
+`AttributeError` en `st.session_state.last_pdf_name`. El reset de v113 BORRABA claves que luego se leen con
+acceso por ATRIBUTO (`st.session_state.last_pdf_name`, `.calc_results`...). `_init_state()` no las repone
+porque solo corre una vez (flag `initialized`), asi que la clave quedaba ausente y el acceso por atributo
+lanza AttributeError (el acceso por `.get()` no).
+Fix doble: (1) el reset ahora **reinicia a su valor por defecto** las claves criticas (pdf_extracted,
+last_pdf_name, pdf_bytes, ns, survey_df, calc_results, proyecto/cliente/ubicacion/ingeniero) en vez de
+borrarlas; solo se borran las auxiliares. (2) las lecturas de esas claves pasan a `.get()`.
+REGLA: si borras una clave de session_state, o la reinicias, o todas sus lecturas usan `.get()`.
+
 ## Informe del CLIENTE rediseñado como presentacion (v116)
 `core/user_report.py` reescrito en forma (el contenido tecnico se conserva). Concepto: documento visual,
 no una lista de secciones.
@@ -978,7 +988,7 @@ posicional + plano) → app.py, al cargar el PDF, setea `st.session_state["ns"]`
 resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NORTH SYD y AGECARE → NS=6
 (coincide con travel/floor-height HQ/HE).
 
-## Versiones desplegadas (v116 = actual)
+## Versiones desplegadas (v117 = actual)
 | Ver | Cambio principal |
 |---|---|
 | v5 | Extractor: CRLF fix, caso D valor-antes-label, sin pdfplumber |
@@ -1080,6 +1090,7 @@ resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NOR
 | v102 | Fix: NS se lee del plano (NUMBER OF STOPS) al cargar el PDF; default de init 6→2 (ya no queda pegado en 6) |
 | v103 | Rol conductor (2 relojes: jornada general + segmentos por proyecto, columna Tipo) + cronómetro en vivo para todos + reporte admin de horas del grupo (Mi grupo → ⏱ Horas) |
 | v104 | Credenciales/tickets por usuario (White Card, Forklift, Dogging/Rigging, licencia…): vencimiento+estado, foto/documento a Drive, radar en Resumen del día, avisos email/Telegram a admin+usuario; usuario ve las suyas (🎫 Mis credenciales) |
+| v117 | Fix: crash (AttributeError) tras 'Empezar un survey nuevo' — el reset borraba claves leidas por atributo |
 | v116 | Informe del cliente rediseñado como presentacion: portada a sangre, pie con paginacion, nº de informe, veredicto, KPIs, glosario, alcance, conclusiones+firma |
 | v115 | Survey pro: solucion activa elegible, resumen ejecutivo, checklist, filtro de pisos, validacion temprana, duplicar, comparar soluciones, exportar diagramas |
 | v114 | Survey en 2 fases (Datos / Resultados) con salto automatico al calcular; config leida de session_state |

@@ -255,7 +255,7 @@ with st.sidebar:
     # ══════════════════════════════════════════════════
     _agente_lbl = "Asistente de campo" if _ROL == "campo" else "Asistente de gestión"
     with st.expander(f"🤖 {_agente_lbl} COPEX", expanded=False):
-        ctx_label = "🔗 Con contexto del cálculo actual." if st.session_state.calc_results else "Sin cálculo activo."
+        ctx_label = "🔗 Con contexto del cálculo actual." if st.session_state.get("calc_results") else "Sin cálculo activo."
         _foco = ("Enfocado en la instalación en obra y el uso de la app en terreno."
                  if _ROL == "campo"
                  else "Enfocado en la gestión de proyectos e interpretación de resultados.")
@@ -274,7 +274,7 @@ with st.sidebar:
                 st.markdown(prompt)
             with st.chat_message("assistant", avatar="🤖"):
                 with st.spinner("Consultando…"):
-                    _r = st.session_state.calc_results
+                    _r = st.session_state.get("calc_results")
                     _response = get_chat_response(
                         user_message = prompt,
                         history      = st.session_state.chat_history[:-1],
@@ -355,17 +355,23 @@ if _seccion == _L_SURVEY:
     # así que el import deja los valores "pendientes" y se aplican aquí, arriba del todo.
     # ── Empezar de cero (se procesa ANTES de crear los widgets) ──
     if st.session_state.pop("_reset_survey", False):
+        # Los inp_*/cfg_* sí se borran (los widgets los recrean con su valor por defecto).
         for _k in [k for k in list(st.session_state.keys())
                    if k.startswith("inp_") or k.startswith("cfg_")]:
             st.session_state.pop(_k, None)
-        for _k in ("ns", "calc_results", "pdf_extracted", "last_pdf_name", "pdf_bytes",
-                   "last_excel_id", "_calc_sig", "ns_msg", "rail_ref_msg",
-                   "proyecto", "cliente", "ubicacion", "ingeniero", "sched_rows",
-                   "sched_start", "_rebuilt_from"):
+        # ⚠️ El RESTO se REINICIA a su valor por defecto, NO se borra: hay lecturas por
+        # atributo (st.session_state.last_pdf_name…) que lanzan AttributeError si falta la clave.
+        st.session_state["pdf_extracted"] = {}
+        st.session_state["last_pdf_name"] = None
+        st.session_state["pdf_bytes"]     = None
+        st.session_state["ns"]            = 2
+        st.session_state["survey_df"]     = pd.DataFrame({c: [0.0] * 2 for c in SURVEY_COLS})
+        st.session_state["calc_results"]  = None
+        for _k in ("proyecto", "cliente", "ubicacion", "ingeniero"):
+            st.session_state[_k] = ""
+        for _k in ("last_excel_id", "_calc_sig", "ns_msg", "rail_ref_msg", "sched_rows",
+                   "sched_start", "_rebuilt_from", "_diag_pdf", "sol_activa", "diag_pisos"):
             st.session_state.pop(_k, None)
-        st.session_state["ns"]        = 2
-        st.session_state["survey_df"] = pd.DataFrame({c: [0.0] * 2 for c in SURVEY_COLS})
-        st.session_state["calc_results"] = None
 
     # ── Duplicar para el siguiente elevador (conserva parámetros, limpia la matriz) ──
     if st.session_state.pop("_dup_survey", False):
@@ -991,7 +997,7 @@ if _seccion == _L_SURVEY:
         col_brand.selectbox("Marca", ["Schindler"], key="brand")   # placeholder p/ futura expansión
         pdf_file = col_pdf.file_uploader("PDF de planos", type=["pdf"])
 
-        if pdf_file is not None and pdf_file.name != st.session_state.last_pdf_name:
+        if pdf_file is not None and pdf_file.name != st.session_state.get("last_pdf_name"):
             with st.spinner("⏳ Extrayendo datos del PDF..."):
                 extracted = extract_from_pdf(pdf_file)
             st.session_state.pdf_extracted = extracted
@@ -1041,7 +1047,7 @@ if _seccion == _L_SURVEY:
             if missing:
                 st.warning(f"⚠️ Ingresar manualmente: **{', '.join(missing)}**")
             st.rerun()
-        elif pdf_file and pdf_file.name == st.session_state.last_pdf_name:
+        elif pdf_file and pdf_file.name == st.session_state.get("last_pdf_name"):
             st.info(f"📄 Datos de: **{pdf_file.name}** — ver sidebar.")
 
         if st.session_state.get("rail_ref_msg"):
