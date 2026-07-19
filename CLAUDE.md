@@ -43,6 +43,7 @@ C:\Users\diego\P1\survey_app\
 │   ├── highlighting.py     # cell_state(), streamlit_style(), reportlab_commands()
 │   ├── bs_logic.py         # find_bs_step() — BSR vs BS (triangular)
 │   ├── excel_io.py         # export/import survey Excel
+│   ├── survey_ui.py        # render_survey_tab(_ROL,_GRUPO) — TODA la seccion Survey (v125)
 │   ├── diagrams.py         # floor_plan_svg() planta técnica a escala + shaft_iso_svg() isométrica (v119)
 │   ├── schedule.py         # build_schedule/schedule_svg — cronograma Gantt + curva S (v51)
 │   ├── report.py           # generate_report() — INFORME ADMIN (completo)
@@ -775,6 +776,33 @@ Al cargar el plano en el survey (app.py), autocompleta **RAIL = AlturaDiente** (
 espalda) del catálogo; si el código no está o no se detecta → aviso + entrada manual. **RAIL = AlturaDiente**
 (NO el ancho); AnchoDiente se guarda como dato secundario.
 
+## Survey lote 2: extraido a core/survey_ui.py (v125)
+El Survey era el UNICO modulo grande dentro de `app.py`: **1243 de sus ~1650 lineas**, frente a
+plumb_ui (154), prestart_ui (147), timeclock_ui (206), projects_ui (1075), que si tienen el suyo.
+Esa concentracion causo v118 y v120 (indentacion en un archivo enorme con fases anidadas, compilaba
+perfecto y rompia en produccion). Ahora **app.py 321 lineas / core/survey_ui.py 1353**.
+- `render_survey_tab(_ROL, _GRUPO)`. Los parametros se llaman `_ROL`/`_GRUPO` A PROPOSITO: el cuerpo
+  movido los usa tal cual, asi la extraccion **no tuvo que renombrar nada** dentro de 1243 lineas.
+- Se mudaron con el: `SURVEY_COLS`, `USER_ONLY`, `_GRUPOS_PARAM`, `_cfg_from_state`, `_init_state`
+  (renombrado `init_state`, publico: app.py lo llama al arrancar). Unico consumidor externo era él.
+- Perfil de dependencias medido ANTES de mover: 48 nombres, 42 imports + 1 def + 5 asignaciones →
+  extraccion limpia. Merece la pena medir esto antes de cortar.
+### ⚠️ Dos errores que cometi y como se cazaron (repetir estos chequeos)
+1. **Copie el RANGO del primer al ultimo import** de app.py. Como app.py tiene imports en la l.200,
+   arrastro todo lo que habia en medio: **la barrera de login entera** (`if not render_login():
+   st.stop()`) quedo a nivel de modulo en survey_ui, y se habria ejecutado AL IMPORTAR. Correcto:
+   recoger las lineas de CADA nodo import, no el rango.
+2. **Renombre la llamada `init_state()` en app.py pero no la definicion** → `ImportError` seguro en
+   produccion. `py_compile` NO lo detecta. Lo caza **importar el modulo de verdad** y resolver cada
+   `from X import Y` contra el modulo real.
+### Chequeos que dejaron el cambio verificado
+`scratchpad/verificar.py`: (1) todo nombre resuelve dentro de la funcion —contando imports locales y
+`except as e`, o da falsos positivos—; (2) sin fugas entre fases; (3) el log sigue bajo `_ROL`;
+(4) nada de login/sesion se colo; (5) sin `_ROL` de modulo. Ademas: importar `core.survey_ui`,
+resolver todos los imports contra modulos reales (ojo: `from core import notify` da falso positivo,
+un submodulo no es atributo del paquete hasta importarlo), y **diff del cuerpo movido: 0 diferencias
+en 1243 lineas**.
+
 ## Survey lote 1: confidencialidad del log + leyenda de color (v124)
 Revision del Survey tras v113-v123. Dos incoherencias encontradas por inspeccion:
 - ⚠️ **El log del optimizador estaba a la vista de TODOS los roles**, incluido `campo` (el Survey esta en
@@ -1140,7 +1168,7 @@ posicional + plano) → app.py, al cargar el PDF, setea `st.session_state["ns"]`
 resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NORTH SYD y AGECARE → NS=6
 (coincide con travel/floor-height HQ/HE).
 
-## Versiones desplegadas (v124 = actual)
+## Versiones desplegadas (v125 = actual)
 | Ver | Cambio principal |
 |---|---|
 | v5 | Extractor: CRLF fix, caso D valor-antes-label, sin pdfplumber |
@@ -1242,6 +1270,7 @@ resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NOR
 | v102 | Fix: NS se lee del plano (NUMBER OF STOPS) al cargar el PDF; default de init 6→2 (ya no queda pegado en 6) |
 | v103 | Rol conductor (2 relojes: jornada general + segmentos por proyecto, columna Tipo) + cronómetro en vivo para todos + reporte admin de horas del grupo (Mi grupo → ⏱ Horas) |
 | v104 | Credenciales/tickets por usuario (White Card, Forklift, Dogging/Rigging, licencia…): vencimiento+estado, foto/documento a Drive, radar en Resumen del día, avisos email/Telegram a admin+usuario; usuario ve las suyas (🎫 Mis credenciales) |
+| v125 | Survey lote 2: extraido de app.py a core/survey_ui.py (1243 lineas, cuerpo identico); app.py 1650->321 lineas; imports huerfanos podados |
 | v124 | Survey lote 1: el log del optimizador pasa a ser solo del propietario (era visible para campo) + leyenda de color en las tablas (faltaba desde v93) |
 | v123 | Plomado con tratamiento CAD: planta a escala real (antes vertical 1.7x distorsionada) + isometrica con los hilos cayendo + detalle 3D + ficha de replanteo + cierre di+DBP+dd=BSR + aviso de BS incoherente |
 | v122 | Fix: los displays redondeaban a entero valores que el optimizador da en pasos de 0.5 mm (dos soluciones distintas daban la misma etiqueta); cotas con formato adaptativo `_mm` |
