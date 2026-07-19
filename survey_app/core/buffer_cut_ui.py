@@ -6,6 +6,7 @@ import pandas as pd
 
 from core.buffer_cut import compute_buffer_cut
 from extractors.schindler import extract_hkp
+from core import plan_store
 
 
 def render_buffer_cut_tab():
@@ -15,7 +16,7 @@ def render_buffer_cut_tab():
 
     # ── 1. PDF → HKP ────────────────────────────────────────
     st.markdown("**1. Parámetro del plano (HKP)**")
-    pdf = st.file_uploader("PDF de planos (para HKP)", type=["pdf"], key="bc_pdf")
+    pdf = plan_store.selector("PDF de planos (para HKP)", "bc_pdf")
     if pdf is not None and pdf.name != st.session_state.get("bc_pdf_name"):
         with st.spinner("Leyendo HKP del PDF..."):
             ex = extract_hkp(pdf)

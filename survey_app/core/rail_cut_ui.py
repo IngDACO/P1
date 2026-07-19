@@ -5,6 +5,7 @@ import streamlit as st
 import pandas as pd
 
 from core.rail_cut import extract_lf, compute_case1, compute_case2
+from core import plan_store
 
 
 def _result_matrix(labels, per_elev_values, n):
@@ -21,7 +22,7 @@ def render_rail_cut_tab():
 
     # ── 1. PDF → LFKK / LFGK ────────────────────────────────
     st.markdown("**1. Parámetros del plano (LFKK, LFGK)**")
-    pdf = st.file_uploader("PDF de planos (para LFKK / LFGK)", type=["pdf"], key="rc_pdf")
+    pdf = plan_store.selector("PDF de planos (para LFKK / LFGK)", "rc_pdf")
     if pdf is not None and pdf.name != st.session_state.get("rc_pdf_name"):
         with st.spinner("Leyendo LFKK / LFGK del PDF..."):
             lf = extract_lf(pdf)

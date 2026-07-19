@@ -8,6 +8,7 @@ import pandas as pd
 
 from core.plumb import (compute_plumb, plumb_table, plumb_svg, plumb_checks,
                         plumb_iso_svg, plumb_detail_svg, plumb_card_svg)
+from core import plan_store
 
 
 def render_plumb_tab():
@@ -22,7 +23,7 @@ def render_plumb_tab():
         st.session_state.setdefault(_k, 0.0)
 
     # ── Carga de PDF → autocompleta lo que trae el plano ────
-    pdf = st.file_uploader("📄 PDF de planos (autocompleta del plano)", type=["pdf"], key="plb_pdf")
+    pdf = plan_store.selector("📄 PDF de planos (autocompleta del plano)", "plb_pdf")
     if pdf is not None and pdf.name != st.session_state.get("plb_pdf_name"):
         from extractors.schindler import extract_from_pdf
         with st.spinner("Leyendo el plano..."):

@@ -37,6 +37,7 @@ from core                 import notify
 from core.field_pack      import field_pack_pdf
 from core.auth            import get_user as auth_get_user
 from core                 import credentials
+from core                 import plan_store
 from core.auth import can_reports
 
 SURVEY_COLS = ["WR", "FR", "OR", "WL", "FL", "OL"]
@@ -866,6 +867,9 @@ def render_survey_tab(_ROL, _GRUPO):
             st.session_state.pdf_extracted = extracted
             st.session_state.last_pdf_name = pdf_file.name
             st.session_state.pdf_bytes     = pdf_file.getvalue()   # guardar para adjuntar en correo
+            # Plano de la sesion: lo heredan Plomadas, Cortes y Belting,
+            # que hasta v127 pedian cada una su propio PDF.
+            plan_store.guardar(pdf_file.name, st.session_state.pdf_bytes)
             for p in PDF_PARAMS:
                 if extracted.get(p) is not None:
                     st.session_state[f"inp_{p}"] = float(extracted[p])

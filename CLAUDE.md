@@ -45,6 +45,8 @@ C:\Users\diego\P1\survey_app\
 │   ├── excel_io.py         # export/import survey Excel
 │   ├── survey_ui.py        # render_survey_tab(_ROL,_GRUPO) — TODA la seccion Survey (v125)
 │   ├── field_pack.py       # field_pack_pdf() — paquete de obra en 1 PDF (v126)
+│   ├── plan_store.py       # plano UNICO de la sesion, compartido por 5 herramientas (v128)
+│   ├── survey_calc.py      # recalcular() — solucion determinista desde ParamsJSON (v128)
 │   ├── diagrams.py         # floor_plan_svg() planta técnica a escala + shaft_iso_svg() isométrica (v119)
 │   ├── schedule.py         # build_schedule/schedule_svg — cronograma Gantt + curva S (v51)
 │   ├── report.py           # generate_report() — INFORME ADMIN (completo)
@@ -777,6 +779,30 @@ Al cargar el plano en el survey (app.py), autocompleta **RAIL = AlturaDiente** (
 espalda) del catálogo; si el código no está o no se detecta → aviso + entrada manual. **RAIL = AlturaDiente**
 (NO el ancho); AnchoDiente se guarda como dato secundario.
 
+## Plano unico de la sesion + paquete de obra desde el proyecto (v128)
+**El hallazgo de integracion mas grande de la app:** Survey, Plomadas, Corte de rieles, Corte de buffers
+y Belting tenian **cinco `file_uploader` distintos**, asi que el tecnico subia el MISMO plano hasta cinco
+veces para el mismo elevador. Y `extractors/schindler.py` ya tenia todos los extractores juntos
+(`extract_from_pdf`, `extract_number_of_stops`, `extract_car_guide_rail`, `extract_belting`,
+`extract_hkp`): un unico PDF puede alimentarlas todas.
+- **`core/plan_store.py`**: `guardar()` / `actual()` / `selector(label, key)`. El Survey registra el plano
+  al cargarlo; las otras cuatro lo ofrecen con `selector`, que devuelve un `_Plano` (BytesIO **con
+  `.name`**) para que sustituya al UploadedFile sin tocar la logica: los llamadores usan `.name` como
+  guarda de identidad, el patron obligatorio de v112. Lo que se suba en cualquier herramienta queda
+  registrado, asi que da igual por donde empieces.
+  Verificado con un plano REAL: HKP=70, HQ=14045, HGP=85, NS=6 leidos del objeto compartido.
+- **`core/survey_calc.py` → `recalcular(params, matriz)`**: el proyecto guarda ParamsJSON (que ya incluye
+  toda la config: OMEGA_SIDE/WALL_*/CTRL_*/NS) y MatrizJSON, pero **NO la solucion**, que es derivada.
+  Esto rehace SOLO la parte determinista de `_do_calculo` (sin IA, sin correo, sin cronograma, sin
+  Streamlit). La logica sigue en calculations/optimizer/plumb: aqui solo se encadenan llamadas.
+  **Verificado ejecutando ambos caminos sobre los mismos datos: `best` identico y `lim_map` identico.**
+- **Paquete de obra desde el detalle del proyecto** (projects_ui): recalcula y arma el PDF sin pasar por
+  el Survey. Antes habia que reconstruir el proyecto en el Survey y volver a calcular.
+### ⚠️ Error que cometi
+Inserte `from core import plan_store` usando `lineno` del ultimo import; en `plumb_ui.py` el ultimo es
+un import **multilinea entre parentesis**, asi que la linea cayo DENTRO del parentesis → SyntaxError.
+Correcto: usar **`end_lineno`** del nodo AST, no `lineno`.
+
 ## Survey: chequeo al asignar campo + fin de la numeracion (v127)
 Revision de INTEGRACION del Survey. Se asignaban usuarios de campo **sin mirar nada de lo que la app
 ya sabe de ellos**, y la app lo sabe todo (v79 contacto, v104 credenciales):
@@ -1213,7 +1239,7 @@ posicional + plano) → app.py, al cargar el PDF, setea `st.session_state["ns"]`
 resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NORTH SYD y AGECARE → NS=6
 (coincide con travel/floor-height HQ/HE).
 
-## Versiones desplegadas (v127 = actual)
+## Versiones desplegadas (v128 = actual)
 | Ver | Cambio principal |
 |---|---|
 | v5 | Extractor: CRLF fix, caso D valor-antes-label, sin pdfplumber |
@@ -1315,6 +1341,7 @@ resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NOR
 | v102 | Fix: NS se lee del plano (NUMBER OF STOPS) al cargar el PDF; default de init 6→2 (ya no queda pegado en 6) |
 | v103 | Rol conductor (2 relojes: jornada general + segmentos por proyecto, columna Tipo) + cronómetro en vivo para todos + reporte admin de horas del grupo (Mi grupo → ⏱ Horas) |
 | v104 | Credenciales/tickets por usuario (White Card, Forklift, Dogging/Rigging, licencia…): vencimiento+estado, foto/documento a Drive, radar en Resumen del día, avisos email/Telegram a admin+usuario; usuario ve las suyas (🎫 Mis credenciales) |
+| v128 | Plano UNICO de la sesion (se subia el mismo PDF en 5 herramientas) + paquete de obra descargable desde el detalle del proyecto (survey_calc.recalcular) |
 | v127 | Survey: aviso de credenciales vencidas y contacto faltante al asignar campo (fuera del form) + notificacion deja de fallar en silencio + numeracion 1-7 eliminada |
 | v126 | Survey lote 3: paquete de obra en 1 PDF (field_pack.py) + boton que abre el proyecto recien creado (navegacion real) + aviso de proyecto duplicado |
 | v125 | Survey lote 2: extraido de app.py a core/survey_ui.py (1243 lineas, cuerpo identico); app.py 1650->321 lineas; imports huerfanos podados |

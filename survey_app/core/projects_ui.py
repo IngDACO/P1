@@ -13,6 +13,8 @@ from core import notify
 from core import alerts
 from core import maps
 from core.schedule import schedule_svg
+from core import survey_calc
+from core.field_pack import field_pack_pdf
 
 
 def _alerts_section(pid, grupo, project_name="", allow_report=False):
@@ -630,6 +632,40 @@ def _detalle_proyecto(pid: str, grupo: str = None):
                 if ok:
                     _aviso_cambio("Se eliminó una actividad del cronograma.")
                     st.rerun()
+
+    # ── Paquete de obra directo (sin pasar por el Survey) ──
+    # El proyecto guarda ParamsJSON+MatrizJSON pero NO la solucion (es derivada),
+    # asi que se recalcula con survey_calc.recalcular (misma secuencia que el
+    # Survey, verificada identica) y se arma el PDF de terreno.
+    with st.expander("🧰 Paquete de obra (PDF para terreno)"):
+        st.caption("Isométrica del hueco, plantas a escala y replanteo de plomadas "
+                   "con la ficha de medidas. Se regenera desde el survey guardado.")
+        _kp = f"pack_{pid}"
+        if st.button("Preparar paquete de obra", key=f"btnpack_{pid}"):
+            with st.spinner("Recalculando el survey y generando el paquete..."):
+                _full = P.get_project_full(pid)
+                _res = survey_calc.recalcular(_full.get("params") or {},
+                                              _full.get("matriz") or [])
+                if not _res:
+                    st.session_state[_kp] = None
+                else:
+                    st.session_state[_kp] = field_pack_pdf(
+                        _res["all_params"], _res["limits"], _res["best"], _res["lim_map"],
+                        plumb=_res["plumb"],
+                        ctrl_in_frame=bool(_res["all_params"].get("CTRL_IN_FRAME")),
+                        ctrl_side=_res["all_params"].get("CTRL_SIDE"),
+                        meta={"proyecto": str(prj.get("Nombre", "")),
+                              "cliente": str(prj.get("Cliente", "")),
+                              "ubicacion": str(prj.get("Ubicacion", ""))})
+        if st.session_state.get(_kp):
+            st.download_button("⬇️ Descargar paquete de obra (PDF)",
+                               data=st.session_state[_kp],
+                               file_name=f"paquete_obra_{pid}.pdf",
+                               mime="application/pdf", key=f"dlpack_{pid}",
+                               use_container_width=True)
+        elif _kp in st.session_state:
+            st.warning("No se pudo regenerar: al proyecto le faltan parámetros o matriz, "
+                       "o el survey no encuentra solución con esos datos.")
 
     # ── Reconstruir el survey guardado ──
     with st.expander("🔄 Reconstruir proyecto en el Survey (regenerar informes)"):

@@ -8,6 +8,7 @@ import streamlit as st
 import streamlit.components.v1 as components
 
 from core.belting import compute_belting, belting_svg
+from core import plan_store
 
 
 def render_belting_tab():
@@ -20,7 +21,7 @@ def render_belting_tab():
     st.session_state.setdefault("belt_ns", 1)
 
     # ── PDF: autocompleta HQ ────────────────────────────────
-    pdf = st.file_uploader("📄 PDF de planos (autocompleta HQ)", type=["pdf"], key="belt_pdf")
+    pdf = plan_store.selector("📄 PDF de planos (autocompleta HQ)", "belt_pdf")
     if pdf is not None and pdf.name != st.session_state.get("belt_pdf_name"):
         from extractors.schindler import extract_belting
         with st.spinner("Leyendo el plano..."):
