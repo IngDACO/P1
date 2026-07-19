@@ -26,7 +26,8 @@ from reportlab.lib.enums import TA_CENTER, TA_LEFT
 from core.diagrams import floor_plan_svg, shaft_iso_svg
 from core.report import _svg_flowable
 from core.schedule import schedule_svg, schedule_table
-from core.plumb    import plumb_svg, plumb_table, plumb_checks
+from core.plumb    import (plumb_svg, plumb_table, plumb_checks,
+                           plumb_iso_svg, plumb_card_svg)
 
 W          = 170 * mm
 C_COPEX    = colors.HexColor("#1a3a5c")
@@ -473,9 +474,17 @@ def generate_user_report(project_params, calculated, optimizer_result,
             story += [Paragraph(
                 f"Desplazamiento aplicado: lateral = <b>{_pd.get('rl', 0):.1f} mm</b> · "
                 f"frontal = <b>{_pd.get('fb', 0):.1f} mm</b>.", styles["UBody"]), _sp(4)]
-        pdraw = _svg_flowable(plumb_svg(plumb), W)
+        pdraw = _svg_flowable(plumb_svg(plumb, proyecto=meta["proyecto"]), W)
         if pdraw is not None:
             story += [pdraw, _sp(6)]
+        piso = _svg_flowable(plumb_iso_svg(plumb, proyecto=meta["proyecto"]), W * 0.50)
+        if piso is not None:
+            story += [piso, _sp(8)]
+        pfic = _svg_flowable(plumb_card_svg(plumb, proyecto=meta["proyecto"]), W * 0.62)
+        if pfic is not None:
+            story += [_callout("<b>Ficha de replanteo</b> — los valores a medir con cinta "
+                               "en obra. La comprobación de cierre debe dar BSR.", styles),
+                      _sp(4), pfic, _sp(6)]
         phead = [Paragraph(f"<b>{h}</b>", styles["UCell"]) for h in
                  ["Línea", "X inicial (mm)", "X final (mm)", "Desplazada"]]
         ptrows = [phead]

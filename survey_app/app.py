@@ -23,7 +23,8 @@ from core.user_report     import generate_user_report
 from core.diagrams        import (render_floor_plans_html, floors_with_issues,
                                   floor_plans_pdf, shaft_iso_svg)
 from core.schedule        import build_schedule, detect_flags, schedule_svg
-from core.plumb           import compute_plumb, plumb_svg, plumb_table, plumb_checks
+from core.plumb           import (compute_plumb, plumb_svg, plumb_table, plumb_checks,
+                                  plumb_iso_svg, plumb_detail_svg, plumb_card_svg)
 from core                 import projects as projects_data
 from core                 import drive_store
 from core                 import notify
@@ -826,11 +827,39 @@ if _seccion == _L_SURVEY:
             pm3.metric("RW",   f"{plumb_res['rw']:.1f} mm")
             st.dataframe(pd.DataFrame(plumb_table(plumb_res)),
                          use_container_width=True, hide_index=True)
+            _pr_ = str(st.session_state.get("proyecto", ""))
+            _bs = plumb_res.get("bs_check") or {}
+            if _bs and not _bs.get("ok", True):
+                st.error(
+                    f"⚠️ **BS incoherente:** el plano dice **{_bs['bs_plano']:.0f}** pero "
+                    f"SF1+BKS+2·RAIL+SF2 = **{_bs['bs_componentes']:.0f}** "
+                    f"(dif {_bs['dif']:+.0f} mm). El encaje usa (BSR−BS)/2, así que con este "
+                    f"desajuste los plomos quedan mal ubicados. Revisa BS, SF1, SF2, BKS o RAIL."
+                )
             components.html(
                 '<!DOCTYPE html><html><body style="margin:0;background:transparent">'
-                + plumb_svg(plumb_res) + '</body></html>',
-                height=460, scrolling=False,
+                + plumb_svg(plumb_res, proyecto=_pr_) + '</body></html>',
+                height=500, scrolling=False,
             )
+            _v3d, _vfi = st.columns(2)
+            with _v3d.expander("🧊 Vistas 3D del replanteo", expanded=False):
+                components.html(
+                    '<!DOCTYPE html><html><body style="margin:0;background:transparent">'
+                    + plumb_iso_svg(plumb_res, proyecto=_pr_) + '</body></html>',
+                    height=650, scrolling=False,
+                )
+                components.html(
+                    '<!DOCTYPE html><html><body style="margin:0;background:transparent">'
+                    + plumb_detail_svg(plumb_res, proyecto=_pr_) + '</body></html>',
+                    height=500, scrolling=False,
+                )
+            with _vfi.expander("📋 Ficha de replanteo (para obra)", expanded=False):
+                st.caption("Los números a medir con cinta. Imprímela o ábrela en el móvil.")
+                components.html(
+                    '<!DOCTYPE html><html><body style="margin:0;background:transparent">'
+                    + plumb_card_svg(plumb_res, proyecto=_pr_) + '</body></html>',
+                    height=430, scrolling=False,
+                )
             st.markdown("**📏 Verificación en campo — distancias plomo ↔ pared real**")
             st.dataframe(pd.DataFrame(plumb_checks(plumb_res)),
                          use_container_width=True, hide_index=True)

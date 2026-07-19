@@ -775,6 +775,37 @@ Al cargar el plano en el survey (app.py), autocompleta **RAIL = AlturaDiente** (
 espalda) del catálogo; si el código no está o no se detecta → aviso + entrada manual. **RAIL = AlturaDiente**
 (NO el ancho); AnchoDiente se guarda como dato secundario.
 
+## Plomado: planta a escala + 2 vistas 3D + ficha de replanteo (v123)
+`plumb_svg` reescrito y 3 funciones nuevas en `core/plumb.py`. Mismo tratamiento CAD que las plantas.
+⚠️ **El fallo de fondo: el dibujo NO estaba a escala.** `sx` y `sy` mapeaban X e Y a rangos distintos →
+**vertical 1.7× la horizontal** (medido). El triangulo plantilla→plomos, que es JUSTO lo que se mide con
+cinta en obra, salia deformado. Ahora **una sola escala** mm→px; origen X = pared real izquierda (V4=0),
+eje Y = profundidad desde la pared frontal.
+- Lenguaje de plano: muros achurados, paredes teoricas en eje-punto, plomos como circulo+centro, cuerdas
+  d1/d2, cotas DBP/di/dd/DBPW/RW/LT, cajetin. Reusa `_hatch`/`_dim_h`/`_dim_v` de `diagrams.py`
+  (importadas, NO duplicadas; no hay ciclo porque diagrams no importa plumb).
+- **`plumb_iso_svg`** — isometrica con los DOS HILOS cayendo desde arriba hasta la solera, con su peso.
+  Es lo que la planta no puede dar: el replanteo es una operacion VERTICAL. Solo dibuja los planos que el
+  plomado conoce de verdad (paredes reales izq/der + frontal); **el fondo se deja abierto** porque el
+  plomado no recibe TS. Altura esquematica (no recibe la altura del hueco) y se declara en el pie.
+- **`plumb_detail_svg`** — detalle 3D de ejecucion. ⚠️ La 1a version era un plano inclinado con el mismo
+  triangulo que la planta, deformado por la proyeccion: **anadia ruido, no informacion**. Se reoriento
+  dandole CAIDA de hilo real (`Hh = dbp*0.72`) para que ensene la vertical. Presupuesto de lienzo
+  obligatorio (alto de hilo + rombo del plano) o C2 se sale por abajo.
+- **`plumb_card_svg`** — ficha de replanteo: DBP, d1, d2, di, dd en tipografia grande + la comprobacion.
+  En el andamio no hace falta un plano bonito, hacen falta 5 numeros legibles desde el movil.
+- **Cierre `di + DBP + dd = BSR`** — es una IDENTIDAD del modelo (verificado en los 3 modos), asi que su
+  valor NO es como chequeo interno sino **como verificacion de obra**: el instalador mide di y dd con
+  cinta y comprueba que cierran contra BSR.
+- **`bs_check`** — BS del plano vs `SF1+BKS+2·RAIL+SF2`. Si no cuadran, el encaje usa (BSR−BS)/2 y **los
+  plomos quedan mal ubicados EN SILENCIO**. Se avisa en la app (st.error) y en el dibujo. Lo descubri
+  tropezando yo mismo con un dato de prueba incoherente.
+- **Sacrificio Z/Omega** dibujado (lado, cuanto, y "NO CABE" si `fuera_rango`) en modo independiente.
+- `_n()` pasa a formato adaptativo: `DBPW = TKSW−150+fb` arrastra el fb del survey (pasos de 0.5 mm).
+- Integrado en app.py (survey), plumb_ui.py (pestana), report.py e user_report.py.
+- Verificado: PDF real en los 4 modos (survey / BSR<BS / BSR>BS / BS incoherente), cierre exacto en los
+  3 validos y aviso en el 4o; SVG sin `<defs>/<marker>/<pattern>`, svglib convierte los 4 graficos.
+
 ## El optimizador trabaja en pasos de 0.5 mm — NO redondear al mostrar (v122)
 Pregunta del usuario: "la solucion activa redondea los valores?". Respuesta: **el dato NO se redondea
 en ningun punto del calculo**; el selectbox guarda el dict completo (`r["optimizer_result"]["best"] =
@@ -1092,7 +1123,7 @@ posicional + plano) → app.py, al cargar el PDF, setea `st.session_state["ns"]`
 resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NORTH SYD y AGECARE → NS=6
 (coincide con travel/floor-height HQ/HE).
 
-## Versiones desplegadas (v122 = actual)
+## Versiones desplegadas (v123 = actual)
 | Ver | Cambio principal |
 |---|---|
 | v5 | Extractor: CRLF fix, caso D valor-antes-label, sin pdfplumber |
@@ -1194,6 +1225,7 @@ resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NOR
 | v102 | Fix: NS se lee del plano (NUMBER OF STOPS) al cargar el PDF; default de init 6→2 (ya no queda pegado en 6) |
 | v103 | Rol conductor (2 relojes: jornada general + segmentos por proyecto, columna Tipo) + cronómetro en vivo para todos + reporte admin de horas del grupo (Mi grupo → ⏱ Horas) |
 | v104 | Credenciales/tickets por usuario (White Card, Forklift, Dogging/Rigging, licencia…): vencimiento+estado, foto/documento a Drive, radar en Resumen del día, avisos email/Telegram a admin+usuario; usuario ve las suyas (🎫 Mis credenciales) |
+| v123 | Plomado con tratamiento CAD: planta a escala real (antes vertical 1.7x distorsionada) + isometrica con los hilos cayendo + detalle 3D + ficha de replanteo + cierre di+DBP+dd=BSR + aviso de BS incoherente |
 | v122 | Fix: los displays redondeaban a entero valores que el optimizador da en pasos de 0.5 mm (dos soluciones distintas daban la misma etiqueta); cotas con formato adaptativo `_mm` |
 | v121 | Fix CRITICO geometria de los planos: FL/FR van al eje de rieles (cuerpo TK centrado), la cabina ya no se sale del hueco; apertura posicionada con OL/OR reales + marcos |
 | v120 | Fix CRITICO: indentacion de v118 rompia las 2 fases del Survey (NameError sc2, matriz invisible, import de Excel inalcanzable) |

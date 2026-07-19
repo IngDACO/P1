@@ -20,7 +20,8 @@ from core.highlighting import (
 )
 from core.diagrams import floor_plan_svg
 from core.schedule import schedule_svg, schedule_table
-from core.plumb    import plumb_svg, plumb_table, plumb_checks
+from core.plumb    import (plumb_svg, plumb_table, plumb_checks,
+                           plumb_iso_svg, plumb_card_svg)
 
 # ── Color para bloques de interpretación IA ──────────────
 C_IA_BG     = colors.HexColor("#f0f7ff")
@@ -1073,9 +1074,15 @@ def generate_report(project_params, calculated, survey_original,
                 f"frontal (fb) = {_pd.get('fb', 0):.1f} mm.   "
                 f"DBP = {plumb['dbp']:.1f} mm · DBPW = {plumb['dbpw']:.1f} mm · RW = {plumb['rw']:.1f} mm.",
                 styles["Normal2"]), sp(4)]
-        pdraw = _svg_flowable(plumb_svg(plumb), W)
+        pdraw = _svg_flowable(plumb_svg(plumb, proyecto=str(p.get("PROYECTO", ""))), W)
         if pdraw is not None:
             story += [pdraw, sp(6)]
+        piso = _svg_flowable(plumb_iso_svg(plumb, proyecto=str(p.get("PROYECTO", ""))), W * 0.50)
+        if piso is not None:
+            story += [piso, sp(8)]
+        pfic = _svg_flowable(plumb_card_svg(plumb, proyecto=str(p.get("PROYECTO", ""))), W * 0.62)
+        if pfic is not None:
+            story += [pfic, sp(6)]
         phead = [Paragraph(f"<b>{h}</b>", styles["Normal2"]) for h in
                  ["Línea", "X inicial (mm)", "X final (mm)", "Desplazada"]]
         ptrows = [phead]

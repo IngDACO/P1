@@ -6,7 +6,8 @@ import streamlit as st
 import streamlit.components.v1 as components
 import pandas as pd
 
-from core.plumb import compute_plumb, plumb_table, plumb_svg, plumb_checks
+from core.plumb import (compute_plumb, plumb_table, plumb_svg, plumb_checks,
+                        plumb_iso_svg, plumb_detail_svg, plumb_card_svg)
 
 
 def render_plumb_tab():
@@ -112,11 +113,39 @@ def render_plumb_tab():
         st.dataframe(pd.DataFrame(plumb_table(res)), use_container_width=True, hide_index=True)
 
         st.subheader("📐 Diagrama de la plantilla")
+        _pr_ = ""
+        _bs = res.get("bs_check") or {}
+        if _bs and not _bs.get("ok", True):
+            st.error(
+                f"⚠️ **BS incoherente:** el plano dice **{_bs['bs_plano']:.0f}** pero "
+                f"SF1+BKS+2·RAIL+SF2 = **{_bs['bs_componentes']:.0f}** "
+                f"(dif {_bs['dif']:+.0f} mm). El encaje usa (BSR−BS)/2, así que con este "
+                f"desajuste los plomos quedan mal ubicados. Revisa BS, SF1, SF2, BKS o RAIL."
+            )
         components.html(
             '<!DOCTYPE html><html><body style="margin:0;background:transparent">'
-            + plumb_svg(res) + '</body></html>',
-            height=460, scrolling=False,
+            + plumb_svg(res, proyecto=_pr_) + '</body></html>',
+            height=500, scrolling=False,
         )
+        _v3d, _vfi = st.columns(2)
+        with _v3d.expander("🧊 Vistas 3D del replanteo", expanded=False):
+            components.html(
+                '<!DOCTYPE html><html><body style="margin:0;background:transparent">'
+                + plumb_iso_svg(res, proyecto=_pr_) + '</body></html>',
+                height=650, scrolling=False,
+            )
+            components.html(
+                '<!DOCTYPE html><html><body style="margin:0;background:transparent">'
+                + plumb_detail_svg(res, proyecto=_pr_) + '</body></html>',
+                height=500, scrolling=False,
+            )
+        with _vfi.expander("📋 Ficha de replanteo (para obra)", expanded=False):
+            st.caption("Los números a medir con cinta. Imprímela o ábrela en el móvil.")
+            components.html(
+                '<!DOCTYPE html><html><body style="margin:0;background:transparent">'
+                + plumb_card_svg(res, proyecto=_pr_) + '</body></html>',
+                height=430, scrolling=False,
+            )
 
         st.subheader("📏 Verificación en campo — distancias plomo ↔ pared real")
         st.caption("Mide en obra desde cada pared real hasta el plomo correspondiente.")
