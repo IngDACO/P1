@@ -138,12 +138,18 @@ def floor_plan_svg(params: dict, limits: dict, row: dict, floor_idx: int,
         if ctrl_side == "L": lim_ol -= 70
 
     # ── Geometría real (mm) ────────────────────────────────
+    # Eje de profundidad tomado de la identidad EXACTA de calculations.py (l.98):
+    #   BC_CALC = TS − TKSW − TK/2 − 25   ⇒   TS = TKSW + TK/2 + 25 + BC_CALC
+    # Es decir: desde la pared frontal, TKSW (en obra = FL/FR) llega al EJE DE
+    # RIELES, y ese eje está a MEDIA profundidad del cuerpo de cabina (TK/2), no
+    # en su frente. Situar el frente de la cabina a (FL+FR)/2 la sacaba del hueco.
     ancho_int = wl + cab_w + wr
-    tl        = _n(limits.get("TL"), 0.0) or max(600.0, _n(params.get("TK"), 1400.0))
+    tk        = _n(params.get("TK"), 0.0)
+    eje_riel  = max(1.0, (fl + fr) / 2.0)          # pared frontal → eje de rieles
     bc        = _n(limits.get("BC_CALC"), 0.0)
-    frente    = max(1.0, (fl + fr) / 2.0)          # pared frontal → frente de cabina
-    prof_int  = _n(params.get("TS"), 0.0) or (frente + tl + max(bc, 0.0))
-    if ancho_int <= 0 or prof_int <= 0:
+    prof_int  = (_n(params.get("TS"), 0.0)
+                 or (eje_riel + tk / 2 + 25 + max(bc, 0.0)))
+    if ancho_int <= 0 or prof_int <= 0 or tk <= 0:
         return '<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"></svg>'
 
     # ── Lienzo y escala (una sola, ancho y profundidad) ────
@@ -172,9 +178,11 @@ def floor_plan_svg(params: dict, limits: dict, row: dict, floor_idx: int,
     # ── Cabina (posición real) ─────────────────────────────
     cx0 = x0 + wl * esc
     cw  = cab_w * esc
-    cy0 = y0 + (prof_int - frente - tl) * esc
-    ch  = tl * esc
-    cy1 = cy0 + ch                                # frente de la cabina
+    ch  = tk * esc
+    cy0 = y1 - (eje_riel + tk / 2) * esc           # fondo de la cabina
+    cy1 = cy0 + ch                                 # frente de la cabina
+    y_rl = y1 - fl * esc                           # eje de riel izquierdo
+    y_rr = y1 - fr * esc                           # eje de riel derecho
 
     # Posición de DISEÑO (fantasma) — solo si el desplazamiento se distingue a escala
     _rl, _fb = _n(rl), _n(fb)
@@ -192,45 +200,70 @@ def floor_plan_svg(params: dict, limits: dict, row: dict, floor_idx: int,
     p.append(f'<text x="{cx0+cw/2:.1f}" y="{cy0+ch/2+11:.1f}" text-anchor="middle" '
              f'font-size="7.5" fill="#7a8699">BKS+2·RAIL = {cab_w:.0f} mm</text>')
 
-    # Rieles en las esquinas frontales
-    for rx in (cx0, cx0 + cw):
-        p.append(f'<rect x="{rx-3:.1f}" y="{cy1-4:.1f}" width="6" height="8" fill="#1a3a5c"/>')
+    # Rieles: sobre los laterales, a la profundidad medida en obra (FL / FR)
+    for rx, ry in ((cx0, y_rl), (cx0 + cw, y_rr)):
+        p.append(f'<rect x="{rx-4:.1f}" y="{ry-5:.1f}" width="8" height="10" fill="#1a3a5c"/>')
+        p.append(f'<line x1="{rx-13:.1f}" y1="{ry:.1f}" x2="{rx+13:.1f}" y2="{ry:.1f}" '
+                 f'stroke="#1a3a5c" stroke-width="0.6" stroke-dasharray="7,2,1.5,2"/>')
 
-    # ── Ejes: cabina vs apertura (OFFSET_CABIN) ────────────
+    # ── Apertura de puerta — posicionada con los datos MEDIDOS ──
+    # OL/OR se miden desde el borde de la cabina hasta la apertura (ver
+    # LIMIT_OL/OR = BKS/2 + RAIL/2 − BT/2 − FRAME). Antes la apertura se
+    # centraba en un eje calculado y luego se rotulaba con OL/OR: el número
+    # no correspondía al tramo realmente dibujado.
     eje_cab = cx0 + cw / 2
-    off_cab = _n(params.get("OFFSET_CABIN"), 0.0)
-    lado_off = str(params.get("OFFSET_SIDE", "R")).upper()
-    eje_ap  = eje_cab + (off_cab * esc if lado_off == "R" else -off_cab * esc)
-    p.append(f'<line x1="{eje_cab:.1f}" y1="{y0-mur-6:.1f}" x2="{eje_cab:.1f}" y2="{y1+mur+6:.1f}" '
-             f'stroke="#9aa7b8" stroke-width="0.7" stroke-dasharray="9,3,2,3"/>')
-    if abs(off_cab) > 0.05:
-        p.append(f'<line x1="{eje_ap:.1f}" y1="{cy1-30:.1f}" x2="{eje_ap:.1f}" y2="{y1+mur+6:.1f}" '
-                 f'stroke="#2e6da4" stroke-width="0.7" stroke-dasharray="9,3,2,3"/>')
-        p.append(_dim_h(min(eje_cab, eje_ap), max(eje_cab, eje_ap), cy1 - 22,
-                        f"OFFSET {off_cab:.0f}→{lado_off}", color="#2e6da4", tcolor="#2e6da4"))
+    dx0, dx1 = cx0 + ol * esc, cx0 + (cab_w - orr) * esc
+    if dx1 - dx0 < 6:                      # datos incoherentes → apertura nominal
+        dx0, dx1 = eje_cab - bt * esc / 2, eje_cab + bt * esc / 2
+    eje_ap = (dx0 + dx1) / 2
+    marco = max(0.0, ((dx1 - dx0) - bt * esc) / 2)      # FRAME a cada lado
 
-    # ── Apertura de puerta (BT) centrada en su eje ─────────
-    bt_px = bt * esc
-    dx0, dx1 = eje_ap - bt_px / 2, eje_ap + bt_px / 2
-    p.append(f'<line x1="{dx0:.1f}" y1="{y1:.1f}" x2="{dx1:.1f}" y2="{y1:.1f}" '
+    p.append(f'<line x1="{dx0+marco:.1f}" y1="{y1:.1f}" x2="{dx1-marco:.1f}" y2="{y1:.1f}" '
              f'stroke="#1a3a5c" stroke-width="3.4"/>')
+    if marco > 0.7:                        # marcos de la puerta
+        for _mx in (dx0, dx1 - marco):
+            p.append(f'<rect x="{_mx:.1f}" y="{y1-2.5:.1f}" width="{marco:.1f}" height="5" '
+                     f'fill="#8a94a6"/>')
     p.append(f'<text x="{eje_ap:.1f}" y="{y1+mur+22:.1f}" text-anchor="middle" font-size="8" '
              f'fill="#5f6b7a">APERTURA BT {bt:.0f}</text>')
 
-    # ── Cotas de holguras (rojo si incumple) ───────────────
+    # ── Ejes: cabina vs apertura ─────────────────────
+    p.append(f'<line x1="{eje_cab:.1f}" y1="{y0-mur-6:.1f}" x2="{eje_cab:.1f}" y2="{y1+mur+6:.1f}" '
+             f'stroke="#9aa7b8" stroke-width="0.7" stroke-dasharray="9,3,2,3"/>')
+    d_ejes = (eje_ap - eje_cab) / esc if esc else 0.0   # mm reales entre ejes
+    if abs(d_ejes) > 0.5:
+        p.append(f'<line x1="{eje_ap:.1f}" y1="{cy1-30:.1f}" x2="{eje_ap:.1f}" y2="{y1+mur+6:.1f}" '
+                 f'stroke="#2e6da4" stroke-width="0.7" stroke-dasharray="9,3,2,3"/>')
+        _lado = "R" if d_ejes > 0 else "L"
+        p.append(_dim_h(min(eje_cab, eje_ap), max(eje_cab, eje_ap), cy1 - 22,
+                        f"EJES {abs(d_ejes):.0f}→{_lado}",
+                        color="#2e6da4", tcolor="#2e6da4"))
+
+    # ── Cotas (rojo si incumple) ───────────────────
     def _c(v, lim, es_max=False):
         return "#c0392b" if ((v > lim) if es_max else (v < lim)) else "#1f2937"
 
     yd = y0 - mur - 16
-    p.append(_dim_h(x0, cx0, yd, f"WL {wl:.0f}", tcolor=_c(wl, lim_wl), ext_desde=y0 - mur, hacia="izq"))
-    p.append(_dim_h(cx0 + cw, x1, yd, f"WR {wr:.0f}", tcolor=_c(wr, lim_wr), ext_desde=y0 - mur, hacia="der"))
+    p.append(_dim_h(x0, cx0, yd, f"WL {wl:.0f}", tcolor=_c(wl, lim_wl),
+                    ext_desde=y0 - mur, hacia="izq"))
+    p.append(_dim_h(cx0 + cw, x1, yd, f"WR {wr:.0f}", tcolor=_c(wr, lim_wr),
+                    ext_desde=y0 - mur, hacia="der"))
+
     xd = x0 - mur - 26
-    p.append(_dim_v(cy1, y1, xd, f"FL {fl:.0f}", tcolor=_c(fl, lim_fl), ext_desde=x0 - mur, hacia="abajo"))
-    p.append(_dim_v(cy0, cy1, x1 + mur + 40, f"TL {tl:.0f}", ext_desde=x1 + mur))
-    p.append(_dim_v(cy1, y1, x1 + mur + 16, f"FR {fr:.0f}", tcolor=_c(fr, lim_fr), ext_desde=x1 + mur, hacia="abajo"))
+    # FL/FR: pared frontal → EJE DE RIELES (que es justo lo que se mide en obra)
+    p.append(_dim_v(y_rl, y1, xd, f"FL {fl:.0f}", tcolor=_c(fl, lim_fl), ext_desde=x0 - mur))
+    p.append(_dim_v(y_rr, y1, x1 + mur + 16, f"FR {fr:.0f}", tcolor=_c(fr, lim_fr),
+                    ext_desde=x1 + mur))
+    p.append(_dim_v(cy0, cy1, x1 + mur + 42, f"TK {tk:.0f}", ext_desde=x1 + mur))
+    bc_dib = prof_int - (eje_riel + tk / 2)            # holgura trasera dibujada
+    if bc_dib * esc > 3:
+        p.append(_dim_v(y0, cy0, xd - 20, f"BC {bc_dib:.0f}", ext_desde=x0 - mur))
+
     yo = y1 + mur + 34
-    p.append(_dim_h(x0, dx0, yo, f"OL {ol:.0f}", tcolor=_c(ol, lim_ol, True), ext_desde=y1 + mur, hacia="izq"))
-    p.append(_dim_h(dx1, x1, yo, f"OR {orr:.0f}", tcolor=_c(orr, lim_or, True), ext_desde=y1 + mur))
+    p.append(_dim_h(cx0, dx0, yo, f"OL {ol:.0f}", tcolor=_c(ol, lim_ol, True),
+                    ext_desde=y1 + mur, hacia="izq"))
+    p.append(_dim_h(dx1, cx0 + cw, yo, f"OR {orr:.0f}", tcolor=_c(orr, lim_or, True),
+                    ext_desde=y1 + mur, hacia="der"))
 
     # Rótulos de orientación
     p.append(f'<text x="{x0-mur:.1f}" y="{y0-mur-30:.1f}" font-size="8" fill="#7a8699" '
@@ -239,8 +272,7 @@ def floor_plan_svg(params: dict, limits: dict, row: dict, floor_idx: int,
              f'letter-spacing="0.1em">PARED FRONTAL — ACCESO</text>')
 
     # ── DETALLE A: se amplía la holgura crítica (<25 mm) ───
-    crit = min([(wl, "WL", lim_wl), (wr, "WR", lim_wr),
-                (fl, "FL", lim_fl), (fr, "FR", lim_fr)], key=lambda z: z[0])
+    crit = min([(wl, "WL", lim_wl), (wr, "WR", lim_wr)], key=lambda z: z[0])
     if crit[0] < 25:
         bx, by, bw, bh = 492, 66, 152, 116
         z = max(3.0, min(40.0, 34.0 / max(0.5, crit[0] * esc)))
@@ -259,8 +291,8 @@ def floor_plan_svg(params: dict, limits: dict, row: dict, floor_idx: int,
         col = "#c0392b" if crit[0] < crit[2] else "#1f2937"
         p.append(_dim_h(mx, mx + gap, my + 62, f"{crit[0]:.0f} mm", tcolor=col, ext_desde=my + 52))
         # marca en el dibujo principal
-        p.append(f'<circle cx="{(x0 if crit[1] in ("WL","FL") else x1):.1f}" '
-                 f'cy="{(cy0+ch/2 if crit[1] in ("WL","WR") else cy1):.1f}" r="9" '
+        p.append(f'<circle cx="{(x0 if crit[1] == "WL" else x1):.1f}" '
+                 f'cy="{cy0+ch/2:.1f}" r="9" '
                  f'fill="none" stroke="#c0392b" stroke-width="1"/>')
 
     # ── Desplazamiento aplicado (siempre legible, aunque sea sub-píxel) ──
@@ -480,12 +512,15 @@ def shaft_iso_svg(params: dict, limits: dict, solution: dict, ns: int,
         p.append(_poly([A(e, D, z - h_piso * 0.72), A(e + bt, D, z - h_piso * 0.72),
                         A(e + bt, D, z), A(e, D, z)], "#ffffff", "#1a3a5c", 1.1))
 
-    # Cabina (bloque) en el nivel 1, a escala en planta
-    frente = (fl + fr) / 2
+    # Cabina (bloque) en el nivel 1, a escala en planta.
+    # Misma identidad que la planta: FL/FR llegan al EJE DE RIELES, que está a
+    # media profundidad del cuerpo de cabina (TK/2), no en su frente.
+    eje_riel = max(1.0, (fl + fr) / 2)
     cz0, cz1 = h_piso * 0.12, h_piso * 0.12 + h_piso * 0.72
     cx_a, cx_b = wl, wl + cab_w
-    cy_b = D - frente                       # cara frontal de la cabina (lado acceso)
-    cy_a = cy_b - tl
+    _tk  = _n(params.get("TK"), 0.0) or tl
+    cy_b = D - eje_riel + _tk / 2           # cara frontal de la cabina (lado acceso)
+    cy_a = D - eje_riel - _tk / 2
     # Solo las caras que MIRAN al observador: x = cx_b (derecha) e y = cy_b (frente).
     top  = [A(cx_a, cy_a, cz1), A(cx_b, cy_a, cz1), A(cx_b, cy_b, cz1), A(cx_a, cy_b, cz1)]
     der  = [A(cx_b, cy_a, cz0), A(cx_b, cy_a, cz1), A(cx_b, cy_b, cz1), A(cx_b, cy_b, cz0)]

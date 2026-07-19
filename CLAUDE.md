@@ -775,6 +775,31 @@ Al cargar el plano en el survey (app.py), autocompleta **RAIL = AlturaDiente** (
 espalda) del catálogo; si el código no está o no se detecta → aviso + entrada manual. **RAIL = AlturaDiente**
 (NO el ancho); AnchoDiente se guarda como dato secundario.
 
+## Fix CRITICO de geometria en los dibujos (v121)
+Los planos de v119 salian con **la cabina fuera del hueco** (se escapaba por arriba del muro de fondo).
+Dos suposiciones mias, mal:
+**1. FL/FR NO llegan al frente de la cabina, llegan al EJE DE RIELES.** Identidad exacta de
+`calculations.py` l.98: `BC_CALC = TS − TKSW − TK/2 − 25` ⇒ `TS = TKSW + TK/2 + 25 + BC_CALC`. O sea,
+desde la pared frontal: TKSW (en obra = FL/FR) llega al eje de rieles, y **ese eje esta a MEDIA
+profundidad del cuerpo de cabina (TK/2)**. Yo situaba el frente de la cabina a (FL+FR)/2 del muro y
+ademas usaba TL como profundidad → con FL≈1176 y TL=2365 la cabina se iba 1176 mm hacia atras y no
+cabia en TS. Ahora: cuerpo **TK centrado en el eje de rieles**, rieles dibujados sobre los laterales a
+su profundidad real (FL izq / FR der, que es justo lo que se mide en obra), y cota **BC** atras.
+⚠️ TL (= CS+TKS+TSW) NO es la profundidad util para la planta; la profundidad del cuerpo es **TK**.
+**2. La apertura se centraba en un eje calculado pero se rotulaba con OL/OR medidos** → el numero no
+correspondia al tramo dibujado (en el caso real, OL 277 y OR 62 salian sobre tramos casi iguales).
+OL/OR se miden **desde el borde de la cabina** (ver `LIMIT_OL/OR = BKS/2 + RAIL/2 − BT/2 − FRAME`), asi
+que ahora la apertura se POSICIONA con ellos: `dx0 = cx0 + OL`, `dx1 = cx0 + (cab_w − OR)`, y el
+sobrante a cada lado es el FRAME, que se dibuja. La cota entre ejes pasa a rotular la distancia
+**medida** (`EJES n→R/L`) en vez del OFFSET de diseno, para no afirmar un numero que no se dibuja.
+- El "DETALLE" ampliado ya solo considera **WL/WR**: son las unicas holguras que se desvanecen a escala
+  real. FL/FR son distancias largas (pared→eje de rieles), no holguras.
+- `shaft_iso_svg` arrastraba el mismo error de profundidad: corregido igual.
+Verificado midiendo el SVG en el DOM con los datos reales del usuario: WL=72, WR=294, cabina 1288×2328,
+`cabina_dentro=true`, y OL 277 + marco 24,5 + BT 900 + marco 24,5 + OR 62 = **1288 = ancho de cabina**.
+⚠️ Leccion de proceso: en dos revisiones a ojo crei ver fallos que NO existian (nivel rojo, cabina
+atravesando el foso) y no vi este, que si era real. **Medir el SVG, no mirarlo.**
+
 ## Fix CRITICO: indentacion rompio las 2 fases del Survey (v120)
 Regresion de **v118** que se detecto en produccion: `NameError: sc2` al entrar a Resultados, los 7 pasos
 saliendo en la fase Datos y **la matriz del survey invisible**. Un solo error de indentacion los causaba
@@ -1051,7 +1076,7 @@ posicional + plano) → app.py, al cargar el PDF, setea `st.session_state["ns"]`
 resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NORTH SYD y AGECARE → NS=6
 (coincide con travel/floor-height HQ/HE).
 
-## Versiones desplegadas (v120 = actual)
+## Versiones desplegadas (v121 = actual)
 | Ver | Cambio principal |
 |---|---|
 | v5 | Extractor: CRLF fix, caso D valor-antes-label, sin pdfplumber |
@@ -1153,6 +1178,7 @@ resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NOR
 | v102 | Fix: NS se lee del plano (NUMBER OF STOPS) al cargar el PDF; default de init 6→2 (ya no queda pegado en 6) |
 | v103 | Rol conductor (2 relojes: jornada general + segmentos por proyecto, columna Tipo) + cronómetro en vivo para todos + reporte admin de horas del grupo (Mi grupo → ⏱ Horas) |
 | v104 | Credenciales/tickets por usuario (White Card, Forklift, Dogging/Rigging, licencia…): vencimiento+estado, foto/documento a Drive, radar en Resumen del día, avisos email/Telegram a admin+usuario; usuario ve las suyas (🎫 Mis credenciales) |
+| v121 | Fix CRITICO geometria de los planos: FL/FR van al eje de rieles (cuerpo TK centrado), la cabina ya no se sale del hueco; apertura posicionada con OL/OR reales + marcos |
 | v120 | Fix CRITICO: indentacion de v118 rompia las 2 fases del Survey (NameError sc2, matriz invisible, import de Excel inalcanzable) |
 | v119 | Dibujos del survey rehechos: planta a escala real con cotas/achurado/cajetin + detalle ampliado automatico + ambos desplazamientos + vista isometrica del hueco |
 | v118 | Fix: al cambiar de fase se perdian parametros/NS/config (Streamlit descarta widgets no renderizados) + el Excel ya no pisa los valores del PDF salvo que lo pidas |
