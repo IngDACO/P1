@@ -262,6 +262,13 @@ elif _ROL == "conductor":
 else:
     _nav = _HERR + [_L_CLOCK]
 
+# Navegación pendiente (p.ej. "abrir el proyecto recién creado" desde el Survey).
+# Se aplica ANTES de instanciar el radio: escribir la clave de un widget ya
+# creado lanza excepción (misma regla que el import de Excel, v111).
+_np = st.session_state.pop("_nav_pending", None)
+if _np in _nav:
+    st.session_state["main_nav"] = _np
+
 _seccion = st.radio("Navegación", _nav, horizontal=True,
                     key="main_nav", label_visibility="collapsed")
 st.markdown("---")

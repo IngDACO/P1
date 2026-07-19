@@ -44,6 +44,7 @@ C:\Users\diego\P1\survey_app\
 │   ├── bs_logic.py         # find_bs_step() — BSR vs BS (triangular)
 │   ├── excel_io.py         # export/import survey Excel
 │   ├── survey_ui.py        # render_survey_tab(_ROL,_GRUPO) — TODA la seccion Survey (v125)
+│   ├── field_pack.py       # field_pack_pdf() — paquete de obra en 1 PDF (v126)
 │   ├── diagrams.py         # floor_plan_svg() planta técnica a escala + shaft_iso_svg() isométrica (v119)
 │   ├── schedule.py         # build_schedule/schedule_svg — cronograma Gantt + curva S (v51)
 │   ├── report.py           # generate_report() — INFORME ADMIN (completo)
@@ -776,6 +777,29 @@ Al cargar el plano en el survey (app.py), autocompleta **RAIL = AlturaDiente** (
 espalda) del catálogo; si el código no está o no se detecta → aviso + entrada manual. **RAIL = AlturaDiente**
 (NO el ancho); AnchoDiente se guarda como dato secundario.
 
+## Survey lote 3: cierre de ciclo, paquete de obra y duplicados (v126)
+- **`core/field_pack.py` → `field_pack_pdf(...)`**: UN PDF con lo que necesita quien va a terreno —
+  cabecera del proyecto, isometrica del hueco, plantas por piso a escala y el replanteo de plomadas
+  (planta + isometrica + **ficha de medidas**). Tras v119-v123 las piezas existian pero SUELTAS: habia
+  que ir seccion por seccion descargandolas. NO lleva interpretaciones, log ni formulas: no es el
+  informe del cliente ni el de admin. Opcion "solo pisos con incidencias" (reusa `floors_with_issues`).
+  Boton en el Survey, dentro de `_render_survey_results`.
+- **Cierre del ciclo al guardar**: antes terminaba en el texto muerto "Gestionalo en Mi grupo →
+  Proyectos". Ahora hay boton **"Abrir proyecto ➜"** que navega de verdad: `_nav_pending` (aplicado
+  antes del radio `main_nav` en app.py) + `_prjsel_pending` (aplicado antes del selectbox
+  `adminproj_sel` en projects_ui) + `owner_sec` si es propietario. Patron pendiente+rerun de v111:
+  jamas escribir la clave de un widget ya instanciado.
+- **Aviso de duplicados**: `create_project` no comprobaba nada. Un proyecto = un elevador y el survey se
+  repite por elevador, asi que era facil crear el mismo dos veces y repartir horas/gastos entre
+  duplicados. Ahora compara el nombre normalizado contra los del grupo, lista los coincidentes y exige
+  marcar una casilla para crear igualmente.
+### ⚠️ Error que cometi (chequeo nuevo a repetir)
+Inserte el bloque del paquete en la fase Resultados pero **FUERA de `_render_survey_results`**, donde NO
+existen `best`/`lim_map`/`ctrl_in_frame_` (son locales de esa funcion) y ademas se dibujaba sin haber
+calculado → `NameError` seguro. El chequeo global de nombres NO lo detecta: esos nombres existen en OTRA
+parte del arbol. **Chequeo correcto: verificar en que funcion cae la linea insertada y que las locales
+que usa esten asignadas ANTES de esa linea, dentro de esa misma funcion.**
+
 ## Survey lote 2: extraido a core/survey_ui.py (v125)
 El Survey era el UNICO modulo grande dentro de `app.py`: **1243 de sus ~1650 lineas**, frente a
 plumb_ui (154), prestart_ui (147), timeclock_ui (206), projects_ui (1075), que si tienen el suyo.
@@ -1168,7 +1192,7 @@ posicional + plano) → app.py, al cargar el PDF, setea `st.session_state["ns"]`
 resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NORTH SYD y AGECARE → NS=6
 (coincide con travel/floor-height HQ/HE).
 
-## Versiones desplegadas (v125 = actual)
+## Versiones desplegadas (v126 = actual)
 | Ver | Cambio principal |
 |---|---|
 | v5 | Extractor: CRLF fix, caso D valor-antes-label, sin pdfplumber |
@@ -1270,6 +1294,7 @@ resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NOR
 | v102 | Fix: NS se lee del plano (NUMBER OF STOPS) al cargar el PDF; default de init 6→2 (ya no queda pegado en 6) |
 | v103 | Rol conductor (2 relojes: jornada general + segmentos por proyecto, columna Tipo) + cronómetro en vivo para todos + reporte admin de horas del grupo (Mi grupo → ⏱ Horas) |
 | v104 | Credenciales/tickets por usuario (White Card, Forklift, Dogging/Rigging, licencia…): vencimiento+estado, foto/documento a Drive, radar en Resumen del día, avisos email/Telegram a admin+usuario; usuario ve las suyas (🎫 Mis credenciales) |
+| v126 | Survey lote 3: paquete de obra en 1 PDF (field_pack.py) + boton que abre el proyecto recien creado (navegacion real) + aviso de proyecto duplicado |
 | v125 | Survey lote 2: extraido de app.py a core/survey_ui.py (1243 lineas, cuerpo identico); app.py 1650->321 lineas; imports huerfanos podados |
 | v124 | Survey lote 1: el log del optimizador pasa a ser solo del propietario (era visible para campo) + leyenda de color en las tablas (faltaba desde v93) |
 | v123 | Plomado con tratamiento CAD: planta a escala real (antes vertical 1.7x distorsionada) + isometrica con los hilos cayendo + detalle 3D + ficha de replanteo + cierre di+DBP+dd=BSR + aviso de BS incoherente |

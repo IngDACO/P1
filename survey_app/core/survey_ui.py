@@ -34,6 +34,7 @@ from core.plumb           import (compute_plumb, plumb_svg, plumb_table, plumb_c
 from core                 import projects as projects_data
 from core                 import drive_store
 from core                 import notify
+from core.field_pack      import field_pack_pdf
 from core.auth import can_reports
 
 SURVEY_COLS = ["WR", "FR", "OR", "WL", "FL", "OL"]
@@ -647,6 +648,35 @@ def render_survey_tab(_ROL, _GRUPO):
                         "template completo (punto P, cortes C1/C2 y diagonales).")
         else:
             st.caption("Se mostrará cuando el survey encuentre una solución válida.")
+
+        # ── Paquete de obra: todo lo que necesita quien va a terreno ──
+        # Las piezas ya existian sueltas tras v119-v123; aqui van en UN PDF.
+        # Vive DENTRO de _render_survey_results porque usa sus locales
+        # (best, lim_map, ctrl_in_frame_) y solo tiene sentido con calculo hecho.
+        with st.expander("🧰 Paquete de obra (PDF para terreno)", expanded=False):
+            st.caption("Isométrica del hueco + plantas a escala + replanteo de plomadas "
+                       "con la ficha de medidas. Sin interpretaciones ni log: solo lo "
+                       "que se usa para montar.")
+            _pk1, _pk2 = st.columns([2, 1])
+            _solo = _pk1.checkbox("Solo los pisos con incidencias", value=False,
+                                  key="pack_solo_inc")
+            if _pk2.button("Preparar paquete", use_container_width=True, key="btn_pack"):
+                with st.spinner("Generando paquete de obra..."):
+                    st.session_state["_pack_pdf"] = field_pack_pdf(
+                        all_params, limits, best, lim_map,
+                        plumb=r.get("plumb"),
+                        ctrl_in_frame=ctrl_in_frame_, ctrl_side=ctrl_side_,
+                        meta={"proyecto": st.session_state.get("proyecto", ""),
+                              "cliente": st.session_state.get("cliente", ""),
+                              "ubicacion": st.session_state.get("ubicacion", "")},
+                        solo_incidencias=_solo)
+            _pk = st.session_state.get("_pack_pdf")
+            if _pk:
+                st.download_button("⬇️ Descargar paquete de obra (PDF)", data=_pk,
+                                   file_name="paquete_obra.pdf", mime="application/pdf",
+                                   use_container_width=True, key="dl_pack")
+            elif "_pack_pdf" in st.session_state:
+                st.warning("No se pudo generar el paquete de obra.")
 
         # ── Estado de las interpretaciones IA ─────────────────
         if not interpretation.get("_ok"):
@@ -1265,9 +1295,34 @@ def render_survey_tab(_ROL, _GRUPO):
                     pj_pres = st.number_input("💰 Presupuesto del proyecto (0 = sin presupuesto)",
                                               min_value=0.0, step=100.0,
                                               help="Se compara contra compras + mano de obra.")
+                    pj_dup_ok = st.checkbox(
+                        "Crear aunque ya exista un proyecto con ese nombre",
+                        value=False, key="pj_dup_ok",
+                        help="Marca esto solo si de verdad es un elevador distinto.")
                     if st.form_submit_button("💾 Guardar como proyecto", use_container_width=True):
+                        # Un proyecto = un elevador. Sin este control es facil crear
+                        # el mismo dos veces (el survey se repite por elevador) y las
+                        # horas/gastos quedan repartidos entre duplicados.
+                        _dups = []
+                        try:
+                            _norm = lambda x: " ".join(str(x or "").lower().split())
+                            for _p in projects_data.list_projects(_GRUPO):
+                                if _norm(_p.get("Nombre")) == _norm(pj_nom):
+                                    _dups.append(f"{_p.get('ID')} · {_p.get('Nombre')}"
+                                                 + (f" ({_p.get('Cliente')})"
+                                                    if _p.get("Cliente") else ""))
+                        except Exception:
+                            pass
                         if not pj_nom.strip():
                             st.error("El nombre del proyecto es obligatorio.")
+                        elif _dups and not pj_dup_ok:
+                            st.warning(
+                                "⚠️ Ya existe un proyecto con ese nombre en tu grupo:\n\n"
+                                + "\n".join(f"- {d}" for d in _dups)
+                                + "\n\nSi es otro elevador, marca la casilla de arriba "
+                                  "y vuelve a guardar. Si es el mismo, ábrelo en "
+                                  "🛠 Mi grupo en vez de duplicarlo."
+                            )
                         else:
                             sched = r.get("schedule") or {}
                             _sd = sched.get("start_date"); _ff = sched.get("fecha_fin")
@@ -1288,8 +1343,9 @@ def render_survey_tab(_ROL, _GRUPO):
                                 presupuesto=pj_pres,
                             )
                             if ok:
-                                st.success(f"✅ Proyecto **{res}** guardado. "
-                                           "Gestiónalo en 🛠 Mi grupo → Proyectos.")
+                                st.session_state["_prj_creado"] = {
+                                    "id": res, "nombre": pj_nom.strip()}
+                                st.success(f"✅ Proyecto **{res}** guardado.")
                                 # ── Avisar a los usuarios de campo asignados ──
                                 if pj_asg and notify.any_channel_configured():
                                     _pinfo = {"Nombre": pj_nom.strip(), "Cliente": pj_cli,
@@ -1351,3 +1407,20 @@ def render_survey_tab(_ROL, _GRUPO):
                                             st.caption("📎 Documentos base archivados en Drive.")
                             else:
                                 st.error(f"No se pudo guardar: {res}")
+
+                # ── Cerrar el ciclo: llevar al proyecto recien creado ──
+                # Antes esto terminaba en un texto muerto ("Gestionalo en Mi grupo").
+                _pc = st.session_state.get("_prj_creado")
+                if _pc:
+                    _c1, _c2 = st.columns([3, 1])
+                    _c1.info(f"Proyecto **{_pc['id']} · {_pc['nombre']}** listo. "
+                             "Puedes abrirlo para asignar campo, actividades y gastos.")
+                    if _c2.button("Abrir proyecto ➜", use_container_width=True,
+                                  key="ir_al_proyecto"):
+                        st.session_state["_prjsel_pending"] = _pc["id"]
+                        st.session_state["_nav_pending"] = (
+                            "👑 Administración" if _ROL == "propietario" else "🛠 Mi grupo")
+                        if _ROL == "propietario":
+                            st.session_state["owner_sec"] = "📁 Proyectos"
+                        st.session_state.pop("_prj_creado", None)
+                        st.rerun()

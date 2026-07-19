@@ -284,6 +284,13 @@ def _panel_proyectos(grupo: str):
     # ── Abrir proyecto (detalle / edición) ──
     st.markdown("#### 🔎 Abrir proyecto")
     idmap = {f"{p.get('ID')} · {p.get('Nombre')}": p.get("ID") for p in proys}
+    # Proyecto pendiente de abrir (viene del Survey al guardar). Se aplica antes
+    # de instanciar el selectbox, nunca despues.
+    _pp = st.session_state.pop("_prjsel_pending", None)
+    if _pp:
+        _match = next((k for k in idmap if k.startswith(str(_pp))), None)
+        if _match:
+            st.session_state["adminproj_sel"] = _match
     sel = st.selectbox("Proyecto", list(idmap.keys()), key="adminproj_sel",
                        label_visibility="collapsed")
     if sel:
