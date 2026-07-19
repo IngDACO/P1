@@ -775,6 +775,18 @@ Al cargar el plano en el survey (app.py), autocompleta **RAIL = AlturaDiente** (
 espalda) del catálogo; si el código no está o no se detecta → aviso + entrada manual. **RAIL = AlturaDiente**
 (NO el ancho); AnchoDiente se guarda como dato secundario.
 
+## Fix: perdida de datos al cambiar de fase + Excel pisando el PDF (v118)
+**1. CRITICO — Streamlit descarta el estado de un widget que NO se renderiza en el rerun.** Con el Survey en
+2 fases (v114), al pasar a "Resultados" los `inp_*`, `ns`, `cfg_*` y proyecto/cliente/ubicacion/ingeniero
+(que solo se dibujan en "Datos") se PERDIAN. Fix: al inicio de la seccion, antes de crear ningun widget, se
+re-asignan a si mismas (`st.session_state[k] = st.session_state[k]`) -> las mantiene vivas entre fases.
+REGLA: si un widget puede dejar de renderizarse (fases/tabs/condicionales), hay que "tocar" su clave en cada
+rerun o su valor se pierde.
+**2. El import de Excel pisaba los parametros leidos del PDF.** El .xlsx guarda tambien parametros y
+configuracion y se restauraban siempre. Ahora hay checkbox "Restaurar tambien parametros y configuracion"
+(por defecto DESMARCADO: solo se importa la matriz, el plano manda) + boton "Volver a importar el Excel"
+para reimportar con otra opcion. El mensaje de exito indica que se importo.
+
 ## Fix: crash tras "Empezar un survey nuevo" (v117)
 `AttributeError` en `st.session_state.last_pdf_name`. El reset de v113 BORRABA claves que luego se leen con
 acceso por ATRIBUTO (`st.session_state.last_pdf_name`, `.calc_results`...). `_init_state()` no las repone
@@ -988,7 +1000,7 @@ posicional + plano) → app.py, al cargar el PDF, setea `st.session_state["ns"]`
 resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NORTH SYD y AGECARE → NS=6
 (coincide con travel/floor-height HQ/HE).
 
-## Versiones desplegadas (v117 = actual)
+## Versiones desplegadas (v118 = actual)
 | Ver | Cambio principal |
 |---|---|
 | v5 | Extractor: CRLF fix, caso D valor-antes-label, sin pdfplumber |
@@ -1090,6 +1102,7 @@ resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NOR
 | v102 | Fix: NS se lee del plano (NUMBER OF STOPS) al cargar el PDF; default de init 6→2 (ya no queda pegado en 6) |
 | v103 | Rol conductor (2 relojes: jornada general + segmentos por proyecto, columna Tipo) + cronómetro en vivo para todos + reporte admin de horas del grupo (Mi grupo → ⏱ Horas) |
 | v104 | Credenciales/tickets por usuario (White Card, Forklift, Dogging/Rigging, licencia…): vencimiento+estado, foto/documento a Drive, radar en Resumen del día, avisos email/Telegram a admin+usuario; usuario ve las suyas (🎫 Mis credenciales) |
+| v118 | Fix: al cambiar de fase se perdian parametros/NS/config (Streamlit descarta widgets no renderizados) + el Excel ya no pisa los valores del PDF salvo que lo pidas |
 | v117 | Fix: crash (AttributeError) tras 'Empezar un survey nuevo' — el reset borraba claves leidas por atributo |
 | v116 | Informe del cliente rediseñado como presentacion: portada a sangre, pie con paginacion, nº de informe, veredicto, KPIs, glosario, alcance, conclusiones+firma |
 | v115 | Survey pro: solucion activa elegible, resumen ejecutivo, checklist, filtro de pisos, validacion temprana, duplicar, comparar soluciones, exportar diagramas |

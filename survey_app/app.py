@@ -353,6 +353,15 @@ if _seccion == _L_SURVEY:
     # ── Aplicar valores importados (Excel) ANTES de crear los widgets ──
     # Streamlit prohíbe escribir st.session_state[k] de un widget ya instanciado,
     # así que el import deja los valores "pendientes" y se aplican aquí, arriba del todo.
+    # ⚠️ Streamlit DESCARTA el estado de un widget que no se renderiza en el rerun.
+    # Como el Survey está en 2 fases, al pasar a "Resultados" los parámetros, el NS y
+    # la configuración (que solo se dibujan en "Datos") se perderían. Re-asignarlos aquí
+    # —antes de crear ningún widget— los mantiene vivos entre fases.
+    for _k in [k for k in list(st.session_state.keys())
+               if k.startswith("inp_") or k.startswith("cfg_")
+               or k in ("ns", "proyecto", "cliente", "ubicacion", "ingeniero")]:
+        st.session_state[_k] = st.session_state[_k]
+
     # ── Empezar de cero (se procesa ANTES de crear los widgets) ──
     if st.session_state.pop("_reset_survey", False):
         # Los inp_*/cfg_* sí se borran (los widgets los recrean con su valor por defecto).
@@ -393,7 +402,9 @@ if _seccion == _L_SURVEY:
             st.session_state[f"inp_{_k}"] = float(_v)
         for _k, _v in (_pend.get("cfg") or {}).items():
             st.session_state[_k] = _v
-        st.success("✅ Matriz, parámetros y configuración cargados desde el Excel.")
+        st.success("✅ Matriz, parámetros y configuración cargados desde el Excel."
+                   if _pend.get("todo") else
+                   "✅ Matriz cargada desde el Excel (los parámetros del plano se conservan).")
 
     if st.session_state.pop("_dup_msg", False):
         st.success("📑 Survey duplicado: se conservaron parámetros y configuración. "
@@ -1163,6 +1174,15 @@ if _seccion == _L_SURVEY:
 
         # Cargar Excel
         uploaded_excel = sc2.file_uploader("📂 Cargar matriz (.xlsx)", type=["xlsx"], key="excel_uploader")
+    # Por defecto solo se importa la MATRIZ: si ya cargaste el plano, los parámetros del
+    # PDF mandan y no deben ser pisados por los que venían guardados en el Excel.
+    _imp_todo = sc2.checkbox("Restaurar también parámetros y configuración del Excel",
+                             value=False, key="excel_imp_todo",
+                             help="Desmarcado: solo se importa la matriz de medidas.")
+    if st.session_state.get("last_excel_id") and sc2.button("🔄 Volver a importar el Excel",
+                                                            key="btn_reimport_xls"):
+        st.session_state.pop("last_excel_id", None)
+        st.rerun()
         # ⚠️ GUARDA obligatoria: el file_uploader conserva el archivo entre reruns, así que
         # sin esta condición el import se repetiría en CADA rerun y pisaría los valores del
         # PDF o los que escriba el usuario. Mismo patrón que la carga de PDF.
@@ -1186,8 +1206,11 @@ if _seccion == _L_SURVEY:
                 if cfg.get("CTRL_SIDE") in ("R", "L"):   _cfg["cfg_ctrl_side"] = cfg["CTRL_SIDE"]
 
                 st.session_state["_import_pending"] = {
-                    "ns": len(imported["df"]), "params": _params, "cfg": _cfg,
+                    "ns": len(imported["df"]),
+                    "params": _params if _imp_todo else {},
+                    "cfg":    _cfg    if _imp_todo else {},
                     "df": imported["df"].copy(),
+                    "todo": bool(_imp_todo),
                 }
                 st.session_state["last_excel_id"] = _xls_id
                 st.rerun()
