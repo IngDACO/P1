@@ -782,6 +782,27 @@ Al cargar el plano en el survey (app.py), autocompleta **RAIL = AlturaDiente** (
 espalda) del catálogo; si el código no está o no se detecta → aviso + entrada manual. **RAIL = AlturaDiente**
 (NO el ancho); AnchoDiente se guarda como dato secundario.
 
+## Documentos invisibles + el campo recibe lo suyo (v134)
+⚠️ **Bug de 36 versiones, encontrado auditando los modulos pendientes:** `_documentos_section` filtraba
+por `_DOC_TIPOS`, asi que **todo documento generado por la app con un tipo ausente de esa lista
+desaparecia EN SILENCIO — para TODOS los roles, incluido el admin**:
+- **`prestart`** (v97): cada PDF de Pre-Start archivado en el proyecto llevaba 36 versiones invisible.
+- **`calculo`** (v129): los PDF de las herramientas nacieron invisibles.
+Fix de raiz (no parche): se separa **`_DOC_SUBIR`** (solo alimenta el desplegable de subida MANUAL) de lo
+que se VE. El admin/propietario pasa a `ver_tipos = None` → **sin filtro**, asi un tipo nuevo generado por
+la app no puede volver a desaparecer. `_CAMPO_VER` suma `prestart` y `calculo`; iconos 🦺 y 🧮.
+REGLA: un filtro por lista blanca sobre datos que la propia app genera es fail-closed y falla en silencio.
+Para VISUALIZAR, fail-open; la lista blanca solo para lo que el usuario elige al subir.
+### El campo por fin recibe lo que se construyo para el
+El **paquete de obra** se llama literalmente "PDF para terreno" y hasta ahora **solo podia bajarlo el
+admin** (Survey y detalle de proyecto). Los **calculos** (plomada, cortes) los EJECUTA el campo y no los
+veia. Ambos estan ya en 📋 Mis proyectos. El bloque del paquete se extrajo a
+**`_paquete_obra_section(pid, prj)`**, compartido por el detalle del admin y la vista de campo, para que
+las dos no diverjan.
+### Auditoria de los modulos pendientes (Administracion / Fichaje / Mis proyectos)
+NO tienen el bug v110: los bloques largos bajo `st.button` son ACCIONES que terminan en `st.rerun()`
+(verificado distinguiendo accion de render). Ese patron esta agotado.
+
 ## Agente IA al dia + limpieza (v133)
 ⚠️ **El agente llevaba ~35 versiones desactualizado.** Auditoria de su SYSTEM_PROMPT contra las
 funciones reales: **desconocia 11** — Corte de buffers (v96), Pre-Start (v97), Maps (v98),
@@ -1339,7 +1360,7 @@ posicional + plano) → app.py, al cargar el PDF, setea `st.session_state["ns"]`
 resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NORTH SYD y AGECARE → NS=6
 (coincide con travel/floor-height HQ/HE).
 
-## Versiones desplegadas (v133 = actual)
+## Versiones desplegadas (v134 = actual)
 | Ver | Cambio principal |
 |---|---|
 | v5 | Extractor: CRLF fix, caso D valor-antes-label, sin pdfplumber |
@@ -1441,6 +1462,7 @@ resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NOR
 | v102 | Fix: NS se lee del plano (NUMBER OF STOPS) al cargar el PDF; default de init 6→2 (ya no queda pegado en 6) |
 | v103 | Rol conductor (2 relojes: jornada general + segmentos por proyecto, columna Tipo) + cronómetro en vivo para todos + reporte admin de horas del grupo (Mi grupo → ⏱ Horas) |
 | v104 | Credenciales/tickets por usuario (White Card, Forklift, Dogging/Rigging, licencia…): vencimiento+estado, foto/documento a Drive, radar en Resumen del día, avisos email/Telegram a admin+usuario; usuario ve las suyas (🎫 Mis credenciales) |
+| v134 | Fix de 36 versiones: los PDF de Pre-Start (v97) y de calculos (v129) eran INVISIBLES en Documentos para todos los roles + el campo ya puede bajar el paquete de obra y ver los calculos |
 | v133 | Agente IA al dia: desconocia 11 funciones (todo desde v96) y no sabia guiar por la interfaz; ahora tambien navega por rol. Quitada toolruns.list_group (huerfana) |
 | v132 | Detalle de proyecto reorganizado: 11 secciones en scroll unico -> 4 pestañas (Estado/Datos/Costos/Archivos) con cabecera fija |
 | v131 | Mi grupo: historial de calculos de herramientas en el detalle del proyecto (la hoja Calculos se escribia desde v129 pero nadie la leia) |

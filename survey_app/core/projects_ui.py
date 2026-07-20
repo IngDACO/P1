@@ -192,12 +192,23 @@ def _resumen_del_dia(grupo: str):
 
 
 # Documentos: tipos y permisos por rol
-_DOC_TIPOS  = ["plano", "informe_cliente", "informe_admin", "matriz_survey",
+# ⚠️ Esta lista es SOLO para el desplegable de subida manual.
+# NO se usa para filtrar lo que se ve: el admin ve TODOS los tipos.
+# Hasta v134 la vista filtraba por aqui, asi que los documentos generados por
+# la app con un tipo ausente de la lista desaparecian EN SILENCIO: los
+# Pre-Start (tipo "prestart", v97) llevaban 36 versiones invisibles y los
+# calculos (tipo "calculo", v129) nacieron invisibles.
+_DOC_SUBIR  = ["plano", "informe_cliente", "informe_admin", "matriz_survey",
                "foto", "certificado", "otro"]
-_CAMPO_VER  = {"plano", "informe_cliente", "matriz_survey", "foto"}   # campo puede consultar
+_DOC_TIPOS  = _DOC_SUBIR                       # alias para llamadores previos
+# El campo consulta lo que usa en obra: incluye el Pre-Start que firma y los
+# calculos (plomada, cortes) que ejecuta.
+_CAMPO_VER  = {"plano", "informe_cliente", "matriz_survey", "foto",
+               "prestart", "calculo"}
 _CAMPO_SUBE = ["foto"]                                                # campo solo sube fotos
 _DOC_ICON   = {"plano": "📐", "informe_cliente": "📄", "informe_admin": "📑",
-               "matriz_survey": "📊", "foto": "📷", "certificado": "🏅", "otro": "📎"}
+               "matriz_survey": "📊", "foto": "📷", "certificado": "🏅",
+               "prestart": "🦺", "calculo": "🧮", "otro": "📎"}
 
 
 def _documentos_section(pid: str):
@@ -209,11 +220,14 @@ def _documentos_section(pid: str):
     a = st.session_state.get("auth", {})
     rol, usuario = a.get("rol", ""), a.get("usuario", "")
     es_campo     = rol == "campo"
-    ver_tipos    = _CAMPO_VER if es_campo else set(_DOC_TIPOS)
-    sube_tipos   = _CAMPO_SUBE if es_campo else _DOC_TIPOS
+    # Admin/propietario: ver_tipos = None -> SIN filtro, para que un tipo
+    # nuevo generado por la app no vuelva a desaparecer de la vista.
+    ver_tipos    = _CAMPO_VER if es_campo else None
+    sube_tipos   = _CAMPO_SUBE if es_campo else _DOC_SUBIR
     puede_borrar = rol in ("administrador", "propietario")
 
-    docs = [d for d in P.list_documents(pid) if str(d.get("Tipo", "")) in ver_tipos]
+    docs = [d for d in P.list_documents(pid)
+            if ver_tipos is None or str(d.get("Tipo", "")) in ver_tipos]
     if docs:
         for d in docs:
             did = str(d.get("DriveID", ""))
@@ -251,6 +265,48 @@ def _documentos_section(pid: str):
                     st.rerun()
                 except Exception as e:
                     st.error(f"No se pudo subir: {e}")
+
+
+def _paquete_obra_section(pid: str, prj: dict):
+    """Paquete de obra (PDF de terreno) regenerado desde el survey guardado.
+
+    Compartido por el detalle del admin y por 📋 Mis proyectos: el documento se
+    llama "PDF para terreno", asi que quien esta en terreno tiene que poder
+    bajarlo. Vive aqui, en un solo sitio, para que las dos vistas no diverjan.
+
+    El proyecto guarda ParamsJSON+MatrizJSON pero NO la solucion (es derivada),
+    de ahi el recalculo con `survey_calc.recalcular` (misma secuencia que el
+    Survey, verificada identica).
+    """
+    with st.expander("🧰 Paquete de obra (PDF para terreno)"):
+        st.caption("Isométrica del hueco, plantas a escala y replanteo de plomadas "
+                   "con la ficha de medidas. Se regenera desde el survey guardado.")
+        kp = f"pack_{pid}"
+        if st.button("Preparar paquete de obra", key=f"btnpack_{pid}"):
+            with st.spinner("Recalculando el survey y generando el paquete..."):
+                full = P.get_project_full(pid)
+                res = survey_calc.recalcular(full.get("params") or {},
+                                             full.get("matriz") or [])
+                if not res:
+                    st.session_state[kp] = None
+                else:
+                    st.session_state[kp] = field_pack_pdf(
+                        res["all_params"], res["limits"], res["best"], res["lim_map"],
+                        plumb=res["plumb"],
+                        ctrl_in_frame=bool(res["all_params"].get("CTRL_IN_FRAME")),
+                        ctrl_side=res["all_params"].get("CTRL_SIDE"),
+                        meta={"proyecto": str(prj.get("Nombre", "")),
+                              "cliente": str(prj.get("Cliente", "")),
+                              "ubicacion": str(prj.get("Ubicacion", ""))})
+        if st.session_state.get(kp):
+            st.download_button("⬇️ Descargar paquete de obra (PDF)",
+                               data=st.session_state[kp],
+                               file_name=f"paquete_obra_{pid}.pdf",
+                               mime="application/pdf", key=f"dlpack_{pid}",
+                               use_container_width=True)
+        elif kp in st.session_state:
+            st.warning("No se pudo regenerar: al proyecto le faltan parámetros o matriz, "
+                       "o el survey no encuentra solución con esos datos.")
 
 
 def _calculos_section(pid: str):
@@ -696,39 +752,7 @@ def _detalle_proyecto(pid: str, grupo: str = None):
         render_expenses(pid, grupo, can_delete=True, key_prefix="adm")
 
     elif _sec == "📎 Archivos":
-        # ── Paquete de obra directo (sin pasar por el Survey) ──
-        # El proyecto guarda ParamsJSON+MatrizJSON pero NO la solucion (es derivada),
-        # asi que se recalcula con survey_calc.recalcular (misma secuencia que el
-        # Survey, verificada identica) y se arma el PDF de terreno.
-        with st.expander("🧰 Paquete de obra (PDF para terreno)"):
-            st.caption("Isométrica del hueco, plantas a escala y replanteo de plomadas "
-                       "con la ficha de medidas. Se regenera desde el survey guardado.")
-            _kp = f"pack_{pid}"
-            if st.button("Preparar paquete de obra", key=f"btnpack_{pid}"):
-                with st.spinner("Recalculando el survey y generando el paquete..."):
-                    _full = P.get_project_full(pid)
-                    _res = survey_calc.recalcular(_full.get("params") or {},
-                                                  _full.get("matriz") or [])
-                    if not _res:
-                        st.session_state[_kp] = None
-                    else:
-                        st.session_state[_kp] = field_pack_pdf(
-                            _res["all_params"], _res["limits"], _res["best"], _res["lim_map"],
-                            plumb=_res["plumb"],
-                            ctrl_in_frame=bool(_res["all_params"].get("CTRL_IN_FRAME")),
-                            ctrl_side=_res["all_params"].get("CTRL_SIDE"),
-                            meta={"proyecto": str(prj.get("Nombre", "")),
-                                  "cliente": str(prj.get("Cliente", "")),
-                                  "ubicacion": str(prj.get("Ubicacion", ""))})
-            if st.session_state.get(_kp):
-                st.download_button("⬇️ Descargar paquete de obra (PDF)",
-                                   data=st.session_state[_kp],
-                                   file_name=f"paquete_obra_{pid}.pdf",
-                                   mime="application/pdf", key=f"dlpack_{pid}",
-                                   use_container_width=True)
-            elif _kp in st.session_state:
-                st.warning("No se pudo regenerar: al proyecto le faltan parámetros o matriz, "
-                           "o el survey no encuentra solución con esos datos.")
+        _paquete_obra_section(pid, prj)
 
         # ── Reconstruir el survey guardado ──
         with st.expander("🔄 Reconstruir proyecto en el Survey (regenerar informes)"):
@@ -989,6 +1013,14 @@ def render_field_projects(usuario: str, grupo: str):
     render_expenses(pid, grupo, can_delete=False, key_prefix="fld")
 
     # ── Documentos (campo: sube fotos, consulta planos/informe cliente/matriz/fotos) ──
+    # ── Lo que el campo necesita en obra ──────────────────
+    # El paquete de obra es literalmente "PDF para terreno" y hasta v134 solo
+    # podia bajarlo el admin. Los calculos (plomada, cortes) los EJECUTA el
+    # campo, asi que tambien los ve.
+    st.markdown("---")
+    _paquete_obra_section(pid, prj)
+    _calculos_section(pid)
+
     st.markdown("---")
     _documentos_section(pid)
 
