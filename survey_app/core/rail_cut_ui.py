@@ -10,6 +10,7 @@ import streamlit.components.v1 as components
 from core.tool_pdf import tool_pdf
 from core.tool_save_ui import render_guardar
 from core import plan_store
+from core import plan_ui
 
 
 def _result_matrix(labels, per_elev_values, n):
@@ -25,6 +26,16 @@ def render_rail_cut_tab():
                "Carga el PDF para leer LFKK y LFGK (o ingrésalos manualmente).")
 
     # ── 1. PDF → LFKK / LFGK ────────────────────────────────
+    # ── Proyecto: de aquí salen los datos del plano ya leídos ──
+    # El admin elige el proyecto; al campo le sale del clock-in. Si el proyecto
+    # tiene su plano cargado, los valores se rellenan solos y NO hace falta
+    # volver a subir el PDF (antes cada herramienta lo reparseaba, 30-70 s).
+    _prj, _plano = plan_ui.selector_proyecto("rc")
+    if _plano:
+        _n = plan_ui.aplicar(_plano, {"lfkk": "rc_lfkk", "lfgk": "rc_lfgk"})
+        if _n:
+            st.caption("✅ LFKK y LFGK tomado(s) del plano del proyecto.")
+
     st.markdown("**1. Parámetros del plano (LFKK, LFGK)**")
     pdf = plan_store.selector("PDF de planos (para LFKK / LFGK)", "rc_pdf")
     if pdf is not None and pdf.name != st.session_state.get("rc_pdf_name"):

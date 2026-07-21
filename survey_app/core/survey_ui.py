@@ -38,6 +38,7 @@ from core.field_pack      import field_pack_pdf
 from core.auth            import get_user as auth_get_user
 from core                 import credentials
 from core                 import toolruns
+from core                 import plan_ui
 from core                 import plan_store
 from core.auth import can_reports
 
@@ -858,6 +859,23 @@ def render_survey_tab(_ROL, _GRUPO):
         # PASO 1 — CARGAR PDF
         # ══════════════════════════════════════════════════════
         st.header("📄 Plano del elevador")
+
+        # ── Proyecto: sus datos del plano, ya leídos ─────────
+        # Desde v137 el plano se lee UNA vez al crear el proyecto. Aquí solo se
+        # vuelcan sus valores: el técnico no tiene que volver a subir el PDF ni
+        # esperar la extracción (que cuesta ~80 s).
+        _prj_sv, _plano_sv = plan_ui.selector_proyecto("sv")
+        if _plano_sv:
+            _mapa_sv = {f"params.{_p}": f"inp_{_p}" for _p in PDF_PARAMS}
+            _mapa_sv["ns"] = "ns"
+            _n_sv = plan_ui.aplicar(_plano_sv, _mapa_sv)
+            if _n_sv:
+                st.caption(f"✅ {_n_sv} valor(es) tomados del plano del proyecto. "
+                           "Revísalos y completa los medidos en obra.")
+            if _plano_sv.get("rail"):
+                st.caption(f"🚆 Riel del plano: **{_plano_sv['rail']}** "
+                           "— ajusta RAIL si el catálogo no lo tiene.")
+
         col_brand, col_pdf = st.columns([1, 3])
         col_brand.selectbox("Marca", ["Schindler"], key="brand")   # placeholder p/ futura expansión
         pdf_file = col_pdf.file_uploader("PDF de planos", type=["pdf"])

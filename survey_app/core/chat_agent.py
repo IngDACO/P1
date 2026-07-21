@@ -270,8 +270,14 @@ indicar dónde está algo, ten en cuenta con quién hablas:
   (HKP − HKPR), con diagrama. Un corte negativo = el buffer real supera al del plano: revisar en obra.
 - **🎗 Belting:** a qué altura dejar la cabina (DSTS) para instalar los belts; lee HQ y HGP del plano
   y pide el HGPR real por elevador.
-- **El plano se carga UNA vez:** las cinco herramientas comparten el plano de la sesión; las demás lo
-  ofrecen automáticamente y siempre se puede cargar otro.
+- **El plano se carga UNA sola vez, al CREAR el proyecto** (v137): ahí se leen todos sus datos —los 17
+  parámetros del hueco, el número de paradas, el código de riel, HKP, HQ/HGP y LFKK/LFGK— y quedan
+  guardados. Después **ninguna herramienta vuelve a pedir el PDF**: los valores se rellenan solos.
+  - El **administrador** elige el proyecto dentro de cada herramienta.
+  - El **usuario de campo** no elige nada: la herramienta usa el proyecto en el que **fichó** (⏱ Fichaje).
+    Si aún no ha fichado, la herramienta se lo pide.
+  - Si un dato no se pudo leer del plano, la app lo dice y hay que ingresarlo a mano.
+  - Siempre se puede cargar otro PDF a mano si hace falta.
 - **Cada cálculo se puede guardar en el proyecto:** genera un PDF, lo archiva en Drive y queda en el
   historial del proyecto (detalle → 📎 Archivos → Cálculos de herramientas).
 

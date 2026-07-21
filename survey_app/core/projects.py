@@ -31,6 +31,10 @@ PROJECTS_HEADERS = [
     "CampoAsignados", "Avance", "AgrupacionID", "PesoEnAgrupacion",
     "ParamsJSON", "MatrizJSON", "InterpJSON", "CreadoPor", "Creado",
     "Instrucciones", "InduccionLinks", "Presupuesto",
+    # v137: datos leidos del PLANO (distintos de ParamsJSON, que es el survey e
+    # incluye lo medido en obra). Se extraen UNA vez al cargar el plano y los
+    # consumen las 5 herramientas sin volver a abrir el PDF.
+    "PlanoJSON",
 ]
 ACTIVITIES_HEADERS = [
     "ProyectoID", "Orden", "Nombre", "DuracionDias", "Peso", "Avance",

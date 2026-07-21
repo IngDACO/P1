@@ -9,6 +9,7 @@ import pandas as pd
 from core.plumb import (compute_plumb, plumb_table, plumb_svg, plumb_checks,
                         plumb_iso_svg, plumb_detail_svg, plumb_card_svg)
 from core import plan_store
+from core import plan_ui
 from core.tool_pdf import tool_pdf
 from core.tool_save_ui import render_guardar
 
@@ -25,6 +26,18 @@ def render_plumb_tab():
         st.session_state.setdefault(_k, 0.0)
 
     # ── Carga de PDF → autocompleta lo que trae el plano ────
+    # ── Proyecto: el plano ya leído ──────────────────────
+    # El admin elige el proyecto; al campo le sale del clock-in. Si el proyecto
+    # tiene su plano cargado, estos valores se rellenan sin abrir el PDF.
+    _prj, _plano = plan_ui.selector_proyecto("plb")
+    if _plano:
+        _n = plan_ui.aplicar(_plano, {
+            "params.BKS": "plb_bks", "params.TKSW": "plb_tksw",
+            "params.SF1": "plb_sf1", "params.SF2": "plb_sf2",
+            "params.BS": "plb_bs", "params.SG": "plb_sg", "params.TG": "plb_tg"})
+        if _n:
+            st.caption(f"✅ {_n} valor(es) tomados del plano del proyecto.")
+
     pdf = plan_store.selector("📄 PDF de planos (autocompleta del plano)", "plb_pdf")
     if pdf is not None and pdf.name != st.session_state.get("plb_pdf_name"):
         from extractors.schindler import extract_from_pdf

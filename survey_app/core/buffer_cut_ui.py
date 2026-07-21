@@ -14,6 +14,7 @@ import pandas as pd
 from core.buffer_cut import compute_buffer_cut, buffer_cut_svg
 from extractors.schindler import extract_hkp
 from core import plan_store
+from core import plan_ui
 from core.tool_pdf import tool_pdf
 from core.tool_save_ui import render_guardar
 
@@ -24,6 +25,16 @@ def render_buffer_cut_tab():
     st.markdown("### 🛡 Corte de buffers")
     st.caption("Calcula cuánto cortar cada buffer. Carga el PDF para leer **HKP** "
                "(o ingrésalo manualmente) e indica el **HKPR** real de cada buffer.")
+
+    # ── Proyecto: de aquí salen los datos del plano ya leídos ──
+    # El admin elige el proyecto; al campo le sale del clock-in. Si el proyecto
+    # tiene su plano cargado, los valores se rellenan solos y NO hace falta
+    # volver a subir el PDF (antes cada herramienta lo reparseaba, 30-70 s).
+    _prj, _plano = plan_ui.selector_proyecto("bc")
+    if _plano:
+        _n = plan_ui.aplicar(_plano, {"hkp": "bc_hkp"})
+        if _n:
+            st.caption("✅ HKP tomado(s) del plano del proyecto.")
 
     # ── 1. PDF → HKP ────────────────────────────────────────
     st.markdown("**1. Parámetro del plano (HKP)**")

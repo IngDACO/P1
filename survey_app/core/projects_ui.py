@@ -16,6 +16,7 @@ from core.schedule import schedule_svg
 from core import survey_calc
 from core import toolruns
 from core import credentials
+from core import plan_data
 from core.field_pack import field_pack_pdf
 
 
@@ -290,6 +291,39 @@ def _nuevo_proyecto_form(grupo: str, key: str = "nuevo"):
         except Exception:
             pass
 
+        # ── Plano del elevador (fuera del form, para poder prellenar) ──
+        # De aqui salen NS y los parametros que usan las 5 herramientas. Se lee
+        # UNA vez: despues nadie vuelve a subir el PDF (antes se subia en cada
+        # herramienta y cada una lo reparseaba, 30-70 s por vez).
+        st.markdown("**📄 Plano del elevador** — opcional, pero recomendado")
+        st.caption("Se leen los datos del plano una sola vez y quedan en el proyecto: "
+                   "el equipo de campo ya no tendrá que cargar el PDF en ninguna herramienta.")
+        _pdf = st.file_uploader("PDF del plano", type=["pdf"], key=f"np_pdf_{key}")
+        _kd = f"np_plano_{key}"
+        if _pdf is not None and st.session_state.get(f"{_kd}_id") != f"{_pdf.name}:{_pdf.size}":
+            _barra = st.progress(0.0, text="Leyendo el plano…")
+            def _prog(fr, txt):
+                _barra.progress(min(1.0, fr), text=f"Leyendo el plano… {txt}")
+            try:
+                st.session_state[_kd] = plan_data.extraer_todo(_pdf, progreso=_prog)
+                st.session_state[f"{_kd}_bytes"] = _pdf.getvalue()
+            except Exception as e:
+                st.session_state[_kd] = None
+                st.error(f"No se pudo leer el plano: {e}")
+            # Guarda de identidad: sin esto se reextraería en CADA rerun (v112)
+            st.session_state[f"{_kd}_id"] = f"{_pdf.name}:{_pdf.size}"
+            _barra.empty()
+            st.rerun()
+
+        _plano = st.session_state.get(_kd)
+        if _plano:
+            st.success(f"✅ Plano leído — {plan_data.resumen(_plano)}")
+            if _plano.get("faltan"):
+                with st.expander(f"⚠️ {len(_plano['faltan'])} dato(s) que el plano no dio"):
+                    st.caption("Habrá que ingresarlos a mano en la herramienta que los use. "
+                               "Se listan para que no queden en cero sin que nadie lo note.")
+                    st.write(", ".join(_plano["faltan"]))
+
         asg = st.multiselect("👷 Usuarios de campo asignados", campos,
                              key=f"np_asg_{key}")
         if asg:
@@ -301,11 +335,19 @@ def _nuevo_proyecto_form(grupo: str, key: str = "nuevo"):
             cli = c2.text_input("Cliente", key=f"np_cli_{key}")
             ubi = c1.text_input("Ubicación", key=f"np_ubi_{key}",
                                 help="Se enlaza a Google Maps en toda la app.")
-            mod = c2.text_input("Modelo de elevador", key=f"np_mod_{key}")
+            mod = c2.text_input("Modelo de elevador", key=f"np_mod_{key}",
+                                value=str((_plano or {}).get("rail") or ""),
+                                help="Prellenado con el código de riel del plano, si se leyó.")
             ing = c1.text_input("Ingeniero responsable", key=f"np_ing_{key}")
+            _ns0 = 2
+            try:
+                _ns0 = max(2, min(50, int(float((_plano or {}).get("ns") or 2))))
+            except Exception:
+                pass
             ns = c2.number_input("Número de paradas (NS) *", min_value=2, max_value=50,
-                                 value=2, step=1, key=f"np_ns_{key}",
-                                 help="Define la duración de las actividades del cronograma.")
+                                 value=_ns0, step=1, key=f"np_ns_{key}",
+                                 help=("Leído del plano." if (_plano or {}).get("ns")
+                                       else "Define la duración de las actividades."))
             f_ini = c1.date_input("Fecha de inicio", value=_dt.date.today(),
                                   key=f"np_ini_{key}")
             pres = c2.number_input("💰 Presupuesto (0 = sin presupuesto)", min_value=0.0,
@@ -345,9 +387,28 @@ def _nuevo_proyecto_form(grupo: str, key: str = "nuevo"):
                 st.error(f"No se pudo crear: {res}")
                 return
 
+            # Datos del plano + PDF, para que ninguna herramienta vuelva a pedirlo
+            if _plano:
+                try:
+                    plan_data.guardar(res, _plano)
+                except Exception as e:
+                    st.warning(f"El proyecto se creó, pero no se guardaron los datos "
+                               f"del plano: {e}")
+                _pb = st.session_state.get(f"{_kd}_bytes")
+                if _pb and drive_store.is_configured() and drive_store.is_available():
+                    try:
+                        fid = drive_store.upload(res, "plano.pdf", _pb, "application/pdf")
+                        P.add_document(res, "plano.pdf", "plano", fid,
+                                       st.session_state.get("auth", {}).get("usuario", ""))
+                    except Exception:
+                        st.caption("📎 El plano no se pudo archivar en Drive.")
+                for _k in (_kd, f"{_kd}_bytes", f"{_kd}_id"):
+                    st.session_state.pop(_k, None)
+
             st.success(f"✅ Proyecto **{res}** creado con "
-                       f"{len(sched.get('activities', []))} actividades. "
-                       "El survey y las demás herramientas ya pueden alimentarlo.")
+                       f"{len(sched.get('activities', []))} actividades"
+                       + (" y los datos del plano cargados." if _plano else ".")
+                       + " El survey y las demás herramientas ya pueden alimentarlo.")
             if asg:
                 _notificar_asignados(asg, {
                     "Nombre": nom.strip(), "Cliente": cli, "Ubicacion": ubi,

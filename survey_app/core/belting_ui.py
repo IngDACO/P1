@@ -13,6 +13,7 @@ import streamlit.components.v1 as components
 
 from core.belting import compute_belting, belting_svg
 from core import plan_store
+from core import plan_ui
 from core.tool_pdf import tool_pdf
 from core.tool_save_ui import render_guardar
 
@@ -27,6 +28,16 @@ def render_belting_tab():
     for k in ("belt_hgp", "belt_hq"):
         st.session_state.setdefault(k, 0.0)
     st.session_state.setdefault("belt_ns", 1)
+
+    # ── Proyecto: de aquí salen los datos del plano ya leídos ──
+    # El admin elige el proyecto; al campo le sale del clock-in. Si el proyecto
+    # tiene su plano cargado, los valores se rellenan solos y NO hace falta
+    # volver a subir el PDF (antes cada herramienta lo reparseaba, 30-70 s).
+    _prj, _plano = plan_ui.selector_proyecto("belt")
+    if _plano:
+        _n = plan_ui.aplicar(_plano, {"hq": "belt_hq", "hgp": "belt_hgp"})
+        if _n:
+            st.caption("✅ HQ y HGP tomado(s) del plano del proyecto.")
 
     # ── PDF: autocompleta HQ ────────────────────────────────
     pdf = plan_store.selector("📄 PDF de planos (autocompleta HQ)", "belt_pdf")
