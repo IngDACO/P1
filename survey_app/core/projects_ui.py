@@ -17,6 +17,11 @@ from core import survey_calc
 from core import toolruns
 from core import credentials
 from core import plan_data
+from core import timeclock
+
+# Opción neutra de los selectores de proyecto: sin ella, `st.selectbox`
+# devuelve el primer elemento y se abre un proyecto que nadie eligió.
+_VACIO = "— elige un proyecto —"
 from core.field_pack import field_pack_pdf
 
 
@@ -593,11 +598,17 @@ def _panel_proyectos(grupo: str):
         _match = next((k for k in idmap if k.startswith(str(_pp))), None)
         if _match:
             st.session_state["adminproj_sel"] = _match
-    sel = st.selectbox("Proyecto", list(idmap.keys()), key="adminproj_sel",
+    # ⚠️ Opción vacía la PRIMERA: un selectbox sin placeholder devuelve siempre
+    # el primer elemento, asi que al entrar se abria el detalle de un proyecto
+    # arbitrario — ruido visual y 8 lecturas de datos que nadie pidio.
+    _opts = [_VACIO] + list(idmap.keys())
+    sel = st.selectbox("Proyecto", _opts, key="adminproj_sel",
                        label_visibility="collapsed")
-    if sel:
+    if sel and sel != _VACIO:
         st.markdown("---")
         _detalle_proyecto(idmap[sel], grupo)
+    else:
+        st.caption("Elige un proyecto de la lista para ver su detalle.")
 
 
 def _portfolio_html(proys, horas, alarmas, ags, delays=None, aheads=None,
@@ -1155,8 +1166,9 @@ def render_owner_projects():
 
     st.markdown("#### 🔎 Abrir proyecto")
     idmap = {f"{p.get('Grupo')} · {p.get('ID')} · {p.get('Nombre')}": p.get("ID") for p in proys}
-    sel = st.selectbox("Proyecto", list(idmap.keys()), key="ownerproj_sel")
-    if sel:
+    _opts = [_VACIO] + list(idmap.keys())
+    sel = st.selectbox("Proyecto", _opts, key="ownerproj_sel")
+    if sel and sel != _VACIO:
         _detalle_proyecto(idmap[sel])
 
 
@@ -1174,8 +1186,27 @@ def render_field_projects(usuario: str, grupo: str):
 
     idmap = {f"{p.get('Nombre')} ({p.get('ID')}) — {p.get('Estado')}": p.get("ID")
              for p in proys}
-    sel = st.selectbox("Proyecto asignado", list(idmap.keys()), key="fieldproj_sel")
-    if not sel:
+    # Si el usuario tiene fichaje abierto, se abre ESE proyecto: es donde está
+    # trabajando ahora (mismo criterio que usan las herramientas desde v137).
+    _opts = [_VACIO] + list(idmap.keys())
+    if "fieldproj_sel" not in st.session_state:
+        _fich = ""
+        try:
+            _au = st.session_state.get("auth", {}) or {}
+            _ses = timeclock.open_sessions(_au.get("nombre", ""), grupo, usuario)
+            _fich = str((_ses.get(timeclock.TIPO_PROYECTO)
+                         or _ses.get(timeclock.TIPO_GENERAL)
+                         or {}).get("proyecto", "")).strip()
+        except Exception:
+            pass
+        if _fich:
+            _m = next((k for k in idmap if k.startswith(_fich + " (")), None)
+            if _m:
+                st.session_state["fieldproj_sel"] = _m
+    sel = st.selectbox("Proyecto asignado", _opts, key="fieldproj_sel")
+    if not sel or sel == _VACIO:
+        st.caption("Elige el proyecto en el que estás trabajando. "
+                   "Si fichas en ⏱ Fichaje, se abre solo.")
         return
     pid = idmap[sel]
     prj = P.get_project(pid)
