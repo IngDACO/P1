@@ -8,6 +8,7 @@ import streamlit as st
 import pandas as pd
 
 from core import auth
+from core import ui_common as ui
 
 _USER_COLS = ["Usuario", "Nombre", "Rol", "Grupo", "Activo", "Email"]  # tabla sin hash/tokens
 
@@ -293,11 +294,15 @@ def _owner_grupos():
             (st.success if ok else st.error)(msg)
             if ok: st.rerun()
     if grupos:
-        gsel = st.selectbox("Eliminar grupo", [g["Grupo"] for g in grupos], key="del_g_sel")
-        if st.button("🗑 Eliminar grupo", key="del_g_btn"):
-            ok, msg = auth.delete_group(gsel)
-            (st.success if ok else st.error)(msg)
-            if ok: st.rerun()
+        gsel = ui.elegir("Eliminar grupo", [g["Grupo"] for g in grupos],
+                         key="del_g_sel", vacio="— ningún grupo —")
+        if gsel:
+            _ok_del = ui.confirmar_borrado("del_g_ok",
+                                           f"Confirmo eliminar el grupo **{gsel}**")
+            if st.button("🗑 Eliminar grupo", key="del_g_btn", disabled=not _ok_del):
+                ok, msg = auth.delete_group(gsel)
+                (st.success if ok else st.error)(msg)
+                if ok: st.rerun()
 
 
 def _owner_usuarios():
@@ -449,13 +454,17 @@ def _owner_manuales():
         } for r in ups]), hide_index=True, use_container_width=True)
         with st.expander("🗑 Quitar un manual"):
             opciones = {f"{r.get('Nombre')}  ·  {r.get('Fecha')}": r.get("ID") for r in ups}
-            sel = st.selectbox("Manual", list(opciones.keys()), key="man_del_sel")
-            if st.button("🗑 Eliminar", key="man_del_btn"):
-                if manuals.delete_manual(opciones[sel]):
-                    st.success("Manual eliminado.")
-                    st.rerun()
-                else:
-                    st.error("No se pudo eliminar.")
+            _mid = ui.elegir("Manual", opciones, key="man_del_sel",
+                             vacio="— ningún manual —")
+            if _mid:
+                _ok_del = ui.confirmar_borrado("man_del_ok",
+                                               "Confirmo eliminar este manual")
+                if st.button("🗑 Eliminar", key="man_del_btn", disabled=not _ok_del):
+                    if manuals.delete_manual(_mid):
+                        st.success("Manual eliminado.")
+                        st.rerun()
+                    else:
+                        st.error("No se pudo eliminar.")
     else:
         st.info("Aún no has subido manuales. Agrega el primero abajo.")
 

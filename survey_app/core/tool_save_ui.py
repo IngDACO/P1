@@ -12,6 +12,10 @@ import streamlit as st
 from core import projects as P
 from core import toolruns
 
+# Opción neutra: sin ella el selectbox devuelve el primer proyecto y se
+# escribiría sobre un elevador que nadie eligió.
+_VACIO = "— elige el proyecto —"
+
 
 def _proyectos_de(rol, usuario, grupo):
     """Mismo criterio que el Pre-Start: cada rol ve lo suyo."""
@@ -52,10 +56,12 @@ def render_guardar(herramienta: str, titulo_pdf: str, pdf_bytes: bytes,
 
     idmap = {f"{p.get('Nombre')} ({p.get('ID')})": p for p in proys}
     with c2:
-        sel = st.selectbox("Guardar en el proyecto", list(idmap.keys()),
+        # Sin preseleccion: guardar el calculo contra otro elevador ensucia su
+        # historial y su carpeta de Drive sin que nadie lo note.
+        sel = st.selectbox("Guardar en el proyecto", [_VACIO] + list(idmap.keys()),
                            key=f"prj_{key}")
         if st.button("💾 Guardar en el proyecto", use_container_width=True,
-                     key=f"save_{key}"):
+                     key=f"save_{key}", disabled=(not sel or sel == _VACIO)):
             prj = idmap[sel]
             with st.spinner("Guardando..."):
                 res = toolruns.registrar(

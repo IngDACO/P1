@@ -23,6 +23,7 @@ from core import timeclock
 # devuelve el primer elemento y se abre un proyecto que nadie eligió.
 _VACIO = "— elige un proyecto —"
 from core.field_pack import field_pack_pdf
+from core import ui_common as ui
 
 
 def _alerts_section(pid, grupo, project_name="", allow_report=False):
@@ -947,13 +948,17 @@ def _detalle_proyecto(pid: str, grupo: str = None):
                 st.markdown("**🗑 Eliminar actividad**")
                 _dmap = {f"{int(P._num(a.get('Orden')))} · {a.get('Nombre')}": a.get("Orden")
                          for a in acts}
-                dsel = st.selectbox("Actividad a eliminar", list(_dmap.keys()), key=f"delact_{pid}")
-                if st.button("Eliminar", key=f"delactb_{pid}"):
-                    ok, msg = P.delete_activity(pid, _dmap[dsel])
-                    (st.success if ok else st.error)(msg)
-                    if ok:
-                        _aviso_cambio("Se eliminó una actividad del cronograma.")
-                        st.rerun()
+                _orden = ui.elegir("Actividad a eliminar", _dmap, key=f"delact_{pid}",
+                                   vacio="— ninguna —")
+                if _orden is not None:
+                    _ok_del = ui.confirmar_borrado(f"delactok_{pid}",
+                                                   "Confirmo eliminar esta actividad")
+                    if st.button("Eliminar", key=f"delactb_{pid}", disabled=not _ok_del):
+                        ok, msg = P.delete_activity(pid, _orden)
+                        (st.success if ok else st.error)(msg)
+                        if ok:
+                            _aviso_cambio("Se eliminó una actividad del cronograma.")
+                            st.rerun()
         # ── Eliminar ──
         with st.expander("🗑 Eliminar proyecto"):
             st.warning("Esto elimina el proyecto y sus actividades. No se puede deshacer.")
@@ -1094,13 +1099,17 @@ def _panel_agrupaciones(grupo: str):
     if ags:
         st.markdown("#### 🗑 Eliminar agrupación")
         delmap = {f"{a['ID']} · {a['Nombre']}": a["ID"] for a in ags}
-        d = st.selectbox("Agrupación", list(delmap.keys()), key="del_agr_sel")
+        _agr = ui.elegir("Agrupación", delmap, key="del_agr_sel",
+                         vacio="— ninguna —")
         st.caption("Los proyectos no se borran; solo se desagrupan.")
-        if st.button("Eliminar agrupación"):
-            ok, msg = P.delete_grouping(delmap[d])
-            (st.success if ok else st.error)(msg)
-            if ok:
-                st.rerun()
+        if _agr:
+            _ok_del = ui.confirmar_borrado("del_agr_ok",
+                                           "Confirmo eliminar esta agrupación")
+            if st.button("Eliminar agrupación", disabled=not _ok_del):
+                ok, msg = P.delete_grouping(_agr)
+                (st.success if ok else st.error)(msg)
+                if ok:
+                    st.rerun()
 
 
 # ── Panel del PROPIETARIO: todos los proyectos (todos los grupos) ──
@@ -1295,8 +1304,9 @@ def render_conductor_projects(grupo: str):
     # ── Cargar recibos (combustible, peajes, materiales…) ──
     st.markdown("---")
     idmap = {f"{p.get('Nombre')} ({p.get('ID')})": p.get("ID") for p in proys}
-    sel = st.selectbox("Cargar recibo al proyecto", list(idmap.keys()), key="cond_exp_sel")
-    if sel:
+    sel = st.selectbox("Cargar recibo al proyecto", [_VACIO] + list(idmap.keys()),
+                       key="cond_exp_sel")
+    if sel and sel != _VACIO:
         render_expenses(idmap[sel], grupo, can_delete=False, key_prefix="cond")
 
 

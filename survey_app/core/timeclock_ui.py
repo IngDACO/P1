@@ -15,6 +15,10 @@ import streamlit.components.v1 as components
 from core import timeclock
 from core import projects as projects_data
 
+# Opción neutra: sin ella el selectbox devuelve el primer proyecto y se
+# escribiría sobre un elevador que nadie eligió.
+_VACIO = "— elige el proyecto —"
+
 _OTRO = "✏️ Otro (escribir)…"
 
 
@@ -95,9 +99,12 @@ def _render_normal(nombre, usuario, grupo):
     c3, c4 = st.columns(2)
     if asignados:
         nombres = [p.get("Nombre") for p in asignados]
-        sel = c3.selectbox("Proyecto (de tus asignados)", nombres + [_OTRO], key="tc_proyecto_sel")
+        # Sin preseleccion: fichar en el proyecto equivocado desvirtua las horas
+        # y, con ellas, el costo de mano de obra del elevador.
+        sel = c3.selectbox("Proyecto (de tus asignados)",
+                           [_VACIO] + nombres + [_OTRO], key="tc_proyecto_sel")
         proyecto = (c3.text_input("Nombre del proyecto", key="tc_proyecto_otro")
-                    if sel == _OTRO else sel)
+                    if sel == _OTRO else ("" if sel == _VACIO else sel))
     else:
         c3.caption("No tienes proyectos asignados; escribe el proyecto a mano.")
         proyecto = c3.text_input("Proyecto / Cliente", key="tc_proyecto",
@@ -189,7 +196,9 @@ def _render_conductor(nombre, usuario, grupo):
                         st.rerun()
     else:
         if nombres:
-            sel = st.selectbox("Proyecto al que le prestas servicio", nombres, key="cd_prj_sel")
+            sel = st.selectbox("Proyecto al que le prestas servicio",
+                               [_VACIO] + nombres, key="cd_prj_sel")
+            sel = "" if sel == _VACIO else sel
         else:
             sel = st.text_input("Proyecto (no hay proyectos en el grupo, escribe uno)", key="cd_prj_txt")
         if st.button("🟢 Clock IN proyecto", use_container_width=True, key="cd_prj_in"):

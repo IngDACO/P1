@@ -42,6 +42,10 @@ from core                 import plan_ui
 from core                 import plan_store
 from core.auth import can_reports
 
+# Opción neutra: sin ella el selectbox devuelve el primer proyecto y se
+# escribiría sobre un elevador que nadie eligió.
+_VACIO = "— elige el proyecto —"
+
 SURVEY_COLS = ["WR", "FR", "OR", "WL", "FL", "OL"]
 
 def _cfg_from_state():
@@ -1312,12 +1316,19 @@ def render_survey_tab(_ROL, _GRUPO):
                                "al proyecto, y se archivan plano, matriz e informe del cliente. "
                                "El cronograma y los avances del proyecto NO se tocan.")
                     _idmap = {f"{p.get('Nombre')} ({p.get('ID')})": p for p in _proys}
-                    _sel = st.selectbox("Proyecto de destino", list(_idmap.keys()),
+                    _sel = st.selectbox("Proyecto de destino",
+                                        [_VACIO] + list(_idmap.keys()),
                                         key="sv_prj_sel")
-                    _prj = _idmap[_sel]
+                    if not _sel or _sel == _VACIO:
+                        st.caption("Elige a qué proyecto adjuntar este survey.")
+                        _prj = None
+                    else:
+                        _prj = _idmap[_sel]
 
                     # NS del plano vs NS del proyecto: avisar, nunca pisar en silencio
+                    # (protegido: _prj es None mientras no se elija destino)
                     try:
+                        assert _prj is not None
                         _ns_prj = int(float(_prj.get("NS") or 0))
                         _ns_sv  = int(float(ap.get("NS") or 0))
                         if _ns_prj and _ns_sv and _ns_prj != _ns_sv:
@@ -1328,7 +1339,8 @@ def render_survey_tab(_ROL, _GRUPO):
                         pass
 
                     if st.button("💾 Guardar el survey en este proyecto",
-                                 use_container_width=True, key="sv_save_prj"):
+                                 use_container_width=True, key="sv_save_prj",
+                                 disabled=(_prj is None)):
                         _pid = str(_prj.get("ID", ""))
                         _usr = st.session_state.get("auth", {}).get("usuario", "")
                         _matriz = (r["survey_orig"].to_dict("records")

@@ -48,6 +48,7 @@ C:\Users\diego\P1\survey_app\
 │   ├── plan_store.py       # plano UNICO de la sesion, compartido por 5 herramientas (v128)
 │   ├── plan_data.py        # extraer_todo/guardar/del_proyecto — datos del plano EN el proyecto (v137)
 │   ├── plan_ui.py          # selector_proyecto/aplicar — el plano segun el rol (v137)
+│   ├── ui_common.py        # elegir() sin preseleccion + confirmar_borrado() (v139)
 │   ├── toolruns.py         # hoja Calculos: cada uso de una herramienta alimenta el proyecto (v129)
 │   ├── tool_pdf.py         # PDF comun de las 4 herramientas de calculo (v129)
 │   ├── tool_save_ui.py     # bloque compartido descargar + guardar en el proyecto (v129)
@@ -784,6 +785,32 @@ Al cargar el plano en el survey (app.py), autocompleta **RAIL = AlturaDiente** (
 espalda) del catálogo; si el código no está o no se detecta → aviso + entrada manual. **RAIL = AlturaDiente**
 (NO el ancho); AnchoDiente se guarda como dato secundario.
 
+## Auditoria de los 38 desplegables (v139)
+Pregunta del usuario: "casi todas las listas desplegables tienen un valor preseleccionado, revisa cuales
+podemos dejar sin preseleccion". Auditoria completa → **38 selectbox/multiselect**, clasificados por lo
+que pasa AL ELEGIR, no por consistencia estetica:
+### A · Cuatro que BORRAN — lo serio
+`Eliminar grupo` (auth_ui) · `Actividad a eliminar` (projects_ui) · `Manual` (auth_ui) ·
+`Agrupación` (projects_ui). Los cuatro tenian el mismo patron: **destino ya elegido + boton de eliminar
+al lado, SIN confirmacion**. Un clic de mas borraba algo que nadie eligio. (El de "Eliminar proyecto" si
+avisaba; estos no.) Ahora: opcion neutra + **casilla de confirmacion** que habilita el boton.
+### B · Seis que ESCRIBEN en un proyecto
+Fichaje normal y de conductor, Pre-Start, recibo de gastos, guardar un calculo, destino del survey.
+No destruyen, pero **atribuian datos al proyecto equivocado en silencio** — horas y costos al elevador
+que no es. Todos con opcion neutra; el boton de guardar queda `disabled` sin destino.
+### C · El resto se deja IGUAL (decision explicita)
+Marca (Schindler es la unica), Tipo de documento, Categoria de gasto, Rol, Clase, Referencia de riel,
+Estado manual y la navegacion por radio: son **valores de configuracion con defecto util**, no acciones.
+Quitarles el defecto añadiria un clic sin evitar ningun error.
+### `core/ui_common.py`
+`elegir(label, opciones, key, vacio)` (acepta lista o dict; con dict devuelve el VALOR) y
+`confirmar_borrado(key, texto)`. Viven en un sitio para que los 4 bloques de borrado no divergan.
+⚠️ **`st.selectbox` no tiene estado "sin elegir"**: siempre devuelve su primer elemento. Cualquier
+desplegable que dispare una ACCION necesita opcion neutra explicita.
+### ⚠️ Repetido el chequeo de uso-antes-de-asignar (v138)
+Al dejar `_prj = None` en el survey cuando no hay destino, el codigo de abajo seguia usandolo → se
+protegio el bloque NS y el boton (`disabled=(_prj is None)`). Chequeo pasado en los 7 archivos tocados.
+
 ## Los selectores ya no abren un proyecto que nadie eligio (v138)
 Pregunta del usuario: "cuando entro siempre tiene que haber un proyecto preseleccionado en Mi grupo?".
 **No, y era un bug de UX real:** `st.selectbox("Proyecto", list(idmap))` **siempre devuelve el primer
@@ -1458,7 +1485,7 @@ posicional + plano) → app.py, al cargar el PDF, setea `st.session_state["ns"]`
 resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NORTH SYD y AGECARE → NS=6
 (coincide con travel/floor-height HQ/HE).
 
-## Versiones desplegadas (v138 = actual)
+## Versiones desplegadas (v139 = actual)
 | Ver | Cambio principal |
 |---|---|
 | v5 | Extractor: CRLF fix, caso D valor-antes-label, sin pdfplumber |
@@ -1560,6 +1587,7 @@ resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NOR
 | v102 | Fix: NS se lee del plano (NUMBER OF STOPS) al cargar el PDF; default de init 6→2 (ya no queda pegado en 6) |
 | v103 | Rol conductor (2 relojes: jornada general + segmentos por proyecto, columna Tipo) + cronómetro en vivo para todos + reporte admin de horas del grupo (Mi grupo → ⏱ Horas) |
 | v104 | Credenciales/tickets por usuario (White Card, Forklift, Dogging/Rigging, licencia…): vencimiento+estado, foto/documento a Drive, radar en Resumen del día, avisos email/Telegram a admin+usuario; usuario ve las suyas (🎫 Mis credenciales) |
+| v139 | Auditoria de los 38 desplegables: los 4 que BORRAN pasan a sin-preseleccion + confirmacion, y los 6 que escriben en un proyecto tampoco preseleccionan; los de configuracion se dejan igual |
 | v138 | Los selectores de proyecto ya no abren uno arbitrario al entrar (8 lecturas que nadie pidio); al campo se le preselecciona el proyecto en el que ficho |
 | v137 | El plano se lee UNA vez al crear el proyecto (columna PlanoJSON) y alimenta las 5 herramientas: el campo ya no sube el PDF — su proyecto sale del clock-in, el admin lo elige en la herramienta |
 | v136 | Extraccion del plano 2.9x mas rapida (230s -> 79s): los 6 extractores comparten una sola lectura cacheada del PDF; resultados verificados identicos |

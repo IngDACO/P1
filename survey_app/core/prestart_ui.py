@@ -11,6 +11,10 @@ from core import prestart as PS
 from core import projects as P
 from core import maps
 
+# Opción neutra: sin ella el selectbox devuelve el primer proyecto y se
+# escribiría sobre un elevador que nadie eligió.
+_VACIO = "— elige el proyecto —"
+
 
 def _initials(nombre: str) -> str:
     parts = [w for w in str(nombre or "").split() if w]
@@ -46,7 +50,12 @@ def render_prestart_tab():
         return
 
     idmap = {f"{p.get('Nombre')} ({p.get('ID')})": p for p in proys}
-    sel = st.selectbox("Proyecto", list(idmap.keys()), key="ps_proy")
+    # Sin preseleccion: el pre-start queda archivado en el proyecto elegido y
+    # una near miss abre alarma ahi — no puede ir al proyecto por defecto.
+    sel = st.selectbox("Proyecto", [_VACIO] + list(idmap.keys()), key="ps_proy")
+    if not sel or sel == _VACIO:
+        st.info("Elige el proyecto en el que vas a trabajar hoy.")
+        return
     prj = idmap[sel]
     pid = str(prj.get("ID", ""))
     pgrupo = str(prj.get("Grupo", "")) or grupo
