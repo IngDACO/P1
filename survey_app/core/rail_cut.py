@@ -27,13 +27,12 @@ def extract_lf(pdf_file) -> dict:
     """Devuelve {'LFKK': float|None, 'LFGK': float|None} leídos del PDF."""
     result = {"LFKK": None, "LFGK": None}
     try:
-        from pypdf import PdfReader
-        from extractors.schindler import _page_text_positional
-        reader = PdfReader(pdf_file)
+        # Reusa la lectura cacheada: antes esto reparseaba el PDF entero (~71 s)
+        from extractors.schindler import page_texts
         text = []
-        for page in reader.pages:
-            text.append(_page_text_positional(page) or "")
-            text.append(page.extract_text() or "")
+        for pos, plano in page_texts(pdf_file):
+            text.append(pos or "")
+            text.append(plano or "")
         full = "\n".join(text)
         for key in ("LFKK", "LFGK"):
             m = re.search(rf"{key}\s*[=:\s]\s*(-?\d+(?:[.,]\d+)?)", full, re.IGNORECASE)

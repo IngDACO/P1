@@ -11,6 +11,7 @@ Casos especiales manejados:
 """
 from pypdf import PdfReader
 import logging
+import hashlib
 import re
 
 logger = logging.getLogger(__name__)
@@ -234,6 +235,60 @@ def _extract_from_text(text: str, found: dict) -> None:
                     break
 
 
+# ── Lectura de texto compartida (v136) ────────────────────────────────
+# Los 6 extractores necesitan el MISMO texto del plano. Antes cada uno abria su
+# propio PdfReader y reextraia todas las paginas: el plano completo costaba
+# ~230 s. Aqui se lee una vez y se cachea por contenido del archivo.
+_TEXTS_CACHE: dict = {}
+_TEXTS_MAX = 4          # planos en memoria (el texto pesa poco; el PDF no se guarda)
+
+
+def _pdf_key(pdf_file):
+    """Huella del PDF por contenido. None si no se puede calcular."""
+    try:
+        if hasattr(pdf_file, "seek"):
+            pdf_file.seek(0)
+        data = pdf_file.read()
+        if hasattr(pdf_file, "seek"):
+            pdf_file.seek(0)
+        return hashlib.md5(data).hexdigest() if data else None
+    except Exception:
+        return None
+
+
+def page_texts(pdf_file) -> list:
+    """[(texto_posicional, texto_plano)] por pagina. Cacheado por contenido.
+
+    El texto plano se calcula aqui tambien porque varios extractores lo usan
+    como segunda fuente, y era otra pasada completa sobre el PDF.
+    """
+    key = _pdf_key(pdf_file)
+    if key and key in _TEXTS_CACHE:
+        return _TEXTS_CACHE[key]
+    out = []
+    try:
+        if hasattr(pdf_file, "seek"):
+            pdf_file.seek(0)
+        for page in PdfReader(pdf_file).pages:
+            try:
+                pos = _page_text_positional(page)
+            except Exception:
+                pos = ""
+            try:
+                plano = page.extract_text() or ""
+            except Exception:
+                plano = ""
+            out.append((pos, plano))
+    except Exception as e:
+        logger.warning("page_texts: %s", e)
+        return out
+    if key:
+        if len(_TEXTS_CACHE) >= _TEXTS_MAX:
+            _TEXTS_CACHE.pop(next(iter(_TEXTS_CACHE)), None)
+        _TEXTS_CACHE[key] = out
+    return out
+
+
 def extract_from_pdf(pdf_file) -> dict:
     """
     Extrae parámetros del PDF Schindler.  Estrategia de dos pasadas:
@@ -252,15 +307,12 @@ def extract_from_pdf(pdf_file) -> dict:
     """
     found: dict = {p: None for p in PARAMS}
     try:
-        reader = PdfReader(pdf_file)
-        for page in reader.pages:
+        for text_pos, text_plain in page_texts(pdf_file):
             # Pasada 1: extracción posicional
-            text_pos = _page_text_positional(page)
             _extract_from_text(text_pos, found)
 
             # Pasada 2: texto plano para parámetros aún no encontrados
             if any(v is None for v in found.values()):
-                text_plain = page.extract_text() or ""
                 _extract_from_text(text_plain, found)
 
             if all(v is not None for v in found.values()):
@@ -277,11 +329,8 @@ _NS_RE = re.compile(r"NUMBER\s+OF\s+STOPS\s+(\d{1,2})\b")
 def extract_number_of_stops(pdf_file):
     """Número de paradas (NUMBER OF STOPS) leído del plano, o None."""
     try:
-        if hasattr(pdf_file, "seek"):
-            pdf_file.seek(0)
-        reader = PdfReader(pdf_file)
-        for page in reader.pages:
-            for src in (_page_text_positional(page), page.extract_text() or ""):
+        for pos, plano in page_texts(pdf_file):
+            for src in (pos, plano):
                 m = _NS_RE.search(src.upper())
                 if m:
                     return int(m.group(1))
@@ -301,11 +350,8 @@ def extract_car_guide_rail(pdf_file) -> str:
     posicional). Se excluye la fila de 'COUNTERWEIGHT GUIDE RAIL'.
     """
     try:
-        if hasattr(pdf_file, "seek"):
-            pdf_file.seek(0)
-        reader = PdfReader(pdf_file)
-        for page in reader.pages:
-            for line in _page_text_positional(page).split("\n"):
+        for pos, _plano in page_texts(pdf_file):
+            for line in pos.split("\n"):
                 U = line.upper()
                 if "CAR GUIDE RAIL" in U and "COUNTERWEIGHT" not in U:
                     after = U.split("CAR GUIDE RAIL", 1)[1]
@@ -327,12 +373,9 @@ def extract_belting(pdf_file) -> dict:
     HQ del texto 'HQ= 14045'. HGP = 2º valor de la fila 'HKP/HGP [mm]' (el 1º es HKP)."""
     out = {"HQ": None, "HGP": None}
     try:
-        if hasattr(pdf_file, "seek"):
-            pdf_file.seek(0)
-        for page in PdfReader(pdf_file).pages:
-            txt = _page_text_positional(page)
+        for txt, _plano in page_texts(pdf_file):
             if out["HQ"] is None:
-                m = _HQ_RE.search(txt) or _HQ_RE.search(page.extract_text() or "")
+                m = _HQ_RE.search(txt) or _HQ_RE.search(_plano)
                 if m:
                     out["HQ"] = float(m.group(1))
             if out["HGP"] is None:
@@ -356,10 +399,7 @@ def extract_hkp(pdf_file) -> dict:
     HKP = 1er valor de la fila 'HKP/HGP [mm]' (el 2º es HGP)."""
     out = {"HKP": None}
     try:
-        if hasattr(pdf_file, "seek"):
-            pdf_file.seek(0)
-        for page in PdfReader(pdf_file).pages:
-            txt = _page_text_positional(page)
+        for txt, _plano in page_texts(pdf_file):
             for line in txt.split("\n"):
                 if "HKP/HGP" in line.upper():
                     vals = _VAL_TOL.findall(line.upper().split("HKP/HGP", 1)[1])
