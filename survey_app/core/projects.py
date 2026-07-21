@@ -259,6 +259,30 @@ def create_project(grupo, nombre, cliente="", ubicacion="", modelo="", ns=0,
     return True, pid
 
 
+def attach_survey(pid: str, params: dict = None, matriz=None,
+                  interp: dict = None) -> tuple:
+    """Adjunta el resultado de un survey a un proyecto YA EXISTENTE.
+
+    Desde v135 el survey no crea el proyecto: es una herramienta que lo
+    alimenta, como Plomadas o Corte de rieles. Esto escribe las columnas
+    ParamsJSON/MatrizJSON/InterpJSON, de las que dependen el paquete de obra
+    (`survey_calc.recalcular`) y "Reconstruir proyecto en el Survey".
+
+    ⚠️ NO toca las actividades: el cronograma se crea con el proyecto y el
+    campo ya puede haber cargado avances. Sobrescribirlo aquí los borraría.
+    """
+    campos = {}
+    if params is not None:
+        campos["ParamsJSON"] = json.dumps(params or {}, ensure_ascii=False, default=str)
+    if matriz is not None:
+        campos["MatrizJSON"] = json.dumps(matriz or [], ensure_ascii=False, default=str)
+    if interp is not None:
+        campos["InterpJSON"] = json.dumps(interp or {}, ensure_ascii=False, default=str)
+    if not campos:
+        return False, "Nada que adjuntar."
+    return update_project(pid, campos)
+
+
 def parse_links(text) -> list:
     """Lista de links (uno por línea) desde el texto de InduccionLinks."""
     return [l.strip() for l in str(text or "").splitlines() if l.strip()]

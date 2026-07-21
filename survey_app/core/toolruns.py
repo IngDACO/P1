@@ -31,6 +31,7 @@ HEADERS = ["ID", "ProyectoID", "Grupo", "Herramienta", "Fecha", "Usuario",
 
 # Etiqueta visible por herramienta (la clave se guarda en la hoja)
 HERRAMIENTAS = {
+    "survey":   "📐 Survey de elevador",
     "plomada":  "🔩 Líneas de plomada",
     "rieles":   "✂️ Corte de rieles",
     "buffers":  "🛡 Corte de buffers",

@@ -782,6 +782,36 @@ Al cargar el plano en el survey (app.py), autocompleta **RAIL = AlturaDiente** (
 espalda) del catálogo; si el código no está o no se detecta → aviso + entrada manual. **RAIL = AlturaDiente**
 (NO el ancho); AnchoDiente se guarda como dato secundario.
 
+## ⚠️ CAMBIO DE ARQUITECTURA: el survey deja de crear proyectos (v135)
+**El PROYECTO pasa a ser la entidad principal y el survey una herramienta que lo alimenta**, igual que
+Plomadas, Cortes y Belting. Antes el proyecto SOLO nacia del survey ("Guardar como proyecto"), asi que
+no se podia dar de alta una obra hasta tener el survey hecho — pero la obra existe antes que el survey.
+### Crear proyecto (nuevo)
+`projects_ui._nuevo_proyecto_form(grupo, key)` — expander **➕ Nuevo proyecto** en 🛠 Mi grupo → 📊
+Proyectos y en 👑 Administracion → 📁 Proyectos (el propietario elige grupo). Pide nombre, cliente,
+ubicacion, modelo, ingeniero, **NS**, fecha de inicio, presupuesto, instrucciones e inducciones.
+El **cronograma se genera solo con el NS** (`build_schedule(ns, fecha, {})` → 11 actividades estandar):
+no necesita el survey. Incluye aviso de duplicados y el chequeo de credenciales/contacto de v127
+(extraidos a `_avisar_asignados` / `_notificar_asignados`, compartidos).
+⚠️ **El formulario va ANTES del `return` por lista vacia** en ambos paneles: si no, sin proyectos y sin
+el survey como origen, la app se quedaria SIN forma de crear el primero (sin arranque posible).
+### El survey alimenta un proyecto existente
+`projects.attach_survey(pid, params, matriz, interp)` escribe ParamsJSON/MatrizJSON/InterpJSON en un
+proyecto ya creado (via `update_project`), de las que dependen el paquete de obra
+(`survey_calc.recalcular`) y "Reconstruir proyecto en el Survey" — **siguen funcionando igual**.
+⚠️ `attach_survey` **NO toca las actividades**: el cronograma se crea con el proyecto y el campo ya
+puede tener avances cargados; sobrescribirlo los borraria.
+El survey ademas registra en la hoja `Calculos` (clave `survey`, añadida a `toolruns.HERRAMIENTAS`) y
+archiva plano + matriz + informe del cliente. Si el NS del plano difiere del NS del proyecto, **avisa**
+en vez de pisarlo en silencio (el cronograma se calculo con el del proyecto).
+### Compatibilidad
+Los proyectos existentes ya tienen su ParamsJSON: nada que migrar, solo cambia DONDE se escribe.
+### ⚠️ Error que cometi
+Al reescribir el bloque invente el kwarg `survey_matrix=` en `generate_user_report`, cuya firma real
+lleva `lim_map=`. Habria sido **TypeError al archivar el informe**. Lo caza **validar cada llamada nueva
+contra `inspect.signature` de la funcion real** — chequeo que conviene repetir tras reescribir bloques.
+El agente IA se actualizo en el MISMO lote (regla de v133): ya no dice "Guardar como proyecto".
+
 ## Documentos invisibles + el campo recibe lo suyo (v134)
 ⚠️ **Bug de 36 versiones, encontrado auditando los modulos pendientes:** `_documentos_section` filtraba
 por `_DOC_TIPOS`, asi que **todo documento generado por la app con un tipo ausente de esa lista
@@ -1360,7 +1390,7 @@ posicional + plano) → app.py, al cargar el PDF, setea `st.session_state["ns"]`
 resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NORTH SYD y AGECARE → NS=6
 (coincide con travel/floor-height HQ/HE).
 
-## Versiones desplegadas (v134 = actual)
+## Versiones desplegadas (v135 = actual)
 | Ver | Cambio principal |
 |---|---|
 | v5 | Extractor: CRLF fix, caso D valor-antes-label, sin pdfplumber |
@@ -1462,6 +1492,7 @@ resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NOR
 | v102 | Fix: NS se lee del plano (NUMBER OF STOPS) al cargar el PDF; default de init 6→2 (ya no queda pegado en 6) |
 | v103 | Rol conductor (2 relojes: jornada general + segmentos por proyecto, columna Tipo) + cronómetro en vivo para todos + reporte admin de horas del grupo (Mi grupo → ⏱ Horas) |
 | v104 | Credenciales/tickets por usuario (White Card, Forklift, Dogging/Rigging, licencia…): vencimiento+estado, foto/documento a Drive, radar en Resumen del día, avisos email/Telegram a admin+usuario; usuario ve las suyas (🎫 Mis credenciales) |
+| v135 | ARQUITECTURA: el survey deja de crear proyectos y pasa a alimentarlos como una herramienta mas; el proyecto se crea en Mi grupo/Administracion y genera su cronograma del NS |
 | v134 | Fix de 36 versiones: los PDF de Pre-Start (v97) y de calculos (v129) eran INVISIBLES en Documentos para todos los roles + el campo ya puede bajar el paquete de obra y ver los calculos |
 | v133 | Agente IA al dia: desconocia 11 funciones (todo desde v96) y no sabia guiar por la interfaz; ahora tambien navega por rol. Quitada toolruns.list_group (huerfana) |
 | v132 | Detalle de proyecto reorganizado: 11 secciones en scroll unico -> 4 pestañas (Estado/Datos/Costos/Archivos) con cabecera fija |

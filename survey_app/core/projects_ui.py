@@ -15,6 +15,7 @@ from core import maps
 from core.schedule import schedule_svg
 from core import survey_calc
 from core import toolruns
+from core import credentials
 from core.field_pack import field_pack_pdf
 
 
@@ -267,6 +268,144 @@ def _documentos_section(pid: str):
                     st.error(f"No se pudo subir: {e}")
 
 
+def _nuevo_proyecto_form(grupo: str, key: str = "nuevo"):
+    """Crear un proyecto desde cero, sin pasar por el Survey (v135).
+
+    Antes el proyecto SOLO nacía del survey ("Guardar como proyecto"), así que
+    no se podía dar de alta una obra hasta tener el survey hecho. Ahora el
+    proyecto es la entidad principal y el survey una herramienta que lo
+    alimenta, igual que Plomadas o los cortes.
+
+    El cronograma se genera de las actividades estándar a partir del NS, que es
+    lo único que necesita `build_schedule` — no hace falta el survey.
+    """
+    import datetime as _dt
+    from core.schedule import build_schedule
+
+    with st.expander("➕ Nuevo proyecto"):
+        campos = []
+        try:
+            campos = [u["Usuario"] for u in auth.list_users(grupo)
+                      if str(u.get("Rol", "")) == "campo"]
+        except Exception:
+            pass
+
+        asg = st.multiselect("👷 Usuarios de campo asignados", campos,
+                             key=f"np_asg_{key}")
+        if asg:
+            _avisar_asignados(asg)
+
+        with st.form(f"np_form_{key}"):
+            c1, c2 = st.columns(2)
+            nom = c1.text_input("Nombre del proyecto *", key=f"np_nom_{key}")
+            cli = c2.text_input("Cliente", key=f"np_cli_{key}")
+            ubi = c1.text_input("Ubicación", key=f"np_ubi_{key}",
+                                help="Se enlaza a Google Maps en toda la app.")
+            mod = c2.text_input("Modelo de elevador", key=f"np_mod_{key}")
+            ing = c1.text_input("Ingeniero responsable", key=f"np_ing_{key}")
+            ns = c2.number_input("Número de paradas (NS) *", min_value=2, max_value=50,
+                                 value=2, step=1, key=f"np_ns_{key}",
+                                 help="Define la duración de las actividades del cronograma.")
+            f_ini = c1.date_input("Fecha de inicio", value=_dt.date.today(),
+                                  key=f"np_ini_{key}")
+            pres = c2.number_input("💰 Presupuesto (0 = sin presupuesto)", min_value=0.0,
+                                   step=100.0, key=f"np_pres_{key}")
+            instr = st.text_area("📌 Instrucciones particulares", key=f"np_ins_{key}",
+                                 placeholder="Indicaciones específicas para el equipo…")
+            inds = st.text_area("📝 Inducciones (un link por línea)", key=f"np_ind_{key}",
+                                placeholder="https://...",
+                                help="Se envían por Telegram/email a los asignados.")
+            enviar = st.form_submit_button("➕ Crear proyecto", use_container_width=True)
+
+        if enviar:
+            if not nom.strip():
+                st.error("El nombre del proyecto es obligatorio.")
+                return
+            dups = [f"{p.get('ID')} · {p.get('Nombre')}" for p in P.list_projects(grupo)
+                    if " ".join(str(p.get("Nombre") or "").lower().split())
+                    == " ".join(nom.lower().split())]
+            if dups and not st.session_state.get(f"np_dup_{key}"):
+                st.warning("⚠️ Ya existe un proyecto con ese nombre: "
+                           + ", ".join(dups)
+                           + ". Si es otro elevador, marca la casilla y crea de nuevo.")
+                st.checkbox("Crear aunque el nombre se repita", key=f"np_dup_{key}")
+                return
+
+            sched = build_schedule(int(ns), f_ini, {})
+            ok, res = P.create_project(
+                grupo=grupo, nombre=nom.strip(), cliente=cli, ubicacion=ubi,
+                modelo=mod, ns=int(ns), ingeniero=ing, campo_asignados=asg,
+                fecha_inicio=f_ini.strftime("%Y-%m-%d"),
+                fecha_fin_est=(sched["fecha_fin"].strftime("%Y-%m-%d")
+                               if sched.get("fecha_fin") else ""),
+                activities=sched.get("activities", []),
+                creado_por=st.session_state.get("auth", {}).get("usuario", ""),
+                instrucciones=instr, induccion_links=inds, presupuesto=pres)
+            if not ok:
+                st.error(f"No se pudo crear: {res}")
+                return
+
+            st.success(f"✅ Proyecto **{res}** creado con "
+                       f"{len(sched.get('activities', []))} actividades. "
+                       "El survey y las demás herramientas ya pueden alimentarlo.")
+            if asg:
+                _notificar_asignados(asg, {
+                    "Nombre": nom.strip(), "Cliente": cli, "Ubicacion": ubi,
+                    "FechaInicio": f_ini.strftime("%Y-%m-%d"),
+                    "FechaFinEst": (sched["fecha_fin"].strftime("%Y-%m-%d")
+                                    if sched.get("fecha_fin") else ""),
+                    "InduccionLinks": inds})
+
+
+def _avisar_asignados(usuarios):
+    """Avisa de credenciales vencidas o contacto incompleto ANTES de asignar."""
+    sin_contacto, cred_mal = [], []
+    for u in usuarios:
+        try:
+            info = auth.get_user(u) or {}
+            if not (str(info.get("Email", "")).strip()
+                    and str(info.get("TelegramChatID", "")).strip()):
+                sin_contacto.append(u)
+        except Exception:
+            pass
+        try:
+            for c in credentials.list_for(u):
+                if credentials.status(c.get("Vencimiento")) in ("vencido", "por_vencer"):
+                    cred_mal.append(f"{u} — {c.get('Tipo', 'credencial')}: "
+                                    f"{credentials.status_label(c.get('Vencimiento'))}")
+        except Exception:
+            pass
+    if cred_mal:
+        st.warning("🎫 **Credenciales a revisar antes de mandarlos a obra:**\n\n"
+                   + "\n".join(f"- {x}" for x in cred_mal))
+    if sin_contacto:
+        st.warning("📵 **Sin contacto completo (email + Telegram):** "
+                   + ", ".join(sin_contacto)
+                   + ". No recibirán la asignación ni las inducciones.")
+
+
+def _notificar_asignados(usuarios, info_prj):
+    """Envía la asignación e informa SIEMPRE del resultado (no falla en silencio)."""
+    if not notify.any_channel_configured():
+        st.caption("📨 Sin canales de aviso configurados (Gmail / Telegram).")
+        return
+    n = 0
+    for u in usuarios:
+        try:
+            rr = notify.notify_assignment(u, info_prj)
+            if rr.get("email") or rr.get("telegram"):
+                n += 1
+        except Exception:
+            pass
+    if n == len(usuarios):
+        st.caption(f"📨 {n} usuario(s) de campo notificado(s).")
+    elif n:
+        st.warning(f"📨 Notificados {n} de {len(usuarios)}. Al resto le falta contacto.")
+    else:
+        st.warning("📵 No se pudo notificar a nadie: revisa email y Telegram "
+                   "en 🛠 Mi grupo → Usuarios.")
+
+
 def _paquete_obra_section(pid: str, prj: dict):
     """Paquete de obra (PDF de terreno) regenerado desde el survey guardado.
 
@@ -360,9 +499,12 @@ def _field_users(grupo):
 def _panel_proyectos(grupo: str):
     proys = P.list_projects(grupo=grupo)
     if not proys:
-        st.info("Todavía no hay proyectos en este grupo. Los proyectos se crean desde "
-                "la pestaña **Survey** con el botón **💾 Guardar como proyecto** "
-                "(tras calcular).")
+        # ⚠️ El formulario va ANTES del return: desde v135 el survey ya no crea
+        # proyectos, asi que si aqui se cortara no habria forma de crear el
+        # primero (la app quedaria sin arranque posible).
+        st.info("Todavía no hay proyectos en este grupo. Crea el primero aquí; "
+                "después el Survey y las demás herramientas podrán alimentarlo.")
+        _nuevo_proyecto_form(grupo, key="adm")
         return
 
     # ── Cartera de proyectos (lista de tarjetas) ──
@@ -377,6 +519,8 @@ def _panel_proyectos(grupo: str):
                 + (f"  ·  🟢 {_na} adelantado(s)" if _na else ""))
     st.markdown(_portfolio_html(proys, horas, alarmas, ags, delays, aheads),
                 unsafe_allow_html=True)
+
+    _nuevo_proyecto_form(grupo, key="adm")
 
     # ── Abrir proyecto (detalle / edición) ──
     st.markdown("#### 🔎 Abrir proyecto")
@@ -894,8 +1038,18 @@ def render_owner_projects():
         st.warning("La gestión de proyectos necesita Google Sheets configurado.")
         return
     proys = P.list_projects()   # todos los grupos
+    _grupos = []
+    try:
+        _grupos = [g["Grupo"] for g in auth.list_groups(only_active=True)]
+    except Exception:
+        pass
+    if _grupos:
+        _g = st.selectbox("Grupo para el nuevo proyecto", _grupos, key="own_np_grupo")
+        _nuevo_proyecto_form(_g, key="own")
     if not proys:
-        st.info("Aún no hay proyectos en ningún grupo.")
+        if not _grupos:
+            st.info("Aún no hay grupos. Crea uno en **🏢 Grupos** para poder "
+                    "registrar proyectos.")
         return
     ags = {a["ID"]: a["Nombre"] for a in P.list_groupings()}
     alarmas = alerts.open_counts_all() if alerts.is_configured() else {}

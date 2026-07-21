@@ -37,6 +37,7 @@ from core                 import notify
 from core.field_pack      import field_pack_pdf
 from core.auth            import get_user as auth_get_user
 from core                 import credentials
+from core                 import toolruns
 from core                 import plan_store
 from core.auth import can_reports
 
@@ -1264,211 +1265,135 @@ def render_survey_tab(_ROL, _GRUPO):
         # ══════════════════════════════════════════════════════
         # PASO 7 — GUARDAR COMO PROYECTO  (solo administrador / propietario)
         # ══════════════════════════════════════════════════════
+        # ══════════════════════════════════════════════════════
+        # GUARDAR EN EL PROYECTO  (v135: el survey ya NO crea proyectos)
+        # ══════════════════════════════════════════════════════
+        # El survey pasa a ser una herramienta que ALIMENTA un proyecto, igual
+        # que Plomadas, Cortes o Belting. El proyecto se crea aparte, en
+        # 🛠 Mi grupo → ➕ Nuevo proyecto. Motivo: la obra existe antes que el
+        # survey, y atar la creación al survey obligaba a tenerlo hecho para
+        # poder dar de alta el proyecto.
         if _ROL in ("administrador", "propietario"):
-            st.header("💾 Guardar como proyecto")
+            st.header("💾 Guardar en el proyecto")
             if not st.session_state.get("calc_results"):
-                st.info("Calcula primero: el proyecto se inicia con este survey.")
+                st.info("Calcula primero para poder guardar el survey en un proyecto.")
             elif not projects_data.is_configured():
-                st.caption("🔒 Requiere Google Sheets configurado para guardar proyectos.")
-            elif not _GRUPO:
-                st.caption("🔒 Tu cuenta no tiene grupo asignado; no se pueden crear proyectos.")
+                st.caption("🔒 Requiere Google Sheets configurado.")
             else:
                 r  = st.session_state.calc_results
                 ap = r["all_params"]
-                _campos = []
-                try:
-                    from core.auth import list_users
-                    _campos = [u["Usuario"] for u in list_users(_GRUPO)
-                               if str(u.get("Rol", "")) == "campo"]
-                except Exception:
-                    pass
-                # ── Asignacion de campo FUERA del form ──────────────
-                # Va fuera a proposito: dentro de un st.form los widgets no
-                # actualizan session_state hasta el submit, y el aviso de
-                # credenciales/contacto solo sirve ANTES de guardar.
-                pj_asg = st.multiselect("👷 Usuarios de campo asignados", _campos,
-                                        key="pj_asg_sel")
-                if pj_asg:
-                    _sin_contacto, _cred_mal = [], []
-                    for _u in pj_asg:
-                        try:
-                            _info = auth_get_user(_u) or {}
-                            if not (str(_info.get("Email", "")).strip()
-                                    and str(_info.get("TelegramChatID", "")).strip()):
-                                _sin_contacto.append(_u)
-                        except Exception:
-                            pass
-                        try:
-                            for _c in credentials.list_for(_u):
-                                _e = credentials.status(_c.get("Vencimiento"))
-                                if _e in ("vencido", "por_vencer"):
-                                    _cred_mal.append(
-                                        f"{_u} — {_c.get('Tipo','credencial')}: "
-                                        f"{credentials.status_label(_c.get('Vencimiento'))}"
-                                        + (f" ({_c.get('Vencimiento')})"
-                                           if _c.get("Vencimiento") else ""))
-                        except Exception:
-                            pass
-                    if _cred_mal:
-                        st.warning("🎫 **Credenciales a revisar antes de mandarlos a obra:**\n\n"
-                                   + "\n".join(f"- {x}" for x in _cred_mal)
-                                   + "\n\nPuedes guardar igualmente; el aviso es informativo.")
-                    if _sin_contacto:
-                        st.warning(
-                            "📵 **Sin contacto completo (email + Telegram):** "
-                            + ", ".join(_sin_contacto)
-                            + ". No recibirán la asignación ni las inducciones, y sin "
-                              "contacto no pueden usar la app. Complétalo en "
-                              "🛠 Mi grupo → Usuarios.")
+                _proys = (projects_data.list_projects() if _ROL == "propietario"
+                          else projects_data.list_projects(_GRUPO))
+                if not _proys:
+                    st.info("No hay proyectos todavía. Créalo en "
+                            + ("**👑 Administración → 📁 Proyectos**" if _ROL == "propietario"
+                               else "**🛠 Mi grupo → 📊 Proyectos → ➕ Nuevo proyecto**")
+                            + " y vuelve aquí para adjuntarle este survey.")
+                else:
+                    st.caption("Se adjuntan los parámetros, la matriz y las interpretaciones "
+                               "al proyecto, y se archivan plano, matriz e informe del cliente. "
+                               "El cronograma y los avances del proyecto NO se tocan.")
+                    _idmap = {f"{p.get('Nombre')} ({p.get('ID')})": p for p in _proys}
+                    _sel = st.selectbox("Proyecto de destino", list(_idmap.keys()),
+                                        key="sv_prj_sel")
+                    _prj = _idmap[_sel]
 
-                with st.form("save_project"):
-                    st.caption("Se guarda el survey completo (parámetros, matriz, interpretaciones "
-                               "y cronograma). El avance lo alimentará el equipo de campo.")
-                    pc1, pc2 = st.columns(2)
-                    pj_nom = pc1.text_input("Nombre del proyecto", value=ap.get("PROYECTO", ""))
-                    pj_cli = pc2.text_input("Cliente", value=st.session_state.get("cliente", ""))
-                    pj_ubi = pc1.text_input("Ubicación", value=st.session_state.get("ubicacion", ""))
-                    pj_mod = pc2.text_input("Modelo de elevador")
-                    pj_ing = pc1.text_input("Ingeniero", value=ap.get("INGENIERO", ""))
-                    pj_instr = st.text_area("📌 Instrucciones particulares del proyecto",
-                                            placeholder="Indicaciones específicas para el equipo…")
-                    pj_ind = st.text_area("📝 Inducciones (un link por línea)",
-                                          placeholder="https://...\nhttps://...",
-                                          help="Se enviarán por Telegram/email a los usuarios de campo "
-                                               "asignados para que las diligencien.")
-                    pj_pres = st.number_input("💰 Presupuesto del proyecto (0 = sin presupuesto)",
-                                              min_value=0.0, step=100.0,
-                                              help="Se compara contra compras + mano de obra.")
-                    pj_dup_ok = st.checkbox(
-                        "Crear aunque ya exista un proyecto con ese nombre",
-                        value=False, key="pj_dup_ok",
-                        help="Marca esto solo si de verdad es un elevador distinto.")
-                    if st.form_submit_button("💾 Guardar como proyecto", use_container_width=True):
-                        # Un proyecto = un elevador. Sin este control es facil crear
-                        # el mismo dos veces (el survey se repite por elevador) y las
-                        # horas/gastos quedan repartidos entre duplicados.
-                        _dups = []
-                        try:
-                            _norm = lambda x: " ".join(str(x or "").lower().split())
-                            for _p in projects_data.list_projects(_GRUPO):
-                                if _norm(_p.get("Nombre")) == _norm(pj_nom):
-                                    _dups.append(f"{_p.get('ID')} · {_p.get('Nombre')}"
-                                                 + (f" ({_p.get('Cliente')})"
-                                                    if _p.get("Cliente") else ""))
-                        except Exception:
-                            pass
-                        if not pj_nom.strip():
-                            st.error("El nombre del proyecto es obligatorio.")
-                        elif _dups and not pj_dup_ok:
-                            st.warning(
-                                "⚠️ Ya existe un proyecto con ese nombre en tu grupo:\n\n"
-                                + "\n".join(f"- {d}" for d in _dups)
-                                + "\n\nSi es otro elevador, marca la casilla de arriba "
-                                  "y vuelve a guardar. Si es el mismo, ábrelo en "
-                                  "🛠 Mi grupo en vez de duplicarlo."
-                            )
+                    # NS del plano vs NS del proyecto: avisar, nunca pisar en silencio
+                    try:
+                        _ns_prj = int(float(_prj.get("NS") or 0))
+                        _ns_sv  = int(float(ap.get("NS") or 0))
+                        if _ns_prj and _ns_sv and _ns_prj != _ns_sv:
+                            st.warning(f"⚠️ El proyecto tiene **NS = {_ns_prj}** y este survey "
+                                       f"**NS = {_ns_sv}**. Revisa cuál es el correcto: el "
+                                       "cronograma del proyecto se calculó con el suyo.")
+                    except Exception:
+                        pass
+
+                    if st.button("💾 Guardar el survey en este proyecto",
+                                 use_container_width=True, key="sv_save_prj"):
+                        _pid = str(_prj.get("ID", ""))
+                        _usr = st.session_state.get("auth", {}).get("usuario", "")
+                        _matriz = (r["survey_orig"].to_dict("records")
+                                   if hasattr(r.get("survey_orig"), "to_dict") else [])
+                        ok, msg = projects_data.attach_survey(
+                            _pid, params=ap, matriz=_matriz,
+                            interp={"admin": r.get("interpretation"),
+                                    "user":  r.get("interpretation_user")})
+                        if not ok:
+                            st.error(f"No se pudo guardar: {msg}")
                         else:
-                            sched = r.get("schedule") or {}
-                            _sd = sched.get("start_date"); _ff = sched.get("fecha_fin")
-                            matriz = (r["survey_orig"].to_dict("records")
-                                      if hasattr(r.get("survey_orig"), "to_dict") else [])
-                            ok, res = projects_data.create_project(
-                                grupo=_GRUPO, nombre=pj_nom.strip(), cliente=pj_cli,
-                                ubicacion=pj_ubi, modelo=pj_mod, ns=int(ap.get("NS", 0) or 0),
-                                ingeniero=pj_ing, campo_asignados=pj_asg,
-                                fecha_inicio=(_sd.strftime("%Y-%m-%d") if _sd else ""),
-                                fecha_fin_est=(_ff.strftime("%Y-%m-%d") if _ff else ""),
-                                params=ap, matriz=matriz,
-                                interp={"admin": r.get("interpretation"),
-                                        "user":  r.get("interpretation_user")},
-                                activities=sched.get("activities", []),
-                                creado_por=st.session_state.auth.get("usuario", ""),
-                                instrucciones=pj_instr, induccion_links=pj_ind,
-                                presupuesto=pj_pres,
-                            )
-                            if ok:
-                                st.session_state["_prj_creado"] = {
-                                    "id": res, "nombre": pj_nom.strip()}
-                                st.success(f"✅ Proyecto **{res}** guardado.")
-                                # ── Avisar a los usuarios de campo asignados ──
-                                if pj_asg and not notify.any_channel_configured():
-                                    st.caption("📨 Sin canales de aviso configurados "
-                                               "(Gmail / Telegram): no se envió nada.")
-                                if pj_asg and notify.any_channel_configured():
-                                    _pinfo = {"Nombre": pj_nom.strip(), "Cliente": pj_cli,
-                                              "Ubicacion": pj_ubi,
-                                              "FechaInicio": (_sd.strftime("%Y-%m-%d") if _sd else ""),
-                                              "FechaFinEst": (_ff.strftime("%Y-%m-%d") if _ff else ""),
-                                              "InduccionLinks": pj_ind}
-                                    _nn = 0
-                                    for un in pj_asg:
-                                        try:
-                                            rr = notify.notify_assignment(un, _pinfo)
-                                            if rr.get("email") or rr.get("telegram"):
-                                                _nn += 1
-                                        except Exception:
-                                            pass
-                                    if _nn == len(pj_asg):
-                                        st.caption(f"📨 {_nn} usuario(s) de campo notificado(s).")
-                                    elif _nn:
-                                        st.warning(f"📨 Notificados {_nn} de {len(pj_asg)}. "
-                                                   "Al resto le falta email o Telegram.")
-                                    else:
-                                        st.warning("📵 No se pudo notificar a ningún usuario "
-                                                   "asignado: revisa su email y Telegram en "
-                                                   "🛠 Mi grupo → Usuarios.")
-                                # ── Auto-archivo en Drive: plano + matriz + informe cliente ──
-                                if drive_store.is_configured():
-                                    if not drive_store.is_available():
-                                        st.caption("📎 Documentos no archivados: Google Drive no está "
-                                                   "conectado (revisa las credenciales OAuth en Secrets).")
-                                    else:
-                                        _usr = st.session_state.auth.get("usuario", "")
-                                        _fallos = []
-                                        with st.spinner("Archivando documentos en Drive..."):
-                                            try:
-                                                pb = st.session_state.get("pdf_bytes")
-                                                if pb:
-                                                    fid = drive_store.upload(res, "plano.pdf", pb, "application/pdf")
-                                                    projects_data.add_document(res, "plano.pdf", "plano", fid, _usr)
-                                            except Exception:
-                                                _fallos.append("plano")
-                                            try:
-                                                csv = r["survey_orig"].to_csv(index=False).encode("utf-8")
-                                                fid = drive_store.upload(res, "matriz_survey.csv", csv, "text/csv")
-                                                projects_data.add_document(res, "matriz_survey.csv",
-                                                                           "matriz_survey", fid, _usr)
-                                            except Exception:
-                                                _fallos.append("matriz")
-                                            try:
-                                                if (r.get("interpretation_user") or {}).get("_ok"):
-                                                    pdfb = generate_user_report(
-                                                        project_params=r["all_params"], calculated=r["limits"],
-                                                        optimizer_result=r["optimizer_result"], lim_map=r["lim_map"],
-                                                        survey_cols=SURVEY_COLS,
-                                                        interpretation_user=r.get("interpretation_user"),
-                                                        schedule=r.get("schedule"), plumb=r.get("plumb"))
-                                                    fid = drive_store.upload(res, "informe_cliente.pdf",
-                                                                             pdfb, "application/pdf")
-                                                    projects_data.add_document(res, "informe_cliente.pdf",
-                                                                               "informe_cliente", fid, _usr)
-                                            except Exception:
-                                                _fallos.append("informe cliente")
-                                        if _fallos:
-                                            st.caption("📎 Documentos base archivados, salvo: "
-                                                       + ", ".join(_fallos) + ".")
-                                        else:
-                                            st.caption("📎 Documentos base archivados en Drive.")
-                            else:
-                                st.error(f"No se pudo guardar: {res}")
+                            _best = (r.get("optimizer_result") or {}).get("best") or {}
+                            st.session_state["_prj_creado"] = {
+                                "id": _pid, "nombre": str(_prj.get("Nombre", ""))}
 
-                # ── Cerrar el ciclo: llevar al proyecto recien creado ──
-                # Antes esto terminaba en un texto muerto ("Gestionalo en Mi grupo").
+                            # Registro en el historial de cálculos del proyecto
+                            try:
+                                toolruns.registrar(
+                                    pid=_pid, grupo=str(_prj.get("Grupo", _GRUPO)),
+                                    herramienta="survey",
+                                    resumen=(f"RL {_best.get('rl', 0):+.1f} · "
+                                             f"FB {_best.get('fb_applied', _best.get('fb', 0)):+.1f} · "
+                                             f"{_best.get('total_off', 0)} fuera de límite"),
+                                    datos={"rl": _best.get("rl"), "fb": _best.get("fb"),
+                                           "total_off": _best.get("total_off"),
+                                           "ns": ap.get("NS")},
+                                    usuario=_usr)
+                            except Exception:
+                                pass
+
+                            # Documentos base en Drive (best-effort)
+                            if drive_store.is_configured() and drive_store.is_available():
+                                _fallos = []
+                                with st.spinner("Archivando documentos en Drive..."):
+                                    try:
+                                        pb = st.session_state.get("pdf_bytes")
+                                        if pb:
+                                            fid = drive_store.upload(_pid, "plano.pdf", pb,
+                                                                     "application/pdf")
+                                            projects_data.add_document(_pid, "plano.pdf",
+                                                                       "plano", fid, _usr)
+                                    except Exception:
+                                        _fallos.append("plano")
+                                    try:
+                                        csv = r["survey_orig"].to_csv(index=False).encode("utf-8")
+                                        fid = drive_store.upload(_pid, "matriz_survey.csv", csv,
+                                                                 "text/csv")
+                                        projects_data.add_document(_pid, "matriz_survey.csv",
+                                                                   "matriz_survey", fid, _usr)
+                                    except Exception:
+                                        _fallos.append("matriz")
+                                    try:
+                                        if (r.get("interpretation_user") or {}).get("_ok"):
+                                            pdfb = generate_user_report(
+                                                project_params=r["all_params"],
+                                                calculated=r["limits"],
+                                                optimizer_result=r["optimizer_result"],
+                                                lim_map=r["lim_map"],
+                                                survey_cols=SURVEY_COLS,
+                                                interpretation_user=r.get("interpretation_user"),
+                                                schedule=r.get("schedule"), plumb=r.get("plumb"))
+                                            fid = drive_store.upload(_pid, "informe_cliente.pdf",
+                                                                     pdfb, "application/pdf")
+                                            projects_data.add_document(_pid, "informe_cliente.pdf",
+                                                                       "informe_cliente", fid, _usr)
+                                    except Exception:
+                                        _fallos.append("informe cliente")
+                                if _fallos:
+                                    st.caption("📎 Documentos archivados, salvo: "
+                                               + ", ".join(_fallos) + ".")
+                                else:
+                                    st.caption("📎 Documentos archivados en Drive.")
+                            elif drive_store.is_configured():
+                                st.caption("📎 Documentos no archivados: Drive no conectado.")
+
+                            st.success(f"✅ Survey guardado en **{_prj.get('Nombre')}**.")
+
+                # ── Cerrar el ciclo: llevar al proyecto ──
                 _pc = st.session_state.get("_prj_creado")
                 if _pc:
                     _c1, _c2 = st.columns([3, 1])
-                    _c1.info(f"Proyecto **{_pc['id']} · {_pc['nombre']}** listo. "
-                             "Puedes abrirlo para asignar campo, actividades y gastos.")
+                    _c1.info(f"Proyecto **{_pc['id']} · {_pc['nombre']}** actualizado con "
+                             "este survey.")
                     if _c2.button("Abrir proyecto ➜", use_container_width=True,
                                   key="ir_al_proyecto"):
                         st.session_state["_prjsel_pending"] = _pc["id"]

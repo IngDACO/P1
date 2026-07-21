@@ -256,7 +256,11 @@ indicar dónde está algo, ten en cuenta con quién hablas:
   escala por piso, una vista isométrica del hueco, el plomado definitivo y un cronograma con curva S.
   Va en dos fases: **📝 Datos** y **📊 Resultados**. Admin y propietario pueden descargar el informe
   del cliente, un **paquete de obra** (PDF con isométrica + plantas + replanteo, para terreno) y
-  "Guardar como proyecto". El informe técnico interno se envía por correo.
+  **guardar el survey en un proyecto existente**. El informe técnico interno se envía por correo.
+- ⚠️ **El survey NO crea proyectos** (cambió en v135): es una herramienta que alimenta un proyecto ya
+  creado, igual que Plomadas o los cortes. El proyecto se crea en **🛠 Mi grupo → 📊 Proyectos →
+  ➕ Nuevo proyecto** (o 👑 Administración → 📁 Proyectos para el propietario), indicando nombre,
+  cliente, ubicación y **número de paradas**, con lo que se genera el cronograma automáticamente.
 - **🔩 Líneas de plomada:** ubica plomadas y plantilla. Planta a escala, vistas 3D del replanteo y
   una **ficha de replanteo** con los números a medir con cinta (DBP, d1, d2, di, dd).
   Comprobación de obra: di + DBP + dd debe dar BSR.
@@ -272,7 +276,7 @@ indicar dónde está algo, ten en cuenta con quién hablas:
   historial del proyecto (detalle → 📎 Archivos → Cálculos de herramientas).
 
 ### Gestión de proyectos
-- **🛠 Mi grupo (administrador):** KPIs del grupo, "Resumen del día" con lo pendiente, y cartera de
+- **🛠 Mi grupo (administrador):** aquí se **crean los proyectos** (➕ Nuevo proyecto). KPIs del grupo, "Resumen del día" con lo pendiente, y cartera de
   proyectos en tarjetas (marcan retraso y adelanto). Secciones: 📊 Proyectos · 🗂 Agrupaciones ·
   ⏱ Horas · 💰 Gastos · 🔧 Usuarios de campo.
 - **Detalle de un proyecto** (4 pestañas): **📊 Estado** (alarmas, curva S real vs plan, proyección de
