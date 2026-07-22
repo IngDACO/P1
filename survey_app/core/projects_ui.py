@@ -1670,26 +1670,131 @@ def render_conductor_projects(grupo: str):
 
 
 # ── Gastos / compras por proyecto (admin, campo, conductor) ──
+def _barras_html(pares, total, color="#2e6da4") -> str:
+    """Barras horizontales ordenadas: etiqueta · barra · valor · %.
+
+    Para desgloses cortos (categorias de gasto, personas). Un `st.bar_chart` aqui
+    obliga a leer un eje para nada; la barra con su numero al lado se lee sola.
+    """
+    if not pares or total <= 0:
+        return ""
+    out = []
+    for et, val in pares:
+        pct = 100.0 * float(val) / total
+        out.append(
+            '<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">'
+            f'<div style="width:118px;flex:none;font-size:12.5px;color:#374151;'
+            f'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{et}</div>'
+            '<div style="flex:1;height:9px;background:#eef1f5;border-radius:20px;'
+            'overflow:hidden;">'
+            f'<div style="height:9px;width:{max(1.5, pct):.1f}%;background:{color};'
+            f'border-radius:20px;"></div></div>'
+            f'<div style="width:96px;flex:none;text-align:right;font-size:12.5px;'
+            f'color:#1f2937;font-weight:600;">${float(val):,.0f}</div>'
+            f'<div style="width:42px;flex:none;text-align:right;font-size:11.5px;'
+            f'color:#9aa7b8;">{pct:.0f}%</div></div>')
+    return "".join(out)
+
+
 def render_expenses(pid, grupo, can_delete=False, key_prefix="ex"):
+    """Costos del proyecto (v144).
+
+    ⚠️ Antes respondia solo "cuanto llevas gastado". La pregunta accionable es
+    **cuanto vas a gastar**: la barra de presupuesto se ponia roja al pasarse,
+    o sea cuando ya no se puede hacer nada. Ahora la proyeccion al terminar va
+    arriba del todo.
+    """
     from core import expenses as E
     if not E.is_configured():
         return
-    st.markdown("#### 💰 Gastos / compras")
-    cost = E.project_cost(pid, grupo)
-    m1, m2, m3 = st.columns(3)
-    m1.metric("Compras", f"${cost['compras']:,.0f}")
-    m2.metric("Mano de obra", f"${cost['mano_obra']:,.0f}")
-    m3.metric("Costo total", f"${cost['total']:,.0f}")
-    if cost["presupuesto"] > 0:
-        st.progress(min(1.0, (cost["pct"] or 0) / 100.0))
-        txt = f"Presupuesto ${cost['presupuesto']:,.0f} · {cost['pct']}% consumido"
-        (st.error if cost["over"] else st.caption)(txt + (" ⛔ SOBRE PRESUPUESTO" if cost["over"] else ""))
 
+    cp    = E.cost_projection(pid, grupo)      # incluye todo lo de project_cost
+    lb    = E.labor_breakdown(pid, grupo)
+    gastos = E.project_expenses(pid)
+    pres  = cp["presupuesto"]
+    proy  = cp["proyectado"]
+
+    # ── Titular: una frase antes de cualquier numero ──
+    if proy and pres > 0 and proy > pres * 1.02:
+        _t = (f"A este ritmo el proyecto costara **${proy:,.0f}**, "
+              f"**${proy - pres:,.0f} por encima** del presupuesto")
+        _c, _fn = "#c0392b", st.error
+    elif proy and pres > 0:
+        _t = (f"A este ritmo el proyecto costara **${proy:,.0f}**, dentro "
+              f"del presupuesto de ${pres:,.0f}")
+        _c, _fn = "#1e8449", st.success
+    elif cp["total"] > 0 and pres <= 0:
+        _t = ("Este proyecto **no tiene presupuesto asignado**, así que no hay "
+              "contra qué comparar el gasto. Se define en ✏️ Datos.")
+        _c, _fn = "#6b7280", st.info
+    else:
+        _t, _c, _fn = ("Todavía no hay costos registrados en este proyecto.",
+                       "#6b7280", st.info)
+
+    # ── Tarjetas KPI ──
+    tarj = [_kpi_card("Costo total", f"${cp['total']:,.0f}"),
+            _kpi_card("Compras", f"${cp['compras']:,.0f}"),
+            _kpi_card("Mano de obra", f"${cp['mano_obra']:,.0f}"),
+            _kpi_card("Presupuesto", f"${pres:,.0f}" if pres > 0 else "—"),
+            _kpi_card("Costará al terminar", f"${proy:,.0f}" if proy else "—", _c)]
+    st.markdown('<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px">'
+                + "".join(tarj) + "</div>", unsafe_allow_html=True)
+    _fn(_t)
+
+    if pres > 0:
+        st.progress(min(1.0, (cp["pct"] or 0) / 100.0))
+        _l = f"Llevas **${cp['total']:,.0f}** de ${pres:,.0f} · **{cp['pct']}% consumido**"
+        if cp["avance"] > 0:
+            _l += f" con **{cp['avance']:.0f}% de avance**"
+            if cp["por_punto"]:
+                _l += f" (${cp['por_punto']:,.0f} por punto)"
+        st.caption(_l + ("  ⛔ SOBRE PRESUPUESTO" if cp["over"] else ""))
+
+    # ── Reparto compras / mano de obra ──
+    if cp["total"] > 0:
+        st.markdown("**Reparto del costo**")
+        st.markdown(_barras_html([("Mano de obra", cp["mano_obra"]),
+                                  ("Compras", cp["compras"])], cp["total"]),
+                    unsafe_allow_html=True)
+
+    # ── Gasto por categoria: se calculaba desde v105 y la pestaña lo tiraba ──
+    _cat = gastos.get("por_categoria") or {}
+    if _cat:
+        st.markdown("**Compras por categoría**")
+        st.markdown(_barras_html(sorted(_cat.items(), key=lambda x: -x[1]),
+                                 gastos["total"], "#BA7517"),
+                    unsafe_allow_html=True)
+
+    # ── Mano de obra por persona: labor_cost solo daba el total ──
+    if lb["items"]:
+        st.markdown("**Mano de obra por persona**")
+        st.dataframe(pd.DataFrame([{
+            "Usuario": x["usuario"], "Horas": x["horas"],
+            "Tarifa/h": x["tarifa"], "Costo": x["costo"],
+        } for x in lb["items"]]), hide_index=True, use_container_width=True)
+        if lb["sin_tarifa"]:
+            st.warning("⚠️ Sin tarifa/hora, así que sus horas suman **$0** al costo: **"
+                       + ", ".join(lb["sin_tarifa"]) + "**. Se fija en 🔧 Usuarios.")
+
+    # ── Curva de gasto acumulado ──
+    _curva = E.spend_curve(pid, grupo)
+    _svg   = E.spend_svg(_curva, proy, str(P.get_project(pid).get("Nombre", ""))) if _curva else ""
+    if _svg:
+        components.html(
+            '<!DOCTYPE html><html><body style="margin:0;background:transparent">'
+            + _svg + '</body></html>', height=320, scrolling=False)
+        st.caption("Coste acumulado día a día. La línea discontinua gris es el "
+                   "presupuesto; la de color, dónde acabas al ritmo actual.")
+    elif _curva:
+        st.caption("Hace falta más de un movimiento para dibujar la curva de gasto.")
+
+    # ── Cargar recibo ──
     with st.expander("➕ Cargar recibo"):
         with st.form(f"{key_prefix}_add_{pid}", clear_on_submit=True):
             c1, c2 = st.columns(2)
             cat = c1.selectbox("Categoría", E.CATEGORIAS, key=f"{key_prefix}_cat")
-            val = c2.number_input("Valor total del recibo", min_value=0.0, step=1.0, key=f"{key_prefix}_val")
+            val = c2.number_input("Valor total del recibo", min_value=0.0, step=1.0,
+                                  key=f"{key_prefix}_val")
             prov = c1.text_input("Proveedor", key=f"{key_prefix}_prov")
             desc = c2.text_input("Descripción", key=f"{key_prefix}_desc")
             f = st.file_uploader("Foto / PDF del recibo", type=["pdf", "png", "jpg", "jpeg"],
@@ -1701,25 +1806,26 @@ def render_expenses(pid, grupo, can_delete=False, key_prefix="ex"):
                     did, fn = "", ""
                     if f is not None:
                         fn = f.name
-                        did = E.upload_receipt(pid, f.name, f.getvalue(), f.type or "application/octet-stream")
+                        did = E.upload_receipt(pid, f.name, f.getvalue(),
+                                               f.type or "application/octet-stream")
                     ok, msg = E.add(pid, grupo, val, cat, prov, desc, did, fn,
                                     st.session_state.get("auth", {}).get("usuario", ""))
                     (st.success if ok else st.error)(msg)
                     if ok:
                         st.rerun()
 
-    items = E.project_expenses(pid)["items"]
+    items = gastos["items"]
     if items:
-        st.dataframe(pd.DataFrame([{
-            "Fecha": r.get("Fecha"), "Categoría": r.get("Categoria"),
-            "Proveedor": r.get("Proveedor"), "Descripción": r.get("Descripcion"),
-            "Valor": E._num(r.get("Valor")), "Por": r.get("CreadoPor"),
-        } for r in items]), hide_index=True, use_container_width=True)
-        with st.expander(f"📎 Recibos ({len(items)})"):
+        with st.expander(f"🧾 Detalle de compras ({len(items)})"):
+            st.dataframe(pd.DataFrame([{
+                "Fecha": r.get("Fecha"), "Categoría": r.get("Categoria"),
+                "Proveedor": r.get("Proveedor"), "Descripción": r.get("Descripcion"),
+                "Valor": E._num(r.get("Valor")), "Por": r.get("CreadoPor"),
+            } for r in items]), hide_index=True, use_container_width=True)
             for r in items:
                 did = str(r.get("DriveID", "")).strip()
                 cc = st.columns([5, 1])
-                lbl = f"{r.get('Fecha')} · {r.get('Categoria')} · ${E._num(r.get('Valor')):.0f}"
+                lbl = f"{r.get('Fecha')} · {r.get('Categoria')} · ${E._num(r.get('Valor')):,.0f}"
                 if did:
                     try:
                         from core import drive_store

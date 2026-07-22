@@ -785,6 +785,42 @@ Al cargar el plano en el survey (app.py), autocompleta **RAIL = AlturaDiente** (
 espalda) del catálogo; si el código no está o no se detecta → aviso + entrada manual. **RAIL = AlturaDiente**
 (NO el ancho); AnchoDiente se guarda como dato secundario.
 
+## Pestaña Costos: de "cuanto llevas" a "cuanto vas a gastar" (v144)
+Peticion del usuario: "esta muy simple, mas visual, con mas impacto y mas datos; es un apartado muy
+importante". La pestaña eran **3 `st.metric`, una barra y una tabla plana**.
+### ⚠️ El fallo de fondo: respondia la pregunta que ya no se puede accionar
+La barra de presupuesto **solo se ponia roja al pasarse**, o sea cuando ya no hay nada que hacer.
+- **`expenses.cost_projection(pid, grupo)`** — cuanto costara AL TERMINAR al ritmo actual:
+  `proyectado = costo_actual / (avance/100)`. Es el gemelo de "fin proyectado" de v143.
+  Con datos reales: *prueba1* lleva $358 al 46% → **$778 final** contra $10.000 de presupuesto.
+  El caso que importa: **gastar $6.000 de $10.000 al 30% de avance proyecta $20.000** — hoy la barra
+  seguia verde (60% consumido) y no decia absolutamente nada.
+  Añade `por_punto` (costo por punto de avance).
+- **`expenses.labor_breakdown(pid, grupo)`** — mano de obra POR PERSONA. `labor_cost` recorria los
+  fichajes y devolvia **solo el total**, asi que quien consumia las horas era invisible aunque el dato
+  estuviera ahi. `labor_cost` pasa a ser un wrapper (mismo total, verificado: 358.8 antes y despues).
+  Marca **`sin_tarifa`**: con tarifa 0 las horas suman $0 y parecia que el proyecto no costaba MO.
+- **`expenses.spend_curve` + `spend_svg`** — gasto acumulado dia a dia, mano de obra y compras
+  **apiladas** (se ve el reparto, no solo el total), con el presupuesto en discontinua gris y la
+  proyeccion al ritmo actual hasta donde acabas. Sale de datos que ya existian: las compras traen
+  Fecha y cada fichaje aporta horas×tarifa en el dia de su Clock In.
+- **Gasto por categoria: se calculaba desde v105 y la pestaña lo TIRABA.** `project_expenses` devuelve
+  `por_categoria` y solo lo leia el informe de grupo. Quinta vez del patron "se escribe y nadie lo lee".
+- `_barras_html(pares, total, color)` para los desgloses cortos: un `st.bar_chart` obliga a leer un eje
+  para nada; la barra con su numero al lado se lee sola.
+### ⚠️ El cruce de horas va por NOMBRE de proyecto, no por ID
+Encontrado mirando los datos reales: hay fichajes bajo `"Prueba1"` para un proyecto llamado `"prueba1"`
+y **esas horas se caian del costo EN SILENCIO**. `_mismo_proyecto()` normaliza may/min y espacios, lo
+que tapa ese caso concreto — pero **renombrar un proyecto sigue borrando su historico de mano de obra**.
+El arreglo de fondo es guardar el ProyectoID en la hoja de fichaje. PENDIENTE, es cambio de modelo.
+### Verificacion
+`spend_svg` **medido numericamente** sobre el XML (no mirado): linea de presupuesto en sy(6000)=136.0 ✓
+· proyeccion termina en sy(9200)=72.1 y arranca en el ultimo punto x=652 ✓ · roja porque 9200>6000 ✓ ·
+2 areas apiladas ✓ · 15 puntos de curva ✓ · sin `<defs>/<marker>` ✓ · degrada a "" con <2 fechas.
+Las 4 ramas del titular probadas contra los 3 proyectos REALES + el caso sobre-presupuesto simulado.
+`over_budget`, `group_expenses` y `projections_by_group` siguen dando lo mismo; firma de
+`render_expenses` intacta para sus 3 call-sites (admin / campo / conductor).
+
 ## Pestaña Estado: la grafica deja de ser una imagen plana (v143)
 Peticion del usuario: "las graficas se ven planas como simples imagenes, quiero algo mas integrado y
 que impacte mas; y los valores, mas informacion mejor presentada".
@@ -1601,7 +1637,7 @@ posicional + plano) → app.py, al cargar el PDF, setea `st.session_state["ns"]`
 resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NORTH SYD y AGECARE → NS=6
 (coincide con travel/floor-height HQ/HE).
 
-## Versiones desplegadas (v143 = actual)
+## Versiones desplegadas (v144 = actual)
 | Ver | Cambio principal |
 |---|---|
 | v5 | Extractor: CRLF fix, caso D valor-antes-label, sin pdfplumber |
@@ -1703,6 +1739,7 @@ resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NOR
 | v102 | Fix: NS se lee del plano (NUMBER OF STOPS) al cargar el PDF; default de init 6→2 (ya no queda pegado en 6) |
 | v103 | Rol conductor (2 relojes: jornada general + segmentos por proyecto, columna Tipo) + cronómetro en vivo para todos + reporte admin de horas del grupo (Mi grupo → ⏱ Horas) |
 | v104 | Credenciales/tickets por usuario (White Card, Forklift, Dogging/Rigging, licencia…): vencimiento+estado, foto/documento a Drive, radar en Resumen del día, avisos email/Telegram a admin+usuario; usuario ve las suyas (🎫 Mis credenciales) |
+| v144 | Pestaña Costos: proyeccion de cuanto costara AL TERMINAR (la barra solo avisaba al pasarse), mano de obra por persona, gasto por categoria (se calculaba desde v105 y se tiraba), curva de gasto acumulado apilada vs presupuesto y aviso de tarifas en 0 |
 | v143 | Pestaña Estado: la brecha plan-vs-real se RELLENA (antes habia que deducirla comparando dos lineas), HOY cruza el Gantt, barras que marcan lo que tocaba y no arranco, proyeccion al ritmo actual + diagnostico (ritmo real vs necesario, que tocaba hoy vs que se hace, proximo hito) |
 | v142 | Agrupaciones con cartera de tarjetas (entrega del conjunto, elevador critico, retraso, alarmas, horas y costo sin entrar) + creacion plegada + projections_by_group cacheado |
 | v141 | Agrupaciones al reves (se crean los proyectos y luego se eligen al armar la agrupacion) + dashboard con fecha de entrega del conjunto, elevador critico, curva S consolidada, comparativa y alarmas |
