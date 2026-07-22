@@ -828,8 +828,12 @@ def _detalle_proyecto(pid: str, grupo: str = None):
             ag_idx  = next((i for i, a in enumerate(ags) if a["ID"] == ag_cur), None)
             ag_sel  = st.selectbox("Agrupación", ag_opts,
                                    index=(ag_idx + 1) if ag_idx is not None else 0)
-            peso    = st.number_input("Peso en la agrupación", min_value=0.0, step=1.0,
-                                      value=P._num(prj.get("PesoEnAgrupacion")))
+            # Peso por defecto 1: si queda en 0 el avance de la agrupación da 0
+            # aunque los elevadores estén al 100% (Σpeso·avance / Σpeso).
+            peso    = st.number_input("Peso en la agrupación", min_value=0.0, step=0.5,
+                                      value=P._num(prj.get("PesoEnAgrupacion")) or 1.0,
+                                      help="Cuánto pesa este elevador en el avance "
+                                           "consolidado de su agrupación.")
             est_man = st.selectbox("Estado manual (override)", P.ESTADOS_MANUAL,
                                    index=P.ESTADOS_MANUAL.index(str(prj.get("EstadoManual", "")))
                                    if str(prj.get("EstadoManual", "")) in P.ESTADOS_MANUAL else 0)
@@ -1014,55 +1018,171 @@ def _detalle_proyecto(pid: str, grupo: str = None):
 
 # ── Panel de agrupaciones ────────────────────────────────────────
 def _dashboard_agrupacion(ag, grupo):
-    """Vista consolidada de una agrupación: avance ponderado, proyectos, horas y costo."""
+    """Vista consolidada de una agrupación (un edificio con varios elevadores).
+
+    ⚠️ El avance consolidado (promedio ponderado) NO responde la pregunta que
+    importa: el edificio se entrega cuando termina **el último** elevador, no el
+    promedio. De ahí la fecha de entrega del conjunto y el elevador crítico.
+    """
     from core import expenses as E
     aid = ag["ID"]
     proys = P.list_projects(grupo=grupo, agrupacion_id=aid)
     if not proys:
-        st.info("Esta agrupación aún no tiene proyectos asignados.")
+        st.info("Esta agrupación aún no tiene elevadores. Añádelos abajo.")
         return
-    pr = P.grouping_progress(aid)
-    delays = P.delays_of_group(grupo)
-    aheads = P.aheads_of_group(grupo)
-    horas = P.project_hours_bulk(grupo)
 
-    tot_h = sum(horas.get(str(p.get("Nombre", "")), 0.0) for p in proys)
-    costos = [E.project_cost(p.get("ID"), grupo) for p in proys] if E.is_configured() else []
-    tot_c = sum(c["total"] for c in costos)
+    pr      = P.grouping_progress(aid)
+    delays  = P.delays_of_group(grupo)
+    aheads  = P.aheads_of_group(grupo)
+    horas   = P.project_hours_bulk(grupo)
+    alarmas = alerts.open_counts_all() if alerts.is_configured() else {}
+    proj    = P.grouping_projection(aid, grupo)
+
+    tot_h    = sum(horas.get(str(p.get("Nombre", "")), 0.0) for p in proys)
+    costos   = [E.project_cost(p.get("ID"), grupo) for p in proys] if E.is_configured() else []
+    tot_c    = sum(c["total"] for c in costos)
     tot_pres = sum(c["presupuesto"] for c in costos)
+    n_alarm  = sum(alarmas.get(str(p.get("ID", "")), 0) for p in proys)
+    n_retras = sum(1 for p in proys if str(p.get("ID", "")) in delays)
 
-    m1, m2, m3, m4 = st.columns(4)
-    m1.metric("Avance consolidado", f"{pr['avance']:.0f}%")
-    m2.metric("Elevadores", pr["n_proyectos"])
-    m3.metric("Horas", f"{tot_h:.0f}")
-    m4.metric("Costo total", f"${tot_c:,.0f}")
+    # ── Tarjetas KPI (mismo lenguaje que la cartera de proyectos) ──
+    _fecha = (proj["fecha"].strftime("%d/%m/%Y") if proj.get("fecha") else "—")
+    _col_f = "#c0392b" if n_retras else "#1e8449"
+    tarjetas = [
+        _kpi_card("Avance consolidado", f"{pr['avance']:.0f}%"),
+        _kpi_card("Elevadores", pr["n_proyectos"]),
+        _kpi_card("Entrega del conjunto", _fecha, _col_f),
+        _kpi_card("Con retraso", n_retras, "#c0392b" if n_retras else None),
+        _kpi_card("Alarmas", n_alarm, "#c0392b" if n_alarm else None),
+        _kpi_card("Horas", f"{tot_h:.0f}"),
+        _kpi_card("Costo total", f"${tot_c:,.0f}"),
+    ]
+    st.markdown('<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px">'
+                + "".join(tarjetas) + "</div>", unsafe_allow_html=True)
     st.progress(min(1.0, pr["avance"] / 100.0))
+
+    # ── Quién manda la fecha de entrega ──
+    if proj.get("critico"):
+        _d = delays.get(proj["critico_id"])
+        st.markdown(
+            f"🎯 **La entrega la marca «{proj['critico']}»** — proyectada para "
+            f"**{_fecha}**" + (f", con **{_d:.0f} días de retraso**." if _d else
+                               ", en fecha.")
+            + "  Es donde más rinde reforzar.")
+    if proj.get("sin_datos"):
+        st.caption("Sin cronograma para proyectar: " + ", ".join(proj["sin_datos"]))
+
     if tot_pres > 0:
         _p = round(100 * tot_c / tot_pres)
         (st.error if tot_c > tot_pres else st.caption)(
-            f"Presupuesto agrupación ${tot_pres:,.0f} · {_p}% consumido"
+            f"Presupuesto de la agrupación ${tot_pres:,.0f} · {_p}% consumido"
             + (" ⛔ SOBRE PRESUPUESTO" if tot_c > tot_pres else ""))
+
+    # ── Curva S CONSOLIDADA (plan vs real de todo el conjunto) ──
+    try:
+        cur = P.grouping_curve(aid, grupo)
+    except Exception:
+        cur = {}
+    if cur and cur.get("fechas"):
+        st.markdown("**📈 Avance del conjunto — plan vs real**")
+        _df = pd.DataFrame({"Planificado": cur["plan"], "Real": cur["real"]},
+                           index=pd.to_datetime(cur["fechas"]))
+        st.line_chart(_df, height=240)
+        st.caption("Ponderado por el peso de cada elevador. La curva real se corta en HOY.")
+
+    # ── Comparativa entre elevadores ──
+    # En un edificio son unidades casi gemelas, así que la desviación respecto
+    # al promedio delata al que se sale de lo normal.
+    st.markdown("**🔍 Comparativa entre elevadores**")
+    _hs = [horas.get(str(p.get("Nombre", "")), 0.0) for p in proys]
+    _cs = [c.get("total", 0) for c in costos] if costos else [0] * len(proys)
+    _hm = (sum(_hs) / len(_hs)) if _hs else 0
+    _cm = (sum(_cs) / len(_cs)) if _cs else 0
+
+    def _dev(v, med):
+        if med <= 0:
+            return ""
+        d = round(100 * (v - med) / med)
+        return f"{d:+d}%" if abs(d) >= 15 else "≈"
 
     rows = []
     for i, p in enumerate(proys):
         pid = str(p.get("ID", ""))
-        c = costos[i] if costos else {"total": 0}
+        _na = alarmas.get(pid, 0)
+        _pf = next((x["fecha"] for x in proj.get("detalle", []) if x["id"] == pid), None)
         rows.append({
-            "Proyecto": p.get("Nombre"), "Estado": p.get("Estado"),
+            "Elevador": p.get("Nombre"), "Estado": p.get("Estado"),
             "Avance %": P._num(p.get("Avance")),
             "Peso": P._num(p.get("PesoEnAgrupacion")),
+            "Entrega prev.": _pf.strftime("%d/%m") if _pf else "—",
             "⏰/⏩": (f"⏰ {delays[pid]:.0f} d" if pid in delays
                      else (f"⏩ {aheads[pid]:.0f} d" if pid in aheads else "en fecha")),
-            "Horas": horas.get(str(p.get("Nombre", "")), 0.0),
-            "Costo": c.get("total", 0),
+            "Horas": _hs[i], "vs media h": _dev(_hs[i], _hm),
+            "Costo": _cs[i], "vs media $": _dev(_cs[i], _cm),
+            "🔔": _na or "",
         })
     st.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True)
+    st.caption("«vs media» compara cada elevador con el promedio de la agrupación; "
+               "solo se marca si se desvía 15% o más.")
+
+    _out = [r["Elevador"] for r in rows if r["vs media h"].startswith("+")]
+    if _out:
+        st.info("⚠️ Consumen bastantes más horas que sus gemelos: **"
+                + ", ".join(_out) + "**. Vale la pena mirar por qué.")
+
     st.bar_chart(pd.DataFrame({"Avance %": [r["Avance %"] for r in rows]},
-                              index=[r["Proyecto"] for r in rows]))
+                              index=[r["Elevador"] for r in rows]))
+
+
+
+def _miembros_editor(ags_proys, todos, key, pesos_actuales=None):
+    """Tabla para elegir QUÉ proyectos componen una agrupación y con qué peso.
+
+    Devuelve {pid: peso} de los marcados. Peso por defecto **1** (todos cuentan
+    igual): antes había que ponerlo a mano en cada proyecto y, si quedaba en 0,
+    el avance de la agrupación daba 0 aunque los elevadores fueran al 100%.
+    """
+    pesos_actuales = pesos_actuales or {}
+    filas = []
+    for p in todos:
+        pid = str(p.get("ID", ""))
+        otra = str(p.get("AgrupacionID", ""))
+        filas.append({
+            "En la agrupación": pid in pesos_actuales,
+            "Proyecto": f"{p.get('Nombre')} ({pid})",
+            "Peso": float(pesos_actuales.get(pid, 1.0)),
+            "Avance %": P._num(p.get("Avance")),
+            "Ya en otra": (ags_proys.get(otra, "") if otra and otra not in
+                           (None, "") and pid not in pesos_actuales else ""),
+        })
+    if not filas:
+        st.caption("No hay proyectos en el grupo todavía.")
+        return {}
+    ed = st.data_editor(
+        pd.DataFrame(filas), hide_index=True, use_container_width=True,
+        num_rows="fixed", key=key,
+        disabled=["Proyecto", "Avance %", "Ya en otra"],
+        column_config={
+            "En la agrupación": st.column_config.CheckboxColumn(width="small"),
+            "Peso": st.column_config.NumberColumn(
+                min_value=0.0, step=0.5,
+                help="Cuánto pesa este elevador en el avance consolidado."),
+            "Ya en otra": st.column_config.TextColumn(
+                "⚠️ Ya en otra", help="Marcarlo aquí lo MUEVE a esta agrupación."),
+        })
+    out = {}
+    for _, r in ed.iterrows():
+        if bool(r["En la agrupación"]):
+            pid = str(r["Proyecto"]).rsplit("(", 1)[-1].rstrip(")")
+            out[pid] = float(r["Peso"] or 1.0)
+    return out
 
 
 def _panel_agrupaciones(grupo: str):
     ags = P.list_groupings(grupo=grupo)
+    todos = P.list_projects(grupo=grupo)
+    nom_ags = {a["ID"]: a["Nombre"] for a in ags}
+
     if ags:
         rows = []
         for a in ags:
@@ -1073,28 +1193,60 @@ def _panel_agrupaciones(grupo: str):
                 "Descripción": a.get("Descripcion", ""),
             })
         st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
-        # Dashboard consolidado de una agrupación
-        st.markdown("#### 📊 Dashboard de agrupación")
-        _amap = {f"{a['ID']} · {a['Nombre']}": a for a in ags}
-        _asel = st.selectbox("Agrupación", list(_amap.keys()), key="agr_dash_sel",
-                             label_visibility="collapsed")
-        if _asel:
-            _dashboard_agrupacion(_amap[_asel], grupo)
-    else:
-        st.info("No hay agrupaciones. Crea una para agrupar varios elevadores con pesos.")
 
+        # ── Abrir una agrupación (sin preselección: v138/v139) ──
+        st.markdown("#### 📊 Abrir agrupación")
+        _amap = {f"{a['ID']} · {a['Nombre']}": a for a in ags}
+        _ag = ui.elegir("Agrupación", _amap, key="agr_dash_sel",
+                        vacio="— elige una agrupación —", label_visibility="collapsed")
+        if _ag:
+            _dashboard_agrupacion(_ag, grupo)
+            st.markdown("---")
+            with st.expander("🔧 Proyectos de esta agrupación"):
+                st.caption("Marca los elevadores que la componen. Al quitar uno se "
+                           "**desagrupa**, no se borra.")
+                _act = {str(p.get("ID")): P._num(p.get("PesoEnAgrupacion")) or 1.0
+                        for p in P.list_projects(grupo=grupo,
+                                                 agrupacion_id=_ag["ID"])}
+                _sel = _miembros_editor(nom_ags, todos, f"agmem_{_ag['ID']}", _act)
+                if len(_sel) > 12:
+                    st.warning(f"{len(_sel)} proyectos: cada cambio es una escritura "
+                               "en la hoja; puede tardar unos segundos.")
+                if st.button("💾 Guardar los proyectos de la agrupación",
+                             key=f"agmemsave_{_ag['ID']}", use_container_width=True):
+                    with st.spinner("Guardando..."):
+                        ok, msg = P.set_grouping_members(_ag["ID"], _sel, grupo)
+                    (st.success if ok else st.error)(msg)
+                    if ok:
+                        st.rerun()
+    else:
+        st.info("No hay agrupaciones. Crea una abajo y elige qué elevadores la componen.")
+
+    # ── Crear: la agrupación se arma CON sus proyectos (v141) ──
     st.markdown("#### ➕ Nueva agrupación")
-    with st.form("nueva_agr"):
-        nom = st.text_input("Nombre de la agrupación")
-        des = st.text_input("Descripción (opcional)")
-        if st.form_submit_button("Crear agrupación"):
-            if not nom.strip():
-                st.error("El nombre es obligatorio.")
+    st.caption("Los proyectos se crean primero; aquí eliges cuáles forman parte.")
+    nom = st.text_input("Nombre de la agrupación", key="nueva_agr_nom")
+    des = st.text_input("Descripción (opcional)", key="nueva_agr_des")
+    _nuevos = _miembros_editor(nom_ags, todos, "agmem_nueva")
+    if st.button("Crear agrupación", key="nueva_agr_btn", use_container_width=True):
+        if not nom.strip():
+            st.error("El nombre es obligatorio.")
+        else:
+            ok, res = P.create_grouping(grupo, nom.strip(), des.strip())
+            if not ok:
+                st.error(res)
             else:
-                ok, msg = P.create_grouping(grupo, nom.strip(), des.strip())
-                (st.success if ok else st.error)(f"Agrupación creada ({msg})" if ok else msg)
-                if ok:
-                    st.rerun()
+                _n = 0
+                if _nuevos:
+                    with st.spinner("Asignando proyectos..."):
+                        ok2, msg2 = P.set_grouping_members(res, _nuevos, grupo)
+                    _n = len(_nuevos)
+                    if not ok2:
+                        st.warning(f"Agrupación creada, pero: {msg2}")
+                st.success(f"Agrupación creada ({res})"
+                           + (f" con {_n} elevador(es)." if _n else
+                              ". Añádele elevadores desde su panel."))
+                st.rerun()
 
     if ags:
         st.markdown("#### 🗑 Eliminar agrupación")
@@ -1110,6 +1262,7 @@ def _panel_agrupaciones(grupo: str):
                 (st.success if ok else st.error)(msg)
                 if ok:
                     st.rerun()
+
 
 
 # ── Panel del PROPIETARIO: todos los proyectos (todos los grupos) ──

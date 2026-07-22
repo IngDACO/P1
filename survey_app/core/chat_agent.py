@@ -282,6 +282,11 @@ indicar dónde está algo, ten en cuenta con quién hablas:
   historial del proyecto (detalle → 📎 Archivos → Cálculos de herramientas).
 
 ### Gestión de proyectos
+- **🗂 Agrupaciones:** varios elevadores de un mismo edificio se agrupan para verlos como conjunto.
+  **Primero se crean los proyectos y luego, al crear la agrupación, se eligen cuáles la componen**
+  (cada uno con un peso; por defecto 1). Su panel muestra el avance consolidado, **la fecha de entrega
+  del conjunto y qué elevador la determina** (la marca el más lento, no el promedio), la curva de avance
+  plan vs real, alarmas y una comparativa de horas y costo entre elevadores.
 - **🛠 Mi grupo (administrador):** aquí se **crean los proyectos** (➕ Nuevo proyecto). KPIs del grupo, "Resumen del día" con lo pendiente, y cartera de
   proyectos en tarjetas (marcan retraso y adelanto). Secciones: 📊 Proyectos · 🗂 Agrupaciones ·
   ⏱ Horas · 💰 Gastos · 🔧 Usuarios de campo.

@@ -785,6 +785,40 @@ Al cargar el plano en el survey (app.py), autocompleta **RAIL = AlturaDiente** (
 espalda) del catálogo; si el código no está o no se detecta → aviso + entrada manual. **RAIL = AlturaDiente**
 (NO el ancho); AnchoDiente se guarda como dato secundario.
 
+## Agrupaciones: se invierte el flujo + dashboard de conjunto (v141)
+Peticion del usuario: "primero debe existir una agrupacion para que al crear el proyecto se seleccione;
+quiero que sea al contrario". Tenia razon — el flujo estaba al reves de como se trabaja: para agrupar 4
+elevadores habia que crear la agrupacion VACIA y luego abrir los 4 proyectos uno por uno, editar cada
+uno y asignarlo. **Cuatro ediciones en cuatro pantallas, sin ver nunca el conjunto.**
+### El flujo se invierte (solo UI: el modelo de datos NO cambia)
+La relacion sigue viviendo en el proyecto (`AgrupacionID` + `PesoEnAgrupacion`); solo cambia DONDE se
+edita, asi que **no hay migracion**.
+- **`projects.set_grouping_members(gid, {pid: peso}, grupo)`** — define de una vez que proyectos la
+  componen. Los que salen se DESAGRUPAN (no se borran). Solo escribe los que cambian.
+- **`projects_ui._miembros_editor`** — tabla con casilla + peso, reusada al crear y al editar miembros.
+  Marca los proyectos que **ya estan en otra agrupacion** para no moverlos sin querer.
+- **Peso por defecto 1** (decision del usuario) en los DOS caminos. ⚠️ Motivo real: `grouping_progress`
+  es `Σ(peso·avance)/Σpeso`, asi que **con todos los pesos en 0 el avance daba 0** aunque los elevadores
+  estuvieran al 100%. Con el flujo viejo era facil que pasara (habia que ponerlo a mano en cada uno).
+- El selector de agrupacion del **editar proyecto se mantiene** (decision del usuario): aqui los dos
+  caminos son utiles — armar la agrupacion de golpe, o asignar estando dentro del proyecto. No es el
+  caso de v140, donde uno era puro residuo.
+### Dashboard de agrupacion, reescrito
+⚠️ **El avance consolidado NO responde la pregunta que importa.** Un edificio se entrega cuando termina
+**el ultimo** elevador, no el promedio. El dashboard decia "62%" y no decia cuando entregas.
+- **`grouping_projection(gid)`** → fecha de entrega del CONJUNTO = max(`fecha_proj` por SPI) + **que
+  elevador la determina** (el critico). Es lo accionable: ahi es donde rinde reforzar.
+- **`grouping_curve(gid)`** → curva S consolidada plan vs real. ⚠️ Cada elevador tiene su propia fecha
+  de inicio, asi que **no se pueden sumar por "dia N"**: se llevan todos a un eje de FECHAS y se
+  combinan ponderando por peso. Interpolacion lineal entre puntos; 0 antes de empezar, ultimo valor
+  despues; la real se corta en HOY. Topado a 100 (los scurve individuales redondean y sumaban 100.2).
+  Verificado con dos cronogramas de inicios y pesos distintos: 0% al inicio, 100% al final.
+- **Comparativa entre elevadores**: en un edificio son unidades casi gemelas, asi que la desviacion de
+  horas/costo respecto al promedio delata al anomalo. Solo se marca si se desvia ≥15%.
+- **Alarmas del conjunto** + **tarjetas KPI** (`_kpi_card`, ya existia) en vez de `st.metric` planos.
+- **Sin agrupacion preseleccionada** (peticion del usuario; mismo criterio de v138/v139).
+Agente IA actualizado en el mismo lote (regla v133).
+
 ## Se quita el doble selector de plano (v140)
 Residuo mio de v137. v128 dio a las 5 herramientas un plano de SESION compartido; v137 movio el plano
 AL PROYECTO (mejor), pero **no quito lo anterior**: quedaron dos cosas seguidas pidiendo el mismo plano.
@@ -1506,7 +1540,7 @@ posicional + plano) → app.py, al cargar el PDF, setea `st.session_state["ns"]`
 resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NORTH SYD y AGECARE → NS=6
 (coincide con travel/floor-height HQ/HE).
 
-## Versiones desplegadas (v140 = actual)
+## Versiones desplegadas (v141 = actual)
 | Ver | Cambio principal |
 |---|---|
 | v5 | Extractor: CRLF fix, caso D valor-antes-label, sin pdfplumber |
@@ -1608,6 +1642,7 @@ resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NOR
 | v102 | Fix: NS se lee del plano (NUMBER OF STOPS) al cargar el PDF; default de init 6→2 (ya no queda pegado en 6) |
 | v103 | Rol conductor (2 relojes: jornada general + segmentos por proyecto, columna Tipo) + cronómetro en vivo para todos + reporte admin de horas del grupo (Mi grupo → ⏱ Horas) |
 | v104 | Credenciales/tickets por usuario (White Card, Forklift, Dogging/Rigging, licencia…): vencimiento+estado, foto/documento a Drive, radar en Resumen del día, avisos email/Telegram a admin+usuario; usuario ve las suyas (🎫 Mis credenciales) |
+| v141 | Agrupaciones al reves (se crean los proyectos y luego se eligen al armar la agrupacion) + dashboard con fecha de entrega del conjunto, elevador critico, curva S consolidada, comparativa y alarmas |
 | v140 | Se quita el doble selector de plano: el uploader de PDF pasa a expander plegado (plan B) y los textos describen el flujo real; era residuo de v137 |
 | v139 | Auditoria de los 38 desplegables: los 4 que BORRAN pasan a sin-preseleccion + confirmacion, y los 6 que escriben en un proyecto tampoco preseleccionan; los de configuracion se dejan igual |
 | v138 | Los selectores de proyecto ya no abren uno arbitrario al entrar (8 lecturas que nadie pidio); al campo se le preselecciona el proyecto en el que ficho |

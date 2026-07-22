@@ -565,6 +565,124 @@ def project_hours_bulk(grupo: str = None) -> dict:
 
 
 # ── Avance de una agrupación ─────────────────────────────────────
+def set_grouping_members(gid: str, miembros: dict, grupo: str = None) -> tuple:
+    """Define QUÉ proyectos componen una agrupación. `miembros` = {pid: peso}.
+
+    Desde v141 la agrupación se arma desde la agrupación (elegir sus proyectos),
+    no proyecto a proyecto: antes había que crear la agrupación vacía y luego
+    editar cada elevador por separado para asignarlo.
+
+    Los proyectos que estaban y ya no figuran se DESAGRUPAN (no se borran).
+    Devuelve (ok, mensaje). ⚠️ Es 1 escritura por proyecto que cambia.
+    """
+    actuales = {str(p.get("ID")): _num(p.get("PesoEnAgrupacion"))
+                for p in list_projects(grupo=grupo, agrupacion_id=gid)}
+    nuevos = {str(k): float(v or 1) for k, v in (miembros or {}).items()}
+
+    cambios, errores = 0, []
+    for pid, peso in nuevos.items():                   # altas y cambios de peso
+        if pid not in actuales or abs(actuales[pid] - peso) > 1e-9:
+            ok, msg = update_project(pid, {"AgrupacionID": gid,
+                                           "PesoEnAgrupacion": peso})
+            cambios += 1 if ok else 0
+            if not ok:
+                errores.append(f"{pid}: {msg}")
+    for pid in actuales:                               # bajas
+        if pid not in nuevos:
+            ok, msg = update_project(pid, {"AgrupacionID": "", "PesoEnAgrupacion": 0})
+            cambios += 1 if ok else 0
+            if not ok:
+                errores.append(f"{pid}: {msg}")
+
+    if errores:
+        return False, "  ·  ".join(errores[:3])
+    return True, (f"{cambios} proyecto(s) actualizados." if cambios
+                  else "Sin cambios que guardar.")
+
+
+def grouping_projection(gid: str, grupo: str = None) -> dict:
+    """Cuándo se entrega el CONJUNTO y quién lo determina.
+
+    El avance consolidado (un promedio ponderado) no responde la pregunta que
+    importa en un edificio: la entrega la marca **el último** elevador, no el
+    promedio. Aquí se toma el máximo de las fechas proyectadas por SPI.
+    """
+    out = {"fecha": None, "critico": "", "critico_id": "", "spi_min": None,
+           "sin_datos": [], "detalle": []}
+    for p in list_projects(grupo=grupo, agrupacion_id=gid):
+        pid, nom = str(p.get("ID", "")), str(p.get("Nombre", ""))
+        ps = project_schedule(pid)
+        if not ps or not ps.get("proj"):
+            out["sin_datos"].append(nom)
+            continue
+        pr = ps["proj"]
+        fecha, spi = pr.get("fecha_proj"), pr.get("spi")
+        out["detalle"].append({"id": pid, "nombre": nom, "fecha": fecha,
+                               "spi": spi, "gap": pr.get("dias_gap")})
+        if fecha and (out["fecha"] is None or fecha > out["fecha"]):
+            out["fecha"], out["critico"], out["critico_id"] = fecha, nom, pid
+        if spi is not None and (out["spi_min"] is None or spi < out["spi_min"]):
+            out["spi_min"] = spi
+    return out
+
+
+def grouping_curve(gid: str, grupo: str = None) -> dict:
+    """Curva S CONSOLIDADA de la agrupación (plan vs real), en fechas reales.
+
+    Cada elevador tiene su propio cronograma y su propia fecha de inicio, así
+    que no se pueden sumar por "día N": se llevan todos a un eje de FECHAS y se
+    combinan ponderando por el peso de cada uno en la agrupación.
+    """
+    from datetime import timedelta
+    series = []
+    for p in list_projects(grupo=grupo, agrupacion_id=gid):
+        ps = project_schedule(str(p.get("ID", "")))
+        if not ps:
+            continue
+        peso = _num(p.get("PesoEnAgrupacion")) or 1.0
+        series.append({"peso": peso, "inicio": ps["sched"]["start_date"],
+                       "plan": ps["sched"]["scurve"], "real": ps["real"],
+                       "hoy": ps["today_day"]})
+    if not series:
+        return {}
+
+    ini = min(s["inicio"] for s in series)
+    fin = max(s["inicio"] + timedelta(days=int(s["plan"][-1][0])) for s in series
+              if s["plan"])
+    tot_peso = sum(s["peso"] for s in series) or 1.0
+
+    def _pct(curva, dia):
+        """% de una curva [(dia,%)] en `dia`; 0 antes de empezar, último valor después."""
+        if not curva:
+            return 0.0
+        if dia <= curva[0][0]:
+            return 0.0
+        if dia >= curva[-1][0]:
+            return curva[-1][1]
+        for i in range(1, len(curva)):
+            if curva[i][0] >= dia:                       # interpolación lineal
+                (x0, y0), (x1, y1) = curva[i - 1], curva[i]
+                t = (dia - x0) / (x1 - x0) if x1 != x0 else 0
+                return y0 + (y1 - y0) * t
+        return curva[-1][1]
+
+    fechas, plan, real = [], [], []
+    d, hoy = ini, __import__("datetime").date.today()
+    while d <= fin:
+        pl = rl = 0.0
+        for s in series:
+            off = (d - s["inicio"]).days
+            pl += s["peso"] * _pct(s["plan"], off)
+            if d <= hoy:                                  # la real se corta en HOY
+                rl += s["peso"] * _pct(s["real"], off)
+        fechas.append(d)
+        # tope 100: cada scurve individual redondea y la suma daba 100.2 %
+        plan.append(min(100.0, round(pl / tot_peso, 1)))
+        real.append(min(100.0, round(rl / tot_peso, 1)) if d <= hoy else None)
+        d += timedelta(days=max(1, (fin - ini).days // 60 or 1))
+    return {"fechas": fechas, "plan": plan, "real": real, "hoy": hoy}
+
+
 def grouping_progress(gid: str) -> dict:
     """Avance ponderado de una agrupación: Σ(peso_proy × avance_proy)/Σ(peso)."""
     proys = list_projects(agrupacion_id=gid)
