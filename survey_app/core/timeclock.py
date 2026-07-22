@@ -233,14 +233,17 @@ def clock_out(nombre: str, grupo: str = "", nota: str = "",
         horas = ""
 
     try:
-        # Columnas: 6=Clock Out, 7=Horas, 8=Estado
-        ws.update_cell(target_row, 6, out_ts)
-        ws.update_cell(target_row, 7, str(horas))
-        ws.update_cell(target_row, 8, "CERRADO")
+        # UNA sola escritura. Antes eran 3 update_cell (+1 lectura y +1 escritura
+        # si habia nota) = hasta 5 llamadas por cada salida. Con todo el equipo
+        # fichando a la misma hora es justo el escenario del 429 que v80 arreglo
+        # en los proyectos. Columnas: F=Clock Out, G=Horas, H=Estado.
+        peticiones = [{"range": f"F{target_row}:H{target_row}",
+                       "values": [[out_ts, str(horas), "CERRADO"]]}]
         if nota:
-            # anexar nota a Ubicacion (col 4) si viene
-            prev = ws.cell(target_row, 4).value or ""
-            ws.update_cell(target_row, 4, (prev + " | " + nota).strip(" |"))
+            prev = str(records[target_row - 2].get("Ubicacion", "") or "")
+            peticiones.append({"range": f"D{target_row}",
+                               "values": [[(prev + " | " + nota).strip(" |")]]})
+        ws.batch_update(peticiones, value_input_option="RAW")
     except Exception as e:
         return False, f"Error actualizando el fichaje: {e}"
 
@@ -296,6 +299,87 @@ def open_sessions(nombre: str, grupo: str = "", usuario: str = "") -> dict:
     except Exception:
         pass
     return out
+
+
+def fichar_proyecto(nombre: str, proyecto: str, grupo: str = "", usuario: str = "",
+                    proyecto_id: str = "") -> tuple:
+    """Ficha a un proyecto y, si no hay jornada general abierta, la abre tambien.
+
+    Decision del usuario (v150): los dos relojes son para TODOS, pero sin cobrar
+    un toque extra cada mañana. La jornada general es el tiempo pagado y el
+    segmento de proyecto es a que se imputa; `group_hours` deriva de ahi
+    `sin_asignar` (traslados y espera). Si el proyecto pudiera ficharse sin
+    jornada, ese numero dejaria de significar nada.
+
+    Devuelve (ok, mensaje, jornada_abierta_automaticamente).
+    """
+    abiertas = open_sessions(nombre, grupo, usuario)
+    auto = False
+    if not abiertas.get(TIPO_GENERAL):
+        ok_g, _ = clock_in(nombre, "", "", grupo, tipo=TIPO_GENERAL, usuario=usuario)
+        auto = bool(ok_g)
+    ok, msg = clock_in(nombre, proyecto, "", grupo, tipo=TIPO_PROYECTO,
+                       usuario=usuario, proyecto_id=proyecto_id)
+    return ok, msg, auto
+
+
+def cerrar_jornada(nombre: str, grupo: str = "", usuario: str = "") -> tuple:
+    """Cierra la jornada general y, de paso, el segmento de proyecto si sigue abierto."""
+    abiertas = open_sessions(nombre, grupo, usuario)
+    if abiertas.get(TIPO_PROYECTO):
+        clock_out(nombre, grupo, tipo=TIPO_PROYECTO, usuario=usuario)
+    return clock_out(nombre, grupo, tipo=TIPO_GENERAL, usuario=usuario)
+
+
+def resumen_hoy(nombre: str, grupo: str = "", usuario: str = "") -> dict:
+    """Horas de HOY de esta persona: jornada, imputado a proyectos y sin asignar.
+
+    El cronometro solo dice cuanto llevas desde que fichaste; esto dice cuanto
+    llevas EN EL DIA, que es lo que se quiere saber. Dia natural, no ultimas 24 h.
+    """
+    hoy = datetime.now().date()
+    out = {"general": 0.0, "proyecto": 0.0, "sin_asignar": 0.0, "por_proyecto": {}}
+    for r in _cached_records():                      # lectura cacheada (display)
+        if not _matches(r, usuario, nombre, grupo):
+            continue
+        ci = str(r.get("Clock In", ""))
+        try:
+            if datetime.strptime(ci, FMT).date() != hoy:
+                continue
+        except Exception:
+            continue
+        abierto = str(r.get("Estado", "")).strip().upper() == "ABIERTO"
+        h = round(elapsed_seconds(ci) / 3600.0, 2) if abierto else _num(r.get("Horas"))
+        if h <= 0:
+            continue
+        if _tipo_of(r) == TIPO_GENERAL:
+            out["general"] += h
+        else:
+            out["proyecto"] += h
+            pn = _nombre_actual(pid_of(r), r.get("Proyecto", "")) or "(sin proyecto)"
+            out["por_proyecto"][pn] = round(out["por_proyecto"].get(pn, 0.0) + h, 2)
+    out["general"] = round(out["general"], 2)
+    out["proyecto"] = round(out["proyecto"], 2)
+    out["sin_asignar"] = round(max(0.0, out["general"] - out["proyecto"]), 2)
+    return out
+
+
+def mis_fichajes(nombre: str, grupo: str = "", usuario: str = "", limite: int = 8) -> list:
+    """Los ultimos fichajes de esta persona (los suyos, no los del grupo)."""
+    filas = []
+    for r in _cached_records():
+        if not _matches(r, usuario, nombre, grupo):
+            continue
+        filas.append({
+            "tipo": _tipo_of(r),
+            "proyecto": _nombre_actual(pid_of(r), r.get("Proyecto", "")),
+            "entrada": str(r.get("Clock In", "")),
+            "salida": str(r.get("Clock Out", "")),
+            "horas": _num(r.get("Horas")),
+            "abierto": str(r.get("Estado", "")).strip().upper() == "ABIERTO",
+        })
+    filas.sort(key=lambda x: x["entrada"], reverse=True)
+    return filas[:limite]
 
 
 def switch_project(nombre: str, grupo: str, new_proyecto: str, ubicacion: str = "",

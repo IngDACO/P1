@@ -785,6 +785,48 @@ Al cargar el plano en el survey (app.py), autocompleta **RAIL = AlturaDiente** (
 espalda) del catálogo; si el código no está o no se detecta → aviso + entrada manual. **RAIL = AlturaDiente**
 (NO el ancho); AnchoDiente se guarda como dato secundario.
 
+## Fichaje: dos relojes para TODOS, sin texto libre y con resumen del dia (v150)
+Peticion del usuario: "mas dinamico, mas profesional; aun salen campos para llenar a mano; el proyecto
+debe poder seleccionarse; y vamos a estandarizar el clock in/out para todos por igual, uno general y
+uno especifico, con cronometro".
+### ⚠️ El texto libre no era cosmetico: PERDIA HORAS
+Habia tres sitios para teclear el proyecto a mano (`_OTRO`, `tc_proyecto`, `cd_prj_txt`). Al usarlos
+el **`ProyectoID` quedaba vacio**, asi que esas horas dependian de que el nombre coincidiera exacto:
+con un dedazo **no contaban para ningun proyecto** y desaparecian del costo de mano de obra, sin
+aviso. Reabria justo el agujero que cerro v145. En los datos reales solo **6 de 12** filas tienen ID.
+Ahora el proyecto SIEMPRE sale de una lista (`ui.elegir`, sin preseleccion).
+### "Ubicacion / Nota": se pedia dos veces y no la leia NADIE
+Verificado en todo el repo: todas las lecturas de `Ubicacion` son la **del proyecto**, no la del
+fichaje. Y en los datos reales esta **vacia en las 12 filas**. Se pedia al entrar y otra vez al salir
+(se anexaba como nota). Eliminada del formulario.
+### Un solo fichaje: jornada + proyecto (decision del usuario)
+`_render_normal` y `_render_conductor` eran dos flujos que divergian; ahora hay **una** funcion.
+El modelo ya existia entero (TIPO_GENERAL/TIPO_PROYECTO, switch_project, `sin_asignar` = jornada −
+Σproyectos, ya clampado a 0), solo lo usaba el conductor. Eso producia datos incoherentes: en la hoja
+real, `lksdfkldsf` tiene **8.97 h de proyecto y 0 de jornada**.
+- **`fichar_proyecto()`** abre la jornada SOLA si no estaba (decision del usuario: los dos relojes
+  para todos, pero sin cobrar un toque extra cada mañana) y lo avisa. **`cerrar_jornada()`** cierra
+  tambien el segmento de proyecto.
+- **`resumen_hoy()`**: horas del DIA NATURAL (no ultimas 24 h) — jornada, imputado y sin asignar. El
+  cronometro solo dice cuanto llevas desde que fichaste; esto dice cuanto llevas en el dia.
+- **`mis_fichajes()`**: los propios, que el usuario no podia ver (el reporte de horas es del admin).
+### ⚠️ `clock_out` hacia hasta 5 llamadas a la API por salida
+3 `update_cell` + (si habia nota) 1 lectura y 1 escritura mas. Con el equipo fichando a la misma hora
+es el escenario del 429 que v80 arreglo en los proyectos. Ahora **1 `batch_update`**.
+### ⚠️ Bug que reintroduje y cace en la verificacion
+El selector de proyectos lo arme con `{nombre: id for p in proys}`: **dos proyectos homonimos
+colapsan y uno queda IMPOSIBLE de fichar**, en silencio. Es exactamente el fallo de v147, cometido
+otra vez tres versiones despues. Desempatado con el ID. Los homonimos son posibles: `create_project`
+solo AVISA de duplicados, no los impide.
+### Verificacion
+`resumen_hoy` probado con fichajes simulados: dia normal (8 h jornada, 3+2.5 imputadas → 2.5 sin
+asignar) · sesion ABIERTA contando el tiempo transcurrido · lo de ayer NO entra · proyecto sin jornada
+no deja `sin_asignar` negativo. `fichar_proyecto` y `cerrar_jornada` probados en los 3 escenarios
+(sin nada abierto → abre general + proyecto, auto=True; jornada ya abierta → solo proyecto; cerrar con
+proyecto abierto → cierra proyecto y luego general). `mis_fichajes` contra los datos REALES.
+0 nombres sin resolver · 0 `text_input` en el modulo · sin referencias huerfanas a las 2 funciones
+eliminadas · prompt del agente actualizado en el MISMO lote (regla v133).
+
 ## Pestaña Datos: archivar en vez de borrar, y fechas que no mienten (v149)
 Revision de ✏️ Datos a peticion del usuario ("a mi no se me ocurre mucho, que propones?"). Tres
 problemas reales, ninguno estetico.
@@ -1841,7 +1883,7 @@ posicional + plano) → app.py, al cargar el PDF, setea `st.session_state["ns"]`
 resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NORTH SYD y AGECARE → NS=6
 (coincide con travel/floor-height HQ/HE).
 
-## Versiones desplegadas (v149 = actual)
+## Versiones desplegadas (v150 = actual)
 | Ver | Cambio principal |
 |---|---|
 | v5 | Extractor: CRLF fix, caso D valor-antes-label, sin pdfplumber |
@@ -1943,6 +1985,7 @@ resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NOR
 | v102 | Fix: NS se lee del plano (NUMBER OF STOPS) al cargar el PDF; default de init 6→2 (ya no queda pegado en 6) |
 | v103 | Rol conductor (2 relojes: jornada general + segmentos por proyecto, columna Tipo) + cronómetro en vivo para todos + reporte admin de horas del grupo (Mi grupo → ⏱ Horas) |
 | v104 | Credenciales/tickets por usuario (White Card, Forklift, Dogging/Rigging, licencia…): vencimiento+estado, foto/documento a Drive, radar en Resumen del día, avisos email/Telegram a admin+usuario; usuario ve las suyas (🎫 Mis credenciales) |
+| v150 | Fichaje unificado: dos relojes (jornada + proyecto) para todos los roles, el proyecto siempre de una lista (el texto libre dejaba las horas sin atribuir), fuera Ubicacion (nadie la leia), resumen del dia, historial propio y clock_out en 1 llamada |
 | v149 | Datos: archivar sustituye a borrar (borrar dejaba huerfanos documentos, pre-starts, alarmas y fichajes, y sin confirmacion), fechas con calendario (el texto libre falseaba el cronograma en silencio) y aviso de credenciales al asignar campo |
 | v148 | Reabrir un calculo guardado en su herramienta: DatosJSON no tenia lector y ademas solo guardaba los resultados; ahora guarda tambien las entradas y se puede retomar un calculo |
 | v147 | Archivos: datos del plano visibles en el proyecto, fotos de obra en galeria, quien subio cada documento y cuando, y la descarga deja de bajarse TODO Drive en cada render |

@@ -246,7 +246,7 @@ indicar dónde está algo, ten en cuenta con quién hablas:
 - **Propietario:** 👑 Administración + las herramientas de cálculo (sin fichaje).
 - **Administrador:** 🛠 Mi grupo · ⏱ Fichaje + las herramientas.
 - **Campo:** 📋 Mis proyectos · ⏱ Fichaje · 🎫 Mis credenciales + las herramientas.
-- **Conductor:** ⏱ Fichaje (dos relojes) · 📋 Proyectos (solo lectura) · 🎫 Mis credenciales.
+- **Conductor:** ⏱ Fichaje · 📋 Proyectos (solo lectura) · 🎫 Mis credenciales.
 - **Herramientas comunes a todos:** 📐 Survey · 🔩 Plomadas · ✂️ Corte de rieles ·
   🛡 Corte de buffers · 🎗 Belting · 🦺 Pre-Start diario.
 
@@ -313,8 +313,12 @@ indicar dónde está algo, ten en cuenta con quién hablas:
 - **💰 Gastos y costos:** se cargan recibos por proyecto (foto o PDF + valor + categoría). El costo
   total del proyecto = compras + mano de obra (horas × tarifa de cada persona), y se compara contra
   el **presupuesto** del proyecto si se fijó.
-- **⏱ Fichaje:** clock in/out con la identidad del login, con cronómetro en vivo; el proyecto se elige
-  de los asignados. El **conductor** ficha con dos relojes: jornada general + segmentos por proyecto.
+- **⏱ Fichaje:** DOS relojes para TODOS los roles, con cronómetro en vivo en ambos:
+  la **jornada** (el tiempo pagado del día) y el **segmento de proyecto** (a qué se imputa).
+  Al fichar a un proyecto se abre la jornada sola si no estaba; al cerrar la jornada se cierra
+  también el proyecto. El proyecto SIEMPRE se elige de una lista (nunca se escribe a mano, porque
+  entonces las horas no se atribuirían a ningún elevador). La pestaña muestra el resumen del día
+  (jornada, imputado a proyectos y **sin asignar** = traslados y espera) y los últimos fichajes.
   Los fichajes son privados; solo el admin ve el reporte de horas del grupo.
 - **📍 Ubicaciones:** cada dirección enlaza a Google Maps.
 - **📎 Documentos:** cada proyecto tiene su carpeta en Drive (plano, informes, fotos, certificados),

@@ -2,49 +2,67 @@
 UI de la pestaña de fichaje (clock in / clock out).
 La identidad viene del login; ya no se pide usuario + PIN.
 
-- Todos los roles: clock in/out por proyecto, con CRONÓMETRO en vivo.
-- Conductor: DOS relojes — jornada GENERAL (total de horas) + segmentos por PROYECTO
-  (para fichar a un proyecto debe haber jornada general abierta). Cronómetro en ambos,
-  cambio de proyecto en 1 toque, aviso de jornada olvidada.
+DOS relojes para TODOS los roles (v150): la **jornada general** (el tiempo
+pagado) y el **segmento de proyecto** (a qué se imputa). De ahí sale
+`sin_asignar` = jornada − Σproyectos, que son traslados y espera.
+
+Hasta v149 solo el conductor tenía los dos y el resto un único reloj de
+proyecto, lo que producía datos incoherentes (gente con horas de proyecto y 0
+de jornada). Ahora hay UNA función en vez de dos que divergían.
 """
 from datetime import datetime
 
+import pandas as pd
 import streamlit as st
 import streamlit.components.v1 as components
 
 from core import timeclock
 from core import projects as projects_data
+from core import ui_common as ui
 
-# Opción neutra: sin ella el selectbox devuelve el primer proyecto y se
-# escribiría sobre un elevador que nadie eligió.
-_VACIO = "— elige el proyecto —"
-
-_OTRO = "✏️ Otro (escribir)…"
+_AZUL, _VERDE, _GRIS, _ROJO = "#1a3a5c", "#1e8449", "#6b7280", "#c0392b"
 
 
-def _chronometer(clock_in_str, label="En curso", color="#1e8449"):
-    """Cronómetro en vivo (client-side): cuenta desde el Clock In, sin recargar la app."""
+def _chronometer(clock_in_str, label="En curso", color=_VERDE, key="chrono"):
+    """Cronómetro en vivo (client-side): cuenta desde el Clock In, sin recargar."""
     e0 = timeclock.elapsed_seconds(clock_in_str)
     components.html(
-        "<div style=\"display:flex;align-items:center;gap:10px;"
-        "font-family:'Segoe UI',sans-serif;\">"
-        f"<span style=\"font-size:13px;color:#6b7280;\">{label}</span>"
-        f"<span id=\"chrono\" style=\"font-size:26px;font-weight:800;"
-        f"font-family:'Courier New',monospace;color:{color};\">00:00:00</span></div>"
+        '<div style="display:flex;align-items:baseline;gap:10px;'
+        'font-family:Arial,Helvetica,sans-serif;">'
+        f'<span style="font-size:12.5px;color:#6b7280;">{label}</span>'
+        f'<span id="{key}" style="font-size:34px;font-weight:800;'
+        f'font-family:\'Courier New\',monospace;color:{color};letter-spacing:1px;">'
+        '00:00:00</span></div>'
         "<script>"
         f"var e={e0};"
         "function f(s){var h=Math.floor(s/3600),m=Math.floor((s%3600)/60),x=s%60;"
-        "return String(h).padStart(2,'0')+':'+String(m).padStart(2,'0')+':'+String(x).padStart(2,'0');}"
-        "var el=document.getElementById('chrono');el.textContent=f(e);"
+        "return String(h).padStart(2,'0')+':'+String(m).padStart(2,'0')+':'"
+        "+String(x).padStart(2,'0');}"
+        f"var el=document.getElementById('{key}');el.textContent=f(e);"
         "setInterval(function(){e++;el.textContent=f(e);},1000);"
         "</script>",
-        height=42,
+        height=52,
     )
+
+
+def _tarjeta(titulo, valor, pie="", color=None, activo=False):
+    """Tarjeta de estado, mismo lenguaje visual que los KPI de los proyectos."""
+    borde = f"border-left:4px solid {color};" if (activo and color) else ""
+    col = f"color:{color};" if color else ""
+    return (
+        '<div style="background:#ffffff;border:1px solid #e6e9ef;border-radius:12px;'
+        f'padding:12px 14px;flex:1;min-width:132px;{borde}">'
+        f'<div style="font-size:12.5px;color:#6b7280;line-height:1.2;">{titulo}</div>'
+        f'<div style="font-size:24px;font-weight:700;margin-top:2px;{col}">{valor}</div>'
+        + (f'<div style="font-size:11.5px;color:#9aa7b8;margin-top:2px;">{pie}</div>'
+           if pie else "")
+        + "</div>")
 
 
 def _es_hoy(clock_in_str) -> bool:
     try:
-        return datetime.strptime(str(clock_in_str), timeclock.FMT).date() == datetime.now().date()
+        return (datetime.strptime(str(clock_in_str), timeclock.FMT).date()
+                == datetime.now().date())
     except Exception:
         return True
 
@@ -53,15 +71,38 @@ def _aviso_olvido(sess):
     """Avisa si una sesión abierta viene de un día anterior."""
     for tipo, s in sess.items():
         if s and not _es_hoy(s["clock_in"]):
-            etq = "jornada general" if tipo == timeclock.TIPO_GENERAL else f"proyecto «{s['proyecto']}»"
-            st.warning(f"⚠️ Tienes una **{etq}** abierta desde **{s['clock_in']}** (día anterior). "
-                       "Haz clock out si la olvidaste.")
+            etq = ("jornada general" if tipo == timeclock.TIPO_GENERAL
+                   else f"proyecto «{s['proyecto']}»")
+            st.warning(f"⚠️ Tienes una **{etq}** abierta desde **{s['clock_in']}** "
+                       "(día anterior). Haz clock out si la olvidaste.")
+
+
+def _proyectos_para(rol, usuario, grupo):
+    """Proyectos que esta persona puede fichar. Devuelve (lista, son_suyos).
+
+    ⚠️ Siempre una LISTA, nunca texto libre. Escribir el proyecto a mano dejaba
+    el `ProyectoID` vacío (v145) y entonces las horas dependían de que el nombre
+    coincidiera exacto: con un dedazo **no contaban para ningún proyecto** y
+    desaparecían del costo de mano de obra, sin ningún aviso.
+    """
+    try:
+        if rol == "campo":
+            asignados = projects_data.list_projects_for_field(usuario, grupo=grupo)
+            if asignados:
+                return asignados, True
+            return projects_data.list_projects(grupo=grupo), False
+        if rol == "propietario":
+            return projects_data.list_projects(), True
+        return projects_data.list_projects(grupo=grupo), True
+    except Exception:
+        return [], True
 
 
 def render_timeclock_tab():
-    st.markdown("### ⏱ Fichaje — Clock In / Clock Out")
+    st.markdown("### ⏱ Fichaje")
     if not timeclock.is_configured():
-        st.warning("⚠️ El fichaje aún no está conectado a Google Sheets. Configura los Secrets.")
+        st.warning("⚠️ El fichaje aún no está conectado a Google Sheets. "
+                   "Configura los Secrets.")
         return
 
     a       = st.session_state.get("auth", {})
@@ -70,98 +111,48 @@ def render_timeclock_tab():
     usuario = a.get("usuario", "")
     grupo   = a.get("grupo", "")
 
-    if rol == "conductor":
-        _render_conductor(nombre, usuario, grupo)
-    else:
-        _render_normal(nombre, usuario, grupo)
-
-
-# ── Fichaje estándar (campo/admin/propietario): solo proyecto + cronómetro ──
-def _render_normal(nombre, usuario, grupo):
-    st.caption(f"Fichando como **{nombre}**" + (f"  ·  grupo **{grupo}**" if grupo else "")
-               + ". Tus fichajes son privados.")
-
     sess = timeclock.open_sessions(nombre, grupo, usuario)
+    gen  = sess.get(timeclock.TIPO_GENERAL)
+    prj  = sess.get(timeclock.TIPO_PROYECTO)
+    hoy  = timeclock.resumen_hoy(nombre, grupo, usuario)
+
+    st.caption(f"**{nombre}**" + (f"  ·  grupo **{grupo}**" if grupo else "")
+               + "  ·  tus fichajes son privados.")
     _aviso_olvido(sess)
-    abierto = sess.get(timeclock.TIPO_PROYECTO)
-    if abierto:
-        st.success(f"🟢 Clock in abierto — proyecto **{abierto['proyecto'] or '—'}** "
-                   f"desde {abierto['clock_in']}")
-        _chronometer(abierto["clock_in"], "⏱ Tiempo en curso:")
 
-    asignados = []
-    try:
-        if grupo:
-            asignados = projects_data.list_projects_for_field(usuario, grupo=grupo)
-    except Exception:
-        asignados = []
-
-    # nombre -> ID: el fichaje guarda el ID para no perder las horas si el
-    # proyecto se renombra (v145). Escribir el nombre a mano deja el ID vacio.
-    _ids = {str(p.get("Nombre", "")): str(p.get("ID", "")) for p in asignados}
-
-    c3, c4 = st.columns(2)
-    if asignados:
-        nombres = [p.get("Nombre") for p in asignados]
-        # Sin preseleccion: fichar en el proyecto equivocado desvirtua las horas
-        # y, con ellas, el costo de mano de obra del elevador.
-        sel = c3.selectbox("Proyecto (de tus asignados)",
-                           [_VACIO] + nombres + [_OTRO], key="tc_proyecto_sel")
-        proyecto = (c3.text_input("Nombre del proyecto", key="tc_proyecto_otro")
-                    if sel == _OTRO else ("" if sel == _VACIO else sel))
-    else:
-        c3.caption("No tienes proyectos asignados; escribe el proyecto a mano.")
-        proyecto = c3.text_input("Proyecto / Cliente", key="tc_proyecto",
-                                 placeholder="Proyecto en el que trabajas")
-    ubicacion = c4.text_input("Ubicación / Nota", key="tc_ubicacion",
-                              placeholder="Obra, ubicación o comentario")
-
-    b1, b2 = st.columns(2)
-    if b1.button("🟢 Clock IN", use_container_width=True, key="tc_in"):
-        if not proyecto:
-            st.error("Elige o escribe el proyecto antes de fichar.")
-        else:
-            ok, msg = timeclock.clock_in(nombre, proyecto, ubicacion, grupo,
-                                         usuario=usuario,
-                                         proyecto_id=_ids.get(proyecto, ""))
-            (st.success if ok else st.error)(msg)
-            if ok:
-                st.rerun()
-    if b2.button("🔴 Clock OUT", use_container_width=True, key="tc_out"):
-        ok, msg = timeclock.clock_out(nombre, grupo, ubicacion, usuario=usuario)
-        (st.success if ok else st.error)(msg)
-        if ok:
-            st.rerun()
-
-    st.markdown("---")
-    st.caption("🔒 Tus fichajes son privados. El resumen de horas lo ve la administración.")
-
-
-# ── Fichaje del CONDUCTOR: jornada general + segmentos de proyecto ──
-def _render_conductor(nombre, usuario, grupo):
-    st.caption(f"Conductor: **{nombre}**" + (f"  ·  grupo **{grupo}**" if grupo else "")
-               + ". Jornada general + segmentos por proyecto.")
-    sess = timeclock.open_sessions(nombre, grupo, usuario)
-    _aviso_olvido(sess)
-    gen = sess.get(timeclock.TIPO_GENERAL)
-    prj = sess.get(timeclock.TIPO_PROYECTO)
+    # ── Estado de un vistazo ──
+    _est = ("🟢 En un proyecto" if prj else
+            ("🟡 Jornada abierta, sin proyecto" if gen else "⚪ Sin fichar"))
+    _col = _VERDE if prj else (_AZUL if gen else _GRIS)
+    tarj = [_tarjeta("Estado", _est, color=_col, activo=bool(gen or prj)),
+            _tarjeta("Jornada de hoy", f"{hoy['general']:.2f} h",
+                     "el tiempo pagado", _AZUL, bool(gen)),
+            _tarjeta("Imputado a proyectos", f"{hoy['proyecto']:.2f} h",
+                     f"{len(hoy['por_proyecto'])} proyecto(s)", _VERDE, bool(prj)),
+            _tarjeta("Sin asignar", f"{hoy['sin_asignar']:.2f} h",
+                     "traslados y espera",
+                     _ROJO if hoy["sin_asignar"] > 2 else None)]
+    st.markdown('<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px">'
+                + "".join(tarj) + "</div>", unsafe_allow_html=True)
 
     # ── Jornada general ──
-    st.markdown("#### 🚚 Jornada (general)")
+    st.markdown("#### 🕐 Jornada")
     if gen:
-        st.success(f"🟢 Jornada abierta desde {gen['clock_in']}")
-        _chronometer(gen["clock_in"], "⏱ Jornada:", color="#1a3a5c")
-        if st.button("🔴 Clock OUT jornada", use_container_width=True, key="cd_gen_out"):
-            # cerrar también el segmento de proyecto si sigue abierto
-            if prj:
-                timeclock.clock_out(nombre, grupo, tipo=timeclock.TIPO_PROYECTO, usuario=usuario)
-            ok, msg = timeclock.clock_out(nombre, grupo, tipo=timeclock.TIPO_GENERAL, usuario=usuario)
+        _chronometer(gen["clock_in"], "Llevas abierta", _AZUL, "chrono_gen")
+        st.caption(f"Desde las {gen['clock_in'][11:16]}."
+                   + ("  Al cerrarla se cierra también el proyecto en curso." if prj else ""))
+        if st.button("🔴 Cerrar la jornada", use_container_width=True, key="tc_gen_out"):
+            ok, msg = timeclock.cerrar_jornada(nombre, grupo, usuario)
             (st.success if ok else st.error)(msg)
             if ok:
                 st.rerun()
     else:
-        if st.button("🟢 Clock IN jornada", use_container_width=True, key="cd_gen_in", type="primary"):
-            ok, msg = timeclock.clock_in(nombre, "", "", grupo, tipo=timeclock.TIPO_GENERAL, usuario=usuario)
+        st.caption("La jornada es tu tiempo de trabajo del día. Se abre sola al "
+                   "fichar a un proyecto, o puedes abrirla aquí.")
+        if st.button("🟢 Abrir jornada", use_container_width=True, key="tc_gen_in",
+                     type="primary"):
+            ok, msg = timeclock.clock_in(nombre, "", "", grupo,
+                                         tipo=timeclock.TIPO_GENERAL, usuario=usuario)
             (st.success if ok else st.error)(msg)
             if ok:
                 st.rerun()
@@ -169,58 +160,87 @@ def _render_conductor(nombre, usuario, grupo):
     st.markdown("---")
 
     # ── Segmento por proyecto ──
-    st.markdown("#### 🏗 Proyecto que estás atendiendo")
-    if not gen:
-        st.info("Primero abre la **jornada general** para poder fichar a un proyecto.")
-        return
-
-    proys = []
-    try:
-        proys = projects_data.list_projects(grupo=grupo)
-    except Exception:
-        proys = []
-    nombres = [p.get("Nombre") for p in proys] or []
-    _ids    = {str(p.get("Nombre", "")): str(p.get("ID", "")) for p in proys}
+    st.markdown("#### 🏗 Proyecto")
+    proys, propios = _proyectos_para(rol, usuario, grupo)
+    # ⚠️ Un dict comprehension por NOMBRE descarta homonimos en silencio y ese
+    # proyecto se volveria imposible de fichar (mismo fallo que en v147). El
+    # nombre puede repetirse: `create_project` solo AVISA de duplicados.
+    idmap = {}
+    for p in proys:
+        _et = str(p.get("Nombre") or "(sin nombre)")
+        if _et in idmap:
+            _et = f"{_et} ({p.get('ID')})"
+        idmap[_et] = str(p.get("ID", ""))
 
     if prj:
-        st.success(f"🟢 Atendiendo **{prj['proyecto'] or '—'}** desde {prj['clock_in']}")
-        _chronometer(prj["clock_in"], "⏱ En este proyecto:", color="#1e8449")
+        st.markdown(f"Estás en **{prj['proyecto'] or '—'}**")
+        _chronometer(prj["clock_in"], "En este proyecto", _VERDE, "chrono_prj")
         c1, c2 = st.columns(2)
-        if c1.button("🔴 Clock OUT proyecto", use_container_width=True, key="cd_prj_out"):
-            ok, msg = timeclock.clock_out(nombre, grupo, tipo=timeclock.TIPO_PROYECTO, usuario=usuario)
+        if c1.button("🔴 Salir del proyecto", use_container_width=True, key="tc_prj_out"):
+            ok, msg = timeclock.clock_out(nombre, grupo,
+                                          tipo=timeclock.TIPO_PROYECTO, usuario=usuario)
             (st.success if ok else st.error)(msg)
             if ok:
                 st.rerun()
-        # Cambio de proyecto en 1 toque
-        opts = [n for n in nombres if n != prj["proyecto"]]
-        if opts:
-            nuevo = c2.selectbox("Cambiar a otro proyecto", ["—"] + opts, key="cd_switch_sel")
-            if c2.button("🔄 Cambiar de proyecto", use_container_width=True, key="cd_switch"):
-                if nuevo and nuevo != "—":
-                    ok, msg = timeclock.switch_project(nombre, grupo, nuevo,
-                                                       usuario=usuario,
-                                                       new_pid=_ids.get(nuevo, ""))
+        _otros = {k: v for k, v in idmap.items() if k != prj["proyecto"]}
+        if _otros:
+            with c2:
+                _nuevo = ui.elegir("Cambiar de proyecto", _otros, key="tc_switch",
+                                   vacio="— cambiar a… —")
+                if st.button("🔄 Cambiar", use_container_width=True, key="tc_switch_btn",
+                             disabled=(_nuevo is None)):
+                    _nom = next(k for k, v in _otros.items() if v == _nuevo)
+                    ok, msg = timeclock.switch_project(nombre, grupo, _nom,
+                                                       usuario=usuario, new_pid=_nuevo)
                     (st.success if ok else st.error)(msg)
                     if ok:
                         st.rerun()
+    elif not idmap:
+        st.info("No hay proyectos disponibles para fichar. Pídele al administrador "
+                "que te asigne uno.")
     else:
-        if nombres:
-            sel = st.selectbox("Proyecto al que le prestas servicio",
-                               [_VACIO] + nombres, key="cd_prj_sel")
-            sel = "" if sel == _VACIO else sel
-        else:
-            sel = st.text_input("Proyecto (no hay proyectos en el grupo, escribe uno)", key="cd_prj_txt")
-        if st.button("🟢 Clock IN proyecto", use_container_width=True, key="cd_prj_in"):
-            if not sel:
-                st.error("Elige el proyecto.")
+        if not propios:
+            st.caption("No tienes proyectos asignados; se muestran los de tu grupo.")
+        _pid = ui.elegir("¿En qué proyecto vas a trabajar?", idmap, key="tc_prj_sel",
+                         vacio="— elige el proyecto —")
+        if st.button("🟢 Fichar al proyecto", use_container_width=True, type="primary",
+                     key="tc_prj_in", disabled=(_pid is None)):
+            _nom = next(k for k, v in idmap.items() if v == _pid)
+            ok, msg, auto = timeclock.fichar_proyecto(nombre, _nom, grupo, usuario, _pid)
+            if ok:
+                st.success(msg + ("  🕐 Se abrió también tu jornada." if auto else ""))
+                st.rerun()
             else:
-                ok, msg = timeclock.clock_in(nombre, sel, "", grupo,
-                                             tipo=timeclock.TIPO_PROYECTO,
-                                             usuario=usuario,
-                                             proyecto_id=_ids.get(sel, ""))
-                (st.success if ok else st.error)(msg)
-                if ok:
-                    st.rerun()
+                st.error(msg)
 
-    st.markdown("---")
-    st.caption("🔒 Tus fichajes son privados. La administración ve el resumen de horas del grupo.")
+    # ── Lo de hoy, por proyecto ──
+    if hoy["por_proyecto"]:
+        st.markdown("---")
+        st.markdown("**Hoy has imputado**")
+        _tot = sum(hoy["por_proyecto"].values()) or 1
+        for nom, h in sorted(hoy["por_proyecto"].items(), key=lambda x: -x[1]):
+            st.markdown(
+                '<div style="display:flex;align-items:center;gap:10px;margin-bottom:5px;">'
+                f'<div style="width:170px;flex:none;font-size:13px;color:#374151;'
+                f'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{nom}</div>'
+                '<div style="flex:1;height:8px;background:#eef1f5;border-radius:20px;">'
+                f'<div style="height:8px;width:{100*h/_tot:.0f}%;background:{_VERDE};'
+                'border-radius:20px;"></div></div>'
+                f'<div style="width:58px;flex:none;text-align:right;font-size:13px;'
+                f'font-weight:600;color:#1f2937;">{h:.2f} h</div></div>',
+                unsafe_allow_html=True)
+
+    # ── Historial propio ──
+    _mios = timeclock.mis_fichajes(nombre, grupo, usuario, 8)
+    if _mios:
+        with st.expander("🗂 Tus últimos fichajes"):
+            st.dataframe(pd.DataFrame([{
+                "": "🕐" if f["tipo"] == timeclock.TIPO_GENERAL else "🏗",
+                "Proyecto": f["proyecto"] or "—",
+                "Entrada": f["entrada"][5:16].replace("-", "/"),
+                "Salida": (f["salida"][11:16] if f["salida"] else "en curso"),
+                "Horas": f["horas"],
+            } for f in _mios]), hide_index=True, use_container_width=True)
+
+    st.caption("🔒 Tus fichajes son privados. La administración ve el resumen de "
+               "horas del grupo, no el detalle de cada persona.")
