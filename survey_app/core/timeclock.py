@@ -13,7 +13,8 @@ from datetime import datetime, timedelta
 import streamlit as st
 
 HEADERS = ["Nombre", "PIN", "Proyecto", "Ubicacion",
-           "Clock In", "Clock Out", "Horas", "Estado", "Grupo", "Tipo", "Usuario"]
+           "Clock In", "Clock Out", "Horas", "Estado", "Grupo", "Tipo", "Usuario",
+           "ProyectoID"]
 FMT = "%Y-%m-%d %H:%M:%S"
 # Tipo de fichaje: 'general' (jornada del conductor) | 'proyecto' (segmento por proyecto).
 # Filas antiguas sin Tipo se tratan como 'proyecto'.
@@ -120,6 +121,27 @@ def _tipo_of(r) -> str:
     return (str(r.get("Tipo", "")).strip().lower() or TIPO_PROYECTO)
 
 
+def pid_of(r) -> str:
+    """ProyectoID de una fila de fichaje ('' en las filas anteriores a v145)."""
+    return str(r.get("ProyectoID", "")).strip()
+
+
+def es_del_proyecto(r, pid: str, nombre: str) -> bool:
+    """¿Este fichaje es de este proyecto? **ID primero, nombre como respaldo.**
+
+    Mismo criterio que `_matches` usa con Usuario desde v106: las filas antiguas
+    (sin ProyectoID) caen al nombre, normalizado sin may/min ni espacios.
+
+    ⚠️ El nombre NO es identidad estable: renombrar un proyecto desligaba todo su
+    historico de horas, y con el el costo de mano de obra. Por eso el ID manda.
+    """
+    rp = pid_of(r)
+    if rp and pid:
+        return rp == str(pid).strip()
+    return (str(r.get("Proyecto", "")).strip().casefold()
+            == str(nombre or "").strip().casefold())
+
+
 def _matches(r, usuario: str, nombre: str, grupo: str) -> bool:
     """¿La fila es de este usuario? Identifica por **Usuario** (login, v106); las filas
     antiguas sin Usuario caen al Nombre visible."""
@@ -132,7 +154,8 @@ def _matches(r, usuario: str, nombre: str, grupo: str) -> bool:
 
 
 def clock_in(nombre: str, proyecto: str, ubicacion: str, grupo: str = "",
-             tipo: str = TIPO_PROYECTO, usuario: str = "") -> tuple:
+             tipo: str = TIPO_PROYECTO, usuario: str = "",
+             proyecto_id: str = "") -> tuple:
     """Registra un clock in (tipo 'general' o 'proyecto'). Devuelve (ok, mensaje).
     Un usuario puede tener a la vez UNA sesión general y UNA de proyecto abiertas."""
     ws, err = _get_worksheet()
@@ -159,7 +182,8 @@ def clock_in(nombre: str, proyecto: str, ubicacion: str, grupo: str = "",
 
     try:
         ws.append_row([nombre, "", proyecto or "", ubicacion or "",
-                       _now(), "", "", "ABIERTO", grupo, tipo, usuario or ""],
+                       _now(), "", "", "ABIERTO", grupo, tipo, usuario or "",
+                       str(proyecto_id or "")],
                       value_input_option="RAW")
     except Exception as e:
         return False, f"Error escribiendo el fichaje: {e}"
@@ -267,17 +291,36 @@ def open_sessions(nombre: str, grupo: str = "", usuario: str = "") -> dict:
             if (_matches(r, usuario, nombre, grupo)
                     and str(r.get("Estado", "")).strip().upper() == "ABIERTO"):
                 out[_tipo_of(r)] = {"clock_in": str(r.get("Clock In", "")),
-                                    "proyecto": str(r.get("Proyecto", ""))}
+                                    "proyecto": str(r.get("Proyecto", "")),
+                                    "proyecto_id": pid_of(r)}
     except Exception:
         pass
     return out
 
 
 def switch_project(nombre: str, grupo: str, new_proyecto: str, ubicacion: str = "",
-                   usuario: str = "") -> tuple:
+                   usuario: str = "", new_pid: str = "") -> tuple:
     """Cambia de proyecto en 1 toque: cierra el segmento activo (si hay) y abre el nuevo."""
     clock_out(nombre, grupo, tipo=TIPO_PROYECTO, usuario=usuario)   # si no hay, se ignora
-    return clock_in(nombre, new_proyecto, ubicacion, grupo, tipo=TIPO_PROYECTO, usuario=usuario)
+    return clock_in(nombre, new_proyecto, ubicacion, grupo, tipo=TIPO_PROYECTO,
+                    usuario=usuario, proyecto_id=new_pid)
+
+
+def _nombre_actual(pid: str, nombre_fila: str) -> str:
+    """Nombre vigente del proyecto a partir de su ID; si no hay ID, el de la fila.
+
+    Import perezoso a proposito: `projects` importa `timeclock`, asi que arriba
+    seria una dependencia circular.
+    """
+    nom = str(nombre_fila or "").strip()
+    if not str(pid or "").strip():
+        return nom
+    try:
+        from core import projects as P
+        prj = P.get_project(str(pid).strip())
+        return str(prj.get("Nombre", "")).strip() or nom if prj else nom
+    except Exception:
+        return nom
 
 
 def group_hours(grupo: str, days=None) -> list:
@@ -312,7 +355,9 @@ def group_hours(grupo: str, days=None) -> list:
             a["general"] += h
         else:
             a["proyecto"] += h
-            pn = str(r.get("Proyecto", "")) or "(sin proyecto)"
+            # Con ID se resuelve al nombre ACTUAL: si el proyecto se renombro,
+            # sus horas viejas ya no salen bajo dos etiquetas distintas.
+            pn = _nombre_actual(pid_of(r), r.get("Proyecto", "")) or "(sin proyecto)"
             a["por"][pn] = a["por"].get(pn, 0.0) + h
     out = []
     for clave, a in agg.items():

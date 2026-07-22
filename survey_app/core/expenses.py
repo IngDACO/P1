@@ -83,16 +83,13 @@ def project_expenses(pid) -> dict:
             "items": items}
 
 
-def _mismo_proyecto(fila_proy: str, nombre: str) -> bool:
-    """¿Este fichaje pertenece al proyecto? Compara sin may/min ni espacios.
+def _mismo_proyecto(fila, pid: str, nombre: str) -> bool:
+    """¿Este fichaje pertenece al proyecto? **Por ID (v145), nombre de respaldo.**
 
-    ⚠️ El cruce va por NOMBRE, no por ID: en los datos reales hay fichajes bajo
-    "Prueba1" para un proyecto llamado "prueba1" y esas horas se perdian del
-    costo EN SILENCIO. Normalizar tapa ese caso, pero **renombrar un proyecto
-    sigue borrando su historico de mano de obra**; el arreglo de fondo es
-    guardar el ProyectoID en el fichaje.
+    Delega en `timeclock.es_del_proyecto` para que el costo de mano de obra y las
+    horas del proyecto usen exactamente el mismo criterio y no puedan divergir.
     """
-    return str(fila_proy or "").strip().casefold() == str(nombre or "").strip().casefold()
+    return timeclock.es_del_proyecto(fila, pid, nombre)
 
 
 def _horas_de(r) -> float:
@@ -120,7 +117,7 @@ def labor_breakdown(pid, grupo) -> dict:
     rates  = auth.rate_map(grupo)
     acc    = {}
     for r in P._fichaje_records():
-        if not _mismo_proyecto(r.get("Proyecto", ""), nombre):
+        if not _mismo_proyecto(r, pid, nombre):
             continue
         if str(r.get("Grupo", "")) != str(grupo):
             continue
@@ -200,7 +197,7 @@ def spend_curve(pid, grupo) -> dict:
             dia.setdefault(f, {"compras": 0.0, "mo": 0.0})
             dia[f]["compras"] += _num(r.get("Valor"))
     for r in P._fichaje_records():
-        if not _mismo_proyecto(r.get("Proyecto", ""), nombre):
+        if not _mismo_proyecto(r, pid, nombre):
             continue
         if str(r.get("Grupo", "")) != str(grupo):
             continue

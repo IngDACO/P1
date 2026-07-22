@@ -108,7 +108,7 @@ def _kpis(grupo=None) -> dict:
         "avg":     round(sum(avances) / len(avances)) if avances else 0,
         "riesgo":  len(P.delays_of_group(grupo)),
         "alarmas": sum(v for k, v in alarmas.items() if k in ids),
-        "horas":   round(sum(horas.get(str(p.get("Nombre", "")), 0.0) for p in proys)),
+        "horas":   round(sum(horas.get(str(p.get("ID", "")), 0.0) for p in proys)),
     }
 
 
@@ -628,7 +628,7 @@ def _portfolio_html(proys, horas, alarmas, ags, delays=None, aheads=None,
         av  = P._num(p.get("Avance"))
         nom = str(p.get("Nombre", "")) or "(sin nombre)"
         pid = str(p.get("ID", ""))
-        hrs = horas.get(str(p.get("Nombre", "")), 0.0)
+        hrs = horas.get(str(p.get("ID", "")), 0.0)
         na  = alarmas.get(pid, 0)
         ag  = ags.get(str(p.get("AgrupacionID", "")), "")
         sub = f"{pid} · {str(p.get('Cliente','')) or '—'}" + (f" · {ag}" if ag else "")
@@ -909,7 +909,8 @@ def _detalle_proyecto(pid: str, grupo: str = None):
     )
     c1, c2 = st.columns(2)
     c1.metric("Avance", f"{avance:.0f}%")
-    c2.metric("Horas trabajadas", f"{P.project_hours(prj.get('Nombre'), grupo):.1f}")
+    c2.metric("Horas trabajadas",
+              f"{P.project_hours(prj.get('Nombre'), grupo, pid=pid):.1f}")
     st.progress(min(1.0, avance / 100.0))
 
     # ── Sub-navegacion: 11 secciones en un scroll unico era el mismo
@@ -1167,7 +1168,7 @@ def _dashboard_agrupacion(ag, grupo):
     alarmas = alerts.open_counts_all() if alerts.is_configured() else {}
     proj    = P.grouping_projection(aid, grupo)
 
-    tot_h    = sum(horas.get(str(p.get("Nombre", "")), 0.0) for p in proys)
+    tot_h    = sum(horas.get(str(p.get("ID", "")), 0.0) for p in proys)
     costos   = [E.project_cost(p.get("ID"), grupo) for p in proys] if E.is_configured() else []
     tot_c    = sum(c["total"] for c in costos)
     tot_pres = sum(c["presupuesto"] for c in costos)
@@ -1223,7 +1224,7 @@ def _dashboard_agrupacion(ag, grupo):
     # En un edificio son unidades casi gemelas, así que la desviación respecto
     # al promedio delata al que se sale de lo normal.
     st.markdown("**🔍 Comparativa entre elevadores**")
-    _hs = [horas.get(str(p.get("Nombre", "")), 0.0) for p in proys]
+    _hs = [horas.get(str(p.get("ID", "")), 0.0) for p in proys]
     _cs = [c.get("total", 0) for c in costos] if costos else [0] * len(proys)
     _hm = (sum(_hs) / len(_hs)) if _hs else 0
     _cm = (sum(_cs) / len(_cs)) if _cs else 0
@@ -1295,7 +1296,7 @@ def _agrupaciones_html(ags, grupo) -> str:
                 fecha, critico, gap = d["fecha"], str(p.get("Nombre", "")), d.get("gap") or 0.0
 
         n_al  = sum(alarmas.get(str(p.get("ID", "")), 0) for p in miemb)
-        hrs   = sum(horas.get(str(p.get("Nombre", "")), 0.0) for p in miemb)
+        hrs   = sum(horas.get(str(p.get("ID", "")), 0.0) for p in miemb)
         costo = (sum(E.project_cost(p.get("ID"), grupo)["total"] for p in miemb)
                  if hay_costos and miemb else 0)
 
@@ -1515,13 +1516,15 @@ def render_owner_projects():
             "⏰ Retraso": f"{_d:.0f} d" if _d else "",
             "⏩ Adelanto": f"{_ad:.0f} d" if _ad else "",
             "Avance %":  P._num(p.get("Avance")),
-            "Horas":     P.project_hours(p.get("Nombre"), p.get("Grupo")),
+            "Horas":     P.project_hours(p.get("Nombre"), p.get("Grupo"),
+                                        pid=str(p.get("ID", ""))),
             "Agrupación": ags.get(str(p.get("AgrupacionID", "")), ""),
         })
     # Cartera de tarjetas (mismo look del admin) + tabla detallada abajo
     _hb = {}
     for p in proys:
-        _hb[str(p.get("Nombre", ""))] = P.project_hours(p.get("Nombre"), p.get("Grupo"))
+        _hb[str(p.get("ID", ""))] = P.project_hours(p.get("Nombre"), p.get("Grupo"),
+                                                    pid=str(p.get("ID", "")))
     st.markdown(f"**Cartera — {len(proys)} proyecto(s)**"
                 + (f"  ·  🔴 {len(delays)} con retraso" if delays else "")
                 + (f"  ·  🟢 {len(aheads)} adelantado(s)" if aheads else ""))

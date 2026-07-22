@@ -96,6 +96,10 @@ def _render_normal(nombre, usuario, grupo):
     except Exception:
         asignados = []
 
+    # nombre -> ID: el fichaje guarda el ID para no perder las horas si el
+    # proyecto se renombra (v145). Escribir el nombre a mano deja el ID vacio.
+    _ids = {str(p.get("Nombre", "")): str(p.get("ID", "")) for p in asignados}
+
     c3, c4 = st.columns(2)
     if asignados:
         nombres = [p.get("Nombre") for p in asignados]
@@ -117,7 +121,9 @@ def _render_normal(nombre, usuario, grupo):
         if not proyecto:
             st.error("Elige o escribe el proyecto antes de fichar.")
         else:
-            ok, msg = timeclock.clock_in(nombre, proyecto, ubicacion, grupo, usuario=usuario)
+            ok, msg = timeclock.clock_in(nombre, proyecto, ubicacion, grupo,
+                                         usuario=usuario,
+                                         proyecto_id=_ids.get(proyecto, ""))
             (st.success if ok else st.error)(msg)
             if ok:
                 st.rerun()
@@ -174,6 +180,7 @@ def _render_conductor(nombre, usuario, grupo):
     except Exception:
         proys = []
     nombres = [p.get("Nombre") for p in proys] or []
+    _ids    = {str(p.get("Nombre", "")): str(p.get("ID", "")) for p in proys}
 
     if prj:
         st.success(f"🟢 Atendiendo **{prj['proyecto'] or '—'}** desde {prj['clock_in']}")
@@ -190,7 +197,9 @@ def _render_conductor(nombre, usuario, grupo):
             nuevo = c2.selectbox("Cambiar a otro proyecto", ["—"] + opts, key="cd_switch_sel")
             if c2.button("🔄 Cambiar de proyecto", use_container_width=True, key="cd_switch"):
                 if nuevo and nuevo != "—":
-                    ok, msg = timeclock.switch_project(nombre, grupo, nuevo, usuario=usuario)
+                    ok, msg = timeclock.switch_project(nombre, grupo, nuevo,
+                                                       usuario=usuario,
+                                                       new_pid=_ids.get(nuevo, ""))
                     (st.success if ok else st.error)(msg)
                     if ok:
                         st.rerun()
@@ -205,7 +214,10 @@ def _render_conductor(nombre, usuario, grupo):
             if not sel:
                 st.error("Elige el proyecto.")
             else:
-                ok, msg = timeclock.clock_in(nombre, sel, "", grupo, tipo=timeclock.TIPO_PROYECTO, usuario=usuario)
+                ok, msg = timeclock.clock_in(nombre, sel, "", grupo,
+                                             tipo=timeclock.TIPO_PROYECTO,
+                                             usuario=usuario,
+                                             proyecto_id=_ids.get(sel, ""))
                 (st.success if ok else st.error)(msg)
                 if ok:
                     st.rerun()

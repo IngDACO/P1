@@ -785,6 +785,45 @@ Al cargar el plano en el survey (app.py), autocompleta **RAIL = AlturaDiente** (
 espalda) del catálogo; si el código no está o no se detecta → aviso + entrada manual. **RAIL = AlturaDiente**
 (NO el ancho); AnchoDiente se guarda como dato secundario.
 
+## El fichaje guarda el ProyectoID: trazabilidad que no se pierde al renombrar (v145)
+Decision del usuario tras el hallazgo de v144: el fichaje cruzaba con el proyecto **por NOMBRE**, asi
+que habia fichajes bajo `"Prueba1"` para un proyecto llamado `"prueba1"` cuyas horas **se caian del
+costo EN SILENCIO**, y renombrar un proyecto desligaba todo su historico de mano de obra.
+### Columna `ProyectoID` en la hoja del fichaje (migra sola, va al final)
+- **`timeclock.es_del_proyecto(fila, pid, nombre)`** — regla unica: **ID primero, nombre de respaldo**
+  (normalizado sin may/min ni espacios). Mismo criterio que `_matches` usa con `Usuario` desde v106.
+  La usan `project_hours`, `project_hours_bulk`, `labor_breakdown` y `spend_curve`, para que el costo
+  de mano de obra y las horas del proyecto **no puedan divergir**.
+- **Escritura**: `clock_in(..., proyecto_id=)` y `switch_project(..., new_pid=)`; los 3 call-sites de
+  `timeclock_ui` mandan el ID desde un mapa nombre→ID. Escribir el proyecto a mano deja el ID vacio
+  (y cae al nombre), que es el comportamiento correcto.
+- **`open_sessions`** devuelve tambien `proyecto_id` **sin quitar `proyecto`** (lo consumen plan_ui,
+  projects_ui y timeclock_ui).
+- **`group_hours`** resuelve el nombre ACTUAL via ID (`_nombre_actual`, import perezoso porque
+  `projects` importa `timeclock` → seria circular): un proyecto renombrado deja de aparecer bajo dos
+  etiquetas distintas.
+### ⚠️ `project_hours_bulk` CAMBIA DE CLAVE: {nombre} → {ProyectoID}
+Es el riesgo del lote: **8 call-sites lo indexaban por nombre** (tarjetas de cartera, agrupaciones,
+KPIs, radar del admin, tabla del propietario) y si se escapa uno las horas salen **0 en silencio**.
+Las filas anteriores a v145 no traen ID, asi que su nombre se resuelve contra los proyectos del grupo
+y **tambien acaban sumando bajo el ID correcto** — el relleno del historico no hace falta para que las
+cuentas salgan, solo para trazabilidad.
+### Verificacion contra la base REAL
+Horas totales **8.99 antes y 8.99 despues** (nada perdido); mano de obra **358.8 identica**; bulk y
+`project_hours` coinciden proyecto a proyecto; los 5 casos de `es_del_proyecto` (ID manda sobre nombre,
+ID distinto con nombre igual, fila vieja por nombre sin may/min, fila de otro, pid vacio); y
+`group_hours`, `over_budget`, `group_expenses` y `admin_digest` siguen dando lo mismo. Ademas: **cero
+nombres sin resolver NUEVOS** comparando por AST contra el commit anterior en los 5 modulos tocados
+(los preexistentes son cierres anidados, no fallos).
+### ⚠️ ERROR MIO: una lectura local NO es solo-lectura si has tocado HEADERS
+Dije que iba a auditar la hoja **sin escribir** y una ejecucion posterior escribio: al editar
+`timeclock.HEADERS` y luego llamar a `project_hours_bulk`, la lectura pasa por **`_cached_ws()`, que
+lleva la migracion de cabecera dentro**, y creo la columna `ProyectoID` en produccion sin avisar.
+Fue benigno (solo la cabecera; las 12 filas de datos quedaron intactas, verificado) pero no era lo
+acordado. **REGLA: `timeclock._cached_ws` / `projects._get_ws` / `alerts._ws` MIGRAN LA CABECERA en
+cualquier acceso. Si has tocado HEADERS, cualquier "lectura" escribe.** Para auditar de verdad hay que
+ir por gspread crudo, sin pasar por los helpers de la app.
+
 ## Pestaña Costos: de "cuanto llevas" a "cuanto vas a gastar" (v144)
 Peticion del usuario: "esta muy simple, mas visual, con mas impacto y mas datos; es un apartado muy
 importante". La pestaña eran **3 `st.metric`, una barra y una tabla plana**.
@@ -1637,7 +1676,7 @@ posicional + plano) → app.py, al cargar el PDF, setea `st.session_state["ns"]`
 resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NORTH SYD y AGECARE → NS=6
 (coincide con travel/floor-height HQ/HE).
 
-## Versiones desplegadas (v144 = actual)
+## Versiones desplegadas (v145 = actual)
 | Ver | Cambio principal |
 |---|---|
 | v5 | Extractor: CRLF fix, caso D valor-antes-label, sin pdfplumber |
@@ -1739,6 +1778,7 @@ resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NOR
 | v102 | Fix: NS se lee del plano (NUMBER OF STOPS) al cargar el PDF; default de init 6→2 (ya no queda pegado en 6) |
 | v103 | Rol conductor (2 relojes: jornada general + segmentos por proyecto, columna Tipo) + cronómetro en vivo para todos + reporte admin de horas del grupo (Mi grupo → ⏱ Horas) |
 | v104 | Credenciales/tickets por usuario (White Card, Forklift, Dogging/Rigging, licencia…): vencimiento+estado, foto/documento a Drive, radar en Resumen del día, avisos email/Telegram a admin+usuario; usuario ve las suyas (🎫 Mis credenciales) |
+| v145 | El fichaje guarda el ProyectoID: las horas y el costo de mano de obra dejan de perderse al renombrar un proyecto (regla unica ID-primero-nombre-de-respaldo); project_hours_bulk pasa a indexarse por ID en sus 8 call-sites |
 | v144 | Pestaña Costos: proyeccion de cuanto costara AL TERMINAR (la barra solo avisaba al pasarse), mano de obra por persona, gasto por categoria (se calculaba desde v105 y se tiraba), curva de gasto acumulado apilada vs presupuesto y aviso de tarifas en 0 |
 | v143 | Pestaña Estado: la brecha plan-vs-real se RELLENA (antes habia que deducirla comparando dos lineas), HOY cruza el Gantt, barras que marcan lo que tocaba y no arranco, proyeccion al ritmo actual + diagnostico (ritmo real vs necesario, que tocaba hoy vs que se hace, proximo hito) |
 | v142 | Agrupaciones con cartera de tarjetas (entrega del conjunto, elevador critico, retraso, alarmas, horas y costo sin entrar) + creacion plegada + projections_by_group cacheado |

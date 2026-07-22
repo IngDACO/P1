@@ -562,11 +562,11 @@ def save_activities(pid, edits) -> tuple:
 
 
 # ── Horas trabajadas (desde el fichaje) ──────────────────────────
-def project_hours(proyecto_nombre: str, grupo: str = None) -> float:
-    """Suma de horas del fichaje asociadas al proyecto (por nombre, opcionalmente grupo)."""
+def project_hours(proyecto_nombre: str, grupo: str = None, pid: str = "") -> float:
+    """Horas del fichaje de un proyecto. Con `pid` cruza por ID (v145); si no, por nombre."""
     total = 0.0
     for r in _fichaje_records():
-        if str(r.get("Proyecto", "")) != str(proyecto_nombre):
+        if not timeclock.es_del_proyecto(r, pid, proyecto_nombre):
             continue
         if grupo is not None and str(r.get("Grupo", "")) != str(grupo):
             continue
@@ -575,15 +575,27 @@ def project_hours(proyecto_nombre: str, grupo: str = None) -> float:
 
 
 def project_hours_bulk(grupo: str = None) -> dict:
-    """{nombre_proyecto: horas} (fichaje cacheado, 1 lectura para la lista)."""
+    """**{ProyectoID: horas}** (v145; antes iba por nombre). 1 lectura del fichaje.
+
+    ⚠️ Cambio de clave: el nombre no es identidad estable y renombrar un proyecto
+    partia sus horas en dos. Las filas anteriores a v145 no traen ProyectoID, asi
+    que su nombre se resuelve contra los proyectos del grupo y tambien acaban
+    sumando bajo el ID correcto.
+    """
+    idx = {}                                   # nombre normalizado -> ID
+    for p in list_projects(grupo=grupo):
+        n = str(p.get("Nombre", "")).strip().casefold()
+        if n:
+            idx[n] = str(p.get("ID", ""))
     out = {}
     for r in _fichaje_records():
         if grupo is not None and str(r.get("Grupo", "")) != str(grupo):
             continue
-        nom = str(r.get("Proyecto", ""))
-        if not nom:
-            continue
-        out[nom] = out.get(nom, 0.0) + _num(r.get("Horas"))
+        pid = timeclock.pid_of(r) or idx.get(
+            str(r.get("Proyecto", "")).strip().casefold(), "")
+        if not pid:
+            continue                           # fichaje de algo que ya no existe
+        out[pid] = out.get(pid, 0.0) + _num(r.get("Horas"))
     return {k: round(v, 2) for k, v in out.items()}
 
 

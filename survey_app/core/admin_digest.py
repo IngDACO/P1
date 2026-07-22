@@ -117,7 +117,7 @@ def group_digest(grupo) -> dict:
         "grupo": grupo,
         "n_total": len(proys), "n_activos": len(activos),
         "avance_prom": round(sum(avances) / len(avances)) if avances else 0,
-        "horas": round(sum(horas.get(str(p.get("Nombre", "")), 0.0) for p in proys)),
+        "horas": round(sum(horas.get(str(p.get("ID", "")), 0.0) for p in proys)),
         "retrasos": retrasos, "alarmas": al,
         "por_vencer": sorted(por_vencer, key=lambda x: x["dias"]),
         "vencidos": sorted(vencidos, key=lambda x: x["dias"]),
@@ -218,7 +218,7 @@ def group_snapshot_text(grupo, max_proys=30) -> str:
         lines.append(
             f"- [{pid}] {p.get('Nombre', '')} | {p.get('Estado', '')} | avance {P._num(p.get('Avance')):.0f}% "
             f"| fin est {p.get('FechaFinEst', '') or '—'} | campo: {campo} "
-            f"| {horas.get(str(p.get('Nombre', '')), 0.0):.0f} h"
+            f"| {horas.get(str(p.get('ID', '')), 0.0):.0f} h"
             + (" | " + ", ".join(extra) if extra else ""))
     us = []
     for u in auth.list_users(grupo):
