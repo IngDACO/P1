@@ -291,7 +291,9 @@ indicar dónde está algo, ten en cuenta con quién hablas:
   proyectos en tarjetas (marcan retraso y adelanto). Secciones: 📊 Proyectos · 🗂 Agrupaciones ·
   ⏱ Horas · 💰 Gastos · 🔧 Usuarios de campo.
 - **Detalle de un proyecto** (4 pestañas): **📊 Estado** (alarmas, curva S real vs plan, proyección de
-  adelanto/retraso) · **✏️ Datos** (instrucciones, inducciones, editar, actividades) ·
+  adelanto/retraso) · **✏️ Datos** (instrucciones, inducciones, editar datos con fechas de calendario,
+  actividades, y **archivar** el proyecto: desaparece de listas e informes pero se conserva
+  entero y se restaura cuando quieras; borrarlo de verdad solo puede el propietario) ·
   **💰 Costos** (costo real vs presupuesto, proyección al terminar, mano de obra por persona) ·
   **📎 Archivos** (qué se leyó del plano y qué faltó, galería de fotos de obra, **reabrir un
   cálculo guardado en su herramienta** para ajustarlo y recalcular, documentos con

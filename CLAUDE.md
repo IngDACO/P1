@@ -785,6 +785,53 @@ Al cargar el plano en el survey (app.py), autocompleta **RAIL = AlturaDiente** (
 espalda) del catálogo; si el código no está o no se detecta → aviso + entrada manual. **RAIL = AlturaDiente**
 (NO el ancho); AnchoDiente se guarda como dato secundario.
 
+## Pestaña Datos: archivar en vez de borrar, y fechas que no mienten (v149)
+Revision de ✏️ Datos a peticion del usuario ("a mi no se me ocurre mucho, que propones?"). Tres
+problemas reales, ninguno estetico.
+### ⚠️ 1. Las fechas eran texto libre y falseaban el cronograma EN SILENCIO
+`FechaInicio`/`FechaFinEst` eran `text_input`, y `project_schedule` hace `.split("-")` con un `except`
+que **cae a `date.today()` sin avisar**. Comprobado: `16/07/2026`, `16-07-2026`, `2026/07/16` y `""`
+todos caen a hoy. En PRJ-0001 real (dia 12 de 32, 46% real vs 33% plan), reescribir la fecha con barras
+lo manda al **dia 0** y la app dice 46% real contra 0% planificado: *"vas adelantadisimo"*. Quedan
+falseados curva S, retraso, fin proyectado y el radar del admin. Ahora `st.date_input` (+ `_a_fecha`
+para leer lo ya guardado en cualquier formato y `_iso` para guardar siempre en ISO) y validacion de
+que fin >= inicio.
+### ⚠️ 2. Borrar era la accion mas destructiva y la PEOR protegida
+Un clic, **sin casilla de confirmacion** — mientras que borrar UNA actividad si la exige desde v139.
+Y `delete_project` solo quita proyecto + actividades: medido en PRJ-0001, dejaba huerfanos
+**2 documentos (con sus archivos en Drive), 2 pre-starts, 6 alarmas y 4 fichajes**.
+**Decision del usuario: archivar en vez de borrar.**
+- `ARCHIVADO` entra en `ESTADOS_MANUAL` y en `derive_estado` (reusa la maquina de estados existente,
+  sin inventar una paralela). `set_archivado(pid, bool)` archiva y restaura.
+- **`list_projects(..., incluir_archivados=False)`**: el defecto OCULTA. ⚠️ Por eso las **busquedas
+  por identidad** tienen que pedirlo explicitamente, o archivar las romperia en silencio. Clasificados
+  los 30 call-sites: 4 son busquedas (`plan_data.del_proyecto`, el mapa nombre->ID de
+  `project_hours_bulk`, el proyecto del clock-in en `plan_ui`, y el chequeo de duplicados) y 26 son
+  listas.
+- ⚠️ **Sin una forma de VER los archivados, archivar seria un viaje sin vuelta**: el proyecto
+  desaparece de la cartera y no habria como abrirlo para restaurarlo. Casilla "📦 Ver también los
+  archivados" en la cartera del admin y en la tabla del propietario, mas un contador de cuantos hay
+  ocultos. Emoji y color de estado añadidos.
+- **Borrar de verdad: solo propietario**, con el **inventario de lo que quedara huerfano** y hay que
+  **teclear el nombre del proyecto** para habilitar el boton.
+### 3. Asignar campo no avisaba de credenciales vencidas ni contacto faltante
+`_avisar_asignados` existe desde v127 y **solo se usaba al CREAR** el proyecto. Asignar gente a un
+proyecto existente es la accion diaria. La causa es la que v127 ya resolvio en el Survey: el selector
+estaba **dentro del `st.form`**, y ahi los widgets no escriben hasta el submit, asi que el aviso en
+vivo es imposible. Sacado fuera del form.
+### ⚠️ ERROR MIO: `st.stop()` dentro del form, y otra vez la indentacion
+Valide con `st.error(...)` + `st.stop()`. **`st.stop()` corta el render de TODO lo que va debajo**
+(actividades, archivar, eliminar): la pagina se quedaria a medias. Se cambio por `_err` + `if/else`.
+Y al reindentar el guardado bajo el `else` volvi a hacerlo a mano: el `else:` con 2 espacios dejaba las
+9 sentencias del guardado FUERA del condicional, asi que habria guardado igual con el nombre vacio.
+Rehecho **por AST**, midiendo el rango real del bloque, y **verificado por AST** que los 6 efectos
+(`update_project`, las 3 notificaciones, `toast`, `rerun`) quedan DENTRO del else y ninguno fuera.
+### Verificacion
+0 nombres sin resolver nuevos y 0 usos-antes-de-asignar nuevos en los 4 modulos (AST vs commit
+anterior) · `_ver_arch` asignado antes de usarse en las 2 funciones · `ag_id` asignado antes de su uso
+dentro del else · la validacion de fechas compara ANTES de convertir a texto · las 4 ramas del detalle
+intactas · `datos_asociados` probado sobre los proyectos reales.
+
 ## Reabrir un calculo guardado (v148)
 Salido de una auditoria del patron "se escribe y nadie lo lee": **`toolruns.DatosJSON` no tenia
 lector**. Cada plomada, corte o belting guardaba su JSON desde v129 y no habia forma de usarlo: de un
@@ -1794,7 +1841,7 @@ posicional + plano) → app.py, al cargar el PDF, setea `st.session_state["ns"]`
 resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NORTH SYD y AGECARE → NS=6
 (coincide con travel/floor-height HQ/HE).
 
-## Versiones desplegadas (v148 = actual)
+## Versiones desplegadas (v149 = actual)
 | Ver | Cambio principal |
 |---|---|
 | v5 | Extractor: CRLF fix, caso D valor-antes-label, sin pdfplumber |
@@ -1896,6 +1943,7 @@ resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NOR
 | v102 | Fix: NS se lee del plano (NUMBER OF STOPS) al cargar el PDF; default de init 6→2 (ya no queda pegado en 6) |
 | v103 | Rol conductor (2 relojes: jornada general + segmentos por proyecto, columna Tipo) + cronómetro en vivo para todos + reporte admin de horas del grupo (Mi grupo → ⏱ Horas) |
 | v104 | Credenciales/tickets por usuario (White Card, Forklift, Dogging/Rigging, licencia…): vencimiento+estado, foto/documento a Drive, radar en Resumen del día, avisos email/Telegram a admin+usuario; usuario ve las suyas (🎫 Mis credenciales) |
+| v149 | Datos: archivar sustituye a borrar (borrar dejaba huerfanos documentos, pre-starts, alarmas y fichajes, y sin confirmacion), fechas con calendario (el texto libre falseaba el cronograma en silencio) y aviso de credenciales al asignar campo |
 | v148 | Reabrir un calculo guardado en su herramienta: DatosJSON no tenia lector y ademas solo guardaba los resultados; ahora guarda tambien las entradas y se puede retomar un calculo |
 | v147 | Archivos: datos del plano visibles en el proyecto, fotos de obra en galeria, quien subio cada documento y cuando, y la descarga deja de bajarse TODO Drive en cada render |
 | v146 | Se elimina el paquete de obra (~225 lineas): no aportaba ni un dibujo que no estuviera ya en el informe del cliente, que ademas se archiva solo. Residuo de v126 vaciado por v129/v130/v134 |

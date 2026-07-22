@@ -30,7 +30,10 @@ def _proyecto_fichado(auth: dict):
     nombre = str((abierta or {}).get("proyecto", "")).strip()
     if not nombre:
         return None
-    for p in P.list_projects(grupo=auth.get("grupo", "") or None):
+    # Resolucion del proyecto del clock-in: si esta archivado, que se encuentre
+    # igual en vez de dejar la herramienta sin datos del plano y sin explicacion.
+    for p in P.list_projects(grupo=auth.get("grupo", "") or None,
+                             incluir_archivados=True):
         if str(p.get("Nombre", "")).strip() == nombre:
             return p
     return None

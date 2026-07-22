@@ -107,7 +107,8 @@ def guardar(pid: str, datos: dict) -> tuple:
 def del_proyecto(pid: str) -> dict:
     """Datos del plano guardados en el proyecto ({} si no hay)."""
     from core import projects as P
-    for r in P.list_projects():
+    # Busqueda por ID: un proyecto archivado tiene que seguir devolviendo su plano.
+    for r in P.list_projects(incluir_archivados=True):
         if str(r.get("ID", "")) == str(pid):
             try:
                 return json.loads(r.get("PlanoJSON") or "{}")

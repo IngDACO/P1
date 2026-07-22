@@ -64,7 +64,7 @@ def _alerts_section(pid, grupo, project_name="", allow_report=False):
 
 _ESTADO_EMOJI = {
     "Planificado": "🕓", "En progreso": "🚧", "Completado": "✅",
-    "En pausa": "⏸", "Cancelado": "🚫",
+    "En pausa": "⏸", "Cancelado": "🚫", "Archivado": "📦",
 }
 
 # Colores de estado para las píldoras/barras (bg suave, texto oscuro de la misma familia)
@@ -74,6 +74,7 @@ _ESTADO_COLOR = {
     "Completado":  ("#eaf3de", "#3b6d11", "#639922"),
     "En pausa":    ("#faeeda", "#854f0b", "#ba7517"),
     "Cancelado":   ("#fcebeb", "#a32d2d", "#e24b4a"),
+    "Archivado":   ("#eef1f5", "#6b7280", "#9aa7b8"),
 }
 
 
@@ -219,6 +220,34 @@ _CAMPO_SUBE = ["foto"]                                                # campo so
 _DOC_ICON   = {"plano": "📐", "informe_cliente": "📄", "informe_admin": "📑",
                "matriz_survey": "📊", "foto": "📷", "certificado": "🏅",
                "prestart": "🦺", "calculo": "🧮", "otro": "📎"}
+
+
+def _a_fecha(v):
+    """Texto de la hoja -> date, o None. Acepta lo que haya guardado de antes.
+
+    ⚠️ Hasta v149 estas fechas eran `text_input` LIBRE y `project_schedule` hacia
+    `.split("-")` con un `except` que caia a **hoy sin avisar**: escribir
+    "16/07/2026" desplazaba el cronograma entero al dia 0 y falseaba curva S,
+    retraso, proyeccion y radar del admin, en silencio.
+    """
+    from datetime import datetime as _dt
+    s = str(v or "").strip()
+    if not s:
+        return None
+    for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y", "%Y/%m/%d"):
+        try:
+            return _dt.strptime(s[:10], fmt).date()
+        except Exception:
+            pass
+    return None
+
+
+def _iso(d) -> str:
+    """date -> 'YYYY-MM-DD' (el unico formato que `project_schedule` sabe leer)."""
+    try:
+        return d.isoformat()
+    except Exception:
+        return ""
 
 
 def _fecha_corta(v) -> str:
@@ -485,7 +514,9 @@ def _nuevo_proyecto_form(grupo: str, key: str = "nuevo"):
             if not nom.strip():
                 st.error("El nombre del proyecto es obligatorio.")
                 return
-            dups = [f"{p.get('ID')} · {p.get('Nombre')}" for p in P.list_projects(grupo)
+            # Incluye archivados: crear un homonimo de uno archivado tambien confunde.
+            dups = [f"{p.get('ID')} · {p.get('Nombre')}"
+                    for p in P.list_projects(grupo, incluir_archivados=True)
                     if " ".join(str(p.get("Nombre") or "").lower().split())
                     == " ".join(nom.lower().split())]
             if dups and not st.session_state.get(f"np_dup_{key}"):
@@ -668,7 +699,15 @@ def _field_users(grupo):
 
 # ── Panel de proyectos ───────────────────────────────────────────
 def _panel_proyectos(grupo: str):
-    proys = P.list_projects(grupo=grupo)
+    _ver_arch = st.checkbox("📦 Ver también los archivados", key="ver_arch_admin",
+                            help="Los archivados no salen en listas ni informes; "
+                                 "ábrelos desde aquí para restaurarlos.")
+    proys = P.list_projects(grupo=grupo, incluir_archivados=_ver_arch)
+    if not _ver_arch:
+        _n_arch = len([p for p in P.list_projects(grupo=grupo, incluir_archivados=True)
+                       if str(p.get("Estado", "")) == P.ARCHIVADO])
+        if _n_arch:
+            st.caption(f"📦 {_n_arch} proyecto(s) archivado(s) oculto(s).")
     if not proys:
         # ⚠️ El formulario va ANTES del return: desde v135 el survey ya no crea
         # proyectos, asi que si aqui se cortara no habria forma de crear el
@@ -1032,6 +1071,20 @@ def _detalle_proyecto(pid: str, grupo: str = None):
         _induccion_section(pid, prj, grupo, allow_send=True)
 
 
+        # ── Asignar campo: FUERA del form ──
+        # Dentro de un `st.form` los widgets no escriben en session_state hasta
+        # el submit, asi que un aviso "en vivo" ahi dentro es imposible. Es el
+        # mismo motivo por el que v127 lo saco del form en el Survey; aqui se
+        # habia quedado dentro, y asignar gente a un proyecto EXISTENTE es la
+        # accion del dia a dia.
+        _campos_disp = _field_users(grupo)
+        _actuales = [x.strip() for x in str(prj.get("CampoAsignados", "")).split(";")
+                     if x.strip()]
+        _opts = sorted(set(_campos_disp) | set(_actuales))
+        asignados = st.multiselect("👷 Usuarios de campo asignados", _opts,
+                                   default=_actuales, key=f"asig_{pid}")
+        _avisar_asignados(asignados)      # credenciales vencidas / contacto faltante
+
         # ── Editar datos ──
         with st.form(f"edit_{pid}"):
             st.markdown("**Datos del proyecto**")
@@ -1041,18 +1094,18 @@ def _detalle_proyecto(pid: str, grupo: str = None):
             ubic     = e1.text_input("Ubicación", value=prj.get("Ubicacion", ""))
             modelo   = e2.text_input("Modelo", value=prj.get("Modelo", ""))
             ing      = e1.text_input("Ingeniero", value=prj.get("Ingeniero", ""))
-            f_ini    = e2.text_input("Fecha inicio", value=prj.get("FechaInicio", ""))
-            f_fin    = e1.text_input("Fecha fin estimada", value=prj.get("FechaFinEst", ""))
+            # Calendario, no texto libre: ver `_a_fecha`. El valor se guarda
+            # siempre en ISO, que es lo unico que `project_schedule` sabe leer.
+            f_ini    = e2.date_input("Fecha inicio", value=_a_fecha(prj.get("FechaInicio")),
+                                     format="YYYY-MM-DD")
+            f_fin    = e1.date_input("Fecha fin estimada", value=_a_fecha(prj.get("FechaFinEst")),
+                                     format="YYYY-MM-DD")
             instr    = st.text_area("📌 Instrucciones particulares", value=prj.get("Instrucciones", ""))
             ind      = st.text_area("📝 Inducciones (un link por línea)",
                                     value=prj.get("InduccionLinks", ""),
                                     help="Al asignar un usuario de campo se le envían por Telegram/email.")
 
-            campos_disp = _field_users(grupo)
-            actuales = [x.strip() for x in str(prj.get("CampoAsignados", "")).split(";") if x.strip()]
-            # opciones = union para no perder asignados que ya no estén en la lista
-            opts = sorted(set(campos_disp) | set(actuales))
-            asignados = st.multiselect("Usuarios de campo asignados", opts, default=actuales)
+            actuales = _actuales
 
             ags = P.list_groupings(grupo=grupo)
             ag_opts = ["(ninguna)"] + [f"{a['ID']} · {a['Nombre']}" for a in ags]
@@ -1073,47 +1126,58 @@ def _detalle_proyecto(pid: str, grupo: str = None):
                                       min_value=0.0, step=100.0, value=P._num(prj.get("Presupuesto")))
 
             if st.form_submit_button("💾 Guardar cambios", use_container_width=True):
-                ag_id = "" if ag_sel == "(ninguna)" else ag_sel.split(" · ")[0]
-                P.update_project(pid, {   # todo en UNA escritura (batch) → sin rate limit
-                    "Nombre": nombre, "Cliente": cliente, "Ubicacion": ubic, "Modelo": modelo,
-                    "Ingeniero": ing, "FechaInicio": f_ini, "FechaFinEst": f_fin,
-                    "CampoAsignados": ";".join(asignados),
-                    "AgrupacionID": ag_id, "PesoEnAgrupacion": peso,
-                    "EstadoManual": est_man, "Estado": P.derive_estado(avance, est_man),
-                    "Instrucciones": instr, "InduccionLinks": ind, "Presupuesto": presup,
-                })
-                # Notificar a los usuarios de campo recién asignados
-                nuevos = [x for x in asignados if x not in actuales]
-                _sent = 0
-                if nuevos:
-                    _info = {"Nombre": nombre, "Cliente": cliente, "Ubicacion": ubic,
-                             "FechaInicio": f_ini, "FechaFinEst": f_fin, "InduccionLinks": ind}
-                    for un in nuevos:
-                        try:
-                            rr = notify.notify_assignment(un, _info)
-                            if rr.get("email") or rr.get("telegram"):
-                                _sent += 1
-                        except Exception:
-                            pass
-                # Si cambiaron las inducciones, reenviarlas a los ya asignados
-                if str(ind).strip() != str(prj.get("InduccionLinks", "")).strip():
-                    _links = P.parse_links(ind)
-                    if _links:
-                        for un in [x for x in asignados if x not in nuevos]:
+                # Validar sin `st.stop()`: pararia el render de TODO lo que va
+                # debajo (actividades, archivar...) y la pagina quedaria a medias.
+                _err = ""
+                if not str(nombre).strip():
+                    _err = "El nombre del proyecto no puede quedar vacío."
+                elif f_ini and f_fin and f_fin < f_ini:
+                    _err = "La fecha de fin no puede ser anterior a la de inicio."
+                f_ini, f_fin = _iso(f_ini), _iso(f_fin)
+                if _err:
+                    st.error(_err)
+                else:
+                    ag_id = "" if ag_sel == "(ninguna)" else ag_sel.split(" · ")[0]
+                    P.update_project(pid, {   # todo en UNA escritura (batch) → sin rate limit
+                        "Nombre": nombre, "Cliente": cliente, "Ubicacion": ubic, "Modelo": modelo,
+                        "Ingeniero": ing, "FechaInicio": f_ini, "FechaFinEst": f_fin,
+                        "CampoAsignados": ";".join(asignados),
+                        "AgrupacionID": ag_id, "PesoEnAgrupacion": peso,
+                        "EstadoManual": est_man, "Estado": P.derive_estado(avance, est_man),
+                        "Instrucciones": instr, "InduccionLinks": ind, "Presupuesto": presup,
+                    })
+                    # Notificar a los usuarios de campo recién asignados
+                    nuevos = [x for x in asignados if x not in actuales]
+                    _sent = 0
+                    if nuevos:
+                        _info = {"Nombre": nombre, "Cliente": cliente, "Ubicacion": ubic,
+                                 "FechaInicio": f_ini, "FechaFinEst": f_fin, "InduccionLinks": ind}
+                        for un in nuevos:
                             try:
-                                notify.notify_induction(un, nombre, _links)
+                                rr = notify.notify_assignment(un, _info)
+                                if rr.get("email") or rr.get("telegram"):
+                                    _sent += 1
                             except Exception:
                                 pass
+                    # Si cambiaron las inducciones, reenviarlas a los ya asignados
+                    if str(ind).strip() != str(prj.get("InduccionLinks", "")).strip():
+                        _links = P.parse_links(ind)
+                        if _links:
+                            for un in [x for x in asignados if x not in nuevos]:
+                                try:
+                                    notify.notify_induction(un, nombre, _links)
+                                except Exception:
+                                    pass
 
-                # Aviso de cambio al campo ya asignado (los nuevos ya recibieron la asignación)
-                try:
-                    alerts.notify_change(pid, grupo, "Se actualizaron los datos del proyecto.",
-                                         st.session_state.get("auth", {}).get("usuario", ""),
-                                         [x for x in asignados if x not in nuevos], nombre)
-                except Exception:
-                    pass
-                st.toast("Cambios guardados." + (f"  📨 {_sent} notificado(s)." if _sent else ""))
-                st.rerun()
+                    # Aviso de cambio al campo ya asignado (los nuevos ya recibieron la asignación)
+                    try:
+                        alerts.notify_change(pid, grupo, "Se actualizaron los datos del proyecto.",
+                                             st.session_state.get("auth", {}).get("usuario", ""),
+                                             [x for x in asignados if x not in nuevos], nombre)
+                    except Exception:
+                        pass
+                    st.toast("Cambios guardados." + (f"  📨 {_sent} notificado(s)." if _sent else ""))
+                    st.rerun()
 
         # helper: avisar al campo asignado de un cambio del admin
         _asig_now = [x.strip() for x in str(prj.get("CampoAsignados", "")).split(";") if x.strip()]
@@ -1195,14 +1259,53 @@ def _detalle_proyecto(pid: str, grupo: str = None):
                         if ok:
                             _aviso_cambio("Se eliminó una actividad del cronograma.")
                             st.rerun()
-        # ── Eliminar ──
-        with st.expander("🗑 Eliminar proyecto"):
-            st.warning("Esto elimina el proyecto y sus actividades. No se puede deshacer.")
-            if st.button("Eliminar definitivamente", key=f"del_{pid}"):
-                ok, msg = P.delete_project(pid)
+        # ── Archivar / eliminar ──
+        _archivado = str(prj.get("Estado", "")) == P.ARCHIVADO
+        if _archivado:
+            st.info("📦 Este proyecto está **archivado**: no aparece en las listas "
+                    "ni en los informes, pero no se ha perdido nada.")
+            if st.button("♻️ Restaurar proyecto", key=f"unarch_{pid}",
+                         use_container_width=True):
+                ok, msg = P.set_archivado(pid, False)
                 (st.success if ok else st.error)(msg)
                 if ok:
                     st.rerun()
+        else:
+            with st.expander("📦 Archivar proyecto"):
+                st.caption("Desaparece de las listas y de los informes, pero se "
+                           "conserva entero y puede restaurarse cuando quieras. "
+                           "Es lo recomendado al cerrar una obra.")
+                if st.button("📦 Archivar", key=f"arch_{pid}", use_container_width=True):
+                    ok, msg = P.set_archivado(pid, True)
+                    (st.success if ok else st.error)(msg)
+                    if ok:
+                        st.rerun()
+
+        # Borrado de verdad: SOLO propietario. `delete_project` quita el proyecto
+        # y sus actividades, pero deja huerfanos documentos (con sus archivos en
+        # Drive), gastos, calculos, pre-starts, alarmas y fichajes — por eso se
+        # enseña el inventario antes y se exige teclear el nombre.
+        if st.session_state.get("auth", {}).get("rol") == "propietario":
+            with st.expander("🗑 Eliminar definitivamente (irreversible)"):
+                _aso = P.datos_asociados(pid)
+                _hay = {k: v for k, v in _aso.items() if v}
+                st.warning("Se borrarán el proyecto y sus actividades. **No se puede "
+                           "deshacer.** Casi siempre lo que quieres es archivarlo.")
+                if _hay:
+                    st.markdown("Quedará sin proyecto: "
+                                + " · ".join(f"**{v}** {k.lower()}"
+                                             for k, v in _hay.items()))
+                    st.caption("Esas filas y sus archivos en Drive NO se borran: "
+                               "quedan apuntando a un proyecto que ya no existe.")
+                _tecleado = st.text_input(
+                    f"Escribe «{prj.get('Nombre','')}» para confirmar", key=f"delnom_{pid}")
+                if st.button("Eliminar definitivamente", key=f"del_{pid}",
+                             use_container_width=True,
+                             disabled=(_tecleado.strip() != str(prj.get("Nombre", "")).strip())):
+                    ok, msg = P.delete_project(pid)
+                    (st.success if ok else st.error)(msg)
+                    if ok:
+                        st.rerun()
 
     elif _sec == "💰 Costos":
         # ── Gastos / compras ──
@@ -1581,7 +1684,8 @@ def render_owner_projects():
     if not P.is_configured():
         st.warning("La gestión de proyectos necesita Google Sheets configurado.")
         return
-    proys = P.list_projects()   # todos los grupos
+    _ver_arch = st.checkbox("📦 Ver también los archivados", key="ver_arch_owner")
+    proys = P.list_projects(incluir_archivados=_ver_arch)   # todos los grupos
     _grupos = []
     try:
         _grupos = [g["Grupo"] for g in auth.list_groups(only_active=True)]

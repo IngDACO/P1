@@ -47,7 +47,7 @@ DOCUMENTS_HEADERS = ["ProyectoID", "Nombre", "Tipo", "DriveID", "SubidoPor", "Fe
 _PCOL = {h: i + 1 for i, h in enumerate(PROJECTS_HEADERS)}
 _ACOL = {h: i + 1 for i, h in enumerate(ACTIVITIES_HEADERS)}
 
-ESTADOS_MANUAL = ["", "En pausa", "Cancelado"]
+ESTADOS_MANUAL = ["", "En pausa", "Cancelado", "Archivado"]
 FMT_DATE = "%Y-%m-%d"
 
 
@@ -136,7 +136,7 @@ def compute_avance(activities: list) -> float:
 
 def derive_estado(avance: float, estado_manual: str = "") -> str:
     """Estado automático por avance, salvo override manual (En pausa / Cancelado)."""
-    if estado_manual in ("En pausa", "Cancelado"):
+    if estado_manual in ("En pausa", "Cancelado", "Archivado"):
         return estado_manual
     if avance <= 0:
         return "Planificado"
@@ -357,14 +357,70 @@ def aheads_of_group(grupo) -> dict:
     return {k: abs(v) for k, v in gaps_by_group(grupo).items() if v < -0.5}
 
 
-def list_projects(grupo: str = None, agrupacion_id: str = None) -> list:
+ARCHIVADO = "Archivado"
+
+
+def list_projects(grupo: str = None, agrupacion_id: str = None,
+                  incluir_archivados: bool = False) -> list:
+    """Proyectos del grupo. **Oculta los archivados salvo que se pidan** (v149).
+
+    ⚠️ Archivar sustituye a borrar: `delete_project` solo quitaba el proyecto y
+    sus actividades, dejando huerfanos sus documentos (con sus archivos en
+    Drive), gastos, calculos, pre-starts, alarmas y fichajes. Datos de obra que
+    pueden hacer falta despues.
+
+    ⚠️ El defecto es OCULTAR, asi que las **busquedas por identidad** tienen que
+    pedir `incluir_archivados=True` explicitamente: `plan_data.del_proyecto`,
+    el mapa nombre->ID de `project_hours_bulk`, el proyecto del clock-in
+    (`plan_ui`) y el chequeo de nombres duplicados. Si no, archivar romperia esas
+    resoluciones en silencio.
+    """
     out = []
     for r in _records(PROJECTS_SHEET):
         if grupo is not None and str(r.get("Grupo", "")) != str(grupo):
             continue
         if agrupacion_id is not None and str(r.get("AgrupacionID", "")) != str(agrupacion_id):
             continue
+        if not incluir_archivados and str(r.get("Estado", "")) == ARCHIVADO:
+            continue
         out.append(r)
+    return out
+
+
+def set_archivado(pid: str, archivar: bool = True) -> tuple:
+    """Archiva o restaura un proyecto. No borra nada."""
+    prj = get_project(pid)
+    if not prj:
+        return False, "Proyecto no encontrado."
+    if archivar:
+        return update_project(pid, {"EstadoManual": ARCHIVADO, "Estado": ARCHIVADO})
+    return update_project(pid, {"EstadoManual": "",
+                                "Estado": derive_estado(_num(prj.get("Avance")), "")})
+
+
+def datos_asociados(pid: str) -> dict:
+    """Cuanto cuelga de este proyecto. Se enseña ANTES de borrar de verdad."""
+    out = {}
+    try:
+        out["Documentos"] = len(list_documents(pid))
+    except Exception:
+        out["Documentos"] = 0
+    for etiqueta, hoja, col in (("Gastos", "Gastos", "ProyectoID"),
+                                ("Cálculos", "Calculos", "ProyectoID"),
+                                ("Pre-Starts", "PreStarts", "ProyectoID"),
+                                ("Alarmas", "Alarmas", "ProyectoID")):
+        try:
+            out[etiqueta] = sum(1 for r in _records(hoja)
+                                if str(r.get(col, "")) == str(pid))
+        except Exception:
+            out[etiqueta] = 0
+    try:
+        out["Actividades"] = len(list_activities(pid))
+        nom = str((get_project(pid) or {}).get("Nombre", ""))
+        out["Fichajes"] = sum(1 for r in _fichaje_records()
+                              if timeclock.es_del_proyecto(r, pid, nom))
+    except Exception:
+        pass
     return out
 
 
@@ -583,7 +639,9 @@ def project_hours_bulk(grupo: str = None) -> dict:
     sumando bajo el ID correcto.
     """
     idx = {}                                   # nombre normalizado -> ID
-    for p in list_projects(grupo=grupo):
+    # Mapa de resolucion, no lista: incluye archivados para que sus fichajes
+    # historicos sigan sumando bajo su ID.
+    for p in list_projects(grupo=grupo, incluir_archivados=True):
         n = str(p.get("Nombre", "")).strip().casefold()
         if n:
             idx[n] = str(p.get("ID", ""))
