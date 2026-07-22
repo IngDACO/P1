@@ -293,7 +293,8 @@ indicar dónde está algo, ten en cuenta con quién hablas:
 - **Detalle de un proyecto** (4 pestañas): **📊 Estado** (alarmas, curva S real vs plan, proyección de
   adelanto/retraso) · **✏️ Datos** (instrucciones, inducciones, editar, actividades) ·
   **💰 Costos** (costo real vs presupuesto, proyección al terminar, mano de obra por persona) ·
-  **📎 Archivos** (cálculos de herramientas, documentos, reconstruir en el Survey).
+  **📎 Archivos** (qué se leyó del plano y qué faltó, galería de fotos de obra, documentos con
+  quién los subió y cuándo, cálculos de herramientas, reconstruir en el Survey).
 - **📋 Mis proyectos (campo):** los proyectos asignados; actualiza el avance de cada actividad,
   reporta problemas y carga recibos.
 - **📋 Proyectos (conductor):** datos básicos, solo lectura, sin avances ni actividades.

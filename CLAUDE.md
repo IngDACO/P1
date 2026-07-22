@@ -785,6 +785,41 @@ Al cargar el plano en el survey (app.py), autocompleta **RAIL = AlturaDiente** (
 espalda) del catálogo; si el código no está o no se detecta → aviso + entrada manual. **RAIL = AlturaDiente**
 (NO el ancho); AnchoDiente se guarda como dato secundario.
 
+## Pestaña Archivos: el plano visible, fotos en galeria y descarga bajo demanda (v147)
+Cuatro mejoras tras quitar el paquete de obra en v146.
+### ⚠️ La descarga era ANSIOSA: se bajaba TODO Drive en cada render
+`st.download_button(data=...)` evalua `data` **al renderizar**, no al pulsar. Con un
+`download_button` por documento, abrir un proyecto se bajaba de Drive **todos** sus archivos antes de
+que nadie tocara nada. Cacheado 5 min, asi que con 3 documentos no se nota — pero el campo **solo
+puede subir fotos**, asi que ese numero crece sin techo. Estaba igual en Documentos y en Calculos.
+Ahora: lista con metadatos + **`ui.elegir` sin preseleccion** (v139) y solo se descarga **el elegido**.
+Medido con los documentos reales: **0 descargas al renderizar** (antes 2 en PRJ-0001 y 3 en PRJ-0003).
+### Las fotos de obra, en galeria
+El campo solo sube fotos: son la unica ventana del admin a la obra y salian como una fila de texto
+(`📷 foto.jpg · foto`). `_galeria_fotos` las pinta en rejilla de 3 con su fecha y quien la subio.
+**Paginada de 6 en 6 a proposito**: cada miniatura ES una descarga, y mostrarlas todas seria
+reintroducir el problema que acabamos de arreglar.
+### Quien subio cada documento y cuando
+La hoja `Documentos` guarda `SubidoPor` y `Fecha` desde v74 y **la vista los tiraba**. Ya salen en la
+tabla (`campo1 · 16/07 07:44`). Sexta aparicion del patron "se escribe y nadie lo lee".
+### Lo que dijo el plano, dentro del proyecto (`_plano_section`)
+`PlanoJSON` existe desde v137 y solo se veia **al crear el proyecto** o dentro de una herramienta: en
+el detalle tenias el `plano.pdf` colgado sin saber que se extrajo ni si falto algo. Ahora hay tarjetas
+(parametros n/total, NS, riel, HKP, HQ, LFKK/LFGK), **aviso de lo que el plano NO dio** y la tabla
+completa desplegable. Claves verificadas contra `plan_data.extraer_todo` antes de usarlas (el error de
+v135 fue inventarse un nombre de argumento).
+### ⚠️ Bug que casi cuelo: dict comprehension que descarta en SILENCIO
+Construi el mapa del selector con `{etiqueta: doc for doc in docs}`. **Dos documentos con el mismo
+nombre y el mismo minuto** (subida masiva de fotos) colisionan y uno queda **imposible de descargar**,
+sin ningun error. Desempate por los ultimos 6 del DriveID. REGLA: un dict comprehension sobre datos de
+usuario necesita que la clave sea unica DE VERDAD, o pierde filas sin avisar.
+### Verificacion
+Simulada la pestaña con los documentos REALES de los 3 proyectos: iconos, tipos, autor y fecha
+correctos; `_fecha_corta` probada con los 5 timestamps reales y con ''/None/fecha-sin-hora/basura;
+selector sin colisiones; 0 nombres sin resolver nuevos (AST vs commit anterior; el unico "hallazgo"
+era el `e` de un `except ... as e`, falso positivo de mi chequeo). Prompt del agente actualizado en el
+MISMO lote (regla v133).
+
 ## Se elimina el paquete de obra: era un subconjunto del informe del cliente (v146)
 El usuario, mirando la pestaña 📎 Archivos: "la opcion de paquete de obra no aporta mucho... aun no
 veo claro si aporta algo tenerlo en la app". Tenia razon, y la comprobacion lo dejo sin defensa.
@@ -1723,7 +1758,7 @@ posicional + plano) → app.py, al cargar el PDF, setea `st.session_state["ns"]`
 resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NORTH SYD y AGECARE → NS=6
 (coincide con travel/floor-height HQ/HE).
 
-## Versiones desplegadas (v146 = actual)
+## Versiones desplegadas (v147 = actual)
 | Ver | Cambio principal |
 |---|---|
 | v5 | Extractor: CRLF fix, caso D valor-antes-label, sin pdfplumber |
@@ -1825,6 +1860,7 @@ resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NOR
 | v102 | Fix: NS se lee del plano (NUMBER OF STOPS) al cargar el PDF; default de init 6→2 (ya no queda pegado en 6) |
 | v103 | Rol conductor (2 relojes: jornada general + segmentos por proyecto, columna Tipo) + cronómetro en vivo para todos + reporte admin de horas del grupo (Mi grupo → ⏱ Horas) |
 | v104 | Credenciales/tickets por usuario (White Card, Forklift, Dogging/Rigging, licencia…): vencimiento+estado, foto/documento a Drive, radar en Resumen del día, avisos email/Telegram a admin+usuario; usuario ve las suyas (🎫 Mis credenciales) |
+| v147 | Archivos: datos del plano visibles en el proyecto, fotos de obra en galeria, quien subio cada documento y cuando, y la descarga deja de bajarse TODO Drive en cada render |
 | v146 | Se elimina el paquete de obra (~225 lineas): no aportaba ni un dibujo que no estuviera ya en el informe del cliente, que ademas se archiva solo. Residuo de v126 vaciado por v129/v130/v134 |
 | v145 | El fichaje guarda el ProyectoID: las horas y el costo de mano de obra dejan de perderse al renombrar un proyecto (regla unica ID-primero-nombre-de-respaldo); project_hours_bulk pasa a indexarse por ID en sus 8 call-sites |
 | v144 | Pestaña Costos: proyeccion de cuanto costara AL TERMINAR (la barra solo avisaba al pasarse), mano de obra por persona, gasto por categoria (se calculaba desde v105 y se tiraba), curva de gasto acumulado apilada vs presupuesto y aviso de tarifas en 0 |

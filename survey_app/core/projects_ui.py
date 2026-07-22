@@ -220,8 +220,94 @@ _DOC_ICON   = {"plano": "📐", "informe_cliente": "📄", "informe_admin": "�
                "prestart": "🦺", "calculo": "🧮", "otro": "📎"}
 
 
+def _fecha_corta(v) -> str:
+    """'2026-07-16 07:44:29' -> '16/07 07:44'. Devuelve '' si no se puede."""
+    s = str(v or "").strip()
+    if len(s) >= 16 and s[4] == "-" and s[7] == "-":
+        return f"{s[8:10]}/{s[5:7]} {s[11:16]}"
+    return s[:16]
+
+
+def _plano_section(pid: str, prj: dict):
+    """Que se leyo del plano de este proyecto (columna PlanoJSON, v137).
+
+    ⚠️ El dato existia desde v137 y solo se veia **al crear el proyecto** o dentro
+    de una herramienta. En el detalle tenias el `plano.pdf` colgado en Documentos
+    sin forma de saber que se extrajo de el ni si falto algo.
+    """
+    datos = plan_data.del_proyecto(pid)
+    st.markdown("**📐 Datos del plano**")
+    if not datos:
+        st.caption("Este proyecto no tiene datos de plano guardados. Las herramientas "
+                   "le pedirán el PDF a quien las use. Se cargan al crear el proyecto.")
+        return
+
+    faltan = datos.get("faltan") or []
+    n, tot = datos.get("n_params", 0), datos.get("n_total", 0)
+    tarj = [_kpi_card("Parámetros", f"{n}/{tot}" if tot else str(n),
+                      "#c0392b" if faltan else "#1e8449")]
+    for k, et in (("ns", "Paradas (NS)"), ("rail", "Riel"), ("hkp", "HKP"),
+                  ("hq", "HQ"), ("lfkk", "LFKK"), ("lfgk", "LFGK")):
+        if datos.get(k) not in (None, ""):
+            tarj.append(_kpi_card(et, datos[k]))
+    st.markdown('<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:8px">'
+                + "".join(tarj) + "</div>", unsafe_allow_html=True)
+
+    if faltan:
+        st.warning("⚠️ El plano no dio: **" + ", ".join(str(x) for x in faltan)
+                   + "**. Quien use una herramienta tendrá que escribirlos a mano.")
+    else:
+        st.caption("El plano dio todo lo que las herramientas necesitan.")
+
+    par = datos.get("params") or {}
+    if par:
+        with st.expander(f"Ver los {len(par)} parámetros del plano"):
+            st.dataframe(pd.DataFrame([{"Parámetro": k, "Valor": v}
+                                       for k, v in sorted(par.items())]),
+                         hide_index=True, use_container_width=True)
+
+
+def _galeria_fotos(fotos, pid, por_pagina=6):
+    """Miniaturas de las fotos de obra.
+
+    El campo **solo puede subir fotos**: son la unica ventana del admin a la obra
+    y hasta ahora salian como una fila de texto (`📷 foto.jpg · foto`).
+    Paginada a proposito: cada miniatura es una descarga de Drive, asi que
+    mostrarlas todas de golpe es justo el problema que evita el resto de la
+    seccion (ver `_documentos_section`).
+    """
+    kver = f"_fotos_n_{pid}"
+    n_ver = int(st.session_state.get(kver, por_pagina))
+    st.markdown(f"**📷 Fotos de obra** — {len(fotos)}")
+    visibles = fotos[:n_ver]
+    for fila in range(0, len(visibles), 3):
+        cols = st.columns(3)
+        for c, d in zip(cols, visibles[fila:fila + 3]):
+            did = str(d.get("DriveID", ""))
+            with c:
+                try:
+                    st.image(drive_store.download(did), use_container_width=True)
+                except Exception:
+                    st.caption("🖼 no disponible")
+                pie = str(d.get("Nombre", ""))
+                st.caption(f"{pie[:26]}\n\n{_fecha_corta(d.get('Fecha'))}"
+                           + (f" · {d.get('SubidoPor')}" if d.get("SubidoPor") else ""))
+    if len(fotos) > n_ver:
+        if st.button(f"Ver {min(por_pagina, len(fotos) - n_ver)} más "
+                     f"({len(fotos) - n_ver} restantes)", key=f"masfotos_{pid}"):
+            st.session_state[kver] = n_ver + por_pagina
+            st.rerun()
+
+
 def _documentos_section(pid: str):
-    """Sección 📎 Documentos con permisos por rol (leído de session_state.auth)."""
+    """📎 Documentos con permisos por rol (leido de session_state.auth).
+
+    ⚠️ v147: **la descarga deja de ser ansiosa.** `st.download_button(data=...)`
+    evalua `data` al RENDERIZAR, asi que la version anterior se bajaba de Drive
+    **todos** los documentos del proyecto en cada pasada, antes de que nadie
+    pulsara nada (cacheado 5 min, pero con fotos de obra eso crece sin techo).
+    Ahora se listan con sus metadatos y solo se descarga **el que eliges**.
+    """
     st.markdown("**📎 Documentos**")
     if not drive_store.is_configured():
         st.caption("🔒 Almacenamiento en Drive no configurado (faltan los secrets `[gdrive]`).")
@@ -230,32 +316,60 @@ def _documentos_section(pid: str):
     rol, usuario = a.get("rol", ""), a.get("usuario", "")
     es_campo     = rol == "campo"
     # Admin/propietario: ver_tipos = None -> SIN filtro, para que un tipo
-    # nuevo generado por la app no vuelva a desaparecer de la vista.
+    # nuevo generado por la app no vuelva a desaparecer de la vista (v134).
     ver_tipos    = _CAMPO_VER if es_campo else None
     sube_tipos   = _CAMPO_SUBE if es_campo else _DOC_SUBIR
     puede_borrar = rol in ("administrador", "propietario")
 
     docs = [d for d in P.list_documents(pid)
             if ver_tipos is None or str(d.get("Tipo", "")) in ver_tipos]
-    if docs:
-        for d in docs:
-            did = str(d.get("DriveID", ""))
-            cols = st.columns([5, 2, 1] if puede_borrar else [6, 2])
-            cols[0].write(f"{_DOC_ICON.get(str(d.get('Tipo')), '📎')} {d.get('Nombre')}  "
-                          f"· _{d.get('Tipo')}_")
-            try:
-                cols[1].download_button("⬇️ Descargar", data=drive_store.download(did),
-                                        file_name=str(d.get("Nombre")),
-                                        key=f"dl_{pid}_{did}", use_container_width=True)
-            except Exception:
-                cols[1].caption("no disponible")
-            if puede_borrar and cols[2].button("🗑", key=f"deld_{pid}_{did}",
-                                               use_container_width=True):
-                drive_store.delete(did)
-                P.delete_document_record(pid, did)
-                st.rerun()
-    else:
+    fotos = [d for d in docs if str(d.get("Tipo", "")) == "foto"]
+    resto = [d for d in docs if str(d.get("Tipo", "")) != "foto"]
+
+    if fotos:
+        _galeria_fotos(fotos, pid)
+        st.markdown("")
+
+    if resto:
+        # Quien subio cada cosa y cuando: estaba guardado desde v74 y la vista
+        # lo tiraba. Es lo que permite auditar de donde salio un documento.
+        st.dataframe(pd.DataFrame([{
+            "": _DOC_ICON.get(str(d.get("Tipo")), "📎"),
+            "Documento": d.get("Nombre"),
+            "Tipo": d.get("Tipo"),
+            "Subido por": d.get("SubidoPor"),
+            "Fecha": _fecha_corta(d.get("Fecha")),
+        } for d in resto]), hide_index=True, use_container_width=True)
+    elif not fotos:
         st.caption("Sin documentos todavía.")
+
+    if docs:
+        # ⚠️ Con dict comprehension, dos documentos de igual nombre y minuto
+        # (subida masiva de fotos) colisionan y uno quedaria SIN poder bajarse.
+        _mapa = {}
+        for d in docs:
+            _et = (f"{_DOC_ICON.get(str(d.get('Tipo')), '📎')} {d.get('Nombre')}"
+                   f"  ·  {_fecha_corta(d.get('Fecha'))}")
+            if _et in _mapa:                       # desempate por DriveID
+                _et = f"{_et} · {str(d.get('DriveID',''))[-6:]}"
+            _mapa[_et] = d
+        _sel = ui.elegir("Descargar un documento", _mapa, key=f"dldoc_{pid}",
+                         vacio="— elige un documento —")
+        if _sel:                                   # solo AQUI se toca Drive
+            _did = str(_sel.get("DriveID", ""))
+            c1, c2 = st.columns([4, 1]) if puede_borrar else [st.container(), None]
+            try:
+                c1.download_button("⬇️ Descargar " + str(_sel.get("Nombre")),
+                                   data=drive_store.download(_did),
+                                   file_name=str(_sel.get("Nombre")),
+                                   key=f"dlbtn_{pid}_{_did}", use_container_width=True)
+            except Exception as e:
+                c1.error(f"No se pudo descargar: {e}")
+            if puede_borrar and c2 is not None:
+                if c2.button("🗑", key=f"deld_{pid}_{_did}", use_container_width=True):
+                    drive_store.delete(_did)
+                    P.delete_document_record(pid, _did)
+                    st.rerun()
 
     with st.expander("➕ Subir documento"):
         if es_campo:
@@ -493,23 +607,29 @@ def _calculos_section(pid: str):
                    "🛡 Corte de buffers o 🎗 Belting, pulsa **Guardar en el proyecto**.")
         return
 
-    for r in runs:
-        clave = str(r.get("Herramienta", ""))
-        icono = toolruns.HERRAMIENTAS.get(clave, clave or "🧮")
-        did   = str(r.get("DriveID", ""))
-        cols  = st.columns([5, 2]) if did else [st.container()]
-        with cols[0]:
-            st.write(f"{icono}  ·  **{r.get('Fecha', '')}**  ·  {r.get('Usuario', '')}")
-            if str(r.get("Resumen", "")).strip():
-                st.caption(str(r.get("Resumen")))
-        if did:
+    st.dataframe(pd.DataFrame([{
+        "": toolruns.HERRAMIENTAS.get(str(r.get("Herramienta", "")),
+                                      str(r.get("Herramienta", "")) or "🧮"),
+        "Fecha": _fecha_corta(r.get("Fecha")), "Por": r.get("Usuario"),
+        "Resumen": r.get("Resumen"),
+    } for r in runs]), hide_index=True, use_container_width=True)
+
+    # Descarga bajo demanda: igual que en Documentos, el `data=` de
+    # download_button se evalua al renderizar y bajaba TODOS los PDF a la vez.
+    _conpdf = {f"{toolruns.HERRAMIENTAS.get(str(r.get('Herramienta','')), '🧮')} "
+               f"{_fecha_corta(r.get('Fecha'))} · {r.get('Usuario')}": r
+               for r in runs if str(r.get("DriveID", "")).strip()}
+    if _conpdf:
+        _r = ui.elegir("Descargar el PDF de un cálculo", _conpdf,
+                       key=f"dlcalc_{pid}", vacio="— elige un cálculo —")
+        if _r:
             try:
-                cols[1].download_button(
-                    "⬇️ PDF", data=drive_store.download(did),
-                    file_name=str(r.get("Archivo") or f"{r.get('ID')}.pdf"),
-                    key=f"dlcal_{pid}_{r.get('ID')}", use_container_width=True)
-            except Exception:
-                cols[1].caption("PDF no disponible")
+                st.download_button(
+                    "⬇️ Descargar PDF", data=drive_store.download(str(_r.get("DriveID"))),
+                    file_name=str(_r.get("Archivo") or f"{_r.get('ID')}.pdf"),
+                    key=f"dlcalbtn_{pid}_{_r.get('ID')}", use_container_width=True)
+            except Exception as e:
+                st.error(f"PDF no disponible: {e}")
 
 
 def _field_users(grupo):
@@ -1064,6 +1184,9 @@ def _detalle_proyecto(pid: str, grupo: str = None):
         render_expenses(pid, grupo, can_delete=True, key_prefix="adm")
 
     elif _sec == "📎 Archivos":
+        _plano_section(pid, prj)
+        st.markdown("---")
+
         # ── Reconstruir el survey guardado ──
         with st.expander("🔄 Reconstruir proyecto en el Survey (regenerar informes)"):
             st.caption("Carga los parámetros y la matriz guardados en la pestaña 📐 Survey. "
