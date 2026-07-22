@@ -1,6 +1,6 @@
 """
 UI de la pestaña de Belting (herramienta independiente).
-Del plano: HQ (autocompletado). Del usuario: HGP y HGPR por elevador.
+Del plano del proyecto: HQ y HGP (v137). Del usuario: HGPR por elevador.
 DSTS = HGPR − HGP − HQ/1000 (mm), por elevador.
 
 v129/v130: los resultados vivían dentro de `if st.button(...)` y se perdían con
@@ -40,25 +40,30 @@ def render_belting_tab():
             st.caption("✅ HQ y HGP tomado(s) del plano del proyecto.")
 
     # ── PDF: autocompleta HQ ────────────────────────────────
-    pdf = plan_store.selector("📄 PDF de planos (autocompleta HQ)", "belt_pdf")
-    if pdf is not None and pdf.name != st.session_state.get("belt_pdf_name"):
-        from extractors.schindler import extract_belting
-        with st.spinner("Leyendo el plano..."):
-            ex = extract_belting(pdf)
-        st.session_state["belt_pdf_name"] = pdf.name
-        _found = []
-        if ex.get("HQ") is not None:
-            st.session_state["belt_hq"] = float(ex["HQ"]);  _found.append(f"HQ={ex['HQ']:.0f}")
-        if ex.get("HGP") is not None:
-            st.session_state["belt_hgp"] = float(ex["HGP"]); _found.append(f"HGP={ex['HGP']:.0f}")
-        if _found:
-            st.success(f"✅ Del plano: **{', '.join(_found)} mm**. "
-                       "Ingresa los HGPR reales de cada elevador.")
-        else:
-            st.warning("No se encontraron HQ/HGP en el plano. Ingrésalos a mano.")
-        st.rerun()
-    elif pdf is not None:
-        st.caption(f"📄 Plano cargado: **{pdf.name}**")
+    # Plan B, plegado: desde v137 el plano vive en el PROYECTO y sus valores
+    # se rellenan arriba. Esto sigue haciendo falta para un proyecto creado
+    # sin plano, o para calcular sin proyecto asignado.
+    with st.expander("📄 ¿El proyecto no tiene plano? Cárgalo aquí"):
+        st.caption("Se leerá HQ y HGP de este PDF. Lo normal es que ya vengan del plano del proyecto.")
+        pdf = plan_store.selector("📄 PDF de planos (autocompleta HQ)", "belt_pdf")
+        if pdf is not None and pdf.name != st.session_state.get("belt_pdf_name"):
+            from extractors.schindler import extract_belting
+            with st.spinner("Leyendo el plano..."):
+                ex = extract_belting(pdf)
+            st.session_state["belt_pdf_name"] = pdf.name
+            _found = []
+            if ex.get("HQ") is not None:
+                st.session_state["belt_hq"] = float(ex["HQ"]);  _found.append(f"HQ={ex['HQ']:.0f}")
+            if ex.get("HGP") is not None:
+                st.session_state["belt_hgp"] = float(ex["HGP"]); _found.append(f"HGP={ex['HGP']:.0f}")
+            if _found:
+                st.success(f"✅ Del plano: **{', '.join(_found)} mm**. "
+                           "Ingresa los HGPR reales de cada elevador.")
+            else:
+                st.warning("No se encontraron HQ/HGP en el plano. Ingrésalos a mano.")
+            st.rerun()
+        elif pdf is not None:
+            st.caption(f"📄 Plano cargado: **{pdf.name}**")
 
     # ── Datos del plano ─────────────────────────────────────
     st.markdown("**Datos**  ·  📄 = del plano · ✏️ = manual")

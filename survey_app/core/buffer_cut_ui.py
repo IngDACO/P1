@@ -23,8 +23,8 @@ _K = "bc_res"
 
 def render_buffer_cut_tab():
     st.markdown("### 🛡 Corte de buffers")
-    st.caption("Calcula cuánto cortar cada buffer. Carga el PDF para leer **HKP** "
-               "(o ingrésalo manualmente) e indica el **HKPR** real de cada buffer.")
+    st.caption("Calcula cuánto cortar cada buffer. **HKP** sale del plano del proyecto; "
+               "tú indicas el **HKPR** real medido en cada buffer.")
 
     # ── Proyecto: de aquí salen los datos del plano ya leídos ──
     # El admin elige el proyecto; al campo le sale del clock-in. Si el proyecto
@@ -38,16 +38,21 @@ def render_buffer_cut_tab():
 
     # ── 1. PDF → HKP ────────────────────────────────────────
     st.markdown("**1. Parámetro del plano (HKP)**")
-    pdf = plan_store.selector("PDF de planos (para HKP)", "bc_pdf")
-    if pdf is not None and pdf.name != st.session_state.get("bc_pdf_name"):
-        with st.spinner("Leyendo HKP del PDF..."):
-            ex = extract_hkp(pdf)
-        st.session_state["bc_pdf_name"] = pdf.name
-        if ex.get("HKP") is not None:
-            st.session_state["bc_hkp"] = float(ex["HKP"])
-            st.success(f"HKP encontrado en el PDF: {ex['HKP']:.0f} mm. Verifica abajo.")
-        else:
-            st.warning("No se encontró HKP en el PDF. Ingrésalo manualmente.")
+    # Plan B, plegado: desde v137 el plano vive en el PROYECTO y sus valores
+    # se rellenan arriba. Esto sigue haciendo falta para un proyecto creado
+    # sin plano, o para calcular sin proyecto asignado.
+    with st.expander("📄 ¿El proyecto no tiene plano? Cárgalo aquí"):
+        st.caption("Se leerá HKP de este PDF. Lo normal es que ya vengan del plano del proyecto.")
+        pdf = plan_store.selector("PDF de planos (para HKP)", "bc_pdf")
+        if pdf is not None and pdf.name != st.session_state.get("bc_pdf_name"):
+            with st.spinner("Leyendo HKP del PDF..."):
+                ex = extract_hkp(pdf)
+            st.session_state["bc_pdf_name"] = pdf.name
+            if ex.get("HKP") is not None:
+                st.session_state["bc_hkp"] = float(ex["HKP"])
+                st.success(f"HKP encontrado en el PDF: {ex['HKP']:.0f} mm. Verifica abajo.")
+            else:
+                st.warning("No se encontró HKP en el PDF. Ingrésalo manualmente.")
 
     hkp = st.number_input("HKP (mm) — sticker de cabina ↔ buffer sirviendo el 1er nivel",
                           value=float(st.session_state.get("bc_hkp", 0.0)),

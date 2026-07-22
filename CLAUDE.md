@@ -785,6 +785,27 @@ Al cargar el plano en el survey (app.py), autocompleta **RAIL = AlturaDiente** (
 espalda) del catálogo; si el código no está o no se detecta → aviso + entrada manual. **RAIL = AlturaDiente**
 (NO el ancho); AnchoDiente se guarda como dato secundario.
 
+## Se quita el doble selector de plano (v140)
+Residuo mio de v137. v128 dio a las 5 herramientas un plano de SESION compartido; v137 movio el plano
+AL PROYECTO (mejor), pero **no quito lo anterior**: quedaron dos cosas seguidas pidiendo el mismo plano.
+El usuario abria 🛡 Corte de buffers y veia (1) el selector de proyecto, que rellena HKP solo, y justo
+debajo (2) "PDF de planos (para HKP)" pidiendole un PDF **que ya no hace falta**. Ademas los `caption`
+seguian describiendo el flujo viejo ("Carga el PDF para leer HKP").
+- El uploader pasa a un **expander plegado**: "📄 ¿El proyecto no tiene plano? Cárgalo aquí".
+  **NO se elimina**: sigue haciendo falta con un proyecto creado sin plano, o para calcular sin proyecto
+  asignado. Solo deja de ser lo primero que se ve.
+- Textos actualizados en las 4: ahora describen que los valores vienen del plano del proyecto.
+### Verificacion (el plegado es una REINDENTACION, la clase de cambio que rompio v120)
+1. Limites del bloque localizados por **AST** (la asignacion `pdf = plan_store.selector` + el `if pdf is
+   not None` que lo consume), no por texto.
+2. **Orden preservado**: `aplicar()` y las escrituras del uploader siguen ANTES de crear cada widget
+   (regla v111) — verificado por linea en las 7 claves afectadas.
+3. **Cero lineas de codigo perdidas** (multiconjunto ignorando indentacion); las unicas ausentes son los
+   textos que se cambiaron a proposito.
+4. Uso-antes-de-asignacion limpio en los 4 (chequeo de v138).
+REGLA: al reemplazar un mecanismo por otro mejor, **quitar el viejo en el mismo lote o dejarlo
+explicitamente como plan B**. Dos mecanismos vivos para lo mismo confunden y envejecen mal.
+
 ## Auditoria de los 38 desplegables (v139)
 Pregunta del usuario: "casi todas las listas desplegables tienen un valor preseleccionado, revisa cuales
 podemos dejar sin preseleccion". Auditoria completa → **38 selectbox/multiselect**, clasificados por lo
@@ -1485,7 +1506,7 @@ posicional + plano) → app.py, al cargar el PDF, setea `st.session_state["ns"]`
 resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NORTH SYD y AGECARE → NS=6
 (coincide con travel/floor-height HQ/HE).
 
-## Versiones desplegadas (v139 = actual)
+## Versiones desplegadas (v140 = actual)
 | Ver | Cambio principal |
 |---|---|
 | v5 | Extractor: CRLF fix, caso D valor-antes-label, sin pdfplumber |
@@ -1587,6 +1608,7 @@ resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NOR
 | v102 | Fix: NS se lee del plano (NUMBER OF STOPS) al cargar el PDF; default de init 6→2 (ya no queda pegado en 6) |
 | v103 | Rol conductor (2 relojes: jornada general + segmentos por proyecto, columna Tipo) + cronómetro en vivo para todos + reporte admin de horas del grupo (Mi grupo → ⏱ Horas) |
 | v104 | Credenciales/tickets por usuario (White Card, Forklift, Dogging/Rigging, licencia…): vencimiento+estado, foto/documento a Drive, radar en Resumen del día, avisos email/Telegram a admin+usuario; usuario ve las suyas (🎫 Mis credenciales) |
+| v140 | Se quita el doble selector de plano: el uploader de PDF pasa a expander plegado (plan B) y los textos describen el flujo real; era residuo de v137 |
 | v139 | Auditoria de los 38 desplegables: los 4 que BORRAN pasan a sin-preseleccion + confirmacion, y los 6 que escriben en un proyecto tampoco preseleccionan; los de configuracion se dejan igual |
 | v138 | Los selectores de proyecto ya no abren uno arbitrario al entrar (8 lecturas que nadie pidio); al campo se le preselecciona el proyecto en el que ficho |
 | v137 | El plano se lee UNA vez al crear el proyecto (columna PlanoJSON) y alimenta las 5 herramientas: el campo ya no sube el PDF — su proyecto sale del clock-in, el admin lo elige en la herramienta |

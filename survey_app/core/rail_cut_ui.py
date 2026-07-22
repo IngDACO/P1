@@ -23,7 +23,7 @@ def _result_matrix(labels, per_elev_values, n):
 def render_rail_cut_tab():
     st.markdown("### ✂️ Corte de rieles")
     st.caption("Calcula el corte de los rieles de cada elevador del shaft. "
-               "Carga el PDF para leer LFKK y LFGK (o ingrésalos manualmente).")
+               "LFKK y LFGK salen del plano del proyecto; si falta, se ingresan a mano.")
 
     # ── 1. PDF → LFKK / LFGK ────────────────────────────────
     # ── Proyecto: de aquí salen los datos del plano ya leídos ──
@@ -37,18 +37,23 @@ def render_rail_cut_tab():
             st.caption("✅ LFKK y LFGK tomado(s) del plano del proyecto.")
 
     st.markdown("**1. Parámetros del plano (LFKK, LFGK)**")
-    pdf = plan_store.selector("PDF de planos (para LFKK / LFGK)", "rc_pdf")
-    if pdf is not None and pdf.name != st.session_state.get("rc_pdf_name"):
-        with st.spinner("Leyendo LFKK / LFGK del PDF..."):
-            lf = extract_lf(pdf)
-        st.session_state["rc_pdf_name"] = pdf.name
-        if lf.get("LFKK") is not None:
-            st.session_state["rc_lfkk"] = float(lf["LFKK"])
-        if lf.get("LFGK") is not None:
-            st.session_state["rc_lfgk"] = float(lf["LFGK"])
-        found = [k for k in ("LFKK", "LFGK") if lf.get(k) is not None]
-        st.success(f"Encontrados en el PDF: {', '.join(found) if found else 'ninguno'}. "
-                   "Verifica o completa abajo.")
+    # Plan B, plegado: desde v137 el plano vive en el PROYECTO y sus valores
+    # se rellenan arriba. Esto sigue haciendo falta para un proyecto creado
+    # sin plano, o para calcular sin proyecto asignado.
+    with st.expander("📄 ¿El proyecto no tiene plano? Cárgalo aquí"):
+        st.caption("Se leerá LFKK y LFGK de este PDF. Lo normal es que ya vengan del plano del proyecto.")
+        pdf = plan_store.selector("PDF de planos (para LFKK / LFGK)", "rc_pdf")
+        if pdf is not None and pdf.name != st.session_state.get("rc_pdf_name"):
+            with st.spinner("Leyendo LFKK / LFGK del PDF..."):
+                lf = extract_lf(pdf)
+            st.session_state["rc_pdf_name"] = pdf.name
+            if lf.get("LFKK") is not None:
+                st.session_state["rc_lfkk"] = float(lf["LFKK"])
+            if lf.get("LFGK") is not None:
+                st.session_state["rc_lfgk"] = float(lf["LFGK"])
+            found = [k for k in ("LFKK", "LFGK") if lf.get(k) is not None]
+            st.success(f"Encontrados en el PDF: {', '.join(found) if found else 'ninguno'}. "
+                       "Verifica o completa abajo.")
 
     c1, c2 = st.columns(2)
     lfkk = c1.number_input("LFKK (mm)", value=float(st.session_state.get("rc_lfkk", 0.0)),

@@ -16,8 +16,8 @@ from core.tool_save_ui import render_guardar
 
 def render_plumb_tab():
     st.markdown("### 🔩 Cálculo de líneas de plomada")
-    st.caption("Carga el PDF del plano para autocompletar los valores que se pueden leer, "
-               "o ingresa todo a mano.")
+    st.caption("Elige el proyecto y los valores del plano se rellenan solos. "
+               "Los medidos en obra (RAIL, LengthTemplate, BSR) van a mano.")
 
     # ── Inicializar en 0 (sin valores residuales de ejemplo) ─
     _keys = ["plb_bks", "plb_rail", "plb_tksw", "plb_lt", "plb_sf1", "plb_sf2",
@@ -25,7 +25,6 @@ def render_plumb_tab():
     for _k in _keys:
         st.session_state.setdefault(_k, 0.0)
 
-    # ── Carga de PDF → autocompleta lo que trae el plano ────
     # ── Proyecto: el plano ya leído ──────────────────────
     # El admin elige el proyecto; al campo le sale del clock-in. Si el proyecto
     # tiene su plano cargado, estos valores se rellenan sin abrir el PDF.
@@ -38,26 +37,31 @@ def render_plumb_tab():
         if _n:
             st.caption(f"✅ {_n} valor(es) tomados del plano del proyecto.")
 
-    pdf = plan_store.selector("📄 PDF de planos (autocompleta del plano)", "plb_pdf")
-    if pdf is not None and pdf.name != st.session_state.get("plb_pdf_name"):
-        from extractors.schindler import extract_from_pdf
-        with st.spinner("Leyendo el plano..."):
-            ex = extract_from_pdf(pdf)
-        st.session_state["plb_pdf_name"] = pdf.name
-        mapping = {"BKS": "plb_bks", "TKSW": "plb_tksw", "SF1": "plb_sf1", "SF2": "plb_sf2",
-                   "BS": "plb_bs", "SG": "plb_sg", "TG": "plb_tg"}
-        found = []
-        for src, key in mapping.items():
-            if ex.get(src) is not None:
-                st.session_state[key] = float(ex[src]); found.append(src)
-        if found:
-            st.success(f"✅ Del plano: **{', '.join(found)}**. "
-                       "Completa RAIL, LengthTemplate y BSR (no vienen en el plano).")
-        else:
-            st.warning("No se encontraron valores en el plano. Ingrésalos manualmente.")
-        st.rerun()
-    elif pdf is not None:
-        st.caption(f"📄 Plano cargado: **{pdf.name}**")
+    # Plan B, plegado: desde v137 el plano vive en el PROYECTO y sus valores
+    # se rellenan arriba. Esto sigue haciendo falta para un proyecto creado
+    # sin plano, o para calcular sin proyecto asignado.
+    with st.expander("📄 ¿El proyecto no tiene plano? Cárgalo aquí"):
+        st.caption("Se leerá BKS, TKSW, SF1, SF2, BS, SG y TG de este PDF. Lo normal es que ya vengan del plano del proyecto.")
+        pdf = plan_store.selector("📄 PDF de planos (autocompleta del plano)", "plb_pdf")
+        if pdf is not None and pdf.name != st.session_state.get("plb_pdf_name"):
+            from extractors.schindler import extract_from_pdf
+            with st.spinner("Leyendo el plano..."):
+                ex = extract_from_pdf(pdf)
+            st.session_state["plb_pdf_name"] = pdf.name
+            mapping = {"BKS": "plb_bks", "TKSW": "plb_tksw", "SF1": "plb_sf1", "SF2": "plb_sf2",
+                       "BS": "plb_bs", "SG": "plb_sg", "TG": "plb_tg"}
+            found = []
+            for src, key in mapping.items():
+                if ex.get(src) is not None:
+                    st.session_state[key] = float(ex[src]); found.append(src)
+            if found:
+                st.success(f"✅ Del plano: **{', '.join(found)}**. "
+                           "Completa RAIL, LengthTemplate y BSR (no vienen en el plano).")
+            else:
+                st.warning("No se encontraron valores en el plano. Ingrésalos manualmente.")
+            st.rerun()
+        elif pdf is not None:
+            st.caption(f"📄 Plano cargado: **{pdf.name}**")
 
     # ── Entradas principales ────────────────────────────────
     st.markdown("**Entradas principales**  ·  📄 = del plano · ✏️ = manual")
