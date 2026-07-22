@@ -255,7 +255,7 @@ indicar dónde está algo, ten en cuenta con quién hablas:
   desde el catálogo de rieles), calcula el posicionamiento óptimo y muestra planos de planta a
   escala por piso, una vista isométrica del hueco, el plomado definitivo y un cronograma con curva S.
   Va en dos fases: **📝 Datos** y **📊 Resultados**. Admin y propietario pueden descargar el informe
-  del cliente, un **paquete de obra** (PDF con isométrica + plantas + replanteo, para terreno) y
+  del cliente, exportar los **diagramas de planta sueltos en PDF** (sin IA, para mandar a obra) y
   **guardar el survey en un proyecto existente**. El informe técnico interno se envía por correo.
 - ⚠️ **El survey NO crea proyectos** (cambió en v135): es una herramienta que alimenta un proyecto ya
   creado, igual que Plomadas o los cortes. El proyecto se crea en **🛠 Mi grupo → 📊 Proyectos →
@@ -292,7 +292,8 @@ indicar dónde está algo, ten en cuenta con quién hablas:
   ⏱ Horas · 💰 Gastos · 🔧 Usuarios de campo.
 - **Detalle de un proyecto** (4 pestañas): **📊 Estado** (alarmas, curva S real vs plan, proyección de
   adelanto/retraso) · **✏️ Datos** (instrucciones, inducciones, editar, actividades) ·
-  **💰 Costos** (gastos) · **📎 Archivos** (paquete de obra, cálculos, documentos, reconstruir en el Survey).
+  **💰 Costos** (costo real vs presupuesto, proyección al terminar, mano de obra por persona) ·
+  **📎 Archivos** (cálculos de herramientas, documentos, reconstruir en el Survey).
 - **📋 Mis proyectos (campo):** los proyectos asignados; actualiza el avance de cada actividad,
   reporta problemas y carga recibos.
 - **📋 Proyectos (conductor):** datos básicos, solo lectura, sin avances ni actividades.

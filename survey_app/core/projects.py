@@ -269,8 +269,8 @@ def attach_survey(pid: str, params: dict = None, matriz=None,
 
     Desde v135 el survey no crea el proyecto: es una herramienta que lo
     alimenta, como Plomadas o Corte de rieles. Esto escribe las columnas
-    ParamsJSON/MatrizJSON/InterpJSON, de las que dependen el paquete de obra
-    (`survey_calc.recalcular`) y "Reconstruir proyecto en el Survey".
+    ParamsJSON/MatrizJSON/InterpJSON, de las que depende "Reconstruir proyecto
+    en el Survey" (y el recalculo determinista de `survey_calc.recalcular`).
 
     ⚠️ NO toca las actividades: el cronograma se crea con el proyecto y el
     campo ya puede haber cargado avances. Sobrescribirlo aquí los borraría.

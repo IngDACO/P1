@@ -34,7 +34,6 @@ from core.plumb           import (compute_plumb, plumb_svg, plumb_table, plumb_c
 from core                 import projects as projects_data
 from core                 import drive_store
 from core                 import notify
-from core.field_pack      import field_pack_pdf
 from core.auth            import get_user as auth_get_user
 from core                 import credentials
 from core                 import toolruns
@@ -657,35 +656,6 @@ def render_survey_tab(_ROL, _GRUPO):
                         "template completo (punto P, cortes C1/C2 y diagonales).")
         else:
             st.caption("Se mostrará cuando el survey encuentre una solución válida.")
-
-        # ── Paquete de obra: todo lo que necesita quien va a terreno ──
-        # Las piezas ya existian sueltas tras v119-v123; aqui van en UN PDF.
-        # Vive DENTRO de _render_survey_results porque usa sus locales
-        # (best, lim_map, ctrl_in_frame_) y solo tiene sentido con calculo hecho.
-        with st.expander("🧰 Paquete de obra (PDF para terreno)", expanded=False):
-            st.caption("Isométrica del hueco + plantas a escala + replanteo de plomadas "
-                       "con la ficha de medidas. Sin interpretaciones ni log: solo lo "
-                       "que se usa para montar.")
-            _pk1, _pk2 = st.columns([2, 1])
-            _solo = _pk1.checkbox("Solo los pisos con incidencias", value=False,
-                                  key="pack_solo_inc")
-            if _pk2.button("Preparar paquete", use_container_width=True, key="btn_pack"):
-                with st.spinner("Generando paquete de obra..."):
-                    st.session_state["_pack_pdf"] = field_pack_pdf(
-                        all_params, limits, best, lim_map,
-                        plumb=r.get("plumb"),
-                        ctrl_in_frame=ctrl_in_frame_, ctrl_side=ctrl_side_,
-                        meta={"proyecto": st.session_state.get("proyecto", ""),
-                              "cliente": st.session_state.get("cliente", ""),
-                              "ubicacion": st.session_state.get("ubicacion", "")},
-                        solo_incidencias=_solo)
-            _pk = st.session_state.get("_pack_pdf")
-            if _pk:
-                st.download_button("⬇️ Descargar paquete de obra (PDF)", data=_pk,
-                                   file_name="paquete_obra.pdf", mime="application/pdf",
-                                   use_container_width=True, key="dl_pack")
-            elif "_pack_pdf" in st.session_state:
-                st.warning("No se pudo generar el paquete de obra.")
 
         # ── Estado de las interpretaciones IA ─────────────────
         if not interpretation.get("_ok"):

@@ -24,7 +24,6 @@ from core import timeclock
 # Opción neutra de los selectores de proyecto: sin ella, `st.selectbox`
 # devuelve el primer elemento y se abre un proyecto que nadie eligió.
 _VACIO = "— elige un proyecto —"
-from core.field_pack import field_pack_pdf
 from core import ui_common as ui
 
 
@@ -473,48 +472,6 @@ def _notificar_asignados(usuarios, info_prj):
     else:
         st.warning("📵 No se pudo notificar a nadie: revisa email y Telegram "
                    "en 🛠 Mi grupo → Usuarios.")
-
-
-def _paquete_obra_section(pid: str, prj: dict):
-    """Paquete de obra (PDF de terreno) regenerado desde el survey guardado.
-
-    Compartido por el detalle del admin y por 📋 Mis proyectos: el documento se
-    llama "PDF para terreno", asi que quien esta en terreno tiene que poder
-    bajarlo. Vive aqui, en un solo sitio, para que las dos vistas no diverjan.
-
-    El proyecto guarda ParamsJSON+MatrizJSON pero NO la solucion (es derivada),
-    de ahi el recalculo con `survey_calc.recalcular` (misma secuencia que el
-    Survey, verificada identica).
-    """
-    with st.expander("🧰 Paquete de obra (PDF para terreno)"):
-        st.caption("Isométrica del hueco, plantas a escala y replanteo de plomadas "
-                   "con la ficha de medidas. Se regenera desde el survey guardado.")
-        kp = f"pack_{pid}"
-        if st.button("Preparar paquete de obra", key=f"btnpack_{pid}"):
-            with st.spinner("Recalculando el survey y generando el paquete..."):
-                full = P.get_project_full(pid)
-                res = survey_calc.recalcular(full.get("params") or {},
-                                             full.get("matriz") or [])
-                if not res:
-                    st.session_state[kp] = None
-                else:
-                    st.session_state[kp] = field_pack_pdf(
-                        res["all_params"], res["limits"], res["best"], res["lim_map"],
-                        plumb=res["plumb"],
-                        ctrl_in_frame=bool(res["all_params"].get("CTRL_IN_FRAME")),
-                        ctrl_side=res["all_params"].get("CTRL_SIDE"),
-                        meta={"proyecto": str(prj.get("Nombre", "")),
-                              "cliente": str(prj.get("Cliente", "")),
-                              "ubicacion": str(prj.get("Ubicacion", ""))})
-        if st.session_state.get(kp):
-            st.download_button("⬇️ Descargar paquete de obra (PDF)",
-                               data=st.session_state[kp],
-                               file_name=f"paquete_obra_{pid}.pdf",
-                               mime="application/pdf", key=f"dlpack_{pid}",
-                               use_container_width=True)
-        elif kp in st.session_state:
-            st.warning("No se pudo regenerar: al proyecto le faltan parámetros o matriz, "
-                       "o el survey no encuentra solución con esos datos.")
 
 
 def _calculos_section(pid: str):
@@ -1107,8 +1064,6 @@ def _detalle_proyecto(pid: str, grupo: str = None):
         render_expenses(pid, grupo, can_delete=True, key_prefix="adm")
 
     elif _sec == "📎 Archivos":
-        _paquete_obra_section(pid, prj)
-
         # ── Reconstruir el survey guardado ──
         with st.expander("🔄 Reconstruir proyecto en el Survey (regenerar informes)"):
             st.caption("Carga los parámetros y la matriz guardados en la pestaña 📐 Survey. "
@@ -1631,11 +1586,9 @@ def render_field_projects(usuario: str, grupo: str):
 
     # ── Documentos (campo: sube fotos, consulta planos/informe cliente/matriz/fotos) ──
     # ── Lo que el campo necesita en obra ──────────────────
-    # El paquete de obra es literalmente "PDF para terreno" y hasta v134 solo
-    # podia bajarlo el admin. Los calculos (plomada, cortes) los EJECUTA el
-    # campo, asi que tambien los ve.
+    # Los calculos (plomada, cortes) los EJECUTA el campo, asi que tambien los ve
+    # (hasta v134 estaban ocultos para su rol).
     st.markdown("---")
-    _paquete_obra_section(pid, prj)
     _calculos_section(pid)
 
     st.markdown("---")

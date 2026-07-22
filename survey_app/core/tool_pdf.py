@@ -2,8 +2,7 @@
 PDF de resultado para las herramientas de cálculo.
 
 Un único generador para Plomadas, Corte de rieles, Corte de buffers y Belting:
-así las cuatro salen con la misma cara (y la misma que el paquete de obra del
-Survey) en vez de que cada una invente la suya.
+así las cuatro salen con la misma cara en vez de que cada una invente la suya.
 
 Estructura: cabecera + ficha del proyecto + dibujos + tabla de resultados +
 notas. Los dibujos entran como SVG vía `report._svg_flowable` (svglib), así que

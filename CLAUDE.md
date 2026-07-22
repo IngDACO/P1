@@ -785,6 +785,44 @@ Al cargar el plano en el survey (app.py), autocompleta **RAIL = AlturaDiente** (
 espalda) del catálogo; si el código no está o no se detecta → aviso + entrada manual. **RAIL = AlturaDiente**
 (NO el ancho); AnchoDiente se guarda como dato secundario.
 
+## Se elimina el paquete de obra: era un subconjunto del informe del cliente (v146)
+El usuario, mirando la pestaña 📎 Archivos: "la opcion de paquete de obra no aporta mucho... aun no
+veo claro si aporta algo tenerlo en la app". Tenia razon, y la comprobacion lo dejo sin defensa.
+### La evidencia: no aportaba NI UN dibujo propio
+`field_pack_pdf` metia `shaft_iso_svg` + `floor_plan_svg` + `plumb_svg`/`plumb_iso_svg`/
+`plumb_card_svg`. **Los cinco estan en `user_report` (L408, L415, L477, L480, L483)**, con las mismas
+funciones y los mismos argumentos — y el informe del cliente **ya se archiva solo** al guardar el
+survey. Los tres del plomado ademas los genera por su cuenta el PDF de 🔩 Plomadas desde v130.
+Su unico diferenciador era **lo que quitaba** (portada, veredicto, IA, glosario, conclusiones, firma):
+una preferencia de formato, no una capacidad ausente.
+### Por que sobrevivio tanto: el patron de v140, otra vez
+Nacio en **v126**. Despues **v129/v130** dieron PDF propio a cada herramienta y **v134** se los hizo
+visibles al campo. Entre las dos le vaciaron la razon de ser y nadie lo retiro. **REGLA (repetida):
+al sustituir un mecanismo por otro mejor, quitar el viejo en el MISMO lote.**
+### ⚠️ Una propuesta mia que RETIRE tras comprobarla
+Propuse que el informe del cliente **degradara sin IA** (generarse sin las 5 secciones de la IA en vez
+de bloquearse, regla de v38) para cubrir el unico caso en que el paquete ganaba: `survey_calc.
+recalcular` es determinista y el informe se bloquea si falla la interpretacion. **Al verificar, la via
+sin IA YA EXISTIA**: `diagrams.floor_plans_pdf` (v115), cuyo docstring dice literalmente "para enviar a
+obra sin el informe completo", ya esta en el Survey. Abrir un modo de fallo nuevo en un documento que
+va al CLIENTE para cubrir algo ya cubierto habria sido peor: el bloqueo de v38 es un control de calidad
+deliberado. Se descarto y el informe no se toco.
+### Eliminado
+`core/field_pack.py` (152 lineas) · `_paquete_obra_section` (42) · sus 2 call-sites · el bloque del
+Survey (29) · 2 imports. **~225 lineas.**
+### Verificacion (borrar lineas DENTRO de funciones es lo que rompio v120)
+1. **Diff estructural por AST contra el commit anterior**: en projects_ui solo desaparece
+   `_paquete_obra_section` y solo cambia `render_field_projects` (32→31 sentencias); en survey_ui solo
+   `_render_survey_results` (44→43). Ninguna otra funcion alterada.
+2. **Las 4 ramas del detalle comparadas una a una**: Estado/Datos/Costos identicas, Archivos 4→3
+   (exactamente la llamada quitada), ninguna rama perdida.
+3. `best`/`lim_map`/`ctrl_in_frame_`/`all_params`/`limits`/`plumb_res` siguen asignados en
+   `_render_survey_results` (las locales de las que dependia el bloque).
+4. Cero referencias residuales en todo el repo; los 5 modulos importan de verdad.
+5. **Prompt del agente actualizado en el MISMO lote** (regla v133): decia que el Survey ofrece un
+   paquete de obra y que Archivos lo contiene. Ahora describe `floor_plans_pdf` y las pestañas reales.
+   ⚠️ La regla de v133 aplica igual al QUITAR, no solo al añadir.
+
 ## El fichaje guarda el ProyectoID: trazabilidad que no se pierde al renombrar (v145)
 Decision del usuario tras el hallazgo de v144: el fichaje cruzaba con el proyecto **por NOMBRE**, asi
 que habia fichajes bajo `"Prueba1"` para un proyecto llamado `"prueba1"` cuyas horas **se caian del
@@ -1685,7 +1723,7 @@ posicional + plano) → app.py, al cargar el PDF, setea `st.session_state["ns"]`
 resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NORTH SYD y AGECARE → NS=6
 (coincide con travel/floor-height HQ/HE).
 
-## Versiones desplegadas (v145 = actual)
+## Versiones desplegadas (v146 = actual)
 | Ver | Cambio principal |
 |---|---|
 | v5 | Extractor: CRLF fix, caso D valor-antes-label, sin pdfplumber |
@@ -1787,6 +1825,7 @@ resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NOR
 | v102 | Fix: NS se lee del plano (NUMBER OF STOPS) al cargar el PDF; default de init 6→2 (ya no queda pegado en 6) |
 | v103 | Rol conductor (2 relojes: jornada general + segmentos por proyecto, columna Tipo) + cronómetro en vivo para todos + reporte admin de horas del grupo (Mi grupo → ⏱ Horas) |
 | v104 | Credenciales/tickets por usuario (White Card, Forklift, Dogging/Rigging, licencia…): vencimiento+estado, foto/documento a Drive, radar en Resumen del día, avisos email/Telegram a admin+usuario; usuario ve las suyas (🎫 Mis credenciales) |
+| v146 | Se elimina el paquete de obra (~225 lineas): no aportaba ni un dibujo que no estuviera ya en el informe del cliente, que ademas se archiva solo. Residuo de v126 vaciado por v129/v130/v134 |
 | v145 | El fichaje guarda el ProyectoID: las horas y el costo de mano de obra dejan de perderse al renombrar un proyecto (regla unica ID-primero-nombre-de-respaldo); project_hours_bulk pasa a indexarse por ID en sus 8 call-sites |
 | v144 | Pestaña Costos: proyeccion de cuanto costara AL TERMINAR (la barra solo avisaba al pasarse), mano de obra por persona, gasto por categoria (se calculaba desde v105 y se tiraba), curva de gasto acumulado apilada vs presupuesto y aviso de tarifas en 0 |
 | v143 | Pestaña Estado: la brecha plan-vs-real se RELLENA (antes habia que deducirla comparando dos lineas), HOY cruza el Gantt, barras que marcan lo que tocaba y no arranco, proyeccion al ritmo actual + diagnostico (ritmo real vs necesario, que tocaba hoy vs que se hace, proximo hito) |
