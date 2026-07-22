@@ -1135,6 +1135,89 @@ def _dashboard_agrupacion(ag, grupo):
 
 
 
+def _agrupaciones_html(ags, grupo) -> str:
+    """Tarjetas de agrupación — mismo lenguaje que la cartera de proyectos.
+
+    La idea es ver lo relevante de cada edificio SIN entrar: cuántos elevadores,
+    avance consolidado, **cuándo se entrega el conjunto** y si algún elevador la
+    está retrasando. La tabla plana anterior no decía nada de eso.
+    """
+    proys_all = P.list_projects(grupo=grupo)
+    horas     = P.project_hours_bulk(grupo)
+    alarmas   = alerts.open_counts_all() if alerts.is_configured() else {}
+    proyecc   = P.projections_by_group(grupo)      # cacheado 60 s
+    from core import expenses as E
+    hay_costos = E.is_configured()
+
+    parts = []
+    for a in ags:
+        aid   = str(a.get("ID", ""))
+        miemb = [p for p in proys_all if str(p.get("AgrupacionID", "")) == aid]
+        pr    = P.grouping_progress(aid)
+        av    = pr["avance"]
+
+        # Fecha del conjunto = la del elevador MÁS LENTO (no el promedio)
+        fecha, critico, gap = None, "", 0.0
+        for p in miemb:
+            d = proyecc.get(str(p.get("ID", "")))
+            if not d or not d.get("fecha"):
+                continue
+            if fecha is None or d["fecha"] > fecha:
+                fecha, critico, gap = d["fecha"], str(p.get("Nombre", "")), d.get("gap") or 0.0
+
+        n_al  = sum(alarmas.get(str(p.get("ID", "")), 0) for p in miemb)
+        hrs   = sum(horas.get(str(p.get("Nombre", "")), 0.0) for p in miemb)
+        costo = (sum(E.project_cost(p.get("ID"), grupo)["total"] for p in miemb)
+                 if hay_costos and miemb else 0)
+
+        borde = "border:1px solid #e6e9ef"
+        badge = ""
+        if gap and gap > 0.5:
+            borde = "border:1px solid #e6e9ef;border-left:4px solid #c0392b"
+            badge = (f'<span style="font-size:12px;padding:3px 9px;border-radius:20px;'
+                     f'background:#fcebeb;color:#a32d2d;white-space:nowrap;flex:none;'
+                     f'font-weight:600;">⏰ {gap:.0f} d</span>')
+        elif gap and gap < -0.5:
+            borde = "border:1px solid #e6e9ef;border-left:4px solid #1e8449"
+            badge = (f'<span style="font-size:12px;padding:3px 9px;border-radius:20px;'
+                     f'background:#eaf3de;color:#3b6d11;white-space:nowrap;flex:none;'
+                     f'font-weight:600;">⏩ {abs(gap):.0f} d</span>')
+        punto = "#c0392b" if (gap and gap > 0.5) else ("#1e8449" if av >= 100 else "#2e6da4")
+
+        sub = f"{aid} · {len(miemb)} elevador(es)"
+        if a.get("Descripcion"):
+            sub += f" · {a['Descripcion']}"
+        entrega = (f'<div style="font-size:11.5px;color:#6b7280;">🎯 entrega '
+                   f'<b>{fecha.strftime("%d/%m/%Y")}</b>'
+                   + (f' — la marca {critico}' if critico else "") + '</div>'
+                   if fecha else
+                   '<div style="font-size:11.5px;color:#9aa7b8;">sin cronograma para proyectar</div>')
+        alarm = (f'<div style="width:44px;text-align:center;flex:none;color:#c0392b;'
+                 f'font-size:12.5px;font-weight:600;">🔔 {n_al}</div>'
+                 if n_al else '<div style="width:44px;flex:none;"></div>')
+
+        parts.append(
+            f'<div style="display:flex;align-items:center;gap:12px;padding:11px 14px;'
+            f'{borde};border-radius:10px;margin-bottom:8px;background:#fff;">'
+            f'<div style="width:9px;height:9px;border-radius:50%;background:{punto};flex:none;"></div>'
+            '<div style="flex:1;min-width:0;">'
+            f'<div style="font-size:14px;font-weight:600;color:#1f2937;white-space:nowrap;'
+            f'overflow:hidden;text-overflow:ellipsis;">🗂 {a.get("Nombre","")}</div>'
+            f'<div style="font-size:12px;color:#6b7280;white-space:nowrap;overflow:hidden;'
+            f'text-overflow:ellipsis;">{sub}</div>' + entrega +
+            '</div>' + badge +
+            '<div style="width:118px;flex:none;">'
+            '<div style="height:7px;background:#eef1f5;border-radius:20px;overflow:hidden;">'
+            f'<div style="height:7px;width:{min(100, max(0, av)):.0f}%;background:{punto};"></div>'
+            '</div>'
+            f'<div style="font-size:11.5px;color:#6b7280;margin-top:3px;text-align:right;">'
+            f'{av:.0f}%</div></div>'
+            f'<div style="width:74px;text-align:right;flex:none;font-size:12px;color:#6b7280;">'
+            f'{hrs:.0f} h' + (f'<br>${costo:,.0f}' if costo else '') + '</div>'
+            + alarm + '</div>')
+    return "".join(parts)
+
+
 def _miembros_editor(ags_proys, todos, key, pesos_actuales=None):
     """Tabla para elegir QUÉ proyectos componen una agrupación y con qué peso.
 
@@ -1184,15 +1267,8 @@ def _panel_agrupaciones(grupo: str):
     nom_ags = {a["ID"]: a["Nombre"] for a in ags}
 
     if ags:
-        rows = []
-        for a in ags:
-            pr = P.grouping_progress(a["ID"])
-            rows.append({
-                "ID": a["ID"], "Agrupación": a["Nombre"],
-                "Proyectos": pr["n_proyectos"], "Avance %": pr["avance"],
-                "Descripción": a.get("Descripcion", ""),
-            })
-        st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+        st.markdown(f"**Agrupaciones — {len(ags)}**")
+        st.markdown(_agrupaciones_html(ags, grupo), unsafe_allow_html=True)
 
         # ── Abrir una agrupación (sin preselección: v138/v139) ──
         st.markdown("#### 📊 Abrir agrupación")
@@ -1223,30 +1299,31 @@ def _panel_agrupaciones(grupo: str):
         st.info("No hay agrupaciones. Crea una abajo y elige qué elevadores la componen.")
 
     # ── Crear: la agrupación se arma CON sus proyectos (v141) ──
-    st.markdown("#### ➕ Nueva agrupación")
-    st.caption("Los proyectos se crean primero; aquí eliges cuáles forman parte.")
-    nom = st.text_input("Nombre de la agrupación", key="nueva_agr_nom")
-    des = st.text_input("Descripción (opcional)", key="nueva_agr_des")
-    _nuevos = _miembros_editor(nom_ags, todos, "agmem_nueva")
-    if st.button("Crear agrupación", key="nueva_agr_btn", use_container_width=True):
-        if not nom.strip():
-            st.error("El nombre es obligatorio.")
-        else:
-            ok, res = P.create_grouping(grupo, nom.strip(), des.strip())
-            if not ok:
-                st.error(res)
+    # Plegada, como "➕ Nuevo proyecto": no es lo que se viene a hacer a diario.
+    with st.expander("➕ Nueva agrupación"):
+        st.caption("Los proyectos se crean primero; aquí eliges cuáles forman parte.")
+        nom = st.text_input("Nombre de la agrupación", key="nueva_agr_nom")
+        des = st.text_input("Descripción (opcional)", key="nueva_agr_des")
+        _nuevos = _miembros_editor(nom_ags, todos, "agmem_nueva")
+        if st.button("Crear agrupación", key="nueva_agr_btn", use_container_width=True):
+            if not nom.strip():
+                st.error("El nombre es obligatorio.")
             else:
-                _n = 0
-                if _nuevos:
-                    with st.spinner("Asignando proyectos..."):
-                        ok2, msg2 = P.set_grouping_members(res, _nuevos, grupo)
-                    _n = len(_nuevos)
-                    if not ok2:
-                        st.warning(f"Agrupación creada, pero: {msg2}")
-                st.success(f"Agrupación creada ({res})"
-                           + (f" con {_n} elevador(es)." if _n else
-                              ". Añádele elevadores desde su panel."))
-                st.rerun()
+                ok, res = P.create_grouping(grupo, nom.strip(), des.strip())
+                if not ok:
+                    st.error(res)
+                else:
+                    _n = 0
+                    if _nuevos:
+                        with st.spinner("Asignando proyectos..."):
+                            ok2, msg2 = P.set_grouping_members(res, _nuevos, grupo)
+                        _n = len(_nuevos)
+                        if not ok2:
+                            st.warning(f"Agrupación creada, pero: {msg2}")
+                    st.success(f"Agrupación creada ({res})"
+                               + (f" con {_n} elevador(es)." if _n else
+                                  ". Añádele elevadores desde su panel."))
+                    st.rerun()
 
     if ags:
         st.markdown("#### 🗑 Eliminar agrupación")

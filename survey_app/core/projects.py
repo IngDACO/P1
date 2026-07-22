@@ -316,6 +316,29 @@ def gaps_by_group(grupo) -> dict:
     return _gaps_for(list_projects(grupo=grupo))
 
 
+@st.cache_data(ttl=60, show_spinner=False)
+def projections_by_group(grupo) -> dict:
+    """{pid: {"fecha","spi","gap"}} del grupo, CACHEADO 60 s.
+
+    `project_schedule` reconstruye el cronograma de un proyecto y NO esta
+    cacheado. Sin esto, pintar la fecha de entrega en una lista de N
+    agrupaciones × M elevadores lo recalculaba todo en cada rerun — el mismo
+    problema que resolvio `gaps_by_group` en v107.
+    """
+    out = {}
+    for p in list_projects(grupo=grupo):
+        pid = str(p.get("ID", ""))
+        try:
+            ps = project_schedule(pid)
+            pr = ps.get("proj") if ps else None
+            if pr:
+                out[pid] = {"fecha": pr.get("fecha_proj"), "spi": pr.get("spi"),
+                            "gap": pr.get("dias_gap")}
+        except Exception:
+            pass
+    return out
+
+
 def delays_for(proys) -> dict:
     """{pid: días de RETRASO} (proyección SPI)."""
     return {k: v for k, v in _gaps_for(proys).items() if v > 0.5}
@@ -609,16 +632,22 @@ def grouping_projection(gid: str, grupo: str = None) -> dict:
     """
     out = {"fecha": None, "critico": "", "critico_id": "", "spi_min": None,
            "sin_datos": [], "detalle": []}
+    cache = projections_by_group(grupo) if grupo else {}
     for p in list_projects(grupo=grupo, agrupacion_id=gid):
         pid, nom = str(p.get("ID", "")), str(p.get("Nombre", ""))
-        ps = project_schedule(pid)
-        if not ps or not ps.get("proj"):
+        pr = cache.get(pid)                       # cacheado por grupo (60 s)
+        if pr is None:
+            ps = project_schedule(pid)
+            pr = ps.get("proj") if ps else None
+        if not pr:
             out["sin_datos"].append(nom)
             continue
-        pr = ps["proj"]
-        fecha, spi = pr.get("fecha_proj"), pr.get("spi")
+        fecha, spi = pr.get("fecha"), pr.get("spi")
+        if fecha is None and "fecha_proj" in pr:
+            fecha = pr.get("fecha_proj")
         out["detalle"].append({"id": pid, "nombre": nom, "fecha": fecha,
-                               "spi": spi, "gap": pr.get("dias_gap")})
+                               "spi": spi,
+                               "gap": pr.get("gap", pr.get("dias_gap"))})
         if fecha and (out["fecha"] is None or fecha > out["fecha"]):
             out["fecha"], out["critico"], out["critico_id"] = fecha, nom, pid
         if spi is not None and (out["spi_min"] is None or spi < out["spi_min"]):

@@ -785,6 +785,26 @@ Al cargar el plano en el survey (app.py), autocompleta **RAIL = AlturaDiente** (
 espalda) del catálogo; si el código no está o no se detecta → aviso + entrada manual. **RAIL = AlturaDiente**
 (NO el ancho); AnchoDiente se guarda como dato secundario.
 
+## Agrupaciones: cartera de tarjetas + creacion plegada (v142)
+La lista de agrupaciones era una tabla plana (ID / nombre / nº proyectos / avance) que **no decia nada
+util sin entrar**. Ahora usa el MISMO lenguaje que la cartera de proyectos (`_portfolio_html`):
+- **`_agrupaciones_html(ags, grupo)`** — tarjeta por agrupacion: punto de estado, nombre, nº de
+  elevadores, descripcion, **fecha de entrega del conjunto y que elevador la marca**, barra de avance
+  consolidado, horas, costo, 🔔 alarmas y **borde rojo + ⏰ N d** si el elevador critico va retrasado
+  (verde + ⏩ si va adelantado). Mismo criterio visual que los proyectos.
+- **"➕ Nueva agrupacion" pasa a expander plegado**, como "➕ Nuevo proyecto": no es lo que se viene a
+  hacer a diario.
+### ⚠️ Rendimiento: la fecha de entrega es CARA
+`project_schedule` reconstruye el cronograma de un proyecto y **NO esta cacheado**. Pintar la fecha en
+una lista de N agrupaciones × M elevadores lo recalculaba todo en cada rerun — el mismo problema que
+resolvio `gaps_by_group` en v107. Fix: **`projects.projections_by_group(grupo)`** cacheado 60 s
+({pid: {fecha, spi, gap}}); las tarjetas y `grouping_projection` comparten ese calculo.
+REGLA: antes de poner un dato derivado en una LISTA, comprobar cuanto cuesta calcularlo por fila.
+### Verificado con datos simulados (render real en navegador)
+fecha del conjunto = la del elevador MAS LENTO · señala al critico correcto · badge con el gap del
+critico (no el del primero) · horas 210+180+410=800 · costo 3×18500=55.500 · alarmas · borde rojo/verde
+· y **agrupacion SIN miembros no rompe** (0 elevadores + "sin cronograma para proyectar").
+
 ## Agrupaciones: se invierte el flujo + dashboard de conjunto (v141)
 Peticion del usuario: "primero debe existir una agrupacion para que al crear el proyecto se seleccione;
 quiero que sea al contrario". Tenia razon — el flujo estaba al reves de como se trabaja: para agrupar 4
@@ -1540,7 +1560,7 @@ posicional + plano) → app.py, al cargar el PDF, setea `st.session_state["ns"]`
 resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NORTH SYD y AGECARE → NS=6
 (coincide con travel/floor-height HQ/HE).
 
-## Versiones desplegadas (v141 = actual)
+## Versiones desplegadas (v142 = actual)
 | Ver | Cambio principal |
 |---|---|
 | v5 | Extractor: CRLF fix, caso D valor-antes-label, sin pdfplumber |
@@ -1642,6 +1662,7 @@ resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NOR
 | v102 | Fix: NS se lee del plano (NUMBER OF STOPS) al cargar el PDF; default de init 6→2 (ya no queda pegado en 6) |
 | v103 | Rol conductor (2 relojes: jornada general + segmentos por proyecto, columna Tipo) + cronómetro en vivo para todos + reporte admin de horas del grupo (Mi grupo → ⏱ Horas) |
 | v104 | Credenciales/tickets por usuario (White Card, Forklift, Dogging/Rigging, licencia…): vencimiento+estado, foto/documento a Drive, radar en Resumen del día, avisos email/Telegram a admin+usuario; usuario ve las suyas (🎫 Mis credenciales) |
+| v142 | Agrupaciones con cartera de tarjetas (entrega del conjunto, elevador critico, retraso, alarmas, horas y costo sin entrar) + creacion plegada + projections_by_group cacheado |
 | v141 | Agrupaciones al reves (se crean los proyectos y luego se eligen al armar la agrupacion) + dashboard con fecha de entrega del conjunto, elevador critico, curva S consolidada, comparativa y alarmas |
 | v140 | Se quita el doble selector de plano: el uploader de PDF pasa a expander plegado (plan B) y los textos describen el flujo real; era residuo de v137 |
 | v139 | Auditoria de los 38 desplegables: los 4 que BORRAN pasan a sin-preseleccion + confirmacion, y los 6 que escriben en un proyecto tampoco preseleccionan; los de configuracion se dejan igual |
