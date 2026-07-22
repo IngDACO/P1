@@ -70,6 +70,21 @@ def _invalidate():
         pass
 
 
+def entradas_de(fila) -> dict:
+    """Entradas con las que se hizo un calculo guardado ({} si no las trae).
+
+    ⚠️ Hasta v148 `DatosJSON` solo guardaba los RESULTADOS, asi que un calculo
+    no se podia reabrir: faltaba justo lo que hacia falta. Desde v148 la columna
+    es {"entradas": {...}, "resultados": {...}}. Las filas con el formato viejo
+    devuelven {} y simplemente no ofrecen "reabrir".
+    """
+    try:
+        d = json.loads(str(fila.get("DatosJSON", "")) or "{}")
+    except Exception:
+        return {}
+    return d.get("entradas") or {} if isinstance(d, dict) else {}
+
+
 def list_for(pid: str) -> list:
     """Historial de cálculos de un proyecto, del más reciente al más antiguo."""
     out = [r for r in _records() if str(r.get("ProyectoID", "")) == str(pid)]

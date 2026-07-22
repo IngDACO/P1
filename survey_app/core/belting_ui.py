@@ -16,6 +16,7 @@ from core import plan_store
 from core import plan_ui
 from core.tool_pdf import tool_pdf
 from core.tool_save_ui import render_guardar
+from core import tool_save_ui
 
 _K = "belt_res"
 
@@ -33,6 +34,12 @@ def render_belting_tab():
     # El admin elige el proyecto; al campo le sale del clock-in. Si el proyecto
     # tiene su plano cargado, los valores se rellenan solos y NO hace falta
     # volver a subir el PDF (antes cada herramienta lo reparseaba, 30-70 s).
+    # Reabrir un calculo guardado: escribe claves de widget, asi que
+    # va ANTES de instanciar ninguno (regla v111).
+    _reab = tool_save_ui.aplicar_restauracion("belting")
+    if _reab:
+        st.info(f"↩️ Reabierto el cálculo **{_reab}**. Ajusta lo que necesites y vuelve a calcular.")
+
     _prj, _plano = plan_ui.selector_proyecto("belt")
     if _plano:
         _n = plan_ui.aplicar(_plano, {"hq": "belt_hq", "hgp": "belt_hgp"})

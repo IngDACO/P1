@@ -17,6 +17,7 @@ from core import maps
 from core.schedule import schedule_svg
 from core import survey_calc
 from core import toolruns
+from core import tool_save_ui
 from core import credentials
 from core import plan_data
 from core import timeclock
@@ -613,6 +614,30 @@ def _calculos_section(pid: str):
         "Fecha": _fecha_corta(r.get("Fecha")), "Por": r.get("Usuario"),
         "Resumen": r.get("Resumen"),
     } for r in runs]), hide_index=True, use_container_width=True)
+
+    # ── Reabrir un calculo en su herramienta (v148) ──
+    # `DatosJSON` guardaba solo los RESULTADOS, asi que un calculo no se podia
+    # retomar: para cambiar un dato habia que teclearlo todo otra vez. Desde
+    # v148 se guardan tambien las ENTRADAS y esto las devuelve a la herramienta.
+    _NAV = {"plomada": "🔩 Líneas de plomada", "rieles": "✂️ Corte de rieles",
+            "buffers": "🛡 Corte de buffers", "belting": "🎗 Belting"}
+    _reab = {f"{toolruns.HERRAMIENTAS.get(str(r.get('Herramienta','')), '🧮')} "
+             f"{_fecha_corta(r.get('Fecha'))} · {r.get('Resumen','')[:40]}": r
+             for r in runs
+             if toolruns.entradas_de(r) and str(r.get("Herramienta","")) in _NAV}
+    if _reab:
+        _r = ui.elegir("↩️ Reabrir un cálculo en su herramienta", _reab,
+                       key=f"reab_{pid}", vacio="— elige un cálculo —")
+        if _r and st.button("↩️ Reabrir en la herramienta", key=f"reabbtn_{pid}",
+                            use_container_width=True):
+            _h = str(_r.get("Herramienta", ""))
+            if tool_save_ui.pedir_reapertura(_r, _h, _NAV[_h]):
+                st.rerun()
+            else:
+                st.warning("Este cálculo no guardó sus entradas (es anterior a v148).")
+    elif runs:
+        st.caption("Los cálculos anteriores a v148 no guardaron sus entradas, "
+                   "así que solo puede descargarse su PDF.")
 
     # Descarga bajo demanda: igual que en Documentos, el `data=` de
     # download_button se evalua al renderizar y bajaba TODOS los PDF a la vez.

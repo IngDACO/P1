@@ -785,6 +785,42 @@ Al cargar el plano en el survey (app.py), autocompleta **RAIL = AlturaDiente** (
 espalda) del catálogo; si el código no está o no se detecta → aviso + entrada manual. **RAIL = AlturaDiente**
 (NO el ancho); AnchoDiente se guarda como dato secundario.
 
+## Reabrir un calculo guardado (v148)
+Salido de una auditoria del patron "se escribe y nadie lo lee": **`toolruns.DatosJSON` no tenia
+lector**. Cada plomada, corte o belting guardaba su JSON desde v129 y no habia forma de usarlo: de un
+calculo de la semana pasada solo podias bajar el PDF, no abrirlo y cambiar un numero.
+### ⚠️ Al ir a implementarlo, el dato guardado NO servia
+`DatosJSON` guardaba los **RESULTADOS**, no las entradas: plomada metia dbp/dbpw/d1/d2/verif..., que
+son salidas de `compute_plumb`, no BKS/RAIL/TKSW/BSR. **Faltaba justo lo necesario para reabrir.**
+Se corrigio el formato a `{"entradas": {...}, "resultados": {...}}`. Como la hoja `Calculos` tiene
+**0 filas** (nunca se guardo ni un calculo en produccion), no hay formato heredado que sostener; aun
+asi `entradas_de()` devuelve {} con el formato viejo y entonces no se ofrece reabrir.
+REGLA: antes de construir sobre un dato guardado, mirar **que contiene**, no que exista la columna.
+### Como se capturan las entradas
+`tool_save_ui._snapshot(herramienta)` recoge session_state **por PREFIJO** (`plb_`, `rc_`, `bc_`,
+`belt_`) en vez de enumerar claves: asi las que nacen sobre la marcha (`belt_hgpr_2`) entran solas y no
+hay una lista que mantener. Los `DataFrame` (matrices de rieles y buffers) viajan como
+`{"__df__": records}`. Se saltan las claves `*_editor` (los `st.data_editor`): su contenido ya vive en
+el `*_df` de al lado, que **NO es clave de widget** y por tanto es seguro restaurar.
+Los widgets del propio bloque de guardado (`prj_*`, `dl_*`, `save_*`) no empiezan por el prefijo, asi
+que quedan fuera solos — verificado.
+### ⚠️ La restauracion escribe claves de WIDGET (regla v111)
+`aplicar_restauracion()` va **antes de instanciar ningun widget** de la herramienta. Verificado por
+AST en las 4: la llamada esta DENTRO de su `render_*_tab` y su linea es anterior a la del primer
+widget (plumb 34<38, rieles 36<40, buffers 36<40, belting 39<43).
+### ⚠️ ERROR MIO: volvi a romper la indentacion, como en v120
+Mi parche sustituia el texto del ancla sin sus 4 espacios, asi que la linea reinsertada quedaba a
+columna 0 → `IndentationError` en los 4 ficheros. Se revirtio con `git checkout` y se rehizo leyendo
+la **indentacion real** de la linea ancla (`re.match(r"\s*", linea)`) y aplicandosela al bloque.
+REGLA: al insertar codigo por texto, NUNCA reescribir la linea ancla; insertar lineas ANTES de ella
+con su misma indentacion medida del fichero.
+### Verificacion: viaje completo, no solo "compila"
+Simulado el ciclo real de las 4 herramientas — session_state -> `_snapshot` -> `json.dumps` -> columna
+-> `json.loads` -> `entradas_de` -> `aplicar_restauracion` -> session_state vacio:
+plomada 11 claves, rieles 7 (con matriz), buffers 3 (con matriz), belting 6 (claves dinamicas).
+En las 4: nada falta, nada sobra, valores identicos, **matrices reconstruidas** y `bc_editor` excluido.
+Formato viejo y `DatosJSON` corrupto devuelven {} sin romper.
+
 ## Pestaña Archivos: el plano visible, fotos en galeria y descarga bajo demanda (v147)
 Cuatro mejoras tras quitar el paquete de obra en v146.
 ### ⚠️ La descarga era ANSIOSA: se bajaba TODO Drive en cada render
@@ -1758,7 +1794,7 @@ posicional + plano) → app.py, al cargar el PDF, setea `st.session_state["ns"]`
 resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NORTH SYD y AGECARE → NS=6
 (coincide con travel/floor-height HQ/HE).
 
-## Versiones desplegadas (v147 = actual)
+## Versiones desplegadas (v148 = actual)
 | Ver | Cambio principal |
 |---|---|
 | v5 | Extractor: CRLF fix, caso D valor-antes-label, sin pdfplumber |
@@ -1860,6 +1896,7 @@ resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NOR
 | v102 | Fix: NS se lee del plano (NUMBER OF STOPS) al cargar el PDF; default de init 6→2 (ya no queda pegado en 6) |
 | v103 | Rol conductor (2 relojes: jornada general + segmentos por proyecto, columna Tipo) + cronómetro en vivo para todos + reporte admin de horas del grupo (Mi grupo → ⏱ Horas) |
 | v104 | Credenciales/tickets por usuario (White Card, Forklift, Dogging/Rigging, licencia…): vencimiento+estado, foto/documento a Drive, radar en Resumen del día, avisos email/Telegram a admin+usuario; usuario ve las suyas (🎫 Mis credenciales) |
+| v148 | Reabrir un calculo guardado en su herramienta: DatosJSON no tenia lector y ademas solo guardaba los resultados; ahora guarda tambien las entradas y se puede retomar un calculo |
 | v147 | Archivos: datos del plano visibles en el proyecto, fotos de obra en galeria, quien subio cada documento y cuando, y la descarga deja de bajarse TODO Drive en cada render |
 | v146 | Se elimina el paquete de obra (~225 lineas): no aportaba ni un dibujo que no estuviera ya en el informe del cliente, que ademas se archiva solo. Residuo de v126 vaciado por v129/v130/v134 |
 | v145 | El fichaje guarda el ProyectoID: las horas y el costo de mano de obra dejan de perderse al renombrar un proyecto (regla unica ID-primero-nombre-de-respaldo); project_hours_bulk pasa a indexarse por ID en sus 8 call-sites |

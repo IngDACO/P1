@@ -12,6 +12,7 @@ from core import plan_store
 from core import plan_ui
 from core.tool_pdf import tool_pdf
 from core.tool_save_ui import render_guardar
+from core import tool_save_ui
 
 
 def render_plumb_tab():
@@ -28,6 +29,12 @@ def render_plumb_tab():
     # ── Proyecto: el plano ya leído ──────────────────────
     # El admin elige el proyecto; al campo le sale del clock-in. Si el proyecto
     # tiene su plano cargado, estos valores se rellenan sin abrir el PDF.
+    # Reabrir un calculo guardado: escribe claves de widget, asi que
+    # va ANTES de instanciar ninguno (regla v111).
+    _reab = tool_save_ui.aplicar_restauracion("plomada")
+    if _reab:
+        st.info(f"↩️ Reabierto el cálculo **{_reab}**. Ajusta lo que necesites y vuelve a calcular.")
+
     _prj, _plano = plan_ui.selector_proyecto("plb")
     if _plano:
         _n = plan_ui.aplicar(_plano, {
