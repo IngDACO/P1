@@ -815,6 +815,15 @@ ID distinto con nombre igual, fila vieja por nombre sin may/min, fila de otro, p
 `group_hours`, `over_budget`, `group_expenses` y `admin_digest` siguen dando lo mismo. Ademas: **cero
 nombres sin resolver NUEVOS** comparando por AST contra el commit anterior en los 5 modulos tocados
 (los preexistentes son cierres anidados, no fallos).
+### Relleno del historico EJECUTADO (22/07/2026, autorizado por el usuario)
+Se escribio `ProyectoID` en **6 de las 12 filas** del fichaje real, en 1 sola llamada, recalculando
+FRESCO al escribir y con asserts de que el plan seguia siendo el de la vista previa: filas 5/6/8/11 ->
+PRJ-0001 (la 8 es la `"Prueba1"` que se caia), 12 -> PRJ-0003, 13 -> PRJ-0002. Las otras 6 no se
+tocaron (5 sin proyecto, ninguna sin coincidencia). Verificado despues: horas 8.98/0/0.01 y suma 8.99
+**sin cambios**, MO 358.8 sin cambios, y `group_hours` deja de partir `prueba1`/`Prueba1` en dos porque
+`_nombre_actual` resuelve por ID. Comprobada la razon de ser del cambio: con el proyecto renombrado,
+cruzar por ID conserva **8.98 h** y cruzar por nombre da **0.00 h**.
+
 ### ⚠️ ERROR MIO: una lectura local NO es solo-lectura si has tocado HEADERS
 Dije que iba a auditar la hoja **sin escribir** y una ejecucion posterior escribio: al editar
 `timeclock.HEADERS` y luego llamar a `project_hours_bulk`, la lectura pasa por **`_cached_ws()`, que
