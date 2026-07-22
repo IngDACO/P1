@@ -785,6 +785,47 @@ Al cargar el plano en el survey (app.py), autocompleta **RAIL = AlturaDiente** (
 espalda) del catálogo; si el código no está o no se detecta → aviso + entrada manual. **RAIL = AlturaDiente**
 (NO el ancho); AnchoDiente se guarda como dato secundario.
 
+## Pestaña Estado: la grafica deja de ser una imagen plana (v143)
+Peticion del usuario: "las graficas se ven planas como simples imagenes, quiero algo mas integrado y
+que impacte mas; y los valores, mas informacion mejor presentada".
+### ⚠️ El problema de la grafica no era estetico
+La **brecha entre plan y real —que es toda la historia— habia que deducirla comparando dos lineas
+finas de 2.5 px**. `schedule_svg` reescrito con el lenguaje de los planos (v119-v123):
+- **La brecha se RELLENA** entre las dos curvas: **roja si vas por detras, verde si por delante**. Se
+  ve cuanto y desde cuando de un vistazo, en vez de estimarla a ojo.
+- **HOY cruza TAMBIEN el Gantt** (antes solo la curva) → se ve que actividad cae bajo la linea.
+- **Jerarquia en las barras**: terminada (verde) / en curso (azul) / **tocaba y sigue en 0% (roja
+  achurada + ● en el nombre)** / futura (gris). Ese cuarto estado es el que senala el problema.
+- **Proyeccion al ritmo actual** en trazo discontinuo hasta la fecha proyectada + area bajo la real.
+- ⚠️ **`proj_dias` de `schedule_projection` es la DIFERENCIA contra el plan (+tarde/−antes), NO el dia
+  absoluto.** Usarlo tal cual ponia el punto de proyeccion en el dia 32 en vez del 61.
+- ⚠️ **Tope al eje (`total × 1.32`)**: el eje se estira para que quepa la proyeccion, pero sin tope un
+  SPI malo (fecha lejanisima) **aplastaba el Gantt**, que es el contenido principal. Pasado el tope la
+  proyeccion se dibuja hasta el borde y se rotula "03/09 ▸".
+- ⚠️ **El eje siempre contiene HOY**: con el tope, un proyecto **pasado de fecha perdia su marca de
+  HOY** — justo el que peor va.
+### La informacion: `_diagnostico(ps)` + `_estado_section(pid, grupo, prj)`
+"SPI 0.47" no le dice nada a nadie en obra. Lo que si, calculado de lo que ya habia en `ps`:
+- **Ritmo real vs necesario**: "vas a **1,7 %/dia** y necesitas **6,4 %/dia**: hay que acelerar **×3,8**
+  en los 11 dias que quedan". Mismo dato que el SPI, en unidades que se accionan.
+- **Que tocaba hoy vs que se esta haciendo** (dos columnas) + el diagnostico: "el equipo sigue
+  terminando Brackets, Rieles y Cabina, asi que Puertas de rellano aun no ha arrancado. **Ahi esta el
+  retraso**". Es la causa, no la constatacion.
+- **Proximo hito** con fecha, **titular en una frase** y **tarjetas KPI** (`_kpi_card`) en vez de los 3
+  `st.metric` planos: avance real / deberia ir / desvio / situacion / fin proyectado.
+- ⚠️ **`proj["today_day"]` viene CLAMPADO al total**: el titular habria dicho "dia 29 de 29" en un
+  proyecto que lleva 40. Para mostrar el dia real hay que usar `ps["today_day"]`.
+- ⚠️ **El dia en que se abre la ventana de una actividad NO cuenta como retraso** (`inicio < hoy`
+  estricto): con `<=`, un proyecto **recien creado nacia con una actividad en rojo**.
+### Verificacion
+Geometria **medida en el DOM**, no mirada (leccion de v121): HOY dia 18 → x=339.9 ✓ · fin planificado
+dia 29 → x=416.8 ✓ · proyeccion dia 61.5 → x=644 (borde) ✓ · punto real 30.2% → y=435.7 ✓ · la banda
+de HOY cubre y 46→487 (Gantt + curva) ✓. Cinco escenarios (atrasado / adelantado / al dia / recien
+empieza / sin avance) + la **llamada minima `schedule_svg(sched)`** que usan `report.py`,
+`user_report.py` y `survey_ui.py` (sigue funcionando, sin HOY ni brecha).
+⚠️ `timedelta` **no estaba importado en projects_ui.py** — lo caza el chequeo de nombres libres, y
+habria sido NameError nada mas abrir la pestaña.
+
 ## Agrupaciones: cartera de tarjetas + creacion plegada (v142)
 La lista de agrupaciones era una tabla plana (ID / nombre / nº proyectos / avance) que **no decia nada
 util sin entrar**. Ahora usa el MISMO lenguaje que la cartera de proyectos (`_portfolio_html`):
@@ -1560,7 +1601,7 @@ posicional + plano) → app.py, al cargar el PDF, setea `st.session_state["ns"]`
 resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NORTH SYD y AGECARE → NS=6
 (coincide con travel/floor-height HQ/HE).
 
-## Versiones desplegadas (v142 = actual)
+## Versiones desplegadas (v143 = actual)
 | Ver | Cambio principal |
 |---|---|
 | v5 | Extractor: CRLF fix, caso D valor-antes-label, sin pdfplumber |
@@ -1662,6 +1703,7 @@ resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NOR
 | v102 | Fix: NS se lee del plano (NUMBER OF STOPS) al cargar el PDF; default de init 6→2 (ya no queda pegado en 6) |
 | v103 | Rol conductor (2 relojes: jornada general + segmentos por proyecto, columna Tipo) + cronómetro en vivo para todos + reporte admin de horas del grupo (Mi grupo → ⏱ Horas) |
 | v104 | Credenciales/tickets por usuario (White Card, Forklift, Dogging/Rigging, licencia…): vencimiento+estado, foto/documento a Drive, radar en Resumen del día, avisos email/Telegram a admin+usuario; usuario ve las suyas (🎫 Mis credenciales) |
+| v143 | Pestaña Estado: la brecha plan-vs-real se RELLENA (antes habia que deducirla comparando dos lineas), HOY cruza el Gantt, barras que marcan lo que tocaba y no arranco, proyeccion al ritmo actual + diagnostico (ritmo real vs necesario, que tocaba hoy vs que se hace, proximo hito) |
 | v142 | Agrupaciones con cartera de tarjetas (entrega del conjunto, elevador critico, retraso, alarmas, horas y costo sin entrar) + creacion plegada + projections_by_group cacheado |
 | v141 | Agrupaciones al reves (se crean los proyectos y luego se eligen al armar la agrupacion) + dashboard con fecha de entrega del conjunto, elevador critico, curva S consolidada, comparativa y alarmas |
 | v140 | Se quita el doble selector de plano: el uploader de PDF pasa a expander plegado (plan B) y los textos describen el flujo real; era residuo de v137 |

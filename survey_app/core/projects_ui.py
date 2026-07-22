@@ -2,6 +2,8 @@
 UI del panel de administración de proyectos (rol administrador).
 Navegación con st.radio (NO st.tabs) para evitar mezcla de contenido.
 """
+from datetime import timedelta
+
 import pandas as pd
 import streamlit as st
 import streamlit.components.v1 as components
@@ -712,6 +714,174 @@ def _induccion_section(pid, prj, grupo=None, allow_send=False):
                     st.success(f"📨 Enviado a {n} usuario(s) de campo.")
 
 
+def _diagnostico(ps: dict) -> dict:
+    """Traduce el cronograma a lo accionable. Todo sale de `ps`; no lee nada nuevo.
+
+    ⚠️ "SPI 0.47" no le dice nada a nadie en obra. Lo que sí: a qué ritmo vas, a
+    qué ritmo tendrías que ir, **qué actividad tocaba hoy y sigue sin arrancar**
+    y cuál es el próximo hito. Eso es lo que explica el retraso; el % solo lo
+    constata.
+    """
+    sched = ps["sched"]
+    acts  = sched["activities"]
+    av    = ps.get("avances") or []
+    proj  = ps.get("proj") or {}
+    hoy   = ps["today_day"]
+    total = max(1, sched["total_dias"])
+    ini   = sched["start_date"]
+
+    ev = proj.get("ev", 0.0)
+
+    # Ritmo: %/dia hecho vs %/dia que hace falta para llegar a la fecha
+    ritmo_real = (ev / hoy) if hoy and hoy > 0 else None
+    dias_rest  = total - hoy
+    ritmo_nec  = ((100.0 - ev) / dias_rest) if dias_rest > 0 else None
+    factor     = (ritmo_nec / ritmo_real) if (ritmo_real and ritmo_real > 0.01
+                                              and ritmo_nec) else None
+
+    tocaban, en_curso, proximo = [], [], None
+    for i, a in enumerate(acts):
+        pct  = float(av[i]) if i < len(av) else 0.0
+        fin  = a["inicio"] + a["duracion"]
+        f_i  = ini + timedelta(days=int(a["inicio"]))
+        # `inicio < hoy` (estricto): el dia en que se abre la ventana aun no
+        # cuenta como retraso — si no, un proyecto recien creado nace en rojo.
+        if a["inicio"] < hoy <= fin and pct < 100:
+            tocaban.append({"nombre": a["nombre"], "avance": pct,
+                            "desde": f_i, "dur": a["duracion"]})
+        if 0 < pct < 100:
+            en_curso.append({"nombre": a["nombre"], "avance": pct,
+                             "tarde": hoy > fin})     # arrastrada: ya paso su ventana
+        if proximo is None and a["inicio"] > hoy:
+            proximo = {"nombre": a["nombre"], "fecha": f_i,
+                       "faltan": a["inicio"] - hoy}
+
+    # Sin arrancar y ya tocaba: es LA causa del retraso, no un detalle
+    paradas = [x for x in tocaban if x["avance"] <= 0]
+    return {"ritmo_real": ritmo_real, "ritmo_nec": ritmo_nec, "factor": factor,
+            "dias_rest": dias_rest, "tocaban": tocaban, "paradas": paradas,
+            "en_curso": en_curso, "arrastradas": [x for x in en_curso if x["tarde"]],
+            "proximo": proximo, "ev": ev, "pv": proj.get("pv", 0.0)}
+
+
+def _estado_section(pid: str, grupo: str, prj: dict):
+    """Pestaña 📊 Estado: alarmas, cronograma y el diagnostico de por que vas asi."""
+    _alerts_section(pid, grupo, prj.get("Nombre", ""), allow_report=False)
+
+    ps = P.project_schedule(pid)
+    if not (ps and ps["sched"].get("activities")):
+        st.info("Este proyecto no tiene actividades, así que no hay cronograma "
+                "que seguir. Añádelas en ✏️ Datos.")
+        return
+
+    d    = _diagnostico(ps)
+    proj = ps.get("proj") or {}
+    dv   = proj.get("desvio", 0.0)
+    dg   = proj.get("dias_gap", 0.0)
+
+    # ── Titular: una frase que diga como va, antes de cualquier numero ──
+    if dv <= -1:
+        _tit, _col = (f"Vas **{abs(dv):.0f} puntos por debajo** del plan", "#c0392b")
+    elif dv >= 1:
+        _tit, _col = (f"Vas **{dv:.0f} puntos por encima** del plan", "#1e8449")
+    else:
+        _tit, _col = ("Vas **en línea con el plan**", "#2e6da4")
+    # ⚠️ proj["today_day"] viene CLAMPADO al total: en un proyecto pasado de fecha
+    # diria "día 29 de 29" llevando 40. El real es ps["today_day"].
+    _hoy_real = ps["today_day"]
+    _tot      = proj.get("total", 0)
+    _dia_txt  = (f"día {_hoy_real} de {_tot}" if _hoy_real <= _tot
+                 else f"día {_hoy_real} — {_hoy_real - _tot} más de los {_tot} planificados")
+    st.markdown(f"<div style='font-size:17px;margin-bottom:8px'>{_tit} "
+                f"<span style='color:#6b7280;font-size:14px'>· {_dia_txt}</span></div>",
+                unsafe_allow_html=True)
+
+    # ── KPIs (tarjetas, no st.metric planos) ──
+    _fin = (proj["fecha_proj"].strftime("%d/%m/%Y")
+            if proj.get("fecha_proj") else "—")
+    _pd  = proj.get("proj_dias")
+    _cf  = "#c0392b" if (_pd is not None and _pd > 0.5) else (
+           "#1e8449" if (_pd is not None and _pd < -0.5) else None)
+    _est = ("En fecha" if abs(dg) < 0.5
+            else f"{abs(dg):.0f} d {'de retraso' if dg > 0 else 'de adelanto'}")
+    tarj = [_kpi_card("Avance real", f"{d['ev']:.0f}%"),
+            _kpi_card("Debería ir", f"{d['pv']:.0f}%"),
+            _kpi_card("Desvío", f"{dv:+.0f}%", _col),
+            _kpi_card("Situación", _est, "#c0392b" if dg > 0.5 else None),
+            _kpi_card("Fin proyectado", _fin, _cf)]
+    st.markdown('<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px">'
+                + "".join(tarj) + "</div>", unsafe_allow_html=True)
+
+    # ── El ritmo: mas accionable que el SPI ──
+    if d["ritmo_real"] is not None and d["ritmo_nec"] is not None:
+        if d["dias_rest"] <= 0:
+            st.warning(f"⏱ La fecha de fin planificada ya pasó y queda "
+                       f"**{100 - d['ev']:.0f}%** por completar.")
+        elif d["factor"] and d["factor"] > 1.15:
+            st.error(f"⏱ Vas a **{d['ritmo_real']:.1f} %/día** y necesitas "
+                     f"**{d['ritmo_nec']:.1f} %/día** para llegar a la fecha: "
+                     f"hay que **acelerar ×{d['factor']:.1f}** en los "
+                     f"{d['dias_rest']:.0f} días que quedan.")
+        elif d["factor"] and d["factor"] < 0.85:
+            st.success(f"⏱ Vas a **{d['ritmo_real']:.1f} %/día** y con "
+                       f"**{d['ritmo_nec']:.1f} %/día** llegas: hay margen.")
+        else:
+            st.info(f"⏱ Vas a **{d['ritmo_real']:.1f} %/día**, justo el ritmo "
+                    f"que hace falta ({d['ritmo_nec']:.1f} %/día).")
+
+    # ── Que tocaba hoy vs que se esta haciendo: el porque del retraso ──
+    c1, c2 = st.columns(2)
+    with c1:
+        st.markdown("**📌 Tocaba hoy**")
+        if not d["tocaban"]:
+            st.caption("Ninguna actividad tiene su ventana abierta hoy.")
+        for x in d["tocaban"]:
+            if x["avance"] <= 0:
+                st.markdown(f"🔴 **{x['nombre']}** — sin empezar, arrancaba el "
+                            f"{x['desde'].strftime('%d/%m')} ({x['dur']:.0f} d)")
+            else:
+                st.markdown(f"🟢 {x['nombre']} — {x['avance']:.0f}%")
+    with c2:
+        st.markdown("**🔧 En curso ahora**")
+        if not d["en_curso"]:
+            st.caption("Ninguna actividad entre 1% y 99%.")
+        for x in d["en_curso"]:
+            st.markdown(("⏳ " if x["tarde"] else "▶️ ")
+                        + f"{x['nombre']} — {x['avance']:.0f}%"
+                        + (" _(arrastrada)_" if x["tarde"] else ""))
+
+    # El diagnostico: el equipo sigue en trabajo viejo y lo de hoy no arranca
+    if d["paradas"] and d["arrastradas"]:
+        st.warning("🩺 El equipo sigue terminando **"
+                   + ", ".join(x["nombre"] for x in d["arrastradas"][:3])
+                   + "**, así que **"
+                   + ", ".join(x["nombre"] for x in d["paradas"][:3])
+                   + "** aún no ha arrancado. Ahí está el retraso.")
+    elif d["paradas"]:
+        st.warning("🩺 Sin empezar y ya tocaba: **"
+                   + ", ".join(x["nombre"] for x in d["paradas"][:3]) + "**.")
+
+    if d["proximo"]:
+        st.caption(f"🎯 Próximo hito: **{d['proximo']['nombre']}** arranca el "
+                   f"{d['proximo']['fecha'].strftime('%d/%m/%Y')} "
+                   f"(en {d['proximo']['faltan']:.0f} días).")
+
+    # ── La grafica ──
+    st.markdown("**📆 Cronograma y avance**")
+    n = len(ps["sched"]["activities"])
+    components.html(
+        '<!DOCTYPE html><html><body style="margin:0;background:transparent">'
+        + schedule_svg(ps["sched"], real_curve=ps["real"], today_day=ps["today_day"],
+                       avances=ps.get("avances"), proj=proj,
+                       titulo=prj.get("Nombre", ""))
+        + '</body></html>',
+        height=int(300 + n * 21), scrolling=False,
+    )
+    st.caption("La **banda de color** entre las dos curvas es la brecha contra el "
+               "plan (roja si vas por detrás, verde si por delante). ● rojo = la "
+               "actividad ya debería haber arrancado.")
+
+
 def _detalle_proyecto(pid: str, grupo: str = None):
     prj = P.get_project(pid)
     if not prj:
@@ -752,48 +922,7 @@ def _detalle_proyecto(pid: str, grupo: str = None):
 
     if _sec == "📊 Estado":
         # ── Alarmas / avisos del proyecto ──
-        _alerts_section(pid, grupo, prj.get("Nombre", ""), allow_report=False)
-
-        # ── Cronograma: curva S planificada vs real ──
-        ps = P.project_schedule(pid)
-        if ps and ps["sched"].get("activities"):
-            st.markdown("**📆 Cronograma — curva S planificada vs real**")
-            st.caption("Naranja = planificada (original) · Verde = real (avance del campo) · "
-                       "línea roja = HOY.")
-            n = len(ps["sched"]["activities"])
-            components.html(
-                '<!DOCTYPE html><html><body style="margin:0;background:transparent">'
-                + schedule_svg(ps["sched"], real_curve=ps["real"],
-                               today_day=ps["today_day"], avances=ps.get("avances"))
-                + '</body></html>',
-                height=int(280 + n * 22), scrolling=False,
-            )
-
-            # ── Proyección avance vs fecha (earned value) ──
-            proj = ps.get("proj")
-            if proj and proj.get("pv", 0) > 0:
-                dv, dg = proj["desvio"], proj["dias_gap"]
-                icon = "🟢" if dv >= 1 else ("🔴" if dv <= -1 else "🟡")
-                st.markdown(f"**🔮 Proyección (avance vs fecha)**  {icon}")
-                q1, q2, q3 = st.columns(3)
-                q1.metric("Desvío hoy", f"{dv:+.0f}%",
-                          help="Avance real − planificado a la fecha de hoy")
-                q2.metric("Estado hoy",
-                          "En fecha" if abs(dg) < 0.5
-                          else f"{abs(dg):.0f} d {'retraso' if dg > 0 else 'adelanto'}")
-                if proj["proj_dias"] is not None and proj["fecha_proj"]:
-                    q3.metric("Fin proyectado", proj["fecha_proj"].strftime("%d/%m/%Y"))
-                    pdi = proj["proj_dias"]
-                    fin = ("a tiempo" if abs(pdi) < 0.5
-                           else f"**{abs(pdi):.0f} días de {'retraso' if pdi > 0 else 'adelanto'}**")
-                    st.caption(f"A este ritmo (SPI = {proj['spi']}) terminarías {fin}.  "
-                               f"Real {proj['ev']:.0f}% vs planificado {proj['pv']:.0f}% "
-                               f"al día {proj['today_day']} de {proj['total']}.")
-                else:
-                    q3.metric("Fin proyectado", "—")
-                    st.caption(f"Real {proj['ev']:.0f}% vs planificado {proj['pv']:.0f}% "
-                               f"al día {proj['today_day']} de {proj['total']}. Sin avance suficiente "
-                               "para proyectar la fecha de fin.")
+        _estado_section(pid, grupo, prj)
 
     elif _sec == "✏️ Datos":
         # ── Instrucciones e inducciones ──

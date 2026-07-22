@@ -212,129 +212,222 @@ def _esc(s: str) -> str:
 
 
 def schedule_svg(sched: dict, real_curve: list = None, today_day: float = None,
-                 avances: list = None) -> str:
-    """SVG con Gantt (arriba) + curva S (abajo) compartiendo el eje de tiempo.
-    Sin <marker>/<defs> → compatible con Streamlit y svglib.
+                 avances: list = None, proj: dict = None, titulo: str = "") -> str:
+    """Gantt + curva S con el lenguaje de los planos técnicos (v143).
 
-    Si `real_curve` (de real_scurve) viene, se superpone la curva REAL (verde) sobre la
-    planificada (naranja) y se marca la línea `today_day` ("HOY").
-    Si `avances` viene (alineado con las actividades), cada barra del Gantt se "llena"
-    según el % de avance de esa actividad (verde si 100%). Sin `avances`, barra sólida."""
+    El problema de la version anterior no era estetico: la BRECHA entre plan y
+    real —que es toda la historia— había que deducirla comparando dos lineas
+    finas. Aqui la brecha se RELLENA (roja si vas por detras, verde si por
+    delante), asi se ve cuanto y desde cuando de un vistazo.
+
+    Ademas: areas con cuerpo, HOY como banda que cruza TAMBIEN el Gantt (antes
+    solo la curva), proyeccion al ritmo actual en trazo discontinuo, y jerarquia
+    en las barras: terminada / en curso / **deberia haber empezado** / futura.
+
+    `proj` es lo que devuelve schedule_projection. OJO: su `proj_dias` es la
+    DIFERENCIA contra el plan (+ tarde / − antes), no el dia absoluto.
+
+    Sin <marker>/<defs> → compatible con Streamlit y svglib.
+    """
     acts  = sched["activities"]
     total = max(1, sched["total_dias"])
     start = sched["start_date"]
     n     = len(acts)
 
-    VW    = 700
-    ML    = 210          # margen izq. para nombres
-    MR    = 40
-    MT    = 46
-    rowH  = 22
-    gantt_h = n * rowH
-    gap   = 30
-    sc_h  = 150          # alto curva S
-    xaxis_h = 34
-    VH    = MT + gantt_h + gap + sc_h + xaxis_h
-
-    pw = VW - ML - MR
-    def sx(day): return ML + (day / total) * pw
-
-    p = [f'<svg viewBox="0 0 {VW} {VH}" xmlns="http://www.w3.org/2000/svg" '
-         f'style="width:100%;max-width:{VW}px;font-family:system-ui,sans-serif;display:block;margin:0 auto">']
-    p.append(f'<text x="{VW/2:.0f}" y="20" text-anchor="middle" font-size="14" '
-             f'fill="#1a3a5c" font-weight="bold">Cronograma y curva S del proyecto</text>')
-    p.append(f'<text x="{VW/2:.0f}" y="36" text-anchor="middle" font-size="9" fill="#888">'
-             f'{start.strftime("%d/%m/%Y")} → {sched["fecha_fin"].strftime("%d/%m/%Y")}  ·  '
-             f'{total} días  ·  {n} actividades</text>')
-
-    # ── Gantt ───────────────────────────────────────────────
+    VW, ML, MR, MT = 760, 214, 116, 52
+    rowH, gap, sc_h, xaxis_h = 21, 34, 170, 36
+    gantt_h   = n * rowH
+    VH        = MT + gantt_h + gap + sc_h + xaxis_h + 26
+    pw        = VW - ML - MR
     gantt_top = MT
-    # líneas verticales de referencia (cada ~5 días)
-    step = 5 if total > 15 else (2 if total > 6 else 1)
+    sc_top    = gantt_top + gantt_h + gap
+
+    # Dia absoluto en que se terminaria al ritmo actual (proj_dias es el DELTA)
+    proj_total = None
+    if proj and proj.get("proj_dias") is not None:
+        proj_total = total + float(proj["proj_dias"])
+
+    # El eje se estira para que quepa la proyeccion, pero con TOPE: si el ritmo
+    # actual da una fecha lejanisima, estirar hasta alli aplastaria el Gantt (que
+    # es el contenido principal). Pasado el tope la proyeccion se dibuja hasta el
+    # borde y la fecha se rotula con "▸".
+    tope    = total * 1.32
+    fin_eje = max(1.0, min(max(total, proj_total or 0), tope))
+    if today_day is not None:                 # HOY SIEMPRE tiene que caber:
+        fin_eje = max(fin_eje, float(today_day))   # si no, un proyecto pasado de
+                                                   # fecha perdia su marca de HOY
+    proj_x  = min(proj_total, fin_eje) if proj_total else None
+    proj_cortada = bool(proj_total and proj_total > fin_eje + 0.01)
+
+    def sx(day): return ML + (day / fin_eje) * pw
+    def sy(pct): return sc_top + (1 - pct / 100.0) * sc_h
+
+    C_PLAN, C_REAL, C_HOY, C_GRIS = "#BA7517", "#1e8449", "#c0392b", "#9aa7b8"
+    p = [f'<svg viewBox="0 0 {VW} {VH}" xmlns="http://www.w3.org/2000/svg" '
+         f'style="width:100%;max-width:{VW}px;font-family:Arial,Helvetica,sans-serif;'
+         f'display:block;margin:0 auto">',
+         f'<rect x="0" y="0" width="{VW}" height="{VH}" fill="#ffffff"/>',
+         f'<text x="18" y="24" font-size="13" fill="#1a3a5c" font-weight="bold">'
+         f'CRONOGRAMA Y AVANCE</text>',
+         f'<text x="18" y="39" font-size="8.5" fill="#7a8699">'
+         f'{_esc(titulo) + " · " if titulo else ""}'
+         f'{start.strftime("%d/%m/%Y")} → {sched["fecha_fin"].strftime("%d/%m/%Y")} · '
+         f'{total} días · {n} actividades</text>']
+
+    # ── Rejilla vertical: la comparten Gantt y curva ────────
+    step = 5 if fin_eje > 15 else (2 if fin_eje > 6 else 1)
     d = 0
-    while d <= total:
+    while d <= fin_eje:
         x = sx(d)
-        p.append(f'<line x1="{x:.1f}" y1="{gantt_top:.1f}" x2="{x:.1f}" '
-                 f'y2="{gantt_top+gantt_h+sc_h+gap:.1f}" stroke="#eee" stroke-width="1"/>')
+        p.append(f'<line x1="{x:.1f}" y1="{gantt_top-6:.1f}" x2="{x:.1f}" '
+                 f'y2="{sc_top+sc_h:.1f}" stroke="#f0f2f6" stroke-width="1"/>')
         d += step
 
-    for i, a in enumerate(acts):
-        y = gantt_top + i * rowH
-        # nombre
-        nm = a["nombre"]
-        if len(nm) > 30: nm = nm[:29] + "…"
-        p.append(f'<text x="6" y="{y+rowH*0.68:.1f}" font-size="9.5" fill="#333">{_esc(nm)}</text>')
-        # barra
-        x0 = sx(a["inicio"]); x1 = sx(a["inicio"] + a["duracion"])
-        w  = max(2, x1 - x0)
-        if avances is not None:
-            av = max(0.0, min(100.0, float(avances[i]) if i < len(avances) else 0.0))
-            # fondo tenue (planificado) + relleno según avance
-            p.append(f'<rect x="{x0:.1f}" y="{y+3:.1f}" width="{w:.1f}" height="{rowH-8}" '
-                     f'rx="3" fill="#dbe6f2" stroke="#2e6da4" stroke-width="0.7"/>')
-            fw = w * av / 100.0
-            if fw > 0.5:
-                col = "#27ae60" if av >= 100 else "#2e6da4"
-                p.append(f'<rect x="{x0:.1f}" y="{y+3:.1f}" width="{fw:.1f}" height="{rowH-8}" '
-                         f'rx="3" fill="{col}"/>')
-            p.append(f'<text x="{x1+4:.1f}" y="{y+rowH*0.68:.1f}" font-size="8" fill="#2e6da4">'
-                     f'{a["peso"]:.0f}% · {av:.0f}%</text>')
-        else:
-            p.append(f'<rect x="{x0:.1f}" y="{y+3:.1f}" width="{w:.1f}" height="{rowH-8}" '
-                     f'rx="3" fill="#2e6da4"/>')
-            p.append(f'<text x="{x1+4:.1f}" y="{y+rowH*0.68:.1f}" font-size="8" fill="#2e6da4">'
-                     f'{a["peso"]:.0f}%</text>')
+    # ── Banda de HOY: cruza Gantt Y curva (antes solo la curva) ──
+    if today_day is not None and 0 <= today_day <= fin_eje:
+        hx = sx(today_day)
+        p.append(f'<rect x="{hx-2:.1f}" y="{gantt_top-6:.1f}" width="4" '
+                 f'height="{sc_top+sc_h-gantt_top+6:.1f}" fill="{C_HOY}" fill-opacity="0.09"/>')
+        p.append(f'<line x1="{hx:.1f}" y1="{gantt_top-6:.1f}" x2="{hx:.1f}" '
+                 f'y2="{sc_top+sc_h:.1f}" stroke="{C_HOY}" stroke-width="1.1" '
+                 f'stroke-dasharray="5,3"/>')
+        p.append(f'<text x="{hx:.1f}" y="{gantt_top-11:.1f}" text-anchor="middle" '
+                 f'font-size="8.5" fill="{C_HOY}" font-weight="bold">HOY</text>')
 
-    # ── Curva S ─────────────────────────────────────────────
-    sc_top = gantt_top + gantt_h + gap
-    def sy(pct): return sc_top + (1 - pct/100.0) * sc_h
-    # ejes/grilla horizontal 0/25/50/75/100
+    # ── Gantt con jerarquia ─────────────────────────────────
+    for i, a in enumerate(acts):
+        y  = gantt_top + i * rowH
+        av = max(0.0, min(100.0, float(avances[i])
+                          if (avances and i < len(avances)) else 0.0))
+        x0, x1 = sx(a["inicio"]), sx(a["inicio"] + a["duracion"])
+        w = max(2.0, x1 - x0)
+
+        # ¿deberia estar en curso hoy?
+        ventana = (today_day is not None
+                   and a["inicio"] <= today_day <= a["inicio"] + a["duracion"])
+        if av >= 100:
+            col, txt = C_REAL, "#6b7280"          # terminada
+        elif av > 0:
+            col, txt = "#2e6da4", "#1f2937"       # en curso
+        elif ventana:
+            col, txt = C_HOY, C_HOY               # tocaba y no ha arrancado
+        else:
+            col, txt = C_GRIS, C_GRIS             # futura
+
+        nm = a["nombre"]
+        if len(nm) > 32:
+            nm = nm[:31] + "…"
+        if ventana and av < 100:
+            p.append(f'<text x="6" y="{y+rowH*0.70:.1f}" font-size="9" fill="{C_HOY}">●</text>')
+        p.append(f'<text x="15" y="{y+rowH*0.70:.1f}" font-size="9.5" fill="{txt}">'
+                 f'{_esc(nm)}</text>')
+        p.append(f'<rect x="{x0:.1f}" y="{y+3:.1f}" width="{w:.1f}" height="{rowH-8}" '
+                 f'rx="2.5" fill="#eef1f5" stroke="#dfe4ec" stroke-width="0.7"/>')
+        if av > 0:
+            p.append(f'<rect x="{x0:.1f}" y="{y+3:.1f}" width="{w*av/100.0:.1f}" '
+                     f'height="{rowH-8}" rx="2.5" fill="{col}" fill-opacity="0.92"/>')
+        elif ventana:
+            for k in range(int(w // 7) + 1):      # achurado = tocaba y sigue en 0
+                xx = x0 + 4 + k * 7
+                if xx < x0 + w - 1:
+                    p.append(f'<line x1="{xx:.1f}" y1="{y+rowH-6:.1f}" x2="{xx+5:.1f}" '
+                             f'y2="{y+4:.1f}" stroke="{C_HOY}" stroke-width="0.6" '
+                             f'stroke-opacity="0.5"/>')
+        p.append(f'<text x="{x0+w+5:.1f}" y="{y+rowH*0.70:.1f}" font-size="8" '
+                 f'fill="{txt}">{av:.0f}%</text>')
+
+    # ── Curva S: rejilla ────────────────────────────────────
     for pct in (0, 25, 50, 75, 100):
         yy = sy(pct)
         p.append(f'<line x1="{ML:.1f}" y1="{yy:.1f}" x2="{VW-MR:.1f}" y2="{yy:.1f}" '
-                 f'stroke="{"#ccc" if pct in (0,100) else "#eee"}" stroke-width="1"/>')
-        p.append(f'<text x="{ML-6:.1f}" y="{yy+3:.1f}" text-anchor="end" font-size="8" fill="#999">{pct}%</text>')
-    p.append(f'<text x="{ML-6:.1f}" y="{sc_top-4:.1f}" text-anchor="end" font-size="8.5" '
-             f'fill="#BA7517" font-weight="bold">Avance</text>')
-    # polilínea de la curva S planificada
-    pts = " ".join(f"{sx(dd):.1f},{sy(pc):.1f}" for dd, pc in sched["scurve"])
-    p.append(f'<polyline points="{pts}" fill="none" stroke="#BA7517" stroke-width="2.5"/>')
-    # puntos
-    for dd, pc in sched["scurve"]:
-        if int(dd) % max(1, step) == 0:
-            p.append(f'<circle cx="{sx(dd):.1f}" cy="{sy(pc):.1f}" r="2.2" fill="#BA7517"/>')
+                 f'stroke="{"#c3ccd8" if pct in (0, 100) else "#f0f2f6"}" stroke-width="1"/>')
+        p.append(f'<text x="{ML-7:.1f}" y="{yy+3:.1f}" text-anchor="end" font-size="8" '
+                 f'fill="{C_GRIS}">{pct}%</text>')
 
-    # ── Curva S REAL superpuesta + línea HOY ────────────────
+    plan = sched["scurve"]
+
+    # ── LA BRECHA rellena: lo que antes habia que deducir a ojo ──
+    if real_curve and len(real_curve) > 1:
+        arriba = " ".join(f"{sx(dd):.1f},{sy(_scurve_at(sched, dd)):.1f}"
+                          for dd, _ in real_curve)
+        abajo  = " ".join(f"{sx(dd):.1f},{sy(pc):.1f}" for dd, pc in reversed(real_curve))
+        atras  = real_curve[-1][1] < _scurve_at(sched, real_curve[-1][0])
+        p.append(f'<polygon points="{arriba} {abajo}" '
+                 f'fill="{C_HOY if atras else C_REAL}" fill-opacity="0.15"/>')
+        # area bajo la real, para que tenga cuerpo
+        base = sy(0)
+        p.append(f'<polygon points="{sx(real_curve[0][0]):.1f},{base:.1f} '
+                 + " ".join(f"{sx(dd):.1f},{sy(pc):.1f}" for dd, pc in real_curve)
+                 + f' {sx(real_curve[-1][0]):.1f},{base:.1f}" '
+                 f'fill="{C_REAL}" fill-opacity="0.10"/>')
+
+    p.append('<polyline points="'
+             + " ".join(f"{sx(dd):.1f},{sy(pc):.1f}" for dd, pc in plan)
+             + f'" fill="none" stroke="{C_PLAN}" stroke-width="2.4"/>')
     if real_curve:
-        rpts = " ".join(f"{sx(dd):.1f},{sy(pc):.1f}" for dd, pc in real_curve)
-        p.append(f'<polyline points="{rpts}" fill="none" stroke="#2e8b57" stroke-width="2.5"/>')
-        for dd, pc in real_curve:
-            if int(dd) % max(1, step) == 0:
-                p.append(f'<circle cx="{sx(dd):.1f}" cy="{sy(pc):.1f}" r="2.2" fill="#2e8b57"/>')
-        # leyenda (arriba a la derecha del área de la curva)
-        lgx = VW - MR - 140
-        lgy = sc_top + 9
-        p.append(f'<rect x="{lgx:.1f}" y="{lgy-6:.1f}" width="12" height="3" fill="#BA7517"/>')
-        p.append(f'<text x="{lgx+16:.1f}" y="{lgy:.1f}" font-size="8" fill="#666">Planificada</text>')
-        p.append(f'<rect x="{lgx+78:.1f}" y="{lgy-6:.1f}" width="12" height="3" fill="#2e8b57"/>')
-        p.append(f'<text x="{lgx+94:.1f}" y="{lgy:.1f}" font-size="8" fill="#666">Real</text>')
-    if today_day is not None and 0 <= today_day <= total:
-        hx = sx(today_day)
-        p.append(f'<line x1="{hx:.1f}" y1="{sc_top:.1f}" x2="{hx:.1f}" y2="{sc_top+sc_h:.1f}" '
-                 f'stroke="#c0392b" stroke-width="1.2" stroke-dasharray="4,3"/>')
-        p.append(f'<text x="{hx:.1f}" y="{sc_top-4:.1f}" text-anchor="middle" font-size="8" '
-                 f'fill="#c0392b" font-weight="bold">HOY</text>')
+        p.append('<polyline points="'
+                 + " ".join(f"{sx(dd):.1f},{sy(pc):.1f}" for dd, pc in real_curve)
+                 + f'" fill="none" stroke="{C_REAL}" stroke-width="2.8"/>')
+        if len(real_curve) > 1:
+            ddl, pcl = real_curve[-1]
+            p.append(f'<circle cx="{sx(ddl):.1f}" cy="{sy(pcl):.1f}" r="4" fill="#ffffff" '
+                     f'stroke="{C_REAL}" stroke-width="2"/>')
+            p.append(f'<text x="{sx(ddl)+7:.1f}" y="{sy(pcl)-6:.1f}" font-size="9" '
+                     f'fill="{C_REAL}" font-weight="bold">{pcl:.0f}%</text>')
 
-    # ── Eje X (fechas) ──────────────────────────────────────
+    # ── Proyeccion al ritmo actual ──────────────────────────
+    C_PROJ = C_REAL
+    if proj_x and real_curve and len(real_curve) > 1:
+        ddl, pcl = real_curve[-1]
+        tarde  = proj_total > total + 0.5
+        C_PROJ = C_HOY if tarde else C_REAL
+        # si esta recortada, la pendiente se mantiene y se corta en el borde
+        y_fin = (sy(pcl) + (sy(100) - sy(pcl)) * (proj_x - ddl) / (proj_total - ddl)
+                 if proj_total > ddl else sy(100))
+        p.append(f'<line x1="{sx(ddl):.1f}" y1="{sy(pcl):.1f}" x2="{sx(proj_x):.1f}" '
+                 f'y2="{y_fin:.1f}" stroke="{C_PROJ}" stroke-width="1.6" '
+                 f'stroke-dasharray="6,4" stroke-opacity="0.85"/>')
+        if not proj_cortada:
+            p.append(f'<circle cx="{sx(proj_x):.1f}" cy="{sy(100):.1f}" r="3.5" '
+                     f'fill="{C_PROJ}"/>')
+        if proj.get("fecha_proj"):
+            _fp = proj["fecha_proj"].strftime("%d/%m")
+            p.append(f'<text x="{sx(proj_x) - (4 if proj_cortada else 0):.1f}" '
+                     f'y="{y_fin - 8:.1f}" '
+                     f'text-anchor="{"end" if proj_cortada else "middle"}" font-size="8.5" '
+                     f'fill="{C_PROJ}" font-weight="bold">'
+                     f'{_fp}{" ▸" if proj_cortada else ""}</text>')
+    # fin planificado
+    p.append(f'<line x1="{sx(total):.1f}" y1="{sy(0):.1f}" x2="{sx(total):.1f}" '
+             f'y2="{sy(100):.1f}" stroke="{C_PLAN}" stroke-width="1" '
+             f'stroke-dasharray="3,3" stroke-opacity="0.7"/>')
+
+    # ── Leyenda ─────────────────────────────────────────────
+    lgx, lgy = ML, sc_top + sc_h + 30
+    leyenda = [("Planificado", C_PLAN, False), ("Real", C_REAL, False)]
+    if real_curve and len(real_curve) > 1:
+        leyenda.append(("Brecha", C_HOY, True))
+    if proj_x and real_curve and len(real_curve) > 1:      # igual que al dibujarla
+        leyenda.append(("Proyección al ritmo actual", C_PROJ, True))
+    for et, col, tenue in leyenda:
+        p.append(f'<rect x="{lgx:.1f}" y="{lgy-7:.1f}" width="13" height="3.5" '
+                 f'fill="{col}"' + (' fill-opacity="0.28"' if tenue else '') + '/>')
+        p.append(f'<text x="{lgx+18:.1f}" y="{lgy:.1f}" font-size="8" '
+                 f'fill="#7a8699">{et}</text>')
+        lgx += 30 + len(et) * 5.4
+
+    # ── Eje de fechas ───────────────────────────────────────
     xaxis_y = sc_top + sc_h
     d = 0
-    while d <= total:
+    while d <= fin_eje:
         x = sx(d)
-        fecha = (start + timedelta(days=int(d)))
-        p.append(f'<line x1="{x:.1f}" y1="{xaxis_y:.1f}" x2="{x:.1f}" y2="{xaxis_y+4:.1f}" stroke="#999" stroke-width="1"/>')
-        p.append(f'<text x="{x:.1f}" y="{xaxis_y+15:.1f}" text-anchor="middle" font-size="7.5" fill="#666">'
-                 f'{fecha.strftime("%d/%m")}</text>')
+        p.append(f'<line x1="{x:.1f}" y1="{xaxis_y:.1f}" x2="{x:.1f}" y2="{xaxis_y+4:.1f}" '
+                 f'stroke="{C_GRIS}" stroke-width="1"/>')
+        p.append(f'<text x="{x:.1f}" y="{xaxis_y+15:.1f}" text-anchor="middle" '
+                 f'font-size="7.5" fill="#7a8699">'
+                 f'{(start + timedelta(days=int(d))).strftime("%d/%m")}</text>')
         d += step
+
     p.append("</svg>")
     return "".join(p)
 
