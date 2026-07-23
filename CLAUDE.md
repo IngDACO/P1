@@ -785,6 +785,35 @@ Al cargar el plano en el survey (app.py), autocompleta **RAIL = AlturaDiente** (
 espalda) del catálogo; si el código no está o no se detecta → aviso + entrada manual. **RAIL = AlturaDiente**
 (NO el ancho); AnchoDiente se guarda como dato secundario.
 
+## Gastos del grupo: presupuesto, proyeccion y separar con/sin presupuesto (v152)
+Peticion del usuario. La pestaña era de **v106** y no se habia vuelto a tocar: dos `st.bar_chart`
+grises, una tabla y un `st.metric`. Se quedo atras respecto a Costos (v144), Estado (v143) y Horas
+(v151).
+### ⚠️ Respondia "cuanto llevas" en vez de "cuanto vas a gastar"
+`cost_projection` (proyeccion al terminar = costo·100/avance) existe desde v144 y la vista de grupo
+**no la usaba**, ni mostraba el presupuesto del grupo. La pregunta de gestion no es cuanto lleva
+gastado el grupo sino **si se va a salir del presupuesto** — y eso se sabe hoy, no cuando ya paso.
+`group_expenses` ahora añade por fila `avance`, `proyectado`, `over` y **`over_proj`** (se saldra al
+ritmo actual aunque hoy aun este dentro). Es el UNICO consumidor, asi que enriquecerlo no afecta a nadie.
+### Rehecha con el lenguaje de las otras pestañas
+- **KPIs**: costo actual, presupuesto del grupo, % consumido (rojo si >100), **proyeccion al terminar**
+  (rojo si supera el presupuesto), proyectos sobre presupuesto.
+- **Dos alertas**: ⛔ los que YA se pasaron (`over`) y ⚠️ los que **se pasaran al ritmo actual**
+  (`over_proj`, aun dentro hoy). El caso que importa: $6k de $10k al 30% proyecta $20k → avisa estando
+  al 60% consumido, cuando aun se puede reaccionar.
+- **Se separan** los proyectos CON presupuesto (costo/proyeccion/% + semaforo ⛔⚠️✅) de los SIN
+  presupuesto (solo costo + aviso de que no hay contra que comparar). Antes se mezclaban en una columna
+  "%" que salia vacia — con 2 de 3 proyectos a presupuesto 0, la tabla se veia a medias.
+- Barras HTML (`_barras_html`, v144) para reparto MO/compras y por categoria, en vez de `st.bar_chart`
+  grises. **Quitada la subtabla de categorias** (duplicaba las barras de justo encima).
+- CSV de contabilidad ampliado con avance y proyeccion.
+### Verificacion
+Contra datos REALES: KPIs (costo $359, presup $10.000, proyeccion $778, 4% consumido), separacion
+correcta (prueba1 con presupuesto / north+norte sin), proyeccion de prueba1 778.31. Las **3 ramas de
+alerta** probadas con filas simuladas (sano / ya pasado / se pasara al ritmo / mezcla): ⛔ y ⚠️
+disparan donde deben y el caso $6k→$20k avisa sin estar todavia sobre. 0 nombres sin resolver (el `x`
+es de una lambda).
+
 ## Horas del grupo: costo de M.O., KPIs y el "sin asignar" deja de mentir (v151)
 Peticion del usuario: revisar 🛠 Mi grupo → ⏱ Horas (tecnico, imagen y funcionalidad). Eran **dos
 tablas planas** que solo respondian "cuantas horas".
@@ -1913,7 +1942,7 @@ posicional + plano) → app.py, al cargar el PDF, setea `st.session_state["ns"]`
 resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NORTH SYD y AGECARE → NS=6
 (coincide con travel/floor-height HQ/HE).
 
-## Versiones desplegadas (v151 = actual)
+## Versiones desplegadas (v152 = actual)
 | Ver | Cambio principal |
 |---|---|
 | v5 | Extractor: CRLF fix, caso D valor-antes-label, sin pdfplumber |
@@ -2015,6 +2044,7 @@ resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NOR
 | v102 | Fix: NS se lee del plano (NUMBER OF STOPS) al cargar el PDF; default de init 6→2 (ya no queda pegado en 6) |
 | v103 | Rol conductor (2 relojes: jornada general + segmentos por proyecto, columna Tipo) + cronómetro en vivo para todos + reporte admin de horas del grupo (Mi grupo → ⏱ Horas) |
 | v104 | Credenciales/tickets por usuario (White Card, Forklift, Dogging/Rigging, licencia…): vencimiento+estado, foto/documento a Drive, radar en Resumen del día, avisos email/Telegram a admin+usuario; usuario ve las suyas (🎫 Mis credenciales) |
+| v152 | Gastos del grupo: presupuesto y proyeccion al terminar (existia desde v144 y no se usaba), KPIs, alerta de los que se saldran al ritmo actual, y separar proyectos con/sin presupuesto; barras en vez de bar_chart grises |
 | v151 | Horas del grupo: costo de mano de obra por persona (horas x tarifa), KPIs del grupo, reparto por proyecto en barras, y el «sin asignar» deja de mostrar ceros falsos (marca «—» cuando el dato es indeterminado por fichar sin jornada) |
 | v150 | Fichaje unificado: dos relojes (jornada + proyecto) para todos los roles, el proyecto siempre de una lista (el texto libre dejaba las horas sin atribuir), fuera Ubicacion (nadie la leia), resumen del dia, historial propio y clock_out en 1 llamada |
 | v149 | Datos: archivar sustituye a borrar (borrar dejaba huerfanos documentos, pre-starts, alarmas y fichajes, y sin confirmacion), fechas con calendario (el texto libre falseaba el cronograma en silencio) y aviso de credenciales al asignar campo |

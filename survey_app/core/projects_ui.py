@@ -2063,30 +2063,79 @@ def render_group_expenses(grupo: str):
     if not filas:
         st.info("No hay proyectos en el grupo.")
         return
-    df = pd.DataFrame([{
-        "Proyecto": f["nombre"], "Compras": f["compras"], "Mano de obra": f["mano_obra"],
-        "Costo total": f["total"], "Presupuesto": f["presupuesto"],
-        "% ": f["pct"] if f["pct"] is not None else "",
-    } for f in filas])
-    st.dataframe(df, use_container_width=True, hide_index=True)
-    tot = sum(f["total"] for f in filas)
-    st.metric("Costo total del grupo", f"${tot:,.0f}")
 
-    # ── Gráficas ──
-    _conc = [f for f in filas if f["total"] > 0]
-    if _conc:
-        st.markdown("**Costo por proyecto** (compras vs mano de obra)")
-        st.bar_chart(pd.DataFrame(
-            {"Compras": [f["compras"] for f in _conc],
-             "Mano de obra": [f["mano_obra"] for f in _conc]},
-            index=[f["nombre"] for f in _conc]))
+    tot     = sum(f["total"] for f in filas)
+    tot_pres = sum(f["presupuesto"] for f in filas)
+    tot_proj = sum((f["proyectado"] or f["total"]) for f in filas)
+    con_pres = [f for f in filas if f["presupuesto"] > 0]
+    sin_pres = [f for f in filas if f["presupuesto"] <= 0]
+    n_over   = sum(1 for f in filas if f["over"])
+    n_over_p = sum(1 for f in filas if f["over_proj"] and not f["over"])
+    pct_grupo = round(100 * tot / tot_pres) if tot_pres > 0 else None
+
+    # ── KPIs del grupo ──
+    tarj = [_kpi_card("Costo actual", f"${tot:,.0f}"),
+            _kpi_card("Presupuesto", f"${tot_pres:,.0f}" if tot_pres else "—"),
+            _kpi_card("% consumido", f"{pct_grupo}%" if pct_grupo is not None else "—",
+                      "#c0392b" if (pct_grupo or 0) > 100 else None),
+            _kpi_card("Proyección al terminar", f"${tot_proj:,.0f}",
+                      "#c0392b" if (tot_pres and tot_proj > tot_pres) else None),
+            _kpi_card("Sobre presupuesto", n_over, "#c0392b" if n_over else None)]
+    st.markdown('<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:8px">'
+                + "".join(tarj) + "</div>", unsafe_allow_html=True)
+
+    if n_over:
+        st.error(f"⛔ **{n_over} proyecto(s) ya sobre presupuesto:** "
+                 + ", ".join(f["nombre"] for f in filas if f["over"]))
+    if n_over_p:
+        st.warning(f"⚠️ **{n_over_p} más se saldrá(n) al ritmo actual** (aún dentro hoy): "
+                   + ", ".join(f["nombre"] for f in filas if f["over_proj"] and not f["over"]))
+
+    # ── Reparto compras vs mano de obra ──
+    if tot > 0:
+        st.markdown("**Reparto del costo del grupo**")
+        st.markdown(_barras_html(
+            [("Mano de obra", sum(f["mano_obra"] for f in filas)),
+             ("Compras", sum(f["compras"] for f in filas))], tot),
+            unsafe_allow_html=True)
+
+    # ── Proyectos CON presupuesto: costo, proyección y % ──
+    if con_pres:
+        st.markdown("**Proyectos con presupuesto**")
+        st.dataframe(pd.DataFrame([{
+            "Proyecto": f["nombre"], "Costo": f["total"], "Presupuesto": f["presupuesto"],
+            "% consumido": f["pct"], "Avance %": f["avance"],
+            "Proyección": f["proyectado"] if f["proyectado"] is not None else "—",
+            "": ("⛔" if f["over"] else ("⚠️" if f["over_proj"] else "✅")),
+        } for f in con_pres]), hide_index=True, use_container_width=True)
+        st.caption("**Proyección** = lo que costará al terminar al ritmo de gasto actual "
+                   "(costo ÷ avance). ⛔ ya se pasó · ⚠️ se pasará al ritmo actual · ✅ dentro.")
+
+    # ── Proyectos SIN presupuesto: solo costo, y aviso ──
+    if sin_pres:
+        st.markdown("**Proyectos sin presupuesto asignado**")
+        st.dataframe(pd.DataFrame([{
+            "Proyecto": f["nombre"], "Compras": f["compras"],
+            "Mano de obra": f["mano_obra"], "Costo total": f["total"],
+        } for f in sin_pres]), hide_index=True, use_container_width=True)
+        st.caption(f"{len(sin_pres)} proyecto(s) sin presupuesto: no hay contra qué comparar "
+                   "su gasto. Se define en el detalle del proyecto → ✏️ Datos.")
+
+    # ── Compras por categoría ──
     if ge["por_categoria"]:
         st.markdown("**Compras por categoría**")
-        _cat = dict(sorted(ge["por_categoria"].items(), key=lambda x: -x[1]))
-        st.bar_chart(pd.DataFrame({"Total": list(_cat.values())}, index=list(_cat.keys())))
-        st.dataframe(pd.DataFrame([{"Categoría": k, "Total": v} for k, v in _cat.items()]),
-                     hide_index=True, use_container_width=True)
-    st.download_button("⬇️ Exportar CSV (contabilidad)", data=df.to_csv(index=False).encode("utf-8"),
+        _cat = sorted(ge["por_categoria"].items(), key=lambda x: -x[1])
+        st.markdown(_barras_html(_cat, sum(v for _, v in _cat), "#BA7517"),
+                    unsafe_allow_html=True)
+
+    # ── Export para contabilidad ──
+    _csv = pd.DataFrame([{
+        "Proyecto": f["nombre"], "Compras": f["compras"], "Mano de obra": f["mano_obra"],
+        "Costo total": f["total"], "Presupuesto": f["presupuesto"],
+        "% consumido": f["pct"], "Avance %": f["avance"], "Proyeccion": f["proyectado"],
+    } for f in filas])
+    st.download_button("⬇️ Exportar CSV (contabilidad)",
+                       data=_csv.to_csv(index=False).encode("utf-8"),
                        file_name=f"gastos_{grupo}.csv", mime="text/csv", key="ge_csv")
 
 

@@ -254,14 +254,28 @@ def over_budget(grupo) -> list:
 
 @st.cache_data(ttl=60, show_spinner=False)
 def group_expenses(grupo) -> dict:
-    """Costos de todos los proyectos del grupo + desglose por categoría."""
+    """Costos de todos los proyectos del grupo + desglose por categoría.
+
+    Cada fila lleva tambien `avance` y `proyectado` (lo que costara AL TERMINAR al
+    ritmo actual, = total·100/avance). La proyeccion existe desde v144 pero la
+    vista de grupo no la usaba: respondia "cuanto llevas" en vez de "cuanto vas a
+    gastar", que es la pregunta de gestion.
+    """
     from core import projects as P
     proys, por_cat, filas = P.list_projects(grupo=grupo), {}, []
     for p in proys:
-        c = project_cost(p.get("ID"), grupo)
+        c  = project_cost(p.get("ID"), grupo)
+        av = _num(p.get("Avance"))
+        proyectado = (round(c["total"] * 100.0 / av, 2)
+                      if av > 0 and c["total"] > 0 else None)
         filas.append({"id": p.get("ID"), "nombre": p.get("Nombre"),
                       "compras": c["compras"], "mano_obra": c["mano_obra"],
-                      "total": c["total"], "presupuesto": c["presupuesto"], "pct": c["pct"]})
+                      "total": c["total"], "presupuesto": c["presupuesto"],
+                      "pct": c["pct"], "over": c["over"],
+                      "avance": av, "proyectado": proyectado,
+                      # se saldra del presupuesto al ritmo actual (aunque hoy aun no)
+                      "over_proj": bool(c["presupuesto"] > 0 and proyectado
+                                        and proyectado > c["presupuesto"])})
     for r in _records():
         if str(r.get("Grupo", "")) == str(grupo):
             cat = str(r.get("Categoria", "")) or "Otros"
