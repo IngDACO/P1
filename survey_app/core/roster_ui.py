@@ -87,8 +87,79 @@ def render_planificacion(grupo):
     if _pers:
         _editar_persona(grupo, lunes, _pers, _nombre.get(_pers, _pers), tidx)
 
+    # ── Plan vs real ──
+    _plan_vs_real(grupo, lunes, staff, tidx)
+
     # ── Catálogo de trabajos ──
     _catalogo(grupo)
+
+
+def _plan_vs_real(grupo, lunes, staff, tidx):
+    """Compara la asignacion del dia (si enlaza a PRJ) contra donde ficho cada uno.
+
+    Solo tiene sentido para trabajos enlazados a un proyecto: un delivery o un
+    estado (OFF/Leave) no tiene fichaje contra que comparar. Decision de v161.
+    """
+    from datetime import date as _date
+    from core import timeclock
+    with st.expander("🔍 Plan vs real (lo asignado contra lo fichado)"):
+        if not timeclock.is_configured():
+            st.caption("Necesita el fichaje configurado.")
+            return
+        # Día a comparar: hoy si cae en la semana vista, si no el lunes.
+        hoy = _date.today()
+        _idx_def = (hoy - lunes).days if 0 <= (hoy - lunes).days <= 4 else 0
+        _dsel = st.radio("Día", R.DIAS, index=_idx_def, horizontal=True,
+                         format_func=lambda d: f"{R.DIAS_LABEL[d]} "
+                         f"{R.fecha_de_dia(lunes, d).strftime('%d/%m')}",
+                         key="pvr_dia", label_visibility="collapsed")
+        fecha = R.fecha_de_dia(lunes, _dsel)
+        datos = R.get_semana(grupo, lunes)
+        real  = timeclock.proyectos_por_usuario_dia(grupo, fecha)
+
+        n_ok = n_desvio = n_sin = 0
+        filas = []
+        for u in staff:
+            usr = u["Usuario"]
+            nom = u.get("Nombre") or usr
+            c = R.celda(datos, usr, _dsel)
+            asig = str(c.get("asig", ""))
+            plan_pid = R.proyecto_de(asig, tidx)
+            es_estado = asig in R.ESTADOS
+            reales = real.get(usr, [])
+            real_pids = {e["pid"] for e in reales if e["pid"]}
+            real_txt = ", ".join(e["nombre"] for e in reales) or "—"
+
+            if es_estado:
+                if reales:
+                    filas.append(("ℹ️", nom, f"marcado {R.etiqueta_de(asig, tidx)} "
+                                  f"pero fichó en {real_txt}"))
+                # OFF/Leave sin fichar: correcto, no se lista
+            elif plan_pid:
+                if plan_pid in real_pids:
+                    n_ok += 1
+                    filas.append(("🟢", nom, f"{R.etiqueta_de(asig, tidx)} — fichó donde tocaba"))
+                elif real_pids:
+                    n_desvio += 1
+                    filas.append(("🔴", nom, f"asignado a {R.etiqueta_de(asig, tidx)} · "
+                                  f"fichó en {real_txt}"))
+                else:
+                    n_sin += 1
+                    filas.append(("⚠️", nom, f"asignado a {R.etiqueta_de(asig, tidx)} · "
+                                  "sin fichar aún"))
+            elif asig:                                  # trabajo sin enlace a PRJ
+                filas.append(("—", nom, f"{R.etiqueta_de(asig, tidx)} "
+                              "(sin proyecto que comparar)"
+                              + (f" · fichó en {real_txt}" if reales else "")))
+            elif reales:                                # sin plan pero ficho
+                filas.append(("❔", nom, f"sin asignación · fichó en {real_txt}"))
+
+        st.markdown(f"`🟢 {n_ok} donde tocaba`  `🔴 {n_desvio} en otro sitio`  "
+                    f"`⚠️ {n_sin} sin fichar`")
+        if not filas:
+            st.caption("Nada que comparar este día (sin asignaciones a proyecto ni fichajes).")
+        for ic, nom, txt in filas:
+            st.markdown(f"{ic}  **{_esc(nom)}** — {_esc(txt)}")
 
 
 def render_board_readonly(grupo, resaltar_usuario=""):

@@ -790,6 +790,27 @@ Al cargar el plano en el survey (app.py), autocompleta **RAIL = AlturaDiente** (
 espalda) del catálogo; si el código no está o no se detecta → aviso + entrada manual. **RAIL = AlturaDiente**
 (NO el ancho); AnchoDiente se guarda como dato secundario.
 
+## Tablero de cuadrilla — plan vs real (v161): feature COMPLETA
+Ultimo incremento del roster. El admin ve, por dia, lo ASIGNADO contra lo FICHADO.
+- **`timeclock.proyectos_por_usuario_dia(grupo, fecha)`** — {usuario: [{pid,nombre}]} de los proyectos
+  que cada uno ficho ese dia (segmentos de tipo proyecto). Filtra fichajes sin proyecto (nada que
+  comparar).
+- **`roster_ui._plan_vs_real`** (expander en 📅 Planificacion): selector de dia (hoy por defecto si cae
+  en la semana vista) + KPIs (🟢 donde tocaba · 🔴 en otro sitio · ⚠️ sin fichar) + una linea por
+  persona con su estado. Seis ramas: 🟢 fichó donde tocaba · 🔴 asignado a X, fichó en Y · ⚠️ asignado
+  sin fichar · — trabajo sin enlace a PRJ (nada que comparar) · ℹ️ OFF/Leave pero fichó · ❔ sin plan
+  pero fichó.
+- ⚠️ **Solo compara trabajos enlazados a un PRJ**: un delivery o un estado no tienen fichaje contra que
+  medir. Es la razon de ser del enlace opcional a proyecto.
+### Verificacion
+Las 6 ramas simuladas con roster + fichajes: 🟢1/🔴1/⚠️1 y las 3 informativas, todas donde deben.
+`proyectos_por_usuario_dia` contra los fichajes REALES: 16/07 lksdfkldsf→prueba1, 17/07 vacio (la
+sesion cruzo medianoche, Clock In fue el 16), y el fichaje sin proyecto del 10/07 ya no aparece.
+### Roster COMPLETO (v159–v161)
+v159 base (catalogo + rejilla admin) · v160 campo (ve el board + atajo de fichaje) · v161 plan vs real.
+PENDIENTE solo la validacion en el Cloud: crear trabajos, asignar una semana, copiar semana, y que el
+campo vea su "hoy" — todo eso son escrituras que se estrenan alli.
+
 ## Tablero de cuadrilla — el campo lo ve + fichaje con la asignacion del dia (v160)
 Segundo incremento del roster (v159 fue la base). Cierra el lado del CAMPO.
 - **`roster.asignacion_dia(grupo, usuario, fecha)`** — que le toca a una persona un dia: {asig, nota,
@@ -2160,7 +2181,7 @@ posicional + plano) → app.py, al cargar el PDF, setea `st.session_state["ns"]`
 resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NORTH SYD y AGECARE → NS=6
 (coincide con travel/floor-height HQ/HE).
 
-## Versiones desplegadas (v160 = actual)
+## Versiones desplegadas (v161 = actual)
 | Ver | Cambio principal |
 |---|---|
 | v5 | Extractor: CRLF fix, caso D valor-antes-label, sin pdfplumber |
@@ -2262,6 +2283,7 @@ resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NOR
 | v102 | Fix: NS se lee del plano (NUMBER OF STOPS) al cargar el PDF; default de init 6→2 (ya no queda pegado en 6) |
 | v103 | Rol conductor (2 relojes: jornada general + segmentos por proyecto, columna Tipo) + cronómetro en vivo para todos + reporte admin de horas del grupo (Mi grupo → ⏱ Horas) |
 | v104 | Credenciales/tickets por usuario (White Card, Forklift, Dogging/Rigging, licencia…): vencimiento+estado, foto/documento a Drive, radar en Resumen del día, avisos email/Telegram a admin+usuario; usuario ve las suyas (🎫 Mis credenciales) |
+| v161 | Tablero de cuadrilla — plan vs real: el admin ve por dia lo asignado contra lo fichado (🟢 donde tocaba / 🔴 en otro sitio / ⚠️ sin fichar), solo para trabajos enlazados a un proyecto. Feature completa (v159 base + v160 campo + v161 plan-vs-real) |
 | v160 | Tablero de cuadrilla: el campo ve el board completo (su fila resaltada) en 📋 Mis proyectos con su asignacion de hoy destacada, y en el fichaje un atajo «fichar a tu asignacion de hoy» cuando enlaza a un proyecto |
 | v159 | Tablero semanal de cuadrilla (base): catalogo de Trabajos (numero/nombre/color/enlace opcional a PRJ) + seccion 📅 Planificacion del admin con rejilla coloreada como el board, editar semana persona a persona y copiar semana anterior |
 | v158 | Pre-Start: el contenido que se capturaba (checks, asistentes, notas) por fin se ve en el historial con semaforo por check; y ya no se puede firmar sin leer (los checks arrancan sin respuesta, hay que responder cada uno) |

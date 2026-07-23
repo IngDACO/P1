@@ -407,6 +407,30 @@ def _nombre_actual(pid: str, nombre_fila: str) -> str:
         return nom
 
 
+def proyectos_por_usuario_dia(grupo: str, fecha) -> dict:
+    """{clave_usuario: [{'pid','nombre'}]} de los proyectos que cada persona FICHÓ
+    ese día (segmentos de tipo proyecto). Para el 'plan vs real' del roster (v161):
+    comparar donde se le ASIGNÓ contra donde ficho de verdad."""
+    fecha_s = fecha.isoformat() if hasattr(fecha, "isoformat") else str(fecha)[:10]
+    out = {}
+    for r in _cached_records():
+        if str(r.get("Grupo", "")).strip() != str(grupo).strip():
+            continue
+        if _tipo_of(r) != TIPO_PROYECTO:
+            continue
+        if str(r.get("Clock In", ""))[:10] != fecha_s:
+            continue
+        clave = str(r.get("Usuario", "")).strip() or str(r.get("Nombre", "")).strip()
+        entry = {"pid": pid_of(r),
+                 "nombre": _nombre_actual(pid_of(r), r.get("Proyecto", ""))}
+        if not entry["pid"] and not entry["nombre"]:
+            continue                              # fichaje sin proyecto: nada que comparar
+        out.setdefault(clave, [])
+        if entry not in out[clave]:
+            out[clave].append(entry)
+    return out
+
+
 def group_hours(grupo: str, days=None) -> list:
     """Resumen de horas por usuario del grupo (para el admin). days=None=todo, 7=semana.
     Devuelve [{usuario, general, proyecto, sin_asignar, por_proyecto{nombre:horas}}]. Las
