@@ -854,6 +854,7 @@ def render_survey_tab(_ROL, _GRUPO):
         if _plano_sv:
             _mapa_sv = {f"params.{_p}": f"inp_{_p}" for _p in PDF_PARAMS}
             _mapa_sv["ns"] = "ns"
+            _mapa_sv["rail_altura"] = "inp_RAIL"   # altura del diente, del catálogo
             _n_sv = plan_ui.aplicar(_plano_sv, _mapa_sv)
             if _n_sv:
                 st.caption(f"✅ {_n_sv} valor(es) tomados del plano del proyecto. "

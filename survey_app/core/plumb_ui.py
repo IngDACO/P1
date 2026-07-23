@@ -18,7 +18,7 @@ from core import tool_save_ui
 def render_plumb_tab():
     st.markdown("### 🔩 Cálculo de líneas de plomada")
     st.caption("Elige el proyecto y los valores del plano se rellenan solos. "
-               "Los medidos en obra (RAIL, LengthTemplate, BSR) van a mano.")
+               "RAIL sale del catálogo (por el código del plano); LengthTemplate y BSR van a mano.")
 
     # ── Inicializar en 0 (sin valores residuales de ejemplo) ─
     _keys = ["plb_bks", "plb_rail", "plb_tksw", "plb_lt", "plb_sf1", "plb_sf2",
@@ -40,7 +40,8 @@ def render_plumb_tab():
         _n = plan_ui.aplicar(_plano, {
             "params.BKS": "plb_bks", "params.TKSW": "plb_tksw",
             "params.SF1": "plb_sf1", "params.SF2": "plb_sf2",
-            "params.BS": "plb_bs", "params.SG": "plb_sg", "params.TG": "plb_tg"})
+            "params.BS": "plb_bs", "params.SG": "plb_sg", "params.TG": "plb_tg",
+            "rail_altura": "plb_rail"})   # RAIL = altura del diente, del catálogo
         if _n:
             st.caption(f"✅ {_n} valor(es) tomados del plano del proyecto.")
 
@@ -63,7 +64,7 @@ def render_plumb_tab():
                     st.session_state[key] = float(ex[src]); found.append(src)
             if found:
                 st.success(f"✅ Del plano: **{', '.join(found)}**. "
-                           "Completa RAIL, LengthTemplate y BSR (no vienen en el plano).")
+                           "Completa LengthTemplate y BSR (no vienen en el plano); RAIL sale del código de riel.")
             else:
                 st.warning("No se encontraron valores en el plano. Ingrésalos manualmente.")
             st.rerun()
@@ -74,7 +75,7 @@ def render_plumb_tab():
     st.markdown("**Entradas principales**  ·  📄 = del plano · ✏️ = manual")
     c1, c2, c3, c4 = st.columns(4)
     bks  = c1.number_input("📄 BKS (mm)",            step=0.5, key="plb_bks")
-    rail = c2.number_input("✏️ RAIL (mm)",           step=0.5, key="plb_rail")
+    rail = c2.number_input("📄 RAIL (mm)",           step=0.5, key="plb_rail")
     tksw = c3.number_input("📄 TKSW (mm)",           step=0.5, key="plb_tksw")
     lt   = c4.number_input("✏️ LengthTemplate (mm)", step=0.5, key="plb_lt")
 

@@ -83,9 +83,28 @@ def extraer_todo(pdf_file, progreso=None) -> dict:
         except Exception:
             pass
 
+    # ── RAIL: el plano da el CÓDIGO (p.ej. T75-3/B); el VALOR (altura del diente)
+    # sale del catálogo de rieles. Sin este paso, RAIL quedaba en 0 al cargar el
+    # plano desde el proyecto — solo el uploader directo del Survey lo resolvía.
+    out["rail_altura"] = None
+    out["rail_ancho"] = None
+    if out.get("rail"):
+        try:
+            from core import rails
+            if rails.is_configured():
+                _info = rails.get_rail(out["rail"])
+                if _info:
+                    out["rail_altura"] = _info.get("altura")
+                    out["rail_ancho"] = _info.get("ancho")
+        except Exception as e:
+            logger.warning("plan_data rail catálogo: %s", e)
+
     # Qué NO se pudo leer. Un valor ausente que nadie mira se convierte en un
     # cero silencioso aguas abajo, así que se deja explícito.
     faltan = [p for p in PARAMS if p not in out["params"]]
+    # Código de riel leído pero sin altura en el catálogo → RAIL no se autocompleta.
+    if out.get("rail") and out.get("rail_altura") in (None, "", 0, 0.0):
+        faltan.append(f"RAIL (código {out['rail']} no está en el catálogo de rieles)")
     for k in ("ns", "rail", "hq", "hgp", "hkp", "lfkk", "lfgk"):
         if out.get(k) in (None, ""):
             faltan.append(k.upper())

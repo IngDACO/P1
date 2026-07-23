@@ -788,6 +788,30 @@ Al cargar el plano en el survey (app.py), autocompleta **RAIL = AlturaDiente** (
 espalda) del catálogo; si el código no está o no se detecta → aviso + entrada manual. **RAIL = AlturaDiente**
 (NO el ancho); AnchoDiente se guarda como dato secundario.
 
+## RAIL desde el proyecto: el codigo del riel se resuelve a su altura (v157)
+Bug reportado por el usuario: "esta leyendo el tipo de riel pero no me da el valor que le corresponde;
+RAIL sale en 0".
+### La raiz: el plano da el CODIGO, no la altura
+El plano trae el codigo del riel (p.ej. `T75-3/B`); el VALOR RAIL (altura del diente) sale del
+catalogo de rieles (hoja Rieles, T75-3/B → AlturaDiente 62). El uploader DIRECTO del Survey si hacia
+ese lookup (`rails.get_rail` → `inp_RAIL`, v84/v85), pero el camino **desde el proyecto** (v137,
+`plan_ui.aplicar`) **no lo hacia**: `extraer_todo` guardaba solo el codigo y el mapa no incluia RAIL.
+Asi que al cargar el plano desde el proyecto, RAIL quedaba en 0.
+### Fix
+- **`plan_data.extraer_todo`** consulta el catalogo con el codigo leido y guarda `rail_altura` (y
+  `rail_ancho`) en el plano. Si el codigo no esta en el catalogo, lo pone en `faltan` con el motivo.
+- **Los mapas de `aplicar`** vuelcan `rail_altura`: Survey → `inp_RAIL`, Plomada → `plb_rail`.
+- **`_plano_section`** muestra el riel como "codigo · RAIL 62". Plomada marca RAIL como 📄 (del plano)
+  y corrige los textos que decian que RAIL va a mano.
+### ⚠️ Los planos ya cargados hay que RECARGARLOS
+`rail_altura` se calcula en la extraccion, asi que un PlanoJSON guardado ANTES de v157 no lo tiene. Hay
+que volver a cargar el plano (📎 Archivos → 📐 Datos del plano → Cargar) para que se resuelva la altura.
+### Verificacion
+Viaje completo con el plano REAL (PLANO NORTH SYD.pdf): `extraer_todo` → rail=`T75-3/B`,
+**rail_altura=62.0**, rail_ancho=10.0, faltan=[]; `aplicar({"rail_altura":"inp_RAIL"})` sobre
+session_state vacio → **inp_RAIL=62.0** ✓. Catalogo confirmado (T75-3/B=62, T127-2/B=89). El uploader
+directo del Survey sigue intacto. NO se escribio en produccion (solo lecturas).
+
 ## Cargar el plano en un proyecto ya creado (v156)
 Bug reportado por el usuario: "cuando cargo el plano desde Mi grupo → proyecto → Archivos, las
 herramientas no lo ven".
@@ -2054,7 +2078,7 @@ posicional + plano) → app.py, al cargar el PDF, setea `st.session_state["ns"]`
 resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NORTH SYD y AGECARE → NS=6
 (coincide con travel/floor-height HQ/HE).
 
-## Versiones desplegadas (v156 = actual)
+## Versiones desplegadas (v157 = actual)
 | Ver | Cambio principal |
 |---|---|
 | v5 | Extractor: CRLF fix, caso D valor-antes-label, sin pdfplumber |
@@ -2156,6 +2180,7 @@ resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NOR
 | v102 | Fix: NS se lee del plano (NUMBER OF STOPS) al cargar el PDF; default de init 6→2 (ya no queda pegado en 6) |
 | v103 | Rol conductor (2 relojes: jornada general + segmentos por proyecto, columna Tipo) + cronómetro en vivo para todos + reporte admin de horas del grupo (Mi grupo → ⏱ Horas) |
 | v104 | Credenciales/tickets por usuario (White Card, Forklift, Dogging/Rigging, licencia…): vencimiento+estado, foto/documento a Drive, radar en Resumen del día, avisos email/Telegram a admin+usuario; usuario ve las suyas (🎫 Mis credenciales) |
+| v157 | RAIL sale en 0 al cargar el plano desde el proyecto: el plano da el CODIGO del riel y faltaba resolverlo a su altura por el catalogo; extraer_todo ahora guarda rail_altura y los mapas de survey/plomada lo vuelcan a RAIL |
 | v156 | Cargar el plano en un proyecto ya creado (📐 Datos del plano): subir el PDF por Documentos no extraia a PlanoJSON, asi que las herramientas no lo veian; ahora hay un control que sube Y extrae, y «plano» sale del uploader generico |
 | v155 | El Survey ya no pide proyecto/cliente/ubicacion/ingeniero a mano: eran entrada duplicada (el proyecto que alimenta ya los trae); se toman del proyecto elegido y alimentan el informe igual |
 | v154 | El Survey es una herramienta tecnica mas (las 5: survey, plomado, rieles, buffers, belting); el Pre-Start se separa de ellas en el nav por ser seguridad de obra, no una herramienta |

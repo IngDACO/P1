@@ -324,7 +324,11 @@ def _plano_section(pid: str, prj: dict):
     for k, et in (("ns", "Paradas (NS)"), ("rail", "Riel"), ("hkp", "HKP"),
                   ("hq", "HQ"), ("lfkk", "LFKK"), ("lfgk", "LFGK")):
         if datos.get(k) not in (None, ""):
-            tarj.append(_kpi_card(et, datos[k]))
+            _v = datos[k]
+            # El riel muestra código + altura (el valor RAIL que usan las herramientas).
+            if k == "rail" and datos.get("rail_altura"):
+                _v = f"{datos['rail']} · RAIL {datos['rail_altura']:.0f}"
+            tarj.append(_kpi_card(et, _v))
     st.markdown('<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:8px">'
                 + "".join(tarj) + "</div>", unsafe_allow_html=True)
 
