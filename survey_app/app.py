@@ -250,17 +250,20 @@ _L_CONDPROJ  = "📋 Proyectos"
 _L_MYCRED    = "🎫 Mis credenciales"
 
 # Orden de las pestañas por rol (el panel de cada rol va primero).
-_HERR = [_L_SURVEY, _L_PLUMB, _L_RAIL, _L_BUFFER, _L_BELT, _L_PRESTART]   # herramientas comunes
+# Las 5 HERRAMIENTAS TÉCNICAS van juntas; el Survey es una más (la más potente),
+# no un caso aparte. El Pre-Start NO es una herramienta técnica: es un formato de
+# SEGURIDAD de obra, así que va con lo operativo (fichaje/proyectos), no con ellas.
+_HERR = [_L_SURVEY, _L_PLUMB, _L_RAIL, _L_BUFFER, _L_BELT]   # herramientas técnicas
 if _ROL == "propietario":
-    _nav = [_L_OWNER] + _HERR                      # sin fichaje
+    _nav = [_L_OWNER, _L_PRESTART] + _HERR          # sin fichaje
 elif _ROL == "administrador":
-    _nav = [_L_GRUPO, _L_CLOCK] + _HERR
+    _nav = [_L_GRUPO, _L_CLOCK, _L_PRESTART] + _HERR
 elif _ROL == "campo":
-    _nav = [_L_FIELDPROJ, _L_CLOCK] + _HERR + [_L_MYCRED]
+    _nav = [_L_FIELDPROJ, _L_CLOCK, _L_PRESTART] + _HERR + [_L_MYCRED]
 elif _ROL == "conductor":
     _nav = [_L_CLOCK, _L_CONDPROJ, _L_MYCRED]      # fichaje (2 relojes) + proyectos + credenciales
 else:
-    _nav = _HERR + [_L_CLOCK]
+    _nav = [_L_PRESTART] + _HERR + [_L_CLOCK]
 
 # Navegación pendiente (p.ej. "abrir el proyecto recién creado" desde el Survey).
 # Se aplica ANTES de instanciar el radio: escribir la clave de un widget ya

@@ -96,9 +96,12 @@ PowerShell). `backup_survey.ps1` escribe `"vNN"` antes de cada commit → se act
 renderiza SOLO la sección activa (`if/elif _seccion == ...`). El survey completo va bajo
 `if _seccion == _L_SURVEY:` (Paso 1→6). **No volver a introducir `st.tabs`** (ni anidados).
 
-Secciones visibles según el rol (ver Login/Roles):
-- Todos: 📐 Survey · 🔩 Plomadas · ✂️ Corte de rieles · ⏱ Fichaje
-- Propietario: + 👑 Administración   |   Administrador: + 🛠 Mi grupo   |   Campo: sin extra y sin descargar informes
+**5 HERRAMIENTAS TÉCNICAS (v154):** 📐 Survey · 🔩 Plomadas · ✂️ Corte de rieles · 🛡 Corte de buffers
+· 🎗 Belting. El Survey es UNA MÁS (la más potente, no un caso aparte). El **🦺 Pre-Start NO es una
+herramienta técnica**: es SEGURIDAD de obra, va con lo operativo (fichaje/proyectos).
+Secciones por rol: Propietario 👑 Administración · Pre-Start · las 5 técnicas | Administrador 🛠 Mi grupo
+· Fichaje · Pre-Start · las 5 | Campo 📋 Mis proyectos · Fichaje · Pre-Start · las 5 · 🎫 Mis credenciales
+| Conductor Fichaje · Proyectos · Mis credenciales (sin técnicas ni Pre-Start).
 
 ---
 
@@ -784,6 +787,32 @@ etiqueta en la extracción posicional; excluye COUNTERWEIGHT; regex `T\d{2,3}-\d
 Al cargar el plano en el survey (app.py), autocompleta **RAIL = AlturaDiente** (altura del diente desde la
 espalda) del catálogo; si el código no está o no se detecta → aviso + entrada manual. **RAIL = AlturaDiente**
 (NO el ancho); AnchoDiente se guarda como dato secundario.
+
+## El Survey es una herramienta más; el Pre-Start no es técnico (v154)
+Apunte del usuario: "cuando hablamos de las herramientas me nombras todas menos el survey; ahora el
+survey es una herramienta mas, la mas potente y compleja pero una mas. Las herramientas TECNICAS son:
+survey, plomado, corte de rieles, corte de buffers, belting".
+### Que ya estaba bien
+El Survey YA se trataba como herramienta en el nav (`_HERR`), en `toolruns.HERRAMIENTAS` (clave
+`survey`) y en el prompt del agente ("es una herramienta que alimenta un proyecto, igual que Plomadas").
+La incoherencia principal era **mi lenguaje** ("las 4 herramientas"), heredado de que toolruns/
+tool_save_ui se construyeron para las otras 4.
+### La incoherencia real: el Pre-Start estaba en el saco de las herramientas
+`_HERR` se llamaba "herramientas comunes" e incluia Survey + los 4 calculos **+ Pre-Start diario**.
+Pero el Pre-Start es un formato de SEGURIDAD de obra, no una herramienta tecnica. Decision del usuario:
+separarlo en el nav.
+- **`_HERR` pasa a ser las 5 TECNICAS** (Survey, Plomadas, Rieles, Buffers, Belting), contiguas.
+- **El Pre-Start se coloca con lo operativo** (tras el panel del rol y el fichaje), antes de las tecnicas.
+- Prompt del agente actualizado: distingue "5 herramientas tecnicas" de "Pre-Start (seguridad)".
+### Verificacion
+Solo cambia ORDEN y encabezado, no accesos: comprobado que propietario y campo conservan el MISMO
+conjunto de secciones (nada perdido ni ganado) y el conductor queda intacto (nunca tuvo Pre-Start ni
+tecnicas). Los defaults (1er item por rol) no cambian. El enrutado es por etiqueta (`if _seccion == _L_X`),
+asi que reordenar la lista no lo afecta. Sintaxis + import OK.
+### Pendiente menor (no se toco)
+El Survey se "reabre" con "🔄 Reconstruir en el Survey" mientras las otras 4 usan "↩️ Reabrir en la
+herramienta" (v148): dos nombres para el mismo concepto. Es defendible (el Survey guarda en ParamsJSON,
+no en DatosJSON) pero conviene unificar el LENGUAJE algun dia.
 
 ## Usuarios de campo: una ficha 360 por persona (v153)
 Peticion del usuario: la gestion de usuarios "debe ser lo mas completa posible y permitir ver y
@@ -1972,7 +2001,7 @@ posicional + plano) → app.py, al cargar el PDF, setea `st.session_state["ns"]`
 resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NORTH SYD y AGECARE → NS=6
 (coincide con travel/floor-height HQ/HE).
 
-## Versiones desplegadas (v153 = actual)
+## Versiones desplegadas (v154 = actual)
 | Ver | Cambio principal |
 |---|---|
 | v5 | Extractor: CRLF fix, caso D valor-antes-label, sin pdfplumber |
@@ -2074,6 +2103,7 @@ resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NOR
 | v102 | Fix: NS se lee del plano (NUMBER OF STOPS) al cargar el PDF; default de init 6→2 (ya no queda pegado en 6) |
 | v103 | Rol conductor (2 relojes: jornada general + segmentos por proyecto, columna Tipo) + cronómetro en vivo para todos + reporte admin de horas del grupo (Mi grupo → ⏱ Horas) |
 | v104 | Credenciales/tickets por usuario (White Card, Forklift, Dogging/Rigging, licencia…): vencimiento+estado, foto/documento a Drive, radar en Resumen del día, avisos email/Telegram a admin+usuario; usuario ve las suyas (🎫 Mis credenciales) |
+| v154 | El Survey es una herramienta tecnica mas (las 5: survey, plomado, rieles, buffers, belting); el Pre-Start se separa de ellas en el nav por ser seguridad de obra, no una herramienta |
 | v153 | Usuarios de campo: ficha 360 por persona (acceso, contacto, credenciales y su trabajo —proyectos, horas, recibos— en un solo sitio) en vez de elegir al usuario en 3 desplegables distintos; se adapta al rol |
 | v152 | Gastos del grupo: presupuesto y proyeccion al terminar (existia desde v144 y no se usaba), KPIs, alerta de los que se saldran al ritmo actual, y separar proyectos con/sin presupuesto; barras en vez de bar_chart grises |
 | v151 | Horas del grupo: costo de mano de obra por persona (horas x tarifa), KPIs del grupo, reparto por proyecto en barras, y el «sin asignar» deja de mostrar ceros falsos (marca «—» cuando el dato es indeterminado por fichar sin jornada) |

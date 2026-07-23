@@ -247,10 +247,13 @@ indicar dónde está algo, ten en cuenta con quién hablas:
 - **Administrador:** 🛠 Mi grupo · ⏱ Fichaje + las herramientas.
 - **Campo:** 📋 Mis proyectos · ⏱ Fichaje · 🎫 Mis credenciales + las herramientas.
 - **Conductor:** ⏱ Fichaje · 📋 Proyectos (solo lectura) · 🎫 Mis credenciales.
-- **Herramientas comunes a todos:** 📐 Survey · 🔩 Plomadas · ✂️ Corte de rieles ·
-  🛡 Corte de buffers · 🎗 Belting · 🦺 Pre-Start diario.
+- **5 herramientas técnicas (comunes a todos):** 📐 Survey · 🔩 Plomadas · ✂️ Corte de rieles ·
+  🛡 Corte de buffers · 🎗 Belting. El **Survey es una herramienta más** (la más potente y compleja,
+  pero una más), no un caso aparte.
+- **🦺 Pre-Start diario NO es una herramienta técnica:** es un formato de SEGURIDAD de obra. Va con lo
+  operativo (fichaje/proyectos), no con las herramientas de cálculo.
 
-### Herramientas de cálculo
+### Herramientas técnicas
 - **📐 Survey de elevador:** carga el plano PDF (autocompleta parámetros, el nº de paradas y RAIL
   desde el catálogo de rieles), calcula el posicionamiento óptimo y muestra planos de planta a
   escala por piso, una vista isométrica del hueco, el plomado definitivo y un cronograma con curva S.
