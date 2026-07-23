@@ -71,6 +71,11 @@ def render_prestart_tab():
 
     st.markdown("---")
 
+    # ⚠️ Los checks arrancan SIN respuesta (index=None, v158): hay que responder
+    # cada uno para poder generar. Antes arrancaban en YES y el pre-start se podía
+    # firmar en un toque sin revisar nada — vaciaba la charla de seguridad.
+    st.caption("Responde cada punto: es una revisión de seguridad, no una firma.")
+
     # ── 1. Planned work activities ──
     st.markdown("**1. Planned work activities today**")
     s1 = {}
@@ -78,14 +83,14 @@ def render_prestart_tab():
         cc = st.columns([3, 2])
         cc[0].markdown(f"<div style='font-size:0.9rem;padding-top:6px'>{label}</div>",
                        unsafe_allow_html=True)
-        s1[key] = cc[1].radio(label, PS.OPTS_YN, horizontal=True, index=0,
+        s1[key] = cc[1].radio(label, PS.OPTS_YN, horizontal=True, index=None,
                               key=f"ps_s1_{key}", label_visibility="collapsed")
     act_notes = st.text_area("Notas de actividades / SWMS", key="ps_act", height=70)
 
     # ── 2. Issues / hazard / near miss ──
     st.markdown("**2. Issues, hazard / near miss reports**")
     nm = st.radio("Near Miss/Hazard Report submitted", PS.OPTS_YN, horizontal=True,
-                  index=1, key="ps_nm")
+                  index=None, key="ps_nm")
     nm_desc = ""
     if nm == "YES":
         nm_desc = st.text_area("Describe el near miss / hazard (abrirá una alarma del proyecto)",
@@ -98,7 +103,7 @@ def render_prestart_tab():
         cc = st.columns([3, 2])
         cc[0].markdown(f"<div style='font-size:0.9rem;padding-top:6px'>{label}</div>",
                        unsafe_allow_html=True)
-        s3[key] = cc[1].radio(label, PS.OPTS_YNA, horizontal=True, index=0,
+        s3[key] = cc[1].radio(label, PS.OPTS_YNA, horizontal=True, index=None,
                               key=f"ps_s3_{key}", label_visibility="collapsed")
 
     # ── 4. General notes ──
@@ -116,8 +121,18 @@ def render_prestart_tab():
     st.session_state["ps_att_df"] = att_edit
 
     st.markdown("---")
+    # Qué falta por responder (checks sin marcar + near miss + al menos 1 asistente)
+    _pend = [PS._LABELS.get(k, k) for k, v in {**s1, **s3}.items() if v is None]
+    _att_hay = any(str(r.get("Print Name", "")).strip() for _, r in att_edit.iterrows())
+    if nm is None:
+        _pend.append("Near Miss/Hazard (sección 2)")
+    if not _att_hay:
+        _pend.append("Al menos un asistente (sección 5)")
+    if _pend:
+        st.caption("Falta por completar: " + " · ".join(_pend))
+
     if st.button("📋 Generar y archivar Pre-Start", type="primary", use_container_width=True,
-                 key="ps_submit"):
+                 key="ps_submit", disabled=bool(_pend)):
         attendees = [{"name": str(r["Print Name"]).strip(), "initial": str(r["Initial"]).strip()}
                      for _, r in att_edit.iterrows()
                      if str(r.get("Print Name", "")).strip() or str(r.get("Initial", "")).strip()]
@@ -139,17 +154,72 @@ def render_prestart_tab():
                 st.caption("📎 Archivado en los documentos del proyecto.")
             else:
                 st.caption("⚠️ No se archivó en Drive (revisa la conexión); el registro sí quedó guardado.")
+            _no = [PS._LABELS.get(k, k) for k, v in {**s1, **s3}.items() if v == "NO"]
+            if _no:
+                st.error("⚠️ Checks marcados **NO** (revisar antes de trabajar): "
+                         + " · ".join(_no))
             if res["alarma"]:
                 st.warning("🔴 Se abrió una alarma del proyecto por el near miss/hazard reportado.")
             st.download_button("⬇️ Descargar PDF", data=res["pdf"], file_name=res["filename"],
                                mime="application/pdf", use_container_width=True, key="ps_dl")
 
     # ── Historial ──
-    prev = PS.list_prestarts(pid)
-    if prev:
-        with st.expander(f"🗂 Pre-Starts anteriores ({len(prev)})"):
-            st.dataframe(pd.DataFrame([{
-                "Fecha": r.get("Fecha"), "Hora": r.get("Hora"),
-                "Facilitador": r.get("Facilitador"),
-                "Near miss": r.get("NearMiss"), "Archivo": r.get("Archivo"),
-            } for r in prev]), hide_index=True, use_container_width=True)
+    _historial(pid)
+
+
+def _historial(pid):
+    prev = [PS.leer(r) for r in PS.list_prestarts(pid)]
+    st.markdown("---")
+    st.markdown("#### 🗂 Pre-Starts anteriores")
+    if not prev:
+        st.caption("Aún no hay pre-starts registrados en este proyecto.")
+        return
+
+    # ── KPIs de seguridad ──
+    n_nm  = sum(1 for d in prev if d["near_miss"])
+    n_fail = sum(1 for d in prev if d["n_no"])
+    tarj = [_kpi("Registrados", len(prev)),
+            _kpi("Con near miss", n_nm, "#c0392b" if n_nm else None),
+            _kpi("Con checks en NO", n_fail, "#c0392b" if n_fail else None),
+            _kpi("Último", prev[0]["fecha"] or "—")]
+    st.markdown('<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:8px">'
+                + "".join(tarj) + "</div>", unsafe_allow_html=True)
+
+    # ── Ficha desplegable por pre-start ──
+    for d in prev:
+        _flag = ("🔴" if (d["near_miss"] or d["n_no"]) else "🟢")
+        _res = []
+        if d["near_miss"]:      _res.append("near miss")
+        if d["n_no"]:           _res.append(f"{d['n_no']} check(s) en NO")
+        _tit = (f"{_flag}  {d['fecha']} · {d['facilitador'] or '—'}"
+                + (f"  ·  ⚠️ {', '.join(_res)}" if _res else "  ·  todo OK"))
+        with st.expander(_tit):
+            if d["asistentes"]:
+                st.markdown("**👷 Asistentes:** " + " · ".join(d["asistentes"]))
+            st.markdown("**Checks:**")
+            for c in d["checks"]:
+                _e = {"YES": "🟢", "NO": "🔴", "N/A": "⬜"}.get(c["estado"], "❔")
+                st.markdown(f"{_e} {c['label']}  ·  _{c['estado']}_")
+            if d["near_miss"]:
+                st.error("🔴 **Near miss / hazard:** " + (d["near_miss_desc"] or "(sin descripción)"))
+            if str(d["act_notes"]).strip():
+                st.caption("📝 Actividades: " + d["act_notes"])
+            if str(d["gen_notes"]).strip():
+                st.caption("📝 Notas generales: " + d["gen_notes"])
+            _did = str(d["drive_id"]).strip()
+            if _did:
+                try:
+                    from core import drive_store
+                    st.download_button("⬇️ PDF", data=drive_store.download(_did),
+                                       file_name=d["archivo"] or f"{d['id']}.pdf",
+                                       key=f"ps_hdl_{d['id']}")
+                except Exception:
+                    st.caption("PDF no disponible")
+
+
+def _kpi(label, valor, color=None):
+    col = f"color:{color};" if color else ""
+    return ('<div style="background:#fff;border:1px solid #e6e9ef;border-radius:12px;'
+            'padding:10px 14px;flex:1;min-width:110px;">'
+            f'<div style="font-size:12px;color:#6b7280;">{label}</div>'
+            f'<div style="font-size:22px;font-weight:700;{col}">{valor}</div></div>')

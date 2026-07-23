@@ -72,6 +72,49 @@ def _invalidate():
         pass
 
 
+_LABELS = {k: v for k, v in CHECKS_S1} | {k: v for k, v in CHECKS_S3}
+
+
+def leer(r) -> dict:
+    """Descompone una fila de pre-start en algo legible (v158).
+
+    ⚠️ S1JSON/S3JSON/Asistentes se escribían desde v97 y **nadie los leía**: el
+    historial solo mostraba fecha/facilitador/near-miss. Un check en **NO** es
+    una alerta de seguridad y quedaba invisible sin abrir el PDF.
+
+    Devuelve {checks:[{label,estado}], n_no, asistentes:[...], near_miss, ...}.
+    """
+    import json as _json
+
+    def _parse(col):
+        try:
+            return _json.loads(r.get(col, "") or "{}")
+        except Exception:
+            return {}
+
+    s1, s3 = _parse("S1JSON"), _parse("S3JSON")
+    checks = []
+    for k, v in list(s1.items()) + list(s3.items()):
+        checks.append({"label": _LABELS.get(k, k), "estado": str(v).upper()})
+    n_no = sum(1 for c in checks if c["estado"] == "NO")
+
+    try:
+        asist = _json.loads(r.get("Asistentes", "") or "[]")
+    except Exception:
+        asist = []
+
+    return {
+        "id": r.get("ID", ""), "fecha": r.get("Fecha", ""), "hora": r.get("Hora", ""),
+        "facilitador": r.get("Facilitador", ""), "location": r.get("Location", ""),
+        "near_miss": str(r.get("NearMiss", "")).upper() == "YES",
+        "near_miss_desc": r.get("NearMissDesc", ""),
+        "checks": checks, "n_no": n_no,
+        "act_notes": r.get("ActividadesNotas", ""), "gen_notes": r.get("NotasGenerales", ""),
+        "asistentes": [str(a.get("name", "")).strip() for a in asist if a.get("name")],
+        "archivo": r.get("Archivo", ""), "drive_id": r.get("DriveID", ""),
+    }
+
+
 def list_prestarts(pid) -> list:
     """Pre-starts de un proyecto, más recientes primero."""
     out = [r for r in _records() if str(r.get("ProyectoID", "")) == str(pid)]

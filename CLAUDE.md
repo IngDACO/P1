@@ -788,6 +788,33 @@ Al cargar el plano en el survey (app.py), autocompleta **RAIL = AlturaDiente** (
 espalda) del catálogo; si el código no está o no se detecta → aviso + entrada manual. **RAIL = AlturaDiente**
 (NO el ancho); AnchoDiente se guarda como dato secundario.
 
+## Pre-Start: lo que se captura por fin se ve + no se puede firmar sin leer (v158)
+Revision del ultimo modulo del admin sin tocar, "con la misma dinamica" (tecnico/imagen/integracion).
+### ⚠️ Tecnico 1: 7 columnas escritas desde v97 y NADIE las leia
+`S1JSON`, `S3JSON`, `Asistentes`, `Location`, `ActividadesNotas`, `NotasGenerales` se guardaban y el
+historial solo mostraba fecha/hora/facilitador/near-miss/archivo. **Un check en NO es una alerta de
+seguridad y quedaba invisible** sin abrir el PDF. `prestart.leer(r)` descompone la fila (checks con su
+estado, n_no, asistentes, notas). Octava aparicion del patron "se escribe y nadie lo lee".
+### ⚠️ Tecnico 2 (el mas serio): el formato se podia FIRMAR SIN LEERLO
+Los checks arrancaban en **YES** (index=0) y el near-miss en **NO** (index=1): entrabas, pulsabas
+Generar y salia un pre-start con todo en verde sin revisar nada — vaciaba la charla de seguridad.
+Decision del usuario: **sin respuesta por defecto** (`index=None`, soportado desde Streamlit 1.30). Hay
+que responder cada check; el boton Generar queda `disabled` y lista lo que falta. Al generar, si hay
+checks en NO se avisan aparte (revisar antes de trabajar).
+### Imagen
+- **KPIs de seguridad**: registrados, con near miss, con checks en NO, fecha del ultimo.
+- **Historial como fichas desplegables** (antes tabla plana de 5 cols): cada pre-start con **semaforo
+  🟢/🔴** (rojo si near miss o algun check en NO), y al abrir: asistentes, cada check con su estado
+  (🟢 YES / 🔴 NO / ⬜ N/A), la descripcion del near miss, las notas y el PDF.
+### Integracion (ya estaba, no se toco)
+El near-miss abre alarma del proyecto y el "Resumen del dia" del admin cuenta los near-miss de la
+semana. PENDIENTE que deje anotado: un check en NO NO abre alarma (solo el near-miss). Podria, pero
+seria cambio de comportamiento — se dejo solo muy visible en la UI.
+### Verificacion
+`leer()` contra los 2 pre-starts REALES de PRJ-0001: PS-0002 (near_miss=YES, 7 checks YES, asistente
+asfgjjd) → 🔴; PS-0001 (near_miss=NO, todo YES, lksdfkldsf) → 🟢. KPIs: 2 registrados, 1 con near miss,
+0 con checks NO. 0 nombres sin resolver en las 3 funciones. Prompt del agente actualizado (regla v133).
+
 ## RAIL desde el proyecto: el codigo del riel se resuelve a su altura (v157)
 Bug reportado por el usuario: "esta leyendo el tipo de riel pero no me da el valor que le corresponde;
 RAIL sale en 0".
@@ -2078,7 +2105,7 @@ posicional + plano) → app.py, al cargar el PDF, setea `st.session_state["ns"]`
 resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NORTH SYD y AGECARE → NS=6
 (coincide con travel/floor-height HQ/HE).
 
-## Versiones desplegadas (v157 = actual)
+## Versiones desplegadas (v158 = actual)
 | Ver | Cambio principal |
 |---|---|
 | v5 | Extractor: CRLF fix, caso D valor-antes-label, sin pdfplumber |
@@ -2180,6 +2207,7 @@ resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NOR
 | v102 | Fix: NS se lee del plano (NUMBER OF STOPS) al cargar el PDF; default de init 6→2 (ya no queda pegado en 6) |
 | v103 | Rol conductor (2 relojes: jornada general + segmentos por proyecto, columna Tipo) + cronómetro en vivo para todos + reporte admin de horas del grupo (Mi grupo → ⏱ Horas) |
 | v104 | Credenciales/tickets por usuario (White Card, Forklift, Dogging/Rigging, licencia…): vencimiento+estado, foto/documento a Drive, radar en Resumen del día, avisos email/Telegram a admin+usuario; usuario ve las suyas (🎫 Mis credenciales) |
+| v158 | Pre-Start: el contenido que se capturaba (checks, asistentes, notas) por fin se ve en el historial con semaforo por check; y ya no se puede firmar sin leer (los checks arrancan sin respuesta, hay que responder cada uno) |
 | v157 | RAIL sale en 0 al cargar el plano desde el proyecto: el plano da el CODIGO del riel y faltaba resolverlo a su altura por el catalogo; extraer_todo ahora guarda rail_altura y los mapas de survey/plomada lo vuelcan a RAIL |
 | v156 | Cargar el plano en un proyecto ya creado (📐 Datos del plano): subir el PDF por Documentos no extraia a PlanoJSON, asi que las herramientas no lo veian; ahora hay un control que sube Y extrae, y «plano» sale del uploader generico |
 | v155 | El Survey ya no pide proyecto/cliente/ubicacion/ingeniero a mano: eran entrada duplicada (el proyecto que alimenta ya los trae); se toman del proyecto elegido y alimentan el informe igual |

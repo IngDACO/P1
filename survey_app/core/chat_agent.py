@@ -310,8 +310,10 @@ indicar dónde está algo, ten en cuenta con quién hablas:
   grupos, catálogo de rieles y banco de manuales.
 
 ### Obra, seguridad y costos
-- **🦺 Pre-Start diario:** la charla de seguridad antes de empezar. Genera el PDF, lo archiva en el
-  proyecto y, si hay near miss/hazard, abre una alarma automáticamente.
+- **🦺 Pre-Start diario:** la charla de seguridad antes de empezar. Hay que responder cada check
+  (no hay respuesta por defecto: es una revisión, no una firma). Genera el PDF, lo archiva en el
+  proyecto y, si hay near miss/hazard, abre una alarma automáticamente. El historial muestra cada
+  pre-start con su estado (🟢 todo OK / 🔴 near miss o algún check en NO), asistentes y notas.
 - **🎫 Mis credenciales:** cada usuario ve sus tickets (White Card, Forklift, Dogging/Rigging, EWP,
   trabajo en altura, primeros auxilios, licencia) con su vencimiento y semáforo. El admin los gestiona
   y la app avisa de los que vencen.
