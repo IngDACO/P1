@@ -785,6 +785,36 @@ Al cargar el plano en el survey (app.py), autocompleta **RAIL = AlturaDiente** (
 espalda) del catálogo; si el código no está o no se detecta → aviso + entrada manual. **RAIL = AlturaDiente**
 (NO el ancho); AnchoDiente se guarda como dato secundario.
 
+## Horas del grupo: costo de M.O., KPIs y el "sin asignar" deja de mentir (v151)
+Peticion del usuario: revisar 🛠 Mi grupo → ⏱ Horas (tecnico, imagen y funcionalidad). Eran **dos
+tablas planas** que solo respondian "cuantas horas".
+### ⚠️ El "sin asignar" mostraba CEROS FALSOS
+`sin_asignar` = jornada − Σproyectos, clampado a 0. Pero eso solo vale si todos abren jornada, y hasta
+v150 el fichaje normal no la abria. En los datos reales, `lksdfkldsf` imputa **8.97 h a proyecto con 0
+de jornada** → sin_asignar sale 0, cuando en realidad es **indeterminado**. La metrica parecia precisa
+y no lo era. Ahora `group_hours` marca `sin_asignar_indet` (proyecto > jornada + 3 min de tolerancia)
+y la tabla muestra **«—»** en vez del cero enganoso, con nota explicativa.
+### El costo, que es lo que le faltaba a una vista de GESTION
+`TarifaHora` por usuario y `labor_cost` ya existian, aqui no se cruzaban. `group_hours` añade
+**`tarifa` y `costo`** (horas imputadas × tarifa) por persona + total del grupo. Aviso de quien tiene
+tarifa 0 (su costo sale $0 sin explicacion). Mismo criterio que la pestaña Costos de v144.
+### Imagen: KPIs + reparto por proyecto
+Tarjetas arriba (personas activas, jornada, en proyectos, sin asignar con % en rojo si >25%, costo
+M.O.) y **barras de horas del grupo por proyecto** — a que elevador va el tiempo, que antes estaba
+enterrado en subtablas persona por persona dentro de un expander. Se quito la columna **Login** (ruido
+tecnico) y las subtablas.
+### ⚠️ Bug que introduje al quitar el Login y cace en la verificacion
+El Login era el **desempate**: en los datos reales `conductor` y `fijiofgjei` tienen el MISMO Nombre,
+asi que sin el Login salian como dos filas `fijiofgjei` **indistinguibles** (mismo colapso por homonimo
+de v147/v150). Fix: se añade el login entre parentesis SOLO a los nombres que colisionan. REGLA (ya van
+tres): al usar un nombre legible como identidad visual, comprobar que es UNICO; si no, desempatar.
+### Verificacion
+Contra los datos REALES: KPIs (4 personas, 9.9 h jornada, 17.7 h proyecto, $359 M.O.), costo de
+`lksdfkldsf` 8.97×40=358.8, `sin_asignar_indet` True para quien imputo sin jornada y False para el
+ruido de 1 centesima (admin1 8.68 vs 8.67), reparto por proyecto (prueba1 8.99 / north 8.65 / norte
+0.02), y las dos `fijiofgjei` ya distinguibles. `group_hours` es el UNICO consumidor, asi que ampliar
+su dict no afecta a nadie mas.
+
 ## Fichaje: dos relojes para TODOS, sin texto libre y con resumen del dia (v150)
 Peticion del usuario: "mas dinamico, mas profesional; aun salen campos para llenar a mano; el proyecto
 debe poder seleccionarse; y vamos a estandarizar el clock in/out para todos por igual, uno general y
@@ -1883,7 +1913,7 @@ posicional + plano) → app.py, al cargar el PDF, setea `st.session_state["ns"]`
 resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NORTH SYD y AGECARE → NS=6
 (coincide con travel/floor-height HQ/HE).
 
-## Versiones desplegadas (v150 = actual)
+## Versiones desplegadas (v151 = actual)
 | Ver | Cambio principal |
 |---|---|
 | v5 | Extractor: CRLF fix, caso D valor-antes-label, sin pdfplumber |
@@ -1985,6 +2015,7 @@ resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NOR
 | v102 | Fix: NS se lee del plano (NUMBER OF STOPS) al cargar el PDF; default de init 6→2 (ya no queda pegado en 6) |
 | v103 | Rol conductor (2 relojes: jornada general + segmentos por proyecto, columna Tipo) + cronómetro en vivo para todos + reporte admin de horas del grupo (Mi grupo → ⏱ Horas) |
 | v104 | Credenciales/tickets por usuario (White Card, Forklift, Dogging/Rigging, licencia…): vencimiento+estado, foto/documento a Drive, radar en Resumen del día, avisos email/Telegram a admin+usuario; usuario ve las suyas (🎫 Mis credenciales) |
+| v151 | Horas del grupo: costo de mano de obra por persona (horas x tarifa), KPIs del grupo, reparto por proyecto en barras, y el «sin asignar» deja de mostrar ceros falsos (marca «—» cuando el dato es indeterminado por fichar sin jornada) |
 | v150 | Fichaje unificado: dos relojes (jornada + proyecto) para todos los roles, el proyecto siempre de una lista (el texto libre dejaba las horas sin atribuir), fuera Ubicacion (nadie la leia), resumen del dia, historial propio y clock_out en 1 llamada |
 | v149 | Datos: archivar sustituye a borrar (borrar dejaba huerfanos documentos, pre-starts, alarmas y fichajes, y sin confirmacion), fechas con calendario (el texto libre falseaba el cronograma en silencio) y aviso de credenciales al asignar campo |
 | v148 | Reabrir un calculo guardado en su herramienta: DatosJSON no tenia lector y ademas solo guardaba los resultados; ahora guarda tambien las entradas y se puede retomar un calculo |

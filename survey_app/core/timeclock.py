@@ -434,7 +434,8 @@ def group_hours(grupo: str, days=None) -> list:
         h = round(elapsed_seconds(ci) / 3600.0, 2) if estado == "ABIERTO" else _num(r.get("Horas"))
         if h <= 0:
             continue
-        a = agg.setdefault(clave, {"general": 0.0, "proyecto": 0.0, "por": {}, "nombre": nombre})
+        a = agg.setdefault(clave, {"general": 0.0, "proyecto": 0.0, "por": {},
+                                   "nombre": nombre})
         if _tipo_of(r) == TIPO_GENERAL:
             a["general"] += h
         else:
@@ -443,14 +444,34 @@ def group_hours(grupo: str, days=None) -> list:
             # sus horas viejas ya no salen bajo dos etiquetas distintas.
             pn = _nombre_actual(pid_of(r), r.get("Proyecto", "")) or "(sin proyecto)"
             a["por"][pn] = a["por"].get(pn, 0.0) + h
+    # Tarifa/hora por usuario, para el costo de mano de obra (misma fuente que
+    # expenses.labor_cost). Import perezoso: auth no depende de timeclock.
+    try:
+        from core import auth
+        rates = auth.rate_map(grupo)
+    except Exception:
+        rates = {}
+
     out = []
     for clave, a in agg.items():
+        gen, pro = a["general"], a["proyecto"]
+        # ⚠️ `sin_asignar` = jornada − proyectos SOLO tiene sentido si la jornada
+        # cubre lo imputado. Si se imputo a proyectos MAS que la jornada abierta
+        # (fichajes de proyecto sin abrir jornada, lo normal antes de v150), el
+        # resultado es INDETERMINADO, no 0: marcarlo en vez de un cero que engaña.
+        # Umbral de 3 min: por debajo es ruido de redondeo (dos tramos que cierran
+        # con segundos de diferencia), no un dato realmente incompleto.
+        indet = pro > gen + 0.05
+        tarifa = float(rates.get(clave, 0.0) or 0.0)
         out.append({
             "usuario": clave,
             "nombre": a.get("nombre", clave),
-            "general": round(a["general"], 2),
-            "proyecto": round(a["proyecto"], 2),
-            "sin_asignar": round(max(0.0, a["general"] - a["proyecto"]), 2),
+            "general": round(gen, 2),
+            "proyecto": round(pro, 2),
+            "sin_asignar": round(max(0.0, gen - pro), 2),
+            "sin_asignar_indet": indet,
+            "tarifa": tarifa,
+            "costo": round(pro * tarifa, 2),      # costo = horas imputadas × tarifa
             "por_proyecto": {k: round(v, 2) for k, v in a["por"].items()},
         })
     out.sort(key=lambda x: -(x["general"] or x["proyecto"]))

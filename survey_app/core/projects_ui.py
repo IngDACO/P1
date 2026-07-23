@@ -2098,8 +2098,6 @@ def render_group_hours(grupo: str):
     if not timeclock.is_configured():
         st.warning("El fichaje necesita Google Sheets configurado.")
         return
-    st.caption("Total de horas por usuario (jornada general de conductores + horas por proyecto). "
-               "**Sin asignar** = tiempo de jornada no imputado a un proyecto (transporte/espera).")
 
     per = st.radio("Periodo", ["Hoy", "Semana", "Mes", "Todo"], horizontal=True,
                    key="gh_per", label_visibility="collapsed")
@@ -2114,19 +2112,77 @@ def render_group_hours(grupo: str):
         st.info("Sin fichajes en el periodo.")
         return
 
-    st.dataframe(pd.DataFrame([{
-        "Usuario":       d.get("nombre") or d["usuario"],
-        "Login":         d["usuario"],
-        "Jornada (h)":   d["general"],
-        "Proyectos (h)": d["proyecto"],
-        "Sin asignar (h)": d["sin_asignar"],
-    } for d in data]), use_container_width=True, hide_index=True)
+    # ── Totales del grupo (KPIs) ──
+    tot_jorn = sum(d["general"] for d in data)
+    tot_proy = sum(d["proyecto"] for d in data)
+    tot_sina = sum(d["sin_asignar"] for d in data)
+    tot_cost = sum(d["costo"] for d in data)
+    activos  = sum(1 for d in data if d["general"] or d["proyecto"])
+    pct_sina = (100 * tot_sina / tot_jorn) if tot_jorn > 0 else 0
+    _dudoso  = [d for d in data if d["sin_asignar_indet"]]
 
-    with st.expander("🔎 Desglose por proyecto"):
-        for d in data:
-            if d["por_proyecto"]:
-                st.markdown(f"**{d.get('nombre') or d['usuario']}**")
-                st.dataframe(pd.DataFrame(
-                    [{"Proyecto": k, "Horas": v} for k, v in
-                     sorted(d["por_proyecto"].items(), key=lambda x: -x[1])],
-                ), use_container_width=True, hide_index=True)
+    tarj = [_kpi_card("Personas", activos),
+            _kpi_card("Jornada", f"{tot_jorn:.1f} h"),
+            _kpi_card("En proyectos", f"{tot_proy:.1f} h"),
+            _kpi_card("Sin asignar", f"{tot_sina:.1f} h",
+                      "#c0392b" if pct_sina > 25 else None),
+            _kpi_card("Costo M.O.", f"${tot_cost:,.0f}")]
+    st.markdown('<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:6px">'
+                + "".join(tarj) + "</div>", unsafe_allow_html=True)
+    if tot_jorn > 0:
+        st.caption(f"**{pct_sina:.0f}%** de la jornada del grupo fue traslados y espera "
+                   "(sin asignar). El costo de M.O. = horas imputadas × tarifa de cada persona.")
+
+    # ── Tabla por persona (con costo; sin el Login técnico) ──
+    # ⚠️ Dos logins pueden compartir Nombre (en los datos reales, `conductor` y
+    # `fijiofgjei` se llaman igual): sin el Login se volverian indistinguibles.
+    # Se añade el login SOLO a los que colisionan, no a todos.
+    from collections import Counter as _Counter
+    _nombres = _Counter((d.get("nombre") or d["usuario"]) for d in data)
+
+    def _etiqueta(d):
+        nom = d.get("nombre") or d["usuario"]
+        return f"{nom} ({d['usuario']})" if _nombres[nom] > 1 else nom
+
+    filas = []
+    for d in data:
+        _sa = ("—" if d["sin_asignar_indet"] else f"{d['sin_asignar']:.2f}")
+        filas.append({
+            "Usuario": _etiqueta(d),
+            "Jornada (h)": d["general"],
+            "En proyectos (h)": d["proyecto"],
+            "Sin asignar (h)": _sa,
+            "Tarifa/h": d["tarifa"] or "—",
+            "Costo M.O.": d["costo"] or 0,
+        })
+    st.dataframe(pd.DataFrame(filas), use_container_width=True, hide_index=True)
+
+    if _dudoso:
+        st.caption("«—» en *sin asignar*: esa persona imputó a proyectos más horas que las "
+                   "de su jornada, así que el dato no es fiable (fichó al proyecto sin abrir "
+                   "jornada). Se corrige a partir de v150; el histórico anterior queda así.")
+    _sin_tar = [_etiqueta(d) for d in data
+                if d["proyecto"] > 0 and not d["tarifa"]]
+    if _sin_tar:
+        st.warning("⚠️ Sin **tarifa/hora**, así que su costo sale $0: **"
+                   + ", ".join(_sin_tar) + "**. Se fija en 🔧 Usuarios.")
+
+    # ── Reparto por proyecto (a qué elevador va el tiempo del grupo) ──
+    por_proy = {}
+    for d in data:
+        for nom, h in d["por_proyecto"].items():
+            por_proy[nom] = por_proy.get(nom, 0.0) + h
+    if por_proy:
+        st.markdown("**Horas del grupo por proyecto**")
+        _tot = sum(por_proy.values()) or 1
+        for nom, h in sorted(por_proy.items(), key=lambda x: -x[1]):
+            st.markdown(
+                '<div style="display:flex;align-items:center;gap:10px;margin-bottom:5px;">'
+                f'<div style="width:190px;flex:none;font-size:13px;color:#374151;'
+                f'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{nom}</div>'
+                '<div style="flex:1;height:9px;background:#eef1f5;border-radius:20px;">'
+                f'<div style="height:9px;width:{100*h/_tot:.0f}%;background:#2e6da4;'
+                'border-radius:20px;"></div></div>'
+                f'<div style="width:64px;flex:none;text-align:right;font-size:13px;'
+                f'font-weight:600;color:#1f2937;">{h:.1f} h</div></div>',
+                unsafe_allow_html=True)
