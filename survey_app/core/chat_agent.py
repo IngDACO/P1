@@ -289,7 +289,9 @@ indicar dónde está algo, ten en cuenta con quién hablas:
   plan vs real, alarmas y una comparativa de horas y costo entre elevadores.
 - **🛠 Mi grupo (administrador):** aquí se **crean los proyectos** (➕ Nuevo proyecto). KPIs del grupo, "Resumen del día" con lo pendiente, y cartera de
   proyectos en tarjetas (marcan retraso y adelanto). Secciones: 📊 Proyectos · 🗂 Agrupaciones ·
-  ⏱ Horas · 💰 Gastos · 🔧 Usuarios de campo.
+  ⏱ Horas · 💰 Gastos · **🔧 Usuarios de campo** (ficha 360° por persona: acceso/contraseña/tarifa,
+  contacto email+Telegram, credenciales, y su trabajo —proyectos asignados, horas, recibos—; crear
+  y eliminar usuarios).
 - **Detalle de un proyecto** (4 pestañas): **📊 Estado** (alarmas, curva S real vs plan, proyección de
   adelanto/retraso) · **✏️ Datos** (instrucciones, inducciones, editar datos con fechas de calendario,
   actividades, y **archivar** el proyecto: desaparece de listas e informes pero se conserva

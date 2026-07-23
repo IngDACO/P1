@@ -13,10 +13,45 @@ from core import ui_common as ui
 _USER_COLS = ["Usuario", "Nombre", "Rol", "Grupo", "Activo", "Email"]  # tabla sin hash/tokens
 
 
-def _field_contact_ui(campo_users, key_prefix="cc"):
-    """Gestión de contacto OBLIGATORIO (email + Telegram) de usuarios de campo — solo admin/owner.
-    El Telegram lo vincula el admin DESPUÉS de que el usuario pulse Start en el bot."""
+def _contacto_uno(sel, key_prefix="cc"):
+    """Email + vinculación de Telegram de UN usuario. El Telegram lo vincula el
+    admin después de que el usuario pulse Start en el bot."""
     from core import notify
+    rec = auth.get_user(sel)
+    em  = st.text_input("📧 Email", value=str(rec.get("Email", "")), key=f"{key_prefix}_em")
+    if st.button("Guardar email", key=f"{key_prefix}_emb"):
+        ok, msg = auth.set_contact(sel, email=em)
+        (st.success if ok else st.error)(msg)
+        if ok:
+            st.rerun()
+    st.markdown("**📨 Telegram**")
+    tg = str(rec.get("TelegramChatID", "")).strip()
+    if not notify.telegram_configured() or not notify.bot_username():
+        st.caption("Telegram no configurado (falta el bot en Secrets).")
+    elif tg:
+        st.success("✅ Telegram vinculado.")
+        if st.button("Desvincular Telegram", key=f"{key_prefix}_tgu"):
+            auth.set_contact(sel, telegram="")
+            st.rerun()
+    else:
+        bot  = notify.bot_username()
+        code = re.sub(r"[^A-Za-z0-9_-]", "", sel) or "user"
+        st.caption("1) El usuario abre el bot y pulsa **Start** (envíale este link):")
+        st.code(f"https://t.me/{bot}?start={code}")
+        st.caption("2) Cuando lo haya hecho, pulsa:")
+        if st.button("🔗 Vincular Telegram de este usuario", key=f"{key_prefix}_tgl"):
+            cid = notify.telegram_find_chat_by_code(code)
+            if cid:
+                auth.set_contact(sel, telegram=cid)
+                st.success("✅ Telegram vinculado.")
+                st.rerun()
+            else:
+                st.error("No encontré su mensaje. Asegúrate de que pulsó Start y reintenta.")
+
+
+def _field_contact_ui(campo_users, key_prefix="cc"):
+    """Contacto OBLIGATORIO (email + Telegram) de usuarios de campo — panel propietario.
+    (En 🛠 Mi grupo el contacto vive dentro de la ficha de cada usuario, v153.)"""
     if not campo_users:
         return
     faltan = [u["Usuario"] for u in campo_users
@@ -26,36 +61,7 @@ def _field_contact_ui(campo_users, key_prefix="cc"):
             st.warning("⚠️ Sin contacto completo (no pueden usar la app): " + ", ".join(faltan))
         sel = st.selectbox("Usuario de campo", [u["Usuario"] for u in campo_users],
                            key=f"{key_prefix}_sel")
-        rec = auth.get_user(sel)
-        em  = st.text_input("📧 Email", value=str(rec.get("Email", "")), key=f"{key_prefix}_em")
-        if st.button("Guardar email", key=f"{key_prefix}_emb"):
-            ok, msg = auth.set_contact(sel, email=em)
-            (st.success if ok else st.error)(msg)
-            if ok:
-                st.rerun()
-        st.markdown("**📨 Telegram**")
-        tg = str(rec.get("TelegramChatID", "")).strip()
-        if not notify.telegram_configured() or not notify.bot_username():
-            st.caption("Telegram no configurado (falta el bot en Secrets).")
-        elif tg:
-            st.success("✅ Telegram vinculado.")
-            if st.button("Desvincular Telegram", key=f"{key_prefix}_tgu"):
-                auth.set_contact(sel, telegram="")
-                st.rerun()
-        else:
-            bot  = notify.bot_username()
-            code = re.sub(r"[^A-Za-z0-9_-]", "", sel) or "user"
-            st.caption("1) El usuario abre el bot y pulsa **Start** (envíale este link):")
-            st.code(f"https://t.me/{bot}?start={code}")
-            st.caption("2) Cuando lo haya hecho, pulsa:")
-            if st.button("🔗 Vincular Telegram de este usuario", key=f"{key_prefix}_tgl"):
-                cid = notify.telegram_find_chat_by_code(code)
-                if cid:
-                    auth.set_contact(sel, telegram=cid)
-                    st.success("✅ Telegram vinculado.")
-                    st.rerun()
-                else:
-                    st.error("No encontré su mensaje. Asegúrate de que pulsó Start y reintenta.")
+        _contacto_uno(sel, key_prefix)
 
 def render_credenciales(usuario, grupo, editable=False, key_prefix="cr"):
     """Tickets/credenciales de un usuario. editable=True → admin gestiona (agregar/editar/
@@ -550,21 +556,151 @@ def _owner_rieles():
 # ════════════════════════════════════════════════════════════
 # PANEL DEL ADMINISTRADOR — su grupo (proyectos + usuarios de campo)
 # ════════════════════════════════════════════════════════════
+def _ficha_usuario(u, grupo):
+    """Ficha 360° de UN usuario: identidad, acceso, contacto, credenciales y su
+    trabajo (v153). Antes había que elegir a la persona en 3 desplegables distintos
+    (contacto / modificar / credenciales); ahora se gestiona todo desde aquí."""
+    from core import credentials as C
+    from core import projects as P
+    from core import timeclock as T
+    from core import expenses as E
+    sel   = u["Usuario"]
+    es_campo = u["Rol"].lower() == "campo"
+    k = f"fu_{sel}"
+
+    # ── Estado de un vistazo ──
+    contacto_ok = bool(str(u.get("Email", "")).strip()
+                       and str(u.get("TelegramChatID", "")).strip())
+    activo = str(u.get("Activo", "")).strip().upper() in ("SI", "TRUE", "1", "SÍ")
+    try:
+        _ses = T.open_sessions(u.get("Nombre") or sel, grupo, sel)
+        fichando = bool(_ses.get(T.TIPO_GENERAL) or _ses.get(T.TIPO_PROYECTO))
+    except Exception:
+        fichando = False
+    chips = [("🟢 Activo" if activo else "🔴 Inactivo"),
+             ("🕐 Fichando ahora" if fichando else ""),
+             (("📇 Contacto OK" if contacto_ok else "⚠️ Sin contacto")
+              if es_campo else "")]
+    st.markdown(f"**{u.get('Nombre') or sel}**  ·  _{u['Rol']}_  ·  "
+                + "  ·  ".join(c for c in chips if c))
+
+    _sec = st.radio("Sección del usuario",
+                    ["🔑 Acceso", "📇 Contacto", "🎫 Credenciales", "📊 Su trabajo", "🗑"],
+                    horizontal=True, key=f"{k}_sec", label_visibility="collapsed")
+
+    if _sec == "🔑 Acceso":
+        np_ = st.text_input("Nueva contraseña", type="password", key=f"{k}_np")
+        if st.button("Cambiar contraseña", key=f"{k}_chp"):
+            if np_:
+                ok, msg = auth.set_password(sel, np_); (st.success if ok else st.error)(msg)
+            else:
+                st.error("Escribe la nueva contraseña.")
+        tar = st.number_input("💵 Tarifa por hora (para costear la mano de obra)",
+                              min_value=0.0, step=1.0,
+                              value=float(str(u.get("TarifaHora", "") or 0).replace(",", ".") or 0),
+                              key=f"{k}_tar")
+        if st.button("Guardar tarifa", key=f"{k}_savetar"):
+            ok, msg = auth.set_rate(sel, tar); (st.success if ok else st.error)(msg)
+            if ok:
+                st.rerun()
+        if activo:
+            if st.button("🔴 Desactivar (no podrá entrar)", key=f"{k}_de"):
+                ok, msg = auth.set_active(sel, False); (st.success if ok else st.error)(msg)
+                if ok:
+                    st.rerun()
+        else:
+            if st.button("🟢 Activar", key=f"{k}_act"):
+                ok, msg = auth.set_active(sel, True); (st.success if ok else st.error)(msg)
+                if ok:
+                    st.rerun()
+
+    elif _sec == "📇 Contacto":
+        if not es_campo:
+            st.caption("El contacto (email + Telegram) solo es obligatorio para "
+                       "usuarios de campo. Puedes registrarlo igual.")
+        elif not contacto_ok:
+            st.warning("⚠️ Sin contacto completo **no puede usar la app** y no recibe "
+                       "asignaciones ni inducciones.")
+        _contacto_uno(sel, key_prefix=f"{k}_cc")
+
+    elif _sec == "🎫 Credenciales":
+        render_credenciales(sel, grupo, editable=True, key_prefix=f"{k}_cr")
+
+    elif _sec == "📊 Su trabajo":
+        # Todo lo asociado a la persona, en solo lectura.
+        c1, c2, c3 = st.columns(3)
+        try:
+            gh = next((d for d in T.group_hours(grupo, days=None)
+                       if d["usuario"] == sel), None)
+            _h = (gh["general"] + gh["proyecto"]) if gh else 0.0
+        except Exception:
+            _h = 0.0
+        rec = E.by_user(grupo, sel) if E.is_configured() else {"n": 0, "total": 0.0}
+        asg = ([p for p in P.list_projects(grupo=grupo)
+                if sel in [x.strip() for x in str(p.get("CampoAsignados", "")).split(";")]]
+               if es_campo else [])
+        c1.metric("Horas registradas", f"{_h:.1f}")
+        c2.metric("Recibos cargados", rec["n"])
+        c3.metric("Proyectos asignados", len(asg))
+        if asg:
+            st.caption("**Asignado a:** " + " · ".join(str(p.get("Nombre")) for p in asg))
+        if rec["n"]:
+            st.caption(f"Ha cargado recibos por **${rec['total']:,.0f}** en total.")
+        st.caption("Las horas y los recibos se gestionan desde ⏱ Fichaje y el detalle "
+                   "de cada proyecto; aquí es un resumen de solo lectura.")
+
+    else:  # 🗑 eliminar
+        st.warning("Eliminar quita al usuario y su acceso. Sus fichajes, recibos y "
+                   "credenciales ya registrados **no se borran** (quedan a su nombre).")
+        if ui.confirmar_borrado(f"{k}_delok", f"Confirmo eliminar a «{sel}»"):
+            if st.button("Eliminar definitivamente", key=f"{k}_del"):
+                ok, msg = auth.delete_user(sel); (st.success if ok else st.error)(msg)
+                if ok:
+                    st.session_state.pop("gp_fichasel", None)
+                    st.rerun()
+
+
 def _grupo_usuarios(grupo):
+    from core import credentials as C
     users = auth.list_users(grupo=grupo)
-    campo = [u for u in users if u["Rol"].lower() == "campo"]
     gente = [u for u in users if u["Rol"].lower() in ("campo", "conductor")]
+
+    # Aviso de vencimientos (email/Telegram) una vez por sesión
+    if C.is_configured() and not st.session_state.get(f"_credaviso_{grupo}"):
+        st.session_state[f"_credaviso_{grupo}"] = True
+        try:
+            C.notify_expiring(grupo)
+        except Exception:
+            pass
+
+    # ── Panorama: tabla-resumen con semáforos ──
     if gente:
-        _rows = [{"Usuario": u["Usuario"], "Nombre": u["Nombre"],
-                  "Rol": u["Rol"], "Activo": u["Activo"],
-                  "Contacto": ("—" if u["Rol"].lower() == "conductor"
-                               else ("✅" if (str(u.get("Email", "")).strip()
-                                              and str(u.get("TelegramChatID", "")).strip())
-                                     else "⚠️ falta"))} for u in gente]
+        _rows = []
+        for u in gente:
+            es_campo = u["Rol"].lower() == "campo"
+            _cont = ("—" if not es_campo
+                     else ("✅" if (str(u.get("Email", "")).strip()
+                                    and str(u.get("TelegramChatID", "")).strip())
+                           else "⚠️ falta"))
+            _rows.append({"Usuario": u["Usuario"], "Nombre": u["Nombre"],
+                          "Rol": u["Rol"], "Activo": u["Activo"],
+                          "Tarifa/h": u.get("TarifaHora", "") or "—", "Contacto": _cont})
         st.dataframe(pd.DataFrame(_rows), hide_index=True, use_container_width=True)
     else:
-        st.info("Aún no tienes usuarios de campo ni conductores.")
+        st.info("Aún no tienes usuarios de campo ni conductores. Crea uno abajo.")
 
+    # ── Matriz de compliance (panorama de credenciales) ──
+    if gente and C.is_configured():
+        try:
+            tipos, filas = C.matrix(grupo)
+            if tipos:
+                with st.expander("🗂 Matriz de credenciales (usuarios × tickets)"):
+                    st.caption("🟢 vigente · 🟡 por vencer (≤30 d) · 🔴 vencido · — no registrada")
+                    st.dataframe(pd.DataFrame(filas), hide_index=True, use_container_width=True)
+        except Exception:
+            pass
+
+    # ── Crear usuario (plegado) ──
     with st.expander("➕ Crear usuario (campo o conductor)"):
         with st.form("form_campo", clear_on_submit=True):
             u  = st.text_input("Usuario")
@@ -572,7 +708,7 @@ def _grupo_usuarios(grupo):
             pw = st.text_input("Contraseña", type="password")
             rl = st.selectbox("Rol", ["campo", "conductor"], key="gp_newrol")
             em = st.text_input("📧 Email (OBLIGATORIO para campo)")
-            st.caption("Campo: el Telegram se vincula abajo tras crearlo. "
+            st.caption("Campo: el Telegram se vincula en su ficha tras crearlo. "
                        "Conductor: no requiere email/Telegram.")
             if st.form_submit_button("Crear"):
                 if rl == "campo" and not em.strip():
@@ -585,55 +721,15 @@ def _grupo_usuarios(grupo):
                     if ok:
                         st.rerun()
 
-    _field_contact_ui(campo, key_prefix="gp_cc")
-
+    # ── Ficha de UN usuario (elegir y gestionar todo) ──
     if gente:
-        with st.expander("🔑 Modificar usuario (campo / conductor)"):
-            sel = st.selectbox("Usuario", [x["Usuario"] for x in gente], key="gp_sel")
-            np_ = st.text_input("Nueva contraseña", type="password", key="gp_np")
-            if st.button("Cambiar contraseña", key="gp_chp"):
-                if np_:
-                    ok, msg = auth.set_password(sel, np_); (st.success if ok else st.error)(msg)
-            _cur = next((x for x in gente if x["Usuario"] == sel), {})
-            tar = st.number_input("💵 Tarifa por hora (para costear la mano de obra)",
-                                  min_value=0.0, step=1.0,
-                                  value=float(str(_cur.get("TarifaHora", "") or 0).replace(",", ".") or 0),
-                                  key="gp_tar")
-            if st.button("Guardar tarifa", key="gp_savetar"):
-                ok, msg = auth.set_rate(sel, tar); (st.success if ok else st.error)(msg); st.rerun()
-            b1, b2, b3 = st.columns(3)
-            if b1.button("Activar", key="gp_act"):
-                ok, msg = auth.set_active(sel, True);  (st.success if ok else st.error)(msg); st.rerun()
-            if b2.button("Desactivar", key="gp_de"):
-                ok, msg = auth.set_active(sel, False); (st.success if ok else st.error)(msg); st.rerun()
-            if b3.button("Eliminar", key="gp_del"):
-                ok, msg = auth.delete_user(sel);       (st.success if ok else st.error)(msg); st.rerun()
-
-    # ── Credenciales / tickets ──
-    st.markdown("---")
-    st.markdown("#### 🎫 Credenciales / tickets")
-    from core import credentials as C
-    # Aviso de vencimientos (email/Telegram) una vez por sesión
-    if C.is_configured() and not st.session_state.get(f"_credaviso_{grupo}"):
-        st.session_state[f"_credaviso_{grupo}"] = True
-        try:
-            C.notify_expiring(grupo)
-        except Exception:
-            pass
-    if users:
-        # Matriz de compliance: usuarios × credenciales con semáforo
-        try:
-            tipos, filas = C.matrix(grupo)
-            if tipos:
-                with st.expander("🗂 Matriz de compliance (usuarios × credenciales)", expanded=True):
-                    st.caption("🟢 vigente · 🟡 por vencer (≤30 d) · 🔴 vencido · — no registrada")
-                    st.dataframe(pd.DataFrame(filas), hide_index=True, use_container_width=True)
-        except Exception:
-            pass
-        cusel = st.selectbox("Usuario", [x["Usuario"] for x in users], key="gp_credsel")
-        render_credenciales(cusel, grupo, editable=True, key_prefix="gpcr")
-    else:
-        st.caption("Crea usuarios para gestionar sus credenciales.")
+        st.markdown("#### 👤 Gestionar un usuario")
+        _map = {f"{u['Nombre'] or u['Usuario']} ({u['Usuario']})": u for u in gente}
+        _elegido = ui.elegir("Usuario", _map, key="gp_fichasel",
+                             vacio="— elige un usuario —")
+        if _elegido:
+            st.markdown("---")
+            _ficha_usuario(_elegido, grupo)
 
 
 def render_group_panel(grupo: str):

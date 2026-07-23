@@ -71,6 +71,20 @@ def list_for(pid) -> list:
     return [r for r in _records() if str(r.get("ProyectoID", "")) == str(pid)]
 
 
+def by_user(grupo, usuario) -> dict:
+    """Recibos cargados POR este usuario en el grupo: {n, total}.
+
+    Para la ficha de usuario (v153): que ha aportado cada persona. `CreadoPor`
+    se guarda desde v105 y no se leia por usuario en ningun sitio.
+    """
+    n, total = 0, 0.0
+    for r in _records():
+        if str(r.get("Grupo", "")) == str(grupo) and str(r.get("CreadoPor", "")) == str(usuario):
+            n += 1
+            total += _num(r.get("Valor"))
+    return {"n": n, "total": round(total, 2)}
+
+
 def project_expenses(pid) -> dict:
     """{total, por_categoria{cat:val}, items[]} de las compras del proyecto."""
     items = list_for(pid)

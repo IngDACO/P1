@@ -785,6 +785,36 @@ Al cargar el plano en el survey (app.py), autocompleta **RAIL = AlturaDiente** (
 espalda) del catálogo; si el código no está o no se detecta → aviso + entrada manual. **RAIL = AlturaDiente**
 (NO el ancho); AnchoDiente se guarda como dato secundario.
 
+## Usuarios de campo: una ficha 360 por persona (v153)
+Peticion del usuario: la gestion de usuarios "debe ser lo mas completa posible y permitir ver y
+gestionar TODO lo asociado con cada usuario; practica pero completa".
+### ⚠️ El problema: estaba organizada por ACCION, no por PERSONA
+Para gestionar UN usuario habia que elegirlo en **tres desplegables distintos** — uno para el contacto,
+otro para modificar (contraseña/tarifa/activar) y otro para las credenciales — y la tabla de arriba era
+solo lectura. Ademas habia datos de cada persona que **no se veian en ningun sitio de gestion** aunque
+la app los tiene: proyectos asignados, horas, recibos que cargo, si esta fichando ahora.
+### `_ficha_usuario(u, grupo)`: elegir a la persona y gestionarlo todo ahi
+Sub-navegacion con radio (regla v56, NO st.tabs) dentro de la ficha:
+- **🔑 Acceso**: contraseña, tarifa/hora, activar/desactivar.
+- **📇 Contacto**: email + vinculacion de Telegram (reusa `_contacto_uno`, extraido de
+  `_field_contact_ui` para no duplicar; el panel del propietario sigue usando la version con lista).
+- **🎫 Credenciales**: `render_credenciales(editable=True)`, ya existia.
+- **📊 Su trabajo** (nuevo, solo lectura): horas registradas, recibos cargados (`expenses.by_user`,
+  nuevo — `CreadoPor` se guardaba desde v105 y no se leia por usuario) y proyectos asignados. El "todo
+  lo asociado" que se pidio.
+- **🗑**: eliminar con `ui.confirmar_borrado`.
+La ficha **se adapta al rol** (decision del usuario, campo+conductor misma ficha): al conductor no le
+exige contacto ni le muestra proyectos asignados (no van por `CampoAsignados`).
+Arriba queda el **panorama**: tabla-resumen con semaforos de contacto + la matriz de compliance, y
+"➕ Crear usuario" plegado. El selector de la ficha va **sin preseleccion** (`ui.elegir`, v139).
+### Verificacion
+Contra datos REALES: `campo1` (rol campo) muestra sus **3 proyectos asignados** (prueba1/north/norte),
+`conductor` no muestra proyectos (correcto, no van por CampoAsignados); `by_user` cuenta recibos por
+`CreadoPor`; los chips de estado (activo/fichando/contacto) derivan de datos reales. 0 nombres sin
+resolver en las 4 funciones tocadas. **`_field_contact_ui` conserva su firma** para los 2 call-sites
+del panel del propietario (extraje `_contacto_uno` sin cambiar la version con lista). Sin variable
+`campo` huerfana tras la reescritura. Prompt del agente actualizado en el mismo lote (regla v133).
+
 ## Gastos del grupo: presupuesto, proyeccion y separar con/sin presupuesto (v152)
 Peticion del usuario. La pestaña era de **v106** y no se habia vuelto a tocar: dos `st.bar_chart`
 grises, una tabla y un `st.metric`. Se quedo atras respecto a Costos (v144), Estado (v143) y Horas
@@ -1942,7 +1972,7 @@ posicional + plano) → app.py, al cargar el PDF, setea `st.session_state["ns"]`
 resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NORTH SYD y AGECARE → NS=6
 (coincide con travel/floor-height HQ/HE).
 
-## Versiones desplegadas (v152 = actual)
+## Versiones desplegadas (v153 = actual)
 | Ver | Cambio principal |
 |---|---|
 | v5 | Extractor: CRLF fix, caso D valor-antes-label, sin pdfplumber |
@@ -2044,6 +2074,7 @@ resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NOR
 | v102 | Fix: NS se lee del plano (NUMBER OF STOPS) al cargar el PDF; default de init 6→2 (ya no queda pegado en 6) |
 | v103 | Rol conductor (2 relojes: jornada general + segmentos por proyecto, columna Tipo) + cronómetro en vivo para todos + reporte admin de horas del grupo (Mi grupo → ⏱ Horas) |
 | v104 | Credenciales/tickets por usuario (White Card, Forklift, Dogging/Rigging, licencia…): vencimiento+estado, foto/documento a Drive, radar en Resumen del día, avisos email/Telegram a admin+usuario; usuario ve las suyas (🎫 Mis credenciales) |
+| v153 | Usuarios de campo: ficha 360 por persona (acceso, contacto, credenciales y su trabajo —proyectos, horas, recibos— en un solo sitio) en vez de elegir al usuario en 3 desplegables distintos; se adapta al rol |
 | v152 | Gastos del grupo: presupuesto y proyeccion al terminar (existia desde v144 y no se usaba), KPIs, alerta de los que se saldran al ritmo actual, y separar proyectos con/sin presupuesto; barras en vez de bar_chart grises |
 | v151 | Horas del grupo: costo de mano de obra por persona (horas x tarifa), KPIs del grupo, reparto por proyecto en barras, y el «sin asignar» deja de mostrar ceros falsos (marca «—» cuando el dato es indeterminado por fichar sin jornada) |
 | v150 | Fichaje unificado: dos relojes (jornada + proyecto) para todos los roles, el proyecto siempre de una lista (el texto libre dejaba las horas sin atribuir), fuera Ubicacion (nadie la leia), resumen del dia, historial propio y clock_out en 1 llamada |
