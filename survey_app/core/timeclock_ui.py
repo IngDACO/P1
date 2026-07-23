@@ -201,6 +201,27 @@ def render_timeclock_tab():
     else:
         if not propios:
             st.caption("No tienes proyectos asignados; se muestran los de tu grupo.")
+        # ── Atajo: tu asignación de hoy (del roster) ──
+        # Accion EXPLICITA (dice a que fichara), no una preseleccion silenciosa (v138).
+        try:
+            from core import roster
+            if roster.is_configured():
+                _asig = roster.asignacion_dia(grupo, usuario)
+                _rpid = (_asig or {}).get("proyecto_id", "")
+                if _rpid and _rpid in idmap.values():
+                    _rnom = next(k for k, v in idmap.items() if v == _rpid)
+                    if st.button(f"🟢 Fichar a {_asig['etiqueta']} (tu asignación de hoy)",
+                                 use_container_width=True, type="primary", key="tc_roster_in"):
+                        ok, msg, auto = timeclock.fichar_proyecto(
+                            nombre, _rnom, grupo, usuario, _rpid)
+                        if ok:
+                            st.success(msg + ("  🕐 Se abrió también tu jornada." if auto else ""))
+                            st.rerun()
+                        else:
+                            st.error(msg)
+                    st.caption("O elige otro proyecto abajo.")
+        except Exception:
+            pass
         _pid = ui.elegir("¿En qué proyecto vas a trabajar?", idmap, key="tc_prj_sel",
                          vacio="— elige el proyecto —")
         if st.button("🟢 Fichar al proyecto", use_container_width=True, type="primary",

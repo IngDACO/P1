@@ -790,6 +790,26 @@ Al cargar el plano en el survey (app.py), autocompleta **RAIL = AlturaDiente** (
 espalda) del catálogo; si el código no está o no se detecta → aviso + entrada manual. **RAIL = AlturaDiente**
 (NO el ancho); AnchoDiente se guarda como dato secundario.
 
+## Tablero de cuadrilla — el campo lo ve + fichaje con la asignacion del dia (v160)
+Segundo incremento del roster (v159 fue la base). Cierra el lado del CAMPO.
+- **`roster.asignacion_dia(grupo, usuario, fecha)`** — que le toca a una persona un dia: {asig, nota,
+  proyecto_id, etiqueta, color, es_estado}. Fin de semana (weekday>4) o dia sin asignacion → {}.
+- **`roster_ui.render_board_readonly(grupo, resaltar_usuario)`** — el board en SOLO LECTURA (el campo ve
+  toda la cuadrilla, decision del usuario), con su fila resaltada (👉 + fondo). Nav de semana, sin edicion.
+- **Campo → 📋 Mis proyectos**: arriba, "📅 Hoy: <trabajo> · <nota>" destacado + expander con el board
+  completo. Va ANTES del early-return por "sin proyectos", asi que se ve aunque el campo solo tenga
+  trabajos NO enlazados a PRJ.
+- **Fichaje**: si la asignacion de hoy enlaza a un PRJ que el campo tiene, aparece un boton
+  **"🟢 Fichar a <trabajo> (tu asignacion de hoy)"**. ⚠️ Es una accion EXPLICITA (dice a que fichara),
+  no una preseleccion silenciosa — respeta la regla de v138. Si la asignacion es un estado (OFF/Leave)
+  no hay PRJ y no aparece boton.
+### Verificacion
+Sintaxis + import de los 4 modulos; `asignacion_dia` mapea bien el dia (martes→mar, sabado→{}). Todo
+lo que ESCRIBE (guardar_persona, copiar_semana) y el board real siguen sin ejercitarse hasta el Cloud.
+### PENDIENTE (ultimo incremento)
+Plan vs real: en el admin, comparar la asignacion del dia (si enlaza a PRJ) contra donde ficho de
+verdad cada persona, y marcar desvios.
+
 ## Tablero semanal de cuadrilla — base: catalogo + rejilla del admin (v159)
 Feature nueva pedida por el usuario (mando un pantallazo de su hoja actual: persona×dia, color por
 sitio, trabajos "89. Talavera", estados OFF/Leave/TAFE, notas de vehiculo/equipo). **Diseno acordado
@@ -2140,7 +2160,7 @@ posicional + plano) → app.py, al cargar el PDF, setea `st.session_state["ns"]`
 resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NORTH SYD y AGECARE → NS=6
 (coincide con travel/floor-height HQ/HE).
 
-## Versiones desplegadas (v159 = actual)
+## Versiones desplegadas (v160 = actual)
 | Ver | Cambio principal |
 |---|---|
 | v5 | Extractor: CRLF fix, caso D valor-antes-label, sin pdfplumber |
@@ -2242,6 +2262,7 @@ resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NOR
 | v102 | Fix: NS se lee del plano (NUMBER OF STOPS) al cargar el PDF; default de init 6→2 (ya no queda pegado en 6) |
 | v103 | Rol conductor (2 relojes: jornada general + segmentos por proyecto, columna Tipo) + cronómetro en vivo para todos + reporte admin de horas del grupo (Mi grupo → ⏱ Horas) |
 | v104 | Credenciales/tickets por usuario (White Card, Forklift, Dogging/Rigging, licencia…): vencimiento+estado, foto/documento a Drive, radar en Resumen del día, avisos email/Telegram a admin+usuario; usuario ve las suyas (🎫 Mis credenciales) |
+| v160 | Tablero de cuadrilla: el campo ve el board completo (su fila resaltada) en 📋 Mis proyectos con su asignacion de hoy destacada, y en el fichaje un atajo «fichar a tu asignacion de hoy» cuando enlaza a un proyecto |
 | v159 | Tablero semanal de cuadrilla (base): catalogo de Trabajos (numero/nombre/color/enlace opcional a PRJ) + seccion 📅 Planificacion del admin con rejilla coloreada como el board, editar semana persona a persona y copiar semana anterior |
 | v158 | Pre-Start: el contenido que se capturaba (checks, asistentes, notas) por fin se ve en el historial con semaforo por check; y ya no se puede firmar sin leer (los checks arrancan sin respuesta, hay que responder cada uno) |
 | v157 | RAIL sale en 0 al cargar el plano desde el proyecto: el plano da el CODIGO del riel y faltaba resolverlo a su altura por el catalogo; extraer_todo ahora guarda rail_altura y los mapas de survey/plomada lo vuelcan a RAIL |

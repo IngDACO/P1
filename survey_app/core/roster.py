@@ -294,6 +294,33 @@ def guardar_persona(grupo, lunes, usuario, dias: dict) -> tuple:
     return True, "Guardado."
 
 
+def asignacion_dia(grupo, usuario, fecha=None) -> dict:
+    """Qué le toca a una persona un día concreto (hoy si None).
+
+    Devuelve {asig, nota, proyecto_id, etiqueta, color, es_estado}. Vacío si el
+    día no es laboral (fin de semana) o no hay asignación. Lo usan el fichaje
+    (pre-proponer el proyecto) y la vista del campo.
+    """
+    fecha = fecha or date.today()
+    if isinstance(fecha, datetime):
+        fecha = fecha.date()
+    wd = fecha.weekday()                       # 0=lun .. 6=dom
+    if wd > 4:                                 # sáb/dom: no hay rejilla
+        return {}
+    dia = DIAS[wd]
+    lunes = lunes_de(fecha)
+    c = celda(get_semana(grupo, lunes), str(usuario), dia)
+    asig = str(c.get("asig", ""))
+    if not asig and not str(c.get("nota", "")).strip():
+        return {}
+    tidx = trabajos_idx(grupo)
+    return {"asig": asig, "nota": str(c.get("nota", "")),
+            "proyecto_id": proyecto_de(asig, tidx),
+            "etiqueta": etiqueta_de(asig, tidx),
+            "color": color_de(asig, tidx),
+            "es_estado": asig in ESTADOS}
+
+
 def copiar_semana(grupo, lunes_origen, lunes_destino) -> tuple:
     """Clona todas las asignaciones de una semana a otra (1 fila por persona)."""
     datos = get_semana(grupo, lunes_origen)

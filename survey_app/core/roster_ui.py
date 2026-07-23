@@ -91,7 +91,35 @@ def render_planificacion(grupo):
     _catalogo(grupo)
 
 
-def _grid_html(staff, lunes, datos, tidx) -> str:
+def render_board_readonly(grupo, resaltar_usuario=""):
+    """Tablero de la semana en SOLO LECTURA (para el campo: ve toda la cuadrilla).
+
+    Decisión del usuario: el campo ve el board completo para saber con quién va a
+    cada obra. Resalta su propia fila.
+    """
+    if not R.is_configured():
+        return
+    staff = _staff(grupo)
+    if not staff:
+        return
+    lunes = _semana_activa()
+    tidx  = R.trabajos_idx(grupo)
+    datos = R.get_semana(grupo, lunes)
+
+    c1, c2, c3 = st.columns([1, 3, 1])
+    if c1.button("◀", key="rosf_prev", use_container_width=True):
+        st.session_state["ros_lunes"] = (lunes - timedelta(days=7)).isoformat()
+        st.rerun()
+    c2.markdown(f"<div style='text-align:center;font-weight:700;padding-top:6px'>"
+                f"{R.rango_label(lunes)}</div>", unsafe_allow_html=True)
+    if c3.button("▶", key="rosf_next", use_container_width=True):
+        st.session_state["ros_lunes"] = (lunes + timedelta(days=7)).isoformat()
+        st.rerun()
+    st.markdown(_grid_html(staff, lunes, datos, tidx, resaltar_usuario),
+                unsafe_allow_html=True)
+
+
+def _grid_html(staff, lunes, datos, tidx, resaltar="") -> str:
     ths = ['<th style="text-align:left;padding:6px 8px;font-size:12px;color:#6b7280;'
            'position:sticky;left:0;background:#fff;">Persona</th>']
     for d in R.DIAS:
@@ -102,9 +130,11 @@ def _grid_html(staff, lunes, datos, tidx) -> str:
     for u in staff:
         usr = u["Usuario"]
         nom = u.get("Nombre") or usr
-        celdas = [f'<td style="padding:5px 8px;font-size:13px;font-weight:600;color:#1f2937;'
-                  f'white-space:nowrap;position:sticky;left:0;background:#fff;'
-                  f'border-right:1px solid #eef1f5;">{_esc(nom)}</td>']
+        _mio = (str(usr) == str(resaltar))
+        _nbg = "#fff7e6" if _mio else "#fff"
+        celdas = [f'<td style="padding:5px 8px;font-size:13px;font-weight:{"800" if _mio else "600"};'
+                  f'color:#1f2937;white-space:nowrap;position:sticky;left:0;background:{_nbg};'
+                  f'border-right:1px solid #eef1f5;">{"👉 " if _mio else ""}{_esc(nom)}</td>']
         for d in R.DIAS:
             c = R.celda(datos, usr, d)
             asig = str(c.get("asig", ""))

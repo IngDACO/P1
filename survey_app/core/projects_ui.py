@@ -1807,6 +1807,20 @@ def render_field_projects(usuario: str, grupo: str):
         st.warning("La gestión de proyectos necesita Google Sheets configurado.")
         return
 
+    # ── Planificación de la semana (el campo ve toda la cuadrilla) ──
+    try:
+        from core import roster, roster_ui
+        if roster.is_configured():
+            _hoy = roster.asignacion_dia(grupo, usuario)
+            if _hoy and _hoy.get("etiqueta"):
+                _n = f" · {_hoy['nota']}" if str(_hoy.get("nota", "")).strip() else ""
+                (st.info if _hoy.get("es_estado") else st.success)(
+                    f"📅 **Hoy:** {_hoy['etiqueta']}{_n}")
+            with st.expander("📅 Ver la planificación de la semana (toda la cuadrilla)"):
+                roster_ui.render_board_readonly(grupo, resaltar_usuario=usuario)
+    except Exception:
+        pass
+
     proys = P.list_projects_for_field(usuario, grupo=grupo)
     if not proys:
         st.info("No tienes proyectos asignados todavía. El administrador te asigna a un proyecto.")
