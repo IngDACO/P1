@@ -80,7 +80,9 @@ C:\Users\diego\P1\survey_app\
 │   ├── alerts.py           # alarmas/avisos por proyecto (campo↔admin) — v88
 │   ├── belting.py          # compute_belting/belting_svg — belting (DSTS) — v86
 │   ├── belting_ui.py       # render_belting_tab()
-│   └── rails.py            # catálogo de rieles (referencia→medidas) para autocompletar RAIL — v84
+│   ├── rails.py            # catálogo de rieles (referencia→medidas) para autocompletar RAIL — v84
+│   ├── roster.py           # tablero semanal de cuadrilla: catalogo Trabajos + hoja Roster (v159)
+│   └── roster_ui.py        # 📅 Planificacion (admin): rejilla coloreada + editar semana + copiar (v159)
 └── extractors/
     └── schindler.py        # extract_from_pdf() + extract_car_guide_rail() + extract_belting() — pypdf CAD PDF
 
@@ -787,6 +789,39 @@ etiqueta en la extracción posicional; excluye COUNTERWEIGHT; regex `T\d{2,3}-\d
 Al cargar el plano en el survey (app.py), autocompleta **RAIL = AlturaDiente** (altura del diente desde la
 espalda) del catálogo; si el código no está o no se detecta → aviso + entrada manual. **RAIL = AlturaDiente**
 (NO el ancho); AnchoDiente se guarda como dato secundario.
+
+## Tablero semanal de cuadrilla — base: catalogo + rejilla del admin (v159)
+Feature nueva pedida por el usuario (mando un pantallazo de su hoja actual: persona×dia, color por
+sitio, trabajos "89. Talavera", estados OFF/Leave/TAFE, notas de vehiculo/equipo). **Diseno acordado
+antes de construir** (ver memoria feature-roster-planificacion). Decisiones firmes: catalogo de
+trabajos propio con enlace OPCIONAL a PRJ · una asignacion por dia · semana Lun–Vie + copiar semana
+anterior · estados OFF/Leave/Formacion + nota libre · el campo ve todo el tablero · conecta con fichaje.
+### Esta version (la BASE)
+- **`core/roster.py`** — dos hojas nuevas (multi-tenant, migran solas):
+  - **Trabajos**: ID·Grupo·Numero·Nombre·Color·ProyectoID·Activo. CRUD + `trabajos_idx` (resuelve
+    color/etiqueta aunque el trabajo se desactive).
+  - **Roster**: ID·Grupo·Semana(lunes)·Usuario·**DatosJSON** = {lun:{asig,nota},...vie}. **1 fila por
+    persona×semana** (compacto; se lee la semana entera). `get_semana`, `guardar_persona` (1 escritura),
+    `copiar_semana`.
+  - `ESTADOS` (OFF/LEAVE/FORMACION, claves reservadas que no colisionan con TRB-####), `PALETA` (12
+    colores), utilidades de fecha (`lunes_de`, `fecha_de_dia`, `rango_label`).
+- **`core/roster_ui.py`** — seccion **📅 Planificacion** en 🛠 Mi grupo: navegacion de semana + copiar
+  semana anterior + **rejilla HTML coloreada** (como el board del usuario, verificada en navegador) +
+  editar la semana de una persona (selector trabajo/estado + nota por dia, guarda en 1 escritura) +
+  catalogo de trabajos (crear con color de la paleta y enlace opcional a PRJ, activar/desactivar).
+### ⚠️ La rejilla es HTML, no st.data_editor
+`st.data_editor` no colorea celdas por valor, y el color es clave para leer el board. Solucion: HTML
+para VER (con `_texto_sobre` que elige negro/blanco por luminancia del fondo) + edicion persona a
+persona debajo. Verificado en el navegador con datos tipo pantallazo: 9 personas, colores correctos,
+notas, OFF/Leave, columna de nombres fija.
+### Verificacion (logica pura, SIN tocar produccion)
+Crear las hojas escribiria en el Sheet real, asi que se probo solo la logica: semana del miercoles 27/5
+→ lunes 25/5 ✓; resolucion trabajo/estado → color+etiqueta+PRJ ✓; orden por numero ✓; JSON omite
+celdas vacias ✓; los 3 modulos importan. Las escrituras (add_trabajo, guardar_persona, copiar_semana)
+corren por primera vez en el Cloud.
+### PENDIENTE (proximo incremento)
+Campo → "mi semana" (donde voy cada dia) · fichaje pre-rellenado desde el roster · plan vs real
+(asignado a X / ficho en Y, solo para trabajos enlazados a un PRJ).
 
 ## Pre-Start: lo que se captura por fin se ve + no se puede firmar sin leer (v158)
 Revision del ultimo modulo del admin sin tocar, "con la misma dinamica" (tecnico/imagen/integracion).
@@ -2105,7 +2140,7 @@ posicional + plano) → app.py, al cargar el PDF, setea `st.session_state["ns"]`
 resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NORTH SYD y AGECARE → NS=6
 (coincide con travel/floor-height HQ/HE).
 
-## Versiones desplegadas (v158 = actual)
+## Versiones desplegadas (v159 = actual)
 | Ver | Cambio principal |
 |---|---|
 | v5 | Extractor: CRLF fix, caso D valor-antes-label, sin pdfplumber |
@@ -2207,6 +2242,7 @@ resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NOR
 | v102 | Fix: NS se lee del plano (NUMBER OF STOPS) al cargar el PDF; default de init 6→2 (ya no queda pegado en 6) |
 | v103 | Rol conductor (2 relojes: jornada general + segmentos por proyecto, columna Tipo) + cronómetro en vivo para todos + reporte admin de horas del grupo (Mi grupo → ⏱ Horas) |
 | v104 | Credenciales/tickets por usuario (White Card, Forklift, Dogging/Rigging, licencia…): vencimiento+estado, foto/documento a Drive, radar en Resumen del día, avisos email/Telegram a admin+usuario; usuario ve las suyas (🎫 Mis credenciales) |
+| v159 | Tablero semanal de cuadrilla (base): catalogo de Trabajos (numero/nombre/color/enlace opcional a PRJ) + seccion 📅 Planificacion del admin con rejilla coloreada como el board, editar semana persona a persona y copiar semana anterior |
 | v158 | Pre-Start: el contenido que se capturaba (checks, asistentes, notas) por fin se ve en el historial con semaforo por check; y ya no se puede firmar sin leer (los checks arrancan sin respuesta, hay que responder cada uno) |
 | v157 | RAIL sale en 0 al cargar el plano desde el proyecto: el plano da el CODIGO del riel y faltaba resolverlo a su altura por el catalogo; extraer_todo ahora guarda rail_altura y los mapas de survey/plomada lo vuelcan a RAIL |
 | v156 | Cargar el plano en un proyecto ya creado (📐 Datos del plano): subir el PDF por Documentos no extraia a PlanoJSON, asi que las herramientas no lo veian; ahora hay un control que sube Y extrae, y «plano» sale del uploader generico |

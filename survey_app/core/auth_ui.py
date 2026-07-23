@@ -747,13 +747,17 @@ def render_group_panel(grupo: str):
         return
 
     sec = st.radio("Sección",
-                   ["📊 Proyectos", "🗂 Agrupaciones", "⏱ Horas", "💰 Gastos", "🔧 Usuarios de campo"],
+                   ["📊 Proyectos", "🗂 Agrupaciones", "📅 Planificación",
+                    "⏱ Horas", "💰 Gastos", "🔧 Usuarios de campo"],
                    horizontal=True, key="grupo_sec", label_visibility="collapsed")
     st.markdown("---")
     if sec == "📊 Proyectos":
         PU._panel_proyectos(grupo)
     elif sec == "🗂 Agrupaciones":
         PU._panel_agrupaciones(grupo)
+    elif sec == "📅 Planificación":
+        from core import roster_ui
+        roster_ui.render_planificacion(grupo)
     elif sec == "⏱ Horas":
         PU.render_group_hours(grupo)
     elif sec == "💰 Gastos":
