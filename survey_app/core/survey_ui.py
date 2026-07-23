@@ -176,18 +176,10 @@ def render_survey_tab(_ROL, _GRUPO):
                 "Pulsa **🚀 Calcular** para regenerar diagramas e informes.")
 
     # ── Identificación del proyecto ───────────────────────
-    _id1, _id2 = st.columns(2)
-    _id1.text_input("🏗 Proyecto", key="proyecto", placeholder="Ej: Torre Central")
-    _id2.text_input("🏢 Cliente", key="cliente", placeholder="Empresa / constructora")
-    _id3, _id4 = st.columns(2)
-    _id3.text_input("📍 Ubicación de la obra", key="ubicacion",
-                    placeholder="Dirección — aparece en el informe")
-    _id4.text_input("👷 Ingeniero responsable", key="ingeniero",
-                    placeholder="Quien realiza el survey")
-    if st.session_state.get("ubicacion", "").strip():
-        from core import maps as _maps
-        _id3.caption(_maps.maps_link_md(st.session_state["ubicacion"], "ver en Maps"))
-
+    # NO se teclea: el survey alimenta un proyecto que YA existe (v135) y ese
+    # proyecto trae proyecto/cliente/ubicación/ingeniero. Se toman de él al
+    # elegirlo (en el selector del plano, más abajo) y se usan en el informe.
+    # En modo «sin proyecto» el informe va sin ellos.
     with st.expander("🧹 Empezar un survey nuevo"):
         st.caption("Borra parámetros, matriz, configuración y resultados de esta sesión. "
                    "No afecta a los proyectos ya guardados.")
@@ -839,6 +831,26 @@ def render_survey_tab(_ROL, _GRUPO):
         # vuelcan sus valores: el técnico no tiene que volver a subir el PDF ni
         # esperar la extracción (que cuesta ~80 s).
         _prj_sv, _plano_sv = plan_ui.selector_proyecto("sv")
+        # Identidad del informe TOMADA del proyecto elegido (ya no se teclea).
+        # Seguro escribir estas claves: dejaron de ser widgets al quitar los
+        # text_input de arriba (habría sido el error de v111 si aún lo fueran).
+        if _prj_sv:
+            st.session_state["proyecto"]  = str(_prj_sv.get("Nombre", ""))
+            st.session_state["cliente"]   = str(_prj_sv.get("Cliente", ""))
+            st.session_state["ubicacion"] = str(_prj_sv.get("Ubicacion", ""))
+            st.session_state["ingeniero"] = str(_prj_sv.get("Ingeniero", ""))
+            _rep = " · ".join(x for x in (str(_prj_sv.get("Cliente", "")),
+                                          str(_prj_sv.get("Ubicacion", "")),
+                                          str(_prj_sv.get("Ingeniero", ""))) if x)
+            st.caption("📋 El informe usará los datos de este proyecto"
+                       + (f": {_rep}." if _rep else "."))
+            if str(_prj_sv.get("Ubicacion", "")).strip():
+                from core import maps as _maps
+                st.caption(_maps.maps_link_md(_prj_sv.get("Ubicacion"), "📍 ver en Maps"))
+        else:
+            # Sin proyecto: cálculo suelto, el informe va sin identidad.
+            for _kid in ("proyecto", "cliente", "ubicacion", "ingeniero"):
+                st.session_state[_kid] = ""
         if _plano_sv:
             _mapa_sv = {f"params.{_p}": f"inp_{_p}" for _p in PDF_PARAMS}
             _mapa_sv["ns"] = "ns"

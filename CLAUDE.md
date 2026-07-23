@@ -788,6 +788,32 @@ Al cargar el plano en el survey (app.py), autocompleta **RAIL = AlturaDiente** (
 espalda) del catálogo; si el código no está o no se detecta → aviso + entrada manual. **RAIL = AlturaDiente**
 (NO el ancho); AnchoDiente se guarda como dato secundario.
 
+## El Survey ya no pide proyecto/cliente/ubicacion/ingeniero a mano (v155)
+Apunte del usuario: "en el Survey tengo que escribir proyecto, cliente, ubicacion, ingeniero; estos
+campos no son necesarios". Tenia razon: eran **entrada duplicada**. Desde v135 el survey alimenta un
+proyecto que YA existe, y ese proyecto ya trae Nombre/Cliente/Ubicacion/Ingeniero. El survey tenia DOS
+formas de identificar el proyecto a la vez: 4 `text_input` arriba + el selector de proyecto abajo.
+### Que alimentaban esos campos (verificado antes de tocar)
+Solo los INFORMES (portada cliente, informe admin) y el correo — **no el calculo** (no estan en
+`_survey_signature`) y **no se escribian de vuelta al proyecto** (`attach_survey` solo toca
+ParamsJSON/MatrizJSON/InterpJSON). O sea, puro dato de presentacion que el proyecto ya tiene.
+### El cambio
+- Se quitan los 4 `text_input`. La identidad se TOMA del proyecto al elegirlo en el selector del plano:
+  `session_state["proyecto"/"cliente"/"ubicacion"/"ingeniero"]` = Nombre/Cliente/Ubicacion/Ingeniero.
+- ⚠️ **Seguro escribir esas claves** porque dejaron de ser widgets (con los `text_input` vivos habria
+  sido el error de v111). Y NO estan en la firma, asi que no disparan falsos "recalcular".
+- El keep-alive de v118 (L122) ya cubre esas 4 claves → el valor escrito en la fase Datos sobrevive a
+  la fase Resultados (donde los dibujos y el correo lo leen).
+- **Modo «sin proyecto»** (calculo suelto del admin): el `else` limpia las 4 a "" → el informe va sin
+  identidad, sin arrastrar la del proyecto anterior. (Decision del usuario: informe sin esos datos.)
+- Confirmacion al elegir: "📋 El informe usara los datos de este proyecto: Cliente · Ubicacion ·
+  Ingeniero" + enlace a Maps, puesto DONDE el valor esta fresco (no arriba, que iba un render por
+  detras). El bloque de identidad de arriba se elimino (redundante con `_cabecera` del selector).
+### Verificacion
+Los 4 `text_input` fuera; **ningun widget usa ya key proyecto/cliente/ubicacion/ingeniero** (chequeo
+regex); informes y correo siguen leyendo de session_state; de PRJ-0001 real se tomaria
+prueba1 / ci / 259 clveland redfern / daco; sin referencias colgantes a `_id1..4`; importa OK.
+
 ## El Survey es una herramienta más; el Pre-Start no es técnico (v154)
 Apunte del usuario: "cuando hablamos de las herramientas me nombras todas menos el survey; ahora el
 survey es una herramienta mas, la mas potente y compleja pero una mas. Las herramientas TECNICAS son:
@@ -2001,7 +2027,7 @@ posicional + plano) → app.py, al cargar el PDF, setea `st.session_state["ns"]`
 resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NORTH SYD y AGECARE → NS=6
 (coincide con travel/floor-height HQ/HE).
 
-## Versiones desplegadas (v154 = actual)
+## Versiones desplegadas (v155 = actual)
 | Ver | Cambio principal |
 |---|---|
 | v5 | Extractor: CRLF fix, caso D valor-antes-label, sin pdfplumber |
@@ -2103,6 +2129,7 @@ resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NOR
 | v102 | Fix: NS se lee del plano (NUMBER OF STOPS) al cargar el PDF; default de init 6→2 (ya no queda pegado en 6) |
 | v103 | Rol conductor (2 relojes: jornada general + segmentos por proyecto, columna Tipo) + cronómetro en vivo para todos + reporte admin de horas del grupo (Mi grupo → ⏱ Horas) |
 | v104 | Credenciales/tickets por usuario (White Card, Forklift, Dogging/Rigging, licencia…): vencimiento+estado, foto/documento a Drive, radar en Resumen del día, avisos email/Telegram a admin+usuario; usuario ve las suyas (🎫 Mis credenciales) |
+| v155 | El Survey ya no pide proyecto/cliente/ubicacion/ingeniero a mano: eran entrada duplicada (el proyecto que alimenta ya los trae); se toman del proyecto elegido y alimentan el informe igual |
 | v154 | El Survey es una herramienta tecnica mas (las 5: survey, plomado, rieles, buffers, belting); el Pre-Start se separa de ellas en el nav por ser seguridad de obra, no una herramienta |
 | v153 | Usuarios de campo: ficha 360 por persona (acceso, contacto, credenciales y su trabajo —proyectos, horas, recibos— en un solo sitio) en vez de elegir al usuario en 3 desplegables distintos; se adapta al rol |
 | v152 | Gastos del grupo: presupuesto y proyeccion al terminar (existia desde v144 y no se usaba), KPIs, alerta de los que se saldran al ritmo actual, y separar proyectos con/sin presupuesto; barras en vez de bar_chart grises |
