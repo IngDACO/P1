@@ -788,6 +788,33 @@ Al cargar el plano en el survey (app.py), autocompleta **RAIL = AlturaDiente** (
 espalda) del catálogo; si el código no está o no se detecta → aviso + entrada manual. **RAIL = AlturaDiente**
 (NO el ancho); AnchoDiente se guarda como dato secundario.
 
+## Cargar el plano en un proyecto ya creado (v156)
+Bug reportado por el usuario: "cuando cargo el plano desde Mi grupo → proyecto → Archivos, las
+herramientas no lo ven".
+### La raiz: subir el PDF ≠ extraer sus datos
+Las herramientas leen **`PlanoJSON`** (`plan_data.del_proyecto`). Esa columna solo se poblaba **al
+CREAR el proyecto** (v137, con `extraer_todo` + `guardar`). Subir el plano por el uploader generico de
+📎 Documentos hacia solo `drive_store.upload` + `add_document`: guardaba el PDF pero **NO extraia a
+PlanoJSON**, asi que el plano quedaba invisible para las herramientas. Y un proyecto creado sin plano
+**no tenia NINGUNA forma** de recibirlo despues. Confirmado: los 3 proyectos reales tienen PlanoJSON
+VACIO.
+### Fix: `_cargar_plano(pid)` en el bloque 📐 Datos del plano
+Hace lo mismo que la creacion: sube el PDF + **extrae a PlanoJSON** (barra de progreso ~80 s, guarda de
+identidad `name:size` de v112) + registra el PDF como documento (best-effort). Es el sitio natural,
+justo donde se ven esos datos; cuando estan vacios, invita a cargarlo en vez de dejar un callejon sin
+salida ("se cargan al crear el proyecto").
+### Se cierra la trampa del uploader generico
+**"plano" sale de `_DOC_SUBIR`** (ya no se puede subir por el uploader generico, que no extrae) pero
+sigue en `_DOC_TIPOS`/`_CAMPO_VER` (se VE si ya existe). Una sola forma de cargar plano, y siempre
+extrae. Mismo criterio que v140: no dejar dos mecanismos para lo mismo, uno de los cuales falla en
+silencio.
+### Verificacion
+`extraer_todo` sobre un plano REAL (PLANO NORTH SYD.pdf): 17/17 params, NS=6, T75-3/B, HKP=70,
+HQ=14045, LFKK=2915, faltan=[]; la barra reporta 7 pasos; el JSON serializa (459 chars).
+`guardar`+`del_proyecto` usan el camino ya probado en v137. `plano` fuera de `_DOC_SUBIR` pero visible
+en `_DOC_TIPOS`. 0 nombres sin resolver en las 2 funciones. NO se escribio en produccion al verificar
+(solo `extraer_todo`, que es lectura).
+
 ## El Survey ya no pide proyecto/cliente/ubicacion/ingeniero a mano (v155)
 Apunte del usuario: "en el Survey tengo que escribir proyecto, cliente, ubicacion, ingeniero; estos
 campos no son necesarios". Tenia razon: eran **entrada duplicada**. Desde v135 el survey alimenta un
@@ -2027,7 +2054,7 @@ posicional + plano) → app.py, al cargar el PDF, setea `st.session_state["ns"]`
 resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NORTH SYD y AGECARE → NS=6
 (coincide con travel/floor-height HQ/HE).
 
-## Versiones desplegadas (v155 = actual)
+## Versiones desplegadas (v156 = actual)
 | Ver | Cambio principal |
 |---|---|
 | v5 | Extractor: CRLF fix, caso D valor-antes-label, sin pdfplumber |
@@ -2129,6 +2156,7 @@ resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NOR
 | v102 | Fix: NS se lee del plano (NUMBER OF STOPS) al cargar el PDF; default de init 6→2 (ya no queda pegado en 6) |
 | v103 | Rol conductor (2 relojes: jornada general + segmentos por proyecto, columna Tipo) + cronómetro en vivo para todos + reporte admin de horas del grupo (Mi grupo → ⏱ Horas) |
 | v104 | Credenciales/tickets por usuario (White Card, Forklift, Dogging/Rigging, licencia…): vencimiento+estado, foto/documento a Drive, radar en Resumen del día, avisos email/Telegram a admin+usuario; usuario ve las suyas (🎫 Mis credenciales) |
+| v156 | Cargar el plano en un proyecto ya creado (📐 Datos del plano): subir el PDF por Documentos no extraia a PlanoJSON, asi que las herramientas no lo veian; ahora hay un control que sube Y extrae, y «plano» sale del uploader generico |
 | v155 | El Survey ya no pide proyecto/cliente/ubicacion/ingeniero a mano: eran entrada duplicada (el proyecto que alimenta ya los trae); se toman del proyecto elegido y alimentan el informe igual |
 | v154 | El Survey es una herramienta tecnica mas (las 5: survey, plomado, rieles, buffers, belting); el Pre-Start se separa de ellas en el nav por ser seguridad de obra, no una herramienta |
 | v153 | Usuarios de campo: ficha 360 por persona (acceso, contacto, credenciales y su trabajo —proyectos, horas, recibos— en un solo sitio) en vez de elegir al usuario en 3 desplegables distintos; se adapta al rol |

@@ -209,9 +209,12 @@ def _resumen_del_dia(grupo: str):
 # la app con un tipo ausente de la lista desaparecian EN SILENCIO: los
 # Pre-Start (tipo "prestart", v97) llevaban 36 versiones invisibles y los
 # calculos (tipo "calculo", v129) nacieron invisibles.
-_DOC_SUBIR  = ["plano", "informe_cliente", "informe_admin", "matriz_survey",
+# ⚠️ "plano" NO va aquí: subirlo por el uploader genérico solo lo guardaba en
+# Drive sin extraer a PlanoJSON, así que las herramientas no lo veían (v156). El
+# plano se carga SOLO desde 📐 Datos del plano (_cargar_plano), que sí extrae.
+_DOC_SUBIR  = ["informe_cliente", "informe_admin", "matriz_survey",
                "foto", "certificado", "otro"]
-_DOC_TIPOS  = _DOC_SUBIR                       # alias para llamadores previos
+_DOC_TIPOS  = _DOC_SUBIR + ["plano"]           # para VER (el plano se sigue mostrando)
 # El campo consulta lo que usa en obra: incluye el Pre-Start que firma y los
 # calculos (plomada, cortes) que ejecuta.
 _CAMPO_VER  = {"plano", "informe_cliente", "matriz_survey", "foto",
@@ -258,18 +261,60 @@ def _fecha_corta(v) -> str:
     return s[:16]
 
 
-def _plano_section(pid: str, prj: dict):
-    """Que se leyo del plano de este proyecto (columna PlanoJSON, v137).
+def _cargar_plano(pid: str):
+    """Sube el PDF del plano Y extrae sus datos a PlanoJSON (v156).
 
-    ⚠️ El dato existia desde v137 y solo se veia **al crear el proyecto** o dentro
-    de una herramienta. En el detalle tenias el `plano.pdf` colgado en Documentos
-    sin forma de saber que se extrajo de el ni si falto algo.
+    ⚠️ El bug: subir el plano por el uploader genérico de 📎 Documentos solo lo
+    guardaba en Drive; NO extraía a PlanoJSON, que es lo ÚNICO que leen las
+    herramientas. Así que el plano quedaba invisible para ellas. Aquí se hace lo
+    mismo que al crear el proyecto: subir + extraer + guardar.
+    """
+    with st.expander("📤 Cargar / actualizar el plano del proyecto"):
+        st.caption("Sube el PDF y se extraen sus datos para que las herramientas "
+                   "los usen sin volver a pedir el plano. Tarda ~1 min.")
+        _pdf = st.file_uploader("PDF del plano", type=["pdf"], key=f"planoup_{pid}")
+        _idk = f"planoup_id_{pid}"
+        if _pdf is not None and st.session_state.get(_idk) != f"{_pdf.name}:{_pdf.size}":
+            _barra = st.progress(0.0, text="Leyendo el plano…")
+            try:
+                res = plan_data.extraer_todo(
+                    _pdf, progreso=lambda fr, txt: _barra.progress(
+                        min(1.0, fr), text=f"Leyendo el plano… {txt}"))
+                # 1) Datos → PlanoJSON (lo que leen las herramientas)
+                plan_data.guardar(pid, res)
+                # 2) El PDF a Drive + registro como documento (best-effort)
+                try:
+                    if drive_store.is_configured():
+                        _fid = drive_store.upload(pid, _pdf.name, _pdf.getvalue(),
+                                                  "application/pdf")
+                        P.add_document(pid, _pdf.name, "plano", _fid,
+                                       st.session_state.get("auth", {}).get("usuario", ""))
+                except Exception:
+                    pass
+                _barra.empty()
+                st.session_state[_idk] = f"{_pdf.name}:{_pdf.size}"   # guarda v112
+                st.success(f"✅ Plano cargado — {plan_data.resumen(res)}. "
+                           "Las herramientas ya lo usan.")
+                st.rerun()
+            except Exception as e:
+                _barra.empty()
+                st.error(f"No se pudo leer el plano: {e}")
+
+
+def _plano_section(pid: str, prj: dict):
+    """Qué se leyó del plano de este proyecto (columna PlanoJSON, v137) + cargarlo.
+
+    ⚠️ El dato existía desde v137 y solo se poblaba **al crear el proyecto**. Un
+    proyecto creado sin plano no tenía forma de recibirlo (subirlo en Documentos
+    NO extraía), así que las herramientas no lo veían nunca. Ahora se carga aquí.
     """
     datos = plan_data.del_proyecto(pid)
     st.markdown("**📐 Datos del plano**")
     if not datos:
-        st.caption("Este proyecto no tiene datos de plano guardados. Las herramientas "
-                   "le pedirán el PDF a quien las use. Se cargan al crear el proyecto.")
+        st.caption("Este proyecto no tiene datos de plano guardados, así que las "
+                   "herramientas le pedirán el PDF a quien las use. Cárgalo aquí "
+                   "una vez y dejarán de pedirlo.")
+        _cargar_plano(pid)
         return
 
     faltan = datos.get("faltan") or []
@@ -295,6 +340,7 @@ def _plano_section(pid: str, prj: dict):
             st.dataframe(pd.DataFrame([{"Parámetro": k, "Valor": v}
                                        for k, v in sorted(par.items())]),
                          hide_index=True, use_container_width=True)
+    _cargar_plano(pid)
 
 
 def _galeria_fotos(fotos, pid, por_pagina=6):
