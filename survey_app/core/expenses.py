@@ -215,13 +215,17 @@ def spend_curve(pid, grupo) -> dict:
             continue
         if str(r.get("Grupo", "")) != str(grupo):
             continue
-        h = _horas_de(r)
-        f = str(r.get("Clock In", ""))[:10]
-        if h <= 0 or not f:
-            continue
         clave = str(r.get("Usuario", "")).strip() or str(r.get("Nombre", "")).strip()
-        dia.setdefault(f, {"compras": 0.0, "mo": 0.0})
-        dia[f]["mo"] += h * rates.get(clave, 0.0)
+        tarifa = rates.get(clave, 0.0)
+        # La M.O. cae en el DÍA real trabajado: un fichaje que cruza medianoche se
+        # reparte por día (v164). El total no cambia (Σsegmentos = horas de la fila),
+        # solo el reparto de la curva por fecha.
+        for d, h in timeclock._row_segmentos(r):
+            if h <= 0:
+                continue
+            f = d.isoformat()
+            dia.setdefault(f, {"compras": 0.0, "mo": 0.0})
+            dia[f]["mo"] += h * tarifa
 
     if not dia:
         return {}

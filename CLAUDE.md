@@ -791,6 +791,37 @@ Al cargar el plano en el survey (app.py), autocompleta **RAIL = AlturaDiente** (
 espalda) del catálogo; si el código no está o no se detecta → aviso + entrada manual. **RAIL = AlturaDiente**
 (NO el ancho); AnchoDiente se guarda como dato secundario.
 
+## Fichaje del campo: horas por día (medianoche) + olvidos accionables (v164)
+Revision de ⏱ Fichaje desde el rol campo (tecnico/visual/integracion). La UI ya era solida (v150);
+el hallazgo fue de DATOS, con evidencia real: **3 de 16 fichajes cruzan medianoche** (~8.6 h, entrada
+~21:00 → salida ~05:00).
+### ⚠️ Tecnico: las horas se atribuian TODAS al dia del Clock In
+`resumen_hoy` y `group_hours` contaban la sesion entera en el dia de entrada (o la excluian entera de
+la ventana). Consecuencias: (a) el campo veia *"🟡 Jornada abierta · cronometro 5:12"* pero
+*"Jornada de hoy: 0.00 h"* (contradiccion, porque `resumen_hoy` filtraba por dia del Clock In); (b) el
+reporte del admin en **"Hoy"/"Semana"** perdia el tramo trabajado de una sesion que entro el dia
+anterior. **Decision del usuario: partir las horas por dia (medianoche).**
+- **`timeclock._segmentos_dia(ci, fin)`** → `[(date, horas)]`, corta en cada medianoche.
+  **`_row_segmentos(r)`** lo aplica a una fila (abierta = hasta ahora; cerrada = hasta Clock Out).
+  ⚠️ Una fila cerrada de UN solo dia respeta las **Horas GUARDADAS** (no recomputa) → el total con
+  `days=None` queda IDENTICO; solo las que cruzan medianoche se reparten.
+- **`resumen_hoy`** cuenta el segmento de HOY. **`group_hours(grupo, days)`** suma solo los segmentos
+  dentro de la ventana. **`proyectos_por_usuario_dia`** (roster) cuenta el proyecto en cada dia
+  trabajado. **`expenses.spend_curve`** reparte la M.O. por dia real (total sin cambio).
+### Olvidos: aviso ACCIONABLE + cierre honesto
+`_aviso_olvido` deja de ser solo texto: para una sesion abierta de un dia anterior, pide **"a que hora
+terminaste"** (date+time, sugerido = entrada+8 h) y cierra con ESA hora, no con "ahora" → no registra
+las horas fantasma de la noche que nadie trabajo. Valida hora ∈ (entrada, ahora]. **`clock_out` gana
+`out_ts`** opcional (por defecto = ahora); de paso se quito el parametro muerto `nota` (nadie lo pasaba
+desde v150). Tarjeta "Sin asignar": el pie pasa a *"traslados, espera o proyecto sin fichar"* (para un
+tecnico en una obra, sin_asignar grande casi siempre = olvido fichar el proyecto).
+### Verificacion (contra datos REALES, gspread crudo)
+`_segmentos_dia` unidad: mismo dia = total · **16/07 20:31→17/07 05:05 = 3.47+5.09 = 8.57** ✓ · 2 noches
+= 28 h · entrada=salida/basura = []. **`group_hours(days=None)` OLD vs NEW: diff 0.0000 h** en los 4
+usuarios reales (nada perdido). Ventana "Semana": NEW **recupera** el tramo del dia que OLD tiraba
+(`lksdfkldsf` 0 → 5.09 h). 0 nombres libres nuevos (el `e` de clock_out es el `except as e`). Ningun
+call-site pasa `nota`. Import real de los 3 modulos OK.
+
 ## Se elimina el rol conductor: era un subconjunto del campo (v163)
 Peticion del usuario: "integrar el perfil del conductor dentro del campo y luego eliminar el conductor".
 ### Por que ya no aportaba
@@ -2237,9 +2268,10 @@ posicional + plano) → app.py, al cargar el PDF, setea `st.session_state["ns"]`
 resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NORTH SYD y AGECARE → NS=6
 (coincide con travel/floor-height HQ/HE).
 
-## Versiones desplegadas (v163 = actual)
+## Versiones desplegadas (v164 = actual)
 | Ver | Cambio principal |
 |---|---|
+| v164 | Fichaje del campo: las horas se reparten por dia natural (medianoche) — antes una sesion que cruzaba medianoche se contaba entera en el dia de entrada, falseando "Jornada de hoy" y el reporte "Hoy"/"Semana" del admin (evidencia: 3/16 fichajes reales cruzan medianoche). El olvido de clock-out se cierra a la hora que el usuario indica (no "ahora", que registraba las horas fantasma de la noche). group_hours(Todo) queda identico |
 | v163 | Se elimina el rol conductor: tras el fichaje unificado (v150) era un subconjunto del campo; se borra el rol, su vista de proyectos y todas sus ramas (nav, creacion de usuario, prompt del agente), y se elimina el unico usuario conductor de prueba. Quedan 3 roles: propietario/administrador/campo |
 | v5 | Extractor: CRLF fix, caso D valor-antes-label, sin pdfplumber |
 | v6 | BC_CALC + FB_MAX_BACK constraint en optimizer |

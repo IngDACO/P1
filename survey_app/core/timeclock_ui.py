@@ -67,14 +67,46 @@ def _es_hoy(clock_in_str) -> bool:
         return True
 
 
-def _aviso_olvido(sess):
-    """Avisa si una sesión abierta viene de un día anterior."""
-    for tipo, s in sess.items():
-        if s and not _es_hoy(s["clock_in"]):
-            etq = ("jornada general" if tipo == timeclock.TIPO_GENERAL
-                   else f"proyecto «{s['proyecto']}»")
-            st.warning(f"⚠️ Tienes una **{etq}** abierta desde **{s['clock_in']}** "
-                       "(día anterior). Haz clock out si la olvidaste.")
+def _aviso_olvido(nombre, grupo, usuario, sess):
+    """Sesión abierta de un día anterior: la cierra a la hora que el usuario indique.
+
+    Cerrarla «ahora» registraría como trabajadas todas las horas de la noche que
+    nadie hizo. Por eso se pide la hora REAL de fin (v164) y se cierra con ella.
+    """
+    from datetime import datetime as _dt, time as _t, timedelta as _td
+    stale = {tipo: s for tipo, s in sess.items()
+             if s and not _es_hoy(s["clock_in"])}
+    if not stale:
+        return
+    lineas, ci_min = [], None
+    for tipo, s in stale.items():
+        etq = ("jornada general" if tipo == timeclock.TIPO_GENERAL
+               else f"proyecto «{s['proyecto'] or '—'}»")
+        lineas.append(f"- **{etq}** abierta desde **{s['clock_in']}**")
+        try:
+            t = _dt.strptime(s["clock_in"], timeclock.FMT)
+            ci_min = t if ci_min is None or t < ci_min else ci_min
+        except Exception:
+            pass
+    st.warning("⚠️ Tienes fichaje(s) de un día anterior **sin cerrar**:\n"
+               + "\n".join(lineas)
+               + "\n\nCiérralos indicando **a qué hora terminaste de verdad** — si no, "
+                 "se contarían como trabajadas las horas de la noche.")
+    sugerido = min(ci_min + _td(hours=8), _dt.now()) if ci_min else _dt.now()
+    c1, c2 = st.columns(2)
+    d_fin = c1.date_input("Día que terminaste", value=sugerido.date(), key="olv_d")
+    t_fin = c2.time_input("Hora", value=sugerido.time().replace(second=0, microsecond=0),
+                          key="olv_t")
+    fin = _dt.combine(d_fin, t_fin)
+    ok_rango = ci_min is not None and ci_min < fin <= _dt.now()
+    if not ok_rango:
+        st.caption("⚠️ La hora de fin debe estar entre la entrada y ahora.")
+    if st.button("🔴 Cerrar sesión olvidada", key="olv_btn", use_container_width=True,
+                 disabled=not ok_rango):
+        for tipo in stale:
+            timeclock.clock_out(nombre, grupo, tipo=tipo, usuario=usuario, out_ts=fin)
+        st.success("Sesión cerrada a la hora indicada.")
+        st.rerun()
 
 
 def _proyectos_para(rol, usuario, grupo):
@@ -118,7 +150,7 @@ def render_timeclock_tab():
 
     st.caption(f"**{nombre}**" + (f"  ·  grupo **{grupo}**" if grupo else "")
                + "  ·  tus fichajes son privados.")
-    _aviso_olvido(sess)
+    _aviso_olvido(nombre, grupo, usuario, sess)
 
     # ── Estado de un vistazo ──
     _est = ("🟢 En un proyecto" if prj else
@@ -130,7 +162,7 @@ def render_timeclock_tab():
             _tarjeta("Imputado a proyectos", f"{hoy['proyecto']:.2f} h",
                      f"{len(hoy['por_proyecto'])} proyecto(s)", _VERDE, bool(prj)),
             _tarjeta("Sin asignar", f"{hoy['sin_asignar']:.2f} h",
-                     "traslados y espera",
+                     "traslados, espera o proyecto sin fichar",
                      _ROJO if hoy["sin_asignar"] > 2 else None)]
     st.markdown('<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px">'
                 + "".join(tarj) + "</div>", unsafe_allow_html=True)

@@ -8,7 +8,7 @@ Requiere en los Secrets de Streamlit:
 Esquema de la hoja (una fila por sesión de trabajo):
   Nombre | PIN | Proyecto | Ubicacion | Clock In | Clock Out | Horas | Estado
 """
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date, time
 
 import streamlit as st
 
@@ -192,9 +192,14 @@ def clock_in(nombre: str, proyecto: str, ubicacion: str, grupo: str = "",
     return True, f"✅ Clock IN {etq} a las {_now()}."
 
 
-def clock_out(nombre: str, grupo: str = "", nota: str = "",
-              tipo: str = TIPO_PROYECTO, usuario: str = "") -> tuple:
-    """Cierra la sesión abierta (del tipo indicado) de nombre+grupo. Devuelve (ok, mensaje)."""
+def clock_out(nombre: str, grupo: str = "", tipo: str = TIPO_PROYECTO,
+              usuario: str = "", out_ts=None) -> tuple:
+    """Cierra la sesión abierta (del tipo indicado) de nombre+grupo. Devuelve (ok, mensaje).
+
+    `out_ts` (datetime o str) permite cerrar a una hora distinta de «ahora»: lo usa
+    el cierre de una sesión OLVIDADA de un día anterior (v164), para no registrar
+    como trabajadas las horas de la noche que nadie hizo. Por defecto = ahora.
+    """
     ws, err = _get_worksheet()
     if err:
         return False, err
@@ -223,7 +228,12 @@ def clock_out(nombre: str, grupo: str = "", nota: str = "",
         etq = "jornada" if tipo == TIPO_GENERAL else "proyecto"
         return False, f"No tienes un clock in de {etq} abierto."
 
-    out_ts = _now()
+    if out_ts is None:
+        out_ts = _now()
+    elif hasattr(out_ts, "strftime"):
+        out_ts = out_ts.strftime(FMT)
+    else:
+        out_ts = str(out_ts)
     horas  = ""
     try:
         t_in  = datetime.strptime(target_in, FMT)
@@ -233,17 +243,12 @@ def clock_out(nombre: str, grupo: str = "", nota: str = "",
         horas = ""
 
     try:
-        # UNA sola escritura. Antes eran 3 update_cell (+1 lectura y +1 escritura
-        # si habia nota) = hasta 5 llamadas por cada salida. Con todo el equipo
-        # fichando a la misma hora es justo el escenario del 429 que v80 arreglo
-        # en los proyectos. Columnas: F=Clock Out, G=Horas, H=Estado.
-        peticiones = [{"range": f"F{target_row}:H{target_row}",
-                       "values": [[out_ts, str(horas), "CERRADO"]]}]
-        if nota:
-            prev = str(records[target_row - 2].get("Ubicacion", "") or "")
-            peticiones.append({"range": f"D{target_row}",
-                               "values": [[(prev + " | " + nota).strip(" |")]]})
-        ws.batch_update(peticiones, value_input_option="RAW")
+        # UNA sola escritura. Antes eran 3 update_cell = hasta 5 llamadas por salida.
+        # Con todo el equipo fichando a la misma hora es justo el escenario del 429
+        # que v80 arreglo en los proyectos. Columnas: F=Clock Out, G=Horas, H=Estado.
+        ws.batch_update([{"range": f"F{target_row}:H{target_row}",
+                          "values": [[out_ts, str(horas), "CERRADO"]]}],
+                        value_input_option="RAW")
     except Exception as e:
         return False, f"Error actualizando el fichaje: {e}"
 
@@ -284,6 +289,54 @@ def elapsed_seconds(clock_in_str) -> int:
         return max(0, int((datetime.now() - datetime.strptime(str(clock_in_str), FMT)).total_seconds()))
     except Exception:
         return 0
+
+
+def _segmentos_dia(ci_str, fin_dt) -> list:
+    """Parte el tramo [ci, fin] en segmentos por DÍA NATURAL: [(date, horas), …].
+
+    Un fichaje que cruza medianoche (turno de noche o clock-out olvidado) NO es de
+    un solo día: 21:00→05:00 son ~3 h del día 1 y ~5 h del día 2. Repartir así deja
+    que «hoy» y el costo de M.O. caigan en el día correcto (v164). La suma de los
+    segmentos = la duración total, así que los agregados por-usuario no cambian.
+    """
+    try:
+        ci = datetime.strptime(str(ci_str), FMT)
+    except Exception:
+        return []
+    if not isinstance(fin_dt, datetime) or fin_dt <= ci:
+        return []
+    segs, cur = [], ci
+    while cur.date() < fin_dt.date():
+        medianoche = datetime.combine(cur.date() + timedelta(days=1), time.min)
+        segs.append((cur.date(), (medianoche - cur).total_seconds() / 3600.0))
+        cur = medianoche
+    segs.append((cur.date(), (fin_dt - cur).total_seconds() / 3600.0))
+    return segs
+
+
+def _row_segmentos(r) -> list:
+    """Segmentos por día de UNA fila de fichaje. Abierta = hasta ahora; cerrada =
+    hasta el Clock Out. Si la salida no parsea, cae a las Horas guardadas (1 día)."""
+    ci = str(r.get("Clock In", ""))
+    if str(r.get("Estado", "")).strip().upper() == "ABIERTO":
+        return _segmentos_dia(ci, datetime.now())
+    try:
+        fin = datetime.strptime(str(r.get("Clock Out", "")), FMT)
+    except Exception:
+        try:
+            d = datetime.strptime(ci, FMT).date()
+        except Exception:
+            return []
+        h = _num(r.get("Horas"))
+        return [(d, h)] if h > 0 else []
+    segs = _segmentos_dia(ci, fin)
+    # Fila cerrada de UN solo día: respeta las Horas GUARDADAS (lo que ya veía el
+    # reporte del admin) en vez de recomputar del timestamp → el total con days=None
+    # queda IDÉNTICO. Solo las que cruzan medianoche se reparten por segmento.
+    if len(segs) == 1:
+        h = _num(r.get("Horas"))
+        return [(segs[0][0], h)] if h > 0 else []
+    return segs
 
 
 def open_sessions(nombre: str, grupo: str = "", usuario: str = "") -> dict:
@@ -342,14 +395,10 @@ def resumen_hoy(nombre: str, grupo: str = "", usuario: str = "") -> dict:
     for r in _cached_records():                      # lectura cacheada (display)
         if not _matches(r, usuario, nombre, grupo):
             continue
-        ci = str(r.get("Clock In", ""))
-        try:
-            if datetime.strptime(ci, FMT).date() != hoy:
-                continue
-        except Exception:
-            continue
-        abierto = str(r.get("Estado", "")).strip().upper() == "ABIERTO"
-        h = round(elapsed_seconds(ci) / 3600.0, 2) if abierto else _num(r.get("Horas"))
+        # Solo el segmento de HOY: una sesión que empezó ayer y sigue —o cerró hoy
+        # de madrugada— aporta sus horas de hoy, no 0 (antes se descartaba la fila
+        # entera si el Clock In no era hoy, y el cronómetro decía otra cosa).
+        h = sum(hh for d, hh in _row_segmentos(r) if d == hoy)
         if h <= 0:
             continue
         if _tipo_of(r) == TIPO_GENERAL:
@@ -411,14 +460,22 @@ def proyectos_por_usuario_dia(grupo: str, fecha) -> dict:
     """{clave_usuario: [{'pid','nombre'}]} de los proyectos que cada persona FICHÓ
     ese día (segmentos de tipo proyecto). Para el 'plan vs real' del roster (v161):
     comparar donde se le ASIGNÓ contra donde ficho de verdad."""
-    fecha_s = fecha.isoformat() if hasattr(fecha, "isoformat") else str(fecha)[:10]
+    if isinstance(fecha, date) and not isinstance(fecha, datetime):
+        fecha_d = fecha
+    else:
+        try:
+            fecha_d = datetime.strptime(str(fecha)[:10], "%Y-%m-%d").date()
+        except Exception:
+            return {}
     out = {}
     for r in _cached_records():
         if str(r.get("Grupo", "")).strip() != str(grupo).strip():
             continue
         if _tipo_of(r) != TIPO_PROYECTO:
             continue
-        if str(r.get("Clock In", ""))[:10] != fecha_s:
+        # Cuenta el proyecto en CADA día que se trabajó (no solo el del Clock In):
+        # un segmento nocturno que cruza medianoche se trabajó en los dos días.
+        if fecha_d not in {d for d, hh in _row_segmentos(r) if hh > 0}:
             continue
         clave = str(r.get("Usuario", "")).strip() or str(r.get("Nombre", "")).strip()
         entry = {"pid": pid_of(r),
@@ -437,7 +494,7 @@ def group_hours(grupo: str, days=None) -> list:
     sesiones abiertas cuentan con el tiempo transcurrido hasta ahora."""
     records = _cached_records()             # lectura cacheada (display)
     grupo = (grupo or "").strip()
-    desde = (datetime.now() - timedelta(days=days)) if days else None
+    desde = (datetime.now() - timedelta(days=days)).date() if days else None
     agg = {}
     for r in records:
         if str(r.get("Grupo", "")).strip() != grupo:
@@ -447,15 +504,12 @@ def group_hours(grupo: str, days=None) -> list:
         nombre = str(r.get("Nombre", "")).strip() or clave
         if not clave:
             continue
-        ci = str(r.get("Clock In", ""))
-        if desde:
-            try:
-                if datetime.strptime(ci, FMT) < desde:
-                    continue
-            except Exception:
-                continue
-        estado = str(r.get("Estado", "")).strip().upper()
-        h = round(elapsed_seconds(ci) / 3600.0, 2) if estado == "ABIERTO" else _num(r.get("Horas"))
+        # Horas por DÍA de la fila, filtradas a la ventana. Partir en medianoche hace
+        # que «Hoy»/«Semana» cuenten el tramo REAL de cada día: una sesión que cruzó
+        # medianoche ya no se excluye entera (por el día del Clock In) ni se cuenta
+        # toda en un solo día. Con days=None (Todo) el total es IDÉNTICO al anterior,
+        # porque Σsegmentos = duración de la fila.
+        h = sum(hh for d, hh in _row_segmentos(r) if desde is None or d >= desde)
         if h <= 0:
             continue
         a = agg.setdefault(clave, {"general": 0.0, "proyecto": 0.0, "por": {},
