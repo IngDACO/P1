@@ -616,7 +616,7 @@ Paso 7, solo administrador/propietario). Persistencia en Google Sheets (misma ho
   y en 📋 Mis proyectos (campo, solo lectura). Los links de inducción se envían por Telegram/email a los
   usuarios de campo **al asignarlos** (`notify.notify_assignment` los incluye) y con `notify.notify_induction`
   (reenvío). `projects.parse_links` (uno por línea).
-- **Campo** (📋 Mis proyectos): ve asignados (`list_projects_for_field`), actualiza Avance% por actividad (`update_activity_progress` recalcula proyecto). `render_field_projects`.
+- **Campo** (📋 Mis proyectos): ve asignados; actualiza el avance en UNA tabla editable (`save_field_progress`, batch + fechas reales automaticas, v162); sub-pestañas 🏗 Avance/🚨 Avisos/💰 Recibos/📎 Archivos. `render_field_projects`.
 - **Propietario** (👑 Administración → 📁 Proyectos): ve TODOS los proyectos de todos los grupos
   (`render_owner_projects`, `list_projects()` sin filtro). `_detalle_proyecto` toma el grupo del propio proyecto. (v73)
 - **Horas**: del fichaje por nombre de proyecto (`project_hours`, `project_hours_bulk`=1 lectura).
@@ -789,6 +789,34 @@ etiqueta en la extracción posicional; excluye COUNTERWEIGHT; regex `T\d{2,3}-\d
 Al cargar el plano en el survey (app.py), autocompleta **RAIL = AlturaDiente** (altura del diente desde la
 espalda) del catálogo; si el código no está o no se detecta → aviso + entrada manual. **RAIL = AlturaDiente**
 (NO el ancho); AnchoDiente se guarda como dato secundario.
+
+## Mis proyectos (campo): sub-pestañas + tabla de avance + fechas reales automaticas (v162)
+Peticion del usuario: revisar 📋 Mis proyectos del campo (tecnico/imagen/integracion). Eran **108
+lineas apiladas en scroll unico** (mismo problema que el detalle del admin antes de v132) y su accion
+NUCLEO —actualizar avance— era la mas incomoda: N expandibles, un guardado cada uno.
+### ⚠️ Tecnico 1: el avance eran N escrituras (429 en potencia)
+`update_activity_progress` hacia hasta 5 `update_cell` por actividad, y el campo lo llamaba una vez por
+expandible. **`projects.save_field_progress(pid, cambios)`** escribe SOLO lo que cambio en 1
+`batch_update` (el patron 429 de v80/v150). El campo edita el avance en UNA tabla (`st.data_editor`,
+Actividad/Avance %/Nota) y guarda una vez; solo se mandan las filas que cambiaron.
+### ⚠️ Tecnico 2: las fechas reales eran texto libre y casi nadie las llenaba
+`FechaInicioReal`/`FechaFinReal` eran `text_input("YYYY-MM-DD")` (mismo fallo de v149) y alimentan la
+curva S real (`windows`). En los 3 proyectos reales estaban TODAS vacias. **Decision del usuario:
+automaticas** — no se teclean:
+- Inicio real = el dia que el avance pasa de 0 (si estaba vacia). Sticky.
+- Fin real = el dia que llega a 100 (si estaba vacia).
+- **Reapertura**: si una actividad al 100% baja de 100, se BORRA el fin real (no dejar "terminada" una
+  fecha que ya no es cierta). Cuando vuelva a 100, nueva fecha.
+### Imagen: sub-pestañas (radio, como el admin) + KPI cards
+Cabecera con tarjetas (estado, avance, cliente) + barra + Maps. Sub-navegacion **radio** (NO st.tabs,
+v56): 🏗 Avance (instrucciones + tabla) · 🚨 Avisos (reportar/ver alarmas) · 💰 Recibos · 📎 Archivos
+(calculos + documentos). Antes todo era un scroll; en el movil el campo va directo a lo suyo.
+La planificacion (roster "hoy" + board, v160) sigue arriba, cross-proyecto.
+### Verificacion
+`save_field_progress` probado en 6 casos (arranca→inicio · ya arrancada→no toca · llega a 100→fin · ya
+100→no re-escribe · reabre→borra fin · sigue en 0→nada): todos correctos. render_field_projects: 0
+nombres sin resolver NUEVOS (AST vs commit anterior), los 8 helpers existen, las 4 ramas del radio
+presentes. El batch real corre por primera vez en el Cloud.
 
 ## Tablero de cuadrilla — plan vs real (v161): feature COMPLETA
 Ultimo incremento del roster. El admin ve, por dia, lo ASIGNADO contra lo FICHADO.
@@ -2181,7 +2209,7 @@ posicional + plano) → app.py, al cargar el PDF, setea `st.session_state["ns"]`
 resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NORTH SYD y AGECARE → NS=6
 (coincide con travel/floor-height HQ/HE).
 
-## Versiones desplegadas (v161 = actual)
+## Versiones desplegadas (v162 = actual)
 | Ver | Cambio principal |
 |---|---|
 | v5 | Extractor: CRLF fix, caso D valor-antes-label, sin pdfplumber |
@@ -2283,6 +2311,7 @@ resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NOR
 | v102 | Fix: NS se lee del plano (NUMBER OF STOPS) al cargar el PDF; default de init 6→2 (ya no queda pegado en 6) |
 | v103 | Rol conductor (2 relojes: jornada general + segmentos por proyecto, columna Tipo) + cronómetro en vivo para todos + reporte admin de horas del grupo (Mi grupo → ⏱ Horas) |
 | v104 | Credenciales/tickets por usuario (White Card, Forklift, Dogging/Rigging, licencia…): vencimiento+estado, foto/documento a Drive, radar en Resumen del día, avisos email/Telegram a admin+usuario; usuario ve las suyas (🎫 Mis credenciales) |
+| v162 | Mis proyectos (campo): sub-pestañas (Avance/Avisos/Recibos/Archivos como el admin) + el avance en UNA tabla editable con guardado en batch, y las fechas reales de inicio/fin se registran solas (inicio al pasar de 0, fin al llegar a 100) en vez de texto libre |
 | v161 | Tablero de cuadrilla — plan vs real: el admin ve por dia lo asignado contra lo fichado (🟢 donde tocaba / 🔴 en otro sitio / ⚠️ sin fichar), solo para trabajos enlazados a un proyecto. Feature completa (v159 base + v160 campo + v161 plan-vs-real) |
 | v160 | Tablero de cuadrilla: el campo ve el board completo (su fila resaltada) en 📋 Mis proyectos con su asignacion de hoy destacada, y en el fichaje un atajo «fichar a tu asignacion de hoy» cuando enlaza a un proyecto |
 | v159 | Tablero semanal de cuadrilla (base): catalogo de Trabajos (numero/nombre/color/enlace opcional a PRJ) + seccion 📅 Planificacion del admin con rejilla coloreada como el board, editar semana persona a persona y copiar semana anterior |

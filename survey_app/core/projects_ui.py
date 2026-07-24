@@ -1801,6 +1801,52 @@ def render_owner_projects():
 
 
 # ── Pestaña del usuario de CAMPO: mis proyectos ──────────────────
+def _field_activities(pid):
+    """Tabla editable del avance del campo (v162): una tabla, un guardado.
+
+    Antes eran N expandibles con un guardado cada uno (hasta 5 update_cell por
+    actividad). Ahora `save_field_progress` escribe solo lo que cambio en 1 batch,
+    y las fechas reales se registran solas (no se teclean).
+    """
+    st.markdown("#### Actividades — actualiza tu avance")
+    acts = P.list_activities(pid)
+    if not acts:
+        st.caption("Este proyecto no tiene actividades registradas.")
+        return
+    _df = pd.DataFrame([{
+        "N": int(P._num(a.get("Orden"))),
+        "Actividad": a.get("Nombre"),
+        "Avance %": int(P._num(a.get("Avance"))),
+        "Inicio real": str(a.get("FechaInicioReal", "")) or "—",
+        "Fin real": str(a.get("FechaFinReal", "")) or "—",
+        "Nota": str(a.get("Nota", "")),
+    } for a in acts])
+    _ed = st.data_editor(
+        _df, hide_index=True, use_container_width=True, num_rows="fixed",
+        key=f"fldacts_{pid}",
+        disabled=["N", "Actividad", "Inicio real", "Fin real"],
+        column_config={
+            "Avance %": st.column_config.NumberColumn(min_value=0, max_value=100, step=5,
+                                                      help="Tu avance en esta actividad"),
+            "Nota": st.column_config.TextColumn(help="Opcional"),
+        })
+    st.caption("Las fechas se registran solas: **inicio** al pasar de 0, **fin** al llegar a 100.")
+    if st.button("💾 Guardar avances", key=f"fldsave_{pid}", use_container_width=True):
+        cambios = []
+        for i, a in enumerate(acts):
+            r = _ed.iloc[i]
+            nav, nnota = int(r["Avance %"]), str(r["Nota"])
+            if nav != int(P._num(a.get("Avance"))) or nnota != str(a.get("Nota", "")):
+                cambios.append({"orden": a.get("Orden"), "avance": nav, "nota": nnota})
+        if not cambios:
+            st.info("No cambiaste ningún avance.")
+        else:
+            ok, msg = P.save_field_progress(pid, cambios)
+            (st.success if ok else st.error)(msg)
+            if ok:
+                st.rerun()
+
+
 def render_field_projects(usuario: str, grupo: str):
     st.markdown("### 📋 Mis proyectos")
     if not P.is_configured():
@@ -1856,59 +1902,34 @@ def render_field_projects(usuario: str, grupo: str):
         st.error("Proyecto no encontrado.")
         return
 
+    # ── Cabecera: tarjetas KPI (mismo lenguaje que el resto) ──
     avance = P._num(prj.get("Avance"))
     est    = str(prj.get("Estado", ""))
-    c1, c2 = st.columns(2)
-    c1.metric("Estado", f"{_ESTADO_EMOJI.get(est,'')} {est}".strip())
-    c2.metric("Avance del proyecto", f"{avance:.0f}%")
+    _ub = str(prj.get("Ubicacion", "") or "")
+    tarj = [_kpi_card("Estado", f"{_ESTADO_EMOJI.get(est, '')} {est}".strip()),
+            _kpi_card("Avance del proyecto", f"{avance:.0f}%"),
+            _kpi_card("Cliente", prj.get("Cliente") or "—")]
+    st.markdown('<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:8px">'
+                + "".join(tarj) + "</div>", unsafe_allow_html=True)
     st.progress(min(1.0, avance / 100.0))
-    if prj.get("Ubicacion"):
-        st.caption(f"{maps.maps_link_md(prj.get('Ubicacion'))}  ·  Cliente: {prj.get('Cliente','—')}")
-    elif prj.get("Cliente"):
-        st.caption(f"Cliente: {prj.get('Cliente','—')}")
+    if _ub:
+        st.caption("📍 " + maps.maps_link_md(_ub, _ub))
 
-    # ── Instrucciones e inducciones del proyecto (solo lectura) ──
-    _induccion_section(pid, prj, grupo, allow_send=False)
-
-    # ── Alarmas: reportar problema + ver avisos ──
-    _alerts_section(pid, grupo, prj.get("Nombre", ""), allow_report=True)
-
-    st.markdown("#### Actividades — actualiza tu avance")
-    acts = P.list_activities(pid)
-    if not acts:
-        st.caption("Este proyecto no tiene actividades registradas.")
-    for a in acts:
-        orden  = a.get("Orden")
-        nombre = a.get("Nombre")
-        cur    = P._num(a.get("Avance"))
-        icon   = "✅" if cur >= 100 else ("🚧" if cur > 0 else "🕓")
-        with st.expander(f"{icon} {orden}. {nombre} — {cur:.0f}%"):
-            new = st.slider("Avance %", 0, 100, int(cur), key=f"act_{pid}_{orden}")
-            fc1, fc2 = st.columns(2)
-            fi = fc1.text_input("Inicio real (YYYY-MM-DD)", value=a.get("FechaInicioReal", ""),
-                                key=f"fi_{pid}_{orden}")
-            ff = fc2.text_input("Fin real (YYYY-MM-DD)", value=a.get("FechaFinReal", ""),
-                                key=f"ff_{pid}_{orden}")
-            nota = st.text_input("Nota", value=a.get("Nota", ""), key=f"nt_{pid}_{orden}")
-            if st.button("💾 Guardar avance", key=f"sv_{pid}_{orden}"):
-                ok, msg = P.update_activity_progress(pid, orden, new, fi, ff, nota)
-                (st.success if ok else st.error)(msg)
-                if ok:
-                    st.rerun()
-
-    # ── Gastos / compras (campo carga recibos) ──
+    # ── Sub-navegación (radio, NO st.tabs — regla v56; como el detalle del admin) ──
+    _sec = st.radio("Sección", ["🏗 Avance", "🚨 Avisos", "💰 Recibos", "📎 Archivos"],
+                    horizontal=True, key="fld_sec", label_visibility="collapsed")
     st.markdown("---")
-    render_expenses(pid, grupo, can_delete=False, key_prefix="fld")
-
-    # ── Documentos (campo: sube fotos, consulta planos/informe cliente/matriz/fotos) ──
-    # ── Lo que el campo necesita en obra ──────────────────
-    # Los calculos (plomada, cortes) los EJECUTA el campo, asi que tambien los ve
-    # (hasta v134 estaban ocultos para su rol).
-    st.markdown("---")
-    _calculos_section(pid)
-
-    st.markdown("---")
-    _documentos_section(pid)
+    if _sec == "🏗 Avance":
+        _induccion_section(pid, prj, grupo, allow_send=False)
+        _field_activities(pid)
+    elif _sec == "🚨 Avisos":
+        _alerts_section(pid, grupo, prj.get("Nombre", ""), allow_report=True)
+    elif _sec == "💰 Recibos":
+        render_expenses(pid, grupo, can_delete=False, key_prefix="fld")
+    else:   # 📎 Archivos
+        _calculos_section(pid)
+        st.markdown("---")
+        _documentos_section(pid)
 
 
 # ── Vista del CONDUCTOR: proyectos del grupo (solo lectura, datos básicos) ──

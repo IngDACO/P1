@@ -588,6 +588,59 @@ def delete_activity(pid, orden) -> tuple:
     return True, "Actividad eliminada."
 
 
+def save_field_progress(pid, cambios) -> tuple:
+    """El campo actualiza el avance de VARIAS actividades en UNA escritura (batch).
+
+    `cambios` = [{'orden', 'avance', 'nota'(opc)}]. Fechas reales AUTOMATICAS
+    (decision del usuario, v162): el campo no teclea fechas.
+      - FechaInicioReal: el primer dia que el avance pasa de 0 (si estaba vacia).
+      - FechaFinReal: el dia que llega a 100 (si estaba vacia).
+      - Si una actividad al 100% se REABRE (baja de 100), se borra la fin real
+        (dejaria "terminada" una fecha que ya no es cierta).
+    ⚠️ Reemplaza el `update_activity_progress` por-actividad (hasta 5 update_cell
+    cada uno) — el escenario de 429 que v80/v150 ya arreglaron en otros sitios.
+    """
+    from datetime import date as _date
+    aws, err = _activities_ws()
+    if err:
+        return False, err
+    hoy = _date.today().isoformat()
+    recs = aws.get_all_records(numericise_ignore=["all"])
+    rowmap = {str(r.get("Orden", "")): (i + 2, r)
+              for i, r in enumerate(recs) if str(r.get("ProyectoID", "")) == str(pid)}
+    batch = []
+    for c in (cambios or []):
+        hit = rowmap.get(str(c.get("orden")))
+        if hit is None:
+            continue
+        row, r = hit
+        av = max(0.0, min(100.0, _num(c.get("avance"))))
+        fi = str(r.get("FechaInicioReal", "")).strip()
+        ff = str(r.get("FechaFinReal", "")).strip()
+        batch.append({"range": f"{_col_letter(_ACOL['Avance'])}{row}", "values": [[str(av)]]})
+        if av > 0 and not fi:                        # arranca → inicio real = hoy
+            batch.append({"range": f"{_col_letter(_ACOL['FechaInicioReal'])}{row}",
+                          "values": [[hoy]]})
+        if av >= 100 and not ff:                     # completa → fin real = hoy
+            batch.append({"range": f"{_col_letter(_ACOL['FechaFinReal'])}{row}",
+                          "values": [[hoy]]})
+        elif av < 100 and ff:                        # reabierta → borrar fin real
+            batch.append({"range": f"{_col_letter(_ACOL['FechaFinReal'])}{row}",
+                          "values": [[""]]})
+        if "nota" in c:
+            batch.append({"range": f"{_col_letter(_ACOL['Nota'])}{row}",
+                          "values": [[str(c.get("nota", ""))]]})
+    if not batch:
+        return True, "Sin cambios que guardar."
+    try:
+        aws.batch_update(batch, value_input_option="RAW")
+    except Exception as ex:
+        return False, f"Error guardando: {ex}"
+    _recompute_project_avance(pid)
+    _invalidate()
+    return True, "Avances guardados."
+
+
 def save_activities(pid, edits) -> tuple:
     """Guarda ediciones de la tabla (nombre/días/peso/orden) en UNA sola escritura (batch).
     `edits`: lista de dicts con 'orden0' (orden original, para localizar la fila) +
