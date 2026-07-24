@@ -102,8 +102,9 @@ renderiza SOLO la sección activa (`if/elif _seccion == ...`). El survey complet
 · 🎗 Belting. El Survey es UNA MÁS (la más potente, no un caso aparte). El **🦺 Pre-Start NO es una
 herramienta técnica**: es SEGURIDAD de obra, va con lo operativo (fichaje/proyectos).
 Secciones por rol: Propietario 👑 Administración · Pre-Start · las 5 técnicas | Administrador 🛠 Mi grupo
-· Fichaje · Pre-Start · las 5 | Campo 📋 Mis proyectos · Fichaje · Pre-Start · las 5 · 🎫 Mis credenciales
-| Conductor Fichaje · Proyectos · Mis credenciales (sin técnicas ni Pre-Start).
+· Fichaje · Pre-Start · las 5 | Campo 📋 Mis proyectos · Fichaje · Pre-Start · las 5 · 🎫 Mis credenciales.
+⚠️ **El rol `conductor` se ELIMINÓ en v163** (era un subconjunto del campo tras unificar el fichaje en
+v150). Solo quedan 3 roles: propietario, administrador, campo.
 
 ---
 
@@ -789,6 +790,33 @@ etiqueta en la extracción posicional; excluye COUNTERWEIGHT; regex `T\d{2,3}-\d
 Al cargar el plano en el survey (app.py), autocompleta **RAIL = AlturaDiente** (altura del diente desde la
 espalda) del catálogo; si el código no está o no se detecta → aviso + entrada manual. **RAIL = AlturaDiente**
 (NO el ancho); AnchoDiente se guarda como dato secundario.
+
+## Se elimina el rol conductor: era un subconjunto del campo (v163)
+Peticion del usuario: "integrar el perfil del conductor dentro del campo y luego eliminar el conductor".
+### Por que ya no aportaba
+Tras **v150** (fichaje unificado: dos relojes jornada+proyecto para TODOS), el conductor quedo como un
+SUBCONJUNTO del campo. Su unica funcion propia era `render_conductor_projects` (ver todos los proyectos
+del grupo en solo lectura + cargar recibo a cualquiera). **Decisiones del usuario:** (a) mantener el
+bloqueo de contacto de v79 para todo el campo; (b) NO trasladar por ahora lo de "recibo a cualquier
+proyecto"; (c) el unico usuario conductor real (`conductor`/fijiofgjei, cuenta de prueba sin contacto)
+se **ELIMINA**, no se migra.
+### Cambios
+- `auth.ROLES` pasa de 4 a **3 roles** (fuera "conductor"). Los selectores de rol que leen `ROLES`
+  (creacion del propietario) dejan de ofrecerlo solos.
+- `app.py`: fuera el label `_L_CONDPROJ`, la rama de nav del conductor y su enrutado.
+- `projects_ui.render_conductor_projects` **eliminada** (borrada por AST, 27 lineas).
+- `auth_ui`: "Crear usuario" pasa a **solo campo** (email obligatorio siempre); el panorama de usuarios
+  filtra `== "campo"`.
+- `plan_ui`: `rol in ("campo","conductor")` → `rol == "campo"`.
+- `chat_agent`: fuera las 2 lineas del prompt que describian el rol (regla v133).
+- Comentarios/filtros en roster_ui / expenses / timeclock ajustados. `timeclock_ui:9` se deja (es
+  historia correcta: "hasta v149 solo el conductor tenia los dos relojes").
+### Verificacion
+Usuario de prueba borrado (verificado: 0 conductores antes/despues). Import REAL de los 8 modulos
+tocados OK; `auth.ROLES` sin conductor; `render_conductor_projects` ausente y **0 referencias residuales**
+a el / `_L_CONDPROJ` en todo el repo; la nav del campo queda IDENTICA (nada perdido ni ganado); 0 nombres
+libres nuevos en las funciones tocadas de auth_ui; sin variable `rl` huerfana (la que queda es de otro
+form, el del propietario). El prompt del agente ya no menciona el conductor.
 
 ## Mis proyectos (campo): sub-pestañas + tabla de avance + fechas reales automaticas (v162)
 Peticion del usuario: revisar 📋 Mis proyectos del campo (tecnico/imagen/integracion). Eran **108
@@ -2209,9 +2237,10 @@ posicional + plano) → app.py, al cargar el PDF, setea `st.session_state["ns"]`
 resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NORTH SYD y AGECARE → NS=6
 (coincide con travel/floor-height HQ/HE).
 
-## Versiones desplegadas (v162 = actual)
+## Versiones desplegadas (v163 = actual)
 | Ver | Cambio principal |
 |---|---|
+| v163 | Se elimina el rol conductor: tras el fichaje unificado (v150) era un subconjunto del campo; se borra el rol, su vista de proyectos y todas sus ramas (nav, creacion de usuario, prompt del agente), y se elimina el unico usuario conductor de prueba. Quedan 3 roles: propietario/administrador/campo |
 | v5 | Extractor: CRLF fix, caso D valor-antes-label, sin pdfplumber |
 | v6 | BC_CALC + FB_MAX_BACK constraint en optimizer |
 | v7 | BC eliminado de inputs usuario, calculado automáticamente |

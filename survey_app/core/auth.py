@@ -23,7 +23,7 @@ LOGIN_HEADERS = ["Usuario", "Password", "Rol", "Nombre", "Activo", "Grupo",
                  "SessionToken", "SessionTime", "Email", "TelegramChatID", "TarifaHora"]
 GROUPS_SHEET   = "Grupos"
 GROUPS_HEADERS = ["Grupo", "Descripcion", "Activo"]
-ROLES         = ["propietario", "administrador", "campo", "conductor"]
+ROLES         = ["propietario", "administrador", "campo"]
 _ACTIVE_OK    = ("", "SI", "SÍ", "YES", "Y", "TRUE", "1", "X")
 # Columnas (1-based) en la hoja Login
 _COL = {"Usuario": 1, "Password": 2, "Rol": 3, "Nombre": 4, "Activo": 5, "Grupo": 6,

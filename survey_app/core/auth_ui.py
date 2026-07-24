@@ -663,7 +663,7 @@ def _ficha_usuario(u, grupo):
 def _grupo_usuarios(grupo):
     from core import credentials as C
     users = auth.list_users(grupo=grupo)
-    gente = [u for u in users if u["Rol"].lower() in ("campo", "conductor")]
+    gente = [u for u in users if u["Rol"].lower() == "campo"]
 
     # Aviso de vencimientos (email/Telegram) una vez por sesión
     if C.is_configured() and not st.session_state.get(f"_credaviso_{grupo}"):
@@ -687,7 +687,7 @@ def _grupo_usuarios(grupo):
                           "Tarifa/h": u.get("TarifaHora", "") or "—", "Contacto": _cont})
         st.dataframe(pd.DataFrame(_rows), hide_index=True, use_container_width=True)
     else:
-        st.info("Aún no tienes usuarios de campo ni conductores. Crea uno abajo.")
+        st.info("Aún no tienes usuarios de campo. Crea uno abajo.")
 
     # ── Matriz de compliance (panorama de credenciales) ──
     if gente and C.is_configured():
@@ -701,21 +701,19 @@ def _grupo_usuarios(grupo):
             pass
 
     # ── Crear usuario (plegado) ──
-    with st.expander("➕ Crear usuario (campo o conductor)"):
+    with st.expander("➕ Crear usuario de campo"):
         with st.form("form_campo", clear_on_submit=True):
             u  = st.text_input("Usuario")
             nm = st.text_input("Nombre")
             pw = st.text_input("Contraseña", type="password")
-            rl = st.selectbox("Rol", ["campo", "conductor"], key="gp_newrol")
             em = st.text_input("📧 Email (OBLIGATORIO para campo)")
-            st.caption("Campo: el Telegram se vincula en su ficha tras crearlo. "
-                       "Conductor: no requiere email/Telegram.")
+            st.caption("El Telegram se vincula en su ficha tras crearlo.")
             if st.form_submit_button("Crear"):
-                if rl == "campo" and not em.strip():
+                if not em.strip():
                     st.error("El email es obligatorio para usuarios de campo.")
                 else:
-                    ok, msg = auth.add_user(u, pw, rl, nm, grupo)
-                    if ok and rl == "campo" and em.strip():
+                    ok, msg = auth.add_user(u, pw, "campo", nm, grupo)
+                    if ok and em.strip():
                         auth.set_contact(u, email=em)
                     (st.success if ok else st.error)(msg)
                     if ok:

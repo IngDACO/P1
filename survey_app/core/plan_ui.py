@@ -6,7 +6,7 @@ el PDF:
 
 - **admin / propietario**: elige el proyecto dentro de la herramienta (trabaja
   sobre varias obras desde el escritorio).
-- **campo / conductor**: el proyecto sale del **clock-in**, que ya lo pide
+- **campo**: el proyecto sale del **clock-in**, que ya lo pide
   desde v67. Cero fricción: ficha y las herramientas ya saben dónde está.
 
 Devuelve `(proyecto|None, datos_del_plano)` para que la herramienta prellene
@@ -20,7 +20,7 @@ from core import timeclock
 
 
 def _proyecto_fichado(auth: dict):
-    """Proyecto del clock-in abierto del usuario (campo/conductor)."""
+    """Proyecto del clock-in abierto del usuario de campo."""
     try:
         ses = timeclock.open_sessions(auth.get("nombre", ""), auth.get("grupo", ""),
                                       auth.get("usuario", ""))
@@ -46,8 +46,8 @@ def selector_proyecto(key: str, ayuda: str = "") -> tuple:
     auth = st.session_state.get("auth", {}) or {}
     rol = auth.get("rol", "")
 
-    # ── Campo y conductor: el proyecto viene del fichaje ──
-    if rol in ("campo", "conductor"):
+    # ── Campo: el proyecto viene del fichaje ──
+    if rol == "campo":
         prj = _proyecto_fichado(auth)
         if not prj:
             st.info("ℹ️ **Ficha primero en ⏱ Fichaje** eligiendo el proyecto en el que "

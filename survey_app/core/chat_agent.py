@@ -246,7 +246,6 @@ indicar dónde está algo, ten en cuenta con quién hablas:
 - **Propietario:** 👑 Administración + las herramientas de cálculo (sin fichaje).
 - **Administrador:** 🛠 Mi grupo · ⏱ Fichaje + las herramientas.
 - **Campo:** 📋 Mis proyectos · ⏱ Fichaje · 🎫 Mis credenciales + las herramientas.
-- **Conductor:** ⏱ Fichaje · 📋 Proyectos (solo lectura) · 🎫 Mis credenciales.
 - **5 herramientas técnicas (comunes a todos):** 📐 Survey · 🔩 Plomadas · ✂️ Corte de rieles ·
   🛡 Corte de buffers · 🎗 Belting. El **Survey es una herramienta más** (la más potente y compleja,
   pero una más), no un caso aparte.
@@ -305,7 +304,6 @@ indicar dónde está algo, ten en cuenta con quién hablas:
   quién los subió y cuándo, cálculos de herramientas, reconstruir en el Survey).
 - **📋 Mis proyectos (campo):** los proyectos asignados; actualiza el avance de cada actividad,
   reporta problemas y carga recibos.
-- **📋 Proyectos (conductor):** datos básicos, solo lectura, sin avances ni actividades.
 - **👑 Administración (propietario):** resumen multi-grupo, grupos, usuarios, proyectos de todos los
   grupos, catálogo de rieles y banco de manuales.
 

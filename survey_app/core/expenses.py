@@ -1,8 +1,8 @@
 """
 Gastos / compras por proyecto → control de costos (compras + mano de obra).
 
-- Recibos por proyecto (foto/PDF a Drive + valor + categoría). Los cargan admin,
-  campo y conductor.
+- Recibos por proyecto (foto/PDF a Drive + valor + categoría). Los cargan admin
+  y campo.
 - Costo de mano de obra = Σ (horas de cada persona en el proyecto × su tarifa/hora,
   `auth.TarifaHora`). Costo total = compras + mano de obra.
 - Presupuesto por proyecto (`Proyectos.Presupuesto`) → % consumido + alerta al pasarse.

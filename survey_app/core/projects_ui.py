@@ -1932,37 +1932,7 @@ def render_field_projects(usuario: str, grupo: str):
         _documentos_section(pid)
 
 
-# ── Vista del CONDUCTOR: proyectos del grupo (solo lectura, datos básicos) ──
-def render_conductor_projects(grupo: str):
-    st.markdown("### 📋 Proyectos del grupo")
-    st.caption("Datos básicos para ubicarte y fichar. No incluye avances ni actividades.")
-    if not P.is_configured():
-        st.warning("La lista de proyectos necesita Google Sheets configurado.")
-        return
-    proys = P.list_projects(grupo=grupo)
-    if not proys:
-        st.info("No hay proyectos en el grupo.")
-        return
-    rows = [{
-        "ID":        p.get("ID"),
-        "Proyecto":  p.get("Nombre"),
-        "Cliente":   p.get("Cliente"),
-        "Ubicación": str(p.get("Ubicacion", "") or ""),
-        "🗺":        maps.maps_url(p.get("Ubicacion")),
-    } for p in proys]
-    st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True,
-                 column_config={"🗺": st.column_config.LinkColumn("🗺", display_text="Abrir")})
-
-    # ── Cargar recibos (combustible, peajes, materiales…) ──
-    st.markdown("---")
-    idmap = {f"{p.get('Nombre')} ({p.get('ID')})": p.get("ID") for p in proys}
-    sel = st.selectbox("Cargar recibo al proyecto", [_VACIO] + list(idmap.keys()),
-                       key="cond_exp_sel")
-    if sel and sel != _VACIO:
-        render_expenses(idmap[sel], grupo, can_delete=False, key_prefix="cond")
-
-
-# ── Gastos / compras por proyecto (admin, campo, conductor) ──
+# ── Gastos / compras por proyecto (admin, campo) ──
 def _barras_html(pares, total, color="#2e6da4") -> str:
     """Barras horizontales ordenadas: etiqueta · barra · valor · %.
 
@@ -2268,9 +2238,8 @@ def render_group_hours(grupo: str):
                    "(sin asignar). El costo de M.O. = horas imputadas × tarifa de cada persona.")
 
     # ── Tabla por persona (con costo; sin el Login técnico) ──
-    # ⚠️ Dos logins pueden compartir Nombre (en los datos reales, `conductor` y
-    # `fijiofgjei` se llaman igual): sin el Login se volverian indistinguibles.
-    # Se añade el login SOLO a los que colisionan, no a todos.
+    # ⚠️ Dos logins distintos pueden compartir Nombre: sin el Login se volverian
+    # indistinguibles. Se añade el login SOLO a los que colisionan, no a todos.
     from collections import Counter as _Counter
     _nombres = _Counter((d.get("nombre") or d["usuario"]) for d in data)
 

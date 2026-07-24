@@ -16,7 +16,7 @@ HEADERS = ["Nombre", "PIN", "Proyecto", "Ubicacion",
            "Clock In", "Clock Out", "Horas", "Estado", "Grupo", "Tipo", "Usuario",
            "ProyectoID"]
 FMT = "%Y-%m-%d %H:%M:%S"
-# Tipo de fichaje: 'general' (jornada del conductor) | 'proyecto' (segmento por proyecto).
+# Tipo de fichaje: 'general' (jornada del día) | 'proyecto' (segmento por proyecto).
 # Filas antiguas sin Tipo se tratan como 'proyecto'.
 TIPO_GENERAL  = "general"
 TIPO_PROYECTO = "proyecto"

@@ -16,10 +16,10 @@ from core import ui_common as ui
 
 
 def _staff(grupo):
-    """Personal del grupo que va al tablero (campo + conductor)."""
+    """Personal de campo del grupo que va al tablero."""
     try:
         return [u for u in auth.list_users(grupo=grupo)
-                if str(u.get("Rol", "")).lower() in ("campo", "conductor")]
+                if str(u.get("Rol", "")).lower() == "campo"]
     except Exception:
         return []
 
@@ -53,7 +53,7 @@ def render_planificacion(grupo):
 
     staff = _staff(grupo)
     if not staff:
-        st.info("Aún no tienes personal de campo/conductor. Créalo en 🔧 Usuarios de campo.")
+        st.info("Aún no tienes personal de campo. Créalo en 🔧 Usuarios de campo.")
         return
 
     lunes = _semana_activa()
