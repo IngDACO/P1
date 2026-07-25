@@ -163,20 +163,36 @@ def render_login() -> bool:
     if st.session_state.get("auth"):
         return True
 
-    # ── Login persistente: restaurar desde la cookie (si la sesión sigue viva) ──
-    if not st.session_state.get("_cookie_tried"):
-        st.session_state["_cookie_tried"] = True
+    # ── Login persistente: restaurar desde la cookie (sobrevive al refresco) ──
+    # ⚠️ El componente de cookies (extra-streamlit-components) NO entrega las cookies
+    # en el PRIMER run tras un refresco: las reporta en un rerun posterior. Antes se
+    # marcaba `_cookie_tried` en ese primer intento y NUNCA se reintentaba → refrescar
+    # deslogueaba. Ahora se REINTENTA unos pocos reruns antes de rendirse.
+    if not st.session_state.get("_cookie_done"):
+        _u = _t = None
         try:
             from core import session_cookie
             _u, _t = session_cookie.load()
-            if _u and _t:
-                _a = auth.validate_session(_u, _t)
-                if _a:
-                    st.session_state["auth"] = _a
-                    st.session_state["_hb_last"] = time.time()
-                    st.rerun()
         except Exception:
-            pass
+            st.session_state["_cookie_done"] = True
+        if _u and _t:
+            st.session_state["_cookie_done"] = True
+            try:
+                _a = auth.validate_session(_u, _t)
+            except Exception:
+                _a = None
+            if _a:
+                st.session_state["auth"] = _a
+                st.session_state["_hb_last"] = time.time()
+                st.rerun()
+        elif not st.session_state.get("_cookie_done"):
+            # Todavía no llegan las cookies del navegador: dar unos reruns de gracia.
+            _w = st.session_state.get("_cookie_waits", 0)
+            if _w < 3:
+                st.session_state["_cookie_waits"] = _w + 1
+                time.sleep(0.2)
+                st.rerun()
+            st.session_state["_cookie_done"] = True
 
     # ── Logo COPEX centrado ─────────────────────────────────
     c = st.columns([1, 1, 1])

@@ -1068,6 +1068,25 @@ corren por primera vez en el Cloud.
 Campo → "mi semana" (donde voy cada dia) · fichaje pre-rellenado desde el roster · plan vs real
 (asignado a X / ficho en Y, solo para trabajos enlazados a un PRJ).
 
+## Fix: refrescar la página deslogueaba (v174)
+Peticion del usuario: "cuando refresco se cierra la sesion". El login persistente por cookie existe
+desde v107, pero no restauraba tras un refresco.
+### Raiz: el componente de cookies + un gate de UN solo intento
+`extra-streamlit-components` `CookieManager.get()` devuelve **None en el PRIMER run** tras un refresco
+(el componente aún no recibió las cookies del navegador; las reporta en un rerun posterior). Pero
+`render_login` marcaba `_cookie_tried=True` en ese primer intento y **nunca reintentaba** → siempre
+caía al login.
+### Fix
+Se REINTENTA la lectura de la cookie unos pocos reruns (`_cookie_waits < 3`, con `time.sleep(0.2)`) antes
+de rendirse, dándole al componente tiempo de reportar. Cuando la cookie llega, `auth.validate_session`
+(que solo compara el token con el de la hoja Login, sin exigir heartbeat) restaura la sesión. El
+heartbeat de sesión única no re-desloguea: el restore deja `_hb_last` fresco y el token no cambió.
+### Verificacion
+Compila + import; 0 `_cookie_tried` colgando (solo en un comentario). ⚠️ El timing del componente de
+cookies solo se prueba de verdad en el navegador: PENDIENTE confirmar en el Cloud que refrescar YA no
+desloguea. Si sigue fallando, plan B: montar un único CookieManager al inicio del app o cambiar el
+mecanismo de persistencia.
+
 ## Zona horaria POR GRUPO — hora local correcta multi-país (v173)
 Peticion del usuario: "los registros no coinciden con mi zona horaria" + "¿y si alguien usa la app en
 otro país?". Raiz: **Streamlit Cloud corre en UTC**, asi que cada `datetime.now()`/`date.today()`
@@ -2463,9 +2482,10 @@ posicional + plano) → app.py, al cargar el PDF, setea `st.session_state["ns"]`
 resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NORTH SYD y AGECARE → NS=6
 (coincide con travel/floor-height HQ/HE).
 
-## Versiones desplegadas (v173 = actual)
+## Versiones desplegadas (v174 = actual)
 | Ver | Cambio principal |
 |---|---|
+| v174 | Fix: refrescar la pagina deslogueaba. El componente de cookies (extra-streamlit-components) no entrega las cookies en el primer run tras el refresco, y render_login se rendia al primer intento (_cookie_tried); ahora reintenta unos reruns antes de mostrar el login, asi el login persistente de v107 por fin sobrevive al refresco |
 | v173 | Zona horaria POR GRUPO (core/clock.py): Streamlit Cloud corre en UTC, asi que los registros salian ~10 h corridos. Ahora cada grupo tiene su zona (Grupos.Zona, la fija el propietario; default Australia/Sydney) y todos los datetime.now()/date.today() (~40 sitios) pasan por clock.now()/today() que resuelve la zona del grupo con zoneinfo (per-sesion, sirve multi-país). +tzdata |
 | v172 | PDF del Pre-Start reescrito para calcar el template CI Liftworx: formulario blanco y negro con bordes, bandas grises por seccion, recuadros de notas, la respuesta marcada resaltada en negro, los 4 checks reubicados a la sub-tabla "Circle one" de la Seccion 3, y asistentes en 3 pares. Marca = grupo, textos en español |
 | v171 | Pre-Start seccion 2 (Issues/hazard/near miss): el campo de texto libre pasa a estar SIEMPRE visible (antes solo aparecia al marcar YES), para describir un issue/hazard aunque no sea un near miss formal; si marca YES sin describir, se avisa |
