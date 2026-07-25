@@ -1,6 +1,10 @@
 """
-PDF del Pre-Start diario. Marca = nombre del grupo (empresa). Reproduce el formato:
-encabezado, datos, secciones 1-5 con checks YES/NO/N-A, asistentes y notas.
+PDF del Pre-Start diario. Calca el formato CI Liftworx "Daily Pre-Start" (v172):
+formulario blanco y negro con bordes, bandas grises por sección y recuadros de
+notas. Marca = nombre del grupo (empresa). Los datos que captura la app se
+reorganizan como el template: la Sección 1 es solo notas, y los 4 checks de
+permisos/toolbox/subcontratistas/pre-operacionales van a la Sección 3 en la
+sub-tabla "Circle one".
 """
 import io
 from datetime import datetime
@@ -10,32 +14,39 @@ from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import mm
 from reportlab.lib.enums import TA_CENTER, TA_LEFT
-from reportlab.platypus import (
-    SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable,
-)
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 
 from core.prestart import CHECKS_S1, CHECKS_S3
 from core import maps
 
-C_DARK  = colors.HexColor("#1a3a5c")
-C_MED   = colors.HexColor("#2e6da4")
-C_LIGHT = colors.HexColor("#e8f1fb")
-C_GREEN = colors.HexColor("#1e8449")
-C_RED   = colors.HexColor("#c0392b")
-C_GREY  = colors.HexColor("#888888")
-W = 170 * mm
+C_BLACK = colors.black
+C_BAND  = colors.HexColor("#d9d9d9")     # banda gris de sección (como el template)
+C_LINE  = colors.HexColor("#555555")     # bordes de las cajitas de respuesta
+W = 180 * mm
+
+
+def _esc(s) -> str:
+    return (str(s or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;"))
 
 
 def _styles():
     ss = getSampleStyleSheet()
+
     def add(name, **kw):
         ss.add(ParagraphStyle(name, **kw))
-    add("PSTitle",  fontSize=20, textColor=colors.white, alignment=TA_LEFT, fontName="Helvetica-Bold")
-    add("PSSub",    fontSize=11, textColor=colors.HexColor("#b0c8e8"), alignment=TA_LEFT)
-    add("PSSec",    fontSize=11, textColor=colors.white, fontName="Helvetica-Bold")
-    add("PSInfo",   fontSize=9.5, textColor=colors.black, leading=13)
-    add("PSBody",   fontSize=9.5, textColor=colors.black, leading=13)
-    add("PSQ",      fontSize=9,   textColor=colors.black, leading=12)
+    add("PSBrand",  fontSize=16, textColor=C_BLACK, fontName="Helvetica-Bold", leading=18)
+    add("PSTitle2", fontSize=12, textColor=C_BLACK, fontName="Helvetica-Bold", leading=14)
+    add("PSProj",   fontSize=9,  textColor=colors.HexColor("#555555"), leading=12)
+    add("PSInfo",   fontSize=9,  textColor=C_BLACK, leading=12)
+    add("PSSec",    fontSize=10, textColor=C_BLACK, leading=13)
+    add("PSBody",   fontSize=9,  textColor=C_BLACK, leading=13)
+    add("PSQ",      fontSize=8.5, textColor=C_BLACK, leading=11)
+    add("PSCirc",   fontSize=8,  textColor=colors.HexColor("#555555"),
+        fontName="Helvetica-Bold", alignment=TA_CENTER)
+    add("PSAns",    fontSize=8.5, textColor=colors.HexColor("#333333"),
+        alignment=TA_CENTER, leading=10)
+    add("PSAnsSel", fontSize=8.5, textColor=colors.white, fontName="Helvetica-Bold",
+        alignment=TA_CENTER, leading=10)
     add("PSSmall",  fontSize=7.5, textColor=colors.grey, alignment=TA_CENTER)
     return ss
 
@@ -44,134 +55,176 @@ def _sp(n=6):
     return Spacer(1, n)
 
 
-def _ans_color(v):
-    v = str(v).upper()
-    if v == "YES":
-        return C_GREEN
-    if v == "NO":
-        return C_RED
-    return C_GREY
+def _ans(options, selected, st):
+    """Cajitas de respuesta: la opción marcada va con fondo negro (form 'rellenado')."""
+    sel = str(selected or "").strip().upper()
+    row = [Paragraph(o, st["PSAnsSel"] if o.upper() == sel else st["PSAns"]) for o in options]
+    t = Table([row], colWidths=[10.5 * mm] * len(options))
+    stl = [("GRID", (0, 0), (-1, -1), 0.5, C_LINE),
+           ("ALIGN", (0, 0), (-1, -1), "CENTER"), ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+           ("TOPPADDING", (0, 0), (-1, -1), 1.5), ("BOTTOMPADDING", (0, 0), (-1, -1), 1.5)]
+    for i, o in enumerate(options):
+        if o.upper() == sel:
+            stl.append(("BACKGROUND", (i, 0), (i, 0), C_BLACK))
+    t.setStyle(TableStyle(stl))
+    return t
 
 
-def _section(text, st):
-    t = Table([[Paragraph(text, st["PSSec"])]], colWidths=[W])
+def _band(title, st, sub=""):
+    inner = f"<b>{_esc(title)}</b>"
+    if sub:
+        inner += f"<br/><i>{_esc(sub)}</i>"
+    t = Table([[Paragraph(inner, st["PSSec"])]], colWidths=[W])
     t.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, -1), C_MED),
-        ("TOPPADDING", (0, 0), (-1, -1), 5),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
-        ("LEFTPADDING", (0, 0), (-1, -1), 8),
+        ("BACKGROUND", (0, 0), (-1, -1), C_BAND),
+        ("BOX", (0, 0), (-1, -1), 0.6, C_BLACK),
+        ("LEFTPADDING", (0, 0), (-1, -1), 6),
+        ("TOPPADDING", (0, 0), (-1, -1), 3), ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
     ]))
     return t
 
 
-def _checks_table(items, answers, st):
-    rows = []
-    for key, label in items:
-        v = str(answers.get(key, "") or "—")
-        rows.append([Paragraph(label, st["PSQ"]),
-                     Paragraph(f"<b>{v}</b>", st["PSQ"])])
-    t = Table(rows, colWidths=[W * 0.82, W * 0.18])
-    style = [
-        ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#c8d8f0")),
-        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("TOPPADDING", (0, 0), (-1, -1), 4), ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
-        ("LEFTPADDING", (0, 0), (-1, -1), 6),
-        ("ALIGN", (1, 0), (1, -1), "CENTER"),
-    ]
-    for i, (key, _l) in enumerate(items):
-        style.append(("TEXTCOLOR", (1, i), (1, i), _ans_color(answers.get(key, ""))))
-    t.setStyle(TableStyle(style))
+def _notebox(text, st, holgura=26):
+    """Recuadro con borde para las notas (como los espacios en blanco del template)."""
+    p = Paragraph(_esc(text).replace("\n", "<br/>") or "&nbsp;", st["PSBody"])
+    t = Table([[p]], colWidths=[W])
+    t.setStyle(TableStyle([
+        ("BOX", (0, 0), (-1, -1), 0.6, C_BLACK),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 6), ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+        ("TOPPADDING", (0, 0), (-1, -1), 5),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 5 + holgura),   # da altura al recuadro
+    ]))
     return t
 
 
 def generate_prestart_pdf(data: dict) -> bytes:
     buf = io.BytesIO()
-    doc = SimpleDocTemplate(buf, pagesize=A4, leftMargin=20 * mm, rightMargin=20 * mm,
-                            topMargin=16 * mm, bottomMargin=16 * mm)
+    doc = SimpleDocTemplate(buf, pagesize=A4, leftMargin=15 * mm, rightMargin=15 * mm,
+                            topMargin=14 * mm, bottomMargin=12 * mm)
     st = _styles()
     story = []
     grupo = str(data.get("grupo", "") or "COPEX")
+    proyecto = str(data.get("proyecto_nombre", "") or "")
 
-    # ── Cabecera (marca = grupo) ──
-    hdr = Table([[Paragraph(grupo, st["PSTitle"])],
-                 [Paragraph("Daily Pre-Start", st["PSSub"])]], colWidths=[W])
-    hdr.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, -1), C_DARK),
-        ("LEFTPADDING", (0, 0), (-1, -1), 16), ("RIGHTPADDING", (0, 0), (-1, -1), 16),
-        ("TOPPADDING", (0, 0), (0, 0), 14), ("BOTTOMPADDING", (0, 0), (0, 0), 0),
-        ("TOPPADDING", (0, 1), (0, 1), 0), ("BOTTOMPADDING", (0, 1), (0, 1), 14),
-    ]))
-    story += [hdr, _sp(10)]
+    # ── Cabecera (marca = grupo, sin banda de color) ──
+    story += [Paragraph(_esc(grupo), st["PSBrand"]),
+              Paragraph("Daily Pre-Start", st["PSTitle2"])]
+    if proyecto:
+        story += [Paragraph("Proyecto: " + _esc(proyecto), st["PSProj"])]
+    story += [_sp(8)]
 
-    # ── Datos ──
+    # ── Fila: Date · Time · Location · Facilitated by (bordeada, como el template) ──
     f = data.get("fecha")
     fecha_s = f.strftime("%d/%m/%Y") if hasattr(f, "strftime") else str(f)
     loc = str(data.get("location", "") or "")
     loc_url = maps.maps_url(loc)
-    loc_para = Paragraph(f'<a href="{loc_url}" color="#2e6da4">{loc}</a>' if loc_url else "—", st["PSInfo"])
-    info = Table([
-        [Paragraph("<b>Proyecto</b>", st["PSInfo"]), Paragraph(str(data.get("proyecto_nombre", "—")), st["PSInfo"]),
-         Paragraph("<b>Fecha</b>", st["PSInfo"]), Paragraph(fecha_s, st["PSInfo"])],
-        [Paragraph("<b>Location</b>", st["PSInfo"]), loc_para,
-         Paragraph("<b>Hora</b>", st["PSInfo"]), Paragraph(str(data.get("hora", "—") or "—"), st["PSInfo"])],
-        [Paragraph("<b>Facilitated by</b>", st["PSInfo"]), Paragraph(str(data.get("facilitador", "—") or "—"), st["PSInfo"]),
-         Paragraph("", st["PSInfo"]), Paragraph("", st["PSInfo"])],
-    ], colWidths=[W * 0.20, W * 0.34, W * 0.14, W * 0.32])
+    loc_html = (f'<a href="{loc_url}" color="#1a3a5c">{_esc(loc)}</a>'
+                if (loc and loc_url) else (_esc(loc) or "—"))
+    info = Table([[
+        Paragraph(f"<b>Date:</b> {fecha_s}", st["PSInfo"]),
+        Paragraph(f"<b>Time:</b> {_esc(data.get('hora', '')) or '—'}", st["PSInfo"]),
+        Paragraph(f"<b>Location:</b> {loc_html}", st["PSInfo"]),
+        Paragraph(f"<b>Facilitated by:</b> {_esc(data.get('facilitador', '')) or '—'}", st["PSInfo"]),
+    ]], colWidths=[W * 0.20, W * 0.16, W * 0.37, W * 0.27])
     info.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, -1), C_LIGHT),
-        ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#c8d8f0")),
+        ("GRID", (0, 0), (-1, -1), 0.6, C_BLACK),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
         ("TOPPADDING", (0, 0), (-1, -1), 5), ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
-        ("LEFTPADDING", (0, 0), (-1, -1), 6),
+        ("LEFTPADDING", (0, 0), (-1, -1), 5), ("RIGHTPADDING", (0, 0), (-1, -1), 5),
     ]))
-    story += [info, _sp(12)]
+    story += [info, _sp(8)]
 
-    # ── 1. Planned work activities ──
-    story += [_section("1. Planned work activities today", st), _sp(5),
-              _checks_table(CHECKS_S1, data.get("s1", {}), st)]
-    if data.get("activities_notes"):
-        story += [_sp(4), Paragraph("<b>Notas:</b> " + str(data["activities_notes"]), st["PSBody"])]
-    story += [_sp(10)]
+    # ── 1. Planned work activities today (solo notas, como el template) ──
+    story += [_band("1. Planned work activities today", st,
+                    "Discuss today's planned activities and review the SWMS for these "
+                    "activities. Note key points below."),
+              _notebox(data.get("activities_notes", ""), st, holgura=34), _sp(8)]
 
-    # ── 2. Issues / hazard / near miss ──
-    story += [_section("2. Issues, hazard / near miss reports", st), _sp(5)]
-    nm = str(data.get("near_miss", "NO")).upper()
-    nm_hex = {"YES": "#c0392b", "NO": "#1e8449"}.get(nm, "#888888")  # YES = riesgo (rojo)
-    story += [Paragraph(f"Near Miss/Hazard Report submitted: "
-                        f"<font color='{nm_hex}'><b>{nm}</b></font>", st["PSBody"])]
-    if data.get("near_miss_desc"):
-        story += [_sp(3), Paragraph(str(data["near_miss_desc"]), st["PSBody"])]
-    story += [_sp(10)]
+    # ── 2. Discuss any issues, hazard / near miss reports ──
+    story += [_band("2. Discuss any issues, hazard / near miss reports", st,
+                    "Note the key points/actions discussed below."),
+              _notebox(data.get("near_miss_desc", ""), st, holgura=26)]
+    nm_row = Table([[Paragraph("Near Miss/Hazard Report submitted", st["PSQ"]),
+                     _ans(["NO", "YES"], data.get("near_miss", ""), st)]],
+                   colWidths=[W * 0.70, W * 0.30])
+    nm_row.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("ALIGN", (1, 0), (1, 0), "LEFT"),
+        ("TOPPADDING", (0, 0), (-1, -1), 4), ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ("LEFTPADDING", (0, 0), (0, 0), 2),
+    ]))
+    story += [nm_row, _sp(8)]
 
-    # ── 3. Shaft protection ──
-    story += [_section("3. Shaft Protection & other daily checks", st), _sp(5),
-              _checks_table(CHECKS_S3, data.get("s3", {}), st), _sp(10)]
-
-    # ── 4. General notes ──
-    story += [_section("4. General Notes", st), _sp(5),
-              Paragraph(str(data.get("general_notes", "") or "—"), st["PSBody"]), _sp(10)]
-
-    # ── 5. Attendees ──
-    story += [_section("5. Attendees", st), _sp(5)]
-    att = data.get("attendees", [])
-    rows = [[Paragraph("<b>Print Name</b>", st["PSQ"]), Paragraph("<b>Initial</b>", st["PSQ"])]]
-    for a in att:
-        nm2 = str(a.get("name", "")).strip()
-        ini = str(a.get("initial", "")).strip()
-        if nm2 or ini:
-            rows.append([Paragraph(nm2 or "—", st["PSQ"]), Paragraph(ini or "—", st["PSQ"])])
-    if len(rows) == 1:
-        rows.append([Paragraph("—", st["PSQ"]), Paragraph("—", st["PSQ"])])
-    at = Table(rows, colWidths=[W * 0.70, W * 0.30])
-    at.setStyle(TableStyle([
-        ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#c8d8f0")),
-        ("BACKGROUND", (0, 0), (-1, 0), C_LIGHT),
+    # ── 3. Shaft Protection & other daily checks ──
+    story += [_band("3. Shaft Protection & other daily checks", st)]
+    s3 = data.get("s3", {})
+    srows = [[Paragraph(label, st["PSQ"]), _ans(["NO", "YES", "N/A"], s3.get(key, ""), st)]
+             for key, label in CHECKS_S3]
+    stab = Table(srows, colWidths=[W * 0.62, W * 0.38])
+    stab.setStyle(TableStyle([
+        ("GRID", (0, 0), (-1, -1), 0.6, C_BLACK),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("ALIGN", (1, 0), (1, -1), "LEFT"),
         ("TOPPADDING", (0, 0), (-1, -1), 4), ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
         ("LEFTPADDING", (0, 0), (-1, -1), 6),
     ]))
-    story += [at, _sp(12)]
+    story += [stab]
 
-    story += [HRFlowable(width="100%", thickness=0.5, color=colors.HexColor("#c8d8f0")), _sp(4),
-              Paragraph(f"Generado el {datetime.now().strftime('%d/%m/%Y %H:%M')} · {grupo}", st["PSSmall"])]
+    # Sub-tabla "Circle one" con los 4 checks (permisos/toolbox/subcontratistas/preop)
+    s1 = data.get("s1", {})
+
+    def _qa(idx):
+        key, label = CHECKS_S1[idx]
+        return Paragraph(label, st["PSQ"]), _ans(["YES", "NO", "N/A"], s1.get(key, ""), st)
+    q0, a0 = _qa(0); q1, a1 = _qa(1); q2, a2 = _qa(2); q3, a3 = _qa(3)
+    circ = Table([
+        [Paragraph("", st["PSQ"]), Paragraph("Circle one", st["PSCirc"]),
+         Paragraph("", st["PSQ"]), Paragraph("Circle one", st["PSCirc"])],
+        [q0, a0, q1, a1],
+        [q2, a2, q3, a3],
+    ], colWidths=[W * 0.30, W * 0.20, W * 0.30, W * 0.20])
+    circ.setStyle(TableStyle([
+        ("GRID", (0, 0), (-1, -1), 0.6, C_BLACK),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("ALIGN", (1, 0), (1, -1), "CENTER"), ("ALIGN", (3, 0), (3, -1), "CENTER"),
+        ("TOPPADDING", (0, 0), (-1, -1), 4), ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ("LEFTPADDING", (0, 0), (-1, -1), 5),
+    ]))
+    story += [circ, _sp(8)]
+
+    # ── 4. General Notes ──
+    story += [_band("4. General Notes", st),
+              _notebox(data.get("general_notes", ""), st, holgura=40), _sp(8)]
+
+    # ── 5. Attendees (3 pares Print Name · Initial, como el template) ──
+    story += [_band("5. Attendees", st)]
+    att = [a for a in data.get("attendees", [])
+           if str(a.get("name", "")).strip() or str(a.get("initial", "")).strip()]
+    hdr = []
+    for _ in range(3):
+        hdr += [Paragraph("<b>Print Name</b>", st["PSQ"]), Paragraph("<b>Initial</b>", st["PSQ"])]
+    rows = [hdr]
+    grupos = [att[i:i + 3] for i in range(0, len(att), 3)] or [[]]
+    if not att:
+        grupos = [[], []]                              # 2 filas en blanco si no hay asistentes
+    for g in grupos:
+        row = []
+        for j in range(3):
+            a = g[j] if j < len(g) else {}
+            row += [Paragraph(_esc(a.get("name", "")) or "&nbsp;", st["PSQ"]),
+                    Paragraph(_esc(a.get("initial", "")) or "&nbsp;", st["PSQ"])]
+        rows.append(row)
+    attab = Table(rows, colWidths=[W * 0.243, W * 0.09] * 3)
+    attab.setStyle(TableStyle([
+        ("GRID", (0, 0), (-1, -1), 0.6, C_BLACK),
+        ("BACKGROUND", (0, 0), (-1, 0), C_BAND),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("TOPPADDING", (0, 0), (-1, -1), 4), ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ("LEFTPADDING", (0, 0), (-1, -1), 5),
+    ]))
+    story += [attab, _sp(10)]
+
+    story += [Paragraph(f"Generado el {datetime.now().strftime('%d/%m/%Y %H:%M')} · {_esc(grupo)}",
+                        st["PSSmall"])]
 
     doc.build(story)
     return buf.getvalue()

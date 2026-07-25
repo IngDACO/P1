@@ -1067,6 +1067,30 @@ corren por primera vez en el Cloud.
 Campo → "mi semana" (donde voy cada dia) · fichaje pre-rellenado desde el roster · plan vs real
 (asignado a X / ficho en Y, solo para trabajos enlazados a un PRJ).
 
+## PDF del Pre-Start calcado al template CI Liftworx (v172)
+Peticion del usuario: "que el pdf que se genera se vea mas como el que te pase de ejemplo". El ejemplo
+es `Downloads/_Daily Pre-Start Template.pdf` (CI Liftworx): un FORMULARIO blanco y negro con bordes,
+bandas grises por seccion y recuadros de notas. El PDF anterior era colorido/moderno (bandas azules).
+### `prestart_pdf.generate_prestart_pdf` reescrito para calcar el template
+- Blanco y negro, **bordes**, **bandas grises** (`#d9d9d9`) por seccion, recuadros de notas con borde.
+- Fila **Date · Time · Location · Facilitated by** bordeada (como el template).
+- ⚠️ **Reubicacion clave**: los 4 checks que la app llama "Seccion 1" (permisos/toolbox/subcontratistas/
+  preop) en el TEMPLATE van en la **Seccion 3, sub-tabla "Circle one"**. La Seccion 1 del template es
+  solo un recuadro de notas. El PDF ahora respeta eso: Seccion 1 = `activities_notes`; Seccion 3 = los 3
+  shaft checks (`CHECKS_S3`) + la sub-tabla 2×2 "Circle one" con `CHECKS_S1`.
+- **Respuesta marcada = cajita con fondo NEGRO** (helper `_ans`): el "formulario relleno". ⚠️ Sin glyphs
+  Unicode de checkbox (Helvetica no los tiene) — se usa `Table` con `BACKGROUND` negro en la celda
+  seleccionada, 100% fiable.
+- Attendees en **3 pares** (Print Name · Initial), como el template.
+- **Marca = nombre del grupo** (decision del usuario, no "CI Liftworx"); sin el logo skyline (la app no
+  tiene logo por grupo). **Textos de los checks en ESPAÑOL** (decision del usuario: iguales a la pantalla
+  del Pre-Start, para que app y PDF coincidan).
+### Verificacion
+PDF de prueba generado con datos realistas y **revisado visualmente** (render): cabe en 1 pagina A4,
+estructura calcada, respuestas resaltadas correctas (YES/NO/N-A), notas en sus recuadros, 4 asistentes en
+2 filas de 3 pares. Compila + import; firma `generate_prestart_pdf(data)` intacta (sin cambios en
+`submit` ni call-sites). Los datos ya se capturaban desde v97/v158; solo cambia la MAQUETA.
+
 ## Pre-Start del campo: preselecciona el proyecto donde fichó + Time estructurado (v170)
 Revision de 🦺 Pre-Start desde el rol CAMPO (quien lo llena en obra, en el movil, cada mañana). Ya era
 solido tras v158; tres mejoras de la experiencia de campo.
@@ -2406,9 +2430,10 @@ posicional + plano) → app.py, al cargar el PDF, setea `st.session_state["ns"]`
 resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NORTH SYD y AGECARE → NS=6
 (coincide con travel/floor-height HQ/HE).
 
-## Versiones desplegadas (v171 = actual)
+## Versiones desplegadas (v172 = actual)
 | Ver | Cambio principal |
 |---|---|
+| v172 | PDF del Pre-Start reescrito para calcar el template CI Liftworx: formulario blanco y negro con bordes, bandas grises por seccion, recuadros de notas, la respuesta marcada resaltada en negro, los 4 checks reubicados a la sub-tabla "Circle one" de la Seccion 3, y asistentes en 3 pares. Marca = grupo, textos en español |
 | v171 | Pre-Start seccion 2 (Issues/hazard/near miss): el campo de texto libre pasa a estar SIEMPRE visible (antes solo aparecia al marcar YES), para describir un issue/hazard aunque no sea un near miss formal; si marca YES sin describir, se avisa |
 | v170 | Pre-Start del campo: preselecciona el proyecto donde fichó (lo primero que hace el campo es fichar; señal fuerte y mostrada, sigue cambiable — no el "primero de la lista" que evitó v139), "Time" pasa de texto libre a st.time_input, y la inicial del asistente se autocompleta del nombre |
 | v169 | Planificacion: la celda del tablero pasa a ser un BOTON nativo (st.button coloreado por la clase st-key-<key>, Streamlit>=1.39, verificado en vivo) que abre el proyecto en la MISMA sesion, sin recarga. Reemplaza el enlace HTML de v168 (que podia recargar). El board del campo sigue siendo HTML de solo lectura |
