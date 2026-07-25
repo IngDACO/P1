@@ -791,6 +791,31 @@ Al cargar el plano en el survey (app.py), autocompleta **RAIL = AlturaDiente** (
 espalda) del catálogo; si el código no está o no se detecta → aviso + entrada manual. **RAIL = AlturaDiente**
 (NO el ancho); AnchoDiente se guarda como dato secundario.
 
+## Archivos: una lista ÚNICA y buscable (v165)
+Peticion del usuario: "si tengo muchos archivos se convierte en un problema encontrar el que quiero".
+El apartado 📎 Archivos eran DOS sub-secciones (Documentos y Calculos) con **tres selectores distintos**
+y listas planas: con 40 archivos, encontrar uno era el problema.
+### Decisiones del usuario (AskUserQuestion)
+Unificar TODO en una sola lista buscable · mecanismo = **buscador + desplegable de tipo con contadores**.
+### `_archivos_section(pid)` (reemplaza a `_documentos_section` + `_calculos_section`, borradas)
+- **Fuente unica: `list_documents`**, que YA es la union de todo — `toolruns.registrar` archiva cada
+  PDF de calculo como documento tipo "calculo" con el **MISMO DriveID** que su fila de calculo. Se casa
+  cada calculo con su toolrun **por DriveID** → «reabrir en la herramienta» sin duplicar. Los calculos
+  reabribles SIN PDF (Drive caido) se agregan como entradas reopen-only (no se pierden).
+- **Barra para acotar**: 🔎 buscar (nombre · tipo · resumen · quien) · **Tipo con contadores**
+  (`Todos (M) · 📄 Informe cliente (3) · 🧮 Calculos (5) · 📷 Fotos (12)…`) · **Orden** (reciente/
+  antiguo/nombre/tipo) · *"Mostrando N de M"*. Reduce a la vez la galeria, la tabla y el descargador.
+- **Render**: galeria de fotos (las que pasan el filtro, sigue LAZY) + tabla del resto. Accion sobre el
+  elegido (lista ya corta): ⬇️ descargar (lazy) · ↩️ reabrir calculo (si tiene entradas) · 🗑 borrar (admin).
+- Los 2 call-sites (detalle admin + 📋 Mis proyectos del campo) llaman a `_archivos_section`. El plano
+  (`_plano_section`) y "🔄 Reconstruir en el Survey" siguen arriba en el detalle admin, intactos.
+### Verificacion
+Contra datos REALES: PRJ-0001 = 11 archivos (2 pre-start, 2 informe, 1 matriz, 3 plano, 3 foto), **0
+DriveID duplicados**; PRJ-0003 = 3; PRJ-0002 vacio. La hoja Calculos sigue con 0 filas (runs=0), asi que
+el dedup de calculos se probo SINTETICO: calculo con PDF = 1 entrada (no 2) reabrible · calculo sin PDF
+= reopen-only sin perderse · calculo sin entradas ni PDF = no aparece. 0 nombres libres nuevos (el `ex`
+es `except as ex`), 0 referencias a las funciones viejas, prompt del agente al dia (regla v133).
+
 ## Fichaje del campo: horas por día (medianoche) + olvidos accionables (v164)
 Revision de ⏱ Fichaje desde el rol campo (tecnico/visual/integracion). La UI ya era solida (v150);
 el hallazgo fue de DATOS, con evidencia real: **3 de 16 fichajes cruzan medianoche** (~8.6 h, entrada
@@ -2268,9 +2293,10 @@ posicional + plano) → app.py, al cargar el PDF, setea `st.session_state["ns"]`
 resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NORTH SYD y AGECARE → NS=6
 (coincide con travel/floor-height HQ/HE).
 
-## Versiones desplegadas (v164 = actual)
+## Versiones desplegadas (v165 = actual)
 | Ver | Cambio principal |
 |---|---|
+| v165 | Archivos: una sola lista buscable (busqueda por nombre + filtro por tipo con contadores + orden) en vez de dos sub-secciones planas (Documentos y Calculos) con tres selectores; unifica documentos + PDF de calculos + plano casando cada calculo con su toolrun por DriveID (sin duplicar), y reduce a la vez galeria, tabla y descargador |
 | v164 | Fichaje del campo: las horas se reparten por dia natural (medianoche) — antes una sesion que cruzaba medianoche se contaba entera en el dia de entrada, falseando "Jornada de hoy" y el reporte "Hoy"/"Semana" del admin (evidencia: 3/16 fichajes reales cruzan medianoche). El olvido de clock-out se cierra a la hora que el usuario indica (no "ahora", que registraba las horas fantasma de la noche). group_hours(Todo) queda identico |
 | v163 | Se elimina el rol conductor: tras el fichaje unificado (v150) era un subconjunto del campo; se borra el rol, su vista de proyectos y todas sus ramas (nav, creacion de usuario, prompt del agente), y se elimina el unico usuario conductor de prueba. Quedan 3 roles: propietario/administrador/campo |
 | v5 | Extractor: CRLF fix, caso D valor-antes-label, sin pdfplumber |

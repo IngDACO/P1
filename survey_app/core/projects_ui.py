@@ -223,6 +223,16 @@ _CAMPO_SUBE = ["foto"]                                                # campo so
 _DOC_ICON   = {"plano": "📐", "informe_cliente": "📄", "informe_admin": "📑",
                "matriz_survey": "📊", "foto": "📷", "certificado": "🏅",
                "prestart": "🦺", "calculo": "🧮", "otro": "📎"}
+# Etiquetas legibles (icono + nombre) para el filtro de tipo del buscador (v165).
+_TIPO_LABEL = {"plano": "📐 Plano", "informe_cliente": "📄 Informe cliente",
+               "informe_admin": "📑 Informe admin", "matriz_survey": "📊 Matriz survey",
+               "foto": "📷 Fotos", "certificado": "🏅 Certificados",
+               "prestart": "🦺 Pre-Start", "calculo": "🧮 Cálculos", "otro": "📎 Otros"}
+_TIPO_ORDER = ["plano", "informe_cliente", "informe_admin", "matriz_survey",
+               "calculo", "prestart", "foto", "certificado", "otro"]
+# Reabrir un cálculo en su herramienta (v148): solo estas 4 guardan entradas.
+_CALC_NAV   = {"plomada": "🔩 Líneas de plomada", "rieles": "✂️ Corte de rieles",
+               "buffers": "🛡 Corte de buffers", "belting": "🎗 Belting"}
 
 
 def _a_fecha(v):
@@ -354,7 +364,7 @@ def _galeria_fotos(fotos, pid, por_pagina=6):
     y hasta ahora salian como una fila de texto (`📷 foto.jpg · foto`).
     Paginada a proposito: cada miniatura es una descarga de Drive, asi que
     mostrarlas todas de golpe es justo el problema que evita el resto de la
-    seccion (ver `_documentos_section`).
+    seccion (ver `_archivos_section`).
     """
     kver = f"_fotos_n_{pid}"
     n_ver = int(st.session_state.get(kver, por_pagina))
@@ -379,78 +389,179 @@ def _galeria_fotos(fotos, pid, por_pagina=6):
             st.rerun()
 
 
-def _documentos_section(pid: str):
-    """📎 Documentos con permisos por rol (leido de session_state.auth).
+def _archivos_section(pid: str):
+    """📎 Archivos: UNA lista buscable de todo lo del proyecto (v165).
 
-    ⚠️ v147: **la descarga deja de ser ansiosa.** `st.download_button(data=...)`
-    evalua `data` al RENDERIZAR, asi que la version anterior se bajaba de Drive
-    **todos** los documentos del proyecto en cada pasada, antes de que nadie
-    pulsara nada (cacheado 5 min, pero con fotos de obra eso crece sin techo).
-    Ahora se listan con sus metadatos y solo se descarga **el que eliges**.
+    Antes eran DOS sub-secciones (Documentos y Cálculos) con tres selectores
+    distintos y listas planas: con muchos archivos, encontrar uno era el problema.
+    Ahora hay una sola lista con búsqueda por nombre, filtro por tipo (con
+    contadores) y orden, que reduce a la vez la tabla, la galería y el descargador.
+
+    `list_documents` ya es la UNIÓN de todo (informes, matriz, fotos, pre-starts y
+    los PDF de cálculos, que `toolruns.registrar` archiva como documento tipo
+    "calculo" con el MISMO DriveID que su fila). Se casa cada cálculo con su
+    toolrun por DriveID para ofrecer «reabrir en la herramienta» sin duplicarlo.
     """
-    st.markdown("**📎 Documentos**")
+    from collections import Counter
+    st.markdown("**📎 Archivos**")
     if not drive_store.is_configured():
         st.caption("🔒 Almacenamiento en Drive no configurado (faltan los secrets `[gdrive]`).")
         return
     a = st.session_state.get("auth", {})
     rol, usuario = a.get("rol", ""), a.get("usuario", "")
     es_campo     = rol == "campo"
-    # Admin/propietario: ver_tipos = None -> SIN filtro, para que un tipo
-    # nuevo generado por la app no vuelva a desaparecer de la vista (v134).
+    # Admin/propietario: ver_tipos = None -> SIN filtro (un tipo nuevo generado por
+    # la app no vuelve a desaparecer de la vista, v134). El campo ve lo suyo.
     ver_tipos    = _CAMPO_VER if es_campo else None
     sube_tipos   = _CAMPO_SUBE if es_campo else _DOC_SUBIR
     puede_borrar = rol in ("administrador", "propietario")
 
+    # ── Unir documentos + cálculos reabribles sin PDF (casados por DriveID) ──
     docs = [d for d in P.list_documents(pid)
             if ver_tipos is None or str(d.get("Tipo", "")) in ver_tipos]
-    fotos = [d for d in docs if str(d.get("Tipo", "")) == "foto"]
-    resto = [d for d in docs if str(d.get("Tipo", "")) != "foto"]
+    runs = toolruns.list_for(pid) if toolruns.is_configured() else []
+    runs_by_drive = {str(r.get("DriveID", "")).strip(): r
+                     for r in runs if str(r.get("DriveID", "")).strip()}
+    entries, casados = [], set()
+    for d in docs:
+        tipo = str(d.get("Tipo", ""))
+        did  = str(d.get("DriveID", "")).strip()
+        run  = runs_by_drive.get(did) if tipo == "calculo" else None
+        if run:
+            casados.add(did)
+        entries.append({
+            "tipo": tipo, "label": _TIPO_LABEL.get(tipo, "📎 " + (tipo or "otro")),
+            "nombre": str(d.get("Nombre", "")), "fecha": str(d.get("Fecha", "")),
+            "por": str(d.get("SubidoPor", "")), "did": did,
+            "resumen": str(run.get("Resumen", "")) if run else "",
+            "doc": d, "run": run})
+    # Cálculos con entradas guardadas pero SIN PDF archivado (Drive estaba caído):
+    # no son un "archivo" descargable, pero sí se pueden reabrir. No se pierden.
+    if ver_tipos is None or "calculo" in ver_tipos:
+        for r in runs:
+            did = str(r.get("DriveID", "")).strip()
+            if did and did in casados:
+                continue
+            if not toolruns.entradas_de(r):
+                continue
+            h = str(r.get("Herramienta", ""))
+            entries.append({
+                "tipo": "calculo", "label": _TIPO_LABEL["calculo"],
+                "nombre": (f"{toolruns.HERRAMIENTAS.get(h, '🧮')} "
+                           f"{str(r.get('Resumen', ''))[:40]}").strip(),
+                "fecha": str(r.get("Fecha", "")), "por": str(r.get("Usuario", "")),
+                "did": did, "resumen": str(r.get("Resumen", "")),
+                "doc": None, "run": r})
 
+    if not entries:
+        st.caption("Sin archivos todavía.")
+        _subir_documento(pid, es_campo, sube_tipos, usuario)
+        return
+
+    # ── Barra para acotar: buscar + tipo (con contadores) + orden ──
+    cuenta = Counter(e["tipo"] for e in entries)
+    tipos = ["Todos"] + [t for t in _TIPO_ORDER if t in cuenta] \
+            + [t for t in cuenta if t not in _TIPO_ORDER]
+
+    def _tlabel(t):
+        return (f"Todos ({len(entries)})" if t == "Todos"
+                else f"{_TIPO_LABEL.get(t, '📎 ' + t)} ({cuenta[t]})")
+
+    c1, c2, c3 = st.columns([2, 1.5, 1.5])
+    q = c1.text_input("🔎 Buscar", key=f"arch_q_{pid}",
+                      placeholder="nombre, tipo…").strip().lower()
+    tsel = c2.selectbox("Tipo", tipos, format_func=_tlabel, key=f"arch_t_{pid}")
+    orden = c3.selectbox("Orden", ["Más reciente", "Más antiguo", "Nombre A–Z", "Tipo"],
+                         key=f"arch_o_{pid}")
+
+    vis = entries
+    if tsel != "Todos":
+        vis = [e for e in vis if e["tipo"] == tsel]
+    if q:
+        vis = [e for e in vis
+               if q in f"{e['nombre']} {e['label']} {e['resumen']} {e['por']}".lower()]
+    if orden == "Más reciente":
+        vis = sorted(vis, key=lambda e: e["fecha"], reverse=True)
+    elif orden == "Más antiguo":
+        vis = sorted(vis, key=lambda e: e["fecha"])
+    elif orden == "Nombre A–Z":
+        vis = sorted(vis, key=lambda e: e["nombre"].lower())
+    else:
+        vis = sorted(vis, key=lambda e: (e["label"], e["fecha"]))
+
+    if len(vis) != len(entries):
+        st.caption(f"Mostrando **{len(vis)}** de {len(entries)} archivos.")
+
+    # ── Galería de fotos (solo las que pasan el filtro; sigue siendo lazy) ──
+    fotos = [e["doc"] for e in vis if e["tipo"] == "foto"]
     if fotos:
         _galeria_fotos(fotos, pid)
         st.markdown("")
 
+    # ── Tabla del resto ──
+    resto = [e for e in vis if e["tipo"] != "foto"]
     if resto:
-        # Quien subio cada cosa y cuando: estaba guardado desde v74 y la vista
-        # lo tiraba. Es lo que permite auditar de donde salio un documento.
         st.dataframe(pd.DataFrame([{
-            "": _DOC_ICON.get(str(d.get("Tipo")), "📎"),
-            "Documento": d.get("Nombre"),
-            "Tipo": d.get("Tipo"),
-            "Subido por": d.get("SubidoPor"),
-            "Fecha": _fecha_corta(d.get("Fecha")),
-        } for d in resto]), hide_index=True, use_container_width=True)
-    elif not fotos:
-        st.caption("Sin documentos todavía.")
+            "": _DOC_ICON.get(e["tipo"], "📎"),
+            "Archivo": e["nombre"], "Tipo": e["label"].split(" ", 1)[-1],
+            "Subido por": e["por"], "Fecha": _fecha_corta(e["fecha"]),
+        } for e in resto]), hide_index=True, use_container_width=True)
 
-    if docs:
-        # ⚠️ Con dict comprehension, dos documentos de igual nombre y minuto
-        # (subida masiva de fotos) colisionan y uno quedaria SIN poder bajarse.
+    if not vis:
+        st.info("Ningún archivo coincide con el filtro.")
+
+    # ── Acción sobre UNO (la lista ya está acotada; solo aquí se toca Drive) ──
+    if vis:
         _mapa = {}
-        for d in docs:
-            _et = (f"{_DOC_ICON.get(str(d.get('Tipo')), '📎')} {d.get('Nombre')}"
-                   f"  ·  {_fecha_corta(d.get('Fecha'))}")
-            if _et in _mapa:                       # desempate por DriveID
-                _et = f"{_et} · {str(d.get('DriveID',''))[-6:]}"
-            _mapa[_et] = d
-        _sel = ui.elegir("Descargar un documento", _mapa, key=f"dldoc_{pid}",
-                         vacio="— elige un documento —")
-        if _sel:                                   # solo AQUI se toca Drive
-            _did = str(_sel.get("DriveID", ""))
-            c1, c2 = st.columns([4, 1]) if puede_borrar else [st.container(), None]
-            try:
-                c1.download_button("⬇️ Descargar " + str(_sel.get("Nombre")),
-                                   data=drive_store.download(_did),
-                                   file_name=str(_sel.get("Nombre")),
-                                   key=f"dlbtn_{pid}_{_did}", use_container_width=True)
-            except Exception as e:
-                c1.error(f"No se pudo descargar: {e}")
-            if puede_borrar and c2 is not None:
-                if c2.button("🗑", key=f"deld_{pid}_{_did}", use_container_width=True):
-                    drive_store.delete(_did)
-                    P.delete_document_record(pid, _did)
-                    st.rerun()
+        for e in vis:
+            et = f"{_DOC_ICON.get(e['tipo'], '📎')} {e['nombre']}  ·  {_fecha_corta(e['fecha'])}"
+            if et in _mapa:                        # desempate por DriveID / ID del cálculo
+                et = f"{et} · {(e['did'] or str((e['run'] or {}).get('ID', '')))[-6:]}"
+            _mapa[et] = e
+        _sel = ui.elegir("Abrir / descargar", _mapa, key=f"arch_sel_{pid}",
+                         vacio="— elige un archivo —")
+        if _sel:
+            _acciones_archivo(pid, _sel, puede_borrar)
 
+    _subir_documento(pid, es_campo, sube_tipos, usuario)
+
+
+def _acciones_archivo(pid, e, puede_borrar):
+    """Descargar / reabrir / borrar el archivo elegido. Solo aquí se descarga."""
+    did = e["did"]
+    run = e.get("run")
+    h = str((run or {}).get("Herramienta", ""))
+    reabrible = bool(run) and h in _CALC_NAV and bool(toolruns.entradas_de(run))
+    es_doc = e.get("doc") is not None
+
+    if did:
+        try:
+            st.download_button("⬇️ Descargar " + (e["nombre"] or "archivo"),
+                               data=drive_store.download(did),
+                               file_name=e["nombre"] or f"{did}.pdf",
+                               key=f"arch_dl_{pid}_{did}", use_container_width=True)
+        except Exception as ex:
+            st.error(f"No se pudo descargar: {ex}")
+    if reabrible:
+        if st.button("↩️ Reabrir en la herramienta", key=f"arch_reab_{pid}",
+                     use_container_width=True):
+            if tool_save_ui.pedir_reapertura(run, h, _CALC_NAV[h]):
+                st.rerun()
+            else:
+                st.warning("Este cálculo no guardó sus entradas (es anterior a v148).")
+    if puede_borrar and es_doc:
+        if st.button("🗑 Borrar", key=f"arch_del_{pid}_{did or e['nombre']}",
+                     use_container_width=True):
+            if did:
+                drive_store.delete(did)
+            P.delete_document_record(pid, did)
+            st.rerun()
+    if not did and not reabrible:
+        st.caption("Este cálculo no tiene PDF archivado ni entradas para reabrir.")
+
+
+def _subir_documento(pid, es_campo, sube_tipos, usuario):
+    """Subir un documento (el campo solo puede subir fotos)."""
     with st.expander("➕ Subir documento"):
         if es_campo:
             st.caption("Como usuario de campo, solo puedes subir **fotos**.")
@@ -466,8 +577,8 @@ def _documentos_section(pid: str):
                     P.add_document(pid, up.name, tipo, fid, usuario)
                     st.success("Documento subido.")
                     st.rerun()
-                except Exception as e:
-                    st.error(f"No se pudo subir: {e}")
+                except Exception as ex:
+                    st.error(f"No se pudo subir: {ex}")
 
 
 def _nuevo_proyecto_form(grupo: str, key: str = "nuevo"):
@@ -668,74 +779,6 @@ def _notificar_asignados(usuarios, info_prj):
     else:
         st.warning("📵 No se pudo notificar a nadie: revisa email y Telegram "
                    "en 🛠 Mi grupo → Usuarios.")
-
-
-def _calculos_section(pid: str):
-    """Historial de cálculos de las herramientas para este proyecto.
-
-    v129/v130 hicieron que Plomadas, Corte de rieles, Corte de buffers y Belting
-    escribieran en la hoja `Calculos`… pero NADIE la leía: los datos entraban y
-    no había forma de verlos. Esto cierra ese lazo, que es justo lo que se pidió
-    ("cada vez que se use una herramienta debe alimentar la base del proyecto").
-    """
-    st.markdown("**🧮 Cálculos de herramientas**")
-    if not toolruns.is_configured():
-        st.caption("🔒 Requiere Google Sheets configurado.")
-        return
-
-    runs = toolruns.list_for(pid)
-    if not runs:
-        st.caption("Sin cálculos guardados. Desde 🔩 Plomadas, ✂️ Corte de rieles, "
-                   "🛡 Corte de buffers o 🎗 Belting, pulsa **Guardar en el proyecto**.")
-        return
-
-    st.dataframe(pd.DataFrame([{
-        "": toolruns.HERRAMIENTAS.get(str(r.get("Herramienta", "")),
-                                      str(r.get("Herramienta", "")) or "🧮"),
-        "Fecha": _fecha_corta(r.get("Fecha")), "Por": r.get("Usuario"),
-        "Resumen": r.get("Resumen"),
-    } for r in runs]), hide_index=True, use_container_width=True)
-
-    # ── Reabrir un calculo en su herramienta (v148) ──
-    # `DatosJSON` guardaba solo los RESULTADOS, asi que un calculo no se podia
-    # retomar: para cambiar un dato habia que teclearlo todo otra vez. Desde
-    # v148 se guardan tambien las ENTRADAS y esto las devuelve a la herramienta.
-    _NAV = {"plomada": "🔩 Líneas de plomada", "rieles": "✂️ Corte de rieles",
-            "buffers": "🛡 Corte de buffers", "belting": "🎗 Belting"}
-    _reab = {f"{toolruns.HERRAMIENTAS.get(str(r.get('Herramienta','')), '🧮')} "
-             f"{_fecha_corta(r.get('Fecha'))} · {r.get('Resumen','')[:40]}": r
-             for r in runs
-             if toolruns.entradas_de(r) and str(r.get("Herramienta","")) in _NAV}
-    if _reab:
-        _r = ui.elegir("↩️ Reabrir un cálculo en su herramienta", _reab,
-                       key=f"reab_{pid}", vacio="— elige un cálculo —")
-        if _r and st.button("↩️ Reabrir en la herramienta", key=f"reabbtn_{pid}",
-                            use_container_width=True):
-            _h = str(_r.get("Herramienta", ""))
-            if tool_save_ui.pedir_reapertura(_r, _h, _NAV[_h]):
-                st.rerun()
-            else:
-                st.warning("Este cálculo no guardó sus entradas (es anterior a v148).")
-    elif runs:
-        st.caption("Los cálculos anteriores a v148 no guardaron sus entradas, "
-                   "así que solo puede descargarse su PDF.")
-
-    # Descarga bajo demanda: igual que en Documentos, el `data=` de
-    # download_button se evalua al renderizar y bajaba TODOS los PDF a la vez.
-    _conpdf = {f"{toolruns.HERRAMIENTAS.get(str(r.get('Herramienta','')), '🧮')} "
-               f"{_fecha_corta(r.get('Fecha'))} · {r.get('Usuario')}": r
-               for r in runs if str(r.get("DriveID", "")).strip()}
-    if _conpdf:
-        _r = ui.elegir("Descargar el PDF de un cálculo", _conpdf,
-                       key=f"dlcalc_{pid}", vacio="— elige un cálculo —")
-        if _r:
-            try:
-                st.download_button(
-                    "⬇️ Descargar PDF", data=drive_store.download(str(_r.get("DriveID"))),
-                    file_name=str(_r.get("Archivo") or f"{_r.get('ID')}.pdf"),
-                    key=f"dlcalbtn_{pid}_{_r.get('ID')}", use_container_width=True)
-            except Exception as e:
-                st.error(f"PDF no disponible: {e}")
 
 
 def _field_users(grupo):
@@ -1394,12 +1437,8 @@ def _detalle_proyecto(pid: str, grupo: str = None):
                     st.session_state["ingeniero"] = str(prj.get("Ingeniero", ""))
                     st.session_state["_rebuilt_from"] = str(prj.get("Nombre", ""))
                     st.success("✅ Cargado. Ve a **📐 Survey** y pulsa **Calcular** para regenerar todo.")
-        # ── Cálculos de herramientas ──
-        _calculos_section(pid)
-
-        # ── Documentos ──
-        _documentos_section(pid)
-
+        # ── Archivos del proyecto (buscable) ──
+        _archivos_section(pid)
 
 
 # ── Panel de agrupaciones ────────────────────────────────────────
@@ -1518,7 +1557,6 @@ def _dashboard_agrupacion(ag, grupo):
 
     st.bar_chart(pd.DataFrame({"Avance %": [r["Avance %"] for r in rows]},
                               index=[r["Elevador"] for r in rows]))
-
 
 
 def _agrupaciones_html(ags, grupo) -> str:
@@ -1727,7 +1765,6 @@ def _panel_agrupaciones(grupo: str):
                     st.rerun()
 
 
-
 # ── Panel del PROPIETARIO: todos los proyectos (todos los grupos) ──
 def render_owner_projects():
     st.markdown("### 📁 Todos los proyectos")
@@ -1927,9 +1964,7 @@ def render_field_projects(usuario: str, grupo: str):
     elif _sec == "💰 Recibos":
         render_expenses(pid, grupo, can_delete=False, key_prefix="fld")
     else:   # 📎 Archivos
-        _calculos_section(pid)
-        st.markdown("---")
-        _documentos_section(pid)
+        _archivos_section(pid)
 
 
 # ── Gastos / compras por proyecto (admin, campo) ──

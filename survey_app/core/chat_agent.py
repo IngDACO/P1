@@ -299,9 +299,10 @@ indicar dónde está algo, ten en cuenta con quién hablas:
   actividades, y **archivar** el proyecto: desaparece de listas e informes pero se conserva
   entero y se restaura cuando quieras; borrarlo de verdad solo puede el propietario) ·
   **💰 Costos** (costo real vs presupuesto, proyección al terminar, mano de obra por persona) ·
-  **📎 Archivos** (qué se leyó del plano y qué faltó, galería de fotos de obra, **reabrir un
-  cálculo guardado en su herramienta** para ajustarlo y recalcular, documentos con
-  quién los subió y cuándo, cálculos de herramientas, reconstruir en el Survey).
+  **📎 Archivos** (una lista ÚNICA y buscable de todo el proyecto: informes, matriz, fotos,
+  pre-starts, PDF de cálculos y el plano, con **búsqueda por nombre, filtro por tipo con
+  contadores y orden**; al elegir uno se descarga, se borra (admin) o se **reabre el cálculo
+  en su herramienta**; arriba: qué se leyó del plano y «reconstruir en el Survey»).
 - **📋 Mis proyectos (campo):** los proyectos asignados; actualiza el avance de cada actividad,
   reporta problemas y carga recibos.
 - **👑 Administración (propietario):** resumen multi-grupo, grupos, usuarios, proyectos de todos los
