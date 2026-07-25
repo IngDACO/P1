@@ -76,11 +76,9 @@ def render_planificacion(grupo):
         if ok:
             st.rerun()
 
-    # ── Rejilla coloreada (el board) — las celdas con proyecto son clicables ──
-    st.caption("🔗 Las celdas con un proyecto enlazado son un enlace: toca una para "
-               "abrir su detalle.")
-    st.markdown(_grid_html(staff, lunes, datos, tidx, clicable=True),
-                unsafe_allow_html=True)
+    # ── Tablero (botones nativos): la celda con proyecto abre su detalle ──
+    st.caption("🔗 Toca una celda con un proyecto enlazado para abrir su detalle.")
+    _tablero_editable(grupo, lunes, staff, datos, tidx)
 
     # ── Editar la semana de una persona ──
     st.markdown("##### ✏️ Editar la semana de una persona")
@@ -193,7 +191,73 @@ def render_board_readonly(grupo, resaltar_usuario=""):
                 unsafe_allow_html=True)
 
 
-def _grid_html(staff, lunes, datos, tidx, resaltar="", clicable=False) -> str:
+def _tablero_editable(grupo, lunes, staff, datos, tidx):
+    """El board del admin como BOTONES nativos (v169): la celda cuyo trabajo enlaza
+    a un proyecto navega a su detalle en la MISMA sesión (sin recarga ni riesgo de
+    deslogueo, a diferencia del enlace HTML de v168).
+
+    Cada celda se colorea con el color de su trabajo inyectando CSS por la clase
+    `st-key-<key>` que Streamlit (≥1.39) pone en el contenedor de cada widget con
+    key — verificado en vivo antes de construir. El board del campo sigue siendo el
+    HTML de `_grid_html` (solo lectura).
+    """
+    dias = R.DIAS
+    # 1) Modelo de la rejilla + CSS de color por celda (una regla por celda no vacía)
+    grid, css, idx = [], [], 0
+    for u in staff:
+        cells = []
+        for d in dias:
+            c = R.celda(datos, u["Usuario"], d)
+            asig = str(c.get("asig", ""))
+            nota = str(c.get("nota", ""))
+            if not asig:
+                cells.append(None)
+                continue
+            bg = R.color_de(asig, tidx)
+            fg = _texto_sobre(bg)
+            key = f"roscel_{idx}"
+            idx += 1
+            css.append(f".st-key-{key} button{{background:{bg}!important;"
+                       f"color:{fg}!important;border-color:{bg}!important;}}")
+            cells.append({"key": key, "et": R.etiqueta_de(asig, tidx),
+                          "nota": nota, "pid": R.proyecto_de(asig, tidx)})
+        grid.append((u.get("Nombre") or u["Usuario"], cells))
+    if css:
+        st.markdown("<style>" + "".join(css) + "</style>", unsafe_allow_html=True)
+
+    # 2) Cabecera (persona + días)
+    anchos = [1.4] + [1] * len(dias)
+    h = st.columns(anchos)
+    h[0].markdown("<div style='font-size:12px;color:#6b7280'>Persona</div>",
+                  unsafe_allow_html=True)
+    for i, d in enumerate(dias):
+        f = R.fecha_de_dia(lunes, d)
+        h[i + 1].markdown(f"<div style='font-size:12px;color:#6b7280'>{R.DIAS_LABEL[d]} "
+                          f"{f.strftime('%d/%m')}</div>", unsafe_allow_html=True)
+
+    # 3) Filas: nombre + una celda por día (botón coloreado)
+    for nom, cells in grid:
+        cols = st.columns(anchos)
+        cols[0].markdown(f"<div style='padding-top:6px;font-weight:600;font-size:13px'>"
+                         f"{_esc(nom)}</div>", unsafe_allow_html=True)
+        for i, cell in enumerate(cells):
+            col = cols[i + 1]
+            if cell is None:                       # celda vacía
+                col.markdown("<div style='text-align:center;color:#cbd5e1'>·</div>",
+                             unsafe_allow_html=True)
+                continue
+            # Un botón por celda; navega solo si el trabajo enlaza a un proyecto.
+            if col.button(cell["et"] or "—", key=cell["key"], use_container_width=True,
+                          help="Abrir el proyecto" if cell["pid"] else None):
+                if cell["pid"]:
+                    st.session_state["_prjsel_pending"] = cell["pid"]
+                    st.session_state["_gruposec_pending"] = "📊 Proyectos"
+                    st.rerun()
+            if cell["nota"]:
+                col.caption(cell["nota"])
+
+
+def _grid_html(staff, lunes, datos, tidx, resaltar="") -> str:
     ths = ['<th style="text-align:left;padding:6px 8px;font-size:12px;color:#6b7280;'
            'position:sticky;left:0;background:#fff;">Persona</th>']
     for d in R.DIAS:
@@ -219,20 +283,9 @@ def _grid_html(staff, lunes, datos, tidx, resaltar="", clicable=False) -> str:
             cont = (f'<div style="font-weight:600;">{_esc(et)}</div>' if et else "")
             if nota:
                 cont += f'<div style="font-size:10.5px;opacity:0.85;">{_esc(nota)}</div>'
-            inner = cont or "&nbsp;"
-            # Celda CLICABLE: si el trabajo enlaza a un proyecto, la celda es un
-            # enlace que abre su detalle (?abrir_prj=…, lo maneja app.py). El login
-            # persiste por cookie, así que si el enlace recargara, no desloguea.
-            pid = R.proyecto_de(asig, tidx) if clicable else ""
-            if pid:
-                inner = (f'<a href="?abrir_prj={pid}" title="Abrir el proyecto" '
-                         f'style="color:{fg};text-decoration:none;display:block;'
-                         f'cursor:pointer;">{inner}'
-                         f'<div style="font-size:9px;opacity:0.75;margin-top:1px;">'
-                         f'🔗 abrir</div></a>')
             celdas.append(f'<td style="padding:5px 7px;background:{bg};color:{fg};'
                           f'border-radius:6px;font-size:11.5px;line-height:1.25;'
-                          f'vertical-align:top;">{inner}</td>')
+                          f'vertical-align:top;">{cont or "&nbsp;"}</td>')
         filas.append("<tr>" + "".join(celdas) + "</tr>")
     return ('<div style="overflow-x:auto;margin:10px 0;">'
             '<table style="border-collapse:separate;border-spacing:3px;width:100%;">'

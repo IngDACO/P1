@@ -791,7 +791,29 @@ Al cargar el plano en el survey (app.py), autocompleta **RAIL = AlturaDiente** (
 espalda) del catálogo; si el código no está o no se detecta → aviso + entrada manual. **RAIL = AlturaDiente**
 (NO el ancho); AnchoDiente se guarda como dato secundario.
 
-## Planificación: ir al proyecto desde LA CELDA del tablero (v168)
+## Planificación: la celda es un BOTÓN nativo que abre el proyecto (v169)
+El enfoque de v168 (celda = `<a href="?abrir_prj=…">`) tenía el riesgo de recargar la página. El usuario
+pidió el plan B: **la celda como botón nativo**, que navega en la MISMA sesión, sin recarga ni riesgo de
+deslogueo. Se revirtió v168 (handler de query param en app.py + el `clicable`/`<a>` de `_grid_html`).
+### `roster_ui._tablero_editable(grupo, lunes, staff, datos, tidx)` (board del admin)
+- El board del admin pasa de HTML a **botones `st.button`**: nombre + una celda por día. Cada celda no
+  vacía es un botón; **navega solo si su trabajo enlaza a un proyecto** (`_prjsel_pending` +
+  `_gruposec_pending` + rerun, en sesión). La nota (vehículo/equipo) va como `caption` bajo el botón.
+- **Color por celda**: se inyecta `<style>.st-key-<key> button{background:…}</style>`. Streamlit (≥1.39)
+  pone la clase `st-key-<key>` en el contenedor de cada widget con `key`. ⚠️ **Verificado EN VIVO** antes
+  de construir (mini-app + inspección del DOM): `.st-key-celda_0 button` sale `background rgb(46,109,164)`.
+  Por eso `requirements.txt` sube a `streamlit>=1.39`.
+- El board del **campo** (`render_board_readonly`) sigue siendo el HTML de `_grid_html` (solo lectura, sin
+  botones) — `_grid_html` volvió a su forma anterior a v168.
+### ⚠️ Contra aceptada por el usuario
+Con `st.columns` (nombre + 5 días) el board pierde el scroll horizontal del HTML y en móvil queda más
+apretado. El usuario lo aceptó a cambio de que el clic sea 100% fiable en la sesión.
+### Verificación
+Mecanismo `st-key` probado en vivo (botón coloreado, clase presente). Modelo de la rejilla: 2 celdas no
+vacías → 2 reglas CSS, 1 navegable (solo la enlazada a PRJ). v168 sin restos (`abrir_prj`/`clicable`),
+plumbing en sesión (`_prjsel_pending`+`_gruposec_pending`), `_tablero_editable` 0 nombres libres, compila.
+
+## Planificación: ir al proyecto desde LA CELDA del tablero (v168 — ⚠️ REEMPLAZADO por botones en v169)
 El usuario rechazó los botones de v167: "quiero que sea desde la celda de la propia tabla". Se
 REVIRTIÓ `_ir_a_proyecto` (los botones) y ahora **la celda misma es clicable**.
 ### ⚠️ El board es HTML, no un `st.dataframe` (no hay selección de celda)
@@ -2362,10 +2384,11 @@ posicional + plano) → app.py, al cargar el PDF, setea `st.session_state["ns"]`
 resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NORTH SYD y AGECARE → NS=6
 (coincide con travel/floor-height HQ/HE).
 
-## Versiones desplegadas (v168 = actual)
+## Versiones desplegadas (v169 = actual)
 | Ver | Cambio principal |
 |---|---|
-| v168 | Planificacion: ir al proyecto desde LA CELDA del tablero (reemplaza los botones de v167, rechazados). El board es HTML, asi que la celda enlazada a un proyecto es un `<a href="?abrir_prj=…">`; app.py detecta el query param y navega al detalle (login persiste por cookie si recargara) |
+| v169 | Planificacion: la celda del tablero pasa a ser un BOTON nativo (st.button coloreado por la clase st-key-<key>, Streamlit>=1.39, verificado en vivo) que abre el proyecto en la MISMA sesion, sin recarga. Reemplaza el enlace HTML de v168 (que podia recargar). El board del campo sigue siendo HTML de solo lectura |
+| v168 | (reemplazado en v169) Planificacion: celda como enlace `<a href="?abrir_prj=">` + handler de query param en app.py |
 | v167 | (revertido en v168) Planificacion (roster): boton por cada proyecto enlazado en la semana (el board es HTML, no clicable como st.dataframe); navega con _prjsel_pending + un _gruposec_pending nuevo que cambia la seccion del grupo a Proyectos antes de instanciar el radio |
 | v166 | Archivos: la descarga pasa a la propia tabla — se selecciona la fila (st.dataframe on_select, lazy: solo se baja la elegida) y aparecen descargar/reabrir/borrar; ademas un boton de descarga bajo cada foto que reutiliza los bytes ya bajados para la miniatura. Se quita el selector aparte de v165 |
 | v165 | Archivos: una sola lista buscable (busqueda por nombre + filtro por tipo con contadores + orden) en vez de dos sub-secciones planas (Documentos y Calculos) con tres selectores; unifica documentos + PDF de calculos + plano casando cada calculo con su toolrun por DriveID (sin duplicar), y reduce a la vez galeria, tabla y descargador |

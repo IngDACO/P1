@@ -1,7 +1,7 @@
 # Versiones fijadas a majors ESTABLES para evitar segfaults por ruedas nativas
 # bleeding-edge. Pensado para Python 3.12 (fíjalo en Streamlit Cloud → Settings →
 # Python version). En Python 3.14 solo hay ruedas de las últimas versiones (inestables).
-streamlit>=1.35,<2
+streamlit>=1.39,<2   # >=1.39: clase CSS st-key-<key> por widget (colorea el tablero del roster, v169)
 pypdf>=4.0.0,<7
 pandas>=2.0.0,<2.3
 numpy>=1.26.0,<2
