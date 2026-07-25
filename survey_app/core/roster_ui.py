@@ -76,11 +76,11 @@ def render_planificacion(grupo):
         if ok:
             st.rerun()
 
-    # ── Rejilla coloreada (el board) ──
-    st.markdown(_grid_html(staff, lunes, datos, tidx), unsafe_allow_html=True)
-
-    # ── Ir a un proyecto del tablero ──
-    _ir_a_proyecto(grupo, staff, tidx, datos)
+    # ── Rejilla coloreada (el board) — las celdas con proyecto son clicables ──
+    st.caption("🔗 Las celdas con un proyecto enlazado son un enlace: toca una para "
+               "abrir su detalle.")
+    st.markdown(_grid_html(staff, lunes, datos, tidx, clicable=True),
+                unsafe_allow_html=True)
 
     # ── Editar la semana de una persona ──
     st.markdown("##### ✏️ Editar la semana de una persona")
@@ -95,42 +95,6 @@ def render_planificacion(grupo):
 
     # ── Catálogo de trabajos ──
     _catalogo(grupo)
-
-
-def _ir_a_proyecto(grupo, staff, tidx, datos):
-    """Botones para saltar al detalle de un proyecto que aparece en la semana.
-
-    El board es HTML (celdas coloreadas), así que no se puede hacer la celda
-    clicable como un `st.dataframe`; en su lugar se ofrece un botón por cada
-    proyecto DISTINTO enlazado en la semana visible. Navega con el patrón
-    `_prjsel_pending` (v126) + cambiar la sección del grupo a 📊 Proyectos
-    (`_gruposec_pending`, aplicado antes del radio en `render_group_panel`).
-    """
-    pids = []
-    for u in staff:
-        for d in R.DIAS:
-            asig = str(R.celda(datos, u["Usuario"], d).get("asig", ""))
-            pid = R.proyecto_de(asig, tidx)
-            if pid and pid not in pids:
-                pids.append(pid)
-    if not pids:
-        return
-    # Solo los navegables: existen y no están archivados (list_projects los oculta).
-    nombres = {str(p.get("ID")): str(p.get("Nombre") or p.get("ID"))
-               for p in P.list_projects(grupo=grupo)}
-    items = sorted(((pid, nombres[pid]) for pid in pids if pid in nombres),
-                   key=lambda x: x[1].lower())
-    if not items:
-        return
-    st.markdown("##### 🔗 Ir a un proyecto del tablero")
-    st.caption("Abre el detalle del proyecto sin salir de la cuadrilla.")
-    for fila in range(0, len(items), 3):
-        cols = st.columns(3)
-        for c, (pid, nom) in zip(cols, items[fila:fila + 3]):
-            if c.button(f"🔗 {nom}", key=f"ros_go_{pid}", use_container_width=True):
-                st.session_state["_prjsel_pending"] = pid
-                st.session_state["_gruposec_pending"] = "📊 Proyectos"
-                st.rerun()
 
 
 def _plan_vs_real(grupo, lunes, staff, tidx):
@@ -229,7 +193,7 @@ def render_board_readonly(grupo, resaltar_usuario=""):
                 unsafe_allow_html=True)
 
 
-def _grid_html(staff, lunes, datos, tidx, resaltar="") -> str:
+def _grid_html(staff, lunes, datos, tidx, resaltar="", clicable=False) -> str:
     ths = ['<th style="text-align:left;padding:6px 8px;font-size:12px;color:#6b7280;'
            'position:sticky;left:0;background:#fff;">Persona</th>']
     for d in R.DIAS:
@@ -255,9 +219,20 @@ def _grid_html(staff, lunes, datos, tidx, resaltar="") -> str:
             cont = (f'<div style="font-weight:600;">{_esc(et)}</div>' if et else "")
             if nota:
                 cont += f'<div style="font-size:10.5px;opacity:0.85;">{_esc(nota)}</div>'
+            inner = cont or "&nbsp;"
+            # Celda CLICABLE: si el trabajo enlaza a un proyecto, la celda es un
+            # enlace que abre su detalle (?abrir_prj=…, lo maneja app.py). El login
+            # persiste por cookie, así que si el enlace recargara, no desloguea.
+            pid = R.proyecto_de(asig, tidx) if clicable else ""
+            if pid:
+                inner = (f'<a href="?abrir_prj={pid}" title="Abrir el proyecto" '
+                         f'style="color:{fg};text-decoration:none;display:block;'
+                         f'cursor:pointer;">{inner}'
+                         f'<div style="font-size:9px;opacity:0.75;margin-top:1px;">'
+                         f'🔗 abrir</div></a>')
             celdas.append(f'<td style="padding:5px 7px;background:{bg};color:{fg};'
                           f'border-radius:6px;font-size:11.5px;line-height:1.25;'
-                          f'vertical-align:top;">{cont or "&nbsp;"}</td>')
+                          f'vertical-align:top;">{inner}</td>')
         filas.append("<tr>" + "".join(celdas) + "</tr>")
     return ('<div style="overflow-x:auto;margin:10px 0;">'
             '<table style="border-collapse:separate;border-spacing:3px;width:100%;">'

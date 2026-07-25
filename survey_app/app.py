@@ -262,6 +262,22 @@ elif _ROL == "campo":
 else:
     _nav = [_L_PRESTART] + _HERR + [_L_CLOCK]
 
+# Abrir un proyecto desde una CELDA del tablero de Planificación (v168): la celda
+# enlazada es <a href="?abrir_prj=PRJ-…">. Se detecta aquí (antes del nav) y se
+# navega al detalle con el patrón pending (no se escriben widgets ya vivos). El
+# login persiste por cookie, así que si el enlace llegara a recargar, se restaura.
+_goto = st.query_params.get("abrir_prj")
+if _goto:
+    st.session_state["_prjsel_pending"] = _goto
+    if _ROL == "administrador":
+        st.session_state["main_nav"] = _L_GRUPO
+        st.session_state["_gruposec_pending"] = "📊 Proyectos"
+    try:
+        del st.query_params["abrir_prj"]
+    except Exception:
+        st.query_params.clear()
+    st.rerun()
+
 # Navegación pendiente (p.ej. "abrir el proyecto recién creado" desde el Survey).
 # Se aplica ANTES de instanciar el radio: escribir la clave de un widget ya
 # creado lanza excepción (misma regla que el import de Excel, v111).

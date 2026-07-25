@@ -791,7 +791,32 @@ Al cargar el plano en el survey (app.py), autocompleta **RAIL = AlturaDiente** (
 espalda) del catálogo; si el código no está o no se detecta → aviso + entrada manual. **RAIL = AlturaDiente**
 (NO el ancho); AnchoDiente se guarda como dato secundario.
 
-## Planificación: ir al proyecto desde el tablero (v167)
+## Planificación: ir al proyecto desde LA CELDA del tablero (v168)
+El usuario rechazó los botones de v167: "quiero que sea desde la celda de la propia tabla". Se
+REVIRTIÓ `_ir_a_proyecto` (los botones) y ahora **la celda misma es clicable**.
+### ⚠️ El board es HTML, no un `st.dataframe` (no hay selección de celda)
+El tablero se dibuja con `_grid_html` (celdas coloreadas por valor; por eso nunca fue un dataframe, y
+`st.dataframe` solo selecciona filas/columnas, no celdas). Para que la CELDA navegue sin salir de
+Streamlit, la celda enlazada a un proyecto se envuelve en **`<a href="?abrir_prj=PRJ-…">`** (query param).
+- **`_grid_html(..., clicable=False)`**: en `clicable=True` (solo la Planificación del admin), la celda
+  cuyo trabajo enlaza a un PRJ es un enlace con un hint "🔗 abrir". El board del campo
+  (`render_board_readonly`) queda `clicable=False` (sin enlaces).
+- **`app.py`** detecta `?abrir_prj=` ANTES del nav: fija `_prjsel_pending` (v126) + `main_nav = 🛠 Mi
+  grupo` + `_gruposec_pending = 📊 Proyectos` (plomería de v167, que SÍ se conserva) + limpia el query
+  param + rerun → abre el detalle del proyecto.
+### ⚠️ Riesgo de deslogueo, mitigado
+Un `<a href>` puede recargar la página; una recarga reinicia session_state. Pero el **login persiste por
+cookie** (`auth_ui` restaura con `session_cookie.load()` al cargar), y el handler fija las claves aunque
+la sesión venga fresca, así que la navegación funciona en recarga suave o dura. **Pendiente de validar
+en el Cloud**: confirmar que el clic navega sin pedir login de nuevo; si la recarga molesta, el plan B
+es un grid de `st.button` coloreados por `st-key-<key>` (misma sesión, sin recarga).
+### Verificación
+`_grid_html(clicable=True)` sobre datos sintéticos: exactamente 1 enlace `?abrir_prj=PRJ-0001` para la
+celda enlazada; OFF/vacía no generan enlace; `clicable=False` (campo) sin enlaces. Handler lee
+`abrir_prj` antes del nav; `_gruposec_pending` se lee antes del radio `grupo_sec`; `_prjsel_pending`
+antes de `adminproj_sel`. Revert de `_ir_a_proyecto` sin referencias colgantes. Compila + import.
+
+## Planificación: ir al proyecto desde el tablero (v167 — ⚠️ REVERTIDO en v168, ver arriba)
 Peticion del usuario: "lo mismo con la tabla de planificacion; quiero poder ir al proyecto seleccionando
 desde ahi". El board del roster es **HTML** (celdas coloreadas — por eso no es `st.dataframe`), asi que
 no se puede hacer la celda clicable como en Archivos (v166); la adaptacion es un **botón por proyecto**.
@@ -2337,10 +2362,11 @@ posicional + plano) → app.py, al cargar el PDF, setea `st.session_state["ns"]`
 resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NORTH SYD y AGECARE → NS=6
 (coincide con travel/floor-height HQ/HE).
 
-## Versiones desplegadas (v167 = actual)
+## Versiones desplegadas (v168 = actual)
 | Ver | Cambio principal |
 |---|---|
-| v167 | Planificacion (roster): desde el tablero se salta al detalle de un proyecto con un boton por cada proyecto enlazado en la semana (el board es HTML, no clicable como st.dataframe); navega con _prjsel_pending + un _gruposec_pending nuevo que cambia la seccion del grupo a Proyectos antes de instanciar el radio |
+| v168 | Planificacion: ir al proyecto desde LA CELDA del tablero (reemplaza los botones de v167, rechazados). El board es HTML, asi que la celda enlazada a un proyecto es un `<a href="?abrir_prj=…">`; app.py detecta el query param y navega al detalle (login persiste por cookie si recargara) |
+| v167 | (revertido en v168) Planificacion (roster): boton por cada proyecto enlazado en la semana (el board es HTML, no clicable como st.dataframe); navega con _prjsel_pending + un _gruposec_pending nuevo que cambia la seccion del grupo a Proyectos antes de instanciar el radio |
 | v166 | Archivos: la descarga pasa a la propia tabla — se selecciona la fila (st.dataframe on_select, lazy: solo se baja la elegida) y aparecen descargar/reabrir/borrar; ademas un boton de descarga bajo cada foto que reutiliza los bytes ya bajados para la miniatura. Se quita el selector aparte de v165 |
 | v165 | Archivos: una sola lista buscable (busqueda por nombre + filtro por tipo con contadores + orden) en vez de dos sub-secciones planas (Documentos y Calculos) con tres selectores; unifica documentos + PDF de calculos + plano casando cada calculo con su toolrun por DriveID (sin duplicar), y reduce a la vez galeria, tabla y descargador |
 | v164 | Fichaje del campo: las horas se reparten por dia natural (medianoche) — antes una sesion que cruzaba medianoche se contaba entera en el dia de entrada, falseando "Jornada de hoy" y el reporte "Hoy"/"Semana" del admin (evidencia: 3/16 fichajes reales cruzan medianoche). El olvido de clock-out se cierra a la hora que el usuario indica (no "ahora", que registraba las horas fantasma de la noche). group_hours(Todo) queda identico |
