@@ -791,6 +791,27 @@ Al cargar el plano en el survey (app.py), autocompleta **RAIL = AlturaDiente** (
 espalda) del catálogo; si el código no está o no se detecta → aviso + entrada manual. **RAIL = AlturaDiente**
 (NO el ancho); AnchoDiente se guarda como dato secundario.
 
+## Archivos: descarga desde la tabla (fila clicable) + por foto (v166)
+Peticion del usuario: "la descarga debe ser mas accesible; que este en la tabla donde se ven los
+archivos". En v165 la descarga estaba en un selector aparte debajo de la tabla → habia que buscar el
+archivo por segunda vez.
+### ⚠️ Por que estaba en un selector y no en la tabla
+`st.download_button(data=…)` evalua `data` al RENDERIZAR, no al pulsar: un boton por fila bajaria TODOS
+los archivos de Drive en cada pasada (el problema que arreglo v147). La solucion que mantiene la
+descarga LAZY es la **seleccion de fila** (`st.dataframe(on_select="rerun", selection_mode="single-row")`,
+soportado desde Streamlit 1.35; el pin es `>=1.35`): tocas una fila y solo entonces se descarga ESA.
+### Cambios
+- **Tabla clicable**: al seleccionar una fila aparece debajo su ⬇️ descargar (+ ↩️ reabrir si es
+  calculo, + 🗑 borrar si admin), via `_acciones_archivo`. Se **quito el selector "Abrir / descargar"**
+  de v165 (redundante). ⚠️ Clamp del indice: si cambias el filtro con una fila elegida, el indice podria
+  apuntar fuera de la lista actual — no se abre un archivo equivocado.
+- **Fotos**: la miniatura YA baja los bytes para mostrarse (y `drive_store.download` cachea 5 min), asi
+  que un **⬇️ bajo cada foto** reutiliza esos bytes — descarga directa sin segunda llamada a Drive.
+### Verificacion
+Compila + import real; tabla con `on_select`+`single-row` y accion desde `resto[_rows[0]]`; 0 restos del
+selector viejo (`arch_sel`); 0 nombres libres nuevos (el `ex` es `except as ex`). La descarga sigue LAZY
+(0 descargas hasta elegir fila; la galeria solo baja las fotos visibles y reutiliza sus bytes).
+
 ## Archivos: una lista ÚNICA y buscable (v165)
 Peticion del usuario: "si tengo muchos archivos se convierte en un problema encontrar el que quiero".
 El apartado 📎 Archivos eran DOS sub-secciones (Documentos y Calculos) con **tres selectores distintos**
@@ -2293,9 +2314,10 @@ posicional + plano) → app.py, al cargar el PDF, setea `st.session_state["ns"]`
 resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NORTH SYD y AGECARE → NS=6
 (coincide con travel/floor-height HQ/HE).
 
-## Versiones desplegadas (v165 = actual)
+## Versiones desplegadas (v166 = actual)
 | Ver | Cambio principal |
 |---|---|
+| v166 | Archivos: la descarga pasa a la propia tabla — se selecciona la fila (st.dataframe on_select, lazy: solo se baja la elegida) y aparecen descargar/reabrir/borrar; ademas un boton de descarga bajo cada foto que reutiliza los bytes ya bajados para la miniatura. Se quita el selector aparte de v165 |
 | v165 | Archivos: una sola lista buscable (busqueda por nombre + filtro por tipo con contadores + orden) en vez de dos sub-secciones planas (Documentos y Calculos) con tres selectores; unifica documentos + PDF de calculos + plano casando cada calculo con su toolrun por DriveID (sin duplicar), y reduce a la vez galeria, tabla y descargador |
 | v164 | Fichaje del campo: las horas se reparten por dia natural (medianoche) — antes una sesion que cruzaba medianoche se contaba entera en el dia de entrada, falseando "Jornada de hoy" y el reporte "Hoy"/"Semana" del admin (evidencia: 3/16 fichajes reales cruzan medianoche). El olvido de clock-out se cierra a la hora que el usuario indica (no "ahora", que registraba las horas fantasma de la noche). group_hours(Todo) queda identico |
 | v163 | Se elimina el rol conductor: tras el fichaje unificado (v150) era un subconjunto del campo; se borra el rol, su vista de proyectos y todas sus ramas (nav, creacion de usuario, prompt del agente), y se elimina el unico usuario conductor de prueba. Quedan 3 roles: propietario/administrador/campo |

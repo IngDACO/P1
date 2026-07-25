@@ -375,13 +375,20 @@ def _galeria_fotos(fotos, pid, por_pagina=6):
         for c, d in zip(cols, visibles[fila:fila + 3]):
             did = str(d.get("DriveID", ""))
             with c:
+                _b = None
                 try:
-                    st.image(drive_store.download(did), use_container_width=True)
+                    _b = drive_store.download(did)     # cacheado 5 min
+                    st.image(_b, use_container_width=True)
                 except Exception:
                     st.caption("🖼 no disponible")
                 pie = str(d.get("Nombre", ""))
                 st.caption(f"{pie[:26]}\n\n{_fecha_corta(d.get('Fecha'))}"
                            + (f" · {d.get('SubidoPor')}" if d.get("SubidoPor") else ""))
+                # Reutiliza los bytes ya bajados para la miniatura: descarga directa
+                # de la foto sin una segunda llamada a Drive.
+                if _b is not None:
+                    st.download_button("⬇️", data=_b, file_name=pie or f"{did}.jpg",
+                                       key=f"fdl_{pid}_{did}", use_container_width=True)
     if len(fotos) > n_ver:
         if st.button(f"Ver {min(por_pagina, len(fotos) - n_ver)} más "
                      f"({len(fotos) - n_ver} restantes)", key=f"masfotos_{pid}"):
@@ -498,30 +505,30 @@ def _archivos_section(pid: str):
         _galeria_fotos(fotos, pid)
         st.markdown("")
 
-    # ── Tabla del resto ──
+    # ── Tabla del resto: CLICABLE — tocar una fila muestra su descarga ──
+    # La descarga sigue siendo lazy: `st.download_button(data=…)` evalúa `data` al
+    # renderizar, así que un botón por fila bajaría TODO Drive en cada pasada (el
+    # problema de v147). Con selección de fila, solo se descarga la elegida.
     resto = [e for e in vis if e["tipo"] != "foto"]
     if resto:
-        st.dataframe(pd.DataFrame([{
+        _ev = st.dataframe(pd.DataFrame([{
             "": _DOC_ICON.get(e["tipo"], "📎"),
             "Archivo": e["nombre"], "Tipo": e["label"].split(" ", 1)[-1],
             "Subido por": e["por"], "Fecha": _fecha_corta(e["fecha"]),
-        } for e in resto]), hide_index=True, use_container_width=True)
+        } for e in resto]), hide_index=True, use_container_width=True,
+            on_select="rerun", selection_mode="single-row", key=f"arch_tbl_{pid}")
+        st.caption("👆 Toca una fila para descargar o reabrir ese archivo.")
+        try:
+            _rows = list(_ev.selection.rows)
+        except Exception:
+            _rows = []
+        # Clamp: si cambiaste el filtro con una fila elegida, el índice podría
+        # apuntar fuera de la lista actual — no abrir un archivo equivocado.
+        if _rows and _rows[0] < len(resto):
+            _acciones_archivo(pid, resto[_rows[0]], puede_borrar)
 
     if not vis:
         st.info("Ningún archivo coincide con el filtro.")
-
-    # ── Acción sobre UNO (la lista ya está acotada; solo aquí se toca Drive) ──
-    if vis:
-        _mapa = {}
-        for e in vis:
-            et = f"{_DOC_ICON.get(e['tipo'], '📎')} {e['nombre']}  ·  {_fecha_corta(e['fecha'])}"
-            if et in _mapa:                        # desempate por DriveID / ID del cálculo
-                et = f"{et} · {(e['did'] or str((e['run'] or {}).get('ID', '')))[-6:]}"
-            _mapa[et] = e
-        _sel = ui.elegir("Abrir / descargar", _mapa, key=f"arch_sel_{pid}",
-                         vacio="— elige un archivo —")
-        if _sel:
-            _acciones_archivo(pid, _sel, puede_borrar)
 
     _subir_documento(pid, es_campo, sube_tipos, usuario)
 
