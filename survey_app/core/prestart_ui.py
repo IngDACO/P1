@@ -50,9 +50,30 @@ def render_prestart_tab():
         return
 
     idmap = {f"{p.get('Nombre')} ({p.get('ID')})": p for p in proys}
-    # Sin preseleccion: el pre-start queda archivado en el proyecto elegido y
-    # una near miss abre alarma ahi — no puede ir al proyecto por defecto.
+    # Campo: preselecciona el proyecto donde FICHÓ (lo primero que hace en el día),
+    # como en 📋 Mis proyectos (v138). No es "el primero de la lista" que evitó v139:
+    # es una señal FUERTE (donde está trabajando) que se MUESTRA y sigue siendo
+    # cambiable. El pre-start se archiva y la near miss abre alarma en ese proyecto.
+    _fich_key = None
+    if rol == "campo":
+        try:
+            from core import timeclock
+            _ses = timeclock.open_sessions(nombre, grupo, usuario)
+            _open = (_ses.get(timeclock.TIPO_PROYECTO)
+                     or _ses.get(timeclock.TIPO_GENERAL) or {})
+            _fpid = str(_open.get("proyecto_id", "")).strip()
+            _fpn  = str(_open.get("proyecto", "")).strip()
+            if _fpid:                                  # ID primero, nombre de respaldo (v145)
+                _fich_key = next((k for k in idmap if k.endswith(f"({_fpid})")), None)
+            if not _fich_key and _fpn:
+                _fich_key = next((k for k in idmap if k.startswith(_fpn + " (")), None)
+        except Exception:
+            pass
+        if _fich_key and "ps_proy" not in st.session_state:
+            st.session_state["ps_proy"] = _fich_key
     sel = st.selectbox("Proyecto", [_VACIO] + list(idmap.keys()), key="ps_proy")
+    if _fich_key and sel == _fich_key:
+        st.caption("⏱ Es el proyecto donde fichaste hoy. Cámbialo si el pre-start es de otro.")
     if not sel or sel == _VACIO:
         st.info("Elige el proyecto en el que vas a trabajar hoy.")
         return
@@ -63,7 +84,9 @@ def render_prestart_tab():
     # ── Encabezado ──
     c1, c2, c3 = st.columns(3)
     f_fecha = c1.date_input("Date", value=date.today(), key="ps_fecha")
-    f_hora  = c2.text_input("Time", value=datetime.now().strftime("%H:%M"), key="ps_hora")
+    f_hora_t = c2.time_input("Time", value=datetime.now().time().replace(second=0, microsecond=0),
+                             key="ps_hora")
+    f_hora   = f_hora_t.strftime("%H:%M") if f_hora_t else ""
     f_loc   = c3.text_input("Location", value=str(prj.get("Ubicacion", "")), key="ps_loc")
     if f_loc.strip():
         c3.caption(maps.maps_link_md(f_loc, "ver en Maps"))
@@ -133,7 +156,9 @@ def render_prestart_tab():
 
     if st.button("📋 Generar y archivar Pre-Start", type="primary", use_container_width=True,
                  key="ps_submit", disabled=bool(_pend)):
-        attendees = [{"name": str(r["Print Name"]).strip(), "initial": str(r["Initial"]).strip()}
+        attendees = [{"name": str(r["Print Name"]).strip(),
+                      "initial": (str(r["Initial"]).strip()
+                                  or _initials(str(r["Print Name"]).strip()))}
                      for _, r in att_edit.iterrows()
                      if str(r.get("Print Name", "")).strip() or str(r.get("Initial", "")).strip()]
         data = {

@@ -1067,6 +1067,28 @@ corren por primera vez en el Cloud.
 Campo → "mi semana" (donde voy cada dia) · fichaje pre-rellenado desde el roster · plan vs real
 (asignado a X / ficho en Y, solo para trabajos enlazados a un PRJ).
 
+## Pre-Start del campo: preselecciona el proyecto donde fichó + Time estructurado (v170)
+Revision de 🦺 Pre-Start desde el rol CAMPO (quien lo llena en obra, en el movil, cada mañana). Ya era
+solido tras v158; tres mejoras de la experiencia de campo.
+### Integracion: preselecciona el proyecto del FICHAJE
+El campo elegia el proyecto de una lista sin preseleccion cada dia. **Decision del usuario: "lo primero
+que hace el usuario es fichar"** → cuando llega al Pre-Start ya tiene fichaje abierto, asi que se
+preselecciona ESE proyecto (como 📋 Mis proyectos, v138). ⚠️ NO es "el primero de la lista" que evito
+v139: es una señal FUERTE (donde esta trabajando), se MUESTRA ("⏱ Es el proyecto donde fichaste hoy;
+cambialo si el pre-start es de otro") y sigue siendo cambiable. Resuelve **ID primero, nombre de
+respaldo** (v145). Solo para el rol campo (admin/propietario no fichan).
+### Tecnico: "Time" deja de ser texto libre
+Era `text_input` (mismo fallo de las fechas antes de v149): un dedazo quedaba como hora rara en el PDF.
+Pasa a **`st.time_input`** (se guarda como "%H:%M").
+### Detalle: la inicial del asistente se autocompleta
+Al generar, si un asistente tiene el "Initial" vacio se calcula de su nombre (`_initials`) — no hay que
+teclear las dos cosas.
+### Verificacion
+Preseleccion (sintetico): por ID PRJ-0002→North, por nombre Prueba1→Prueba1, sin fichaje→None, ID
+inexistente cae al nombre→Norte. `time_input` 17:16:00→"17:16". `render_prestart_tab` 0 nombres libres,
+compila+import. (Con datos reales no hay fichajes abiertos ahora, asi que la preseleccion se estrena en
+el Cloud cuando alguien fiche y abra el Pre-Start.)
+
 ## Pre-Start: lo que se captura por fin se ve + no se puede firmar sin leer (v158)
 Revision del ultimo modulo del admin sin tocar, "con la misma dinamica" (tecnico/imagen/integracion).
 ### ⚠️ Tecnico 1: 7 columnas escritas desde v97 y NADIE las leia
@@ -2384,9 +2406,10 @@ posicional + plano) → app.py, al cargar el PDF, setea `st.session_state["ns"]`
 resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NORTH SYD y AGECARE → NS=6
 (coincide con travel/floor-height HQ/HE).
 
-## Versiones desplegadas (v169 = actual)
+## Versiones desplegadas (v170 = actual)
 | Ver | Cambio principal |
 |---|---|
+| v170 | Pre-Start del campo: preselecciona el proyecto donde fichó (lo primero que hace el campo es fichar; señal fuerte y mostrada, sigue cambiable — no el "primero de la lista" que evitó v139), "Time" pasa de texto libre a st.time_input, y la inicial del asistente se autocompleta del nombre |
 | v169 | Planificacion: la celda del tablero pasa a ser un BOTON nativo (st.button coloreado por la clase st-key-<key>, Streamlit>=1.39, verificado en vivo) que abre el proyecto en la MISMA sesion, sin recarga. Reemplaza el enlace HTML de v168 (que podia recargar). El board del campo sigue siendo HTML de solo lectura |
 | v168 | (reemplazado en v169) Planificacion: celda como enlace `<a href="?abrir_prj=">` + handler de query param en app.py |
 | v167 | (revertido en v168) Planificacion (roster): boton por cada proyecto enlazado en la semana (el board es HTML, no clicable como st.dataframe); navega con _prjsel_pending + un _gruposec_pending nuevo que cambia la seccion del grupo a Proyectos antes de instanciar el radio |
