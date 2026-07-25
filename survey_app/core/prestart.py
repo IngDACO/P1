@@ -15,6 +15,7 @@ from datetime import datetime
 import streamlit as st
 
 from core import timeclock
+from core import clock
 
 logger = logging.getLogger(__name__)
 
@@ -136,7 +137,7 @@ def _next_id(recs) -> str:
 def filename_for(data) -> str:
     """`ddmmyyyy AB CD EF.pdf` — fecha + iniciales de los asistentes."""
     f = data.get("fecha")
-    ddmmyyyy = f.strftime("%d%m%Y") if hasattr(f, "strftime") else datetime.now().strftime("%d%m%Y")
+    ddmmyyyy = f.strftime("%d%m%Y") if hasattr(f, "strftime") else clock.now().strftime("%d%m%Y")
     inis = [str(a.get("initial", "")).strip().upper() for a in data.get("attendees", [])
             if str(a.get("initial", "")).strip()]
     tail = (" " + " ".join(inis)) if inis else ""
@@ -194,7 +195,7 @@ def submit(data: dict) -> dict:
             json.dumps(data.get("s3", {}), ensure_ascii=False),
             str(data.get("general_notes", "")),
             json.dumps(data.get("attendees", []), ensure_ascii=False),
-            fname, drive_id, creado_por, datetime.now().strftime("%Y-%m-%d %H:%M"),
+            fname, drive_id, creado_por, clock.now().strftime("%Y-%m-%d %H:%M"),
         ], value_input_option="RAW")
     except Exception as e:
         res["error"] = f"No se pudo registrar el pre-start: {e}"

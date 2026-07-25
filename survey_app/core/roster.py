@@ -19,6 +19,7 @@ from datetime import date, datetime, timedelta
 import streamlit as st
 
 from core import timeclock
+from core import clock
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +54,7 @@ _COLOR_DEFECTO = "#2e6da4"
 # ── Utilidades de fecha ──────────────────────────────────────────
 def lunes_de(d=None) -> date:
     """Lunes de la semana de `d` (hoy si None)."""
-    d = d or date.today()
+    d = d or clock.today()
     if isinstance(d, datetime):
         d = d.date()
     return d - timedelta(days=d.weekday())
@@ -301,7 +302,7 @@ def asignacion_dia(grupo, usuario, fecha=None) -> dict:
     día no es laboral (fin de semana) o no hay asignación. Lo usan el fichaje
     (pre-proponer el proyecto) y la vista del campo.
     """
-    fecha = fecha or date.today()
+    fecha = fecha or clock.today()
     if isinstance(fecha, datetime):
         fecha = fecha.date()
     wd = fecha.weekday()                       # 0=lun .. 6=dom

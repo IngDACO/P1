@@ -49,6 +49,7 @@ C:\Users\diego\P1\survey_app\
 │   ├── plan_data.py        # extraer_todo/guardar/del_proyecto — datos del plano EN el proyecto (v137)
 │   ├── plan_ui.py          # selector_proyecto/aplicar — el plano segun el rol (v137)
 │   ├── ui_common.py        # elegir() sin preseleccion + confirmar_borrado() (v139)
+│   ├── clock.py            # now()/today() en la hora LOCAL del grupo (Grupos.Zona; UTC->local, v173)
 │   ├── toolruns.py         # hoja Calculos: cada uso de una herramienta alimenta el proyecto (v129)
 │   ├── tool_pdf.py         # PDF comun de las 4 herramientas de calculo (v129)
 │   ├── tool_save_ui.py     # bloque compartido descargar + guardar en el proyecto (v129)
@@ -1066,6 +1067,38 @@ corren por primera vez en el Cloud.
 ### PENDIENTE (proximo incremento)
 Campo → "mi semana" (donde voy cada dia) · fichaje pre-rellenado desde el roster · plan vs real
 (asignado a X / ficho en Y, solo para trabajos enlazados a un PRJ).
+
+## Zona horaria POR GRUPO — hora local correcta multi-país (v173)
+Peticion del usuario: "los registros no coinciden con mi zona horaria" + "¿y si alguien usa la app en
+otro país?". Raiz: **Streamlit Cloud corre en UTC**, asi que cada `datetime.now()`/`date.today()`
+grababa en UTC (~10-11 h corrido para Australia). Y el proceso es COMPARTIDO por todos los usuarios, asi
+que fijar una zona global (`tzset`) no sirve para multi-país (todos quedarian en una sola zona).
+### `core/clock.py` — hora local resuelta POR GRUPO
+- `clock.now(grupo=None)` / `clock.today(grupo=None)` → datetime/date NAIVE en la zona del grupo. Sin
+  `grupo`, la toma del **grupo del usuario en sesión** (`session_state.auth.grupo`). Usa `zoneinfo`
+  (per-sesión, seguro con usuarios concurrentes en distintos países — NO `tzset` global).
+- La zona de cada grupo se guarda en **`Grupos.Zona`** (nueva columna, migra sola via `get_sheet`).
+  `auth.group_timezone(grupo)` (lectura cacheada) + `auth.set_group_timezone`. Sin zona → `DEFAULT_TZ`
+  = **Australia/Sydney** (por eso el grupo actual ya queda bien sin configurar nada).
+- El propietario fija la zona de cada grupo en 👑 Administración → 🏢 Grupos → "🕐 Zona horaria".
+- **`tzdata`** añadido a requirements (para que `zoneinfo` resuelva la zona seguro en el Cloud).
+### Reemplazo masivo (~40 sitios en 22 archivos)
+`datetime.now()`→`clock.now()`, `date.today()`→`clock.today()` en todo core/ (EXCEPTO `session_cookie.py`
+—plomeria de cookies— y `clock.py`). El modelo multi-tenant garantiza que campo/admin solo tocan datos
+de SU grupo, asi que el fallback por sesión da la zona correcta; el propietario (sin grupo) cae al default.
+### ⚠️ Error que cometi y cace: el regex mordio los alias
+`re.sub(r"\bdate\.today\(\)")` tambien matcheo dentro de `_dt.date.today()` y
+`__import__("datetime").date.today()` → los dejo como `_dt.clock.today()` (roto: `clock` como atributo del
+modulo datetime). Cazado con un grep de `algo.clock.now/today` y corregido a mano (projects.py:823,
+projects_ui.py:671). Los alias que el regex NO matcheo (`_dt.now()`, `_date.today()`) se convirtieron
+aparte. REGLA: tras un reemplazo por regex de `X.now()/X.today()`, grep de `\w\.clock\.` para cazar los
+que quedaron como atributo de otra cosa.
+### Verificacion
+51/51 modulos importan; **per-grupo probado**: grupo sin zona→Sydney, grupo mock "usa"→America/New_York,
+horas distintas (14 h). Migracion de la columna via `get_sheet`. 0 `datetime.now()/date.today()` sin
+convertir, 0 `.clock.` mal formado. ⚠️ Arregla los registros DE AHORA EN ADELANTE; los ya guardados
+quedaron en UTC (migracion aparte, opcional). Con esto los turnos normales dejan de "cruzar medianoche"
+(v164), que era un sintoma de este bug.
 
 ## PDF del Pre-Start calcado al template CI Liftworx (v172)
 Peticion del usuario: "que el pdf que se genera se vea mas como el que te pase de ejemplo". El ejemplo
@@ -2430,9 +2463,10 @@ posicional + plano) → app.py, al cargar el PDF, setea `st.session_state["ns"]`
 resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NORTH SYD y AGECARE → NS=6
 (coincide con travel/floor-height HQ/HE).
 
-## Versiones desplegadas (v172 = actual)
+## Versiones desplegadas (v173 = actual)
 | Ver | Cambio principal |
 |---|---|
+| v173 | Zona horaria POR GRUPO (core/clock.py): Streamlit Cloud corre en UTC, asi que los registros salian ~10 h corridos. Ahora cada grupo tiene su zona (Grupos.Zona, la fija el propietario; default Australia/Sydney) y todos los datetime.now()/date.today() (~40 sitios) pasan por clock.now()/today() que resuelve la zona del grupo con zoneinfo (per-sesion, sirve multi-país). +tzdata |
 | v172 | PDF del Pre-Start reescrito para calcar el template CI Liftworx: formulario blanco y negro con bordes, bandas grises por seccion, recuadros de notas, la respuesta marcada resaltada en negro, los 4 checks reubicados a la sub-tabla "Circle one" de la Seccion 3, y asistentes en 3 pares. Marca = grupo, textos en español |
 | v171 | Pre-Start seccion 2 (Issues/hazard/near miss): el campo de texto libre pasa a estar SIEMPRE visible (antes solo aparecia al marcar YES), para describir un issue/hazard aunque no sea un near miss formal; si marca YES sin describir, se avisa |
 | v170 | Pre-Start del campo: preselecciona el proyecto donde fichó (lo primero que hace el campo es fichar; señal fuerte y mostrada, sigue cambiable — no el "primero de la lista" que evitó v139), "Time" pasa de texto libre a st.time_input, y la inicial del asistente se autocompleta del nombre |

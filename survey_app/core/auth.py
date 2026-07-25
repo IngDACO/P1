@@ -22,7 +22,7 @@ LOGIN_SHEET   = "Login"
 LOGIN_HEADERS = ["Usuario", "Password", "Rol", "Nombre", "Activo", "Grupo",
                  "SessionToken", "SessionTime", "Email", "TelegramChatID", "TarifaHora"]
 GROUPS_SHEET   = "Grupos"
-GROUPS_HEADERS = ["Grupo", "Descripcion", "Activo"]
+GROUPS_HEADERS = ["Grupo", "Descripcion", "Activo", "Zona"]
 ROLES         = ["propietario", "administrador", "campo"]
 _ACTIVE_OK    = ("", "SI", "SÍ", "YES", "Y", "TRUE", "1", "X")
 # Columnas (1-based) en la hoja Login
@@ -131,11 +131,46 @@ def list_groups(only_active: bool = False) -> list:
             continue
         out.append({"Grupo": str(r.get("Grupo", "")),
                     "Descripcion": str(r.get("Descripcion", "")),
-                    "Activo": "SI" if activo else "NO"})
+                    "Activo": "SI" if activo else "NO",
+                    "Zona": str(r.get("Zona", "")).strip()})
     return out
 
 
-def add_group(nombre: str, descripcion: str = "") -> tuple:
+def group_timezone(grupo: str) -> str:
+    """Zona horaria del grupo (`Grupos.Zona`), o '' si no está configurada.
+
+    La usa `core.clock` para grabar y comparar 'hoy' en la hora local del grupo
+    (cada empresa puede estar en otro país). Lectura cacheada (`_group_records`)."""
+    g = (grupo or "").strip().lower()
+    if not g:
+        return ""
+    for r in _group_records():
+        if str(r.get("Grupo", "")).strip().lower() == g:
+            return str(r.get("Zona", "")).strip()
+    return ""
+
+
+def set_group_timezone(grupo: str, zona: str) -> tuple:
+    """El propietario fija la zona horaria de un grupo (p.ej. 'Australia/Sydney')."""
+    gws, err = _get_groups_ws()
+    if err:
+        return False, err
+    try:
+        col = gws.row_values(1).index("Zona") + 1
+    except ValueError:
+        return False, "La columna Zona aún no existe en la hoja Grupos."
+    for i, r in enumerate(gws.get_all_records(numericise_ignore=["all"])):
+        if str(r.get("Grupo", "")).strip().lower() == (grupo or "").strip().lower():
+            try:
+                gws.update_cell(i + 2, col, str(zona or "").strip())
+                _invalidate_groups()
+                return True, "Zona horaria actualizada."
+            except Exception as e:
+                return False, f"Error: {e}"
+    return False, "Grupo no encontrado."
+
+
+def add_group(nombre: str, descripcion: str = "", zona: str = "") -> tuple:
     gws, err = _get_groups_ws()
     if err:
         return False, err
@@ -146,7 +181,7 @@ def add_group(nombre: str, descripcion: str = "") -> tuple:
         if str(r.get("Grupo", "")).strip().lower() == nombre.lower():
             return False, f"El grupo '{nombre}' ya existe."
     try:
-        gws.append_row([nombre, descripcion, "SI"], value_input_option="RAW")
+        gws.append_row([nombre, descripcion, "SI", zona], value_input_option="RAW")
     except Exception as e:
         return False, f"Error creando grupo: {e}"
     _invalidate_groups()

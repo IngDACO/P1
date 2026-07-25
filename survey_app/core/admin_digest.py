@@ -16,6 +16,7 @@ from core import projects as P
 from core import alerts
 from core import auth
 from core import prestart
+from core import clock
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +49,7 @@ def group_digest(grupo) -> dict:
     proys, activos, delays, horas, alarmas = (b["proys"], b["activos"], b["delays"],
                                               b["horas"], b["alarmas"])
     name = {str(p.get("ID", "")): p.get("Nombre", "") for p in proys}
-    hoy = date.today()
+    hoy = clock.today()
 
     retrasos = sorted(
         [{"id": pid, "nombre": name.get(pid, pid), "dias": round(d)} for pid, d in delays.items()],

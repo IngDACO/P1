@@ -9,6 +9,7 @@ import pandas as pd
 
 from core import auth
 from core import ui_common as ui
+from core import clock
 
 _USER_COLS = ["Usuario", "Nombre", "Rol", "Grupo", "Activo", "Email"]  # tabla sin hash/tokens
 
@@ -299,6 +300,39 @@ def _owner_grupos():
             ok, msg = auth.add_group(gn, gd)
             (st.success if ok else st.error)(msg)
             if ok: st.rerun()
+
+    # ── Zona horaria por grupo (v173) ──
+    # Define en qué hora LOCAL se graban los registros de cada grupo (cada empresa
+    # puede estar en otro país). Sin fijar → clock.DEFAULT_TZ.
+    if grupos:
+        with st.expander("🕐 Zona horaria de cada grupo"):
+            st.caption("En qué hora local se graban los registros (fichaje, pre-start, "
+                       f"alarmas…) de ese grupo. Sin fijar = {clock.DEFAULT_TZ}.")
+            _gz = {g["Grupo"]: (g.get("Zona") or "") for g in grupos}
+            gzsel = ui.elegir("Grupo", list(_gz.keys()), key="tz_g_sel", vacio="— elige un grupo —")
+            if gzsel:
+                _cur = _gz.get(gzsel) or clock.DEFAULT_TZ
+                _opts = ["Australia/Sydney", "Australia/Brisbane", "Australia/Adelaide",
+                         "Australia/Perth", "Australia/Darwin", "Pacific/Auckland",
+                         "Europe/Madrid", "America/New_York", "America/Los_Angeles", "UTC"]
+                if _cur not in _opts:
+                    _opts = [_cur] + _opts
+                znew = st.selectbox("Zona horaria (IANA)", _opts, index=_opts.index(_cur),
+                                    key="tz_z_sel")
+                try:
+                    from zoneinfo import ZoneInfo
+                    from datetime import datetime as _dtn
+                    st.caption(f"En **{znew}** ahora son las "
+                               f"**{_dtn.now(ZoneInfo(znew)).strftime('%H:%M')}**.  "
+                               f"(Actual del grupo: {_gz.get(gzsel) or 'sin fijar'})")
+                except Exception:
+                    pass
+                if st.button("💾 Guardar zona", key="tz_save"):
+                    ok, msg = auth.set_group_timezone(gzsel, znew)
+                    (st.success if ok else st.error)(msg)
+                    if ok:
+                        st.rerun()
+
     if grupos:
         gsel = ui.elegir("Eliminar grupo", [g["Grupo"] for g in grupos],
                          key="del_g_sel", vacio="— ningún grupo —")

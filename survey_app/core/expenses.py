@@ -16,6 +16,7 @@ from datetime import datetime
 import streamlit as st
 
 from core import timeclock
+from core import clock
 
 logger = logging.getLogger(__name__)
 
@@ -336,10 +337,10 @@ def add(pid, grupo, valor, categoria="Materiales", proveedor="", descripcion="",
     try:
         gid = _next_id(w.get_all_records(numericise_ignore=["all"]))
         w.append_row([gid, str(pid), str(grupo),
-                      str(fecha or datetime.now().strftime("%Y-%m-%d")),
+                      str(fecha or clock.now().strftime("%Y-%m-%d")),
                       str(categoria), str(proveedor), str(descripcion),
                       str(_num(valor)), str(drive_id), str(archivo), str(creado_por),
-                      datetime.now().strftime("%Y-%m-%d %H:%M")],
+                      clock.now().strftime("%Y-%m-%d %H:%M")],
                      value_input_option="RAW")
     except Exception as e:
         return False, f"Error guardando: {e}"

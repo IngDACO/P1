@@ -18,6 +18,7 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, Tabl
 
 from core.prestart import CHECKS_S1, CHECKS_S3
 from core import maps
+from core import clock
 
 C_BLACK = colors.black
 C_BAND  = colors.HexColor("#d9d9d9")     # banda gris de sección (como el template)
@@ -223,7 +224,7 @@ def generate_prestart_pdf(data: dict) -> bytes:
     ]))
     story += [attab, _sp(10)]
 
-    story += [Paragraph(f"Generado el {datetime.now().strftime('%d/%m/%Y %H:%M')} · {_esc(grupo)}",
+    story += [Paragraph(f"Generado el {clock.now().strftime('%d/%m/%Y %H:%M')} · {_esc(grupo)}",
                         st["PSSmall"])]
 
     doc.build(story)

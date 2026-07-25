@@ -13,6 +13,7 @@ from core import roster as R
 from core import auth
 from core import projects as P
 from core import ui_common as ui
+from core import clock
 
 
 def _staff(grupo):
@@ -108,7 +109,7 @@ def _plan_vs_real(grupo, lunes, staff, tidx):
             st.caption("Necesita el fichaje configurado.")
             return
         # Día a comparar: hoy si cae en la semana vista, si no el lunes.
-        hoy = _date.today()
+        hoy = clock.today()
         _idx_def = (hoy - lunes).days if 0 <= (hoy - lunes).days <= 4 else 0
         _dsel = st.radio("Día", R.DIAS, index=_idx_def, horizontal=True,
                          format_func=lambda d: f"{R.DIAS_LABEL[d]} "

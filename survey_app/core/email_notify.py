@@ -10,6 +10,7 @@ from email.mime.text      import MIMEText
 from email.mime.application import MIMEApplication
 
 import streamlit as st
+from core import clock
 
 
 def _secrets():
@@ -70,7 +71,7 @@ def send_usage_notification(
         return False
 
     best = opt_result.get("best") if opt_result else None
-    ts   = datetime.now().strftime("%d/%m/%Y  %H:%M")
+    ts   = clock.now().strftime("%d/%m/%Y  %H:%M")
 
     # ── Construir cuerpo HTML ─────────────────────────────
     def row(label, value, highlight=False):

@@ -22,6 +22,7 @@ from datetime import datetime
 import streamlit as st
 
 from core import timeclock
+from core import clock
 
 logger = logging.getLogger(__name__)
 
@@ -133,7 +134,7 @@ def registrar(pid: str, grupo: str, herramienta: str, resumen: str,
         cid = _next_id()
         w.append_row(
             [cid, str(pid), str(grupo), str(herramienta),
-             datetime.now().strftime("%Y-%m-%d %H:%M"), str(usuario),
+             clock.now().strftime("%Y-%m-%d %H:%M"), str(usuario),
              str(resumen)[:480], json.dumps(datos, ensure_ascii=False,
                                             default=str)[:4800],
              str(filename), drive_id],

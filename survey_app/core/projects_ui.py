@@ -26,6 +26,7 @@ from core import timeclock
 # devuelve el primer elemento y se abre un proyecto que nadie eligió.
 _VACIO = "— elige un proyecto —"
 from core import ui_common as ui
+from core import clock
 
 
 def _alerts_section(pid, grupo, project_name="", allow_report=False):
@@ -667,7 +668,7 @@ def _nuevo_proyecto_form(grupo: str, key: str = "nuevo"):
                                  value=_ns0, step=1, key=f"np_ns_{key}",
                                  help=("Leído del plano." if (_plano or {}).get("ns")
                                        else "Define la duración de las actividades."))
-            f_ini = c1.date_input("Fecha de inicio", value=_dt.date.today(),
+            f_ini = c1.date_input("Fecha de inicio", value=clock.today(),
                                   key=f"np_ini_{key}")
             pres = c2.number_input("💰 Presupuesto (0 = sin presupuesto)", min_value=0.0,
                                    step=100.0, key=f"np_pres_{key}")
@@ -2247,7 +2248,7 @@ def render_group_hours(grupo: str):
 
     per = st.radio("Periodo", ["Hoy", "Semana", "Mes", "Todo"], horizontal=True,
                    key="gh_per", label_visibility="collapsed")
-    now = datetime.now()
+    now = clock.now()
     if per == "Hoy":
         days = (now - now.replace(hour=0, minute=0, second=0, microsecond=0)).total_seconds() / 86400.0
     else:

@@ -19,6 +19,7 @@ import streamlit.components.v1 as components
 from core import timeclock
 from core import projects as projects_data
 from core import ui_common as ui
+from core import clock
 
 _AZUL, _VERDE, _GRIS, _ROJO = "#1a3a5c", "#1e8449", "#6b7280", "#c0392b"
 
@@ -62,7 +63,7 @@ def _tarjeta(titulo, valor, pie="", color=None, activo=False):
 def _es_hoy(clock_in_str) -> bool:
     try:
         return (datetime.strptime(str(clock_in_str), timeclock.FMT).date()
-                == datetime.now().date())
+                == clock.now().date())
     except Exception:
         return True
 
@@ -92,13 +93,13 @@ def _aviso_olvido(nombre, grupo, usuario, sess):
                + "\n".join(lineas)
                + "\n\nCiérralos indicando **a qué hora terminaste de verdad** — si no, "
                  "se contarían como trabajadas las horas de la noche.")
-    sugerido = min(ci_min + _td(hours=8), _dt.now()) if ci_min else _dt.now()
+    sugerido = min(ci_min + _td(hours=8), clock.now()) if ci_min else clock.now()
     c1, c2 = st.columns(2)
     d_fin = c1.date_input("Día que terminaste", value=sugerido.date(), key="olv_d")
     t_fin = c2.time_input("Hora", value=sugerido.time().replace(second=0, microsecond=0),
                           key="olv_t")
     fin = _dt.combine(d_fin, t_fin)
-    ok_rango = ci_min is not None and ci_min < fin <= _dt.now()
+    ok_rango = ci_min is not None and ci_min < fin <= clock.now()
     if not ok_rango:
         st.caption("⚠️ La hora de fin debe estar entre la entrada y ahora.")
     if st.button("🔴 Cerrar sesión olvidada", key="olv_btn", use_container_width=True,

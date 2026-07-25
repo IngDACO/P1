@@ -22,6 +22,7 @@ from core.diagrams import floor_plan_svg
 from core.schedule import schedule_svg, schedule_table
 from core.plumb    import (plumb_svg, plumb_table, plumb_checks,
                            plumb_iso_svg, plumb_card_svg)
+from core import clock
 
 # ── Color para bloques de interpretación IA ──────────────
 C_IA_BG     = colors.HexColor("#f0f7ff")
@@ -506,7 +507,7 @@ def generate_report(project_params, calculated, survey_original,
         ("BOTTOMPADDING", (0,0),(-1,-1), 10),
     ]))
     story += [tt, sp(4),
-              Paragraph(f"Generado: {datetime.now().strftime('%d/%m/%Y  %H:%M')}", styles["SmallCenter"]),
+              Paragraph(f"Generado: {clock.now().strftime('%d/%m/%Y  %H:%M')}", styles["SmallCenter"]),
               sp(10)]
 
     # ── 1. PARÁMETROS DE ENTRADA ─────────────────────────────
@@ -1120,7 +1121,7 @@ def generate_report(project_params, calculated, survey_original,
     # ── PIE ──────────────────────────────────────────────────
     story += [sp(8), HRFlowable(width="100%", thickness=0.5, color=colors.lightgrey), sp(4),
               Paragraph("Elevator Survey Analyzer — Reporte generado automáticamente", styles["SmallCenter"]),
-              Paragraph(f"Fecha: {datetime.now().strftime('%d/%m/%Y %H:%M')}", styles["SmallCenter"])]
+              Paragraph(f"Fecha: {clock.now().strftime('%d/%m/%Y %H:%M')}", styles["SmallCenter"])]
 
     doc.build(story)
     buf.seek(0)

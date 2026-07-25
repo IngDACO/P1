@@ -11,6 +11,7 @@ Esquema de la hoja (una fila por sesión de trabajo):
 from datetime import datetime, timedelta, date, time
 
 import streamlit as st
+from core import clock
 
 HEADERS = ["Nombre", "PIN", "Proyecto", "Ubicacion",
            "Clock In", "Clock Out", "Horas", "Estado", "Grupo", "Tipo", "Usuario",
@@ -113,7 +114,7 @@ def is_configured() -> bool:
 
 
 def _now() -> str:
-    return datetime.now().strftime(FMT)
+    return clock.now().strftime(FMT)
 
 
 def _tipo_of(r) -> str:
@@ -286,7 +287,7 @@ def _invalidate_records():
 def elapsed_seconds(clock_in_str) -> int:
     """Segundos transcurridos desde un Clock In (para el cronómetro)."""
     try:
-        return max(0, int((datetime.now() - datetime.strptime(str(clock_in_str), FMT)).total_seconds()))
+        return max(0, int((clock.now() - datetime.strptime(str(clock_in_str), FMT)).total_seconds()))
     except Exception:
         return 0
 
@@ -319,7 +320,7 @@ def _row_segmentos(r) -> list:
     hasta el Clock Out. Si la salida no parsea, cae a las Horas guardadas (1 día)."""
     ci = str(r.get("Clock In", ""))
     if str(r.get("Estado", "")).strip().upper() == "ABIERTO":
-        return _segmentos_dia(ci, datetime.now())
+        return _segmentos_dia(ci, clock.now())
     try:
         fin = datetime.strptime(str(r.get("Clock Out", "")), FMT)
     except Exception:
@@ -390,7 +391,7 @@ def resumen_hoy(nombre: str, grupo: str = "", usuario: str = "") -> dict:
     El cronometro solo dice cuanto llevas desde que fichaste; esto dice cuanto
     llevas EN EL DIA, que es lo que se quiere saber. Dia natural, no ultimas 24 h.
     """
-    hoy = datetime.now().date()
+    hoy = clock.now().date()
     out = {"general": 0.0, "proyecto": 0.0, "sin_asignar": 0.0, "por_proyecto": {}}
     for r in _cached_records():                      # lectura cacheada (display)
         if not _matches(r, usuario, nombre, grupo):
@@ -494,7 +495,7 @@ def group_hours(grupo: str, days=None) -> list:
     sesiones abiertas cuentan con el tiempo transcurrido hasta ahora."""
     records = _cached_records()             # lectura cacheada (display)
     grupo = (grupo or "").strip()
-    desde = (datetime.now() - timedelta(days=days)).date() if days else None
+    desde = (clock.now() - timedelta(days=days)).date() if days else None
     agg = {}
     for r in records:
         if str(r.get("Grupo", "")).strip() != grupo:

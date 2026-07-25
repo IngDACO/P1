@@ -12,6 +12,7 @@ from datetime import date, datetime
 import streamlit as st
 
 from core import timeclock
+from core import clock
 
 logger = logging.getLogger(__name__)
 
@@ -90,7 +91,7 @@ def status(vencimiento) -> str:
     v = _parse(vencimiento)
     if not v:
         return ""
-    dd = (v - date.today()).days
+    dd = (v - clock.today()).days
     if dd < 0:
         return "vencido"
     if dd <= DIAS_AVISO:
@@ -105,7 +106,7 @@ def status_label(vencimiento) -> str:
 
 def dias_para(vencimiento):
     v = _parse(vencimiento)
-    return (v - date.today()).days if v else None
+    return (v - clock.today()).days if v else None
 
 
 # ── Lecturas ─────────────────────────────────────────────────────
@@ -179,7 +180,7 @@ def add(usuario, grupo, tipo, numero="", clase="", emision="", vencimiento="",
         w.append_row([cid, str(usuario), str(grupo), str(tipo), str(numero), str(clase),
                       str(emision), str(vencimiento), str(drive_id), str(archivo),
                       str(nota), "", str(actualizado_por),
-                      datetime.now().strftime("%Y-%m-%d %H:%M")],
+                      clock.now().strftime("%Y-%m-%d %H:%M")],
                      value_input_option="RAW")
     except Exception as e:
         return False, f"Error guardando: {e}"
@@ -278,7 +279,7 @@ def notify_expiring(grupo, days=DIAS_AVISO) -> int:
     except Exception:
         pass
 
-    hoy = date.today()
+    hoy = clock.today()
     enviados = 0
     for i, r in enumerate(recs):
         if str(r.get("Grupo", "")) != str(grupo):

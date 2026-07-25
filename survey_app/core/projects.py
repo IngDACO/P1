@@ -18,6 +18,7 @@ from datetime import datetime, date
 import streamlit as st
 
 from core import timeclock
+from core import clock
 
 logger = logging.getLogger(__name__)
 
@@ -245,7 +246,7 @@ def create_project(grupo, nombre, cliente="", ubicacion="", modelo="", ns=0,
         json.dumps(params or {}, ensure_ascii=False, default=str),
         json.dumps(matriz or [], ensure_ascii=False, default=str),
         json.dumps(interp or {}, ensure_ascii=False, default=str),
-        creado_por, datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        creado_por, clock.now().strftime("%Y-%m-%d %H:%M:%S"),
         str(instrucciones or ""), str(induccion_links or ""), str(presupuesto or ""),
     ]
     pws.append_row(row, value_input_option="RAW")
@@ -604,7 +605,7 @@ def save_field_progress(pid, cambios) -> tuple:
     aws, err = _activities_ws()
     if err:
         return False, err
-    hoy = _date.today().isoformat()
+    hoy = clock.today().isoformat()
     recs = aws.get_all_records(numericise_ignore=["all"])
     rowmap = {str(r.get("Orden", "")): (i + 2, r)
               for i, r in enumerate(recs) if str(r.get("ProyectoID", "")) == str(pid)}
@@ -819,7 +820,7 @@ def grouping_curve(gid: str, grupo: str = None) -> dict:
         return curva[-1][1]
 
     fechas, plan, real = [], [], []
-    d, hoy = ini, __import__("datetime").date.today()
+    d, hoy = ini, clock.today()
     while d <= fin:
         pl = rl = 0.0
         for s in series:
@@ -860,13 +861,13 @@ def project_schedule(pid: str):
         y, m, d = str(prj.get("FechaInicio", "")).split("-")
         start = date(int(y), int(m), int(d))
     except Exception:
-        start = date.today()
+        start = clock.today()
     custom = [{"nombre":   a.get("Nombre", ""),
                "duracion": _num(a.get("DuracionDias")) or 1.0,
                "peso":     _num(a.get("Peso"))} for a in acts]
     sched     = build_schedule(1, start, {}, custom_rows=custom)
     avances   = [_num(a.get("Avance")) for a in acts]
-    today_day = (date.today() - start).days
+    today_day = (clock.today() - start).days
 
     def _day_off(s):
         try:
@@ -898,7 +899,7 @@ def add_document(pid, nombre, tipo, drive_id, subido_por="") -> tuple:
     if err:
         return False, err
     dws.append_row([pid, nombre, tipo, drive_id, subido_por,
-                    datetime.now().strftime("%Y-%m-%d %H:%M:%S")], value_input_option="RAW")
+                    clock.now().strftime("%Y-%m-%d %H:%M:%S")], value_input_option="RAW")
     _invalidate()
     return True, "Documento registrado."
 

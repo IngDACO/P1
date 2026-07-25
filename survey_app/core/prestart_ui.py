@@ -10,6 +10,7 @@ from datetime import datetime, date
 from core import prestart as PS
 from core import projects as P
 from core import maps
+from core import clock
 
 # Opción neutra: sin ella el selectbox devuelve el primer proyecto y se
 # escribiría sobre un elevador que nadie eligió.
@@ -83,8 +84,8 @@ def render_prestart_tab():
 
     # ── Encabezado ──
     c1, c2, c3 = st.columns(3)
-    f_fecha = c1.date_input("Date", value=date.today(), key="ps_fecha")
-    f_hora_t = c2.time_input("Time", value=datetime.now().time().replace(second=0, microsecond=0),
+    f_fecha = c1.date_input("Date", value=clock.today(), key="ps_fecha")
+    f_hora_t = c2.time_input("Time", value=clock.now().time().replace(second=0, microsecond=0),
                              key="ps_hora")
     f_hora   = f_hora_t.strftime("%H:%M") if f_hora_t else ""
     f_loc   = c3.text_input("Location", value=str(prj.get("Ubicacion", "")), key="ps_loc")

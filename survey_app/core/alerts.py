@@ -17,6 +17,7 @@ import streamlit as st
 from core import timeclock
 from core import notify
 from core import auth
+from core import clock
 
 logger = logging.getLogger(__name__)
 
@@ -104,7 +105,7 @@ def create_alert(pid, grupo, origen, tipo, mensaje, creado_por) -> tuple:
         return False, err
     aid = _next_id(w.get_all_records(numericise_ignore=["all"]))
     w.append_row([aid, str(pid), str(grupo), origen, tipo, str(mensaje), str(creado_por),
-                  datetime.now().strftime("%Y-%m-%d %H:%M"), "abierta", "", ""],
+                  clock.now().strftime("%Y-%m-%d %H:%M"), "abierta", "", ""],
                  value_input_option="RAW")
     _invalidate()
     return True, aid
@@ -122,7 +123,7 @@ def resolve_alert(alert_id, resuelto_por) -> tuple:
                 {"range": f"{_col_letter(_COL['Estado'])}{row}", "values": [["resuelta"]]},
                 {"range": f"{_col_letter(_COL['ResueltoPor'])}{row}", "values": [[str(resuelto_por)]]},
                 {"range": f"{_col_letter(_COL['FechaResuelta'])}{row}",
-                 "values": [[datetime.now().strftime("%Y-%m-%d %H:%M")]]},
+                 "values": [[clock.now().strftime("%Y-%m-%d %H:%M")]]},
             ], value_input_option="RAW")
             _invalidate()
             return True, "Alarma resuelta."

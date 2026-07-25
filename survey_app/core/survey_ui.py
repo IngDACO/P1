@@ -40,6 +40,7 @@ from core                 import toolruns
 from core                 import plan_ui
 from core                 import plan_store
 from core.auth import can_reports
+from core import clock
 
 # Opción neutra: sin ella el selectbox devuelve el primer proyecto y se
 # escribiría sobre un elevador que nadie eligió.
@@ -772,13 +773,13 @@ def render_survey_tab(_ROL, _GRUPO):
 
         # ── Cronograma automático según el proyecto ───────────
         _flags = detect_flags(st.session_state.calc_results)
-        _auto  = build_schedule(_c["ns"], date.today(), _flags)
+        _auto  = build_schedule(_c["ns"], clock.today(), _flags)
         st.session_state.calc_results["schedule"] = _auto
         st.session_state["sched_rows"] = [
             {"Actividad": a["nombre"], "Duración (d)": int(a["duracion"]), "Peso (%)": a["peso"]}
             for a in _auto["activities"]
         ]
-        st.session_state["sched_start"] = date.today()
+        st.session_state["sched_start"] = clock.today()
 
         # ── Informe ADMIN (completo) → correo interno ─────────
         admin_pdf = None
@@ -1185,7 +1186,7 @@ def render_survey_tab(_ROL, _GRUPO):
                        "y pesos si lo necesitas — la curva S se recalcula sola.")
 
             if "sched_start" not in st.session_state:
-                st.session_state["sched_start"] = date.today()
+                st.session_state["sched_start"] = clock.today()
 
             gc1, gc2 = st.columns([1, 2])
             start = gc1.date_input("Fecha de inicio del proyecto", key="sched_start")

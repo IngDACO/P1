@@ -24,6 +24,7 @@ import zipfile
 from datetime import datetime
 
 import streamlit as st
+from core import clock
 
 _DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "manuals")
 
@@ -265,14 +266,14 @@ def add_manual(file_bytes, filename, nombre, subido_por=""):
         from core import drive_store
         payload = gzip.compress(json.dumps(
             {"nombre": nombre, "chunks": chunks}, ensure_ascii=False).encode("utf-8"))
-        mid = datetime.now().strftime("MAN-%Y%m%d%H%M%S")
+        mid = clock.now().strftime("MAN-%Y%m%d%H%M%S")
         drive_id = drive_store.upload_to(
             drive_store.folder(_FOLDER_NAME), f"{mid}.json.gz", payload, "application/gzip")
         w = _index_ws()
         if w is None:
             return 0, "No se pudo abrir la hoja de manuales."
         w.append_row([mid, nombre, drive_id, str(len(chunks)),
-                      datetime.now().strftime("%Y-%m-%d %H:%M"), subido_por],
+                      clock.now().strftime("%Y-%m-%d %H:%M"), subido_por],
                      value_input_option="RAW")
     except Exception as e:
         return 0, f"No se pudo guardar el manual: {e}"

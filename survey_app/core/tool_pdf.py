@@ -20,6 +20,7 @@ from reportlab.platypus import (SimpleDocTemplate, Paragraph, Spacer, Table,
                                 TableStyle)
 
 from core.report import _svg_flowable
+from core import clock
 
 C_COPEX = colors.HexColor("#1a3a5c")
 C_LIGHT = colors.HexColor("#e8f1fb")
@@ -81,7 +82,7 @@ def tool_pdf(titulo: str, meta: dict = None, svgs: list = None,
     W = doc.width
 
     story = [Paragraph(titulo, ss["TTit"]), Spacer(1, 2),
-             Paragraph("COPEX · " + datetime.now().strftime("%d/%m/%Y %H:%M"),
+             Paragraph("COPEX · " + clock.now().strftime("%d/%m/%Y %H:%M"),
                        ss["TSub"]), Spacer(1, 10)]
 
     ficha = [(k, v) for k, v in meta.items() if str(v or "").strip()]

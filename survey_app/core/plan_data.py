@@ -13,6 +13,7 @@ se mezclan: con solo el plano no se puede recalcular un survey.
 import json
 import logging
 from datetime import datetime
+from core import clock
 
 logger = logging.getLogger(__name__)
 
@@ -109,7 +110,7 @@ def extraer_todo(pdf_file, progreso=None) -> dict:
         if out.get(k) in (None, ""):
             faltan.append(k.upper())
     out["faltan"] = faltan
-    out["leido"] = datetime.now().strftime("%Y-%m-%d %H:%M")
+    out["leido"] = clock.now().strftime("%Y-%m-%d %H:%M")
     out["n_params"] = len(out["params"])
     out["n_total"] = len(PARAMS)
     return out

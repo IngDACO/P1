@@ -28,6 +28,7 @@ from core.report import _svg_flowable
 from core.schedule import schedule_svg, schedule_table
 from core.plumb    import (plumb_svg, plumb_table, plumb_checks,
                            plumb_iso_svg, plumb_card_svg)
+from core import clock
 
 W          = 170 * mm
 C_COPEX    = colors.HexColor("#1a3a5c")
@@ -45,7 +46,7 @@ _LOGO = os.path.join(os.path.dirname(os.path.dirname(__file__)), "static", "icon
 
 def numero_informe() -> str:
     """Nº de informe automático, único y ordenable: INF-AAAAMMDD-HHMM."""
-    return datetime.now().strftime("INF-%Y%m%d-%H%M")
+    return clock.now().strftime("INF-%Y%m%d-%H%M")
 
 
 def _styles():
@@ -260,7 +261,7 @@ def generate_user_report(project_params, calculated, optimizer_result,
     ia     = interpretation_user or {}
     best   = optimizer_result.get("best") if optimizer_result else None
 
-    fecha  = datetime.now().strftime("%d/%m/%Y")
+    fecha  = clock.now().strftime("%d/%m/%Y")
     n_inf  = numero_informe()
     meta = {
         "proyecto":  str(p.get("PROYECTO", "") or "—"),
