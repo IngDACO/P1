@@ -2406,9 +2406,10 @@ posicional + plano) → app.py, al cargar el PDF, setea `st.session_state["ns"]`
 resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NORTH SYD y AGECARE → NS=6
 (coincide con travel/floor-height HQ/HE).
 
-## Versiones desplegadas (v170 = actual)
+## Versiones desplegadas (v171 = actual)
 | Ver | Cambio principal |
 |---|---|
+| v171 | Pre-Start seccion 2 (Issues/hazard/near miss): el campo de texto libre pasa a estar SIEMPRE visible (antes solo aparecia al marcar YES), para describir un issue/hazard aunque no sea un near miss formal; si marca YES sin describir, se avisa |
 | v170 | Pre-Start del campo: preselecciona el proyecto donde fichó (lo primero que hace el campo es fichar; señal fuerte y mostrada, sigue cambiable — no el "primero de la lista" que evitó v139), "Time" pasa de texto libre a st.time_input, y la inicial del asistente se autocompleta del nombre |
 | v169 | Planificacion: la celda del tablero pasa a ser un BOTON nativo (st.button coloreado por la clase st-key-<key>, Streamlit>=1.39, verificado en vivo) que abre el proyecto en la MISMA sesion, sin recarga. Reemplaza el enlace HTML de v168 (que podia recargar). El board del campo sigue siendo HTML de solo lectura |
 | v168 | (reemplazado en v169) Planificacion: celda como enlace `<a href="?abrir_prj=">` + handler de query param en app.py |

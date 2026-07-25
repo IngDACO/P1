@@ -114,10 +114,13 @@ def render_prestart_tab():
     st.markdown("**2. Issues, hazard / near miss reports**")
     nm = st.radio("Near Miss/Hazard Report submitted", PS.OPTS_YN, horizontal=True,
                   index=None, key="ps_nm")
-    nm_desc = ""
-    if nm == "YES":
-        nm_desc = st.text_area("Describe el near miss / hazard (abrirá una alarma del proyecto)",
-                               key="ps_nmdesc", height=70)
+    # Texto libre SIEMPRE visible (antes solo aparecía al marcar YES): permite
+    # describir un issue/hazard aunque no sea un near miss formal.
+    nm_desc = st.text_area("Describe el issue / hazard / near miss (opcional)",
+                           key="ps_nmdesc", height=70,
+                           help="Si marcas YES arriba, esta descripción abre una alarma del proyecto.")
+    if nm == "YES" and not str(nm_desc).strip():
+        st.caption("🔴 Marcaste YES: describe el near miss/hazard (abrirá una alarma del proyecto).")
 
     # ── 3. Shaft protection ──
     st.markdown("**3. Shaft Protection & other daily checks**")
