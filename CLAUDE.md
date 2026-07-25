@@ -791,6 +791,29 @@ Al cargar el plano en el survey (app.py), autocompleta **RAIL = AlturaDiente** (
 espalda) del catálogo; si el código no está o no se detecta → aviso + entrada manual. **RAIL = AlturaDiente**
 (NO el ancho); AnchoDiente se guarda como dato secundario.
 
+## Planificación: ir al proyecto desde el tablero (v167)
+Peticion del usuario: "lo mismo con la tabla de planificacion; quiero poder ir al proyecto seleccionando
+desde ahi". El board del roster es **HTML** (celdas coloreadas — por eso no es `st.dataframe`), asi que
+no se puede hacer la celda clicable como en Archivos (v166); la adaptacion es un **botón por proyecto**.
+### `roster_ui._ir_a_proyecto(grupo, staff, tidx, datos)` (bajo la rejilla, en 📅 Planificación)
+- Recolecta los proyectos DISTINTOS enlazados en la semana visible (`R.proyecto_de` de cada celda;
+  ignora estados OFF/Leave y trabajos sin enlace, dedupe). Solo ofrece los **navegables** (existen y no
+  archivados, via `list_projects`).
+- Un botón por proyecto → abre su detalle en **📊 Proyectos** con un clic, usando el patron de navegacion
+  existente: `_prjsel_pending = pid` (v126, lo lee `_panel_proyectos` antes del selectbox `adminproj_sel`)
+  + **`_gruposec_pending = "📊 Proyectos"`** (NUEVO) + rerun.
+### ⚠️ Plomeria: cambiar de seccion del grupo necesita un pending (regla v111)
+El radio `grupo_sec` (📊 Proyectos · 🗂 Agrupaciones · 📅 Planificación · …) se instancia en
+`render_group_panel` ANTES de que corra `render_planificacion`, asi que no se puede escribir su clave
+despues (StreamlitAPIException). Se añadio `_gruposec_pending`, que se aplica ANTES del radio — igual que
+`main_nav` con `_nav_pending` en app.py.
+### Verificacion
+Recoleccion probada (funciones REALES `R.celda`/`R.proyecto_de` + datos sinteticos): distintos
+`['PRJ-0001','PRJ-0003']`, sin duplicar, sin OFF ni trabajos sin enlace. `_gruposec_pending` se lee
+(pop) ANTES del radio `grupo_sec`; `_prjsel_pending` ANTES de `adminproj_sel`. 0 nombres libres, import
+OK. Alcance: solo la Planificacion del admin (el board del campo en 📋 Mis proyectos abre solo proyectos
+asignados; pendiente si se pide).
+
 ## Archivos: descarga desde la tabla (fila clicable) + por foto (v166)
 Peticion del usuario: "la descarga debe ser mas accesible; que este en la tabla donde se ven los
 archivos". En v165 la descarga estaba en un selector aparte debajo de la tabla → habia que buscar el
@@ -2314,9 +2337,10 @@ posicional + plano) → app.py, al cargar el PDF, setea `st.session_state["ns"]`
 resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NORTH SYD y AGECARE → NS=6
 (coincide con travel/floor-height HQ/HE).
 
-## Versiones desplegadas (v166 = actual)
+## Versiones desplegadas (v167 = actual)
 | Ver | Cambio principal |
 |---|---|
+| v167 | Planificacion (roster): desde el tablero se salta al detalle de un proyecto con un boton por cada proyecto enlazado en la semana (el board es HTML, no clicable como st.dataframe); navega con _prjsel_pending + un _gruposec_pending nuevo que cambia la seccion del grupo a Proyectos antes de instanciar el radio |
 | v166 | Archivos: la descarga pasa a la propia tabla — se selecciona la fila (st.dataframe on_select, lazy: solo se baja la elegida) y aparecen descargar/reabrir/borrar; ademas un boton de descarga bajo cada foto que reutiliza los bytes ya bajados para la miniatura. Se quita el selector aparte de v165 |
 | v165 | Archivos: una sola lista buscable (busqueda por nombre + filtro por tipo con contadores + orden) en vez de dos sub-secciones planas (Documentos y Calculos) con tres selectores; unifica documentos + PDF de calculos + plano casando cada calculo con su toolrun por DriveID (sin duplicar), y reduce a la vez galeria, tabla y descargador |
 | v164 | Fichaje del campo: las horas se reparten por dia natural (medianoche) — antes una sesion que cruzaba medianoche se contaba entera en el dia de entrada, falseando "Jornada de hoy" y el reporte "Hoy"/"Semana" del admin (evidencia: 3/16 fichajes reales cruzan medianoche). El olvido de clock-out se cierra a la hora que el usuario indica (no "ahora", que registraba las horas fantasma de la noche). group_hours(Todo) queda identico |

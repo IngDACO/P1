@@ -79,6 +79,9 @@ def render_planificacion(grupo):
     # ── Rejilla coloreada (el board) ──
     st.markdown(_grid_html(staff, lunes, datos, tidx), unsafe_allow_html=True)
 
+    # ── Ir a un proyecto del tablero ──
+    _ir_a_proyecto(grupo, staff, tidx, datos)
+
     # ── Editar la semana de una persona ──
     st.markdown("##### ✏️ Editar la semana de una persona")
     _nombre = {u["Usuario"]: (u.get("Nombre") or u["Usuario"]) for u in staff}
@@ -92,6 +95,42 @@ def render_planificacion(grupo):
 
     # ── Catálogo de trabajos ──
     _catalogo(grupo)
+
+
+def _ir_a_proyecto(grupo, staff, tidx, datos):
+    """Botones para saltar al detalle de un proyecto que aparece en la semana.
+
+    El board es HTML (celdas coloreadas), así que no se puede hacer la celda
+    clicable como un `st.dataframe`; en su lugar se ofrece un botón por cada
+    proyecto DISTINTO enlazado en la semana visible. Navega con el patrón
+    `_prjsel_pending` (v126) + cambiar la sección del grupo a 📊 Proyectos
+    (`_gruposec_pending`, aplicado antes del radio en `render_group_panel`).
+    """
+    pids = []
+    for u in staff:
+        for d in R.DIAS:
+            asig = str(R.celda(datos, u["Usuario"], d).get("asig", ""))
+            pid = R.proyecto_de(asig, tidx)
+            if pid and pid not in pids:
+                pids.append(pid)
+    if not pids:
+        return
+    # Solo los navegables: existen y no están archivados (list_projects los oculta).
+    nombres = {str(p.get("ID")): str(p.get("Nombre") or p.get("ID"))
+               for p in P.list_projects(grupo=grupo)}
+    items = sorted(((pid, nombres[pid]) for pid in pids if pid in nombres),
+                   key=lambda x: x[1].lower())
+    if not items:
+        return
+    st.markdown("##### 🔗 Ir a un proyecto del tablero")
+    st.caption("Abre el detalle del proyecto sin salir de la cuadrilla.")
+    for fila in range(0, len(items), 3):
+        cols = st.columns(3)
+        for c, (pid, nom) in zip(cols, items[fila:fila + 3]):
+            if c.button(f"🔗 {nom}", key=f"ros_go_{pid}", use_container_width=True):
+                st.session_state["_prjsel_pending"] = pid
+                st.session_state["_gruposec_pending"] = "📊 Proyectos"
+                st.rerun()
 
 
 def _plan_vs_real(grupo, lunes, staff, tidx):

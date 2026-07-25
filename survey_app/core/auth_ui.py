@@ -744,6 +744,12 @@ def render_group_panel(grupo: str):
                    "(gcp_service_account + TIMECLOCK_SHEET_ID en los Secrets).")
         return
 
+    # Sección pendiente (p.ej. "abrir un proyecto del tablero de Planificación"):
+    # se aplica ANTES de instanciar el radio, nunca después (regla v111, como
+    # main_nav con _nav_pending).
+    _gsp = st.session_state.pop("_gruposec_pending", None)
+    if _gsp:
+        st.session_state["grupo_sec"] = _gsp
     sec = st.radio("Sección",
                    ["📊 Proyectos", "🗂 Agrupaciones", "📅 Planificación",
                     "⏱ Horas", "💰 Gastos", "🔧 Usuarios de campo"],
