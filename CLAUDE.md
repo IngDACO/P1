@@ -1068,6 +1068,33 @@ corren por primera vez en el Cloud.
 Campo → "mi semana" (donde voy cada dia) · fichaje pre-rellenado desde el roster · plan vs real
 (asignado a X / ficho en Y, solo para trabajos enlazados a un PRJ).
 
+## Plomadas: revisión técnico/estético/integración — por elevador (v179)
+Revisión dedicada de 🔩 Plomadas (la única herramienta técnica sin un pase con esa dinámica; tenía trabajo
+de dominio v57-64 y el CAD v123, pero no la revisión). Tres hallazgos.
+### ⚠️ Integración (fallo real): el nombre del proyecto se perdía
+`plumb_ui` tenía **`_pr_ = ""` hardcodeado** y con eso dibujaba los 4 SVG y armaba el PDF — el replanteo
+iba a obra SIN identificar el proyecto/elevador, aunque `_prj` estaba disponible del selector. Otro
+"dato disponible que no se usa". Fix: `_pr_base` = nombre del proyecto → a los diagramas (cajetín) y al
+`meta` del PDF.
+### Estético: lenguaje inconsistente
+- DBP/DBPW/RW eran `st.metric` planos → **tarjetas KPI** (`_kpi`, como v143).
+- El encaje BSR<BS era un muro de números crudos (LIMIT_ZB/OB/sacrificios) → contado como ACCIÓN
+  ("acerca X mm al lado Z"; abs para no mostrar "-3") con los umbrales internos en un desplegable.
+### Técnico/dominio: POR ELEVADOR (decisión del usuario)
+Rieles/buffers/belting son por elevador; plomadas era un solo cálculo. **Insight clave**: la PLANTILLA
+(DBP, DBPW, RW, d1, d2) depende de BKS/RAIL/TKSW/LengthTemplate → es **la misma para todo el shaft** (una
+plantilla). Lo que varía por elevador es el **BSR** (ancho real medido en cada hueco) → cambia el
+**encaje** y la **verificación** (di/dd). Rediseño:
+- Entradas compartidas del shaft (una vez) + **matriz BSR por elevador** (como la L de rieles).
+- `compute_plumb` por cada BSR. La plantilla en tarjetas KPI **una vez**; una **tabla por elevador**
+  (BSR · encaje · di · dd · cierre `di+DBP+dd=BSR`); un selector para ver el diagrama de cada elevador.
+- PDF con el proyecto + la plantilla + la tabla por elevador + planta/ficha de cada uno.
+- `plumb.py` NO se tocó (compute y SVG ya trabajan por-resultado); solo se reescribió `render_plumb_tab`.
+### Verificacion
+La plantilla (DBP/DBPW/RW/d1/d2) sale **IDÉNTICA** con 3 BSR distintos (1420/1426/1432) ✓; el encaje y
+di/dd cambian y **cierre = BSR** en los 3 (identidad di+DBP+dd=BSR) ✓; 0 nombres libres; 0 restos del
+estado viejo (plb_res/plb_bsr single → plb_res_multi/plb_bsr_df); compila + import.
+
 ## Corte de rieles: sin orden inventado (Caso 1) + esquema de rieles (Caso 2) (v178)
 Dos apuntes del usuario sobre `rail_cut_svg`:
 ### Caso 1: "¿de dónde sacas el orden de los rieles?"
@@ -2554,9 +2581,10 @@ posicional + plano) → app.py, al cargar el PDF, setea `st.session_state["ns"]`
 resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NORTH SYD y AGECARE → NS=6
 (coincide con travel/floor-height HQ/HE).
 
-## Versiones desplegadas (v178 = actual)
+## Versiones desplegadas (v179 = actual)
 | Ver | Cambio principal |
 |---|---|
+| v179 | Plomadas por elevador (la plantilla DBP/d1/d2 es una sola del shaft; el BSR se mide por elevador y define el encaje/verificación) + arreglo de integración (el nombre del proyecto estaba hardcodeado vacío, ahora va a los diagramas y al PDF) + estética (tarjetas KPI, el encaje como acción no como muro de números) |
 | v178 | Corte de rieles: Caso 1 deja de inventar el orden de los rieles (la app solo tiene conteos, no secuencia) — la pila A se dibuja como UN bloque; y el Caso 2 se rehace como esquema de rieles (cabina RZ/RO + contrapeso RF/RB, corte marcado arriba, alturas ilustrativas) en vez de las barras comparativas |
 | v177 | Corte de rieles Caso 1: el corte se dibujaba arriba pero se corta el PRIMER riel (el de abajo); ahora se marca al pie de la columna (rojo recorta / verde añade) con una línea de piso. Solo el dibujo; los números no cambian |
 | v176 | Guardar un cálculo de herramienta: el campo ya no elige el proyecto de una lista — se guarda AUTOMÁTICO en el proyecto donde fichó (ID primero, nombre de respaldo), con un expander "¿otro proyecto?" de emergencia; sin fichar o admin/propietario, la lista. Mismo criterio que plano/Mis proyectos/Pre-Start |
