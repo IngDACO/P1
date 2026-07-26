@@ -1068,6 +1068,27 @@ corren por primera vez en el Cloud.
 Campo → "mi semana" (donde voy cada dia) · fichaje pre-rellenado desde el roster · plan vs real
 (asignado a X / ficho en Y, solo para trabajos enlazados a un PRJ).
 
+## Corte de rieles: sin orden inventado (Caso 1) + esquema de rieles (Caso 2) (v178)
+Dos apuntes del usuario sobre `rail_cut_svg`:
+### Caso 1: "¿de dónde sacas el orden de los rieles?"
+Tenía razón: la app solo tiene los **conteos** (n2500, n5000), NO el orden. El dibujo apilaba los 5000
+abajo y los 2500 arriba — una **secuencia inventada**. `A = n2500·2500 + n5000·5000` es solo un total.
+Fix: la pila estándar A se dibuja como **UN bloque** (altura = A, etiqueta "A · pila estándar"), sin
+inventar la secuencia. La composición sigue en el subtítulo. El resto del Caso 1 (columna requerida,
+corte al pie = primer riel, v177) intacto.
+### Caso 2: "se ve poco profesional" → esquema de rieles (decisión del usuario)
+El Caso 2 no tiene longitudes (RZ/RO/RF/RB se miden en obra), así que las barras comparativas no decían
+mucho. Se rehízo como **esquema de rieles**: por elevador, 4 rieles agrupados —**cabina** (RZ, RO, azul)
+y **contrapeso** (RF, RB, teal)— cada uno con una **banda de corte arriba** (el último riel instalado, el
+que se corta) + línea de corte punteada + el valor del corte encima + etiqueta al pie. ⚠️ Las alturas son
+**ILUSTRATIVAS** (uniformes, no a escala) — se declara en el subtítulo, porque el Caso 2 no tiene
+longitudes reales.
+### Verificacion (geometría medida en el SVG)
+Caso 1: **1 solo bloque** de pila en x=30 (antes n2500+n5000 rects) ✓. Caso 2: 8 cuerpos de riel + 8
+bandas de corte para 2 elevadores ✓, encabezados Cabina/Contrapeso, leyenda por color. Ambos SVG sin
+`<defs>/<marker>` (svglib-compat). Compila. Los números (compute_case1/2) NO cambian, solo el dibujo.
+⚠️ Se corrigió un error propio: `\'` dentro de un f-string de comillas simples (SyntaxError) → variables.
+
 ## Corte de rieles Caso 1: el corte va en el PRIMER riel (abajo) (v177)
 Bug reportado: "en el Caso 1 se corta el primer riel instalado (el de más abajo), pero en el dibujo sale
 como si se cortara el de arriba". Cierto: `rail_cut_svg` dibuja las columnas RC/RCW **desde la base
@@ -2533,9 +2554,10 @@ posicional + plano) → app.py, al cargar el PDF, setea `st.session_state["ns"]`
 resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NORTH SYD y AGECARE → NS=6
 (coincide con travel/floor-height HQ/HE).
 
-## Versiones desplegadas (v177 = actual)
+## Versiones desplegadas (v178 = actual)
 | Ver | Cambio principal |
 |---|---|
+| v178 | Corte de rieles: Caso 1 deja de inventar el orden de los rieles (la app solo tiene conteos, no secuencia) — la pila A se dibuja como UN bloque; y el Caso 2 se rehace como esquema de rieles (cabina RZ/RO + contrapeso RF/RB, corte marcado arriba, alturas ilustrativas) en vez de las barras comparativas |
 | v177 | Corte de rieles Caso 1: el corte se dibujaba arriba pero se corta el PRIMER riel (el de abajo); ahora se marca al pie de la columna (rojo recorta / verde añade) con una línea de piso. Solo el dibujo; los números no cambian |
 | v176 | Guardar un cálculo de herramienta: el campo ya no elige el proyecto de una lista — se guarda AUTOMÁTICO en el proyecto donde fichó (ID primero, nombre de respaldo), con un expander "¿otro proyecto?" de emergencia; sin fichar o admin/propietario, la lista. Mismo criterio que plano/Mis proyectos/Pre-Start |
 | v175 | El plano se muestra POR HERRAMIENTA (las 5 por igual): antes el mensaje lideraba con "17 parametros" del survey y el resto salia suelto. La extraccion ya leia todo (NS/riel/HQ/HGP/HKP/LFKK/LFGK, verificado en 2 planos reales); ahora plan_data.por_herramienta + una tabla muestran que le da el plano a cada herramienta (Survey/Plomadas/Rieles/Buffers/Belting) con ✓ o ⚠️ falta |

@@ -143,15 +143,16 @@ def rail_cut_svg(res: dict, caso: int = 1, n2500: int = 0, n5000: int = 0) -> st
         p.append(f'<text x="{VW-22}" y="{yA-4:.1f}" text-anchor="end" font-size="8.5" '
                  f'fill="#1a3a5c">A {_mm(A)}</text>')
 
-        acum = 0.0
-        for seg in [5000.0] * int(n5000) + [2500.0] * int(n2500):
-            y0 = base - (acum + seg) * esc
-            p.append(f'<rect x="30" y="{y0:.1f}" width="36" height="{seg*esc:.1f}" '
-                     f'fill="#eef2f7" stroke="#8a94a6" stroke-width="0.9"/>')
-            if seg * esc > 13:
-                p.append(f'<text x="48" y="{y0+seg*esc/2+3:.1f}" text-anchor="middle" '
-                         f'font-size="7.5" fill="#7a8699">{_mm(seg)}</text>')
-            acum += seg
+        # Pila estándar A como UN bloque. ⚠️ La app tiene los CONTEOS (n2500/n5000),
+        # NO el orden de los rieles, así que NO se inventa la secuencia de la pila
+        # (antes se dibujaban los 5000 abajo y los 2500 arriba, un orden ficticio).
+        if A > 0:
+            p.append(f'<rect x="30" y="{yA:.1f}" width="36" height="{A*esc:.1f}" '
+                     f'fill="#eef2f7" stroke="#8a94a6" stroke-width="1.1"/>')
+            p.append(f'<text x="48" y="{(yA+base)/2:.1f}" text-anchor="middle" '
+                     f'font-size="8" fill="#7a8699" font-weight="bold">A</text>')
+            p.append(f'<text x="48" y="{(yA+base)/2+11:.1f}" text-anchor="middle" '
+                     f'font-size="6.5" fill="#9aa7b8">pila estándar</text>')
 
         # Piso: donde se apoya el PRIMER riel — el que se corta en el Caso 1.
         p.append(f'<line x1="26" y1="{base:.1f}" x2="{VW-24}" y2="{base:.1f}" '
@@ -203,33 +204,69 @@ def rail_cut_svg(res: dict, caso: int = 1, n2500: int = 0, n5000: int = 0) -> st
         p.append("</svg>")
         return "".join(p)
 
-    claves = [("CutRZ", "RZ"), ("CutRO", "RO"), ("CutRF", "RF"), ("CutRB", "RB")]
-    vals = [abs(float(e.get(k) or 0)) for e in elevs for k, _ in claves]
-    vmax = max(vals) or 1.0
+    # ── CASO 2 — esquema de rieles (v178) ──
+    # 4 rieles por elevador: cabina (RZ, RO) y contrapeso (RF, RB). Se marca el
+    # ÚLTIMO riel instalado (el de ARRIBA) como el que se corta, con su valor.
+    # ⚠️ El Caso 2 NO tiene longitudes (los valores se miden en obra): las alturas
+    # de los rieles son ILUSTRATIVAS, uniformes, no a escala.
+    rails = [("CutRZ", "RZ", "cabina"), ("CutRO", "RO", "cabina"),
+             ("CutRF", "RF", "contra"), ("CutRB", "RB", "contra")]
+    COL = {"cabina": "#1a3a5c", "contra": "#0e7490"}
+    railW, gsmall, gpair, gelev, left = 26, 10, 22, 44, 44
+    xs = [0, railW + gsmall, railW * 2 + gsmall + gpair, railW * 3 + gsmall * 2 + gpair]
+    unit = xs[3] + railW
     n = len(elevs)
-    paso = max(160, min(230, 660 // max(1, n)))
-    VW = max(480, 74 + paso * n + 30)
-    VH, TOP, LARGO = 300, 78, 126
+    VW = max(430, left + unit * n + gelev * max(0, n - 1) + 30)
+    VH, TOP, H = 300, 96, 128
+    base = TOP + H
+    cutH = 15
     p = [f'<svg viewBox="0 0 {VW} {VH}" xmlns="http://www.w3.org/2000/svg" '
          f'style="width:100%;max-width:{VW}px;font-family:Arial,Helvetica,sans-serif;'
          f'display:block;margin:0 auto">',
          f'<rect x="0" y="0" width="{VW}" height="{VH}" fill="#ffffff"/>', cab,
          f'<text x="18" y="40" font-size="8" fill="#7a8699">'
-         f'Caso 2 &#183; corte por riel y elevador (barras a escala comun)</text>']
+         f'Caso 2 &#183; se corta el &#218;LTIMO riel (el de arriba) &#183; '
+         f'alturas ilustrativas, no a escala</text>',
+         f'<line x1="26" y1="{base}" x2="{VW-24}" y2="{base}" '
+         f'stroke="#1f2937" stroke-width="1.5"/>']
     for i, e in enumerate(elevs):
-        cx = 64 + paso * i
-        for j, (k, lbl) in enumerate(claves):
+        ex = left + i * (unit + gelev)
+        # Encabezados de grupo
+        p.append(f'<text x="{ex + (xs[0]+xs[1]+railW)/2:.1f}" y="{TOP-24:.0f}" '
+                 f'text-anchor="middle" font-size="7.5" fill="#7a8699" '
+                 f'font-weight="bold">Cabina</text>')
+        p.append(f'<text x="{ex + (xs[2]+xs[3]+railW)/2:.1f}" y="{TOP-24:.0f}" '
+                 f'text-anchor="middle" font-size="7.5" fill="#7a8699" '
+                 f'font-weight="bold">Contrapeso</text>')
+        for j, (k, lbl, grp) in enumerate(rails):
+            x = ex + xs[j]
+            col = COL[grp]
             v = float(e.get(k) or 0)
-            y = TOP + j * 30
-            w = abs(v) / vmax * LARGO
-            col = "#c0392b" if v < 0 else "#1a3a5c"
-            p.append(f'<rect x="{cx:.1f}" y="{y:.1f}" width="{max(1.5,w):.1f}" '
-                     f'height="15" fill="{col}" fill-opacity="0.82"/>')
-            p.append(f'<text x="{cx-6:.1f}" y="{y+12:.1f}" text-anchor="end" '
-                     f'font-size="8" fill="#7a8699">{lbl}</text>')
-            p.append(f'<text x="{cx+max(1.5,w)+5:.1f}" y="{y+12:.1f}" font-size="8.5" '
-                     f'fill="{col}">{_mm(v)}</text>')
-        p.append(f'<text x="{cx+LARGO/2:.1f}" y="{TOP+4*30+16:.1f}" text-anchor="middle" '
+            # Cuerpo del riel (altura ilustrativa)
+            p.append(f'<rect x="{x:.1f}" y="{TOP}" width="{railW}" height="{H}" rx="3" '
+                     f'fill="#f2f6fa" stroke="{col}" stroke-width="1.2"/>')
+            # Banda de corte arriba (el último tramo instalado, el que se corta)
+            p.append(f'<rect x="{x:.1f}" y="{TOP}" width="{railW}" height="{cutH}" '
+                     f'fill="{col}" fill-opacity="0.85"/>')
+            p.append(f'<line x1="{x-3:.1f}" y1="{TOP+cutH}" x2="{x+railW+3:.1f}" '
+                     f'y2="{TOP+cutH}" stroke="#c0392b" stroke-width="1.0" '
+                     f'stroke-dasharray="3,2"/>')
+            # Valor del corte, arriba del riel
+            p.append(f'<text x="{x+railW/2:.1f}" y="{TOP-6:.0f}" text-anchor="middle" '
+                     f'font-size="8.5" fill="{col}" font-weight="bold">{_mm(v)}</text>')
+            # Etiqueta del riel al pie
+            p.append(f'<text x="{x+railW/2:.1f}" y="{base+13:.0f}" text-anchor="middle" '
+                     f'font-size="7.5" fill="#1f2937">{lbl}</text>')
+        p.append(f'<text x="{ex+unit/2:.1f}" y="{base+30:.0f}" text-anchor="middle" '
                  f'font-size="8.5" fill="#1f2937" font-weight="bold">Elevador {i+1}</text>')
+
+    _cab, _con = COL["cabina"], COL["contra"]
+    p.append(f'<rect x="18" y="{VH-26}" width="9" height="9" fill="{_cab}" '
+             f'fill-opacity="0.85"/>')
+    p.append(f'<text x="32" y="{VH-18}" font-size="8" fill="#7a8699">cabina (RZ, RO)</text>')
+    p.append(f'<rect x="118" y="{VH-26}" width="9" height="9" fill="{_con}" '
+             f'fill-opacity="0.85"/>')
+    p.append(f'<text x="132" y="{VH-18}" font-size="8" fill="#7a8699">'
+             f'contrapeso (RF, RB) &#183; el corte (mm) va en el riel de ARRIBA</text>')
     p.append("</svg>")
     return "".join(p)
