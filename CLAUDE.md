@@ -1068,6 +1068,23 @@ corren por primera vez en el Cloud.
 Campo → "mi semana" (donde voy cada dia) · fichaje pre-rellenado desde el roster · plan vs real
 (asignado a X / ficho en Y, solo para trabajos enlazados a un PRJ).
 
+## Guardar un cálculo: el campo va SOLO a su proyecto del fichaje (v176)
+Peticion del usuario: "al usar las herramientas, al final me da una lista de a cuál proyecto agregar el
+resultado; no debe ser así: si ya fiché a un proyecto, se debería guardar ahí automáticamente".
+### `tool_save_ui.render_guardar` — destino automático para el campo
+Las 4 herramientas de cálculo (plomada/rieles/buffers/belting) comparten este bloque. Pedía el proyecto
+en un `selectbox` para TODOS los roles. Ahora, para el rol **campo**:
+- Si tiene **fichaje abierto** a un proyecto → destino AUTOMÁTICO = ese proyecto: "💾 Se guardará en X —
+  donde fichaste" + un botón (un toque). Resuelve **ID primero, nombre de respaldo** (v145). Mismo
+  criterio que el plano (v137), Mis proyectos (v138) y el Pre-Start (v170).
+- Salida de emergencia: un expander plegado "¿Es de otro proyecto?" con la lista, por si el cálculo es
+  de otra obra.
+- Campo SIN fichar → cae a la lista (tiene que elegir). Admin/propietario → la lista (trabajan varias obras).
+La lógica de guardado se extrajo a un helper interno `_guardar(prj)` para no duplicar `toolruns.registrar`.
+### Verificacion
+Matching probado: por ID (PRJ-0002→North), por nombre case-insensitive (Prueba1→prueba1), sin fichaje→
+None (cae a la lista). `render_guardar` 0 nombres libres, compila + import. `registrar` intacto.
+
 ## El plano alimenta las 5 herramientas, mostradas POR IGUAL (v175)
 Peticion del usuario: "al cargar el plano solo me muestra que leyo 17 parametros (los del survey); las
 otras herramientas tecnicas las maneja como independientes cuando todas son de igual importancia".
@@ -2501,9 +2518,10 @@ posicional + plano) → app.py, al cargar el PDF, setea `st.session_state["ns"]`
 resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NORTH SYD y AGECARE → NS=6
 (coincide con travel/floor-height HQ/HE).
 
-## Versiones desplegadas (v175 = actual)
+## Versiones desplegadas (v176 = actual)
 | Ver | Cambio principal |
 |---|---|
+| v176 | Guardar un cálculo de herramienta: el campo ya no elige el proyecto de una lista — se guarda AUTOMÁTICO en el proyecto donde fichó (ID primero, nombre de respaldo), con un expander "¿otro proyecto?" de emergencia; sin fichar o admin/propietario, la lista. Mismo criterio que plano/Mis proyectos/Pre-Start |
 | v175 | El plano se muestra POR HERRAMIENTA (las 5 por igual): antes el mensaje lideraba con "17 parametros" del survey y el resto salia suelto. La extraccion ya leia todo (NS/riel/HQ/HGP/HKP/LFKK/LFGK, verificado en 2 planos reales); ahora plan_data.por_herramienta + una tabla muestran que le da el plano a cada herramienta (Survey/Plomadas/Rieles/Buffers/Belting) con ✓ o ⚠️ falta |
 | v174 | Fix: refrescar la pagina deslogueaba. El componente de cookies (extra-streamlit-components) no entrega las cookies en el primer run tras el refresco, y render_login se rendia al primer intento (_cookie_tried); ahora reintenta unos reruns antes de mostrar el login, asi el login persistente de v107 por fin sobrevive al refresco |
 | v173 | Zona horaria POR GRUPO (core/clock.py): Streamlit Cloud corre en UTC, asi que los registros salian ~10 h corridos. Ahora cada grupo tiene su zona (Grupos.Zona, la fija el propietario; default Australia/Sydney) y todos los datetime.now()/date.today() (~40 sitios) pasan por clock.now()/today() que resuelve la zona del grupo con zoneinfo (per-sesion, sirve multi-país). +tzdata |

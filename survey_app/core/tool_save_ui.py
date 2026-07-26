@@ -115,32 +115,72 @@ def render_guardar(herramienta: str, titulo_pdf: str, pdf_bytes: bytes,
     a = st.session_state.get("auth", {}) or {}
     rol, usuario = a.get("rol", ""), a.get("usuario", "")
     grupo = a.get("grupo", "")
+    nombre = a.get("nombre") or usuario
     proys = _proyectos_de(rol, usuario, grupo)
     if not proys:
         c2.caption("No hay proyectos disponibles para asociar este cálculo.")
         return
 
     idmap = {f"{p.get('Nombre')} ({p.get('ID')})": p for p in proys}
+
+    def _guardar(prj):
+        with st.spinner("Guardando..."):
+            res = toolruns.registrar(
+                pid=str(prj.get("ID", "")),
+                grupo=str(prj.get("Grupo", grupo)),
+                herramienta=herramienta, resumen=resumen,
+                datos={"entradas": _snapshot(herramienta), "resultados": datos},
+                usuario=usuario, pdf=pdf_bytes, filename=nombre_archivo)
+        if res.get("ok"):
+            msg = f"✅ Guardado como **{res['id']}** en {prj.get('Nombre')}."
+            if not res.get("drive_id"):
+                msg += " (El PDF no se archivó en Drive: revisa la conexión.)"
+            st.success(msg)
+        else:
+            st.error(f"No se pudo guardar: {res.get('error')}")
+
+    # ── Campo: destino AUTOMÁTICO = el proyecto donde fichó ──
+    # No lo elige de una lista; ya está trabajando allí. Mismo criterio que el plano
+    # (v137), Mis proyectos (v138) y el Pre-Start (v170). ID primero, nombre de
+    # respaldo (v145).
+    _fich = None
+    if rol == "campo":
+        try:
+            from core import timeclock
+            _ses = timeclock.open_sessions(nombre, grupo, usuario)
+            _open = (_ses.get(timeclock.TIPO_PROYECTO)
+                     or _ses.get(timeclock.TIPO_GENERAL) or {})
+            _fpid = str(_open.get("proyecto_id", "")).strip()
+            _fpn  = str(_open.get("proyecto", "")).strip()
+            for _p in proys:
+                if (_fpid and str(_p.get("ID", "")).strip() == _fpid) or \
+                   (not _fpid and _fpn and
+                    str(_p.get("Nombre", "")).strip().casefold() == _fpn.casefold()):
+                    _fich = _p
+                    break
+        except Exception:
+            pass
+
     with c2:
-        # Sin preseleccion: guardar el calculo contra otro elevador ensucia su
-        # historial y su carpeta de Drive sin que nadie lo note.
-        sel = st.selectbox("Guardar en el proyecto", [_VACIO] + list(idmap.keys()),
-                           key=f"prj_{key}")
-        if st.button("💾 Guardar en el proyecto", use_container_width=True,
-                     key=f"save_{key}", disabled=(not sel or sel == _VACIO)):
-            prj = idmap[sel]
-            with st.spinner("Guardando..."):
-                res = toolruns.registrar(
-                    pid=str(prj.get("ID", "")),
-                    grupo=str(prj.get("Grupo", grupo)),
-                    herramienta=herramienta, resumen=resumen,
-                    datos={"entradas": _snapshot(herramienta),
-                           "resultados": datos},
-                    usuario=usuario, pdf=pdf_bytes, filename=nombre_archivo)
-            if res.get("ok"):
-                msg = f"✅ Guardado como **{res['id']}** en {prj.get('Nombre')}."
-                if not res.get("drive_id"):
-                    msg += " (El PDF no se archivó en Drive: revisa la conexión.)"
-                st.success(msg)
-            else:
-                st.error(f"No se pudo guardar: {res.get('error')}")
+        if _fich is not None:
+            st.caption(f"💾 Se guardará en **{_fich.get('Nombre')}** — donde fichaste.")
+            if st.button("💾 Guardar en el proyecto", use_container_width=True,
+                         key=f"save_{key}"):
+                _guardar(_fich)
+            with st.expander("¿Es de otro proyecto?"):
+                sel = st.selectbox("Proyecto", [_VACIO] + list(idmap.keys()),
+                                   key=f"prj_{key}", label_visibility="collapsed")
+                if st.button("Guardar en el elegido", key=f"save2_{key}",
+                             use_container_width=True,
+                             disabled=(not sel or sel == _VACIO)):
+                    _guardar(idmap[sel])
+        else:
+            if rol == "campo":
+                st.caption("Aún no has fichado a un proyecto (⏱ Fichaje). Elige uno:")
+            # Sin preseleccion: guardar el calculo contra otro elevador ensucia su
+            # historial y su carpeta de Drive sin que nadie lo note.
+            sel = st.selectbox("Guardar en el proyecto", [_VACIO] + list(idmap.keys()),
+                               key=f"prj_{key}")
+            if st.button("💾 Guardar en el proyecto", use_container_width=True,
+                         key=f"save_{key}", disabled=(not sel or sel == _VACIO)):
+                _guardar(idmap[sel])
