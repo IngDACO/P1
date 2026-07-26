@@ -98,7 +98,12 @@ def _mm(v) -> str:
     return f"{v:.0f}" if abs(v - round(v)) < 0.05 else f"{v:.1f}"
 
 
-def rail_cut_svg(res: dict, caso: int = 1, n2500: int = 0, n5000: int = 0) -> str:
+def _esc(s) -> str:
+    return str(s or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+def rail_cut_svg(res: dict, caso: int = 1, n2500: int = 0, n5000: int = 0,
+                 proyecto: str = "") -> str:
     """Diagrama de los cortes de riel.
 
     Hasta v129 esta herramienta daba SOLO numeros para una operacion
@@ -136,6 +141,9 @@ def rail_cut_svg(res: dict, caso: int = 1, n2500: int = 0, n5000: int = 0) -> st
              f'<text x="18" y="40" font-size="8" fill="#7a8699">'
              f'Caso 1 &#183; pila instalada A = {_mm(A)} mm '
              f'({n2500}&#215;2500 + {n5000}&#215;5000) &#183; corte = requerido &#8722; A</text>']
+        if proyecto:
+            p.append(f'<text x="{VW-18}" y="26" text-anchor="end" font-size="9" '
+                     f'fill="#1f2937" font-weight="bold">{_esc(proyecto)}</text>')
 
         yA = base - A * esc
         p.append(f'<line x1="74" y1="{yA:.1f}" x2="{VW-24}" y2="{yA:.1f}" '
@@ -229,6 +237,9 @@ def rail_cut_svg(res: dict, caso: int = 1, n2500: int = 0, n5000: int = 0) -> st
          f'alturas ilustrativas, no a escala</text>',
          f'<line x1="26" y1="{base}" x2="{VW-24}" y2="{base}" '
          f'stroke="#1f2937" stroke-width="1.5"/>']
+    if proyecto:
+        p.append(f'<text x="{VW-18}" y="26" text-anchor="end" font-size="9" '
+                 f'fill="#1f2937" font-weight="bold">{_esc(proyecto)}</text>')
     for i, e in enumerate(elevs):
         ex = left + i * (unit + gelev)
         # Encabezados de grupo

@@ -1068,6 +1068,24 @@ corren por primera vez en el Cloud.
 Campo → "mi semana" (donde voy cada dia) · fichaje pre-rellenado desde el roster · plan vs real
 (asignado a X / ficho en Y, solo para trabajos enlazados a un PRJ).
 
+## Corte de rieles: revisión técnico/estético/integración (v180)
+Revisión dedicada de ✂️ Corte de rieles (ya estaba en buena forma: es por elevador desde v52, diagramas
+rehechos v177/v178, e integración compartida). Salió ligera — dos arreglos.
+### ⚠️ Integración (el MISMO fallo que plomado v179)
+El proyecto se conocía (`_prj` del selector) pero **no iba al diagrama ni al PDF**: `rail_cut_svg` no
+tenía `proyecto` y el `meta` del PDF no lo incluía. El corte iba a obra sin identificar el proyecto.
+Fix: `rail_cut_svg(..., proyecto="")` dibuja el nombre arriba-derecha (ambos casos) + "Proyecto" al
+`meta` del PDF (Caso 1 y 2).
+### Estético
+`st.success("A = …")` / `st.success("Sub-caso: …")` planos → **tarjetas KPI** (`_kpi`): Caso 1 = A · LFKK
+· LFGK · nº elevadores; Caso 2 = fórmula · LFKK · LFGK · nº elevadores (+ el sub-caso como caption).
+### Técnico: sin gaps
+Ya es por elevador (matriz L / matriz RZ·RO·RF·RB); diagramas ya corregidos; reabrir cálculo y
+guardar-auto-al-fichaje (v176) ya están. No se tocó nada técnico.
+### Verificacion
+Ambos diagramas muestran el proyecto ("North Syd"), sin proyecto no rompe, escape de `& < >` OK, sin
+`<defs>/<marker>` (svglib-compat). Compila + import. Los números (compute_case1/2) intactos.
+
 ## Plomadas: revisión técnico/estético/integración — por elevador (v179)
 Revisión dedicada de 🔩 Plomadas (la única herramienta técnica sin un pase con esa dinámica; tenía trabajo
 de dominio v57-64 y el CAD v123, pero no la revisión). Tres hallazgos.
@@ -2581,9 +2599,10 @@ posicional + plano) → app.py, al cargar el PDF, setea `st.session_state["ns"]`
 resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NORTH SYD y AGECARE → NS=6
 (coincide con travel/floor-height HQ/HE).
 
-## Versiones desplegadas (v179 = actual)
+## Versiones desplegadas (v180 = actual)
 | Ver | Cambio principal |
 |---|---|
+| v180 | Corte de rieles (revisión): el nombre del proyecto va ahora al diagrama y al PDF (estaba disponible y no se usaba, mismo fallo que plomado) + tarjetas KPI en vez de st.success planos. Ya era por elevador y los diagramas se rehicieron en v177/v178 |
 | v179 | Plomadas por elevador (la plantilla DBP/d1/d2 es una sola del shaft; el BSR se mide por elevador y define el encaje/verificación) + arreglo de integración (el nombre del proyecto estaba hardcodeado vacío, ahora va a los diagramas y al PDF) + estética (tarjetas KPI, el encaje como acción no como muro de números) |
 | v178 | Corte de rieles: Caso 1 deja de inventar el orden de los rieles (la app solo tiene conteos, no secuencia) — la pila A se dibuja como UN bloque; y el Caso 2 se rehace como esquema de rieles (cabina RZ/RO + contrapeso RF/RB, corte marcado arriba, alturas ilustrativas) en vez de las barras comparativas |
 | v177 | Corte de rieles Caso 1: el corte se dibujaba arriba pero se corta el PRIMER riel (el de abajo); ahora se marca al pie de la columna (rojo recorta / verde añade) con una línea de piso. Solo el dibujo; los números no cambian |

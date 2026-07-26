@@ -21,6 +21,19 @@ def _result_matrix(labels, per_elev_values, n):
     return pd.DataFrame(cols, index=labels)
 
 
+def _kpi(label, value, color=None):
+    col = f"color:{color};" if color else ""
+    return ('<div style="background:#fff;border:1px solid #e6e9ef;border-radius:12px;'
+            'padding:10px 14px;flex:1;min-width:96px;">'
+            f'<div style="font-size:12px;color:#6b7280;">{label}</div>'
+            f'<div style="font-size:20px;font-weight:700;{col}">{value}</div></div>')
+
+
+def _kpi_row(cards):
+    return ('<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:8px">'
+            + "".join(cards) + "</div>")
+
+
 def render_rail_cut_tab():
     st.markdown("### ✂️ Corte de rieles")
     st.caption("Calcula el corte de los rieles de cada elevador del shaft. "
@@ -38,6 +51,7 @@ def render_rail_cut_tab():
         st.info(f"↩️ Reabierto el cálculo **{_reab}**. Ajusta lo que necesites y vuelve a calcular.")
 
     _prj, _plano = plan_ui.selector_proyecto("rc")
+    _pr = str((_prj or {}).get("Nombre", "") or "")     # v180: al diagrama y al PDF
     if _plano:
         _n = plan_ui.aplicar(_plano, {"lfkk": "rc_lfkk", "lfgk": "rc_lfgk"})
         if _n:
@@ -118,7 +132,10 @@ def render_rail_cut_tab():
         _e = st.session_state.get("rc_res")
         if _e and _e.get("caso") == 1:
             res = _e["res"]
-            st.success(f"A = {res['A']:.0f} mm")
+            st.markdown(_kpi_row([
+                _kpi("A (pila instalada)", f"{res['A']:.0f} mm"),
+                _kpi("LFKK", f"{lfkk:.0f}"), _kpi("LFGK", f"{lfgk:.0f}"),
+                _kpi("Elevadores", str(_e["n"]))]), unsafe_allow_html=True)
             mat = _result_matrix(["CutRC", "CutRCW"], res["elevadores"], _e["n"])
             st.subheader("Resultado — cortes (mm)")
             st.dataframe(mat, use_container_width=True)
@@ -126,7 +143,7 @@ def render_rail_cut_tab():
                 det = _result_matrix(["RC", "RCW"], res["elevadores"], _e["n"])
                 st.dataframe(det, use_container_width=True)
 
-            svg = rail_cut_svg(res, caso=1, n2500=_e["n2500"], n5000=_e["n5000"])
+            svg = rail_cut_svg(res, caso=1, n2500=_e["n2500"], n5000=_e["n5000"], proyecto=_pr)
             st.subheader("📐 Diagrama de cortes")
             components.html(
                 '<!DOCTYPE html><html><body style="margin:0;background:transparent">'
@@ -138,7 +155,8 @@ def render_rail_cut_tab():
                       for i, x in enumerate(res["elevadores"])]
             _pdf = tool_pdf(
                 "Corte de rieles — Caso 1",
-                meta={"A (pila instalada)": f"{res['A']:.0f} mm",
+                meta={"Proyecto": _pr or "—",
+                      "A (pila instalada)": f"{res['A']:.0f} mm",
                       "Composición": f"{_e['n2500']}×2500 + {_e['n5000']}×5000",
                       "LFKK / LFGK": f"{lfkk:.0f} / {lfgk:.0f} mm"},
                 svgs=[svg], tablas=[("Cortes por elevador", _filas)],
@@ -188,12 +206,16 @@ def render_rail_cut_tab():
         if _e and _e.get("caso") == 2:
             res = _e["res"]
             signo = "LFKK/LFGK − R" if _e["subcaso"] == "encima" else "LFKK/LFGK + R"
-            st.success(f"Sub-caso: {_e['sub']}  →  {signo}")
+            st.markdown(_kpi_row([
+                _kpi("Fórmula", signo), _kpi("LFKK", f"{lfkk:.0f}"),
+                _kpi("LFGK", f"{lfgk:.0f}"), _kpi("Elevadores", str(_e["n"]))]),
+                unsafe_allow_html=True)
+            st.caption(f"Sub-caso: {_e['sub']}")
             mat = _result_matrix(["CutRZ", "CutRO", "CutRF", "CutRB"], res, _e["n"])
             st.subheader("Resultado — cortes (mm)")
             st.dataframe(mat, use_container_width=True)
 
-            svg = rail_cut_svg({"elevadores": res}, caso=2)
+            svg = rail_cut_svg({"elevadores": res}, caso=2, proyecto=_pr)
             st.subheader("📐 Diagrama de cortes")
             components.html(
                 '<!DOCTYPE html><html><body style="margin:0;background:transparent">'
@@ -205,7 +227,7 @@ def render_rail_cut_tab():
                       for i, x in enumerate(res)]
             _pdf = tool_pdf(
                 "Corte de rieles — Caso 2",
-                meta={"Sub-caso": _e["sub"], "Fórmula": signo,
+                meta={"Proyecto": _pr or "—", "Sub-caso": _e["sub"], "Fórmula": signo,
                       "LFKK / LFGK": f"{lfkk:.0f} / {lfgk:.0f} mm"},
                 svgs=[svg], tablas=[("Cortes por elevador", _filas)],
                 notas=["Caso 2: el riel a cortar es el último instalado (arriba)."])
