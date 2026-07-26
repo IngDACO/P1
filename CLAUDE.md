@@ -1068,6 +1068,21 @@ corren por primera vez en el Cloud.
 Campo → "mi semana" (donde voy cada dia) · fichaje pre-rellenado desde el roster · plan vs real
 (asignado a X / ficho en Y, solo para trabajos enlazados a un PRJ).
 
+## Corte de rieles Caso 1: el corte va en el PRIMER riel (abajo) (v177)
+Bug reportado: "en el Caso 1 se corta el primer riel instalado (el de más abajo), pero en el dibujo sale
+como si se cortara el de arriba". Cierto: `rail_cut_svg` dibuja las columnas RC/RCW **desde la base
+(piso) hacia arriba**, pero pintaba el corte ARRIBA (entre la punta de la barra y la línea A).
+### Fix (solo el dibujo del Caso 1; los números no cambian)
+- El corte se marca **AL PIE de la columna** (borde inferior en la línea de piso), que es donde está el
+  primer riel instalado. Color por signo: **rojo = recorta** (corte<0) / **verde = añade** (corte>0).
+- Se añadió una **línea de piso** (`base`) para que se vea dónde se apoya el primer riel.
+- Leyenda reescrita: "recorta / añade al 1er riel · el corte va en el riel de ABAJO". Cierra el pendiente
+  de v130 sobre la dirección del corte.
+### Verificacion (geometría medida en el SVG, no a ojo — lección de v121)
+Caso 1 con 2 elevadores (uno recorta CutRC=-1985/-2207, otro añade +515/+293): los 4 rects de corte
+tienen su **borde inferior en el piso (y=270)** ✓; línea de piso en y=270; rojo para recortes, verde para
+añadidos; SVG sin `<defs>/<marker>` (svglib-compat). Compila. Caso 2 (barras) intacto.
+
 ## Guardar un cálculo: el campo va SOLO a su proyecto del fichaje (v176)
 Peticion del usuario: "al usar las herramientas, al final me da una lista de a cuál proyecto agregar el
 resultado; no debe ser así: si ya fiché a un proyecto, se debería guardar ahí automáticamente".
@@ -2518,9 +2533,10 @@ posicional + plano) → app.py, al cargar el PDF, setea `st.session_state["ns"]`
 resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NORTH SYD y AGECARE → NS=6
 (coincide con travel/floor-height HQ/HE).
 
-## Versiones desplegadas (v176 = actual)
+## Versiones desplegadas (v177 = actual)
 | Ver | Cambio principal |
 |---|---|
+| v177 | Corte de rieles Caso 1: el corte se dibujaba arriba pero se corta el PRIMER riel (el de abajo); ahora se marca al pie de la columna (rojo recorta / verde añade) con una línea de piso. Solo el dibujo; los números no cambian |
 | v176 | Guardar un cálculo de herramienta: el campo ya no elige el proyecto de una lista — se guarda AUTOMÁTICO en el proyecto donde fichó (ID primero, nombre de respaldo), con un expander "¿otro proyecto?" de emergencia; sin fichar o admin/propietario, la lista. Mismo criterio que plano/Mis proyectos/Pre-Start |
 | v175 | El plano se muestra POR HERRAMIENTA (las 5 por igual): antes el mensaje lideraba con "17 parametros" del survey y el resto salia suelto. La extraccion ya leia todo (NS/riel/HQ/HGP/HKP/LFKK/LFGK, verificado en 2 planos reales); ahora plan_data.por_herramienta + una tabla muestran que le da el plano a cada herramienta (Survey/Plomadas/Rieles/Buffers/Belting) con ✓ o ⚠️ falta |
 | v174 | Fix: refrescar la pagina deslogueaba. El componente de cookies (extra-streamlit-components) no entrega las cookies en el primer run tras el refresco, y render_login se rendia al primer intento (_cookie_tried); ahora reintenta unos reruns antes de mostrar el login, asi el login persistente de v107 por fin sobrevive al refresco |

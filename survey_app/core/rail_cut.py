@@ -153,6 +153,10 @@ def rail_cut_svg(res: dict, caso: int = 1, n2500: int = 0, n5000: int = 0) -> st
                          f'font-size="7.5" fill="#7a8699">{_mm(seg)}</text>')
             acum += seg
 
+        # Piso: donde se apoya el PRIMER riel — el que se corta en el Caso 1.
+        p.append(f'<line x1="26" y1="{base:.1f}" x2="{VW-24}" y2="{base:.1f}" '
+                 f'stroke="#1f2937" stroke-width="1.5"/>')
+
         for i, e in enumerate(elevs):
             cx = 100 + paso * i
             for j, (lbl, largo, corte) in enumerate(
@@ -160,16 +164,23 @@ def rail_cut_svg(res: dict, caso: int = 1, n2500: int = 0, n5000: int = 0) -> st
                 x = cx + j * 48
                 largo, corte = float(largo), float(corte)
                 y0 = base - largo * esc
+                # Columna requerida (RC/RCW), desde el PISO (base) hacia arriba.
                 p.append(f'<rect x="{x:.1f}" y="{y0:.1f}" width="36" '
                          f'height="{largo*esc:.1f}" fill="#f7fafd" '
                          f'stroke="#1a3a5c" stroke-width="1.1"/>')
                 if abs(corte) > 0.05:
-                    yc0, yc1 = (y0, yA) if corte > 0 else (yA, y0)
-                    p.append(f'<rect x="{x:.1f}" y="{min(yc0,yc1):.1f}" width="36" '
-                             f'height="{abs(yc1-yc0):.1f}" fill="#fcebeb" '
-                             f'stroke="#c0392b" stroke-width="0.8"/>')
-                    p.append(f'<text x="{x+18:.1f}" y="{(yc0+yc1)/2+3:.1f}" '
-                             f'text-anchor="middle" font-size="8.5" fill="#c0392b" '
+                    # ⚠️ El corte va en el PRIMER riel instalado (el de ABAJO), así
+                    # que se marca AL PIE de la columna, no arriba. corte<0 = se
+                    # recorta (rojo); corte>0 = falta y se añade al primer riel (verde).
+                    h = min(abs(corte) * esc, largo * esc)
+                    yc = base - h
+                    stk, fll = (("#c0392b", "#fcebeb") if corte < 0
+                                else ("#1e8449", "#e8f5e9"))
+                    p.append(f'<rect x="{x:.1f}" y="{yc:.1f}" width="36" '
+                             f'height="{h:.1f}" fill="{fll}" stroke="{stk}" '
+                             f'stroke-width="1.0"/>')
+                    p.append(f'<text x="{x+18:.1f}" y="{yc + h/2 + 3:.1f}" '
+                             f'text-anchor="middle" font-size="8.5" fill="{stk}" '
                              f'font-weight="bold">{_mm(corte)}</text>')
                 p.append(f'<text x="{x+18:.1f}" y="{base+14:.1f}" text-anchor="middle" '
                          f'font-size="7.5" fill="#1f2937">{lbl}</text>')
@@ -180,11 +191,15 @@ def rail_cut_svg(res: dict, caso: int = 1, n2500: int = 0, n5000: int = 0) -> st
 
         p.append(f'<rect x="18" y="{VH-26}" width="9" height="9" fill="#fcebeb" '
                  f'stroke="#c0392b" stroke-width="0.7"/>')
-        # ⚠️ La app NO documenta que significa el signo de Cut* (solo muestra el
-        # numero crudo), asi que la leyenda describe lo que SI se sabe —la
-        # diferencia contra A— en vez de afirmar una direccion de corte.
+        p.append(f'<rect x="150" y="{VH-26}" width="9" height="9" fill="#e8f5e9" '
+                 f'stroke="#1e8449" stroke-width="0.7"/>')
+        # El corte va SIEMPRE en el 1er riel (el de abajo, primero instalado): la
+        # leyenda lo dice y el color distingue recortar (rojo) de añadir (verde).
         p.append(f'<text x="32" y="{VH-18}" font-size="8" fill="#7a8699">'
-                 f'diferencia contra A (mismo valor con signo que la tabla)</text>')
+                 f'recorta el 1er riel</text>')
+        p.append(f'<text x="164" y="{VH-18}" font-size="8" fill="#7a8699">'
+                 f'a&#241;ade al 1er riel &#183; el corte va en el riel de ABAJO '
+                 f'(mismo valor con signo que la tabla)</text>')
         p.append("</svg>")
         return "".join(p)
 
