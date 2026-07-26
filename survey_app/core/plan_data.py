@@ -142,6 +142,47 @@ def hay_datos(pid: str) -> bool:
     return bool(d and (d.get("params") or d.get("ns") or d.get("hkp")))
 
 
+def por_herramienta(datos: dict) -> list:
+    """Qué le da el plano a CADA una de las 5 herramientas técnicas (v175).
+
+    Un solo plano alimenta las cinco: no hay unos valores "del survey" y otros
+    "extra", son de igual importancia. Devuelve
+    [{'tool': etiqueta, 'items': [(label, valor|None)]}] — valor None = no leído.
+    """
+    if not datos:
+        return []
+    p = datos.get("params", {}) or {}
+    npar = len(p)
+    ntot = datos.get("n_total") or npar
+
+    def _v(k):
+        x = datos.get(k)
+        if x in (None, ""):
+            return None
+        if isinstance(x, float) and x.is_integer():
+            return int(x)            # 2915.0 → 2915 (más legible)
+        return x
+
+    rail = datos.get("rail")
+    ralt = datos.get("rail_altura")
+    riel = (f"{rail} · RAIL {ralt:.0f}" if (rail and ralt) else (rail or None))
+    par  = f"{npar}/{ntot}" if npar else None
+    ralt_txt = (f"{ralt:.0f}" if ralt else None)
+    return [
+        {"tool": "📐 Survey de elevador",
+         "items": [("Parámetros del hueco", par), ("N.º de paradas (NS)", _v("ns")),
+                   ("Riel", riel)]},
+        {"tool": "🔩 Líneas de plomada",
+         "items": [("Parámetros del hueco", par), ("RAIL (altura)", ralt_txt)]},
+        {"tool": "✂️ Corte de rieles",
+         "items": [("LFKK", _v("lfkk")), ("LFGK", _v("lfgk"))]},
+        {"tool": "🛡 Corte de buffers",
+         "items": [("HKP", _v("hkp"))]},
+        {"tool": "🎗 Belting",
+         "items": [("HQ", _v("hq")), ("HGP", _v("hgp"))]},
+    ]
+
+
 def resumen(datos: dict) -> str:
     """Línea legible de qué se leyó del plano."""
     if not datos:

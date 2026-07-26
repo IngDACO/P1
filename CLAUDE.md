@@ -1068,6 +1068,25 @@ corren por primera vez en el Cloud.
 Campo → "mi semana" (donde voy cada dia) · fichaje pre-rellenado desde el roster · plan vs real
 (asignado a X / ficho en Y, solo para trabajos enlazados a un PRJ).
 
+## El plano alimenta las 5 herramientas, mostradas POR IGUAL (v175)
+Peticion del usuario: "al cargar el plano solo me muestra que leyo 17 parametros (los del survey); las
+otras herramientas tecnicas las maneja como independientes cuando todas son de igual importancia".
+### ⚠️ Era DISPLAY, no extraccion (verificado con evidencia)
+`extraer_todo` YA lee todo para las 5 herramientas. Probado sobre los 2 planos REALES de Downloads:
+NORTH SYD y AGECARE dan **17/17 params + NS + riel(+altura) + HQ + HGP + HKP + LFKK + LFGK, faltan=0**.
+El problema era el framing: el mensaje al cargar lideraba con "17 parametros" (`plan_data.resumen`) y el
+detalle mostraba tarjetas sueltas (HKP, HQ, LFKK…) sin decir a que herramienta alimenta cada una.
+### `plan_data.por_herramienta(datos)` — el plano por herramienta
+Invierte el mapa `USA` (dato→herramienta) para agrupar POR herramienta: devuelve, para cada una de las 5,
+`[(label, valor|None)]`. `projects_ui._plano_herramientas_html` lo pinta como tabla (chip verde con el
+valor / chip rojo "⚠️ falta" por herramienta). Se muestra AL CARGAR (nuevo proyecto + 📐 Datos del plano)
+y en el detalle del proyecto, reemplazando las tarjetas sueltas y el mensaje de "17 parametros":
+`📐 Survey (17/17 · NS · Riel) · 🔩 Plomadas (params · RAIL) · ✂️ Rieles (LFKK · LFGK) · 🛡 Buffers (HKP)
+· 🎗 Belting (HQ · HGP)`. Floats redondos se muestran como enteros (2915.0→2915).
+### Verificacion
+`por_herramienta` con datos completos → las 5 con sus valores; con datos parciales → cada herramienta
+marca lo que le falta. HTML valido. `resumen()` se conserva (aun la usa `plan_ui.py`). Compila + import.
+
 ## Fix: refrescar la página deslogueaba (v174)
 Peticion del usuario: "cuando refresco se cierra la sesion". El login persistente por cookie existe
 desde v107, pero no restauraba tras un refresco.
@@ -2482,9 +2501,10 @@ posicional + plano) → app.py, al cargar el PDF, setea `st.session_state["ns"]`
 resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NORTH SYD y AGECARE → NS=6
 (coincide con travel/floor-height HQ/HE).
 
-## Versiones desplegadas (v174 = actual)
+## Versiones desplegadas (v175 = actual)
 | Ver | Cambio principal |
 |---|---|
+| v175 | El plano se muestra POR HERRAMIENTA (las 5 por igual): antes el mensaje lideraba con "17 parametros" del survey y el resto salia suelto. La extraccion ya leia todo (NS/riel/HQ/HGP/HKP/LFKK/LFGK, verificado en 2 planos reales); ahora plan_data.por_herramienta + una tabla muestran que le da el plano a cada herramienta (Survey/Plomadas/Rieles/Buffers/Belting) con ✓ o ⚠️ falta |
 | v174 | Fix: refrescar la pagina deslogueaba. El componente de cookies (extra-streamlit-components) no entrega las cookies en el primer run tras el refresco, y render_login se rendia al primer intento (_cookie_tried); ahora reintenta unos reruns antes de mostrar el login, asi el login persistente de v107 por fin sobrevive al refresco |
 | v173 | Zona horaria POR GRUPO (core/clock.py): Streamlit Cloud corre en UTC, asi que los registros salian ~10 h corridos. Ahora cada grupo tiene su zona (Grupos.Zona, la fija el propietario; default Australia/Sydney) y todos los datetime.now()/date.today() (~40 sitios) pasan por clock.now()/today() que resuelve la zona del grupo con zoneinfo (per-sesion, sirve multi-país). +tzdata |
 | v172 | PDF del Pre-Start reescrito para calcar el template CI Liftworx: formulario blanco y negro con bordes, bandas grises por seccion, recuadros de notas, la respuesta marcada resaltada en negro, los 4 checks reubicados a la sub-tabla "Circle one" de la Seccion 3, y asistentes en 3 pares. Marca = grupo, textos en español |

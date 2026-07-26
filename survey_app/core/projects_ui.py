@@ -304,12 +304,40 @@ def _cargar_plano(pid: str):
                     pass
                 _barra.empty()
                 st.session_state[_idk] = f"{_pdf.name}:{_pdf.size}"   # guarda v112
-                st.success(f"✅ Plano cargado — {plan_data.resumen(res)}. "
-                           "Las herramientas ya lo usan.")
+                st.success("✅ Plano cargado — alimenta tus 5 herramientas técnicas.")
                 st.rerun()
             except Exception as e:
                 _barra.empty()
                 st.error(f"No se pudo leer el plano: {e}")
+
+
+def _plano_herramientas_html(datos) -> str:
+    """Tabla: qué le da el plano a CADA una de las 5 herramientas técnicas (v175).
+
+    El plano alimenta las cinco por igual; se muestran juntas para que no parezca
+    que solo cuentan los 17 parámetros del survey.
+    """
+    filas = []
+    for h in plan_data.por_herramienta(datos):
+        chips = []
+        for label, val in h["items"]:
+            if val not in (None, ""):
+                chips.append(
+                    '<span style="display:inline-block;background:#e8f5e9;color:#1b5e20;'
+                    'border-radius:6px;padding:2px 8px;margin:2px 3px;font-size:12px;">'
+                    f'{label}: <b>{val}</b></span>')
+            else:
+                chips.append(
+                    '<span style="display:inline-block;background:#fdecea;color:#b71c1c;'
+                    'border-radius:6px;padding:2px 8px;margin:2px 3px;font-size:12px;">'
+                    f'{label}: ⚠️ falta</span>')
+        filas.append(
+            '<tr><td style="padding:6px 10px;white-space:nowrap;font-weight:600;'
+            'vertical-align:top;border-bottom:1px solid #eef1f5;">'
+            f'{h["tool"]}</td><td style="padding:5px 6px;border-bottom:1px solid #eef1f5;">'
+            f'{"".join(chips)}</td></tr>')
+    return ('<table style="border-collapse:collapse;width:100%;margin:4px 0 8px;">'
+            + "".join(filas) + "</table>")
 
 
 def _plano_section(pid: str, prj: dict):
@@ -328,26 +356,10 @@ def _plano_section(pid: str, prj: dict):
         _cargar_plano(pid)
         return
 
-    faltan = datos.get("faltan") or []
-    n, tot = datos.get("n_params", 0), datos.get("n_total", 0)
-    tarj = [_kpi_card("Parámetros", f"{n}/{tot}" if tot else str(n),
-                      "#c0392b" if faltan else "#1e8449")]
-    for k, et in (("ns", "Paradas (NS)"), ("rail", "Riel"), ("hkp", "HKP"),
-                  ("hq", "HQ"), ("lfkk", "LFKK"), ("lfgk", "LFGK")):
-        if datos.get(k) not in (None, ""):
-            _v = datos[k]
-            # El riel muestra código + altura (el valor RAIL que usan las herramientas).
-            if k == "rail" and datos.get("rail_altura"):
-                _v = f"{datos['rail']} · RAIL {datos['rail_altura']:.0f}"
-            tarj.append(_kpi_card(et, _v))
-    st.markdown('<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:8px">'
-                + "".join(tarj) + "</div>", unsafe_allow_html=True)
-
-    if faltan:
-        st.warning("⚠️ El plano no dio: **" + ", ".join(str(x) for x in faltan)
-                   + "**. Quien use una herramienta tendrá que escribirlos a mano.")
-    else:
-        st.caption("El plano dio todo lo que las herramientas necesitan.")
+    st.caption("Un solo plano alimenta **tus 5 herramientas técnicas** — todas por igual:")
+    st.markdown(_plano_herramientas_html(datos), unsafe_allow_html=True)
+    if not (datos.get("faltan") or []):
+        st.caption("✅ El plano dio todo lo que las herramientas necesitan.")
 
     par = datos.get("params") or {}
     if par:
@@ -637,12 +649,8 @@ def _nuevo_proyecto_form(grupo: str, key: str = "nuevo"):
 
         _plano = st.session_state.get(_kd)
         if _plano:
-            st.success(f"✅ Plano leído — {plan_data.resumen(_plano)}")
-            if _plano.get("faltan"):
-                with st.expander(f"⚠️ {len(_plano['faltan'])} dato(s) que el plano no dio"):
-                    st.caption("Habrá que ingresarlos a mano en la herramienta que los use. "
-                               "Se listan para que no queden en cero sin que nadie lo note.")
-                    st.write(", ".join(_plano["faltan"]))
+            st.success("✅ Plano leído — alimenta tus **5 herramientas técnicas**:")
+            st.markdown(_plano_herramientas_html(_plano), unsafe_allow_html=True)
 
         asg = st.multiselect("👷 Usuarios de campo asignados", campos,
                              key=f"np_asg_{key}")
