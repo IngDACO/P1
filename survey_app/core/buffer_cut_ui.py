@@ -22,6 +22,19 @@ from core import tool_save_ui
 _K = "bc_res"
 
 
+def _kpi(label, value, color=None):
+    col = f"color:{color};" if color else ""
+    return ('<div style="background:#fff;border:1px solid #e6e9ef;border-radius:12px;'
+            'padding:10px 14px;flex:1;min-width:96px;">'
+            f'<div style="font-size:12px;color:#6b7280;">{label}</div>'
+            f'<div style="font-size:20px;font-weight:700;{col}">{value}</div></div>')
+
+
+def _kpi_row(cards):
+    return ('<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:8px">'
+            + "".join(cards) + "</div>")
+
+
 def render_buffer_cut_tab():
     st.markdown("### 🛡 Corte de buffers")
     st.caption("Calcula cuánto cortar cada buffer. **HKP** sale del plano del proyecto; "
@@ -38,6 +51,7 @@ def render_buffer_cut_tab():
         st.info(f"↩️ Reabierto el cálculo **{_reab}**. Ajusta lo que necesites y vuelve a calcular.")
 
     _prj, _plano = plan_ui.selector_proyecto("bc")
+    _pr = str((_prj or {}).get("Nombre", "") or "")     # v181: al diagrama y al PDF
     if _plano:
         _n = plan_ui.aplicar(_plano, {"hkp": "bc_hkp"})
         if _n:
@@ -91,7 +105,13 @@ def render_buffer_cut_tab():
         return
 
     # ── 5. Resultado (persistente entre reruns) ─────────────
-    st.success(f"HKP = {res['HKP']:.0f} mm   ·   CutBuffer = HKP − HKPR")
+    _n_warn = sum(1 for b in res["buffers"] if b["warn"])
+    st.markdown(_kpi_row([
+        _kpi("HKP (plano)", f"{res['HKP']:.0f} mm"),
+        _kpi("Buffers", str(len(res["buffers"]))),
+        _kpi("A revisar", str(_n_warn), "#c0392b" if _n_warn else None)]),
+        unsafe_allow_html=True)
+    st.caption("Corte = HKP − HKPR (por buffer).")
     filas = [{
         "Buffer":     f"Buffer {b['n']}",
         "HKPR (mm)":  round(b["HKPR"], 1),
@@ -101,7 +121,7 @@ def render_buffer_cut_tab():
     st.subheader("Resultado — cortes (mm)")
     st.dataframe(pd.DataFrame(filas), use_container_width=True, hide_index=True)
 
-    svg = buffer_cut_svg(res)
+    svg = buffer_cut_svg(res, proyecto=_pr)
     st.subheader("📐 Diagrama de cortes")
     components.html(
         '<!DOCTYPE html><html><body style="margin:0;background:transparent">'
@@ -115,7 +135,7 @@ def render_buffer_cut_tab():
     _cortes = ", ".join(f"B{b['n']}: {b['CutBuffer']}" for b in res["buffers"])
     pdf_bytes = tool_pdf(
         "Corte de buffers",
-        meta={"HKP del plano": f"{res['HKP']:.0f} mm",
+        meta={"Proyecto": _pr or "—", "HKP del plano": f"{res['HKP']:.0f} mm",
               "Buffers": str(len(res["buffers"]))},
         svgs=[svg],
         tablas=[("Cortes por buffer", filas)],

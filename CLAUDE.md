@@ -1068,6 +1068,17 @@ corren por primera vez en el Cloud.
 Campo → "mi semana" (donde voy cada dia) · fichaje pre-rellenado desde el roster · plan vs real
 (asignado a X / ficho en Y, solo para trabajos enlazados a un PRJ).
 
+## Corte de buffers: revisión técnico/estético/integración (v181)
+Revisión de 🛡 Corte de buffers — **idéntica a rieles v180** (ya era por buffer, diagrama v129, integración
+compartida). Dos arreglos:
+- **Integración:** el proyecto se conocía (`_prj`) pero no iba al diagrama ni al PDF. Fix:
+  `buffer_cut_svg(..., proyecto="")` lo dibuja arriba-derecha + "Proyecto" al `meta` del PDF.
+- **Estético:** `st.success("HKP = …")` plano → tarjetas KPI (`_kpi`): HKP · nº buffers · nº a revisar
+  (rojo si hay cortes negativos).
+- **Técnico:** sin gaps (por buffer + diagrama + reabrir/guardar-auto ya estaban).
+Verificado: el diagrama muestra el proyecto, sin proyecto no rompe, escape OK, sin `<defs>/<marker>`;
+compute_buffer_cut intacto (warn cuando HKPR>HKP). Compila + import.
+
 ## Corte de rieles: revisión técnico/estético/integración (v180)
 Revisión dedicada de ✂️ Corte de rieles (ya estaba en buena forma: es por elevador desde v52, diagramas
 rehechos v177/v178, e integración compartida). Salió ligera — dos arreglos.
@@ -2599,9 +2610,10 @@ posicional + plano) → app.py, al cargar el PDF, setea `st.session_state["ns"]`
 resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NORTH SYD y AGECARE → NS=6
 (coincide con travel/floor-height HQ/HE).
 
-## Versiones desplegadas (v180 = actual)
+## Versiones desplegadas (v181 = actual)
 | Ver | Cambio principal |
 |---|---|
+| v181 | Corte de buffers (revisión, igual que rieles): el nombre del proyecto va al diagrama y al PDF (estaba disponible y no se usaba) + tarjetas KPI (HKP · nº buffers · nº a revisar) en vez del st.success plano. Ya era por buffer |
 | v180 | Corte de rieles (revisión): el nombre del proyecto va ahora al diagrama y al PDF (estaba disponible y no se usaba, mismo fallo que plomado) + tarjetas KPI en vez de st.success planos. Ya era por elevador y los diagramas se rehicieron en v177/v178 |
 | v179 | Plomadas por elevador (la plantilla DBP/d1/d2 es una sola del shaft; el BSR se mide por elevador y define el encaje/verificación) + arreglo de integración (el nombre del proyecto estaba hardcodeado vacío, ahora va a los diagramas y al PDF) + estética (tarjetas KPI, el encaje como acción no como muro de números) |
 | v178 | Corte de rieles: Caso 1 deja de inventar el orden de los rieles (la app solo tiene conteos, no secuencia) — la pila A se dibuja como UN bloque; y el Caso 2 se rehace como esquema de rieles (cabina RZ/RO + contrapeso RF/RB, corte marcado arriba, alturas ilustrativas) en vez de las barras comparativas |

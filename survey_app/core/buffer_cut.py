@@ -36,7 +36,11 @@ def _mm(v) -> str:
     return f"{v:.0f}" if abs(v - round(v)) < 0.05 else f"{v:.1f}"
 
 
-def buffer_cut_svg(res: dict) -> str:
+def _esc(s) -> str:
+    return str(s or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+def buffer_cut_svg(res: dict, proyecto: str = "") -> str:
     """Alzado esquemático del corte de cada buffer.
 
     Hasta v128 esta herramienta daba SOLO números para una operación
@@ -75,6 +79,9 @@ def buffer_cut_svg(res: dict) -> str:
          f'<text x="18" y="40" font-size="8" fill="#7a8699">'
          f'HKP del plano {_mm(hkp)} mm · corte = HKP − HKPR · '
          f'escala vertical ajustada al rango</text>']
+    if proyecto:
+        p.append(f'<text x="{VW-18}" y="26" text-anchor="end" font-size="9" '
+                 f'fill="#1f2937" font-weight="bold">{_esc(proyecto)}</text>')
 
     # Nivel de plano (HKP): referencia comun
     yh = Y(hkp)
