@@ -1068,6 +1068,18 @@ corren por primera vez en el Cloud.
 Campo → "mi semana" (donde voy cada dia) · fichaje pre-rellenado desde el roster · plan vs real
 (asignado a X / ficho en Y, solo para trabajos enlazados a un PRJ).
 
+## Corte de buffers: diagrama replanteado (v182)
+El usuario notó que el diagrama **no representaba bien la geometría**: HKP/HKPR no son alturas, son la
+**holgura** (distancia) entre el **sticker de la cabina** y el **borde superior del buffer** —dos elementos
+que no se tocan—; HKP de diseño (plano), HKPR medida. **Cortar el buffer baja su borde → agranda la
+holgura**; el corte = HKP − HKPR es la rebanada que se quita del borde para pasar de HKPR a HKP.
+`buffer_cut_svg` reescrito: sticker (barra fija arriba) + línea HKP común (borde superior de diseño) +
+por buffer el borde real (a HKPR) y, si HKPR<HKP, la rebanada roja borde-real→línea-HKP = lo que se corta.
+Casos: corte>0 (rebanada roja), corte≈0 ("sin corte" verde en la línea), HKPR>HKP ("revisar" ámbar, borde
+bajo la línea). Holgura sticker↔buffer con "≈" (no a escala); corte a escala ampliada. `compute_buffer_cut`
+NO cambia. Verificado renderizado en navegador (los 3 casos correctos), sin `<defs>/<marker>`, proyecto
+arriba-derecha.
+
 ## Corte de buffers: revisión técnico/estético/integración (v181)
 Revisión de 🛡 Corte de buffers — **idéntica a rieles v180** (ya era por buffer, diagrama v129, integración
 compartida). Dos arreglos:
@@ -2610,9 +2622,10 @@ posicional + plano) → app.py, al cargar el PDF, setea `st.session_state["ns"]`
 resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NORTH SYD y AGECARE → NS=6
 (coincide con travel/floor-height HQ/HE).
 
-## Versiones desplegadas (v181 = actual)
+## Versiones desplegadas (v182 = actual)
 | Ver | Cambio principal |
 |---|---|
+| v182 | Corte de buffers: diagrama replanteado. HKP/HKPR son HOLGURAS (sticker↔buffer), no alturas. Ahora dibuja el sticker (arriba) + línea HKP de diseño + rebanada roja = lo que se corta del borde del buffer para pasar de HKPR a HKP. Casos corte/sin-corte/revisar |
 | v181 | Corte de buffers (revisión, igual que rieles): el nombre del proyecto va al diagrama y al PDF (estaba disponible y no se usaba) + tarjetas KPI (HKP · nº buffers · nº a revisar) en vez del st.success plano. Ya era por buffer |
 | v180 | Corte de rieles (revisión): el nombre del proyecto va ahora al diagrama y al PDF (estaba disponible y no se usaba, mismo fallo que plomado) + tarjetas KPI en vez de st.success planos. Ya era por elevador y los diagramas se rehicieron en v177/v178 |
 | v179 | Plomadas por elevador (la plantilla DBP/d1/d2 es una sola del shaft; el BSR se mide por elevador y define el encaje/verificación) + arreglo de integración (el nombre del proyecto estaba hardcodeado vacío, ahora va a los diagramas y al PDF) + estética (tarjetas KPI, el encaje como acción no como muro de números) |
