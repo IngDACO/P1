@@ -1068,6 +1068,16 @@ corren por primera vez en el Cloud.
 Campo → "mi semana" (donde voy cada dia) · fichaje pre-rellenado desde el roster · plan vs real
 (asignado a X / ficho en Y, solo para trabajos enlazados a un PRJ).
 
+## KPIs de credenciales + descargas agrupadas (v186)
+Estético de `render_credenciales`: arriba de la tabla, fila de `st.metric` (Credenciales · 🟢 Vigentes ·
+🟡 Por vencer · 🔴 Vencidas) calculada con `status()` — mismo estilo que la pestaña "Su trabajo" de la ficha;
+sirve al admin y al propio usuario en "Mis credenciales". Los botones de descarga (antes apilados sueltos
+bajo la tabla) ahora van en un expander "⬇️ Documentos (n)". Backend intacto. Compila + import + AST OK.
+Pendientes de la revisión de credenciales (NO hechos, dejados aparte a propósito): desacoplar
+`notify_expiring` del render (hoy es el ÚNICO disparador de avisos → mover a un digest programado, verificar
+scheduler antes); clutter del form (Clase/"Otro" siempre visibles → están dentro de `st.form`, no se puede
+ocultar condicional sin sacarlo del form); unificar mensajes de login (enumeración de usuarios).
+
 ## Fechas de credenciales con calendario (v185)
 Hallazgo de la revisión: las fechas de Emisión/Vencimiento eran **texto libre** "YYYY-MM-DD" sin validar;
 un typo → `_parse` la ignora en silencio → esa credencial **nunca dispara la alerta de vencimiento** y sale
@@ -2669,9 +2679,10 @@ posicional + plano) → app.py, al cargar el PDF, setea `st.session_state["ns"]`
 resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NORTH SYD y AGECARE → NS=6
 (coincide con travel/floor-height HQ/HE).
 
-## Versiones desplegadas (v185 = actual)
+## Versiones desplegadas (v186 = actual)
 | Ver | Cambio principal |
 |---|---|
+| v186 | Credenciales: fila de KPIs (total · vigentes · por vencer · vencidas) arriba de la tabla + botones de descarga agrupados en un expander "Documentos" |
 | v185 | Fechas de credenciales con calendario (`st.date_input`) en vez de texto libre: guarda siempre ISO, así un typo ya no desactiva en silencio la alerta de vencimiento. Precarga datos viejos; form de Editar ahora refresca los campos al cambiar de credencial (key con ID) |
 | v184 | Panel del propietario (👑 Administración → Usuarios) unificado a la ficha 360°: se gestiona cada persona desde un solo lugar (Acceso/Contacto/Credenciales/Su trabajo) en vez de 3 desplegables sueltos, igual que el administrador. La ficha gana modo `owner` con Rol+Grupo. Borrado código muerto (`_field_contact_ui`, `_USER_COLS`) |
 | v183 | Belting (revisión + diagrama replanteado): proyecto al diagrama/PDF + tarjetas KPI (HQ·HGP·nº) + el diagrama ahora respeta el SIGNO del DSTS (cabina por encima/debajo del FFL de referencia, a escala ampliada) en vez de ponerla siempre debajo en posición fija. Cierra las 5 técnicas |

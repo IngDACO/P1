@@ -72,22 +72,31 @@ def render_credenciales(usuario, grupo, editable=False, key_prefix="cr"):
         return
     creds = C.list_for(usuario)
     if creds:
+        # KPIs de un vistazo (v186): vigentes / por vencer / vencidas
+        _sts = [C.status(r.get("Vencimiento")) for r in creds]
+        k1, k2, k3, k4 = st.columns(4)
+        k1.metric("Credenciales", len(creds))
+        k2.metric("🟢 Vigentes", sum(1 for s in _sts if s == "vigente"))
+        k3.metric("🟡 Por vencer", sum(1 for s in _sts if s == "por_vencer"))
+        k4.metric("🔴 Vencidas", sum(1 for s in _sts if s == "vencido"))
         st.dataframe(pd.DataFrame([{
             "Tipo": r.get("Tipo"), "Número": r.get("Numero"), "Clase": r.get("Clase"),
             "Emisión": r.get("Emision") or "—", "Vence": r.get("Vencimiento") or "—",
             "Estado": C.status_label(r.get("Vencimiento")),
         } for r in creds]), hide_index=True, use_container_width=True)
-        for r in creds:
-            did = str(r.get("DriveID", "")).strip()
-            if did:
-                try:
-                    from core import drive_store
-                    st.download_button(f"⬇️ {r.get('Tipo')} — {r.get('Archivo', 'archivo')}",
-                                       data=drive_store.download(did),
-                                       file_name=r.get("Archivo", "credencial"),
-                                       key=f"{key_prefix}_dl_{r.get('ID')}")
-                except Exception:
-                    pass
+        # Documentos adjuntos agrupados (antes: botones sueltos apilados bajo la tabla)
+        _docs = [r for r in creds if str(r.get("DriveID", "")).strip()]
+        if _docs:
+            with st.expander(f"⬇️ Documentos ({len(_docs)})"):
+                from core import drive_store
+                for r in _docs:
+                    try:
+                        st.download_button(f"⬇️ {r.get('Tipo')} — {r.get('Archivo', 'archivo')}",
+                                           data=drive_store.download(str(r.get("DriveID", "")).strip()),
+                                           file_name=r.get("Archivo", "credencial"),
+                                           key=f"{key_prefix}_dl_{r.get('ID')}")
+                    except Exception:
+                        pass
     else:
         st.caption("Sin credenciales registradas.")
 
