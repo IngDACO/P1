@@ -11,8 +11,6 @@ from core import auth
 from core import ui_common as ui
 from core import clock
 
-_USER_COLS = ["Usuario", "Nombre", "Rol", "Grupo", "Activo", "Email"]  # tabla sin hash/tokens
-
 
 def _contacto_uno(sel, key_prefix="cc"):
     """Email + vinculación de Telegram de UN usuario. El Telegram lo vincula el
@@ -49,20 +47,6 @@ def _contacto_uno(sel, key_prefix="cc"):
             else:
                 st.error("No encontré su mensaje. Asegúrate de que pulsó Start y reintenta.")
 
-
-def _field_contact_ui(campo_users, key_prefix="cc"):
-    """Contacto OBLIGATORIO (email + Telegram) de usuarios de campo — panel propietario.
-    (En 🛠 Mi grupo el contacto vive dentro de la ficha de cada usuario, v153.)"""
-    if not campo_users:
-        return
-    faltan = [u["Usuario"] for u in campo_users
-              if not (str(u.get("Email", "")).strip() and str(u.get("TelegramChatID", "")).strip())]
-    with st.expander("📇 Contacto de campo (email + Telegram — OBLIGATORIO)", expanded=bool(faltan)):
-        if faltan:
-            st.warning("⚠️ Sin contacto completo (no pueden usar la app): " + ", ".join(faltan))
-        sel = st.selectbox("Usuario de campo", [u["Usuario"] for u in campo_users],
-                           key=f"{key_prefix}_sel")
-        _contacto_uno(sel, key_prefix)
 
 def render_credenciales(usuario, grupo, editable=False, key_prefix="cr"):
     """Tickets/credenciales de un usuario. editable=True → admin gestiona (agregar/editar/
@@ -362,13 +346,35 @@ def _owner_grupos():
 
 
 def _owner_usuarios():
+    """Gestión de usuarios del propietario (v184): mismo estilo que el administrador
+    — una tabla-resumen y luego la ficha 360° por persona (una sola selección),
+    en vez de los 3 desplegables sueltos de antes."""
     users = auth.list_users()
-    if users:
-        _df   = pd.DataFrame(users)
-        _cols = [c for c in _USER_COLS if c in _df.columns]
-        st.dataframe(_df[_cols] if _cols else _df, hide_index=True, use_container_width=True)
-    grupo_opts = [""] + [g["Grupo"] for g in auth.list_groups()]
 
+    # ── Tabla-resumen de todos los usuarios (+ contacto ✅/⚠️) ──
+    if users:
+        _rows = []
+        for u in users:
+            es_campo = str(u.get("Rol", "")).lower() == "campo"
+            _cont = ("—" if not es_campo
+                     else ("✅" if (str(u.get("Email", "")).strip()
+                                    and str(u.get("TelegramChatID", "")).strip())
+                           else "⚠️ falta"))
+            _rows.append({"Usuario": u.get("Usuario", ""), "Nombre": u.get("Nombre", ""),
+                          "Rol": u.get("Rol", ""), "Grupo": u.get("Grupo", "") or "—",
+                          "Activo": u.get("Activo", "SI"),
+                          "Email": u.get("Email", "") or "—", "Contacto": _cont})
+        st.dataframe(pd.DataFrame(_rows), hide_index=True, use_container_width=True)
+        _faltan = [u["Usuario"] for u in users
+                   if str(u.get("Rol", "")).lower() == "campo"
+                   and not (str(u.get("Email", "")).strip()
+                            and str(u.get("TelegramChatID", "")).strip())]
+        if _faltan:
+            st.warning("⚠️ Campo sin contacto completo (no pueden usar la app): "
+                       + ", ".join(_faltan))
+
+    # ── Crear usuario (rol + grupo) ──
+    grupo_opts = [""] + [g["Grupo"] for g in auth.list_groups()]
     with st.expander("➕ Crear usuario"):
         with st.form("form_user", clear_on_submit=True):
             u  = st.text_input("Usuario")
@@ -388,46 +394,19 @@ def _owner_usuarios():
                     (st.success if ok else st.error)(msg)
                     if ok: st.rerun()
 
-    _campo = [x for x in users if str(x.get("Rol", "")).lower() == "campo"]
-    _field_contact_ui(_campo, key_prefix="ow_cc")
-
+    # ── Gestionar un usuario: ficha 360° (una sola selección) ──
     if users:
-        with st.expander("🔑 Modificar usuario"):
-            sel = st.selectbox("Usuario", [x["Usuario"] for x in users], key="ow_sel")
-            np_ = st.text_input("Nueva contraseña", type="password", key="ow_np")
-            if st.button("Cambiar contraseña", key="ow_chp"):
-                if np_:
-                    ok, msg = auth.set_password(sel, np_); (st.success if ok else st.error)(msg)
-                else:
-                    st.warning("Ingresa la contraseña.")
-            cr1, cr2 = st.columns(2)
-            nr = cr1.selectbox("Rol", auth.ROLES, key="ow_nr")
-            if cr1.button("Aplicar rol", key="ow_chr"):
-                ok, msg = auth.set_role(sel, nr); (st.success if ok else st.error)(msg); st.rerun()
-            ng = cr2.selectbox("Grupo", grupo_opts, key="ow_ng")
-            if cr2.button("Aplicar grupo", key="ow_chg"):
-                ok, msg = auth.set_group(sel, ng); (st.success if ok else st.error)(msg); st.rerun()
-            _curo = next((x for x in users if x["Usuario"] == sel), {})
-            taro = st.number_input("💵 Tarifa por hora (mano de obra)", min_value=0.0, step=1.0,
-                                   value=float(str(_curo.get("TarifaHora", "") or 0).replace(",", ".") or 0),
-                                   key="ow_tar")
-            if st.button("Guardar tarifa", key="ow_savetar"):
-                ok, msg = auth.set_rate(sel, taro); (st.success if ok else st.error)(msg); st.rerun()
-            a1, a2, a3 = st.columns(3)
-            if a1.button("Activar", key="ow_act"):
-                ok, msg = auth.set_active(sel, True);  (st.success if ok else st.error)(msg); st.rerun()
-            if a2.button("Desactivar", key="ow_de"):
-                ok, msg = auth.set_active(sel, False); (st.success if ok else st.error)(msg); st.rerun()
-            if a3.button("Eliminar", key="ow_del"):
-                ok, msg = auth.delete_user(sel);       (st.success if ok else st.error)(msg); st.rerun()
-
-    # ── Credenciales / tickets (propietario gestiona cualquier usuario) ──
-    if users:
-        st.markdown("---")
-        st.markdown("#### 🎫 Credenciales / tickets")
-        cusel = st.selectbox("Usuario", [x["Usuario"] for x in users], key="ow_credsel")
-        _cu = next((x for x in users if x["Usuario"] == cusel), {})
-        render_credenciales(cusel, _cu.get("Grupo", ""), editable=True, key_prefix="owcr")
+        st.markdown("#### 👤 Gestionar un usuario")
+        _gf = ui.elegir("Filtrar por grupo", [g["Grupo"] for g in auth.list_groups()],
+                        key="ow_ficha_gfil", vacio="— todos los grupos —")
+        _cands = [u for u in users if (not _gf or str(u.get("Grupo", "")) == _gf)]
+        _map = {f"{u['Nombre'] or u['Usuario']} ({u['Usuario']}) · {u.get('Grupo') or 'sin grupo'}": u
+                for u in _cands}
+        _elegido = ui.elegir("Usuario", _map, key="ow_fichasel", vacio="— elige un usuario —")
+        if _elegido:
+            st.markdown("---")
+            _ficha_usuario(_elegido, _elegido.get("Grupo", ""),
+                           owner=True, sel_key="ow_fichasel")
 
 
 def render_owner_panel():
@@ -606,10 +585,14 @@ def _owner_rieles():
 # ════════════════════════════════════════════════════════════
 # PANEL DEL ADMINISTRADOR — su grupo (proyectos + usuarios de campo)
 # ════════════════════════════════════════════════════════════
-def _ficha_usuario(u, grupo):
+def _ficha_usuario(u, grupo, owner=False, sel_key="gp_fichasel"):
     """Ficha 360° de UN usuario: identidad, acceso, contacto, credenciales y su
     trabajo (v153). Antes había que elegir a la persona en 3 desplegables distintos
-    (contacto / modificar / credenciales); ahora se gestiona todo desde aquí."""
+    (contacto / modificar / credenciales); ahora se gestiona todo desde aquí.
+
+    owner=True (v184): además de contraseña/tarifa/estado, la pestaña Acceso deja
+    reasignar Rol y Grupo (lo que antes solo tenía el panel disperso del propietario).
+    sel_key: clave del selector externo, para limpiarla al eliminar al usuario."""
     from core import credentials as C
     from core import projects as P
     from core import timeclock as T
@@ -645,6 +628,25 @@ def _ficha_usuario(u, grupo):
                 ok, msg = auth.set_password(sel, np_); (st.success if ok else st.error)(msg)
             else:
                 st.error("Escribe la nueva contraseña.")
+        if owner:   # el propietario también reasigna rol y grupo (v184)
+            _gopts = [""] + [g["Grupo"] for g in auth.list_groups()]
+            _rc, _gc = st.columns(2)
+            _rcur = str(u.get("Rol", "") or "campo")
+            _nrol = _rc.selectbox("Rol", auth.ROLES,
+                                  index=auth.ROLES.index(_rcur) if _rcur in auth.ROLES else 0,
+                                  key=f"{k}_rol")
+            if _rc.button("Aplicar rol", key=f"{k}_chrol"):
+                ok, msg = auth.set_role(sel, _nrol); (st.success if ok else st.error)(msg)
+                if ok:
+                    st.rerun()
+            _gcur = str(u.get("Grupo", "") or "")
+            _ngrp = _gc.selectbox("Grupo", _gopts,
+                                  index=_gopts.index(_gcur) if _gcur in _gopts else 0,
+                                  key=f"{k}_grp")
+            if _gc.button("Aplicar grupo", key=f"{k}_chgrp"):
+                ok, msg = auth.set_group(sel, _ngrp); (st.success if ok else st.error)(msg)
+                if ok:
+                    st.rerun()
         tar = st.number_input("💵 Tarifa por hora (para costear la mano de obra)",
                               min_value=0.0, step=1.0,
                               value=float(str(u.get("TarifaHora", "") or 0).replace(",", ".") or 0),
@@ -706,7 +708,7 @@ def _ficha_usuario(u, grupo):
             if st.button("Eliminar definitivamente", key=f"{k}_del"):
                 ok, msg = auth.delete_user(sel); (st.success if ok else st.error)(msg)
                 if ok:
-                    st.session_state.pop("gp_fichasel", None)
+                    st.session_state.pop(sel_key, None)
                     st.rerun()
 
 

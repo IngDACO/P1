@@ -1068,6 +1068,25 @@ corren por primera vez en el Cloud.
 Campo → "mi semana" (donde voy cada dia) · fichaje pre-rellenado desde el roster · plan vs real
 (asignado a X / ficho en Y, solo para trabajos enlazados a un PRJ).
 
+## Panel del propietario unificado a la ficha 360° (v184)
+Revisión estético/integración del bloque acceso+credenciales. Hallazgo gordo: el **administrador**
+gestiona cada persona con la **ficha 360°** (`_ficha_usuario`: pestañas Acceso/Contacto/Credenciales/
+Su trabajo/eliminar, una sola selección), pero el **propietario** (`_owner_usuarios`) seguía con el
+estilo viejo disperso (elegir a la persona en 3 desplegables: modificar / contacto / credenciales).
+La mejora v153 nunca se aplicó al panel del propietario. Unificado:
+- `_ficha_usuario(u, grupo, owner=False, sel_key="gp_fichasel")`: nuevo modo `owner` que, en la pestaña
+  🔑 Acceso, añade reasignar **Rol** y **Grupo** (lo que solo tenía el propietario). El admin la ve igual.
+  `sel_key` parametriza la clave del selector externo a limpiar al eliminar.
+- `_owner_usuarios` rehecho: tabla-resumen (con columna Contacto ✅/⚠️ + aviso de faltantes) → "➕ Crear
+  usuario" (rol+grupo) → "👤 Gestionar un usuario" = filtro por grupo + selector → `_ficha_usuario(..., owner=True)`.
+  Desaparecen los 3 desplegables sueltos ("Modificar usuario", "Contacto de campo", "Credenciales").
+- Borrado el código muerto: `_field_contact_ui` y `_USER_COLS` (ya no se usan).
+NO se tocó: `auth.py` (backend), el panel del administrador, la creación de usuarios ni las credenciales.
+Verificado: compila + import + AST sin nombres libres; el admin sigue llamando `_ficha_usuario` con los
+defaults. Confirmación visual = en el Cloud (necesita la hoja real). Pendientes de la revisión (no hechos
+aún): fechas de credenciales con `date_input`+validación, KPIs de credenciales, desacoplar `notify_expiring`
+del render, unificar mensajes de login.
+
 ## Belting: revisión técnico/estético/integración + diagrama replanteado (v183)
 Última de las 5 herramientas técnicas. Tres arreglos:
 - **Integración:** el proyecto se conocía (`_prj`) pero no iba al diagrama ni al PDF. Fix:
@@ -2635,9 +2654,10 @@ posicional + plano) → app.py, al cargar el PDF, setea `st.session_state["ns"]`
 resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NORTH SYD y AGECARE → NS=6
 (coincide con travel/floor-height HQ/HE).
 
-## Versiones desplegadas (v183 = actual)
+## Versiones desplegadas (v184 = actual)
 | Ver | Cambio principal |
 |---|---|
+| v184 | Panel del propietario (👑 Administración → Usuarios) unificado a la ficha 360°: se gestiona cada persona desde un solo lugar (Acceso/Contacto/Credenciales/Su trabajo) en vez de 3 desplegables sueltos, igual que el administrador. La ficha gana modo `owner` con Rol+Grupo. Borrado código muerto (`_field_contact_ui`, `_USER_COLS`) |
 | v183 | Belting (revisión + diagrama replanteado): proyecto al diagrama/PDF + tarjetas KPI (HQ·HGP·nº) + el diagrama ahora respeta el SIGNO del DSTS (cabina por encima/debajo del FFL de referencia, a escala ampliada) en vez de ponerla siempre debajo en posición fija. Cierra las 5 técnicas |
 | v182 | Corte de buffers: diagrama replanteado. HKP/HKPR son HOLGURAS (sticker↔buffer), no alturas. Ahora dibuja el sticker (arriba) + línea HKP de diseño + rebanada roja = lo que se corta del borde del buffer para pasar de HKPR a HKP. Casos corte/sin-corte/revisar |
 | v181 | Corte de buffers (revisión, igual que rieles): el nombre del proyecto va al diagrama y al PDF (estaba disponible y no se usaba) + tarjetas KPI (HKP · nº buffers · nº a revisar) en vez del st.success plano. Ya era por buffer |
