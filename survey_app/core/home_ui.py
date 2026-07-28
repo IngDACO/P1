@@ -176,9 +176,11 @@ def _placeholder(titulo, desc=""):
 
 # ── HOME ─────────────────────────────────────────────────────────
 def render_home(grupo):
-    from core import clock
-    st.markdown(f"## 🏠 Home  ·  <span style='font-size:1rem;color:#6b7280;'>"
-                f"{clock.today().strftime('%A %d/%m/%Y')}</span>", unsafe_allow_html=True)
+    # v192: el "Centro de control del grupo" (KPIs + resumen del día) vivía en la
+    # cabecera de "Mi grupo"; al reorganizar la nav quedó sin sitio → se reubica aquí,
+    # que es la nueva landing. Reusa la función tal cual (no se duplica lógica).
+    from core import projects_ui as PU
+    PU.render_group_header(grupo)
     col_map, col_ag = st.columns([3, 2], gap="large")
     with col_map:
         st.markdown("#### 🗺 Proyectos en ejecución")

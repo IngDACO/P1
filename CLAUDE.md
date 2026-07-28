@@ -1068,6 +1068,14 @@ corren por primera vez en el Cloud.
 Campo → "mi semana" (donde voy cada dia) · fichaje pre-rellenado desde el roster · plan vs real
 (asignado a X / ficho en Y, solo para trabajos enlazados a un PRJ).
 
+## Centro de control reubicado en HOME (v192)
+Auditoría antes→ahora: 13/13 apartados reubicados; lo ÚNICO sin sitio era el "Centro de control del grupo"
+(`projects_ui.render_group_header`: banda 🏢 grupo + KPIs [activos·avance·en riesgo·alarmas·horas] + resumen
+del día con chips de pendientes y briefing IA), que salía arriba de "Mi grupo". Reubicado al tope de
+`home_ui.render_home` (nueva landing), reusando la función tal cual, arriba del mapa y la agenda. Se quitó el
+título "🏠 Home · fecha" redundante (el banner del grupo hace de cabecera). Verificado: compila + import.
+Sigue pendiente: los saltos automáticos (`_nav_pending`/`_gruposec_pending`) no aplican en la nav del admin.
+
 ## Integración del contenido en la nueva navegación (v191)
 Se cablearon los apartados de la nueva nav del admin a las funciones que YA existen (reconexión, no reescritura).
 Mapeo (decisiones del usuario): **Fichaje**→`timeclock_ui.render_timeclock_tab`; **Planificación**→sub-menú
@@ -2751,9 +2759,10 @@ posicional + plano) → app.py, al cargar el PDF, setea `st.session_state["ns"]`
 resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NORTH SYD y AGECARE → NS=6
 (coincide con travel/floor-height HQ/HE).
 
-## Versiones desplegadas (v191 = actual)
+## Versiones desplegadas (v192 = actual)
 | Ver | Cambio principal |
 |---|---|
+| v192 | Centro de control del grupo (KPIs + resumen del día) reubicado en HOME, arriba del mapa y la agenda (era lo único que había quedado sin reubicar al reorganizar la nav del admin) |
 | v191 | Integrado TODO el contenido existente en la nueva nav del admin: Fichaje, Planificación (Tablero+Usuarios), Proyectos (Proyectos+Agrupaciones), Finanzas (Gastos+Horas), Herramientas (5 técnicas+Pre-Start). Inventario y Contactos quedan placeholders. Reconexión de funciones ya probadas |
 | v190 | Nueva navegación del ADMIN (primer pase): menú lateral de iconos (Home/Fichaje/Planificación/Proyectos/Finanzas/Inventario/Herramientas/Contactos) + barra superior (buscador + campana de alertas) + HOME real (mapa de proyectos en ejecución + agenda de hoy del roster). Los 6 apartados restantes son placeholders. Solo rol admin; nuevo core/home_ui.py |
 | v189 | Formulario de credenciales sin clutter: "Especifica" solo si Tipo=Otro, "Clase" solo para licencia de conducir (Tipo movido fuera del st.form para poder condicionar). Cierra la revisión de acceso+credenciales |
