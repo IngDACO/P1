@@ -1068,6 +1068,25 @@ corren por primera vez en el Cloud.
 Campo → "mi semana" (donde voy cada dia) · fichaje pre-rellenado desde el roster · plan vs real
 (asignado a X / ficho en Y, solo para trabajos enlazados a un PRJ).
 
+## Nueva navegación del admin: shell + HOME (v190) — EN CURSO
+Rediseño de la UX de navegación (pedido del usuario), **solo rol administrador** por ahora (owner/campo
+siguen con la nav vieja). Nuevo `core/home_ui.py`:
+- **Menú lateral de iconos** (en el sidebar, `sidebar_menu()`): 🏠 Home · ⏱ Fichaje · 📅 Planificación ·
+  📁 Proyectos · 💰 Finanzas · 📦 Inventario · 🛠 Herramientas · 👥 Contactos. (Decisión del usuario:
+  Fichaje = icono propio; Pre-Start = una herramienta más dentro de Herramientas.)
+- **Barra superior** (`render_topbar`): buscador (placeholder, aún sin backend) + **campana** (popover)
+  con alertas — de momento credenciales por vencer/vencidas (`credentials.expiring`); más fuentes luego.
+- **HOME real** (`render_home`, doble columna): IZQ mapa de proyectos "En progreso" (`st.map`, sin API key;
+  geocodifica `Ubicacion` de texto con Nominatim/OSM, cacheado 1 día; los sin ubicación se listan aparte);
+  DER agenda de hoy desde el roster (`get_semana`/`celda`/`etiqueta_de`/`color_de`, por persona de campo,
+  con chip de color + nota + proyecto enlazado + resumen asignados/OFF/leave/sin asignar).
+- Los otros 6 apartados son **placeholders** ("en construcción") — decisión del usuario, se integran uno a uno.
+Wiring en `app.py`: en el sidebar, si `_ROL=="administrador"` se renderiza `sidebar_menu()`; y antes de la
+cabecera principal, un branch admin llama `render_topbar`+`render_admin_content` y hace `st.stop()` (salta la
+cabecera y el radio viejo). Verificado: compila + import + AST sin nombres libres. **Confirmación visual =
+Cloud** (necesita login + Sheets; no renderizable local). PENDIENTE/decisiones futuras: Google Maps vs OSM,
+campo de coordenadas por proyecto, qué busca el buscador, más fuentes de alertas, e integrar los placeholders.
+
 ## Formulario de credenciales sin clutter (v189)
 Último ítem de la revisión de credenciales. En "➕ Agregar credencial", "Especifica (Otro)" y "Clase
 (licencia)" se mostraban SIEMPRE aunque no aplicaran; dentro de un `st.form` no se puede condicionar (no hay
@@ -2718,9 +2737,10 @@ posicional + plano) → app.py, al cargar el PDF, setea `st.session_state["ns"]`
 resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NORTH SYD y AGECARE → NS=6
 (coincide con travel/floor-height HQ/HE).
 
-## Versiones desplegadas (v189 = actual)
+## Versiones desplegadas (v190 = actual)
 | Ver | Cambio principal |
 |---|---|
+| v190 | Nueva navegación del ADMIN (primer pase): menú lateral de iconos (Home/Fichaje/Planificación/Proyectos/Finanzas/Inventario/Herramientas/Contactos) + barra superior (buscador + campana de alertas) + HOME real (mapa de proyectos en ejecución + agenda de hoy del roster). Los 6 apartados restantes son placeholders. Solo rol admin; nuevo core/home_ui.py |
 | v189 | Formulario de credenciales sin clutter: "Especifica" solo si Tipo=Otro, "Clase" solo para licencia de conducir (Tipo movido fuera del st.form para poder condicionar). Cierra la revisión de acceso+credenciales |
 | v188 | Fix login persistente: refrescar (F5) ya no desloguea. El componente de cookies se creaba nuevo cada rerun y el login bloqueaba con sleeps que impedían procesar el mensaje del navegador con la cookie. Ahora CookieManager único por sesión + sin bloqueos (deja que el componente dispare su rerun) + no re-restaurar tras logout |
 | v187 | Avisos de vencimiento de credenciales desacoplados del panel: antes solo se disparaban al abrir 🔧 Usuarios de campo (frágil); ahora corren al login de cualquier admin/propietario (app.py), 1×/día/grupo, deduplicado. No había scheduler; se eligió la opción pragmática sin infra (job programado queda anotado como futuro) |

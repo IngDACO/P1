@@ -189,6 +189,12 @@ with st.sidebar:
     render_user_bar()
     st.markdown("---")
 
+    # ── Navegación del admin (nueva UI, v190) ──
+    if _ROL == "administrador":
+        from core import home_ui as _home
+        st.session_state["_admin_sec"] = _home.sidebar_menu()
+        st.markdown("---")
+
     # ══════════════════════════════════════════════════
     # ASISTENTE IA — desplegable en sidebar
     # ══════════════════════════════════════════════════
@@ -230,6 +236,16 @@ with st.sidebar:
             if st.button("🗑 Limpiar conversación", use_container_width=True, key="clear_chat_sb"):
                 st.session_state.chat_history = []
                 st.rerun()
+
+# ══════════════════════════════════════════════════════
+# ADMIN — nueva navegación (shell): top bar + contenido por sección (v190)
+# Solo el administrador; owner/campo siguen con la cabecera + nav de abajo.
+# ══════════════════════════════════════════════════════
+if _ROL == "administrador":
+    from core import home_ui as _home
+    _home.render_topbar(_GRUPO)
+    _home.render_admin_content(st.session_state.get("_admin_sec", "home"), _GRUPO)
+    st.stop()
 
 # ══════════════════════════════════════════════════════
 # CABECERA PRINCIPAL
