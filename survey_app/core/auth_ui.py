@@ -48,6 +48,21 @@ def _contacto_uno(sel, key_prefix="cc"):
                 st.error("No encontré su mensaje. Asegúrate de que pulsó Start y reintenta.")
 
 
+def _fecha_input(col, label, valor_actual="", *, key):
+    """Selector de fecha OPCIONAL para credenciales (v185). Precarga `valor_actual`
+    (texto de la hoja) y devuelve ISO 'YYYY-MM-DD', o '' si se deja vacío. Al guardar
+    siempre en ISO, un typo ya no puede desactivar en silencio la alerta de vencimiento."""
+    from core import credentials as C
+    import datetime as _dt
+    lo, hi = _dt.date(2000, 1, 1), _dt.date(2100, 12, 31)
+    ini = C._parse(valor_actual) if valor_actual else None
+    if ini and not (lo <= ini <= hi):
+        ini = None
+    d = col.date_input(label, value=ini, key=key, format="YYYY-MM-DD",
+                       min_value=lo, max_value=hi)
+    return d.isoformat() if d else ""
+
+
 def render_credenciales(usuario, grupo, editable=False, key_prefix="cr"):
     """Tickets/credenciales de un usuario. editable=True → admin gestiona (agregar/editar/
     eliminar, subir foto/documento); editable=False → solo lectura (el propio usuario)."""
@@ -88,8 +103,8 @@ def render_credenciales(usuario, grupo, editable=False, key_prefix="cr"):
             num   = c1.text_input("Número")
             clase = c2.selectbox("Clase (para licencia)", C.CLASES_LICENCIA, key=f"{key_prefix}_clase")
             c3, c4 = st.columns(2)
-            emi = c3.text_input("Emisión (YYYY-MM-DD)")
-            ven = c4.text_input("Vencimiento (YYYY-MM-DD, vacío si no vence)")
+            emi = _fecha_input(c3, "Emisión", key=f"{key_prefix}_emi")
+            ven = _fecha_input(c4, "Vencimiento (vacío si no vence)", key=f"{key_prefix}_ven")
             arch = st.file_uploader("Foto o documento (opcional)",
                                     type=["pdf", "png", "jpg", "jpeg"], key=f"{key_prefix}_file")
             nota = st.text_input("Nota")
@@ -112,11 +127,12 @@ def render_credenciales(usuario, grupo, editable=False, key_prefix="cr"):
             idmap = {f"{r.get('Tipo')} · {r.get('Numero') or 's/n'} ({r.get('ID')})": r for r in creds}
             sel = st.selectbox("Credencial", list(idmap.keys()), key=f"{key_prefix}_esel")
             r = idmap[sel]
+            _kid = str(r.get("ID", ""))
             c1, c2 = st.columns(2)
-            enum = c1.text_input("Número", value=r.get("Numero", ""), key=f"{key_prefix}_enum")
-            even = c2.text_input("Vencimiento (YYYY-MM-DD)", value=r.get("Vencimiento", ""),
-                                 key=f"{key_prefix}_even")
-            enota = st.text_input("Nota", value=r.get("Nota", ""), key=f"{key_prefix}_enota")
+            enum = c1.text_input("Número", value=r.get("Numero", ""), key=f"{key_prefix}_enum_{_kid}")
+            even = _fecha_input(c2, "Vencimiento (vacío si no vence)", r.get("Vencimiento", ""),
+                                key=f"{key_prefix}_even_{_kid}")
+            enota = st.text_input("Nota", value=r.get("Nota", ""), key=f"{key_prefix}_enota_{_kid}")
             b1, b2 = st.columns(2)
             if b1.button("💾 Guardar", key=f"{key_prefix}_eupd"):
                 ok, msg = C.update(r.get("ID"), {"Numero": enum, "Vencimiento": even, "Nota": enota,

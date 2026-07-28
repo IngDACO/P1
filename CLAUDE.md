@@ -1068,6 +1068,21 @@ corren por primera vez en el Cloud.
 Campo → "mi semana" (donde voy cada dia) · fichaje pre-rellenado desde el roster · plan vs real
 (asignado a X / ficho en Y, solo para trabajos enlazados a un PRJ).
 
+## Fechas de credenciales con calendario (v185)
+Hallazgo de la revisión: las fechas de Emisión/Vencimiento eran **texto libre** "YYYY-MM-DD" sin validar;
+un typo → `_parse` la ignora en silencio → esa credencial **nunca dispara la alerta de vencimiento** y sale
+"—". Fix: helper `_fecha_input(col, label, valor_actual="", *, key)` que usa `st.date_input` (calendario,
+opcional con `value=None`, rango 2000–2100), precarga el valor existente parseándolo con `credentials._parse`
+(si estaba mal escrito queda vacío para corregir) y **devuelve siempre ISO `YYYY-MM-DD`** — justo lo que leen
+`_parse`/`status`/alertas, así un typo ya no rompe el aviso. Aplicado a los formularios Agregar (Emisión +
+Vencimiento) y Editar (Vencimiento) de `render_credenciales`. De paso, el form de **Editar** ahora incluye el
+**ID de la credencial en las keys** (`_enum_{id}`, `_even_{id}`, `_enota_{id}`): antes tenían key fija y al
+cambiar de credencial NO se refrescaban los campos (bug de precarga preexistente). Backend `credentials.py`
+NO se toca; las credenciales ya guardadas se siguen leyendo igual (se re-guardan en ISO solo al editarlas).
+Verificado: date→ISO→`status()` cierra; datos viejos DD/MM/YYYY precargan; basura/fuera de rango → vacío.
+Pendientes de la revisión de credenciales: KPIs (vigentes/por vencer/vencidas), desacoplar `notify_expiring`
+del render, unificar mensajes de login, clutter del form (Clase/"Otro" siempre visibles), botones de descarga.
+
 ## Panel del propietario unificado a la ficha 360° (v184)
 Revisión estético/integración del bloque acceso+credenciales. Hallazgo gordo: el **administrador**
 gestiona cada persona con la **ficha 360°** (`_ficha_usuario`: pestañas Acceso/Contacto/Credenciales/
@@ -2654,9 +2669,10 @@ posicional + plano) → app.py, al cargar el PDF, setea `st.session_state["ns"]`
 resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NORTH SYD y AGECARE → NS=6
 (coincide con travel/floor-height HQ/HE).
 
-## Versiones desplegadas (v184 = actual)
+## Versiones desplegadas (v185 = actual)
 | Ver | Cambio principal |
 |---|---|
+| v185 | Fechas de credenciales con calendario (`st.date_input`) en vez de texto libre: guarda siempre ISO, así un typo ya no desactiva en silencio la alerta de vencimiento. Precarga datos viejos; form de Editar ahora refresca los campos al cambiar de credencial (key con ID) |
 | v184 | Panel del propietario (👑 Administración → Usuarios) unificado a la ficha 360°: se gestiona cada persona desde un solo lugar (Acceso/Contacto/Credenciales/Su trabajo) en vez de 3 desplegables sueltos, igual que el administrador. La ficha gana modo `owner` con Rol+Grupo. Borrado código muerto (`_field_contact_ui`, `_USER_COLS`) |
 | v183 | Belting (revisión + diagrama replanteado): proyecto al diagrama/PDF + tarjetas KPI (HQ·HGP·nº) + el diagrama ahora respeta el SIGNO del DSTS (cabina por encima/debajo del FFL de referencia, a escala ampliada) en vez de ponerla siempre debajo en posición fija. Cierra las 5 técnicas |
 | v182 | Corte de buffers: diagrama replanteado. HKP/HKPR son HOLGURAS (sticker↔buffer), no alturas. Ahora dibuja el sticker (arriba) + línea HKP de diseño + rebanada roja = lo que se corta del borde del buffer para pasar de HKPR a HKP. Casos corte/sin-corte/revisar |
