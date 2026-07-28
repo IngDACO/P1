@@ -1068,6 +1068,17 @@ corren por primera vez en el Cloud.
 Campo → "mi semana" (donde voy cada dia) · fichaje pre-rellenado desde el roster · plan vs real
 (asignado a X / ficho en Y, solo para trabajos enlazados a un PRJ).
 
+## Formulario de credenciales sin clutter (v189)
+Último ítem de la revisión de credenciales. En "➕ Agregar credencial", "Especifica (Otro)" y "Clase
+(licencia)" se mostraban SIEMPRE aunque no aplicaran; dentro de un `st.form` no se puede condicionar (no hay
+rerun hasta el submit). Fix: se sacó el selectbox **Tipo** FUERA del form → al cambiarlo hay rerun y se
+muestran solo los campos que aplican: "Especifica el tipo" solo si Tipo="Otro"; "Clase" solo si
+Tipo="Driver License" (si no, Número a ancho completo, sin columna vacía). El resto sigue dentro del form.
+El Tipo queda seleccionado tras agregar (cómodo para varias del mismo tipo). Backend intacto. Compila +
+import + AST OK. Con esto queda CERRADA la revisión de acceso+credenciales (login persistente v188 confirmado
+por el usuario en el Cloud). Solo queda anotado como futuro: mensajes de login (enumeración de usuarios) y
+la Opción B de `notify_expiring` (job programado).
+
 ## Fix login persistente al refrescar (v188)
 El usuario confirmó en el Cloud que lo ÚNICO que falló del lote fue **mantener la sesión al refrescar** (F5
 deslogueaba) — justo lo que quedó marcado para confirmar en vivo. Causa raíz: el enfoque v174→v187
@@ -2707,9 +2718,10 @@ posicional + plano) → app.py, al cargar el PDF, setea `st.session_state["ns"]`
 resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NORTH SYD y AGECARE → NS=6
 (coincide con travel/floor-height HQ/HE).
 
-## Versiones desplegadas (v188 = actual)
+## Versiones desplegadas (v189 = actual)
 | Ver | Cambio principal |
 |---|---|
+| v189 | Formulario de credenciales sin clutter: "Especifica" solo si Tipo=Otro, "Clase" solo para licencia de conducir (Tipo movido fuera del st.form para poder condicionar). Cierra la revisión de acceso+credenciales |
 | v188 | Fix login persistente: refrescar (F5) ya no desloguea. El componente de cookies se creaba nuevo cada rerun y el login bloqueaba con sleeps que impedían procesar el mensaje del navegador con la cookie. Ahora CookieManager único por sesión + sin bloqueos (deja que el componente dispare su rerun) + no re-restaurar tras logout |
 | v187 | Avisos de vencimiento de credenciales desacoplados del panel: antes solo se disparaban al abrir 🔧 Usuarios de campo (frágil); ahora corren al login de cualquier admin/propietario (app.py), 1×/día/grupo, deduplicado. No había scheduler; se eligió la opción pragmática sin infra (job programado queda anotado como futuro) |
 | v186 | Credenciales: fila de KPIs (total · vigentes · por vencer · vencidas) arriba de la tabla + botones de descarga agrupados en un expander "Documentos" |

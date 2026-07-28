@@ -105,12 +105,24 @@ def render_credenciales(usuario, grupo, editable=False, key_prefix="cr"):
     admin_usr = st.session_state.get("auth", {}).get("usuario", "")
 
     with st.expander("➕ Agregar credencial"):
+        # 'Tipo' va FUERA del form (v189): así, al cambiarlo, la app se re-renderiza
+        # y podemos mostrar solo los campos que aplican — "especifica" para 'Otro' y
+        # "Clase" solo para licencia de conducir. Dentro de un form no hay rerun hasta
+        # el submit, así que ahí no se puede condicionar. El Tipo queda seleccionado
+        # tras agregar (cómodo para cargar varias del mismo tipo).
+        tipo = st.selectbox("Tipo", C.CATALOGO, key=f"{key_prefix}_tipo")
+        _es_otro = (tipo == "Otro")
+        _es_lic  = (tipo == "Driver License")
+        tipo_otro = (st.text_input("Especifica el tipo", key=f"{key_prefix}_tipootro")
+                     if _es_otro else "")
         with st.form(f"{key_prefix}_add_{usuario}", clear_on_submit=True):
-            tipo = st.selectbox("Tipo", C.CATALOGO, key=f"{key_prefix}_tipo")
-            tipo_otro = st.text_input("Especifica (si elegiste 'Otro')", key=f"{key_prefix}_tipootro")
-            c1, c2 = st.columns(2)
-            num   = c1.text_input("Número")
-            clase = c2.selectbox("Clase (para licencia)", C.CLASES_LICENCIA, key=f"{key_prefix}_clase")
+            if _es_lic:
+                c1, c2 = st.columns(2)
+                num   = c1.text_input("Número")
+                clase = c2.selectbox("Clase (licencia)", C.CLASES_LICENCIA, key=f"{key_prefix}_clase")
+            else:
+                num   = st.text_input("Número")
+                clase = ""
             c3, c4 = st.columns(2)
             emi = _fecha_input(c3, "Emisión", key=f"{key_prefix}_emi")
             ven = _fecha_input(c4, "Vencimiento (vacío si no vence)", key=f"{key_prefix}_ven")
@@ -118,7 +130,7 @@ def render_credenciales(usuario, grupo, editable=False, key_prefix="cr"):
                                     type=["pdf", "png", "jpg", "jpeg"], key=f"{key_prefix}_file")
             nota = st.text_input("Nota")
             if st.form_submit_button("Agregar"):
-                t = tipo_otro.strip() if (tipo == "Otro" and tipo_otro.strip()) else tipo
+                t = tipo_otro.strip() if (_es_otro and tipo_otro.strip()) else tipo
                 did, fname = "", ""
                 if arch is not None:
                     fname = arch.name
