@@ -73,7 +73,10 @@ C:\Users\diego\P1\survey_app\
 │   ├── timeclock.py        # clock_in/out — fichaje por login+grupo (sin PIN, v54)
 │   ├── timeclock_ui.py     # render_timeclock_tab() — fichaje (usa identidad del login)
 │   ├── auth.py             # login, roles, grupos, sesión única, contacto (Sheets, PBKDF2) — v53+
-│   ├── auth_ui.py          # render_login/user_bar/owner_panel(grupos/usuarios/proyectos/rieles)/group_panel
+│   ├── auth_ui.py          # render_login/user_bar/owner_panel(grupos/usuarios/proyectos/rieles)/group_panel + ficha 360 (v184) + credenciales
+│   ├── home_ui.py          # NUEVA nav del ADMIN (v190-192): sidebar de iconos + top bar (buscador+campana) + HOME (Centro de control + mapa + agenda) + ruteo a secciones/placeholders
+│   ├── credentials.py      # credenciales/tickets por usuario (hoja Credenciales): vencimiento, Drive, avisos (v104)
+│   ├── session_cookie.py   # login persistente por cookie (extra-streamlit-components); manager unico por sesion (v188)
 │   ├── projects.py         # gestión de proyectos: Proyectos/Actividades/Agrupaciones/Documentos (Sheets) — v65+
 │   ├── projects_ui.py      # panel admin/propietario/campo + docs + alarmas + cronograma real vs plan
 │   ├── drive_store.py      # documentos por proyecto en Google Drive (OAuth drive.file) — v74
