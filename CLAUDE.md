@@ -1068,6 +1068,20 @@ corren por primera vez en el Cloud.
 Campo → "mi semana" (donde voy cada dia) · fichaje pre-rellenado desde el roster · plan vs real
 (asignado a X / ficho en Y, solo para trabajos enlazados a un PRJ).
 
+## Avisos de vencimiento desacoplados del panel (v187)
+Antes `notify_expiring` se disparaba SOLO al abrir 🔧 Usuarios de campo (`_grupo_usuarios`), 1×/sesión/grupo
+— frágil: si nadie abría ese panel, o el grupo no tenía admin, los vencimientos no se avisaban nunca.
+Investigación: NO hay scheduler en el repo (ni cron, ni st_autorefresh; `ping.yml` es solo `on: push`);
+el digest (`admin_digest`) solo arma datos para mostrar, no notifica; `notify` envía por Gmail SMTP + Telegram
+leyendo `st.secrets`. Elegida la **Opción A** (pragmática, sin infra): el disparo se movió al **login**
+(`app.py`, tras el heartbeat): si `_ROL` es administrador/propietario, corre `notify_expiring` — el admin
+sobre su grupo, el propietario sobre todos —, deduplicado por día en `session_state`
+(`_credaviso_{grupo}_{hoy}`) y por 25 d en la hoja (`UltimoAviso`), envuelto en try para no bloquear la
+entrada. Quitado el disparo de `_grupo_usuarios`. Opción B (job programado con GitHub Action `on: schedule`
++ runner headless) queda ANOTADA como mejora futura (requiere duplicar secretos en GitHub y una capa de
+compatibilidad porque el código lee `st.secrets`, que no existe fuera de Streamlit). Verificado: compila +
+import; el único `_credaviso` restante está en app.py.
+
 ## KPIs de credenciales + descargas agrupadas (v186)
 Estético de `render_credenciales`: arriba de la tabla, fila de `st.metric` (Credenciales · 🟢 Vigentes ·
 🟡 Por vencer · 🔴 Vencidas) calculada con `status()` — mismo estilo que la pestaña "Su trabajo" de la ficha;
@@ -2679,9 +2693,10 @@ posicional + plano) → app.py, al cargar el PDF, setea `st.session_state["ns"]`
 resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NORTH SYD y AGECARE → NS=6
 (coincide con travel/floor-height HQ/HE).
 
-## Versiones desplegadas (v186 = actual)
+## Versiones desplegadas (v187 = actual)
 | Ver | Cambio principal |
 |---|---|
+| v187 | Avisos de vencimiento de credenciales desacoplados del panel: antes solo se disparaban al abrir 🔧 Usuarios de campo (frágil); ahora corren al login de cualquier admin/propietario (app.py), 1×/día/grupo, deduplicado. No había scheduler; se eligió la opción pragmática sin infra (job programado queda anotado como futuro) |
 | v186 | Credenciales: fila de KPIs (total · vigentes · por vencer · vencidas) arriba de la tabla + botones de descarga agrupados en un expander "Documentos" |
 | v185 | Fechas de credenciales con calendario (`st.date_input`) en vez de texto libre: guarda siempre ISO, así un typo ya no desactiva en silencio la alerta de vencimiento. Precarga datos viejos; form de Editar ahora refresca los campos al cambiar de credencial (key con ID) |
 | v184 | Panel del propietario (👑 Administración → Usuarios) unificado a la ficha 360°: se gestiona cada persona desde un solo lugar (Acceso/Contacto/Credenciales/Su trabajo) en vez de 3 desplegables sueltos, igual que el administrador. La ficha gana modo `owner` con Rol+Grupo. Borrado código muerto (`_field_contact_ui`, `_USER_COLS`) |

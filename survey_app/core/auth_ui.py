@@ -741,14 +741,8 @@ def _grupo_usuarios(grupo):
     from core import credentials as C
     users = auth.list_users(grupo=grupo)
     gente = [u for u in users if u["Rol"].lower() == "campo"]
-
-    # Aviso de vencimientos (email/Telegram) una vez por sesión
-    if C.is_configured() and not st.session_state.get(f"_credaviso_{grupo}"):
-        st.session_state[f"_credaviso_{grupo}"] = True
-        try:
-            C.notify_expiring(grupo)
-        except Exception:
-            pass
+    # El aviso de vencimientos ya NO se dispara aquí (dependía de abrir este panel):
+    # desde v187 corre al login de cualquier admin/propietario (app.py), 1×/día/grupo.
 
     # ── Panorama: tabla-resumen con semáforos ──
     if gente:

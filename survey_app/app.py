@@ -122,6 +122,27 @@ if _time.time() - st.session_state.get("_hb_last", 0) > 50:
                    "(o expiró por inactividad). Vuelve a iniciar sesión.")
         st.stop()
 
+# ── Avisos de vencimiento de credenciales (v187): al entrar, 1×/día/grupo ──
+# Antes solo se disparaba al abrir el panel de usuarios de campo (frágil: si nadie
+# lo abría, o el grupo no tenía admin, no se avisaba). Ahora corre al login de
+# cualquier admin/propietario; el admin sobre su grupo, el propietario sobre todos.
+# Deduplicado por día (session_state) y por 25 días en la hoja (UltimoAviso), y
+# envuelto en try para no bloquear nunca la entrada.
+if _ROL in ("administrador", "propietario"):
+    try:
+        from core import credentials as _cred, clock as _clk, auth as _auth
+        if _cred.is_configured():
+            _hoy = _clk.today()
+            _grps = ([_GRUPO] if _ROL == "administrador"
+                     else [g["Grupo"] for g in _auth.list_groups()])
+            for _g in _grps:
+                _kav = f"_credaviso_{_g}_{_hoy}"
+                if _g and not st.session_state.get(_kav):
+                    st.session_state[_kav] = True
+                    _cred.notify_expiring(_g)
+    except Exception:
+        pass
+
 # ── Contacto OBLIGATORIO para usuarios de campo (email + Telegram) ──
 if _ROL == "campo" and not st.session_state.get("_contact_ok"):
     _rec = get_user(st.session_state.auth.get("usuario", ""))
