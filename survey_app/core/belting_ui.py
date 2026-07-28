@@ -21,6 +21,19 @@ from core import tool_save_ui
 _K = "belt_res"
 
 
+def _kpi(label, value, color=None):
+    col = f"color:{color};" if color else ""
+    return ('<div style="background:#fff;border:1px solid #e6e9ef;border-radius:12px;'
+            'padding:10px 14px;flex:1;min-width:96px;">'
+            f'<div style="font-size:12px;color:#6b7280;">{label}</div>'
+            f'<div style="font-size:20px;font-weight:700;{col}">{value}</div></div>')
+
+
+def _kpi_row(cards):
+    return ('<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:8px">'
+            + "".join(cards) + "</div>")
+
+
 def render_belting_tab():
     st.markdown("### 🎗 Belting — posición de la cabina para instalar los belts")
     st.caption("Calcula **DSTS** = cuánto bajar la cabina bajo el FFL del piso más alto para instalar "
@@ -41,6 +54,7 @@ def render_belting_tab():
         st.info(f"↩️ Reabierto el cálculo **{_reab}**. Ajusta lo que necesites y vuelve a calcular.")
 
     _prj, _plano = plan_ui.selector_proyecto("belt")
+    _pr = str((_prj or {}).get("Nombre", "") or "")     # v183: al diagrama y al PDF
     if _plano:
         _n = plan_ui.aplicar(_plano, {"hq": "belt_hq", "hgp": "belt_hgp"})
         if _n:
@@ -99,6 +113,11 @@ def render_belting_tab():
     results, _hgp, _hq = est["results"], est["hgp"], est["hq"]
 
     # ── Resultado (persistente entre reruns) ────────────────
+    st.markdown(_kpi_row([
+        _kpi("HQ (travel)", f"{_hq:.0f} mm"),
+        _kpi("HGP (diseño)", f"{_hgp:.0f} mm"),
+        _kpi("Elevadores", str(len(results)))]),
+        unsafe_allow_html=True)
     filas = [{
         "Elevador":  r["elevador"],
         "HGPR (mm)": r["hgpr"],
@@ -112,7 +131,7 @@ def render_belting_tab():
                 f"= HGPR − {_hgp + _hq / 1000.0:.1f} mm")
     st.caption(_formula)
 
-    svg = belting_svg(results)
+    svg = belting_svg(results, proyecto=_pr)
     st.subheader("📐 Diagrama")
     components.html(
         '<!DOCTYPE html><html><body style="margin:0;background:transparent">'
@@ -122,8 +141,8 @@ def render_belting_tab():
     _resumen = ", ".join(f"E{r['elevador']}: DSTS {r['dsts']}" for r in results)
     pdf_bytes = tool_pdf(
         "Belting — posición de la cabina",
-        meta={"HQ (travel)": f"{_hq:.0f} mm", "HGP (diseño)": f"{_hgp:.0f} mm",
-              "Elevadores": str(len(results))},
+        meta={"Proyecto": _pr or "—", "HQ (travel)": f"{_hq:.0f} mm",
+              "HGP (diseño)": f"{_hgp:.0f} mm", "Elevadores": str(len(results))},
         svgs=[svg],
         tablas=[("DSTS por elevador", filas)],
         notas=[_formula,

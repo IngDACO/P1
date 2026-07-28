@@ -26,53 +26,108 @@ def compute_belting(hgp, hq, hgpr_list) -> list:
     return out
 
 
-def belting_svg(results: list) -> str:
-    """Diagrama conceptual (no a escala): cabina DSTS por debajo del FFL del piso más alto,
-    una columna por elevador. Sin <marker>/<defs> (compat)."""
+def _mm(v) -> str:
+    try:
+        v = float(v)
+    except Exception:
+        return str(v)
+    return f"{v:.0f}" if abs(v - round(v)) < 0.05 else f"{v:.1f}"
+
+
+def _esc(s) -> str:
+    return str(s or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+def belting_svg(results: list, proyecto: str = "") -> str:
+    """Diagrama por elevador (v183, replanteado).
+
+    DSTS es la posición CON SIGNO de la cabina respecto al FFL del piso más alto:
+    DSTS > 0 = la cabina baja esa distancia POR DEBAJO del FFL; DSTS < 0 = queda
+    POR ENCIMA. El dibujo antiguo ponía la cabina siempre debajo en una posición
+    fija, contradiciendo a la tabla y sin reflejar la magnitud. Ahora el FFL es la
+    línea de referencia común y cada cabina se coloca a su DSTS con signo, a escala
+    ampliada común para comparar entre elevadores. Sin <marker>/<defs> (compat)."""
+    results = results or []
     n = max(1, len(results))
-    colw = 160
-    ML, MT = 20, 46
+    RED, AMBER, CABF, CABS = "#c0392b", "#b5731a", "#dbe6f2", "#2e6da4"
+    GRID, INK, MUT = "#e6e9ef", "#333333", "#8a8f99"
+
+    colw = 150
+    ML = 24
     VW = ML * 2 + n * colw
     VH = 300
+    y_ffl = 134            # línea FFL común (referencia)
+    BAND = 66              # px del mayor |DSTS|
+    cab_h = 44
+    frame_top, frame_bot = 58, 252
+
+    dstss = [float(r["dsts"]) for r in results]
+    maxabs = max((abs(d) for d in dstss), default=0.0)
+    esc = (BAND / maxabs) if maxabs > 0.05 else 0.0     # mm → px
 
     p = [f'<svg viewBox="0 0 {VW} {VH}" xmlns="http://www.w3.org/2000/svg" '
-         f'style="width:100%;max-width:{VW}px;font-family:system-ui,sans-serif;display:block;margin:0 auto">']
-    p.append(f'<text x="{VW/2:.0f}" y="20" text-anchor="middle" font-size="13" fill="#1a3a5c" '
-             f'font-weight="bold">Belting — posición de la cabina bajo el FFL del piso más alto</text>')
-    p.append(f'<text x="{VW/2:.0f}" y="36" text-anchor="middle" font-size="9" fill="#888">'
-             f'DSTS = cuánto baja la cabina (mm) · esquema no a escala</text>')
+         f'style="width:100%;max-width:{VW}px;font-family:Arial,Helvetica,sans-serif;'
+         f'display:block;margin:0 auto">',
+         f'<rect x="0" y="0" width="{VW}" height="{VH}" fill="#ffffff"/>',
+         f'<text x="18" y="22" font-size="12" fill="#1a3a5c" font-weight="bold">'
+         f'BELTING — posición de la cabina respecto al FFL del piso más alto</text>',
+         f'<text x="18" y="36" font-size="8.5" fill="{MUT}">'
+         f'DSTS = cuánto baja (+, por debajo) o sube (−, por encima) la cabina · '
+         f'posición a escala ampliada</text>']
+    if proyecto:
+        p.append(f'<text x="{VW-18}" y="22" text-anchor="end" font-size="9" '
+                 f'fill="#1f2937" font-weight="bold">{_esc(proyecto)}</text>')
 
-    ffl_y = MT + 18
-    cab_y = MT + 150   # techo de la cabina (visualmente separado)
-    cab_h = 70
+    # ── FFL: línea de referencia común a todos los elevadores ──
+    p.append(f'<line x1="{ML}" y1="{y_ffl}" x2="{VW-ML}" y2="{y_ffl}" '
+             f'stroke="{RED}" stroke-width="2"/>')
+    p.append(f'<text x="{ML+2}" y="{y_ffl-4}" font-size="8.5" fill="{RED}" '
+             f'font-weight="bold">FFL piso más alto</text>')
+
     for i, r in enumerate(results):
         x0 = ML + i * colw
-        w  = colw - 30
+        w = colw - 34
         cx = x0 + w / 2
+        dsts = float(r["dsts"])
+        hgpr = float(r.get("hgpr", 0))
+        roof = y_ffl + dsts * esc            # techo de la cabina (con signo)
 
-        # marco del hueco
-        p.append(f'<rect x="{x0:.1f}" y="{ffl_y:.1f}" width="{w:.1f}" height="{cab_y + cab_h - ffl_y:.1f}" '
-                 f'fill="none" stroke="#ddd" stroke-width="1"/>')
-        # FFL del piso más alto
-        p.append(f'<line x1="{x0:.1f}" y1="{ffl_y:.1f}" x2="{x0+w:.1f}" y2="{ffl_y:.1f}" '
-                 f'stroke="#c0392b" stroke-width="2"/>')
-        p.append(f'<text x="{x0+3:.1f}" y="{ffl_y-4:.1f}" font-size="8.5" fill="#c0392b">FFL piso más alto</text>')
-        # cabina
-        p.append(f'<rect x="{x0+15:.1f}" y="{cab_y:.1f}" width="{w-30:.1f}" height="{cab_h:.1f}" '
-                 f'rx="3" fill="#dbe6f2" stroke="#2e6da4" stroke-width="1.2"/>')
-        p.append(f'<text x="{cx:.1f}" y="{cab_y+cab_h/2+3:.1f}" text-anchor="middle" font-size="9" '
-                 f'fill="#2e6da4">Cabina</text>')
-        # cota DSTS (del FFL al techo de la cabina)
-        dimx = x0 + 6
-        p.append(f'<line x1="{dimx:.1f}" y1="{ffl_y:.1f}" x2="{dimx:.1f}" y2="{cab_y:.1f}" '
-                 f'stroke="#BA7517" stroke-width="1.2"/>')
-        for yy in (ffl_y, cab_y):
-            p.append(f'<line x1="{dimx-3:.1f}" y1="{yy:.1f}" x2="{dimx+3:.1f}" y2="{yy:.1f}" '
-                     f'stroke="#BA7517" stroke-width="1.2"/>')
-        p.append(f'<text x="{dimx+5:.1f}" y="{(ffl_y+cab_y)/2:.1f}" font-size="9" fill="#BA7517" '
-                 f'font-weight="bold">DSTS {r["dsts"]:.0f}</text>')
-        # etiqueta elevador
-        p.append(f'<text x="{cx:.1f}" y="{cab_y+cab_h+18:.1f}" text-anchor="middle" font-size="9.5" '
-                 f'fill="#333" font-weight="bold">Elevador {r["elevador"]}</text>')
+        # marco del hueco (guía)
+        p.append(f'<rect x="{x0:.1f}" y="{frame_top}" width="{w:.1f}" '
+                 f'height="{frame_bot-frame_top}" fill="none" stroke="{GRID}" '
+                 f'stroke-width="1"/>')
+        # cabina, colocada a su DSTS
+        cabw = w - 46
+        p.append(f'<rect x="{cx-cabw/2:.1f}" y="{roof:.1f}" width="{cabw:.1f}" '
+                 f'height="{cab_h}" rx="3" fill="{CABF}" stroke="{CABS}" '
+                 f'stroke-width="1.2"/>')
+        p.append(f'<text x="{cx:.1f}" y="{roof+cab_h/2+3:.1f}" text-anchor="middle" '
+                 f'font-size="9" fill="{CABS}">Cabina</text>')
+
+        # cota DSTS: del FFL al techo de la cabina (línea; el valor va al pie
+        # para no solaparse con la cabina cuando el DSTS es pequeño/negativo)
+        dimx = x0 + 12
+        if abs(roof - y_ffl) > 1:
+            ya, yb = (y_ffl, roof) if roof >= y_ffl else (roof, y_ffl)
+            p.append(f'<line x1="{dimx:.1f}" y1="{ya:.1f}" x2="{dimx:.1f}" y2="{yb:.1f}" '
+                     f'stroke="{AMBER}" stroke-width="1.3"/>')
+            for yy in (ya, yb):
+                p.append(f'<line x1="{dimx-3:.1f}" y1="{yy:.1f}" x2="{dimx+3:.1f}" '
+                         f'y2="{yy:.1f}" stroke="{AMBER}" stroke-width="1.3"/>')
+
+        # etiquetas al pie (línea base fija, alineadas entre elevadores)
+        if dsts > 0.05:
+            _dir, _dc = "por debajo del FFL", RED
+        elif dsts < -0.05:
+            _dir, _dc = "por encima del FFL", CABS
+        else:
+            _dir, _dc = "en el FFL", MUT
+        p.append(f'<text x="{cx:.1f}" y="266" text-anchor="middle" font-size="9.5" '
+                 f'fill="{INK}" font-weight="bold">Elevador {r["elevador"]}</text>')
+        p.append(f'<text x="{cx:.1f}" y="279" text-anchor="middle" font-size="9" '
+                 f'fill="{_dc}" font-weight="bold">DSTS {_mm(dsts)} mm</text>')
+        p.append(f'<text x="{cx:.1f}" y="290" text-anchor="middle" font-size="7.5" '
+                 f'fill="{MUT}">{_dir} · HGPR {_mm(hgpr)}</text>')
+
     p.append("</svg>")
     return "".join(p)

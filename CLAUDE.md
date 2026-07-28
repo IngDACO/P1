@@ -1068,6 +1068,19 @@ corren por primera vez en el Cloud.
 Campo → "mi semana" (donde voy cada dia) · fichaje pre-rellenado desde el roster · plan vs real
 (asignado a X / ficho en Y, solo para trabajos enlazados a un PRJ).
 
+## Belting: revisión técnico/estético/integración + diagrama replanteado (v183)
+Última de las 5 herramientas técnicas. Tres arreglos:
+- **Integración:** el proyecto se conocía (`_prj`) pero no iba al diagrama ni al PDF. Fix:
+  `belting_svg(..., proyecto="")` lo dibuja arriba-derecha + "Proyecto" al `meta` del PDF.
+- **Estético:** resultados iban directo a la tabla → añadidas tarjetas KPI (`_kpi`): HQ · HGP · nº elevadores.
+- **Técnico/representación (como buffers):** el diagrama ponía la cabina SIEMPRE por debajo del FFL en
+  posición fija, aunque DSTS fuera negativo (cabina por ENCIMA) o distinto entre elevadores —
+  contradecía a la tabla. `belting_svg` reescrito: **FFL = línea de referencia común** y cada cabina
+  a su **DSTS con signo** (debajo si +, encima si −), a escala ampliada común para comparar; valor
+  DSTS con signo al pie (no se solapa con la cabina). `compute_belting` NO cambia.
+Verificado renderizado en navegador (DSTS +40 debajo / 0 en FFL / −20 encima), sin `<defs>/<marker>`.
+Con esto quedan revisadas las 5 técnicas: plomado (v179), rieles (v180), buffers (v181-182), belting (v183).
+
 ## Corte de buffers: diagrama replanteado (v182)
 El usuario notó que el diagrama **no representaba bien la geometría**: HKP/HKPR no son alturas, son la
 **holgura** (distancia) entre el **sticker de la cabina** y el **borde superior del buffer** —dos elementos
@@ -2622,9 +2635,10 @@ posicional + plano) → app.py, al cargar el PDF, setea `st.session_state["ns"]`
 resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NORTH SYD y AGECARE → NS=6
 (coincide con travel/floor-height HQ/HE).
 
-## Versiones desplegadas (v182 = actual)
+## Versiones desplegadas (v183 = actual)
 | Ver | Cambio principal |
 |---|---|
+| v183 | Belting (revisión + diagrama replanteado): proyecto al diagrama/PDF + tarjetas KPI (HQ·HGP·nº) + el diagrama ahora respeta el SIGNO del DSTS (cabina por encima/debajo del FFL de referencia, a escala ampliada) en vez de ponerla siempre debajo en posición fija. Cierra las 5 técnicas |
 | v182 | Corte de buffers: diagrama replanteado. HKP/HKPR son HOLGURAS (sticker↔buffer), no alturas. Ahora dibuja el sticker (arriba) + línea HKP de diseño + rebanada roja = lo que se corta del borde del buffer para pasar de HKPR a HKP. Casos corte/sin-corte/revisar |
 | v181 | Corte de buffers (revisión, igual que rieles): el nombre del proyecto va al diagrama y al PDF (estaba disponible y no se usaba) + tarjetas KPI (HKP · nº buffers · nº a revisar) en vez del st.success plano. Ya era por buffer |
 | v180 | Corte de rieles (revisión): el nombre del proyecto va ahora al diagrama y al PDF (estaba disponible y no se usaba, mismo fallo que plomado) + tarjetas KPI en vez de st.success planos. Ya era por elevador y los diagramas se rehicieron en v177/v178 |
