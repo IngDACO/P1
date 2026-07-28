@@ -88,23 +88,84 @@ def render_admin_content(key, grupo):
     if key == "home":
         render_home(grupo)
     elif key == "fichaje":
-        _placeholder("⏱ Fichaje", "El fichaje del equipo vivirá aquí.")
+        from core.timeclock_ui import render_timeclock_tab
+        render_timeclock_tab()
     elif key == "planificacion":
-        _placeholder("📅 Planificación", "El tablero de cuadrilla (roster) se integrará aquí.")
+        _seccion_planificacion(grupo)
     elif key == "proyectos":
-        _placeholder("📁 Proyectos", "El portafolio de proyectos se integrará aquí.")
+        _seccion_proyectos(grupo)
     elif key == "finanzas":
-        _placeholder("💰 Finanzas", "Gastos, tarifas y costos de mano de obra se integrarán aquí.")
+        _seccion_finanzas(grupo)
     elif key == "inventario":
-        _placeholder("📦 Inventario", "Control de inventario (módulo nuevo).")
+        _placeholder("📦 Inventario", "Control de inventario — módulo nuevo, en desarrollo.")
     elif key == "herramientas":
-        _placeholder("🛠 Herramientas",
-                     "Las 5 herramientas técnicas (Survey · Plomada · Rieles · Buffers · "
-                     "Belting) y el Pre-Start se integrarán aquí.")
+        _seccion_herramientas(grupo)
     elif key == "contactos":
-        _placeholder("👥 Contactos", "Usuarios, contacto y credenciales se integrarán aquí.")
+        _placeholder("👥 Contactos", "Nuevo apartado de contactos — se desarrollará luego.")
     else:
         render_home(grupo)
+
+
+def _subnav(titulo, opciones, key):
+    """Sub-menú horizontal dentro de un apartado (mismo estilo que la nav actual)."""
+    st.markdown(f"## {titulo}")
+    sel = st.radio("sub", opciones, horizontal=True, key=key, label_visibility="collapsed")
+    st.markdown("---")
+    return sel
+
+
+def _seccion_planificacion(grupo):
+    # v191: la gestión de usuarios vive aquí (decisión del usuario), junto al tablero.
+    sub = _subnav("📅 Planificación", ["📋 Tablero", "👷 Usuarios"], "adm_plan_sub")
+    if sub == "📋 Tablero":
+        from core import roster_ui
+        roster_ui.render_planificacion(grupo)
+    else:
+        from core.auth_ui import _grupo_usuarios
+        _grupo_usuarios(grupo)
+
+
+def _seccion_proyectos(grupo):
+    from core import projects_ui as PU
+    sub = _subnav("📁 Proyectos", ["📊 Proyectos", "🗂 Agrupaciones"], "adm_proy_sub")
+    if sub == "📊 Proyectos":
+        PU._panel_proyectos(grupo)
+    else:
+        PU._panel_agrupaciones(grupo)
+
+
+def _seccion_finanzas(grupo):
+    from core import projects_ui as PU
+    sub = _subnav("💰 Finanzas", ["💰 Gastos", "⏱ Horas"], "adm_fin_sub")
+    if sub == "💰 Gastos":
+        PU.render_group_expenses(grupo)
+    else:
+        PU.render_group_hours(grupo)
+
+
+def _seccion_herramientas(grupo):
+    rol = st.session_state.get("auth", {}).get("rol", "administrador")
+    sub = _subnav("🛠 Herramientas",
+                  ["📐 Survey", "🔩 Plomada", "✂️ Rieles", "🛡 Buffers", "🎗 Belting", "🦺 Pre-Start"],
+                  "adm_herr_sub")
+    if sub == "📐 Survey":
+        from core.survey_ui import render_survey_tab
+        render_survey_tab(rol, grupo)
+    elif sub == "🔩 Plomada":
+        from core.plumb_ui import render_plumb_tab
+        render_plumb_tab()
+    elif sub == "✂️ Rieles":
+        from core.rail_cut_ui import render_rail_cut_tab
+        render_rail_cut_tab()
+    elif sub == "🛡 Buffers":
+        from core.buffer_cut_ui import render_buffer_cut_tab
+        render_buffer_cut_tab()
+    elif sub == "🎗 Belting":
+        from core.belting_ui import render_belting_tab
+        render_belting_tab()
+    else:
+        from core.prestart_ui import render_prestart_tab
+        render_prestart_tab()
 
 
 def _placeholder(titulo, desc=""):

@@ -1068,7 +1068,21 @@ corren por primera vez en el Cloud.
 Campo → "mi semana" (donde voy cada dia) · fichaje pre-rellenado desde el roster · plan vs real
 (asignado a X / ficho en Y, solo para trabajos enlazados a un PRJ).
 
-## Nueva navegación del admin: shell + HOME (v190) — EN CURSO
+## Integración del contenido en la nueva navegación (v191)
+Se cablearon los apartados de la nueva nav del admin a las funciones que YA existen (reconexión, no reescritura).
+Mapeo (decisiones del usuario): **Fichaje**→`timeclock_ui.render_timeclock_tab`; **Planificación**→sub-menú
+[📋 Tablero=`roster_ui.render_planificacion` · 👷 Usuarios=`auth_ui._grupo_usuarios`] (la gestión de usuarios
+vive AQUÍ, no en Contactos); **Proyectos**→[📊 `PU._panel_proyectos` · 🗂 `PU._panel_agrupaciones`];
+**Finanzas**→[💰 `PU.render_group_expenses` · ⏱ `PU.render_group_hours`]; **Herramientas**→sub-selector de 6
+[Survey=`survey_ui.render_survey_tab(rol,grupo)` · Plomada · Rieles · Buffers · Belting · Pre-Start];
+**Inventario** y **Contactos**→placeholders (nuevos, a desarrollar). Helper `_subnav(titulo,opciones,key)` =
+sub-menú horizontal. `init_state()` corre incondicional en app.py:100, así que el Survey funciona desde aquí.
+Verificado: compila + import + las 13 funciones existen como atributos. Confirmación visual = Cloud.
+PENDIENTE/known: el `_nav_pending` (navegar tras crear proyecto desde el Survey) apunta al radio viejo — no
+aplica en la nav del admin; revisar esos flujos "navegar tras acción" cuando se validen. Diseñar Inventario y
+Contactos. Buscador aún sin backend.
+
+## Nueva navegación del admin: shell + HOME (v190)
 Rediseño de la UX de navegación (pedido del usuario), **solo rol administrador** por ahora (owner/campo
 siguen con la nav vieja). Nuevo `core/home_ui.py`:
 - **Menú lateral de iconos** (en el sidebar, `sidebar_menu()`): 🏠 Home · ⏱ Fichaje · 📅 Planificación ·
@@ -2737,9 +2751,10 @@ posicional + plano) → app.py, al cargar el PDF, setea `st.session_state["ns"]`
 resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NORTH SYD y AGECARE → NS=6
 (coincide con travel/floor-height HQ/HE).
 
-## Versiones desplegadas (v190 = actual)
+## Versiones desplegadas (v191 = actual)
 | Ver | Cambio principal |
 |---|---|
+| v191 | Integrado TODO el contenido existente en la nueva nav del admin: Fichaje, Planificación (Tablero+Usuarios), Proyectos (Proyectos+Agrupaciones), Finanzas (Gastos+Horas), Herramientas (5 técnicas+Pre-Start). Inventario y Contactos quedan placeholders. Reconexión de funciones ya probadas |
 | v190 | Nueva navegación del ADMIN (primer pase): menú lateral de iconos (Home/Fichaje/Planificación/Proyectos/Finanzas/Inventario/Herramientas/Contactos) + barra superior (buscador + campana de alertas) + HOME real (mapa de proyectos en ejecución + agenda de hoy del roster). Los 6 apartados restantes son placeholders. Solo rol admin; nuevo core/home_ui.py |
 | v189 | Formulario de credenciales sin clutter: "Especifica" solo si Tipo=Otro, "Clase" solo para licencia de conducir (Tipo movido fuera del st.form para poder condicionar). Cierra la revisión de acceso+credenciales |
 | v188 | Fix login persistente: refrescar (F5) ya no desloguea. El componente de cookies se creaba nuevo cada rerun y el login bloqueaba con sleeps que impedían procesar el mensaje del navegador con la cookie. Ahora CookieManager único por sesión + sin bloqueos (deja que el componente dispare su rerun) + no re-restaurar tras logout |
