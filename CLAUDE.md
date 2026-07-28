@@ -1068,6 +1068,20 @@ corren por primera vez en el Cloud.
 Campo → "mi semana" (donde voy cada dia) · fichaje pre-rellenado desde el roster · plan vs real
 (asignado a X / ficho en Y, solo para trabajos enlazados a un PRJ).
 
+## Fix login persistente al refrescar (v188)
+El usuario confirmó en el Cloud que lo ÚNICO que falló del lote fue **mantener la sesión al refrescar** (F5
+deslogueaba) — justo lo que quedó marcado para confirmar en vivo. Causa raíz: el enfoque v174→v187
+BLOQUEABA con `time.sleep(0.2)` + `st.rerun()` forzado hasta 3 veces y se rendía (`_cookie_done=True`); pero
+el componente `extra-streamlit-components` entrega la cookie en un rerun NATURAL (mensaje del navegador por
+WebSocket) que durante el `sleep` no se procesa → llegaba SIEMPRE después de rendirse. Además `_mgr()` creaba
+un CookieManager nuevo en cada llamada (re-montaba el componente). Fix: (1) `session_cookie._manager()` crea
+el CookieManager UNA vez por sesión y lo guarda en `session_state` (`_cookie_mgr`); (2) `load()` usa
+`get_all()`; (3) `render_login` ya NO bloquea ni reintenta — solo renderiza el componente y deja que dispare
+su propio rerun (se ve el login un instante y al llegar la cookie se restaura sola); (4) tras logout se marca
+`_no_cookie_restore` para no re-restaurar la sesión recién cerrada (evita la carrera con el delete de la
+cookie). Verificado: compila + import + sin restos de `_cookie_done/_cookie_waits`. Confirmación definitiva =
+F5 en el Cloud (no reproducible localmente: necesita el runtime + el navegador).
+
 ## Avisos de vencimiento desacoplados del panel (v187)
 Antes `notify_expiring` se disparaba SOLO al abrir 🔧 Usuarios de campo (`_grupo_usuarios`), 1×/sesión/grupo
 — frágil: si nadie abría ese panel, o el grupo no tenía admin, los vencimientos no se avisaban nunca.
@@ -2693,9 +2707,10 @@ posicional + plano) → app.py, al cargar el PDF, setea `st.session_state["ns"]`
 resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NORTH SYD y AGECARE → NS=6
 (coincide con travel/floor-height HQ/HE).
 
-## Versiones desplegadas (v187 = actual)
+## Versiones desplegadas (v188 = actual)
 | Ver | Cambio principal |
 |---|---|
+| v188 | Fix login persistente: refrescar (F5) ya no desloguea. El componente de cookies se creaba nuevo cada rerun y el login bloqueaba con sleeps que impedían procesar el mensaje del navegador con la cookie. Ahora CookieManager único por sesión + sin bloqueos (deja que el componente dispare su rerun) + no re-restaurar tras logout |
 | v187 | Avisos de vencimiento de credenciales desacoplados del panel: antes solo se disparaban al abrir 🔧 Usuarios de campo (frágil); ahora corren al login de cualquier admin/propietario (app.py), 1×/día/grupo, deduplicado. No había scheduler; se eligió la opción pragmática sin infra (job programado queda anotado como futuro) |
 | v186 | Credenciales: fila de KPIs (total · vigentes · por vencer · vencidas) arriba de la tabla + botones de descarga agrupados en un expander "Documentos" |
 | v185 | Fechas de credenciales con calendario (`st.date_input`) en vez de texto libre: guarda siempre ISO, así un typo ya no desactiva en silencio la alerta de vencimiento. Precarga datos viejos; form de Editar ahora refresca los campos al cambiar de credencial (key con ID) |

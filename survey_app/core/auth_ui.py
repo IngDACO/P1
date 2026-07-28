@@ -173,19 +173,22 @@ def render_login() -> bool:
         return True
 
     # ── Login persistente: restaurar desde la cookie (sobrevive al refresco) ──
-    # ⚠️ El componente de cookies (extra-streamlit-components) NO entrega las cookies
-    # en el PRIMER run tras un refresco: las reporta en un rerun posterior. Antes se
-    # marcaba `_cookie_tried` en ese primer intento y NUNCA se reintentaba → refrescar
-    # deslogueaba. Ahora se REINTENTA unos pocos reruns antes de rendirse.
-    if not st.session_state.get("_cookie_done"):
+    # El componente de cookies (extra-streamlit-components) entrega las cookies en un
+    # rerun POSTERIOR al montaje (un mensaje del navegador por WebSocket). El enfoque
+    # previo (v174→v187) BLOQUEABA con `time.sleep` + reruns forzados y se rendía a los
+    # 3 intentos; pero durante el sleep el hilo no procesa ese mensaje, así que el rerun
+    # con la cookie llegaba SIEMPRE después de rendirse → refrescar deslogueaba. Ahora
+    # (v188) solo renderizamos el componente (manager persistente en session_state) y
+    # dejamos que él dispare su propio rerun: se ve el login un instante y, al llegar la
+    # cookie, se restaura sola. Tras un logout explícito NO se auto-restaura.
+    if not st.session_state.get("_no_cookie_restore"):
         _u = _t = None
         try:
             from core import session_cookie
             _u, _t = session_cookie.load()
         except Exception:
-            st.session_state["_cookie_done"] = True
+            pass
         if _u and _t:
-            st.session_state["_cookie_done"] = True
             try:
                 _a = auth.validate_session(_u, _t)
             except Exception:
@@ -194,14 +197,6 @@ def render_login() -> bool:
                 st.session_state["auth"] = _a
                 st.session_state["_hb_last"] = time.time()
                 st.rerun()
-        elif not st.session_state.get("_cookie_done"):
-            # Todavía no llegan las cookies del navegador: dar unos reruns de gracia.
-            _w = st.session_state.get("_cookie_waits", 0)
-            if _w < 3:
-                st.session_state["_cookie_waits"] = _w + 1
-                time.sleep(0.2)
-                st.rerun()
-            st.session_state["_cookie_done"] = True
 
     # ── Logo COPEX centrado ─────────────────────────────────
     c = st.columns([1, 1, 1])
@@ -306,6 +301,7 @@ def render_user_bar():
             pass
         if "auth" in st.session_state:
             del st.session_state["auth"]
+        st.session_state["_no_cookie_restore"] = True   # no auto-restaurar tras salir (v188)
         st.rerun()
 
 
