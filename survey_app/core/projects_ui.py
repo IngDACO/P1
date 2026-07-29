@@ -227,12 +227,14 @@ def _resumen_del_dia(grupo: str):
         st.markdown("".join(_css), unsafe_allow_html=True)
 
         st.caption("Toca un indicador para ver el detalle e ir a resolverlo.")
-        for _col, (slug, icon, lbl, _urgb, cnt, _sec, _sub, _secn, _fn) in zip(st.columns(9), inds):
-            if _col.button(f"{icon} {cnt}", key=f"resind_{slug}", help=lbl,
-                           use_container_width=True):
-                _cur = st.session_state.get("_res_sel")
-                st.session_state["_res_sel"] = None if _cur == slug else slug
-                st.rerun()
+        for _i0 in range(0, len(inds), 3):          # 3 filas de 3 (nombres visibles)
+            for _col, (slug, icon, lbl, _urgb, cnt, _sec, _sub, _secn, _fn) in \
+                    zip(st.columns(3), inds[_i0:_i0 + 3]):
+                if _col.button(f"{icon} {lbl} · {cnt}", key=f"resind_{slug}",
+                               use_container_width=True):
+                    _cur = st.session_state.get("_res_sel")
+                    st.session_state["_res_sel"] = None if _cur == slug else slug
+                    st.rerun()
 
         sel = st.session_state.get("_res_sel")
         it = next((x for x in inds if x[0] == sel), None) if sel else None

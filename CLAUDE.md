@@ -1071,6 +1071,18 @@ corren por primera vez en el Cloud.
 Campo → "mi semana" (donde voy cada dia) · fichaje pre-rellenado desde el roster · plan vs real
 (asignado a X / ficho en Y, solo para trabajos enlazados a un PRJ).
 
+## Elementos activos: nombres en indicadores + mapa y agenda clickeables (v200)
+Extiende v199 con el principio "todo activo". (1) Indicadores del resumen ahora muestran **nombre visible**
+("🔴 En retraso · 1"), en 3 filas de 3 (`st.columns(3)`) en vez de icono+número en fila de 9. (2) **Pines
+del mapa clickeables** (`home_ui._mapa_proyectos`): `st_folium(..., returned_objects=["last_object_clicked"])`;
+al tocar un pin se busca el proyecto por lat/lng, se deja `_prjsel_pending` (mecanismo que YA usaba el panel
+para abrir un proyecto) y se `navegar("proyectos","📊 Proyectos")` → abre ese proyecto. Guard `_home_map_click`
+para no re-navegar con clics viejos. Cada fila lleva `pid`. (3) **Agenda clickeable** (`_agenda_hoy`): cada
+persona es un BOTÓN (borde izq = color de su trabajo, vía `.st-key-agper_<i>` CSS) → deja `gp_fichasel` =
+"Nombre (usuario)" y `navegar("planificacion","👷 Usuarios")` → abre su ficha. Se quitó `_fila_agenda` (HTML
+pasivo) y el helper `_esc` (sin uso). Verificado: compila + import + AST. `ui.elegir` es un selectbox simple
+(pre-seleccionar con la key funciona). ⚠️ Confirmación visual = Cloud.
+
 ## Resumen y métricas ACTIVOS/clickeables (v199)
 Principio del usuario: nada de elementos pasivos; todo clickeable → lleva a una sección o muestra el detalle.
 Aplicado al Centro de control (HOME). Mecanismo de navegación programática en la nueva nav del admin:
@@ -2829,9 +2841,10 @@ posicional + plano) → app.py, al cargar el PDF, setea `st.session_state["ns"]`
 resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NORTH SYD y AGECARE → NS=6
 (coincide con travel/floor-height HQ/HE).
 
-## Versiones desplegadas (v199 = actual)
+## Versiones desplegadas (v200 = actual)
 | Ver | Cambio principal |
 |---|---|
+| v200 | Más elementos activos: indicadores del resumen con NOMBRE visible; PINES del mapa clickeables (abren el proyecto); filas de la AGENDA clickeables (abren la ficha de la persona). Reusa _prjsel_pending y gp_fichasel para el deep-link |
 | v199 | Resumen y métricas ACTIVOS: los 9 indicadores y las 3 métricas son botones clickeables → al tocar un indicador muestra el detalle ("cuáles") + botón "→ Ir a [sección]" que navega a resolverlo. Mecanismo de navegación programática en la nav del admin (home_ui.navegar/_aplicar_nav_pending) |
 | v197 | Fusión KPIs + resumen: quitadas las tarjetas "En riesgo" y "Alarmas" de arriba (estaban duplicadas con la rejilla de indicadores del resumen); arriba quedan solo las métricas del portafolio (Activos·Avance·Horas). Un solo bloque coherente |
 | v196 | Resumen del día con estructura FIJA: línea de estado + rejilla de 9 indicadores siempre igual (3 columnas, número 0 incluido) + detalle desplegable + la lectura de IA en su propio desplegable colapsado y bajo demanda (ya no se genera automático). Antes los chips aparecían/desaparecían según los datos |

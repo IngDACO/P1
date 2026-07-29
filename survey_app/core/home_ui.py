@@ -16,10 +16,6 @@ import streamlit as st
 import pandas as pd
 
 
-def _esc(s) -> str:
-    return (str(s or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;"))
-
-
 # ── Menú lateral (iconos) ────────────────────────────────────────
 _SECCIONES = [
     ("home",          "🏠  Home"),
@@ -243,7 +239,8 @@ def _mapa_proyectos(grupo):
             if coord:
                 lat, lng = coord
         if lat is not None and lng is not None:
-            filas.append({"lat": lat, "lon": lng, "nombre": str(p.get("Nombre", ""))})
+            filas.append({"lat": lat, "lon": lng, "nombre": str(p.get("Nombre", "")),
+                          "pid": str(p.get("ID", ""))})
         else:
             sin_ubic.append(str(p.get("Nombre", "")))
 
@@ -257,7 +254,21 @@ def _mapa_proyectos(grupo):
             for f in filas:
                 folium.Marker([f["lat"], f["lon"]], popup=f["nombre"], tooltip=f["nombre"],
                               icon=folium.Icon(color="red")).add_to(m)
-            st_folium(m, key="home_map", height=380, returned_objects=[])
+            _out = st_folium(m, key="home_map", height=380,
+                             returned_objects=["last_object_clicked"])
+            st.caption("📍 Toca un pin para abrir el proyecto.")
+            # v199: pin ACTIVO → abre ese proyecto (reusa _prjsel_pending del panel)
+            _clk = (_out or {}).get("last_object_clicked")
+            if _clk:
+                _cc = (round(float(_clk["lat"]), 6), round(float(_clk["lng"]), 6))
+                if st.session_state.get("_home_map_click") != _cc:
+                    st.session_state["_home_map_click"] = _cc
+                    _best = min(filas, key=lambda r: (r["lat"] - _cc[0]) ** 2
+                                + (r["lon"] - _cc[1]) ** 2)
+                    if (abs(_best["lat"] - _cc[0]) < 1e-3
+                            and abs(_best["lon"] - _cc[1]) < 1e-3 and _best["pid"]):
+                        st.session_state["_prjsel_pending"] = _best["pid"]
+                        navegar("proyectos", "📊 Proyectos")
         except Exception:
             st.map(pd.DataFrame(filas), latitude="lat", longitude="lon",
                    color="#c0392b", size=80)
@@ -319,6 +330,7 @@ def _agenda_hoy(grupo):
         else:
             n_sin += 1
         filas.append({
+            "usuario": usr,
             "nombre": nombre,
             "etq": R.etiqueta_de(asig, tidx),
             "color": R.color_de(asig, tidx),
@@ -334,24 +346,20 @@ def _agenda_hoy(grupo):
         f"<b>{n_leave}</b> leave &nbsp;·&nbsp; <b>{n_sin}</b> sin asignar</div>",
         unsafe_allow_html=True)
 
-    for f in filas:
-        _fila_agenda(f)
+    # v199: cada persona es un BOTÓN → su ficha (Planificación · Usuarios). El borde
+    # izquierdo del botón lleva el color de su trabajo (mantiene el lenguaje visual).
+    _css = ["<style>"]
+    for _i, f in enumerate(filas):
+        _css.append(f".st-key-agper_{_i} button{{border-left:5px solid {f['color']}!important;"
+                    "justify-content:flex-start!important;text-align:left!important;}")
+    _css.append("</style>")
+    st.markdown("".join(_css), unsafe_allow_html=True)
 
-
-def _fila_agenda(f):
-    if f["etq"]:
-        chip = (f'<span style="background:{f["color"]};color:#fff;padding:1px 9px;'
-                f'border-radius:10px;font-size:0.78rem;white-space:nowrap;">{_esc(f["etq"])}</span>')
-    else:
-        chip = '<span style="color:#9aa7b8;font-size:0.78rem;">— sin asignar —</span>'
-    extra = []
-    if f["proy"]:
-        extra.append(f'📁 {_esc(f["proy"])}')
-    if f["nota"]:
-        extra.append(_esc(f["nota"]))
-    extra_html = (f'<div style="color:#6b7280;font-size:0.76rem;margin-top:1px;">'
-                  f'{" · ".join(extra)}</div>' if extra else "")
-    st.markdown(
-        f'<div style="padding:6px 0;border-bottom:1px solid #eef1f5;">'
-        f'<b style="font-size:0.9rem;">{_esc(f["nombre"])}</b> &nbsp; {chip}{extra_html}</div>',
-        unsafe_allow_html=True)
+    for _i, f in enumerate(filas):
+        _lbl = f"{f['nombre']} · {f['etq'] or 'sin asignar'}"
+        _hlp = " · ".join(x for x in (f.get("proy"), f.get("nota")) if x) or None
+        if st.button(_lbl, key=f"agper_{_i}", use_container_width=True, help=_hlp):
+            _u = f.get("usuario", "")
+            _nom = f.get("nombre", "") or _u
+            st.session_state["gp_fichasel"] = f"{_nom} ({_u})"   # pre-selecciona la persona
+            navegar("planificacion", "👷 Usuarios")
