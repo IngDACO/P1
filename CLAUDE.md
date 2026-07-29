@@ -1071,6 +1071,20 @@ corren por primera vez en el Cloud.
 Campo → "mi semana" (donde voy cada dia) · fichaje pre-rellenado desde el roster · plan vs real
 (asignado a X / ficho en Y, solo para trabajos enlazados a un PRJ).
 
+## Resumen del día con ESTRUCTURA FIJA (v196)
+El resumen (en HOME, dentro de `render_group_header` → `_resumen_del_dia`) cambiaba de forma cada día: los
+chips solo aparecían si había algo (3 un día, 6 otro), y el briefing IA es texto libre variable. Rediseño
+(opción del usuario "b"): (1) **línea de estado** fija (🟢 en orden / 🟡 N pendientes / 🔴 N urgentes;
+urgentes = retrasos+vencidos+alarmas). (2) **rejilla FIJA de 9 indicadores** en 3 columnas (📁 Proyectos:
+retraso/vencidos/por vencer · 👥 Equipo: sin asignar/sin contacto/credenciales · 🔧 Obra-$: alarmas/near
+miss/sobre presup.), SIEMPRE los mismos en el mismo orden, con su número (0 en gris, >0 rojo si urgente /
+ámbar si no) — helper `_ind_card`. (3) **desplegable "📋 Ver detalle"** con los "cuáles". (4) el **briefing
+IA en su propio desplegable colapsado "💬 Lectura del asistente" y BAJO DEMANDA** (botón ✨ Generar; antes se
+generaba automático en cada carga → ahora no gasta IA salvo que se pida). Verificado: compila + import + AST;
+lógica de indicadores/colores probada con digest simulado. group_digest da: retrasos/vencidos/por_vencer
+[{nombre,dias/fin}], alarmas [{nombre,n}], near_miss [{proyecto,fecha}], sin_asignar [{nombre}],
+campo_sin_contacto [usuario], cred_venc [{tipo,usuario,dias}], sobre_presupuesto [.].
+
 ## Fix: el mapa de HOME no mostraba proyectos recién creados (v195)
 El usuario creó un proyecto y no aparecía en el mapa. Causa: `_mapa_proyectos` filtraba `Estado=="En progreso"`,
 pero un proyecto recién creado tiene avance 0 → `derive_estado(0)`="Planificado" → quedaba EXCLUIDO tuviera pin
@@ -2792,9 +2806,10 @@ posicional + plano) → app.py, al cargar el PDF, setea `st.session_state["ns"]`
 resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NORTH SYD y AGECARE → NS=6
 (coincide con travel/floor-height HQ/HE).
 
-## Versiones desplegadas (v195 = actual)
+## Versiones desplegadas (v196 = actual)
 | Ver | Cambio principal |
 |---|---|
+| v196 | Resumen del día con estructura FIJA: línea de estado + rejilla de 9 indicadores siempre igual (3 columnas, número 0 incluido) + detalle desplegable + la lectura de IA en su propio desplegable colapsado y bajo demanda (ya no se genera automático). Antes los chips aparecían/desaparecían según los datos |
 | v195 | Fix: el mapa de HOME no mostraba proyectos recién creados (filtraba solo "En progreso"; un proyecto nuevo es "Planificado"). Ahora muestra los activos (Planificado + En progreso) → "Proyectos activos" |
 | v194 | El pin de ubicación también al CREAR el proyecto ("➕ Nuevo proyecto"): nace con coordenadas. create_project acepta lat/lng. (El Survey ya no crea proyectos desde v135, así que era el único flujo). Completa v193 |
 | v193 | Ubicación de proyecto con búsqueda de dirección + pin en mapa (folium/streamlit-folium, sin API key): guarda Lat/Lng por proyecto (columnas nuevas), se fija editando el proyecto → 🗺 Ubicación; HOME lee las coordenadas guardadas (respaldo: geocode del texto). Nuevo core/location_ui.py |

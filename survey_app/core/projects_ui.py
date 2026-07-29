@@ -155,52 +155,125 @@ def render_group_header(grupo: str):
     _resumen_del_dia(grupo)
 
 
+def _ind_card(icon, label, count, urgente):
+    """Tarjeta fija de un indicador del resumen. count 0 = gris; >0 = color (rojo si
+    urgente, ámbar si no). La rejilla es SIEMPRE la misma (v196)."""
+    if count:
+        col = "#c0392b" if urgente else "#c77700"
+        bg  = "#fdecec" if urgente else "#fff4e0"
+    else:
+        col, bg = "#9aa7b8", "#f4f6f9"
+    return ('<div style="display:flex;justify-content:space-between;align-items:center;'
+            f'background:{bg};border-radius:8px;padding:6px 10px;margin-bottom:6px;">'
+            f'<span style="font-size:0.85rem;color:#374151;">{icon} {label}</span>'
+            f'<span style="font-size:1.1rem;font-weight:700;color:{col};">{count}</span></div>')
+
+
 def _resumen_del_dia(grupo: str):
-    """Resumen del día del grupo: chips de pendientes + briefing IA (1 vez por sesión)."""
+    """Resumen del día — ESTRUCTURA FIJA (v196): línea de estado + rejilla de 9
+    indicadores siempre igual (3 columnas) + detalle desplegable; la lectura de IA
+    va en su propio desplegable colapsado y bajo demanda (no gasta IA en cada carga)."""
     from core import admin_digest
     try:
         d = admin_digest.group_digest(grupo)
     except Exception:
         return
-    with st.expander("🔔 Resumen del día", expanded=True):
-        chips = []
-        if d["vencidos"]:           chips.append(f"⛔ {len(d['vencidos'])} vencido(s)")
-        if d["por_vencer"]:         chips.append(f"📅 {len(d['por_vencer'])} por vencer")
-        if d["retrasos"]:           chips.append(f"🔴 {len(d['retrasos'])} en retraso")
-        if d["alarmas"]:            chips.append(f"🔔 {sum(a['n'] for a in d['alarmas'])} alarma(s)")
-        if d["near_miss"]:          chips.append(f"🦺 {len(d['near_miss'])} near miss")
-        if d["sin_asignar"]:        chips.append(f"👷 {len(d['sin_asignar'])} sin asignar")
-        if d["campo_sin_contacto"]: chips.append(f"📇 {len(d['campo_sin_contacto'])} sin contacto")
-        if d.get("cred_venc"):      chips.append(f"🎫 {len(d['cred_venc'])} credenciales")
-        if d.get("sobre_presupuesto"): chips.append(f"💸 {len(d['sobre_presupuesto'])} sobre presupuesto")
-        if chips:
-            st.markdown("  ".join(f"`{c}`" for c in chips))
-        else:
-            st.success("Sin pendientes urgentes. ✅")
 
-        key = f"_brief_{grupo}"
-        if key not in st.session_state:
-            with st.spinner("Preparando tu resumen…"):
-                from core import chat_agent
-                st.session_state[key] = chat_agent.admin_briefing(grupo)
-        st.markdown(st.session_state[key])
-        b1, b2 = st.columns(2)
-        if b1.button("🔄 Actualizar resumen", key=f"brief_ref_{grupo}"):
-            st.session_state.pop(key, None)
-            st.rerun()
-        if b2.button("📨 Enviármelo por Telegram/email", key=f"brief_send_{grupo}"):
-            from core import notify
-            _u = st.session_state.get("auth", {}).get("usuario", "")
-            _txt = st.session_state.get(key, "")
-            try:
-                rr = notify.notify_user(_u, f"🔔 Resumen del día — {grupo}",
-                                        [l for l in str(_txt).split("\n") if l.strip()])
-                if rr.get("email") or rr.get("telegram"):
-                    st.success("📨 Resumen enviado.")
-                else:
-                    st.warning("No tienes email/Telegram configurado en tu usuario.")
-            except Exception as e:
-                st.error(f"No se pudo enviar: {e}")
+    _al_n = sum(a["n"] for a in d["alarmas"])
+    _cols = {
+        "📁 Proyectos": [("🔴", "En retraso", len(d["retrasos"]), True),
+                         ("⛔", "Vencidos", len(d["vencidos"]), True),
+                         ("📅", "Por vencer", len(d["por_vencer"]), False)],
+        "👥 Equipo":    [("👷", "Sin asignar", len(d["sin_asignar"]), False),
+                         ("📇", "Sin contacto", len(d["campo_sin_contacto"]), False),
+                         ("🎫", "Credenciales", len(d.get("cred_venc", [])), False)],
+        "🔧 Obra / $":  [("🔔", "Alarmas", _al_n, True),
+                         ("🦺", "Near miss", len(d["near_miss"]), False),
+                         ("💸", "Sobre presup.", len(d.get("sobre_presupuesto", [])), False)],
+    }
+    _urgentes = len(d["retrasos"]) + len(d["vencidos"]) + _al_n
+    _total = sum(c for items in _cols.values() for (_, _, c, _u) in items)
+
+    with st.expander("🔔 Resumen del día", expanded=True):
+        # 1) línea de estado (siempre presente)
+        if _total == 0:
+            st.markdown("<span style='color:#1e8449;font-weight:600;'>🟢 Todo en orden — "
+                        "sin pendientes.</span>", unsafe_allow_html=True)
+        elif _urgentes:
+            st.markdown(f"<span style='color:#c0392b;font-weight:600;'>🔴 {_urgentes} urgente(s)"
+                        f"</span> · {_total} pendiente(s) en total", unsafe_allow_html=True)
+        else:
+            st.markdown(f"<span style='color:#c77700;font-weight:600;'>🟡 {_total} pendiente(s)"
+                        "</span>", unsafe_allow_html=True)
+
+        # 2) rejilla FIJA de 9 indicadores (3 columnas)
+        for col, (titulo, items) in zip(st.columns(3), _cols.items()):
+            with col:
+                st.markdown(
+                    f"<div style='font-size:0.8rem;font-weight:700;color:#6b7280;"
+                    f"margin:6px 0 4px 0;'>{titulo}</div>"
+                    + "".join(_ind_card(*it) for it in items),
+                    unsafe_allow_html=True)
+
+        # 3) detalle (desplegable) — el "ver cuáles"
+        if _total:
+            with st.expander("📋 Ver detalle de pendientes"):
+                if d["retrasos"]:
+                    st.markdown("**🔴 En retraso:** " + ", ".join(
+                        f"{r['nombre']} ({r['dias']}d)" for r in d["retrasos"][:15]))
+                if d["vencidos"]:
+                    st.markdown("**⛔ Vencidos:** " + ", ".join(
+                        f"{v['nombre']} ({v['fin']})" for v in d["vencidos"][:15]))
+                if d["por_vencer"]:
+                    st.markdown("**📅 Por vencer:** " + ", ".join(
+                        f"{v['nombre']} ({v['dias']}d)" for v in d["por_vencer"][:15]))
+                if d["sin_asignar"]:
+                    st.markdown("**👷 Sin asignar:** " + ", ".join(
+                        s["nombre"] for s in d["sin_asignar"][:15]))
+                if d["campo_sin_contacto"]:
+                    st.markdown("**📇 Sin contacto:** " + ", ".join(d["campo_sin_contacto"][:15]))
+                if d.get("cred_venc"):
+                    st.markdown("**🎫 Credenciales:** " + ", ".join(
+                        f"{c['tipo']}·{c['usuario']} ({c['dias']}d)" for c in d["cred_venc"][:15]))
+                if d["alarmas"]:
+                    st.markdown("**🔔 Alarmas:** " + ", ".join(
+                        f"{a['nombre']} ({a['n']})" for a in d["alarmas"][:15]))
+                if d["near_miss"]:
+                    st.markdown("**🦺 Near miss:** " + ", ".join(
+                        f"{n['proyecto']} ({n['fecha']})" for n in d["near_miss"][:15]))
+                if d.get("sobre_presupuesto"):
+                    st.markdown(f"**💸 Sobre presupuesto:** {len(d['sobre_presupuesto'])} proyecto(s)")
+
+        # 4) lectura del asistente (IA) — su propio desplegable, bajo demanda
+        with st.expander("💬 Lectura del asistente (IA)"):
+            key = f"_brief_{grupo}"
+            if key in st.session_state:
+                st.markdown(st.session_state[key])
+                b1, b2 = st.columns(2)
+                if b1.button("🔄 Actualizar", key=f"brief_ref_{grupo}"):
+                    st.session_state.pop(key, None)
+                    st.rerun()
+                if b2.button("📨 Enviármelo", key=f"brief_send_{grupo}"):
+                    from core import notify
+                    _u = st.session_state.get("auth", {}).get("usuario", "")
+                    _txt = st.session_state.get(key, "")
+                    try:
+                        rr = notify.notify_user(_u, f"🔔 Resumen del día — {grupo}",
+                                                [l for l in str(_txt).split("\n") if l.strip()])
+                        if rr.get("email") or rr.get("telegram"):
+                            st.success("📨 Resumen enviado.")
+                        else:
+                            st.warning("No tienes email/Telegram configurado en tu usuario.")
+                    except Exception as e:
+                        st.error(f"No se pudo enviar: {e}")
+            else:
+                st.caption("El asistente redacta el estado del grupo en pocas frases, "
+                           "con una recomendación.")
+                if st.button("✨ Generar lectura", key=f"brief_gen_{grupo}"):
+                    with st.spinner("Preparando…"):
+                        from core import chat_agent
+                        st.session_state[key] = chat_agent.admin_briefing(grupo)
+                    st.rerun()
 
 
 # Documentos: tipos y permisos por rol
