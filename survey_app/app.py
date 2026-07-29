@@ -189,6 +189,11 @@ with st.sidebar:
     render_user_bar()
     st.markdown("---")
 
+    # ── Cronómetro de fichaje EN VIVO (v202): admin y campo, solo si estás fichado ──
+    if _ROL in ("administrador", "campo"):
+        from core.timeclock_ui import render_sidebar_chrono
+        render_sidebar_chrono()
+
     # ── Navegación del admin (nueva UI, v190) ──
     if _ROL == "administrador":
         from core import home_ui as _home

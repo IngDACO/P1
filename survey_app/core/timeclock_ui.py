@@ -46,6 +46,57 @@ def _chronometer(clock_in_str, label="En curso", color=_VERDE, key="chrono"):
     )
 
 
+def _chrono_mini(clock_in_str, label, color, key):
+    """Cronómetro compacto para el sidebar (misma técnica JS que _chronometer)."""
+    e0 = timeclock.elapsed_seconds(clock_in_str)
+    components.html(
+        '<div style="font-family:Arial,Helvetica,sans-serif;line-height:1.1;">'
+        f'<div style="font-size:11px;color:#6b7280;white-space:nowrap;overflow:hidden;'
+        f'text-overflow:ellipsis;">{label}</div>'
+        f'<span id="{key}" style="font-size:21px;font-weight:800;'
+        f"font-family:'Courier New',monospace;color:{color};letter-spacing:.5px;\">"
+        '00:00:00</span></div>'
+        "<script>"
+        f"var e={e0};"
+        "function f(s){var h=Math.floor(s/3600),m=Math.floor((s%3600)/60),x=s%60;"
+        "return String(h).padStart(2,'0')+':'+String(m).padStart(2,'0')+':'"
+        "+String(x).padStart(2,'0');}"
+        f"var el=document.getElementById('{key}');el.textContent=f(e);"
+        "setInterval(function(){e++;el.textContent=f(e);},1000);"
+        "</script>",
+        height=44,
+    )
+
+
+def render_sidebar_chrono():
+    """Cronómetro(s) de fichaje EN VIVO en el sidebar — SOLO si el usuario está fichado
+    (v202). Lo llaman admin y campo desde la barra lateral, para verlo desde cualquier
+    sección. Solo muestra; el fichaje se sigue gestionando en la pestaña ⏱ Fichaje."""
+    if not timeclock.is_configured():
+        return
+    a = st.session_state.get("auth", {})
+    nombre  = a.get("nombre") or a.get("usuario") or ""
+    usuario = a.get("usuario", "")
+    grupo   = a.get("grupo", "")
+    if not (nombre or usuario):
+        return
+    try:
+        sess = timeclock.open_sessions(nombre, grupo, usuario)
+    except Exception:
+        return
+    gen = sess.get(timeclock.TIPO_GENERAL)
+    prj = sess.get(timeclock.TIPO_PROYECTO)
+    if not (gen or prj):
+        return                       # solo cuando estás fichado
+    st.markdown("###### ⏱ FICHAJE EN CURSO")
+    if gen:
+        _chrono_mini(gen["clock_in"], "🕐 Jornada", _AZUL, "sb_chrono_gen")
+    if prj:
+        _pn = str(prj.get("proyecto") or "Proyecto").replace("&", "&amp;").replace("<", "&lt;")
+        _chrono_mini(prj["clock_in"], f"🏗 {_pn}", _VERDE, "sb_chrono_prj")
+    st.markdown("---")
+
+
 def _tarjeta(titulo, valor, pie="", color=None, activo=False):
     """Tarjeta de estado, mismo lenguaje visual que los KPI de los proyectos."""
     borde = f"border-left:4px solid {color};" if (activo and color) else ""

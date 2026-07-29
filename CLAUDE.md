@@ -1071,6 +1071,15 @@ corren por primera vez en el Cloud.
 Campo → "mi semana" (donde voy cada dia) · fichaje pre-rellenado desde el roster · plan vs real
 (asignado a X / ficho en Y, solo para trabajos enlazados a un PRJ).
 
+## Cronómetro de fichaje en el sidebar (v202)
+Pedido del usuario: ver el tiempo en vivo de fichaje desde cualquier sección, no solo en ⏱ Fichaje. Nuevo
+`timeclock_ui.render_sidebar_chrono()` + `_chrono_mini()` (versión compacta del `_chronometer` JS client-side):
+lee `open_sessions(nombre,grupo,usuario)`; si hay jornada general y/o proyecto abiertos, muestra el/los
+cronómetro(s) en vivo ("🕐 Jornada" / "🏗 [proyecto]") en el sidebar. SOLO cuando estás fichado (si no, no
+muestra nada — decisión del usuario). Solo LECTURA (el fichaje se sigue gestionando en la pestaña). Llamado en
+`app.py` en el bloque del sidebar, tras `render_user_bar`, para `_ROL in (administrador, campo)` (owner no ficha).
+Verificado: compila + import + AST (_AZUL/_VERDE son constantes de módulo reales). Visual = Cloud.
+
 ## Ajustes estéticos: logo de login + zona negra superior (v201)
 Dos pedidos del usuario. (1) El **logo del login** era muy grande → columnas `st.columns([1,1,1])` → `[2,1,2]`
 en `render_login` (el logo ocupa el tercio central, con `use_container_width`; pasar a [2,1,2] lo deja en ~20%
@@ -2849,9 +2858,10 @@ posicional + plano) → app.py, al cargar el PDF, setea `st.session_state["ns"]`
 resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NORTH SYD y AGECARE → NS=6
 (coincide con travel/floor-height HQ/HE).
 
-## Versiones desplegadas (v201 = actual)
+## Versiones desplegadas (v202 = actual)
 | Ver | Cambio principal |
 |---|---|
+| v202 | Cronómetro(s) de fichaje EN VIVO en el sidebar (jornada + proyecto), visibles desde cualquier sección, solo cuando estás fichado. Admin y campo. Nuevo timeclock_ui.render_sidebar_chrono |
 | v201 | Estética: logo del login ~40% más pequeño ([2,1,2]); quitada la zona negra superior en la vista del admin (cabecera de Streamlit transparente + menos padding arriba, sin ocultar el botón de desplegar el sidebar) |
 | v200 | Más elementos activos: indicadores del resumen con NOMBRE visible; PINES del mapa clickeables (abren el proyecto); filas de la AGENDA clickeables (abren la ficha de la persona). Reusa _prjsel_pending y gp_fichasel para el deep-link |
 | v199 | Resumen y métricas ACTIVOS: los 9 indicadores y las 3 métricas son botones clickeables → al tocar un indicador muestra el detalle ("cuáles") + botón "→ Ir a [sección]" que navega a resolverlo. Mecanismo de navegación programática en la nav del admin (home_ui.navegar/_aplicar_nav_pending) |
