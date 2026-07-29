@@ -34,8 +34,34 @@ _SECCIONES = [
 _LBL2KEY = {lbl: k for k, lbl in _SECCIONES}
 
 
+_SUBKEY = {"planificacion": "adm_plan_sub", "proyectos": "adm_proy_sub",
+           "finanzas": "adm_fin_sub", "herramientas": "adm_herr_sub"}
+
+
+def navegar(seccion, sub_label=None):
+    """Deja pendiente saltar a una sección (y sub-pestaña) del admin. Lo usan los
+    elementos ACTIVOS (indicadores del resumen, métricas, pines…). Reejecuta."""
+    st.session_state["_admin_nav_pending"] = (seccion, sub_label)
+    st.rerun()
+
+
+def _aplicar_nav_pending():
+    """Aplica un salto pendiente ANTES de instanciar los radios (regla v111): se
+    escribe la clave del widget antes de crearlo, nunca después."""
+    p = st.session_state.pop("_admin_nav_pending", None)
+    if not p:
+        return
+    seccion, sub_label = p if isinstance(p, (tuple, list)) else (p, None)
+    lbl = next((l for k, l in _SECCIONES if k == seccion), None)
+    if lbl:
+        st.session_state["admin_nav"] = lbl
+    if sub_label and _SUBKEY.get(seccion):
+        st.session_state[_SUBKEY[seccion]] = sub_label
+
+
 def sidebar_menu() -> str:
     """Renderiza el menú de iconos en el sidebar y devuelve la clave de la sección."""
+    _aplicar_nav_pending()                     # aplica saltos de los elementos activos
     st.markdown("###### NAVEGACIÓN")
     sel = st.radio("Menú", [lbl for _, lbl in _SECCIONES], key="admin_nav",
                    label_visibility="collapsed")

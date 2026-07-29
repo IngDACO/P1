@@ -141,39 +141,29 @@ def render_group_header(grupo: str):
     if not P.is_configured():
         return
     k = _kpis(grupo)
-    # v197: fusión — arriba SOLO las métricas del portafolio (cómo va el grupo).
-    # "En riesgo" (=retrasos) y "Alarmas" salieron de aquí: viven en la rejilla de
-    # indicadores del resumen (abajo), para no duplicar la misma cifra en dos lugares.
-    cards = (
-        _kpi_card("Proyectos activos", k["activos"])
-        + _kpi_card("Avance promedio", f'{k["avg"]}%')
-        + _kpi_card("Horas registradas", k["horas"])
-    )
-    st.markdown(
-        f'<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:6px;">{cards}</div>',
-        unsafe_allow_html=True,
-    )
+    # v199: métricas ACTIVAS (clic → sección) en vez de tarjetas pasivas. "En riesgo"
+    # y "Alarmas" salieron de aquí (v197): viven en los indicadores del resumen.
+    m1, m2, m3 = st.columns(3)
+    if m1.button(f"📁 {k['activos']} activos", key="m_activos", use_container_width=True):
+        _ir_a("proyectos", "📊 Proyectos")
+    if m2.button(f"📈 {k['avg']}% avance", key="m_avance", use_container_width=True):
+        _ir_a("proyectos", "📊 Proyectos")
+    if m3.button(f"⏱ {k['horas']} h", key="m_horas", use_container_width=True):
+        _ir_a("finanzas", "⏱ Horas")
     _resumen_del_dia(grupo)
 
 
-def _ind_card(icon, label, count, urgente):
-    """Tarjeta fija de un indicador del resumen. count 0 = gris; >0 = color (rojo si
-    urgente, ámbar si no). La rejilla es SIEMPRE la misma (v196)."""
-    if count:
-        col = "#c0392b" if urgente else "#c77700"
-        bg  = "#fdecec" if urgente else "#fff4e0"
-    else:
-        col, bg = "#9aa7b8", "#f4f6f9"
-    return ('<div style="display:flex;justify-content:space-between;align-items:center;'
-            f'background:{bg};border-radius:8px;padding:6px 10px;margin-bottom:6px;">'
-            f'<span style="font-size:0.85rem;color:#374151;">{icon} {label}</span>'
-            f'<span style="font-size:1.1rem;font-weight:700;color:{col};">{count}</span></div>')
+def _ir_a(seccion, sub_label=None):
+    """Salta a una sección (y sub-pestaña) del admin. Lo lee home_ui._aplicar_nav_pending
+    en el siguiente run (antes de instanciar los radios). Usado por los elementos ACTIVOS."""
+    st.session_state["_admin_nav_pending"] = (seccion, sub_label)
+    st.rerun()
 
 
 def _resumen_del_dia(grupo: str):
-    """Resumen del día — ESTRUCTURA FIJA (v196): línea de estado + rejilla de 9
-    indicadores siempre igual (3 columnas) + detalle desplegable; la lectura de IA
-    va en su propio desplegable colapsado y bajo demanda (no gasta IA en cada carga)."""
+    """Resumen del día — estructura fija + elementos ACTIVOS (v199): cada indicador es
+    un botón; al clickearlo muestra sus 'cuáles' + un botón para ir a la sección a actuar.
+    La lectura de IA va en su propio desplegable, bajo demanda."""
     from core import admin_digest
     try:
         d = admin_digest.group_digest(grupo)
@@ -181,69 +171,80 @@ def _resumen_del_dia(grupo: str):
         return
 
     _al_n = sum(a["n"] for a in d["alarmas"])
-    _cols = {
-        "📁 Proyectos": [("🔴", "En retraso", len(d["retrasos"]), True),
-                         ("⛔", "Vencidos", len(d["vencidos"]), True),
-                         ("📅", "Por vencer", len(d["por_vencer"]), False)],
-        "👥 Equipo":    [("👷", "Sin asignar", len(d["sin_asignar"]), False),
-                         ("📇", "Sin contacto", len(d["campo_sin_contacto"]), False),
-                         ("🎫", "Credenciales", len(d.get("cred_venc", [])), False)],
-        "🔧 Obra / $":  [("🔔", "Alarmas", _al_n, True),
-                         ("🦺", "Near miss", len(d["near_miss"]), False),
-                         ("💸", "Sobre presup.", len(d.get("sobre_presupuesto", [])), False)],
-    }
-    _urgentes = len(d["retrasos"]) + len(d["vencidos"]) + _al_n
-    _total = sum(c for items in _cols.values() for (_, _, c, _u) in items)
+    # slug, icono, etiqueta, urgente, count, sección, sub_pestaña, nombre_sección, detalle()
+    inds = [
+        ("retrasos", "🔴", "En retraso", True, len(d["retrasos"]),
+         "proyectos", "📊 Proyectos", "Proyectos",
+         lambda: ", ".join(f"{r['nombre']} ({r['dias']}d)" for r in d["retrasos"][:15])),
+        ("vencidos", "⛔", "Vencidos", True, len(d["vencidos"]),
+         "proyectos", "📊 Proyectos", "Proyectos",
+         lambda: ", ".join(f"{v['nombre']} ({v['fin']})" for v in d["vencidos"][:15])),
+        ("porvencer", "📅", "Por vencer", False, len(d["por_vencer"]),
+         "proyectos", "📊 Proyectos", "Proyectos",
+         lambda: ", ".join(f"{v['nombre']} ({v['dias']}d)" for v in d["por_vencer"][:15])),
+        ("sinasig", "👷", "Sin asignar", False, len(d["sin_asignar"]),
+         "proyectos", "📊 Proyectos", "Proyectos",
+         lambda: ", ".join(s["nombre"] for s in d["sin_asignar"][:15])),
+        ("sincont", "📇", "Sin contacto", False, len(d["campo_sin_contacto"]),
+         "planificacion", "👷 Usuarios", "Usuarios",
+         lambda: ", ".join(d["campo_sin_contacto"][:15])),
+        ("cred", "🎫", "Credenciales", False, len(d.get("cred_venc", [])),
+         "planificacion", "👷 Usuarios", "Usuarios",
+         lambda: ", ".join(f"{c['tipo']}·{c['usuario']} ({c['dias']}d)"
+                           for c in d.get("cred_venc", [])[:15])),
+        ("alarmas", "🔔", "Alarmas", True, _al_n,
+         "proyectos", "📊 Proyectos", "Proyectos",
+         lambda: ", ".join(f"{a['nombre']} ({a['n']})" for a in d["alarmas"][:15])),
+        ("near", "🦺", "Near miss", False, len(d["near_miss"]),
+         "proyectos", "📊 Proyectos", "Proyectos",
+         lambda: ", ".join(f"{n['proyecto']} ({n['fecha']})" for n in d["near_miss"][:15])),
+        ("sobrep", "💸", "Sobre presup.", False, len(d.get("sobre_presupuesto", [])),
+         "finanzas", "💰 Gastos", "Gastos",
+         lambda: f"{len(d.get('sobre_presupuesto', []))} proyecto(s) sobre presupuesto"),
+    ]
+    _urg = sum(c for (_s, _i, _l, u, c, *_r) in inds if u)
+    _tot = sum(c for (_s, _i, _l, _u, c, *_r) in inds)
 
     with st.expander("🔔 Resumen del día", expanded=True):
-        # 1) línea de estado (siempre presente)
-        if _total == 0:
-            st.markdown("<span style='color:#1e8449;font-weight:600;'>🟢 Todo en orden — "
-                        "sin pendientes.</span>", unsafe_allow_html=True)
-        elif _urgentes:
-            st.markdown(f"<span style='color:#c0392b;font-weight:600;'>🔴 {_urgentes} urgente(s)"
-                        f"</span> · {_total} pendiente(s) en total", unsafe_allow_html=True)
+        if _tot == 0:
+            st.markdown("<span style='color:#1e8449;font-weight:600;'>🟢 Todo en orden.</span>",
+                        unsafe_allow_html=True)
+        elif _urg:
+            st.markdown(f"<span style='color:#c0392b;font-weight:600;'>🔴 {_urg} urgente(s)</span>"
+                        f" · {_tot} pendiente(s)", unsafe_allow_html=True)
         else:
-            st.markdown(f"<span style='color:#c77700;font-weight:600;'>🟡 {_total} pendiente(s)"
-                        "</span>", unsafe_allow_html=True)
+            st.markdown(f"<span style='color:#c77700;font-weight:600;'>🟡 {_tot} pendiente(s)</span>",
+                        unsafe_allow_html=True)
 
-        # 2) rejilla FIJA de 9 indicadores (3 columnas)
-        for col, (titulo, items) in zip(st.columns(3), _cols.items()):
-            with col:
-                st.markdown(
-                    f"<div style='font-size:0.8rem;font-weight:700;color:#6b7280;"
-                    f"margin:6px 0 4px 0;'>{titulo}</div>"
-                    + "".join(_ind_card(*it) for it in items),
-                    unsafe_allow_html=True)
+        # colorear cada botón-indicador por severidad (clase st-key-<key>, v169)
+        _css = ["<style>"]
+        for _slug, _i, _l, _urgb, _cnt, *_r in inds:
+            _bg, _fg = (("#fdecec", "#c0392b") if _urgb else ("#fff4e0", "#c77700")) \
+                       if _cnt else ("#f4f6f9", "#9aa7b8")
+            _css.append(f".st-key-resind_{_slug} button{{background:{_bg}!important;"
+                        f"color:{_fg}!important;border-color:{_bg}!important;}}")
+        _css.append("</style>")
+        st.markdown("".join(_css), unsafe_allow_html=True)
 
-        # 3) detalle (desplegable) — el "ver cuáles"
-        if _total:
-            with st.expander("📋 Ver detalle de pendientes"):
-                if d["retrasos"]:
-                    st.markdown("**🔴 En retraso:** " + ", ".join(
-                        f"{r['nombre']} ({r['dias']}d)" for r in d["retrasos"][:15]))
-                if d["vencidos"]:
-                    st.markdown("**⛔ Vencidos:** " + ", ".join(
-                        f"{v['nombre']} ({v['fin']})" for v in d["vencidos"][:15]))
-                if d["por_vencer"]:
-                    st.markdown("**📅 Por vencer:** " + ", ".join(
-                        f"{v['nombre']} ({v['dias']}d)" for v in d["por_vencer"][:15]))
-                if d["sin_asignar"]:
-                    st.markdown("**👷 Sin asignar:** " + ", ".join(
-                        s["nombre"] for s in d["sin_asignar"][:15]))
-                if d["campo_sin_contacto"]:
-                    st.markdown("**📇 Sin contacto:** " + ", ".join(d["campo_sin_contacto"][:15]))
-                if d.get("cred_venc"):
-                    st.markdown("**🎫 Credenciales:** " + ", ".join(
-                        f"{c['tipo']}·{c['usuario']} ({c['dias']}d)" for c in d["cred_venc"][:15]))
-                if d["alarmas"]:
-                    st.markdown("**🔔 Alarmas:** " + ", ".join(
-                        f"{a['nombre']} ({a['n']})" for a in d["alarmas"][:15]))
-                if d["near_miss"]:
-                    st.markdown("**🦺 Near miss:** " + ", ".join(
-                        f"{n['proyecto']} ({n['fecha']})" for n in d["near_miss"][:15]))
-                if d.get("sobre_presupuesto"):
-                    st.markdown(f"**💸 Sobre presupuesto:** {len(d['sobre_presupuesto'])} proyecto(s)")
+        st.caption("Toca un indicador para ver el detalle e ir a resolverlo.")
+        for _col, (slug, icon, lbl, _urgb, cnt, _sec, _sub, _secn, _fn) in zip(st.columns(9), inds):
+            if _col.button(f"{icon} {cnt}", key=f"resind_{slug}", help=lbl,
+                           use_container_width=True):
+                _cur = st.session_state.get("_res_sel")
+                st.session_state["_res_sel"] = None if _cur == slug else slug
+                st.rerun()
+
+        sel = st.session_state.get("_res_sel")
+        it = next((x for x in inds if x[0] == sel), None) if sel else None
+        if it:
+            slug, icon, lbl, _urgb, cnt, sec, sub, secn, fn = it
+            st.markdown(f"**{icon} {lbl} — {cnt}**")
+            if cnt:
+                st.caption(fn())
+                if st.button(f"→ Ir a {secn}", key=f"go_{slug}", type="primary"):
+                    _ir_a(sec, sub)
+            else:
+                st.caption("Sin pendientes aquí. ✅")
 
         # 4) lectura del asistente (IA) — su propio desplegable, bajo demanda
         with st.expander("💬 Lectura del asistente (IA)"):

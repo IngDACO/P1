@@ -1071,6 +1071,21 @@ corren por primera vez en el Cloud.
 Campo → "mi semana" (donde voy cada dia) · fichaje pre-rellenado desde el roster · plan vs real
 (asignado a X / ficho en Y, solo para trabajos enlazados a un PRJ).
 
+## Resumen y métricas ACTIVOS/clickeables (v199)
+Principio del usuario: nada de elementos pasivos; todo clickeable → lleva a una sección o muestra el detalle.
+Aplicado al Centro de control (HOME). Mecanismo de navegación programática en la nueva nav del admin:
+`home_ui.navegar(seccion, sub_label)` / `_ir_a(...)` en projects_ui deja `_admin_nav_pending` en session_state;
+`home_ui._aplicar_nav_pending()` (llamado al inicio de `sidebar_menu`, ANTES de instanciar los radios, regla
+v111) escribe `admin_nav` y la sub-key (`adm_plan_sub`/`adm_proy_sub`/`adm_fin_sub`) → salta a la sección+sub.
+`_resumen_del_dia` rehecho: los **9 indicadores son botones** (colorea cada uno por severidad con `.st-key-<key>`
+CSS, v169; opción c del usuario) en una fila (`st.columns(9)`, icono+número, label en tooltip); al clickear uno
+se guarda `_res_sel` y abajo se muestra su detalle (los "cuáles") + botón **"→ Ir a [sección]"** que navega
+(retrasos/vencidos/por vencer/alarmas/near→Proyectos; sin contacto/credenciales→Planificación·Usuarios;
+sin asignar→Proyectos; sobre presup.→Finanzas·Gastos). Las **3 métricas** (Activos/Avance/Horas) también son
+botones que navegan (Proyectos/Proyectos/Finanzas·Horas). Se quitó la rejilla pasiva y el "Ver detalle" único.
+Verificado: compila + import + AST; mapeo sección→label y sub-key correctos. ⚠️ Confirmación visual = Cloud
+(el coloreado de botones por CSS y la navegación solo se ven en vivo).
+
 ## Fusión KPIs + resumen (v197)
 El Centro de control (`render_group_header`) mostraba "En riesgo" y "Alarmas abiertas" como tarjetas KPI Y
 otra vez como indicadores en el resumen (v196) → duplicado. Fusionado: arriba quedan SOLO las métricas del
@@ -2814,9 +2829,10 @@ posicional + plano) → app.py, al cargar el PDF, setea `st.session_state["ns"]`
 resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NORTH SYD y AGECARE → NS=6
 (coincide con travel/floor-height HQ/HE).
 
-## Versiones desplegadas (v197 = actual)
+## Versiones desplegadas (v199 = actual)
 | Ver | Cambio principal |
 |---|---|
+| v199 | Resumen y métricas ACTIVOS: los 9 indicadores y las 3 métricas son botones clickeables → al tocar un indicador muestra el detalle ("cuáles") + botón "→ Ir a [sección]" que navega a resolverlo. Mecanismo de navegación programática en la nav del admin (home_ui.navegar/_aplicar_nav_pending) |
 | v197 | Fusión KPIs + resumen: quitadas las tarjetas "En riesgo" y "Alarmas" de arriba (estaban duplicadas con la rejilla de indicadores del resumen); arriba quedan solo las métricas del portafolio (Activos·Avance·Horas). Un solo bloque coherente |
 | v196 | Resumen del día con estructura FIJA: línea de estado + rejilla de 9 indicadores siempre igual (3 columnas, número 0 incluido) + detalle desplegable + la lectura de IA en su propio desplegable colapsado y bajo demanda (ya no se genera automático). Antes los chips aparecían/desaparecían según los datos |
 | v195 | Fix: el mapa de HOME no mostraba proyectos recién creados (filtraba solo "En progreso"; un proyecto nuevo es "Planificado"). Ahora muestra los activos (Planificado + En progreso) → "Proyectos activos" |
