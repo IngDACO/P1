@@ -1071,6 +1071,14 @@ corren por primera vez en el Cloud.
 Campo → "mi semana" (donde voy cada dia) · fichaje pre-rellenado desde el roster · plan vs real
 (asignado a X / ficho en Y, solo para trabajos enlazados a un PRJ).
 
+## Fusión KPIs + resumen (v197)
+El Centro de control (`render_group_header`) mostraba "En riesgo" y "Alarmas abiertas" como tarjetas KPI Y
+otra vez como indicadores en el resumen (v196) → duplicado. Fusionado: arriba quedan SOLO las métricas del
+portafolio (Proyectos activos · Avance promedio · Horas registradas); "En riesgo"(=retrasos) y "Alarmas"
+viven únicamente en la rejilla de 9 indicadores del resumen. Un solo bloque coherente: métricas del grupo
+arriba + "qué necesita atención" (estado + rejilla fija) abajo. Solo se quitaron 2 tarjetas del display
+(`_kpis` sigue calculando todo). Compila + import.
+
 ## Resumen del día con ESTRUCTURA FIJA (v196)
 El resumen (en HOME, dentro de `render_group_header` → `_resumen_del_dia`) cambiaba de forma cada día: los
 chips solo aparecían si había algo (3 un día, 6 otro), y el briefing IA es texto libre variable. Rediseño
@@ -2806,9 +2814,10 @@ posicional + plano) → app.py, al cargar el PDF, setea `st.session_state["ns"]`
 resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NORTH SYD y AGECARE → NS=6
 (coincide con travel/floor-height HQ/HE).
 
-## Versiones desplegadas (v196 = actual)
+## Versiones desplegadas (v197 = actual)
 | Ver | Cambio principal |
 |---|---|
+| v197 | Fusión KPIs + resumen: quitadas las tarjetas "En riesgo" y "Alarmas" de arriba (estaban duplicadas con la rejilla de indicadores del resumen); arriba quedan solo las métricas del portafolio (Activos·Avance·Horas). Un solo bloque coherente |
 | v196 | Resumen del día con estructura FIJA: línea de estado + rejilla de 9 indicadores siempre igual (3 columnas, número 0 incluido) + detalle desplegable + la lectura de IA en su propio desplegable colapsado y bajo demanda (ya no se genera automático). Antes los chips aparecían/desaparecían según los datos |
 | v195 | Fix: el mapa de HOME no mostraba proyectos recién creados (filtraba solo "En progreso"; un proyecto nuevo es "Planificado"). Ahora muestra los activos (Planificado + En progreso) → "Proyectos activos" |
 | v194 | El pin de ubicación también al CREAR el proyecto ("➕ Nuevo proyecto"): nace con coordenadas. create_project acepta lat/lng. (El Survey ya no crea proyectos desde v135, así que era el único flujo). Completa v193 |

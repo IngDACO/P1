@@ -141,11 +141,12 @@ def render_group_header(grupo: str):
     if not P.is_configured():
         return
     k = _kpis(grupo)
+    # v197: fusión — arriba SOLO las métricas del portafolio (cómo va el grupo).
+    # "En riesgo" (=retrasos) y "Alarmas" salieron de aquí: viven en la rejilla de
+    # indicadores del resumen (abajo), para no duplicar la misma cifra en dos lugares.
     cards = (
         _kpi_card("Proyectos activos", k["activos"])
         + _kpi_card("Avance promedio", f'{k["avg"]}%')
-        + _kpi_card("En riesgo", k["riesgo"], "#c0392b" if k["riesgo"] else "#1f2937")
-        + _kpi_card("Alarmas abiertas", k["alarmas"], "#d97706" if k["alarmas"] else "#1f2937")
         + _kpi_card("Horas registradas", k["horas"])
     )
     st.markdown(
