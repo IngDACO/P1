@@ -227,7 +227,8 @@ def create_project(grupo, nombre, cliente="", ubicacion="", modelo="", ns=0,
                    ingeniero="", campo_asignados=None, fecha_inicio="", fecha_fin_est="",
                    params=None, matriz=None, interp=None, activities=None,
                    creado_por="", agrupacion_id="", peso_agrupacion=0,
-                   instrucciones="", induccion_links="", presupuesto="") -> tuple:
+                   instrucciones="", induccion_links="", presupuesto="",
+                   lat="", lng="") -> tuple:
     """Crea un proyecto (fila en Proyectos + filas en Actividades). Devuelve (ok, id|error)."""
     pws, err = _projects_ws()
     if err:
@@ -250,6 +251,8 @@ def create_project(grupo, nombre, cliente="", ubicacion="", modelo="", ns=0,
         json.dumps(interp or {}, ensure_ascii=False, default=str),
         creado_por, clock.now().strftime("%Y-%m-%d %H:%M:%S"),
         str(instrucciones or ""), str(induccion_links or ""), str(presupuesto or ""),
+        "",                                 # PlanoJSON (se llena aparte con plan_data.guardar)
+        str(lat or ""), str(lng or ""),     # v194: coordenadas fijadas al crear (pin en el mapa)
     ]
     pws.append_row(row, value_input_option="RAW")
 

@@ -1071,6 +1071,16 @@ corren por primera vez en el Cloud.
 Campo → "mi semana" (donde voy cada dia) · fichaje pre-rellenado desde el roster · plan vs real
 (asignado a X / ficho en Y, solo para trabajos enlazados a un PRJ).
 
+## Pin de ubicación también al CREAR el proyecto (v194)
+Completa v193. NOTA: desde v135 el Survey ya NO crea proyectos (solo guarda en uno existente); el ÚNICO flujo
+de creación es el formulario "➕ Nuevo proyecto" (`projects_ui._nuevo_proyecto_form`, única llamada a
+`create_project`). Cambios: (1) `create_project` acepta `lat=""`,`lng=""` y su fila posicional se extendió con
+`""`(PlanoJSON, que la fila OMITÍA y se llena aparte) + lat + lng → 27 valores = 27 headers. (2) el formulario
+"➕ Nuevo proyecto" tiene el mismo expander "🗺 Ubicación en el mapa" con `location_ui.location_picker`
+(fuera del st.form) y pasa lat/lng a `create_project`. Así el proyecto NACE con coordenadas. Verificado:
+compila + import + AST; fila = 27 = headers; create_project acepta lat/lng. Con esto, ubicación con pin queda
+completa (crear y editar).
+
 ## Ubicación de proyecto con búsqueda + pin en mapa (v193)
 Antes el mapa de HOME geocodificaba el texto `Ubicacion` en cada dibujo (frágil, impreciso). Ahora se
 GUARDAN coordenadas por proyecto. Cambios: (1) requirements +`folium`+`streamlit-folium` (sin API key,
@@ -2776,9 +2786,10 @@ posicional + plano) → app.py, al cargar el PDF, setea `st.session_state["ns"]`
 resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NORTH SYD y AGECARE → NS=6
 (coincide con travel/floor-height HQ/HE).
 
-## Versiones desplegadas (v193 = actual)
+## Versiones desplegadas (v194 = actual)
 | Ver | Cambio principal |
 |---|---|
+| v194 | El pin de ubicación también al CREAR el proyecto ("➕ Nuevo proyecto"): nace con coordenadas. create_project acepta lat/lng. (El Survey ya no crea proyectos desde v135, así que era el único flujo). Completa v193 |
 | v193 | Ubicación de proyecto con búsqueda de dirección + pin en mapa (folium/streamlit-folium, sin API key): guarda Lat/Lng por proyecto (columnas nuevas), se fija editando el proyecto → 🗺 Ubicación; HOME lee las coordenadas guardadas (respaldo: geocode del texto). Nuevo core/location_ui.py |
 | v192 | Centro de control del grupo (KPIs + resumen del día) reubicado en HOME, arriba del mapa y la agenda (era lo único que había quedado sin reubicar al reorganizar la nav del admin) |
 | v191 | Integrado TODO el contenido existente en la nueva nav del admin: Fichaje, Planificación (Tablero+Usuarios), Proyectos (Proyectos+Agrupaciones), Finanzas (Gastos+Horas), Herramientas (5 técnicas+Pre-Start). Inventario y Contactos quedan placeholders. Reconexión de funciones ya probadas |

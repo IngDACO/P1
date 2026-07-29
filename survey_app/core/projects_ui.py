@@ -657,6 +657,11 @@ def _nuevo_proyecto_form(grupo: str, key: str = "nuevo"):
         if asg:
             _avisar_asignados(asg)
 
+        # ── Ubicación en el mapa (fuera del form: el mapa necesita reruns) — v194 ──
+        from core import location_ui
+        with st.expander("🗺 Ubicación en el mapa (opcional — fija el pin del proyecto)"):
+            _nplat, _nplng = location_ui.location_picker(f"nploc_{key}")
+
         with st.form(f"np_form_{key}"):
             c1, c2 = st.columns(2)
             nom = c1.text_input("Nombre del proyecto *", key=f"np_nom_{key}")
@@ -712,7 +717,9 @@ def _nuevo_proyecto_form(grupo: str, key: str = "nuevo"):
                                if sched.get("fecha_fin") else ""),
                 activities=sched.get("activities", []),
                 creado_por=st.session_state.get("auth", {}).get("usuario", ""),
-                instrucciones=instr, induccion_links=inds, presupuesto=pres)
+                instrucciones=instr, induccion_links=inds, presupuesto=pres,
+                lat=("" if _nplat is None else _nplat),
+                lng=("" if _nplng is None else _nplng))
             if not ok:
                 st.error(f"No se pudo crear: {res}")
                 return
