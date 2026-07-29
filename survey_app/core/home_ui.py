@@ -183,7 +183,7 @@ def render_home(grupo):
     PU.render_group_header(grupo)
     col_map, col_ag = st.columns([3, 2], gap="large")
     with col_map:
-        st.markdown("#### 🗺 Proyectos en ejecución")
+        st.markdown("#### 🗺 Proyectos activos")
         _mapa_proyectos(grupo)
     with col_ag:
         st.markdown("#### 📋 Agenda de hoy")
@@ -194,13 +194,16 @@ def render_home(grupo):
 def _mapa_proyectos(grupo):
     from core import projects as P
     from core import location_ui
+    # v195: "activos" = Planificado + En progreso. Antes filtraba solo "En progreso",
+    # así que un proyecto recién creado (avance 0 → Planificado) nunca aparecía.
+    _ACTIVOS = ("Planificado", "En progreso")
     try:
         proys = [p for p in P.list_projects(grupo)
-                 if str(p.get("Estado", "")) == "En progreso"]
+                 if str(p.get("Estado", "")) in _ACTIVOS]
     except Exception:
         proys = []
     if not proys:
-        st.info("No hay proyectos en ejecución ahora mismo.")
+        st.info("No hay proyectos activos ahora mismo.")
         return
 
     filas, sin_ubic = [], []

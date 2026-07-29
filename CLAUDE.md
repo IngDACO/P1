@@ -1071,6 +1071,12 @@ corren por primera vez en el Cloud.
 Campo → "mi semana" (donde voy cada dia) · fichaje pre-rellenado desde el roster · plan vs real
 (asignado a X / ficho en Y, solo para trabajos enlazados a un PRJ).
 
+## Fix: el mapa de HOME no mostraba proyectos recién creados (v195)
+El usuario creó un proyecto y no aparecía en el mapa. Causa: `_mapa_proyectos` filtraba `Estado=="En progreso"`,
+pero un proyecto recién creado tiene avance 0 → `derive_estado(0)`="Planificado" → quedaba EXCLUIDO tuviera pin
+o no. Fix: el filtro ahora incluye los **activos** = ("Planificado","En progreso"); etiqueta "🗺 Proyectos
+activos" (antes "en ejecución"). Verificado: compila + import; derive_estado(0)=Planificado (ahora incluido).
+
 ## Pin de ubicación también al CREAR el proyecto (v194)
 Completa v193. NOTA: desde v135 el Survey ya NO crea proyectos (solo guarda en uno existente); el ÚNICO flujo
 de creación es el formulario "➕ Nuevo proyecto" (`projects_ui._nuevo_proyecto_form`, única llamada a
@@ -2786,9 +2792,10 @@ posicional + plano) → app.py, al cargar el PDF, setea `st.session_state["ns"]`
 resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NORTH SYD y AGECARE → NS=6
 (coincide con travel/floor-height HQ/HE).
 
-## Versiones desplegadas (v194 = actual)
+## Versiones desplegadas (v195 = actual)
 | Ver | Cambio principal |
 |---|---|
+| v195 | Fix: el mapa de HOME no mostraba proyectos recién creados (filtraba solo "En progreso"; un proyecto nuevo es "Planificado"). Ahora muestra los activos (Planificado + En progreso) → "Proyectos activos" |
 | v194 | El pin de ubicación también al CREAR el proyecto ("➕ Nuevo proyecto"): nace con coordenadas. create_project acepta lat/lng. (El Survey ya no crea proyectos desde v135, así que era el único flujo). Completa v193 |
 | v193 | Ubicación de proyecto con búsqueda de dirección + pin en mapa (folium/streamlit-folium, sin API key): guarda Lat/Lng por proyecto (columnas nuevas), se fija editando el proyecto → 🗺 Ubicación; HOME lee las coordenadas guardadas (respaldo: geocode del texto). Nuevo core/location_ui.py |
 | v192 | Centro de control del grupo (KPIs + resumen del día) reubicado en HOME, arriba del mapa y la agenda (era lo único que había quedado sin reubicar al reorganizar la nav del admin) |
