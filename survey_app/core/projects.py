@@ -36,6 +36,8 @@ PROJECTS_HEADERS = [
     # incluye lo medido en obra). Se extraen UNA vez al cargar el plano y los
     # consumen las 5 herramientas sin volver a abrir el PDF.
     "PlanoJSON",
+    # v193: coordenadas para el pin en el mapa (se fijan con el selector de ubicación).
+    "Lat", "Lng",
 ]
 ACTIVITIES_HEADERS = [
     "ProyectoID", "Orden", "Nombre", "DuracionDias", "Peso", "Avance",

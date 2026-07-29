@@ -1071,6 +1071,20 @@ corren por primera vez en el Cloud.
 Campo → "mi semana" (donde voy cada dia) · fichaje pre-rellenado desde el roster · plan vs real
 (asignado a X / ficho en Y, solo para trabajos enlazados a un PRJ).
 
+## Ubicación de proyecto con búsqueda + pin en mapa (v193)
+Antes el mapa de HOME geocodificaba el texto `Ubicacion` en cada dibujo (frágil, impreciso). Ahora se
+GUARDAN coordenadas por proyecto. Cambios: (1) requirements +`folium`+`streamlit-folium` (sin API key,
+OpenStreetMap; import perezoso con fallback). (2) `PROJECTS_HEADERS` +`Lat`,`Lng` (al final, migran solas).
+(3) NUEVO `core/location_ui.py`: `location_picker(key,lat,lng,direccion)` = caja "buscar dirección"
+(Nominatim) que centra el mapa + clic en el mapa para fijar/mover el pin (guarda el punto en session_state,
+solo un clic NUEVO mueve el pin vía `_lastclick`); `geocode` (cacheado), `to_float`. Va FUERA de `st.form`.
+(4) `projects_ui._detalle_proyecto`: expander "🗺 Ubicación en el mapa" con el picker ARRIBA del form de editar
+(patrón asignados) + guarda Lat/Lng en `update_project`. (5) `home_ui._mapa_proyectos`: lee Lat/Lng guardadas
+(respaldo: geocode del texto para proyectos viejos), mapa folium con pines etiquetados (popup=nombre,
+returned_objects=[] para no re-renderizar); quitado el `_geocode` local duplicado. Verificado: compila +
+import + AST; Lat/Lng en headers y _PCOL. ⚠️ RIESGO: dependencia nueva en el Cloud (vigilar el build). v194
+pendiente: integrar el picker en CREAR proyecto (Survey → Guardar como proyecto y el "➕ Nuevo proyecto").
+
 ## Centro de control reubicado en HOME (v192)
 Auditoría antes→ahora: 13/13 apartados reubicados; lo ÚNICO sin sitio era el "Centro de control del grupo"
 (`projects_ui.render_group_header`: banda 🏢 grupo + KPIs [activos·avance·en riesgo·alarmas·horas] + resumen
@@ -2762,9 +2776,10 @@ posicional + plano) → app.py, al cargar el PDF, setea `st.session_state["ns"]`
 resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NORTH SYD y AGECARE → NS=6
 (coincide con travel/floor-height HQ/HE).
 
-## Versiones desplegadas (v192 = actual)
+## Versiones desplegadas (v193 = actual)
 | Ver | Cambio principal |
 |---|---|
+| v193 | Ubicación de proyecto con búsqueda de dirección + pin en mapa (folium/streamlit-folium, sin API key): guarda Lat/Lng por proyecto (columnas nuevas), se fija editando el proyecto → 🗺 Ubicación; HOME lee las coordenadas guardadas (respaldo: geocode del texto). Nuevo core/location_ui.py |
 | v192 | Centro de control del grupo (KPIs + resumen del día) reubicado en HOME, arriba del mapa y la agenda (era lo único que había quedado sin reubicar al reorganizar la nav del admin) |
 | v191 | Integrado TODO el contenido existente en la nueva nav del admin: Fichaje, Planificación (Tablero+Usuarios), Proyectos (Proyectos+Agrupaciones), Finanzas (Gastos+Horas), Herramientas (5 técnicas+Pre-Start). Inventario y Contactos quedan placeholders. Reconexión de funciones ya probadas |
 | v190 | Nueva navegación del ADMIN (primer pase): menú lateral de iconos (Home/Fichaje/Planificación/Proyectos/Finanzas/Inventario/Herramientas/Contactos) + barra superior (buscador + campana de alertas) + HOME real (mapa de proyectos en ejecución + agenda de hoy del roster). Los 6 apartados restantes son placeholders. Solo rol admin; nuevo core/home_ui.py |

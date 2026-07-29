@@ -1194,6 +1194,16 @@ def _detalle_proyecto(pid: str, grupo: str = None):
                                    default=_actuales, key=f"asig_{pid}")
         _avisar_asignados(asignados)      # credenciales vencidas / contacto faltante
 
+        # ── Ubicación en el mapa (fuera del form: el mapa necesita reruns) — v193 ──
+        from core import location_ui
+        with st.expander("🗺 Ubicación en el mapa (pin del proyecto)",
+                         expanded=not location_ui.to_float(prj.get("Lat"))):
+            _plat, _plng = location_ui.location_picker(
+                f"edloc_{pid}",
+                lat=location_ui.to_float(prj.get("Lat")),
+                lng=location_ui.to_float(prj.get("Lng")),
+                direccion=str(prj.get("Ubicacion", "")))
+
         # ── Editar datos ──
         with st.form(f"edit_{pid}"):
             st.markdown("**Datos del proyecto**")
@@ -1254,6 +1264,8 @@ def _detalle_proyecto(pid: str, grupo: str = None):
                         "AgrupacionID": ag_id, "PesoEnAgrupacion": peso,
                         "EstadoManual": est_man, "Estado": P.derive_estado(avance, est_man),
                         "Instrucciones": instr, "InduccionLinks": ind, "Presupuesto": presup,
+                        "Lat": "" if _plat is None else _plat,
+                        "Lng": "" if _plng is None else _plng,
                     })
                     # Notificar a los usuarios de campo recién asignados
                     nuevos = [x for x in asignados if x not in actuales]

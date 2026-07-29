@@ -18,3 +18,7 @@ pyarrow>=14.0,<18
 extra-streamlit-components>=0.1.60,<0.2
 # Base de datos de zonas horarias para zoneinfo (core/clock.py, hora local por grupo, v173).
 tzdata
+# Mapa interactivo para fijar la ubicación de un proyecto con un pin (v193). Sin API key
+# (usa OpenStreetMap). Import perezoso + fallback a coordenadas manuales si no está.
+folium>=0.15,<1
+streamlit-folium>=0.20,<1

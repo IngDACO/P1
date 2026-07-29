@@ -191,27 +191,9 @@ def render_home(grupo):
 
 
 # ── Mapa de proyectos ────────────────────────────────────────────
-@st.cache_data(ttl=86400, show_spinner=False)
-def _geocode(direccion: str):
-    """(lat, lon) de una dirección de texto vía Nominatim (sin key), o None. Cacheado 1 día."""
-    d = (direccion or "").strip()
-    if not d:
-        return None
-    try:
-        import requests
-        r = requests.get("https://nominatim.openstreetmap.org/search",
-                         params={"q": d, "format": "json", "limit": 1},
-                         headers={"User-Agent": "COPEX-SurveyApp/1.0"}, timeout=6)
-        j = r.json()
-        if isinstance(j, list) and j:
-            return float(j[0]["lat"]), float(j[0]["lon"])
-    except Exception:
-        pass
-    return None
-
-
 def _mapa_proyectos(grupo):
     from core import projects as P
+    from core import location_ui
     try:
         proys = [p for p in P.list_projects(grupo)
                  if str(p.get("Estado", "")) == "En progreso"]
@@ -223,18 +205,37 @@ def _mapa_proyectos(grupo):
 
     filas, sin_ubic = [], []
     for p in proys:
-        coord = _geocode(str(p.get("Ubicacion", "")))
-        if coord:
-            filas.append({"lat": coord[0], "lon": coord[1], "nombre": p.get("Nombre", "")})
+        # v193: coordenadas guardadas (preciso). Respaldo para proyectos viejos aún
+        # sin fijar: geocodificar su Ubicacion de texto (transición sin romper).
+        lat = location_ui.to_float(p.get("Lat"))
+        lng = location_ui.to_float(p.get("Lng"))
+        if lat is None or lng is None:
+            coord = location_ui.geocode(str(p.get("Ubicacion", "")))
+            if coord:
+                lat, lng = coord
+        if lat is not None and lng is not None:
+            filas.append({"lat": lat, "lon": lng, "nombre": str(p.get("Nombre", ""))})
         else:
             sin_ubic.append(str(p.get("Nombre", "")))
 
     if filas:
-        st.map(pd.DataFrame(filas), latitude="lat", longitude="lon",
-               color="#c0392b", size=80)
-        st.caption("📍 " + "  ·  ".join(f["nombre"] for f in filas))
+        try:
+            import folium
+            from streamlit_folium import st_folium
+            clat = sum(f["lat"] for f in filas) / len(filas)
+            clon = sum(f["lon"] for f in filas) / len(filas)
+            m = folium.Map(location=[clat, clon], zoom_start=11)
+            for f in filas:
+                folium.Marker([f["lat"], f["lon"]], popup=f["nombre"], tooltip=f["nombre"],
+                              icon=folium.Icon(color="red")).add_to(m)
+            st_folium(m, key="home_map", height=380, returned_objects=[])
+        except Exception:
+            st.map(pd.DataFrame(filas), latitude="lat", longitude="lon",
+                   color="#c0392b", size=80)
+            st.caption("📍 " + "  ·  ".join(f["nombre"] for f in filas))
     else:
-        st.info("Ninguno de los proyectos en ejecución tiene una ubicación geolocalizable todavía.")
+        st.info("Ninguno de los proyectos en ejecución tiene ubicación todavía. "
+                "Fíjala editando el proyecto → 🗺 Ubicación en el mapa.")
     if sin_ubic:
         st.caption("⚠️ Sin ubicación en el mapa: " + ", ".join(sin_ubic))
 
