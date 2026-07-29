@@ -210,8 +210,8 @@ def render_login() -> bool:
                 st.session_state["_hb_last"] = time.time()
                 st.rerun()
 
-    # ── Logo COPEX centrado ─────────────────────────────────
-    c = st.columns([1, 1, 1])
+    # ── Logo COPEX centrado (v201: ~40% más pequeño → columnas [2,1,2]) ──
+    c = st.columns([2, 1, 2])
     with c[1]:
         if os.path.exists(_LOGO):
             st.image(_LOGO, use_container_width=True)

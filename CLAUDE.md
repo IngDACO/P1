@@ -1071,6 +1071,14 @@ corren por primera vez en el Cloud.
 Campo → "mi semana" (donde voy cada dia) · fichaje pre-rellenado desde el roster · plan vs real
 (asignado a X / ficho en Y, solo para trabajos enlazados a un PRJ).
 
+## Ajustes estéticos: logo de login + zona negra superior (v201)
+Dos pedidos del usuario. (1) El **logo del login** era muy grande → columnas `st.columns([1,1,1])` → `[2,1,2]`
+en `render_login` (el logo ocupa el tercio central, con `use_container_width`; pasar a [2,1,2] lo deja en ~20%
+del ancho = ~40% más pequeño). (2) En la vista del admin, encima del buscador había una **zona negra** (la
+cabecera por defecto de Streamlit + el hueco superior; en modo oscuro se ve negra). Fix en `home_ui.render_topbar`
+(solo admin): CSS `header[data-testid='stHeader']{background:transparent}` (no se OCULTA para no perder el botón
+de desplegar el sidebar) + `div.block-container{padding-top:2.4rem}`. Compila + import; visual = Cloud.
+
 ## Elementos activos: nombres en indicadores + mapa y agenda clickeables (v200)
 Extiende v199 con el principio "todo activo". (1) Indicadores del resumen ahora muestran **nombre visible**
 ("🔴 En retraso · 1"), en 3 filas de 3 (`st.columns(3)`) en vez de icono+número en fila de 9. (2) **Pines
@@ -2841,9 +2849,10 @@ posicional + plano) → app.py, al cargar el PDF, setea `st.session_state["ns"]`
 resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NORTH SYD y AGECARE → NS=6
 (coincide con travel/floor-height HQ/HE).
 
-## Versiones desplegadas (v200 = actual)
+## Versiones desplegadas (v201 = actual)
 | Ver | Cambio principal |
 |---|---|
+| v201 | Estética: logo del login ~40% más pequeño ([2,1,2]); quitada la zona negra superior en la vista del admin (cabecera de Streamlit transparente + menos padding arriba, sin ocultar el botón de desplegar el sidebar) |
 | v200 | Más elementos activos: indicadores del resumen con NOMBRE visible; PINES del mapa clickeables (abren el proyecto); filas de la AGENDA clickeables (abren la ficha de la persona). Reusa _prjsel_pending y gp_fichasel para el deep-link |
 | v199 | Resumen y métricas ACTIVOS: los 9 indicadores y las 3 métricas son botones clickeables → al tocar un indicador muestra el detalle ("cuáles") + botón "→ Ir a [sección]" que navega a resolverlo. Mecanismo de navegación programática en la nav del admin (home_ui.navegar/_aplicar_nav_pending) |
 | v197 | Fusión KPIs + resumen: quitadas las tarjetas "En riesgo" y "Alarmas" de arriba (estaban duplicadas con la rejilla de indicadores del resumen); arriba quedan solo las métricas del portafolio (Activos·Avance·Horas). Un solo bloque coherente |

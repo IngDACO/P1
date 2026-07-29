@@ -66,6 +66,12 @@ def sidebar_menu() -> str:
 
 # ── Barra superior (buscador + campana) ──────────────────────────
 def render_topbar(grupo):
+    # v201: la cabecera negra de Streamlit + el hueco superior quitaban espacio en la
+    # vista del admin. La hacemos transparente (sin ocultarla, para no perder el botón
+    # de desplegar el sidebar) y reducimos el padding superior del contenido.
+    st.markdown("<style>header[data-testid='stHeader']{background:transparent;}"
+                "div.block-container{padding-top:2.4rem !important;}</style>",
+                unsafe_allow_html=True)
     c1, c2 = st.columns([9, 1])
     with c1:
         st.text_input("Buscar", key="topbar_search", label_visibility="collapsed",
