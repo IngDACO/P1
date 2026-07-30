@@ -1071,6 +1071,16 @@ corren por primera vez en el Cloud.
 Campo → "mi semana" (donde voy cada dia) · fichaje pre-rellenado desde el roster · plan vs real
 (asignado a X / ficho en Y, solo para trabajos enlazados a un PRJ).
 
+## HOME: columna derecha compartida Agenda/Proyectos (v203)
+Pedido del usuario: la columna derecha de HOME (antes fija en "Agenda de hoy") ahora tiene un TOGGLE arriba
+(`st.radio` horizontal, hace de título): **📋 Agenda** | **📁 Proyectos** → cambio rápido sin salir de HOME.
+Agenda = lo de antes. Nuevo `home_ui._proyectos_home(grupo)`: datos importantes de los proyectos ACTIVOS
+(Planificado+En progreso) en compacto — cada proyecto es un BOTÓN cuyo FONDO se llena según el % de avance
+(`linear-gradient` vía `.st-key-hp_<i>` CSS), borde izq por salud (rojo=retraso `delays_of_group`,
+verde=adelanto `aheads_of_group`, azul=en curso), label con % + retraso/adelanto + alarmas
+(`alerts.open_counts_all`). Ordenados por urgencia (retraso desc → alarmas desc → avance asc). Al tocar →
+abre el proyecto (reusa `_prjsel_pending` + `navegar`). Verificado: compila + import + AST; funciones existen.
+
 ## Cronómetro de fichaje en el sidebar (v202)
 Pedido del usuario: ver el tiempo en vivo de fichaje desde cualquier sección, no solo en ⏱ Fichaje. Nuevo
 `timeclock_ui.render_sidebar_chrono()` + `_chrono_mini()` (versión compacta del `_chronometer` JS client-side):
@@ -2858,9 +2868,10 @@ posicional + plano) → app.py, al cargar el PDF, setea `st.session_state["ns"]`
 resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NORTH SYD y AGECARE → NS=6
 (coincide con travel/floor-height HQ/HE).
 
-## Versiones desplegadas (v202 = actual)
+## Versiones desplegadas (v203 = actual)
 | Ver | Cambio principal |
 |---|---|
+| v203 | HOME: la columna derecha ahora se comparte entre Agenda y Proyectos con un toggle arriba (cambio rápido sin salir de HOME). Vista Proyectos = lista compacta clickeable con avance (barra en el fondo del botón), retraso/adelanto y alarmas, ordenada por urgencia |
 | v202 | Cronómetro(s) de fichaje EN VIVO en el sidebar (jornada + proyecto), visibles desde cualquier sección, solo cuando estás fichado. Admin y campo. Nuevo timeclock_ui.render_sidebar_chrono |
 | v201 | Estética: logo del login ~40% más pequeño ([2,1,2]); quitada la zona negra superior en la vista del admin (cabecera de Streamlit transparente + menos padding arriba, sin ocultar el botón de desplegar el sidebar) |
 | v200 | Más elementos activos: indicadores del resumen con NOMBRE visible; PINES del mapa clickeables (abren el proyecto); filas de la AGENDA clickeables (abren la ficha de la persona). Reusa _prjsel_pending y gp_fichasel para el deep-link |

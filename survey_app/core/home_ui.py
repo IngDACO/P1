@@ -214,8 +214,14 @@ def render_home(grupo):
         st.markdown("#### 🗺 Proyectos activos")
         _mapa_proyectos(grupo)
     with col_ag:
-        st.markdown("#### 📋 Agenda de hoy")
-        _agenda_hoy(grupo)
+        # v203: la columna derecha se comparte entre la agenda y los proyectos; el
+        # toggle hace de título → cambio rápido sin salir de HOME.
+        _vista = st.radio("vista", ["📋 Agenda", "📁 Proyectos"], horizontal=True,
+                          key="home_right_view", label_visibility="collapsed")
+        if _vista == "📁 Proyectos":
+            _proyectos_home(grupo)
+        else:
+            _agenda_hoy(grupo)
 
 
 # ── Mapa de proyectos ────────────────────────────────────────────
@@ -284,6 +290,67 @@ def _mapa_proyectos(grupo):
                 "Fíjala editando el proyecto → 🗺 Ubicación en el mapa.")
     if sin_ubic:
         st.caption("⚠️ Sin ubicación en el mapa: " + ", ".join(sin_ubic))
+
+
+# ── Proyectos (vista compacta de HOME) ───────────────────────────
+def _proyectos_home(grupo):
+    """Datos más importantes de los proyectos activos, en compacto y clickeable (v203):
+    cada proyecto es un botón cuyo fondo se llena según el % de avance; borde según
+    salud (rojo=retraso, verde=adelanto, azul=en curso); label con retraso/alarmas.
+    Ordenados por urgencia. Al tocar → abre el proyecto (reusa _prjsel_pending)."""
+    from core import projects as P
+    from core import alerts
+    _ACTIVOS = ("Planificado", "En progreso")
+    try:
+        proys = [p for p in P.list_projects(grupo) if str(p.get("Estado", "")) in _ACTIVOS]
+    except Exception:
+        proys = []
+    if not proys:
+        st.info("No hay proyectos activos ahora mismo.")
+        return
+    try:
+        delays = P.delays_of_group(grupo)
+        aheads = P.aheads_of_group(grupo)
+        alarmas = alerts.open_counts_all() if alerts.is_configured() else {}
+    except Exception:
+        delays, aheads, alarmas = {}, {}, {}
+
+    # urgencia: primero los de más retraso, luego más alarmas, luego menor avance
+    def _urg(p):
+        _pid = str(p.get("ID", ""))
+        return (-delays.get(_pid, 0), -alarmas.get(_pid, 0), P._num(p.get("Avance")))
+    proys.sort(key=_urg)
+
+    st.caption(f"{len(proys)} activo(s) · ordenados por urgencia")
+    _css = ["<style>"]
+    for _i, p in enumerate(proys):
+        _pid = str(p.get("ID", ""))
+        _av = max(0, min(100, int(P._num(p.get("Avance")))))
+        _dl, _ah = delays.get(_pid, 0), aheads.get(_pid, 0)
+        _col = "#c0392b" if _dl else ("#1e8449" if _ah else "#2e6da4")
+        _tint = "#fdecec" if _dl else ("#e8f5ee" if _ah else "#e8eef6")
+        _css.append(
+            f".st-key-hp_{_i} button{{background:linear-gradient(to right,"
+            f"{_tint} {_av}%, #f4f6f9 {_av}%)!important;border-left:4px solid {_col}!important;"
+            "justify-content:flex-start!important;text-align:left!important;}")
+    _css.append("</style>")
+    st.markdown("".join(_css), unsafe_allow_html=True)
+
+    for _i, p in enumerate(proys):
+        _pid = str(p.get("ID", ""))
+        _av = max(0, min(100, int(P._num(p.get("Avance")))))
+        _dl, _ah, _al = delays.get(_pid, 0), aheads.get(_pid, 0), alarmas.get(_pid, 0)
+        _extra = ""
+        if _dl:
+            _extra += f" · 🔴 {_dl}d"
+        elif _ah:
+            _extra += f" · 🟢 {_ah}d"
+        if _al:
+            _extra += f" · 🔔 {_al}"
+        _lbl = f"{p.get('Nombre', '')} · {_av}%{_extra}"
+        if st.button(_lbl, key=f"hp_{_i}", use_container_width=True):
+            st.session_state["_prjsel_pending"] = _pid
+            navegar("proyectos", "📊 Proyectos")
 
 
 # ── Agenda de hoy (desde el roster) ──────────────────────────────
