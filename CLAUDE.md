@@ -1071,6 +1071,16 @@ corren por primera vez en el Cloud.
 Campo → "mi semana" (donde voy cada dia) · fichaje pre-rellenado desde el roster · plan vs real
 (asignado a X / ficho en Y, solo para trabajos enlazados a un PRJ).
 
+## Botón "← Atrás" en la navegación del admin (v204)
+Pedido del usuario: opción de volver atrás para moverse más rápido. Historial de secciones en session_state:
+`_track_history(cur)` (en `sidebar_menu`, tras resolver la sección) apila la sección anterior en `_nav_hist`
+(tope 20) salvo que el cambio fuera un 'atrás' (flag `_nav_back`, para no rebotar); `puede_atras()` /
+`ir_atras()` (desapila y `navegar(dest)` con `_nav_back`). Botón **"←"** arriba-izquierda de la barra superior
+(`render_topbar`, columnas [1,8,1]), `disabled` cuando no hay historial. Multi-nivel (atrás, atrás…). Funciona
+con cualquier forma de navegar (menú, "→ Ir a", pines, etc.) porque el tracking es sobre el cambio de sección.
+Solo nav del admin (donde está la barra superior). Verificado: compila + import + lógica del historial simulada
+(home→proy→fin, atrás→proy, atrás→home, se desactiva).
+
 ## HOME: columna derecha compartida Agenda/Proyectos (v203)
 Pedido del usuario: la columna derecha de HOME (antes fija en "Agenda de hoy") ahora tiene un TOGGLE arriba
 (`st.radio` horizontal, hace de título): **📋 Agenda** | **📁 Proyectos** → cambio rápido sin salir de HOME.
@@ -2868,9 +2878,10 @@ posicional + plano) → app.py, al cargar el PDF, setea `st.session_state["ns"]`
 resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NORTH SYD y AGECARE → NS=6
 (coincide con travel/floor-height HQ/HE).
 
-## Versiones desplegadas (v203 = actual)
+## Versiones desplegadas (v204 = actual)
 | Ver | Cambio principal |
 |---|---|
+| v204 | Botón "← Atrás" arriba-izquierda de la barra superior del admin: vuelve a la sección anterior (historial multi-nivel), se desactiva cuando no hay a dónde volver |
 | v203 | HOME: la columna derecha ahora se comparte entre Agenda y Proyectos con un toggle arriba (cambio rápido sin salir de HOME). Vista Proyectos = lista compacta clickeable con avance (barra en el fondo del botón), retraso/adelanto y alarmas, ordenada por urgencia |
 | v202 | Cronómetro(s) de fichaje EN VIVO en el sidebar (jornada + proyecto), visibles desde cualquier sección, solo cuando estás fichado. Admin y campo. Nuevo timeclock_ui.render_sidebar_chrono |
 | v201 | Estética: logo del login ~40% más pequeño ([2,1,2]); quitada la zona negra superior en la vista del admin (cabecera de Streamlit transparente + menos padding arriba, sin ocultar el botón de desplegar el sidebar) |

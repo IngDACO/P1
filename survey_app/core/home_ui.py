@@ -55,13 +55,40 @@ def _aplicar_nav_pending():
         st.session_state[_SUBKEY[seccion]] = sub_label
 
 
+def _track_history(cur):
+    """Apila la sección de la que venimos, para el botón Atrás (v204). NO apila cuando
+    el cambio fue un 'atrás' (para no rebotar). Tope de 20."""
+    prev = st.session_state.get("_nav_cur")
+    if prev is not None and prev != cur:
+        if st.session_state.pop("_nav_back", False):
+            pass                                   # venimos de un 'atrás'
+        else:
+            hist = st.session_state.setdefault("_nav_hist", [])
+            hist.append(prev)
+            del hist[:-20]
+    st.session_state["_nav_cur"] = cur
+
+
+def puede_atras() -> bool:
+    return bool(st.session_state.get("_nav_hist"))
+
+
+def ir_atras():
+    hist = st.session_state.get("_nav_hist") or []
+    if hist:
+        st.session_state["_nav_back"] = True       # que _track_history no lo re-apile
+        navegar(hist.pop())
+
+
 def sidebar_menu() -> str:
     """Renderiza el menú de iconos en el sidebar y devuelve la clave de la sección."""
     _aplicar_nav_pending()                     # aplica saltos de los elementos activos
     st.markdown("###### NAVEGACIÓN")
     sel = st.radio("Menú", [lbl for _, lbl in _SECCIONES], key="admin_nav",
                    label_visibility="collapsed")
-    return _LBL2KEY.get(sel, "home")
+    _key = _LBL2KEY.get(sel, "home")
+    _track_history(_key)
+    return _key
 
 
 # ── Barra superior (buscador + campana) ──────────────────────────
@@ -72,7 +99,11 @@ def render_topbar(grupo):
     st.markdown("<style>header[data-testid='stHeader']{background:transparent;}"
                 "div.block-container{padding-top:2.4rem !important;}</style>",
                 unsafe_allow_html=True)
-    c1, c2 = st.columns([9, 1])
+    cback, c1, c2 = st.columns([1, 8, 1])
+    with cback:
+        if st.button("←", key="nav_back_btn", help="Volver atrás",
+                     use_container_width=True, disabled=not puede_atras()):
+            ir_atras()
     with c1:
         st.text_input("Buscar", key="topbar_search", label_visibility="collapsed",
                       placeholder="🔎  Buscar proyectos, personas, trabajos…")
