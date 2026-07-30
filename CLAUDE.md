@@ -1071,6 +1071,17 @@ corren por primera vez en el Cloud.
 Campo → "mi semana" (donde voy cada dia) · fichaje pre-rellenado desde el roster · plan vs real
 (asignado a X / ficho en Y, solo para trabajos enlazados a un PRJ).
 
+## Fix móvil: el gesto de retroceso cerraba la app (v205)
+El usuario reportó que en el móvil el gesto/botón de retroceso CIERRA la app. Causa: Streamlit es una sola
+página → la nav interna no crea entradas de historial → el back del sistema "no tiene página anterior" → sale.
+Fix (el camino más fácil, en la web, sirve para navegador y app instalada): `home_ui._mobile_back_trap()`
+(llamado al final de `render_topbar`) inyecta un `components.html` con JS que accede a `window.parent`
+(mismo origen: el iframe de components tiene allow-same-origin) y: (1) hace `history.pushState` una entrada
+'trampa' para que el back nunca salga; (2) en `popstate` (gesto atrás) re-apila y hace click en el botón
+interno `.st-key-nav_back_btn button` (mi "← Atrás") → el back del móvil = el botón atrás. Guard `__copexBack`
+para montarlo una sola vez. ⚠️ NO probable desde aquí (comportamiento móvil): validar en el teléfono. Plan B si
+falla: interceptar el botón físico en el código Capacitor (`copex_mobile`). Verificado: compila + import.
+
 ## Botón "← Atrás" en la navegación del admin (v204)
 Pedido del usuario: opción de volver atrás para moverse más rápido. Historial de secciones en session_state:
 `_track_history(cur)` (en `sidebar_menu`, tras resolver la sección) apila la sección anterior en `_nav_hist`
@@ -2878,9 +2889,10 @@ posicional + plano) → app.py, al cargar el PDF, setea `st.session_state["ns"]`
 resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NORTH SYD y AGECARE → NS=6
 (coincide con travel/floor-height HQ/HE).
 
-## Versiones desplegadas (v204 = actual)
+## Versiones desplegadas (v205 = actual)
 | Ver | Cambio principal |
 |---|---|
+| v205 | Fix móvil: el gesto de retroceso ya no cierra la app; se redirige al botón "← Atrás" interno (JS que atrapa el back con history.pushState + popstate → click en el botón). Validar en el teléfono |
 | v204 | Botón "← Atrás" arriba-izquierda de la barra superior del admin: vuelve a la sección anterior (historial multi-nivel), se desactiva cuando no hay a dónde volver |
 | v203 | HOME: la columna derecha ahora se comparte entre Agenda y Proyectos con un toggle arriba (cambio rápido sin salir de HOME). Vista Proyectos = lista compacta clickeable con avance (barra en el fondo del botón), retraso/adelanto y alarmas, ordenada por urgencia |
 | v202 | Cronómetro(s) de fichaje EN VIVO en el sidebar (jornada + proyecto), visibles desde cualquier sección, solo cuando estás fichado. Admin y campo. Nuevo timeclock_ui.render_sidebar_chrono |

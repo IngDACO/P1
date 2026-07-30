@@ -92,6 +92,21 @@ def sidebar_menu() -> str:
 
 
 # ── Barra superior (buscador + campana) ──────────────────────────
+def _mobile_back_trap():
+    """Atrapa el gesto/botón de retroceso del móvil (que CERRABA la app, al ser una sola
+    página) y lo redirige al botón '← Atrás' interno (v205). Corre en el iframe del
+    componente pero toca `window.parent` (mismo origen: sandbox con allow-same-origin).
+    Mantiene una entrada de historial 'trampa' para que el back nunca salga de la app."""
+    import streamlit.components.v1 as components
+    components.html(
+        "<script>(function(){try{var P=window.parent;if(P.__copexBack)return;"
+        "P.__copexBack=true;P.history.pushState({c:1},'');"
+        "P.addEventListener('popstate',function(){P.history.pushState({c:1},'');"
+        "var b=P.document.querySelector('.st-key-nav_back_btn button');"
+        "if(b&&!b.disabled){b.click();}});}catch(e){}})();</script>",
+        height=0)
+
+
 def render_topbar(grupo):
     # v201: la cabecera negra de Streamlit + el hueco superior quitaban espacio en la
     # vista del admin. La hacemos transparente (sin ocultarla, para no perder el botón
@@ -111,6 +126,7 @@ def render_topbar(grupo):
         _campana(grupo)
     st.markdown("<hr style='margin:2px 0 14px 0;border:none;border-top:1px solid #e6e9ef;'>",
                 unsafe_allow_html=True)
+    _mobile_back_trap()      # el back del móvil hace lo mismo que el botón '←'
 
 
 def _alertas(grupo) -> list:
