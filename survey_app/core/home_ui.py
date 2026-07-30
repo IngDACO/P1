@@ -326,8 +326,11 @@ def _mapa_proyectos(grupo):
                                 + (r["lon"] - _cc[1]) ** 2)
                     if (abs(_best["lat"] - _cc[0]) < 1e-3
                             and abs(_best["lon"] - _cc[1]) < 1e-3 and _best["pid"]):
-                        st.session_state["_prjsel_pending"] = _best["pid"]
-                        navegar("proyectos", "📊 Proyectos")
+                        # v206: el pin abre el RESUMEN del proyecto en la columna derecha
+                        # (pestaña Proyectos), sin salir de HOME. El "ver completo" va dentro.
+                        st.session_state["home_right_view"] = "📁 Proyectos"
+                        st.session_state["_home_proj_sel"] = _best["pid"]
+                        st.rerun()
         except Exception:
             st.map(pd.DataFrame(filas), latitude="lat", longitude="lon",
                    color="#c0392b", size=80)
@@ -340,11 +343,75 @@ def _mapa_proyectos(grupo):
 
 
 # ── Proyectos (vista compacta de HOME) ───────────────────────────
+def _resumen_proyecto_home(grupo, pid):
+    """Resumen de UN proyecto en la columna derecha de HOME (v206): datos clave + botón
+    para ir al proyecto completo. Se abre al tocar un pin del mapa o un proyecto de la lista."""
+    from core import projects as P
+    from core import alerts
+    if st.button("← Volver a la lista", key="hpr_back"):
+        st.session_state.pop("_home_proj_sel", None)
+        st.rerun()
+    prj = next((p for p in P.list_projects(grupo, incluir_archivados=True)
+                if str(p.get("ID", "")) == str(pid)), None)
+    if not prj:
+        st.warning("Proyecto no encontrado.")
+        return
+    av = max(0, min(100, int(P._num(prj.get("Avance")))))
+    try:
+        dl = P.delays_of_group(grupo).get(str(pid), 0)
+        ah = P.aheads_of_group(grupo).get(str(pid), 0)
+        al = (alerts.open_counts_all() if alerts.is_configured() else {}).get(str(pid), 0)
+    except Exception:
+        dl = ah = al = 0
+    _sem = "🔴" if dl else ("🟢" if ah else "🟡")
+    _bar = "#c0392b" if dl else ("#1e8449" if ah else "#2e6da4")
+
+    def _e(s):
+        return str(s or "").replace("&", "&amp;").replace("<", "&lt;")
+
+    st.markdown(f"### {_e(prj.get('Nombre'))}")
+    st.markdown(
+        f"<div style='background:#f0f2f5;border-radius:8px;height:14px;overflow:hidden;"
+        f"margin:2px 0 8px;'><div style='background:{_bar};height:100%;width:{av}%;'></div></div>",
+        unsafe_allow_html=True)
+    bits = [f"📊 **{av}%**", f"{_sem} {_e(prj.get('Estado'))}"]
+    if prj.get("Cliente"):
+        bits.append(f"🏢 {_e(prj.get('Cliente'))}")
+    if dl:
+        bits.append(f"🔴 {dl} d de retraso")
+    elif ah:
+        bits.append(f"🟢 {ah} d de adelanto")
+    if al:
+        bits.append(f"🔔 {al} alarma(s)")
+    st.markdown("  ·  ".join(bits))
+    _fi = str(prj.get("FechaInicio", "") or "—")
+    _ff = str(prj.get("FechaFinEst", "") or "—")
+    st.caption(f"📅 {_fi} → {_ff}" + (f"  ·  🛗 {_e(prj.get('NS'))} paradas" if prj.get("NS") else ""))
+    _asg = [x.strip() for x in str(prj.get("CampoAsignados", "")).split(";") if x.strip()]
+    if _asg:
+        st.caption(f"👷 {', '.join(_asg[:6])}")
+    _ub = str(prj.get("Ubicacion", "") or "")
+    if _ub:
+        try:
+            from core import maps
+            st.markdown("📍 " + maps.maps_link_md(_ub))
+        except Exception:
+            st.caption(f"📍 {_ub}")
+    st.markdown("")
+    if st.button("→ Ver proyecto completo", key="hpr_full", type="primary",
+                 use_container_width=True):
+        st.session_state.pop("_home_proj_sel", None)
+        st.session_state["_prjsel_pending"] = str(pid)
+        navegar("proyectos", "📊 Proyectos")
+
+
 def _proyectos_home(grupo):
-    """Datos más importantes de los proyectos activos, en compacto y clickeable (v203):
-    cada proyecto es un botón cuyo fondo se llena según el % de avance; borde según
-    salud (rojo=retraso, verde=adelanto, azul=en curso); label con retraso/alarmas.
-    Ordenados por urgencia. Al tocar → abre el proyecto (reusa _prjsel_pending)."""
+    """Datos importantes de los proyectos activos, compacto y clickeable (v203). Al tocar
+    un proyecto (o un pin del mapa) se abre su RESUMEN aquí mismo (v206), con botón para ir
+    al proyecto completo. Ordenados por urgencia."""
+    if st.session_state.get("_home_proj_sel"):
+        _resumen_proyecto_home(grupo, str(st.session_state["_home_proj_sel"]))
+        return
     from core import projects as P
     from core import alerts
     _ACTIVOS = ("Planificado", "En progreso")
@@ -396,8 +463,8 @@ def _proyectos_home(grupo):
             _extra += f" · 🔔 {_al}"
         _lbl = f"{p.get('Nombre', '')} · {_av}%{_extra}"
         if st.button(_lbl, key=f"hp_{_i}", use_container_width=True):
-            st.session_state["_prjsel_pending"] = _pid
-            navegar("proyectos", "📊 Proyectos")
+            st.session_state["_home_proj_sel"] = _pid      # v206: abre el resumen aquí
+            st.rerun()
 
 
 # ── Agenda de hoy (desde el roster) ──────────────────────────────

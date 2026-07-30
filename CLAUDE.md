@@ -1071,6 +1071,16 @@ corren por primera vez en el Cloud.
 Campo → "mi semana" (donde voy cada dia) · fichaje pre-rellenado desde el roster · plan vs real
 (asignado a X / ficho en Y, solo para trabajos enlazados a un PRJ).
 
+## Pin/lista del mapa → resumen del proyecto en HOME (v206)
+Antes el pin del mapa (y la lista de la vista Proyectos) saltaban al proyecto COMPLETO fuera de HOME. Ahora
+abren un RESUMEN en la columna derecha (pestaña Proyectos), sin salir de HOME; el "ver completo" es un paso más.
+Nuevo `home_ui._resumen_proyecto_home(grupo, pid)`: nombre + barra de avance + estado(semáforo) + cliente +
+retraso/adelanto + alarmas + fechas + paradas + asignados + ubicación (maps_link_md) + botón "→ Ver proyecto
+completo" (que sí hace `_prjsel_pending`+`navegar`) + "← Volver a la lista". Pin (`_mapa_proyectos`) y cada
+ítem de la lista (`_proyectos_home`) ahora dejan `_home_proj_sel=pid` (+ `home_right_view="📁 Proyectos"` el pin)
+y `st.rerun()` — se quedan en HOME. `_proyectos_home` muestra el resumen si `_home_proj_sel`, si no la lista.
+Verificado: compila + import + AST; maps.maps_link_md existe.
+
 ## Fix móvil: el gesto de retroceso cerraba la app (v205)
 El usuario reportó que en el móvil el gesto/botón de retroceso CIERRA la app. Causa: Streamlit es una sola
 página → la nav interna no crea entradas de historial → el back del sistema "no tiene página anterior" → sale.
@@ -2889,9 +2899,10 @@ posicional + plano) → app.py, al cargar el PDF, setea `st.session_state["ns"]`
 resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NORTH SYD y AGECARE → NS=6
 (coincide con travel/floor-height HQ/HE).
 
-## Versiones desplegadas (v205 = actual)
+## Versiones desplegadas (v206 = actual)
 | Ver | Cambio principal |
 |---|---|
+| v206 | El pin del mapa (y la lista de Proyectos en HOME) ahora abren un RESUMEN del proyecto en la columna derecha, sin salir de HOME; desde ahí un botón "→ Ver proyecto completo" |
 | v205 | Fix móvil: el gesto de retroceso ya no cierra la app; se redirige al botón "← Atrás" interno (JS que atrapa el back con history.pushState + popstate → click en el botón). Validar en el teléfono |
 | v204 | Botón "← Atrás" arriba-izquierda de la barra superior del admin: vuelve a la sección anterior (historial multi-nivel), se desactiva cuando no hay a dónde volver |
 | v203 | HOME: la columna derecha ahora se comparte entre Agenda y Proyectos con un toggle arriba (cambio rápido sin salir de HOME). Vista Proyectos = lista compacta clickeable con avance (barra en el fondo del botón), retraso/adelanto y alarmas, ordenada por urgencia |
