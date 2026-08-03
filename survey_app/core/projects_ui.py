@@ -897,6 +897,8 @@ def _cartera_clickeable(proys, horas, alarmas, delays, aheads):
     azul=en curso); label con datos clave. Mismo lenguaje que HOME. Ordenados por urgencia."""
     proys = sorted(proys, key=lambda p: (-delays.get(str(p.get("ID", "")), 0),
                                          -alarmas.get(str(p.get("ID", "")), 0)))
+    # CSS por tarjeta: fondo = avance, borde = salud, y texto a la IZQUIERDA (v208:
+    # el justify-content del botón no alinea el texto interno → hay que tocar el <p>).
     _css = ["<style>"]
     for _i, p in enumerate(proys):
         _pid = str(p.get("ID", ""))
@@ -904,30 +906,41 @@ def _cartera_clickeable(proys, horas, alarmas, delays, aheads):
         _dl, _ah = delays.get(_pid, 0), aheads.get(_pid, 0)
         _col = "#c0392b" if _dl else ("#1e8449" if _ah else "#2e6da4")
         _tint = "#fdecec" if _dl else ("#e8f5ee" if _ah else "#e8eef6")
-        _css.append(f".st-key-cart_{_i} button{{background:linear-gradient(to right,"
-                    f"{_tint} {_av}%,#f4f6f9 {_av}%)!important;border-left:4px solid {_col}!important;"
-                    "justify-content:flex-start!important;text-align:left!important;}")
+        _css.append(
+            f".st-key-cart_{_i} button{{background:linear-gradient(to right,"
+            f"{_tint} {_av}%,#f4f6f9 {_av}%)!important;border-left:5px solid {_col}!important;"
+            "justify-content:flex-start!important;padding-left:12px!important;}"
+            f".st-key-cart_{_i} button>div{{justify-content:flex-start!important;width:100%!important;}}"
+            f".st-key-cart_{_i} button p{{text-align:left!important;width:100%!important;}}")
     _css.append("</style>")
     st.markdown("".join(_css), unsafe_allow_html=True)
-    for _i, p in enumerate(proys):
-        _pid = str(p.get("ID", ""))
-        _av = max(0, min(100, int(P._num(p.get("Avance")))))
-        _dl, _ah, _al = delays.get(_pid, 0), aheads.get(_pid, 0), alarmas.get(_pid, 0)
-        _hr = horas.get(_pid, 0.0)
-        _cli = str(p.get("Cliente", "") or "")
-        _extra = ""
-        if _dl:
-            _extra += f" · 🔴{_dl}d"
-        elif _ah:
-            _extra += f" · 🟢{_ah}d"
-        if _al:
-            _extra += f" · 🔔{_al}"
-        if _hr:
-            _extra += f" · {_hr:.0f}h"
-        _lbl = str(p.get("Nombre", "")) + (f" · {_cli}" if _cli else "") + f" · {_av}%{_extra}"
-        if st.button(_lbl, key=f"cart_{_i}", use_container_width=True):
-            st.session_state["_admin_open_proj"] = _pid
-            st.rerun()
+
+    # Rejilla de 2 columnas (v208): más densa y dinámica que la lista a ancho completo.
+    for _r in range(0, len(proys), 2):
+        _cols = st.columns(2)
+        for _j in range(2):
+            _idx = _r + _j
+            if _idx >= len(proys):
+                break
+            p = proys[_idx]
+            _pid = str(p.get("ID", ""))
+            _av = max(0, min(100, int(P._num(p.get("Avance")))))
+            _dl, _ah, _al = delays.get(_pid, 0), aheads.get(_pid, 0), alarmas.get(_pid, 0)
+            _hr = horas.get(_pid, 0.0)
+            _cli = str(p.get("Cliente", "") or "")
+            _extra = ""
+            if _dl:
+                _extra += f" · 🔴{_dl}d"
+            elif _ah:
+                _extra += f" · 🟢{_ah}d"
+            if _al:
+                _extra += f" · 🔔{_al}"
+            if _hr:
+                _extra += f" · {_hr:.0f}h"
+            _lbl = f"**{p.get('Nombre', '')}**" + (f" · {_cli}" if _cli else "") + f" · {_av}%{_extra}"
+            if _cols[_j].button(_lbl, key=f"cart_{_idx}", use_container_width=True):
+                st.session_state["_admin_open_proj"] = _pid
+                st.rerun()
 
 
 def _panel_proyectos(grupo: str):

@@ -1071,6 +1071,15 @@ corren por primera vez en el Cloud.
 Campo → "mi semana" (donde voy cada dia) · fichaje pre-rellenado desde el roster · plan vs real
 (asignado a X / ficho en Y, solo para trabajos enlazados a un PRJ).
 
+## Estética de la cartera + rejilla 2 columnas (v208)
+El usuario notó que las tarjetas-botón (v207) se veían MUY VACÍAS y "de lado a lado" (ancho completo, texto
+centrado). Fix en `_cartera_clickeable`: (1) **rejilla de 2 columnas** (`st.columns(2)`, 2 tarjetas por fila)
+→ más densa/dinámica (aplica [[feedback-doble-columna]]); (2) **texto a la izquierda** de verdad — el
+`justify-content` del botón NO alinea el texto interno; hay que tocar `.st-key-cart_<i> button>div` y
+`button p` (`text-align:left;width:100%`); (3) nombre en **negrita** (`**...**`, markdown en el label del
+botón). Verificado: compila + import + AST. SIGUIENTE (ya aprobado por el usuario): doble columna en el DETALLE
+del proyecto — pestaña 📊 Estado: "cómo va" (titular+KPIs+diagnóstico) | 🔔 alarmas, cronograma a ancho completo.
+
 ## Proyectos: cartera CLICKEABLE (v207) — revisión apartado por apartado
 Empieza la mejora de cada apartado con la visión del usuario (activo/compacto/consistente). Proyectos, #1:
 la cartera era PASIVA (`_portfolio_html`, tarjetas HTML) + un selector aparte "🔎 Abrir proyecto" para abrir —
@@ -2912,9 +2921,10 @@ posicional + plano) → app.py, al cargar el PDF, setea `st.session_state["ns"]`
 resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NORTH SYD y AGECARE → NS=6
 (coincide con travel/floor-height HQ/HE).
 
-## Versiones desplegadas (v207 = actual)
+## Versiones desplegadas (v208 = actual)
 | Ver | Cambio principal |
 |---|---|
+| v208 | Estética de la cartera de proyectos: rejilla de 2 columnas (más densa, menos vacía) + texto alineado a la izquierda + nombre en negrita |
 | v207 | Proyectos: la cartera ahora es clickeable (tarjetas-botón con avance/salud, mismo lenguaje que HOME) → tocar abre el detalle directo; se quitó el selector "Abrir proyecto" y el form Nuevo proyecto quedó plegado |
 | v206 | El pin del mapa (y la lista de Proyectos en HOME) ahora abren un RESUMEN del proyecto en la columna derecha, sin salir de HOME; desde ahí un botón "→ Ver proyecto completo" |
 | v205 | Fix móvil: el gesto de retroceso ya no cierra la app; se redirige al botón "← Atrás" interno (JS que atrapa el back con history.pushState + popstate → click en el botón). Validar en el teléfono |
