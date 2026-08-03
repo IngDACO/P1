@@ -735,9 +735,11 @@ def _nuevo_proyecto_form(grupo: str, key: str = "nuevo"):
             _avisar_asignados(asg)
 
         # ── Ubicación en el mapa (fuera del form: el mapa necesita reruns) — v194 ──
+        # v210: inline (sin expander propio) — este bloque ya vive dentro del expander
+        # "➕ Nuevo proyecto", y Streamlit no permite expanders anidados.
         from core import location_ui
-        with st.expander("🗺 Ubicación en el mapa (opcional — fija el pin del proyecto)"):
-            _nplat, _nplng = location_ui.location_picker(f"nploc_{key}")
+        st.markdown("**🗺 Ubicación en el mapa** — opcional, fija el pin del proyecto")
+        _nplat, _nplng = location_ui.location_picker(f"nploc_{key}")
 
         with st.form(f"np_form_{key}"):
             c1, c2 = st.columns(2)
@@ -1010,8 +1012,9 @@ def _panel_proyectos(grupo: str):
     else:
         st.caption("Toca un proyecto para abrir su detalle.")
         _cartera_clickeable(_proys_f, horas, alarmas, delays, aheads)
-    with st.expander("➕ Nuevo proyecto"):
-        _nuevo_proyecto_form(grupo, key="adm")
+    # `_nuevo_proyecto_form` ya se pliega solo (tiene su propio expander) → no envolver
+    # otra vez, o quedan dos expanders "Nuevo proyecto" anidados (v210).
+    _nuevo_proyecto_form(grupo, key="adm")
 
 
 def _portfolio_html(proys, horas, alarmas, ags, delays=None, aheads=None,

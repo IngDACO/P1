@@ -1071,6 +1071,16 @@ corren por primera vez en el Cloud.
 Campo → "mi semana" (donde voy cada dia) · fichaje pre-rellenado desde el roster · plan vs real
 (asignado a X / ficho en Y, solo para trabajos enlazados a un PRJ).
 
+## Fix: "Nuevo proyecto" doblemente anidado (v210)
+El usuario notó que "➕ Nuevo proyecto" quedaba doblemente anidado. Causa: `_nuevo_proyecto_form` YA tiene su
+propio `st.expander("➕ Nuevo proyecto")` (línea 695, se pliega solo), pero en v207 lo envolví en OTRO expander
+en `_panel_proyectos` → dos expanders "Nuevo proyecto" anidados. Además, dentro del 695 había un expander de
+ubicación (v194) → expander-en-expander (Streamlit no lo permite). Fix: (1) `_panel_proyectos` llama
+`_nuevo_proyecto_form(grupo, key="adm")` DIRECTO (sin envolver); (2) el selector de ubicación en
+`_nuevo_proyecto_form` pasa a INLINE (st.markdown + `location_picker`, sin su propio expander). Queda un único
+expander "Nuevo proyecto" sin nada anidado. LECCIÓN: `_nuevo_proyecto_form` ya se auto-pliega; no envolverlo.
+Verificado: compila + import; grep confirma un solo expander "Nuevo proyecto" y sin el de ubicación.
+
 ## Proyectos #4: filtro rápido de la cartera (v209)
 Arriba de la cartera (`_panel_proyectos`), en DOBLE columna [2,3]: **búsqueda** por nombre/cliente (`cart_q`,
 filtra al escribir) + **chips** (`st.radio` horizontal `cart_filt`): Todos · 🔴 Retraso · 🟢 Adelanto ·
@@ -2929,9 +2939,10 @@ posicional + plano) → app.py, al cargar el PDF, setea `st.session_state["ns"]`
 resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NORTH SYD y AGECARE → NS=6
 (coincide con travel/floor-height HQ/HE).
 
-## Versiones desplegadas (v209 = actual)
+## Versiones desplegadas (v210 = actual)
 | Ver | Cambio principal |
 |---|---|
+| v210 | Fix: "➕ Nuevo proyecto" estaba doblemente anidado (yo lo envolví en un expander cuando ya tenía el suyo) + tenía el de ubicación anidado dentro. Ahora un solo expander, ubicación inline |
 | v209 | Proyectos: filtro rápido arriba de la cartera (búsqueda por nombre/cliente + chips Todos/Retraso/Adelanto/En pausa), en doble columna |
 | v208 | Estética de la cartera de proyectos: rejilla de 2 columnas (más densa, menos vacía) + texto alineado a la izquierda + nombre en negrita |
 | v207 | Proyectos: la cartera ahora es clickeable (tarjetas-botón con avance/salud, mismo lenguaje que HOME) → tocar abre el detalle directo; se quitó el selector "Abrir proyecto" y el form Nuevo proyecto quedó plegado |
