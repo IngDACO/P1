@@ -1071,6 +1071,14 @@ corren por primera vez en el Cloud.
 Campo → "mi semana" (donde voy cada dia) · fichaje pre-rellenado desde el roster · plan vs real
 (asignado a X / ficho en Y, solo para trabajos enlazados a un PRJ).
 
+## Proyectos #4: filtro rápido de la cartera (v209)
+Arriba de la cartera (`_panel_proyectos`), en DOBLE columna [2,3]: **búsqueda** por nombre/cliente (`cart_q`,
+filtra al escribir) + **chips** (`st.radio` horizontal `cart_filt`): Todos · 🔴 Retraso · 🟢 Adelanto ·
+⏸ En pausa. Filtra `proys` → `_proys_f` (search en Nombre+Cliente; retraso=delays, adelanto=aheads, pausa=Estado)
+y pasa la lista filtrada a `_cartera_clickeable`. Header "Cartera — N de M". Radio (no st.pills) por el pin
+streamlit>=1.39. Verificado: compila + import + AST. Quedan de Proyectos: #4b enganchar el buscador GLOBAL de la
+barra superior (su propia tanda), y #5 revisar el detalle + doble columna en 📊 Estado (ya aprobado).
+
 ## Estética de la cartera + rejilla 2 columnas (v208)
 El usuario notó que las tarjetas-botón (v207) se veían MUY VACÍAS y "de lado a lado" (ancho completo, texto
 centrado). Fix en `_cartera_clickeable`: (1) **rejilla de 2 columnas** (`st.columns(2)`, 2 tarjetas por fila)
@@ -2921,9 +2929,10 @@ posicional + plano) → app.py, al cargar el PDF, setea `st.session_state["ns"]`
 resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NORTH SYD y AGECARE → NS=6
 (coincide con travel/floor-height HQ/HE).
 
-## Versiones desplegadas (v208 = actual)
+## Versiones desplegadas (v209 = actual)
 | Ver | Cambio principal |
 |---|---|
+| v209 | Proyectos: filtro rápido arriba de la cartera (búsqueda por nombre/cliente + chips Todos/Retraso/Adelanto/En pausa), en doble columna |
 | v208 | Estética de la cartera de proyectos: rejilla de 2 columnas (más densa, menos vacía) + texto alineado a la izquierda + nombre en negrita |
 | v207 | Proyectos: la cartera ahora es clickeable (tarjetas-botón con avance/salud, mismo lenguaje que HOME) → tocar abre el detalle directo; se quitó el selector "Abrir proyecto" y el form Nuevo proyecto quedó plegado |
 | v206 | El pin del mapa (y la lista de Proyectos en HOME) ahora abren un RESUMEN del proyecto en la columna derecha, sin salir de HOME; desde ahí un botón "→ Ver proyecto completo" |

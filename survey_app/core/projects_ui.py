@@ -979,12 +979,37 @@ def _panel_proyectos(grupo: str):
     alarmas = alerts.open_counts_all() if alerts.is_configured() else {}
     delays = P.delays_of_group(grupo)     # {pid: días de retraso} (cacheado)
     aheads = P.aheads_of_group(grupo)     # {pid: días de adelanto} (cacheado)
+
+    # ── Filtro rápido (v209): búsqueda + chips, en doble columna ──
+    _fc1, _fc2 = st.columns([2, 3])
+    _q = _fc1.text_input("Buscar", key="cart_q", label_visibility="collapsed",
+                         placeholder="🔎 Buscar proyecto o cliente…")
+    _filt = _fc2.radio("Filtro", ["Todos", "🔴 Retraso", "🟢 Adelanto", "⏸ En pausa"],
+                       horizontal=True, key="cart_filt", label_visibility="collapsed")
+    _ql = (_q or "").strip().lower()
+
+    def _pasa(p):
+        _pid = str(p.get("ID", ""))
+        if _ql and _ql not in f"{p.get('Nombre', '')} {p.get('Cliente', '')}".lower():
+            return False
+        if _filt == "🔴 Retraso":
+            return bool(delays.get(_pid))
+        if _filt == "🟢 Adelanto":
+            return bool(aheads.get(_pid))
+        if _filt == "⏸ En pausa":
+            return str(p.get("Estado", "")) == "En pausa"
+        return True
+    _proys_f = [p for p in proys if _pasa(p)]
+
     _nr, _na = len(delays), len(aheads)
-    st.markdown(f"**Cartera — {len(proys)} proyecto(s)**"
+    st.markdown(f"**Cartera — {len(_proys_f)} de {len(proys)}**"
                 + (f"  ·  🔴 {_nr} con retraso" if _nr else "")
                 + (f"  ·  🟢 {_na} adelantado(s)" if _na else ""))
-    st.caption("Toca un proyecto para abrir su detalle.")
-    _cartera_clickeable(proys, horas, alarmas, delays, aheads)
+    if not _proys_f:
+        st.caption("Ningún proyecto coincide con el filtro.")
+    else:
+        st.caption("Toca un proyecto para abrir su detalle.")
+        _cartera_clickeable(_proys_f, horas, alarmas, delays, aheads)
     with st.expander("➕ Nuevo proyecto"):
         _nuevo_proyecto_form(grupo, key="adm")
 
