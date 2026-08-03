@@ -891,7 +891,60 @@ def _field_users(grupo):
 
 
 # ── Panel de proyectos ───────────────────────────────────────────
+def _cartera_clickeable(proys, horas, alarmas, delays, aheads):
+    """Cartera de proyectos como botones CLICKEABLES (v207): al tocar uno se abre su
+    detalle directo. Fondo = % de avance; borde izq = salud (rojo=retraso, verde=adelanto,
+    azul=en curso); label con datos clave. Mismo lenguaje que HOME. Ordenados por urgencia."""
+    proys = sorted(proys, key=lambda p: (-delays.get(str(p.get("ID", "")), 0),
+                                         -alarmas.get(str(p.get("ID", "")), 0)))
+    _css = ["<style>"]
+    for _i, p in enumerate(proys):
+        _pid = str(p.get("ID", ""))
+        _av = max(0, min(100, int(P._num(p.get("Avance")))))
+        _dl, _ah = delays.get(_pid, 0), aheads.get(_pid, 0)
+        _col = "#c0392b" if _dl else ("#1e8449" if _ah else "#2e6da4")
+        _tint = "#fdecec" if _dl else ("#e8f5ee" if _ah else "#e8eef6")
+        _css.append(f".st-key-cart_{_i} button{{background:linear-gradient(to right,"
+                    f"{_tint} {_av}%,#f4f6f9 {_av}%)!important;border-left:4px solid {_col}!important;"
+                    "justify-content:flex-start!important;text-align:left!important;}")
+    _css.append("</style>")
+    st.markdown("".join(_css), unsafe_allow_html=True)
+    for _i, p in enumerate(proys):
+        _pid = str(p.get("ID", ""))
+        _av = max(0, min(100, int(P._num(p.get("Avance")))))
+        _dl, _ah, _al = delays.get(_pid, 0), aheads.get(_pid, 0), alarmas.get(_pid, 0)
+        _hr = horas.get(_pid, 0.0)
+        _cli = str(p.get("Cliente", "") or "")
+        _extra = ""
+        if _dl:
+            _extra += f" · 🔴{_dl}d"
+        elif _ah:
+            _extra += f" · 🟢{_ah}d"
+        if _al:
+            _extra += f" · 🔔{_al}"
+        if _hr:
+            _extra += f" · {_hr:.0f}h"
+        _lbl = str(p.get("Nombre", "")) + (f" · {_cli}" if _cli else "") + f" · {_av}%{_extra}"
+        if st.button(_lbl, key=f"cart_{_i}", use_container_width=True):
+            st.session_state["_admin_open_proj"] = _pid
+            st.rerun()
+
+
 def _panel_proyectos(grupo: str):
+    # ── Proyecto ABIERTO (de una tarjeta, de HOME "ver completo", o del crear) ──
+    _pp = st.session_state.pop("_prjsel_pending", None)
+    if _pp:
+        st.session_state["_admin_open_proj"] = str(_pp)
+    _open = st.session_state.get("_admin_open_proj")
+    if _open:
+        if st.button("← Volver a la cartera", key="pp_back_cartera"):
+            st.session_state.pop("_admin_open_proj", None)
+            st.rerun()
+        st.markdown("---")
+        _detalle_proyecto(str(_open), grupo)
+        return
+
+    # ── Cartera (tarjetas clickeables → abren el detalle) ──
     _ver_arch = st.checkbox("📦 Ver también los archivados", key="ver_arch_admin",
                             help="Los archivados no salen en listas ni informes; "
                                  "ábrelos desde aquí para restaurarlos.")
@@ -903,15 +956,12 @@ def _panel_proyectos(grupo: str):
             st.caption(f"📦 {_n_arch} proyecto(s) archivado(s) oculto(s).")
     if not proys:
         # ⚠️ El formulario va ANTES del return: desde v135 el survey ya no crea
-        # proyectos, asi que si aqui se cortara no habria forma de crear el
-        # primero (la app quedaria sin arranque posible).
+        # proyectos, así que si aquí se cortara no habría forma de crear el primero.
         st.info("Todavía no hay proyectos en este grupo. Crea el primero aquí; "
                 "después el Survey y las demás herramientas podrán alimentarlo.")
         _nuevo_proyecto_form(grupo, key="adm")
         return
 
-    # ── Cartera de proyectos (lista de tarjetas) ──
-    ags = {a["ID"]: a["Nombre"] for a in P.list_groupings(grupo=grupo)}
     horas = P.project_hours_bulk(grupo)   # 1 sola lectura del fichaje
     alarmas = alerts.open_counts_all() if alerts.is_configured() else {}
     delays = P.delays_of_group(grupo)     # {pid: días de retraso} (cacheado)
@@ -920,32 +970,10 @@ def _panel_proyectos(grupo: str):
     st.markdown(f"**Cartera — {len(proys)} proyecto(s)**"
                 + (f"  ·  🔴 {_nr} con retraso" if _nr else "")
                 + (f"  ·  🟢 {_na} adelantado(s)" if _na else ""))
-    st.markdown(_portfolio_html(proys, horas, alarmas, ags, delays, aheads),
-                unsafe_allow_html=True)
-
-    _nuevo_proyecto_form(grupo, key="adm")
-
-    # ── Abrir proyecto (detalle / edición) ──
-    st.markdown("#### 🔎 Abrir proyecto")
-    idmap = {f"{p.get('ID')} · {p.get('Nombre')}": p.get("ID") for p in proys}
-    # Proyecto pendiente de abrir (viene del Survey al guardar). Se aplica antes
-    # de instanciar el selectbox, nunca despues.
-    _pp = st.session_state.pop("_prjsel_pending", None)
-    if _pp:
-        _match = next((k for k in idmap if k.startswith(str(_pp))), None)
-        if _match:
-            st.session_state["adminproj_sel"] = _match
-    # ⚠️ Opción vacía la PRIMERA: un selectbox sin placeholder devuelve siempre
-    # el primer elemento, asi que al entrar se abria el detalle de un proyecto
-    # arbitrario — ruido visual y 8 lecturas de datos que nadie pidio.
-    _opts = [_VACIO] + list(idmap.keys())
-    sel = st.selectbox("Proyecto", _opts, key="adminproj_sel",
-                       label_visibility="collapsed")
-    if sel and sel != _VACIO:
-        st.markdown("---")
-        _detalle_proyecto(idmap[sel], grupo)
-    else:
-        st.caption("Elige un proyecto de la lista para ver su detalle.")
+    st.caption("Toca un proyecto para abrir su detalle.")
+    _cartera_clickeable(proys, horas, alarmas, delays, aheads)
+    with st.expander("➕ Nuevo proyecto"):
+        _nuevo_proyecto_form(grupo, key="adm")
 
 
 def _portfolio_html(proys, horas, alarmas, ags, delays=None, aheads=None,

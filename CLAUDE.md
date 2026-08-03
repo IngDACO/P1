@@ -1071,6 +1071,19 @@ corren por primera vez en el Cloud.
 Campo → "mi semana" (donde voy cada dia) · fichaje pre-rellenado desde el roster · plan vs real
 (asignado a X / ficho en Y, solo para trabajos enlazados a un PRJ).
 
+## Proyectos: cartera CLICKEABLE (v207) — revisión apartado por apartado
+Empieza la mejora de cada apartado con la visión del usuario (activo/compacto/consistente). Proyectos, #1:
+la cartera era PASIVA (`_portfolio_html`, tarjetas HTML) + un selector aparte "🔎 Abrir proyecto" para abrir —
+justo lo que el usuario no quiere. Ahora `_panel_proyectos` usa `_cartera_clickeable(proys,horas,alarmas,
+delays,aheads)`: cada proyecto es un BOTÓN (fondo=avance vía linear-gradient `.st-key-cart_<i>`, borde por
+salud, label nombre·cliente·%·retraso/alarmas/horas, ordenado por urgencia). Al tocar → `_admin_open_proj=pid`
++ rerun → abre el detalle COMPLETO directo (decisión del usuario: no resumen). "← Volver a la cartera" cierra.
+`_prjsel_pending` (de HOME "ver completo"/crear) ahora setea `_admin_open_proj`. Se eliminó el selector
+redundante; el form "➕ Nuevo proyecto" quedó plegado en un expander (crear no es lo diario). `_portfolio_html`
+se conserva (lo usa el panel del propietario). Verificado: compila + import + AST. Próximo en Proyectos:
+#4 filtro/buscador; luego revisar el detalle (Estado/Datos/Costos/Archivos). Pendiente global: Finanzas,
+Inventario, Contactos, buscador topbar, más alertas campana.
+
 ## Pin/lista del mapa → resumen del proyecto en HOME (v206)
 Antes el pin del mapa (y la lista de la vista Proyectos) saltaban al proyecto COMPLETO fuera de HOME. Ahora
 abren un RESUMEN en la columna derecha (pestaña Proyectos), sin salir de HOME; el "ver completo" es un paso más.
@@ -2899,9 +2912,10 @@ posicional + plano) → app.py, al cargar el PDF, setea `st.session_state["ns"]`
 resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NORTH SYD y AGECARE → NS=6
 (coincide con travel/floor-height HQ/HE).
 
-## Versiones desplegadas (v206 = actual)
+## Versiones desplegadas (v207 = actual)
 | Ver | Cambio principal |
 |---|---|
+| v207 | Proyectos: la cartera ahora es clickeable (tarjetas-botón con avance/salud, mismo lenguaje que HOME) → tocar abre el detalle directo; se quitó el selector "Abrir proyecto" y el form Nuevo proyecto quedó plegado |
 | v206 | El pin del mapa (y la lista de Proyectos en HOME) ahora abren un RESUMEN del proyecto en la columna derecha, sin salir de HOME; desde ahí un botón "→ Ver proyecto completo" |
 | v205 | Fix móvil: el gesto de retroceso ya no cierra la app; se redirige al botón "← Atrás" interno (JS que atrapa el back con history.pushState + popstate → click en el botón). Validar en el teléfono |
 | v204 | Botón "← Atrás" arriba-izquierda de la barra superior del admin: vuelve a la sección anterior (historial multi-nivel), se desactiva cuando no hay a dónde volver |
