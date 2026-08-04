@@ -1071,6 +1071,20 @@ corren por primera vez en el Cloud.
 Campo → "mi semana" (donde voy cada dia) · fichaje pre-rellenado desde el roster · plan vs real
 (asignado a X / ficho en Y, solo para trabajos enlazados a un PRJ).
 
+## Horas por usuario × proyecto: se surfacea lo que ya existía (v216)
+Petición del usuario: "quiero saber cuántas horas ha gastado cada usuario en cada proyecto ¿dónde lo veo?; y en
+cada proyecto, quiénes han trabajado y qué tiempo". Auditoría (auditar, no adivinar): **ambos datos ya existían,
+solo no se mostraban del todo**. (Q2, por proyecto → quién) `expenses.labor_breakdown(pid,grupo)` (usuario·horas·
+tarifa·costo) ya alimentaba 💰 Costos → "Mano de obra por persona", pero enmarcado como COSTO. (Q1, usuario × cada
+proyecto) `timeclock.group_hours(grupo,days)` ya devuelve por persona un `por_proyecto{nombre:horas}`, pero
+⏱ Horas solo mostraba el TOTAL "En proyectos" y el reparto agregado del grupo — nunca el split por persona.
+Cambios: (1) **`_equipo_proyecto(pid,grupo)`** — bloque "👷 Quién ha trabajado aquí" (persona·horas + total),
+colocado en la columna DER de 📊 Estado junto a las alarmas (aprovecha la doble columna v211); usa
+`labor_breakdown` sin el costo, degrada limpio si expenses no está configurado. (2) En **`render_group_hours`**,
+al final, matriz **"🔍 Horas por persona y proyecto"** (`st.dataframe`): filas = personas (reusa `_etiqueta`, que
+desempata homónimos), columnas = proyectos, celda = `por_proyecto.get(proyecto)` (vacío si 0). Sin datos nuevos:
+solo mostrar `por_proyecto`. Verificado: compila + import + AST (el único "libre" es `_etiqueta`, def anidada).
+
 ## Finanzas: doble columna + tablas activas (v215)
 Apartado 💰 Finanzas (Gastos + Horas). **Gastos** (`render_group_expenses`): (1) "Reparto del costo del grupo"
 | "Compras por categoría" en **doble columna** (antes apiladas y separadas — se movió categorías arriba y se
@@ -2989,6 +3003,7 @@ resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NOR
 ## Versiones desplegadas (v215 = actual)
 | Ver | Cambio principal |
 |---|---|
+| v216 | Horas por usuario × proyecto (el dato ya existía, solo faltaba mostrarlo): matriz "persona × proyecto" al final de ⏱ Horas (usa el por_proyecto de group_hours), y bloque "👷 Quién ha trabajado aquí" (persona·horas) en 📊 Estado del proyecto, junto a las alarmas (labor_breakdown sin el costo) |
 | v215 | Finanzas: Gastos con "Reparto" y "Compras por categoría" en doble columna + tabla de proyectos clickeable (→ abre el proyecto); Horas con tabla de personas clickeable (→ abre la ficha) |
 | v214 | Agrupaciones clickeables (mismo patrón que Proyectos): tocar una tarjeta abre su tablero directo; se quitaron los selectores "Abrir" y "Eliminar" (Eliminar movido dentro). Cuidando no anidar expanders |
 | v213 | Costos: "Reparto del costo" y "Compras por categoría" en doble columna; recibos clickeables que muestran la foto inline (antes: tabla redundante + solo descarga) |

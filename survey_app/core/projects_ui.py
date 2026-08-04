@@ -1167,9 +1167,29 @@ def _diagnostico(ps: dict) -> dict:
             "proximo": proximo, "ev": ev, "pv": proj.get("pv", 0.0)}
 
 
+def _equipo_proyecto(pid, grupo):
+    """👷 Quién ha trabajado en ESTE proyecto y cuántas horas (v216). El dato ya
+    estaba (labor_breakdown, usado en 💰 Costos); aquí se surfacea, sin el costo."""
+    try:
+        from core import expenses as E
+        if not E.is_configured():
+            return
+        _lb = E.labor_breakdown(pid, grupo)
+    except Exception:
+        return
+    st.markdown("**👷 Quién ha trabajado aquí**")
+    if not _lb["items"]:
+        st.caption("Nadie ha fichado horas a este proyecto todavía.")
+        return
+    st.dataframe(pd.DataFrame([{"Persona": x["usuario"], "Horas": x["horas"]}
+                               for x in _lb["items"]]),
+                 hide_index=True, use_container_width=True)
+    st.caption(f"Total: **{_lb['horas']:.1f} h**")
+
+
 def _estado_section(pid: str, grupo: str, prj: dict):
-    """Pestaña 📊 Estado (v211: doble columna arriba — cómo va | alarmas; el ritmo, el
-    desglose y el cronograma van a ancho completo abajo)."""
+    """Pestaña 📊 Estado (v211: doble columna arriba — cómo va | alarmas + equipo; el
+    ritmo, el desglose y el cronograma van a ancho completo abajo)."""
     ps = P.project_schedule(pid)
     if not (ps and ps["sched"].get("activities")):
         _alerts_section(pid, grupo, prj.get("Nombre", ""), allow_report=False)
@@ -1221,6 +1241,8 @@ def _estado_section(pid: str, grupo: str, prj: dict):
                     + "".join(tarj) + "</div>", unsafe_allow_html=True)
     with _der:
         _alerts_section(pid, grupo, prj.get("Nombre", ""), allow_report=False)
+        st.markdown("")
+        _equipo_proyecto(pid, grupo)
 
     # ── El ritmo: mas accionable que el SPI ──
     if d["ritmo_real"] is not None and d["ritmo_nec"] is not None:
@@ -2641,3 +2663,25 @@ def render_group_hours(grupo: str):
                 f'<div style="width:64px;flex:none;text-align:right;font-size:13px;'
                 f'font-weight:600;color:#1f2937;">{h:.1f} h</div></div>',
                 unsafe_allow_html=True)
+
+    # ── Horas por PERSONA y PROYECTO (v216) ──────────────────────────────────
+    # Responde "¿cuántas horas gastó cada usuario en cada proyecto?". El dato ya
+    # lo trae group_hours en por_proyecto; aquí se muestra como matriz.
+    _proys = sorted({p for d in data for p in d["por_proyecto"]})
+    if _proys:
+        st.divider()
+        st.markdown("**🔍 Horas por persona y proyecto**")
+        _mat = []
+        for d in data:
+            _pp = d["por_proyecto"]
+            if not _pp:
+                continue
+            _fila = {"Persona": _etiqueta(d)}
+            for _p in _proys:
+                _h = _pp.get(_p, 0.0)
+                _fila[_p] = round(_h, 2) if _h else ""
+            _mat.append(_fila)
+        if _mat:
+            st.dataframe(pd.DataFrame(_mat), use_container_width=True, hide_index=True)
+            st.caption("Cada celda: horas que esa persona imputó a ese proyecto en el periodo. "
+                       "Las columnas son los proyectos.")
