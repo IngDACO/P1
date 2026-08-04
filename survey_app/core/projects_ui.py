@@ -1873,45 +1873,122 @@ def _miembros_editor(ags_proys, todos, key, pesos_actuales=None):
     return out
 
 
+def _cartera_agrupaciones(ags, grupo):
+    """Agrupaciones como botones CLICKEABLES (v214): tocar abre su tablero. Fondo =
+    avance consolidado; borde = salud (entrega del elevador más lento). Ordenadas por
+    urgencia. Mismo lenguaje que la cartera de proyectos."""
+    proys_all = P.list_projects(grupo=grupo)
+    alarmas = alerts.open_counts_all() if alerts.is_configured() else {}
+    try:
+        proyecc = P.projections_by_group(grupo)
+    except Exception:
+        proyecc = {}
+    rows = []
+    for a in ags:
+        aid = str(a.get("ID", ""))
+        miemb = [p for p in proys_all if str(p.get("AgrupacionID", "")) == aid]
+        av = P.grouping_progress(aid)["avance"]
+        fecha, gap = None, 0.0
+        for p in miemb:
+            _d = proyecc.get(str(p.get("ID", "")))
+            if _d and _d.get("fecha") and (fecha is None or _d["fecha"] > fecha):
+                fecha, gap = _d["fecha"], _d.get("gap") or 0.0
+        n_al = sum(alarmas.get(str(p.get("ID", "")), 0) for p in miemb)
+        rows.append({"a": a, "aid": aid, "n": len(miemb), "av": av,
+                     "gap": gap, "n_al": n_al, "fecha": fecha})
+    rows.sort(key=lambda r: -r["gap"])
+
+    _css = ["<style>"]
+    for _i, r in enumerate(rows):
+        _av = max(0, min(100, int(r["av"])))
+        _col = "#c0392b" if r["gap"] > 0.5 else ("#1e8449" if r["gap"] < -0.5 else "#2e6da4")
+        _tint = "#fdecec" if r["gap"] > 0.5 else ("#e8f5ee" if r["gap"] < -0.5 else "#e8eef6")
+        _css.append(
+            f".st-key-agrc_{_i} button{{background:linear-gradient(to right,"
+            f"{_tint} {_av}%,#f4f6f9 {_av}%)!important;border-left:5px solid {_col}!important;"
+            "justify-content:flex-start!important;padding-left:12px!important;}"
+            f".st-key-agrc_{_i} button>div{{justify-content:flex-start!important;width:100%!important;}}"
+            f".st-key-agrc_{_i} button p{{text-align:left!important;width:100%!important;}}")
+    _css.append("</style>")
+    st.markdown("".join(_css), unsafe_allow_html=True)
+
+    for _r0 in range(0, len(rows), 2):
+        _cols = st.columns(2)
+        for _j in range(2):
+            _idx = _r0 + _j
+            if _idx >= len(rows):
+                break
+            r = rows[_idx]
+            _av = max(0, min(100, int(r["av"])))
+            _extra = ""
+            if r["gap"] > 0.5:
+                _extra += f" · ⏰{r['gap']:.0f}d"
+            elif r["gap"] < -0.5:
+                _extra += f" · ⏩{abs(r['gap']):.0f}d"
+            if r["n_al"]:
+                _extra += f" · 🔔{r['n_al']}"
+            if r["fecha"]:
+                _extra += f" · 🎯{r['fecha'].strftime('%d/%m')}"
+            _lbl = f"**🗂 {r['a'].get('Nombre', '')}** · {r['n']} elev · {_av}%{_extra}"
+            if _cols[_j].button(_lbl, key=f"agrc_{_idx}", use_container_width=True):
+                st.session_state["_admin_open_agr"] = r["aid"]
+                st.rerun()
+
+
 def _panel_agrupaciones(grupo: str):
     ags = P.list_groupings(grupo=grupo)
     todos = P.list_projects(grupo=grupo)
     nom_ags = {a["ID"]: a["Nombre"] for a in ags}
 
+    # ── Agrupación ABIERTA (de una tarjeta) → tablero + gestión, sin anidar ──
+    _open = st.session_state.get("_admin_open_agr")
+    if _open:
+        _ag = next((a for a in ags if str(a.get("ID", "")) == str(_open)), None)
+        if st.button("← Volver a las agrupaciones", key="agr_back"):
+            st.session_state.pop("_admin_open_agr", None)
+            st.rerun()
+        if not _ag:
+            st.warning("Agrupación no encontrada.")
+            st.session_state.pop("_admin_open_agr", None)
+            return
+        _dashboard_agrupacion(_ag, grupo)      # sin expanders internos → seguro
+        st.markdown("---")
+        with st.expander("🔧 Proyectos de esta agrupación"):
+            st.caption("Marca los elevadores que la componen. Al quitar uno se "
+                       "**desagrupa**, no se borra.")
+            _act = {str(p.get("ID")): P._num(p.get("PesoEnAgrupacion")) or 1.0
+                    for p in P.list_projects(grupo=grupo, agrupacion_id=_ag["ID"])}
+            _sel = _miembros_editor(nom_ags, todos, f"agmem_{_ag['ID']}", _act)
+            if len(_sel) > 12:
+                st.warning(f"{len(_sel)} proyectos: cada cambio es una escritura "
+                           "en la hoja; puede tardar unos segundos.")
+            if st.button("💾 Guardar los proyectos de la agrupación",
+                         key=f"agmemsave_{_ag['ID']}", use_container_width=True):
+                with st.spinner("Guardando..."):
+                    ok, msg = P.set_grouping_members(_ag["ID"], _sel, grupo)
+                (st.success if ok else st.error)(msg)
+                if ok:
+                    st.rerun()
+        with st.expander("🗑 Eliminar agrupación"):
+            st.caption("Los proyectos no se borran; solo se desagrupan.")
+            _ok_del = ui.confirmar_borrado("del_agr_ok", "Confirmo eliminar esta agrupación")
+            if st.button("Eliminar agrupación", disabled=not _ok_del, key="del_agr_btn"):
+                ok, msg = P.delete_grouping(_ag["ID"])
+                (st.success if ok else st.error)(msg)
+                if ok:
+                    st.session_state.pop("_admin_open_agr", None)
+                    st.rerun()
+        return
+
+    # ── Lista de agrupaciones CLICKEABLES ──
     if ags:
         st.markdown(f"**Agrupaciones — {len(ags)}**")
-        st.markdown(_agrupaciones_html(ags, grupo), unsafe_allow_html=True)
-
-        # ── Abrir una agrupación (sin preselección: v138/v139) ──
-        st.markdown("#### 📊 Abrir agrupación")
-        _amap = {f"{a['ID']} · {a['Nombre']}": a for a in ags}
-        _ag = ui.elegir("Agrupación", _amap, key="agr_dash_sel",
-                        vacio="— elige una agrupación —", label_visibility="collapsed")
-        if _ag:
-            _dashboard_agrupacion(_ag, grupo)
-            st.markdown("---")
-            with st.expander("🔧 Proyectos de esta agrupación"):
-                st.caption("Marca los elevadores que la componen. Al quitar uno se "
-                           "**desagrupa**, no se borra.")
-                _act = {str(p.get("ID")): P._num(p.get("PesoEnAgrupacion")) or 1.0
-                        for p in P.list_projects(grupo=grupo,
-                                                 agrupacion_id=_ag["ID"])}
-                _sel = _miembros_editor(nom_ags, todos, f"agmem_{_ag['ID']}", _act)
-                if len(_sel) > 12:
-                    st.warning(f"{len(_sel)} proyectos: cada cambio es una escritura "
-                               "en la hoja; puede tardar unos segundos.")
-                if st.button("💾 Guardar los proyectos de la agrupación",
-                             key=f"agmemsave_{_ag['ID']}", use_container_width=True):
-                    with st.spinner("Guardando..."):
-                        ok, msg = P.set_grouping_members(_ag["ID"], _sel, grupo)
-                    (st.success if ok else st.error)(msg)
-                    if ok:
-                        st.rerun()
+        st.caption("Toca una agrupación para abrir su tablero.")
+        _cartera_agrupaciones(ags, grupo)
     else:
         st.info("No hay agrupaciones. Crea una abajo y elige qué elevadores la componen.")
 
-    # ── Crear: la agrupación se arma CON sus proyectos (v141) ──
-    # Plegada, como "➕ Nuevo proyecto": no es lo que se viene a hacer a diario.
+    # ── Crear: la agrupación se arma CON sus proyectos (v141), plegada ──
     with st.expander("➕ Nueva agrupación"):
         st.caption("Los proyectos se crean primero; aquí eliges cuáles forman parte.")
         nom = st.text_input("Nombre de la agrupación", key="nueva_agr_nom")
@@ -1935,21 +2012,6 @@ def _panel_agrupaciones(grupo: str):
                     st.success(f"Agrupación creada ({res})"
                                + (f" con {_n} elevador(es)." if _n else
                                   ". Añádele elevadores desde su panel."))
-                    st.rerun()
-
-    if ags:
-        st.markdown("#### 🗑 Eliminar agrupación")
-        delmap = {f"{a['ID']} · {a['Nombre']}": a["ID"] for a in ags}
-        _agr = ui.elegir("Agrupación", delmap, key="del_agr_sel",
-                         vacio="— ninguna —")
-        st.caption("Los proyectos no se borran; solo se desagrupan.")
-        if _agr:
-            _ok_del = ui.confirmar_borrado("del_agr_ok",
-                                           "Confirmo eliminar esta agrupación")
-            if st.button("Eliminar agrupación", disabled=not _ok_del):
-                ok, msg = P.delete_grouping(_agr)
-                (st.success if ok else st.error)(msg)
-                if ok:
                     st.rerun()
 
 
