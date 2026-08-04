@@ -1071,6 +1071,15 @@ corren por primera vez en el Cloud.
 Campo → "mi semana" (donde voy cada dia) · fichaje pre-rellenado desde el roster · plan vs real
 (asignado a X / ficho en Y, solo para trabajos enlazados a un PRJ).
 
+## Proyectos #5: doble columna en el detalle (📊 Estado) (v211)
+Aplicado [[feedback-doble-columna]] al detalle. `_estado_section` reordenado: se mueve el chequeo de cronograma
+arriba, se calculan titular + KPIs, y se ponen en **doble columna [3,2]**: IZQ = "cómo va" (titular + tarjetas
+KPI) · DER = 🔔 alarmas (`_alerts_section`, que usa columnas internas — OK, Streamlit permite 1 nivel de
+anidado). A ANCHO COMPLETO abajo (sin tocar): el ritmo, "📌 Tocaba hoy | 🔧 En curso" (ya era 2 col), el
+diagnóstico 🩺, próximo hito y el CRONOGRAMA/curva S (SVG ancho). Verificado: compila + import + AST. Con esto
+Proyectos queda 5/5 (falta solo el buscador GLOBAL de la barra superior, que es su propia tanda). Próximo
+apartado a revisar: Finanzas (o el que elija el usuario).
+
 ## Fix: "Nuevo proyecto" doblemente anidado (v210)
 El usuario notó que "➕ Nuevo proyecto" quedaba doblemente anidado. Causa: `_nuevo_proyecto_form` YA tiene su
 propio `st.expander("➕ Nuevo proyecto")` (línea 695, se pliega solo), pero en v207 lo envolví en OTRO expander
@@ -2939,9 +2948,10 @@ posicional + plano) → app.py, al cargar el PDF, setea `st.session_state["ns"]`
 resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NORTH SYD y AGECARE → NS=6
 (coincide con travel/floor-height HQ/HE).
 
-## Versiones desplegadas (v210 = actual)
+## Versiones desplegadas (v211 = actual)
 | Ver | Cambio principal |
 |---|---|
+| v211 | Detalle de proyecto (📊 Estado) en doble columna: "cómo va" (titular + KPIs) a la izquierda, alarmas a la derecha; ritmo, desglose y cronograma a ancho completo abajo |
 | v210 | Fix: "➕ Nuevo proyecto" estaba doblemente anidado (yo lo envolví en un expander cuando ya tenía el suyo) + tenía el de ubicación anidado dentro. Ahora un solo expander, ubicación inline |
 | v209 | Proyectos: filtro rápido arriba de la cartera (búsqueda por nombre/cliente + chips Todos/Retraso/Adelanto/En pausa), en doble columna |
 | v208 | Estética de la cartera de proyectos: rejilla de 2 columnas (más densa, menos vacía) + texto alineado a la izquierda + nombre en negrita |

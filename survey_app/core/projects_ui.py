@@ -1168,11 +1168,11 @@ def _diagnostico(ps: dict) -> dict:
 
 
 def _estado_section(pid: str, grupo: str, prj: dict):
-    """Pestaña 📊 Estado: alarmas, cronograma y el diagnostico de por que vas asi."""
-    _alerts_section(pid, grupo, prj.get("Nombre", ""), allow_report=False)
-
+    """Pestaña 📊 Estado (v211: doble columna arriba — cómo va | alarmas; el ritmo, el
+    desglose y el cronograma van a ancho completo abajo)."""
     ps = P.project_schedule(pid)
     if not (ps and ps["sched"].get("activities")):
+        _alerts_section(pid, grupo, prj.get("Nombre", ""), allow_report=False)
         st.info("Este proyecto no tiene actividades, así que no hay cronograma "
                 "que seguir. Añádelas en ✏️ Datos.")
         return
@@ -1195,9 +1195,6 @@ def _estado_section(pid: str, grupo: str, prj: dict):
     _tot      = proj.get("total", 0)
     _dia_txt  = (f"día {_hoy_real} de {_tot}" if _hoy_real <= _tot
                  else f"día {_hoy_real} — {_hoy_real - _tot} más de los {_tot} planificados")
-    st.markdown(f"<div style='font-size:17px;margin-bottom:8px'>{_tit} "
-                f"<span style='color:#6b7280;font-size:14px'>· {_dia_txt}</span></div>",
-                unsafe_allow_html=True)
 
     # ── KPIs (tarjetas, no st.metric planos) ──
     _fin = (proj["fecha_proj"].strftime("%d/%m/%Y")
@@ -1212,8 +1209,17 @@ def _estado_section(pid: str, grupo: str, prj: dict):
             _kpi_card("Desvío", f"{dv:+.0f}%", _col),
             _kpi_card("Situación", _est, "#c0392b" if dg > 0.5 else None),
             _kpi_card("Fin proyectado", _fin, _cf)]
-    st.markdown('<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px">'
-                + "".join(tarj) + "</div>", unsafe_allow_html=True)
+
+    # ── Doble columna (v211): cómo va (izq) | alarmas (der) ──
+    _izq, _der = st.columns([3, 2], gap="large")
+    with _izq:
+        st.markdown(f"<div style='font-size:17px;margin-bottom:8px'>{_tit} "
+                    f"<span style='color:#6b7280;font-size:14px'>· {_dia_txt}</span></div>",
+                    unsafe_allow_html=True)
+        st.markdown('<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px">'
+                    + "".join(tarj) + "</div>", unsafe_allow_html=True)
+    with _der:
+        _alerts_section(pid, grupo, prj.get("Nombre", ""), allow_report=False)
 
     # ── El ritmo: mas accionable que el SPI ──
     if d["ritmo_real"] is not None and d["ritmo_nec"] is not None:
