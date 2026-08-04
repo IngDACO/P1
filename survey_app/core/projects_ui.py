@@ -2461,25 +2461,54 @@ def render_group_expenses(grupo: str):
         st.warning(f"⚠️ **{n_over_p} más se saldrá(n) al ritmo actual** (aún dentro hoy): "
                    + ", ".join(f["nombre"] for f in filas if f["over_proj"] and not f["over"]))
 
-    # ── Reparto compras vs mano de obra ──
-    if tot > 0:
+    # ── Reparto del costo | Compras por categoría (doble columna, v215) ──
+    _catg = ge["por_categoria"]
+
+    def _blq_reparto_g():
         st.markdown("**Reparto del costo del grupo**")
         st.markdown(_barras_html(
             [("Mano de obra", sum(f["mano_obra"] for f in filas)),
              ("Compras", sum(f["compras"] for f in filas))], tot),
             unsafe_allow_html=True)
 
-    # ── Proyectos CON presupuesto: costo, proyección y % ──
+    def _blq_categorias_g():
+        st.markdown("**Compras por categoría**")
+        _c = sorted(_catg.items(), key=lambda x: -x[1])
+        st.markdown(_barras_html(_c, sum(v for _, v in _c), "#BA7517"),
+                    unsafe_allow_html=True)
+
+    if tot > 0 and _catg:
+        _gc1, _gc2 = st.columns(2, gap="large")
+        with _gc1:
+            _blq_reparto_g()
+        with _gc2:
+            _blq_categorias_g()
+    elif tot > 0:
+        _blq_reparto_g()
+    elif _catg:
+        _blq_categorias_g()
+
+    # ── Proyectos CON presupuesto (tabla CLICKEABLE → abre el proyecto, v215) ──
     if con_pres:
         st.markdown("**Proyectos con presupuesto**")
-        st.dataframe(pd.DataFrame([{
+        _gev = st.dataframe(pd.DataFrame([{
             "Proyecto": f["nombre"], "Costo": f["total"], "Presupuesto": f["presupuesto"],
             "% consumido": f["pct"], "Avance %": f["avance"],
             "Proyección": f["proyectado"] if f["proyectado"] is not None else "—",
             "": ("⛔" if f["over"] else ("⚠️" if f["over_proj"] else "✅")),
-        } for f in con_pres]), hide_index=True, use_container_width=True)
-        st.caption("**Proyección** = lo que costará al terminar al ritmo de gasto actual "
-                   "(costo ÷ avance). ⛔ ya se pasó · ⚠️ se pasará al ritmo actual · ✅ dentro.")
+        } for f in con_pres]), hide_index=True, use_container_width=True,
+            on_select="rerun", selection_mode="single-row", key="ge_tbl")
+        st.caption("👆 Toca una fila y «Abrir» para ir a ese proyecto. **Proyección** = costo al "
+                   "terminar al ritmo actual. ⛔ ya se pasó · ⚠️ se pasará · ✅ dentro.")
+        try:
+            _grows = list(_gev.selection.rows)
+        except Exception:
+            _grows = []
+        if _grows and _grows[0] < len(con_pres):
+            _gf = con_pres[_grows[0]]
+            if st.button(f"→ Abrir {_gf['nombre']}", key="ge_open", type="primary"):
+                st.session_state["_prjsel_pending"] = str(_gf.get("id", ""))
+                _ir_a("proyectos", "📊 Proyectos")
 
     # ── Proyectos SIN presupuesto: solo costo, y aviso ──
     if sin_pres:
@@ -2491,12 +2520,7 @@ def render_group_expenses(grupo: str):
         st.caption(f"{len(sin_pres)} proyecto(s) sin presupuesto: no hay contra qué comparar "
                    "su gasto. Se define en el detalle del proyecto → ✏️ Datos.")
 
-    # ── Compras por categoría ──
-    if ge["por_categoria"]:
-        st.markdown("**Compras por categoría**")
-        _cat = sorted(ge["por_categoria"].items(), key=lambda x: -x[1])
-        st.markdown(_barras_html(_cat, sum(v for _, v in _cat), "#BA7517"),
-                    unsafe_allow_html=True)
+    # (Compras por categoría se muestra arriba, en doble columna con el reparto — v215.)
 
     # ── Export para contabilidad ──
     _csv = pd.DataFrame([{
@@ -2573,7 +2597,20 @@ def render_group_hours(grupo: str):
             "Tarifa/h": d["tarifa"] or "—",
             "Costo M.O.": d["costo"] or 0,
         })
-    st.dataframe(pd.DataFrame(filas), use_container_width=True, hide_index=True)
+    # v215: tabla CLICKEABLE → abre la ficha de la persona (Planificación · Usuarios).
+    _hev = st.dataframe(pd.DataFrame(filas), use_container_width=True, hide_index=True,
+                        on_select="rerun", selection_mode="single-row", key="gh_tbl")
+    st.caption("👆 Toca una persona y «Abrir ficha» para gestionarla.")
+    try:
+        _hrows = list(_hev.selection.rows)
+    except Exception:
+        _hrows = []
+    if _hrows and _hrows[0] < len(data):
+        _hd = data[_hrows[0]]
+        _hn = _hd.get("nombre") or _hd["usuario"]
+        if st.button(f"→ Abrir ficha de {_hn}", key="gh_open", type="primary"):
+            st.session_state["gp_fichasel"] = f"{_hn} ({_hd['usuario']})"
+            _ir_a("planificacion", "👷 Usuarios")
 
     if _dudoso:
         st.caption("«—» en *sin asignar*: esa persona imputó a proyectos más horas que las "

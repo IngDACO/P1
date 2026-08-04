@@ -1071,6 +1071,16 @@ corren por primera vez en el Cloud.
 Campo → "mi semana" (donde voy cada dia) · fichaje pre-rellenado desde el roster · plan vs real
 (asignado a X / ficho en Y, solo para trabajos enlazados a un PRJ).
 
+## Finanzas: doble columna + tablas activas (v215)
+Apartado 💰 Finanzas (Gastos + Horas). **Gastos** (`render_group_expenses`): (1) "Reparto del costo del grupo"
+| "Compras por categoría" en **doble columna** (antes apiladas y separadas — se movió categorías arriba y se
+quitó su bloque de abajo); (2) tabla **"Proyectos con presupuesto" CLICKEABLE** (`st.dataframe(on_select=
+"rerun")`) → seleccionar fila muestra botón "→ Abrir [proyecto]" → `_prjsel_pending`+`_ir_a("proyectos")`
+(navegación por botón, no auto, para no re-navegar al volver). Reusa `f["id"]` de `group_expenses`. **Horas**
+(`render_group_hours`): tabla por persona CLICKEABLE → botón "→ Abrir ficha de [persona]" → `gp_fichasel`+
+`_ir_a("planificacion","👷 Usuarios")`. Verificado: compila + import + AST. Siguiente apartado: los placeholders
+📦 Inventario y 👥 Contactos (a diseñar), o Fichaje/Herramientas.
+
 ## Agrupaciones: cartera clickeable (v214)
 Mismo patrón que Proyectos v207 (las agrupaciones tenían tarjetas pasivas `_agrupaciones_html` + un selector
 aparte "📊 Abrir agrupación" + otro selector de "🗑 Eliminar" abajo). Nuevo `_cartera_agrupaciones(ags,grupo)`:
@@ -2976,9 +2986,10 @@ posicional + plano) → app.py, al cargar el PDF, setea `st.session_state["ns"]`
 resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NORTH SYD y AGECARE → NS=6
 (coincide con travel/floor-height HQ/HE).
 
-## Versiones desplegadas (v214 = actual)
+## Versiones desplegadas (v215 = actual)
 | Ver | Cambio principal |
 |---|---|
+| v215 | Finanzas: Gastos con "Reparto" y "Compras por categoría" en doble columna + tabla de proyectos clickeable (→ abre el proyecto); Horas con tabla de personas clickeable (→ abre la ficha) |
 | v214 | Agrupaciones clickeables (mismo patrón que Proyectos): tocar una tarjeta abre su tablero directo; se quitaron los selectores "Abrir" y "Eliminar" (Eliminar movido dentro). Cuidando no anidar expanders |
 | v213 | Costos: "Reparto del costo" y "Compras por categoría" en doble columna; recibos clickeables que muestran la foto inline (antes: tabla redundante + solo descarga) |
 | v212 | Fix: el % de avance salía 2 veces en el detalle (cabecera + KPI "Avance real"); se quitó la KPI redundante de la pestaña Estado |
