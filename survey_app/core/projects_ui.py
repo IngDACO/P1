@@ -2236,20 +2236,31 @@ def render_expenses(pid, grupo, can_delete=False, key_prefix="ex"):
                 _l += f" (${cp['por_punto']:,.0f} por punto)"
         st.caption(_l + ("  ⛔ SOBRE PRESUPUESTO" if cp["over"] else ""))
 
-    # ── Reparto compras / mano de obra ──
-    if cp["total"] > 0:
+    # ── Reparto del costo | Compras por categoría (doble columna, v213) ──
+    _rep = cp["total"] > 0
+    _cat = gastos.get("por_categoria") or {}
+
+    def _blq_reparto():
         st.markdown("**Reparto del costo**")
         st.markdown(_barras_html([("Mano de obra", cp["mano_obra"]),
                                   ("Compras", cp["compras"])], cp["total"]),
                     unsafe_allow_html=True)
 
-    # ── Gasto por categoria: se calculaba desde v105 y la pestaña lo tiraba ──
-    _cat = gastos.get("por_categoria") or {}
-    if _cat:
+    def _blq_categorias():
         st.markdown("**Compras por categoría**")
         st.markdown(_barras_html(sorted(_cat.items(), key=lambda x: -x[1]),
-                                 gastos["total"], "#BA7517"),
-                    unsafe_allow_html=True)
+                                 gastos["total"], "#BA7517"), unsafe_allow_html=True)
+
+    if _rep and _cat:
+        _bc1, _bc2 = st.columns(2, gap="large")
+        with _bc1:
+            _blq_reparto()
+        with _bc2:
+            _blq_categorias()
+    elif _rep:
+        _blq_reparto()
+    elif _cat:
+        _blq_categorias()
 
     # ── Mano de obra por persona: labor_cost solo daba el total ──
     if lb["items"]:
@@ -2302,31 +2313,50 @@ def render_expenses(pid, grupo, can_delete=False, key_prefix="ex"):
 
     items = gastos["items"]
     if items:
-        with st.expander(f"🧾 Detalle de compras ({len(items)})"):
-            st.dataframe(pd.DataFrame([{
-                "Fecha": r.get("Fecha"), "Categoría": r.get("Categoria"),
-                "Proveedor": r.get("Proveedor"), "Descripción": r.get("Descripcion"),
-                "Valor": E._num(r.get("Valor")), "Por": r.get("CreadoPor"),
-            } for r in items]), hide_index=True, use_container_width=True)
+        # v213: recibos ACTIVOS — tocar uno muestra su foto inline (antes: tabla
+        # redundante + botones de solo-descarga).
+        with st.expander(f"🧾 Recibos ({len(items)})"):
+            st.caption("Toca un recibo para ver la foto.")
             for r in items:
-                did = str(r.get("DriveID", "")).strip()
-                cc = st.columns([5, 1])
-                lbl = f"{r.get('Fecha')} · {r.get('Categoria')} · ${E._num(r.get('Valor')):,.0f}"
-                if did:
-                    try:
-                        from core import drive_store
-                        cc[0].download_button("⬇️ " + lbl, data=drive_store.download(did),
-                                              file_name=r.get("Archivo", "recibo"),
-                                              key=f"{key_prefix}_dl_{r.get('ID')}")
-                    except Exception:
-                        cc[0].caption(lbl)
+                _rid = str(r.get("ID", ""))
+                _did = str(r.get("DriveID", "")).strip()
+                _lbl = f"🧾 {r.get('Fecha')} · {r.get('Categoria')} · ${E._num(r.get('Valor')):,.0f}"
+                _ex = " · ".join(x for x in [str(r.get('Proveedor') or ''),
+                                             str(r.get('Descripcion') or '')] if x)
+                if _ex:
+                    _lbl += f" · {_ex}"
+                cc = st.columns([6, 1])
+                if _did:
+                    if cc[0].button(_lbl, key=f"{key_prefix}_open_{_rid}",
+                                    use_container_width=True):
+                        _cur = st.session_state.get(f"{key_prefix}_rcb")
+                        st.session_state[f"{key_prefix}_rcb"] = None if _cur == _rid else _rid
+                        st.rerun()
                 else:
-                    cc[0].caption(lbl + " (sin archivo)")
-                if can_delete and cc[1].button("🗑", key=f"{key_prefix}_del_{r.get('ID')}"):
+                    cc[0].caption(_lbl + " · sin archivo")
+                if can_delete and cc[1].button("🗑", key=f"{key_prefix}_del_{_rid}"):
                     ok, msg = E.delete(r.get("ID"))
                     (st.success if ok else st.error)(msg)
                     if ok:
+                        st.session_state.pop(f"{key_prefix}_rcb", None)
                         st.rerun()
+
+            # ── Recibo abierto: foto inline (imagen) o descarga (PDF) ──
+            _sel = st.session_state.get(f"{key_prefix}_rcb")
+            _ro = next((x for x in items if str(x.get("ID")) == str(_sel)), None) if _sel else None
+            if _ro and str(_ro.get("DriveID", "")).strip():
+                _arch = str(_ro.get("Archivo", "recibo"))
+                try:
+                    from core import drive_store
+                    _data = drive_store.download(str(_ro.get("DriveID", "")).strip())
+                    if _arch.lower().endswith((".png", ".jpg", ".jpeg")):
+                        st.image(_data, caption=_arch, use_container_width=True)
+                    else:
+                        st.info(f"📄 {_arch} — es un PDF; descárgalo para verlo.")
+                    st.download_button("⬇️ Descargar recibo", data=_data, file_name=_arch,
+                                       key=f"{key_prefix}_dlrcb_{_sel}")
+                except Exception:
+                    st.caption("No se pudo cargar el archivo del recibo.")
 
 
 # ── Reporte del ADMIN: gastos de todos los proyectos del grupo ──

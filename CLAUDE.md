@@ -1071,6 +1071,16 @@ corren por primera vez en el Cloud.
 Campo → "mi semana" (donde voy cada dia) · fichaje pre-rellenado desde el roster · plan vs real
 (asignado a X / ficho en Y, solo para trabajos enlazados a un PRJ).
 
+## Costos: doble columna + recibos activos (v213)
+Revisión de la sub-pestaña 💰 Costos (`render_expenses`). (1) **Doble columna**: "Reparto del costo" (mano de
+obra vs compras) | "Compras por categoría" — los dos gráficos de barras cortos, antes apilados, ahora lado a
+lado (helpers `_blq_reparto`/`_blq_categorias`; si solo hay uno → ancho completo). KPIs, titular+barra de
+presupuesto, tabla de mano de obra y curva de gasto siguen a ancho completo. (2) **Recibos ACTIVOS**: antes
+mostraban una TABLA redundante + botones de solo-descarga; ahora cada recibo es un BOTÓN (fecha·categoría·$·
+proveedor·desc) → al tocar muestra la FOTO inline (`st.image` para png/jpg; los PDF → descarga). Toggle
+`{key_prefix}_rcb`. Se quitó la tabla redundante. Verificado: compila + import + AST. Siguiente sub-pestaña:
+📎 Archivos (archivos como tarjetas clickeables), luego ✏️ Datos.
+
 ## Fix: % de avance duplicado en el detalle (v212)
 El usuario notó que el % de avance salía 2 veces al abrir un proyecto: la CABECERA de `_detalle_proyecto`
 (`c1.metric("Avance", X%)` + `st.progress`) y otra vez la KPI "Avance real" de la pestaña 📊 Estado. Se quitó
@@ -2955,9 +2965,10 @@ posicional + plano) → app.py, al cargar el PDF, setea `st.session_state["ns"]`
 resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NORTH SYD y AGECARE → NS=6
 (coincide con travel/floor-height HQ/HE).
 
-## Versiones desplegadas (v212 = actual)
+## Versiones desplegadas (v213 = actual)
 | Ver | Cambio principal |
 |---|---|
+| v213 | Costos: "Reparto del costo" y "Compras por categoría" en doble columna; recibos clickeables que muestran la foto inline (antes: tabla redundante + solo descarga) |
 | v212 | Fix: el % de avance salía 2 veces en el detalle (cabecera + KPI "Avance real"); se quitó la KPI redundante de la pestaña Estado |
 | v211 | Detalle de proyecto (📊 Estado) en doble columna: "cómo va" (titular + KPIs) a la izquierda, alarmas a la derecha; ritmo, desglose y cronograma a ancho completo abajo |
 | v210 | Fix: "➕ Nuevo proyecto" estaba doblemente anidado (yo lo envolví en un expander cuando ya tenía el suyo) + tenía el de ubicación anidado dentro. Ahora un solo expander, ubicación inline |
