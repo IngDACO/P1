@@ -1071,6 +1071,13 @@ corren por primera vez en el Cloud.
 Campo → "mi semana" (donde voy cada dia) · fichaje pre-rellenado desde el roster · plan vs real
 (asignado a X / ficho en Y, solo para trabajos enlazados a un PRJ).
 
+## Fix: % de avance duplicado en el detalle (v212)
+El usuario notó que el % de avance salía 2 veces al abrir un proyecto: la CABECERA de `_detalle_proyecto`
+(`c1.metric("Avance", X%)` + `st.progress`) y otra vez la KPI "Avance real" de la pestaña 📊 Estado. Se quitó
+la KPI "Avance real" de `_estado_section` (la cabecera es la fuente persistente, visible en todas las
+sub-pestañas). Las KPIs de Estado quedan: Debería ir · Desvío · Situación · Fin proyectado (se leen contra el
+avance de la cabecera). Compila + import.
+
 ## Proyectos #5: doble columna en el detalle (📊 Estado) (v211)
 Aplicado [[feedback-doble-columna]] al detalle. `_estado_section` reordenado: se mueve el chequeo de cronograma
 arriba, se calculan titular + KPIs, y se ponen en **doble columna [3,2]**: IZQ = "cómo va" (titular + tarjetas
@@ -2948,9 +2955,10 @@ posicional + plano) → app.py, al cargar el PDF, setea `st.session_state["ns"]`
 resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NORTH SYD y AGECARE → NS=6
 (coincide con travel/floor-height HQ/HE).
 
-## Versiones desplegadas (v211 = actual)
+## Versiones desplegadas (v212 = actual)
 | Ver | Cambio principal |
 |---|---|
+| v212 | Fix: el % de avance salía 2 veces en el detalle (cabecera + KPI "Avance real"); se quitó la KPI redundante de la pestaña Estado |
 | v211 | Detalle de proyecto (📊 Estado) en doble columna: "cómo va" (titular + KPIs) a la izquierda, alarmas a la derecha; ritmo, desglose y cronograma a ancho completo abajo |
 | v210 | Fix: "➕ Nuevo proyecto" estaba doblemente anidado (yo lo envolví en un expander cuando ya tenía el suyo) + tenía el de ubicación anidado dentro. Ahora un solo expander, ubicación inline |
 | v209 | Proyectos: filtro rápido arriba de la cartera (búsqueda por nombre/cliente + chips Todos/Retraso/Adelanto/En pausa), en doble columna |

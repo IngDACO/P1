@@ -1204,8 +1204,9 @@ def _estado_section(pid: str, grupo: str, prj: dict):
            "#1e8449" if (_pd is not None and _pd < -0.5) else None)
     _est = ("En fecha" if abs(dg) < 0.5
             else f"{abs(dg):.0f} d {'de retraso' if dg > 0 else 'de adelanto'}")
-    tarj = [_kpi_card("Avance real", f"{d['ev']:.0f}%"),
-            _kpi_card("Debería ir", f"{d['pv']:.0f}%"),
+    # v212: "Avance real" ya está en la cabecera del detalle (métrica + barra) → no
+    # repetirlo aquí. "Debería ir" y "Desvío" se leen contra ese avance de la cabecera.
+    tarj = [_kpi_card("Debería ir", f"{d['pv']:.0f}%"),
             _kpi_card("Desvío", f"{dv:+.0f}%", _col),
             _kpi_card("Situación", _est, "#c0392b" if dg > 0.5 else None),
             _kpi_card("Fin proyectado", _fin, _cf)]
