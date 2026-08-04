@@ -46,6 +46,32 @@ def _semana_activa() -> "date":
     return _d(int(y), int(m), int(dd))
 
 
+def _cobertura_hoy(lunes, staff, datos):
+    """Cobertura del día en vista (hoy si cae en la semana, si no el lunes): en obra /
+    sin asignar (con nombres) / OFF-Leave — para ver los huecos de un vistazo (v217)."""
+    off = (clock.today() - lunes).days
+    d = R.DIAS[off] if 0 <= off <= 4 else R.DIAS[0]
+    fecha = R.fecha_de_dia(lunes, d)
+    en_obra, estado, sin = 0, 0, []
+    for u in staff:
+        asig = str(R.celda(datos, u["Usuario"], d).get("asig", ""))
+        if not asig:
+            sin.append(u.get("Nombre") or u["Usuario"])
+        elif asig in R.ESTADOS:
+            estado += 1
+        else:
+            en_obra += 1
+    partes = [f"🟢 **{en_obra}** en obra"]
+    if sin:
+        _n = ", ".join(sin[:4]) + ("…" if len(sin) > 4 else "")
+        partes.append(f"⚠️ **{len(sin)}** sin asignar ({_esc(_n)})")
+    else:
+        partes.append("✅ nadie sin asignar")
+    if estado:
+        partes.append(f"⬜ **{estado}** OFF/Leave")
+    st.markdown(f"**{R.DIAS_LABEL[d]} {fecha.strftime('%d/%m')}** · " + " · ".join(partes))
+
+
 def render_planificacion(grupo):
     st.markdown("#### 📅 Planificación de la semana")
     if not R.is_configured():
@@ -77,17 +103,13 @@ def render_planificacion(grupo):
         if ok:
             st.rerun()
 
-    # ── Tablero (botones nativos): la celda con proyecto abre su detalle ──
-    st.caption("🔗 Toca una celda con un proyecto enlazado para abrir su detalle.")
-    _tablero_editable(grupo, lunes, staff, datos, tidx)
+    # ── Cobertura del día (dónde está la cuadrilla, dónde hay huecos) ──
+    _cobertura_hoy(lunes, staff, datos)
 
-    # ── Editar la semana de una persona ──
-    st.markdown("##### ✏️ Editar la semana de una persona")
-    _nombre = {u["Usuario"]: (u.get("Nombre") or u["Usuario"]) for u in staff}
-    _pers = ui.elegir("Persona", {f"{v} ({k})": k for k, v in _nombre.items()},
-                      key="ros_editpers", vacio="— elige a quién asignar —")
-    if _pers:
-        _editar_persona(grupo, lunes, _pers, _nombre.get(_pers, _pers), tidx)
+    # ── Tablero EDITABLE EN SITIO: toca una celda para asignar/editar ahí mismo ──
+    st.caption("Toca una celda para **asignar o editar ahí mismo** (una vacía ＋ también "
+               "asigna). Si el trabajo enlaza a un proyecto, dentro tienes «→ Abrir proyecto».")
+    _tablero_editable(grupo, lunes, staff, datos, tidx)
 
     # ── Plan vs real ──
     _plan_vs_real(grupo, lunes, staff, tidx)
@@ -192,37 +214,46 @@ def render_board_readonly(grupo, resaltar_usuario=""):
                 unsafe_allow_html=True)
 
 
-def _tablero_editable(grupo, lunes, staff, datos, tidx):
-    """El board del admin como BOTONES nativos (v169): la celda cuyo trabajo enlaza
-    a un proyecto navega a su detalle en la MISMA sesión (sin recarga ni riesgo de
-    deslogueo, a diferencia del enlace HTML de v168).
+def _guardar_celda(grupo, lunes, usuario, datos, dia, asig, nota, toda_semana):
+    """Escribe UNA celda (o toda la semana) reusando la semana actual de la persona.
+    `guardar_persona` omite las celdas vacías, así que asig+nota vacíos = limpiar."""
+    sem = dict(datos.get(usuario, {}) or {})
+    if toda_semana:
+        for d in R.DIAS:
+            sem[d] = {"asig": asig, "nota": nota}
+    else:
+        sem[dia] = {"asig": asig, "nota": nota}
+    return R.guardar_persona(grupo, lunes, usuario, sem)
 
-    Cada celda se colorea con el color de su trabajo inyectando CSS por la clase
-    `st-key-<key>` que Streamlit (≥1.39) pone en el contenedor de cada widget con
-    key — verificado en vivo antes de construir. El board del campo sigue siendo el
-    HTML de `_grid_html` (solo lectura).
+
+def _tablero_editable(grupo, lunes, staff, datos, tidx):
+    """Board del admin EDITABLE EN SITIO (v217): cada celda es un `st.popover`
+    coloreado con el color de su trabajo (clase `st-key-<key>` sobre el trigger —
+    verificado en vivo antes de construir). Al tocar la celda se edita AHÍ MISMO
+    (asignación + nota, con «aplicar a toda la semana») y, si el trabajo enlaza a un
+    proyecto, se salta a su detalle — sin salir del tablero ni un formulario aparte.
+    Una celda vacía (＋) también asigna en sitio. Reemplaza el editor por-persona de
+    abajo (v159). El board del campo sigue siendo el HTML de `_grid_html`.
     """
     dias = R.DIAS
-    # 1) Modelo de la rejilla + CSS de color por celda (una regla por celda no vacía)
-    grid, css, idx = [], [], 0
-    for u in staff:
-        cells = []
-        for d in dias:
-            c = R.celda(datos, u["Usuario"], d)
-            asig = str(c.get("asig", ""))
-            nota = str(c.get("nota", ""))
-            if not asig:
-                cells.append(None)
-                continue
-            bg = R.color_de(asig, tidx)
-            fg = _texto_sobre(bg)
+    op = _opciones(grupo, tidx)
+    etiquetas = [e for e, _ in op]
+    valores   = [v for _, v in op]
+
+    # 1) CSS de color por celda (una regla por celda; las vacías, tenues).
+    css = []
+    for pi, u in enumerate(staff):
+        for di, d in enumerate(dias):
+            idx = pi * len(dias) + di
+            asig = str(R.celda(datos, u["Usuario"], d).get("asig", ""))
             key = f"roscel_{idx}"
-            idx += 1
-            css.append(f".st-key-{key} button{{background:{bg}!important;"
-                       f"color:{fg}!important;border-color:{bg}!important;}}")
-            cells.append({"key": key, "et": R.etiqueta_de(asig, tidx),
-                          "nota": nota, "pid": R.proyecto_de(asig, tidx)})
-        grid.append((u.get("Nombre") or u["Usuario"], cells))
+            if asig:
+                bg = R.color_de(asig, tidx)
+                css.append(f".st-key-{key} button{{background:{bg}!important;"
+                           f"color:{_texto_sobre(bg)}!important;border-color:{bg}!important;}}")
+            else:
+                css.append(f".st-key-{key} button{{background:#f8fafc!important;"
+                           f"color:#b6c0cd!important;border:1px dashed #e2e8f0!important;}}")
     if css:
         st.markdown("<style>" + "".join(css) + "</style>", unsafe_allow_html=True)
 
@@ -236,26 +267,48 @@ def _tablero_editable(grupo, lunes, staff, datos, tidx):
         h[i + 1].markdown(f"<div style='font-size:12px;color:#6b7280'>{R.DIAS_LABEL[d]} "
                           f"{f.strftime('%d/%m')}</div>", unsafe_allow_html=True)
 
-    # 3) Filas: nombre + una celda por día (botón coloreado)
-    for nom, cells in grid:
+    # 3) Filas: nombre + una celda-popover por día
+    for pi, u in enumerate(staff):
+        usuario = u["Usuario"]
+        nom = u.get("Nombre") or usuario
         cols = st.columns(anchos)
-        cols[0].markdown(f"<div style='padding-top:6px;font-weight:600;font-size:13px'>"
+        cols[0].markdown(f"<div style='padding-top:8px;font-weight:600;font-size:13px'>"
                          f"{_esc(nom)}</div>", unsafe_allow_html=True)
-        for i, cell in enumerate(cells):
-            col = cols[i + 1]
-            if cell is None:                       # celda vacía
-                col.markdown("<div style='text-align:center;color:#cbd5e1'>·</div>",
-                             unsafe_allow_html=True)
-                continue
-            # Un botón por celda; navega solo si el trabajo enlaza a un proyecto.
-            if col.button(cell["et"] or "—", key=cell["key"], use_container_width=True,
-                          help="Abrir el proyecto" if cell["pid"] else None):
-                if cell["pid"]:
-                    st.session_state["_prjsel_pending"] = cell["pid"]
+        for di, d in enumerate(dias):
+            idx = pi * len(dias) + di
+            col = cols[di + 1]
+            c = R.celda(datos, usuario, d)
+            asig = str(c.get("asig", ""))
+            nota = str(c.get("nota", ""))
+            pid  = R.proyecto_de(asig, tidx)
+            et   = R.etiqueta_de(asig, tidx)
+            with col.popover(et or "＋", key=f"roscel_{idx}", use_container_width=True):
+                f = R.fecha_de_dia(lunes, d)
+                st.caption(f"**{_esc(nom)}** · {R.DIAS_LABEL[d]} {f.strftime('%d/%m')}")
+                _i = valores.index(asig) if asig in valores else 0
+                _sel = st.selectbox("Asignación", etiquetas, index=_i, key=f"pva_{idx}")
+                _nota = st.text_input("Nota", value=nota, key=f"pvn_{idx}",
+                                      placeholder="vehículo, equipo, horario…")
+                _all = st.checkbox("Aplicar a toda la semana", key=f"pvw_{idx}")
+                if st.button("💾 Guardar", key=f"pvs_{idx}", type="primary",
+                             use_container_width=True):
+                    _nueva = valores[etiquetas.index(_sel)]
+                    ok, msg = _guardar_celda(grupo, lunes, usuario, datos, d,
+                                             _nueva, _nota, _all)
+                    if ok:
+                        st.rerun()
+                    else:
+                        st.error(msg)
+                if pid and st.button("→ Abrir proyecto", key=f"pvo_{idx}",
+                                     use_container_width=True):
+                    # Navega al detalle en la nav NUEVA del admin y (por si acaso) la
+                    # vieja: se fija el pending que lee cada shell antes de sus radios.
+                    st.session_state["_prjsel_pending"] = pid
+                    st.session_state["_admin_nav_pending"] = ("proyectos", "📊 Proyectos")
                     st.session_state["_gruposec_pending"] = "📊 Proyectos"
                     st.rerun()
-            if cell["nota"]:
-                col.caption(cell["nota"])
+            if nota:
+                col.caption(nota)
 
 
 def _grid_html(staff, lunes, datos, tidx, resaltar="") -> str:
@@ -304,37 +357,6 @@ def _opciones(grupo, tidx):
         op.append((f"{num}. {r.get('Nombre','')}" if num else str(r.get("Nombre", "")),
                    str(r.get("ID", ""))))
     return op
-
-
-def _editar_persona(grupo, lunes, usuario, nombre, tidx):
-    op = _opciones(grupo, tidx)
-    etiquetas = [e for e, _ in op]
-    valores   = [v for _, v in op]
-    datos = R.get_semana(grupo, lunes)
-    dias_out = {}
-    st.caption(f"Semana de **{nombre}** · {R.rango_label(lunes)}")
-    for d in R.DIAS:
-        c = R.celda(datos, usuario, d)
-        cur = str(c.get("asig", ""))
-        idx = valores.index(cur) if cur in valores else 0
-        f = R.fecha_de_dia(lunes, d)
-        cc = st.columns([1.2, 3, 3])
-        cc[0].markdown(f"<div style='padding-top:8px;font-weight:600'>{R.DIAS_LABEL[d]} "
-                       f"<span style='color:#9aa7b8;font-weight:400'>{f.strftime('%d/%m')}</span></div>",
-                       unsafe_allow_html=True)
-        sel = cc[1].selectbox("asig", etiquetas, index=idx,
-                              key=f"ros_{usuario}_{lunes}_{d}_a", label_visibility="collapsed")
-        nota = cc[2].text_input("nota", value=str(c.get("nota", "")),
-                                key=f"ros_{usuario}_{lunes}_{d}_n",
-                                label_visibility="collapsed",
-                                placeholder="Nota: vehículo, equipo, horario…")
-        dias_out[d] = {"asig": valores[etiquetas.index(sel)], "nota": nota}
-    if st.button(f"💾 Guardar la semana de {nombre}", key=f"ros_save_{usuario}",
-                 use_container_width=True):
-        ok, msg = R.guardar_persona(grupo, lunes, usuario, dias_out)
-        (st.success if ok else st.error)(msg)
-        if ok:
-            st.rerun()
 
 
 def _catalogo(grupo):

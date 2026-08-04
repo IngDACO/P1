@@ -1071,6 +1071,32 @@ corren por primera vez en el Cloud.
 Campo → "mi semana" (donde voy cada dia) · fichaje pre-rellenado desde el roster · plan vs real
 (asignado a X / ficho en Y, solo para trabajos enlazados a un PRJ).
 
+## Planificación: tablero EDITABLE EN SITIO + cobertura del día (v217)
+Petición del usuario ("el de planificación es muy importante"). Auditoría: la rejilla era **solo de
+lectura/navegación** — para asignar había que bajar a "✏️ Editar la semana de una persona", elegir a UNO en
+un desplegable y editar sus 5 días en un formulario **separado del tablero**, persona por persona (el cuello de
+botella). Rediseño de `roster_ui.render_planificacion` / `_tablero_editable`:
+- **Cada celda es ahora un `st.popover` coloreado** (antes `st.button`). Al tocarla se edita AHÍ MISMO:
+  selectbox de asignación (`_opciones`) + nota + **"Aplicar a toda la semana"** + 💾 Guardar, y si el trabajo
+  enlaza a un proyecto, **"→ Abrir proyecto"** dentro. Una celda vacía (**＋**) también asigna en sitio. Se
+  **eliminó** el editor por-persona de abajo (`_editar_persona` borrada) — el tablero es el editor.
+- ⚠️ **Verificado EN VIVO antes de construir** (lección v169): `st.popover` acepta `key` (streamlit 1.57;
+  pin `>=1.39,<2` resuelve a la última), su *trigger* recibe la clase `.st-key-<key>` (`data-testid=
+  stPopoverButton`) → `.st-key-<key> button{background}` lo colorea (rgb medido), y el CONTENIDO se portalea
+  FUERA del contenedor keyed (`stPopoverBody`) → el CSS de color NO toca los botones del editor. Mini-app en
+  preview + inspección del DOM.
+- **`_guardar_celda(grupo,lunes,usuario,datos,dia,asig,nota,toda_semana)`**: reusa la semana actual de la
+  persona (de `datos`, sin mutarla) y escribe 1 día o los 5 vía `R.guardar_persona` (que omite vacíos =
+  limpiar). Probado: 1 día no toca los otros, toda-la-semana llena los 5, `datos` intacto.
+- **Cobertura del día** (`_cobertura_hoy`): línea sobre el tablero — 🟢 en obra · ⚠️ N sin asignar (nombres) ·
+  ⬜ OFF/Leave del día en vista (hoy si cae en la semana), para ver huecos de un vistazo.
+- **Fix de navegación**: "→ Abrir proyecto" fijaba `_gruposec_pending` (nav VIEJA); ahora fija además
+  `_prjsel_pending` + `_admin_nav_pending=("proyectos","📊 Proyectos")` (nav NUEVA del admin) — funciona en las
+  dos shells. ⚠️ NO se metió doble columna en los expanders secundarios: `_catalogo` usa `st.columns` interno,
+  meterlo en una columna sería anidación de columnas (la "doble anidación" que el usuario prohíbe).
+Verificado: compila + import + AST (0 nombres libres en las 4 funciones) + lógica de guardado + popover en vivo.
+El board del campo (`render_board_readonly`/`_grid_html`) NO se tocó. Confirmación final = Cloud (login+Sheets).
+
 ## Horas por usuario × proyecto: se surfacea lo que ya existía (v216)
 Petición del usuario: "quiero saber cuántas horas ha gastado cada usuario en cada proyecto ¿dónde lo veo?; y en
 cada proyecto, quiénes han trabajado y qué tiempo". Auditoría (auditar, no adivinar): **ambos datos ya existían,
@@ -3003,6 +3029,7 @@ resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NOR
 ## Versiones desplegadas (v215 = actual)
 | Ver | Cambio principal |
 |---|---|
+| v217 | Planificación: el tablero pasa a ser EDITABLE EN SITIO — cada celda es un popover coloreado donde asignas/editas ahí mismo (asignación + nota + "aplicar a toda la semana" + abrir proyecto); una celda vacía (＋) también asigna. Se quitó el editor por-persona de abajo. + línea de "cobertura del día" (en obra / sin asignar / OFF) sobre el tablero. Popover+color verificado en vivo (st.popover acepta key en 1.57) |
 | v216 | Horas por usuario × proyecto (el dato ya existía, solo faltaba mostrarlo): matriz "persona × proyecto" al final de ⏱ Horas (usa el por_proyecto de group_hours), y bloque "👷 Quién ha trabajado aquí" (persona·horas) en 📊 Estado del proyecto, junto a las alarmas (labor_breakdown sin el costo) |
 | v215 | Finanzas: Gastos con "Reparto" y "Compras por categoría" en doble columna + tabla de proyectos clickeable (→ abre el proyecto); Horas con tabla de personas clickeable (→ abre la ficha) |
 | v214 | Agrupaciones clickeables (mismo patrón que Proyectos): tocar una tarjeta abre su tablero directo; se quitaron los selectores "Abrir" y "Eliminar" (Eliminar movido dentro). Cuidando no anidar expanders |
