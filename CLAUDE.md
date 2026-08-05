@@ -1071,6 +1071,22 @@ corren por primera vez en el Cloud.
 Campo → "mi semana" (donde voy cada dia) · fichaje pre-rellenado desde el roster · plan vs real
 (asignado a X / ficho en Y, solo para trabajos enlazados a un PRJ).
 
+## Cartera de proyectos: tarjeta con resumen completo antes de abrir (v223)
+El usuario pidió ver en el tablero (📊 Proyectos) toda la info del proyecto ANTES de abrirlo. Se le mostraron
+2 opciones (mockup vía visualize) y eligió la **Opción A**: tarjeta con barra de progreso + botón «Abrir».
+`_cartera_clickeable` reescrita (antes: botón-tarjeta con fondo=avance, v207/v208). Cada tarjeta =
+**`st.container(border=True, key=f"cart_{i}")`** con `st.markdown` (HTML) + `st.button("Abrir →")` dentro, y
+muestra los **7 datos**: nombre (+punto de salud) · estado (pill) + % avance (barra real) · cliente · fechas
+inicio→fin (`_ddmm`) · **% presupuesto ejecutado** (⚠️ si over) · **nº de usuarios** (CampoAsignados) · alertas
+(🔔) + retraso/adelanto. Se quitaron las horas (decisión del usuario). Borde IZQUIERDO por salud vía CSS
+`.st-key-cart_{i}{border-left:4px solid <color>}` (⚠️ **verificado en vivo**: el contenedor con `border=True`+
+`key` ES el elemento `.st-key-<key>` y su borde-izq se colorea; `st.container` acepta `key`+`border` en 1.57).
+El **% de presupuesto** sale de **`expenses.group_expenses(grupo)` (1 lectura CACHEADA)** → `{pid:{pct,
+presupuesto,over}}`, no N cálculos; de paso se **quitó la lectura `project_hours_bulk`** del panel (ya no se
+muestran horas). Verificado: compila + import + AST (0 libres) + **render Streamlit real** (mini-app + DOM:
+bordes 🔴/🔵/🟢, barras a %, pills, ⚠️ over, «Abrir» dentro del recuadro). Aplica solo a la cartera del ADMIN
+(`_panel_proyectos`); el propietario sigue con `_portfolio_html`.
+
 ## Fix: la sesión recordada moría al cerrar/reabrir (cookie de sesión → persistente) (v222)
 El usuario reportó que, aun tildando "mantener la sesión iniciada" (v221), al **cerrar y reabrir** la app le
 pedía login otra vez (probando en la **PWA instalada** en escritorio y móvil). Diagnóstico: la cookie
@@ -3126,6 +3142,7 @@ resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NOR
 ## Versiones desplegadas (v215 = actual)
 | Ver | Cambio principal |
 |---|---|
+| v223 | Cartera de proyectos (📊 Proyectos): cada tarjeta ahora muestra ANTES de abrir — nombre, estado + % avance (barra real), cliente, fechas inicio→fin, % presupuesto ejecutado (⚠️ si se pasó), nº de usuarios y alertas; se abre con botón «Abrir». Borde izq por salud. % presupuesto de group_expenses (1 lectura cacheada); se quitaron las horas. Opción A elegida por el usuario tras ver un mockup |
 | v222 | Fix: al tildar "mantener la sesión" y CERRAR/REABRIR la app (PWA) pedía login otra vez — la cookie se guardaba como "de sesión". Ahora se escribe persistente con max-age vía window.parent.document.cookie desde render_user_bar (no en _do_login, que hace rerun y la descartaría). Verificado en vivo: CookieStore confirma persistent + expira a 7 días |
 | v221 | Login: "Mantener la sesión iniciada en este dispositivo" ahora es un check OPCIONAL (por defecto SIN tildar). Antes la cookie de 7 días se guardaba siempre; ahora solo si se tilda → si lo activas, no reescribes usuario/contraseña en tu dispositivo; sin tildar, la sesión dura solo la pestaña |
 | v220 | Asignar personal (deploy 2/2): al asignar campo a un proyecto, aparecen AUTOMÁTICAMENTE en el planificador, en ese proyecto, Lun–Vie entre FechaInicio y FechaFinEst (todo el rango, solo celdas vacías — no pisa OFF ni otro proyecto). Al desasignar se limpian sus días de ese proyecto. Escritor eficiente (1 batch_update + 1 append_rows) para no disparar el rate limit |

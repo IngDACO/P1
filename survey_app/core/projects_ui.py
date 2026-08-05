@@ -1009,31 +1009,47 @@ def _field_users(grupo):
 
 
 # ── Panel de proyectos ───────────────────────────────────────────
-def _cartera_clickeable(proys, horas, alarmas, delays, aheads):
-    """Cartera de proyectos como botones CLICKEABLES (v207): al tocar uno se abre su
-    detalle directo. Fondo = % de avance; borde izq = salud (rojo=retraso, verde=adelanto,
-    azul=en curso); label con datos clave. Mismo lenguaje que HOME. Ordenados por urgencia."""
+def _cartera_clickeable(proys, alarmas, delays, aheads, costos):
+    """Cartera de proyectos como TARJETAS con toda la info ANTES de abrir (v223, opción A
+    elegida por el usuario): nombre, estado + % avance (barra real), cliente, fechas,
+    % de presupuesto ejecutado, nº de usuarios asignados y alertas. Se abre con «Abrir».
+    Borde izq = salud (rojo=retraso, verde=adelanto, azul=en curso). Rejilla de 2 col,
+    ordenada por urgencia. El contenedor keyed permite colorear el borde (verificado)."""
+    import html as _htmlmod
+
+    def esc(s):
+        return _htmlmod.escape(str(s or ""))
+
+    def _ddmm(s):
+        s = str(s or "").strip()[:10]
+        if not s:
+            return "—"
+        from datetime import datetime as _dt
+        for _f in ("%Y-%m-%d", "%d/%m/%Y"):
+            try:
+                return _dt.strptime(s, _f).strftime("%d/%m")
+            except Exception:
+                pass
+        return "—"
+
+    _pill = {"En progreso": ("#e8eef6", "#1e4e79"), "Planificado": ("#f0efe8", "#5f5e5a"),
+             "Completado": ("#e8f5ee", "#1e6e4e"), "En pausa": ("#faeeda", "#8a5a0b"),
+             "Cancelado": ("#fbeaea", "#a12d2d"), "Archivado": ("#eceff3", "#5f5e5a")}
+
+    def _salud(pid):
+        return "#c0392b" if delays.get(pid) else ("#1e8449" if aheads.get(pid) else "#2e6da4")
+
     proys = sorted(proys, key=lambda p: (-delays.get(str(p.get("ID", "")), 0),
                                          -alarmas.get(str(p.get("ID", "")), 0)))
-    # CSS por tarjeta: fondo = avance, borde = salud, y texto a la IZQUIERDA (v208:
-    # el justify-content del botón no alinea el texto interno → hay que tocar el <p>).
+
+    # Borde izquierdo por salud en cada tarjeta (contenedor keyed = .st-key-cart_<i>, v223).
     _css = ["<style>"]
     for _i, p in enumerate(proys):
-        _pid = str(p.get("ID", ""))
-        _av = max(0, min(100, int(P._num(p.get("Avance")))))
-        _dl, _ah = delays.get(_pid, 0), aheads.get(_pid, 0)
-        _col = "#c0392b" if _dl else ("#1e8449" if _ah else "#2e6da4")
-        _tint = "#fdecec" if _dl else ("#e8f5ee" if _ah else "#e8eef6")
-        _css.append(
-            f".st-key-cart_{_i} button{{background:linear-gradient(to right,"
-            f"{_tint} {_av}%,#f4f6f9 {_av}%)!important;border-left:5px solid {_col}!important;"
-            "justify-content:flex-start!important;padding-left:12px!important;}"
-            f".st-key-cart_{_i} button>div{{justify-content:flex-start!important;width:100%!important;}}"
-            f".st-key-cart_{_i} button p{{text-align:left!important;width:100%!important;}}")
+        _css.append(f".st-key-cart_{_i}{{border-left:4px solid "
+                    f"{_salud(str(p.get('ID', '')))}!important;}}")
     _css.append("</style>")
     st.markdown("".join(_css), unsafe_allow_html=True)
 
-    # Rejilla de 2 columnas (v208): más densa y dinámica que la lista a ancho completo.
     for _r in range(0, len(proys), 2):
         _cols = st.columns(2)
         for _j in range(2):
@@ -1044,21 +1060,47 @@ def _cartera_clickeable(proys, horas, alarmas, delays, aheads):
             _pid = str(p.get("ID", ""))
             _av = max(0, min(100, int(P._num(p.get("Avance")))))
             _dl, _ah, _al = delays.get(_pid, 0), aheads.get(_pid, 0), alarmas.get(_pid, 0)
-            _hr = horas.get(_pid, 0.0)
-            _cli = str(p.get("Cliente", "") or "")
-            _extra = ""
+            _col = _salud(_pid)
+            _est = str(p.get("Estado", "") or "—")
+            _pbg, _pfg = _pill.get(_est, ("#eceff3", "#5f5e5a"))
+            _users = len([x for x in str(p.get("CampoAsignados", "")).split(";") if x.strip()])
+            _c = costos.get(_pid) or {}
+            if P._num(_c.get("presupuesto")) > 0:
+                _ppto = f"{int(round(P._num(_c.get('pct'))))}% ppto" + (" ⚠️" if _c.get("over") else "")
+            else:
+                _ppto = "s/ppto"
+            _chips = f"💰 {_ppto} · 👷 {_users}"
             if _dl:
-                _extra += f" · 🔴{_dl}d"
+                _chips += f" · 🔴 {_dl}d"
             elif _ah:
-                _extra += f" · 🟢{_ah}d"
+                _chips += f" · 🟢 {_ah}d"
             if _al:
-                _extra += f" · 🔔{_al}"
-            if _hr:
-                _extra += f" · {_hr:.0f}h"
-            _lbl = f"**{p.get('Nombre', '')}**" + (f" · {_cli}" if _cli else "") + f" · {_av}%{_extra}"
-            if _cols[_j].button(_lbl, key=f"cart_{_idx}", use_container_width=True):
-                st.session_state["_admin_open_proj"] = _pid
-                st.rerun()
+                _chips += f" · 🔔 {_al}"
+            _html = (
+                "<div style='display:flex;justify-content:space-between;align-items:center;"
+                "gap:8px;margin-bottom:6px;'>"
+                "<div style='display:flex;align-items:center;gap:7px;min-width:0;'>"
+                f"<span style='width:9px;height:9px;border-radius:50%;background:{_col};"
+                "flex:none;'></span>"
+                "<span style='font-weight:700;font-size:15px;overflow:hidden;"
+                f"text-overflow:ellipsis;white-space:nowrap;'>{esc(p.get('Nombre', ''))}</span></div>"
+                f"<span style='background:{_pbg};color:{_pfg};font-size:11.5px;padding:2px 8px;"
+                f"border-radius:6px;white-space:nowrap;'>{esc(_est)}</span></div>"
+                "<div style='display:flex;align-items:center;gap:8px;margin-bottom:6px;'>"
+                "<div style='flex:1;height:7px;background:#eef1f5;border-radius:20px;"
+                "overflow:hidden;'>"
+                f"<div style='height:100%;width:{_av}%;background:#2e6da4;"
+                "border-radius:20px;'></div></div>"
+                f"<span style='font-size:12.5px;font-weight:600;color:#374151;'>{_av}%</span></div>"
+                f"<div style='font-size:12.5px;color:#6b7280;margin-bottom:5px;'>👤 "
+                f"{esc(p.get('Cliente', '') or '—')} · 📅 {_ddmm(p.get('FechaInicio'))} → "
+                f"{_ddmm(p.get('FechaFinEst'))}</div>"
+                f"<div style='font-size:12.5px;color:#374151;'>{_chips}</div>")
+            with _cols[_j].container(border=True, key=f"cart_{_idx}"):
+                st.markdown(_html, unsafe_allow_html=True)
+                if st.button("Abrir →", key=f"cartbtn_{_idx}", use_container_width=True):
+                    st.session_state["_admin_open_proj"] = _pid
+                    st.rerun()
 
 
 def _panel_proyectos(grupo: str):
@@ -1093,7 +1135,15 @@ def _panel_proyectos(grupo: str):
         _nuevo_proyecto_form(grupo, key="adm")
         return
 
-    horas = P.project_hours_bulk(grupo)   # 1 sola lectura del fichaje
+    # % de presupuesto ejecutado por proyecto — de group_expenses (1 lectura CACHEADA,
+    # no N): {pid: {pct, presupuesto, over, ...}}. v223.
+    costos = {}
+    try:
+        from core import expenses as _exp
+        _ge = _exp.group_expenses(grupo)
+        costos = {str(r.get("id")): r for r in (_ge.get("proyectos") or [])}
+    except Exception:
+        pass
     alarmas = alerts.open_counts_all() if alerts.is_configured() else {}
     delays = P.delays_of_group(grupo)     # {pid: días de retraso} (cacheado)
     aheads = P.aheads_of_group(grupo)     # {pid: días de adelanto} (cacheado)
@@ -1126,8 +1176,8 @@ def _panel_proyectos(grupo: str):
     if not _proys_f:
         st.caption("Ningún proyecto coincide con el filtro.")
     else:
-        st.caption("Toca un proyecto para abrir su detalle.")
-        _cartera_clickeable(_proys_f, horas, alarmas, delays, aheads)
+        st.caption("Cada tarjeta muestra el resumen; toca «Abrir» para ver el detalle.")
+        _cartera_clickeable(_proys_f, alarmas, delays, aheads, costos)
     # `_nuevo_proyecto_form` ya se pliega solo (tiene su propio expander) → no envolver
     # otra vez, o quedan dos expanders "Nuevo proyecto" anidados (v210).
     _nuevo_proyecto_form(grupo, key="adm")
