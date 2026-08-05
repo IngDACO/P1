@@ -38,6 +38,9 @@ PROJECTS_HEADERS = [
     "PlanoJSON",
     # v193: coordenadas para el pin en el mapa (se fijan con el selector de ubicación).
     "Lat", "Lng",
+    # v219: certificados/tickets que EXIGE el proyecto (tipos del catálogo, `;`), para
+    # avisar y marcar a los asignados que no cumplen.
+    "CertsReq",
 ]
 ACTIVITIES_HEADERS = [
     "ProyectoID", "Orden", "Nombre", "DuracionDias", "Peso", "Avance",
@@ -228,7 +231,7 @@ def create_project(grupo, nombre, cliente="", ubicacion="", modelo="", ns=0,
                    params=None, matriz=None, interp=None, activities=None,
                    creado_por="", agrupacion_id="", peso_agrupacion=0,
                    instrucciones="", induccion_links="", presupuesto="",
-                   lat="", lng="") -> tuple:
+                   lat="", lng="", certs_req="") -> tuple:
     """Crea un proyecto (fila en Proyectos + filas en Actividades). Devuelve (ok, id|error)."""
     pws, err = _projects_ws()
     if err:
@@ -253,6 +256,7 @@ def create_project(grupo, nombre, cliente="", ubicacion="", modelo="", ns=0,
         str(instrucciones or ""), str(induccion_links or ""), str(presupuesto or ""),
         "",                                 # PlanoJSON (se llena aparte con plan_data.guardar)
         str(lat or ""), str(lng or ""),     # v194: coordenadas fijadas al crear (pin en el mapa)
+        str(certs_req or ""),               # v219: certificados requeridos por el proyecto
     ]
     pws.append_row(row, value_input_option="RAW")
 

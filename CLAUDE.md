@@ -1071,6 +1071,24 @@ corren por primera vez en el Cloud.
 Campo → "mi semana" (donde voy cada dia) · fichaje pre-rellenado desde el roster · plan vs real
 (asignado a X / ficho en Y, solo para trabajos enlazados a un PRJ).
 
+## Asignar personal más inteligente: ya-en-otro-proyecto + certificados requeridos (v219)
+Petición del usuario (facilitar la planificación al asignar campo). Deploy 1 de 2 (el auto-poblado del
+planificador entre fechas del proyecto = feature 2, va aparte). Se amplió el flujo de asignación (crear
+`_nuevo_proyecto_form` + editar `_detalle_proyecto`, ambos ya llamaban `_avisar_asignados` FUERA del form):
+- **Feature 1 — "ya está en otro proyecto (y hasta cuándo)"**: `_avisar_asignados(usuarios, grupo,
+  exclude_pid, certs_req)` ahora, por cada usuario, lista los **otros proyectos activos** del grupo donde ya
+  está asignado + su **FechaFinEst** ("Juan → 🏗 Torre Norte (hasta 15/09)"). Informativo, no bloquea.
+- **Feature 3 — certificados que EXIGE el proyecto**: campo nuevo **`CertsReq`** en Proyectos (tipos del
+  `credentials.CATALOGO`, `;`; migra al final; `create_project` gana `certs_req=""`, +1 en `row` y HEADERS —
+  verificado 28==28). Multiselect "🎫 Certificados que exige el proyecto" en crear y editar. Al asignar,
+  **`credentials.compliance(usuario, requeridos)`** → `{por_tipo:{tipo: vigente|por_vencer|vencido|falta},
+  cumple}`; **cumple = ningún requerido vencido ni faltante** (por-vencer SÍ cumple, solo 🟡; decisión del
+  usuario). `_avisar_asignados` avisa 🔴 quién no cumple (falta/vencido) y 🟡 los por-vencer; los tipos
+  requeridos se excluyen del aviso genérico de credenciales para no duplicar. Vista VIVA `_cumplimiento_equipo`
+  (tabla asignados × certs, ✅/🟡/🔴/—) en 📊 Estado, solo si el proyecto define requeridos.
+Verificado: compila + import + AST (0 libres) + alineación row/headers + lógica de compliance
+(vigente/vencido/falta→no cumple; por_vencer→cumple). Confirmación final = Cloud.
+
 ## Planificación: un PROYECTO se asigna directo (ya es un trabajo) (v218)
 El usuario notó redundancia: en el roster solo se podían asignar TRB-#### (catálogo) o estados; para poner a
 alguien en un proyecto había que **crear un "trabajo" que lo enlazara** (`ProyectoID`). Pero **todo proyecto es
@@ -3052,6 +3070,7 @@ resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NOR
 ## Versiones desplegadas (v215 = actual)
 | Ver | Cambio principal |
 |---|---|
+| v219 | Asignar personal más inteligente (deploy 1/2): al asignar campo a un proyecto se avisa si el usuario YA está en otro proyecto (y hasta cuándo), y se pueden tildar los certificados que EXIGE el proyecto (campo CertsReq) → aviso + marca 🔴 quien no cumple / 🟡 por vencer, con tabla viva de cumplimiento del equipo en Estado. (Falta feature 2: auto-poblar el planificador entre fechas del proyecto) |
 | v218 | Planificación: un PROYECTO se asigna DIRECTO en el tablero (aparece 🏗 en el desplegable) — ya no hay que crear un "trabajo" que lo enlace (todo proyecto es un trabajo en sí mismo). El catálogo queda solo para lo NO-proyecto (entregas/cursos/traslados) y pierde el campo "enlace a proyecto". Color de proyecto automático y estable (hashlib). Histórico compatible |
 | v217 | Planificación: el tablero pasa a ser EDITABLE EN SITIO — cada celda es un popover coloreado donde asignas/editas ahí mismo (asignación + nota + "aplicar a toda la semana" + abrir proyecto); una celda vacía (＋) también asigna. Se quitó el editor por-persona de abajo. + línea de "cobertura del día" (en obra / sin asignar / OFF) sobre el tablero. Popover+color verificado en vivo (st.popover acepta key en 1.57) |
 | v216 | Horas por usuario × proyecto (el dato ya existía, solo faltaba mostrarlo): matriz "persona × proyecto" al final de ⏱ Horas (usa el por_proyecto de group_hours), y bloque "👷 Quién ha trabajado aquí" (persona·horas) en 📊 Estado del proyecto, junto a las alarmas (labor_breakdown sin el costo) |

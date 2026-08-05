@@ -120,6 +120,32 @@ def list_group(grupo) -> list:
     return [r for r in _records() if str(r.get("Grupo", "")) == g]
 
 
+def compliance(usuario, requeridos) -> dict:
+    """Cumplimiento de un usuario contra una lista de tipos de credencial REQUERIDOS.
+
+    Devuelve {'por_tipo': {tipo: estado}, 'cumple': bool} donde estado ∈
+    'vigente' | 'por_vencer' | 'vencido' | 'falta' (no la tiene). Una credencial sin
+    fecha de vencimiento (p.ej. White Card que no caduca) cuenta como 'vigente'.
+    **cumple** = ningún tipo requerido queda 'vencido' ni 'falta' (por-vencer SÍ cumple,
+    solo se marca para renovar; decisión del usuario v219). Si un usuario tiene varias
+    del mismo tipo, se toma la de MEJOR estado (la vigente manda sobre la vencida)."""
+    creds = list_for(usuario)
+    _orden = {"vigente": 3, "por_vencer": 2, "vencido": 1, "falta": 0}
+    por_tipo, cumple = {}, True
+    for tipo in requeridos:
+        matching = [c for c in creds if str(c.get("Tipo", "")).strip() == str(tipo).strip()]
+        if not matching:
+            por_tipo[tipo] = "falta"
+            cumple = False
+            continue
+        est = max(((status(c.get("Vencimiento")) or "vigente") for c in matching),
+                  key=lambda e: _orden.get(e, 0))
+        por_tipo[tipo] = est
+        if est == "vencido":
+            cumple = False
+    return {"por_tipo": por_tipo, "cumple": cumple}
+
+
 def matrix(grupo) -> tuple:
     """Matriz de compliance: (tipos, filas) = usuarios × credenciales con semáforo.
     Celda: 🟢 vigente · 🟡 por vencer · 🔴 vencido · — no tiene."""

@@ -731,8 +731,11 @@ def _nuevo_proyecto_form(grupo: str, key: str = "nuevo"):
 
         asg = st.multiselect("👷 Usuarios de campo asignados", campos,
                              key=f"np_asg_{key}")
+        _certs = st.multiselect("🎫 Certificados que exige el proyecto", credentials.CATALOGO,
+                                key=f"np_certs_{key}",
+                                help="Al asignar personal se avisa y marca a quien no los cumpla.")
         if asg:
-            _avisar_asignados(asg)
+            _avisar_asignados(asg, grupo, certs_req=_certs)
 
         # ── Ubicación en el mapa (fuera del form: el mapa necesita reruns) — v194 ──
         # v210: inline (sin expander propio) — este bloque ya vive dentro del expander
@@ -798,7 +801,8 @@ def _nuevo_proyecto_form(grupo: str, key: str = "nuevo"):
                 creado_por=st.session_state.get("auth", {}).get("usuario", ""),
                 instrucciones=instr, induccion_links=inds, presupuesto=pres,
                 lat=("" if _nplat is None else _nplat),
-                lng=("" if _nplng is None else _nplng))
+                lng=("" if _nplng is None else _nplng),
+                certs_req=";".join(_certs))
             if not ok:
                 st.error(f"No se pudo crear: {res}")
                 return
@@ -834,9 +838,30 @@ def _nuevo_proyecto_form(grupo: str, key: str = "nuevo"):
                     "InduccionLinks": inds})
 
 
-def _avisar_asignados(usuarios):
-    """Avisa de credenciales vencidas o contacto incompleto ANTES de asignar."""
+def _avisar_asignados(usuarios, grupo=None, exclude_pid=None, certs_req=None):
+    """Avisos ANTES de asignar (v219): contacto, credenciales, si YA está en otro
+    proyecto (y hasta cuándo), y cumplimiento de los certificados que EXIGE el proyecto.
+    Todo informativo — no bloquea (una asignación con solapes o pendientes puede ser
+    deliberada). `exclude_pid` = el proyecto actual (no se cuenta a sí mismo)."""
     sin_contacto, cred_mal = [], []
+    no_cumplen, cert_pv = [], []          # feature 3: certificados requeridos
+
+    # feature 1: otros proyectos activos donde ya está cada usuario asignado.
+    otros = {}
+    if grupo:
+        try:
+            for p in P.list_projects(grupo):
+                if str(p.get("ID", "")) == str(exclude_pid or ""):
+                    continue
+                if str(p.get("Estado", "")) in ("Completado", "Cancelado"):
+                    continue
+                for u in [x.strip() for x in str(p.get("CampoAsignados", "")).split(";")
+                          if x.strip()]:
+                    otros.setdefault(u, []).append(p)
+        except Exception:
+            pass
+
+    ocupados = []
     for u in usuarios:
         try:
             info = auth.get_user(u) or {}
@@ -847,18 +872,72 @@ def _avisar_asignados(usuarios):
             pass
         try:
             for c in credentials.list_for(u):
+                # los tipos REQUERIDOS por el proyecto los cubre el chequeo de abajo
+                if certs_req and str(c.get("Tipo", "")).strip() in certs_req:
+                    continue
                 if credentials.status(c.get("Vencimiento")) in ("vencido", "por_vencer"):
                     cred_mal.append(f"{u} — {c.get('Tipo', 'credencial')}: "
                                     f"{credentials.status_label(c.get('Vencimiento'))}")
         except Exception:
             pass
+        for p in otros.get(u, []):
+            _fin = str(p.get("FechaFinEst", "")).strip()
+            ocupados.append(f"**{u}** → 🏗 {p.get('Nombre', '')}"
+                            + (f" (hasta {_fin})" if _fin else ""))
+        if certs_req:
+            try:
+                comp = credentials.compliance(u, certs_req)
+                faltan = [t for t in certs_req if comp["por_tipo"].get(t) in ("falta", "vencido")]
+                pv = [t for t in certs_req if comp["por_tipo"].get(t) == "por_vencer"]
+                if faltan:
+                    no_cumplen.append(f"**{u}**: " + ", ".join(
+                        f"{t} ({'falta' if comp['por_tipo'][t] == 'falta' else 'vencido'})"
+                        for t in faltan))
+                if pv:
+                    cert_pv.append(f"**{u}**: " + ", ".join(f"{t}" for t in pv))
+            except Exception:
+                pass
+
+    if ocupados:
+        st.info("📌 **Ya asignados a otro proyecto:**\n\n"
+                + "\n".join(f"- {x}" for x in ocupados))
+    if no_cumplen:
+        st.error("🔴 **No cumplen los certificados que exige el proyecto:**\n\n"
+                 + "\n".join(f"- {x}" for x in no_cumplen))
+    if cert_pv:
+        st.warning("🟡 **Certificados requeridos POR VENCER (renovar):**\n\n"
+                   + "\n".join(f"- {x}" for x in cert_pv))
     if cred_mal:
-        st.warning("🎫 **Credenciales a revisar antes de mandarlos a obra:**\n\n"
+        st.warning("🎫 **Otras credenciales a revisar antes de mandarlos a obra:**\n\n"
                    + "\n".join(f"- {x}" for x in cred_mal))
     if sin_contacto:
         st.warning("📵 **Sin contacto completo (email + Telegram):** "
                    + ", ".join(sin_contacto)
                    + ". No recibirán la asignación ni las inducciones.")
+
+
+def _cumplimiento_equipo(pid, grupo, prj):
+    """Tabla VIVA de cumplimiento de certificados del equipo asignado (v219): asignados
+    × certificados requeridos, ✅/🟡/🔴/—. Solo si el proyecto define requeridos."""
+    req = [x.strip() for x in str(prj.get("CertsReq", "")).split(";") if x.strip()]
+    if not req:
+        return
+    st.markdown("**🎫 Cumplimiento de certificados del equipo**")
+    asign = [x.strip() for x in str(prj.get("CampoAsignados", "")).split(";") if x.strip()]
+    if not asign:
+        st.caption("Sin usuarios de campo asignados todavía.")
+        return
+    _ico = {"vigente": "✅", "por_vencer": "🟡", "vencido": "🔴", "falta": "—"}
+    filas = []
+    for u in asign:
+        comp = credentials.compliance(u, req)
+        fila = {"Usuario": u, "Cumple": "✅" if comp["cumple"] else "🔴"}
+        for t in req:
+            fila[t] = _ico.get(comp["por_tipo"].get(t, "falta"), "—")
+        filas.append(fila)
+    st.dataframe(pd.DataFrame(filas), hide_index=True, use_container_width=True)
+    st.caption("✅ vigente · 🟡 por vencer (renovar) · 🔴 vencido · — falta.  "
+               "**Cumple** = ningún certificado requerido vencido ni faltante.")
 
 
 def _notificar_asignados(usuarios, info_prj):
@@ -1244,6 +1323,9 @@ def _estado_section(pid: str, grupo: str, prj: dict):
         st.markdown("")
         _equipo_proyecto(pid, grupo)
 
+    # ── Cumplimiento de certificados del equipo (si el proyecto exige alguno) ──
+    _cumplimiento_equipo(pid, grupo, prj)
+
     # ── El ritmo: mas accionable que el SPI ──
     if d["ritmo_real"] is not None and d["ritmo_nec"] is not None:
         if d["dias_rest"] <= 0:
@@ -1374,7 +1456,13 @@ def _detalle_proyecto(pid: str, grupo: str = None):
         _opts = sorted(set(_campos_disp) | set(_actuales))
         asignados = st.multiselect("👷 Usuarios de campo asignados", _opts,
                                    default=_actuales, key=f"asig_{pid}")
-        _avisar_asignados(asignados)      # credenciales vencidas / contacto faltante
+        _ecerts = st.multiselect(
+            "🎫 Certificados que exige el proyecto", credentials.CATALOGO,
+            default=[x.strip() for x in str(prj.get("CertsReq", "")).split(";") if x.strip()],
+            key=f"certs_{pid}",
+            help="Al asignar personal se avisa y marca a quien no los cumpla.")
+        # feature 1 (ya en otro proyecto) + feature 3 (cumplimiento vs certs requeridos)
+        _avisar_asignados(asignados, grupo, exclude_pid=pid, certs_req=_ecerts)
 
         # ── Ubicación en el mapa (fuera del form: el mapa necesita reruns) — v193 ──
         from core import location_ui
@@ -1448,6 +1536,7 @@ def _detalle_proyecto(pid: str, grupo: str = None):
                         "Instrucciones": instr, "InduccionLinks": ind, "Presupuesto": presup,
                         "Lat": "" if _plat is None else _plat,
                         "Lng": "" if _plng is None else _plng,
+                        "CertsReq": ";".join(_ecerts),
                     })
                     # Notificar a los usuarios de campo recién asignados
                     nuevos = [x for x in asignados if x not in actuales]
