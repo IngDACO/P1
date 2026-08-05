@@ -12,7 +12,6 @@ import streamlit as st
 from core import roster as R
 from core import auth
 from core import projects as P
-from core import ui_common as ui
 from core import clock
 
 
@@ -348,21 +347,31 @@ def _grid_html(staff, lunes, datos, tidx, resaltar="") -> str:
 
 
 def _opciones(grupo, tidx):
-    """[(etiqueta, valor)] para el selector de asignación: neutro + estados + trabajos."""
+    """[(etiqueta, valor)] para el selector: neutro + PROYECTOS (directo) + trabajos
+    (no-proyecto) + estados. Un proyecto ya es asignable por sí mismo (v218): no hay que
+    crear un 'trabajo' que lo enlace. Los proyectos completados/cancelados no se ofrecen."""
     op = [("— sin asignar —", "")]
-    for k, v in R.ESTADOS.items():
-        op.append((f"🟥 {v['nombre']}" if k != "OFF" else f"⬜ {v['nombre']}", k))
+    try:
+        for p in P.list_projects(grupo=grupo):
+            if str(p.get("Estado", "")) in ("Completado", "Cancelado"):
+                continue
+            op.append((f"🏗 {p.get('Nombre','')}", str(p.get("ID", ""))))
+    except Exception:
+        pass
     for r in R.list_trabajos(grupo):
         num = str(r.get("Numero", "")).strip()
-        op.append((f"{num}. {r.get('Nombre','')}" if num else str(r.get("Nombre", "")),
+        op.append((f"🔧 {num}. {r.get('Nombre','')}" if num else f"🔧 {r.get('Nombre','')}",
                    str(r.get("ID", ""))))
+    for k, v in R.ESTADOS.items():
+        op.append((f"⬜ {v['nombre']}" if k == "OFF" else f"🟥 {v['nombre']}", k))
     return op
 
 
 def _catalogo(grupo):
-    with st.expander("🎨 Catálogo de trabajos"):
-        st.caption("Los trabajos del tablero: número, nombre y color. El enlace a un "
-                   "proyecto es opcional — conecta el trabajo con el fichaje y los costos.")
+    with st.expander("🎨 Catálogo de trabajos (lo que NO es un proyecto)"):
+        st.caption("Para trabajos que **no** son un proyecto: entregas, cursos, policía, "
+                   "traslados… Los **proyectos se asignan directo** en el tablero (ya son un "
+                   "trabajo en sí mismos), no hace falta crearlos aquí.")
         trabajos = R.list_trabajos(grupo, incluir_inactivos=True)
         if trabajos:
             for r in trabajos:
@@ -382,24 +391,19 @@ def _catalogo(grupo):
         else:
             st.caption("Aún no hay trabajos. Añade el primero abajo.")
 
-        st.markdown("**➕ Nuevo trabajo**")
-        c1, c2 = st.columns([1, 3])
+        st.markdown("**➕ Nuevo trabajo** (no-proyecto)")
+        c1, c2, c3 = st.columns([1, 2.5, 1.5])
         num = c1.text_input("Número", key="trab_num", placeholder="89")
-        nom = c2.text_input("Nombre", key="trab_nom", placeholder="Talavera")
-        c3, c4 = st.columns(2)
+        nom = c2.text_input("Nombre", key="trab_nom", placeholder="Entrega / Curso / Traslado…")
         _colmap = {n: h for n, h in R.PALETA}
         colnom = c3.selectbox("Color", list(_colmap.keys()), key="trab_col")
-        _prjmap = {f"{p.get('Nombre')} ({p.get('ID')})": str(p.get("ID"))
-                   for p in P.list_projects(grupo=grupo)}
-        prj = ui.elegir("Proyecto (opcional)", _prjmap, key="trab_prj",
-                        vacio="— sin enlace a proyecto —")
         st.markdown(f"<div style='width:100%;height:8px;border-radius:4px;"
                     f"background:{_colmap[colnom]}'></div>", unsafe_allow_html=True)
         if st.button("Crear trabajo", key="trab_add", use_container_width=True):
             if not nom.strip():
                 st.error("El nombre es obligatorio.")
             else:
-                ok, res = R.add_trabajo(grupo, num, nom, _colmap[colnom], prj or "")
+                ok, res = R.add_trabajo(grupo, num, nom, _colmap[colnom], "")
                 (st.success if ok else st.error)(
                     f"Trabajo creado ({res})." if ok else res)
                 if ok:

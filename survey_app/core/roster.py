@@ -51,6 +51,15 @@ PALETA = [
 _COLOR_DEFECTO = "#2e6da4"
 
 
+def _color_proyecto(pid) -> str:
+    """Color estable y distinto para un proyecto (no tiene color propio): derivado de
+    su ID sobre la misma PALETA. Usa hashlib (NO hash(), que va salteado por proceso y
+    cambiaría el color en cada arranque)."""
+    import hashlib
+    h = int(hashlib.md5(str(pid).encode("utf-8")).hexdigest(), 16)
+    return PALETA[h % len(PALETA)][1]
+
+
 # ── Utilidades de fecha ──────────────────────────────────────────
 def lunes_de(d=None) -> date:
     """Lunes de la semana de `d` (hoy si None)."""
@@ -158,10 +167,25 @@ def _num_orden(v):
 
 
 def trabajos_idx(grupo) -> dict:
-    """{TRB-id: fila} de todos los trabajos del grupo (activos e inactivos), para
-    resolver color/etiqueta aunque un trabajo se haya desactivado."""
-    return {str(r.get("ID", "")): r for r in _trab_records()
-            if str(r.get("Grupo", "")) == str(grupo)}
+    """{id: fila} de TODO lo asignable del grupo, para resolver color/etiqueta/proyecto:
+    los trabajos del catálogo (TRB-####, activos e inactivos) MÁS los proyectos del grupo
+    (PRJ-####) como entradas sintéticas — un proyecto ya es un trabajo en sí mismo (v218),
+    así se asigna directo sin duplicarlo en el catálogo. Incluye archivados para que una
+    asignación/fichaje histórico a un proyecto archivado siga resolviendo su nombre.
+    (TRB-#### y PRJ-#### nunca colisionan; `setdefault` no pisa un trabajo real.)"""
+    idx = {str(r.get("ID", "")): r for r in _trab_records()
+           if str(r.get("Grupo", "")) == str(grupo)}
+    try:
+        from core import projects as P
+        for p in P.list_projects(grupo=grupo, incluir_archivados=True):
+            pid = str(p.get("ID", ""))
+            if pid:
+                idx.setdefault(pid, {"ID": pid, "Numero": "",
+                                     "Nombre": str(p.get("Nombre", "")),
+                                     "Color": _color_proyecto(pid), "ProyectoID": pid})
+    except Exception:
+        pass
+    return idx
 
 
 def add_trabajo(grupo, numero, nombre, color, proyecto_id="") -> tuple:

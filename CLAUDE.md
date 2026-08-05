@@ -1071,6 +1071,29 @@ corren por primera vez en el Cloud.
 Campo → "mi semana" (donde voy cada dia) · fichaje pre-rellenado desde el roster · plan vs real
 (asignado a X / ficho en Y, solo para trabajos enlazados a un PRJ).
 
+## Planificación: un PROYECTO se asigna directo (ya es un trabajo) (v218)
+El usuario notó redundancia: en el roster solo se podían asignar TRB-#### (catálogo) o estados; para poner a
+alguien en un proyecto había que **crear un "trabajo" que lo enlazara** (`ProyectoID`). Pero **todo proyecto es
+un trabajo en sí mismo** — duplicarlo en el catálogo es ruido. Fix (decisión del usuario; color de proyecto =
+**automático**):
+- **`roster.trabajos_idx(grupo)` se extiende**: además de los TRB-#### del catálogo, mete los **proyectos del
+  grupo (PRJ-####) como entradas sintéticas** `{ID, Numero:"", Nombre, Color:_color_proyecto(pid), ProyectoID:
+  pid}` (con `incluir_archivados=True` para que un histórico a un proyecto archivado siga resolviendo). Así
+  `color_de`/`etiqueta_de`/`proyecto_de` resuelven un PRJ **sin tocar a ningún llamador** (board admin+campo,
+  agenda de HOME, plan-vs-real, `asignacion_dia`/fichaje) — cascada limpia. `setdefault` no pisa un TRB real;
+  TRB-#### y PRJ-#### nunca colisionan.
+- **`roster._color_proyecto(pid)`**: color estable y distinto por proyecto, `hashlib.md5(pid) % PALETA`
+  (⚠️ NO `hash()`, que va salteado por proceso → cambiaría el color en cada arranque).
+- **`roster_ui._opciones`** ahora lista: neutro + **🏗 proyectos activos** (value=PRJ-####; excluye Completado/
+  Cancelado; archivados ya los oculta `list_projects`) + 🔧 trabajos no-proyecto + estados.
+- **`_catalogo` reencuadrado** a "lo que NO es un proyecto" (entregas, cursos, traslados…): se **quitó el campo
+  "Proyecto (opcional)"** del alta de trabajo (ya es redundante). Los trabajos viejos que enlazan a un PRJ
+  siguen mostrándose (🔗, compat); solo no se crean nuevos así. Import `ui_common` quedó sin uso → eliminado.
+- **Compat**: `asig` puede ser PRJ-#### (directo), TRB-#### (catálogo) o estado; el histórico no se migra.
+  Plan-vs-real y "→ Abrir proyecto" del popover (v217) funcionan igual (proyecto_de(PRJ)=el propio PRJ).
+Verificado: compila + import + AST (0 libres) + tests (color estable y de la paleta; el proyecto entra al
+índice y resuelve etiqueta/color/proyecto_de; `_opciones` incluye el activo y excluye el completado).
+
 ## Planificación: tablero EDITABLE EN SITIO + cobertura del día (v217)
 Petición del usuario ("el de planificación es muy importante"). Auditoría: la rejilla era **solo de
 lectura/navegación** — para asignar había que bajar a "✏️ Editar la semana de una persona", elegir a UNO en
@@ -3029,6 +3052,7 @@ resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NOR
 ## Versiones desplegadas (v215 = actual)
 | Ver | Cambio principal |
 |---|---|
+| v218 | Planificación: un PROYECTO se asigna DIRECTO en el tablero (aparece 🏗 en el desplegable) — ya no hay que crear un "trabajo" que lo enlace (todo proyecto es un trabajo en sí mismo). El catálogo queda solo para lo NO-proyecto (entregas/cursos/traslados) y pierde el campo "enlace a proyecto". Color de proyecto automático y estable (hashlib). Histórico compatible |
 | v217 | Planificación: el tablero pasa a ser EDITABLE EN SITIO — cada celda es un popover coloreado donde asignas/editas ahí mismo (asignación + nota + "aplicar a toda la semana" + abrir proyecto); una celda vacía (＋) también asigna. Se quitó el editor por-persona de abajo. + línea de "cobertura del día" (en obra / sin asignar / OFF) sobre el tablero. Popover+color verificado en vivo (st.popover acepta key en 1.57) |
 | v216 | Horas por usuario × proyecto (el dato ya existía, solo faltaba mostrarlo): matriz "persona × proyecto" al final de ⏱ Horas (usa el por_proyecto de group_hours), y bloque "👷 Quién ha trabajado aquí" (persona·horas) en 📊 Estado del proyecto, junto a las alarmas (labor_breakdown sin el costo) |
 | v215 | Finanzas: Gastos con "Reparto" y "Compras por categoría" en doble columna + tabla de proyectos clickeable (→ abre el proyecto); Horas con tabla de personas clickeable (→ abre la ficha) |
