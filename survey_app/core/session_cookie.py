@@ -15,8 +15,8 @@ tras un refresco (ver core/auth_ui.render_login). Ahora `load()` solo renderiza 
 componente y devuelve lo que haya; el propio componente dispara el rerun cuando el
 navegador entrega la cookie.
 """
+import json
 import streamlit as st
-from datetime import datetime, timedelta
 
 _COOKIE  = "copex_session"
 _DIAS    = 7
@@ -62,12 +62,28 @@ def load() -> tuple:
 
 
 def save(usuario: str, token: str):
-    m = _manager()
-    if m is None:
+    """Escribe la cookie como PERSISTENTE (`max-age`) directamente en el documento de la
+    app vía `window.parent.document.cookie`, NO con el `set` de extra-streamlit-components.
+
+    v222 — motivo: el `set` de la librería dejaba la cookie como **de sesión** (sin
+    expiración efectiva) → sobrevivía al refresco pero moría al **cerrar/reabrir** el
+    navegador o la PWA instalada, y había que volver a loguear. `max-age` es inequívoco.
+    La cookie va sobre el MISMO origen que lee `load()` (el componente de la librería se
+    sirve desde el host de la app), así que la lectura la sigue viendo.
+
+    ⚠️ Debe llamarse en un run que TERMINA (p.ej. `render_user_bar`), NUNCA justo antes de
+    un `st.rerun()`: el rerun descarta los componentes del run en curso y no se escribiría.
+    Es idempotente y 'rolling' (refresca los 7 días en cada visita)."""
+    if not usuario or not token:
         return
     try:
-        m.set(_COOKIE, f"{usuario}|{token}",
-              expires_at=datetime.now() + timedelta(days=_DIAS), key="copex_cookie_set")
+        import streamlit.components.v1 as components
+        secs = _DIAS * 24 * 3600
+        cookie_str = f"{_COOKIE}={usuario}|{token}; max-age={secs}; path=/; SameSite=Lax"
+        components.html(
+            "<script>try{window.parent.document.cookie="
+            + json.dumps(cookie_str) + ";}catch(e){}</script>",
+            height=0, width=0)
     except Exception:
         pass
 

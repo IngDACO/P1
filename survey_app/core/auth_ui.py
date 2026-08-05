@@ -208,6 +208,7 @@ def render_login() -> bool:
             if _a:
                 st.session_state["auth"] = _a
                 st.session_state["_hb_last"] = time.time()
+                st.session_state["_remember_session"] = True   # v222: había cookie → recordar
                 st.rerun()
 
     # ── Logo COPEX centrado (v201: ~40% más pequeño → columnas [2,1,2]) ──
@@ -284,13 +285,12 @@ def render_login() -> bool:
                     "token": tok,
                 }
                 st.session_state["_hb_last"] = time.time()
-                # v221: solo persistir si el usuario tildó "mantener la sesión iniciada".
-                if st.session_state.get("login_remember", False):
-                    try:    # login persistente (sobrevive el refresco/reapertura)
-                        from core import session_cookie
-                        session_cookie.save(res["usuario"], tok)
-                    except Exception:
-                        pass
+                # v222: marcar si pidió recordar la sesión. La cookie NO se escribe aquí
+                # (el st.rerun de abajo descartaría el componente); la escribe
+                # render_user_bar en el próximo run (un render que TERMINA). Sin tildar →
+                # sin cookie → la sesión dura solo la pestaña.
+                st.session_state["_remember_session"] = bool(
+                    st.session_state.get("login_remember", False))
                 st.rerun()
 
             if st.button("Iniciar sesión", type="primary", use_container_width=True):
@@ -308,6 +308,15 @@ def render_login() -> bool:
 def render_user_bar():
     """Usuario logueado + grupo + botón salir (sidebar)."""
     a = st.session_state.get("auth", {})
+    # v222: (re)escribir la cookie PERSISTENTE si el usuario pidió recordar la sesión.
+    # Va AQUÍ (render que TERMINA, en el sidebar de cada página logueada), no en
+    # _do_login (que hace st.rerun y descartaría el componente). Idempotente y rolling.
+    if a and st.session_state.get("_remember_session"):
+        try:
+            from core import session_cookie
+            session_cookie.save(a.get("usuario", ""), a.get("token", ""))
+        except Exception:
+            pass
     rol_lbl = {"propietario": "👑 Propietario", "administrador": "🛠 Administrador",
                "campo": "🔧 Campo"}.get(a.get("rol"), a.get("rol", ""))
     grupo = a.get("grupo") or ("todos" if a.get("rol") == "propietario" else "—")
@@ -325,6 +334,7 @@ def render_user_bar():
         if "auth" in st.session_state:
             del st.session_state["auth"]
         st.session_state["_no_cookie_restore"] = True   # no auto-restaurar tras salir (v188)
+        st.session_state.pop("_remember_session", None)  # v222: dejar de escribir la cookie
         st.rerun()
 
 

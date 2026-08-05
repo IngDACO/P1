@@ -1071,6 +1071,28 @@ corren por primera vez en el Cloud.
 Campo → "mi semana" (donde voy cada dia) · fichaje pre-rellenado desde el roster · plan vs real
 (asignado a X / ficho en Y, solo para trabajos enlazados a un PRJ).
 
+## Fix: la sesión recordada moría al cerrar/reabrir (cookie de sesión → persistente) (v222)
+El usuario reportó que, aun tildando "mantener la sesión iniciada" (v221), al **cerrar y reabrir** la app le
+pedía login otra vez (probando en la **PWA instalada** en escritorio y móvil). Diagnóstico: la cookie
+sobrevivía al refresco pero moría al cerrar → se estaba guardando como **cookie de SESIÓN**. Causa: el `set`
+de `extra-streamlit-components` no aplicaba la expiración de forma efectiva (su Python manda `expires_at` ISO,
+pero el resultado en la PWA era una cookie sin persistencia). Fix (v222):
+- **`session_cookie.save` reescrito**: ya NO usa el `set` de la librería. Escribe la cookie **persistente con
+  `max-age`** directamente en el documento de la app vía **`window.parent.document.cookie`** (misma técnica que
+  el mobile-back-trap v205): `copex_session=usuario|token; max-age=604800; path=/; SameSite=Lax`. El origen es
+  el mismo que lee `load()` (el componente de la librería se sirve desde el host de la app), así que la lectura
+  la sigue viendo. `clear()` sigue con el `delete` bloqueante de la librería (el logout hace `st.rerun()`
+  inmediato, que descartaría un `components.html`). Se quitó el import `datetime` (ya no se usa).
+- ⚠️ **Timing**: un `components.html` justo antes de `st.rerun()` se DESCARTA (el rerun tira los deltas del run
+  en curso). Por eso la cookie NO se escribe en `_do_login`; se marca `st.session_state["_remember_session"]`
+  y la escribe **`render_user_bar`** (sidebar, corre en cada página logueada, en un run que TERMINA;
+  idempotente y 'rolling' → refresca los 7 días en cada visita). El restore por cookie también setea el flag;
+  el logout lo limpia (`pop`).
+- **Verificado EN VIVO** (mini-app en preview + inspección): `window.parent.document.cookie` desde el iframe de
+  `components.html` **sí** escribe en el top document; **CookieStore API** confirma `persistent:true`,
+  `expires` ≈ +7 días, `sameSite:lax`, valor `juan|abc123` con el `|` literal (lo lee `load()`). Compila +
+  import + AST (0 libres). Confirmación final en la PWA del usuario = cerrar/reabrir sigue dentro.
+
 ## Login: "mantener la sesión iniciada" ahora es OPCIONAL (v221)
 La persistencia por cookie (v107/v188) estaba **siempre activa**: cada login guardaba una cookie de 7 días y al
 refrescar/reabrir la sesión se restauraba sin escribir nada. El usuario pidió que sea **un tick opcional**.
@@ -3104,6 +3126,7 @@ resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NOR
 ## Versiones desplegadas (v215 = actual)
 | Ver | Cambio principal |
 |---|---|
+| v222 | Fix: al tildar "mantener la sesión" y CERRAR/REABRIR la app (PWA) pedía login otra vez — la cookie se guardaba como "de sesión". Ahora se escribe persistente con max-age vía window.parent.document.cookie desde render_user_bar (no en _do_login, que hace rerun y la descartaría). Verificado en vivo: CookieStore confirma persistent + expira a 7 días |
 | v221 | Login: "Mantener la sesión iniciada en este dispositivo" ahora es un check OPCIONAL (por defecto SIN tildar). Antes la cookie de 7 días se guardaba siempre; ahora solo si se tilda → si lo activas, no reescribes usuario/contraseña en tu dispositivo; sin tildar, la sesión dura solo la pestaña |
 | v220 | Asignar personal (deploy 2/2): al asignar campo a un proyecto, aparecen AUTOMÁTICAMENTE en el planificador, en ese proyecto, Lun–Vie entre FechaInicio y FechaFinEst (todo el rango, solo celdas vacías — no pisa OFF ni otro proyecto). Al desasignar se limpian sus días de ese proyecto. Escritor eficiente (1 batch_update + 1 append_rows) para no disparar el rate limit |
 | v219 | Asignar personal más inteligente (deploy 1/2): al asignar campo a un proyecto se avisa si el usuario YA está en otro proyecto (y hasta cuándo), y se pueden tildar los certificados que EXIGE el proyecto (campo CertsReq) → aviso + marca 🔴 quien no cumple / 🟡 por vencer, con tabla viva de cumplimiento del equipo en Estado. (Falta feature 2: auto-poblar el planificador entre fechas del proyecto) |
