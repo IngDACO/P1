@@ -3155,6 +3155,7 @@ resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NOR
 ## Versiones desplegadas (v215 = actual)
 | Ver | Cambio principal |
 |---|---|
+| v225 | Torta de gasto por rubro CENTRADA: antes la leyenda (flex:1) se estiraba a todo el ancho y el monto/% se iban al borde ("todo separado"); ahora torta+leyenda se agrupan con justify-content:center y la leyenda se acota a 300px (márgenes iguales, verificado) |
 | v224 | Finanzas → Gastos: diagrama de TORTA del gasto por rubro (Mano de obra + cada categoría de compra), debajo de los dos bloques de barras. Hecho con CSS conic-gradient (sin dependencias nuevas) + leyenda color·rubro·$·%. Verificado en vivo que st.markdown no lo recorta |
 | v223 | Cartera de proyectos (📊 Proyectos): cada tarjeta ahora muestra ANTES de abrir — nombre, estado + % avance (barra real), cliente, fechas inicio→fin, % presupuesto ejecutado (⚠️ si se pasó), nº de usuarios y alertas; se abre con botón «Abrir». Borde izq por salud. % presupuesto de group_expenses (1 lectura cacheada); se quitaron las horas. Opción A elegida por el usuario tras ver un mockup |
 | v222 | Fix: al tildar "mantener la sesión" y CERRAR/REABRIR la app (PWA) pedía login otra vez — la cookie se guardaba como "de sesión". Ahora se escribe persistente con max-age vía window.parent.document.cookie desde render_user_bar (no en _do_login, que hace rerun y la descartaría). Verificado en vivo: CookieStore confirma persistent + expira a 7 días |

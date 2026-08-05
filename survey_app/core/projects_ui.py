@@ -2472,11 +2472,14 @@ def _torta_html(pares, total) -> str:
             f'<span style="width:40px;flex:none;text-align:right;font-size:11.5px;'
             f'color:#9aa7b8;">{_pct:.0f}%</span></div>')
     _grad = "conic-gradient(" + ", ".join(_stops) + ")"
+    # v225: centrado — se agrupan torta + leyenda y la leyenda se ACOTA (antes flex:1
+    # la estiraba a todo el ancho y el monto/% se iban al borde → "todo separado").
     return (
-        '<div style="display:flex;align-items:center;gap:24px;flex-wrap:wrap;margin-top:4px;">'
+        '<div style="display:flex;align-items:center;justify-content:center;gap:32px;'
+        'flex-wrap:wrap;margin-top:4px;">'
         f'<div style="width:150px;height:150px;border-radius:50%;background:{_grad};'
         'flex:none;"></div>'
-        f'<div style="flex:1;min-width:220px;">{"".join(_leg)}</div></div>')
+        f'<div style="width:300px;max-width:100%;">{"".join(_leg)}</div></div>')
 
 
 def render_expenses(pid, grupo, can_delete=False, key_prefix="ex"):
