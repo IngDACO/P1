@@ -2446,6 +2446,39 @@ def _barras_html(pares, total, color="#2e6da4") -> str:
     return "".join(out)
 
 
+def _torta_html(pares, total) -> str:
+    """Diagrama de torta (pie) con CSS `conic-gradient` + leyenda (color · rubro · $ · %).
+    Sin dependencias de charting (nada de plotly/matplotlib): mismo enfoque HTML que
+    `_barras_html`, se renderiza en `st.markdown`. Para el gasto por rubro del grupo
+    (mano de obra + cada categoría de compra). v224."""
+    pares = [(k, float(v)) for k, v in pares if v and float(v) > 0]
+    if not pares or total <= 0:
+        return ""
+    _pal = ["#2e6da4", "#BA7517", "#1e8449", "#8e44ad", "#c0392b", "#16a085",
+            "#e67e22", "#2980b9", "#d4537e", "#7f8c8d", "#f1c40f", "#34495e"]
+    _stops, _leg, _acc = [], [], 0.0
+    for _i, (et, val) in enumerate(pares):
+        _pct = 100.0 * val / total
+        _col = _pal[_i % len(_pal)]
+        _stops.append(f"{_col} {_acc:.2f}% {_acc + _pct:.2f}%")
+        _acc += _pct
+        _leg.append(
+            '<div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;">'
+            f'<span style="width:12px;height:12px;border-radius:3px;background:{_col};'
+            'flex:none;"></span>'
+            f'<span style="flex:1;font-size:12.5px;color:#374151;overflow:hidden;'
+            f'text-overflow:ellipsis;white-space:nowrap;">{et}</span>'
+            f'<span style="font-size:12.5px;font-weight:600;color:#1f2937;">${val:,.0f}</span>'
+            f'<span style="width:40px;flex:none;text-align:right;font-size:11.5px;'
+            f'color:#9aa7b8;">{_pct:.0f}%</span></div>')
+    _grad = "conic-gradient(" + ", ".join(_stops) + ")"
+    return (
+        '<div style="display:flex;align-items:center;gap:24px;flex-wrap:wrap;margin-top:4px;">'
+        f'<div style="width:150px;height:150px;border-radius:50%;background:{_grad};'
+        'flex:none;"></div>'
+        f'<div style="flex:1;min-width:220px;">{"".join(_leg)}</div></div>')
+
+
 def render_expenses(pid, grupo, can_delete=False, key_prefix="ex"):
     """Costos del proyecto (v144).
 
@@ -2689,6 +2722,15 @@ def render_group_expenses(grupo: str):
         _blq_reparto_g()
     elif _catg:
         _blq_categorias_g()
+
+    # ── Torta: gasto por rubro (Mano de obra + categorías) a ancho completo (v224) ──
+    _rubros = [("Mano de obra", sum(f["mano_obra"] for f in filas))]
+    _rubros += sorted(_catg.items(), key=lambda x: -x[1])
+    _rubros = [(k, v) for k, v in _rubros if v and v > 0]
+    if _rubros:
+        st.markdown("**Gasto por rubro**")
+        st.markdown(_torta_html(_rubros, sum(v for _, v in _rubros)),
+                    unsafe_allow_html=True)
 
     # ── Proyectos CON presupuesto (tabla CLICKEABLE → abre el proyecto, v215) ──
     if con_pres:

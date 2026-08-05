@@ -1071,6 +1071,19 @@ corren por primera vez en el Cloud.
 Campo → "mi semana" (donde voy cada dia) · fichaje pre-rellenado desde el roster · plan vs real
 (asignado a X / ficho en Y, solo para trabajos enlazados a un PRJ).
 
+## Finanzas/Gastos: torta de gasto por rubro (v224)
+El usuario pidió una **torta** del gasto por rubro debajo de los dos bloques de barras (reparto | compras por
+categoría). Decisión del usuario: rubros = **Mano de obra + cada categoría de compra** (reparto COMPLETO del
+gasto, opción A). Nuevo **`_torta_html(pares, total)`** (junto a `_barras_html`): pie con **CSS
+`conic-gradient`** + leyenda (color · rubro · $ · %) — **sin dependencias de charting** (nada de plotly/
+matplotlib), mismo enfoque HTML que las barras, se renderiza en `st.markdown`. En `render_group_expenses`,
+debajo de los bloques de barras y antes de la tabla "Proyectos con presupuesto":
+`_rubros = [("Mano de obra", ΣMO)] + sorted(por_categoria)` (solo >0), total = `sum(_rubros)` (así los % suman
+100 exacto). ⚠️ **Verificado EN VIVO** que `st.markdown` NO recorta `conic-gradient` (mini-app + DOM: el círculo
+tiene `background-image: conic-gradient(...)` computado; la nota de diagrams.py sobre "Streamlit elimina los
+`<svg>`" aplica a SVG, no a un div con conic-gradient). Compila + import + AST (0 libres) + lógica (tramos
+0→100%, formato $/%). Paleta de 12 colores; MO = azul (#2e6da4, como el reparto).
+
 ## Cartera de proyectos: tarjeta con resumen completo antes de abrir (v223)
 El usuario pidió ver en el tablero (📊 Proyectos) toda la info del proyecto ANTES de abrirlo. Se le mostraron
 2 opciones (mockup vía visualize) y eligió la **Opción A**: tarjeta con barra de progreso + botón «Abrir».
@@ -3142,6 +3155,7 @@ resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NOR
 ## Versiones desplegadas (v215 = actual)
 | Ver | Cambio principal |
 |---|---|
+| v224 | Finanzas → Gastos: diagrama de TORTA del gasto por rubro (Mano de obra + cada categoría de compra), debajo de los dos bloques de barras. Hecho con CSS conic-gradient (sin dependencias nuevas) + leyenda color·rubro·$·%. Verificado en vivo que st.markdown no lo recorta |
 | v223 | Cartera de proyectos (📊 Proyectos): cada tarjeta ahora muestra ANTES de abrir — nombre, estado + % avance (barra real), cliente, fechas inicio→fin, % presupuesto ejecutado (⚠️ si se pasó), nº de usuarios y alertas; se abre con botón «Abrir». Borde izq por salud. % presupuesto de group_expenses (1 lectura cacheada); se quitaron las horas. Opción A elegida por el usuario tras ver un mockup |
 | v222 | Fix: al tildar "mantener la sesión" y CERRAR/REABRIR la app (PWA) pedía login otra vez — la cookie se guardaba como "de sesión". Ahora se escribe persistente con max-age vía window.parent.document.cookie desde render_user_bar (no en _do_login, que hace rerun y la descartaría). Verificado en vivo: CookieStore confirma persistent + expira a 7 días |
 | v221 | Login: "Mantener la sesión iniciada en este dispositivo" ahora es un check OPCIONAL (por defecto SIN tildar). Antes la cookie de 7 días se guardaba siempre; ahora solo si se tilda → si lo activas, no reescribes usuario/contraseña en tu dispositivo; sin tildar, la sesión dura solo la pestaña |
