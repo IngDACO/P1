@@ -1071,6 +1071,20 @@ corren por primera vez en el Cloud.
 Campo → "mi semana" (donde voy cada dia) · fichaje pre-rellenado desde el roster · plan vs real
 (asignado a X / ficho en Y, solo para trabajos enlazados a un PRJ).
 
+## Login: "mantener la sesión iniciada" ahora es OPCIONAL (v221)
+La persistencia por cookie (v107/v188) estaba **siempre activa**: cada login guardaba una cookie de 7 días y al
+refrescar/reabrir la sesión se restauraba sin escribir nada. El usuario pidió que sea **un tick opcional**.
+- **Check "Mantener la sesión iniciada en este dispositivo"** en el login (`auth_ui.render_login`), key
+  `login_remember`, **por defecto SIN tildar** (decisión del usuario; más seguro para equipos compartidos).
+- **`_do_login` solo llama `session_cookie.save` si el check está tildado**; el resto igual. Sin tildar → no hay
+  cookie → la sesión dura solo esa pestaña (refrescar/reabrir pide login). Tildado → cookie 7 días, restaura sin
+  reescribir usuario/contraseña en ese dispositivo. La restauración (`load`+`validate_session`) no cambia: sin
+  cookie, no hay nada que restaurar. Duración (7 d) y sesión única (v75) sin cambios.
+- ⚠️ **Cambia el comportamiento anterior**: quien antes se quedaba logueado por defecto, ahora debe tildar el
+  check. Es lo pedido.
+Verificado: compila + import + AST (0 libres) + 1 solo call-site de `save`, gated. ⚠️ Cookie/navegador: la prueba
+REAL es en el Cloud (tildar → refrescar sigue dentro; sin tildar → refrescar pide login).
+
 ## Auto-poblar el planificador con el proyecto entre sus fechas (v220)
 Deploy 2 de 2 de "asignar más inteligente" (feature 2). Al asignar campo a un proyecto, ahora **aparecen
 automáticamente en el planificador**, en ese proyecto (asig=PRJ-####, directo desde v218), **Lun–Vie entre
@@ -3090,6 +3104,7 @@ resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NOR
 ## Versiones desplegadas (v215 = actual)
 | Ver | Cambio principal |
 |---|---|
+| v221 | Login: "Mantener la sesión iniciada en este dispositivo" ahora es un check OPCIONAL (por defecto SIN tildar). Antes la cookie de 7 días se guardaba siempre; ahora solo si se tilda → si lo activas, no reescribes usuario/contraseña en tu dispositivo; sin tildar, la sesión dura solo la pestaña |
 | v220 | Asignar personal (deploy 2/2): al asignar campo a un proyecto, aparecen AUTOMÁTICAMENTE en el planificador, en ese proyecto, Lun–Vie entre FechaInicio y FechaFinEst (todo el rango, solo celdas vacías — no pisa OFF ni otro proyecto). Al desasignar se limpian sus días de ese proyecto. Escritor eficiente (1 batch_update + 1 append_rows) para no disparar el rate limit |
 | v219 | Asignar personal más inteligente (deploy 1/2): al asignar campo a un proyecto se avisa si el usuario YA está en otro proyecto (y hasta cuándo), y se pueden tildar los certificados que EXIGE el proyecto (campo CertsReq) → aviso + marca 🔴 quien no cumple / 🟡 por vencer, con tabla viva de cumplimiento del equipo en Estado. (Falta feature 2: auto-poblar el planificador entre fechas del proyecto) |
 | v218 | Planificación: un PROYECTO se asigna DIRECTO en el tablero (aparece 🏗 en el desplegable) — ya no hay que crear un "trabajo" que lo enlace (todo proyecto es un trabajo en sí mismo). El catálogo queda solo para lo NO-proyecto (entregas/cursos/traslados) y pierde el campo "enlace a proyecto". Color de proyecto automático y estable (hashlib). Histórico compatible |

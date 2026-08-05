@@ -255,6 +255,15 @@ def render_login() -> bool:
             st.markdown("#### Iniciar sesión")
             u = st.text_input("Usuario", key="login_u")
             p = st.text_input("Contraseña", type="password", key="login_p")
+            # v221: la persistencia por cookie (v107/v188) pasa a ser OPCIONAL. Sin
+            # tildar (por defecto) la sesión dura solo esta pestaña; al tildar se guarda
+            # la cookie de 7 días y no hay que volver a escribir usuario/contraseña en
+            # este dispositivo. Déjalo sin marcar en equipos compartidos.
+            st.checkbox("Mantener la sesión iniciada en este dispositivo",
+                        value=False, key="login_remember",
+                        help="Si lo activas, este dispositivo recordará tu sesión ~7 días y "
+                             "no tendrás que volver a escribir usuario y contraseña. "
+                             "Déjalo sin marcar en un equipo compartido o público.")
 
             def _do_login(force=False):
                 res = auth.verify_login(u, p)
@@ -275,11 +284,13 @@ def render_login() -> bool:
                     "token": tok,
                 }
                 st.session_state["_hb_last"] = time.time()
-                try:    # login persistente (sobrevive el refresco)
-                    from core import session_cookie
-                    session_cookie.save(res["usuario"], tok)
-                except Exception:
-                    pass
+                # v221: solo persistir si el usuario tildó "mantener la sesión iniciada".
+                if st.session_state.get("login_remember", False):
+                    try:    # login persistente (sobrevive el refresco/reapertura)
+                        from core import session_cookie
+                        session_cookie.save(res["usuario"], tok)
+                    except Exception:
+                        pass
                 st.rerun()
 
             if st.button("Iniciar sesión", type="primary", use_container_width=True):
