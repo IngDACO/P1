@@ -356,3 +356,148 @@ def copiar_semana(grupo, lunes_origen, lunes_destino) -> tuple:
         ok, _ = guardar_persona(grupo, lunes_destino, usuario, dias)
         n += 1 if ok else 0
     return True, f"{n} persona(s) copiada(s)."
+
+
+def _a_date(x):
+    """ISO 'YYYY-MM-DD' o date/datetime → date; None si no se puede."""
+    if isinstance(x, datetime):
+        return x.date()
+    if isinstance(x, date):
+        return x
+    try:
+        y, m, d = str(x)[:10].split("-")
+        return date(int(y), int(m), int(d))
+    except Exception:
+        return None
+
+
+_MAX_SEMANAS = 104   # tope de seguridad (~2 años) para no auto-poblar rangos absurdos
+
+
+def autopoblar_proyecto(grupo, pid, usuarios, fecha_ini, fecha_fin,
+                        solo_vacias=True) -> dict:
+    """Rellena el planificador con un PROYECTO (asig=PRJ-####) entre sus fechas, Lun–Vie,
+    para los usuarios dados y SOLO en celdas vacías (no pisa OFF ni otro proyecto). v219.
+
+    Eficiente: lee la hoja UNA vez y escribe en 1 `batch_update` (filas existentes) + 1
+    `append_rows` (semanas nuevas), así el rango no dispara el rate limit. Devuelve
+    {llenadas, ocupadas, actualizadas, nuevas, semanas}."""
+    vacio = {"llenadas": 0, "ocupadas": 0, "actualizadas": 0, "nuevas": 0, "semanas": 0}
+    w = _ws_roster()
+    if w is None or not usuarios or not pid:
+        return vacio
+    ini, fin = _a_date(fecha_ini), _a_date(fecha_fin)
+    if not ini or not fin or fin < ini:
+        return vacio
+    usuarios = [str(u) for u in usuarios]
+
+    semanas = []
+    lun = lunes_de(ini)
+    while lun <= fin and len(semanas) < _MAX_SEMANAS:
+        semanas.append(lun)
+        lun = lun + timedelta(days=7)
+
+    try:
+        vals = w.get_all_values()
+    except Exception:
+        return vacio
+    existentes = {}                       # (semana, usuario) -> (row_idx0, datos)
+    for i, r in enumerate(vals):
+        if i == 0:                        # cabecera
+            continue
+        r = list(r) + [""] * (5 - len(r))
+        if str(r[1]) != str(grupo):
+            continue
+        try:
+            d = json.loads(r[4] or "{}")
+        except Exception:
+            d = {}
+        existentes[(str(r[2]), str(r[3]))] = (i, d)
+
+    llenadas = ocupadas = 0
+    updates, nuevas = [], []
+    next_n = len(vals)                    # id incremental para filas nuevas
+    for lu in semanas:
+        sem = lu.isoformat()
+        for u in usuarios:
+            idx0, datos = existentes.get((sem, u), (None, {}))
+            datos = dict(datos)
+            cambiado = False
+            for di, dk in enumerate(DIAS):
+                fdia = lu + timedelta(days=di)
+                if fdia < ini or fdia > fin:
+                    continue
+                cur = str((datos.get(dk) or {}).get("asig", ""))
+                if cur:
+                    if cur != str(pid):
+                        ocupadas += 1     # otra asignación: no se pisa (feature 1)
+                    continue
+                datos[dk] = {"asig": str(pid), "nota": ""}
+                llenadas += 1
+                cambiado = True
+            if not cambiado:
+                continue
+            payload = json.dumps(
+                {k: v for k, v in datos.items()
+                 if v and (str(v.get("asig", "")).strip() or str(v.get("nota", "")).strip())},
+                ensure_ascii=False)
+            if idx0 is not None:
+                updates.append({"range": _a1(idx0 + 1, 5), "values": [[payload]]})
+            else:
+                next_n += 1
+                nuevas.append([f"ROS-{next_n:04d}", str(grupo), sem, str(u), payload])
+
+    try:
+        if updates:
+            w.batch_update(updates, value_input_option="RAW")
+        if nuevas:
+            w.append_rows(nuevas, value_input_option="RAW")
+    except Exception as e:
+        logger.warning("autopoblar_proyecto: %s", e)
+        return vacio
+    _invalidate()
+    return {"llenadas": llenadas, "ocupadas": ocupadas,
+            "actualizadas": len(updates), "nuevas": len(nuevas), "semanas": len(semanas)}
+
+
+def limpiar_proyecto(grupo, pid, usuarios=None) -> int:
+    """Quita del planificador TODAS las celdas asignadas a un proyecto (para cuando se
+    desasigna a alguien). Si `usuarios` se da, solo esas personas. 1 `batch_update`. v219."""
+    w = _ws_roster()
+    if w is None or not pid:
+        return 0
+    us = set(str(u) for u in usuarios) if usuarios else None
+    try:
+        vals = w.get_all_values()
+    except Exception:
+        return 0
+    updates, quitadas = [], 0
+    for i, r in enumerate(vals):
+        if i == 0:
+            continue
+        r = list(r) + [""] * (5 - len(r))
+        if str(r[1]) != str(grupo):
+            continue
+        if us is not None and str(r[3]) not in us:
+            continue
+        try:
+            datos = json.loads(r[4] or "{}")
+        except Exception:
+            continue
+        ch = False
+        for dk in list(datos.keys()):
+            if str((datos.get(dk) or {}).get("asig", "")) == str(pid):
+                datos.pop(dk)
+                ch = True
+                quitadas += 1
+        if ch:
+            updates.append({"range": _a1(i + 1, 5),
+                            "values": [[json.dumps(datos, ensure_ascii=False)]]})
+    try:
+        if updates:
+            w.batch_update(updates, value_input_option="RAW")
+    except Exception as e:
+        logger.warning("limpiar_proyecto: %s", e)
+        return 0
+    _invalidate()
+    return quitadas

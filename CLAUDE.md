@@ -1071,6 +1071,26 @@ corren por primera vez en el Cloud.
 Campo → "mi semana" (donde voy cada dia) · fichaje pre-rellenado desde el roster · plan vs real
 (asignado a X / ficho en Y, solo para trabajos enlazados a un PRJ).
 
+## Auto-poblar el planificador con el proyecto entre sus fechas (v220)
+Deploy 2 de 2 de "asignar más inteligente" (feature 2). Al asignar campo a un proyecto, ahora **aparecen
+automáticamente en el planificador**, en ese proyecto (asig=PRJ-####, directo desde v218), **Lun–Vie entre
+FechaInicio y FechaFinEst**. Decisiones del usuario: **todo el rango**, **solo celdas vacías** (no pisa OFF ni
+otro proyecto).
+- **`roster.autopoblar_proyecto(grupo, pid, usuarios, fecha_ini, fecha_fin, solo_vacias=True)`** → {llenadas,
+  ocupadas, actualizadas, nuevas, semanas}. **Eficiente**: lee la hoja UNA vez (`get_all_values`) y escribe en
+  **1 `batch_update`** (filas persona×semana existentes) **+ 1 `append_rows`** (semanas nuevas) — así el span no
+  dispara el rate limit (a diferencia de `guardar_persona`, 2 llamadas por persona/semana). Rellena solo los
+  días Lun–Vie DENTRO de [ini,fin] y solo si la celda está vacía; cuenta las `ocupadas` (respeta OFF/otro
+  proyecto). Tope de seguridad `_MAX_SEMANAS=104`. `_a_date` parsea ISO o date.
+- **`roster.limpiar_proyecto(grupo, pid, usuarios=None)`** → quita del planificador todas las celdas asig==pid
+  (1 batch_update); se usa al **desasignar**.
+- **`projects_ui._autoagenda(grupo, pid, nuevos, quitados, fecha_ini, fecha_fin)`**: helper compartido —
+  auto-puebla los NUEVOS y limpia los DESASIGNADOS, e informa (días asignados / ocupados respetados / sin
+  fecha-fin no planifica). Cableado en crear (`_nuevo_proyecto_form`, tras notificar) y editar
+  (`_detalle_proyecto`, tras guardar: `nuevos` = añadidos, `_quitados` = quitados).
+Verificado: compila + import + AST (0 libres) + tests con worksheet simulado (roster vacío→5 días en fila nueva;
+OFF respetado + fila existente actualizada, 4 llenados; limpiar quita solo el pid y deja OFF). Confirmación = Cloud.
+
 ## Asignar personal más inteligente: ya-en-otro-proyecto + certificados requeridos (v219)
 Petición del usuario (facilitar la planificación al asignar campo). Deploy 1 de 2 (el auto-poblado del
 planificador entre fechas del proyecto = feature 2, va aparte). Se amplió el flujo de asignación (crear
@@ -3070,6 +3090,7 @@ resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NOR
 ## Versiones desplegadas (v215 = actual)
 | Ver | Cambio principal |
 |---|---|
+| v220 | Asignar personal (deploy 2/2): al asignar campo a un proyecto, aparecen AUTOMÁTICAMENTE en el planificador, en ese proyecto, Lun–Vie entre FechaInicio y FechaFinEst (todo el rango, solo celdas vacías — no pisa OFF ni otro proyecto). Al desasignar se limpian sus días de ese proyecto. Escritor eficiente (1 batch_update + 1 append_rows) para no disparar el rate limit |
 | v219 | Asignar personal más inteligente (deploy 1/2): al asignar campo a un proyecto se avisa si el usuario YA está en otro proyecto (y hasta cuándo), y se pueden tildar los certificados que EXIGE el proyecto (campo CertsReq) → aviso + marca 🔴 quien no cumple / 🟡 por vencer, con tabla viva de cumplimiento del equipo en Estado. (Falta feature 2: auto-poblar el planificador entre fechas del proyecto) |
 | v218 | Planificación: un PROYECTO se asigna DIRECTO en el tablero (aparece 🏗 en el desplegable) — ya no hay que crear un "trabajo" que lo enlace (todo proyecto es un trabajo en sí mismo). El catálogo queda solo para lo NO-proyecto (entregas/cursos/traslados) y pierde el campo "enlace a proyecto". Color de proyecto automático y estable (hashlib). Histórico compatible |
 | v217 | Planificación: el tablero pasa a ser EDITABLE EN SITIO — cada celda es un popover coloreado donde asignas/editas ahí mismo (asignación + nota + "aplicar a toda la semana" + abrir proyecto); una celda vacía (＋) también asigna. Se quitó el editor por-persona de abajo. + línea de "cobertura del día" (en obra / sin asignar / OFF) sobre el tablero. Popover+color verificado en vivo (st.popover acepta key en 1.57) |

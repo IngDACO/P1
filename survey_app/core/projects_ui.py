@@ -836,6 +836,43 @@ def _nuevo_proyecto_form(grupo: str, key: str = "nuevo"):
                     "FechaFinEst": (sched["fecha_fin"].strftime("%Y-%m-%d")
                                     if sched.get("fecha_fin") else ""),
                     "InduccionLinks": inds})
+                # v219: auto-poblar el planificador con el proyecto entre sus fechas.
+                _autoagenda(grupo, res, asg, [], f_ini,
+                            sched.get("fecha_fin") if sched.get("fecha_fin") else None)
+
+
+def _autoagenda(grupo, pid, nuevos, quitados, fecha_ini, fecha_fin):
+    """Sincroniza el planificador con la asignación del proyecto (v219): pone a los
+    NUEVOS asignados en el proyecto entre sus fechas (Lun–Vie, solo celdas vacías) y
+    quita del planificador a los DESASIGNADOS. Best-effort; informa el resultado."""
+    from core import roster as R
+    msgs = []
+    try:
+        if nuevos and fecha_ini and fecha_fin:
+            r = R.autopoblar_proyecto(grupo, pid, nuevos, fecha_ini, fecha_fin)
+            if r["llenadas"]:
+                _oc = (f" · {r['ocupadas']} día(s) ya ocupados se respetaron"
+                       if r["ocupadas"] else "")
+                msgs.append(f"📅 Planificador: {r['llenadas']} día(s) asignados a "
+                            f"{len(nuevos)} persona(s) en {r['semanas']} semana(s){_oc}.")
+            elif r["ocupadas"]:
+                msgs.append("📅 Planificador: los días del rango ya estaban ocupados; "
+                            "no se pisó nada.")
+        elif nuevos and not fecha_fin:
+            msgs.append("📅 El proyecto no tiene **fecha de fin**, así que no se "
+                        "auto-planificó. Ponla en ✏️ Datos, o planifica a mano en "
+                        "📅 Planificación.")
+    except Exception:
+        pass
+    try:
+        if quitados:
+            n = R.limpiar_proyecto(grupo, pid, quitados)
+            if n:
+                msgs.append(f"🧹 Planificador: se quitaron {n} día(s) de los desasignados.")
+    except Exception:
+        pass
+    for m in msgs:
+        st.caption(m)
 
 
 def _avisar_asignados(usuarios, grupo=None, exclude_pid=None, certs_req=None):
@@ -1568,6 +1605,10 @@ def _detalle_proyecto(pid: str, grupo: str = None):
                                              [x for x in asignados if x not in nuevos], nombre)
                     except Exception:
                         pass
+                    # v219: sincronizar el planificador — poner a los nuevos en el
+                    # proyecto entre sus fechas y quitar del roster a los desasignados.
+                    _quitados = [x for x in actuales if x not in asignados]
+                    _autoagenda(grupo, pid, nuevos, _quitados, f_ini, f_fin)
                     st.toast("Cambios guardados." + (f"  📨 {_sent} notificado(s)." if _sent else ""))
                     st.rerun()
 
