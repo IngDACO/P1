@@ -1071,6 +1071,27 @@ corren por primera vez en el Cloud.
 Campo → "mi semana" (donde voy cada dia) · fichaje pre-rellenado desde el roster · plan vs real
 (asignado a X / ficho en Y, solo para trabajos enlazados a un PRJ).
 
+## 👷 Usuarios: panorama ACTIVO (fila de salud + tabla clickeable → ficha) (v226)
+Revisión de la sub-pestaña 👷 Usuarios (Planificación). La ficha 360° por persona (`_ficha_usuario`, v153/v184)
+está sólida y NO se tocó. El problema era el PANORAMA: tabla pasiva + un desplegable aparte "elige un usuario"
+para abrir la ficha — el mismo patrón pasivo que el usuario ya hizo cambiar en Proyectos/Finanzas. `_grupo_usuarios`
+reescrita (decisión del usuario: **tabla clickeable**, no tarjetas):
+- **Fila de salud del equipo**: 👥 personas · 🟢 activos · ⚠️ sin contacto · 🟡 cred. por vencer · 🔴 cred.
+  vencida(s). La salud de credenciales por usuario sale de **`credentials.list_group(grupo)` (1 lectura cacheada)**,
+  quedándose con el peor estado por persona.
+- **Tabla CLICKEABLE** (`st.dataframe(on_select="rerun", selection_mode="single-row", key="gu_tbl")`): Usuario ·
+  Nombre · Activo 🟢/🔴 · Contacto ✅/⚠️ · **Credenciales 🟢/🟡/🔴/—** · Tarifa/h. Al **seleccionar una fila** se
+  abre la ficha de esa persona debajo. Se quitó el `ui.elegir` (desplegable) de v153.
+- **Fuente de verdad `_gu_open`** (usuario): maneja (a) **deep-links** `gp_fichasel="Nombre (usuario)"` desde la
+  agenda de HOME (v200) y Finanzas·Horas (v215) — que ya no encuentran el desplegable viejo; se parsea el usuario,
+  se abre su ficha y se descarta la selección de tabla previa; (b) que la ficha persista entre sus reruns; (c) al
+  **eliminar**, `_ficha_usuario` (sel_key por defecto `gp_fichasel`, inerte aquí) deja `_gu_open` apuntando al
+  borrado → el bloque de arriba detecta que ya no existe y cierra la ficha (+ limpia `gu_tbl`).
+- El form de alta se extrajo a **`_crear_usuario_form(grupo)`** (reusado en el estado vacío y en el expander).
+  La matriz de credenciales (expander) y el alta quedan como secundarios abajo.
+Verificado: compila + import + AST (0 libres) + parse del deep-link (todos los formatos). El panel del PROPIETARIO
+(`_owner_usuarios`) NO se tocó (sigue con su selector). Confirmación visual = Cloud (necesita login+Sheets).
+
 ## Finanzas/Gastos: torta de gasto por rubro (v224)
 El usuario pidió una **torta** del gasto por rubro debajo de los dos bloques de barras (reparto | compras por
 categoría). Decisión del usuario: rubros = **Mano de obra + cada categoría de compra** (reparto COMPLETO del
@@ -3155,6 +3176,7 @@ resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NOR
 ## Versiones desplegadas (v215 = actual)
 | Ver | Cambio principal |
 |---|---|
+| v226 | 👷 Usuarios: panorama activo — fila de salud del equipo (personas/activos/sin contacto/credenciales por vencer o vencidas) + tabla CLICKEABLE (Usuario·Nombre·Activo·Contacto·Credenciales·Tarifa) que al tocar una fila abre la ficha 360° de esa persona (antes: tabla pasiva + desplegable aparte). Deep-links de HOME/Finanzas Horas manejados. La ficha no cambió |
 | v225 | Torta de gasto por rubro CENTRADA: antes la leyenda (flex:1) se estiraba a todo el ancho y el monto/% se iban al borde ("todo separado"); ahora torta+leyenda se agrupan con justify-content:center y la leyenda se acota a 300px (márgenes iguales, verificado) |
 | v224 | Finanzas → Gastos: diagrama de TORTA del gasto por rubro (Mano de obra + cada categoría de compra), debajo de los dos bloques de barras. Hecho con CSS conic-gradient (sin dependencias nuevas) + leyenda color·rubro·$·%. Verificado en vivo que st.markdown no lo recorta |
 | v223 | Cartera de proyectos (📊 Proyectos): cada tarjeta ahora muestra ANTES de abrir — nombre, estado + % avance (barra real), cliente, fechas inicio→fin, % presupuesto ejecutado (⚠️ si se pasó), nº de usuarios y alertas; se abre con botón «Abrir». Borde izq por salud. % presupuesto de group_expenses (1 lectura cacheada); se quitaron las horas. Opción A elegida por el usuario tras ver un mockup |

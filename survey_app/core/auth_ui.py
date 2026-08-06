@@ -766,31 +766,119 @@ def _ficha_usuario(u, grupo, owner=False, sel_key="gp_fichasel"):
                     st.rerun()
 
 
+def _crear_usuario_form(grupo):
+    """Alta de un usuario de campo (email obligatorio; el Telegram se vincula luego)."""
+    with st.form("form_campo", clear_on_submit=True):
+        u  = st.text_input("Usuario")
+        nm = st.text_input("Nombre")
+        pw = st.text_input("Contraseña", type="password")
+        em = st.text_input("📧 Email (OBLIGATORIO para campo)")
+        st.caption("El Telegram se vincula en su ficha tras crearlo.")
+        if st.form_submit_button("Crear"):
+            if not em.strip():
+                st.error("El email es obligatorio para usuarios de campo.")
+            else:
+                ok, msg = auth.add_user(u, pw, "campo", nm, grupo)
+                if ok and em.strip():
+                    auth.set_contact(u, email=em)
+                (st.success if ok else st.error)(msg)
+                if ok:
+                    st.rerun()
+
+
 def _grupo_usuarios(grupo):
+    """👷 Usuarios de campo (v226): panorama ACTIVO — fila de salud del equipo + tabla
+    CLICKEABLE (al seleccionar una fila se abre la ficha 360° de esa persona, en vez del
+    desplegable aparte que había). La ficha (`_ficha_usuario`) no cambia.
+    El aviso de vencimientos ya NO se dispara aquí (desde v187 corre al login, app.py)."""
     from core import credentials as C
     users = auth.list_users(grupo=grupo)
     gente = [u for u in users if u["Rol"].lower() == "campo"]
-    # El aviso de vencimientos ya NO se dispara aquí (dependía de abrir este panel):
-    # desde v187 corre al login de cualquier admin/propietario (app.py), 1×/día/grupo.
 
-    # ── Panorama: tabla-resumen con semáforos ──
-    if gente:
-        _rows = []
-        for u in gente:
-            es_campo = u["Rol"].lower() == "campo"
-            _cont = ("—" if not es_campo
-                     else ("✅" if (str(u.get("Email", "")).strip()
-                                    and str(u.get("TelegramChatID", "")).strip())
-                           else "⚠️ falta"))
-            _rows.append({"Usuario": u["Usuario"], "Nombre": u["Nombre"],
-                          "Rol": u["Rol"], "Activo": u["Activo"],
-                          "Tarifa/h": u.get("TarifaHora", "") or "—", "Contacto": _cont})
-        st.dataframe(pd.DataFrame(_rows), hide_index=True, use_container_width=True)
-    else:
-        st.info("Aún no tienes usuarios de campo. Crea uno abajo.")
+    if not gente:
+        st.info("Aún no tienes usuarios de campo. Crea el primero aquí.")
+        with st.expander("➕ Crear usuario de campo", expanded=True):
+            _crear_usuario_form(grupo)
+        return
 
-    # ── Matriz de compliance (panorama de credenciales) ──
-    if gente and C.is_configured():
+    # ── Ficha abierta (`_gu_open` = usuario) — fuente de verdad, para: (a) deep-links
+    #    "Nombre (usuario)" desde la agenda de HOME (v200) y Finanzas·Horas (v215), que
+    #    ya no encuentran el desplegable viejo; (b) que la ficha persista entre sus
+    #    propios reruns; (c) cerrarla al eliminar al usuario. ──
+    _deep = st.session_state.pop("gp_fichasel", None)
+    if _deep:
+        _du = (_deep.rsplit("(", 1)[-1].rstrip(")").strip()
+               if "(" in str(_deep) else str(_deep).strip())
+        st.session_state["_gu_open"] = _du
+        st.session_state.pop("gu_tbl", None)      # descarta cualquier selección previa
+    _op = st.session_state.get("_gu_open")
+    if _op and not any(u["Usuario"] == _op for u in gente):   # p.ej. tras eliminarlo
+        st.session_state.pop("_gu_open", None)
+        st.session_state.pop("gu_tbl", None)
+
+    # ── Salud de credenciales por usuario (1 lectura CACHEADA) ──
+    _peor = {}          # {usuario_lower: 'vencido'|'por_vencer'|'vigente'}
+    if C.is_configured():
+        _rank = {"vencido": 3, "por_vencer": 2, "vigente": 1}
+        try:
+            for r in C.list_group(grupo):
+                _uu = str(r.get("Usuario", "")).strip().lower()
+                _s = C.status(r.get("Vencimiento"))
+                if _s and _rank.get(_s, 0) > _rank.get(_peor.get(_uu, ""), 0):
+                    _peor[_uu] = _s
+        except Exception:
+            pass
+    _ico = {"vencido": "🔴", "por_vencer": "🟡", "vigente": "🟢"}
+
+    def _activo(u):
+        return str(u.get("Activo", "")).strip().upper() in ("SI", "TRUE", "1", "SÍ")
+
+    def _cont_ok(u):
+        return bool(str(u.get("Email", "")).strip()
+                    and str(u.get("TelegramChatID", "")).strip())
+
+    # ── Fila de SALUD del equipo (de un vistazo) ──
+    _nact = sum(1 for u in gente if _activo(u))
+    _nsc = sum(1 for u in gente if not _cont_ok(u))
+    _npv = sum(1 for u in gente if _peor.get(u["Usuario"].strip().lower()) == "por_vencer")
+    _nvc = sum(1 for u in gente if _peor.get(u["Usuario"].strip().lower()) == "vencido")
+    _linea = f"👥 **{len(gente)}** personas · 🟢 **{_nact}** activos"
+    if _nsc:
+        _linea += f" · ⚠️ **{_nsc}** sin contacto"
+    if _npv:
+        _linea += f" · 🟡 **{_npv}** cred. por vencer"
+    if _nvc:
+        _linea += f" · 🔴 **{_nvc}** cred. vencida(s)"
+    st.markdown(_linea)
+
+    # ── Tabla CLICKEABLE → abre la ficha de esa persona ──
+    _rows = [{
+        "Usuario": u["Usuario"], "Nombre": u["Nombre"] or u["Usuario"],
+        "Activo": "🟢" if _activo(u) else "🔴",
+        "Contacto": "✅" if _cont_ok(u) else "⚠️",
+        "Credenciales": _ico.get(_peor.get(u["Usuario"].strip().lower()), "—"),
+        "Tarifa/h": u.get("TarifaHora", "") or "—",
+    } for u in gente]
+    _ev = st.dataframe(pd.DataFrame(_rows), hide_index=True, use_container_width=True,
+                       on_select="rerun", selection_mode="single-row", key="gu_tbl")
+    st.caption("👆 Toca una fila para abrir y gestionar la ficha de esa persona.  "
+               "Credenciales: 🟢 vigentes · 🟡 por vencer · 🔴 vencida · — sin registrar.")
+    try:
+        _sr = list(_ev.selection.rows)
+    except Exception:
+        _sr = []
+    if _sr and _sr[0] < len(gente):
+        st.session_state["_gu_open"] = gente[_sr[0]]["Usuario"]
+    _op = st.session_state.get("_gu_open")
+    _oi = next((i for i, u in enumerate(gente) if u["Usuario"] == _op), None) if _op else None
+    if _oi is not None:
+        st.markdown("---")
+        # sel_key por defecto (gp_fichasel, ya popeado aquí): al eliminar deja `_gu_open`
+        # apuntando al usuario borrado → el bloque de arriba cierra la ficha en el rerun.
+        _ficha_usuario(gente[_oi], grupo)
+
+    # ── Secundarios: matriz de credenciales + crear usuario ──
+    if C.is_configured():
         try:
             tipos, filas = C.matrix(grupo)
             if tipos:
@@ -799,35 +887,8 @@ def _grupo_usuarios(grupo):
                     st.dataframe(pd.DataFrame(filas), hide_index=True, use_container_width=True)
         except Exception:
             pass
-
-    # ── Crear usuario (plegado) ──
     with st.expander("➕ Crear usuario de campo"):
-        with st.form("form_campo", clear_on_submit=True):
-            u  = st.text_input("Usuario")
-            nm = st.text_input("Nombre")
-            pw = st.text_input("Contraseña", type="password")
-            em = st.text_input("📧 Email (OBLIGATORIO para campo)")
-            st.caption("El Telegram se vincula en su ficha tras crearlo.")
-            if st.form_submit_button("Crear"):
-                if not em.strip():
-                    st.error("El email es obligatorio para usuarios de campo.")
-                else:
-                    ok, msg = auth.add_user(u, pw, "campo", nm, grupo)
-                    if ok and em.strip():
-                        auth.set_contact(u, email=em)
-                    (st.success if ok else st.error)(msg)
-                    if ok:
-                        st.rerun()
-
-    # ── Ficha de UN usuario (elegir y gestionar todo) ──
-    if gente:
-        st.markdown("#### 👤 Gestionar un usuario")
-        _map = {f"{u['Nombre'] or u['Usuario']} ({u['Usuario']})": u for u in gente}
-        _elegido = ui.elegir("Usuario", _map, key="gp_fichasel",
-                             vacio="— elige un usuario —")
-        if _elegido:
-            st.markdown("---")
-            _ficha_usuario(_elegido, grupo)
+        _crear_usuario_form(grupo)
 
 
 def render_group_panel(grupo: str):
