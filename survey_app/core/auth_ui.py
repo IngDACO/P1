@@ -676,12 +676,22 @@ def _ficha_usuario(u, grupo, owner=False, sel_key="gp_fichasel"):
                     horizontal=True, key=f"{k}_sec", label_visibility="collapsed")
 
     if _sec == "🔑 Acceso":
-        np_ = st.text_input("Nueva contraseña", type="password", key=f"{k}_np")
-        if st.button("Cambiar contraseña", key=f"{k}_chp"):
-            if np_:
-                ok, msg = auth.set_password(sel, np_); (st.success if ok else st.error)(msg)
-            else:
-                st.error("Escribe la nueva contraseña.")
+        _a1, _a2 = st.columns(2)      # v227: contraseña | tarifa lado a lado
+        with _a1:
+            np_ = st.text_input("Nueva contraseña", type="password", key=f"{k}_np")
+            if st.button("Cambiar contraseña", key=f"{k}_chp", use_container_width=True):
+                if np_:
+                    ok, msg = auth.set_password(sel, np_); (st.success if ok else st.error)(msg)
+                else:
+                    st.error("Escribe la nueva contraseña.")
+        with _a2:
+            tar = st.number_input("💵 Tarifa por hora", min_value=0.0, step=1.0,
+                                  value=float(str(u.get("TarifaHora", "") or 0).replace(",", ".") or 0),
+                                  key=f"{k}_tar", help="Para costear la mano de obra.")
+            if st.button("Guardar tarifa", key=f"{k}_savetar", use_container_width=True):
+                ok, msg = auth.set_rate(sel, tar); (st.success if ok else st.error)(msg)
+                if ok:
+                    st.rerun()
         if owner:   # el propietario también reasigna rol y grupo (v184)
             _gopts = [""] + [g["Grupo"] for g in auth.list_groups()]
             _rc, _gc = st.columns(2)
@@ -701,21 +711,14 @@ def _ficha_usuario(u, grupo, owner=False, sel_key="gp_fichasel"):
                 ok, msg = auth.set_group(sel, _ngrp); (st.success if ok else st.error)(msg)
                 if ok:
                     st.rerun()
-        tar = st.number_input("💵 Tarifa por hora (para costear la mano de obra)",
-                              min_value=0.0, step=1.0,
-                              value=float(str(u.get("TarifaHora", "") or 0).replace(",", ".") or 0),
-                              key=f"{k}_tar")
-        if st.button("Guardar tarifa", key=f"{k}_savetar"):
-            ok, msg = auth.set_rate(sel, tar); (st.success if ok else st.error)(msg)
-            if ok:
-                st.rerun()
         if activo:
-            if st.button("🔴 Desactivar (no podrá entrar)", key=f"{k}_de"):
+            if st.button("🔴 Desactivar (no podrá entrar)", key=f"{k}_de",
+                         use_container_width=True):
                 ok, msg = auth.set_active(sel, False); (st.success if ok else st.error)(msg)
                 if ok:
                     st.rerun()
         else:
-            if st.button("🟢 Activar", key=f"{k}_act"):
+            if st.button("🟢 Activar", key=f"{k}_act", use_container_width=True):
                 ok, msg = auth.set_active(sel, True); (st.success if ok else st.error)(msg)
                 if ok:
                     st.rerun()
@@ -733,14 +736,14 @@ def _ficha_usuario(u, grupo, owner=False, sel_key="gp_fichasel"):
         render_credenciales(sel, grupo, editable=True, key_prefix=f"{k}_cr")
 
     elif _sec == "📊 Su trabajo":
-        # Todo lo asociado a la persona, en solo lectura.
         c1, c2, c3 = st.columns(3)
         try:
             gh = next((d for d in T.group_hours(grupo, days=None)
                        if d["usuario"] == sel), None)
-            _h = (gh["general"] + gh["proyecto"]) if gh else 0.0
         except Exception:
-            _h = 0.0
+            gh = None
+        _h = (gh["general"] + gh["proyecto"]) if gh else 0.0
+        _pp = (gh.get("por_proyecto") or {}) if gh else {}
         rec = E.by_user(grupo, sel) if E.is_configured() else {"n": 0, "total": 0.0}
         asg = ([p for p in P.list_projects(grupo=grupo)
                 if sel in [x.strip() for x in str(p.get("CampoAsignados", "")).split(";")]]
@@ -748,12 +751,30 @@ def _ficha_usuario(u, grupo, owner=False, sel_key="gp_fichasel"):
         c1.metric("Horas registradas", f"{_h:.1f}")
         c2.metric("Recibos cargados", rec["n"])
         c3.metric("Proyectos asignados", len(asg))
+
+        # v227: proyectos asignados CLICKEABLES → abren el proyecto (elementos activos).
         if asg:
-            st.caption("**Asignado a:** " + " · ".join(str(p.get("Nombre")) for p in asg))
+            st.markdown("**Asignado a** — toca para abrir:")
+            _ac = st.columns(2)
+            for _i, _p in enumerate(asg):
+                if _ac[_i % 2].button(f"🏗 {_p.get('Nombre', '')}", key=f"{k}_gp_{_i}",
+                                      use_container_width=True):
+                    st.session_state["_prjsel_pending"] = str(_p.get("ID", ""))
+                    st.session_state["_admin_nav_pending"] = ("proyectos", "📊 Proyectos")
+                    st.session_state["_gruposec_pending"] = "📊 Proyectos"
+                    st.rerun()
+        elif es_campo:
+            st.caption("Sin proyectos asignados.")
+
+        # Horas por proyecto de esta persona (del fichaje): dónde ha puesto su tiempo.
+        if _pp:
+            st.markdown("**Horas por proyecto:** "
+                        + " · ".join(f"{_n} {_hh:.1f} h"
+                                     for _n, _hh in sorted(_pp.items(), key=lambda x: -x[1])))
         if rec["n"]:
             st.caption(f"Ha cargado recibos por **${rec['total']:,.0f}** en total.")
-        st.caption("Las horas y los recibos se gestionan desde ⏱ Fichaje y el detalle "
-                   "de cada proyecto; aquí es un resumen de solo lectura.")
+        st.caption("Las horas y los recibos se gestionan desde ⏱ Fichaje y el detalle de "
+                   "cada proyecto; aquí es un resumen.")
 
     else:  # 🗑 eliminar
         st.warning("Eliminar quita al usuario y su acceso. Sus fichajes, recibos y "

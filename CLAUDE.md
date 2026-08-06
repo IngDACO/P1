@@ -1071,6 +1071,21 @@ corren por primera vez en el Cloud.
 Campo → "mi semana" (donde voy cada dia) · fichaje pre-rellenado desde el roster · plan vs real
 (asignado a X / ficho en Y, solo para trabajos enlazados a un PRJ).
 
+## Ficha de usuario: 📊 Su trabajo ACTIVA + 🔑 Acceso a doble columna (v227)
+Revisión de las SUB-pestañas de la ficha (`_ficha_usuario`). Auditoría honesta: 📇 Contacto y 🎫 Credenciales
+(v185-189) ya sólidas → no se tocaron; 📊 Su trabajo era PASIVA y 🔑 Acceso estaba apilada.
+- **📊 Su trabajo**: los proyectos asignados dejan de ser texto ("Asignado a: X · Y") y pasan a **botones
+  CLICKEABLES** (rejilla 2 col) que **abren el proyecto** — set `_prjsel_pending` + `_admin_nav_pending=
+  ("proyectos","📊 Proyectos")` (+ `_gruposec_pending` para la nav vieja) + rerun (mismo patrón que el board del
+  roster). Además, **"Horas por proyecto"** de esa persona (de `group_hours(...)["por_proyecto"]`, el dato de
+  v216): dónde puso su tiempo. Los 3 KPIs (horas/recibos/proyectos) se mantienen.
+- **🔑 Acceso**: peinada a **doble columna** — contraseña | tarifa lado a lado (antes apiladas); rol/grupo del
+  propietario ya iban en 2 col; activar/desactivar a ancho completo. ⚠️ Al mover la tarifa a la columna se
+  BORRÓ el bloque de tarifa viejo (mismos keys `{k}_tar`/`{k}_savetar` → habría dado StreamlitDuplicateKey);
+  verificado que cada key aparece 1 sola vez.
+Verificado: compila + import + AST (0 libres) + keys sin duplicar. La ficha se renderiza a nivel top en
+`_grupo_usuarios`, así que los `st.columns` nuevos son 1 nivel (sin anidación). Confirmación visual = Cloud.
+
 ## 👷 Usuarios: panorama ACTIVO (fila de salud + tabla clickeable → ficha) (v226)
 Revisión de la sub-pestaña 👷 Usuarios (Planificación). La ficha 360° por persona (`_ficha_usuario`, v153/v184)
 está sólida y NO se tocó. El problema era el PANORAMA: tabla pasiva + un desplegable aparte "elige un usuario"
@@ -3176,6 +3191,7 @@ resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NOR
 ## Versiones desplegadas (v215 = actual)
 | Ver | Cambio principal |
 |---|---|
+| v227 | Ficha de usuario (sub-pestañas): 📊 Su trabajo pasa a ACTIVA — los proyectos asignados son botones que abren el proyecto + "horas por proyecto" de esa persona; 🔑 Acceso peinada a doble columna (contraseña\|tarifa). Contacto y Credenciales ya estaban sólidas, no se tocaron |
 | v226 | 👷 Usuarios: panorama activo — fila de salud del equipo (personas/activos/sin contacto/credenciales por vencer o vencidas) + tabla CLICKEABLE (Usuario·Nombre·Activo·Contacto·Credenciales·Tarifa) que al tocar una fila abre la ficha 360° de esa persona (antes: tabla pasiva + desplegable aparte). Deep-links de HOME/Finanzas Horas manejados. La ficha no cambió |
 | v225 | Torta de gasto por rubro CENTRADA: antes la leyenda (flex:1) se estiraba a todo el ancho y el monto/% se iban al borde ("todo separado"); ahora torta+leyenda se agrupan con justify-content:center y la leyenda se acota a 300px (márgenes iguales, verificado) |
 | v224 | Finanzas → Gastos: diagrama de TORTA del gasto por rubro (Mano de obra + cada categoría de compra), debajo de los dos bloques de barras. Hecho con CSS conic-gradient (sin dependencias nuevas) + leyenda color·rubro·$·%. Verificado en vivo que st.markdown no lo recorta |
