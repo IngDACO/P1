@@ -30,8 +30,16 @@ _SECCIONES = [
 _LBL2KEY = {lbl: k for k, lbl in _SECCIONES}
 
 
-_SUBKEY = {"planificacion": "adm_plan_sub", "proyectos": "adm_proy_sub",
-           "finanzas": "adm_fin_sub", "herramientas": "adm_herr_sub"}
+# Sub-pestañas (nivel 2) de cada sección, centralizadas (v229): (clave_de_estado, [labels]).
+# Antes estaban repartidas en cada `_seccion_*`; ahora también las usa el sidebar (acordeón).
+_SUBSECCIONES = {
+    "planificacion": ("adm_plan_sub", ["📋 Tablero", "👷 Usuarios"]),
+    "proyectos":     ("adm_proy_sub", ["📊 Proyectos", "🗂 Agrupaciones"]),
+    "finanzas":      ("adm_fin_sub",  ["💰 Gastos", "⏱ Horas"]),
+    "herramientas":  ("adm_herr_sub", ["📐 Survey", "🔩 Plomada", "✂️ Rieles",
+                                       "🛡 Buffers", "🎗 Belting", "🦺 Pre-Start"]),
+}
+_SUBKEY = {k: v[0] for k, v in _SUBSECCIONES.items()}   # {seccion: clave_de_estado}
 
 
 def navegar(seccion, sub_label=None):
@@ -81,14 +89,49 @@ def ir_atras():
 
 
 def sidebar_menu() -> str:
-    """Renderiza el menú de iconos en el sidebar y devuelve la clave de la sección."""
+    """Menú lateral de 2 niveles (v229): secciones (nivel 1) y, bajo la ACTIVA, sus
+    sub-pestañas (nivel 2) indentadas y clickeables → se va DIRECTO desde el sidebar
+    (acordeón: solo la activa despliega sus hijas). Los botones se estilan como ítems de
+    menú vía CSS `.st-key-…` (verificado en vivo). Devuelve la clave de la sección activa."""
     _aplicar_nav_pending()                     # aplica saltos de los elementos activos
+    _cur_lbl = st.session_state.get("admin_nav") or _SECCIONES[0][1]
+    _cur = _LBL2KEY.get(_cur_lbl, "home")
+
+    # Botones como ítems de menú + resaltado del activo (sección y sub).
+    # ⚠️ Prefijo `navsec_`/`navsub_` (NO `nav_`): `[class*="st-key-nav_"]` también matchearía
+    # `st-key-nav_back_btn` (el botón ← del topbar, v205) y lo restylearía.
+    _css = ["<style>",
+            '[class*="st-key-navsec_"] button,[class*="st-key-navsub_"] button{'
+            'border:none!important;background:transparent!important;box-shadow:none!important;'
+            'justify-content:flex-start!important;padding:5px 12px!important;min-height:0!important;}',
+            '[class*="st-key-navsec_"] button p,[class*="st-key-navsub_"] button p{'
+            'text-align:left!important;width:100%!important;}',
+            '[class*="st-key-navsub_"] button{padding-left:26px!important;font-size:.85rem!important;}',
+            f'.st-key-navsec_{_cur} button{{background:#e8eef6!important;color:#1e4e79!important;'
+            'font-weight:600!important;border-radius:8px!important;}']
+    if _cur in _SUBSECCIONES:
+        _sk, _subs = _SUBSECCIONES[_cur]
+        _cursub = st.session_state.get(_sk) or _subs[0]
+        if _cursub in _subs:
+            _css.append(f'.st-key-navsub_{_cur}_{_subs.index(_cursub)} button{{'
+                        'background:#e8eef6!important;color:#1e4e79!important;'
+                        'font-weight:600!important;border-radius:8px!important;}')
+    _css.append("</style>")
+    st.markdown("".join(_css), unsafe_allow_html=True)
+
     st.markdown("###### NAVEGACIÓN")
-    sel = st.radio("Menú", [lbl for _, lbl in _SECCIONES], key="admin_nav",
-                   label_visibility="collapsed")
-    _key = _LBL2KEY.get(sel, "home")
-    _track_history(_key)
-    return _key
+    for _k, _lbl in _SECCIONES:
+        _has = _k in _SUBSECCIONES
+        _mark = ("  ▾" if (_has and _k == _cur) else ("  ▸" if _has else ""))
+        if st.button(_lbl + _mark, key=f"navsec_{_k}", use_container_width=True):
+            navegar(_k)                        # entra a la sección (mantiene su sub actual)
+        if _has and _k == _cur:                # acordeón: solo la activa despliega sus hijas
+            _sk, _subs = _SUBSECCIONES[_k]
+            for _i, _s in enumerate(_subs):
+                if st.button(f"› {_s}", key=f"navsub_{_k}_{_i}", use_container_width=True):
+                    navegar(_k, _s)
+    _track_history(_cur)
+    return _cur
 
 
 # ── Barra superior (buscador + campana) ──────────────────────────
@@ -181,17 +224,22 @@ def render_admin_content(key, grupo):
         render_home(grupo)
 
 
-def _subnav(titulo, opciones, key):
-    """Sub-menú horizontal dentro de un apartado (mismo estilo que la nav actual)."""
-    st.markdown(f"## {titulo}")
-    sel = st.radio("sub", opciones, horizontal=True, key=key, label_visibility="collapsed")
+def _sub_header(titulo, seccion):
+    """Cabecera del contenido con la sub-pestaña ACTUAL (v229). El selector de nivel 2 ya
+    NO va aquí (radio horizontal) — vive en el sidebar (`sidebar_menu`); esto solo da
+    contexto. Devuelve la sub-pestaña activa (de session_state; default = la primera)."""
+    _sk, _subs = _SUBSECCIONES[seccion]
+    sub = st.session_state.get(_sk) or _subs[0]
+    if sub not in _subs:
+        sub = _subs[0]
+    st.markdown(f"## {titulo}  ·  {sub}")
     st.markdown("---")
-    return sel
+    return sub
 
 
 def _seccion_planificacion(grupo):
     # v191: la gestión de usuarios vive aquí (decisión del usuario), junto al tablero.
-    sub = _subnav("📅 Planificación", ["📋 Tablero", "👷 Usuarios"], "adm_plan_sub")
+    sub = _sub_header("📅 Planificación", "planificacion")
     if sub == "📋 Tablero":
         from core import roster_ui
         roster_ui.render_planificacion(grupo)
@@ -202,7 +250,7 @@ def _seccion_planificacion(grupo):
 
 def _seccion_proyectos(grupo):
     from core import projects_ui as PU
-    sub = _subnav("📁 Proyectos", ["📊 Proyectos", "🗂 Agrupaciones"], "adm_proy_sub")
+    sub = _sub_header("📁 Proyectos", "proyectos")
     if sub == "📊 Proyectos":
         PU._panel_proyectos(grupo)
     else:
@@ -211,7 +259,7 @@ def _seccion_proyectos(grupo):
 
 def _seccion_finanzas(grupo):
     from core import projects_ui as PU
-    sub = _subnav("💰 Finanzas", ["💰 Gastos", "⏱ Horas"], "adm_fin_sub")
+    sub = _sub_header("💰 Finanzas", "finanzas")
     if sub == "💰 Gastos":
         PU.render_group_expenses(grupo)
     else:
@@ -220,9 +268,7 @@ def _seccion_finanzas(grupo):
 
 def _seccion_herramientas(grupo):
     rol = st.session_state.get("auth", {}).get("rol", "administrador")
-    sub = _subnav("🛠 Herramientas",
-                  ["📐 Survey", "🔩 Plomada", "✂️ Rieles", "🛡 Buffers", "🎗 Belting", "🦺 Pre-Start"],
-                  "adm_herr_sub")
+    sub = _sub_header("🛠 Herramientas", "herramientas")
     if sub == "📐 Survey":
         from core.survey_ui import render_survey_tab
         render_survey_tab(rol, grupo)

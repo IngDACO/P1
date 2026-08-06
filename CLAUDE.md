@@ -1120,6 +1120,27 @@ tiene `background-image: conic-gradient(...)` computado; la nota de diagrams.py 
 `<svg>`" aplica a SVG, no a un div con conic-gradient). Compila + import + AST (0 libres) + lógica (tramos
 0→100%, formato $/%). Paleta de 12 colores; MO = azul (#2e6da4, como el reparto).
 
+## Navegación del admin: sidebar de 2 niveles (acordeón) (v229)
+El usuario pidió que las sub-pestañas (nivel 2) se desplieguen en la PROPIA barra izquierda, para ir directo
+a una sub-pestaña desde el sidebar. Se le mostró un mockup (visualize) de **acordeón** vs **árbol libre** →
+eligió **acordeón** (solo la sección activa despliega sus hijas). Rediseño de `home_ui.sidebar_menu`:
+- El nivel 1 pasa de `st.radio` a **botones** (para poder anidar las hijas debajo del padre activo). Se estilan
+  como ítems de menú vía CSS `.st-key-…` (borde/fondo transparentes, texto a la izq; activo = fondo #e8eef6 +
+  texto #1e4e79 + negrita). ⚠️ **Verificado EN VIVO** (mini-app + DOM: activo resaltado, sub indentada 26px,
+  inactivas transparentes). La sección activa se guarda en `st.session_state["admin_nav"]` (ya NO es widget →
+  asignación plana).
+- **Sub-pestañas centralizadas** en `_SUBSECCIONES = {seccion: (clave_estado, [labels])}` (antes repartidas en
+  cada `_seccion_*`); `_SUBKEY` se deriva de ahí. Bajo la sección activa se renderizan sus hijas como botones
+  indentados (`navsub_<sec>_<i>`); tocar una → `navegar(sec, sub)`.
+- El selector de nivel 2 **se quitó del contenido** (`_subnav` eliminado): ahora `_sub_header(titulo, seccion)`
+  solo pone la cabecera "## Titulo · <sub actual>" y los `_seccion_*` leen la sub de `session_state`.
+- ⚠️ **Colisión de clases evitada**: las claves de nivel 1 son `navsec_<k>` (NO `nav_<k>`) porque
+  `[class*="st-key-nav_"]` también matchearía `st-key-nav_back_btn` (el botón ← del topbar v205) y lo
+  restylearía. `navsec_`/`navsub_` no matchean `nav_back_btn`.
+- Deep-links intactos (`_admin_nav_pending` → `_aplicar_nav_pending` fija `admin_nav` + la sub-key); back button
+  y `_track_history` igual; `app.py` sin cambios (sidebar_menu devuelve la clave de sección como antes).
+Verificado: compila + import + AST (0 libres) + 0 referencias a `_subnav` + CSS en vivo. Solo rol admin.
+
 ## Cartera de proyectos: toggle Tarjetas | Lista (v228)
 El usuario pidió una vista alternativa: además de las tarjetas (v223), la típica **tabla** (proyectos por
 filas, datos por columnas). En `_panel_proyectos` se añadió un **toggle `st.radio` "🃏 Tarjetas | 📋 Lista"**
@@ -3203,6 +3224,7 @@ resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NOR
 ## Versiones desplegadas (v215 = actual)
 | Ver | Cambio principal |
 |---|---|
+| v229 | Navegación del admin: el sidebar pasa a 2 niveles (acordeón) — bajo la sección activa se despliegan sus sub-pestañas indentadas y clickeables, para ir directo a una de nivel 2 desde la barra izquierda. El nivel 1 pasa de radio a botones-menú (CSS st-key, verificado). Se quitó el radio horizontal de sub-pestañas del contenido |
 | v228 | Cartera de Proyectos: toggle de vista "🃏 Tarjetas \| 📋 Lista". La Lista es la tabla clásica (proyecto por fila; columnas estado/avance con barra/cliente/fechas/% presupuesto/usuarios/situación/alertas) y es clickeable (seleccionar fila abre el proyecto). Las tarjetas siguen como default |
 | v227 | Ficha de usuario (sub-pestañas): 📊 Su trabajo pasa a ACTIVA — los proyectos asignados son botones que abren el proyecto + "horas por proyecto" de esa persona; 🔑 Acceso peinada a doble columna (contraseña\|tarifa). Contacto y Credenciales ya estaban sólidas, no se tocaron |
 | v226 | 👷 Usuarios: panorama activo — fila de salud del equipo (personas/activos/sin contacto/credenciales por vencer o vencidas) + tabla CLICKEABLE (Usuario·Nombre·Activo·Contacto·Credenciales·Tarifa) que al tocar una fila abre la ficha 360° de esa persona (antes: tabla pasiva + desplegable aparte). Deep-links de HOME/Finanzas Horas manejados. La ficha no cambió |
