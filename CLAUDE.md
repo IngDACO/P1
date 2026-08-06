@@ -1120,6 +1120,18 @@ tiene `background-image: conic-gradient(...)` computado; la nota de diagrams.py 
 `<svg>`" aplica a SVG, no a un div con conic-gradient). Compila + import + AST (0 libres) + lógica (tramos
 0→100%, formato $/%). Paleta de 12 colores; MO = azul (#2e6da4, como el reparto).
 
+## Cartera de proyectos: toggle Tarjetas | Lista (v228)
+El usuario pidió una vista alternativa: además de las tarjetas (v223), la típica **tabla** (proyectos por
+filas, datos por columnas). En `_panel_proyectos` se añadió un **toggle `st.radio` "🃏 Tarjetas | 📋 Lista"**
+(key `cart_view`, junto al header de la cartera). Nueva **`_cartera_lista(proys, alarmas, delays, aheads,
+costos)`**: `st.dataframe` CLICKEABLE con columnas Proyecto · Estado · **Avance (ProgressColumn con barra)** ·
+Cliente · Inicio · Fin · Ppto (% ejecutado, ⚠️ si over) · 👷 usuarios · Situación (🔴/🟢 retraso/adelanto) ·
+🔔 alertas. Al **seleccionar una fila** se abre el detalle (`_admin_open_proj`) y se **popea `cart_tbl`** para
+que al volver NO se re-abra solo (misma técnica anti-loop que v226). ⚠️ **Verificado en vivo** que la columna
+🔔 no puede mezclar int y str (Arrow falla la serialización) → se fuerza a **string** (`str(_al) if _al else
+""`); tras el fix no hay warning de Arrow. `ProgressColumn` existe en 1.57. Ordenación por urgencia igual que
+las tarjetas. Compila + import + AST (0 libres). La cartera del propietario (`_portfolio_html`) no se tocó.
+
 ## Cartera de proyectos: tarjeta con resumen completo antes de abrir (v223)
 El usuario pidió ver en el tablero (📊 Proyectos) toda la info del proyecto ANTES de abrirlo. Se le mostraron
 2 opciones (mockup vía visualize) y eligió la **Opción A**: tarjeta con barra de progreso + botón «Abrir».
@@ -3191,6 +3203,7 @@ resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NOR
 ## Versiones desplegadas (v215 = actual)
 | Ver | Cambio principal |
 |---|---|
+| v228 | Cartera de Proyectos: toggle de vista "🃏 Tarjetas \| 📋 Lista". La Lista es la tabla clásica (proyecto por fila; columnas estado/avance con barra/cliente/fechas/% presupuesto/usuarios/situación/alertas) y es clickeable (seleccionar fila abre el proyecto). Las tarjetas siguen como default |
 | v227 | Ficha de usuario (sub-pestañas): 📊 Su trabajo pasa a ACTIVA — los proyectos asignados son botones que abren el proyecto + "horas por proyecto" de esa persona; 🔑 Acceso peinada a doble columna (contraseña\|tarifa). Contacto y Credenciales ya estaban sólidas, no se tocaron |
 | v226 | 👷 Usuarios: panorama activo — fila de salud del equipo (personas/activos/sin contacto/credenciales por vencer o vencidas) + tabla CLICKEABLE (Usuario·Nombre·Activo·Contacto·Credenciales·Tarifa) que al tocar una fila abre la ficha 360° de esa persona (antes: tabla pasiva + desplegable aparte). Deep-links de HOME/Finanzas Horas manejados. La ficha no cambió |
 | v225 | Torta de gasto por rubro CENTRADA: antes la leyenda (flex:1) se estiraba a todo el ancho y el monto/% se iban al borde ("todo separado"); ahora torta+leyenda se agrupan con justify-content:center y la leyenda se acota a 300px (márgenes iguales, verificado) |

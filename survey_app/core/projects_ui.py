@@ -1103,6 +1103,63 @@ def _cartera_clickeable(proys, alarmas, delays, aheads, costos):
                     st.rerun()
 
 
+def _cartera_lista(proys, alarmas, delays, aheads, costos):
+    """Vista LISTA de la cartera (v228): la típica tabla — proyectos por filas, datos por
+    columnas — CLICKEABLE (seleccionar una fila abre el detalle, igual que las tarjetas).
+    Alternativa a `_cartera_clickeable`; se elige con el toggle de vista."""
+    proys = sorted(proys, key=lambda p: (-delays.get(str(p.get("ID", "")), 0),
+                                         -alarmas.get(str(p.get("ID", "")), 0)))
+
+    def _ddmm(s):
+        s = str(s or "").strip()[:10]
+        if not s:
+            return "—"
+        from datetime import datetime as _dt
+        for _f in ("%Y-%m-%d", "%d/%m/%Y"):
+            try:
+                return _dt.strptime(s, _f).strftime("%d/%m/%y")
+            except Exception:
+                pass
+        return "—"
+
+    _rows = []
+    for p in proys:
+        _pid = str(p.get("ID", ""))
+        _dl, _ah, _al = delays.get(_pid, 0), aheads.get(_pid, 0), alarmas.get(_pid, 0)
+        _c = costos.get(_pid) or {}
+        _ppto = (f"{int(round(P._num(_c.get('pct'))))}%" + ("⚠️" if _c.get("over") else "")
+                 if P._num(_c.get("presupuesto")) > 0 else "—")
+        _users = len([x for x in str(p.get("CampoAsignados", "")).split(";") if x.strip()])
+        _sit = (f"🔴 {_dl}d" if _dl else (f"🟢 {_ah}d" if _ah else "—"))
+        _rows.append({
+            "Proyecto": str(p.get("Nombre", "")),
+            "Estado": str(p.get("Estado", "") or "—"),
+            "Avance": max(0, min(100, int(P._num(p.get("Avance"))))),
+            "Cliente": str(p.get("Cliente", "") or "—"),
+            "Inicio": _ddmm(p.get("FechaInicio")),
+            "Fin": _ddmm(p.get("FechaFinEst")),
+            "Ppto": _ppto,
+            "👷": _users,
+            "Situación": _sit,
+            "🔔": str(_al) if _al else "",
+        })
+    _ev = st.dataframe(
+        pd.DataFrame(_rows), hide_index=True, use_container_width=True,
+        on_select="rerun", selection_mode="single-row", key="cart_tbl",
+        column_config={"Avance": st.column_config.ProgressColumn(
+            "Avance", min_value=0, max_value=100, format="%d%%")})
+    st.caption("👆 Toca una fila para abrir el proyecto.  "
+               "Ppto = % del presupuesto ejecutado (⚠️ si se pasó) · 👷 usuarios · 🔔 alertas.")
+    try:
+        _sr = list(_ev.selection.rows)
+    except Exception:
+        _sr = []
+    if _sr and _sr[0] < len(proys):
+        st.session_state["_admin_open_proj"] = str(proys[_sr[0]].get("ID", ""))
+        st.session_state.pop("cart_tbl", None)   # limpia la selección → no re-abre al volver
+        st.rerun()
+
+
 def _panel_proyectos(grupo: str):
     # ── Proyecto ABIERTO (de una tarjeta, de HOME "ver completo", o del crear) ──
     _pp = st.session_state.pop("_prjsel_pending", None)
@@ -1170,11 +1227,17 @@ def _panel_proyectos(grupo: str):
     _proys_f = [p for p in proys if _pasa(p)]
 
     _nr, _na = len(delays), len(aheads)
-    st.markdown(f"**Cartera — {len(_proys_f)} de {len(proys)}**"
-                + (f"  ·  🔴 {_nr} con retraso" if _nr else "")
-                + (f"  ·  🟢 {_na} adelantado(s)" if _na else ""))
+    _hc1, _hc2 = st.columns([3, 2])
+    _hc1.markdown(f"**Cartera — {len(_proys_f)} de {len(proys)}**"
+                  + (f"  ·  🔴 {_nr} con retraso" if _nr else "")
+                  + (f"  ·  🟢 {_na} adelantado(s)" if _na else ""))
+    # v228: toggle de vista — tarjetas (resumen visual) o lista (tabla clásica).
+    _view = _hc2.radio("Vista", ["🃏 Tarjetas", "📋 Lista"], horizontal=True,
+                       key="cart_view", label_visibility="collapsed")
     if not _proys_f:
         st.caption("Ningún proyecto coincide con el filtro.")
+    elif _view == "📋 Lista":
+        _cartera_lista(_proys_f, alarmas, delays, aheads, costos)
     else:
         st.caption("Cada tarjeta muestra el resumen; toca «Abrir» para ver el detalle.")
         _cartera_clickeable(_proys_f, alarmas, delays, aheads, costos)
