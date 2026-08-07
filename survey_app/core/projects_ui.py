@@ -659,7 +659,7 @@ def _acciones_archivo(pid, e, puede_borrar):
 
 def _subir_documento(pid, es_campo, sube_tipos, usuario):
     """Subir un documento (el campo solo puede subir fotos)."""
-    with st.expander("➕ Subir documento"):
+    with st.expander("Subir documento", icon=":material/upload_file:"):
         if es_campo:
             st.caption("Como usuario de campo, solo puedes subir **fotos**.")
         up   = st.file_uploader("Archivo", key=f"updoc_{pid}")
@@ -692,7 +692,7 @@ def _nuevo_proyecto_form(grupo: str, key: str = "nuevo"):
     import datetime as _dt
     from core.schedule import build_schedule
 
-    with st.expander("➕ Nuevo proyecto"):
+    with st.expander("Nuevo proyecto", icon=":material/add_circle:"):
         campos = []
         try:
             campos = [u["Usuario"] for u in auth.list_users(grupo)
@@ -704,7 +704,7 @@ def _nuevo_proyecto_form(grupo: str, key: str = "nuevo"):
         # De aqui salen NS y los parametros que usan las 5 herramientas. Se lee
         # UNA vez: despues nadie vuelve a subir el PDF (antes se subia en cada
         # herramienta y cada una lo reparseaba, 30-70 s por vez).
-        st.markdown("**📄 Plano del elevador** — opcional, pero recomendado")
+        st.markdown("**:material/description: Plano del elevador** — opcional, pero recomendado")
         st.caption("Se leen los datos del plano una sola vez y quedan en el proyecto: "
                    "el equipo de campo ya no tendrá que cargar el PDF en ninguna herramienta.")
         _pdf = st.file_uploader("PDF del plano", type=["pdf"], key=f"np_pdf_{key}")
@@ -741,7 +741,7 @@ def _nuevo_proyecto_form(grupo: str, key: str = "nuevo"):
         # v210: inline (sin expander propio) — este bloque ya vive dentro del expander
         # "➕ Nuevo proyecto", y Streamlit no permite expanders anidados.
         from core import location_ui
-        st.markdown("**🗺 Ubicación en el mapa** — opcional, fija el pin del proyecto")
+        st.markdown("**:material/map: Ubicación en el mapa** — opcional, fija el pin del proyecto")
         _nplat, _nplng = location_ui.location_picker(f"nploc_{key}")
 
         with st.form(f"np_form_{key}"):
@@ -1175,7 +1175,7 @@ def _panel_proyectos(grupo: str):
         return
 
     # ── Cartera (tarjetas clickeables → abren el detalle) ──
-    _ver_arch = st.checkbox("📦 Ver también los archivados", key="ver_arch_admin",
+    _ver_arch = st.checkbox(":material/archive: Ver también los archivados", key="ver_arch_admin",
                             help="Los archivados no salen en listas ni informes; "
                                  "ábrelos desde aquí para restaurarlos.")
     proys = P.list_projects(grupo=grupo, incluir_archivados=_ver_arch)
@@ -1622,7 +1622,7 @@ def _detalle_proyecto(pid: str, grupo: str = None):
 
         # ── Ubicación en el mapa (fuera del form: el mapa necesita reruns) — v193 ──
         from core import location_ui
-        with st.expander("🗺 Ubicación en el mapa (pin del proyecto)",
+        with st.expander("Ubicación en el mapa (pin del proyecto)", icon=":material/map:",
                          expanded=not location_ui.to_float(prj.get("Lat"))):
             _plat, _plng = location_ui.location_picker(
                 f"edloc_{pid}",
@@ -1780,7 +1780,8 @@ def _detalle_proyecto(pid: str, grupo: str = None):
         else:
             st.caption("Sin actividades registradas.")
 
-        with st.expander("➕ Agregar / 🗑 eliminar actividad (recalcula el % automáticamente)"):
+        with st.expander("Agregar / eliminar actividad (recalcula el % automáticamente)",
+                         icon=":material/playlist_add:"):
             with st.form(f"addact_{pid}", clear_on_submit=True):
                 st.markdown("**➕ Agregar actividad**")
                 an = st.text_input("Nombre")
@@ -2260,7 +2261,7 @@ def _panel_agrupaciones(grupo: str):
         st.info("No hay agrupaciones. Crea una abajo y elige qué elevadores la componen.")
 
     # ── Crear: la agrupación se arma CON sus proyectos (v141), plegada ──
-    with st.expander("➕ Nueva agrupación"):
+    with st.expander("Nueva agrupación", icon=":material/create_new_folder:"):
         st.caption("Los proyectos se crean primero; aquí eliges cuáles forman parte.")
         nom = st.text_input("Nombre de la agrupación", key="nueva_agr_nom")
         des = st.text_input("Descripción (opcional)", key="nueva_agr_des")
@@ -2292,7 +2293,7 @@ def render_owner_projects():
     if not P.is_configured():
         st.warning("La gestión de proyectos necesita Google Sheets configurado.")
         return
-    _ver_arch = st.checkbox("📦 Ver también los archivados", key="ver_arch_owner")
+    _ver_arch = st.checkbox(":material/archive: Ver también los archivados", key="ver_arch_owner")
     proys = P.list_projects(incluir_archivados=_ver_arch)   # todos los grupos
     _grupos = []
     try:
@@ -2659,7 +2660,7 @@ def render_expenses(pid, grupo, can_delete=False, key_prefix="ex"):
         st.caption("Hace falta más de un movimiento para dibujar la curva de gasto.")
 
     # ── Cargar recibo ──
-    with st.expander("➕ Cargar recibo"):
+    with st.expander("Cargar recibo", icon=":material/receipt:"):
         with st.form(f"{key_prefix}_add_{pid}", clear_on_submit=True):
             c1, c2 = st.columns(2)
             cat = c1.selectbox("Categoría", E.CATEGORIAS, key=f"{key_prefix}_cat")
