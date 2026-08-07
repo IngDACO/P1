@@ -477,7 +477,7 @@ def _galeria_fotos(fotos, pid, por_pagina=6):
                 # Reutiliza los bytes ya bajados para la miniatura: descarga directa
                 # de la foto sin una segunda llamada a Drive.
                 if _b is not None:
-                    st.download_button("⬇️", data=_b, file_name=pie or f"{did}.jpg",
+                    st.download_button(":material/download:", data=_b, file_name=pie or f"{did}.jpg",
                                        key=f"fdl_{pid}_{did}", use_container_width=True)
     if len(fotos) > n_ver:
         if st.button(f"Ver {min(por_pagina, len(fotos) - n_ver)} más "
@@ -633,21 +633,21 @@ def _acciones_archivo(pid, e, puede_borrar):
 
     if did:
         try:
-            st.download_button("⬇️ Descargar " + (e["nombre"] or "archivo"),
+            st.download_button(":material/download: Descargar " + (e["nombre"] or "archivo"),
                                data=drive_store.download(did),
                                file_name=e["nombre"] or f"{did}.pdf",
                                key=f"arch_dl_{pid}_{did}", use_container_width=True)
         except Exception as ex:
             st.error(f"No se pudo descargar: {ex}")
     if reabrible:
-        if st.button("↩️ Reabrir en la herramienta", key=f"arch_reab_{pid}",
+        if st.button(":material/replay: Reabrir en la herramienta", key=f"arch_reab_{pid}",
                      use_container_width=True):
             if tool_save_ui.pedir_reapertura(run, h, _CALC_NAV[h]):
                 st.rerun()
             else:
                 st.warning("Este cálculo no guardó sus entradas (es anterior a v148).")
     if puede_borrar and es_doc:
-        if st.button("🗑 Borrar", key=f"arch_del_{pid}_{did or e['nombre']}",
+        if st.button(":material/delete: Borrar", key=f"arch_del_{pid}_{did or e['nombre']}",
                      use_container_width=True):
             if did:
                 drive_store.delete(did)
@@ -772,7 +772,8 @@ def _nuevo_proyecto_form(grupo: str, key: str = "nuevo"):
             inds = st.text_area("📝 Inducciones (un link por línea)", key=f"np_ind_{key}",
                                 placeholder="https://...",
                                 help="Se envían por Telegram/email a los asignados.")
-            enviar = st.form_submit_button("➕ Crear proyecto", use_container_width=True)
+            enviar = st.form_submit_button(":material/add_circle: Crear proyecto",
+                                           use_container_width=True)
 
         if enviar:
             if not nom.strip():
@@ -1670,7 +1671,7 @@ def _detalle_proyecto(pid: str, grupo: str = None):
             presup  = st.number_input("💰 Presupuesto del proyecto (0 = sin presupuesto)",
                                       min_value=0.0, step=100.0, value=P._num(prj.get("Presupuesto")))
 
-            if st.form_submit_button("💾 Guardar cambios", use_container_width=True):
+            if st.form_submit_button(":material/save: Guardar cambios", use_container_width=True):
                 # Validar sin `st.stop()`: pararia el render de TODO lo que va
                 # debajo (actividades, archivar...) y la pagina quedaria a medias.
                 _err = ""
@@ -1763,7 +1764,7 @@ def _detalle_proyecto(pid: str, grupo: str = None):
                                                            help="Peso relativo (el % se calcula proporcional)"),
                 })
             st.caption("Edita nombre, días, peso y el orden; el avance % es de solo lectura (lo actualiza el campo).")
-            if st.button("💾 Guardar tabla de actividades", key=f"savetbl_{pid}"):
+            if st.button(":material/save: Guardar tabla de actividades", key=f"savetbl_{pid}"):
                 edits = []
                 for i, a in enumerate(acts):
                     r = _edited.iloc[i]
@@ -1872,7 +1873,7 @@ def _detalle_proyecto(pid: str, grupo: str = None):
         with st.expander("🔄 Reconstruir proyecto en el Survey (regenerar informes)"):
             st.caption("Carga los parámetros y la matriz guardados en la pestaña 📐 Survey. "
                        "Luego pulsa **Calcular** allí para regenerar diagramas e informes.")
-            if st.button("🔄 Cargar este proyecto en el Survey", key=f"rebuild_{pid}"):
+            if st.button(":material/sync: Cargar este proyecto en el Survey", key=f"rebuild_{pid}"):
                 full = P.get_project_full(pid)
                 params, matriz = full.get("params") or {}, full.get("matriz") or []
                 if not params:
@@ -2234,7 +2235,7 @@ def _panel_agrupaciones(grupo: str):
             if len(_sel) > 12:
                 st.warning(f"{len(_sel)} proyectos: cada cambio es una escritura "
                            "en la hoja; puede tardar unos segundos.")
-            if st.button("💾 Guardar los proyectos de la agrupación",
+            if st.button(":material/save: Guardar los proyectos de la agrupación",
                          key=f"agmemsave_{_ag['ID']}", use_container_width=True):
                 with st.spinner("Guardando..."):
                     ok, msg = P.set_grouping_members(_ag["ID"], _sel, grupo)
@@ -2390,7 +2391,7 @@ def _field_activities(pid):
             "Nota": st.column_config.TextColumn(help="Opcional"),
         })
     st.caption("Las fechas se registran solas: **inicio** al pasar de 0, **fin** al llegar a 100.")
-    if st.button("💾 Guardar avances", key=f"fldsave_{pid}", use_container_width=True):
+    if st.button(":material/save: Guardar avances", key=f"fldsave_{pid}", use_container_width=True):
         cambios = []
         for i, a in enumerate(acts):
             r = _ed.iloc[i]
@@ -2727,7 +2728,7 @@ def render_expenses(pid, grupo, can_delete=False, key_prefix="ex"):
                         st.image(_data, caption=_arch, use_container_width=True)
                     else:
                         st.info(f"📄 {_arch} — es un PDF; descárgalo para verlo.")
-                    st.download_button("⬇️ Descargar recibo", data=_data, file_name=_arch,
+                    st.download_button(":material/download: Descargar recibo", data=_data, file_name=_arch,
                                        key=f"{key_prefix}_dlrcb_{_sel}")
                 except Exception:
                     st.caption("No se pudo cargar el archivo del recibo.")
@@ -2849,7 +2850,7 @@ def render_group_expenses(grupo: str):
         "Costo total": f["total"], "Presupuesto": f["presupuesto"],
         "% consumido": f["pct"], "Avance %": f["avance"], "Proyeccion": f["proyectado"],
     } for f in filas])
-    st.download_button("⬇️ Exportar CSV (contabilidad)",
+    st.download_button(":material/download: Exportar CSV (contabilidad)",
                        data=_csv.to_csv(index=False).encode("utf-8"),
                        file_name=f"gastos_{grupo}.csv", mime="text/csv", key="ge_csv")
 
