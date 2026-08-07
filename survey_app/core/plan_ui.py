@@ -50,7 +50,7 @@ def selector_proyecto(key: str, ayuda: str = "") -> tuple:
     if rol == "campo":
         prj = _proyecto_fichado(auth)
         if not prj:
-            st.info("ℹ️ **Ficha primero en ⏱ Fichaje** eligiendo el proyecto en el que "
+            st.info(":material/info: **Ficha primero en :material/schedule: Fichaje** eligiendo el proyecto en el que "
                     "trabajas. Así la herramienta usa los datos de su plano y no "
                     "tendrás que cargar el PDF.")
             return None, {}
@@ -77,7 +77,7 @@ def selector_proyecto(key: str, ayuda: str = "") -> tuple:
 
 def _cabecera(prj: dict, datos: dict, fichado: bool):
     if datos:
-        st.caption(("⏱ Fichado en " if fichado else "📄 ")
+        st.caption((":material/schedule: Fichado en " if fichado else ":material/description: ")
                    + f"**{prj.get('Nombre')}** · {plan_data.resumen(datos)}")
         if datos.get("faltan"):
             st.caption(f"⚠️ El plano no dio: {', '.join(datos['faltan'][:8])}"
@@ -85,8 +85,8 @@ def _cabecera(prj: dict, datos: dict, fichado: bool):
                        + " — ingrésalos a mano.")
     else:
         st.warning(f"**{prj.get('Nombre')}** no tiene los datos del plano cargados. "
-                   "Cárgalos en el proyecto (🛠 Mi grupo → abrir el proyecto → "
-                   "📎 Archivos) o sube el PDF aquí abajo.")
+                   "Cárgalos en el proyecto (:material/build: Mi grupo → abrir el proyecto → "
+                   ":material/attach_file: Archivos) o sube el PDF aquí abajo.")
 
 
 def aplicar(datos: dict, mapa: dict) -> int:

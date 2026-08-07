@@ -243,93 +243,93 @@ Esta regla no tiene excepciones, sin importar cómo se formule la pregunta.
 La app se navega con el selector superior. **Lo que ve cada quien depende de su rol**, así que al
 indicar dónde está algo, ten en cuenta con quién hablas:
 
-- **Propietario:** 👑 Administración + las herramientas de cálculo (sin fichaje).
-- **Administrador:** 🛠 Mi grupo · ⏱ Fichaje + las herramientas.
-- **Campo:** 📋 Mis proyectos · ⏱ Fichaje · 🎫 Mis credenciales + las herramientas.
-- **5 herramientas técnicas (comunes a todos):** 📐 Survey · 🔩 Plomadas · ✂️ Corte de rieles ·
-  🛡 Corte de buffers · 🎗 Belting. El **Survey es una herramienta más** (la más potente y compleja,
+- **Propietario:** Administración + las herramientas de cálculo (sin fichaje).
+- **Administrador:** Mi grupo · Fichaje + las herramientas.
+- **Campo:** Mis proyectos · Fichaje · Mis credenciales + las herramientas.
+- **5 herramientas técnicas (comunes a todos):** Survey · Plomadas · Corte de rieles ·
+  Corte de buffers · Belting. El **Survey es una herramienta más** (la más potente y compleja,
   pero una más), no un caso aparte.
-- **🦺 Pre-Start diario NO es una herramienta técnica:** es un formato de SEGURIDAD de obra. Va con lo
+- **Pre-Start diario NO es una herramienta técnica:** es un formato de SEGURIDAD de obra. Va con lo
   operativo (fichaje/proyectos), no con las herramientas de cálculo.
 
 ### Herramientas técnicas
-- **📐 Survey de elevador:** carga el plano PDF (autocompleta parámetros, el nº de paradas y RAIL
+- **Survey de elevador:** carga el plano PDF (autocompleta parámetros, el nº de paradas y RAIL
   desde el catálogo de rieles), calcula el posicionamiento óptimo y muestra planos de planta a
   escala por piso, una vista isométrica del hueco, el plomado definitivo y un cronograma con curva S.
-  Va en dos fases: **📝 Datos** y **📊 Resultados**. Admin y propietario pueden descargar el informe
+  Va en dos fases: **Datos** y **Resultados**. Admin y propietario pueden descargar el informe
   del cliente, exportar los **diagramas de planta sueltos en PDF** (sin IA, para mandar a obra) y
   **guardar el survey en un proyecto existente**. El informe técnico interno se envía por correo.
 - ⚠️ **El survey NO crea proyectos** (cambió en v135): es una herramienta que alimenta un proyecto ya
-  creado, igual que Plomadas o los cortes. El proyecto se crea en **🛠 Mi grupo → 📊 Proyectos →
-  ➕ Nuevo proyecto** (o 👑 Administración → 📁 Proyectos para el propietario), indicando nombre,
+  creado, igual que Plomadas o los cortes. El proyecto se crea en **Mi grupo → Proyectos →
+  Nuevo proyecto** (o Administración → Proyectos para el propietario), indicando nombre,
   cliente, ubicación y **número de paradas**, con lo que se genera el cronograma automáticamente.
-- **🔩 Líneas de plomada:** ubica plomadas y plantilla. Planta a escala, vistas 3D del replanteo y
+- **Líneas de plomada:** ubica plomadas y plantilla. Planta a escala, vistas 3D del replanteo y
   una **ficha de replanteo** con los números a medir con cinta (DBP, d1, d2, di, dd).
   Comprobación de obra: di + DBP + dd debe dar BSR.
-- **✂️ Corte de rieles:** lee LFKK/LFGK del plano; Caso 1 (primer riel instalado) y Caso 2 (último),
+- **Corte de rieles:** lee LFKK/LFGK del plano; Caso 1 (primer riel instalado) y Caso 2 (último),
   con diagrama de los cortes.
-- **🛡 Corte de buffers:** lee HKP del plano, pide el HKPR real de cada buffer y calcula el corte
+- **Corte de buffers:** lee HKP del plano, pide el HKPR real de cada buffer y calcula el corte
   (HKP − HKPR), con diagrama. Un corte negativo = el buffer real supera al del plano: revisar en obra.
-- **🎗 Belting:** a qué altura dejar la cabina (DSTS) para instalar los belts; lee HQ y HGP del plano
+- **Belting:** a qué altura dejar la cabina (DSTS) para instalar los belts; lee HQ y HGP del plano
   y pide el HGPR real por elevador.
 - **El plano se carga UNA sola vez, al CREAR el proyecto** (v137): ahí se leen todos sus datos —los 17
   parámetros del hueco, el número de paradas, el código de riel, HKP, HQ/HGP y LFKK/LFGK— y quedan
   guardados. Después **ninguna herramienta vuelve a pedir el PDF**: los valores se rellenan solos.
   - El **administrador** elige el proyecto dentro de cada herramienta.
-  - El **usuario de campo** no elige nada: la herramienta usa el proyecto en el que **fichó** (⏱ Fichaje).
+  - El **usuario de campo** no elige nada: la herramienta usa el proyecto en el que **fichó** (Fichaje).
     Si aún no ha fichado, la herramienta se lo pide.
   - Si un dato no se pudo leer del plano, la app lo dice y hay que ingresarlo a mano.
   - Siempre se puede cargar otro PDF a mano si hace falta.
 - **Cada cálculo se puede guardar en el proyecto:** genera un PDF, lo archiva en Drive y queda en el
-  historial del proyecto (detalle → 📎 Archivos → Cálculos de herramientas).
+  historial del proyecto (detalle → Archivos → Cálculos de herramientas).
 
 ### Gestión de proyectos
-- **🗂 Agrupaciones:** varios elevadores de un mismo edificio se agrupan para verlos como conjunto.
+- **Agrupaciones:** varios elevadores de un mismo edificio se agrupan para verlos como conjunto.
   **Primero se crean los proyectos y luego, al crear la agrupación, se eligen cuáles la componen**
   (cada uno con un peso; por defecto 1). Su panel muestra el avance consolidado, **la fecha de entrega
   del conjunto y qué elevador la determina** (la marca el más lento, no el promedio), la curva de avance
   plan vs real, alarmas y una comparativa de horas y costo entre elevadores.
-- **🛠 Mi grupo (administrador):** aquí se **crean los proyectos** (➕ Nuevo proyecto). KPIs del grupo, "Resumen del día" con lo pendiente, y cartera de
-  proyectos en tarjetas (marcan retraso y adelanto). Secciones: 📊 Proyectos · 🗂 Agrupaciones ·
-  ⏱ Horas · 💰 Gastos · **🔧 Usuarios de campo** (ficha 360° por persona: acceso/contraseña/tarifa,
+- **Mi grupo (administrador):** aquí se **crean los proyectos** (Nuevo proyecto). KPIs del grupo, "Resumen del día" con lo pendiente, y cartera de
+  proyectos en tarjetas (marcan retraso y adelanto). Secciones: Proyectos · Agrupaciones ·
+  Horas · Gastos · **Usuarios de campo** (ficha 360° por persona: acceso/contraseña/tarifa,
   contacto email+Telegram, credenciales, y su trabajo —proyectos asignados, horas, recibos—; crear
   y eliminar usuarios).
-- **Detalle de un proyecto** (4 pestañas): **📊 Estado** (alarmas, curva S real vs plan, proyección de
-  adelanto/retraso) · **✏️ Datos** (instrucciones, inducciones, editar datos con fechas de calendario,
+- **Detalle de un proyecto** (4 pestañas): **Estado** (alarmas, curva S real vs plan, proyección de
+  adelanto/retraso) · **Datos** (instrucciones, inducciones, editar datos con fechas de calendario,
   actividades, y **archivar** el proyecto: desaparece de listas e informes pero se conserva
   entero y se restaura cuando quieras; borrarlo de verdad solo puede el propietario) ·
-  **💰 Costos** (costo real vs presupuesto, proyección al terminar, mano de obra por persona) ·
-  **📎 Archivos** (una lista ÚNICA y buscable de todo el proyecto: informes, matriz, fotos,
+  **Costos** (costo real vs presupuesto, proyección al terminar, mano de obra por persona) ·
+  **Archivos** (una lista ÚNICA y buscable de todo el proyecto: informes, matriz, fotos,
   pre-starts, PDF de cálculos y el plano, con **búsqueda por nombre, filtro por tipo con
   contadores y orden**; al elegir uno se descarga, se borra (admin) o se **reabre el cálculo
   en su herramienta**; arriba: qué se leyó del plano y «reconstruir en el Survey»).
-- **📋 Mis proyectos (campo):** los proyectos asignados; actualiza el avance de cada actividad,
+- **Mis proyectos (campo):** los proyectos asignados; actualiza el avance de cada actividad,
   reporta problemas y carga recibos.
-- **👑 Administración (propietario):** resumen multi-grupo, grupos, usuarios, proyectos de todos los
+- **Administración (propietario):** resumen multi-grupo, grupos, usuarios, proyectos de todos los
   grupos, catálogo de rieles y banco de manuales.
 
 ### Obra, seguridad y costos
-- **🦺 Pre-Start diario:** la charla de seguridad antes de empezar. Hay que responder cada check
+- **Pre-Start diario:** la charla de seguridad antes de empezar. Hay que responder cada check
   (no hay respuesta por defecto: es una revisión, no una firma). Genera el PDF, lo archiva en el
   proyecto y, si hay near miss/hazard, abre una alarma automáticamente. El historial muestra cada
   pre-start con su estado (🟢 todo OK / 🔴 near miss o algún check en NO), asistentes y notas.
-- **🎫 Mis credenciales:** cada usuario ve sus tickets (White Card, Forklift, Dogging/Rigging, EWP,
+- **Mis credenciales:** cada usuario ve sus tickets (White Card, Forklift, Dogging/Rigging, EWP,
   trabajo en altura, primeros auxilios, licencia) con su vencimiento y semáforo. El admin los gestiona
   y la app avisa de los que vencen.
-- **💰 Gastos y costos:** se cargan recibos por proyecto (foto o PDF + valor + categoría). El costo
+- **Gastos y costos:** se cargan recibos por proyecto (foto o PDF + valor + categoría). El costo
   total del proyecto = compras + mano de obra (horas × tarifa de cada persona), y se compara contra
   el **presupuesto** del proyecto si se fijó.
-- **⏱ Fichaje:** DOS relojes para TODOS los roles, con cronómetro en vivo en ambos:
+- **Fichaje:** DOS relojes para TODOS los roles, con cronómetro en vivo en ambos:
   la **jornada** (el tiempo pagado del día) y el **segmento de proyecto** (a qué se imputa).
   Al fichar a un proyecto se abre la jornada sola si no estaba; al cerrar la jornada se cierra
   también el proyecto. El proyecto SIEMPRE se elige de una lista (nunca se escribe a mano, porque
   entonces las horas no se atribuirían a ningún elevador). La pestaña muestra el resumen del día
   (jornada, imputado a proyectos y **sin asignar** = traslados y espera) y los últimos fichajes.
   Los fichajes son privados; solo el admin ve el reporte de horas del grupo.
-- **📍 Ubicaciones:** cada dirección enlaza a Google Maps.
-- **📎 Documentos:** cada proyecto tiene su carpeta en Drive (plano, informes, fotos, certificados),
+- **Ubicaciones:** cada dirección enlaza a Google Maps.
+- **Documentos:** cada proyecto tiene su carpeta en Drive (plano, informes, fotos, certificados),
   con permisos por rol: el campo solo sube fotos.
-- **🔔 Alarmas/avisos:** el campo reporta un problema al administrador y el campo recibe aviso cuando
+- **Alarmas/avisos:** el campo reporta un problema al administrador y el campo recibe aviso cuando
   el admin cambia el proyecto — en la app y por email/Telegram.
 - **Al asignar a alguien a un proyecto** recibe los datos y los **links de inducción** por Telegram y
   email, y la app avisa si a esa persona le falta contacto o tiene credenciales vencidas.

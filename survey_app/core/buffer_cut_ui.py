@@ -48,7 +48,7 @@ def render_buffer_cut_tab():
     # va ANTES de instanciar ninguno (regla v111).
     _reab = tool_save_ui.aplicar_restauracion("buffers")
     if _reab:
-        st.info(f"↩️ Reabierto el cálculo **{_reab}**. Ajusta lo que necesites y vuelve a calcular.")
+        st.info(f":material/replay: Reabierto el cálculo **{_reab}**. Ajusta lo que necesites y vuelve a calcular.")
 
     _prj, _plano = plan_ui.selector_proyecto("bc")
     _pr = str((_prj or {}).get("Nombre", "") or "")     # v181: al diagrama y al PDF
@@ -62,7 +62,7 @@ def render_buffer_cut_tab():
     # Plan B, plegado: desde v137 el plano vive en el PROYECTO y sus valores
     # se rellenan arriba. Esto sigue haciendo falta para un proyecto creado
     # sin plano, o para calcular sin proyecto asignado.
-    with st.expander("📄 ¿El proyecto no tiene plano? Cárgalo aquí"):
+    with st.expander("¿El proyecto no tiene plano? Cárgalo aquí", icon=":material/description:"):
         st.caption("Se leerá HKP de este PDF. Lo normal es que ya vengan del plano del proyecto.")
         pdf = plan_store.selector("PDF de planos (para HKP)", "bc_pdf")
         if pdf is not None and pdf.name != st.session_state.get("bc_pdf_name"):

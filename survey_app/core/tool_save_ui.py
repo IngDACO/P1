@@ -104,12 +104,12 @@ def render_guardar(herramienta: str, titulo_pdf: str, pdf_bytes: bytes,
 
     st.markdown("---")
     c1, c2 = st.columns([1, 1])
-    c1.download_button(f"⬇️ Descargar {titulo_pdf} (PDF)", data=pdf_bytes,
+    c1.download_button(f":material/download: Descargar {titulo_pdf} (PDF)", data=pdf_bytes,
                        file_name=nombre_archivo, mime="application/pdf",
                        use_container_width=True, key=f"dl_{key}")
 
     if not toolruns.is_configured():
-        c2.caption("🔒 Guardar en el proyecto requiere Google Sheets configurado.")
+        c2.caption(":material/lock: Guardar en el proyecto requiere Google Sheets configurado.")
         return
 
     a = st.session_state.get("auth", {}) or {}
@@ -163,8 +163,8 @@ def render_guardar(herramienta: str, titulo_pdf: str, pdf_bytes: bytes,
 
     with c2:
         if _fich is not None:
-            st.caption(f"💾 Se guardará en **{_fich.get('Nombre')}** — donde fichaste.")
-            if st.button("💾 Guardar en el proyecto", use_container_width=True,
+            st.caption(f":material/save: Se guardará en **{_fich.get('Nombre')}** — donde fichaste.")
+            if st.button(":material/save: Guardar en el proyecto", use_container_width=True,
                          key=f"save_{key}"):
                 _guardar(_fich)
             with st.expander("¿Es de otro proyecto?"):
@@ -176,11 +176,11 @@ def render_guardar(herramienta: str, titulo_pdf: str, pdf_bytes: bytes,
                     _guardar(idmap[sel])
         else:
             if rol == "campo":
-                st.caption("Aún no has fichado a un proyecto (⏱ Fichaje). Elige uno:")
+                st.caption("Aún no has fichado a un proyecto (:material/schedule: Fichaje). Elige uno:")
             # Sin preseleccion: guardar el calculo contra otro elevador ensucia su
             # historial y su carpeta de Drive sin que nadie lo note.
             sel = st.selectbox("Guardar en el proyecto", [_VACIO] + list(idmap.keys()),
                                key=f"prj_{key}")
-            if st.button("💾 Guardar en el proyecto", use_container_width=True,
+            if st.button(":material/save: Guardar en el proyecto", use_container_width=True,
                          key=f"save_{key}", disabled=(not sel or sel == _VACIO)):
                 _guardar(idmap[sel])

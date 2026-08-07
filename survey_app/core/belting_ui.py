@@ -51,7 +51,7 @@ def render_belting_tab():
     # va ANTES de instanciar ninguno (regla v111).
     _reab = tool_save_ui.aplicar_restauracion("belting")
     if _reab:
-        st.info(f"↩️ Reabierto el cálculo **{_reab}**. Ajusta lo que necesites y vuelve a calcular.")
+        st.info(f":material/replay: Reabierto el cálculo **{_reab}**. Ajusta lo que necesites y vuelve a calcular.")
 
     _prj, _plano = plan_ui.selector_proyecto("belt")
     _pr = str((_prj or {}).get("Nombre", "") or "")     # v183: al diagrama y al PDF
@@ -64,7 +64,7 @@ def render_belting_tab():
     # Plan B, plegado: desde v137 el plano vive en el PROYECTO y sus valores
     # se rellenan arriba. Esto sigue haciendo falta para un proyecto creado
     # sin plano, o para calcular sin proyecto asignado.
-    with st.expander("📄 ¿El proyecto no tiene plano? Cárgalo aquí"):
+    with st.expander("¿El proyecto no tiene plano? Cárgalo aquí", icon=":material/description:"):
         st.caption("Se leerá HQ y HGP de este PDF. Lo normal es que ya vengan del plano del proyecto.")
         pdf = plan_store.selector("📄 PDF de planos (autocompleta HQ)", "belt_pdf")
         if pdf is not None and pdf.name != st.session_state.get("belt_pdf_name"):
@@ -84,7 +84,7 @@ def render_belting_tab():
                 st.warning("No se encontraron HQ/HGP en el plano. Ingrésalos a mano.")
             st.rerun()
         elif pdf is not None:
-            st.caption(f"📄 Plano cargado: **{pdf.name}**")
+            st.caption(f":material/description: Plano cargado: **{pdf.name}**")
 
     # ── Datos del plano ─────────────────────────────────────
     st.markdown("**Datos**  ·  📄 = del plano · ✏️ = manual")

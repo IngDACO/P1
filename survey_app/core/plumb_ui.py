@@ -49,7 +49,7 @@ def render_plumb_tab():
     # Reabrir un calculo guardado: escribe claves de widget, va ANTES de crearlos (v111).
     _reab = tool_save_ui.aplicar_restauracion("plomada")
     if _reab:
-        st.info(f"↩️ Reabierto el cálculo **{_reab}**. Ajusta lo que necesites y vuelve a calcular.")
+        st.info(f":material/replay: Reabierto el cálculo **{_reab}**. Ajusta lo que necesites y vuelve a calcular.")
 
     # ── Proyecto: el plano ya leído ──
     _prj, _plano = plan_ui.selector_proyecto("plb")
@@ -63,7 +63,7 @@ def render_plumb_tab():
         if _n:
             st.caption(f"✅ {_n} valor(es) tomados del plano del proyecto.")
 
-    with st.expander("📄 ¿El proyecto no tiene plano? Cárgalo aquí"):
+    with st.expander("¿El proyecto no tiene plano? Cárgalo aquí", icon=":material/description:"):
         st.caption("Se leerá BKS, TKSW, SF1, SF2, BS, SG y TG de este PDF.")
         pdf = plan_store.selector("📄 PDF de planos (autocompleta del plano)", "plb_pdf")
         if pdf is not None and pdf.name != st.session_state.get("plb_pdf_name"):
@@ -84,7 +84,7 @@ def render_plumb_tab():
                 st.warning("No se encontraron valores en el plano. Ingrésalos manualmente.")
             st.rerun()
         elif pdf is not None:
-            st.caption(f"📄 Plano cargado: **{pdf.name}**")
+            st.caption(f":material/description: Plano cargado: **{pdf.name}**")
 
     # ── Entradas COMPARTIDAS del shaft (la plantilla es una sola) ──
     st.markdown("**Plantilla del shaft (compartida)**  ·  📄 = del plano · ✏️ = manual")
@@ -146,7 +146,7 @@ def render_plumb_tab():
                  "Con este desajuste los plomos quedan mal ubicados. Revisa BS, SF1, SF2, BKS o RAIL.")
 
     # ── Tabla por elevador ──
-    st.markdown("#### 🛗 Por elevador — encaje y verificación")
+    st.markdown("#### :material/elevator: Por elevador — encaje y verificación")
     _rows = []
     for i, r in enumerate(results):
         v = r.get("verif") or {}
@@ -189,12 +189,12 @@ def render_plumb_tab():
     components.html('<!DOCTYPE html><html><body style="margin:0;background:transparent">'
                     + plumb_svg(r, proyecto=_pr) + '</body></html>', height=500, scrolling=False)
     _v3d, _vfi = st.columns(2)
-    with _v3d.expander("🧊 Vistas 3D del replanteo", expanded=False):
+    with _v3d.expander("Vistas 3D del replanteo", icon=":material/view_in_ar:", expanded=False):
         components.html('<!DOCTYPE html><html><body style="margin:0;background:transparent">'
                         + plumb_iso_svg(r, proyecto=_pr) + '</body></html>', height=650, scrolling=False)
         components.html('<!DOCTYPE html><html><body style="margin:0;background:transparent">'
                         + plumb_detail_svg(r, proyecto=_pr) + '</body></html>', height=500, scrolling=False)
-    with _vfi.expander("📋 Ficha de replanteo (para obra)", expanded=False):
+    with _vfi.expander("Ficha de replanteo (para obra)", icon=":material/assignment:", expanded=False):
         st.caption("Los números a medir con cinta. Imprímela o ábrela en el móvil.")
         components.html('<!DOCTYPE html><html><body style="margin:0;background:transparent">'
                         + plumb_card_svg(r, proyecto=_pr) + '</body></html>', height=430, scrolling=False)
