@@ -1579,8 +1579,14 @@ def _detalle_proyecto(pid: str, grupo: str = None):
 
     # ── Sub-navegacion: 11 secciones en un scroll unico era el mismo
     # problema que tenia el Survey antes de v114. Radio, NO st.tabs (v56).
+    # v234: format_func muestra iconos Material; las OPCIONES siguen siendo el ID (con
+    # emoji) → el match de abajo y cualquier deep-link no cambian.
     _sec = st.radio("Sección del proyecto",
                     ["📊 Estado", "✏️ Datos", "💰 Costos", "📎 Archivos"],
+                    format_func=lambda o: {"📊 Estado": ":material/insights: Estado",
+                                           "✏️ Datos": ":material/edit: Datos",
+                                           "💰 Costos": ":material/payments: Costos",
+                                           "📎 Archivos": ":material/folder: Archivos"}.get(o, o),
                     horizontal=True, key="prj_detalle_sec",
                     label_visibility="collapsed")
     st.markdown("---")
@@ -2469,6 +2475,10 @@ def render_field_projects(usuario: str, grupo: str):
 
     # ── Sub-navegación (radio, NO st.tabs — regla v56; como el detalle del admin) ──
     _sec = st.radio("Sección", ["🏗 Avance", "🚨 Avisos", "💰 Recibos", "📎 Archivos"],
+                    format_func=lambda o: {"🏗 Avance": ":material/trending_up: Avance",
+                                           "🚨 Avisos": ":material/report: Avisos",
+                                           "💰 Recibos": ":material/receipt: Recibos",
+                                           "📎 Archivos": ":material/folder: Archivos"}.get(o, o),
                     horizontal=True, key="fld_sec", label_visibility="collapsed")
     st.markdown("---")
     if _sec == "🏗 Avance":
@@ -2725,7 +2735,7 @@ def render_expenses(pid, grupo, can_delete=False, key_prefix="ex"):
 # ── Reporte del ADMIN: gastos de todos los proyectos del grupo ──
 def render_group_expenses(grupo: str):
     from core import expenses as E
-    st.markdown("#### 💰 Gastos del grupo")
+    st.markdown("#### :material/payments: Gastos del grupo")
     if not E.is_configured():
         st.warning("Los gastos necesitan Google Sheets configurado.")
         return
@@ -2847,7 +2857,7 @@ def render_group_expenses(grupo: str):
 def render_group_hours(grupo: str):
     from datetime import datetime
     from core import timeclock
-    st.markdown("#### ⏱ Horas del grupo")
+    st.markdown("#### :material/schedule: Horas del grupo")
     if not timeclock.is_configured():
         st.warning("El fichaje necesita Google Sheets configurado.")
         return

@@ -1120,6 +1120,18 @@ tiene `background-image: conic-gradient(...)` computado; la nota de diagrams.py 
 `<svg>`" aplica a SVG, no a un div con conic-gradient). Compila + import + AST (0 libres) + lógica (tramos
 0→100%, formato $/%). Paleta de 12 colores; MO = azul (#2e6da4, como el reparto).
 
+## Estética fase 3a: radios del detalle + headers de grupo (v234)
+Sigue v232/v233. Chunk acotado del contenido:
+- **Radios de sub-navegación** (`st.radio`): el detalle de proyecto (📊 Estado/✏️ Datos/💰 Costos/📎 Archivos) y
+  el de 📋 Mis proyectos del campo (🏗 Avance/🚨 Avisos/💰 Recibos/📎 Archivos) ahora muestran iconos Material
+  vía **`format_func`** — ⚠️ las OPCIONES siguen siendo el ID con emoji, así que el `if _sec == "📊 Estado"` y
+  cualquier deep-link NO cambian (mismo patrón decouple que la nav). Verificado en vivo que `st.radio` renderiza
+  `:material/` por `format_func`.
+- **Headers**: `#### 💰 Gastos del grupo` / `#### ⏱ Horas del grupo` → `:material/payments:` / `:material/schedule:`.
+Compila + import + matching intacto. PENDIENTE (fase 3 sigue siendo grande): más headers de paneles, botones
+(💾/➕/🔎…) y captions repartidos por projects_ui/auth_ui/survey_ui/tools; estados 🟢🔴🟡 sin tocar; el prompt
+del agente (chat_agent) menciona los emoji viejos — actualizar cuando se cierre la migración de esas etiquetas.
+
 ## Estética fase 2: iconos Material en el chrome del admin (v233)
 Sigue v232. Se migró el CHROME (visible en cada página): topbar + barra de usuario.
 - **`home_ui`**: campana 🔔 → `:material/notifications:` (label del popover + header); del buscador se quitó el
@@ -3278,6 +3290,7 @@ resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NOR
 ## Versiones desplegadas (v215 = actual)
 | Ver | Cambio principal |
 |---|---|
+| v234 | Estética (fase 3a): los radios de sub-navegación del detalle de proyecto y de Mis proyectos (campo) muestran iconos Material vía format_func (las opciones siguen siendo el ID con emoji → sin romper matching); headers de Gastos/Horas del grupo a iconos |
 | v233 | Estética (fase 2): el chrome del admin a iconos Material — campana (🔔→notifications), barra de usuario (rol 👑/🛠/🔧, grupo 🏢, cerrar sesión 🚪) y se quitó el 🔎 del buscador. Monocromo |
 | v232 | Estética (fase 1): la NAVEGACIÓN del admin cambia los emoji por iconos Material profesionales en azul COPEX (sidebar: secciones + sub-pestañas + hub). Sub-pestañas decopladas en (id interno con emoji / display con icono) para no tocar los deep-links. Los estados 🟢🔴🟡 se dejan por ahora |
 | v231 | Herramientas: página de entrada (hub) — nueva sub-pestaña "🧰 Inicio" (default) con una tarjeta por herramienta (qué hace + Abrir). Punto de partida claro al entrar a Herramientas. Versión simple (sin el chequeo del plano, que queda para después) |
