@@ -3290,6 +3290,7 @@ resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NOR
 ## Versiones desplegadas (v215 = actual)
 | Ver | Cambio principal |
 |---|---|
+| v239 | Estética (fase 3f): cabeceras internas del detalle de proyecto a iconos Material — Datos del plano, Fotos, Archivos, Cumplimiento de certificados, Quién ha trabajado aquí, Tocaba hoy, En curso ahora, Próximo hito (caption), Avance del conjunto. Solo display |
 | v238 | Estética (fase 3e): auth_ui — panel del propietario (radio owner_sec y del group panel grupo_sec vía format_func, IDs/deep-links intactos), headers (Administración, Manuales, Rieles), expanders/botones (zona horaria, subir/quitar manual, agregar/editar riel, eliminar grupo). Con esto auth_ui queda migrado |
 | v237 | Estética (fase 3d): auth_ui — ficha 360° de Usuarios (radio Acceso/Contacto/Credenciales/Su trabajo/🗑 vía format_func, IDs intactos), expanders (Agregar/Editar credencial, Crear usuario, Matriz), botón Vincular Telegram, headers. Los botones Activar/Desactivar 🟢🔴 se dejan (usan color de estado a propósito) |
 | v236 | Estética (fase 3c): botones de projects_ui a iconos Material (Guardar→save, Borrar→delete, Reabrir→replay, Crear proyecto→add_circle, Cargar en Survey→sync, Descargar/Exportar→download). Labels de botón/form_submit/download_button — display puro. Verificado que las 3 variantes renderizan Material |

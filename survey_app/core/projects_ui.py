@@ -425,7 +425,7 @@ def _plano_section(pid: str, prj: dict):
     NO extraía), así que las herramientas no lo veían nunca. Ahora se carga aquí.
     """
     datos = plan_data.del_proyecto(pid)
-    st.markdown("**📐 Datos del plano**")
+    st.markdown("**:material/description: Datos del plano**")
     if not datos:
         st.caption("Este proyecto no tiene datos de plano guardados, así que las "
                    "herramientas le pedirán el PDF a quien las use. Cárgalo aquí "
@@ -458,7 +458,7 @@ def _galeria_fotos(fotos, pid, por_pagina=6):
     """
     kver = f"_fotos_n_{pid}"
     n_ver = int(st.session_state.get(kver, por_pagina))
-    st.markdown(f"**📷 Fotos de obra** — {len(fotos)}")
+    st.markdown(f"**:material/photo_camera: Fotos de obra** — {len(fotos)}")
     visibles = fotos[:n_ver]
     for fila in range(0, len(visibles), 3):
         cols = st.columns(3)
@@ -500,7 +500,7 @@ def _archivos_section(pid: str):
     toolrun por DriveID para ofrecer «reabrir en la herramienta» sin duplicarlo.
     """
     from collections import Counter
-    st.markdown("**📎 Archivos**")
+    st.markdown("**:material/folder: Archivos**")
     if not drive_store.is_configured():
         st.caption("🔒 Almacenamiento en Drive no configurado (faltan los secrets `[gdrive]`).")
         return
@@ -960,7 +960,7 @@ def _cumplimiento_equipo(pid, grupo, prj):
     req = [x.strip() for x in str(prj.get("CertsReq", "")).split(";") if x.strip()]
     if not req:
         return
-    st.markdown("**🎫 Cumplimiento de certificados del equipo**")
+    st.markdown("**:material/verified_user: Cumplimiento de certificados del equipo**")
     asign = [x.strip() for x in str(prj.get("CampoAsignados", "")).split(";") if x.strip()]
     if not asign:
         st.caption("Sin usuarios de campo asignados todavía.")
@@ -1407,7 +1407,7 @@ def _equipo_proyecto(pid, grupo):
         _lb = E.labor_breakdown(pid, grupo)
     except Exception:
         return
-    st.markdown("**👷 Quién ha trabajado aquí**")
+    st.markdown("**:material/groups: Quién ha trabajado aquí**")
     if not _lb["items"]:
         st.caption("Nadie ha fichado horas a este proyecto todavía.")
         return
@@ -1497,7 +1497,7 @@ def _estado_section(pid: str, grupo: str, prj: dict):
     # ── Que tocaba hoy vs que se esta haciendo: el porque del retraso ──
     c1, c2 = st.columns(2)
     with c1:
-        st.markdown("**📌 Tocaba hoy**")
+        st.markdown("**:material/push_pin: Tocaba hoy**")
         if not d["tocaban"]:
             st.caption("Ninguna actividad tiene su ventana abierta hoy.")
         for x in d["tocaban"]:
@@ -1507,7 +1507,7 @@ def _estado_section(pid: str, grupo: str, prj: dict):
             else:
                 st.markdown(f"🟢 {x['nombre']} — {x['avance']:.0f}%")
     with c2:
-        st.markdown("**🔧 En curso ahora**")
+        st.markdown("**:material/pending_actions: En curso ahora**")
         if not d["en_curso"]:
             st.caption("Ninguna actividad entre 1% y 99%.")
         for x in d["en_curso"]:
@@ -1527,7 +1527,7 @@ def _estado_section(pid: str, grupo: str, prj: dict):
                    + ", ".join(x["nombre"] for x in d["paradas"][:3]) + "**.")
 
     if d["proximo"]:
-        st.caption(f"🎯 Próximo hito: **{d['proximo']['nombre']}** arranca el "
+        st.caption(f":material/flag: Próximo hito: **{d['proximo']['nombre']}** arranca el "
                    f"{d['proximo']['fecha'].strftime('%d/%m/%Y')} "
                    f"(en {d['proximo']['faltan']:.0f} días).")
 
@@ -1970,7 +1970,7 @@ def _dashboard_agrupacion(ag, grupo):
     except Exception:
         cur = {}
     if cur and cur.get("fechas"):
-        st.markdown("**📈 Avance del conjunto — plan vs real**")
+        st.markdown("**:material/trending_up: Avance del conjunto — plan vs real**")
         _df = pd.DataFrame({"Planificado": cur["plan"], "Real": cur["real"]},
                            index=pd.to_datetime(cur["fechas"]))
         st.line_chart(_df, height=240)
