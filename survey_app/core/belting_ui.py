@@ -35,7 +35,7 @@ def _kpi_row(cards):
 
 
 def render_belting_tab():
-    st.markdown("### 🎗 Belting — posición de la cabina para instalar los belts")
+    st.markdown("### :material/swap_vert: Belting — posición de la cabina para instalar los belts")
     st.caption("Calcula **DSTS** = cuánto bajar la cabina bajo el FFL del piso más alto para instalar "
                "los belts respetando el recorrido de diseño.  DSTS = HGPR − HGP − HQ/1000 (mm), por elevador.")
 
@@ -102,7 +102,7 @@ def render_belting_tab():
         hgpr_list.append(v)
 
     # ── Cálculo (solo computa; el render va fuera) ──────────
-    if st.button("🎗 Calcular belting", type="primary", use_container_width=True,
+    if st.button(":material/swap_vert: Calcular belting", type="primary", use_container_width=True,
                  key="belt_calc"):
         st.session_state[_K] = {"results": compute_belting(hgp, hq, hgpr_list),
                                 "hgp": hgp, "hq": hq}
@@ -125,14 +125,14 @@ def render_belting_tab():
         "Posición":  f"{abs(r['dsts']):.0f} mm "
                      f"{'por debajo' if r['dsts'] >= 0 else 'por encima'} del FFL top",
     } for r in results]
-    st.subheader("📋 Resultados (DSTS por elevador)")
+    st.subheader(":material/table_rows: Resultados (DSTS por elevador)")
     st.dataframe(pd.DataFrame(filas), use_container_width=True, hide_index=True)
     _formula = (f"DSTS = HGPR − HGP({_hgp:.0f}) − HQ({_hq:.0f})/1000 "
                 f"= HGPR − {_hgp + _hq / 1000.0:.1f} mm")
     st.caption(_formula)
 
     svg = belting_svg(results, proyecto=_pr)
-    st.subheader("📐 Diagrama")
+    st.subheader(":material/architecture: Diagrama")
     components.html(
         '<!DOCTYPE html><html><body style="margin:0;background:transparent">'
         + svg + '</body></html>', height=330, scrolling=False)

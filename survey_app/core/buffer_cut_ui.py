@@ -36,7 +36,7 @@ def _kpi_row(cards):
 
 
 def render_buffer_cut_tab():
-    st.markdown("### 🛡 Corte de buffers")
+    st.markdown("### :material/shield: Corte de buffers")
     st.caption("Calcula cuánto cortar cada buffer. **HKP** sale del plano del proyecto; "
                "tú indicas el **HKPR** real medido en cada buffer.")
 
@@ -95,7 +95,7 @@ def render_buffer_cut_tab():
     st.session_state["bc_df"] = edit
 
     # ── 4. Calcular (solo computa; el render va fuera) ──────
-    if st.button("🛡 Calcular cortes", type="primary", use_container_width=True,
+    if st.button(":material/shield: Calcular cortes", type="primary", use_container_width=True,
                  key="bc_calc"):
         hkpr_list = [float(x) for x in edit["HKPR (mm)"].tolist()]
         st.session_state[_K] = compute_buffer_cut(hkp, hkpr_list)
@@ -122,7 +122,7 @@ def render_buffer_cut_tab():
     st.dataframe(pd.DataFrame(filas), use_container_width=True, hide_index=True)
 
     svg = buffer_cut_svg(res, proyecto=_pr)
-    st.subheader("📐 Diagrama de cortes")
+    st.subheader(":material/architecture: Diagrama de cortes")
     components.html(
         '<!DOCTYPE html><html><body style="margin:0;background:transparent">'
         + svg + '</body></html>', height=330, scrolling=False)

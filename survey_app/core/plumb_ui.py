@@ -36,7 +36,7 @@ def _encaje_txt(disp) -> str:
 
 
 def render_plumb_tab():
-    st.markdown("### 🔩 Cálculo de líneas de plomada")
+    st.markdown("### :material/straighten: Cálculo de líneas de plomada")
     st.caption("Una **plantilla** para el shaft; el **BSR se mide por elevador**. "
                "Los valores del plano se rellenan solos; RAIL sale del catálogo.")
 
@@ -116,7 +116,7 @@ def render_plumb_tab():
                               num_rows="fixed", disabled=["Elevador"], key="plb_bsr_editor")
     st.session_state["plb_bsr_df"] = bsr_edit
 
-    if st.button("🔩 Calcular plomadas", type="primary", use_container_width=True, key="plb_calc"):
+    if st.button(":material/straighten: Calcular plomadas", type="primary", use_container_width=True, key="plb_calc"):
         bsr_list = [float(x or 0) for x in bsr_edit["BSR (mm)"].tolist()]
         st.session_state["plb_res_multi"] = {"n": n, "results": [compute_plumb({
             "BKS": bks, "RAIL": rail, "TKSW": tksw, "LengthTemplate": lt,
@@ -131,7 +131,7 @@ def render_plumb_tab():
     r0 = results[0]                       # la plantilla es la misma para todos
 
     # ── La plantilla (compartida, UNA vez) ──
-    st.markdown("#### 📐 La plantilla (igual para todos los elevadores)")
+    st.markdown("#### :material/architecture: La plantilla (igual para todos los elevadores)")
     st.markdown('<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:8px">'
                 + "".join([_kpi("DBP", f"{r0['dbp']:.1f}"), _kpi("DBPW", f"{r0['dbpw']:.1f}"),
                            _kpi("RW", f"{r0['rw']:.1f}"), _kpi("d1", f"{r0['d1']:.2f}"),
@@ -163,7 +163,7 @@ def render_plumb_tab():
     st.caption("Comprobación de obra: **di + DBP + dd = BSR**. Si no cierra, hay error de medida.")
 
     # ── Diagramas de un elevador ──
-    st.markdown("#### 📐 Diagramas de un elevador")
+    st.markdown("#### :material/architecture: Diagramas de un elevador")
     sel = st.selectbox("Ver el replanteo del elevador", list(range(1, n + 1)),
                        format_func=lambda i: f"Elevador {i}", key="plb_sel_e")
     r = results[sel - 1]

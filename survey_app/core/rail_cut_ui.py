@@ -35,7 +35,7 @@ def _kpi_row(cards):
 
 
 def render_rail_cut_tab():
-    st.markdown("### ✂️ Corte de rieles")
+    st.markdown("### :material/content_cut: Corte de rieles")
     st.caption("Calcula el corte de los rieles de cada elevador del shaft. "
                "LFKK y LFGK salen del plano del proyecto; si falta, se ingresan a mano.")
 
@@ -122,7 +122,7 @@ def render_rail_cut_tab():
 
         # El boton SOLO computa: antes todo el resultado colgaba de aqui y se
         # perdia con cualquier interaccion (bug estructural de v110).
-        if st.button("✂️ Calcular cortes (Caso 1)", type="primary",
+        if st.button(":material/content_cut: Calcular cortes (Caso 1)", type="primary",
                      use_container_width=True, key="rc_calc1"):
             L_list = [float(x) for x in L_edit["L (mm)"].tolist()]
             st.session_state["rc_res"] = {
@@ -144,7 +144,7 @@ def render_rail_cut_tab():
                 st.dataframe(det, use_container_width=True)
 
             svg = rail_cut_svg(res, caso=1, n2500=_e["n2500"], n5000=_e["n5000"], proyecto=_pr)
-            st.subheader("📐 Diagrama de cortes")
+            st.subheader(":material/architecture: Diagrama de cortes")
             components.html(
                 '<!DOCTYPE html><html><body style="margin:0;background:transparent">'
                 + svg + '</body></html>', height=390, scrolling=False)
@@ -192,7 +192,7 @@ def render_rail_cut_tab():
                                  num_rows="fixed", disabled=["Riel"], key="rc_in_editor")
         st.session_state["rc_in_df"] = in_edit
 
-        if st.button("✂️ Calcular cortes (Caso 2)", type="primary",
+        if st.button(":material/content_cut: Calcular cortes (Caso 2)", type="primary",
                      use_container_width=True, key="rc_calc2"):
             rows = []
             for i in range(n):
@@ -216,7 +216,7 @@ def render_rail_cut_tab():
             st.dataframe(mat, use_container_width=True)
 
             svg = rail_cut_svg({"elevadores": res}, caso=2, proyecto=_pr)
-            st.subheader("📐 Diagrama de cortes")
+            st.subheader(":material/architecture: Diagrama de cortes")
             components.html(
                 '<!DOCTYPE html><html><body style="margin:0;background:transparent">'
                 + svg + '</body></html>', height=330, scrolling=False)

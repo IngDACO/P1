@@ -31,7 +31,7 @@ def _projects_for(rol, usuario, grupo):
 
 
 def render_prestart_tab():
-    st.markdown("### 📋 Pre-Start diario")
+    st.markdown("### :material/health_and_safety: Pre-Start diario")
     st.caption("Registro de la charla de seguridad antes de empezar en obra. Genera el PDF, "
                "lo archiva en el proyecto y —si hay near miss/hazard— abre una alarma.")
 
@@ -158,7 +158,7 @@ def render_prestart_tab():
     if _pend:
         st.caption("Falta por completar: " + " · ".join(_pend))
 
-    if st.button("📋 Generar y archivar Pre-Start", type="primary", use_container_width=True,
+    if st.button(":material/health_and_safety: Generar y archivar Pre-Start", type="primary", use_container_width=True,
                  key="ps_submit", disabled=bool(_pend)):
         attendees = [{"name": str(r["Print Name"]).strip(),
                       "initial": (str(r["Initial"]).strip()
@@ -189,7 +189,7 @@ def render_prestart_tab():
                          + " · ".join(_no))
             if res["alarma"]:
                 st.warning("🔴 Se abrió una alarma del proyecto por el near miss/hazard reportado.")
-            st.download_button("⬇️ Descargar PDF", data=res["pdf"], file_name=res["filename"],
+            st.download_button(":material/download: Descargar PDF", data=res["pdf"], file_name=res["filename"],
                                mime="application/pdf", use_container_width=True, key="ps_dl")
 
     # ── Historial ──
@@ -239,7 +239,7 @@ def _historial(pid):
             if _did:
                 try:
                     from core import drive_store
-                    st.download_button("⬇️ PDF", data=drive_store.download(_did),
+                    st.download_button(":material/download: PDF", data=drive_store.download(_did),
                                        file_name=d["archivo"] or f"{d['id']}.pdf",
                                        key=f"ps_hdl_{d['id']}")
                 except Exception:
