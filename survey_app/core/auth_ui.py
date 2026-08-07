@@ -360,7 +360,7 @@ def _owner_grupos():
     # Define en qué hora LOCAL se graban los registros de cada grupo (cada empresa
     # puede estar en otro país). Sin fijar → clock.DEFAULT_TZ.
     if grupos:
-        with st.expander("🕐 Zona horaria de cada grupo"):
+        with st.expander("Zona horaria de cada grupo", icon=":material/schedule:"):
             st.caption("En qué hora local se graban los registros (fichaje, pre-start, "
                        f"alarmas…) de ese grupo. Sin fijar = {clock.DEFAULT_TZ}.")
             _gz = {g["Grupo"]: (g.get("Zona") or "") for g in grupos}
@@ -394,7 +394,7 @@ def _owner_grupos():
         if gsel:
             _ok_del = ui.confirmar_borrado("del_g_ok",
                                            f"Confirmo eliminar el grupo **{gsel}**")
-            if st.button("🗑 Eliminar grupo", key="del_g_btn", disabled=not _ok_del):
+            if st.button(":material/delete: Eliminar grupo", key="del_g_btn", disabled=not _ok_del):
                 ok, msg = auth.delete_group(gsel)
                 (st.success if ok else st.error)(msg)
                 if ok: st.rerun()
@@ -465,10 +465,16 @@ def _owner_usuarios():
 
 
 def render_owner_panel():
-    st.markdown("### 👑 Administración")
+    st.markdown("### :material/admin_panel_settings: Administración")
     # Sub-navegación con radio (NO st.tabs anidado → evita mezcla de contenido)
     sec = st.radio("Sección",
                    ["🌐 Resumen", "🏢 Grupos", "👥 Usuarios", "📁 Proyectos", "🚆 Rieles", "📚 Manuales"],
+                   format_func=lambda o: {"🌐 Resumen": ":material/dashboard: Resumen",
+                                          "🏢 Grupos": ":material/business: Grupos",
+                                          "👥 Usuarios": ":material/group: Usuarios",
+                                          "📁 Proyectos": ":material/folder: Proyectos",
+                                          "🚆 Rieles": ":material/train: Rieles",
+                                          "📚 Manuales": ":material/menu_book: Manuales"}.get(o, o),
                    horizontal=True, key="owner_sec", label_visibility="collapsed")
     st.markdown("---")
     if sec == "🌐 Resumen":
@@ -515,7 +521,7 @@ def _owner_resumen():
 def _owner_manuales():
     """Banco de manuales para el agente de IA: subir/quitar (self-service)."""
     from core import manuals
-    st.markdown("#### 📚 Banco de manuales del asistente")
+    st.markdown("#### :material/menu_book: Banco de manuales del asistente")
     st.caption("El asistente de IA consulta estos manuales para responder dudas técnicas de "
                "instalación y **cita la fuente** (manual · sección · página).")
 
@@ -542,14 +548,14 @@ def _owner_manuales():
             "Fecha": r.get("Fecha"),
             "Por": r.get("SubidoPor"),
         } for r in ups]), hide_index=True, use_container_width=True)
-        with st.expander("🗑 Quitar un manual"):
+        with st.expander("Quitar un manual", icon=":material/delete:"):
             opciones = {f"{r.get('Nombre')}  ·  {r.get('Fecha')}": r.get("ID") for r in ups}
             _mid = ui.elegir("Manual", opciones, key="man_del_sel",
                              vacio="— ningún manual —")
             if _mid:
                 _ok_del = ui.confirmar_borrado("man_del_ok",
                                                "Confirmo eliminar este manual")
-                if st.button("🗑 Eliminar", key="man_del_btn", disabled=not _ok_del):
+                if st.button(":material/delete: Eliminar", key="man_del_btn", disabled=not _ok_del):
                     if manuals.delete_manual(_mid):
                         st.success("Manual eliminado.")
                         st.rerun()
@@ -558,7 +564,7 @@ def _owner_manuales():
     else:
         st.info("Aún no has subido manuales. Agrega el primero abajo.")
 
-    with st.expander("➕ Subir manual", expanded=not ups):
+    with st.expander("Subir manual", icon=":material/upload_file:", expanded=not ups):
         st.caption("Acepta un PDF con texto (no escaneado) o un ZIP con varios PDFs. "
                    "Evita PDFs enormes (>50 MB): se procesan en el navegador.")
         up = st.file_uploader("Archivo (PDF o ZIP)", type=["pdf", "zip"], key="man_up_file")
@@ -582,7 +588,7 @@ def _owner_manuales():
 def _owner_rieles():
     """Catálogo de rieles: referencia → medidas (para autocompletar RAIL desde el plano)."""
     from core import rails
-    st.markdown("#### 🚆 Catálogo de rieles")
+    st.markdown("#### :material/train: Catálogo de rieles")
     st.caption("Al cargar un plano, el lector detecta el código del **CAR GUIDE RAIL** y "
                "autocompleta **RAIL** con la *altura del diente desde la espalda* de esta tabla.")
     if not rails.is_configured():
@@ -598,7 +604,7 @@ def _owner_rieles():
     else:
         st.info("Catálogo vacío. Agrega el primer riel abajo.")
 
-    with st.expander("➕ Agregar riel", expanded=not data):
+    with st.expander("Agregar riel", icon=":material/add_circle:", expanded=not data):
         with st.form("form_riel", clear_on_submit=True):
             ref = st.text_input("Referencia (ej. T75-3/B)")
             rc1, rc2 = st.columns(2)
@@ -615,7 +621,7 @@ def _owner_rieles():
                         st.rerun()
 
     if data:
-        with st.expander("✏️ Editar / 🗑 eliminar riel"):
+        with st.expander("Editar / eliminar riel", icon=":material/edit:"):
             refs = [r.get("Referencia") for r in data]
             sel  = st.selectbox("Referencia", refs, key="riel_sel")
             _cur = rails.get_rail(sel) or {}
@@ -944,6 +950,13 @@ def render_group_panel(grupo: str):
     sec = st.radio("Sección",
                    ["📊 Proyectos", "🗂 Agrupaciones", "📅 Planificación",
                     "⏱ Horas", "💰 Gastos", "🔧 Usuarios de campo"],
+                   format_func=lambda o: {
+                       "📊 Proyectos": ":material/format_list_bulleted: Proyectos",
+                       "🗂 Agrupaciones": ":material/account_tree: Agrupaciones",
+                       "📅 Planificación": ":material/calendar_month: Planificación",
+                       "⏱ Horas": ":material/schedule: Horas",
+                       "💰 Gastos": ":material/receipt_long: Gastos",
+                       "🔧 Usuarios de campo": ":material/engineering: Usuarios de campo"}.get(o, o),
                    horizontal=True, key="grupo_sec", label_visibility="collapsed")
     st.markdown("---")
     if sec == "📊 Proyectos":
