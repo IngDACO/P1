@@ -68,12 +68,12 @@ def _cfg_from_state():
     }
 
 _GRUPOS_PARAM = [
-    ("🏗 Hueco",           ["BS", "TS"]),
-    ("🛗 Cabina",          ["BK", "TK", "BKS"]),
-    ("🚪 Puerta / umbral", ["BT", "TKA", "TKS", "TSW"]),
-    ("📍 Frontal",         ["TKSW", "BKF1", "BKF2"]),
-    ("↔️ Laterales",       ["SF1", "SF2"]),
-    ("⚖️ Contrapeso",      ["BGS", "SG", "TG"]),
+    (":material/crop_free: Hueco",           ["BS", "TS"]),
+    (":material/elevator: Cabina",          ["BK", "TK", "BKS"]),
+    (":material/door_front: Puerta / umbral", ["BT", "TKA", "TKS", "TSW"]),
+    (":material/place: Frontal",         ["TKSW", "BKF1", "BKF2"]),
+    (":material/swap_horiz: Laterales",       ["SF1", "SF2"]),
+    (":material/balance: Contrapeso",      ["BGS", "SG", "TG"]),
 ]
 
 USER_ONLY = {
@@ -173,8 +173,8 @@ def render_survey_tab(_ROL, _GRUPO):
 
     # Aviso cuando se llega desde "Reconstruir proyecto" (Mi grupo → detalle)
     if st.session_state.get("_rebuilt_from"):
-        st.info(f"📥 Cargaste el proyecto **{st.session_state['_rebuilt_from']}**. "
-                "Pulsa **🚀 Calcular** para regenerar diagramas e informes.")
+        st.info(f":material/download: Cargaste el proyecto **{st.session_state['_rebuilt_from']}**. "
+                "Pulsa **:material/play_arrow: Calcular** para regenerar diagramas e informes.")
 
     # ── Identificación del proyecto ───────────────────────
     # NO se teclea: el survey alimenta un proyecto que YA existe (v135) y ese
@@ -200,6 +200,8 @@ def render_survey_tab(_ROL, _GRUPO):
         st.session_state["survey_fase"] = _fp
     _FASE_DATOS, _FASE_RES = "📝 Datos del survey", "📊 Resultados e informes"
     _fase = st.radio("Fase", [_FASE_DATOS, _FASE_RES], horizontal=True,
+                     format_func=lambda o: {_FASE_DATOS: ":material/edit: Datos del survey",
+                                            _FASE_RES: ":material/insights: Resultados e informes"}.get(o, o),
                      key="survey_fase", label_visibility="collapsed")
     st.markdown("---")
 
@@ -313,7 +315,7 @@ def render_survey_tab(_ROL, _GRUPO):
         else:
             st.error("❌ No se encontró ninguna combinación válida con estos parámetros.")
 
-        with st.expander("📊 Parámetros calculados", expanded=False):
+        with st.expander("Parámetros calculados", icon=":material/calculate:", expanded=False):
             st.dataframe(
                 pd.DataFrame([
                     {"Parámetro": k, "Valor": round(v, 3) if isinstance(v, (int, float)) else v}
@@ -410,7 +412,7 @@ def render_survey_tab(_ROL, _GRUPO):
                         r["plumb"] = None
                     st.rerun()
 
-                with st.expander("⚖️ Comparar soluciones lado a lado", expanded=False):
+                with st.expander("Comparar soluciones lado a lado", icon=":material/compare:", expanded=False):
                     _comp = []
                     for k, s in enumerate(sorted_solutions):
                         _obc = s.get("off_by_col", {}) or {}
@@ -478,7 +480,7 @@ def render_survey_tab(_ROL, _GRUPO):
             # Es logica propietaria: misma regla que ya aplica el agente IA y que
             # excluye el informe del cliente. Solo el propietario lo ve.
             if _ROL == "propietario":
-                with st.expander(f"📋 Log del optimizador ({len(step_log)} pasos evaluados)", expanded=False):
+                with st.expander(f"Log del optimizador ({len(step_log)} pasos evaluados)", icon=":material/list_alt:", expanded=False):
                     valid_steps  = [s for s in step_log if s.get("status") == "VALID"]
                     skip_steps   = [s for s in step_log if s.get("status") == "SKIP"]
                     skip_phys    = [s for s in skip_steps if s.get("skip_type", "").startswith("physical")]
@@ -527,7 +529,7 @@ def render_survey_tab(_ROL, _GRUPO):
             st.error("No se encontró combinación válida.")
 
         # ── Diagrama físico — planta por piso ─────────────────
-        st.subheader("📐 Diagrama de posicionamiento — planta por piso")
+        st.subheader(":material/architecture: Diagrama de posicionamiento — planta por piso")
         st.caption("Vista superior de cómo encaja la cabina en el shaft en cada piso "
                    "(matriz de la solución seleccionada). Verde = dentro de límite, "
                    "naranja = al límite, rojo = fuera.")
@@ -535,7 +537,7 @@ def render_survey_tab(_ROL, _GRUPO):
             n_floors = len(best["matrix"])
             _prob = floors_with_issues(best, lim_map)
 
-            with st.expander("🧊 Vista isométrica del hueco", expanded=False):
+            with st.expander("Vista isométrica del hueco", icon=":material/view_in_ar:", expanded=False):
                 components.html(
                     shaft_iso_svg(all_params, limits, best, n_floors, lim_map,
                                   proyecto=str(st.session_state.get("proyecto", ""))),
@@ -567,7 +569,7 @@ def render_survey_tab(_ROL, _GRUPO):
                     scrolling=True,
                 )
                 # Exportar los diagramas sueltos (para mandar a obra sin el informe)
-                if st.button("📄 Preparar PDF de estos diagramas", key="btn_diag_pdf"):
+                if st.button(":material/picture_as_pdf: Preparar PDF de estos diagramas", key="btn_diag_pdf"):
                     with st.spinner("Generando PDF de diagramas..."):
                         st.session_state["_diag_pdf"] = floor_plans_pdf(
                             all_params, limits, best, lim_map, ctrl_in_frame_, ctrl_side_,
@@ -575,7 +577,7 @@ def render_survey_tab(_ROL, _GRUPO):
                             titulo=f"Diagramas de posicionamiento — "
                                    f"{all_params.get('PROYECTO') or 'Survey'}")
                 if st.session_state.get("_diag_pdf"):
-                    st.download_button("⬇️ Descargar diagramas (PDF)",
+                    st.download_button(":material/download: Descargar diagramas (PDF)",
                                        data=st.session_state["_diag_pdf"],
                                        file_name="diagramas_posicionamiento.pdf",
                                        mime="application/pdf", key="dl_diag_pdf")
@@ -593,7 +595,7 @@ def render_survey_tab(_ROL, _GRUPO):
             )
 
         # ── Plomado definitivo (con el desplazamiento del survey) ──
-        st.subheader("🔩 Plomado definitivo (según el survey)")
+        st.subheader(":material/straighten: Plomado definitivo (según el survey)")
         st.caption("Esquema de plomado con los desplazamientos que determinó el survey. "
                    "El conjunto (plomos + paredes teóricas + template) se mueve; las paredes "
                    "reales quedan fijas (eje cero = pared real izquierda).")
@@ -623,7 +625,7 @@ def render_survey_tab(_ROL, _GRUPO):
                 height=500, scrolling=False,
             )
             _v3d, _vfi = st.columns(2)
-            with _v3d.expander("🧊 Vistas 3D del replanteo", expanded=False):
+            with _v3d.expander("Vistas 3D del replanteo", icon=":material/view_in_ar:", expanded=False):
                 components.html(
                     '<!DOCTYPE html><html><body style="margin:0;background:transparent">'
                     + plumb_iso_svg(plumb_res, proyecto=_pr_) + '</body></html>',
@@ -634,14 +636,14 @@ def render_survey_tab(_ROL, _GRUPO):
                     + plumb_detail_svg(plumb_res, proyecto=_pr_) + '</body></html>',
                     height=500, scrolling=False,
                 )
-            with _vfi.expander("📋 Ficha de replanteo (para obra)", expanded=False):
+            with _vfi.expander("Ficha de replanteo (para obra)", icon=":material/assignment:", expanded=False):
                 st.caption("Los números a medir con cinta. Imprímela o ábrela en el móvil.")
                 components.html(
                     '<!DOCTYPE html><html><body style="margin:0;background:transparent">'
                     + plumb_card_svg(plumb_res, proyecto=_pr_) + '</body></html>',
                     height=430, scrolling=False,
                 )
-            st.markdown("**📏 Verificación en campo — distancias plomo ↔ pared real**")
+            st.markdown("**:material/straighten: Verificación en campo — distancias plomo ↔ pared real**")
             st.dataframe(pd.DataFrame(plumb_checks(plumb_res)),
                          use_container_width=True, hide_index=True)
             if float(all_params.get("LengthTemplate", 0.0)) <= 0:
@@ -825,7 +827,7 @@ def render_survey_tab(_ROL, _GRUPO):
     if _fase == _FASE_DATOS:
         # PASO 1 — CARGAR PDF
         # ══════════════════════════════════════════════════════
-        st.header("📄 Plano del elevador")
+        st.header(":material/description: Plano del elevador")
 
         # ── Proyecto: sus datos del plano, ya leídos ─────────
         # Desde v137 el plano se lee UNA vez al crear el proyecto. Aquí solo se
@@ -843,7 +845,7 @@ def render_survey_tab(_ROL, _GRUPO):
             _rep = " · ".join(x for x in (str(_prj_sv.get("Cliente", "")),
                                           str(_prj_sv.get("Ubicacion", "")),
                                           str(_prj_sv.get("Ingeniero", ""))) if x)
-            st.caption("📋 El informe usará los datos de este proyecto"
+            st.caption(":material/info: El informe usará los datos de este proyecto"
                        + (f": {_rep}." if _rep else "."))
             if str(_prj_sv.get("Ubicacion", "")).strip():
                 from core import maps as _maps
@@ -932,7 +934,7 @@ def render_survey_tab(_ROL, _GRUPO):
         # ══════════════════════════════════════════════════════
         # PASO 2 — PARÁMETROS
         # ══════════════════════════════════════════════════════
-        st.header("⚙️ Parámetros")
+        st.header(":material/tune: Parámetros")
 
         # Marca por campo: ✅ leído del plano · ✏️ a completar a mano.
         # (Recupera la señal que se perdió al quitar el panel del sidebar en v93.)
@@ -953,7 +955,7 @@ def render_survey_tab(_ROL, _GRUPO):
             else:
                 _r2.success("✅ El plano aportó todos los parámetros.")
 
-        with st.expander("📄 Parámetros del plano (editables)", expanded=True):
+        with st.expander("Parámetros del plano (editables)", icon=":material/description:", expanded=True):
             _pendientes = list(PDF_PARAMS)
             for _titulo, _lista in _GRUPOS_PARAM:
                 _ps = [p for p in _lista if p in _pendientes]
@@ -978,7 +980,7 @@ def render_survey_tab(_ROL, _GRUPO):
                         help  = PARAM_DESCRIPTIONS.get(p, ""), key = f"inp_{p}",
                     )
 
-        with st.expander("✏️ Parámetros medidos en obra", expanded=True):
+        with st.expander("Parámetros medidos en obra", icon=":material/straighten:", expanded=True):
             cols = st.columns(len(USER_ONLY))
             for j, (p, desc) in enumerate(USER_ONLY.items()):
                 cols[j].number_input(
@@ -988,7 +990,7 @@ def render_survey_tab(_ROL, _GRUPO):
                     key   = f"inp_{p}",
                 )
 
-        st.markdown("**⚙️ Configuración**")
+        st.markdown("**:material/tune: Configuración**")
         c1, c2, c3 = st.columns(3)
         c1.radio("Lado del Omega",        ["R", "L"], horizontal=True, key="cfg_omega_side")
         c2.radio("¿Hay pared limitante?", ["N", "Y"], horizontal=True, key="cfg_wall_yn")
@@ -1016,7 +1018,7 @@ def render_survey_tab(_ROL, _GRUPO):
         # ══════════════════════════════════════════════════════
         # PASO 3 — MATRIZ SURVEY
         # ══════════════════════════════════════════════════════
-        st.header("📊 Matriz del survey")
+        st.header(":material/grid_on: Matriz del survey")
 
         sc1, sc2, sc3 = st.columns([1, 2, 2])
 
@@ -1042,7 +1044,7 @@ def render_survey_tab(_ROL, _GRUPO):
         _imp_todo = sc2.checkbox("Restaurar también parámetros y configuración del Excel",
                                  value=False, key="excel_imp_todo",
                                  help="Desmarcado: solo se importa la matriz de medidas.")
-        if st.session_state.get("last_excel_id") and sc2.button("🔄 Volver a importar el Excel",
+        if st.session_state.get("last_excel_id") and sc2.button(":material/refresh: Volver a importar el Excel",
                                                                 key="btn_reimport_xls"):
             st.session_state.pop("last_excel_id", None)
             st.rerun()
@@ -1104,7 +1106,7 @@ def render_survey_tab(_ROL, _GRUPO):
         }
         excel_bytes = export_survey_excel(edited_df, info_dict, config_dict)
         sc3.download_button(
-            label     = "💾 Guardar matriz (.xlsx)",
+            label     = ":material/download: Guardar matriz (.xlsx)",
             data      = excel_bytes,
             file_name = "survey_matrix.xlsx",
             mime      = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -1147,7 +1149,7 @@ def render_survey_tab(_ROL, _GRUPO):
                 for _x in _iss0:
                     st.warning(_x)
 
-        if st.button("🚀 Calcular y ver resultados", type="primary",
+        if st.button(":material/play_arrow: Calcular y ver resultados", type="primary",
                      use_container_width=True, key="btn_calc_datos"):
             _do_calculo()
             st.session_state["_fase_pending"] = _FASE_RES
@@ -1163,15 +1165,15 @@ def render_survey_tab(_ROL, _GRUPO):
 
     else:
 
-        st.header("✅ Resultados")
+        st.header(":material/insights: Resultados")
         if not st.session_state.calc_results:
-            st.info("Aún no hay cálculo. Ve a **📝 Datos del survey**, completa la "
-                    "información y pulsa **🚀 Calcular y ver resultados**.")
+            st.info("Aún no hay cálculo. Ve a **:material/edit: Datos del survey**, completa la "
+                    "información y pulsa **:material/play_arrow: Calcular y ver resultados**.")
         else:
             if st.session_state.get("_calc_sig") and st.session_state["_calc_sig"] != _survey_signature():
                 st.warning("⚠️ Cambiaste datos desde el último cálculo. Lo de abajo corresponde "
                            "al cálculo anterior — recalcula para actualizarlo.")
-            if st.button("🔄 Recalcular con los datos actuales", use_container_width=True,
+            if st.button(":material/sync: Recalcular con los datos actuales", use_container_width=True,
                          key="btn_recalc"):
                 _do_calculo()
                 st.rerun()
@@ -1226,11 +1228,11 @@ def render_survey_tab(_ROL, _GRUPO):
         # PASO 6 — INFORME DEL CLIENTE  (solo propietario / administrador)
         # ══════════════════════════════════════════════════════
         if not can_reports(_ROL):
-            st.header("📄 Informe del cliente")
+            st.header(":material/description: Informe del cliente")
             st.caption("🔒 La descarga de informes está disponible para administración "
                        "(propietario / administrador).")
         else:
-            st.header("📄 Informe del cliente")
+            st.header(":material/description: Informe del cliente")
             st.caption("Informe profesional para entregar al cliente (solución final, diagramas e "
                        "instrucciones de implementación). El informe técnico interno se envía "
                        "automáticamente por correo a administración.")
@@ -1245,7 +1247,7 @@ def render_survey_tab(_ROL, _GRUPO):
                         f"Motivo: {interp_usr.get('_error', interp.get('_error', 'no disponible'))}.\n\n"
                         "Configura `ANTHROPIC_API_KEY` en los Secrets de Streamlit Cloud y vuelve a calcular."
                     )
-                elif st.button("📄 Generar informe del cliente", use_container_width=True):
+                elif st.button(":material/description: Generar informe del cliente", use_container_width=True):
                     with st.spinner("Generando informe del cliente..."):
                         user_pdf = generate_user_report(
                             project_params      = r["all_params"],
@@ -1259,7 +1261,7 @@ def render_survey_tab(_ROL, _GRUPO):
                         )
                     proj = (r["all_params"].get("PROYECTO") or "cliente").replace(" ", "_")
                     st.download_button(
-                        label     = "⬇️ Descargar informe del cliente",
+                        label     = ":material/download: Descargar informe del cliente",
                         data      = user_pdf,
                         file_name = f"informe_{proj}.pdf",
                         mime      = "application/pdf",
@@ -1280,7 +1282,7 @@ def render_survey_tab(_ROL, _GRUPO):
         # survey, y atar la creación al survey obligaba a tenerlo hecho para
         # poder dar de alta el proyecto.
         if _ROL in ("administrador", "propietario"):
-            st.header("💾 Guardar en el proyecto")
+            st.header(":material/save: Guardar en el proyecto")
             if not st.session_state.get("calc_results"):
                 st.info("Calcula primero para poder guardar el survey en un proyecto.")
             elif not projects_data.is_configured():
@@ -1322,7 +1324,7 @@ def render_survey_tab(_ROL, _GRUPO):
                     except Exception:
                         pass
 
-                    if st.button("💾 Guardar el survey en este proyecto",
+                    if st.button(":material/save: Guardar el survey en este proyecto",
                                  use_container_width=True, key="sv_save_prj",
                                  disabled=(_prj is None)):
                         _pid = str(_prj.get("ID", ""))
