@@ -36,7 +36,7 @@ _SUBSECCIONES = {
     "planificacion": ("adm_plan_sub", ["📋 Tablero", "👷 Usuarios"]),
     "proyectos":     ("adm_proy_sub", ["📊 Proyectos", "🗂 Agrupaciones"]),
     "finanzas":      ("adm_fin_sub",  ["💰 Gastos", "⏱ Horas"]),
-    "herramientas":  ("adm_herr_sub", ["📐 Survey", "🔩 Plomada", "✂️ Rieles",
+    "herramientas":  ("adm_herr_sub", ["🧰 Inicio", "📐 Survey", "🔩 Plomada", "✂️ Rieles",
                                        "🛡 Buffers", "🎗 Belting", "🦺 Pre-Start"]),
 }
 _SUBKEY = {k: v[0] for k, v in _SUBSECCIONES.items()}   # {seccion: clave_de_estado}
@@ -283,10 +283,39 @@ def _seccion_finanzas(grupo):
         PU.render_group_hours(grupo)
 
 
+def _hub_herramientas():
+    """Hub/entrada de Herramientas (v231): una tarjeta por herramienta (qué hace + Abrir).
+    «Abrir» navega a la sub-pestaña de esa herramienta."""
+    st.caption("Elige una herramienta:")
+    _cards = [
+        ("📐 Survey", "Posicionamiento del hueco y matriz de solución; genera los informes "
+                      "del cliente y de obra."),
+        ("🔩 Plomada", "Líneas de plomada y replanteo; distancias de verificación en obra."),
+        ("✂️ Rieles", "Cuánto cortar de cada riel de guía (Caso 1 / Caso 2)."),
+        ("🛡 Buffers", "Cuánto cortar de cada buffer (HKP − HKPR)."),
+        ("🎗 Belting", "Altura a la que dejar la cabina para instalar los belts (DSTS)."),
+        ("🦺 Pre-Start", "Charla diaria de seguridad de obra (Daily Pre-Start)."),
+    ]
+    for _r in range(0, len(_cards), 3):
+        _cols = st.columns(3, gap="medium")
+        for _j in range(3):
+            _i = _r + _j
+            if _i >= len(_cards):
+                break
+            _lbl, _desc = _cards[_i]
+            with _cols[_j].container(border=True):
+                st.markdown(f"#### {_lbl}")
+                st.caption(_desc)
+                if st.button("Abrir →", key=f"hubherr_{_i}", use_container_width=True):
+                    navegar("herramientas", _lbl)
+
+
 def _seccion_herramientas(grupo):
     rol = st.session_state.get("auth", {}).get("rol", "administrador")
     sub = _sub_header("🛠 Herramientas", "herramientas")
-    if sub == "📐 Survey":
+    if sub == "🧰 Inicio":
+        _hub_herramientas()
+    elif sub == "📐 Survey":
         from core.survey_ui import render_survey_tab
         render_survey_tab(rol, grupo)
     elif sub == "🔩 Plomada":

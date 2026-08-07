@@ -1120,6 +1120,17 @@ tiene `background-image: conic-gradient(...)` computado; la nota de diagrams.py 
 `<svg>`" aplica a SVG, no a un div con conic-gradient). Compila + import + AST (0 libres) + lógica (tramos
 0→100%, formato $/%). Paleta de 12 colores; MO = azul (#2e6da4, como el reparto).
 
+## Herramientas: hub/página de entrada (v231)
+El usuario pidió un hub de entrada para 🛠 Herramientas (se le mostró un mockup vía visualize; eligió la versión
+**simple**, sin el chequeo del plano). Se añadió **"🧰 Inicio"** como PRIMERA sub-pestaña de herramientas
+(`_SUBSECCIONES["herramientas"]`), que es el default → al entrar a Herramientas ves el hub. `_hub_herramientas`
+renderiza una **tarjeta por herramienta** (`st.container(border=True)` en rejilla de 3 col): título + qué hace
+(1 línea) + botón «Abrir →» que hace `navegar("herramientas", <label>)`. Las 6: Survey · Plomada · Rieles ·
+Buffers · Belting · Pre-Start. `_seccion_herramientas` ganó la rama `if sub == "🧰 Inicio": _hub_herramientas()`.
+⚠️ Cambiar el default de Survey→Inicio no rompe nada: "Reconstruir en el Survey" (projects_ui) NO auto-navega
+(solo carga session_state + avisa "ve a Survey"). Verificado: compila + import + AST (0 libres). El chequeo del
+plano por herramienta (v175, `plan_data.por_herramienta`/`del_proyecto`) queda para una posible v2 del hub.
+
 ## Nav: desplegar ≠ navegar (no cargar la sub-pestaña al expandir) (v230)
 El usuario notó que al tocar una sección (p.ej. Planificación) SOLO para desplegar sus sub-pestañas, la app ya
 abría/cargaba la 1ª (Tablero). Fix: en `sidebar_menu` se separa **desplegar** de **navegar**.
@@ -3236,6 +3247,7 @@ resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NOR
 ## Versiones desplegadas (v215 = actual)
 | Ver | Cambio principal |
 |---|---|
+| v231 | Herramientas: página de entrada (hub) — nueva sub-pestaña "🧰 Inicio" (default) con una tarjeta por herramienta (qué hace + Abrir). Punto de partida claro al entrar a Herramientas. Versión simple (sin el chequeo del plano, que queda para después) |
 | v230 | Nav: desplegar ≠ navegar — tocar una sección con sub-pestañas ahora SOLO despliega sus hijas en el sidebar (no carga la 1ª sub-pestaña de una); la carga ocurre solo al tocar una hija. Estado `_admin_expanded` separado del activo |
 | v229 | Navegación del admin: el sidebar pasa a 2 niveles (acordeón) — bajo la sección activa se despliegan sus sub-pestañas indentadas y clickeables, para ir directo a una de nivel 2 desde la barra izquierda. El nivel 1 pasa de radio a botones-menú (CSS st-key, verificado). Se quitó el radio horizontal de sub-pestañas del contenido |
 | v228 | Cartera de Proyectos: toggle de vista "🃏 Tarjetas \| 📋 Lista". La Lista es la tabla clásica (proyecto por fila; columnas estado/avance con barra/cliente/fechas/% presupuesto/usuarios/situación/alertas) y es clickeable (seleccionar fila abre el proyecto). Las tarjetas siguen como default |
