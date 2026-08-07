@@ -317,11 +317,12 @@ def render_user_bar():
             session_cookie.save(a.get("usuario", ""), a.get("token", ""))
         except Exception:
             pass
-    rol_lbl = {"propietario": "👑 Propietario", "administrador": "🛠 Administrador",
-               "campo": "🔧 Campo"}.get(a.get("rol"), a.get("rol", ""))
+    rol_lbl = {"propietario": ":material/shield_person: Propietario",
+               "administrador": ":material/manage_accounts: Administrador",
+               "campo": ":material/engineering: Campo"}.get(a.get("rol"), a.get("rol", ""))
     grupo = a.get("grupo") or ("todos" if a.get("rol") == "propietario" else "—")
-    st.markdown(f"**{a.get('nombre','')}**  \n{rol_lbl}  \n🏢 {grupo}")
-    if st.button("🚪 Cerrar sesión", use_container_width=True, key="logout_btn"):
+    st.markdown(f"**{a.get('nombre','')}**  \n{rol_lbl}  \n:material/business: {grupo}")
+    if st.button(":material/logout: Cerrar sesión", use_container_width=True, key="logout_btn"):
         try:
             auth.end_session(a.get("usuario", ""), a.get("token"))   # libera la cuenta
         except Exception:

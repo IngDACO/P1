@@ -206,7 +206,7 @@ def render_topbar(grupo):
             ir_atras()
     with c1:
         st.text_input("Buscar", key="topbar_search", label_visibility="collapsed",
-                      placeholder="🔎  Buscar proyectos, personas, trabajos…")
+                      placeholder="Buscar proyectos, personas, trabajos…")
     with c2:
         _campana(grupo)
     st.markdown("<hr style='margin:2px 0 14px 0;border:none;border-top:1px solid #e6e9ef;'>",
@@ -234,9 +234,10 @@ def _campana(grupo):
         alerts = _alertas(grupo)
     except Exception:
         alerts = []
-    label = f"🔔 {len(alerts)}" if alerts else "🔔"
+    label = (f":material/notifications: {len(alerts)}" if alerts
+             else ":material/notifications:")
     with st.popover(label, use_container_width=True):
-        st.markdown("**🔔 Alertas**")
+        st.markdown(":material/notifications: **Alertas**")
         if not alerts:
             st.caption("Sin alertas por ahora.")
         for a in alerts:

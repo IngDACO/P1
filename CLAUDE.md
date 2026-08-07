@@ -1120,6 +1120,17 @@ tiene `background-image: conic-gradient(...)` computado; la nota de diagrams.py 
 `<svg>`" aplica a SVG, no a un div con conic-gradient). Compila + import + AST (0 libres) + lógica (tramos
 0→100%, formato $/%). Paleta de 12 colores; MO = azul (#2e6da4, como el reparto).
 
+## Estética fase 2: iconos Material en el chrome del admin (v233)
+Sigue v232. Se migró el CHROME (visible en cada página): topbar + barra de usuario.
+- **`home_ui`**: campana 🔔 → `:material/notifications:` (label del popover + header); del buscador se quitó el
+  emoji 🔎 (los placeholders son texto plano, no renderizan `:material/`).
+- **`auth_ui.render_user_bar`** (sidebar, TODOS los roles): rol 👑/🛠/🔧 → `:material/shield_person:` /
+  `:material/manage_accounts:` / `:material/engineering:`; 🏢 grupo → `:material/business:`; 🚪 Cerrar sesión →
+  `:material/logout:`. Monocromo (color del tema), no azul COPEX (es chrome, no nav).
+⚠️ **Verificado en vivo**: los `:material/` renderizan en label de POPOVER, en `st.markdown` (incluso con salto
+de línea `  \n`) y en botón (sin texto literal). Compila + import. PENDIENTE fase 3: cabeceras de los paneles de
+contenido (projects_ui, etc.) y botones (💾/➕/🔎…); los estados 🟢🔴🟡 siguen sin tocar.
+
 ## Estética: iconos Material (azul COPEX) en la nav, en vez de emoji (v232)
 El usuario pidió reemplazar los emoji "infantiles" por iconos profesionales dentro de la paleta COPEX (se le
 mostró un mockup; eligió empezar por la **navegación** y dejar los estados 🟢🔴🟡 por ahora). Fase 1 = el
@@ -3267,6 +3278,7 @@ resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NOR
 ## Versiones desplegadas (v215 = actual)
 | Ver | Cambio principal |
 |---|---|
+| v233 | Estética (fase 2): el chrome del admin a iconos Material — campana (🔔→notifications), barra de usuario (rol 👑/🛠/🔧, grupo 🏢, cerrar sesión 🚪) y se quitó el 🔎 del buscador. Monocromo |
 | v232 | Estética (fase 1): la NAVEGACIÓN del admin cambia los emoji por iconos Material profesionales en azul COPEX (sidebar: secciones + sub-pestañas + hub). Sub-pestañas decopladas en (id interno con emoji / display con icono) para no tocar los deep-links. Los estados 🟢🔴🟡 se dejan por ahora |
 | v231 | Herramientas: página de entrada (hub) — nueva sub-pestaña "🧰 Inicio" (default) con una tarjeta por herramienta (qué hace + Abrir). Punto de partida claro al entrar a Herramientas. Versión simple (sin el chequeo del plano, que queda para después) |
 | v230 | Nav: desplegar ≠ navegar — tocar una sección con sub-pestañas ahora SOLO despliega sus hijas en el sidebar (no carga la 1ª sub-pestaña de una); la carga ocurre solo al tocar una hija. Estado `_admin_expanded` separado del activo |
