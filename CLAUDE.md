@@ -1120,6 +1120,18 @@ tiene `background-image: conic-gradient(...)` computado; la nota de diagrams.py 
 `<svg>`" aplica a SVG, no a un div con conic-gradient). Compila + import + AST (0 libres) + lógica (tramos
 0→100%, formato $/%). Paleta de 12 colores; MO = azul (#2e6da4, como el reparto).
 
+## Nav: desplegar ≠ navegar (no cargar la sub-pestaña al expandir) (v230)
+El usuario notó que al tocar una sección (p.ej. Planificación) SOLO para desplegar sus sub-pestañas, la app ya
+abría/cargaba la 1ª (Tablero). Fix: en `sidebar_menu` se separa **desplegar** de **navegar**.
+- Nuevo estado `_admin_expanded` (sección desplegada en el sidebar), independiente de `admin_nav` (sección
+  ACTIVA cuyo contenido se muestra). Por defecto la activa está desplegada; `""` = todo plegado.
+- Tocar una sección **con** hijas → solo togglea `_admin_expanded` (`st.rerun`, SIN `navegar`) → el contenido
+  actual NO cambia; las hijas se muestran/ocultan. Tocar una sección **sin** hijas → `navegar` directo. Tocar
+  una **hija** → fija `_admin_expanded` + `navegar(sec, sub)` (ahí sí carga).
+- `_aplicar_nav_pending` fija `_admin_expanded=seccion` en cada navegación (deep-links despliegan el destino).
+- La sub activa solo se resalta si la desplegada == la activa (`_exp == _cur`); caret ▾ = desplegada, ▸ =
+  plegada con hijas. Verificado: compila + import + AST (0 libres) + escenarios razonados.
+
 ## Navegación del admin: sidebar de 2 niveles (acordeón) (v229)
 El usuario pidió que las sub-pestañas (nivel 2) se desplieguen en la PROPIA barra izquierda, para ir directo
 a una sub-pestaña desde el sidebar. Se le mostró un mockup (visualize) de **acordeón** vs **árbol libre** →
@@ -3224,6 +3236,7 @@ resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NOR
 ## Versiones desplegadas (v215 = actual)
 | Ver | Cambio principal |
 |---|---|
+| v230 | Nav: desplegar ≠ navegar — tocar una sección con sub-pestañas ahora SOLO despliega sus hijas en el sidebar (no carga la 1ª sub-pestaña de una); la carga ocurre solo al tocar una hija. Estado `_admin_expanded` separado del activo |
 | v229 | Navegación del admin: el sidebar pasa a 2 niveles (acordeón) — bajo la sección activa se despliegan sus sub-pestañas indentadas y clickeables, para ir directo a una de nivel 2 desde la barra izquierda. El nivel 1 pasa de radio a botones-menú (CSS st-key, verificado). Se quitó el radio horizontal de sub-pestañas del contenido |
 | v228 | Cartera de Proyectos: toggle de vista "🃏 Tarjetas \| 📋 Lista". La Lista es la tabla clásica (proyecto por fila; columnas estado/avance con barra/cliente/fechas/% presupuesto/usuarios/situación/alertas) y es clickeable (seleccionar fila abre el proyecto). Las tarjetas siguen como default |
 | v227 | Ficha de usuario (sub-pestañas): 📊 Su trabajo pasa a ACTIVA — los proyectos asignados son botones que abren el proyecto + "horas por proyecto" de esa persona; 🔑 Acceso peinada a doble columna (contraseña\|tarifa). Contacto y Credenciales ya estaban sólidas, no se tocaron |

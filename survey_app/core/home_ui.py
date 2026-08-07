@@ -59,6 +59,7 @@ def _aplicar_nav_pending():
     lbl = next((l for k, l in _SECCIONES if k == seccion), None)
     if lbl:
         st.session_state["admin_nav"] = lbl
+        st.session_state["_admin_expanded"] = seccion   # v230: desplegar la sección navegada
     if sub_label and _SUBKEY.get(seccion):
         st.session_state[_SUBKEY[seccion]] = sub_label
 
@@ -96,6 +97,12 @@ def sidebar_menu() -> str:
     _aplicar_nav_pending()                     # aplica saltos de los elementos activos
     _cur_lbl = st.session_state.get("admin_nav") or _SECCIONES[0][1]
     _cur = _LBL2KEY.get(_cur_lbl, "home")
+    # v230: sección DESPLEGADA en el sidebar. Puede diferir de la ACTIVA porque
+    # "desplegar" ya NO navega (antes tocar la sección abría su 1ª sub-pestaña de una).
+    # Por defecto la activa está desplegada; "" = todo plegado.
+    _exp = st.session_state.get("_admin_expanded")
+    if _exp is None:
+        _exp = _cur
 
     # Botones como ítems de menú + resaltado del activo (sección y sub).
     # ⚠️ Prefijo `navsec_`/`navsub_` (NO `nav_`): `[class*="st-key-nav_"]` también matchearía
@@ -109,7 +116,8 @@ def sidebar_menu() -> str:
             '[class*="st-key-navsub_"] button{padding-left:26px!important;font-size:.85rem!important;}',
             f'.st-key-navsec_{_cur} button{{background:#e8eef6!important;color:#1e4e79!important;'
             'font-weight:600!important;border-radius:8px!important;}']
-    if _cur in _SUBSECCIONES:
+    # La sub activa solo se resalta si la sección activa es además la desplegada.
+    if _exp == _cur and _cur in _SUBSECCIONES:
         _sk, _subs = _SUBSECCIONES[_cur]
         _cursub = st.session_state.get(_sk) or _subs[0]
         if _cursub in _subs:
@@ -122,13 +130,22 @@ def sidebar_menu() -> str:
     st.markdown("###### NAVEGACIÓN")
     for _k, _lbl in _SECCIONES:
         _has = _k in _SUBSECCIONES
-        _mark = ("  ▾" if (_has and _k == _cur) else ("  ▸" if _has else ""))
+        _open = _has and _k == _exp
+        _mark = ("  ▾" if _open else ("  ▸" if _has else ""))
         if st.button(_lbl + _mark, key=f"navsec_{_k}", use_container_width=True):
-            navegar(_k)                        # entra a la sección (mantiene su sub actual)
-        if _has and _k == _cur:                # acordeón: solo la activa despliega sus hijas
+            if _has:
+                # v230: SOLO desplegar/plegar; NO navegar → no se carga el contenido de la
+                # sub-pestaña hasta que se toca una hija (evita "abrir todo de una vez").
+                st.session_state["_admin_expanded"] = ("" if _open else _k)
+                st.rerun()
+            else:
+                st.session_state["_admin_expanded"] = _k    # sin hijas → navega directo
+                navegar(_k)
+        if _open:                              # acordeón: solo la DESPLEGADA muestra sus hijas
             _sk, _subs = _SUBSECCIONES[_k]
             for _i, _s in enumerate(_subs):
                 if st.button(f"› {_s}", key=f"navsub_{_k}_{_i}", use_container_width=True):
+                    st.session_state["_admin_expanded"] = _k
                     navegar(_k, _s)
     _track_history(_cur)
     return _cur
