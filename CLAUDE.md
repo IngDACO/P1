@@ -1120,6 +1120,26 @@ tiene `background-image: conic-gradient(...)` computado; la nota de diagrams.py 
 `<svg>`" aplica a SVG, no a un div con conic-gradient). Compila + import + AST (0 libres) + lógica (tramos
 0→100%, formato $/%). Paleta de 12 colores; MO = azul (#2e6da4, como el reparto).
 
+## Estética: iconos Material (azul COPEX) en la nav, en vez de emoji (v232)
+El usuario pidió reemplazar los emoji "infantiles" por iconos profesionales dentro de la paleta COPEX (se le
+mostró un mockup; eligió empezar por la **navegación** y dejar los estados 🟢🔴🟡 por ahora). Fase 1 = el
+sidebar del admin (`home_ui`):
+- **Material Symbols nativos** de Streamlit (`:material/xxx:`), monocromo, sin dependencias. ⚠️ **Verificado en
+  vivo** que: (a) renderizan en labels de botón (no solo markdown); (b) el icono es el ÚNICO `<span>` del `<p>`
+  del botón (sin clase/testid) → se pinta SOLO el icono con `[class*="st-key-navsec_"] button p span{color:...}`
+  dejando el texto en su color. Iconos en **azul COPEX #2e6da4**; sección/sub ACTIVA en #1e4e79 (icono+texto) +
+  highlight.
+- `_SECCIONES` labels → `:material/...:` (seguro: la lógica usa la CLAVE). Ej: home/schedule/calendar_month/
+  folder/payments/inventory_2/build/contacts.
+- ⚠️ **Sub-pestañas = (id, display)**: el ID conserva el emoji ("📊 Proyectos") porque es el IDENTIFICADOR que
+  usan los deep-links (`_ir_a`/`_admin_nav_pending` en projects_ui/auth_ui/roster_ui) y el match en `_seccion_*`
+  — NO se toca. `display` (`:material/...:`) es lo único que cambia (sidebar + `_sub_header` + hub). Cero cambios
+  en deep-links. `_sub_header(seccion)` deriva el título de `_SECCIONES` y muestra el display de la sub. El hub
+  toma el display de `_SUBSECCIONES` y navega con el ID.
+Verificado: compila + import + AST (0 libres) + IDs de matching intactos + mecanismos CSS en vivo. Solo rol
+admin. PENDIENTE (fases siguientes): cabeceras/botones del contenido, tablas, y decidir si los estados 🟢🔴🟡
+se migran. Los emoji de otros contextos (chat_agent prompt, plan_data, toolruns, captions) NO se tocaron.
+
 ## Herramientas: hub/página de entrada (v231)
 El usuario pidió un hub de entrada para 🛠 Herramientas (se le mostró un mockup vía visualize; eligió la versión
 **simple**, sin el chequeo del plano). Se añadió **"🧰 Inicio"** como PRIMERA sub-pestaña de herramientas
@@ -3247,6 +3267,7 @@ resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NOR
 ## Versiones desplegadas (v215 = actual)
 | Ver | Cambio principal |
 |---|---|
+| v232 | Estética (fase 1): la NAVEGACIÓN del admin cambia los emoji por iconos Material profesionales en azul COPEX (sidebar: secciones + sub-pestañas + hub). Sub-pestañas decopladas en (id interno con emoji / display con icono) para no tocar los deep-links. Los estados 🟢🔴🟡 se dejan por ahora |
 | v231 | Herramientas: página de entrada (hub) — nueva sub-pestaña "🧰 Inicio" (default) con una tarjeta por herramienta (qué hace + Abrir). Punto de partida claro al entrar a Herramientas. Versión simple (sin el chequeo del plano, que queda para después) |
 | v230 | Nav: desplegar ≠ navegar — tocar una sección con sub-pestañas ahora SOLO despliega sus hijas en el sidebar (no carga la 1ª sub-pestaña de una); la carga ocurre solo al tocar una hija. Estado `_admin_expanded` separado del activo |
 | v229 | Navegación del admin: el sidebar pasa a 2 niveles (acordeón) — bajo la sección activa se despliegan sus sub-pestañas indentadas y clickeables, para ir directo a una de nivel 2 desde la barra izquierda. El nivel 1 pasa de radio a botones-menú (CSS st-key, verificado). Se quitó el radio horizontal de sub-pestañas del contenido |

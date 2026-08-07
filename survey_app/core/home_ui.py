@@ -17,27 +17,44 @@ import pandas as pd
 
 
 # ── Menú lateral (iconos) ────────────────────────────────────────
+# v232: iconos Material (profesionales, monocromo, azul COPEX vía CSS) en vez de emoji.
+# Las labels son display; la lógica usa la CLAVE, así que cambiarlas es seguro.
 _SECCIONES = [
-    ("home",          "🏠  Home"),
-    ("fichaje",       "⏱  Fichaje"),
-    ("planificacion", "📅  Planificación"),
-    ("proyectos",     "📁  Proyectos"),
-    ("finanzas",      "💰  Finanzas"),
-    ("inventario",    "📦  Inventario"),
-    ("herramientas",  "🛠  Herramientas"),
-    ("contactos",     "👥  Contactos"),
+    ("home",          ":material/home: Home"),
+    ("fichaje",       ":material/schedule: Fichaje"),
+    ("planificacion", ":material/calendar_month: Planificación"),
+    ("proyectos",     ":material/folder: Proyectos"),
+    ("finanzas",      ":material/payments: Finanzas"),
+    ("inventario",    ":material/inventory_2: Inventario"),
+    ("herramientas",  ":material/build: Herramientas"),
+    ("contactos",     ":material/contacts: Contactos"),
 ]
 _LBL2KEY = {lbl: k for k, lbl in _SECCIONES}
 
 
 # Sub-pestañas (nivel 2) de cada sección, centralizadas (v229): (clave_de_estado, [labels]).
 # Antes estaban repartidas en cada `_seccion_*`; ahora también las usa el sidebar (acordeón).
+# v232: cada sub = (id, display). El ID (con emoji) es el IDENTIFICADOR interno — lo usan
+# los deep-links (`_ir_a`/`_admin_nav_pending`) y el match en `_seccion_*`, así que NO cambia.
+# `display` es lo que se MUESTRA (icono Material). Solo cambia lo visible → cero riesgo.
 _SUBSECCIONES = {
-    "planificacion": ("adm_plan_sub", ["📋 Tablero", "👷 Usuarios"]),
-    "proyectos":     ("adm_proy_sub", ["📊 Proyectos", "🗂 Agrupaciones"]),
-    "finanzas":      ("adm_fin_sub",  ["💰 Gastos", "⏱ Horas"]),
-    "herramientas":  ("adm_herr_sub", ["🧰 Inicio", "📐 Survey", "🔩 Plomada", "✂️ Rieles",
-                                       "🛡 Buffers", "🎗 Belting", "🦺 Pre-Start"]),
+    "planificacion": ("adm_plan_sub", [
+        ("📋 Tablero", ":material/calendar_view_week: Tablero"),
+        ("👷 Usuarios", ":material/badge: Usuarios")]),
+    "proyectos": ("adm_proy_sub", [
+        ("📊 Proyectos", ":material/format_list_bulleted: Proyectos"),
+        ("🗂 Agrupaciones", ":material/account_tree: Agrupaciones")]),
+    "finanzas": ("adm_fin_sub", [
+        ("💰 Gastos", ":material/receipt_long: Gastos"),
+        ("⏱ Horas", ":material/schedule: Horas")]),
+    "herramientas": ("adm_herr_sub", [
+        ("🧰 Inicio", ":material/apps: Inicio"),
+        ("📐 Survey", ":material/architecture: Survey"),
+        ("🔩 Plomada", ":material/straighten: Plomada"),
+        ("✂️ Rieles", ":material/content_cut: Rieles"),
+        ("🛡 Buffers", ":material/shield: Buffers"),
+        ("🎗 Belting", ":material/swap_vert: Belting"),
+        ("🦺 Pre-Start", ":material/health_and_safety: Pre-Start")]),
 }
 _SUBKEY = {k: v[0] for k, v in _SUBSECCIONES.items()}   # {seccion: clave_de_estado}
 
@@ -114,16 +131,24 @@ def sidebar_menu() -> str:
             '[class*="st-key-navsec_"] button p,[class*="st-key-navsub_"] button p{'
             'text-align:left!important;width:100%!important;}',
             '[class*="st-key-navsub_"] button{padding-left:26px!important;font-size:.85rem!important;}',
+            # v232: el ICONO Material (único <span> del <p>) en azul COPEX; el texto, por defecto.
+            '[class*="st-key-navsec_"] button p span,[class*="st-key-navsub_"] button p span{'
+            'color:#2e6da4!important;}',
+            # sección ACTIVA: highlight + azul oscuro (texto e icono).
             f'.st-key-navsec_{_cur} button{{background:#e8eef6!important;color:#1e4e79!important;'
-            'font-weight:600!important;border-radius:8px!important;}']
+            'font-weight:600!important;border-radius:8px!important;}',
+            f'.st-key-navsec_{_cur} button p span{{color:#1e4e79!important;}}']
     # La sub activa solo se resalta si la sección activa es además la desplegada.
     if _exp == _cur and _cur in _SUBSECCIONES:
         _sk, _subs = _SUBSECCIONES[_cur]
-        _cursub = st.session_state.get(_sk) or _subs[0]
-        if _cursub in _subs:
-            _css.append(f'.st-key-navsub_{_cur}_{_subs.index(_cursub)} button{{'
+        _cursub = st.session_state.get(_sk) or _subs[0][0]
+        _idx_sub = next((_i for _i, (_sid, _d) in enumerate(_subs) if _sid == _cursub), None)
+        if _idx_sub is not None:
+            _css.append(f'.st-key-navsub_{_cur}_{_idx_sub} button{{'
                         'background:#e8eef6!important;color:#1e4e79!important;'
-                        'font-weight:600!important;border-radius:8px!important;}')
+                        'font-weight:600!important;border-radius:8px!important;}'
+                        f'.st-key-navsub_{_cur}_{_idx_sub} button p span'
+                        '{color:#1e4e79!important;}')
     _css.append("</style>")
     st.markdown("".join(_css), unsafe_allow_html=True)
 
@@ -143,10 +168,10 @@ def sidebar_menu() -> str:
                 navegar(_k)
         if _open:                              # acordeón: solo la DESPLEGADA muestra sus hijas
             _sk, _subs = _SUBSECCIONES[_k]
-            for _i, _s in enumerate(_subs):
-                if st.button(f"› {_s}", key=f"navsub_{_k}_{_i}", use_container_width=True):
+            for _i, (_sid, _sdisp) in enumerate(_subs):
+                if st.button(_sdisp, key=f"navsub_{_k}_{_i}", use_container_width=True):
                     st.session_state["_admin_expanded"] = _k
-                    navegar(_k, _s)
+                    navegar(_k, _sid)          # navega con el ID interno (deep-links intactos)
     _track_history(_cur)
     return _cur
 
@@ -241,22 +266,25 @@ def render_admin_content(key, grupo):
         render_home(grupo)
 
 
-def _sub_header(titulo, seccion):
-    """Cabecera del contenido con la sub-pestaña ACTUAL (v229). El selector de nivel 2 ya
-    NO va aquí (radio horizontal) — vive en el sidebar (`sidebar_menu`); esto solo da
-    contexto. Devuelve la sub-pestaña activa (de session_state; default = la primera)."""
+def _sub_header(seccion):
+    """Cabecera del contenido con la sub-pestaña ACTUAL. El selector de nivel 2 vive en el
+    sidebar; esto solo da contexto. Devuelve el ID de la sub activa (default = la primera) y
+    muestra su display con icono. Título = la label de la sección (de `_SECCIONES`). v232."""
+    titulo = next((l for k, l in _SECCIONES if k == seccion), seccion)
     _sk, _subs = _SUBSECCIONES[seccion]
-    sub = st.session_state.get(_sk) or _subs[0]
-    if sub not in _subs:
-        sub = _subs[0]
-    st.markdown(f"## {titulo}  ·  {sub}")
+    _ids = [_i for _i, _d in _subs]
+    sub = st.session_state.get(_sk)
+    if sub not in _ids:
+        sub = _ids[0]
+    _disp = next((_d for _i, _d in _subs if _i == sub), sub)
+    st.markdown(f"## {titulo}  ·  {_disp}")
     st.markdown("---")
     return sub
 
 
 def _seccion_planificacion(grupo):
     # v191: la gestión de usuarios vive aquí (decisión del usuario), junto al tablero.
-    sub = _sub_header("📅 Planificación", "planificacion")
+    sub = _sub_header("planificacion")
     if sub == "📋 Tablero":
         from core import roster_ui
         roster_ui.render_planificacion(grupo)
@@ -267,7 +295,7 @@ def _seccion_planificacion(grupo):
 
 def _seccion_proyectos(grupo):
     from core import projects_ui as PU
-    sub = _sub_header("📁 Proyectos", "proyectos")
+    sub = _sub_header("proyectos")
     if sub == "📊 Proyectos":
         PU._panel_proyectos(grupo)
     else:
@@ -276,7 +304,7 @@ def _seccion_proyectos(grupo):
 
 def _seccion_finanzas(grupo):
     from core import projects_ui as PU
-    sub = _sub_header("💰 Finanzas", "finanzas")
+    sub = _sub_header("finanzas")
     if sub == "💰 Gastos":
         PU.render_group_expenses(grupo)
     else:
@@ -287,32 +315,34 @@ def _hub_herramientas():
     """Hub/entrada de Herramientas (v231): una tarjeta por herramienta (qué hace + Abrir).
     «Abrir» navega a la sub-pestaña de esa herramienta."""
     st.caption("Elige una herramienta:")
-    _cards = [
-        ("📐 Survey", "Posicionamiento del hueco y matriz de solución; genera los informes "
-                      "del cliente y de obra."),
-        ("🔩 Plomada", "Líneas de plomada y replanteo; distancias de verificación en obra."),
-        ("✂️ Rieles", "Cuánto cortar de cada riel de guía (Caso 1 / Caso 2)."),
-        ("🛡 Buffers", "Cuánto cortar de cada buffer (HKP − HKPR)."),
-        ("🎗 Belting", "Altura a la que dejar la cabina para instalar los belts (DSTS)."),
-        ("🦺 Pre-Start", "Charla diaria de seguridad de obra (Daily Pre-Start)."),
-    ]
-    for _r in range(0, len(_cards), 3):
+    _desc = {
+        "📐 Survey": "Posicionamiento del hueco y matriz de solución; genera los informes "
+                     "del cliente y de obra.",
+        "🔩 Plomada": "Líneas de plomada y replanteo; distancias de verificación en obra.",
+        "✂️ Rieles": "Cuánto cortar de cada riel de guía (Caso 1 / Caso 2).",
+        "🛡 Buffers": "Cuánto cortar de cada buffer (HKP − HKPR).",
+        "🎗 Belting": "Altura a la que dejar la cabina para instalar los belts (DSTS).",
+        "🦺 Pre-Start": "Charla diaria de seguridad de obra (Daily Pre-Start).",
+    }
+    # display (icono) desde _SUBSECCIONES (consistente con el sidebar); navega con el ID.
+    _herr = [(_id, _d) for _id, _d in _SUBSECCIONES["herramientas"][1] if _id != "🧰 Inicio"]
+    for _r in range(0, len(_herr), 3):
         _cols = st.columns(3, gap="medium")
         for _j in range(3):
             _i = _r + _j
-            if _i >= len(_cards):
+            if _i >= len(_herr):
                 break
-            _lbl, _desc = _cards[_i]
+            _id, _dispv = _herr[_i]
             with _cols[_j].container(border=True):
-                st.markdown(f"#### {_lbl}")
-                st.caption(_desc)
+                st.markdown(f"#### {_dispv}")
+                st.caption(_desc.get(_id, ""))
                 if st.button("Abrir →", key=f"hubherr_{_i}", use_container_width=True):
-                    navegar("herramientas", _lbl)
+                    navegar("herramientas", _id)
 
 
 def _seccion_herramientas(grupo):
     rol = st.session_state.get("auth", {}).get("rol", "administrador")
-    sub = _sub_header("🛠 Herramientas", "herramientas")
+    sub = _sub_header("herramientas")
     if sub == "🧰 Inicio":
         _hub_herramientas()
     elif sub == "📐 Survey":
