@@ -38,7 +38,7 @@ def _contacto_uno(sel, key_prefix="cc"):
         st.caption("1) El usuario abre el bot y pulsa **Start** (envíale este link):")
         st.code(f"https://t.me/{bot}?start={code}")
         st.caption("2) Cuando lo haya hecho, pulsa:")
-        if st.button("🔗 Vincular Telegram de este usuario", key=f"{key_prefix}_tgl"):
+        if st.button(":material/link: Vincular Telegram de este usuario", key=f"{key_prefix}_tgl"):
             cid = notify.telegram_find_chat_by_code(code)
             if cid:
                 auth.set_contact(sel, telegram=cid)
@@ -104,7 +104,7 @@ def render_credenciales(usuario, grupo, editable=False, key_prefix="cr"):
         return
     admin_usr = st.session_state.get("auth", {}).get("usuario", "")
 
-    with st.expander("➕ Agregar credencial"):
+    with st.expander("Agregar credencial", icon=":material/add_circle:"):
         # 'Tipo' va FUERA del form (v189): así, al cambiarlo, la app se re-renderiza
         # y podemos mostrar solo los campos que aplican — "especifica" para 'Otro' y
         # "Clase" solo para licencia de conducir. Dentro de un form no hay rerun hasta
@@ -144,7 +144,7 @@ def render_credenciales(usuario, grupo, editable=False, key_prefix="cr"):
                     st.rerun()
 
     if creds:
-        with st.expander("✏️ Editar / 🗑 eliminar credencial"):
+        with st.expander("Editar / eliminar credencial", icon=":material/edit:"):
             idmap = {f"{r.get('Tipo')} · {r.get('Numero') or 's/n'} ({r.get('ID')})": r for r in creds}
             sel = st.selectbox("Credencial", list(idmap.keys()), key=f"{key_prefix}_esel")
             r = idmap[sel]
@@ -171,7 +171,7 @@ def render_credenciales(usuario, grupo, editable=False, key_prefix="cr"):
 def render_my_credentials():
     """Vista de solo lectura de las credenciales del usuario logueado."""
     a = st.session_state.get("auth", {})
-    st.markdown("### 🎫 Mis credenciales")
+    st.markdown("### :material/badge: Mis credenciales")
     st.caption("Tus tickets y credenciales registrados por tu administrador. Muéstralos en obra si te los piden.")
     render_credenciales(a.get("usuario", ""), a.get("grupo", ""), editable=False, key_prefix="mycr")
 
@@ -430,7 +430,7 @@ def _owner_usuarios():
 
     # ── Crear usuario (rol + grupo) ──
     grupo_opts = [""] + [g["Grupo"] for g in auth.list_groups()]
-    with st.expander("➕ Crear usuario"):
+    with st.expander("Crear usuario", icon=":material/person_add:"):
         with st.form("form_user", clear_on_submit=True):
             u  = st.text_input("Usuario")
             nm = st.text_input("Nombre")
@@ -451,7 +451,7 @@ def _owner_usuarios():
 
     # ── Gestionar un usuario: ficha 360° (una sola selección) ──
     if users:
-        st.markdown("#### 👤 Gestionar un usuario")
+        st.markdown("#### :material/manage_accounts: Gestionar un usuario")
         _gf = ui.elegir("Filtrar por grupo", [g["Grupo"] for g in auth.list_groups()],
                         key="ow_ficha_gfil", vacio="— todos los grupos —")
         _cands = [u for u in users if (not _gf or str(u.get("Grupo", "")) == _gf)]
@@ -672,8 +672,15 @@ def _ficha_usuario(u, grupo, owner=False, sel_key="gp_fichasel"):
     st.markdown(f"**{u.get('Nombre') or sel}**  ·  _{u['Rol']}_  ·  "
                 + "  ·  ".join(c for c in chips if c))
 
+    # v237: format_func muestra iconos Material; las OPCIONES siguen siendo el ID (emoji)
+    # → el match de abajo (if _sec == "🔑 Acceso"…) no cambia.
     _sec = st.radio("Sección del usuario",
                     ["🔑 Acceso", "📇 Contacto", "🎫 Credenciales", "📊 Su trabajo", "🗑"],
+                    format_func=lambda o: {"🔑 Acceso": ":material/key: Acceso",
+                                           "📇 Contacto": ":material/contact_page: Contacto",
+                                           "🎫 Credenciales": ":material/badge: Credenciales",
+                                           "📊 Su trabajo": ":material/work: Su trabajo",
+                                           "🗑": ":material/delete:"}.get(o, o),
                     horizontal=True, key=f"{k}_sec", label_visibility="collapsed")
 
     if _sec == "🔑 Acceso":
@@ -819,7 +826,7 @@ def _grupo_usuarios(grupo):
 
     if not gente:
         st.info("Aún no tienes usuarios de campo. Crea el primero aquí.")
-        with st.expander("➕ Crear usuario de campo", expanded=True):
+        with st.expander("Crear usuario de campo", icon=":material/person_add:", expanded=True):
             _crear_usuario_form(grupo)
         return
 
@@ -904,12 +911,13 @@ def _grupo_usuarios(grupo):
         try:
             tipos, filas = C.matrix(grupo)
             if tipos:
-                with st.expander("🗂 Matriz de credenciales (usuarios × tickets)"):
+                with st.expander("Matriz de credenciales (usuarios × tickets)",
+                                 icon=":material/table_chart:"):
                     st.caption("🟢 vigente · 🟡 por vencer (≤30 d) · 🔴 vencido · — no registrada")
                     st.dataframe(pd.DataFrame(filas), hide_index=True, use_container_width=True)
         except Exception:
             pass
-    with st.expander("➕ Crear usuario de campo"):
+    with st.expander("Crear usuario de campo", icon=":material/person_add:"):
         _crear_usuario_form(grupo)
 
 

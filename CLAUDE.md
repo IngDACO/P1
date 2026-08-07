@@ -3290,6 +3290,7 @@ resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NOR
 ## Versiones desplegadas (v215 = actual)
 | Ver | Cambio principal |
 |---|---|
+| v237 | Estética (fase 3d): auth_ui — ficha 360° de Usuarios (radio Acceso/Contacto/Credenciales/Su trabajo/🗑 vía format_func, IDs intactos), expanders (Agregar/Editar credencial, Crear usuario, Matriz), botón Vincular Telegram, headers. Los botones Activar/Desactivar 🟢🔴 se dejan (usan color de estado a propósito) |
 | v236 | Estética (fase 3c): botones de projects_ui a iconos Material (Guardar→save, Borrar→delete, Reabrir→replay, Crear proyecto→add_circle, Cargar en Survey→sync, Descargar/Exportar→download). Labels de botón/form_submit/download_button — display puro. Verificado que las 3 variantes renderizan Material |
 | v235 | Estética (fase 3b): expanders y checkboxes de la sección Proyectos a iconos Material — "Nuevo proyecto"/"Nueva agrupación"/"Cargar recibo"/"Subir documento"/"Agregar-eliminar actividad" (icon= param), "Ver archivados" (admin+owner), y headers "Plano del elevador"/"Ubicación en el mapa". Solo display |
 | v234 | Estética (fase 3a): los radios de sub-navegación del detalle de proyecto y de Mis proyectos (campo) muestran iconos Material vía format_func (las opciones siguen siendo el ID con emoji → sin romper matching); headers de Gastos/Horas del grupo a iconos |
