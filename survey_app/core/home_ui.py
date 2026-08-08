@@ -222,8 +222,8 @@ def _alertas(grupo) -> list:
         from core import credentials as C
         if C.is_configured():
             for e in C.expiring(grupo)[:10]:
-                est = "🔴 vencida" if e["dias"] < 0 else f"🟡 vence en {e['dias']} d"
-                out.append(f"🎫 {e['tipo']} · {e['usuario']} — {est}")
+                est = ":red[:material/cancel:] vencida" if e["dias"] < 0 else f":orange[:material/schedule:] vence en {e['dias']} d"
+                out.append(f":material/badge: {e['tipo']} · {e['usuario']} — {est}")
     except Exception:
         pass
     return out
@@ -258,11 +258,11 @@ def render_admin_content(key, grupo):
     elif key == "finanzas":
         _seccion_finanzas(grupo)
     elif key == "inventario":
-        _placeholder("📦 Inventario", "Control de inventario — módulo nuevo, en desarrollo.")
+        _placeholder(":material/inventory_2: Inventario", "Control de inventario — módulo nuevo, en desarrollo.")
     elif key == "herramientas":
         _seccion_herramientas(grupo)
     elif key == "contactos":
-        _placeholder("👥 Contactos", "Nuevo apartado de contactos — se desarrollará luego.")
+        _placeholder(":material/contacts: Contactos", "Nuevo apartado de contactos — se desarrollará luego.")
     else:
         render_home(grupo)
 
@@ -368,7 +368,7 @@ def _seccion_herramientas(grupo):
 
 def _placeholder(titulo, desc=""):
     st.markdown(f"## {titulo}")
-    st.info("🚧 **En construcción** — este apartado se está rediseñando."
+    st.info(":material/construction: **En construcción** — este apartado se está rediseñando."
             + (f"\n\n{desc}" if desc else ""))
 
 
@@ -381,12 +381,14 @@ def render_home(grupo):
     PU.render_group_header(grupo)
     col_map, col_ag = st.columns([3, 2], gap="large")
     with col_map:
-        st.markdown("#### 🗺 Proyectos activos")
+        st.markdown("#### :material/map: Proyectos activos")
         _mapa_proyectos(grupo)
     with col_ag:
         # v203: la columna derecha se comparte entre la agenda y los proyectos; el
         # toggle hace de título → cambio rápido sin salir de HOME.
         _vista = st.radio("vista", ["📋 Agenda", "📁 Proyectos"], horizontal=True,
+                          format_func=lambda o: {"📋 Agenda": ":material/list: Agenda",
+                                                 "📁 Proyectos": ":material/folder: Proyectos"}.get(o, o),
                           key="home_right_view", label_visibility="collapsed")
         if _vista == "📁 Proyectos":
             _proyectos_home(grupo)
@@ -438,7 +440,7 @@ def _mapa_proyectos(grupo):
                               icon=folium.Icon(color="red")).add_to(m)
             _out = st_folium(m, key="home_map", height=380,
                              returned_objects=["last_object_clicked"])
-            st.caption("📍 Toca un pin para abrir el proyecto.")
+            st.caption(":material/place: Toca un pin para abrir el proyecto.")
             # v199: pin ACTIVO → abre ese proyecto (reusa _prjsel_pending del panel)
             _clk = (_out or {}).get("last_object_clicked")
             if _clk:
@@ -457,12 +459,12 @@ def _mapa_proyectos(grupo):
         except Exception:
             st.map(pd.DataFrame(filas), latitude="lat", longitude="lon",
                    color="#c0392b", size=80)
-            st.caption("📍 " + "  ·  ".join(f["nombre"] for f in filas))
+            st.caption(":material/place: " + "  ·  ".join(f["nombre"] for f in filas))
     else:
         st.info("Ninguno de los proyectos en ejecución tiene ubicación todavía. "
-                "Fíjala editando el proyecto → 🗺 Ubicación en el mapa.")
+                "Fíjala editando el proyecto → :material/map: Ubicación en el mapa.")
     if sin_ubic:
-        st.caption("⚠️ Sin ubicación en el mapa: " + ", ".join(sin_ubic))
+        st.caption(":orange[:material/warning:] Sin ubicación en el mapa: " + ", ".join(sin_ubic))
 
 
 # ── Proyectos (vista compacta de HOME) ───────────────────────────
@@ -486,7 +488,7 @@ def _resumen_proyecto_home(grupo, pid):
         al = (alerts.open_counts_all() if alerts.is_configured() else {}).get(str(pid), 0)
     except Exception:
         dl = ah = al = 0
-    _sem = "🔴" if dl else ("🟢" if ah else "🟡")
+    _sem = ":red[:material/cancel:]" if dl else (":green[:material/check_circle:]" if ah else ":orange[:material/schedule:]")
     _bar = "#c0392b" if dl else ("#1e8449" if ah else "#2e6da4")
 
     def _e(s):
@@ -497,29 +499,29 @@ def _resumen_proyecto_home(grupo, pid):
         f"<div style='background:#f0f2f5;border-radius:8px;height:14px;overflow:hidden;"
         f"margin:2px 0 8px;'><div style='background:{_bar};height:100%;width:{av}%;'></div></div>",
         unsafe_allow_html=True)
-    bits = [f"📊 **{av}%**", f"{_sem} {_e(prj.get('Estado'))}"]
+    bits = [f":material/bar_chart: **{av}%**", f"{_sem} {_e(prj.get('Estado'))}"]
     if prj.get("Cliente"):
-        bits.append(f"🏢 {_e(prj.get('Cliente'))}")
+        bits.append(f":material/business: {_e(prj.get('Cliente'))}")
     if dl:
-        bits.append(f"🔴 {dl} d de retraso")
+        bits.append(f":red[:material/schedule:] {dl} d de retraso")
     elif ah:
-        bits.append(f"🟢 {ah} d de adelanto")
+        bits.append(f":green[:material/schedule:] {ah} d de adelanto")
     if al:
-        bits.append(f"🔔 {al} alarma(s)")
+        bits.append(f":material/notifications: {al} alarma(s)")
     st.markdown("  ·  ".join(bits))
     _fi = str(prj.get("FechaInicio", "") or "—")
     _ff = str(prj.get("FechaFinEst", "") or "—")
-    st.caption(f"📅 {_fi} → {_ff}" + (f"  ·  🛗 {_e(prj.get('NS'))} paradas" if prj.get("NS") else ""))
+    st.caption(f":material/calendar_month: {_fi} → {_ff}" + (f"  ·  :material/elevator: {_e(prj.get('NS'))} paradas" if prj.get("NS") else ""))
     _asg = [x.strip() for x in str(prj.get("CampoAsignados", "")).split(";") if x.strip()]
     if _asg:
-        st.caption(f"👷 {', '.join(_asg[:6])}")
+        st.caption(f":material/engineering: {', '.join(_asg[:6])}")
     _ub = str(prj.get("Ubicacion", "") or "")
     if _ub:
         try:
             from core import maps
-            st.markdown("📍 " + maps.maps_link_md(_ub))
+            st.markdown(":material/place: " + maps.maps_link_md(_ub))
         except Exception:
-            st.caption(f"📍 {_ub}")
+            st.caption(f":material/place: {_ub}")
     st.markdown("")
     if st.button("→ Ver proyecto completo", key="hpr_full", type="primary",
                  use_container_width=True):
@@ -579,11 +581,11 @@ def _proyectos_home(grupo):
         _dl, _ah, _al = delays.get(_pid, 0), aheads.get(_pid, 0), alarmas.get(_pid, 0)
         _extra = ""
         if _dl:
-            _extra += f" · 🔴 {_dl}d"
+            _extra += f" · :material/schedule: {_dl}d"
         elif _ah:
-            _extra += f" · 🟢 {_ah}d"
+            _extra += f" · :material/schedule: {_ah}d"
         if _al:
-            _extra += f" · 🔔 {_al}"
+            _extra += f" · :material/notifications: {_al}"
         _lbl = f"{p.get('Nombre', '')} · {_av}%{_extra}"
         if st.button(_lbl, key=f"hp_{_i}", use_container_width=True):
             st.session_state["_home_proj_sel"] = _pid      # v206: abre el resumen aquí
