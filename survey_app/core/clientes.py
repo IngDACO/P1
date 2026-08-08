@@ -164,3 +164,30 @@ def update_cliente(cid: str, fields: dict) -> tuple:
 
 def set_activo(cid: str, activo: bool) -> tuple:
     return update_cliente(cid, {"Activo": "SI" if activo else "NO"})
+
+
+# ── Enlace cliente↔proyecto (ID-primero, nombre-de-respaldo) ─────
+def es_del_cliente(proyecto: dict, cid: str, nombre_norm: str) -> bool:
+    """¿El proyecto pertenece a este cliente?
+
+    Regla única (como `timeclock.es_del_proyecto`, v145): si el proyecto tiene
+    `ClienteID`, manda ese; si no, cae al `Cliente` (texto) normalizado. Así un
+    proyecto vinculado por ID sigue casando aunque le renombren el texto, y los
+    proyectos viejos (sin ID) siguen casando por nombre.
+    """
+    pid_cli = str(proyecto.get("ClienteID", "")).strip()
+    if pid_cli:
+        return bool(cid) and pid_cli == str(cid)
+    return _norm(proyecto.get("Cliente")) == nombre_norm
+
+
+def client_key(proyecto: dict, fichas_by_id: dict):
+    """(clave_normalizada, display) del cliente de un proyecto.
+
+    Si el `ClienteID` resuelve a una ficha, se agrupa bajo el NOMBRE de la ficha
+    (aunque el texto `Cliente` difiera); si no, bajo el texto `Cliente`.
+    """
+    pid_cli = str(proyecto.get("ClienteID", "")).strip()
+    f = fichas_by_id.get(pid_cli) if pid_cli else None
+    nom = (f.get("Nombre") if f else str(proyecto.get("Cliente", "")).strip())
+    return _norm(nom), nom

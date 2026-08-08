@@ -1,20 +1,20 @@
 """👥 Contactos — gestión de clientes (CRM básico).
 
 Lista de clientes → seleccionar uno abre su detalle: ficha de contacto editable,
-resumen (proyectos/avance/horas/alarmas) y sus proyectos (clickeables → abren el
-proyecto en la sección Proyectos). El enlace cliente↔proyecto es por NOMBRE
-(el campo `Cliente` del proyecto); ver `core/clientes.py`.
+resumen (proyectos/avance/horas/costo/alarmas) y sus proyectos (clickeables →
+abren el proyecto en la sección Proyectos). El enlace cliente↔proyecto usa
+`ClienteID` (ID-primero) con respaldo por el texto `Cliente` — ver `core/clientes.py`.
 """
 import pandas as pd
 import streamlit as st
 
-from core import alerts, maps
+from core import alerts, expenses, maps
 from core import clientes as C
 from core import projects as P
 
 
 def _norm(s) -> str:
-    return " ".join(str(s or "").strip().lower().split())
+    return C._norm(s)
 
 
 def _num(v, d=0.0) -> float:
@@ -29,14 +29,15 @@ def _creado_por() -> str:
     return str(a.get("usuario", "") or a.get("nombre", ""))
 
 
-def _agregados(proys, horas, alarmas):
-    """(activos, avance_prom, horas, alarmas) de una lista de proyectos."""
+def _agregados(proys, horas, alarmas, costos):
+    """(activos, avance_prom, horas, costo, alarmas) de una lista de proyectos."""
     activos = [x for x in proys
                if str(x.get("Estado", "")) not in ("Completado", "Cancelado", "Archivado")]
     av = (sum(_num(x.get("Avance")) for x in proys) / len(proys)) if proys else 0.0
     hrs = sum(horas.get(str(x.get("ID", "")), 0.0) for x in proys)
+    cost = sum(costos.get(str(x.get("ID", "")), 0.0) for x in proys)
     al = sum(int(_num(alarmas.get(str(x.get("ID", "")), 0))) for x in proys)
-    return len(activos), av, hrs, al
+    return len(activos), av, hrs, cost, al
 
 
 # ── Vista principal ──────────────────────────────────────────────
@@ -56,19 +57,21 @@ def render_contactos(grupo):
     proys   = P.list_projects(grupo=grupo)
     horas   = P.project_hours_bulk(grupo)
     alarmas = alerts.open_counts_all() if alerts.is_configured() else {}
+    costos  = ({str(r["id"]): _num(r.get("total")) for r in expenses.group_expenses(grupo)["proyectos"]}
+               if expenses.is_configured() else {})
 
-    # Proyectos agrupados por cliente (nombre normalizado)
+    fichas_by_id   = {str(f.get("ID", "")): f for f in fichas}
+    fichas_by_norm = {_norm(f.get("Nombre")): f for f in fichas}
+
+    # Proyectos agrupados por cliente (ID-primero, respaldo por nombre)
     by_client = {}
     for p in proys:
-        nom = str(p.get("Cliente", "")).strip()
-        k = _norm(nom)
+        k, disp = C.client_key(p, fichas_by_id)
         if not k:
             continue
-        by_client.setdefault(k, {"nombre": nom, "proys": []})["proys"].append(p)
+        by_client.setdefault(k, {"nombre": disp, "proys": []})["proys"].append(p)
 
-    fichas_by = {_norm(f.get("Nombre")): f for f in fichas}
-    all_keys = set(by_client) | set(fichas_by)
-
+    all_keys = set(by_client) | set(fichas_by_norm)
     if not all_keys:
         st.caption("Aún no hay clientes. Crea el primero, o crea proyectos con un cliente.")
         _nuevo_cliente_form(grupo)
@@ -76,14 +79,14 @@ def render_contactos(grupo):
 
     rows = []
     for k in all_keys:
-        f  = fichas_by.get(k, {})
+        f  = fichas_by_norm.get(k, {})
         pr = by_client.get(k, {}).get("proys", [])
         disp = f.get("Nombre") or by_client.get(k, {}).get("nombre") or "—"
-        activos, av, hrs, al = _agregados(pr, horas, alarmas)
+        activos, av, hrs, cost, al = _agregados(pr, horas, alarmas, costos)
         rows.append({"key": k, "disp": disp, "ficha": bool(f),
                      "Contacto": f.get("Contacto", ""), "Telefono": f.get("Telefono", ""),
                      "Email": f.get("Email", ""), "total": len(pr), "activos": activos,
-                     "av": av, "hrs": hrs, "al": al})
+                     "av": av, "hrs": hrs, "cost": cost, "al": al})
     rows.sort(key=lambda r: (-r["activos"], -r["total"], r["disp"].lower()))
 
     # Fila de salud
@@ -94,7 +97,21 @@ def render_contactos(grupo):
     c[2].metric("Sin ficha", len(rows) - _con_ficha)
     c[3].metric("Proyectos", sum(r["total"] for r in rows))
 
-    st.caption("Toca un cliente para ver su ficha, su resumen y sus proyectos.")
+    # Buscador
+    _q = st.text_input(":material/search: Buscar cliente, contacto, teléfono o email",
+                       key="cli_q", placeholder="escribe para filtrar…").strip().lower()
+    if _q:
+        rows = [r for r in rows if _q in " ".join([
+            r["disp"], r["Contacto"], r["Telefono"], r["Email"]]).lower()]
+    st.caption(f"Toca un cliente para ver su ficha, su resumen y sus proyectos. "
+               f"({len(rows)} cliente(s))")
+
+    if not rows:
+        st.info(":material/search_off: Ningún cliente coincide con la búsqueda.")
+        _nuevo_cliente_form(grupo)
+        return
+
+    _hay_costo = expenses.is_configured()
     df = pd.DataFrame([{
         "Cliente":   r["disp"],
         "Ficha":     "sí" if r["ficha"] else "—",
@@ -105,15 +122,17 @@ def render_contactos(grupo):
         "Activos":   r["activos"],
         "Avance":    int(round(r["av"])),
         "Horas":     round(r["hrs"], 1),
+        **({"Costo": round(r["cost"], 0)} if _hay_costo else {}),
         "Alarmas":   str(r["al"]) if r["al"] else "",
     } for r in rows])
+    _colcfg = {"Avance": st.column_config.ProgressColumn(
+        "Avance", min_value=0, max_value=100, format="%d%%")}
+    if _hay_costo:
+        _colcfg["Costo"] = st.column_config.NumberColumn("Costo", format="$%d")
     _ev = st.dataframe(
         df, use_container_width=True, hide_index=True,
         on_select="rerun", selection_mode="single-row", key="cli_tbl",
-        column_config={
-            "Avance": st.column_config.ProgressColumn(
-                "Avance", min_value=0, max_value=100, format="%d%%"),
-        },
+        column_config=_colcfg,
     )
     _sr = list(_ev.selection.rows)
     if _sr:
@@ -130,16 +149,18 @@ def _detalle_cliente(grupo, key):
         st.session_state.pop("_cli_open", None)
         st.rerun()
 
-    fichas_by = {_norm(f.get("Nombre")): f for f in C.list_clientes(grupo)}
-    f = fichas_by.get(key, {})
-    proys = [p for p in P.list_projects(grupo=grupo) if _norm(p.get("Cliente")) == key]
+    fichas = C.list_clientes(grupo)
+    fichas_by_norm = {_norm(f.get("Nombre")): f for f in fichas}
+    fichas_by_id   = {str(f.get("ID", "")): f for f in fichas}
+    f = fichas_by_norm.get(key, {})
+    cid = str(f.get("ID", ""))
+    proys = [p for p in P.list_projects(grupo=grupo) if C.es_del_cliente(p, cid, key)]
     disp = f.get("Nombre") or (proys[0].get("Cliente") if proys else key)
-    cid = f.get("ID", "")
 
     st.markdown(f"## :material/apartment: {disp}")
     if not f:
         st.info(":material/info: Este cliente aún **no tiene ficha** — sale de sus proyectos. "
-                "Completa el contacto abajo y guarda para crear su ficha.")
+                "Completa el contacto abajo y guarda para crear su ficha (y poder vincular proyectos).")
 
     izq, der = st.columns([3, 2])
 
@@ -175,13 +196,17 @@ def _detalle_cliente(grupo, key):
         st.markdown("#### :material/insights: Resumen")
         horas   = P.project_hours_bulk(grupo)
         alarmas = alerts.open_counts_all() if alerts.is_configured() else {}
-        activos, av, hrs, al = _agregados(proys, horas, alarmas)
+        costos  = ({str(r["id"]): _num(r.get("total")) for r in expenses.group_expenses(grupo)["proyectos"]}
+                   if expenses.is_configured() else {})
+        activos, av, hrs, cost, al = _agregados(proys, horas, alarmas, costos)
         r1 = st.columns(2)
         r1[0].metric("Proyectos", len(proys))
         r1[1].metric("Activos", activos)
         r2 = st.columns(2)
         r2[0].metric("Avance prom.", f"{av:.0f}%")
         r2[1].metric("Horas", f"{hrs:.1f}")
+        if expenses.is_configured():
+            st.metric("Costo total", f"${cost:,.0f}")
         if al:
             st.markdown(f":red[:material/notifications:] **{al}** alarma(s) abierta(s)")
         if cid:
@@ -195,17 +220,35 @@ def _detalle_cliente(grupo, key):
     # Proyectos del cliente (ancho completo, clickeables)
     st.markdown("#### :material/folder: Proyectos de este cliente")
     if not proys:
-        st.caption("Sin proyectos con este nombre. El enlace es por el campo «Cliente» del "
-                   "proyecto — revisa que coincida.")
-        return
-    cols = st.columns(2)
-    for i, p in enumerate(sorted(proys, key=lambda x: str(x.get("Nombre", "")).lower())):
-        pid = str(p.get("ID", ""))
-        _lbl = f"**{p.get('Nombre', '')}** · {p.get('Estado', '')} · {int(_num(p.get('Avance')))}%"
-        if cols[i % 2].button(_lbl, key=f"cli_prj_{pid}", use_container_width=True):
-            st.session_state["_prjsel_pending"] = pid
-            st.session_state["_admin_nav_pending"] = ("proyectos", "📊 Proyectos")
-            st.rerun()
+        st.caption("Aún no tiene proyectos vinculados.")
+    else:
+        cols = st.columns(2)
+        for i, p in enumerate(sorted(proys, key=lambda x: str(x.get("Nombre", "")).lower())):
+            pid = str(p.get("ID", ""))
+            _lbl = f"**{p.get('Nombre', '')}** · {p.get('Estado', '')} · {int(_num(p.get('Avance')))}%"
+            if cols[i % 2].button(_lbl, key=f"cli_prj_{pid}", use_container_width=True):
+                st.session_state["_prjsel_pending"] = pid
+                st.session_state["_admin_nav_pending"] = ("proyectos", "📊 Proyectos")
+                st.rerun()
+
+    # Vincular más proyectos (necesita ficha con ID)
+    if cid:
+        otros = [p for p in P.list_projects(grupo=grupo) if not C.es_del_cliente(p, cid, key)]
+        if otros:
+            with st.expander(":material/link: Vincular otros proyectos a este cliente"):
+                st.caption("Útil si el proyecto tiene otro texto en «Cliente» o quedó sin vincular.")
+                _opts = {f"{p.get('Nombre', '')} ({p.get('ID', '')})": str(p.get("ID", ""))
+                         for p in otros}
+                _sel = st.multiselect("Proyectos a vincular", list(_opts.keys()),
+                                      key=f"cli_link_{cid}")
+                if st.button(":material/link: Vincular seleccionados", key=f"cli_linkbtn_{cid}"):
+                    if _sel:
+                        for _lbl in _sel:
+                            P.update_project(_opts[_lbl], {"ClienteID": cid, "Cliente": disp})
+                        st.success(f"{len(_sel)} proyecto(s) vinculado(s).")
+                        st.rerun()
+                    else:
+                        st.warning("Elige al menos un proyecto.")
 
 
 # ── Alta de cliente ──────────────────────────────────────────────

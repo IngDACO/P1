@@ -744,10 +744,22 @@ def _nuevo_proyecto_form(grupo: str, key: str = "nuevo"):
         st.markdown("**:material/map: Ubicación en el mapa** — opcional, fija el pin del proyecto")
         _nplat, _nplng = location_ui.location_picker(f"nploc_{key}")
 
+        # ── Cliente: elegir uno existente o escribir uno nuevo (fuera del form) ──
+        from core import clientes as _C
+        _cli_fichas = _C.list_clientes(grupo)
+        _cli_names = [str(c.get("Nombre", "")) for c in _cli_fichas]
+        _CLI_OTRO = "➕ Otro (escribir uno nuevo)"
+        _cli_sel = st.selectbox(":material/contacts: Cliente",
+                                ["— sin cliente —"] + _cli_names + [_CLI_OTRO],
+                                key=f"np_clisel_{key}",
+                                help="Elige un cliente de Contactos o escribe uno nuevo.")
+        _cli_new = ""
+        if _cli_sel == _CLI_OTRO:
+            _cli_new = st.text_input("Nombre del nuevo cliente", key=f"np_clinew_{key}")
+
         with st.form(f"np_form_{key}"):
+            nom = st.text_input("Nombre del proyecto *", key=f"np_nom_{key}")
             c1, c2 = st.columns(2)
-            nom = c1.text_input("Nombre del proyecto *", key=f"np_nom_{key}")
-            cli = c2.text_input("Cliente", key=f"np_cli_{key}")
             ubi = c1.text_input("Ubicación", key=f"np_ubi_{key}",
                                 help="Se enlaza a Google Maps en toda la app.")
             mod = c2.text_input("Modelo de elevador", key=f"np_mod_{key}",
@@ -791,9 +803,19 @@ def _nuevo_proyecto_form(grupo: str, key: str = "nuevo"):
                 st.checkbox("Crear aunque el nombre se repita", key=f"np_dup_{key}")
                 return
 
+            # Cliente elegido/escrito → texto + ClienteID (v255)
+            if _cli_sel in _cli_names:
+                cli = _cli_sel
+                _cli_id = next((str(c.get("ID", "")) for c in _cli_fichas
+                                if str(c.get("Nombre", "")) == _cli_sel), "")
+            elif _cli_sel == _CLI_OTRO:
+                cli, _cli_id = _cli_new.strip(), ""
+            else:
+                cli, _cli_id = "", ""
+
             sched = build_schedule(int(ns), f_ini, {})
             ok, res = P.create_project(
-                grupo=grupo, nombre=nom.strip(), cliente=cli, ubicacion=ubi,
+                grupo=grupo, nombre=nom.strip(), cliente=cli, cliente_id=_cli_id, ubicacion=ubi,
                 modelo=mod, ns=int(ns), ingeniero=ing, campo_asignados=asg,
                 fecha_inicio=f_ini.strftime("%Y-%m-%d"),
                 fecha_fin_est=(sched["fecha_fin"].strftime("%Y-%m-%d")
