@@ -1956,7 +1956,7 @@ def _dashboard_agrupacion(ag, grupo):
     if proj.get("critico"):
         _d = delays.get(proj["critico_id"])
         st.markdown(
-            f":material/target: **La entrega la marca «{proj['critico']}»** — proyectada para "
+            f":material/event: **La entrega la marca «{proj['critico']}»** — proyectada para "
             f"**{_fecha}**" + (f", con **{_d:.0f} días de retraso**." if _d else
                                ", en fecha.")
             + "  Es donde más rinde reforzar.")
@@ -2077,7 +2077,7 @@ def _agrupaciones_html(ags, grupo) -> str:
         sub = f"{aid} · {len(miemb)} elevador(es)"
         if a.get("Descripcion"):
             sub += f" · {a['Descripcion']}"
-        entrega = (f'<div style="font-size:11.5px;color:#6b7280;">{_MI('target')} entrega '
+        entrega = (f'<div style="font-size:11.5px;color:#6b7280;">{_MI('event')} entrega '
                    f'<b>{fecha.strftime("%d/%m/%Y")}</b>'
                    + (f' — la marca {critico}' if critico else "") + '</div>'
                    if fecha else
@@ -2200,13 +2200,13 @@ def _cartera_agrupaciones(ags, grupo):
             _av = max(0, min(100, int(r["av"])))
             _extra = ""
             if r["gap"] > 0.5:
-                _extra += f" · :material/alarm:{r['gap']:.0f}d"
+                _extra += f" · :material/alarm: {r['gap']:.0f}d"
             elif r["gap"] < -0.5:
                 _extra += f" · :material/trending_up: {abs(r['gap']):.0f}d"
             if r["n_al"]:
-                _extra += f" · :material/notifications:{r['n_al']}"
+                _extra += f" · :material/notifications: {r['n_al']}"
             if r["fecha"]:
-                _extra += f" · :material/target:{r['fecha'].strftime('%d/%m')}"
+                _extra += f" · :material/event: {r['fecha'].strftime('%d/%m')}"
             _lbl = f"**:material/account_tree: {r['a'].get('Nombre', '')}** · {r['n']} elev · {_av}%{_extra}"
             if _cols[_j].button(_lbl, key=f"agrc_{_idx}", use_container_width=True):
                 st.session_state["_admin_open_agr"] = r["aid"]
