@@ -393,7 +393,7 @@ def render_survey_tab(_ROL, _GRUPO):
                 _lbl = [f"RL {s['rl']:+.1f} · FB {s.get('fb_applied', s['fb']):+.1f} · "
                         f"{s['total_off']} fuera" for s in sorted_solutions]
                 _sel = st.selectbox(
-                    ":material/target: Solución activa — se usa en diagramas, plomado e informes",
+                    ":material/star: Solución activa — se usa en diagramas, plomado e informes",
                     range(len(_lbl)), index=_idx_act, format_func=lambda k: _lbl[k],
                     key="sol_activa",
                 )
