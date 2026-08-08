@@ -262,7 +262,8 @@ def render_admin_content(key, grupo):
     elif key == "herramientas":
         _seccion_herramientas(grupo)
     elif key == "contactos":
-        _placeholder(":material/contacts: Contactos", "Nuevo apartado de contactos — se desarrollará luego.")
+        from core.clientes_ui import render_contactos
+        render_contactos(grupo)
     else:
         render_home(grupo)
 
