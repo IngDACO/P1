@@ -175,10 +175,10 @@ def _plan_vs_real(grupo, lunes, staff, tidx):
                               "(sin proyecto que comparar)"
                               + (f" · fichó en {real_txt}" if reales else "")))
             elif reales:                                # sin plan pero ficho
-                filas.append(("❔", nom, f"sin asignación · fichó en {real_txt}"))
+                filas.append((":material/help:", nom, f"sin asignación · fichó en {real_txt}"))
 
-        st.markdown(f"`:green[:material/check_circle:] {n_ok} donde tocaba`  `:red[:material/cancel:] {n_desvio} en otro sitio`  "
-                    f"`:orange[:material/warning:] {n_sin} sin fichar`")
+        st.markdown(f":green[:material/check_circle:] {n_ok} donde tocaba  ·  :red[:material/cancel:] {n_desvio} en otro sitio  ·  "
+                    f":orange[:material/warning:] {n_sin} sin fichar")
         if not filas:
             st.caption("Nada que comparar este día (sin asignaciones a proyecto ni fichajes).")
         for ic, nom, txt in filas:
@@ -355,15 +355,15 @@ def _opciones(grupo, tidx):
         for p in P.list_projects(grupo=grupo):
             if str(p.get("Estado", "")) in ("Completado", "Cancelado"):
                 continue
-            op.append((f":material/apartment: {p.get('Nombre','')}", str(p.get("ID", ""))))
+            op.append((str(p.get("Nombre", "")), str(p.get("ID", ""))))
     except Exception:
         pass
     for r in R.list_trabajos(grupo):
         num = str(r.get("Numero", "")).strip()
-        op.append((f":material/build: {num}. {r.get('Nombre','')}" if num else f":material/build: {r.get('Nombre','')}",
+        op.append((f"{num}. {r.get('Nombre','')}" if num else f"{r.get('Nombre','')}",
                    str(r.get("ID", ""))))
     for k, v in R.ESTADOS.items():
-        op.append((f":gray[:material/crop_square:] {v['nombre']}" if k == "OFF" else f":red[:material/cancel:] {v['nombre']}", k))
+        op.append((str(v["nombre"]), k))
     return op
 
 

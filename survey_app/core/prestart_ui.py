@@ -227,7 +227,7 @@ def _historial(pid):
                 st.markdown("**:material/engineering: Asistentes:** " + " · ".join(d["asistentes"]))
             st.markdown("**Checks:**")
             for c in d["checks"]:
-                _e = {"YES": ":green[:material/check_circle:]", "NO": ":red[:material/cancel:]", "N/A": ":gray[:material/crop_square:]"}.get(c["estado"], "❔")
+                _e = {"YES": ":green[:material/check_circle:]", "NO": ":red[:material/cancel:]", "N/A": ":gray[:material/crop_square:]"}.get(c["estado"], ":gray[:material/help:]")
                 st.markdown(f"{_e} {c['label']}  ·  _{c['estado']}_")
             if d["near_miss"]:
                 st.error(":material/cancel: **Near miss / hazard:** " + (d["near_miss_desc"] or "(sin descripción)"))

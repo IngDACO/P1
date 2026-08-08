@@ -310,8 +310,8 @@ _TIPO_LABEL = {"plano": "Plano", "informe_cliente": "Informe cliente",
 _TIPO_ORDER = ["plano", "informe_cliente", "informe_admin", "matriz_survey",
                "calculo", "prestart", "foto", "certificado", "otro"]
 # Reabrir un cálculo en su herramienta (v148): solo estas 4 guardan entradas.
-_CALC_NAV   = {"plomada": ":material/straighten: Líneas de plomada", "rieles": ":material/content_cut: Corte de rieles",
-               "buffers": ":material/shield: Corte de buffers", "belting": ":material/swap_vert: Belting"}
+_CALC_NAV   = {"plomada": "🔩 Líneas de plomada", "rieles": "✂️ Corte de rieles",
+               "buffers": "🛡 Corte de buffers", "belting": "🎗 Belting"}
 
 
 def _a_fecha(v):

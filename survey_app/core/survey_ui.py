@@ -499,8 +499,8 @@ def render_survey_tab(_ROL, _GRUPO):
                         for s in valid_steps:
                             obc  = s.get("off_by_col", {})
                             pair = (s["rl"], s["fb"])
-                            if pair == best_p:        estado = "⭐ SELECCIONADA"
-                            elif pair in opt_pairs:   estado = ":green[:material/check_circle:] ÓPTIMA"
+                            if pair == best_p:        estado = "SELECCIONADA"
+                            elif pair in opt_pairs:   estado = "ÓPTIMA"
                             else:                     estado = ""
                             log_rows.append({
                                 "RL": s["rl"], "FB": s["fb"],
@@ -512,15 +512,15 @@ def render_survey_tab(_ROL, _GRUPO):
                                 "Estado": estado,
                             })
                         log_rows = (
-                            [x for x in log_rows if x["Estado"] == ":material/star: SELECCIONADA"] +
-                            [x for x in log_rows if x["Estado"] == ":green[:material/check_circle:] ÓPTIMA"] +
+                            [x for x in log_rows if x["Estado"] == "SELECCIONADA"] +
+                            [x for x in log_rows if x["Estado"] == "ÓPTIMA"] +
                             [x for x in log_rows if x["Estado"] == ""]
                         )
                         df_log = pd.DataFrame(log_rows)
                         def _hl(row):
-                            if row["Estado"] == "⭐ SELECCIONADA":
+                            if row["Estado"] == "SELECCIONADA":
                                 return ["background-color:#7b5c00;color:white;font-weight:bold"] * len(row)
-                            if row["Estado"] == "✅ ÓPTIMA":
+                            if row["Estado"] == "ÓPTIMA":
                                 return ["background-color:#1a3a2a;color:#a8e6cf"] * len(row)
                             return [""] * len(row)
                         st.dataframe(df_log.style.apply(_hl, axis=1),
@@ -1124,10 +1124,10 @@ def render_survey_tab(_ROL, _GRUPO):
         _chips = [
             (":green[:material/check_circle:] Plano cargado" if _ex else ":gray[:material/radio_button_unchecked:] Sin plano (parámetros a mano)"),
             (":green[:material/check_circle:] Parámetros completos" if (_ex and not _falt)
-             else (f":orange[:material/warning:] {len(_falt)} parámetro(s) sin leer" if _falt else "✏️ Parámetros manuales")),
+             else (f":orange[:material/warning:] {len(_falt)} parámetro(s) sin leer" if _falt else ":material/edit: Parámetros manuales")),
             f":green[:material/check_circle:] Matriz: {_nsv} niveles",
         ]
-        st.markdown("  ".join(f"`{c}`" for c in _chips))
+        st.markdown("  ·  ".join(_chips))
 
         # Validación temprana: avisar ANTES de pulsar Calcular
         try:
@@ -1414,8 +1414,8 @@ def render_survey_tab(_ROL, _GRUPO):
                                   key="ir_al_proyecto"):
                         st.session_state["_prjsel_pending"] = _pc["id"]
                         st.session_state["_nav_pending"] = (
-                            "👑 Administración" if _ROL == "propietario" else ":material/build: Mi grupo")
+                            "👑 Administración" if _ROL == "propietario" else "🛠 Mi grupo")
                         if _ROL == "propietario":
-                            st.session_state["owner_sec"] = ":material/folder: Proyectos"
+                            st.session_state["owner_sec"] = "📁 Proyectos"
                         st.session_state.pop("_prj_creado", None)
                         st.rerun()

@@ -19,14 +19,14 @@ logger = logging.getLogger(__name__)
 
 # Qué herramienta usa cada dato (para poder decir qué falta y a quién afecta)
 USA = {
-    "params":  ":material/architecture: Survey · :material/straighten: Plomadas",
-    "ns":      ":material/architecture: Survey (paradas)",
-    "rail":    ":material/architecture: Survey (RAIL del catálogo)",
-    "hq":      ":material/swap_vert: Belting",
-    "hgp":     ":material/swap_vert: Belting",
-    "hkp":     ":material/shield: Corte de buffers",
-    "lfkk":    ":material/content_cut: Corte de rieles",
-    "lfgk":    ":material/content_cut: Corte de rieles",
+    "params":  "Survey · Plomadas",
+    "ns":      "Survey (paradas)",
+    "rail":    "Survey (RAIL del catálogo)",
+    "hq":      "Belting",
+    "hgp":     "Belting",
+    "hkp":     "Corte de buffers",
+    "lfkk":    "Corte de rieles",
+    "lfgk":    "Corte de rieles",
 }
 
 
@@ -169,16 +169,16 @@ def por_herramienta(datos: dict) -> list:
     par  = f"{npar}/{ntot}" if npar else None
     ralt_txt = (f"{ralt:.0f}" if ralt else None)
     return [
-        {"tool": ":material/architecture: Survey de elevador",
+        {"tool": "Survey de elevador",
          "items": [("Parámetros del hueco", par), ("N.º de paradas (NS)", _v("ns")),
                    ("Riel", riel)]},
-        {"tool": ":material/straighten: Líneas de plomada",
+        {"tool": "Líneas de plomada",
          "items": [("Parámetros del hueco", par), ("RAIL (altura)", ralt_txt)]},
-        {"tool": ":material/content_cut: Corte de rieles",
+        {"tool": "Corte de rieles",
          "items": [("LFKK", _v("lfkk")), ("LFGK", _v("lfgk"))]},
-        {"tool": ":material/shield: Corte de buffers",
+        {"tool": "Corte de buffers",
          "items": [("HKP", _v("hkp"))]},
-        {"tool": ":material/swap_vert: Belting",
+        {"tool": "Belting",
          "items": [("HQ", _v("hq")), ("HGP", _v("hgp"))]},
     ]
 

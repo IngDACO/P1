@@ -116,7 +116,7 @@ def render_buffer_cut_tab():
         "Buffer":     f"Buffer {b['n']}",
         "HKPR (mm)":  round(b["HKPR"], 1),
         "Corte (mm)": b["CutBuffer"],
-        "Estado":     ":orange[:material/warning:] revisar" if b["warn"] else "OK",
+        "Estado":     "revisar" if b["warn"] else "OK",
     } for b in res["buffers"]]
     st.subheader("Resultado — cortes (mm)")
     st.dataframe(pd.DataFrame(filas), use_container_width=True, hide_index=True)
