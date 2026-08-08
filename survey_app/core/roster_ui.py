@@ -325,7 +325,7 @@ def _grid_html(staff, lunes, datos, tidx, resaltar="") -> str:
         _nbg = "#fff7e6" if _mio else "#fff"
         celdas = [f'<td style="padding:5px 8px;font-size:13px;font-weight:{"800" if _mio else "600"};'
                   f'color:#1f2937;white-space:nowrap;position:sticky;left:0;background:{_nbg};'
-                  f'border-right:1px solid #eef1f5;">{":material/arrow_forward: " if _mio else ""}{_esc(nom)}</td>']
+                  f'border-right:1px solid #eef1f5;">{"<span style=\"font-family:&#39;Material Symbols Rounded&#39;;vertical-align:-2px\">arrow_forward</span> " if _mio else ""}{_esc(nom)}</td>']
         for d in R.DIAS:
             c = R.celda(datos, usr, d)
             asig = str(c.get("asig", ""))

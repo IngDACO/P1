@@ -125,13 +125,22 @@ def _kpi_card(label, value, color=None):
     )
 
 
+def _MI(name, color="", size="1.05em"):
+    """Icono Material DENTRO de HTML (st.markdown unsafe_allow_html / tarjetas).
+    El directivo `:material/x:` NO renderiza dentro de un <div>, pero la fuente que
+    Streamlit ya carga sí, vía font-family inline. color='' → hereda del contenedor."""
+    _c = f"color:{color};" if color else ""
+    return (f"<span style=\"font-family:'Material Symbols Rounded';font-size:{size};"
+            f"vertical-align:-2px;{_c}\">{name}</span>")
+
+
 def render_group_header(grupo: str):
     """Banda de marca del grupo + fila de KPIs (centro de control del admin)."""
     st.markdown(
         '<div style="background:linear-gradient(135deg,#1a3a5c 0%,#2e6da4 100%);'
         'padding:14px 18px;border-radius:12px;display:flex;align-items:center;gap:12px;'
         'margin-bottom:14px;">'
-        '<span style="font-size:26px;line-height:1;">:material/business:</span>'
+        f'<span style="line-height:1;">{_MI("business", "#fff", "26px")}</span>'
         '<div style="min-width:0;">'
         f'<div style="color:#fff;font-size:1.25rem;font-weight:800;line-height:1.1;">{grupo}</div>'
         '<div style="color:#b0c8e8;font-size:0.8rem;margin-top:2px;">Centro de control del grupo</div>'
@@ -207,13 +216,13 @@ def _resumen_del_dia(grupo: str):
 
     with st.expander(":material/notifications: Resumen del día", expanded=True):
         if _tot == 0:
-            st.markdown("<span style='color:#1e8449;font-weight:600;'>:material/check_circle: Todo en orden.</span>",
+            st.markdown(f"<span style='color:#1e8449;font-weight:600;'>{_MI('check_circle')} Todo en orden.</span>",
                         unsafe_allow_html=True)
         elif _urg:
-            st.markdown(f"<span style='color:#c0392b;font-weight:600;'>:material/error: {_urg} urgente(s)</span>"
+            st.markdown(f"<span style='color:#c0392b;font-weight:600;'>{_MI('error')} {_urg} urgente(s)</span>"
                         f" · {_tot} pendiente(s)", unsafe_allow_html=True)
         else:
-            st.markdown(f"<span style='color:#c77700;font-weight:600;'>:material/schedule: {_tot} pendiente(s)</span>",
+            st.markdown(f"<span style='color:#c77700;font-weight:600;'>{_MI('schedule')} {_tot} pendiente(s)</span>",
                         unsafe_allow_html=True)
 
         # colorear cada botón-indicador por severidad (clase st-key-<key>, v169)
@@ -407,7 +416,7 @@ def _plano_herramientas_html(datos) -> str:
                 chips.append(
                     '<span style="display:inline-block;background:#fdecea;color:#b71c1c;'
                     'border-radius:6px;padding:2px 8px;margin:2px 3px;font-size:12px;">'
-                    f'{label}: :orange[:material/warning:] falta</span>')
+                    f'{label}: {_MI('warning','#e0a021')} falta</span>')
         filas.append(
             '<tr><td style="padding:6px 10px;white-space:nowrap;font-weight:600;'
             'vertical-align:top;border-bottom:1px solid #eef1f5;">'
@@ -1070,13 +1079,13 @@ def _cartera_clickeable(proys, alarmas, delays, aheads, costos):
                 _ppto = f"{int(round(P._num(_c.get('pct'))))}% ppto" + (" ⚠️" if _c.get("over") else "")
             else:
                 _ppto = "s/ppto"
-            _chips = f":material/payments: {_ppto} · :material/engineering: {_users}"
+            _chips = f"{_MI('payments')} {_ppto} · {_MI('engineering')} {_users}"
             if _dl:
-                _chips += f" · :red[:material/cancel:] {_dl}d"
+                _chips += f" · {_MI('cancel','#d64541')} {_dl}d"
             elif _ah:
-                _chips += f" · :green[:material/check_circle:] {_ah}d"
+                _chips += f" · {_MI('check_circle','#1e9e57')} {_ah}d"
             if _al:
-                _chips += f" · :material/notifications: {_al}"
+                _chips += f" · {_MI('notifications')} {_al}"
             _html = (
                 "<div style='display:flex;justify-content:space-between;align-items:center;"
                 "gap:8px;margin-bottom:6px;'>"
@@ -1093,8 +1102,8 @@ def _cartera_clickeable(proys, alarmas, delays, aheads, costos):
                 f"<div style='height:100%;width:{_av}%;background:#2e6da4;"
                 "border-radius:20px;'></div></div>"
                 f"<span style='font-size:12.5px;font-weight:600;color:#374151;'>{_av}%</span></div>"
-                f"<div style='font-size:12.5px;color:#6b7280;margin-bottom:5px;'>:material/person: "
-                f"{esc(p.get('Cliente', '') or '—')} · :material/calendar_month: {_ddmm(p.get('FechaInicio'))} → "
+                f"<div style='font-size:12.5px;color:#6b7280;margin-bottom:5px;'>{_MI('person')} "
+                f"{esc(p.get('Cliente', '') or '—')} · {_MI('calendar_month')} {_ddmm(p.get('FechaInicio'))} → "
                 f"{_ddmm(p.get('FechaFinEst'))}</div>"
                 f"<div style='font-size:12.5px;color:#374151;'>{_chips}</div>")
             with _cols[_j].container(border=True, key=f"cart_{_idx}"):
@@ -1131,7 +1140,7 @@ def _cartera_lista(proys, alarmas, delays, aheads, costos):
         _ppto = (f"{int(round(P._num(_c.get('pct'))))}%" + ("⚠️" if _c.get("over") else "")
                  if P._num(_c.get("presupuesto")) > 0 else "—")
         _users = len([x for x in str(p.get("CampoAsignados", "")).split(";") if x.strip()])
-        _sit = (f":red[:material/cancel:] {_dl}d" if _dl else (f":green[:material/check_circle:] {_ah}d" if _ah else "—"))
+        _sit = (f"🔴 {_dl}d" if _dl else (f"🟢 {_ah}d" if _ah else "—"))
         _rows.append({
             "Proyecto": str(p.get("Nombre", "")),
             "Estado": str(p.get("Estado", "") or "—"),
@@ -1271,13 +1280,13 @@ def _portfolio_html(proys, horas, alarmas, ags, delays=None, aheads=None,
         ag  = ags.get(str(p.get("AgrupacionID", "")), "")
         sub = f"{pid} · {str(p.get('Cliente','')) or '—'}" + (f" · {ag}" if ag else "")
         if show_group and p.get("Grupo"):
-            sub = f":material/business: {p.get('Grupo')} · " + sub
+            sub = f"{_MI('business')} {p.get('Grupo')} · " + sub
         ubic = str(p.get("Ubicacion", "") or "")
         ubic_html = (f'<div style="font-size:11.5px;white-space:nowrap;overflow:hidden;'
                      f'text-overflow:ellipsis;">{maps.maps_link_html(ubic, ubic, color="#2e6da4")}</div>'
                      if ubic else "")
         alarm = (f'<div style="width:44px;text-align:center;flex:none;color:#c0392b;'
-                 f'font-size:12.5px;font-weight:600;">:material/notifications: {na}</div>'
+                 f'font-size:12.5px;font-weight:600;">{_MI('notifications')} {na}</div>'
                  if na else '<div style="width:44px;flex:none;"></div>')
         # Retraso (rojo) / adelanto (verde) → borde + badge de días
         d, adel = delays.get(pid), aheads.get(pid)
@@ -1287,12 +1296,12 @@ def _portfolio_html(proys, horas, alarmas, ags, delays=None, aheads=None,
             card_border = "border:1px solid #e6e9ef;border-left:4px solid #c0392b"
             retraso_badge = (f'<span style="font-size:12px;padding:3px 9px;border-radius:20px;'
                              f'background:#fcebeb;color:#a32d2d;white-space:nowrap;flex:none;'
-                             f'font-weight:600;">:material/alarm: {d:.0f} d</span>')
+                             f'font-weight:600;">{_MI('alarm')} {d:.0f} d</span>')
         elif adel:
             card_border = "border:1px solid #e6e9ef;border-left:4px solid #1e8449"
             retraso_badge = (f'<span style="font-size:12px;padding:3px 9px;border-radius:20px;'
                              f'background:#eaf3de;color:#3b6d11;white-space:nowrap;flex:none;'
-                             f'font-weight:600;">⏩ {adel:.0f} d</span>')
+                             f'font-weight:600;">{_MI('trending_up')} {adel:.0f} d</span>')
         parts.append(
             f'<div style="display:flex;align-items:center;gap:12px;padding:11px 14px;'
             f'{card_border};border-radius:10px;margin-bottom:8px;background:#fff;">'
@@ -1315,7 +1324,7 @@ def _portfolio_html(proys, horas, alarmas, ags, delays=None, aheads=None,
             f'<div style="height:100%;width:{av:.0f}%;background:{bar};"></div></div>'
             '</div>'
             f'<div style="width:54px;text-align:right;flex:none;font-size:12px;color:#6b7280;">'
-            f':material/schedule: {hrs:.0f}h</div>'
+            f'{_MI("schedule")} {hrs:.0f}h</div>'
             + alarm +
             '</div>'
         )
@@ -1588,7 +1597,7 @@ def _detalle_proyecto(pid: str, grupo: str = None):
     # v234: format_func muestra iconos Material; las OPCIONES siguen siendo el ID (con
     # emoji) → el match de abajo y cualquier deep-link no cambian.
     _sec = st.radio("Sección del proyecto",
-                    [":material/bar_chart: Estado", "✏️ Datos", ":material/payments: Costos", ":material/attach_file: Archivos"],
+                    ["📊 Estado", "✏️ Datos", "💰 Costos", "📎 Archivos"],
                     format_func=lambda o: {"📊 Estado": ":material/insights: Estado",
                                            "✏️ Datos": ":material/edit: Datos",
                                            "💰 Costos": ":material/payments: Costos",
@@ -2066,24 +2075,24 @@ def _agrupaciones_html(ags, grupo) -> str:
             borde = "border:1px solid #e6e9ef;border-left:4px solid #c0392b"
             badge = (f'<span style="font-size:12px;padding:3px 9px;border-radius:20px;'
                      f'background:#fcebeb;color:#a32d2d;white-space:nowrap;flex:none;'
-                     f'font-weight:600;">:material/alarm: {gap:.0f} d</span>')
+                     f'font-weight:600;">{_MI('alarm')} {gap:.0f} d</span>')
         elif gap and gap < -0.5:
             borde = "border:1px solid #e6e9ef;border-left:4px solid #1e8449"
             badge = (f'<span style="font-size:12px;padding:3px 9px;border-radius:20px;'
                      f'background:#eaf3de;color:#3b6d11;white-space:nowrap;flex:none;'
-                     f'font-weight:600;">⏩ {abs(gap):.0f} d</span>')
+                     f'font-weight:600;">{_MI('trending_up')} {abs(gap):.0f} d</span>')
         punto = "#c0392b" if (gap and gap > 0.5) else ("#1e8449" if av >= 100 else "#2e6da4")
 
         sub = f"{aid} · {len(miemb)} elevador(es)"
         if a.get("Descripcion"):
             sub += f" · {a['Descripcion']}"
-        entrega = (f'<div style="font-size:11.5px;color:#6b7280;">:material/target: entrega '
+        entrega = (f'<div style="font-size:11.5px;color:#6b7280;">{_MI('target')} entrega '
                    f'<b>{fecha.strftime("%d/%m/%Y")}</b>'
                    + (f' — la marca {critico}' if critico else "") + '</div>'
                    if fecha else
                    '<div style="font-size:11.5px;color:#9aa7b8;">sin cronograma para proyectar</div>')
         alarm = (f'<div style="width:44px;text-align:center;flex:none;color:#c0392b;'
-                 f'font-size:12.5px;font-weight:600;">:material/notifications: {n_al}</div>'
+                 f'font-size:12.5px;font-weight:600;">{_MI('notifications')} {n_al}</div>'
                  if n_al else '<div style="width:44px;flex:none;"></div>')
 
         parts.append(
@@ -2092,7 +2101,7 @@ def _agrupaciones_html(ags, grupo) -> str:
             f'<div style="width:9px;height:9px;border-radius:50%;background:{punto};flex:none;"></div>'
             '<div style="flex:1;min-width:0;">'
             f'<div style="font-size:14px;font-weight:600;color:#1f2937;white-space:nowrap;'
-            f'overflow:hidden;text-overflow:ellipsis;">:material/account_tree: {a.get("Nombre","")}</div>'
+            f'overflow:hidden;text-overflow:ellipsis;">{_MI('account_tree')} {a.get("Nombre","")}</div>'
             f'<div style="font-size:12px;color:#6b7280;white-space:nowrap;overflow:hidden;'
             f'text-overflow:ellipsis;">{sub}</div>' + entrega +
             '</div>' + badge +
@@ -2202,7 +2211,7 @@ def _cartera_agrupaciones(ags, grupo):
             if r["gap"] > 0.5:
                 _extra += f" · :material/alarm:{r['gap']:.0f}d"
             elif r["gap"] < -0.5:
-                _extra += f" · ⏩{abs(r['gap']):.0f}d"
+                _extra += f" · :material/trending_up: {abs(r['gap']):.0f}d"
             if r["n_al"]:
                 _extra += f" · :material/notifications:{r['n_al']}"
             if r["fecha"]:
