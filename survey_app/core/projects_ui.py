@@ -1658,12 +1658,36 @@ def _detalle_proyecto(pid: str, grupo: str = None):
                 lng=location_ui.to_float(prj.get("Lng")),
                 direccion=str(prj.get("Ubicacion", "")))
 
+        # ── Cliente: elegir existente o escribir uno nuevo (fuera del form) — v256 ──
+        from core import clientes as _C
+        _cli_fichas = _C.list_clientes(grupo)
+        _cli_names = [str(c.get("Nombre", "")) for c in _cli_fichas]
+        _CLI_NONE, _CLI_OTRO = "— sin cliente —", "➕ Otro (escribir uno nuevo)"
+        _opts_cli = [_CLI_NONE] + _cli_names + [_CLI_OTRO]
+        _cur_cid = str(prj.get("ClienteID", "")).strip()
+        _cur_txt = str(prj.get("Cliente", "")).strip()
+        _cur_name = ""
+        if _cur_cid:
+            _cur_name = next((str(c.get("Nombre", "")) for c in _cli_fichas
+                              if str(c.get("ID", "")) == _cur_cid), "")
+        if not _cur_name and _cur_txt:
+            _cur_name = next((n for n in _cli_names if _C._norm(n) == _C._norm(_cur_txt)), "")
+        _cidx = (_opts_cli.index(_cur_name) if _cur_name
+                 else (_opts_cli.index(_CLI_OTRO) if _cur_txt else 0))
+        _ecli_sel = st.selectbox(":material/contacts: Cliente", _opts_cli, index=_cidx,
+                                 key=f"ed_clisel_{pid}",
+                                 help="Elige un cliente de Contactos o escribe uno nuevo.")
+        _ecli_new = ""
+        if _ecli_sel == _CLI_OTRO:
+            _ecli_new = st.text_input("Nombre del nuevo cliente",
+                                      value=(_cur_txt if not _cur_name else ""),
+                                      key=f"ed_clinew_{pid}")
+
         # ── Editar datos ──
         with st.form(f"edit_{pid}"):
             st.markdown("**Datos del proyecto**")
+            nombre   = st.text_input("Nombre", value=prj.get("Nombre", ""))
             e1, e2 = st.columns(2)
-            nombre   = e1.text_input("Nombre", value=prj.get("Nombre", ""))
-            cliente  = e2.text_input("Cliente", value=prj.get("Cliente", ""))
             ubic     = e1.text_input("Ubicación", value=prj.get("Ubicacion", ""))
             modelo   = e2.text_input("Modelo", value=prj.get("Modelo", ""))
             ing      = e1.text_input("Ingeniero", value=prj.get("Ingeniero", ""))
@@ -1711,8 +1735,18 @@ def _detalle_proyecto(pid: str, grupo: str = None):
                     st.error(_err)
                 else:
                     ag_id = "" if ag_sel == "(ninguna)" else ag_sel.split(" · ")[0]
+                    # Cliente elegido/escrito → texto + ClienteID (v256)
+                    if _ecli_sel in _cli_names:
+                        cliente = _ecli_sel
+                        _ecli_id = next((str(c.get("ID", "")) for c in _cli_fichas
+                                         if str(c.get("Nombre", "")) == _ecli_sel), "")
+                    elif _ecli_sel == _CLI_OTRO:
+                        cliente, _ecli_id = _ecli_new.strip(), ""
+                    else:
+                        cliente, _ecli_id = "", ""
                     P.update_project(pid, {   # todo en UNA escritura (batch) → sin rate limit
-                        "Nombre": nombre, "Cliente": cliente, "Ubicacion": ubic, "Modelo": modelo,
+                        "Nombre": nombre, "Cliente": cliente, "ClienteID": _ecli_id,
+                        "Ubicacion": ubic, "Modelo": modelo,
                         "Ingeniero": ing, "FechaInicio": f_ini, "FechaFinEst": f_fin,
                         "CampoAsignados": ";".join(asignados),
                         "AgrupacionID": ag_id, "PesoEnAgrupacion": peso,
