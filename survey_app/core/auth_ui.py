@@ -412,9 +412,9 @@ def _owner_usuarios():
         for u in users:
             es_campo = str(u.get("Rol", "")).lower() == "campo"
             _cont = ("—" if not es_campo
-                     else ("✅" if (str(u.get("Email", "")).strip()
+                     else ("sí" if (str(u.get("Email", "")).strip()
                                     and str(u.get("TelegramChatID", "")).strip())
-                           else "⚠️ falta"))
+                           else "falta"))
             _rows.append({"Usuario": u.get("Usuario", ""), "Nombre": u.get("Nombre", ""),
                           "Rol": u.get("Rol", ""), "Grupo": u.get("Grupo", "") or "—",
                           "Activo": u.get("Activo", "SI"),
@@ -507,9 +507,9 @@ def _owner_resumen():
         return
     st.dataframe(pd.DataFrame([{
         "Grupo": d["grupo"], "Activos": d["activos"], "Avance %": d["avance"],
-        "🔴 Retraso": d["retrasos"], "🔔 Alarmas": d["alarmas"],
-        "⛔ Vencidos": d["vencidos"], "🎫 Credenciales": d["cred_venc"],
-        "💸 Sobre pres.": d["sobre_presupuesto"],
+        "Retraso": d["retrasos"], "Alarmas": d["alarmas"],
+        "Vencidos": d["vencidos"], "Credenciales": d["cred_venc"],
+        "Sobre pres.": d["sobre_presupuesto"],
     } for d in data]), hide_index=True, use_container_width=True)
     _urg = [d for d in data if d["pendientes"]]
     if _urg:
@@ -863,7 +863,7 @@ def _grupo_usuarios(grupo):
                     _peor[_uu] = _s
         except Exception:
             pass
-    _ico = {"vencido": "🔴", "por_vencer": "🟡", "vigente": "🟢"}
+    _ico = {"vencido": "vencido", "por_vencer": "por vencer", "vigente": "vigente"}
 
     def _activo(u):
         return str(u.get("Activo", "")).strip().upper() in ("SI", "TRUE", "1", "SÍ")
@@ -889,15 +889,15 @@ def _grupo_usuarios(grupo):
     # ── Tabla CLICKEABLE → abre la ficha de esa persona ──
     _rows = [{
         "Usuario": u["Usuario"], "Nombre": u["Nombre"] or u["Usuario"],
-        "Activo": "🟢" if _activo(u) else "🔴",
-        "Contacto": "✅" if _cont_ok(u) else "⚠️",
+        "Activo": "sí" if _activo(u) else "no",
+        "Contacto": "sí" if _cont_ok(u) else "falta",
         "Credenciales": _ico.get(_peor.get(u["Usuario"].strip().lower()), "—"),
         "Tarifa/h": u.get("TarifaHora", "") or "—",
     } for u in gente]
     _ev = st.dataframe(pd.DataFrame(_rows), hide_index=True, use_container_width=True,
                        on_select="rerun", selection_mode="single-row", key="gu_tbl")
     st.caption(":material/touch_app: Toca una fila para abrir y gestionar la ficha de esa persona.  "
-               "Credenciales: 🟢 vigentes · 🟡 por vencer · 🔴 vencida · — sin registrar.")
+               "Credenciales: vigente / por vencer / vencido / — sin registrar.")
     try:
         _sr = list(_ev.selection.rows)
     except Exception:
@@ -919,7 +919,7 @@ def _grupo_usuarios(grupo):
             if tipos:
                 with st.expander("Matriz de credenciales (usuarios × tickets)",
                                  icon=":material/table_chart:"):
-                    st.caption("🟢 vigente · 🟡 por vencer (≤30 d) · 🔴 vencido · — no registrada")
+                    st.caption("Credenciales: vigente / por vencer (≤30 d) / vencido / — no registrada")
                     st.dataframe(pd.DataFrame(filas), hide_index=True, use_container_width=True)
         except Exception:
             pass

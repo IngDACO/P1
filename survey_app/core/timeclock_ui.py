@@ -340,7 +340,7 @@ def render_timeclock_tab():
     if _mios:
         with st.expander(":material/account_tree: Tus últimos fichajes"):
             st.dataframe(pd.DataFrame([{
-                "": "🕐" if f["tipo"] == timeclock.TIPO_GENERAL else "🏗",
+                "": "Jornada" if f["tipo"] == timeclock.TIPO_GENERAL else "Proyecto",
                 "Proyecto": f["proyecto"] or "—",
                 "Entrada": f["entrada"][5:16].replace("-", "/"),
                 "Salida": (f["salida"][11:16] if f["salida"] else "en curso"),

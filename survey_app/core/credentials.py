@@ -100,8 +100,8 @@ def status(vencimiento) -> str:
 
 
 def status_label(vencimiento) -> str:
-    return {"vigente": "🟢 vigente", "por_vencer": "🟡 por vencer",
-            "vencido": "🔴 vencido", "": "—"}[status(vencimiento)]
+    return {"vigente": "vigente", "por_vencer": "por vencer",
+            "vencido": "vencido", "": "—"}[status(vencimiento)]
 
 
 def dias_para(vencimiento):
@@ -162,8 +162,8 @@ def matrix(grupo) -> tuple:
                 fila[t] = "—"
             else:
                 sts = [status(c.get("Vencimiento")) for c in mias]
-                fila[t] = ("🔴" if "vencido" in sts
-                           else "🟡" if "por_vencer" in sts else "🟢")
+                fila[t] = ("vencido" if "vencido" in sts
+                           else "por vencer" if "por_vencer" in sts else "vigente")
         filas.append(fila)
     return tipos, filas
 
