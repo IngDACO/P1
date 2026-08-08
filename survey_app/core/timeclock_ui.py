@@ -205,8 +205,8 @@ def render_timeclock_tab():
     _aviso_olvido(nombre, grupo, usuario, sess)
 
     # ── Estado de un vistazo ──
-    _est = (":green[:material/check_circle:] En un proyecto" if prj else
-            (":orange[:material/schedule:] Jornada abierta, sin proyecto" if gen else ":gray[:material/radio_button_unchecked:] Sin fichar"))
+    _est = ("En un proyecto" if prj else
+            ("Jornada abierta, sin proyecto" if gen else "Sin fichar"))
     _col = _VERDE if prj else (_AZUL if gen else _GRIS)
     tarj = [_tarjeta("Estado", _est, color=_col, activo=bool(gen or prj)),
             _tarjeta("Jornada de hoy", f"{hoy['general']:.2f} h",
