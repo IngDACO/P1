@@ -118,7 +118,7 @@ if _time.time() - st.session_state.get("_hb_last", 0) > 50:
     _a = st.session_state.auth
     if not heartbeat(_a.get("usuario", ""), _a.get("token", "")):
         st.session_state.pop("auth", None)
-        st.warning("🔒 Tu sesión se cerró: esta cuenta se abrió en otro dispositivo "
+        st.warning(":material/lock: Tu sesión se cerró: esta cuenta se abrió en otro dispositivo "
                    "(o expiró por inactividad). Vuelve a iniciar sesión.")
         st.stop()
 
@@ -151,11 +151,11 @@ if _ROL == "campo" and not st.session_state.get("_contact_ok"):
     if _has_mail and _has_tg:
         st.session_state["_contact_ok"] = True
     else:
-        st.markdown("### 🔒 Falta configurar tu contacto")
+        st.markdown("### :material/lock: Falta configurar tu contacto")
         st.warning("Tu cuenta de campo necesita **email y Telegram** para usar la app. "
                    "El **email** lo carga tu administrador.")
-        _pend = ([] if _has_mail else ["📧 Email (lo carga tu administrador)"]) + \
-                ([] if _has_tg else ["📨 Telegram"])
+        _pend = ([] if _has_mail else [":material/mail: Email (lo carga tu administrador)"]) + \
+                ([] if _has_tg else [":material/send: Telegram"])
         st.info("Pendiente: " + "  ·  ".join(_pend))
         if not _has_tg and notify.telegram_configured() and notify.bot_username():
             import re as _re
@@ -164,7 +164,7 @@ if _ROL == "campo" and not st.session_state.get("_contact_ok"):
             st.markdown(f"**Tu único paso:** abre el bot y pulsa **Start** → "
                         f"[t.me/{_bot}](https://t.me/{_bot}?start={_code})")
             st.caption("Después, tu administrador te vincula. Recarga cuando esté listo.")
-        if st.button("🔄 Ya está listo — revisar"):
+        if st.button(":material/sync: Ya está listo — revisar"):
             st.rerun()
         st.stop()
 
@@ -204,8 +204,8 @@ with st.sidebar:
     # ASISTENTE IA — desplegable en sidebar
     # ══════════════════════════════════════════════════
     _agente_lbl = "Asistente de campo" if _ROL == "campo" else "Asistente de gestión"
-    with st.expander(f"🤖 {_agente_lbl} COPEX", expanded=False):
-        ctx_label = "🔗 Con contexto del cálculo actual." if st.session_state.get("calc_results") else "Sin cálculo activo."
+    with st.expander(f":material/smart_toy: {_agente_lbl} COPEX", expanded=False):
+        ctx_label = ":material/link: Con contexto del cálculo actual." if st.session_state.get("calc_results") else "Sin cálculo activo."
         _foco = ("Enfocado en la instalación en obra y el uso de la app en terreno."
                  if _ROL == "campo"
                  else "Enfocado en la gestión de proyectos e interpretación de resultados.")
@@ -238,7 +238,7 @@ with st.sidebar:
 
         # Limpiar
         if st.session_state.chat_history:
-            if st.button("🗑 Limpiar conversación", use_container_width=True, key="clear_chat_sb"):
+            if st.button(":material/delete: Limpiar conversación", use_container_width=True, key="clear_chat_sb"):
                 st.session_state.chat_history = []
                 st.rerun()
 
@@ -311,7 +311,21 @@ _np = st.session_state.pop("_nav_pending", None)
 if _np in _nav:
     st.session_state["main_nav"] = _np
 
+_NAV_DISPLAY = {
+    _L_SURVEY: ":material/architecture: Survey de elevador",
+    _L_PLUMB:  ":material/straighten: Líneas de plomada",
+    _L_RAIL:   ":material/content_cut: Corte de rieles",
+    _L_BUFFER: ":material/shield: Corte de buffers",
+    _L_BELT:   ":material/swap_vert: Belting",
+    _L_PRESTART: ":material/health_and_safety: Pre-Start diario",
+    _L_CLOCK:  ":material/schedule: Fichaje",
+    _L_OWNER:  ":material/shield_person: Administración",
+    _L_GRUPO:  ":material/build: Mi grupo",
+    _L_FIELDPROJ: ":material/assignment: Mis proyectos",
+    _L_MYCRED: ":material/badge: Mis credenciales",
+}
 _seccion = st.radio("Navegación", _nav, horizontal=True,
+                    format_func=lambda o: _NAV_DISPLAY.get(o, o),
                     key="main_nav", label_visibility="collapsed")
 st.markdown("---")
 

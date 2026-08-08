@@ -154,7 +154,7 @@ def report_problem(pid, grupo, mensaje, creado_por, project_name="") -> tuple:
     if not ok:
         return False, aid
     _notify(_admins_and_owners(grupo),
-            f"🔴 Alarma en proyecto {project_name or pid}",
+            f":red[:material/cancel:] Alarma en proyecto {project_name or pid}",
             [f"<b>Problema reportado</b> por {creado_por}:", mensaje,
              f"Proyecto: {project_name or pid}."])
     return True, aid
@@ -165,6 +165,6 @@ def notify_change(pid, grupo, mensaje, creado_por, assigned_users, project_name=
     ok, aid = create_alert(pid, grupo, "admin", "cambio", mensaje, creado_por)
     if assigned_users:
         _notify(assigned_users,
-                f"🔵 Actualización en {project_name or pid}",
+                f":blue[:material/info:] Actualización en {project_name or pid}",
                 [f"El administrador actualizó el proyecto <b>{project_name or pid}</b>:", mensaje])
     return ok, aid

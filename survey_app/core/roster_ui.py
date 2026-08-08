@@ -60,26 +60,26 @@ def _cobertura_hoy(lunes, staff, datos):
             estado += 1
         else:
             en_obra += 1
-    partes = [f"🟢 **{en_obra}** en obra"]
+    partes = [f":green[:material/check_circle:] **{en_obra}** en obra"]
     if sin:
         _n = ", ".join(sin[:4]) + ("…" if len(sin) > 4 else "")
-        partes.append(f"⚠️ **{len(sin)}** sin asignar ({_esc(_n)})")
+        partes.append(f":orange[:material/warning:] **{len(sin)}** sin asignar ({_esc(_n)})")
     else:
-        partes.append("✅ nadie sin asignar")
+        partes.append(":green[:material/check_circle:] nadie sin asignar")
     if estado:
-        partes.append(f"⬜ **{estado}** OFF/Leave")
+        partes.append(f":gray[:material/crop_square:] **{estado}** OFF/Leave")
     st.markdown(f"**{R.DIAS_LABEL[d]} {fecha.strftime('%d/%m')}** · " + " · ".join(partes))
 
 
 def render_planificacion(grupo):
-    st.markdown("#### 📅 Planificación de la semana")
+    st.markdown("#### :material/calendar_month: Planificación de la semana")
     if not R.is_configured():
         st.warning("La planificación necesita Google Sheets configurado.")
         return
 
     staff = _staff(grupo)
     if not staff:
-        st.info("Aún no tienes personal de campo. Créalo en 🔧 Usuarios de campo.")
+        st.info("Aún no tienes personal de campo. Créalo en :material/build: Usuarios de campo.")
         return
 
     lunes = _semana_activa()
@@ -96,7 +96,7 @@ def render_planificacion(grupo):
     if n3.button("▶", key="ros_next", use_container_width=True):
         st.session_state["ros_lunes"] = (lunes + timedelta(days=7)).isoformat()
         st.rerun()
-    if n4.button("📋 Copiar semana anterior", key="ros_copy", use_container_width=True):
+    if n4.button(":material/assignment: Copiar semana anterior", key="ros_copy", use_container_width=True):
         ok, msg = R.copiar_semana(grupo, lunes - timedelta(days=7), lunes)
         (st.success if ok else st.warning)(msg)
         if ok:
@@ -125,7 +125,7 @@ def _plan_vs_real(grupo, lunes, staff, tidx):
     """
     from datetime import date as _date
     from core import timeclock
-    with st.expander("🔍 Plan vs real (lo asignado contra lo fichado)"):
+    with st.expander(":material/search: Plan vs real (lo asignado contra lo fichado)"):
         if not timeclock.is_configured():
             st.caption("Necesita el fichaje configurado.")
             return
@@ -155,20 +155,20 @@ def _plan_vs_real(grupo, lunes, staff, tidx):
 
             if es_estado:
                 if reales:
-                    filas.append(("ℹ️", nom, f"marcado {R.etiqueta_de(asig, tidx)} "
+                    filas.append((":blue[:material/info:]", nom, f"marcado {R.etiqueta_de(asig, tidx)} "
                                   f"pero fichó en {real_txt}"))
                 # OFF/Leave sin fichar: correcto, no se lista
             elif plan_pid:
                 if plan_pid in real_pids:
                     n_ok += 1
-                    filas.append(("🟢", nom, f"{R.etiqueta_de(asig, tidx)} — fichó donde tocaba"))
+                    filas.append((":green[:material/check_circle:]", nom, f"{R.etiqueta_de(asig, tidx)} — fichó donde tocaba"))
                 elif real_pids:
                     n_desvio += 1
-                    filas.append(("🔴", nom, f"asignado a {R.etiqueta_de(asig, tidx)} · "
+                    filas.append((":red[:material/cancel:]", nom, f"asignado a {R.etiqueta_de(asig, tidx)} · "
                                   f"fichó en {real_txt}"))
                 else:
                     n_sin += 1
-                    filas.append(("⚠️", nom, f"asignado a {R.etiqueta_de(asig, tidx)} · "
+                    filas.append((":orange[:material/warning:]", nom, f"asignado a {R.etiqueta_de(asig, tidx)} · "
                                   "sin fichar aún"))
             elif asig:                                  # trabajo sin enlace a PRJ
                 filas.append(("—", nom, f"{R.etiqueta_de(asig, tidx)} "
@@ -177,8 +177,8 @@ def _plan_vs_real(grupo, lunes, staff, tidx):
             elif reales:                                # sin plan pero ficho
                 filas.append(("❔", nom, f"sin asignación · fichó en {real_txt}"))
 
-        st.markdown(f"`🟢 {n_ok} donde tocaba`  `🔴 {n_desvio} en otro sitio`  "
-                    f"`⚠️ {n_sin} sin fichar`")
+        st.markdown(f"`:green[:material/check_circle:] {n_ok} donde tocaba`  `:red[:material/cancel:] {n_desvio} en otro sitio`  "
+                    f"`:orange[:material/warning:] {n_sin} sin fichar`")
         if not filas:
             st.caption("Nada que comparar este día (sin asignaciones a proyecto ni fichajes).")
         for ic, nom, txt in filas:
@@ -289,7 +289,7 @@ def _tablero_editable(grupo, lunes, staff, datos, tidx):
                 _nota = st.text_input("Nota", value=nota, key=f"pvn_{idx}",
                                       placeholder="vehículo, equipo, horario…")
                 _all = st.checkbox("Aplicar a toda la semana", key=f"pvw_{idx}")
-                if st.button("💾 Guardar", key=f"pvs_{idx}", type="primary",
+                if st.button(":material/save: Guardar", key=f"pvs_{idx}", type="primary",
                              use_container_width=True):
                     _nueva = valores[etiquetas.index(_sel)]
                     ok, msg = _guardar_celda(grupo, lunes, usuario, datos, d,
@@ -325,7 +325,7 @@ def _grid_html(staff, lunes, datos, tidx, resaltar="") -> str:
         _nbg = "#fff7e6" if _mio else "#fff"
         celdas = [f'<td style="padding:5px 8px;font-size:13px;font-weight:{"800" if _mio else "600"};'
                   f'color:#1f2937;white-space:nowrap;position:sticky;left:0;background:{_nbg};'
-                  f'border-right:1px solid #eef1f5;">{"👉 " if _mio else ""}{_esc(nom)}</td>']
+                  f'border-right:1px solid #eef1f5;">{":material/arrow_forward: " if _mio else ""}{_esc(nom)}</td>']
         for d in R.DIAS:
             c = R.celda(datos, usr, d)
             asig = str(c.get("asig", ""))
@@ -355,20 +355,20 @@ def _opciones(grupo, tidx):
         for p in P.list_projects(grupo=grupo):
             if str(p.get("Estado", "")) in ("Completado", "Cancelado"):
                 continue
-            op.append((f"🏗 {p.get('Nombre','')}", str(p.get("ID", ""))))
+            op.append((f":material/apartment: {p.get('Nombre','')}", str(p.get("ID", ""))))
     except Exception:
         pass
     for r in R.list_trabajos(grupo):
         num = str(r.get("Numero", "")).strip()
-        op.append((f"🔧 {num}. {r.get('Nombre','')}" if num else f"🔧 {r.get('Nombre','')}",
+        op.append((f":material/build: {num}. {r.get('Nombre','')}" if num else f":material/build: {r.get('Nombre','')}",
                    str(r.get("ID", ""))))
     for k, v in R.ESTADOS.items():
-        op.append((f"⬜ {v['nombre']}" if k == "OFF" else f"🟥 {v['nombre']}", k))
+        op.append((f":gray[:material/crop_square:] {v['nombre']}" if k == "OFF" else f":red[:material/cancel:] {v['nombre']}", k))
     return op
 
 
 def _catalogo(grupo):
-    with st.expander("🎨 Catálogo de trabajos (lo que NO es un proyecto)"):
+    with st.expander(":material/palette: Catálogo de trabajos (lo que NO es un proyecto)"):
         st.caption("Para trabajos que **no** son un proyecto: entregas, cursos, policía, "
                    "traslados… Los **proyectos se asignan directo** en el tablero (ya son un "
                    "trabajo en sí mismos), no hace falta crearlos aquí.")
@@ -382,7 +382,7 @@ def _catalogo(grupo):
                                unsafe_allow_html=True)
                 _prj = str(r.get("ProyectoID", "")).strip()
                 cc[1].markdown(f"**{str(r.get('Numero','')).strip()}. {r.get('Nombre','')}**"
-                               + (f"  ·  🔗 {_prj}" if _prj else "")
+                               + (f"  ·  :material/link: {_prj}" if _prj else "")
                                + ("" if _act else "  ·  _inactivo_"))
                 if cc[2].button("Activar" if not _act else "Desactivar",
                                 key=f"trab_act_{r.get('ID')}"):
@@ -391,7 +391,7 @@ def _catalogo(grupo):
         else:
             st.caption("Aún no hay trabajos. Añade el primero abajo.")
 
-        st.markdown("**➕ Nuevo trabajo** (no-proyecto)")
+        st.markdown("**:material/add: Nuevo trabajo** (no-proyecto)")
         c1, c2, c3 = st.columns([1, 2.5, 1.5])
         num = c1.text_input("Número", key="trab_num", placeholder="89")
         nom = c2.text_input("Nombre", key="trab_nom", placeholder="Entrega / Curso / Traslado…")

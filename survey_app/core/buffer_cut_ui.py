@@ -55,7 +55,7 @@ def render_buffer_cut_tab():
     if _plano:
         _n = plan_ui.aplicar(_plano, {"hkp": "bc_hkp"})
         if _n:
-            st.caption("✅ HKP tomado(s) del plano del proyecto.")
+            st.caption(":green[:material/check_circle:] HKP tomado(s) del plano del proyecto.")
 
     # ── 1. PDF → HKP ────────────────────────────────────────
     st.markdown("**1. Parámetro del plano (HKP)**")
@@ -116,7 +116,7 @@ def render_buffer_cut_tab():
         "Buffer":     f"Buffer {b['n']}",
         "HKPR (mm)":  round(b["HKPR"], 1),
         "Corte (mm)": b["CutBuffer"],
-        "Estado":     "⚠️ revisar" if b["warn"] else "OK",
+        "Estado":     ":orange[:material/warning:] revisar" if b["warn"] else "OK",
     } for b in res["buffers"]]
     st.subheader("Resultado — cortes (mm)")
     st.dataframe(pd.DataFrame(filas), use_container_width=True, hide_index=True)
@@ -128,7 +128,7 @@ def render_buffer_cut_tab():
         + svg + '</body></html>', height=330, scrolling=False)
 
     if any(b["warn"] for b in res["buffers"]):
-        st.warning("⚠️ Un corte negativo significa que el HKPR real supera al HKP del plano: "
+        st.warning(":material/warning: Un corte negativo significa que el HKPR real supera al HKP del plano: "
                    "no hay nada que cortar en ese buffer, revísalo en obra.")
 
     # ── 6. PDF + guardar contra el proyecto ─────────────────

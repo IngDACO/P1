@@ -30,7 +30,7 @@ def _encaje_txt(disp) -> str:
     if disp.get("centrado"):
         return f"centrado · holgura {disp.get('holgura_lado', 0):.0f} mm/lado"
     if disp.get("fuera_rango"):
-        return (f"⚠️ NO CABE · Omega {disp.get('omega_sacrificio', 0):.0f} > "
+        return (f":orange[:material/warning:] NO CABE · Omega {disp.get('omega_sacrificio', 0):.0f} > "
                 f"límite {disp.get('limit_ob', 0):.0f}")
     return f"acerca {abs(disp.get('desp_conjunto', 0)):.0f} mm al lado {disp.get('z_side', '')}"
 
@@ -61,11 +61,11 @@ def render_plumb_tab():
             "params.BS": "plb_bs", "params.SG": "plb_sg", "params.TG": "plb_tg",
             "rail_altura": "plb_rail"})   # RAIL = altura del diente, del catálogo
         if _n:
-            st.caption(f"✅ {_n} valor(es) tomados del plano del proyecto.")
+            st.caption(f":green[:material/check_circle:] {_n} valor(es) tomados del plano del proyecto.")
 
     with st.expander("¿El proyecto no tiene plano? Cárgalo aquí", icon=":material/description:"):
         st.caption("Se leerá BKS, TKSW, SF1, SF2, BS, SG y TG de este PDF.")
-        pdf = plan_store.selector("📄 PDF de planos (autocompleta del plano)", "plb_pdf")
+        pdf = plan_store.selector(":material/description: PDF de planos (autocompleta del plano)", "plb_pdf")
         if pdf is not None and pdf.name != st.session_state.get("plb_pdf_name"):
             from extractors.schindler import extract_from_pdf
             with st.spinner("Leyendo el plano..."):
@@ -78,7 +78,7 @@ def render_plumb_tab():
                 if ex.get(src) is not None:
                     st.session_state[key] = float(ex[src]); found.append(src)
             if found:
-                st.success(f"✅ Del plano: **{', '.join(found)}**. Completa LengthTemplate; "
+                st.success(f":material/check_circle: Del plano: **{', '.join(found)}**. Completa LengthTemplate; "
                            "RAIL sale del código de riel; el BSR se mide por elevador.")
             else:
                 st.warning("No se encontraron valores en el plano. Ingrésalos manualmente.")
@@ -87,21 +87,21 @@ def render_plumb_tab():
             st.caption(f":material/description: Plano cargado: **{pdf.name}**")
 
     # ── Entradas COMPARTIDAS del shaft (la plantilla es una sola) ──
-    st.markdown("**Plantilla del shaft (compartida)**  ·  📄 = del plano · ✏️ = manual")
+    st.markdown("**Plantilla del shaft (compartida)**  ·  :material/description: = del plano · ✏️ = manual")
     c1, c2, c3, c4 = st.columns(4)
-    bks  = c1.number_input("📄 BKS (mm)",            step=0.5, key="plb_bks")
-    rail = c2.number_input("📄 RAIL (mm)",           step=0.5, key="plb_rail")
-    tksw = c3.number_input("📄 TKSW (mm)",           step=0.5, key="plb_tksw")
+    bks  = c1.number_input(":material/description: BKS (mm)",            step=0.5, key="plb_bks")
+    rail = c2.number_input(":material/description: RAIL (mm)",           step=0.5, key="plb_rail")
+    tksw = c3.number_input(":material/description: TKSW (mm)",           step=0.5, key="plb_tksw")
     lt   = c4.number_input("✏️ LengthTemplate (mm)", step=0.5, key="plb_lt")
     g1, g2, g3, _g4 = st.columns(4)
-    sf1 = g1.number_input("📄 SF1 (mm)", step=0.5, key="plb_sf1")
-    sf2 = g2.number_input("📄 SF2 (mm)", step=0.5, key="plb_sf2")
-    bs  = g3.number_input("📄 BS (mm)",  step=0.5, key="plb_bs")
+    sf1 = g1.number_input(":material/description: SF1 (mm)", step=0.5, key="plb_sf1")
+    sf2 = g2.number_input(":material/description: SF2 (mm)", step=0.5, key="plb_sf2")
+    bs  = g3.number_input(":material/description: BS (mm)",  step=0.5, key="plb_bs")
 
     with st.expander("Datos de encaje (SG, TG, lado Omega) — se usan cuando un BSR < BS"):
         e1, e2, e3 = st.columns(3)
-        sg    = e1.number_input("📄 SG (mm)", step=0.5, key="plb_sg")
-        tg    = e2.number_input("📄 TG (mm)", step=0.5, key="plb_tg")
+        sg    = e1.number_input(":material/description: SG (mm)", step=0.5, key="plb_sg")
+        tg    = e2.number_input(":material/description: TG (mm)", step=0.5, key="plb_tg")
         omega = e3.radio("✏️ Lado del Omega", ["R", "L"], horizontal=True, key="plb_omega")
 
     # ── BSR por elevador (lo que varía entre huecos) ──
@@ -141,7 +141,7 @@ def render_plumb_tab():
 
     _bs = r0.get("bs_check") or {}
     if _bs and not _bs.get("ok", True):
-        st.error(f"⚠️ **BS incoherente:** el plano dice **{_bs['bs_plano']:.0f}** pero "
+        st.error(f":material/warning: **BS incoherente:** el plano dice **{_bs['bs_plano']:.0f}** pero "
                  f"SF1+BKS+2·RAIL+SF2 = **{_bs['bs_componentes']:.0f}** (dif {_bs['dif']:+.0f} mm). "
                  "Con este desajuste los plomos quedan mal ubicados. Revisa BS, SF1, SF2, BKS o RAIL.")
 
@@ -175,7 +175,7 @@ def render_plumb_tab():
                    f"(holgura {disp['holgura_lado']:.1f} mm/lado).")
     elif disp:
         if disp.get("fuera_rango"):
-            st.error(f"⚠️ Elevador {sel}: NO CABE — sacrificar {disp['omega_sacrificio']:.1f} mm "
+            st.error(f":material/warning: Elevador {sel}: NO CABE — sacrificar {disp['omega_sacrificio']:.1f} mm "
                      f"del Omega, pero el límite es {disp['limit_ob']:.1f} mm.")
         st.info(f"Elevador {sel}: BSR < BS → **acerca el conjunto {abs(disp['desp_conjunto']):.1f} mm "
                 f"al lado {disp['z_side']}** (Omega {disp['omega_side']} del otro lado).")

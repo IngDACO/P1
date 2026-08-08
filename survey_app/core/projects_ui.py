@@ -174,32 +174,32 @@ def _resumen_del_dia(grupo: str):
     # slug, icono, etiqueta, urgente, count, sección, sub_pestaña, nombre_sección, detalle()
     inds = [
         ("retrasos", ":material/error:", "En retraso", True, len(d["retrasos"]),
-         "proyectos", "📊 Proyectos", "Proyectos",
+         "proyectos", ":material/bar_chart: Proyectos", "Proyectos",
          lambda: ", ".join(f"{r['nombre']} ({r['dias']}d)" for r in d["retrasos"][:15])),
         ("vencidos", ":material/block:", "Vencidos", True, len(d["vencidos"]),
-         "proyectos", "📊 Proyectos", "Proyectos",
+         "proyectos", ":material/bar_chart: Proyectos", "Proyectos",
          lambda: ", ".join(f"{v['nombre']} ({v['fin']})" for v in d["vencidos"][:15])),
         ("porvencer", ":material/event:", "Por vencer", False, len(d["por_vencer"]),
-         "proyectos", "📊 Proyectos", "Proyectos",
+         "proyectos", ":material/bar_chart: Proyectos", "Proyectos",
          lambda: ", ".join(f"{v['nombre']} ({v['dias']}d)" for v in d["por_vencer"][:15])),
         ("sinasig", ":material/engineering:", "Sin asignar", False, len(d["sin_asignar"]),
-         "proyectos", "📊 Proyectos", "Proyectos",
+         "proyectos", ":material/bar_chart: Proyectos", "Proyectos",
          lambda: ", ".join(s["nombre"] for s in d["sin_asignar"][:15])),
         ("sincont", ":material/contact_page:", "Sin contacto", False, len(d["campo_sin_contacto"]),
-         "planificacion", "👷 Usuarios", "Usuarios",
+         "planificacion", ":material/engineering: Usuarios", "Usuarios",
          lambda: ", ".join(d["campo_sin_contacto"][:15])),
         ("cred", ":material/badge:", "Credenciales", False, len(d.get("cred_venc", [])),
-         "planificacion", "👷 Usuarios", "Usuarios",
+         "planificacion", ":material/engineering: Usuarios", "Usuarios",
          lambda: ", ".join(f"{c['tipo']}·{c['usuario']} ({c['dias']}d)"
                            for c in d.get("cred_venc", [])[:15])),
         ("alarmas", ":material/notifications:", "Alarmas", True, _al_n,
-         "proyectos", "📊 Proyectos", "Proyectos",
+         "proyectos", ":material/bar_chart: Proyectos", "Proyectos",
          lambda: ", ".join(f"{a['nombre']} ({a['n']})" for a in d["alarmas"][:15])),
         ("near", ":material/health_and_safety:", "Near miss", False, len(d["near_miss"]),
-         "proyectos", "📊 Proyectos", "Proyectos",
+         "proyectos", ":material/bar_chart: Proyectos", "Proyectos",
          lambda: ", ".join(f"{n['proyecto']} ({n['fecha']})" for n in d["near_miss"][:15])),
         ("sobrep", ":material/payments:", "Sobre presup.", False, len(d.get("sobre_presupuesto", [])),
-         "finanzas", "💰 Gastos", "Gastos",
+         "finanzas", ":material/payments: Gastos", "Gastos",
          lambda: f"{len(d.get('sobre_presupuesto', []))} proyecto(s) sobre presupuesto"),
     ]
     _urg = sum(c for (_s, _i, _l, u, c, *_r) in inds if u)
@@ -303,14 +303,14 @@ _DOC_ICON   = {"plano": "📐", "informe_cliente": "📄", "informe_admin": "�
                "prestart": "🦺", "calculo": "🧮", "otro": "📎"}
 # Etiquetas legibles (icono + nombre) para el filtro de tipo del buscador (v165).
 _TIPO_LABEL = {"plano": "📐 Plano", "informe_cliente": "📄 Informe cliente",
-               "informe_admin": "📑 Informe admin", "matriz_survey": "📊 Matriz survey",
-               "foto": "📷 Fotos", "certificado": "🏅 Certificados",
-               "prestart": "🦺 Pre-Start", "calculo": "🧮 Cálculos", "otro": "📎 Otros"}
+               "informe_admin": ":material/summarize: Informe admin", "matriz_survey": ":material/bar_chart: Matriz survey",
+               "foto": ":material/photo_camera: Fotos", "certificado": ":material/military_tech: Certificados",
+               "prestart": ":material/health_and_safety: Pre-Start", "calculo": ":material/calculate: Cálculos", "otro": ":material/attach_file: Otros"}
 _TIPO_ORDER = ["plano", "informe_cliente", "informe_admin", "matriz_survey",
                "calculo", "prestart", "foto", "certificado", "otro"]
 # Reabrir un cálculo en su herramienta (v148): solo estas 4 guardan entradas.
 _CALC_NAV   = {"plomada": "🔩 Líneas de plomada", "rieles": "✂️ Corte de rieles",
-               "buffers": "🛡 Corte de buffers", "belting": "🎗 Belting"}
+               "buffers": ":material/shield: Corte de buffers", "belting": ":material/swap_vert: Belting"}
 
 
 def _a_fecha(v):
@@ -407,7 +407,7 @@ def _plano_herramientas_html(datos) -> str:
                 chips.append(
                     '<span style="display:inline-block;background:#fdecea;color:#b71c1c;'
                     'border-radius:6px;padding:2px 8px;margin:2px 3px;font-size:12px;">'
-                    f'{label}: ⚠️ falta</span>')
+                    f'{label}: :orange[:material/warning:] falta</span>')
         filas.append(
             '<tr><td style="padding:6px 10px;white-space:nowrap;font-weight:600;'
             'vertical-align:top;border-bottom:1px solid #eef1f5;">'
@@ -487,7 +487,7 @@ def _galeria_fotos(fotos, pid, por_pagina=6):
 
 
 def _archivos_section(pid: str):
-    """📎 Archivos: UNA lista buscable de todo lo del proyecto (v165).
+    """:material/attach_file: Archivos: UNA lista buscable de todo lo del proyecto (v165).
 
     Antes eran DOS sub-secciones (Documentos y Cálculos) con tres selectores
     distintos y listas planas: con muchos archivos, encontrar uno era el problema.
@@ -854,22 +854,22 @@ def _autoagenda(grupo, pid, nuevos, quitados, fecha_ini, fecha_fin):
             if r["llenadas"]:
                 _oc = (f" · {r['ocupadas']} día(s) ya ocupados se respetaron"
                        if r["ocupadas"] else "")
-                msgs.append(f"📅 Planificador: {r['llenadas']} día(s) asignados a "
+                msgs.append(f":material/calendar_month: Planificador: {r['llenadas']} día(s) asignados a "
                             f"{len(nuevos)} persona(s) en {r['semanas']} semana(s){_oc}.")
             elif r["ocupadas"]:
-                msgs.append("📅 Planificador: los días del rango ya estaban ocupados; "
+                msgs.append(":material/calendar_month: Planificador: los días del rango ya estaban ocupados; "
                             "no se pisó nada.")
         elif nuevos and not fecha_fin:
-            msgs.append("📅 El proyecto no tiene **fecha de fin**, así que no se "
+            msgs.append(":material/calendar_month: El proyecto no tiene **fecha de fin**, así que no se "
                         "auto-planificó. Ponla en ✏️ Datos, o planifica a mano en "
-                        "📅 Planificación.")
+                        ":material/calendar_month: Planificación.")
     except Exception:
         pass
     try:
         if quitados:
             n = R.limpiar_proyecto(grupo, pid, quitados)
             if n:
-                msgs.append(f"🧹 Planificador: se quitaron {n} día(s) de los desasignados.")
+                msgs.append(f":material/cleaning_services: Planificador: se quitaron {n} día(s) de los desasignados.")
     except Exception:
         pass
     for m in msgs:
@@ -920,7 +920,7 @@ def _avisar_asignados(usuarios, grupo=None, exclude_pid=None, certs_req=None):
             pass
         for p in otros.get(u, []):
             _fin = str(p.get("FechaFinEst", "")).strip()
-            ocupados.append(f"**{u}** → 🏗 {p.get('Nombre', '')}"
+            ocupados.append(f"**{u}** → :material/apartment: {p.get('Nombre', '')}"
                             + (f" (hasta {_fin})" if _fin else ""))
         if certs_req:
             try:
@@ -937,16 +937,16 @@ def _avisar_asignados(usuarios, grupo=None, exclude_pid=None, certs_req=None):
                 pass
 
     if ocupados:
-        st.info("📌 **Ya asignados a otro proyecto:**\n\n"
+        st.info(":material/push_pin: **Ya asignados a otro proyecto:**\n\n"
                 + "\n".join(f"- {x}" for x in ocupados))
     if no_cumplen:
-        st.error("🔴 **No cumplen los certificados que exige el proyecto:**\n\n"
+        st.error(":material/cancel: **No cumplen los certificados que exige el proyecto:**\n\n"
                  + "\n".join(f"- {x}" for x in no_cumplen))
     if cert_pv:
-        st.warning("🟡 **Certificados requeridos POR VENCER (renovar):**\n\n"
+        st.warning(":material/schedule: **Certificados requeridos POR VENCER (renovar):**\n\n"
                    + "\n".join(f"- {x}" for x in cert_pv))
     if cred_mal:
-        st.warning("🎫 **Otras credenciales a revisar antes de mandarlos a obra:**\n\n"
+        st.warning(":material/badge: **Otras credenciales a revisar antes de mandarlos a obra:**\n\n"
                    + "\n".join(f"- {x}" for x in cred_mal))
     if sin_contacto:
         st.warning(":material/warning: **Sin contacto completo (email + Telegram):** "
@@ -974,7 +974,7 @@ def _cumplimiento_equipo(pid, grupo, prj):
             fila[t] = _ico.get(comp["por_tipo"].get(t, "falta"), "—")
         filas.append(fila)
     st.dataframe(pd.DataFrame(filas), hide_index=True, use_container_width=True)
-    st.caption("✅ vigente · 🟡 por vencer (renovar) · 🔴 vencido · — falta.  "
+    st.caption(":green[:material/check_circle:] vigente · :orange[:material/schedule:] por vencer (renovar) · :red[:material/cancel:] vencido · — falta.  "
                "**Cumple** = ningún certificado requerido vencido ni faltante.")
 
 
@@ -997,7 +997,7 @@ def _notificar_asignados(usuarios, info_prj):
         st.warning(f":material/mail: Notificados {n} de {len(usuarios)}. Al resto le falta contacto.")
     else:
         st.warning(":material/warning: No se pudo notificar a nadie: revisa email y Telegram "
-                   "en 🛠 Mi grupo → Usuarios.")
+                   "en :material/build: Mi grupo → Usuarios.")
 
 
 def _field_users(grupo):
@@ -1070,13 +1070,13 @@ def _cartera_clickeable(proys, alarmas, delays, aheads, costos):
                 _ppto = f"{int(round(P._num(_c.get('pct'))))}% ppto" + (" ⚠️" if _c.get("over") else "")
             else:
                 _ppto = "s/ppto"
-            _chips = f"💰 {_ppto} · 👷 {_users}"
+            _chips = f":material/payments: {_ppto} · :material/engineering: {_users}"
             if _dl:
-                _chips += f" · 🔴 {_dl}d"
+                _chips += f" · :red[:material/cancel:] {_dl}d"
             elif _ah:
-                _chips += f" · 🟢 {_ah}d"
+                _chips += f" · :green[:material/check_circle:] {_ah}d"
             if _al:
-                _chips += f" · 🔔 {_al}"
+                _chips += f" · :material/notifications: {_al}"
             _html = (
                 "<div style='display:flex;justify-content:space-between;align-items:center;"
                 "gap:8px;margin-bottom:6px;'>"
@@ -1093,8 +1093,8 @@ def _cartera_clickeable(proys, alarmas, delays, aheads, costos):
                 f"<div style='height:100%;width:{_av}%;background:#2e6da4;"
                 "border-radius:20px;'></div></div>"
                 f"<span style='font-size:12.5px;font-weight:600;color:#374151;'>{_av}%</span></div>"
-                f"<div style='font-size:12.5px;color:#6b7280;margin-bottom:5px;'>👤 "
-                f"{esc(p.get('Cliente', '') or '—')} · 📅 {_ddmm(p.get('FechaInicio'))} → "
+                f"<div style='font-size:12.5px;color:#6b7280;margin-bottom:5px;'>:material/person: "
+                f"{esc(p.get('Cliente', '') or '—')} · :material/calendar_month: {_ddmm(p.get('FechaInicio'))} → "
                 f"{_ddmm(p.get('FechaFinEst'))}</div>"
                 f"<div style='font-size:12.5px;color:#374151;'>{_chips}</div>")
             with _cols[_j].container(border=True, key=f"cart_{_idx}"):
@@ -1131,7 +1131,7 @@ def _cartera_lista(proys, alarmas, delays, aheads, costos):
         _ppto = (f"{int(round(P._num(_c.get('pct'))))}%" + ("⚠️" if _c.get("over") else "")
                  if P._num(_c.get("presupuesto")) > 0 else "—")
         _users = len([x for x in str(p.get("CampoAsignados", "")).split(";") if x.strip()])
-        _sit = (f"🔴 {_dl}d" if _dl else (f"🟢 {_ah}d" if _ah else "—"))
+        _sit = (f":red[:material/cancel:] {_dl}d" if _dl else (f":green[:material/check_circle:] {_ah}d" if _ah else "—"))
         _rows.append({
             "Proyecto": str(p.get("Nombre", "")),
             "Estado": str(p.get("Estado", "") or "—"),
@@ -1149,8 +1149,8 @@ def _cartera_lista(proys, alarmas, delays, aheads, costos):
         on_select="rerun", selection_mode="single-row", key="cart_tbl",
         column_config={"Avance": st.column_config.ProgressColumn(
             "Avance", min_value=0, max_value=100, format="%d%%")})
-    st.caption("👆 Toca una fila para abrir el proyecto.  "
-               "Ppto = % del presupuesto ejecutado (⚠️ si se pasó) · 👷 usuarios · 🔔 alertas.")
+    st.caption(":material/touch_app: Toca una fila para abrir el proyecto.  "
+               "Ppto = % del presupuesto ejecutado (:orange[:material/warning:] si se pasó) · :material/engineering: usuarios · :material/notifications: alertas.")
     try:
         _sr = list(_ev.selection.rows)
     except Exception:
@@ -1233,8 +1233,8 @@ def _panel_proyectos(grupo: str):
     _nr, _na = len(delays), len(aheads)
     _hc1, _hc2 = st.columns([3, 2])
     _hc1.markdown(f"**Cartera — {len(_proys_f)} de {len(proys)}**"
-                  + (f"  ·  🔴 {_nr} con retraso" if _nr else "")
-                  + (f"  ·  🟢 {_na} adelantado(s)" if _na else ""))
+                  + (f"  ·  :red[:material/cancel:] {_nr} con retraso" if _nr else "")
+                  + (f"  ·  :green[:material/check_circle:] {_na} adelantado(s)" if _na else ""))
     # v228: toggle de vista — tarjetas (resumen visual) o lista (tabla clásica).
     _view = _hc2.radio("Vista", ["🃏 Tarjetas", "📋 Lista"], horizontal=True,
                        format_func=lambda o: {"🃏 Tarjetas": ":material/grid_view: Tarjetas",
@@ -1271,13 +1271,13 @@ def _portfolio_html(proys, horas, alarmas, ags, delays=None, aheads=None,
         ag  = ags.get(str(p.get("AgrupacionID", "")), "")
         sub = f"{pid} · {str(p.get('Cliente','')) or '—'}" + (f" · {ag}" if ag else "")
         if show_group and p.get("Grupo"):
-            sub = f"🏢 {p.get('Grupo')} · " + sub
+            sub = f":material/business: {p.get('Grupo')} · " + sub
         ubic = str(p.get("Ubicacion", "") or "")
         ubic_html = (f'<div style="font-size:11.5px;white-space:nowrap;overflow:hidden;'
                      f'text-overflow:ellipsis;">{maps.maps_link_html(ubic, ubic, color="#2e6da4")}</div>'
                      if ubic else "")
         alarm = (f'<div style="width:44px;text-align:center;flex:none;color:#c0392b;'
-                 f'font-size:12.5px;font-weight:600;">🔔 {na}</div>'
+                 f'font-size:12.5px;font-weight:600;">:material/notifications: {na}</div>'
                  if na else '<div style="width:44px;flex:none;"></div>')
         # Retraso (rojo) / adelanto (verde) → borde + badge de días
         d, adel = delays.get(pid), aheads.get(pid)
@@ -1287,7 +1287,7 @@ def _portfolio_html(proys, horas, alarmas, ags, delays=None, aheads=None,
             card_border = "border:1px solid #e6e9ef;border-left:4px solid #c0392b"
             retraso_badge = (f'<span style="font-size:12px;padding:3px 9px;border-radius:20px;'
                              f'background:#fcebeb;color:#a32d2d;white-space:nowrap;flex:none;'
-                             f'font-weight:600;">⏰ {d:.0f} d</span>')
+                             f'font-weight:600;">:material/alarm: {d:.0f} d</span>')
         elif adel:
             card_border = "border:1px solid #e6e9ef;border-left:4px solid #1e8449"
             retraso_badge = (f'<span style="font-size:12px;padding:3px 9px;border-radius:20px;'
@@ -1315,7 +1315,7 @@ def _portfolio_html(proys, horas, alarmas, ags, delays=None, aheads=None,
             f'<div style="height:100%;width:{av:.0f}%;background:{bar};"></div></div>'
             '</div>'
             f'<div style="width:54px;text-align:right;flex:none;font-size:12px;color:#6b7280;">'
-            f'⏱ {hrs:.0f}h</div>'
+            f':material/schedule: {hrs:.0f}h</div>'
             + alarm +
             '</div>'
         )
@@ -1403,7 +1403,7 @@ def _diagnostico(ps: dict) -> dict:
 
 
 def _equipo_proyecto(pid, grupo):
-    """👷 Quién ha trabajado en ESTE proyecto y cuántas horas (v216). El dato ya
+    """:material/engineering: Quién ha trabajado en ESTE proyecto y cuántas horas (v216). El dato ya
     estaba (labor_breakdown, usado en 💰 Costos); aquí se surfacea, sin el costo."""
     try:
         from core import expenses as E
@@ -1423,7 +1423,7 @@ def _equipo_proyecto(pid, grupo):
 
 
 def _estado_section(pid: str, grupo: str, prj: dict):
-    """Pestaña 📊 Estado (v211: doble columna arriba — cómo va | alarmas + equipo; el
+    """Pestaña :material/bar_chart: Estado (v211: doble columna arriba — cómo va | alarmas + equipo; el
     ritmo, el desglose y el cronograma van a ancho completo abajo)."""
     ps = P.project_schedule(pid)
     if not (ps and ps["sched"].get("activities")):
@@ -1485,18 +1485,18 @@ def _estado_section(pid: str, grupo: str, prj: dict):
     # ── El ritmo: mas accionable que el SPI ──
     if d["ritmo_real"] is not None and d["ritmo_nec"] is not None:
         if d["dias_rest"] <= 0:
-            st.warning(f"⏱ La fecha de fin planificada ya pasó y queda "
+            st.warning(f":material/schedule: La fecha de fin planificada ya pasó y queda "
                        f"**{100 - d['ev']:.0f}%** por completar.")
         elif d["factor"] and d["factor"] > 1.15:
-            st.error(f"⏱ Vas a **{d['ritmo_real']:.1f} %/día** y necesitas "
+            st.error(f":material/schedule: Vas a **{d['ritmo_real']:.1f} %/día** y necesitas "
                      f"**{d['ritmo_nec']:.1f} %/día** para llegar a la fecha: "
                      f"hay que **acelerar ×{d['factor']:.1f}** en los "
                      f"{d['dias_rest']:.0f} días que quedan.")
         elif d["factor"] and d["factor"] < 0.85:
-            st.success(f"⏱ Vas a **{d['ritmo_real']:.1f} %/día** y con "
+            st.success(f":material/schedule: Vas a **{d['ritmo_real']:.1f} %/día** y con "
                        f"**{d['ritmo_nec']:.1f} %/día** llegas: hay margen.")
         else:
-            st.info(f"⏱ Vas a **{d['ritmo_real']:.1f} %/día**, justo el ritmo "
+            st.info(f":material/schedule: Vas a **{d['ritmo_real']:.1f} %/día**, justo el ritmo "
                     f"que hace falta ({d['ritmo_nec']:.1f} %/día).")
 
     # ── Que tocaba hoy vs que se esta haciendo: el porque del retraso ──
@@ -1507,10 +1507,10 @@ def _estado_section(pid: str, grupo: str, prj: dict):
             st.caption("Ninguna actividad tiene su ventana abierta hoy.")
         for x in d["tocaban"]:
             if x["avance"] <= 0:
-                st.markdown(f"🔴 **{x['nombre']}** — sin empezar, arrancaba el "
+                st.markdown(f":red[:material/cancel:] **{x['nombre']}** — sin empezar, arrancaba el "
                             f"{x['desde'].strftime('%d/%m')} ({x['dur']:.0f} d)")
             else:
-                st.markdown(f"🟢 {x['nombre']} — {x['avance']:.0f}%")
+                st.markdown(f":green[:material/check_circle:] {x['nombre']} — {x['avance']:.0f}%")
     with c2:
         st.markdown("**:material/pending_actions: En curso ahora**")
         if not d["en_curso"]:
@@ -1522,13 +1522,13 @@ def _estado_section(pid: str, grupo: str, prj: dict):
 
     # El diagnostico: el equipo sigue en trabajo viejo y lo de hoy no arranca
     if d["paradas"] and d["arrastradas"]:
-        st.warning("🩺 El equipo sigue terminando **"
+        st.warning(":material/stethoscope: El equipo sigue terminando **"
                    + ", ".join(x["nombre"] for x in d["arrastradas"][:3])
                    + "**, así que **"
                    + ", ".join(x["nombre"] for x in d["paradas"][:3])
                    + "** aún no ha arrancado. Ahí está el retraso.")
     elif d["paradas"]:
-        st.warning("🩺 Sin empezar y ya tocaba: **"
+        st.warning(":material/stethoscope: Sin empezar y ya tocaba: **"
                    + ", ".join(x["nombre"] for x in d["paradas"][:3]) + "**.")
 
     if d["proximo"]:
@@ -1588,7 +1588,7 @@ def _detalle_proyecto(pid: str, grupo: str = None):
     # v234: format_func muestra iconos Material; las OPCIONES siguen siendo el ID (con
     # emoji) → el match de abajo y cualquier deep-link no cambian.
     _sec = st.radio("Sección del proyecto",
-                    ["📊 Estado", "✏️ Datos", "💰 Costos", "📎 Archivos"],
+                    [":material/bar_chart: Estado", "✏️ Datos", ":material/payments: Costos", ":material/attach_file: Archivos"],
                     format_func=lambda o: {"📊 Estado": ":material/insights: Estado",
                                            "✏️ Datos": ":material/edit: Datos",
                                            "💰 Costos": ":material/payments: Costos",
@@ -1734,7 +1734,7 @@ def _detalle_proyecto(pid: str, grupo: str = None):
                     # proyecto entre sus fechas y quitar del roster a los desasignados.
                     _quitados = [x for x in actuales if x not in asignados]
                     _autoagenda(grupo, pid, nuevos, _quitados, f_ini, f_fin)
-                    st.toast("Cambios guardados." + (f"  📨 {_sent} notificado(s)." if _sent else ""))
+                    st.toast("Cambios guardados." + (f"  :material/send: {_sent} notificado(s)." if _sent else ""))
                     st.rerun()
 
         # helper: avisar al campo asignado de un cambio del admin
@@ -1823,7 +1823,7 @@ def _detalle_proyecto(pid: str, grupo: str = None):
         if _archivado:
             st.info(":material/inventory_2: Este proyecto está **archivado**: no aparece en las listas "
                     "ni en los informes, pero no se ha perdido nada.")
-            if st.button("♻️ Restaurar proyecto", key=f"unarch_{pid}",
+            if st.button(":material/recycling: Restaurar proyecto", key=f"unarch_{pid}",
                          use_container_width=True):
                 ok, msg = P.set_archivado(pid, False)
                 (st.success if ok else st.error)(msg)
@@ -1876,7 +1876,7 @@ def _detalle_proyecto(pid: str, grupo: str = None):
 
         # ── Reconstruir el survey guardado ──
         with st.expander(":material/sync: Reconstruir proyecto en el Survey (regenerar informes)"):
-            st.caption("Carga los parámetros y la matriz guardados en la pestaña 📐 Survey. "
+            st.caption("Carga los parámetros y la matriz guardados en la pestaña :material/architecture: Survey. "
                        "Luego pulsa **Calcular** allí para regenerar diagramas e informes.")
             if st.button(":material/sync: Cargar este proyecto en el Survey", key=f"rebuild_{pid}"):
                 full = P.get_project_full(pid)
@@ -1902,7 +1902,7 @@ def _detalle_proyecto(pid: str, grupo: str = None):
                     st.session_state["proyecto"]  = str(prj.get("Nombre", ""))
                     st.session_state["ingeniero"] = str(prj.get("Ingeniero", ""))
                     st.session_state["_rebuilt_from"] = str(prj.get("Nombre", ""))
-                    st.success("✅ Cargado. Ve a **📐 Survey** y pulsa **Calcular** para regenerar todo.")
+                    st.success(":material/check_circle: Cargado. Ve a **:material/architecture: Survey** y pulsa **Calcular** para regenerar todo.")
         # ── Archivos del proyecto (buscable) ──
         _archivos_section(pid)
 
@@ -1956,7 +1956,7 @@ def _dashboard_agrupacion(ag, grupo):
     if proj.get("critico"):
         _d = delays.get(proj["critico_id"])
         st.markdown(
-            f"🎯 **La entrega la marca «{proj['critico']}»** — proyectada para "
+            f":material/target: **La entrega la marca «{proj['critico']}»** — proyectada para "
             f"**{_fecha}**" + (f", con **{_d:.0f} días de retraso**." if _d else
                                ", en fecha.")
             + "  Es donde más rinde reforzar.")
@@ -1967,7 +1967,7 @@ def _dashboard_agrupacion(ag, grupo):
         _p = round(100 * tot_c / tot_pres)
         (st.error if tot_c > tot_pres else st.caption)(
             f"Presupuesto de la agrupación ${tot_pres:,.0f} · {_p}% consumido"
-            + (" ⛔ SOBRE PRESUPUESTO" if tot_c > tot_pres else ""))
+            + (" :red[:material/block:] SOBRE PRESUPUESTO" if tot_c > tot_pres else ""))
 
     # ── Curva S CONSOLIDADA (plan vs real de todo el conjunto) ──
     try:
@@ -2018,7 +2018,7 @@ def _dashboard_agrupacion(ag, grupo):
 
     _out = [r["Elevador"] for r in rows if r["vs media h"].startswith("+")]
     if _out:
-        st.info("⚠️ Consumen bastantes más horas que sus gemelos: **"
+        st.info(":material/warning: Consumen bastantes más horas que sus gemelos: **"
                 + ", ".join(_out) + "**. Vale la pena mirar por qué.")
 
     st.bar_chart(pd.DataFrame({"Avance %": [r["Avance %"] for r in rows]},
@@ -2066,7 +2066,7 @@ def _agrupaciones_html(ags, grupo) -> str:
             borde = "border:1px solid #e6e9ef;border-left:4px solid #c0392b"
             badge = (f'<span style="font-size:12px;padding:3px 9px;border-radius:20px;'
                      f'background:#fcebeb;color:#a32d2d;white-space:nowrap;flex:none;'
-                     f'font-weight:600;">⏰ {gap:.0f} d</span>')
+                     f'font-weight:600;">:material/alarm: {gap:.0f} d</span>')
         elif gap and gap < -0.5:
             borde = "border:1px solid #e6e9ef;border-left:4px solid #1e8449"
             badge = (f'<span style="font-size:12px;padding:3px 9px;border-radius:20px;'
@@ -2077,13 +2077,13 @@ def _agrupaciones_html(ags, grupo) -> str:
         sub = f"{aid} · {len(miemb)} elevador(es)"
         if a.get("Descripcion"):
             sub += f" · {a['Descripcion']}"
-        entrega = (f'<div style="font-size:11.5px;color:#6b7280;">🎯 entrega '
+        entrega = (f'<div style="font-size:11.5px;color:#6b7280;">:material/target: entrega '
                    f'<b>{fecha.strftime("%d/%m/%Y")}</b>'
                    + (f' — la marca {critico}' if critico else "") + '</div>'
                    if fecha else
                    '<div style="font-size:11.5px;color:#9aa7b8;">sin cronograma para proyectar</div>')
         alarm = (f'<div style="width:44px;text-align:center;flex:none;color:#c0392b;'
-                 f'font-size:12.5px;font-weight:600;">🔔 {n_al}</div>'
+                 f'font-size:12.5px;font-weight:600;">:material/notifications: {n_al}</div>'
                  if n_al else '<div style="width:44px;flex:none;"></div>')
 
         parts.append(
@@ -2092,7 +2092,7 @@ def _agrupaciones_html(ags, grupo) -> str:
             f'<div style="width:9px;height:9px;border-radius:50%;background:{punto};flex:none;"></div>'
             '<div style="flex:1;min-width:0;">'
             f'<div style="font-size:14px;font-weight:600;color:#1f2937;white-space:nowrap;'
-            f'overflow:hidden;text-overflow:ellipsis;">🗂 {a.get("Nombre","")}</div>'
+            f'overflow:hidden;text-overflow:ellipsis;">:material/account_tree: {a.get("Nombre","")}</div>'
             f'<div style="font-size:12px;color:#6b7280;white-space:nowrap;overflow:hidden;'
             f'text-overflow:ellipsis;">{sub}</div>' + entrega +
             '</div>' + badge +
@@ -2200,14 +2200,14 @@ def _cartera_agrupaciones(ags, grupo):
             _av = max(0, min(100, int(r["av"])))
             _extra = ""
             if r["gap"] > 0.5:
-                _extra += f" · ⏰{r['gap']:.0f}d"
+                _extra += f" · :material/alarm:{r['gap']:.0f}d"
             elif r["gap"] < -0.5:
                 _extra += f" · ⏩{abs(r['gap']):.0f}d"
             if r["n_al"]:
-                _extra += f" · 🔔{r['n_al']}"
+                _extra += f" · :material/notifications:{r['n_al']}"
             if r["fecha"]:
-                _extra += f" · 🎯{r['fecha'].strftime('%d/%m')}"
-            _lbl = f"**🗂 {r['a'].get('Nombre', '')}** · {r['n']} elev · {_av}%{_extra}"
+                _extra += f" · :material/target:{r['fecha'].strftime('%d/%m')}"
+            _lbl = f"**:material/account_tree: {r['a'].get('Nombre', '')}** · {r['n']} elev · {_av}%{_extra}"
             if _cols[_j].button(_lbl, key=f"agrc_{_idx}", use_container_width=True):
                 st.session_state["_admin_open_agr"] = r["aid"]
                 st.rerun()
@@ -2311,7 +2311,7 @@ def render_owner_projects():
         _nuevo_proyecto_form(_g, key="own")
     if not proys:
         if not _grupos:
-            st.info("Aún no hay grupos. Crea uno en **🏢 Grupos** para poder "
+            st.info("Aún no hay grupos. Crea uno en **:material/business: Grupos** para poder "
                     "registrar proyectos.")
         return
     ags = {a["ID"]: a["Nombre"] for a in P.list_groupings()}
@@ -2348,12 +2348,12 @@ def render_owner_projects():
         _hb[str(p.get("ID", ""))] = P.project_hours(p.get("Nombre"), p.get("Grupo"),
                                                     pid=str(p.get("ID", "")))
     st.markdown(f"**Cartera — {len(proys)} proyecto(s)**"
-                + (f"  ·  🔴 {len(delays)} con retraso" if delays else "")
-                + (f"  ·  🟢 {len(aheads)} adelantado(s)" if aheads else ""))
+                + (f"  ·  :red[:material/cancel:] {len(delays)} con retraso" if delays else "")
+                + (f"  ·  :green[:material/check_circle:] {len(aheads)} adelantado(s)" if aheads else ""))
     st.markdown(_portfolio_html(proys, _hb, alarmas, ags, delays, aheads, show_group=True),
                 unsafe_allow_html=True)
 
-    with st.expander("📋 Ver tabla detallada"):
+    with st.expander(":material/assignment: Ver tabla detallada"):
         st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True,
                      column_config={"🗺": st.column_config.LinkColumn("🗺", display_text="Abrir")})
 
@@ -2426,8 +2426,8 @@ def render_field_projects(usuario: str, grupo: str):
             if _hoy and _hoy.get("etiqueta"):
                 _n = f" · {_hoy['nota']}" if str(_hoy.get("nota", "")).strip() else ""
                 (st.info if _hoy.get("es_estado") else st.success)(
-                    f"📅 **Hoy:** {_hoy['etiqueta']}{_n}")
-            with st.expander("📅 Ver la planificación de la semana (toda la cuadrilla)"):
+                    f":material/calendar_month: **Hoy:** {_hoy['etiqueta']}{_n}")
+            with st.expander(":material/calendar_month: Ver la planificación de la semana (toda la cuadrilla)"):
                 roster_ui.render_board_readonly(grupo, resaltar_usuario=usuario)
     except Exception:
         pass
@@ -2459,7 +2459,7 @@ def render_field_projects(usuario: str, grupo: str):
     sel = st.selectbox("Proyecto asignado", _opts, key="fieldproj_sel")
     if not sel or sel == _VACIO:
         st.caption("Elige el proyecto en el que estás trabajando. "
-                   "Si fichas en ⏱ Fichaje, se abre solo.")
+                   "Si fichas en :material/schedule: Fichaje, se abre solo.")
         return
     pid = idmap[sel]
     prj = P.get_project(pid)
@@ -2478,7 +2478,7 @@ def render_field_projects(usuario: str, grupo: str):
                 + "".join(tarj) + "</div>", unsafe_allow_html=True)
     st.progress(min(1.0, avance / 100.0))
     if _ub:
-        st.caption("📍 " + maps.maps_link_md(_ub, _ub))
+        st.caption(":material/place: " + maps.maps_link_md(_ub, _ub))
 
     # ── Sub-navegación (radio, NO st.tabs — regla v56; como el detalle del admin) ──
     _sec = st.radio("Sección", ["🏗 Avance", "🚨 Avisos", "💰 Recibos", "📎 Archivos"],
@@ -2495,7 +2495,7 @@ def render_field_projects(usuario: str, grupo: str):
         _alerts_section(pid, grupo, prj.get("Nombre", ""), allow_report=True)
     elif _sec == "💰 Recibos":
         render_expenses(pid, grupo, can_delete=False, key_prefix="fld")
-    else:   # 📎 Archivos
+    else:   # :material/attach_file: Archivos
         _archivos_section(pid)
 
 
@@ -2614,7 +2614,7 @@ def render_expenses(pid, grupo, can_delete=False, key_prefix="ex"):
             _l += f" con **{cp['avance']:.0f}% de avance**"
             if cp["por_punto"]:
                 _l += f" (${cp['por_punto']:,.0f} por punto)"
-        st.caption(_l + ("  ⛔ SOBRE PRESUPUESTO" if cp["over"] else ""))
+        st.caption(_l + ("  :red[:material/block:] SOBRE PRESUPUESTO" if cp["over"] else ""))
 
     # ── Reparto del costo | Compras por categoría (doble columna, v213) ──
     _rep = cp["total"] > 0
@@ -2650,8 +2650,8 @@ def render_expenses(pid, grupo, can_delete=False, key_prefix="ex"):
             "Tarifa/h": x["tarifa"], "Costo": x["costo"],
         } for x in lb["items"]]), hide_index=True, use_container_width=True)
         if lb["sin_tarifa"]:
-            st.warning("⚠️ Sin tarifa/hora, así que sus horas suman **$0** al costo: **"
-                       + ", ".join(lb["sin_tarifa"]) + "**. Se fija en 🔧 Usuarios.")
+            st.warning(":material/warning: Sin tarifa/hora, así que sus horas suman **$0** al costo: **"
+                       + ", ".join(lb["sin_tarifa"]) + "**. Se fija en :material/build: Usuarios.")
 
     # ── Curva de gasto acumulado ──
     _curva = E.spend_curve(pid, grupo)
@@ -2700,7 +2700,7 @@ def render_expenses(pid, grupo, can_delete=False, key_prefix="ex"):
             for r in items:
                 _rid = str(r.get("ID", ""))
                 _did = str(r.get("DriveID", "")).strip()
-                _lbl = f"🧾 {r.get('Fecha')} · {r.get('Categoria')} · ${E._num(r.get('Valor')):,.0f}"
+                _lbl = f":material/receipt_long: {r.get('Fecha')} · {r.get('Categoria')} · ${E._num(r.get('Valor')):,.0f}"
                 _ex = " · ".join(x for x in [str(r.get('Proveedor') or ''),
                                              str(r.get('Descripcion') or '')] if x)
                 if _ex:
@@ -2773,10 +2773,10 @@ def render_group_expenses(grupo: str):
                 + "".join(tarj) + "</div>", unsafe_allow_html=True)
 
     if n_over:
-        st.error(f"⛔ **{n_over} proyecto(s) ya sobre presupuesto:** "
+        st.error(f":material/block: **{n_over} proyecto(s) ya sobre presupuesto:** "
                  + ", ".join(f["nombre"] for f in filas if f["over"]))
     if n_over_p:
-        st.warning(f"⚠️ **{n_over_p} más se saldrá(n) al ritmo actual** (aún dentro hoy): "
+        st.warning(f":material/warning: **{n_over_p} más se saldrá(n) al ritmo actual** (aún dentro hoy): "
                    + ", ".join(f["nombre"] for f in filas if f["over_proj"] and not f["over"]))
 
     # ── Reparto del costo | Compras por categoría (doble columna, v215) ──
@@ -2825,8 +2825,8 @@ def render_group_expenses(grupo: str):
             "": ("⛔" if f["over"] else ("⚠️" if f["over_proj"] else "✅")),
         } for f in con_pres]), hide_index=True, use_container_width=True,
             on_select="rerun", selection_mode="single-row", key="ge_tbl")
-        st.caption("👆 Toca una fila y «Abrir» para ir a ese proyecto. **Proyección** = costo al "
-                   "terminar al ritmo actual. ⛔ ya se pasó · ⚠️ se pasará · ✅ dentro.")
+        st.caption(":material/touch_app: Toca una fila y «Abrir» para ir a ese proyecto. **Proyección** = costo al "
+                   "terminar al ritmo actual. :red[:material/block:] ya se pasó · :orange[:material/warning:] se pasará · :green[:material/check_circle:] dentro.")
         try:
             _grows = list(_gev.selection.rows)
         except Exception:
@@ -2927,7 +2927,7 @@ def render_group_hours(grupo: str):
     # v215: tabla CLICKEABLE → abre la ficha de la persona (Planificación · Usuarios).
     _hev = st.dataframe(pd.DataFrame(filas), use_container_width=True, hide_index=True,
                         on_select="rerun", selection_mode="single-row", key="gh_tbl")
-    st.caption("👆 Toca una persona y «Abrir ficha» para gestionarla.")
+    st.caption(":material/touch_app: Toca una persona y «Abrir ficha» para gestionarla.")
     try:
         _hrows = list(_hev.selection.rows)
     except Exception:
@@ -2946,8 +2946,8 @@ def render_group_hours(grupo: str):
     _sin_tar = [_etiqueta(d) for d in data
                 if d["proyecto"] > 0 and not d["tarifa"]]
     if _sin_tar:
-        st.warning("⚠️ Sin **tarifa/hora**, así que su costo sale $0: **"
-                   + ", ".join(_sin_tar) + "**. Se fija en 🔧 Usuarios.")
+        st.warning(":material/warning: Sin **tarifa/hora**, así que su costo sale $0: **"
+                   + ", ".join(_sin_tar) + "**. Se fija en :material/build: Usuarios.")
 
     # ── Reparto por proyecto (a qué elevador va el tiempo del grupo) ──
     por_proy = {}

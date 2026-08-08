@@ -74,7 +74,7 @@ def render_prestart_tab():
             st.session_state["ps_proy"] = _fich_key
     sel = st.selectbox("Proyecto", [_VACIO] + list(idmap.keys()), key="ps_proy")
     if _fich_key and sel == _fich_key:
-        st.caption("⏱ Es el proyecto donde fichaste hoy. Cámbialo si el pre-start es de otro.")
+        st.caption(":material/schedule: Es el proyecto donde fichaste hoy. Cámbialo si el pre-start es de otro.")
     if not sel or sel == _VACIO:
         st.info("Elige el proyecto en el que vas a trabajar hoy.")
         return
@@ -121,7 +121,7 @@ def render_prestart_tab():
                            key="ps_nmdesc", height=70,
                            help="Si marcas YES arriba, esta descripción abre una alarma del proyecto.")
     if nm == "YES" and not str(nm_desc).strip():
-        st.caption("🔴 Marcaste YES: describe el near miss/hazard (abrirá una alarma del proyecto).")
+        st.caption(":red[:material/cancel:] Marcaste YES: describe el near miss/hazard (abrirá una alarma del proyecto).")
 
     # ── 3. Shaft protection ──
     st.markdown("**3. Shaft Protection & other daily checks**")
@@ -178,17 +178,17 @@ def render_prestart_tab():
         if not res["ok"]:
             st.error(res["error"] or "No se pudo guardar el pre-start.")
         else:
-            st.success(f"✅ Pre-Start **{res['id']}** guardado como `{res['filename']}`.")
+            st.success(f":material/check_circle: Pre-Start **{res['id']}** guardado como `{res['filename']}`.")
             if res["drive_id"]:
-                st.caption("📎 Archivado en los documentos del proyecto.")
+                st.caption(":material/attach_file: Archivado en los documentos del proyecto.")
             else:
-                st.caption("⚠️ No se archivó en Drive (revisa la conexión); el registro sí quedó guardado.")
+                st.caption(":orange[:material/warning:] No se archivó en Drive (revisa la conexión); el registro sí quedó guardado.")
             _no = [PS._LABELS.get(k, k) for k, v in {**s1, **s3}.items() if v == "NO"]
             if _no:
-                st.error("⚠️ Checks marcados **NO** (revisar antes de trabajar): "
+                st.error(":material/warning: Checks marcados **NO** (revisar antes de trabajar): "
                          + " · ".join(_no))
             if res["alarma"]:
-                st.warning("🔴 Se abrió una alarma del proyecto por el near miss/hazard reportado.")
+                st.warning(":material/cancel: Se abrió una alarma del proyecto por el near miss/hazard reportado.")
             st.download_button(":material/download: Descargar PDF", data=res["pdf"], file_name=res["filename"],
                                mime="application/pdf", use_container_width=True, key="ps_dl")
 
@@ -199,7 +199,7 @@ def render_prestart_tab():
 def _historial(pid):
     prev = [PS.leer(r) for r in PS.list_prestarts(pid)]
     st.markdown("---")
-    st.markdown("#### 🗂 Pre-Starts anteriores")
+    st.markdown("#### :material/account_tree: Pre-Starts anteriores")
     if not prev:
         st.caption("Aún no hay pre-starts registrados en este proyecto.")
         return
@@ -216,25 +216,25 @@ def _historial(pid):
 
     # ── Ficha desplegable por pre-start ──
     for d in prev:
-        _flag = ("🔴" if (d["near_miss"] or d["n_no"]) else "🟢")
+        _flag = (":red[:material/cancel:]" if (d["near_miss"] or d["n_no"]) else ":green[:material/check_circle:]")
         _res = []
         if d["near_miss"]:      _res.append("near miss")
         if d["n_no"]:           _res.append(f"{d['n_no']} check(s) en NO")
         _tit = (f"{_flag}  {d['fecha']} · {d['facilitador'] or '—'}"
-                + (f"  ·  ⚠️ {', '.join(_res)}" if _res else "  ·  todo OK"))
+                + (f"  ·  :orange[:material/warning:] {', '.join(_res)}" if _res else "  ·  todo OK"))
         with st.expander(_tit):
             if d["asistentes"]:
-                st.markdown("**👷 Asistentes:** " + " · ".join(d["asistentes"]))
+                st.markdown("**:material/engineering: Asistentes:** " + " · ".join(d["asistentes"]))
             st.markdown("**Checks:**")
             for c in d["checks"]:
-                _e = {"YES": "🟢", "NO": "🔴", "N/A": "⬜"}.get(c["estado"], "❔")
+                _e = {"YES": ":green[:material/check_circle:]", "NO": ":red[:material/cancel:]", "N/A": ":gray[:material/crop_square:]"}.get(c["estado"], "❔")
                 st.markdown(f"{_e} {c['label']}  ·  _{c['estado']}_")
             if d["near_miss"]:
-                st.error("🔴 **Near miss / hazard:** " + (d["near_miss_desc"] or "(sin descripción)"))
+                st.error(":material/cancel: **Near miss / hazard:** " + (d["near_miss_desc"] or "(sin descripción)"))
             if str(d["act_notes"]).strip():
-                st.caption("📝 Actividades: " + d["act_notes"])
+                st.caption(":material/description: Actividades: " + d["act_notes"])
             if str(d["gen_notes"]).strip():
-                st.caption("📝 Notas generales: " + d["gen_notes"])
+                st.caption(":material/description: Notas generales: " + d["gen_notes"])
             _did = str(d["drive_id"]).strip()
             if _did:
                 try:

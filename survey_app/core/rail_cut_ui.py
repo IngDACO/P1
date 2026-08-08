@@ -55,7 +55,7 @@ def render_rail_cut_tab():
     if _plano:
         _n = plan_ui.aplicar(_plano, {"lfkk": "rc_lfkk", "lfgk": "rc_lfgk"})
         if _n:
-            st.caption("✅ LFKK y LFGK tomado(s) del plano del proyecto.")
+            st.caption(":green[:material/check_circle:] LFKK y LFGK tomado(s) del plano del proyecto.")
 
     st.markdown("**1. Parámetros del plano (LFKK, LFGK)**")
     # Plan B, plegado: desde v137 el plano vive en el PROYECTO y sus valores

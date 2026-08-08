@@ -52,10 +52,10 @@ def location_picker(key, lat=None, lng=None, direccion=""):
         st.session_state[klng] = lng
     slat, slng = st.session_state.get(klat), st.session_state.get(klng)
 
-    st.caption("📍 Busca la dirección y/o haz **clic en el mapa** para fijar el punto exacto.")
+    st.caption(":material/place: Busca la dirección y/o haz **clic en el mapa** para fijar el punto exacto.")
     c1, c2 = st.columns([4, 1])
     q = c1.text_input("Buscar dirección", value=direccion, key=f"{key}_q",
-                      label_visibility="collapsed", placeholder="🔎 Buscar dirección…")
+                      label_visibility="collapsed", placeholder=":material/search: Buscar dirección…")
     if c2.button("Buscar", key=f"{key}_btn", use_container_width=True):
         coord = geocode(q)
         if coord:

@@ -58,7 +58,7 @@ def render_belting_tab():
     if _plano:
         _n = plan_ui.aplicar(_plano, {"hq": "belt_hq", "hgp": "belt_hgp"})
         if _n:
-            st.caption("✅ HQ y HGP tomado(s) del plano del proyecto.")
+            st.caption(":green[:material/check_circle:] HQ y HGP tomado(s) del plano del proyecto.")
 
     # ── PDF: autocompleta HQ ────────────────────────────────
     # Plan B, plegado: desde v137 el plano vive en el PROYECTO y sus valores
@@ -66,7 +66,7 @@ def render_belting_tab():
     # sin plano, o para calcular sin proyecto asignado.
     with st.expander("¿El proyecto no tiene plano? Cárgalo aquí", icon=":material/description:"):
         st.caption("Se leerá HQ y HGP de este PDF. Lo normal es que ya vengan del plano del proyecto.")
-        pdf = plan_store.selector("📄 PDF de planos (autocompleta HQ)", "belt_pdf")
+        pdf = plan_store.selector(":material/description: PDF de planos (autocompleta HQ)", "belt_pdf")
         if pdf is not None and pdf.name != st.session_state.get("belt_pdf_name"):
             from extractors.schindler import extract_belting
             with st.spinner("Leyendo el plano..."):
@@ -78,7 +78,7 @@ def render_belting_tab():
             if ex.get("HGP") is not None:
                 st.session_state["belt_hgp"] = float(ex["HGP"]); _found.append(f"HGP={ex['HGP']:.0f}")
             if _found:
-                st.success(f"✅ Del plano: **{', '.join(_found)} mm**. "
+                st.success(f":material/check_circle: Del plano: **{', '.join(_found)} mm**. "
                            "Ingresa los HGPR reales de cada elevador.")
             else:
                 st.warning("No se encontraron HQ/HGP en el plano. Ingrésalos a mano.")
@@ -87,10 +87,10 @@ def render_belting_tab():
             st.caption(f":material/description: Plano cargado: **{pdf.name}**")
 
     # ── Datos del plano ─────────────────────────────────────
-    st.markdown("**Datos**  ·  📄 = del plano · ✏️ = manual")
+    st.markdown("**Datos**  ·  :material/description: = del plano · ✏️ = manual")
     c1, c2 = st.columns(2)
-    hq  = c1.number_input("📄 HQ — travel height (mm)", step=1.0, key="belt_hq")
-    hgp = c2.number_input("📄 HGP — striker↔buffer de diseño (mm)", step=0.5, key="belt_hgp")
+    hq  = c1.number_input(":material/description: HQ — travel height (mm)", step=1.0, key="belt_hq")
+    hgp = c2.number_input(":material/description: HGP — striker↔buffer de diseño (mm)", step=0.5, key="belt_hgp")
 
     ne = st.number_input("Número de elevadores", min_value=1, max_value=12, step=1, key="belt_ns")
 

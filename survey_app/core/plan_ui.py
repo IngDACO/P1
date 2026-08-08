@@ -80,7 +80,7 @@ def _cabecera(prj: dict, datos: dict, fichado: bool):
         st.caption((":material/schedule: Fichado en " if fichado else ":material/description: ")
                    + f"**{prj.get('Nombre')}** · {plan_data.resumen(datos)}")
         if datos.get("faltan"):
-            st.caption(f"⚠️ El plano no dio: {', '.join(datos['faltan'][:8])}"
+            st.caption(f":orange[:material/warning:] El plano no dio: {', '.join(datos['faltan'][:8])}"
                        + ("…" if len(datos["faltan"]) > 8 else "")
                        + " — ingrésalos a mano.")
     else:

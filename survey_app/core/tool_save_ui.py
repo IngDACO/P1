@@ -132,7 +132,7 @@ def render_guardar(herramienta: str, titulo_pdf: str, pdf_bytes: bytes,
                 datos={"entradas": _snapshot(herramienta), "resultados": datos},
                 usuario=usuario, pdf=pdf_bytes, filename=nombre_archivo)
         if res.get("ok"):
-            msg = f"✅ Guardado como **{res['id']}** en {prj.get('Nombre')}."
+            msg = f":green[:material/check_circle:] Guardado como **{res['id']}** en {prj.get('Nombre')}."
             if not res.get("drive_id"):
                 msg += " (El PDF no se archivó en Drive: revisa la conexión.)"
             st.success(msg)
