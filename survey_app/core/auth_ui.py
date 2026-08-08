@@ -726,13 +726,13 @@ def _ficha_usuario(u, grupo, owner=False, sel_key="gp_fichasel"):
                 if ok:
                     st.rerun()
         if activo:
-            if st.button("🔴 Desactivar (no podrá entrar)", key=f"{k}_de",
+            if st.button(":material/block: Desactivar (no podrá entrar)", key=f"{k}_de",
                          use_container_width=True):
                 ok, msg = auth.set_active(sel, False); (st.success if ok else st.error)(msg)
                 if ok:
                     st.rerun()
         else:
-            if st.button("🟢 Activar", key=f"{k}_act", use_container_width=True):
+            if st.button(":material/check_circle: Activar", key=f"{k}_act", use_container_width=True):
                 ok, msg = auth.set_active(sel, True); (st.success if ok else st.error)(msg)
                 if ok:
                     st.rerun()

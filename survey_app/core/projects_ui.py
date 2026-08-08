@@ -861,7 +861,7 @@ def _autoagenda(grupo, pid, nuevos, quitados, fecha_ini, fecha_fin):
                             "no se pisó nada.")
         elif nuevos and not fecha_fin:
             msgs.append(":material/calendar_month: El proyecto no tiene **fecha de fin**, así que no se "
-                        "auto-planificó. Ponla en ✏️ Datos, o planifica a mano en "
+                        "auto-planificó. Ponla en :material/edit: Datos, o planifica a mano en "
                         ":material/calendar_month: Planificación.")
     except Exception:
         pass
@@ -1429,7 +1429,7 @@ def _estado_section(pid: str, grupo: str, prj: dict):
     if not (ps and ps["sched"].get("activities")):
         _alerts_section(pid, grupo, prj.get("Nombre", ""), allow_report=False)
         st.info("Este proyecto no tiene actividades, así que no hay cronograma "
-                "que seguir. Añádelas en ✏️ Datos.")
+                "que seguir. Añádelas en :material/edit: Datos.")
         return
 
     d    = _diagnostico(ps)
@@ -2141,7 +2141,7 @@ def _miembros_editor(ags_proys, todos, key, pesos_actuales=None):
                 min_value=0.0, step=0.5,
                 help="Cuánto pesa este elevador en el avance consolidado."),
             "Ya en otra": st.column_config.TextColumn(
-                "⚠️ Ya en otra", help="Marcarlo aquí lo MUEVE a esta agrupación."),
+                ":material/warning: Ya en otra", help="Marcarlo aquí lo MUEVE a esta agrupación."),
         })
     out = {}
     for _, r in ed.iterrows():
@@ -2591,7 +2591,7 @@ def render_expenses(pid, grupo, can_delete=False, key_prefix="ex"):
         _c, _fn = "#1e8449", st.success
     elif cp["total"] > 0 and pres <= 0:
         _t = ("Este proyecto **no tiene presupuesto asignado**, así que no hay "
-              "contra qué comparar el gasto. Se define en ✏️ Datos.")
+              "contra qué comparar el gasto. Se define en :material/edit: Datos.")
         _c, _fn = "#6b7280", st.info
     else:
         _t, _c, _fn = ("Todavía no hay costos registrados en este proyecto.",
@@ -2845,7 +2845,7 @@ def render_group_expenses(grupo: str):
             "Mano de obra": f["mano_obra"], "Costo total": f["total"],
         } for f in sin_pres]), hide_index=True, use_container_width=True)
         st.caption(f"{len(sin_pres)} proyecto(s) sin presupuesto: no hay contra qué comparar "
-                   "su gasto. Se define en el detalle del proyecto → ✏️ Datos.")
+                   "su gasto. Se define en el detalle del proyecto → :material/edit: Datos.")
 
     # (Compras por categoría se muestra arriba, en doble columna con el reparto — v215.)
 

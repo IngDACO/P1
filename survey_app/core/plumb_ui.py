@@ -92,7 +92,7 @@ def render_plumb_tab():
     bks  = c1.number_input(":material/description: BKS (mm)",            step=0.5, key="plb_bks")
     rail = c2.number_input(":material/description: RAIL (mm)",           step=0.5, key="plb_rail")
     tksw = c3.number_input(":material/description: TKSW (mm)",           step=0.5, key="plb_tksw")
-    lt   = c4.number_input("✏️ LengthTemplate (mm)", step=0.5, key="plb_lt")
+    lt   = c4.number_input(":material/edit: LengthTemplate (mm)", step=0.5, key="plb_lt")
     g1, g2, g3, _g4 = st.columns(4)
     sf1 = g1.number_input(":material/description: SF1 (mm)", step=0.5, key="plb_sf1")
     sf2 = g2.number_input(":material/description: SF2 (mm)", step=0.5, key="plb_sf2")
@@ -102,7 +102,7 @@ def render_plumb_tab():
         e1, e2, e3 = st.columns(3)
         sg    = e1.number_input(":material/description: SG (mm)", step=0.5, key="plb_sg")
         tg    = e2.number_input(":material/description: TG (mm)", step=0.5, key="plb_tg")
-        omega = e3.radio("✏️ Lado del Omega", ["R", "L"], horizontal=True, key="plb_omega")
+        omega = e3.radio(":material/edit: Lado del Omega", ["R", "L"], horizontal=True, key="plb_omega")
 
     # ── BSR por elevador (lo que varía entre huecos) ──
     st.markdown("**BSR medido en cada elevador (mm)**")

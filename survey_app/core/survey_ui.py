@@ -951,7 +951,7 @@ def render_survey_tab(_ROL, _GRUPO):
             _r1, _r2 = st.columns([1, 2])
             _r1.metric("Leídos del plano", f"{len(_found)}/{len(_ext)}")
             if _miss:
-                _r2.warning("✏️ Completa a mano: **" + "**, **".join(_miss) + "**")
+                _r2.warning(":material/edit: Completa a mano: **" + "**, **".join(_miss) + "**")
             else:
                 _r2.success(":green[:material/check_circle:] El plano aportó todos los parámetros.")
 

@@ -94,7 +94,7 @@ def render_belting_tab():
 
     ne = st.number_input("Número de elevadores", min_value=1, max_value=12, step=1, key="belt_ns")
 
-    st.markdown("**✏️ HGPR — distancia REAL striker↔buffer del contrapeso, por elevador (mm)**")
+    st.markdown("**:material/edit: HGPR — distancia REAL striker↔buffer del contrapeso, por elevador (mm)**")
     hgpr_list = []
     cols = st.columns(min(int(ne), 4))
     for i in range(int(ne)):
