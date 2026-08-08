@@ -17,18 +17,18 @@ def _contacto_uno(sel, key_prefix="cc"):
     admin después de que el usuario pulse Start en el bot."""
     from core import notify
     rec = auth.get_user(sel)
-    em  = st.text_input("📧 Email", value=str(rec.get("Email", "")), key=f"{key_prefix}_em")
+    em  = st.text_input(":material/mail: Email", value=str(rec.get("Email", "")), key=f"{key_prefix}_em")
     if st.button("Guardar email", key=f"{key_prefix}_emb"):
         ok, msg = auth.set_contact(sel, email=em)
         (st.success if ok else st.error)(msg)
         if ok:
             st.rerun()
-    st.markdown("**📨 Telegram**")
+    st.markdown("**:material/send: Telegram**")
     tg = str(rec.get("TelegramChatID", "")).strip()
     if not notify.telegram_configured() or not notify.bot_username():
         st.caption("Telegram no configurado (falta el bot en Secrets).")
     elif tg:
-        st.success("✅ Telegram vinculado.")
+        st.success(":material/check_circle: Telegram vinculado.")
         if st.button("Desvincular Telegram", key=f"{key_prefix}_tgu"):
             auth.set_contact(sel, telegram="")
             st.rerun()
@@ -42,7 +42,7 @@ def _contacto_uno(sel, key_prefix="cc"):
             cid = notify.telegram_find_chat_by_code(code)
             if cid:
                 auth.set_contact(sel, telegram=cid)
-                st.success("✅ Telegram vinculado.")
+                st.success(":material/check_circle: Telegram vinculado.")
                 st.rerun()
             else:
                 st.error("No encontré su mensaje. Asegúrate de que pulsó Start y reintenta.")
@@ -76,9 +76,9 @@ def render_credenciales(usuario, grupo, editable=False, key_prefix="cr"):
         _sts = [C.status(r.get("Vencimiento")) for r in creds]
         k1, k2, k3, k4 = st.columns(4)
         k1.metric("Credenciales", len(creds))
-        k2.metric("🟢 Vigentes", sum(1 for s in _sts if s == "vigente"))
-        k3.metric("🟡 Por vencer", sum(1 for s in _sts if s == "por_vencer"))
-        k4.metric("🔴 Vencidas", sum(1 for s in _sts if s == "vencido"))
+        k2.metric(":material/check_circle: Vigentes", sum(1 for s in _sts if s == "vigente"))
+        k3.metric(":material/schedule: Por vencer", sum(1 for s in _sts if s == "por_vencer"))
+        k4.metric(":material/cancel: Vencidas", sum(1 for s in _sts if s == "vencido"))
         st.dataframe(pd.DataFrame([{
             "Tipo": r.get("Tipo"), "Número": r.get("Numero"), "Clase": r.get("Clase"),
             "Emisión": r.get("Emision") or "—", "Vence": r.get("Vencimiento") or "—",
@@ -87,11 +87,11 @@ def render_credenciales(usuario, grupo, editable=False, key_prefix="cr"):
         # Documentos adjuntos agrupados (antes: botones sueltos apilados bajo la tabla)
         _docs = [r for r in creds if str(r.get("DriveID", "")).strip()]
         if _docs:
-            with st.expander(f"⬇️ Documentos ({len(_docs)})"):
+            with st.expander(f":material/download: Documentos ({len(_docs)})"):
                 from core import drive_store
                 for r in _docs:
                     try:
-                        st.download_button(f"⬇️ {r.get('Tipo')} — {r.get('Archivo', 'archivo')}",
+                        st.download_button(f":material/download: {r.get('Tipo')} — {r.get('Archivo', 'archivo')}",
                                            data=drive_store.download(str(r.get("DriveID", "")).strip()),
                                            file_name=r.get("Archivo", "credencial"),
                                            key=f"{key_prefix}_dl_{r.get('ID')}")
@@ -155,13 +155,13 @@ def render_credenciales(usuario, grupo, editable=False, key_prefix="cr"):
                                 key=f"{key_prefix}_even_{_kid}")
             enota = st.text_input("Nota", value=r.get("Nota", ""), key=f"{key_prefix}_enota_{_kid}")
             b1, b2 = st.columns(2)
-            if b1.button("💾 Guardar", key=f"{key_prefix}_eupd"):
+            if b1.button(":material/save: Guardar", key=f"{key_prefix}_eupd"):
                 ok, msg = C.update(r.get("ID"), {"Numero": enum, "Vencimiento": even, "Nota": enota,
                                                  "ActualizadoPor": admin_usr})
                 (st.success if ok else st.error)(msg)
                 if ok:
                     st.rerun()
-            if b2.button("🗑 Eliminar", key=f"{key_prefix}_edel"):
+            if b2.button(":material/delete: Eliminar", key=f"{key_prefix}_edel"):
                 ok, msg = C.delete(r.get("ID"))
                 (st.success if ok else st.error)(msg)
                 if ok:
@@ -223,7 +223,7 @@ def render_login() -> bool:
                 unsafe_allow_html=True)
 
     if not auth.is_configured():
-        st.error("🔒 El acceso no está conectado a Google Sheets. "
+        st.error(":material/lock: El acceso no está conectado a Google Sheets. "
                  "Configura los Secrets (gcp_service_account + TIMECLOCK_SHEET_ID) en Streamlit Cloud.")
         return False
 
@@ -235,7 +235,7 @@ def render_login() -> bool:
     mid = st.columns([1, 2, 1])[1]
     with mid:
         if first_run:
-            st.info("👑 **Configuración inicial** — crea la cuenta de propietario.")
+            st.info(":material/shield_person: **Configuración inicial** — crea la cuenta de propietario.")
             u  = st.text_input("Usuario", key="setup_u")
             nm = st.text_input("Nombre", key="setup_n")
             p1 = st.text_input("Contraseña", type="password", key="setup_p1")
@@ -276,7 +276,7 @@ def render_login() -> bool:
                 ses_ok, tok = auth.start_session(res["usuario"])
                 if not ses_ok:
                     st.session_state["_blocked_user"] = res["usuario"]
-                    st.error(f"🔒 {tok}")
+                    st.error(f":material/lock: {tok}")
                     return
                 st.session_state.pop("_blocked_user", None)
                 st.session_state["auth"] = {
@@ -299,7 +299,7 @@ def render_login() -> bool:
             if st.session_state.get("_blocked_user"):
                 st.caption("Si eres **tú** y dejaste la sesión abierta en otro dispositivo, "
                            "puedes cerrarla e iniciar aquí.")
-                if st.button("🔓 Cerrar la otra sesión e iniciar aquí",
+                if st.button(":material/lock_open: Cerrar la otra sesión e iniciar aquí",
                              use_container_width=True):
                     _do_login(force=True)
     return False
@@ -351,7 +351,7 @@ def _owner_grupos():
     with st.form("form_grupo", clear_on_submit=True):
         gn = st.text_input("Nombre del grupo (empresa cliente)")
         gd = st.text_input("Descripción (opcional)")
-        if st.form_submit_button("➕ Crear grupo"):
+        if st.form_submit_button(":material/add: Crear grupo"):
             ok, msg = auth.add_group(gn, gd)
             (st.success if ok else st.error)(msg)
             if ok: st.rerun()
@@ -382,7 +382,7 @@ def _owner_grupos():
                                f"(Actual del grupo: {_gz.get(gzsel) or 'sin fijar'})")
                 except Exception:
                     pass
-                if st.button("💾 Guardar zona", key="tz_save"):
+                if st.button(":material/save: Guardar zona", key="tz_save"):
                     ok, msg = auth.set_group_timezone(gzsel, znew)
                     (st.success if ok else st.error)(msg)
                     if ok:
@@ -425,7 +425,7 @@ def _owner_usuarios():
                    and not (str(u.get("Email", "")).strip()
                             and str(u.get("TelegramChatID", "")).strip())]
         if _faltan:
-            st.warning("⚠️ Campo sin contacto completo (no pueden usar la app): "
+            st.warning(":material/warning: Campo sin contacto completo (no pueden usar la app): "
                        + ", ".join(_faltan))
 
     # ── Crear usuario (rol + grupo) ──
@@ -438,7 +438,7 @@ def _owner_usuarios():
             gr = st.selectbox("Grupo", grupo_opts,
                               help="Propietario puede ir sin grupo; admin y campo requieren grupo.")
             pw = st.text_input("Contraseña", type="password")
-            em = st.text_input("📧 Email (obligatorio para campo)")
+            em = st.text_input(":material/mail: Email (obligatorio para campo)")
             if st.form_submit_button("Crear usuario"):
                 if rl == "campo" and not em.strip():
                     st.error("El email es obligatorio para usuarios de campo.")
@@ -495,7 +495,7 @@ def render_owner_panel():
 def _owner_resumen():
     """Resumen multi-grupo del propietario: estado de cada empresa cliente."""
     from core import admin_digest
-    st.markdown("#### 🌐 Resumen de todos los grupos")
+    st.markdown("#### :material/public: Resumen de todos los grupos")
     from core import projects as _P
     if not _P.is_configured():
         st.warning("Necesita Google Sheets configurado.")
@@ -515,7 +515,7 @@ def _owner_resumen():
     if _urg:
         st.warning("Grupos con pendientes: " + ", ".join(d["grupo"] for d in _urg))
     else:
-        st.success("Ningún grupo tiene pendientes urgentes. ✅")
+        st.success("Ningún grupo tiene pendientes urgentes.")
 
 
 def _owner_manuales():
@@ -530,7 +530,7 @@ def _owner_manuales():
     if pre:
         st.markdown("**Pre-cargados** (incluidos en la app):")
         for nm in pre:
-            st.markdown(f"- 📖 {nm}")
+            st.markdown(f"- :material/menu_book: {nm}")
 
     if not manuals.storage_available():
         st.info("Para subir manuales nuevos hace falta Google Drive + Sheets configurados "
@@ -569,7 +569,7 @@ def _owner_manuales():
                    "Evita PDFs enormes (>50 MB): se procesan en el navegador.")
         up = st.file_uploader("Archivo (PDF o ZIP)", type=["pdf", "zip"], key="man_up_file")
         nombre = st.text_input("Nombre del manual (ej. 'KONE MonoSpace')", key="man_up_name")
-        if st.button("📥 Procesar y guardar", key="man_up_btn", disabled=up is None):
+        if st.button(":material/upload: Procesar y guardar", key="man_up_btn", disabled=up is None):
             if up is None:
                 st.error("Selecciona un archivo.")
             else:
@@ -631,12 +631,12 @@ def _owner_rieles():
             ea = ec2.number_input("Ancho diente", min_value=0.0, step=0.5,
                                   value=float(_cur.get("ancho") or 0.0), key="riel_ea")
             b1, b2 = st.columns(2)
-            if b1.button("💾 Guardar", key="riel_save"):
+            if b1.button(":material/save: Guardar", key="riel_save"):
                 ok, msg = rails.update_riel(sel, ea, el)
                 (st.success if ok else st.error)(msg)
                 if ok:
                     st.rerun()
-            if b2.button("🗑 Eliminar", key="riel_del"):
+            if b2.button(":material/delete: Eliminar", key="riel_del"):
                 ok, msg = rails.delete_riel(sel)
                 (st.success if ok else st.error)(msg)
                 if ok:
@@ -671,9 +671,9 @@ def _ficha_usuario(u, grupo, owner=False, sel_key="gp_fichasel"):
         fichando = bool(_ses.get(T.TIPO_GENERAL) or _ses.get(T.TIPO_PROYECTO))
     except Exception:
         fichando = False
-    chips = [("🟢 Activo" if activo else "🔴 Inactivo"),
-             ("🕐 Fichando ahora" if fichando else ""),
-             (("📇 Contacto OK" if contacto_ok else "⚠️ Sin contacto")
+    chips = [(":green[:material/check_circle:] Activo" if activo else ":red[:material/cancel:] Inactivo"),
+             (":material/schedule: Fichando ahora" if fichando else ""),
+             ((":green[:material/contact_page:] Contacto OK" if contacto_ok else ":orange[:material/warning:] Sin contacto")
               if es_campo else "")]
     st.markdown(f"**{u.get('Nombre') or sel}**  ·  _{u['Rol']}_  ·  "
                 + "  ·  ".join(c for c in chips if c))
@@ -699,7 +699,7 @@ def _ficha_usuario(u, grupo, owner=False, sel_key="gp_fichasel"):
                 else:
                     st.error("Escribe la nueva contraseña.")
         with _a2:
-            tar = st.number_input("💵 Tarifa por hora", min_value=0.0, step=1.0,
+            tar = st.number_input(":material/payments: Tarifa por hora", min_value=0.0, step=1.0,
                                   value=float(str(u.get("TarifaHora", "") or 0).replace(",", ".") or 0),
                                   key=f"{k}_tar", help="Para costear la mano de obra.")
             if st.button("Guardar tarifa", key=f"{k}_savetar", use_container_width=True):
@@ -742,7 +742,7 @@ def _ficha_usuario(u, grupo, owner=False, sel_key="gp_fichasel"):
             st.caption("El contacto (email + Telegram) solo es obligatorio para "
                        "usuarios de campo. Puedes registrarlo igual.")
         elif not contacto_ok:
-            st.warning("⚠️ Sin contacto completo **no puede usar la app** y no recibe "
+            st.warning(":material/warning: Sin contacto completo **no puede usar la app** y no recibe "
                        "asignaciones ni inducciones.")
         _contacto_uno(sel, key_prefix=f"{k}_cc")
 
@@ -771,7 +771,7 @@ def _ficha_usuario(u, grupo, owner=False, sel_key="gp_fichasel"):
             st.markdown("**Asignado a** — toca para abrir:")
             _ac = st.columns(2)
             for _i, _p in enumerate(asg):
-                if _ac[_i % 2].button(f"🏗 {_p.get('Nombre', '')}", key=f"{k}_gp_{_i}",
+                if _ac[_i % 2].button(f":material/apartment: {_p.get('Nombre', '')}", key=f"{k}_gp_{_i}",
                                       use_container_width=True):
                     st.session_state["_prjsel_pending"] = str(_p.get("ID", ""))
                     st.session_state["_admin_nav_pending"] = ("proyectos", "📊 Proyectos")
@@ -787,7 +787,7 @@ def _ficha_usuario(u, grupo, owner=False, sel_key="gp_fichasel"):
                                      for _n, _hh in sorted(_pp.items(), key=lambda x: -x[1])))
         if rec["n"]:
             st.caption(f"Ha cargado recibos por **${rec['total']:,.0f}** en total.")
-        st.caption("Las horas y los recibos se gestionan desde ⏱ Fichaje y el detalle de "
+        st.caption("Las horas y los recibos se gestionan desde :material/schedule: Fichaje y el detalle de "
                    "cada proyecto; aquí es un resumen.")
 
     else:  # 🗑 eliminar
@@ -807,7 +807,7 @@ def _crear_usuario_form(grupo):
         u  = st.text_input("Usuario")
         nm = st.text_input("Nombre")
         pw = st.text_input("Contraseña", type="password")
-        em = st.text_input("📧 Email (OBLIGATORIO para campo)")
+        em = st.text_input(":material/mail: Email (OBLIGATORIO para campo)")
         st.caption("El Telegram se vincula en su ficha tras crearlo.")
         if st.form_submit_button("Crear"):
             if not em.strip():
@@ -877,13 +877,13 @@ def _grupo_usuarios(grupo):
     _nsc = sum(1 for u in gente if not _cont_ok(u))
     _npv = sum(1 for u in gente if _peor.get(u["Usuario"].strip().lower()) == "por_vencer")
     _nvc = sum(1 for u in gente if _peor.get(u["Usuario"].strip().lower()) == "vencido")
-    _linea = f"👥 **{len(gente)}** personas · 🟢 **{_nact}** activos"
+    _linea = f":material/group: **{len(gente)}** personas · :green[:material/check_circle:] **{_nact}** activos"
     if _nsc:
-        _linea += f" · ⚠️ **{_nsc}** sin contacto"
+        _linea += f" · :orange[:material/warning:] **{_nsc}** sin contacto"
     if _npv:
-        _linea += f" · 🟡 **{_npv}** cred. por vencer"
+        _linea += f" · :orange[:material/schedule:] **{_npv}** cred. por vencer"
     if _nvc:
-        _linea += f" · 🔴 **{_nvc}** cred. vencida(s)"
+        _linea += f" · :red[:material/cancel:] **{_nvc}** cred. vencida(s)"
     st.markdown(_linea)
 
     # ── Tabla CLICKEABLE → abre la ficha de esa persona ──
@@ -896,7 +896,7 @@ def _grupo_usuarios(grupo):
     } for u in gente]
     _ev = st.dataframe(pd.DataFrame(_rows), hide_index=True, use_container_width=True,
                        on_select="rerun", selection_mode="single-row", key="gu_tbl")
-    st.caption("👆 Toca una fila para abrir y gestionar la ficha de esa persona.  "
+    st.caption(":material/touch_app: Toca una fila para abrir y gestionar la ficha de esa persona.  "
                "Credenciales: 🟢 vigentes · 🟡 por vencer · 🔴 vencida · — sin registrar.")
     try:
         _sr = list(_ev.selection.rows)
@@ -929,7 +929,7 @@ def _grupo_usuarios(grupo):
 
 def render_group_panel(grupo: str):
     if not grupo:
-        st.markdown("### 🛠 Mi grupo")
+        st.markdown("### :material/build: Mi grupo")
         st.warning("Tu cuenta no tiene un grupo asignado. Contacta al propietario.")
         return
 

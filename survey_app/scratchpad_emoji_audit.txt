@@ -1,0 +1,133 @@
+=== TOTAL EMOJI POR ARCHIVO (occurrencias / lineas) ===
+ 282  (236 lineas)  core\projects_ui.py
+ 119  ( 92 lineas)  core\auth_ui.py
+  89  ( 79 lineas)  core\survey_ui.py
+  63  ( 58 lineas)  core\home_ui.py
+  29  ( 25 lineas)  core\roster_ui.py
+  27  ( 26 lineas)  core\timeclock_ui.py
+  27  ( 24 lineas)  app.py
+  21  ( 18 lineas)  core\prestart_ui.py
+  18  ( 17 lineas)  core\plumb_ui.py
+  15  ( 14 lineas)  core\plan_data.py
+  10  (  9 lineas)  core\chat_agent.py
+  10  (  6 lineas)  core\credentials.py
+   8  (  7 lineas)  core\belting_ui.py
+   8  (  8 lineas)  core\report.py
+   6  (  6 lineas)  core\projects.py
+   6  (  6 lineas)  core\toolruns.py
+   4  (  4 lineas)  core\buffer_cut_ui.py
+   4  (  4 lineas)  core\notify.py
+   4  (  4 lineas)  core\timeclock.py
+   3  (  3 lineas)  core\email_notify.py
+   3  (  3 lineas)  core\location_ui.py
+   3  (  3 lineas)  core\maps.py
+   3  (  3 lineas)  core\rail_cut.py
+   2  (  2 lineas)  core\alerts.py
+   2  (  2 lineas)  core\plumb.py
+   2  (  2 lineas)  core\tool_save_ui.py
+   1  (  1 lineas)  core\expenses.py
+   1  (  1 lineas)  core\plan_ui.py
+   1  (  1 lineas)  core\prestart.py
+   1  (  1 lineas)  core\rail_cut_ui.py
+   1  (  1 lineas)  core\session_cookie.py
+   1  (  1 lineas)  core\survey_calc.py
+   1  (  1 lineas)  core\ui_common.py
+
+GRAN TOTAL: 775 occurrencias, 95 emoji distintos, 33 archivos
+
+=== EMOJI DISTINTOS (codepoint · nombre · total) ===
+U+026A0    96  WARNING SIGN
+U+02705    53  WHITE HEAVY CHECK MARK
+U+1F534    46  LARGE RED CIRCLE
+U+1F7E2    32  LARGE GREEN CIRCLE
+U+1F4CA    32  BAR CHART
+U+1F4C4    19  PAGE FACING UP
+U+023F1    18  STOPWATCH
+U+1F4CE    18  PAPERCLIP
+U+1F7E1    16  LARGE YELLOW CIRCLE
+U+1F4B0    16  MONEY BAG
+U+0270F    16  PENCIL
+U+1F4D0    16  TRIANGULAR RULER
+U+1F514    15  BELL
+U+1F477    15  CONSTRUCTION WORKER
+U+1F4C5    15  CALENDAR
+U+1F916    14  ROBOT FACE
+U+1F4CB    13  CLIPBOARD
+U+1F3AB    11  TICKET
+U+02702    11  BLACK SCISSORS
+U+1F4E8    10  INCOMING ENVELOPE
+U+1F5D1    10  WASTEBASKET
+U+1F4C1    10  FILE FOLDER
+U+1F527    10  WRENCH
+U+1F4CD    10  ROUND PUSHPIN
+U+1F3D7     9  BUILDING CONSTRUCTION
+U+1F397     9  REMINDER RIBBON
+U+1F4DD     9  MEMO
+U+1F512     8  LOCK
+U+1F5C2     8  CARD INDEX DIVIDERS
+U+1F529     8  NUT AND BOLT
+U+1F6E1     8  SHIELD
+U+1F3E2     7  OFFICE BUILDING
+U+026D4     7  NO ENTRY
+U+1F6E0     7  HAMMER AND WRENCH
+U+023F0     7  ALARM CLOCK
+U+02795     6  HEAVY PLUS SIGN
+U+1F550     6  CLOCK FACE ONE OCLOCK
+U+1F9BA     6  SAFETY VEST
+U+1F4E6     6  PACKAGE
+U+1F4E7     5  E-MAIL SYMBOL
+U+1F465     5  BUSTS IN SILHOUETTE
+U+1F4C7     5  CARD INDEX
+U+1F446     5  WHITE UP POINTING BACKHAND INDEX
+U+1F5FA     5  WORLD MAP
+U+1F4D1     5  BOOKMARK TABS
+U+1F3AF     5  DIRECT HIT
+U+1F50D     5  LEFT-POINTING MAGNIFYING GLASS
+U+1F4BE     4  FLOPPY DISK
+U+1F451     4  CROWN
+U+1F310     4  GLOBE WITH MERIDIANS
+U+1F686     4  TRAIN
+U+1F511     4  KEY
+U+1F50E     4  RIGHT-POINTING MAGNIFYING GLASS
+U+1F504     4  ANTICLOCKWISE DOWNWARDS AND UPWARDS OPEN CIRCLE ARROWS
+U+1F4CC     4  PUSHPIN
+U+02B50     4  WHITE MEDIUM STAR
+U+1F9F0     3  TOOLBOX
+U+02B1C     3  WHITE LARGE SQUARE
+U+1F4F7     3  CAMERA
+U+1F9EE     3  ABACUS
+U+1F9F9     3  BROOM
+U+1F6A8     3  POLICE CARS REVOLVING LIGHT
+U+02139     3  INFORMATION SOURCE
+U+1F535     2  LARGE BLUE CIRCLE
+U+02B07     2  DOWNWARDS BLACK ARROW
+U+1F4DA     2  BOOKS
+U+1F4B8     2  MONEY WITH WINGS
+U+1F6A7     2  CONSTRUCTION SIGN
+U+1F6AB     2  NO ENTRY SIGN
+U+1F3C5     2  SPORTS MEDAL
+U+1F4F5     2  NO MOBILE PHONES
+U+023F3     2  HOURGLASS WITH FLOWING SAND
+U+1FA7A     2  STETHOSCOPE
+U+1F9FE     2  RECEIPT
+U+1F517     2  LINK SYMBOL
+U+1F9D1     2  ADULT
+U+1F513     1  OPEN LOCK
+U+1F4D6     1  OPEN BOOK
+U+1F4E5     1  INBOX TRAY
+U+1F4B5     1  BANKNOTE WITH DOLLAR SIGN
+U+1F6D7     1  ELEVATOR
+U+1F553     1  CLOCK FACE FOUR OCLOCK
+U+1F4C8     1  CHART WITH UPWARDS TREND
+U+1F4AC     1  SPEECH BALLOON
+U+1F4E4     1  OUTBOX TRAY
+U+1F5BC     1  FRAME WITH PICTURE
+U+1F464     1  BUST IN SILHOUETTE
+U+1F0CF     1  PLAYING CARD BLACK JOKER
+U+1F4C6     1  TEAR-OFF CALENDAR
+U+1F449     1  WHITE RIGHT POINTING BACKHAND INDEX
+U+1F7E5     1  LARGE RED SQUARE
+U+1F3A8     1  ARTIST PALETTE
+U+1F4CF     1  STRAIGHT RULER
+U+1F4A1     1  ELECTRIC LIGHT BULB
+U+1F4C2     1  OPEN FILE FOLDER
