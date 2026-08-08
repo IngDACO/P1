@@ -417,7 +417,7 @@ def render_survey_tab(_ROL, _GRUPO):
                     for k, s in enumerate(sorted_solutions):
                         _obc = s.get("off_by_col", {}) or {}
                         _comp.append({
-                            "": ":material/target:" if k == _idx_act else "",
+                            "": "activa" if k == _idx_act else "",
                             "#": k + 1, "RL": s["rl"], "FB": s["fb"],
                             "FB aplic.": s.get("fb_applied", s["fb"]),
                             "Fuera": s["total_off"],

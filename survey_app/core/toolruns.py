@@ -32,11 +32,11 @@ HEADERS = ["ID", "ProyectoID", "Grupo", "Herramienta", "Fecha", "Usuario",
 
 # Etiqueta visible por herramienta (la clave se guarda en la hoja)
 HERRAMIENTAS = {
-    "survey":   ":material/architecture: Survey de elevador",
-    "plomada":  ":material/straighten: Líneas de plomada",
-    "rieles":   ":material/content_cut: Corte de rieles",
-    "buffers":  ":material/shield: Corte de buffers",
-    "belting":  ":material/swap_vert: Belting",
+    "survey":   "Survey de elevador",
+    "plomada":  "Líneas de plomada",
+    "rieles":   "Corte de rieles",
+    "buffers":  "Corte de buffers",
+    "belting":  "Belting",
 }
 
 

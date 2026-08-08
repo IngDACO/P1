@@ -38,7 +38,7 @@ def _alerts_section(pid, grupo, project_name="", allow_report=False):
     st.markdown(f"**{':red[:material/notifications:] ' + str(len(abiertas)) if abiertas else ':material/notifications:'} Alarmas / avisos**")
     if abiertas:
         for al in abiertas:
-            emo = "🔴" if str(al.get("Tipo")) == "problema" else "🔵"
+            emo = ":red[:material/error:]" if str(al.get("Tipo")) == "problema" else ":blue[:material/info:]"
             c = st.columns([6, 1])
             c[0].write(f"{emo} _{al.get('Fecha')}_ · **{al.get('CreadoPor')}**: {al.get('Mensaje')}")
             if c[1].button(":material/check_circle:", key=f"resolv_{al.get('ID')}", help="Marcar resuelta"):
@@ -62,11 +62,6 @@ def _alerts_section(pid, grupo, project_name="", allow_report=False):
                     if ok:
                         st.rerun()
 
-
-_ESTADO_EMOJI = {
-    "Planificado": "🕓", "En progreso": "🚧", "Completado": "✅",
-    "En pausa": "⏸", "Cancelado": "🚫", "Archivado": "📦",
-}
 
 # Colores de estado para las píldoras/barras (bg suave, texto oscuro de la misma familia)
 _ESTADO_COLOR = {
@@ -307,10 +302,7 @@ _DOC_TIPOS  = _DOC_SUBIR + ["plano"]           # para VER (el plano se sigue mos
 _CAMPO_VER  = {"plano", "informe_cliente", "matriz_survey", "foto",
                "prestart", "calculo"}
 _CAMPO_SUBE = ["foto"]                                                # campo solo sube fotos
-_DOC_ICON   = {"plano": "📐", "informe_cliente": "📄", "informe_admin": "📑",
-               "matriz_survey": "📊", "foto": "📷", "certificado": "🏅",
-               "prestart": "🦺", "calculo": "🧮", "otro": "📎"}
-# Etiquetas legibles (icono + nombre) para el filtro de tipo del buscador (v165).
+# Etiquetas legibles para el filtro de tipo del buscador (v165).
 _TIPO_LABEL = {"plano": "Plano", "informe_cliente": "Informe cliente",
                "informe_admin": "Informe admin", "matriz_survey": "Matriz survey",
                "foto": "Fotos", "certificado": "Certificados",
@@ -553,7 +545,7 @@ def _archivos_section(pid: str):
             h = str(r.get("Herramienta", ""))
             entries.append({
                 "tipo": "calculo", "label": _TIPO_LABEL["calculo"],
-                "nombre": (f"{toolruns.HERRAMIENTAS.get(h, '🧮')} "
+                "nombre": (f"{toolruns.HERRAMIENTAS.get(h, '')} "
                            f"{str(r.get('Resumen', ''))[:40]}").strip(),
                 "fecha": str(r.get("Fecha", "")), "por": str(r.get("Usuario", "")),
                 "did": did, "resumen": str(r.get("Resumen", "")),
