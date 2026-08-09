@@ -22,7 +22,7 @@ LOGIN_SHEET   = "Login"
 LOGIN_HEADERS = ["Usuario", "Password", "Rol", "Nombre", "Activo", "Grupo",
                  "SessionToken", "SessionTime", "Email", "TelegramChatID", "TarifaHora"]
 GROUPS_SHEET   = "Grupos"
-GROUPS_HEADERS = ["Grupo", "Descripcion", "Activo", "Zona", "MargenDefault"]
+GROUPS_HEADERS = ["Grupo", "Descripcion", "Activo", "Zona", "MargenDefault", "ImpuestoDefault"]
 ROLES         = ["propietario", "administrador", "campo"]
 _ACTIVE_OK    = ("", "SI", "SÍ", "YES", "Y", "TRUE", "1", "X")
 # Columnas (1-based) en la hoja Login
@@ -203,6 +203,42 @@ def set_group_margin_default(grupo: str, pct) -> tuple:
                 gws.update_cell(i + 2, col, str(pct))
                 _invalidate_groups()
                 return True, "Margen por defecto actualizado."
+            except Exception as e:
+                return False, f"Error: {e}"
+    return False, "Grupo no encontrado."
+
+
+def group_tax_default(grupo: str) -> float:
+    """Impuesto (%) por defecto del grupo para facturas (GST/IVA). `Grupos.ImpuestoDefault`.
+
+    Editable por factura. Australia = 10 (GST). Lectura cacheada. 0.0 si no está."""
+    g = (grupo or "").strip().lower()
+    if not g:
+        return 0.0
+    for r in _group_records():
+        if str(r.get("Grupo", "")).strip().lower() == g:
+            try:
+                return float(str(r.get("ImpuestoDefault", "") or 0).replace(",", "."))
+            except Exception:
+                return 0.0
+    return 0.0
+
+
+def set_group_tax_default(grupo: str, pct) -> tuple:
+    """El propietario fija el impuesto % por defecto (GST/IVA) de un grupo."""
+    gws, err = _get_groups_ws()
+    if err:
+        return False, err
+    try:
+        col = gws.row_values(1).index("ImpuestoDefault") + 1
+    except ValueError:
+        return False, "La columna ImpuestoDefault aún no existe en la hoja Grupos."
+    for i, r in enumerate(gws.get_all_records(numericise_ignore=["all"])):
+        if str(r.get("Grupo", "")).strip().lower() == (grupo or "").strip().lower():
+            try:
+                gws.update_cell(i + 2, col, str(pct))
+                _invalidate_groups()
+                return True, "Impuesto por defecto actualizado."
             except Exception as e:
                 return False, f"Error: {e}"
     return False, "Grupo no encontrado."

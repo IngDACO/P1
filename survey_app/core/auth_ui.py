@@ -410,6 +410,28 @@ def _owner_grupos():
                     if ok:
                         st.rerun()
 
+    # ── Impuesto de facturación por defecto (GST/IVA) por grupo (v258) ──
+    if grupos:
+        with st.expander("Impuesto de facturación por defecto (GST/IVA)", icon=":material/receipt_long:"):
+            st.caption("Se aplica por defecto a las facturas nuevas; editable por factura. "
+                       "Australia = 10 (GST).")
+            gtsel = ui.elegir("Grupo", [g["Grupo"] for g in grupos], key="tx_g_sel",
+                              vacio="— elige un grupo —")
+            if gtsel:
+                def _f_tx(v):
+                    try:
+                        return float(str(v).replace(",", ".") or 0)
+                    except Exception:
+                        return 0.0
+                _curt = next((_f_tx(g.get("ImpuestoDefault")) for g in grupos if g["Grupo"] == gtsel), 0.0)
+                tnew = st.number_input("Impuesto por defecto (%)", min_value=0.0, max_value=100.0,
+                                       step=1.0, value=_curt, key="tx_val")
+                if st.button(":material/save: Guardar impuesto", key="tx_save"):
+                    ok, msg = auth.set_group_tax_default(gtsel, tnew)
+                    (st.success if ok else st.error)(msg)
+                    if ok:
+                        st.rerun()
+
     if grupos:
         gsel = ui.elegir("Eliminar grupo", [g["Grupo"] for g in grupos],
                          key="del_g_sel", vacio="— ningún grupo —")
