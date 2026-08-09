@@ -489,6 +489,32 @@ def proyectos_por_usuario_dia(grupo: str, fecha) -> dict:
     return out
 
 
+def horas_por_usuario_rango(grupo: str, desde, hasta) -> dict:
+    """{clave: {nombre, horas}} — horas de JORNADA (general) por usuario en [desde, hasta].
+
+    Para la nómina (pago por periodo). Usa los segmentos por día (v164), así una
+    sesión que cruza medianoche cuenta el tramo real de cada día dentro del rango.
+    `desde`/`hasta` son date; el rango es inclusivo.
+    """
+    grupo = (grupo or "").strip()
+    out = {}
+    for r in _cached_records():
+        if str(r.get("Grupo", "")).strip() != grupo:
+            continue
+        if _tipo_of(r) != TIPO_GENERAL:
+            continue
+        clave = str(r.get("Usuario", "")).strip() or str(r.get("Nombre", "")).strip()
+        nombre = str(r.get("Nombre", "")).strip() or clave
+        if not clave:
+            continue
+        h = sum(hh for d, hh in _row_segmentos(r) if desde <= d <= hasta)
+        if h <= 0:
+            continue
+        a = out.setdefault(clave, {"nombre": nombre, "horas": 0.0})
+        a["horas"] += h
+    return {k: {"nombre": v["nombre"], "horas": round(v["horas"], 2)} for k, v in out.items()}
+
+
 def group_hours(grupo: str, days=None) -> list:
     """Resumen de horas por usuario del grupo (para el admin). days=None=todo, 7=semana.
     Devuelve [{usuario, general, proyecto, sin_asignar, por_proyecto{nombre:horas}}]. Las

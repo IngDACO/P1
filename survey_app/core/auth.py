@@ -22,7 +22,8 @@ LOGIN_SHEET   = "Login"
 LOGIN_HEADERS = ["Usuario", "Password", "Rol", "Nombre", "Activo", "Grupo",
                  "SessionToken", "SessionTime", "Email", "TelegramChatID", "TarifaHora"]
 GROUPS_SHEET   = "Grupos"
-GROUPS_HEADERS = ["Grupo", "Descripcion", "Activo", "Zona", "MargenDefault", "ImpuestoDefault"]
+GROUPS_HEADERS = ["Grupo", "Descripcion", "Activo", "Zona", "MargenDefault", "ImpuestoDefault",
+                  "SuperDefault", "RetencionDefault"]
 ROLES         = ["propietario", "administrador", "campo"]
 _ACTIVE_OK    = ("", "SI", "SÍ", "YES", "Y", "TRUE", "1", "X")
 # Columnas (1-based) en la hoja Login
@@ -203,6 +204,46 @@ def set_group_margin_default(grupo: str, pct) -> tuple:
                 gws.update_cell(i + 2, col, str(pct))
                 _invalidate_groups()
                 return True, "Margen por defecto actualizado."
+            except Exception as e:
+                return False, f"Error: {e}"
+    return False, "Grupo no encontrado."
+
+
+def group_num_setting(grupo: str, field: str, default: float = 0.0) -> float:
+    """Lee un ajuste numérico del grupo (columna `field` de Grupos). Cacheado.
+
+    Usado por los defaults de nómina (SuperDefault, RetencionDefault). `default`
+    si el grupo/columna no está."""
+    g = (grupo or "").strip().lower()
+    if not g:
+        return default
+    for r in _group_records():
+        if str(r.get("Grupo", "")).strip().lower() == g:
+            raw = str(r.get(field, "")).strip()
+            if raw == "":
+                return default
+            try:
+                return float(raw.replace(",", "."))
+            except Exception:
+                return default
+    return default
+
+
+def set_group_num_setting(grupo: str, field: str, val) -> tuple:
+    """Fija un ajuste numérico del grupo (columna `field`)."""
+    gws, err = _get_groups_ws()
+    if err:
+        return False, err
+    try:
+        col = gws.row_values(1).index(field) + 1
+    except ValueError:
+        return False, f"La columna {field} aún no existe en la hoja Grupos."
+    for i, r in enumerate(gws.get_all_records(numericise_ignore=["all"])):
+        if str(r.get("Grupo", "")).strip().lower() == (grupo or "").strip().lower():
+            try:
+                gws.update_cell(i + 2, col, str(val))
+                _invalidate_groups()
+                return True, f"{field} actualizado."
             except Exception as e:
                 return False, f"Error: {e}"
     return False, "Grupo no encontrado."

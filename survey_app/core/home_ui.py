@@ -47,6 +47,7 @@ _SUBSECCIONES = {
     "finanzas": ("adm_fin_sub", [
         ("💰 Gastos", ":material/receipt_long: Gastos"),
         ("🧾 Facturas", ":material/receipt: Facturas"),
+        ("👥 Nóminas", ":material/payments: Nóminas"),
         ("⏱ Horas", ":material/schedule: Horas"),
         ("📈 Rentabilidad", ":material/trending_up: Rentabilidad")]),
     "herramientas": ("adm_herr_sub", [
@@ -314,6 +315,9 @@ def _seccion_finanzas(grupo):
     elif sub == "🧾 Facturas":
         from core.invoices_ui import render_facturas
         render_facturas(grupo)
+    elif sub == "👥 Nóminas":
+        from core.payroll_ui import render_nominas
+        render_nominas(grupo)
     elif sub == "📈 Rentabilidad":
         PU.render_group_profitability(grupo)
     else:

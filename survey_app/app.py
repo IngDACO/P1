@@ -289,6 +289,7 @@ _L_OWNER  = "👑 Administración"
 _L_GRUPO  = "🛠 Mi grupo"
 _L_FIELDPROJ = "📋 Mis proyectos"
 _L_MYCRED    = "🎫 Mis credenciales"
+_L_MYPAY     = "🧾 Mis colillas"
 
 # Orden de las pestañas por rol (el panel de cada rol va primero).
 # Las 5 HERRAMIENTAS TÉCNICAS van juntas; el Survey es una más (la más potente),
@@ -300,7 +301,7 @@ if _ROL == "propietario":
 elif _ROL == "administrador":
     _nav = [_L_GRUPO, _L_CLOCK, _L_PRESTART] + _HERR
 elif _ROL == "campo":
-    _nav = [_L_FIELDPROJ, _L_CLOCK, _L_PRESTART] + _HERR + [_L_MYCRED]
+    _nav = [_L_FIELDPROJ, _L_CLOCK, _L_PRESTART] + _HERR + [_L_MYCRED, _L_MYPAY]
 else:
     _nav = [_L_PRESTART] + _HERR + [_L_CLOCK]
 
@@ -323,6 +324,7 @@ _NAV_DISPLAY = {
     _L_GRUPO:  ":material/build: Mi grupo",
     _L_FIELDPROJ: ":material/assignment: Mis proyectos",
     _L_MYCRED: ":material/badge: Mis credenciales",
+    _L_MYPAY: ":material/payments: Mis colillas",
 }
 _seccion = st.radio("Navegación", _nav, horizontal=True,
                     format_func=lambda o: _NAV_DISPLAY.get(o, o),
@@ -372,6 +374,10 @@ elif _seccion == _L_FIELDPROJ:
 elif _seccion == _L_MYCRED:
     from core.auth_ui import render_my_credentials
     render_my_credentials()
+
+elif _seccion == _L_MYPAY:
+    from core.payroll_ui import render_mis_colillas
+    render_mis_colillas(st.session_state.auth.get("usuario", ""), _GRUPO)
 
 elif _seccion == _L_OWNER:
     render_owner_panel()

@@ -432,6 +432,37 @@ def _owner_grupos():
                     if ok:
                         st.rerun()
 
+    # ── Nómina: super y retención por defecto por grupo (v260) ──
+    if grupos:
+        with st.expander("Nómina: super y retención por defecto", icon=":material/payments:"):
+            st.caption("Se precargan al generar una nómina; editables por nómina. "
+                       "Australia: super ~11.5%. No es cálculo fiscal certificado.")
+            gnsel = ui.elegir("Grupo", [g["Grupo"] for g in grupos], key="nomcfg_g_sel",
+                              vacio="— elige un grupo —")
+            if gnsel:
+                def _f_n(v, dflt):
+                    s = str(v).strip()
+                    if s == "":
+                        return dflt
+                    try:
+                        return float(s.replace(",", "."))
+                    except Exception:
+                        return dflt
+                _g = next((g for g in grupos if g["Grupo"] == gnsel), {})
+                nc1, nc2 = st.columns(2)
+                _sup = nc1.number_input("Superannuation % (aporte)", min_value=0.0, max_value=100.0,
+                                        step=0.5, value=_f_n(_g.get("SuperDefault"), 11.5), key="nom_supdef")
+                _ret = nc2.number_input("Retención de impuesto % (deducción)", min_value=0.0, max_value=100.0,
+                                        step=1.0, value=_f_n(_g.get("RetencionDefault"), 0.0), key="nom_retdef")
+                if st.button(":material/save: Guardar nómina", key="nomcfg_save"):
+                    ok1, _m1 = auth.set_group_num_setting(gnsel, "SuperDefault", _sup)
+                    ok2, _m2 = auth.set_group_num_setting(gnsel, "RetencionDefault", _ret)
+                    if ok1 and ok2:
+                        st.success("Configuración de nómina actualizada.")
+                        st.rerun()
+                    else:
+                        st.error(_m1 if not ok1 else _m2)
+
     if grupos:
         gsel = ui.elegir("Eliminar grupo", [g["Grupo"] for g in grupos],
                          key="del_g_sel", vacio="— ningún grupo —")
