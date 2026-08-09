@@ -2805,6 +2805,43 @@ def render_expenses(pid, grupo, can_delete=False, key_prefix="ex"):
 
 
 # ── Reporte del ADMIN: gastos de todos los proyectos del grupo ──
+def render_pnl(grupo: str):
+    """Resumen financiero del grupo (Fase 4): ingresos − costos = ganancia + cuentas.
+
+    Lo REALMENTE facturado (facturas) menos los costos (nóminas + compras). La
+    sub-pestaña «Rentabilidad» es la estimación por margen; esto es lo ejecutado.
+    """
+    from core import finance as F
+    st.markdown("#### :material/insights: Resumen financiero (P&L)")
+    st.caption("Lo realmente facturado menos los costos (nóminas + compras) = ganancia. "
+               "«Rentabilidad» es la estimación por margen; esto es lo ejecutado.")
+    d = F.pnl(grupo)
+    if d["facturado"] == 0 and d["costo_total"] == 0:
+        st.info(":material/info: Aún no hay facturas ni costos (nóminas/compras) registrados.")
+        return
+    c = st.columns(3)
+    c[0].metric("Ingresos (facturado)", f"${d['facturado']:,.0f}")
+    c[1].metric("Costos", f"${d['costo_total']:,.0f}")
+    c[2].metric("Ganancia", f"${d['ganancia']:,.0f}",
+                delta=(f"{(100 * d['ganancia'] / d['facturado']):.0f}% margen"
+                       if d["facturado"] > 0 else None))
+    st.markdown("---")
+    a, b = st.columns(2)
+    with a:
+        st.markdown("**:material/trending_up: Ingresos (cuentas por cobrar)**")
+        st.markdown(f"- Facturado: **${d['facturado']:,.2f}**")
+        st.markdown(f"- Cobrado: **${d['cobrado']:,.2f}**")
+        _pc = f"- Por cobrar: **${d['por_cobrar']:,.2f}**"
+        if d["vencido"] > 0:
+            _pc += f"  ·  :red[vencido ${d['vencido']:,.0f}]"
+        st.markdown(_pc)
+    with b:
+        st.markdown("**:material/trending_down: Costos (cuentas por pagar)**")
+        st.markdown(f"- Nóminas (sueldos + super): **${d['costo_nomina']:,.2f}**")
+        st.markdown(f"- Compras / materiales: **${d['compras']:,.2f}**")
+        st.markdown(f"- Por pagar (nóminas): **${d['por_pagar']:,.2f}**  ·  pagado ${d['pagado']:,.0f}")
+
+
 def render_group_profitability(grupo: str):
     """Rentabilidad del grupo (Fase 1 finanzas): costo vs ingreso estimado = ganancia.
 

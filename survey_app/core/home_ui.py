@@ -45,6 +45,7 @@ _SUBSECCIONES = {
         ("📊 Proyectos", ":material/format_list_bulleted: Proyectos"),
         ("🗂 Agrupaciones", ":material/account_tree: Agrupaciones")]),
     "finanzas": ("adm_fin_sub", [
+        ("📊 Resumen", ":material/insights: Resumen"),
         ("💰 Gastos", ":material/receipt_long: Gastos"),
         ("🧾 Facturas", ":material/receipt: Facturas"),
         ("👥 Nóminas", ":material/payments: Nóminas"),
@@ -310,7 +311,9 @@ def _seccion_proyectos(grupo):
 def _seccion_finanzas(grupo):
     from core import projects_ui as PU
     sub = _sub_header("finanzas")
-    if sub == "💰 Gastos":
+    if sub == "📊 Resumen":
+        PU.render_pnl(grupo)
+    elif sub == "💰 Gastos":
         PU.render_group_expenses(grupo)
     elif sub == "🧾 Facturas":
         from core.invoices_ui import render_facturas

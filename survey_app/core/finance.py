@@ -74,3 +74,49 @@ def group_profitability(grupo: str) -> dict:
     return {"rows": rows,
             "totales": {"costo": round(t_costo, 2), "ingreso": round(t_ing, 2),
                         "ganancia": round(t_ing - t_costo, 2)}}
+
+
+def pnl(grupo: str) -> dict:
+    """Estado de resultados (P&L) del grupo: ingresos − costos = ganancia.
+
+    Basado en lo REALMENTE facturado (facturas) y en las nóminas generadas + las
+    compras — a diferencia de `group_profitability`, que es la estimación por margen.
+    Además: cuentas por cobrar (facturas) y por pagar (nóminas). Imports perezosos
+    de invoices/payroll para no crear ciclos (ambos dependen de este módulo).
+
+      Ingresos    = Σ Total de facturas (no anuladas)
+      Costo MO    = Σ Base + devengos + aportes de las nóminas (costo patronal)
+      Costo total = Costo MO + compras (hoja Gastos)
+      Ganancia    = Ingresos (facturado) − Costo total
+    """
+    from core import invoices as INV
+    from core import payroll as PR
+
+    facs = INV.list_facturas(grupo)                      # excluye anuladas
+    facturado = round(sum(_num(f.get("Total")) for f in facs), 2)
+    cobrado   = round(sum(_num(f.get("Cobrado")) for f in facs), 2)
+    vencido   = round(sum(_num(f.get("Total")) - _num(f.get("Cobrado"))
+                          for f in facs if INV.estado_cobro(f) == "vencida"), 2)
+
+    nbase = ndev = nap = por_pagar = pagado = 0.0
+    for n in PR.list_nominas(grupo):                     # excluye anuladas
+        nbase += _num(n.get("Base"))
+        for c in PR.conceptos_de(n):
+            t = str(c.get("tipo", "")).lower()
+            if t == "devengo":
+                ndev += _num(c.get("monto"))
+            elif t == "aporte":
+                nap += _num(c.get("monto"))
+        if str(n.get("Estado", "")).lower() == "pagada":
+            pagado += _num(n.get("Neto"))
+        else:
+            por_pagar += _num(n.get("Neto"))
+    costo_nomina = round(nbase + ndev + nap, 2)
+
+    compras = round(sum(_num(r.get("compras")) for r in E.group_expenses(grupo)["proyectos"]), 2)
+    costo_total = round(costo_nomina + compras, 2)
+    ganancia = round(facturado - costo_total, 2)
+    return {"facturado": facturado, "cobrado": cobrado,
+            "por_cobrar": round(facturado - cobrado, 2), "vencido": vencido,
+            "costo_nomina": costo_nomina, "compras": compras, "costo_total": costo_total,
+            "ganancia": ganancia, "por_pagar": round(por_pagar, 2), "pagado": round(pagado, 2)}
