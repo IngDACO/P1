@@ -497,6 +497,23 @@ def horas_por_usuario_rango(grupo: str, desde, hasta) -> dict:
     `desde`/`hasta` son date; el rango es inclusivo.
     """
     grupo = (grupo or "").strip()
+    # `desde`/`hasta` pueden llegar como date (date_input) o como ISO string
+    # (payroll.generar pasa `.isoformat()`). Los segmentos son `date`, así que hay
+    # que comparar date con date (str <= date → TypeError).
+    from datetime import date as _date, datetime as _datetime
+
+    def _to_date(v):
+        if isinstance(v, _datetime):
+            return v.date()
+        if isinstance(v, _date):
+            return v
+        try:
+            return _datetime.strptime(str(v)[:10], "%Y-%m-%d").date()
+        except Exception:
+            return None
+    desde, hasta = _to_date(desde), _to_date(hasta)
+    if desde is None or hasta is None:
+        return {}
     out = {}
     for r in _cached_records():
         if str(r.get("Grupo", "")).strip() != grupo:
