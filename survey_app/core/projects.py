@@ -44,6 +44,9 @@ PROJECTS_HEADERS = [
     # v255: enlace robusto al cliente (CLI-#### de la hoja Clientes). El campo `Cliente`
     # (texto) se conserva; el match usa ID-primero, nombre-de-respaldo (como el fichaje, v145).
     "ClienteID",
+    # v257: margen (%) sobre la mano de obra para facturar al cliente. Vacío = usa el
+    # default del grupo (Grupos.MargenDefault). Base de la 'tarifa de venta' (Fase 1 finanzas).
+    "MargenMO",
 ]
 ACTIVITIES_HEADERS = [
     "ProyectoID", "Orden", "Nombre", "DuracionDias", "Peso", "Avance",
@@ -234,7 +237,7 @@ def create_project(grupo, nombre, cliente="", ubicacion="", modelo="", ns=0,
                    params=None, matriz=None, interp=None, activities=None,
                    creado_por="", agrupacion_id="", peso_agrupacion=0,
                    instrucciones="", induccion_links="", presupuesto="",
-                   lat="", lng="", certs_req="", cliente_id="") -> tuple:
+                   lat="", lng="", certs_req="", cliente_id="", margen_mo="") -> tuple:
     """Crea un proyecto (fila en Proyectos + filas en Actividades). Devuelve (ok, id|error)."""
     pws, err = _projects_ws()
     if err:
@@ -261,6 +264,7 @@ def create_project(grupo, nombre, cliente="", ubicacion="", modelo="", ns=0,
         str(lat or ""), str(lng or ""),     # v194: coordenadas fijadas al crear (pin en el mapa)
         str(certs_req or ""),               # v219: certificados requeridos por el proyecto
         str(cliente_id or ""),              # v255: enlace robusto a la ficha de cliente
+        str(margen_mo or ""),               # v257: margen % sobre MO (vacío = default del grupo)
     ]
     pws.append_row(row, value_input_option="RAW")
 

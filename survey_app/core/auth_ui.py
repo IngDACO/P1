@@ -388,6 +388,28 @@ def _owner_grupos():
                     if ok:
                         st.rerun()
 
+    # ── Margen de facturación por defecto por grupo (v257) ──
+    if grupos:
+        with st.expander("Margen de facturación por defecto", icon=":material/trending_up:"):
+            st.caption("Ganancia (%) sobre la mano de obra que se cobra al cliente. Cada proyecto "
+                       "puede sobrescribirlo (✏️ Datos). Base de la 'tarifa de venta' y la rentabilidad.")
+            gmsel = ui.elegir("Grupo", [g["Grupo"] for g in grupos], key="mg_g_sel",
+                              vacio="— elige un grupo —")
+            if gmsel:
+                def _f_mg(v):
+                    try:
+                        return float(str(v).replace(",", ".") or 0)
+                    except Exception:
+                        return 0.0
+                _curm = next((_f_mg(g.get("MargenDefault")) for g in grupos if g["Grupo"] == gmsel), 0.0)
+                mnew = st.number_input("Margen por defecto (%)", min_value=0.0, max_value=500.0,
+                                       step=1.0, value=_curm, key="mg_val")
+                if st.button(":material/save: Guardar margen", key="mg_save"):
+                    ok, msg = auth.set_group_margin_default(gmsel, mnew)
+                    (st.success if ok else st.error)(msg)
+                    if ok:
+                        st.rerun()
+
     if grupos:
         gsel = ui.elegir("Eliminar grupo", [g["Grupo"] for g in grupos],
                          key="del_g_sel", vacio="— ningún grupo —")

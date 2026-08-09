@@ -46,7 +46,8 @@ _SUBSECCIONES = {
         ("🗂 Agrupaciones", ":material/account_tree: Agrupaciones")]),
     "finanzas": ("adm_fin_sub", [
         ("💰 Gastos", ":material/receipt_long: Gastos"),
-        ("⏱ Horas", ":material/schedule: Horas")]),
+        ("⏱ Horas", ":material/schedule: Horas"),
+        ("📈 Rentabilidad", ":material/trending_up: Rentabilidad")]),
     "herramientas": ("adm_herr_sub", [
         ("🧰 Inicio", ":material/apps: Inicio"),
         ("📐 Survey", ":material/architecture: Survey"),
@@ -309,6 +310,8 @@ def _seccion_finanzas(grupo):
     sub = _sub_header("finanzas")
     if sub == "💰 Gastos":
         PU.render_group_expenses(grupo)
+    elif sub == "📈 Rentabilidad":
+        PU.render_group_profitability(grupo)
     else:
         PU.render_group_hours(grupo)
 

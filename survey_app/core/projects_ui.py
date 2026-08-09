@@ -1721,6 +1721,14 @@ def _detalle_proyecto(pid: str, grupo: str = None):
                                    if str(prj.get("EstadoManual", "")) in P.ESTADOS_MANUAL else 0)
             presup  = st.number_input(":material/payments: Presupuesto del proyecto (0 = sin presupuesto)",
                                       min_value=0.0, step=100.0, value=P._num(prj.get("Presupuesto")))
+            _defm = auth.group_margin_default(grupo)
+            _m0 = (P._num(prj.get("MargenMO")) if str(prj.get("MargenMO", "")).strip() != ""
+                   else float(_defm))
+            margen  = st.number_input(
+                ":material/trending_up: Margen sobre mano de obra (%) — lo que cobras al cliente",
+                min_value=0.0, max_value=500.0, step=1.0, value=_m0,
+                help=f"Venta de la MO = costo × (1+margen). Default del grupo: {_defm:.0f}% "
+                     f"(lo fija el propietario en Grupos).")
 
             if st.form_submit_button(":material/save: Guardar cambios", use_container_width=True):
                 # Validar sin `st.stop()`: pararia el render de TODO lo que va
@@ -1752,6 +1760,7 @@ def _detalle_proyecto(pid: str, grupo: str = None):
                         "AgrupacionID": ag_id, "PesoEnAgrupacion": peso,
                         "EstadoManual": est_man, "Estado": P.derive_estado(avance, est_man),
                         "Instrucciones": instr, "InduccionLinks": ind, "Presupuesto": presup,
+                        "MargenMO": margen,
                         "Lat": "" if _plat is None else _plat,
                         "Lng": "" if _plng is None else _plng,
                         "CertsReq": ";".join(_ecerts),
@@ -2796,6 +2805,41 @@ def render_expenses(pid, grupo, can_delete=False, key_prefix="ex"):
 
 
 # ── Reporte del ADMIN: gastos de todos los proyectos del grupo ──
+def render_group_profitability(grupo: str):
+    """Rentabilidad del grupo (Fase 1 finanzas): costo vs ingreso estimado = ganancia.
+
+    Estimación de facturación total (MO × (1+margen) + materiales a costo). Las
+    facturas reales (con cobrado/pendiente) llegan en la Fase 2.
+    """
+    from core import finance as F
+    st.markdown("#### :material/trending_up: Rentabilidad del grupo")
+    st.caption("Lo que costó cada proyecto (mano de obra + materiales) frente a lo que "
+               "cobrarías (MO × (1 + margen) + materiales) = tu ganancia estimada. El margen sale "
+               "de cada proyecto (o del default del grupo); se cambia en ✏️ Datos del proyecto.")
+    data = F.group_profitability(grupo)
+    if not data["rows"]:
+        st.info(":material/info: Aún no hay proyectos con costo registrado (horas o compras).")
+        return
+    t = data["totales"]
+    c = st.columns(3)
+    c[0].metric("Costo total", f"${t['costo']:,.0f}")
+    c[1].metric("Ingreso estimado", f"${t['ingreso']:,.0f}")
+    c[2].metric("Ganancia estimada", f"${t['ganancia']:,.0f}")
+    df = pd.DataFrame([{
+        "Proyecto":         r["nombre"],
+        "Costo":            round(r["costo"], 0),
+        "Margen":           int(round(r["margen"])),
+        "Ingreso estimado": round(r["ingreso"], 0),
+        "Ganancia":         round(r["ganancia"], 0),
+    } for r in sorted(data["rows"], key=lambda x: -x["ganancia"])])
+    st.dataframe(df, use_container_width=True, hide_index=True, column_config={
+        "Costo":            st.column_config.NumberColumn("Costo", format="$%d"),
+        "Margen":           st.column_config.NumberColumn("Margen", format="%d%%"),
+        "Ingreso estimado": st.column_config.NumberColumn("Ingreso estimado", format="$%d"),
+        "Ganancia":         st.column_config.NumberColumn("Ganancia", format="$%d"),
+    })
+
+
 def render_group_expenses(grupo: str):
     from core import expenses as E
     st.markdown("#### :material/payments: Gastos del grupo")

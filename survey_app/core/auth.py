@@ -22,7 +22,7 @@ LOGIN_SHEET   = "Login"
 LOGIN_HEADERS = ["Usuario", "Password", "Rol", "Nombre", "Activo", "Grupo",
                  "SessionToken", "SessionTime", "Email", "TelegramChatID", "TarifaHora"]
 GROUPS_SHEET   = "Grupos"
-GROUPS_HEADERS = ["Grupo", "Descripcion", "Activo", "Zona"]
+GROUPS_HEADERS = ["Grupo", "Descripcion", "Activo", "Zona", "MargenDefault"]
 ROLES         = ["propietario", "administrador", "campo"]
 _ACTIVE_OK    = ("", "SI", "SÍ", "YES", "Y", "TRUE", "1", "X")
 # Columnas (1-based) en la hoja Login
@@ -165,6 +165,44 @@ def set_group_timezone(grupo: str, zona: str) -> tuple:
                 gws.update_cell(i + 2, col, str(zona or "").strip())
                 _invalidate_groups()
                 return True, "Zona horaria actualizada."
+            except Exception as e:
+                return False, f"Error: {e}"
+    return False, "Grupo no encontrado."
+
+
+def group_margin_default(grupo: str) -> float:
+    """Margen (%) por defecto del grupo sobre la mano de obra (`Grupos.MargenDefault`).
+
+    Es la base de la 'tarifa de venta': lo que se cobra al cliente por la MO =
+    costo × (1 + margen%). Cada proyecto puede sobrescribirlo (`Proyectos.MargenMO`).
+    Lectura cacheada (`_group_records`). 0.0 si no está configurado."""
+    g = (grupo or "").strip().lower()
+    if not g:
+        return 0.0
+    for r in _group_records():
+        if str(r.get("Grupo", "")).strip().lower() == g:
+            try:
+                return float(str(r.get("MargenDefault", "") or 0).replace(",", "."))
+            except Exception:
+                return 0.0
+    return 0.0
+
+
+def set_group_margin_default(grupo: str, pct) -> tuple:
+    """El propietario fija el margen % por defecto de un grupo."""
+    gws, err = _get_groups_ws()
+    if err:
+        return False, err
+    try:
+        col = gws.row_values(1).index("MargenDefault") + 1
+    except ValueError:
+        return False, "La columna MargenDefault aún no existe en la hoja Grupos."
+    for i, r in enumerate(gws.get_all_records(numericise_ignore=["all"])):
+        if str(r.get("Grupo", "")).strip().lower() == (grupo or "").strip().lower():
+            try:
+                gws.update_cell(i + 2, col, str(pct))
+                _invalidate_groups()
+                return True, "Margen por defecto actualizado."
             except Exception as e:
                 return False, f"Error: {e}"
     return False, "Grupo no encontrado."
