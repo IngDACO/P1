@@ -112,12 +112,22 @@ def location_picker(key, lat=None, lng=None, direccion=""):
         _ln = m2.text_input("Lng", value="" if slng is None else str(slng), key=f"{key}_mlng")
         return to_float(_la), to_float(_ln)
 
+    st.caption(":material/lightbulb: Para el punto EXACTO: cambia a **Satélite** (control arriba-derecha "
+               "del mapa) y haz **clic sobre el techo del edificio**. Nominatim (OSM, gratis) suele "
+               "quedarse a nivel de calle en Australia.")
     center = [slat, slng] if slat is not None else list(_SYDNEY)
-    m = folium.Map(location=center, zoom_start=16 if slat is not None else 10)
+    m = folium.Map(location=center, zoom_start=18 if slat is not None else 11,
+                   tiles="OpenStreetMap")
+    # Capa satélite (Esri World Imagery, sin API key): ver el edificio real y clicar
+    # el punto exacto cuando el geocodificador solo llega a nivel de calle.
+    folium.TileLayer(
+        tiles="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+        attr="Esri World Imagery", name="Satélite", control=True).add_to(m)
+    folium.LayerControl(collapsed=False).add_to(m)
     if slat is not None:
         folium.Marker(center, tooltip="Ubicación del proyecto",
                       icon=folium.Icon(color="red")).add_to(m)
-    out = st_folium(m, key=f"{key}_map", height=340,
+    out = st_folium(m, key=f"{key}_map", height=420,
                     returned_objects=["last_clicked"])
 
     clicked = (out or {}).get("last_clicked")
