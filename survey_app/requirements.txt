@@ -22,3 +22,5 @@ tzdata
 # (usa OpenStreetMap). Import perezoso + fallback a coordenadas manuales si no está.
 folium>=0.15,<1
 streamlit-folium>=0.20,<1
+# Códigos QR para el inventario de activos (v263). Pure-python, sin ruedas nativas → seguro en el Cloud.
+segno>=1.6,<2

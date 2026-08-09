@@ -262,7 +262,8 @@ def render_admin_content(key, grupo):
     elif key == "finanzas":
         _seccion_finanzas(grupo)
     elif key == "inventario":
-        _placeholder(":material/inventory_2: Inventario", "Control de inventario — módulo nuevo, en desarrollo.")
+        from core.inventory_ui import render_inventario
+        render_inventario(grupo)
     elif key == "herramientas":
         _seccion_herramientas(grupo)
     elif key == "contactos":
