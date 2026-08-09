@@ -111,6 +111,24 @@ if not render_login():
 _ROL   = st.session_state.auth["rol"]
 _GRUPO = st.session_state.auth.get("grupo", "")
 
+# Deep-link del QR del inventario: escanear `…?activo=ACT-####` abre esa ficha.
+# Debe correr ANTES del sidebar (sidebar_menu aplica `_admin_nav_pending`). Solo
+# el administrador tiene 📦 Inventario (nueva shell). Guard para no re-disparar.
+if _ROL == "administrador":
+    try:
+        _scan = st.query_params.get("activo")
+    except Exception:
+        _scan = None
+    if _scan and st.session_state.get("_scan_handled") != _scan:
+        st.session_state["_scan_handled"] = _scan
+        st.session_state["_admin_nav_pending"] = ("inventario", None)
+        st.session_state["_inv_open"] = str(_scan)
+        try:
+            st.query_params.clear()
+        except Exception:
+            pass
+        st.rerun()
+
 # ── Sesión única: heartbeat (throttled) + expulsión si otro toma la cuenta ──
 import time as _time
 if _time.time() - st.session_state.get("_hb_last", 0) > 50:

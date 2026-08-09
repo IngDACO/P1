@@ -30,12 +30,17 @@ _ACOL = {h: i + 1 for i, h in enumerate(ACTIVOS_HEADERS)}
 CAT_SHEET = "InvCategorias"
 CAT_HEADERS = ["Grupo", "Nombre"]
 
+MOV_SHEET = "MovimientosActivo"
+MOV_HEADERS = ["ID", "Grupo", "ActivoID", "Tipo", "Fecha", "DesdeUbic", "HaciaUbic",
+               "Usuario", "Costo", "Nota", "CreadoPor", "Creado"]
+MOV_TIPOS = ["salida", "entrada", "traslado", "mantenimiento", "baja"]
+
 ESTADOS = ["disponible", "en_uso", "mantenimiento", "dañado", "baja"]
 CONDICIONES = ["bueno", "regular", "malo"]
 UBIC_TIPOS = ["bodega", "proyecto", "usuario", "reparacion"]
 CAT_DEFAULT = ["Herramienta", "Equipo", "Vehículo", "EPP", "Consumible", "Otro"]
 
-_HEADERS = {ACTIVOS_SHEET: ACTIVOS_HEADERS, CAT_SHEET: CAT_HEADERS}
+_HEADERS = {ACTIVOS_SHEET: ACTIVOS_HEADERS, CAT_SHEET: CAT_HEADERS, MOV_SHEET: MOV_HEADERS}
 
 
 def is_configured() -> bool:
@@ -212,9 +217,14 @@ def update_activo(aid: str, fields: dict) -> tuple:
     return True, "Activo actualizado."
 
 
-def dar_de_baja(aid: str, motivo: str = "") -> tuple:
-    return update_activo(aid, {"Activo": "NO", "Estado": "baja",
-                               "Nota": (motivo or "Dado de baja")})
+def dar_de_baja(aid: str, grupo: str = "", motivo: str = "", creado_por: str = "") -> tuple:
+    a = get_activo(aid)
+    ok, msg = update_activo(aid, {"Activo": "NO", "Estado": "baja",
+                                  "Nota": (motivo or "Dado de baja")})
+    if ok:
+        _log_mov(grupo or str(a.get("Grupo", "")), aid, "baja", ubic_str(a), "baja",
+                 "", "", motivo, creado_por=creado_por)
+    return ok, msg
 
 
 # ── Valor / depreciación (línea recta) ───────────────────────────
@@ -245,6 +255,114 @@ def resumen(grupo: str) -> dict:
     return {"n": len(acts), "por_estado": por_estado,
             "valor_compra": round(v_compra, 2), "valor_actual": round(v_actual, 2),
             "mant_vencido": mant_venc}
+
+
+# ── Movimientos (entradas/salidas/traslado/mantenimiento) — Fase 2 ─
+def ubic_str(a: dict) -> str:
+    t = str(a.get("UbicacionTipo", "") or "")
+    ref = str(a.get("UbicacionRef", "") or "")
+    return f"{t}: {ref}" if ref else (t or "—")
+
+
+def list_movimientos(grupo: str = None, activo_id: str = None) -> list:
+    out = []
+    for r in _records(MOV_SHEET):
+        if grupo is not None and str(r.get("Grupo", "")) != str(grupo):
+            continue
+        if activo_id is not None and str(r.get("ActivoID", "")) != str(activo_id):
+            continue
+        out.append(r)
+    return out
+
+
+def _next_mov_id() -> str:
+    mx = 0
+    for r in _records(MOV_SHEET):
+        mid = str(r.get("ID", ""))
+        if mid.startswith("MOV-"):
+            try:
+                mx = max(mx, int(mid.split("-")[1]))
+            except Exception:
+                pass
+    return f"MOV-{mx + 1:04d}"
+
+
+def _log_mov(grupo, aid, tipo, desde="", hacia="", usuario="", costo="", nota="",
+             fecha="", creado_por="") -> tuple:
+    w, err = _ws(MOV_SHEET)
+    if err:
+        return False, err
+    row = [_next_mov_id(), grupo, aid, tipo, str(fecha or clock.today().isoformat()),
+           str(desde or ""), str(hacia or ""), str(usuario or ""),
+           (str(_num(costo)) if str(costo).strip() != "" else ""), str(nota or ""),
+           str(creado_por or ""), clock.now().strftime("%Y-%m-%d %H:%M:%S")]
+    w.append_row(row, value_input_option="RAW")
+    _invalidate()
+    return True, "ok"
+
+
+def salida(aid, grupo, usuario="", hacia_tipo="usuario", hacia_ref="",
+           fecha_devolucion="", nota="", creado_por="") -> tuple:
+    """Check-out: el activo sale a un proyecto/usuario. Estado→en_uso."""
+    a = get_activo(aid)
+    if not a:
+        return False, "Activo no encontrado."
+    desde = ubic_str(a)
+    hacia = f"{hacia_tipo}: {hacia_ref}" if hacia_ref else hacia_tipo
+    ok, msg = update_activo(aid, {"Estado": "en_uso", "UbicacionTipo": hacia_tipo,
+                                  "UbicacionRef": hacia_ref, "AsignadoA": usuario,
+                                  "FechaDevolucion": fecha_devolucion})
+    if not ok:
+        return ok, msg
+    _log_mov(grupo, aid, "salida", desde, hacia, usuario, "", nota, creado_por=creado_por)
+    return True, "Salida registrada."
+
+
+def entrada(aid, grupo, bodega="", nota="", creado_por="") -> tuple:
+    """Check-in: el activo vuelve a bodega. Estado→disponible."""
+    a = get_activo(aid)
+    if not a:
+        return False, "Activo no encontrado."
+    desde = ubic_str(a)
+    ok, msg = update_activo(aid, {"Estado": "disponible", "UbicacionTipo": "bodega",
+                                  "UbicacionRef": bodega, "AsignadoA": "", "FechaDevolucion": ""})
+    if not ok:
+        return ok, msg
+    _log_mov(grupo, aid, "entrada", desde, (f"bodega: {bodega}" if bodega else "bodega"),
+             a.get("AsignadoA", ""), "", nota, creado_por=creado_por)
+    return True, "Entrada (devolución) registrada."
+
+
+def traslado(aid, grupo, hacia_tipo, hacia_ref, nota="", creado_por="") -> tuple:
+    """Cambia la ubicación (sin cambiar la custodia)."""
+    a = get_activo(aid)
+    if not a:
+        return False, "Activo no encontrado."
+    desde = ubic_str(a)
+    hacia = f"{hacia_tipo}: {hacia_ref}" if hacia_ref else hacia_tipo
+    ok, msg = update_activo(aid, {"UbicacionTipo": hacia_tipo, "UbicacionRef": hacia_ref})
+    if not ok:
+        return ok, msg
+    _log_mov(grupo, aid, "traslado", desde, hacia, "", "", nota, creado_por=creado_por)
+    return True, "Traslado registrado."
+
+
+def mantenimiento(aid, grupo, costo="", proximo="", nota="", en_mant=False, creado_por="") -> tuple:
+    """Registra un mantenimiento (costo + próxima fecha); opcional deja el activo en mantenimiento."""
+    a = get_activo(aid)
+    if not a:
+        return False, "Activo no encontrado."
+    campos = {}
+    if proximo:
+        campos["ProximoMant"] = proximo
+    if en_mant:
+        campos["Estado"] = "mantenimiento"
+    if campos:
+        ok, msg = update_activo(aid, campos)
+        if not ok:
+            return ok, msg
+    _log_mov(grupo, aid, "mantenimiento", ubic_str(a), ubic_str(a), "", costo, nota, creado_por=creado_por)
+    return True, "Mantenimiento registrado."
 
 
 # ── QR ───────────────────────────────────────────────────────────

@@ -46,6 +46,24 @@ def _fecha_input(label, valor, key):
     return v.isoformat() if v else ""
 
 
+def _usuarios(grupo):
+    try:
+        from core import auth
+        return [str(u.get("Usuario", "")) for u in auth.list_users(grupo)
+                if str(u.get("Usuario", "")).strip()]
+    except Exception:
+        return []
+
+
+def _proyectos(grupo):
+    try:
+        from core import projects as P
+        return [str(p.get("Nombre", "")) for p in P.list_projects(grupo=grupo)
+                if str(p.get("Nombre", "")).strip()]
+    except Exception:
+        return []
+
+
 # ── Vista principal ──────────────────────────────────────────────
 def render_inventario(grupo):
     st.markdown("## :material/inventory_2: Inventario de activos")
@@ -176,6 +194,79 @@ def _detalle(grupo, aid):
         except Exception as e:
             st.caption(f"No se pudo generar el QR: {e}")
 
+    # ── Acciones (salida/entrada/traslado/mantenimiento) ──
+    _est = str(a.get("Estado", "")).lower()
+    _cp = _creado_por()
+    if _est != "baja":
+        st.markdown("#### :material/swap_horiz: Acciones")
+        ac = st.columns(2)
+        if _est == "disponible":
+            with ac[0].expander(":material/logout: Salida / entregar"):
+                _dt = st.selectbox("Destino", ["proyecto", "usuario", "otro"], key=f"inv_sdt_{aid}")
+                if _dt == "proyecto":
+                    _ref = st.selectbox("Proyecto", _proyectos(grupo) or ["(sin proyectos)"], key=f"inv_srp_{aid}")
+                elif _dt == "usuario":
+                    _ref = st.selectbox("Usuario", _usuarios(grupo) or ["(sin usuarios)"], key=f"inv_sru_{aid}")
+                else:
+                    _ref = st.text_input("Destino", key=f"inv_srt_{aid}")
+                _resp = st.selectbox("Responsable", ["—"] + _usuarios(grupo), key=f"inv_srsp_{aid}")
+                _dev = _fecha_input("Devolución esperada", "", f"inv_sdev_{aid}")
+                _n = st.text_input("Nota", key=f"inv_snota_{aid}")
+                if st.button(":material/check: Registrar salida", type="primary", key=f"inv_sbtn_{aid}"):
+                    _u = ("" if _resp == "—" else _resp) or (_ref if _dt == "usuario" else "")
+                    ok, msg = INV.salida(aid, grupo, usuario=_u, hacia_tipo=_dt, hacia_ref=_ref,
+                                         fecha_devolucion=_dev, nota=_n, creado_por=_cp)
+                    (st.success if ok else st.error)(msg)
+                    if ok:
+                        st.rerun()
+        else:
+            with ac[0].expander(":material/login: Entrada / devolver", expanded=True):
+                _bod = st.text_input("Bodega / ubicación de retorno", value="Bodega", key=f"inv_ebod_{aid}")
+                _n = st.text_input("Nota", key=f"inv_enota_{aid}")
+                if st.button(":material/check: Registrar entrada", type="primary", key=f"inv_ebtn_{aid}"):
+                    ok, msg = INV.entrada(aid, grupo, bodega=_bod, nota=_n, creado_por=_cp)
+                    (st.success if ok else st.error)(msg)
+                    if ok:
+                        st.rerun()
+        with ac[1].expander(":material/move_up: Traslado"):
+            _tt = st.selectbox("Nueva ubicación (tipo)", INV.UBIC_TIPOS, key=f"inv_ttt_{aid}")
+            _tr = st.text_input("Detalle", key=f"inv_ttr_{aid}")
+            _n = st.text_input("Nota", key=f"inv_tnota_{aid}")
+            if st.button(":material/check: Trasladar", key=f"inv_tbtn_{aid}"):
+                ok, msg = INV.traslado(aid, grupo, _tt, _tr, nota=_n, creado_por=_cp)
+                (st.success if ok else st.error)(msg)
+                if ok:
+                    st.rerun()
+        with ac[1].expander(":material/build: Mantenimiento"):
+            _costo = st.number_input("Costo", min_value=0.0, step=10.0, key=f"inv_mcosto_{aid}")
+            _prox = _fecha_input("Próximo mantenimiento", a.get("ProximoMant"), f"inv_mprox_{aid}")
+            _enm = st.checkbox("Dejar el activo EN mantenimiento", key=f"inv_menm_{aid}")
+            _n = st.text_input("Nota", key=f"inv_mnota_{aid}")
+            if st.button(":material/check: Registrar mantenimiento", key=f"inv_mbtn_{aid}"):
+                ok, msg = INV.mantenimiento(aid, grupo, costo=_costo, proximo=_prox, nota=_n,
+                                            en_mant=_enm, creado_por=_cp)
+                (st.success if ok else st.error)(msg)
+                if ok:
+                    st.rerun()
+
+    # ── Historial ──
+    st.markdown("#### :material/history: Historial")
+    movs = INV.list_movimientos(grupo, aid)
+    if not movs:
+        st.caption("Sin movimientos todavía.")
+    else:
+        _mr = sorted(movs, key=lambda m: str(m.get("Creado", "")), reverse=True)
+        st.dataframe(pd.DataFrame([{
+            "Fecha":   m.get("Fecha", ""),
+            "Tipo":    m.get("Tipo", ""),
+            "Desde":   m.get("DesdeUbic", "") or "—",
+            "Hacia":   m.get("HaciaUbic", "") or "—",
+            "Usuario": m.get("Usuario", "") or "—",
+            "Costo":   (round(_num(m.get("Costo")), 0) if str(m.get("Costo", "")).strip() else None),
+            "Nota":    m.get("Nota", "") or "",
+        } for m in _mr]), use_container_width=True, hide_index=True,
+            column_config={"Costo": st.column_config.NumberColumn("Costo", format="$%d")})
+
     # Editar
     st.markdown("#### :material/edit: Editar activo")
     with st.form(f"inv_edit_{aid}"):
@@ -218,7 +309,7 @@ def _detalle(grupo, aid):
             st.caption("Retira el activo del inventario (queda en el histórico).")
             _mot = st.text_input("Motivo", key=f"inv_baja_mot_{aid}")
             if st.button("Dar de baja este activo", key=f"inv_baja_{aid}"):
-                INV.dar_de_baja(aid, _mot)
+                INV.dar_de_baja(aid, grupo, _mot, _creado_por())
                 st.session_state.pop("_inv_open", None)
                 st.rerun()
 
