@@ -250,6 +250,45 @@ def _detalle_cliente(grupo, key):
                     else:
                         st.warning("Elige al menos un proyecto.")
 
+    # ── Estado de cuenta: facturas del cliente (v259) ──
+    from core import invoices as INV
+    if cid and INV.is_configured():
+        st.markdown("#### :material/receipt: Facturación")
+        rc = INV.resumen_cliente(grupo, cid)
+        fc = st.columns(4)
+        fc[0].metric("Facturado", f"${rc['facturado']:,.0f}")
+        fc[1].metric("Cobrado", f"${rc['cobrado']:,.0f}")
+        fc[2].metric("Pendiente", f"${rc['pendiente']:,.0f}")
+        fc[3].metric("Vencido", f"${rc['vencido']:,.0f}")
+        _facs = INV.list_facturas(grupo, cid)
+        if _facs:
+            _fr = sorted(_facs, key=lambda x: str(x.get("Creado", "")), reverse=True)
+            _fdf = pd.DataFrame([{
+                "Nº":      str(x.get("Numero", "")),
+                "Fecha":   str(x.get("Fecha", "")),
+                "Total":   round(_num(x.get("Total")), 0),
+                "Cobrado": round(_num(x.get("Cobrado")), 0),
+                "Estado":  INV.estado_cobro(x),
+            } for x in _fr])
+            _fev = st.dataframe(
+                _fdf, use_container_width=True, hide_index=True,
+                on_select="rerun", selection_mode="single-row", key=f"cli_facs_{cid}",
+                column_config={"Total": st.column_config.NumberColumn("Total", format="$%d"),
+                               "Cobrado": st.column_config.NumberColumn("Cobrado", format="$%d")})
+            _fs = list(_fev.selection.rows)
+            if _fs:
+                st.session_state["_fac_open"] = str(_fr[_fs[0]].get("ID", ""))
+                st.session_state["_admin_nav_pending"] = ("finanzas", "🧾 Facturas")
+                st.session_state.pop(f"cli_facs_{cid}", None)
+                st.rerun()
+        else:
+            st.caption("Sin facturas todavía.")
+        if st.button(":material/add_circle: Nueva factura para este cliente", key=f"cli_newfac_{cid}"):
+            st.session_state["_fac_nueva"] = True
+            st.session_state["fac_cli"] = disp   # preselecciona el cliente en el form de factura
+            st.session_state["_admin_nav_pending"] = ("finanzas", "🧾 Facturas")
+            st.rerun()
+
 
 # ── Alta de cliente ──────────────────────────────────────────────
 def _nuevo_cliente_form(grupo):

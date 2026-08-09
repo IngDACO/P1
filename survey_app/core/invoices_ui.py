@@ -126,6 +126,15 @@ def _detalle_factura(grupo, fid):
                     f"Total: **${total:,.2f}**")
         if str(f.get("Nota", "")).strip():
             st.caption(f"Nota: {f.get('Nota')}")
+        try:
+            from core import invoice_pdf
+            _cli = C.get_cliente(str(f.get("ClienteID", ""))) if f.get("ClienteID") else {}
+            _pdf = invoice_pdf.generate_invoice_pdf(f, _cli, grupo)
+            st.download_button(":material/download: Descargar factura (PDF)", data=_pdf,
+                               file_name=f"Factura_{f.get('Numero', '')}.pdf",
+                               mime="application/pdf", key=f"fac_pdf_{fid}")
+        except Exception as e:
+            st.caption(f":material/warning: No se pudo generar el PDF: {e}")
 
     with der:
         st.markdown("#### :material/payments: Cobros")
@@ -143,6 +152,11 @@ def _detalle_factura(grupo, fid):
                         st.rerun()
         elif est == "cobrada":
             st.success(":material/check_circle: Factura cobrada por completo.")
+        _cobros = I.cobros_de(f)
+        if _cobros:
+            st.caption("Cobros registrados:")
+            for cb in _cobros:
+                st.markdown(f"- {cb.get('fecha', '')}: **${_num(cb.get('monto')):,.2f}**")
         if str(f.get("Estado", "")).lower() != "anulada":
             with st.expander(":material/block: Anular factura"):
                 st.caption("La saca de las cuentas por cobrar. No se puede deshacer.")

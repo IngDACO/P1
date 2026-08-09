@@ -24,6 +24,8 @@ FACTURAS_HEADERS = [
     "ID", "Grupo", "ClienteID", "ClienteNombre", "Numero", "Fecha", "Vencimiento",
     "LineasJSON", "Subtotal", "ImpuestoPct", "Impuesto", "Total",
     "Cobrado", "FechaCobro", "Estado", "Nota", "CreadoPor", "Creado",
+    # v259: historial de cobros [{fecha, monto}] (Cobrado es el running total).
+    "CobrosJSON",
 ]
 _FCOL = {h: i + 1 for i, h in enumerate(FACTURAS_HEADERS)}
 
@@ -106,6 +108,14 @@ def get_factura(fid: str) -> dict:
 def lineas_de(f: dict) -> list:
     try:
         return json.loads(f.get("LineasJSON", "") or "[]")
+    except Exception:
+        return []
+
+
+def cobros_de(f: dict) -> list:
+    """Historial de cobros [{fecha, monto}] de la factura."""
+    try:
+        return json.loads(f.get("CobrosJSON", "") or "[]")
     except Exception:
         return []
 
@@ -205,7 +215,7 @@ def create_factura(grupo, cliente_id, cliente_nombre, lineas, impuesto_pct=0.0,
            json.dumps(lineas, ensure_ascii=False, default=str),
            str(subtotal), str(_num(impuesto_pct)), str(impuesto), str(total),
            "0", "", "emitida", str(nota or ""), str(creado_por or ""),
-           clock.now().strftime("%Y-%m-%d %H:%M:%S")]
+           clock.now().strftime("%Y-%m-%d %H:%M:%S"), json.dumps([])]
     w.append_row(row, value_input_option="RAW")
     _invalidate()
     return True, fid
@@ -229,12 +239,19 @@ def registrar_cobro(fid: str, monto, fecha="") -> tuple:
     row = _find_row(w, fid)
     if row is None:
         return False, "Factura no encontrada."
-    nuevo = min(_num(f.get("Total")), round(_num(f.get("Cobrado")) + _num(monto), 2))
+    prev = _num(f.get("Cobrado"))
+    nuevo = min(_num(f.get("Total")), round(prev + _num(monto), 2))
+    real = round(nuevo - prev, 2)                 # lo efectivamente sumado (respeta el tope)
+    _fch = str(fecha or clock.today().isoformat())
+    cobros = cobros_de(f)
+    if real > 0:
+        cobros.append({"fecha": _fch, "monto": real})
     try:
         w.batch_update([
             {"range": f"{_col_letter(_FCOL['Cobrado'])}{row}", "values": [[str(nuevo)]]},
-            {"range": f"{_col_letter(_FCOL['FechaCobro'])}{row}",
-             "values": [[str(fecha or clock.today().isoformat())]]},
+            {"range": f"{_col_letter(_FCOL['FechaCobro'])}{row}", "values": [[_fch]]},
+            {"range": f"{_col_letter(_FCOL['CobrosJSON'])}{row}",
+             "values": [[json.dumps(cobros, ensure_ascii=False)]]},
         ], value_input_option="RAW")
     except Exception as e:
         return False, str(e)
