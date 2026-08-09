@@ -257,6 +257,42 @@ def resumen(grupo: str) -> dict:
             "mant_vencido": mant_venc}
 
 
+def alertas(grupo: str) -> list:
+    """Alertas del inventario para la campana: mantenimiento vencido y activos no
+    devueltos (salida con FechaDevolucion pasada y aún en_uso)."""
+    out = []
+    hoy = clock.today()
+    for a in list_activos(grupo):
+        pm = _parse_date(a.get("ProximoMant"))
+        if pm and pm < hoy:
+            out.append({"tipo": "mantenimiento", "activo": str(a.get("Nombre", "")),
+                        "id": str(a.get("ID", "")), "dias": (hoy - pm).days})
+        fd = _parse_date(a.get("FechaDevolucion"))
+        if fd and fd < hoy and str(a.get("Estado", "")).lower() == "en_uso":
+            out.append({"tipo": "no_devuelto", "activo": str(a.get("Nombre", "")),
+                        "id": str(a.get("ID", "")), "dias": (hoy - fd).days,
+                        "usuario": str(a.get("AsignadoA", ""))})
+    return out
+
+
+def reporte_valor(grupo: str) -> dict:
+    """Valor (compra y actual) agrupado por categoría y por ubicación (tipo)."""
+    cat, ubi = {}, {}
+    for a in list_activos(grupo):
+        va = valor_actual(a)
+        vc = _num(a.get("ValorCompra"))
+        k = str(a.get("Categoria", "")) or "—"
+        d = cat.setdefault(k, {"n": 0, "compra": 0.0, "actual": 0.0})
+        d["n"] += 1
+        d["compra"] += vc
+        d["actual"] += va
+        u = str(a.get("UbicacionTipo", "")) or "—"
+        e = ubi.setdefault(u, {"n": 0, "actual": 0.0})
+        e["n"] += 1
+        e["actual"] += va
+    return {"por_categoria": cat, "por_ubicacion": ubi}
+
+
 # ── Movimientos (entradas/salidas/traslado/mantenimiento) — Fase 2 ─
 def ubic_str(a: dict) -> str:
     t = str(a.get("UbicacionTipo", "") or "")

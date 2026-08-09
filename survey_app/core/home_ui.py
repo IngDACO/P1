@@ -230,6 +230,19 @@ def _alertas(grupo) -> list:
                 out.append(f":material/badge: {e['tipo']} · {e['usuario']} — {est}")
     except Exception:
         pass
+    try:
+        from core import inventory as INV
+        if INV.is_configured():
+            for e in INV.alertas(grupo)[:10]:
+                if e["tipo"] == "mantenimiento":
+                    out.append(f":material/build: {e['activo']} — "
+                               f":red[mantenimiento vencido hace {e['dias']} d]")
+                else:
+                    out.append(f":material/inventory_2: {e['activo']} — "
+                               f":red[no devuelto hace {e['dias']} d]"
+                               + (f" ({e['usuario']})" if e.get("usuario") else ""))
+    except Exception:
+        pass
     return out
 
 

@@ -131,6 +131,7 @@ def render_inventario(grupo):
         st.session_state.pop("inv_tbl", None)
         st.rerun()
 
+    _reportes(grupo)
     _categorias_expander(grupo)
 
 
@@ -370,6 +371,30 @@ def _registro(grupo):
 
 
 # ── Categorías (catálogo editable) ───────────────────────────────
+def _reportes(grupo):
+    rep = INV.reporte_valor(grupo)
+    if not rep["por_categoria"]:
+        return
+    with st.expander(":material/insights: Reportes de valor"):
+        ca, cb = st.columns(2)
+        with ca:
+            st.markdown("**Por categoría**")
+            st.dataframe(pd.DataFrame([{
+                "Categoría": k, "Activos": v["n"],
+                "Compra": round(v["compra"], 0), "Actual": round(v["actual"], 0),
+            } for k, v in sorted(rep["por_categoria"].items())]),
+                use_container_width=True, hide_index=True,
+                column_config={"Compra": st.column_config.NumberColumn("Compra", format="$%d"),
+                               "Actual": st.column_config.NumberColumn("Actual", format="$%d")})
+        with cb:
+            st.markdown("**Por ubicación**")
+            st.dataframe(pd.DataFrame([{
+                "Ubicación": k, "Activos": v["n"], "Valor actual": round(v["actual"], 0),
+            } for k, v in sorted(rep["por_ubicacion"].items())]),
+                use_container_width=True, hide_index=True,
+                column_config={"Valor actual": st.column_config.NumberColumn("Valor actual", format="$%d")})
+
+
 def _categorias_expander(grupo):
     with st.expander(":material/category: Categorías"):
         st.caption("Las de por defecto siempre están; aquí añades/quitas las tuyas.")
