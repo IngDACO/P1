@@ -130,6 +130,11 @@ def location_picker(key, lat=None, lng=None, direccion=""):
 
     st.caption(":material/place: Escribe la dirección y pulsa **Buscar**: la app la ubica sola. "
                "Si hay varias coincidencias, elige la correcta. (Opcional: clic en el mapa para afinar.)")
+    if geocoder_activo() == "google":
+        st.caption("🎯 Precisión: **Google** (número de casa exacto).")
+    else:
+        st.caption("≈ Precisión aproximada (OpenStreetMap). Falta la API key de Google "
+                   "para ubicar el número exacto.")
     c1, c2 = st.columns([4, 1])
     q = c1.text_input("Buscar dirección", value=direccion, key=f"{key}_q",
                       label_visibility="collapsed", placeholder=":material/search: Buscar dirección…")
