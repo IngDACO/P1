@@ -25,22 +25,41 @@ def to_float(v):
 
 
 @st.cache_data(ttl=86400, show_spinner=False)
-def geocode(direccion: str):
-    """(lat, lon) de una dirección de texto vía Nominatim (sin key), o None. Cacheado 1 día."""
+def geocode_candidates(direccion: str, limit: int = 6) -> list:
+    """Candidatos [{lat, lon, label}] de Nominatim para una dirección. Cacheado 1 día.
+
+    Antes se pedía `limit=1` y se tomaba el primer resultado → para una dirección en
+    texto libre eso solía caer en una calle parecida de otro país/ciudad. Ahora se
+    traen VARIAS opciones (con la dirección completa `display_name`) para elegir la
+    correcta; el clic en el mapa sigue disponible para afinar el punto exacto.
+    """
     d = (direccion or "").strip()
     if not d:
-        return None
+        return []
     try:
         import requests
-        r = requests.get("https://nominatim.openstreetmap.org/search",
-                         params={"q": d, "format": "json", "limit": 1},
-                         headers={"User-Agent": "COPEX-SurveyApp/1.0"}, timeout=6)
+        r = requests.get(
+            "https://nominatim.openstreetmap.org/search",
+            params={"q": d, "format": "jsonv2", "limit": limit, "addressdetails": 1},
+            headers={"User-Agent": "COPEX-SurveyApp/1.0 (ingdaco)"}, timeout=8)
+        out = []
         j = r.json()
-        if isinstance(j, list) and j:
-            return float(j[0]["lat"]), float(j[0]["lon"])
+        if isinstance(j, list):
+            for it in j:
+                try:
+                    out.append({"lat": float(it["lat"]), "lon": float(it["lon"]),
+                                "label": str(it.get("display_name", "")).strip()})
+                except Exception:
+                    pass
+        return out
     except Exception:
-        pass
-    return None
+        return []
+
+
+def geocode(direccion: str):
+    """(lat, lon) del mejor candidato, o None. Compat con `home_ui` (proyectos viejos)."""
+    c = geocode_candidates(direccion, limit=1)
+    return (c[0]["lat"], c[0]["lon"]) if c else None
 
 
 def location_picker(key, lat=None, lng=None, direccion=""):
@@ -52,17 +71,35 @@ def location_picker(key, lat=None, lng=None, direccion=""):
         st.session_state[klng] = lng
     slat, slng = st.session_state.get(klat), st.session_state.get(klng)
 
-    st.caption(":material/place: Busca la dirección y/o haz **clic en el mapa** para fijar el punto exacto.")
+    st.caption(":material/place: Busca la dirección, **elige el resultado correcto** y/o haz "
+               "**clic en el mapa** para afinar el punto exacto.")
     c1, c2 = st.columns([4, 1])
     q = c1.text_input("Buscar dirección", value=direccion, key=f"{key}_q",
                       label_visibility="collapsed", placeholder=":material/search: Buscar dirección…")
     if c2.button("Buscar", key=f"{key}_btn", use_container_width=True):
-        coord = geocode(q)
-        if coord:
-            st.session_state[klat], st.session_state[klng] = coord
+        _cands = geocode_candidates(q)
+        st.session_state[f"{key}_cands"] = _cands
+        if not _cands:
+            st.warning("No encontré esa dirección. Añade ciudad/estado/país, o haz clic en el mapa.")
+        st.rerun()
+
+    # Candidatos de la última búsqueda: uno se fija solo; varios → elige el correcto.
+    _cands = st.session_state.get(f"{key}_cands") or []
+    if len(_cands) == 1:
+        st.session_state[klat] = _cands[0]["lat"]
+        st.session_state[klng] = _cands[0]["lon"]
+        st.session_state.pop(f"{key}_cands", None)
+        st.rerun()
+    elif len(_cands) > 1:
+        _labels = [c["label"] for c in _cands]
+        _sel = st.selectbox("¿Cuál es? Elige el resultado exacto:", ["—"] + _labels,
+                            key=f"{key}_candsel")
+        if _sel != "—":
+            _c = _cands[_labels.index(_sel)]
+            st.session_state[klat], st.session_state[klng] = _c["lat"], _c["lon"]
+            st.session_state.pop(f"{key}_cands", None)
+            st.session_state.pop(f"{key}_candsel", None)
             st.rerun()
-        else:
-            st.warning("No encontré esa dirección. Prueba con más detalle o haz clic en el mapa.")
 
     try:
         import folium
