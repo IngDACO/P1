@@ -182,10 +182,9 @@ def _asignacion_inteligente(grupo, lunes, staff, tidx):
                        + _esc(", ".join(f["nom"] for f in ocupados)))
 
 
-def _radar_personal(grupo, lunes, staff, tidx):
-    """Problemas de personal de la semana vista: choques de turno (franjas que se solapan
-    el mismo día) + certificados que BLOQUEAN (asignado a un proyecto cuyos certs no cumple).
-    v280."""
+def _radar_scan(grupo, lunes, staff, tidx):
+    """Escanea la semana vista y devuelve (choques, sin_cumplir). Reusado por el radar y
+    por los KPIs del Panel (v280/v282)."""
     from core import credentials
     datos = R.get_semana(grupo, lunes)
     choques, sin_cumplir, _seen = [], [], set()
@@ -222,6 +221,12 @@ def _radar_personal(grupo, lunes, staff, tidx):
                     faltan = [t for t, e in comp["por_tipo"].items() if e in ("vencido", "falta")]
                     sin_cumplir.append(f"{nom} → {R.etiqueta_de(it['asig'], tidx)}: "
                                        + ", ".join(faltan))
+    return choques, sin_cumplir
+
+
+def _radar_personal(grupo, lunes, staff, tidx, scan=None):
+    """Radar de personal (expander): choques de turno + certificados que bloquean (v280)."""
+    choques, sin_cumplir = scan if scan is not None else _radar_scan(grupo, lunes, staff, tidx)
     n = len(choques) + len(sin_cumplir)
     _lbl = (f":material/radar: Radar de personal ({n})" if n
             else ":material/radar: Radar de personal — sin problemas")
@@ -239,8 +244,69 @@ def _radar_personal(grupo, lunes, staff, tidx):
                 st.markdown(f"- {_esc(c)}")
 
 
+def _ficha_rapida(grupo, usuario):
+    """Tarjeta compacta de una persona (al clic en su nombre, v282): contacto, asignación
+    de hoy (con franja), certificados y un botón a su ficha 360° completa."""
+    from core import credentials
+    u = auth.get_user(usuario) or {}
+    nom = u.get("Nombre") or usuario
+    with st.container(border=True):
+        cA, cB = st.columns([5, 1])
+        cA.markdown(f"**{_esc(nom)}**"
+                    + (f" · {_esc(u.get('Rol', ''))}" if u.get("Rol") else ""))
+        if cB.button("✕", key="fp_close"):
+            st.session_state.pop("_panel_ficha", None)
+            st.rerun()
+        _cont = []
+        if str(u.get("Email", "")).strip():
+            _cont.append(f":material/mail: {_esc(u.get('Email'))}")
+        if str(u.get("TelegramChatID", "")).strip():
+            _cont.append(":material/send: Telegram")
+        st.caption(" · ".join(_cont) if _cont else ":material/warning: Sin contacto registrado")
+
+        aa = R.asignaciones_dia(grupo, usuario)
+        if aa:
+            _h = " · ".join(
+                a["etiqueta"] + (f" {R.franja_label(a['ini'], a['fin'])}"
+                                 if R.franja_label(a["ini"], a["fin"]) else "")
+                for a in aa if a.get("etiqueta"))
+            st.markdown(f":material/today: **Hoy:** {_esc(_h)}")
+        else:
+            st.caption(":material/today: Hoy: sin asignación")
+
+        try:
+            creds = credentials.list_for(usuario)
+            _ic = {"vigente": "🟢", "por_vencer": "🟡", "vencido": "🔴"}
+            bits = [f"{_ic.get(credentials.status(c.get('Vencimiento')) or 'vigente', '🟢')} "
+                    f"{c.get('Tipo')}" for c in creds]
+            st.caption(":material/badge: " + (" · ".join(bits) if bits else "Sin certificados"))
+        except Exception:
+            pass
+
+        if st.button("→ Ver ficha completa", key="fp_full", use_container_width=True):
+            st.session_state["gp_fichasel"] = f"{nom} ({usuario})"
+            st.session_state["_admin_nav_pending"] = ("planificacion", "👷 Usuarios")
+            st.rerun()
+
+
+def _panel_kpis(grupo, lunes, staff, datos, choques, sin_cumplir):
+    """Fila de KPIs + estado en vivo del Panel (v282)."""
+    from core import timeclock
+    ab = timeclock.open_now(grupo) if timeclock.is_configured() else []
+    fich = len({(s["usuario"] or s["nombre"]) for s in ab})
+    off = (clock.today() - lunes).days
+    d = R.DIAS[off] if 0 <= off <= 4 else None
+    libres_hoy = (sum(1 for u in staff if not R.celda_items(datos, u["Usuario"], d))
+                  if d else 0)
+    k = st.columns(4)
+    k[0].metric("Fichados ahora", fich)
+    k[1].metric("Libres hoy", libres_hoy if d else "—")
+    k[2].metric("Choques", len(choques))
+    k[3].metric("Certs que bloquean", len(sin_cumplir))
+
+
 def render_planificacion(grupo):
-    st.markdown("#### :material/calendar_month: Planificación de la semana")
+    st.markdown("#### :material/dashboard: Panel de personal")
     if not R.is_configured():
         st.warning("La planificación necesita Google Sheets configurado.")
         return
@@ -253,6 +319,14 @@ def render_planificacion(grupo):
     lunes = _semana_activa()
     tidx  = R.trabajos_idx(grupo)
     datos = R.get_semana(grupo, lunes)
+
+    # ── KPIs + estado en vivo (un solo escaneo del radar, reusado en los KPIs) ──
+    _scan = _radar_scan(grupo, lunes, staff, tidx)
+    _panel_kpis(grupo, lunes, staff, datos, _scan[0], _scan[1])
+
+    # ── Ficha rápida (aparece al tocar un nombre en el tablero) ──
+    if st.session_state.get("_panel_ficha"):
+        _ficha_rapida(grupo, st.session_state["_panel_ficha"])
 
     # ── Navegación de semana ──
     n1, n2, n3, n4 = st.columns([1, 3, 1, 2])
@@ -270,24 +344,43 @@ def render_planificacion(grupo):
         if ok:
             st.rerun()
 
-    # ── Cobertura del día (dónde está la cuadrilla, dónde hay huecos) ──
+    # ── Cobertura del día ──
     _cobertura_hoy(lunes, staff, datos)
 
-    # ── Asignación inteligente: a quién poner (libre + cumple certs + sin choque) ──
+    # ── Asignación inteligente + Radar (reusa el escaneo ya hecho) ──
     _asignacion_inteligente(grupo, lunes, staff, tidx)
+    _radar_personal(grupo, lunes, staff, tidx, scan=_scan)
 
-    # ── Radar de personal: choques de turno + certificados que bloquean ──
-    _radar_personal(grupo, lunes, staff, tidx)
+    # ── Vista principal: Tablero | Disponibilidad (toggle, sin salir del panel) ──
+    _vista = st.radio("vista", ["📋 Tablero", "👀 Disponibilidad"], horizontal=True,
+                      key="panel_vista", label_visibility="collapsed",
+                      format_func=lambda o: {
+                          "📋 Tablero": ":material/calendar_view_week: Tablero",
+                          "👀 Disponibilidad": ":material/event_available: Disponibilidad"}.get(o, o))
+    if _vista == "👀 Disponibilidad":
+        _dd = st.selectbox("¿Quién está libre el…?", R.DIAS, key="panel_libredia",
+                           format_func=lambda d: f"{R.DIAS_LABEL[d]} "
+                           f"{R.fecha_de_dia(lunes, d).strftime('%d/%m')}")
+        _libres = [(u.get("Nombre") or u["Usuario"]) for u in staff
+                   if not R.celda_items(datos, u["Usuario"], _dd)]
+        if _libres:
+            st.success(f":material/person_check: **{len(_libres)}** libres el "
+                       f"{R.DIAS_LABEL[_dd]}: " + _esc(", ".join(_libres)))
+        else:
+            st.warning(f":material/warning: Nadie libre el {R.DIAS_LABEL[_dd]}.")
+        st.caption("Verde = libre · gris = ocupado (con su franja horaria).")
+        st.markdown(_disponibilidad_html(staff, lunes, datos, tidx), unsafe_allow_html=True)
+    else:
+        st.caption("Toca una **celda** para asignar/editar (con su franja); toca un **nombre** "
+                   "para su ficha rápida.")
+        _tablero_editable(grupo, lunes, staff, datos, tidx)
 
-    # ── Tablero EDITABLE EN SITIO: toca una celda para asignar/editar ahí mismo ──
-    st.caption("Toca una celda para **asignar o editar ahí mismo** (una vacía ＋ también "
-               "asigna). Si el trabajo enlaza a un proyecto, dentro tienes «→ Abrir proyecto».")
-    _tablero_editable(grupo, lunes, staff, datos, tidx)
+    # ── Estado en vivo (quién está fichado ahora) ──
+    with st.expander(":material/broadcast: Estado en vivo — quién está fichado ahora"):
+        render_estado_vivo(grupo)
 
-    # ── Plan vs real ──
+    # ── Plan vs real + Catálogo de trabajos ──
     _plan_vs_real(grupo, lunes, staff, tidx)
-
-    # ── Catálogo de trabajos ──
     _catalogo(grupo)
 
 
@@ -488,8 +581,10 @@ def _tablero_editable(grupo, lunes, staff, datos, tidx):
         usuario = u["Usuario"]
         nom = u.get("Nombre") or usuario
         cols = st.columns(anchos)
-        cols[0].markdown(f"<div style='padding-top:8px;font-weight:600;font-size:13px'>"
-                         f"{_esc(nom)}</div>", unsafe_allow_html=True)
+        if cols[0].button(nom, key=f"pnm_{_wk}_{pi}", use_container_width=True,
+                          help="Ver ficha rápida de la persona"):
+            st.session_state["_panel_ficha"] = usuario
+            st.rerun()
         for di, d in enumerate(dias):
             idx = pi * len(dias) + di
             col = cols[di + 1]
@@ -677,47 +772,6 @@ def _esc(s) -> str:
     return (str(s).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;"))
 
 
-def render_disponibilidad(grupo):
-    """Quién está LIBRE esta semana (de las celdas del tablero): por persona y día,
-    libre (verde) u ocupado con sus franjas — para ver los huecos de un vistazo (v278)."""
-    if not R.is_configured():
-        st.info("La planificación necesita Google Sheets configurado.")
-        return
-    staff = _staff(grupo)
-    if not staff:
-        st.info("No hay personal de campo en el grupo.")
-        return
-    lunes = _semana_activa()
-    tidx = R.trabajos_idx(grupo)
-    datos = R.get_semana(grupo, lunes)
-
-    c1, c2, c3 = st.columns([1, 3, 1])
-    if c1.button("◀", key="disp_prev", use_container_width=True):
-        st.session_state["ros_lunes"] = (lunes - timedelta(days=7)).isoformat()
-        st.rerun()
-    c2.markdown(f"<div style='text-align:center;font-weight:700;padding-top:6px'>"
-                f"{R.rango_label(lunes)}</div>", unsafe_allow_html=True)
-    if c3.button("▶", key="disp_next", use_container_width=True):
-        st.session_state["ros_lunes"] = (lunes + timedelta(days=7)).isoformat()
-        st.rerun()
-
-    _dsel = st.radio("Día", R.DIAS, horizontal=True,
-                     format_func=lambda d: f"{R.DIAS_LABEL[d]} "
-                     f"{R.fecha_de_dia(lunes, d).strftime('%d/%m')}",
-                     key="disp_dia", label_visibility="collapsed")
-    libres = [(u.get("Nombre") or u["Usuario"]) for u in staff
-              if not R.celda_items(datos, u["Usuario"], _dsel)]
-    if libres:
-        st.success(f":material/person_check: **{len(libres)}** libres el "
-                   f"{R.DIAS_LABEL[_dsel]}: " + _esc(", ".join(libres)))
-    else:
-        st.warning(f":material/warning: Nadie libre el {R.DIAS_LABEL[_dsel]} "
-                   f"({len(staff)} ocupados).")
-
-    st.caption("Verde = libre · gris = ocupado (con su franja horaria).")
-    st.markdown(_disponibilidad_html(staff, lunes, datos, tidx), unsafe_allow_html=True)
-
-
 def render_estado_vivo(grupo):
     """Quién está fichado AHORA y en qué proyecto + quién estaba asignado hoy y no ha
     fichado (v281). Se actualiza al recargar la sección."""
@@ -725,7 +779,6 @@ def render_estado_vivo(grupo):
     if not timeclock.is_configured():
         st.info("El fichaje necesita Google Sheets configurado.")
         return
-    st.markdown("#### :material/broadcast: Estado en vivo")
     st.caption("Quién está trabajando ahora mismo. Se actualiza al recargar.")
 
     abiertos = timeclock.open_now(grupo)

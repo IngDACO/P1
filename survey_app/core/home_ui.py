@@ -39,9 +39,7 @@ _LBL2KEY = {lbl: k for k, lbl in _SECCIONES}
 # `display` es lo que se MUESTRA (icono Material). Solo cambia lo visible → cero riesgo.
 _SUBSECCIONES = {
     "planificacion": ("adm_plan_sub", [
-        ("📋 Tablero", ":material/calendar_view_week: Tablero"),
-        ("👀 Disponibilidad", ":material/event_available: Disponibilidad"),
-        ("🟢 En vivo", ":material/broadcast: En vivo"),
+        ("🎛 Panel", ":material/dashboard: Panel"),
         ("🗺 Ruta del día", ":material/route: Ruta del día"),
         ("👷 Usuarios", ":material/badge: Usuarios")]),
     "proyectos": ("adm_proy_sub", [
@@ -308,15 +306,9 @@ def _sub_header(seccion):
 def _seccion_planificacion(grupo):
     # v191: la gestión de usuarios vive aquí (decisión del usuario), junto al tablero.
     sub = _sub_header("planificacion")
-    if sub == "📋 Tablero":
+    if sub == "🎛 Panel":
         from core import roster_ui
         roster_ui.render_planificacion(grupo)
-    elif sub == "👀 Disponibilidad":
-        from core import roster_ui
-        roster_ui.render_disponibilidad(grupo)
-    elif sub == "🟢 En vivo":
-        from core import roster_ui
-        roster_ui.render_estado_vivo(grupo)
     elif sub == "🗺 Ruta del día":
         from core import route_ui
         route_ui.render_ruta_dia(grupo)
