@@ -512,3 +512,81 @@ def _catalogo(grupo):
 
 def _esc(s) -> str:
     return (str(s).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;"))
+
+
+def render_disponibilidad(grupo):
+    """Quién está LIBRE esta semana (de las celdas del tablero): por persona y día,
+    libre (verde) u ocupado con sus franjas — para ver los huecos de un vistazo (v278)."""
+    if not R.is_configured():
+        st.info("La planificación necesita Google Sheets configurado.")
+        return
+    staff = _staff(grupo)
+    if not staff:
+        st.info("No hay personal de campo en el grupo.")
+        return
+    lunes = _semana_activa()
+    tidx = R.trabajos_idx(grupo)
+    datos = R.get_semana(grupo, lunes)
+
+    c1, c2, c3 = st.columns([1, 3, 1])
+    if c1.button("◀", key="disp_prev", use_container_width=True):
+        st.session_state["ros_lunes"] = (lunes - timedelta(days=7)).isoformat()
+        st.rerun()
+    c2.markdown(f"<div style='text-align:center;font-weight:700;padding-top:6px'>"
+                f"{R.rango_label(lunes)}</div>", unsafe_allow_html=True)
+    if c3.button("▶", key="disp_next", use_container_width=True):
+        st.session_state["ros_lunes"] = (lunes + timedelta(days=7)).isoformat()
+        st.rerun()
+
+    _dsel = st.radio("Día", R.DIAS, horizontal=True,
+                     format_func=lambda d: f"{R.DIAS_LABEL[d]} "
+                     f"{R.fecha_de_dia(lunes, d).strftime('%d/%m')}",
+                     key="disp_dia", label_visibility="collapsed")
+    libres = [(u.get("Nombre") or u["Usuario"]) for u in staff
+              if not R.celda_items(datos, u["Usuario"], _dsel)]
+    if libres:
+        st.success(f":material/person_check: **{len(libres)}** libres el "
+                   f"{R.DIAS_LABEL[_dsel]}: " + _esc(", ".join(libres)))
+    else:
+        st.warning(f":material/warning: Nadie libre el {R.DIAS_LABEL[_dsel]} "
+                   f"({len(staff)} ocupados).")
+
+    st.caption("Verde = libre · gris = ocupado (con su franja horaria).")
+    st.markdown(_disponibilidad_html(staff, lunes, datos, tidx), unsafe_allow_html=True)
+
+
+def _disponibilidad_html(staff, lunes, datos, tidx) -> str:
+    ths = ['<th style="text-align:left;padding:6px 8px;font-size:12px;color:#6b7280;'
+           'position:sticky;left:0;background:#fff;">Persona</th>']
+    for d in R.DIAS:
+        f = R.fecha_de_dia(lunes, d)
+        ths.append(f'<th style="padding:6px 8px;font-size:12px;color:#6b7280;'
+                   f'min-width:110px;">{R.DIAS_LABEL[d]} {f.strftime("%d/%m")}</th>')
+    filas = []
+    for u in staff:
+        usr = u["Usuario"]
+        nom = u.get("Nombre") or usr
+        celdas = [f'<td style="padding:5px 8px;font-size:13px;font-weight:600;color:#1f2937;'
+                  f'white-space:nowrap;position:sticky;left:0;background:#fff;'
+                  f'border-right:1px solid #eef1f5;">{_esc(nom)}</td>']
+        for d in R.DIAS:
+            items = R.celda_items(datos, usr, d)
+            if not items:
+                cont = ('<div style="background:#EAF3DE;color:#3B6D11;border-radius:5px;'
+                        'padding:3px 6px;font-weight:600;text-align:center;">libre</div>')
+            else:
+                _cs = []
+                for it in items:
+                    _fl = R.franja_label(it["ini"], it["fin"])
+                    _fh = (f' <span style="opacity:.8;">· {_esc(_fl)}</span>') if _fl else ""
+                    _cs.append(f'<div style="background:#F1EFE8;color:#444441;border-radius:5px;'
+                               f'padding:2px 5px;margin-bottom:2px;">'
+                               f'{_esc(R.etiqueta_de(it["asig"], tidx))}{_fh}</div>')
+                cont = "".join(_cs)
+            celdas.append(f'<td style="padding:4px 5px;background:#fff;font-size:11.5px;'
+                          f'line-height:1.25;vertical-align:top;">{cont}</td>')
+        filas.append("<tr>" + "".join(celdas) + "</tr>")
+    return ('<div style="overflow-x:auto;margin:10px 0;">'
+            '<table style="border-collapse:separate;border-spacing:3px;width:100%;">'
+            "<thead><tr>" + "".join(ths) + "</tr></thead>"
+            "<tbody>" + "".join(filas) + "</tbody></table></div>")
