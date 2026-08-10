@@ -5,7 +5,7 @@ Sección 📅 Planificación en 🛠 Mi grupo: la rejilla persona×día coloread
 el board del usuario), edición de la semana persona a persona, "copiar la semana
 anterior" y el catálogo de trabajos.
 """
-from datetime import timedelta
+from datetime import timedelta, time as _time
 
 import streamlit as st
 
@@ -13,6 +13,17 @@ from core import roster as R
 from core import auth
 from core import projects as P
 from core import clock
+
+
+def _to_time(hhmm, default="07:00") -> _time:
+    """'HH:MM' → datetime.time (para st.time_input); cae al default si viene vacío/inválido."""
+    for cand in (hhmm, default):
+        try:
+            hh, mm = str(cand).split(":")
+            return _time(int(hh), int(mm))
+        except Exception:
+            continue
+    return _time(7, 0)
 
 
 def _staff(grupo):
@@ -225,11 +236,14 @@ def render_board_readonly(grupo, resaltar_usuario=""):
                 unsafe_allow_html=True)
 
 
-def _guardar_celda(grupo, lunes, usuario, datos, dia, asigs, nota, toda_semana):
-    """Escribe UNA celda (o toda la semana) con VARIAS asignaciones + una nota por día
-    (v274). `guardar_persona` omite celdas vacías → asigs vacío + nota vacía = limpiar."""
+def _guardar_celda(grupo, lunes, usuario, datos, dia, items, nota, toda_semana):
+    """Escribe UNA celda (o toda la semana) con VARIAS asignaciones, cada una con su franja
+    horaria, + una nota por día (v277). `items` = [{'asig','ini','fin'}]. `guardar_persona`
+    omite las vacías → items vacío + nota vacía = limpiar."""
     sem = dict(datos.get(usuario, {}) or {})
-    cell = {"asigs": [a for a in (asigs or []) if a], "nota": nota}
+    cell = {"items": [{"a": it["asig"], "i": it.get("ini", ""), "f": it.get("fin", "")}
+                      for it in (items or []) if it.get("asig")],
+            "nota": nota}
     if toda_semana:
         for d in R.DIAS:
             sem[d] = dict(cell)
@@ -316,9 +330,16 @@ def _tablero_editable(grupo, lunes, staff, datos, tidx):
         for di, d in enumerate(dias):
             idx = pi * len(dias) + di
             col = cols[di + 1]
-            asigs = R.celda_asigs(datos, usuario, d)
+            items_cur = R.celda_items(datos, usuario, d)              # v277: con franja
+            asigs = [it["asig"] for it in items_cur]
+            fr_cur = {it["asig"]: (it["ini"], it["fin"]) for it in items_cur}
             nota = R.celda(datos, usuario, d).get("nota", "")
-            et = " · ".join(R.etiqueta_de(a, tidx) for a in asigs) if asigs else ""
+            # etiqueta del trigger: "Proyecto 7:00–15:30 · Otro …"
+            _trig = []
+            for it in items_cur:
+                _fl = R.franja_label(it["ini"], it["fin"])
+                _trig.append(R.etiqueta_de(it["asig"], tidx) + (f" {_fl}" if _fl else ""))
+            et = " · ".join(_trig)
             with col.popover(et or "＋", key=f"roscel_{_wk}_{idx}", use_container_width=True):
                 f = R.fecha_de_dia(lunes, d)
                 st.caption(f"**{_esc(nom)}** · {R.DIAS_LABEL[d]} {f.strftime('%d/%m')}")
@@ -326,24 +347,38 @@ def _tablero_editable(grupo, lunes, staff, datos, tidx):
                 _sel = st.multiselect("Asignaciones del día (puedes elegir varias)",
                                       etq, default=_def, key=f"pva_{_wk}_{idx}")
                 _selvals = [val_by_etq[e] for e in _sel]
-                # v273/v274: por cada PROYECTO elegido, avisa si el usuario cumple los
-                # certificados que exige (CertsReq).
+                # Por cada asignación: si es PROYECTO/TRABAJO → franja horaria (default 7:00–15:30)
+                # + aviso de cumplimiento de certificados. Los estados (OFF/Leave) no llevan franja.
+                _items = []
                 for _v in _selvals:
+                    if _v in R.ESTADOS:
+                        _items.append({"asig": _v, "ini": "", "fin": ""})
+                        continue
                     _pv = R.proyecto_de(_v, tidx)
                     if _pv:
                         _cumplimiento_celda(usuario, _pv)
+                    _ci, _cf = fr_cur.get(_v, R.TURNO_DEFAULT)
+                    _c1, _c2 = st.columns(2)
+                    _ti = _c1.time_input(f"{R.etiqueta_de(_v, tidx)} · inicio",
+                                         value=_to_time(_ci, R.TURNO_DEFAULT[0]),
+                                         key=f"pvi_{_wk}_{idx}_{_v}", step=900)
+                    _tf = _c2.time_input(f"{R.etiqueta_de(_v, tidx)} · fin",
+                                         value=_to_time(_cf, R.TURNO_DEFAULT[1]),
+                                         key=f"pvf_{_wk}_{idx}_{_v}", step=900)
+                    _items.append({"asig": _v, "ini": _ti.strftime("%H:%M"),
+                                   "fin": _tf.strftime("%H:%M")})
                 _nota = st.text_input("Nota (para todo el día)", value=nota, key=f"pvn_{_wk}_{idx}",
-                                      placeholder="vehículo, equipo, horario…")
+                                      placeholder="vehículo, equipo…")
                 _all = st.checkbox("Aplicar a toda la semana", key=f"pvw_{_wk}_{idx}")
                 if st.button(":material/save: Guardar", key=f"pvs_{_wk}_{idx}", type="primary",
                              use_container_width=True):
                     ok, msg = _guardar_celda(grupo, lunes, usuario, datos, d,
-                                             _selvals, _nota, _all)
+                                             _items, _nota, _all)
                     if ok:
-                        # v273/v274: cada PROYECTO agendado mete al usuario como asignado
-                        # del proyecto → acceso desde su cuenta (no quita a nadie de otros).
-                        for _v in _selvals:
-                            _pv = R.proyecto_de(_v, tidx)
+                        # cada PROYECTO agendado mete al usuario como asignado del proyecto
+                        # → acceso desde su cuenta (no quita a nadie de otros).
+                        for _it in _items:
+                            _pv = R.proyecto_de(_it["asig"], tidx)
                             if _pv:
                                 try:
                                     P.add_field_user(_pv, usuario)
@@ -382,14 +417,20 @@ def _grid_html(staff, lunes, datos, tidx, resaltar="") -> str:
                   f'color:#1f2937;white-space:nowrap;position:sticky;left:0;background:{_nbg};'
                   f'border-right:1px solid #eef1f5;">{"<span style=\"font-family:&#39;Material Symbols Rounded&#39;;vertical-align:-2px\">arrow_forward</span> " if _mio else ""}{_esc(nom)}</td>']
         for d in R.DIAS:
-            asigs = R.celda_asigs(datos, usr, d)
+            items = R.celda_items(datos, usr, d)              # v277: con franja horaria
             nota  = R.celda(datos, usr, d).get("nota", "")
-            if asigs:
-                cont = "".join(
-                    f'<div style="background:{R.color_de(a, tidx)};'
-                    f'color:{_texto_sobre(R.color_de(a, tidx))};border-radius:5px;'
-                    f'padding:2px 5px;margin-bottom:2px;font-weight:600;">'
-                    f'{_esc(R.etiqueta_de(a, tidx))}</div>' for a in asigs)
+            if items:
+                _chips = []
+                for it in items:
+                    _bg = R.color_de(it["asig"], tidx)
+                    _fl = R.franja_label(it["ini"], it["fin"])
+                    _fh = (f'<span style="opacity:.85;font-weight:400;"> · {_esc(_fl)}</span>'
+                           if _fl else "")
+                    _chips.append(
+                        f'<div style="background:{_bg};color:{_texto_sobre(_bg)};'
+                        f'border-radius:5px;padding:2px 5px;margin-bottom:2px;font-weight:600;">'
+                        f'{_esc(R.etiqueta_de(it["asig"], tidx))}{_fh}</div>')
+                cont = "".join(_chips)
                 if nota:
                     cont += (f'<div style="font-size:10.5px;opacity:0.8;color:#4b5563;">'
                              f'{_esc(nota)}</div>')

@@ -662,7 +662,8 @@ def _agenda_hoy(grupo):
     for u in staff:
         usr = u["Usuario"]
         nombre = u.get("Nombre") or usr
-        asigs = R.celda_asigs(sem, usr, dia)          # v274: varias asignaciones por día
+        items = R.celda_items(sem, usr, dia)          # v277: varias por día, con franja
+        asigs = [it["asig"] for it in items]
         nota = R.celda(sem, usr, dia).get("nota", "").strip()
         reales = [a for a in asigs if a not in R.ESTADOS]
         if reales:
@@ -673,10 +674,14 @@ def _agenda_hoy(grupo):
             n_leave += 1
         else:
             n_sin += 1
+        _etqs = []
+        for it in items:
+            _fl = R.franja_label(it["ini"], it["fin"])
+            _etqs.append(R.etiqueta_de(it["asig"], tidx) + (f" {_fl}" if _fl else ""))
         filas.append({
             "usuario": usr,
             "nombre": nombre,
-            "etqs": [R.etiqueta_de(a, tidx) for a in asigs],
+            "etqs": _etqs,
             "color": R.color_de(asigs[0] if asigs else "", tidx),
             "nota": nota,
             "proys": [p for p in (pmap.get(R.proyecto_de(a, tidx), "") for a in asigs) if p],

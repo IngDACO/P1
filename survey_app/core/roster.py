@@ -284,31 +284,50 @@ def get_semana(grupo, lunes) -> dict:
 
 
 def _norm_cell(c) -> dict:
-    """Normaliza una celda a {'asigs':[...], 'nota':str}. Compat: el formato viejo
-    {'asig','nota'} (una sola asignación) se lee como lista de uno; el nuevo lleva
-    varias en 'asigs' (varios proyectos el mismo día, v274). Una nota por día."""
+    """Normaliza una celda a {'items':[{'asig','ini','fin'}], 'asigs':[...], 'nota':str}.
+
+    Compat con TODOS los formatos:
+    - viejo `{'asig','nota'}` → 1 item (día completo, sin franja).
+    - v274 `{'asigs':[str],'nota'}` → items día completo.
+    - v277 `{'items':[{'a','i','f'}],'nota'}` → tal cual (a=asig, i=inicio 'HH:MM', f=fin).
+    `ini`/`fin` vacíos = **día completo** (sin franja horaria). `asigs` se deriva de `items`
+    para no romper a los consumidores que solo miran la lista de proyectos. Una nota por día."""
     c = c or {}
-    if "asigs" in c:
-        asigs = [str(a).strip() for a in (c.get("asigs") or []) if str(a).strip()]
+    items = []
+    if "items" in c:
+        for it in (c.get("items") or []):
+            a = str((it or {}).get("a", "")).strip()
+            if a:
+                items.append({"asig": a, "ini": str((it or {}).get("i", "") or ""),
+                              "fin": str((it or {}).get("f", "") or "")})
+    elif "asigs" in c:
+        for a in (c.get("asigs") or []):
+            a = str(a).strip()
+            if a:
+                items.append({"asig": a, "ini": "", "fin": ""})
     else:
         a = str(c.get("asig", "")).strip()
-        asigs = [a] if a else []
-    return {"asigs": asigs, "nota": str(c.get("nota", "") or "")}
+        if a:
+            items.append({"asig": a, "ini": "", "fin": ""})
+    return {"items": items, "asigs": [it["asig"] for it in items],
+            "nota": str(c.get("nota", "") or "")}
 
 
 def _compact(datos) -> dict:
-    """Deja solo las celdas no vacías, normalizadas a {'asigs','nota'} (formato nuevo)."""
+    """Deja solo las celdas no vacías, normalizadas al formato nuevo {'items','nota'}."""
     out = {}
     for k, v in (datos or {}).items():
         n = _norm_cell(v)
-        if n["asigs"] or n["nota"].strip():
-            out[k] = {"asigs": n["asigs"], "nota": n["nota"]}
+        if n["items"] or n["nota"].strip():
+            out[k] = {"items": [{"a": it["asig"], "i": it["ini"], "f": it["fin"]}
+                               for it in n["items"]],
+                      "nota": n["nota"]}
     return out
 
 
 def celda(semana_datos, usuario, dia) -> dict:
     """Celda como {'asig','nota'} — `asig` = la PRIMERA asignación del día (compat con los
-    consumidores de una sola). Para TODAS las asignaciones: `celda_asigs`. {} si vacía."""
+    consumidores de una sola). Para TODAS: `celda_asigs` / `celda_items`. {} si vacía."""
     n = _norm_cell((semana_datos.get(usuario, {}) or {}).get(dia, {}))
     if not n["asigs"] and not n["nota"].strip():
         return {}
@@ -316,9 +335,33 @@ def celda(semana_datos, usuario, dia) -> dict:
 
 
 def celda_asigs(semana_datos, usuario, dia) -> list:
-    """Lista de asignaciones (valores) de una celda; [] si no hay. Soporta varios
-    proyectos el mismo día (v274) y el formato viejo de una sola."""
+    """Lista de asignaciones (valores) de una celda; [] si no hay. Varios por día (v274)."""
     return _norm_cell((semana_datos.get(usuario, {}) or {}).get(dia, {}))["asigs"]
+
+
+def celda_items(semana_datos, usuario, dia) -> list:
+    """Asignaciones con franja horaria: [{'asig','ini','fin'}]; [] si no hay (v277).
+    `ini`/`fin` vacíos = día completo."""
+    return _norm_cell((semana_datos.get(usuario, {}) or {}).get(dia, {}))["items"]
+
+
+TURNO_DEFAULT = ("07:00", "15:30")   # turno estándar de la cuadrilla (v277)
+
+
+def franja_label(ini, fin) -> str:
+    """'7:00–15:30' desde ('07:00','15:30'); '' si es día completo (sin franja)."""
+    ini, fin = str(ini or "").strip(), str(fin or "").strip()
+    if not ini and not fin:
+        return ""
+
+    def _h(t):
+        try:
+            hh, mm = t.split(":")
+            return f"{int(hh)}:{mm}"
+        except Exception:
+            return t
+
+    return f"{_h(ini)}–{_h(fin)}" if (ini and fin) else (_h(ini) or _h(fin))
 
 
 def guardar_persona(grupo, lunes, usuario, dias: dict) -> tuple:
@@ -364,14 +407,15 @@ def asignaciones_dia(grupo, usuario, fecha=None) -> list:
     lunes = lunes_de(fecha)
     sem = get_semana(grupo, lunes)
     raw = _norm_cell((sem.get(str(usuario), {}) or {}).get(dia, {}))
-    if not raw["asigs"]:
+    if not raw["items"]:
         return []
     tidx = trabajos_idx(grupo)
-    return [{"asig": a, "nota": raw["nota"],
-             "proyecto_id": proyecto_de(a, tidx),
-             "etiqueta": etiqueta_de(a, tidx),
-             "color": color_de(a, tidx),
-             "es_estado": a in ESTADOS} for a in raw["asigs"]]
+    return [{"asig": it["asig"], "nota": raw["nota"],
+             "ini": it["ini"], "fin": it["fin"],
+             "proyecto_id": proyecto_de(it["asig"], tidx),
+             "etiqueta": etiqueta_de(it["asig"], tidx),
+             "color": color_de(it["asig"], tidx),
+             "es_estado": it["asig"] in ESTADOS} for it in raw["items"]]
 
 
 def asignacion_dia(grupo, usuario, fecha=None) -> dict:
@@ -467,7 +511,7 @@ def autopoblar_proyecto(grupo, pid, usuarios, fecha_ini, fecha_fin,
                     if str(pid) not in cell["asigs"]:
                         ocupadas += 1     # ya tiene asignación(es): no se pisa (solo vacías)
                     continue
-                datos[dk] = {"asigs": [str(pid)], "nota": ""}
+                datos[dk] = {"items": [{"a": str(pid), "i": "", "f": ""}], "nota": ""}
                 llenadas += 1
                 cambiado = True
             if not cambiado:
@@ -520,9 +564,10 @@ def limpiar_proyecto(grupo, pid, usuarios=None) -> int:
         for dk in list(datos.keys()):
             n = _norm_cell(datos.get(dk))
             if str(pid) in n["asigs"]:
-                rest = [a for a in n["asigs"] if a != str(pid)]
+                rest = [it for it in n["items"] if it["asig"] != str(pid)]
                 if rest or n["nota"].strip():
-                    datos[dk] = {"asigs": rest, "nota": n["nota"]}
+                    datos[dk] = {"items": [{"a": it["asig"], "i": it["ini"], "f": it["fin"]}
+                                          for it in rest], "nota": n["nota"]}
                 else:
                     datos.pop(dk)
                 ch = True

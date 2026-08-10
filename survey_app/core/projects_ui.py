@@ -2511,9 +2511,15 @@ def render_field_projects(usuario: str, grupo: str):
     try:
         from core import roster, roster_ui
         if roster.is_configured():
-            _aa = roster.asignaciones_dia(grupo, usuario)   # v274: varias por día
+            _aa = roster.asignaciones_dia(grupo, usuario)   # v274/v277: varias, con franja
             if _aa:
-                _ets = " · ".join(a["etiqueta"] for a in _aa if a.get("etiqueta"))
+                _parts = []
+                for a in _aa:
+                    if not a.get("etiqueta"):
+                        continue
+                    _fl = roster.franja_label(a.get("ini", ""), a.get("fin", ""))
+                    _parts.append(a["etiqueta"] + (f" {_fl}" if _fl else ""))
+                _ets = " · ".join(_parts)
                 _nt = next((a["nota"] for a in _aa if str(a.get("nota", "")).strip()), "")
                 _n = f" · {_nt}" if _nt else ""
                 _est = all(a.get("es_estado") for a in _aa)
