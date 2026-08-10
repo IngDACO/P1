@@ -82,6 +82,106 @@ def _cobertura_hoy(lunes, staff, datos):
     st.markdown(f"**{R.DIAS_LABEL[d]} {fecha.strftime('%d/%m')}** · " + " · ".join(partes))
 
 
+def _min(hhmm):
+    try:
+        hh, mm = str(hhmm).split(":")
+        return int(hh) * 60 + int(mm)
+    except Exception:
+        return None
+
+
+def _solapa(i1, f1, i2, f2) -> bool:
+    """¿Se solapan dos franjas? Una franja vacía (día completo) ocupa todo → siempre choca."""
+    a1, a2, b1, b2 = _min(i1), _min(f1), _min(i2), _min(f2)
+    if None in (a1, a2, b1, b2):
+        return True
+    return a1 < b2 and b1 < a2
+
+
+def _asignar_al_dia(grupo, lunes, usuario, sem_persona, dia, pid, ini, fin):
+    """Añade el proyecto (con franja) al día de la persona SIN pisar sus otras asignaciones;
+    guarda la semana completa (1 escritura)."""
+    sem = dict(sem_persona or {})
+    cur = R._norm_cell(sem.get(dia, {}))
+    if str(pid) not in [it["asig"] for it in cur["items"]]:
+        cur["items"].append({"asig": str(pid), "ini": ini, "fin": fin})
+    sem[dia] = {"items": [{"a": it["asig"], "i": it["ini"], "f": it["fin"]} for it in cur["items"]],
+                "nota": cur["nota"]}
+    return R.guardar_persona(grupo, lunes, usuario, sem)
+
+
+def _asignacion_inteligente(grupo, lunes, staff, tidx):
+    """Sugiere a quién asignar a un proyecto en un día/franja = libre esa franja + cumple los
+    certificados que exige + sin choque de turno (v279). Asigna a los elegidos con un clic."""
+    from core import credentials
+    with st.expander(":material/bolt: Asignación inteligente — ¿a quién pongo?"):
+        try:
+            proys = [p for p in P.list_projects(grupo)
+                     if str(p.get("Estado", "")) not in ("Completado", "Cancelado", "Archivado")]
+        except Exception:
+            proys = []
+        if not proys:
+            st.caption("No hay proyectos activos para asignar.")
+            return
+        _pmap = {str(p.get("Nombre")): str(p.get("ID")) for p in proys}
+        _psel = st.selectbox("Proyecto", ["— elige el proyecto —"] + list(_pmap), key="ai_prj")
+        if _psel not in _pmap:
+            return
+        pid = _pmap[_psel]
+        prj = P.get_project(pid)
+        certs = [c.strip() for c in str((prj or {}).get("CertsReq", "")).split(";") if c.strip()]
+
+        cda, cdb = st.columns([2, 3])
+        _dsel = cda.selectbox("Día", R.DIAS, key="ai_dia",
+                              format_func=lambda d: f"{R.DIAS_LABEL[d]} "
+                              f"{R.fecha_de_dia(lunes, d).strftime('%d/%m')}")
+        c1, c2 = cdb.columns(2)
+        _ti = c1.time_input("Inicio", value=_to_time(R.TURNO_DEFAULT[0]), key="ai_ini", step=900)
+        _tf = c2.time_input("Fin", value=_to_time(R.TURNO_DEFAULT[1]), key="ai_fin", step=900)
+        ini, fin = _ti.strftime("%H:%M"), _tf.strftime("%H:%M")
+        if certs:
+            st.caption(":material/badge: Exige: " + " · ".join(certs))
+
+        datos = R.get_semana(grupo, lunes)
+        libres, ocupados = [], []
+        for u in staff:
+            usr = u["Usuario"]
+            nom = u.get("Nombre") or usr
+            items = R.celda_items(datos, usr, _dsel)
+            choca = any(_solapa(ini, fin, it["ini"], it["fin"]) for it in items)
+            comp = credentials.compliance(usr, certs) if certs else {"cumple": True, "por_tipo": {}}
+            todo_vigente = all(e == "vigente" for e in comp["por_tipo"].values())
+            estado = "🟢" if (comp["cumple"] and todo_vigente) else ("🟡" if comp["cumple"] else "🔴")
+            (ocupados if choca else libres).append(
+                {"usr": usr, "nom": nom, "cumple": comp["cumple"], "estado": estado})
+        libres.sort(key=lambda f: (0 if f["cumple"] else 1, f["nom"]))
+
+        if not libres:
+            st.warning(f":material/warning: Nadie libre el {R.DIAS_LABEL[_dsel]} en {ini}–{fin}.")
+        else:
+            _opts = {f"{f['estado']} {f['nom']}" + ("" if f["cumple"] else " — no cumple"): f["usr"]
+                     for f in libres}
+            _pick = st.multiselect("Sugeridos (libres) — elige a quién asignar:",
+                                   list(_opts), key="ai_pick")
+            if st.button(f":material/check: Asignar {len(_pick)} a «{_psel}»", key="ai_go",
+                         type="primary", use_container_width=True, disabled=not _pick):
+                _n = 0
+                for _lbl in _pick:
+                    _u = _opts[_lbl]
+                    ok, _ = _asignar_al_dia(grupo, lunes, _u, datos.get(_u, {}), _dsel, pid, ini, fin)
+                    if ok:
+                        try:
+                            P.add_field_user(pid, _u)
+                        except Exception:
+                            pass
+                        _n += 1
+                st.success(f"Asignados {_n} a «{_psel}» el {R.DIAS_LABEL[_dsel]} {ini}–{fin}.")
+                st.rerun()
+        if ocupados:
+            st.caption(":material/block: Ocupados esa franja: "
+                       + _esc(", ".join(f["nom"] for f in ocupados)))
+
+
 def render_planificacion(grupo):
     st.markdown("#### :material/calendar_month: Planificación de la semana")
     if not R.is_configured():
@@ -115,6 +215,9 @@ def render_planificacion(grupo):
 
     # ── Cobertura del día (dónde está la cuadrilla, dónde hay huecos) ──
     _cobertura_hoy(lunes, staff, datos)
+
+    # ── Asignación inteligente: a quién poner (libre + cumple certs + sin choque) ──
+    _asignacion_inteligente(grupo, lunes, staff, tidx)
 
     # ── Tablero EDITABLE EN SITIO: toca una celda para asignar/editar ahí mismo ──
     st.caption("Toca una celda para **asignar o editar ahí mismo** (una vacía ＋ también "
