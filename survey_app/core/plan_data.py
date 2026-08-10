@@ -38,10 +38,10 @@ def extraer_todo(pdf_file, progreso=None) -> dict:
     """
     from extractors.schindler import (extract_from_pdf, extract_number_of_stops,
                                       extract_car_guide_rail, extract_belting,
-                                      extract_hkp, PARAMS)
+                                      extract_hkp, extract_product_line, PARAMS)
     from core.rail_cut import extract_lf
 
-    out = {"params": {}, "ns": None, "rail": None,
+    out = {"params": {}, "ns": None, "rail": None, "modelo": None,
            "hq": None, "hgp": None, "hkp": None, "lfkk": None, "lfgk": None,
            "archivo": getattr(pdf_file, "name", ""), "leido": "", "faltan": []}
 
@@ -49,6 +49,7 @@ def extraer_todo(pdf_file, progreso=None) -> dict:
         ("params",  "Parámetros del hueco",   lambda f: extract_from_pdf(f)),
         ("ns",      "Número de paradas",      lambda f: extract_number_of_stops(f)),
         ("rail",    "Código de riel",         lambda f: extract_car_guide_rail(f)),
+        ("modelo",  "Modelo (línea de producto)", lambda f: extract_product_line(f)),
         ("belting", "Datos de belting",       lambda f: extract_belting(f)),
         ("hkp",     "HKP (buffers)",          lambda f: extract_hkp(f)),
         ("lf",      "LFKK / LFGK (rieles)",   lambda f: extract_lf(f)),

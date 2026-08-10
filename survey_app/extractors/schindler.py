@@ -339,6 +339,30 @@ def extract_number_of_stops(pdf_file):
     return None
 
 
+# Modelo / línea de producto Schindler (p.ej. "ES1_R2"), del cajetín del plano.
+# ⚠️ El valor de la fila "PRODUCT CLUSTER" de la tabla MAIN DATA sale pegado a notas en
+# la extracción del CAD (no fiable); "PRODUCT LINE:" sí aparece limpio en cada página.
+_PLINE_RE = re.compile(r"PRODUCT\s*LINE\s*[:\-]?\s*([A-Z0-9][A-Z0-9_\-/\.]{1,24})")
+
+
+def extract_product_line(pdf_file) -> str:
+    """Línea de producto / modelo Schindler (ej. 'ES1_R2') del cajetín del plano, o None.
+
+    Se lee de la extracción POSICIONAL (donde el valor va junto al label). Se exige que
+    el valor tenga un dígito o '_' para no confundirlo con el label 'PRODUCT LINE: REV…'
+    del recuadro de título."""
+    try:
+        for pos, _plano in page_texts(pdf_file):
+            m = _PLINE_RE.search(pos.upper())
+            if m:
+                val = m.group(1).strip(" .:-")
+                if val and re.search(r"[0-9_]", val):
+                    return val
+    except Exception as e:
+        logger.warning("extract_product_line: %s", e)
+    return None
+
+
 # Código de riel tipo T75-3/B (con tolerancia a espacios que mete el CAD)
 _RAIL_CODE = re.compile(r"T\s?\d{2,3}\s?-?\s?\d?\s?/?\s?[A-Z]", re.IGNORECASE)
 

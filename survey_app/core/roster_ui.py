@@ -225,6 +225,28 @@ def _guardar_celda(grupo, lunes, usuario, datos, dia, asig, nota, toda_semana):
     return R.guardar_persona(grupo, lunes, usuario, sem)
 
 
+def _cumplimiento_celda(usuario, pid):
+    """Dentro del popover: avisa si el usuario cumple los certificados que EXIGE el
+    proyecto (CertsReq). Reusa `credentials.compliance` (v219). Silencioso si el
+    proyecto no exige certificados."""
+    try:
+        prj = P.get_project(pid)
+        certs = [c.strip() for c in str((prj or {}).get("CertsReq", "")).split(";")
+                 if c.strip()]
+        if not certs:
+            return
+        from core import credentials
+        comp = credentials.compliance(usuario, certs)
+        _ic = {"vigente": "🟢", "por_vencer": "🟡", "vencido": "🔴", "falta": "⚪"}
+        bits = " · ".join(f"{_ic.get(e, '⚪')} {t}" for t, e in comp["por_tipo"].items())
+        if comp["cumple"]:
+            st.success(f"Cumple los certificados del proyecto: {bits}")
+        else:
+            st.warning(f":material/warning: No cumple todos los certificados: {bits}")
+    except Exception:
+        pass
+
+
 def _tablero_editable(grupo, lunes, staff, datos, tidx):
     """Board del admin EDITABLE EN SITIO (v217): cada celda es un `st.popover`
     coloreado con el color de su trabajo (clase `st-key-<key>` sobre el trigger —
@@ -286,15 +308,27 @@ def _tablero_editable(grupo, lunes, staff, datos, tidx):
                 st.caption(f"**{_esc(nom)}** · {R.DIAS_LABEL[d]} {f.strftime('%d/%m')}")
                 _i = valores.index(asig) if asig in valores else 0
                 _sel = st.selectbox("Asignación", etiquetas, index=_i, key=f"pva_{idx}")
+                _selval = valores[etiquetas.index(_sel)]
+                # v273: si lo elegido es un PROYECTO, avisa aquí mismo si el usuario
+                # cumple los certificados que exige (CertsReq).
+                _pidsel = R.proyecto_de(_selval, tidx)
+                if _pidsel:
+                    _cumplimiento_celda(usuario, _pidsel)
                 _nota = st.text_input("Nota", value=nota, key=f"pvn_{idx}",
                                       placeholder="vehículo, equipo, horario…")
                 _all = st.checkbox("Aplicar a toda la semana", key=f"pvw_{idx}")
                 if st.button(":material/save: Guardar", key=f"pvs_{idx}", type="primary",
                              use_container_width=True):
-                    _nueva = valores[etiquetas.index(_sel)]
                     ok, msg = _guardar_celda(grupo, lunes, usuario, datos, d,
-                                             _nueva, _nota, _all)
+                                             _selval, _nota, _all)
                     if ok:
+                        # v273: al agendar a un PROYECTO, el usuario entra como asignado
+                        # del proyecto → acceso desde su cuenta (no quita a nadie de otros).
+                        if _pidsel:
+                            try:
+                                P.add_field_user(_pidsel, usuario)
+                            except Exception:
+                                pass
                         st.rerun()
                     else:
                         st.error(msg)

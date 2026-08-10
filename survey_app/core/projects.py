@@ -452,6 +452,24 @@ def list_projects_for_field(usuario: str, grupo: str = None) -> list:
     return out
 
 
+def add_field_user(pid: str, usuario: str) -> tuple:
+    """Añade un usuario de campo a CampoAsignados del proyecto (para que tenga acceso
+    desde su cuenta). Idempotente: si ya está, no reescribe. NO quita a nadie.
+    Devuelve (ok, nuevo) donde `nuevo`=True solo si se acaba de agregar."""
+    usuario = str(usuario or "").strip()
+    if not usuario:
+        return False, False
+    prj = get_project(pid)
+    if not prj:
+        return False, False
+    actuales = [x.strip() for x in str(prj.get("CampoAsignados", "")).split(";") if x.strip()]
+    if usuario in actuales:
+        return True, False
+    actuales.append(usuario)
+    ok, _ = update_project(pid, {"CampoAsignados": ";".join(actuales)})
+    return ok, ok
+
+
 def get_project(pid: str) -> dict:
     for r in _records(PROJECTS_SHEET):
         if str(r.get("ID", "")) == str(pid):

@@ -727,6 +727,9 @@ def _nuevo_proyecto_form(grupo: str, key: str = "nuevo"):
                 st.session_state[f"np_ns_{key}"] = max(2, min(50, int(float(_pl.get("ns") or 2))))
             except Exception:
                 pass
+            _mdl = str(_pl.get("modelo") or "").strip()   # v273: PRODUCT LINE del plano
+            if _mdl:
+                st.session_state[f"np_mod_{key}"] = _mdl
             # Guarda de identidad: sin esto se reextraería en CADA rerun (v112)
             st.session_state[f"{_kd}_id"] = f"{_pdf.name}:{_pdf.size}"
             _barra.empty()
@@ -783,10 +786,20 @@ def _nuevo_proyecto_form(grupo: str, key: str = "nuevo"):
                                        else "Define la duración de las actividades."))
             f_ini = c1.date_input("Fecha de inicio", value=clock.today(),
                                   key=f"np_ini_{key}")
+            # La fecha de FIN no se teclea: sale del NS + las actividades estándar de
+            # instalación (`build_schedule`), cuyas duraciones escalan con el NS. Preview:
+            try:
+                _sch_prev = build_schedule(int(ns), f_ini, {})
+                c1.caption(":material/event_available: Fin estimado: "
+                           f"**{_sch_prev['fecha_fin'].strftime('%d/%m/%Y')}** "
+                           f"({_sch_prev['total_dias']} días) — del NS y las actividades estándar.")
+            except Exception:
+                pass
             pres = c2.number_input(":material/payments: Presupuesto (0 = sin presupuesto)", min_value=0.0,
                                    step=100.0, key=f"np_pres_{key}")
-            mod = st.text_input("Modelo de elevador (opcional)", key=f"np_mod_{key}",
-                                placeholder="El plano no expone un modelo fiable; escríbelo si lo necesitas.")
+            mod = st.text_input("Modelo de elevador", key=f"np_mod_{key}",
+                                placeholder="opcional",
+                                help="Prellenado del plano (PRODUCT LINE), si se leyó. Editable.")
             instr = st.text_area(":material/push_pin: Instrucciones particulares", key=f"np_ins_{key}",
                                  placeholder="Indicaciones específicas para el equipo…")
             inds = st.text_area(":material/description: Inducciones (un link por línea)", key=f"np_ind_{key}",
