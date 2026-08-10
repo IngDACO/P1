@@ -218,30 +218,31 @@ def render_ruta_dia(grupo):
         usr = str(u.get("Usuario", ""))
         nom = str(u.get("Nombre", "") or usr)
         try:
-            a = roster.asignacion_dia(grupo, usr, fecha)
+            aa = roster.asignaciones_dia(grupo, usr, fecha)   # v274: varias por día
         except Exception:
-            a = {}
-        if not a or not str(a.get("asig", "")).strip():
+            aa = []
+        if not aa:
             sin_plan.append(nom)
             continue
-        pid = str(a.get("proyecto_id", "")).strip()
-        if not pid:
-            sin_prj.append(f"{nom} — {a.get('etiqueta') or a.get('asig')}")
-            continue
-        prj = P.get_project(pid)
-        if not prj:
-            sin_prj.append(f"{nom} — (obra no encontrada)")
-            continue
-        obra = str(prj.get("Nombre", ""))
-        c = _coords_de(prj)
-        if not c:
-            sin_coord.append(f"{nom} → {obra}")
-            continue
-        s = sitios.setdefault(pid, {"nombre": obra, "lat": c[0], "lon": c[1],
-                                    "personas": []})
-        s["personas"].append(nom)
-        en_obra.append({"Persona": nom, "Obra": obra,
-                        "Dirección": str(prj.get("Ubicacion", ""))})
+        for a in aa:
+            pid = str(a.get("proyecto_id", "")).strip()
+            if not pid:
+                sin_prj.append(f"{nom} — {a.get('etiqueta') or a.get('asig')}")
+                continue
+            prj = P.get_project(pid)
+            if not prj:
+                sin_prj.append(f"{nom} — (obra no encontrada)")
+                continue
+            obra = str(prj.get("Nombre", ""))
+            c = _coords_de(prj)
+            if not c:
+                sin_coord.append(f"{nom} → {obra}")
+                continue
+            s = sitios.setdefault(pid, {"nombre": obra, "lat": c[0], "lon": c[1],
+                                        "personas": []})
+            s["personas"].append(nom)
+            en_obra.append({"Persona": nom, "Obra": obra,
+                            "Dirección": str(prj.get("Ubicacion", ""))})
 
     k1, k2, k3, k4 = st.columns(4)
     k1.metric("En obra", len(en_obra))

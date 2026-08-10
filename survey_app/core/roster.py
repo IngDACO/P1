@@ -283,9 +283,42 @@ def get_semana(grupo, lunes) -> dict:
     return out
 
 
+def _norm_cell(c) -> dict:
+    """Normaliza una celda a {'asigs':[...], 'nota':str}. Compat: el formato viejo
+    {'asig','nota'} (una sola asignación) se lee como lista de uno; el nuevo lleva
+    varias en 'asigs' (varios proyectos el mismo día, v274). Una nota por día."""
+    c = c or {}
+    if "asigs" in c:
+        asigs = [str(a).strip() for a in (c.get("asigs") or []) if str(a).strip()]
+    else:
+        a = str(c.get("asig", "")).strip()
+        asigs = [a] if a else []
+    return {"asigs": asigs, "nota": str(c.get("nota", "") or "")}
+
+
+def _compact(datos) -> dict:
+    """Deja solo las celdas no vacías, normalizadas a {'asigs','nota'} (formato nuevo)."""
+    out = {}
+    for k, v in (datos or {}).items():
+        n = _norm_cell(v)
+        if n["asigs"] or n["nota"].strip():
+            out[k] = {"asigs": n["asigs"], "nota": n["nota"]}
+    return out
+
+
 def celda(semana_datos, usuario, dia) -> dict:
-    """{'asig','nota'} de una celda; {} si no hay."""
-    return (semana_datos.get(usuario, {}) or {}).get(dia, {}) or {}
+    """Celda como {'asig','nota'} — `asig` = la PRIMERA asignación del día (compat con los
+    consumidores de una sola). Para TODAS las asignaciones: `celda_asigs`. {} si vacía."""
+    n = _norm_cell((semana_datos.get(usuario, {}) or {}).get(dia, {}))
+    if not n["asigs"] and not n["nota"].strip():
+        return {}
+    return {"asig": n["asigs"][0] if n["asigs"] else "", "nota": n["nota"]}
+
+
+def celda_asigs(semana_datos, usuario, dia) -> list:
+    """Lista de asignaciones (valores) de una celda; [] si no hay. Soporta varios
+    proyectos el mismo día (v274) y el formato viejo de una sola."""
+    return _norm_cell((semana_datos.get(usuario, {}) or {}).get(dia, {}))["asigs"]
 
 
 def guardar_persona(grupo, lunes, usuario, dias: dict) -> tuple:
@@ -298,8 +331,7 @@ def guardar_persona(grupo, lunes, usuario, dias: dict) -> tuple:
     if w is None:
         return False, "Google Sheets no está configurado."
     sem = lunes.isoformat() if hasattr(lunes, "isoformat") else str(lunes)
-    limpio = {d: v for d, v in (dias or {}).items()
-              if v and (str(v.get("asig", "")).strip() or str(v.get("nota", "")).strip())}
+    limpio = _compact(dias)
     payload = json.dumps(limpio, ensure_ascii=False)
     try:
         recs = w.get_all_values()
@@ -319,31 +351,34 @@ def guardar_persona(grupo, lunes, usuario, dias: dict) -> tuple:
     return True, "Guardado."
 
 
-def asignacion_dia(grupo, usuario, fecha=None) -> dict:
-    """Qué le toca a una persona un día concreto (hoy si None).
-
-    Devuelve {asig, nota, proyecto_id, etiqueta, color, es_estado}. Vacío si el
-    día no es laboral (fin de semana) o no hay asignación. Lo usan el fichaje
-    (pre-proponer el proyecto) y la vista del campo.
-    """
+def asignaciones_dia(grupo, usuario, fecha=None) -> list:
+    """TODAS las asignaciones de una persona un día (varias posibles, v274). Cada una:
+    {asig, nota, proyecto_id, etiqueta, color, es_estado}. [] si fin de semana o vacío.
+    La `nota` es una sola por día (se repite en cada asignación)."""
     fecha = fecha or clock.today()
     if isinstance(fecha, datetime):
         fecha = fecha.date()
-    wd = fecha.weekday()                       # 0=lun .. 6=dom
-    if wd > 4:                                 # sáb/dom: no hay rejilla
-        return {}
-    dia = DIAS[wd]
+    if fecha.weekday() > 4:                     # sáb/dom: no hay rejilla
+        return []
+    dia = DIAS[fecha.weekday()]
     lunes = lunes_de(fecha)
-    c = celda(get_semana(grupo, lunes), str(usuario), dia)
-    asig = str(c.get("asig", ""))
-    if not asig and not str(c.get("nota", "")).strip():
-        return {}
+    sem = get_semana(grupo, lunes)
+    raw = _norm_cell((sem.get(str(usuario), {}) or {}).get(dia, {}))
+    if not raw["asigs"]:
+        return []
     tidx = trabajos_idx(grupo)
-    return {"asig": asig, "nota": str(c.get("nota", "")),
-            "proyecto_id": proyecto_de(asig, tidx),
-            "etiqueta": etiqueta_de(asig, tidx),
-            "color": color_de(asig, tidx),
-            "es_estado": asig in ESTADOS}
+    return [{"asig": a, "nota": raw["nota"],
+             "proyecto_id": proyecto_de(a, tidx),
+             "etiqueta": etiqueta_de(a, tidx),
+             "color": color_de(a, tidx),
+             "es_estado": a in ESTADOS} for a in raw["asigs"]]
+
+
+def asignacion_dia(grupo, usuario, fecha=None) -> dict:
+    """La PRIMERA asignación de la persona ese día (compat: fichaje, agenda). {} si no hay.
+    Para TODAS: `asignaciones_dia`."""
+    aa = asignaciones_dia(grupo, usuario, fecha)
+    return aa[0] if aa else {}
 
 
 def copiar_semana(grupo, lunes_origen, lunes_destino) -> tuple:
@@ -427,20 +462,17 @@ def autopoblar_proyecto(grupo, pid, usuarios, fecha_ini, fecha_fin,
                 fdia = lu + timedelta(days=di)
                 if fdia < ini or fdia > fin:
                     continue
-                cur = str((datos.get(dk) or {}).get("asig", ""))
-                if cur:
-                    if cur != str(pid):
-                        ocupadas += 1     # otra asignación: no se pisa (feature 1)
+                cell = _norm_cell(datos.get(dk))
+                if cell["asigs"]:
+                    if str(pid) not in cell["asigs"]:
+                        ocupadas += 1     # ya tiene asignación(es): no se pisa (solo vacías)
                     continue
-                datos[dk] = {"asig": str(pid), "nota": ""}
+                datos[dk] = {"asigs": [str(pid)], "nota": ""}
                 llenadas += 1
                 cambiado = True
             if not cambiado:
                 continue
-            payload = json.dumps(
-                {k: v for k, v in datos.items()
-                 if v and (str(v.get("asig", "")).strip() or str(v.get("nota", "")).strip())},
-                ensure_ascii=False)
+            payload = json.dumps(_compact(datos), ensure_ascii=False)
             if idx0 is not None:
                 updates.append({"range": _a1(idx0 + 1, 5), "values": [[payload]]})
             else:
@@ -486,13 +518,18 @@ def limpiar_proyecto(grupo, pid, usuarios=None) -> int:
             continue
         ch = False
         for dk in list(datos.keys()):
-            if str((datos.get(dk) or {}).get("asig", "")) == str(pid):
-                datos.pop(dk)
+            n = _norm_cell(datos.get(dk))
+            if str(pid) in n["asigs"]:
+                rest = [a for a in n["asigs"] if a != str(pid)]
+                if rest or n["nota"].strip():
+                    datos[dk] = {"asigs": rest, "nota": n["nota"]}
+                else:
+                    datos.pop(dk)
                 ch = True
                 quitadas += 1
         if ch:
             updates.append({"range": _a1(i + 1, 5),
-                            "values": [[json.dumps(datos, ensure_ascii=False)]]})
+                            "values": [[json.dumps(_compact(datos), ensure_ascii=False)]]})
     try:
         if updates:
             w.batch_update(updates, value_input_option="RAW")

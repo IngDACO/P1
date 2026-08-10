@@ -213,15 +213,16 @@ def render_board_readonly(grupo, resaltar_usuario=""):
                 unsafe_allow_html=True)
 
 
-def _guardar_celda(grupo, lunes, usuario, datos, dia, asig, nota, toda_semana):
-    """Escribe UNA celda (o toda la semana) reusando la semana actual de la persona.
-    `guardar_persona` omite las celdas vacías, así que asig+nota vacíos = limpiar."""
+def _guardar_celda(grupo, lunes, usuario, datos, dia, asigs, nota, toda_semana):
+    """Escribe UNA celda (o toda la semana) con VARIAS asignaciones + una nota por día
+    (v274). `guardar_persona` omite celdas vacías → asigs vacío + nota vacía = limpiar."""
     sem = dict(datos.get(usuario, {}) or {})
+    cell = {"asigs": [a for a in (asigs or []) if a], "nota": nota}
     if toda_semana:
         for d in R.DIAS:
-            sem[d] = {"asig": asig, "nota": nota}
+            sem[d] = dict(cell)
     else:
-        sem[dia] = {"asig": asig, "nota": nota}
+        sem[dia] = cell
     return R.guardar_persona(grupo, lunes, usuario, sem)
 
 
@@ -257,17 +258,22 @@ def _tablero_editable(grupo, lunes, staff, datos, tidx):
     abajo (v159). El board del campo sigue siendo el HTML de `_grid_html`.
     """
     dias = R.DIAS
+    _wk = lunes.strftime("%Y%m%d")   # las keys llevan la SEMANA: al navegar semanas, una
+                                     # celda no hereda la selección de otra (evita pisar datos).
     op = _opciones(grupo, tidx)
-    etiquetas = [e for e, _ in op]
-    valores   = [v for _, v in op]
+    op_real = [(e, v) for e, v in op if v != ""]        # sin el neutro (para el multiselect)
+    etq = [e for e, _ in op_real]
+    val_by_etq = {e: v for e, v in op_real}
+    etq_by_val = {v: e for e, v in op_real}
 
-    # 1) CSS de color por celda (una regla por celda; las vacías, tenues).
+    # 1) CSS de color por celda (color de la 1ª asignación; las vacías, tenues).
     css = []
     for pi, u in enumerate(staff):
         for di, d in enumerate(dias):
             idx = pi * len(dias) + di
-            asig = str(R.celda(datos, u["Usuario"], d).get("asig", ""))
-            key = f"roscel_{idx}"
+            _asigs = R.celda_asigs(datos, u["Usuario"], d)
+            asig = _asigs[0] if _asigs else ""
+            key = f"roscel_{_wk}_{idx}"
             if asig:
                 bg = R.color_de(asig, tidx)
                 css.append(f".st-key-{key} button{{background:{bg}!important;"
@@ -298,48 +304,51 @@ def _tablero_editable(grupo, lunes, staff, datos, tidx):
         for di, d in enumerate(dias):
             idx = pi * len(dias) + di
             col = cols[di + 1]
-            c = R.celda(datos, usuario, d)
-            asig = str(c.get("asig", ""))
-            nota = str(c.get("nota", ""))
-            pid  = R.proyecto_de(asig, tidx)
-            et   = R.etiqueta_de(asig, tidx)
-            with col.popover(et or "＋", key=f"roscel_{idx}", use_container_width=True):
+            asigs = R.celda_asigs(datos, usuario, d)
+            nota = R.celda(datos, usuario, d).get("nota", "")
+            et = " · ".join(R.etiqueta_de(a, tidx) for a in asigs) if asigs else ""
+            with col.popover(et or "＋", key=f"roscel_{_wk}_{idx}", use_container_width=True):
                 f = R.fecha_de_dia(lunes, d)
                 st.caption(f"**{_esc(nom)}** · {R.DIAS_LABEL[d]} {f.strftime('%d/%m')}")
-                _i = valores.index(asig) if asig in valores else 0
-                _sel = st.selectbox("Asignación", etiquetas, index=_i, key=f"pva_{idx}")
-                _selval = valores[etiquetas.index(_sel)]
-                # v273: si lo elegido es un PROYECTO, avisa aquí mismo si el usuario
-                # cumple los certificados que exige (CertsReq).
-                _pidsel = R.proyecto_de(_selval, tidx)
-                if _pidsel:
-                    _cumplimiento_celda(usuario, _pidsel)
-                _nota = st.text_input("Nota", value=nota, key=f"pvn_{idx}",
+                _def = [etq_by_val[a] for a in asigs if a in etq_by_val]
+                _sel = st.multiselect("Asignaciones del día (puedes elegir varias)",
+                                      etq, default=_def, key=f"pva_{_wk}_{idx}")
+                _selvals = [val_by_etq[e] for e in _sel]
+                # v273/v274: por cada PROYECTO elegido, avisa si el usuario cumple los
+                # certificados que exige (CertsReq).
+                for _v in _selvals:
+                    _pv = R.proyecto_de(_v, tidx)
+                    if _pv:
+                        _cumplimiento_celda(usuario, _pv)
+                _nota = st.text_input("Nota (para todo el día)", value=nota, key=f"pvn_{_wk}_{idx}",
                                       placeholder="vehículo, equipo, horario…")
-                _all = st.checkbox("Aplicar a toda la semana", key=f"pvw_{idx}")
-                if st.button(":material/save: Guardar", key=f"pvs_{idx}", type="primary",
+                _all = st.checkbox("Aplicar a toda la semana", key=f"pvw_{_wk}_{idx}")
+                if st.button(":material/save: Guardar", key=f"pvs_{_wk}_{idx}", type="primary",
                              use_container_width=True):
                     ok, msg = _guardar_celda(grupo, lunes, usuario, datos, d,
-                                             _selval, _nota, _all)
+                                             _selvals, _nota, _all)
                     if ok:
-                        # v273: al agendar a un PROYECTO, el usuario entra como asignado
+                        # v273/v274: cada PROYECTO agendado mete al usuario como asignado
                         # del proyecto → acceso desde su cuenta (no quita a nadie de otros).
-                        if _pidsel:
-                            try:
-                                P.add_field_user(_pidsel, usuario)
-                            except Exception:
-                                pass
+                        for _v in _selvals:
+                            _pv = R.proyecto_de(_v, tidx)
+                            if _pv:
+                                try:
+                                    P.add_field_user(_pv, usuario)
+                                except Exception:
+                                    pass
                         st.rerun()
                     else:
                         st.error(msg)
-                if pid and st.button("→ Abrir proyecto", key=f"pvo_{idx}",
-                                     use_container_width=True):
-                    # Navega al detalle en la nav NUEVA del admin y (por si acaso) la
-                    # vieja: se fija el pending que lee cada shell antes de sus radios.
-                    st.session_state["_prjsel_pending"] = pid
-                    st.session_state["_admin_nav_pending"] = ("proyectos", "📊 Proyectos")
-                    st.session_state["_gruposec_pending"] = "📊 Proyectos"
-                    st.rerun()
+                # Abrir cada proyecto elegido (un botón por proyecto).
+                for _v in _selvals:
+                    _pv = R.proyecto_de(_v, tidx)
+                    if _pv and st.button(f"→ {R.etiqueta_de(_v, tidx)}",
+                                         key=f"pvo_{_wk}_{idx}_{_v}", use_container_width=True):
+                        st.session_state["_prjsel_pending"] = _pv
+                        st.session_state["_admin_nav_pending"] = ("proyectos", "📊 Proyectos")
+                        st.session_state["_gruposec_pending"] = "📊 Proyectos"
+                        st.rerun()
             if nota:
                 col.caption(nota)
 
@@ -361,18 +370,22 @@ def _grid_html(staff, lunes, datos, tidx, resaltar="") -> str:
                   f'color:#1f2937;white-space:nowrap;position:sticky;left:0;background:{_nbg};'
                   f'border-right:1px solid #eef1f5;">{"<span style=\"font-family:&#39;Material Symbols Rounded&#39;;vertical-align:-2px\">arrow_forward</span> " if _mio else ""}{_esc(nom)}</td>']
         for d in R.DIAS:
-            c = R.celda(datos, usr, d)
-            asig = str(c.get("asig", ""))
-            nota = str(c.get("nota", ""))
-            bg   = R.color_de(asig, tidx)
-            fg   = _texto_sobre(bg) if asig else "#9aa7b8"
-            et   = R.etiqueta_de(asig, tidx)
-            cont = (f'<div style="font-weight:600;">{_esc(et)}</div>' if et else "")
-            if nota:
-                cont += f'<div style="font-size:10.5px;opacity:0.85;">{_esc(nota)}</div>'
-            celdas.append(f'<td style="padding:5px 7px;background:{bg};color:{fg};'
-                          f'border-radius:6px;font-size:11.5px;line-height:1.25;'
-                          f'vertical-align:top;">{cont or "&nbsp;"}</td>')
+            asigs = R.celda_asigs(datos, usr, d)
+            nota  = R.celda(datos, usr, d).get("nota", "")
+            if asigs:
+                cont = "".join(
+                    f'<div style="background:{R.color_de(a, tidx)};'
+                    f'color:{_texto_sobre(R.color_de(a, tidx))};border-radius:5px;'
+                    f'padding:2px 5px;margin-bottom:2px;font-weight:600;">'
+                    f'{_esc(R.etiqueta_de(a, tidx))}</div>' for a in asigs)
+                if nota:
+                    cont += (f'<div style="font-size:10.5px;opacity:0.8;color:#4b5563;">'
+                             f'{_esc(nota)}</div>')
+            else:
+                cont = "&nbsp;"
+            celdas.append(f'<td style="padding:4px 5px;background:#fff;'
+                          f'font-size:11.5px;line-height:1.25;vertical-align:top;">'
+                          f'{cont}</td>')
         filas.append("<tr>" + "".join(celdas) + "</tr>")
     return ('<div style="overflow-x:auto;margin:10px 0;">'
             '<table style="border-collapse:separate;border-spacing:3px;width:100%;">'
