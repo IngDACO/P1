@@ -41,6 +41,7 @@ _SUBSECCIONES = {
     "planificacion": ("adm_plan_sub", [
         ("📋 Tablero", ":material/calendar_view_week: Tablero"),
         ("👀 Disponibilidad", ":material/event_available: Disponibilidad"),
+        ("🟢 En vivo", ":material/broadcast: En vivo"),
         ("🗺 Ruta del día", ":material/route: Ruta del día"),
         ("👷 Usuarios", ":material/badge: Usuarios")]),
     "proyectos": ("adm_proy_sub", [
@@ -313,6 +314,9 @@ def _seccion_planificacion(grupo):
     elif sub == "👀 Disponibilidad":
         from core import roster_ui
         roster_ui.render_disponibilidad(grupo)
+    elif sub == "🟢 En vivo":
+        from core import roster_ui
+        roster_ui.render_estado_vivo(grupo)
     elif sub == "🗺 Ruta del día":
         from core import route_ui
         route_ui.render_ruta_dia(grupo)

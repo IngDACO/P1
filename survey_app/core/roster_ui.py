@@ -718,6 +718,54 @@ def render_disponibilidad(grupo):
     st.markdown(_disponibilidad_html(staff, lunes, datos, tidx), unsafe_allow_html=True)
 
 
+def render_estado_vivo(grupo):
+    """Quién está fichado AHORA y en qué proyecto + quién estaba asignado hoy y no ha
+    fichado (v281). Se actualiza al recargar la sección."""
+    from core import timeclock
+    if not timeclock.is_configured():
+        st.info("El fichaje necesita Google Sheets configurado.")
+        return
+    st.markdown("#### :material/broadcast: Estado en vivo")
+    st.caption("Quién está trabajando ahora mismo. Se actualiza al recargar.")
+
+    abiertos = timeclock.open_now(grupo)
+    poru = {}
+    for s in abiertos:
+        k = s["usuario"] or s["nombre"]
+        poru.setdefault(k, {"nombre": s["nombre"] or k, "gen": None, "prj": None})
+        poru[k]["prj" if s["tipo"] == timeclock.TIPO_PROYECTO else "gen"] = s
+    fichados = [v for v in poru.values() if v["gen"] or v["prj"]]
+
+    def _hm(seg):
+        h, m = seg // 3600, (seg % 3600) // 60
+        return f"{h}h{m:02d}" if h else f"{m}min"
+
+    k1, k2 = st.columns(2)
+    k1.metric("Fichados ahora", len(fichados))
+    k2.metric("En un proyecto", sum(1 for v in fichados if v["prj"]))
+
+    if fichados:
+        for v in sorted(fichados, key=lambda x: x["nombre"].lower()):
+            _seg = (v["prj"] or v["gen"])["segundos"]
+            _donde = f"→ {v['prj']['proyecto']}" if v["prj"] else "· jornada (sin proyecto aún)"
+            st.markdown(f"🟢 **{_esc(v['nombre'])}** {_esc(_donde)} · {_hm(_seg)}")
+    else:
+        st.info("Nadie fichado en este momento.")
+
+    _fich = {s["usuario"] for s in abiertos if s["usuario"]}
+    _sin = []
+    try:
+        for u in _staff(grupo):
+            usr = u["Usuario"]
+            aa = R.asignaciones_dia(grupo, usr)
+            if any(a.get("proyecto_id") for a in aa) and usr not in _fich:
+                _sin.append(u.get("Nombre") or usr)
+    except Exception:
+        pass
+    if _sin:
+        st.warning(":material/warning: Asignados hoy y sin fichar: " + _esc(", ".join(_sin)))
+
+
 def _disponibilidad_html(staff, lunes, datos, tidx) -> str:
     ths = ['<th style="text-align:left;padding:6px 8px;font-size:12px;color:#6b7280;'
            'position:sticky;left:0;background:#fff;">Persona</th>']

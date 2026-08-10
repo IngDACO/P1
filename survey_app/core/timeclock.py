@@ -355,6 +355,26 @@ def open_sessions(nombre: str, grupo: str = "", usuario: str = "") -> dict:
     return out
 
 
+def open_now(grupo: str) -> list:
+    """Sesiones ABIERTAS ahora mismo en el grupo (para el 'estado en vivo', v281):
+    [{usuario, nombre, tipo, proyecto, proyecto_id, clock_in, segundos}]."""
+    out = []
+    try:
+        for r in _cached_records():
+            if str(r.get("Grupo", "")).strip() != str(grupo).strip():
+                continue
+            if str(r.get("Estado", "")).strip().upper() != "ABIERTO":
+                continue
+            _ci = str(r.get("Clock In", ""))
+            out.append({"usuario": str(r.get("Usuario", "")), "nombre": str(r.get("Nombre", "")),
+                        "tipo": _tipo_of(r), "proyecto": str(r.get("Proyecto", "")),
+                        "proyecto_id": pid_of(r), "clock_in": _ci,
+                        "segundos": elapsed_seconds(_ci)})
+    except Exception:
+        pass
+    return out
+
+
 def fichar_proyecto(nombre: str, proyecto: str, grupo: str = "", usuario: str = "",
                     proyecto_id: str = "") -> tuple:
     """Ficha a un proyecto y, si no hay jornada general abierta, la abre tambien.
