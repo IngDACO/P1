@@ -290,12 +290,17 @@ def render_timeclock_tab():
         try:
             from core import roster
             if roster.is_configured():
-                _asig = roster.asignacion_dia(grupo, usuario)
-                _rpid = (_asig or {}).get("proyecto_id", "")
-                if _rpid and _rpid in idmap.values():
+                _aa = roster.asignaciones_dia(grupo, usuario)   # v274: varias por día
+                _hechos = set()
+                for _a in _aa:
+                    _rpid = (_a or {}).get("proyecto_id", "")
+                    if not _rpid or _rpid in _hechos or _rpid not in idmap.values():
+                        continue
+                    _hechos.add(_rpid)
                     _rnom = next(k for k, v in idmap.items() if v == _rpid)
-                    if st.button(f":material/check_circle: Fichar a {_asig['etiqueta']} (tu asignación de hoy)",
-                                 use_container_width=True, type="primary", key="tc_roster_in"):
+                    if st.button(f":material/check_circle: Fichar a {_a['etiqueta']} (tu asignación de hoy)",
+                                 use_container_width=True, type="primary",
+                                 key=f"tc_roster_in_{_rpid}"):
                         ok, msg, auto = timeclock.fichar_proyecto(
                             nombre, _rnom, grupo, usuario, _rpid)
                         if ok:
@@ -303,6 +308,7 @@ def render_timeclock_tab():
                             st.rerun()
                         else:
                             st.error(msg)
+                if _hechos:
                     st.caption("O elige otro proyecto abajo.")
         except Exception:
             pass

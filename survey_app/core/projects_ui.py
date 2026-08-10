@@ -2511,11 +2511,14 @@ def render_field_projects(usuario: str, grupo: str):
     try:
         from core import roster, roster_ui
         if roster.is_configured():
-            _hoy = roster.asignacion_dia(grupo, usuario)
-            if _hoy and _hoy.get("etiqueta"):
-                _n = f" · {_hoy['nota']}" if str(_hoy.get("nota", "")).strip() else ""
-                (st.info if _hoy.get("es_estado") else st.success)(
-                    f":material/calendar_month: **Hoy:** {_hoy['etiqueta']}{_n}")
+            _aa = roster.asignaciones_dia(grupo, usuario)   # v274: varias por día
+            if _aa:
+                _ets = " · ".join(a["etiqueta"] for a in _aa if a.get("etiqueta"))
+                _nt = next((a["nota"] for a in _aa if str(a.get("nota", "")).strip()), "")
+                _n = f" · {_nt}" if _nt else ""
+                _est = all(a.get("es_estado") for a in _aa)
+                (st.info if _est else st.success)(
+                    f":material/calendar_month: **Hoy:** {_ets}{_n}")
             with st.expander(":material/calendar_month: Ver la planificación de la semana (toda la cuadrilla)"):
                 roster_ui.render_board_readonly(grupo, resaltar_usuario=usuario)
     except Exception:

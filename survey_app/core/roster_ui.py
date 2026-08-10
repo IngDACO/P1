@@ -53,13 +53,13 @@ def _cobertura_hoy(lunes, staff, datos):
     fecha = R.fecha_de_dia(lunes, d)
     en_obra, estado, sin = 0, 0, []
     for u in staff:
-        asig = str(R.celda(datos, u["Usuario"], d).get("asig", ""))
-        if not asig:
-            sin.append(u.get("Nombre") or u["Usuario"])
-        elif asig in R.ESTADOS:
+        asigs = R.celda_asigs(datos, u["Usuario"], d)     # v274: varias por día
+        if any(a not in R.ESTADOS for a in asigs):
+            en_obra += 1
+        elif asigs:                                       # solo estados (OFF/Leave/…)
             estado += 1
         else:
-            en_obra += 1
+            sin.append(u.get("Nombre") or u["Usuario"])
     partes = [f":green[:material/check_circle:] **{en_obra}** en obra"]
     if sin:
         _n = ", ".join(sin[:4]) + ("…" if len(sin) > 4 else "")
@@ -145,36 +145,48 @@ def _plan_vs_real(grupo, lunes, staff, tidx):
         for u in staff:
             usr = u["Usuario"]
             nom = u.get("Nombre") or usr
-            c = R.celda(datos, usr, _dsel)
-            asig = str(c.get("asig", ""))
-            plan_pid = R.proyecto_de(asig, tidx)
-            es_estado = asig in R.ESTADOS
+            plan_asigs = R.celda_asigs(datos, usr, _dsel)          # v274: varias por día
+            plan_pids = {R.proyecto_de(a, tidx) for a in plan_asigs if R.proyecto_de(a, tidx)}
+            plan_lbl = ", ".join(R.etiqueta_de(a, tidx) for a in plan_asigs
+                                 if R.proyecto_de(a, tidx)) or "—"
+            solo_estados = bool(plan_asigs) and all(a in R.ESTADOS for a in plan_asigs)
+            trabajos_sin_prj = [a for a in plan_asigs
+                                if a not in R.ESTADOS and not R.proyecto_de(a, tidx)]
             reales = real.get(usr, [])
             real_pids = {e["pid"] for e in reales if e["pid"]}
             real_txt = ", ".join(e["nombre"] for e in reales) or "—"
 
-            if es_estado:
-                if reales:
-                    filas.append((":blue[:material/info:]", nom, f"marcado {R.etiqueta_de(asig, tidx)} "
-                                  f"pero fichó en {real_txt}"))
-                # OFF/Leave sin fichar: correcto, no se lista
-            elif plan_pid:
-                if plan_pid in real_pids:
-                    n_ok += 1
-                    filas.append((":green[:material/check_circle:]", nom, f"{R.etiqueta_de(asig, tidx)} — fichó donde tocaba"))
-                elif real_pids:
-                    n_desvio += 1
-                    filas.append((":red[:material/cancel:]", nom, f"asignado a {R.etiqueta_de(asig, tidx)} · "
-                                  f"fichó en {real_txt}"))
-                else:
+            if plan_pids:
+                falta = plan_pids - real_pids
+                extra = real_pids - plan_pids
+                if not real_pids:
                     n_sin += 1
-                    filas.append((":orange[:material/warning:]", nom, f"asignado a {R.etiqueta_de(asig, tidx)} · "
-                                  "sin fichar aún"))
-            elif asig:                                  # trabajo sin enlace a PRJ
-                filas.append(("—", nom, f"{R.etiqueta_de(asig, tidx)} "
-                              "(sin proyecto que comparar)"
+                    filas.append((":orange[:material/warning:]", nom,
+                                  f"asignado a {plan_lbl} · sin fichar aún"))
+                elif not falta:
+                    n_ok += 1
+                    _ex = f" (+ también {real_txt})" if extra else ""
+                    filas.append((":green[:material/check_circle:]", nom,
+                                  f"{plan_lbl} — fichó donde tocaba{_ex}"))
+                elif plan_pids & real_pids:
+                    n_desvio += 1
+                    filas.append((":orange[:material/warning:]", nom,
+                                  f"asignado a {plan_lbl} · fichó en {real_txt} (faltan algunas)"))
+                else:
+                    n_desvio += 1
+                    filas.append((":red[:material/cancel:]", nom,
+                                  f"asignado a {plan_lbl} · fichó en {real_txt}"))
+            elif solo_estados:
+                if reales:
+                    _est = ", ".join(R.etiqueta_de(a, tidx) for a in plan_asigs)
+                    filas.append((":blue[:material/info:]", nom,
+                                  f"marcado {_est} pero fichó en {real_txt}"))
+                # OFF/Leave sin fichar: correcto, no se lista
+            elif trabajos_sin_prj:                          # trabajo(s) sin enlace a PRJ
+                _tr = ", ".join(R.etiqueta_de(a, tidx) for a in trabajos_sin_prj)
+                filas.append(("—", nom, f"{_tr} (sin proyecto que comparar)"
                               + (f" · fichó en {real_txt}" if reales else "")))
-            elif reales:                                # sin plan pero ficho
+            elif reales:                                    # sin plan pero fichó
                 filas.append((":material/help:", nom, f"sin asignación · fichó en {real_txt}"))
 
         st.markdown(f":green[:material/check_circle:] {n_ok} donde tocaba  ·  :red[:material/cancel:] {n_desvio} en otro sitio  ·  "
