@@ -662,26 +662,24 @@ def _agenda_hoy(grupo):
     for u in staff:
         usr = u["Usuario"]
         nombre = u.get("Nombre") or usr
-        c = R.celda(sem, usr, dia)
-        asig = str(c.get("asig", ""))
-        nota = str(c.get("nota", "")).strip()
-        if asig in R.ESTADOS:
-            if asig == "OFF":
-                n_off += 1
-            elif asig == "LEAVE":
-                n_leave += 1
-        elif asig:
+        asigs = R.celda_asigs(sem, usr, dia)          # v274: varias asignaciones por día
+        nota = R.celda(sem, usr, dia).get("nota", "").strip()
+        reales = [a for a in asigs if a not in R.ESTADOS]
+        if reales:
             n_asig += 1
+        elif "OFF" in asigs:
+            n_off += 1
+        elif "LEAVE" in asigs:
+            n_leave += 1
         else:
             n_sin += 1
         filas.append({
             "usuario": usr,
             "nombre": nombre,
-            "etq": R.etiqueta_de(asig, tidx),
-            "color": R.color_de(asig, tidx),
+            "etqs": [R.etiqueta_de(a, tidx) for a in asigs],
+            "color": R.color_de(asigs[0] if asigs else "", tidx),
             "nota": nota,
-            "proy": pmap.get(R.proyecto_de(asig, tidx), ""),
-            "asig": asig,
+            "proys": [p for p in (pmap.get(R.proyecto_de(a, tidx), "") for a in asigs) if p],
         })
 
     # resumen
@@ -701,8 +699,9 @@ def _agenda_hoy(grupo):
     st.markdown("".join(_css), unsafe_allow_html=True)
 
     for _i, f in enumerate(filas):
-        _lbl = f"{f['nombre']} · {f['etq'] or 'sin asignar'}"
-        _hlp = " · ".join(x for x in (f.get("proy"), f.get("nota")) if x) or None
+        _etqs = " · ".join(x for x in f.get("etqs", []) if x)
+        _lbl = f"{f['nombre']} · {_etqs or 'sin asignar'}"
+        _hlp = " · ".join(list(f.get("proys", [])) + ([f["nota"]] if f.get("nota") else [])) or None
         if st.button(_lbl, key=f"agper_{_i}", use_container_width=True, help=_hlp):
             _u = f.get("usuario", "")
             _nom = f.get("nombre", "") or _u
