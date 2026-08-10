@@ -141,26 +141,25 @@ def location_picker(key, lat=None, lng=None, direccion=""):
     if c2.button("Buscar", key=f"{key}_btn", use_container_width=True):
         _cands = geocode_candidates(q)
         st.session_state[f"{key}_cands"] = _cands
+        st.session_state.pop(f"{key}_applied", None)     # reaplicar el mejor de esta búsqueda
+        st.session_state.pop(f"{key}_candsel", None)
         if not _cands:
             st.warning("No encontré esa dirección. Añade ciudad/estado/país, o haz clic en el mapa.")
         st.rerun()
 
-    # Candidatos de la última búsqueda: uno se fija solo; varios → elige el correcto.
+    # Resultados de la última búsqueda: SIEMPRE se muestran como opciones (aunque sea uno,
+    # que es el caso normal con Google). El mejor se aplica solo y se puede cambiar; la
+    # dirección elegida queda en `{key}_addr` para reusarla como texto de Ubicación.
     _cands = st.session_state.get(f"{key}_cands") or []
-    if len(_cands) == 1:
-        st.session_state[klat] = _cands[0]["lat"]
-        st.session_state[klng] = _cands[0]["lon"]
-        st.session_state.pop(f"{key}_cands", None)
-        st.rerun()
-    elif len(_cands) > 1:
+    if _cands:
         _labels = [c["label"] for c in _cands]
-        _sel = st.selectbox("¿Cuál es? Elige el resultado exacto:", ["—"] + _labels,
-                            key=f"{key}_candsel")
-        if _sel != "—":
-            _c = _cands[_labels.index(_sel)]
+        _sel = st.selectbox(f":material/place: Resultado ({len(_cands)}) — confírmalo o elige otro:",
+                            _labels, key=f"{key}_candsel")
+        _c = _cands[_labels.index(_sel)]
+        if st.session_state.get(f"{key}_applied") != _sel:
+            st.session_state[f"{key}_applied"] = _sel
             st.session_state[klat], st.session_state[klng] = _c["lat"], _c["lon"]
-            st.session_state.pop(f"{key}_cands", None)
-            st.session_state.pop(f"{key}_candsel", None)
+            st.session_state[f"{key}_addr"] = _sel
             st.rerun()
 
     try:

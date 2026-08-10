@@ -719,6 +719,14 @@ def _nuevo_proyecto_form(grupo: str, key: str = "nuevo"):
             except Exception as e:
                 st.session_state[_kd] = None
                 st.error(f"No se pudo leer el plano: {e}")
+            # v272: prellenar NS desde el plano AQUÍ (session_state), no con `value=` en el
+            # form. El widget NS ya se instanció antes de subir el plano y Streamlit ignora
+            # `value=` si la key ya existe → el prellenado no tomaba (NS se quedaba en 2).
+            _pl = st.session_state.get(_kd) or {}
+            try:
+                st.session_state[f"np_ns_{key}"] = max(2, min(50, int(float(_pl.get("ns") or 2))))
+            except Exception:
+                pass
             # Guarda de identidad: sin esto se reextraería en CADA rerun (v112)
             st.session_state[f"{_kd}_id"] = f"{_pdf.name}:{_pdf.size}"
             _barra.empty()
@@ -757,28 +765,28 @@ def _nuevo_proyecto_form(grupo: str, key: str = "nuevo"):
         if _cli_sel == _CLI_OTRO:
             _cli_new = st.text_input("Nombre del nuevo cliente", key=f"np_clinew_{key}")
 
+        # NS lo controla session_state (prellenado del plano arriba); la Ubicación se toma de
+        # la dirección que buscaste en el mapa → ya no se pide dos veces (v272).
+        st.session_state.setdefault(f"np_ns_{key}", 2)
+        _ubi_auto = (st.session_state.get(f"nploc_{key}_addr")
+                     or st.session_state.get(f"nploc_{key}_q") or "").strip()
+        if _ubi_auto:
+            st.caption(f":material/place: Ubicación que se guardará: **{_ubi_auto}**")
+
         with st.form(f"np_form_{key}"):
             nom = st.text_input("Nombre del proyecto *", key=f"np_nom_{key}")
             c1, c2 = st.columns(2)
-            ubi = c1.text_input("Ubicación", key=f"np_ubi_{key}",
-                                help="Se enlaza a Google Maps en toda la app.")
-            mod = c2.text_input("Modelo de elevador", key=f"np_mod_{key}",
-                                value=str((_plano or {}).get("rail") or ""),
-                                help="Prellenado con el código de riel del plano, si se leyó.")
             ing = c1.text_input("Ingeniero responsable", key=f"np_ing_{key}")
-            _ns0 = 2
-            try:
-                _ns0 = max(2, min(50, int(float((_plano or {}).get("ns") or 2))))
-            except Exception:
-                pass
             ns = c2.number_input("Número de paradas (NS) *", min_value=2, max_value=50,
-                                 value=_ns0, step=1, key=f"np_ns_{key}",
+                                 step=1, key=f"np_ns_{key}",
                                  help=("Leído del plano." if (_plano or {}).get("ns")
                                        else "Define la duración de las actividades."))
             f_ini = c1.date_input("Fecha de inicio", value=clock.today(),
                                   key=f"np_ini_{key}")
             pres = c2.number_input(":material/payments: Presupuesto (0 = sin presupuesto)", min_value=0.0,
                                    step=100.0, key=f"np_pres_{key}")
+            mod = st.text_input("Modelo de elevador (opcional)", key=f"np_mod_{key}",
+                                placeholder="El plano no expone un modelo fiable; escríbelo si lo necesitas.")
             instr = st.text_area(":material/push_pin: Instrucciones particulares", key=f"np_ins_{key}",
                                  placeholder="Indicaciones específicas para el equipo…")
             inds = st.text_area(":material/description: Inducciones (un link por línea)", key=f"np_ind_{key}",
@@ -791,6 +799,9 @@ def _nuevo_proyecto_form(grupo: str, key: str = "nuevo"):
             if not nom.strip():
                 st.error("El nombre del proyecto es obligatorio.")
                 return
+            # Ubicación = la dirección que se buscó en el mapa (ya no hay campo aparte).
+            ubi = (st.session_state.get(f"nploc_{key}_addr")
+                   or st.session_state.get(f"nploc_{key}_q") or "").strip()
             # Incluye archivados: crear un homonimo de uno archivado tambien confunde.
             dups = [f"{p.get('ID')} · {p.get('Nombre')}"
                     for p in P.list_projects(grupo, incluir_archivados=True)
