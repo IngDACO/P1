@@ -182,6 +182,63 @@ def _asignacion_inteligente(grupo, lunes, staff, tidx):
                        + _esc(", ".join(f["nom"] for f in ocupados)))
 
 
+def _radar_personal(grupo, lunes, staff, tidx):
+    """Problemas de personal de la semana vista: choques de turno (franjas que se solapan
+    el mismo día) + certificados que BLOQUEAN (asignado a un proyecto cuyos certs no cumple).
+    v280."""
+    from core import credentials
+    datos = R.get_semana(grupo, lunes)
+    choques, sin_cumplir, _seen = [], [], set()
+    for u in staff:
+        usr = u["Usuario"]
+        nom = u.get("Nombre") or usr
+        for d in R.DIAS:
+            items = R.celda_items(datos, usr, d)
+            ov = False
+            for i in range(len(items)):
+                for j in range(i + 1, len(items)):
+                    if _solapa(items[i]["ini"], items[i]["fin"], items[j]["ini"], items[j]["fin"]):
+                        ov = True
+                        break
+                if ov:
+                    break
+            if ov:
+                _lbls = " y ".join(R.etiqueta_de(it["asig"], tidx) for it in items)
+                choques.append(f"{nom} · {R.DIAS_LABEL[d]} "
+                               f"{R.fecha_de_dia(lunes, d).strftime('%d/%m')}: {_lbls} se solapan")
+            for it in items:
+                if it["asig"] in R.ESTADOS:
+                    continue
+                pid = R.proyecto_de(it["asig"], tidx)
+                if not pid or (usr, pid) in _seen:
+                    continue
+                prj = P.get_project(pid)
+                certs = [c.strip() for c in str((prj or {}).get("CertsReq", "")).split(";") if c.strip()]
+                if not certs:
+                    continue
+                comp = credentials.compliance(usr, certs)
+                if not comp["cumple"]:
+                    _seen.add((usr, pid))
+                    faltan = [t for t, e in comp["por_tipo"].items() if e in ("vencido", "falta")]
+                    sin_cumplir.append(f"{nom} → {R.etiqueta_de(it['asig'], tidx)}: "
+                                       + ", ".join(faltan))
+    n = len(choques) + len(sin_cumplir)
+    _lbl = (f":material/radar: Radar de personal ({n})" if n
+            else ":material/radar: Radar de personal — sin problemas")
+    with st.expander(_lbl, expanded=bool(n)):
+        if not n:
+            st.success("Sin choques de turno ni certificados que bloqueen esta semana.")
+            return
+        if choques:
+            st.markdown("**:orange[:material/warning:] Choques de turno:**")
+            for c in choques:
+                st.markdown(f"- {_esc(c)}")
+        if sin_cumplir:
+            st.markdown("**:red[:material/block:] Certificados que bloquean:**")
+            for c in sin_cumplir:
+                st.markdown(f"- {_esc(c)}")
+
+
 def render_planificacion(grupo):
     st.markdown("#### :material/calendar_month: Planificación de la semana")
     if not R.is_configured():
@@ -218,6 +275,9 @@ def render_planificacion(grupo):
 
     # ── Asignación inteligente: a quién poner (libre + cumple certs + sin choque) ──
     _asignacion_inteligente(grupo, lunes, staff, tidx)
+
+    # ── Radar de personal: choques de turno + certificados que bloquean ──
+    _radar_personal(grupo, lunes, staff, tidx)
 
     # ── Tablero EDITABLE EN SITIO: toca una celda para asignar/editar ahí mismo ──
     st.caption("Toca una celda para **asignar o editar ahí mismo** (una vacía ＋ también "
