@@ -2497,6 +2497,14 @@ def render_field_projects(usuario: str, grupo: str):
     except Exception:
         pass
 
+    # ── Mi ruta del día (v270): mis obras en el mapa, ordenadas para ir a terreno ──
+    with st.expander(":material/route: Mi ruta (mis obras en el mapa)"):
+        try:
+            from core import route_ui
+            route_ui.render_mi_ruta(usuario, grupo)
+        except Exception:
+            st.caption("No se pudo cargar la ruta ahora mismo.")
+
     proys = P.list_projects_for_field(usuario, grupo=grupo)
     if not proys:
         st.info("No tienes proyectos asignados todavía. El administrador te asigna a un proyecto.")

@@ -40,6 +40,7 @@ _LBL2KEY = {lbl: k for k, lbl in _SECCIONES}
 _SUBSECCIONES = {
     "planificacion": ("adm_plan_sub", [
         ("📋 Tablero", ":material/calendar_view_week: Tablero"),
+        ("🗺 Ruta del día", ":material/route: Ruta del día"),
         ("👷 Usuarios", ":material/badge: Usuarios")]),
     "proyectos": ("adm_proy_sub", [
         ("📊 Proyectos", ":material/format_list_bulleted: Proyectos"),
@@ -308,6 +309,9 @@ def _seccion_planificacion(grupo):
     if sub == "📋 Tablero":
         from core import roster_ui
         roster_ui.render_planificacion(grupo)
+    elif sub == "🗺 Ruta del día":
+        from core import route_ui
+        route_ui.render_ruta_dia(grupo)
     else:
         from core.auth_ui import _grupo_usuarios
         _grupo_usuarios(grupo)
