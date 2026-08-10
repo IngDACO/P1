@@ -419,7 +419,7 @@ def render_home(grupo):
     with col_ag:
         # v203: la columna derecha se comparte entre la agenda y los proyectos; el
         # toggle hace de título → cambio rápido sin salir de HOME.
-        _vista = st.radio("vista", ["📋 Agenda", "📁 Proyectos"], horizontal=True,
+        _vista = st.radio("vista", ["📁 Proyectos", "📋 Agenda"], horizontal=True,
                           format_func=lambda o: {"📋 Agenda": ":material/list: Agenda",
                                                  "📁 Proyectos": ":material/folder: Proyectos"}.get(o, o),
                           key="home_right_view", label_visibility="collapsed")

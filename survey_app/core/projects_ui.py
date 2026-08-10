@@ -1258,7 +1258,7 @@ def _panel_proyectos(grupo: str):
                   + (f"  ·  :red[:material/cancel:] {_nr} con retraso" if _nr else "")
                   + (f"  ·  :green[:material/check_circle:] {_na} adelantado(s)" if _na else ""))
     # v228: toggle de vista — tarjetas (resumen visual) o lista (tabla clásica).
-    _view = _hc2.radio("Vista", ["🃏 Tarjetas", "📋 Lista"], horizontal=True,
+    _view = _hc2.radio("Vista", ["📋 Lista", "🃏 Tarjetas"], horizontal=True,
                        format_func=lambda o: {"🃏 Tarjetas": ":material/grid_view: Tarjetas",
                                               "📋 Lista": ":material/list: Lista"}.get(o, o),
                        key="cart_view", label_visibility="collapsed")
