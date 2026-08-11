@@ -386,7 +386,7 @@ def render_planificacion(grupo):
     _n_rad = len(_scan[0]) + len(_scan[1])
     _TOOLS = [("asignar", f":material/bolt: Asignar"),
               ("radar", f":material/radar: Radar" + (f" ({_n_rad})" if _n_rad else "")),
-              ("vivo", ":material/broadcast: En vivo"),
+              ("vivo", ":material/sensors: En vivo"),   # v288: `broadcast` NO existe
               ("real", ":material/search: Plan vs real"),
               ("cat", ":material/palette: Trabajos")]
     st.markdown("")

@@ -131,10 +131,15 @@ header[data-testid="stHeader"] {{ background: transparent; }}
 
 
 def inject():
-    """Inyecta el CSS del sistema de diseño. Idempotente por sesión."""
-    if st.session_state.get("_cpx_theme"):
-        return
-    st.session_state["_cpx_theme"] = True
+    """Inyecta el CSS del sistema de diseño.
+
+    ⚠️ SE EMITE EN CADA RUN, a propósito. Streamlit **reconstruye el DOM en cada
+    rerun**: un elemento que no se vuelve a emitir DESAPARECE. La v283 lo guardaba
+    con un flag en `session_state` ("idempotente por sesión") y el resultado fue que
+    el estilo solo existía en el primer run — las tarjetas KPI salían como texto
+    plano en cuanto había cualquier interacción. Evidencia: el CSS de densidad del
+    tablero (emitido sin guarda) sí se aplicaba. **No volver a poner una guarda aquí.**
+    """
     st.markdown(_CSS, unsafe_allow_html=True)
 
 
