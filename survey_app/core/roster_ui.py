@@ -114,7 +114,7 @@ def _asignacion_inteligente(grupo, lunes, staff, tidx):
     """Sugiere a quién asignar a un proyecto en un día/franja = libre esa franja + cumple los
     certificados que exige + sin choque de turno (v279). Asigna a los elegidos con un clic."""
     from core import credentials
-    with st.expander(":material/bolt: Asignación inteligente — ¿a quién pongo?"):
+    with st.container():   # v287: el título lo da el botón de la fila de herramientas
         try:
             proys = [p for p in P.list_projects(grupo)
                      if str(p.get("Estado", "")) not in ("Completado", "Cancelado", "Archivado")]
@@ -225,12 +225,11 @@ def _radar_scan(grupo, lunes, staff, tidx):
 
 
 def _radar_personal(grupo, lunes, staff, tidx, scan=None):
-    """Radar de personal (expander): choques de turno + certificados que bloquean (v280)."""
+    """Radar de personal: choques de turno + certificados que bloquean (v280).
+    v287: se abre desde la fila de herramientas del Panel (ya no es un expander)."""
     choques, sin_cumplir = scan if scan is not None else _radar_scan(grupo, lunes, staff, tidx)
     n = len(choques) + len(sin_cumplir)
-    _lbl = (f":material/radar: Radar de personal ({n})" if n
-            else ":material/radar: Radar de personal — sin problemas")
-    with st.expander(_lbl, expanded=bool(n)):
+    with st.container():   # v287: vive en la fila de herramientas del Panel
         if not n:
             st.success("Sin choques de turno ni certificados que bloqueen esta semana.")
             return
@@ -356,10 +355,6 @@ def render_planificacion(grupo):
     # ── Cobertura del día ──
     _cobertura_hoy(lunes, staff, datos)
 
-    # ── Asignación inteligente + Radar (reusa el escaneo ya hecho) ──
-    _asignacion_inteligente(grupo, lunes, staff, tidx)
-    _radar_personal(grupo, lunes, staff, tidx, scan=_scan)
-
     # ── Vista principal: Tablero | Disponibilidad (toggle, sin salir del panel) ──
     _vista = st.radio("vista", ["📋 Tablero", "👀 Disponibilidad"], horizontal=True,
                       key="panel_vista", label_visibility="collapsed",
@@ -384,13 +379,35 @@ def render_planificacion(grupo):
                    "para su ficha rápida.")
         _tablero_editable(grupo, lunes, staff, datos, tidx)
 
-    # ── Estado en vivo (quién está fichado ahora) ──
-    with st.expander(":material/broadcast: Estado en vivo — quién está fichado ahora"):
-        render_estado_vivo(grupo)
-
-    # ── Plan vs real + Catálogo de trabajos ──
-    _plan_vs_real(grupo, lunes, staff, tidx)
-    _catalogo(grupo)
+    # ── HERRAMIENTAS: una fila, un panel (v287) ─────────────────────────────
+    # Antes eran 5 bloques APILADOS (asignación, radar, en vivo, plan-vs-real, catálogo)
+    # y el Panel se leía como una lista. Ahora es una fila de accesos y solo se abre
+    # el elegido — la pantalla queda: KPIs → vista → tablero → una herramienta.
+    _n_rad = len(_scan[0]) + len(_scan[1])
+    _TOOLS = [("asignar", f":material/bolt: Asignar"),
+              ("radar", f":material/radar: Radar" + (f" ({_n_rad})" if _n_rad else "")),
+              ("vivo", ":material/broadcast: En vivo"),
+              ("real", ":material/search: Plan vs real"),
+              ("cat", ":material/palette: Trabajos")]
+    st.markdown("")
+    _tc = st.columns(len(_TOOLS))
+    _cur = st.session_state.get("_panel_tool", "")
+    for _i, (_k, _lbl) in enumerate(_TOOLS):
+        if _tc[_i].button(_lbl, key=f"ptool_{_k}", use_container_width=True):
+            st.session_state["_panel_tool"] = "" if _cur == _k else _k
+            st.rerun()
+    if _cur:
+        with st.container(border=True):
+            if _cur == "asignar":
+                _asignacion_inteligente(grupo, lunes, staff, tidx)
+            elif _cur == "radar":
+                _radar_personal(grupo, lunes, staff, tidx, scan=_scan)
+            elif _cur == "vivo":
+                render_estado_vivo(grupo)
+            elif _cur == "real":
+                _plan_vs_real(grupo, lunes, staff, tidx)
+            else:
+                _catalogo(grupo)
 
 
 def _plan_vs_real(grupo, lunes, staff, tidx):
@@ -401,7 +418,7 @@ def _plan_vs_real(grupo, lunes, staff, tidx):
     """
     from datetime import date as _date
     from core import timeclock
-    with st.expander(":material/search: Plan vs real (lo asignado contra lo fichado)"):
+    with st.container():   # v287: vive en la fila de herramientas del Panel
         if not timeclock.is_configured():
             st.caption("Necesita el fichaje configurado.")
             return
@@ -556,6 +573,31 @@ def _tablero_editable(grupo, lunes, staff, datos, tidx):
     etq = [e for e, _ in op_real]
     val_by_etq = {e: v for e, v in op_real}
     etq_by_val = {v: e for e, v in op_real}
+
+    # 0) DENSIDAD del tablero (v287): el board se veía aireado porque cada celda es un
+    # botón/popover con el padding por defecto de Streamlit. Se compacta el trigger para
+    # que la rejilla se lea como una tabla (como el diseño), sin perder la edición en sitio.
+    st.markdown("""
+<style>
+[class*="st-key-roscel_"] button {
+  padding: 4px 7px !important; min-height: 0 !important; border-radius: 7px !important;
+  line-height: 1.2 !important;
+}
+[class*="st-key-roscel_"] button p {
+  font-size: .74rem !important; font-weight: 600 !important;
+  text-align: left !important; width: 100%; white-space: normal !important;
+}
+[class*="st-key-pnm_"] button {
+  padding: 4px 8px !important; min-height: 0 !important;
+  background: transparent !important; border: none !important;
+  border-left: 3px solid #2e6da4 !important; border-radius: 0 !important;
+}
+[class*="st-key-pnm_"] button p {
+  font-size: .8rem !important; font-weight: 700 !important;
+  text-align: left !important; width: 100%; color: #1e4e79;
+}
+[class*="st-key-pnm_"] button:hover { background: #f4f7fb !important; }
+</style>""", unsafe_allow_html=True)
 
     # 1) CSS de color por celda (color de la 1ª asignación; las vacías, tenues).
     css = []
@@ -735,7 +777,7 @@ def _opciones(grupo, tidx):
 
 
 def _catalogo(grupo):
-    with st.expander(":material/palette: Catálogo de trabajos (lo que NO es un proyecto)"):
+    with st.container():   # v287: vive en la fila de herramientas del Panel
         st.caption("Para trabajos que **no** son un proyecto: entregas, cursos, policía, "
                    "traslados… Los **proyectos se asignan directo** en el tablero (ya son un "
                    "trabajo en sí mismos), no hace falta crearlos aquí.")
