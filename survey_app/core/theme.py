@@ -94,6 +94,24 @@ header[data-testid="stHeader"] {{ background: transparent; }}
   display: inline-block; padding: 2px 9px; border-radius: 999px;
   font-size: .76rem; font-weight: 600; line-height: 1.5;
 }}
+
+/* ── KPI CLICKEABLE: un botón con key `cpxkpi_*` se ve como tarjeta KPI ──
+   (el principio del usuario: nada pasivo — la métrica lleva a su sección).
+   Usa la clase `st-key-<key>` que Streamlit pone en el contenedor del widget. */
+[class*="st-key-cpxkpi_"] button {{
+  background: #fff !important; border: 1px solid {BORDE} !important;
+  border-left: 3px solid {AZUL} !important; border-radius: 12px !important;
+  padding: 12px 14px !important; min-height: 64px;
+  box-shadow: 0 1px 2px rgba(16,24,40,.04);
+  justify-content: flex-start !important;
+}}
+[class*="st-key-cpxkpi_"] button:hover {{
+  border-color: {AZUL} !important; box-shadow: 0 2px 8px rgba(46,109,164,.13);
+}}
+[class*="st-key-cpxkpi_"] button p {{
+  text-align: left !important; width: 100%;
+  font-size: 1.02rem !important; font-weight: 700 !important; color: {AZUL_OSC};
+}}
 .cpx-sec {{
   display: flex; align-items: baseline; gap: 9px;
   margin: 14px 0 6px; padding-bottom: 5px; border-bottom: 1px solid {BORDE};

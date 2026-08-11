@@ -110,12 +110,16 @@ def _kpis(grupo=None) -> dict:
 
 
 def _kpi_card(label, value, color=None):
-    col = f"color:{color};" if color else ""
+    """Tarjeta KPI — delega en el SISTEMA DE DISEÑO (`core/theme.py`, v283) para que
+    las ~20 tarjetas repartidas por la app hablen el mismo idioma visual. Firma
+    intacta: `color` sigue tiñendo el valor y ahora también el borde de acento."""
+    from core import theme
+    _acc = color or theme.AZUL
+    _val = f"color:{color};" if color else ""
     return (
-        '<div style="background:#ffffff;border:1px solid #e6e9ef;border-radius:12px;'
-        'padding:12px 14px;flex:1;min-width:104px;">'
-        f'<div style="font-size:12.5px;color:#6b7280;line-height:1.2;">{label}</div>'
-        f'<div style="font-size:26px;font-weight:700;margin-top:2px;{col}">{value}</div>'
+        f'<div class="cpx-kpi" style="--cpx-accent:{_acc};min-width:104px;">'
+        f'<div class="lbl">{theme._esc(label)}</div>'
+        f'<div class="val" style="{_val}">{theme._esc(value)}</div>'
         '</div>'
     )
 
@@ -147,12 +151,17 @@ def render_group_header(grupo: str):
     k = _kpis(grupo)
     # v199: métricas ACTIVAS (clic → sección) en vez de tarjetas pasivas. "En riesgo"
     # y "Alarmas" salieron de aquí (v197): viven en los indicadores del resumen.
+    # v283: se ven como TARJETA KPI (clase `cpxkpi_` del sistema de diseño) sin dejar
+    # de ser botones — la métrica sigue llevando a su sección.
     m1, m2, m3 = st.columns(3)
-    if m1.button(f":material/folder: {k['activos']} activos", key="m_activos", use_container_width=True):
+    if m1.button(f":material/folder: {k['activos']} proyectos activos",
+                 key="cpxkpi_activos", use_container_width=True):
         _ir_a("proyectos", "📊 Proyectos")
-    if m2.button(f":material/trending_up: {k['avg']}% avance", key="m_avance", use_container_width=True):
+    if m2.button(f":material/trending_up: {k['avg']}% de avance promedio",
+                 key="cpxkpi_avance", use_container_width=True):
         _ir_a("proyectos", "📊 Proyectos")
-    if m3.button(f":material/schedule: {k['horas']} h", key="m_horas", use_container_width=True):
+    if m3.button(f":material/schedule: {k['horas']} h registradas",
+                 key="cpxkpi_horas", use_container_width=True):
         _ir_a("finanzas", "⏱ Horas")
     _resumen_del_dia(grupo)
 
