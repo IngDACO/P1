@@ -1092,8 +1092,12 @@ def _cartera_clickeable(proys, alarmas, delays, aheads, costos):
              "Completado": ("#e8f5ee", "#1e6e4e"), "En pausa": ("#faeeda", "#8a5a0b"),
              "Cancelado": ("#fbeaea", "#a12d2d"), "Archivado": ("#eceff3", "#5f5e5a")}
 
+    from core import theme
+
     def _salud(pid):
-        return "#c0392b" if delays.get(pid) else ("#1e8449" if aheads.get(pid) else "#2e6da4")
+        # v283: colores del sistema de diseño (rojo=retraso, verde=adelanto, azul=en curso)
+        return (theme.ROJO if delays.get(pid)
+                else (theme.VERDE if aheads.get(pid) else theme.AZUL))
 
     proys = sorted(proys, key=lambda p: (-delays.get(str(p.get("ID", "")), 0),
                                          -alarmas.get(str(p.get("ID", "")), 0)))
@@ -2615,29 +2619,32 @@ def render_field_projects(usuario: str, grupo: str):
 
 
 # ── Gastos / compras por proyecto (admin, campo) ──
-def _barras_html(pares, total, color="#2e6da4") -> str:
+def _barras_html(pares, total, color=None) -> str:
     """Barras horizontales ordenadas: etiqueta · barra · valor · %.
 
     Para desgloses cortos (categorias de gasto, personas). Un `st.bar_chart` aqui
     obliga a leer un eje para nada; la barra con su numero al lado se lee sola.
+    v283: los colores salen del SISTEMA DE DISEÑO (`core/theme.py`), no hardcodeados.
     """
+    from core import theme
     if not pares or total <= 0:
         return ""
+    color = color or theme.AZUL
     out = []
     for et, val in pares:
         pct = 100.0 * float(val) / total
         out.append(
             '<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">'
-            f'<div style="width:118px;flex:none;font-size:12.5px;color:#374151;'
+            f'<div style="width:118px;flex:none;font-size:12.5px;color:{theme.TXT};'
             f'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{et}</div>'
-            '<div style="flex:1;height:9px;background:#eef1f5;border-radius:20px;'
+            f'<div style="flex:1;height:9px;background:{theme.PISTA};border-radius:20px;'
             'overflow:hidden;">'
             f'<div style="height:9px;width:{max(1.5, pct):.1f}%;background:{color};'
             f'border-radius:20px;"></div></div>'
             f'<div style="width:96px;flex:none;text-align:right;font-size:12.5px;'
-            f'color:#1f2937;font-weight:600;">${float(val):,.0f}</div>'
+            f'color:{theme.TXT};font-weight:600;">${float(val):,.0f}</div>'
             f'<div style="width:42px;flex:none;text-align:right;font-size:11.5px;'
-            f'color:#9aa7b8;">{pct:.0f}%</div></div>')
+            f'color:{theme.GRIS_SUAVE};">{pct:.0f}%</div></div>')
     return "".join(out)
 
 
@@ -2646,11 +2653,11 @@ def _torta_html(pares, total) -> str:
     Sin dependencias de charting (nada de plotly/matplotlib): mismo enfoque HTML que
     `_barras_html`, se renderiza en `st.markdown`. Para el gasto por rubro del grupo
     (mano de obra + cada categoría de compra). v224."""
+    from core import theme
     pares = [(k, float(v)) for k, v in pares if v and float(v) > 0]
     if not pares or total <= 0:
         return ""
-    _pal = ["#2e6da4", "#BA7517", "#1e8449", "#8e44ad", "#c0392b", "#16a085",
-            "#e67e22", "#2980b9", "#d4537e", "#7f8c8d", "#f1c40f", "#34495e"]
+    _pal = theme.PALETA          # v283: paleta única del sistema de diseño
     _stops, _leg, _acc = [], [], 0.0
     for _i, (et, val) in enumerate(pares):
         _pct = 100.0 * val / total
@@ -2661,11 +2668,11 @@ def _torta_html(pares, total) -> str:
             '<div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;">'
             f'<span style="width:12px;height:12px;border-radius:3px;background:{_col};'
             'flex:none;"></span>'
-            f'<span style="flex:1;font-size:12.5px;color:#374151;overflow:hidden;'
+            f'<span style="flex:1;font-size:12.5px;color:{theme.TXT};overflow:hidden;'
             f'text-overflow:ellipsis;white-space:nowrap;">{et}</span>'
-            f'<span style="font-size:12.5px;font-weight:600;color:#1f2937;">${val:,.0f}</span>'
+            f'<span style="font-size:12.5px;font-weight:600;color:{theme.TXT};">${val:,.0f}</span>'
             f'<span style="width:40px;flex:none;text-align:right;font-size:11.5px;'
-            f'color:#9aa7b8;">{_pct:.0f}%</span></div>')
+            f'color:{theme.GRIS_SUAVE};">{_pct:.0f}%</span></div>')
     _grad = "conic-gradient(" + ", ".join(_stops) + ")"
     # v225: centrado — se agrupan torta + leyenda y la leyenda se ACOTA (antes flex:1
     # la estiraba a todo el ancho y el monto/% se iban al borde → "todo separado").

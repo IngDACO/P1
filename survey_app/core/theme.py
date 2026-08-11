@@ -25,8 +25,16 @@ ROJO = "#c0392b"        # fuera de límite, retraso, alarma
 VERDE = "#1e8449"       # correcto, adelanto
 AMBAR = "#e67e22"       # al límite, por vencer
 GRIS_TXT = "#5b6472"    # texto secundario
+GRIS_SUAVE = "#9aa7b8"  # texto terciario (porcentajes, pies)
+TXT = "#1f2937"         # texto principal
+PISTA = "#eef1f5"       # fondo de barra/pista
 BORDE = "#e3e8ef"
 FONDO_SUAVE = "#f4f7fb"
+
+# Paleta CATEGÓRICA (torta de rubros, series): arranca en el azul de marca y
+# alterna tonos distinguibles. Única fuente — no redefinir paletas por módulo.
+PALETA = ["#2e6da4", "#BA7517", "#1e8449", "#8e44ad", "#c0392b", "#16a085",
+          "#e67e22", "#2980b9", "#d4537e", "#7f8c8d", "#f1c40f", "#34495e"]
 
 _CSS = f"""
 <style>
