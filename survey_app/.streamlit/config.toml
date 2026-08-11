@@ -1,2 +1,13 @@
 [server]
 enableStaticServing = true
+
+# Tema COPEX (v283) — API OFICIAL de Streamlit, estable entre versiones.
+# Es la BASE del look: color de marca, superficies y tipografía. El CSS a medida
+# (core/theme.py) solo cubre lo que el tema no alcanza — así el diseño no se rompe
+# cuando Streamlit cambie de versión.
+[theme]
+primaryColor = "#2e6da4"           # azul COPEX (el mismo de la nav y los diagramas)
+backgroundColor = "#ffffff"
+secondaryBackgroundColor = "#f4f7fb"   # tarjetas/sidebar: azul muy tenue, no gris sucio
+textColor = "#1f2937"
+font = "sans serif"

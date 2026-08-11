@@ -290,19 +290,28 @@ def _ficha_rapida(grupo, usuario):
 
 
 def _panel_kpis(grupo, lunes, staff, datos, choques, sin_cumplir):
-    """Fila de KPIs + estado en vivo del Panel (v282)."""
+    """Fila de KPIs del Panel, con el kit de diseño COPEX (v282/v283)."""
     from core import timeclock
+    from core import theme
     ab = timeclock.open_now(grupo) if timeclock.is_configured() else []
     fich = len({(s["usuario"] or s["nombre"]) for s in ab})
+    en_prj = len({(s["usuario"] or s["nombre"]) for s in ab
+                  if s["tipo"] == timeclock.TIPO_PROYECTO})
     off = (clock.today() - lunes).days
     d = R.DIAS[off] if 0 <= off <= 4 else None
-    libres_hoy = (sum(1 for u in staff if not R.celda_items(datos, u["Usuario"], d))
-                  if d else 0)
-    k = st.columns(4)
-    k[0].metric("Fichados ahora", fich)
-    k[1].metric("Libres hoy", libres_hoy if d else "—")
-    k[2].metric("Choques", len(choques))
-    k[3].metric("Certs que bloquean", len(sin_cumplir))
+    libres = ([u for u in staff if not R.celda_items(datos, u["Usuario"], d)]
+              if d else [])
+    theme.kpi_row([
+        ("Fichados ahora", fich, f"{en_prj} en un proyecto", theme.VERDE if fich else theme.GRIS_TXT),
+        ("Libres hoy", (len(libres) if d else "—"),
+         (", ".join((u.get("Nombre") or u["Usuario"]) for u in libres[:2]) +
+          ("…" if len(libres) > 2 else "")) if libres else ("sin huecos" if d else "fin de semana"),
+         theme.AZUL),
+        ("Choques de turno", len(choques), "franjas que se solapan",
+         theme.ROJO if choques else theme.GRIS_TXT),
+        ("Certs que bloquean", len(sin_cumplir), "asignado sin cumplir",
+         theme.AMBAR if sin_cumplir else theme.GRIS_TXT),
+    ])
 
 
 def render_planificacion(grupo):

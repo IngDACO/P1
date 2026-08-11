@@ -29,6 +29,13 @@ st.set_page_config(page_title=f"COPEX Survey Analyzer {APP_VERSION}",
                    layout="wide", page_icon=_PAGE_ICON)
 
 # ══════════════════════════════════════════════════════
+# SISTEMA DE DISEÑO COPEX (v283) — antes que nada, para que TODA la app
+# (incluido el login, la primera impresión) salga con la misma estética.
+# ══════════════════════════════════════════════════════
+from core import theme as _cpx_theme
+_cpx_theme.inject()
+
+# ══════════════════════════════════════════════════════
 # OPTIMIZACIÓN MÓVIL (CSS responsive)
 # ══════════════════════════════════════════════════════
 st.markdown("""
