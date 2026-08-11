@@ -219,8 +219,12 @@ def render_login() -> bool:
         else:
             st.markdown("<h1 style='text-align:center;letter-spacing:.2em;color:#1a3a5c'>COPEX</h1>",
                         unsafe_allow_html=True)
-    st.markdown("<p style='text-align:center;color:#888;margin-top:-8px'>Elevator Survey Analyzer</p>",
-                unsafe_allow_html=True)
+    st.markdown(
+        "<p style='text-align:center;color:#5b6472;margin-top:-8px;font-size:.95rem;'>"
+        "Gestión de instalación de elevadores"
+        "<br><span style='font-size:.8rem;color:#8b95a5;'>Proyectos · Cuadrilla · Costos · "
+        "Herramientas técnicas</span></p>",
+        unsafe_allow_html=True)
 
     if not auth.is_configured():
         st.error(":material/lock: El acceso no está conectado a Google Sheets. "
@@ -232,7 +236,10 @@ def render_login() -> bool:
     except Exception:
         first_run = False
 
-    mid = st.columns([1, 2, 1])[1]
+    # v284: el formulario dentro de una TARJETA (sistema de diseño). Se envuelve la
+    # columna en un container con borde — un solo cambio de línea, sin reindentar el
+    # cuerpo (evita la clase de bug de v120/v148).
+    mid = st.columns([1, 2, 1])[1].container(border=True)
     with mid:
         if first_run:
             st.info(":material/shield_person: **Configuración inicial** — crea la cuenta de propietario.")
