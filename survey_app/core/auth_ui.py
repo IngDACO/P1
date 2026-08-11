@@ -282,7 +282,13 @@ def render_login() -> bool:
                     auth.end_session(res["usuario"], None)   # cerrar la otra sesión
                 ses_ok, tok = auth.start_session(res["usuario"])
                 if not ses_ok:
-                    st.session_state["_blocked_user"] = res["usuario"]
+                    # Solo es "sesión ocupada" cuando hay OTRA sesión de verdad;
+                    # si la hoja no respondió, ofrecer "cerrar la otra sesión"
+                    # mentiría (no hay ninguna que cerrar) y no arreglaría nada.
+                    if tok == auth.SESION_OCUPADA:
+                        st.session_state["_blocked_user"] = res["usuario"]
+                    else:
+                        st.session_state.pop("_blocked_user", None)
                     st.error(f":material/lock: {tok}")
                     return
                 st.session_state.pop("_blocked_user", None)

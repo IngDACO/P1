@@ -323,7 +323,14 @@ def _records(lws):
 
 
 def _find_row(lws, usuario):
-    """Devuelve (row_index_1based, record) o (None, None)."""
+    """Devuelve (row_index_1based, record) o (None, None).
+
+    ⚠️ Un fallo de la API se PROPAGA a propósito (no se traga aquí). `(None, None)`
+    significa "el usuario no está en la hoja", y las rutas de sesión lo interpretan
+    como EXPULSAR. Si esta función se tragara un 429/503 y devolviera `(None, None)`,
+    un hipo de Google echaría a todo el mundo. Cada llamador decide qué hacer ante
+    un error de lectura — ver `heartbeat`/`validate_session`/`start_session`.
+    """
     usuario = (usuario or "").strip().lower()
     for i, r in enumerate(_records(lws)):
         if str(r.get("Usuario", "")).strip().lower() == usuario:
@@ -363,6 +370,13 @@ def verify_login(usuario: str, pw: str) -> dict:
 
 
 # ── Sesión única por cuenta ("primero gana") ─────────────────
+# Motivo EXACTO del bloqueo por conflicto de sesión. Es una constante (y no un
+# literal suelto) porque la UI la compara para decidir si ofrece el botón
+# "cerrar la otra sesión e iniciar aquí": ese botón solo tiene sentido cuando
+# hay otra sesión de verdad, no cuando la hoja no respondió.
+SESION_OCUPADA = "Esta cuenta ya tiene una sesión activa en otro dispositivo."
+
+
 def _session_active(rec) -> bool:
     """¿La cuenta tiene una sesión viva? (token no vacío y heartbeat reciente)."""
     if not str(rec.get("SessionToken", "")).strip():
@@ -380,11 +394,16 @@ def start_session(usuario: str) -> tuple:
     lws, err = _get_login_ws()
     if err:
         return False, err
-    row, rec = _find_row(lws, usuario)
+    try:
+        row, rec = _find_row(lws, usuario)
+    except Exception:
+        # Sin leer la hoja no se puede saber si la cuenta ya tiene sesión activa.
+        # Se BLOQUEA (no se abre a ciegas) pero con un mensaje accionable.
+        return False, "No se pudo verificar la sesión (la hoja no respondió). Reintenta en unos segundos."
     if row is None:
         return False, "Usuario no encontrado."
     if _session_active(rec):
-        return False, "Esta cuenta ya tiene una sesión activa en otro dispositivo."
+        return False, SESION_OCUPADA
     token = uuid.uuid4().hex
     try:
         lws.update_cell(row, _COL["SessionToken"], token)
@@ -399,7 +418,14 @@ def heartbeat(usuario: str, token: str) -> bool:
     lws, err = _get_login_ws()
     if err:
         return True   # error transitorio de la API → no expulsar
-    row, rec = _find_row(lws, usuario)
+    try:
+        row, rec = _find_row(lws, usuario)
+    except Exception:
+        # Misma razón que el `if err` de arriba: la lectura también puede fallar
+        # por un 429/503 de Google. Sin esta guarda el traceback subía hasta app.py
+        # y tumbaba la app entera — y el heartbeat es la PRIMERA llamada a Sheets
+        # de cada carga de página, así que era siempre la que se comía el fallo.
+        return True
     if row is None:
         return False
     if str(rec.get("SessionToken", "")).strip() != str(token):
@@ -419,7 +445,10 @@ def validate_session(usuario: str, token: str) -> dict:
     lws, err = _get_login_ws()
     if err:
         return {}
-    _, rec = _find_row(lws, usuario)
+    try:
+        _, rec = _find_row(lws, usuario)
+    except Exception:
+        return {}   # no se pudo leer → no restaurar (se pide login, no se rompe)
     if not rec:
         return {}
     if str(rec.get("SessionToken", "")).strip() != str(token).strip():
