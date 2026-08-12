@@ -185,10 +185,16 @@ def _asignacion_inteligente(grupo, lunes, staff, tidx):
 def _radar_scan(grupo, lunes, staff, tidx):
     """Escanea la semana vista y devuelve (choques, sin_cumplir, marcas).
 
-    `marcas` = {(usuario, dia): "choque" | "cert"} → para que el TABLERO pinte
+    `marcas` = {(usuario, dia): {"choque", "cert"}} → para que el TABLERO pinte
     DÓNDE está el problema (v292). Antes la KPI decía "Choques de turno: 1" en rojo
     y el tablero no señalaba la celda: había que abrir el Radar para enterarse.
     El dato ya se calculaba aquí y se tiraba.
+
+    ⚠️ El valor es un CONJUNTO, no una etiqueta (v294). En v292 el choque "ganaba"
+    al cert en la misma celda y eso ESCONDÍA un problema. Ahora la celda lleva los
+    dos anillos y no se pierde nada. (El contador del Radar sigue sin coincidir con
+    el nº de anillos, y es correcto: un cert vencido en un proyecto asignado dos
+    días es 1 problema y 2 celdas. Son unidades distintas, no una incoherencia.)
 
     Reusado por el radar, por los KPIs y por el tablero (un solo escaneo, v280/v282).
     """
@@ -210,7 +216,7 @@ def _radar_scan(grupo, lunes, staff, tidx):
                 if ov:
                     break
             if ov:
-                marcas[(usr, d)] = "choque"      # el choque manda sobre el cert
+                marcas.setdefault((usr, d), set()).add("choque")
                 _lbls = " y ".join(R.etiqueta_de(it["asig"], tidx) for it in items)
                 choques.append(f"{nom} · {R.DIAS_LABEL[d]} "
                                f"{R.fecha_de_dia(lunes, d).strftime('%d/%m')}: {_lbls} se solapan")
@@ -232,7 +238,7 @@ def _radar_scan(grupo, lunes, staff, tidx):
                 # ⚠️ La marca va SIEMPRE, aunque el aviso ya se haya listado: `_seen`
                 # evita repetir la MISMA línea en el radar, pero cada día afectado
                 # tiene su propia celda que señalar.
-                marcas.setdefault((usr, d), "cert")
+                marcas.setdefault((usr, d), set()).add("cert")
                 if _k in _seen:
                     continue
                 _seen.add(_k)
@@ -695,7 +701,6 @@ def _tablero_editable(grupo, lunes, staff, datos, tidx, marcas=None):
     #    ⚠️ Mecanismo medido en vivo antes de escribirlo (el anillo convive con el
     #    background del trabajo; la celda sin marca queda con `box-shadow: none`).
     from core import theme
-    _MARCA_COLOR = {"choque": theme.ROJO, "cert": theme.AMBAR}
     marcas = marcas or {}
     css = []
     for pi, u in enumerate(staff):
@@ -704,27 +709,46 @@ def _tablero_editable(grupo, lunes, staff, datos, tidx, marcas=None):
             _asigs = R.celda_asigs(datos, u["Usuario"], d)
             asig = _asigs[0] if _asigs else ""
             key = f"roscel_{_wk}_{idx}"
-            _ring = _MARCA_COLOR.get(marcas.get((u["Usuario"], d)))
-            _sombra = f"box-shadow:0 0 0 2px {_ring}!important;" if _ring else ""
+            # Anillos: rojo DENTRO (choque) y ámbar FUERA (cert). `box-shadow` admite
+            # varias capas, así que una celda con los dos problemas los enseña LOS DOS.
+            # v292 daba prioridad al rojo y eso escondía el cert (verificado en vivo).
+            _m = marcas.get((u["Usuario"], d)) or set()
+            _capas = []
+            if "choque" in _m:
+                _capas.append(f"0 0 0 2px {theme.ROJO}")
+            if "cert" in _m:
+                _capas.append(f"0 0 0 {'4px' if 'choque' in _m else '2px'} {theme.AMBAR}")
+            _sombra = f"box-shadow:{','.join(_capas)}!important;" if _capas else ""
             if asig:
                 bg = R.color_de(asig, tidx)
                 css.append(f".st-key-{key} button{{background:{bg}!important;"
                            f"color:{_texto_sobre(bg)}!important;border-color:{bg}!important;"
                            f"{_sombra}}}")
             else:
+                # Celda vacía: fuera el chevron del popover — con solo el ＋ se lee
+                # como un hueco donde asignar, no como un desplegable.
+                # ⚠️ El chevron NO es un <svg>: es un Material Symbol de FUENTE
+                # (span[data-testid=stIconMaterial]). Se usa el data-testid, que es
+                # contrato de Streamlit; las clases `st-emotion-cache-*` cambian de
+                # versión a versión. Verificado en vivo.
                 css.append(f".st-key-{key} button{{background:#f8fafc!important;"
                            f"color:#b6c0cd!important;border:1px dashed #e2e8f0!important;"
-                           f"{_sombra}}}")
+                           f"{_sombra}}}"
+                           f".st-key-{key} button [data-testid='stIconMaterial']"
+                           f"{{display:none!important;}}")
     if css:
         st.markdown("<style>" + "".join(css) + "</style>", unsafe_allow_html=True)
     if marcas:
-        st.caption(f":red[:material/error:] borde rojo = choque de turno  ·  "
-                   f":orange[:material/shield:] borde ámbar = certificado que bloquea")
+        st.caption(":red[:material/error:] borde rojo = choque de turno  ·  "
+                   ":orange[:material/shield:] borde ámbar = certificado que bloquea  ·  "
+                   "una celda puede llevar **los dos**")
 
     # 2) Cabecera (persona + días)
     anchos = [1.4] + [1] * len(dias)
     h = st.columns(anchos)
-    h[0].markdown("<div style='font-size:12px;color:#6b7280'>Persona</div>",
+    # `Persona` se alinea con el TEXTO del botón de nombre (que lleva su propio
+    # padding-left por el borde de acento), no con el borde de la columna.
+    h[0].markdown("<div style='font-size:12px;color:#6b7280;padding-left:11px'>Persona</div>",
                   unsafe_allow_html=True)
     for i, d in enumerate(dias):
         f = R.fecha_de_dia(lunes, d)
@@ -910,8 +934,12 @@ def _catalogo(grupo):
         nom = c2.text_input("Nombre", key="trab_nom", placeholder="Entrega / Curso / Traslado…")
         _colmap = {n: h for n, h in R.PALETA}
         colnom = c3.selectbox("Color", list(_colmap.keys()), key="trab_col")
-        st.markdown(f"<div style='width:100%;height:8px;border-radius:4px;"
-                    f"background:{_colmap[colnom]}'></div>", unsafe_allow_html=True)
+        # Muestra del color con el MISMO lenguaje que la lista de arriba (cuadradito
+        # de 20×20). Antes era una franja a todo el ancho que se leía como un
+        # artefacto de renderizado atravesando la tarjeta, no como una muestra.
+        c3.markdown(f"<div style='width:20px;height:20px;border-radius:5px;"
+                    f"background:{_colmap[colnom]};border:1px solid #e3e8ef'></div>",
+                    unsafe_allow_html=True)
         if st.button("Crear trabajo", key="trab_add", use_container_width=True):
             if not nom.strip():
                 st.error("El nombre es obligatorio.")
