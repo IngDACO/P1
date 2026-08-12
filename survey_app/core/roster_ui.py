@@ -314,7 +314,9 @@ def _panel_kpis(grupo, lunes, staff, datos, choques, sin_cumplir):
 
 
 def render_planificacion(grupo):
-    st.markdown("#### :material/dashboard: Panel de personal")
+    # ⚠️ SIN cabecera propia: `home_ui._sub_header` ya pinta "## Planificación · Panel"
+    # justo encima. Un "#### Panel de personal" aquí repetía el título en la misma
+    # pantalla (mismo caso que el % de avance duplicado de v212).
     if not R.is_configured():
         st.warning("La planificación necesita Google Sheets configurado.")
         return
@@ -336,31 +338,39 @@ def render_planificacion(grupo):
     if st.session_state.get("_panel_ficha"):
         _ficha_rapida(grupo, st.session_state["_panel_ficha"])
 
-    # ── Navegación de semana ──
-    n1, n2, n3, n4 = st.columns([1, 3, 1, 2])
-    if n1.button("◀", key="ros_prev", use_container_width=True):
+    # ── BARRA: semana + vista + copiar, en UNA fila (v291) ──────────────────
+    # Antes eran CUATRO bandas apiladas entre los KPIs y el tablero (nav de semana,
+    # cobertura, toggle de vista y un caption). Era lo que quedaba del efecto "lista"
+    # después de v287: el tablero —a lo que se viene— arrancaba media pantalla abajo.
+    # El caption pasó a `help` del toggle: útil el primer día, ruido a partir del segundo.
+    # El radio va DENTRO de una columna = 1 solo nivel (no son columnas anidadas).
+    b1, b2, b3, b4, b5 = st.columns([1, 3, 1, 4, 3])
+    if b1.button("◀", key="ros_prev", use_container_width=True):
         st.session_state["ros_lunes"] = (lunes - timedelta(days=7)).isoformat()
         st.rerun()
-    n2.markdown(f"<div style='text-align:center;font-weight:700;font-size:1.05rem;"
+    b2.markdown(f"<div style='text-align:center;font-weight:700;font-size:1.05rem;"
                 f"padding-top:6px'>{R.rango_label(lunes)}</div>", unsafe_allow_html=True)
-    if n3.button("▶", key="ros_next", use_container_width=True):
+    if b3.button("▶", key="ros_next", use_container_width=True):
         st.session_state["ros_lunes"] = (lunes + timedelta(days=7)).isoformat()
         st.rerun()
-    if n4.button(":material/assignment: Copiar semana anterior", key="ros_copy", use_container_width=True):
+    _vista = b4.radio(
+        "vista", ["📋 Tablero", "👀 Disponibilidad"], horizontal=True,
+        key="panel_vista", label_visibility="collapsed",
+        help="En el tablero: toca una **celda** para asignar o editar (con su franja "
+             "horaria); toca un **nombre** para abrir su ficha rápida.",
+        format_func=lambda o: {
+            "📋 Tablero": ":material/calendar_view_week: Tablero",
+            "👀 Disponibilidad": ":material/event_available: Disponibilidad"}.get(o, o))
+    if b5.button(":material/assignment: Copiar semana anterior", key="ros_copy",
+                 use_container_width=True):
         ok, msg = R.copiar_semana(grupo, lunes - timedelta(days=7), lunes)
         (st.success if ok else st.warning)(msg)
         if ok:
             st.rerun()
 
-    # ── Cobertura del día ──
+    # ── Cobertura del día (esto es DATO, no chrome: se queda) ──
     _cobertura_hoy(lunes, staff, datos)
 
-    # ── Vista principal: Tablero | Disponibilidad (toggle, sin salir del panel) ──
-    _vista = st.radio("vista", ["📋 Tablero", "👀 Disponibilidad"], horizontal=True,
-                      key="panel_vista", label_visibility="collapsed",
-                      format_func=lambda o: {
-                          "📋 Tablero": ":material/calendar_view_week: Tablero",
-                          "👀 Disponibilidad": ":material/event_available: Disponibilidad"}.get(o, o))
     if _vista == "👀 Disponibilidad":
         _dd = st.selectbox("¿Quién está libre el…?", R.DIAS, key="panel_libredia",
                            format_func=lambda d: f"{R.DIAS_LABEL[d]} "
@@ -375,8 +385,6 @@ def render_planificacion(grupo):
         st.caption("Verde = libre · gris = ocupado (con su franja horaria).")
         st.markdown(_disponibilidad_html(staff, lunes, datos, tidx), unsafe_allow_html=True)
     else:
-        st.caption("Toca una **celda** para asignar/editar (con su franja); toca un **nombre** "
-                   "para su ficha rápida.")
         _tablero_editable(grupo, lunes, staff, datos, tidx)
 
     # ── HERRAMIENTAS: una fila, un panel (v287) ─────────────────────────────
