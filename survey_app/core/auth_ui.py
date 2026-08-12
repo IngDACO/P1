@@ -863,7 +863,6 @@ def _ficha_usuario(u, grupo, owner=False, sel_key="gp_fichasel"):
                                       use_container_width=True):
                     st.session_state["_prjsel_pending"] = str(_p.get("ID", ""))
                     st.session_state["_admin_nav_pending"] = ("proyectos", "📊 Proyectos")
-                    st.session_state["_gruposec_pending"] = "📊 Proyectos"
                     st.rerun()
         elif es_campo:
             st.caption("Sin proyectos asignados.")
@@ -1015,48 +1014,3 @@ def _grupo_usuarios(grupo):
         _crear_usuario_form(grupo)
 
 
-def render_group_panel(grupo: str):
-    if not grupo:
-        st.markdown("### :material/build: Mi grupo")
-        st.warning("Tu cuenta no tiene un grupo asignado. Contacta al propietario.")
-        return
-
-    from core import projects_ui as PU
-    PU.render_group_header(grupo)        # banda de marca + KPIs (centro de control)
-
-    if not PU.P.is_configured():
-        st.warning("La gestión del grupo necesita Google Sheets configurado "
-                   "(gcp_service_account + TIMECLOCK_SHEET_ID en los Secrets).")
-        return
-
-    # Sección pendiente (p.ej. "abrir un proyecto del tablero de Planificación"):
-    # se aplica ANTES de instanciar el radio, nunca después (regla v111, como
-    # main_nav con _nav_pending).
-    _gsp = st.session_state.pop("_gruposec_pending", None)
-    if _gsp:
-        st.session_state["grupo_sec"] = _gsp
-    sec = st.radio("Sección",
-                   ["📊 Proyectos", "🗂 Agrupaciones", "📅 Planificación",
-                    "⏱ Horas", "💰 Gastos", "🔧 Usuarios de campo"],
-                   format_func=lambda o: {
-                       "📊 Proyectos": ":material/format_list_bulleted: Proyectos",
-                       "🗂 Agrupaciones": ":material/account_tree: Agrupaciones",
-                       "📅 Planificación": ":material/calendar_month: Planificación",
-                       "⏱ Horas": ":material/schedule: Horas",
-                       "💰 Gastos": ":material/receipt_long: Gastos",
-                       "🔧 Usuarios de campo": ":material/engineering: Usuarios de campo"}.get(o, o),
-                   horizontal=True, key="grupo_sec", label_visibility="collapsed")
-    st.markdown("---")
-    if sec == "📊 Proyectos":
-        PU._panel_proyectos(grupo)
-    elif sec == "🗂 Agrupaciones":
-        PU._panel_agrupaciones(grupo)
-    elif sec == "📅 Planificación":
-        from core import roster_ui
-        roster_ui.render_planificacion(grupo)
-    elif sec == "⏱ Horas":
-        PU.render_group_hours(grupo)
-    elif sec == "💰 Gastos":
-        PU.render_group_expenses(grupo)
-    else:
-        _grupo_usuarios(grupo)

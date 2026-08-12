@@ -109,7 +109,7 @@ init_state()
 # ══════════════════════════════════════════════════════
 # LOGIN — barrera de acceso
 # ══════════════════════════════════════════════════════
-from core.auth_ui import render_login, render_user_bar, render_owner_panel, render_group_panel
+from core.auth_ui import render_login, render_user_bar, render_owner_panel
 from core.auth import heartbeat, get_user
 
 if not render_login():
@@ -311,7 +311,6 @@ _L_BELT   = "🎗 Belting"
 _L_PRESTART = "🦺 Pre-Start diario"
 _L_CLOCK  = "⏱ Fichaje"
 _L_OWNER  = "👑 Administración"
-_L_GRUPO  = "🛠 Mi grupo"
 _L_FIELDPROJ = "📋 Mis proyectos"
 _L_MYCRED    = "🎫 Mis credenciales"
 _L_MYPAY     = "🧾 Mis colillas"
@@ -321,10 +320,12 @@ _L_MYPAY     = "🧾 Mis colillas"
 # no un caso aparte. El Pre-Start NO es una herramienta técnica: es un formato de
 # SEGURIDAD de obra, así que va con lo operativo (fichaje/proyectos), no con ellas.
 _HERR = [_L_SURVEY, _L_PLUMB, _L_RAIL, _L_BUFFER, _L_BELT]   # herramientas técnicas
+# ⚠️ NO hay rama para `administrador` a propósito: desde v190 tiene su propia shell
+# (home_ui) y ARRIBA hace `st.stop()`, así que nunca llega hasta aquí. Su rama y su
+# panel de grupo eran código inalcanzable y se borraron en v296 — están en el
+# historial de git si algún día hubiera que devolver al admin a esta nav.
 if _ROL == "propietario":
     _nav = [_L_OWNER, _L_PRESTART] + _HERR          # sin fichaje
-elif _ROL == "administrador":
-    _nav = [_L_GRUPO, _L_CLOCK, _L_PRESTART] + _HERR
 elif _ROL == "campo":
     _nav = [_L_FIELDPROJ, _L_CLOCK, _L_PRESTART] + _HERR + [_L_MYCRED, _L_MYPAY]
 else:
@@ -346,7 +347,6 @@ _NAV_DISPLAY = {
     _L_PRESTART: ":material/health_and_safety: Pre-Start diario",
     _L_CLOCK:  ":material/schedule: Fichaje",
     _L_OWNER:  ":material/shield_person: Administración",
-    _L_GRUPO:  ":material/build: Mi grupo",
     _L_FIELDPROJ: ":material/assignment: Mis proyectos",
     _L_MYCRED: ":material/badge: Mis credenciales",
     _L_MYPAY: ":material/payments: Mis colillas",
@@ -406,6 +406,3 @@ elif _seccion == _L_MYPAY:
 
 elif _seccion == _L_OWNER:
     render_owner_panel()
-
-elif _seccion == _L_GRUPO:
-    render_group_panel(_GRUPO)

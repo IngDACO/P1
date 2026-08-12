@@ -848,7 +848,6 @@ def _tablero_editable(grupo, lunes, staff, datos, tidx, marcas=None):
                                          key=f"pvo_{_wk}_{idx}_{_v}", use_container_width=True):
                         st.session_state["_prjsel_pending"] = _pv
                         st.session_state["_admin_nav_pending"] = ("proyectos", "📊 Proyectos")
-                        st.session_state["_gruposec_pending"] = "📊 Proyectos"
                         st.rerun()
             if nota:
                 col.caption(nota)
