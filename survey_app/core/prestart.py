@@ -55,7 +55,7 @@ def _ws():
         return None
 
 
-@st.cache_data(ttl=30, show_spinner=False)
+@st.cache_data(ttl=120, show_spinner=False)
 def _records() -> list:
     w = _ws()
     if w is None:

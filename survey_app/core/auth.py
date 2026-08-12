@@ -86,7 +86,7 @@ def _get_groups_ws():
 # OJO: las rutas críticas de sesión ("primero gana": start_session, heartbeat,
 # end_session, verify_login) NO usan este caché — leen fresco para no permitir
 # una 2ª sesión con datos vencidos.
-@st.cache_data(ttl=30, show_spinner=False)
+@st.cache_data(ttl=120, show_spinner=False)
 def _login_records_cached():
     lws, err = _get_login_ws()
     if err or lws is None:
@@ -105,7 +105,7 @@ def _invalidate_login():
 
 
 # ── Gestión de grupos ────────────────────────────────────────
-@st.cache_data(ttl=60, show_spinner=False)
+@st.cache_data(ttl=120, show_spinner=False)
 def _group_records() -> list:
     gws, err = _get_groups_ws()
     if err or gws is None:

@@ -43,7 +43,7 @@ def _base(grupo) -> dict:
     }
 
 
-@st.cache_data(ttl=60, show_spinner=False)
+@st.cache_data(ttl=120, show_spinner=False)
 def group_digest(grupo) -> dict:
     b = _base(grupo)
     proys, activos, delays, horas, alarmas = (b["proys"], b["activos"], b["delays"],
@@ -171,7 +171,7 @@ def digest_text(d) -> str:
     return "\n".join(L)
 
 
-@st.cache_data(ttl=60, show_spinner=False)
+@st.cache_data(ttl=120, show_spinner=False)
 def owner_digest() -> list:
     """Resumen por grupo para el propietario: [{grupo, activos, avance, retrasos,
     alarmas, vencidos, cred_venc, sobre_presupuesto, pendientes}]."""

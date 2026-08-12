@@ -88,7 +88,7 @@ def _ws(title):
         return None, f"No se pudo abrir la hoja {title}: {e}"
 
 
-@st.cache_data(ttl=30, show_spinner=False)
+@st.cache_data(ttl=120, show_spinner=False)
 def _records(title):
     w, err = _ws(title)
     if err or w is None:

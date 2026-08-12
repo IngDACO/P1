@@ -104,7 +104,7 @@ def _ws_roster():
         return None
 
 
-@st.cache_data(ttl=30, show_spinner=False)
+@st.cache_data(ttl=120, show_spinner=False)
 def _trab_records() -> list:
     w = _ws_trab()
     if w is None:
@@ -115,7 +115,7 @@ def _trab_records() -> list:
         return []
 
 
-@st.cache_data(ttl=30, show_spinner=False)
+@st.cache_data(ttl=120, show_spinner=False)
 def _roster_records() -> list:
     w = _ws_roster()
     if w is None:

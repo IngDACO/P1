@@ -94,7 +94,7 @@ _HEADERS_BY_TITLE = {
 }
 
 
-@st.cache_data(ttl=30, show_spinner=False)
+@st.cache_data(ttl=120, show_spinner=False)
 def _records(title):
     """Registros de una hoja (cacheados). Solo lecturas de DISPLAY."""
     w, err = _get_ws(title, _HEADERS_BY_TITLE.get(title, []))
@@ -107,7 +107,7 @@ def _records(title):
         return []
 
 
-@st.cache_data(ttl=30, show_spinner=False)
+@st.cache_data(ttl=120, show_spinner=False)
 def _fichaje_records():
     """Registros del fichaje (cacheados) para sumar horas."""
     ws, err = timeclock._get_worksheet()
@@ -327,14 +327,14 @@ def _gaps_for(proys) -> dict:
     return out
 
 
-@st.cache_data(ttl=60, show_spinner=False)
+@st.cache_data(ttl=120, show_spinner=False)
 def gaps_by_group(grupo) -> dict:
     """{pid: dias_gap} del grupo, CACHEADO 60 s. El cronograma de cada proyecto se
     reconstruía varias veces por render (KPIs + tarjetas + tabla + radar)."""
     return _gaps_for(list_projects(grupo=grupo))
 
 
-@st.cache_data(ttl=60, show_spinner=False)
+@st.cache_data(ttl=120, show_spinner=False)
 def projections_by_group(grupo) -> dict:
     """{pid: {"fecha","spi","gap"}} del grupo, CACHEADO 60 s.
 

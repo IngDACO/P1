@@ -49,7 +49,7 @@ def _ws():
         return None
 
 
-@st.cache_data(ttl=30, show_spinner=False)
+@st.cache_data(ttl=120, show_spinner=False)
 def _records() -> list:
     w = _ws()
     if w is None:
@@ -256,7 +256,7 @@ def project_cost(pid, grupo) -> dict:
             "presupuesto": pres, "pct": pct, "over": bool(pres > 0 and total > pres)}
 
 
-@st.cache_data(ttl=60, show_spinner=False)
+@st.cache_data(ttl=120, show_spinner=False)
 def over_budget(grupo) -> list:
     """Proyectos del grupo sobre presupuesto (para el radar del admin)."""
     from core import projects as P
@@ -271,7 +271,7 @@ def over_budget(grupo) -> list:
     return out
 
 
-@st.cache_data(ttl=60, show_spinner=False)
+@st.cache_data(ttl=120, show_spinner=False)
 def group_expenses(grupo) -> dict:
     """Costos de todos los proyectos del grupo + desglose por categoría.
 

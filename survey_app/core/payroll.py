@@ -89,7 +89,7 @@ def _ws():
         return None, f"No se pudo abrir la hoja {NOMINAS_SHEET}: {e}"
 
 
-@st.cache_data(ttl=30, show_spinner=False)
+@st.cache_data(ttl=120, show_spinner=False)
 def _records():
     w, err = _ws()
     if err or w is None:

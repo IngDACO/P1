@@ -9,6 +9,7 @@ Esquema de la hoja (una fila por sesión de trabajo):
   Nombre | PIN | Proyecto | Ubicacion | Clock In | Clock Out | Horas | Estado
 """
 from datetime import datetime, timedelta, date, time
+from time import sleep as _dormir   # ⚠️ `time` de arriba es datetime.time, NO el módulo
 
 import streamlit as st
 from core import clock
@@ -33,6 +34,47 @@ def _secrets_present() -> bool:
         return False
 
 
+# ── Reintento acotado ante 429 / 5xx (v290) ──────────────────
+# gspread NO reintenta: un pico de cuota sube como APIError y rompía el render.
+# El límite de Google es 60 lecturas/min por usuario y toda la app va con UNA
+# cuenta de servicio, así que un rellenado de caché puede rozarlo.
+#
+# ⚠️ NO usar `gspread.http_client.BackOffHTTPClient`: la propia librería lo marca
+#    "not production ready", y su contador `_NR_BACKOFF` SOLO se resetea cuando
+#    acierta → ante un 429 sostenido encadena 2+4+8+…+128 s = más de 4 minutos de
+#    sleep DENTRO del render. Aquí el techo son ~2.1 s, que es lo que aguanta una UI.
+_ESPERAS = (0.6, 1.5)
+_HTTP_CLS = None
+
+
+def _http_client_cls():
+    """Clase de cliente HTTP con reintento acotado (import perezoso de gspread,
+    igual que el resto del módulo). Se construye una sola vez."""
+    global _HTTP_CLS
+    if _HTTP_CLS is None:
+        from gspread.http_client import HTTPClient
+        from gspread.exceptions import APIError
+
+        class _ConReintento(HTTPClient):
+            def request(self, *a, **kw):
+                for espera in _ESPERAS:
+                    try:
+                        return super().request(*a, **kw)
+                    except APIError as e:
+                        cod = (getattr(e, "code", None)
+                               or getattr(getattr(e, "response", None), "status_code", 0)
+                               or 0)
+                        # Solo se reintenta lo transitorio. Un 403/404 (permisos,
+                        # hoja borrada) es un error REAL: insistir solo lo tapa.
+                        if cod != 429 and cod < 500:
+                            raise
+                        _dormir(espera)
+                return super().request(*a, **kw)   # último intento: si falla, propaga
+
+        _HTTP_CLS = _ConReintento
+    return _HTTP_CLS
+
+
 @st.cache_resource(show_spinner=False)
 def _cached_ws():
     """Abre y cachea la worksheet. Se autentica UNA vez (no en cada rerun).
@@ -43,7 +85,7 @@ def _cached_ws():
     creds_info = dict(st.secrets["gcp_service_account"])
     sheet_id   = st.secrets["TIMECLOCK_SHEET_ID"]
     creds  = Credentials.from_service_account_info(creds_info, scopes=SCOPES)
-    client = gspread.authorize(creds)
+    client = gspread.authorize(creds, http_client=_http_client_cls())
     ws     = client.open_by_key(sheet_id).sheet1
 
     # Asegurar cabecera + migrar columnas faltantes (Grupo, Tipo, …)
@@ -75,25 +117,66 @@ def _get_worksheet():
 
 
 @st.cache_resource(show_spinner=False)
+def _libro():
+    """Índice del libro entero en 2 llamadas, en vez de 2 por hoja (v290).
+
+    Cada `get_sheet(title)` hacía `ss.worksheet(title)` (1 llamada de metadata)
+    + `row_values(1)` (1 lectura). Con las ~11 hojas del libro eso son ~22
+    llamadas en un arranque frío — casi media cuota de Google (60 lecturas/min),
+    que es lo que producía el 429. Aquí se traen TODAS las hojas con
+    `worksheets()` (1 llamada) y TODAS las cabeceras con `values_batch_get` (1).
+
+    Devuelve ({titulo_en_minúsculas: Worksheet}, {titulo_en_minúsculas: cabecera}).
+
+    ⚠️ Una hoja AUSENTE del dict de cabeceras significa "no pude leerla", NO
+       "está vacía". `get_sheet` debe releerla. Confundir las dos cosas
+       escribiría una fila de cabecera ENCIMA de una hoja con datos.
+    """
+    ss = _cached_ws().spreadsheet
+    hojas = {w.title.strip().lower(): w for w in ss.worksheets()}
+    cabeceras = {}
+    if hojas:
+        claves = list(hojas)
+        try:
+            # El API devuelve los valueRanges en el MISMO orden que los rangos.
+            # Si vinieran menos, el zip los deja fuera → caen al respaldo. Seguro.
+            resp = ss.values_batch_get([f"'{hojas[k].title}'!1:1" for k in claves])
+            for k, vr in zip(claves, resp.get("valueRanges", [])):
+                vals = vr.get("values") or []
+                cabeceras[k] = vals[0] if vals else []
+        except Exception:
+            cabeceras = {}      # sin batch → cada hoja lee su cabecera, como antes
+    return hojas, cabeceras
+
+
+@st.cache_resource(show_spinner=False)
 def get_sheet(title: str, headers: tuple):
     """Devuelve el handle de una pestaña por título, cacheado como recurso.
 
-    Crea la hoja y asegura/migra la cabecera UNA SOLA VEZ por proceso. Antes,
-    cada módulo (auth, projects, alerts, manuals…) hacía `ss.worksheet(title)`
-    (metadata) + `row_values(1)` (cabecera) en CADA lectura → 2 llamadas extra
-    por lectura. Con esto esas comprobaciones ocurren una vez y luego se reutiliza
-    el handle. Si la API falla, lanza excepción → NO se cachea → se reintenta."""
-    ws = _cached_ws()                      # conexión cacheada; lanza si la API falla
-    ss = ws.spreadsheet
-    try:
-        w = ss.worksheet(title)
-    except Exception:
+    Crea la hoja y asegura/migra la cabecera UNA SOLA VEZ por proceso. Se apoya
+    en `_libro()` para no pagar metadata+cabecera por hoja. Si la API falla,
+    lanza excepción → NO se cachea → se reintenta en la próxima llamada."""
+    hojas, cabeceras = _libro()
+    clave = title.strip().lower()
+    w = hojas.get(clave)
+
+    if w is None:
+        # ⚠️ Ahora solo se crea si la hoja NO está en el listado real del libro.
+        # Antes bastaba con que `ss.worksheet(title)` lanzara —incluido por un
+        # error de API—, así que un hipo podía crear una hoja duplicada.
+        ss = _cached_ws().spreadsheet
         w = ss.add_worksheet(title=title, rows=500, cols=len(headers))
         w.append_row(list(headers))
+        hojas[clave] = w                     # el índice sigue vivo en el proceso
+        cabeceras[clave] = list(headers)
         return w
-    head = w.row_values(1)
+
+    head = cabeceras.get(clave)
+    if head is None:                         # no vino en el batch → leer como antes
+        head = w.row_values(1)
     if not head:
         w.append_row(list(headers))
+        cabeceras[clave] = list(headers)
     else:
         # Migración: agrega columnas faltantes en su posición canónica.
         for i, h in enumerate(headers, start=1):
@@ -102,8 +185,10 @@ def get_sheet(title: str, headers: tuple):
                     if w.col_count < i:
                         w.add_cols(i - w.col_count)
                     w.update_cell(1, i, h)
+                    head = head + [h] if i > len(head) else head
                 except Exception:
                     pass
+        cabeceras[clave] = head
     return w
 
 
@@ -264,7 +349,7 @@ def _num(v) -> float:
         return 0.0
 
 
-@st.cache_data(ttl=20, show_spinner=False)
+@st.cache_data(ttl=120, show_spinner=False)
 def _cached_records() -> list:
     """Filas del fichaje CACHEADAS (solo para lecturas de display: estado del reloj,
     resumen de horas). Las rutas de ESCRITURA leen fresco. Se invalida al fichar."""
