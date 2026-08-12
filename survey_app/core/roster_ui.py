@@ -183,11 +183,19 @@ def _asignacion_inteligente(grupo, lunes, staff, tidx):
 
 
 def _radar_scan(grupo, lunes, staff, tidx):
-    """Escanea la semana vista y devuelve (choques, sin_cumplir). Reusado por el radar y
-    por los KPIs del Panel (v280/v282)."""
+    """Escanea la semana vista y devuelve (choques, sin_cumplir, marcas).
+
+    `marcas` = {(usuario, dia): "choque" | "cert"} → para que el TABLERO pinte
+    DÓNDE está el problema (v292). Antes la KPI decía "Choques de turno: 1" en rojo
+    y el tablero no señalaba la celda: había que abrir el Radar para enterarse.
+    El dato ya se calculaba aquí y se tiraba.
+
+    Reusado por el radar, por los KPIs y por el tablero (un solo escaneo, v280/v282).
+    """
     from core import credentials
     datos = R.get_semana(grupo, lunes)
     choques, sin_cumplir, _seen = [], [], set()
+    marcas, _comp = {}, {}          # _comp: cachea compliance por (usuario, proyecto)
     for u in staff:
         usr = u["Usuario"]
         nom = u.get("Nombre") or usr
@@ -202,6 +210,7 @@ def _radar_scan(grupo, lunes, staff, tidx):
                 if ov:
                     break
             if ov:
+                marcas[(usr, d)] = "choque"      # el choque manda sobre el cert
                 _lbls = " y ".join(R.etiqueta_de(it["asig"], tidx) for it in items)
                 choques.append(f"{nom} · {R.DIAS_LABEL[d]} "
                                f"{R.fecha_de_dia(lunes, d).strftime('%d/%m')}: {_lbls} se solapan")
@@ -209,25 +218,37 @@ def _radar_scan(grupo, lunes, staff, tidx):
                 if it["asig"] in R.ESTADOS:
                     continue
                 pid = R.proyecto_de(it["asig"], tidx)
-                if not pid or (usr, pid) in _seen:
+                if not pid:
                     continue
-                prj = P.get_project(pid)
-                certs = [c.strip() for c in str((prj or {}).get("CertsReq", "")).split(";") if c.strip()]
-                if not certs:
+                _k = (usr, pid)
+                if _k not in _comp:              # una sola consulta por persona×proyecto
+                    prj = P.get_project(pid)
+                    certs = [c.strip() for c in str((prj or {}).get("CertsReq", "")).split(";")
+                             if c.strip()]
+                    _comp[_k] = credentials.compliance(usr, certs) if certs else None
+                comp = _comp[_k]
+                if comp is None or comp["cumple"]:
                     continue
-                comp = credentials.compliance(usr, certs)
-                if not comp["cumple"]:
-                    _seen.add((usr, pid))
-                    faltan = [t for t, e in comp["por_tipo"].items() if e in ("vencido", "falta")]
-                    sin_cumplir.append(f"{nom} → {R.etiqueta_de(it['asig'], tidx)}: "
-                                       + ", ".join(faltan))
-    return choques, sin_cumplir
+                # ⚠️ La marca va SIEMPRE, aunque el aviso ya se haya listado: `_seen`
+                # evita repetir la MISMA línea en el radar, pero cada día afectado
+                # tiene su propia celda que señalar.
+                marcas.setdefault((usr, d), "cert")
+                if _k in _seen:
+                    continue
+                _seen.add(_k)
+                faltan = [t for t, e in comp["por_tipo"].items() if e in ("vencido", "falta")]
+                sin_cumplir.append(f"{nom} → {R.etiqueta_de(it['asig'], tidx)}: "
+                                   + ", ".join(faltan))
+    return choques, sin_cumplir, marcas
 
 
 def _radar_personal(grupo, lunes, staff, tidx, scan=None):
     """Radar de personal: choques de turno + certificados que bloquean (v280).
     v287: se abre desde la fila de herramientas del Panel (ya no es un expander)."""
-    choques, sin_cumplir = scan if scan is not None else _radar_scan(grupo, lunes, staff, tidx)
+    # ⚠️ `_radar_scan` devuelve 3 elementos desde v292 (el 3º son las marcas del
+    # tablero). Se indexa en vez de desempaquetar para no romper al añadir más.
+    _sc = scan if scan is not None else _radar_scan(grupo, lunes, staff, tidx)
+    choques, sin_cumplir = _sc[0], _sc[1]
     n = len(choques) + len(sin_cumplir)
     with st.container():   # v287: vive en la fila de herramientas del Panel
         if not n:
@@ -355,7 +376,7 @@ def render_planificacion(grupo):
         st.rerun()
     _vista = b4.radio(
         "vista", ["📋 Tablero", "👀 Disponibilidad"], horizontal=True,
-        key="panel_vista", label_visibility="collapsed",
+        key="cpxseg_vista", label_visibility="collapsed",   # cpxseg_ = segmentado del kit
         help="En el tablero: toca una **celda** para asignar o editar (con su franja "
              "horaria); toca un **nombre** para abrir su ficha rápida.",
         format_func=lambda o: {
@@ -385,7 +406,7 @@ def render_planificacion(grupo):
         st.caption("Verde = libre · gris = ocupado (con su franja horaria).")
         st.markdown(_disponibilidad_html(staff, lunes, datos, tidx), unsafe_allow_html=True)
     else:
-        _tablero_editable(grupo, lunes, staff, datos, tidx)
+        _tablero_editable(grupo, lunes, staff, datos, tidx, marcas=_scan[2])
 
     # ── HERRAMIENTAS: una fila, un panel (v287) ─────────────────────────────
     # Antes eran 5 bloques APILADOS (asignación, radar, en vivo, plan-vs-real, catálogo)
@@ -564,7 +585,7 @@ def _cumplimiento_celda(usuario, pid):
         pass
 
 
-def _tablero_editable(grupo, lunes, staff, datos, tidx):
+def _tablero_editable(grupo, lunes, staff, datos, tidx, marcas=None):
     """Board del admin EDITABLE EN SITIO (v217): cada celda es un `st.popover`
     coloreado con el color de su trabajo (clase `st-key-<key>` sobre el trigger —
     verificado en vivo antes de construir). Al tocar la celda se edita AHÍ MISMO
@@ -607,7 +628,15 @@ def _tablero_editable(grupo, lunes, staff, datos, tidx):
 [class*="st-key-pnm_"] button:hover { background: #f4f7fb !important; }
 </style>""", unsafe_allow_html=True)
 
-    # 1) CSS de color por celda (color de la 1ª asignación; las vacías, tenues).
+    # 1) CSS de color por celda (color de la 1ª asignación; las vacías, tenues) +
+    #    ANILLO de conflicto (v292): rojo = choque de turno, ámbar = certificado que
+    #    bloquea. Va como `box-shadow` y NO como `border` a propósito: el borde ya lo
+    #    usa el color del trabajo, y un box-shadow no desplaza la rejilla.
+    #    ⚠️ Mecanismo medido en vivo antes de escribirlo (el anillo convive con el
+    #    background del trabajo; la celda sin marca queda con `box-shadow: none`).
+    from core import theme
+    _MARCA_COLOR = {"choque": theme.ROJO, "cert": theme.AMBAR}
+    marcas = marcas or {}
     css = []
     for pi, u in enumerate(staff):
         for di, d in enumerate(dias):
@@ -615,15 +644,22 @@ def _tablero_editable(grupo, lunes, staff, datos, tidx):
             _asigs = R.celda_asigs(datos, u["Usuario"], d)
             asig = _asigs[0] if _asigs else ""
             key = f"roscel_{_wk}_{idx}"
+            _ring = _MARCA_COLOR.get(marcas.get((u["Usuario"], d)))
+            _sombra = f"box-shadow:0 0 0 2px {_ring}!important;" if _ring else ""
             if asig:
                 bg = R.color_de(asig, tidx)
                 css.append(f".st-key-{key} button{{background:{bg}!important;"
-                           f"color:{_texto_sobre(bg)}!important;border-color:{bg}!important;}}")
+                           f"color:{_texto_sobre(bg)}!important;border-color:{bg}!important;"
+                           f"{_sombra}}}")
             else:
                 css.append(f".st-key-{key} button{{background:#f8fafc!important;"
-                           f"color:#b6c0cd!important;border:1px dashed #e2e8f0!important;}}")
+                           f"color:#b6c0cd!important;border:1px dashed #e2e8f0!important;"
+                           f"{_sombra}}}")
     if css:
         st.markdown("<style>" + "".join(css) + "</style>", unsafe_allow_html=True)
+    if marcas:
+        st.caption(f":red[:material/error:] borde rojo = choque de turno  ·  "
+                   f":orange[:material/shield:] borde ámbar = certificado que bloquea")
 
     # 2) Cabecera (persona + días)
     anchos = [1.4] + [1] * len(dias)

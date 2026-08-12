@@ -120,6 +120,35 @@ header[data-testid="stHeader"] {{ background: transparent; }}
   text-align: left !important; width: 100%;
   font-size: 1.02rem !important; font-weight: 700 !important; color: {AZUL_OSC};
 }}
+/* ── TOGGLE SEGMENTADO: un `st.radio(horizontal=True)` con key `cpxseg_*` se ve
+   como un control segmentado, no como dos bolitas sueltas (v292).
+   ⚠️ Verificado EN VIVO antes de escribirlo (mini-app + medición del DOM):
+   la bolita queda `display:none`, el elegido sale `rgb(232,238,246)` y el otro
+   transparente. El bloque va dentro de `@supports selector(:has())` A PROPÓSITO:
+   sin `:has()` no se podría resaltar el elegido y, con la bolita oculta, no
+   habría NINGUNA marca de cuál está activo — así degrada al radio de siempre. */
+[class*="st-key-cpxseg_"] div[role="radiogroup"] {{
+  gap: 0 !important; display: inline-flex !important; background: #fff;
+  border: 1px solid {BORDE}; border-radius: 9px; overflow: hidden;
+}}
+[class*="st-key-cpxseg_"] div[role="radiogroup"] > label {{
+  margin: 0 !important; padding: 6px 14px !important; border-radius: 0 !important;
+  border-right: 1px solid {BORDE};
+}}
+[class*="st-key-cpxseg_"] div[role="radiogroup"] > label:last-child {{ border-right: none; }}
+[class*="st-key-cpxseg_"] div[role="radiogroup"] > label:hover {{ background: {FONDO_SUAVE}; }}
+@supports selector(label:has(input:checked)) {{
+  [class*="st-key-cpxseg_"] div[role="radiogroup"] > label > div:first-child {{
+    display: none !important;
+  }}
+  [class*="st-key-cpxseg_"] div[role="radiogroup"] > label:has(input:checked) {{
+    background: #e8eef6 !important;
+  }}
+  [class*="st-key-cpxseg_"] div[role="radiogroup"] > label:has(input:checked) p {{
+    color: {AZUL_OSC} !important; font-weight: 700 !important;
+  }}
+}}
+
 .cpx-sec {{
   display: flex; align-items: baseline; gap: 9px;
   margin: 14px 0 6px; padding-bottom: 5px; border-bottom: 1px solid {BORDE};
