@@ -413,10 +413,11 @@ def render_planificacion(grupo):
     # y el Panel se leía como una lista. Ahora es una fila de accesos y solo se abre
     # el elegido — la pantalla queda: KPIs → vista → tablero → una herramienta.
     _n_rad = len(_scan[0]) + len(_scan[1])
-    _TOOLS = [("asignar", f":material/bolt: Asignar"),
-              ("radar", f":material/radar: Radar" + (f" ({_n_rad})" if _n_rad else "")),
-              ("vivo", ":material/sensors: En vivo"),   # v288: `broadcast` NO existe
-              ("real", ":material/search: Plan vs real"),
+    # v293: «En vivo» y «Plan vs real» eran la misma pregunta a distinta resolución
+    # de tiempo → una sola herramienta «Cumplimiento» (lo vivo va en cada fila).
+    _TOOLS = [("asignar", ":material/bolt: Asignar"),
+              ("radar", ":material/radar: Radar" + (f" ({_n_rad})" if _n_rad else "")),
+              ("cumpl", ":material/fact_check: Cumplimiento"),
               ("cat", ":material/palette: Trabajos")]
     st.markdown("")
     _tc = st.columns(len(_TOOLS))
@@ -431,21 +432,33 @@ def render_planificacion(grupo):
                 _asignacion_inteligente(grupo, lunes, staff, tidx)
             elif _cur == "radar":
                 _radar_personal(grupo, lunes, staff, tidx, scan=_scan)
-            elif _cur == "vivo":
-                render_estado_vivo(grupo)
-            elif _cur == "real":
-                _plan_vs_real(grupo, lunes, staff, tidx)
+            elif _cur == "cumpl":
+                _cumplimiento(grupo, lunes, staff, tidx)
             else:
                 _catalogo(grupo)
 
 
-def _plan_vs_real(grupo, lunes, staff, tidx):
-    """Compara la asignacion del dia (si enlaza a PRJ) contra donde ficho cada uno.
+def _cumplimiento(grupo, lunes, staff, tidx):
+    """Plan vs real + estado EN VIVO en UNA sola vista (v293).
 
-    Solo tiene sentido para trabajos enlazados a un proyecto: un delivery o un
-    estado (OFF/Leave) no tiene fichaje contra que comparar. Decision de v161.
+    Antes eran dos herramientas que respondían la MISMA pregunta —¿se está
+    cumpliendo lo planificado?— a distinta resolución de tiempo: «En vivo»
+    (¿quién trabaja ahora mismo?) y «Plan vs real» (¿se cumplió el día?). El
+    solape era grande: «En vivo» ya calculaba «asignados hoy y sin fichar», que
+    es una de las ramas de «Plan vs real», y repetía la métrica «Fichados ahora»
+    que YA es la primera tarjeta KPI del Panel.
+
+    Lo vivo NO es un bloque aparte: es una columna más de cada fila cuando el día
+    elegido es HOY. Así una sola línea dice plan + real + cuánto lleva fichado,
+    en vez de obligar a mirar en dos sitios para saber lo mismo de una persona.
+
+    ⚠️ `proyectos_por_usuario_dia` DESCARTA los fichajes sin proyecto, así que de
+    ahí no se puede deducir «está en jornada pero no ha imputado obra» — que era
+    la única señal que vivía SOLO en «En vivo» y se habría perdido en la fusión.
+    Para HOY se rescata con `open_now` (sesiones abiertas). Para días PASADOS no
+    se puede distinguir: ahí «sin fichar» puede ser «fichó sin imputar», y el
+    texto NO afirma lo contrario.
     """
-    from datetime import date as _date
     from core import timeclock
     with st.container():   # v287: vive en la fila de herramientas del Panel
         if not timeclock.is_configured():
@@ -457,10 +470,39 @@ def _plan_vs_real(grupo, lunes, staff, tidx):
         _dsel = st.radio("Día", R.DIAS, index=_idx_def, horizontal=True,
                          format_func=lambda d: f"{R.DIAS_LABEL[d]} "
                          f"{R.fecha_de_dia(lunes, d).strftime('%d/%m')}",
-                         key="pvr_dia", label_visibility="collapsed")
+                         key="cpxseg_cumpl_dia", label_visibility="collapsed")
         fecha = R.fecha_de_dia(lunes, _dsel)
+        es_hoy = (fecha == hoy)
         datos = R.get_semana(grupo, lunes)
         real  = timeclock.proyectos_por_usuario_dia(grupo, fecha)
+
+        # ── Capa EN VIVO (solo si el día elegido es HOY: ayer no hay nadie fichado) ──
+        vivo = {}
+        if es_hoy:
+            for s in timeclock.open_now(grupo):
+                _k = s["usuario"] or s["nombre"]
+                _v = vivo.setdefault(_k, {"prj": None, "gen": None})
+                _v["prj" if s["tipo"] == timeclock.TIPO_PROYECTO else "gen"] = s
+
+        def _hm(seg):
+            h, m = seg // 3600, (seg % 3600) // 60
+            return f"{h}h{m:02d}" if h else f"{m}min"
+
+        def _ahora(usr):
+            """Sufijo en vivo: cuánto lleva fichado. '' si no está fichado o no es hoy."""
+            _v = vivo.get(usr)
+            if not _v:
+                return ""
+            _s = _v["prj"] or _v["gen"]
+            return f" · :green[en curso {_hm(_s['segundos'])}]"
+
+        if es_hoy:
+            _n_prj = sum(1 for v in vivo.values() if v["prj"])
+            if vivo:
+                st.markdown(f":green[:material/sensors:] **{len(vivo)}** fichados ahora "
+                            f"· {_n_prj} en un proyecto")
+            else:
+                st.caption(":material/sensors: Nadie fichado en este momento.")
 
         n_ok = n_desvio = n_sin = 0
         filas = []
@@ -478,38 +520,56 @@ def _plan_vs_real(grupo, lunes, staff, tidx):
             real_pids = {e["pid"] for e in reales if e["pid"]}
             real_txt = ", ".join(e["nombre"] for e in reales) or "—"
 
+            _v = vivo.get(usr)
+            _solo_jornada = bool(_v and _v["gen"] and not _v["prj"])   # fichado sin imputar
+
             if plan_pids:
                 falta = plan_pids - real_pids
                 extra = real_pids - plan_pids
                 if not real_pids:
                     n_sin += 1
-                    filas.append((":orange[:material/warning:]", nom,
-                                  f"asignado a {plan_lbl} · sin fichar aún"))
+                    if _solo_jornada:
+                        # ⚠️ La señal que solo existía en «En vivo»: está trabajando,
+                        # pero sus horas no van a ninguna obra. Es el olvido típico.
+                        filas.append((":orange[:material/timer:]", nom,
+                                      f"asignado a {plan_lbl} · fichado en jornada pero "
+                                      f"SIN imputar obra{_ahora(usr)}"))
+                    else:
+                        filas.append((":orange[:material/warning:]", nom,
+                                      f"asignado a {plan_lbl} · sin fichar aún"))
                 elif not falta:
                     n_ok += 1
                     _ex = f" (+ también {real_txt})" if extra else ""
                     filas.append((":green[:material/check_circle:]", nom,
-                                  f"{plan_lbl} — fichó donde tocaba{_ex}"))
+                                  f"{plan_lbl} — fichó donde tocaba{_ex}{_ahora(usr)}"))
                 elif plan_pids & real_pids:
                     n_desvio += 1
                     filas.append((":orange[:material/warning:]", nom,
-                                  f"asignado a {plan_lbl} · fichó en {real_txt} (faltan algunas)"))
+                                  f"asignado a {plan_lbl} · fichó en {real_txt} "
+                                  f"(faltan algunas){_ahora(usr)}"))
                 else:
                     n_desvio += 1
                     filas.append((":red[:material/cancel:]", nom,
-                                  f"asignado a {plan_lbl} · fichó en {real_txt}"))
+                                  f"asignado a {plan_lbl} · fichó en {real_txt}{_ahora(usr)}"))
             elif solo_estados:
-                if reales:
+                if reales or _solo_jornada:
                     _est = ", ".join(R.etiqueta_de(a, tidx) for a in plan_asigs)
+                    _d = real_txt if reales else "jornada (sin obra)"
                     filas.append((":blue[:material/info:]", nom,
-                                  f"marcado {_est} pero fichó en {real_txt}"))
+                                  f"marcado {_est} pero fichó en {_d}{_ahora(usr)}"))
                 # OFF/Leave sin fichar: correcto, no se lista
             elif trabajos_sin_prj:                          # trabajo(s) sin enlace a PRJ
                 _tr = ", ".join(R.etiqueta_de(a, tidx) for a in trabajos_sin_prj)
                 filas.append(("—", nom, f"{_tr} (sin proyecto que comparar)"
-                              + (f" · fichó en {real_txt}" if reales else "")))
+                              + (f" · fichó en {real_txt}" if reales else "")
+                              + _ahora(usr)))
             elif reales:                                    # sin plan pero fichó
-                filas.append((":material/help:", nom, f"sin asignación · fichó en {real_txt}"))
+                filas.append((":material/help:", nom,
+                              f"sin asignación · fichó en {real_txt}{_ahora(usr)}"))
+            elif _solo_jornada:                             # sin plan y sin imputar
+                filas.append((":orange[:material/timer:]", nom,
+                              f"sin asignación · fichado en jornada, sin imputar obra"
+                              f"{_ahora(usr)}"))
 
         st.markdown(f":green[:material/check_circle:] {n_ok} donde tocaba  ·  :red[:material/cancel:] {n_desvio} en otro sitio  ·  "
                     f":orange[:material/warning:] {n_sin} sin fichar")
@@ -865,53 +925,6 @@ def _catalogo(grupo):
 
 def _esc(s) -> str:
     return (str(s).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;"))
-
-
-def render_estado_vivo(grupo):
-    """Quién está fichado AHORA y en qué proyecto + quién estaba asignado hoy y no ha
-    fichado (v281). Se actualiza al recargar la sección."""
-    from core import timeclock
-    if not timeclock.is_configured():
-        st.info("El fichaje necesita Google Sheets configurado.")
-        return
-    st.caption("Quién está trabajando ahora mismo. Se actualiza al recargar.")
-
-    abiertos = timeclock.open_now(grupo)
-    poru = {}
-    for s in abiertos:
-        k = s["usuario"] or s["nombre"]
-        poru.setdefault(k, {"nombre": s["nombre"] or k, "gen": None, "prj": None})
-        poru[k]["prj" if s["tipo"] == timeclock.TIPO_PROYECTO else "gen"] = s
-    fichados = [v for v in poru.values() if v["gen"] or v["prj"]]
-
-    def _hm(seg):
-        h, m = seg // 3600, (seg % 3600) // 60
-        return f"{h}h{m:02d}" if h else f"{m}min"
-
-    k1, k2 = st.columns(2)
-    k1.metric("Fichados ahora", len(fichados))
-    k2.metric("En un proyecto", sum(1 for v in fichados if v["prj"]))
-
-    if fichados:
-        for v in sorted(fichados, key=lambda x: x["nombre"].lower()):
-            _seg = (v["prj"] or v["gen"])["segundos"]
-            _donde = f"→ {v['prj']['proyecto']}" if v["prj"] else "· jornada (sin proyecto aún)"
-            st.markdown(f"🟢 **{_esc(v['nombre'])}** {_esc(_donde)} · {_hm(_seg)}")
-    else:
-        st.info("Nadie fichado en este momento.")
-
-    _fich = {s["usuario"] for s in abiertos if s["usuario"]}
-    _sin = []
-    try:
-        for u in _staff(grupo):
-            usr = u["Usuario"]
-            aa = R.asignaciones_dia(grupo, usr)
-            if any(a.get("proyecto_id") for a in aa) and usr not in _fich:
-                _sin.append(u.get("Nombre") or usr)
-    except Exception:
-        pass
-    if _sin:
-        st.warning(":material/warning: Asignados hoy y sin fichar: " + _esc(", ".join(_sin)))
 
 
 def _disponibilidad_html(staff, lunes, datos, tidx) -> str:
