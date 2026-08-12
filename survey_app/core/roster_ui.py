@@ -738,21 +738,28 @@ def _tablero_editable(grupo, lunes, staff, datos, tidx, marcas=None):
                            f"{{display:none!important;}}")
     if css:
         st.markdown("<style>" + "".join(css) + "</style>", unsafe_allow_html=True)
+    _leyenda = [f":material/schedule: la hora solo aparece si difiere del turno "
+                f"({R.TURNO_DEFAULT[0]}–{R.TURNO_DEFAULT[1]})"]
     if marcas:
-        st.caption(":red[:material/error:] borde rojo = choque de turno  ·  "
-                   ":orange[:material/shield:] borde ámbar = certificado que bloquea  ·  "
-                   "una celda puede llevar **los dos**")
+        _leyenda.insert(0, ":red[:material/error:] borde rojo = choque de turno  ·  "
+                           ":orange[:material/shield:] borde ámbar = certificado que "
+                           "bloquea (una celda puede llevar **los dos**)")
+    st.caption("  ·  ".join(_leyenda))
 
     # 2) Cabecera (persona + días)
     anchos = [1.4] + [1] * len(dias)
     h = st.columns(anchos)
     # `Persona` se alinea con el TEXTO del botón de nombre (que lleva su propio
     # padding-left por el borde de acento), no con el borde de la columna.
-    h[0].markdown("<div style='font-size:12px;color:#6b7280;padding-left:11px'>Persona</div>",
-                  unsafe_allow_html=True)
+    h[0].markdown("<div style='font-size:12px;color:#6b7280;padding-left:11px;"
+                  "margin-bottom:5px'>Persona</div>", unsafe_allow_html=True)
+    # Los días van CENTRADOS sobre su columna (la etiqueta iba a la izquierda sobre
+    # una celda que ocupa todo el ancho → se leía corrida) y con aire abajo, que
+    # antes tocaban el cuadro.
     for i, d in enumerate(dias):
         f = R.fecha_de_dia(lunes, d)
-        h[i + 1].markdown(f"<div style='font-size:12px;color:#6b7280'>{R.DIAS_LABEL[d]} "
+        h[i + 1].markdown(f"<div style='font-size:12px;color:#6b7280;text-align:center;"
+                          f"margin-bottom:5px'>{R.DIAS_LABEL[d]} "
                           f"{f.strftime('%d/%m')}</div>", unsafe_allow_html=True)
 
     # 3) Filas: nombre + una celda-popover por día
@@ -771,12 +778,22 @@ def _tablero_editable(grupo, lunes, staff, datos, tidx, marcas=None):
             asigs = [it["asig"] for it in items_cur]
             fr_cur = {it["asig"]: (it["ini"], it["fin"]) for it in items_cur}
             nota = R.celda(datos, usuario, d).get("nota", "")
-            # etiqueta del trigger: "Proyecto 7:00–15:30 · Otro …"
+            # Etiqueta del trigger (v295). Antes se pegaban todas las etiquetas CON su
+            # franja y la celda desbordaba a 2 líneas ilegibles:
+            #     "prueba2 7:00–15:30 · prueba 3 7:00–15:30"
+            # Dos arreglos:
+            #  (a) la franja SOLO si difiere del turno estándar — repetir "7:00–15:30"
+            #      en cada chip gastaba medio ancho diciendo «lo normal», y de paso
+            #      escondía las que SÍ son excepción, que es lo único que hay que ver.
+            #  (b) con 3+ trabajos no entra ni así → el primero y un contador; el
+            #      resto se ve (y se edita) al abrir la celda.
             _trig = []
             for it in items_cur:
                 _fl = R.franja_label(it["ini"], it["fin"])
+                if (it["ini"], it["fin"]) == R.TURNO_DEFAULT:
+                    _fl = ""
                 _trig.append(R.etiqueta_de(it["asig"], tidx) + (f" {_fl}" if _fl else ""))
-            et = " · ".join(_trig)
+            et = f"{_trig[0]} +{len(_trig) - 1}" if len(_trig) > 2 else " · ".join(_trig)
             with col.popover(et or "＋", key=f"roscel_{_wk}_{idx}", use_container_width=True):
                 f = R.fecha_de_dia(lunes, d)
                 st.caption(f"**{_esc(nom)}** · {R.DIAS_LABEL[d]} {f.strftime('%d/%m')}")
@@ -910,10 +927,14 @@ def _catalogo(grupo):
                    "traslados… Los **proyectos se asignan directo** en el tablero (ya son un "
                    "trabajo en sí mismos), no hace falta crearlos aquí.")
         trabajos = R.list_trabajos(grupo, incluir_inactivos=True)
+        _colmap = {n: h for n, h in R.PALETA}
+        _colinv = {h.lower(): n for n, h in R.PALETA}      # hex → nombre, para precargar
+        _edit = st.session_state.get("_trab_edit", "")
         if trabajos:
             for r in trabajos:
+                tid = str(r.get("ID", ""))
                 _act = str(r.get("Activo", "SI")).upper() in ("SI", "SÍ", "TRUE", "1")
-                cc = st.columns([0.5, 4, 2, 1.5])
+                cc = st.columns([0.5, 3.6, 1.6, 1.3])
                 cc[0].markdown(f"<div style='width:20px;height:20px;border-radius:5px;"
                                f"background:{r.get('Color','#2e6da4')};margin-top:4px'></div>",
                                unsafe_allow_html=True)
@@ -921,10 +942,55 @@ def _catalogo(grupo):
                 cc[1].markdown(f"**{str(r.get('Numero','')).strip()}. {r.get('Nombre','')}**"
                                + (f"  ·  :material/link: {_prj}" if _prj else "")
                                + ("" if _act else "  ·  _inactivo_"))
-                if cc[2].button("Activar" if not _act else "Desactivar",
-                                key=f"trab_act_{r.get('ID')}"):
-                    R.set_activo_trabajo(r.get("ID"), not _act)
+                if cc[2].button("Activar" if not _act else "Desactivar", key=f"trab_act_{tid}"):
+                    R.set_activo_trabajo(tid, not _act)
                     st.rerun()
+                if cc[3].button(":material/edit: Editar", key=f"trab_ed_{tid}"):
+                    st.session_state["_trab_edit"] = "" if _edit == tid else tid
+                    st.rerun()
+
+                # Panel de edición en sitio. El BORRADO vive aquí dentro a propósito:
+                # obliga a abrir la ficha antes de poder borrar (dos pasos), en vez de
+                # dejar una papelera al lado de cada fila — es la lección de v139, donde
+                # un clic de más borraba algo que nadie había elegido.
+                if _edit == tid:
+                    with st.container(border=True):
+                        e1, e2, e3 = st.columns([1, 2.5, 1.5])
+                        _n = e1.text_input("Número", value=str(r.get("Numero", "")),
+                                           key=f"tedn_{tid}")
+                        _nm = e2.text_input("Nombre", value=str(r.get("Nombre", "")),
+                                            key=f"tednm_{tid}")
+                        _cur = _colinv.get(str(r.get("Color", "")).lower())
+                        _nombres = list(_colmap)
+                        _cn = e3.selectbox("Color", _nombres, key=f"tedc_{tid}",
+                                           index=_nombres.index(_cur) if _cur in _nombres else 0)
+                        g1, g2 = st.columns([1, 1])
+                        if g1.button(":material/save: Guardar cambios", key=f"teds_{tid}",
+                                     type="primary", use_container_width=True):
+                            if not _nm.strip():
+                                st.error("El nombre es obligatorio.")
+                            else:
+                                ok, msg = R.update_trabajo(tid, {
+                                    "Numero": _n.strip(), "Nombre": _nm.strip(),
+                                    "Color": _colmap[_cn]})
+                                (st.success if ok else st.error)(msg)
+                                if ok:
+                                    st.session_state["_trab_edit"] = ""
+                                    st.rerun()
+                        _usos = R.usos_de_trabajo(grupo, tid)
+                        if _usos:
+                            g2.caption(f":material/lock: No se puede borrar: asignado en "
+                                       f"**{_usos}** {'día' if _usos == 1 else 'días'}. "
+                                       f"Desactívalo si ya no se usa.")
+                        else:
+                            _conf = g2.checkbox("Confirmo eliminarlo", key=f"tedcf_{tid}")
+                            if g2.button(":material/delete: Eliminar", key=f"tedd_{tid}",
+                                         disabled=not _conf, use_container_width=True):
+                                ok, msg = R.delete_trabajo(grupo, tid)
+                                (st.success if ok else st.warning)(msg)
+                                if ok:
+                                    st.session_state["_trab_edit"] = ""
+                                    st.rerun()
         else:
             st.caption("Aún no hay trabajos. Añade el primero abajo.")
 
@@ -932,8 +998,7 @@ def _catalogo(grupo):
         c1, c2, c3 = st.columns([1, 2.5, 1.5])
         num = c1.text_input("Número", key="trab_num", placeholder="89")
         nom = c2.text_input("Nombre", key="trab_nom", placeholder="Entrega / Curso / Traslado…")
-        _colmap = {n: h for n, h in R.PALETA}
-        colnom = c3.selectbox("Color", list(_colmap.keys()), key="trab_col")
+        colnom = c3.selectbox("Color", list(_colmap.keys()), key="trab_col")   # _colmap: arriba
         # Muestra del color con el MISMO lenguaje que la lista de arriba (cuadradito
         # de 20×20). Antes era una franja a todo el ancho que se leía como un
         # artefacto de renderizado atravesando la tarjeta, no como una muestra.

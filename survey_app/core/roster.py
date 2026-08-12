@@ -232,6 +232,60 @@ def set_activo_trabajo(tid, activo: bool) -> tuple:
     return update_trabajo(tid, {"Activo": "SI" if activo else "NO"})
 
 
+def usos_de_trabajo(grupo, tid) -> int:
+    """En cuántas celdas del roster (todas las semanas) está asignado este trabajo.
+
+    Sirve para decidir si se puede BORRAR sin dejar huérfano el histórico: el
+    tablero resuelve nombre y color por ID (`trabajos_idx`), así que borrar un
+    trabajo asignado dejaría esas celdas mostrando el ID crudo y sin color.
+    Lectura CACHEADA (`_roster_records`), no cuesta una llamada nueva.
+    """
+    tid = str(tid or "").strip()
+    if not tid:
+        return 0
+    n = 0
+    for r in _roster_records():
+        if str(r.get("Grupo", "")) != str(grupo):
+            continue
+        try:
+            datos = json.loads(r.get("DatosJSON", "") or "{}")
+        except Exception:
+            continue
+        for d in DIAS:
+            for it in _norm_cell(datos.get(d, {}))["items"]:
+                if str(it.get("asig", "")) == tid:
+                    n += 1
+    return n
+
+
+def delete_trabajo(grupo, tid) -> tuple:
+    """Borra un trabajo del catálogo — SOLO si no se usa en ningún roster.
+
+    ⚠️ Mismo criterio que v149 (archivar en vez de borrar): un borrado que deja
+    referencias huérfanas rompe datos en silencio. Si está en uso NO se borra y se
+    devuelve el motivo, para que la UI ofrezca «desactivar» (que sí conserva el
+    histórico: `trabajos_idx` sigue resolviendo los inactivos).
+    """
+    usos = usos_de_trabajo(grupo, tid)
+    if usos:
+        return False, (f"No se puede borrar: está asignado en {usos} "
+                       f"{'día' if usos == 1 else 'días'} del tablero. "
+                       f"Desactívalo y dejará de ofrecerse sin romper el histórico.")
+    w = _ws_trab()
+    if w is None:
+        return False, "Google Sheets no está configurado."
+    try:
+        recs = w.get_all_values()          # FRESCO: ruta de escritura (regla v108)
+        fila = next((i for i, r in enumerate(recs) if r and r[0] == str(tid)), None)
+        if fila is None:
+            return False, "Trabajo no encontrado."
+        w.delete_rows(fila + 1)
+    except Exception as e:
+        return False, f"Error borrando: {e}"
+    _invalidate()
+    return True, "Trabajo eliminado."
+
+
 def _a1(fila, col) -> str:
     """(fila, col) 1-indexado → 'A1'. col máx 26 nos sobra (7 columnas)."""
     return f"{chr(64 + col)}{fila}"
