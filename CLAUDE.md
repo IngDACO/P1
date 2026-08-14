@@ -3426,7 +3426,25 @@ Medido el bloque entero: **246 px**, de los que solo 105 eran los 9 indicadores 
 **46 de huecos**). Los huecos verticales bajan a `.3rem` → **232 px**. ⚠️ La regla va acotada a
 `.st-key-cpxresumen` (el expander recibió `key`): suelta, apretaría TODOS los desplegables de la app.
 
-## Versiones desplegadas (v304 = actual)
+## Resumen del día: de 3 filas a 2 (v305)
+El usuario, tras v303/v304: *"entiendo que se redujeron de tamaño pero aún siento que ocupan mucho
+espacio"*. El alto del botón ya estaba en su suelo (**35 px**; menos es ilegible), así que la única
+palanca que quedaba era el número de FILAS. Medido en el navegador con las etiquetas reales:
+| Reparto | Ancho de botón | Resultado |
+|---|---|---|
+| 9 en UNA fila | 132 px a 1400 de contenido | cabe **solo** con ≥1180 px; a 1150 se parten 4 etiquetas y la fila crece a 52 px → se pierde lo ganado |
+| **2 filas (5+4)** | 228 px a 1400 · 179 px a 1150 | **nada se parte en ningún ancho probado** ← elegido |
+| 3 filas (v303) | 403 px | lo que había |
+**Bloque: 232 → 192 px** (cabecera 38 + 2 filas 75 + huecos + IA 40). Desde el original: 304 → 192.
+- ⚠️ `st.columns(5)` en las DOS filas a propósito: el `zip` deja la 5ª celda vacía en la segunda y
+  así los 9 botones miden IGUAL (con `columns(4)` la fila corta saldría más ancha).
+- ⚠️ **`zip` TRUNCA en silencio**: si una fila tuviera más elementos que columnas, los sobrantes
+  desaparecerían sin error. Guardián en `verif_v303.py`: por AST, ninguna fila puede superar el
+  número de columnas y las filas deben cubrir los 9 índices sin huecos ni solapes.
+- Se pierde el agrupamiento implícito de v196 (las 3 filas eran Proyectos / Equipo / Obra-$), pero
+  el ORDEN no cambia y no había ningún rótulo que lo hiciera visible.
+
+## Versiones desplegadas (v305 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -3434,6 +3452,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v305 | Resumen del día: los 9 indicadores pasan de 3 filas a **2 (5+4)** → bloque 232→192 px (del original 304). El alto del botón ya estaba en su suelo (35 px), así que la palanca era el nº de filas. Medido: en UNA fila solo caben con ≥1180 px de contenido y por debajo se parten 4 etiquetas. Guardián nuevo: `zip` trunca en silencio si una fila tuviera más elementos que columnas |
 | v304 | Menú lateral: la cascada por fin se ve — nivel 1 pegado a la izquierda (8 px) y en seminegrita, nivel 2 a 30 px, más pequeño y más fino. ⚠️ El menú salía **centrado**: el CSS de v229 había dejado de aplicar porque Streamlit metió un `span` flex centrado dentro del botón, y porque `font-size`/`font-weight` puestos en el botón nunca llegan al `<p>` (los dos niveles salían a 16 px/peso 400, activo incluido). Además, los huecos del resumen del día bajan de 10 a 5 px (bloque 246→232), con la regla acotada al expander por `key` |
 | v303 | HOME del admin: las 3 tarjetas KPI ganan una línea de contexto (con datos que `_kpis` ya calculaba → 0 lecturas nuevas) y se mudan a la cabecera de la columna del mapa; el resumen del día se comprime sin perder estructura ni nombres (estado al título, pista al `help`, indicadores 52→35 px); el fondo pasa a 3 columnas mapa \| proyectos \| agenda (muere el toggle); y el hueco sobre el buscador baja a 1rem. ⚠️ De paso se arregla un fallo real: los "→ Ir a" del resumen llevaban displays en vez de IDs → 7 de 9 abrían **Agrupaciones** y "Sobre presup." abría **Horas**. La banda azul del cliente NO se toca (decisión del usuario) |
 | v302 | Panel: vuelve el atajo "Toda la semana (Lun–Vie)" como check que manda sobre el selector de días y lo deshabilita; sin `st.rerun` para no cerrar el popover |

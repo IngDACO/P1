@@ -316,9 +316,19 @@ def _resumen_del_dia(grupo: str):
         # línea fija. Pasa al `help` de CADA botón, donde además dice a dónde lleva.
         # ⚠️ No se puede colgar del expander: `st.expander` NO acepta `help` (firma
         # comprobada en vivo: label, expanded, *, key, icon, width, on_change…).
-        for _i0 in range(0, len(inds), 3):          # 3 filas de 3 (nombres visibles)
+        # v305: DOS filas (5+4) en vez de tres de tres. El alto del botón ya está en su
+        # suelo (35 px; menos es ilegible), así que lo único que queda por recortar es el
+        # número de FILAS. ⚠️ Medido en el navegador: con 5 columnas el botón tiene 185 px
+        # incluso con la ventana en 1150 y no se parte ninguna etiqueta; con los 9 en UNA
+        # fila hacen falta ≥1180 px de contenido y por debajo se parten cuatro (y la fila
+        # crece a 52, perdiendo lo ganado). Se sacrifica el agrupamiento implícito de v196
+        # (Proyectos / Equipo / Obra-$ eran las 3 filas), pero el ORDEN no cambia y no
+        # había ningún rótulo que lo hiciera visible.
+        # `st.columns(5)` en las DOS filas a propósito: el `zip` deja la 5ª celda vacía en
+        # la segunda, y así los 9 botones miden igual (con `columns(4)` saldrían más anchos).
+        for _fila in (inds[:5], inds[5:]):
             for _col, (slug, icon, lbl, _urgb, cnt, _sec, _sub, _secn, _fn) in \
-                    zip(st.columns(3), inds[_i0:_i0 + 3]):
+                    zip(st.columns(5), _fila):
                 if _col.button(f"{icon} {lbl} · {cnt}", key=f"resind_{slug}",
                                use_container_width=True,
                                help=f"Ver el detalle e ir a {_secn} a resolverlo"):
