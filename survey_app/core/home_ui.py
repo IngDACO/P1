@@ -115,8 +115,16 @@ _SUBSECCIONES_OWNER = {
     "herramientas": _SUBSECCIONES_CAMPO["herramientas"],   # las 5 técnicas, sin Pre-Start
 }
 
-_SECCIONES_ROL = {"campo": _SECCIONES_CAMPO, "propietario": _SECCIONES_OWNER}
-_SUBSECCIONES_ROL = {"campo": _SUBSECCIONES_CAMPO, "propietario": _SUBSECCIONES_OWNER}
+_SECCIONES_ROL = {
+    "administrador": _SECCIONES,
+    "campo":         _SECCIONES_CAMPO,
+    "propietario":   _SECCIONES_OWNER,
+}
+_SUBSECCIONES_ROL = {
+    "administrador": _SUBSECCIONES,
+    "campo":         _SUBSECCIONES_CAMPO,
+    "propietario":   _SUBSECCIONES_OWNER,
+}
 
 
 def _rol() -> str:
@@ -138,12 +146,16 @@ def _version() -> str:
         return ""
 
 
+# ⚠️ El default de los dos es el del CAMPO (menor privilegio), NO el del admin.
+# Desde v299 la shell sirve a TODOS los roles, así que este default decide qué ve
+# un `Rol` que no reconozcamos (un typo en la hoja Login, un rol futuro a medio
+# añadir). Caer en la nav de gestión sería regalar acceso por un error de dato.
 def _secciones():
-    return _SECCIONES_ROL.get(_rol(), _SECCIONES)
+    return _SECCIONES_ROL.get(_rol(), _SECCIONES_CAMPO)
 
 
 def _subsecciones():
-    return _SUBSECCIONES_ROL.get(_rol(), _SUBSECCIONES)
+    return _SUBSECCIONES_ROL.get(_rol(), _SUBSECCIONES_CAMPO)
 
 
 def _lbl2key():

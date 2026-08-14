@@ -109,7 +109,7 @@ init_state()
 # ══════════════════════════════════════════════════════
 # LOGIN — barrera de acceso
 # ══════════════════════════════════════════════════════
-from core.auth_ui import render_login, render_user_bar, render_owner_panel
+from core.auth_ui import render_login, render_user_bar
 from core.auth import heartbeat, get_user
 
 if not render_login():
@@ -118,10 +118,6 @@ if not render_login():
 _ROL   = st.session_state.auth["rol"]
 _GRUPO = st.session_state.auth.get("grupo", "")
 
-# Roles ya migrados a la shell nueva (sidebar de secciones + topbar, `core/home_ui`).
-# El resto sigue con la cabecera COPEX + el radio horizontal de más abajo. Cuando
-# entre aquí el propietario, TODO lo que hay bajo el bloque de la shell se borra.
-_SHELL_NUEVA = ("administrador", "campo", "propietario")
 
 # Deep-link del QR del inventario: escanear `…?activo=ACT-####` abre esa ficha.
 # Debe correr ANTES del sidebar (sidebar_menu aplica `_admin_nav_pending`). Solo
@@ -224,12 +220,11 @@ with st.sidebar:
         from core.timeclock_ui import render_sidebar_chrono
         render_sidebar_chrono()
 
-    # ── Shell nueva (v190 admin · v297 campo) ──
+    # ── Menú de secciones (v299: para TODOS los roles) ──
     # `sidebar_menu` resuelve las secciones POR ROL internamente (home_ui._secciones).
-    if _ROL in _SHELL_NUEVA:
-        from core import home_ui as _home
-        st.session_state["_admin_sec"] = _home.sidebar_menu()
-        st.markdown("---")
+    from core import home_ui as _home
+    st.session_state["_admin_sec"] = _home.sidebar_menu()
+    st.markdown("---")
 
     # ══════════════════════════════════════════════════
     # ASISTENTE IA — desplegable en sidebar
@@ -274,148 +269,16 @@ with st.sidebar:
                 st.rerun()
 
 # ══════════════════════════════════════════════════════
-# SHELL NUEVA: sidebar de secciones + top bar + contenido (v190 admin · v297 campo)
-# El PROPIETARIO es el único que sigue con la cabecera + nav de abajo; cuando
-# también migre, todo lo que hay debajo de este bloque se puede borrar.
+# CONTENIDO — shell única: top bar + la sección activa
+# v190 admin · v297 campo · v298 propietario · v299 se borró la nav vieja
+# (cabecera COPEX + radio `main_nav` + su if/elif de enrutado, 132 líneas).
+# Ya NO es condicional: los tres roles pasan por aquí y `home_ui` resuelve sus
+# secciones. Un rol desconocido cae a las del CAMPO (menor privilegio).
 # ══════════════════════════════════════════════════════
-if _ROL in _SHELL_NUEVA:
-    from core import home_ui as _home
-    _home.render_topbar(_GRUPO)
-    # El default NO puede ser "home" fijo: el campo no tiene esa sección. Se deja
-    # que `render_admin_content` caiga a la primera de su rol (v297).
-    _home.render_admin_content(st.session_state.get("_admin_sec", ""), _GRUPO)
-    st.stop()
+from core import home_ui as _home
+_home.render_topbar(_GRUPO)
+# El default NO puede ser "home" fijo: campo y propietario no tienen esa sección;
+# `render_admin_content` cae a la primera del rol (v297).
+_home.render_admin_content(st.session_state.get("_admin_sec", ""), _GRUPO)
 
 # ══════════════════════════════════════════════════════
-# CABECERA PRINCIPAL
-# ══════════════════════════════════════════════════════
-st.markdown(f"""
-<div style="background:linear-gradient(135deg,#1a3a5c 0%,#2e6da4 100%);
-            padding:clamp(14px,4vw,22px) clamp(16px,5vw,32px);border-radius:12px;
-            margin-bottom:20px;display:flex;justify-content:space-between;
-            align-items:center;gap:12px;flex-wrap:wrap;">
-    <div style="min-width:0;">
-        <div style="color:white;font-size:clamp(1.6rem,7vw,2.4rem);font-weight:900;
-                    letter-spacing:0.18em;font-family:'Segoe UI',sans-serif;
-                    line-height:1.0;">COPEX</div>
-        <div style="color:#b0c8e8;font-size:clamp(0.8rem,3vw,1rem);margin-top:4px;font-weight:400;">
-            Elevator Survey Analyzer
-        </div>
-    </div>
-    <div style="text-align:right;">
-        <div style="color:#b0c8e8;font-size:0.75rem;">Versión</div>
-        <div style="color:white;font-size:clamp(1.1rem,4vw,1.4rem);font-weight:700;
-                    font-family:'Courier New',monospace;">{APP_VERSION}</div>
-    </div>
-</div>
-""", unsafe_allow_html=True)
-
-# Navegación con selector (NO st.tabs → evita el bug de mezcla de contenido).
-# Solo se renderiza la sección seleccionada; no hay paneles ocultos que se filtren.
-_L_SURVEY = "📐 Survey de elevador"
-_L_PLUMB  = "🔩 Líneas de plomada"
-_L_RAIL   = "✂️ Corte de rieles"
-_L_BUFFER = "🛡 Corte de buffers"
-_L_BELT   = "🎗 Belting"
-_L_PRESTART = "🦺 Pre-Start diario"
-_L_CLOCK  = "⏱ Fichaje"
-_L_OWNER  = "👑 Administración"
-_L_FIELDPROJ = "📋 Mis proyectos"
-_L_MYCRED    = "🎫 Mis credenciales"
-_L_MYPAY     = "🧾 Mis colillas"
-
-# Orden de las pestañas por rol (el panel de cada rol va primero).
-# Las 5 HERRAMIENTAS TÉCNICAS van juntas; el Survey es una más (la más potente),
-# no un caso aparte. El Pre-Start NO es una herramienta técnica: es un formato de
-# SEGURIDAD de obra, así que va con lo operativo (fichaje/proyectos), no con ellas.
-_HERR = [_L_SURVEY, _L_PLUMB, _L_RAIL, _L_BUFFER, _L_BELT]   # herramientas técnicas
-# ⚠️ NO hay rama para `administrador` a propósito: desde v190 tiene su propia shell
-# (home_ui) y ARRIBA hace `st.stop()`, así que nunca llega hasta aquí. Su rama y su
-# panel de grupo eran código inalcanzable y se borraron en v296 — están en el
-# historial de git si algún día hubiera que devolver al admin a esta nav.
-if _ROL == "propietario":
-    _nav = [_L_OWNER, _L_PRESTART] + _HERR          # sin fichaje
-elif _ROL == "campo":
-    # ⚠️ INALCANZABLE desde v297 (el campo entra por la shell y hace `st.stop()`
-    # arriba). Se deja a propósito hasta la Fase 3, que borra la nav vieja ENTERA
-    # de una vez cuando el propietario también migre — borrarla a trozos deja el
-    # fichero a medias y es más difícil de verificar.
-    _nav = [_L_FIELDPROJ, _L_CLOCK, _L_PRESTART] + _HERR + [_L_MYCRED, _L_MYPAY]
-else:
-    _nav = [_L_PRESTART] + _HERR + [_L_CLOCK]
-
-# Navegación pendiente (p.ej. "abrir el proyecto recién creado" desde el Survey).
-# Se aplica ANTES de instanciar el radio: escribir la clave de un widget ya
-# creado lanza excepción (misma regla que el import de Excel, v111).
-_np = st.session_state.pop("_nav_pending", None)
-if _np in _nav:
-    st.session_state["main_nav"] = _np
-
-_NAV_DISPLAY = {
-    _L_SURVEY: ":material/architecture: Survey de elevador",
-    _L_PLUMB:  ":material/straighten: Líneas de plomada",
-    _L_RAIL:   ":material/content_cut: Corte de rieles",
-    _L_BUFFER: ":material/shield: Corte de buffers",
-    _L_BELT:   ":material/swap_vert: Belting",
-    _L_PRESTART: ":material/health_and_safety: Pre-Start diario",
-    _L_CLOCK:  ":material/schedule: Fichaje",
-    _L_OWNER:  ":material/shield_person: Administración",
-    _L_FIELDPROJ: ":material/assignment: Mis proyectos",
-    _L_MYCRED: ":material/badge: Mis credenciales",
-    _L_MYPAY: ":material/payments: Mis colillas",
-}
-_seccion = st.radio("Navegación", _nav, horizontal=True,
-                    format_func=lambda o: _NAV_DISPLAY.get(o, o),
-                    key="main_nav", label_visibility="collapsed")
-st.markdown("---")
-
-if _seccion == _L_SURVEY:
-
-    # ── Aplicar valores importados (Excel) ANTES de crear los widgets ──
-    # Streamlit prohíbe escribir st.session_state[k] de un widget ya instanciado,
-    # así que el import deja los valores "pendientes" y se aplican aquí, arriba del todo.
-    # ⚠️ Streamlit DESCARTA el estado de un widget que no se renderiza en el rerun.
-    # Como el Survey está en 2 fases, al pasar a "Resultados" los parámetros, el NS y
-    # la configuración (que solo se dibujan en "Datos") se perderían. Re-asignarlos aquí
-    # —antes de crear ningún widget— los mantiene vivos entre fases.
-    render_survey_tab(_ROL, _GRUPO)
-
-
-elif _seccion == _L_PLUMB:
-    from core.plumb_ui import render_plumb_tab
-    render_plumb_tab()
-
-elif _seccion == _L_RAIL:
-    from core.rail_cut_ui import render_rail_cut_tab
-    render_rail_cut_tab()
-
-elif _seccion == _L_BUFFER:
-    from core.buffer_cut_ui import render_buffer_cut_tab
-    render_buffer_cut_tab()
-
-elif _seccion == _L_BELT:
-    from core.belting_ui import render_belting_tab
-    render_belting_tab()
-
-elif _seccion == _L_PRESTART:
-    from core.prestart_ui import render_prestart_tab
-    render_prestart_tab()
-
-elif _seccion == _L_CLOCK:
-    from core.timeclock_ui import render_timeclock_tab
-    render_timeclock_tab()
-
-elif _seccion == _L_FIELDPROJ:
-    from core.projects_ui import render_field_projects
-    render_field_projects(st.session_state.auth.get("usuario", ""), _GRUPO)
-
-elif _seccion == _L_MYCRED:
-    from core.auth_ui import render_my_credentials
-    render_my_credentials()
-
-elif _seccion == _L_MYPAY:
-    from core.payroll_ui import render_mis_colillas
-    render_mis_colillas(st.session_state.auth.get("usuario", ""), _GRUPO)
-
-elif _seccion == _L_OWNER:
-    render_owner_panel()

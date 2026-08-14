@@ -552,22 +552,6 @@ def _owner_usuarios():
                            owner=True, sel_key="ow_fichasel")
 
 
-def render_owner_panel():
-    st.markdown("### :material/admin_panel_settings: Administración")
-    # Sub-navegación con radio (NO st.tabs anidado → evita mezcla de contenido)
-    sec = st.radio("Sección",
-                   ["🌐 Resumen", "🏢 Grupos", "👥 Usuarios", "📁 Proyectos", "🚆 Rieles", "📚 Manuales"],
-                   format_func=lambda o: {"🌐 Resumen": ":material/dashboard: Resumen",
-                                          "🏢 Grupos": ":material/business: Grupos",
-                                          "👥 Usuarios": ":material/group: Usuarios",
-                                          "📁 Proyectos": ":material/folder: Proyectos",
-                                          "🚆 Rieles": ":material/train: Rieles",
-                                          "📚 Manuales": ":material/menu_book: Manuales"}.get(o, o),
-                   horizontal=True, key="owner_sec", label_visibility="collapsed")
-    st.markdown("---")
-    render_owner_seccion(sec)
-
-
 def render_owner_seccion(sec: str):
     """Despacho de UNA sub-sección de Administración (v298).
 

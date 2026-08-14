@@ -1413,9 +1413,12 @@ def render_survey_tab(_ROL, _GRUPO):
                     if _c2.button("Abrir proyecto ➜", use_container_width=True,
                                   key="ir_al_proyecto"):
                         st.session_state["_prjsel_pending"] = _pc["id"]
-                        st.session_state["_nav_pending"] = (
-                            "👑 Administración" if _ROL == "propietario" else "🛠 Mi grupo")
-                        if _ROL == "propietario":
-                            st.session_state["owner_sec"] = "📁 Proyectos"
+                        # v299: la nav vieja (`_nav_pending` + el radio `main_nav`) se
+                        # borró; el salto va por el mecanismo de la shell. Cada rol
+                        # tiene su sección de proyectos: el propietario dentro de
+                        # Administración, el administrador en la suya.
+                        st.session_state["_admin_nav_pending"] = (
+                            ("administracion", "📁 Proyectos") if _ROL == "propietario"
+                            else ("proyectos", "📊 Proyectos"))
                         st.session_state.pop("_prj_creado", None)
                         st.rerun()

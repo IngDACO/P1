@@ -319,8 +319,10 @@ _TIPO_LABEL = {"plano": "Plano", "informe_cliente": "Informe cliente",
 _TIPO_ORDER = ["plano", "informe_cliente", "informe_admin", "matriz_survey",
                "calculo", "prestart", "foto", "certificado", "otro"]
 # Reabrir un cálculo en su herramienta (v148): solo estas 4 guardan entradas.
-_CALC_NAV   = {"plomada": "🔩 Líneas de plomada", "rieles": "✂️ Corte de rieles",
-               "buffers": "🛡 Corte de buffers", "belting": "🎗 Belting"}
+# v299: IDs de las SUB-pestañas de 🛠 Herramientas en la shell (`home_ui._SUBSECCIONES`),
+# no las etiquetas de la nav vieja — esa nav se borró.
+_CALC_NAV   = {"plomada": "🔩 Plomada", "rieles": "✂️ Rieles",
+               "buffers": "🛡 Buffers", "belting": "🎗 Belting"}
 
 
 def _a_fecha(v):

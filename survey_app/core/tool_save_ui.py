@@ -80,14 +80,20 @@ def aplicar_restauracion(herramienta: str) -> str:
     return str(pend.get("id", ""))
 
 
-def pedir_reapertura(fila, herramienta: str, etiqueta_nav: str) -> bool:
-    """Deja pendiente reabrir este calculo y navega a su herramienta."""
+def pedir_reapertura(fila, herramienta: str, sub_herramienta: str) -> bool:
+    """Deja pendiente reabrir este calculo y navega a su herramienta.
+
+    v299: `sub_herramienta` es el ID de la sub-pestaña dentro de 🛠 Herramientas
+    (p. ej. "🔩 Plomada"), no la etiqueta de la nav vieja — esa nav se borró y su
+    `_nav_pending` ya no lo lee nadie. El salto va por `_admin_nav_pending`, que
+    `home_ui._aplicar_nav_pending` aplica ANTES de instanciar los menús (regla v111).
+    """
     vals = toolruns.entradas_de(fila)
     if not vals:
         return False
     st.session_state[_PENDIENTE] = {"herramienta": herramienta, "valores": vals,
                                     "id": str(fila.get("ID", ""))}
-    st.session_state["_nav_pending"] = etiqueta_nav
+    st.session_state["_admin_nav_pending"] = ("herramientas", sub_herramienta)
     return True
 
 
