@@ -613,19 +613,24 @@ def render_board_readonly(grupo, resaltar_usuario=""):
                 unsafe_allow_html=True)
 
 
-def _guardar_celda(grupo, lunes, usuario, datos, dia, items, nota, toda_semana):
-    """Escribe UNA celda (o toda la semana) con VARIAS asignaciones, cada una con su franja
-    horaria, + una nota por día (v277). `items` = [{'asig','ini','fin'}]. `guardar_persona`
-    omite las vacías → items vacío + nota vacía = limpiar."""
+def _guardar_celda(grupo, lunes, usuario, datos, dias_destino, items, nota):
+    """Escribe la MISMA asignación en UNO O VARIOS días de la semana (v301).
+
+    `dias_destino` = lista de claves de `R.DIAS`. Antes era `dia` + un booleano
+    `toda_semana`: o un día o los cinco, sin término medio — así que planificar a
+    alguien tres días obligaba a abrir tres celdas. Ahora se eligen los días que sean.
+
+    `items` = [{'asig','ini','fin'}] (varias asignaciones por día, cada una con su
+    franja, v277). Se escribe la semana COMPLETA en 1 sola llamada, así que N días
+    cuestan lo mismo que uno. `guardar_persona` omite las vacías → items vacío +
+    nota vacía = limpiar esos días.
+    """
     sem = dict(datos.get(usuario, {}) or {})
     cell = {"items": [{"a": it["asig"], "i": it.get("ini", ""), "f": it.get("fin", "")}
                       for it in (items or []) if it.get("asig")],
             "nota": nota}
-    if toda_semana:
-        for d in R.DIAS:
-            sem[d] = dict(cell)
-    else:
-        sem[dia] = cell
+    for d in (dias_destino or []):
+        sem[d] = dict(cell)
     return R.guardar_persona(grupo, lunes, usuario, sem)
 
 
@@ -749,17 +754,15 @@ def _tablero_editable(grupo, lunes, staff, datos, tidx, marcas=None):
     # 2) Cabecera (persona + días)
     anchos = [1.4] + [1] * len(dias)
     h = st.columns(anchos)
-    # `Persona` se alinea con el TEXTO del botón de nombre (que lleva su propio
-    # padding-left por el borde de acento), no con el borde de la columna.
-    h[0].markdown("<div style='font-size:12px;color:#6b7280;padding-left:11px;"
-                  "margin-bottom:5px'>Persona</div>", unsafe_allow_html=True)
-    # Los días van CENTRADOS sobre su columna (la etiqueta iba a la izquierda sobre
-    # una celda que ocupa todo el ancho → se leía corrida) y con aire abajo, que
-    # antes tocaban el cuadro.
+    # Cabecera de la rejilla (v301): 13.5px + seminegrita y TODO centrado — a 12px
+    # gris claro apenas se leía, y "Persona" iba alineada a la izquierda mientras los
+    # días ya estaban centrados, así que la fila no cuadraba.
+    _CAB = ("font-size:13.5px;font-weight:600;color:#5b6472;"
+            "text-align:center;margin-bottom:6px")
+    h[0].markdown(f"<div style='{_CAB}'>Persona</div>", unsafe_allow_html=True)
     for i, d in enumerate(dias):
         f = R.fecha_de_dia(lunes, d)
-        h[i + 1].markdown(f"<div style='font-size:12px;color:#6b7280;text-align:center;"
-                          f"margin-bottom:5px'>{R.DIAS_LABEL[d]} "
+        h[i + 1].markdown(f"<div style='{_CAB}'>{R.DIAS_LABEL[d]} "
                           f"{f.strftime('%d/%m')}</div>", unsafe_allow_html=True)
 
     # 3) Filas: nombre + una celda-popover por día
@@ -823,11 +826,19 @@ def _tablero_editable(grupo, lunes, staff, datos, tidx, marcas=None):
                                    "fin": _tf.strftime("%H:%M")})
                 _nota = st.text_input("Nota (para todo el día)", value=nota, key=f"pvn_{_wk}_{idx}",
                                       placeholder="vehículo, equipo…")
-                _all = st.checkbox("Aplicar a toda la semana", key=f"pvw_{_wk}_{idx}")
+                # v301: planificar VARIOS días de una. Antes era un check "toda la
+                # semana" (o uno, o los cinco), así que asignar a alguien 2-3 días
+                # obligaba a abrir una celda por día. Arranca con el día tocado.
+                _dd = st.multiselect(
+                    "Aplicar a estos días", R.DIAS, default=[d], key=f"pvw_{_wk}_{idx}",
+                    format_func=lambda x: f"{R.DIAS_LABEL[x]} "
+                                          f"{R.fecha_de_dia(lunes, x).strftime('%d/%m')}")
+                if len(_dd) > 1:
+                    st.caption(f":material/content_copy: Se guardará igual en **{len(_dd)} días**.")
                 if st.button(":material/save: Guardar", key=f"pvs_{_wk}_{idx}", type="primary",
-                             use_container_width=True):
-                    ok, msg = _guardar_celda(grupo, lunes, usuario, datos, d,
-                                             _items, _nota, _all)
+                             use_container_width=True, disabled=not _dd):
+                    ok, msg = _guardar_celda(grupo, lunes, usuario, datos, _dd,
+                                             _items, _nota)
                     if ok:
                         # cada PROYECTO agendado mete al usuario como asignado del proyecto
                         # → acceso desde su cuenta (no quita a nadie de otros).
@@ -925,6 +936,9 @@ def _catalogo(grupo):
         st.caption("Para trabajos que **no** son un proyecto: entregas, cursos, policía, "
                    "traslados… Los **proyectos se asignan directo** en el tablero (ya son un "
                    "trabajo en sí mismos), no hace falta crearlos aquí.")
+        # incluir_inactivos: los desactivados SÍ se listan (para reactivarlos).
+        # Los ELIMINADOS no: su fila solo existe para que el histórico del tablero
+        # siga resolviendo nombre y color (v301).
         trabajos = R.list_trabajos(grupo, incluir_inactivos=True)
         _colmap = {n: h for n, h in R.PALETA}
         _colinv = {h.lower(): n for n, h in R.PALETA}      # hex → nombre, para precargar
@@ -976,20 +990,24 @@ def _catalogo(grupo):
                                 if ok:
                                     st.session_state["_trab_edit"] = ""
                                     st.rerun()
+                        # v301: eliminar SIEMPRE se puede. Si tiene historia, la fila se
+                        # conserva marcada (sale del catálogo y del desplegable, pero el
+                        # tablero sigue resolviendo su nombre y color en las semanas ya
+                        # planificadas). Se dice ANTES de pulsar, no después.
                         _usos = R.usos_de_trabajo(grupo, tid)
                         if _usos:
-                            g2.caption(f":material/lock: No se puede borrar: asignado en "
-                                       f"**{_usos}** {'día' if _usos == 1 else 'días'}. "
-                                       f"Desactívalo si ya no se usa.")
-                        else:
-                            _conf = g2.checkbox("Confirmo eliminarlo", key=f"tedcf_{tid}")
-                            if g2.button(":material/delete: Eliminar", key=f"tedd_{tid}",
-                                         disabled=not _conf, use_container_width=True):
-                                ok, msg = R.delete_trabajo(grupo, tid)
-                                (st.success if ok else st.warning)(msg)
-                                if ok:
-                                    st.session_state["_trab_edit"] = ""
-                                    st.rerun()
+                            g2.caption(f":material/history: Está en **{_usos}** "
+                                       f"{'día ya planificado' if _usos == 1 else 'días ya planificados'}: "
+                                       f"al eliminarlo sale del catálogo, pero **el histórico se "
+                                       f"conserva** tal cual.")
+                        _conf = g2.checkbox("Confirmo eliminarlo", key=f"tedcf_{tid}")
+                        if g2.button(":material/delete: Eliminar", key=f"tedd_{tid}",
+                                     disabled=not _conf, use_container_width=True):
+                            ok, msg = R.delete_trabajo(grupo, tid)
+                            (st.success if ok else st.warning)(msg)
+                            if ok:
+                                st.session_state["_trab_edit"] = ""
+                                st.rerun()
         else:
             st.caption("Aún no hay trabajos. Añade el primero abajo.")
 

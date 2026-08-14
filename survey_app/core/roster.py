@@ -146,12 +146,26 @@ def _next_id(ws, prefijo) -> str:
 
 
 # ── Catálogo de trabajos ─────────────────────────────────────────
-def list_trabajos(grupo, incluir_inactivos=False) -> list:
+# Estado "borrado" de un trabajo (v301). NO es lo mismo que inactivo:
+#   SI/SÍ/TRUE/1 → activo: se ofrece al asignar y sale en el catálogo.
+#   NO           → desactivado: NO se ofrece, pero sigue EN el catálogo (se reactiva).
+#   ELIMINADO    → fuera del catálogo y del desplegable, pero la FILA SE CONSERVA para
+#                  que `trabajos_idx` siga resolviendo nombre y color de las
+#                  asignaciones históricas. Borrar la fila las dejaría mostrando el ID
+#                  crudo (TRB-0003) sin color — perder historia sin avisar.
+ELIMINADO = "ELIMINADO"
+_ACTIVO_OK = ("SI", "SÍ", "TRUE", "1")
+
+
+def list_trabajos(grupo, incluir_inactivos=False, incluir_eliminados=False) -> list:
     out = []
     for r in _trab_records():
         if str(r.get("Grupo", "")) != str(grupo):
             continue
-        if not incluir_inactivos and str(r.get("Activo", "SI")).upper() not in ("SI", "SÍ", "TRUE", "1"):
+        _act = str(r.get("Activo", "SI")).strip().upper()
+        if _act == ELIMINADO and not incluir_eliminados:
+            continue
+        if not incluir_inactivos and _act not in _ACTIVO_OK:
             continue
         out.append(r)
     out.sort(key=lambda r: _num_orden(r.get("Numero", "")))
@@ -259,18 +273,27 @@ def usos_de_trabajo(grupo, tid) -> int:
 
 
 def delete_trabajo(grupo, tid) -> tuple:
-    """Borra un trabajo del catálogo — SOLO si no se usa en ningún roster.
+    """Quita un trabajo del catálogo. SIEMPRE se puede (v301).
 
-    ⚠️ Mismo criterio que v149 (archivar en vez de borrar): un borrado que deja
-    referencias huérfanas rompe datos en silencio. Si está en uso NO se borra y se
-    devuelve el motivo, para que la UI ofrezca «desactivar» (que sí conserva el
-    histórico: `trabajos_idx` sigue resolviendo los inactivos).
+    Dos caminos según si tiene historia, para que borrar nunca destruya datos:
+      · **Sin usar en ningún roster** → se borra la FILA de verdad. No hay nada que
+        conservar.
+      · **Asignado alguna vez** → se marca `Activo = ELIMINADO`: desaparece del
+        catálogo y del desplegable de asignación, pero la fila SIGUE ahí, así que
+        `trabajos_idx` continúa resolviendo su nombre y su color en las semanas
+        pasadas del tablero. Sin eso, esas celdas mostrarían `TRB-####` sin color.
+
+    (v295 lo IMPEDÍA cuando estaba en uso; el usuario pidió poder borrarlo igual
+    «sin eliminar el historial de que existió» — esto es exactamente eso.)
     """
     usos = usos_de_trabajo(grupo, tid)
     if usos:
-        return False, (f"No se puede borrar: está asignado en {usos} "
-                       f"{'día' if usos == 1 else 'días'} del tablero. "
-                       f"Desactívalo y dejará de ofrecerse sin romper el histórico.")
+        ok, _ = update_trabajo(tid, {"Activo": ELIMINADO})
+        if not ok:
+            return False, "No se pudo eliminar."
+        return True, (f"Trabajo eliminado del catálogo. Se conserva el histórico: "
+                      f"sigue viéndose con su nombre y color en {usos} "
+                      f"{'día ya planificado' if usos == 1 else 'días ya planificados'}.")
     w = _ws_trab()
     if w is None:
         return False, "Google Sheets no está configurado."
