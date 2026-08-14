@@ -307,8 +307,11 @@ def render_topbar(grupo):
     # v201: la cabecera negra de Streamlit + el hueco superior quitaban espacio en la
     # vista del admin. La hacemos transparente (sin ocultarla, para no perder el botón
     # de desplegar el sidebar) y reducimos el padding superior del contenido.
+    # v303: el padding era 2.4rem y se veía como una franja en blanco sobre el
+    # buscador. Lo que tapaba la cabecera oscura es la regla de al lado
+    # (`background:transparent`), no el hueco → 2.4rem → 1rem.
     st.markdown("<style>header[data-testid='stHeader']{background:transparent;}"
-                "div.block-container{padding-top:2.4rem !important;}</style>",
+                "div.block-container{padding-top:1rem !important;}</style>",
                 unsafe_allow_html=True)
     cback, c1, cver, c2 = st.columns([1, 7, 1.4, 1])
     with cback:
@@ -587,23 +590,24 @@ def render_home(grupo):
     # v192: el "Centro de control del grupo" (KPIs + resumen del día) vivía en la
     # cabecera de "Mi grupo"; al reorganizar la nav quedó sin sitio → se reubica aquí,
     # que es la nueva landing. Reusa la función tal cual (no se duplica lógica).
+    # v303: TRES columnas en vez de [3, 2] + toggle. El toggle (v203) obligaba a
+    # elegir entre proyectos Y agenda, y lo elegido quedaba en el 40% del ancho:
+    # de ahí venía lo de "arrinconados", y el ancho sobrante de ahí venía lo de
+    # "vacía". La interfaz del admin es de PC (decisión del usuario), así que el
+    # único contra —que en móvil las 3 columnas se apilan— no aplica aquí.
     from core import projects_ui as PU
     PU.render_group_header(grupo)
-    col_map, col_ag = st.columns([3, 2], gap="large")
+    col_map, col_pro, col_ag = st.columns([2, 1.5, 1.5], gap="large")
     with col_map:
+        PU.render_kpis(grupo)          # los 3 KPIs son la cabecera de esta columna
         st.markdown("#### :material/map: Proyectos activos")
         _mapa_proyectos(grupo)
+    with col_pro:
+        st.markdown("#### :material/folder: Proyectos")
+        _proyectos_home(grupo)
     with col_ag:
-        # v203: la columna derecha se comparte entre la agenda y los proyectos; el
-        # toggle hace de título → cambio rápido sin salir de HOME.
-        _vista = st.radio("vista", ["📁 Proyectos", "📋 Agenda"], horizontal=True,
-                          format_func=lambda o: {"📋 Agenda": ":material/list: Agenda",
-                                                 "📁 Proyectos": ":material/folder: Proyectos"}.get(o, o),
-                          key="home_right_view", label_visibility="collapsed")
-        if _vista == "📁 Proyectos":
-            _proyectos_home(grupo)
-        else:
-            _agenda_hoy(grupo)
+        st.markdown("#### :material/list: Agenda de hoy")
+        _agenda_hoy(grupo)
 
 
 # ── Mapa de proyectos ────────────────────────────────────────────
@@ -661,9 +665,10 @@ def _mapa_proyectos(grupo):
                                 + (r["lon"] - _cc[1]) ** 2)
                     if (abs(_best["lat"] - _cc[0]) < 1e-3
                             and abs(_best["lon"] - _cc[1]) < 1e-3 and _best["pid"]):
-                        # v206: el pin abre el RESUMEN del proyecto en la columna derecha
-                        # (pestaña Proyectos), sin salir de HOME. El "ver completo" va dentro.
-                        st.session_state["home_right_view"] = "📁 Proyectos"
+                        # v206: el pin abre el RESUMEN del proyecto en la columna de
+                        # Proyectos, sin salir de HOME. El "ver completo" va dentro.
+                        # v303: ya no hay que cambiar de pestaña — esa columna está
+                        # siempre a la vista, así que `home_right_view` desaparece.
                         st.session_state["_home_proj_sel"] = _best["pid"]
                         st.rerun()
         except Exception:

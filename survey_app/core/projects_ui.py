@@ -134,7 +134,13 @@ def _MI(name, color="", size="1.05em"):
 
 
 def render_group_header(grupo: str):
-    """Banda de marca del grupo + fila de KPIs (centro de control del admin)."""
+    """Banda de marca del grupo + resumen del día (centro de control del admin).
+
+    ⚠️ Los KPIs ya NO se pintan aquí (v303): se mudaron a `render_kpis`, que HOME
+    llama dentro de la columna del mapa. Tres números estirados a lo ancho de la
+    pantalla era justo lo que la hacía verse vacía. La BANDA no se toca: el nombre
+    de la empresa cliente es lo que el admin quiere ver resaltado al entrar.
+    """
     st.markdown(
         '<div style="background:linear-gradient(135deg,#1a3a5c 0%,#2e6da4 100%);'
         'padding:14px 18px;border-radius:12px;display:flex;align-items:center;gap:12px;'
@@ -148,22 +154,67 @@ def render_group_header(grupo: str):
     )
     if not P.is_configured():
         return
+    _resumen_del_dia(grupo)
+
+
+def _kpi_pies(k: dict) -> tuple:
+    """Los 3 pies de contexto de las tarjetas KPI, a partir del dict de `_kpis`.
+
+    Aparte para que se pueda VERIFICAR sin montar la UI: el chequeo de que ningún pie
+    se sale de los 93 px útiles llama a esta función, no a una copia de su lógica
+    (una copia puede pasar el test mientras la pantalla dice otra cosa).
+    """
+    _act, _rie, _tot = k["activos"], k["riesgo"], k["total"]
+    if not _act:
+        _sub_act = f"de {_tot} en total" if _tot else "ninguno todavía"
+    elif not _rie:
+        _sub_act = "todos al día"
+    elif _rie >= _act:                      # todos los activos van retrasados
+        _sub_act = f"los {_act} en retraso"
+    else:
+        _sub_act = f"{_rie} en retraso"
+    # ⚠️ "media de N obras" mide 94 px con N de 2 cifras → NO cabe, por 1 px. "de N obras" = 59.
+    _sub_avg = ("sin avance aún" if not k["avg"]
+                else f"de {_act} obra" + ("s" if _act != 1 else ""))
+    _sub_hor = "nadie ha fichado" if not k["horas"] else "en todo el grupo"
+    return _sub_act, _sub_avg, _sub_hor
+
+
+def render_kpis(grupo: str):
+    """Las 3 métricas del portafolio, como tarjetas KPI CLICKEABLES (v199/v283).
+
+    v303 — cada una gana una TERCERA línea de contexto. Una caja grande con un solo
+    número se ve vacía, y encogerla no lo arregla: solo la hace una caja pequeña
+    vacía. El dato del pie ya lo calculaba `_kpis` (`total`, `riesgo`) y se estaba
+    tirando desde v197 → **cero lecturas nuevas de Sheets**.
+
+    ⚠️ El pie tiene **93 px útiles** (medidos: tarjeta de 124 px − 28 de padding − borde),
+    y el límite es de ANCHO, no de caracteres: `media de 12 obras` y `los 12 en retraso`
+    tienen los mismos 17 caracteres y miden 94 px y 84 px. Por eso el pie se escribe
+    corto Y el CSS lleva `nowrap`+elipsis (theme.py): si algún día uno no cabe, se
+    recorta en vez de saltar a 2 líneas y descuadrar la fila de tarjetas.
+    Cada pie nuevo hay que MEDIRLO en el navegador y añadirlo a `verif_v303.py`.
+    ⚠️ "en retraso" sale aquí Y en el indicador «En retraso» del resumen. Es
+    deliberado (aquí es contexto del número, allí es un filtro accionable), pero es
+    el único número que se repite en HOME: si se añade otro pie, que no sea de los
+    9 indicadores.
+    """
+    if not P.is_configured():
+        return
     k = _kpis(grupo)
-    # v199: métricas ACTIVAS (clic → sección) en vez de tarjetas pasivas. "En riesgo"
-    # y "Alarmas" salieron de aquí (v197): viven en los indicadores del resumen.
-    # v283: se ven como TARJETA KPI (clase `cpxkpi_` del sistema de diseño) sin dejar
-    # de ser botones — la métrica sigue llevando a su sección.
+    _act, _hor = k["activos"], k["horas"]
+    _sub_act, _sub_avg, _sub_hor = _kpi_pies(k)
+
     m1, m2, m3 = st.columns(3)
-    if m1.button(f":material/folder: {k['activos']} proyectos activos",
+    if m1.button(f":material/folder: Activos\n\n{_act}\n\n{_sub_act}",
                  key="cpxkpi_activos", use_container_width=True):
         _ir_a("proyectos", "📊 Proyectos")
-    if m2.button(f":material/trending_up: {k['avg']}% de avance promedio",
+    if m2.button(f":material/trending_up: Avance\n\n{k['avg']}%\n\n{_sub_avg}",
                  key="cpxkpi_avance", use_container_width=True):
         _ir_a("proyectos", "📊 Proyectos")
-    if m3.button(f":material/schedule: {k['horas']} h registradas",
+    if m3.button(f":material/schedule: Horas\n\n{_hor} h\n\n{_sub_hor}",
                  key="cpxkpi_horas", use_container_width=True):
         _ir_a("finanzas", "⏱ Horas")
-    _resumen_del_dia(grupo)
 
 
 def _ir_a(seccion, sub_label=None):
@@ -176,7 +227,15 @@ def _ir_a(seccion, sub_label=None):
 def _resumen_del_dia(grupo: str):
     """Resumen del día — estructura fija + elementos ACTIVOS (v199): cada indicador es
     un botón; al clickearlo muestra sus 'cuáles' + un botón para ir a la sección a actuar.
-    La lectura de IA va en su propio desplegable, bajo demanda."""
+    La lectura de IA va en su propio desplegable, bajo demanda.
+
+    ⚠️ El 2º campo de cada tupla es el **ID** de la sub-pestaña (`home_ui._SUBSECCIONES`),
+    y el ID lleva EMOJI a propósito (v232: el display con icono Material es otra cosa).
+    Hasta v303 aquí había displays (`":material/bar_chart: Proyectos"`) que no eran ID de
+    nada: `_seccion_proyectos` compara `sub == "📊 Proyectos"` por igualdad literal, así
+    que «→ Ir a Proyectos» caía en el `else` y **abría Agrupaciones**; «→ Ir a Gastos»
+    abría Horas. Si tocas estos strings, cópialos de `_SUBSECCIONES`, no del sidebar.
+    """
     from core import admin_digest
     try:
         d = admin_digest.group_digest(grupo)
@@ -187,50 +246,59 @@ def _resumen_del_dia(grupo: str):
     # slug, icono, etiqueta, urgente, count, sección, sub_pestaña, nombre_sección, detalle()
     inds = [
         ("retrasos", ":material/error:", "En retraso", True, len(d["retrasos"]),
-         "proyectos", ":material/bar_chart: Proyectos", "Proyectos",
+         "proyectos", "📊 Proyectos", "Proyectos",
          lambda: ", ".join(f"{r['nombre']} ({r['dias']}d)" for r in d["retrasos"][:15])),
         ("vencidos", ":material/block:", "Vencidos", True, len(d["vencidos"]),
-         "proyectos", ":material/bar_chart: Proyectos", "Proyectos",
+         "proyectos", "📊 Proyectos", "Proyectos",
          lambda: ", ".join(f"{v['nombre']} ({v['fin']})" for v in d["vencidos"][:15])),
         ("porvencer", ":material/event:", "Por vencer", False, len(d["por_vencer"]),
-         "proyectos", ":material/bar_chart: Proyectos", "Proyectos",
+         "proyectos", "📊 Proyectos", "Proyectos",
          lambda: ", ".join(f"{v['nombre']} ({v['dias']}d)" for v in d["por_vencer"][:15])),
         ("sinasig", ":material/engineering:", "Sin asignar", False, len(d["sin_asignar"]),
-         "proyectos", ":material/bar_chart: Proyectos", "Proyectos",
+         "proyectos", "📊 Proyectos", "Proyectos",
          lambda: ", ".join(s["nombre"] for s in d["sin_asignar"][:15])),
         ("sincont", ":material/contact_page:", "Sin contacto", False, len(d["campo_sin_contacto"]),
-         "planificacion", ":material/engineering: Usuarios", "Usuarios",
+         "planificacion", "👷 Usuarios", "Usuarios",
          lambda: ", ".join(d["campo_sin_contacto"][:15])),
         ("cred", ":material/badge:", "Credenciales", False, len(d.get("cred_venc", [])),
-         "planificacion", ":material/engineering: Usuarios", "Usuarios",
+         "planificacion", "👷 Usuarios", "Usuarios",
          lambda: ", ".join(f"{c['tipo']}·{c['usuario']} ({c['dias']}d)"
                            for c in d.get("cred_venc", [])[:15])),
         ("alarmas", ":material/notifications:", "Alarmas", True, _al_n,
-         "proyectos", ":material/bar_chart: Proyectos", "Proyectos",
+         "proyectos", "📊 Proyectos", "Proyectos",
          lambda: ", ".join(f"{a['nombre']} ({a['n']})" for a in d["alarmas"][:15])),
         ("near", ":material/health_and_safety:", "Near miss", False, len(d["near_miss"]),
-         "proyectos", ":material/bar_chart: Proyectos", "Proyectos",
+         "proyectos", "📊 Proyectos", "Proyectos",
          lambda: ", ".join(f"{n['proyecto']} ({n['fecha']})" for n in d["near_miss"][:15])),
         ("sobrep", ":material/payments:", "Sobre presup.", False, len(d.get("sobre_presupuesto", [])),
-         "finanzas", ":material/payments: Gastos", "Gastos",
+         "finanzas", "💰 Gastos", "Gastos",
          lambda: f"{len(d.get('sobre_presupuesto', []))} proyecto(s) sobre presupuesto"),
     ]
     _urg = sum(c for (_s, _i, _l, u, c, *_r) in inds if u)
     _tot = sum(c for (_s, _i, _l, _u, c, *_r) in inds)
 
-    with st.expander(":material/notifications: Resumen del día", expanded=True):
-        if _tot == 0:
-            st.markdown(f"<span style='color:#1e8449;font-weight:600;'>{_MI('check_circle')} Todo en orden.</span>",
-                        unsafe_allow_html=True)
-        elif _urg:
-            st.markdown(f"<span style='color:#c0392b;font-weight:600;'>{_MI('error')} {_urg} urgente(s)</span>"
-                        f" · {_tot} pendiente(s)", unsafe_allow_html=True)
-        else:
-            st.markdown(f"<span style='color:#c77700;font-weight:600;'>{_MI('schedule')} {_tot} pendiente(s)</span>",
-                        unsafe_allow_html=True)
+    # v303: el estado sube al TÍTULO del desplegable. Gana dos cosas: deja de gastar
+    # una línea entera dentro del bloque (que el usuario veía demasiado alto) y se
+    # sigue leyendo aunque el resumen esté plegado.
+    # ⚠️ Verificado en vivo que el markdown de color SÍ se aplica en el label de un
+    # expander (`:red[...]` → rgb(255,108,108) en el <summary>).
+    _p = "" if _tot == 1 else "s"
+    if _tot == 0:
+        _titulo = ":material/notifications: Resumen del día — :green[todo en orden]"
+    elif _urg:
+        _titulo = (f":material/notifications: Resumen del día — "
+                   f":red[{_urg} urgente{'' if _urg == 1 else 's'}] · {_tot} pendiente{_p}")
+    else:
+        _titulo = (f":material/notifications: Resumen del día — "
+                   f":orange[{_tot} pendiente{_p}]")
 
+    with st.expander(_titulo, expanded=True):
         # colorear cada botón-indicador por severidad (clase st-key-<key>, v169)
-        _css = ["<style>"]
+        # + v303: bajarlos de ~52 a ~35 px (medido). Son 3 filas → ~50 px menos, sin
+        # tocar la estructura fija (v196) ni los nombres visibles (v200).
+        _css = ["<style>",
+                '[class*="st-key-resind_"] button{min-height:0 !important;'
+                'padding:4px 8px !important;}']
         for _slug, _i, _l, _urgb, _cnt, *_r in inds:
             _bg, _fg = (("#fdecec", "#c0392b") if _urgb else ("#fff4e0", "#c77700")) \
                        if _cnt else ("#f4f6f9", "#9aa7b8")
@@ -239,12 +307,16 @@ def _resumen_del_dia(grupo: str):
         _css.append("</style>")
         st.markdown("".join(_css), unsafe_allow_html=True)
 
-        st.caption("Toca un indicador para ver el detalle e ir a resolverlo.")
+        # v303: la pista ("toca un indicador…") era un `st.caption` que costaba una
+        # línea fija. Pasa al `help` de CADA botón, donde además dice a dónde lleva.
+        # ⚠️ No se puede colgar del expander: `st.expander` NO acepta `help` (firma
+        # comprobada en vivo: label, expanded, *, key, icon, width, on_change…).
         for _i0 in range(0, len(inds), 3):          # 3 filas de 3 (nombres visibles)
             for _col, (slug, icon, lbl, _urgb, cnt, _sec, _sub, _secn, _fn) in \
                     zip(st.columns(3), inds[_i0:_i0 + 3]):
                 if _col.button(f"{icon} {lbl} · {cnt}", key=f"resind_{slug}",
-                               use_container_width=True):
+                               use_container_width=True,
+                               help=f"Ver el detalle e ir a {_secn} a resolverlo"):
                     _cur = st.session_state.get("_res_sel")
                     st.session_state["_res_sel"] = None if _cur == slug else slug
                     st.rerun()

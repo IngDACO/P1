@@ -120,6 +120,33 @@ header[data-testid="stHeader"] {{ background: transparent; }}
   text-align: left !important; width: 100%;
   font-size: 1.02rem !important; font-weight: 700 !important; color: {AZUL_OSC};
 }}
+/* Tarjeta KPI de TRES líneas (v303): el label del botón va como
+   `etiqueta\n\nvalor\n\ncontexto` y Streamlit lo renderiza como TRES <p>.
+   ⚠️ VERIFICADO EN VIVO antes de escribir esto (mini-app + medición del DOM):
+   `\n\n` da <p> separados; `  \n` da UN <p> con <br> dentro (no sirve, no se
+   pueden estilar por separado) y `\n` simple también colapsa en uno.
+   Espeja `.cpx-kpi .lbl/.val/.sub` de arriba para que la tarjeta clickeable y la
+   pasiva se vean IGUAL. Los `:not(...)` dejan intacta la tarjeta de una sola
+   línea: sin ellos, un botón KPI de un solo <p> se encogería a .72rem. */
+[class*="st-key-cpxkpi_"] button p:first-child:not(:last-child) {{
+  font-size: .72rem !important; font-weight: 600 !important; letter-spacing: .3px;
+  text-transform: uppercase; color: {GRIS_TXT} !important; margin-bottom: 1px !important;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}}
+[class*="st-key-cpxkpi_"] button p:nth-child(2):not(:last-child) {{
+  font-size: 1.5rem !important; font-weight: 700 !important; color: {AZUL_OSC} !important;
+  line-height: 1.15 !important; margin: 0 !important;
+}}
+/* ⚠️ `nowrap` + elipsis NO es cosmético: es lo que garantiza que las 3 tarjetas de
+   una fila midan LO MISMO. Sin él, un pie de 94 px en los 93 px útiles que hay
+   dentro de la columna del mapa salta a 2 líneas y esa tarjeta crece 20 px — pasó,
+   medido. Con esto, un texto que no quepa se recorta con "…" en vez de descuadrar
+   la fila. Aun así los pies se escriben cortos (ver `render_kpis`). */
+[class*="st-key-cpxkpi_"] button p:last-child:not(:first-child) {{
+  font-size: .76rem !important; font-weight: 500 !important; color: {GRIS_TXT} !important;
+  margin-top: 1px !important;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}}
 /* ── TOGGLE SEGMENTADO: un `st.radio(horizontal=True)` con key `cpxseg_*` se ve
    como un control segmentado, no como dos bolitas sueltas (v292).
    ⚠️ Verificado EN VIVO antes de escribirlo (mini-app + medición del DOM):

@@ -3359,7 +3359,52 @@ posicional + plano) → app.py, al cargar el PDF, setea `st.session_state["ns"]`
 resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NORTH SYD y AGECARE → NS=6
 (coincide con travel/floor-height HQ/HE).
 
-## Versiones desplegadas (v299 = actual)
+## HOME del admin: densidad + 3 columnas + fix de los deep-links del resumen (v303)
+El usuario: *"la veo muy vacía; la agenda y los proyectos están arrinconados; el resumen del día
+ocupa mucho espacio; y arriba del buscador hay un espacio en blanco"*. Además dejó dos decisiones
+firmes: **la banda azul es SOLO para el nombre de la empresa cliente** (no se fusiona con nada:
+"es algo importante que respetar y resaltar") y **la interfaz del admin es para PC**.
+### ⚠️ Encoger no arregla "vacío"
+La primera propuesta era bajar la altura de las 3 tarjetas KPI. El usuario la rechazó y tenía
+razón: una caja grande con un número está vacía, y una caja pequeña con un número **también**,
+solo que más pequeña. Lo que llena una tarjeta es INFORMACIÓN. `_kpis()` ya calculaba `total` y
+`riesgo` y los tiraba desde v197 → cada tarjeta gana una 3ª línea de contexto (`los 12 en retraso`
+· `de 12 obras` · `en todo el grupo`) con **cero lecturas nuevas** de Sheets.
+- **`_kpi_pies(k)`** (puro, aparte a propósito) arma los 3 pies; `render_kpis(grupo)` los pinta.
+  Se separó para que el chequeo de ancho llame a la FUNCIÓN REAL y no a una copia de su lógica.
+- **`render_group_header` ya NO pinta KPIs**: quedan banda + resumen. Los KPIs se mudan a la
+  cabecera de la columna del mapa (`home_ui.render_home`) — tres números estirados a 1400 px eran
+  justo el vacío del que se quejaba el usuario.
+- **La tarjeta de 3 líneas es un `st.button`** cuyo label va `etiqueta\n\nvalor\n\ncontexto`.
+  ⚠️ VERIFICADO EN VIVO: `\n\n` da **tres `<p>`** estilables por separado; `  \n` da un `<p>` con
+  `<br>` (inservible) y `\n` simple colapsa. CSS en `theme.py`, espejando `.cpx-kpi .lbl/.val/.sub`,
+  con `:not(...)` para no tocar una tarjeta KPI de una sola línea.
+### ⚠️ El límite del pie es de ANCHO, no de caracteres
+`media de 12 obras` y `los 12 en retraso` tienen **17 caracteres los dos** y miden **94 px y 84 px**.
+El hueco útil dentro de la columna del mapa es de **93 px** (tarjeta 124 − 28 de padding − borde),
+así que el primero saltaba a 2 líneas y esa tarjeta crecía 20 px, descuadrando la fila. Contar
+caracteres daba un OK falso. Dos medidas: el pie se acortó a `de N obras` (59 px) **y** el CSS
+lleva `nowrap`+elipsis, que es lo que GARANTIZA que las 3 tarjetas midan igual pase lo que pase.
+### El resumen del día, sin perder nada
+Estructura fija (v196) y nombres visibles (v200) intactos; solo se comprime el envoltorio:
+el estado sube al **título** del desplegable (`Resumen del día — :red[3 urgentes] · 5 pendientes`,
+se lee aunque esté plegado), el `caption` de la pista pasa al **`help` de cada indicador**
+(⚠️ `st.expander` NO acepta `help` — firma comprobada) y los botones bajan de ~52 a **35 px**.
+### ⚠️ FALLO REAL encontrado de paso: los "→ Ir a" del resumen iban al sitio equivocado
+Las tuplas de los 9 indicadores llevaban **displays** (`":material/bar_chart: Proyectos"`) donde
+va el **ID** de la sub-pestaña. `_seccion_proyectos` compara `sub == "📊 Proyectos"` por igualdad
+literal, así que **7 de los 9 indicadores abrían Agrupaciones** y "Sobre presup." abría Horas;
+"Sin contacto"/"Credenciales" acertaban **por accidente** (Usuarios es el `else`). Corregidos a los
+IDs de `home_ui._SUBSECCIONES`. **Guardián nuevo y permanente** en `verif_v303.py`: recorre por AST
+TODOS los `_ir_a(...)`/`navegar(...)` con destino literal del repo (16 hoy) y falla si alguno apunta
+a una sección o a un ID que no existe.
+### Lo demás
+`padding-top` del contenido 2.4rem → **1rem** (el hueco en blanco; lo que tapa la cabecera oscura es
+la regla `background:transparent` de al lado, no el hueco) · HOME pasa de `[3,2]`+toggle a
+**`[2, 1.5, 1.5]`: mapa | proyectos | agenda**, siempre los tres a la vista → muere
+`home_right_view` (0 restos) y el pin del mapa ya no tiene que cambiar de pestaña.
+
+## Versiones desplegadas (v303 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -3367,6 +3412,10 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v303 | HOME del admin: las 3 tarjetas KPI ganan una línea de contexto (con datos que `_kpis` ya calculaba → 0 lecturas nuevas) y se mudan a la cabecera de la columna del mapa; el resumen del día se comprime sin perder estructura ni nombres (estado al título, pista al `help`, indicadores 52→35 px); el fondo pasa a 3 columnas mapa \| proyectos \| agenda (muere el toggle); y el hueco sobre el buscador baja a 1rem. ⚠️ De paso se arregla un fallo real: los "→ Ir a" del resumen llevaban displays en vez de IDs → 7 de 9 abrían **Agrupaciones** y "Sobre presup." abría **Horas**. La banda azul del cliente NO se toca (decisión del usuario) |
+| v302 | Panel: vuelve el atajo "Toda la semana (Lun–Vie)" como check que manda sobre el selector de días y lo deshabilita; sin `st.rerun` para no cerrar el popover |
+| v301 | Panel: cabeceras de días y "Persona" más grandes y centradas; se puede planificar VARIOS días de una (multiselect de días en el popover); y un trabajo ya asignado se puede eliminar sin perder el historial (se marca ELIMINADO y `trabajos_idx` lo sigue resolviendo) |
+| v300 | Trazabilidad: CLAUDE.md (navegación por rol, árbol de módulos, tabla de versiones, bloque de trampas de verificación), prompt del agente y memoria puestos al día tras la migración v296-v299 |
 | v299 | **Fase 3 de la migración: se BORRA la navegación vieja.** Fuera de `app.py` la cabecera COPEX, los `_L_*`, `_HERR`, la cadena `_nav`, `_NAV_DISPLAY`, el radio `main_nav`, su if/elif de enrutado y `_nav_pending` (421→284 líneas), más `auth_ui.render_owner_panel`. ⚠️ ANTES se convirtieron sus 2 flujos VIVOS a `_admin_nav_pending` («Abrir proyecto» tras el survey y «Reabrir cálculo en su herramienta»; `_CALC_NAV` pasa a apuntar a las sub-pestañas reales) — borrar solo el lector los habría dejado sin efecto en silencio (patrón v140). La shell deja de ser condicional y un rol desconocido cae a la nav del CAMPO (menor privilegio) |
 | v298 | Fase 2: el PROPIETARIO a la shell. Sus 6 pestañas de Administración pasan a sub-secciones con la MISMA clave `owner_sec` (el deep-link de `survey_ui` sigue vivo); el despacho se extrae a `auth_ui.render_owner_seccion` para que las dos shells lo compartan sin duplicar; su campana AGREGA alertas de todos sus grupos vía `owner_digest` |
 | v297 | Fase 1: el CAMPO a la shell. `home_ui` gana secciones POR ROL (`_SECCIONES_ROL`), el rol se resuelve dentro (`_rol()`) para no cambiar ninguna firma. El campo gana el botón ← Atrás y la trampa del gesto de retroceso en móvil (que solo tenía el admin). Su campana pasa a mostrar SOLO sus credenciales (antes: las de todo el grupo). La versión va al topbar |
