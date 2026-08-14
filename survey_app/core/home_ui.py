@@ -93,8 +93,30 @@ _SUBSECCIONES_CAMPO = {
                       if _i != "🦺 Pre-Start"]),
 }
 
-_SECCIONES_ROL = {"campo": _SECCIONES_CAMPO}
-_SUBSECCIONES_ROL = {"campo": _SUBSECCIONES_CAMPO}
+# PROPIETARIO (v298): su nav vieja era Administración · Pre-Start · las 5 técnicas
+# (sin fichaje — no ficha, decisión de v93). Las 6 pestañas internas de su panel
+# pasan a ser sub-secciones de la shell.
+_SECCIONES_OWNER = [
+    ("administracion", ":material/shield_person: Administración"),
+    ("prestart",       ":material/health_and_safety: Pre-Start"),
+    ("herramientas",   ":material/build: Herramientas"),
+]
+_SUBSECCIONES_OWNER = {
+    # ⚠️ La clave de estado es `owner_sec`, LA MISMA del radio viejo, a propósito:
+    # hay un deep-link (`survey_ui` al guardar un survey) que escribe
+    # `owner_sec = "📁 Proyectos"`. Reutilizarla lo mantiene vivo sin tocarlo.
+    "administracion": ("owner_sec", [
+        ("🌐 Resumen",   ":material/dashboard: Resumen"),
+        ("🏢 Grupos",    ":material/business: Grupos"),
+        ("👥 Usuarios",  ":material/group: Usuarios"),
+        ("📁 Proyectos", ":material/folder: Proyectos"),
+        ("🚆 Rieles",    ":material/train: Rieles"),
+        ("📚 Manuales",  ":material/menu_book: Manuales")]),
+    "herramientas": _SUBSECCIONES_CAMPO["herramientas"],   # las 5 técnicas, sin Pre-Start
+}
+
+_SECCIONES_ROL = {"campo": _SECCIONES_CAMPO, "propietario": _SECCIONES_OWNER}
+_SUBSECCIONES_ROL = {"campo": _SUBSECCIONES_CAMPO, "propietario": _SUBSECCIONES_OWNER}
 
 
 def _rol() -> str:
@@ -312,6 +334,30 @@ def _alertas(grupo) -> list:
     out = []
     _es_campo = (_rol() == "campo")
     _yo = str(st.session_state.get("auth", {}).get("usuario", "")).strip().lower()
+
+    # ── PROPIETARIO (v298): no tiene UN grupo, así que se agrega por grupo ──
+    # Reusa `owner_digest()` (v107, cacheado 60 s), que ya recorre todos los grupos:
+    # no se inventa un recorrido nuevo ni se multiplican las lecturas de Sheets.
+    if _rol() == "propietario":
+        try:
+            from core import admin_digest
+            for g in admin_digest.owner_digest():
+                _p = []
+                if g["retrasos"]:
+                    _p.append(f"{g['retrasos']} en retraso")
+                if g["alarmas"]:
+                    _p.append(f"{g['alarmas']} alarmas")
+                if g["vencidos"]:
+                    _p.append(f"{g['vencidos']} vencidos")
+                if g["cred_venc"]:
+                    _p.append(f"{g['cred_venc']} credenciales")
+                if g["sobre_presupuesto"]:
+                    _p.append(f"{g['sobre_presupuesto']} sobre presupuesto")
+                if _p:
+                    out.append(f":material/business: **{g['grupo']}** — " + " · ".join(_p))
+        except Exception:
+            pass
+        return out
     try:
         from core import credentials as C
         if C.is_configured():
@@ -358,6 +404,11 @@ def render_admin_content(key, grupo):
     # ── Secciones propias del CAMPO (v297) ───────────────────────
     # Se cablean a las MISMAS funciones que ya usaba su nav vieja: es una
     # reconexión, no una reescritura (igual que hizo v191 con el admin).
+    if key == "administracion":            # PROPIETARIO (v298)
+        from core.auth_ui import render_owner_seccion
+        render_owner_seccion(_sub_header("administracion"))
+        return
+
     if key in ("misproyectos", "prestart", "credenciales", "colillas"):
         _usr = st.session_state.get("auth", {}).get("usuario", "")
         if key == "misproyectos":

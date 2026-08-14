@@ -121,7 +121,7 @@ _GRUPO = st.session_state.auth.get("grupo", "")
 # Roles ya migrados a la shell nueva (sidebar de secciones + topbar, `core/home_ui`).
 # El resto sigue con la cabecera COPEX + el radio horizontal de más abajo. Cuando
 # entre aquí el propietario, TODO lo que hay bajo el bloque de la shell se borra.
-_SHELL_NUEVA = ("administrador", "campo")
+_SHELL_NUEVA = ("administrador", "campo", "propietario")
 
 # Deep-link del QR del inventario: escanear `…?activo=ACT-####` abre esa ficha.
 # Debe correr ANTES del sidebar (sidebar_menu aplica `_admin_nav_pending`). Solo

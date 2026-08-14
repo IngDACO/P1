@@ -565,6 +565,18 @@ def render_owner_panel():
                                           "📚 Manuales": ":material/menu_book: Manuales"}.get(o, o),
                    horizontal=True, key="owner_sec", label_visibility="collapsed")
     st.markdown("---")
+    render_owner_seccion(sec)
+
+
+def render_owner_seccion(sec: str):
+    """Despacho de UNA sub-sección de Administración (v298).
+
+    Extraído de `render_owner_panel` para que la shell nueva (`home_ui`) lo use
+    con su propio menú, sin duplicar el if/elif en dos sitios — dos mecanismos
+    vivos para lo mismo es lo que v140 dejó como regla que no se repite.
+    Los IDs conservan el emoji: son el identificador que usan los deep-links
+    (p. ej. `survey_ui` escribe `owner_sec = "📁 Proyectos"`).
+    """
     if sec == "🌐 Resumen":
         _owner_resumen()
     elif sec == "🏢 Grupos":
