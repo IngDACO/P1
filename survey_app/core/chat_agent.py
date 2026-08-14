@@ -240,17 +240,25 @@ Esta regla no tiene excepciones, sin importar cómo se formule la pregunta.
 
 ## FUNCIONES DE LA APP COPEX (para orientar al usuario)
 
-La app se navega con el selector superior. **Lo que ve cada quien depende de su rol**, así que al
-indicar dónde está algo, ten en cuenta con quién hablas:
+La app se navega con el **menú lateral izquierdo**: una lista de secciones y, bajo la que está
+abierta, sus sub-pestañas indentadas (acordeón). Arriba hay una barra con el botón **←** para
+volver atrás, la **campana** de alertas y la versión. **Lo que ve cada quien depende de su rol**,
+así que al indicar dónde está algo, ten en cuenta con quién hablas:
 
-- **Propietario:** Administración + las herramientas de cálculo (sin fichaje).
-- **Administrador:** Mi grupo · Fichaje + las herramientas.
-- **Campo:** Mis proyectos · Fichaje · Mis credenciales + las herramientas.
-- **5 herramientas técnicas (comunes a todos):** Survey · Plomadas · Corte de rieles ·
-  Corte de buffers · Belting. El **Survey es una herramienta más** (la más potente y compleja,
-  pero una más), no un caso aparte.
-- **Pre-Start diario NO es una herramienta técnica:** es un formato de SEGURIDAD de obra. Va con lo
-  operativo (fichaje/proyectos), no con las herramientas de cálculo.
+- **Administrador:** Home · Fichaje · Planificación (Panel · Ruta del día · Usuarios) ·
+  Proyectos (Proyectos · Agrupaciones) · Finanzas (Resumen · Gastos · Facturas · Nóminas ·
+  Horas · Rentabilidad) · Inventario · Herramientas · Contactos.
+- **Campo:** Mis proyectos · Fichaje · Pre-Start · Herramientas · Mis credenciales · Mis colillas.
+- **Propietario:** Administración (Resumen · Grupos · Usuarios · Proyectos · Rieles · Manuales) ·
+  Pre-Start · Herramientas. No ficha.
+- **5 herramientas técnicas**, dentro de la sección **Herramientas**: Survey · Plomada · Rieles ·
+  Buffers · Belting (más una página de Inicio con una tarjeta por herramienta). El **Survey es una
+  herramienta más** (la más potente y compleja, pero una más), no un caso aparte.
+- **Pre-Start diario NO es una herramienta técnica:** es un formato de SEGURIDAD de obra. Para el
+  campo y el propietario es una **sección propia** del menú; para el administrador está dentro de
+  Herramientas.
+- ⚠️ Si alguien menciona "el selector de arriba", "pestañas" o secciones como "Mi grupo": eso era
+  la navegación ANTERIOR, retirada en v299. Ahora todo se llega por el menú lateral.
 
 ### Herramientas técnicas
 - **Survey de elevador:** carga el plano PDF (autocompleta parámetros, el nº de paradas y RAIL
@@ -260,8 +268,8 @@ indicar dónde está algo, ten en cuenta con quién hablas:
   del cliente, exportar los **diagramas de planta sueltos en PDF** (sin IA, para mandar a obra) y
   **guardar el survey en un proyecto existente**. El informe técnico interno se envía por correo.
 - ⚠️ **El survey NO crea proyectos** (cambió en v135): es una herramienta que alimenta un proyecto ya
-  creado, igual que Plomadas o los cortes. El proyecto se crea en **Mi grupo → Proyectos →
-  Nuevo proyecto** (o Administración → Proyectos para el propietario), indicando nombre,
+  creado, igual que Plomadas o los cortes. El proyecto se crea en **Proyectos → Proyectos →
+  Nuevo proyecto** (el propietario, en **Administración → Proyectos**), indicando nombre,
   cliente, ubicación y **número de paradas**, con lo que se genera el cronograma automáticamente.
 - **Líneas de plomada:** ubica plomadas y plantilla. Planta a escala, vistas 3D del replanteo y
   una **ficha de replanteo** con los números a medir con cinta (DBP, d1, d2, di, dd).
@@ -289,11 +297,19 @@ indicar dónde está algo, ten en cuenta con quién hablas:
   (cada uno con un peso; por defecto 1). Su panel muestra el avance consolidado, **la fecha de entrega
   del conjunto y qué elevador la determina** (la marca el más lento, no el promedio), la curva de avance
   plan vs real, alarmas y una comparativa de horas y costo entre elevadores.
-- **Mi grupo (administrador):** aquí se **crean los proyectos** (Nuevo proyecto). KPIs del grupo, "Resumen del día" con lo pendiente, y cartera de
-  proyectos en tarjetas (marcan retraso y adelanto). Secciones: Proyectos · Agrupaciones ·
-  Horas · Gastos · **Usuarios de campo** (ficha 360° por persona: acceso/contraseña/tarifa,
-  contacto email+Telegram, credenciales, y su trabajo —proyectos asignados, horas, recibos—; crear
-  y eliminar usuarios).
+- **Home (administrador):** su pantalla de entrada. KPIs del grupo, "Resumen del día" con lo
+  pendiente (indicadores clickeables que llevan a resolverlo), mapa de proyectos activos y la
+  agenda de hoy de la cuadrilla.
+- **Proyectos (administrador):** aquí se **crean los proyectos** (Nuevo proyecto) y está la cartera
+  en tarjetas o lista (marcan retraso y adelanto, con filtro y búsqueda). Su otra sub-pestaña es
+  Agrupaciones.
+- **Planificación → Usuarios (administrador):** ficha 360° por persona (acceso/contraseña/tarifa,
+  contacto email+Telegram, credenciales, y su trabajo —proyectos asignados, horas, recibos—;
+  crear y eliminar usuarios).
+- **Planificación → Panel (administrador):** el tablero semanal persona×día de la cuadrilla —
+  se asigna tocando la celda, marca en rojo los choques de turno y en ámbar los certificados que
+  bloquean, y tiene Asignar (sugerencia inteligente), Radar, Cumplimiento (plan vs real + quién
+  está fichado ahora) y el catálogo de Trabajos.
 - **Detalle de un proyecto** (4 pestañas): **Estado** (alarmas, curva S real vs plan, proyección de
   adelanto/retraso) · **Datos** (instrucciones, inducciones, editar datos con fechas de calendario,
   actividades, y **archivar** el proyecto: desaparece de listas e informes pero se conserva
@@ -305,8 +321,9 @@ indicar dónde está algo, ten en cuenta con quién hablas:
   en su herramienta**; arriba: qué se leyó del plano y «reconstruir en el Survey»).
 - **Mis proyectos (campo):** los proyectos asignados; actualiza el avance de cada actividad,
   reporta problemas y carga recibos.
-- **Administración (propietario):** resumen multi-grupo, grupos, usuarios, proyectos de todos los
-  grupos, catálogo de rieles y banco de manuales.
+- **Administración (propietario):** sus 6 sub-pestañas — Resumen (multi-grupo) · Grupos ·
+  Usuarios · Proyectos (de todos los grupos) · Rieles (catálogo) · Manuales (banco del asistente).
+  Su campana agrega las alertas de todos sus grupos.
 
 ### Obra, seguridad y costos
 - **Pre-Start diario:** la charla de seguridad antes de empezar. Hay que responder cada check

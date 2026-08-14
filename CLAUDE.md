@@ -74,7 +74,15 @@ C:\Users\diego\P1\survey_app\
 │   ├── timeclock_ui.py     # render_timeclock_tab() — fichaje (usa identidad del login)
 │   ├── auth.py             # login, roles, grupos, sesión única, contacto (Sheets, PBKDF2) — v53+
 │   ├── auth_ui.py          # render_login/user_bar/owner_panel(grupos/usuarios/proyectos/rieles)/group_panel + ficha 360 (v184) + credenciales
-│   ├── home_ui.py          # NUEVA nav del ADMIN (v190-192): sidebar de iconos + top bar (buscador+campana) + HOME (Centro de control + mapa + agenda) + ruteo a secciones/placeholders
+│   ├── home_ui.py          # LA shell de la app (v190-192, POR ROL desde v297-299): sidebar de 2 niveles + top bar (← atrás, buscador, versión, campana) + HOME del admin + router de secciones
+│   ├── theme.py            # sistema de diseño COPEX (v283): inject() + kpi_row/chip/section + PALETA. USARLO en UI nueva
+│   ├── route_ui.py         # 🗺 Ruta del día (v270): obras ordenadas para ir a terreno + link a Google Maps
+│   ├── location_ui.py      # location_picker: dirección→coordenadas (Google Geocoding + respaldo OSM) + pin en mapa (v193/v268)
+│   ├── clientes.py/_ui     # 👥 Contactos = CRM de clientes (hoja Clientes, v254-256)
+│   ├── invoices.py/_ui     # facturas: cobrar + PDF (v257-261)
+│   ├── payroll.py/_ui      # nóminas y colillas: pagar + PDF (v257-261)
+│   ├── inventory.py/_ui    # 📦 Inventario de activos con QR, movimientos y depreciación (v263-265)
+│   ├── expenses.py         # costos: compras + mano de obra + presupuesto + P&L (v105+)
 │   ├── credentials.py      # credenciales/tickets por usuario (hoja Credenciales): vencimiento, Drive, avisos (v104)
 │   ├── session_cookie.py   # login persistente por cookie (extra-streamlit-components); manager unico por sesion (v188)
 │   ├── projects.py         # gestión de proyectos: Proyectos/Actividades/Agrupaciones/Documentos (Sheets) — v65+
@@ -96,19 +104,83 @@ C:\Users\diego\copex_mobile\   # App Android (Capacitor) — carga la URL de Str
 **Versión (v35+):** `app.py` lee `survey_app/VERSION` con `utf-8-sig` (evita el BOM que agrega
 PowerShell). `backup_survey.ps1` escribe `"vNN"` antes de cada commit → se actualiza sola.
 
-## NAVEGACIÓN — NO usar st.tabs ⚠️ (v56)
-`st.tabs` causaba **mezcla de contenido** entre pestañas (bug de Streamlit con contenido pesado
-+ reruns; también con tabs anidados). Se reemplazó por un **selector `st.radio` horizontal** que
-renderiza SOLO la sección activa (`if/elif _seccion == ...`). El survey completo va bajo
-`if _seccion == _L_SURVEY:` (Paso 1→6). **No volver a introducir `st.tabs`** (ni anidados).
+## NAVEGACIÓN — una sola shell para los 3 roles (v299) ⚠️ ACTUALIZADO
 
-**5 HERRAMIENTAS TÉCNICAS (v154):** 📐 Survey · 🔩 Plomadas · ✂️ Corte de rieles · 🛡 Corte de buffers
-· 🎗 Belting. El Survey es UNA MÁS (la más potente, no un caso aparte). El **🦺 Pre-Start NO es una
-herramienta técnica**: es SEGURIDAD de obra, va con lo operativo (fichaje/proyectos).
-Secciones por rol: Propietario 👑 Administración · Pre-Start · las 5 técnicas | Administrador 🛠 Mi grupo
-· Fichaje · Pre-Start · las 5 | Campo 📋 Mis proyectos · Fichaje · Pre-Start · las 5 · 🎫 Mis credenciales.
+⚠️ **La navegación vieja YA NO EXISTE.** Hasta v296 había DOS: la shell nueva (`core/home_ui.py`,
+solo admin desde v190) y, en `app.py`, la cabecera COPEX + un `st.radio` horizontal (`main_nav`)
+con su cadena `if/elif _seccion == _L_*` para propietario y campo. **v297-v299 migraron los tres
+roles a la shell y borraron la vieja entera** (132 líneas de `app.py` + `auth_ui.render_owner_panel`).
+Si lees `_L_SURVEY`, `_NAV_DISPLAY`, `main_nav`, `_nav_pending` o `render_group_panel` en algún
+sitio: **son de la nav muerta**, están solo en el historial de git.
+
+### Cómo se navega ahora
+**Menú lateral de 2 niveles** (acordeón, `home_ui.sidebar_menu`) + **barra superior**
+(`render_topbar`: botón ← Atrás, buscador —solo gestión, aún sin backend—, versión y campana).
+`app.py` ya no enruta nada: llama a `render_topbar` + `render_admin_content` y se acabó.
+
+**Las secciones dependen del ROL** (`home_ui._SECCIONES_ROL` / `_SUBSECCIONES_ROL`):
+
+| Rol | Secciones (nivel 1) |
+|---|---|
+| **administrador** | Home · Fichaje · Planificación · Proyectos · Finanzas · Inventario · Herramientas · Contactos |
+| **campo** | Mis proyectos · Fichaje · Pre-Start · Herramientas · Mis credenciales · Mis colillas |
+| **propietario** | Administración · Pre-Start · Herramientas (no ficha, v93) |
+
+- ⚠️ El **rol se resuelve DENTRO** de `home_ui` (`_rol()`, lee `session_state.auth`), no se pasa por
+  parámetro: así ninguna firma cambió al migrar y el camino del admin quedó intacto.
+- ⚠️ **El default de `_secciones()`/`_subsecciones()` es el del CAMPO, no el del admin.** Es a
+  propósito: la shell sirve a todos, así que ese default decide qué ve un `Rol` que no
+  reconozcamos (un typo en la hoja Login). Caer en la nav de gestión sería regalar acceso.
+- **Sub-pestañas = (ID, display)** (v232): el ID conserva el emoji porque es el IDENTIFICADOR que
+  usan los deep-links y el match en los `_seccion_*`; el display es lo único que cambia. La
+  sub-key del propietario es **`owner_sec`**, la MISMA del radio viejo, para no romper el
+  deep-link de `survey_ui`.
+- **Deep-links**: SOLO `_admin_nav_pending` (`home_ui.navegar` / `projects_ui._ir_a`), aplicado en
+  `_aplicar_nav_pending()` ANTES de instanciar los menús (regla v111).
+
+### Lo que sigue vigente
+**NO usar `st.tabs`** (v56): causaba mezcla de contenido. Toda sub-navegación va con `st.radio`
+o con el sidebar.
+
+**5 HERRAMIENTAS TÉCNICAS (v154):** 📐 Survey · 🔩 Plomada · ✂️ Rieles · 🛡 Buffers · 🎗 Belting,
+dentro de la sección **Herramientas** (+ una página "Inicio" con una tarjeta por herramienta, v231).
+El Survey es UNA MÁS (la más potente, no un caso aparte). El **🦺 Pre-Start NO es una herramienta
+técnica**: es SEGURIDAD de obra → sección PROPIA para campo y propietario; para el admin está
+dentro de Herramientas.
+
 ⚠️ **El rol `conductor` se ELIMINÓ en v163** (era un subconjunto del campo tras unificar el fichaje en
 v150). Solo quedan 3 roles: propietario, administrador, campo.
+
+---
+
+## ⚠️ TRAMPAS DE VERIFICACIÓN (v289-v299) — leer antes de "verificar" algo
+
+Un chequeo que pasa en falso es PEOR que no tener chequeo: da confianza sin dar evidencia.
+Estas cinco mordieron en una sola tanda:
+
+1. **El paso en VACÍO.** Un test comparó `None == None` y dio "OK": el regex no capturaba la rama
+   del propietario, así que el rol que más importaba proteger **no se verificó**. → Todo test que
+   compare dos cosas extraídas debe **primero afirmar que se extrajo algo** (`bool(antes) and
+   bool(ahora)`).
+2. **Grep ≠ uso.** Un guardián bloqueó un borrado por una referencia que era **mi propio
+   comentario**; y un chequeo de "no queda `main_nav`" falló por lo mismo. → Para saber si un
+   símbolo se usa, **AST** (Name/Attribute/import); para buscar en código, quitar comentarios con
+   `tokenize`.
+3. **Falsos positivos del chequeo de nombres libres**: argumentos de `lambda`, el **operador
+   morsa** (`if x := ...`, `ast.NamedExpr`) y `__file__` salen como "sin definir" si no se
+   contemplan.
+4. **`key = f"..."` no es una key de widget.** Contar keys duplicadas por regex mezcla la variable
+   local con el `key=` de la llamada. → Sacar los `keyword` de los `ast.Call`.
+5. **El icono puede no ser un `<svg>`.** El chevron del `st.popover` es `expand_more`, un Material
+   Symbol renderizado como **ligadura de fuente** (`span[data-testid=stIconMaterial]`). Un
+   `button svg{display:none}` no hace nada. → Medir el DOM antes de escribir CSS (regla v121:
+   *medir, no mirar*), y apoyarse en `data-testid` (contrato de Streamlit), NUNCA en las clases
+   `st-emotion-cache-*`, que cambian de versión.
+
+**Y la regla de siempre, que volvió a aplicar:** antes de borrar el LECTOR de un mecanismo, buscar
+sus ESCRITORES y convertirlos. En v299 `_nav_pending` tenía dos vivos («Abrir proyecto» tras el
+survey y «Reabrir cálculo»); borrar solo el lector los habría dejado como botones que no hacen
+nada, sin ningún error (patrón v140/v146).
 
 ---
 
@@ -3287,9 +3359,25 @@ posicional + plano) → app.py, al cargar el PDF, setea `st.session_state["ns"]`
 resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NORTH SYD y AGECARE → NS=6
 (coincide con travel/floor-height HQ/HE).
 
-## Versiones desplegadas (v215 = actual)
+## Versiones desplegadas (v299 = actual)
+⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
+atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
+tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
+detalle exacto de una versión no listada: `git log`.
+
 | Ver | Cambio principal |
 |---|---|
+| v299 | **Fase 3 de la migración: se BORRA la navegación vieja.** Fuera de `app.py` la cabecera COPEX, los `_L_*`, `_HERR`, la cadena `_nav`, `_NAV_DISPLAY`, el radio `main_nav`, su if/elif de enrutado y `_nav_pending` (421→284 líneas), más `auth_ui.render_owner_panel`. ⚠️ ANTES se convirtieron sus 2 flujos VIVOS a `_admin_nav_pending` («Abrir proyecto» tras el survey y «Reabrir cálculo en su herramienta»; `_CALC_NAV` pasa a apuntar a las sub-pestañas reales) — borrar solo el lector los habría dejado sin efecto en silencio (patrón v140). La shell deja de ser condicional y un rol desconocido cae a la nav del CAMPO (menor privilegio) |
+| v298 | Fase 2: el PROPIETARIO a la shell. Sus 6 pestañas de Administración pasan a sub-secciones con la MISMA clave `owner_sec` (el deep-link de `survey_ui` sigue vivo); el despacho se extrae a `auth_ui.render_owner_seccion` para que las dos shells lo compartan sin duplicar; su campana AGREGA alertas de todos sus grupos vía `owner_digest` |
+| v297 | Fase 1: el CAMPO a la shell. `home_ui` gana secciones POR ROL (`_SECCIONES_ROL`), el rol se resuelve dentro (`_rol()`) para no cambiar ninguna firma. El campo gana el botón ← Atrás y la trampa del gesto de retroceso en móvil (que solo tenía el admin). Su campana pasa a mostrar SOLO sus credenciales (antes: las de todo el grupo). La versión va al topbar |
+| v296 | Limpieza: se borra la shell VIEJA del admin («🛠 Mi grupo»), inalcanzable desde v190 — `render_group_panel` + `_L_GRUPO` + su rama de nav + los `_gruposec_pending`. ⚠️ NO se borró la nav vieja entera: propietario y campo aún dependían de ella (verificado que sus navs quedaban idénticas) |
+| v295 | Panel: celda con varios trabajos legible (la hora SOLO si difiere del turno estándar; con 3+ → primero y contador), días de la semana centrados y con aire, y el catálogo permite EDITAR y ELIMINAR trabajos. ⚠️ El borrado se NIEGA si el trabajo está asignado en algún roster (rompería el histórico: el tablero resuelve nombre/color por ID) → criterio de v149 |
+| v294 | Panel: la celda con choque Y certificado enseña los DOS anillos (v292 daba prioridad al rojo y eso ESCONDÍA el cert); fuera el chevron de las celdas vacías (⚠️ NO es un `<svg>`: es `span[data-testid=stIconMaterial]`, Material Symbol de fuente); muestra de color como cuadradito; cabecera "Persona" alineada |
+| v293 | Panel: «En vivo» y «Plan vs real» se unen en UNA herramienta **Cumplimiento** (5→4 en la fila). Lo vivo va en CADA FILA (plan + real + cronómetro en una línea). ⚠️ Se rescató el caso «fichado en jornada pero SIN imputar obra», que solo existía en «En vivo» porque `proyectos_por_usuario_dia` descarta los fichajes sin proyecto |
+| v292 | Panel: el tablero MARCA dónde está el conflicto (anillo rojo = choque de turno, ámbar = certificado que bloquea; `_radar_scan` devuelve además `marcas` por celda) y el toggle Tablero/Disponibilidad pasa a segmentado del kit (`cpxseg_`, con `@supports selector(:has())` para degradar) |
+| v291 | Panel: quitado el título duplicado (`_sub_header` ya pinta "Planificación · Panel") y las 4 bandas de chrome (nav de semana, cobertura, toggle, caption) se unifican en UNA barra; el hint pasa al `help` del toggle |
+| v290 | **Cuota de Sheets**: arranque frío de 30 → 12 lecturas (índice del libro en 2 llamadas —`worksheets()` + `values_batch_get` de las cabeceras— en vez de 2 por hoja), TTL de caché 30→120 s y reintento acotado ante 429/5xx. ⚠️ NO se usó `gspread.BackOffHTTPClient`: la librería lo marca "not production ready" y encadena hasta 254 s de sleep |
+| v289 | Fix: un hipo de la API de Sheets tumbaba la app entera. `heartbeat` estaba blindado en el `_get_login_ws` y en el `update_cell`, pero NO en la lectura del medio → el 429 subía hasta `app.py`. Guardas en `heartbeat`/`validate_session`/`start_session`; el bloqueo por sesión ocupada se distingue del fallo de API (`auth.SESION_OCUPADA`) |
 | v240 | Estética (fase 3g): las 5 herramientas técnicas (Plomada/Rieles/Buffers/Belting/Pre-Start) — header principal, botón Calcular/Generar, subtítulos de diagramas/resultados y descargas de PDF a iconos Material. Quedan sueltos el "¿No tiene plano?"/"Plano cargado" (secundarios) y survey_ui |
 | v239 | Estética (fase 3f): cabeceras internas del detalle de proyecto a iconos Material — Datos del plano, Fotos, Archivos, Cumplimiento de certificados, Quién ha trabajado aquí, Tocaba hoy, En curso ahora, Próximo hito (caption), Avance del conjunto. Solo display |
 | v238 | Estética (fase 3e): auth_ui — panel del propietario (radio owner_sec y del group panel grupo_sec vía format_func, IDs/deep-links intactos), headers (Administración, Manuales, Rieles), expanders/botones (zona horaria, subir/quitar manual, agregar/editar riel, eliminar grupo). Con esto auth_ui queda migrado |
