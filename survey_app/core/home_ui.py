@@ -64,6 +64,74 @@ _SUBSECCIONES = {
 _SUBKEY = {k: v[0] for k, v in _SUBSECCIONES.items()}   # {seccion: clave_de_estado}
 
 
+# ── La shell POR ROL (v297) ───────────────────────────────────────
+# Hasta v296 esta shell era solo del administrador y propietario/campo seguían con
+# la nav vieja de `app.py` (cabecera COPEX + radio horizontal). Para poder retirar
+# aquella del todo, la shell pasa a servir a los tres roles.
+#
+# ⚠️ El rol se resuelve DENTRO (`_rol()`), no se pasa por parámetro: así NINGUNA
+# firma cambia (`sidebar_menu()`, `render_admin_content(key, grupo)`, `_sub_header`)
+# y el camino del admin queda byte a byte como estaba. Menos superficie, menos riesgo.
+
+# CAMPO: se respeta su nav de siempre (Mis proyectos · Fichaje · Pre-Start · las 5
+# técnicas · Mis credenciales · Mis colillas). El Pre-Start va SUELTO, no dentro de
+# Herramientas: es seguridad de obra y su acción diaria (regla v154); enterrarlo un
+# nivel le costaría un toque cada mañana justo a quien lo usa en el móvil.
+_SECCIONES_CAMPO = [
+    ("misproyectos", ":material/assignment: Mis proyectos"),
+    ("fichaje",      ":material/schedule: Fichaje"),
+    ("prestart",     ":material/health_and_safety: Pre-Start"),
+    ("herramientas", ":material/build: Herramientas"),
+    ("credenciales", ":material/badge: Mis credenciales"),
+    ("colillas",     ":material/payments: Mis colillas"),
+]
+# Sus Herramientas son las 5 TÉCNICAS: el Pre-Start ya es sección propia, y
+# duplicarlo lo dejaría en dos sitios (el patrón de v140 que evitamos).
+_SUBSECCIONES_CAMPO = {
+    "herramientas": (_SUBSECCIONES["herramientas"][0],
+                     [(_i, _d) for _i, _d in _SUBSECCIONES["herramientas"][1]
+                      if _i != "🦺 Pre-Start"]),
+}
+
+_SECCIONES_ROL = {"campo": _SECCIONES_CAMPO}
+_SUBSECCIONES_ROL = {"campo": _SUBSECCIONES_CAMPO}
+
+
+def _rol() -> str:
+    try:
+        return str(st.session_state.get("auth", {}).get("rol", "")).strip().lower()
+    except Exception:
+        return ""
+
+
+@st.cache_data(show_spinner=False)
+def _version() -> str:
+    """Versión desplegada, para el topbar. Mismo fichero y codificación que app.py
+    (`utf-8-sig` quita el BOM que PowerShell escribe en VERSION)."""
+    import os
+    try:
+        ruta = os.path.join(os.path.dirname(os.path.dirname(__file__)), "VERSION")
+        return open(ruta, encoding="utf-8-sig").read().strip()
+    except Exception:
+        return ""
+
+
+def _secciones():
+    return _SECCIONES_ROL.get(_rol(), _SECCIONES)
+
+
+def _subsecciones():
+    return _SUBSECCIONES_ROL.get(_rol(), _SUBSECCIONES)
+
+
+def _lbl2key():
+    return {lbl: k for k, lbl in _secciones()}
+
+
+def _subkey():
+    return {k: v[0] for k, v in _subsecciones().items()}
+
+
 def navegar(seccion, sub_label=None):
     """Deja pendiente saltar a una sección (y sub-pestaña) del admin. Lo usan los
     elementos ACTIVOS (indicadores del resumen, métricas, pines…). Reejecuta."""
@@ -78,12 +146,13 @@ def _aplicar_nav_pending():
     if not p:
         return
     seccion, sub_label = p if isinstance(p, (tuple, list)) else (p, None)
-    lbl = next((l for k, l in _SECCIONES if k == seccion), None)
+    lbl = next((l for k, l in _secciones() if k == seccion), None)
     if lbl:
         st.session_state["admin_nav"] = lbl
         st.session_state["_admin_expanded"] = seccion   # v230: desplegar la sección navegada
-    if sub_label and _SUBKEY.get(seccion):
-        st.session_state[_SUBKEY[seccion]] = sub_label
+    _sk = _subkey()
+    if sub_label and _sk.get(seccion):
+        st.session_state[_sk[seccion]] = sub_label
 
 
 def _track_history(cur):
@@ -117,8 +186,11 @@ def sidebar_menu() -> str:
     (acordeón: solo la activa despliega sus hijas). Los botones se estilan como ítems de
     menú vía CSS `.st-key-…` (verificado en vivo). Devuelve la clave de la sección activa."""
     _aplicar_nav_pending()                     # aplica saltos de los elementos activos
-    _cur_lbl = st.session_state.get("admin_nav") or _SECCIONES[0][1]
-    _cur = _LBL2KEY.get(_cur_lbl, "home")
+    _SECS, _SUBS = _secciones(), _subsecciones()
+    _cur_lbl = st.session_state.get("admin_nav") or _SECS[0][1]
+    # ⚠️ El default cae a la PRIMERA sección DEL ROL, no a "home": el campo no tiene
+    # Home, así que un `admin_nav` heredado de otro rol dejaría la shell en blanco.
+    _cur = _lbl2key().get(_cur_lbl, _SECS[0][0])
     # v230: sección DESPLEGADA en el sidebar. Puede diferir de la ACTIVA porque
     # "desplegar" ya NO navega (antes tocar la sección abría su 1ª sub-pestaña de una).
     # Por defecto la activa está desplegada; "" = todo plegado.
@@ -144,8 +216,8 @@ def sidebar_menu() -> str:
             'font-weight:600!important;border-radius:8px!important;}',
             f'.st-key-navsec_{_cur} button p span{{color:#1e4e79!important;}}']
     # La sub activa solo se resalta si la sección activa es además la desplegada.
-    if _exp == _cur and _cur in _SUBSECCIONES:
-        _sk, _subs = _SUBSECCIONES[_cur]
+    if _exp == _cur and _cur in _SUBS:
+        _sk, _subs = _SUBS[_cur]
         _cursub = st.session_state.get(_sk) or _subs[0][0]
         _idx_sub = next((_i for _i, (_sid, _d) in enumerate(_subs) if _sid == _cursub), None)
         if _idx_sub is not None:
@@ -158,8 +230,8 @@ def sidebar_menu() -> str:
     st.markdown("".join(_css), unsafe_allow_html=True)
 
     st.markdown("###### NAVEGACIÓN")
-    for _k, _lbl in _SECCIONES:
-        _has = _k in _SUBSECCIONES
+    for _k, _lbl in _SECS:
+        _has = _k in _SUBS
         _open = _has and _k == _exp
         _mark = ("  ▾" if _open else ("  ▸" if _has else ""))
         if st.button(_lbl + _mark, key=f"navsec_{_k}", use_container_width=True):
@@ -172,7 +244,7 @@ def sidebar_menu() -> str:
                 st.session_state["_admin_expanded"] = _k    # sin hijas → navega directo
                 navegar(_k)
         if _open:                              # acordeón: solo la DESPLEGADA muestra sus hijas
-            _sk, _subs = _SUBSECCIONES[_k]
+            _sk, _subs = _SUBS[_k]
             for _i, (_sid, _sdisp) in enumerate(_subs):
                 if st.button(_sdisp, key=f"navsub_{_k}_{_i}", use_container_width=True):
                     st.session_state["_admin_expanded"] = _k
@@ -204,14 +276,24 @@ def render_topbar(grupo):
     st.markdown("<style>header[data-testid='stHeader']{background:transparent;}"
                 "div.block-container{padding-top:2.4rem !important;}</style>",
                 unsafe_allow_html=True)
-    cback, c1, c2 = st.columns([1, 8, 1])
+    cback, c1, cver, c2 = st.columns([1, 7, 1.4, 1])
     with cback:
         if st.button("←", key="nav_back_btn", help="Volver atrás",
                      use_container_width=True, disabled=not puede_atras()):
             ir_atras()
     with c1:
-        st.text_input("Buscar", key="topbar_search", label_visibility="collapsed",
-                      placeholder="Buscar proyectos, personas, trabajos…")
+        # El buscador aún no tiene backend; para el CAMPO además sería ruido (su nav
+        # es corta y todo lo suyo cuelga de "Mis proyectos"). Solo gestión.
+        if _rol() != "campo":
+            st.text_input("Buscar", key="topbar_search", label_visibility="collapsed",
+                          placeholder="Buscar proyectos, personas, trabajos…")
+    with cver:
+        # v297: la versión vivía en la banda azul COPEX de la nav vieja. Esa banda no
+        # vuelve (el admin lleva sin ella desde v190 y no se echó en falta), pero la
+        # versión sí: se usa a diario para saber qué hay desplegado.
+        st.markdown(f"<div style='text-align:right;padding-top:8px;font-size:.78rem;"
+                    f"color:#9aa7b8;font-family:monospace'>{_version()}</div>",
+                    unsafe_allow_html=True)
     with c2:
         _campana(grupo)
     st.markdown("<hr style='margin:2px 0 14px 0;border:none;border-top:1px solid #e6e9ef;'>",
@@ -221,19 +303,28 @@ def render_topbar(grupo):
 
 def _alertas(grupo) -> list:
     """Alertas para la campana. De momento: credenciales por vencer/vencidas del grupo.
-    (Más fuentes —retrasos de proyecto, sobrepresupuesto— se sumarán después.)"""
+    (Más fuentes —retrasos de proyecto, sobrepresupuesto— se sumarán después.)
+
+    ⚠️ Para el CAMPO solo salen las SUYAS (v297): la lista del grupo son las
+    credenciales de todos sus compañeros — dato de gestión, no suyo. Y el
+    inventario (activos sin devolver, mantenimientos) es cosa del admin.
+    """
     out = []
+    _es_campo = (_rol() == "campo")
+    _yo = str(st.session_state.get("auth", {}).get("usuario", "")).strip().lower()
     try:
         from core import credentials as C
         if C.is_configured():
             for e in C.expiring(grupo)[:10]:
+                if _es_campo and str(e.get("usuario", "")).strip().lower() != _yo:
+                    continue
                 est = ":red[:material/cancel:] vencida" if e["dias"] < 0 else f":orange[:material/schedule:] vence en {e['dias']} d"
                 out.append(f":material/badge: {e['tipo']} · {e['usuario']} — {est}")
     except Exception:
         pass
     try:
         from core import inventory as INV
-        if INV.is_configured():
+        if INV.is_configured() and not _es_campo:
             for e in INV.alertas(grupo)[:10]:
                 if e["tipo"] == "mantenimiento":
                     out.append(f":material/build: {e['activo']} — "
@@ -264,6 +355,25 @@ def _campana(grupo):
 
 # ── Router de contenido ──────────────────────────────────────────
 def render_admin_content(key, grupo):
+    # ── Secciones propias del CAMPO (v297) ───────────────────────
+    # Se cablean a las MISMAS funciones que ya usaba su nav vieja: es una
+    # reconexión, no una reescritura (igual que hizo v191 con el admin).
+    if key in ("misproyectos", "prestart", "credenciales", "colillas"):
+        _usr = st.session_state.get("auth", {}).get("usuario", "")
+        if key == "misproyectos":
+            from core.projects_ui import render_field_projects
+            render_field_projects(_usr, grupo)
+        elif key == "prestart":
+            from core.prestart_ui import render_prestart_tab
+            render_prestart_tab()
+        elif key == "credenciales":
+            from core.auth_ui import render_my_credentials
+            render_my_credentials()
+        else:
+            from core.payroll_ui import render_mis_colillas
+            render_mis_colillas(_usr, grupo)
+        return
+
     if key == "home":
         render_home(grupo)
     elif key == "fichaje":
@@ -284,15 +394,19 @@ def render_admin_content(key, grupo):
         from core.clientes_ui import render_contactos
         render_contactos(grupo)
     else:
-        render_home(grupo)
+        # ⚠️ El fallback NO puede ser `render_home`: es del admin (KPIs del grupo,
+        # mapa, agenda) y el campo no tiene esa sección. Cae a la PRIMERA de su rol.
+        _prim = _secciones()[0][0]
+        if _prim != key:
+            render_admin_content(_prim, grupo)
 
 
 def _sub_header(seccion):
     """Cabecera del contenido con la sub-pestaña ACTUAL. El selector de nivel 2 vive en el
     sidebar; esto solo da contexto. Devuelve el ID de la sub activa (default = la primera) y
     muestra su display con icono. Título = la label de la sección (de `_SECCIONES`). v232."""
-    titulo = next((l for k, l in _SECCIONES if k == seccion), seccion)
-    _sk, _subs = _SUBSECCIONES[seccion]
+    titulo = next((l for k, l in _secciones() if k == seccion), seccion)
+    _sk, _subs = _subsecciones()[seccion]
     _ids = [_i for _i, _d in _subs]
     sub = st.session_state.get(_sk)
     if sub not in _ids:
@@ -359,7 +473,7 @@ def _hub_herramientas():
         "🦺 Pre-Start": "Charla diaria de seguridad de obra (Daily Pre-Start).",
     }
     # display (icono) desde _SUBSECCIONES (consistente con el sidebar); navega con el ID.
-    _herr = [(_id, _d) for _id, _d in _SUBSECCIONES["herramientas"][1] if _id != "🧰 Inicio"]
+    _herr = [(_id, _d) for _id, _d in _subsecciones()["herramientas"][1] if _id != "🧰 Inicio"]
     for _r in range(0, len(_herr), 3):
         _cols = st.columns(3, gap="medium")
         for _j in range(3):

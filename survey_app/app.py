@@ -118,6 +118,11 @@ if not render_login():
 _ROL   = st.session_state.auth["rol"]
 _GRUPO = st.session_state.auth.get("grupo", "")
 
+# Roles ya migrados a la shell nueva (sidebar de secciones + topbar, `core/home_ui`).
+# El resto sigue con la cabecera COPEX + el radio horizontal de más abajo. Cuando
+# entre aquí el propietario, TODO lo que hay bajo el bloque de la shell se borra.
+_SHELL_NUEVA = ("administrador", "campo")
+
 # Deep-link del QR del inventario: escanear `…?activo=ACT-####` abre esa ficha.
 # Debe correr ANTES del sidebar (sidebar_menu aplica `_admin_nav_pending`). Solo
 # el administrador tiene 📦 Inventario (nueva shell). Guard para no re-disparar.
@@ -219,8 +224,9 @@ with st.sidebar:
         from core.timeclock_ui import render_sidebar_chrono
         render_sidebar_chrono()
 
-    # ── Navegación del admin (nueva UI, v190) ──
-    if _ROL == "administrador":
+    # ── Shell nueva (v190 admin · v297 campo) ──
+    # `sidebar_menu` resuelve las secciones POR ROL internamente (home_ui._secciones).
+    if _ROL in _SHELL_NUEVA:
         from core import home_ui as _home
         st.session_state["_admin_sec"] = _home.sidebar_menu()
         st.markdown("---")
@@ -268,13 +274,16 @@ with st.sidebar:
                 st.rerun()
 
 # ══════════════════════════════════════════════════════
-# ADMIN — nueva navegación (shell): top bar + contenido por sección (v190)
-# Solo el administrador; owner/campo siguen con la cabecera + nav de abajo.
+# SHELL NUEVA: sidebar de secciones + top bar + contenido (v190 admin · v297 campo)
+# El PROPIETARIO es el único que sigue con la cabecera + nav de abajo; cuando
+# también migre, todo lo que hay debajo de este bloque se puede borrar.
 # ══════════════════════════════════════════════════════
-if _ROL == "administrador":
+if _ROL in _SHELL_NUEVA:
     from core import home_ui as _home
     _home.render_topbar(_GRUPO)
-    _home.render_admin_content(st.session_state.get("_admin_sec", "home"), _GRUPO)
+    # El default NO puede ser "home" fijo: el campo no tiene esa sección. Se deja
+    # que `render_admin_content` caiga a la primera de su rol (v297).
+    _home.render_admin_content(st.session_state.get("_admin_sec", ""), _GRUPO)
     st.stop()
 
 # ══════════════════════════════════════════════════════
@@ -327,6 +336,10 @@ _HERR = [_L_SURVEY, _L_PLUMB, _L_RAIL, _L_BUFFER, _L_BELT]   # herramientas téc
 if _ROL == "propietario":
     _nav = [_L_OWNER, _L_PRESTART] + _HERR          # sin fichaje
 elif _ROL == "campo":
+    # ⚠️ INALCANZABLE desde v297 (el campo entra por la shell y hace `st.stop()`
+    # arriba). Se deja a propósito hasta la Fase 3, que borra la nav vieja ENTERA
+    # de una vez cuando el propietario también migre — borrarla a trozos deja el
+    # fichero a medias y es más difícil de verificar.
     _nav = [_L_FIELDPROJ, _L_CLOCK, _L_PRESTART] + _HERR + [_L_MYCRED, _L_MYPAY]
 else:
     _nav = [_L_PRESTART] + _HERR + [_L_CLOCK]
