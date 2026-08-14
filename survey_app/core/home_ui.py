@@ -239,15 +239,34 @@ def sidebar_menu() -> str:
             '[class*="st-key-navsec_"] button,[class*="st-key-navsub_"] button{'
             'border:none!important;background:transparent!important;box-shadow:none!important;'
             'justify-content:flex-start!important;padding:5px 12px!important;min-height:0!important;}',
+            # ⚠️ v304: alinear el BOTÓN no basta y por eso el menú salía CENTRADO. El texto
+            # vive en `button > div > span > div[stMarkdownContainer] > p`, y ese `div`
+            # (234 px) y su `span` son flex con `justify-content:center` → recentraban.
+            # Medido en vivo: la sangría del texto era 99 px en vez de los 12 del padding.
+            # (El CSS de v229 funcionaba entonces; Streamlit metió después ese `span`.)
+            '[class*="st-key-navsec_"] button>div,[class*="st-key-navsec_"] button>div>span,'
+            '[class*="st-key-navsub_"] button>div,[class*="st-key-navsub_"] button>div>span{'
+            'justify-content:flex-start!important;width:100%!important;}',
             '[class*="st-key-navsec_"] button p,[class*="st-key-navsub_"] button p{'
             'text-align:left!important;width:100%!important;}',
-            '[class*="st-key-navsub_"] button{padding-left:26px!important;font-size:.85rem!important;}',
+            # Cascada VISIBLE (v304): nivel 1 pegado a la izquierda y en seminegrita;
+            # nivel 2 más adentro, más pequeño y más fino → 22 px de sangría entre niveles.
+            '[class*="st-key-navsec_"] button{padding-left:8px!important;}',
+            '[class*="st-key-navsec_"] button p{font-weight:600!important;}',
+            '[class*="st-key-navsub_"] button{padding-left:30px!important;}',
+            # ⚠️ El `font-size` estaba en el BOTÓN y NO llegaba al texto: medido, los dos
+            # niveles salían a 16 px. Las propiedades de texto van en el `<p>`.
+            '[class*="st-key-navsub_"] button p{'
+            'font-size:.85rem!important;font-weight:400!important;}',
             # v232: el ICONO Material (único <span> del <p>) en azul COPEX; el texto, por defecto.
             '[class*="st-key-navsec_"] button p span,[class*="st-key-navsub_"] button p span{'
             'color:#2e6da4!important;}',
             # sección ACTIVA: highlight + azul oscuro (texto e icono).
-            f'.st-key-navsec_{_cur} button{{background:#e8eef6!important;color:#1e4e79!important;'
-            'font-weight:600!important;border-radius:8px!important;}',
+            # ⚠️ El `font-weight` del activo iba en el BOTÓN y tampoco llegaba al texto
+            # (medido: la sección activa salía a 400, igual que las demás). Va en el `<p>`.
+            f'.st-key-navsec_{_cur} button{{background:#e8eef6!important;'
+            'border-radius:8px!important;}',
+            f'.st-key-navsec_{_cur} button p{{font-weight:700!important;color:#1e4e79!important;}}',
             f'.st-key-navsec_{_cur} button p span{{color:#1e4e79!important;}}']
     # La sub activa solo se resalta si la sección activa es además la desplegada.
     if _exp == _cur and _cur in _SUBS:
@@ -256,8 +275,9 @@ def sidebar_menu() -> str:
         _idx_sub = next((_i for _i, (_sid, _d) in enumerate(_subs) if _sid == _cursub), None)
         if _idx_sub is not None:
             _css.append(f'.st-key-navsub_{_cur}_{_idx_sub} button{{'
-                        'background:#e8eef6!important;color:#1e4e79!important;'
-                        'font-weight:600!important;border-radius:8px!important;}'
+                        'background:#e8eef6!important;border-radius:8px!important;}'
+                        f'.st-key-navsub_{_cur}_{_idx_sub} button p'
+                        '{font-weight:600!important;color:#1e4e79!important;}'
                         f'.st-key-navsub_{_cur}_{_idx_sub} button p span'
                         '{color:#1e4e79!important;}')
     _css.append("</style>")

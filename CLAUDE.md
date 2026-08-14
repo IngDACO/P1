@@ -3404,7 +3404,29 @@ la regla `background:transparent` de al lado, no el hueco) · HOME pasa de `[3,2
 **`[2, 1.5, 1.5]`: mapa | proyectos | agenda**, siempre los tres a la vista → muere
 `home_right_view` (0 restos) y el pin del mapa ya no tiene que cambiar de pestaña.
 
-## Versiones desplegadas (v303 = actual)
+## ⚠️ El menú lateral salía CENTRADO: CSS de v229 que Streamlit dejó sin efecto (v304)
+El usuario pidió que se distinguiera mejor la cascada del sidebar. Al medirlo, el problema era otro:
+**las reglas de alineación de v229 ya no aplicaban** y todo el menú salía centrado (sangría del texto
+**99 px** en un botón con `padding-left:12px`). Dos causas, las dos de la misma familia:
+1. **Alinear el `<button>` no alinea el texto.** El texto vive en
+   `button > div > span > div[stMarkdownContainer] > p`, y ese `div` (234 px) **y su `span`** son flex
+   con `justify-content:center` → recentran lo que el botón había alineado. Ese `span` lo metió
+   Streamlit DESPUÉS de v229; el CSS se verificó en su día y envejeció en silencio.
+2. **Las propiedades de TEXTO puestas en el botón no llegan al `<p>`.** El `font-size:.85rem` del
+   nivel 2 y el `font-weight:600` de la sección ACTIVA llevaban versiones sin efecto: medido, los dos
+   niveles salían a **16 px** y **peso 400**, activo incluido.
+**Fix:** `justify-content:flex-start` + `width:100%` también en `button>div` y `button>div>span`, y
+todo lo de texto (`font-size`/`font-weight`/`color`) movido al `p`. Cascada pedida: nivel 1 a **8 px
+y peso 600** (activo 700), nivel 2 a **30 px, peso 400 y .85rem** (activo 600) → escalón de **22 px**.
+**LECCIÓN (repetida, ver también las trampas de v289-v299):** un CSS "verificado en vivo" caduca
+cuando Streamlit cambia el interior de sus widgets. Al retocar un estilo viejo, **volver a medir el
+DOM antes de asumir que lo de al lado funciona** — el estilo no falla con un error, falla en silencio.
+### De paso: los huecos del resumen del día
+Medido el bloque entero: **246 px**, de los que solo 105 eran los 9 indicadores (cabecera 38 + IA 40 +
+**46 de huecos**). Los huecos verticales bajan a `.3rem` → **232 px**. ⚠️ La regla va acotada a
+`.st-key-cpxresumen` (el expander recibió `key`): suelta, apretaría TODOS los desplegables de la app.
+
+## Versiones desplegadas (v304 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -3412,6 +3434,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v304 | Menú lateral: la cascada por fin se ve — nivel 1 pegado a la izquierda (8 px) y en seminegrita, nivel 2 a 30 px, más pequeño y más fino. ⚠️ El menú salía **centrado**: el CSS de v229 había dejado de aplicar porque Streamlit metió un `span` flex centrado dentro del botón, y porque `font-size`/`font-weight` puestos en el botón nunca llegan al `<p>` (los dos niveles salían a 16 px/peso 400, activo incluido). Además, los huecos del resumen del día bajan de 10 a 5 px (bloque 246→232), con la regla acotada al expander por `key` |
 | v303 | HOME del admin: las 3 tarjetas KPI ganan una línea de contexto (con datos que `_kpis` ya calculaba → 0 lecturas nuevas) y se mudan a la cabecera de la columna del mapa; el resumen del día se comprime sin perder estructura ni nombres (estado al título, pista al `help`, indicadores 52→35 px); el fondo pasa a 3 columnas mapa \| proyectos \| agenda (muere el toggle); y el hueco sobre el buscador baja a 1rem. ⚠️ De paso se arregla un fallo real: los "→ Ir a" del resumen llevaban displays en vez de IDs → 7 de 9 abrían **Agrupaciones** y "Sobre presup." abría **Horas**. La banda azul del cliente NO se toca (decisión del usuario) |
 | v302 | Panel: vuelve el atajo "Toda la semana (Lun–Vie)" como check que manda sobre el selector de días y lo deshabilita; sin `st.rerun` para no cerrar el popover |
 | v301 | Panel: cabeceras de días y "Persona" más grandes y centradas; se puede planificar VARIOS días de una (multiselect de días en el popover); y un trabajo ya asignado se puede eliminar sin perder el historial (se marca ELIMINADO y `trabajos_idx` lo sigue resolviendo) |

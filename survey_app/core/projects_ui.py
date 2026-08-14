@@ -292,13 +292,18 @@ def _resumen_del_dia(grupo: str):
         _titulo = (f":material/notifications: Resumen del día — "
                    f":orange[{_tot} pendiente{_p}]")
 
-    with st.expander(_titulo, expanded=True):
+    with st.expander(_titulo, expanded=True, key="cpxresumen"):
         # colorear cada botón-indicador por severidad (clase st-key-<key>, v169)
         # + v303: bajarlos de ~52 a ~35 px (medido). Son 3 filas → ~50 px menos, sin
         # tocar la estructura fija (v196) ni los nombres visibles (v200).
+        # + v304: los HUECOS entre filas. Medido el bloque entero (246 px), la mitad era
+        # envoltorio: 46 px de huecos verticales. ⚠️ Va acotado a `.st-key-cpxresumen`
+        # (por eso el expander lleva `key`): la misma regla suelta apretaría TODOS los
+        # desplegables de la app.
         _css = ["<style>",
                 '[class*="st-key-resind_"] button{min-height:0 !important;'
-                'padding:4px 8px !important;}']
+                'padding:4px 8px !important;}',
+                '.st-key-cpxresumen [data-testid="stVerticalBlock"]{gap:.3rem !important;}']
         for _slug, _i, _l, _urgb, _cnt, *_r in inds:
             _bg, _fg = (("#fdecec", "#c0392b") if _urgb else ("#fff4e0", "#c77700")) \
                        if _cnt else ("#f4f6f9", "#9aa7b8")
