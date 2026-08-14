@@ -829,15 +829,24 @@ def _tablero_editable(grupo, lunes, staff, datos, tidx, marcas=None):
                 # v301: planificar VARIOS días de una. Antes era un check "toda la
                 # semana" (o uno, o los cinco), así que asignar a alguien 2-3 días
                 # obligaba a abrir una celda por día. Arranca con el día tocado.
+                # v302: el atajo de la semana completa VUELVE como check, no como
+                # botón que rellene el selector: eso exigiría `st.rerun()` para poder
+                # escribir la clave de un widget ya instanciado (regla v111) y el
+                # rerun CIERRA el popover — habría que reabrirlo para guardar. El
+                # check va ANTES para poder deshabilitar el selector cuando manda él.
+                _all = st.checkbox("Toda la semana (Lun–Vie)", key=f"pvwa_{_wk}_{idx}")
                 _dd = st.multiselect(
                     "Aplicar a estos días", R.DIAS, default=[d], key=f"pvw_{_wk}_{idx}",
+                    disabled=_all,
                     format_func=lambda x: f"{R.DIAS_LABEL[x]} "
                                           f"{R.fecha_de_dia(lunes, x).strftime('%d/%m')}")
-                if len(_dd) > 1:
-                    st.caption(f":material/content_copy: Se guardará igual en **{len(_dd)} días**.")
+                _destino = list(R.DIAS) if _all else _dd
+                if len(_destino) > 1:
+                    st.caption(f":material/content_copy: Se guardará igual en "
+                               f"**{len(_destino)} días**.")
                 if st.button(":material/save: Guardar", key=f"pvs_{_wk}_{idx}", type="primary",
-                             use_container_width=True, disabled=not _dd):
-                    ok, msg = _guardar_celda(grupo, lunes, usuario, datos, _dd,
+                             use_container_width=True, disabled=not _destino):
+                    ok, msg = _guardar_celda(grupo, lunes, usuario, datos, _destino,
                                              _items, _nota)
                     if ok:
                         # cada PROYECTO agendado mete al usuario como asignado del proyecto
