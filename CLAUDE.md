@@ -3640,7 +3640,48 @@ SVG. Nuevo `schedule.schedule_svg_alto(n)` con la MISMA fórmula que `VH`, así 
 - El cronograma falso escrito a mano no tenía la clave `scurve` y el test petaba por su culpa →
   usar `build_schedule` de verdad en vez de inventarse la estructura.
 
-## Versiones desplegadas (v311 = actual)
+## MODELO DE NEGOCIO (fijado por el usuario) y la conciliación de mano de obra (v313)
+El usuario, al preguntársele qué cifra es "la buena":
+> *"Yo pago las horas fichadas sean o no de un proyecto + lo de ley. Las horas fichadas en un
+> proyecto se cargan a ese proyecto, es lo que se le cobra al cliente… más un factor de ganancia."*
+
+**Verificado que el código YA lo implementa**: `timeclock.horas_por_usuario_rango` (base de la
+nómina) usa las horas de **JORNADA**; `expenses.labor_cost(pid)` usa las **imputadas a esa obra**;
+`finance.group_profitability` cobra `MO × (1+margen) + materiales`. No había que elegir entre dos
+definiciones: **son dos preguntas distintas y las dos son correctas**.
+| | Qué responde | Fuente |
+|---|---|---|
+| **Lo que pagas** | cuánto cuesta la empresa | jornada × tarifa **+ aportes de ley** |
+| **Lo que cargas** | cuánto vale lo imputado a esa obra | horas del proyecto × tarifa |
+Lo que faltaba era **el puente**. `finance.conciliacion_mo(grupo, desde, hasta)` (v313):
+```
+  cargado a obras (horas de proyecto × tarifa)
+  − horas cobradas que NO se pagaron  (imputadas sin jornada abierta)
+  + horas pagadas que NO se cargaron  (jornada sin imputar: traslados, espera)
+  = base a pagar
+  + aportes de ley (super)
+  = costo real de la mano de obra
+```
+Con los datos REALES del usuario cierra exacto: `1.645,20 − 358,80 + 0,40 = 1.286,80`;
+`+147,98 (super 11,5%) = 1.434,78`, que es justo el `costo_nomina` del P&L.
+- ⚠️ **`sin_explicar` no se cuadra a la fuerza**: si una nómina se editó a mano la cadena deja de
+  cerrar y **se dice**. Probado con una nómina alterada (delata los 286,80 de diferencia).
+- **Los tres huecos son el margen real** y no se veían en ninguna pantalla: el **super** (lo pagas y
+  no lo cargas), las **horas sin imputar** (traslados/espera: las pagas y no las cobras) y las
+  **horas imputadas sin jornada** (las cobras y no las pagaste — 358,80 en el grupo real, y esas
+  INFLAN el margen). Avisos nuevos para los tres, más "sin tarifa/hora → su trabajo cuenta $0".
+- **Se renombran las cifras** para que no se llamen todas "costo": P&L → «Costos (lo que pagas)»,
+  Gastos → «Costo cargado a obras», Rentabilidad → «Costo cargado» (con `help` explicando que NO
+  incluye ley ni horas sin imputar: eso lo cubre el margen).
+- **Aviso de margen 0%** en Rentabilidad: con margen 0 el "ingreso estimado" es idéntico al costo y
+  la ganancia sale $0 — la pantalla parecía rota y solo faltaba poner el margen.
+### ⚠️ Hallazgo de negocio (con los números del usuario)
+El P&L decía **ganancia $1.710** en «Este mes». Con todo el histórico son **$210,42**
+(`3.145,20 − 1.434,78 − 1.500`): la factura es del **09/08** y las compras del **28/07**, así que un
+P&L por mes natural separa un ingreso de los costos que lo produjeron. No es un bug del filtro; es
+que falta poder ver el resultado **por proyecto/factura** además de por mes.
+
+## Versiones desplegadas (v313 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -3648,6 +3689,8 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v313 | **Conciliación de mano de obra**: nuevo `finance.conciliacion_mo` con la cadena `cargado a obras → −horas cobradas sin pagar → +horas pagadas sin cargar → base → +aportes de ley → costo real`, que cierra exacto con los datos reales. Las cinco pantallas dejan de llamar "costo" a cosas distintas («lo que pagas» vs «lo que cargas a obras») + avisos de horas imputadas sin jornada, gente sin tarifa y proyectos con margen 0%. ⚠️ Se verificó que el modelo del usuario (paga la jornada + ley; carga a la obra lo imputado; cobra eso × margen) ya estaba bien implementado: faltaba el puente entre las dos cifras |
+| v312 | Fix de v310: las tarjetas KPI mostraban la barra del escape (`COSTO ACTUAL \$3,145`). `theme.dinero` escapa el `$` para MARKDOWN, pero `_kpi_card` emite HTML crudo. Ahora `theme._esc` deshace ese escape, así que cualquier pieza HTML del kit lo arregla sola y no puede repetirse |
 | v311 | Detalle de proyecto (Estado) reordenado: lo corto (titular + KPIs) va arriba a ancho completo y abajo se enfrentan dos bloques largos (actividades \| alarmas), en vez de dejar la columna izquierda vacía ~800 px. El **cronograma pasa de 760 a 1280 px de lienzo** (área de barras 430→950) — ⚠️ `vw` es parámetro y el default sigue en 760 para NO cambiar los informes PDF. «Tocaba hoy» + «En curso ahora» se fusionan. ⚠️ Fix: el titular mostraba `**` literales porque el markdown no se procesa dentro de HTML; y el iframe del gráfico era 18 px más corto que el SVG, así que recortaba el pie |
 | v310 | ⚠️ **Gastos decía `COSTO ACTUAL $0` con $1.500 en la torta**: `group_expenses` ocultaba los proyectos ARCHIVADOS (v149) y esas compras no contaban en ningún costo, presupuesto ni alerta. Auditada la hoja real (solo lectura): los $1.500 eran de PRJ-0001, archivado. Ahora hay UNA definición (todas las compras del grupo), el P&L usa la misma, las compras sin proyecto se avisan en vez de perderse, y se quitó el gráfico de barras que duplicaba la torta. Sin periodo a propósito (rompería «% consumido»). ⚠️ De paso: el test de v309 daba OK en falso porque el mock ignoraba `incluir_archivados` |
 | v309 | ⚠️ **Fallo en las 3 pantallas de dinero**: dos `$` en la misma cadena hacen que Streamlit la renderice como **LaTeX** — en Facturas la línea de Subtotal/Impuesto/Total salía como fórmula ilegible, en Nóminas igual, en el P&L desaparecían los `$` y el `metric` de Facturas perdía el símbolo. Nuevo `theme.dinero()` (formatea + escapa, idéntico al formato anterior) en los 5 sitios + guardián AST. Y el **P&L gana periodo** (mes/trimestre/año/todo), desglose por cliente, composición del costo y enlaces a Facturas/Nóminas |

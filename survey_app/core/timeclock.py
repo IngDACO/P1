@@ -670,6 +670,37 @@ def horas_por_usuario_rango(grupo: str, desde, hasta) -> dict:
     return {k: {"nombre": v["nombre"], "horas": round(v["horas"], 2)} for k, v in out.items()}
 
 
+def jornada_y_proyecto(grupo: str, desde=None, hasta=None) -> dict:
+    """`{clave: {nombre, jornada, proyecto}}` — horas de JORNADA y horas IMPUTADAS a
+    proyectos de cada persona en [desde, hasta] (fechas `date`; None = todo).
+
+    Es el dato que hacía falta para conciliar (v313): el modelo del negocio es
+    **se paga la jornada** (esté o no en un proyecto) y **se carga a la obra lo
+    imputado**, así que la diferencia entre las dos columnas ES el hueco entre lo
+    que sale de caja y lo que se le puede cobrar al cliente. `group_hours` no vale
+    aquí porque su ventana es móvil (`days`) y el P&L trabaja con un rango.
+    """
+    grupo = (grupo or "").strip()
+    out = {}
+    for r in _cached_records():
+        if str(r.get("Grupo", "")).strip() != grupo:
+            continue
+        clave = str(r.get("Usuario", "")).strip() or str(r.get("Nombre", "")).strip()
+        if not clave:
+            continue
+        h = sum(hh for d, hh in _row_segmentos(r)
+                if (desde is None or d >= desde) and (hasta is None or d <= hasta))
+        if h <= 0:
+            continue
+        a = out.setdefault(clave, {"nombre": str(r.get("Nombre", "")).strip() or clave,
+                                   "jornada": 0.0, "proyecto": 0.0})
+        a["jornada" if _tipo_of(r) == TIPO_GENERAL else "proyecto"] += h
+    for a in out.values():
+        a["jornada"] = round(a["jornada"], 2)
+        a["proyecto"] = round(a["proyecto"], 2)
+    return out
+
+
 def group_hours(grupo: str, days=None) -> list:
     """Resumen de horas por usuario del grupo (para el admin). days=None=todo, 7=semana.
     Devuelve [{usuario, general, proyecto, sin_asignar, por_proyecto{nombre:horas}}]. Las

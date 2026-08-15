@@ -3086,7 +3086,8 @@ def render_pnl(grupo: str):
     # los trata como LaTeX: el markdown salia como formula y el metric perdia el
     # simbolo de moneda (v309). Con una sola cifra el escape es inofensivo.
     c[0].metric("Ingresos (facturado)", T.dinero(d["facturado"], 0))
-    c[1].metric("Costos", T.dinero(d["costo_total"], 0))
+    c[1].metric("Costos (lo que pagas)", T.dinero(d["costo_total"], 0),
+            help="Nóminas (jornada + aportes de ley) + compras. Es lo que sale de caja, NO lo que se le carga a las obras.")
     c[2].metric("Ganancia", T.dinero(d["ganancia"], 0),
                 delta=(f"{(100 * d['ganancia'] / d['facturado']):.0f}% margen"
                        if d["facturado"] > 0 else None))
@@ -3124,6 +3125,50 @@ def render_pnl(grupo: str):
             st.markdown("**Composición del costo**")
             st.markdown(_torta_html(_comp, d["costo_total"]), unsafe_allow_html=True)
 
+    # ── Conciliación: lo que PAGAS vs lo que CARGAS a las obras (v313) ──
+    # Las dos cifras son correctas y responden preguntas distintas; lo que faltaba era
+    # ver POR QUÉ no coinciden. Aquí está el margen real y por dónde se escapa.
+    _cc = None
+    try:
+        _cc = F.conciliacion_mo(grupo, _desde, _hasta)
+    except Exception:
+        pass
+    if _cc and (_cc["cargado"] or _cc["costo_real"]):
+        with st.expander(":material/compare_arrows: De lo que cargas a las obras "
+                         "a lo que pagas de verdad", expanded=False):
+            _fil = [("Cargado a las obras (horas imputadas × tarifa)", _cc["cargado"], ""),
+                    ("− horas cobradas que NO pagaste (imputadas sin jornada)",
+                     -_cc["cobrado_no_pagado"], "#c0392b"),
+                    ("+ horas pagadas que NO cargaste (traslados, espera)",
+                     _cc["pagado_no_cargado"], "#c77700"),
+                    ("= base que deberías pagar", _cc["base_teorica"], "bold"),
+                    ("Base realmente puesta en nóminas", _cc["base_nomina"], ""),
+                    ("+ aportes de ley (super)", _cc["aportes"], "#c77700"),
+                    ("= costo real de la mano de obra", _cc["costo_real"], "bold")]
+            _html = ['<table style="width:100%;border-collapse:collapse;font-size:13.5px">']
+            for _lb, _v, _st in _fil:
+                _b = "font-weight:700;border-top:1px solid #e6e9ef;" if _st == "bold" else ""
+                _c = f"color:{_st};" if _st.startswith("#") else ""
+                _html.append(f'<tr><td style="padding:4px 0;{_b}">{T._esc(_lb)}</td>'
+                             f'<td style="padding:4px 0;text-align:right;{_b}{_c}">'
+                             f'{T._esc(T.dinero(_v))}</td></tr>')
+            _html.append("</table>")
+            st.markdown("".join(_html), unsafe_allow_html=True)
+            if abs(_cc["sin_explicar"]) >= 1:
+                st.warning(f":material/warning: **{T.dinero(abs(_cc['sin_explicar']))} sin "
+                           "explicar** entre lo que deberías pagar y lo puesto en nóminas: "
+                           "trabajo aún sin nómina en este periodo, o nóminas editadas a mano.")
+            if _cc["cobrado_no_pagado"] >= 1:
+                st.error(f":material/error: **{T.dinero(_cc['cobrado_no_pagado'])} facturables "
+                         "que no te costaron nada**: alguien fichó a un proyecto **sin abrir "
+                         "jornada**, así que esas horas se cargan a la obra pero no entran en "
+                         "ninguna nómina. Infla tu margen.")
+            if _cc["sin_tarifa"]:
+                st.warning(":material/payments: Sin tarifa/hora, así que su trabajo cuenta "
+                           "como $0: **" + ", ".join(_cc["sin_tarifa"]) + "**.")
+            st.caption("Tu margen tiene que cubrir los aportes de ley y las horas que pagas "
+                       "sin poder cargarlas a ninguna obra.")
+
 
 def render_group_profitability(grupo: str):
     """Rentabilidad del grupo (Fase 1 finanzas): costo vs ingreso estimado = ganancia.
@@ -3141,8 +3186,20 @@ def render_group_profitability(grupo: str):
         st.info(":material/info: Aún no hay proyectos con costo registrado (horas o compras).")
         return
     t = data["totales"]
+    # ⚠️ v313: con margen 0% el "ingreso estimado" es IGUAL al costo, así que la
+    # ganancia estimada sale 0 y la pantalla parecía rota. No lo está: es que no hay
+    # margen puesto. Se dice, en vez de dejar una tabla de ceros sin explicación.
+    _m0 = [r["nombre"] for r in data["rows"] if P._num(r.get("margen")) <= 0]
+    if _m0:
+        st.warning(f":material/percent: **{len(_m0)} proyecto(s) con margen 0%**, así que su "
+                   "ingreso estimado es exactamente su costo y la ganancia sale $0: "
+                   + ", ".join(_m0[:6])
+                   + ("…" if len(_m0) > 6 else "")
+                   + ". El margen se pone en :material/edit: Datos del proyecto (o el "
+                     "default del grupo, que fija el propietario).")
     c = st.columns(3)
-    c[0].metric("Costo total", f"${t['costo']:,.0f}")
+    c[0].metric("Costo cargado", f"${t['costo']:,.0f}",
+            help="Horas imputadas a la obra × tarifa + materiales. NO incluye los aportes de ley ni las horas sin imputar: eso lo cubre el margen.")
     c[1].metric("Ingreso estimado", f"${t['ingreso']:,.0f}")
     c[2].metric("Ganancia estimada", f"${t['ganancia']:,.0f}")
     df = pd.DataFrame([{
@@ -3188,7 +3245,7 @@ def render_group_expenses(grupo: str):
     pct_grupo = round(100 * tot / tot_pres) if tot_pres > 0 else None
 
     # ── KPIs del grupo ──
-    tarj = [_kpi_card("Costo actual", T.dinero(tot, 0)),
+    tarj = [_kpi_card("Costo cargado a obras", T.dinero(tot, 0)),
             _kpi_card("Presupuesto", T.dinero(tot_pres, 0) if tot_pres else "—"),
             _kpi_card("% consumido", f"{pct_grupo}%" if pct_grupo is not None else "—",
                       "#c0392b" if (pct_grupo or 0) > 100 else None),

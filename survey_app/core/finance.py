@@ -13,6 +13,7 @@ Es una estimación de facturación total; las facturas reales llegan en la Fase 
 from core import auth
 from core import expenses as E
 from core import projects as P
+from core import timeclock
 
 
 def _num(v, d=0.0) -> float:
@@ -172,6 +173,68 @@ def pnl(grupo: str, desde=None, hasta=None) -> dict:
             "ganancia": ganancia, "por_pagar": round(por_pagar, 2), "pagado": round(pagado, 2),
             # v309: de dónde sale, para el desglose de la pantalla
             "por_cliente": _por_cliente(facs)}
+
+
+def conciliacion_mo(grupo: str, desde=None, hasta=None) -> dict:
+    """El puente entre **lo que pagas** y **lo que cargas a las obras** (v313).
+
+    Modelo del negocio (fijado por el usuario): se paga **toda la jornada fichada**,
+    esté o no imputada a un proyecto, **más los aportes de ley**; y al cliente se le
+    cobran **las horas imputadas a su obra** por la tarifa, más un factor de ganancia.
+    Las dos cifras son correctas y responden preguntas distintas — el problema era que
+    no había forma de ver por qué no coinciden. Esta es la cadena, y CIERRA:
+
+        cargado a obras (horas de proyecto × tarifa)
+        − horas cobradas que no se pagaron   (imputadas SIN jornada abierta)
+        + horas pagadas que no se cargaron   (jornada sin imputar: traslados, espera)
+        = base a pagar
+        + aportes de ley (super)
+        = costo real de la mano de obra
+
+    ⚠️ `sin_explicar` NO es decorado: si alguien editó a mano una nómina, la cadena
+    deja de cerrar y hay que DECIRLO en vez de cuadrar el número a la fuerza.
+    """
+    from core import payroll as PR
+
+    hp = timeclock.jornada_y_proyecto(grupo, desde, hasta)
+    rates = auth.rate_map(grupo)
+
+    cargado = cobrado_no_pagado = pagado_no_cargado = 0.0
+    sin_tarifa = []
+    for clave, h in hp.items():
+        t = _num(rates.get(clave, 0))
+        cargado += h["proyecto"] * t
+        _d = (h["proyecto"] - h["jornada"]) * t
+        if _d > 0:
+            cobrado_no_pagado += _d
+        else:
+            pagado_no_cargado += -_d
+        if t <= 0 and (h["jornada"] > 0 or h["proyecto"] > 0):
+            sin_tarifa.append(h["nombre"])
+
+    # Lo REALMENTE liquidado en nóminas del periodo (por `PeriodoHasta`, como el P&L)
+    base_nom = aportes = 0.0
+    for n in PR.list_nominas(grupo):
+        if not _en_rango(n.get("PeriodoHasta"), desde, hasta):
+            continue
+        base_nom += _num(n.get("Base"))
+        for c in PR.conceptos_de(n):
+            if str(c.get("tipo", "")).lower() == "aporte":
+                aportes += _num(c.get("monto"))
+
+    base_teorica = cargado - cobrado_no_pagado + pagado_no_cargado
+    return {
+        "cargado":            round(cargado, 2),
+        "cobrado_no_pagado":  round(cobrado_no_pagado, 2),
+        "pagado_no_cargado":  round(pagado_no_cargado, 2),
+        "base_teorica":       round(base_teorica, 2),
+        "base_nomina":        round(base_nom, 2),
+        "aportes":            round(aportes, 2),
+        "costo_real":         round(base_nom + aportes, 2),
+        # lo que la cadena no explica: nóminas editadas a mano, o trabajo aún sin nómina
+        "sin_explicar":       round(base_teorica - base_nom, 2),
+        "sin_tarifa":         sorted(set(sin_tarifa)),
+    }
 
 
 def _por_cliente(facs) -> list:
