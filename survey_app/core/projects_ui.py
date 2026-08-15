@@ -3312,51 +3312,122 @@ def _pnl_por_proyecto(grupo: str, T):
 
 
 def render_group_profitability(grupo: str):
-    """Rentabilidad del grupo (Fase 1 finanzas): costo vs ingreso estimado = ganancia.
+    """Rentabilidad del grupo: lo estimado CONTRA lo realmente facturado (v321).
 
-    Estimación de facturación total (MO × (1+margen) + materiales a costo). Las
-    facturas reales (con cobrado/pendiente) llegan en la Fase 2.
+    ⚠️ SIN cabecera propia: `home_ui._sub_header` ya pinta «Finanzas · Rentabilidad».
     """
     from core import finance as F
-    # ⚠️ SIN cabecera propia: `home_ui._sub_header` ya pinta «Finanzas · X» encima.
-    # Era el 5º título duplicado de la app (v212, v291, v314, v319 y este barrido).
-    st.caption("Lo que costó cada proyecto (mano de obra + materiales) frente a lo que "
-               "cobrarías (MO × (1 + margen) + materiales) = tu ganancia estimada. El margen sale "
-               "de cada proyecto (o del default del grupo); se cambia en ✏️ Datos del proyecto.")
+    from core import invoices as INV
+    from core import theme as T
+    st.caption("Lo que costó cada obra (horas imputadas × tarifa + materiales) frente a lo "
+               "que cobrarías (MO × (1 + margen) + materiales). Aquí mismo se editan los "
+               "márgenes y se ve cuánto de ese estimado ya está facturado.")
     data = F.group_profitability(grupo)
     if not data["rows"]:
         st.info(":material/info: Aún no hay proyectos con costo registrado (horas o compras).")
         return
+
+    # Lo REALMENTE facturado por obra (1 lectura cacheada). «Por facturar» se calcula
+    # como `ingreso estimado − facturado`, que es EXACTAMENTE lo que hace
+    # `invoices.pendiente_de_facturar` (misma fórmula de ingreso) sin llamarla N veces.
+    try:
+        _fac = INV.facturado_por_proyecto(grupo)
+    except Exception:
+        _fac = {}
+    rows = []
+    for r in data["rows"]:
+        f = P._num(_fac.get(str(r["id"]), 0))
+        rows.append({**r, "facturado": round(f, 2),
+                     "por_facturar": round(max(0.0, r["ingreso"] - f), 2)})
+
     t = data["totales"]
+    _t_fac = round(sum(r["facturado"] for r in rows), 2)
+    _t_pdt = round(sum(r["por_facturar"] for r in rows), 2)
+
     # ⚠️ v313: con margen 0% el "ingreso estimado" es IGUAL al costo, así que la
     # ganancia estimada sale 0 y la pantalla parecía rota. No lo está: es que no hay
-    # margen puesto. Se dice, en vez de dejar una tabla de ceros sin explicación.
-    _m0 = [r["nombre"] for r in data["rows"] if P._num(r.get("margen")) <= 0]
+    # margen puesto. v321: además se pueden poner AQUÍ, sin salir de la pantalla.
+    _m0 = [r["nombre"] for r in rows if P._num(r.get("margen")) <= 0]
     if _m0:
-        st.warning(f":material/percent: **{len(_m0)} proyecto(s) con margen 0%**, así que su "
+        st.warning(f":material/percent: **{len(_m0)} obra(s) con margen 0%**, así que su "
                    "ingreso estimado es exactamente su costo y la ganancia sale $0: "
-                   + ", ".join(_m0[:6])
-                   + ("…" if len(_m0) > 6 else "")
-                   + ". El margen se pone en :material/edit: Datos del proyecto (o el "
-                     "default del grupo, que fija el propietario).")
-    c = st.columns(3)
-    c[0].metric("Costo cargado", f"${t['costo']:,.0f}",
-            help="Horas imputadas a la obra × tarifa + materiales. NO incluye los aportes de ley ni las horas sin imputar: eso lo cubre el margen.")
-    c[1].metric("Ingreso estimado", f"${t['ingreso']:,.0f}")
-    c[2].metric("Ganancia estimada", f"${t['ganancia']:,.0f}")
-    df = pd.DataFrame([{
+                   + ", ".join(_m0[:6]) + ("…" if len(_m0) > 6 else "")
+                   + ". Edítalos en la tabla de abajo.")
+
+    st.markdown('<div style="display:flex;gap:10px;flex-wrap:wrap;margin:2px 0 6px">'
+                + _kpi_card("Costo cargado", T.dinero(t["costo"], 0))
+                + _kpi_card("Ingreso estimado", T.dinero(t["ingreso"], 0))
+                + _kpi_card("Ganancia estimada", T.dinero(t["ganancia"], 0),
+                            T.VERDE if t["ganancia"] > 0 else None)
+                + _kpi_card("Ya facturado", T.dinero(_t_fac, 0))
+                + _kpi_card("Por facturar", T.dinero(_t_pdt, 0),
+                            T.AMBAR if _t_pdt > 0 else None)
+                + "</div>", unsafe_allow_html=True)
+    st.caption("«Costo cargado» = horas imputadas × tarifa + materiales; NO incluye los "
+               "aportes de ley ni las horas sin imputar — eso lo cubre el margen "
+               "(Resumen → Conciliación).")
+
+    # ── Tabla con el MARGEN EDITABLE ─────────────────────────────
+    # El aviso de arriba decía "ve a Datos del proyecto" estando ya en la lista de
+    # márgenes: se editan aquí (principio de elementos activos, v199).
+    _con = [r for r in rows if r["costo"] > 0 or r["facturado"] > 0]
+    _sin = [r for r in rows if not (r["costo"] > 0 or r["facturado"] > 0)]
+    _orden = sorted(_con, key=lambda x: -x["ganancia"])
+    _df = pd.DataFrame([{
         "Proyecto":         r["nombre"],
         "Costo":            round(r["costo"], 0),
-        "Margen":           int(round(r["margen"])),
+        "Margen %":         float(round(r["margen"], 1)),
         "Ingreso estimado": round(r["ingreso"], 0),
         "Ganancia":         round(r["ganancia"], 0),
-    } for r in sorted(data["rows"], key=lambda x: -x["ganancia"])])
-    st.dataframe(df, use_container_width=True, hide_index=True, column_config={
-        "Costo":            st.column_config.NumberColumn("Costo", format="$%d"),
-        "Margen":           st.column_config.NumberColumn("Margen", format="%d%%"),
-        "Ingreso estimado": st.column_config.NumberColumn("Ingreso estimado", format="$%d"),
-        "Ganancia":         st.column_config.NumberColumn("Ganancia", format="$%d"),
-    })
+        "Facturado":        round(r["facturado"], 0),
+        "Por facturar":     round(r["por_facturar"], 0),
+    } for r in _orden])
+    _ed = st.data_editor(
+        _df, use_container_width=True, hide_index=True, key="rent_ed",
+        disabled=["Proyecto", "Costo", "Ingreso estimado", "Ganancia",
+                  "Facturado", "Por facturar"],
+        column_config={
+            "Costo":            st.column_config.NumberColumn(format="$%d"),
+            "Margen %":         st.column_config.NumberColumn(
+                                    "Margen %", format="%.1f%%", min_value=0.0,
+                                    max_value=500.0, step=1.0,
+                                    help="Editable: cámbialo y pulsa Guardar."),
+            "Ingreso estimado": st.column_config.NumberColumn(format="$%d"),
+            "Ganancia":         st.column_config.NumberColumn(format="$%d"),
+            "Facturado":        st.column_config.NumberColumn(format="$%d"),
+            "Por facturar":     st.column_config.NumberColumn(format="$%d"),
+        })
+    # Solo lo que CAMBIO de verdad (comparando contra el valor original de cada fila)
+    _cambios = {}
+    for _i, r in enumerate(_orden):
+        try:
+            _nuevo = float(_ed.iloc[_i]["Margen %"])
+        except Exception:
+            continue
+        if abs(_nuevo - float(r["margen"])) > 0.001:
+            _cambios[r["id"]] = _nuevo
+    if _cambios:
+        st.info(f":material/edit: {len(_cambios)} margen(es) por guardar.")
+        # ⚠️ Es UNA escritura por proyecto cambiado. Con 6 obras da igual; si algún día
+        # son 60 y se cambian todas de golpe, hay que agrupar (patrón del 429 de v80).
+        if st.button(":material/save: Guardar márgenes", type="primary", key="rent_save"):
+            _ok = 0
+            for _pid, _m in _cambios.items():
+                try:
+                    P.update_project(_pid, {"MargenMO": str(_m)})
+                    _ok += 1
+                except Exception as e:
+                    st.error(f"{_pid}: {e}")
+            st.success(f":material/check_circle: {_ok} margen(es) guardado(s).")
+            st.session_state.pop("rent_ed", None)
+            st.rerun()
+
+    if _sin:
+        with st.expander(f":material/visibility_off: {len(_sin)} obra(s) sin movimiento "
+                         "(sin costo ni facturación)"):
+            st.caption(", ".join(r["nombre"] for r in _sin)
+                       + ". No aportan a la rentabilidad todavía; su margen se edita "
+                         "en el proyecto.")
 
 
 def render_group_expenses(grupo: str):

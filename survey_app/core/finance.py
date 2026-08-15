@@ -57,8 +57,13 @@ def group_profitability(grupo: str) -> dict:
     """
     ge = E.group_expenses(grupo)
     default_m = auth.group_margin_default(grupo)
+    # ⚠️ v321: `incluir_archivados=True`. Desde v310 `group_expenses` SÍ devuelve los
+    # proyectos archivados, pero este mapa se construía sin ellos: `mmap.get(pid, "")`
+    # daba "" y esos proyectos caían al margen DEFAULT del grupo en vez de usar el
+    # suyo — en silencio. Al ampliar una fuente hay que revisar los mapas que se
+    # cruzan con ella (mismo patrón que el `project_hours_bulk` de v145).
     mmap = {str(p.get("ID", "")): str(p.get("MargenMO", "")).strip()
-            for p in P.list_projects(grupo=grupo)}
+            for p in P.list_projects(grupo=grupo, incluir_archivados=True)}
     rows, t_costo, t_ing = [], 0.0, 0.0
     for r in ge["proyectos"]:
         pid = str(r["id"])

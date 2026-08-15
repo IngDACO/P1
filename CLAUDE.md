@@ -3794,7 +3794,25 @@ no entran en ninguna nómina.
 - Fuera los proyectos con **0,0 h** del reparto (barra vacía = ruido); se filtra por el valor
   REDONDEADO, que es el que se ve en pantalla.
 
-## Versiones desplegadas (v320 = actual)
+## Rentabilidad: el margen se edita AQUÍ + estimado vs facturado (v321)
+### ⚠️ Fallo introducido en v310: el margen del ARCHIVADO se ignoraba
+`group_profitability` recorre `group_expenses`, que **desde v310 SÍ devuelve los archivados**, pero
+construía el mapa de márgenes con `list_projects(grupo)` — que los excluye. `mmap.get(pid, "")` daba
+`""` y esos proyectos caían al **default del grupo** en vez de usar el suyo, en silencio.
+**LECCIÓN: al ampliar una fuente, revisar los mapas que se cruzan con ella** (mismo patrón que el
+`project_hours_bulk` de v145). El test lo caza porque su mock **respeta `incluir_archivados`** — si
+devolviera lo mismo siempre, daría OK en falso (la trampa de v309/v310).
+### La pantalla
+- **El margen se edita en la propia tabla** (`st.data_editor`, solo esa columna). El aviso decía "ve
+  a Datos del proyecto" estando ya en la lista de márgenes. Se guarda solo lo que CAMBIÓ.
+  ⚠️ Es **una escritura por proyecto cambiado**: con 6 obras da igual, con 60 hay que agrupar (429 de v80).
+- **Estimado contra realidad**: columnas y KPIs de **Ya facturado** y **Por facturar**. `por_facturar
+  = ingreso − facturado`, que es la MISMA fórmula de `invoices.pendiente_de_facturar` pero sin
+  llamarla una vez por proyecto (se usa el mapa cacheado `facturado_por_proyecto`).
+- Las obras **sin movimiento** (ni costo ni facturación) se van a un desplegable: eran 5 filas de
+  ceros de 6. ⚠️ Una obra facturada SIN costo registrado NO se aparta (sigue siendo rentabilidad).
+
+## Versiones desplegadas (v321 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -3802,6 +3820,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v321 | Rentabilidad: **el margen se edita en la propia tabla** (antes te mandaba a Datos de cada proyecto estando ya en la lista de márgenes) + columnas **Ya facturado / Por facturar** para contrastar el estimado con la realidad + las obras sin movimiento a un desplegable. ⚠️ Fix de un fallo de v310: el margen propio de un proyecto **archivado** se ignoraba y usaba el default del grupo, porque `group_expenses` pasó a incluir archivados y el mapa de márgenes no |
 | v320 | **Barrido de títulos duplicados** por AST sobre las 26 vistas de la shell: quitados 4 (Gastos, Horas, Rentabilidad, Facturas). ⚠️ Las vistas del campo y Pre-Start NO se tocan: cuelgan de secciones SIN sub-pestañas, así que su título es el único. + Horas: el KPI «sin asignar» mostraba 1,2 h y un 3% cuando el dato **no era calculable** (hay más horas en obras que de jornada) — ahora pone «—» y explica quién fichó a proyecto sin abrir jornada; «Costo M.O.» pasa a «M.O. cargada a obras» (v313) y fuera los proyectos con 0,0 h |
 | v319 | Nóminas: la lista dejaba pasar **4 colillas de $0** (esas personas no tienen tarifa/hora — `generar` lo detecta y solo se veía al generar), **dos filas homónimas indistinguibles** (nuevo `auth.etiqueta_usuarios`, la regla del ID aplicada a personas) y **gente con horas sin nómina**. Ahora las tres se avisan, con botón a Usuarios. + columna Tarifa/h, totales, filtro de periodo y KPIs con contexto. ⚠️ 4º título duplicado encontrado (v212/v291/v314) |
 | v318 | La torta de composición del costo pasa de fija a **herramienta** (4ª): el usuario la vio fija en v317 y prefirió pedirla al mirarla. La pantalla arranca en la rejilla de pendientes |
