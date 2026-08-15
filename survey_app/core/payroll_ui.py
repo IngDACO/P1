@@ -141,9 +141,12 @@ def _detalle(grupo, nid):
     base = _num(f.get("Base"))
     est = str(f.get("Estado", "emitida"))
     st.markdown(f"## :material/payments: Nómina — {f.get('Nombre', '')}")
+    # ⚠️ v309: dos importes en la misma línea → Streamlit lo renderizaba como LaTeX
+    # (la tarifa y la base salían como fórmula). `theme.dinero` escapa el `$`.
+    from core import theme as _T
     st.markdown(f"Periodo **{f.get('PeriodoDesde', '')} → {f.get('PeriodoHasta', '')}**  ·  "
-                f"{_num(f.get('Horas')):.1f} h × ${_num(f.get('TarifaHora')):,.2f} = "
-                f"base **${base:,.2f}**  ·  estado: **{est}**")
+                f"{_num(f.get('Horas')):.1f} h × {_T.dinero(f.get('TarifaHora'))} = "
+                f"base **{_T.dinero(base)}**  ·  estado: **{est}**")
 
     izq, der = st.columns([3, 2])
     with izq:

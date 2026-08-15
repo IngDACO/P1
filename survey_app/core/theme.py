@@ -203,6 +203,30 @@ def _esc(s) -> str:
     return str(s).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
+def dinero(valor, dec: int = 2, simbolo: str = "$") -> str:
+    """Importe formateado y **seguro para `st.markdown` / `st.metric`** (v309).
+
+    ⚠️ Streamlit trata lo que hay entre dos `$` de una misma cadena como **LaTeX**.
+    Medido en vivo con las cadenas reales de la app:
+      - `"Subtotal **$3,145.20** · Impuesto **$314.52**"` → se renderiza como una
+        FÓRMULA ilegible (el DOM trae KaTeX de verdad).
+      - `"**$0.00** · pagado $1,287"` → los `$` **desaparecen** y los `**` salen
+        literales, que es lo que se veía en el P&L.
+      - `st.metric("Cobrado", "$3,145 de $3,145")` → muestra `3,145 de 3,145`,
+        sin símbolo de moneda.
+    Con `\\$` los cuatro casos salen bien, y **con una sola cifra el escape es
+    inofensivo** (verificado), así que se escapa SIEMPRE en vez de contar dólares.
+
+    Por eso el formato de importes vive en UN sitio: cada vez que alguien escriba
+    `f"${x:,.2f}"` a mano el fallo vuelve, y vuelve en las pantallas de dinero.
+    """
+    try:
+        v = float(valor or 0)
+    except (TypeError, ValueError):
+        v = 0.0
+    return f"\\{simbolo}{v:,.{dec}f}"
+
+
 def kpi_row(items):
     """Fila de tarjetas KPI. `items` = [(label, valor)] o [(label, valor, sub)] o
     [(label, valor, sub, color_acento)]. Una sola fila responsive."""

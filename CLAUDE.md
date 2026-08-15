@@ -3553,7 +3553,37 @@ anidados 253 sin partir texto). ⚠️ En móvil Streamlit apila las columnas so
   (ni dos niveles). La nota de v217 sobre "doble anidación de columnas" era cautela, no un límite
   real; lo que sí es error de Streamlit es el expander dentro de expander (v210).
 
-## Versiones desplegadas (v308 = actual)
+## ⚠️ DOS `$` EN LA MISMA CADENA = LaTeX (fallo en las 3 pantallas de dinero) — v309
+Encontrado al revisar el P&L, donde se veía `Por pagar (nóminas): ** 0.00** · pagado 1,287`.
+**Streamlit trata lo que hay entre dos `$` de una misma cadena como fórmula.** Barrido del repo
+por AST (no grep: cuenta comentarios) → **5 sitios**, y medido en vivo qué hacía cada uno:
+| Sitio | Qué se veía |
+|---|---|
+| P&L «Por pagar» | los `$` **desaparecen** y los `**` salen literales |
+| **Facturas** — Subtotal/Impuesto/Total (2 sitios) | **KaTeX de verdad**: la línea sale como fórmula ilegible |
+| **Facturas** — `metric(help="Cobrado $X de $Y")` | pierde los símbolos: `3,145 de 3,145` |
+| **Nóminas** — `38 h × $37.75 = base **$1,434.50**` | KaTeX |
+**Fix:** `theme.dinero(valor, dec)` — formatea **y escapa** (`\$`). Vive en el sistema de diseño
+porque el fallo vuelve cada vez que alguien escriba `f"${x:,.2f}"` a mano, y vuelve en las pantallas
+de dinero. Con una sola cifra el escape es inofensivo (verificado), así que se escapa SIEMPRE en vez
+de contar dólares. ⚠️ Verificado que imprime **idéntico** al formato anterior (incluido el redondeo
+al par de Python) — si no, cada cifra de la app habría cambiado en silencio con el deploy.
+**Guardián permanente** en `verif_v309.py`: por AST, ninguna cadena de `st.markdown/metric/caption/
+button/…` puede llevar dos `$` sin escapar.
+## P&L: periodo, desglose y enlaces (v309)
+- **Periodo** (Este mes · Trimestre · Este año · Todo): `finance.pnl(grupo, desde, hasta)`. Qué fecha
+  manda: factura→`Fecha`, nómina→**`PeriodoHasta`** (el coste se devenga en el periodo que cierra,
+  no el día que se paga) y compra→`Fecha`. ⚠️ Una fila **sin fecha legible** entra solo cuando NO hay
+  periodo: con periodo, contarla sería inventarse en qué mes ocurrió.
+- ⚠️ Las compras pasan de `group_expenses` (agregado) a recorrer la hoja Gastos filtrando por los
+  proyectos del grupo — **el mismo conjunto de filas**, para que sin periodo el total sea idéntico.
+  Comprobado en el test, no supuesto.
+- **Desglose honesto:** facturado **por cliente** (barras) y **composición del costo** (torta,
+  nóminas vs compras). ⚠️ NO hay "ganancia por proyecto": las nóminas son por PERSONA y no por obra,
+  así que repartirlas saldría inventado. Se dice en el código para que nadie lo "arregle" luego.
+- «Por cobrar» y «Por pagar» dejan de ser texto: llevan a 🧾 Facturas y 👥 Nóminas.
+
+## Versiones desplegadas (v309 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -3561,6 +3591,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v309 | ⚠️ **Fallo en las 3 pantallas de dinero**: dos `$` en la misma cadena hacen que Streamlit la renderice como **LaTeX** — en Facturas la línea de Subtotal/Impuesto/Total salía como fórmula ilegible, en Nóminas igual, en el P&L desaparecían los `$` y el `metric` de Facturas perdía el símbolo. Nuevo `theme.dinero()` (formatea + escapa, idéntico al formato anterior) en los 5 sitios + guardián AST. Y el **P&L gana periodo** (mes/trimestre/año/todo), desglose por cliente, composición del costo y enlaces a Facturas/Nóminas |
 | v308 | Fichaje: ⚠️ **fix de un fallo introducido en v306** — se guardaba la ETIQUETA del desplegable (`prueba (PRJ-0007)`) como nombre del proyecto en la hoja; ahora va el nombre real. Y «Cambiar de proyecto» excluye el actual por ID (antes te ofrecía el que ya tenías abierto). + tarjeta **Esta semana** (lunes→hoy, sin lecturas nuevas) + el estado pasa de tarjeta KPI a franja + Jornada y Proyecto lado a lado (botones de 1350→523 px) |
 | v307 | Ruta del día aprovechada: ⚠️ el hueco blanco era `st_folium` dibujando a **500 px FIJOS** dentro de un bloque de 1110 (medido dentro del iframe) → `use_container_width=True` (también en HOME). Mapa + tarjetas de sitio en orden de recorrido, con «Cómo llegar» y la ruta completa a Google Maps (`ordenar_ruta`/`gmaps_dir_url` existían desde v270 y solo las usaba el campo). La tabla gana **horario** y **estado real** (🟢 fichado aquí / 🔴 fichó en X / ⚠️ sin fichar) sin lecturas nuevas. KPIs activos con contexto. Bug de camino: la persona cuya obra no tenía ubicación **desaparecía de la tabla** |
 | v306 | **Identidad por ID.** Los 3 sitios que aún casaban proyectos por NOMBRE pasan a ID vía `projects.etiqueta_proyectos` (Panel→Asignar hacía desaparecer un homónimo del desplegable; **Facturas enlazaba el importe al proyecto equivocado**; Inventario guardaba el nombre y ahora guarda `PRJ-####`). + **Tipo de proyecto** (Instalación/Delivery/Ripout/Otro): ⚠️ solo Instalación genera el cronograma estándar — antes un delivery nacía con 11 actividades falsas que ensuciaban avance, SPI y el radar. + **El ID a la vista** en tarjeta, lista (1ª columna), detalle y buscador. Guardián AST permanente contra volver a indexar proyectos por nombre |

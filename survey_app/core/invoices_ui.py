@@ -121,9 +121,10 @@ def _detalle_factura(grupo, fid):
             } for x in _ln]), use_container_width=True, hide_index=True,
                 column_config={"Importe": st.column_config.NumberColumn("Importe", format="$%.2f")})
         _imp_pct = _num(f.get("ImpuestoPct"))
-        st.markdown(f"Subtotal: **${_num(f.get('Subtotal')):,.2f}**  ·  "
-                    f"Impuesto ({_imp_pct:.0f}%): **${_num(f.get('Impuesto')):,.2f}**  ·  "
-                    f"Total: **${total:,.2f}**")
+        from core import theme as _T                      # v309: escapa el `$` (LaTeX)
+        st.markdown(f"Subtotal: **{_T.dinero(_num(f.get('Subtotal')))}**  ·  "
+                    f"Impuesto ({_imp_pct:.0f}%): **{_T.dinero(_num(f.get('Impuesto')))}**  ·  "
+                    f"Total: **{_T.dinero(total)}**")
         if str(f.get("Nota", "")).strip():
             st.caption(f"Nota: {f.get('Nota')}")
         try:
@@ -138,7 +139,9 @@ def _detalle_factura(grupo, fid):
 
     with der:
         st.markdown("#### :material/payments: Cobros")
-        st.metric("Por cobrar", f"${total - cob:,.2f}", help=f"Cobrado ${cob:,.2f} de ${total:,.2f}")
+        # v309: el `help` llevaba DOS importes → perdía los símbolos de moneda.
+        st.metric("Por cobrar", _T.dinero(total - cob),
+                  help=f"Cobrado {_T.dinero(cob)} de {_T.dinero(total)}")
         if est != "anulada" and cob < total:
             with st.form(f"cob_{fid}"):
                 _m = st.number_input("Registrar cobro ($)", min_value=0.0,
@@ -236,8 +239,11 @@ def _nueva_factura(grupo):
                         "proyecto_id": _pid_by_lbl.get(pnom, "")})
     _sub = round(sum(l["importe"] for l in _lineas), 2)
     _impv = round(_sub * _imp / 100.0, 2)
-    st.markdown(f"Subtotal **${_sub:,.2f}**  ·  Impuesto **${_impv:,.2f}**  ·  "
-                f"Total **${_sub + _impv:,.2f}**")
+    # ⚠️ `theme.dinero` escapa el `$`: con dos importes en la misma línea Streamlit
+    # renderizaba esto como una FÓRMULA LaTeX ilegible (v309).
+    from core import theme as _T
+    st.markdown(f"Subtotal **{_T.dinero(_sub)}**  ·  Impuesto **{_T.dinero(_impv)}**  ·  "
+                f"Total **{_T.dinero(_sub + _impv)}**")
 
     if st.button(":material/receipt_long: Emitir factura", type="primary", key="fac_emit"):
         if not _lineas:

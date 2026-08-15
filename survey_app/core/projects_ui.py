@@ -3040,31 +3040,73 @@ def render_pnl(grupo: str):
     st.markdown("#### :material/insights: Resumen financiero (P&L)")
     st.caption("Lo realmente facturado menos los costos (nóminas + compras) = ganancia. "
                "«Rentabilidad» es la estimación por margen; esto es lo ejecutado.")
-    d = F.pnl(grupo)
+    # ── Periodo (v309) ───────────────────────────────────────────
+    # Un P&L sin fechas decia "desde siempre", que no es un estado de resultados.
+    from core import theme as T
+    _hoy = clock.today(grupo)
+    _per = st.radio("Periodo", ["Este mes", "Trimestre", "Este año", "Todo"],
+                    horizontal=True, key="cpxseg_pnl_per", label_visibility="collapsed")
+    if _per == "Este mes":
+        _desde, _hasta = _hoy.replace(day=1), _hoy
+    elif _per == "Trimestre":
+        _desde = _hoy.replace(day=1, month=((_hoy.month - 1) // 3) * 3 + 1)
+        _hasta = _hoy
+    elif _per == "Este año":
+        _desde, _hasta = _hoy.replace(day=1, month=1), _hoy
+    else:
+        _desde = _hasta = None
+
+    d = F.pnl(grupo, _desde, _hasta)
     if d["facturado"] == 0 and d["costo_total"] == 0:
-        st.info(":material/info: Aún no hay facturas ni costos (nóminas/compras) registrados.")
+        st.info(":material/info: No hay facturas ni costos (nóminas/compras) en este periodo."
+                if _desde else
+                ":material/info: Aún no hay facturas ni costos (nóminas/compras) registrados.")
         return
+    if _desde:
+        st.caption(f":material/date_range: {_desde.strftime('%d/%m/%Y')} → "
+                   f"{_hasta.strftime('%d/%m/%Y')}")
     c = st.columns(3)
-    c[0].metric("Ingresos (facturado)", f"${d['facturado']:,.0f}")
-    c[1].metric("Costos", f"${d['costo_total']:,.0f}")
-    c[2].metric("Ganancia", f"${d['ganancia']:,.0f}",
+    # ⚠️ `theme.dinero` escapa el `$`. Con dos importes en la misma cadena Streamlit
+    # los trata como LaTeX: el markdown salia como formula y el metric perdia el
+    # simbolo de moneda (v309). Con una sola cifra el escape es inofensivo.
+    c[0].metric("Ingresos (facturado)", T.dinero(d["facturado"], 0))
+    c[1].metric("Costos", T.dinero(d["costo_total"], 0))
+    c[2].metric("Ganancia", T.dinero(d["ganancia"], 0),
                 delta=(f"{(100 * d['ganancia'] / d['facturado']):.0f}% margen"
                        if d["facturado"] > 0 else None))
     st.markdown("---")
     a, b = st.columns(2)
     with a:
         st.markdown("**:material/trending_up: Ingresos (cuentas por cobrar)**")
-        st.markdown(f"- Facturado: **${d['facturado']:,.2f}**")
-        st.markdown(f"- Cobrado: **${d['cobrado']:,.2f}**")
-        _pc = f"- Por cobrar: **${d['por_cobrar']:,.2f}**"
+        st.markdown(f"- Facturado: **{T.dinero(d['facturado'])}**")
+        st.markdown(f"- Cobrado: **{T.dinero(d['cobrado'])}**")
+        _pc = f"- Por cobrar: **{T.dinero(d['por_cobrar'])}**"
         if d["vencido"] > 0:
-            _pc += f"  ·  :red[vencido ${d['vencido']:,.0f}]"
+            _pc += f"  ·  :red[vencido {T.dinero(d['vencido'], 0)}]"
         st.markdown(_pc)
+        if d["por_cobrar"] > 0 and st.button(":material/receipt: Ver facturas por cobrar",
+                                             key="pnl_ir_fac", use_container_width=True):
+            _ir_a("finanzas", "🧾 Facturas")
+        if d.get("por_cliente"):
+            st.markdown("**Facturado por cliente**")
+            st.markdown(_barras_html(d["por_cliente"], d["facturado"] or 1, T.AZUL),
+                        unsafe_allow_html=True)
     with b:
         st.markdown("**:material/trending_down: Costos (cuentas por pagar)**")
-        st.markdown(f"- Nóminas (sueldos + super): **${d['costo_nomina']:,.2f}**")
-        st.markdown(f"- Compras / materiales: **${d['compras']:,.2f}**")
-        st.markdown(f"- Por pagar (nóminas): **${d['por_pagar']:,.2f}**  ·  pagado ${d['pagado']:,.0f}")
+        st.markdown(f"- Nóminas (sueldos + super): **{T.dinero(d['costo_nomina'])}**")
+        st.markdown(f"- Compras / materiales: **{T.dinero(d['compras'])}**")
+        st.markdown(f"- Por pagar (nóminas): **{T.dinero(d['por_pagar'])}**"
+                    f"  ·  pagado {T.dinero(d['pagado'], 0)}")
+        if d["por_pagar"] > 0 and st.button(":material/payments: Ver nóminas por pagar",
+                                            key="pnl_ir_nom", use_container_width=True):
+            _ir_a("finanzas", "👥 Nóminas")
+        # Composicion del costo. ⚠️ NO se reparte por proyecto: las nominas son por
+        # PERSONA y no por obra, asi que un "ganancia por proyecto" saldria inventado.
+        _comp = [(x, y) for x, y in (("Nóminas", d["costo_nomina"]),
+                                     ("Compras / materiales", d["compras"])) if y > 0]
+        if len(_comp) > 1:
+            st.markdown("**Composición del costo**")
+            st.markdown(_torta_html(_comp, d["costo_total"]), unsafe_allow_html=True)
 
 
 def render_group_profitability(grupo: str):
