@@ -3583,7 +3583,35 @@ button/…` puede llevar dos `$` sin escapar.
   así que repartirlas saldría inventado. Se dice en el código para que nadie lo "arregle" luego.
 - «Por cobrar» y «Por pagar» dejan de ser texto: llevan a 🧾 Facturas y 👥 Nóminas.
 
-## Versiones desplegadas (v309 = actual)
+## ⚠️ UNA sola definición de "gasto del grupo" — los archivados volvían a $0 (v310)
+La pantalla de Gastos se contradecía: **`COSTO ACTUAL $0`** y justo debajo la torta con **$1.500**.
+Auditada la hoja REAL en solo lectura (gspread crudo, sin pasar por los helpers: tras tocar
+`PROJECTS_HEADERS` en v306, una "lectura" por ahí MIGRA la cabecera y escribe — regla v145):
+las 2 compras del grupo son de **PRJ-0001, archivado**. Ni huérfanas ni IDs fantasma.
+**Causa:** `group_expenses` recorría `list_projects(grupo)`, que **oculta los archivados desde
+v149**, mientras `por_categoria` suma por la columna `Grupo`. Archivar un proyecto no des-gasta el
+dinero → ahora las filas se sacan con `incluir_archivados=True` y el total del grupo es
+`compras_grupo` (todas las del grupo). El KPI y la torta por fin dicen lo mismo.
+- **Huérfanas visibles:** una compra sin `ProyectoID` (o de un proyecto borrado) se sigue contando
+  en el costo del grupo y ahora **se avisa** ("$X en N compras sin proyecto"), en vez de sumarla a
+  la torta y no verla en ninguna fila. Invariante que comprueba el test:
+  `total del grupo == Σ compras por proyecto + huérfanas`.
+- **El P&L usa la MISMA definición.** Había llegado a haber **tres** respuestas a la misma pregunta.
+- **Se quitó el bloque de barras «Compras por categoría»**: mostraba exactamente los mismos números
+  que la torta (mismas categorías, mismos $ y %). La torta se queda (la pidió el usuario en v224 y
+  además incluye la mano de obra).
+- **NO se le puso periodo** a esta pantalla, aunque estaba en el plan: «% consumido» y «proyección al
+  terminar» son acumulados contra un presupuesto de toda la obra, y un filtro por mes los haría
+  mentir. El P&L (v309) es el que responde "cómo fue agosto".
+### ⚠️ Dos tests que dieron OK EN FALSO (y cómo se cazaron)
+1. **v309 afirmó "sin periodo el total es idéntico" y era MENTIRA**: el mock de `list_projects`
+   devolvía la misma lista con y sin `incluir_archivados`, así que no podía ver la diferencia. En
+   producción las compras pasaron de $0 a $1.500 y la ganancia de $1.710 a $210 sin que el test se
+   enterara. → **Un mock que ignora el parámetro que estás probando garantiza un OK falso.**
+2. **`group_expenses` está CACHEADA (v108)**: el segundo caso del test devolvía el resultado del
+   primero (1.500 en vez de 1.700). → Limpiar `st.cache_data` entre casos.
+
+## Versiones desplegadas (v310 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -3591,6 +3619,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v310 | ⚠️ **Gastos decía `COSTO ACTUAL $0` con $1.500 en la torta**: `group_expenses` ocultaba los proyectos ARCHIVADOS (v149) y esas compras no contaban en ningún costo, presupuesto ni alerta. Auditada la hoja real (solo lectura): los $1.500 eran de PRJ-0001, archivado. Ahora hay UNA definición (todas las compras del grupo), el P&L usa la misma, las compras sin proyecto se avisan en vez de perderse, y se quitó el gráfico de barras que duplicaba la torta. Sin periodo a propósito (rompería «% consumido»). ⚠️ De paso: el test de v309 daba OK en falso porque el mock ignoraba `incluir_archivados` |
 | v309 | ⚠️ **Fallo en las 3 pantallas de dinero**: dos `$` en la misma cadena hacen que Streamlit la renderice como **LaTeX** — en Facturas la línea de Subtotal/Impuesto/Total salía como fórmula ilegible, en Nóminas igual, en el P&L desaparecían los `$` y el `metric` de Facturas perdía el símbolo. Nuevo `theme.dinero()` (formatea + escapa, idéntico al formato anterior) en los 5 sitios + guardián AST. Y el **P&L gana periodo** (mes/trimestre/año/todo), desglose por cliente, composición del costo y enlaces a Facturas/Nóminas |
 | v308 | Fichaje: ⚠️ **fix de un fallo introducido en v306** — se guardaba la ETIQUETA del desplegable (`prueba (PRJ-0007)`) como nombre del proyecto en la hoja; ahora va el nombre real. Y «Cambiar de proyecto» excluye el actual por ID (antes te ofrecía el que ya tenías abierto). + tarjeta **Esta semana** (lunes→hoy, sin lecturas nuevas) + el estado pasa de tarjeta KPI a franja + Jornada y Proyecto lado a lado (botones de 1350→523 px) |
 | v307 | Ruta del día aprovechada: ⚠️ el hueco blanco era `st_folium` dibujando a **500 px FIJOS** dentro de un bloque de 1110 (medido dentro del iframe) → `use_container_width=True` (también en HOME). Mapa + tarjetas de sitio en orden de recorrido, con «Cómo llegar» y la ruta completa a Google Maps (`ordenar_ruta`/`gmaps_dir_url` existían desde v270 y solo las usaba el campo). La tabla gana **horario** y **estado real** (🟢 fichado aquí / 🔴 fichó en X / ⚠️ sin fichar) sin lecturas nuevas. KPIs activos con contexto. Bug de camino: la persona cuya obra no tenía ubicación **desaparecía de la tabla** |

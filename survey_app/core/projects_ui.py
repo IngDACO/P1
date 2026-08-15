@@ -3146,6 +3146,7 @@ def render_group_profitability(grupo: str):
 
 def render_group_expenses(grupo: str):
     from core import expenses as E
+    from core import theme as T          # v309: `T.dinero` escapa el `$` (LaTeX)
     st.markdown("#### :material/payments: Gastos del grupo")
     if not E.is_configured():
         st.warning("Los gastos necesitan Google Sheets configurado.")
@@ -3156,7 +3157,12 @@ def render_group_expenses(grupo: str):
         st.info("No hay proyectos en el grupo.")
         return
 
-    tot     = sum(f["total"] for f in filas)
+    # ⚠️ v310: UNA sola definición de gasto del grupo. `filas` ya incluye los
+    # proyectos archivados, y `compras_grupo` son TODAS las compras del grupo
+    # (incluidas las huérfanas), así que el KPI y la torta por fin dicen lo mismo.
+    _mo   = round(sum(f["mano_obra"] for f in filas), 2)
+    _huer = ge.get("huerfanos", {"n": 0, "total": 0.0})
+    tot   = round(_mo + ge.get("compras_grupo", sum(f["compras"] for f in filas)), 2)
     tot_pres = sum(f["presupuesto"] for f in filas)
     tot_proj = sum((f["proyectado"] or f["total"]) for f in filas)
     con_pres = [f for f in filas if f["presupuesto"] > 0]
@@ -3166,16 +3172,21 @@ def render_group_expenses(grupo: str):
     pct_grupo = round(100 * tot / tot_pres) if tot_pres > 0 else None
 
     # ── KPIs del grupo ──
-    tarj = [_kpi_card("Costo actual", f"${tot:,.0f}"),
-            _kpi_card("Presupuesto", f"${tot_pres:,.0f}" if tot_pres else "—"),
+    tarj = [_kpi_card("Costo actual", T.dinero(tot, 0)),
+            _kpi_card("Presupuesto", T.dinero(tot_pres, 0) if tot_pres else "—"),
             _kpi_card("% consumido", f"{pct_grupo}%" if pct_grupo is not None else "—",
                       "#c0392b" if (pct_grupo or 0) > 100 else None),
-            _kpi_card("Proyección al terminar", f"${tot_proj:,.0f}",
+            _kpi_card("Proyección al terminar", T.dinero(tot_proj, 0),
                       "#c0392b" if (tot_pres and tot_proj > tot_pres) else None),
             _kpi_card("Sobre presupuesto", n_over, "#c0392b" if n_over else None)]
     st.markdown('<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:8px">'
                 + "".join(tarj) + "</div>", unsafe_allow_html=True)
 
+    # Dinero registrado que no cuelga de ningún proyecto: se DICE, no se descarta.
+    if _huer["n"]:
+        st.warning(f":material/help: **{T.dinero(_huer['total'], 0)} en {_huer['n']} compra(s) "
+                   "sin proyecto** (o de un proyecto borrado). Cuentan en el costo del grupo, "
+                   "pero no en el presupuesto de ninguna obra — asígnalas desde el recibo.")
     if n_over:
         st.error(f":material/block: **{n_over} proyecto(s) ya sobre presupuesto:** "
                  + ", ".join(f["nombre"] for f in filas if f["over"]))
@@ -3183,41 +3194,19 @@ def render_group_expenses(grupo: str):
         st.warning(f":material/warning: **{n_over_p} más se saldrá(n) al ritmo actual** (aún dentro hoy): "
                    + ", ".join(f["nombre"] for f in filas if f["over_proj"] and not f["over"]))
 
-    # ── Reparto del costo | Compras por categoría (doble columna, v215) ──
+    # ── Gasto por rubro (mano de obra + cada categoría de compra) ─────────
+    # ⚠️ v310: se quitó el bloque de barras «Compras por categoría». Mostraba
+    # EXACTAMENTE los mismos números que la torta (mismas categorías, mismos $ y
+    # mismos %): dos gráficos para el mismo dato. La torta se queda porque es la
+    # que el usuario pidió (v224) y además incluye la mano de obra.
     _catg = ge["por_categoria"]
-
-    def _blq_reparto_g():
-        st.markdown("**Reparto del costo del grupo**")
-        st.markdown(_barras_html(
-            [("Mano de obra", sum(f["mano_obra"] for f in filas)),
-             ("Compras", sum(f["compras"] for f in filas))], tot),
-            unsafe_allow_html=True)
-
-    def _blq_categorias_g():
-        st.markdown("**Compras por categoría**")
-        _c = sorted(_catg.items(), key=lambda x: -x[1])
-        st.markdown(_barras_html(_c, sum(v for _, v in _c), "#BA7517"),
-                    unsafe_allow_html=True)
-
-    if tot > 0 and _catg:
-        _gc1, _gc2 = st.columns(2, gap="large")
-        with _gc1:
-            _blq_reparto_g()
-        with _gc2:
-            _blq_categorias_g()
-    elif tot > 0:
-        _blq_reparto_g()
-    elif _catg:
-        _blq_categorias_g()
-
-    # ── Torta: gasto por rubro (Mano de obra + categorías) a ancho completo (v224) ──
-    _rubros = [("Mano de obra", sum(f["mano_obra"] for f in filas))]
-    _rubros += sorted(_catg.items(), key=lambda x: -x[1])
+    _rubros = [("Mano de obra", _mo)] + sorted(_catg.items(), key=lambda x: -x[1])
     _rubros = [(k, v) for k, v in _rubros if v and v > 0]
     if _rubros:
         st.markdown("**Gasto por rubro**")
         st.markdown(_torta_html(_rubros, sum(v for _, v in _rubros)),
                     unsafe_allow_html=True)
+
 
     # ── Proyectos CON presupuesto (tabla CLICKEABLE → abre el proyecto, v215) ──
     if con_pres:

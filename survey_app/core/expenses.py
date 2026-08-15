@@ -281,7 +281,12 @@ def group_expenses(grupo) -> dict:
     gastar", que es la pregunta de gestion.
     """
     from core import projects as P
-    proys, por_cat, filas = P.list_projects(grupo=grupo), {}, []
+    # ⚠️ v310: **incluir_archivados=True**. `list_projects` los oculta desde v149, así
+    # que las compras de un proyecto archivado desaparecían del KPI «Costo actual»
+    # mientras SÍ salían en la torta (que suma por la columna Grupo). Auditada la hoja
+    # real: los $1.500 del grupo eran de PRJ-0001, archivado → el KPI decía $0.
+    # Archivar un proyecto NO des-gasta el dinero: ese costo sigue siendo del grupo.
+    proys, por_cat, filas = P.list_projects(grupo=grupo, incluir_archivados=True), {}, []
     for p in proys:
         c  = project_cost(p.get("ID"), grupo)
         av = _num(p.get("Avance"))
@@ -295,11 +300,26 @@ def group_expenses(grupo) -> dict:
                       # se saldra del presupuesto al ritmo actual (aunque hoy aun no)
                       "over_proj": bool(c["presupuesto"] > 0 and proyectado
                                         and proyectado > c["presupuesto"])})
+    # Huérfanos (v310): compras del grupo que NO cuelgan de ningún proyecto suyo —
+    # sin `ProyectoID` o apuntando a uno borrado. Antes se sumaban a la torta y no
+    # aparecían en ninguna fila, así que el total por proyectos y el de la torta no
+    # cuadraban y nadie podía ver por qué. Ahora se DEVUELVEN para poder mostrarlos:
+    # dinero registrado no se descarta en silencio.
+    _ids = {str(p.get("ID", "")) for p in proys}
+    huerf_n, huerf_tot = 0, 0.0
     for r in _records():
         if str(r.get("Grupo", "")) == str(grupo):
             cat = str(r.get("Categoria", "")) or "Otros"
             por_cat[cat] = por_cat.get(cat, 0.0) + _num(r.get("Valor"))
-    return {"proyectos": filas, "por_categoria": {k: round(v, 2) for k, v in por_cat.items()}}
+            if str(r.get("ProyectoID", "")) not in _ids:
+                huerf_n += 1
+                huerf_tot += _num(r.get("Valor"))
+    return {"proyectos": filas,
+            "por_categoria": {k: round(v, 2) for k, v in por_cat.items()},
+            "huerfanos": {"n": huerf_n, "total": round(huerf_tot, 2)},
+            # `compras_grupo` = TODAS las compras del grupo (la definición única).
+            # Σ(compras por proyecto) + huérfanos, por construcción.
+            "compras_grupo": round(sum(v for v in por_cat.values()), 2)}
 
 
 # ── Escrituras ───────────────────────────────────────────────────

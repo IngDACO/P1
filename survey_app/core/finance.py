@@ -155,13 +155,14 @@ def pnl(grupo: str, desde=None, hasta=None) -> dict:
             por_pagar += _num(n.get("Neto"))
     costo_nomina = round(nbase + ndev + nap, 2)
 
-    # Compras: MISMO conjunto de filas que suma `group_expenses` (las de proyectos de
-    # este grupo), pero fila a fila para poder filtrar por fecha. Sin periodo el total
-    # es identico al anterior — está comprobado en el test, no supuesto.
-    _pids = {str(p.get("ID", "")) for p in P.list_projects(grupo=grupo,
-                                                           incluir_archivados=True)}
+    # Compras = TODAS las del grupo (v310, definición ÚNICA: la misma que usa la
+    # pantalla de Gastos). Antes esto filtraba por los proyectos del grupo, y en v309
+    # yo lo dejé incluyendo archivados mientras la pantalla de Gastos los excluía →
+    # la misma pregunta tenía tres respuestas distintas en la app. Se cuenta por la
+    # columna `Grupo`, así que una compra sin proyecto tampoco se pierde (la pantalla
+    # la muestra aparte como huérfana).
     compras = round(sum(_num(r.get("Valor")) for r in E._records()
-                        if str(r.get("ProyectoID", "")) in _pids
+                        if str(r.get("Grupo", "")).strip() == str(grupo).strip()
                         and _en_rango(r.get("Fecha"), desde, hasta)), 2)
     costo_total = round(costo_nomina + compras, 2)
     ganancia = round(facturado - costo_total, 2)
