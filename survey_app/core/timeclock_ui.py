@@ -204,124 +204,164 @@ def render_timeclock_tab():
                + "  ·  tus fichajes son privados.")
     _aviso_olvido(nombre, grupo, usuario, sess)
 
-    # ── Estado de un vistazo ──
+    # ── Estado: una FRANJA, no una tarjeta KPI (v308) ──
+    # "Sin fichar" no es una cifra y competía visualmente con las horas; además, sin
+    # haber fichado, la pantalla eran cuatro tarjetas a 0.00. Ahora el estado es una
+    # banda de color arriba y las tarjetas quedan solo para lo que son números.
     _est = ("En un proyecto" if prj else
             ("Jornada abierta, sin proyecto" if gen else "Sin fichar"))
     _col = _VERDE if prj else (_AZUL if gen else _GRIS)
-    tarj = [_tarjeta("Estado", _est, color=_col, activo=bool(gen or prj)),
-            _tarjeta("Jornada de hoy", f"{hoy['general']:.2f} h",
+    _det = (f"{prj['proyecto'] or '—'} · desde las {prj['clock_in'][11:16]}" if prj else
+            (f"desde las {gen['clock_in'][11:16]}" if gen else
+             "abre la jornada o ficha directamente a un proyecto"))
+    st.markdown(
+        f'<div style="border-left:4px solid {_col};background:#f8fafc;border-radius:8px;'
+        'padding:9px 14px;margin-bottom:12px;">'
+        f'<span style="font-weight:700;color:{_col};font-size:1.02rem;">{_est}</span>'
+        f'<span style="color:#6b7280;font-size:12.5px;"> · {_det}</span></div>',
+        unsafe_allow_html=True)
+
+    # Semana en curso (v308): lo que de verdad quiere saber quien ficha. Sale de los
+    # mismos registros cacheados → 0 lecturas nuevas.
+    try:
+        sem = timeclock.resumen_semana(nombre, grupo, usuario)
+    except Exception:
+        sem = {"general": 0.0, "proyecto": 0.0, "dias": 0}
+    tarj = [_tarjeta("Jornada de hoy", f"{hoy['general']:.2f} h",
                      "el tiempo pagado", _AZUL, bool(gen)),
             _tarjeta("Imputado a proyectos", f"{hoy['proyecto']:.2f} h",
                      f"{len(hoy['por_proyecto'])} proyecto(s)", _VERDE, bool(prj)),
             _tarjeta("Sin asignar", f"{hoy['sin_asignar']:.2f} h",
                      "traslados, espera o proyecto sin fichar",
-                     _ROJO if hoy["sin_asignar"] > 2 else None)]
+                     _ROJO if hoy["sin_asignar"] > 2 else None),
+            _tarjeta("Esta semana", f"{sem['general']:.2f} h",
+                     f"lunes a hoy · {sem['dias']} día(s)", _AZUL)]
     st.markdown('<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px">'
                 + "".join(tarj) + "</div>", unsafe_allow_html=True)
 
-    # ── Jornada general ──
-    st.markdown("#### :material/schedule: Jornada")
-    if gen:
-        _chronometer(gen["clock_in"], "Llevas abierta", _AZUL, "chrono_gen")
-        st.caption(f"Desde las {gen['clock_in'][11:16]}."
-                   + ("  Al cerrarla se cierra también el proyecto en curso." if prj else ""))
-        if st.button(":material/cancel: Cerrar la jornada", use_container_width=True, key="tc_gen_out"):
-            ok, msg = timeclock.cerrar_jornada(nombre, grupo, usuario)
-            (st.success if ok else st.error)(msg)
-            if ok:
-                st.rerun()
-    else:
-        st.caption("La jornada es tu tiempo de trabajo del día. Se abre sola al "
-                   "fichar a un proyecto, o puedes abrirla aquí.")
-        if st.button(":material/check_circle: Abrir jornada", use_container_width=True, key="tc_gen_in",
-                     type="primary"):
-            ok, msg = timeclock.clock_in(nombre, "", "", grupo,
-                                         tipo=timeclock.TIPO_GENERAL, usuario=usuario)
-            (st.success if ok else st.error)(msg)
-            if ok:
-                st.rerun()
+    # ── Las DOS acciones, lado a lado (v308) ──────────────────────
+    # Antes iban apiladas y separadas por una línea, con los botones estirados a todo
+    # el ancho. ⚠️ En móvil —donde el campo usa esto— Streamlit apila las columnas
+    # solo, así que no se pierde nada; en PC se acaba el scroll y el botón de 1350 px.
+    col_jor, col_prj = st.columns(2, gap="large")
 
-    st.markdown("---")
+    # ── Jornada general ──
+    with col_jor:
+        st.markdown("#### :material/schedule: Jornada")
+        if gen:
+            _chronometer(gen["clock_in"], "Llevas abierta", _AZUL, "chrono_gen")
+            st.caption(f"Desde las {gen['clock_in'][11:16]}."
+                       + ("  Al cerrarla se cierra también el proyecto en curso." if prj else ""))
+            if st.button(":material/cancel: Cerrar la jornada", use_container_width=True, key="tc_gen_out"):
+                ok, msg = timeclock.cerrar_jornada(nombre, grupo, usuario)
+                (st.success if ok else st.error)(msg)
+                if ok:
+                    st.rerun()
+        else:
+            st.caption("La jornada es tu tiempo de trabajo del día. Se abre sola al "
+                       "fichar a un proyecto, o puedes abrirla aquí.")
+            if st.button(":material/check_circle: Abrir jornada", use_container_width=True, key="tc_gen_in",
+                         type="primary"):
+                ok, msg = timeclock.clock_in(nombre, "", "", grupo,
+                                             tipo=timeclock.TIPO_GENERAL, usuario=usuario)
+                (st.success if ok else st.error)(msg)
+                if ok:
+                    st.rerun()
 
     # ── Segmento por proyecto ──
-    st.markdown("#### :material/apartment: Proyecto")
-    proys, propios = _proyectos_para(rol, usuario, grupo)
-    # ⚠️ Un dict comprehension por NOMBRE descarta homonimos en silencio y ese
-    # proyecto se volveria imposible de fichar (mismo fallo que en v147). El
-    # nombre puede repetirse: `create_project` solo AVISA de duplicados.
-    # v306: el desempate estaba escrito AQUI a mano y solo marcaba el segundo homonimo
-    # (el primero se quedaba sin ID, asi que seguian sin poder distinguirse). Ahora sale
-    # de `P.etiqueta_proyectos`, la misma que usan Panel/Facturas/Inventario.
-    from core import projects as _P
-    idmap = {_lbl: _pid for _pid, _lbl in _P.etiqueta_proyectos(proys).items()}
+    _prj_ctx = col_prj
+    with _prj_ctx:
+        st.markdown("#### :material/apartment: Proyecto")
+        proys, propios = _proyectos_para(rol, usuario, grupo)
+        # ⚠️ Un dict comprehension por NOMBRE descarta homonimos en silencio y ese
+        # proyecto se volveria imposible de fichar (mismo fallo que en v147). El
+        # nombre puede repetirse: `create_project` solo AVISA de duplicados.
+        # v306: el desempate estaba escrito AQUI a mano y solo marcaba el segundo homonimo
+        # (el primero se quedaba sin ID, asi que seguian sin poder distinguirse). Ahora sale
+        # de `P.etiqueta_proyectos`, la misma que usan Panel/Facturas/Inventario.
+        from core import projects as _P
+        idmap = {_lbl: _pid for _pid, _lbl in _P.etiqueta_proyectos(proys).items()}
+        # ⚠️ v308: el NOMBRE limpio, aparte de la etiqueta. La etiqueta puede llevar el ID
+        # detrás (`prueba (PRJ-0007)`) y se estaba pasando como nombre a `fichar_proyecto`,
+        # que lo escribe TAL CUAL en la columna `Proyecto` de la hoja → el fichaje quedaba
+        # con un nombre inventado. No rompía las cuentas (manda el ProyectoID desde v145),
+        # pero el dato guardado tiene que ser el nombre de verdad.
+        _nom_de = {str(p.get("ID", "")): str(p.get("Nombre", "")) for p in proys}
 
-    if prj:
-        st.markdown(f"Estás en **{prj['proyecto'] or '—'}**")
-        _chronometer(prj["clock_in"], "En este proyecto", _VERDE, "chrono_prj")
-        c1, c2 = st.columns(2)
-        if c1.button(":material/cancel: Salir del proyecto", use_container_width=True, key="tc_prj_out"):
-            ok, msg = timeclock.clock_out(nombre, grupo,
-                                          tipo=timeclock.TIPO_PROYECTO, usuario=usuario)
-            (st.success if ok else st.error)(msg)
-            if ok:
-                st.rerun()
-        _otros = {k: v for k, v in idmap.items() if k != prj["proyecto"]}
-        if _otros:
-            with c2:
-                _nuevo = ui.elegir("Cambiar de proyecto", _otros, key="tc_switch",
-                                   vacio="— cambiar a… —")
-                if st.button(":material/sync: Cambiar", use_container_width=True, key="tc_switch_btn",
-                             disabled=(_nuevo is None)):
-                    _nom = next(k for k, v in _otros.items() if v == _nuevo)
-                    ok, msg = timeclock.switch_project(nombre, grupo, _nom,
-                                                       usuario=usuario, new_pid=_nuevo)
-                    (st.success if ok else st.error)(msg)
-                    if ok:
-                        st.rerun()
-    elif not idmap:
-        st.info("No hay proyectos disponibles para fichar. Pídele al administrador "
-                "que te asigne uno.")
-    else:
-        if not propios:
-            st.caption("No tienes proyectos asignados; se muestran los de tu grupo.")
-        # ── Atajo: tu asignación de hoy (del roster) ──
-        # Accion EXPLICITA (dice a que fichara), no una preseleccion silenciosa (v138).
-        try:
-            from core import roster
-            if roster.is_configured():
-                _aa = roster.asignaciones_dia(grupo, usuario)   # v274: varias por día
-                _hechos = set()
-                for _a in _aa:
-                    _rpid = (_a or {}).get("proyecto_id", "")
-                    if not _rpid or _rpid in _hechos or _rpid not in idmap.values():
-                        continue
-                    _hechos.add(_rpid)
-                    _rnom = next(k for k, v in idmap.items() if v == _rpid)
-                    if st.button(f":material/check_circle: Fichar a {_a['etiqueta']} (tu asignación de hoy)",
-                                 use_container_width=True, type="primary",
-                                 key=f"tc_roster_in_{_rpid}"):
-                        ok, msg, auto = timeclock.fichar_proyecto(
-                            nombre, _rnom, grupo, usuario, _rpid)
+        if prj:
+            st.markdown(f"Estás en **{prj['proyecto'] or '—'}**")
+            _chronometer(prj["clock_in"], "En este proyecto", _VERDE, "chrono_prj")
+            c1, c2 = st.columns(2)
+            if c1.button(":material/cancel: Salir del proyecto", use_container_width=True, key="tc_prj_out"):
+                ok, msg = timeclock.clock_out(nombre, grupo,
+                                              tipo=timeclock.TIPO_PROYECTO, usuario=usuario)
+                (st.success if ok else st.error)(msg)
+                if ok:
+                    st.rerun()
+            # ⚠️ v308: se excluye el proyecto actual por **ID**, no comparando la etiqueta
+            # del desplegable contra el nombre guardado en el fichaje. Con homónimos la
+            # etiqueta lleva el ID y el nombre no, así que no coincidían nunca y te ofrecía
+            # "cambiar" al proyecto en el que YA estás. `open_sessions` trae `proyecto_id`
+            # desde v145 justamente para esto.
+            _pid_actual = str(prj.get("proyecto_id", "") or "")
+            _otros = {k: v for k, v in idmap.items()
+                      if (v != _pid_actual if _pid_actual else k != prj["proyecto"])}
+            if _otros:
+                with c2:
+                    _nuevo = ui.elegir("Cambiar de proyecto", _otros, key="tc_switch",
+                                       vacio="— cambiar a… —")
+                    if st.button(":material/sync: Cambiar", use_container_width=True, key="tc_switch_btn",
+                                 disabled=(_nuevo is None)):
+                        _nom = _nom_de.get(_nuevo, "")
+                        ok, msg = timeclock.switch_project(nombre, grupo, _nom,
+                                                           usuario=usuario, new_pid=_nuevo)
+                        (st.success if ok else st.error)(msg)
                         if ok:
-                            st.success(msg + ("  :material/schedule: Se abrió también tu jornada." if auto else ""))
                             st.rerun()
-                        else:
-                            st.error(msg)
-                if _hechos:
-                    st.caption("O elige otro proyecto abajo.")
-        except Exception:
-            pass
-        _pid = ui.elegir("¿En qué proyecto vas a trabajar?", idmap, key="tc_prj_sel",
-                         vacio="— elige el proyecto —")
-        if st.button(":material/check_circle: Fichar al proyecto", use_container_width=True, type="primary",
-                     key="tc_prj_in", disabled=(_pid is None)):
-            _nom = next(k for k, v in idmap.items() if v == _pid)
-            ok, msg, auto = timeclock.fichar_proyecto(nombre, _nom, grupo, usuario, _pid)
-            if ok:
-                st.success(msg + ("  :material/schedule: Se abrió también tu jornada." if auto else ""))
-                st.rerun()
-            else:
-                st.error(msg)
+        elif not idmap:
+            st.info("No hay proyectos disponibles para fichar. Pídele al administrador "
+                    "que te asigne uno.")
+        else:
+            if not propios:
+                st.caption("No tienes proyectos asignados; se muestran los de tu grupo.")
+            # ── Atajo: tu asignación de hoy (del roster) ──
+            # Accion EXPLICITA (dice a que fichara), no una preseleccion silenciosa (v138).
+            try:
+                from core import roster
+                if roster.is_configured():
+                    _aa = roster.asignaciones_dia(grupo, usuario)   # v274: varias por día
+                    _hechos = set()
+                    for _a in _aa:
+                        _rpid = (_a or {}).get("proyecto_id", "")
+                        if not _rpid or _rpid in _hechos or _rpid not in idmap.values():
+                            continue
+                        _hechos.add(_rpid)
+                        _rnom = _nom_de.get(_rpid, "")     # v308: el nombre, no la etiqueta
+                        if st.button(f":material/check_circle: Fichar a {_a['etiqueta']} (tu asignación de hoy)",
+                                     use_container_width=True, type="primary",
+                                     key=f"tc_roster_in_{_rpid}"):
+                            ok, msg, auto = timeclock.fichar_proyecto(
+                                nombre, _rnom, grupo, usuario, _rpid)
+                            if ok:
+                                st.success(msg + ("  :material/schedule: Se abrió también tu jornada." if auto else ""))
+                                st.rerun()
+                            else:
+                                st.error(msg)
+                    if _hechos:
+                        st.caption("O elige otro proyecto abajo.")
+            except Exception:
+                pass
+            _pid = ui.elegir("¿En qué proyecto vas a trabajar?", idmap, key="tc_prj_sel",
+                             vacio="— elige el proyecto —")
+            if st.button(":material/check_circle: Fichar al proyecto", use_container_width=True, type="primary",
+                         key="tc_prj_in", disabled=(_pid is None)):
+                _nom = _nom_de.get(_pid, "")               # v308: el nombre, no la etiqueta
+                ok, msg, auto = timeclock.fichar_proyecto(nombre, _nom, grupo, usuario, _pid)
+                if ok:
+                    st.success(msg + ("  :material/schedule: Se abrió también tu jornada." if auto else ""))
+                    st.rerun()
+                else:
+                    st.error(msg)
 
     # ── Lo de hoy, por proyecto ──
     if hoy["por_proyecto"]:

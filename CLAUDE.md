@@ -3520,7 +3520,40 @@ un caption muerto al fondo.
 ⚠️ Chequeo que falló por mi propio comentario: `'[:18]' not in src` daba FALLO porque el comentario
 que explica que se quitó ese corte contiene `[:18]`. Se rehízo por AST (trampa nº2 de este documento).
 
-## Versiones desplegadas (v307 = actual)
+## Fichaje: fix del nombre guardado + la semana + dos columnas (v308)
+### ⚠️ FALLO INTRODUCIDO EN v306 (encontrado al auditar esta pantalla)
+`fichar_proyecto(nombre, proyecto, …)` escribe `proyecto` TAL CUAL en la columna `Proyecto` de la
+hoja, y la UI le pasaba `next(k for k, v in idmap.items() if v == _pid)` — o sea, **la etiqueta del
+desplegable**. Desde v306 esa etiqueta lleva el ID cuando hay homónimos, así que el fichaje habría
+guardado `prueba (PRJ-0007)` como nombre del proyecto. No rompía las cuentas (manda el `ProyectoID`
+desde v145) pero el dato quedaba inventado. Ahora hay un `_nom_de = {ID: Nombre}` aparte y la
+etiqueta **solo se muestra**. LECCIÓN: al cambiar lo que muestra un selector, revisar qué se GUARDA
+desde él — la etiqueta y el dato son cosas distintas.
+- Hermano del mismo error, este anterior a v306: **«Cambiar de proyecto» excluía el actual comparando
+  la etiqueta contra el nombre guardado** (`k != prj["proyecto"]`), así que con homónimos te ofrecía
+  cambiar al proyecto en el que YA estabas. Ahora se excluye por `prj["proyecto_id"]` (que
+  `open_sessions` devuelve desde v145 justo para esto), con respaldo al nombre para fichajes viejos.
+### `timeclock.resumen_semana(nombre, grupo, usuario)`
+La pregunta de quien ficha es "¿cuánto llevo esta semana?" y no se podía responder: `resumen_hoy`
+solo cuenta el día. Nueva tarjeta **Esta semana** (lunes→hoy + nº de días con jornada). Sale de
+`_cached_records` → **0 lecturas nuevas**. ⚠️ Semana NATURAL, no `group_hours(days=7)`: esa es una
+ventana móvil (un lunes por la mañana arrastraría el viernes anterior) y además con `days=0` se
+interpretaría como "todo el histórico".
+### Estructura
+El **estado deja de ser una tarjeta KPI** (no es una cifra, y sin fichar la pantalla eran cuatro
+ceros): pasa a una franja de color con el detalle al lado. Jornada y Proyecto van ahora **lado a
+lado** en vez de apilados con un divisor y botones de 1350 px (medido después: 523 px, y los
+anidados 253 sin partir texto). ⚠️ En móvil Streamlit apila las columnas solo, así que el campo
+—que es quien más usa esta pantalla— no pierde nada.
+- ⚠️ La reindentación del bloque de Proyecto bajo su columna se hizo POR SCRIPT midiendo el rango
+  (es la clase de cambio que rompió v120 y v148): 0 líneas perdidas y verificado por AST que cada
+  columna se quedó exactamente con sus widgets (`col_jor`: tc_gen_*; `_prj_ctx`: tc_prj_*/tc_switch*)
+  y que no hay keys duplicadas.
+- ⚠️ Comprobado en vivo que `st.columns` DENTRO de una columna **no revienta** en Streamlit 1.57
+  (ni dos niveles). La nota de v217 sobre "doble anidación de columnas" era cautela, no un límite
+  real; lo que sí es error de Streamlit es el expander dentro de expander (v210).
+
+## Versiones desplegadas (v308 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -3528,6 +3561,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v308 | Fichaje: ⚠️ **fix de un fallo introducido en v306** — se guardaba la ETIQUETA del desplegable (`prueba (PRJ-0007)`) como nombre del proyecto en la hoja; ahora va el nombre real. Y «Cambiar de proyecto» excluye el actual por ID (antes te ofrecía el que ya tenías abierto). + tarjeta **Esta semana** (lunes→hoy, sin lecturas nuevas) + el estado pasa de tarjeta KPI a franja + Jornada y Proyecto lado a lado (botones de 1350→523 px) |
 | v307 | Ruta del día aprovechada: ⚠️ el hueco blanco era `st_folium` dibujando a **500 px FIJOS** dentro de un bloque de 1110 (medido dentro del iframe) → `use_container_width=True` (también en HOME). Mapa + tarjetas de sitio en orden de recorrido, con «Cómo llegar» y la ruta completa a Google Maps (`ordenar_ruta`/`gmaps_dir_url` existían desde v270 y solo las usaba el campo). La tabla gana **horario** y **estado real** (🟢 fichado aquí / 🔴 fichó en X / ⚠️ sin fichar) sin lecturas nuevas. KPIs activos con contexto. Bug de camino: la persona cuya obra no tenía ubicación **desaparecía de la tabla** |
 | v306 | **Identidad por ID.** Los 3 sitios que aún casaban proyectos por NOMBRE pasan a ID vía `projects.etiqueta_proyectos` (Panel→Asignar hacía desaparecer un homónimo del desplegable; **Facturas enlazaba el importe al proyecto equivocado**; Inventario guardaba el nombre y ahora guarda `PRJ-####`). + **Tipo de proyecto** (Instalación/Delivery/Ripout/Otro): ⚠️ solo Instalación genera el cronograma estándar — antes un delivery nacía con 11 actividades falsas que ensuciaban avance, SPI y el radar. + **El ID a la vista** en tarjeta, lista (1ª columna), detalle y buscador. Guardián AST permanente contra volver a indexar proyectos por nombre |
 | v305 | Resumen del día: los 9 indicadores pasan de 3 filas a **2 (5+4)** → bloque 232→192 px (del original 304). El alto del botón ya estaba en su suelo (35 px), así que la palanca era el nº de filas. Medido: en UNA fila solo caben con ≥1180 px de contenido y por debajo se parten 4 etiquetas. Guardián nuevo: `zip` trunca en silencio si una fila tuviera más elementos que columnas |

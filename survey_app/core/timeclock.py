@@ -519,6 +519,39 @@ def resumen_hoy(nombre: str, grupo: str = "", usuario: str = "") -> dict:
     return out
 
 
+def resumen_semana(nombre: str, grupo: str = "", usuario: str = "") -> dict:
+    """Horas de esta persona en la SEMANA EN CURSO (lunes → hoy): {general, proyecto, dias}.
+
+    Es la pregunta que se hace quien ficha ("¿cuánto llevo esta semana?"), y no se podía
+    responder: `resumen_hoy` solo cuenta el día. Misma fuente cacheada, así que **no añade
+    ni una lectura de Sheets** ([[constraint-cuota-sheets]]).
+
+    ⚠️ Semana NATURAL desde el lunes, no "últimas 168 horas": un lunes por la mañana
+    tiene que decir ~0, no arrastrar el viernes anterior. `group_hours(days=7)` es una
+    ventana móvil y por eso no vale aquí (además, con `days=0` se interpretaría como
+    'todo el histórico').
+    """
+    hoy = clock.now(grupo).date()
+    lunes = hoy - timedelta(days=hoy.weekday())
+    out = {"general": 0.0, "proyecto": 0.0, "dias": 0}
+    _dias = set()
+    for r in _cached_records():                      # lectura cacheada (display)
+        if not _matches(r, usuario, nombre, grupo):
+            continue
+        for d, hh in _row_segmentos(r):
+            if hh <= 0 or not (lunes <= d <= hoy):
+                continue
+            if _tipo_of(r) == TIPO_GENERAL:
+                out["general"] += hh
+                _dias.add(d)
+            else:
+                out["proyecto"] += hh
+    out["general"] = round(out["general"], 2)
+    out["proyecto"] = round(out["proyecto"], 2)
+    out["dias"] = len(_dias)                         # días con jornada abierta
+    return out
+
+
 def mis_fichajes(nombre: str, grupo: str = "", usuario: str = "", limite: int = 8) -> list:
     """Los ultimos fichajes de esta persona (los suyos, no los del grupo)."""
     filas = []
