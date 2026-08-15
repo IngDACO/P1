@@ -237,6 +237,57 @@ def conciliacion_mo(grupo: str, desde=None, hasta=None) -> dict:
     }
 
 
+def resultado_por_proyecto(grupo: str) -> list:
+    """Cada obra: lo facturado contra lo que costó. `[{id, nombre, facturado, mo,
+    compras, costo, resultado, margen}]`, solo las que tienen algo.
+
+    ⚠️ **ACUMULADO a propósito: ignora el selector de periodo.** Casar un ingreso con
+    los costos que lo produjeron es justo lo que un P&L por mes natural NO puede hacer:
+    en el grupo real la factura es del 09/08 y las compras del 28/07, así que «Este mes»
+    daba una ganancia de $1.710 cuando la obra entera dejó $210,42. Una obra se mide de
+    principio a fin, no por meses.
+
+    ⚠️ El costo aquí es el **cargado a la obra** (horas imputadas × tarifa + compras),
+    NO lo que sale de caja: los aportes de ley y las horas sin imputar no son de ninguna
+    obra en concreto — los cubre el margen. Ver `conciliacion_mo`.
+    """
+    from core import invoices as INV
+
+    fac = INV.facturado_por_proyecto(grupo)
+    out = []
+    for p in P.list_projects(grupo=grupo, incluir_archivados=True):
+        pid = str(p.get("ID", ""))
+        f = _num(fac.get(pid, 0))
+        mo = _num(E.labor_cost(pid, grupo))
+        co = _num(E.project_expenses(pid).get("total"))
+        if f <= 0 and mo <= 0 and co <= 0:
+            continue                       # obra sin movimiento: no aporta nada al cuadro
+        costo = round(mo + co, 2)
+        out.append({"id": pid, "nombre": str(p.get("Nombre", "")),
+                    "facturado": round(f, 2), "mo": round(mo, 2), "compras": round(co, 2),
+                    "costo": costo, "resultado": round(f - costo, 2),
+                    "margen": (round(100.0 * (f - costo) / f, 1) if f > 0 else None)})
+    return sorted(out, key=lambda r: -r["facturado"])
+
+
+def sin_facturar(grupo: str) -> list:
+    """`[(nombre, importe)]` de obras con trabajo hecho y aún NO facturado.
+
+    Es dinero ganado que no se ha pedido. No estaba en ninguna pantalla: había que
+    entrar a crear una factura para enterarse.
+    """
+    from core import invoices as INV
+    out = []
+    for p in P.list_projects(grupo=grupo, incluir_archivados=True):
+        try:
+            v = INV.pendiente_de_facturar(str(p.get("ID", "")), grupo, p)
+        except Exception:
+            v = 0.0
+        if v > 0:
+            out.append((str(p.get("Nombre", "")), round(v, 2)))
+    return sorted(out, key=lambda x: -x[1])
+
+
 def _por_cliente(facs) -> list:
     """[(cliente, facturado)] ordenado desc. Del lado del INGRESO se puede desglosar
     honestamente porque la factura lleva cliente.

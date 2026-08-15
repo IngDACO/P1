@@ -3068,18 +3068,19 @@ def render_expenses(pid, grupo, can_delete=False, key_prefix="ex"):
 
 # ── Reporte del ADMIN: gastos de todos los proyectos del grupo ──
 def render_pnl(grupo: str):
-    """Resumen financiero del grupo (Fase 4): ingresos − costos = ganancia + cuentas.
+    """Resumen financiero del grupo: torre de control, no una lista de cifras (v317).
 
-    Lo REALMENTE facturado (facturas) menos los costos (nóminas + compras). La
-    sub-pestaña «Rentabilidad» es la estimación por margen; esto es lo ejecutado.
+    Toma las dos mecanicas que ya funcionan en la app: la **rejilla fija de indicadores
+    clickeables** del «Resumen del dia» de HOME (v196/v199) y la **fila de herramientas
+    que se abren debajo** del Panel de planificacion (v287). Todo sale de lectores
+    cacheados -> 0 lecturas nuevas de Sheets.
     """
     from core import finance as F
-    st.markdown("#### :material/insights: Resumen financiero (P&L)")
+    from core import theme as T
     st.caption("Lo realmente facturado menos los costos (nóminas + compras) = ganancia. "
                "«Rentabilidad» es la estimación por margen; esto es lo ejecutado.")
-    # ── Periodo (v309) ───────────────────────────────────────────
-    # Un P&L sin fechas decia "desde siempre", que no es un estado de resultados.
-    from core import theme as T
+
+    # ── Periodo ──────────────────────────────────────────────────
     _hoy = clock.today(grupo)
     _per = st.radio("Periodo", ["Este mes", "Trimestre", "Este año", "Todo"],
                     horizontal=True, key="cpxseg_pnl_per", label_visibility="collapsed")
@@ -3102,93 +3103,203 @@ def render_pnl(grupo: str):
     if _desde:
         st.caption(f":material/date_range: {_desde.strftime('%d/%m/%Y')} → "
                    f"{_hasta.strftime('%d/%m/%Y')}")
-    c = st.columns(3)
-    # ⚠️ `theme.dinero` escapa el `$`. Con dos importes en la misma cadena Streamlit
-    # los trata como LaTeX: el markdown salia como formula y el metric perdia el
-    # simbolo de moneda (v309). Con una sola cifra el escape es inofensivo.
-    c[0].metric("Ingresos (facturado)", T.dinero(d["facturado"], 0))
-    c[1].metric("Costos (lo que pagas)", T.dinero(d["costo_total"], 0),
-            help="Nóminas (jornada + aportes de ley) + compras. Es lo que sale de caja, NO lo que se le carga a las obras.")
-    c[2].metric("Ganancia", T.dinero(d["ganancia"], 0),
-                delta=(f"{(100 * d['ganancia'] / d['facturado']):.0f}% margen"
-                       if d["facturado"] > 0 else None))
-    st.markdown("---")
-    a, b = st.columns(2)
-    with a:
-        st.markdown("**:material/trending_up: Ingresos (cuentas por cobrar)**")
-        st.markdown(f"- Facturado: **{T.dinero(d['facturado'])}**")
-        st.markdown(f"- Cobrado: **{T.dinero(d['cobrado'])}**")
-        _pc = f"- Por cobrar: **{T.dinero(d['por_cobrar'])}**"
-        if d["vencido"] > 0:
-            _pc += f"  ·  :red[vencido {T.dinero(d['vencido'], 0)}]"
-        st.markdown(_pc)
-        if d["por_cobrar"] > 0 and st.button(":material/receipt: Ver facturas por cobrar",
-                                             key="pnl_ir_fac", use_container_width=True):
-            _ir_a("finanzas", "🧾 Facturas")
-        if d.get("por_cliente"):
-            st.markdown("**Facturado por cliente**")
-            st.markdown(_barras_html(d["por_cliente"], d["facturado"] or 1, T.AZUL),
-                        unsafe_allow_html=True)
-    with b:
-        st.markdown("**:material/trending_down: Costos (cuentas por pagar)**")
-        st.markdown(f"- Nóminas (sueldos + super): **{T.dinero(d['costo_nomina'])}**")
-        st.markdown(f"- Compras / materiales: **{T.dinero(d['compras'])}**")
-        st.markdown(f"- Por pagar (nóminas): **{T.dinero(d['por_pagar'])}**"
-                    f"  ·  pagado {T.dinero(d['pagado'], 0)}")
-        if d["por_pagar"] > 0 and st.button(":material/payments: Ver nóminas por pagar",
-                                            key="pnl_ir_nom", use_container_width=True):
-            _ir_a("finanzas", "👥 Nóminas")
-        # Composicion del costo. ⚠️ NO se reparte por proyecto: las nominas son por
-        # PERSONA y no por obra, asi que un "ganancia por proyecto" saldria inventado.
-        _comp = [(x, y) for x, y in (("Nóminas", d["costo_nomina"]),
-                                     ("Compras / materiales", d["compras"])) if y > 0]
-        if len(_comp) > 1:
-            st.markdown("**Composición del costo**")
-            st.markdown(_torta_html(_comp, d["costo_total"]), unsafe_allow_html=True)
 
-    # ── Conciliación: lo que PAGAS vs lo que CARGAS a las obras (v313) ──
-    # Las dos cifras son correctas y responden preguntas distintas; lo que faltaba era
-    # ver POR QUÉ no coinciden. Aquí está el margen real y por dónde se escapa.
-    _cc = None
+    # ── Las 3 cifras, con linea de contexto (como los KPI de HOME, v303) ──
+    _nfac = len(d.get("por_cliente") or [])
+    _mrg = (100 * d["ganancia"] / d["facturado"]) if d["facturado"] > 0 else None
+    st.markdown('<div style="display:flex;gap:10px;flex-wrap:wrap;margin:2px 0 6px">'
+                + _kpi_card("Ingresos (facturado)", T.dinero(d["facturado"], 0))
+                + _kpi_card("Costos (lo que pagas)", T.dinero(d["costo_total"], 0))
+                + _kpi_card("Ganancia", T.dinero(d["ganancia"], 0),
+                            T.VERDE if d["ganancia"] >= 0 else T.ROJO)
+                + "</div>", unsafe_allow_html=True)
+    st.caption(f"{_nfac} cliente(s) facturado(s)  ·  costos = nóminas + compras"
+               + (f"  ·  margen {_mrg:.0f}%" if _mrg is not None else ""))
+
+    # ── Rejilla FIJA de pendientes, clickeables (patron del Resumen del dia) ──
+    # ⚠️ Estructura fija (v196): siempre los mismos 8 y en el mismo orden, con su 0
+    # incluido. Que aparezcan y desaparezcan segun el dia es lo que hacia ilegible
+    # el resumen antes de v196.
+    _cc = {}
     try:
-        _cc = F.conciliacion_mo(grupo, _desde, _hasta)
+        _cc = F.conciliacion_mo(grupo, _desde, _hasta) or {}
     except Exception:
         pass
-    if _cc and (_cc["cargado"] or _cc["costo_real"]):
-        with st.expander(":material/compare_arrows: De lo que cargas a las obras "
-                         "a lo que pagas de verdad", expanded=False):
-            _fil = [("Cargado a las obras (horas imputadas × tarifa)", _cc["cargado"], ""),
-                    ("− horas cobradas que NO pagaste (imputadas sin jornada)",
-                     -_cc["cobrado_no_pagado"], "#c0392b"),
-                    ("+ horas pagadas que NO cargaste (traslados, espera)",
-                     _cc["pagado_no_cargado"], "#c77700"),
-                    ("= base que deberías pagar", _cc["base_teorica"], "bold"),
-                    ("Base realmente puesta en nóminas", _cc["base_nomina"], ""),
-                    ("+ aportes de ley (super)", _cc["aportes"], "#c77700"),
-                    ("= costo real de la mano de obra", _cc["costo_real"], "bold")]
-            _html = ['<table style="width:100%;border-collapse:collapse;font-size:13.5px">']
-            for _lb, _v, _st in _fil:
-                _b = "font-weight:700;border-top:1px solid #e6e9ef;" if _st == "bold" else ""
-                _c = f"color:{_st};" if _st.startswith("#") else ""
-                _html.append(f'<tr><td style="padding:4px 0;{_b}">{T._esc(_lb)}</td>'
-                             f'<td style="padding:4px 0;text-align:right;{_b}{_c}">'
-                             f'{T._esc(T.dinero(_v))}</td></tr>')
-            _html.append("</table>")
-            st.markdown("".join(_html), unsafe_allow_html=True)
-            if abs(_cc["sin_explicar"]) >= 1:
-                st.warning(f":material/warning: **{T.dinero(abs(_cc['sin_explicar']))} sin "
-                           "explicar** entre lo que deberías pagar y lo puesto en nóminas: "
-                           "trabajo aún sin nómina en este periodo, o nóminas editadas a mano.")
-            if _cc["cobrado_no_pagado"] >= 1:
-                st.error(f":material/error: **{T.dinero(_cc['cobrado_no_pagado'])} facturables "
-                         "que no te costaron nada**: alguien fichó a un proyecto **sin abrir "
-                         "jornada**, así que esas horas se cargan a la obra pero no entran en "
-                         "ninguna nómina. Infla tu margen.")
-            if _cc["sin_tarifa"]:
-                st.warning(":material/payments: Sin tarifa/hora, así que su trabajo cuenta "
-                           "como $0: **" + ", ".join(_cc["sin_tarifa"]) + "**.")
-            st.caption("Tu margen tiene que cubrir los aportes de ley y las horas que pagas "
-                       "sin poder cargarlas a ninguna obra.")
+    try:
+        _sf = F.sin_facturar(grupo)
+    except Exception:
+        _sf = []
+    try:
+        _sinmar = [r["nombre"] for r in F.group_profitability(grupo)["rows"]
+                   if P._num(r.get("margen")) <= 0]
+    except Exception:
+        _sinmar = []
+    try:
+        from core import expenses as _E
+        _over = [r["nombre"] for r in _E.over_budget(grupo)]
+    except Exception:
+        _over = []
+
+    # slug, icono, etiqueta, valor, urgente, hay_algo, seccion, sub, detalle()
+    _IND = [
+        ("venc", ":material/warning:", "Vencido", T.dinero(d["vencido"], 0), True,
+         d["vencido"] > 0, "finanzas", "🧾 Facturas",
+         lambda: f"{T.dinero(d['vencido'])} en facturas pasadas de su vencimiento."),
+        ("cobrar", ":material/receipt:", "Por cobrar", T.dinero(d["por_cobrar"], 0), False,
+         d["por_cobrar"] > 0, "finanzas", "🧾 Facturas",
+         lambda: f"{T.dinero(d['por_cobrar'])} facturados y aún sin cobrar."),
+        ("sinfac", ":material/request_quote:", "Sin facturar",
+         T.dinero(sum(v for _n, v in _sf), 0), True, bool(_sf), "finanzas", "🧾 Facturas",
+         lambda: " · ".join(f"{n}: {T.dinero(v, 0)}" for n, v in _sf[:8])
+                 or "Todo lo trabajado está facturado."),
+        ("pagar", ":material/payments:", "Por pagar", T.dinero(d["por_pagar"], 0), False,
+         d["por_pagar"] > 0, "finanzas", "👥 Nóminas",
+         lambda: f"{T.dinero(d['por_pagar'])} en nóminas emitidas sin marcar pagadas."),
+        ("sinnom", ":material/schedule:", "Horas sin nómina",
+         T.dinero(_cc.get("cobrado_no_pagado", 0), 0), True,
+         _cc.get("cobrado_no_pagado", 0) >= 1, "finanzas", "👥 Nóminas",
+         lambda: "Horas imputadas a una obra SIN jornada abierta: se cargan al cliente "
+                 "pero no entran en ninguna nómina, así que inflan el margen."),
+        ("sintar", ":material/person_off:", "Sin tarifa",
+         f"{len(_cc.get('sin_tarifa') or [])} pers.", False,
+         bool(_cc.get("sin_tarifa")), "planificacion", "👷 Usuarios",
+         lambda: "Su trabajo cuenta como $0: " + ", ".join(_cc.get("sin_tarifa") or [])),
+        ("sinmar", ":material/percent:", "Sin margen", f"{len(_sinmar)} obras", False,
+         bool(_sinmar), "finanzas", "📈 Rentabilidad",
+         lambda: "Se factura al costo (ganancia estimada $0): " + ", ".join(_sinmar[:8])),
+        ("over", ":material/trending_down:", "Sobre ppto.", f"{len(_over)}", True,
+         bool(_over), "finanzas", "💰 Gastos",
+         lambda: ", ".join(_over[:8]) or "Ninguna obra pasada de presupuesto."),
+    ]
+    st.markdown("**:material/notifications: Pendientes**")
+    _css = ["<style>"]
+    for _s, _i, _l, _v, _u, _hay, _sec, _sub, _fn in _IND:
+        _bg, _fg = (("#fdecec", "#c0392b") if _u else ("#fff4e0", "#c77700")) \
+                   if _hay else ("#f4f6f9", "#9aa7b8")
+        _css.append(f".st-key-pnlind_{_s} button{{background:{_bg}!important;"
+                    f"color:{_fg}!important;border-color:{_bg}!important;"
+                    "min-height:0!important;padding:4px 8px!important;}")
+    _css.append("</style>")
+    st.markdown("".join(_css), unsafe_allow_html=True)
+    # 2 filas de 4 (v305: 3 filas era mas alto y una sola no cabe sin partir etiquetas)
+    for _fila in (_IND[:4], _IND[4:]):
+        for _col, _x in zip(st.columns(4), _fila):
+            if _col.button(f"{_x[1]} {_x[2]} · {_x[3]}", key=f"pnlind_{_x[0]}",
+                           use_container_width=True,
+                           help="Ver el detalle e ir a resolverlo"):
+                _cur0 = st.session_state.get("_pnl_ind")
+                st.session_state["_pnl_ind"] = None if _cur0 == _x[0] else _x[0]
+                st.rerun()
+    _sel = st.session_state.get("_pnl_ind")
+    _it = next((x for x in _IND if x[0] == _sel), None) if _sel else None
+    if _it:
+        st.markdown(f"**{_it[1]} {_it[2]} — {_it[3]}**")
+        st.caption(_it[8]())
+        if st.button(f"→ Ir a {_it[7].split(chr(32), 1)[-1]}", key=f"pnlgo_{_it[0]}",
+                     type="primary"):
+            _ir_a(_it[6], _it[7])
+
+    # ── Composicion del costo: FIJA (decision del usuario) ────────
+    _comp = [(x, y) for x, y in (("Nóminas", d["costo_nomina"]),
+                                 ("Compras / materiales", d["compras"])) if y > 0]
+    if len(_comp) > 1:
+        st.markdown("**:material/pie_chart: Composición del costo**")
+        st.markdown(_torta_html(_comp, d["costo_total"]), unsafe_allow_html=True)
+
+    # ── Herramientas, se abren debajo (patron del Panel) ──────────
+    _TOOLS = [("conc", ":material/compare_arrows: Conciliación"),
+              ("cli", ":material/groups: Por cliente"),
+              ("prj", ":material/apartment: Por proyecto")]
+    _tc = st.columns(len(_TOOLS))
+    _cur = st.session_state.get("_pnl_tool", "")
+    for _i2, (_k, _lbl) in enumerate(_TOOLS):
+        if _tc[_i2].button(_lbl, key=f"pnltool_{_k}", use_container_width=True):
+            st.session_state["_pnl_tool"] = "" if _cur == _k else _k
+            st.rerun()
+    if _cur:
+        with st.container(border=True):
+            if _cur == "conc":
+                _pnl_conciliacion(_cc, T)
+            elif _cur == "cli":
+                st.markdown("**Facturado por cliente**")
+                if d.get("por_cliente"):
+                    st.markdown(_barras_html(d["por_cliente"], d["facturado"] or 1, T.AZUL),
+                                unsafe_allow_html=True)
+                else:
+                    st.caption("Sin facturas en este periodo.")
+            else:
+                _pnl_por_proyecto(grupo, T)
+
+
+def _pnl_conciliacion(cc: dict, T):
+    """El puente entre lo que se CARGA a las obras y lo que se PAGA (v313)."""
+    if not cc:
+        st.caption("No se pudo calcular la conciliación.")
+        return
+    _fil = [("Cargado a las obras (horas imputadas × tarifa)", cc["cargado"], ""),
+            ("− horas cobradas que NO pagaste (imputadas sin jornada)",
+             -cc["cobrado_no_pagado"], "#c0392b"),
+            ("+ horas pagadas que NO cargaste (traslados, espera)",
+             cc["pagado_no_cargado"], "#c77700"),
+            ("= base que deberías pagar", cc["base_teorica"], "bold"),
+            ("Base realmente puesta en nóminas", cc["base_nomina"], ""),
+            ("+ aportes de ley (super)", cc["aportes"], "#c77700"),
+            ("= costo real de la mano de obra", cc["costo_real"], "bold")]
+    _h = ['<table style="width:100%;border-collapse:collapse;font-size:13.5px">']
+    for _lb, _v, _st in _fil:
+        _b = "font-weight:700;border-top:1px solid #e6e9ef;" if _st == "bold" else ""
+        _c = f"color:{_st};" if _st.startswith("#") else ""
+        _h.append(f'<tr><td style="padding:4px 0;{_b}">{T._esc(_lb)}</td>'
+                  f'<td style="padding:4px 0;text-align:right;{_b}{_c}">'
+                  f'{T._esc(T.dinero(_v))}</td></tr>')
+    _h.append("</table>")
+    st.markdown("".join(_h), unsafe_allow_html=True)
+    if abs(cc["sin_explicar"]) >= 1:
+        st.warning(f":material/warning: **{T.dinero(abs(cc['sin_explicar']))} sin explicar** "
+                   "entre lo que deberías pagar y lo puesto en nóminas: trabajo aún sin "
+                   "nómina en este periodo, o nóminas editadas a mano.")
+    st.caption("Tu margen tiene que cubrir los aportes de ley y las horas que pagas sin "
+               "poder cargarlas a ninguna obra.")
+
+
+def _pnl_por_proyecto(grupo: str, T):
+    """Cada obra: facturado vs lo que costo.
+
+    ⚠️ ACUMULADO, ignora el selector de periodo — es justo lo que un P&L por mes
+    natural no puede responder: la factura y sus costos caen en meses distintos.
+    """
+    from core import finance as F
+    try:
+        rows = F.resultado_por_proyecto(grupo)
+    except Exception as e:
+        st.caption(f"No se pudo calcular: {e}")
+        return
+    if not rows:
+        st.caption("Ninguna obra tiene facturación ni costo todavía.")
+        return
+    st.caption(":material/info: **De principio a fin de cada obra**, sin filtrar por "
+               "periodo: es lo que un resumen por mes no puede decirte, porque la "
+               "factura y sus costos caen en meses distintos.")
+    st.dataframe(pd.DataFrame([{
+        "Proyecto": r["nombre"],
+        "Facturado": r["facturado"],
+        "Mano de obra": r["mo"],
+        "Compras": r["compras"],
+        "Resultado": r["resultado"],
+        "Margen %": r["margen"],
+    } for r in rows]), hide_index=True, use_container_width=True,
+        column_config={
+            "Facturado":    st.column_config.NumberColumn(format="$%.0f"),
+            "Mano de obra": st.column_config.NumberColumn(format="$%.0f"),
+            "Compras":      st.column_config.NumberColumn(format="$%.0f"),
+            "Resultado":    st.column_config.NumberColumn(format="$%.0f"),
+            "Margen %":     st.column_config.NumberColumn(format="%.1f%%"),
+        })
+    _t = sum(r["resultado"] for r in rows)
+    st.markdown(f"Resultado acumulado de las obras: **{T.dinero(_t, 0)}**")
+    st.caption("Costo = lo CARGADO a la obra (horas imputadas × tarifa + compras). Los "
+               "aportes de ley y las horas sin imputar no son de ninguna obra en "
+               "concreto: los cubre el margen (ver Conciliación).")
 
 
 def render_group_profitability(grupo: str):
