@@ -1837,9 +1837,17 @@ def _detalle_proyecto(pid: str, grupo: str = None):
                                            "✏️ Datos": ":material/edit: Datos",
                                            "💰 Costos": ":material/payments: Costos",
                                            "📎 Archivos": ":material/folder: Archivos"}.get(o, o),
-                    horizontal=True, key="prj_detalle_sec",
+                    # v316: key `cpxseg_*` → el SEGMENTADO del kit (v292): sin bolitas,
+                    # con marco y el elegido resaltado. Es la pieza para "una de N", que
+                    # es lo que son estas 4 secciones. ⚠️ NO se usa la fila de botones del
+                    # Panel: aquella es un acordeón de herramientas OPCIONALES (se pueden
+                    # cerrar todas); aquí siempre hay una sección abierta. Medido: la fila
+                    # de botones sale a 1120 px estirados y necesita CSS propio para el
+                    # activo; el segmentado ocupa 412 y ya lo hace.
+                    horizontal=True, key="cpxseg_prj_sec",
                     label_visibility="collapsed")
-    st.markdown("---")
+    # v316: sin el `---` de debajo. El segmentado ya lleva marco propio, así que el
+    # separador era una raya más en la cabecera que justo acabamos de adelgazar.
 
     if _sec == "📊 Estado":
         # ── Alarmas / avisos del proyecto ──
@@ -2800,8 +2808,10 @@ def render_field_projects(usuario: str, grupo: str):
                                            "🚨 Avisos": ":material/report: Avisos",
                                            "💰 Recibos": ":material/receipt: Recibos",
                                            "📎 Archivos": ":material/folder: Archivos"}.get(o, o),
-                    horizontal=True, key="fld_sec", label_visibility="collapsed")
-    st.markdown("---")
+                    # v316: mismo segmentado que el detalle del admin. El campo ve la
+                    # misma pieza que el admin: la coherencia entre pantallas es lo que
+                    # hace que parezca un producto y no cuatro cosas pegadas.
+                    horizontal=True, key="cpxseg_fld_sec", label_visibility="collapsed")
     if _sec == "🏗 Avance":
         _induccion_section(pid, prj, grupo, allow_send=False)
         _field_activities(pid)

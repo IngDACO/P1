@@ -3706,7 +3706,24 @@ el hueco que la tarjeta ya tenía. Y fuera el `---` entre «← Volver a la cart
 **Medido en vivo (mini-app con el tema real): 196 → 104 px, −92 px**, más ~35 del separador.
 Verificado que no queda ningún `st.metric` ni `st.progress` en la cabecera.
 
-## Versiones desplegadas (v315 = actual)
+## Sub-navegación del proyecto: al segmentado del kit (v316)
+El usuario pidió "algo parecido a la fila del Panel (radar/asignar/trabajos)". ⚠️ **No es lo mismo**:
+esa fila es un **acordeón de herramientas OPCIONALES** (se pueden cerrar todas); Estado/Datos/Costos/
+Archivos son **secciones excluyentes** y siempre hay una abierta. Copiarla dejaría cerrar todo y
+quedarse sin contenido. Para "una de N" el kit ya tiene la pieza: el **segmentado** de v292.
+Medidos los tres candidatos con el tema real:
+| | Ancho del control | Bolitas | Marco | Activo |
+|---|---|---|---|---|
+| `st.radio` de siempre | 430 px | **visibles** | no | no |
+| **segmentado `cpxseg_`** | **412 px** | ocultas | sí | sí (`rgb(232,238,246)`) |
+| fila de botones del Panel | **1120 px** (estirados) | — | — | requiere CSS propio |
+Cambio: la KEY pasa a `cpxseg_prj_sec` / `cpxseg_fld_sec` (el CSS del kit engancha por el prefijo).
+- ⚠️ **Las OPCIONES no se tocan**: siguen siendo los IDs con emoji, que son los que usan el matching
+  y los deep-links (v232/v234). Verificado por AST que las 4 opciones y las ramas siguen igual.
+- Se aplica también a 📋 Mis proyectos del CAMPO: la misma pieza en las dos pantallas.
+- Fuera el `---` que iba debajo: el segmentado ya trae marco.
+
+## Versiones desplegadas (v316 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -3714,6 +3731,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v316 | Estado/Datos/Costos/Archivos pasan del radio con bolitas al **segmentado del kit** (`cpxseg_`, la pieza de v292): 412 px, con marco y el activo resaltado. Igual en 📋 Mis proyectos del campo. ⚠️ NO se copió la fila de botones del Panel: aquella es un acordeón de herramientas opcionales (se pueden cerrar todas) y estas son secciones excluyentes; medida, además, salía a 1120 px estirados. Los IDs con emoji y el matching, intactos |
 | v315 | Cabecera del detalle de proyecto: avance y horas se meten DENTRO de la tarjeta (barra fina + las dos cifras en una línea), fuera los dos `st.metric` de 660 px, la barra de progreso duplicada y el separador. **Medido: 196→104 px**. ⚠️ Era lo prometido en v311 y no entregado entonces |
 | v314 | Ruta del día, cabecera: fuera el **título duplicado** (`_sub_header` ya lo pinta — 3ª vez que pasa, ver v212/v291), el selector de fecha deja de ocupar 1340 px y gana **saltos de día ◀ ▶** (aplicados antes de instanciar el widget, regla v111), y la caption se va al `help`. ⚠️ Además: en **fin de semana** todos salían «sin plan» sin explicación, porque la rejilla del roster es Lun–Vie; ahora se dice |
 | v313 | **Conciliación de mano de obra**: nuevo `finance.conciliacion_mo` con la cadena `cargado a obras → −horas cobradas sin pagar → +horas pagadas sin cargar → base → +aportes de ley → costo real`, que cierra exacto con los datos reales. Las cinco pantallas dejan de llamar "costo" a cosas distintas («lo que pagas» vs «lo que cargas a obras») + avisos de horas imputadas sin jornada, gente sin tarifa y proyectos con margen 0%. ⚠️ Se verificó que el modelo del usuario (paga la jornada + ley; carga a la obra lo imputado; cobra eso × margen) ya estaba bien implementado: faltaba el puente entre las dos cifras |
