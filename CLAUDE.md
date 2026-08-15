@@ -3696,7 +3696,17 @@ Tres causas, ninguna estética de fondo:
 elegir un fin de semana la pantalla decía "N sin plan" y no había forma de saber por qué. Ahora se
 dice y se corta ahí. Al lado del selector se muestra el día de la semana en texto.
 
-## Versiones desplegadas (v314 = actual)
+## Detalle de proyecto: la CABECERA, densa (v315)
+⚠️ **Esto se prometió en v311 y no se hizo**: se dijo "avance y horas se van dentro de la tarjeta"
+y en aquel deploy solo se tocó la mitad de abajo de la pantalla. Aquí se cumple.
+La cabecera eran: tarjeta del proyecto (con la mitad derecha vacía) + **dos `st.metric` de ~660 px
+para dos números** + una **barra de progreso a ancho completo que repetía el mismo %**. Todo eso
+entra ahora en la tarjeta: barra fina + `0% avance` + `0.0 h trabajadas` en una sola línea, usando
+el hueco que la tarjeta ya tenía. Y fuera el `---` entre «← Volver a la cartera» y la tarjeta.
+**Medido en vivo (mini-app con el tema real): 196 → 104 px, −92 px**, más ~35 del separador.
+Verificado que no queda ningún `st.metric` ni `st.progress` en la cabecera.
+
+## Versiones desplegadas (v315 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -3704,6 +3714,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v315 | Cabecera del detalle de proyecto: avance y horas se meten DENTRO de la tarjeta (barra fina + las dos cifras en una línea), fuera los dos `st.metric` de 660 px, la barra de progreso duplicada y el separador. **Medido: 196→104 px**. ⚠️ Era lo prometido en v311 y no entregado entonces |
 | v314 | Ruta del día, cabecera: fuera el **título duplicado** (`_sub_header` ya lo pinta — 3ª vez que pasa, ver v212/v291), el selector de fecha deja de ocupar 1340 px y gana **saltos de día ◀ ▶** (aplicados antes de instanciar el widget, regla v111), y la caption se va al `help`. ⚠️ Además: en **fin de semana** todos salían «sin plan» sin explicación, porque la rejilla del roster es Lun–Vie; ahora se dice |
 | v313 | **Conciliación de mano de obra**: nuevo `finance.conciliacion_mo` con la cadena `cargado a obras → −horas cobradas sin pagar → +horas pagadas sin cargar → base → +aportes de ley → costo real`, que cierra exacto con los datos reales. Las cinco pantallas dejan de llamar "costo" a cosas distintas («lo que pagas» vs «lo que cargas a obras») + avisos de horas imputadas sin jornada, gente sin tarifa y proyectos con margen 0%. ⚠️ Se verificó que el modelo del usuario (paga la jornada + ley; carga a la obra lo imputado; cobra eso × margen) ya estaba bien implementado: faltaba el puente entre las dos cifras |
 | v312 | Fix de v310: las tarjetas KPI mostraban la barra del escape (`COSTO ACTUAL \$3,145`). `theme.dinero` escapa el `$` para MARKDOWN, pero `_kpi_card` emite HTML crudo. Ahora `theme._esc` deshace ese escape, así que cualquier pieza HTML del kit lo arregla sola y no puede repetirse |

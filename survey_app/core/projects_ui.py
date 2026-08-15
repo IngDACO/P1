@@ -1365,10 +1365,12 @@ def _panel_proyectos(grupo: str):
         st.session_state["_admin_open_proj"] = str(_pp)
     _open = st.session_state.get("_admin_open_proj")
     if _open:
+        # v315: sin el `---` de debajo. El botón ya iba en su propia fila y el separador
+        # metía otros ~35 px entre él y la tarjeta, en una cabecera que ya era la parte
+        # más pesada de la pantalla.
         if st.button("← Volver a la cartera", key="pp_back_cartera"):
             st.session_state.pop("_admin_open_proj", None)
             st.rerun()
-        st.markdown("---")
         _detalle_proyecto(str(_open), grupo)
         return
 
@@ -1794,6 +1796,11 @@ def _detalle_proyecto(pid: str, grupo: str = None):
     # v306: el ID a la vista. Es LA identidad del proyecto (el nombre puede repetirse),
     # así que se muestra siempre y en monoespaciada, para poder dictarlo o buscarlo.
     _tp = str(prj.get("Tipo", "")).strip()
+    # v315: TODO en la tarjeta. Antes debajo iban dos `st.metric` de ~660 px para dos
+    # números y una barra de progreso a ancho completo que repetía el mismo %: ~130 px
+    # de cabecera para lo que cabe en una línea. La derecha de la tarjeta estaba vacía.
+    _horas = P.project_hours(prj.get("Nombre"), grupo, pid=pid)
+    _av = max(0, min(100, int(round(avance))))
     st.markdown(
         f'<div style="border:1px solid #e6e9ef;border-left:4px solid {_bar};border-radius:10px;'
         'padding:12px 16px;margin-bottom:10px;background:#fff;">'
@@ -1807,14 +1814,18 @@ def _detalle_proyecto(pid: str, grupo: str = None):
         f'<div style="font-size:12.5px;color:#6b7280;margin-top:3px;">'
         + (f'{_tp} · ' if _tp else '')
         + f'{_cli}{_ubic}</div>'
-        '</div>',
+        # barra + las dos cifras en la MISMA línea: la barra ya dice el %, así que el
+        # número va a su lado en vez de en una tarjeta propia.
+        '<div style="display:flex;align-items:center;gap:12px;margin-top:11px;">'
+        '<div style="flex:1;height:8px;background:#eef1f5;border-radius:20px;overflow:hidden;">'
+        f'<div style="height:100%;width:{_av}%;background:{_bar};border-radius:20px;"></div></div>'
+        f'<span style="font-size:13px;color:#374151;white-space:nowrap;">'
+        f'<b>{_av}%</b> avance</span>'
+        f'<span style="font-size:13px;color:#6b7280;white-space:nowrap;">'
+        f'<b style="color:#374151">{_horas:.1f} h</b> trabajadas</span>'
+        '</div></div>',
         unsafe_allow_html=True,
     )
-    c1, c2 = st.columns(2)
-    c1.metric("Avance", f"{avance:.0f}%")
-    c2.metric("Horas trabajadas",
-              f"{P.project_hours(prj.get('Nombre'), grupo, pid=pid):.1f}")
-    st.progress(min(1.0, avance / 100.0))
 
     # ── Sub-navegacion: 11 secciones en un scroll unico era el mismo
     # problema que tenia el Survey antes de v114. Radio, NO st.tabs (v56).
