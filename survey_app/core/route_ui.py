@@ -200,11 +200,50 @@ def render_ruta_dia(grupo):
     from core import auth, roster, projects as P
     from core import clock
 
-    st.markdown("#### :material/route: Ruta del día de la cuadrilla")
-    st.caption("A dónde va cada persona de campo según la planificación. "
-               "Elige el día para verlo.")
-    fecha = st.date_input("Día", value=clock.today(grupo), key="rutadia_fecha",
-                          format="DD/MM/YYYY")
+    # ⚠️ v314: SIN cabecera propia. `home_ui._sub_header` ya pinta "Planificación ·
+    # Ruta del día" justo encima, así que este `#### Ruta del día de la cuadrilla`
+    # repetía el título en la misma pantalla (mismo caso que el Panel en v291 y el
+    # % de avance duplicado en v212). La explicación se va al `help` del selector:
+    # gastaba una línea entera para decir lo que el título ya dice.
+    from datetime import timedelta as _td
+
+    # Salto de día pendiente: se aplica ANTES de instanciar el date_input, porque
+    # escribir la clave de un widget YA creado es un error (regla v111).
+    _salto = st.session_state.pop("_rd_salto", 0)
+    if _salto:
+        _b = st.session_state.get("rutadia_fecha") or clock.today(grupo)
+        st.session_state["rutadia_fecha"] = _b + _td(days=_salto)
+
+    # El `date_input` ocupaba los 1340 px de ancho para una fecha. Se acota y a su
+    # lado van los saltos de día (esta pantalla se mira "hoy, y mañana qué").
+    cf, cp, cn, cd = st.columns([1.6, 0.7, 0.7, 4])
+    fecha = cf.date_input("Día", value=clock.today(grupo), key="rutadia_fecha",
+                          format="DD/MM/YYYY",
+                          help="A dónde va cada persona de campo según la planificación.")
+    cp.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
+    cn.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
+    if cp.button(":material/chevron_left:", key="rd_prev", use_container_width=True,
+                 help="Día anterior"):
+        st.session_state["_rd_salto"] = -1
+        st.rerun()
+    if cn.button(":material/chevron_right:", key="rd_next", use_container_width=True,
+                 help="Día siguiente"):
+        st.session_state["_rd_salto"] = 1
+        st.rerun()
+    _DIAS_L = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"]
+    _MES_L = ["", "enero", "febrero", "marzo", "abril", "mayo", "junio", "julio",
+              "agosto", "septiembre", "octubre", "noviembre", "diciembre"]
+    with cd:
+        st.markdown("<div style='height:30px'></div>", unsafe_allow_html=True)
+        st.markdown(f":gray[{_DIAS_L[fecha.weekday()]} {fecha.day} de "
+                    f"{_MES_L[fecha.month]}]")
+    # ⚠️ El roster es de lunes a viernes (`asignaciones_dia` devuelve [] en fin de
+    # semana), así que un sábado TODO el mundo salía como "sin plan" sin que nada
+    # dijera por qué. Ahora se dice y se corta aquí.
+    if fecha.weekday() > 4:
+        st.info(":material/weekend: Fin de semana — la planificación es de lunes a "
+                "viernes, así que no hay ruta para este día.")
+        return
 
     try:
         campos = [u for u in auth.list_users(grupo)

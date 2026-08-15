@@ -3681,7 +3681,22 @@ El P&L decía **ganancia $1.710** en «Este mes». Con todo el histórico son **
 P&L por mes natural separa un ingreso de los costos que lo produjeron. No es un bug del filtro; es
 que falta poder ver el resultado **por proyecto/factura** además de por mes.
 
-## Versiones desplegadas (v313 = actual)
+## Ruta del día: el vacío de la cabecera (v314)
+Tres causas, ninguna estética de fondo:
+1. **Título duplicado.** `home_ui._sub_header` ya pinta «Planificación · Ruta del día» y la función
+   repetía «Ruta del día de la cuadrilla» justo debajo. **Es la tercera vez que aparece este
+   patrón** (v212 con el % de avance, v291 con el Panel): al escribir una vista nueva hay que
+   recordar que la cabecera de sección YA la pone la shell.
+2. **`date_input` a 1340 px** para una fecha. Se acota a ~305 px y a su lado van **saltos de día**
+   (◀ ▶), que es como se usa la pantalla: "hoy, ¿y mañana?". ⚠️ El salto se aplica escribiendo
+   `rutadia_fecha` **antes** de instanciar el widget (regla v111).
+3. **Caption que explicaba el título** → al `help` del selector.
+### ⚠️ Fin de semana: todos salían «sin plan» sin explicación
+`roster.asignaciones_dia` devuelve `[]` en sábado y domingo (la rejilla es Lun–Vie), así que al
+elegir un fin de semana la pantalla decía "N sin plan" y no había forma de saber por qué. Ahora se
+dice y se corta ahí. Al lado del selector se muestra el día de la semana en texto.
+
+## Versiones desplegadas (v314 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -3689,6 +3704,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v314 | Ruta del día, cabecera: fuera el **título duplicado** (`_sub_header` ya lo pinta — 3ª vez que pasa, ver v212/v291), el selector de fecha deja de ocupar 1340 px y gana **saltos de día ◀ ▶** (aplicados antes de instanciar el widget, regla v111), y la caption se va al `help`. ⚠️ Además: en **fin de semana** todos salían «sin plan» sin explicación, porque la rejilla del roster es Lun–Vie; ahora se dice |
 | v313 | **Conciliación de mano de obra**: nuevo `finance.conciliacion_mo` con la cadena `cargado a obras → −horas cobradas sin pagar → +horas pagadas sin cargar → base → +aportes de ley → costo real`, que cierra exacto con los datos reales. Las cinco pantallas dejan de llamar "costo" a cosas distintas («lo que pagas» vs «lo que cargas a obras») + avisos de horas imputadas sin jornada, gente sin tarifa y proyectos con margen 0%. ⚠️ Se verificó que el modelo del usuario (paga la jornada + ley; carga a la obra lo imputado; cobra eso × margen) ya estaba bien implementado: faltaba el puente entre las dos cifras |
 | v312 | Fix de v310: las tarjetas KPI mostraban la barra del escape (`COSTO ACTUAL \$3,145`). `theme.dinero` escapa el `$` para MARKDOWN, pero `_kpi_card` emite HTML crudo. Ahora `theme._esc` deshace ese escape, así que cualquier pieza HTML del kit lo arregla sola y no puede repetirse |
 | v311 | Detalle de proyecto (Estado) reordenado: lo corto (titular + KPIs) va arriba a ancho completo y abajo se enfrentan dos bloques largos (actividades \| alarmas), en vez de dejar la columna izquierda vacía ~800 px. El **cronograma pasa de 760 a 1280 px de lienzo** (área de barras 430→950) — ⚠️ `vw` es parámetro y el default sigue en 760 para NO cambiar los informes PDF. «Tocaba hoy» + «En curso ahora» se fusionan. ⚠️ Fix: el titular mostraba `**` literales porque el markdown no se procesa dentro de HTML; y el iframe del gráfico era 18 px más corto que el SVG, así que recortaba el pie |
