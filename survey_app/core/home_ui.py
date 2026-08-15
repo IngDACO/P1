@@ -672,7 +672,10 @@ def _mapa_proyectos(grupo):
             for f in filas:
                 folium.Marker([f["lat"], f["lon"]], popup=f["nombre"], tooltip=f["nombre"],
                               icon=folium.Icon(color="red")).add_to(m)
+            # v307: `use_container_width` — el defecto de st_folium es `width=500`
+            # FIJO, así que el mapa no llenaba su columna (medido en vivo).
             _out = st_folium(m, key="home_map", height=380,
+                             use_container_width=True,
                              returned_objects=["last_object_clicked"])
             st.caption(":material/place: Toca un pin para abrir el proyecto.")
             # v199: pin ACTIVO → abre ese proyecto (reusa _prjsel_pending del panel)

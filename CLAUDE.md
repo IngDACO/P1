@@ -3490,7 +3490,37 @@ En la tarjeta de la cartera (monoespaciada, bajo el nombre), como **primera colu
 Lista, en la cabecera del detalle, y **buscable** (pegar `PRJ-0007` en el buscador de la cartera lo
 encuentra). La cartera gana filtro por tipo, que solo aparece si hay más de un tipo en el grupo.
 
-## Versiones desplegadas (v306 = actual)
+## Ruta del día: el mapa llena, la ruta existe y se ve el plan CONTRA lo fichado (v307)
+El usuario: *"se ve muy desaprovechada"*. Media pantalla en blanco a la derecha del mapa.
+### ⚠️ La causa NO era de diseño: `st_folium` dibuja a 500 px FIJOS
+Medido en vivo (mini-app + DOM, entrando al `contentDocument` del iframe): el iframe ocupaba
+**1110 px** y el `.leaflet-container` de dentro **500** → **610 px de aire blanco DENTRO del mapa**.
+`st_folium(..., use_container_width=True)` lo arregla (medido después: 634/634, cero aire). Afectaba
+también al mapa de HOME, corregido en el mismo lote. ⚠️ El defecto de la librería es
+`width=500, use_container_width=False`: cualquier `st_folium` nuevo tiene que pasarlo.
+### Lo que faltaba, y ya estaba escrito
+`ordenar_ruta()` y `gmaps_dir_url()` existen desde v270 y **solo las usaba el campo**: la vista del
+ADMIN —la que se llama «Ruta del día»— no ordenaba las paradas, no dibujaba el recorrido ni ofrecía
+navegación. Ahora sí: paradas numeradas por vecino-más-cercano, polilínea, «Cómo llegar» por sitio y
+«Abrir la ruta completa en Google Maps». Otra vez el patrón "se escribe y nadie lo lee" (v131, v148).
+### De plan a tablero de despacho
+La tabla era Persona/Obra/Dirección: solo decía el PLAN. Ahora lleva **horario** (el roster guarda
+`ini`/`fin` desde v277 y se tiraban) y **estado real** — 🟢 fichado aquí · 🔴 fichó en X · ⚠️ sin
+fichar — con `timeclock.proyectos_por_usuario_dia`, el mismo dato cacheado que usa «Cumplimiento» en
+el Panel. **Cero lecturas nuevas de Sheets.** La pregunta que responde pasa a ser "a las 9, ¿está
+cada uno donde debe?".
+### ⚠️ Bug de camino: la persona sin ubicación DESAPARECÍA
+Si la obra no tenía coordenadas, el bucle hacía `continue` y esa fila **no entraba en la tabla**: el
+KPI decía "1 sin ubicación" y no había forma de ver de quién se trataba. Ahora la fila entra igual
+(solo queda fuera del mapa, que es lo único que necesita coordenadas).
+### Estructura
+Mapa (3) | tarjetas de sitio en orden de recorrido (2), y los 4 KPIs pasan a ser **botones activos**
+con contexto ("2 · de 3 personas", "1 · sdkm") que llevan a Panel o a Proyectos — el «sin plan» era
+un caption muerto al fondo.
+⚠️ Chequeo que falló por mi propio comentario: `'[:18]' not in src` daba FALLO porque el comentario
+que explica que se quitó ese corte contiene `[:18]`. Se rehízo por AST (trampa nº2 de este documento).
+
+## Versiones desplegadas (v307 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -3498,6 +3528,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v307 | Ruta del día aprovechada: ⚠️ el hueco blanco era `st_folium` dibujando a **500 px FIJOS** dentro de un bloque de 1110 (medido dentro del iframe) → `use_container_width=True` (también en HOME). Mapa + tarjetas de sitio en orden de recorrido, con «Cómo llegar» y la ruta completa a Google Maps (`ordenar_ruta`/`gmaps_dir_url` existían desde v270 y solo las usaba el campo). La tabla gana **horario** y **estado real** (🟢 fichado aquí / 🔴 fichó en X / ⚠️ sin fichar) sin lecturas nuevas. KPIs activos con contexto. Bug de camino: la persona cuya obra no tenía ubicación **desaparecía de la tabla** |
 | v306 | **Identidad por ID.** Los 3 sitios que aún casaban proyectos por NOMBRE pasan a ID vía `projects.etiqueta_proyectos` (Panel→Asignar hacía desaparecer un homónimo del desplegable; **Facturas enlazaba el importe al proyecto equivocado**; Inventario guardaba el nombre y ahora guarda `PRJ-####`). + **Tipo de proyecto** (Instalación/Delivery/Ripout/Otro): ⚠️ solo Instalación genera el cronograma estándar — antes un delivery nacía con 11 actividades falsas que ensuciaban avance, SPI y el radar. + **El ID a la vista** en tarjeta, lista (1ª columna), detalle y buscador. Guardián AST permanente contra volver a indexar proyectos por nombre |
 | v305 | Resumen del día: los 9 indicadores pasan de 3 filas a **2 (5+4)** → bloque 232→192 px (del original 304). El alto del botón ya estaba en su suelo (35 px), así que la palanca era el nº de filas. Medido: en UNA fila solo caben con ≥1180 px de contenido y por debajo se parten 4 etiquetas. Guardián nuevo: `zip` trunca en silencio si una fila tuviera más elementos que columnas |
 | v304 | Menú lateral: la cascada por fin se ve — nivel 1 pegado a la izquierda (8 px) y en seminegrita, nivel 2 a 30 px, más pequeño y más fino. ⚠️ El menú salía **centrado**: el CSS de v229 había dejado de aplicar porque Streamlit metió un `span` flex centrado dentro del botón, y porque `font-size`/`font-weight` puestos en el botón nunca llegan al `<p>` (los dos niveles salían a 16 px/peso 400, activo incluido). Además, los huecos del resumen del día bajan de 10 a 5 px (bloque 246→232), con la regla acotada al expander por `key` |

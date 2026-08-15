@@ -123,7 +123,12 @@ def _folium_map(marcadores, ruta_coords=None, numerado=True, key="ruta_map",
                       popup=mk.get("popup"), icon=icon).add_to(fmap)
     if len(marcadores) >= 2:
         fmap.fit_bounds([[min(lats), min(lons)], [max(lats), max(lons)]])
-    st_folium(fmap, key=key, height=height, returned_objects=[])
+    # ⚠️ `use_container_width=True` (v307). El defecto de `st_folium` es `width=500`
+    # FIJO, así que dentro de un bloque ancho el iframe ocupa todo pero el mapa se
+    # dibuja a 500 px y el resto queda en BLANCO. Medido en vivo: iframe 1110 px con
+    # el `.leaflet-container` a 500 → 610 px de aire. Era el hueco de la Ruta del día.
+    st_folium(fmap, key=key, height=height, returned_objects=[],
+              use_container_width=True)
     return True
 
 
@@ -211,7 +216,17 @@ def render_ruta_dia(grupo):
         st.info("No hay usuarios de campo en el grupo.")
         return
 
-    sitios = {}        # pid -> {nombre, lat, lon, personas:[]}
+    # ── Dónde ficharon DE VERDAD (v307) ──────────────────────────
+    # El mismo dato que usa «Cumplimiento» en el Panel (v161/v293), ya cacheado: sin
+    # esto la pantalla solo dice el PLAN, y la pregunta del admin a las 9 de la mañana
+    # es si cada uno está donde debe. {clave_usuario: [{pid, nombre}]}
+    from core import timeclock
+    try:
+        real = timeclock.proyectos_por_usuario_dia(grupo, fecha)
+    except Exception:
+        real = {}
+
+    sitios = {}        # pid -> {nombre, lat, lon, personas:[], dir}
     en_obra = []       # filas de la tabla
     sin_coord, sin_prj, sin_plan = [], [], []
     for u in campos:
@@ -224,6 +239,10 @@ def render_ruta_dia(grupo):
         if not aa:
             sin_plan.append(nom)
             continue
+        # lo FICHADO por esta persona ese día (la clave es el login; nombre de respaldo)
+        _fich = real.get(usr) or real.get(nom) or []
+        _fich_pids = {str(x.get("pid", "")) for x in _fich if x.get("pid")}
+        _fich_noms = [str(x.get("nombre", "")) for x in _fich if x.get("nombre")]
         for a in aa:
             pid = str(a.get("proyecto_id", "")).strip()
             if not pid:
@@ -234,44 +253,108 @@ def render_ruta_dia(grupo):
                 sin_prj.append(f"{nom} — (obra no encontrada)")
                 continue
             obra = str(prj.get("Nombre", ""))
+            # Plan vs real, con las MISMAS tres lecturas que el Panel:
+            if pid in _fich_pids:
+                _estado = "🟢 fichado aquí"
+            elif _fich_noms:
+                _estado = "🔴 fichó en " + ", ".join(_fich_noms[:2])
+            else:
+                _estado = "⚠️ sin fichar"
             c = _coords_de(prj)
             if not c:
                 sin_coord.append(f"{nom} → {obra}")
-                continue
-            s = sitios.setdefault(pid, {"nombre": obra, "lat": c[0], "lon": c[1],
-                                        "personas": []})
-            s["personas"].append(nom)
-            en_obra.append({"Persona": nom, "Obra": obra,
-                            "Dirección": str(prj.get("Ubicacion", ""))})
+            else:
+                s = sitios.setdefault(pid, {"nombre": obra, "lat": c[0], "lon": c[1],
+                                            "personas": [],
+                                            "dir": str(prj.get("Ubicacion", ""))})
+                s["personas"].append(nom)
+            # ⚠️ La fila entra AUNQUE la obra no tenga ubicación: antes se hacía
+            # `continue` y esa persona desaparecía de la tabla — el KPI decía "1 sin
+            # ubicación" y no había forma de ver de quién se trataba.
+            en_obra.append({"Persona": nom,
+                            "Horario": roster.franja_label(a.get("ini"), a.get("fin")) or "día completo",
+                            "Obra": obra, "Estado": _estado,
+                            "Dirección": str(prj.get("Ubicacion", "")) or "—"})
 
+    # ── KPIs ACTIVOS, con contexto (mismo criterio que HOME en v303) ──
+    _n_pers = len(campos)
+    _nav = _KPI_NAV
     k1, k2, k3, k4 = st.columns(4)
-    k1.metric("En obra", len(en_obra))
-    k2.metric("Sitios", len(sitios))
-    k3.metric("Sin ubicación", len(sin_coord))
-    k4.metric("Sin plan", len(sin_plan))
+    if k1.button(f":material/engineering: En obra\n\n{len(en_obra)}\n\n"
+                 f"de {_n_pers} persona{'' if _n_pers == 1 else 's'}",
+                 key="cpxkpi_rd_obra", use_container_width=True):
+        _nav("planificacion", "🎛 Panel")
+    if k2.button(f":material/location_on: Sitios\n\n{len(sitios)}\n\n"
+                 + ("con gente hoy" if sitios else "ninguno hoy"),
+                 key="cpxkpi_rd_sitios", use_container_width=True):
+        _nav("proyectos", "📊 Proyectos")
+    if k3.button(f":material/wrong_location: Sin ubicación\n\n{len(sin_coord)}\n\n"
+                 + ("fija el pin" if sin_coord else "todas ubicadas"),
+                 key="cpxkpi_rd_sinubic", use_container_width=True):
+        _nav("proyectos", "📊 Proyectos")
+    # ⚠️ El pie NO se corta a lo bruto: `", ".join(nombres)[:18]` partía un nombre por
+    # la mitad. Con una persona se dice quién es; con varias, cuántas.
+    _sub_plan = ("todos planificados" if not sin_plan
+                 else (sin_plan[0] if len(sin_plan) == 1 else f"{len(sin_plan)} personas"))
+    if k4.button(f":material/help: Sin plan\n\n{len(sin_plan)}\n\n{_sub_plan}",
+                 key="cpxkpi_rd_sinplan", use_container_width=True):
+        _nav("planificacion", "🎛 Panel")
 
-    if sitios:
-        marcs = []
-        for s in sitios.values():
-            pers = ", ".join(s["personas"])
-            marcs.append({"lat": s["lat"], "lon": s["lon"],
-                          "label": f"{s['nombre']} ({len(s['personas'])})",
-                          "popup": f"{s['nombre']} — {pers}"})
-        if not _folium_map(marcs, numerado=False, key="rutadia_map", height=420):
-            _mapa_respaldo(marcs)
-    else:
+    if not sitios:
         st.info("Nadie tiene una obra con ubicación asignada para ese día.")
+    else:
+        # ── Mapa + sitios, lado a lado (v307) ────────────────────
+        # Antes el mapa iba a ancho completo (dibujándose a 500 px) y la mitad derecha
+        # de la pantalla quedaba vacía. Además se ORDENAN las paradas y se ofrece la
+        # navegación: `ordenar_ruta`/`gmaps_dir_url` existen desde v270 y esta vista,
+        # que se llama «Ruta del día», no las usaba — solo las usaba el campo.
+        ruta = ordenar_ruta(list(sitios.values()))
+        col_map, col_side = st.columns([3, 2], gap="large")
+        with col_map:
+            marcs = [{"lat": s["lat"], "lon": s["lon"],
+                      "label": f"{i}. {s['nombre']} ({len(s['personas'])})",
+                      "popup": f"{i}. {s['nombre']} — " + ", ".join(s["personas"])}
+                     for i, s in enumerate(ruta, 1)]
+            if not _folium_map(marcs, ruta_coords=[[s["lat"], s["lon"]] for s in ruta],
+                               numerado=True, key="rutadia_map", height=420):
+                _mapa_respaldo(marcs)
+        with col_side:
+            st.markdown("**Sitios de hoy** — en orden de recorrido")
+            for i, s in enumerate(ruta, 1):
+                with st.container(border=True, key=f"rdsitio_{i}"):
+                    _n = len(s["personas"])
+                    st.markdown(
+                        f"**{i}. {s['nombre']}**  \n"
+                        f":gray[{s['dir'] or 'sin dirección'}]  \n"
+                        f":material/group: {_n} persona{'' if _n == 1 else 's'} · "
+                        + ", ".join(s["personas"]))
+                    st.link_button("Cómo llegar", gmaps_dir_url([s], desde_actual=True),
+                                   icon=":material/navigation:",
+                                   use_container_width=True)
+            if len(ruta) > 1:
+                st.link_button("Abrir la ruta completa en Google Maps",
+                               gmaps_dir_url(ruta, desde_actual=False),
+                               icon=":material/route:", use_container_width=True,
+                               type="primary")
 
     if en_obra:
         import pandas as pd
+        st.markdown("**Quién va a dónde**")
         st.dataframe(pd.DataFrame(en_obra), hide_index=True,
                      use_container_width=True)
+        st.caption(":material/info: «Estado» compara la planificación con el fichaje "
+                   "real de ese día.")
 
     if sin_coord:
-        st.caption(":orange[:material/warning:] Obra sin ubicación en el mapa: "
-                   + " · ".join(sin_coord))
+        st.caption(":orange[:material/warning:] Obra sin ubicación en el mapa (no entra "
+                   "en la ruta): " + " · ".join(sin_coord))
     if sin_prj:
         st.caption(":material/info: Asignado a un estado/otro (no es obra): "
                    + " · ".join(sin_prj))
-    if sin_plan:
-        st.caption(":material/help: Sin planificación ese día: " + ", ".join(sin_plan))
+
+
+def _KPI_NAV(seccion, sub):
+    """Salta a otra sección del admin. Import perezoso: `home_ui` importa este módulo,
+    así que a nivel de módulo sería circular."""
+    from core import home_ui
+    home_ui.navegar(seccion, sub)
