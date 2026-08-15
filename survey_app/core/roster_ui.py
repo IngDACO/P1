@@ -123,11 +123,19 @@ def _asignacion_inteligente(grupo, lunes, staff, tidx):
         if not proys:
             st.caption("No hay proyectos activos para asignar.")
             return
-        _pmap = {str(p.get("Nombre")): str(p.get("ID")) for p in proys}
-        _psel = st.selectbox("Proyecto", ["— elige el proyecto —"] + list(_pmap), key="ai_prj")
-        if _psel not in _pmap:
+        # ⚠️ v306: la clave es el **ID**, no el nombre. Con `{Nombre: ID}` dos proyectos
+        # homónimos colapsaban y uno quedaba IMPOSIBLE de elegir aquí, en silencio (el
+        # mismo fallo de v147/v150, que se arregló en el fichaje y no aquí). El nombre
+        # es solo la etiqueta que se muestra, y lleva el ID detrás para desempatar.
+        _opts = [str(p.get("ID")) for p in proys]
+        _lbl = {str(p.get("ID")): f"{p.get('Nombre') or '(sin nombre)'} ({p.get('ID')})"
+                for p in proys}
+        _psel = st.selectbox("Proyecto", ["—"] + _opts, key="ai_prj",
+                             format_func=lambda i: "— elige el proyecto —" if i == "—"
+                             else _lbl.get(i, i))
+        if _psel == "—":
             return
-        pid = _pmap[_psel]
+        pid = _psel
         prj = P.get_project(pid)
         certs = [c.strip() for c in str((prj or {}).get("CertsReq", "")).split(";") if c.strip()]
 

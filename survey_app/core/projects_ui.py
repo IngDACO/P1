@@ -866,6 +866,18 @@ def _nuevo_proyecto_form(grupo: str, key: str = "nuevo"):
         if _cli_sel == _CLI_OTRO:
             _cli_new = st.text_input("Nombre del nuevo cliente", key=f"np_clinew_{key}")
 
+        # ── Tipo de proyecto (v306) ──────────────────────────────
+        # ⚠️ FUERA del `st.form` a propósito: dentro, los widgets no escriben hasta el
+        # submit, así que el formulario no podría reaccionar al tipo — y aquí TIENE que
+        # hacerlo, porque solo la instalación pide NS y calcula la fecha de fin sola.
+        # (Misma razón por la que v127 sacó del form el selector de campo y v189 el tipo
+        # de credencial.)
+        _tipo = st.selectbox(":material/category: Tipo de proyecto", P.TIPOS,
+                             key=f"np_tipo_{key}",
+                             help="Solo «Instalación» genera el cronograma estándar de obra "
+                                  "(11 actividades que escalan con el NS).")
+        _es_inst = (_tipo == P.TIPO_INSTALACION)
+
         # NS lo controla session_state (prellenado del plano arriba); la Ubicación se toma de
         # la dirección que buscaste en el mapa → ya no se pide dos veces (v272).
         st.session_state.setdefault(f"np_ns_{key}", 2)
@@ -878,21 +890,31 @@ def _nuevo_proyecto_form(grupo: str, key: str = "nuevo"):
             nom = st.text_input("Nombre del proyecto *", key=f"np_nom_{key}")
             c1, c2 = st.columns(2)
             ing = c1.text_input("Ingeniero responsable", key=f"np_ing_{key}")
-            ns = c2.number_input("Número de paradas (NS) *", min_value=2, max_value=50,
-                                 step=1, key=f"np_ns_{key}",
-                                 help=("Leído del plano." if (_plano or {}).get("ns")
-                                       else "Define la duración de las actividades."))
             f_ini = c1.date_input("Fecha de inicio", value=clock.today(),
                                   key=f"np_ini_{key}")
-            # La fecha de FIN no se teclea: sale del NS + las actividades estándar de
-            # instalación (`build_schedule`), cuyas duraciones escalan con el NS. Preview:
-            try:
-                _sch_prev = build_schedule(int(ns), f_ini, {})
-                c1.caption(":material/event_available: Fin estimado: "
-                           f"**{_sch_prev['fecha_fin'].strftime('%d/%m/%Y')}** "
-                           f"({_sch_prev['total_dias']} días) — del NS y las actividades estándar.")
-            except Exception:
-                pass
+            f_fin_manual = None
+            if _es_inst:
+                ns = c2.number_input("Número de paradas (NS) *", min_value=2, max_value=50,
+                                     step=1, key=f"np_ns_{key}",
+                                     help=("Leído del plano." if (_plano or {}).get("ns")
+                                           else "Define la duración de las actividades."))
+                # La fecha de FIN no se teclea: sale del NS + las actividades estándar de
+                # instalación (`build_schedule`), cuyas duraciones escalan con el NS. Preview:
+                try:
+                    _sch_prev = build_schedule(int(ns), f_ini, {})
+                    c1.caption(":material/event_available: Fin estimado: "
+                               f"**{_sch_prev['fecha_fin'].strftime('%d/%m/%Y')}** "
+                               f"({_sch_prev['total_dias']} días) — del NS y las actividades estándar.")
+                except Exception:
+                    pass
+            else:
+                # v306: un delivery/ripout no tiene paradas ni el plan de 11 actividades,
+                # así que la fecha de fin SÍ se teclea (para instalación sigue saliendo sola).
+                ns = 2                      # mínimo válido; no se usa para nada aquí
+                f_fin_manual = c2.date_input("Fecha de fin estimada", value=clock.today(),
+                                             key=f"np_fin_{key}",
+                                             help="Este tipo de proyecto no tiene cronograma "
+                                                  "estándar, así que la fecha la pones tú.")
             pres = c2.number_input(":material/payments: Presupuesto (0 = sin presupuesto)", min_value=0.0,
                                    step=100.0, key=f"np_pres_{key}")
             mod = st.text_input("Modelo de elevador", key=f"np_mod_{key}",
@@ -935,14 +957,28 @@ def _nuevo_proyecto_form(grupo: str, key: str = "nuevo"):
             else:
                 cli, _cli_id = "", ""
 
-            sched = build_schedule(int(ns), f_ini, {})
+            # v306: el cronograma DEPENDE del tipo. Antes se generaba el plan de
+            # instalación siempre, así que un delivery nacía con 11 actividades falsas —
+            # y ese plan alimenta avance, curva S, SPI y el indicador «En retraso».
+            if _es_inst:
+                sched = build_schedule(int(ns), f_ini, {})
+                _fin = (sched["fecha_fin"].strftime("%Y-%m-%d")
+                        if sched.get("fecha_fin") else "")
+                _acts = sched.get("activities", [])
+            else:
+                _fin = f_fin_manual.strftime("%Y-%m-%d") if f_fin_manual else ""
+                # ⚠️ UNA actividad genérica, no CERO: el avance del proyecto es
+                # Σ(peso·avance)/Σpeso sobre sus actividades, así que sin ninguna el
+                # proyecto se quedaría clavado en 0% para siempre y el campo no tendría
+                # dónde reportar. Con una sola, avanza 0→100 sin fingir un plan de obra.
+                _dias = max(1, ((f_fin_manual - f_ini).days + 1) if f_fin_manual else 1)
+                _acts = [{"nombre": "Ejecución", "duracion": _dias, "peso": 1}]
             ok, res = P.create_project(
                 grupo=grupo, nombre=nom.strip(), cliente=cli, cliente_id=_cli_id, ubicacion=ubi,
-                modelo=mod, ns=int(ns), ingeniero=ing, campo_asignados=asg,
+                modelo=mod, ns=int(ns), ingeniero=ing, campo_asignados=asg, tipo=_tipo,
                 fecha_inicio=f_ini.strftime("%Y-%m-%d"),
-                fecha_fin_est=(sched["fecha_fin"].strftime("%Y-%m-%d")
-                               if sched.get("fecha_fin") else ""),
-                activities=sched.get("activities", []),
+                fecha_fin_est=_fin,
+                activities=_acts,
                 creado_por=st.session_state.get("auth", {}).get("usuario", ""),
                 instrucciones=instr, induccion_links=inds, presupuesto=pres,
                 lat=("" if _nplat is None else _nplat),
@@ -1241,6 +1277,15 @@ def _cartera_clickeable(proys, alarmas, delays, aheads, costos):
                 f"<div style='height:100%;width:{_av}%;background:#2e6da4;"
                 "border-radius:20px;'></div></div>"
                 f"<span style='font-size:12.5px;font-weight:600;color:#374151;'>{_av}%</span></div>"
+                # v306: ID + tipo. El ID en monoespaciada porque es un identificador que
+                # se dicta y se busca, no una etiqueta; el tipo solo si está marcado.
+                "<div style='font-size:11.5px;color:#9aa7b8;margin-bottom:4px;"
+                "font-family:monospace;'>"
+                f"{esc(_pid)}"
+                + (f"<span style='font-family:inherit;color:#6b7280;'> · "
+                   f"{esc(str(p.get('Tipo', '')).strip())}</span>"
+                   if str(p.get('Tipo', '')).strip() else "")
+                + "</div>"
                 f"<div style='font-size:12.5px;color:#6b7280;margin-bottom:5px;'>{_MI('person')} "
                 f"{esc(p.get('Cliente', '') or '—')} · {_MI('calendar_month')} {_ddmm(p.get('FechaInicio'))} → "
                 f"{_ddmm(p.get('FechaFinEst'))}</div>"
@@ -1281,7 +1326,11 @@ def _cartera_lista(proys, alarmas, delays, aheads, costos):
         _users = len([x for x in str(p.get("CampoAsignados", "")).split(";") if x.strip()])
         _sit = (f"{_dl} d retraso" if _dl else (f"{_ah} d adelanto" if _ah else "—"))
         _rows.append({
+            # v306: el ID primero. Es la identidad real (el nombre puede repetirse), y
+            # tenerlo en la tabla permite dictarlo, buscarlo y cruzarlo con la hoja.
+            "ID": _pid,
             "Proyecto": str(p.get("Nombre", "")),
+            "Tipo": str(p.get("Tipo", "") or "—"),
             "Estado": str(p.get("Estado", "") or "—"),
             "Avance": max(0, min(100, int(P._num(p.get("Avance"))))),
             "Cliente": str(p.get("Cliente", "") or "—"),
@@ -1363,11 +1412,24 @@ def _panel_proyectos(grupo: str):
                                               "🟢 Adelanto": ":green[:material/trending_up:] Adelanto",
                                               "⏸ En pausa": ":material/pause: En pausa"}.get(o, o),
                        horizontal=True, key="cart_filt", label_visibility="collapsed")
+    # v306: filtro por TIPO. Solo aparece si el grupo tiene proyectos de más de un tipo
+    # (o alguno sin marcar): con todo igual sería un desplegable que no filtra nada.
+    _SIN_T = "— sin tipo —"
+    _tipos_pres = sorted({str(p.get("Tipo", "")).strip() or _SIN_T for p in proys})
+    _tsel = "Todos"
+    if len(_tipos_pres) > 1:
+        _tsel = st.selectbox("Tipo", ["Todos"] + _tipos_pres, key="cart_tipo",
+                             label_visibility="collapsed")
     _ql = (_q or "").strip().lower()
 
     def _pasa(p):
         _pid = str(p.get("ID", ""))
-        if _ql and _ql not in f"{p.get('Nombre', '')} {p.get('Cliente', '')}".lower():
+        # El ID entra en la búsqueda: es la identidad del proyecto y ahora se ve, así
+        # que tiene que poder buscarse por él (pegar "PRJ-0007" y que salga).
+        if _ql and _ql not in (f"{p.get('Nombre', '')} {p.get('Cliente', '')} "
+                               f"{_pid}").lower():
+            return False
+        if _tsel != "Todos" and (str(p.get("Tipo", "")).strip() or _SIN_T) != _tsel:
             return False
         if _filt == "🔴 Retraso":
             return bool(delays.get(_pid))
@@ -1713,15 +1775,22 @@ def _detalle_proyecto(pid: str, grupo: str = None):
     _bg, _fg, _bar = _estado_colors(est)
     _cli  = str(prj.get("Cliente", "")) or "—"
     _ubic = (" · " + maps.maps_link_html(prj.get("Ubicacion"))) if prj.get("Ubicacion") else ""
+    # v306: el ID a la vista. Es LA identidad del proyecto (el nombre puede repetirse),
+    # así que se muestra siempre y en monoespaciada, para poder dictarlo o buscarlo.
+    _tp = str(prj.get("Tipo", "")).strip()
     st.markdown(
         f'<div style="border:1px solid #e6e9ef;border-left:4px solid {_bar};border-radius:10px;'
         'padding:12px 16px;margin-bottom:10px;background:#fff;">'
         '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;'
         'flex-wrap:wrap;">'
-        f'<div style="font-size:1.15rem;font-weight:800;color:#1f2937;">{prj.get("Nombre","")}</div>'
+        f'<div style="font-size:1.15rem;font-weight:800;color:#1f2937;">{prj.get("Nombre","")}'
+        f'<span style="font-family:monospace;font-size:12px;color:#9aa7b8;font-weight:500;'
+        f'margin-left:8px;">{pid}</span></div>'
         f'<span style="font-size:12px;padding:3px 11px;border-radius:20px;background:{_bg};'
         f'color:{_fg};white-space:nowrap;">{est}</span></div>'
-        f'<div style="font-size:12.5px;color:#6b7280;margin-top:3px;">{_cli}{_ubic}</div>'
+        f'<div style="font-size:12.5px;color:#6b7280;margin-top:3px;">'
+        + (f'{_tp} · ' if _tp else '')
+        + f'{_cli}{_ubic}</div>'
         '</div>',
         unsafe_allow_html=True,
     )
@@ -1814,7 +1883,16 @@ def _detalle_proyecto(pid: str, grupo: str = None):
             st.markdown("**Datos del proyecto**")
             nombre   = st.text_input("Nombre", value=prj.get("Nombre", ""))
             e1, e2 = st.columns(2)
-            ubic     = e1.text_input("Ubicación", value=prj.get("Ubicacion", ""))
+            # v306: tipo editable. `_SIN_TIPO` primero para los proyectos anteriores a
+            # v306, que lo tienen vacío: se ven como "sin tipo" hasta que se marquen, en
+            # vez de fingir que todos eran instalaciones.
+            _TIPO_VACIO = "— sin tipo —"
+            _tp_cur = str(prj.get("Tipo", "")).strip()
+            _tp_opts = ([_TIPO_VACIO] + P.TIPOS) if _tp_cur not in P.TIPOS else list(P.TIPOS)
+            tipo = e1.selectbox("Tipo de proyecto", _tp_opts,
+                                index=_tp_opts.index(_tp_cur) if _tp_cur in _tp_opts else 0,
+                                help="Solo «Instalación» usa el cronograma estándar de obra.")
+            ubic     = e2.text_input("Ubicación", value=prj.get("Ubicacion", ""))
             modelo   = e2.text_input("Modelo", value=prj.get("Modelo", ""))
             ing      = e1.text_input("Ingeniero", value=prj.get("Ingeniero", ""))
             # Calendario, no texto libre: ver `_a_fecha`. El valor se guarda
@@ -1880,6 +1958,7 @@ def _detalle_proyecto(pid: str, grupo: str = None):
                         cliente, _ecli_id = "", ""
                     P.update_project(pid, {   # todo en UNA escritura (batch) → sin rate limit
                         "Nombre": nombre, "Cliente": cliente, "ClienteID": _ecli_id,
+                        "Tipo": ("" if tipo == _TIPO_VACIO else tipo),
                         "Ubicacion": ubic, "Modelo": modelo,
                         "Ingeniero": ing, "FechaInicio": f_ini, "FechaFinEst": f_fin,
                         "CampoAsignados": ";".join(asignados),

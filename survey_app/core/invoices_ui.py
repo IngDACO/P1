@@ -184,11 +184,17 @@ def _nueva_factura(grupo):
 
     # Proyectos del cliente (para precargar y para el desplegable de líneas)
     prjs = [p for p in P.list_projects(grupo=grupo) if C.es_del_cliente(p, cid, cnorm)]
-    prj_names = [p.get("Nombre", "") for p in prjs]
-    _pid_by_name = {p.get("Nombre", ""): str(p.get("ID", "")) for p in prjs}
+    # ⚠️ v306: por ID, no por nombre. Antes el alcance y la línea de la factura se casaban
+    # con `{Nombre: ID}`: con dos proyectos homónimos el radio mostraba DOS opciones
+    # idénticas, el filtro casaba con AMBOS y el importe se enlazaba al proyecto
+    # equivocado — es decir, se facturaba mal, no solo se veía mal.
+    _lbl = P.etiqueta_proyectos(prjs)              # {ID: etiqueta única}
+    _pid_by_lbl = {v: k for k, v in _lbl.items()}
+    prj_names = [_lbl[str(p.get("ID", ""))] for p in prjs]
 
     _scope = st.radio("Alcance", ["Todo el cliente"] + prj_names, horizontal=True, key="fac_scope")
-    _scope_prjs = prjs if _scope == "Todo el cliente" else [p for p in prjs if p.get("Nombre", "") == _scope]
+    _scope_prjs = (prjs if _scope == "Todo el cliente"
+                   else [p for p in prjs if _lbl.get(str(p.get("ID", ""))) == _scope])
 
     # Precarga: una línea por proyecto con lo pendiente de facturar
     _pre = []
@@ -196,7 +202,7 @@ def _nueva_factura(grupo):
         pend = I.pendiente_de_facturar(str(p.get("ID", "")), grupo, p)
         if pend > 0:
             _pre.append({"Concepto": f"Trabajos — {p.get('Nombre', '')}",
-                         "Proyecto": p.get("Nombre", ""), "Importe": pend})
+                         "Proyecto": _lbl.get(str(p.get("ID", "")), ""), "Importe": pend})
     if not _pre:
         _pre = [{"Concepto": "", "Proyecto": "(ninguno)", "Importe": 0.0}]
 
@@ -227,7 +233,7 @@ def _nueva_factura(grupo):
             continue
         pnom = str(r.get("Proyecto", ""))
         _lineas.append({"concepto": con, "importe": imp,
-                        "proyecto_id": _pid_by_name.get(pnom, "")})
+                        "proyecto_id": _pid_by_lbl.get(pnom, "")})
     _sub = round(sum(l["importe"] for l in _lineas), 2)
     _impv = round(_sub * _imp / 100.0, 2)
     st.markdown(f"Subtotal **${_sub:,.2f}**  ·  Impuesto **${_impv:,.2f}**  ·  "

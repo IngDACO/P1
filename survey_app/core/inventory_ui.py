@@ -29,9 +29,11 @@ _EST_LBL = {"disponible": ":green[disponible]", "en_uso": ":blue[en uso]",
 
 
 def _ubic_txt(a) -> str:
-    t = str(a.get("UbicacionTipo", "") or "")
-    ref = str(a.get("UbicacionRef", "") or "")
-    return f"{t}: {ref}" if ref else (t or "—")
+    """Ubicación legible. ⚠️ Delega en `INV.ubic_str` (v306): esta función era una COPIA
+    de la del backend, así que al hacer que el proyecto se guarde por ID solo se habría
+    arreglado una de las dos y la lista seguiría enseñando `PRJ-0007` (el patrón de dos
+    mecanismos para lo mismo que v140 mandó no repetir)."""
+    return INV.ubic_str(a)
 
 
 def _fecha_input(label, valor, key):
@@ -56,12 +58,21 @@ def _usuarios(grupo):
 
 
 def _proyectos(grupo):
+    """`(ids, etiqueta)` de los proyectos del grupo, para elegir destino.
+
+    ⚠️ v306: se guarda el **ID** en `UbicacionRef`, no el nombre. Antes se guardaba el
+    nombre y con dos proyectos homónimos era imposible saber en cuál está el activo
+    (y renombrar un proyecto dejaba huérfano el histórico, como pasaba con las horas
+    antes de v145). Las filas antiguas siguen leyéndose: `ubic_proyecto` resuelve el
+    ID si lo es y, si no, muestra el texto tal cual.
+    """
     try:
         from core import projects as P
-        return [str(p.get("Nombre", "")) for p in P.list_projects(grupo=grupo)
-                if str(p.get("Nombre", "")).strip()]
+        _ps = [p for p in P.list_projects(grupo=grupo) if str(p.get("ID", "")).strip()]
+        _lbl = P.etiqueta_proyectos(_ps)
+        return [str(p.get("ID", "")) for p in _ps], _lbl
     except Exception:
-        return []
+        return [], {}
 
 
 # ── Vista principal ──────────────────────────────────────────────
@@ -205,7 +216,11 @@ def _detalle(grupo, aid):
             with ac[0].expander(":material/logout: Salida / entregar"):
                 _dt = st.selectbox("Destino", ["proyecto", "usuario", "otro"], key=f"inv_sdt_{aid}")
                 if _dt == "proyecto":
-                    _ref = st.selectbox("Proyecto", _proyectos(grupo) or ["(sin proyectos)"], key=f"inv_srp_{aid}")
+                    # El VALOR es el ID (identidad); la etiqueta es el nombre (comodidad).
+                    _pids, _plbl = _proyectos(grupo)
+                    _ref = st.selectbox("Proyecto", _pids or ["(sin proyectos)"],
+                                        key=f"inv_srp_{aid}",
+                                        format_func=lambda i: _plbl.get(i, i))
                 elif _dt == "usuario":
                     _ref = st.selectbox("Usuario", _usuarios(grupo) or ["(sin usuarios)"], key=f"inv_sru_{aid}")
                 else:
@@ -286,7 +301,12 @@ def _detalle(grupo, aid):
         _ui = INV.UBIC_TIPOS.index(a.get("UbicacionTipo")) if a.get("UbicacionTipo") in INV.UBIC_TIPOS else 0
         ubic_t = e2.selectbox("Ubicación (tipo)", INV.UBIC_TIPOS, index=_ui)
         ubic_r = e1.text_input("Ubicación (detalle)", value=a.get("UbicacionRef", ""),
-                               help="Bodega, nombre del proyecto o del usuario que lo tiene.")
+                               help="Bodega o usuario que lo tiene. Si el activo está en "
+                                    "una obra, aquí va el ID del proyecto (PRJ-####) — se "
+                                    "pone solo al registrar la salida; la lista muestra el "
+                                    "nombre.")
+        if str(a.get("UbicacionRef", "")).startswith("PRJ-"):
+            e1.caption(f":material/folder: {INV.ubic_ref_label(a.get('UbicacionRef'))}")
         vc = e2.number_input("Valor de compra", min_value=0.0, step=10.0,
                              value=_num(a.get("ValorCompra")))
         c3, c4 = st.columns(2)

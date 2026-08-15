@@ -294,9 +294,29 @@ def reporte_valor(grupo: str) -> dict:
 
 
 # ── Movimientos (entradas/salidas/traslado/mantenimiento) — Fase 2 ─
+def ubic_ref_label(ref: str) -> str:
+    """Texto legible de una `UbicacionRef`.
+
+    ⚠️ v306: cuando el destino es un proyecto se guarda su **ID** (`PRJ-####`), no el
+    nombre — el nombre puede repetirse y además cambia al renombrar, y entonces el
+    histórico del activo quedaría colgando de un texto que ya no existe (el mismo fallo
+    que tenían las horas antes de v145). Aquí se resuelve al nombre ACTUAL. Las filas
+    anteriores a v306 guardan el nombre: no casan con ningún ID y se muestran tal cual.
+    """
+    ref = str(ref or "")
+    if not ref.startswith("PRJ-"):
+        return ref
+    try:
+        from core import projects as P
+        p = P.get_project(ref)
+        return f"{p.get('Nombre') or ref}" if p else ref
+    except Exception:
+        return ref
+
+
 def ubic_str(a: dict) -> str:
     t = str(a.get("UbicacionTipo", "") or "")
-    ref = str(a.get("UbicacionRef", "") or "")
+    ref = ubic_ref_label(a.get("UbicacionRef", ""))
     return f"{t}: {ref}" if ref else (t or "—")
 
 
@@ -344,7 +364,11 @@ def salida(aid, grupo, usuario="", hacia_tipo="usuario", hacia_ref="",
     if not a:
         return False, "Activo no encontrado."
     desde = ubic_str(a)
-    hacia = f"{hacia_tipo}: {hacia_ref}" if hacia_ref else hacia_tipo
+    # ⚠️ El ACTIVO guarda el ID (`UbicacionRef`), que es la relación viva y sobrevive a
+    # renombrar el proyecto. El MOVIMIENTO es un registro histórico, así que guarda el
+    # nombre ya resuelto: debe seguir leyéndose años después aunque el proyecto se
+    # archive o cambie de nombre — un log cuenta lo que pasó, no lo que hay ahora.
+    hacia = (f"{hacia_tipo}: {ubic_ref_label(hacia_ref)}" if hacia_ref else hacia_tipo)
     ok, msg = update_activo(aid, {"Estado": "en_uso", "UbicacionTipo": hacia_tipo,
                                   "UbicacionRef": hacia_ref, "AsignadoA": usuario,
                                   "FechaDevolucion": fecha_devolucion})

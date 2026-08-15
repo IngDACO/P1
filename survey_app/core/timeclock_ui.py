@@ -249,12 +249,11 @@ def render_timeclock_tab():
     # ⚠️ Un dict comprehension por NOMBRE descarta homonimos en silencio y ese
     # proyecto se volveria imposible de fichar (mismo fallo que en v147). El
     # nombre puede repetirse: `create_project` solo AVISA de duplicados.
-    idmap = {}
-    for p in proys:
-        _et = str(p.get("Nombre") or "(sin nombre)")
-        if _et in idmap:
-            _et = f"{_et} ({p.get('ID')})"
-        idmap[_et] = str(p.get("ID", ""))
+    # v306: el desempate estaba escrito AQUI a mano y solo marcaba el segundo homonimo
+    # (el primero se quedaba sin ID, asi que seguian sin poder distinguirse). Ahora sale
+    # de `P.etiqueta_proyectos`, la misma que usan Panel/Facturas/Inventario.
+    from core import projects as _P
+    idmap = {_lbl: _pid for _pid, _lbl in _P.etiqueta_proyectos(proys).items()}
 
     if prj:
         st.markdown(f"Estás en **{prj['proyecto'] or '—'}**")

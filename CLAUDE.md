@@ -3444,7 +3444,53 @@ palanca que quedaba era el número de FILAS. Medido en el navegador con las etiq
 - Se pierde el agrupamiento implícito de v196 (las 3 filas eran Proyectos / Equipo / Obra-$), pero
   el ORDEN no cambia y no había ningún rótulo que lo hiciera visible.
 
-## Versiones desplegadas (v305 = actual)
+## Identidad por ID + tipo de proyecto + el ID a la vista (v306)
+Cuatro reglas que fijó el usuario: **internamente todo se relaciona por el ID** (único, irrepetible,
+lo pone el sistema); **el nombre es solo comodidad** para su gestión; hay que **distinguir instalación
+/ delivery / ripout / otros**; y hay que **poder ver el ID de cada proyecto**.
+### Los 3 sitios que aún iban por nombre (auditados a raíz de "¿qué pasa si repito el nombre?")
+`create_project` avisa de duplicados pero **no los impide** (a propósito: dos elevadores de la misma
+torre se llaman igual), así que un `{Nombre: ID}` colapsa homónimos EN SILENCIO. Ya había pasado en
+v147 (documentos) y v150 (fichaje); quedaban tres:
+| Sitio | Qué hacía |
+|---|---|
+| Panel → Asignar (`roster_ui`) | uno de los dos homónimos **desaparecía del desplegable** y no se le podía asignar gente |
+| **Facturas** (`invoices_ui`) | el radio mostraba dos opciones idénticas, el filtro casaba con AMBOS y la línea se enlazaba al proyecto equivocado → **se facturaba mal**, no solo se veía mal |
+| Inventario (`inventory_ui`) | guardaba el **nombre** en `UbicacionRef`: con homónimos no se sabía en qué obra está el activo, y renombrar dejaba el histórico colgando |
+**Fix único:** `projects.etiqueta_proyectos(proys) → {ID: etiqueta}`, con el ID detrás **solo si el
+nombre se repite** (sin colisión la pantalla queda limpia). La usan Panel, Facturas, Inventario y
+también `timeclock_ui`, que tenía su propia copia y solo marcaba el SEGUNDO homónimo (el primero se
+quedaba sin ID, así que seguían sin poder distinguirse).
+- **Inventario** pasa a guardar `PRJ-####` en `UbicacionRef` y a resolverlo al mostrar
+  (`inventory.ubic_ref_label`). Las filas anteriores guardan el nombre y se siguen leyendo tal cual —
+  no hay migración. ⚠️ El **movimiento** (log) guarda el nombre YA RESUELTO: un histórico cuenta lo que
+  pasó, no lo que hay ahora. Y `inventory_ui._ubic_txt` era una COPIA de `ubic_str`: ahora delega
+  (si no, se habría arreglado el backend y la lista seguiría enseñando `PRJ-0007`; patrón de v140).
+- ⚠️ **Guardián permanente** en `verif_v306.py`: por AST, ningún dict-comprehension sobre proyectos
+  puede tener como CLAVE el nombre sin el ID. Se afinó para no gritar en falso con las claves
+  `f"{Nombre} ({ID})"` (marcaba 5 sitios sanos) y **se probó contra el código roto de v305**, que sí
+  detecta — un guardián que no se prueba contra su propio fallo no vale nada.
+### Tipo de proyecto (columna `Tipo`, al final → migra sola)
+`Instalación · Delivery · Ripout · Otro`. Los proyectos anteriores a v306 quedan **vacíos a
+propósito** (no se escribió en la hoja): salen como "sin tipo" hasta que se marquen, en vez de fingir
+que todos eran instalaciones.
+- ⚠️ **No es cosmético:** al crear se llamaba SIEMPRE a `build_schedule(ns, …)`, así que un delivery
+  nacería con las 11 actividades de instalación y una fecha de fin inventada — y ese plan alimenta
+  avance, curva S, SPI y el indicador «En retraso». Ahora solo Instalación lo genera; el resto pide la
+  fecha de fin a mano (campo nuevo, antes no existía porque siempre salía del cronograma).
+- ⚠️ Los demás tipos nacen con **UNA** actividad genérica ("Ejecución"), no con cero: el avance es
+  `Σ(peso·avance)/Σpeso` sobre las actividades, así que sin ninguna el proyecto se quedaría clavado en
+  0% para siempre y el campo no tendría dónde reportar.
+- El selector de tipo va **FUERA** del `st.form` (dentro, los widgets no escriben hasta el submit y el
+  formulario no podría reaccionar) — misma razón que v127 y v189.
+- `create_project` comprueba que la fila y la cabecera tengan el mismo tamaño y devuelve error si no:
+  la fila es POSICIONAL y descuadrarla guarda cada dato en la columna de al lado, en silencio.
+### El ID a la vista
+En la tarjeta de la cartera (monoespaciada, bajo el nombre), como **primera columna** de la vista
+Lista, en la cabecera del detalle, y **buscable** (pegar `PRJ-0007` en el buscador de la cartera lo
+encuentra). La cartera gana filtro por tipo, que solo aparece si hay más de un tipo en el grupo.
+
+## Versiones desplegadas (v306 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -3452,6 +3498,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v306 | **Identidad por ID.** Los 3 sitios que aún casaban proyectos por NOMBRE pasan a ID vía `projects.etiqueta_proyectos` (Panel→Asignar hacía desaparecer un homónimo del desplegable; **Facturas enlazaba el importe al proyecto equivocado**; Inventario guardaba el nombre y ahora guarda `PRJ-####`). + **Tipo de proyecto** (Instalación/Delivery/Ripout/Otro): ⚠️ solo Instalación genera el cronograma estándar — antes un delivery nacía con 11 actividades falsas que ensuciaban avance, SPI y el radar. + **El ID a la vista** en tarjeta, lista (1ª columna), detalle y buscador. Guardián AST permanente contra volver a indexar proyectos por nombre |
 | v305 | Resumen del día: los 9 indicadores pasan de 3 filas a **2 (5+4)** → bloque 232→192 px (del original 304). El alto del botón ya estaba en su suelo (35 px), así que la palanca era el nº de filas. Medido: en UNA fila solo caben con ≥1180 px de contenido y por debajo se parten 4 etiquetas. Guardián nuevo: `zip` trunca en silencio si una fila tuviera más elementos que columnas |
 | v304 | Menú lateral: la cascada por fin se ve — nivel 1 pegado a la izquierda (8 px) y en seminegrita, nivel 2 a 30 px, más pequeño y más fino. ⚠️ El menú salía **centrado**: el CSS de v229 había dejado de aplicar porque Streamlit metió un `span` flex centrado dentro del botón, y porque `font-size`/`font-weight` puestos en el botón nunca llegan al `<p>` (los dos niveles salían a 16 px/peso 400, activo incluido). Además, los huecos del resumen del día bajan de 10 a 5 px (bloque 246→232), con la regla acotada al expander por `key` |
 | v303 | HOME del admin: las 3 tarjetas KPI ganan una línea de contexto (con datos que `_kpis` ya calculaba → 0 lecturas nuevas) y se mudan a la cabecera de la columna del mapa; el resumen del día se comprime sin perder estructura ni nombres (estado al título, pista al `help`, indicadores 52→35 px); el fondo pasa a 3 columnas mapa \| proyectos \| agenda (muere el toggle); y el hueco sobre el buscador baja a 1rem. ⚠️ De paso se arregla un fallo real: los "→ Ir a" del resumen llevaban displays en vez de IDs → 7 de 9 abrían **Agrupaciones** y "Sobre presup." abría **Horas**. La banda azul del cliente NO se toca (decisión del usuario) |

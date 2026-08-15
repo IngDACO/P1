@@ -47,7 +47,19 @@ PROJECTS_HEADERS = [
     # v257: margen (%) sobre la mano de obra para facturar al cliente. Vacío = usa el
     # default del grupo (Grupos.MargenDefault). Base de la 'tarifa de venta' (Fase 1 finanzas).
     "MargenMO",
+    # v306: qué clase de trabajo es. NO es cosmético: solo la instalación tiene el
+    # cronograma estándar de 11 actividades que escalan con el NS, y ese plan alimenta
+    # avance, curva S, SPI y el indicador «En retraso». Los proyectos anteriores a v306
+    # lo tienen VACÍO a propósito (no se tocó la hoja): se muestran como "sin tipo".
+    "Tipo",
 ]
+
+# Tipos de proyecto (v306). `TIPO_INSTALACION` es el único que genera el cronograma
+# estándar de obra; los demás nacen con UNA actividad genérica (ver `create_project`).
+TIPO_INSTALACION = "Instalación"
+TIPOS = [TIPO_INSTALACION, "Delivery", "Ripout", "Otro"]
+TIPO_ICONO = {TIPO_INSTALACION: ":material/construction:", "Delivery": ":material/local_shipping:",
+              "Ripout": ":material/delete_sweep:", "Otro": ":material/category:"}
 ACTIVITIES_HEADERS = [
     "ProyectoID", "Orden", "Nombre", "DuracionDias", "Peso", "Avance",
     "FechaInicioReal", "FechaFinReal", "Nota",
@@ -65,6 +77,33 @@ FMT_DATE = "%Y-%m-%d"
 
 def is_configured() -> bool:
     return timeclock._secrets_present()
+
+
+def etiqueta_proyectos(proys) -> dict:
+    """`{ID: etiqueta única}` para cualquier desplegable/tabla de proyectos.
+
+    El **ID es la identidad** (único, irrepetible, lo pone el sistema); el nombre es
+    solo comodidad para el usuario y **puede repetirse** — `create_project` avisa de
+    los duplicados pero no los impide, a propósito (dos elevadores en la misma torre
+    se llaman igual).
+
+    ⚠️ Por eso NUNCA se debe indexar un dict de proyectos por nombre: los homónimos
+    colapsan y uno se vuelve inalcanzable EN SILENCIO. Ya pasó tres veces (v147 con
+    documentos, v150 con el fichaje, y hasta v306 en Panel→Asignar, Facturas e
+    Inventario). Aquí la clave es el ID y el nombre solo se muestra.
+
+    La etiqueta lleva el ID detrás **solo si el nombre se repite**: sin colisión la
+    pantalla queda limpia, y con colisión se pueden distinguir.
+    """
+    _vistos = {}
+    for p in proys or []:
+        _vistos[str(p.get("Nombre") or "")] = _vistos.get(str(p.get("Nombre") or ""), 0) + 1
+    out = {}
+    for p in proys or []:
+        _pid = str(p.get("ID") or "")
+        _nom = str(p.get("Nombre") or "") or "(sin nombre)"
+        out[_pid] = f"{_nom} ({_pid})" if _vistos.get(str(p.get("Nombre") or ""), 0) > 1 else _nom
+    return out
 
 
 # ── Worksheets (crea la pestaña si no existe) ────────────────────
@@ -237,7 +276,8 @@ def create_project(grupo, nombre, cliente="", ubicacion="", modelo="", ns=0,
                    params=None, matriz=None, interp=None, activities=None,
                    creado_por="", agrupacion_id="", peso_agrupacion=0,
                    instrucciones="", induccion_links="", presupuesto="",
-                   lat="", lng="", certs_req="", cliente_id="", margen_mo="") -> tuple:
+                   lat="", lng="", certs_req="", cliente_id="", margen_mo="",
+                   tipo="") -> tuple:
     """Crea un proyecto (fila en Proyectos + filas en Actividades). Devuelve (ok, id|error)."""
     pws, err = _projects_ws()
     if err:
@@ -265,7 +305,13 @@ def create_project(grupo, nombre, cliente="", ubicacion="", modelo="", ns=0,
         str(certs_req or ""),               # v219: certificados requeridos por el proyecto
         str(cliente_id or ""),              # v255: enlace robusto a la ficha de cliente
         str(margen_mo or ""),               # v257: margen % sobre MO (vacío = default del grupo)
+        str(tipo or ""),                    # v306: instalación / delivery / ripout / otro
     ]
+    # ⚠️ La fila es POSICIONAL: si no cuadra con la cabecera, cada dato se guarda en la
+    # columna de al lado (silencioso y difícil de ver). Se comprueba aquí, no en un test.
+    if len(row) != len(PROJECTS_HEADERS):
+        return False, (f"Error interno: la fila tiene {len(row)} valores y la cabecera "
+                       f"{len(PROJECTS_HEADERS)} columnas.")
     pws.append_row(row, value_input_option="RAW")
 
     # Actividades del cronograma (batch: 1 sola llamada a la API)
