@@ -3318,7 +3318,8 @@ def render_group_profitability(grupo: str):
     facturas reales (con cobrado/pendiente) llegan en la Fase 2.
     """
     from core import finance as F
-    st.markdown("#### :material/trending_up: Rentabilidad del grupo")
+    # ⚠️ SIN cabecera propia: `home_ui._sub_header` ya pinta «Finanzas · X» encima.
+    # Era el 5º título duplicado de la app (v212, v291, v314, v319 y este barrido).
     st.caption("Lo que costó cada proyecto (mano de obra + materiales) frente a lo que "
                "cobrarías (MO × (1 + margen) + materiales) = tu ganancia estimada. El margen sale "
                "de cada proyecto (o del default del grupo); se cambia en ✏️ Datos del proyecto.")
@@ -3361,7 +3362,8 @@ def render_group_profitability(grupo: str):
 def render_group_expenses(grupo: str):
     from core import expenses as E
     from core import theme as T          # v309: `T.dinero` escapa el `$` (LaTeX)
-    st.markdown("#### :material/payments: Gastos del grupo")
+    # ⚠️ SIN cabecera propia: `home_ui._sub_header` ya pinta «Finanzas · X» encima.
+    # Era el 5º título duplicado de la app (v212, v291, v314, v319 y este barrido).
     if not E.is_configured():
         st.warning("Los gastos necesitan Google Sheets configurado.")
         return
@@ -3471,7 +3473,8 @@ def render_group_expenses(grupo: str):
 def render_group_hours(grupo: str):
     from datetime import datetime
     from core import timeclock
-    st.markdown("#### :material/schedule: Horas del grupo")
+    # ⚠️ SIN cabecera propia: `home_ui._sub_header` ya pinta «Finanzas · X» encima.
+    # Era el 5º título duplicado de la app (v212, v291, v314, v319 y este barrido).
     if not timeclock.is_configured():
         st.warning("El fichaje necesita Google Sheets configurado.")
         return
@@ -3489,6 +3492,16 @@ def render_group_hours(grupo: str):
         st.info("Sin fichajes en el periodo.")
         return
 
+    # ⚠️ Dos logins distintos pueden compartir Nombre (hay dos `lksdfkldsf` y dos
+    # `fijiofgjei`): sin el login se vuelven indistinguibles. Se añade SOLO a los que
+    # colisionan. Se define AQUÍ arriba porque lo usan el aviso y la tabla.
+    from collections import Counter as _Counter
+    _nombres = _Counter((d.get("nombre") or d["usuario"]) for d in data)
+
+    def _etiqueta(d):
+        nom = d.get("nombre") or d["usuario"]
+        return f"{nom} ({d['usuario']})" if _nombres[nom] > 1 else nom
+
     # ── Totales del grupo (KPIs) ──
     tot_jorn = sum(d["general"] for d in data)
     tot_proy = sum(d["proyecto"] for d in data)
@@ -3498,27 +3511,37 @@ def render_group_hours(grupo: str):
     pct_sina = (100 * tot_sina / tot_jorn) if tot_jorn > 0 else 0
     _dudoso  = [d for d in data if d["sin_asignar_indet"]]
 
+    # ⚠️ v320: «Costo M.O.» pasa a llamarse por lo que ES. Tras v313 la app distingue
+    # lo que PAGAS (jornada × tarifa + aportes de ley) de lo que CARGAS a las obras
+    # (horas imputadas × tarifa). Esta cifra es la SEGUNDA, y llamarla "costo" a secas
+    # la hacía indistinguible del «Costos» del P&L, que es otro número.
     tarj = [_kpi_card("Personas", activos),
             _kpi_card("Jornada", f"{tot_jorn:.1f} h"),
             _kpi_card("En proyectos", f"{tot_proy:.1f} h"),
-            _kpi_card("Sin asignar", f"{tot_sina:.1f} h",
-                      "#c0392b" if pct_sina > 25 else None),
-            _kpi_card("Costo M.O.", f"${tot_cost:,.0f}")]
+            _kpi_card("Sin asignar", "—" if _dudoso else f"{tot_sina:.1f} h",
+                      "#c0392b" if (_dudoso or pct_sina > 25) else None),
+            _kpi_card("M.O. cargada a obras", f"${tot_cost:,.0f}")]
     st.markdown('<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:6px">'
                 + "".join(tarj) + "</div>", unsafe_allow_html=True)
-    if tot_jorn > 0:
+
+    # ⚠️ «En proyectos» puede salir MAYOR que «Jornada»: alguien fichó a una obra sin
+    # abrir jornada (comportamiento anterior a v150). Eso hace que el total de «sin
+    # asignar» NO sea fiable —la app ya lo marcaba con «—» por persona, pero el KPI del
+    # grupo seguía dando una cifra y un % como si nada— y además es el mismo hueco que
+    # el resumen financiero llama «horas sin nómina»: se cobran y no se pagan.
+    if _dudoso:
+        _n = ", ".join(_etiqueta(d) for d in _dudoso)
+        st.error(f":material/error: **{tot_proy - tot_jorn:+.1f} h**: hay quien imputó a "
+                 f"obras MÁS horas que las de su jornada ({_n}). Fichó al proyecto sin "
+                 "abrir jornada, así que esas horas **se cargan al cliente y no entran en "
+                 "ninguna nómina**. Por eso «sin asignar» sale como «—»: no es calculable.")
+    elif tot_jorn > 0:
         st.caption(f"**{pct_sina:.0f}%** de la jornada del grupo fue traslados y espera "
-                   "(sin asignar). El costo de M.O. = horas imputadas × tarifa de cada persona.")
+                   "(sin asignar). M.O. cargada = horas imputadas × tarifa de cada persona; "
+                   "no incluye los aportes de ley (ver Resumen → Conciliación).")
 
     # ── Tabla por persona (con costo; sin el Login técnico) ──
-    # ⚠️ Dos logins distintos pueden compartir Nombre: sin el Login se volverian
-    # indistinguibles. Se añade el login SOLO a los que colisionan, no a todos.
-    from collections import Counter as _Counter
-    _nombres = _Counter((d.get("nombre") or d["usuario"]) for d in data)
-
-    def _etiqueta(d):
-        nom = d.get("nombre") or d["usuario"]
-        return f"{nom} ({d['usuario']})" if _nombres[nom] > 1 else nom
+    # (`_etiqueta` y `_nombres` se definen arriba: los usa también el aviso)
 
     filas = []
     for d in data:
@@ -3561,6 +3584,10 @@ def render_group_hours(grupo: str):
     for d in data:
         for nom, h in d["por_proyecto"].items():
             por_proy[nom] = por_proy.get(nom, 0.0) + h
+    # ⚠️ Fuera los proyectos con 0.0 h: salían con la barra vacía y solo hacían ruido
+    # (un fichaje de segundos redondea a 0.0). Se filtra por el valor REDONDEADO, que
+    # es el que se muestra: si en pantalla pone «0.0 h», la fila no aporta nada.
+    por_proy = {n: h for n, h in por_proy.items() if round(h, 1) > 0}
     if por_proy:
         st.markdown("**Horas del grupo por proyecto**")
         _tot = sum(por_proy.values()) or 1

@@ -3771,7 +3771,30 @@ comportamiento y el usuario no llegó a decidirlo.
 `_sub_header` ya pinta «Finanzas · Nóminas» y la función repetía «Nóminas». Deja de ser anécdota:
 **al escribir cualquier vista nueva, la cabecera de sección ya la pone la shell.**
 
-## Versiones desplegadas (v319 = actual)
+## Horas del grupo + BARRIDO de títulos duplicados (v320)
+### El barrido que se prometió en v319
+Escaneadas por AST **las 26 vistas** que despacha la shell. ⚠️ Solo son duplicado las que cuelgan de
+una sección **con sub-pestañas** (ahí `_sub_header` pinta «Sección · Sub»); las del campo (Fichaje,
+Mis colillas, Mis credenciales, Mis proyectos) son secciones SIN subs, así que su título es el único
+y **debe quedarse**. Quitados 4: Gastos, Horas, Rentabilidad y Facturas.
+⚠️ **Pre-Start NO se toca**: se despacha en los DOS sitios — sub de Herramientas para el admin (con
+`_sub_header`) y sección propia para el campo (sin él). Quitarle el título dejaría al campo sin
+cabecera. Las 4 herramientas técnicas tampoco: su título añade información («Cálculo de líneas de
+plomada» ≠ «Plomada»).
+### Horas: el KPI «sin asignar» daba una cifra que no era calculable
+`En proyectos` (49,8 h) sale **MAYOR** que `Jornada` (42,1 h) porque alguien fichó a una obra sin
+abrir jornada (comportamiento anterior a v150). La tabla ya marcaba «—» por persona (v151), pero el
+**KPI del grupo seguía mostrando 1,2 h y un 3%** como si el dato fuera bueno. Ahora, si hay alguna
+fila indeterminada, el KPI pone **«—»** y sale un error explicando quién y cuántas horas — que es,
+además, el mismo hueco que el resumen financiero llama «horas sin nómina»: se cargan al cliente y
+no entran en ninguna nómina.
+- **«Costo M.O.» → «M.O. cargada a obras»**: tras v313 la app distingue lo que PAGAS de lo que
+  CARGAS, y esta cifra es la segunda. Llamarla "costo" a secas la hacía indistinguible del «Costos»
+  del P&L, que es otro número.
+- Fuera los proyectos con **0,0 h** del reparto (barra vacía = ruido); se filtra por el valor
+  REDONDEADO, que es el que se ve en pantalla.
+
+## Versiones desplegadas (v320 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -3779,6 +3802,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v320 | **Barrido de títulos duplicados** por AST sobre las 26 vistas de la shell: quitados 4 (Gastos, Horas, Rentabilidad, Facturas). ⚠️ Las vistas del campo y Pre-Start NO se tocan: cuelgan de secciones SIN sub-pestañas, así que su título es el único. + Horas: el KPI «sin asignar» mostraba 1,2 h y un 3% cuando el dato **no era calculable** (hay más horas en obras que de jornada) — ahora pone «—» y explica quién fichó a proyecto sin abrir jornada; «Costo M.O.» pasa a «M.O. cargada a obras» (v313) y fuera los proyectos con 0,0 h |
 | v319 | Nóminas: la lista dejaba pasar **4 colillas de $0** (esas personas no tienen tarifa/hora — `generar` lo detecta y solo se veía al generar), **dos filas homónimas indistinguibles** (nuevo `auth.etiqueta_usuarios`, la regla del ID aplicada a personas) y **gente con horas sin nómina**. Ahora las tres se avisan, con botón a Usuarios. + columna Tarifa/h, totales, filtro de periodo y KPIs con contexto. ⚠️ 4º título duplicado encontrado (v212/v291/v314) |
 | v318 | La torta de composición del costo pasa de fija a **herramienta** (4ª): el usuario la vio fija en v317 y prefirió pedirla al mirarla. La pantalla arranca en la rejilla de pendientes |
 | v317 | **Resumen financiero como torre de control**: rejilla fija de 8 pendientes clickeables (patrón del Resumen del día) + 3 herramientas que se abren debajo (patrón del Panel) + los 3 KPI con línea de contexto; la torta se queda fija. Cuatro indicadores NUEVOS que no estaban en ninguna pantalla: sin facturar, horas sin nómina, sin tarifa, sin margen. Y `resultado_por_proyecto` — ⚠️ acumulado a propósito — que revela que prueba1 se facturó **al costo** (margen 0%), no los $1.710 que sugería el mes natural |

@@ -36,7 +36,8 @@ _EST_FMT = {
 
 
 def render_facturas(grupo):
-    st.markdown("## :material/receipt_long: Facturas")
+    # ⚠️ SIN cabecera propia: `home_ui._sub_header` ya pinta «Finanzas · X» encima.
+    # Era el 5º título duplicado de la app (v212, v291, v314, v319 y este barrido).
     if not I.is_configured():
         st.info(":material/info: Configura Google Sheets para gestionar facturas.")
         return
