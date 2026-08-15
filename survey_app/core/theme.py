@@ -200,7 +200,17 @@ def inject():
 
 
 def _esc(s) -> str:
-    return str(s).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    """Escapa texto para meterlo en HTML.
+
+    ⚠️ v312: además DESHACE el escape de markdown `\\$`. `dinero()` devuelve `\\$1.234`
+    porque en markdown dos `$` sueltos se interpretan como LaTeX — pero en HTML la
+    barra no es un escape, es un carácter, y salía en pantalla: la tarjeta de Gastos
+    mostraba literalmente `\\$3,145`. Como TODAS las piezas HTML del kit pasan por aquí
+    (`kpi_row`, `_kpi_card`, `chip`…), esto lo arregla en el único sitio donde importa
+    y hace imposible volver a cometer el error pasando el importe equivocado.
+    """
+    return (str(s).replace("\\$", "$")
+            .replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;"))
 
 
 def dinero(valor, dec: int = 2, simbolo: str = "$") -> str:
