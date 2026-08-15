@@ -544,6 +544,28 @@ def set_rate(usuario: str, tarifa) -> tuple:
     return True, f"Tarifa de '{usuario}' actualizada."
 
 
+def etiqueta_usuarios(users) -> dict:
+    """`{usuario: etiqueta}` — el Nombre, con el LOGIN detrás **solo si se repite**.
+
+    Misma regla que `projects.etiqueta_proyectos` (v306) aplicada a las personas: el
+    login es la identidad y el nombre es comodidad, y el nombre PUEDE repetirse. En el
+    grupo real hay dos logins llamados `lksdfkldsf` y dos `fijiofgjei`, así que una
+    tabla que muestre solo el nombre deja filas que no se pueden distinguir — pasó en
+    Nóminas (v319) y ya había pasado en el reporte de Horas (v151).
+
+    `users` = iterable de dicts con `Usuario` y `Nombre`.
+    """
+    _n = {}
+    for u in users or []:
+        _n[str(u.get("Nombre") or "")] = _n.get(str(u.get("Nombre") or ""), 0) + 1
+    out = {}
+    for u in users or []:
+        _u = str(u.get("Usuario") or "")
+        _nom = str(u.get("Nombre") or "") or _u
+        out[_u] = f"{_nom} ({_u})" if _n.get(str(u.get("Nombre") or ""), 0) > 1 else _nom
+    return out
+
+
 def rate_map(grupo: str = None) -> dict:
     """Tarifas/hora indexadas por **Usuario** y también por Nombre (respaldo para
     los fichajes antiguos, anteriores a la columna Usuario)."""

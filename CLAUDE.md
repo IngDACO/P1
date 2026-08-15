@@ -3749,7 +3749,29 @@ aportes de ley y las horas sin imputar no son de ninguna obra — los cubre el m
   los 8 sin huecos y **ninguna supera el nº de columnas** (`zip` trunca en silencio, lección v305),
   y los 8 destinos «→ Ir a» existen en `home_ui._SUBSECCIONES`.
 
-## Versiones desplegadas (v318 = actual)
+## Nóminas: lo que la pantalla CALLABA (v319)
+La revisión era de interfaz y lo grave estaba en los datos que la lista dejaba pasar:
+1. **4 de 5 nóminas con base $0.** `asfgjjd` trabajó 8,7 h y su colilla decía **$0** porque esa
+   persona **no tiene tarifa/hora**. ⚠️ `payroll.generar` YA lo detecta (devuelve `sin_tarifa`),
+   pero eso se muestra UNA vez al generar y después la lista deja las colillas a cero como si
+   estuvieran bien. Ahora se avisa en la lista, con nombres y botón a Usuarios.
+2. **Dos filas `fijiofgjei` indistinguibles**: distinto login, mismo nombre, y la tabla solo
+   mostraba `Nombre`. Nuevo **`auth.etiqueta_usuarios(users)`** → añade el login **solo si el
+   nombre se repite**; es la misma regla que `projects.etiqueta_proyectos` (v306) aplicada a las
+   personas, y el mismo fallo que el reporte de Horas ya había tenido en v151.
+3. **Gente con horas y SIN nómina en el periodo** (el hueco de $358,80 que el resumen financiero
+   marca como «Horas sin nómina»): se avisa AQUÍ, que es donde se arregla, usando
+   `timeclock.jornada_y_proyecto` (v313).
+4. **Columna `Tarifa/h`** (vacía = no la tiene puesta) para que «Base $0» tenga explicación, y pie
+   con totales de base y neto.
+5. **Filtro de periodo**: hoy son 5 filas del mismo periodo; en un año son 60.
+⚠️ **NO se bloquea** generar una nómina con tarifa 0: solo se avisa. Cambiar eso altera el
+comportamiento y el usuario no llegó a decidirlo.
+### ⚠️ Título duplicado: CUARTA vez (v212, v291, v314, v319)
+`_sub_header` ya pinta «Finanzas · Nóminas» y la función repetía «Nóminas». Deja de ser anécdota:
+**al escribir cualquier vista nueva, la cabecera de sección ya la pone la shell.**
+
+## Versiones desplegadas (v319 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -3757,6 +3779,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v319 | Nóminas: la lista dejaba pasar **4 colillas de $0** (esas personas no tienen tarifa/hora — `generar` lo detecta y solo se veía al generar), **dos filas homónimas indistinguibles** (nuevo `auth.etiqueta_usuarios`, la regla del ID aplicada a personas) y **gente con horas sin nómina**. Ahora las tres se avisan, con botón a Usuarios. + columna Tarifa/h, totales, filtro de periodo y KPIs con contexto. ⚠️ 4º título duplicado encontrado (v212/v291/v314) |
 | v318 | La torta de composición del costo pasa de fija a **herramienta** (4ª): el usuario la vio fija en v317 y prefirió pedirla al mirarla. La pantalla arranca en la rejilla de pendientes |
 | v317 | **Resumen financiero como torre de control**: rejilla fija de 8 pendientes clickeables (patrón del Resumen del día) + 3 herramientas que se abren debajo (patrón del Panel) + los 3 KPI con línea de contexto; la torta se queda fija. Cuatro indicadores NUEVOS que no estaban en ninguna pantalla: sin facturar, horas sin nómina, sin tarifa, sin margen. Y `resultado_por_proyecto` — ⚠️ acumulado a propósito — que revela que prueba1 se facturó **al costo** (margen 0%), no los $1.710 que sugería el mes natural |
 | v316 | Estado/Datos/Costos/Archivos pasan del radio con bolitas al **segmentado del kit** (`cpxseg_`, la pieza de v292): 412 px, con marco y el activo resaltado. Igual en 📋 Mis proyectos del campo. ⚠️ NO se copió la fila de botones del Panel: aquella es un acordeón de herramientas opcionales (se pueden cerrar todas) y estas son secciones excluyentes; medida, además, salía a 1120 px estirados. Los IDs con emoji y el matching, intactos |

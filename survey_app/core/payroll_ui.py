@@ -27,7 +27,11 @@ def _creado_por() -> str:
 
 # ── Vista admin ──────────────────────────────────────────────────
 def render_nominas(grupo):
-    st.markdown("## :material/payments: Nóminas")
+    """Lista de nóminas + lo que la pantalla CALLABA (v319).
+
+    ⚠️ SIN cabecera propia: `home_ui._sub_header` ya pinta «Finanzas · Nóminas». Es la
+    4ª vez que aparecía este título duplicado (v212, v291, v314).
+    """
     if not payroll.is_configured():
         st.info(":material/info: Configura Google Sheets para gestionar nóminas.")
         return
@@ -38,36 +42,106 @@ def render_nominas(grupo):
         _detalle(grupo, st.session_state["_nom_open"])
         return
 
+    noms = payroll.list_nominas(grupo)
     r = payroll.resumen(grupo)
-    c = st.columns(3)
-    c[0].metric("Por pagar", f"${r['a_pagar']:,.0f}")
-    c[1].metric("Pagado", f"${r['pagado']:,.0f}")
-    c[2].metric("Nóminas", r["n"])
+    _npag = sum(1 for x in noms if str(x.get("Estado", "")).lower() == "pagada")
+    _peri = sorted({(str(x.get("PeriodoDesde", "")), str(x.get("PeriodoHasta", "")))
+                    for x in noms}, reverse=True)
+
+    # Tarjetas del KIT (`theme.kpi_row`), con línea de contexto: «Nóminas 5» a secas no
+    # decía nada. ⚠️ `T.dinero` escapa el `$` para markdown y `kpi_row` pasa por
+    # `theme._esc`, que deshace ese escape al montar el HTML (v312).
+    from core import theme as T
+    T.kpi_row([
+        ("Por pagar", T.dinero(r["a_pagar"], 0),
+         f"{len(noms) - _npag} emitida(s) sin pagar",
+         T.ROJO if r["a_pagar"] > 0 else T.AZUL),
+        ("Pagado", T.dinero(r["pagado"], 0), f"{_npag} pagada(s)"),
+        ("Nóminas", str(r["n"]), f"{len(_peri)} periodo(s)"),
+    ])
 
     if st.button(":material/add_circle: Generar nómina", type="primary", key="nom_gen_btn"):
         st.session_state["_nom_gen"] = True
         st.rerun()
 
-    noms = payroll.list_nominas(grupo)
     if not noms:
         st.caption("Aún no hay nóminas. Genera la primera con «Generar nómina».")
         return
+
+    # ── Filtro de periodo ────────────────────────────────────────
+    # Hoy son 5 filas del mismo periodo; en un año son 60 y la tabla deja de servir.
+    _OPT_TODOS = "Todos los periodos"
+    _lbl = {f"{d} → {h}": (d, h) for d, h in _peri}
+    _sel = st.selectbox("Periodo", [_OPT_TODOS] + list(_lbl), key="nom_periodo",
+                        label_visibility="collapsed")
+    _rows = [x for x in noms
+             if _sel == _OPT_TODOS
+             or (str(x.get("PeriodoDesde", "")), str(x.get("PeriodoHasta", ""))) == _lbl[_sel]]
+    _rows = sorted(_rows, key=lambda x: (str(x.get("PeriodoHasta", "")),
+                                         str(x.get("Nombre", ""))), reverse=True)
+
+    # ── Lo que la pantalla no decía ──────────────────────────────
+    # (a) colillas de $0 porque esa persona no tiene tarifa/hora. `payroll.generar` ya
+    #     lo detecta (devuelve `sin_tarifa`) pero eso se ve UNA vez, al generar, y
+    #     después la lista deja las nóminas a 0 como si estuvieran bien.
+    _cero = sorted({str(x.get("Nombre", "")) for x in _rows
+                    if _num(x.get("Horas")) > 0 and _num(x.get("TarifaHora")) <= 0})
+    if _cero:
+        st.warning(":material/payments: **" + ", ".join(_cero) + "** "
+                   f"tiene{'n' if len(_cero) > 1 else ''} horas trabajadas pero "
+                   "**base $0**: les falta la tarifa/hora. La colilla sale en cero y su "
+                   "trabajo no cuenta en el costo.")
+        if st.button(":material/badge: Poner tarifas en Usuarios", key="nom_ir_users"):
+            from core import home_ui
+            home_ui.navegar("planificacion", "👷 Usuarios")
+
+    # (b) gente con horas en el periodo y SIN nómina. Es el hueco que el resumen
+    #     financiero marca como «Horas sin nómina», pero aquí es donde se arregla.
+    if _sel != _OPT_TODOS:
+        _d, _h = _lbl[_sel]
+        try:
+            from core import timeclock, auth
+            from datetime import datetime as _dt
+            _f = lambda s: _dt.strptime(str(s)[:10], "%Y-%m-%d").date()
+            _hp = timeclock.jornada_y_proyecto(grupo, _f(_d), _f(_h))
+            _con = {str(x.get("Usuario", "")) for x in _rows}
+            _etq = auth.etiqueta_usuarios(auth.list_users(grupo))
+            _falta = [(_etq.get(u, u), v) for u, v in _hp.items()
+                      if u not in _con and (v["jornada"] > 0 or v["proyecto"] > 0)]
+        except Exception:
+            _falta = []
+        if _falta:
+            st.error(":material/person_alert: Sin nómina en este periodo, teniendo horas: "
+                     + " · ".join(f"**{n}** ({v['jornada']:.1f} h jornada / "
+                                  f"{v['proyecto']:.1f} h en obra)" for n, v in _falta))
+
+    # ── Tabla ────────────────────────────────────────────────────
+    # ⚠️ El nombre PUEDE repetirse (hay dos `fijiofgjei` y dos `lksdfkldsf`): sin el
+    # login, dos filas quedan indistinguibles. `auth.etiqueta_usuarios` solo añade el
+    # login cuando hace falta.
+    from core import auth as _A
+    _et = _A.etiqueta_usuarios([{"Usuario": x.get("Usuario"), "Nombre": x.get("Nombre")}
+                                for x in noms])
     st.caption("Toca una nómina para ver el detalle, editar conceptos y marcar pagada.")
-    _rows = sorted(noms, key=lambda x: (str(x.get("PeriodoHasta", "")), str(x.get("Nombre", ""))),
-                   reverse=True)
     df = pd.DataFrame([{
-        "Usuario": str(x.get("Nombre", "")),
-        "Periodo": f"{x.get('PeriodoDesde', '')} → {x.get('PeriodoHasta', '')}",
-        "Horas":   round(_num(x.get("Horas")), 1),
-        "Base":    round(_num(x.get("Base")), 0),
-        "Neto":    round(_num(x.get("Neto")), 0),
-        "Estado":  str(x.get("Estado", "")),
+        "Usuario":  _et.get(str(x.get("Usuario", "")), str(x.get("Nombre", ""))),
+        "Periodo":  f"{x.get('PeriodoDesde', '')} → {x.get('PeriodoHasta', '')}",
+        "Horas":    round(_num(x.get("Horas")), 1),
+        "Tarifa/h": (round(_num(x.get("TarifaHora")), 2)
+                     if _num(x.get("TarifaHora")) > 0 else None),
+        "Base":     round(_num(x.get("Base")), 0),
+        "Neto":     round(_num(x.get("Neto")), 0),
+        "Estado":   str(x.get("Estado", "")),
     } for x in _rows])
     _ev = st.dataframe(
         df, use_container_width=True, hide_index=True,
         on_select="rerun", selection_mode="single-row", key="nom_tbl",
         column_config={"Base": st.column_config.NumberColumn("Base", format="$%d"),
-                       "Neto": st.column_config.NumberColumn("Neto", format="$%d")})
+                       "Neto": st.column_config.NumberColumn("Neto", format="$%d"),
+                       "Tarifa/h": st.column_config.NumberColumn("Tarifa/h", format="$%.2f")})
+    st.caption(f"{len(_rows)} nómina(s)  ·  base {T.dinero(sum(_num(x.get('Base')) for x in _rows), 0)}"
+               f"  ·  neto {T.dinero(sum(_num(x.get('Neto')) for x in _rows), 0)}"
+               "  ·  «Tarifa/h» vacía = esa persona no la tiene puesta.")
     _sr = list(_ev.selection.rows)
     if _sr:
         st.session_state["_nom_open"] = str(_rows[_sr[0]].get("ID", ""))
