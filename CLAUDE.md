@@ -3726,7 +3726,8 @@ Cambio: la KEY pasa a `cpxseg_prj_sec` / `cpxseg_fld_sec` (el CSS del kit enganc
 ## Resumen financiero = torre de control (v317)
 Petición del usuario: *"que el resumen de finanzas sea parecido al panel de planificación o al
 home, en interacción y en ver mucha información en poco espacio de forma organizada"*. Se le mostró
-un mockup y lo aprobó, con un cambio: **la torta se queda FIJA**, no como herramienta.
+un mockup y lo aprobó. La torta se probó FIJA (v317) y en cuanto la vio prefirió tenerla **como una
+herramienta más** (v318): así la pantalla arranca en la rejilla y cada gráfico se pide al mirarlo.
 Se reutilizan las dos mecánicas que ya funcionan, sin inventar patrones nuevos:
 - **Rejilla FIJA de 8 pendientes clickeables** (patrón del «Resumen del día», v196/v199), en 2 filas
   de 4 (v305): Vencido · Por cobrar · **Sin facturar** · Por pagar / **Horas sin nómina** · Sin
@@ -3734,8 +3735,8 @@ Se reutilizan las dos mecánicas que ya funcionan, sin inventar patrones nuevos:
   un «→ Ir a» a la sub-pestaña donde se resuelve. **Cuatro de los ocho no existían en ninguna
   pantalla** y son los que cuestan dinero: trabajo sin facturar, horas que se cobran sin pagarse,
   gente sin tarifa y obras a margen 0%.
-- **Fila de 3 herramientas que se abren debajo** (patrón del Panel, v287): Conciliación · Por
-  cliente · **Por proyecto**.
+- **Fila de 4 herramientas que se abren debajo** (patrón del Panel, v287): Conciliación · Por
+  cliente · Composición · **Por proyecto**.
 ### `finance.resultado_por_proyecto(grupo)` — lo que un P&L por mes NO puede decir
 ⚠️ **ACUMULADO a propósito: NO acepta fechas.** Con el grupo real, «Este mes» daba ganancia $1.710
 porque la factura es del 09/08 y las compras del 28/07; la obra ENTERA dejó **$0** (se facturó
@@ -3748,7 +3749,7 @@ aportes de ley y las horas sin imputar no son de ninguna obra — los cubre el m
   los 8 sin huecos y **ninguna supera el nº de columnas** (`zip` trunca en silencio, lección v305),
   y los 8 destinos «→ Ir a» existen en `home_ui._SUBSECCIONES`.
 
-## Versiones desplegadas (v317 = actual)
+## Versiones desplegadas (v318 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -3756,6 +3757,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v318 | La torta de composición del costo pasa de fija a **herramienta** (4ª): el usuario la vio fija en v317 y prefirió pedirla al mirarla. La pantalla arranca en la rejilla de pendientes |
 | v317 | **Resumen financiero como torre de control**: rejilla fija de 8 pendientes clickeables (patrón del Resumen del día) + 3 herramientas que se abren debajo (patrón del Panel) + los 3 KPI con línea de contexto; la torta se queda fija. Cuatro indicadores NUEVOS que no estaban en ninguna pantalla: sin facturar, horas sin nómina, sin tarifa, sin margen. Y `resultado_por_proyecto` — ⚠️ acumulado a propósito — que revela que prueba1 se facturó **al costo** (margen 0%), no los $1.710 que sugería el mes natural |
 | v316 | Estado/Datos/Costos/Archivos pasan del radio con bolitas al **segmentado del kit** (`cpxseg_`, la pieza de v292): 412 px, con marco y el activo resaltado. Igual en 📋 Mis proyectos del campo. ⚠️ NO se copió la fila de botones del Panel: aquella es un acordeón de herramientas opcionales (se pueden cerrar todas) y estas son secciones excluyentes; medida, además, salía a 1120 px estirados. Los IDs con emoji y el matching, intactos |
 | v315 | Cabecera del detalle de proyecto: avance y horas se meten DENTRO de la tarjeta (barra fina + las dos cifras en una línea), fuera los dos `st.metric` de 660 px, la barra de progreso duplicada y el separador. **Medido: 196→104 px**. ⚠️ Era lo prometido en v311 y no entregado entonces |

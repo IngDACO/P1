@@ -3199,16 +3199,13 @@ def render_pnl(grupo: str):
                      type="primary"):
             _ir_a(_it[6], _it[7])
 
-    # ── Composicion del costo: FIJA (decision del usuario) ────────
-    _comp = [(x, y) for x, y in (("Nóminas", d["costo_nomina"]),
-                                 ("Compras / materiales", d["compras"])) if y > 0]
-    if len(_comp) > 1:
-        st.markdown("**:material/pie_chart: Composición del costo**")
-        st.markdown(_torta_html(_comp, d["costo_total"]), unsafe_allow_html=True)
-
     # ── Herramientas, se abren debajo (patron del Panel) ──────────
+    # La composicion del costo entra aqui como una mas (el usuario la probo fija y
+    # prefirio tenerla bajo demanda): asi la pantalla arranca en la rejilla y cada
+    # grafico se pide cuando se quiere mirar.
     _TOOLS = [("conc", ":material/compare_arrows: Conciliación"),
               ("cli", ":material/groups: Por cliente"),
+              ("comp", ":material/pie_chart: Composición"),
               ("prj", ":material/apartment: Por proyecto")]
     _tc = st.columns(len(_TOOLS))
     _cur = st.session_state.get("_pnl_tool", "")
@@ -3227,6 +3224,18 @@ def render_pnl(grupo: str):
                                 unsafe_allow_html=True)
                 else:
                     st.caption("Sin facturas en este periodo.")
+            elif _cur == "comp":
+                _comp = [(x, y) for x, y in (("Nóminas", d["costo_nomina"]),
+                                             ("Compras / materiales", d["compras"]))
+                         if y > 0]
+                if len(_comp) > 1:
+                    st.markdown("**Composición del costo**")
+                    st.markdown(_torta_html(_comp, d["costo_total"]), unsafe_allow_html=True)
+                elif _comp:
+                    st.caption(f"Todo el costo del periodo es **{_comp[0][0]}** "
+                               f"({T.dinero(_comp[0][1], 0)}): no hay nada que repartir.")
+                else:
+                    st.caption("Sin costos en este periodo.")
             else:
                 _pnl_por_proyecto(grupo, T)
 
