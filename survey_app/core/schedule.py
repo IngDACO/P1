@@ -211,8 +211,18 @@ def _esc(s: str) -> str:
     return str(s).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
+def schedule_svg_alto(n_actividades: int, vw: int = 760) -> int:
+    """Alto REAL del SVG (v311). El `components.html` que lo envuelve necesita una
+    altura fija en px y estaba puesta a ojo (`300 + n*21`), **18 px menos** que el
+    SVG → el pie del gráfico se recortaba. Aquí sale de la misma fórmula que `VH`,
+    así que no pueden volver a divergir.
+    """
+    return 52 + n_actividades * 21 + 34 + 170 + 36 + 26
+
+
 def schedule_svg(sched: dict, real_curve: list = None, today_day: float = None,
-                 avances: list = None, proj: dict = None, titulo: str = "") -> str:
+                 avances: list = None, proj: dict = None, titulo: str = "",
+                 vw: int = 760) -> str:
     """Gantt + curva S con el lenguaje de los planos técnicos (v143).
 
     El problema de la version anterior no era estetico: la BRECHA entre plan y
@@ -234,7 +244,14 @@ def schedule_svg(sched: dict, real_curve: list = None, today_day: float = None,
     start = sched["start_date"]
     n     = len(acts)
 
-    VW, ML, MR, MT = 760, 214, 116, 52
+    # ⚠️ v311: `vw` es PARÁMETRO, con el 760 de siempre por defecto. En la app el
+    # gráfico se pedía a 760 px y quedaba centrado en un contenedor de 1340 con 290 px
+    # de margen a cada lado — y con `ML=214`/`MR=116` las barras vivían en 430 px.
+    # NO se sube el default: este mismo SVG va a los informes PDF (report/user_report),
+    # donde svglib lo escala al ancho de la página; con un lienzo más ancho y el mismo
+    # alto, la misma altura se repartiría entre 13 filas aplastadas. La app pide ancho;
+    # el PDF se queda como estaba.
+    VW, ML, MR, MT = int(vw), 214, 116, 52
     rowH, gap, sc_h, xaxis_h = 21, 34, 170, 36
     gantt_h   = n * rowH
     VH        = MT + gantt_h + gap + sc_h + xaxis_h + 26

@@ -14,7 +14,7 @@ from core import drive_store
 from core import notify
 from core import alerts
 from core import maps
-from core.schedule import schedule_svg
+from core.schedule import schedule_svg, schedule_svg_alto
 from core import survey_calc
 from core import toolruns
 from core import tool_save_ui
@@ -1648,12 +1648,15 @@ def _estado_section(pid: str, grupo: str, prj: dict):
     dg   = proj.get("dias_gap", 0.0)
 
     # ── Titular: una frase que diga como va, antes de cualquier numero ──
+    # ⚠️ v311: el titular se pintaba con `**...**` DENTRO de un `<div>` y Streamlit no
+    # procesa markdown dentro de HTML → en pantalla salían los asteriscos literales
+    # ("Vas **54 puntos por debajo** del plan"). Se emite `<b>` con el color del estado.
     if dv <= -1:
-        _tit, _col = (f"Vas **{abs(dv):.0f} puntos por debajo** del plan", "#c0392b")
+        _tit_html, _col = (f"Vas <b>{abs(dv):.0f} puntos por debajo</b> del plan", "#c0392b")
     elif dv >= 1:
-        _tit, _col = (f"Vas **{dv:.0f} puntos por encima** del plan", "#1e8449")
+        _tit_html, _col = (f"Vas <b>{dv:.0f} puntos por encima</b> del plan", "#1e8449")
     else:
-        _tit, _col = ("Vas **en línea con el plan**", "#2e6da4")
+        _tit_html, _col = ("Vas <b>en línea con el plan</b>", "#2e6da4")
     # ⚠️ proj["today_day"] viene CLAMPADO al total: en un proyecto pasado de fecha
     # diria "día 29 de 29" llevando 40. El real es ps["today_day"].
     _hoy_real = ps["today_day"]
@@ -1676,23 +1679,20 @@ def _estado_section(pid: str, grupo: str, prj: dict):
             _kpi_card("Situación", _est, "#c0392b" if dg > 0.5 else None),
             _kpi_card("Fin proyectado", _fin, _cf)]
 
-    # ── Doble columna (v211): cómo va (izq) | alarmas (der) ──
-    _izq, _der = st.columns([3, 2], gap="large")
-    with _izq:
-        st.markdown(f"<div style='font-size:17px;margin-bottom:8px'>{_tit} "
-                    f"<span style='color:#6b7280;font-size:14px'>· {_dia_txt}</span></div>",
-                    unsafe_allow_html=True)
-        st.markdown('<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px">'
-                    + "".join(tarj) + "</div>", unsafe_allow_html=True)
-    with _der:
-        _alerts_section(pid, grupo, prj.get("Nombre", ""), allow_report=False)
-        st.markdown("")
-        _equipo_proyecto(pid, grupo)
+    # ── v311: titular + KPIs a ANCHO COMPLETO ────────────────────
+    # Antes iban en la columna izquierda de un [3,2] cuya derecha llevaba 6 alarmas
+    # y una tabla: el bloque corto quedaba enfrente del largo y la izquierda se veía
+    # vacía ~800 px. Ahora lo corto va arriba a lo ancho y abajo se enfrentan dos
+    # bloques LARGOS (actividades | alarmas), que es lo que equilibra la pantalla.
+    # ⚠️ El titular va en `st.markdown` SIN html: iba dentro de un `<div>` y ahí el
+    # markdown NO se procesa, así que los `**` salían literales en pantalla.
+    st.markdown(f"<span style='font-size:17px'>{_tit_html}</span>"
+                f"<span style='color:#6b7280;font-size:14px'> · {_dia_txt}</span>",
+                unsafe_allow_html=True)
+    st.markdown('<div style="display:flex;gap:10px;flex-wrap:wrap;margin:8px 0 10px">'
+                + "".join(tarj) + "</div>", unsafe_allow_html=True)
 
-    # ── Cumplimiento de certificados del equipo (si el proyecto exige alguno) ──
-    _cumplimiento_equipo(pid, grupo, prj)
-
-    # ── El ritmo: mas accionable que el SPI ──
+    # ── El ritmo: mas accionable que el SPI (banner, ancho completo) ──
     if d["ritmo_real"] is not None and d["ritmo_nec"] is not None:
         if d["dias_rest"] <= 0:
             st.warning(f":material/schedule: La fecha de fin planificada ya pasó y queda "
@@ -1709,27 +1709,6 @@ def _estado_section(pid: str, grupo: str, prj: dict):
             st.info(f":material/schedule: Vas a **{d['ritmo_real']:.1f} %/día**, justo el ritmo "
                     f"que hace falta ({d['ritmo_nec']:.1f} %/día).")
 
-    # ── Que tocaba hoy vs que se esta haciendo: el porque del retraso ──
-    c1, c2 = st.columns(2)
-    with c1:
-        st.markdown("**:material/push_pin: Tocaba hoy**")
-        if not d["tocaban"]:
-            st.caption("Ninguna actividad tiene su ventana abierta hoy.")
-        for x in d["tocaban"]:
-            if x["avance"] <= 0:
-                st.markdown(f":red[:material/cancel:] **{x['nombre']}** — sin empezar, arrancaba el "
-                            f"{x['desde'].strftime('%d/%m')} ({x['dur']:.0f} d)")
-            else:
-                st.markdown(f":green[:material/check_circle:] {x['nombre']} — {x['avance']:.0f}%")
-    with c2:
-        st.markdown("**:material/pending_actions: En curso ahora**")
-        if not d["en_curso"]:
-            st.caption("Ninguna actividad entre 1% y 99%.")
-        for x in d["en_curso"]:
-            st.markdown(("⏳ " if x["tarde"] else "▶️ ")
-                        + f"{x['nombre']} — {x['avance']:.0f}%"
-                        + (" _(arrastrada)_" if x["tarde"] else ""))
-
     # El diagnostico: el equipo sigue en trabajo viejo y lo de hoy no arranca
     if d["paradas"] and d["arrastradas"]:
         st.warning(":material/stethoscope: El equipo sigue terminando **"
@@ -1741,21 +1720,58 @@ def _estado_section(pid: str, grupo: str, prj: dict):
         st.warning(":material/stethoscope: Sin empezar y ya tocaba: **"
                    + ", ".join(x["nombre"] for x in d["paradas"][:3]) + "**.")
 
-    if d["proximo"]:
-        st.caption(f":material/flag: Próximo hito: **{d['proximo']['nombre']}** arranca el "
-                   f"{d['proximo']['fecha'].strftime('%d/%m/%Y')} "
-                   f"(en {d['proximo']['faltan']:.0f} días).")
+    # ── Dos bloques LARGOS enfrentados: actividades | alarmas y equipo ──
+    _izq, _der = st.columns([3, 2], gap="large")
+    with _izq:
+        # v311: «Tocaba hoy» y «En curso ahora» eran dos columnas, una con UNA línea
+        # y otra con diez → media pantalla vacía. Se fusionan en UNA lista con el
+        # estado de cada actividad, que además es como se lee el Gantt de al lado.
+        st.markdown("**:material/checklist: Actividades**")
+        _vistas = set()
+        for x in d["paradas"]:
+            _vistas.add(x["nombre"])
+            st.markdown(f":red[:material/cancel:] **{x['nombre']}** — sin empezar, "
+                        f"tocaba el {x['desde'].strftime('%d/%m')} ({x['dur']:.0f} d)")
+        for x in d["tocaban"]:
+            if x["nombre"] in _vistas or x["avance"] <= 0:
+                continue
+            _vistas.add(x["nombre"])
+            st.markdown(f":green[:material/check_circle:] {x['nombre']} — "
+                        f"{x['avance']:.0f}% · toca hoy")
+        for x in d["en_curso"]:
+            if x["nombre"] in _vistas:
+                continue
+            st.markdown((":orange[:material/hourglass_top:] " if x["tarde"]
+                         else ":blue[:material/play_arrow:] ")
+                        + f"{x['nombre']} — {x['avance']:.0f}%"
+                        + (" _(arrastrada)_" if x["tarde"] else ""))
+        if not _vistas and not d["en_curso"]:
+            st.caption("Ninguna actividad abierta ni arrastrada.")
+        if d["proximo"]:
+            st.caption(f":material/flag: Próximo hito: **{d['proximo']['nombre']}** arranca el "
+                       f"{d['proximo']['fecha'].strftime('%d/%m/%Y')} "
+                       f"(en {d['proximo']['faltan']:.0f} días).")
+    with _der:
+        _alerts_section(pid, grupo, prj.get("Nombre", ""), allow_report=False)
+        st.markdown("")
+        _equipo_proyecto(pid, grupo)
 
-    # ── La grafica ──
+    # ── Cumplimiento de certificados del equipo (si el proyecto exige alguno) ──
+    _cumplimiento_equipo(pid, grupo, prj)
+
+    # ── La grafica, a ANCHO COMPLETO y con lienzo ancho ──
     st.markdown("**:material/calendar_month: Cronograma y avance**")
     n = len(ps["sched"]["activities"])
+    _VW = 1280          # el ancho del contenido; el SVG escala a 100% hasta ahí
     components.html(
         '<!DOCTYPE html><html><body style="margin:0;background:transparent">'
         + schedule_svg(ps["sched"], real_curve=ps["real"], today_day=ps["today_day"],
                        avances=ps.get("avances"), proj=proj,
-                       titulo=prj.get("Nombre", ""))
+                       titulo=prj.get("Nombre", ""), vw=_VW)
         + '</body></html>',
-        height=int(300 + n * 21), scrolling=False,
+        # ⚠️ el alto sale de la MISMA formula que el SVG (antes era `300 + n*21`,
+        # 18 px de menos, y el pie del grafico se recortaba).
+        height=schedule_svg_alto(n), scrolling=False,
     )
     st.caption("La **banda de color** entre las dos curvas es la brecha contra el "
                "plan (roja si vas por detrás, verde si por delante). ● rojo = la "

@@ -3611,7 +3611,36 @@ dinero → ahora las filas se sacan con `incluir_archivados=True` y el total del
 2. **`group_expenses` está CACHEADA (v108)**: el segundo caso del test devolvía el resultado del
    primero (1.500 en vez de 1.700). → Limpiar `st.cache_data` entre casos.
 
-## Versiones desplegadas (v310 = actual)
+## Detalle de proyecto (Estado): se reordena para no dejar media pantalla vacía (v311)
+### ⚠️ El markdown NO se procesa dentro de HTML
+El titular salía literalmente como `Vas **54 puntos por debajo** del plan`: se emitía con
+`**...**` **dentro de un `<div>`** (`unsafe_allow_html=True`), y ahí Streamlit no interpreta
+markdown. Ahora va con `<b>`. Regla: si el texto viaja dentro de HTML, el énfasis va en HTML.
+### Los tres desperdicios, medidos
+1. **Columnas desparejas.** `[3,2]` con el bloque CORTO (titular + 4 tarjetas) enfrente del LARGO
+   (6 alarmas + tabla de horas) → la izquierda quedaba vacía ~800 px. Y abajo otro `columns(2)` con
+   «Tocaba hoy» (una línea) contra «En curso ahora» (10 actividades). **Ahora lo corto va arriba a
+   ancho completo y abajo se enfrentan dos bloques LARGOS** (actividades | alarmas + equipo).
+2. **El cronograma estaba topado a 760 px** (`VW=760` + `max-width` + `margin:0 auto`): centrado en
+   1340 dejaba 290 px de margen a cada lado, y con `ML=214`/`MR=116` las 13 barras vivían en
+   **430 px**. `vw` pasa a ser PARÁMETRO; la app pide 1280 → área útil **950 px**.
+   ⚠️ **El default sigue en 760 a propósito**: este mismo SVG va a los informes PDF, donde svglib lo
+   escala al ancho de página; con lienzo ancho y el mismo alto, las filas se aplastarían. Verificado
+   que `report.py`/`user_report.py` no pasan `vw` y que svglib sigue convirtiendo el SVG.
+3. **«Tocaba hoy» y «En curso ahora»** se fusionan en UNA lista de actividades con su estado.
+### El pie del gráfico se recortaba
+El `components.html` llevaba `height=300 + n*21` puesto a ojo: **18 px menos** que el alto real del
+SVG. Nuevo `schedule.schedule_svg_alto(n)` con la MISMA fórmula que `VH`, así no pueden divergir.
+### ⚠️ Tres chequeos que fallaron por el test, no por el código (en una sola tanda)
+- Buscar los titulares por "texto que contenga 'puntos por'" pillaba **mi propio comentario** → 5 en
+  vez de 3. Igual con «Tocaba hoy»: el único resto era el comentario que explica la fusión →
+  hay que comparar sobre el código **sin comentarios** (`tokenize`).
+- El alto se comparaba con `n` pedido (13, 25) mientras `build_schedule(6)` da **11** actividades:
+  se comparaban dos `n` distintos. Usar el `n` REAL de la rebanada.
+- El cronograma falso escrito a mano no tenía la clave `scurve` y el test petaba por su culpa →
+  usar `build_schedule` de verdad en vez de inventarse la estructura.
+
+## Versiones desplegadas (v311 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -3619,6 +3648,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v311 | Detalle de proyecto (Estado) reordenado: lo corto (titular + KPIs) va arriba a ancho completo y abajo se enfrentan dos bloques largos (actividades \| alarmas), en vez de dejar la columna izquierda vacía ~800 px. El **cronograma pasa de 760 a 1280 px de lienzo** (área de barras 430→950) — ⚠️ `vw` es parámetro y el default sigue en 760 para NO cambiar los informes PDF. «Tocaba hoy» + «En curso ahora» se fusionan. ⚠️ Fix: el titular mostraba `**` literales porque el markdown no se procesa dentro de HTML; y el iframe del gráfico era 18 px más corto que el SVG, así que recortaba el pie |
 | v310 | ⚠️ **Gastos decía `COSTO ACTUAL $0` con $1.500 en la torta**: `group_expenses` ocultaba los proyectos ARCHIVADOS (v149) y esas compras no contaban en ningún costo, presupuesto ni alerta. Auditada la hoja real (solo lectura): los $1.500 eran de PRJ-0001, archivado. Ahora hay UNA definición (todas las compras del grupo), el P&L usa la misma, las compras sin proyecto se avisan en vez de perderse, y se quitó el gráfico de barras que duplicaba la torta. Sin periodo a propósito (rompería «% consumido»). ⚠️ De paso: el test de v309 daba OK en falso porque el mock ignoraba `incluir_archivados` |
 | v309 | ⚠️ **Fallo en las 3 pantallas de dinero**: dos `$` en la misma cadena hacen que Streamlit la renderice como **LaTeX** — en Facturas la línea de Subtotal/Impuesto/Total salía como fórmula ilegible, en Nóminas igual, en el P&L desaparecían los `$` y el `metric` de Facturas perdía el símbolo. Nuevo `theme.dinero()` (formatea + escapa, idéntico al formato anterior) en los 5 sitios + guardián AST. Y el **P&L gana periodo** (mes/trimestre/año/todo), desglose por cliente, composición del costo y enlaces a Facturas/Nóminas |
 | v308 | Fichaje: ⚠️ **fix de un fallo introducido en v306** — se guardaba la ETIQUETA del desplegable (`prueba (PRJ-0007)`) como nombre del proyecto en la hoja; ahora va el nombre real. Y «Cambiar de proyecto» excluye el actual por ID (antes te ofrecía el que ya tenías abierto). + tarjeta **Esta semana** (lunes→hoy, sin lecturas nuevas) + el estado pasa de tarjeta KPI a franja + Jornada y Proyecto lado a lado (botones de 1350→523 px) |
