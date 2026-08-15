@@ -11,17 +11,11 @@ import streamlit as st
 from core import alerts, expenses, maps
 from core import clientes as C
 from core import projects as P
+from core.num import num as _num
 
 
 def _norm(s) -> str:
     return C._norm(s)
-
-
-def _num(v, d=0.0) -> float:
-    try:
-        return float(v)
-    except Exception:
-        return d
 
 
 def _creado_por() -> str:

@@ -13,6 +13,7 @@ import streamlit as st
 
 from core import timeclock
 from core import clock
+from core.num import col_letter as _col_letter
 
 logger = logging.getLogger(__name__)
 
@@ -67,14 +68,6 @@ def _invalidate():
 
 def _col(h):
     return HEADERS.index(h) + 1
-
-
-def _col_letter(n):
-    s = ""
-    while n > 0:
-        n, r = divmod(n - 1, 26)
-        s = chr(65 + r) + s
-    return s
 
 
 def _parse(d):
@@ -307,6 +300,7 @@ def notify_expiring(grupo, days=DIAS_AVISO) -> int:
 
     hoy = clock.today()
     enviados = 0
+    marcar = []                    # filas a sellar con la fecha de aviso
     for i, r in enumerate(recs):
         if str(r.get("Grupo", "")) != str(grupo):
             continue
@@ -334,10 +328,21 @@ def notify_expiring(grupo, days=DIAS_AVISO) -> int:
                 pass
         if sent_any:
             enviados += 1
-            try:
-                w.update_cell(i + 2, _col("UltimoAviso"), hoy.strftime(FMT_FECHA))
-            except Exception:
-                pass
+            marcar.append(i + 2)
+
+    # ⚠️ v323: esto era UN `update_cell` por credencial DENTRO del bucle, y
+    # `notify_expiring` corre en CADA login de administrador (v187). Con varias
+    # credenciales venciendo a la vez eran N llamadas seguidas a Sheets justo al
+    # entrar — el escenario del 429 que v80 arregló en proyectos, contra un techo
+    # DURO de 60 lecturas/min. Ahora es **1 batch_update** pase lo que pase.
+    if marcar:
+        col = _col_letter(_col("UltimoAviso"))
+        sello = hoy.strftime(FMT_FECHA)
+        try:
+            w.batch_update([{"range": f"{col}{f}", "values": [[sello]]}
+                            for f in marcar])
+        except Exception as e:
+            logger.warning("credentials: no se pudo sellar UltimoAviso: %s", e)
     if enviados:
         _invalidate()
     return enviados

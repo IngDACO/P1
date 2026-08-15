@@ -14,13 +14,7 @@ from core import auth
 from core import expenses as E
 from core import projects as P
 from core import timeclock
-
-
-def _num(v, d=0.0) -> float:
-    try:
-        return float(str(v).replace(",", "."))
-    except Exception:
-        return d
+from core.num import num as _num
 
 
 def project_margin(pid: str, grupo: str, prj: dict = None) -> float:

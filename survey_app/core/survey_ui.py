@@ -12,6 +12,7 @@ conservan esos nombres a proposito: el cuerpo movido los usa tal cual, asi la
 extraccion no tuvo que renombrar nada.
 """
 
+import logging
 import streamlit as st
 import streamlit.components.v1 as components
 import pandas as pd
@@ -37,6 +38,8 @@ from core                 import plan_ui
 from core                 import plan_store
 from core.auth import can_reports
 from core import clock
+
+logger = logging.getLogger(__name__)
 
 # Opción neutra: sin ella el selectbox devuelve el primer proyecto y se
 # escribiría sobre un elevador que nadie eligió.
@@ -1350,8 +1353,13 @@ def render_survey_tab(_ROL, _GRUPO):
                                            "total_off": _best.get("total_off"),
                                            "ns": ap.get("NS")},
                                     usuario=_usr)
-                            except Exception:
-                                pass
+                            except Exception as e:
+                                # El survey YA quedó guardado en el proyecto; esto solo
+                                # alimenta el historial de cálculos (v131). No se avisa
+                                # en pantalla para no ensuciar el éxito, pero deja rastro.
+                                logger.warning(
+                                    "survey_ui: el cálculo no entró al historial "
+                                    "del proyecto %s: %s", _pid, e)
 
                             # Documentos base en Drive (best-effort)
                             if drive_store.is_configured() and drive_store.is_available():

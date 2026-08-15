@@ -19,6 +19,7 @@ import logging
 import streamlit as st
 
 from core import auth, clock, timeclock
+from core.num import col_letter as _col_letter, num as _num
 
 logger = logging.getLogger(__name__)
 
@@ -34,21 +35,6 @@ TIPOS = ["devengo", "deduccion", "aporte"]
 
 def is_configured() -> bool:
     return timeclock._secrets_present()
-
-
-def _num(v, d=0.0) -> float:
-    try:
-        return float(str(v).replace(",", "."))
-    except Exception:
-        return d
-
-
-def _col_letter(n: int) -> str:
-    s = ""
-    while n > 0:
-        n, r = divmod(n - 1, 26)
-        s = chr(65 + r) + s
-    return s
 
 
 def conceptos_de(f: dict) -> list:

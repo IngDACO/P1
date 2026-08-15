@@ -10,11 +10,11 @@ Multi-tenant, migran solas (`timeclock.get_sheet`). QR con `segno` (pure-python)
 """
 import io
 import logging
-from datetime import date
 
 import streamlit as st
 
 from core import clock, timeclock
+from core.num import col_letter as _col_letter, num as _num, parse_date as _parse_date
 
 logger = logging.getLogger(__name__)
 
@@ -53,28 +53,6 @@ def app_url() -> str:
         return str(st.secrets.get("APP_URL", "")).rstrip("/")
     except Exception:
         return ""
-
-
-def _num(v, d=0.0) -> float:
-    try:
-        return float(str(v).replace(",", "."))
-    except Exception:
-        return d
-
-
-def _col_letter(n: int) -> str:
-    s = ""
-    while n > 0:
-        n, r = divmod(n - 1, 26)
-        s = chr(65 + r) + s
-    return s
-
-
-def _parse_date(v):
-    try:
-        return date.fromisoformat(str(v)[:10])
-    except Exception:
-        return None
 
 
 # ── Worksheet + lecturas cacheadas ───────────────────────────────
@@ -160,10 +138,35 @@ def get_activo(aid: str) -> dict:
     return {}
 
 
+def _ids_frescos(title: str, col: str = "ID") -> list:
+    """Los IDs LEÍDOS DE LA HOJA, saltándose la caché (ver `invoices._ids_frescos`).
+
+    ⚠️ v323: `_next_id` leía de `_records()` (cacheado 120 s desde v290) y podía
+    devolver un ID **ya usado**. Con el inventario duele el doble: el QR pegado en
+    el activo apunta al ID, así que dos activos con el mismo ACT-#### comparten
+    etiqueta física y su historial de movimientos se mezcla.
+    """
+    w, err = _ws(title)
+    if err or w is None:
+        return []
+    try:
+        vals = w.get_all_values()
+    except Exception as e:
+        logger.warning("inventory: lectura fresca de IDs de %s falló: %s", title, e)
+        return []
+    if not vals:
+        return []
+    try:
+        i = vals[0].index(col)
+    except ValueError:
+        return []
+    return [f[i] for f in vals[1:] if len(f) > i]
+
+
 def _next_id() -> str:
     mx = 0
-    for r in _records(ACTIVOS_SHEET):
-        aid = str(r.get("ID", ""))
+    for aid in _ids_frescos(ACTIVOS_SHEET):
+        aid = str(aid)
         if aid.startswith("ACT-"):
             try:
                 mx = max(mx, int(aid.split("-")[1]))

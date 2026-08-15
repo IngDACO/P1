@@ -19,6 +19,7 @@ import streamlit as st
 
 from core import timeclock
 from core import clock
+from core.num import col_letter as _col_letter, num as _num
 
 logger = logging.getLogger(__name__)
 
@@ -169,13 +170,6 @@ def _invalidate():
 
 
 # ── Helpers de dominio ───────────────────────────────────────────
-def _num(v, default=0.0):
-    try:
-        return float(v)
-    except Exception:
-        return default
-
-
 def compute_avance(activities: list) -> float:
     """% del proyecto = Σ(peso × avance) / Σ(peso).  activities: list de dicts."""
     tot_peso = sum(_num(a.get("Peso")) for a in activities)
@@ -216,15 +210,6 @@ def _find_row(ws, header, value):
         if str(r.get(header, "")) == str(value):
             return i + 2  # +1 cabecera, +1 base-1
     return None
-
-
-def _col_letter(n: int) -> str:
-    """Índice de columna (1-based) → letra(s) A1 (1→A, 27→AA)."""
-    s = ""
-    while n > 0:
-        n, r = divmod(n - 1, 26)
-        s = chr(65 + r) + s
-    return s
 
 
 # ── Agrupaciones ─────────────────────────────────────────────────

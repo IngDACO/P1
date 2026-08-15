@@ -8,7 +8,6 @@ cliente (grupo) al que pertenece el admin — sin IA. Dos salidas:
   en vivo para que el agente responda preguntas, recomiende y redacte.
 """
 import logging
-from datetime import datetime
 
 import streamlit as st
 
@@ -17,19 +16,11 @@ from core import alerts
 from core import auth
 from core import prestart
 from core import clock
+from core.num import parse_date as _parse_date
 
 logger = logging.getLogger(__name__)
 
 _DONE = ("Completado", "Cancelado")
-
-
-def _parse_date(s):
-    for fmt in ("%Y-%m-%d", "%d/%m/%Y"):
-        try:
-            return datetime.strptime(str(s).strip()[:10], fmt).date()
-        except Exception:
-            pass
-    return None
 
 
 def _base(grupo) -> dict:

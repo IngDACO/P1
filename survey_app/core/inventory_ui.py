@@ -4,18 +4,15 @@ KPIs + lista filtrable → ficha (foto, QR + etiqueta PDF, datos, valor deprecia
 edición, baja) + registro + catálogo de categorías. Solo admin/propietario.
 Movimientos (entradas/salidas) y el escaneo que abre la ficha llegan en la Fase 2.
 """
+import logging
 import pandas as pd
 import streamlit as st
 
 from core import clock
 from core import inventory as INV
+from core.num import num as _num
 
-
-def _num(v, d=0.0) -> float:
-    try:
-        return float(str(v).replace(",", "."))
-    except Exception:
-        return d
+logger = logging.getLogger(__name__)
 
 
 def _creado_por() -> str:
@@ -375,8 +372,13 @@ def _registro(grupo):
                     foto_id = drive_store.upload_to(drive_store.folder("COPEX Activos"),
                                                     _foto.name, _foto.getvalue(),
                                                     _foto.type or "image/jpeg")
-            except Exception:
-                pass
+            except Exception as e:
+                # ⚠️ v323: era un `pass` mudo. El activo se creaba igual (correcto,
+                # la foto es accesoria) pero el usuario ADJUNTÓ una foto y se le
+                # decía que todo fue bien: creía tenerla guardada y no estaba.
+                logger.warning("inventory_ui: la foto del activo no subió a Drive: %s", e)
+                st.warning(":material/warning: El activo se registra, pero **la foto no "
+                           "se pudo subir** a Drive. Añádela luego desde su ficha.")
         ok, res = INV.create_activo(
             grupo=grupo, nombre=nombre, categoria=categoria, marca=marca, modelo=modelo,
             serie=serie, foto_id=foto_id, fecha_compra=f_compra, valor_compra=vc,

@@ -17,6 +17,7 @@ from core import timeclock
 from core import notify
 from core import auth
 from core import clock
+from core.num import col_letter as _col_letter
 
 logger = logging.getLogger(__name__)
 
@@ -57,14 +58,6 @@ def _invalidate():
         _records.clear()
     except Exception:
         pass
-
-
-def _col_letter(n):
-    s = ""
-    while n > 0:
-        n, r = divmod(n - 1, 26)
-        s = chr(65 + r) + s
-    return s
 
 
 # ── Lecturas ─────────────────────────────────────────────────────

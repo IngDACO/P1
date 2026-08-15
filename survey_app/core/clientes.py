@@ -15,6 +15,7 @@ import logging
 import streamlit as st
 
 from core import clock, timeclock
+from core.num import col_letter as _col_letter
 
 logger = logging.getLogger(__name__)
 
@@ -33,21 +34,6 @@ def is_configured() -> bool:
 def _norm(s) -> str:
     """Nombre normalizado para casar cliente↔proyecto (sin may/min ni espacios dobles)."""
     return " ".join(str(s or "").strip().lower().split())
-
-
-def _num(v, default=0.0) -> float:
-    try:
-        return float(v)
-    except Exception:
-        return default
-
-
-def _col_letter(n: int) -> str:
-    s = ""
-    while n > 0:
-        n, r = divmod(n - 1, 26)
-        s = chr(65 + r) + s
-    return s
 
 
 # ── Worksheet + lecturas cacheadas ───────────────────────────────
@@ -101,11 +87,35 @@ def get_cliente(cid: str) -> dict:
 
 
 # ── Escrituras ───────────────────────────────────────────────────
+def _ids_frescos(col: str = "ID") -> list:
+    """Los IDs LEÍDOS DE LA HOJA, saltándose la caché (ver `invoices._ids_frescos`).
+
+    ⚠️ v323: `_next_id` leía de `_records()` (cacheado 120 s desde v290) y podía
+    devolver un ID **ya usado**. El ID es la identidad: dos clientes con el mismo
+    CLI-#### se pisan y los proyectos enlazados apuntan al equivocado.
+    """
+    w, err = _ws()
+    if err or w is None:
+        return []
+    try:
+        vals = w.get_all_values()
+    except Exception as e:
+        logger.warning("clientes: lectura fresca de IDs falló: %s", e)
+        return []
+    if not vals:
+        return []
+    try:
+        i = vals[0].index(col)
+    except ValueError:
+        return []
+    return [f[i] for f in vals[1:] if len(f) > i]
+
+
 def _next_id() -> str:
-    """CLI-#### incremental (máximo existente + 1)."""
+    """CLI-#### incremental (máximo existente + 1). Lee FRESCO: es escritura."""
     mx = 0
-    for r in _records():
-        cid = str(r.get("ID", ""))
+    for cid in _ids_frescos():
+        cid = str(cid)
         if cid.startswith("CLI-"):
             try:
                 mx = max(mx, int(cid.split("-")[1]))

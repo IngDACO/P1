@@ -7,6 +7,7 @@ Usuarios en Google Sheets (hoja 'Login', mismo spreadsheet que el fichaje):
 Roles: propietario, administrador, campo.
 Contraseñas encriptadas con PBKDF2-SHA256 (nunca en texto plano).
 """
+import logging
 import hashlib
 import hmac
 import os
@@ -16,6 +17,8 @@ import uuid
 import streamlit as st
 
 from core import timeclock
+
+logger = logging.getLogger(__name__)
 
 LOGIN_SHEET   = "Login"
 # Columnas nuevas al final para no romper filas existentes (migración segura).
@@ -432,8 +435,11 @@ def heartbeat(usuario: str, token: str) -> bool:
         return False
     try:
         lws.update_cell(row, _COL["SessionTime"], str(int(time.time())))
-    except Exception:
-        pass
+    except Exception as e:
+        # El silencio es DELIBERADO (v289: un hipo de la API no puede tumbar la
+        # app, y el heartbeat es la primera llamada de cada carga). Pero mudo del
+        # todo tampoco: sin rastro, una racha de 429 parece "la sesión se cae sola".
+        logger.warning("auth: heartbeat de %s no pudo escribir: %s", usuario, e)
     return True
 
 
@@ -503,8 +509,12 @@ def end_session(usuario: str, token: str = None):
         try:
             lws.update_cell(row, _COL["SessionToken"], "")
             lws.update_cell(row, _COL["SessionTime"], "")
-        except Exception:
-            pass
+        except Exception as e:
+            # ⚠️ Si esto falla, el token sigue vivo en la hoja y la sesión única
+            # (v75) BLOQUEA el siguiente login durante 180 s: el usuario cierra
+            # sesión, vuelve a entrar y le dice "ya hay una sesión activa".
+            logger.warning("auth: no se pudo liberar la sesión de %s: %s "
+                           "→ su próximo login puede salir bloqueado", usuario, e)
 
 
 # ── Gestión de usuarios ──────────────────────────────────────

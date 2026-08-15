@@ -16,6 +16,7 @@ import streamlit as st
 
 from core import timeclock
 from core import clock
+from core.num import num as _num
 
 logger = logging.getLogger(__name__)
 
@@ -29,13 +30,6 @@ _FOLDER = "COPEX Recibos"
 
 def is_configured() -> bool:
     return timeclock._secrets_present()
-
-
-def _num(v) -> float:
-    try:
-        return float(str(v).replace(",", ".").replace("$", "").strip() or 0)
-    except Exception:
-        return 0.0
 
 
 def _ws():

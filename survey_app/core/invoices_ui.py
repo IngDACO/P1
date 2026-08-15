@@ -12,13 +12,7 @@ from core import auth, clock
 from core import clientes as C
 from core import invoices as I
 from core import projects as P
-
-
-def _num(v, d=0.0) -> float:
-    try:
-        return float(str(v).replace(",", "."))
-    except Exception:
-        return d
+from core.num import num as _num
 
 
 def _creado_por() -> str:

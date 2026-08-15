@@ -12,17 +12,11 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+from core.num import num as _num
 
 C_BRAND = colors.HexColor("#1a3a5c")
 C_LIGHT = colors.HexColor("#e8f1fb")
 C_MUTE  = colors.HexColor("#7a8699")
-
-
-def _num(v, d=0.0) -> float:
-    try:
-        return float(str(v).replace(",", "."))
-    except Exception:
-        return d
 
 
 def _money(v) -> str:

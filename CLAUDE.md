@@ -3851,7 +3851,60 @@ Duplicación de helpers (`_num` en 14 módulos, `_records` en 12, `_ws` en 10, `
 `credentials.notify_expiring`, corre en cada login de admin). Son refactors de riesgo real sobre
 código que funciona; van aparte, no en una limpieza.
 
-## Versiones desplegadas (v322 = actual)
+## Los helpers duplicados NO eran cosmética: la divergencia ERA el fallo (v323)
+Segunda pasada de la revisión: en v322 dejé anotada la duplicación de helpers como
+"refactor sin beneficio visible". Al medirla, **estaba equivocado**: no eran 14 copias
+del mismo código, eran **5 implementaciones DISTINTAS** de `_num`, 2 de `_parse_date` y
+7 de `_col_letter`, y dos de esas divergencias son fallos de dinero.
+### ⚠️ `_num`: cualquier importe con separador de miles valía $0,00
+Las 5 variantes hacían `float(v)` o `float(str(v).replace(",", "."))`. Con `1,234.56`
+—que es justo como Sheets formatea el dinero en AU/US— las **cinco** revientan y
+devuelven **0.0 en silencio**. Medido: de 9 casos de formato, 13 resultados incorrectos
+repartidos por costos, facturas, nóminas e inventario.
+- **Auditada la hoja REAL en SOLO LECTURA** (gspread crudo con scope `readonly`: los
+  helpers de la app migran cabeceras al acceder, regla v145): **0 casos hoy**. El fallo
+  es LATENTE, no activo — todo lo que hay lo escribió la app (`number_input` → float
+  plano). Por eso era el momento de unificar: **está demostrado que no cambia ningún
+  número existente** (5000 importes en formato de la app, 0 diferencias).
+- Vive en **`core/num.py`** (módulo HOJA, no importa nada de `core` → sin ciclos).
+  Regla: con los dos separadores, el ÚLTIMO es el decimal; solo coma en grupos de 3 →
+  miles; **solo punto → decimal SIEMPRE** (es lo que la app escribe: tarifas, horas).
+### ⚠️ `_parse_date`: una fecha no-ISO desaparecía del P&L
+`invoices`/`inventory` usaban `date.fromisoformat`, que solo acepta ISO. Un
+`16/08/2026` —el formato de texto libre que hubo hasta v149— se leía `None`, y una fila
+sin fecha legible **queda fuera de todo filtro por periodo** (v309): esa factura no
+salía en «Este mes» ni en ningún otro, sin decir nada. `admin_digest` ya aceptaba los
+dos formatos; ahora los tres comparten el mismo, día primero (AU).
+### ⚠️ `_next_id` leía de la caché → podía repetir un ID
+`invoices`, `clientes` e `inventory` lo calculaban sobre `_records()`, que está
+**cacheado 120 s** (TTL subido en v290). Si la caché no se invalidó, el "siguiente" ID
+sale **ya usado** — y aquí *el ID es la identidad*: dos facturas que se pisan, dos
+clientes que confunden sus proyectos, dos activos compartiendo la etiqueta QR física.
+`toolruns._next_id` ya leía fresco y lo documentaba; los otros tres no. ⚠️ Cuesta **1
+lectura extra por creación**, aceptado: crear es una acción humana y rara, y la
+alternativa es corromper la identidad.
+### `notify_expiring`: N escrituras seguidas en cada login de admin
+Era un `update_cell` por credencial DENTRO del bucle, y esta función corre en **cada
+login de administrador** (v187). Con varias credenciales venciendo a la vez eran N
+llamadas seguidas justo al entrar, contra el techo DURO de 60/min. Ahora **1
+`batch_update`** pase lo que pase (el patrón de v80).
+### Los silencios que escondían una escritura fallida
+De los **128** `except: pass` del repo, solo **7** se tragaban una escritura; los otros
+121 son lectura/display/opcional y el silencio ahí es correcto. Los 7 ahora dejan
+rastro (sin cambiar el flujo). El peor con diferencia: **`timeclock.get_sheet`** — si
+la migración de cabecera falla, los módulos siguen escribiendo por el índice CANÓNICO
+de `HEADERS` y **cada dato cae en la columna de al lado**. Se registra como ERROR. Los
+otros: el heartbeat y la liberación de sesión (v75/v289 — el silencio es deliberado,
+pero sin rastro una racha de 429 parece "la sesión se cae sola"), y tres best-effort de
+Drive donde el usuario creía haber guardado una foto o un PDF que no se subió (ahí
+además se avisa en pantalla).
+### Lo que sigo SIN tocar, y por qué
+`_ws` (×10), `_records` (×12), `is_configured` (×15) e `_invalidate` (×11) **parecen**
+duplicados pero cada uno se ata a su hoja, su cabecera y su clave de caché. Unificarlos
+es construir un repositorio genérico de hojas sobre 12 módulos que tocan datos de
+producción: mucho riesgo de regresión, cero cambio para el usuario. Se quedan.
+
+## Versiones desplegadas (v323 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -3859,6 +3912,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v323 | Los helpers duplicados **no eran cosmética**: eran 5 implementaciones DISTINTAS de `_num`, 2 de `_parse_date` y 7 de `_col_letter`, y la divergencia era el fallo. ⚠️ **Cualquier importe con separador de miles (`1,234.56`, como Sheets formatea el dinero en AU) se leía como $0,00 en silencio** en las cinco variantes — costos, facturas, nóminas e inventario. Auditada la hoja real en SOLO LECTURA: 0 casos hoy (latente), así que unificar está probado que no cambia ningún número existente (5000 importes, 0 diferencias). Todo a `core/num.py`. + Una fecha no-ISO (`16/08/2026`) se leía `None` y esa factura **desaparecía del P&L**. + `_next_id` de facturas/clientes/inventario leía de la caché de 120 s y **podía repetir un ID** (y el ID es la identidad). + `notify_expiring` hacía N escrituras seguidas en CADA login de admin → 1 `batch_update`. + de los 128 `except: pass`, los 7 que se tragaban una escritura ya dejan rastro — el peor, `timeclock.get_sheet`: si la cabecera no migra, cada dato se guarda **en la columna de al lado** |
 | v322 | **Revisión de código**: 8 funciones muertas (−124 líneas, 0 referencias en todo el repo, verificado por AST porque grep cuenta mis propios comentarios) + 27 imports sin usar en 20 archivos. ⚠️ Y el hallazgo de fondo: **archivar un ascensor cambiaba en silencio el avance consolidado, la fecha de entrega y la curva S de todo el edificio** — las 6 consultas de miembros de una agrupación heredaban el "ocultar archivados" de v149, que es correcto para una lista y falso para un conjunto (misma familia que v145/v310/v321: archivar no des-construye el ascensor). ⚠️ Ese arreglo introdujo una regresión que cazó la verificación: el editor de miembros no mostraba al archivado y al guardar lo **desagrupaba solo**; y mi guardián solo veía una de las dos formas de escribir la consulta, así que la tarjeta de agrupación contaba menos elevadores que su propio % |
 | v321 | Rentabilidad: **el margen se edita en la propia tabla** (antes te mandaba a Datos de cada proyecto estando ya en la lista de márgenes) + columnas **Ya facturado / Por facturar** para contrastar el estimado con la realidad + las obras sin movimiento a un desplegable. ⚠️ Fix de un fallo de v310: el margen propio de un proyecto **archivado** se ignoraba y usaba el default del grupo, porque `group_expenses` pasó a incluir archivados y el mapa de márgenes no |
 | v320 | **Barrido de títulos duplicados** por AST sobre las 26 vistas de la shell: quitados 4 (Gastos, Horas, Rentabilidad, Facturas). ⚠️ Las vistas del campo y Pre-Start NO se tocan: cuelgan de secciones SIN sub-pestañas, así que su título es el único. + Horas: el KPI «sin asignar» mostraba 1,2 h y un 3% cuando el dato **no era calculable** (hay más horas en obras que de jornada) — ahora pone «—» y explica quién fichó a proyecto sin abrir jornada; «Costo M.O.» pasa a «M.O. cargada a obras» (v313) y fuera los proyectos con 0,0 h |

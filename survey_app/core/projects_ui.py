@@ -2,6 +2,7 @@
 UI del panel de administración de proyectos (rol administrador).
 Navegación con st.radio (NO st.tabs) para evitar mezcla de contenido.
 """
+import logging
 from datetime import timedelta
 
 import pandas as pd
@@ -26,6 +27,8 @@ from core import timeclock
 _VACIO = "— elige un proyecto —"
 from core import ui_common as ui
 from core import clock
+
+logger = logging.getLogger(__name__)
 
 
 def _alerts_section(pid, grupo, project_name="", allow_report=False):
@@ -475,8 +478,14 @@ def _cargar_plano(pid: str):
                                                   "application/pdf")
                         P.add_document(pid, _pdf.name, "plano", _fid,
                                        st.session_state.get("auth", {}).get("usuario", ""))
-                except Exception:
-                    pass
+                except Exception as e:
+                    # Los DATOS del plano (PlanoJSON) ya se guardaron arriba, que es
+                    # lo que leen las herramientas; archivar el PDF es accesorio y no
+                    # debe tumbar la carga. Pero mudo no: el usuario subió un PDF y
+                    # luego no lo encuentra en 📎 Archivos sin saber por qué.
+                    logger.warning("projects_ui: el PDF del plano no se archivó: %s", e)
+                    st.info(":material/info: Los datos del plano quedaron guardados, "
+                            "pero **el PDF no se pudo archivar** en Drive.")
                 _barra.empty()
                 st.session_state[_idk] = f"{_pdf.name}:{_pdf.size}"   # guarda v112
                 st.success(":material/check_circle: Plano cargado — alimenta tus 5 herramientas técnicas.")

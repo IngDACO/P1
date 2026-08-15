@@ -11,11 +11,11 @@ Patrón calcado de projects.py/clientes.py (hoja cacheada + invalidación + batc
 """
 import json
 import logging
-from datetime import date
 
 import streamlit as st
 
 from core import clock, timeclock
+from core.num import col_letter as _col_letter, num as _num, parse_date as _parse_date
 
 logger = logging.getLogger(__name__)
 
@@ -32,28 +32,6 @@ _FCOL = {h: i + 1 for i, h in enumerate(FACTURAS_HEADERS)}
 
 def is_configured() -> bool:
     return timeclock._secrets_present()
-
-
-def _num(v, d=0.0) -> float:
-    try:
-        return float(str(v).replace(",", "."))
-    except Exception:
-        return d
-
-
-def _col_letter(n: int) -> str:
-    s = ""
-    while n > 0:
-        n, r = divmod(n - 1, 26)
-        s = chr(65 + r) + s
-    return s
-
-
-def _parse_date(v):
-    try:
-        return date.fromisoformat(str(v)[:10])
-    except Exception:
-        return None
 
 
 # ── Worksheet + lecturas cacheadas ───────────────────────────────
@@ -173,10 +151,36 @@ def resumen_cliente(grupo: str, cliente_id: str) -> dict:
 
 
 # ── Escrituras ───────────────────────────────────────────────────
+def _ids_frescos(col: str = "ID") -> list:
+    """Los IDs LEÍDOS DE LA HOJA, saltándose la caché.
+
+    ⚠️ v323: `_next_id` leía de `_records()`, que está cacheado **120 s** (TTL
+    subido en v290). Si la caché no se invalidó —o se pobló entre la creación y
+    la siguiente— el "siguiente" ID sale **repetido**, y en esta app *el ID es la
+    identidad*: dos facturas con el mismo ID se pisan. Es ruta de ESCRITURA, así
+    que lee fresco, igual que `toolruns._next_id` y `projects._find_row`.
+    """
+    w, err = _ws()
+    if err or w is None:
+        return []
+    try:
+        vals = w.get_all_values()
+    except Exception as e:
+        logger.warning("invoices: lectura fresca de IDs falló: %s", e)
+        return []
+    if not vals:
+        return []
+    try:
+        i = vals[0].index(col)
+    except ValueError:
+        return []
+    return [f[i] for f in vals[1:] if len(f) > i]
+
+
 def _next_id() -> str:
     mx = 0
-    for r in _records():
-        fid = str(r.get("ID", ""))
+    for fid in _ids_frescos():
+        fid = str(fid)
         if fid.startswith("FAC-"):
             try:
                 mx = max(mx, int(fid.split("-")[1]))

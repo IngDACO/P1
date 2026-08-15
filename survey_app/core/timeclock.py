@@ -8,11 +8,15 @@ Requiere en los Secrets de Streamlit:
 Esquema de la hoja (una fila por sesión de trabajo):
   Nombre | PIN | Proyecto | Ubicacion | Clock In | Clock Out | Horas | Estado
 """
+import logging
 from datetime import datetime, timedelta, date, time
 from time import sleep as _dormir   # ⚠️ `time` de arriba es datetime.time, NO el módulo
 
 import streamlit as st
 from core import clock
+from core.num import num as _num
+
+logger = logging.getLogger(__name__)
 
 HEADERS = ["Nombre", "PIN", "Proyecto", "Ubicacion",
            "Clock In", "Clock Out", "Horas", "Estado", "Grupo", "Tipo", "Usuario",
@@ -99,8 +103,11 @@ def _cached_ws():
                     if ws.col_count < i:
                         ws.add_cols(i - ws.col_count)
                     ws.update_cell(1, i, h)
-    except Exception:
-        pass
+    except Exception as e:
+        # ⚠️ v323: mismo caso que en `get_sheet` — si la cabecera del fichaje no
+        # migra, las escrituras por índice canónico se desalinean en silencio.
+        logger.error("timeclock: no se pudo asegurar la cabecera del fichaje: %s "
+                     "→ las escrituras pueden quedar desalineadas", e)
     return ws
 
 
@@ -186,8 +193,16 @@ def get_sheet(title: str, headers: tuple):
                         w.add_cols(i - w.col_count)
                     w.update_cell(1, i, h)
                     head = head + [h] if i > len(head) else head
-                except Exception:
-                    pass
+                except Exception as e:
+                    # ⚠️ v323: esto era un `pass` mudo, y es el silencio más caro
+                    # del repo. Los módulos calculan la columna donde escribir con
+                    # el índice CANÓNICO de `HEADERS`; si la migración falla, la
+                    # hoja se queda sin esa columna y las escrituras posteriores
+                    # caen **desplazadas**, guardando cada dato en la columna de al
+                    # lado. Sin rastro. Se registra como ERROR, no warning.
+                    logger.error("timeclock: no se pudo migrar la columna %r (pos %d) "
+                                 "de la hoja %r: %s  → las escrituras de esa hoja "
+                                 "pueden quedar desalineadas", h, i, clave, e)
         cabeceras[clave] = head
     return w
 
@@ -340,13 +355,6 @@ def clock_out(nombre: str, grupo: str = "", tipo: str = TIPO_PROYECTO,
 
     _invalidate_records()
     return True, f"✅ Clock OUT a las {out_ts}. Horas trabajadas: {horas}."
-
-
-def _num(v) -> float:
-    try:
-        return float(str(v).replace(",", ".").strip() or 0)
-    except Exception:
-        return 0.0
 
 
 @st.cache_data(ttl=120, show_spinner=False)
