@@ -15,7 +15,6 @@ extraccion no tuvo que renombrar nada.
 import streamlit as st
 import streamlit.components.v1 as components
 import pandas as pd
-from datetime import date
 from extractors.schindler import extract_from_pdf, PARAMS as PDF_PARAMS, PARAM_DESCRIPTIONS
 from core.calculations import calculate_limits, apply_offsets, analyze_matrix, validate_inputs
 from core.optimizer    import optimize
@@ -33,9 +32,6 @@ from core.plumb           import (compute_plumb, plumb_svg, plumb_table, plumb_c
                                   plumb_iso_svg, plumb_detail_svg, plumb_card_svg)
 from core                 import projects as projects_data
 from core                 import drive_store
-from core                 import notify
-from core.auth            import get_user as auth_get_user
-from core                 import credentials
 from core                 import toolruns
 from core                 import plan_ui
 from core                 import plan_store

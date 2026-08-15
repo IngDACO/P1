@@ -3812,7 +3812,46 @@ devolviera lo mismo siempre, daría OK en falso (la trampa de v309/v310).
 - Las obras **sin movimiento** (ni costo ni facturación) se van a un desplegable: eran 5 filas de
   ceros de 6. ⚠️ Una obra facturada SIN costo registrado NO se aparta (sigue siendo rentabilidad).
 
-## Versiones desplegadas (v321 = actual)
+## Revisión de código: limpieza + archivar deja de deshacer un edificio (v322)
+Petición del usuario: *"dale una revisión al código, que todo esté bien, que no haya líneas
+muertas o mejoras al código"*.
+### Lo muerto (verificado por AST, no por grep)
+**8 funciones sin una sola referencia en todo el repo** (−124 líneas) y **27 imports sin usar**
+en 20 archivos. Las 8: `projects_ui._agrupaciones_html` (−83, la sustituyó `_cartera_agrupaciones`
+en v214), `home_ui._placeholder`, `roster.asignacion_dia` + `semana_str`, `session_cookie.available`,
+`payroll.costo_empleador`, `plan_data.hay_datos`, `plan_store.hay_plano`.
+⚠️ `grep` cuenta **mis propios comentarios** como uso (ya mordió 4 veces): la referencia solo vale
+si aparece como `Name`/`Attribute` en el AST.
+### ⚠️ EL HALLAZGO: archivar un ascensor DESHACÍA el edificio
+`list_projects` oculta los archivados desde v149 — correcto para una lista, **falso para una
+agrupación**. Las **6** consultas de miembros lo usaban por defecto, así que archivar un ascensor
+de una torre cambiaba **en silencio** el avance consolidado, la fecha de entrega, la curva S y las
+alarmas del conjunto. Es la misma familia que v145 (horas), v310 (dinero) y v321 (márgenes):
+**archivar no des-construye el ascensor**, igual que no des-gasta el dinero.
+### ⚠️ Y la regresión que ese arreglo introdujo (cazada en la verificación)
+Al pasar `set_grouping_members` a leer los miembros CON archivados, el editor de miembros —que
+lista solo activos— dejaba de tener casilla para el archivado, así que al guardar caía en el bucle
+de **bajas y se desagrupaba solo**. Arreglado añadiendo a la lista del editor los miembros
+archivados que faltaban. **Antes del cambio no pasaba** porque los dos lados lo ignoraban por igual:
+ampliar UNA fuente sin mirar quién la cruza es justo el patrón de v145 y v321.
+### ⚠️ Mi guardián solo veía UNA de las dos formas de escribir la consulta
+Lo escribí buscando el kwarg `agrupacion_id=`, y `_cartera_agrupaciones` filtra **a mano**
+(`[p for p in proys_all if p["AgrupacionID"] == aid]`) → se escapó, y la tarjeta contaba menos
+elevadores que el `grouping_progress` de su propio %. El guardián ahora cubre las dos formas
+(kwarg, comprensión inline y comprensión sobre una variable) y **se prueba contra el código ROTO**,
+no solo contra el sano: un guardián que solo aprueba lo que ya funciona no demuestra nada.
+### Falsos positivos de mi propio chequeo de nombres libres
+Salieron **83** y **los 83 eran cierres**: una función anidada usa variables de la que la contiene.
+Con el ámbito exterior en la cuenta quedan **0**. ⚠️ Y hay que subir el ámbito nivel a nivel: con
+`ast.walk` un NIETO se compara contra el ámbito del abuelo y los parámetros del padre salen como
+"sin definir" (pasó con `survey_ui.make_highlighter > _highlight`).
+### Auditado y NO tocado (queda anotado)
+Duplicación de helpers (`_num` en 14 módulos, `_records` en 12, `_ws` en 10, `_next_id` en 9,
+`is_configured` en 15), ~100 `except: pass` silenciosos, y escrituras dentro de bucles (la peor,
+`credentials.notify_expiring`, corre en cada login de admin). Son refactors de riesgo real sobre
+código que funciona; van aparte, no en una limpieza.
+
+## Versiones desplegadas (v322 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -3820,6 +3859,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v322 | **Revisión de código**: 8 funciones muertas (−124 líneas, 0 referencias en todo el repo, verificado por AST porque grep cuenta mis propios comentarios) + 27 imports sin usar en 20 archivos. ⚠️ Y el hallazgo de fondo: **archivar un ascensor cambiaba en silencio el avance consolidado, la fecha de entrega y la curva S de todo el edificio** — las 6 consultas de miembros de una agrupación heredaban el "ocultar archivados" de v149, que es correcto para una lista y falso para un conjunto (misma familia que v145/v310/v321: archivar no des-construye el ascensor). ⚠️ Ese arreglo introdujo una regresión que cazó la verificación: el editor de miembros no mostraba al archivado y al guardar lo **desagrupaba solo**; y mi guardián solo veía una de las dos formas de escribir la consulta, así que la tarjeta de agrupación contaba menos elevadores que su propio % |
 | v321 | Rentabilidad: **el margen se edita en la propia tabla** (antes te mandaba a Datos de cada proyecto estando ya en la lista de márgenes) + columnas **Ya facturado / Por facturar** para contrastar el estimado con la realidad + las obras sin movimiento a un desplegable. ⚠️ Fix de un fallo de v310: el margen propio de un proyecto **archivado** se ignoraba y usaba el default del grupo, porque `group_expenses` pasó a incluir archivados y el mapa de márgenes no |
 | v320 | **Barrido de títulos duplicados** por AST sobre las 26 vistas de la shell: quitados 4 (Gastos, Horas, Rentabilidad, Facturas). ⚠️ Las vistas del campo y Pre-Start NO se tocan: cuelgan de secciones SIN sub-pestañas, así que su título es el único. + Horas: el KPI «sin asignar» mostraba 1,2 h y un 3% cuando el dato **no era calculable** (hay más horas en obras que de jornada) — ahora pone «—» y explica quién fichó a proyecto sin abrir jornada; «Costo M.O.» pasa a «M.O. cargada a obras» (v313) y fuera los proyectos con 0,0 h |
 | v319 | Nóminas: la lista dejaba pasar **4 colillas de $0** (esas personas no tienen tarifa/hora — `generar` lo detecta y solo se veía al generar), **dos filas homónimas indistinguibles** (nuevo `auth.etiqueta_usuarios`, la regla del ID aplicada a personas) y **gente con horas sin nómina**. Ahora las tres se avisan, con botón a Usuarios. + columna Tarifa/h, totales, filtro de periodo y KPIs con contexto. ⚠️ 4º título duplicado encontrado (v212/v291/v314) |

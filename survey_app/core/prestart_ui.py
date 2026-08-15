@@ -5,7 +5,6 @@ hay Near Miss/Hazard se abre una alarma del proyecto.
 """
 import streamlit as st
 import pandas as pd
-from datetime import datetime, date
 
 from core import prestart as PS
 from core import projects as P

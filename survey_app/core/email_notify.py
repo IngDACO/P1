@@ -4,7 +4,6 @@ Envía resumen técnico a diegoaco93@gmail.com via Gmail SMTP.
 """
 import smtplib
 import traceback
-from datetime import datetime
 from email.mime.multipart import MIMEMultipart
 from email.mime.text      import MIMEText
 from email.mime.application import MIMEApplication

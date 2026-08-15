@@ -7,13 +7,12 @@ permisos/toolbox/subcontratistas/pre-operacionales van a la Sección 3 en la
 sub-tabla "Circle one".
 """
 import io
-from datetime import datetime
 
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import mm
-from reportlab.lib.enums import TA_CENTER, TA_LEFT
+from reportlab.lib.enums import TA_CENTER
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 
 from core.prestart import CHECKS_S1, CHECKS_S3

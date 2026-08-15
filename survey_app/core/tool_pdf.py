@@ -9,7 +9,6 @@ notas. Los dibujos entran como SVG vía `report._svg_flowable` (svglib), así qu
 valen los mismos SVG que ya se muestran en pantalla.
 """
 import io as _io
-from datetime import datetime
 
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors

@@ -69,10 +69,6 @@ def lunes_de(d=None) -> date:
     return d - timedelta(days=d.weekday())
 
 
-def semana_str(d=None) -> str:
-    return lunes_de(d).isoformat()
-
-
 def fecha_de_dia(lunes, dia_key) -> date:
     """Fecha real de un día ('lun'..'vie') de la semana que empieza en `lunes`."""
     return lunes + timedelta(days=DIAS.index(dia_key))
@@ -493,13 +489,6 @@ def asignaciones_dia(grupo, usuario, fecha=None) -> list:
              "etiqueta": etiqueta_de(it["asig"], tidx),
              "color": color_de(it["asig"], tidx),
              "es_estado": it["asig"] in ESTADOS} for it in raw["items"]]
-
-
-def asignacion_dia(grupo, usuario, fecha=None) -> dict:
-    """La PRIMERA asignación de la persona ese día (compat: fichaje, agenda). {} si no hay.
-    Para TODAS: `asignaciones_dia`."""
-    aa = asignaciones_dia(grupo, usuario, fecha)
-    return aa[0] if aa else {}
 
 
 def copiar_semana(grupo, lunes_origen, lunes_destino) -> tuple:

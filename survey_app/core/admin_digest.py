@@ -8,7 +8,7 @@ cliente (grupo) al que pertenece el admin — sin IA. Dos salidas:
   en vivo para que el agente responda preguntas, recomiende y redacte.
 """
 import logging
-from datetime import date, datetime
+from datetime import datetime
 
 import streamlit as st
 

@@ -12,7 +12,6 @@ se mezclan: con solo el plano no se puede recalcular un survey.
 """
 import json
 import logging
-from datetime import datetime
 from core import clock
 
 logger = logging.getLogger(__name__)
@@ -136,11 +135,6 @@ def del_proyecto(pid: str) -> dict:
             except Exception:
                 return {}
     return {}
-
-
-def hay_datos(pid: str) -> bool:
-    d = del_proyecto(pid)
-    return bool(d and (d.get("params") or d.get("ns") or d.get("hkp")))
 
 
 def por_herramienta(datos: dict) -> list:

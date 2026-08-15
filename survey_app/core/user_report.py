@@ -11,7 +11,6 @@ NO incluye lógica interna, fórmulas ni log del optimizador (regla de confidenc
 """
 import io
 import os
-from datetime import datetime
 
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors

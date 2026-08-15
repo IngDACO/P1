@@ -15,7 +15,6 @@ from core import notify
 from core import alerts
 from core import maps
 from core.schedule import schedule_svg, schedule_svg_alto
-from core import survey_calc
 from core import toolruns
 from core import tool_save_ui
 from core import credentials
@@ -2222,7 +2221,7 @@ def _dashboard_agrupacion(ag, grupo):
     """
     from core import expenses as E
     aid = ag["ID"]
-    proys = P.list_projects(grupo=grupo, agrupacion_id=aid)
+    proys = P.list_projects(grupo=grupo, agrupacion_id=aid, incluir_archivados=True)
     if not proys:
         st.info("Esta agrupación aún no tiene elevadores. Añádelos abajo.")
         return
@@ -2330,89 +2329,6 @@ def _dashboard_agrupacion(ag, grupo):
                               index=[r["Elevador"] for r in rows]))
 
 
-def _agrupaciones_html(ags, grupo) -> str:
-    """Tarjetas de agrupación — mismo lenguaje que la cartera de proyectos.
-
-    La idea es ver lo relevante de cada edificio SIN entrar: cuántos elevadores,
-    avance consolidado, **cuándo se entrega el conjunto** y si algún elevador la
-    está retrasando. La tabla plana anterior no decía nada de eso.
-    """
-    proys_all = P.list_projects(grupo=grupo)
-    horas     = P.project_hours_bulk(grupo)
-    alarmas   = alerts.open_counts_all() if alerts.is_configured() else {}
-    proyecc   = P.projections_by_group(grupo)      # cacheado 60 s
-    from core import expenses as E
-    hay_costos = E.is_configured()
-
-    parts = []
-    for a in ags:
-        aid   = str(a.get("ID", ""))
-        miemb = [p for p in proys_all if str(p.get("AgrupacionID", "")) == aid]
-        pr    = P.grouping_progress(aid)
-        av    = pr["avance"]
-
-        # Fecha del conjunto = la del elevador MÁS LENTO (no el promedio)
-        fecha, critico, gap = None, "", 0.0
-        for p in miemb:
-            d = proyecc.get(str(p.get("ID", "")))
-            if not d or not d.get("fecha"):
-                continue
-            if fecha is None or d["fecha"] > fecha:
-                fecha, critico, gap = d["fecha"], str(p.get("Nombre", "")), d.get("gap") or 0.0
-
-        n_al  = sum(alarmas.get(str(p.get("ID", "")), 0) for p in miemb)
-        hrs   = sum(horas.get(str(p.get("ID", "")), 0.0) for p in miemb)
-        costo = (sum(E.project_cost(p.get("ID"), grupo)["total"] for p in miemb)
-                 if hay_costos and miemb else 0)
-
-        borde = "border:1px solid #e6e9ef"
-        badge = ""
-        if gap and gap > 0.5:
-            borde = "border:1px solid #e6e9ef;border-left:4px solid #c0392b"
-            badge = (f'<span style="font-size:12px;padding:3px 9px;border-radius:20px;'
-                     f'background:#fcebeb;color:#a32d2d;white-space:nowrap;flex:none;'
-                     f'font-weight:600;">{_MI('alarm')} {gap:.0f} d</span>')
-        elif gap and gap < -0.5:
-            borde = "border:1px solid #e6e9ef;border-left:4px solid #1e8449"
-            badge = (f'<span style="font-size:12px;padding:3px 9px;border-radius:20px;'
-                     f'background:#eaf3de;color:#3b6d11;white-space:nowrap;flex:none;'
-                     f'font-weight:600;">{_MI('trending_up')} {abs(gap):.0f} d</span>')
-        punto = "#c0392b" if (gap and gap > 0.5) else ("#1e8449" if av >= 100 else "#2e6da4")
-
-        sub = f"{aid} · {len(miemb)} elevador(es)"
-        if a.get("Descripcion"):
-            sub += f" · {a['Descripcion']}"
-        entrega = (f'<div style="font-size:11.5px;color:#6b7280;">{_MI('event')} entrega '
-                   f'<b>{fecha.strftime("%d/%m/%Y")}</b>'
-                   + (f' — la marca {critico}' if critico else "") + '</div>'
-                   if fecha else
-                   '<div style="font-size:11.5px;color:#9aa7b8;">sin cronograma para proyectar</div>')
-        alarm = (f'<div style="width:44px;text-align:center;flex:none;color:#c0392b;'
-                 f'font-size:12.5px;font-weight:600;">{_MI('notifications')} {n_al}</div>'
-                 if n_al else '<div style="width:44px;flex:none;"></div>')
-
-        parts.append(
-            f'<div style="display:flex;align-items:center;gap:12px;padding:11px 14px;'
-            f'{borde};border-radius:10px;margin-bottom:8px;background:#fff;">'
-            f'<div style="width:9px;height:9px;border-radius:50%;background:{punto};flex:none;"></div>'
-            '<div style="flex:1;min-width:0;">'
-            f'<div style="font-size:14px;font-weight:600;color:#1f2937;white-space:nowrap;'
-            f'overflow:hidden;text-overflow:ellipsis;">{_MI('account_tree')} {a.get("Nombre","")}</div>'
-            f'<div style="font-size:12px;color:#6b7280;white-space:nowrap;overflow:hidden;'
-            f'text-overflow:ellipsis;">{sub}</div>' + entrega +
-            '</div>' + badge +
-            '<div style="width:118px;flex:none;">'
-            '<div style="height:7px;background:#eef1f5;border-radius:20px;overflow:hidden;">'
-            f'<div style="height:7px;width:{min(100, max(0, av)):.0f}%;background:{punto};"></div>'
-            '</div>'
-            f'<div style="font-size:11.5px;color:#6b7280;margin-top:3px;text-align:right;">'
-            f'{av:.0f}%</div></div>'
-            f'<div style="width:74px;text-align:right;flex:none;font-size:12px;color:#6b7280;">'
-            f'{hrs:.0f} h' + (f'<br>${costo:,.0f}' if costo else '') + '</div>'
-            + alarm + '</div>')
-    return "".join(parts)
-
-
 def _miembros_editor(ags_proys, todos, key, pesos_actuales=None):
     """Tabla para elegir QUÉ proyectos componen una agrupación y con qué peso.
 
@@ -2460,7 +2376,10 @@ def _cartera_agrupaciones(ags, grupo):
     """Agrupaciones como botones CLICKEABLES (v214): tocar abre su tablero. Fondo =
     avance consolidado; borde = salud (entrega del elevador más lento). Ordenadas por
     urgencia. Mismo lenguaje que la cartera de proyectos."""
-    proys_all = P.list_projects(grupo=grupo)
+    # ⚠️ CON archivados: el avance consolidado (`grouping_progress`) los cuenta,
+    # así que el nº de elevadores, la fecha de entrega y las alarmas de la tarjeta
+    # tienen que salir del MISMO conjunto o la tarjeta se contradice a sí misma.
+    proys_all = P.list_projects(grupo=grupo, incluir_archivados=True)
     alarmas = alerts.open_counts_all() if alerts.is_configured() else {}
     try:
         proyecc = P.projections_by_group(grupo)
@@ -2540,8 +2459,15 @@ def _panel_agrupaciones(grupo: str):
             st.caption("Marca los elevadores que la componen. Al quitar uno se "
                        "**desagrupa**, no se borra.")
             _act = {str(p.get("ID")): P._num(p.get("PesoEnAgrupacion")) or 1.0
-                    for p in P.list_projects(grupo=grupo, agrupacion_id=_ag["ID"])}
-            _sel = _miembros_editor(nom_ags, todos, f"agmem_{_ag['ID']}", _act)
+                    for p in P.list_projects(grupo=grupo, agrupacion_id=_ag["ID"], incluir_archivados=True)}
+            # ⚠️ Un miembro ARCHIVADO no está en `todos` (la lista oculta archivados
+            # desde v149), así que no tendría casilla y `set_grouping_members` lo
+            # leería como una BAJA → se desagruparía solo al guardar. Se añade a la
+            # lista para que siga marcable.
+            _falta = [p for p in P.list_projects(grupo=grupo, incluir_archivados=True)
+                      if str(p.get("ID")) in _act
+                      and str(p.get("ID")) not in {str(q.get("ID")) for q in todos}]
+            _sel = _miembros_editor(nom_ags, todos + _falta, f"agmem_{_ag['ID']}", _act)
             if len(_sel) > 12:
                 st.warning(f"{len(_sel)} proyectos: cada cambio es una escritura "
                            "en la hoja; puede tardar unos segundos.")
@@ -3542,7 +3468,6 @@ def render_group_expenses(grupo: str):
 
 # ── Reporte del ADMIN: horas de TODOS los usuarios del grupo ──
 def render_group_hours(grupo: str):
-    from datetime import datetime
     from core import timeclock
     # ⚠️ SIN cabecera propia: `home_ui._sub_header` ya pinta «Finanzas · X» encima.
     # Era el 5º título duplicado de la app (v212, v291, v314, v319 y este barrido).

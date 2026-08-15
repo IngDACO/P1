@@ -125,7 +125,7 @@ def _aviso_olvido(nombre, grupo, usuario, sess):
     Cerrarla «ahora» registraría como trabajadas todas las horas de la noche que
     nadie hizo. Por eso se pide la hora REAL de fin (v164) y se cierra con ella.
     """
-    from datetime import datetime as _dt, time as _t, timedelta as _td
+    from datetime import datetime as _dt, timedelta as _td
     stale = {tipo: s for tipo, s in sess.items()
              if s and not _es_hoy(s["clock_in"])}
     if not stale:

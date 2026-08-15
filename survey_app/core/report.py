@@ -4,7 +4,6 @@ Incluye cada paso del optimizador.
 """
 import io
 import pandas as pd
-from datetime import datetime
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle

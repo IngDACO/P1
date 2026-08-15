@@ -11,7 +11,6 @@ Gastos / compras por proyecto → control de costos (compras + mano de obra).
 Hoja `Gastos`.
 """
 import logging
-from datetime import datetime
 
 import streamlit as st
 

@@ -10,7 +10,6 @@ Dos flujos:
 Estado: abierta | resuelta.
 """
 import logging
-from datetime import datetime
 
 import streamlit as st
 

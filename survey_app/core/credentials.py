@@ -7,7 +7,7 @@ cada usuario ve las suyas en solo lectura. Las que están por vencer/vencidas en
 al radar del admin (admin_digest) y se avisan por email/Telegram (deduplicado).
 """
 import logging
-from datetime import date, datetime
+from datetime import datetime
 
 import streamlit as st
 

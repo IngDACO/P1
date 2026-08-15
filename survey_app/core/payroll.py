@@ -69,15 +69,6 @@ def neto(base, conceptos) -> float:
     return round(tot, 2)
 
 
-def costo_empleador(base, conceptos) -> float:
-    tot = _num(base)
-    for c in conceptos or []:
-        t = str(c.get("tipo", "")).lower()
-        if t in ("devengo", "aporte"):
-            tot += _num(c.get("monto"))
-    return round(tot, 2)
-
-
 # ── Worksheet + lecturas ─────────────────────────────────────────
 def _ws():
     if not timeclock._secrets_present():

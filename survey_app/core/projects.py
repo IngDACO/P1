@@ -13,7 +13,7 @@ Escrituras RAW + lecturas con numericise_ignore=['all'] (conserva textos/JSON/ce
 """
 import json
 import logging
-from datetime import datetime, date
+from datetime import date
 
 import streamlit as st
 
@@ -682,7 +682,6 @@ def save_field_progress(pid, cambios) -> tuple:
     ⚠️ Reemplaza el `update_activity_progress` por-actividad (hasta 5 update_cell
     cada uno) — el escenario de 429 que v80/v150 ya arreglaron en otros sitios.
     """
-    from datetime import date as _date
     aws, err = _activities_ws()
     if err:
         return False, err
@@ -804,7 +803,7 @@ def set_grouping_members(gid: str, miembros: dict, grupo: str = None) -> tuple:
     Devuelve (ok, mensaje). ⚠️ Es 1 escritura por proyecto que cambia.
     """
     actuales = {str(p.get("ID")): _num(p.get("PesoEnAgrupacion"))
-                for p in list_projects(grupo=grupo, agrupacion_id=gid)}
+                for p in list_projects(grupo=grupo, agrupacion_id=gid, incluir_archivados=True)}
     nuevos = {str(k): float(v or 1) for k, v in (miembros or {}).items()}
 
     cambios, errores = 0, []
@@ -838,7 +837,7 @@ def grouping_projection(gid: str, grupo: str = None) -> dict:
     out = {"fecha": None, "critico": "", "critico_id": "", "spi_min": None,
            "sin_datos": [], "detalle": []}
     cache = projections_by_group(grupo) if grupo else {}
-    for p in list_projects(grupo=grupo, agrupacion_id=gid):
+    for p in list_projects(grupo=grupo, agrupacion_id=gid, incluir_archivados=True):
         pid, nom = str(p.get("ID", "")), str(p.get("Nombre", ""))
         pr = cache.get(pid)                       # cacheado por grupo (60 s)
         if pr is None:
@@ -869,7 +868,7 @@ def grouping_curve(gid: str, grupo: str = None) -> dict:
     """
     from datetime import timedelta
     series = []
-    for p in list_projects(grupo=grupo, agrupacion_id=gid):
+    for p in list_projects(grupo=grupo, agrupacion_id=gid, incluir_archivados=True):
         ps = project_schedule(str(p.get("ID", "")))
         if not ps:
             continue
@@ -919,7 +918,7 @@ def grouping_curve(gid: str, grupo: str = None) -> dict:
 
 def grouping_progress(gid: str) -> dict:
     """Avance ponderado de una agrupación: Σ(peso_proy × avance_proy)/Σ(peso)."""
-    proys = list_projects(agrupacion_id=gid)
+    proys = list_projects(agrupacion_id=gid, incluir_archivados=True)
     tot_peso = sum(_num(p.get("PesoEnAgrupacion")) for p in proys)
     if tot_peso <= 0:
         avance = 0.0

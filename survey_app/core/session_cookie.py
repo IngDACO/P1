@@ -36,11 +36,6 @@ def _manager():
     return st.session_state[_MGR_KEY]
 
 
-def available() -> bool:
-    """True si hay persistencia por cookie (librería presente)."""
-    return _manager() is not None
-
-
 def load() -> tuple:
     """(usuario, token) de la cookie, o (None, None).
 

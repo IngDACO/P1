@@ -6,8 +6,7 @@ import streamlit as st
 import streamlit.components.v1 as components
 import pandas as pd
 
-from core.plumb import (compute_plumb, plumb_table, plumb_svg, plumb_checks,
-                        plumb_iso_svg, plumb_detail_svg, plumb_card_svg)
+from core.plumb import compute_plumb, plumb_table, plumb_svg, plumb_iso_svg, plumb_detail_svg, plumb_card_svg
 from core import plan_store
 from core import plan_ui
 from core.tool_pdf import tool_pdf

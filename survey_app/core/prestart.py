@@ -10,7 +10,6 @@ Nombre de archivo: `ddmmyyyy AB CD EF.pdf` (fecha + iniciales de los asistentes)
 """
 import json
 import logging
-from datetime import datetime
 
 import streamlit as st
 

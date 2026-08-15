@@ -599,12 +599,6 @@ def _seccion_herramientas(grupo):
         render_prestart_tab()
 
 
-def _placeholder(titulo, desc=""):
-    st.markdown(f"## {titulo}")
-    st.info(":material/construction: **En construcción** — este apartado se está rediseñando."
-            + (f"\n\n{desc}" if desc else ""))
-
-
 # ── HOME ─────────────────────────────────────────────────────────
 def render_home(grupo):
     # v192: el "Centro de control del grupo" (KPIs + resumen del día) vivía en la
@@ -856,7 +850,7 @@ def _agenda_hoy(grupo):
         return
 
     try:
-        pmap = {str(p.get("ID", "")): str(p.get("Nombre", "")) for p in P.list_projects(grupo)}
+        pmap = {str(p.get("ID", "")): str(p.get("Nombre", "")) for p in P.list_projects(grupo, incluir_archivados=True)}
     except Exception:
         pmap = {}
 

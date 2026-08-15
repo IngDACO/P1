@@ -9,7 +9,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 from core.chat_agent      import get_chat_response
 from core                 import notify
-from core.survey_ui       import init_state, render_survey_tab
+from core.survey_ui import init_state
 
 try:
     # utf-8-sig elimina el BOM que agrega PowerShell al escribir VERSION

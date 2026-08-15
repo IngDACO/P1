@@ -33,11 +33,6 @@ def actual() -> tuple:
     return st.session_state.get(_K_NOM), st.session_state.get(_K_BYT)
 
 
-def hay_plano() -> bool:
-    nom, byt = actual()
-    return bool(nom and byt)
-
-
 def limpiar() -> None:
     for k in (_K_NOM, _K_BYT):
         st.session_state.pop(k, None)
