@@ -1703,10 +1703,24 @@ def _estado_section(pid: str, grupo: str, prj: dict):
                 + "".join(tarj) + "</div>", unsafe_allow_html=True)
 
     # ── El ritmo: mas accionable que el SPI (banner, ancho completo) ──
-    if d["ritmo_real"] is not None and d["ritmo_nec"] is not None:
-        if d["dias_rest"] <= 0:
+    # ⚠️ v324: la guarda pedía `ritmo_nec is not None`, pero `ritmo_nec` vale None
+    # EXACTAMENTE cuando `dias_rest <= 0` → el `if dias_rest <= 0` de dentro no
+    # podía cumplirse nunca y su aviso era CÓDIGO MUERTO: un proyecto pasado de
+    # fecha se quedaba sin banner de ritmo, en silencio. Ahora ese caso se atiende
+    # ANTES de exigir `ritmo_nec`, y a partir de ahí sí está garantizado.
+    if d["ritmo_real"] is not None:
+        if d["dias_rest"] <= 0 or d["ritmo_nec"] is None:
             st.warning(f":material/schedule: La fecha de fin planificada ya pasó y queda "
                        f"**{100 - d['ev']:.0f}%** por completar.")
+        elif d["ritmo_real"] <= 0.01:
+            # ⚠️ v324: sin este caso, un proyecto SIN AVANCE caía en el `else` y
+            # recibía el mensaje MÁS TRANQUILO de los tres ("justo el ritmo que
+            # hace falta"). Pasaba porque `factor` se deja en None para no dividir
+            # por cero, y `factor and …` es falsy → se saltaban las dos ramas de
+            # aviso. El proyecto que peor va era el que menos alarma daba.
+            st.error(f":material/schedule: **Sin avance todavía**: necesitas "
+                     f"**{d['ritmo_nec']:.1f} %/día** en los {d['dias_rest']:.0f} días "
+                     f"que quedan para llegar a la fecha.")
         elif d["factor"] and d["factor"] > 1.15:
             st.error(f":material/schedule: Vas a **{d['ritmo_real']:.1f} %/día** y necesitas "
                      f"**{d['ritmo_nec']:.1f} %/día** para llegar a la fecha: "
@@ -3151,7 +3165,7 @@ def render_pnl(grupo: str):
     if _cur:
         with st.container(border=True):
             if _cur == "conc":
-                _pnl_conciliacion(_cc, T)
+                _pnl_conciliacion(_cc, T, periodo_completo=(_desde is None))
             elif _cur == "cli":
                 st.markdown("**Facturado por cliente**")
                 if d.get("por_cliente"):
@@ -3175,14 +3189,25 @@ def render_pnl(grupo: str):
                 _pnl_por_proyecto(grupo, T)
 
 
-def _pnl_conciliacion(cc: dict, T):
-    """El puente entre lo que se CARGA a las obras y lo que se PAGA (v313)."""
+def _pnl_conciliacion(cc: dict, T, periodo_completo: bool = True):
+    """El puente entre lo que se CARGA a las obras y lo que se PAGA (v313).
+
+    ⚠️ `periodo_completo` (v324) es lo que decide si el residuo es una ALARMA o
+    ruido esperable: los dos lados de la cadena se filtran por fechas DISTINTAS
+    —las horas por el día trabajado, las nóminas por su `PeriodoHasta` (decisión
+    de v309: el costo se devenga en el periodo que cierra)—, así que en una
+    ventana corta la cadena NO puede cerrar. Con «Este mes» por defecto, eso
+    sacaba un «$1,262.80 sin explicar» que no era ninguna descuadre.
+    """
     if not cc:
         st.caption("No se pudo calcular la conciliación.")
         return
+    # ⚠️ v324: el signo va en la ETIQUETA (− / + / =), como en cualquier estado de
+    # cuenta; el importe va en magnitud. Antes la fila restada llevaba el signo en
+    # los dos sitios y se leía «− horas cobradas … $-358.80», que parece un error.
     _fil = [("Cargado a las obras (horas imputadas × tarifa)", cc["cargado"], ""),
             ("− horas cobradas que NO pagaste (imputadas sin jornada)",
-             -cc["cobrado_no_pagado"], "#c0392b"),
+             cc["cobrado_no_pagado"], "#c0392b"),
             ("+ horas pagadas que NO cargaste (traslados, espera)",
              cc["pagado_no_cargado"], "#c77700"),
             ("= base que deberías pagar", cc["base_teorica"], "bold"),
@@ -3199,9 +3224,16 @@ def _pnl_conciliacion(cc: dict, T):
     _h.append("</table>")
     st.markdown("".join(_h), unsafe_allow_html=True)
     if abs(cc["sin_explicar"]) >= 1:
-        st.warning(f":material/warning: **{T.dinero(abs(cc['sin_explicar']))} sin explicar** "
-                   "entre lo que deberías pagar y lo puesto en nóminas: trabajo aún sin "
-                   "nómina en este periodo, o nóminas editadas a mano.")
+        if periodo_completo:
+            st.warning(f":material/warning: **{T.dinero(abs(cc['sin_explicar']))} sin explicar** "
+                       "entre lo que deberías pagar y lo puesto en nóminas: trabajo aún sin "
+                       "nómina, o nóminas editadas a mano.")
+        else:
+            st.info(f":material/info: Con un periodo acotado la cadena **no cierra por "
+                    f"construcción**: las horas cuentan por el día trabajado y las nóminas "
+                    f"por el periodo que cierran, así que caen en meses distintos. "
+                    f"Los {T.dinero(abs(cc['sin_explicar']))} de diferencia no son un "
+                    f"descuadre — para conciliar de verdad, mira el periodo **Todo**.")
     st.caption("Tu margen tiene que cubrir los aportes de ley y las horas que pagas sin "
                "poder cargarlas a ninguna obra.")
 

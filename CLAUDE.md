@@ -3904,7 +3904,56 @@ duplicados pero cada uno se ata a su hoja, su cabecera y su clave de caché. Uni
 es construir un repositorio genérico de hojas sobre 12 módulos que tocan datos de
 producción: mucho riesgo de regresión, cero cambio para el usuario. Se quedan.
 
-## Versiones desplegadas (v323 = actual)
+## Revisión EN EL CLOUD: tres fallos que solo se ven con datos reales (v324)
+Primera revisión de la app desplegada, con sesión de administrador real. v322 y v323
+salieron intactas —y v322 resultó tener un caso VIVO, no hipotético— pero mirar las
+pantallas con datos de verdad destapó tres defectos que ningún test local iba a dar.
+### ✅ Lo que se confirmó funcionando
+- **v322 con caso real:** `AGR-0001` («North») tiene **2 miembros y los DOS están
+  archivados**. La tarjeta muestra ahora `2 elev · 21%` donde antes decía **0 elev · 0%**,
+  y el editor de miembros lista `north` y `norte` **marcados** — sin el arreglo no
+  habrían salido y guardar los habría desagrupado. El 21% cuadra solo: (8 + 34,6)/2.
+- **v323 no movió un solo número:** Resumen $3.145 / $1.435 / $1.710 y la conciliación
+  con periodo «Todo» cierra exacta (1.645,20 − 358,80 + 0,40 = 1.286,80), idénticas a
+  lo documentado en v313. Gastos: KPI $3.145 = torta (1.645 + 1.000 + 500).
+- v309/v312 (los `$` sin LaTeX), v311 (titular con negrita real), v315, v316, v321
+  (el aviso de margen 0% incluye los archivados `north`/`norte`), v306 (ID en la lista).
+### ⚠️ 1. El proyecto que peor va recibía el mensaje MÁS TRANQUILO
+En `prueba 3` (0% de avance, 6 días de retraso) el banner decía *«Vas a 0.0 %/día,
+**justo el ritmo que hace falta** (4.3 %/día)»*. Causa:
+```python
+factor = (ritmo_nec / ritmo_real) if (ritmo_real and ritmo_real > 0.01 and ritmo_nec) else None
+```
+Con avance 0, `ritmo_real` es 0 → la guarda contra división por cero deja `factor=None`
+→ `factor and …` es **falsy** en las dos ramas de aviso → cae en el `else`, que es el
+mensaje calmado. Rama nueva explícita para «sin avance», que además es la que más
+alarma debe dar.
+### ⚠️ 2. …y el proyecto pasado de fecha no mostraba NADA (rama inalcanzable)
+La guarda exterior era `if ritmo_real is not None and ritmo_nec is not None:`, pero
+`ritmo_nec` vale `None` **exactamente** cuando `dias_rest <= 0` → el `if dias_rest <= 0`
+de dentro no podía cumplirse **nunca** y su aviso («la fecha de fin ya pasó») era
+**código muerto**. Un proyecto vencido se quedaba sin banner de ritmo, en silencio.
+⚠️ Lo cazó el test, no yo: al replicar el orden REAL de los `if` en vez de suponerlo,
+un caso salió «sin banner» donde yo esperaba el aviso. **Replicar la estructura exacta
+del código en el test es lo que convierte un test en evidencia.** Las 5 ramas se
+comprueban ahora alcanzables.
+### ⚠️ 3. La conciliación gritaba un descuadre que no existe
+Con el periodo por defecto («Este mes») salía **«$1.262,80 sin explicar»**. No es un
+descuadre: los dos lados de la cadena se filtran por fechas **distintas** —las horas por
+el día trabajado, las nóminas por su `PeriodoHasta` (decisión deliberada de v309: el
+costo se devenga en el periodo que cierra)—, así que en una ventana corta la cadena **no
+puede cerrar por construcción**. Con «Todo» cierra al céntimo. Ahora la alarma roja solo
+sale con periodo completo; con periodo acotado se explica por qué no cuadra.
+### Detalle de formato
+La fila restada mostraba `− horas cobradas … $-358.80`: el signo iba en la etiqueta **y**
+en el importe. El signo se queda en la etiqueta (− / + / =, como cualquier estado de
+cuenta) y el importe va en magnitud.
+### Pendiente de ejercitarse en vivo
+El `batch_update` de `notify_expiring` (v323) **aún no ha corrido**: la credencial que
+vence tiene `UltimoAviso = 2026-08-10` y el deduplicado de 25 días lo suprimió
+correctamente. Y `_ids_frescos` solo se estrena al crear una factura/cliente/activo.
+
+## Versiones desplegadas (v324 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -3912,6 +3961,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v324 | **Revisión en el Cloud con datos reales.** ⚠️ El proyecto con **0% de avance y 6 días de retraso** mostraba el mensaje **más tranquilo** de los tres (*«justo el ritmo que hace falta»*): con `ritmo_real = 0` la guarda anti-división-por-cero deja `factor = None`, que es *falsy*, y las dos ramas de aviso se saltaban. ⚠️ Y el proyecto **pasado de fecha no mostraba NADA**: su aviso era **código muerto** porque la guarda exigía `ritmo_nec is not None`, que es `None` justo cuando la fecha ya pasó (lo cazó el test al replicar el orden real de los `if`). ⚠️ La **conciliación gritaba «$1.262,80 sin explicar»** con el periodo por defecto, y no era un descuadre: horas y nóminas se filtran por fechas distintas (v309), así que en una ventana corta no cierra por construcción — con «Todo» cierra al céntimo. + el importe restado ya no lleva el signo duplicado. **Confirmado en vivo**: v322 tenía un caso REAL (AGR-0001, 2 miembros archivados: `0 elev · 0%` → `2 elev · 21%`) y v323 no movió ningún número |
 | v323 | Los helpers duplicados **no eran cosmética**: eran 5 implementaciones DISTINTAS de `_num`, 2 de `_parse_date` y 7 de `_col_letter`, y la divergencia era el fallo. ⚠️ **Cualquier importe con separador de miles (`1,234.56`, como Sheets formatea el dinero en AU) se leía como $0,00 en silencio** en las cinco variantes — costos, facturas, nóminas e inventario. Auditada la hoja real en SOLO LECTURA: 0 casos hoy (latente), así que unificar está probado que no cambia ningún número existente (5000 importes, 0 diferencias). Todo a `core/num.py`. + Una fecha no-ISO (`16/08/2026`) se leía `None` y esa factura **desaparecía del P&L**. + `_next_id` de facturas/clientes/inventario leía de la caché de 120 s y **podía repetir un ID** (y el ID es la identidad). + `notify_expiring` hacía N escrituras seguidas en CADA login de admin → 1 `batch_update`. + de los 128 `except: pass`, los 7 que se tragaban una escritura ya dejan rastro — el peor, `timeclock.get_sheet`: si la cabecera no migra, cada dato se guarda **en la columna de al lado** |
 | v322 | **Revisión de código**: 8 funciones muertas (−124 líneas, 0 referencias en todo el repo, verificado por AST porque grep cuenta mis propios comentarios) + 27 imports sin usar en 20 archivos. ⚠️ Y el hallazgo de fondo: **archivar un ascensor cambiaba en silencio el avance consolidado, la fecha de entrega y la curva S de todo el edificio** — las 6 consultas de miembros de una agrupación heredaban el "ocultar archivados" de v149, que es correcto para una lista y falso para un conjunto (misma familia que v145/v310/v321: archivar no des-construye el ascensor). ⚠️ Ese arreglo introdujo una regresión que cazó la verificación: el editor de miembros no mostraba al archivado y al guardar lo **desagrupaba solo**; y mi guardián solo veía una de las dos formas de escribir la consulta, así que la tarjeta de agrupación contaba menos elevadores que su propio % |
 | v321 | Rentabilidad: **el margen se edita en la propia tabla** (antes te mandaba a Datos de cada proyecto estando ya en la lista de márgenes) + columnas **Ya facturado / Por facturar** para contrastar el estimado con la realidad + las obras sin movimiento a un desplegable. ⚠️ Fix de un fallo de v310: el margen propio de un proyecto **archivado** se ignoraba y usaba el default del grupo, porque `group_expenses` pasó a incluir archivados y el mapa de márgenes no |
