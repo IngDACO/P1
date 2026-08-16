@@ -137,24 +137,30 @@ def _rol() -> str:
         return ""
 
 
-def _version() -> str:
-    """Versión desplegada, para el topbar. Mismo fichero y codificación que app.py
-    (`utf-8-sig` quita el BOM que PowerShell escribe en VERSION).
-
-    ⚠️ v331: llevaba `@st.cache_data` SIN ttl, así que el valor se congelaba durante
-    toda la vida del proceso. Streamlit Cloud recarga el código en caliente sin
-    reiniciar siempre, de modo que tras un deploy el topbar seguía anunciando la
-    versión ANTERIOR — visto en vivo: la app era v330 y la barra decía v324. Un
-    indicador de versión que miente es peor que no tenerlo, y este se usa a diario
-    para saber qué hay desplegado. Sin caché: es leer un fichero local de 5 bytes,
-    inapreciable al lado de cualquier llamada a Sheets.
-    """
+def _leer_version() -> str:
     import os
     try:
         ruta = os.path.join(os.path.dirname(os.path.dirname(__file__)), "VERSION")
         return open(ruta, encoding="utf-8-sig").read().strip()
     except Exception:
         return ""
+
+
+# ⚠️ Se lee AL IMPORTAR el módulo, y esto NO es un descuido de caché — es el arreglo.
+# Historia: v331 quitó un `@st.cache_data` sin ttl porque el topbar se quedaba
+# anunciando una versión vieja. Leerlo fresco en cada run resultó ser PEOR: el
+# fichero VERSION vive en disco y se actualiza con el deploy, pero los módulos
+# `core.*` ya importados siguen en memoria hasta que el proceso reinicia. O sea que
+# la barra anunciaba con toda confianza una versión cuyo código NO se estaba
+# ejecutando — medido: la app decía «v333» sirviendo el `theme.py` de v332.
+# Leyéndolo al importar, el número cambia exactamente cuando cambia el código que
+# corre. Si la barra dice v333, es que se está ejecutando v333.
+_VERSION = _leer_version()
+
+
+def _version() -> str:
+    """La versión del CÓDIGO QUE SE ESTÁ EJECUTANDO (ver `_VERSION` arriba)."""
+    return _VERSION
 
 
 # ⚠️ El default de los dos es el del CAMPO (menor privilegio), NO el del admin.
