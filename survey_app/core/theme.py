@@ -79,16 +79,22 @@ div[data-testid="stVerticalBlockBorderWrapper"] {{
   box-shadow: 0 1px 2px rgba(16,24,40,.04);
 }}
 
-/* ── Botones: menos "botón de formulario", más control de producto ── */
-div[data-testid="stButton"] > button,
-div[data-testid="stFormSubmitButton"] > button,
-div[data-testid="stDownloadButton"] > button {{
+/* ── Botones: menos "botón de formulario", más control de producto ──
+   ⚠️ v326: estos selectores usaban el combinador HIJO (`>`). Cuando un botón lleva
+   `help=`, Streamlit lo envuelve en `stTooltipHoverTarget`, así que deja de ser hijo
+   directo y **el estilo del kit no le llegaba**. Medido en producción: 10 de 25
+   botones visibles (**40 %**) se quedaban sin radio, sin peso, sin hover y sin el
+   acuse de recibo — incluidos el ← de la barra y todos los indicadores. Descendiente,
+   no hijo. */
+div[data-testid="stButton"] button,
+div[data-testid="stFormSubmitButton"] button,
+div[data-testid="stDownloadButton"] button {{
   border-radius: 9px; font-weight: 600; border-color: {BORDE};
   min-height: 38px;            /* v326: eran 32 px — corto para ratón, imposible con el dedo */
   transition: border-color .14s ease, background .14s ease,
               transform .09s ease-out, box-shadow .14s ease;
 }}
-div[data-testid="stButton"] > button:hover {{
+div[data-testid="stButton"] button:hover {{
   border-color: {AZUL}; color: {AZUL};
   box-shadow: 0 2px 8px -2px rgba(46,109,164,.28);
 }}
@@ -99,9 +105,9 @@ div[data-testid="stButton"] > button:hover {{
    usuario vuelve a pulsar y entonces sí parece rota. Esto NO acelera el rerun:
    confirma que se recibió, que es lo que separa "no funcionó" de "está
    trabajando". Ocurre en el navegador, antes de que el servidor conteste. */
-div[data-testid="stButton"] > button:active,
-div[data-testid="stFormSubmitButton"] > button:active,
-div[data-testid="stDownloadButton"] > button:active {{
+div[data-testid="stButton"] button:active,
+div[data-testid="stFormSubmitButton"] button:active,
+div[data-testid="stDownloadButton"] button:active {{
   transform: scale(.985); opacity: .72; transition: transform .09s ease-out;
 }}
 

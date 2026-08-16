@@ -303,7 +303,10 @@ def _resumen_del_dia(grupo: str):
         # (por eso el expander lleva `key`): la misma regla suelta apretaría TODOS los
         # desplegables de la app.
         _css = ["<style>",
-                '[class*="st-key-resind_"] button{min-height:0 !important;'
+                # ⚠️ v326: era `min-height:0`, que dejaba estos botones en 32 px —
+                # por debajo del mínimo cómodo (36 px) y muy por debajo del táctil
+                # (44 px). Son los que llevan a resolver cada pendiente.
+                '[class*="st-key-resind_"] button{min-height:38px !important;'
                 'padding:4px 8px !important;}',
                 '.st-key-cpxresumen [data-testid="stVerticalBlock"]{gap:.3rem !important;}']
         for _slug, _i, _l, _urgb, _cnt, *_r in inds:
