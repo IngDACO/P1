@@ -748,8 +748,11 @@ def group_hours(grupo: str, days=None) -> list:
     try:
         from core import auth
         rates = auth.rate_map(grupo)
+        # v325: sin grupo → alguien movido de grupo sigue existiendo y no se
+        # puede decir que "ya no está".
+        conocidas = auth.claves_conocidas()
     except Exception:
-        rates = {}
+        rates, conocidas = {}, set()
 
     out = []
     for clave, a in agg.items():
@@ -770,6 +773,11 @@ def group_hours(grupo: str, days=None) -> list:
             "sin_asignar": round(max(0.0, gen - pro), 2),
             "sin_asignar_indet": indet,
             "tarifa": tarifa,
+            # v325: ¿sigue dada de alta? Si no, su tarifa 0 no es "falta ponerla"
+            # sino "no hay fila donde ponerla". Sin `conocidas` (fallo al leer) se
+            # asume que sí, para no acusar de baja a nadie por un error de lectura.
+            "existe": (not conocidas) or clave in conocidas
+                      or a.get("nombre", "") in conocidas,
             "costo": round(pro * tarifa, 2),      # costo = horas imputadas × tarifa
             "por_proyecto": {k: round(v, 2) for k, v in a["por"].items()},
         })

@@ -3953,7 +3953,39 @@ El `batch_update` de `notify_expiring` (v323) **aún no ha corrido**: la credenc
 vence tiene `UltimoAviso = 2026-08-10` y el deduplicado de 25 días lo suprimió
 correctamente. Y `_ids_frescos` solo se estrena al crear una factura/cliente/activo.
 
-## Versiones desplegadas (v324 = actual)
+## «Sin tarifa» eran DOS cosas distintas en el mismo aviso (v325)
+Salió de la revisión en el Cloud: el aviso de Horas decía *«Sin tarifa/hora, así que su
+costo sale $0: asfgjjd, fijiofgjei (conductor)»* y mandaba a **Usuarios** a arreglarlo.
+Para `asfgjjd` era correcto —le faltaba la tarifa, se le puso 40—. Para `fijiofgjei`
+**no existe fila que arreglar**: es la cuenta `conductor` que se eliminó en v163 al
+quitar ese rol, y sus fichajes históricos quedaron huérfanos. El aviso mandaba a un
+callejón sin salida y el pendiente no se podía cerrar nunca.
+### `auth.claves_conocidas(grupo=None)` — la señal, en un solo sitio
+Devuelve las claves (Usuario **y** Nombre) de quien sigue dado de alta. Sale de
+`list_users`, que está cacheado → **0 llamadas nuevas a Sheets**. Se puso en `auth` y no
+copiada en cada consumidor: es exactamente el patrón que causó los fallos de v323
+(cinco `_num` divergentes), así que aquí se nace con una sola definición.
+- ⚠️ **Sin `grupo` mira TODA la hoja**: alguien movido a otro grupo sigue existiendo y
+  decir que «ya no está» sería falso.
+- ⚠️ **Degrada a “sí existe”** si no se puede leer Login (`conocidas` vacío): un fallo de
+  lectura no puede acusar de baja a nadie. Probado.
+### Los tres consumidores, coherentes
+`timeclock.group_hours` añade **`existe`** por persona; `expenses.labor_breakdown` y
+`finance.conciliacion_mo` parten su `sin_tarifa` en **`sin_tarifa`** (accionable) y
+**`de_baja`** (informativo). En pantalla: Finanzas·Horas y el detalle de Costos sacan dos
+mensajes distintos, y el **indicador «Sin tarifa» del Resumen cuenta SOLO a quien se le
+puede poner** —un pendiente que nadie puede cerrar no es un pendiente— mencionando a los
+de baja en su detalle.
+### Verificado contra la hoja real
+`conductor`/`fijiofgjei` → «ya no está»; `admin1`/`asfgjjd`/`campo1` → de alta. Con los
+datos del grupo: 1 de baja (`fijiofgjei`) y, en la conciliación, `Bobo` como el único
+«falta tarifa» accionable.
+### Dato de producción cambiado
+`admin1` (nombre `asfgjjd`) pasó a **TarifaHora 40** vía `auth.set_rate`. Efecto: M.O.
+cargada a obras del grupo $1.645 → **$1.992**, y el costo de la agrupación *North*
+$0 → **$346**.
+
+## Versiones desplegadas (v325 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -3961,6 +3993,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v325 | El aviso «sin tarifa» mezclaba **dos cosas distintas**: a quien le falta la tarifa (se arregla en Usuarios) y a quien **ya no está dado de alta** (cuenta eliminada — no hay fila donde ponerla, y el aviso mandaba a un callejón sin salida). Nueva `auth.claves_conocidas()` —una sola definición, 0 lecturas nuevas, y degrada a «sí existe» si falla la lectura para no acusar de baja a nadie— consumida por `group_hours` (`existe`), `labor_breakdown` y `conciliacion_mo` (`sin_tarifa` / `de_baja`). El **indicador del Resumen cuenta solo lo accionable**. Caso real: `fijiofgjei` es la cuenta `conductor` borrada en v163 con fichajes huérfanos |
 | v324 | **Revisión en el Cloud con datos reales.** ⚠️ El proyecto con **0% de avance y 6 días de retraso** mostraba el mensaje **más tranquilo** de los tres (*«justo el ritmo que hace falta»*): con `ritmo_real = 0` la guarda anti-división-por-cero deja `factor = None`, que es *falsy*, y las dos ramas de aviso se saltaban. ⚠️ Y el proyecto **pasado de fecha no mostraba NADA**: su aviso era **código muerto** porque la guarda exigía `ritmo_nec is not None`, que es `None` justo cuando la fecha ya pasó (lo cazó el test al replicar el orden real de los `if`). ⚠️ La **conciliación gritaba «$1.262,80 sin explicar»** con el periodo por defecto, y no era un descuadre: horas y nóminas se filtran por fechas distintas (v309), así que en una ventana corta no cierra por construcción — con «Todo» cierra al céntimo. + el importe restado ya no lleva el signo duplicado. **Confirmado en vivo**: v322 tenía un caso REAL (AGR-0001, 2 miembros archivados: `0 elev · 0%` → `2 elev · 21%`) y v323 no movió ningún número |
 | v323 | Los helpers duplicados **no eran cosmética**: eran 5 implementaciones DISTINTAS de `_num`, 2 de `_parse_date` y 7 de `_col_letter`, y la divergencia era el fallo. ⚠️ **Cualquier importe con separador de miles (`1,234.56`, como Sheets formatea el dinero en AU) se leía como $0,00 en silencio** en las cinco variantes — costos, facturas, nóminas e inventario. Auditada la hoja real en SOLO LECTURA: 0 casos hoy (latente), así que unificar está probado que no cambia ningún número existente (5000 importes, 0 diferencias). Todo a `core/num.py`. + Una fecha no-ISO (`16/08/2026`) se leía `None` y esa factura **desaparecía del P&L**. + `_next_id` de facturas/clientes/inventario leía de la caché de 120 s y **podía repetir un ID** (y el ID es la identidad). + `notify_expiring` hacía N escrituras seguidas en CADA login de admin → 1 `batch_update`. + de los 128 `except: pass`, los 7 que se tragaban una escritura ya dejan rastro — el peor, `timeclock.get_sheet`: si la cabecera no migra, cada dato se guarda **en la columna de al lado** |
 | v322 | **Revisión de código**: 8 funciones muertas (−124 líneas, 0 referencias en todo el repo, verificado por AST porque grep cuenta mis propios comentarios) + 27 imports sin usar en 20 archivos. ⚠️ Y el hallazgo de fondo: **archivar un ascensor cambiaba en silencio el avance consolidado, la fecha de entrega y la curva S de todo el edificio** — las 6 consultas de miembros de una agrupación heredaban el "ocultar archivados" de v149, que es correcto para una lista y falso para un conjunto (misma familia que v145/v310/v321: archivar no des-construye el ascensor). ⚠️ Ese arreglo introdujo una regresión que cazó la verificación: el editor de miembros no mostraba al archivado y al guardar lo **desagrupaba solo**; y mi guardián solo veía una de las dos formas de escribir la consulta, así que la tarjeta de agrupación contaba menos elevadores que su propio % |

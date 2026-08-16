@@ -2928,6 +2928,10 @@ def render_expenses(pid, grupo, can_delete=False, key_prefix="ex"):
         if lb["sin_tarifa"]:
             st.warning(":material/warning: Sin tarifa/hora, así que sus horas suman **$0** al costo: **"
                        + ", ".join(lb["sin_tarifa"]) + "**. Se fija en :material/build: Usuarios.")
+        if lb.get("de_baja"):          # v325: cuenta eliminada ≠ tarifa sin poner
+            st.info(":material/person_off: **" + ", ".join(lb["de_baja"]) + "**: horas de "
+                    "alguien que **ya no está dado de alta**, así que suman $0 y no hay "
+                    "dónde ponerle tarifa.")
 
     # ── Curva de gasto acumulado ──
     _curva = E.spend_curve(pid, grupo)
@@ -3109,10 +3113,17 @@ def render_pnl(grupo: str):
          _cc.get("cobrado_no_pagado", 0) >= 1, "finanzas", "👥 Nóminas",
          lambda: "Horas imputadas a una obra SIN jornada abierta: se cargan al cliente "
                  "pero no entran en ninguna nómina, así que inflan el margen."),
+        # ⚠️ v325: el indicador cuenta SOLO a quien se le puede poner tarifa. Quien
+        # ya no está dado de alta no es un pendiente accionable —no hay fila donde
+        # ponerla— y sumarlo aquí mandaba a Usuarios a no hacer nada; se menciona
+        # en el detalle, que es donde informa sin fingir que hay una tarea.
         ("sintar", ":material/person_off:", "Sin tarifa",
          f"{len(_cc.get('sin_tarifa') or [])} pers.", False,
          bool(_cc.get("sin_tarifa")), "planificacion", "👷 Usuarios",
-         lambda: "Su trabajo cuenta como $0: " + ", ".join(_cc.get("sin_tarifa") or [])),
+         lambda: "Su trabajo cuenta como $0: " + ", ".join(_cc.get("sin_tarifa") or [])
+                 + (("  ·  Además, con horas pero YA SIN cuenta (no se les puede poner "
+                     "tarifa): " + ", ".join(_cc.get("de_baja") or []))
+                    if _cc.get("de_baja") else "")),
         ("sinmar", ":material/percent:", "Sin margen", f"{len(_sinmar)} obras", False,
          bool(_sinmar), "finanzas", "📈 Rentabilidad",
          lambda: "Se factura al costo (ganancia estimada $0): " + ", ".join(_sinmar[:8])),
@@ -3610,11 +3621,21 @@ def render_group_hours(grupo: str):
         st.caption("«—» en *sin asignar*: esa persona imputó a proyectos más horas que las "
                    "de su jornada, así que el dato no es fiable (fichó al proyecto sin abrir "
                    "jornada). Se corrige a partir de v150; el histórico anterior queda así.")
+    # ⚠️ v325: dos causas MUY distintas daban el mismo aviso. «Falta ponerle la
+    # tarifa» se arregla en Usuarios; «esta persona ya no está dada de alta» NO —
+    # no hay fila donde ponerla, así que mandar ahí era mandar a un callejón.
     _sin_tar = [_etiqueta(d) for d in data
-                if d["proyecto"] > 0 and not d["tarifa"]]
+                if d["proyecto"] > 0 and not d["tarifa"] and d.get("existe", True)]
+    _baja = [_etiqueta(d) for d in data
+             if d["proyecto"] > 0 and not d["tarifa"] and not d.get("existe", True)]
     if _sin_tar:
         st.warning(":material/warning: Sin **tarifa/hora**, así que su costo sale $0: **"
                    + ", ".join(_sin_tar) + "**. Se fija en :material/build: Usuarios.")
+    if _baja:
+        st.info(":material/person_off: **" + ", ".join(_baja) + "**: horas de alguien "
+                "que **ya no está dado de alta** (cuenta eliminada). Sus horas siguen "
+                "contando, pero **no hay dónde ponerle tarifa**, así que suman $0. "
+                "Para costearlas habría que volver a crear esa cuenta.")
 
     # ── Reparto por proyecto (a qué elevador va el tiempo del grupo) ──
     por_proy = {}

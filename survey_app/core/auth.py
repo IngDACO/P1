@@ -592,6 +592,28 @@ def rate_map(grupo: str = None) -> dict:
     return m
 
 
+def claves_conocidas(grupo: str = None) -> set:
+    """Las claves (Usuario **y** Nombre) de la gente que SIGUE dada de alta (v325).
+
+    Sirve para distinguir dos cosas que se veían iguales y no lo son: alguien con
+    horas fichadas y tarifa 0 puede ser **una tarifa que falta poner** (se arregla
+    en Usuarios) o **una cuenta que ya no existe** (p. ej. el rol conductor, que se
+    eliminó en v163, dejando sus fichajes históricos huérfanos). Lo segundo NO se
+    arregla poniendo una tarifa: no hay fila donde ponerla.
+
+    ⚠️ Sin `grupo` mira TODA la hoja: alguien movido a otro grupo sigue existiendo,
+    y decir que "ya no está" sería falso. Sale de `list_users` (cacheado) → 0
+    llamadas nuevas a Sheets.
+    """
+    out = set()
+    for u in list_users(grupo):
+        for k in ("Usuario", "Nombre"):
+            v = str(u.get(k, "") or "").strip()
+            if v:
+                out.add(v)
+    return out
+
+
 def add_user(usuario: str, pw: str, rol: str, nombre: str = "",
              grupo: str = "", activo: bool = True) -> tuple:
     lws, err = _get_login_ws()

@@ -119,7 +119,8 @@ def labor_breakdown(pid, grupo) -> dict:
     from core import auth
     prj = P.get_project(pid)
     if not prj:
-        return {"items": [], "total": 0.0, "horas": 0.0, "sin_tarifa": []}
+        return {"items": [], "total": 0.0, "horas": 0.0,
+                "sin_tarifa": [], "de_baja": []}
 
     nombre = str(prj.get("Nombre", ""))
     rates  = auth.rate_map(grupo)
@@ -136,18 +137,23 @@ def labor_breakdown(pid, grupo) -> dict:
         acc.setdefault(clave, 0.0)
         acc[clave] += h
 
-    items, sin_tarifa = [], []
+    # v325: separar «falta ponerle tarifa» (se arregla en Usuarios) de «esta
+    # persona ya no está dada de alta» (no hay fila donde ponerla). Antes las dos
+    # caían en el mismo aviso y la segunda mandaba a un sitio donde no hay nada
+    # que hacer.
+    conocidas = auth.claves_conocidas()
+    items, sin_tarifa, de_baja = [], [], []
     for u, h in acc.items():
         tar = rates.get(u, 0.0)
         items.append({"usuario": u, "horas": round(h, 2), "tarifa": tar,
                       "costo": round(h * tar, 2)})
         if tar <= 0:
-            sin_tarifa.append(u)
+            (sin_tarifa if (not conocidas or u in conocidas) else de_baja).append(u)
     items.sort(key=lambda x: (-x["costo"], -x["horas"]))
     return {"items": items,
             "total": round(sum(x["costo"] for x in items), 2),
             "horas": round(sum(x["horas"] for x in items), 2),
-            "sin_tarifa": sin_tarifa}
+            "sin_tarifa": sin_tarifa, "de_baja": de_baja}
 
 
 def labor_cost(pid, grupo) -> float:

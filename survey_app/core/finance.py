@@ -198,8 +198,12 @@ def conciliacion_mo(grupo: str, desde=None, hasta=None) -> dict:
     hp = timeclock.jornada_y_proyecto(grupo, desde, hasta)
     rates = auth.rate_map(grupo)
 
+    # v325: quien ya NO está dado de alta no es un «falta ponerle tarifa» — no hay
+    # fila donde ponerla. Se cuenta aparte para que el pendiente siga siendo
+    # accionable y no arrastre gente que nadie puede arreglar.
+    conocidas = auth.claves_conocidas()
     cargado = cobrado_no_pagado = pagado_no_cargado = 0.0
-    sin_tarifa = []
+    sin_tarifa, de_baja = [], []
     for clave, h in hp.items():
         t = _num(rates.get(clave, 0))
         cargado += h["proyecto"] * t
@@ -209,7 +213,9 @@ def conciliacion_mo(grupo: str, desde=None, hasta=None) -> dict:
         else:
             pagado_no_cargado += -_d
         if t <= 0 and (h["jornada"] > 0 or h["proyecto"] > 0):
-            sin_tarifa.append(h["nombre"])
+            _vivo = (not conocidas or clave in conocidas
+                     or str(h.get("nombre", "")) in conocidas)
+            (sin_tarifa if _vivo else de_baja).append(h["nombre"])
 
     # Lo REALMENTE liquidado en nóminas del periodo (por `PeriodoHasta`, como el P&L)
     base_nom = aportes = 0.0
@@ -233,6 +239,7 @@ def conciliacion_mo(grupo: str, desde=None, hasta=None) -> dict:
         # lo que la cadena no explica: nóminas editadas a mano, o trabajo aún sin nómina
         "sin_explicar":       round(base_teorica - base_nom, 2),
         "sin_tarifa":         sorted(set(sin_tarifa)),
+        "de_baja":            sorted(set(de_baja)),
     }
 
 
