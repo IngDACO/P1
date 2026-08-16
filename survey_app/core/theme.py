@@ -53,6 +53,30 @@ def texto_seguro(color: str) -> str:
     return _TEXTO_SEGURO.get(color, color) if color else color
 
 
+
+# ── ESCALA TIPOGRÁFICA (v333) ────────────────────────────────────────────
+# ⚠️ Había **31 tamaños distintos para 102 usos**, 24 de ellos fuera de cualquier
+# escala (11.52, 12.48, 16.32, 17.92, 21.12… los residuos de escribir en `rem`).
+# Eso no es una escala, es acumulación: nadie la eligió y por eso nadie la puede
+# respetar. Nueve pasos, y todo se ajusta al más cercano — medido antes de tocar:
+# 30 de los 31 valores se mueven ≤1 px, y solo 24→26 se mueve 2 px (3 usos).
+#
+# Se usan LITERALES en px, no `var(--…)`, a propósito: parte de este CSS viaja a
+# `email_notify` (los clientes de correo no resuelven variables CSS) y a los SVG
+# que `svglib` convierte a PDF. Un token que no resuelve deja el texto a un tamaño
+# por defecto y no avisa.
+FS_XS   = 11    # micro: chips, pies de tarjeta, notas al pie
+FS_SM   = 12    # secundario denso (el más usado de la app)
+FS_MD   = 13    # cuerpo compacto
+FS_BASE = 14    # cuerpo
+FS_LG   = 16    # destacado / cuerpo grande
+FS_XL   = 18    # subtítulo
+FS_H3   = 21    # título de sección
+FS_H2   = 26    # cifra grande (valor de KPI)
+FS_H1   = 34    # cifra hero (cronómetro)
+ESCALA_FS = (FS_XS, FS_SM, FS_MD, FS_BASE, FS_LG, FS_XL, FS_H3, FS_H2, FS_H1)
+
+
 # Paleta CATEGÓRICA (torta de rubros, series): arranca en el azul de marca y
 # alterna tonos distinguibles. Única fuente — no redefinir paletas por módulo.
 PALETA = ["#2e6da4", "#BA7517", "#1e8449", "#8e44ad", "#c0392b", "#16a085",
@@ -73,10 +97,10 @@ div.block-container {{
   div.block-container {{ padding-left: 1rem; padding-right: 1rem; }}
 }}
 [data-testid="stVerticalBlock"] {{ gap: 0.6rem; }}
-h1 {{ font-size: 1.7rem !important; font-weight: 700; letter-spacing: -.4px; }}
-h2 {{ font-size: 1.32rem !important; font-weight: 700; letter-spacing: -.3px; }}
-h3 {{ font-size: 1.12rem !important; font-weight: 650; }}
-h4 {{ font-size: 1rem !important; font-weight: 650; color: {AZUL_OSC}; }}
+h1 {{ font-size:26px !important; font-weight: 700; letter-spacing: -.4px; }}
+h2 {{ font-size:21px !important; font-weight: 700; letter-spacing: -.3px; }}
+h3 {{ font-size:18px !important; font-weight: 650; }}
+h4 {{ font-size:16px !important; font-weight: 650; color: {AZUL_OSC}; }}
 
 /* ── Métricas nativas como TARJETA (no números flotando) ── */
 [data-testid="stMetric"] {{
@@ -84,10 +108,10 @@ h4 {{ font-size: 1rem !important; font-weight: 650; color: {AZUL_OSC}; }}
   padding: 12px 14px; box-shadow: 0 1px 2px rgba(16,24,40,.04);
 }}
 [data-testid="stMetricLabel"] p {{
-  font-size: .74rem !important; font-weight: 600; letter-spacing: .3px;
+  font-size:12px !important; font-weight: 600; letter-spacing: .3px;
   text-transform: uppercase; color: {GRIS_TXT};
 }}
-[data-testid="stMetricValue"] {{ font-size: 1.6rem; font-weight: 700; color: {AZUL_OSC}; }}
+[data-testid="stMetricValue"] {{ font-size:26px; font-weight: 700; color: {AZUL_OSC}; }}
 
 /* ── Contenedores con borde: tarjetas de verdad ── */
 [data-testid="stVerticalBlockBorderWrapper"] {{
@@ -181,14 +205,14 @@ body:has([data-testid="stStatusWidget"])::before {{
   padding: 10px 13px; box-shadow: 0 1px 2px rgba(16,24,40,.04);
 }}
 .cpx-kpi .lbl {{
-  font-size: .72rem; font-weight: 600; letter-spacing: .3px;
+  font-size:12px; font-weight: 600; letter-spacing: .3px;
   text-transform: uppercase; color: {GRIS_TXT}; margin-bottom: 2px;
 }}
-.cpx-kpi .val {{ font-size: 1.5rem; font-weight: 700; color: {AZUL_OSC}; line-height: 1.15; }}
-.cpx-kpi .sub {{ font-size: .76rem; color: {GRIS_TXT}; margin-top: 1px; }}
+.cpx-kpi .val {{ font-size:26px; font-weight: 700; color: {AZUL_OSC}; line-height: 1.15; }}
+.cpx-kpi .sub {{ font-size:12px; color: {GRIS_TXT}; margin-top: 1px; }}
 .cpx-chip {{
   display: inline-block; padding: 2px 9px; border-radius: 999px;
-  font-size: .76rem; font-weight: 600; line-height: 1.5;
+  font-size:12px; font-weight: 600; line-height: 1.5;
 }}
 
 /* ── KPI CLICKEABLE: un botón con key `cpxkpi_*` se ve como tarjeta KPI ──
@@ -206,7 +230,7 @@ body:has([data-testid="stStatusWidget"])::before {{
 }}
 [class*="st-key-cpxkpi_"] button p {{
   text-align: left !important; width: 100%;
-  font-size: 1.02rem !important; font-weight: 700 !important; color: {AZUL_OSC};
+  font-size:16px !important; font-weight: 700 !important; color: {AZUL_OSC};
 }}
 /* Tarjeta KPI de TRES líneas (v303): el label del botón va como
    `etiqueta\n\nvalor\n\ncontexto` y Streamlit lo renderiza como TRES <p>.
@@ -217,12 +241,12 @@ body:has([data-testid="stStatusWidget"])::before {{
    pasiva se vean IGUAL. Los `:not(...)` dejan intacta la tarjeta de una sola
    línea: sin ellos, un botón KPI de un solo <p> se encogería a .72rem. */
 [class*="st-key-cpxkpi_"] button p:first-child:not(:last-child) {{
-  font-size: .72rem !important; font-weight: 600 !important; letter-spacing: .3px;
+  font-size:12px !important; font-weight: 600 !important; letter-spacing: .3px;
   text-transform: uppercase; color: {GRIS_TXT} !important; margin-bottom: 1px !important;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }}
 [class*="st-key-cpxkpi_"] button p:nth-child(2):not(:last-child) {{
-  font-size: 1.5rem !important; font-weight: 700 !important; color: {AZUL_OSC} !important;
+  font-size:26px !important; font-weight: 700 !important; color: {AZUL_OSC} !important;
   line-height: 1.15 !important; margin: 0 !important;
 }}
 /* ⚠️ `nowrap` + elipsis NO es cosmético: es lo que garantiza que las 3 tarjetas de
@@ -231,7 +255,7 @@ body:has([data-testid="stStatusWidget"])::before {{
    medido. Con esto, un texto que no quepa se recorta con "…" en vez de descuadrar
    la fila. Aun así los pies se escriben cortos (ver `render_kpis`). */
 [class*="st-key-cpxkpi_"] button p:last-child:not(:first-child) {{
-  font-size: .76rem !important; font-weight: 500 !important; color: {GRIS_TXT} !important;
+  font-size:12px !important; font-weight: 500 !important; color: {GRIS_TXT} !important;
   margin-top: 1px !important;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }}
@@ -268,8 +292,8 @@ body:has([data-testid="stStatusWidget"])::before {{
   display: flex; align-items: baseline; gap: 9px;
   margin: 14px 0 6px; padding-bottom: 5px; border-bottom: 1px solid {BORDE};
 }}
-.cpx-sec .t {{ font-size: 1.02rem; font-weight: 700; color: {AZUL_OSC}; }}
-.cpx-sec .s {{ font-size: .8rem; color: {GRIS_TXT}; }}
+.cpx-sec .t {{ font-size:16px; font-weight: 700; color: {AZUL_OSC}; }}
+.cpx-sec .s {{ font-size:13px; color: {GRIS_TXT}; }}
 </style>
 """
 

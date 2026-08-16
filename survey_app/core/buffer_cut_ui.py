@@ -27,7 +27,7 @@ def _kpi(label, value, color=None):
     return ('<div style="background:#fff;border:1px solid #e6e9ef;border-radius:12px;'
             'padding:10px 14px;flex:1;min-width:96px;">'
             f'<div style="font-size:12px;color:#6b7280;">{label}</div>'
-            f'<div style="font-size:20px;font-weight:700;{col}">{value}</div></div>')
+            f'<div style="font-size:21px;font-weight:700;{col}">{value}</div></div>')
 
 
 def _kpi_row(cards):

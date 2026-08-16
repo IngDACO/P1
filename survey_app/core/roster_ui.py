@@ -383,7 +383,7 @@ def render_planificacion(grupo):
     if b1.button("◀", key="ros_prev", use_container_width=True):
         st.session_state["ros_lunes"] = (lunes - timedelta(days=7)).isoformat()
         st.rerun()
-    b2.markdown(f"<div style='text-align:center;font-weight:700;font-size:1.05rem;"
+    b2.markdown(f"<div style='text-align:center;font-weight:700;font-size:16px;"
                 f"padding-top:6px'>{R.rango_label(lunes)}</div>", unsafe_allow_html=True)
     if b3.button("▶", key="ros_next", use_container_width=True):
         st.session_state["ros_lunes"] = (lunes + timedelta(days=7)).isoformat()
@@ -692,7 +692,7 @@ def _tablero_editable(grupo, lunes, staff, datos, tidx, marcas=None):
   line-height: 1.2 !important;
 }
 [class*="st-key-roscel_"] button p {
-  font-size: .74rem !important; font-weight: 600 !important;
+  font-size:12px !important; font-weight: 600 !important;
   text-align: left !important; width: 100%; white-space: normal !important;
 }
 [class*="st-key-pnm_"] button {
@@ -701,7 +701,7 @@ def _tablero_editable(grupo, lunes, staff, datos, tidx, marcas=None):
   border-left: 3px solid #2e6da4 !important; border-radius: 0 !important;
 }
 [class*="st-key-pnm_"] button p {
-  font-size: .8rem !important; font-weight: 700 !important;
+  font-size:13px !important; font-weight: 700 !important;
   text-align: left !important; width: 100%; color: #1e4e79;
 }
 [class*="st-key-pnm_"] button:hover { background: #f4f7fb !important; }
@@ -765,7 +765,7 @@ def _tablero_editable(grupo, lunes, staff, datos, tidx, marcas=None):
     # Cabecera de la rejilla (v301): 13.5px + seminegrita y TODO centrado — a 12px
     # gris claro apenas se leía, y "Persona" iba alineada a la izquierda mientras los
     # días ya estaban centrados, así que la fila no cuadraba.
-    _CAB = ("font-size:13.5px;font-weight:600;color:#5b6472;"
+    _CAB = ("font-size:13px;font-weight:600;color:#5b6472;"
             "text-align:center;margin-bottom:6px")
     h[0].markdown(f"<div style='{_CAB}'>Persona</div>", unsafe_allow_html=True)
     for i, d in enumerate(dias):
@@ -913,12 +913,12 @@ def _grid_html(staff, lunes, datos, tidx, resaltar="") -> str:
                         f'{_esc(R.etiqueta_de(it["asig"], tidx))}{_fh}</div>')
                 cont = "".join(_chips)
                 if nota:
-                    cont += (f'<div style="font-size:10.5px;opacity:0.8;color:#4b5563;">'
+                    cont += (f'<div style="font-size:11px;opacity:0.8;color:#4b5563;">'
                              f'{_esc(nota)}</div>')
             else:
                 cont = "&nbsp;"
             celdas.append(f'<td style="padding:4px 5px;background:#fff;'
-                          f'font-size:11.5px;line-height:1.25;vertical-align:top;">'
+                          f'font-size:11px;line-height:1.25;vertical-align:top;">'
                           f'{cont}</td>')
         filas.append("<tr>" + "".join(celdas) + "</tr>")
     return ('<div style="overflow-x:auto;margin:10px 0;">'
@@ -1082,7 +1082,7 @@ def _disponibilidad_html(staff, lunes, datos, tidx) -> str:
                                f'padding:2px 5px;margin-bottom:2px;">'
                                f'{_esc(R.etiqueta_de(it["asig"], tidx))}{_fh}</div>')
                 cont = "".join(_cs)
-            celdas.append(f'<td style="padding:4px 5px;background:#fff;font-size:11.5px;'
+            celdas.append(f'<td style="padding:4px 5px;background:#fff;font-size:11px;'
                           f'line-height:1.25;vertical-align:top;">{cont}</td>')
         filas.append("<tr>" + "".join(celdas) + "</tr>")
     return ('<div style="overflow-x:auto;margin:10px 0;">'

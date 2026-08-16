@@ -59,11 +59,11 @@ st.markdown("""
   /* Pestañas más compactas y con scroll horizontal si no caben */
   div[data-testid="stTabs"] button[data-baseweb="tab"] {
     padding: 0 10px !important;
-    font-size: 0.85rem !important;
+    font-size:14px !important;
   }
-  h1 { font-size: 1.4rem !important; }
-  h2 { font-size: 1.2rem !important; }
-  h3 { font-size: 1.05rem !important; }
+  h1 { font-size:21px !important; }
+  h2 { font-size:18px !important; }
+  h3 { font-size:16px !important; }
   /* Botones más altos = más fáciles de tocar */
   div[data-testid="stButton"] button { min-height: 44px; }
 }
@@ -202,10 +202,10 @@ with st.sidebar:
     st.markdown(f"""
     <div style="background:linear-gradient(135deg,#1a3a5c,#2e6da4);
                 padding:14px 16px;border-radius:8px;margin-bottom:12px;">
-        <div style="color:white;font-size:1.7rem;font-weight:900;
+        <div style="color:white;font-size:26px;font-weight:900;
                     letter-spacing:0.18em;font-family:'Segoe UI',sans-serif;
                     line-height:1.1;">COPEX</div>
-        <div style="color:#b0c8e8;font-size:0.72rem;margin-top:2px;">
+        <div style="color:#b0c8e8;font-size:12px;margin-top:2px;">
             Elevator Survey Analyzer &nbsp;·&nbsp; {APP_VERSION}
         </div>
     </div>

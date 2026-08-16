@@ -104,7 +104,7 @@ def render_prestart_tab():
     s1 = {}
     for key, label in PS.CHECKS_S1:
         cc = st.columns([3, 2])
-        cc[0].markdown(f"<div style='font-size:0.9rem;padding-top:6px'>{label}</div>",
+        cc[0].markdown(f"<div style='font-size:14px;padding-top:6px'>{label}</div>",
                        unsafe_allow_html=True)
         s1[key] = cc[1].radio(label, PS.OPTS_YN, horizontal=True, index=None,
                               key=f"ps_s1_{key}", label_visibility="collapsed")
@@ -127,7 +127,7 @@ def render_prestart_tab():
     s3 = {}
     for key, label in PS.CHECKS_S3:
         cc = st.columns([3, 2])
-        cc[0].markdown(f"<div style='font-size:0.9rem;padding-top:6px'>{label}</div>",
+        cc[0].markdown(f"<div style='font-size:14px;padding-top:6px'>{label}</div>",
                        unsafe_allow_html=True)
         s3[key] = cc[1].radio(label, PS.OPTS_YNA, horizontal=True, index=None,
                               key=f"ps_s3_{key}", label_visibility="collapsed")
@@ -250,4 +250,4 @@ def _kpi(label, valor, color=None):
     return ('<div style="background:#fff;border:1px solid #e6e9ef;border-radius:12px;'
             'padding:10px 14px;flex:1;min-width:110px;">'
             f'<div style="font-size:12px;color:#6b7280;">{label}</div>'
-            f'<div style="font-size:22px;font-weight:700;{col}">{valor}</div></div>')
+            f'<div style="font-size:21px;font-weight:700;{col}">{valor}</div></div>')

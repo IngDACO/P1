@@ -152,12 +152,12 @@ def render_group_header(grupo: str):
         'margin-bottom:14px;">'
         f'<span style="line-height:1;">{_MI("business", "#fff", "26px")}</span>'
         '<div style="min-width:0;">'
-        f'<div style="color:#fff;font-size:1.25rem;font-weight:800;line-height:1.1;">{grupo}</div>'
+        f'<div style="color:#fff;font-size:21px;font-weight:800;line-height:1.1;">{grupo}</div>'
         # ⚠️ v327: era #b0c8e8 → 3.2:1 contra el extremo CLARO del degradado de la
         # banda. Los otros 5 usos de ese tono (PDF, email, cajetín) van sobre el azul
         # OSCURO, donde da 9.1:1, así que solo se cambia este. #e2ecf9 → 4.58:1.
         # El nombre de la empresa (blanco, 5.47:1) no se toca: es lo que hay que resaltar.
-        '<div style="color:#e2ecf9;font-size:0.8rem;margin-top:2px;">Centro de control del grupo</div>'
+        '<div style="color:#e2ecf9;font-size:13px;margin-top:2px;">Centro de control del grupo</div>'
         '</div></div>',
         unsafe_allow_html=True,
     )
@@ -1289,29 +1289,29 @@ def _cartera_clickeable(proys, alarmas, delays, aheads, costos):
                 "<div style='display:flex;align-items:center;gap:7px;min-width:0;'>"
                 f"<span style='width:9px;height:9px;border-radius:50%;background:{_col};"
                 "flex:none;'></span>"
-                "<span style='font-weight:700;font-size:15px;overflow:hidden;"
+                "<span style='font-weight:700;font-size:14px;overflow:hidden;"
                 f"text-overflow:ellipsis;white-space:nowrap;'>{esc(p.get('Nombre', ''))}</span></div>"
-                f"<span style='background:{_pbg};color:{_pfg};font-size:11.5px;padding:2px 8px;"
+                f"<span style='background:{_pbg};color:{_pfg};font-size:11px;padding:2px 8px;"
                 f"border-radius:6px;white-space:nowrap;'>{esc(_est)}</span></div>"
                 "<div style='display:flex;align-items:center;gap:8px;margin-bottom:6px;'>"
                 "<div style='flex:1;height:7px;background:#eef1f5;border-radius:20px;"
                 "overflow:hidden;'>"
                 f"<div style='height:100%;width:{_av}%;background:#2e6da4;"
                 "border-radius:20px;'></div></div>"
-                f"<span style='font-size:12.5px;font-weight:600;color:#374151;'>{_av}%</span></div>"
+                f"<span style='font-size:12px;font-weight:600;color:#374151;'>{_av}%</span></div>"
                 # v306: ID + tipo. El ID en monoespaciada porque es un identificador que
                 # se dicta y se busca, no una etiqueta; el tipo solo si está marcado.
-                "<div style='font-size:11.5px;color:#667080;margin-bottom:4px;"
+                "<div style='font-size:11px;color:#667080;margin-bottom:4px;"
                 "font-family:monospace;'>"
                 f"{esc(_pid)}"
                 + (f"<span style='font-family:inherit;color:#6b7280;'> · "
                    f"{esc(str(p.get('Tipo', '')).strip())}</span>"
                    if str(p.get('Tipo', '')).strip() else "")
                 + "</div>"
-                f"<div style='font-size:12.5px;color:#6b7280;margin-bottom:5px;'>{_MI('person')} "
+                f"<div style='font-size:12px;color:#6b7280;margin-bottom:5px;'>{_MI('person')} "
                 f"{esc(p.get('Cliente', '') or '—')} · {_MI('calendar_month')} {_ddmm(p.get('FechaInicio'))} → "
                 f"{_ddmm(p.get('FechaFinEst'))}</div>"
-                f"<div style='font-size:12.5px;color:#374151;'>{_chips}</div>")
+                f"<div style='font-size:12px;color:#374151;'>{_chips}</div>")
             with _cols[_j].container(border=True, key=f"cart_{_idx}"):
                 st.markdown(_html, unsafe_allow_html=True)
                 if st.button("Abrir →", key=f"cartbtn_{_idx}", use_container_width=True):
@@ -1507,11 +1507,11 @@ def _portfolio_html(proys, horas, alarmas, ags, delays=None, aheads=None,
         if show_group and p.get("Grupo"):
             sub = f"{_MI('business')} {p.get('Grupo')} · " + sub
         ubic = str(p.get("Ubicacion", "") or "")
-        ubic_html = (f'<div style="font-size:11.5px;white-space:nowrap;overflow:hidden;'
+        ubic_html = (f'<div style="font-size:11px;white-space:nowrap;overflow:hidden;'
                      f'text-overflow:ellipsis;">{maps.maps_link_html(ubic, ubic, color="#2e6da4")}</div>'
                      if ubic else "")
         alarm = (f'<div style="width:44px;text-align:center;flex:none;color:#c0392b;'
-                 f'font-size:12.5px;font-weight:600;">{_MI('notifications')} {na}</div>'
+                 f'font-size:12px;font-weight:600;">{_MI('notifications')} {na}</div>'
                  if na else '<div style="width:44px;flex:none;"></div>')
         # Retraso (rojo) / adelanto (verde) → borde + badge de días
         d, adel = delays.get(pid), aheads.get(pid)
@@ -1542,7 +1542,7 @@ def _portfolio_html(proys, horas, alarmas, ags, delays=None, aheads=None,
             f'<span style="font-size:12px;padding:3px 10px;border-radius:20px;background:{bg};'
             f'color:{fg};white-space:nowrap;flex:none;">{est}</span>'
             '<div style="width:118px;flex:none;">'
-            '<div style="display:flex;justify-content:space-between;font-size:11.5px;'
+            '<div style="display:flex;justify-content:space-between;font-size:11px;'
             f'color:#6b7280;margin-bottom:3px;"><span>Avance</span>'
             f'<span style="color:#1f2937;font-weight:600;">{av:.0f}%</span></div>'
             '<div style="height:6px;background:#eef1f5;border-radius:20px;overflow:hidden;">'
@@ -1710,7 +1710,7 @@ def _estado_section(pid: str, grupo: str, prj: dict):
     # bloques LARGOS (actividades | alarmas), que es lo que equilibra la pantalla.
     # ⚠️ El titular va en `st.markdown` SIN html: iba dentro de un `<div>` y ahí el
     # markdown NO se procesa, así que los `**` salían literales en pantalla.
-    st.markdown(f"<span style='font-size:17px'>{_tit_html}</span>"
+    st.markdown(f"<span style='font-size:16px'>{_tit_html}</span>"
                 f"<span style='color:#6b7280;font-size:14px'> · {_dia_txt}</span>",
                 unsafe_allow_html=True)
     st.markdown('<div style="display:flex;gap:10px;flex-wrap:wrap;margin:8px 0 10px">'
@@ -1842,12 +1842,12 @@ def _detalle_proyecto(pid: str, grupo: str = None):
         'padding:12px 16px;margin-bottom:10px;background:#fff;">'
         '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;'
         'flex-wrap:wrap;">'
-        f'<div style="font-size:1.15rem;font-weight:800;color:#1f2937;">{prj.get("Nombre","")}'
+        f'<div style="font-size:18px;font-weight:800;color:#1f2937;">{prj.get("Nombre","")}'
         f'<span style="font-family:monospace;font-size:12px;color:#667080;font-weight:500;'
         f'margin-left:8px;">{pid}</span></div>'
         f'<span style="font-size:12px;padding:3px 11px;border-radius:20px;background:{_bg};'
         f'color:{_fg};white-space:nowrap;">{est}</span></div>'
-        f'<div style="font-size:12.5px;color:#6b7280;margin-top:3px;">'
+        f'<div style="font-size:12px;color:#6b7280;margin-top:3px;">'
         + (f'{_tp} · ' if _tp else '')
         + f'{_cli}{_ubic}</div>'
         # barra + las dos cifras en la MISMA línea: la barra ya dice el %, así que el
@@ -2803,15 +2803,15 @@ def _barras_html(pares, total, color=None) -> str:
         pct = 100.0 * float(val) / total
         out.append(
             '<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">'
-            f'<div style="width:118px;flex:none;font-size:12.5px;color:{theme.TXT};'
+            f'<div style="width:118px;flex:none;font-size:12px;color:{theme.TXT};'
             f'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{et}</div>'
             f'<div style="flex:1;height:9px;background:{theme.PISTA};border-radius:20px;'
             'overflow:hidden;">'
             f'<div style="height:9px;width:{max(1.5, pct):.1f}%;background:{color};'
             f'border-radius:20px;"></div></div>'
-            f'<div style="width:96px;flex:none;text-align:right;font-size:12.5px;'
+            f'<div style="width:96px;flex:none;text-align:right;font-size:12px;'
             f'color:{theme.TXT};font-weight:600;">${float(val):,.0f}</div>'
-            f'<div style="width:42px;flex:none;text-align:right;font-size:11.5px;'
+            f'<div style="width:42px;flex:none;text-align:right;font-size:11px;'
             f'color:{theme.GRIS_SUAVE};">{pct:.0f}%</div></div>')
     return "".join(out)
 
@@ -2836,10 +2836,10 @@ def _torta_html(pares, total) -> str:
             '<div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;">'
             f'<span style="width:12px;height:12px;border-radius:3px;background:{_col};'
             'flex:none;"></span>'
-            f'<span style="flex:1;font-size:12.5px;color:{theme.TXT};overflow:hidden;'
+            f'<span style="flex:1;font-size:12px;color:{theme.TXT};overflow:hidden;'
             f'text-overflow:ellipsis;white-space:nowrap;">{et}</span>'
-            f'<span style="font-size:12.5px;font-weight:600;color:{theme.TXT};">${val:,.0f}</span>'
-            f'<span style="width:40px;flex:none;text-align:right;font-size:11.5px;'
+            f'<span style="font-size:12px;font-weight:600;color:{theme.TXT};">${val:,.0f}</span>'
+            f'<span style="width:40px;flex:none;text-align:right;font-size:11px;'
             f'color:{theme.GRIS_SUAVE};">{_pct:.0f}%</span></div>')
     _grad = "conic-gradient(" + ", ".join(_stops) + ")"
     # v225: centrado — se agrupan torta + leyenda y la leyenda se ACOTA (antes flex:1
@@ -3242,7 +3242,7 @@ def _pnl_conciliacion(cc: dict, T, periodo_completo: bool = True):
             ("Base realmente puesta en nóminas", cc["base_nomina"], ""),
             ("+ aportes de ley (super)", cc["aportes"], "#c77700"),
             ("= costo real de la mano de obra", cc["costo_real"], "bold")]
-    _h = ['<table style="width:100%;border-collapse:collapse;font-size:13.5px">']
+    _h = ['<table style="width:100%;border-collapse:collapse;font-size:13px">']
     for _lb, _v, _st in _fil:
         _b = "font-weight:700;border-top:1px solid #e6e9ef;" if _st == "bold" else ""
         _c = f"color:{_st};" if _st.startswith("#") else ""

@@ -30,7 +30,7 @@ def _chronometer(clock_in_str, label="En curso", color=_VERDE, key="chrono"):
     components.html(
         '<div style="display:flex;align-items:baseline;gap:10px;'
         'font-family:Arial,Helvetica,sans-serif;">'
-        f'<span style="font-size:12.5px;color:#6b7280;">{label}</span>'
+        f'<span style="font-size:12px;color:#6b7280;">{label}</span>'
         f'<span id="{key}" style="font-size:34px;font-weight:800;'
         f'font-family:\'Courier New\',monospace;color:{color};letter-spacing:1px;">'
         '00:00:00</span></div>'
@@ -104,9 +104,9 @@ def _tarjeta(titulo, valor, pie="", color=None, activo=False):
     return (
         '<div style="background:#ffffff;border:1px solid #e6e9ef;border-radius:12px;'
         f'padding:12px 14px;flex:1;min-width:132px;{borde}">'
-        f'<div style="font-size:12.5px;color:#6b7280;line-height:1.2;">{titulo}</div>'
-        f'<div style="font-size:24px;font-weight:700;margin-top:2px;{col}">{valor}</div>'
-        + (f'<div style="font-size:11.5px;color:#667080;margin-top:2px;">{pie}</div>'
+        f'<div style="font-size:12px;color:#6b7280;line-height:1.2;">{titulo}</div>'
+        f'<div style="font-size:26px;font-weight:700;margin-top:2px;{col}">{valor}</div>'
+        + (f'<div style="font-size:11px;color:#667080;margin-top:2px;">{pie}</div>'
            if pie else "")
         + "</div>")
 
@@ -217,8 +217,8 @@ def render_timeclock_tab():
     st.markdown(
         f'<div style="border-left:4px solid {_col};background:#f8fafc;border-radius:8px;'
         'padding:9px 14px;margin-bottom:12px;">'
-        f'<span style="font-weight:700;color:{_col};font-size:1.02rem;">{_est}</span>'
-        f'<span style="color:#6b7280;font-size:12.5px;"> · {_det}</span></div>',
+        f'<span style="font-weight:700;color:{_col};font-size:16px;">{_est}</span>'
+        f'<span style="color:#6b7280;font-size:12px;"> · {_det}</span></div>',
         unsafe_allow_html=True)
 
     # Semana en curso (v308): lo que de verdad quiere saber quien ficha. Sale de los

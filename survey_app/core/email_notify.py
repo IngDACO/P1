@@ -111,8 +111,8 @@ def send_usage_notification(
     <html><body style="font-family:'Segoe UI',Arial,sans-serif;color:#212529;max-width:680px;margin:0 auto">
 
     <div style="background:linear-gradient(135deg,#1a3a5c,#2e6da4);padding:20px 28px;border-radius:8px">
-        <div style="color:white;font-size:1.6rem;font-weight:900;letter-spacing:0.15em">COPEX</div>
-        <div style="color:#b0c8e8;font-size:0.85rem">Elevator Survey Analyzer — Notificación de uso</div>
+        <div style="color:white;font-size:26px;font-weight:900;letter-spacing:0.15em">COPEX</div>
+        <div style="color:#b0c8e8;font-size:14px">Elevator Survey Analyzer — Notificación de uso</div>
     </div>
 
     <div style="background:#e8f4f8;padding:10px 20px;border-left:4px solid #2e6da4;margin:16px 0">

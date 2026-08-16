@@ -220,9 +220,9 @@ def render_login() -> bool:
             st.markdown("<h1 style='text-align:center;letter-spacing:.2em;color:#1a3a5c'>COPEX</h1>",
                         unsafe_allow_html=True)
     st.markdown(
-        "<p style='text-align:center;color:#5b6472;margin-top:-8px;font-size:.95rem;'>"
+        "<p style='text-align:center;color:#5b6472;margin-top:-8px;font-size:16px;'>"
         "Gestión de instalación de elevadores"
-        "<br><span style='font-size:.8rem;color:#8b95a5;'>Proyectos · Cuadrilla · Costos · "
+        "<br><span style='font-size:13px;color:#8b95a5;'>Proyectos · Cuadrilla · Costos · "
         "Herramientas técnicas</span></p>",
         unsafe_allow_html=True)
 

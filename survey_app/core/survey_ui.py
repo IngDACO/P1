@@ -254,7 +254,7 @@ def render_survey_tab(_ROL, _GRUPO):
         """
         st.markdown(
             '<div style="display:flex;flex-wrap:wrap;gap:14px;align-items:center;'
-            'font-size:0.78rem;color:#5f6b7a;margin:-6px 0 10px 2px">'
+            'font-size:12px;color:#5f6b7a;margin:-6px 0 10px 2px">'
             '<span><span style="display:inline-block;width:11px;height:11px;'
             'background:#c0392b;border-radius:2px;vertical-align:-1px"></span> '
             'fuera de límite — el valor más crítico de su columna</span>'

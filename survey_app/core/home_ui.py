@@ -268,7 +268,7 @@ def sidebar_menu() -> str:
             # ⚠️ El `font-size` estaba en el BOTÓN y NO llegaba al texto: medido, los dos
             # niveles salían a 16 px. Las propiedades de texto van en el `<p>`.
             '[class*="st-key-navsub_"] button p{'
-            'font-size:.85rem!important;font-weight:400!important;}',
+            'font-size:14px!important;font-weight:400!important;}',
             # v232: el ICONO Material (único <span> del <p>) en azul COPEX; el texto, por defecto.
             '[class*="st-key-navsec_"] button p span,[class*="st-key-navsub_"] button p span{'
             'color:#2e6da4!important;}',
@@ -365,7 +365,7 @@ def render_topbar(grupo):
         # v297: la versión vivía en la banda azul COPEX de la nav vieja. Esa banda no
         # vuelve (el admin lleva sin ella desde v190 y no se echó en falta), pero la
         # versión sí: se usa a diario para saber qué hay desplegado.
-        st.markdown(f"<div style='text-align:right;padding-top:8px;font-size:.78rem;"
+        st.markdown(f"<div style='text-align:right;padding-top:8px;font-size:12px;"
                     f"color:#667080;font-family:monospace'>{_version()}</div>",
                     unsafe_allow_html=True)
     with c2:
@@ -1055,7 +1055,7 @@ def _agenda_hoy(grupo):
 
     # resumen
     st.markdown(
-        f"<div style='margin:2px 0 8px 0;font-size:0.85rem;color:#374151;'>"
+        f"<div style='margin:2px 0 8px 0;font-size:14px;color:#374151;'>"
         f"<b>{n_asig}</b> asignados &nbsp;·&nbsp; <b>{n_off}</b> OFF &nbsp;·&nbsp; "
         f"<b>{n_leave}</b> leave &nbsp;·&nbsp; <b>{n_sin}</b> sin asignar</div>",
         unsafe_allow_html=True)
