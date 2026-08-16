@@ -4067,7 +4067,35 @@ Buscar «norte» → el proyecto archivado PRJ-0003, y al tocarlo abre su detall
 caja ya limpia. Buscar «campo1» → la persona, y al tocarla abre **su ficha** en
 Planificación · Usuarios. El guardián de v303 (destinos de `navegar()` existentes) pasa.
 
-## Versiones desplegadas (v331 = actual)
+## Estado de carga + los selectores del kit dejan de suponer la etiqueta (v332)
+### ⚠️ El atenuado de v326 NUNCA funcionó (y lo di por bueno)
+La regla era `div[data-testid="stMain"]` y **stMain es un `<section>`**, así que no
+casaba con nada. Lo afirmé en el informe de diseño sin medirlo. Es el mismo error que
+el combinador `>` de v327: **un selector supuesto en vez de medido**.
+Al auditar TODOS los selectores del kit contra el DOM real apareció un segundo:
+**`stMetricLabel` es un `<label>`**, así que el estilo de las etiquetas de métrica
+(mayúsculas, peso 600, color secundario) llevaba muerto **desde v283**.
+→ Se quitó el nombre de etiqueta de los **18** selectores del kit: el `data-testid` ya
+es único, la etiqueta no aporta nada y es justo lo que se rompe cuando Streamlit cambia
+su DOM. Verificado: 0 selectores con etiqueta.
+### El estado de carga, por fin visible
+Dos señales, que resuelven cosas distintas:
+- **Barra superior animada** (3 px, degradado azul COPEX, `cpx-cargando` 1.05 s) →
+  «te he oído y estoy trabajando». Aparece en el navegador, sin esperar al servidor.
+- **Contenido atenuado a .55** → «lo que ves ya no es lo definitivo».
+Medido en producción durante un rerun de 520 ms: barra visible con su animación,
+`opacity` del main baja a 0.55, y **en reposo vuelve todo a 1 sin residuo**.
+⚠️ No es un esqueleto literal (Streamlit no permite reservar la altura del contenido
+que aún no existe); es la señal que resuelve el problema real, que era la pantalla
+idéntica y quieta hasta 2,9 s.
+### La lección, que ya va tres veces
+Un selector CSS que no casa **no da error**: la app se ve "casi bien" y nadie lo nota.
+Las tres veces (v326 `>`, v326 `div`/section, v283 `div`/label) se cazaron **midiendo el
+DOM en vivo**, nunca leyendo el código. Comprobación barata que conviene repetir al
+tocar el kit: para cada `tag[data-testid=X]`, comparar cuántos elementos casan con y sin
+la etiqueta.
+
+## Versiones desplegadas (v332 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -4075,6 +4103,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v332 | **Estado de carga visible**: barra superior animada + contenido atenuado mientras Streamlit re-ejecuta (medido: 520 ms de rerun, opacity 0.55, sin residuo en reposo). ⚠️ Y el hallazgo: **el atenuado de v326 nunca funcionó** — la regla decía `div[data-testid="stMain"]` y stMain es un `<section>`. Auditados TODOS los selectores del kit contra el DOM real apareció un segundo muerto **desde v283**: `stMetricLabel` es un `<label>`, así que el estilo de las etiquetas de métrica jamás aplicó. Los 18 selectores dejan de depender del nombre de etiqueta |
 | v331 | El indicador de versión del topbar **mentía tras un deploy**: `@st.cache_data` sin ttl lo congelaba durante la vida del proceso y Streamlit Cloud recarga en caliente sin reiniciar. Visto en vivo: app v330, barra v324 |
 | v330 | **El buscador ya busca.** Era el fallo con más coste de credibilidad de la auditoría: 641 px del control más prominente, inertes desde v190. Busca proyectos (nombre/ID/cliente/ubicación), personas (nombre/login/email) y trabajos, con ranking (ID exacto → empieza por → contiene), sin acentos ni mayúsculas, mínimo 2 letras, y los archivados marcados. **0 lecturas nuevas a Sheets** (las 3 fuentes ya estaban cacheadas). Cada resultado reusa los deep-links existentes; la caja se limpia por bandera aplicada antes de instanciar el widget (regla v111) |
 | v329 | `theme.texto_seguro()`: un color de ACENTO deja de usarse como color de TEXTO. `_kpi_card` teñía borde y valor con el mismo color, así que el ámbar daba un importe a **2.85:1** («Por facturar»). El borde conserva el color vivo; el valor usa su equivalente legible (6.16:1). En el kit, no en cada una de las ~20 llamadas |
