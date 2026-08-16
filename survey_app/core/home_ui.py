@@ -12,8 +12,11 @@ Alcance: SOLO el rol administrador (owner/campo siguen con su navegación actual
 El mapa geocodifica la `Ubicacion` de texto con OpenStreetMap/Nominatim (sin API key,
 cacheado). Cuando se valide el look, se decide Google Maps y/o un campo de coordenadas.
 """
+import logging
 import streamlit as st
 import pandas as pd
+
+logger = logging.getLogger(__name__)
 
 
 # ── Menú lateral (iconos) ────────────────────────────────────────
@@ -339,9 +342,15 @@ def render_topbar(grupo):
                      use_container_width=True, disabled=not puede_atras()):
             ir_atras()
     with c1:
-        # El buscador aún no tiene backend; para el CAMPO además sería ruido (su nav
-        # es corta y todo lo suyo cuelga de "Mis proyectos"). Solo gestión.
+        # v330: el buscador YA busca. Para el CAMPO sigue sin mostrarse: su nav es
+        # corta y todo lo suyo cuelga de "Mis proyectos", así que sería ruido.
         if _rol() != "campo":
+            # ⚠️ Limpiar la caja tras abrir un resultado hay que hacerlo ANTES de
+            # instanciar el widget (regla v111): quien lo pide es el clic, que ocurre
+            # más abajo en el MISMO run, así que deja la marca y la aplica el
+            # siguiente. Escribirla después daría StreamlitAPIException.
+            if st.session_state.pop("_search_clear", False):
+                st.session_state["topbar_search"] = ""
             st.text_input("Buscar", key="topbar_search", label_visibility="collapsed",
                           placeholder="Buscar proyectos, personas, trabajos…")
     with cver:
@@ -356,6 +365,148 @@ def render_topbar(grupo):
     st.markdown("<hr style='margin:2px 0 14px 0;border:none;border-top:1px solid #e6e9ef;'>",
                 unsafe_allow_html=True)
     _mobile_back_trap()      # el back del móvil hace lo mismo que el botón '←'
+
+
+def _norm_busq(s) -> str:
+    """Minúsculas y sin acentos: buscar «grua» tiene que encontrar «grúa»."""
+    import unicodedata
+    t = unicodedata.normalize("NFD", str(s or "").strip().lower())
+    return "".join(c for c in t if unicodedata.category(c) != "Mn")
+
+
+def buscar(q: str, grupo) -> list:
+    """Busca en proyectos, personas y trabajos. Devuelve [{tipo, titulo, pie, ...}].
+
+    ⚠️ v330: hasta aquí el buscador de la barra superior era un `text_input` cuyo
+    valor **no se leía en ningún punto del código** — 641 px del control más
+    prominente de la pantalla, inertes. Lo detectó la auditoría de diseño.
+
+    **0 lecturas nuevas a Sheets**: las tres fuentes ya están cacheadas y se usan
+    en otras pantallas. Con el techo duro de 60 lecturas/min, eso era condición.
+
+    Orden: primero lo que coincide por ID exacto, luego lo que EMPIEZA por el
+    término, luego lo que lo contiene. Dentro de cada grupo, por tipo.
+    """
+    qn = _norm_busq(q)
+    if len(qn) < 2:                      # con 1 letra todo coincide: no es útil
+        return []
+    out = []
+
+    def _rank(*campos) -> int:
+        """0 = ID exacto · 1 = empieza por · 2 = contiene · None = no coincide."""
+        mejor = None
+        for c in campos:
+            cn = _norm_busq(c)
+            if not cn:
+                continue
+            if cn == qn:
+                return 0
+            if cn.startswith(qn):
+                mejor = 1 if mejor is None else min(mejor, 1)
+            elif qn in cn:
+                mejor = 2 if mejor is None else min(mejor, 2)
+        return mejor
+
+    try:
+        from core import projects as P
+        for p in P.list_projects(grupo, incluir_archivados=True):
+            pid = str(p.get("ID", ""))
+            r = _rank(pid, p.get("Nombre"), p.get("Cliente"), p.get("Ubicacion"))
+            if r is None:
+                continue
+            _arch = "ARCHIV" in str(p.get("EstadoManual") or p.get("Estado") or "").upper()
+            _pie = " · ".join(x for x in [pid, str(p.get("Cliente", "")).strip(),
+                                          "archivado" if _arch else ""] if x)
+            out.append({"tipo": "proyecto", "icono": ":material/folder:", "orden": r,
+                        "titulo": str(p.get("Nombre", "")) or pid, "pie": _pie, "id": pid})
+    except Exception as e:
+        logger.warning("buscar: proyectos falló: %s", e)
+
+    try:
+        from core import auth as A
+        for u in A.list_users(grupo):
+            usr = str(u.get("Usuario", ""))
+            r = _rank(usr, u.get("Nombre"), u.get("Email"))
+            if r is None:
+                continue
+            _pie = " · ".join(x for x in [usr, str(u.get("Rol", "")).strip(),
+                                          str(u.get("Grupo", "")).strip()] if x)
+            out.append({"tipo": "persona", "icono": ":material/badge:", "orden": r,
+                        "titulo": str(u.get("Nombre", "")) or usr, "pie": _pie,
+                        "id": usr, "nombre": str(u.get("Nombre", "")) or usr})
+    except Exception as e:
+        logger.warning("buscar: personas falló: %s", e)
+
+    try:
+        from core import roster as R
+        # Solo el catálogo (TRB-####): los proyectos ya salen arriba y `trabajos_idx`
+        # los mete como entradas sintéticas, así que usarlo aquí los duplicaría.
+        for t in R.list_trabajos(grupo, incluir_inactivos=True):
+            tid = str(t.get("ID", ""))
+            r = _rank(tid, t.get("Nombre"), t.get("Numero"))
+            if r is None:
+                continue
+            _num = str(t.get("Numero", "")).strip()
+            _pie = " · ".join(x for x in [tid, f"nº {_num}" if _num else "",
+                                          "" if str(t.get("Activo", "SI")).upper() == "SI"
+                                          else "inactivo"] if x)
+            out.append({"tipo": "trabajo", "icono": ":material/construction:", "orden": r,
+                        "titulo": str(t.get("Nombre", "")) or tid, "pie": _pie, "id": tid})
+    except Exception as e:
+        logger.warning("buscar: trabajos falló: %s", e)
+
+    _peso = {"proyecto": 0, "persona": 1, "trabajo": 2}
+    out.sort(key=lambda x: (x["orden"], _peso.get(x["tipo"], 9), _norm_busq(x["titulo"])))
+    return out
+
+
+def _abrir_resultado(res: dict):
+    """Lleva a donde vive el resultado, reusando los deep-links que ya existen."""
+    st.session_state["_search_clear"] = True          # se aplica en el próximo run
+    if res["tipo"] == "proyecto":
+        st.session_state["_admin_open_proj"] = res["id"]
+        navegar("proyectos", "📊 Proyectos")
+    elif res["tipo"] == "persona":
+        st.session_state["gp_fichasel"] = f"{res['nombre']} ({res['id']})"
+        navegar("planificacion", "👷 Usuarios")
+    else:
+        navegar("planificacion", "🎛 Panel")
+
+
+def _pantalla_busqueda(q: str, grupo) -> bool:
+    """Resultados de la búsqueda. Devuelve True si se ha hecho cargo de la pantalla."""
+    qn = (q or "").strip()
+    if not qn:
+        return False
+    if len(_norm_busq(qn)) < 2:
+        st.caption(":material/search: Escribe al menos dos letras.")
+        return True
+
+    res = buscar(qn, grupo)
+    _c1, _c2 = st.columns([6, 1])
+    _c1.markdown(f"#### :material/search: {len(res)} resultado(s) para «{qn}»")
+    if _c2.button("Limpiar", key="busq_limpiar", use_container_width=True):
+        st.session_state["_search_clear"] = True
+        st.rerun()
+
+    if not res:
+        st.info(":material/search_off: Sin coincidencias en proyectos, personas ni "
+                "trabajos. Se busca por nombre, ID, cliente, ubicación, login y correo.")
+        return True
+
+    _ETQ = {"proyecto": "Proyectos", "persona": "Personas", "trabajo": "Trabajos"}
+    for _tipo in ("proyecto", "persona", "trabajo"):
+        _grupo_res = [r for r in res if r["tipo"] == _tipo]
+        if not _grupo_res:
+            continue
+        st.markdown(f"**{_ETQ[_tipo]}** · {len(_grupo_res)}")
+        for _i, _r in enumerate(_grupo_res[:12]):
+            if st.button(f"{_r['icono']} {_r['titulo']}\n\n{_r['pie']}",
+                         key=f"busq_{_tipo}_{_i}", use_container_width=True):
+                _abrir_resultado(_r)
+        if len(_grupo_res) > 12:
+            st.caption(f"…y {len(_grupo_res) - 12} más. Afina el término.")
+    return True
 
 
 def _alertas(grupo) -> list:
@@ -436,6 +587,14 @@ def _campana(grupo):
 
 # ── Router de contenido ──────────────────────────────────────────
 def render_admin_content(key, grupo):
+    # ── Búsqueda (v330): manda sobre la sección ───────────────────
+    # Va aquí y no en `app.py` para que el enganche sea de UNA línea y ningún
+    # llamador cambie. Si hay término escrito, los resultados OCUPAN la pantalla:
+    # se ha ido a buscar algo, no a mirar la sección que había debajo.
+    if _rol() != "campo" and _pantalla_busqueda(
+            st.session_state.get("topbar_search", ""), grupo):
+        return
+
     # ── Secciones propias del CAMPO (v297) ───────────────────────
     # Se cablean a las MISMAS funciones que ya usaba su nav vieja: es una
     # reconexión, no una reescritura (igual que hizo v191 con el admin).
