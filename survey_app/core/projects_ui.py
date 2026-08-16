@@ -1671,6 +1671,45 @@ def _equipo_proyecto(pid, grupo):
     st.caption(f"Total: **{_lb['horas']:.1f} h**")
 
 
+_CAMPO_LEGIBLE = {
+    "MargenPct": "Margen (%)", "Presupuesto": "Presupuesto", "Avance": "Avance (%)",
+    "Estado": "Estado", "EstadoManual": "Estado manual", "FechaInicio": "Fecha de inicio",
+    "FechaFinEst": "Fecha de fin estimada", "Cliente": "Cliente", "ClienteID": "Cliente",
+    "Nombre": "Nombre", "CampoAsignados": "Personal asignado",
+    "AgrupacionID": "Agrupación", "PesoEnAgrupacion": "Peso en la agrupación",
+    "TarifaHora": "Tarifa por hora",
+}
+
+
+def _historial_section(pid: str):
+    """Quién cambió qué y cuándo en este proyecto (v342).
+
+    Solo aparece si hay algo anotado: un desplegable vacío en cada proyecto sería
+    ruido, y los proyectos anteriores a v342 no tienen rastro.
+    """
+    try:
+        from core import auditoria, theme        # `theme` se importa local en este módulo
+        filas = auditoria.historial(entidad="proyecto", entidad_id=pid, limite=50)
+    except Exception:
+        return
+    if not filas:
+        return
+    with st.expander(f":material/history: Historial de cambios ({len(filas)})"):
+        st.caption("Se anotan los cambios que mueven dinero o el estado de la obra "
+                   "(margen, presupuesto, fechas, avance, cliente, personal).")
+        for r in filas:
+            _quien = str(r.get("Usuario", "") or "—")
+            st.markdown(f"**{r.get('Fecha','')}** · {_quien}")
+            for campo, (antes, despues) in (r.get("cambios") or {}).items():
+                _lbl = _CAMPO_LEGIBLE.get(campo, campo)
+                _a = str(antes or "").strip() or "(vacío)"
+                _d = str(despues or "").strip() or "(vacío)"
+                st.markdown(
+                    f"&nbsp;&nbsp;&nbsp;&nbsp;{_lbl}: "
+                    f"<span style='color:{theme.GRIS_SUAVE}'>{_a}</span> → <b>{_d}</b>",
+                    unsafe_allow_html=True)
+
+
 def _estado_section(pid: str, grupo: str, prj: dict):
     """Pestaña :material/bar_chart: Estado (v211: doble columna arriba — cómo va | alarmas + equipo; el
     ritmo, el desglose y el cronograma van a ancho completo abajo)."""
@@ -2175,6 +2214,9 @@ def _detalle_proyecto(pid: str, grupo: str = None):
                         if ok:
                             _aviso_cambio("Se eliminó una actividad del cronograma.")
                             st.rerun()
+        # ── Rastro de cambios (v342) ──
+        _historial_section(pid)
+
         # ── Archivar / eliminar ──
         _archivado = str(prj.get("Estado", "")) == P.ARCHIVADO
         if _archivado:

@@ -525,6 +525,8 @@ def update_project(pid: str, fields: dict) -> tuple:
     row = _find_row(pws, "ID", pid)
     if row is None:
         return False, "Proyecto no encontrado."
+    # v342: el ANTES se captura aquí, antes de escribir. Sale de la caché (0 llamadas).
+    _antes = dict(get_project(pid) or {})
     # Una sola llamada a la API (batch) en vez de N update_cell → evita rate limit.
     batch = [{"range": f"{_col_letter(_PCOL[k])}{row}", "values": [[str(v)]]}
              for k, v in fields.items() if k in _PCOL]
@@ -534,6 +536,14 @@ def update_project(pid: str, fields: dict) -> tuple:
         except Exception as e:
             return False, f"Error actualizando: {e}"
     _invalidate()
+    # ⚠️ v342: FUERA del try del guardado y DESPUÉS de invalidar. Si la anotación
+    # falla, el cambio del usuario ya está hecho y no se va a deshacer por eso.
+    try:
+        from core import auditoria
+        auditoria.registrar("proyecto", pid, auditoria.diff(_antes, fields),
+                            grupo=str(_antes.get("Grupo", "")))
+    except Exception:
+        pass
     return True, "Proyecto actualizado."
 def delete_project(pid: str) -> tuple:
     pws, err = _projects_ws()

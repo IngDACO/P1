@@ -545,14 +545,24 @@ def set_rate(usuario: str, tarifa) -> tuple:
     lws, err = _get_login_ws()
     if err:
         return False, err
-    row, _ = _find_row(lws, usuario)
+    row, rec = _find_row(lws, usuario)
     if row is None:
         return False, "Usuario no encontrado."
+    _antes = dict(rec or {})            # v342: el ANTES, de la fila que ya se leyó
     try:
         lws.update_cell(row, _COL["TarifaHora"], str(tarifa))
     except Exception as e:
         return False, f"Error: {e}"
     _invalidate_login()
+    # ⚠️ v342: la tarifa decide lo que se le paga a una persona y lo que se le cobra
+    # al cliente. Es el cambio que más merece dejar rastro.
+    try:
+        from core import auditoria
+        auditoria.registrar("usuario", usuario,
+                            auditoria.diff(_antes, {"TarifaHora": tarifa}),
+                            grupo=str(_antes.get("Grupo", "")))
+    except Exception:
+        pass
     return True, f"Tarifa de '{usuario}' actualizada."
 
 
