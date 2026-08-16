@@ -4095,7 +4095,45 @@ DOM en vivo**, nunca leyendo el código. Comprobación barata que conviene repet
 tocar el kit: para cada `tag[data-testid=X]`, comparar cuántos elementos casan con y sin
 la etiqueta.
 
-## Versiones desplegadas (v332 = actual)
+## Escala tipográfica + el deploy que no llega (v333-v335)
+### La escala: de 31 tamaños a 9
+Había **31 tamaños de fuente distintos para 102 usos**, 24 fuera de cualquier escala
+(11.52, 12.48, 16.32, 17.92, 21.12… los residuos de escribir en `rem`). Eso no es una
+escala: nadie la eligió, así que nadie la puede respetar.
+Nueve pasos — **11 · 12 · 13 · 14 · 16 · 18 · 21 · 26 · 34** — y todo se ajusta al más
+cercano. ⚠️ **Medido ANTES de tocar**: 30 de los 31 valores se mueven ≤1 px y solo
+24→26 se mueve 2 px (3 usos). Por eso se pudo hacer de golpe sin romper maquetación.
+- **Literales en px, no `var(--…)`**, a propósito: parte de este CSS viaja a
+  `email_notify` (los clientes de correo no resuelven variables) y a los SVG que
+  `svglib` pasa a PDF. Un token que no resuelve no avisa, deja el texto por defecto.
+- **NO se tocan los `font-size="7.5"` de los SVG** (137): son atributos sin unidad con
+  la escala del dibujo técnico; meterlos en la de la interfaz rompería las cotas.
+- **Guardián** (`verif_v333.py`): falla si aparece un `font-size:` fuera de la escala.
+  Cazó 6 en `app.py` que mi migración se había saltado por recorrer solo `core/`.
+### ⚠️ EL HALLAZGO OPERATIVO: «desplegado» ≠ «corriendo»
+Verificando v333 medí que la app **anunciaba v333 sirviendo el `theme.py` de v332**.
+Causa: el fichero `VERSION` vive en disco y se actualiza con el deploy, pero Streamlit
+Cloud recarga el script principal **sin re-importar los módulos `core.*`** ya cargados
+en `sys.modules`. Hasta que el proceso reinicia, el código nuevo NO corre.
+- Esto invalidó una verificación mía: la primera comprobación de maquetación de v333
+  corrió contra el CSS de v332, así que **no probaba nada**. Hubo que repetirla.
+- **v334 invierte el arreglo de v331**: la versión se lee **AL IMPORTAR** el módulo, no
+  fresca en cada run. v331 la hizo fresca para que no se quedara vieja, pero eso la
+  volvió más engañosa — anunciaba con confianza una versión cuyo código no se ejecutaba.
+  Leída al importar, cambia exactamente cuando cambia el código. **Si la barra dice
+  v334, se está ejecutando v334.**
+### v335: una etiqueta truncada no informa
+Streamlit recorta la etiqueta de `st.metric` con elipsis (`nowrap`+`overflow:hidden`).
+En ventana estrecha eso deja «Dispon…». Ahora usa dos líneas: 12 px más de alto es mejor
+que media palabra. ⚠️ **Honestidad sobre el hallazgo**: lo medí a 780 px porque
+`preview_start` me había reseteado el viewport, no al tamaño de diseño. A 1440 las
+columnas son de 202 px y **todas las etiquetas caben en una línea**, así que el arreglo
+no cambia nada ahí — solo hace que degrade bien en un portátil o media pantalla.
+### Comprobado en producción (1440×900, 7 pantallas)
+0 desbordes horizontales · **0 tamaños fuera de la escala** · tarjetas KPI idénticas
+entre sí (73 px, `kpiDesigual: 0`) · 0 etiquetas recortadas.
+
+## Versiones desplegadas (v335 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -4103,6 +4141,9 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v335 | Las etiquetas de `st.metric` dejan de truncarse con elipsis y usan dos líneas — «Dispon…» no informa de nada. ⚠️ Solo actúa en ventana estrecha: a 1440 px todas caben en una línea |
+| v334 | ⚠️ **Invierte v331**: la versión del topbar se lee **AL IMPORTAR** el módulo. Leerla fresca la volvía más engañosa, porque el fichero VERSION se actualiza con el deploy pero los módulos `core.*` ya importados siguen en memoria — medido: la app anunciaba v333 sirviendo el `theme.py` de v332. Ahora, si la barra dice v334, se está ejecutando v334 |
+| v333 | **Escala tipográfica**: de **31 tamaños distintos para 102 usos** (24 fuera de escala, residuos de escribir en `rem`) a **9 pasos elegidos**. Medido antes de tocar: 30 de 31 valores se mueven ≤1 px. Literales en px, no variables CSS (parte del CSS va a correo y a PDF). Los 137 `font-size=` de los SVG no se tocan: son la escala del dibujo técnico. + guardián que bloquea cualquier tamaño fuera de la escala |
 | v332 | **Estado de carga visible**: barra superior animada + contenido atenuado mientras Streamlit re-ejecuta (medido: 520 ms de rerun, opacity 0.55, sin residuo en reposo). ⚠️ Y el hallazgo: **el atenuado de v326 nunca funcionó** — la regla decía `div[data-testid="stMain"]` y stMain es un `<section>`. Auditados TODOS los selectores del kit contra el DOM real apareció un segundo muerto **desde v283**: `stMetricLabel` es un `<label>`, así que el estilo de las etiquetas de métrica jamás aplicó. Los 18 selectores dejan de depender del nombre de etiqueta |
 | v331 | El indicador de versión del topbar **mentía tras un deploy**: `@st.cache_data` sin ttl lo congelaba durante la vida del proceso y Streamlit Cloud recarga en caliente sin reiniciar. Visto en vivo: app v330, barra v324 |
 | v330 | **El buscador ya busca.** Era el fallo con más coste de credibilidad de la auditoría: 641 px del control más prominente, inertes desde v190. Busca proyectos (nombre/ID/cliente/ubicación), personas (nombre/login/email) y trabajos, con ranking (ID exacto → empieza por → contiene), sin acentos ni mayúsculas, mínimo 2 letras, y los archivados marcados. **0 lecturas nuevas a Sheets** (las 3 fuentes ya estaban cacheadas). Cada resultado reusa los deep-links existentes; la caja se limpia por bandera aplicada antes de instanciar el widget (regla v111) |
