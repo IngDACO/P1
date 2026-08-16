@@ -150,7 +150,11 @@ def render_group_header(grupo: str):
         f'<span style="line-height:1;">{_MI("business", "#fff", "26px")}</span>'
         '<div style="min-width:0;">'
         f'<div style="color:#fff;font-size:1.25rem;font-weight:800;line-height:1.1;">{grupo}</div>'
-        '<div style="color:#b0c8e8;font-size:0.8rem;margin-top:2px;">Centro de control del grupo</div>'
+        # ⚠️ v327: era #b0c8e8 → 3.2:1 contra el extremo CLARO del degradado de la
+        # banda. Los otros 5 usos de ese tono (PDF, email, cajetín) van sobre el azul
+        # OSCURO, donde da 9.1:1, así que solo se cambia este. #e2ecf9 → 4.58:1.
+        # El nombre de la empresa (blanco, 5.47:1) no se toca: es lo que hay que resaltar.
+        '<div style="color:#e2ecf9;font-size:0.8rem;margin-top:2px;">Centro de control del grupo</div>'
         '</div></div>',
         unsafe_allow_html=True,
     )
