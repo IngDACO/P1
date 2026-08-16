@@ -206,6 +206,80 @@ def _aplicar_nav_pending():
         st.session_state[_sk[seccion]] = sub_label
 
 
+def _slug(sub_id: str) -> str:
+    """ID de sub-pestaña → trozo de URL legible. «📊 Proyectos» → `proyectos`.
+
+    El ID lleva emoji porque ES el identificador interno (v232) y no se puede tocar,
+    pero en una URL sería ilegible y frágil de codificar. El slug se deriva, no se
+    guarda: si mañana cambia el emoji, el enlace sigue funcionando.
+    """
+    import unicodedata
+    t = unicodedata.normalize("NFD", str(sub_id or "").lower())
+    t = "".join(c for c in t if unicodedata.category(c) not in ("Mn", "So", "Cn"))
+    return "-".join("".join(ch if ch.isalnum() else " " for ch in t).split())
+
+
+def _sub_por_slug(seccion: str, slug: str):
+    """El ID de sub-pestaña cuyo slug coincide (o None)."""
+    for _id, _d in (_subsecciones().get(seccion) or (None, []))[1]:
+        if _slug(_id) == slug:
+            return _id
+    return None
+
+
+def _url_a_estado():
+    """Al abrir un enlace con estado, saltar a esa pantalla (v337).
+
+    ⚠️ Solo en la PRIMERA pasada de la sesión: después manda la navegación normal,
+    o cada rerun te devolvería a donde apuntaba la URL y no podrías moverte.
+    ⚠️ Y solo si no hay ya un salto pendiente: los deep-links internos
+    (`_admin_nav_pending`) son más específicos y tienen que ganar.
+    """
+    if st.session_state.get("_url_leida") or st.session_state.get("_admin_nav_pending"):
+        st.session_state["_url_leida"] = True
+        return
+    st.session_state["_url_leida"] = True
+    try:
+        qp = st.query_params
+        sec = qp.get("s")
+        if not sec or sec not in {k for k, _l in _secciones()}:
+            return
+        sub = _sub_por_slug(sec, qp.get("t") or "")
+        st.session_state["_admin_nav_pending"] = (sec, sub)
+        if qp.get("p"):
+            st.session_state["_admin_open_proj"] = str(qp.get("p"))
+    except Exception as e:
+        logger.warning("home_ui: no se pudo leer el estado de la URL: %s", e)
+
+
+def _estado_a_url(seccion: str):
+    """Refleja en la URL dónde estás, para poder mandar el enlace (v337).
+
+    ⚠️ Solo escribe si CAMBIA. Reescribir los parámetros en cada rerun provoca una
+    actualización de URL por pasada, y con ella el riesgo de un bucle.
+    ⚠️ NO toca `activo`: es el deep-link del QR de inventario, que tiene su propio
+    handler en `app.py` y se limpia solo.
+    """
+    try:
+        qp = st.query_params
+        sub = st.session_state.get((_subkey() or {}).get(seccion) or "")
+        quiero = {"s": seccion}
+        if sub:
+            quiero["t"] = _slug(sub)
+        prj = st.session_state.get("_admin_open_proj")
+        if prj and seccion == "proyectos":
+            quiero["p"] = str(prj)
+        if {k: qp.get(k) for k in ("s", "t", "p") if qp.get(k)} == quiero:
+            return
+        for k in ("s", "t", "p"):
+            if k in quiero:
+                qp[k] = quiero[k]
+            elif qp.get(k) is not None:
+                del qp[k]
+    except Exception as e:
+        logger.warning("home_ui: no se pudo reflejar el estado en la URL: %s", e)
+
+
 def _track_history(cur):
     """Apila la sección de la que venimos, para el botón Atrás (v204). NO apila cuando
     el cambio fue un 'atrás' (para no rebotar). Tope de 20."""
@@ -236,6 +310,7 @@ def sidebar_menu() -> str:
     sub-pestañas (nivel 2) indentadas y clickeables → se va DIRECTO desde el sidebar
     (acordeón: solo la activa despliega sus hijas). Los botones se estilan como ítems de
     menú vía CSS `.st-key-…` (verificado en vivo). Devuelve la clave de la sección activa."""
+    _url_a_estado()                            # v337: un enlace compartido abre su pantalla
     _aplicar_nav_pending()                     # aplica saltos de los elementos activos
     _SECS, _SUBS = _secciones(), _subsecciones()
     _cur_lbl = st.session_state.get("admin_nav") or _SECS[0][1]
@@ -321,6 +396,7 @@ def sidebar_menu() -> str:
                     st.session_state["_admin_expanded"] = _k
                     navegar(_k, _sid)          # navega con el ID interno (deep-links intactos)
     _track_history(_cur)
+    _estado_a_url(_cur)     # v337: la URL refleja dónde estás → el enlace se puede mandar
     return _cur
 
 
