@@ -105,6 +105,51 @@ def _en_rango(txt, desde, hasta) -> bool:
     return (desde is None or d >= desde) and (hasta is None or d <= hasta)
 
 
+def periodo_anterior(desde, hasta):
+    """El periodo INMEDIATAMENTE anterior, de la misma duración (v341).
+
+    Un administrador no pregunta «¿cuánto gané en agosto?», pregunta «¿voy mejor o
+    peor que en julio?». El P&L tenía periodos pero ninguna comparación, así que la
+    respuesta había que sacarla cambiando el filtro y acordándose del número.
+
+    Se desplaza la ventana su propia duración hacia atrás: del 01/08 al 16/08 (16
+    días) compara con del 16/07 al 31/07. ⚠️ Con «Todo» (sin fechas) no hay anterior
+    posible — devuelve (None, None) y la UI no ofrece comparación.
+    """
+    if not desde or not hasta:
+        return None, None
+    from datetime import timedelta
+    dias = (hasta - desde).days + 1
+    return desde - timedelta(days=dias), desde - timedelta(days=1)
+
+
+def variacion(actual, previo) -> dict:
+    """{dif, pct, mejor} entre dos cifras. `pct` es None si no hay base con la que
+    comparar (dividir por cero no es «infinito por ciento», es «no se puede decir»)."""
+    a, p = _num(actual), _num(previo)
+    dif = round(a - p, 2)
+    pct = round(100.0 * dif / abs(p), 1) if abs(p) > 0.005 else None
+    return {"dif": dif, "pct": pct, "mejor": dif > 0}
+
+
+def pnl_comparado(grupo: str, desde=None, hasta=None) -> dict:
+    """El P&L del periodo + el del anterior + la variación de cada cifra (v341).
+
+    ⚠️ Cuesta 0 llamadas nuevas a Sheets: `pnl` lee de los mismos lectores cacheados
+    (lote de v339), así que calcular el periodo anterior es solo volver a filtrar
+    en memoria lo que ya está descargado.
+    """
+    act = pnl(grupo, desde, hasta)
+    d0, h0 = periodo_anterior(desde, hasta)
+    if d0 is None:
+        return {"actual": act, "previo": None, "var": {}, "rango_previo": None}
+    prev = pnl(grupo, d0, h0)
+    campos = ("facturado", "cobrado", "costo_total", "costo_nomina", "compras", "ganancia")
+    return {"actual": act, "previo": prev,
+            "var": {k: variacion(act.get(k), prev.get(k)) for k in campos},
+            "rango_previo": (d0, h0)}
+
+
 def pnl(grupo: str, desde=None, hasta=None) -> dict:
     """Estado de resultados (P&L) del grupo: ingresos − costos = ganancia.
 

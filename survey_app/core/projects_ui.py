@@ -111,21 +111,36 @@ def _kpis(grupo=None) -> dict:
     }
 
 
-def _kpi_card(label, value, color=None):
+def _kpi_card(label, value, color=None, pie=None, var=None):
     """Tarjeta KPI — delega en el SISTEMA DE DISEÑO (`core/theme.py`, v283) para que
-    las ~20 tarjetas repartidas por la app hablen el mismo idioma visual. Firma
-    intacta: `color` sigue tiñendo el valor y ahora también el borde de acento."""
+    las ~20 tarjetas repartidas por la app hablen el mismo idioma visual.
+
+    `color` tiñe el valor y el borde de acento. `pie` es una línea de contexto
+    (v303). `var` (v341) es la variación contra el periodo anterior:
+    `{dif, pct, mejor}` de `finance.variacion` — se pinta como ▲/▼ con su %.
+    Las tres firmas viejas siguen valiendo: los parámetros nuevos son opcionales.
+    """
     from core import theme
     _acc = color or theme.AZUL                    # borde: el color vivo, no es texto
     # ⚠️ v328: el VALOR sí es texto, así que pasa por `texto_seguro`. Con AMBAR el
     # importe salía a 2.85:1 sobre blanco.
     _seg = theme.texto_seguro(color)
     _val = f"color:{_seg};" if color else ""
+    _sub = ""
+    if var and var.get("pct") is not None:
+        # ⚠️ El color lo decide `mejor`, que NO siempre es "subió": en un costo,
+        # subir es peor. Quien llama pasa el sentido correcto.
+        _c = theme.VERDE if var.get("mejor") else theme.ROJO
+        _f = "▲" if var["dif"] > 0 else ("▼" if var["dif"] < 0 else "=")
+        _sub = (f'<div class="sub" style="color:{theme.texto_seguro(_c)}">'
+                f'{_f} {abs(var["pct"]):.0f}% vs. periodo anterior</div>')
+    elif pie:
+        _sub = f'<div class="sub">{theme._esc(pie)}</div>'
     return (
         f'<div class="cpx-kpi" style="--cpx-accent:{_acc};min-width:104px;">'
         f'<div class="lbl">{theme._esc(label)}</div>'
         f'<div class="val" style="{_val}">{theme._esc(value)}</div>'
-        '</div>'
+        f'{_sub}</div>'
     )
 
 
@@ -3075,14 +3090,34 @@ def render_pnl(grupo: str):
     # ── Las 3 cifras, con linea de contexto (como los KPI de HOME, v303) ──
     _nfac = len(d.get("por_cliente") or [])
     _mrg = (100 * d["ganancia"] / d["facturado"]) if d["facturado"] > 0 else None
+    # v341: la comparación con el periodo ANTERIOR. Cuesta 0 llamadas nuevas — `pnl`
+    # lee de los mismos lectores cacheados, así que el periodo previo es solo volver
+    # a filtrar en memoria. ⚠️ En «Todo» no hay anterior: `var` sale vacío y las
+    # tarjetas caen a su pie de siempre.
+    try:
+        _cmp = F.pnl_comparado(grupo, _desde, _hasta)
+        _v = _cmp.get("var") or {}
+    except Exception:
+        _cmp, _v = {}, {}
+    # ⚠️ En un COSTO, subir es peor: se invierte el sentido de `mejor`.
+    _vc = dict(_v.get("costo_total") or {})
+    if _vc:
+        _vc["mejor"] = not _vc.get("mejor")
     st.markdown('<div style="display:flex;gap:10px;flex-wrap:wrap;margin:2px 0 6px">'
-                + _kpi_card("Ingresos (facturado)", T.dinero(d["facturado"], 0))
-                + _kpi_card("Costos (lo que pagas)", T.dinero(d["costo_total"], 0))
+                + _kpi_card("Ingresos (facturado)", T.dinero(d["facturado"], 0),
+                            var=_v.get("facturado"))
+                + _kpi_card("Costos (lo que pagas)", T.dinero(d["costo_total"], 0),
+                            var=_vc or None)
                 + _kpi_card("Ganancia", T.dinero(d["ganancia"], 0),
-                            T.VERDE if d["ganancia"] >= 0 else T.ROJO)
+                            T.VERDE if d["ganancia"] >= 0 else T.ROJO,
+                            var=_v.get("ganancia"))
                 + "</div>", unsafe_allow_html=True)
-    st.caption(f"{_nfac} cliente(s) facturado(s)  ·  costos = nóminas + compras"
-               + (f"  ·  margen {_mrg:.0f}%" if _mrg is not None else ""))
+    _pie = (f"{_nfac} cliente(s) facturado(s)  ·  costos = nóminas + compras"
+            + (f"  ·  margen {_mrg:.0f}%" if _mrg is not None else ""))
+    if _cmp.get("rango_previo"):
+        _d0, _h0 = _cmp["rango_previo"]
+        _pie += (f"  ·  se compara con {_d0.strftime('%d/%m')}–{_h0.strftime('%d/%m')}")
+    st.caption(_pie)
 
     # ── Rejilla FIJA de pendientes, clickeables (patron del Resumen del dia) ──
     # ⚠️ Estructura fija (v196): siempre los mismos 8 y en el mismo orden, con su 0
