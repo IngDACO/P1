@@ -4232,6 +4232,25 @@ los datos (v323). El lote es solo para lectura de display.
 fresca e independiente con gspread crudo: Alarmas 18, Proyectos 6, Sheet1 30, Login 6,
 Gastos 2, Nóminas 5 — todas idénticas. Las 7 pantallas del Cloud renderizan sin errores.
 
+## Subir el techo de cuota: decidido y APLAZADO (16/08/2026)
+v339 dio margen de sobra para los clientes actuales, así que **no se hace nada ahora**.
+Las opciones, para cuando toque:
+| | Qué resuelve | Coste |
+|---|---|---|
+| **A. Una cuenta de servicio por cliente**, mismo libro | Solo la cuota | **BAJO**: el libro se abre en UN solo sitio (`timeclock._cached_ws`, ~L89-93); sería cachear por grupo |
+| **B. Un libro por cliente** (+ su cuenta) | Cuota **y aislamiento** | MEDIO-ALTO. ⚠️ Rompe las vistas del PROPIETARIO, que leen todos los grupos de una vez (`owner_digest`, `list_projects()` sin filtro): pasarían a abrir N libros |
+| **C. Salir de Sheets** (Postgres/Supabase) | Todo | ALTO, pero es el final natural si crece |
+**Disparadores acordados:** A → cuando entre el segundo cliente de verdad. B o C →
+cuando un cliente pregunte por sus datos.
+### ⚠️ El argumento no es la cuota, es el AISLAMIENTO
+Hoy todos los clientes viven en el **mismo archivo**, separados por una columna `Grupo`.
+Un fallo en ese filtro —de los que han salido varios— no muestra un número mal:
+**enseña datos de otro cliente**. Es objeción de venta y es riesgo real.
+### Palanca gratis sin usar
+Subir "Read requests per minute per user" de 60 → 300 en Cloud Console → Sheets API →
+Cuotas. No reduce consumo, da colchón. Se decidió no depender de ella porque Google
+empezará a **facturar el exceso** más adelante en 2026.
+
 ## Versiones desplegadas (v339 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
