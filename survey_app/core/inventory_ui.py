@@ -99,7 +99,19 @@ def render_inventario(grupo):
         st.session_state["_inv_nuevo"] = True
         st.rerun()
 
-    acts = INV.list_activos(grupo)
+    # ⚠️ v340: dar de baja un activo era un VIAJE SIN VUELTA — `dar_de_baja` marca
+    # `Activo=NO` y la lista usaba el default, que lo oculta, sin casilla para verlo
+    # ni forma de reactivarlo. Mismo fallo que tenían los clientes y que v149 ya
+    # había resuelto para los proyectos.
+    _ver_baja = st.checkbox(":material/archive: Ver también los dados de baja",
+                            key="inv_ver_baja",
+                            help="Un activo de baja sale del inventario pero conserva "
+                                 "su historial de movimientos y su QR.")
+    acts = INV.list_activos(grupo, incluir_baja=_ver_baja)
+    _n_baja = len([a for a in INV.list_activos(grupo, incluir_baja=True)
+                   if str(a.get("Activo", "SI")).upper() in ("NO", "FALSE", "0")])
+    if _n_baja and not _ver_baja:
+        st.caption(f":material/inventory_2: {_n_baja} activo(s) dado(s) de baja oculto(s).")
     if not acts:
         st.caption("Aún no hay activos. Registra el primero con «Registrar activo».")
         _categorias_expander(grupo)
@@ -324,11 +336,22 @@ def _detalle(grupo, aid):
 
     if str(a.get("Estado", "")).lower() != "baja":
         with st.expander(":material/block: Dar de baja"):
-            st.caption("Retira el activo del inventario (queda en el histórico).")
+            st.caption("Retira el activo del inventario (queda en el histórico). Para "
+                       "volver a verlo, marca «Ver también los dados de baja».")
             _mot = st.text_input("Motivo", key=f"inv_baja_mot_{aid}")
             if st.button("Dar de baja este activo", key=f"inv_baja_{aid}"):
                 INV.dar_de_baja(aid, grupo, _mot, _creado_por())
                 st.session_state.pop("_inv_open", None)
+                st.rerun()
+    else:
+        # v340: la vuelta. Antes un activo de baja no se podía reactivar desde la app.
+        st.warning(":material/block: Este activo está **dado de baja**: no aparece en el "
+                   "inventario salvo que marques «Ver también los dados de baja».")
+        if st.button(":material/restore: Reactivar este activo",
+                     key=f"inv_react_{aid}", type="primary"):
+            ok, msg = INV.update_activo(aid, {"Activo": "SI", "Estado": "disponible"})
+            (st.success if ok else st.error)(msg)
+            if ok:
                 st.rerun()
 
 

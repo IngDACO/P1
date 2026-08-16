@@ -47,7 +47,20 @@ def render_contactos(grupo):
         _detalle_cliente(grupo, _open)
         return
 
-    fichas  = C.list_clientes(grupo)
+    # ⚠️ v340: archivar un cliente era un VIAJE SIN VUELTA. `set_activo(cid, False)`
+    # lo marca `Activo=NO` y las 5 llamadas a `list_clientes` usaban el default, que
+    # los oculta — sin casilla para verlos ni botón para restaurar. Desaparecía y no
+    # había forma de recuperarlo desde la app. Es exactamente lo que v149 arregló
+    # para los proyectos y a los clientes nunca se les aplicó.
+    _ver_arch = st.checkbox(":material/archive: Ver también los archivados",
+                            key="cli_ver_arch",
+                            help="Los archivados dejan de listarse, pero no se borran: "
+                                 "sus proyectos, horas y facturas siguen intactos.")
+    fichas  = C.list_clientes(grupo, incluir_inactivos=_ver_arch)
+    _n_arch = len([f for f in C.list_clientes(grupo, incluir_inactivos=True)
+                   if str(f.get("Activo", "SI")).upper() in ("NO", "FALSE", "0")])
+    if _n_arch and not _ver_arch:
+        st.caption(f":material/inventory_2: {_n_arch} cliente(s) archivado(s) oculto(s).")
     proys   = P.list_projects(grupo=grupo)
     horas   = P.project_hours_bulk(grupo)
     alarmas = alerts.open_counts_all() if alerts.is_configured() else {}
@@ -204,12 +217,27 @@ def _detalle_cliente(grupo, key):
         if al:
             st.markdown(f":red[:material/notifications:] **{al}** alarma(s) abierta(s)")
         if cid:
-            with st.expander(":material/archive: Archivar cliente"):
-                st.caption("Deja de listarse; sus proyectos no se tocan.")
-                if st.button("Archivar esta ficha", key=f"cli_arch_{cid}"):
-                    C.set_activo(cid, False)
-                    st.session_state.pop("_cli_open", None)
-                    st.rerun()
+            # v340: archivar y RESTAURAR. Antes solo se podía archivar y el cliente
+            # desaparecía sin vuelta atrás.
+            _ficha = C.get_cliente(cid)
+            _archivado = str(_ficha.get("Activo", "SI")).upper() in ("NO", "FALSE", "0")
+            if _archivado:
+                st.warning(":material/archive: Esta ficha está **archivada**: no aparece "
+                           "en la lista salvo que marques «Ver también los archivados».")
+                if st.button(":material/restore: Restaurar esta ficha",
+                             key=f"cli_rest_{cid}", type="primary"):
+                    ok, msg = C.set_activo(cid, True)
+                    (st.success if ok else st.error)(msg)
+                    if ok:
+                        st.rerun()
+            else:
+                with st.expander(":material/archive: Archivar cliente"):
+                    st.caption("Deja de listarse; sus proyectos no se tocan. Para volver "
+                               "a verlo, marca «Ver también los archivados» en la lista.")
+                    if st.button("Archivar esta ficha", key=f"cli_arch_{cid}"):
+                        C.set_activo(cid, False)
+                        st.session_state.pop("_cli_open", None)
+                        st.rerun()
 
     # Proyectos del cliente (ancho completo, clickeables)
     st.markdown("#### :material/folder: Proyectos de este cliente")
