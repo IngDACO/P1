@@ -262,7 +262,13 @@ def _estado_a_url(seccion: str):
     """
     try:
         qp = st.query_params
-        sub = st.session_state.get((_subkey() or {}).get(seccion) or "")
+        # ⚠️ v338: esto era `st.session_state.get(_subkey().get(seccion) or "")`, y en
+        # una sección SIN sub-pestañas (Home, Fichaje, Inventario, Contactos) quedaba
+        # `get("")` → excepción, tragada por el `except` de abajo → la URL no se
+        # actualizaba **solo en esas cuatro**. Finanzas o Proyectos sí funcionaban, que
+        # es lo que despistaba: el fallo se veía intermitente, no roto.
+        _sk = (_subkey() or {}).get(seccion)
+        sub = st.session_state.get(_sk) if _sk else None
         quiero = {"s": seccion}
         if sub:
             quiero["t"] = _slug(sub)
