@@ -111,6 +111,17 @@ h4 {{ font-size:16px !important; font-weight: 650; color: {AZUL_OSC}; }}
   font-size:12px !important; font-weight: 600; letter-spacing: .3px;
   text-transform: uppercase; color: {GRIS_TXT};
 }}
+/* ⚠️ v335: Streamlit recorta la etiqueta con elipsis (`nowrap`+`overflow:hidden`) y
+   en una columna estrecha eso deja «Dispon…» — medido en Inventario: 39 px de ancho
+   para 73 que necesita, o sea media palabra. Una etiqueta truncada no informa de
+   nada, y encima la culpa era en parte del kit (mayúsculas + letter-spacing la
+   ensanchan). Que use dos líneas: ocupar 12 px más de alto es mejor que no leerse. */
+[data-testid="stMetricLabel"],
+[data-testid="stMetricLabel"] > div,
+[data-testid="stMetricLabel"] p {{
+  white-space: normal !important; overflow: visible !important;
+  text-overflow: clip !important; line-height: 1.25;
+}}
 [data-testid="stMetricValue"] {{ font-size:26px; font-weight: 700; color: {AZUL_OSC}; }}
 
 /* ── Contenedores con borde: tarjetas de verdad ── */
