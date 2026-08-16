@@ -220,6 +220,24 @@ body:has([data-testid="stStatusWidget"])::before {{
   text-transform: uppercase; color: {GRIS_TXT}; margin-bottom: 2px;
 }}
 .cpx-kpi .val {{ font-size:26px; font-weight: 700; color: {AZUL_OSC}; line-height: 1.15; }}
+
+/* ── La cifra ENTRA cuando se recalcula (v336) ───────────────────────────
+   Al cambiar un filtro (el periodo de Finanzas, la ventana de Horas) los números
+   nuevos aparecían idénticos en sitio a los viejos, así que no había forma de ver
+   QUE habían cambiado: se filtraba y la pantalla parecía la misma.
+   ⚠️ NO es un contador animado: `st.markdown` no ejecuta scripts, así que un
+   count-up necesitaría un iframe por tarjeta y eso rompería la maquetación. Un
+   gesto de entrada da la misma señal —«esto se acaba de recalcular»— con CSS y
+   sin tocar el valor. 220 ms y 3 px: se percibe, no se sufre. */
+@keyframes cpx-entra {{
+  from {{ opacity: 0; transform: translateY(3px); }}
+  to   {{ opacity: 1; transform: none; }}
+}}
+.cpx-kpi .val {{ animation: cpx-entra .22s ease-out both; }}
+[data-testid="stMetricValue"] {{ animation: cpx-entra .22s ease-out both; }}
+@media (prefers-reduced-motion: reduce) {{
+  .cpx-kpi .val, [data-testid="stMetricValue"] {{ animation: none; }}
+}}
 .cpx-kpi .sub {{ font-size:12px; color: {GRIS_TXT}; margin-top: 1px; }}
 .cpx-chip {{
   display: inline-block; padding: 2px 9px; border-radius: 999px;

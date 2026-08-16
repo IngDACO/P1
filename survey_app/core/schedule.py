@@ -222,7 +222,7 @@ def schedule_svg_alto(n_actividades: int, vw: int = 760) -> int:
 
 def schedule_svg(sched: dict, real_curve: list = None, today_day: float = None,
                  avances: list = None, proj: dict = None, titulo: str = "",
-                 vw: int = 760) -> str:
+                 vw: int = 760, animar: bool = False) -> str:
     """Gantt + curva S con el lenguaje de los planos técnicos (v143).
 
     El problema de la version anterior no era estetico: la BRECHA entre plan y
@@ -284,6 +284,23 @@ def schedule_svg(sched: dict, real_curve: list = None, today_day: float = None,
          f'style="width:100%;max-width:{VW}px;font-family:Arial,Helvetica,sans-serif;'
          f'display:block;margin:0 auto">',
          f'<rect x="0" y="0" width="{VW}" height="{VH}" fill="#ffffff"/>',
+         # ── Trazado animado de las curvas (v336) ────────────────────────
+         # ⚠️ Solo con `animar=True`, que SOLO pasan los dos call-sites de PANTALLA.
+         # El mismo SVG va al PDF por `svglib` (report.py / user_report.py) y ahí un
+         # `<style>` con @keyframes es, en el mejor caso, ignorado. Por defecto
+         # `animar=False` → el PDF sale byte a byte como hasta ahora.
+         #
+         # Aquí la animación ES el dato: la curva se traza de izquierda a derecha,
+         # así que el tiempo se lee como tiempo. Es lo único puramente expresivo de
+         # todo el lote y está ganado.
+         ('<style>'
+          '@keyframes cpx-trazar{to{stroke-dashoffset:0}}'
+          '.cpx-traza{stroke-dasharray:4000;stroke-dashoffset:4000;'
+          'animation:cpx-trazar .9s cubic-bezier(.25,.6,.3,1) forwards}'
+          '.cpx-traza-2{animation-delay:.18s}'
+          '@media (prefers-reduced-motion:reduce){'
+          '.cpx-traza{animation:none;stroke-dashoffset:0}}'
+          '</style>') if animar else "",
          f'<text x="18" y="24" font-size="13" fill="#1a3a5c" font-weight="bold">'
          f'CRONOGRAMA Y AVANCE</text>',
          f'<text x="18" y="39" font-size="8.5" fill="#5b6472">'
@@ -380,11 +397,13 @@ def schedule_svg(sched: dict, real_curve: list = None, today_day: float = None,
 
     p.append('<polyline points="'
              + " ".join(f"{sx(dd):.1f},{sy(pc):.1f}" for dd, pc in plan)
-             + f'" fill="none" stroke="{C_PLAN}" stroke-width="2.4"/>')
+             + f'" fill="none" stroke="{C_PLAN}" stroke-width="2.4"'
+             + (' class="cpx-traza"' if animar else "") + "/>")
     if real_curve:
         p.append('<polyline points="'
                  + " ".join(f"{sx(dd):.1f},{sy(pc):.1f}" for dd, pc in real_curve)
-                 + f'" fill="none" stroke="{C_REAL}" stroke-width="2.8"/>')
+                 + f'" fill="none" stroke="{C_REAL}" stroke-width="2.8"'
+                 + (' class="cpx-traza cpx-traza-2"' if animar else "") + "/>")
         if len(real_curve) > 1:
             ddl, pcl = real_curve[-1]
             p.append(f'<circle cx="{sx(ddl):.1f}" cy="{sy(pcl):.1f}" r="4" fill="#ffffff" '

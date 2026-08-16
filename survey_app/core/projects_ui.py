@@ -1805,7 +1805,8 @@ def _estado_section(pid: str, grupo: str, prj: dict):
         '<!DOCTYPE html><html><body style="margin:0;background:transparent">'
         + schedule_svg(ps["sched"], real_curve=ps["real"], today_day=ps["today_day"],
                        avances=ps.get("avances"), proj=proj,
-                       titulo=prj.get("Nombre", ""), vw=_VW)
+                       titulo=prj.get("Nombre", ""), vw=_VW,
+                       animar=True)      # v336: pantalla sí, PDF no
         + '</body></html>',
         # ⚠️ el alto sale de la MISMA formula que el SVG (antes era `300 + n*21`,
         # 18 px de menos, y el pie del grafico se recortaba).

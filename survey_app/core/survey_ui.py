@@ -1216,7 +1216,8 @@ def render_survey_tab(_ROL, _GRUPO):
 
                 components.html(
                     '<!DOCTYPE html><html><body style="margin:0;background:transparent">'
-                    + schedule_svg(sched) + '</body></html>',
+                    + schedule_svg(sched, animar=True)      # v336: pantalla
+                    + '</body></html>',
                     height=140 + len(sched["activities"]) * 22 + 200,
                     scrolling=False,
                 )
