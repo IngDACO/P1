@@ -4188,7 +4188,51 @@ Finanzas y Proyectos sí funcionaban, que es lo que despistaba: se veía intermi
 no roto. **Un `except` amplio alrededor de código nuevo esconde justo el fallo que
 acabas de introducir** — el mismo patrón que v323 destapó en los silencios de escritura.
 
-## Versiones desplegadas (v338 = actual)
+## El techo de cuota de Sheets: lector por LOTES (v339)
+Lo que limitaba a cuántos clientes se le puede vender la app.
+### Lo medido ANTES (instrumentando la capa HTTP de gspread, no suponiendo)
+- arranque en frío: **12 llamadas**, 859 ms de media cada una
+- recorrido por todas las secciones: **7 más** → 19 por sesión
+- **15 de las 19 eran `values/{hoja}`: una por hoja.** La app lee 21 hojas con 30
+  lectores cacheados y cada uno pedía la suya por separado.
+- techo: **60 lecturas/min por cuenta de servicio** — y hay UNA para todos los grupos,
+  así que no crece al añadir clientes, se reparte. Daba **~10 usuarios en paralelo**
+  o **5 arranques por minuto** antes del 429.
+### La palanca
+`spreadsheets.values.batchGet` trae **muchos rangos en UNA petición**, y la cuota cuenta
+peticiones. **`core/hojas.py`**: la primera hoja que alguien pida dispara UNA llamada
+que se trae todas; el resto salen de ahí. Los 17 lectores cacheados de los 13 módulos
+delegan en `hojas.registros(titulo, cabeceras)`.
+### Medido DESPUÉS
+| | Antes | Ahora |
+|---|---|---|
+| Arranque en frío | 12 llamadas | **6** |
+| Recorrido por todas las secciones | 7 más | **0** |
+| Total de una sesión | 19 | **6** |
+⚠️ Y el lote es `@st.cache_data`, o sea **compartido por proceso**: mientras esté
+caliente, TODOS los usuarios leen de él. La navegación deja de consumir cuota.
+### Tres trampas que hubo que resolver
+1. **Un rango inexistente tumba el lote ENTERO.** `MovimientosActivo` aún no existe
+   (no hay activos) y `values_batch_get` devolvía 400 para toda la petición. Se piden
+   solo las hojas que existen, según el índice que `timeclock._libro()` ya cachea
+   (coste: 0 llamadas).
+2. **⚠️ `_invalidate()` tenía que tirar TAMBIÉN el lote.** Cada módulo limpiaba su
+   caché, pero el dato venía del lote compartido → tras guardar algo habría seguido
+   saliendo el valor viejo hasta 120 s. «Lo guardé y no sale». Los 12 `_invalidate`
+   llaman ahora a `hojas.invalidar()`.
+3. **Ciclo de imports**: `hojas` importa `timeclock`, así que los lectores lo importan
+   DENTRO de la función, no a nivel de módulo.
+### Lo que NO cambia
+Las rutas de **ESCRITURA siguen leyendo frescas** (`_find_row`, `_next_id`,
+`_ids_frescos`): decidir dónde escribir o qué ID toca con una caché es como se corrompen
+los datos (v323). El lote es solo para lectura de display.
+### Verificado
+`registros()` devuelve **idéntico fila a fila** a `get_all_records(numericise_ignore=
+['all'])` en las **19 hojas** (incluidas las de 0 filas y la de 72), y contra una lectura
+fresca e independiente con gspread crudo: Alarmas 18, Proyectos 6, Sheet1 30, Login 6,
+Gastos 2, Nóminas 5 — todas idénticas. Las 7 pantallas del Cloud renderizan sin errores.
+
+## Versiones desplegadas (v339 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -4196,6 +4240,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v339 | **El techo de cuota de Sheets.** Medido: 15 de las 19 llamadas de una sesión eran `values/{hoja}`, una por hoja. Nuevo `core/hojas.py` las trae todas en UNA `values.batchGet` → sesión de **19 a 6 llamadas** y el recorrido por todas las secciones cuesta **0**; el lote es `cache_data`, o sea compartido por proceso. ⚠️ Tres trampas: un rango inexistente tumba el lote entero (se piden solo las hojas que existen), cada `_invalidate` debe tirar TAMBIÉN el lote (si no, «lo guardé y no sale») e import perezoso para no ciclar con `timeclock`. Las escrituras siguen leyendo frescas. Verificado idéntico fila a fila en las 19 hojas contra lectura fresca |
 | v338 | Fix de v337: la URL no se actualizaba en las 4 secciones **sin** sub-pestañas (Home, Fichaje, Inventario, Contactos), por un `session_state.get("")` que lanzaba y que mi propio `except` se tragaba. Parecía intermitente porque Finanzas y Proyectos sí funcionaban |
 | v337 | **Estado en la URL**: la dirección refleja sección · sub-pestaña · proyecto abierto, así que se puede mandar «mira esta pantalla». El slug se deriva del ID (que lleva emoji y no se toca), solo se lee en la primera pasada, solo se escribe si cambia, y no pisa el `?activo=` del QR. ⚠️ Valida contra las secciones **del rol**: una URL de otra sección no da acceso |
 | v336 | **Cierra el plan de diseño**: la curva S se traza de izquierda a derecha al entrar (aquí la animación ES el dato: el tiempo se lee como tiempo) y las cifras KPI entran al recalcularse, que era la señal que faltaba al cambiar un filtro. ⚠️ `animar=False` por defecto porque el MISMO SVG va al PDF por svglib — probado que, quitando estilo y clases, el de pantalla es **idéntico carácter a carácter** al del PDF. ⚠️ El navegador de automatización pide *reduced motion*, así que ahí no se ve animar: verificado por CSSOM que el mecanismo está entero |
