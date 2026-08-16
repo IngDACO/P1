@@ -72,25 +72,25 @@ div.block-container {{
 @media (max-width: 640px) {{
   div.block-container {{ padding-left: 1rem; padding-right: 1rem; }}
 }}
-div[data-testid="stVerticalBlock"] {{ gap: 0.6rem; }}
+[data-testid="stVerticalBlock"] {{ gap: 0.6rem; }}
 h1 {{ font-size: 1.7rem !important; font-weight: 700; letter-spacing: -.4px; }}
 h2 {{ font-size: 1.32rem !important; font-weight: 700; letter-spacing: -.3px; }}
 h3 {{ font-size: 1.12rem !important; font-weight: 650; }}
 h4 {{ font-size: 1rem !important; font-weight: 650; color: {AZUL_OSC}; }}
 
 /* ── Métricas nativas como TARJETA (no números flotando) ── */
-div[data-testid="stMetric"] {{
+[data-testid="stMetric"] {{
   background: #fff; border: 1px solid {BORDE}; border-radius: 12px;
   padding: 12px 14px; box-shadow: 0 1px 2px rgba(16,24,40,.04);
 }}
-div[data-testid="stMetricLabel"] p {{
+[data-testid="stMetricLabel"] p {{
   font-size: .74rem !important; font-weight: 600; letter-spacing: .3px;
   text-transform: uppercase; color: {GRIS_TXT};
 }}
-div[data-testid="stMetricValue"] {{ font-size: 1.6rem; font-weight: 700; color: {AZUL_OSC}; }}
+[data-testid="stMetricValue"] {{ font-size: 1.6rem; font-weight: 700; color: {AZUL_OSC}; }}
 
 /* ── Contenedores con borde: tarjetas de verdad ── */
-div[data-testid="stVerticalBlockBorderWrapper"] {{
+[data-testid="stVerticalBlockBorderWrapper"] {{
   border-radius: 12px; border-color: {BORDE};
   box-shadow: 0 1px 2px rgba(16,24,40,.04);
 }}
@@ -102,15 +102,15 @@ div[data-testid="stVerticalBlockBorderWrapper"] {{
    botones visibles (**40 %**) se quedaban sin radio, sin peso, sin hover y sin el
    acuse de recibo — incluidos el ← de la barra y todos los indicadores. Descendiente,
    no hijo. */
-div[data-testid="stButton"] button,
-div[data-testid="stFormSubmitButton"] button,
-div[data-testid="stDownloadButton"] button {{
+[data-testid="stButton"] button,
+[data-testid="stFormSubmitButton"] button,
+[data-testid="stDownloadButton"] button {{
   border-radius: 9px; font-weight: 600; border-color: {BORDE};
   min-height: 38px;            /* v326: eran 32 px — corto para ratón, imposible con el dedo */
   transition: border-color .14s ease, background .14s ease,
               transform .09s ease-out, box-shadow .14s ease;
 }}
-div[data-testid="stButton"] button:hover {{
+[data-testid="stButton"] button:hover {{
   border-color: {AZUL}; color: {AZUL};
   box-shadow: 0 2px 8px -2px rgba(46,109,164,.28);
 }}
@@ -121,16 +121,37 @@ div[data-testid="stButton"] button:hover {{
    usuario vuelve a pulsar y entonces sí parece rota. Esto NO acelera el rerun:
    confirma que se recibió, que es lo que separa "no funcionó" de "está
    trabajando". Ocurre en el navegador, antes de que el servidor conteste. */
-div[data-testid="stButton"] button:active,
-div[data-testid="stFormSubmitButton"] button:active,
-div[data-testid="stDownloadButton"] button:active {{
+[data-testid="stButton"] button:active,
+[data-testid="stFormSubmitButton"] button:active,
+[data-testid="stDownloadButton"] button:active {{
   transform: scale(.985); opacity: .72; transition: transform .09s ease-out;
 }}
 
-/* Mientras Streamlit re-ejecuta, el contenido se atenúa en vez de quedarse
-   congelado e idéntico: da la señal de "esto ya no es lo definitivo". */
-div[data-testid="stMain"] {{ transition: opacity .18s ease; }}
-body:has([data-testid="stStatusWidget"]) div[data-testid="stMain"] {{ opacity: .62; }}
+/* ── ESTADO DE CARGA (v332) ──────────────────────────────────────────────
+   ⚠️ La regla de v326 apuntaba a `[data-testid="stMain"]` y **stMain es un
+   `<section>`**, así que NO casaba con nada: el atenuado nunca llegó a verse. Mismo
+   error que el combinador `>` de v327 — un selector supuesto en vez de medido. Sin
+   nombre de etiqueta, que además es más robusto si Streamlit lo cambia.
+
+   Dos señales, porque resuelven cosas distintas: la BARRA dice «te he oído y estoy
+   trabajando» (aparece al instante, en el navegador) y el ATENUADO dice «lo que ves
+   ya no es lo definitivo». Sin ellas, hasta 2,9 s de pantalla idéntica y quieta. */
+[data-testid="stMain"] {{ transition: opacity .2s ease; }}
+body:has([data-testid="stStatusWidget"]) [data-testid="stMain"] {{ opacity: .55; }}
+
+body::before {{
+  content: ""; position: fixed; inset: 0 0 auto 0; height: 3px; z-index: 9999;
+  pointer-events: none; opacity: 0; transition: opacity .15s ease;
+  background: linear-gradient(90deg, transparent, {AZUL} 45%, {AZUL_OSC} 55%, transparent);
+  background-size: 42% 100%; background-repeat: no-repeat;
+}}
+body:has([data-testid="stStatusWidget"])::before {{
+  opacity: 1; animation: cpx-cargando 1.05s ease-in-out infinite;
+}}
+@keyframes cpx-cargando {{
+  from {{ background-position: -42% 0; }}
+  to   {{ background-position: 142% 0; }}
+}}
 
 /* ⚠️ Respeta a quien pide menos movimiento (y a quien se marea con él). */
 @media (prefers-reduced-motion: reduce) {{
@@ -140,17 +161,17 @@ body:has([data-testid="stStatusWidget"]) div[data-testid="stMain"] {{ opacity: .
 }}
 
 /* ── Expander: cabecera legible, sin caja pesada ── */
-div[data-testid="stExpander"] details {{ border-radius: 10px; border-color: {BORDE}; }}
-div[data-testid="stExpander"] summary p {{ font-weight: 600; }}
+[data-testid="stExpander"] details {{ border-radius: 10px; border-color: {BORDE}; }}
+[data-testid="stExpander"] summary p {{ font-weight: 600; }}
 
 /* ── Tabs de datos / tablas: encabezado sobrio ── */
-div[data-testid="stDataFrame"] {{ border-radius: 10px; }}
+[data-testid="stDataFrame"] {{ border-radius: 10px; }}
 
 /* ── Sidebar: superficie de marca ── */
-section[data-testid="stSidebar"] {{ border-right: 1px solid {BORDE}; }}
+[data-testid="stSidebar"] {{ border-right: 1px solid {BORDE}; }}
 
 /* ── Cabecera de Streamlit transparente (evita la franja oscura arriba) ── */
-header[data-testid="stHeader"] {{ background: transparent; }}
+[data-testid="stHeader"] {{ background: transparent; }}
 
 /* ── Piezas del kit (kpi_row / chip / section) ── */
 .cpx-kpis {{ display: flex; gap: 10px; flex-wrap: wrap; margin: 2px 0 12px; }}
