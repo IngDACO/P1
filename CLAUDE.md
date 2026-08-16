@@ -4160,7 +4160,35 @@ automatización, así que la guarda hizo su trabajo. Comprobado por CSSOM que es
 la animación a mano, aplica (`cpx-trazar`, 0.9 s). **Si tu Windows tiene activado
 "mostrar animaciones" (lo normal), la verás.**
 
-## Versiones desplegadas (v336 = actual)
+## Estado en la URL: «mira esta pantalla» (v337-v338)
+Último punto del informe de diseño. La dirección refleja **sección · sub-pestaña ·
+proyecto abierto**, así que se puede copiar y mandar:
+`…/?s=proyectos&t=proyectos&p=PRJ-0003` abre ese detalle directamente.
+### Cómo
+- **`_slug(sub_id)`**: el ID interno lleva emoji porque ES el identificador (v232) y no
+  se toca, pero en una URL sería ilegible. El slug se **deriva**, no se guarda: si mañana
+  cambia el emoji, el enlace viejo sigue funcionando. Verificado: 0 colisiones dentro de
+  una sección y las 18 sub-pestañas hacen ida y vuelta.
+- **`_url_a_estado()`** solo en la PRIMERA pasada (`_url_leida`) y solo si no hay ya un
+  `_admin_nav_pending`: los deep-links internos son más específicos y ganan. Sin esa
+  guarda, cada rerun te devolvería a donde apunta la URL y no podrías moverte.
+- **`_estado_a_url()`** solo escribe **si cambia**, para no actualizar la URL en cada
+  pasada (y con ello arriesgar un bucle). Probado: estable 2,5 s sin tocar nada.
+- **NO toca `activo`**, el deep-link del QR de inventario, que tiene su handler en
+  `app.py` y se limpia solo.
+### ⚠️ La URL NO es una vía para saltarse el rol
+`_url_a_estado` valida la sección contra `_secciones()`, que es **por rol**. Probado:
+un campo con `?s=finanzas` NO llega a Finanzas, y el propietario tampoco a Proyectos.
+Y aunque llegara, el despachador de contenido también es por rol.
+### ⚠️ v338: fallaba en 4 secciones y parecía intermitente
+`sub = st.session_state.get(_subkey().get(seccion) or "")` → en una sección **sin**
+sub-pestañas (Home, Fichaje, Inventario, Contactos) quedaba `get("")`, que lanza; mi
+propio `except` se lo tragaba y la URL no se actualizaba **solo en esas cuatro**.
+Finanzas y Proyectos sí funcionaban, que es lo que despistaba: se veía intermitente,
+no roto. **Un `except` amplio alrededor de código nuevo esconde justo el fallo que
+acabas de introducir** — el mismo patrón que v323 destapó en los silencios de escritura.
+
+## Versiones desplegadas (v338 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -4168,6 +4196,8 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v338 | Fix de v337: la URL no se actualizaba en las 4 secciones **sin** sub-pestañas (Home, Fichaje, Inventario, Contactos), por un `session_state.get("")` que lanzaba y que mi propio `except` se tragaba. Parecía intermitente porque Finanzas y Proyectos sí funcionaban |
+| v337 | **Estado en la URL**: la dirección refleja sección · sub-pestaña · proyecto abierto, así que se puede mandar «mira esta pantalla». El slug se deriva del ID (que lleva emoji y no se toca), solo se lee en la primera pasada, solo se escribe si cambia, y no pisa el `?activo=` del QR. ⚠️ Valida contra las secciones **del rol**: una URL de otra sección no da acceso |
 | v336 | **Cierra el plan de diseño**: la curva S se traza de izquierda a derecha al entrar (aquí la animación ES el dato: el tiempo se lee como tiempo) y las cifras KPI entran al recalcularse, que era la señal que faltaba al cambiar un filtro. ⚠️ `animar=False` por defecto porque el MISMO SVG va al PDF por svglib — probado que, quitando estilo y clases, el de pantalla es **idéntico carácter a carácter** al del PDF. ⚠️ El navegador de automatización pide *reduced motion*, así que ahí no se ve animar: verificado por CSSOM que el mecanismo está entero |
 | v335 | Las etiquetas de `st.metric` dejan de truncarse con elipsis y usan dos líneas — «Dispon…» no informa de nada. ⚠️ Solo actúa en ventana estrecha: a 1440 px todas caben en una línea |
 | v334 | ⚠️ **Invierte v331**: la versión del topbar se lee **AL IMPORTAR** el módulo. Leerla fresca la volvía más engañosa, porque el fichero VERSION se actualiza con el deploy pero los módulos `core.*` ya importados siguen en memoria — medido: la app anunciaba v333 sirviendo el `theme.py` de v332. Ahora, si la barra dice v334, se está ejecutando v334 |
