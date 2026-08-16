@@ -4028,7 +4028,46 @@ Con las tres corregidas: **9 pantallas medidas, 0 fallos reales**.
 anillo/gráfico. Y el buscador de la barra superior sigue inerte: es decisión de producto
 (conectarlo o quitarlo), no un arreglo de estilo.
 
-## Versiones desplegadas (v329 = actual)
+## El buscador de la barra superior YA busca (v330-v331)
+Era el hallazgo con más coste de credibilidad de la auditoría de diseño: **641 px del
+control más prominente de cada pantalla de gestión, inertes** desde v190 — un
+`text_input` cuyo valor no se leía en ningún punto del código.
+### `home_ui.buscar(q, grupo)` — el motor
+Busca en **proyectos** (nombre, ID, cliente, ubicación), **personas** (nombre, login,
+email) y **trabajos** del catálogo (nombre, ID, número). Devuelve
+`[{tipo, titulo, pie, id, orden}]`.
+- **0 lecturas nuevas a Sheets**: las tres fuentes (`P.list_projects`, `auth.list_users`,
+  `R.list_trabajos`) ya están cacheadas y se usan en otras pantallas. Con el techo duro
+  de 60/min era condición, no preferencia.
+- **Ranking**: 0 = ID exacto · 1 = empieza por · 2 = contiene; a igualdad, por tipo.
+- `_norm_busq` quita acentos y mayúsculas → «grua» encuentra «grúa».
+- **Mínimo 2 letras**: con una sola, todo coincide y no informa.
+- ⚠️ Solo el catálogo TRB-#### en trabajos: `trabajos_idx` mete los proyectos como
+  entradas sintéticas (v218) y usarlo aquí los DUPLICARÍA con la sección de proyectos.
+- Los **archivados** se encuentran (`incluir_archivados=True`) y se marcan como tales:
+  buscar algo viejo es justo cuando hace falta un buscador.
+### La pantalla y la navegación
+`_pantalla_busqueda` se engancha en **una línea al principio de `render_admin_content`**
+(no en `app.py`) para que ningún llamador cambie. Con término escrito, los resultados
+OCUPAN la pantalla: se ha ido a buscar, no a mirar la sección de debajo. Cada resultado
+reusa los deep-links que YA existían — `_admin_open_proj`, `gp_fichasel`, `navegar()` —
+en vez de inventar caminos nuevos.
+- ⚠️ **Limpiar la caja va por bandera** (`_search_clear`), aplicada en `render_topbar`
+  ANTES de instanciar el `text_input`: quien la pide es el clic, que ocurre más abajo en
+  el MISMO run, y escribir la clave de un widget ya instanciado revienta (regla v111).
+- Al **campo** no se le muestra: su nav es corta y todo lo suyo cuelga de Mis proyectos.
+### ⚠️ v331: el indicador de versión mentía
+Visto al verificar: la app era **v330** y el topbar decía **v324**. `_version()` llevaba
+`@st.cache_data` **sin ttl**, así que se congelaba durante toda la vida del proceso, y
+Streamlit Cloud recarga el código en caliente sin reiniciar siempre. Un indicador de
+versión que miente es peor que no tenerlo — y este se usa a diario para saber qué hay
+desplegado. Sin caché: es leer un fichero local de 5 bytes.
+### Verificado en producción
+Buscar «norte» → el proyecto archivado PRJ-0003, y al tocarlo abre su detalle con la
+caja ya limpia. Buscar «campo1» → la persona, y al tocarla abre **su ficha** en
+Planificación · Usuarios. El guardián de v303 (destinos de `navegar()` existentes) pasa.
+
+## Versiones desplegadas (v331 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -4036,6 +4075,8 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v331 | El indicador de versión del topbar **mentía tras un deploy**: `@st.cache_data` sin ttl lo congelaba durante la vida del proceso y Streamlit Cloud recarga en caliente sin reiniciar. Visto en vivo: app v330, barra v324 |
+| v330 | **El buscador ya busca.** Era el fallo con más coste de credibilidad de la auditoría: 641 px del control más prominente, inertes desde v190. Busca proyectos (nombre/ID/cliente/ubicación), personas (nombre/login/email) y trabajos, con ranking (ID exacto → empieza por → contiene), sin acentos ni mayúsculas, mínimo 2 letras, y los archivados marcados. **0 lecturas nuevas a Sheets** (las 3 fuentes ya estaban cacheadas). Cada resultado reusa los deep-links existentes; la caja se limpia por bandera aplicada antes de instanciar el widget (regla v111) |
 | v329 | `theme.texto_seguro()`: un color de ACENTO deja de usarse como color de TEXTO. `_kpi_card` teñía borde y valor con el mismo color, así que el ámbar daba un importe a **2.85:1** («Por facturar»). El borde conserva el color vivo; el valor usa su equivalente legible (6.16:1). En el kit, no en cada una de las ~20 llamadas |
 | v328 | Subtítulo de la banda de marca **3.2 → 4.58:1**. Solo el de pantalla: los otros 5 usos de ese tono van sobre el azul oscuro (PDF, email, cajetín), donde da 9.1:1 |
 | v327 | ⚠️ **El 40 % de los botones nunca recibió el estilo del kit**: los selectores usaban combinador HIJO y un botón con `help=` va envuelto en `stTooltipHoverTarget`. Medido: 10 de 25. Viene de v283. + indicadores del resumen a 38 px (su `min-height:0` anulaba la altura del kit) |
