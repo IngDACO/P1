@@ -4133,7 +4133,34 @@ no cambia nada ahí — solo hace que degrade bien en un portátil o media panta
 0 desbordes horizontales · **0 tamaños fuera de la escala** · tarjetas KPI idénticas
 entre sí (73 px, `kpiDesigual: 0`) · 0 etiquetas recortadas.
 
-## Versiones desplegadas (v335 = actual)
+## Movimiento con sentido: la curva se traza, la cifra entra (v336)
+Cierra el plan de la auditoría de diseño. Las dos piezas que quedaban, las dos
+puramente de percepción.
+### La curva S se traza de izquierda a derecha
+`stroke-dasharray`/`stroke-dashoffset` animados 0.9 s. Aquí la animación **ES el dato**:
+la curva avanza en el tiempo, así que el tiempo se lee como tiempo. La real entra 0.18 s
+después de la planificada, que es el orden en que se comparan.
+- ⚠️ **`schedule_svg(..., animar=False)` por defecto.** El MISMO SVG va al PDF por
+  `svglib` (`report.py`, `user_report.py`), y ahí un `<style>` con `@keyframes` es, en
+  el mejor caso, ignorado. Solo los dos call-sites de PANTALLA pasan `animar=True`.
+- **Probado que el PDF no cambia**: quitando el `<style>` y las clases, el SVG de
+  pantalla es **idéntico carácter a carácter** al del PDF, y `svg2rlg` lo sigue
+  convirtiendo (570×412).
+### Las cifras entran al recalcularse
+Al cambiar un filtro, los números nuevos aparecían en el mismo sitio y con la misma
+pinta que los viejos: no había forma de ver QUE habían cambiado. Ahora entran con
+`cpx-entra` (220 ms, 3 px). ⚠️ **NO es un contador animado**: `st.markdown` no ejecuta
+scripts, así que un count-up necesitaría un iframe por tarjeta y rompería la maquetación.
+El gesto de entrada da la misma señal sin tocar el valor.
+### ⚠️ Este navegador pide *reduced motion* — y por eso no se ve animar
+Verificando en el Cloud, las curvas salían con `animation: none` y ya trazadas. No es un
+fallo: `matchMedia('(prefers-reduced-motion: reduce)')` da **true** en el navegador de
+automatización, así que la guarda hizo su trabajo. Comprobado por CSSOM que están los
+`@keyframes`, la regla base, el retardo de la segunda curva y la anulación; y forzando
+la animación a mano, aplica (`cpx-trazar`, 0.9 s). **Si tu Windows tiene activado
+"mostrar animaciones" (lo normal), la verás.**
+
+## Versiones desplegadas (v336 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -4141,6 +4168,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v336 | **Cierra el plan de diseño**: la curva S se traza de izquierda a derecha al entrar (aquí la animación ES el dato: el tiempo se lee como tiempo) y las cifras KPI entran al recalcularse, que era la señal que faltaba al cambiar un filtro. ⚠️ `animar=False` por defecto porque el MISMO SVG va al PDF por svglib — probado que, quitando estilo y clases, el de pantalla es **idéntico carácter a carácter** al del PDF. ⚠️ El navegador de automatización pide *reduced motion*, así que ahí no se ve animar: verificado por CSSOM que el mecanismo está entero |
 | v335 | Las etiquetas de `st.metric` dejan de truncarse con elipsis y usan dos líneas — «Dispon…» no informa de nada. ⚠️ Solo actúa en ventana estrecha: a 1440 px todas caben en una línea |
 | v334 | ⚠️ **Invierte v331**: la versión del topbar se lee **AL IMPORTAR** el módulo. Leerla fresca la volvía más engañosa, porque el fichero VERSION se actualiza con el deploy pero los módulos `core.*` ya importados siguen en memoria — medido: la app anunciaba v333 sirviendo el `theme.py` de v332. Ahora, si la barra dice v334, se está ejecutando v334 |
 | v333 | **Escala tipográfica**: de **31 tamaños distintos para 102 usos** (24 fuera de escala, residuos de escribir en `rem`) a **9 pasos elegidos**. Medido antes de tocar: 30 de 31 valores se mueven ≤1 px. Literales en px, no variables CSS (parte del CSS va a correo y a PDF). Los 137 `font-size=` de los SVG no se tocan: son la escala del dibujo técnico. + guardián que bloquea cualquier tamaño fuera de la escala |
