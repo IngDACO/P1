@@ -138,7 +138,7 @@ def rail_cut_svg(res: dict, caso: int = 1, n2500: int = 0, n5000: int = 0,
              f'style="width:100%;max-width:{VW}px;font-family:Arial,Helvetica,sans-serif;'
              f'display:block;margin:0 auto">',
              f'<rect x="0" y="0" width="{VW}" height="{VH}" fill="#ffffff"/>', cab,
-             f'<text x="18" y="40" font-size="8" fill="#7a8699">'
+             f'<text x="18" y="40" font-size="8" fill="#5b6472">'
              f'Caso 1 &#183; pila instalada A = {_mm(A)} mm '
              f'({n2500}&#215;2500 + {n5000}&#215;5000) &#183; corte = requerido &#8722; A</text>']
         if proyecto:
@@ -158,9 +158,9 @@ def rail_cut_svg(res: dict, caso: int = 1, n2500: int = 0, n5000: int = 0,
             p.append(f'<rect x="30" y="{yA:.1f}" width="36" height="{A*esc:.1f}" '
                      f'fill="#eef2f7" stroke="#8a94a6" stroke-width="1.1"/>')
             p.append(f'<text x="48" y="{(yA+base)/2:.1f}" text-anchor="middle" '
-                     f'font-size="8" fill="#7a8699" font-weight="bold">A</text>')
+                     f'font-size="8" fill="#5b6472" font-weight="bold">A</text>')
             p.append(f'<text x="48" y="{(yA+base)/2+11:.1f}" text-anchor="middle" '
-                     f'font-size="6.5" fill="#9aa7b8">pila estándar</text>')
+                     f'font-size="6.5" fill="#667080">pila estándar</text>')
 
         # Piso: donde se apoya el PRIMER riel — el que se corta en el Caso 1.
         p.append(f'<line x1="26" y1="{base:.1f}" x2="{VW-24}" y2="{base:.1f}" '
@@ -196,7 +196,7 @@ def rail_cut_svg(res: dict, caso: int = 1, n2500: int = 0, n5000: int = 0,
             p.append(f'<text x="{cx+42:.1f}" y="{base+31:.1f}" text-anchor="middle" '
                      f'font-size="8.5" fill="#1f2937" font-weight="bold">Elev. {i+1}</text>')
             p.append(f'<text x="{cx+42:.1f}" y="{base+43:.1f}" text-anchor="middle" '
-                     f'font-size="7.5" fill="#7a8699">L {_mm(e["L"])}</text>')
+                     f'font-size="7.5" fill="#5b6472">L {_mm(e["L"])}</text>')
 
         p.append(f'<rect x="18" y="{VH-26}" width="9" height="9" fill="#fcebeb" '
                  f'stroke="#c0392b" stroke-width="0.7"/>')
@@ -204,9 +204,9 @@ def rail_cut_svg(res: dict, caso: int = 1, n2500: int = 0, n5000: int = 0,
                  f'stroke="#1e8449" stroke-width="0.7"/>')
         # El corte va SIEMPRE en el 1er riel (el de abajo, primero instalado): la
         # leyenda lo dice y el color distingue recortar (rojo) de añadir (verde).
-        p.append(f'<text x="32" y="{VH-18}" font-size="8" fill="#7a8699">'
+        p.append(f'<text x="32" y="{VH-18}" font-size="8" fill="#5b6472">'
                  f'recorta el 1er riel</text>')
-        p.append(f'<text x="164" y="{VH-18}" font-size="8" fill="#7a8699">'
+        p.append(f'<text x="164" y="{VH-18}" font-size="8" fill="#5b6472">'
                  f'a&#241;ade al 1er riel &#183; el corte va en el riel de ABAJO '
                  f'(mismo valor con signo que la tabla)</text>')
         p.append("</svg>")
@@ -232,7 +232,7 @@ def rail_cut_svg(res: dict, caso: int = 1, n2500: int = 0, n5000: int = 0,
          f'style="width:100%;max-width:{VW}px;font-family:Arial,Helvetica,sans-serif;'
          f'display:block;margin:0 auto">',
          f'<rect x="0" y="0" width="{VW}" height="{VH}" fill="#ffffff"/>', cab,
-         f'<text x="18" y="40" font-size="8" fill="#7a8699">'
+         f'<text x="18" y="40" font-size="8" fill="#5b6472">'
          f'Caso 2 &#183; se corta el &#218;LTIMO riel (el de arriba) &#183; '
          f'alturas ilustrativas, no a escala</text>',
          f'<line x1="26" y1="{base}" x2="{VW-24}" y2="{base}" '
@@ -244,10 +244,10 @@ def rail_cut_svg(res: dict, caso: int = 1, n2500: int = 0, n5000: int = 0,
         ex = left + i * (unit + gelev)
         # Encabezados de grupo
         p.append(f'<text x="{ex + (xs[0]+xs[1]+railW)/2:.1f}" y="{TOP-24:.0f}" '
-                 f'text-anchor="middle" font-size="7.5" fill="#7a8699" '
+                 f'text-anchor="middle" font-size="7.5" fill="#5b6472" '
                  f'font-weight="bold">Cabina</text>')
         p.append(f'<text x="{ex + (xs[2]+xs[3]+railW)/2:.1f}" y="{TOP-24:.0f}" '
-                 f'text-anchor="middle" font-size="7.5" fill="#7a8699" '
+                 f'text-anchor="middle" font-size="7.5" fill="#5b6472" '
                  f'font-weight="bold">Contrapeso</text>')
         for j, (k, lbl, grp) in enumerate(rails):
             x = ex + xs[j]
@@ -274,10 +274,10 @@ def rail_cut_svg(res: dict, caso: int = 1, n2500: int = 0, n5000: int = 0,
     _cab, _con = COL["cabina"], COL["contra"]
     p.append(f'<rect x="18" y="{VH-26}" width="9" height="9" fill="{_cab}" '
              f'fill-opacity="0.85"/>')
-    p.append(f'<text x="32" y="{VH-18}" font-size="8" fill="#7a8699">cabina (RZ, RO)</text>')
+    p.append(f'<text x="32" y="{VH-18}" font-size="8" fill="#5b6472">cabina (RZ, RO)</text>')
     p.append(f'<rect x="118" y="{VH-26}" width="9" height="9" fill="{_con}" '
              f'fill-opacity="0.85"/>')
-    p.append(f'<text x="132" y="{VH-18}" font-size="8" fill="#7a8699">'
+    p.append(f'<text x="132" y="{VH-18}" font-size="8" fill="#5b6472">'
              f'contrapeso (RF, RB) &#183; el corte (mm) va en el riel de ARRIBA</text>')
     p.append("</svg>")
     return "".join(p)

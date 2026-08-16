@@ -349,7 +349,7 @@ def render_topbar(grupo):
         # vuelve (el admin lleva sin ella desde v190 y no se echó en falta), pero la
         # versión sí: se usa a diario para saber qué hay desplegado.
         st.markdown(f"<div style='text-align:right;padding-top:8px;font-size:.78rem;"
-                    f"color:#9aa7b8;font-family:monospace'>{_version()}</div>",
+                    f"color:#667080;font-family:monospace'>{_version()}</div>",
                     unsafe_allow_html=True)
     with c2:
         _campana(grupo)

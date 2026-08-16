@@ -106,7 +106,7 @@ def _tarjeta(titulo, valor, pie="", color=None, activo=False):
         f'padding:12px 14px;flex:1;min-width:132px;{borde}">'
         f'<div style="font-size:12.5px;color:#6b7280;line-height:1.2;">{titulo}</div>'
         f'<div style="font-size:24px;font-weight:700;margin-top:2px;{col}">{valor}</div>'
-        + (f'<div style="font-size:11.5px;color:#9aa7b8;margin-top:2px;">{pie}</div>'
+        + (f'<div style="font-size:11.5px;color:#667080;margin-top:2px;">{pie}</div>'
            if pie else "")
         + "</div>")
 

@@ -24,8 +24,14 @@ AZUL_OSC = "#1e4e79"    # activo / titulares
 ROJO = "#c0392b"        # fuera de límite, retraso, alarma
 VERDE = "#1e8449"       # correcto, adelanto
 AMBAR = "#e67e22"       # al límite, por vencer
-GRIS_TXT = "#5b6472"    # texto secundario
-GRIS_SUAVE = "#9aa7b8"  # texto terciario (porcentajes, pies)
+GRIS_TXT = "#5b6472"    # texto secundario · 5.98:1 sobre blanco
+# ⚠️ v326: era #9aa7b8, que da **2.27:1** sobre el fondo suave — la MITAD del
+# mínimo WCAG AA (4.5:1). Se usa en los indicadores en reposo, que es el estado
+# que más se ve, y esta app se abre EN OBRA con sol. #667080 mantiene la jerarquía
+# de tres niveles (principal → secundario → terciario) y pasa en los tres fondos:
+# blanco 5.01 · #f4f7fb 4.66 · #f7fafd 4.78. Medido, no estimado.
+GRIS_SUAVE = "#667080"  # texto terciario (porcentajes, pies)
+AMBAR_TXT = "#8a5600"   # ámbar cuando es TEXTO · 5.65:1 sobre #fff4e0 (era #c77700, 3.18)
 TXT = "#1f2937"         # texto principal
 PISTA = "#eef1f5"       # fondo de barra/pista
 BORDE = "#e3e8ef"
@@ -39,7 +45,17 @@ PALETA = ["#2e6da4", "#BA7517", "#1e8449", "#8e44ad", "#c0392b", "#16a085",
 _CSS = f"""
 <style>
 /* ── Densidad: la app maneja mucha información; menos aire = más profesional ── */
-div.block-container {{ padding-top: 2.2rem; padding-bottom: 3rem; max-width: 1400px; }}
+/* ⚠️ v326: el lateral NUNCA se había fijado, así que heredaba los 5rem (80 px por
+   lado) de fábrica de Streamlit: **160 px regalados** en cada pantalla, el 14 % del
+   ancho útil. Se notaba en HOME, donde las 3 columnas caían a 345/248/248 px sobre
+   una pantalla de 1440. A 2rem se recuperan 96 px para TODAS las pantallas. */
+div.block-container {{
+  padding-top: 2.2rem; padding-bottom: 3rem; max-width: 1400px;
+  padding-left: 2rem; padding-right: 2rem;
+}}
+@media (max-width: 640px) {{
+  div.block-container {{ padding-left: 1rem; padding-right: 1rem; }}
+}}
 div[data-testid="stVerticalBlock"] {{ gap: 0.6rem; }}
 h1 {{ font-size: 1.7rem !important; font-weight: 700; letter-spacing: -.4px; }}
 h2 {{ font-size: 1.32rem !important; font-weight: 700; letter-spacing: -.3px; }}
@@ -68,9 +84,38 @@ div[data-testid="stButton"] > button,
 div[data-testid="stFormSubmitButton"] > button,
 div[data-testid="stDownloadButton"] > button {{
   border-radius: 9px; font-weight: 600; border-color: {BORDE};
-  transition: border-color .12s ease, background .12s ease;
+  min-height: 38px;            /* v326: eran 32 px — corto para ratón, imposible con el dedo */
+  transition: border-color .14s ease, background .14s ease,
+              transform .09s ease-out, box-shadow .14s ease;
 }}
-div[data-testid="stButton"] > button:hover {{ border-color: {AZUL}; color: {AZUL}; }}
+div[data-testid="stButton"] > button:hover {{
+  border-color: {AZUL}; color: {AZUL};
+  box-shadow: 0 2px 8px -2px rgba(46,109,164,.28);
+}}
+
+/* ── ACUSE DE RECIBO (v326) ──────────────────────────────────────────────
+   El fallo de sensación más caro de la app: una navegación tarda hasta 2,9 s y
+   NADA respondía al clic — se pulsaba y no pasaba absolutamente nada, así que el
+   usuario vuelve a pulsar y entonces sí parece rota. Esto NO acelera el rerun:
+   confirma que se recibió, que es lo que separa "no funcionó" de "está
+   trabajando". Ocurre en el navegador, antes de que el servidor conteste. */
+div[data-testid="stButton"] > button:active,
+div[data-testid="stFormSubmitButton"] > button:active,
+div[data-testid="stDownloadButton"] > button:active {{
+  transform: scale(.985); opacity: .72; transition: transform .09s ease-out;
+}}
+
+/* Mientras Streamlit re-ejecuta, el contenido se atenúa en vez de quedarse
+   congelado e idéntico: da la señal de "esto ya no es lo definitivo". */
+div[data-testid="stMain"] {{ transition: opacity .18s ease; }}
+body:has([data-testid="stStatusWidget"]) div[data-testid="stMain"] {{ opacity: .62; }}
+
+/* ⚠️ Respeta a quien pide menos movimiento (y a quien se marea con él). */
+@media (prefers-reduced-motion: reduce) {{
+  *, *::before, *::after {{
+    animation-duration: .001ms !important; transition-duration: .001ms !important;
+  }}
+}}
 
 /* ── Expander: cabecera legible, sin caja pesada ── */
 div[data-testid="stExpander"] details {{ border-radius: 10px; border-color: {BORDE}; }}

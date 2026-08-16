@@ -245,7 +245,7 @@ def plumb_svg(res: dict, proyecto: str = "") -> str:
                  f'stroke="#1f2937" stroke-width="2.2"/>')
     p.append(f'<line x1="{px0:.1f}" y1="{py1:.1f}" x2="{px1:.1f}" y2="{py1:.1f}" '
              f'stroke="#1f2937" stroke-width="2.2"/>')
-    p.append(f'<text x="{px0:.1f}" y="{py1+mur+30:.1f}" font-size="8" fill="#7a8699" '
+    p.append(f'<text x="{px0:.1f}" y="{py1+mur+30:.1f}" font-size="8" fill="#5b6472" '
              f'letter-spacing="0.1em">PARED FRONTAL</text>')
 
     # ── Paredes teóricas (del plano) ───────────────────────
@@ -254,7 +254,7 @@ def plumb_svg(res: dict, proyecto: str = "") -> str:
         p.append(f'<line x1="{xt:.1f}" y1="{SY(dbpw)-14:.1f}" x2="{xt:.1f}" y2="{py1:.1f}" '
                  f'stroke="#9aa7b8" stroke-width="0.9" stroke-dasharray="9,3,2,3"/>')
         p.append(f'<text x="{xt:.1f}" y="{SY(dbpw)-19:.1f}" text-anchor="middle" font-size="7" '
-                 f'fill="#9aa7b8">pared teórica</text>')
+                 f'fill="#667080">pared teórica</text>')
 
     # ── Plomos (V1/V2) — en planta son puntos; el hilo cae en vertical ──
     yC = SY(dbpw)
@@ -285,7 +285,7 @@ def plumb_svg(res: dict, proyecto: str = "") -> str:
              f'stroke="#1f2937" stroke-width="1.6"/>')
     p.append(f'<text x="{xP+11:.1f}" y="{yP+11:.1f}" font-size="9" fill="#1f2937" '
              f'font-weight="bold">P</text>')
-    p.append(f'<text x="{xP+11:.1f}" y="{yP+21:.1f}" font-size="7" fill="#7a8699">plantilla</text>')
+    p.append(f'<text x="{xP+11:.1f}" y="{yP+21:.1f}" font-size="7" fill="#5b6472">plantilla</text>')
 
     # ── Cotas ──────────────────────────────────────────────
     p.append(_dim_h(SX(lines["V1"]["x"]), SX(lines["V2"]["x"]), yC - 30,
@@ -368,7 +368,7 @@ def plumb_svg(res: dict, proyecto: str = "") -> str:
              f'Proporción real · cotas en mm</text>')
     p.append(f'<text x="{tx+6}" y="{ty+60}" font-size="7.5" fill="#5f6b7a">'
              f'{(proyecto or "COPEX")[:24]}</text>')
-    p.append(f'<text x="{tx+6}" y="{ty+71}" font-size="7" fill="#7a8699">'
+    p.append(f'<text x="{tx+6}" y="{ty+71}" font-size="7" fill="#5b6472">'
              f'Origen X: pared real izquierda</text>')
 
     p.append("</svg>")
@@ -471,7 +471,7 @@ def plumb_iso_svg(res: dict, altura: float = 0.0, proyecto: str = "") -> str:
 
     p.append(f'<text x="18" y="26" font-size="11" fill="#1f2937" font-weight="bold">'
              f'PLOMADAS — VISTA ISOMÉTRICA</text>')
-    p.append(f'<text x="18" y="40" font-size="8" fill="#7a8699">'
+    p.append(f'<text x="18" y="40" font-size="8" fill="#5b6472">'
              f'{(proyecto or "COPEX")[:38]} · planta a escala, altura esquemática</text>')
 
     fy = VH - 62
@@ -482,7 +482,7 @@ def plumb_iso_svg(res: dict, altura: float = 0.0, proyecto: str = "") -> str:
                                   ("RW", f"{_n(rw)} mm"))):
         cx_ = 18 + (VW - 36) * (j + 0.5) / 3
         p.append(f'<text x="{cx_:.0f}" y="{fy+17}" text-anchor="middle" font-size="7.5" '
-                 f'fill="#7a8699">{et}</text>')
+                 f'fill="#5b6472">{et}</text>')
         p.append(f'<text x="{cx_:.0f}" y="{fy+32}" text-anchor="middle" font-size="10" '
                  f'fill="#1f2937">{va}</text>')
     p.append("</svg>")
@@ -584,7 +584,7 @@ def plumb_detail_svg(res: dict, proyecto: str = "") -> str:
 
     p.append(f'<text x="18" y="26" font-size="11" fill="#1f2937" font-weight="bold">'
              f'DETALLE DE REPLANTEO</text>')
-    p.append(f'<text x="18" y="40" font-size="8" fill="#7a8699">'
+    p.append(f'<text x="18" y="40" font-size="8" fill="#5b6472">'
              f'plantilla, plomos y cuerdas a medir · {(proyecto or "COPEX")[:30]}</text>')
     p.append("</svg>")
     return "".join(p)
@@ -625,7 +625,7 @@ def plumb_card_svg(res: dict, proyecto: str = "") -> str:
                  f'font-weight="bold">{cod}</text>')
         p.append(f'<text x="{VW-20}" y="{y+10:.0f}" text-anchor="end" font-size="23" '
                  f'fill="#1f2937" font-weight="bold">{_n(val)}</text>')
-        p.append(f'<text x="66" y="{y+8:.0f}" font-size="9" fill="#7a8699">{desc}</text>')
+        p.append(f'<text x="66" y="{y+8:.0f}" font-size="9" fill="#5b6472">{desc}</text>')
         y += fila
 
     p.append(f'<rect x="0" y="{y-14:.0f}" width="{VW}" height="46" fill="#eaf3de"/>')

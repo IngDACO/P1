@@ -286,7 +286,7 @@ def schedule_svg(sched: dict, real_curve: list = None, today_day: float = None,
          f'<rect x="0" y="0" width="{VW}" height="{VH}" fill="#ffffff"/>',
          f'<text x="18" y="24" font-size="13" fill="#1a3a5c" font-weight="bold">'
          f'CRONOGRAMA Y AVANCE</text>',
-         f'<text x="18" y="39" font-size="8.5" fill="#7a8699">'
+         f'<text x="18" y="39" font-size="8.5" fill="#5b6472">'
          f'{_esc(titulo) + " · " if titulo else ""}'
          f'{start.strftime("%d/%m/%Y")} → {sched["fecha_fin"].strftime("%d/%m/%Y")} · '
          f'{total} días · {n} actividades</text>']
@@ -430,7 +430,7 @@ def schedule_svg(sched: dict, real_curve: list = None, today_day: float = None,
         p.append(f'<rect x="{lgx:.1f}" y="{lgy-7:.1f}" width="13" height="3.5" '
                  f'fill="{col}"' + (' fill-opacity="0.28"' if tenue else '') + '/>')
         p.append(f'<text x="{lgx+18:.1f}" y="{lgy:.1f}" font-size="8" '
-                 f'fill="#7a8699">{et}</text>')
+                 f'fill="#5b6472">{et}</text>')
         lgx += 30 + len(et) * 5.4
 
     # ── Eje de fechas ───────────────────────────────────────
@@ -441,7 +441,7 @@ def schedule_svg(sched: dict, real_curve: list = None, today_day: float = None,
         p.append(f'<line x1="{x:.1f}" y1="{xaxis_y:.1f}" x2="{x:.1f}" y2="{xaxis_y+4:.1f}" '
                  f'stroke="{C_GRIS}" stroke-width="1"/>')
         p.append(f'<text x="{x:.1f}" y="{xaxis_y+15:.1f}" text-anchor="middle" '
-                 f'font-size="7.5" fill="#7a8699">'
+                 f'font-size="7.5" fill="#5b6472">'
                  f'{(start + timedelta(days=int(d))).strftime("%d/%m")}</text>')
         d += step
 

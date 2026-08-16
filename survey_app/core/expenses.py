@@ -438,7 +438,7 @@ def spend_svg(curva: dict, proyectado=None, titulo: str = "") -> str:
          f'<rect x="0" y="0" width="{VW}" height="{VH}" fill="#ffffff"/>',
          f'<text x="18" y="24" font-size="13" fill="#1a3a5c" font-weight="bold">'
          f'GASTO ACUMULADO</text>',
-         f'<text x="18" y="38" font-size="8.5" fill="#7a8699">'
+         f'<text x="18" y="38" font-size="8.5" fill="#5b6472">'
          f'{_esc(titulo) + " · " if titulo else ""}{fechas[0]} → {fechas[-1]}'
          f' · {n} movimientos</text>']
 
@@ -449,7 +449,7 @@ def spend_svg(curva: dict, proyectado=None, titulo: str = "") -> str:
         p.append(f'<line x1="{ML}" y1="{yy:.1f}" x2="{VW-MR}" y2="{yy:.1f}" '
                  f'stroke="{"#c3ccd8" if k == 0 else "#f0f2f6"}" stroke-width="1"/>')
         p.append(f'<text x="{ML-6}" y="{yy+3:.1f}" text-anchor="end" font-size="8" '
-                 f'fill="#9aa7b8">{_money(v)}</text>')
+                 f'fill="#667080">{_money(v)}</text>')
 
     base = sy(0)
     # mano de obra (abajo) y compras encima: se ve el reparto, no solo el total
@@ -494,13 +494,13 @@ def spend_svg(curva: dict, proyectado=None, titulo: str = "") -> str:
         p.append(f'<line x1="{sx(i):.1f}" y1="{base:.1f}" x2="{sx(i):.1f}" '
                  f'y2="{base+4:.1f}" stroke="#9aa7b8" stroke-width="1"/>')
         p.append(f'<text x="{sx(i):.1f}" y="{base+15:.1f}" text-anchor="middle" '
-                 f'font-size="7.5" fill="#7a8699">{fechas[i][8:10]}/{fechas[i][5:7]}</text>')
+                 f'font-size="7.5" fill="#5b6472">{fechas[i][8:10]}/{fechas[i][5:7]}</text>')
 
     lgx = ML
     for et, col in (("Mano de obra", C_MO), ("Compras", C_CO)):
         p.append(f'<rect x="{lgx:.1f}" y="{VH-16}" width="13" height="7" fill="{col}" '
                  f'fill-opacity="0.45"/>')
-        p.append(f'<text x="{lgx+18:.1f}" y="{VH-10}" font-size="8" fill="#7a8699">{et}</text>')
+        p.append(f'<text x="{lgx+18:.1f}" y="{VH-10}" font-size="8" fill="#5b6472">{et}</text>')
         lgx += 34 + len(et) * 5.4
 
     p.append("</svg>")

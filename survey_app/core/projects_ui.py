@@ -307,8 +307,12 @@ def _resumen_del_dia(grupo: str):
                 'padding:4px 8px !important;}',
                 '.st-key-cpxresumen [data-testid="stVerticalBlock"]{gap:.3rem !important;}']
         for _slug, _i, _l, _urgb, _cnt, *_r in inds:
-            _bg, _fg = (("#fdecec", "#c0392b") if _urgb else ("#fff4e0", "#c77700")) \
-                       if _cnt else ("#f4f6f9", "#9aa7b8")
+            # ⚠️ v326: el estado EN REPOSO (contador a 0) usaba #9aa7b8 sobre
+            # #f4f6f9 = **2.26:1**, la mitad del mínimo WCAG. Y es el estado que
+            # más se ve. Esta app se abre en obra, con sol: ahí no se leía.
+            from core import theme as _T
+            _bg, _fg = (("#fdecec", "#c0392b") if _urgb else ("#fff4e0", "#8a5600")) \
+                       if _cnt else ("#f4f6f9", _T.GRIS_SUAVE)
             _css.append(f".st-key-resind_{_slug} button{{background:{_bg}!important;"
                         f"color:{_fg}!important;border-color:{_bg}!important;}}")
         _css.append("</style>")
@@ -1287,7 +1291,7 @@ def _cartera_clickeable(proys, alarmas, delays, aheads, costos):
                 f"<span style='font-size:12.5px;font-weight:600;color:#374151;'>{_av}%</span></div>"
                 # v306: ID + tipo. El ID en monoespaciada porque es un identificador que
                 # se dicta y se busca, no una etiqueta; el tipo solo si está marcado.
-                "<div style='font-size:11.5px;color:#9aa7b8;margin-bottom:4px;"
+                "<div style='font-size:11.5px;color:#667080;margin-bottom:4px;"
                 "font-family:monospace;'>"
                 f"{esc(_pid)}"
                 + (f"<span style='font-family:inherit;color:#6b7280;'> · "
@@ -1829,7 +1833,7 @@ def _detalle_proyecto(pid: str, grupo: str = None):
         '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;'
         'flex-wrap:wrap;">'
         f'<div style="font-size:1.15rem;font-weight:800;color:#1f2937;">{prj.get("Nombre","")}'
-        f'<span style="font-family:monospace;font-size:12px;color:#9aa7b8;font-weight:500;'
+        f'<span style="font-family:monospace;font-size:12px;color:#667080;font-weight:500;'
         f'margin-left:8px;">{pid}</span></div>'
         f'<span style="font-size:12px;padding:3px 11px;border-radius:20px;background:{_bg};'
         f'color:{_fg};white-space:nowrap;">{est}</span></div>'
@@ -3134,11 +3138,14 @@ def render_pnl(grupo: str):
     st.markdown("**:material/notifications: Pendientes**")
     _css = ["<style>"]
     for _s, _i, _l, _v, _u, _hay, _sec, _sub, _fn in _IND:
-        _bg, _fg = (("#fdecec", "#c0392b") if _u else ("#fff4e0", "#c77700")) \
-                   if _hay else ("#f4f6f9", "#9aa7b8")
+        # ⚠️ v326: mismo caso que en el resumen del día — el reposo era 2.26:1.
+        _bg, _fg = (("#fdecec", "#c0392b") if _u else ("#fff4e0", "#8a5600")) \
+                   if _hay else ("#f4f6f9", T.GRIS_SUAVE)
+        # ⚠️ v326: el `min-height:0` anulaba la altura mínima del kit y dejaba
+        # estos botones en 32 px. Son los que llevan a resolver cada pendiente.
         _css.append(f".st-key-pnlind_{_s} button{{background:{_bg}!important;"
                     f"color:{_fg}!important;border-color:{_bg}!important;"
-                    "min-height:0!important;padding:4px 8px!important;}")
+                    "min-height:38px!important;padding:4px 8px!important;}")
     _css.append("</style>")
     st.markdown("".join(_css), unsafe_allow_html=True)
     # 2 filas de 4 (v305: 3 filas era mas alto y una sola no cabe sin partir etiquetas)
