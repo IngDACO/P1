@@ -3985,7 +3985,50 @@ datos del grupo: 1 de baja (`fijiofgjei`) y, en la conciliación, `Bobo` como el
 cargada a obras del grupo $1.645 → **$1.992**, y el costo de la agrupación *North*
 $0 → **$346**.
 
-## Versiones desplegadas (v325 = actual)
+## Auditoría de DISEÑO y sus arreglos (v326–v329)
+Auditoría midiendo el DOM en producción (no capturas): escala tipográfica, paleta,
+densidad, áreas de clic, contraste WCAG y motion. Informe:
+`https://claude.ai/code/artifact/a07de4cd-4e28-4454-888e-02e5b4062519`.
+### Lo que se arregló
+| Qué | Antes | Ahora |
+|---|---|---|
+| Contraste de indicadores en reposo | **2.26:1** | **4.62:1** |
+| Ámbar como texto | 3.18:1 | **5.65:1** |
+| Texto de diagramas (`fill=`) | 3.43:1 | **5.57:1** |
+| Subtítulo de la banda de marca | 3.20:1 | **4.58:1** |
+| Valor KPI en ámbar | 2.85:1 | **6.16:1** |
+| Ancho útil por pantalla | 980 px | **1066 px** |
+| Botones por debajo de 36 px | 9 de 17 | **0** |
+| Transiciones propias | **0** | acuse de recibo + hover + atenuado |
+### ⚠️ El hallazgo que no buscaba: el 40 % de los botones no recibía el kit
+Los selectores del sistema de diseño usaban el combinador HIJO
+(`div[data-testid="stButton"] > button`). Cuando un botón lleva `help=`, Streamlit lo
+envuelve en `stTooltipHoverTarget`, así que **deja de ser hijo directo**: medido en
+producción, **10 de 25 botones visibles** se quedaban sin radio, sin peso, sin hover
+—y se habrían quedado sin el acuse de recibo nuevo—, incluido el ← de la barra y todos
+los indicadores. Viene de v283 y nadie lo había visto. Descendiente, no hijo.
+### ⚠️ Un color de ACENTO no es un color de TEXTO
+`_kpi_card(label, valor, color)` teñía con el mismo color el borde y el valor, así que
+pasarle `AMBAR` (#e67e22) daba un importe a **2.85:1**. Nueva `theme.texto_seguro()`:
+el borde conserva el color vivo (no es texto) y el valor usa su equivalente legible.
+Se resuelve en el kit, no en cada llamada — hay ~20 tarjetas y la siguiente que alguien
+escriba tiene que salir bien sin acordarse.
+### ⚠️ Tres falsos positivos de mi propio medidor (lección de método)
+Medir contraste en el navegador tiene tres trampas, y caí en las tres antes de cazarlas:
+1. **Degradados**: `background-image` no aparece en `backgroundColor` → hay que evaluar
+   contra la PEOR parada del degradado.
+2. **Alfa**: un fondo `rgba(28,131,255,.1)` tratado como opaco daba 2.05:1 cuando el
+   valor real, compuesto sobre blanco, es **6.68:1**. Las alertas nativas de Streamlit
+   pasan todas (4.66–7.55).
+3. **Iconos**: los Material Symbols son texto para el DOM pero contenido no textual para
+   WCAG (umbral 3:1, no 4.5).
+Con las tres corregidas: **9 pantallas medidas, 0 fallos reales**.
+### Lo que NO se tocó, a propósito
+`stroke=` de los diagramas (líneas técnicas, no texto), fondos de pista, y `AMBAR` como
+anillo/gráfico. Y el buscador de la barra superior sigue inerte: es decisión de producto
+(conectarlo o quitarlo), no un arreglo de estilo.
+
+## Versiones desplegadas (v329 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -3993,6 +4036,10 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v329 | `theme.texto_seguro()`: un color de ACENTO deja de usarse como color de TEXTO. `_kpi_card` teñía borde y valor con el mismo color, así que el ámbar daba un importe a **2.85:1** («Por facturar»). El borde conserva el color vivo; el valor usa su equivalente legible (6.16:1). En el kit, no en cada una de las ~20 llamadas |
+| v328 | Subtítulo de la banda de marca **3.2 → 4.58:1**. Solo el de pantalla: los otros 5 usos de ese tono van sobre el azul oscuro (PDF, email, cajetín), donde da 9.1:1 |
+| v327 | ⚠️ **El 40 % de los botones nunca recibió el estilo del kit**: los selectores usaban combinador HIJO y un botón con `help=` va envuelto en `stTooltipHoverTarget`. Medido: 10 de 25. Viene de v283. + indicadores del resumen a 38 px (su `min-height:0` anulaba la altura del kit) |
+| v326 | **Arreglos de la auditoría de diseño**: contraste WCAG en indicadores (2.26→4.62), ámbar de texto (3.18→5.65) y texto de diagramas (3.43→5.57); **96 px de ancho recuperados** en todas las pantallas (el relleno lateral heredaba los 5rem de Streamlit y nunca se había decidido); botones a 38 px; y las primeras transiciones propias de la app — acuse de recibo al pulsar, que ataca los 2,9 s de silencio tras un clic, con `prefers-reduced-motion` |
 | v325 | El aviso «sin tarifa» mezclaba **dos cosas distintas**: a quien le falta la tarifa (se arregla en Usuarios) y a quien **ya no está dado de alta** (cuenta eliminada — no hay fila donde ponerla, y el aviso mandaba a un callejón sin salida). Nueva `auth.claves_conocidas()` —una sola definición, 0 lecturas nuevas, y degrada a «sí existe» si falla la lectura para no acusar de baja a nadie— consumida por `group_hours` (`existe`), `labor_breakdown` y `conciliacion_mo` (`sin_tarifa` / `de_baja`). El **indicador del Resumen cuenta solo lo accionable**. Caso real: `fijiofgjei` es la cuenta `conductor` borrada en v163 con fichajes huérfanos |
 | v324 | **Revisión en el Cloud con datos reales.** ⚠️ El proyecto con **0% de avance y 6 días de retraso** mostraba el mensaje **más tranquilo** de los tres (*«justo el ritmo que hace falta»*): con `ritmo_real = 0` la guarda anti-división-por-cero deja `factor = None`, que es *falsy*, y las dos ramas de aviso se saltaban. ⚠️ Y el proyecto **pasado de fecha no mostraba NADA**: su aviso era **código muerto** porque la guarda exigía `ritmo_nec is not None`, que es `None` justo cuando la fecha ya pasó (lo cazó el test al replicar el orden real de los `if`). ⚠️ La **conciliación gritaba «$1.262,80 sin explicar»** con el periodo por defecto, y no era un descuadre: horas y nóminas se filtran por fechas distintas (v309), así que en una ventana corta no cierra por construcción — con «Todo» cierra al céntimo. + el importe restado ya no lleva el signo duplicado. **Confirmado en vivo**: v322 tenía un caso REAL (AGR-0001, 2 miembros archivados: `0 elev · 0%` → `2 elev · 21%`) y v323 no movió ningún número |
 | v323 | Los helpers duplicados **no eran cosmética**: eran 5 implementaciones DISTINTAS de `_num`, 2 de `_parse_date` y 7 de `_col_letter`, y la divergencia era el fallo. ⚠️ **Cualquier importe con separador de miles (`1,234.56`, como Sheets formatea el dinero en AU) se leía como $0,00 en silencio** en las cinco variantes — costos, facturas, nóminas e inventario. Auditada la hoja real en SOLO LECTURA: 0 casos hoy (latente), así que unificar está probado que no cambia ningún número existente (5000 importes, 0 diferencias). Todo a `core/num.py`. + Una fecha no-ISO (`16/08/2026`) se leía `None` y esa factura **desaparecía del P&L**. + `_next_id` de facturas/clientes/inventario leía de la caché de 120 s y **podía repetir un ID** (y el ID es la identidad). + `notify_expiring` hacía N escrituras seguidas en CADA login de admin → 1 `batch_update`. + de los 128 `except: pass`, los 7 que se tragaban una escritura ya dejan rastro — el peor, `timeclock.get_sheet`: si la cabecera no migra, cada dato se guarda **en la columna de al lado** |
