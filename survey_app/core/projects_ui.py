@@ -2910,6 +2910,110 @@ def _torta_html(pares, total) -> str:
         f'<div style="width:300px;max-width:100%;">{"".join(_leg)}</div></div>')
 
 
+_ORD_ICONO = {"pendiente": ":material/schedule:", "recibida": ":material/check_circle:",
+              "cancelada": ":material/cancel:"}
+
+
+def _ordenes_section(pid, grupo, editable=True, key_prefix="ord"):
+    """Órdenes de compra del proyecto (v343): lo pedido y aún no recibido.
+
+    Al recibir una orden se crea su recibo en `Gastos`, así que el costo real sigue
+    saliendo de una sola fuente (regla v310) y esta lista solo contiene lo pendiente.
+    """
+    from core import clock, theme
+    from core import expenses as E
+    from core import orders as O
+    from core.num import num as _n
+    if not O.is_configured():
+        return
+    try:
+        ords = O.list_for(pid)
+    except Exception:
+        return
+    _pend = [o for o in ords if str(o.get("Estado", "")) == O.PENDIENTE]
+    _tit = f"Órdenes de compra ({len(_pend)} pendiente{'s' if len(_pend) != 1 else ''})"
+
+    with st.expander(f":material/shopping_cart: {_tit}", expanded=False):
+        st.caption("Lo que ya se pidió al proveedor y todavía no ha llegado. Al "
+                   "marcarla **recibida** se carga sola al costo del proyecto.")
+
+        if ords:
+            _hoy = clock.today(grupo)
+            for o in ords:
+                _est = str(o.get("Estado", ""))
+                _oid = str(o.get("ID", ""))
+                _fesp = O._parse_date(o.get("FechaEsperada"))
+                _tarde = bool(_est == O.PENDIENTE and _fesp and _fesp < _hoy)
+                _lin = (f"{_ORD_ICONO.get(_est,'')} **{o.get('Proveedor','')}** · "
+                        f"{theme.dinero(_n(o.get('Valor')))} · "
+                        f"{o.get('Descripcion','') or '—'}")
+                if _fesp:
+                    _lin += f" · llega {_fesp.strftime('%d/%m')}"
+                if _tarde:
+                    _lin += f"  :red[**{(_hoy - _fesp).days} d de retraso**]"
+                st.markdown(_lin)
+                st.caption(f"{_oid} · {_est} · pedida {o.get('Fecha','')}")
+
+                if _est == O.RECIBIDA and not str(o.get("GastoID", "")).strip():
+                    # ⚠️ Se marcó recibida pero su gasto no llegó a escribirse: ese
+                    # costo NO está contado en ningún sitio hasta completarlo.
+                    st.warning(":material/warning: Esta orden está recibida pero **su "
+                               "gasto no se registró**, así que su costo no está contado.")
+                    if editable and st.button("Registrar el gasto ahora",
+                                              key=f"{key_prefix}_ordfix_{_oid}"):
+                        ok, msg = O.completar_gasto(
+                            _oid, st.session_state.get("auth", {}).get("usuario", ""))
+                        (st.success if ok else st.error)(msg)
+                        if ok:
+                            st.rerun()
+
+                if editable and _est == O.PENDIENTE:
+                    _a, _b, _c2 = st.columns([2, 1, 1])
+                    _real = _a.number_input(
+                        "Valor recibido", min_value=0.0, step=10.0,
+                        value=float(_n(o.get("Valor"))), key=f"{key_prefix}_ordv_{_oid}",
+                        help="Si llegó por otro importe, corrígelo aquí antes de recibir.")
+                    if _b.button("Recibir", key=f"{key_prefix}_ordr_{_oid}",
+                                 use_container_width=True):
+                        ok, msg = O.marcar_recibida(
+                            _oid, _real, st.session_state.get("auth", {}).get("usuario", ""))
+                        (st.success if ok else st.error)(msg)
+                        if ok:
+                            st.rerun()
+                    if _c2.button("Cancelar", key=f"{key_prefix}_ordc_{_oid}",
+                                  use_container_width=True):
+                        ok, msg = O.cancelar(_oid)
+                        (st.success if ok else st.error)(msg)
+                        if ok:
+                            st.rerun()
+                st.markdown("---")
+        else:
+            st.caption("Todavía no hay órdenes registradas en este proyecto.")
+
+        if editable:
+            with st.form(f"{key_prefix}_ordnew_{pid}"):
+                st.markdown("**Nueva orden**")
+                _c1, _c2 = st.columns(2)
+                _prov = _c1.text_input("Proveedor")
+                _val  = _c2.number_input("Valor", min_value=0.0, step=10.0)
+                _c3, _c4 = st.columns(2)
+                _desc = _c3.text_input("Descripción", placeholder="p. ej. rieles T75-3/B ×12")
+                _cat  = _c4.selectbox("Categoría", E.CATEGORIAS)
+                _fe   = st.date_input("Fecha esperada de entrega", value=None,
+                                      help="Opcional. Sin ella, la orden nunca se marca "
+                                           "como atrasada — no se puede decir que llega "
+                                           "tarde si nadie dijo cuándo llegaba.")
+                if st.form_submit_button(":material/add_circle: Registrar orden",
+                                         use_container_width=True):
+                    ok, msg = O.crear(
+                        pid, grupo, _prov, _val, descripcion=_desc, categoria=_cat,
+                        fecha_esperada=_fe.strftime("%Y-%m-%d") if _fe else "",
+                        creado_por=st.session_state.get("auth", {}).get("usuario", ""))
+                    (st.success if ok else st.error)(msg)
+                    if ok:
+                        st.rerun()
+
+
 def render_expenses(pid, grupo, can_delete=False, key_prefix="ex"):
     """Costos del proyecto (v144).
 
@@ -2951,6 +3055,12 @@ def render_expenses(pid, grupo, can_delete=False, key_prefix="ex"):
             _kpi_card("Mano de obra", f"${cp['mano_obra']:,.0f}"),
             _kpi_card("Presupuesto", f"${pres:,.0f}" if pres > 0 else "—"),
             _kpi_card("Costará al terminar", f"${proy:,.0f}" if proy else "—", _c)]
+    # v343: lo COMPROMETIDO solo se enseña si hay algo pedido — una tarjeta en $0
+    # en todos los proyectos sería ruido.
+    if cp.get("comprometido"):
+        from core import theme as _th
+        tarj.insert(3, _kpi_card("Comprometido", f"${cp['comprometido']:,.0f}",
+                                 _th.AMBAR, pie="pedido, aún sin recibir"))
     st.markdown('<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px">'
                 + "".join(tarj) + "</div>", unsafe_allow_html=True)
     _fn(_t)
@@ -2963,6 +3073,18 @@ def render_expenses(pid, grupo, can_delete=False, key_prefix="ex"):
             if cp["por_punto"]:
                 _l += f" (${cp['por_punto']:,.0f} por punto)"
         st.caption(_l + ("  :red[:material/block:] SOBRE PRESUPUESTO" if cp["over"] else ""))
+        # ⚠️ v343: el caso que nadie veía — todavía dentro de presupuesto, pero con
+        # lo ya PEDIDO se pasa seguro. Antes esto solo se sabía al llegar la factura.
+        if cp.get("over_comp"):
+            st.warning(
+                f":material/shopping_cart: Vas dentro de presupuesto, pero con las "
+                f"**${cp['comprometido']:,.0f} ya pedidos** el proyecto llega a "
+                f"**${cp['total_comp']:,.0f}**, "
+                f"**${cp['total_comp'] - pres:,.0f} por encima** de los "
+                f"${pres:,.0f} presupuestados.")
+
+    # ── Órdenes de compra: el dinero comprometido (v343) ──
+    _ordenes_section(pid, grupo, editable=can_delete, key_prefix=key_prefix)
 
     # ── Reparto del costo | Compras por categoría (doble columna, v213) ──
     _rep = cp["total"] > 0
@@ -3539,6 +3661,11 @@ def render_group_expenses(grupo: str):
             _kpi_card("Proyección al terminar", T.dinero(tot_proj, 0),
                       "#c0392b" if (tot_pres and tot_proj > tot_pres) else None),
             _kpi_card("Sobre presupuesto", n_over, "#c0392b" if n_over else None)]
+    # v343: lo COMPROMETIDO (pedido y sin recibir) solo si hay algo pedido.
+    _comp_tot = round(sum(f.get("comprometido", 0.0) for f in filas), 2)
+    if _comp_tot:
+        tarj.insert(1, _kpi_card("Comprometido", T.dinero(_comp_tot, 0), T.AMBAR,
+                                 pie="pedido, aún sin recibir"))
     st.markdown('<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:8px">'
                 + "".join(tarj) + "</div>", unsafe_allow_html=True)
 
@@ -3553,6 +3680,22 @@ def render_group_expenses(grupo: str):
     if n_over_p:
         st.warning(f":material/warning: **{n_over_p} más se saldrá(n) al ritmo actual** (aún dentro hoy): "
                    + ", ".join(f["nombre"] for f in filas if f["over_proj"] and not f["over"]))
+    # ⚠️ v343: dentro de presupuesto HOY, pero con lo ya pedido se pasa seguro. Antes
+    # esto solo se sabía cuando llegaba la factura, o sea cuando ya no se podía hacer nada.
+    _oc = [f["nombre"] for f in filas if f.get("over_comp")]
+    if _oc:
+        st.warning(f":material/shopping_cart: **{len(_oc)} se pasará(n) con el material ya "
+                   "pedido** (aún no está recibido): " + ", ".join(_oc))
+    # Órdenes que debían haber llegado: obra parada esperando material.
+    try:
+        from core import orders as _O
+        _atr = _O.atrasadas(grupo)
+    except Exception:
+        _atr = []
+    if _atr:
+        st.warning(":material/local_shipping: **" + str(len(_atr)) + " orden(es) de compra "
+                   "sin llegar en la fecha prometida:** "
+                   + " · ".join(f"{o.get('Proveedor','')} ({o['dias']} d)" for o in _atr[:6]))
 
     # ── Gasto por rubro (mano de obra + cada categoría de compra) ─────────
     # ⚠️ v310: se quitó el bloque de barras «Compras por categoría». Mostraba
@@ -3572,14 +3715,20 @@ def render_group_expenses(grupo: str):
     if con_pres:
         st.markdown("**Proyectos con presupuesto**")
         _gev = st.dataframe(pd.DataFrame([{
-            "Proyecto": f["nombre"], "Costo": f["total"], "Presupuesto": f["presupuesto"],
+            "Proyecto": f["nombre"], "Costo": f["total"],
+            # v343: la columna solo aparece si el grupo tiene algo pedido
+            **({"Comprometido": f.get("comprometido", 0.0)} if _comp_tot else {}),
+            "Presupuesto": f["presupuesto"],
             "% consumido": f["pct"], "Avance %": f["avance"],
             "Proyección": f["proyectado"] if f["proyectado"] is not None else "—",
-            "": ("sobre" if f["over"] else ("riesgo" if f["over_proj"] else "ok")),
+            "": ("sobre" if f["over"] else
+                 ("pedido" if f.get("over_comp") else
+                  ("riesgo" if f["over_proj"] else "ok"))),
         } for f in con_pres]), hide_index=True, use_container_width=True,
             on_select="rerun", selection_mode="single-row", key="ge_tbl")
         st.caption(":material/touch_app: Toca una fila y «Abrir» para ir a ese proyecto. **Proyección** = costo al "
-                   "terminar al ritmo actual. sobre = ya se pasó · riesgo = se pasará · ok = dentro.")
+                   "terminar al ritmo actual. sobre = ya se pasó · pedido = se pasará con "
+                   "el material ya encargado · riesgo = se pasará al ritmo actual · ok = dentro.")
         try:
             _grows = list(_gev.selection.rows)
         except Exception:

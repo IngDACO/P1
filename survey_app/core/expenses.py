@@ -244,16 +244,38 @@ def spend_curve(pid, grupo) -> dict:
 
 
 
-def project_cost(pid, grupo) -> dict:
-    """{compras, mano_obra, total, presupuesto, pct, over}."""
+def project_cost(pid, grupo, comprometido=None) -> dict:
+    """{compras, mano_obra, total, presupuesto, pct, over} + lo COMPROMETIDO (v343).
+
+    ⚠️ `total` NO cambia: sigue siendo lo GASTADO (compras con recibo + mano de obra),
+    que es lo que leen la conciliación, el P&L y todas las pantallas. Lo pedido y aún
+    no recibido se añade aparte (`comprometido` / `total_comp` / `over_comp`) para que
+    el sobrecosto se vea ANTES de que llegue la factura, no después.
+
+    `comprometido=` permite pasarlo ya calculado (las vistas de grupo lo sacan de una
+    sola pasada con `orders.comprometido_por_proyecto`).
+    """
     from core import projects as P
     compras = project_expenses(pid)["total"]
     mo = labor_cost(pid, grupo)
     total = round(compras + mo, 2)
     pres = _num(P.get_project(pid).get("Presupuesto"))
     pct = round(100 * total / pres) if pres > 0 else None
+    if comprometido is None:
+        try:
+            from core import orders as O
+            comprometido = O.comprometido(pid)
+        except Exception:
+            comprometido = 0.0
+    comp = round(_num(comprometido), 2)
+    total_comp = round(total + comp, 2)
     return {"compras": compras, "mano_obra": mo, "total": total,
-            "presupuesto": pres, "pct": pct, "over": bool(pres > 0 and total > pres)}
+            "presupuesto": pres, "pct": pct, "over": bool(pres > 0 and total > pres),
+            "comprometido": comp, "total_comp": total_comp,
+            "pct_comp": round(100 * total_comp / pres) if pres > 0 else None,
+            # ya está comprometido más de lo que queda: aún no se ha pasado, pero
+            # con lo que hay pedido se pasará seguro.
+            "over_comp": bool(pres > 0 and total_comp > pres and total <= pres)}
 
 
 @st.cache_data(ttl=120, show_spinner=False)
@@ -287,8 +309,15 @@ def group_expenses(grupo) -> dict:
     # real: los $1.500 del grupo eran de PRJ-0001, archivado → el KPI decía $0.
     # Archivar un proyecto NO des-gasta el dinero: ese costo sigue siendo del grupo.
     proys, por_cat, filas = P.list_projects(grupo=grupo, incluir_archivados=True), {}, []
+    # v343: UNA pasada por las órdenes para todo el grupo, en vez de una consulta por
+    # proyecto dentro del bucle (el patrón de `project_hours_bulk`).
+    try:
+        from core import orders as O
+        _comp = O.comprometido_por_proyecto(grupo)
+    except Exception:
+        _comp = {}
     for p in proys:
-        c  = project_cost(p.get("ID"), grupo)
+        c  = project_cost(p.get("ID"), grupo, comprometido=_comp.get(str(p.get("ID", "")), 0.0))
         av = _num(p.get("Avance"))
         proyectado = (round(c["total"] * 100.0 / av, 2)
                       if av > 0 and c["total"] > 0 else None)
@@ -296,6 +325,8 @@ def group_expenses(grupo) -> dict:
                       "compras": c["compras"], "mano_obra": c["mano_obra"],
                       "total": c["total"], "presupuesto": c["presupuesto"],
                       "pct": c["pct"], "over": c["over"],
+                      "comprometido": c["comprometido"], "total_comp": c["total_comp"],
+                      "over_comp": c["over_comp"],
                       "avance": av, "proyectado": proyectado,
                       # se saldra del presupuesto al ritmo actual (aunque hoy aun no)
                       "over_proj": bool(c["presupuesto"] > 0 and proyectado
