@@ -46,14 +46,9 @@ def _ws():
 
 @st.cache_data(ttl=120, show_spinner=False)
 def _records():
-    w, err = _ws()
-    if err or w is None:
-        return []
-    try:
-        return w.get_all_records(numericise_ignore=["all"])
-    except Exception as e:
-        logger.warning("rails: lectura falló: %s", e)
-        return []
+    """Registros de SHEET (por lote, v339)."""
+    from core import hojas          # perezoso: evita el ciclo con timeclock
+    return hojas.registros(RIELES_SHEET, RIELES_HEADERS) or []
 
 
 def _norm(ref) -> str:

@@ -91,16 +91,17 @@ def _get_groups_ws():
 # una 2ª sesión con datos vencidos.
 @st.cache_data(ttl=120, show_spinner=False)
 def _login_records_cached():
-    lws, err = _get_login_ws()
-    if err or lws is None:
-        return []
-    try:
-        return lws.get_all_records(numericise_ignore=["all"])
-    except Exception:
-        return []
+    """Registros de "Login" (por lote, v339)."""
+    from core import hojas          # perezoso: evita el ciclo con timeclock
+    return hojas.registros("Login", LOGIN_HEADERS) or []
 
 
 def _invalidate_login():
+    # ⚠️ v339: además de la caché propia hay que tirar el LOTE compartido
+    # (`hojas._lote`). Si no, tras escribir el dato seguiría saliendo del lote
+    # cacheado hasta 120 s y parecería que no se guardó.
+    from core import hojas
+    hojas.invalidar()
     try:
         _login_records_cached.clear()
     except Exception:
@@ -110,16 +111,17 @@ def _invalidate_login():
 # ── Gestión de grupos ────────────────────────────────────────
 @st.cache_data(ttl=120, show_spinner=False)
 def _group_records() -> list:
-    gws, err = _get_groups_ws()
-    if err or gws is None:
-        return []
-    try:
-        return gws.get_all_records(numericise_ignore=["all"])
-    except Exception:
-        return []
+    """Registros de "Grupos" (por lote, v339)."""
+    from core import hojas          # perezoso: evita el ciclo con timeclock
+    return hojas.registros("Grupos", GROUPS_HEADERS) or []
 
 
 def _invalidate_groups():
+    # ⚠️ v339: además de la caché propia hay que tirar el LOTE compartido
+    # (`hojas._lote`). Si no, tras escribir, el dato seguiría saliendo del lote
+    # cacheado hasta 120 s y parecería que no se guardó.
+    from core import hojas
+    hojas.invalidar()
     try:
         _group_records.clear()
     except Exception:

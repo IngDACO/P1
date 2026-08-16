@@ -102,32 +102,28 @@ def _ws_roster():
 
 @st.cache_data(ttl=120, show_spinner=False)
 def _trab_records() -> list:
-    w = _ws_trab()
-    if w is None:
-        return []
-    try:
-        return w.get_all_records(numericise_ignore=["all"])
-    except Exception:
-        return []
+    """Registros de TRABAJOS_SHEET (por lote, v339)."""
+    from core import hojas          # perezoso: evita el ciclo con timeclock
+    return hojas.registros(TRAB_SHEET, TRAB_HEADERS) or []
 
 
 @st.cache_data(ttl=120, show_spinner=False)
 def _roster_records() -> list:
-    w = _ws_roster()
-    if w is None:
-        return []
-    try:
-        return w.get_all_records(numericise_ignore=["all"])
-    except Exception:
-        return []
+    """Registros de ROSTER_SHEET (por lote, v339)."""
+    from core import hojas          # perezoso: evita el ciclo con timeclock
+    return hojas.registros(ROSTER_SHEET, ROSTER_HEADERS) or []
 
 
 def _invalidate():
-    for f in (_trab_records, _roster_records):
-        try:
-            f.clear()
-        except Exception:
-            pass
+    # ⚠️ v339: además de la caché propia hay que tirar el LOTE compartido
+    # (`hojas._lote`). Si no, tras escribir, el dato seguiría saliendo del lote
+    # cacheado hasta 120 s y parecería que no se guardó.
+    from core import hojas
+    hojas.invalidar()
+    try:
+        f.clear()
+    except Exception:
+        pass
 
 
 def _next_id(ws, prefijo) -> str:

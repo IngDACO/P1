@@ -53,17 +53,17 @@ def _ws():
 
 @st.cache_data(ttl=120, show_spinner=False)
 def _records() -> list:
-    w = _ws()
-    if w is None:
-        return []
-    try:
-        return w.get_all_records(numericise_ignore=["all"])
-    except Exception as e:
-        logger.warning("toolruns: lectura falló: %s", e)
-        return []
+    """Registros de SHEET (por lote, v339)."""
+    from core import hojas          # perezoso: evita el ciclo con timeclock
+    return hojas.registros(SHEET, HEADERS) or []
 
 
 def _invalidate():
+    # ⚠️ v339: además de la caché propia hay que tirar el LOTE compartido
+    # (`hojas._lote`). Si no, tras escribir, el dato seguiría saliendo del lote
+    # cacheado hasta 120 s y parecería que no se guardó.
+    from core import hojas
+    hojas.invalidar()
     try:
         _records.clear()
     except Exception:

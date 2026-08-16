@@ -359,18 +359,17 @@ def clock_out(nombre: str, grupo: str = "", tipo: str = TIPO_PROYECTO,
 
 @st.cache_data(ttl=120, show_spinner=False)
 def _cached_records() -> list:
-    """Filas del fichaje CACHEADAS (solo para lecturas de display: estado del reloj,
-    resumen de horas). Las rutas de ESCRITURA leen fresco. Se invalida al fichar."""
-    ws, err = _get_worksheet()
-    if err or ws is None:
-        return []
-    try:
-        return ws.get_all_records(numericise_ignore=['all'])
-    except Exception:
-        return []
+    """Filas del fichaje CACHEADAS (solo para lecturas de display: estado del reloj,"""
+    from core import hojas          # perezoso: evita el ciclo con timeclock
+    return hojas.registros("Sheet1", HEADERS) or []
 
 
 def _invalidate_records():
+    # ⚠️ v339: además de la caché propia hay que tirar el LOTE compartido
+    # (`hojas._lote`). Si no, tras escribir, el dato seguiría saliendo del lote
+    # cacheado hasta 120 s y parecería que no se guardó.
+    from core import hojas
+    hojas.invalidar()
     try:
         _cached_records.clear()
     except Exception:

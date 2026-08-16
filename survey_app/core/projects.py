@@ -137,36 +137,27 @@ _HEADERS_BY_TITLE = {
 @st.cache_data(ttl=120, show_spinner=False)
 def _records(title):
     """Registros de una hoja (cacheados). Solo lecturas de DISPLAY."""
-    w, err = _get_ws(title, _HEADERS_BY_TITLE.get(title, []))
-    if err or w is None:
-        return []
-    try:
-        return w.get_all_records(numericise_ignore=["all"])
-    except Exception as e:
-        logger.warning("projects: lectura de %s falló: %s", title, e)
-        return []
+    from core import hojas          # perezoso: evita el ciclo con timeclock
+    return hojas.registros(title, _HEADERS_BY_TITLE.get(title, [])) or []
 
 
 @st.cache_data(ttl=120, show_spinner=False)
 def _fichaje_records():
     """Registros del fichaje (cacheados) para sumar horas."""
-    ws, err = timeclock._get_worksheet()
-    if err or ws is None:
-        return []
-    try:
-        return ws.get_all_records(numericise_ignore=["all"])
-    except Exception as e:
-        logger.warning("projects: lectura de fichaje falló: %s", e)
-        return []
+    from core import hojas          # perezoso: evita el ciclo con timeclock
+    return hojas.registros("Sheet1", timeclock.HEADERS) or []
 
 
 def _invalidate():
-    """Limpia el caché de lecturas tras una escritura, para reflejar el cambio."""
-    for fn in (_records, _fichaje_records):
-        try:
-            fn.clear()
-        except Exception:
-            pass
+    # ⚠️ v339: además de la caché propia hay que tirar el LOTE compartido
+    # (`hojas._lote`). Si no, tras escribir, el dato seguiría saliendo del lote
+    # cacheado hasta 120 s y parecería que no se guardó.
+    from core import hojas
+    hojas.invalidar()
+    try:
+        fn.clear()
+    except Exception:
+        pass
 
 
 # ── Helpers de dominio ───────────────────────────────────────────
