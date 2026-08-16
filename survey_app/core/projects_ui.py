@@ -116,8 +116,11 @@ def _kpi_card(label, value, color=None):
     las ~20 tarjetas repartidas por la app hablen el mismo idioma visual. Firma
     intacta: `color` sigue tiñendo el valor y ahora también el borde de acento."""
     from core import theme
-    _acc = color or theme.AZUL
-    _val = f"color:{color};" if color else ""
+    _acc = color or theme.AZUL                    # borde: el color vivo, no es texto
+    # ⚠️ v328: el VALOR sí es texto, así que pasa por `texto_seguro`. Con AMBAR el
+    # importe salía a 2.85:1 sobre blanco.
+    _seg = theme.texto_seguro(color)
+    _val = f"color:{_seg};" if color else ""
     return (
         f'<div class="cpx-kpi" style="--cpx-accent:{_acc};min-width:104px;">'
         f'<div class="lbl">{theme._esc(label)}</div>'

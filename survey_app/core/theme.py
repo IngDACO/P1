@@ -37,6 +37,22 @@ PISTA = "#eef1f5"       # fondo de barra/pista
 BORDE = "#e3e8ef"
 FONDO_SUAVE = "#f4f7fb"
 
+
+# ── Un color de ACENTO no siempre sirve como color de TEXTO ──────────────
+# ⚠️ v328: `_kpi_card(label, valor, color)` tiñe con el mismo color el borde de
+# acento Y el valor. Pasarle AMBAR (#e67e22) daba un importe a **2.85:1** sobre
+# blanco — el KPI «Por facturar» de Rentabilidad. El acento vivo está bien en un
+# borde de 3 px (no es texto); como texto hay que oscurecerlo.
+# Se resuelve AQUÍ y no en cada llamada: hay ~20 tarjetas repartidas por la app y
+# la siguiente que alguien escriba tiene que salir accesible sin acordarse.
+_TEXTO_SEGURO = {AMBAR: AMBAR_TXT}
+
+
+def texto_seguro(color: str) -> str:
+    """El equivalente legible de un color de acento, para usarlo como TEXTO."""
+    return _TEXTO_SEGURO.get(color, color) if color else color
+
+
 # Paleta CATEGÓRICA (torta de rubros, series): arranca en el azul de marca y
 # alterna tonos distinguibles. Única fuente — no redefinir paletas por módulo.
 PALETA = ["#2e6da4", "#BA7517", "#1e8449", "#8e44ad", "#c0392b", "#16a085",
