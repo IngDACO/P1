@@ -4251,7 +4251,31 @@ Subir "Read requests per minute per user" de 60 → 300 en Cloud Console → She
 Cuotas. No reduce consumo, da colchón. Se decidió no depender de ella porque Google
 empezará a **facturar el exceso** más adelante en 2026.
 
-## Versiones desplegadas (v339 = actual)
+## ⚠️ REGLA: si algo se puede archivar, tiene que poder VOLVER (v340)
+Encontrado por el usuario al primer intento: **archivó un cliente y desapareció**.
+`set_activo(cid, False)` marca `Activo=NO` y las 5 llamadas a `list_clientes` usaban el
+default que los oculta — **sin casilla para verlos y sin botón para restaurar**. El dato
+seguía en la hoja; la app no tenía forma de enseñarlo.
+Es **exactamente** el fallo que v149 resolvió para los proyectos, aplicado a una entidad
+que nació después y a la que nadie se lo aplicó. Al buscarlo apareció **el mismo en los
+activos dados de baja** (`dar_de_baja` → `Activo=NO`).
+### Las tres piezas, siempre juntas
+1. La bandera existe en el modelo (`incluir_inactivos` / `incluir_baja` /
+   `incluir_archivados`) — esta parte **ya estaba** en los tres casos.
+2. La **interfaz ofrece verlos** (casilla) + dice **cuántos hay ocultos**.
+3. Hay **botón de volver** (Restaurar / Reactivar) en la ficha.
+Tener solo la (1) es peor que no tener nada: el dato existe pero es inalcanzable.
+### Guardián
+En `verif_v340.py`: por cada entidad con bandera de ocultar, su `_ui` tiene que
+mencionar la bandera **y** una vuelta. Hoy pasan clientes, inventario y proyectos.
+### ⚠️ Lo que esto dice del estado real
+La app tiene **70 funciones públicas que escriben**; a fecha de v340 se ha ejercitado
+**una** (`set_rate`). El usuario probó **una** escritura (crear+archivar un cliente) y
+salió un fallo. No es mala suerte: es que la superficie de escritura está sin recorrer.
+**Antes de decir que un rol "está listo", ejercitar sus escrituras, no solo sus
+pantallas.**
+
+## Versiones desplegadas (v340 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -4259,6 +4283,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v340 | ⚠️ **Archivar era un viaje sin vuelta.** El usuario archivó un cliente y desapareció: `Activo=NO` + las 5 llamadas usando el default que los oculta, sin casilla para verlos ni botón para restaurar. El dato seguía en la hoja, pero la app no podía enseñarlo. Es el fallo que v149 resolvió para proyectos y que nunca se aplicó a las entidades nacidas después — al buscarlo apareció **el mismo en los activos dados de baja**. Los dos con casilla «Ver también…», contador de ocultos y botón Restaurar/Reactivar |
 | v339 | **El techo de cuota de Sheets.** Medido: 15 de las 19 llamadas de una sesión eran `values/{hoja}`, una por hoja. Nuevo `core/hojas.py` las trae todas en UNA `values.batchGet` → sesión de **19 a 6 llamadas** y el recorrido por todas las secciones cuesta **0**; el lote es `cache_data`, o sea compartido por proceso. ⚠️ Tres trampas: un rango inexistente tumba el lote entero (se piden solo las hojas que existen), cada `_invalidate` debe tirar TAMBIÉN el lote (si no, «lo guardé y no sale») e import perezoso para no ciclar con `timeclock`. Las escrituras siguen leyendo frescas. Verificado idéntico fila a fila en las 19 hojas contra lectura fresca |
 | v338 | Fix de v337: la URL no se actualizaba en las 4 secciones **sin** sub-pestañas (Home, Fichaje, Inventario, Contactos), por un `session_state.get("")` que lanzaba y que mi propio `except` se tragaba. Parecía intermitente porque Finanzas y Proyectos sí funcionaban |
 | v337 | **Estado en la URL**: la dirección refleja sección · sub-pestaña · proyecto abierto, así que se puede mandar «mira esta pantalla». El slug se deriva del ID (que lleva emoji y no se toca), solo se lee en la primera pasada, solo se escribe si cambia, y no pisa el `?activo=` del QR. ⚠️ Valida contra las secciones **del rol**: una URL de otra sección no da acceso |
