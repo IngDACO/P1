@@ -137,10 +137,18 @@ def _rol() -> str:
         return ""
 
 
-@st.cache_data(show_spinner=False)
 def _version() -> str:
     """Versión desplegada, para el topbar. Mismo fichero y codificación que app.py
-    (`utf-8-sig` quita el BOM que PowerShell escribe en VERSION)."""
+    (`utf-8-sig` quita el BOM que PowerShell escribe en VERSION).
+
+    ⚠️ v331: llevaba `@st.cache_data` SIN ttl, así que el valor se congelaba durante
+    toda la vida del proceso. Streamlit Cloud recarga el código en caliente sin
+    reiniciar siempre, de modo que tras un deploy el topbar seguía anunciando la
+    versión ANTERIOR — visto en vivo: la app era v330 y la barra decía v324. Un
+    indicador de versión que miente es peor que no tenerlo, y este se usa a diario
+    para saber qué hay desplegado. Sin caché: es leer un fichero local de 5 bytes,
+    inapreciable al lado de cualquier llamada a Sheets.
+    """
     import os
     try:
         ruta = os.path.join(os.path.dirname(os.path.dirname(__file__)), "VERSION")
