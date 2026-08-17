@@ -152,8 +152,14 @@ def generar(grupo, desde, hasta, super_pct=0.0, ret_pct=0.0, creado_por="") -> d
     d_iso, h_iso = str(desde), str(hasta)
     horas = timeclock.horas_por_usuario_rango(grupo, desde, hasta)
     rates = auth.rate_map(grupo)
+    # ⚠️ v347: las ANULADAS no bloquean. Antes se contaban como existentes, así que
+    # **no había forma de reemitir el periodo de nadie**: anulabas la nómina mal hecha
+    # y al regenerar decía «omitidas: 1» y no creaba nada. Si se puede deshacer, tiene
+    # que poder rehacerse (el principio de v340 con lo archivado). La fila anulada se
+    # queda como rastro de lo que se corrigió; `list_nominas` la oculta por defecto y
+    # ni `resumen` ni el `costo_nomina` del P&L la cuentan, así que no se duplica nada.
     existentes = {(str(f.get("Usuario", "")), str(f.get("PeriodoDesde", "")), str(f.get("PeriodoHasta", "")))
-                  for f in list_nominas(grupo, incluir_anuladas=True)}
+                  for f in list_nominas(grupo)}
     rows, creadas, omitidas, sin_tarifa = [], 0, 0, []
     base_num = _max_num()
     for clave, info in sorted(horas.items()):

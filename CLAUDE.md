@@ -4465,7 +4465,40 @@ columnas crudas de la hoja; e `invoices._ws()` devuelve **`(worksheet, error)`**
 worksheet suelto (distinto de `orders`/`expenses`). Dos errores míos en una tanda, los
 dos por no mirar. **Regla v135, van cinco veces.**
 
-## Versiones desplegadas (v345 = actual)
+## Nóminas ejercitadas + la decisión de la tarifa 0 (v346)
+Última ruta de escritura sin recorrer. Método de v344/v345 (foto → ejercitar → verificar
+leyendo → devolver todo → segunda foto). **Rastro final: ninguno**; el P&L vuelve a
+$1.434,78 / $210,42.
+
+### La decisión que llevaba versiones pendiente
+`generar` **detectaba** la falta de tarifa y creaba la nómina **igual, con base $0**. No
+era hipotético: en la hoja real está **`NOM-0002`, 8,69 h de trabajo con colilla de $0**,
+emitida antes de que esa persona tuviera tarifa. Una colilla de $0 por trabajo hecho es
+un documento equivocado y se queda ahí. **Decisión del usuario: saltarlo y avisar.**
+- No se crea la fila; se devuelve el **nombre** (`sin_tarifa` pasa de contador a lista) y
+  la UI dice a quién y dónde arreglarlo.
+- ⚠️ **Es reversible por construcción**: como no dejó fila, el salto de duplicados no la
+  bloquea → al poner la tarifa y regenerar **el mismo periodo**, entra. Probado:
+  `{creadas:0, sin_tarifa:['ZZZ PRUEBA']}` → tarifa 50 → `{creadas:1}`, base 2 h×50=100,
+  retención 15 → neto 85, super 11,5 aparte.
+- Al resto del equipo no le afecta: su nómina se genera igual.
+- El aviso de la LISTA se queda (no se borra al cambiar el comportamiento): las colillas
+  de $0 anteriores siguen en la hoja y hay que poder verlas para anularlas y regenerarlas.
+
+### Lo que aguantó
+Salto de duplicados (`creadas 1` → `omitidas 1`) · **neto = base + devengos − deducciones
+con los APORTES sin descontar** (0+1000+200−180 = 1020, el super de 138 no resta) ·
+marcar pagada con fecha · colilla PDF de 1 página con todos los conceptos · anular la
+saca del resumen y del P&L.
+
+### Dos confirmaciones que salieron de regalo
+- **El reparto por medianoche de v164, en vivo**: mi turno de prueba cruzó las 00:00 y la
+  nómina lo repartió solo — 6,37 h el 17 + 1,63 h el 18 = 8,0 h exactas. Ese arreglo
+  nunca se había visto correr con datos reales.
+- **La retención de impuesto se calculó por primera vez** en esa hoja: las 5 nóminas
+  existentes solo llevaban el concepto de Superannuation.
+
+## Versiones desplegadas (v346 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -4473,6 +4506,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v346 | **Nóminas ejercitadas** (última ruta sin recorrer) y **decisión del usuario sobre la tarifa 0**: quien no tiene tarifa ya NO recibe una colilla de $0 — se salta, se le nombra y se dice dónde arreglarlo. ⚠️ Reversible por construcción: como no deja fila, al poner la tarifa y regenerar el mismo periodo entra sin duplicar (probado). Motivo con evidencia: en la hoja real está `NOM-0002`, 8,69 h de trabajo emitidas en $0. Aguantaron el salto de duplicados, el neto (aportes que no descuentan), marcar pagada, la colilla PDF y anular. De regalo, dos confirmaciones en vivo: el **reparto por medianoche de v164** (6,37 + 1,63 = 8,0 h) y la **retención de impuesto**, que nunca se había calculado en esa hoja |
 | v345 | **Ejercitado el fichaje y las facturas** (lo que v344 dejó aparte). ⚠️ Hallazgo: `estado_cobro` miraba `parcial` ANTES que `vencida`, así que **un abono de $1 sacaba a la factura de «vencida» para siempre** — y el indicador rojo del resumen, el P&L y el estado de cuenta del cliente solo cuentan las `vencida`, o sea que ese saldo no lo veía nadie (el caso clásico: el cliente paga un anticipo y desaparece). Ahora vencida gana a parcial; los tres consumidores ya sumaban `Total − Cobrado`. Lo demás aguantó contra datos reales: jornada que se abre sola, cambio de proyecto, cierre con hora explícita (3,0 h), `sin_asignar_indet`, GST, cobro parcial, tope al cobrar de más, PDF y anulación. ⚠️ Y un falso hueco descartado a tiempo: la factura sin vencimiento solo era posible saltándose la UI |
 | v344 | **Ejercitar las escrituras contra la hoja real destapó 4 fallos que ningún test vio.** ⚠️ El peor es mío y llevaba 4 versiones vivo: `projects._invalidate` llamaba a `fn.clear()` con `fn` inexistente (al reescribirlo en v339 quité el bucle y dejé el cuerpo), el `except Exception: pass` se tragaba el NameError y **la caché no se limpiaba nunca** → tras guardar un proyecto la pantalla enseñaba el valor viejo hasta 120 s. Igual en `roster`. + las cachés DERIVADAS (`group_expenses`, `over_budget`, `gaps_by_group`, `projections_by_group`) tampoco se limpiaban. ⚠️ Y la auditoría de v342 vigilaba `MargenPct`, que **no existe** —la columna es `MargenMO`—, así que el margen era el único campo sin rastro; encima `update_project` anotaba cambios que descartaba en silencio y devolvía «Proyecto actualizado.» igual. Guardián nuevo: ningún CAMPO_CLAVE sin columna real, ninguna invalidación con nombres libres, probado contra el código roto |
 | v343 | **Órdenes de compra: el dinero COMPROMETIDO deja de ser invisible.** Entre que se pide el material y llega la factura, el proyecto salía dentro de presupuesto con el dinero ya comprometido — el sobrecosto se descubría cuando ya no se podía hacer nada. Nuevo `core/orders.py` (hoja `Ordenes`): al recibir una orden se crea sola su fila en `Gastos`, así que **el costo real sigue teniendo UNA fuente** (v310). ⚠️ `project_cost.total` NO se mueve (probado contra la fórmula anterior en 6 casos); lo comprometido va aparte, con el aviso **«vas dentro, pero con lo pedido te pasas»**. ⚠️ Se marca recibida ANTES de crear el gasto: al revés, un fallo a mitad daría **dos gastos por la misma compra**; así queda un hueco VISIBLE (`sin_gasto`) con botón para completarlo. + órdenes atrasadas (obra parada esperando material) |
