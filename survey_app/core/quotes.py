@@ -341,3 +341,121 @@ def nueva_version(cid, creado_por="") -> tuple:
         _set(w, row, {"Version": int(_num(c.get("Version"), 1)) + 1})
         _invalidate()
     return True, nuevo
+
+
+# ── Fase 3: ganarla y comparar contra lo real (v354) ─────────────
+def aceptar_y_crear_proyecto(cid, nombre="", tipo="Instalación", fecha_inicio=None,
+                             ns=0, ubicacion="", creado_por="") -> tuple:
+    """Acepta la cotización y da de alta el proyecto con lo que ya se pactó.
+
+    ⚠️ **El presupuesto del proyecto es el COSTO cotizado, no el precio de venta.**
+    `expenses.project_cost` compara `Presupuesto` contra compras + mano de obra, o sea
+    contra el costo. Si aquí se pusiera el precio al cliente, la alerta de «sobre
+    presupuesto» solo saltaría cuando ya estuvieras perdiendo dinero, en vez de cuando
+    te estás comiendo el margen — que es cuando aún se puede reaccionar (la lección de
+    v144 con la proyección).
+
+    ⚠️ **Idempotente**: si la cotización ya generó un proyecto, no crea otro. Un doble
+    clic no puede duplicar una obra.
+    """
+    c = get_cotizacion(cid)
+    if not c:
+        return False, "Cotización no encontrada."
+    if str(c.get("ProyectoID", "")).strip():
+        return False, (f"Esta cotización ya generó el proyecto {c.get('ProyectoID')}.")
+    lineas = lineas_de(c)
+    if not lineas:
+        return False, "La cotización no tiene líneas."
+    t = totales(lineas, _num(c.get("ImpuestoPct")))
+
+    from core import projects as P
+    from core import schedule as S
+    ini = fecha_inicio or clock.today(c.get("Grupo"))
+    acts, fin = None, ""
+    # Solo la instalación tiene cronograma estándar (regla v306): a un delivery o un
+    # ripout se le inventarían 11 actividades y ensuciarían avance, SPI y el radar.
+    if str(tipo) == "Instalación" and _num(ns) > 0:
+        sch = S.build_schedule(int(_num(ns)), ini, {})
+        acts, fin = sch["activities"], sch["fecha_fin"].isoformat()
+
+    ok, res = P.create_project(
+        c.get("Grupo"), str(nombre).strip() or f"{c.get('ClienteNombre','')} — Nº{c.get('Numero','')}",
+        cliente=str(c.get("ClienteNombre", "")), cliente_id=str(c.get("ClienteID", "")),
+        ubicacion=str(ubicacion), ns=int(_num(ns)), fecha_inicio=ini.isoformat(),
+        fecha_fin_est=fin, activities=acts,
+        presupuesto=str(t["costo"]),          # ⚠️ el COSTO (ver arriba)
+        margen_mo=str(t["margen_pct"]),       # decisión del usuario: el de la cotización manda
+        tipo=str(tipo), creado_por=creado_por)
+    if not ok:
+        return False, f"No se pudo crear el proyecto: {res}"
+
+    w = _ws()
+    row, _r = _fila(w, cid)
+    if row is not None:
+        _set(w, row, {"Estado": ACEPTADA, "ProyectoID": res})
+        _invalidate()
+    else:
+        # el proyecto ya existe: decirlo, no fingir que no pasó nada
+        return False, (f"Se creó el proyecto {res}, pero no se pudo enlazar con la "
+                       "cotización. Enlázalo a mano.")
+    try:
+        from core import auditoria
+        auditoria.registrar("cotizacion", cid,
+                            {"Estado": [estado_de(c), ACEPTADA], "ProyectoID": ["", res]},
+                            grupo=str(c.get("Grupo", "")))
+    except Exception:
+        pass
+    return True, res
+
+
+def comparacion(cid) -> dict:
+    """Cotizado contra real. Lo que convierte el cotizador en herramienta de gestión.
+
+    Devuelve {} si la cotización aún no generó proyecto: sin obra no hay con qué
+    comparar, y devolver ceros sería fingir un dato (la trampa de v320).
+    """
+    c = get_cotizacion(cid)
+    pid = str((c or {}).get("ProyectoID", "")).strip()
+    if not pid:
+        return {}
+    grupo = str(c.get("Grupo", ""))
+    t = totales(lineas_de(c), _num(c.get("ImpuestoPct")))
+    from core import expenses as E
+    from core import projects as P
+    try:
+        real = E.project_cost(pid, grupo)
+        prj = P.get_project(pid) or {}
+        horas_real = P.project_hours(str(prj.get("Nombre", "")), grupo, pid=pid)
+    except Exception as e:
+        logger.warning("quotes.comparacion(%s): %s", cid, e)
+        return {}
+
+    def _dif(cot, rl):
+        return {"cotizado": round(cot, 2), "real": round(rl, 2),
+                "dif": round(rl - cot, 2),
+                # ⚠️ None, no 0: sin base no hay porcentaje que valga (v341)
+                "pct": round(100.0 * (rl - cot) / cot, 1) if abs(cot) > 0.005 else None}
+
+    av = _num(prj.get("Avance"))
+    # ⚠️ A mitad de obra, `ingreso − costo` NO es la ganancia: es lo que todavía no has
+    # gastado. Con el proyecto al 0% y $900 de costo daba $3.499 «de ganancia» contra
+    # $893 cotizados, en verde — un número cierto que cuenta una historia falsa (la
+    # familia de v320 y v324). Lo que sí es accionable es la PROYECCIÓN al ritmo
+    # actual, igual que `expenses.cost_projection` hace con el presupuesto (v144).
+    costo_proy = round(real["total"] * 100.0 / av, 2) if av > 0 and real["total"] > 0 else None
+    gan_proy = round(t["subtotal"] - costo_proy, 2) if costo_proy is not None else None
+    return {
+        "proyecto_id": pid, "proyecto": str(prj.get("Nombre", "")),
+        "avance": av,
+        "terminado": av >= 100,
+        "horas": _dif(t["horas"], horas_real),
+        "costo": _dif(t["costo"], real["total"]),
+        # el ingreso es fijo: es lo que el cliente aceptó pagar
+        "ingreso": t["subtotal"],
+        "ganancia_cotizada": t["ganancia"],
+        # ⚠️ None mientras no haya avance o costo: sin base, proyectar es inventar.
+        "costo_proyectado": costo_proy,
+        "ganancia_proyectada": gan_proy,
+        # solo tiene sentido llamarla «real» cuando la obra terminó
+        "ganancia_real": round(t["subtotal"] - real["total"], 2) if av >= 100 else None,
+    }

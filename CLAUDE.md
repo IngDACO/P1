@@ -4729,7 +4729,53 @@ lista. Ahora comprueba las dos. Verificado en vivo: cambiar el precio deja rastr
 ⚠️ El grupo tiene **margen 0% e impuesto 0%** en `Grupos`: hasta ponerlos, toda
 cotización saldrá al costo y sin GST.
 
-## Versiones desplegadas (v352 = actual)
+## COTIZACIONES — fase 2: armar el precio (v353)
+`core/quotes.py` + `core/quotes_ui.py` + `core/quote_pdf.py`, hoja `Cotizaciones`.
+Estructuralmente hermana de `invoices` (líneas en JSON, totales con impuesto, PDF); lo
+que cambia es que aquí el precio se **construye** (costo del catálogo + margen) en vez de
+teclearse. Sub-pestaña **Finanzas · 📄 Cotizaciones**.
+
+### Las tres reglas del documento
+1. **La línea congela su precio.** Guarda `costo_unit`, `margen_pct` y `precio_total` del
+   momento de cotizar, NO una referencia al catálogo. Probado: se sube el costo del riel
+   de 185,50 a 250 y la cotización enviada no se mueve. `recalcular()` reaplica el margen
+   sobre el costo **ya congelado**, nunca vuelve al catálogo.
+2. **Enviada = documento.** En `borrador` se editan las líneas; a partir de `enviada` no,
+   porque el cliente ya la tiene en la mano — se saca una **versión nueva** y la anterior
+   se conserva.
+3. **`vencida` se DERIVA** de la fecha de validez, no se guarda (igual que
+   `invoices.estado_cobro`): un estado calculado no puede quedarse desactualizado.
+
+### ⚠️ El PDF no filtra tus costos
+El cliente ve concepto, cantidad y precio. **Nunca** el costo ni el margen. Verificado
+extrayendo el texto del PDF: los 5 valores sensibles (costo unitario, los dos márgenes y
+los dos costos de línea) no aparecen; el precio con margen sí.
+
+### ⚠️ El fallo que cazó la prueba: la hoja no estaba en el LOTE
+`crear` devolvió `COT-0001` y acto seguido `get_cotizacion` devolvía `{}`. Causa: olvidé
+`Cotizaciones` en `hojas.HOJAS_LECTURA`. Y como el lector va **sin cabeceras** (para no
+crear la hoja al leer, regla v145), `registros()` devuelve `None` → el módulo lee
+**vacío para siempre, sin ningún error**. Es peor que la llamada suelta que documentaba
+la regla de v339: aquello costaba cuota, esto es un silencio.
+→ **Guardián nuevo**: todo módulo con `SHEET = "X"` que lea con `hojas.registros(SHEET)`
+sin cabeceras debe tener `X` en `HOJAS_LECTURA`. Hoy pasan los 4 que usan ese patrón
+(auditoria, catalogo, orders, quotes).
+
+### Detalles que ya nacen bien
+`resumen()` devuelve `conversion=None` —no 0%— cuando aún no hay cotizaciones decididas
+(la trampa de v320 con «sin asignar»); el margen por defecto del grupo precarga cada
+línea; `_ids_frescos` lee sin caché (v323); el cerrojo de aislamiento (v351) en la ficha;
+y los cambios de estado quedan en `auditoria`.
+
+**Pendiente — fase 3:** aceptar → crea el proyecto con presupuesto, cliente y margen; y
+el bloque **«cotizado vs real»** (las horas ya viajan en cada línea para eso).
+
+### Configuración del grupo puesta en producción (17/08/2026)
+`MargenDefault = 20%` y `ImpuestoDefault = 10%` (GST de Australia; el usuario confirmó).
+⚠️ Efecto colateral querido: los proyectos SIN margen propio pasan a heredar 20%, así que
+Rentabilidad deja de mostrar ganancia estimada $0.
+
+## Versiones desplegadas (v353 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -4737,6 +4783,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v353 | **Cotizaciones, fase 2**: armar el precio desde el catálogo con **margen por línea**, estados (borrador→enviada→aceptada/rechazada, con `vencida` derivada de la validez), versiones y **PDF formal**. La línea congela su precio (subir el catálogo no mueve lo ya enviado) y una cotización enviada no se edita: se saca versión nueva. ⚠️ Verificado que el PDF **no filtra costos ni márgenes**. ⚠️ La prueba cazó que olvidé la hoja en `hojas.HOJAS_LECTURA`: como el lector va sin cabeceras, el módulo leía **vacío para siempre sin ningún error** — guardián nuevo para ese patrón. + margen 20% y GST 10% configurados en el grupo |
 | v352 | **Cotizaciones, fase 1: el catálogo.** `core/catalogo.py` + pantalla en Finanzas · 📚 Catálogo: productos (costo × cantidad) y servicios (**horas × tarifa**, para poder comparar luego contra lo fichado). `costo_de()` es la fórmula única que usarán cotización, PDF y la comparación. No deja crear artículos sin costo (fallo de las colillas de $0 de v346), desactivar con vuelta (v340), homónimos por ID (v306). ⚠️ La prueba cazó que **el precio no se auditaba**: `CostoUnit` no estaba en `CAMPOS_CLAVE` — el mismo fallo que `MargenPct` en v344, y el guardián no lo vio porque solo miraba una dirección; ahora mira las dos |
 | v351 | ⚠️ **Aislamiento entre empresas cliente.** El aislamiento no lo garantizaba el código sino que la interfaz nunca te ofreciera el ID de otro: **ninguna vista de detalle comprobaba el grupo**, y `_detalle_proyecto` lo ADOPTABA del proyecto → con los deep-links de v337 bastaba editar `?p=` para abrir el detalle completo de otro cliente (costos, horas, personal, archivos). Latente hoy porque solo hay un grupo real. Nuevo `core/tenant.py` (una sola definición, módulo hoja) aplicado a las 4 vistas por ID global: proyecto, factura, nómina y activo. El propietario sigue viendo todo; el mensaje no revela de qué empresa es el ID. Decisión del usuario: **cerrojo ahora, un libro por cliente cuando entre el primer cliente real** |
 | v350 | **Inventario, credenciales y pre-start ejercitados** — el inventario estaba virgen (0 activos, la hoja `MovimientosActivo` ni existía). ⚠️ Un fallo: **`traslado` guardaba el ID crudo en el historial** mientras `salida` guardaba el nombre resuelto, así que el mismo sitio aparecía como «proyecto: PRJ-0005» al llegar y «proyecto: prueba2» al salir (v306 se aplicó a una función y no a la otra). Aguantaron depreciación, QR, los 4 movimientos, baja+reactivación, los 4 estados de credencial, `compliance`, y el pre-start con su PDF. Tres falsas alarmas mías comprobadas antes de tocar (depreciación de 2 años, `APP_URL` que la UI ya avisa, y las categorías que viven en el código). NO ejercitados a propósito: `notify_expiring` y `near_miss=YES`, que escriben a personas reales |

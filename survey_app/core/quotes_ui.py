@@ -6,6 +6,7 @@ import pandas as pd
 import streamlit as st
 
 from core import catalogo as CAT
+from core import clock
 from core import clientes as C
 from core import quotes as Q
 from core import tenant
@@ -297,6 +298,99 @@ def _detalle(grupo, cid):
     except Exception as e:
         st.warning(f":material/warning: No se pudo generar el PDF: {e}")
 
+    # ── Fase 3: de cotización ganada a obra ──────────────────────
     if est == Q.ACEPTADA and not str(c.get("ProyectoID", "")).strip():
-        st.info(":material/construction: Aceptada. En la próxima versión, desde aquí se "
-                "creará el proyecto con este presupuesto y margen.")
+        _crear_proyecto(grupo, c, t)
+    elif str(c.get("ProyectoID", "")).strip():
+        _comparacion(cid, c)
+
+
+def _crear_proyecto(grupo, c, t):
+    """Aceptada y sin obra todavía: darla de alta con lo ya pactado."""
+    st.markdown("---")
+    st.markdown("### :material/construction: Convertirla en proyecto")
+    st.caption("Nace con el cliente, el presupuesto y el margen que acabas de cotizar. "
+               "Desde ahí sigue el flujo de siempre: costos, horas y factura.")
+    with st.form("cot_prj_" + str(c.get("ID"))):
+        c1, c2 = st.columns(2)
+        nombre = c1.text_input("Nombre del proyecto",
+                               value=str(c.get("ClienteNombre", "")) + " — Nº"
+                                     + str(c.get("Numero", "")))
+        tipo = c2.selectbox("Tipo", ["Instalación", "Delivery", "Ripout", "Otro"])
+        c3, c4 = st.columns(2)
+        ini = c3.date_input("Fecha de inicio", value=clock.today(grupo))
+        ns = c4.number_input("Paradas (NS)", min_value=0, step=1, value=0,
+                             help="Solo la instalación genera el cronograma estándar; "
+                                  "con NS 0 el proyecto nace sin actividades.")
+        ubic = st.text_input("Ubicación (opcional)")
+        st.info(":material/savings: Presupuesto del proyecto: **"
+                + T.dinero(t["costo"], 0) + "** — es tu **costo** cotizado, no el precio "
+                "al cliente (" + T.dinero(t["subtotal"], 0) + "). Así la alerta de "
+                "sobre-presupuesto salta cuando te comes el margen, no cuando ya "
+                "estás perdiendo dinero.")
+        if st.form_submit_button(":material/add_circle: Crear el proyecto",
+                                 type="primary", use_container_width=True):
+            ok, msg = Q.aceptar_y_crear_proyecto(
+                c.get("ID"), nombre=nombre, tipo=tipo, fecha_inicio=ini,
+                ns=ns, ubicacion=ubic, creado_por=_creado_por())
+            if ok:
+                st.success("Proyecto " + str(msg) + " creado desde esta cotización.")
+                st.rerun()
+            else:
+                st.error(msg)
+
+
+def _comparacion(cid, c):
+    """Cotizado contra real: lo que hace que cotizar sirva para gestionar."""
+    st.markdown("---")
+    comp = Q.comparacion(cid)
+    if not comp:
+        st.caption("Enlazada al proyecto " + str(c.get("ProyectoID")) + ".")
+        return
+    st.markdown("### :material/compare_arrows: Cotizado vs. real — " + comp["proyecto"])
+
+    def _tarj(etq, d, unidad=""):
+        _col = T.VERDE if d["dif"] <= 0 else T.ROJO
+        _sig = "+" if d["dif"] > 0 else ""
+        _val = (("%g " % d["real"]) + unidad).strip() if unidad else T.dinero(d["real"], 0)
+        _cot = (("%g " % d["cotizado"]) + unidad).strip() if unidad else T.dinero(d["cotizado"], 0)
+        _pct = (" (" + _sig + ("%.0f" % d["pct"]) + "%)") if d["pct"] is not None else ""
+        return (etq, _val, "cotizaste " + _cot + _pct, _col)
+
+    # ⚠️ La GANANCIA no se compara «real vs cotizada» a mitad de obra: hasta terminar,
+    # lo no gastado parece ganancia. Se muestra la PROYECCIÓN al ritmo actual (v144) y
+    # solo se llama «real» cuando el proyecto está al 100%.
+    _gc = comp["ganancia_cotizada"]
+    if comp["terminado"]:
+        _g, _etq, _pie = comp["ganancia_real"], "Ganancia real", "obra terminada"
+    elif comp["ganancia_proyectada"] is not None:
+        _g, _etq = comp["ganancia_proyectada"], "Ganancia proyectada"
+        _pie = "al ritmo actual · cotizaste " + T.dinero(_gc, 0)
+    else:
+        _g, _etq, _pie = None, "Ganancia proyectada", "aún no hay avance ni costo"
+    _cg = T.VERDE if (_g is not None and _g >= _gc) else (T.ROJO if _g is not None else None)
+    T.kpi_row([
+        _tarj("Horas", comp["horas"], "h"),
+        _tarj("Costo", comp["costo"]),
+        ("Ingreso", T.dinero(comp["ingreso"], 0), "lo que aceptó el cliente"),
+        (_etq, T.dinero(_g, 0) if _g is not None else "—", _pie, _cg),
+    ])
+    if comp["costo_proyectado"] is not None:
+        st.caption(":material/trending_up: Al ritmo actual la obra costará "
+                   + T.dinero(comp["costo_proyectado"], 0) + " contra los "
+                   + T.dinero(comp["costo"]["cotizado"], 0) + " cotizados.")
+    _av = comp["avance"]
+    if comp["costo"]["dif"] > 0 and _av < 100:
+        st.warning(":material/warning: Llevas **" + T.dinero(comp["costo"]["dif"], 0)
+                   + " por encima** de lo cotizado con el proyecto al **"
+                   + ("%.0f" % _av) + "%**. A este ritmo la ganancia final será menor "
+                   "que la cotizada.")
+    elif comp["costo"]["dif"] <= 0 and _av > 0:
+        st.success(":material/check_circle: Vas **"
+                   + T.dinero(abs(comp["costo"]["dif"]), 0) + " por debajo** de lo "
+                   "cotizado con el proyecto al " + ("%.0f" % _av) + "%.")
+    if st.button(":material/folder: Abrir " + comp["proyecto"], key="cot_prj_open_" + str(cid)):
+        from core import home_ui
+        st.session_state["_prjsel_pending"] = comp["proyecto_id"]
+        st.session_state["_admin_open_proj"] = comp["proyecto_id"]
+        home_ui.navegar("proyectos", "📊 Proyectos")
