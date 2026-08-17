@@ -4691,7 +4691,45 @@ cliente es media hora; con cinco, no.
   todos los grupos de una vez (`owner_digest`, `list_projects()` sin filtro) y pasarían a
   abrir N libros.
 
-## Versiones desplegadas (v351 = actual)
+## COTIZACIONES — fase 1: el catálogo (v352)
+Funcionalidad nueva pedida por el usuario. La app cubría **obra → costo → factura**; el
+dinero empieza antes, en la cotización. Diseño acordado con él antes de escribir nada.
+
+### Decisiones del usuario (firmes)
+1. **Aceptar una cotización CREA el proyecto** con presupuesto, cliente y margen puestos.
+2. **La mano de obra se cotiza en HORAS estimadas × tarifa**, no a precio cerrado — así
+   se puede contrastar lo cotizado con lo fichado («cotizamos 120 h, llevamos 160»).
+3. **El margen de la cotización manda** y rellena el `MargenMO` del proyecto al ganarla:
+   una sola fuente de verdad, en vez de dos números que digan cosas distintas.
+
+### `core/catalogo.py` + `core/catalogo_ui.py` (hoja `Catalogo`)
+`ID(CAT-#####) · Tipo(producto|servicio) · Nombre · Unidad · Categoria · CostoUnit ·
+HorasEst · TarifaHora · Activo`. El catálogo guarda el **COSTO**; el margen no vive aquí
+—se pone línea a línea al cotizar, porque a un cliente le cobras 20% y a otro 35%.
+- **`costo_de()` es LA fórmula única** (producto = `CostoUnit × cant`; servicio =
+  `HorasEst × TarifaHora × cant`). La cotización, el PDF y la comparación contra lo real
+  la llamarán a ella: cinco copias divergentes es lo que causó los fallos de v323.
+- `horas_de()` → las horas que aporta cada línea, base del «cotizado vs real».
+- **No se puede crear un artículo sin costo**: saldría en $0 y nadie lo notaría hasta ver
+  el total (el fallo de las colillas de $0 de v346). Un servicio exige horas Y tarifa.
+- Desactivar **con vuelta** (v340) y homónimos desempatados por ID (v306/v319/v348).
+- Sub-pestaña **Finanzas · 📚 Catálogo**; hoja añadida al lote (v339) y cerrojo de
+  aislamiento (v351) en la ficha.
+
+### ⚠️ El fallo que cazó la prueba: el precio no se auditaba
+Se cambió un costo de 185,50 a 199,90 y **el histórico quedó vacío**: el enganche a
+`auditoria` estaba, pero `CostoUnit`/`HorasEst`/`TarifaHora` no estaban en
+`CAMPOS_CLAVE`. **Es exactamente el fallo de `MargenPct` en v344** — el nombre del campo,
+otra vez. Y el guardián de v344 no lo vio porque **solo miraba una dirección**: que cada
+CAMPO_CLAVE existiera como columna real, no que los campos de dinero estuvieran en la
+lista. Ahora comprueba las dos. Verificado en vivo: cambiar el precio deja rastro.
+
+**Pendiente:** fase 2 (la cotización: selección, margen por línea, estados, PDF) y fase 3
+(aceptar → crea el proyecto, y el bloque «cotizado vs real»).
+⚠️ El grupo tiene **margen 0% e impuesto 0%** en `Grupos`: hasta ponerlos, toda
+cotización saldrá al costo y sin GST.
+
+## Versiones desplegadas (v352 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -4699,6 +4737,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v352 | **Cotizaciones, fase 1: el catálogo.** `core/catalogo.py` + pantalla en Finanzas · 📚 Catálogo: productos (costo × cantidad) y servicios (**horas × tarifa**, para poder comparar luego contra lo fichado). `costo_de()` es la fórmula única que usarán cotización, PDF y la comparación. No deja crear artículos sin costo (fallo de las colillas de $0 de v346), desactivar con vuelta (v340), homónimos por ID (v306). ⚠️ La prueba cazó que **el precio no se auditaba**: `CostoUnit` no estaba en `CAMPOS_CLAVE` — el mismo fallo que `MargenPct` en v344, y el guardián no lo vio porque solo miraba una dirección; ahora mira las dos |
 | v351 | ⚠️ **Aislamiento entre empresas cliente.** El aislamiento no lo garantizaba el código sino que la interfaz nunca te ofreciera el ID de otro: **ninguna vista de detalle comprobaba el grupo**, y `_detalle_proyecto` lo ADOPTABA del proyecto → con los deep-links de v337 bastaba editar `?p=` para abrir el detalle completo de otro cliente (costos, horas, personal, archivos). Latente hoy porque solo hay un grupo real. Nuevo `core/tenant.py` (una sola definición, módulo hoja) aplicado a las 4 vistas por ID global: proyecto, factura, nómina y activo. El propietario sigue viendo todo; el mensaje no revela de qué empresa es el ID. Decisión del usuario: **cerrojo ahora, un libro por cliente cuando entre el primer cliente real** |
 | v350 | **Inventario, credenciales y pre-start ejercitados** — el inventario estaba virgen (0 activos, la hoja `MovimientosActivo` ni existía). ⚠️ Un fallo: **`traslado` guardaba el ID crudo en el historial** mientras `salida` guardaba el nombre resuelto, así que el mismo sitio aparecía como «proyecto: PRJ-0005» al llegar y «proyecto: prueba2» al salir (v306 se aplicó a una función y no a la otra). Aguantaron depreciación, QR, los 4 movimientos, baja+reactivación, los 4 estados de credencial, `compliance`, y el pre-start con su PDF. Tres falsas alarmas mías comprobadas antes de tocar (depreciación de 2 años, `APP_URL` que la UI ya avisa, y las categorías que viven en el código). NO ejercitados a propósito: `notify_expiring` y `near_miss=YES`, que escriben a personas reales |
 | v349 | ⚠️ **El LaTeX de v309 volvió en la pantalla de Costos** (`Llevas **0** de 10,000`, con los `$` comidos y los `**` literales). El guardián de v309 solo miraba los argumentos LITERALES de `st.*`, y aquí la cadena se arma antes en una variable → **ciego**. Chequeo nuevo por AST: cualquier f-string del repo con 2+ `$` sin escapar. Salieron 4 — una es el hash PBKDF2 (falso positivo, exento) y **las otras 3 están en Costos**, incluida la que yo escribí en v343. Dos de ellas estaban latentes (solo salen con costos y presupuesto). Lección: cuando el mismo fallo reaparece, preguntar por qué el chequeo no lo vio |

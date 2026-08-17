@@ -50,7 +50,7 @@ HOJAS_LECTURA = (
     "Nominas", "Activos", "InvCategorias", "MovimientosActivo",
     "Roster", "Trabajos", "PreStarts", "Calculos", "Rieles",
     "Auditoria", "Ordenes",
-    "Catalogo",      # v352 — cotizaciones     # v342 — si no entra aquí, sería una llamada suelta
+    "Catalogo", "Cotizaciones",   # v352/v353 — cotizaciones     # v342 — si no entra aquí, sería una llamada suelta
 )
 
 

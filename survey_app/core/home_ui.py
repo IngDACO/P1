@@ -55,6 +55,7 @@ _SUBSECCIONES = {
         ("👥 Nóminas", ":material/payments: Nóminas"),
         ("⏱ Horas", ":material/schedule: Horas"),
         ("📈 Rentabilidad", ":material/trending_up: Rentabilidad"),
+        ("📄 Cotizaciones", ":material/request_quote: Cotizaciones"),
         ("📚 Catálogo", ":material/sell: Catálogo")]),
     "herramientas": ("adm_herr_sub", [
         ("🧰 Inicio", ":material/apps: Inicio"),
@@ -797,6 +798,9 @@ def _seccion_finanzas(grupo):
         render_nominas(grupo)
     elif sub == "📈 Rentabilidad":
         PU.render_group_profitability(grupo)
+    elif sub == "📄 Cotizaciones":
+        from core.quotes_ui import render_cotizaciones
+        render_cotizaciones(grupo)
     elif sub == "📚 Catálogo":
         from core.catalogo_ui import render_catalogo
         render_catalogo(grupo)
