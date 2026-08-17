@@ -152,12 +152,23 @@ def _invalidate():
     # ⚠️ v339: además de la caché propia hay que tirar el LOTE compartido
     # (`hojas._lote`). Si no, tras escribir, el dato seguiría saliendo del lote
     # cacheado hasta 120 s y parecería que no se guardó.
+    #
+    # ⚠️ v344 — REGRESIÓN MÍA DE v339, viva 4 versiones: al reescribir esto quité el
+    # bucle `for fn in (...)` y dejé `fn.clear()`, un nombre que ya no existía. El
+    # `except Exception` de abajo se tragaba el NameError, así que **estas dos cachés
+    # NO se limpiaban nunca** y tras guardar un proyecto la pantalla podía enseñar el
+    # valor viejo hasta 120 s. No lo vio ningún test: solo salió al ejercitar la
+    # escritura contra la hoja real y ver un «antes» rancio en la auditoría.
     from core import hojas
     hojas.invalidar()
-    try:
-        fn.clear()
-    except Exception:
-        pass
+    # Y las DERIVADAS (v344): `gaps_by_group`/`projections_by_group` cachean el
+    # retraso y la fecha proyectada de cada obra; sin limpiarlas, tras tocar las
+    # actividades el retraso y el «en riesgo» seguían con el valor viejo.
+    for fn in (_records, _fichaje_records, gaps_by_group, projections_by_group):
+        try:
+            fn.clear()
+        except Exception as e:                 # deja rastro (v323): si falla, se sabe
+            logger.warning("projects._invalidate: no se pudo limpiar %s: %s", fn, e)
 
 
 # ── Helpers de dominio ───────────────────────────────────────────
@@ -527,9 +538,21 @@ def update_project(pid: str, fields: dict) -> tuple:
         return False, "Proyecto no encontrado."
     # v342: el ANTES se captura aquí, antes de escribir. Sale de la caché (0 llamadas).
     _antes = dict(get_project(pid) or {})
+    # ⚠️ v344: lo que de verdad se va a escribir. Una clave que no está en `_PCOL`
+    # se DESCARTA (un typo, o un nombre de columna que ya no existe), y hasta ahora
+    # eso pasaba en silencio devolviendo «Proyecto actualizado.». Se separa para (a)
+    # auditar solo lo escrito y (b) poder avisar de lo ignorado.
+    _escritos = {k: v for k, v in fields.items() if k in _PCOL}
+    _ignorados = [k for k in fields if k not in _PCOL]
+    if _ignorados:
+        logger.warning("update_project(%s): columnas desconocidas, NO se escriben: %s",
+                       pid, ", ".join(_ignorados))
+    if fields and not _escritos:
+        return False, ("Ningún campo reconocido: " + ", ".join(_ignorados)
+                       + ". No se guardó nada.")
     # Una sola llamada a la API (batch) en vez de N update_cell → evita rate limit.
     batch = [{"range": f"{_col_letter(_PCOL[k])}{row}", "values": [[str(v)]]}
-             for k, v in fields.items() if k in _PCOL]
+             for k, v in _escritos.items()]
     if batch:
         try:
             pws.batch_update(batch, value_input_option="RAW")
@@ -540,7 +563,10 @@ def update_project(pid: str, fields: dict) -> tuple:
     # falla, el cambio del usuario ya está hecho y no se va a deshacer por eso.
     try:
         from core import auditoria
-        auditoria.registrar("proyecto", pid, auditoria.diff(_antes, fields),
+        # ⚠️ v344: se audita `_escritos`, NO `fields`. Con `fields` se anotaba un
+        # cambio que la hoja nunca recibió, y en cada guardado otra vez (el «antes»
+        # no cambiaba nunca porque no se escribía nada).
+        auditoria.registrar("proyecto", pid, auditoria.diff(_antes, _escritos),
                             grupo=str(_antes.get("Grupo", "")))
     except Exception:
         pass

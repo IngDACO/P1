@@ -118,12 +118,16 @@ def _invalidate():
     # ⚠️ v339: además de la caché propia hay que tirar el LOTE compartido
     # (`hojas._lote`). Si no, tras escribir, el dato seguiría saliendo del lote
     # cacheado hasta 120 s y parecería que no se guardó.
+    # ⚠️ v344 — misma regresión que en `projects` (ver allí): al quitar el bucle en
+    # v339 quedó `f.clear()`, un nombre inexistente, y el `except` se tragaba el
+    # NameError → el tablero podía seguir enseñando la asignación vieja hasta 120 s.
     from core import hojas
     hojas.invalidar()
-    try:
-        f.clear()
-    except Exception:
-        pass
+    for fn in (_trab_records, _roster_records):
+        try:
+            fn.clear()
+        except Exception as e:
+            logger.warning("roster._invalidate: no se pudo limpiar %s: %s", fn, e)
 
 
 def _next_id(ws, prefijo) -> str:

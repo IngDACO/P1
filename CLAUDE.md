@@ -83,6 +83,10 @@ C:\Users\diego\P1\survey_app\
 │   ├── payroll.py/_ui      # nóminas y colillas: pagar + PDF (v257-261)
 │   ├── inventory.py/_ui    # 📦 Inventario de activos con QR, movimientos y depreciación (v263-265)
 │   ├── expenses.py         # costos: compras + mano de obra + presupuesto + P&L (v105+)
+│   ├── orders.py           # órdenes de compra = dinero COMPROMETIDO (hoja Ordenes, v343)
+│   ├── auditoria.py        # rastro de cambios: quién tocó margen/tarifa/fechas (hoja Auditoria, v342)
+│   ├── hojas.py            # lector por LOTES del libro (1 batchGet para todas las hojas, v339)
+│   ├── num.py              # helpers únicos: num() / parse_date() / col_letter() (v323)
 │   ├── credentials.py      # credenciales/tickets por usuario (hoja Credenciales): vencimiento, Drive, avisos (v104)
 │   ├── session_cookie.py   # login persistente por cookie (extra-streamlit-components); manager unico por sesion (v188)
 │   ├── projects.py         # gestión de proyectos: Proyectos/Actividades/Agrupaciones/Documentos (Sheets) — v65+
@@ -4275,7 +4279,81 @@ salió un fallo. No es mala suerte: es que la superficie de escritura está sin 
 **Antes de decir que un rol "está listo", ejercitar sus escrituras, no solo sus
 pantallas.**
 
-## Versiones desplegadas (v340 = actual)
+## Los tres huecos del administrador, cerrados (v341-v343)
+Salió de la pregunta del usuario: *«¿estamos ofreciendo las herramientas necesarias
+para un administrador o falta algo?»*. La auditoría dio tres huecos reales — no
+pantallas que faltaran, sino **preguntas que la app no podía responder**.
+
+### v341 · «¿vamos mejor o peor que el mes pasado?»
+El P&L daba una foto del periodo elegido y **nada con qué compararla**: $1.710 de
+ganancia no dice si es bueno hasta saber qué dio el mes anterior. `finance` gana
+`periodo_anterior(desde, hasta)` (ventana del MISMO número de días, pegada justo
+antes), `variacion(actual, previo)` → `{dif, pct, mejor}` y `pnl_comparado`, y
+`_kpi_card` acepta `var=` → ▲/▼ con el % bajo la cifra.
+- **0 llamadas nuevas**: el periodo anterior sale de las mismas filas ya cacheadas.
+- ⚠️ **En un COSTO, subir es PEOR**: `render_pnl` invierte `mejor` para la tarjeta de
+  costos. Sin eso, gastar más saldría en verde.
+- ⚠️ `pct=None` cuando el periodo anterior es ~0: un porcentaje contra cero no
+  significa nada, así que se muestra la diferencia y no un «+∞%». Con «Todo» no hay
+  periodo anterior y no se compara nada.
+- Verificado con datos reales: agosto $1.710,42 contra julio −$1.500 → **+214%**, y la
+  aritmética de ventana cuadra en rangos de 16 días, 31 días y un trimestre.
+
+### v342 · «¿quién puso este margen al 0%?»
+`CreadoPor` decía quién CREÓ una fila; **nada decía quién la cambió**. En una app donde
+el margen, la tarifa, el presupuesto y las fechas deciden lo que se cobra y lo que se
+paga, esa pregunta se hace tarde o temprano y no tenía respuesta.
+`core/auditoria.py` (hoja `Auditoria`): `diff` · `registrar` · `historial`.
+- **Acotado a lo que mueve dinero** (`CAMPOS_CLAVE`). Registrar los 70 puntos de
+  escritura daría una fila por clic y una hoja ilegible; un cambio de nota no entra.
+- **1 escritura por edición y solo si algo cambió de verdad**: toda la edición va en
+  UNA fila (los campos en un JSON) y `diff` compara como texto, así que `40` y `40.0`
+  no generan histórico. Guardar un formulario sin tocar nada no gasta cuota.
+- ⚠️ **La anotación va FUERA del try del guardado y DESPUÉS de invalidar**: el cambio
+  del usuario ya se hizo y no se puede deshacer porque falle el apunte. Verificado por
+  AST en los dos enganches (`projects.update_project`, `auth.set_rate`).
+- ⚠️ **El «antes» se captura ANTES de escribir**, de la caché (0 llamadas).
+- ⚠️ `_records` llama a `hojas.registros(SHEET)` **sin cabeceras**: con ellas cae a
+  `get_sheet`, que **CREA la hoja** — un lector que escribe (regla v145). La hoja la
+  crea la primera anotación.
+- ⚠️ **Fallo que cazó el chequeo de nombres libres**: `projects_ui` importa `theme`
+  **dentro de cada función**, no a nivel de módulo, así que mi bloque nuevo lo usaba
+  sin importarlo → NameError al abrir el desplegable. Mi primera comprobación dijo
+  «importa theme: True» porque recorría el árbol entero con `ast.walk` y encontraba el
+  import LOCAL de otra función. **Comprobar el ámbito, no la presencia.**
+
+### v343 · «¿cuánto llevo comprometido?» — órdenes de compra
+`expenses` responde «cuánto llevas GASTADO»: una compra existe cuando hay recibo. Pero
+el material se encarga semanas antes de la factura, así que entre el pedido y el recibo
+**el proyecto aparece dentro de presupuesto con el dinero ya comprometido**, y el
+sobrecosto se descubre cuando ya no se puede hacer nada — el mismo problema que v144
+resolvió para la mano de obra.
+`core/orders.py` (hoja `Ordenes`, estados pendiente/recibida/cancelada).
+- ⚠️ **UNA sola definición de gasto** (regla v310): una orden **no es** un gasto. Al
+  recibirla se crea su fila en `Gastos`, así que el costo real sigue teniendo una sola
+  fuente y aquí solo vive lo pendiente.
+- ⚠️ **El orden de las dos escrituras importa.** Recibir = marcar + crear el gasto. Si
+  se creara el gasto primero y fallara el marcado, al reintentar habría **dos gastos por
+  la misma compra** y el costo saldría inflado sin que nadie lo vea. Se marca PRIMERO;
+  si falla lo segundo, la orden queda `recibida` **sin GastoID**, `sin_gasto()` lo
+  detecta y la UI ofrece completarlo. **Un hueco visible es mejor que un doble cargo
+  invisible.** Probado simulando la caída de `expenses.add`.
+- ⚠️ **`project_cost.total` NO cambia**: sigue siendo lo gastado, que es lo que leen la
+  conciliación, el P&L, la rentabilidad y las alertas. Lo comprometido va en campos
+  APARTE (`comprometido`, `total_comp`, `over_comp`). Probado contra la fórmula anterior
+  en 6 casos: ni un número existente se mueve.
+- **`over_comp`** es el caso que nadie veía: dentro de presupuesto hoy, pero con lo ya
+  pedido se pasa seguro. No dispara si ya se pasó (manda `over`, sin duplicar el aviso)
+  ni sin presupuesto (no se inventa un porcentaje).
+- `atrasadas(grupo)` = pendientes cuya fecha esperada ya pasó → obra parada esperando
+  material. ⚠️ Una orden **sin** fecha esperada nunca sale atrasada: no se puede afirmar
+  que llega tarde si nadie dijo cuándo llegaba.
+- Las vistas de grupo usan `comprometido_por_proyecto` (UNA pasada) en vez de consultar
+  por proyecto dentro del bucle (patrón `project_hours_bulk`).
+- ⚠️ Las dos hojas nuevas entran en `hojas.HOJAS_LECTURA`: fuera del lote, cada una
+  costaría una llamada suelta por sesión (v339).
+
+## Versiones desplegadas (v343 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -4283,6 +4361,9 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v343 | **Órdenes de compra: el dinero COMPROMETIDO deja de ser invisible.** Entre que se pide el material y llega la factura, el proyecto salía dentro de presupuesto con el dinero ya comprometido — el sobrecosto se descubría cuando ya no se podía hacer nada. Nuevo `core/orders.py` (hoja `Ordenes`): al recibir una orden se crea sola su fila en `Gastos`, así que **el costo real sigue teniendo UNA fuente** (v310). ⚠️ `project_cost.total` NO se mueve (probado contra la fórmula anterior en 6 casos); lo comprometido va aparte, con el aviso **«vas dentro, pero con lo pedido te pasas»**. ⚠️ Se marca recibida ANTES de crear el gasto: al revés, un fallo a mitad daría **dos gastos por la misma compra**; así queda un hueco VISIBLE (`sin_gasto`) con botón para completarlo. + órdenes atrasadas (obra parada esperando material) |
+| v342 | **Rastro de cambios**: `CreadoPor` decía quién creó una fila y **nada decía quién la cambió** — «¿quién puso este margen al 0%?» no tenía respuesta. Nuevo `core/auditoria.py`, acotado a lo que mueve dinero (margen, tarifa, presupuesto, fechas, avance, personal): **1 escritura por edición y solo si algo cambió de verdad** (`40` y `40.0` no generan histórico), con el historial en el detalle del proyecto. ⚠️ La anotación va FUERA del try del guardado: el cambio del usuario no se pierde porque falle el apunte. ⚠️ Leer el historial NO crea la hoja (regla v145). ⚠️ El chequeo de nombres libres cazó un NameError real: `projects_ui` importa `theme` **dentro de cada función**, y mi primera comprobación dio un OK falso porque `ast.walk` encontraba el import local de OTRA función |
+| v341 | **Comparación con el periodo anterior en el P&L**: $1.710 de ganancia no dice nada hasta saber qué dio el mes pasado. `finance.periodo_anterior/variacion/pnl_comparado` + `_kpi_card(var=)` → ▲/▼ con el % bajo cada cifra, con **0 llamadas nuevas**. ⚠️ En un COSTO subir es PEOR (se invierte el sentido, si no gastar más salía en verde) y ⚠️ sin base no se muestra un «+∞%». Verificado con datos reales: agosto $1.710,42 vs julio −$1.500 → +214% |
 | v340 | ⚠️ **Archivar era un viaje sin vuelta.** El usuario archivó un cliente y desapareció: `Activo=NO` + las 5 llamadas usando el default que los oculta, sin casilla para verlos ni botón para restaurar. El dato seguía en la hoja, pero la app no podía enseñarlo. Es el fallo que v149 resolvió para proyectos y que nunca se aplicó a las entidades nacidas después — al buscarlo apareció **el mismo en los activos dados de baja**. Los dos con casilla «Ver también…», contador de ocultos y botón Restaurar/Reactivar |
 | v339 | **El techo de cuota de Sheets.** Medido: 15 de las 19 llamadas de una sesión eran `values/{hoja}`, una por hoja. Nuevo `core/hojas.py` las trae todas en UNA `values.batchGet` → sesión de **19 a 6 llamadas** y el recorrido por todas las secciones cuesta **0**; el lote es `cache_data`, o sea compartido por proceso. ⚠️ Tres trampas: un rango inexistente tumba el lote entero (se piden solo las hojas que existen), cada `_invalidate` debe tirar TAMBIÉN el lote (si no, «lo guardé y no sale») e import perezoso para no ciclar con `timeclock`. Las escrituras siguen leyendo frescas. Verificado idéntico fila a fila en las 19 hojas contra lectura fresca |
 | v338 | Fix de v337: la URL no se actualizaba en las 4 secciones **sin** sub-pestañas (Home, Fichaje, Inventario, Contactos), por un `session_state.get("")` que lanzaba y que mi propio `except` se tragaba. Parecía intermitente porque Finanzas y Proyectos sí funcionaban |

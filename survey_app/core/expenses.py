@@ -55,10 +55,14 @@ def _invalidate():
     # cacheado hasta 120 s y parecería que no se guardó.
     from core import hojas
     hojas.invalidar()
-    try:
-        _records.clear()
-    except Exception:
-        pass
+    # ⚠️ v344: y las DERIVADAS. `group_expenses` y `over_budget` cachean el agregado,
+    # así que limpiar solo `_records` dejaba el total del grupo y la alerta de
+    # sobre-presupuesto con el valor viejo hasta 120 s tras cargar un recibo.
+    for fn in (_records, group_expenses, over_budget):
+        try:
+            fn.clear()
+        except Exception as e:
+            logger.warning("expenses._invalidate: no se pudo limpiar %s: %s", fn, e)
 
 
 # ── Lecturas ─────────────────────────────────────────────────────

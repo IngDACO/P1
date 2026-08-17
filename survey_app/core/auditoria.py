@@ -38,15 +38,23 @@ HEADERS = ["ID", "Grupo", "Fecha", "Usuario", "Entidad", "EntidadID",
            "Accion", "CambiosJSON"]
 
 # Solo lo que mueve dinero o cambia el estado del negocio.
+#
+# ⚠️ CADA NOMBRE TIENE QUE SER UNA COLUMNA REAL. Un nombre que no existe en ninguna
+# hoja no audita nada — y peor: hace que se anote un cambio que NUNCA se escribió,
+# porque `update_project` descarta en silencio las claves que no conoce. Pasó en
+# v343 con `MargenPct`, que no existe: **la columna del margen es `MargenMO`**, así
+# que justo el campo para el que se construyó esta hoja («¿quién puso el margen a
+# 0?») era el único que no se estaba vigilando. Lo cazó ejercitar la escritura
+# contra la hoja real, no ningún test. `verif_v344.py` lo comprueba desde ahora.
 CAMPOS_CLAVE = {
     # proyecto
-    "MargenPct", "Presupuesto", "Avance", "Estado", "EstadoManual",
+    "MargenMO", "Presupuesto", "Avance", "Estado", "EstadoManual",
     "FechaInicio", "FechaFinEst", "Cliente", "ClienteID", "Nombre",
     "CampoAsignados", "AgrupacionID", "PesoEnAgrupacion",
     # persona
     "TarifaHora", "Rol", "Grupo", "Activo",
-    # factura / nómina
-    "Total", "Cobrado", "ImpuestoPct", "Neto", "Base", "Pagada",
+    # factura / nómina  (el cobro y el pago se siguen por `Estado` + `Cobrado`)
+    "Total", "Cobrado", "ImpuestoPct", "Neto", "Base",
 }
 
 
