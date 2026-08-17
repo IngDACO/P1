@@ -49,7 +49,8 @@ HOJAS_LECTURA = (
     "Login", "Grupos", "Credenciales", "Gastos", "Clientes", "Facturas",
     "Nominas", "Activos", "InvCategorias", "MovimientosActivo",
     "Roster", "Trabajos", "PreStarts", "Calculos", "Rieles",
-    "Auditoria", "Ordenes",     # v342 — si no entra aquí, sería una llamada suelta
+    "Auditoria", "Ordenes",
+    "Catalogo",      # v352 — cotizaciones     # v342 — si no entra aquí, sería una llamada suelta
 )
 
 

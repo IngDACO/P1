@@ -4634,7 +4634,64 @@ local (no hay credenciales `[gdrive]`); en el código es best-effort.
 **Un check en NO no abre alarma**, solo el near-miss. En la prueba salieron 2 checks en NO
 y `alarma: False`. Está documentado como decisión deliberada, no como fallo.
 
-## Versiones desplegadas (v350 = actual)
+## ⚠️ AISLAMIENTO ENTRE EMPRESAS: el cerrojo que faltaba (v351)
+Petición del usuario: «separar todos los registros por empresa cliente». Al medir la
+arquitectura antes de proponer nada salió algo más urgente que la separación física.
+
+### El hallazgo: el aislamiento NO lo garantizaba el código
+Lo garantizaba que la interfaz **nunca te ofreciera el ID de otra empresa**. Ninguna de
+las vistas de detalle comprobaba el grupo del objeto, y `_detalle_proyecto` incluso lo
+**adoptaba**:
+```python
+prj = P.get_project(pid)                       # busca en TODA la hoja
+grupo = str(prj.get("Grupo", "")) or grupo     # ← adopta el del proyecto
+```
+Con los deep-links de v337 (`?p=PRJ-####`) bastaba **editar la URL** para abrir el
+detalle completo de otro cliente: costos, horas, personal y archivos. El QR del
+inventario (`?activo=ACT-####`) es la misma puerta.
+Cuatro vistas afectadas: **proyecto, factura, nómina y activo** — las que traen el
+objeto por ID GLOBAL. (`_detalle_cliente` y `_dashboard_agrupacion` ya estaban acotadas:
+buscan dentro de una lista ya filtrada por grupo.)
+**Hoy era latente: solo existe un grupo real (`cliente1`, con los 6 proyectos).** Deja
+de serlo con el segundo cliente — que es justo lo que el usuario está preparando.
+
+### `core/tenant.py` — la regla, en un solo sitio
+Módulo HOJA (solo importa streamlit) → sin ciclos. Una sola definición a propósito:
+cinco copias divergentes de un helper es lo que causó los fallos de v323.
+- **propietario**: ve todos los grupos (es su función, no se le bloquea).
+- **administrador / campo**: solo el suyo, comparando sin distinguir mayúsculas.
+- **objeto sin grupo** (histórico): se deja pasar y se registra — bloquear por un campo
+  vacío rompería registros legítimos anteriores a la columna.
+- **sin sesión**: bloqueado.
+- ⚠️ El mensaje **no dice de qué empresa es**: confirmar que un ID existe en otro grupo
+  ya es filtrar información. Responde igual que si no existiera.
+- ⚠️ La comprobación va en la **frontera de render**, NO en la capa de datos:
+  `get_project` y compañía los llaman por dentro flujos que cruzan grupos a propósito
+  (vistas del propietario, `project_hours_bulk`, el digest multi-grupo). Filtrar ahí
+  rompería esos caminos y daría una falsa sensación de blindaje.
+
+Probado con datos reales sobre `PRJ-0005` (grupo `cliente1`): admin de cliente1 **abre**,
+admin de otra empresa **bloqueado**, campo de otra empresa **bloqueado**, propietario
+**abre**. Guardián permanente (`verif_v351.py`): la regla existe en un solo fichero, las
+4 vistas llaman a `tenant.exigir` DESPUÉS de traer el objeto y ANTES de pintarlo, y el
+propietario nunca queda bloqueado.
+
+### La decisión de arquitectura (tomada por el usuario)
+Se le presentaron 4 caminos con su coste real. Eligió **el cerrojo ahora, un libro de
+Google por cliente después, cuando entre el primer cliente real** — migrar un solo
+cliente es media hora; con cinco, no.
+- Coste de infraestructura: opciones sobre Sheets **$0**; salir a Postgres/Supabase
+  **~25 USD/mes** en plan de producción (la capa gratis **pausa** los proyectos
+  inactivos, inservible para una app que se vende). El coste real de esa opción no es el
+  dinero: es reescribir la capa de datos y migrar 23 hojas.
+- A favor de un libro por cliente cuando toque: **el libro se abre en UN solo sitio**
+  (`timeclock.py:90-93`), y una cuenta de servicio por cliente **multiplica** el techo de
+  60 lecturas/min en vez de repartirlo.
+- ⚠️ Lo que romperá ese cambio, ya identificado: las vistas del PROPIETARIO, que hoy leen
+  todos los grupos de una vez (`owner_digest`, `list_projects()` sin filtro) y pasarían a
+  abrir N libros.
+
+## Versiones desplegadas (v351 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -4642,6 +4699,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v351 | ⚠️ **Aislamiento entre empresas cliente.** El aislamiento no lo garantizaba el código sino que la interfaz nunca te ofreciera el ID de otro: **ninguna vista de detalle comprobaba el grupo**, y `_detalle_proyecto` lo ADOPTABA del proyecto → con los deep-links de v337 bastaba editar `?p=` para abrir el detalle completo de otro cliente (costos, horas, personal, archivos). Latente hoy porque solo hay un grupo real. Nuevo `core/tenant.py` (una sola definición, módulo hoja) aplicado a las 4 vistas por ID global: proyecto, factura, nómina y activo. El propietario sigue viendo todo; el mensaje no revela de qué empresa es el ID. Decisión del usuario: **cerrojo ahora, un libro por cliente cuando entre el primer cliente real** |
 | v350 | **Inventario, credenciales y pre-start ejercitados** — el inventario estaba virgen (0 activos, la hoja `MovimientosActivo` ni existía). ⚠️ Un fallo: **`traslado` guardaba el ID crudo en el historial** mientras `salida` guardaba el nombre resuelto, así que el mismo sitio aparecía como «proyecto: PRJ-0005» al llegar y «proyecto: prueba2» al salir (v306 se aplicó a una función y no a la otra). Aguantaron depreciación, QR, los 4 movimientos, baja+reactivación, los 4 estados de credencial, `compliance`, y el pre-start con su PDF. Tres falsas alarmas mías comprobadas antes de tocar (depreciación de 2 años, `APP_URL` que la UI ya avisa, y las categorías que viven en el código). NO ejercitados a propósito: `notify_expiring` y `near_miss=YES`, que escriben a personas reales |
 | v349 | ⚠️ **El LaTeX de v309 volvió en la pantalla de Costos** (`Llevas **0** de 10,000`, con los `$` comidos y los `**` literales). El guardián de v309 solo miraba los argumentos LITERALES de `st.*`, y aquí la cadena se arma antes en una variable → **ciego**. Chequeo nuevo por AST: cualquier f-string del repo con 2+ `$` sin escapar. Salieron 4 — una es el hash PBKDF2 (falso positivo, exento) y **las otras 3 están en Costos**, incluida la que yo escribí en v343. Dos de ellas estaban latentes (solo salen con costos y presupuesto). Lección: cuando el mismo fallo reaparece, preguntar por qué el chequeo no lo vio |
 | v348 | Anuladas las 3 colillas de $0 que quedaban (`NOM-0001`, `NOM-0004`, `NOM-0005`): la lista de nóminas pasa de 5 filas a **2 con dinero real**. ⚠️ Ninguna cifra se movió — la comprobación de que se anuló lo correcto. + el aviso de tarifa faltante **distingue homónimos** (`fijiofgjei (conductor)` vs `fijiofgjei (fijiofgjei)`): salía dos veces el mismo nombre para dos personas distintas, justo en el mensaje que dice a quién arreglar. Cuarta aparición del patrón (v151/v306/v319) |

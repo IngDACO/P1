@@ -55,6 +55,13 @@ CAMPOS_CLAVE = {
     "TarifaHora", "Rol", "Grupo", "Activo",
     # factura / nómina  (el cobro y el pago se siguen por `Estado` + `Cobrado`)
     "Total", "Cobrado", "ImpuestoPct", "Neto", "Base",
+    # catálogo (v352): el precio de lo que vendes mueve dinero tanto como el margen.
+    # ⚠️ Faltaban al principio y la prueba lo cazó: se cambió un costo de 185,50 a
+    # 199,90 y el histórico quedó vacío. Es el mismo fallo que `MargenPct` en v344 —
+    # el enganche estaba, el nombre del campo no. El guardián solo comprobaba una
+    # dirección (que cada CAMPO_CLAVE exista); ahora también mira que los campos de
+    # dinero del catálogo estén en la lista.
+    "CostoUnit", "HorasEst", "TarifaHora",
 }
 
 
