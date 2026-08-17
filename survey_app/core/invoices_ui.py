@@ -8,6 +8,7 @@ emitir. Impuesto (GST/IVA) con el default del grupo, editable.
 import pandas as pd
 import streamlit as st
 
+from core import tenant
 from core import auth, clock
 from core import clientes as C
 from core import invoices as I
@@ -97,6 +98,10 @@ def _detalle_factura(grupo, fid):
     f = I.get_factura(fid)
     if not f:
         st.warning("Factura no encontrada.")
+        st.session_state.pop("_fac_open", None)
+        return
+    # v351: `get_factura` busca por ID en TODA la hoja, sin mirar el grupo.
+    if not tenant.exigir(f, "Esta factura"):
         st.session_state.pop("_fac_open", None)
         return
 

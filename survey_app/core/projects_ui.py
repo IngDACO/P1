@@ -9,6 +9,7 @@ import pandas as pd
 import streamlit as st
 import streamlit.components.v1 as components
 
+from core import tenant
 from core import projects as P
 from core import auth
 from core import drive_store
@@ -1875,6 +1876,13 @@ def _detalle_proyecto(pid: str, grupo: str = None):
     prj = P.get_project(pid)
     if not prj:
         st.error("Proyecto no encontrado.")
+        return
+    # ⚠️ v351 — EL CASO PEOR del aislamiento. La línea de abajo ADOPTA el grupo del
+    # proyecto, así que sin esta comprobación un administrador abría el detalle
+    # completo de otra empresa —costos, horas, personal y archivos— solo cambiando
+    # `?p=` en la URL (los deep-links se cablearon en v337).
+    if not tenant.exigir(prj, "Este proyecto"):
+        st.session_state.pop("_admin_open_proj", None)
         return
     # El grupo se toma del propio proyecto (así el propietario puede abrir cualquiera)
     grupo = str(prj.get("Grupo", "")) or (grupo or "")

@@ -8,6 +8,7 @@ import logging
 import pandas as pd
 import streamlit as st
 
+from core import tenant
 from core import clock
 from core import inventory as INV
 from core.num import num as _num
@@ -163,6 +164,10 @@ def _detalle(grupo, aid):
     a = INV.get_activo(aid)
     if not a:
         st.warning("Activo no encontrado.")
+        st.session_state.pop("_inv_open", None)
+        return
+    # v351: entra por el QR (`?activo=`), que puede ser el de otra empresa.
+    if not tenant.exigir(a, "Este activo"):
         st.session_state.pop("_inv_open", None)
         return
 

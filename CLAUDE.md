@@ -4582,7 +4582,59 @@ Las dos versiones coinciden (barra lateral **v348** = `app.py` fresco · topbar 
 ese código de v343 se dibuja). Y el aviso de v324 para 0% de avance sale correcto:
 *«Sin avance todavía: necesitas 7.1 %/día en los 14 días que quedan»*.
 
-## Versiones desplegadas (v349 = actual)
+## Inventario, credenciales y pre-start ejercitados (v350)
+Cierre del recorrido de escrituras. Mismo método (foto en solo lectura → ejercitar →
+verificar leyendo → devolver todo → segunda foto). **Rastro final: ninguno.**
+El inventario estaba **completamente virgen**: 0 activos, 0 movimientos, y la hoja
+`MovimientosActivo` ni siquiera existía.
+
+### ⚠️ El traslado guardaba el ID crudo en el historial
+`salida` resuelve el nombre (`ubic_ref_label`) y **`traslado` se quedó con el ID**, así
+que el mismo sitio salía escrito de dos formas en el mismo historial:
+```
+MOV-0002 traslado  → proyecto: PRJ-0005     ← el ID
+MOV-0003 mant.     ← proyecto: prueba2      ← el nombre, del MISMO sitio
+```
+Es media aplicación de la regla de v306: el ACTIVO guarda el ID (relación viva, sobrevive
+a un renombrado) y el **historial guarda el nombre ya resuelto** (cuenta lo que pasó, no
+lo que hay ahora). v306 lo arregló en `salida` y no en `traslado`. Guardián nuevo: en las
+funciones de movimiento, todo f-string que use `hacia_ref` debe pasar por `ubic_ref_label`.
+
+### Lo que aguantó
+- **Inventario**: categoría · alta de activo · **depreciación** ($1.000 comprado hace 2
+  años, vida 5 → $600,27 ✓) · QR PNG · los 4 movimientos (salida → traslado → manten. →
+  entrada), que crearon la hoja `MovimientosActivo` · resumen y reporte de valor por
+  categoría y ubicación · **dar de baja y reactivar** (v340: desaparece de la lista, se ve
+  con la casilla, y el botón lo devuelve).
+- **Credenciales**: alta · los 4 estados del semáforo (⚠️ «vence hoy» cuenta como *por
+  vencer*, no vencida) · renovar la fecha · `expiring` casa con la credencial real
+  (campo1, Driver License, 14 días) · matriz de cumplimiento 4 personas × 2 tipos ·
+  `compliance` marca **falta** el certificado que el proyecto exige y no tiene · borrado.
+- **Pre-start**: `filename_for` (`17082026 XY.pdf`) · PDF de 1 página con proyecto,
+  ubicación y asistentes · fila registrada · `leer()` descompone bien (near miss, **2
+  checks en NO**, asistentes).
+
+### Tres falsas alarmas mías, comprobadas antes de "arreglar"
+1. **La depreciación**: esperaba $800 y salió $600,27 — el activo era de hace **2** años,
+   no 1. El cálculo estaba bien; mi comentario no.
+2. **El QR**: `qr_data` devolvía solo el ID, no una URL... porque falta el secret
+   `APP_URL` en local. **La UI ya avisa** («Configura el secret APP_URL para que el QR
+   abra la app»). ⚠️ Conviene comprobar que ese secret esté puesto en el Cloud, o las
+   etiquetas impresas no abren nada al escanearlas.
+3. **`InvCategorias` con 0 filas** tras la prueba: las 6 categorías salen de `CAT_DEFAULT`
+   (código), la hoja solo guarda las añadidas a mano. Estaba vacía antes y volvió a
+   estarlo — mi «esperado 6» era una suposición.
+
+### Lo que NO se ejercitó, a propósito
+`credentials.notify_expiring` y un pre-start con `near_miss=YES`: los dos **mandan correo
+y Telegram a personas reales**. Y la subida a Drive del PDF del pre-start no corre desde
+local (no hay credenciales `[gdrive]`); en el código es best-effort.
+
+### Standing item que sigue abierto (de v158)
+**Un check en NO no abre alarma**, solo el near-miss. En la prueba salieron 2 checks en NO
+y `alarma: False`. Está documentado como decisión deliberada, no como fallo.
+
+## Versiones desplegadas (v350 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -4590,6 +4642,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v350 | **Inventario, credenciales y pre-start ejercitados** — el inventario estaba virgen (0 activos, la hoja `MovimientosActivo` ni existía). ⚠️ Un fallo: **`traslado` guardaba el ID crudo en el historial** mientras `salida` guardaba el nombre resuelto, así que el mismo sitio aparecía como «proyecto: PRJ-0005» al llegar y «proyecto: prueba2» al salir (v306 se aplicó a una función y no a la otra). Aguantaron depreciación, QR, los 4 movimientos, baja+reactivación, los 4 estados de credencial, `compliance`, y el pre-start con su PDF. Tres falsas alarmas mías comprobadas antes de tocar (depreciación de 2 años, `APP_URL` que la UI ya avisa, y las categorías que viven en el código). NO ejercitados a propósito: `notify_expiring` y `near_miss=YES`, que escriben a personas reales |
 | v349 | ⚠️ **El LaTeX de v309 volvió en la pantalla de Costos** (`Llevas **0** de 10,000`, con los `$` comidos y los `**` literales). El guardián de v309 solo miraba los argumentos LITERALES de `st.*`, y aquí la cadena se arma antes en una variable → **ciego**. Chequeo nuevo por AST: cualquier f-string del repo con 2+ `$` sin escapar. Salieron 4 — una es el hash PBKDF2 (falso positivo, exento) y **las otras 3 están en Costos**, incluida la que yo escribí en v343. Dos de ellas estaban latentes (solo salen con costos y presupuesto). Lección: cuando el mismo fallo reaparece, preguntar por qué el chequeo no lo vio |
 | v348 | Anuladas las 3 colillas de $0 que quedaban (`NOM-0001`, `NOM-0004`, `NOM-0005`): la lista de nóminas pasa de 5 filas a **2 con dinero real**. ⚠️ Ninguna cifra se movió — la comprobación de que se anuló lo correcto. + el aviso de tarifa faltante **distingue homónimos** (`fijiofgjei (conductor)` vs `fijiofgjei (fijiofgjei)`): salía dos veces el mismo nombre para dos personas distintas, justo en el mensaje que dice a quién arreglar. Cuarta aparición del patrón (v151/v306/v319) |
 | v347 | ⚠️ **Una nómina anulada bloqueaba reemitir el periodo**: `generar` contaba las anuladas como duplicados, así que anular y regenerar no creaba nada y **la app no podía reemitir la nómina de nadie** (principio de v340: si se puede deshacer, tiene que poder rehacerse). Con eso arreglado se corrigió **`NOM-0002`** —8,69 h de trabajo real emitidas en $0— reemitiéndola a $347,60 + super 11,5% (el mismo del lote). ⚠️ La ganancia del grupo pasa de $210,42 a **−$177,15**, y esa es la cifra CORRECTA: el costo estaba subestimado en el trabajo que no se pagaba. Y la conciliación de v313 ya decía «sin explicar $347,60» — el dato llevaba ahí señalando el fallo |

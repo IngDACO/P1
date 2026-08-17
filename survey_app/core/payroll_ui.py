@@ -9,6 +9,7 @@ from datetime import timedelta
 import pandas as pd
 import streamlit as st
 
+from core import tenant
 from core import auth, clock, timeclock
 from core import payroll
 from core.num import num as _num
@@ -212,6 +213,9 @@ def _detalle(grupo, nid):
     f = payroll.get_nomina(nid)
     if not f:
         st.warning("Nómina no encontrada.")
+        st.session_state.pop("_nom_open", None)
+        return
+    if not tenant.exigir(f, "Esta nómina"):        # v351
         st.session_state.pop("_nom_open", None)
         return
     base = _num(f.get("Base"))
