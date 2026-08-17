@@ -75,9 +75,11 @@ def render_nominas(grupo):
                                          str(x.get("Nombre", ""))), reverse=True)
 
     # ── Lo que la pantalla no decía ──────────────────────────────
-    # (a) colillas de $0 porque esa persona no tiene tarifa/hora. `payroll.generar` ya
-    #     lo detecta (devuelve `sin_tarifa`) pero eso se ve UNA vez, al generar, y
-    #     después la lista deja las nóminas a 0 como si estuvieran bien.
+    # (a) colillas de $0 porque esa persona no tenía tarifa/hora cuando se generó.
+    #     ⚠️ Desde v346 ya NO se pueden crear (`generar` salta a quien no tiene tarifa),
+    #     pero este aviso SE QUEDA: las de antes siguen en la hoja —en producción está
+    #     `NOM-0002`, 8,69 h de trabajo real emitidas en $0— y hay que poder verlas para
+    #     anularlas y regenerarlas una vez puesta la tarifa.
     _cero = sorted({str(x.get("Nombre", "")) for x in _rows
                     if _num(x.get("Horas")) > 0 and _num(x.get("TarifaHora")) <= 0})
     if _cero:
@@ -190,9 +192,15 @@ def _generar(grupo):
             return
         st.success(f"{res['creadas']} nómina(s) creada(s)."
                    + (f" {res['omitidas']} ya existían para ese periodo." if res['omitidas'] else ""))
-        if res.get("sin_tarifa"):
-            st.warning(f"{res['sin_tarifa']} usuario(s) sin tarifa (base $0). "
-                       "Ponla en Planificación → Usuarios.")
+        # ⚠️ v346: ya NO se crea una colilla de $0. Se salta y se dice a quién, con el
+        # camino para arreglarlo; al ponerle la tarifa y regenerar el mismo periodo
+        # entra sin duplicar (no dejó fila).
+        _st = res.get("sin_tarifa") or []
+        if _st:
+            st.warning(":material/person_off: **No se generó la nómina de "
+                       + ", ".join(_st) + "**: no tienen tarifa/hora, así que su colilla "
+                       "saldría en $0. Ponles la tarifa en :material/build: Planificación → "
+                       "Usuarios y vuelve a generar este mismo periodo — entrarán sin duplicar.")
         st.session_state.pop("_nom_gen", None)
         st.rerun()
 

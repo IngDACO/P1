@@ -4419,7 +4419,53 @@ en vez de un éxito falso.
    imprimía el margen por `MargenPct`, así que no probaba nada: lo que permitió afirmar
    que no toqué PRJ-0006 fue **el propio historial de auditoría**, que lista cada cambio.
 
-## Versiones desplegadas (v344 = actual)
+## Fichaje y facturas ejercitados: un abono de $1 escondía una deuda vencida (v345)
+Segunda tanda del ejercicio de v344, esta vez sobre las dos rutas que en v344 se
+dejaron a propósito («no fabrico registros financieros por mi cuenta»), con el usuario
+autorizándolo. Método idéntico: foto en solo lectura → ejercitar → verificar leyendo →
+devolver todo a su sitio → segunda foto. **Rastro final: ninguno.**
+
+### ⚠️ EL HALLAZGO: `estado_cobro` comprobaba `parcial` ANTES que `vencida`
+```python
+if cob > 0:            return "parcial"     # ← se comía el caso
+venc = _parse_date(...)
+if venc < hoy:         return "vencida"
+```
+O sea que **un abono de $1 sacaba a la factura de «vencida» para siempre**. Y los tres
+sitios que miden la deuda vencida (`finance.pnl`, `invoices.resumen_cliente`, el
+resumen de Facturas) filtran por `estado_cobro(f) == "vencida"`, así que ese saldo
+**no lo veía nadie**: ni el indicador rojo del resumen financiero, ni el P&L.
+Es el caso más común del mundo real: el cliente paga un anticipo y desaparece.
+**Arreglo:** vencida gana a parcial — estar vencida es el hecho accionable, y los tres
+consumidores ya suman `Total − Cobrado`, o sea el saldo, no el total. Probada la matriz
+de 7 casos; los datos reales no cambian de estado (hoy no hay ninguna parcial vencida).
+
+### Lo que aguantó, contra datos reales
+- **Fichaje**: fichar a un proyecto **abre la jornada solo** (v150) · `switch_project`
+  cierra el segmento y abre otro sin tocar la jornada · `cerrar_jornada` cierra los dos ·
+  el `ProyectoID` se guarda (v145) · **cerrar con hora explícita** (el olvido de v164)
+  da 3,0 h exactas · y el caso «3 h en obra con 0 de jornada» se marca
+  `sin_asignar_indet=True` (v320) en vez de un 0 que parece bueno.
+- **v325 en vivo**: la identidad de prueba no está en Login → sale como **«de baja»**
+  (informativo) y no como «sin tarifa» (accionable). La distinción funciona.
+- **Facturas**: subtotal 1.500 + GST 150 = 1.650 · cobro parcial → `parcial` · **intentar
+  cobrar de más se topa al total** → `cobrada` · `CobrosJSON` acumula el historial · PDF
+  de 1 página con cliente, número e importes · anular la saca de
+  `facturado_por_proyecto` · y `pendiente_de_facturar` baja a 0 (no se cobra dos veces).
+
+### ⚠️ Lo que NO era un hueco (comprobado antes de «arreglarlo»)
+Una factura sin fecha de vencimiento nunca puede estar vencida — pero el formulario
+usa `date_input(value=clock.today())`, así que **desde la app siempre lleva fecha**. El
+hueco solo existía en mi script, que se saltaba la UI. Comprobarlo antes de tocar evitó
+un cambio inútil.
+
+### Método, otra vez: seguí suponiendo formas de retorno
+`mis_fichajes` devuelve `{tipo, proyecto, entrada, salida, horas, abierto}`, no las
+columnas crudas de la hoja; e `invoices._ws()` devuelve **`(worksheet, error)`**, no el
+worksheet suelto (distinto de `orders`/`expenses`). Dos errores míos en una tanda, los
+dos por no mirar. **Regla v135, van cinco veces.**
+
+## Versiones desplegadas (v345 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -4427,6 +4473,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v345 | **Ejercitado el fichaje y las facturas** (lo que v344 dejó aparte). ⚠️ Hallazgo: `estado_cobro` miraba `parcial` ANTES que `vencida`, así que **un abono de $1 sacaba a la factura de «vencida» para siempre** — y el indicador rojo del resumen, el P&L y el estado de cuenta del cliente solo cuentan las `vencida`, o sea que ese saldo no lo veía nadie (el caso clásico: el cliente paga un anticipo y desaparece). Ahora vencida gana a parcial; los tres consumidores ya sumaban `Total − Cobrado`. Lo demás aguantó contra datos reales: jornada que se abre sola, cambio de proyecto, cierre con hora explícita (3,0 h), `sin_asignar_indet`, GST, cobro parcial, tope al cobrar de más, PDF y anulación. ⚠️ Y un falso hueco descartado a tiempo: la factura sin vencimiento solo era posible saltándose la UI |
 | v344 | **Ejercitar las escrituras contra la hoja real destapó 4 fallos que ningún test vio.** ⚠️ El peor es mío y llevaba 4 versiones vivo: `projects._invalidate` llamaba a `fn.clear()` con `fn` inexistente (al reescribirlo en v339 quité el bucle y dejé el cuerpo), el `except Exception: pass` se tragaba el NameError y **la caché no se limpiaba nunca** → tras guardar un proyecto la pantalla enseñaba el valor viejo hasta 120 s. Igual en `roster`. + las cachés DERIVADAS (`group_expenses`, `over_budget`, `gaps_by_group`, `projections_by_group`) tampoco se limpiaban. ⚠️ Y la auditoría de v342 vigilaba `MargenPct`, que **no existe** —la columna es `MargenMO`—, así que el margen era el único campo sin rastro; encima `update_project` anotaba cambios que descartaba en silencio y devolvía «Proyecto actualizado.» igual. Guardián nuevo: ningún CAMPO_CLAVE sin columna real, ninguna invalidación con nombres libres, probado contra el código roto |
 | v343 | **Órdenes de compra: el dinero COMPROMETIDO deja de ser invisible.** Entre que se pide el material y llega la factura, el proyecto salía dentro de presupuesto con el dinero ya comprometido — el sobrecosto se descubría cuando ya no se podía hacer nada. Nuevo `core/orders.py` (hoja `Ordenes`): al recibir una orden se crea sola su fila en `Gastos`, así que **el costo real sigue teniendo UNA fuente** (v310). ⚠️ `project_cost.total` NO se mueve (probado contra la fórmula anterior en 6 casos); lo comprometido va aparte, con el aviso **«vas dentro, pero con lo pedido te pasas»**. ⚠️ Se marca recibida ANTES de crear el gasto: al revés, un fallo a mitad daría **dos gastos por la misma compra**; así queda un hueco VISIBLE (`sin_gasto`) con botón para completarlo. + órdenes atrasadas (obra parada esperando material) |
 | v342 | **Rastro de cambios**: `CreadoPor` decía quién creó una fila y **nada decía quién la cambió** — «¿quién puso este margen al 0%?» no tenía respuesta. Nuevo `core/auditoria.py`, acotado a lo que mueve dinero (margen, tarifa, presupuesto, fechas, avance, personal): **1 escritura por edición y solo si algo cambió de verdad** (`40` y `40.0` no generan histórico), con el historial en el detalle del proyecto. ⚠️ La anotación va FUERA del try del guardado: el cambio del usuario no se pierde porque falle el apunte. ⚠️ Leer el historial NO crea la hoja (regla v145). ⚠️ El chequeo de nombres libres cazó un NameError real: `projects_ui` importa `theme` **dentro de cada función**, y mi primera comprobación dio un OK falso porque `ast.walk` encontraba el import local de OTRA función |

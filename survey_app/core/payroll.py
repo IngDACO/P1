@@ -136,7 +136,15 @@ def generar(grupo, desde, hasta, super_pct=0.0, ret_pct=0.0, creado_por="") -> d
 
     Precarga: retención (deducción = base×ret%) y superannuation (aporte = base×super%),
     ambos editables luego. Salta usuarios que YA tienen nómina de ese mismo periodo.
-    Devuelve {creadas, omitidas, sin_tarifa}.
+    Devuelve {creadas, omitidas, sin_tarifa: [nombres]}.
+
+    ⚠️ v346 — SIN TARIFA NO SE GENERA (decisión del usuario). Antes se creaba igual con
+    base $0: una colilla de $0 por trabajo hecho es un documento EQUIVOCADO, y se
+    quedaba ahí (en la hoja real había una, `NOM-0002`: 8,69 h de trabajo → $0, emitida
+    antes de que esa persona tuviera tarifa). Ahora se salta y se devuelve el NOMBRE
+    para poder arreglarlo. **Es reversible**: al ponerle la tarifa y volver a generar el
+    mismo periodo entra sin duplicar, porque no dejó fila que active el salto de
+    duplicados. Al resto del equipo no le afecta: su nómina se genera igual.
     """
     w, err = _ws()
     if err:
@@ -146,7 +154,7 @@ def generar(grupo, desde, hasta, super_pct=0.0, ret_pct=0.0, creado_por="") -> d
     rates = auth.rate_map(grupo)
     existentes = {(str(f.get("Usuario", "")), str(f.get("PeriodoDesde", "")), str(f.get("PeriodoHasta", "")))
                   for f in list_nominas(grupo, incluir_anuladas=True)}
-    rows, creadas, omitidas, sin_tarifa = [], 0, 0, 0
+    rows, creadas, omitidas, sin_tarifa = [], 0, 0, []
     base_num = _max_num()
     for clave, info in sorted(horas.items()):
         if (clave, d_iso, h_iso) in existentes:
@@ -154,7 +162,9 @@ def generar(grupo, desde, hasta, super_pct=0.0, ret_pct=0.0, creado_por="") -> d
             continue
         tarifa = _num(rates.get(clave, 0))
         if tarifa <= 0:
-            sin_tarifa += 1
+            # ⚠️ v346: se SALTA, no se crea con $0 (ver el docstring).
+            sin_tarifa.append(str(info.get("nombre") or clave))
+            continue
         base = round(_num(info["horas"]) * tarifa, 2)
         conceptos = []
         if ret_pct > 0:
