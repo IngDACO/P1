@@ -3033,13 +3033,16 @@ def render_expenses(pid, grupo, can_delete=False, key_prefix="ex"):
     proy  = cp["proyectado"]
 
     # ── Titular: una frase antes de cualquier numero ──
+    # ⚠️ v349: los importes van por `theme.dinero` (formatea Y escapa el `$`). Con dos
+    # `$` sueltos en la misma cadena, Streamlit la renderiza como LaTeX (regla v309).
+    from core import theme as _T
     if proy and pres > 0 and proy > pres * 1.02:
-        _t = (f"A este ritmo el proyecto costara **${proy:,.0f}**, "
-              f"**${proy - pres:,.0f} por encima** del presupuesto")
+        _t = (f"A este ritmo el proyecto costara **{_T.dinero(proy, 0)}**, "
+              f"**{_T.dinero(proy - pres, 0)} por encima** del presupuesto")
         _c, _fn = "#c0392b", st.error
     elif proy and pres > 0:
-        _t = (f"A este ritmo el proyecto costara **${proy:,.0f}**, dentro "
-              f"del presupuesto de ${pres:,.0f}")
+        _t = (f"A este ritmo el proyecto costara **{_T.dinero(proy, 0)}**, dentro "
+              f"del presupuesto de {_T.dinero(pres, 0)}")
         _c, _fn = "#1e8449", st.success
     elif cp["total"] > 0 and pres <= 0:
         _t = ("Este proyecto **no tiene presupuesto asignado**, así que no hay "
@@ -3067,21 +3070,26 @@ def render_expenses(pid, grupo, can_delete=False, key_prefix="ex"):
 
     if pres > 0:
         st.progress(min(1.0, (cp["pct"] or 0) / 100.0))
-        _l = f"Llevas **${cp['total']:,.0f}** de ${pres:,.0f} · **{cp['pct']}% consumido**"
+        # ⚠️ v349: DOS `$` en la misma cadena = LaTeX (regla de v309). Se veía en
+        # producción como «Llevas **0** de 10,000»: los `$` desaparecían y los `**`
+        # salían literales. `theme.dinero` formatea Y escapa.
+        from core import theme as _T
+        _l = (f"Llevas **{_T.dinero(cp['total'], 0)}** de {_T.dinero(pres, 0)}"
+              f" · **{cp['pct']}% consumido**")
         if cp["avance"] > 0:
             _l += f" con **{cp['avance']:.0f}% de avance**"
             if cp["por_punto"]:
-                _l += f" (${cp['por_punto']:,.0f} por punto)"
+                _l += f" ({_T.dinero(cp['por_punto'], 0)} por punto)"
         st.caption(_l + ("  :red[:material/block:] SOBRE PRESUPUESTO" if cp["over"] else ""))
         # ⚠️ v343: el caso que nadie veía — todavía dentro de presupuesto, pero con
         # lo ya PEDIDO se pasa seguro. Antes esto solo se sabía al llegar la factura.
         if cp.get("over_comp"):
             st.warning(
-                f":material/shopping_cart: Vas dentro de presupuesto, pero con las "
-                f"**${cp['comprometido']:,.0f} ya pedidos** el proyecto llega a "
-                f"**${cp['total_comp']:,.0f}**, "
-                f"**${cp['total_comp'] - pres:,.0f} por encima** de los "
-                f"${pres:,.0f} presupuestados.")
+                ":material/shopping_cart: Vas dentro de presupuesto, pero con las "
+                f"**{_T.dinero(cp['comprometido'], 0)} ya pedidos** el proyecto llega "
+                f"a **{_T.dinero(cp['total_comp'], 0)}**, "
+                f"**{_T.dinero(cp['total_comp'] - pres, 0)} por encima** de los "
+                f"{_T.dinero(pres, 0)} presupuestados.")
 
     # ── Órdenes de compra: el dinero comprometido (v343) ──
     _ordenes_section(pid, grupo, editable=can_delete, key_prefix=key_prefix)

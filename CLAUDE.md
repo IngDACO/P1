@@ -4533,7 +4533,24 @@ subestimado justo en el trabajo que no se pagaba. La obra `prueba1` se facturó 
 (margen 0%), así que al contabilizar la mano de obra que faltaba, el resultado es
 pérdida. No es un fallo nuevo: es el fallo viejo dejando de esconderse.
 
-## Versiones desplegadas (v347 = actual)
+## Limpieza de las colillas de $0 + homónimos en el aviso (v348)
+Anuladas `NOM-0001` (Bobo, 0,01 h), `NOM-0004` y `NOM-0005` (`fijiofgjei`, la cuenta
+eliminada en v163): colillas de $0 de gente a la que no se paga por hora.
+⚠️ **Ninguna cifra se movió** (costo_nomina, ganancia y la conciliación idénticas), y esa
+es justamente la comprobación de que se anuló lo correcto: si mover algo de $0 cambiara
+un total, algo estaría mal. La lista de nóminas pasa de 5 filas a **2 con dinero de
+verdad** (`NOM-0003` pagada $1.286,80 · `NOM-0006` emitida $347,60).
+Y con v346+v347 juntos el ciclo cierra: regenerar ese periodo ahora da `creadas: 0` y
+**nombra** a los tres, en vez de recrear las colillas de $0.
+
+### ⚠️ El aviso no distinguía a dos personas distintas
+Esa misma prueba sacó `sin_tarifa: ['Bobo', 'fijiofgjei', 'fijiofgjei']`: dos cuentas
+distintas con el mismo Nombre, **en el mensaje que justamente te dice a quién ponerle la
+tarifa**. Es la cuarta aparición del patrón (v151 horas, v306 proyectos, v319 nóminas).
+Ahora el login se añade **solo cuando el nombre se repite** → `fijiofgjei (conductor)` y
+`fijiofgjei (fijiofgjei)`, dejando limpio el caso normal.
+
+## Versiones desplegadas (v348 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -4541,6 +4558,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v348 | Anuladas las 3 colillas de $0 que quedaban (`NOM-0001`, `NOM-0004`, `NOM-0005`): la lista de nóminas pasa de 5 filas a **2 con dinero real**. ⚠️ Ninguna cifra se movió — la comprobación de que se anuló lo correcto. + el aviso de tarifa faltante **distingue homónimos** (`fijiofgjei (conductor)` vs `fijiofgjei (fijiofgjei)`): salía dos veces el mismo nombre para dos personas distintas, justo en el mensaje que dice a quién arreglar. Cuarta aparición del patrón (v151/v306/v319) |
 | v347 | ⚠️ **Una nómina anulada bloqueaba reemitir el periodo**: `generar` contaba las anuladas como duplicados, así que anular y regenerar no creaba nada y **la app no podía reemitir la nómina de nadie** (principio de v340: si se puede deshacer, tiene que poder rehacerse). Con eso arreglado se corrigió **`NOM-0002`** —8,69 h de trabajo real emitidas en $0— reemitiéndola a $347,60 + super 11,5% (el mismo del lote). ⚠️ La ganancia del grupo pasa de $210,42 a **−$177,15**, y esa es la cifra CORRECTA: el costo estaba subestimado en el trabajo que no se pagaba. Y la conciliación de v313 ya decía «sin explicar $347,60» — el dato llevaba ahí señalando el fallo |
 | v346 | **Nóminas ejercitadas** (última ruta sin recorrer) y **decisión del usuario sobre la tarifa 0**: quien no tiene tarifa ya NO recibe una colilla de $0 — se salta, se le nombra y se dice dónde arreglarlo. ⚠️ Reversible por construcción: como no deja fila, al poner la tarifa y regenerar el mismo periodo entra sin duplicar (probado). Motivo con evidencia: en la hoja real está `NOM-0002`, 8,69 h de trabajo emitidas en $0. Aguantaron el salto de duplicados, el neto (aportes que no descuentan), marcar pagada, la colilla PDF y anular. De regalo, dos confirmaciones en vivo: el **reparto por medianoche de v164** (6,37 + 1,63 = 8,0 h) y la **retención de impuesto**, que nunca se había calculado en esa hoja |
 | v345 | **Ejercitado el fichaje y las facturas** (lo que v344 dejó aparte). ⚠️ Hallazgo: `estado_cobro` miraba `parcial` ANTES que `vencida`, así que **un abono de $1 sacaba a la factura de «vencida» para siempre** — y el indicador rojo del resumen, el P&L y el estado de cuenta del cliente solo cuentan las `vencida`, o sea que ese saldo no lo veía nadie (el caso clásico: el cliente paga un anticipo y desaparece). Ahora vencida gana a parcial; los tres consumidores ya sumaban `Total − Cobrado`. Lo demás aguantó contra datos reales: jornada que se abre sola, cambio de proyecto, cierre con hora explícita (3,0 h), `sin_asignar_indet`, GST, cobro parcial, tope al cobrar de más, PDF y anulación. ⚠️ Y un falso hueco descartado a tiempo: la factura sin vencimiento solo era posible saltándose la UI |
