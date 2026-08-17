@@ -169,7 +169,7 @@ def generar(grupo, desde, hasta, super_pct=0.0, ret_pct=0.0, creado_por="") -> d
         tarifa = _num(rates.get(clave, 0))
         if tarifa <= 0:
             # ⚠️ v346: se SALTA, no se crea con $0 (ver el docstring).
-            sin_tarifa.append(str(info.get("nombre") or clave))
+            sin_tarifa.append((str(info.get("nombre") or clave), clave))
             continue
         base = round(_num(info["horas"]) * tarifa, 2)
         conceptos = []
@@ -192,7 +192,15 @@ def generar(grupo, desde, hasta, super_pct=0.0, ret_pct=0.0, creado_por="") -> d
     if rows:
         w.append_rows(rows, value_input_option="RAW")
         _invalidate()
-    return {"creadas": creadas, "omitidas": omitidas, "sin_tarifa": sin_tarifa}
+    # ⚠️ v348: desempatar HOMÓNIMOS. En producción salió `['Bobo', 'fijiofgjei',
+    # 'fijiofgjei']`: dos personas distintas con el mismo nombre, en el aviso que
+    # justamente te dice a quién ponerle la tarifa. El login solo se añade cuando el
+    # nombre se repite, para no ensuciar el caso normal (regla de v151/v306/v319).
+    _veces = {}
+    for nom, _ in sin_tarifa:
+        _veces[nom] = _veces.get(nom, 0) + 1
+    st_txt = [f"{nom} ({clave})" if _veces[nom] > 1 else nom for nom, clave in sin_tarifa]
+    return {"creadas": creadas, "omitidas": omitidas, "sin_tarifa": st_txt}
 
 
 def _find_row(w, nid):

@@ -4498,7 +4498,42 @@ saca del resumen y del P&L.
 - **La retención de impuesto se calculó por primera vez** en esa hoja: las 5 nóminas
   existentes solo llevaban el concepto de Superannuation.
 
-## Versiones desplegadas (v346 = actual)
+## ⚠️ Una nómina anulada bloqueaba REEMITIR el periodo (v347) + corrección de NOM-0002
+El usuario pidió arreglar `NOM-0002` (8,69 h de trabajo real emitidas en **$0**, porque
+se generó antes de que esa persona tuviera tarifa). El camino obvio —anular y
+regenerar— **no funcionaba**: `generar` construía el conjunto de duplicados con
+`list_nominas(grupo, incluir_anuladas=True)`, así que **la fila anulada seguía
+bloqueando**. O sea que la app no tenía NINGUNA forma de reemitir el periodo de nadie.
+Es el principio de v340 otra vez: **si se puede deshacer, tiene que poder rehacerse**.
+- Arreglo: el filtro pasa a `list_nominas(grupo)` (que ya excluye anuladas por defecto).
+  La fila anulada se queda como **rastro de la corrección**; ni `resumen` ni el
+  `costo_nomina` del P&L la cuentan, así que no se duplica nada. Probado en vivo:
+  emitir → anular → reemitir el MISMO periodo = `{creadas: 1}`, dos filas (una anulada,
+  una viva), `resumen.n` sin doble conteo.
+
+### ⚠️ La conciliación ya lo estaba señalando y nadie la leyó
+Antes de tocar nada, `conciliacion_mo` decía **«sin explicar $347,60»** — exactamente
+8,69 h × $40, la colilla que faltaba. El puente que se construyó en v313 llevaba desde
+entonces apuntando al fallo. **Cuando un número no cuadra, la app ya lo sabe: hay que
+mirarlo antes de buscar a ciegas.**
+
+### La corrección (datos de producción, autorizada por el usuario)
+`NOM-0002` anulada + `NOM-0006` emitida: 8,69 h × $40 = **$347,60**, super 11,5%
+(= $39,97). El 11,5% no se eligió a ojo: es **el mismo que se aplicó a `NOM-0003` en ese
+mismo lote** (147,98 / 1.286,80). Los otros 4 del periodo se omitieron solos porque su
+nómina sigue viva. Efecto en las cifras del grupo:
+| | antes | después |
+|---|---|---|
+| costo_nomina | $1.434,78 | **$1.822,35** |
+| costo_total | $2.934,78 | **$3.322,35** |
+| ganancia | $210,42 | **−$177,15** |
+| sin explicar (conciliación) | $347,60 | **$0,00** |
+⚠️ **La ganancia pasa a NEGATIVA, y esa es la cifra correcta**: el costo estaba
+subestimado justo en el trabajo que no se pagaba. La obra `prueba1` se facturó al costo
+(margen 0%), así que al contabilizar la mano de obra que faltaba, el resultado es
+pérdida. No es un fallo nuevo: es el fallo viejo dejando de esconderse.
+
+## Versiones desplegadas (v347 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -4506,6 +4541,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v347 | ⚠️ **Una nómina anulada bloqueaba reemitir el periodo**: `generar` contaba las anuladas como duplicados, así que anular y regenerar no creaba nada y **la app no podía reemitir la nómina de nadie** (principio de v340: si se puede deshacer, tiene que poder rehacerse). Con eso arreglado se corrigió **`NOM-0002`** —8,69 h de trabajo real emitidas en $0— reemitiéndola a $347,60 + super 11,5% (el mismo del lote). ⚠️ La ganancia del grupo pasa de $210,42 a **−$177,15**, y esa es la cifra CORRECTA: el costo estaba subestimado en el trabajo que no se pagaba. Y la conciliación de v313 ya decía «sin explicar $347,60» — el dato llevaba ahí señalando el fallo |
 | v346 | **Nóminas ejercitadas** (última ruta sin recorrer) y **decisión del usuario sobre la tarifa 0**: quien no tiene tarifa ya NO recibe una colilla de $0 — se salta, se le nombra y se dice dónde arreglarlo. ⚠️ Reversible por construcción: como no deja fila, al poner la tarifa y regenerar el mismo periodo entra sin duplicar (probado). Motivo con evidencia: en la hoja real está `NOM-0002`, 8,69 h de trabajo emitidas en $0. Aguantaron el salto de duplicados, el neto (aportes que no descuentan), marcar pagada, la colilla PDF y anular. De regalo, dos confirmaciones en vivo: el **reparto por medianoche de v164** (6,37 + 1,63 = 8,0 h) y la **retención de impuesto**, que nunca se había calculado en esa hoja |
 | v345 | **Ejercitado el fichaje y las facturas** (lo que v344 dejó aparte). ⚠️ Hallazgo: `estado_cobro` miraba `parcial` ANTES que `vencida`, así que **un abono de $1 sacaba a la factura de «vencida» para siempre** — y el indicador rojo del resumen, el P&L y el estado de cuenta del cliente solo cuentan las `vencida`, o sea que ese saldo no lo veía nadie (el caso clásico: el cliente paga un anticipo y desaparece). Ahora vencida gana a parcial; los tres consumidores ya sumaban `Total − Cobrado`. Lo demás aguantó contra datos reales: jornada que se abre sola, cambio de proyecto, cierre con hora explícita (3,0 h), `sin_asignar_indet`, GST, cobro parcial, tope al cobrar de más, PDF y anulación. ⚠️ Y un falso hueco descartado a tiempo: la factura sin vencimiento solo era posible saltándose la UI |
 | v344 | **Ejercitar las escrituras contra la hoja real destapó 4 fallos que ningún test vio.** ⚠️ El peor es mío y llevaba 4 versiones vivo: `projects._invalidate` llamaba a `fn.clear()` con `fn` inexistente (al reescribirlo en v339 quité el bucle y dejé el cuerpo), el `except Exception: pass` se tragaba el NameError y **la caché no se limpiaba nunca** → tras guardar un proyecto la pantalla enseñaba el valor viejo hasta 120 s. Igual en `roster`. + las cachés DERIVADAS (`group_expenses`, `over_budget`, `gaps_by_group`, `projections_by_group`) tampoco se limpiaban. ⚠️ Y la auditoría de v342 vigilaba `MargenPct`, que **no existe** —la columna es `MargenMO`—, así que el margen era el único campo sin rastro; encima `update_project` anotaba cambios que descartaba en silencio y devolvía «Proyecto actualizado.» igual. Guardián nuevo: ningún CAMPO_CLAVE sin columna real, ninguna invalidación con nombres libres, probado contra el código roto |
