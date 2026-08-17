@@ -402,7 +402,11 @@ def traslado(aid, grupo, hacia_tipo, hacia_ref, nota="", creado_por="") -> tuple
     if not a:
         return False, "Activo no encontrado."
     desde = ubic_str(a)
-    hacia = f"{hacia_tipo}: {hacia_ref}" if hacia_ref else hacia_tipo
+    # ⚠️ v350: el historial guarda el nombre YA RESUELTO (regla v306: un histórico
+    # cuenta lo que pasó, no lo que hay ahora). `salida` sí lo hacía y aquí se quedó el
+    # ID crudo, así que el mismo sitio aparecía como «proyecto: PRJ-0005» al llegar y
+    # como «proyecto: prueba2» al salir — dos grafías para el mismo evento.
+    hacia = f"{hacia_tipo}: {ubic_ref_label(hacia_ref)}" if hacia_ref else hacia_tipo
     ok, msg = update_activo(aid, {"UbicacionTipo": hacia_tipo, "UbicacionRef": hacia_ref})
     if not ok:
         return ok, msg

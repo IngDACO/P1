@@ -4550,7 +4550,39 @@ tarifa**. Es la cuarta aparición del patrón (v151 horas, v306 proyectos, v319 
 Ahora el login se añade **solo cuando el nombre se repite** → `fijiofgjei (conductor)` y
 `fijiofgjei (fijiofgjei)`, dejando limpio el caso normal.
 
-## Versiones desplegadas (v348 = actual)
+## ⚠️ El LaTeX volvió: el guardián de v309 no miraba las VARIABLES (v349)
+Verificando en el navegador que v348 corría, la pantalla de **Costos** mostraba
+literalmente `Llevas **0** de 10,000`: los `$` desaparecidos y los `**` en crudo. Es
+exactamente el fallo de v309 —dos `$` en la misma cadena y Streamlit la renderiza como
+LaTeX— **en un sitio que el guardián de entonces no podía ver**.
+- **La ceguera:** `verif_v309.py` inspecciona los argumentos LITERALES de
+  `st.markdown/metric/caption/…`. Aquí la cadena se arma antes en una variable
+  (`_l = f"Llevas **${...}** de ${...}"`) y solo después se pasa a `st.caption(_l + …)`.
+- **Chequeo nuevo, más simple y más amplio:** por AST, **cualquier f-string del repo**
+  con 2+ `$` sin escapar, se use donde se use. Barrido: **4 coincidencias**.
+  - `auth.py:47` → el formato del hash PBKDF2 (`pbkdf2$sha256$…`). **Falso positivo**,
+    no se muestra nunca; queda exento por (fichero, línea). Mirarlo antes de "arreglarlo"
+    evitó romper el login.
+  - Las **otras 3 están todas en la pantalla de Costos**: el titular «costará $X, $Y por
+    encima» (2 ramas) y **el aviso de material comprometido que yo mismo escribí en
+    v343**. Las tres a `theme.dinero` (formatea Y escapa).
+- ⚠️ Las del titular estaban **latentes**: solo salen con un proyecto que tenga costos y
+  presupuesto, y el que abrí no tenía ninguno. Sin el barrido por AST no aparecen.
+
+**La lección de método:** un guardián acota el fallo a la forma en que lo viste. Este se
+escribió mirando llamadas directas, así que la misma cadena movida a una variable pasa
+por delante sin que salte nada. Cuando el mismo fallo reaparece, la pregunta no es solo
+«¿lo arreglo?» sino **«¿por qué mi chequeo no lo vio?»**.
+
+### De paso, verificado en el navegador con v348 ya corriendo
+Las dos versiones coinciden (barra lateral **v348** = `app.py` fresco · topbar **v348** =
+`home_ui._VERSION` congelado al importar) → el proceso reinició de verdad. Nóminas:
+**POR PAGAR $348 · PAGADO $1.287 · 2 colillas**, sin el aviso de $0. El bloque
+**«Órdenes de compra (0 pendientes)»** renderiza en Costos sin romper (primera vez que
+ese código de v343 se dibuja). Y el aviso de v324 para 0% de avance sale correcto:
+*«Sin avance todavía: necesitas 7.1 %/día en los 14 días que quedan»*.
+
+## Versiones desplegadas (v349 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -4558,6 +4590,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v349 | ⚠️ **El LaTeX de v309 volvió en la pantalla de Costos** (`Llevas **0** de 10,000`, con los `$` comidos y los `**` literales). El guardián de v309 solo miraba los argumentos LITERALES de `st.*`, y aquí la cadena se arma antes en una variable → **ciego**. Chequeo nuevo por AST: cualquier f-string del repo con 2+ `$` sin escapar. Salieron 4 — una es el hash PBKDF2 (falso positivo, exento) y **las otras 3 están en Costos**, incluida la que yo escribí en v343. Dos de ellas estaban latentes (solo salen con costos y presupuesto). Lección: cuando el mismo fallo reaparece, preguntar por qué el chequeo no lo vio |
 | v348 | Anuladas las 3 colillas de $0 que quedaban (`NOM-0001`, `NOM-0004`, `NOM-0005`): la lista de nóminas pasa de 5 filas a **2 con dinero real**. ⚠️ Ninguna cifra se movió — la comprobación de que se anuló lo correcto. + el aviso de tarifa faltante **distingue homónimos** (`fijiofgjei (conductor)` vs `fijiofgjei (fijiofgjei)`): salía dos veces el mismo nombre para dos personas distintas, justo en el mensaje que dice a quién arreglar. Cuarta aparición del patrón (v151/v306/v319) |
 | v347 | ⚠️ **Una nómina anulada bloqueaba reemitir el periodo**: `generar` contaba las anuladas como duplicados, así que anular y regenerar no creaba nada y **la app no podía reemitir la nómina de nadie** (principio de v340: si se puede deshacer, tiene que poder rehacerse). Con eso arreglado se corrigió **`NOM-0002`** —8,69 h de trabajo real emitidas en $0— reemitiéndola a $347,60 + super 11,5% (el mismo del lote). ⚠️ La ganancia del grupo pasa de $210,42 a **−$177,15**, y esa es la cifra CORRECTA: el costo estaba subestimado en el trabajo que no se pagaba. Y la conciliación de v313 ya decía «sin explicar $347,60» — el dato llevaba ahí señalando el fallo |
 | v346 | **Nóminas ejercitadas** (última ruta sin recorrer) y **decisión del usuario sobre la tarifa 0**: quien no tiene tarifa ya NO recibe una colilla de $0 — se salta, se le nombra y se dice dónde arreglarlo. ⚠️ Reversible por construcción: como no deja fila, al poner la tarifa y regenerar el mismo periodo entra sin duplicar (probado). Motivo con evidencia: en la hoja real está `NOM-0002`, 8,69 h de trabajo emitidas en $0. Aguantaron el salto de duplicados, el neto (aportes que no descuentan), marcar pagada, la colilla PDF y anular. De regalo, dos confirmaciones en vivo: el **reparto por medianoche de v164** (6,37 + 1,63 = 8,0 h) y la **retención de impuesto**, que nunca se había calculado en esa hoja |
