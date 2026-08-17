@@ -4353,7 +4353,73 @@ resolvió para la mano de obra.
 - ⚠️ Las dos hojas nuevas entran en `hojas.HOJAS_LECTURA`: fuera del lote, cada una
   costaría una llamada suelta por sesión (v339).
 
-## Versiones desplegadas (v343 = actual)
+## ⚠️ EJERCITAR LAS ESCRITURAS: 4 fallos que ningún test vio (v344)
+El usuario pidió «el ejercicio completo». Se ejercitaron las escrituras **contra la
+hoja real** (código local de v343, datos de producción, con foto del antes y limpieza
+después). Salieron cuatro fallos, y **ninguno lo habría encontrado un test**: los tests
+usaban diccionarios inventados por mí, con MIS nombres de columna y sin caché real.
+
+### ⚠️ 1. La caché de proyectos NO se limpiaba desde v339 — regresión mía, viva 4 versiones
+```python
+def _invalidate():
+    hojas.invalidar()
+    try:
+        fn.clear()        # ⚠️ `fn` NO EXISTE → NameError
+    except Exception:
+        pass              # ⚠️ …y aquí se lo traga
+```
+El original era `for fn in (_records, _fichaje_records): fn.clear()`. Al reescribirlo en
+v339 quité el bucle y dejé `fn.clear()` colgando. Confirmado con `git log -S` (commit
+`70309d5`). **Efecto en producción: tras guardar un proyecto, una actividad o una
+agrupación, la pantalla podía enseñar el valor viejo hasta 120 s** — el «lo guardé y no
+sale» que v339 decía haber evitado. Lo mismo en `roster` (`f.clear()`), o sea el tablero
+de planificación. Barrido por AST de las 17 funciones de invalidación: solo esas dos.
+**Un `except Exception: pass` alrededor de código nuevo esconde justo el fallo que
+acabas de introducir** (misma lección de v323 y v338 — van tres).
+
+### ⚠️ 2. Y las cachés DERIVADAS tampoco
+`group_expenses`, `over_budget`, `gaps_by_group` y `projections_by_group` cachean el
+agregado: limpiar solo `_records` dejaba el total del grupo, la alerta de sobre
+presupuesto y el retraso con el valor viejo hasta 120 s. Probado en vivo: añadir un
+recibo de $77,77 y leer el agregado **inmediatamente** → $1.500 → $1.577,77.
+
+### ⚠️ 3. El margen era el ÚNICO campo que la auditoría NO vigilaba
+`CAMPOS_CLAVE` tenía `MargenPct`; la columna real es **`MargenMO`**. O sea que la
+pregunta para la que se construyó la hoja —«¿quién puso este margen a 0?»— era
+justamente la que no tenía respuesta. (`Pagada` era otro nombre fantasma; `Rol` sí
+existe: mi primer chequeo lo marcó mal porque cogió `GROUPS_HEADERS` en vez de
+`LOGIN_HEADERS` — **validar contra la constante EXACTA, no contra la que encuentre un
+atajo**, regla v135.)
+
+### ⚠️ 4. `update_project` anotaba cambios que nunca escribió
+Una clave que no está en `_PCOL` se descarta **en silencio** y la función devolvía
+igualmente «Proyecto actualizado.». Con la auditoría enganchada, eso además **anotaba un
+cambio que la hoja nunca recibió**, y lo repetía en cada guardado (el «antes» no cambiaba
+nunca porque no se escribía nada). Ahora: se audita `_escritos` (lo filtrado por `_PCOL`),
+las columnas ignoradas se registran en el log, y si NINGUNA es válida se devuelve error
+en vez de un éxito falso.
+
+### Lo que SÍ funcionó a la primera, contra datos reales
+- **Órdenes de compra (v343) enteras**: crear → comprometido $7.500 → el aviso
+  «vas dentro pero con lo pedido te pasas» ($10.500 de $10.000, sin haber gastado un
+  peso) → recibir por un importe distinto ($480 en vez de $500) → gasto creado y
+  enlazado → comprometido baja solo → atrasadas detecta la de 4 días.
+- **`set_grouping_members`** (el arreglo de v322, nunca clicado): los 2 miembros
+  **archivados** sobreviven a un guardado, quitar y volver a poner funciona, y el
+  avance consolidado (21,3%) no se mueve.
+- **`create_project` + `delete_project`**: 11 actividades, fila alineada columna por
+  columna, `datos_asociados` correcto y borrado limpio.
+- La **auditoría** registra también los cambios de agrupación (`AgrupacionID` +
+  `PesoEnAgrupacion`) sin haberlo programado aparte: van por `update_project`.
+
+### Método (repetir tal cual la próxima vez)
+1. Foto del estado **en solo lectura con gspread crudo** (los helpers migran cabeceras
+   = escriben, regla v145). 2. Ejercitar sobre un proyecto de prueba. 3. Verificar
+   leyendo. 4. **Devolver todo a su sitio** y comprobarlo. ⚠️ Mi propia foto del «antes»
+   imprimía el margen por `MargenPct`, así que no probaba nada: lo que permitió afirmar
+   que no toqué PRJ-0006 fue **el propio historial de auditoría**, que lista cada cambio.
+
+## Versiones desplegadas (v344 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -4361,6 +4427,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v344 | **Ejercitar las escrituras contra la hoja real destapó 4 fallos que ningún test vio.** ⚠️ El peor es mío y llevaba 4 versiones vivo: `projects._invalidate` llamaba a `fn.clear()` con `fn` inexistente (al reescribirlo en v339 quité el bucle y dejé el cuerpo), el `except Exception: pass` se tragaba el NameError y **la caché no se limpiaba nunca** → tras guardar un proyecto la pantalla enseñaba el valor viejo hasta 120 s. Igual en `roster`. + las cachés DERIVADAS (`group_expenses`, `over_budget`, `gaps_by_group`, `projections_by_group`) tampoco se limpiaban. ⚠️ Y la auditoría de v342 vigilaba `MargenPct`, que **no existe** —la columna es `MargenMO`—, así que el margen era el único campo sin rastro; encima `update_project` anotaba cambios que descartaba en silencio y devolvía «Proyecto actualizado.» igual. Guardián nuevo: ningún CAMPO_CLAVE sin columna real, ninguna invalidación con nombres libres, probado contra el código roto |
 | v343 | **Órdenes de compra: el dinero COMPROMETIDO deja de ser invisible.** Entre que se pide el material y llega la factura, el proyecto salía dentro de presupuesto con el dinero ya comprometido — el sobrecosto se descubría cuando ya no se podía hacer nada. Nuevo `core/orders.py` (hoja `Ordenes`): al recibir una orden se crea sola su fila en `Gastos`, así que **el costo real sigue teniendo UNA fuente** (v310). ⚠️ `project_cost.total` NO se mueve (probado contra la fórmula anterior en 6 casos); lo comprometido va aparte, con el aviso **«vas dentro, pero con lo pedido te pasas»**. ⚠️ Se marca recibida ANTES de crear el gasto: al revés, un fallo a mitad daría **dos gastos por la misma compra**; así queda un hueco VISIBLE (`sin_gasto`) con botón para completarlo. + órdenes atrasadas (obra parada esperando material) |
 | v342 | **Rastro de cambios**: `CreadoPor` decía quién creó una fila y **nada decía quién la cambió** — «¿quién puso este margen al 0%?» no tenía respuesta. Nuevo `core/auditoria.py`, acotado a lo que mueve dinero (margen, tarifa, presupuesto, fechas, avance, personal): **1 escritura por edición y solo si algo cambió de verdad** (`40` y `40.0` no generan histórico), con el historial en el detalle del proyecto. ⚠️ La anotación va FUERA del try del guardado: el cambio del usuario no se pierde porque falle el apunte. ⚠️ Leer el historial NO crea la hoja (regla v145). ⚠️ El chequeo de nombres libres cazó un NameError real: `projects_ui` importa `theme` **dentro de cada función**, y mi primera comprobación dio un OK falso porque `ast.walk` encontraba el import local de OTRA función |
 | v341 | **Comparación con el periodo anterior en el P&L**: $1.710 de ganancia no dice nada hasta saber qué dio el mes pasado. `finance.periodo_anterior/variacion/pnl_comparado` + `_kpi_card(var=)` → ▲/▼ con el % bajo cada cifra, con **0 llamadas nuevas**. ⚠️ En un COSTO subir es PEOR (se invierte el sentido, si no gastar más salía en verde) y ⚠️ sin base no se muestra un «+∞%». Verificado con datos reales: agosto $1.710,42 vs julio −$1.500 → +214% |

@@ -105,11 +105,17 @@ def estado_cobro(f: dict) -> str:
     total, cob = _num(f.get("Total")), _num(f.get("Cobrado"))
     if total > 0 and cob >= total - 0.005:
         return "cobrada"
-    if cob > 0:
-        return "parcial"
+    # ⚠️ v345: VENCIDA gana a PARCIAL. Antes `parcial` se comprobaba primero, así que
+    # **un abono de $1 sacaba a la factura de «vencida» para siempre**: el indicador
+    # rojo del resumen y el `vencido` del P&L solo cuentan las `vencida`, y ese saldo
+    # —que es el caso más común, el cliente que paga un anticipo y desaparece— no lo
+    # veía nadie. Los tres sitios que suman lo vencido ya restan `Total − Cobrado`,
+    # así que cuentan el saldo pendiente, no el total.
     venc = _parse_date(f.get("Vencimiento"))
     if venc and venc < clock.today():
         return "vencida"
+    if cob > 0:
+        return "parcial"
     return "pendiente"
 
 
