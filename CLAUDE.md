@@ -4995,7 +4995,54 @@ Limpieza verificada: grupo de prueba borrado, `Grupos` con solo `cliente1` y sin
 Cuenta con la que hay que compartir cada libro nuevo:
 `fichaje-bot@gen-lang-client-0922870449.iam.gserviceaccount.com` (identificador, no clave).
 
-## Versiones desplegadas (v359 = actual)
+## LA GANANCIA DEJA DE SER UN % (v360) — importe por rubro
+Cambio de modelo pedido por el usuario: *«la ganancia ya no es un porcentaje sobre el
+proyecto, es un valor sobre cada rubro (servicio, producto y trabajador)»*.
+
+**Decisiones del usuario:** la ganancia del trabajador se mide **por hora**, se define
+**por proyecto**, y los materiales cargados en obra (recibos) se facturan **a costo**.
+
+```
+ingreso  = Σ_persona( horas × (tarifa_costo + ganancia_hora) ) + materiales
+ganancia = Σ_persona( horas × ganancia_hora )
+```
+El **porcentaje deja de ser la entrada** y pasa a ser consecuencia: se sigue calculando
+para mostrarlo, pero ya no se teclea. Es v355 (cotizar por ganancia, no por %) extendido
+al proyecto y a las personas.
+
+### ⚠️ Respaldo: ninguna obra cambia de cifra en silencio
+Las 6 obras tienen `MargenMO` (20-30%) y ninguna tenía ganancia por hora. Cambiar en
+frío les habría desplomado el ingreso estimado —y con él **lo pendiente de facturar**—
+sin que nadie lo pidiera. Así que **sin `GananciaHoraJSON` se sigue usando el modelo
+viejo**, y `project_revenue` devuelve `modelo` (`"rubro"` / `"margen"`) para que la
+pantalla diga cuál aplica. Verificado: las 6 siguen exactamente igual tras el cambio.
+
+### Dónde vive y cómo se pone
+`Proyectos.GananciaHoraJSON` = `{usuario: $/h}` — una columna, sin hoja nueva ni llamada
+extra (misma solución que ParamsJSON/LineasJSON). Se edita en **💰 Costos → «Cuánto ganas
+con cada persona»**, junto a «Mano de obra por persona», que es donde ya se ve quién
+trabajó y cuánto costó. Solo se teclea la **Ganancia/h**; Precio/h y «Ganas» van
+bloqueados porque son consecuencia (igual que en v355).
+
+### Probado con datos reales (PRJ-0001)
+```
+antes  modelo=margen  costo 3.146,40 · ingreso 3.475,68 · ganancia 329,28 · margen 20%
+$15/h  modelo=rubro   costo 3.146,40 · ingreso 3.763,80 · ganancia 617,40 · margen 37,5% (derivado)
+       campo1 32,16 h × $15 = 482,40 · lksdfkldsf 8,97 h × $15 = 134,55 · admin1 0,03 h = 0,45
+```
+- ⚠️ **Quien no tenga ganancia puesta se factura A COSTO**, y se dice (`sin_ganancia`):
+  el patrón de las colillas de $0 de v346 — un cero silencioso no se nota hasta el total.
+- ⚠️ **Reversible**: quitar las ganancias devuelve la obra al modelo viejo y el ingreso
+  vuelve **exactamente** a 3.475,68. Si migras una obra por error, se deshace.
+
+### Pendiente
+`MargenMO` y `Grupos.MargenDefault` quedan como respaldo, no se han retirado. Al aceptar
+una cotización se sigue escribiendo `MargenMO`: la cotización tiene ganancia por LÍNEA
+de servicio, no por persona, y al aceptarla todavía no hay nadie asignado — no hay mapa
+que rellenar. Convertir una en otra (p. ej. ganancia_servicios ÷ horas cotizadas como
+$/h por defecto) queda para cuando se vea con una obra real.
+
+## Versiones desplegadas (v360 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -5003,6 +5050,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v360 | **La ganancia deja de ser un % y pasa a ser un importe por rubro** — y el trabajador es un rubro: cada persona lleva su **ganancia por hora** en esa obra (`Proyectos.GananciaHoraJSON`), los materiales van a costo, y el % pasa a ser consecuencia en vez de entrada. ⚠️ **Respaldo**: sin ganancias puestas, la obra sigue con el modelo viejo, porque cambiar en frío habría desplomado el ingreso estimado de las 6 obras sin que nadie lo pidiera. ⚠️ Quien no tenga ganancia se factura **a costo** y se avisa (patrón v346), y quitar las ganancias devuelve **exactamente** a la cifra anterior |
 | v359 | **Un libro de Google por empresa cliente** (mecanismo). El libro actual queda como maestro Y libro de `cliente1`, así que **no se migra ninguna hoja**; los clientes nuevos nacen con su archivo (`Grupos.SheetID`). `Login/Grupos/Rieles/Manuales` siempre en el maestro; el resto en el libro del grupo, resuelto desde la sesión como `clock.now()` (v173) — ninguna de las 21 llamadas a `get_sheet` cambió de firma. ⚠️ El orden GLOBAL-antes-que-auth evita una recursión infinita, y el lote se cachea **por libro** (si no, el 2º cliente leería los datos del 1º). ⚠️ Límite dicho en pantalla: los consolidados del propietario aún solo cuentan el maestro (fase 2). ⚠️ La cuenta de servicio no puede crear archivos (solo scope `spreadsheets`), así que el aislamiento de punta a punta queda pendiente de un libro real |
 | v358 | ⚠️ **Una obra archivada no se podía facturar**: el atajo de v357 llevaba al alta y la obra no estaba entre las opciones (el formulario usa `list_projects`, que oculta archivados desde v149) → la preselección no hacía nada, **en silencio**. Archivar no es no-cobrar: lo normal es archivar al terminar y facturar después. Cuarta vez que ese default muerde (v310, v321, v322). + la guarda de v357 tenía un caso mudo, que ahora habla. Encontrado **verificando en producción**, no en tests |
 | v357 | **Atajo: facturar desde el propio proyecto** — «Pendiente de facturar $X» + botón en 💰 Costos que abre el alta con cliente y proyecto ya elegidos. Reutiliza el alta existente (verificado: 1 formulario y 1 sola llamada a `create_factura`). ⚠️ No fija la etiqueta desde fuera —la resuelve el formulario, antes de instanciar el radio (v111/v306)— y ⚠️ mirar los datos reales evitó un crash: `Proyectos.Cliente` es texto libre y dos obras tienen «vd» y «ci», que no son fichas; preseleccionar eso reventaría el selectbox. Ahora resuelve por `ClienteID` y, si no hay ficha, lo explica |

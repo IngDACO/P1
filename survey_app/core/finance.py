@@ -83,25 +83,27 @@ def group_profitability(grupo: str) -> dict:
     compras + mano de obra por proyecto) y aplica el margen por proyecto.
     """
     ge = E.group_expenses(grupo)
-    default_m = auth.group_margin_default(grupo)
-    # ⚠️ v321: `incluir_archivados=True`. Desde v310 `group_expenses` SÍ devuelve los
-    # proyectos archivados, pero este mapa se construía sin ellos: `mmap.get(pid, "")`
-    # daba "" y esos proyectos caían al margen DEFAULT del grupo en vez de usar el
-    # suyo — en silencio. Al ampliar una fuente hay que revisar los mapas que se
-    # cruzan con ella (mismo patrón que el `project_hours_bulk` de v145).
-    mmap = {str(p.get("ID", "")): str(p.get("MargenMO", "")).strip()
+    # ⚠️ v360: esto REIMPLEMENTABA la fórmula del ingreso (`mo * (1 + m/100) + mat`).
+    # Con el modelo por rubro dejó de coincidir: el detalle del proyecto decía
+    # 3.628,80 y esta pantalla 3.475,68 — dos cifras de dinero para la misma obra.
+    # Es el fallo de los cinco `_num` divergentes de v323, con importes. Ahora hay
+    # UNA sola definición: `project_revenue`. No cuesta llamadas nuevas (lee de las
+    # mismas cachés que `group_expenses`).
+    prjs = {str(p.get("ID", "")): p
             for p in P.list_projects(grupo=grupo, incluir_archivados=True)}
     rows, t_costo, t_ing = [], 0.0, 0.0
     for r in ge["proyectos"]:
         pid = str(r["id"])
-        mo, mat = _num(r["mano_obra"]), _num(r["compras"])
-        raw = mmap.get(pid, "")
-        m = _num(raw) if raw != "" else default_m
-        costo   = mo + mat
-        ingreso = mo * (1 + m / 100.0) + mat
-        rows.append({"id": pid, "nombre": r["nombre"], "costo": round(costo, 2),
-                     "margen": m, "ingreso": round(ingreso, 2),
-                     "ganancia": round(ingreso - costo, 2)})
+        rev = project_revenue(pid, grupo, prjs.get(pid))
+        costo, ingreso = rev["costo"], rev["ingreso"]
+        rows.append({"id": pid, "nombre": r["nombre"], "costo": costo,
+                     "margen": rev["margen_pct"], "ingreso": ingreso,
+                     "ganancia": rev["ganancia"],
+                     # v360: qué modelo aplica («rubro» = importe por trabajador;
+                     # «margen» = el % viejo). La pantalla lo dice para que un margen
+                     # que ya no se teclea no parezca editable.
+                     "modelo": rev.get("modelo", "margen"),
+                     "sin_ganancia": rev.get("sin_ganancia", [])})
         t_costo += costo
         t_ing += ingreso
     return {"rows": rows,
