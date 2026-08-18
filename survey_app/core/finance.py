@@ -32,15 +32,48 @@ def project_revenue(pid: str, grupo: str, prj: dict = None) -> dict:
 
     {costo_mo, materiales, costo, margen_pct, mo_facturable, ingreso, ganancia}.
     """
+    from core import projects as P
+    mat = E.project_expenses(pid)["total"]        # los materiales van a COSTO (v360)
+    gh  = P.ganancia_hora(pid, prj)
+
+    if gh:
+        # ── v360: ganancia por RUBRO. El trabajador es un rubro: cada persona
+        # aporta `horas × su ganancia/hora` en ESTA obra. El % ya no se teclea:
+        # se deriva para poder mostrarlo.
+        lb = E.labor_breakdown(pid, grupo)
+        mo, gan_mo, detalle = 0.0, 0.0, []
+        for it in lb.get("items", []):
+            u, h, c = str(it.get("usuario", "")), _num(it.get("horas")), _num(it.get("costo"))
+            g = _num(gh.get(u))
+            mo += c
+            gan_mo += h * g
+            detalle.append({"usuario": u, "horas": round(h, 2), "costo": round(c, 2),
+                            "ganancia_hora": g, "ganancia": round(h * g, 2)})
+        mo, gan_mo = round(mo, 2), round(gan_mo, 2)
+        costo   = round(mo + mat, 2)
+        ingreso = round(costo + gan_mo, 2)
+        return {"costo_mo": mo, "materiales": mat, "costo": costo,
+                # el % pasa a ser CONSECUENCIA, no entrada
+                "margen_pct": round(100.0 * gan_mo / mo, 2) if mo > 0 else 0.0,
+                "mo_facturable": round(mo + gan_mo, 2), "ingreso": ingreso,
+                "ganancia": gan_mo, "modelo": "rubro", "por_persona": detalle,
+                # gente con horas y SIN ganancia puesta: su trabajo se facturaría a
+                # costo y nadie lo notaría hasta ver el total (patrón v346)
+                "sin_ganancia": [d["usuario"] for d in detalle
+                                 if d["ganancia_hora"] <= 0 and d["horas"] > 0]}
+
+    # ── Modelo viejo (respaldo): % sobre la mano de obra ──────────
+    # ⚠️ Se conserva para que las obras anteriores a v360 NO cambien de cifra sin
+    # que nadie lo pida. En cuanto se le ponga ganancia/hora, esa obra pasa al nuevo.
     mo  = E.labor_cost(pid, grupo)
-    mat = E.project_expenses(pid)["total"]
     m   = project_margin(pid, grupo, prj)
     mo_fact = round(mo * (1 + m / 100.0), 2)
     costo   = round(mo + mat, 2)
     ingreso = round(mo_fact + mat, 2)
     return {"costo_mo": round(mo, 2), "materiales": round(mat, 2), "costo": costo,
             "margen_pct": m, "mo_facturable": mo_fact, "ingreso": ingreso,
-            "ganancia": round(ingreso - costo, 2)}
+            "ganancia": round(ingreso - costo, 2), "modelo": "margen",
+            "por_persona": [], "sin_ganancia": []}
 
 
 def group_profitability(grupo: str) -> dict:

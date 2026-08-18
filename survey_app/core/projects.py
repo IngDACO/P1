@@ -53,6 +53,10 @@ PROJECTS_HEADERS = [
     # avance, curva S, SPI y el indicador «En retraso». Los proyectos anteriores a v306
     # lo tienen VACÍO a propósito (no se tocó la hoja): se muestran como "sin tipo".
     "Tipo",
+    # v360: {usuario: ganancia $/h} de ESTE proyecto. La ganancia deja de ser
+    # un % y pasa a ser un IMPORTE por rubro. VACÍO = sigue el modelo viejo
+    # (MargenMO), para que ninguna obra cambie de cifra sin pedirlo.
+    "GananciaHoraJSON",
 ]
 
 # Tipos de proyecto (v306). `TIPO_INSTALACION` es el único que genera el cronograma
@@ -1007,3 +1011,26 @@ def delete_document_record(pid, drive_id) -> tuple:
             _invalidate()
             return True, "Documento eliminado."
     return False, "Registro no encontrado."
+
+
+# ── Ganancia por trabajador y hora (v360) ────────────────────────
+def ganancia_hora(pid: str, prj: dict = None) -> dict:
+    """{usuario: ganancia $/h} de este proyecto. {} si aún usa el modelo viejo."""
+    if prj is None:
+        prj = get_project(pid) or {}
+    try:
+        d = json.loads(str(prj.get("GananciaHoraJSON", "") or "{}"))
+        return {str(k): _num(v) for k, v in d.items() if _num(v) != 0}
+    except Exception as e:
+        logger.warning("projects: GananciaHoraJSON inválido en %s: %s", pid, e)
+        return {}
+
+
+def set_ganancia_hora(pid: str, mapa: dict) -> tuple:
+    """Fija cuánto se quiere ganar por hora con cada persona en ESTE proyecto.
+
+    ⚠️ Un mapa vacío devuelve el proyecto al modelo viejo (`MargenMO`), que es una
+    vuelta atrás legítima: si te equivocaste al migrarlo, puedes deshacerlo.
+    """
+    limpio = {str(k): round(_num(v), 2) for k, v in (mapa or {}).items() if _num(v) > 0}
+    return update_project(pid, {"GananciaHoraJSON": json.dumps(limpio, ensure_ascii=False)})

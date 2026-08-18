@@ -4939,7 +4939,63 @@ siguen sin aparecer: solo entran por el atajo. Si hiciera falta facturar una obr
 archivada sin pasar por su ficha, haría falta una casilla «incluir archivadas» — es
 decisión de producto, no se hizo por iniciativa propia.
 
-## Versiones desplegadas (v358 = actual)
+## UN LIBRO DE GOOGLE POR EMPRESA CLIENTE (v359) — mecanismo
+Decisión del usuario: **dejarlo listo sin migrar nada**, y **una sola cuenta de servicio**
+(resuelve el aislamiento, que es lo que importa; la cuota ya no aprieta tras v339).
+
+### El diseño que evita la migración
+El libro actual sigue siendo **el maestro Y el libro de `cliente1`**. Los clientes nuevos
+nacen con su propio archivo (`Grupos.SheetID`, columna que migra sola). Así **no se mueve
+ninguna de las 21 hojas existentes** —el mayor riesgo desaparece— y el objetivo se cumple:
+el segundo cliente tendrá sus datos en su propio fichero.
+
+**Global, siempre en el maestro:** `Login`, `Grupos`, `Rieles`, `Manuales`. Son el
+registro de la app, y `Login` además se lee ANTES de saber a qué grupo perteneces.
+**Todo lo demás** (21 hojas) va al libro del grupo.
+
+### Cómo se resuelve
+`timeclock.sheet_id_para(title, grupo=None)`: si la hoja es GLOBAL → maestro; si no, el
+libro del grupo **de la sesión** (mismo patrón que `clock.now()` con la zona horaria,
+v173), con override explícito. Ninguna de las 21 llamadas a `get_sheet` cambió de firma.
+- ⚠️ **El orden evita una recursión infinita**: la comprobación de GLOBAL va primero y
+  devuelve sin consultar a `auth` — si no, `auth.group_sheet_id` leería `Grupos`, que es
+  global, y se llamaría a sí misma. Verificado por AST (L99 < L111) y ejecutándolo.
+- `_abrir/_cached_ws/_libro/get_sheet` y **`hojas._lote` se cachean POR LIBRO**. Con una
+  sola entrada, el segundo cliente leería los datos del primero — justo lo contrario.
+- `auth.set_group_sheet_id` acepta la **URL completa** además del ID (es lo que se copia
+  del navegador) y **rechaza** enlazar dos grupos al mismo libro.
+
+### ⚠️ Límite conocido, DICHO en la pantalla
+Las cachés `_records` de cada módulo están indexadas por HOJA, no por libro. Admin y
+campo van bien (siempre tienen grupo en sesión), pero los **resúmenes consolidados del
+propietario** solo contarían el maestro. Hacerlo bien es tocar el `_records` de 13
+módulos y **no se puede verificar sin un segundo libro real**. Se expone
+`auth.grupos_con_libro_propio()` y la pantalla **avisa** de a quién le falta:
+*un consolidado incompleto sin avisar es peor que no tenerlo*. Es la fase 2.
+
+### ✅ AISLAMIENTO DEMOSTRADO CON UN SEGUNDO LIBRO REAL (18/08/2026)
+La cuenta de servicio solo tiene scope `spreadsheets` y **no puede crear archivos** (403,
+buena higiene), así que el libro de prueba lo creó el usuario y lo compartió con
+`fichaje-bot@…`. Con él, la prueba completa:
+- Enlazar **pegando la URL entera** funciona, y **rechaza** poner dos grupos en el mismo
+  libro (*«Ese libro ya es de: zzz-cliente-prueba»*).
+- El admin del cliente nuevo ve **0 proyectos, 0 cotizaciones, 0 artículos**: los de
+  `cliente1` están en otro fichero y no se alcanzan.
+- Lo que escribe cae **en SU libro**: se crearon ahí `Sheet1`, `Proyectos`, `Actividades`
+  y `Catalogo`. El maestro **siguió con sus 6 proyectos**, sin mancharse.
+- `cliente1` siguió viendo lo suyo entero (6 proyectos, 3 artículos, 1 cotización).
+- **El cerrojo de v351 sigue valiendo entre libros**: pedir el ID del otro cliente
+  devuelve 🔒, porque compara por grupo, no por ID.
+- ⚠️ **Consecuencia del diseño**: los IDs son ahora **únicos por cliente, no globales**.
+  Los dos libros tienen su propio `PRJ-0001`. No rompe nada —cada quien lee su libro y
+  el cerrojo compara por grupo— pero hay que saberlo antes de asumir que un `PRJ-####`
+  identifica algo en toda la instalación.
+Limpieza verificada: grupo de prueba borrado, `Grupos` con solo `cliente1` y sin SheetID.
+
+Cuenta con la que hay que compartir cada libro nuevo:
+`fichaje-bot@gen-lang-client-0922870449.iam.gserviceaccount.com` (identificador, no clave).
+
+## Versiones desplegadas (v359 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -4947,6 +5003,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v359 | **Un libro de Google por empresa cliente** (mecanismo). El libro actual queda como maestro Y libro de `cliente1`, así que **no se migra ninguna hoja**; los clientes nuevos nacen con su archivo (`Grupos.SheetID`). `Login/Grupos/Rieles/Manuales` siempre en el maestro; el resto en el libro del grupo, resuelto desde la sesión como `clock.now()` (v173) — ninguna de las 21 llamadas a `get_sheet` cambió de firma. ⚠️ El orden GLOBAL-antes-que-auth evita una recursión infinita, y el lote se cachea **por libro** (si no, el 2º cliente leería los datos del 1º). ⚠️ Límite dicho en pantalla: los consolidados del propietario aún solo cuentan el maestro (fase 2). ⚠️ La cuenta de servicio no puede crear archivos (solo scope `spreadsheets`), así que el aislamiento de punta a punta queda pendiente de un libro real |
 | v358 | ⚠️ **Una obra archivada no se podía facturar**: el atajo de v357 llevaba al alta y la obra no estaba entre las opciones (el formulario usa `list_projects`, que oculta archivados desde v149) → la preselección no hacía nada, **en silencio**. Archivar no es no-cobrar: lo normal es archivar al terminar y facturar después. Cuarta vez que ese default muerde (v310, v321, v322). + la guarda de v357 tenía un caso mudo, que ahora habla. Encontrado **verificando en producción**, no en tests |
 | v357 | **Atajo: facturar desde el propio proyecto** — «Pendiente de facturar $X» + botón en 💰 Costos que abre el alta con cliente y proyecto ya elegidos. Reutiliza el alta existente (verificado: 1 formulario y 1 sola llamada a `create_factura`). ⚠️ No fija la etiqueta desde fuera —la resuelve el formulario, antes de instanciar el radio (v111/v306)— y ⚠️ mirar los datos reales evitó un crash: `Proyectos.Cliente` es texto libre y dos obras tienen «vd» y «ci», que no son fichas; preseleccionar eso reventaría el selectbox. Ahora resuelve por `ClienteID` y, si no hay ficha, lo explica |
 | v356 | ⚠️ **El editor de borradores refrescaba los precios en silencio**: reconstruía cada línea desde el catálogo al guardar, así que tocar una celda habría cambiado el total de la cotización real del usuario de $1.927,20 a otro número sin avisar. Ahora la cantidad **escala sobre el costo unitario congelado** y adoptar precios nuevos es un **botón explícito**, que conserva la ganancia en dinero y recalcula el margen. Con aviso de qué cambió («$960 → hoy $80»), solo en borrador, y las líneas cuyo artículo se borró se dicen en vez de descartarse. Encontrado mirando **datos reales**: con artículos de prueba, catálogo y líneas siempre coinciden |

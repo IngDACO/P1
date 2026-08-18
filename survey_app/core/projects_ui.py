@@ -3022,6 +3022,92 @@ def _ordenes_section(pid, grupo, editable=True, key_prefix="ord"):
                         st.rerun()
 
 
+def _ganancia_section(pid, grupo):
+    """Ganancia por trabajador y hora en ESTA obra (v360).
+
+    La ganancia dejó de ser un % del proyecto: es un importe por rubro, y el trabajador
+    es un rubro. Aquí se pone cuánto quieres ganar por cada hora de cada persona; el
+    precio/hora al cliente y el % salen solos.
+    """
+    from core import expenses as E
+    from core import finance as F
+    from core import theme as _T
+    try:
+        rev = F.project_revenue(pid, grupo)
+        lb = E.labor_breakdown(pid, grupo)
+    except Exception:
+        return
+    _gh = P.ganancia_hora(pid)
+    _items = lb.get("items") or []
+    if not _items and not _gh:
+        return                              # nadie ha fichado aquí: nada que decidir
+
+    with st.expander(":material/savings: Cuánto ganas con cada persona",
+                     expanded=bool(rev.get("sin_ganancia"))):
+        if rev.get("modelo") == "margen":
+            st.info(":material/info: Esta obra todavía usa el **modelo viejo**: un "
+                    + f"**{rev['margen_pct']:g}%** sobre la mano de obra. En cuanto "
+                    "pongas aquí lo que quieres ganar por hora, pasa al modelo nuevo "
+                    "(importe por rubro) y el % se calcula solo.")
+        else:
+            st.success(":material/check_circle: Esta obra ya usa el modelo por rubro. "
+                       "El " + f"{rev['margen_pct']:g}%" + " de margen es consecuencia, "
+                       "no un dato que hayas tecleado.")
+        if rev.get("sin_ganancia"):
+            st.warning(":material/person_alert: Sin ganancia puesta, así que su trabajo "
+                       "se facturaría **a costo**: **" + ", ".join(rev["sin_ganancia"])
+                       + "**.")
+
+        _ed = st.data_editor(
+            pd.DataFrame([{
+                "Persona": x.get("usuario", ""),
+                "Horas": round(P._num(x.get("horas")), 2),
+                "Costo/h": round(P._num(x.get("tarifa")), 2),
+                "Ganancia/h": round(P._num(_gh.get(str(x.get("usuario", "")), 0)), 2),
+                "Precio/h": round(P._num(x.get("tarifa"))
+                                  + P._num(_gh.get(str(x.get("usuario", "")), 0)), 2),
+                "Ganas": round(P._num(x.get("horas"))
+                               * P._num(_gh.get(str(x.get("usuario", "")), 0)), 2),
+            } for x in _items]),
+            hide_index=True, use_container_width=True, key=f"gh_ed_{pid}",
+            # ⚠️ Solo se teclea la GANANCIA. Precio/h y «Ganas» son consecuencia y van
+            # bloqueados, igual que en la cotización (v355).
+            disabled=["Persona", "Horas", "Costo/h", "Precio/h", "Ganas"],
+            column_config={
+                "Costo/h": st.column_config.NumberColumn("Costo/h", format="$%.2f",
+                                                         help="Su tarifa. Lo que te cuesta."),
+                "Ganancia/h": st.column_config.NumberColumn(
+                    "Ganancia/h", format="$%.2f", min_value=0.0,
+                    help="Lo que quieres ganar por cada hora suya en esta obra."),
+                "Precio/h": st.column_config.NumberColumn("Precio/h", format="$%.2f",
+                                                          help="Costo + ganancia. Lo que se le cobra al cliente."),
+                "Ganas": st.column_config.NumberColumn("Ganas", format="$%.2f",
+                                                       help="Horas × ganancia/h.")})
+
+        _nuevo = {str(_ed.iloc[i]["Persona"]): P._num(_ed.iloc[i]["Ganancia/h"])
+                  for i in range(len(_ed)) if P._num(_ed.iloc[i]["Ganancia/h"]) > 0}
+        _tot = sum(P._num(_ed.iloc[i]["Horas"]) * P._num(_ed.iloc[i]["Ganancia/h"])
+                   for i in range(len(_ed)))
+        st.caption("Con estos valores ganarías **" + _T.dinero(_tot)
+                   + "** de mano de obra en lo fichado hasta ahora. Los materiales se "
+                     "facturan a costo (decisión de v360).")
+        _c1, _c2 = st.columns([2, 1])
+        if _c1.button(":material/save: Guardar ganancias", key=f"gh_save_{pid}",
+                      type="primary", use_container_width=True):
+            ok, msg = P.set_ganancia_hora(pid, _nuevo)
+            (st.success if ok else st.error)(msg)
+            if ok:
+                st.rerun()
+        # ⚠️ La vuelta atrás: si migraste una obra por error, se puede deshacer (v346).
+        if _gh and _c2.button(":material/undo: Volver al %", key=f"gh_undo_{pid}",
+                              use_container_width=True,
+                              help="Quita las ganancias por hora y vuelve al margen %."):
+            ok, msg = P.set_ganancia_hora(pid, {})
+            (st.success if ok else st.error)(msg)
+            if ok:
+                st.rerun()
+
+
 def _facturar_atajo(pid, grupo, prj_nombre=""):
     """Facturar la obra desde la propia obra (v357).
 
@@ -3149,6 +3235,10 @@ def render_expenses(pid, grupo, can_delete=False, key_prefix="ex"):
                 f"a **{_T.dinero(cp['total_comp'], 0)}**, "
                 f"**{_T.dinero(cp['total_comp'] - pres, 0)} por encima** de los "
                 f"{_T.dinero(pres, 0)} presupuestados.")
+
+    # ── Cuánto ganas con cada persona (v360) ─────────────────────
+    if can_delete:
+        _ganancia_section(pid, grupo)
 
     # ── Facturar esta obra (atajo, v357) ─────────────────────────
     if can_delete:                      # solo gestión: el campo no factura
