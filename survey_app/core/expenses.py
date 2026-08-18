@@ -129,7 +129,31 @@ def labor_breakdown(pid, grupo) -> dict:
 
     nombre = str(prj.get("Nombre", ""))
     rates  = auth.rate_map(grupo)
-    acc    = {}
+
+    # ⚠️ v362: unificar a la MISMA persona. Los fichajes anteriores a v106 no tienen
+    # la columna `Usuario`, así que caían bajo su NOMBRE y la persona salía partida en
+    # dos filas: en producción, `campo1` (4 filas, 32,16 h) y `lksdfkldsf` (2 filas,
+    # 8,97 h) son la misma. Mientras esto solo se sumaba, el total salía bien y no se
+    # notaba; desde v360 hay que decidir la ganancia POR PERSONA, y partida significa
+    # ponérsela dos veces — o dejarse la mitad del trabajo facturándose a costo sin
+    # que nada lo delate. Mismo patrón que v145 (fichajes sin ProyectoID).
+    _por_nombre = {}
+    for u in auth.list_users(grupo):
+        _n = str(u.get("Nombre", "")).strip().casefold()
+        if _n:
+            _por_nombre.setdefault(_n, []).append(str(u.get("Usuario", "")).strip())
+
+    def _clave(r):
+        u = str(r.get("Usuario", "")).strip()
+        if u:
+            return u
+        # ⚠️ Solo se resuelve si ese nombre pertenece a UNA sola cuenta: con homónimos
+        # (los hubo, `fijiofgjei` tenía dos) adivinar mezclaría a dos personas, que es
+        # peor que dejarlas separadas.
+        cand = _por_nombre.get(str(r.get("Nombre", "")).strip().casefold(), [])
+        return cand[0] if len(cand) == 1 else str(r.get("Nombre", "")).strip()
+
+    acc = {}
     for r in P._fichaje_records():
         if not _mismo_proyecto(r, pid, nombre):
             continue
@@ -138,7 +162,7 @@ def labor_breakdown(pid, grupo) -> dict:
         h = _horas_de(r)
         if h <= 0:
             continue
-        clave = str(r.get("Usuario", "")).strip() or str(r.get("Nombre", "")).strip()
+        clave = _clave(r)
         acc.setdefault(clave, 0.0)
         acc[clave] += h
 

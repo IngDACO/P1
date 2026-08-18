@@ -5042,7 +5042,34 @@ de servicio, no por persona, y al aceptarla todavía no hay nadie asignado — n
 que rellenar. Convertir una en otra (p. ej. ganancia_servicios ÷ horas cotizadas como
 $/h por defecto) queda para cuando se vea con una obra real.
 
-## Versiones desplegadas (v360 = actual)
+## ⚠️ Rentabilidad tenía su PROPIA fórmula del ingreso (v361)
+Salió al poner 15 $/h a `campo1` en `prueba1` para probar v360: el detalle del proyecto
+decía **ingreso 3.628,80** y la pantalla de Rentabilidad **3.475,68**. Dos cifras de
+dinero para la misma obra, a la vez.
+
+**Causa:** `group_profitability` **no llamaba a `project_revenue`** — reimplementaba la
+fórmula (`ingreso = mo * (1 + m/100) + mat`). Mientras el único modelo era el %, las dos
+coincidían por casualidad; con el modelo por rubro dejaron de coincidir. Es el fallo de
+los cinco `_num` divergentes de v323, esta vez con importes en pantalla.
+
+**Arreglo:** delega en `project_revenue`, que pasa a ser la ÚNICA definición del ingreso.
+No cuesta llamadas nuevas (lee de las mismas cachés que `group_expenses`). La fila gana
+`modelo` y `sin_ganancia` para que la pantalla pueda decir cuál aplica cada obra.
+**Guardián**: por AST, solo `project_revenue` puede aplicar el `%` de margen.
+
+### ⚠️ Y un fallo de método: un parche que no comprueba que se aplicó, miente
+El patch de v360 intentaba añadir `"modelo"` a esa fila con un ancla que **no existía**,
+y estaba envuelto en `if ... not in s:` — así que **no hizo nada y no dijo nada**. El
+síntoma (`modelo=None`) solo se vio al mirar la salida con datos reales. Los parches
+tienen que `assert` que el ancla existe, como los demás de esta tanda.
+
+### Prueba en producción (a petición del usuario)
+`PRJ-0001` con 15 $/h para `campo1`: modelo `rubro`, ingreso **3.628,80**, ganancia
+**482,40**, margen **29,3%** derivado. `lksdfkldsf` y `admin1` siguen sin ganancia → su
+trabajo se factura a costo y la pantalla los nombra. Lo pendiente de facturar sube de
+**330,48 a 483,60**. Las otras 5 obras siguen en el modelo viejo, sin moverse.
+
+## Versiones desplegadas (v361 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -5050,6 +5077,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v361 | ⚠️ **Rentabilidad reimplementaba la fórmula del ingreso** y, con el modelo por rubro de v360, empezó a dar una cifra distinta que el detalle del proyecto (3.475,68 vs 3.628,80) — dos números de dinero para la misma obra. Ahora delega en `project_revenue`, la única definición, con guardián por AST. ⚠️ De paso, un fallo de método: el parche de v360 tenía un ancla inexistente envuelta en un `if not in`, así que **no aplicó y no avisó**; solo se vio mirando la salida con datos reales |
 | v360 | **La ganancia deja de ser un % y pasa a ser un importe por rubro** — y el trabajador es un rubro: cada persona lleva su **ganancia por hora** en esa obra (`Proyectos.GananciaHoraJSON`), los materiales van a costo, y el % pasa a ser consecuencia en vez de entrada. ⚠️ **Respaldo**: sin ganancias puestas, la obra sigue con el modelo viejo, porque cambiar en frío habría desplomado el ingreso estimado de las 6 obras sin que nadie lo pidiera. ⚠️ Quien no tenga ganancia se factura **a costo** y se avisa (patrón v346), y quitar las ganancias devuelve **exactamente** a la cifra anterior |
 | v359 | **Un libro de Google por empresa cliente** (mecanismo). El libro actual queda como maestro Y libro de `cliente1`, así que **no se migra ninguna hoja**; los clientes nuevos nacen con su archivo (`Grupos.SheetID`). `Login/Grupos/Rieles/Manuales` siempre en el maestro; el resto en el libro del grupo, resuelto desde la sesión como `clock.now()` (v173) — ninguna de las 21 llamadas a `get_sheet` cambió de firma. ⚠️ El orden GLOBAL-antes-que-auth evita una recursión infinita, y el lote se cachea **por libro** (si no, el 2º cliente leería los datos del 1º). ⚠️ Límite dicho en pantalla: los consolidados del propietario aún solo cuentan el maestro (fase 2). ⚠️ La cuenta de servicio no puede crear archivos (solo scope `spreadsheets`), así que el aislamiento de punta a punta queda pendiente de un libro real |
 | v358 | ⚠️ **Una obra archivada no se podía facturar**: el atajo de v357 llevaba al alta y la obra no estaba entre las opciones (el formulario usa `list_projects`, que oculta archivados desde v149) → la preselección no hacía nada, **en silencio**. Archivar no es no-cobrar: lo normal es archivar al terminar y facturar después. Cuarta vez que ese default muerde (v310, v321, v322). + la guarda de v357 tenía un caso mudo, que ahora habla. Encontrado **verificando en producción**, no en tests |
