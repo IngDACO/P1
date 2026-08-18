@@ -4775,7 +4775,49 @@ el bloque **«cotizado vs real»** (las horas ya viajan en cada línea para eso)
 ⚠️ Efecto colateral querido: los proyectos SIN margen propio pasan a heredar 20%, así que
 Rentabilidad deja de mostrar ganancia estimada $0.
 
-## Versiones desplegadas (v353 = actual)
+## COTIZACIONES — fase 3: ganarla y medirla (v354). MÓDULO COMPLETO
+Cierra el ciclo: **cotización → obra → costo → factura**, sin teclear lo mismo dos veces.
+
+### `aceptar_y_crear_proyecto(cid, …)`
+Da de alta el proyecto con lo ya pactado: cliente, `ClienteID`, presupuesto, margen,
+tipo y —solo si es Instalación con NS— el cronograma estándar (regla v306).
+- ⚠️ **El presupuesto es el COSTO cotizado, NO el precio de venta.** Verificado en el
+  código: `expenses.project_cost` compara `Presupuesto` contra compras + mano de obra.
+  Con el precio de venta ahí, la alerta de sobre-presupuesto solo saltaría **cuando ya
+  estás perdiendo dinero**; con el costo, salta cuando te estás comiendo el margen —
+  que es cuando aún se puede reaccionar (la lección de v144).
+- ⚠️ **Idempotente**: si la cotización ya generó proyecto, no crea otro. Probado — un
+  segundo intento devuelve «Esta cotización ya generó el proyecto PRJ-0007».
+- El margen efectivo de la cotización se escribe como `MargenMO` (decisión del usuario:
+  una sola fuente de verdad).
+
+### `comparacion(cid)` — cotizado vs real
+Horas cotizadas contra fichadas, costo cotizado contra cargado, e ingreso fijo (lo que
+el cliente aceptó).
+
+### ⚠️ El fallo que cazó la prueba: «ganancia real» a mitad de obra
+Con el proyecto al **0% y $900 de costo**, `ingreso − costo` daba **$3.499 «de ganancia»
+contra $893 cotizados, en verde**. Técnicamente cierto, historia falsa: no has ganado,
+es que **aún no has gastado**. Misma familia que v320 (el «sin asignar» que mentía) y
+v324 (el proyecto al 0% con el mensaje más tranquilo).
+**Arreglo, con el patrón de v144:** se proyecta al ritmo actual
+(`costo × 100 / avance`) y la tarjeta se llama **«Ganancia proyectada»**; solo se llama
+**«real»** cuando el avance llega a 100. Y **None, no 0**, mientras no haya avance ni
+costo: sin base, proyectar es inventar.
+```
+avance   0% · costo     0 → —            (cotizada 893,20)
+avance   0% · costo   900 → —
+avance  25% · costo   900 → proyectada    799,20   ← ya avisa: por debajo de lo cotizado
+avance  50% · costo 2.500 → proyectada   −600,80
+avance 100% · costo 3.800 → real          599,20
+```
+
+### El módulo, de punta a punta (v352-v354)
+Catálogo (costo) → cotización (margen por línea) → PDF sin filtrar costos → aceptada →
+proyecto con presupuesto y margen → cotizado vs real. Todo ejercitado contra la hoja
+real y con producción devuelta a su estado.
+
+## Versiones desplegadas (v354 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -4783,6 +4825,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v354 | **Cotizaciones, fase 3 — módulo COMPLETO**: aceptar la cotización **crea el proyecto** con cliente, presupuesto, margen y cronograma, y aparece el bloque **cotizado vs real** (horas, costo, ganancia). ⚠️ El presupuesto del proyecto es el **COSTO** cotizado, no el precio: `project_cost` compara contra compras+mano de obra, así que con el precio la alerta solo saltaría cuando ya pierdes dinero. Idempotente (un doble clic no duplica la obra). ⚠️ La prueba cazó que «ganancia real» a mitad de obra daba $3.499 contra $893 cotizados **en verde** —no has ganado, es que no has gastado—: ahora se **proyecta** al ritmo actual (patrón v144) y solo se llama «real» al 100% |
 | v353 | **Cotizaciones, fase 2**: armar el precio desde el catálogo con **margen por línea**, estados (borrador→enviada→aceptada/rechazada, con `vencida` derivada de la validez), versiones y **PDF formal**. La línea congela su precio (subir el catálogo no mueve lo ya enviado) y una cotización enviada no se edita: se saca versión nueva. ⚠️ Verificado que el PDF **no filtra costos ni márgenes**. ⚠️ La prueba cazó que olvidé la hoja en `hojas.HOJAS_LECTURA`: como el lector va sin cabeceras, el módulo leía **vacío para siempre sin ningún error** — guardián nuevo para ese patrón. + margen 20% y GST 10% configurados en el grupo |
 | v352 | **Cotizaciones, fase 1: el catálogo.** `core/catalogo.py` + pantalla en Finanzas · 📚 Catálogo: productos (costo × cantidad) y servicios (**horas × tarifa**, para poder comparar luego contra lo fichado). `costo_de()` es la fórmula única que usarán cotización, PDF y la comparación. No deja crear artículos sin costo (fallo de las colillas de $0 de v346), desactivar con vuelta (v340), homónimos por ID (v306). ⚠️ La prueba cazó que **el precio no se auditaba**: `CostoUnit` no estaba en `CAMPOS_CLAVE` — el mismo fallo que `MargenPct` en v344, y el guardián no lo vio porque solo miraba una dirección; ahora mira las dos |
 | v351 | ⚠️ **Aislamiento entre empresas cliente.** El aislamiento no lo garantizaba el código sino que la interfaz nunca te ofreciera el ID de otro: **ninguna vista de detalle comprobaba el grupo**, y `_detalle_proyecto` lo ADOPTABA del proyecto → con los deep-links de v337 bastaba editar `?p=` para abrir el detalle completo de otro cliente (costos, horas, personal, archivos). Latente hoy porque solo hay un grupo real. Nuevo `core/tenant.py` (una sola definición, módulo hoja) aplicado a las 4 vistas por ID global: proyecto, factura, nómina y activo. El propietario sigue viendo todo; el mensaje no revela de qué empresa es el ID. Decisión del usuario: **cerrojo ahora, un libro por cliente cuando entre el primer cliente real** |

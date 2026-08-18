@@ -84,16 +84,35 @@ def _invalidate():
 
 
 # ── Construir las líneas ─────────────────────────────────────────
-def linea_de(item: dict, cantidad=1, margen_pct=None) -> dict:
+def margen_de(costo, ganancia) -> float:
+    """% de margen que representa ganar `ganancia` sobre `costo`. **La única fórmula.**
+
+    ⚠️ Con costo 0 el margen no existe (no se puede dividir): se devuelve 0 y el precio
+    acaba siendo la ganancia a secas. El catálogo ya impide artículos sin costo, así que
+    esto solo se da con cantidad 0 — que la pantalla descarta.
+    """
+    c = _num(costo)
+    return round(100.0 * _num(ganancia) / c, 2) if c > 0.005 else 0.0
+
+
+def linea_de(item: dict, cantidad=1, margen_pct=None, ganancia=None) -> dict:
     """Una línea de cotización a partir de un artículo del catálogo.
+
+    Se puede fijar el precio por **margen %** o por **ganancia en dinero** (v355, que es
+    como el usuario lo pide: «pongo lo que quiero ganar y el % sale solo»). Si llegan
+    los dos, manda la ganancia — es el dato que la persona escribió.
 
     ⚠️ SNAPSHOT: se copian el costo y el margen, no una referencia. Ver el módulo.
     """
     from core import catalogo as CAT
     cant = _num(cantidad, 0.0)
     costo = CAT.costo_de(item, cant)
-    m = _num(margen_pct, 0.0)
-    precio = round(costo * (1.0 + m / 100.0), 2)
+    if ganancia is not None:
+        m = margen_de(costo, ganancia)
+        precio = round(costo + _num(ganancia), 2)
+    else:
+        m = _num(margen_pct, 0.0)
+        precio = round(costo * (1.0 + m / 100.0), 2)
     return {
         "catalogo_id": str(item.get("ID", "")),
         "tipo": str(item.get("Tipo", "")),
@@ -111,11 +130,26 @@ def linea_de(item: dict, cantidad=1, margen_pct=None) -> dict:
     }
 
 
-def recalcular(linea: dict) -> dict:
-    """Reaplica el margen sobre el costo YA CONGELADO (no vuelve al catálogo)."""
+def recalcular(linea: dict, ganancia=None) -> dict:
+    """Reaplica el precio sobre el costo YA CONGELADO (no vuelve al catálogo).
+
+    Con `ganancia` fija el precio por dinero y deriva el % (v355); sin ella, aplica el
+    `margen_pct` que la línea ya lleva.
+    """
     l = dict(linea)
-    l["precio_total"] = round(_num(l.get("costo_total")) * (1.0 + _num(l.get("margen_pct")) / 100.0), 2)
+    costo = _num(l.get("costo_total"))
+    if ganancia is not None:
+        l["margen_pct"] = margen_de(costo, ganancia)
+        l["precio_total"] = round(costo + _num(ganancia), 2)
+    else:
+        l["precio_total"] = round(costo * (1.0 + _num(l.get("margen_pct")) / 100.0), 2)
     return l
+
+
+def ganancia_de(linea: dict) -> float:
+    """Lo que se gana en esa línea, en dinero. Derivado: no se guarda aparte para que
+    no pueda desacompasarse del precio (la lección de los helpers divergentes de v323)."""
+    return round(_num(linea.get("precio_total")) - _num(linea.get("costo_total")), 2)
 
 
 def totales(lineas: list, impuesto_pct=0.0) -> dict:

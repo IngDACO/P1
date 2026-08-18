@@ -117,37 +117,48 @@ def _editor_lineas(grupo, key: str, lineas: list) -> list:
         st.caption("Sin líneas todavía.")
         return lineas
 
-    st.markdown("**Líneas** — ajusta cantidad y el margen que quieres cobrar en cada una")
+    st.markdown("**Líneas** — pon **cuánto quieres ganar** en cada rubro; "
+                "el margen % y el precio salen solos")
     ed = st.data_editor(
         pd.DataFrame([{
             "Concepto": l.get("concepto", ""),
             "Cant.": _num(l.get("cantidad")),
             "Costo": _num(l.get("costo_total")),
+            "Ganancia $": Q.ganancia_de(l),
             "Margen %": _num(l.get("margen_pct")),
             "Precio": _num(l.get("precio_total")),
             "Quitar": False,
         } for l in lineas]),
         hide_index=True, use_container_width=True, key=f"{key}_ed",
-        disabled=["Concepto", "Costo", "Precio"],
+        # ⚠️ v355: lo único que se teclea del precio es la GANANCIA. El margen y el
+        # precio son consecuencia, y se muestran bloqueados para que quede claro.
+        disabled=["Concepto", "Costo", "Margen %", "Precio"],
         column_config={
             "Costo": st.column_config.NumberColumn("Costo", format="$%.2f",
                                                    help="Lo que te cuesta a ti. No lo ve el cliente."),
+            "Ganancia $": st.column_config.NumberColumn(
+                "Ganancia $", format="$%.2f", min_value=0.0,
+                help="Lo que quieres ganar en este rubro. El margen % se calcula solo."),
+            "Margen %": st.column_config.NumberColumn("Margen %", format="%.1f%%",
+                                                      help="Se calcula: ganancia ÷ costo."),
             "Precio": st.column_config.NumberColumn("Precio", format="$%.2f",
-                                                    help="Se recalcula al guardar."),
-            "Margen %": st.column_config.NumberColumn("Margen %", format="%.1f%%", min_value=0.0),
+                                                    help="Costo + ganancia. Es lo que ve el cliente."),
             "Cant.": st.column_config.NumberColumn("Cant.", min_value=0.0)})
 
     # ⚠️ La cantidad se reaplica sobre el artículo del catálogo (el costo depende de
-    # ella); el margen, sobre el costo ya congelado.
+    # ella); la ganancia, sobre el costo ya congelado.
     nuevas = []
     for i, l in enumerate(lineas):
         if i >= len(ed) or bool(ed.iloc[i]["Quitar"]):
             continue
-        cant, marg = _num(ed.iloc[i]["Cant."]), _num(ed.iloc[i]["Margen %"])
+        cant, gan = _num(ed.iloc[i]["Cant."]), _num(ed.iloc[i]["Ganancia $"])
         if cant <= 0:
             continue
         base = CAT.get_item(l.get("catalogo_id"))
-        nl = Q.linea_de(base, cant, marg) if base else Q.recalcular(dict(l, margen_pct=marg))
+        # ⚠️ Al cambiar la CANTIDAD el costo cambia, y la ganancia tecleada se mantiene
+        # tal cual (es lo que la persona dijo que quiere ganar); el margen se reajusta.
+        nl = (Q.linea_de(base, cant, ganancia=gan) if base
+              else Q.recalcular(l, ganancia=gan))
         nuevas.append(nl)
     return nuevas
 
