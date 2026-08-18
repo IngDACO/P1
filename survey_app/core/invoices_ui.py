@@ -187,6 +187,15 @@ def _nueva_factura(grupo):
 
     # Proyectos del cliente (para precargar y para el desplegable de líneas)
     prjs = [p for p in P.list_projects(grupo=grupo) if C.es_del_cliente(p, cid, cnorm)]
+    # ⚠️ v358: `list_projects` oculta los ARCHIVADOS (v149), pero archivar no es
+    # no-cobrar: lo normal es archivar al terminar y facturar después. Si el atajo desde
+    # el proyecto apunta a una obra que no está en la lista, se añade — si no, el
+    # formulario se abría sin esa opción y la preselección no hacía nada, en silencio.
+    _peek = st.session_state.get("_fac_prj_pending")
+    if _peek and str(_peek) not in {str(p.get("ID", "")) for p in prjs}:
+        _extra = P.get_project(str(_peek)) or {}
+        if _extra and str(_extra.get("Grupo", "")) == str(grupo):
+            prjs = prjs + [_extra]
     # ⚠️ v306: por ID, no por nombre. Antes el alcance y la línea de la factura se casaban
     # con `{Nombre: ID}`: con dos proyectos homónimos el radio mostraba DOS opciones
     # idénticas, el filtro casaba con AMBOS y el importe se enlazaba al proyecto
@@ -209,8 +218,11 @@ def _nueva_factura(grupo):
         _et = _lbl.get(str(_pend_pid))
         if _et in prj_names:
             st.session_state["fac_scope"] = _et
-        elif _et:
-            st.info(":material/info: Ese proyecto no es de este cliente; elige el alcance a mano.")
+        else:
+            # ⚠️ Antes, si el proyecto no estaba en la lista, `_et` era None y NO se
+            # decía nada: el usuario acababa en «Todo el cliente» sin saber por qué.
+            st.info(":material/info: No se pudo preseleccionar ese proyecto para este "
+                    "cliente (revisa a qué cliente está enlazado). Elige el alcance a mano.")
     _scope = st.radio("Alcance", ["Todo el cliente"] + prj_names, horizontal=True, key="fac_scope")
     _scope_prjs = (prjs if _scope == "Todo el cliente"
                    else [p for p in prjs if _lbl.get(str(p.get("ID", ""))) == _scope])

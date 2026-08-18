@@ -4878,7 +4878,40 @@ El comportamiento «correcto» (congelar el precio) y el fallo (refrescar al gua
 convivían en el mismo módulo y se contradecían. Solo se vio **mirando datos reales del
 usuario**: con mis artículos de prueba, catálogo y líneas siempre coincidían.
 
-## Versiones desplegadas (v356 = actual)
+## Atajo: facturar desde el propio proyecto (v357)
+Petición del usuario. Antes: Finanzas → Facturas → Nueva → elegir cliente → volver a
+buscar el proyecto. Ahora, en 💰 Costos de la obra: **«Pendiente de facturar: $X»** +
+botón **«Facturar esta obra»**, que abre el alta con cliente y proyecto ya elegidos.
+
+⚠️ **Reutiliza el alta que ya existe** (`_fac_nueva` + `fac_cli`, el mismo camino que
+Contactos desde v259). Verificado por AST: **1 formulario de alta y 1 sola llamada a
+`create_factura`** en todo el repo — el atajo delega, no crea. Dos mecanismos para lo
+mismo es lo que hubo que desmontar en v140 y v146.
+
+### ⚠️ No se fija la etiqueta del proyecto desde fuera
+`etiqueta_proyectos` calcula la etiqueta sobre los proyectos DE ESE CLIENTE y añade el
+ID solo si el nombre se repite (v306). Fijar `fac_scope` desde el proyecto obligaría a
+recalcularla con otro conjunto, y una opción que no existe **revienta el radio**. Se
+pasa el **ID** en `_fac_prj_pending` y el formulario resuelve su propia etiqueta,
+aplicándola ANTES de instanciar el widget (regla v111, verificado por AST: L205 < L208).
+
+### ⚠️ El fallo que evitó mirar los datos reales
+`Proyectos.Cliente` es **texto libre**. Preseleccionar el selectbox con un valor que no
+está entre las opciones revienta el widget — y en producción hay dos obras con cliente
+**«vd»** y **«ci»**, que no son fichas de Contactos… y las dos tienen importe pendiente,
+así que el botón les habría salido. Ahora el cliente se resuelve **por `ClienteID`**
+(la relación de verdad) y solo se preselecciona si el nombre existe entre las opciones;
+si no, el formulario **lo explica** y deja elegir a mano.
+
+### Detalle
+El bloque no aparece si no hay nada pendiente ni facturado (no estorbar), el botón es
+primario solo cuando hay algo que cobrar, y es **solo para gestión** (`can_delete`): el
+campo ve sus costos pero no factura.
+⚠️ De paso: al poner `MargenDefault=20%` (v353) el ingreso estimado subió, así que
+`prueba1` pasó a tener **$330,48 pendientes** pese a estar facturada — es correcto, pero
+conviene saber de dónde sale.
+
+## Versiones desplegadas (v357 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -4886,6 +4919,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v357 | **Atajo: facturar desde el propio proyecto** — «Pendiente de facturar $X» + botón en 💰 Costos que abre el alta con cliente y proyecto ya elegidos. Reutiliza el alta existente (verificado: 1 formulario y 1 sola llamada a `create_factura`). ⚠️ No fija la etiqueta desde fuera —la resuelve el formulario, antes de instanciar el radio (v111/v306)— y ⚠️ mirar los datos reales evitó un crash: `Proyectos.Cliente` es texto libre y dos obras tienen «vd» y «ci», que no son fichas; preseleccionar eso reventaría el selectbox. Ahora resuelve por `ClienteID` y, si no hay ficha, lo explica |
 | v356 | ⚠️ **El editor de borradores refrescaba los precios en silencio**: reconstruía cada línea desde el catálogo al guardar, así que tocar una celda habría cambiado el total de la cotización real del usuario de $1.927,20 a otro número sin avisar. Ahora la cantidad **escala sobre el costo unitario congelado** y adoptar precios nuevos es un **botón explícito**, que conserva la ganancia en dinero y recalcula el margen. Con aviso de qué cambió («$960 → hoy $80»), solo en borrador, y las líneas cuyo artículo se borró se dicen en vez de descartarse. Encontrado mirando **datos reales**: con artículos de prueba, catálogo y líneas siempre coinciden |
 | v355 | **Se cotiza por GANANCIA, no por porcentaje**: el admin escribe cuánto quiere ganar en cada rubro y el margen % y el precio se calculan solos (Margen y Precio quedan bloqueados en la tabla). Nueva `margen_de()` como única fórmula y `ganancia_de()` derivada del precio, para que no puedan desacompasarse. ⚠️ Al cambiar la cantidad se conserva la **ganancia**, no el %, que es lo que la persona dijo. La invariante `precio = costo + ganancia` verificada exacta en 36 combinaciones; el margen redondeado es solo de lectura |
 | v354 | **Cotizaciones, fase 3 — módulo COMPLETO**: aceptar la cotización **crea el proyecto** con cliente, presupuesto, margen y cronograma, y aparece el bloque **cotizado vs real** (horas, costo, ganancia). ⚠️ El presupuesto del proyecto es el **COSTO** cotizado, no el precio: `project_cost` compara contra compras+mano de obra, así que con el precio la alerta solo saltaría cuando ya pierdes dinero. Idempotente (un doble clic no duplica la obra). ⚠️ La prueba cazó que «ganancia real» a mitad de obra daba $3.499 contra $893 cotizados **en verde** —no has ganado, es que no has gastado—: ahora se **proyecta** al ritmo actual (patrón v144) y solo se llama «real» al 100% |
