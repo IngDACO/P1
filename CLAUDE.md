@@ -4846,7 +4846,39 @@ por el margen es el alta de línea nueva** (que arranca con el default del grupo
 un punto de partida). El margen efectivo del total se calcula de las sumas, no de los %
 por línea.
 
-## Versiones desplegadas (v355 = actual)
+## ⚠️ Los precios de un borrador ya no cambiaban solos… porque SÍ cambiaban (v356)
+Salió verificando v355 con la **cotización real del usuario**: la línea «Instalacion»
+decía costo $960 (12 h × $40 × 2) y el artículo del catálogo hoy vale $40 (1 h). Lo
+había editado después de cotizar. Eso **no era el fallo** —la línea congela su precio a
+propósito (v353)— pero al mirar el editor apareció uno de verdad.
+
+### El fallo: el editor refrescaba en silencio
+`_editor_lineas` reconstruía cada línea desde el catálogo al guardar
+(`Q.linea_de(base, cant, …)`). O sea que **tocar cualquier celda de un borrador adoptaba
+los precios nuevos sin decir nada**: en su cotización, el total habría pasado de
+$1.927,20 a otro número al cambiar una cantidad. Un precio que se mueve a espaldas de
+quien cotiza es peor que un precio viejo.
+
+### El arreglo, en dos piezas
+1. **`quotes.escalar(linea, cantidad, ganancia)`** — cambiar la cantidad escala sobre el
+   **costo unitario congelado**, sin volver al catálogo. Probado: la línea de $960 sigue
+   en $960 al reescribir la cantidad (antes pasaba a $80).
+2. **`desactualizadas(c)` + `actualizar_precios(cid)`** — la pantalla avisa
+   («Instalacion: $960 → hoy $80») y el botón trae los precios nuevos **conservando la
+   ganancia en dinero** (v355); el margen % se reajusta. Probado: 3 uds a $100 con $90
+   de ganancia → sube el catálogo a $130 → tras pulsar, costo $390, **ganancia sigue
+   $90**, margen baja de 30% a 23,08%.
+
+⚠️ **Solo en borrador.** Una cotización enviada no se toca: devuelve «saca una versión
+nueva» y el total no se mueve. ⚠️ Una línea cuyo artículo se borró del catálogo se
+detecta, se dice y **se deja intacta** — no se descarta en silencio.
+
+### Lo que enseña este caso
+El comportamiento «correcto» (congelar el precio) y el fallo (refrescar al guardar)
+convivían en el mismo módulo y se contradecían. Solo se vio **mirando datos reales del
+usuario**: con mis artículos de prueba, catálogo y líneas siempre coincidían.
+
+## Versiones desplegadas (v356 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -4854,6 +4886,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v356 | ⚠️ **El editor de borradores refrescaba los precios en silencio**: reconstruía cada línea desde el catálogo al guardar, así que tocar una celda habría cambiado el total de la cotización real del usuario de $1.927,20 a otro número sin avisar. Ahora la cantidad **escala sobre el costo unitario congelado** y adoptar precios nuevos es un **botón explícito**, que conserva la ganancia en dinero y recalcula el margen. Con aviso de qué cambió («$960 → hoy $80»), solo en borrador, y las líneas cuyo artículo se borró se dicen en vez de descartarse. Encontrado mirando **datos reales**: con artículos de prueba, catálogo y líneas siempre coinciden |
 | v355 | **Se cotiza por GANANCIA, no por porcentaje**: el admin escribe cuánto quiere ganar en cada rubro y el margen % y el precio se calculan solos (Margen y Precio quedan bloqueados en la tabla). Nueva `margen_de()` como única fórmula y `ganancia_de()` derivada del precio, para que no puedan desacompasarse. ⚠️ Al cambiar la cantidad se conserva la **ganancia**, no el %, que es lo que la persona dijo. La invariante `precio = costo + ganancia` verificada exacta en 36 combinaciones; el margen redondeado es solo de lectura |
 | v354 | **Cotizaciones, fase 3 — módulo COMPLETO**: aceptar la cotización **crea el proyecto** con cliente, presupuesto, margen y cronograma, y aparece el bloque **cotizado vs real** (horas, costo, ganancia). ⚠️ El presupuesto del proyecto es el **COSTO** cotizado, no el precio: `project_cost` compara contra compras+mano de obra, así que con el precio la alerta solo saltaría cuando ya pierdes dinero. Idempotente (un doble clic no duplica la obra). ⚠️ La prueba cazó que «ganancia real» a mitad de obra daba $3.499 contra $893 cotizados **en verde** —no has ganado, es que no has gastado—: ahora se **proyecta** al ritmo actual (patrón v144) y solo se llama «real» al 100% |
 | v353 | **Cotizaciones, fase 2**: armar el precio desde el catálogo con **margen por línea**, estados (borrador→enviada→aceptada/rechazada, con `vencida` derivada de la validez), versiones y **PDF formal**. La línea congela su precio (subir el catálogo no mueve lo ya enviado) y una cotización enviada no se edita: se saca versión nueva. ⚠️ Verificado que el PDF **no filtra costos ni márgenes**. ⚠️ La prueba cazó que olvidé la hoja en `hojas.HOJAS_LECTURA`: como el lector va sin cabeceras, el módulo leía **vacío para siempre sin ningún error** — guardián nuevo para ese patrón. + margen 20% y GST 10% configurados en el grupo |

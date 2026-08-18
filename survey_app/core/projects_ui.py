@@ -3022,6 +3022,57 @@ def _ordenes_section(pid, grupo, editable=True, key_prefix="ord"):
                         st.rerun()
 
 
+def _facturar_atajo(pid, grupo, prj_nombre=""):
+    """Facturar la obra desde la propia obra (v357).
+
+    Reutiliza el alta de `invoices_ui` (no se duplica el creador de facturas) y le pasa
+    el ID del proyecto; la etiqueta la resuelve allí. Muestra lo pendiente para que se
+    sepa de antemano si hay algo que facturar.
+    """
+    try:
+        from core import invoices as I
+        from core import theme as _T
+        pend = I.pendiente_de_facturar(pid, grupo)
+        facturado = I.facturado_por_proyecto(grupo).get(str(pid), 0.0)
+    except Exception:
+        return
+    if pend <= 0 and facturado <= 0:
+        return                          # nada que facturar y nada facturado: no estorbar
+    _c1, _c2 = st.columns([3, 2])
+    with _c1:
+        if pend > 0:
+            st.markdown(":material/receipt: **Pendiente de facturar: "
+                        + _T.dinero(pend, 0) + "**")
+            st.caption("Ingreso estimado del proyecto menos lo ya facturado.")
+        else:
+            st.markdown(":material/check_circle: **Todo facturado** ("
+                        + _T.dinero(facturado, 0) + ")")
+    with _c2:
+        if st.button(":material/receipt_long: Facturar esta obra", key="fac_atajo_" + str(pid),
+                     use_container_width=True, type="primary" if pend > 0 else "secondary",
+                     help="Abre la nueva factura con este cliente y este proyecto ya elegidos."):
+            prj = P.get_project(pid) or {}
+            st.session_state["_fac_nueva"] = True
+            # ⚠️ El selectbox de cliente se indexa por NOMBRE, y `Proyectos.Cliente` es
+            # TEXTO LIBRE: en producción hay obras con «vd» y «ci», que no son fichas de
+            # cliente. Preseleccionar un valor que no está entre las opciones **revienta
+            # el widget**. Se resuelve por ClienteID (la relación de verdad, v306) y solo
+            # se preselecciona si el nombre existe de veras entre las opciones.
+            from core import clientes as _C
+            _fichas = _C.list_clientes(grupo)
+            _nombres = {str(f.get("Nombre", "")) for f in _fichas}
+            _porid = next((str(f.get("Nombre", "")) for f in _fichas
+                           if str(f.get("ID", "")) == str(prj.get("ClienteID", ""))), "")
+            _cli = _porid or str(prj.get("Cliente", "") or "")
+            if _cli in _nombres:
+                st.session_state["fac_cli"] = _cli
+            else:
+                st.session_state["_fac_aviso_cli"] = str(prj.get("Cliente", "") or "—")
+            st.session_state["_fac_prj_pending"] = str(pid)
+            st.session_state["_admin_nav_pending"] = ("finanzas", "🧾 Facturas")
+            st.rerun()
+
+
 def render_expenses(pid, grupo, can_delete=False, key_prefix="ex"):
     """Costos del proyecto (v144).
 
@@ -3098,6 +3149,10 @@ def render_expenses(pid, grupo, can_delete=False, key_prefix="ex"):
                 f"a **{_T.dinero(cp['total_comp'], 0)}**, "
                 f"**{_T.dinero(cp['total_comp'] - pres, 0)} por encima** de los "
                 f"{_T.dinero(pres, 0)} presupuestados.")
+
+    # ── Facturar esta obra (atajo, v357) ─────────────────────────
+    if can_delete:                      # solo gestión: el campo no factura
+        _facturar_atajo(pid, grupo, prj_nombre=str(P.get_project(pid).get("Nombre", "")))
 
     # ── Órdenes de compra: el dinero comprometido (v343) ──
     _ordenes_section(pid, grupo, editable=can_delete, key_prefix=key_prefix)

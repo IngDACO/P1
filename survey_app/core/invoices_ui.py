@@ -195,6 +195,22 @@ def _nueva_factura(grupo):
     _pid_by_lbl = {v: k for k, v in _lbl.items()}
     prj_names = [_lbl[str(p.get("ID", ""))] for p in prjs]
 
+    # v357: atajo desde el proyecto. Llega el ID y AQUÍ se resuelve su etiqueta, que es
+    # donde se conoce el conjunto con el que se calculó (v306). Se aplica ANTES de
+    # instanciar el radio: escribir la clave de un widget ya creado revienta (v111).
+    _av = st.session_state.pop("_fac_aviso_cli", None)
+    if _av:
+        st.warning(":material/contacts: Ese proyecto tiene el cliente **" + str(_av)
+                   + "**, que no es una ficha de :material/contacts: Contactos. Elige el "
+                     "cliente a mano, o enlaza el proyecto a su ficha para que el atajo "
+                     "funcione la próxima vez.")
+    _pend_pid = st.session_state.pop("_fac_prj_pending", None)
+    if _pend_pid:
+        _et = _lbl.get(str(_pend_pid))
+        if _et in prj_names:
+            st.session_state["fac_scope"] = _et
+        elif _et:
+            st.info(":material/info: Ese proyecto no es de este cliente; elige el alcance a mano.")
     _scope = st.radio("Alcance", ["Todo el cliente"] + prj_names, horizontal=True, key="fac_scope")
     _scope_prjs = (prjs if _scope == "Todo el cliente"
                    else [p for p in prjs if _lbl.get(str(p.get("ID", ""))) == _scope])
