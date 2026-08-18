@@ -154,12 +154,10 @@ def _editor_lineas(grupo, key: str, lineas: list) -> list:
         cant, gan = _num(ed.iloc[i]["Cant."]), _num(ed.iloc[i]["Ganancia $"])
         if cant <= 0:
             continue
-        base = CAT.get_item(l.get("catalogo_id"))
-        # ⚠️ Al cambiar la CANTIDAD el costo cambia, y la ganancia tecleada se mantiene
-        # tal cual (es lo que la persona dijo que quiere ganar); el margen se reajusta.
-        nl = (Q.linea_de(base, cant, ganancia=gan) if base
-              else Q.recalcular(l, ganancia=gan))
-        nuevas.append(nl)
+        # ⚠️ v356: se escala sobre el costo unitario CONGELADO, sin volver al catálogo.
+        # Antes se reconstruía desde el artículo, así que tocar una celda adoptaba en
+        # silencio los precios nuevos. Adoptarlos es ahora un botón explícito.
+        nuevas.append(Q.escalar(l, cant, ganancia=gan))
     return nuevas
 
 
@@ -245,6 +243,25 @@ def _detalle(grupo, cid):
     t = Q.totales(lineas, _num(c.get("ImpuestoPct")))
 
     if est == Q.BORRADOR:
+        _des = Q.desactualizadas(c)
+        if _des:
+            _txt = " · ".join(
+                str(d["linea"].get("concepto", "")) + ": "
+                + T.dinero(d["linea"].get("costo_total"))
+                + (" → " + T.dinero(d["costo_hoy"]) if d["costo_hoy"] is not None
+                   else " (" + d["motivo"] + ")")
+                for d in _des[:6])
+            st.warning(":material/sync_problem: **El catálogo cambió** desde que armaste "
+                       "esta cotización: " + _txt + ". Los precios de la cotización NO se "
+                       "tocan solos.")
+            if st.button(":material/sync: Actualizar precios desde el catálogo",
+                         key="cot_upd_" + str(cid),
+                         help="Trae los costos de hoy conservando lo que quieres ganar "
+                              "en cada línea."):
+                ok, msg = Q.actualizar_precios(cid)
+                (st.success if ok else st.error)(msg)
+                if ok:
+                    st.rerun()
         nuevas = _editor_lineas(grupo, f"ed{cid}", lineas)
         if nuevas != lineas:
             if st.button(":material/save: Guardar cambios", key=f"cot_save_{cid}",

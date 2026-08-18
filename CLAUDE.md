@@ -4817,7 +4817,36 @@ Catálogo (costo) → cotización (margen por línea) → PDF sin filtrar costos
 proyecto con presupuesto y margen → cotizado vs real. Todo ejercitado contra la hoja
 real y con producción devuelta a su estado.
 
-## Versiones desplegadas (v354 = actual)
+## Cotización: se escribe la GANANCIA, el margen % sale solo (v355)
+Petición del usuario: *«el admin pone el valor que desea ganar sobre el costo base y el
+% de margen se calcula de forma automática»*. Es **invertir la entrada**: antes se
+tecleaba el % y salía el precio; ahora se teclea lo que se quiere ganar y sale el %.
+
+- **`quotes.margen_de(costo, ganancia)`** es la única fórmula del %; `linea_de` y
+  `recalcular` aceptan `ganancia=` (que **manda** sobre `margen_pct` si llegan las dos:
+  es el dato que la persona escribió). **`ganancia_de(linea)`** la deriva del precio —
+  no se guarda aparte, para que no pueda desacompasarse (lección de los helpers
+  divergentes de v323).
+- La tabla editable pasa a tener **«Ganancia $»** como única columna tecleable del
+  precio; **Margen % y Precio quedan bloqueados** para que se lea que son consecuencia.
+- `margen_pct` se conserva en la línea: lo consumen la columna Margen de la lista y el
+  `MargenMO` del proyecto al aceptar. Solo cambia por dónde entra el dato.
+
+### ⚠️ Al cambiar la CANTIDAD se conserva la ganancia, no el %
+12 uds → costo 2.226, ganancia 150, margen 6,74%. A 24 uds → costo 4.452, **ganancia
+sigue 150**, margen baja a 3,37%. Es lo correcto: la persona dijo cuánto quiere ganar,
+no qué porcentaje.
+
+### ⚠️ Redondeo: la invariante es `precio = costo + ganancia`, no el %
+Reconstruir el precio desde el margen **redondeado a 2 decimales** da hasta 3 céntimos
+de diferencia (2.376,00 vs 2.376,03). No es un fallo: el `margen_pct` es un número de
+lectura y el precio se calcula siempre por la ganancia. Verificado: 36 combinaciones de
+cantidad × ganancia con **0 desviaciones**, y por AST que **el único camino que aún pasa
+por el margen es el alta de línea nueva** (que arranca con el default del grupo para dar
+un punto de partida). El margen efectivo del total se calcula de las sumas, no de los %
+por línea.
+
+## Versiones desplegadas (v355 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -4825,6 +4854,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v355 | **Se cotiza por GANANCIA, no por porcentaje**: el admin escribe cuánto quiere ganar en cada rubro y el margen % y el precio se calculan solos (Margen y Precio quedan bloqueados en la tabla). Nueva `margen_de()` como única fórmula y `ganancia_de()` derivada del precio, para que no puedan desacompasarse. ⚠️ Al cambiar la cantidad se conserva la **ganancia**, no el %, que es lo que la persona dijo. La invariante `precio = costo + ganancia` verificada exacta en 36 combinaciones; el margen redondeado es solo de lectura |
 | v354 | **Cotizaciones, fase 3 — módulo COMPLETO**: aceptar la cotización **crea el proyecto** con cliente, presupuesto, margen y cronograma, y aparece el bloque **cotizado vs real** (horas, costo, ganancia). ⚠️ El presupuesto del proyecto es el **COSTO** cotizado, no el precio: `project_cost` compara contra compras+mano de obra, así que con el precio la alerta solo saltaría cuando ya pierdes dinero. Idempotente (un doble clic no duplica la obra). ⚠️ La prueba cazó que «ganancia real» a mitad de obra daba $3.499 contra $893 cotizados **en verde** —no has ganado, es que no has gastado—: ahora se **proyecta** al ritmo actual (patrón v144) y solo se llama «real» al 100% |
 | v353 | **Cotizaciones, fase 2**: armar el precio desde el catálogo con **margen por línea**, estados (borrador→enviada→aceptada/rechazada, con `vencida` derivada de la validez), versiones y **PDF formal**. La línea congela su precio (subir el catálogo no mueve lo ya enviado) y una cotización enviada no se edita: se saca versión nueva. ⚠️ Verificado que el PDF **no filtra costos ni márgenes**. ⚠️ La prueba cazó que olvidé la hoja en `hojas.HOJAS_LECTURA`: como el lector va sin cabeceras, el módulo leía **vacío para siempre sin ningún error** — guardián nuevo para ese patrón. + margen 20% y GST 10% configurados en el grupo |
 | v352 | **Cotizaciones, fase 1: el catálogo.** `core/catalogo.py` + pantalla en Finanzas · 📚 Catálogo: productos (costo × cantidad) y servicios (**horas × tarifa**, para poder comparar luego contra lo fichado). `costo_de()` es la fórmula única que usarán cotización, PDF y la comparación. No deja crear artículos sin costo (fallo de las colillas de $0 de v346), desactivar con vuelta (v340), homónimos por ID (v306). ⚠️ La prueba cazó que **el precio no se auditaba**: `CostoUnit` no estaba en `CAMPOS_CLAVE` — el mismo fallo que `MargenPct` en v344, y el guardián no lo vio porque solo miraba una dirección; ahora mira las dos |

@@ -146,6 +146,81 @@ def recalcular(linea: dict, ganancia=None) -> dict:
     return l
 
 
+def escalar(linea: dict, cantidad, ganancia=None) -> dict:
+    """Cambia la cantidad usando el costo unitario **YA CONGELADO** (v356).
+
+    ⚠️ NO vuelve al catálogo. Antes el editor reconstruía la línea desde el artículo, así
+    que tocar una celda de un borrador adoptaba en silencio los precios nuevos del
+    catálogo — el total cambiaba sin que nadie lo pidiera. Adoptar precios nuevos es
+    ahora una decisión explícita (`actualizar_precios`).
+    """
+    l = dict(linea)
+    cant_ant = _num(l.get("cantidad")) or 1.0
+    horas_unit = _num(l.get("horas")) / cant_ant if cant_ant else 0.0
+    cant = _num(cantidad, 0.0)
+    l["cantidad"] = cant
+    l["costo_total"] = round(_num(l.get("costo_unit")) * cant, 2)
+    l["horas"] = round(horas_unit * cant, 2)
+    gan = ganancia_de(linea) if ganancia is None else ganancia
+    return recalcular(l, ganancia=gan)
+
+
+def desactualizadas(c: dict) -> list:
+    """Líneas cuyo costo ya no coincide con el catálogo de HOY.
+
+    Devuelve [{i, linea, costo_hoy, item, motivo}]. No cambia nada: solo mira, para que
+    la pantalla pueda decirlo en vez de que el usuario lo descubra por el total.
+    """
+    from core import catalogo as CAT
+    out = []
+    for i, l in enumerate(lineas_de(c)):
+        it = CAT.get_item(l.get("catalogo_id"))
+        if not it:
+            out.append({"i": i, "linea": l, "item": None, "costo_hoy": None,
+                        "motivo": "ya no está en el catálogo"})
+            continue
+        hoy = CAT.costo_de(it, _num(l.get("cantidad")))
+        if abs(hoy - _num(l.get("costo_total"))) > 0.005:
+            out.append({"i": i, "linea": l, "item": it, "costo_hoy": hoy,
+                        "motivo": "cambió en el catálogo"})
+    return out
+
+
+def actualizar_precios(cid) -> tuple:
+    """Trae los precios de hoy del catálogo. **Solo en borrador** y bajo petición.
+
+    ⚠️ Conserva la GANANCIA en dinero (v355: es lo que la persona decidió ganar); el
+    margen % se recalcula sobre el costo nuevo. Una línea cuyo artículo ya no exista se
+    deja intacta y se dice — no se descarta en silencio.
+    """
+    c = get_cotizacion(cid)
+    if not c:
+        return False, "Cotización no encontrada."
+    if estado_de(c) != BORRADOR:
+        return False, ("Solo se pueden actualizar precios en un borrador. Esta ya se "
+                       "envió: saca una versión nueva.")
+    des = desactualizadas(c)
+    if not des:
+        return False, "Los precios ya están al día."
+    lineas = lineas_de(c)
+    n, huerf = 0, []
+    for d in des:
+        if not d["item"]:
+            huerf.append(str(d["linea"].get("concepto", "")))
+            continue
+        l = lineas[d["i"]]
+        lineas[d["i"]] = linea_de(d["item"], _num(l.get("cantidad")),
+                                  ganancia=ganancia_de(l))
+        n += 1
+    ok, msg = guardar_lineas(cid, lineas)
+    if not ok:
+        return False, msg
+    txt = f"{n} línea(s) actualizada(s) con los precios de hoy."
+    if huerf:
+        txt += (" Sin tocar (ya no están en el catálogo): " + ", ".join(huerf) + ".")
+    return True, txt
+
+
 def ganancia_de(linea: dict) -> float:
     """Lo que se gana en esa línea, en dinero. Derivado: no se guarda aparte para que
     no pueda desacompasarse del precio (la lección de los helpers divergentes de v323)."""
