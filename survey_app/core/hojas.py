@@ -54,13 +54,12 @@ HOJAS_LECTURA = (
 )
 
 
-def _libro():
-    """El objeto Spreadsheet, cacheado por proceso (ya lo hace `timeclock`)."""
-    ws = timeclock._cached_ws()          # hoja1; de ahí colgamos el libro
-    return ws.spreadsheet if ws is not None else None
+def _libro(sheet_id: str = ""):
+    """El Spreadsheet del libro que toque (v359: uno por cliente)."""
+    return timeclock._abrir(sheet_id or timeclock.sheet_id_para("Sheet1"))
 
 
-def _existentes() -> set:
+def _existentes(sheet_id: str = "") -> set:
     """Títulos de las hojas que EXISTEN, en minúsculas.
 
     ⚠️ Sale del índice que `timeclock._libro()` ya construye y cachea (v290), así
@@ -70,7 +69,7 @@ def _existentes() -> set:
     tumbaba el lote completo y devolvía a leer hoja por hoja.
     """
     try:
-        hojas, _cab = timeclock._libro()
+        hojas, _cab = timeclock._libro(sheet_id or timeclock.sheet_id_para("Sheet1"))
         return set(hojas or {})
     except Exception as e:
         logger.warning("hojas: no se pudo leer el índice del libro: %s", e)
@@ -78,17 +77,20 @@ def _existentes() -> set:
 
 
 @st.cache_data(ttl=120, show_spinner=False)
-def _lote() -> dict:
+def _lote(sheet_id: str = "") -> dict:
     """UNA llamada `values:batchGet` con todas las hojas → {titulo: [[celdas]]}.
 
     ⚠️ Devuelve valores CRUDOS (como `get_all_values`), no registros: así este
     módulo no impone un formato y cada lector arma lo suyo con `registros()`.
     """
-    lib = _libro()
+    # ⚠️ v359: el lote se cachea POR LIBRO. Con una sola entrada, el segundo cliente
+    # leería los datos del primero — justo lo que este cambio viene a impedir.
+    sheet_id = sheet_id or timeclock.sheet_id_para("Sheet1")
+    lib = _libro(sheet_id)
     if lib is None:
         return {}
     try:
-        hay = _existentes()
+        hay = _existentes(sheet_id)
         pedir = [h for h in HOJAS_LECTURA if h.strip().lower() in hay]
         if not pedir:
             return {}
@@ -116,7 +118,7 @@ def invalidar():
         pass
 
 
-def registros(titulo: str, cabeceras=None):
+def registros(titulo: str, cabeceras=None, grupo: str = None):
     """Filas de una hoja como dicts, **idéntico a `get_all_records(numericise_ignore=['all'])`**.
 
     Es decir: la fila 1 es la cabecera, todo llega como TEXTO (nunca numerizado —
@@ -125,12 +127,12 @@ def registros(titulo: str, cabeceras=None):
 
     Si la hoja no vino en el lote, cae al camino de siempre (una llamada suya).
     """
-    datos = _lote().get(titulo)
+    datos = _lote(timeclock.sheet_id_para(titulo, grupo)).get(titulo)
     if datos is None:
         if cabeceras is None:
             return None                   # que el llamador use su propio lector
         try:
-            w = timeclock.get_sheet(titulo, tuple(cabeceras))
+            w = timeclock.get_sheet(titulo, tuple(cabeceras), grupo=grupo)
             return w.get_all_records(numericise_ignore=["all"])
         except Exception as e:
             logger.warning("hojas: lectura suelta de %s falló: %s", titulo, e)

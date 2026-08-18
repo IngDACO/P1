@@ -26,7 +26,10 @@ LOGIN_HEADERS = ["Usuario", "Password", "Rol", "Nombre", "Activo", "Grupo",
                  "SessionToken", "SessionTime", "Email", "TelegramChatID", "TarifaHora"]
 GROUPS_SHEET   = "Grupos"
 GROUPS_HEADERS = ["Grupo", "Descripcion", "Activo", "Zona", "MargenDefault", "ImpuestoDefault",
-                  "SuperDefault", "RetencionDefault"]
+                  "SuperDefault", "RetencionDefault",
+                  # v359: libro de Google propio de este cliente. Vacío = el
+                  # maestro (así `cliente1` sigue donde estaba, sin migrar).
+                  "SheetID"]
 ROLES         = ["propietario", "administrador", "campo"]
 _ACTIVE_OK    = ("", "SI", "SÍ", "YES", "Y", "TRUE", "1", "X")
 # Columnas (1-based) en la hoja Login
@@ -734,3 +737,63 @@ def delete_user(usuario: str) -> tuple:
 def can_reports(rol: str) -> bool:
     return rol in ("propietario", "administrador")
 
+
+
+# ── Libro propio por cliente (v359) ──────────────────────────────
+def group_sheet_id(grupo: str) -> str:
+    """ID del libro de Google de este grupo. Vacío = usa el maestro.
+
+    ⚠️ Lee de `Grupos`, que es una hoja GLOBAL: `timeclock` la resuelve al maestro
+    ANTES de preguntar aquí, o esto se llamaría a sí mismo sin fin.
+    """
+    if not grupo:
+        return ""
+    for g in _group_records():
+        if str(g.get("Grupo", "")).strip().casefold() == str(grupo).strip().casefold():
+            return str(g.get("SheetID", "") or "").strip()
+    return ""
+
+
+def set_group_sheet_id(grupo: str, sheet_id) -> tuple:
+    """Enlaza el grupo con su libro. `sheet_id` vacío lo devuelve al maestro."""
+    gws, err = _get_groups_ws()
+    if err:
+        return False, err
+    sid = str(sheet_id or "").strip()
+    # ⚠️ Se acepta la URL completa además del ID: es lo que se copia del navegador.
+    if "/spreadsheets/d/" in sid:
+        sid = sid.split("/spreadsheets/d/")[1].split("/")[0]
+    if sid:
+        otros = [str(g.get("Grupo")) for g in _group_records()
+                 if str(g.get("SheetID", "")).strip() == sid
+                 and str(g.get("Grupo", "")).strip().casefold() != str(grupo).strip().casefold()]
+        if otros:
+            # dos clientes en el mismo libro es justo lo que este cambio viene a evitar
+            return False, f"Ese libro ya es de: {', '.join(otros)}."
+    try:
+        recs = gws.get_all_records(numericise_ignore=["all"])
+    except Exception as e:
+        return False, f"Error leyendo: {e}"
+    for i, g in enumerate(recs):
+        if str(g.get("Grupo", "")).strip().casefold() == str(grupo).strip().casefold():
+            try:
+                gws.update_cell(i + 2, GROUPS_HEADERS.index("SheetID") + 1, sid)
+            except Exception as e:
+                return False, f"Error guardando: {e}"
+            _invalidate_groups()
+            try:
+                from core import timeclock
+                timeclock.invalidar_libros()
+            except Exception:
+                pass
+            return True, ("Libro enlazado." if sid else "Grupo devuelto al libro maestro.")
+    return False, "Grupo no encontrado."
+
+
+def grupos_con_libro_propio() -> list:
+    """Grupos que ya viven en su propio libro de Google (v359).
+
+    Lo usan las vistas CONSOLIDADAS del propietario para avisar de que su resumen
+    no los incluye todavía (ver el límite documentado en v359)."""
+    return [str(g.get("Grupo", "")) for g in _group_records()
+            if str(g.get("SheetID", "") or "").strip()]

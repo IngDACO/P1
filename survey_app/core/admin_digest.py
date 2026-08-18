@@ -163,6 +163,18 @@ def digest_text(d) -> str:
 
 
 @st.cache_data(ttl=120, show_spinner=False)
+def grupos_fuera_del_maestro() -> list:
+    """Grupos con libro propio (v359). Sus datos NO entran en este consolidado.
+
+    ⚠️ Se expone para que la pantalla lo DIGA. Un resumen al que le faltan clientes sin
+    avisar es peor que no tenerlo: el propietario tomaría decisiones sobre una foto
+    incompleta creyéndola entera."""
+    try:
+        return auth.grupos_con_libro_propio()
+    except Exception:
+        return []
+
+
 def owner_digest() -> list:
     """Resumen por grupo para el propietario: [{grupo, activos, avance, retrasos,
     alarmas, vencidos, cred_venc, sobre_presupuesto, pendientes}]."""

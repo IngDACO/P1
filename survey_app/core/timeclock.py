@@ -79,18 +79,73 @@ def _http_client_cls():
     return _HTTP_CLS
 
 
+# ── Un libro por empresa cliente (v359) ─────────────────────────
+# Hojas que viven SIEMPRE en el libro maestro: son el registro de la app, no datos de
+# un cliente. `Login` además se lee ANTES de saber a qué grupo perteneces.
+SHEETS_GLOBALES = {"login", "grupos", "rieles", "manuales"}
+
+
+def _sheet_maestro() -> str:
+    return str(st.secrets["TIMECLOCK_SHEET_ID"])
+
+
+def sheet_id_para(title: str = "", grupo: str = None) -> str:
+    """El libro que le toca a esta hoja. Vacío/desconocido → el maestro.
+
+    ⚠️ La comprobación de GLOBAL va PRIMERO y devuelve sin consultar a `auth`: si no,
+    `auth.group_sheet_id` leería `Grupos` —que es global— y se llamaría sin fin.
+    """
+    maestro = _sheet_maestro()
+    if str(title).strip().lower() in SHEETS_GLOBALES:
+        return maestro
+    g = grupo
+    if g is None:
+        try:                                  # como `clock.now()`: sale de la sesión (v173)
+            g = str((st.session_state.get("auth") or {}).get("grupo", "") or "")
+        except Exception:
+            g = ""
+    if not g:
+        return maestro                        # propietario o sin sesión → el maestro
+    try:
+        from core import auth                 # perezoso: `auth` importa este módulo
+        return auth.group_sheet_id(g) or maestro
+    except Exception as e:
+        logger.warning("timeclock: no se pudo resolver el libro de %r: %s", g, e)
+        return maestro
+
+
+def invalidar_libros():
+    """Tras enlazar/desenlazar un libro hay que soltar los handles cacheados."""
+    for fn in (_abrir, _cached_ws, _libro, get_sheet):
+        try:
+            fn.clear()
+        except Exception as e:
+            logger.warning("timeclock.invalidar_libros: %s: %s", fn, e)
+    try:
+        from core import hojas
+        hojas.invalidar()
+    except Exception:
+        pass
+
+
 @st.cache_resource(show_spinner=False)
-def _cached_ws():
-    """Abre y cachea la worksheet. Se autentica UNA vez (no en cada rerun).
-    Si falla, lanza excepción → no se cachea → se reintenta en la próxima llamada."""
+def _abrir(sheet_id: str):
+    """El Spreadsheet, cacheado POR LIBRO. Se autentica una vez por proceso."""
     import gspread
     from google.oauth2.service_account import Credentials
-
-    creds_info = dict(st.secrets["gcp_service_account"])
-    sheet_id   = st.secrets["TIMECLOCK_SHEET_ID"]
-    creds  = Credentials.from_service_account_info(creds_info, scopes=SCOPES)
+    creds = Credentials.from_service_account_info(
+        dict(st.secrets["gcp_service_account"]), scopes=SCOPES)
     client = gspread.authorize(creds, http_client=_http_client_cls())
-    ws     = client.open_by_key(sheet_id).sheet1
+    return client.open_by_key(sheet_id)
+
+
+@st.cache_resource(show_spinner=False)
+def _cached_ws(sheet_id: str = ""):
+    """Abre y cachea la worksheet del FICHAJE del libro que toque.
+
+    ⚠️ `Sheet1` es por cliente, así que depende del grupo en sesión."""
+    sheet_id = sheet_id or sheet_id_para("Sheet1")
+    ws = _abrir(sheet_id).sheet1
 
     # Asegurar cabecera + migrar columnas faltantes (Grupo, Tipo, …)
     try:
@@ -124,7 +179,7 @@ def _get_worksheet():
 
 
 @st.cache_resource(show_spinner=False)
-def _libro():
+def _libro(sheet_id: str = ""):
     """Índice del libro entero en 2 llamadas, en vez de 2 por hoja (v290).
 
     Cada `get_sheet(title)` hacía `ss.worksheet(title)` (1 llamada de metadata)
@@ -139,7 +194,7 @@ def _libro():
        "está vacía". `get_sheet` debe releerla. Confundir las dos cosas
        escribiría una fila de cabecera ENCIMA de una hoja con datos.
     """
-    ss = _cached_ws().spreadsheet
+    ss = _abrir(sheet_id or sheet_id_para("Sheet1"))
     hojas = {w.title.strip().lower(): w for w in ss.worksheets()}
     cabeceras = {}
     if hojas:
@@ -157,13 +212,15 @@ def _libro():
 
 
 @st.cache_resource(show_spinner=False)
-def get_sheet(title: str, headers: tuple):
+def get_sheet(title: str, headers: tuple, grupo: str = None):
     """Devuelve el handle de una pestaña por título, cacheado como recurso.
 
     Crea la hoja y asegura/migra la cabecera UNA SOLA VEZ por proceso. Se apoya
     en `_libro()` para no pagar metadata+cabecera por hoja. Si la API falla,
     lanza excepción → NO se cachea → se reintenta en la próxima llamada."""
-    hojas, cabeceras = _libro()
+    # v359: cada hoja se busca en SU libro (global → maestro; si no, el del grupo).
+    _sid = sheet_id_para(title, grupo)
+    hojas, cabeceras = _libro(_sid)
     clave = title.strip().lower()
     w = hojas.get(clave)
 
@@ -171,7 +228,7 @@ def get_sheet(title: str, headers: tuple):
         # ⚠️ Ahora solo se crea si la hoja NO está en el listado real del libro.
         # Antes bastaba con que `ss.worksheet(title)` lanzara —incluido por un
         # error de API—, así que un hipo podía crear una hoja duplicada.
-        ss = _cached_ws().spreadsheet
+        ss = _abrir(_sid)
         w = ss.add_worksheet(title=title, rows=500, cols=len(headers))
         w.append_row(list(headers))
         hojas[clave] = w                     # el índice sigue vivo en el proceso

@@ -4911,7 +4911,35 @@ campo ve sus costos pero no factura.
 `prueba1` pasó a tener **$330,48 pendientes** pese a estar facturada — es correcto, pero
 conviene saber de dónde sale.
 
-## Versiones desplegadas (v357 = actual)
+## ⚠️ Una obra ARCHIVADA se puede facturar (v358)
+Encontrado verificando v357 **en producción**: el atajo de `prueba1` mostraba «Pendiente
+de facturar $330», llevaba al alta de factura… y **esa obra no estaba entre las opciones
+de alcance**, así que la preselección no hacía nada y el radio se quedaba en «Todo el
+cliente». Causa: `_nueva_factura` arma la lista con `list_projects(grupo)`, que **oculta
+los archivados** (v149), y `prueba1` está archivado.
+
+**Archivar no es no-cobrar**: lo habitual es archivar al terminar y facturar después. Es
+la cuarta vez que el default de v149 muerde donde no debía — v310 (los costos de los
+archivados desaparecían del grupo), v321 (su margen se ignoraba), v322 (se caían de su
+agrupación) y ahora la facturación.
+
+**Arreglo:** si el atajo apunta a una obra que no está en la lista, se añade (validando
+que sea del mismo grupo). Se mira el pendiente ANTES de calcular las etiquetas, para que
+`etiqueta_proyectos` lo incluya y la preselección encuentre su opción. Verificado el
+orden por AST: mirar L194 < etiquetas L203 < escribir `fac_scope` L220 < radio L226.
+
+### ⚠️ Y mi guarda de v357 tenía un hueco MUDO
+Contemplaba «el proyecto es de otro cliente» pero no «el proyecto no está en la lista»:
+en ese caso `_et` era `None` y **no se decía nada**. El usuario acababa en «Todo el
+cliente» sin entender por qué. Ahora ese caso también habla.
+
+### Lo que sigue siendo limitación conocida
+En el alta **manual** de factura (Finanzas → Facturas → Nueva) las obras archivadas
+siguen sin aparecer: solo entran por el atajo. Si hiciera falta facturar una obra
+archivada sin pasar por su ficha, haría falta una casilla «incluir archivadas» — es
+decisión de producto, no se hizo por iniciativa propia.
+
+## Versiones desplegadas (v358 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -4919,6 +4947,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v358 | ⚠️ **Una obra archivada no se podía facturar**: el atajo de v357 llevaba al alta y la obra no estaba entre las opciones (el formulario usa `list_projects`, que oculta archivados desde v149) → la preselección no hacía nada, **en silencio**. Archivar no es no-cobrar: lo normal es archivar al terminar y facturar después. Cuarta vez que ese default muerde (v310, v321, v322). + la guarda de v357 tenía un caso mudo, que ahora habla. Encontrado **verificando en producción**, no en tests |
 | v357 | **Atajo: facturar desde el propio proyecto** — «Pendiente de facturar $X» + botón en 💰 Costos que abre el alta con cliente y proyecto ya elegidos. Reutiliza el alta existente (verificado: 1 formulario y 1 sola llamada a `create_factura`). ⚠️ No fija la etiqueta desde fuera —la resuelve el formulario, antes de instanciar el radio (v111/v306)— y ⚠️ mirar los datos reales evitó un crash: `Proyectos.Cliente` es texto libre y dos obras tienen «vd» y «ci», que no son fichas; preseleccionar eso reventaría el selectbox. Ahora resuelve por `ClienteID` y, si no hay ficha, lo explica |
 | v356 | ⚠️ **El editor de borradores refrescaba los precios en silencio**: reconstruía cada línea desde el catálogo al guardar, así que tocar una celda habría cambiado el total de la cotización real del usuario de $1.927,20 a otro número sin avisar. Ahora la cantidad **escala sobre el costo unitario congelado** y adoptar precios nuevos es un **botón explícito**, que conserva la ganancia en dinero y recalcula el margen. Con aviso de qué cambió («$960 → hoy $80»), solo en borrador, y las líneas cuyo artículo se borró se dicen en vez de descartarse. Encontrado mirando **datos reales**: con artículos de prueba, catálogo y líneas siempre coinciden |
 | v355 | **Se cotiza por GANANCIA, no por porcentaje**: el admin escribe cuánto quiere ganar en cada rubro y el margen % y el precio se calculan solos (Margen y Precio quedan bloqueados en la tabla). Nueva `margen_de()` como única fórmula y `ganancia_de()` derivada del precio, para que no puedan desacompasarse. ⚠️ Al cambiar la cantidad se conserva la **ganancia**, no el %, que es lo que la persona dijo. La invariante `precio = costo + ganancia` verificada exacta en 36 combinaciones; el margen redondeado es solo de lectura |

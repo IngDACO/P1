@@ -369,6 +369,50 @@ def _owner_grupos():
             (st.success if ok else st.error)(msg)
             if ok: st.rerun()
 
+    # ── Libro de Google propio de cada cliente (v359) ──
+    # Aislamiento de datos: cada empresa puede vivir en su propio fichero, en vez de
+    # compartirlo separada solo por una columna `Grupo`.
+    if grupos:
+        with st.expander("Libro de datos de cada cliente", icon=":material/menu_book:"):
+            st.caption("Cada empresa cliente puede tener su **propio archivo de Google "
+                       "Sheets**, para que sus datos no compartan fichero con los de "
+                       "otra. Vacío = usa el libro maestro.")
+            _gl = ui.elegir("Grupo", [g["Grupo"] for g in grupos], key="gsheet_sel",
+                            vacio="— elige un grupo —")
+            if _gl:
+                _sid_now = auth.group_sheet_id(_gl)
+                st.markdown(":material/info: Crea una hoja de cálculo en blanco, "
+                            "**compártela como editor** con la cuenta de servicio de la "
+                            "app, y pega aquí su enlace o su ID.")
+                _nuevo = st.text_input("Enlace o ID del libro", value=_sid_now,
+                                       key="gsheet_val",
+                                       placeholder="https://docs.google.com/spreadsheets/d/…")
+                _c1, _c2 = st.columns(2)
+                if _c1.button(":material/link: Guardar enlace", key="gsheet_save",
+                              use_container_width=True):
+                    ok, msg = auth.set_group_sheet_id(_gl, _nuevo)
+                    (st.success if ok else st.error)(msg)
+                    if ok:
+                        st.rerun()
+                if _sid_now and _c2.button(":material/link_off: Volver al maestro",
+                                           key="gsheet_del", use_container_width=True):
+                    ok, msg = auth.set_group_sheet_id(_gl, "")
+                    (st.success if ok else st.error)(msg)
+                    if ok:
+                        st.rerun()
+                if _sid_now:
+                    st.success(":material/check_circle: **" + _gl + "** usa su propio "
+                               "libro. `Login`, `Grupos` y `Rieles` siguen en el maestro: "
+                               "son el registro de la app, no datos suyos.")
+            # ⚠️ El límite se DICE. Un consolidado al que le faltan clientes sin avisar
+            # es peor que no tenerlo (ver v359).
+            _fuera = auth.grupos_con_libro_propio()
+            if _fuera:
+                st.warning(":material/warning: Con clientes en libros aparte, los "
+                           "**resúmenes consolidados del propietario** todavía solo "
+                           "cuentan los del maestro. Fuera del consolidado: **"
+                           + ", ".join(_fuera) + "**. Cada cliente sí ve lo suyo completo.")
+
     # ── Zona horaria por grupo (v173) ──
     # Define en qué hora LOCAL se graban los registros de cada grupo (cada empresa
     # puede estar en otro país). Sin fijar → clock.DEFAULT_TZ.
