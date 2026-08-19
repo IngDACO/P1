@@ -14,6 +14,8 @@ from datetime import datetime
 
 import pandas as pd
 import streamlit as st
+
+from core import flash
 import streamlit.components.v1 as components
 
 from core import timeclock
@@ -157,7 +159,7 @@ def _aviso_olvido(nombre, grupo, usuario, sess):
                  disabled=not ok_rango):
         for tipo in stale:
             timeclock.clock_out(nombre, grupo, tipo=tipo, usuario=usuario, out_ts=fin)
-        st.success("Sesión cerrada a la hora indicada.")
+        flash.exito("Sesión cerrada a la hora indicada.")
         st.rerun()
 
 
@@ -343,7 +345,7 @@ def render_timeclock_tab():
                             ok, msg, auto = timeclock.fichar_proyecto(
                                 nombre, _rnom, grupo, usuario, _rpid)
                             if ok:
-                                st.success(msg + ("  :material/schedule: Se abrió también tu jornada." if auto else ""))
+                                flash.exito(msg + ("  :material/schedule: Se abrió también tu jornada." if auto else ""))
                                 st.rerun()
                             else:
                                 st.error(msg)
@@ -358,7 +360,7 @@ def render_timeclock_tab():
                 _nom = _nom_de.get(_pid, "")               # v308: el nombre, no la etiqueta
                 ok, msg, auto = timeclock.fichar_proyecto(nombre, _nom, grupo, usuario, _pid)
                 if ok:
-                    st.success(msg + ("  :material/schedule: Se abrió también tu jornada." if auto else ""))
+                    flash.exito(msg + ("  :material/schedule: Se abrió también tu jornada." if auto else ""))
                     st.rerun()
                 else:
                     st.error(msg)

@@ -10,6 +10,7 @@ import pandas as pd
 from core import auth
 from core import ui_common as ui
 from core import clock
+from core import flash          # v365: mensajes que sobreviven al st.rerun()
 
 
 def _contacto_uno(sel, key_prefix="cc"):
@@ -42,7 +43,7 @@ def _contacto_uno(sel, key_prefix="cc"):
             cid = notify.telegram_find_chat_by_code(code)
             if cid:
                 auth.set_contact(sel, telegram=cid)
-                st.success(":material/check_circle: Telegram vinculado.")
+                flash.exito(":material/check_circle: Telegram vinculado.")
                 st.rerun()
             else:
                 st.error("No encontré su mensaje. Asegúrate de que pulsó Start y reintenta.")
@@ -226,6 +227,11 @@ def render_login() -> bool:
         "Herramientas técnicas</span></p>",
         unsafe_allow_html=True)
 
+    # ⚠️ v365: los mensajes que sobrevivieron a un rerun también se pintan AQUÍ. El
+    # login ocurre ANTES de la shell, así que sin esto el «propietario creado, ahora
+    # inicia sesión» del bootstrap se perdería igual que antes.
+    flash.mostrar()
+
     if not auth.is_configured():
         st.error(":material/lock: El acceso no está conectado a Google Sheets. "
                  "Configura los Secrets (gcp_service_account + TIMECLOCK_SHEET_ID) en Streamlit Cloud.")
@@ -255,7 +261,7 @@ def render_login() -> bool:
                 else:
                     ok, msg = auth.add_user(u, p1, "propietario", nm)
                     if ok:
-                        st.success(msg + "  Ahora inicia sesión.")
+                        flash.exito(msg + "  Ahora inicia sesión.")
                         st.rerun()
                     else:
                         st.error(msg)
@@ -515,7 +521,7 @@ def _owner_grupos():
                     ok1, _m1 = auth.set_group_num_setting(gnsel, "SuperDefault", _sup)
                     ok2, _m2 = auth.set_group_num_setting(gnsel, "RetencionDefault", _ret)
                     if ok1 and ok2:
-                        st.success("Configuración de nómina actualizada.")
+                        flash.exito("Configuración de nómina actualizada.")
                         st.rerun()
                     else:
                         st.error(_m1 if not ok1 else _m2)
@@ -685,7 +691,7 @@ def _owner_manuales():
                                                "Confirmo eliminar este manual")
                 if st.button(":material/delete: Eliminar", key="man_del_btn", disabled=not _ok_del):
                     if manuals.delete_manual(_mid):
-                        st.success("Manual eliminado.")
+                        flash.exito("Manual eliminado.")
                         st.rerun()
                     else:
                         st.error("No se pudo eliminar.")
@@ -709,7 +715,7 @@ def _owner_manuales():
                 if err:
                     st.error(err)
                 else:
-                    st.success(f"Manual «{nm}» agregado: {n} fragmentos indexados.")
+                    flash.exito(f"Manual «{nm}» agregado: {n} fragmentos indexados.")
                     st.rerun()
 
 

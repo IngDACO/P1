@@ -8,6 +8,8 @@ abren el proyecto en la sección Proyectos). El enlace cliente↔proyecto usa
 import pandas as pd
 import streamlit as st
 
+from core import flash
+
 from core import alerts, expenses, maps
 from core import clientes as C
 from core import projects as P
@@ -191,7 +193,7 @@ def _detalle_cliente(grupo, key):
                 ok, msg = C.create_cliente(grupo, disp, _con, _tel, _mail, _dir,
                                            _notas, creado_por=_creado_por())
             if ok:
-                st.success("Ficha guardada.")
+                flash.exito("Ficha guardada.")
                 st.rerun()
             else:
                 st.error(msg)
@@ -267,7 +269,7 @@ def _detalle_cliente(grupo, key):
                     if _sel:
                         for _lbl in _sel:
                             P.update_project(_opts[_lbl], {"ClienteID": cid, "Cliente": disp})
-                        st.success(f"{len(_sel)} proyecto(s) vinculado(s).")
+                        flash.exito(f"{len(_sel)} proyecto(s) vinculado(s).")
                         st.rerun()
                     else:
                         st.warning("Elige al menos un proyecto.")
@@ -329,7 +331,7 @@ def _nuevo_cliente_form(grupo):
             ok, msg = C.create_cliente(grupo, _nom, _con, _tel, _mail, _dir, _notas,
                                        creado_por=_creado_por())
             if ok:
-                st.success("Cliente creado.")
+                flash.exito("Cliente creado.")
                 st.session_state["_cli_open"] = _norm(_nom)
                 st.rerun()
             else:

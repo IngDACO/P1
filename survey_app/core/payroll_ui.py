@@ -12,6 +12,7 @@ import streamlit as st
 from core import tenant
 from core import auth, clock, timeclock
 from core import payroll
+from core import flash          # v365: mensajes que sobreviven al st.rerun()
 from core.num import num as _num
 
 
@@ -37,15 +38,7 @@ def render_nominas(grupo):
         _detalle(grupo, st.session_state["_nom_open"])
         return
 
-    # ⚠️ v365: el resultado de generar se pinta AQUÍ, después del rerun. Antes se
-    # pintaba dentro de `_generar` y justo después había un `st.rerun()`, que **tira
-    # los deltas del run en curso** — así que NINGÚN mensaje de generar nóminas se ha
-    # visto nunca: ni «N creadas», ni el aviso de v346 («no tienen tarifa/hora», que es
-    # justo para lo que se construyó esa versión), ni el de solape de v364.
-    # Es el mismo principio que v222 documentó con `components.html`.
-    _res = st.session_state.pop("_nom_res", None)
-    if _res:
-        _msg_generar(_res)
+    # (los mensajes de generar los pinta `flash`, desde la shell — ver core/flash.py)
 
     noms = payroll.list_nominas(grupo)
     r = payroll.resumen(grupo)
@@ -201,45 +194,37 @@ def _generar(grupo):
         if res.get("error"):
             st.error(res["error"])          # este SÍ se ve: no hay rerun detrás
             return
-        # ⚠️ v365: NO se pintan los mensajes aquí. El `st.rerun()` de abajo descarta los
-        # deltas del run en curso, así que se perdían TODOS (ver `_msg_generar`). Se
-        # guardan y los pinta la lista, ya del otro lado del rerun.
-        st.session_state["_nom_res"] = res
+        # ⚠️ v365: los mensajes NO se pintan aquí. El `st.rerun()` de abajo descarta los
+        # deltas del run en curso, así que se perdían TODOS — incluido el aviso de v346
+        # (gente sin tarifa) y el bloqueo de solape de v364. Van a `flash`, que los pinta
+        # la shell del otro lado del rerun. Mecanismo ÚNICO para toda la app: tener aquí
+        # uno propio y otro general sería el doble camino que hubo que desmontar en v140.
+        flash.exito(f"{res.get('creadas', 0)} nómina(s) creada(s)."
+                    + (f" {res['omitidas']} ya existían para ese periodo." if res.get("omitidas") else ""))
+        # ⚠️ v346: ya NO se crea una colilla de $0. Se salta y se dice a quién, con el
+        # camino para arreglarlo; al ponerle la tarifa y regenerar el mismo periodo
+        # entra sin duplicar (no dejó fila).
+        _st = res.get("sin_tarifa") or []
+        if _st:
+            flash.aviso(":material/person_off: **No se generó la nómina de "
+                        + ", ".join(_st) + "**: no tienen tarifa/hora, así que su colilla "
+                        "saldría en $0. Ponles la tarifa en :material/build: Planificación → "
+                        "Usuarios y vuelve a generar este mismo periodo — entrarán sin duplicar.")
+        # ⚠️ v364: periodos que SOLAPAN con una nómina ya emitida. El salto de duplicados
+        # solo veía la terna exacta, así que un rango corrido pagaba las mismas horas dos
+        # veces sin decir nada. Se bloquea y se NOMBRA la nómina que estorba, porque el
+        # error es invisible después: cada colilla suelta sale bien.
+        _sol = res.get("solapadas") or []
+        if _sol:
+            _líneas = "\n".join(f"- **{s['nombre']}** ya tiene `{s['id']}` del "
+                                f"{s['desde']} al {s['hasta']}" for s in _sol)
+            flash.error(":material/event_repeat: **No se generó** porque el periodo elegido se "
+                        "cruza con nóminas ya emitidas — se pagarían las mismas horas dos "
+                        "veces:\n\n" + _líneas +
+                        "\n\nAjusta las fechas para que no se crucen, o anula esas nóminas "
+                        "en la lista de abajo y vuelve a generar.")
         st.session_state.pop("_nom_gen", None)
         st.rerun()
-
-
-def _msg_generar(res: dict):
-    """Lo que pasó al generar, pintado DESPUÉS del rerun.
-
-    ⚠️ Vive fuera de `_generar` a propósito: allí cualquier mensaje moría en el
-    `st.rerun()` que cierra el formulario. Es el mismo fallo que v222 documentó con
-    `components.html` — un delta emitido justo antes de un rerun no llega a la pantalla.
-    """
-    st.success(f"{res.get('creadas', 0)} nómina(s) creada(s)."
-               + (f" {res['omitidas']} ya existían para ese periodo." if res.get("omitidas") else ""))
-    # ⚠️ v346: ya NO se crea una colilla de $0. Se salta y se dice a quién, con el
-    # camino para arreglarlo; al ponerle la tarifa y regenerar el mismo periodo
-    # entra sin duplicar (no dejó fila).
-    _st = res.get("sin_tarifa") or []
-    if _st:
-        st.warning(":material/person_off: **No se generó la nómina de "
-                   + ", ".join(_st) + "**: no tienen tarifa/hora, así que su colilla "
-                   "saldría en $0. Ponles la tarifa en :material/build: Planificación → "
-                   "Usuarios y vuelve a generar este mismo periodo — entrarán sin duplicar.")
-    # ⚠️ v364: periodos que SOLAPAN con una nómina ya emitida. El salto de duplicados
-    # solo veía la terna exacta, así que un rango corrido pagaba las mismas horas dos
-    # veces sin decir nada. Se bloquea y se NOMBRA la nómina que estorba, porque el
-    # error es invisible después: cada colilla suelta sale bien.
-    _sol = res.get("solapadas") or []
-    if _sol:
-        _líneas = "\n".join(f"- **{s['nombre']}** ya tiene `{s['id']}` del "
-                            f"{s['desde']} al {s['hasta']}" for s in _sol)
-        st.error(":material/event_repeat: **No se generó** porque el periodo elegido se "
-                 "cruza con nóminas ya emitidas — se pagarían las mismas horas dos "
-                 "veces:\n\n" + _líneas +
-                 "\n\nAjusta las fechas para que no se crucen, o anula esas nóminas "
-                 "en la lista de abajo y vuelve a generar.")
 
 
 def _detalle(grupo, nid):

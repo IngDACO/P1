@@ -685,6 +685,15 @@ def _campana(grupo):
 
 # ── Router de contenido ──────────────────────────────────────────
 def render_admin_content(key, grupo):
+    # ── Mensajes que sobrevivieron al rerun (v365) ────────────────
+    # ⚠️ Va ANTES de la búsqueda y de cualquier sección: un `st.rerun()` descarta los
+    # deltas del run en curso, así que TODA confirmación emitida justo antes de un
+    # rerun se perdía (19 sitios: fichaje, usuarios, clientes, proyectos, nóminas…).
+    # Se pinta aquí, una sola vez, y sirve a cualquier pantalla sin que cada una
+    # tenga que acordarse.
+    from core import flash
+    flash.mostrar()
+
     # ── Búsqueda (v330): manda sobre la sección ───────────────────
     # Va aquí y no en `app.py` para que el enganche sea de UNA línea y ningún
     # llamador cambie. Si hay término escrito, los resultados OCUPAN la pantalla:

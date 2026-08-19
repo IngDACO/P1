@@ -9,6 +9,8 @@ from datetime import timedelta, time as _time
 
 import streamlit as st
 
+from core import flash
+
 from core import roster as R
 from core import auth
 from core import projects as P
@@ -183,7 +185,7 @@ def _asignacion_inteligente(grupo, lunes, staff, tidx):
                         except Exception:
                             pass
                         _n += 1
-                st.success(f"Asignados {_n} a «{_psel}» el {R.DIAS_LABEL[_dsel]} {ini}–{fin}.")
+                flash.exito(f"Asignados {_n} a «{_psel}» el {R.DIAS_LABEL[_dsel]} {ini}–{fin}.")
                 st.rerun()
         if ocupados:
             st.caption(":material/block: Ocupados esa franja: "

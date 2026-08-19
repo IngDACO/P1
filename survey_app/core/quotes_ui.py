@@ -5,6 +5,8 @@
 import pandas as pd
 import streamlit as st
 
+from core import flash
+
 from core import catalogo as CAT
 from core import clock
 from core import clientes as C
@@ -362,7 +364,7 @@ def _crear_proyecto(grupo, c, t):
                 c.get("ID"), nombre=nombre, tipo=tipo, fecha_inicio=ini,
                 ns=ns, ubicacion=ubic, creado_por=_creado_por())
             if ok:
-                st.success("Proyecto " + str(msg) + " creado desde esta cotización.")
+                flash.exito("Proyecto " + str(msg) + " creado desde esta cotización.")
                 st.rerun()
             else:
                 st.error(msg)

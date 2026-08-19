@@ -14,6 +14,8 @@ extraccion no tuvo que renombrar nada.
 
 import logging
 import streamlit as st
+
+from core import flash
 import streamlit.components.v1 as components
 import pandas as pd
 from extractors.schindler import extract_from_pdf, PARAMS as PDF_PARAMS, PARAM_DESCRIPTIONS
@@ -918,7 +920,7 @@ def render_survey_tab(_ROL, _GRUPO):
                 pass
             found   = sum(1 for v in extracted.values() if v is not None)
             missing = [k for k,v in extracted.items() if v is None]
-            st.success(f":material/check_circle: {found}/{len(extracted)} parámetros encontrados.")
+            flash.exito(f":material/check_circle: {found}/{len(extracted)} parámetros encontrados.")
             if missing:
                 st.warning(f":material/warning: Ingresar manualmente: **{', '.join(missing)}**")
             st.rerun()

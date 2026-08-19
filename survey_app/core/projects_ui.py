@@ -7,6 +7,8 @@ from datetime import timedelta
 
 import pandas as pd
 import streamlit as st
+
+from core import flash
 import streamlit.components.v1 as components
 
 from core import tenant
@@ -518,7 +520,7 @@ def _cargar_plano(pid: str):
                             "pero **el PDF no se pudo archivar** en Drive.")
                 _barra.empty()
                 st.session_state[_idk] = f"{_pdf.name}:{_pdf.size}"   # guarda v112
-                st.success(":material/check_circle: Plano cargado — alimenta tus 5 herramientas técnicas.")
+                flash.exito(":material/check_circle: Plano cargado — alimenta tus 5 herramientas técnicas.")
                 st.rerun()
             except Exception as e:
                 _barra.empty()
@@ -808,7 +810,7 @@ def _subir_documento(pid, es_campo, sube_tipos, usuario):
                     fid = drive_store.upload(pid, up.name, up.getvalue(),
                                              up.type or "application/octet-stream")
                     P.add_document(pid, up.name, tipo, fid, usuario)
-                    st.success("Documento subido.")
+                    flash.exito("Documento subido.")
                     st.rerun()
                 except Exception as ex:
                     st.error(f"No se pudo subir: {ex}")
@@ -2621,7 +2623,7 @@ def _panel_agrupaciones(grupo: str):
                         _n = len(_nuevos)
                         if not ok2:
                             st.warning(f"Agrupación creada, pero: {msg2}")
-                    st.success(f"Agrupación creada ({res})"
+                    flash.exito(f"Agrupación creada ({res})"
                                + (f" con {_n} elevador(es)." if _n else
                                   ". Añádele elevadores desde su panel."))
                     st.rerun()
@@ -3774,7 +3776,7 @@ def render_group_profitability(grupo: str):
                     _ok += 1
                 except Exception as e:
                     st.error(f"{_pid}: {e}")
-            st.success(f":material/check_circle: {_ok} margen(es) guardado(s).")
+            flash.exito(f":material/check_circle: {_ok} margen(es) guardado(s).")
             st.session_state.pop("rent_ed", None)
             st.rerun()
 

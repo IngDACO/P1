@@ -7,6 +7,8 @@ Base de las cotizaciones. ⚠️ SIN cabecera propia: `home_ui._sub_header` ya p
 import pandas as pd
 import streamlit as st
 
+from core import flash
+
 from core import catalogo as CAT
 from core import tenant
 from core import theme as T
@@ -118,7 +120,7 @@ def _alta(grupo):
                                     categoria=categoria, descripcion=desc,
                                     creado_por=_creado_por())
                 if ok:
-                    st.success(f"Artículo {msg} creado.")
+                    flash.exito(f"Artículo {msg} creado.")
                     st.rerun()
                 else:
                     st.error(msg)
