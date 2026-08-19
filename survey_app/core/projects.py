@@ -297,6 +297,13 @@ def create_project(grupo, nombre, cliente="", ubicacion="", modelo="", ns=0,
         str(cliente_id or ""),              # v255: enlace robusto a la ficha de cliente
         str(margen_mo or ""),               # v257: margen % sobre MO (vacío = default del grupo)
         str(tipo or ""),                    # v306: instalación / delivery / ripout / otro
+        "",                                 # v360: GananciaHoraJSON — una obra NACE sin ganancias
+        #                                     por hora puestas, así que arranca en el modelo viejo
+        #                                     (MargenMO) y se migra cuando alguien decida cuánto
+        #                                     ganar con cada persona. ⚠️ v363: esta línea FALTABA
+        #                                     desde v360 (se añadió la columna a la cabecera y no
+        #                                     su valor aquí), y el guardián de abajo dejaba
+        #                                     «Nuevo proyecto» y «aceptar cotización» MUERTOS.
     ]
     # ⚠️ La fila es POSICIONAL: si no cuadra con la cabecera, cada dato se guarda en la
     # columna de al lado (silencioso y difícil de ver). Se comprueba aquí, no en un test.

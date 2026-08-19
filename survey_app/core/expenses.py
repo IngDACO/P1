@@ -137,21 +137,14 @@ def labor_breakdown(pid, grupo) -> dict:
     # notaba; desde v360 hay que decidir la ganancia POR PERSONA, y partida significa
     # ponérsela dos veces — o dejarse la mitad del trabajo facturándose a costo sin
     # que nada lo delate. Mismo patrón que v145 (fichajes sin ProyectoID).
-    _por_nombre = {}
-    for u in auth.list_users(grupo):
-        _n = str(u.get("Nombre", "")).strip().casefold()
-        if _n:
-            _por_nombre.setdefault(_n, []).append(str(u.get("Usuario", "")).strip())
+    # ⚠️ v363: esto era una copia LOCAL. La misma regla estaba escrita seis veces
+    # (aquí y en las 5 de `timeclock`), y arreglar v362 solo aquí dejó a la pantalla
+    # de Horas y a la conciliación partiendo a la misma persona en dos. Ahora hay UNA
+    # definición — `timeclock.clave_de` — igual que `num.py` unificó los cinco `_num`.
+    _por_nombre = timeclock.mapa_nombres(grupo)
 
     def _clave(r):
-        u = str(r.get("Usuario", "")).strip()
-        if u:
-            return u
-        # ⚠️ Solo se resuelve si ese nombre pertenece a UNA sola cuenta: con homónimos
-        # (los hubo, `fijiofgjei` tenía dos) adivinar mezclaría a dos personas, que es
-        # peor que dejarlas separadas.
-        cand = _por_nombre.get(str(r.get("Nombre", "")).strip().casefold(), [])
-        return cand[0] if len(cand) == 1 else str(r.get("Nombre", "")).strip()
+        return timeclock.clave_de(r, _por_nombre)
 
     acc = {}
     for r in P._fichaje_records():
@@ -239,12 +232,13 @@ def spend_curve(pid, grupo) -> dict:
         if f:
             dia.setdefault(f, {"compras": 0.0, "mo": 0.0})
             dia[f]["compras"] += _num(r.get("Valor"))
+    _pn = timeclock.mapa_nombres(grupo)      # v363: identidad resuelta una sola vez
     for r in P._fichaje_records():
         if not _mismo_proyecto(r, pid, nombre):
             continue
         if str(r.get("Grupo", "")) != str(grupo):
             continue
-        clave = str(r.get("Usuario", "")).strip() or str(r.get("Nombre", "")).strip()
+        clave = timeclock.clave_de(r, _pn)
         tarifa = rates.get(clave, 0.0)
         # La M.O. cae en el DÍA real trabajado: un fichaje que cruza medianoche se
         # reparte por día (v164). El total no cambia (Σsegmentos = horas de la fila),

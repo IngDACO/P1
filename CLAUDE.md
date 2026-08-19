@@ -5069,7 +5069,31 @@ tienen que `assert` que el ancla existe, como los demás de esta tanda.
 trabajo se factura a costo y la pantalla los nombra. Lo pendiente de facturar sube de
 **330,48 a 483,60**. Las otras 5 obras siguen en el modelo viejo, sin moverse.
 
-## Versiones desplegadas (v361 = actual)
+## ⚠️ La misma persona salía PARTIDA en dos (v362)
+Salió al poner ganancia a las tres personas de `prueba1`: al mirar quiénes eran,
+`campo1` y `lksdfkldsf` **son la misma** — `campo1` es el usuario y `lksdfkldsf` su
+nombre. En el fichaje hay **2 filas sin la columna `Usuario`** (anteriores a v106,
+cuando el fichaje se identificaba solo por nombre) que caían bajo el NOMBRE, así que
+`labor_breakdown` la partía: 32,16 h como `campo1` y 8,97 h como `lksdfkldsf`.
+
+**Por qué no se había notado nunca:** mientras eso solo se SUMABA, el total salía bien.
+Desde v360 hay que decidir la ganancia **por persona**, y partida significa ponérsela dos
+veces — o, como pasó literalmente un turno antes, **dejarse 8,97 h facturándose a costo**
+sin que nada lo delatara. Un cambio de modelo puede convertir en fallo algo que llevaba
+años siendo inofensivo.
+
+**Arreglo:** cuando la fila no trae `Usuario`, se resuelve por su `Nombre` contra las
+cuentas del grupo. ⚠️ **Solo si ese nombre pertenece a UNA sola cuenta**: con homónimos
+—los hubo, `fijiofgjei` tenía dos— adivinar mezclaría a dos personas, que es peor que
+dejarlas separadas.
+
+**Verificado con datos reales:** `campo1` pasa a 41,13 h en una sola fila y el **total no
+se mueve** ($1.646,40 antes y después) — solo cambia cómo se agrupa. Con los tres a
+$15/h: ganancia $617,40, ingreso $3.763,80, margen 37,5% derivado, nadie sin ganancia.
+Es la misma familia que v145 (fichajes sin `ProyectoID`): filas viejas a las que les
+falta una columna que se añadió después.
+
+## Versiones desplegadas (v362 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -5077,6 +5101,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v362 | ⚠️ **La misma persona salía partida en dos**: `campo1` (usuario) y `lksdfkldsf` (su nombre) eran dos filas en el desglose de mano de obra, porque 2 fichajes anteriores a v106 no tienen columna `Usuario`. Inofensivo mientras solo se sumaba —el total era correcto— pero desde v360 hay que decidir la ganancia **por persona**, y partida significa **dejarse 8,97 h facturándose a costo** sin aviso (pasó un turno antes). Ahora se resuelve por nombre contra las cuentas, ⚠️ solo si ese nombre es de UNA sola cuenta (con homónimos, mezclar es peor). El total no se mueve: $1.646,40 antes y después |
 | v361 | ⚠️ **Rentabilidad reimplementaba la fórmula del ingreso** y, con el modelo por rubro de v360, empezó a dar una cifra distinta que el detalle del proyecto (3.475,68 vs 3.628,80) — dos números de dinero para la misma obra. Ahora delega en `project_revenue`, la única definición, con guardián por AST. ⚠️ De paso, un fallo de método: el parche de v360 tenía un ancla inexistente envuelta en un `if not in`, así que **no aplicó y no avisó**; solo se vio mirando la salida con datos reales |
 | v360 | **La ganancia deja de ser un % y pasa a ser un importe por rubro** — y el trabajador es un rubro: cada persona lleva su **ganancia por hora** en esa obra (`Proyectos.GananciaHoraJSON`), los materiales van a costo, y el % pasa a ser consecuencia en vez de entrada. ⚠️ **Respaldo**: sin ganancias puestas, la obra sigue con el modelo viejo, porque cambiar en frío habría desplomado el ingreso estimado de las 6 obras sin que nadie lo pidiera. ⚠️ Quien no tenga ganancia se factura **a costo** y se avisa (patrón v346), y quitar las ganancias devuelve **exactamente** a la cifra anterior |
 | v359 | **Un libro de Google por empresa cliente** (mecanismo). El libro actual queda como maestro Y libro de `cliente1`, así que **no se migra ninguna hoja**; los clientes nuevos nacen con su archivo (`Grupos.SheetID`). `Login/Grupos/Rieles/Manuales` siempre en el maestro; el resto en el libro del grupo, resuelto desde la sesión como `clock.now()` (v173) — ninguna de las 21 llamadas a `get_sheet` cambió de firma. ⚠️ El orden GLOBAL-antes-que-auth evita una recursión infinita, y el lote se cachea **por libro** (si no, el 2º cliente leería los datos del 1º). ⚠️ Límite dicho en pantalla: los consolidados del propietario aún solo cuentan el maestro (fase 2). ⚠️ La cuenta de servicio no puede crear archivos (solo scope `spreadsheets`), así que el aislamiento de punta a punta queda pendiente de un libro real |

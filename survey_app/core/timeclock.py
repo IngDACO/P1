@@ -300,6 +300,50 @@ def es_del_proyecto(r, pid: str, nombre: str) -> bool:
             == str(nombre or "").strip().casefold())
 
 
+def mapa_nombres(grupo: str = "") -> dict:
+    """{nombre_normalizado: [usuarios]} de las cuentas del grupo.
+
+    Se calcula UNA vez por consulta y se pasa a `clave_de` en el bucle: `list_users`
+    está cacheado, así que no cuesta llamadas, pero sí reconstruir el dict por fila.
+    """
+    from core import auth                  # perezoso: `auth` importa este módulo
+    out = {}
+    try:
+        for u in auth.list_users(grupo):
+            n = str(u.get("Nombre", "")).strip().casefold()
+            if n:
+                out.setdefault(n, []).append(str(u.get("Usuario", "")).strip())
+    except Exception as e:                 # sin Login legible no se resuelve nada,
+        logger.warning("timeclock.mapa_nombres: %s", e)   # pero tampoco se rompe
+    return out
+
+
+def clave_de(r, por_nombre: dict = None) -> str:
+    """La IDENTIDAD de un fichaje: el login si la fila lo trae; si no, resuelto por nombre.
+
+    ⚠️ v363 — ÚNICA definición. Los fichajes anteriores a v106 no tienen columna
+    `Usuario`, así que caían bajo su NOMBRE y **la misma persona salía partida en dos**:
+    en producción, `campo1` (login) y `lksdfkldsf` (su nombre) son la misma y la pantalla
+    de Horas la mostraba como dos filas, con las horas y el costo repartidos.
+
+    v362 arregló esto en `expenses.labor_breakdown` y **el mismo patrón estaba copiado
+    en 5 funciones más** (`group_hours`, `jornada_y_proyecto`, `horas_por_usuario_rango`,
+    `proyectos_por_usuario_dia`, `spend_curve`), todas sin arreglar. Es exactamente el
+    fallo de los cinco `_num` divergentes de v323: la misma regla escrita seis veces
+    diverge en cuanto se toca una. Por eso vive aquí y las seis la llaman.
+
+    ⚠️ El nombre solo se resuelve si pertenece a UNA sola cuenta: con homónimos
+    —los hubo, `fijiofgjei` tenía dos— adivinar MEZCLARÍA a dos personas distintas,
+    que es peor que dejarlas separadas.
+    """
+    u = str(r.get("Usuario", "")).strip()
+    if u:
+        return u
+    nom = str(r.get("Nombre", "")).strip()
+    cand = (por_nombre or {}).get(nom.casefold(), [])
+    return cand[0] if len(cand) == 1 else nom
+
+
 def _matches(r, usuario: str, nombre: str, grupo: str) -> bool:
     """¿La fila es de este usuario? Identifica por **Usuario** (login, v106); las filas
     antiguas sin Usuario caen al Nombre visible."""
@@ -671,6 +715,7 @@ def proyectos_por_usuario_dia(grupo: str, fecha) -> dict:
         except Exception:
             return {}
     out = {}
+    _pn = mapa_nombres(grupo)               # v363: resolver identidad una sola vez
     for r in _cached_records():
         if str(r.get("Grupo", "")).strip() != str(grupo).strip():
             continue
@@ -680,7 +725,7 @@ def proyectos_por_usuario_dia(grupo: str, fecha) -> dict:
         # un segmento nocturno que cruza medianoche se trabajó en los dos días.
         if fecha_d not in {d for d, hh in _row_segmentos(r) if hh > 0}:
             continue
-        clave = str(r.get("Usuario", "")).strip() or str(r.get("Nombre", "")).strip()
+        clave = clave_de(r, _pn)
         entry = {"pid": pid_of(r),
                  "nombre": _nombre_actual(pid_of(r), r.get("Proyecto", ""))}
         if not entry["pid"] and not entry["nombre"]:
@@ -717,12 +762,13 @@ def horas_por_usuario_rango(grupo: str, desde, hasta) -> dict:
     if desde is None or hasta is None:
         return {}
     out = {}
+    _pn = mapa_nombres(grupo)               # v363: resolver identidad una sola vez
     for r in _cached_records():
         if str(r.get("Grupo", "")).strip() != grupo:
             continue
         if _tipo_of(r) != TIPO_GENERAL:
             continue
-        clave = str(r.get("Usuario", "")).strip() or str(r.get("Nombre", "")).strip()
+        clave = clave_de(r, _pn)
         nombre = str(r.get("Nombre", "")).strip() or clave
         if not clave:
             continue
@@ -746,10 +792,11 @@ def jornada_y_proyecto(grupo: str, desde=None, hasta=None) -> dict:
     """
     grupo = (grupo or "").strip()
     out = {}
+    _pn = mapa_nombres(grupo)               # v363: resolver identidad una sola vez
     for r in _cached_records():
         if str(r.get("Grupo", "")).strip() != grupo:
             continue
-        clave = str(r.get("Usuario", "")).strip() or str(r.get("Nombre", "")).strip()
+        clave = clave_de(r, _pn)
         if not clave:
             continue
         h = sum(hh for d, hh in _row_segmentos(r)
@@ -773,11 +820,13 @@ def group_hours(grupo: str, days=None) -> list:
     grupo = (grupo or "").strip()
     desde = (clock.now() - timedelta(days=days)).date() if days else None
     agg = {}
+    _pn = mapa_nombres(grupo)               # v363: resolver identidad una sola vez
     for r in records:
         if str(r.get("Grupo", "")).strip() != grupo:
             continue
-        # Clave por USUARIO (login); filas antiguas sin Usuario caen al Nombre.
-        clave  = str(r.get("Usuario", "")).strip() or str(r.get("Nombre", "")).strip()
+        # Clave por USUARIO (login); las filas antiguas sin Usuario se resuelven por
+        # su Nombre contra las cuentas del grupo (v363, `clave_de`).
+        clave  = clave_de(r, _pn)
         nombre = str(r.get("Nombre", "")).strip() or clave
         if not clave:
             continue
