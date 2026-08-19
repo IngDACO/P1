@@ -27,7 +27,23 @@ def _contacto_uno(sel, key_prefix="cc"):
     st.markdown("**:material/send: Telegram**")
     tg = str(rec.get("TelegramChatID", "")).strip()
     if not notify.telegram_configured() or not notify.bot_username():
-        st.caption("Telegram no configurado (falta el bot en Secrets).")
+        # ⚠️ v368: antes esto era un callejón sin salida. Decía «no configurado» y ya:
+        # ningún botón para vincular, y el usuario de campo quedaba bloqueado en la
+        # entrada exigiéndosele justo esto. Ahora se dice que NO se le exige (el
+        # bloqueo de `app.py` solo pide los canales que existen) y se ofrece la salida
+        # manual, por si el chat_id se consiguió por otra vía.
+        st.caption(":material/info: Telegram no está configurado en esta instalación "
+                   "(falta el bot en Secrets), así que **no se le exige** para entrar. "
+                   "Con el email basta.")
+        with st.expander("Poner el chat_id a mano", icon=":material/edit:"):
+            _man = st.text_input("Chat ID de Telegram", value=tg, key=f"{key_prefix}_tgman",
+                                 help="Solo si ya lo tienes por otra vía. Sin bot "
+                                      "configurado, la app no puede enviarle nada.")
+            if st.button("Guardar chat_id", key=f"{key_prefix}_tgmanb"):
+                ok, msg = auth.set_contact(sel, telegram=_man.strip())
+                (flash.exito if ok else st.error)(msg)
+                if ok:
+                    st.rerun()
     elif tg:
         st.success(":material/check_circle: Telegram vinculado.")
         if st.button("Desvincular Telegram", key=f"{key_prefix}_tgu"):

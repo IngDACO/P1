@@ -169,27 +169,50 @@ if _ROL in ("administrador", "propietario"):
     except Exception:
         pass
 
-# ── Contacto OBLIGATORIO para usuarios de campo (email + Telegram) ──
+# ── Contacto obligatorio para usuarios de campo (v79) ────────────────
+# ⚠️ v368: SOLO se exige un canal que EXISTA. Antes se pedían email **y** Telegram
+# siempre, aunque el bot no estuviera en Secrets — y entonces el bloqueo no tenía
+# salida por ningún lado: la pantalla no podía mostrar el link de Start (ese bloque
+# está condicionado a `telegram_configured()`), y el admin tampoco tenía botón para
+# vincular, porque su ficha muestra «Telegram no configurado». Resultado real: 7 de
+# los 8 usuarios de campo del grupo encerrados fuera de la app, sin forma de entrar.
+# Es el patrón de v325/v340 — un pendiente que NADIE puede cerrar es peor que no
+# tenerlo: exigir un canal inexistente no protege nada, solo deja gente fuera.
 if _ROL == "campo" and not st.session_state.get("_contact_ok"):
     _rec = get_user(st.session_state.auth.get("usuario", ""))
     _has_mail = bool(str(_rec.get("Email", "")).strip())
     _has_tg   = bool(str(_rec.get("TelegramChatID", "")).strip())
-    if _has_mail and _has_tg:
+    # ¿el canal Telegram existe en esta instalación?
+    try:
+        _tg_hay = bool(notify.telegram_configured() and notify.bot_username())
+    except Exception:
+        _tg_hay = False
+    _falta_mail = not _has_mail
+    _falta_tg   = _tg_hay and not _has_tg          # si no hay bot, no se exige
+
+    if not _falta_mail and not _falta_tg:
         st.session_state["_contact_ok"] = True
     else:
         st.markdown("### :material/lock: Falta configurar tu contacto")
-        st.warning("Tu cuenta de campo necesita **email y Telegram** para usar la app. "
-                   "El **email** lo carga tu administrador.")
-        _pend = ([] if _has_mail else [":material/mail: Email (lo carga tu administrador)"]) + \
-                ([] if _has_tg else [":material/send: Telegram"])
-        st.info("Pendiente: " + "  ·  ".join(_pend))
-        if not _has_tg and notify.telegram_configured() and notify.bot_username():
+        # ⚠️ Se dice QUIÉN lo resuelve, no solo qué falta: el email no lo puede poner
+        # el propio usuario (lo carga su administrador), así que un «pendiente: email»
+        # a secas lo deja mirando una pared sin saber a quién pedírselo.
+        if _falta_mail and _falta_tg:
+            st.warning("Tu cuenta necesita **email y Telegram**. El **email lo carga tu "
+                       "administrador**; el Telegram lo enlazas tú con el paso de abajo.")
+        elif _falta_mail:
+            st.warning("Tu cuenta necesita un **email**, y lo carga tu administrador. "
+                       "Avísale y vuelve a entrar — tú no puedes ponerlo desde aquí.")
+        else:
+            st.warning("Solo falta enlazar tu **Telegram**. Es un paso tuyo, aquí abajo.")
+
+        if _falta_tg:
             import re as _re
             _bot  = notify.bot_username()
             _code = _re.sub(r"[^A-Za-z0-9_-]", "", st.session_state.auth.get("usuario", "")) or "user"
-            st.markdown(f"**Tu único paso:** abre el bot y pulsa **Start** → "
+            st.markdown(f"**Tu paso:** abre el bot y pulsa **Start** → "
                         f"[t.me/{_bot}](https://t.me/{_bot}?start={_code})")
-            st.caption("Después, tu administrador te vincula. Recarga cuando esté listo.")
+            st.caption("Después tu administrador te vincula desde tu ficha.")
         if st.button(":material/sync: Ya está listo — revisar"):
             st.rerun()
         st.stop()
