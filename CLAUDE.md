@@ -5093,7 +5093,95 @@ $15/h: ganancia $617,40, ingreso $3.763,80, margen 37,5% derivado, nadie sin gan
 Es la misma familia que v145 (fichajes sin `ProyectoID`): filas viejas a las que les
 falta una columna que se añadió después.
 
-## Versiones desplegadas (v362 = actual)
+## ⚠️ CREAR PROYECTOS LLEVABA 3 VERSIONES MUERTO + el resolvedor único (v363)
+Salió al poblar la app con una empresa simulada (el usuario autorizó simular datos:
+todo lo del grupo `cliente1` es de prueba). Se intentaron crear 9 obras y **fallaron las
+9**.
+
+### El fallo: una fila de 31 valores para una cabecera de 32
+En **v360** añadí `GananciaHoraJSON` a `PROJECTS_HEADERS` y **no añadí su valor** a la
+fila posicional de `create_project`. El guardián de v306 corta con «Error interno» antes
+de escribir, así que desde v360:
+- **«➕ Nuevo proyecto» no creaba nada**
+- **«Aceptar cotización» tampoco** (llama a `create_project`) → el módulo de
+  cotizaciones no podía rematar su ciclo
+⚠️ **Matiz que corrige lo que dije al principio**: 31 valores en 32 columnas **NO
+desplazan los datos** — `append_row` deja vacías las de la cola (así escriben
+`auth.add_user`, 6 de 11, y `add_group`, 4 de 9, a propósito). El daño no era corrupción
+silenciosa: era que la función **no hacía nada**.
+
+### Por qué vivió 3 versiones y el guardián nuevo
+El de v306 es de **EJECUCIÓN**: solo salta cuando alguien pulsa el botón, y nadie creó un
+proyecto entre v360 y v363. El nuevo (`verif_v363.py`) es **ESTÁTICO**: por AST cuenta los
+elementos de **las 25 filas posicionales del repo** y los compara con su cabecera.
+- Resuelve la cabecera de cada función en 5 pasos, y **la auto-validación manda**
+  (`if len(row) != len(X_HEADERS)`): tenerla de último recurso hacía que una fila rota
+  —que ya no casa por longitud— se reportara como «no resuelta» en vez de «esta función
+  está MUERTA». Detectaba, pero diagnosticaba mal.
+- Distingue **fila corta legítima** (cola vacía) de **función muerta** (la que se
+  auto-valida con igualdad estricta).
+- ⚠️ **Primera versión daba «✓ ninguna descuadra» habiendo comprobado 1 de 25** (las
+  otras 24 salían «cabecera ambigua» y se saltaban): el paso en VACÍO de siempre. Ahora
+  lo no resuelto cuenta como FALLO del chequeo, no como aprobado.
+- Probado contra el código ROTO: señala `create_project` y sale con error.
+
+### El resolvedor de identidad, en UN solo sitio
+v362 arregló «la misma persona partida en dos» **solo en `expenses.labor_breakdown`**. El
+patrón estaba copiado en **5 funciones más** y ninguna se tocó → la pantalla de Horas
+seguía mostrando a `campo1` como dos filas (`campo1` 353,7 h y `lksdfkldsf` 9,0 h, con el
+costo repartido), y la conciliación inflaba «horas cobradas sin pagar» con un fantasma.
+⚠️ Y `existe` daba **True** para el fantasma, porque `claves_conocidas` incluye nombres
+además de logins: ni siquiera se marcaba como cuenta de baja.
+**`timeclock.clave_de(fila, por_nombre)` + `mapa_nombres(grupo)`** — una definición, la
+usan las 6 (`group_hours`, `jornada_y_proyecto`, `horas_por_usuario_rango`,
+`proyectos_por_usuario_dia`, `spend_curve`, `labor_breakdown`). Es el patrón de `num.py`
+en v323 aplicado a la identidad.
+- ⚠️ **La verificación obvia era una trampa**: comparar el total de horas antes/después
+  en dos ejecuciones daba 20 h de diferencia… porque había una sesión ABIERTA acumulando
+  contra el reloj (llevaba 33,6 h). Un **FALLO en falso**, gemelo del OK en falso. La
+  comparación válida es vieja lógica vs nueva **sobre las mismas filas y el mismo
+  instante**: diferencia 0,000006 h (0,02 s de ruido de flotantes sobre 3.309 h) y el
+  dinero idéntico ($113.361,71 en las dos).
+- ⚠️ Mi epsilon de `1e-6` hacía FALLAR el test por su propia aritmética. Tolerancia con
+  sentido físico (< 3,6 s sobre 3.300 h).
+- Los homónimos **siguen separados**: `Mei Chen` (`mchen`/`mchen2`) en dos filas, que es
+  lo correcto — adivinar mezclaría a dos personas.
+
+## ⚠️ SE PAGABAN LAS MISMAS HORAS DOS VECES: periodos que solapan (v364)
+Encontrado con la empresa simulada, y de la forma más real posible: **dos personas
+generando nóminas a la vez** (el usuario emitió 21/07→19/08 en la app mientras el
+escenario creaba quincenas 20/07→02/08 y 03/08→16/08).
+
+`generar` construye el salto de duplicados como la **terna EXACTA**
+`(Usuario, PeriodoDesde, PeriodoHasta)`, así que un rango que **solapa** no se detectaba:
+```
+campo1:  22/06→05/07  72,5 h · 06/07→19/07  73,5 h · 11/07→09/08  32,2 h
+         20/07→02/08 113,6 h · 21/07→19/08 198,7 h · 03/08→16/08  76,6 h
+         pagado 567,01 h   ·   trabajó realmente 353,67 h   → 213 h de más
+```
+⚠️ **La conciliación de v313 YA lo estaba gritando** («sin explicar −$36.035,90»), pero
+DESPUÉS de emitir. El error es invisible en la colilla individual —cada una sale bien— y
+solo el total del periodo lo delata.
+
+**Arreglo:** intersección de intervalos cerrados por persona; si cruza, **no se emite** y
+se NOMBRA la nómina que estorba (id + fechas) para poder anularla o mover el rango.
+- El **duplicado exacto** sigue tratándose como antes (`omitidas`), sin cambio.
+- Las **anuladas no bloquean** (principio de v347: si se puede deshacer, se puede rehacer).
+- **Quincenas contiguas SÍ pasan** (03/08 pegada a un 20/07→02/08): si no, el bloqueo
+  sería inservible para el uso normal.
+- ⚠️ **Sin fechas legibles NO se afirma que solapan**: no se bloquea a ciegas.
+- Probado en 7 escenarios con la función REAL y worksheet simulado, y **en vivo contra la
+  hoja**: 14 solapes detectados, **0 filas escritas**; y un periodo limpio (17-18/08)
+  entró con 6 colillas.
+
+### Estado de los datos tras la limpieza
+Anuladas las 7 nóminas solapadas del 21/07→19/08. La conciliación pasa de **−$36.035,90
+a −$1.634,40**, y esa cifra está explicada al céntimo: es el doble pago **histórico** de
+`NOM-0003` + `NOM-0006` (periodo 11/07→09/08, que cruza las quincenas). Verificado
+descomponiendo: $4.387,00 trabajados sin pagar − $1.634,40 pagados dos veces = $2.752,60,
+que era exactamente el `sin_explicar` intermedio.
+
+## Versiones desplegadas (v364 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -5101,6 +5189,8 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v364 | ⚠️ **Se pagaban las mismas horas DOS VECES**: el salto de duplicados de la nómina compara la terna EXACTA `(Usuario, Desde, Hasta)`, así que un periodo que **solapa** con otro ya emitido pasaba sin decir nada — a `campo1` se le pagaron 567 h habiendo trabajado 354. Salió de la forma más real: dos personas generando nóminas a la vez. Ahora se comprueba la intersección por persona, **no se emite** y se NOMBRA la nómina que estorba. El duplicado exacto y las anuladas siguen igual; las quincenas contiguas SÍ pasan; sin fechas legibles no se bloquea a ciegas. ⚠️ La conciliación de v313 ya lo gritaba, pero DESPUÉS de emitir — cada colilla suelta sale bien y solo el total delata |
+| v363 | ⚠️ **Crear proyectos llevaba 3 versiones MUERTO** (y con ello aceptar una cotización): en v360 añadí `GananciaHoraJSON` a la cabecera y no su valor a la fila, así que el guardián de v306 cortaba con «Error interno» en cada intento. ⚠️ Matiz: una fila corta **no desplaza** datos (`append_row` deja la cola vacía, como hacen `add_user` y `add_group` a propósito) — el daño era que la función no hacía nada. Guardián nuevo **estático** sobre las 25 filas posicionales del repo (el de v306 solo salta al pulsar el botón, por eso vivió 3 versiones); la auto-validación manda al resolver, y lo no resuelto cuenta como fallo. + **el resolvedor de identidad, único**: v362 arregló «la misma persona partida en dos» solo en `labor_breakdown` y el patrón estaba en 5 funciones más — `timeclock.clave_de` lo unifica. ⚠️ Verificar comparando totales entre dos ejecuciones daba 20 h de diferencia por una sesión ABIERTA acumulando contra el reloj: **fallo en falso**; la comparación válida es sobre las mismas filas y el mismo instante (diferencia 0,02 s, dinero idéntico) |
 | v362 | ⚠️ **La misma persona salía partida en dos**: `campo1` (usuario) y `lksdfkldsf` (su nombre) eran dos filas en el desglose de mano de obra, porque 2 fichajes anteriores a v106 no tienen columna `Usuario`. Inofensivo mientras solo se sumaba —el total era correcto— pero desde v360 hay que decidir la ganancia **por persona**, y partida significa **dejarse 8,97 h facturándose a costo** sin aviso (pasó un turno antes). Ahora se resuelve por nombre contra las cuentas, ⚠️ solo si ese nombre es de UNA sola cuenta (con homónimos, mezclar es peor). El total no se mueve: $1.646,40 antes y después |
 | v361 | ⚠️ **Rentabilidad reimplementaba la fórmula del ingreso** y, con el modelo por rubro de v360, empezó a dar una cifra distinta que el detalle del proyecto (3.475,68 vs 3.628,80) — dos números de dinero para la misma obra. Ahora delega en `project_revenue`, la única definición, con guardián por AST. ⚠️ De paso, un fallo de método: el parche de v360 tenía un ancla inexistente envuelta en un `if not in`, así que **no aplicó y no avisó**; solo se vio mirando la salida con datos reales |
 | v360 | **La ganancia deja de ser un % y pasa a ser un importe por rubro** — y el trabajador es un rubro: cada persona lleva su **ganancia por hora** en esa obra (`Proyectos.GananciaHoraJSON`), los materiales van a costo, y el % pasa a ser consecuencia en vez de entrada. ⚠️ **Respaldo**: sin ganancias puestas, la obra sigue con el modelo viejo, porque cambiar en frío habría desplomado el ingreso estimado de las 6 obras sin que nadie lo pidiera. ⚠️ Quien no tenga ganancia se factura **a costo** y se avisa (patrón v346), y quitar las ganancias devuelve **exactamente** a la cifra anterior |
