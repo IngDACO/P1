@@ -202,6 +202,20 @@ def _generar(grupo):
                        + ", ".join(_st) + "**: no tienen tarifa/hora, así que su colilla "
                        "saldría en $0. Ponles la tarifa en :material/build: Planificación → "
                        "Usuarios y vuelve a generar este mismo periodo — entrarán sin duplicar.")
+        # ⚠️ v364: periodos que SOLAPAN con una nómina ya emitida. El salto de duplicados
+        # solo veía la terna exacta, así que un rango corrido pagaba las mismas horas dos
+        # veces sin decir nada. Se bloquea y se NOMBRA la nómina que estorba, porque el
+        # error es invisible después: cada colilla suelta sale bien.
+        _sol = res.get("solapadas") or []
+        if _sol:
+            _líneas = "\n".join(
+                f"- **{s['nombre']}** ya tiene `{s['id']}` del "
+                f"{s['desde']} al {s['hasta']}" for s in _sol)
+            st.error(":material/event_repeat: **No se generó** porque el periodo elegido se "
+                     "cruza con nóminas ya emitidas — se pagarían las mismas horas dos "
+                     "veces:\n\n" + _líneas +
+                     "\n\nAjusta las fechas para que no se crucen, o anula esas nóminas "
+                     "en la lista de abajo y vuelve a generar.")
         st.session_state.pop("_nom_gen", None)
         st.rerun()
 

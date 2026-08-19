@@ -19,7 +19,7 @@ import logging
 import streamlit as st
 
 from core import auth, clock, timeclock
-from core.num import col_letter as _col_letter, num as _num
+from core.num import col_letter as _col_letter, num as _num, parse_date as _parse_date
 
 logger = logging.getLogger(__name__)
 
@@ -160,11 +160,43 @@ def generar(grupo, desde, hasta, super_pct=0.0, ret_pct=0.0, creado_por="") -> d
     # ni `resumen` ni el `costo_nomina` del P&L la cuentan, así que no se duplica nada.
     existentes = {(str(f.get("Usuario", "")), str(f.get("PeriodoDesde", "")), str(f.get("PeriodoHasta", "")))
                   for f in list_nominas(grupo)}
-    rows, creadas, omitidas, sin_tarifa = [], 0, 0, []
+
+    # ⚠️ v364: el salto de duplicados de arriba compara la TERNA EXACTA, así que un
+    # periodo que SOLAPA con otro ya emitido pasaba sin que nada avisara — y esas horas
+    # se pagan DOS VECES. No es hipotético: salió con datos reales cuando dos personas
+    # generaron nóminas a la vez (quincenas 20/07-02/08 y 03/08-16/08 contra un
+    # 21/07-19/08); a `campo1` se le pagaron 567 h habiendo trabajado 354.
+    # La conciliación de v313 lo detectaba («sin explicar −$36.035»), pero DESPUÉS de
+    # emitir: aquí se corta antes.
+    _d, _h = _parse_date(d_iso), _parse_date(h_iso)
+    solapes = {}
+    if _d and _h:
+        for f in list_nominas(grupo):            # ya excluye las anuladas (v347)
+            fd, fh = _parse_date(f.get("PeriodoDesde")), _parse_date(f.get("PeriodoHasta"))
+            if not fd or not fh:
+                continue                          # sin fechas legibles no se puede afirmar
+            if str(f.get("PeriodoDesde", "")) == d_iso and str(f.get("PeriodoHasta", "")) == h_iso:
+                continue                          # el duplicado EXACTO ya lo trata `existentes`
+            if fd <= _h and _d <= fh:             # intersección de intervalos cerrados
+                solapes.setdefault(str(f.get("Usuario", "")), []).append(
+                    {"id": str(f.get("ID", "")), "desde": str(f.get("PeriodoDesde", "")),
+                     "hasta": str(f.get("PeriodoHasta", "")),
+                     "nombre": str(f.get("Nombre", "") or f.get("Usuario", ""))})
+
+    rows, creadas, omitidas, sin_tarifa, solapadas = [], 0, 0, [], []
     base_num = _max_num()
     for clave, info in sorted(horas.items()):
         if (clave, d_iso, h_iso) in existentes:
             omitidas += 1
+            continue
+        if clave in solapes:
+            # ⚠️ NO se emite: pagar dos veces las mismas horas es un error de dinero y
+            # es MUY difícil de ver después (la colilla individual sale correcta; solo
+            # el total del periodo delata). Se nombra el periodo que estorba para que
+            # se pueda anular o cambiar el rango.
+            for s in solapes[clave]:
+                solapadas.append({"nombre": s["nombre"], "usuario": clave,
+                                  "id": s["id"], "desde": s["desde"], "hasta": s["hasta"]})
             continue
         tarifa = _num(rates.get(clave, 0))
         if tarifa <= 0:
@@ -200,7 +232,8 @@ def generar(grupo, desde, hasta, super_pct=0.0, ret_pct=0.0, creado_por="") -> d
     for nom, _ in sin_tarifa:
         _veces[nom] = _veces.get(nom, 0) + 1
     st_txt = [f"{nom} ({clave})" if _veces[nom] > 1 else nom for nom, clave in sin_tarifa]
-    return {"creadas": creadas, "omitidas": omitidas, "sin_tarifa": st_txt}
+    return {"creadas": creadas, "omitidas": omitidas, "sin_tarifa": st_txt,
+            "solapadas": solapadas}
 
 
 def _find_row(w, nid):
