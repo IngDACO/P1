@@ -274,7 +274,7 @@ def _detalle(grupo, nid):
                                   "tipo": str(rr.get("Tipo", "deduccion") or "deduccion"),
                                   "monto": mon})
             ok, msg = payroll.update_conceptos(nid, conceptos)
-            (st.success if ok else st.error)(msg)
+            (flash.exito if ok else st.error)(msg)
             if ok:
                 st.rerun()
 
@@ -295,7 +295,7 @@ def _detalle(grupo, nid):
                 _fch = st.date_input("Fecha de pago", value=clock.today(grupo))
                 if st.form_submit_button(":material/check: Marcar pagada", type="primary"):
                     ok, msg = payroll.marcar_pagada(nid, _fch.isoformat())
-                    (st.success if ok else st.error)(msg)
+                    (flash.exito if ok else st.error)(msg)
                     if ok:
                         st.rerun()
         if est != "anulada":

@@ -256,7 +256,7 @@ def render_timeclock_tab():
                        + ("  Al cerrarla se cierra también el proyecto en curso." if prj else ""))
             if st.button(":material/cancel: Cerrar la jornada", use_container_width=True, key="tc_gen_out"):
                 ok, msg = timeclock.cerrar_jornada(nombre, grupo, usuario)
-                (st.success if ok else st.error)(msg)
+                (flash.exito if ok else st.error)(msg)
                 if ok:
                     st.rerun()
         else:
@@ -266,7 +266,7 @@ def render_timeclock_tab():
                          type="primary"):
                 ok, msg = timeclock.clock_in(nombre, "", "", grupo,
                                              tipo=timeclock.TIPO_GENERAL, usuario=usuario)
-                (st.success if ok else st.error)(msg)
+                (flash.exito if ok else st.error)(msg)
                 if ok:
                     st.rerun()
 
@@ -297,7 +297,7 @@ def render_timeclock_tab():
             if c1.button(":material/cancel: Salir del proyecto", use_container_width=True, key="tc_prj_out"):
                 ok, msg = timeclock.clock_out(nombre, grupo,
                                               tipo=timeclock.TIPO_PROYECTO, usuario=usuario)
-                (st.success if ok else st.error)(msg)
+                (flash.exito if ok else st.error)(msg)
                 if ok:
                     st.rerun()
             # ⚠️ v308: se excluye el proyecto actual por **ID**, no comparando la etiqueta
@@ -317,7 +317,7 @@ def render_timeclock_tab():
                         _nom = _nom_de.get(_nuevo, "")
                         ok, msg = timeclock.switch_project(nombre, grupo, _nom,
                                                            usuario=usuario, new_pid=_nuevo)
-                        (st.success if ok else st.error)(msg)
+                        (flash.exito if ok else st.error)(msg)
                         if ok:
                             st.rerun()
         elif not idmap:

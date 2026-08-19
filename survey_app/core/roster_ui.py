@@ -401,7 +401,7 @@ def render_planificacion(grupo):
     if b5.button(":material/assignment: Copiar semana anterior", key="ros_copy",
                  use_container_width=True):
         ok, msg = R.copiar_semana(grupo, lunes - timedelta(days=7), lunes)
-        (st.success if ok else st.warning)(msg)
+        (flash.exito if ok else st.warning)(msg)
         if ok:
             st.rerun()
 
@@ -1005,7 +1005,7 @@ def _catalogo(grupo):
                                 ok, msg = R.update_trabajo(tid, {
                                     "Numero": _n.strip(), "Nombre": _nm.strip(),
                                     "Color": _colmap[_cn]})
-                                (st.success if ok else st.error)(msg)
+                                (flash.exito if ok else st.error)(msg)
                                 if ok:
                                     st.session_state["_trab_edit"] = ""
                                     st.rerun()
@@ -1023,7 +1023,7 @@ def _catalogo(grupo):
                         if g2.button(":material/delete: Eliminar", key=f"tedd_{tid}",
                                      disabled=not _conf, use_container_width=True):
                             ok, msg = R.delete_trabajo(grupo, tid)
-                            (st.success if ok else st.warning)(msg)
+                            (flash.exito if ok else st.warning)(msg)
                             if ok:
                                 st.session_state["_trab_edit"] = ""
                                 st.rerun()
@@ -1046,7 +1046,7 @@ def _catalogo(grupo):
                 st.error("El nombre es obligatorio.")
             else:
                 ok, res = R.add_trabajo(grupo, num, nom, _colmap[colnom], "")
-                (st.success if ok else st.error)(
+                (flash.exito if ok else st.error)(
                     f"Trabajo creado ({res})." if ok else res)
                 if ok:
                     st.rerun()

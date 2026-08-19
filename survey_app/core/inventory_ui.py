@@ -8,6 +8,8 @@ import logging
 import pandas as pd
 import streamlit as st
 
+from core import flash
+
 from core import tenant
 from core import clock
 from core import inventory as INV
@@ -246,7 +248,7 @@ def _detalle(grupo, aid):
                     _u = ("" if _resp == "—" else _resp) or (_ref if _dt == "usuario" else "")
                     ok, msg = INV.salida(aid, grupo, usuario=_u, hacia_tipo=_dt, hacia_ref=_ref,
                                          fecha_devolucion=_dev, nota=_n, creado_por=_cp)
-                    (st.success if ok else st.error)(msg)
+                    (flash.exito if ok else st.error)(msg)
                     if ok:
                         st.rerun()
         else:
@@ -255,7 +257,7 @@ def _detalle(grupo, aid):
                 _n = st.text_input("Nota", key=f"inv_enota_{aid}")
                 if st.button(":material/check: Registrar entrada", type="primary", key=f"inv_ebtn_{aid}"):
                     ok, msg = INV.entrada(aid, grupo, bodega=_bod, nota=_n, creado_por=_cp)
-                    (st.success if ok else st.error)(msg)
+                    (flash.exito if ok else st.error)(msg)
                     if ok:
                         st.rerun()
         with ac[1].expander(":material/move_up: Traslado"):
@@ -264,7 +266,7 @@ def _detalle(grupo, aid):
             _n = st.text_input("Nota", key=f"inv_tnota_{aid}")
             if st.button(":material/check: Trasladar", key=f"inv_tbtn_{aid}"):
                 ok, msg = INV.traslado(aid, grupo, _tt, _tr, nota=_n, creado_por=_cp)
-                (st.success if ok else st.error)(msg)
+                (flash.exito if ok else st.error)(msg)
                 if ok:
                     st.rerun()
         with ac[1].expander(":material/build: Mantenimiento"):
@@ -275,7 +277,7 @@ def _detalle(grupo, aid):
             if st.button(":material/check: Registrar mantenimiento", key=f"inv_mbtn_{aid}"):
                 ok, msg = INV.mantenimiento(aid, grupo, costo=_costo, proximo=_prox, nota=_n,
                                             en_mant=_enm, creado_por=_cp)
-                (st.success if ok else st.error)(msg)
+                (flash.exito if ok else st.error)(msg)
                 if ok:
                     st.rerun()
 
@@ -335,7 +337,7 @@ def _detalle(grupo, aid):
                 "Serie": serie, "Estado": estado, "Condicion": condicion,
                 "UbicacionTipo": ubic_t, "UbicacionRef": ubic_r, "ValorCompra": vc,
                 "FechaCompra": f_compra, "VidaUtilAnios": vida, "ProximoMant": prox, "Nota": nota})
-            (st.success if ok else st.error)(msg)
+            (flash.exito if ok else st.error)(msg)
             if ok:
                 st.rerun()
 
@@ -355,7 +357,7 @@ def _detalle(grupo, aid):
         if st.button(":material/restore: Reactivar este activo",
                      key=f"inv_react_{aid}", type="primary"):
             ok, msg = INV.update_activo(aid, {"Activo": "SI", "Estado": "disponible"})
-            (st.success if ok else st.error)(msg)
+            (flash.exito if ok else st.error)(msg)
             if ok:
                 st.rerun()
 
@@ -454,13 +456,13 @@ def _categorias_expander(grupo):
                                   label_visibility="collapsed", placeholder="Nueva categoría…")
         if cc[1].button(":material/add: Añadir", key="inv_cat_add"):
             ok, msg = INV.add_categoria(grupo, _nueva)
-            (st.success if ok else st.error)(msg)
+            (flash.exito if ok else st.error)(msg)
             if ok:
                 st.rerun()
         _quitar = st.selectbox("Quitar una categoría propia", ["—"] + INV.categorias(grupo),
                                key="inv_cat_del")
         if _quitar != "—" and st.button(":material/delete: Quitar", key="inv_cat_delbtn"):
             ok, msg = INV.del_categoria(grupo, _quitar)
-            (st.success if ok else st.error)(msg)
+            (flash.exito if ok else st.error)(msg)
             if ok:
                 st.rerun()

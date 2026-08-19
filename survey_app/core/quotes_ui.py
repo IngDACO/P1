@@ -261,7 +261,7 @@ def _detalle(grupo, cid):
                          help="Trae los costos de hoy conservando lo que quieres ganar "
                               "en cada línea."):
                 ok, msg = Q.actualizar_precios(cid)
-                (st.success if ok else st.error)(msg)
+                (flash.exito if ok else st.error)(msg)
                 if ok:
                     st.rerun()
         nuevas = _editor_lineas(grupo, f"ed{cid}", lineas)
@@ -269,7 +269,7 @@ def _detalle(grupo, cid):
             if st.button(":material/save: Guardar cambios", key=f"cot_save_{cid}",
                          type="primary"):
                 ok, msg = Q.guardar_lineas(cid, nuevas)
-                (st.success if ok else st.error)(msg)
+                (flash.exito if ok else st.error)(msg)
                 if ok:
                     st.rerun()
         _totales_html(Q.totales(nuevas, _num(c.get("ImpuestoPct"))), c.get("ImpuestoPct"))
@@ -289,20 +289,20 @@ def _detalle(grupo, cid):
         if a1.button(":material/send: Marcar como enviada", key=f"cot_env_{cid}",
                      type="primary", use_container_width=True):
             ok, msg = Q.set_estado(cid, Q.ENVIADA)
-            (st.success if ok else st.error)(msg)
+            (flash.exito if ok else st.error)(msg)
             if ok:
                 st.rerun()
     elif est in (Q.ENVIADA, Q.VENCIDA):
         if a1.button(":material/check_circle: El cliente la aceptó", key=f"cot_ok_{cid}",
                      type="primary", use_container_width=True):
             ok, msg = Q.set_estado(cid, Q.ACEPTADA)
-            (st.success if ok else st.error)(msg)
+            (flash.exito if ok else st.error)(msg)
             if ok:
                 st.rerun()
         if a2.button(":material/block: La rechazó", key=f"cot_no_{cid}",
                      use_container_width=True):
             ok, msg = Q.set_estado(cid, Q.RECHAZADA)
-            (st.success if ok else st.error)(msg)
+            (flash.exito if ok else st.error)(msg)
             if ok:
                 st.rerun()
     if est != Q.BORRADOR:

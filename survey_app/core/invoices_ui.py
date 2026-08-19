@@ -8,6 +8,8 @@ emitir. Impuesto (GST/IVA) con el default del grupo, editable.
 import pandas as pd
 import streamlit as st
 
+from core import flash
+
 from core import tenant
 from core import auth, clock
 from core import clientes as C
@@ -150,7 +152,7 @@ def _detalle_factura(grupo, fid):
                 _fch = st.date_input("Fecha del cobro", value=clock.today())
                 if st.form_submit_button(":material/check: Registrar cobro", type="primary"):
                     ok, msg = I.registrar_cobro(fid, _m, _fch.isoformat())
-                    (st.success if ok else st.error)(msg)
+                    (flash.exito if ok else st.error)(msg)
                     if ok:
                         st.rerun()
         elif est == "cobrada":

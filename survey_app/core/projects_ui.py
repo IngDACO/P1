@@ -63,7 +63,7 @@ def _alerts_section(pid, grupo, project_name="", allow_report=False):
                 else:
                     with st.spinner("Enviando alarma..."):
                         ok, res = alerts.report_problem(pid, grupo, msg.strip(), usuario, project_name)
-                    (st.success if ok else st.error)("Alarma enviada al administrador." if ok else res)
+                    (flash.exito if ok else st.error)("Alarma enviada al administrador." if ok else res)
                     if ok:
                         st.rerun()
 
@@ -2185,7 +2185,7 @@ def _detalle_proyecto(pid: str, grupo: str = None):
                                   "Peso": float(r["Peso"]),
                                   "Orden": int(r["Orden"])})
                 ok, msg = P.save_activities(pid, edits)
-                (st.success if ok else st.error)(msg)
+                (flash.exito if ok else st.error)(msg)
                 if ok:
                     _aviso_cambio("Se actualizó la tabla de actividades del cronograma.")
                     st.rerun()
@@ -2205,7 +2205,7 @@ def _detalle_proyecto(pid: str, grupo: str = None):
                         st.error("El nombre es obligatorio.")
                     else:
                         ok, msg = P.add_activity(pid, an.strip(), ad, ap)
-                        (st.success if ok else st.error)(msg)
+                        (flash.exito if ok else st.error)(msg)
                         if ok:
                             _aviso_cambio(f"Se agregó la actividad: {an.strip()}.")
                             st.rerun()
@@ -2220,7 +2220,7 @@ def _detalle_proyecto(pid: str, grupo: str = None):
                                                    "Confirmo eliminar esta actividad")
                     if st.button("Eliminar", key=f"delactb_{pid}", disabled=not _ok_del):
                         ok, msg = P.delete_activity(pid, _orden)
-                        (st.success if ok else st.error)(msg)
+                        (flash.exito if ok else st.error)(msg)
                         if ok:
                             _aviso_cambio("Se eliminó una actividad del cronograma.")
                             st.rerun()
@@ -2235,7 +2235,7 @@ def _detalle_proyecto(pid: str, grupo: str = None):
             if st.button(":material/recycling: Restaurar proyecto", key=f"unarch_{pid}",
                          use_container_width=True):
                 ok, msg = P.set_archivado(pid, False)
-                (st.success if ok else st.error)(msg)
+                (flash.exito if ok else st.error)(msg)
                 if ok:
                     st.rerun()
         else:
@@ -2245,7 +2245,7 @@ def _detalle_proyecto(pid: str, grupo: str = None):
                            "Es lo recomendado al cerrar una obra.")
                 if st.button(":material/inventory_2: Archivar", key=f"arch_{pid}", use_container_width=True):
                     ok, msg = P.set_archivado(pid, True)
-                    (st.success if ok else st.error)(msg)
+                    (flash.exito if ok else st.error)(msg)
                     if ok:
                         st.rerun()
 
@@ -2271,7 +2271,7 @@ def _detalle_proyecto(pid: str, grupo: str = None):
                              use_container_width=True,
                              disabled=(_tecleado.strip() != str(prj.get("Nombre", "")).strip())):
                     ok, msg = P.delete_project(pid)
-                    (st.success if ok else st.error)(msg)
+                    (flash.exito if ok else st.error)(msg)
                     if ok:
                         st.rerun()
 
@@ -2580,7 +2580,7 @@ def _panel_agrupaciones(grupo: str):
                          key=f"agmemsave_{_ag['ID']}", use_container_width=True):
                 with st.spinner("Guardando..."):
                     ok, msg = P.set_grouping_members(_ag["ID"], _sel, grupo)
-                (st.success if ok else st.error)(msg)
+                (flash.exito if ok else st.error)(msg)
                 if ok:
                     st.rerun()
         with st.expander(":material/delete: Eliminar agrupación"):
@@ -2588,7 +2588,7 @@ def _panel_agrupaciones(grupo: str):
             _ok_del = ui.confirmar_borrado("del_agr_ok", "Confirmo eliminar esta agrupación")
             if st.button("Eliminar agrupación", disabled=not _ok_del, key="del_agr_btn"):
                 ok, msg = P.delete_grouping(_ag["ID"])
-                (st.success if ok else st.error)(msg)
+                (flash.exito if ok else st.error)(msg)
                 if ok:
                     st.session_state.pop("_admin_open_agr", None)
                     st.rerun()
@@ -2743,7 +2743,7 @@ def _field_activities(pid):
             st.info("No cambiaste ningún avance.")
         else:
             ok, msg = P.save_field_progress(pid, cambios)
-            (st.success if ok else st.error)(msg)
+            (flash.exito if ok else st.error)(msg)
             if ok:
                 st.rerun()
 
@@ -2973,7 +2973,7 @@ def _ordenes_section(pid, grupo, editable=True, key_prefix="ord"):
                                               key=f"{key_prefix}_ordfix_{_oid}"):
                         ok, msg = O.completar_gasto(
                             _oid, st.session_state.get("auth", {}).get("usuario", ""))
-                        (st.success if ok else st.error)(msg)
+                        (flash.exito if ok else st.error)(msg)
                         if ok:
                             st.rerun()
 
@@ -2987,13 +2987,13 @@ def _ordenes_section(pid, grupo, editable=True, key_prefix="ord"):
                                  use_container_width=True):
                         ok, msg = O.marcar_recibida(
                             _oid, _real, st.session_state.get("auth", {}).get("usuario", ""))
-                        (st.success if ok else st.error)(msg)
+                        (flash.exito if ok else st.error)(msg)
                         if ok:
                             st.rerun()
                     if _c2.button("Cancelar", key=f"{key_prefix}_ordc_{_oid}",
                                   use_container_width=True):
                         ok, msg = O.cancelar(_oid)
-                        (st.success if ok else st.error)(msg)
+                        (flash.exito if ok else st.error)(msg)
                         if ok:
                             st.rerun()
                 st.markdown("---")
@@ -3019,7 +3019,7 @@ def _ordenes_section(pid, grupo, editable=True, key_prefix="ord"):
                         pid, grupo, _prov, _val, descripcion=_desc, categoria=_cat,
                         fecha_esperada=_fe.strftime("%Y-%m-%d") if _fe else "",
                         creado_por=st.session_state.get("auth", {}).get("usuario", ""))
-                    (st.success if ok else st.error)(msg)
+                    (flash.exito if ok else st.error)(msg)
                     if ok:
                         st.rerun()
 
@@ -3097,7 +3097,7 @@ def _ganancia_section(pid, grupo):
         if _c1.button(":material/save: Guardar ganancias", key=f"gh_save_{pid}",
                       type="primary", use_container_width=True):
             ok, msg = P.set_ganancia_hora(pid, _nuevo)
-            (st.success if ok else st.error)(msg)
+            (flash.exito if ok else st.error)(msg)
             if ok:
                 st.rerun()
         # ⚠️ La vuelta atrás: si migraste una obra por error, se puede deshacer (v346).
@@ -3105,7 +3105,7 @@ def _ganancia_section(pid, grupo):
                               use_container_width=True,
                               help="Quita las ganancias por hora y vuelve al margen %."):
             ok, msg = P.set_ganancia_hora(pid, {})
-            (st.success if ok else st.error)(msg)
+            (flash.exito if ok else st.error)(msg)
             if ok:
                 st.rerun()
 
@@ -3324,7 +3324,7 @@ def render_expenses(pid, grupo, can_delete=False, key_prefix="ex"):
                                                f.type or "application/octet-stream")
                     ok, msg = E.add(pid, grupo, val, cat, prov, desc, did, fn,
                                     st.session_state.get("auth", {}).get("usuario", ""))
-                    (st.success if ok else st.error)(msg)
+                    (flash.exito if ok else st.error)(msg)
                     if ok:
                         st.rerun()
 
@@ -3353,7 +3353,7 @@ def render_expenses(pid, grupo, can_delete=False, key_prefix="ex"):
                     cc[0].caption(_lbl + " · sin archivo")
                 if can_delete and cc[1].button(":material/delete:", key=f"{key_prefix}_del_{_rid}"):
                     ok, msg = E.delete(r.get("ID"))
-                    (st.success if ok else st.error)(msg)
+                    (flash.exito if ok else st.error)(msg)
                     if ok:
                         st.session_state.pop(f"{key_prefix}_rcb", None)
                         st.rerun()

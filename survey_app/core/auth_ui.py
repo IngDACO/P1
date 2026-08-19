@@ -21,7 +21,7 @@ def _contacto_uno(sel, key_prefix="cc"):
     em  = st.text_input(":material/mail: Email", value=str(rec.get("Email", "")), key=f"{key_prefix}_em")
     if st.button("Guardar email", key=f"{key_prefix}_emb"):
         ok, msg = auth.set_contact(sel, email=em)
-        (st.success if ok else st.error)(msg)
+        (flash.exito if ok else st.error)(msg)
         if ok:
             st.rerun()
     st.markdown("**:material/send: Telegram**")
@@ -140,7 +140,7 @@ def render_credenciales(usuario, grupo, editable=False, key_prefix="cr"):
                     if not did:
                         st.warning("No se pudo subir el archivo a Drive; se guarda el resto.")
                 ok, msg = C.add(usuario, grupo, t, num, clase, emi, ven, did, fname, nota, admin_usr)
-                (st.success if ok else st.error)(msg)
+                (flash.exito if ok else st.error)(msg)
                 if ok:
                     st.rerun()
 
@@ -159,12 +159,12 @@ def render_credenciales(usuario, grupo, editable=False, key_prefix="cr"):
             if b1.button(":material/save: Guardar", key=f"{key_prefix}_eupd"):
                 ok, msg = C.update(r.get("ID"), {"Numero": enum, "Vencimiento": even, "Nota": enota,
                                                  "ActualizadoPor": admin_usr})
-                (st.success if ok else st.error)(msg)
+                (flash.exito if ok else st.error)(msg)
                 if ok:
                     st.rerun()
             if b2.button(":material/delete: Eliminar", key=f"{key_prefix}_edel"):
                 ok, msg = C.delete(r.get("ID"))
-                (st.success if ok else st.error)(msg)
+                (flash.exito if ok else st.error)(msg)
                 if ok:
                     st.rerun()
 
@@ -372,7 +372,7 @@ def _owner_grupos():
         gd = st.text_input("Descripción (opcional)")
         if st.form_submit_button(":material/add: Crear grupo"):
             ok, msg = auth.add_group(gn, gd)
-            (st.success if ok else st.error)(msg)
+            (flash.exito if ok else st.error)(msg)
             if ok: st.rerun()
 
     # ── Libro de Google propio de cada cliente (v359) ──
@@ -397,13 +397,13 @@ def _owner_grupos():
                 if _c1.button(":material/link: Guardar enlace", key="gsheet_save",
                               use_container_width=True):
                     ok, msg = auth.set_group_sheet_id(_gl, _nuevo)
-                    (st.success if ok else st.error)(msg)
+                    (flash.exito if ok else st.error)(msg)
                     if ok:
                         st.rerun()
                 if _sid_now and _c2.button(":material/link_off: Volver al maestro",
                                            key="gsheet_del", use_container_width=True):
                     ok, msg = auth.set_group_sheet_id(_gl, "")
-                    (st.success if ok else st.error)(msg)
+                    (flash.exito if ok else st.error)(msg)
                     if ok:
                         st.rerun()
                 if _sid_now:
@@ -447,7 +447,7 @@ def _owner_grupos():
                     pass
                 if st.button(":material/save: Guardar zona", key="tz_save"):
                     ok, msg = auth.set_group_timezone(gzsel, znew)
-                    (st.success if ok else st.error)(msg)
+                    (flash.exito if ok else st.error)(msg)
                     if ok:
                         st.rerun()
 
@@ -469,7 +469,7 @@ def _owner_grupos():
                                        step=1.0, value=_curm, key="mg_val")
                 if st.button(":material/save: Guardar margen", key="mg_save"):
                     ok, msg = auth.set_group_margin_default(gmsel, mnew)
-                    (st.success if ok else st.error)(msg)
+                    (flash.exito if ok else st.error)(msg)
                     if ok:
                         st.rerun()
 
@@ -491,7 +491,7 @@ def _owner_grupos():
                                        step=1.0, value=_curt, key="tx_val")
                 if st.button(":material/save: Guardar impuesto", key="tx_save"):
                     ok, msg = auth.set_group_tax_default(gtsel, tnew)
-                    (st.success if ok else st.error)(msg)
+                    (flash.exito if ok else st.error)(msg)
                     if ok:
                         st.rerun()
 
@@ -534,7 +534,7 @@ def _owner_grupos():
                                            f"Confirmo eliminar el grupo **{gsel}**")
             if st.button(":material/delete: Eliminar grupo", key="del_g_btn", disabled=not _ok_del):
                 ok, msg = auth.delete_group(gsel)
-                (st.success if ok else st.error)(msg)
+                (flash.exito if ok else st.error)(msg)
                 if ok: st.rerun()
 
 
@@ -584,7 +584,7 @@ def _owner_usuarios():
                     ok, msg = auth.add_user(u, pw, rl, nm, gr)
                     if ok and em.strip():
                         auth.set_contact(u, email=em)
-                    (st.success if ok else st.error)(msg)
+                    (flash.exito if ok else st.error)(msg)
                     if ok: st.rerun()
 
     # ── Gestionar un usuario: ficha 360° (una sola selección) ──
@@ -750,7 +750,7 @@ def _owner_rieles():
                     st.error("La referencia es obligatoria.")
                 else:
                     ok, msg = rails.add_riel(ref.strip(), anc, alt)
-                    (st.success if ok else st.error)(msg)
+                    (flash.exito if ok else st.error)(msg)
                     if ok:
                         st.rerun()
 
@@ -767,12 +767,12 @@ def _owner_rieles():
             b1, b2 = st.columns(2)
             if b1.button(":material/save: Guardar", key="riel_save"):
                 ok, msg = rails.update_riel(sel, ea, el)
-                (st.success if ok else st.error)(msg)
+                (flash.exito if ok else st.error)(msg)
                 if ok:
                     st.rerun()
             if b2.button(":material/delete: Eliminar", key="riel_del"):
                 ok, msg = rails.delete_riel(sel)
-                (st.success if ok else st.error)(msg)
+                (flash.exito if ok else st.error)(msg)
                 if ok:
                     st.rerun()
 
@@ -837,7 +837,7 @@ def _ficha_usuario(u, grupo, owner=False, sel_key="gp_fichasel"):
                                   value=float(str(u.get("TarifaHora", "") or 0).replace(",", ".") or 0),
                                   key=f"{k}_tar", help="Para costear la mano de obra.")
             if st.button("Guardar tarifa", key=f"{k}_savetar", use_container_width=True):
-                ok, msg = auth.set_rate(sel, tar); (st.success if ok else st.error)(msg)
+                ok, msg = auth.set_rate(sel, tar); (flash.exito if ok else st.error)(msg)
                 if ok:
                     st.rerun()
         if owner:   # el propietario también reasigna rol y grupo (v184)
@@ -848,7 +848,7 @@ def _ficha_usuario(u, grupo, owner=False, sel_key="gp_fichasel"):
                                   index=auth.ROLES.index(_rcur) if _rcur in auth.ROLES else 0,
                                   key=f"{k}_rol")
             if _rc.button("Aplicar rol", key=f"{k}_chrol"):
-                ok, msg = auth.set_role(sel, _nrol); (st.success if ok else st.error)(msg)
+                ok, msg = auth.set_role(sel, _nrol); (flash.exito if ok else st.error)(msg)
                 if ok:
                     st.rerun()
             _gcur = str(u.get("Grupo", "") or "")
@@ -856,18 +856,18 @@ def _ficha_usuario(u, grupo, owner=False, sel_key="gp_fichasel"):
                                   index=_gopts.index(_gcur) if _gcur in _gopts else 0,
                                   key=f"{k}_grp")
             if _gc.button("Aplicar grupo", key=f"{k}_chgrp"):
-                ok, msg = auth.set_group(sel, _ngrp); (st.success if ok else st.error)(msg)
+                ok, msg = auth.set_group(sel, _ngrp); (flash.exito if ok else st.error)(msg)
                 if ok:
                     st.rerun()
         if activo:
             if st.button(":material/block: Desactivar (no podrá entrar)", key=f"{k}_de",
                          use_container_width=True):
-                ok, msg = auth.set_active(sel, False); (st.success if ok else st.error)(msg)
+                ok, msg = auth.set_active(sel, False); (flash.exito if ok else st.error)(msg)
                 if ok:
                     st.rerun()
         else:
             if st.button(":material/check_circle: Activar", key=f"{k}_act", use_container_width=True):
-                ok, msg = auth.set_active(sel, True); (st.success if ok else st.error)(msg)
+                ok, msg = auth.set_active(sel, True); (flash.exito if ok else st.error)(msg)
                 if ok:
                     st.rerun()
 
@@ -928,7 +928,7 @@ def _ficha_usuario(u, grupo, owner=False, sel_key="gp_fichasel"):
                    "credenciales ya registrados **no se borran** (quedan a su nombre).")
         if ui.confirmar_borrado(f"{k}_delok", f"Confirmo eliminar a «{sel}»"):
             if st.button("Eliminar definitivamente", key=f"{k}_del"):
-                ok, msg = auth.delete_user(sel); (st.success if ok else st.error)(msg)
+                ok, msg = auth.delete_user(sel); (flash.exito if ok else st.error)(msg)
                 if ok:
                     st.session_state.pop(sel_key, None)
                     st.rerun()
@@ -949,7 +949,7 @@ def _crear_usuario_form(grupo):
                 ok, msg = auth.add_user(u, pw, "campo", nm, grupo)
                 if ok and em.strip():
                     auth.set_contact(u, email=em)
-                (st.success if ok else st.error)(msg)
+                (flash.exito if ok else st.error)(msg)
                 if ok:
                     st.rerun()
 

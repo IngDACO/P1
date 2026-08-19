@@ -229,7 +229,7 @@ def _detalle_cliente(grupo, key):
                 if st.button(":material/restore: Restaurar esta ficha",
                              key=f"cli_rest_{cid}", type="primary"):
                     ok, msg = C.set_activo(cid, True)
-                    (st.success if ok else st.error)(msg)
+                    (flash.exito if ok else st.error)(msg)
                     if ok:
                         st.rerun()
             else:

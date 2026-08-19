@@ -173,7 +173,7 @@ def _detalle(grupo, cid):
         if st.form_submit_button(":material/save: Guardar cambios", use_container_width=True):
             campos.update({"Nombre": nombre, "Categoria": categoria, "Descripcion": desc})
             ok, msg = CAT.actualizar(cid, campos)
-            (st.success if ok else st.error)(msg)
+            (flash.exito if ok else st.error)(msg)
             if ok:
                 st.rerun()
 
@@ -188,7 +188,7 @@ def _detalle(grupo, cid):
             if st.button(":material/archive: Desactivar", key=f"cat_off_{cid}",
                          use_container_width=True):
                 ok, msg = CAT.set_activo(cid, False)
-                (st.success if ok else st.error)(msg)
+                (flash.exito if ok else st.error)(msg)
                 if ok:
                     st.rerun()
     else:
@@ -196,6 +196,6 @@ def _detalle(grupo, cid):
                    "cotizar salvo que marques «Ver también los desactivados».")
         if st.button(":material/restore: Reactivar", key=f"cat_on_{cid}", type="primary"):
             ok, msg = CAT.set_activo(cid, True)
-            (st.success if ok else st.error)(msg)
+            (flash.exito if ok else st.error)(msg)
             if ok:
                 st.rerun()
