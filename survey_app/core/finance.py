@@ -39,6 +39,11 @@ def project_revenue(pid: str, grupo: str, prj: dict = None) -> dict:
     from core import projects as P
     mat = E.project_expenses(pid)["total"]        # los materiales van a COSTO (v360)
     gh  = P.ganancia_hora(pid, prj)
+    # v373: ganancia FIJA de la obra. Se SUMA al modelo que aplique (rubro o margen),
+    # porque responde a otra pregunta: «además de lo que gano con las horas, ¿cuánto
+    # vale esta obra por sí misma?». Cubre el delivery y el suministro, donde el
+    # margen sobre la mano de obra no tiene sobre qué aplicarse.
+    fija = P.ganancia_fija(pid, prj)
 
     # ── v370: si la obra nació de una cotización ACEPTADA, el ingreso es el PRECIO
     # PACTADO, no una estimación desde el costo. Es un hecho, no una conjetura: el
@@ -67,6 +72,10 @@ def project_revenue(pid: str, grupo: str, prj: dict = None) -> dict:
                 "mo_facturable": round(_mo, 2), "ingreso": round(_ing, 2),
                 "ganancia": round(_ing - _costo, 2), "modelo": "cotizado",
                 "cotizacion": str(_cot.get("ID", "")),
+                # ⚠️ La ganancia fija NO se suma aquí: la cotización ES el precio que el
+                # cliente firmó. Sumarle algo encima inventaría un ingreso que nadie
+                # aceptó. Se devuelve para poder AVISAR de que no se está usando.
+                "ganancia_fija": 0.0, "fija_ignorada": round(fija, 2),
                 # ⚠️ `sin_ganancia` avisa de que un trabajo se facturaría A COSTO. Con el
                 # precio cerrado eso no puede pasar: se cobra lo pactado trabaje quien
                 # trabaje, así que aquí no hay nada que avisar.
@@ -87,12 +96,21 @@ def project_revenue(pid: str, grupo: str, prj: dict = None) -> dict:
                             "ganancia_hora": g, "ganancia": round(h * g, 2)})
         mo, gan_mo = round(mo, 2), round(gan_mo, 2)
         costo   = round(mo + mat, 2)
-        ingreso = round(costo + gan_mo, 2)
+        gan_tot = round(gan_mo + fija, 2)
+        ingreso = round(costo + gan_tot, 2)
         return {"costo_mo": mo, "materiales": mat, "costo": costo,
                 # el % pasa a ser CONSECUENCIA, no entrada
+                # ⚠️ `margen_pct` sigue siendo ganancia de MANO DE OBRA sobre la mano de
+                # obra, EXACTAMENTE como antes de v373: cambiarle el denominador para
+                # meter la ganancia fija movería el % de todas las obras que no la usan,
+                # en silencio (lo contrario de la regla de v360). El margen del conjunto
+                # va en una clave APARTE.
                 "margen_pct": round(100.0 * gan_mo / mo, 2) if mo > 0 else 0.0,
+                "margen_total_pct": round(100.0 * gan_tot / costo, 2) if costo > 0 else 0.0,
                 "mo_facturable": round(mo + gan_mo, 2), "ingreso": ingreso,
-                "ganancia": gan_mo, "modelo": "rubro", "por_persona": detalle,
+                "ganancia": gan_tot, "ganancia_mo": gan_mo,
+                "ganancia_fija": round(fija, 2),
+                "modelo": "rubro+fija" if fija > 0 else "rubro", "por_persona": detalle,
                 # gente con horas y SIN ganancia puesta: su trabajo se facturaría a
                 # costo y nadie lo notaría hasta ver el total (patrón v346)
                 "sin_ganancia": [d["usuario"] for d in detalle
@@ -105,10 +123,17 @@ def project_revenue(pid: str, grupo: str, prj: dict = None) -> dict:
     m   = project_margin(pid, grupo, prj)
     mo_fact = round(mo * (1 + m / 100.0), 2)
     costo   = round(mo + mat, 2)
-    ingreso = round(mo_fact + mat, 2)
+    # ⚠️ La ganancia fija se suma también aquí: el caso que la motiva —un delivery sin
+    # horas— vive justo en este modelo, donde `mo × (1+m)` no tiene sobre qué aplicarse
+    # y el ingreso salía igual al costo. Con fija = 0 el resultado es IDÉNTICO al de
+    # antes de v373, así que ninguna obra existente se mueve.
+    ingreso = round(mo_fact + mat + fija, 2)
     return {"costo_mo": round(mo, 2), "materiales": round(mat, 2), "costo": costo,
             "margen_pct": m, "mo_facturable": mo_fact, "ingreso": ingreso,
-            "ganancia": round(ingreso - costo, 2), "modelo": "margen",
+            "margen_total_pct": round(100.0 * (ingreso - costo) / costo, 2) if costo > 0 else 0.0,
+            "ganancia": round(ingreso - costo, 2),
+            "ganancia_fija": round(fija, 2),
+            "modelo": "margen+fija" if fija > 0 else "margen",
             "por_persona": [], "sin_ganancia": []}
 
 

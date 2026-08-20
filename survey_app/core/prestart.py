@@ -145,10 +145,11 @@ def filename_for(data) -> str:
 
 
 def submit(data: dict) -> dict:
-    """Genera el PDF, lo archiva en Drive + hoja y crea alarma si hay near miss.
-    Devuelve {ok, id, pdf, filename, drive_id, alarma, error}."""
+    """Genera el PDF, lo archiva en Drive + hoja y abre alarma si hay near miss
+    o algún check en NO (v373).
+    Devuelve {ok, id, pdf, filename, drive_id, alarma, alarma_checks, checks_no, error}."""
     res = {"ok": False, "id": "", "pdf": None, "filename": "", "drive_id": "",
-           "alarma": False, "error": ""}
+           "alarma": False, "alarma_checks": False, "checks_no": [], "error": ""}
 
     # 1) PDF
     try:
@@ -216,5 +217,35 @@ def submit(data: dict) -> dict:
             res["alarma"] = bool(ok)
         except Exception as e:
             logger.warning("prestart: no se pudo crear la alarma: %s", e)
+
+    # 5) Alarma si algún check quedó en NO (v373, decisión del usuario)
+    #
+    # Hasta v372 SOLO el near miss abría alarma: un check en NO se veía con su
+    # semáforo rojo en la ficha del pre-start y no salía de ahí — un control de
+    # seguridad sin cumplir que solo conocía quien abriera ese registro. Es un
+    # riesgo de obra, y el mecanismo para escalarlo ya existía desde v88.
+    #
+    # ⚠️ UNA alarma con todos los checks, no una por check: `report_problem`
+    #    escribe Y notifica por Telegram/email, así que N checks serían N avisos
+    #    por un solo formulario. Y va SEPARADA de la del near miss porque son dos
+    #    cosas distintas: un near miss es un suceso, un check en NO es un control
+    #    que falta poner — se resuelven por separado.
+    # ⚠️ Solo cuenta "NO": el "N/A" de la sección 3 es una respuesta legítima
+    #    (no aplica), y un check sin responder no puede llegar (la UI no deja
+    #    generar el pre-start hasta que están todos, v158).
+    checks = {**(data.get("s1") or {}), **(data.get("s3") or {})}
+    no_ok = [_LABELS.get(k, k) for k, v in checks.items()
+             if str(v).strip().upper() == "NO"]
+    res["checks_no"] = no_ok
+    if no_ok:
+        try:
+            from core import alerts
+            msg = (f"Pre-Start con {len(no_ok)} control(es) en NO: "
+                   + " · ".join(no_ok))
+            ok, _ = alerts.report_problem(pid, grupo, msg, creado_por,
+                                          data.get("proyecto_nombre", ""))
+            res["alarma_checks"] = bool(ok)
+        except Exception as e:
+            logger.warning("prestart: no se pudo crear la alarma de checks: %s", e)
 
     return res

@@ -3058,16 +3058,28 @@ def _ganancia_section(pid, grupo):
         lb = E.labor_breakdown(pid, grupo)
     except Exception:
         return
-    _gh = P.ganancia_hora(pid)
+    _gh    = P.ganancia_hora(pid)
+    _fija  = P.ganancia_fija(pid)
     _items = lb.get("items") or []
-    if not _items and not _gh:
-        return                              # nadie ha fichado aquí: nada que decidir
+    _modelo = str(rev.get("modelo", ""))
+    # ⚠️ Hasta v373 aquí se volvía si nadie había fichado — y esa es JUSTO la obra que
+    #    necesita la ganancia fija: un delivery no tiene horas, así que la pantalla
+    #    donde ponerla no se dibujaba nunca y no había forma de darle valor.
+    _a_costo = P._num(rev.get("ganancia")) <= 0
 
-    with st.expander(":material/savings: Cuánto ganas con cada persona",
-                     expanded=bool(rev.get("sin_ganancia"))):
-        if rev.get("modelo") == "margen":
-            st.info(":material/info: Esta obra todavía usa el **modelo viejo**: un "
-                    + f"**{rev['margen_pct']:g}%** sobre la mano de obra. En cuanto "
+    with st.expander(":material/savings: Cuánto ganas con esta obra",
+                     expanded=bool(rev.get("sin_ganancia")) or _a_costo):
+        if _modelo == "cotizado":
+            st.success(":material/check_circle: El ingreso de esta obra es el **precio "
+                       "pactado** en la cotización " + f"**{rev.get('cotizacion','')}**. "
+                       "El " + f"{rev['margen_pct']:g}%" + " es consecuencia de ese precio.")
+            if P._num(rev.get("fija_ignorada")) > 0:
+                st.warning(":material/info: Esta obra tiene una ganancia fija de "
+                           + _T.dinero(rev["fija_ignorada"]) + " que **no se usa**: manda "
+                           "el precio que el cliente firmó. Ponla a 0 para quitar el ruido.")
+        elif _modelo.startswith("margen"):
+            st.info(":material/info: La mano de obra de esta obra todavía usa el **modelo "
+                    "viejo**: un " + f"**{rev['margen_pct']:g}%** sobre ella. En cuanto "
                     "pongas aquí lo que quieres ganar por hora, pasa al modelo nuevo "
                     "(importe por rubro) y el % se calcula solo.")
         else:
@@ -3079,7 +3091,21 @@ def _ganancia_section(pid, grupo):
                        "se facturaría **a costo**: **" + ", ".join(rev["sin_ganancia"])
                        + "**.")
 
-        _ed = st.data_editor(
+        # ⚠️ El editor solo si hay gente: con la lista vacía, `disabled=[...]` y
+        #    `column_config` apuntarían a columnas que no existen.
+        if not _items:
+            st.caption("Nadie ha fichado horas en esta obra todavía, así que no hay "
+                       "ganancia por hora que repartir. Si su valor no está en el tiempo "
+                       "(un delivery, un suministro), usa la **ganancia fija** de abajo.")
+        else:
+            _editor_ganancia_hora(pid, _items, _gh, _T)
+        _ganancia_fija_ui(pid, rev, _fija, _T, _modelo)
+
+
+def _editor_ganancia_hora(pid, _items, _gh, _T):
+    """La tabla persona × ganancia/h (v360). Extraída de `_ganancia_section` en v373
+    para poder no dibujarla cuando la obra no tiene horas fichadas."""
+    _ed = st.data_editor(
             pd.DataFrame([{
                 "Persona": x.get("usuario", ""),
                 "Horas": round(P._num(x.get("horas")), 2),
@@ -3105,28 +3131,65 @@ def _ganancia_section(pid, grupo):
                 "Ganas": st.column_config.NumberColumn("Ganas", format="$%.2f",
                                                        help="Horas × ganancia/h.")})
 
-        _nuevo = {str(_ed.iloc[i]["Persona"]): P._num(_ed.iloc[i]["Ganancia/h"])
-                  for i in range(len(_ed)) if P._num(_ed.iloc[i]["Ganancia/h"]) > 0}
-        _tot = sum(P._num(_ed.iloc[i]["Horas"]) * P._num(_ed.iloc[i]["Ganancia/h"])
-                   for i in range(len(_ed)))
-        st.caption("Con estos valores ganarías **" + _T.dinero(_tot)
-                   + "** de mano de obra en lo fichado hasta ahora. Los materiales se "
-                     "facturan a costo (decisión de v360).")
-        _c1, _c2 = st.columns([2, 1])
-        if _c1.button(":material/save: Guardar ganancias", key=f"gh_save_{pid}",
-                      type="primary", use_container_width=True):
-            ok, msg = P.set_ganancia_hora(pid, _nuevo)
-            (flash.exito if ok else st.error)(msg)
-            if ok:
-                st.rerun()
-        # ⚠️ La vuelta atrás: si migraste una obra por error, se puede deshacer (v346).
-        if _gh and _c2.button(":material/undo: Volver al %", key=f"gh_undo_{pid}",
-                              use_container_width=True,
-                              help="Quita las ganancias por hora y vuelve al margen %."):
-            ok, msg = P.set_ganancia_hora(pid, {})
-            (flash.exito if ok else st.error)(msg)
-            if ok:
-                st.rerun()
+    _nuevo = {str(_ed.iloc[i]["Persona"]): P._num(_ed.iloc[i]["Ganancia/h"])
+              for i in range(len(_ed)) if P._num(_ed.iloc[i]["Ganancia/h"]) > 0}
+    _tot = sum(P._num(_ed.iloc[i]["Horas"]) * P._num(_ed.iloc[i]["Ganancia/h"])
+               for i in range(len(_ed)))
+    st.caption("Con estos valores ganarías **" + _T.dinero(_tot)
+               + "** de mano de obra en lo fichado hasta ahora. Los materiales se "
+                 "facturan a costo (decisión de v360).")
+    _c1, _c2 = st.columns([2, 1])
+    if _c1.button(":material/save: Guardar ganancias", key=f"gh_save_{pid}",
+                  type="primary", use_container_width=True):
+        ok, msg = P.set_ganancia_hora(pid, _nuevo)
+        (flash.exito if ok else st.error)(msg)
+        if ok:
+            st.rerun()
+    # ⚠️ La vuelta atrás: si migraste una obra por error, se puede deshacer (v346).
+    if _gh and _c2.button(":material/undo: Volver al %", key=f"gh_undo_{pid}",
+                          use_container_width=True,
+                          help="Quita las ganancias por hora y vuelve al margen %."):
+        ok, msg = P.set_ganancia_hora(pid, {})
+        (flash.exito if ok else st.error)(msg)
+        if ok:
+            st.rerun()
+
+
+def _ganancia_fija_ui(pid, rev, _fija, _T, _modelo):
+    """Ganancia FIJA de la obra, en dinero (v373).
+
+    Cubre el hueco que v370 dejó abierto: una obra creada A MANO cuyo valor no está
+    en las horas (un delivery, un suministro) valía exactamente lo que costó, porque
+    el margen solo se aplica a la mano de obra y los materiales van a costo. Medido:
+    «Bespoke — Delivery Chullora» estimado en $380 habiendo facturado $5.200.
+    """
+    st.markdown("---")
+    st.markdown("**Ganancia fija de la obra**")
+    st.caption("Lo que vale esta obra por sí misma, **además** de lo que ganes con las "
+               "horas. Para delivery, suministro o cualquier trabajo cuyo valor no esté "
+               "en el tiempo. Déjala en 0 si no aplica.")
+    _c1, _c2 = st.columns([2, 1])
+    _nf = _c1.number_input("Ganancia fija ($)", min_value=0.0, step=100.0,
+                           value=float(_fija), key=f"gf_{pid}",
+                           help="Se suma al ingreso estimado de la obra. Una obra que "
+                                "nació de una cotización aceptada NO la usa: ahí manda "
+                                "el precio que el cliente firmó.")
+    _costo = P._num(rev.get("costo"))
+    if _modelo == "cotizado":
+        _c1.caption(":orange[Esta obra tiene precio pactado, así que este importe "
+                    "no se usa.]")
+    else:
+        # Lo que pasaría a valer la obra con este número, para no teclear a ciegas.
+        # Se parte del ingreso SIN la fija actual, así el cálculo no la cuenta dos veces.
+        _ing = round(P._num(rev.get("ingreso")) - P._num(rev.get("ganancia_fija")) + _nf, 2)
+        _c1.caption("Con este importe, el ingreso estimado de la obra sería **"
+                    + _T.dinero(_ing) + "** sobre un costo de " + _T.dinero(_costo) + ".")
+    if _c2.button(":material/save: Guardar ganancia fija", key=f"gf_save_{pid}",
+                  use_container_width=True):
+        ok, msg = P.set_ganancia_fija(pid, _nf)
+        (flash.exito if ok else st.error)(msg)
+        if ok:
+            st.rerun()
 
 
 def _facturar_atajo(pid, grupo, prj_nombre=""):

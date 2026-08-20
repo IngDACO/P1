@@ -62,6 +62,11 @@ CAMPOS_CLAVE = {
     # dirección (que cada CAMPO_CLAVE exista); ahora también mira que los campos de
     # dinero del catálogo estén en la lista.
     "CostoUnit", "HorasEst", "TarifaHora",
+    # ganancia del proyecto (v373). ⚠️ `GananciaHoraJSON` decide desde v360 lo que se
+    # le cobra al cliente por cada hora y llevaba 13 versiones SIN auditar: el mismo
+    # hueco que `MargenMO` en v344 y `CostoUnit` en v352, tercera vez. Si un campo
+    # mueve dinero, entra aquí en el MISMO lote en que se crea.
+    "GananciaHoraJSON", "GananciaFija",
 }
 
 

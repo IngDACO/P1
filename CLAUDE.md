@@ -5434,7 +5434,72 @@ de 4 = el chequeo pasó en vacío y falla), la guarda de `pd.isna` existe, el av
 módulo** (regla v342/v366: ámbito, no presencia). Probado contra el código roto: señala
 `save_field_progress` **y solo a esa**.
 
-## Versiones desplegadas (v372 = actual)
+## Un check en NO escala, y la obra sin horas ya puede valer algo (v373)
+Las dos decisiones que quedaban pendientes, resueltas por el usuario.
+
+### Un control en NO abre alarma (cierra el standing item de v158)
+Hasta v372 **solo el near miss** abría alarma: un check en NO se veía con su semáforo
+rojo en la ficha del pre-start y **no salía de ahí** — un control de seguridad sin
+cumplir que solo conocía quien abriera ese registro. El mecanismo para escalarlo existía
+desde v88. Estaba documentado como decisión deliberada; el usuario decidió cambiarlo.
+- ⚠️ **UNA alarma con todos los checks, no una por check**: `report_problem` escribe
+  **y notifica** por Telegram/email, así que N checks serían N avisos por un solo
+  formulario.
+- ⚠️ **Separada de la del near miss**: son dos cosas distintas — un near miss es un
+  suceso, un check en NO es un control que falta poner. Se resuelven por separado.
+- ⚠️ Solo cuenta `NO`: el `N/A` de la sección 3 es una respuesta legítima, y un check
+  sin responder no puede llegar (la UI no deja generar el pre-start hasta que están
+  todos, v158).
+- La pantalla usa `res["checks_no"]`, lo que devuelve `submit`, **no una segunda cuenta**
+  a partir de s1/s3: si divergieran, diría una cosa y la alarma otra.
+- ⚠️ **NO ejercitado contra producción**, por la misma razón que `near_miss=YES` y
+  `notify_expiring`: mandaría correo y Telegram a personas reales. Verificado por AST
+  y con la lógica de conteo sobre datos.
+
+### Ganancia FIJA por obra — el hueco que v370 dejó abierto
+v370 arregló las obras que **nacieron de una cotización**. Una creada A MANO cuyo valor
+no está en las horas seguía valiendo su costo, porque el margen solo se aplica a la mano
+de obra y los materiales van a costo en los dos modelos. Columna nueva `GananciaFija`
+(importe, al final → migra sola) + `ganancia_fija()` / `set_ganancia_fija()`.
+```
+Bespoke — Delivery Chullora   costo $380 · facturado $5.200
+   antes:  ingreso estimado $380      ganancia $0        modelo «margen»
+   ahora:  ingreso estimado $5.200    ganancia $4.820    modelo «margen+fija»
+```
+- **Se SUMA al modelo que aplique** (rubro o margen) porque responde a otra pregunta:
+  «además de lo que gano con las horas, ¿cuánto vale esta obra por sí misma?».
+- ⚠️ **A una obra COTIZADA no se le suma**: la cotización es el precio que el cliente
+  firmó y añadirle algo encima inventaría un ingreso que nadie aceptó. Se devuelve
+  `fija_ignorada` para poder **avisar** de que ese número no se está usando, en vez de
+  ignorarlo en silencio.
+- ⚠️ **`margen_pct` conserva su denominador.** Mi primera versión lo cambió a
+  `ganancia_total / costo`, lo que habría movido el % de **todas** las obras que no usan
+  la fija — justo lo contrario de la regla de v360. El margen del conjunto va en una
+  clave APARTE (`margen_total_pct`). Verificado obra por obra: **las 16 dan la misma
+  cifra que antes**.
+- **La vuelta atrás existe** (regla v340/v346): poner 0 la quita y el ingreso vuelve
+  EXACTAMENTE al valor anterior. Probado en vivo.
+- ⚠️ **La pantalla donde ponerla no se dibujaba** para la obra que la necesita:
+  `_ganancia_section` volvía si nadie había fichado, y un delivery no tiene horas. Ahora
+  la tabla persona×ganancia solo se dibuja si hay gente (con la lista vacía,
+  `disabled=[...]` apuntaría a columnas inexistentes) y la ganancia fija se ofrece
+  siempre.
+- ⚠️ **La fila posicional**: se añadió la columna Y su valor en `create_project` en el
+  mismo cambio. Olvidarlo es exactamente lo que mató a esa función 3 versiones (v363).
+
+### ⚠️ `GananciaHoraJSON` llevaba 13 versiones SIN auditar
+Decide desde v360 lo que se le cobra al cliente por cada hora y **no estaba en
+`CAMPOS_CLAVE`**: es el mismo hueco que `MargenMO` en v344 y `CostoUnit` en v352,
+**tercera vez**. Añadidos los dos. Regla: si un campo mueve dinero, entra en
+`CAMPOS_CLAVE` en el MISMO lote en que se crea.
+
+### ⚠️ Y la regla v135, sexta vez
+Llamé `historial("proyecto", PID)` cuando la firma es `historial(grupo, entidad,
+entidad_id)` → el rastro salió **vacío** y por un momento pareció que la auditoría no
+había registrado nada. Sí lo había hecho: las 3 anotaciones estaban ahí, con el
+`'' → '4820.0'` y su vuelta. **Antes de denunciar un fallo, comprobar la firma.**
+
+## Versiones desplegadas (v373 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -5442,6 +5507,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v373 | Las dos decisiones pendientes, resueltas por el usuario. **(a) Un check en NO abre alarma** (cierra el standing item de v158): hasta ahora solo lo hacía el near miss, así que un control de seguridad sin cumplir solo lo sabía quien abriera esa ficha. ⚠️ UNA alarma con todos los checks (no una por check: `report_problem` también notifica) y separada de la del near miss (un suceso vs un control que falta). NO ejercitada contra producción: mandaría correo y Telegram a personas reales. **(b) Ganancia FIJA por obra** (`GananciaFija`), el hueco que v370 dejó abierto: una obra creada a mano cuyo valor no está en las horas valía su costo — el delivery de Bespoke pasa de **$380 estimados a $5.200**, que es lo que se facturó. Se suma al modelo que aplique; ⚠️ a una obra COTIZADA **no**, porque ese precio lo firmó el cliente (se avisa de que el número no se usa). ⚠️ Mi primera versión cambiaba el denominador de `margen_pct` y habría movido el % de **todas** las obras sin fija: revertido, el margen del conjunto va en clave aparte y las 16 obras dan la misma cifra que antes. Vuelta atrás probada (0 la quita y el ingreso vuelve exacto). ⚠️ `GananciaHoraJSON` llevaba **13 versiones sin auditar** — el hueco de v344/v352 por tercera vez |
 | v372 | ⚠️ **El avance que carga el campo no movía el % del proyecto.** `save_field_progress` recomputaba **antes** de invalidar, y `_recompute_project_avance` lee `list_activities`, que está cacheada 120 s — con la caché caliente (siempre lo está: la pantalla acaba de pintar esa tabla para editarla) recalculaba con las actividades VIEJAS. Medido en la hoja real: actividades al **26,0%** y el proyecto escrito en **0,0%**, estado «Planificado» en vez de «En progreso». Prueba de causa: el mismo guardado con la caché fría cuadra. Regresión de **v162** (el camino viejo recomputaba en memoria sobre filas frescas); un solo sitio, los otros 3 ya estaban bien. + la celda de avance **borrada** (`NaN`) reventaba el guardado ENTERO y la nota vacía guardaba el texto `"nan"` — ahora vaciar deja la actividad como estaba y se dice cuáles. ⚠️ Ese aviso tuve que pasarlo a `flash`: lo puse con `st.warning` sobre un `st.rerun()`, el fallo de v365 **dentro del arreglo**. ⚠️ Y mi test dio 5 ✗ EN FALSO por comparar `"40"` con `"40.0"` (la hoja guarda `str(float)`) |
 | v371 | Documentación de v369 y v370 en CLAUDE.md (sin cambios de código) |
 | v370 | ⚠️ **Una obra cotizada valía su COSTO, no el precio pactado.** Los materiales van a costo en los DOS modelos de ganancia, así que una obra cuyo valor no está en las horas (un delivery, un suministro) salía con ganancia $0: *Bespoke — Delivery* daba **$380 estimados habiendo facturado $5.200**, y una obra con cotización aceptada de $2.960 valía **$0**. El resultado REAL salía bien (usa la factura); lo que mentía era la estimación, y de ella cuelgan «ingreso estimado» y **«pendiente de facturar»**. La app **ya tenía** el número bueno —la cotización guarda su `ProyectoID` desde v354— pero el enlace era de una sola dirección: nueva `quotes.cotizacion_de_proyecto` y `project_revenue` usa el precio pactado (`modelo: "cotizado"`). ⚠️ La base es el **`Subtotal`**, no el Total: `facturado_por_proyecto` suma importes de línea sin impuesto, y el GST habría inflado lo pendiente **exactamente en el impuesto** ($296). Rentabilidad lo recoge sola (delega desde v361). ⚠️ Ejercitar el `except` de verdad destapó un `logger` **inexistente en el módulo** — NameError latente. Sigue sin cubrir la obra creada a mano sin cotización |

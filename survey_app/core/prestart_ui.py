@@ -1,7 +1,8 @@
 """
 Pestaña 📋 Pre-Start diario: el equipo llena la charla de seguridad del día,
-se genera el PDF (marca = grupo), se archiva en Drive del proyecto + hoja, y si
-hay Near Miss/Hazard se abre una alarma del proyecto.
+se genera el PDF (marca = grupo), se archiva en Drive del proyecto + hoja, y se
+abre una alarma del proyecto si hay Near Miss/Hazard o si algún control quedó en
+NO (v373).
 """
 import streamlit as st
 import pandas as pd
@@ -32,7 +33,8 @@ def _projects_for(rol, usuario, grupo):
 def render_prestart_tab():
     st.markdown("### :material/health_and_safety: Pre-Start diario")
     st.caption("Registro de la charla de seguridad antes de empezar en obra. Genera el PDF, "
-               "lo archiva en el proyecto y —si hay near miss/hazard— abre una alarma.")
+               "lo archiva en el proyecto y abre una alarma si hay near miss/hazard "
+               "o si algún control queda en NO.")
 
     if not PS.is_configured():
         st.warning("Necesita Google Sheets configurado (gcp_service_account + TIMECLOCK_SHEET_ID).")
@@ -182,12 +184,20 @@ def render_prestart_tab():
                 st.caption(":material/attach_file: Archivado en los documentos del proyecto.")
             else:
                 st.caption(":orange[:material/warning:] No se archivó en Drive (revisa la conexión); el registro sí quedó guardado.")
-            _no = [PS._LABELS.get(k, k) for k, v in {**s1, **s3}.items() if v == "NO"]
+            # ⚠️ Se usa lo que devuelve `submit`, no una segunda cuenta a partir de
+            #    s1/s3: si divergieran, la pantalla diría una cosa y la alarma otra.
+            _no = res.get("checks_no") or []
             if _no:
                 st.error(":material/warning: Checks marcados **NO** (revisar antes de trabajar): "
                          + " · ".join(_no))
             if res["alarma"]:
                 st.warning(":material/cancel: Se abrió una alarma del proyecto por el near miss/hazard reportado.")
+            if res.get("alarma_checks"):
+                st.warning(f":material/cancel: Se abrió una alarma del proyecto por {len(_no)} "
+                           "control(es) en NO. El administrador queda avisado.")
+            elif _no:
+                st.caption(":orange[:material/warning:] No se pudo abrir la alarma de los "
+                           "checks en NO; avisa al administrador.")
             st.download_button(":material/download: Descargar PDF", data=res["pdf"], file_name=res["filename"],
                                mime="application/pdf", use_container_width=True, key="ps_dl")
 

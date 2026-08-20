@@ -57,6 +57,12 @@ PROJECTS_HEADERS = [
     # un % y pasa a ser un IMPORTE por rubro. VACÍO = sigue el modelo viejo
     # (MargenMO), para que ninguna obra cambie de cifra sin pedirlo.
     "GananciaHoraJSON",
+    # v373: ganancia FIJA de la obra, en dinero. Cubre el hueco que v370 dejó abierto:
+    # una obra cuyo valor NO está en las horas (un delivery, un suministro) y que NO
+    # nació de una cotización valía exactamente lo que costó, porque los materiales
+    # van a costo en los dos modelos. Medido: «Bespoke — Delivery Chullora» estimado
+    # en $380 habiendo facturado $5.200. VACÍO = no aporta nada (retrocompatible).
+    "GananciaFija",
 ]
 
 # Tipos de proyecto (v306). `TIPO_INSTALACION` es el único que genera el cronograma
@@ -304,6 +310,11 @@ def create_project(grupo, nombre, cliente="", ubicacion="", modelo="", ns=0,
         #                                     desde v360 (se añadió la columna a la cabecera y no
         #                                     su valor aquí), y el guardián de abajo dejaba
         #                                     «Nuevo proyecto» y «aceptar cotización» MUERTOS.
+        "",                                 # v373: GananciaFija — una obra nace sin ganancia
+        #                                     fija; se pone a mano cuando su valor no está
+        #                                     en las horas. ⚠️ Añadir la columna arriba SIN
+        #                                     esta línea es exactamente lo que mató a
+        #                                     `create_project` durante 3 versiones (v363).
     ]
     # ⚠️ La fila es POSICIONAL: si no cuadra con la cabecera, cada dato se guarda en la
     # columna de al lado (silencioso y difícil de ver). Se comprueba aquí, no en un test.
@@ -1048,3 +1059,25 @@ def set_ganancia_hora(pid: str, mapa: dict) -> tuple:
     """
     limpio = {str(k): round(_num(v), 2) for k, v in (mapa or {}).items() if _num(v) > 0}
     return update_project(pid, {"GananciaHoraJSON": json.dumps(limpio, ensure_ascii=False)})
+
+
+def ganancia_fija(pid: str, prj: dict = None) -> float:
+    """Ganancia FIJA de la obra, en dinero (v373). 0.0 si no tiene.
+
+    ⚠️ Es un importe a nivel de PROYECTO, no por persona ni por hora: existe para
+    las obras cuyo valor no está en las horas (un delivery, un suministro), donde
+    `costo + margen sobre la mano de obra` da exactamente el costo.
+    """
+    if prj is None:
+        prj = get_project(pid) or {}
+    return max(0.0, _num(prj.get("GananciaFija")))
+
+
+def set_ganancia_fija(pid: str, valor) -> tuple:
+    """Fija (o quita, con 0) la ganancia fija de la obra.
+
+    ⚠️ Poner 0 la QUITA — la vuelta atrás tiene que existir (regla v340/v346): si te
+    equivocaste de obra, se deshace sin dejar un número inventado en la estimación.
+    """
+    v = max(0.0, _num(valor))
+    return update_project(pid, {"GananciaFija": str(round(v, 2)) if v > 0 else ""})
