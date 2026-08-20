@@ -87,6 +87,10 @@ C:\Users\diego\P1\survey_app\
 │   ├── auditoria.py        # rastro de cambios: quién tocó margen/tarifa/fechas (hoja Auditoria, v342)
 │   ├── hojas.py            # lector por LOTES del libro (1 batchGet para todas las hojas, v339)
 │   ├── num.py              # helpers únicos: num() / parse_date() / col_letter() (v323)
+│   ├── flash.py            # mensajes que SOBREVIVEN a un st.rerun() (v365-v367). Módulo HOJA.
+│   │                       #   flash.exito/aviso/error/info() encolan; la shell y el login
+│   │                       #   los pintan con mostrar(). ⚠️ 87 mensajes se tiraban antes.
+│   ├── tenant.py           # aislamiento por empresa cliente: puede_ver/exigir (v351). Módulo HOJA.
 │   ├── credentials.py      # credenciales/tickets por usuario (hoja Credenciales): vencimiento, Drive, avisos (v104)
 │   ├── session_cookie.py   # login persistente por cookie (extra-streamlit-components); manager unico por sesion (v188)
 │   ├── projects.py         # gestión de proyectos: Proyectos/Actividades/Agrupaciones/Documentos (Sheets) — v65+
@@ -180,6 +184,27 @@ Estas cinco mordieron en una sola tanda:
    `button svg{display:none}` no hace nada. → Medir el DOM antes de escribir CSS (regla v121:
    *medir, no mirar*), y apoyarse en `data-testid` (contrato de Streamlit), NUNCA en las clases
    `st-emotion-cache-*`, que cambian de versión.
+
+**Añadidas en v363-v368 (una tanda de simular datos reales):**
+
+6. **El FALLO en falso, gemelo del OK en falso.** Comparar un total antes/después en dos
+   ejecuciones dio 20 h de diferencia y parecía que el cambio movía cifras: era una sesión
+   de fichaje ABIERTA acumulando contra el reloj. → Comparar las dos lógicas **sobre las
+   mismas filas y el mismo instante**, no en dos corridas.
+7. **Un epsilon simbólico hace fallar el test por su propia aritmética.** `1e-6` sobre una
+   suma de 473 flotantes (3.309 h) daba FALLO por 0,02 s de ruido. → Tolerancia con sentido
+   FÍSICO.
+8. **Un guardián de EJECUCIÓN no sustituye a uno ESTÁTICO.** El de v306 cortaba
+   `create_project` correctamente… pero solo al pulsar el botón, y como nadie creó un
+   proyecto en 3 versiones, el fallo vivió escondido. → Si se puede comprobar sin tocar
+   producción, hazlo estático.
+9. **Al convertir un patrón en masa, mirar el DIFF antes de desplegar.** El parche de los
+   mensajes convirtió una insignia de ESTADO (`st.success` + `if st.button()`), que habría
+   desaparecido de pantalla y reaparecido como fantasma en otra. Se vio revisando, se
+   revirtió desde el respaldo y se afinó la regla.
+10. **Comprobar el ÁMBITO, no la presencia** (v342, repetido): un import local dentro de
+    OTRA función hace creer que el módulo está disponible. Y el verificador no debe
+    descender a los `def` al mirar el ámbito de módulo — ahí es donde se autoengaña.
 
 **Y la regla de siempre, que volvió a aplicar:** antes de borrar el LECTOR de un mecanismo, buscar
 sus ESCRITORES y convertirlos. En v299 `_nav_pending` tenía dos vivos («Abrir proyecto» tras el
@@ -5181,7 +5206,99 @@ a −$1.634,40**, y esa cifra está explicada al céntimo: es el doble pago **hi
 descomponiendo: $4.387,00 trabajados sin pagar − $1.634,40 pagados dos veces = $2.752,60,
 que era exactamente el `sin_explicar` intermedio.
 
-## Versiones desplegadas (v364 = actual)
+## ⚠️ 87 MENSAJES QUE NADIE VIO NUNCA: `st.rerun()` tira los deltas (v365-v367)
+Salió de una verificación fallida, no de leer código: al comprobar v364 en el navegador,
+**el mensaje de bloqueo no aparecía**. Pensé que era mi clic (el panel me daba una escala
+de screenshot que no correspondía con las coordenadas CSS). No lo era.
+
+### El mecanismo
+`st.rerun()` **descarta los deltas del run en curso**, así que un `st.success(...)`
+emitido justo antes NUNCA llega a la pantalla. Es el mismo principio que v222 documentó
+para `components.html`, aplicado a los mensajes. Confirmado con `git show`: el
+`st.rerun()` que se comía los mensajes de nóminas **es anterior** a mi cambio, así que
+llevaba versiones tirando:
+- «N nómina(s) creada(s)»
+- el aviso de v346 sobre quien no tiene tarifa — **la razón de ser de esa versión**
+- el bloqueo de solape de v364, recién estrenado
+
+### `core/flash.py` — mecanismo ÚNICO
+Módulo HOJA (solo importa streamlit → sin ciclos, como `num.py` y `tenant.py`). El
+mensaje se ENCOLA y lo pinta la shell (`home_ui.render_admin_content`) y el login
+(`auth_ui.render_login`, porque el bootstrap ocurre antes de la shell). Cola en LISTA:
+generar nóminas deja tres mensajes a la vez.
+⚠️ `st.toast` NO lo necesita: sobrevive al rerun por su cuenta.
+
+### ⚠️ Mi guardián estaba CIEGO dos veces (19 → 87)
+1. **Solo veía `st.success(...)` como atributo directo.** El idioma que más usa este
+   repo es `(st.success if ok else st.error)(msg)`, donde el llamable es un `IfExp`.
+   **El fichaje entero se escapó del barrido por eso.**
+2. **Solo veía el rerun como HERMANO.** En el fichaje está anidado:
+   `(st.success if ok else st.error)(msg)` / `if ok: st.rerun()`.
+Con las dos corregidas: **19 → 87**. Lección de v349 otra vez — un guardián acota el
+fallo a la forma en que lo viste; cuando reaparece, la pregunta es *por qué no lo vio*.
+
+### ⚠️ Dos trampas que me habrían hecho ROMPER cosas
+1. **La rama de ERROR no se convierte.** En `(st.success if ok else st.error)(msg)` con
+   `if ok: st.rerun()`, solo muere el éxito: el error se pinta y se queda porque ahí no
+   hay rerun. Convertir las dos habría hecho **desaparecer los mensajes de error** —
+   peor que el problema original. Queda `(flash.exito if ok else st.error)(msg)`.
+   El guardián también tuvo que aprenderlo: marcaba 68 falsos positivos (todos los
+   `st.error` que SÍ se ven) y me habría empujado a romperlos.
+2. **Las insignias de ESTADO tampoco.** Mi primer parche convirtió esto:
+   ```python
+   st.success("Telegram vinculado.")   # estado, se pinta SIEMPRE
+   if st.button("Desvincular"):
+       st.rerun()                       # solo al pulsar
+   ```
+   Habría borrado el estado y hecho aparecer un mensaje fantasma en otra pantalla. Lo vi
+   revisando el diff, **reverté desde el respaldo** y afiné la regla: un rerun bajo
+   `if st.button(...)` no mata nada, porque el mensaje de arriba se pinta en cada pasada.
+
+### ⚠️ Y el chequeo de ámbito dio un OK EN FALSO — el error de v342, dentro del chequeo
+`auth_ui` ya tenía `from core import flash` **dentro de `render_login`**, así que mi
+patch lo dio por importado y no añadió el de módulo → **4 NameError** esperando en
+producción. Y mi verificador dijo «✓ todos bien» porque su `importa_flash` **descendía
+dentro de los `def`** y encontraba el import local de otra función. Es literalmente el
+fallo que v342 documentó, cometido dentro del chequeo escrito para cazarlo.
+**Comprobar el ÁMBITO, no la presencia** — y no descender a un `def` al mirar el módulo.
+
+### Verificado en vivo
+Nóminas: los tres mensajes en pantalla, incluido el de v346 que llevaba 20 versiones sin
+verse. Fichaje: `✅ Clock IN Jornada (general) a las 21:31:46` y `✅ Clock OUT … Horas
+trabajadas: 0.01` — las dos líneas que se generaban y se tiraban desde v150.
+Guardián probado contra el código roto (revertir un sitio → lo caza).
+
+## ⚠️ EL BLOQUEO DE CONTACTO ERA UN CALLEJÓN SIN SALIDA (v368)
+Encontrado al preguntar el usuario qué pasaba con 7 usuarios sin Telegram.
+
+`app.py` exigía email **Y** Telegram a todo usuario de campo (v79) — **aunque el bot no
+estuviera en Secrets**. Y entonces no había salida por ningún lado:
+- la pantalla de bloqueo no podía mostrar el link de Start (ese bloque está condicionado
+  a `telegram_configured()`), así que el usuario veía «Pendiente: Telegram» y **nada más**;
+- el admin tampoco tenía botón: su ficha decía «Telegram no configurado» y punto.
+
+Medido: **7 de los 8 usuarios de campo del grupo encerrados fuera de la app**, y uno de
+ellos (`campo2`) llevaba así desde antes de la sesión. Es el patrón de v325 y v340 —
+**un pendiente que NADIE puede cerrar es peor que no tenerlo**.
+
+**Arreglo: solo se exige un canal que EXISTA.**
+```python
+_tg_hay   = notify.telegram_configured() and notify.bot_username()
+_falta_tg = _tg_hay and not _has_tg        # sin bot, no se pide
+```
+Con bot, todo sigue igual (y entonces el link de Start SÍ se puede mostrar). Además la
+pantalla dice **quién** lo resuelve: el email lo carga el administrador y el usuario no
+puede ponerlo — antes decía «Pendiente: Email» y te dejaba adivinando. Y la ficha del
+admin ofrece meter el chat_id a mano por si se consiguió por otra vía.
+
+⚠️ Verificado evaluando la condición **leída de `app.py` por AST**, no una copia (el OK
+en falso de v324): 8 escenarios (bot × email × telegram) correctos y **ningún bloqueo sin
+salida** en ninguna combinación. Probado contra el código roto.
+⚠️ Se retiró el apaño: había puesto `TEST-<usuario>` como chat_id para desbloquearlos, y
+con v368 sobra — dejarlo habría hecho que, al configurar el bot algún día, la app
+intentara enviar a IDs inventados (regla de v140: al arreglar de fondo, quitar el apaño).
+
+## Versiones desplegadas (v368 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -5189,6 +5306,10 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v368 | ⚠️ **El bloqueo de contacto del campo era un callejón SIN SALIDA**: se exigía email **y** Telegram aunque el bot no estuviera en Secrets — y entonces la pantalla no podía mostrar el link de Start ni el admin tenía botón para vincular. Medido: **7 de 8 usuarios de campo encerrados fuera de la app**, uno desde antes de la sesión. Ahora **solo se exige un canal que EXISTA**; con bot, todo igual. La pantalla además dice QUIÉN lo resuelve (el email lo carga el admin, el usuario no puede). Verificado evaluando la condición leída de `app.py` por AST —no una copia— en los 8 escenarios, con 0 bloqueos sin salida, y probado contra el código roto |
+| v367 | Los **68 mensajes restantes** (el barrido de v366 decía 19 y estaba ciego dos veces: no veía `(st.success if ok else st.error)(...)` ni los `rerun` anidados — por eso el fichaje entero se escapó). ⚠️ Dos trampas evitadas: la rama de **error** NO se convierte (ahí no hay rerun, se ve; convertirla la haría desaparecer) y las **insignias de estado** tampoco (`st.success` + `if st.button(): st.rerun()` se pinta en cada pasada). La primera versión del parche rompió una insignia y hubo que revertir desde el respaldo |
+| v366 | `core/flash.py` — mecanismo ÚNICO para los mensajes, pintado por la shell y por el login. 19 sitios convertidos. ⚠️ El chequeo de ámbito dio un **OK en falso**: `auth_ui` tenía el import DENTRO de `render_login`, mi patch lo dio por importado y dejó **4 NameError**; y mi verificador no lo vio porque descendía dentro de los `def` — el error exacto de v342, cometido dentro del chequeo escrito para cazarlo |
+| v365 | ⚠️ **Ningún mensaje de generar nóminas se había visto NUNCA**: el `st.rerun()` que cierra el formulario descarta los deltas del run (mismo principio que v222 con `components.html`). Se perdían «N creadas», el aviso de v346 sobre quien no tiene tarifa —la razón de ser de esa versión— y el bloqueo de solape de v364 recién hecho. Confirmado con `git show` que el rerun era anterior a mi cambio |
 | v364 | ⚠️ **Se pagaban las mismas horas DOS VECES**: el salto de duplicados de la nómina compara la terna EXACTA `(Usuario, Desde, Hasta)`, así que un periodo que **solapa** con otro ya emitido pasaba sin decir nada — a `campo1` se le pagaron 567 h habiendo trabajado 354. Salió de la forma más real: dos personas generando nóminas a la vez. Ahora se comprueba la intersección por persona, **no se emite** y se NOMBRA la nómina que estorba. El duplicado exacto y las anuladas siguen igual; las quincenas contiguas SÍ pasan; sin fechas legibles no se bloquea a ciegas. ⚠️ La conciliación de v313 ya lo gritaba, pero DESPUÉS de emitir — cada colilla suelta sale bien y solo el total delata |
 | v363 | ⚠️ **Crear proyectos llevaba 3 versiones MUERTO** (y con ello aceptar una cotización): en v360 añadí `GananciaHoraJSON` a la cabecera y no su valor a la fila, así que el guardián de v306 cortaba con «Error interno» en cada intento. ⚠️ Matiz: una fila corta **no desplaza** datos (`append_row` deja la cola vacía, como hacen `add_user` y `add_group` a propósito) — el daño era que la función no hacía nada. Guardián nuevo **estático** sobre las 25 filas posicionales del repo (el de v306 solo salta al pulsar el botón, por eso vivió 3 versiones); la auto-validación manda al resolver, y lo no resuelto cuenta como fallo. + **el resolvedor de identidad, único**: v362 arregló «la misma persona partida en dos» solo en `labor_breakdown` y el patrón estaba en 5 funciones más — `timeclock.clave_de` lo unifica. ⚠️ Verificar comparando totales entre dos ejecuciones daba 20 h de diferencia por una sesión ABIERTA acumulando contra el reloj: **fallo en falso**; la comparación válida es sobre las mismas filas y el mismo instante (diferencia 0,02 s, dinero idéntico) |
 | v362 | ⚠️ **La misma persona salía partida en dos**: `campo1` (usuario) y `lksdfkldsf` (su nombre) eran dos filas en el desglose de mano de obra, porque 2 fichajes anteriores a v106 no tienen columna `Usuario`. Inofensivo mientras solo se sumaba —el total era correcto— pero desde v360 hay que decidir la ganancia **por persona**, y partida significa **dejarse 8,97 h facturándose a costo** sin aviso (pasó un turno antes). Ahora se resuelve por nombre contra las cuentas, ⚠️ solo si ese nombre es de UNA sola cuenta (con homónimos, mezclar es peor). El total no se mueve: $1.646,40 antes y después |
