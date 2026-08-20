@@ -5318,7 +5318,67 @@ del entorno real hay que mirarlo EN el entorno real — en este caso, la propia 
 prueba «porque ya no hacían falta» → **volví a bloquear a los 7**, y hubo que reponerlos.
 
 
-## Versiones desplegadas (v368 = actual)
+## Facturar una obra ARCHIVADA desde el alta manual (v369)
+`list_projects` las oculta desde v149 — correcto para una lista, falso aquí: **archivar
+no es no-cobrar**, lo normal es archivar al terminar y facturar después. v358 lo resolvió
+solo para el atajo desde la ficha del proyecto; desde Finanzas → Facturas → Nueva seguían
+siendo **inalcanzables**. Es la quinta vez que ese default muerde (v310, v321, v322, v358).
+
+Se usa la pieza que la app ya tiene para esto (v149 en la cartera, v340 en Contactos e
+Inventario): **casilla con contador**, desmarcada por defecto.
+- La etiqueta marca **«· archivada»**: si no, en el radio son indistinguibles de las
+  activas y no se entiende por qué aparece una obra que se creía cerrada.
+- ⚠️ **Al desmarcar se suelta el alcance elegido ANTES de instanciar el radio.** Un
+  `st.radio` cuyo valor guardado ya no está entre sus opciones revienta — es el mismo
+  fallo que v358 esquivó por otro lado. Verificado en vivo: elegir «prueba1 · archivada»
+  y desmarcar devuelve la lista a las activas **sin excepción**.
+- El atajo de v357/v358 se conserva: debe seguir funcionando sin obligar a marcar nada.
+
+**El dato que lo justifica**: `cliente 1` tenía **3 obras archivadas con dinero sin
+facturar** — `prueba1` $618,15, `north` $415,20, `norte` $0,48.
+
+## ⚠️ Una obra cotizada vale el PRECIO PACTADO, no costo+margen (v370)
+Salió al mirar el pendiente «7 obras sin horas no admiten ganancia por rubro», que yo
+había clasificado como *«dato, no fallo»*. **Lo era: había un agujero detrás.**
+
+### Los materiales van a costo en LOS DOS modelos
+`ingreso = mo × (1+m) + mat` (viejo) y `Σ(horas × (tarifa+ganancia)) + mat` (v360): el
+margen solo se aplica a la mano de obra. Así que **una obra cuyo valor NO está en las
+horas vale exactamente lo que costó**. Medido:
+| Obra | Costo | La app decía | Realidad |
+|---|---|---|---|
+| Bespoke — Delivery Chullora | $380 | **$380** (ganancia $0) | facturado **$5.200** |
+| Stockland Bankstown — Ripout | $0 | **$0** | cotización aceptada **$2.960** |
+El resultado REAL salía bien (`resultado_por_proyecto` usa la factura); lo que mentía era
+la **estimación**, y de ella cuelgan «ingreso estimado» y «pendiente de facturar». Daño
+concreto: un delivery sin facturar aparecería como **$380 por cobrar** en vez de $5.200.
+
+### El arreglo: usar el número que ya se tiene
+Al aceptar, la cotización guarda su `ProyectoID` (v354) — pero **el enlace era de una sola
+dirección** y `project_revenue` no lo miraba: estimaba el precio desde el costo teniendo
+delante el que el cliente había firmado. Nueva `quotes.cotizacion_de_proyecto(pid)` y, si
+existe, **ingreso = precio pactado** (`modelo: "cotizado"`, cita el ID de la cotización).
+Misma regla que v361: **una sola definición del ingreso**, y un hecho gana a una conjetura.
+
+- ⚠️ **La base es el `Subtotal`, NO el `Total`.** `invoices.facturado_por_proyecto` suma
+  los IMPORTES DE LÍNEA, sin impuesto. Usar el total con GST habría inflado
+  `pendiente_de_facturar` **exactamente en el impuesto** ($296 en el caso real) y nadie lo
+  habría notado hasta cuadrar cuentas.
+- **Sin columna nueva en el proyecto**: se busca sobre las cotizaciones, ya cacheadas
+  (0 llamadas) y sin dos campos que puedan desincronizarse.
+- **`sin_ganancia` se vacía** en este modelo: ese aviso dice «este trabajo se facturaría a
+  costo», y con precio cerrado no puede pasar.
+- **Rentabilidad lo recoge sola** porque delega en `project_revenue` desde v361, y
+  «Sin facturar» pasó a avisar de los $2.960 que antes no existían.
+- ⚠️ Ejercitando el `except` **de verdad** (simulando que las cotizaciones fallan)
+  apareció un `logger` **inexistente en el módulo**: un `NameError` latente escondido justo
+  donde nadie mira. Añadido el logger.
+
+⚠️ **Lo que NO cubre**: una obra creada A MANO cuyo valor no está en las horas (el delivery
+de Bespoke) sigue valiendo su costo. Para eso haría falta una **ganancia fija por obra**
+(un importe a nivel de proyecto), que quedó ofrecida y sin decidir.
+
+## Versiones desplegadas (v370 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -5326,6 +5386,8 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v370 | ⚠️ **Una obra cotizada valía su COSTO, no el precio pactado.** Los materiales van a costo en los DOS modelos de ganancia, así que una obra cuyo valor no está en las horas (un delivery, un suministro) salía con ganancia $0: *Bespoke — Delivery* daba **$380 estimados habiendo facturado $5.200**, y una obra con cotización aceptada de $2.960 valía **$0**. El resultado REAL salía bien (usa la factura); lo que mentía era la estimación, y de ella cuelgan «ingreso estimado» y **«pendiente de facturar»**. La app **ya tenía** el número bueno —la cotización guarda su `ProyectoID` desde v354— pero el enlace era de una sola dirección: nueva `quotes.cotizacion_de_proyecto` y `project_revenue` usa el precio pactado (`modelo: "cotizado"`). ⚠️ La base es el **`Subtotal`**, no el Total: `facturado_por_proyecto` suma importes de línea sin impuesto, y el GST habría inflado lo pendiente **exactamente en el impuesto** ($296). Rentabilidad lo recoge sola (delega desde v361). ⚠️ Ejercitar el `except` de verdad destapó un `logger` **inexistente en el módulo** — NameError latente. Sigue sin cubrir la obra creada a mano sin cotización |
+| v369 | **Facturar una obra ARCHIVADA desde el alta manual.** v358 lo resolvió solo para el atajo desde la ficha; desde Finanzas → Facturas → Nueva seguían inalcanzables — **quinta vez que el default de v149 muerde** (v310, v321, v322, v358). Archivar no es no-cobrar: lo normal es archivar al terminar y facturar después. Casilla con contador (la pieza de v149/v340), etiqueta «· archivada» para distinguirlas en el radio, y ⚠️ **al desmarcar se suelta el alcance elegido ANTES de instanciar el radio** (un `st.radio` con un valor guardado que ya no está entre sus opciones revienta). El dato que lo justifica: `cliente 1` tenía **3 obras archivadas con dinero sin facturar** ($618,15 · $415,20 · $0,48). Verificado en vivo, incluido elegir una archivada y desmarcar sin excepción |
 | v368 | El bloqueo de contacto del campo exigía email **y** Telegram **sin comprobar si el canal existe**: en una instalación sin bot en Secrets eso no tiene salida (la pantalla no puede mostrar el link de Start ni el admin tiene botón). Ahora **solo se exige un canal que EXISTA**; con bot, todo igual. La pantalla además dice QUIÉN lo resuelve (el email lo carga el admin). Verificado por AST sobre la condición real de `app.py` en los 8 escenarios, 0 bloqueos sin salida, probado contra el código roto. ⚠️ **Y el error de método que importa más que el arreglo**: medí `telegram_configured()` en LOCAL y lo presenté como producción («7 encerrados sin salida») — en el Cloud el bot SÍ está, así que siempre tuvieron camino. El `secrets.toml` local NO es el del Cloud; afirmar algo del entorno real exige mirarlo EN el entorno real |
 | v367 | Los **68 mensajes restantes** (el barrido de v366 decía 19 y estaba ciego dos veces: no veía `(st.success if ok else st.error)(...)` ni los `rerun` anidados — por eso el fichaje entero se escapó). ⚠️ Dos trampas evitadas: la rama de **error** NO se convierte (ahí no hay rerun, se ve; convertirla la haría desaparecer) y las **insignias de estado** tampoco (`st.success` + `if st.button(): st.rerun()` se pinta en cada pasada). La primera versión del parche rompió una insignia y hubo que revertir desde el respaldo |
 | v366 | `core/flash.py` — mecanismo ÚNICO para los mensajes, pintado por la shell y por el login. 19 sitios convertidos. ⚠️ El chequeo de ámbito dio un **OK en falso**: `auth_ui` tenía el import DENTRO de `render_login`, mi patch lo dio por importado y dejó **4 NameError**; y mi verificador no lo vio porque descendía dentro de los `def` — el error exacto de v342, cometido dentro del chequeo escrito para cazarlo |
