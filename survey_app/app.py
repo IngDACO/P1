@@ -300,6 +300,15 @@ with st.sidebar:
 # ══════════════════════════════════════════════════════
 from core import home_ui as _home
 _home.render_topbar(_GRUPO)
+
+# ── Aviso del Pre-Start tras fichar (v374) ────────────────────────
+# ⚠️ Va AQUÍ, al top level del script, y NO dentro del `with st.sidebar:` de arriba:
+# el modal se pinta en el contenedor activo, y así es como se verificó en vivo.
+# Se dispara por bandera en la pasada SIGUIENTE al fichaje, porque el `st.rerun()`
+# de la acción descarta los deltas de la suya (v365).
+if _ROL in ("administrador", "campo"):
+    from core.timeclock_ui import aviso_prestart_pendiente
+    aviso_prestart_pendiente()
 # El default NO puede ser "home" fijo: campo y propietario no tienen esa sección;
 # `render_admin_content` cae a la primera del rol (v297).
 _home.render_admin_content(st.session_state.get("_admin_sec", ""), _GRUPO)

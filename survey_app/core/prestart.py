@@ -15,6 +15,7 @@ import streamlit as st
 
 from core import timeclock
 from core import clock
+from core.num import parse_date as _parse_date
 
 logger = logging.getLogger(__name__)
 
@@ -120,6 +121,32 @@ def list_prestarts(pid) -> list:
     """Pre-starts de un proyecto, más recientes primero."""
     out = [r for r in _records() if str(r.get("ProyectoID", "")) == str(pid)]
     return list(reversed(out))
+
+
+def hecho_hoy(pid, grupo: str = "") -> bool:
+    """¿La obra tiene ya el Pre-Start de HOY? (v374)
+
+    ⚠️ Por OBRA y DÍA, **no por persona**: el Pre-Start es la charla de seguridad del
+    SITIO —una por obra y día, con sus asistentes—, así que si el facilitador ya la
+    hizo, al resto de la cuadrilla no hay nada que recordarle. Decisión del usuario.
+
+    Sale de `_records()`, que ya está cacheado y viaja en el lote de v339:
+    **0 llamadas nuevas** a Sheets aunque se consulte en cada pasada.
+    """
+    pid = str(pid or "").strip()
+    if not pid:
+        return False
+    hoy = clock.today(grupo)
+    for r in _records():
+        if str(r.get("ProyectoID", "")).strip() != pid:
+            continue
+        # ⚠️ Se PARSEA la fecha en vez de comparar el texto: `submit` la escribe en
+        # ISO, pero una fila vieja o tocada a mano puede traer `20/08/2026` y una
+        # comparación de cadenas diría «no hecho» con el Pre-Start delante — el
+        # mismo fallo que v323 destapó en las facturas que se caían del P&L.
+        if _parse_date(r.get("Fecha")) == hoy:
+            return True
+    return False
 
 
 def _next_id(recs) -> str:

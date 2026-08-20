@@ -5499,7 +5499,67 @@ entidad_id)` → el rastro salió **vacío** y por un momento pareció que la au
 había registrado nada. Sí lo había hecho: las 3 anotaciones estaban ahí, con el
 `'' → '4820.0'` y su vuelta. **Antes de denunciar un fallo, comprobar la firma.**
 
-## Versiones desplegadas (v373 = actual)
+## Fichar desde el sidebar + el Pre-Start del día se recuerda solo (v374)
+Petición del usuario: un atajo de Clock IN en la barra izquierda, el Clock OUT a mano
+una vez fichado, y **un aviso al fichar** que recuerde hacer el Pre-Start del día.
+
+### El sidebar deja de ser un mirador
+v202 puso ahí el cronómetro en vivo y lo dejó **solo para mirar** («el fichaje se
+gestiona en la pestaña»), y encima solo aparecía **si ya estabas fichado**: para la
+acción más repetida del día había que ir a la sección. Ahora:
+- **sin fichar** → botón de tu asignación de hoy (1 toque, del tablero) + selector con
+  el resto de obras. Decisión del usuario entre tres opciones.
+- **fichado** → los cronómetros de siempre + «Salir del proyecto» y «Cerrar jornada».
+- **sin obras que imputar** → al menos «Abrir jornada», que es el tiempo pagado.
+- ⚠️ El proyecto SIEMPRE de una lista y sin preselección silenciosa (v139/v150), y el
+  **nombre limpio** aparte de la etiqueta: la etiqueta puede llevar el ID detrás y
+  `fichar_proyecto` lo escribe TAL CUAL en la hoja (el fallo que corrigió v308).
+- ⚠️ Todo mensaje por `flash`: estas acciones acaban en `st.rerun()`, que descarta los
+  deltas de la pasada (v365). Un `st.success` ahí no se vería nunca.
+
+### El aviso del Pre-Start
+`prestart.hecho_hoy(pid, grupo)` — ⚠️ **por OBRA y DÍA, no por persona**: el Pre-Start
+es la charla de seguridad del SITIO (una por obra y día, con sus asistentes), así que si
+el facilitador ya la hizo, al resto de la cuadrilla no se le recuerda nada. Decisión del
+usuario. Sale de registros ya cacheados y `PreStarts` está en el lote de v339 →
+**0 llamadas nuevas** (comprobado en `HOJAS_LECTURA`, no supuesto).
+- **Modal** (`st.dialog`) al fichar a una obra sin Pre-Start + **chip persistente** en el
+  sidebar mientras falte: el modal se puede cerrar y perder; el chip no.
+- ⚠️ Se dispara por **BANDERA**, en la pasada SIGUIENTE al fichaje: abrirlo en la misma
+  pasada no serviría de nada porque el `st.rerun()` la descarta (v365 otra vez).
+- ⚠️ Se llama al **TOP LEVEL** del script (`app.py`), NO dentro del `with st.sidebar:`:
+  en Streamlit manda el contenedor activo.
+- ⚠️ Se PARSEA la fecha en vez de compararla como texto: `submit` la escribe en ISO,
+  pero una fila vieja podría traer `20/08/2026` y una comparación de cadenas diría
+  «no hecho» con el Pre-Start delante (el fallo de v323 en las facturas del P&L).
+- El destino depende del ROL: para el campo es sección propia (`prestart`, v154), para
+  el admin una sub de Herramientas. Guardián: los dos destinos existen (regla v303).
+
+### ⚠️ Verificado EN VIVO antes de construir encima
+`st.dialog` existe en la 1.57, pero «existe en la API» no es «funciona ahí» — el CSS del
+menú (v304) y el `st_folium` de 500 px (v307) ya enseñaron esa lección. Mini-app +
+inspección del DOM, **con la estructura exacta del código final** (el modal abierto desde
+una función de módulo mientras otra pinta el `with st.sidebar:`):
+| Qué | Resultado |
+|---|---|
+| se pinta SOBRE la página disparado desde el sidebar | ✓ 500×254 |
+| SOBREVIVE al `st.rerun()` del fichaje | ✓ |
+| el botón de dentro navega y lo cierra | ✓ |
+| **NO reaparece** en pasadas siguientes | ✓ (6 después, cerrado) |
+| el chip del sidebar sigue tras cerrar el modal | ✓ |
+- ⚠️ **Falsa alarma resuelta midiendo**: el título mostraba `health_and_safety` como
+  texto. No era un fallo — los Material Symbols son **ligaduras de fuente** (trampa nº5),
+  así que `innerText` da el nombre aunque el icono se pinte. Medido: `font-family:
+  "Material Symbols Rounded"`, 24 px de ancho. Un glifo, no una palabra.
+
+### Las dos direcciones de `hecho_hoy`
+⚠️ Comprobar solo que devuelve `False` es el **paso en vacío** (trampa nº1): un
+`return False` fijo lo pasaría, y el recordatorio saldría para siempre aun con el
+Pre-Start hecho. Se movió el DÍA (parcheando `clock.today`) en vez de escribir filas en
+producción: obra con pre-start ese día → **True**; otra obra el mismo día → False (es por
+obra); la misma obra otro día → False.
+
+## Versiones desplegadas (v374 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -5507,6 +5567,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v374 | **Fichar desde el sidebar** (v202 lo dejó de mirador y solo visible si YA estabas fichado): sin fichar, botón de tu asignación de hoy + selector del resto; fichado, los cronómetros + salir del proyecto / cerrar jornada. + **el Pre-Start del día se recuerda solo**: `prestart.hecho_hoy` — ⚠️ por OBRA y DÍA, no por persona (si el facilitador ya la hizo, al resto no se le recuerda; decisión del usuario) — con **modal al fichar** y **chip persistente** mientras falte (el modal se cierra y se pierde; el chip no). ⚠️ El modal va por BANDERA en la pasada siguiente y llamado al TOP LEVEL, no dentro del `with st.sidebar:` (v365 + el contenedor activo manda). ⚠️ **Verificado en vivo con la estructura exacta del código final** antes de construir: se pinta sobre la página, sobrevive al rerun, no reaparece. Falsa alarma resuelta midiendo: el icono del título parecía texto y era una **ligadura de fuente** (trampa nº5). ⚠️ Y las DOS direcciones de `hecho_hoy` probadas moviendo el día — comprobar solo el `False` es el paso en vacío |
 | v373 | Las dos decisiones pendientes, resueltas por el usuario. **(a) Un check en NO abre alarma** (cierra el standing item de v158): hasta ahora solo lo hacía el near miss, así que un control de seguridad sin cumplir solo lo sabía quien abriera esa ficha. ⚠️ UNA alarma con todos los checks (no una por check: `report_problem` también notifica) y separada de la del near miss (un suceso vs un control que falta). NO ejercitada contra producción: mandaría correo y Telegram a personas reales. **(b) Ganancia FIJA por obra** (`GananciaFija`), el hueco que v370 dejó abierto: una obra creada a mano cuyo valor no está en las horas valía su costo — el delivery de Bespoke pasa de **$380 estimados a $5.200**, que es lo que se facturó. Se suma al modelo que aplique; ⚠️ a una obra COTIZADA **no**, porque ese precio lo firmó el cliente (se avisa de que el número no se usa). ⚠️ Mi primera versión cambiaba el denominador de `margen_pct` y habría movido el % de **todas** las obras sin fija: revertido, el margen del conjunto va en clave aparte y las 16 obras dan la misma cifra que antes. Vuelta atrás probada (0 la quita y el ingreso vuelve exacto). ⚠️ `GananciaHoraJSON` llevaba **13 versiones sin auditar** — el hueco de v344/v352 por tercera vez |
 | v372 | ⚠️ **El avance que carga el campo no movía el % del proyecto.** `save_field_progress` recomputaba **antes** de invalidar, y `_recompute_project_avance` lee `list_activities`, que está cacheada 120 s — con la caché caliente (siempre lo está: la pantalla acaba de pintar esa tabla para editarla) recalculaba con las actividades VIEJAS. Medido en la hoja real: actividades al **26,0%** y el proyecto escrito en **0,0%**, estado «Planificado» en vez de «En progreso». Prueba de causa: el mismo guardado con la caché fría cuadra. Regresión de **v162** (el camino viejo recomputaba en memoria sobre filas frescas); un solo sitio, los otros 3 ya estaban bien. + la celda de avance **borrada** (`NaN`) reventaba el guardado ENTERO y la nota vacía guardaba el texto `"nan"` — ahora vaciar deja la actividad como estaba y se dice cuáles. ⚠️ Ese aviso tuve que pasarlo a `flash`: lo puse con `st.warning` sobre un `st.rerun()`, el fallo de v365 **dentro del arreglo**. ⚠️ Y mi test dio 5 ✗ EN FALSO por comparar `"40"` con `"40.0"` (la hoja guarda `str(float)`) |
 | v371 | Documentación de v369 y v370 en CLAUDE.md (sin cambios de código) |

@@ -22,6 +22,9 @@ from core import timeclock
 from core import projects as projects_data
 from core import ui_common as ui
 from core import clock
+# v374: el recordatorio del Pre-Start del día. Sin ciclo: `prestart` importa
+# `timeclock`/`clock`/`num`, nunca esta UI.
+from core import prestart
 
 _AZUL, _VERDE, _GRIS, _ROJO = "#1a3a5c", "#1e8449", "#6b7280", "#c0392b"
 
@@ -70,16 +73,92 @@ def _chrono_mini(clock_in_str, label, color, key):
     )
 
 
+def _ir_a_prestart():
+    """Salta a la pantalla del Pre-Start, que NO está en el mismo sitio según el rol.
+
+    ⚠️ Para el CAMPO es sección propia (`prestart`, v154: es su acción diaria y
+    enterrarla un nivel le costaría un toque cada mañana en el móvil); para el
+    admin es una sub-pestaña de Herramientas. El ID de la sub lleva el emoji a
+    propósito: es el IDENTIFICADOR que usa el matching (v232), no un adorno.
+    """
+    from core import home_ui as _home
+    if str(st.session_state.get("auth", {}).get("rol", "")) == "campo":
+        _home.navegar("prestart")                       # `navegar` ya hace el rerun
+    else:
+        _home.navegar("herramientas", "🦺 Pre-Start")
+
+
+@st.dialog(":material/health_and_safety: Falta el Pre-Start de hoy", width="small")
+def _dialogo_prestart(obra: str):
+    """Pop-up tras fichar cuando la obra no tiene Pre-Start del día (v374).
+
+    ⚠️ Verificado EN VIVO antes de construirlo (mini-app + DOM), porque «existe en
+    la API» no es «funciona ahí»: el modal se pinta SOBRE la página aunque lo
+    dispare un botón del sidebar, SOBREVIVE al `st.rerun()` del fichaje, el botón
+    de dentro cierra, y **no reaparece** en las pasadas siguientes.
+    """
+    st.markdown(f"Acabas de fichar a **{obra}** y hoy todavía **no hay Pre-Start** "
+                "registrado en esa obra.")
+    st.caption("Es la charla de seguridad antes de empezar: una por obra y día. "
+               "Si ya la hicisteis, regístrala para que quede el PDF firmado.")
+    c1, c2 = st.columns(2)
+    if c1.button(":material/health_and_safety: Hacerlo ahora", type="primary",
+                 use_container_width=True, key="ps_dlg_ir"):
+        _ir_a_prestart()
+    if c2.button("Ahora no", use_container_width=True, key="ps_dlg_no"):
+        st.rerun()                                      # cierra el modal
+
+
+def aviso_prestart_pendiente():
+    """Abre el modal UNA vez, en la pasada SIGUIENTE al fichaje.
+
+    ⚠️ Va llamada al TOP LEVEL del script (desde `app.py`), NO dentro de
+    `with st.sidebar:`: el contenedor activo manda, y así es como se verificó.
+    ⚠️ Y se dispara por BANDERA, no en el mismo run que ficha: el `st.rerun()` del
+    fichaje descarta los deltas de esa pasada (v365) y el modal sería uno más.
+    """
+    obra = st.session_state.pop("_ps_aviso", None)
+    if obra:
+        _dialogo_prestart(str(obra))
+
+
+def _chip_prestart(pid, nombre_obra, grupo):
+    """Recordatorio PERSISTENTE mientras falte el Pre-Start de esa obra.
+
+    El modal se puede cerrar y perderse; esto se queda en el sidebar hasta que el
+    Pre-Start esté hecho. `hecho_hoy` sale de registros ya cacheados (0 llamadas).
+    """
+    try:
+        if prestart.hecho_hoy(pid, grupo):
+            return
+    except Exception:
+        return                       # sin pre-starts configurados: no se estorba
+    st.warning(":material/warning: Falta el **Pre-Start** de hoy en esta obra.")
+    if st.button(":material/health_and_safety: Hacerlo ahora", use_container_width=True,
+                 key="sb_ps_ir"):
+        _ir_a_prestart()
+
+
 def render_sidebar_chrono():
-    """Cronómetro(s) de fichaje EN VIVO en el sidebar — SOLO si el usuario está fichado
-    (v202). Lo llaman admin y campo desde la barra lateral, para verlo desde cualquier
-    sección. Solo muestra; el fichaje se sigue gestionando en la pestaña ⏱ Fichaje."""
+    """FICHAJE en el sidebar: cronómetros en vivo + fichar y cerrar desde aquí (v374).
+
+    v202 lo dejó como MIRADOR («solo muestra; el fichaje se gestiona en la pestaña»)
+    y solo aparecía si ya estabas fichado — o sea, que para la acción más repetida
+    del día había que ir a la sección. Ahora:
+      · sin fichar → botón de tu asignación de hoy (1 toque) + selector del resto;
+      · fichado    → los cronómetros + salir del proyecto / cerrar la jornada;
+      · y el recordatorio del Pre-Start del día mientras falte.
+
+    ⚠️ Todo mensaje va por `flash`: estas acciones terminan en `st.rerun()`, que
+    descarta los deltas de la pasada (v365) — un `st.success` aquí no se vería nunca.
+    """
     if not timeclock.is_configured():
         return
     a = st.session_state.get("auth", {})
     nombre  = a.get("nombre") or a.get("usuario") or ""
     usuario = a.get("usuario", "")
     grupo   = a.get("grupo", "")
+    rol     = a.get("rol", "")
     if not (nombre or usuario):
         return
     try:
@@ -88,15 +167,117 @@ def render_sidebar_chrono():
         return
     gen = sess.get(timeclock.TIPO_GENERAL)
     prj = sess.get(timeclock.TIPO_PROYECTO)
-    if not (gen or prj):
-        return                       # solo cuando estás fichado
+
+    if gen or prj:
+        _sidebar_fichado(nombre, usuario, grupo, gen, prj)
+    else:
+        _sidebar_sin_fichar(nombre, usuario, grupo, rol)
+    st.markdown("---")
+
+
+def _sidebar_fichado(nombre, usuario, grupo, gen, prj):
+    """Estás fichado: cronómetros + las dos salidas + el aviso del Pre-Start."""
     st.markdown("###### :material/schedule: FICHAJE EN CURSO")
     if gen:
         _chrono_mini(gen["clock_in"], ":material/schedule: Jornada", _AZUL, "sb_chrono_gen")
     if prj:
         _pn = str(prj.get("proyecto") or "Proyecto").replace("&", "&amp;").replace("<", "&lt;")
         _chrono_mini(prj["clock_in"], f":material/apartment: {_pn}", _VERDE, "sb_chrono_prj")
-    st.markdown("---")
+        if st.button(":material/cancel: Salir del proyecto", use_container_width=True,
+                     key="sb_tc_prj_out"):
+            ok, msg = timeclock.clock_out(nombre, grupo,
+                                          tipo=timeclock.TIPO_PROYECTO, usuario=usuario)
+            (flash.exito if ok else st.error)(msg)
+            if ok:
+                st.rerun()
+    if gen:
+        _lbl = ("Cerrar la jornada" if not prj else "Cerrar jornada y proyecto")
+        if st.button(f":material/logout: {_lbl}", use_container_width=True,
+                     key="sb_tc_gen_out"):
+            ok, msg = timeclock.cerrar_jornada(nombre, grupo, usuario)
+            (flash.exito if ok else st.error)(msg)
+            if ok:
+                st.rerun()
+    if prj:
+        _chip_prestart(str(prj.get("proyecto_id", "") or ""),
+                       str(prj.get("proyecto", "") or ""), grupo)
+
+
+def _sidebar_sin_fichar(nombre, usuario, grupo, rol):
+    """Sin fichar: la asignación de hoy a un toque, y el resto en un selector.
+
+    ⚠️ El proyecto SIEMPRE de una lista y sin preselección silenciosa (v139/v150):
+    escribirlo a mano dejaba el `ProyectoID` vacío y esas horas se caían del costo
+    de mano de obra sin ningún aviso (v145).
+    """
+    st.markdown("###### :material/schedule: FICHAJE")
+    try:
+        proys, _propios = _proyectos_para(rol, usuario, grupo)
+    except Exception:
+        proys = []
+    if not proys:
+        # Sin obras que imputar, al menos que pueda abrir su jornada (el tiempo pagado).
+        if st.button(":material/play_circle: Abrir jornada", use_container_width=True,
+                     type="primary", key="sb_tc_gen_in"):
+            ok, msg = timeclock.clock_in(nombre, "", "", grupo,
+                                         tipo=timeclock.TIPO_GENERAL, usuario=usuario)
+            (flash.exito if ok else st.error)(msg)
+            if ok:
+                st.rerun()
+        return
+
+    from core import projects as _P
+    idmap = {_lbl: _pid for _pid, _lbl in _P.etiqueta_proyectos(proys).items()}
+    # ⚠️ El NOMBRE limpio va aparte de la etiqueta: la etiqueta puede llevar el ID
+    # detrás (`prueba (PRJ-0007)`) y `fichar_proyecto` lo escribe TAL CUAL en la
+    # columna `Proyecto` de la hoja — el fallo que v308 tuvo que corregir.
+    nom_de = {str(p.get("ID", "")): str(p.get("Nombre", "")) for p in proys}
+
+    # ── Atajo: tu asignación de hoy (del tablero) ──
+    # Acción EXPLÍCITA (dice a qué fichará), no una preselección silenciosa (v138).
+    _hechos = set()
+    try:
+        from core import roster
+        if roster.is_configured():
+            for _a in roster.asignaciones_dia(grupo, usuario):
+                _rpid = (_a or {}).get("proyecto_id", "")
+                if not _rpid or _rpid in _hechos or _rpid not in idmap.values():
+                    continue
+                _hechos.add(_rpid)
+                if st.button(f":material/check_circle: Fichar a {_a['etiqueta']}",
+                             use_container_width=True, type="primary",
+                             key=f"sb_tc_roster_{_rpid}"):
+                    _fichar(nombre, nom_de.get(_rpid, ""), grupo, usuario, _rpid)
+    except Exception:
+        pass
+    if _hechos:
+        st.caption("Tu asignación de hoy. ¿Otra obra?")
+
+    _pid = ui.elegir("Proyecto", idmap, key="sb_tc_prj_sel", vacio="— elige la obra —")
+    if st.button(":material/check_circle: Fichar", use_container_width=True,
+                 type=("secondary" if _hechos else "primary"),
+                 key="sb_tc_prj_in", disabled=(_pid is None)):
+        _fichar(nombre, nom_de.get(_pid, ""), grupo, usuario, _pid)
+
+
+def _fichar(nombre, nom_obra, grupo, usuario, pid):
+    """Ficha al proyecto y deja pendiente el aviso del Pre-Start si falta.
+
+    ⚠️ El aviso se deja como BANDERA y lo pinta `aviso_prestart_pendiente()` en la
+    pasada siguiente: abrir el modal aquí no serviría de nada porque el
+    `st.rerun()` de abajo descarta los deltas de esta pasada (v365).
+    """
+    ok, msg, auto = timeclock.fichar_proyecto(nombre, nom_obra, grupo, usuario, pid)
+    if not ok:
+        st.error(msg)
+        return
+    flash.exito(msg + ("  :material/schedule: Se abrió también tu jornada." if auto else ""))
+    try:
+        if not prestart.hecho_hoy(pid, grupo):
+            st.session_state["_ps_aviso"] = nom_obra or "esta obra"
+    except Exception:
+        pass                          # sin pre-starts configurados: no se estorba
+    st.rerun()
 
 
 def _tarjeta(titulo, valor, pie="", color=None, activo=False):
