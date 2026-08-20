@@ -5378,7 +5378,63 @@ Misma regla que v361: **una sola definición del ingreso**, y un hecho gana a un
 de Bespoke) sigue valiendo su costo. Para eso haría falta una **ganancia fija por obra**
 (un importe a nivel de proyecto), que quedó ofrecida y sin decidir.
 
-## Versiones desplegadas (v370 = actual)
+## ⚠️ EL AVANCE DEL CAMPO NO MOVÍA EL % DEL PROYECTO (v372)
+Salió ejercitando la ÚNICA escritura del campo (`save_field_progress`, la tabla de
+avance de 📋 Mis proyectos), que era el hueco de verificación que quedaba. Las 6 ramas
+de v162 estaban perfectas; el fallo estaba en las dos líneas del final.
+
+### El orden: recomputar antes de invalidar
+```python
+    aws.batch_update(batch, ...)        # las actividades se escriben BIEN
+    _recompute_project_avance(pid)      # ← lee `list_activities`, CACHEADA 120 s
+    _invalidate()                       # ← la caché se tira DESPUÉS
+```
+`_recompute_project_avance` recalculaba el % **con las actividades viejas**. Y la caché
+está caliente **siempre**, porque la pantalla acaba de pintar esa misma tabla para
+editarla. Medido contra la hoja real:
+```
+actividades escritas en la hoja → el proyecto debería ir al 26,0%
+lo que la app escribió          →                            0,0%   (26 puntos atrás)
+estado escrito: 'Planificado'   (con 26% debería ser 'En progreso')
+```
+**Prueba de causa** (no basta con leer el código): el MISMO guardado con la caché vacía
+escribe 26,1% correctamente. Si con la caché fría cuadra y con la caliente no, la causa
+es el ORDEN.
+- **Es una regresión de v162**: el camino viejo (`update_activity_progress`) lo hacía
+  bien — recomputaba **en memoria** sobre las filas que acababa de leer frescas. Al
+  sustituirlo por el batch, ese recompute pasó a leer de la caché.
+- **Un solo sitio**: los otros tres (`add_activity`, `delete_activity`,
+  `save_activities`) ya invalidaban primero. El arreglo es intercambiar dos líneas.
+- **A qué afectaba**: `Avance` y `Estado` del proyecto alimentan la cartera, la curva S
+  real, el SPI/retraso, el KPI de avance promedio, el radar del admin y el avance
+  consolidado de la agrupación. El campo actualizaba, la actividad cambiaba y **el
+  proyecto se quedaba una pasada por detrás** — y si nadie más escribía, ahí se quedaba.
+
+### Y dos de la tabla: la celda BORRADA
+`int(r["Avance %"])` sobre una celda vaciada (`NaN`) lanza `ValueError` → **el botón
+«Guardar avances» revienta y se pierde TODA la edición**, no solo esa fila. Ahora se
+comprueba `pd.isna` y **vaciar no es poner 0**: la actividad se deja como estaba y se
+dice cuáles. La nota vacía guardaba el texto literal `"nan"`; ahora guarda `""`.
+- ⚠️ **El aviso tenía que ir por `flash`**: mi primera versión lo puso con `st.warning`
+  justo encima de un `st.rerun()` — el fallo de v365, cometido dentro del arreglo. Va
+  por la cola en la rama que recarga y directo en la que no (encolarlo sin rerun lo
+  dejaría de fantasma en otra pantalla).
+
+### ⚠️ Y un FALLO EN FALSO de mi propio test
+La primera pasada dio 5 ✗ en ramas que estaban bien: comparé `"40"` contra lo que hay en
+la hoja, que es `str(float)` → **`"40.0"`**. Los valores impresos eran correctos y el
+veredicto decía lo contrario. **Comparar números como texto es un generador de fallos en
+falso** — gemelo del OK en falso, y ya van dos (v363 fue el otro).
+
+### Guardián
+`verif_v372.py`: por AST, toda función que llame a `_invalidate` y a
+`_recompute_project_avance` tiene que llamar a **invalidar primero** (4 revisadas; menos
+de 4 = el chequeo pasó en vacío y falla), la guarda de `pd.isna` existe, el aviso va por
+`flash` en la rama con rerun y directo en la otra, y `flash` está importado **a nivel de
+módulo** (regla v342/v366: ámbito, no presencia). Probado contra el código roto: señala
+`save_field_progress` **y solo a esa**.
+
+## Versiones desplegadas (v372 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -5386,6 +5442,8 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v372 | ⚠️ **El avance que carga el campo no movía el % del proyecto.** `save_field_progress` recomputaba **antes** de invalidar, y `_recompute_project_avance` lee `list_activities`, que está cacheada 120 s — con la caché caliente (siempre lo está: la pantalla acaba de pintar esa tabla para editarla) recalculaba con las actividades VIEJAS. Medido en la hoja real: actividades al **26,0%** y el proyecto escrito en **0,0%**, estado «Planificado» en vez de «En progreso». Prueba de causa: el mismo guardado con la caché fría cuadra. Regresión de **v162** (el camino viejo recomputaba en memoria sobre filas frescas); un solo sitio, los otros 3 ya estaban bien. + la celda de avance **borrada** (`NaN`) reventaba el guardado ENTERO y la nota vacía guardaba el texto `"nan"` — ahora vaciar deja la actividad como estaba y se dice cuáles. ⚠️ Ese aviso tuve que pasarlo a `flash`: lo puse con `st.warning` sobre un `st.rerun()`, el fallo de v365 **dentro del arreglo**. ⚠️ Y mi test dio 5 ✗ EN FALSO por comparar `"40"` con `"40.0"` (la hoja guarda `str(float)`) |
+| v371 | Documentación de v369 y v370 en CLAUDE.md (sin cambios de código) |
 | v370 | ⚠️ **Una obra cotizada valía su COSTO, no el precio pactado.** Los materiales van a costo en los DOS modelos de ganancia, así que una obra cuyo valor no está en las horas (un delivery, un suministro) salía con ganancia $0: *Bespoke — Delivery* daba **$380 estimados habiendo facturado $5.200**, y una obra con cotización aceptada de $2.960 valía **$0**. El resultado REAL salía bien (usa la factura); lo que mentía era la estimación, y de ella cuelgan «ingreso estimado» y **«pendiente de facturar»**. La app **ya tenía** el número bueno —la cotización guarda su `ProyectoID` desde v354— pero el enlace era de una sola dirección: nueva `quotes.cotizacion_de_proyecto` y `project_revenue` usa el precio pactado (`modelo: "cotizado"`). ⚠️ La base es el **`Subtotal`**, no el Total: `facturado_por_proyecto` suma importes de línea sin impuesto, y el GST habría inflado lo pendiente **exactamente en el impuesto** ($296). Rentabilidad lo recoge sola (delega desde v361). ⚠️ Ejercitar el `except` de verdad destapó un `logger` **inexistente en el módulo** — NameError latente. Sigue sin cubrir la obra creada a mano sin cotización |
 | v369 | **Facturar una obra ARCHIVADA desde el alta manual.** v358 lo resolvió solo para el atajo desde la ficha; desde Finanzas → Facturas → Nueva seguían inalcanzables — **quinta vez que el default de v149 muerde** (v310, v321, v322, v358). Archivar no es no-cobrar: lo normal es archivar al terminar y facturar después. Casilla con contador (la pieza de v149/v340), etiqueta «· archivada» para distinguirlas en el radio, y ⚠️ **al desmarcar se suelta el alcance elegido ANTES de instanciar el radio** (un `st.radio` con un valor guardado que ya no está entre sus opciones revienta). El dato que lo justifica: `cliente 1` tenía **3 obras archivadas con dinero sin facturar** ($618,15 · $415,20 · $0,48). Verificado en vivo, incluido elegir una archivada y desmarcar sin excepción |
 | v368 | El bloqueo de contacto del campo exigía email **y** Telegram **sin comprobar si el canal existe**: en una instalación sin bot en Secrets eso no tiene salida (la pantalla no puede mostrar el link de Start ni el admin tiene botón). Ahora **solo se exige un canal que EXISTA**; con bot, todo igual. La pantalla además dice QUIÉN lo resuelve (el email lo carga el admin). Verificado por AST sobre la condición real de `app.py` en los 8 escenarios, 0 bloqueos sin salida, probado contra el código roto. ⚠️ **Y el error de método que importa más que el arreglo**: medí `telegram_configured()` en LOCAL y lo presenté como producción («7 encerrados sin salida») — en el Cloud el bot SÍ está, así que siempre tuvieron camino. El `secrets.toml` local NO es el del Cloud; afirmar algo del entorno real exige mirarlo EN el entorno real |

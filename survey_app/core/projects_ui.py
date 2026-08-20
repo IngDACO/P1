@@ -2733,15 +2733,34 @@ def _field_activities(pid):
         })
     st.caption("Las fechas se registran solas: **inicio** al pasar de 0, **fin** al llegar a 100.")
     if st.button(":material/save: Guardar avances", key=f"fldsave_{pid}", use_container_width=True):
-        cambios = []
+        cambios, _vacias = [], []
         for i, a in enumerate(acts):
             r = _ed.iloc[i]
-            nav, nnota = int(r["Avance %"]), str(r["Nota"])
+            _av, _nt = r["Avance %"], r["Nota"]
+            # ⚠️ Una celda BORRADA vuelve como NaN: `int(NaN)` reventaba el guardado
+            #    ENTERO (se perdía toda la edición, no solo esa fila) y `str(NaN)`
+            #    guardaba el texto "nan" como nota del campo.
+            if pd.isna(_av):
+                _vacias.append(str(a.get("Nombre", "")))
+                continue                    # vaciar no es poner 0: se deja como estaba
+            nav = int(P._num(_av))
+            nnota = "" if pd.isna(_nt) else str(_nt)
             if nav != int(P._num(a.get("Avance"))) or nnota != str(a.get("Nota", "")):
                 cambios.append({"orden": a.get("Orden"), "avance": nav, "nota": nnota})
+        _msg_vac = ("Dejaste el avance en blanco en: **" + "**, **".join(_vacias)
+                    + "**. Esas quedan como estaban — escribe un número (0-100) "
+                      "si querías cambiarlas.") if _vacias else ""
         if not cambios:
-            st.info("No cambiaste ningún avance.")
+            # Sin rerun: se pinta aquí mismo (encolarlo lo dejaría de fantasma)
+            if _msg_vac:
+                st.warning(_msg_vac)
+            else:
+                st.info("No cambiaste ningún avance.")
         else:
+            # ⚠️ El rerun de abajo descarta los deltas de esta pasada (v365), así
+            #    que este aviso tiene que ir por la cola para llegar a la pantalla.
+            if _msg_vac:
+                flash.aviso(_msg_vac)
             ok, msg = P.save_field_progress(pid, cambios)
             (flash.exito if ok else st.error)(msg)
             if ok:

@@ -740,8 +740,15 @@ def save_field_progress(pid, cambios) -> tuple:
         aws.batch_update(batch, value_input_option="RAW")
     except Exception as ex:
         return False, f"Error guardando: {ex}"
-    _recompute_project_avance(pid)
+    # ⚠️ El ORDEN importa: `_recompute_project_avance` lee `list_activities`, que
+    #    está CACHEADA (120 s). Hasta v372 esto corría ANTES de `_invalidate()`, así
+    #    que el % del proyecto se recalculaba con las actividades VIEJAS — y la
+    #    caché está caliente SIEMPRE, porque la pantalla acaba de pintar esa misma
+    #    tabla para editarla. Medido contra la hoja real: actividades al 26,0% y el
+    #    proyecto escrito en 0,0%. Los otros 3 sitios (add/delete_activity,
+    #    save_activities) ya lo hacían en este orden.
     _invalidate()
+    _recompute_project_avance(pid)
     return True, "Avances guardados."
 
 
