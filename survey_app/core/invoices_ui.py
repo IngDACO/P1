@@ -189,10 +189,25 @@ def _nueva_factura(grupo):
 
     # Proyectos del cliente (para precargar y para el desplegable de líneas)
     prjs = [p for p in P.list_projects(grupo=grupo) if C.es_del_cliente(p, cid, cnorm)]
-    # ⚠️ v358: `list_projects` oculta los ARCHIVADOS (v149), pero archivar no es
-    # no-cobrar: lo normal es archivar al terminar y facturar después. Si el atajo desde
-    # el proyecto apunta a una obra que no está en la lista, se añade — si no, el
-    # formulario se abría sin esa opción y la preselección no hacía nada, en silencio.
+    # ⚠️ v369: `list_projects` oculta los ARCHIVADOS (v149) y **archivar no es no-cobrar**:
+    # lo normal es archivar al terminar y facturar después. Hasta ahora solo entraban por
+    # el atajo desde la ficha del proyecto (v358); desde el alta manual eran inalcanzables.
+    # Misma pieza que ya usan la cartera (v149), Contactos e Inventario (v340): casilla +
+    # cuántas hay ocultas. Va ANTES del radio porque cambia sus opciones (regla v111).
+    _arch = [p for p in P.list_projects(grupo=grupo, incluir_archivados=True)
+             if C.es_del_cliente(p, cid, cnorm)
+             and str(p.get("ID", "")) not in {str(x.get("ID", "")) for x in prjs}]
+    if _arch:
+        if st.checkbox(f":material/archive: Incluir obras archivadas ({len(_arch)})",
+                       key="fac_ver_arch",
+                       help="Archivar no es no-cobrar: lo habitual es archivar al terminar "
+                            "y facturar después."):
+            prjs = prjs + _arch
+
+    # ⚠️ v358: si el atajo desde el proyecto apunta a una obra que no está en la lista, se
+    # añade igualmente — si no, el formulario se abría sin esa opción y la preselección no
+    # hacía nada, en silencio. Se conserva aunque exista la casilla: el atajo debe
+    # funcionar sin obligar a marcar nada.
     _peek = st.session_state.get("_fac_prj_pending")
     if _peek and str(_peek) not in {str(p.get("ID", "")) for p in prjs}:
         _extra = P.get_project(str(_peek)) or {}
@@ -203,8 +218,18 @@ def _nueva_factura(grupo):
     # idénticas, el filtro casaba con AMBOS y el importe se enlazaba al proyecto
     # equivocado — es decir, se facturaba mal, no solo se veía mal.
     _lbl = P.etiqueta_proyectos(prjs)              # {ID: etiqueta única}
+    # Se marca cuál está archivada: si no, en el radio son indistinguibles de las activas
+    # y no se ve por qué aparece una obra que se creía cerrada.
+    _ids_arch = {str(p.get("ID", "")) for p in _arch}
+    _lbl = {k: (v + " · archivada" if k in _ids_arch else v) for k, v in _lbl.items()}
     _pid_by_lbl = {v: k for k, v in _lbl.items()}
     prj_names = [_lbl[str(p.get("ID", ""))] for p in prjs]
+
+    # ⚠️ Al DESMARCAR la casilla, la opción elegida puede desaparecer. Un `st.radio` cuyo
+    # valor guardado ya no está entre las opciones revienta (es el fallo que v358 evitó al
+    # no preseleccionar una etiqueta inexistente). Se suelta ANTES de instanciarlo.
+    if st.session_state.get("fac_scope") not in ["Todo el cliente"] + prj_names:
+        st.session_state.pop("fac_scope", None)
 
     # v357: atajo desde el proyecto. Llega el ID y AQUÍ se resuelve su etiqueta, que es
     # donde se conoce el conjunto con el que se calculó (v306). Se aplica ANTES de
