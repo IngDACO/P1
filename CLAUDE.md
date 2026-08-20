@@ -205,6 +205,12 @@ Estas cinco mordieron en una sola tanda:
 10. **Comprobar el ÁMBITO, no la presencia** (v342, repetido): un import local dentro de
     OTRA función hace creer que el módulo está disponible. Y el verificador no debe
     descender a los `def` al mirar el ámbito de módulo — ahí es donde se autoengaña.
+11. ⚠️ **El `secrets.toml` LOCAL no es el del Cloud.** `telegram_configured()`,
+    `app_url()`, `is_configured()`… medidos en local dicen qué tengo YO, no qué tiene
+    producción. En v368 medí Telegram en local (`False`), lo presenté como el estado real
+    y describí «7 usuarios encerrados sin salida»; en el Cloud el bot SÍ estaba y siempre
+    tuvieron camino. Es la regla de v145 («auditar contra lo real») aplicada a la
+    CONFIGURACIÓN: para afirmar algo del entorno real, mirarlo EN el entorno real.
 
 **Y la regla de siempre, que volvió a aplicar:** antes de borrar el LECTOR de un mecanismo, buscar
 sus ESCRITORES y convertirlos. En v299 `_nav_pending` tenía dos vivos («Abrir proyecto» tras el
@@ -5268,35 +5274,49 @@ verse. Fichaje: `✅ Clock IN Jornada (general) a las 21:31:46` y `✅ Clock OUT
 trabajadas: 0.01` — las dos líneas que se generaban y se tiraban desde v150.
 Guardián probado contra el código roto (revertir un sitio → lo caza).
 
-## ⚠️ EL BLOQUEO DE CONTACTO ERA UN CALLEJÓN SIN SALIDA (v368)
-Encontrado al preguntar el usuario qué pasaba con 7 usuarios sin Telegram.
+## El bloqueo de contacto solo debe exigir canales que EXISTAN (v368)
+⚠️ **Esta sección se reescribió: la primera versión exageraba el fallo.** Se dijo que 7
+usuarios estaban «encerrados sin salida» en producción, y **no era cierto** — ver el
+error de método al final, que es la parte que de verdad hay que recordar.
 
-`app.py` exigía email **Y** Telegram a todo usuario de campo (v79) — **aunque el bot no
-estuviera en Secrets**. Y entonces no había salida por ningún lado:
-- la pantalla de bloqueo no podía mostrar el link de Start (ese bloque está condicionado
-  a `telegram_configured()`), así que el usuario veía «Pendiente: Telegram» y **nada más**;
+### El defecto (real, pero LATENTE)
+`app.py` exigía email **Y** Telegram a todo usuario de campo (v79) **sin comprobar si el
+canal existe**. En una instalación SIN bot en Secrets eso no tiene salida:
+- la pantalla de bloqueo no puede mostrar el link de Start (ese bloque está condicionado
+  a `telegram_configured()`) → el usuario ve «Pendiente: Telegram» y **nada más**;
 - el admin tampoco tenía botón: su ficha decía «Telegram no configurado» y punto.
-
-Medido: **7 de los 8 usuarios de campo del grupo encerrados fuera de la app**, y uno de
-ellos (`campo2`) llevaba así desde antes de la sesión. Es el patrón de v325 y v340 —
-**un pendiente que NADIE puede cerrar es peor que no tenerlo**.
+Es el patrón de v325 y v340: **un pendiente que nadie puede cerrar es peor que no
+tenerlo**. Pero es un defecto de diseño para instalaciones sin bot, **no una avería que
+estuviera ocurriendo**.
 
 **Arreglo: solo se exige un canal que EXISTA.**
 ```python
 _tg_hay   = notify.telegram_configured() and notify.bot_username()
 _falta_tg = _tg_hay and not _has_tg        # sin bot, no se pide
 ```
-Con bot, todo sigue igual (y entonces el link de Start SÍ se puede mostrar). Además la
-pantalla dice **quién** lo resuelve: el email lo carga el administrador y el usuario no
-puede ponerlo — antes decía «Pendiente: Email» y te dejaba adivinando. Y la ficha del
-admin ofrece meter el chat_id a mano por si se consiguió por otra vía.
+Con bot, todo sigue igual. Además la pantalla dice **quién** lo resuelve: el email lo
+carga el administrador y el usuario no puede ponerlo — antes decía «Pendiente: Email» y
+lo dejaba adivinando. Y la ficha del admin ofrece meter el chat_id a mano.
 
 ⚠️ Verificado evaluando la condición **leída de `app.py` por AST**, no una copia (el OK
 en falso de v324): 8 escenarios (bot × email × telegram) correctos y **ningún bloqueo sin
-salida** en ninguna combinación. Probado contra el código roto.
-⚠️ Se retiró el apaño: había puesto `TEST-<usuario>` como chat_id para desbloquearlos, y
-con v368 sobra — dejarlo habría hecho que, al configurar el bot algún día, la app
-intentara enviar a IDs inventados (regla de v140: al arreglar de fondo, quitar el apaño).
+salida**. Probado contra el código roto.
+
+### ⚠️ EL ERROR DE MÉTODO (esto es lo que hay que recordar)
+Comprobé `notify.telegram_configured()` **en local**, salió `False`, y lo presenté como
+el estado de PRODUCCIÓN: «7 usuarios encerrados, sin salida posible». Al entrar en el
+Cloud con uno de ellos, la pantalla mostró *«abre el bot → t.me/**copex_avisos_bot**»*:
+**el bot SÍ está en los Secrets del Cloud**, así que esos usuarios siempre tuvieron su
+camino (pulsar Start + que el admin les vincule). Nunca hubo encierro.
+
+**La regla que ya existía para las hojas vale igual para los SECRETS**: mi
+`secrets.toml` local NO es el del Cloud. Un `is_configured()` / `telegram_configured()` /
+`app_url()` medido en local dice qué tengo yo, no qué tiene producción. Para afirmar algo
+del entorno real hay que mirarlo EN el entorno real — en este caso, la propia pantalla.
+
+⚠️ Y tuvo consecuencia práctica: creyendo que el canal no existía, retiré los chat_id de
+prueba «porque ya no hacían falta» → **volví a bloquear a los 7**, y hubo que reponerlos.
+
 
 ## Versiones desplegadas (v368 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
@@ -5306,7 +5326,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
-| v368 | ⚠️ **El bloqueo de contacto del campo era un callejón SIN SALIDA**: se exigía email **y** Telegram aunque el bot no estuviera en Secrets — y entonces la pantalla no podía mostrar el link de Start ni el admin tenía botón para vincular. Medido: **7 de 8 usuarios de campo encerrados fuera de la app**, uno desde antes de la sesión. Ahora **solo se exige un canal que EXISTA**; con bot, todo igual. La pantalla además dice QUIÉN lo resuelve (el email lo carga el admin, el usuario no puede). Verificado evaluando la condición leída de `app.py` por AST —no una copia— en los 8 escenarios, con 0 bloqueos sin salida, y probado contra el código roto |
+| v368 | El bloqueo de contacto del campo exigía email **y** Telegram **sin comprobar si el canal existe**: en una instalación sin bot en Secrets eso no tiene salida (la pantalla no puede mostrar el link de Start ni el admin tiene botón). Ahora **solo se exige un canal que EXISTA**; con bot, todo igual. La pantalla además dice QUIÉN lo resuelve (el email lo carga el admin). Verificado por AST sobre la condición real de `app.py` en los 8 escenarios, 0 bloqueos sin salida, probado contra el código roto. ⚠️ **Y el error de método que importa más que el arreglo**: medí `telegram_configured()` en LOCAL y lo presenté como producción («7 encerrados sin salida») — en el Cloud el bot SÍ está, así que siempre tuvieron camino. El `secrets.toml` local NO es el del Cloud; afirmar algo del entorno real exige mirarlo EN el entorno real |
 | v367 | Los **68 mensajes restantes** (el barrido de v366 decía 19 y estaba ciego dos veces: no veía `(st.success if ok else st.error)(...)` ni los `rerun` anidados — por eso el fichaje entero se escapó). ⚠️ Dos trampas evitadas: la rama de **error** NO se convierte (ahí no hay rerun, se ve; convertirla la haría desaparecer) y las **insignias de estado** tampoco (`st.success` + `if st.button(): st.rerun()` se pinta en cada pasada). La primera versión del parche rompió una insignia y hubo que revertir desde el respaldo |
 | v366 | `core/flash.py` — mecanismo ÚNICO para los mensajes, pintado por la shell y por el login. 19 sitios convertidos. ⚠️ El chequeo de ámbito dio un **OK en falso**: `auth_ui` tenía el import DENTRO de `render_login`, mi patch lo dio por importado y dejó **4 NameError**; y mi verificador no lo vio porque descendía dentro de los `def` — el error exacto de v342, cometido dentro del chequeo escrito para cazarlo |
 | v365 | ⚠️ **Ningún mensaje de generar nóminas se había visto NUNCA**: el `st.rerun()` que cierra el formulario descarta los deltas del run (mismo principio que v222 con `components.html`). Se perdían «N creadas», el aviso de v346 sobre quien no tiene tarifa —la razón de ser de esa versión— y el bloqueo de solape de v364 recién hecho. Confirmado con `git show` que el rerun era anterior a mi cambio |
