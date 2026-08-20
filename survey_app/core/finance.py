@@ -10,11 +10,15 @@ Reusa `expenses.labor_cost` / `expenses.project_expenses` / `expenses.group_expe
 (el lado del costo) — aquí solo se aplica el margen y se compara contra el costo.
 Es una estimación de facturación total; las facturas reales llegan en la Fase 2.
 """
+import logging
+
 from core import auth
 from core import expenses as E
 from core import projects as P
 from core import timeclock
 from core.num import num as _num
+
+logger = logging.getLogger(__name__)
 
 
 def project_margin(pid: str, grupo: str, prj: dict = None) -> float:
@@ -35,6 +39,38 @@ def project_revenue(pid: str, grupo: str, prj: dict = None) -> dict:
     from core import projects as P
     mat = E.project_expenses(pid)["total"]        # los materiales van a COSTO (v360)
     gh  = P.ganancia_hora(pid, prj)
+
+    # ── v370: si la obra nació de una cotización ACEPTADA, el ingreso es el PRECIO
+    # PACTADO, no una estimación desde el costo. Es un hecho, no una conjetura: el
+    # cliente ya firmó ese número y adivinarlo con costo+margen es contradecir un dato
+    # que ya se tiene (misma regla que v361: UNA definición del ingreso).
+    # ⚠️ Sin esto, una obra cuyo valor NO está en las horas vale exactamente lo que
+    # costó — los materiales van a costo en los DOS modelos (`ingreso = mo×(1+m) + mat`),
+    # así que un delivery o un suministro salían con ganancia $0. Medido: PRJ-0016 en
+    # $0 con $2.960 pactados, y el delivery de Bespoke en $380 habiendo facturado $5.200.
+    # ⚠️ Se usa el **Subtotal** (sin impuesto) porque `invoices.facturado_por_proyecto`
+    # suma los IMPORTES DE LÍNEA, también sin impuesto. Mezclar las dos bases haría que
+    # `pendiente_de_facturar = ingreso − facturado` comparara peras con manzanas.
+    try:
+        from core import quotes as _Q
+        _cot = _Q.cotizacion_de_proyecto(pid)
+    except Exception as e:                        # cotizaciones sin configurar: no rompe
+        logger.warning("project_revenue: no se pudo leer la cotización de %s: %s", pid, e)
+        _cot = {}
+    if _cot:
+        _mo = E.labor_cost(pid, grupo)
+        _ing = _num(_cot.get("Subtotal"))
+        _costo = round(_mo + mat, 2)
+        return {"costo_mo": round(_mo, 2), "materiales": round(mat, 2), "costo": _costo,
+                # el % es CONSECUENCIA del precio pactado, no una entrada
+                "margen_pct": round(100.0 * (_ing - _costo) / _costo, 2) if _costo > 0 else 0.0,
+                "mo_facturable": round(_mo, 2), "ingreso": round(_ing, 2),
+                "ganancia": round(_ing - _costo, 2), "modelo": "cotizado",
+                "cotizacion": str(_cot.get("ID", "")),
+                # ⚠️ `sin_ganancia` avisa de que un trabajo se facturaría A COSTO. Con el
+                # precio cerrado eso no puede pasar: se cobra lo pactado trabaje quien
+                # trabaje, así que aquí no hay nada que avisar.
+                "por_persona": [], "sin_ganancia": []}
 
     if gh:
         # ── v360: ganancia por RUBRO. El trabajador es un rubro: cada persona

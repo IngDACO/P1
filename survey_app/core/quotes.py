@@ -275,6 +275,28 @@ def get_cotizacion(cid) -> dict:
     return next((c for c in _records() if str(c.get("ID", "")) == str(cid)), {})
 
 
+def cotizacion_de_proyecto(pid) -> dict:
+    """La cotización ACEPTADA que generó este proyecto, o {} si no nació de una.
+
+    ⚠️ v370. El enlace existía solo en un sentido: al aceptar, la cotización guarda su
+    `ProyectoID` (v354), pero el proyecto no guarda de qué cotización viene. Así que
+    `project_revenue` estimaba el ingreso desde el costo **teniendo delante el precio que
+    el cliente ya había firmado**. En una obra cuyo valor no está en las horas (un
+    delivery, un suministro) eso daba «vale exactamente lo que costó»: PRJ-0016 salía en
+    $0 con una cotización aceptada de $2.960.
+
+    No se añade columna al proyecto: se busca sobre `_records()`, que ya está cacheado
+    (0 llamadas nuevas a Sheets), y así no hay dos sitios que puedan desincronizarse.
+    """
+    pid = str(pid or "").strip()
+    if not pid:
+        return {}
+    for c in _records():
+        if str(c.get("ProyectoID", "")).strip() == pid and estado_de(c) == ACEPTADA:
+            return c
+    return {}
+
+
 @st.cache_data(ttl=120, show_spinner=False)
 def resumen(grupo) -> dict:
     """Lo que importa de un cotizador: cuánto hay en la calle y cuánto se gana."""
