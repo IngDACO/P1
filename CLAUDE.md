@@ -5783,7 +5783,23 @@ contra lo que ve quien sí las tiene bien** — arreglar la principal y dar la p
 por buena deja ceros que parecen datos. Guardián nuevo: mide horas, alarmas, gastos y
 retrasos del propietario contra los del admin del mismo grupo, y falla si difieren.
 
-## Versiones desplegadas (v380 = actual)
+### ⚠️ Y v380 arregló la función EQUIVOCADA (v381)
+Con la pantalla delante otra vez: las alarmas ya salían… y las **12 tarjetas seguían
+marcando `0h`**. El arreglo de v380 fue a `project_hours_bulk` **dando por hecho** que
+era la que alimentaba la cartera. No lo es: `render_owner_projects` llama a
+**`project_hours()` una vez por obra**. El test daba ✓ sobre una función que esa
+pantalla no usa.
+
+**REGLA: antes de arreglar lo que pinta una pantalla, MIRAR qué función llama.** El
+guardián de v381 lo comprueba primero (`project_hours_bulk: False · project_hours():
+True`) y solo después mide — así no puede volver a validar el camino que no es.
+
+De paso salió otro cero peligroso: **`datos_asociados`** —el recuento que se enseña
+ANTES de borrar un proyecto— le daba **0 en todo** al propietario. «No cuelga nada»
+cuando cuelgan 25 fichajes, 3 gastos y 11 actividades es el peor sitio imaginable para
+un cero falso. Ahora se lee bajo el ámbito del grupo del proyecto.
+
+## Versiones desplegadas (v381 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -5791,6 +5807,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v381 | ⚠️ **v380 arregló la función equivocada.** Con la pantalla delante, las alarmas ya salían y las 12 tarjetas **seguían en `0h`**: el arreglo fue a `project_hours_bulk` dando por hecho que era la de la cartera, y `render_owner_projects` llama a **`project_hours()` una vez por obra**. El test daba ✓ sobre una función que esa pantalla no usa. **REGLA: antes de arreglar lo que pinta una pantalla, mirar QUÉ función llama** — el guardián lo comprueba primero y solo después mide. + otro cero peligroso: **`datos_asociados`**, el recuento que se enseña ANTES de borrar un proyecto, le daba **0 en todo** al propietario («no cuelga nada» con 25 fichajes, 3 gastos y 11 actividades colgando) |
 | v380 | ⚠️ **La fase 2 se dejó dos huecos, y solo se vieron EN PANTALLA**: con la sesión de propietario los proyectos salían pero **todas las tarjetas marcaban `0h`** (el demo tiene 484 fichajes) y **0 alarmas** (el admin veía 19). Mis tests medían `list_projects`, pero una tarjeta se arma con **cuatro fuentes** y cada una tiene su propio camino al libro: las horas van por la hoja del fichaje y `open_counts_all()` **ni siquiera recibe grupo**. Cerrados con el mismo patrón. **REGLA: cuando una pantalla se compone de varias fuentes, compararlas TODAS contra quien las tiene bien** — arreglar la principal y dar la pantalla por buena deja ceros con pinta de dato. Guardián nuevo que compara horas, alarmas, gastos y retrasos del propietario contra los del admin |
 | v379 | **FASE 2: el propietario vuelve a ver a todos sus clientes** (veía 0 desde la mudanza de v377). En vez de hilar un `grupo` por ~40 funciones, **`tenant.como_grupo(g)`**: dentro del `with`, `sheet_id_para` consulta el grupo activo antes que la sesión, así que toda lectura cae en el libro de ese cliente. Un cambio, en el único punto donde se decide el libro; aplicado en 4 sitios. ⚠️ Vive en `session_state`, no en un global (un global se comparte por proceso — el fallo que acababa de cerrar v378). ⚠️ `grupos_por_libro()` lee una vez por LIBRO, no por grupo: si tres comparten el maestro, leerlo tres veces **triplicaría** el consolidado. ⚠️ **Y una fuga que introduje yo**: hacer que el `grupo` explícito eligiera libro SIEMPRE convertía el argumento en una llave (un admin ajeno pasando `grupo="cliente1"` leía su libro) — ahora solo elige si `tenant.puede_ver`. La cazó el test de dos inquilinos, y **solo tras reescribirlo**: el de v378 comparaba propietario contra admin y con la fase 2 había dejado de distinguir una fuga de la funcionalidad nueva |
 | v378 | ⚠️ **Fuga de datos ENTRE INQUILINOS en la caché.** `st.cache_data` se comparte por PROCESO y la clave era solo el título de la hoja, así que el segundo cliente recibía lo que memoizó el primero — demostrado con los dos libros reales en los dos sentidos. El cerrojo de v351 no lo cubre: comprueba el grupo de un objeto ya traído, y aquí **la lista entera es del inquilino equivocado**. 18 lectores de inquilino en 16 módulos: la función cacheada pasa a `X_cached(libro, …)` + envoltorio con el nombre de siempre, **sin tocar ninguno de los ~40 call-sites**. ⚠️ **Tres trampas**: (1) llamar al parámetro `_libro` dejó el arreglo **INERTE** — Streamlit excluye de la clave los argumentos que empiezan por guión bajo, y solo lo delató instrumentar qué se ejecutaba de verdad; (2) `compileall`, los imports y el guardián de AST daban ✓ con **3 `NameError` dentro de los envoltorios** (`TRABAJOS_SHEET`, `SHEET`×2) — **importar no ejecuta**, hubo que llamarlos uno a uno; (3) los `.clear()` de `_invalidate` apuntando al envoltorio, la regresión de v344 por tercera vez |
