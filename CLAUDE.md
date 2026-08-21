@@ -5722,7 +5722,48 @@ Al renombrar la función cacheada, los `X.clear()` de `_invalidate` quedan apunt
 limpiarse y nadie se entera**. El guardián lo cazó en 2 sitios (`projects`, `roster`),
 donde mi regex había arreglado el primer elemento de la tupla y dejado el segundo.
 
-## Versiones desplegadas (v378 = actual)
+## FASE 2: el propietario vuelve a ver a todos sus clientes (v379)
+Tras la mudanza de v377 el propietario veía **0 proyectos**: sus vistas leen el maestro
+y los clientes viven en sus libros. Esta es la fase 2 que v359 dejó aplazada.
+
+### El ámbito de grupo, en vez de hilar un parámetro por 40 funciones
+`owner_digest` recorre grupos llamando a `group_digest(g)`, y por dentro eso lee
+proyectos, alarmas, gastos y credenciales — todo con lectores que resuelven el libro
+**desde la sesión**, y la del propietario no tiene grupo. Hilar un `grupo` por todas
+esas firmas habría sido enorme.
+**`tenant.como_grupo(g)`**: dentro del `with`, `sheet_id_para` consulta el grupo activo
+antes que la sesión, así que TODA lectura cae en el libro de `g`. Un cambio, en el
+único punto donde se decide el libro.
+- ⚠️ Vive en `st.session_state`, **no** en un global del módulo: los globales se
+  comparten por proceso y ahí un «grupo activo» se filtraría a otra sesión — la clase
+  de fallo que acababa de cerrar v378.
+- Reentrante y anidable; el guardián comprueba que al salir restaura lo anterior.
+- Aplicado en 4 sitios: `owner_digest`, la ficha de usuario del propietario, el
+  detalle de proyecto y el aviso de credenciales del login.
+- ⚠️ En `_detalle_proyecto` se **re-entra una vez** bajo el ámbito en vez de envolver
+  300 líneas en un `with`: reindentar un bloque así es lo que rompió v120 y v148. La
+  propia condición corta la recursión.
+- `auth.grupos_por_libro()` da UN grupo por LIBRO distinto. ⚠️ Si tres grupos comparten
+  el maestro, leerlo tres veces **triplicaría las filas**: agrupar por libro no es una
+  optimización, es lo que evita duplicar el consolidado. El guardián lo comprueba.
+
+### ⚠️ EL ARGUMENTO NO PUEDE SER UNA LLAVE
+Mi primera versión hacía que un `grupo` explícito seleccionara el libro **siempre**.
+Con eso, un admin de otra empresa que pasara `grupo="cliente1"` **leía el libro de
+cliente1**: convertí «manda la sesión» en «manda el argumento», debilitando justo lo
+que v378 venía a cerrar. Ahora el grupo explícito solo elige libro **si quien pregunta
+puede ver ese grupo** (`tenant.puede_ver`): propietario, o es el suyo.
+
+### ⚠️ Y el test que había dejado de servir
+El test de fuga de v378 comparaba «propietario» contra «admin de cliente1» y daba por
+fuga que el propietario viera 16 obras. Con la fase 2 eso pasó a ser **lo correcto**,
+así que el test ya no distinguía una fuga de la funcionalidad nueva — y falló en falso.
+Reescrito para comparar **dos administradores de grupos distintos**, que es lo que el
+aislamiento tiene que garantizar. **Solo la versión reescrita encontró la fuga real de
+arriba.** REGLA: cuando una funcionalidad cambia lo que es «correcto», el test que lo
+medía hay que rehacerlo, no relajarlo — si no, se queda dando veredictos de otra época.
+
+## Versiones desplegadas (v379 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -5730,6 +5771,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v379 | **FASE 2: el propietario vuelve a ver a todos sus clientes** (veía 0 desde la mudanza de v377). En vez de hilar un `grupo` por ~40 funciones, **`tenant.como_grupo(g)`**: dentro del `with`, `sheet_id_para` consulta el grupo activo antes que la sesión, así que toda lectura cae en el libro de ese cliente. Un cambio, en el único punto donde se decide el libro; aplicado en 4 sitios. ⚠️ Vive en `session_state`, no en un global (un global se comparte por proceso — el fallo que acababa de cerrar v378). ⚠️ `grupos_por_libro()` lee una vez por LIBRO, no por grupo: si tres comparten el maestro, leerlo tres veces **triplicaría** el consolidado. ⚠️ **Y una fuga que introduje yo**: hacer que el `grupo` explícito eligiera libro SIEMPRE convertía el argumento en una llave (un admin ajeno pasando `grupo="cliente1"` leía su libro) — ahora solo elige si `tenant.puede_ver`. La cazó el test de dos inquilinos, y **solo tras reescribirlo**: el de v378 comparaba propietario contra admin y con la fase 2 había dejado de distinguir una fuga de la funcionalidad nueva |
 | v378 | ⚠️ **Fuga de datos ENTRE INQUILINOS en la caché.** `st.cache_data` se comparte por PROCESO y la clave era solo el título de la hoja, así que el segundo cliente recibía lo que memoizó el primero — demostrado con los dos libros reales en los dos sentidos. El cerrojo de v351 no lo cubre: comprueba el grupo de un objeto ya traído, y aquí **la lista entera es del inquilino equivocado**. 18 lectores de inquilino en 16 módulos: la función cacheada pasa a `X_cached(libro, …)` + envoltorio con el nombre de siempre, **sin tocar ninguno de los ~40 call-sites**. ⚠️ **Tres trampas**: (1) llamar al parámetro `_libro` dejó el arreglo **INERTE** — Streamlit excluye de la clave los argumentos que empiezan por guión bajo, y solo lo delató instrumentar qué se ejecutaba de verdad; (2) `compileall`, los imports y el guardián de AST daban ✓ con **3 `NameError` dentro de los envoltorios** (`TRABAJOS_SHEET`, `SHEET`×2) — **importar no ejecuta**, hubo que llamarlos uno a uno; (3) los `.clear()` de `_invalidate` apuntando al envoltorio, la regresión de v344 por tercera vez |
 | v377 | **La demo se muda a su propio libro** (`COPEX — DEMO (cliente1)`) y el maestro queda limpio para el primer cliente real: 22 hojas de inquilino copiadas, **9.617 celdas verificadas una a una**, y solo entonces vaciado el maestro. Las 4 globales (`Login`, `Grupos`, `Rieles`, `Manuales`) se quedan. Orden sagrado: **copiar → verificar → enlazar → verificar → borrar → verificar**. ⚠️ Hasta vaciar el maestro ninguna cifra probaba nada (los dos libros tenían lo mismo) — el paso en vacío aplicado a una migración. **Tres errores míos por el camino**: el respaldo escrito DENTRO del repo (el deploy lo habría subido a GitHub con hashes y emails — lo cazó `git status`), el verificador reventando con un **429** por pedir hoja por hoja en vez de por lotes (el problema de v339 cometido en el script que venía a verificarlo), y `values_batch_clear` recibiendo la lista como `params` en vez de `body`. ⚠️ **La fase 2 dejó de ser teórica**: el propietario ve ahora 0 proyectos; quedan identificadas las 9 funciones que hay que tocar |
 | v376 | Corrección del registro de v375 (documentación) |

@@ -165,7 +165,13 @@ if _ROL in ("administrador", "propietario"):
                 _kav = f"_credaviso_{_g}_{_hoy}"
                 if _g and not st.session_state.get(_kav):
                     st.session_state[_kav] = True
-                    _cred.notify_expiring(_g)
+                    # ⚠️ v379: el propietario recorre TODOS los grupos y cada uno vive
+                    # en su libro (v359); su sesión no tiene grupo, así que sin este
+                    # ámbito las N vueltas leían las credenciales del maestro y no
+                    # avisaba de ninguna. Para el admin resuelve a su mismo libro.
+                    from core import tenant as _tnt
+                    with _tnt.como_grupo(_g):
+                        _cred.notify_expiring(_g)
     except Exception:
         pass
 

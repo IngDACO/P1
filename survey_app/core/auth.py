@@ -797,3 +797,27 @@ def grupos_con_libro_propio() -> list:
     no los incluye todavía (ver el límite documentado en v359)."""
     return [str(g.get("Grupo", "")) for g in _group_records()
             if str(g.get("SheetID", "") or "").strip()]
+
+
+def grupos_por_libro() -> list:
+    """UN grupo representante por cada LIBRO distinto (v379).
+
+    Es lo que necesitan las vistas del propietario para recorrer todos los clientes:
+    se lee una vez POR LIBRO, no una vez por grupo.
+
+    ⚠️ Si tres grupos comparten el maestro, leerlo tres veces **triplicaría las
+    filas** — y cada fila ya lleva su columna `Grupo`, así que una sola lectura del
+    libro trae lo de los tres. Agrupar por libro no es una optimización: es lo que
+    evita duplicar datos en el consolidado.
+    """
+    vistos, out = set(), []
+    for g in _group_records():
+        nombre = str(g.get("Grupo", "")).strip()
+        if not nombre:
+            continue
+        sid = str(g.get("SheetID", "") or "").strip()      # vacío = el maestro
+        if sid in vistos:
+            continue
+        vistos.add(sid)
+        out.append((nombre, sid))
+    return out

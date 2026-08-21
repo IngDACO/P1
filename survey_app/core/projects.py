@@ -488,7 +488,7 @@ def list_projects(grupo: str = None, agrupacion_id: str = None,
     resoluciones en silencio.
     """
     out = []
-    for r in _records(PROJECTS_SHEET):
+    for r in _registros_visibles(PROJECTS_SHEET, grupo):
         if grupo is not None and str(r.get("Grupo", "")) != str(grupo):
             continue
         if agrupacion_id is not None and str(r.get("AgrupacionID", "")) != str(agrupacion_id):
@@ -496,6 +496,48 @@ def list_projects(grupo: str = None, agrupacion_id: str = None,
         if not incluir_archivados and str(r.get("Estado", "")) == ARCHIVADO:
             continue
         out.append(r)
+    return out
+
+
+def _registros_visibles(title, grupo) -> list:
+    """Las filas que le tocan a quien pregunta (v379).
+
+    ⚠️ El PROPIETARIO sin filtro de grupo tiene que ver TODOS los clientes, y desde
+    v359 cada uno vive en su propio libro. Su sesión no tiene grupo, así que el
+    lector normal cae al maestro — y tras la mudanza de v377 el maestro está vacío:
+    el propietario veía **0 proyectos**. Aquí se recorren los libros.
+
+    Para todos los demás (y para el propietario que SÍ filtra por un grupo) el
+    camino es el de siempre, byte a byte: una sola lectura de su libro.
+    """
+    from core import tenant
+    if grupo is not None:
+        # Un grupo explícito selecciona el libro **solo si quien pregunta puede ver
+        # ese grupo** (propietario, o es el suyo). Sin esto el propietario filtrando
+        # por un cliente leía el maestro y le salían 0 proyectos.
+        #
+        # ⚠️ La comprobación NO es decorativa: sin ella el argumento se convierte en
+        # una LLAVE — un admin de otra empresa que pasara `grupo="cliente1"` leería
+        # el libro de cliente1. Lo cazó el test de dos inquilinos, y solo después de
+        # reescribirlo: la versión anterior comparaba propietario contra admin y con
+        # la fase 2 había dejado de distinguir una fuga de la funcionalidad nueva.
+        if tenant.puede_ver(grupo):
+            with tenant.como_grupo(grupo):
+                return _records(title)
+        return _records(title)          # sin permiso: su libro de siempre
+    if not tenant.es_propietario():
+        return _records(title)
+    from core import auth as _auth
+    try:
+        libros = _auth.grupos_por_libro()
+    except Exception as e:
+        logger.warning("projects: no se pudieron listar los libros: %s", e)
+        return _records(title)
+    out = []
+    for g, _sid in libros:
+        # Dentro del `with`, TODA lectura sale del libro de ese grupo (v379).
+        with tenant.como_grupo(g):
+            out.extend(_records(title))
     return out
 
 
@@ -565,7 +607,9 @@ def add_field_user(pid: str, usuario: str) -> tuple:
 
 
 def get_project(pid: str) -> dict:
-    for r in _records(PROJECTS_SHEET):
+    # v379: para el propietario busca en TODOS los libros — si no, abrir un proyecto
+    # de un cliente desde su panel devolvía {} y la ficha salía vacía.
+    for r in _registros_visibles(PROJECTS_SHEET, None):
         if str(r.get("ID", "")) == str(pid):
             return r
     return {}

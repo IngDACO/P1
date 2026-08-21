@@ -1889,6 +1889,16 @@ def _detalle_proyecto(pid: str, grupo: str = None):
     # El grupo se toma del propio proyecto (así el propietario puede abrir cualquiera)
     grupo = str(prj.get("Grupo", "")) or (grupo or "")
 
+    # ⚠️ v379: el PROPIETARIO entra aquí en datos de OTRO libro (v359). Su sesión no
+    # tiene grupo, así que sin declarar el ámbito todo lo de abajo —costos, horas,
+    # alarmas, actividades, archivos— se leería del MAESTRO y saldría vacío.
+    # Se re-entra una sola vez bajo el ámbito en vez de envolver 300 líneas en un
+    # `with`: reindentar un bloque así es justo lo que rompió v120 y v148. La propia
+    # condición corta la recursión (en la re-entrada el grupo activo ya es este).
+    if grupo and tenant.es_propietario() and tenant.grupo_activo() != grupo:
+        with tenant.como_grupo(grupo):
+            return _detalle_proyecto(pid, grupo)
+
     avance = P._num(prj.get("Avance"))
     est    = str(prj.get("Estado", ""))
     _bg, _fg, _bar = _estado_colors(est)

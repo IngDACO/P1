@@ -183,9 +183,15 @@ def owner_digest() -> list:
         grupos = [g["Grupo"] for g in auth.list_groups()]
     except Exception:
         grupos = []
+    from core import tenant
     for g in grupos:
         try:
-            d = group_digest(g)
+            # ⚠️ v379: cada cliente vive en SU libro (v359) y la sesión del propietario
+            # no tiene grupo, así que sin este ámbito las N vueltas leían el maestro y
+            # el resumen salía idéntico —y vacío— para todos. Dentro del `with`, toda
+            # lectura de `group_digest` cae en el libro de ese grupo.
+            with tenant.como_grupo(g):
+                d = group_digest(g)
         except Exception:
             continue
         out.append({

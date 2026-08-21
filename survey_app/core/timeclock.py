@@ -114,6 +114,16 @@ def sheet_id_para(title: str = "", grupo: str = None) -> str:
         return maestro
     g = grupo
     if g is None:
+        # v379: un ámbito declarado (`tenant.como_grupo`) manda sobre la sesión. Es lo
+        # que permite que las vistas del PROPIETARIO recorran varios clientes: dentro
+        # del `with`, toda lectura cae en el libro de ESE grupo aunque su sesión no
+        # tenga ninguno. Sin esto, cada vuelta de `owner_digest` leía el maestro.
+        try:
+            from core import tenant
+            g = tenant.grupo_activo() or None
+        except Exception:
+            g = None
+    if g is None:
         try:                                  # como `clock.now()`: sale de la sesión (v173)
             g = str((st.session_state.get("auth") or {}).get("grupo", "") or "")
         except Exception:

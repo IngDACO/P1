@@ -614,8 +614,14 @@ def _owner_usuarios():
         _elegido = ui.elegir("Usuario", _map, key="ow_fichasel", vacio="— elige un usuario —")
         if _elegido:
             st.markdown("---")
-            _ficha_usuario(_elegido, _elegido.get("Grupo", ""),
-                           owner=True, sel_key="ow_fichasel")
+            # ⚠️ v379: la ficha muestra el TRABAJO de esa persona (horas, recibos,
+            # proyectos, credenciales), que viven en el libro de SU grupo (v359). La
+            # sesión del propietario no tiene grupo, así que sin declarar el ámbito
+            # esos bloques salían vacíos. `Login` es global y se lee igual.
+            from core import tenant as _tnt
+            with _tnt.como_grupo(_elegido.get("Grupo", "")):
+                _ficha_usuario(_elegido, _elegido.get("Grupo", ""),
+                               owner=True, sel_key="ow_fichasel")
 
 
 def render_owner_seccion(sec: str):

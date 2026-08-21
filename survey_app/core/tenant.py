@@ -34,11 +34,64 @@ import streamlit as st
 logger = logging.getLogger(__name__)
 
 
+_CLAVE_ACTIVO = "_tenant_grupo_activo"
+
+
 def _auth() -> dict:
     try:
         return st.session_state.get("auth") or {}
     except Exception:
         return {}
+
+
+# ── Ámbito temporal de grupo (v379) ──────────────────────────────
+#
+# Las vistas del PROPIETARIO recorren varios clientes: `owner_digest` llama a
+# `group_digest(g)` para cada grupo, y con un libro por cliente (v359) cada
+# vuelta tiene que leer el libro DE ESE GRUPO. Pero los lectores de los módulos
+# resuelven el libro desde la SESIÓN —y la del propietario no tiene grupo—, así
+# que todas las vueltas leían el maestro.
+#
+# ⚠️ La alternativa era hilar un parámetro `grupo` por decenas de funciones
+# públicas (`open_counts_all`, `group_expenses`, `list_group`…) y sus lectores.
+# Esto lo resuelve en un sitio: se declara el grupo activo y `sheet_id_para` lo
+# consulta antes que la sesión, así que TODA lectura de dentro cae en su libro.
+#
+# ⚠️ Vive en `st.session_state`, no en un global del módulo: `cache_data` y los
+# globales se comparten por PROCESO, y ahí un «grupo activo» se filtraría a otra
+# sesión — que es justo la clase de fallo que cerró v378.
+def grupo_activo() -> str:
+    try:
+        return str(st.session_state.get(_CLAVE_ACTIVO) or "")
+    except Exception:
+        return ""
+
+
+class como_grupo:
+    """`with tenant.como_grupo(g):` → todo lo que se lea dentro sale del libro de `g`.
+
+    Reentrante: al salir restaura el que hubiera antes, así se pueden anidar sin
+    que una vuelta del bucle se lleve por delante a la siguiente.
+    """
+
+    def __init__(self, grupo):
+        self.grupo = str(grupo or "")
+        self.previo = None
+
+    def __enter__(self):
+        self.previo = grupo_activo()
+        try:
+            st.session_state[_CLAVE_ACTIVO] = self.grupo
+        except Exception:
+            pass
+        return self
+
+    def __exit__(self, *exc):
+        try:
+            st.session_state[_CLAVE_ACTIVO] = self.previo
+        except Exception:
+            pass
+        return False
 
 
 def rol() -> str:
