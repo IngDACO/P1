@@ -88,15 +88,19 @@ def _ir_a_prestart():
         _home.navegar("herramientas", "🦺 Pre-Start")
 
 
-@st.dialog(":material/health_and_safety: Falta el Pre-Start de hoy", width="small")
-def _dialogo_prestart(obra: str):
-    """Pop-up tras fichar cuando la obra no tiene Pre-Start del día (v374).
+def _ps_descartar():
+    """Deja de recordar el Pre-Start de esta obra en lo que queda de sesión."""
+    p = st.session_state.get("_ps_aviso") or {}
+    pid = str(p.get("pid", ""))
+    if pid:
+        st.session_state[f"_ps_visto_{pid}"] = True
+    st.session_state.pop("_ps_aviso", None)
 
-    ⚠️ Verificado EN VIVO antes de construirlo (mini-app + DOM), porque «existe en
-    la API» no es «funciona ahí»: el modal se pinta SOBRE la página aunque lo
-    dispare un botón del sidebar, SOBREVIVE al `st.rerun()` del fichaje, el botón
-    de dentro cierra, y **no reaparece** en las pasadas siguientes.
-    """
+
+@st.dialog(":material/health_and_safety: Falta el Pre-Start de hoy", width="small",
+           on_dismiss=_ps_descartar)
+def _dialogo_prestart(obra: str):
+    """Pop-up tras fichar cuando la obra no tiene Pre-Start del día (v374/v375)."""
     st.markdown(f"Acabas de fichar a **{obra}** y hoy todavía **no hay Pre-Start** "
                 "registrado en esa obra.")
     st.caption("Es la charla de seguridad antes de empezar: una por obra y día. "
@@ -104,22 +108,41 @@ def _dialogo_prestart(obra: str):
     c1, c2 = st.columns(2)
     if c1.button(":material/health_and_safety: Hacerlo ahora", type="primary",
                  use_container_width=True, key="ps_dlg_ir"):
+        _ps_descartar()
         _ir_a_prestart()
     if c2.button("Ahora no", use_container_width=True, key="ps_dlg_no"):
-        st.rerun()                                      # cierra el modal
+        _ps_descartar()
+        st.rerun()
 
 
-def aviso_prestart_pendiente():
-    """Abre el modal UNA vez, en la pasada SIGUIENTE al fichaje.
+def aviso_prestart_pendiente(grupo: str = ""):
+    """El modal, evaluado como CONDICIÓN de estado y no como evento de un solo uso.
+
+    ⚠️ v375 — FALLO REAL, visto en producción y no en la mini-app: el modal salía y
+    **se cerraba solo**. La v374 consumía la bandera con `pop`, así que se pintaba en
+    esa pasada y desaparecía en la siguiente. Y en la app real SIEMPRE hay una pasada
+    siguiente justo ahí: los cronómetros del sidebar son `components.html` y al
+    MONTARSE disparan un rerun — y solo existen en el estado «fichado», que es
+    exactamente cuando el modal debe verse. La mini-app no los tenía, por eso dio OK.
+    Evaluándolo como condición, cualquier rerun lo vuelve a pintar.
+
+    Se deja de mostrar cuando: se descarta (los dos botones y la X, vía `on_dismiss`)
+    o el Pre-Start ya está hecho.
 
     ⚠️ Va llamada al TOP LEVEL del script (desde `app.py`), NO dentro de
-    `with st.sidebar:`: el contenedor activo manda, y así es como se verificó.
-    ⚠️ Y se dispara por BANDERA, no en el mismo run que ficha: el `st.rerun()` del
-    fichaje descarta los deltas de esa pasada (v365) y el modal sería uno más.
+    `with st.sidebar:`: en Streamlit manda el contenedor activo.
     """
-    obra = st.session_state.pop("_ps_aviso", None)
-    if obra:
-        _dialogo_prestart(str(obra))
+    p = st.session_state.get("_ps_aviso") or {}
+    pid, nombre = str(p.get("pid", "")), str(p.get("nombre", ""))
+    if not pid or st.session_state.get(f"_ps_visto_{pid}"):
+        return
+    try:                                   # si ya lo hicieron, no se insiste
+        if prestart.hecho_hoy(pid, grupo or p.get("grupo", "")):
+            st.session_state.pop("_ps_aviso", None)
+            return
+    except Exception:
+        pass
+    _dialogo_prestart(nombre or "esta obra")
 
 
 def _chip_prestart(pid, nombre_obra, grupo):
@@ -178,11 +201,15 @@ def render_sidebar_chrono():
 def _sidebar_fichado(nombre, usuario, grupo, gen, prj):
     """Estás fichado: cronómetros + las dos salidas + el aviso del Pre-Start."""
     st.markdown("###### :material/schedule: FICHAJE EN CURSO")
+    # ⚠️ v375: la etiqueta del cronómetro va DENTRO de HTML crudo (`components.html`),
+    # donde `:material/...:` no es nada — es sintaxis de markdown de Streamlit. Desde
+    # la migración de iconos (v233) se veía el literal «:material/schedule: Jornada»
+    # en el sidebar. Se vio mirando la pantalla en producción, no leyendo el código.
     if gen:
-        _chrono_mini(gen["clock_in"], ":material/schedule: Jornada", _AZUL, "sb_chrono_gen")
+        _chrono_mini(gen["clock_in"], "Jornada", _AZUL, "sb_chrono_gen")
     if prj:
         _pn = str(prj.get("proyecto") or "Proyecto").replace("&", "&amp;").replace("<", "&lt;")
-        _chrono_mini(prj["clock_in"], f":material/apartment: {_pn}", _VERDE, "sb_chrono_prj")
+        _chrono_mini(prj["clock_in"], _pn, _VERDE, "sb_chrono_prj")
         if st.button(":material/cancel: Salir del proyecto", use_container_width=True,
                      key="sb_tc_prj_out"):
             ok, msg = timeclock.clock_out(nombre, grupo,
@@ -274,7 +301,9 @@ def _fichar(nombre, nom_obra, grupo, usuario, pid):
     flash.exito(msg + ("  :material/schedule: Se abrió también tu jornada." if auto else ""))
     try:
         if not prestart.hecho_hoy(pid, grupo):
-            st.session_state["_ps_aviso"] = nom_obra or "esta obra"
+            st.session_state["_ps_aviso"] = {"pid": pid, "nombre": nom_obra, "grupo": grupo}
+            # Re-armar: si lo descartaste antes y vuelves a fichar aquí, se recuerda.
+            st.session_state.pop(f"_ps_visto_{pid}", None)
     except Exception:
         pass                          # sin pre-starts configurados: no se estorba
     st.rerun()

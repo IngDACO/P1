@@ -5559,7 +5559,45 @@ Pre-Start hecho. Se movió el DÍA (parcheando `clock.today`) en vez de escribir
 producción: obra con pre-start ese día → **True**; otra obra el mismo día → False (es por
 obra); la misma obra otro día → False.
 
-## Versiones desplegadas (v374 = actual)
+## ⚠️ EL MODAL SE CERRABA SOLO, Y LA MINI-APP DIJO QUE NO (v375)
+Verificando v374 **en producción** con sesión de campo: el fichaje desde el sidebar
+funcionó, el chip persistente salió… y **el pop-up no**. La mini-app lo había dado por
+bueno.
+
+### Por qué la mini-app se equivocó
+v374 consumía la bandera con `pop`, así que el diálogo se pintaba en esa pasada y
+desaparecía en la siguiente. Y **en la app real siempre hay una pasada siguiente justo
+ahí**: los cronómetros del sidebar son `components.html` y al MONTARSE disparan un
+rerun — y solo existen en el estado «fichado», que es exactamente cuando el modal debe
+verse. La mini-app no tenía cronómetros, así que nada provocaba esa pasada extra.
+**Una maqueta solo prueba lo que reproduce.** Es la trampa nº1 (el paso en vacío) con
+otro disfraz: el escenario que importaba no llegó a ejecutarse.
+
+**Arreglo**: el aviso pasa de EVENTO de un solo uso a **CONDICIÓN de estado**. Mientras
+haya obra fichada, falte el Pre-Start y no se haya descartado, cada pasada vuelve a
+llamar al diálogo — así cualquier rerun lo repinta en vez de matarlo.
+- Se descarta de **tres** formas: «Hacerlo ahora», «Ahora no» y la **X** (vía
+  `on_dismiss=_ps_descartar`). ⚠️ Sin lo de la X, cerrar el modal lo haría reaparecer
+  en la siguiente pasada **para siempre** — el arreglo sería peor que el fallo.
+- Se re-arma al volver a fichar en esa obra, y se calla solo si el Pre-Start ya está.
+- Guardián: **3 pasadas seguidas → se abre 3/3** (con el `pop` de v374 daba 1/3, que es
+  literalmente lo que se veía).
+
+### Y un literal a la vista desde v233
+Los cronómetros del sidebar mostraban **`:material/schedule: Jornada`** en crudo: la
+etiqueta va DENTRO de `components.html`, donde `:material/...:` no es un icono sino
+sintaxis de markdown de Streamlit, que ahí no se interpreta. Viene de la migración de
+iconos (v233) y llevaba así desde entonces. **Se vio mirando la pantalla, no leyendo el
+código** — ninguna prueba lo iba a cazar porque el HTML era válido.
+
+### Lo que la verificación en producción SÍ confirmó de v374
+Selector sin preselección (v139) y «Fichar» deshabilitado hasta elegir · el desplegable
+ofrece exactamente las 3 obras de esa persona · el fichaje entra y el flash sobrevive al
+rerun (v365) · el sidebar cambia a los dos cronómetros + «Salir del proyecto» +
+«Cerrar jornada y proyecto» · **el chip persistente del Pre-Start** · y la tabla de
+avance del campo (v372) renderiza con sus columnas.
+
+## Versiones desplegadas (v375 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -5567,6 +5605,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v375 | ⚠️ **El pop-up del Pre-Start se cerraba solo en producción, y la mini-app lo dio por bueno.** v374 consumía la bandera con `pop`, así que el modal se pintaba y desaparecía en la pasada siguiente — y en la app real siempre hay una justo ahí: **los cronómetros del sidebar son `components.html` y al montarse disparan un rerun**, y solo existen en el estado «fichado», que es cuando el modal debe verse. La maqueta no los tenía. Ahora el aviso es una **condición de estado** (mientras falte y no se descarte, cada pasada lo repinta), con las tres salidas cubiertas — los dos botones y la **X** vía `on_dismiss`; ⚠️ sin lo de la X reaparecería para siempre. Guardián: 3 pasadas seguidas → 3/3 (con el `pop` daba 1/3). + los cronómetros enseñaban **`:material/schedule:` en crudo** desde v233: la etiqueta va dentro de `components.html`, donde eso no es un icono sino markdown de Streamlit. Visto mirando la pantalla, no el código |
 | v374 | **Fichar desde el sidebar** (v202 lo dejó de mirador y solo visible si YA estabas fichado): sin fichar, botón de tu asignación de hoy + selector del resto; fichado, los cronómetros + salir del proyecto / cerrar jornada. + **el Pre-Start del día se recuerda solo**: `prestart.hecho_hoy` — ⚠️ por OBRA y DÍA, no por persona (si el facilitador ya la hizo, al resto no se le recuerda; decisión del usuario) — con **modal al fichar** y **chip persistente** mientras falte (el modal se cierra y se pierde; el chip no). ⚠️ El modal va por BANDERA en la pasada siguiente y llamado al TOP LEVEL, no dentro del `with st.sidebar:` (v365 + el contenedor activo manda). ⚠️ **Verificado en vivo con la estructura exacta del código final** antes de construir: se pinta sobre la página, sobrevive al rerun, no reaparece. Falsa alarma resuelta midiendo: el icono del título parecía texto y era una **ligadura de fuente** (trampa nº5). ⚠️ Y las DOS direcciones de `hecho_hoy` probadas moviendo el día — comprobar solo el `False` es el paso en vacío |
 | v373 | Las dos decisiones pendientes, resueltas por el usuario. **(a) Un check en NO abre alarma** (cierra el standing item de v158): hasta ahora solo lo hacía el near miss, así que un control de seguridad sin cumplir solo lo sabía quien abriera esa ficha. ⚠️ UNA alarma con todos los checks (no una por check: `report_problem` también notifica) y separada de la del near miss (un suceso vs un control que falta). NO ejercitada contra producción: mandaría correo y Telegram a personas reales. **(b) Ganancia FIJA por obra** (`GananciaFija`), el hueco que v370 dejó abierto: una obra creada a mano cuyo valor no está en las horas valía su costo — el delivery de Bespoke pasa de **$380 estimados a $5.200**, que es lo que se facturó. Se suma al modelo que aplique; ⚠️ a una obra COTIZADA **no**, porque ese precio lo firmó el cliente (se avisa de que el número no se usa). ⚠️ Mi primera versión cambiaba el denominador de `margen_pct` y habría movido el % de **todas** las obras sin fija: revertido, el margen del conjunto va en clave aparte y las 16 obras dan la misma cifra que antes. Vuelta atrás probada (0 la quita y el ingreso vuelve exacto). ⚠️ `GananciaHoraJSON` llevaba **13 versiones sin auditar** — el hueco de v344/v352 por tercera vez |
 | v372 | ⚠️ **El avance que carga el campo no movía el % del proyecto.** `save_field_progress` recomputaba **antes** de invalidar, y `_recompute_project_avance` lee `list_activities`, que está cacheada 120 s — con la caché caliente (siempre lo está: la pantalla acaba de pintar esa tabla para editarla) recalculaba con las actividades VIEJAS. Medido en la hoja real: actividades al **26,0%** y el proyecto escrito en **0,0%**, estado «Planificado» en vez de «En progreso». Prueba de causa: el mismo guardado con la caché fría cuadra. Regresión de **v162** (el camino viejo recomputaba en memoria sobre filas frescas); un solo sitio, los otros 3 ya estaban bien. + la celda de avance **borrada** (`NaN`) reventaba el guardado ENTERO y la nota vacía guardaba el texto `"nan"` — ahora vaciar deja la actividad como estaba y se dice cuáles. ⚠️ Ese aviso tuve que pasarlo a `flash`: lo puse con `st.warning` sobre un `st.rerun()`, el fallo de v365 **dentro del arreglo**. ⚠️ Y mi test dio 5 ✗ EN FALSO por comparar `"40"` con `"40.0"` (la hoja guarda `str(float)`) |
