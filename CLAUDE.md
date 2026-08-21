@@ -205,6 +205,14 @@ Estas cinco mordieron en una sola tanda:
 10. **Comprobar el ÁMBITO, no la presencia** (v342, repetido): un import local dentro de
     OTRA función hace creer que el módulo está disponible. Y el verificador no debe
     descender a los `def` al mirar el ámbito de módulo — ahí es donde se autoengaña.
+12. ⚠️ **Una sonda NEGATIVA no vale hasta validarla con un caso conocido-bueno** (v375).
+    Concluí que un modal «no se pintaba nunca» porque mi `MutationObserver` buscaba
+    `div[role="dialog"]` —el marcado del Streamlit LOCAL— y el del Cloud es
+    `[data-testid="stDialog"]`. El modal estaba ahí. Un observador que «no vio nada»
+    suena a prueba y es solo una sonda mal apuntada. → Antes de afirmar «X no está»,
+    comprobar que la sonda SABE ver X cuando X está; y mirar la captura antes de
+    diagnosticar. Es la nº5 (ligaduras) y v304 (CSS caducado) otra vez: **el DOM de
+    Streamlit cambia entre versiones y el entorno de prueba no es el que corre.**
 11. ⚠️ **El `secrets.toml` LOCAL no es el del Cloud.** `telegram_configured()`,
     `app_url()`, `is_configured()`… medidos en local dicen qué tengo YO, no qué tiene
     producción. En v368 medí Telegram en local (`False`), lo presenté como el estado real
@@ -5559,29 +5567,38 @@ Pre-Start hecho. Se movió el DÍA (parcheando `clock.today`) en vez de escribir
 producción: obra con pre-start ese día → **True**; otra obra el mismo día → False (es por
 obra); la misma obra otro día → False.
 
-## ⚠️ EL MODAL SE CERRABA SOLO, Y LA MINI-APP DIJO QUE NO (v375)
-Verificando v374 **en producción** con sesión de campo: el fichaje desde el sidebar
-funcionó, el chip persistente salió… y **el pop-up no**. La mini-app lo había dado por
-bueno.
+## ⚠️ LA SONDA ESTABA CIEGA: diagnostiqué un fallo que no existía (v375)
+Verificando v374 en producción, mi comprobación decía que **el pop-up no se pintaba
+nunca** — ni siquiera un instante, según un `MutationObserver`. Diagnostiqué la causa,
+la arreglé y desplegué v375. **Y el fallo no existía.**
 
-### Por qué la mini-app se equivocó
-v374 consumía la bandera con `pop`, así que el diálogo se pintaba en esa pasada y
-desaparecía en la siguiente. Y **en la app real siempre hay una pasada siguiente justo
-ahí**: los cronómetros del sidebar son `components.html` y al MONTARSE disparan un
-rerun — y solo existen en el estado «fichado», que es exactamente cuando el modal debe
-verse. La mini-app no tenía cronómetros, así que nada provocaba esa pasada extra.
-**Una maqueta solo prueba lo que reproduce.** Es la trampa nº1 (el paso en vacío) con
-otro disfraz: el escenario que importaba no llegó a ejecutarse.
+### El error: la sonda buscaba un selector de OTRO entorno
+Mi observador y todas mis comprobaciones buscaban **`div[role="dialog"]"`**, que es como
+marca el modal el Streamlit **local** (1.57) donde probé la mini-app. El Streamlit que
+resuelve el **Cloud** lo marca **`[data-testid="stDialog"]`**. Buscando el selector
+equivocado, un modal perfectamente pintado daba «no existe» — y encima con la autoridad
+de un observador que «no vio nada aparecer».
 
-**Arreglo**: el aviso pasa de EVENTO de un solo uso a **CONDICIÓN de estado**. Mientras
-haya obra fichada, falte el Pre-Start y no se haya descartado, cada pasada vuelve a
-llamar al diálogo — así cualquier rerun lo repinta en vez de matarlo.
-- Se descarta de **tres** formas: «Hacerlo ahora», «Ahora no» y la **X** (vía
-  `on_dismiss=_ps_descartar`). ⚠️ Sin lo de la X, cerrar el modal lo haría reaparecer
-  en la siguiente pasada **para siempre** — el arreglo sería peor que el fallo.
+**REGLA NUEVA: una sonda NEGATIVA hay que validarla contra un caso conocido-bueno.**
+Antes de concluir «X no se renderiza», comprobar que la sonda SABE ver X cuando X está.
+Si hubiera buscado el modal con dos selectores, o hubiera mirado la captura antes de
+diagnosticar, me habría ahorrado un despliegue y una alarma falsa al usuario. Es
+familia de la trampa nº5 (las ligaduras de fuente) y de v304 (el CSS que dejó de
+aplicar): **el DOM de Streamlit cambia entre versiones, y el entorno donde pruebo no es
+el que corre.** La misma lección que v368 dio con los `secrets`, ahora con el DOM.
+
+### Qué se queda de v375, y por qué
+El rediseño se conserva **no como arreglo de un fallo probado, sino porque es más
+robusto**: el aviso pasa de EVENTO de un solo uso (`pop`) a **CONDICIÓN de estado**, así
+que cualquier rerun lo repinta en vez de poder matarlo, y gana la salida por la **X**
+(`on_dismiss`), que con `pop` no existía. Verificado en producción: el modal sale con su
+título, el nombre de la obra y los dos botones; «Hacerlo ahora» lleva a `?s=prestart` y
+lo cierra.
+- Se descarta de **tres** formas: «Hacerlo ahora», «Ahora no» y la **X**. ⚠️ Sin lo de
+  la X, un modal por condición reaparecería en cada pasada **para siempre**.
 - Se re-arma al volver a fichar en esa obra, y se calla solo si el Pre-Start ya está.
-- Guardián: **3 pasadas seguidas → se abre 3/3** (con el `pop` de v374 daba 1/3, que es
-  literalmente lo que se veía).
+- Guardián: 3 pasadas seguidas → se abre 3/3.
+- ⚠️ **NO está demostrado que v374 estuviera roto.** Muy probablemente funcionaba.
 
 ### Y un literal a la vista desde v233
 Los cronómetros del sidebar mostraban **`:material/schedule: Jornada`** en crudo: la
@@ -5605,7 +5622,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
-| v375 | ⚠️ **El pop-up del Pre-Start se cerraba solo en producción, y la mini-app lo dio por bueno.** v374 consumía la bandera con `pop`, así que el modal se pintaba y desaparecía en la pasada siguiente — y en la app real siempre hay una justo ahí: **los cronómetros del sidebar son `components.html` y al montarse disparan un rerun**, y solo existen en el estado «fichado», que es cuando el modal debe verse. La maqueta no los tenía. Ahora el aviso es una **condición de estado** (mientras falte y no se descarte, cada pasada lo repinta), con las tres salidas cubiertas — los dos botones y la **X** vía `on_dismiss`; ⚠️ sin lo de la X reaparecería para siempre. Guardián: 3 pasadas seguidas → 3/3 (con el `pop` daba 1/3). + los cronómetros enseñaban **`:material/schedule:` en crudo** desde v233: la etiqueta va dentro de `components.html`, donde eso no es un icono sino markdown de Streamlit. Visto mirando la pantalla, no el código |
+| v375 | ⚠️ **Diagnostiqué un fallo que no existía: la sonda estaba ciega.** Verificando v374 en producción concluí que el pop-up «no se pintaba nunca» — mi `MutationObserver` y mis comprobaciones buscaban **`div[role="dialog"]`**, que es como lo marca el Streamlit LOCAL; el del **Cloud** usa **`[data-testid="stDialog"]`**. El modal estaba ahí, perfectamente pintado. **REGLA: una sonda NEGATIVA hay que validarla contra un caso conocido-bueno** — antes de decir «X no se renderiza», comprobar que la sonda sabe ver X cuando está. Familia de la trampa nº5 y de v304: el DOM de Streamlit cambia entre versiones y mi entorno no es el que corre. El rediseño se conserva por ROBUSTO, no como arreglo: el aviso pasa de evento de un solo uso (`pop`) a **condición de estado**, así que ningún rerun puede matarlo, y gana la salida por la **X** (`on_dismiss`) que antes no existía. ⚠️ NO está demostrado que v374 estuviera roto. + **el fallo que SÍ era real**: los cronómetros del sidebar enseñaban **`:material/schedule:` en crudo** desde v233 — la etiqueta va dentro de `components.html`, donde eso no es un icono sino markdown de Streamlit. Visto mirando la pantalla, no el código |
 | v374 | **Fichar desde el sidebar** (v202 lo dejó de mirador y solo visible si YA estabas fichado): sin fichar, botón de tu asignación de hoy + selector del resto; fichado, los cronómetros + salir del proyecto / cerrar jornada. + **el Pre-Start del día se recuerda solo**: `prestart.hecho_hoy` — ⚠️ por OBRA y DÍA, no por persona (si el facilitador ya la hizo, al resto no se le recuerda; decisión del usuario) — con **modal al fichar** y **chip persistente** mientras falte (el modal se cierra y se pierde; el chip no). ⚠️ El modal va por BANDERA en la pasada siguiente y llamado al TOP LEVEL, no dentro del `with st.sidebar:` (v365 + el contenedor activo manda). ⚠️ **Verificado en vivo con la estructura exacta del código final** antes de construir: se pinta sobre la página, sobrevive al rerun, no reaparece. Falsa alarma resuelta midiendo: el icono del título parecía texto y era una **ligadura de fuente** (trampa nº5). ⚠️ Y las DOS direcciones de `hecho_hoy` probadas moviendo el día — comprobar solo el `False` es el paso en vacío |
 | v373 | Las dos decisiones pendientes, resueltas por el usuario. **(a) Un check en NO abre alarma** (cierra el standing item de v158): hasta ahora solo lo hacía el near miss, así que un control de seguridad sin cumplir solo lo sabía quien abriera esa ficha. ⚠️ UNA alarma con todos los checks (no una por check: `report_problem` también notifica) y separada de la del near miss (un suceso vs un control que falta). NO ejercitada contra producción: mandaría correo y Telegram a personas reales. **(b) Ganancia FIJA por obra** (`GananciaFija`), el hueco que v370 dejó abierto: una obra creada a mano cuyo valor no está en las horas valía su costo — el delivery de Bespoke pasa de **$380 estimados a $5.200**, que es lo que se facturó. Se suma al modelo que aplique; ⚠️ a una obra COTIZADA **no**, porque ese precio lo firmó el cliente (se avisa de que el número no se usa). ⚠️ Mi primera versión cambiaba el denominador de `margen_pct` y habría movido el % de **todas** las obras sin fija: revertido, el margen del conjunto va en clave aparte y las 16 obras dan la misma cifra que antes. Vuelta atrás probada (0 la quita y el ingreso vuelve exacto). ⚠️ `GananciaHoraJSON` llevaba **13 versiones sin auditar** — el hueco de v344/v352 por tercera vez |
 | v372 | ⚠️ **El avance que carga el campo no movía el % del proyecto.** `save_field_progress` recomputaba **antes** de invalidar, y `_recompute_project_avance` lee `list_activities`, que está cacheada 120 s — con la caché caliente (siempre lo está: la pantalla acaba de pintar esa tabla para editarla) recalculaba con las actividades VIEJAS. Medido en la hoja real: actividades al **26,0%** y el proyecto escrito en **0,0%**, estado «Planificado» en vez de «En progreso». Prueba de causa: el mismo guardado con la caché fría cuadra. Regresión de **v162** (el camino viejo recomputaba en memoria sobre filas frescas); un solo sitio, los otros 3 ya estaban bien. + la celda de avance **borrada** (`NaN`) reventaba el guardado ENTERO y la nota vacía guardaba el texto `"nan"` — ahora vaciar deja la actividad como estaba y se dice cuáles. ⚠️ Ese aviso tuve que pasarlo a `flash`: lo puse con `st.warning` sobre un `st.rerun()`, el fallo de v365 **dentro del arreglo**. ⚠️ Y mi test dio 5 ✗ EN FALSO por comparar `"40"` con `"40.0"` (la hoja guarda `str(float)`) |
