@@ -580,28 +580,38 @@ def set_archivado(pid: str, archivar: bool = True) -> tuple:
 
 
 def datos_asociados(pid: str) -> dict:
-    """Cuanto cuelga de este proyecto. Se enseña ANTES de borrar de verdad."""
+    """Cuanto cuelga de este proyecto. Se enseña ANTES de borrar de verdad.
+
+    ⚠️ v380: todo esto vive en el libro del cliente. Para el PROPIETARIO —cuya sesión
+    no tiene grupo— salía a CERO, y este recuento es justo lo que se le enseña antes
+    de un borrado irreversible: «no cuelga nada» cuando cuelgan documentos, gastos y
+    fichajes es el peor sitio posible para un cero falso.
+    """
+    _prj = get_project(pid) or {}
+    _g = str(_prj.get("Grupo", "")) or None
     out = {}
-    try:
-        out["Documentos"] = len(list_documents(pid))
-    except Exception:
-        out["Documentos"] = 0
-    for etiqueta, hoja, col in (("Gastos", "Gastos", "ProyectoID"),
-                                ("Cálculos", "Calculos", "ProyectoID"),
-                                ("Pre-Starts", "PreStarts", "ProyectoID"),
-                                ("Alarmas", "Alarmas", "ProyectoID")):
+    from core import tenant
+    with tenant.como_grupo(_g or tenant.grupo_sesion()):
         try:
-            out[etiqueta] = sum(1 for r in _records(hoja)
-                                if str(r.get(col, "")) == str(pid))
+            out["Documentos"] = len(list_documents(pid))
         except Exception:
-            out[etiqueta] = 0
-    try:
-        out["Actividades"] = len(list_activities(pid))
-        nom = str((get_project(pid) or {}).get("Nombre", ""))
-        out["Fichajes"] = sum(1 for r in _fichaje_records()
-                              if timeclock.es_del_proyecto(r, pid, nom))
-    except Exception:
-        pass
+            out["Documentos"] = 0
+        for etiqueta, hoja, col in (("Gastos", "Gastos", "ProyectoID"),
+                                    ("Cálculos", "Calculos", "ProyectoID"),
+                                    ("Pre-Starts", "PreStarts", "ProyectoID"),
+                                    ("Alarmas", "Alarmas", "ProyectoID")):
+            try:
+                out[etiqueta] = sum(1 for r in _records(hoja)
+                                    if str(r.get(col, "")) == str(pid))
+            except Exception:
+                out[etiqueta] = 0
+        try:
+            out["Actividades"] = len(list_activities(pid))
+            nom = str(_prj.get("Nombre", ""))
+            out["Fichajes"] = sum(1 for r in _fichaje_records()
+                                  if timeclock.es_del_proyecto(r, pid, nom))
+        except Exception:
+            pass
     return out
 
 
@@ -906,7 +916,11 @@ def save_activities(pid, edits) -> tuple:
 def project_hours(proyecto_nombre: str, grupo: str = None, pid: str = "") -> float:
     """Horas del fichaje de un proyecto. Con `pid` cruza por ID (v145); si no, por nombre."""
     total = 0.0
-    for r in _fichaje_records():
+    # ⚠️ v380: también por aquí. Arreglé `project_hours_bulk` dando por hecho que era
+    # la que usaban las tarjetas, y la cartera del PROPIETARIO llama a ESTA una vez por
+    # obra — así que en pantalla seguían saliendo `0h` en las 12. Medir qué función
+    # llama la pantalla, no suponerlo.
+    for r in _fichajes_visibles(grupo):
         if not timeclock.es_del_proyecto(r, pid, proyecto_nombre):
             continue
         if grupo is not None and str(r.get("Grupo", "")) != str(grupo):
