@@ -499,6 +499,33 @@ def list_projects(grupo: str = None, agrupacion_id: str = None,
     return out
 
 
+def _fichajes_visibles(grupo) -> list:
+    """Las filas del FICHAJE que le tocan a quien pregunta (v379).
+
+    Gemela de `_registros_visibles` para la hoja del fichaje, que es la que alimenta
+    las horas de la cartera.
+    """
+    from core import tenant
+    if grupo is not None:
+        if tenant.puede_ver(grupo):
+            with tenant.como_grupo(grupo):
+                return _fichaje_records()
+        return _fichaje_records()
+    if not tenant.es_propietario():
+        return _fichaje_records()
+    from core import auth as _auth
+    try:
+        libros = _auth.grupos_por_libro()
+    except Exception as e:
+        logger.warning("projects: no se pudieron listar los libros: %s", e)
+        return _fichaje_records()
+    out = []
+    for g, _sid in libros:
+        with tenant.como_grupo(g):
+            out.extend(_fichaje_records())
+    return out
+
+
 def _registros_visibles(title, grupo) -> list:
     """Las filas que le tocan a quien pregunta (v379).
 
@@ -904,7 +931,12 @@ def project_hours_bulk(grupo: str = None) -> dict:
         if n:
             idx[n] = str(p.get("ID", ""))
     out = {}
-    for r in _fichaje_records():
+    # ⚠️ v379: el fichaje vive en el libro del cliente. La sesión del PROPIETARIO no
+    # tiene grupo, así que sin el ámbito leía el maestro y su cartera mostraba **0 h
+    # en todas las obras** — visible en pantalla en cuanto la fase 2 le devolvió los
+    # proyectos. Mismo criterio que `_registros_visibles`: el grupo explícito manda
+    # solo si quien pregunta puede verlo, para no convertir el argumento en llave.
+    for r in _fichajes_visibles(grupo):
         if grupo is not None and str(r.get("Grupo", "")) != str(grupo):
             continue
         pid = timeclock.pid_of(r) or idx.get(

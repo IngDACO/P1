@@ -5763,7 +5763,27 @@ aislamiento tiene que garantizar. **Solo la versión reescrita encontró la fuga
 arriba.** REGLA: cuando una funcionalidad cambia lo que es «correcto», el test que lo
 medía hay que rehacerlo, no relajarlo — si no, se queda dando veredictos de otra época.
 
-## Versiones desplegadas (v379 = actual)
+### ⚠️ La cartera se compone de VARIAS fuentes, y solo probé una (v380)
+Verificando la fase 2 **en pantalla** con la sesión de propietario: los proyectos ya
+salían (12 activos de 16), el resumen por grupo cuadraba al dígito con lo previsto…
+y **todas las tarjetas mostraban `0h`**. El demo tiene 484 fichajes.
+
+Mis tests medían `list_projects`. Pero una tarjeta de la cartera se arma con **cuatro
+fuentes distintas**, y cada una tiene su propio camino al libro:
+| Dato | De dónde sale | Estado tras v379 |
+|---|---|---|
+| proyectos | `list_projects` | ✓ arreglado |
+| **horas** | `project_hours_bulk` → hoja del fichaje | ✗ leía el maestro → **0 h** |
+| **alarmas** | `open_counts_all()` — **no recibe grupo** | ✗ leía el maestro → **0** |
+| costos / retrasos | `group_expenses`, `gaps_by_group` | ✓ ya cuadraban |
+
+Los dos huecos se cierran con el mismo patrón (`_fichajes_visibles`, `_alarmas_visibles`).
+**REGLA: cuando una pantalla se compone de varias fuentes, hay que comparar TODAS
+contra lo que ve quien sí las tiene bien** — arreglar la principal y dar la pantalla
+por buena deja ceros que parecen datos. Guardián nuevo: mide horas, alarmas, gastos y
+retrasos del propietario contra los del admin del mismo grupo, y falla si difieren.
+
+## Versiones desplegadas (v380 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -5771,6 +5791,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v380 | ⚠️ **La fase 2 se dejó dos huecos, y solo se vieron EN PANTALLA**: con la sesión de propietario los proyectos salían pero **todas las tarjetas marcaban `0h`** (el demo tiene 484 fichajes) y **0 alarmas** (el admin veía 19). Mis tests medían `list_projects`, pero una tarjeta se arma con **cuatro fuentes** y cada una tiene su propio camino al libro: las horas van por la hoja del fichaje y `open_counts_all()` **ni siquiera recibe grupo**. Cerrados con el mismo patrón. **REGLA: cuando una pantalla se compone de varias fuentes, compararlas TODAS contra quien las tiene bien** — arreglar la principal y dar la pantalla por buena deja ceros con pinta de dato. Guardián nuevo que compara horas, alarmas, gastos y retrasos del propietario contra los del admin |
 | v379 | **FASE 2: el propietario vuelve a ver a todos sus clientes** (veía 0 desde la mudanza de v377). En vez de hilar un `grupo` por ~40 funciones, **`tenant.como_grupo(g)`**: dentro del `with`, `sheet_id_para` consulta el grupo activo antes que la sesión, así que toda lectura cae en el libro de ese cliente. Un cambio, en el único punto donde se decide el libro; aplicado en 4 sitios. ⚠️ Vive en `session_state`, no en un global (un global se comparte por proceso — el fallo que acababa de cerrar v378). ⚠️ `grupos_por_libro()` lee una vez por LIBRO, no por grupo: si tres comparten el maestro, leerlo tres veces **triplicaría** el consolidado. ⚠️ **Y una fuga que introduje yo**: hacer que el `grupo` explícito eligiera libro SIEMPRE convertía el argumento en una llave (un admin ajeno pasando `grupo="cliente1"` leía su libro) — ahora solo elige si `tenant.puede_ver`. La cazó el test de dos inquilinos, y **solo tras reescribirlo**: el de v378 comparaba propietario contra admin y con la fase 2 había dejado de distinguir una fuga de la funcionalidad nueva |
 | v378 | ⚠️ **Fuga de datos ENTRE INQUILINOS en la caché.** `st.cache_data` se comparte por PROCESO y la clave era solo el título de la hoja, así que el segundo cliente recibía lo que memoizó el primero — demostrado con los dos libros reales en los dos sentidos. El cerrojo de v351 no lo cubre: comprueba el grupo de un objeto ya traído, y aquí **la lista entera es del inquilino equivocado**. 18 lectores de inquilino en 16 módulos: la función cacheada pasa a `X_cached(libro, …)` + envoltorio con el nombre de siempre, **sin tocar ninguno de los ~40 call-sites**. ⚠️ **Tres trampas**: (1) llamar al parámetro `_libro` dejó el arreglo **INERTE** — Streamlit excluye de la clave los argumentos que empiezan por guión bajo, y solo lo delató instrumentar qué se ejecutaba de verdad; (2) `compileall`, los imports y el guardián de AST daban ✓ con **3 `NameError` dentro de los envoltorios** (`TRABAJOS_SHEET`, `SHEET`×2) — **importar no ejecuta**, hubo que llamarlos uno a uno; (3) los `.clear()` de `_invalidate` apuntando al envoltorio, la regresión de v344 por tercera vez |
 | v377 | **La demo se muda a su propio libro** (`COPEX — DEMO (cliente1)`) y el maestro queda limpio para el primer cliente real: 22 hojas de inquilino copiadas, **9.617 celdas verificadas una a una**, y solo entonces vaciado el maestro. Las 4 globales (`Login`, `Grupos`, `Rieles`, `Manuales`) se quedan. Orden sagrado: **copiar → verificar → enlazar → verificar → borrar → verificar**. ⚠️ Hasta vaciar el maestro ninguna cifra probaba nada (los dos libros tenían lo mismo) — el paso en vacío aplicado a una migración. **Tres errores míos por el camino**: el respaldo escrito DENTRO del repo (el deploy lo habría subido a GitHub con hashes y emails — lo cazó `git status`), el verificador reventando con un **429** por pedir hoja por hoja en vez de por lotes (el problema de v339 cometido en el script que venía a verificarlo), y `values_batch_clear` recibiendo la lista como `params` en vez de `body`. ⚠️ **La fase 2 dejó de ser teórica**: el propietario ve ahora 0 proyectos; quedan identificadas las 9 funciones que hay que tocar |

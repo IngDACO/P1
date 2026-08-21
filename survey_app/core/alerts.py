@@ -93,13 +93,36 @@ def list_alerts(pid, estado=None) -> list:
 
 
 def open_counts_all() -> dict:
-    """{ProyectoID: nº alarmas abiertas} de todos los proyectos (1 lectura, para badges)."""
+    """{ProyectoID: nº alarmas abiertas} de todos los proyectos (1 lectura, para badges).
+
+    ⚠️ v379: no recibe grupo, así que lee el libro de la SESIÓN — y la del propietario
+    no tiene ninguno. Con un libro por cliente (v359) sus tarjetas mostraban **0
+    alarmas** mientras el admin del mismo grupo veía 19. Para el propietario se
+    recorren los libros; para el resto, una sola lectura como siempre.
+    """
     d = {}
-    for r in _records():
+    for r in _alarmas_visibles():
         if str(r.get("Estado", "")) == "abierta":
             k = str(r.get("ProyectoID", ""))
             d[k] = d.get(k, 0) + 1
     return d
+
+
+def _alarmas_visibles() -> list:
+    from core import tenant
+    if not tenant.es_propietario():
+        return _records()
+    try:
+        from core import auth as _auth
+        libros = _auth.grupos_por_libro()
+    except Exception as e:
+        logger.warning("alerts: no se pudieron listar los libros: %s", e)
+        return _records()
+    out = []
+    for g, _sid in libros:
+        with tenant.como_grupo(g):
+            out.extend(_records())
+    return out
 
 
 # ── Escrituras ───────────────────────────────────────────────────
