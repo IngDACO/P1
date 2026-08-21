@@ -39,6 +39,20 @@ HERRAMIENTAS = {
 }
 
 
+
+def _libro_de(_hoja) -> str:
+    """El id del libro que le toca a esta hoja AHORA (v378).
+
+    Va como primer argumento del lector cacheado para que la clave distinga
+    inquilinos. No se usa dentro: `hojas.registros` resuelve el libro por su
+    cuenta; aquí solo hace falta que el VALOR entre en la clave.
+    """
+    try:
+        from core import timeclock
+        return timeclock.sheet_id_para(_hoja)
+    except Exception:
+        return ""
+
 def is_configured() -> bool:
     return timeclock.is_configured()
 
@@ -52,12 +66,22 @@ def _ws():
 
 
 @st.cache_data(ttl=120, show_spinner=False)
-def _records() -> list:
+def _records_cached(libro: str) -> list:
     """Registros de SHEET (por lote, v339)."""
     from core import hojas          # perezoso: evita el ciclo con timeclock
     return hojas.registros(SHEET, HEADERS) or []
 
 
+
+
+def _records():
+    """Envoltorio: resuelve el libro y delega en la versión cacheada (v378).
+
+    ⚠️ El id del libro va en la CLAVE de caché. Sin él, `st.cache_data` —que se
+    comparte por PROCESO— servía al segundo cliente lo que dejó memoizado el
+    primero: una fuga de datos entre inquilinos, no un problema de rendimiento.
+    """
+    return _records_cached(_libro_de(SHEET))
 def _invalidate():
     # ⚠️ v339: además de la caché propia hay que tirar el LOTE compartido
     # (`hojas._lote`). Si no, tras escribir, el dato seguiría saliendo del lote
@@ -65,7 +89,7 @@ def _invalidate():
     from core import hojas
     hojas.invalidar()
     try:
-        _records.clear()
+        _records_cached.clear()
     except Exception:
         pass
 

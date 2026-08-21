@@ -86,6 +86,20 @@ ESTADOS_MANUAL = ["", "En pausa", "Cancelado", "Archivado"]
 FMT_DATE = "%Y-%m-%d"
 
 
+
+def _libro_de(_hoja) -> str:
+    """El id del libro que le toca a esta hoja AHORA (v378).
+
+    Va como primer argumento del lector cacheado para que la clave distinga
+    inquilinos. No se usa dentro: `hojas.registros` resuelve el libro por su
+    cuenta; aquí solo hace falta que el VALOR entre en la clave.
+    """
+    try:
+        from core import timeclock
+        return timeclock.sheet_id_para(_hoja)
+    except Exception:
+        return ""
+
 def is_configured() -> bool:
     return timeclock._secrets_present()
 
@@ -145,19 +159,39 @@ _HEADERS_BY_TITLE = {
 
 
 @st.cache_data(ttl=120, show_spinner=False)
-def _records(title):
+def _records_cached(libro: str, title):
     """Registros de una hoja (cacheados). Solo lecturas de DISPLAY."""
     from core import hojas          # perezoso: evita el ciclo con timeclock
     return hojas.registros(title, _HEADERS_BY_TITLE.get(title, [])) or []
 
 
+
+
+def _records(title):
+    """Envoltorio: resuelve el libro y delega en la versión cacheada (v378).
+
+    ⚠️ El id del libro va en la CLAVE de caché. Sin él, `st.cache_data` —que se
+    comparte por PROCESO— servía al segundo cliente lo que dejó memoizado el
+    primero: una fuga de datos entre inquilinos, no un problema de rendimiento.
+    """
+    return _records_cached(_libro_de(title), title)
 @st.cache_data(ttl=120, show_spinner=False)
-def _fichaje_records():
+def _fichaje_records_cached(libro: str):
     """Registros del fichaje (cacheados) para sumar horas."""
     from core import hojas          # perezoso: evita el ciclo con timeclock
     return hojas.registros("Sheet1", timeclock.HEADERS) or []
 
 
+
+
+def _fichaje_records():
+    """Envoltorio: resuelve el libro y delega en la versión cacheada (v378).
+
+    ⚠️ El id del libro va en la CLAVE de caché. Sin él, `st.cache_data` —que se
+    comparte por PROCESO— servía al segundo cliente lo que dejó memoizado el
+    primero: una fuga de datos entre inquilinos, no un problema de rendimiento.
+    """
+    return _fichaje_records_cached(_libro_de("Sheet1"))
 def _invalidate():
     # ⚠️ v339: además de la caché propia hay que tirar el LOTE compartido
     # (`hojas._lote`). Si no, tras escribir, el dato seguiría saliendo del lote
@@ -174,7 +208,12 @@ def _invalidate():
     # Y las DERIVADAS (v344): `gaps_by_group`/`projections_by_group` cachean el
     # retraso y la fecha proyectada de cada obra; sin limpiarlas, tras tocar las
     # actividades el retraso y el «en riesgo» seguían con el valor viejo.
-    for fn in (_records, _fichaje_records, gaps_by_group, projections_by_group):
+    # ⚠️ v378: van las CACHEADAS (`*_cached`), no los envoltorios. Limpiar el
+    # envoltorio lanza AttributeError, el `except` lo apunta en el log y la caché
+    # se queda sin limpiar — el mismo agujero de v344 por otro camino. El guardián
+    # de v378 comprueba que cada `.clear()` apunte a algo de verdad cacheado.
+    for fn in (_records_cached, _fichaje_records_cached,
+               gaps_by_group, projections_by_group):
         try:
             fn.clear()
         except Exception as e:                 # deja rastro (v323): si falla, se sabe

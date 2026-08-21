@@ -5671,7 +5671,58 @@ que tocar cuando se aborde la fase 2:
 · `tool_save_ui._proyectos_de` · `survey_ui.render_survey_tab`.
 Que la limitación salga AHORA, con datos simulados, es justo lo que se buscaba.
 
-## Versiones desplegadas (v377 = actual)
+## ⚠️ FUGA DE DATOS ENTRE INQUILINOS EN LA CACHÉ (v378)
+Salió al ir a hacer la fase 2: la capa que había que tocar tenía un agujero peor que
+el problema que veníamos a resolver.
+
+```python
+@st.cache_data(ttl=120)          # ← la clave es SOLO el título de la hoja
+def _records():
+    return hojas.registros(SHEET, HEADERS) or []   # ← el libro sale de la SESIÓN
+```
+`st.cache_data` se comparte **por PROCESO**, no por sesión. El primero que lee deja su
+resultado memoizado y **el siguiente —de otro cliente— recibe datos que no son suyos**.
+Demostrado con los dos libros reales, en los dos sentidos: el propietario leyendo el
+maestro vacío dejaba al admin de cliente1 con 0 proyectos, y al revés el propietario
+recibía las 16 obras del cliente.
+
+⚠️ **El cerrojo de v351 no lo cubre**: aquel comprueba el grupo de un objeto que ya
+trajiste; aquí **la lista entera es del inquilino equivocado**. `hojas._lote` y
+`timeclock._libro` sí van por libro (v359 lo hizo a propósito) — el agujero estaba en
+la caché de ENCIMA, que memoiza el resultado ya derivado.
+
+**Alcance medido**: 22 lectores cacheados; 4 leen hojas globales (sin fuga posible) y
+**18 leen datos de inquilino** en 16 módulos.
+
+**El arreglo**, uniforme y sin tocar ninguno de los ~40 call-sites: la función cacheada
+pasa a `X_cached(libro, …)` y se deja un envoltorio `X()` con el nombre de siempre que
+resuelve el libro y delega.
+
+### ⚠️ TRAMPA 1: el guión bajo hizo el arreglo INERTE
+Llamé al parámetro **`_libro`**. `st.cache_data` trata los argumentos cuyo nombre
+empieza por guión bajo como **no hashables y los deja FUERA de la clave** — es su
+convención para pasar conexiones. Resultado: la firma decía lo correcto, el guardián de
+AST daba ✓… y la fuga seguía **idéntica**.
+Solo lo delató **instrumentar quién se ejecutaba de verdad**: al trazar las llamadas
+reales a `hojas.registros`, la segunda lectura no aparecía — la caché la había servido.
+**REGLA: un parámetro que existe para separar la clave de caché NO puede empezar por
+`_`.** El guardián lo comprueba desde ahora.
+
+### ⚠️ TRAMPA 2: importar un módulo NO ejecuta sus funciones
+`compileall` ✓, los 79 módulos importan ✓, el guardián de AST ✓ … y **tres envoltorios
+tenían un `NameError` dentro**: `roster` usaba `TRABAJOS_SHEET` (la constante es
+`TRAB_SHEET`), `invoices` y `payroll` usaban `SHEET` (son `FACTURAS_SHEET` y
+`NOMINAS_SHEET`). Habrían reventado la primera vez que alguien abriera el tablero, las
+facturas o las nóminas. **Lo único que lo caza es LLAMARLOS**: smoke test que ejecuta
+los 18 envoltorios y las 15 invalidaciones.
+
+### ⚠️ TRAMPA 3: la de v344, otra vez
+Al renombrar la función cacheada, los `X.clear()` de `_invalidate` quedan apuntando al
+**envoltorio** → `AttributeError` → el `except` se lo traga → **la caché deja de
+limpiarse y nadie se entera**. El guardián lo cazó en 2 sitios (`projects`, `roster`),
+donde mi regex había arreglado el primer elemento de la tupla y dejado el segundo.
+
+## Versiones desplegadas (v378 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -5679,6 +5730,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v378 | ⚠️ **Fuga de datos ENTRE INQUILINOS en la caché.** `st.cache_data` se comparte por PROCESO y la clave era solo el título de la hoja, así que el segundo cliente recibía lo que memoizó el primero — demostrado con los dos libros reales en los dos sentidos. El cerrojo de v351 no lo cubre: comprueba el grupo de un objeto ya traído, y aquí **la lista entera es del inquilino equivocado**. 18 lectores de inquilino en 16 módulos: la función cacheada pasa a `X_cached(libro, …)` + envoltorio con el nombre de siempre, **sin tocar ninguno de los ~40 call-sites**. ⚠️ **Tres trampas**: (1) llamar al parámetro `_libro` dejó el arreglo **INERTE** — Streamlit excluye de la clave los argumentos que empiezan por guión bajo, y solo lo delató instrumentar qué se ejecutaba de verdad; (2) `compileall`, los imports y el guardián de AST daban ✓ con **3 `NameError` dentro de los envoltorios** (`TRABAJOS_SHEET`, `SHEET`×2) — **importar no ejecuta**, hubo que llamarlos uno a uno; (3) los `.clear()` de `_invalidate` apuntando al envoltorio, la regresión de v344 por tercera vez |
 | v377 | **La demo se muda a su propio libro** (`COPEX — DEMO (cliente1)`) y el maestro queda limpio para el primer cliente real: 22 hojas de inquilino copiadas, **9.617 celdas verificadas una a una**, y solo entonces vaciado el maestro. Las 4 globales (`Login`, `Grupos`, `Rieles`, `Manuales`) se quedan. Orden sagrado: **copiar → verificar → enlazar → verificar → borrar → verificar**. ⚠️ Hasta vaciar el maestro ninguna cifra probaba nada (los dos libros tenían lo mismo) — el paso en vacío aplicado a una migración. **Tres errores míos por el camino**: el respaldo escrito DENTRO del repo (el deploy lo habría subido a GitHub con hashes y emails — lo cazó `git status`), el verificador reventando con un **429** por pedir hoja por hoja en vez de por lotes (el problema de v339 cometido en el script que venía a verificarlo), y `values_batch_clear` recibiendo la lista como `params` en vez de `body`. ⚠️ **La fase 2 dejó de ser teórica**: el propietario ve ahora 0 proyectos; quedan identificadas las 9 funciones que hay que tocar |
 | v376 | Corrección del registro de v375 (documentación) |
 | v375 | ⚠️ **Diagnostiqué un fallo que no existía: la sonda estaba ciega.** Verificando v374 en producción concluí que el pop-up «no se pintaba nunca» — mi `MutationObserver` y mis comprobaciones buscaban **`div[role="dialog"]`**, que es como lo marca el Streamlit LOCAL; el del **Cloud** usa **`[data-testid="stDialog"]`**. El modal estaba ahí, perfectamente pintado. **REGLA: una sonda NEGATIVA hay que validarla contra un caso conocido-bueno** — antes de decir «X no se renderiza», comprobar que la sonda sabe ver X cuando está. Familia de la trampa nº5 y de v304: el DOM de Streamlit cambia entre versiones y mi entorno no es el que corre. El rediseño se conserva por ROBUSTO, no como arreglo: el aviso pasa de evento de un solo uso (`pop`) a **condición de estado**, así que ningún rerun puede matarlo, y gana la salida por la **X** (`on_dismiss`) que antes no existía. ⚠️ NO está demostrado que v374 estuviera roto. + **el fallo que SÍ era real**: los cronómetros del sidebar enseñaban **`:material/schedule:` en crudo** desde v233 — la etiqueta va dentro de `components.html`, donde eso no es un icono sino markdown de Streamlit. Visto mirando la pantalla, no el código |
