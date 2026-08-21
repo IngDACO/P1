@@ -24,3 +24,9 @@ folium>=0.15,<1
 streamlit-folium>=0.20,<1
 # Códigos QR para el inventario de activos (v263). Pure-python, sin ruedas nativas → seguro en el Cloud.
 segno>=1.6,<2
+# Firma DIBUJADA a mano en el Pre-Start (v383). Es un componente de 2023, así que se
+# probó antes contra el Streamlit que corre aquí (1.57): importa, renderiza, captura el
+# trazo (el PNG pasa de 543 B en blanco a 5.245 B firmado) y reportlab lo acepta.
+# Import PEREZOSO en `prestart_ui`: si el componente no está, el Pre-Start sigue
+# funcionando con nombre e iniciales en vez de romperse.
+streamlit-drawable-canvas>=0.9.3,<1

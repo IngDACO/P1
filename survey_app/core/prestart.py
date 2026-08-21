@@ -185,6 +185,25 @@ def _next_id(recs) -> str:
     return f"PS-{mx + 1:04d}"
 
 
+def _asistentes_para_hoja(attendees) -> list:
+    """Los asistentes SIN la firma, para guardar en la hoja (v383).
+
+    ⚠️ Decisión del usuario: la firma dibujada va **solo al PDF**, que es el
+    documento que vale y ya se archiva en Drive. Aquí se quita a propósito por dos
+    razones, y las dos rompen de verdad:
+      · `json.dumps` no serializa `bytes` → el registro entero fallaría;
+      · una celda de Sheets admite 50.000 caracteres y seis firmas en base64
+        rondan los 40.000: se quedaría sin margen y empezaría a fallar en silencio.
+    """
+    out = []
+    for a in (attendees or []):
+        out.append({"name": str(a.get("name", "")),
+                    "initial": str(a.get("initial", "")),
+                    # rastro de QUE firmó, sin la imagen
+                    "firmado": bool(a.get("sig"))})
+    return out
+
+
 def filename_for(data) -> str:
     """`ddmmyyyy AB CD EF.pdf` — fecha + iniciales de los asistentes."""
     f = data.get("fecha")
@@ -246,7 +265,7 @@ def submit(data: dict) -> dict:
             json.dumps(data.get("s1", {}), ensure_ascii=False),
             json.dumps(data.get("s3", {}), ensure_ascii=False),
             str(data.get("general_notes", "")),
-            json.dumps(data.get("attendees", []), ensure_ascii=False),
+            json.dumps(_asistentes_para_hoja(data.get("attendees")), ensure_ascii=False),
             fname, drive_id, creado_por, clock.now().strftime("%Y-%m-%d %H:%M"),
         ], value_input_option="RAW")
     except Exception as e:

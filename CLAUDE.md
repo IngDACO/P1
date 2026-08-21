@@ -5799,7 +5799,46 @@ ANTES de borrar un proyecto— le daba **0 en todo** al propietario. «No cuelga
 cuando cuelgan 25 fichajes, 3 gastos y 11 actividades es el peor sitio imaginable para
 un cero falso. Ahora se lee bajo el ámbito del grupo del proyecto.
 
-## Versiones desplegadas (v381 = actual)
+## Firma DIBUJADA en el Pre-Start + el aviso que no se va (v383)
+Tres peticiones del usuario. Decisiones suyas: **firma por asistente** (como el formato
+en papel, donde cada uno firma su línea) y **solo en el PDF**.
+
+### La firma
+`streamlit-drawable-canvas` (dependencia nueva). ⚠️ Es un componente de **2023** y aquí
+corre Streamlit 1.57 — con el historial de v66 (segfaults por ruedas bleeding-edge) eso
+se prueba ANTES de prometerlo: importa, renderiza, **captura el trazo** (el PNG pasa de
+543 B en blanco a 5.245 B firmado) y **reportlab lo acepta**.
+- **Import PEREZOSO**: si el componente falta o falla, el Pre-Start NO se cae — se piden
+  las iniciales tecleadas, como hasta v382. Una charla de seguridad no puede quedarse
+  sin registrar porque una dependencia de terceros no cargue.
+- El bloque de asistentes deja de ser un `st.data_editor` (una tabla no puede llevar un
+  lienzo dentro): pasa a una lista de nombre + recuadro de firma, con botón de añadir.
+- **Quien está en la lista, firma**: el botón de generar se bloquea y dice de quién falta
+  la firma. Mismo criterio que v158 («no se puede firmar sin leer»): si se admiten
+  asistentes sin firma, la firma deja de significar nada.
+
+### ⚠️ Tres trampas, y las tres habrían pasado desapercibidas
+1. **Detectar la firma por el canal ALFA no sirve.** Con fondo opaco, un lienzo VACÍO da
+   alfa=255 en los 58.800 píxeles → **todo el mundo constaría como firmado**. Se compara
+   contra el color de fondo. Lo delató instrumentar la mini-app, no leer el código.
+2. **La firma no puede llegar a la hoja.** `json.dumps` **no serializa `bytes`**, así que
+   sin filtrar, `submit` habría fallado ENTERO; y aunque serializara, seis firmas en
+   base64 rondan los 40.000 caracteres contra un tope de celda de 50.000. La hoja guarda
+   nombre, iniciales y un `firmado: true`; la imagen va al PDF, que es el documento que
+   vale y ya se archiva en Drive.
+3. **La columna de firma medía el 9% del ancho** —dimensionada para dos iniciales— y el
+   propio encabezado se partía como «Signatur / e». Reequilibrada a 16,3%. Lo cazó
+   **extraer el texto del PDF generado**; en el código no se ve.
+- Y un `logger` inexistente en `prestart_pdf` dentro del `except` de la firma: el
+  NameError latente de v370 otra vez. El guardián **ejercita esa rama** (firma corrupta).
+
+### El aviso de arriba
+Banda en la barra superior, visible desde CUALQUIER sección y que **no se puede
+descartar**: solo desaparece cuando el Pre-Start está hecho. El chip del sidebar (v374)
+se pierde de vista —el sidebar se pliega en el móvil— y el modal se cierra y no vuelve.
+0 llamadas nuevas: `open_sessions` y `hecho_hoy` salen de registros ya cacheados.
+
+## Versiones desplegadas (v383 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -5807,6 +5846,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v383 | **Firma DIBUJADA en el Pre-Start** (una por asistente, solo en el PDF) + **banda de aviso en la barra superior** que no se puede descartar hasta que el Pre-Start esté hecho. La dependencia (`streamlit-drawable-canvas`, de 2023) se probó ANTES contra el Streamlit 1.57 que corre aquí: captura el trazo (543 B en blanco → 5.245 B firmado) y reportlab lo acepta; import perezoso, así que si falla se cae a las iniciales en vez de dejar sin registrar la charla. ⚠️ **Tres trampas**: detectar la firma por el canal ALFA daba **58.800 píxeles de trazo en un lienzo VACÍO** (todos «firmados»); `json.dumps` **no serializa bytes**, así que sin filtrar la firma el registro habría fallado entero (y en base64 seis firmas rozan el tope de 50.000 caracteres por celda); y la columna de firma medía el **9%** del ancho —dimensionada para dos iniciales— y partía el encabezado como «Signatur / e», lo que solo se vio extrayendo el texto del PDF generado. + `logger` inexistente en el `except` de la firma (el NameError latente de v370), con el guardián ejercitando esa rama |
 | v381 | ⚠️ **v380 arregló la función equivocada.** Con la pantalla delante, las alarmas ya salían y las 12 tarjetas **seguían en `0h`**: el arreglo fue a `project_hours_bulk` dando por hecho que era la de la cartera, y `render_owner_projects` llama a **`project_hours()` una vez por obra**. El test daba ✓ sobre una función que esa pantalla no usa. **REGLA: antes de arreglar lo que pinta una pantalla, mirar QUÉ función llama** — el guardián lo comprueba primero y solo después mide. + otro cero peligroso: **`datos_asociados`**, el recuento que se enseña ANTES de borrar un proyecto, le daba **0 en todo** al propietario («no cuelga nada» con 25 fichajes, 3 gastos y 11 actividades colgando) |
 | v380 | ⚠️ **La fase 2 se dejó dos huecos, y solo se vieron EN PANTALLA**: con la sesión de propietario los proyectos salían pero **todas las tarjetas marcaban `0h`** (el demo tiene 484 fichajes) y **0 alarmas** (el admin veía 19). Mis tests medían `list_projects`, pero una tarjeta se arma con **cuatro fuentes** y cada una tiene su propio camino al libro: las horas van por la hoja del fichaje y `open_counts_all()` **ni siquiera recibe grupo**. Cerrados con el mismo patrón. **REGLA: cuando una pantalla se compone de varias fuentes, compararlas TODAS contra quien las tiene bien** — arreglar la principal y dar la pantalla por buena deja ceros con pinta de dato. Guardián nuevo que compara horas, alarmas, gastos y retrasos del propietario contra los del admin |
 | v379 | **FASE 2: el propietario vuelve a ver a todos sus clientes** (veía 0 desde la mudanza de v377). En vez de hilar un `grupo` por ~40 funciones, **`tenant.como_grupo(g)`**: dentro del `with`, `sheet_id_para` consulta el grupo activo antes que la sesión, así que toda lectura cae en el libro de ese cliente. Un cambio, en el único punto donde se decide el libro; aplicado en 4 sitios. ⚠️ Vive en `session_state`, no en un global (un global se comparte por proceso — el fallo que acababa de cerrar v378). ⚠️ `grupos_por_libro()` lee una vez por LIBRO, no por grupo: si tres comparten el maestro, leerlo tres veces **triplicaría** el consolidado. ⚠️ **Y una fuga que introduje yo**: hacer que el `grupo` explícito eligiera libro SIEMPRE convertía el argumento en una llave (un admin ajeno pasando `grupo="cliente1"` leía su libro) — ahora solo elige si `tenant.puede_ver`. La cazó el test de dos inquilinos, y **solo tras reescribirlo**: el de v378 comparaba propietario contra admin y con la fase 2 había dejado de distinguir una fuga de la funcionalidad nueva |

@@ -4,6 +4,9 @@ se genera el PDF (marca = grupo), se archiva en Drive del proyecto + hoja, y se
 abre una alarma del proyecto si hay Near Miss/Hazard o si algún control quedó en
 NO (v373).
 """
+import io
+import logging
+
 import streamlit as st
 import pandas as pd
 
@@ -11,6 +14,8 @@ from core import prestart as PS
 from core import projects as P
 from core import maps
 from core import clock
+
+logger = logging.getLogger(__name__)
 
 # Opción neutra: sin ella el selectbox devuelve el primer proyecto y se
 # escribiría sobre un elevador que nadie eligió.
@@ -20,6 +25,99 @@ _VACIO = "— elige el proyecto —"
 def _initials(nombre: str) -> str:
     parts = [w for w in str(nombre or "").split() if w]
     return "".join(w[0].upper() for w in parts[:3])
+
+
+def _canvas_disponible():
+    """El componente de dibujo, o None. Import PEREZOSO a propósito.
+
+    ⚠️ Si el componente falta o falla, el Pre-Start NO se cae: se pide la firma
+    tecleando las iniciales, como hasta v382. Una charla de seguridad no se puede
+    quedar sin registrar porque una dependencia de terceros no cargue.
+    """
+    try:
+        from streamlit_drawable_canvas import st_canvas
+        return st_canvas
+    except Exception as e:
+        logger.warning("prestart: sin lienzo de firma (%s)", e)
+        return None
+
+
+def _firma_png(res, fondo="#ffffff"):
+    """El PNG de lo dibujado, o None si el lienzo está EN BLANCO.
+
+    ⚠️ Detectar la firma por el canal ALFA no sirve: con fondo opaco, un lienzo
+    vacío da alfa=255 en los 58.800 píxeles y TODO EL MUNDO constaría como firmado.
+    Se compara contra el color de fondo, que es lo que de verdad distingue un trazo.
+    """
+    if res is None or getattr(res, "image_data", None) is None:
+        return None
+    try:
+        import numpy as np
+        from PIL import Image
+        arr = res.image_data.astype("uint8")
+        rgb = arr[:, :, :3]
+        alfa = arr[:, :, 3]
+        f = tuple(int(fondo.lstrip("#")[i:i + 2], 16) for i in (0, 2, 4))
+        # píxel "con tinta" = visible y distinto del fondo
+        tinta = ((alfa > 10) & (np.abs(rgb.astype(int) - np.array(f)).sum(axis=2) > 40)).sum()
+        if tinta < 40:                      # cuatro píxeles sueltos no son una firma
+            return None
+        img = Image.fromarray(arr, mode="RGBA")
+        base = Image.new("RGB", img.size, "white")
+        base.paste(img, mask=img.split()[3])
+        buf = io.BytesIO()
+        base.save(buf, format="PNG", optimize=True)
+        return buf.getvalue()
+    except Exception as e:
+        logger.warning("prestart: no se pudo convertir la firma: %s", e)
+        return None
+
+
+def _asistentes_con_firma(yo: str) -> list:
+    """Lista de asistentes, cada uno con su nombre y su firma DIBUJADA (v383).
+
+    ⚠️ Deja de ser un `st.data_editor`: una tabla no puede llevar un lienzo dentro.
+    Es una lista de filas (nombre + recuadro de firma) con un botón para añadir,
+    que además se parece más al formato en papel donde cada uno firma su línea.
+    """
+    st.session_state.setdefault("ps_n_asist", 1)
+    st_canvas = _canvas_disponible()
+    if st_canvas is None:
+        st.warning(":material/warning: El lienzo de firma no está disponible en este "
+                   "despliegue; se registran las iniciales tecleadas.")
+
+    out = []
+    for i in range(int(st.session_state["ps_n_asist"])):
+        c1, c2 = st.columns([2, 3])
+        with c1:
+            nom = st.text_input(f"Nombre {i + 1}", key=f"ps_att_nom_{i}",
+                                value=(yo if i == 0 else ""),
+                                placeholder="Nombre y apellido")
+        firma = None
+        with c2:
+            if st_canvas is not None:
+                st.caption("Firma")
+                res = st_canvas(stroke_width=2, stroke_color="#111111",
+                                background_color="#ffffff", height=90,
+                                drawing_mode="freedraw", key=f"ps_firma_{i}",
+                                display_toolbar=True)
+                firma = _firma_png(res)
+                if nom.strip():
+                    st.caption(":green[✓ firmado]" if firma
+                               else ":orange[falta la firma]")
+            else:
+                ini = st.text_input(f"Iniciales {i + 1}", key=f"ps_att_ini_{i}",
+                                    value=_initials(nom) if nom else "")
+                out.append({"name": nom.strip(), "initial": ini.strip(), "sig": None})
+                continue
+        out.append({"name": nom.strip(), "initial": _initials(nom), "sig": firma})
+
+    c1, c2 = st.columns([1, 4])
+    if c1.button(":material/person_add: Añadir asistente", key="ps_add_att",
+                 use_container_width=True):
+        st.session_state["ps_n_asist"] = int(st.session_state["ps_n_asist"]) + 1
+        st.rerun()
+    return [a for a in out if a["name"]]
 
 
 def _projects_for(rol, usuario, grupo):
@@ -139,33 +237,29 @@ def render_prestart_tab():
     gen_notes = st.text_area("Notas generales", key="ps_gen", height=70,
                              label_visibility="collapsed")
 
-    # ── 5. Attendees ──
+    # ── 5. Attendees — cada uno FIRMA (v383) ──
     st.markdown("**5. Attendees**")
-    base = st.session_state.get("ps_att_df")
-    if base is None:
-        base = pd.DataFrame({"Print Name": [nombre or usuario], "Initial": [_initials(nombre or usuario)]})
-    att_edit = st.data_editor(base, use_container_width=True, hide_index=True,
-                              num_rows="dynamic", key="ps_att_editor")
-    st.session_state["ps_att_df"] = att_edit
+    attendees = _asistentes_con_firma(nombre or usuario)
 
     st.markdown("---")
     # Qué falta por responder (checks sin marcar + near miss + al menos 1 asistente)
     _pend = [PS._LABELS.get(k, k) for k, v in {**s1, **s3}.items() if v is None]
-    _att_hay = any(str(r.get("Print Name", "")).strip() for _, r in att_edit.iterrows())
     if nm is None:
         _pend.append("Near Miss/Hazard (sección 2)")
-    if not _att_hay:
+    if not attendees:
         _pend.append("Al menos un asistente (sección 5)")
+    # ⚠️ v383: quien está en la lista, FIRMA. Es el mismo criterio de v158 («no se
+    # puede firmar sin leer»): si el formato admite asistentes sin firma, la firma
+    # deja de significar nada. Solo se exige si el lienzo está disponible.
+    _sin_firma = [a["name"] for a in attendees
+                  if a.get("sig") is None and _canvas_disponible() is not None]
+    if _sin_firma:
+        _pend.append("Firma de: " + ", ".join(_sin_firma))
     if _pend:
         st.caption("Falta por completar: " + " · ".join(_pend))
 
     if st.button(":material/health_and_safety: Generar y archivar Pre-Start", type="primary", use_container_width=True,
                  key="ps_submit", disabled=bool(_pend)):
-        attendees = [{"name": str(r["Print Name"]).strip(),
-                      "initial": (str(r["Initial"]).strip()
-                                  or _initials(str(r["Print Name"]).strip()))}
-                     for _, r in att_edit.iterrows()
-                     if str(r.get("Print Name", "")).strip() or str(r.get("Initial", "")).strip()]
         data = {
             "grupo": pgrupo, "proyecto_id": pid, "proyecto_nombre": prj.get("Nombre", ""),
             "fecha": f_fecha, "hora": f_hora, "location": f_loc, "facilitador": f_fac,

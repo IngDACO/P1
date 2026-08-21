@@ -7,6 +7,7 @@ permisos/toolbox/subcontratistas/pre-operacionales van a la Sección 3 en la
 sub-tabla "Circle one".
 """
 import io
+import logging
 
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
@@ -16,6 +17,11 @@ from reportlab.lib.enums import TA_CENTER
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 
 from core.prestart import CHECKS_S1, CHECKS_S3
+
+# ⚠️ v383: `_celda_firma` registra en el log si una firma viene ilegible. Sin esta
+# línea sería un NameError ESCONDIDO dentro de un `except` — el mismo fallo latente
+# que apareció en `finance.py` en v370, que solo se ve ejercitando esa rama.
+logger = logging.getLogger(__name__)
 from core import maps
 from core import clock
 
@@ -68,6 +74,26 @@ def _ans(options, selected, st):
             stl.append(("BACKGROUND", (i, 0), (i, 0), C_BLACK))
     t.setStyle(TableStyle(stl))
     return t
+
+
+def _celda_firma(a, st):
+    """La firma DIBUJADA del asistente (v383), o sus iniciales si no la hay.
+
+    ⚠️ Degrada en vez de romper: si el lienzo no estuvo disponible (o la imagen
+    viene corrupta), la celda cae a las iniciales tecleadas y el Pre-Start se
+    genera igual. Un PDF de seguridad no se puede quedar sin emitir porque una
+    firma no se pudo pintar.
+    """
+    sig = a.get("sig")
+    if sig:
+        try:
+            from reportlab.platypus import Image as RLImage
+            # Ajustada a la columna de firma (16,3% del ancho útil), con margen.
+            return RLImage(io.BytesIO(sig), width=25 * mm, height=8 * mm,
+                           kind="proportional")
+        except Exception as e:
+            logger.warning("prestart_pdf: firma ilegible (%s); se usan las iniciales", e)
+    return Paragraph(_esc(a.get("initial", "")) or "&nbsp;", st["PSQ"])
 
 
 def _band(title, st, sub=""):
@@ -201,7 +227,8 @@ def generate_prestart_pdf(data: dict) -> bytes:
            if str(a.get("name", "")).strip() or str(a.get("initial", "")).strip()]
     hdr = []
     for _ in range(3):
-        hdr += [Paragraph("<b>Print Name</b>", st["PSQ"]), Paragraph("<b>Initial</b>", st["PSQ"])]
+        hdr += [Paragraph("<b>Print Name</b>", st["PSQ"]),
+                Paragraph("<b>Signature</b>", st["PSQ"])]
     rows = [hdr]
     grupos = [att[i:i + 3] for i in range(0, len(att), 3)] or [[]]
     if not att:
@@ -211,9 +238,13 @@ def generate_prestart_pdf(data: dict) -> bytes:
         for j in range(3):
             a = g[j] if j < len(g) else {}
             row += [Paragraph(_esc(a.get("name", "")) or "&nbsp;", st["PSQ"]),
-                    Paragraph(_esc(a.get("initial", "")) or "&nbsp;", st["PSQ"])]
+                    _celda_firma(a, st)]
         rows.append(row)
-    attab = Table(rows, colWidths=[W * 0.243, W * 0.09] * 3)
+    # ⚠️ v383: la columna de firma medía 9% del ancho —dimensionada para DOS
+    # INICIALES— y una firma dibujada no cabe: el propio encabezado se partía como
+    # «Signatur / e». Se reequilibra dándole sitio al trazo. Lo delató extraer el
+    # texto del PDF generado; a ojo en el código no se ve.
+    attab = Table(rows, colWidths=[W * 0.17, W * 0.163] * 3)
     attab.setStyle(TableStyle([
         ("GRID", (0, 0), (-1, -1), 0.6, C_BLACK),
         ("BACKGROUND", (0, 0), (-1, 0), C_BAND),

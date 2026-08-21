@@ -462,7 +462,54 @@ def render_topbar(grupo):
         _campana(grupo)
     st.markdown("<hr style='margin:2px 0 14px 0;border:none;border-top:1px solid #e6e9ef;'>",
                 unsafe_allow_html=True)
+    _banda_prestart()        # v383: el aviso que no se va hasta que se haga
     _mobile_back_trap()      # el back del móvil hace lo mismo que el botón '←'
+
+
+def _banda_prestart():
+    """Aviso SIEMPRE VISIBLE mientras falte el Pre-Start de la obra donde fichaste.
+
+    Petición del usuario. El chip del sidebar (v374) se puede perder de vista —el
+    sidebar se pliega en el móvil— y el modal se cierra y no vuelve. Esto va en la
+    barra superior, se ve desde CUALQUIER sección y no se puede descartar: solo
+    desaparece cuando el Pre-Start está hecho, que es justo lo que se pidió.
+
+    ⚠️ 0 llamadas nuevas a Sheets: `open_sessions` y `prestart.hecho_hoy` salen de
+    registros ya cacheados que viajan en el lote de v339.
+    """
+    a = st.session_state.get("auth") or {}
+    if str(a.get("rol", "")) not in ("administrador", "campo"):
+        return                      # el propietario no ficha (v93)
+    try:
+        from core import timeclock, prestart
+        if not timeclock.is_configured():
+            return
+        ses = timeclock.open_sessions(a.get("nombre") or a.get("usuario", ""),
+                                      a.get("grupo", ""), a.get("usuario", ""))
+        prj = ses.get(timeclock.TIPO_PROYECTO)
+        if not prj:
+            return                  # sin obra fichada no hay Pre-Start que reclamar
+        pid = str(prj.get("proyecto_id", "") or "")
+        if not pid or prestart.hecho_hoy(pid, a.get("grupo", "")):
+            return
+    except Exception:
+        return                      # nunca estorbar por un fallo del aviso
+    _nom = str(prj.get("proyecto", "") or "esta obra")
+    c1, c2 = st.columns([5, 1])
+    with c1:
+        st.markdown(
+            '<div style="background:#fff4e5;border-left:5px solid #e67e22;'
+            'border-radius:8px;padding:9px 14px;margin-bottom:10px;">'
+            '<span style="font-weight:700;color:#a35b12;font-size:15px;">'
+            '⚠️ Falta el Pre-Start de hoy</span>'
+            f'<span style="color:#7a5b3a;font-size:13px;"> · estás fichado en '
+            f'<b>{_nom}</b> y hoy nadie ha registrado la charla de seguridad.</span></div>',
+            unsafe_allow_html=True)
+    with c2:
+        if st.button(":material/health_and_safety: Hacerlo", key="banda_ps_ir",
+                     type="primary", use_container_width=True):
+            from core.timeclock_ui import _ir_a_prestart
+            _ir_a_prestart()
 
 
 def _norm_busq(s) -> str:
