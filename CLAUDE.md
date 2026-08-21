@@ -5614,7 +5614,64 @@ rerun (v365) · el sidebar cambia a los dos cronómetros + «Salir del proyecto�
 «Cerrar jornada y proyecto» · **el chip persistente del Pre-Start** · y la tabla de
 avance del campo (v372) renderiza con sus columnas.
 
-## Versiones desplegadas (v375 = actual)
+## LA DEMO SE MUDA A SU PROPIO LIBRO — migración hecha (21/08/2026)
+Decisión del usuario entre tres opciones. Los 838 registros de la empresa simulada
+salen del maestro a un libro propio, y el **maestro queda limpio para el primer cliente
+real**. Bonus buscado: **ensayar la migración con datos que no importan**, que es
+exactamente la operación que habrá que hacer bien cuando el dato sí importe.
+
+**Libro de la demo**: `1WHGCrZndwdmqrR3RehLh7jocOIVkRvjAbigifvfSe1Y`, renombrado de
+«PRUEBA aislamiento — borrar» a **«COPEX — DEMO (cliente1)»**. ⚠️ Lo del nombre no es
+manía: un libro que se llama «borrar» y guarda la demo es un accidente con fecha.
+
+### El orden, que es lo único que importa
+**copiar → verificar → enlazar → verificar → borrar → verificar.** Nunca al revés.
+| Paso | Qué | Salvaguarda |
+|---|---|---|
+| 1 | Respaldo CSV a disco de las 26 hojas | 852 filas en `C:\Users\diego\respaldo_sheets\`. Los ZIP del deploy guardan el CÓDIGO, no los datos |
+| 2 | Copiar las **22 hojas de inquilino** | `value_input_option="RAW"`, como escribe la app entera |
+| 3 | Comparar **celda a celda** | **9.617 celdas idénticas** en 22 hojas |
+| 4 | `Grupos.SheetID` → libro de la demo | el mecanismo de v359, ya probado |
+| 5 | Comprobar el **enrutado** | inquilino→DEMO, global→MAESTRO, sin grupo→MAESTRO |
+| 6 | Vaciar el maestro **desde A2** | puerta previa: la demo tiene los datos AHORA |
+| 7 | Prueba decisiva | maestro a 0 filas y la app sigue dando 16 obras · $101.157,21 |
+
+⚠️ **Hasta el paso 6, ninguna cifra probaba nada**: los dos libros tenían lo mismo, así
+que «la app muestra 16 obras» era compatible con leer del maestro. Solo con el maestro
+VACÍO esa cifra demuestra de dónde sale. Es el paso en vacío (trampa nº1) aplicado a una
+migración: **si el test pasaría igual sin haber hecho el trabajo, no es un test**.
+
+- Se quedan en el maestro las 4 hojas **globales** (`Login`, `Grupos`, `Rieles`,
+  `Manuales`): son el registro de la app, y `Login` se lee ANTES de saber de qué grupo
+  eres. Verificado: 13 cuentas siguen ahí y el login funciona.
+- Las cabeceras se conservan (se limpia desde `A2`), así el maestro queda listo para el
+  primer cliente sin que `get_sheet` tenga que recrear nada.
+
+### Tres errores míos en la propia migración
+1. ⚠️ **Escribí el respaldo DENTRO del repo.** `git status` lo delató (`?? respaldo_sheets/`)
+   y el siguiente deploy lo habría empujado a GitHub **con los hashes de contraseña, los
+   emails y los chat_id de Telegram**. **REGLA: una exportación de datos nunca va dentro
+   del repo** — el script de deploy hace `git add` de todo.
+2. ⚠️ **El verificador reventó con un 429** por pedir `src.worksheet(t)` en cada vuelta
+   (refetchea los metadatos del libro **cada vez**): ~88 llamadas contra el techo de
+   60/min. Es el problema que v339 resolvió DENTRO de la app, cometido en el script que
+   venía a verificarla. Rehecho con `values_batch_get`: **2 llamadas**.
+3. ⚠️ `values_batch_clear(params, body)` — pasarle la lista suelta la mete como `params`
+   y muere dentro de `requests` con «too many values to unpack», que no dice nada. Va en
+   el `body`. Falló limpio: el maestro quedó intacto (comprobado antes de reintentar,
+   porque **un borrado a medias es peor que no haber empezado**).
+
+### ⚠️ CONSECUENCIA VIVA: la fase 2 ya no es teórica
+Medido justo después: el **propietario ve 0 proyectos** (sus vistas leen el maestro, que
+ahora está vacío) mientras el admin de cliente1 ve sus 16. Las **9 funciones** que hay
+que tocar cuando se aborde la fase 2:
+`admin_digest.owner_digest` · `auth_ui._owner_usuarios` · `alerts._admins_and_owners` ·
+`credentials.notify_expiring` · y las cinco que dan «todos los proyectos» al propietario:
+`plan_ui.selector_proyecto` · `prestart_ui._projects_for` · `timeclock_ui._proyectos_para`
+· `tool_save_ui._proyectos_de` · `survey_ui.render_survey_tab`.
+Que la limitación salga AHORA, con datos simulados, es justo lo que se buscaba.
+
+## Versiones desplegadas (v377 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -5622,6 +5679,8 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v377 | **La demo se muda a su propio libro** (`COPEX — DEMO (cliente1)`) y el maestro queda limpio para el primer cliente real: 22 hojas de inquilino copiadas, **9.617 celdas verificadas una a una**, y solo entonces vaciado el maestro. Las 4 globales (`Login`, `Grupos`, `Rieles`, `Manuales`) se quedan. Orden sagrado: **copiar → verificar → enlazar → verificar → borrar → verificar**. ⚠️ Hasta vaciar el maestro ninguna cifra probaba nada (los dos libros tenían lo mismo) — el paso en vacío aplicado a una migración. **Tres errores míos por el camino**: el respaldo escrito DENTRO del repo (el deploy lo habría subido a GitHub con hashes y emails — lo cazó `git status`), el verificador reventando con un **429** por pedir hoja por hoja en vez de por lotes (el problema de v339 cometido en el script que venía a verificarlo), y `values_batch_clear` recibiendo la lista como `params` en vez de `body`. ⚠️ **La fase 2 dejó de ser teórica**: el propietario ve ahora 0 proyectos; quedan identificadas las 9 funciones que hay que tocar |
+| v376 | Corrección del registro de v375 (documentación) |
 | v375 | ⚠️ **Diagnostiqué un fallo que no existía: la sonda estaba ciega.** Verificando v374 en producción concluí que el pop-up «no se pintaba nunca» — mi `MutationObserver` y mis comprobaciones buscaban **`div[role="dialog"]`**, que es como lo marca el Streamlit LOCAL; el del **Cloud** usa **`[data-testid="stDialog"]`**. El modal estaba ahí, perfectamente pintado. **REGLA: una sonda NEGATIVA hay que validarla contra un caso conocido-bueno** — antes de decir «X no se renderiza», comprobar que la sonda sabe ver X cuando está. Familia de la trampa nº5 y de v304: el DOM de Streamlit cambia entre versiones y mi entorno no es el que corre. El rediseño se conserva por ROBUSTO, no como arreglo: el aviso pasa de evento de un solo uso (`pop`) a **condición de estado**, así que ningún rerun puede matarlo, y gana la salida por la **X** (`on_dismiss`) que antes no existía. ⚠️ NO está demostrado que v374 estuviera roto. + **el fallo que SÍ era real**: los cronómetros del sidebar enseñaban **`:material/schedule:` en crudo** desde v233 — la etiqueta va dentro de `components.html`, donde eso no es un icono sino markdown de Streamlit. Visto mirando la pantalla, no el código |
 | v374 | **Fichar desde el sidebar** (v202 lo dejó de mirador y solo visible si YA estabas fichado): sin fichar, botón de tu asignación de hoy + selector del resto; fichado, los cronómetros + salir del proyecto / cerrar jornada. + **el Pre-Start del día se recuerda solo**: `prestart.hecho_hoy` — ⚠️ por OBRA y DÍA, no por persona (si el facilitador ya la hizo, al resto no se le recuerda; decisión del usuario) — con **modal al fichar** y **chip persistente** mientras falte (el modal se cierra y se pierde; el chip no). ⚠️ El modal va por BANDERA en la pasada siguiente y llamado al TOP LEVEL, no dentro del `with st.sidebar:` (v365 + el contenedor activo manda). ⚠️ **Verificado en vivo con la estructura exacta del código final** antes de construir: se pinta sobre la página, sobrevive al rerun, no reaparece. Falsa alarma resuelta midiendo: el icono del título parecía texto y era una **ligadura de fuente** (trampa nº5). ⚠️ Y las DOS direcciones de `hecho_hoy` probadas moviendo el día — comprobar solo el `False` es el paso en vacío |
 | v373 | Las dos decisiones pendientes, resueltas por el usuario. **(a) Un check en NO abre alarma** (cierra el standing item de v158): hasta ahora solo lo hacía el near miss, así que un control de seguridad sin cumplir solo lo sabía quien abriera esa ficha. ⚠️ UNA alarma con todos los checks (no una por check: `report_problem` también notifica) y separada de la del near miss (un suceso vs un control que falta). NO ejercitada contra producción: mandaría correo y Telegram a personas reales. **(b) Ganancia FIJA por obra** (`GananciaFija`), el hueco que v370 dejó abierto: una obra creada a mano cuyo valor no está en las horas valía su costo — el delivery de Bespoke pasa de **$380 estimados a $5.200**, que es lo que se facturó. Se suma al modelo que aplique; ⚠️ a una obra COTIZADA **no**, porque ese precio lo firmó el cliente (se avisa de que el número no se usa). ⚠️ Mi primera versión cambiaba el denominador de `margen_pct` y habría movido el % de **todas** las obras sin fija: revertido, el margen del conjunto va en clave aparte y las 16 obras dan la misma cifra que antes. Vuelta atrás probada (0 la quita y el ingreso vuelve exacto). ⚠️ `GananciaHoraJSON` llevaba **13 versiones sin auditar** — el hueco de v344/v352 por tercera vez |
