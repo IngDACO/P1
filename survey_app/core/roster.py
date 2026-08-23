@@ -638,12 +638,22 @@ def autopoblar_proyecto(grupo, pid, usuarios, fecha_ini, fecha_fin,
     next_n = len(vals)                    # id incremental para filas nuevas
     for lu in semanas:
         sem = lu.isoformat()
+        # ⚠️ Los días extra (sáb/dom) NO se rellenan por defecto: la semana normal es
+        # de cinco días y auto-poblar el fin de semana convertiría la excepción en
+        # norma, llenando los sábados de todo el mundo (v390). Pero si en ESA semana
+        # ya hay alguien trabajando ese día, la cuadrilla sí trabaja ese día y dejar
+        # al recién asignado fuera obligaría a añadirlo a mano, persona por persona.
+        # La condición sale del DATO, no de una preferencia que haya que mantener.
+        _dias_sem = list(DIAS) + [
+            d for d in DIAS_EXTRA
+            if any(_norm_cell((dat or {}).get(d))["items"]
+                   for (s, _u), (_i, dat) in existentes.items() if s == sem)]
         for u in usuarios:
             idx0, datos = existentes.get((sem, u), (None, {}))
             datos = dict(datos)
             cambiado = False
-            for di, dk in enumerate(DIAS):
-                fdia = lu + timedelta(days=di)
+            for dk in _dias_sem:
+                fdia = lu + timedelta(days=DIAS_TODOS.index(dk))
                 if fdia < ini or fdia > fin:
                     continue
                 cell = _norm_cell(datos.get(dk))

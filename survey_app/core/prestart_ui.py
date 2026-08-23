@@ -96,8 +96,16 @@ def _asistentes_con_firma(yo: str) -> list:
         with c2:
             if st_canvas is not None:
                 st.caption("Firma")
+                # ⚠️ `width` por defecto es 600 y el componente NO tiene
+                # `use_container_width`: medido en un viewport de móvil (375 px), el
+                # lienzo salía de 600 dentro de un hueco de 343 → **la mitad derecha
+                # quedaba fuera de pantalla y ahí no se podía firmar**. Es el mismo
+                # defecto que el `st_folium` de 500 px fijos (v307).
+                # 300 px caben en el teléfono más estrecho de uso real y siguen
+                # sobrando para una firma; el Pre-Start se llena EN OBRA, así que
+                # manda el móvil aunque en escritorio el recuadro se vea más pequeño.
                 res = st_canvas(stroke_width=2, stroke_color="#111111",
-                                background_color="#ffffff", height=90,
+                                background_color="#ffffff", height=90, width=300,
                                 drawing_mode="freedraw", key=f"ps_firma_{i}",
                                 display_toolbar=True)
                 firma = _firma_png(res)
