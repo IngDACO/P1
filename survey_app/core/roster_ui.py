@@ -129,6 +129,24 @@ def _carriles(items):
     return carriles
 
 
+def _ocupado(items) -> int:
+    """Minutos del día REALMENTE ocupados = unión de las franjas, no su suma.
+
+    ⚠️ Sumar duraciones cuenta dos veces el rato que dos asignaciones comparten:
+    dos obras de 8,5 h a la misma hora darían «17 h» de una persona que trabajó 8,5.
+    Es la misma clase de cifra que mentía en el «sin asignar» de v320."""
+    tramos = sorted((_min(i["ini"]), _min(i["fin"])) for i in items)
+    total, fin_prev = 0, None
+    for a, b in tramos:
+        if fin_prev is None or a > fin_prev:
+            total += b - a
+            fin_prev = b
+        elif b > fin_prev:                 # solapa: solo cuenta lo que asoma
+            total += b - fin_prev
+            fin_prev = b
+    return total
+
+
 def _hm(m) -> str:
     return f"{m // 60:02d}:{m % 60:02d}"
 
@@ -157,10 +175,17 @@ def _vista_dia(grupo, lunes, usuario, nom, dia, datos, tidx):
         c1.markdown(f"<div style='font-size:18px;font-weight:600'>{_esc(nom)} · "
                     f"{R.DIAS_LABEL[dia]} {f.strftime('%d/%m')}</div>",
                     unsafe_allow_html=True)
-        _tot = sum(_min(it["fin"]) - _min(it["ini"]) for it in con_hora)
-        _res = f"{len(items)} asignación" + ("es" if len(items) != 1 else "")
-        if _tot:
-            _res += f" · {_tot / 60:.1f} h con horario"
+        # ⚠️ Las horas del día son la UNIÓN de las franjas, NO su suma. Con dos obras
+        # solapadas de 8,5 h la suma da 17 h y esa persona no trabajó 17 h: es el
+        # mismo rato contado dos veces — el error que este mismo panel denuncia dos
+        # líneas más abajo. La suma solo se muestra junto al aviso, como síntoma.
+        _suma = sum(_min(it["fin"]) - _min(it["ini"]) for it in con_hora)
+        _ocup = _ocupado(con_hora)
+        # (el plural PIERDE la tilde: «una asignación» pero «dos asignaciones»,
+        #  así que no vale pegarle un sufijo al singular)
+        _res = f"{len(items)} " + ("asignación" if len(items) == 1 else "asignaciones")
+        if _ocup:
+            _res += f" · {_ocup / 60:.1f} h del día ocupadas"
         c2.markdown(f"<div style='font-size:13px;color:#5b6472;text-align:right;"
                     f"padding-top:8px'>{_res}</div>", unsafe_allow_html=True)
 
@@ -173,8 +198,10 @@ def _vista_dia(grupo, lunes, usuario, nom, dia, datos, tidx):
             _txt = " · ".join(f"{R.etiqueta_de(a['asig'], tidx)} ↔ "
                               f"{R.etiqueta_de(b['asig'], tidx)}" for a, b in _pares)
             st.warning(f":material/warning: **Se pisan en la misma franja:** {_txt}. "
-                       f"O es un día partido que falta detallar, o alguien está "
-                       f"contado dos veces a la misma hora.")
+                       f"Suman **{_suma / 60:.1f} h asignadas** sobre "
+                       f"**{_ocup / 60:.1f} h de día**, así que ese rato se está "
+                       f"cargando a dos obras: o es un día partido que falta "
+                       f"detallar, o alguien está contado dos veces.")
 
         # ── Línea de tiempo (solo lo que tiene horario) ──
         if con_hora:
@@ -251,7 +278,11 @@ def _vista_dia(grupo, lunes, usuario, nom, dia, datos, tidx):
 
         if nota:
             st.caption(f":material/sticky_note_2: {nota}")
-        if st.button(":material/close: Cerrar", key=f"vdcl_{lunes:%Y%m%d}"):
+        # La key lleva la MISMA tripleta que las de arriba (semana, persona, día):
+        # solo con la semana, dos vistas en la misma pasada chocarían y cortarían el
+        # render a partir de ahí.
+        if st.button(":material/close: Cerrar",
+                     key=f"vdcl_{lunes:%Y%m%d}_{usuario}_{dia}"):
             st.session_state.pop("_dia_abierto", None)
             st.rerun()
 
