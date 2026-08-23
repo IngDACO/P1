@@ -122,10 +122,17 @@ def fecha_de_dia(lunes, dia_key) -> date:
     return lunes + timedelta(days=DIAS_TODOS.index(dia_key))
 
 
-def rango_label(lunes, dias=None) -> str:
+def rango_label(lunes, dias=None, corto=False) -> str:
     """Etiqueta del rango visible. Con sábado en pantalla el rango es hasta el
-    sábado — decir «– vie» mientras se ve una columna del sábado sería mentir."""
+    sábado — decir «– vie» mientras se ve una columna del sábado sería mentir.
+
+    `corto` quita el año («17 – 21/08»): medido en producción, la versión larga
+    necesita ~140 px y en una ventana de 780 su columna tiene 56 → se partía en
+    TRES líneas. Al navegar semana a semana el año no aporta (y sigue completo en
+    el selector de día), así que se sacrifica antes que la legibilidad."""
     fin = lunes + timedelta(days=DIAS_TODOS.index((dias or DIAS)[-1]))
+    if corto:
+        return f"{lunes.strftime('%d')} – {fin.strftime('%d/%m')}"
     return f"{lunes.strftime('%d/%m')} – {fin.strftime('%d/%m/%Y')}"
 
 

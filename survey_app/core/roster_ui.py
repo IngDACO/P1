@@ -747,17 +747,28 @@ def render_planificacion(grupo):
     # después de v287: el tablero —a lo que se viene— arrancaba media pantalla abajo.
     # El caption pasó a `help` del toggle: útil el primer día, ruido a partir del segundo.
     # El radio va DENTRO de una columna = 1 solo nivel (no son columnas anidadas).
-    # ⚠️ v392: la barra pasa de CINCO columnas a cuatro. Con tres vistas, el
-    # segmentado necesita ~330 px y en una ventana de 780 le tocaban 163 → se partía
-    # en vertical. «Copiar semana anterior» baja a la fila de la cobertura, que tiene
-    # sitio de sobra, y ese ancho se lo queda el toggle. (No se le da una fila propia:
-    # v291 unificó cuatro bandas de chrome en una y no se van a volver a separar.)
-    b1, b2, b3, b4 = st.columns([0.7, 2, 0.7, 8.6])
+    # ⚠️ v394: el reparto sale de MEDIR la fila en producción a 780 px (media
+    # pantalla), no de repartir a ojo. Ahí la fila mide 406 px y con el `gap` normal
+    # de Streamlit (16 px × 3 = 48) el hueco útil bajaba a 358: no cabían la nav de
+    # semana + el rango + tres vistas, así que el rango se partía en 3 líneas y el
+    # segmentado en 2. Tres recortes medidos: `gap` a 4 px (−36), rango sin año
+    # (−75, ver `rango_label(corto=True)`) y menos padding en el segmentado (−36).
+    # Con eso: 24 (flechas) + ~78 (rango) + ~276 (vistas) = 378 < 394 útiles.
+    st.markdown("""
+<style>
+/* Acotado a ESTE segmentado (3 opciones): los de 2 y 4 opciones de otras
+   pantallas conservan el aire del kit. */
+[class*="st-key-cpxseg_vista"] div[role="radiogroup"] > label {
+  padding: 6px 8px !important;
+}
+</style>""", unsafe_allow_html=True)
+    b1, b2, b3, b4 = st.columns([0.6, 2.3, 0.6, 8.5], gap="xxsmall")
     if b1.button("◀", key="ros_prev", use_container_width=True):
         st.session_state["ros_lunes"] = (lunes - timedelta(days=7)).isoformat()
         st.rerun()
-    b2.markdown(f"<div style='text-align:center;font-weight:700;font-size:16px;"
-                f"padding-top:6px'>{R.rango_label(lunes, dias)}</div>",
+    b2.markdown(f"<div style='text-align:center;font-weight:700;font-size:14px;"
+                f"padding-top:9px;white-space:nowrap'>"
+                f"{R.rango_label(lunes, dias, corto=True)}</div>",
                 unsafe_allow_html=True)
     if b3.button("▶", key="ros_next", use_container_width=True):
         st.session_state["ros_lunes"] = (lunes + timedelta(days=7)).isoformat()
