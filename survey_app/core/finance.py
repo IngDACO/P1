@@ -423,15 +423,14 @@ def sin_facturar(grupo: str) -> list:
     Es dinero ganado que no se ha pedido. No estaba en ninguna pantalla: había que
     entrar a crear una factura para enterarse.
     """
+    # ⚠️ v397: delega en `invoices.pendiente_por_proyecto`, que es LA definición del
+    # pendiente por obra. Antes repetía el bucle aquí y la cartera habría sido una
+    # tercera copia — el patrón que causó los cinco `_num` divergentes de v323.
     from core import invoices as INV
-    out = []
-    for p in P.list_projects(grupo=grupo, incluir_archivados=True):
-        try:
-            v = INV.pendiente_de_facturar(str(p.get("ID", "")), grupo, p)
-        except Exception:
-            v = 0.0
-        if v > 0:
-            out.append((str(p.get("Nombre", "")), round(v, 2)))
+    _pend = INV.pendiente_por_proyecto(grupo)
+    _nom = {str(p.get("ID", "")): str(p.get("Nombre", ""))
+            for p in P.list_projects(grupo=grupo, incluir_archivados=True)}
+    out = [(_nom.get(pid, pid), v) for pid, v in _pend.items()]
     return sorted(out, key=lambda x: -x[1])
 
 

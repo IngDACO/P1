@@ -1230,7 +1230,8 @@ def _field_users(grupo):
 
 
 # ── Panel de proyectos ───────────────────────────────────────────
-def _cartera_clickeable(proys, alarmas, delays, aheads, costos):
+def _cartera_clickeable(proys, alarmas, delays, aheads, costos,
+                        pendientes=None, grupo="", puede_facturar=False):
     """Cartera de proyectos como TARJETAS con toda la info ANTES de abrir (v223, opción A
     elegida por el usuario): nombre, estado + % avance (barra real), cliente, fechas,
     % de presupuesto ejecutado, nº de usuarios asignados y alertas. Se abre con «Abrir».
@@ -1264,6 +1265,7 @@ def _cartera_clickeable(proys, alarmas, delays, aheads, costos):
         return (theme.ROJO if delays.get(pid)
                 else (theme.VERDE if aheads.get(pid) else theme.AZUL))
 
+    pendientes = pendientes or {}
     proys = sorted(proys, key=lambda p: (-delays.get(str(p.get("ID", "")), 0),
                                          -alarmas.get(str(p.get("ID", "")), 0)))
 
@@ -1301,6 +1303,13 @@ def _cartera_clickeable(proys, alarmas, delays, aheads, costos):
                 _chips += f" · {_MI('check_circle','#1e9e57')} {_ah}d"
             if _al:
                 _chips += f" · {_MI('notifications')} {_al}"
+            # v397: dinero hecho y aún no pedido. Va en la tarjeta porque hoy hay
+            # $36.552 repartidos en 9 obras y no se veía en ninguna parte hasta
+            # entrar obra por obra. `pend` llega ya calculado en UN mapa (regla v142).
+            _pf = pendientes.get(_pid, 0.0)
+            if _pf > 0:
+                _chips += (f" · <b style='color:#8a5a0b;'>{_MI('receipt', '#8a5a0b')} "
+                           f"{theme.dinero(_pf, 0)}</b>")
             _html = (
                 "<div style='display:flex;justify-content:space-between;align-items:center;"
                 "gap:8px;margin-bottom:6px;'>"
@@ -1332,15 +1341,37 @@ def _cartera_clickeable(proys, alarmas, delays, aheads, costos):
                 f"<div style='font-size:12px;color:#374151;'>{_chips}</div>")
             with _cols[_j].container(border=True, key=f"cart_{_idx}"):
                 st.markdown(_html, unsafe_allow_html=True)
-                if st.button("Abrir →", key=f"cartbtn_{_idx}", use_container_width=True):
+                # ⚠️ El botón de facturar SOLO sale si esa obra tiene algo pendiente:
+                # en las demás sería un botón que lleva a una factura vacía. Y solo
+                # para gestión — el campo ve la cartera pero no factura (v357).
+                if _pf > 0 and puede_facturar:
+                    _ba, _bf = st.columns(2)
+                    if _ba.button("Abrir →", key=f"cartbtn_{_idx}",
+                                  use_container_width=True):
+                        st.session_state["_admin_open_proj"] = _pid
+                        st.rerun()
+                    if _bf.button(":material/receipt_long: Facturar", key=f"cartfac_{_idx}",
+                                  use_container_width=True, type="primary",
+                                  help=f"Nueva factura con esta obra y su cliente ya "
+                                       f"elegidos · pendiente {theme.dinero(_pf, 0)}"):
+                        _ir_a_facturar(_pid, grupo)
+                        st.rerun()
+                elif st.button("Abrir →", key=f"cartbtn_{_idx}", use_container_width=True):
                     st.session_state["_admin_open_proj"] = _pid
                     st.rerun()
 
 
-def _cartera_lista(proys, alarmas, delays, aheads, costos):
+def _cartera_lista(proys, alarmas, delays, aheads, costos, pendientes=None):
     """Vista LISTA de la cartera (v228): la típica tabla — proyectos por filas, datos por
     columnas — CLICKEABLE (seleccionar una fila abre el detalle, igual que las tarjetas).
-    Alternativa a `_cartera_clickeable`; se elige con el toggle de vista."""
+    Alternativa a `_cartera_clickeable`; se elige con el toggle de vista.
+
+    ⚠️ Aquí NO hay botón de facturar, y es a propósito: la selección de fila ya
+    significa «abrir el proyecto» (v228) y no se le pueden dar dos significados al
+    mismo clic. La columna «Sin facturar» dice dónde está el dinero —y se puede
+    ordenar por ella—; el botón vive en la tarjeta y en la ficha (v397).
+    """
+    pendientes = pendientes or {}
     proys = sorted(proys, key=lambda p: (-delays.get(str(p.get("ID", "")), 0),
                                          -alarmas.get(str(p.get("ID", "")), 0)))
 
@@ -1377,6 +1408,10 @@ def _cartera_lista(proys, alarmas, delays, aheads, costos):
             "Inicio": _ddmm(p.get("FechaInicio")),
             "Fin": _ddmm(p.get("FechaFinEst")),
             "Ppto": _ppto,
+            # v397: dinero hecho y aún no pedido. Va como NÚMERO (no como texto con
+            # el símbolo) para que la columna se pueda ORDENAR — que es justo para lo
+            # que sirve: ver de un vistazo dónde está el dinero sin facturar.
+            "Sin facturar": round(pendientes.get(_pid, 0.0), 2),
             "Usuarios": _users,
             "Situación": _sit,
             "Alertas": str(_al) if _al else "",
@@ -1384,8 +1419,21 @@ def _cartera_lista(proys, alarmas, delays, aheads, costos):
     _ev = st.dataframe(
         pd.DataFrame(_rows), hide_index=True, use_container_width=True,
         on_select="rerun", selection_mode="single-row", key="cart_tbl",
-        column_config={"Avance": st.column_config.ProgressColumn(
-            "Avance", min_value=0, max_value=100, format="%d%%")})
+        column_config={
+            "Avance": st.column_config.ProgressColumn(
+                "Avance", min_value=0, max_value=100, format="%d%%"),
+            "Sin facturar": st.column_config.NumberColumn(
+                "Sin facturar", format="$%.0f",
+                help="Ingreso estimado de la obra menos lo ya facturado. "
+                     "Se factura desde la tarjeta o desde la propia obra."),
+        })
+    _tot = sum(pendientes.get(str(p.get("ID", "")), 0.0) for p in proys)
+    if _tot > 0:
+        # ⚠️ `theme` se importa por función en este módulo, no arriba (v342).
+        from core import theme as _Tl
+        _n = sum(1 for p in proys if pendientes.get(str(p.get("ID", "")), 0.0) > 0)
+        st.caption(f":material/receipt: **{_Tl.dinero(_tot, 0)}** sin facturar "
+                   f"en {_n} obra(s) de las que se ven.")
     st.caption(":material/touch_app: Toca una fila para abrir el proyecto.  "
                "Ppto = % del presupuesto ejecutado (:orange[:material/warning:] si se pasó) y over = sobre presupuesto.")
     try:
@@ -1492,13 +1540,22 @@ def _panel_proyectos(grupo: str):
                        format_func=lambda o: {"🃏 Tarjetas": ":material/grid_view: Tarjetas",
                                               "📋 Lista": ":material/list: Lista"}.get(o, o),
                        key="cart_view", label_visibility="collapsed")
+    # Pendiente de facturar de TODO el grupo, en UNA pasada (v397). Medido: ~32 ms y
+    # 0 llamadas nuevas a Sheets en un rerun normal — por eso puede ir en la lista
+    # (regla v142: medir antes de poner un dato derivado en cada fila).
+    try:
+        from core import invoices as _INV
+        _pend = _INV.pendiente_por_proyecto(grupo)
+    except Exception:
+        _pend = {}
     if not _proys_f:
         st.caption("Ningún proyecto coincide con el filtro.")
     elif _view == "📋 Lista":
-        _cartera_lista(_proys_f, alarmas, delays, aheads, costos)
+        _cartera_lista(_proys_f, alarmas, delays, aheads, costos, pendientes=_pend)
     else:
         st.caption("Cada tarjeta muestra el resumen; toca «Abrir» para ver el detalle.")
-        _cartera_clickeable(_proys_f, alarmas, delays, aheads, costos)
+        _cartera_clickeable(_proys_f, alarmas, delays, aheads, costos,
+                            pendientes=_pend, grupo=grupo, puede_facturar=True)
     # `_nuevo_proyecto_form` ya se pliega solo (tiene su propio expander) → no envolver
     # otra vez, o quedan dos expanders "Nuevo proyecto" anidados (v210).
     _nuevo_proyecto_form(grupo, key="adm")
@@ -1937,6 +1994,32 @@ def _detalle_proyecto(pid: str, grupo: str = None):
         '</div></div>',
         unsafe_allow_html=True,
     )
+
+    # ── Facturar, EN LA CABECERA (v397) ──────────────────────────────────────
+    # El atajo existe desde v357 pero vivía al final de 💰 Costos, por debajo de la
+    # tabla de mano de obra: 3 clics desde la cartera y solo visible en una de las
+    # cuatro sub-pestañas. Aquí se ve siempre, y solo cuando hay algo que pedir.
+    # ⚠️ `_detalle_proyecto(pid, grupo)` NO recibe `can_delete` (lo resuelve cada
+    # sección por su cuenta) y este módulo importa `theme` DENTRO de cada función,
+    # no a nivel de módulo: escribir `can_delete` y `theme.` aquí sin más eran dos
+    # NameError seguros — el fallo de ámbito de v342.
+    from core import theme as _Tc
+    _rol_ok = str((st.session_state.get("auth") or {}).get("rol", "")).lower() in (
+        "administrador", "propietario")
+    if _rol_ok:                         # solo gestión: el campo no factura
+        try:
+            from core import invoices as _INV
+            _pend_cab = _INV.pendiente_de_facturar(pid, grupo, prj)
+        except Exception:
+            _pend_cab = 0.0
+        if _pend_cab > 0:
+            _fc1, _fc2 = st.columns([3, 1])
+            _fc1.markdown(f":material/receipt: Sin facturar: **{_Tc.dinero(_pend_cab, 0)}**")
+            if _fc2.button(":material/receipt_long: Facturar", key=f"faccab_{pid}",
+                           use_container_width=True, type="primary",
+                           help="Nueva factura con esta obra y su cliente ya elegidos."):
+                _ir_a_facturar(pid, grupo)
+                st.rerun()
 
     # ── Sub-navegacion: 11 secciones en un scroll unico era el mismo
     # problema que tenia el Survey antes de v114. Radio, NO st.tabs (v56).
@@ -3202,6 +3285,38 @@ def _ganancia_fija_ui(pid, rev, _fija, _T, _modelo):
             st.rerun()
 
 
+def _ir_a_facturar(pid, grupo):
+    """Abre el alta de factura con este cliente y este proyecto ya elegidos (v357).
+
+    ⚠️ UNA sola definición: la usan el botón de la ficha y el de la tarjeta de la
+    cartera (v397). Duplicar esta preparación es cómo divergen dos caminos que
+    deberían hacer lo mismo (v323); y aquí lo que se duplicaría es justo la parte
+    delicada — la resolución del cliente.
+    """
+    prj = P.get_project(pid) or {}
+    st.session_state["_fac_nueva"] = True
+    # ⚠️ El selectbox de cliente se indexa por NOMBRE, y `Proyectos.Cliente` es TEXTO
+    # LIBRE: en producción hay obras con «vd» y «ci», que no son fichas de cliente.
+    # Preseleccionar un valor que no está entre las opciones **revienta el widget**.
+    # Se resuelve por ClienteID (la relación de verdad, v306) y solo se preselecciona
+    # si el nombre existe de veras entre las opciones.
+    try:
+        from core import clientes as _C
+        _fichas = _C.list_clientes(grupo)
+    except Exception:
+        _fichas = []
+    _nombres = {str(f.get("Nombre", "")) for f in _fichas}
+    _porid = next((str(f.get("Nombre", "")) for f in _fichas
+                   if str(f.get("ID", "")) == str(prj.get("ClienteID", ""))), "")
+    _cli = _porid or str(prj.get("Cliente", "") or "")
+    if _cli in _nombres:
+        st.session_state["fac_cli"] = _cli
+    else:
+        st.session_state["_fac_aviso_cli"] = str(prj.get("Cliente", "") or "—")
+    st.session_state["_fac_prj_pending"] = str(pid)
+    st.session_state["_admin_nav_pending"] = ("finanzas", "🧾 Facturas")
+
+
 def _facturar_atajo(pid, grupo, prj_nombre=""):
     """Facturar la obra desde la propia obra (v357).
 
@@ -3231,25 +3346,7 @@ def _facturar_atajo(pid, grupo, prj_nombre=""):
         if st.button(":material/receipt_long: Facturar esta obra", key="fac_atajo_" + str(pid),
                      use_container_width=True, type="primary" if pend > 0 else "secondary",
                      help="Abre la nueva factura con este cliente y este proyecto ya elegidos."):
-            prj = P.get_project(pid) or {}
-            st.session_state["_fac_nueva"] = True
-            # ⚠️ El selectbox de cliente se indexa por NOMBRE, y `Proyectos.Cliente` es
-            # TEXTO LIBRE: en producción hay obras con «vd» y «ci», que no son fichas de
-            # cliente. Preseleccionar un valor que no está entre las opciones **revienta
-            # el widget**. Se resuelve por ClienteID (la relación de verdad, v306) y solo
-            # se preselecciona si el nombre existe de veras entre las opciones.
-            from core import clientes as _C
-            _fichas = _C.list_clientes(grupo)
-            _nombres = {str(f.get("Nombre", "")) for f in _fichas}
-            _porid = next((str(f.get("Nombre", "")) for f in _fichas
-                           if str(f.get("ID", "")) == str(prj.get("ClienteID", ""))), "")
-            _cli = _porid or str(prj.get("Cliente", "") or "")
-            if _cli in _nombres:
-                st.session_state["fac_cli"] = _cli
-            else:
-                st.session_state["_fac_aviso_cli"] = str(prj.get("Cliente", "") or "—")
-            st.session_state["_fac_prj_pending"] = str(pid)
-            st.session_state["_admin_nav_pending"] = ("finanzas", "🧾 Facturas")
+            _ir_a_facturar(pid, grupo)
             st.rerun()
 
 

@@ -164,6 +164,37 @@ def pendiente_de_facturar(pid: str, grupo: str, prj: dict = None) -> float:
     return round(max(0.0, ingreso - ya), 2)
 
 
+def pendiente_por_proyecto(grupo: str, incluir_archivados: bool = True) -> dict:
+    """{ProyectoID: pendiente de facturar} de TODO el grupo, en una pasada (v397).
+
+    Existe para poder mostrar el pendiente en la CARTERA sin llamar a
+    `pendiente_de_facturar` una vez por fila — el patrón de `project_hours_bulk`
+    (v145) y `gaps_by_group` (v107). Medido antes de ponerlo en la lista (regla
+    v142): 16 obras cuestan ~32 ms y **0 llamadas nuevas a Sheets** en un rerun
+    normal, porque todo sale de cachés ya vivas; en frío son 2 llamadas.
+
+    ⚠️ Indexado por **ID**, no por nombre: dos obras pueden llamarse igual y un
+    mapa por nombre colapsaría una de las dos en silencio (v306).
+    ⚠️ Incluye ARCHIVADAS por defecto: archivar no es no-cobrar, y hoy 4 de las 9
+    obras con pendiente lo están (v369).
+    """
+    # ⚠️ Import PEREZOSO: este módulo NO importa `projects` a nivel de módulo (lo
+    # haría `projects` → `timeclock` → … y además nadie lo necesitaba hasta ahora).
+    # Escribirlo como `P.list_projects` sin más habría sido un NameError (v342).
+    from core import projects as _P
+    out = {}
+    for p in _P.list_projects(grupo=grupo, incluir_archivados=incluir_archivados):
+        pid = str(p.get("ID", ""))
+        try:
+            v = pendiente_de_facturar(pid, grupo, p)
+        except Exception as e:
+            logger.warning("pendiente_por_proyecto %s: %s", pid, e)
+            v = 0.0
+        if v > 0:
+            out[pid] = v
+    return out
+
+
 def resumen_cliente(grupo: str, cliente_id: str) -> dict:
     """{facturado, cobrado, pendiente, vencido, n} de un cliente."""
     fac = cob = venc = 0.0
