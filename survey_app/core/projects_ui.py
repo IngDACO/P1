@@ -1401,6 +1401,11 @@ def _cartera_lista(proys, alarmas, delays, aheads, costos, pendientes=None):
             # tenerlo en la tabla permite dictarlo, buscarlo y cruzarlo con la hoja.
             "ID": _pid,
             "Proyecto": str(p.get("Nombre", "")),
+            # ⚠️ v398: junto al nombre, no al final. Medido en producción: con 13
+            # columnas y la tabla a ~520 px, puesta la décima **había que hacer
+            # scroll para encontrarla** — o sea que no cumplía su función, que es
+            # ver el dinero pendiente de un vistazo. Existir no es servir.
+            "Sin facturar": round(pendientes.get(_pid, 0.0), 2),
             "Tipo": str(p.get("Tipo", "") or "—"),
             "Estado": str(p.get("Estado", "") or "—"),
             "Avance": max(0, min(100, int(P._num(p.get("Avance"))))),
@@ -1408,10 +1413,6 @@ def _cartera_lista(proys, alarmas, delays, aheads, costos, pendientes=None):
             "Inicio": _ddmm(p.get("FechaInicio")),
             "Fin": _ddmm(p.get("FechaFinEst")),
             "Ppto": _ppto,
-            # v397: dinero hecho y aún no pedido. Va como NÚMERO (no como texto con
-            # el símbolo) para que la columna se pueda ORDENAR — que es justo para lo
-            # que sirve: ver de un vistazo dónde está el dinero sin facturar.
-            "Sin facturar": round(pendientes.get(_pid, 0.0), 2),
             "Usuarios": _users,
             "Situación": _sit,
             "Alertas": str(_al) if _al else "",
