@@ -101,8 +101,12 @@ C:\Users\diego\P1\survey_app\
 │   ├── belting.py          # compute_belting/belting_svg — belting (DSTS) — v86
 │   ├── belting_ui.py       # render_belting_tab()
 │   ├── rails.py            # catálogo de rieles (referencia→medidas) para autocompletar RAIL — v84
-│   ├── roster.py           # tablero semanal de cuadrilla: catalogo Trabajos + hoja Roster (v159)
-│   └── roster_ui.py        # 📅 Planificacion (admin): rejilla coloreada + editar semana + copiar (v159)
+│   ├── roster.py           # tablero de cuadrilla: catalogo Trabajos + hoja Roster (v159).
+│   │                       #   DIAS (lun-vie) + DIAS_EXTRA (sab/dom) + DIAS_TODOS en orden
+│   │                       #   de weekday(); `dias_con_datos` decide qué columnas se pintan (v390)
+│   └── roster_ui.py        # 📅 Planificacion (admin): 3 vistas — Semana (rejilla editable en
+│                           #   sitio, v217) · Día (la cuadrilla sobre un eje de horas, v390) ·
+│                           #   Libres. + «Ver el día» de UNA persona con carriles (v387)
 └── extractors/
     └── schindler.py        # extract_from_pdf() + extract_car_guide_rail() + extract_belting() — pypdf CAD PDF
 
@@ -228,6 +232,35 @@ Estas cinco mordieron en una sola tanda:
     y describí «7 usuarios encerrados sin salida»; en el Cloud el bot SÍ estaba y siempre
     tuvieron camino. Es la regla de v145 («auditar contra lo real») aplicada a la
     CONFIGURACIÓN: para afirmar algo del entorno real, mirarlo EN el entorno real.
+
+**Añadidas en v387-v395 (la tanda de la vista por día y el fin de semana):**
+
+14. ⚠️ **El navegador NORMALIZA el atributo `style`, y un selector literal falla.**
+    Mi sonda buscaba `div[style*="position:absolute"]` y daba **cero resultados**
+    con los bloques perfectamente pintados: el DOM guarda `position: absolute`
+    **con espacio**. Iba a reportar «Streamlit sanitiza el CSS». → Para comprobar
+    estilos, `getComputedStyle`, NUNCA una subcadena del atributo. Es la nº12
+    (sonda negativa) otra vez: **antes de decir «no está», comprobar que la sonda
+    ve el caso conocido-bueno.**
+15. ⚠️ **`sorted()` es alfabético; el dominio casi nunca lo es.** Mi test de
+    auto-poblado dio 4 FALLOS con el código correcto porque comparaba
+    `['jue','lun','mar','mie','vie']` contra el orden de la semana. → Ordenar por
+    la clave del DOMINIO (`key=DIAS_TODOS.index`). Gemelo del `"40"` vs `"40.0"`
+    de v372: **un test que ordena o formatea distinto que el código genera fallos
+    en falso**, y cada uno cuesta media hora de buscar un fallo que no existe.
+16. ⚠️ **Un guardián atado a la FORMA caduca cuando la forma cambia a propósito.**
+    `verif_panel` exigía literalmente que existiera la columna `b5`; al pasar la
+    barra de 5 a 4 columnas (con la misma cantidad de chrome) se puso rojo sin que
+    nada estuviera mal. Igual el de v302, atado al literal «Toda la semana
+    (Lun–Vie)». → La afirmación se escribe sobre el PRINCIPIO (el chrome no vuelve
+    a ser cuatro bandas; el atajo cubre los días visibles) y el número se DERIVA
+    del propio código. Y al actualizarlo, la razón queda escrita al lado (v385).
+17. ⚠️ **Todo componente de terceros trae un tamaño por defecto que no es el tuyo.**
+    `st_canvas` nace con `width=600` y no tiene `use_container_width`: en un móvil
+    de 375 px el lienzo salía de 600 dentro de un hueco de 343 y **la mitad derecha
+    de la firma quedaba fuera de la pantalla**. Es el `st_folium` de 500 px de v307
+    repetido. → Al integrar un componente, mirar su firma (`inspect.signature`) y
+    medirlo EN EL TAMAÑO EN QUE SE VA A USAR — para el Pre-Start, el teléfono.
 
 **Y la regla de siempre, que volvió a aplicar:** antes de borrar el LECTOR de un mecanismo, buscar
 sus ESCRITORES y convertirlos. En v299 `_nav_pending` tenía dos vivos («Abrir proyecto» tras el
@@ -5896,7 +5929,151 @@ dice: el guardián buscaba la subcadena `_records` y **`get_all_records` la cont
 Es la trampa nº2 (*grep ≠ uso*) dentro de un guardián. Corregido a AST por nombre de
 llamada. **Antes de «arreglar» lo que un chequeo denuncia, mirar el código acusado.**
 
-## Versiones desplegadas (v385 = actual)
+## VER EL DÍA de una persona: la celda no cabe, la línea de tiempo sí (v387-v389)
+Petición del usuario: *«cuando alguien tiene más de una asignación por día, al dar clic
+en ese día quiero ver solo ese día, cómo lo tiene organizado, de forma gráfica»*.
+
+### ⚠️ Medir los datos ANTES de diseñar cambió la propuesta
+La idea obvia era una línea de tiempo. Medido primero sobre la hoja real:
+| | |
+|---|---|
+| días-persona con asignación | 34 |
+| …con **más de una** | **1** |
+| asignaciones **con** franja horaria | **3** |
+| asignaciones **sin** hora | **32** |
+Y el único caso real —`campo1`, martes, `PRJ-0005` y `PRJ-0006`— tiene las dos a
+**07:00–15:30**, o sea SOLAPADAS. Con eso, un eje horario puro habría dibujado un
+bloque encima de otro y el resto del eje vacío. El diseño se cambió: **carriles
+paralelos** (el solape se VE) y las asignaciones sin hora como banda «todo el día»,
+sin fingir una franja que nadie puso.
+
+### Cómo se abre (decisión del usuario, entre tres opciones dibujadas)
+La celda ya es un `st.popover` de edición (v217) y no se le pueden dar dos
+significados al mismo clic. El popover gana **«Ver el día»** y el detalle se pinta
+**debajo del tablero, a ancho completo** — a 300 px de popover, los nombres se cortan
+y las horas no caben (medido antes de elegir).
+
+### ⚠️ El resumen MENTÍA, y era mi propio fallo
+Con las dos obras solapadas de 8,5 h, la cabecera decía **«17.0 h»** de una persona
+que trabajó 8,5: el mismo rato contado dos veces — exactamente lo que el aviso de dos
+líneas más abajo denuncia. `_ocupado()` calcula la **UNIÓN** de las franjas; la suma
+solo aparece junto al aviso, como síntoma: *«Suman 17.0 h asignadas sobre 8.5 h de
+día»*. Misma familia que el «sin asignar» de v320.
+
+### Otros dos, cazados por el guardián y por la pantalla
+- **Un turno que acaba cerca de medianoche** dejaba el eje por debajo del mínimo de
+  4 h que la propia función declara: `hi` está topado en las 24:00, así que si no cabe
+  hacia arriba hay que **bajar `lo`**.
+- ⚠️ **El popover NO se cierra con el `st.rerun()`** (medido en producción: el estado
+  de apertura vive en el frontend). Yo había escrito en el código que sí. Queda abierto
+  sobre el tablero hasta que se toque fuera. No se fuerza: la única vía sería remontarlo
+  cambiándole la `key`, y eso arrastra el CSS del color de cada celda a una key variable.
+
+### Verificación
+`_carriles` probado con el caso real, con día partido, con solape parcial de tres y con
+franja mal tecleada; el eje comprobado en 6 rangos (madrugada, hasta las 24:00, 30 min);
+y **ejecutado** en 6 escenarios (importar no ejecuta, v378). En el DOM: bloques a
+9.1%/77.3% en carriles separados, ticks sin recortar, 0 desbordes. En producción con el
+día doble real: «2 asignaciones · 8.5 h del día ocupadas» y los dos bloques en y=990 y
+y=1023, coherente con el KPI «CHOQUES DE TURNO: 1» del propio panel.
+
+## Vista por DÍA de la cuadrilla + sábado y domingo por semana (v390-v395)
+Dos peticiones del usuario: ver el panel **por día** además de por semana, y poder
+**añadir un día** cuando toca trabajar el fin de semana.
+
+### La vista Día: lo único que ninguna pantalla daba
+Ya había tres vistas de un día (Cumplimiento, Ruta del día, Disponibilidad) y ninguna
+responde *a qué hora* está cada uno. La vista Día es la cuadrilla entera sobre un eje
+de horas: una fila por persona, sus bloques a escala, los libres marcados. Reutiliza el
+motor de v387 (`_eje_de`, `_carriles`, `_ticks_html` compartidos, para no tener **dos
+aritméticas del eje** que mantener — la lección de los cinco `_num` de v323).
+- Quien se pisa a sí mismo sale en **sub-carriles al 50%** dentro de su propia fila, así
+  la rejilla sigue siendo una fila por persona.
+- ⚠️ Con 32 de 35 asignaciones sin hora, hoy se llena de bandas «todo el día». Se dice
+  en la propia pantalla; se afinará según se planifique con horario.
+- ⚠️ **Fallo de contraste visto mirando, no midiendo**: el texto blanco sobre la trama
+  de rayas era ilegible. Ahora va en una píldora de color sólido sobre la trama.
+
+### El día extra, SIN configuración nueva (decisión del usuario)
+`+ Sáb` / `+ Dom` añaden la columna **a la semana que se está viendo**, y la columna
+**reaparece sola si hay algo asignado** (`dias_con_datos`). Así no hay ajuste que
+mantener ni migración, y **el dato nunca queda escondido** — por eso mismo, quitar una
+columna con trabajo dentro está bloqueado y dice de quién es (regla v340).
+- ⚠️ `DIAS_TODOS` va en el orden de `weekday()`, así que `fecha_de_dia` sigue siendo
+  `lunes + índice` y **ninguna fecha existente se mueve** (lo primero que comprueba el
+  guardián: si eso se rompe, se desplaza toda la planificación histórica).
+- Se movió con ello todo lo que asumía «la semana es Lun–Vie»: rango del encabezado,
+  atajo «toda la semana», radar de choques y certificados (ahora escanea los 7 días),
+  agenda de Home, Ruta del día, Cumplimiento, Asignar y el board del campo — que ve el
+  fin de semana **solo si hay algo planificado**, que es justo cuando le importa.
+- ⚠️ Los cuatro cortes de `weekday() > 4` ya no cortan por ser sábado: cortan si **no
+  hay nada** ese día. Cortar por el día escondería lo que alguien acaba de planificar.
+
+### Ejercitado contra la hoja REAL (v390)
+Nadie había guardado nunca una asignación en sábado. Método de v344 (foto en solo
+lectura → ejercitar en una semana vacía → verificar leyendo → devolver todo → segunda
+foto): guardar en sábado, leerlo con su franja y su nota, que la columna se abra sola,
+que el campo lo vea ese día (antes devolvía []), y que **`copiar_semana` lo arrastre**
+—que era una afirmación mía sin probar—. Hoja idéntica: 14 filas antes y después.
+
+### v393 · Auto-poblar respeta el fin de semana, pero no lo impone
+Al asignar personal se rellena el planificador entre las fechas del proyecto. Rellenar
+sáb/dom siempre convertiría la excepción en norma; no rellenarlo nunca obliga a añadir
+a mano a cada persona en una semana que la cuadrilla SÍ trabaja. Regla: se rellena el
+día extra **solo si en esa semana ya hay alguien trabajándolo**. La condición sale del
+DATO, no de una preferencia que haya que mantener.
+
+### v391-v394 · La barra del Panel, medida en vez de repartida a ojo
+Con **tres** vistas el segmentado dejó de caber: a 780 px (media pantalla) se partía en
+vertical y «Disponibilidad» salía cortada. Tres intentos, y solo el tercero salió de
+MEDIR la fila en producción (406 px, con 48 comidos por el `gap`):
+| Recorte | Ahorro |
+|---|---|
+| `gap="xxsmall"` (16 → 4 px) | 36 px |
+| rango **sin año** (`rango_label(corto=True)`) | 75 px |
+| menos padding, **acotado a este** segmentado | 36 px |
+Resultado medido en producción: barra de **70 → 40 px**, las tres vistas en una fila,
+rango en una línea, 0 recortes. ⚠️ El rango largo se estaba partiendo en **3 líneas**
+dentro de 56 px — eso era lo que hinchaba la fila, y no se veía hasta medir su altura.
+
+### v393 · ⚠️ La firma del Pre-Start no cabía en un móvil
+`st_canvas` nace con `width=600` y no acepta `use_container_width`: en un viewport de
+375 px el lienzo salía de **600 dentro de un hueco de 343**, así que **la mitad derecha
+quedaba fuera de pantalla y ahí no se podía firmar**. Ahora son 300 px (medido: cabe
+entero, sin scroll). El Pre-Start se llena EN OBRA, así que manda el móvil aunque en
+escritorio el recuadro se vea más pequeño.
+⚠️ **Sigue sin demostrarse** que un DEDO trace una firma completa: mis eventos
+sintéticos dejan tinta pero no completan el trazo, y de eso no se concluye que falle
+(regla v375). Necesita un teléfono real.
+
+### v395 · Las alarmas que no le llegan a nadie
+`report_problem` escribe la alarma **y notifica**. Un destinatario sin email ni Telegram
+la recibe… dentro de la app: solo la ve si entra a mirar. Con el check en NO abriendo
+alarma (v373) eso pasó a importar. Medido en la hoja real: de los **5** destinatarios de
+una alarma de `cliente1`, a **3 no les llega** (`dacox`, `Arcantox`, `admin1`) — aunque
+siempre llega a 2, así que ninguna se pierde del todo.
+- El dato entra en `admin_digest.group_digest` (`avisos_sin_canal`) y se avisa **donde
+  se arregla**: Planificación · Usuarios, encima de la tabla donde se carga el email.
+- ⚠️ **Criterio distinto al del campo, a propósito**: al campo se le exigen los DOS
+  canales (v79, requisito para usar la app); a un gestor le basta UNO. Mezclarlos sería
+  el error de v325 («sin tarifa» eran dos cosas en el mismo aviso).
+- ⚠️ **NO entra en `_PENDING_KEYS`**: la rejilla del resumen del día es de NUEVE
+  indicadores fijos en 2 filas y su reparto tiene guardián (v305).
+- 0 lecturas nuevas: sale de `list_users()`, ya cacheado.
+
+### ⚠️ La regla v135 falló TRES veces en una sola tanda
+`prestart.generate_prestart_pdf` (vive en `prestart_pdf`), `report_problem(pid, grupo,
+tipo, …)` (no tiene `tipo`) y `CHECKS_S1` como lista de cadenas (son **tuplas
+(clave, texto)**). Las tres se cazaron ejecutando, no leyendo. **Antes de escribir una
+llamada nueva, mirar la firma y la FORMA del dato — no el nombre que parece lógico.**
+
+### Y un error de manos
+Sobrescribí `P1/.claude/launch.json` por leer la ruta equivocada antes de escribir
+(`survey_app/.claude/`, que no existe). Restaurado desde git; los cambios locales sin
+commitear que hubiera ahí se perdieron. **Leer el fichero que se va a escribir, no uno
+parecido.**
+
+## Versiones desplegadas (v395 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -5904,6 +6081,16 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v395 | **Se avisa de las alarmas que no le llegan a nadie**: un destinatario sin email ni Telegram recibe la alarma *dentro* de la app y solo la ve si entra a mirar — y desde v373 un control de seguridad en NO abre alarma. Medido en la hoja real: de los 5 destinatarios de `cliente1`, a **3 no les llega** (`dacox`, `Arcantox`, `admin1`), aunque siempre llega a 2. El aviso va **donde se arregla** (Planificación · Usuarios, sobre la tabla del email). ⚠️ Criterio distinto al del campo a propósito (a un gestor le basta UN canal; al campo se le exigen los dos, v79 — mezclarlos sería el error de v325) y ⚠️ **no entra en `_PENDING_KEYS`**: la rejilla del resumen es de nueve indicadores fijos con guardián (v305). 0 lecturas nuevas |
+| v394 | La barra del Panel **cabe en una fila a media pantalla**, esta vez MIDIENDO: la fila da 406 px y el `gap` por defecto se comía 48. ⚠️ Y el rango largo se partía en **3 líneas** dentro de 56 px — eso era lo que hinchaba la fila, invisible hasta medir su altura. Tres recortes: `gap="xxsmall"` (−36), rango sin año (−75) y menos padding **acotado a este** segmentado (−36). Medido en producción: barra de 70 → **40 px**, las tres vistas en una fila, 0 recortes |
+| v393 | ⚠️ **La firma del Pre-Start no cabía en un móvil**: `st_canvas` nace con `width=600` y no acepta `use_container_width`, así que en un viewport de 375 px el lienzo salía de 600 dentro de un hueco de 343 y **la mitad derecha quedaba fuera de pantalla** — el `st_folium` de 500 px de v307 otra vez. Ahora 300 px (medido: cabe entero). ⚠️ Sigue sin demostrarse que un DEDO complete el trazo: necesita un teléfono real. + **auto-poblar** rellena el fin de semana **solo si en esa semana ya hay alguien trabajándolo** (la condición sale del dato, no de una preferencia: ni impone sábados ni obliga a añadir a mano en una semana que la cuadrilla sí trabaja) |
+| v392 | La barra del Panel pasa de 5 a 4 columnas («Copiar semana anterior» baja a la fila de la cobertura) para dar ancho al segmentado. ⚠️ Rompió el guardián de v291, que exigía literalmente la columna `b5`: **caducado, no regresión** — lo que aquella regla defiende es que el chrome no vuelva a ser cuatro bandas, y siguen siendo dos. Actualizado para DERIVAR el número de columnas del propio código |
+| v391 | Etiquetas cortas en el segmentado (**Semana · Día · Libres**) porque «Disponibilidad» se recortaba con tres opciones. Solo el display: los valores son el estado guardado y no se tocan (v232) |
+| v390 | **Vista por DÍA de la cuadrilla** (una fila por persona sobre un eje de horas — lo único que ninguna de las tres vistas de un día ya existentes daba) + **sábado y domingo por semana** con `+ Sáb`/`+ Dom`, sin configuración nueva: la columna reaparece sola si hay algo asignado, y quitarla con trabajo dentro está bloqueado (v340). ⚠️ `DIAS_TODOS` va en el orden de `weekday()`, así que **ninguna fecha existente se mueve**. Se movió con ello todo lo que asumía Lun–Vie (rango, atajo de semana, radar de 7 días, agenda de Home, Ruta del día, Cumplimiento, Asignar, board del campo). Los cortes de `weekday() > 4` ya no cortan por ser sábado, sino si NO hay nada. Ejercitado contra la hoja real (incluido que `copiar_semana` arrastra el sábado, que era una afirmación mía sin probar) |
+| v389 | ⚠️ El popover **no** se cierra con el `st.rerun()` (medido en producción: su estado vive en el frontend). El comentario del código decía lo contrario — corregido, no el comportamiento: forzarlo exigiría remontarlo por `key` y eso arrastra el CSS del color de cada celda |
+| v388 | ⚠️ **El resumen de la vista del día mentía, y era mi propio fallo**: con dos obras solapadas de 8,5 h decía «17.0 h» — el mismo rato contado dos veces, justo lo que el aviso de al lado denuncia. Las horas pasan a ser la **UNIÓN** de las franjas y la suma solo aparece junto al aviso, como síntoma. + plural («asignación»/«asignaciones» pierde la tilde) y keys con la misma tripleta |
+| v387 | **Ver el día de una persona**: la celda solo cabe «primero +N» (v295), así que un día con varias obras esconde a qué hora es cada una y si se pisan. Línea de tiempo a escala **con carriles** (el solape se VE) bajo el tablero. ⚠️ **Medir los datos antes de diseñar cambió la propuesta**: 32 de 35 asignaciones no tienen hora y el único día doble real tiene las dos a la MISMA franja — un eje puro habría dibujado un bloque sobre otro con el resto vacío. Las que no tienen hora salen como «todo el día», sin fingir una franja. ⚠️ Un turno que acaba cerca de medianoche dejaba el eje bajo su propio mínimo (`hi` topado en 24:00 → hay que bajar `lo`) |
+| v386 | Documentación de v383-v385 en CLAUDE.md |
 | v385 | **Auditoría de la suite ENTERA**: venía corriendo un subconjunto elegido por mí, así que «13 en verde» ocultaba que de **48 guardianes fallaban 13** — dos introducidos ese mismo día. **3 fallos reales**: el `font-size:15px` de la banda nueva (fuera de la escala de v333), un `import pandas` muerto en `prestart_ui`, y **5 `except: pass` que se tragaban el apunte de auditoría** sin dejar rastro (de v342/v352). **9 caducados**, actualizados con la razón escrita al lado, no relajados: los tres de la nav exigían código que **v299 borró** (fallaban por haber ganado), y el resto miraba CSS, columnas, fixtures y enlaces que v301/v310/v313/v317/v318/v325/v333/v361 cambiaron a propósito. **Y un falso positivo del propio guardián**: acusaba a `catalogo` y `orders` de leer el `_next_id` de la caché porque buscaba la subcadena `_records`… y **`get_all_records` la contiene** (la trampa nº2, *grep ≠ uso*, dentro de un chequeo). REGLA: se corre la suite entera, no la lista que uno recuerda |
 | v384 | Fix: la banda del Pre-Start usaba `font-size:15px`, fuera de la escala tipográfica de v333 |
 | v383 | **Firma DIBUJADA en el Pre-Start** (una por asistente, solo en el PDF) + **banda de aviso en la barra superior** que no se puede descartar hasta que el Pre-Start esté hecho. La dependencia (`streamlit-drawable-canvas`, de 2023) se probó ANTES contra el Streamlit 1.57 que corre aquí: captura el trazo (543 B en blanco → 5.245 B firmado) y reportlab lo acepta; import perezoso, así que si falla se cae a las iniciales en vez de dejar sin registrar la charla. ⚠️ **Tres trampas**: detectar la firma por el canal ALFA daba **58.800 píxeles de trazo en un lienzo VACÍO** (todos «firmados»); `json.dumps` **no serializa bytes**, así que sin filtrar la firma el registro habría fallado entero (y en base64 seis firmas rozan el tope de 50.000 caracteres por celda); y la columna de firma medía el **9%** del ancho —dimensionada para dos iniciales— y partía el encabezado como «Signatur / e», lo que solo se vio extrayendo el texto del PDF generado. + `logger` inexistente en el `except` de la firma (el NameError latente de v370), con el guardián ejercitando esa rama |
