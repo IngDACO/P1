@@ -58,11 +58,15 @@ def _semana_activa() -> "date":
     return _d(int(y), int(m), int(dd))
 
 
-def _cobertura_hoy(lunes, staff, datos):
+def _cobertura_hoy(lunes, staff, datos, dias=None):
     """Cobertura del día en vista (hoy si cae en la semana, si no el lunes): en obra /
-    sin asignar (con nombres) / OFF-Leave — para ver los huecos de un vistazo (v217)."""
+    sin asignar (con nombres) / OFF-Leave — para ver los huecos de un vistazo (v217).
+    `dias` = los días VISIBLES (v390): si hoy es sábado y el sábado está en pantalla,
+    la cobertura es la del sábado, no la del lunes."""
+    dias = dias or R.DIAS
     off = (clock.today() - lunes).days
-    d = R.DIAS[off] if 0 <= off <= 4 else R.DIAS[0]
+    d = R.DIAS_TODOS[off] if (0 <= off < len(R.DIAS_TODOS)
+                              and R.DIAS_TODOS[off] in dias) else dias[0]
     fecha = R.fecha_de_dia(lunes, d)
     en_obra, estado, sin = 0, 0, []
     for u in staff:
@@ -205,14 +209,7 @@ def _vista_dia(grupo, lunes, usuario, nom, dia, datos, tidx):
 
         # ── Línea de tiempo (solo lo que tiene horario) ──
         if con_hora:
-            lo = max(0, (min(_min(it["ini"]) for it in con_hora) // 60 - 1) * 60)
-            hi = min(1440, (-(-max(_min(it["fin"]) for it in con_hora) // 60) + 1) * 60)
-            if hi - lo < _EJE_MIN:
-                # ⚠️ Ampliar por ARRIBA no basta: `hi` está topado en las 24:00, así
-                # que un turno que acaba cerca de medianoche se quedaba con un eje
-                # más corto que el mínimo. Si no cabe hacia arriba, se baja `lo`.
-                hi = min(1440, lo + _EJE_MIN)
-                lo = max(0, hi - _EJE_MIN)
+            lo, hi = _eje_de(con_hora)       # MISMA escala que la vista de cuadrilla
             span = hi - lo
             filas = []
             for c in _carriles(con_hora):
@@ -287,6 +284,176 @@ def _vista_dia(grupo, lunes, usuario, nom, dia, datos, tidx):
             st.rerun()
 
 
+def _extra_pedidos(lunes) -> list:
+    """Días extra que se han añadido A MANO a esta semana (v390).
+
+    ⚠️ Vive en la SESIÓN, no en una hoja: un día extra con algo asignado reaparece
+    solo (`dias_con_datos` lo detecta), así que lo único efímero es la columna vacía
+    recién abierta — y eso no merece ni una columna nueva ni una migración. La contra,
+    dicha: una empresa que trabaje sábado todas las semanas tendrá que pulsarlo en
+    cada semana nueva hasta asignar algo (copiar la semana anterior ya lo arrastra).
+    """
+    return list(st.session_state.get("_ros_extra", {}).get(lunes.isoformat(), []))
+
+
+def _control_dias(lunes, datos, dias):
+    """Añadir o quitar sábado/domingo en la semana que se está viendo."""
+    pedidos = _extra_pedidos(lunes)
+    cols = st.columns(len(R.DIAS_EXTRA))
+    for i, d in enumerate(R.DIAS_EXTRA):
+        lbl = R.DIAS_LABEL[d]
+        if d not in dias:
+            if cols[i].button(f":material/add: {lbl}", key=f"rosadd_{lunes:%Y%m%d}_{d}",
+                              use_container_width=True,
+                              help=f"Añadir el {lbl.lower()}ado a esta semana"
+                                   if d == "sab" else f"Añadir el {lbl.lower()}ingo"):
+                st.session_state.setdefault("_ros_extra", {})[lunes.isoformat()] = \
+                    pedidos + [d]
+                st.rerun()
+        else:
+            # ⚠️ No se deja quitar una columna CON trabajo dentro: sería esconder
+            # datos que la app guarda (el fallo de v340). Se dice de quién es.
+            con = R.dia_tiene_datos(datos, d)
+            if cols[i].button(f":material/close: {lbl}", key=f"rosdel_{lunes:%Y%m%d}_{d}",
+                              use_container_width=True, disabled=bool(con),
+                              help=(f"No se puede quitar: hay {len(con)} persona(s) "
+                                    f"con trabajo ese día ({', '.join(con[:3])})"
+                                    if con else f"Quitar el {lbl.lower()} de esta semana")):
+                st.session_state.setdefault("_ros_extra", {})[lunes.isoformat()] = \
+                    [x for x in pedidos if x != d]
+                st.rerun()
+
+
+def _eje_de(con_hora):
+    """(lo, hi) del eje horario en minutos, con una hora de aire a cada lado.
+    Compartido por la vista de UNA persona y la de toda la cuadrilla, para que las
+    dos usen exactamente la misma escala y no haya dos aritméticas que mantener."""
+    lo = max(0, (min(_min(it["ini"]) for it in con_hora) // 60 - 1) * 60)
+    hi = min(1440, (-(-max(_min(it["fin"]) for it in con_hora) // 60) + 1) * 60)
+    if hi - lo < _EJE_MIN:
+        # ⚠️ Ampliar por ARRIBA no basta: `hi` está topado en las 24:00, así que un
+        # turno que acaba cerca de medianoche se quedaba con un eje más corto que el
+        # mínimo. Si no cabe hacia arriba, se baja `lo`.
+        hi = min(1440, lo + _EJE_MIN)
+        lo = max(0, hi - _EJE_MIN)
+    return lo, hi
+
+
+def _ticks_html(lo, hi):
+    """Regla de horas del eje. ⚠️ Los ticks de los extremos NO se centran: con
+    translateX(-50%) la mitad del primero se sale del contenedor y se recorta."""
+    span, paso = hi - lo, (60 if (hi - lo) <= 480 else 120)
+    out, m = [], lo
+    while m <= hi:
+        _tr = ("none" if m == lo else
+               "translateX(-100%)" if m + paso > hi else "translateX(-50%)")
+        out.append(f'<span style="position:absolute;left:{(m - lo) / span * 100:.2f}%;'
+                   f'transform:{_tr}">{_hm(m)}</span>')
+        m += paso
+    return ('<div style="position:relative;height:18px;font-size:11px;color:#8a929e">'
+            + "".join(out) + "</div>")
+
+
+def _vista_dia_cuadrilla(grupo, lunes, staff, datos, tidx, dia):
+    """El día de TODA la cuadrilla sobre un eje de horas: una fila por persona (v390).
+
+    Es lo único que ninguna pantalla daba. «Cumplimiento» compara plan contra fichaje,
+    «Ruta del día» ordena las obras en el mapa y «Disponibilidad» dice quién está
+    libre — pero ninguna responde *a qué hora* está cada uno, que es lo que hace falta
+    para meter una entrega a las 14:00 o ver que tres personas se van a las 15:30.
+
+    ⚠️ Las asignaciones SIN hora no se colocan en el eje: ocupan la fila entera con
+    trama, etiquetadas «todo el día». Hoy son la mayoría (el roster nació sin franja),
+    así que esta vista se afina sola según se planifique con horario — fingir una
+    franja para que el dibujo quedara bonito sería inventarse el dato.
+    """
+    f = R.fecha_de_dia(lunes, dia)
+    filas, con_hora_todo, n_libres, n_obra = [], [], 0, 0
+    for u in staff:
+        items = R.celda_items(datos, u["Usuario"], dia)
+        ch = [it for it in items if _clase_franja(it) == "hora"]
+        con_hora_todo.extend(ch)
+        if items:
+            n_obra += 1
+        else:
+            n_libres += 1
+        filas.append((u, items, ch))
+
+    c1, c2 = st.columns([3, 2])
+    c1.markdown(f"<div style='font-size:18px;font-weight:600'>{R.DIAS_LABEL[dia]} "
+                f"{f.strftime('%d/%m')}</div>", unsafe_allow_html=True)
+    c2.markdown(f"<div style='font-size:13px;color:#5b6472;text-align:right;"
+                f"padding-top:8px'>{n_obra} con asignación · {n_libres} libres</div>",
+                unsafe_allow_html=True)
+
+    if not con_hora_todo:
+        st.info("Nadie tiene franja horaria este día, así que no hay nada que situar "
+                "en el reloj. Las asignaciones sin hora se listan abajo como «todo "
+                "el día».")
+
+    lo, hi = _eje_de(con_hora_todo) if con_hora_todo else (0, 0)
+    span = (hi - lo) or 1
+    _NOM = ("font-size:13px;color:#1f2937;font-weight:600;white-space:nowrap;"
+            "overflow:hidden;text-overflow:ellipsis;padding-top:6px")
+    html = []
+    for u, items, ch in filas:
+        nom = u.get("Nombre") or u["Usuario"]
+        pista = []
+        # (a) lo que NO tiene hora ocupa el fondo de la fila, con trama: se ve que
+        #     está asignado sin afirmar a qué hora.
+        for it in [x for x in items if _clase_franja(x) != "hora"]:
+            bg = R.color_de(it["asig"], tidx)
+            # ⚠️ El texto va en una píldora de color SÓLIDO, no directamente sobre la
+            # trama: medido en pantalla, las rayas claras por detrás lo dejaban
+            # ilegible (el mismo problema de contraste que la auditoría de v326-v329).
+            pista.append(
+                f'<div style="position:absolute;left:0;right:0;top:0;bottom:0;'
+                f'background:repeating-linear-gradient(45deg,{bg},{bg} 7px,'
+                f'rgba(255,255,255,.35) 7px,rgba(255,255,255,.35) 14px);'
+                f'display:flex;align-items:center;padding:0 6px;overflow:hidden">'
+                f'<span style="background:{bg};color:{_texto_sobre(bg)};'
+                f'border-radius:4px;padding:1px 7px;font-size:11px;font-weight:600;'
+                f'white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'
+                f'{_esc(R.etiqueta_de(it["asig"], tidx))} · todo el día</span></div>')
+        # (b) las que sí la tienen, a su hora. Si una persona se pisa a sí misma, sus
+        #     bloques se reparten en SUB-carriles dentro de su propia fila, para que
+        #     la rejilla siga siendo una fila por persona.
+        if ch:
+            carr = _carriles(ch)
+            alto = 100 / len(carr)
+            for ci, c in enumerate(carr):
+                for it in c:
+                    a, b = _min(it["ini"]), _min(it["fin"])
+                    bg = R.color_de(it["asig"], tidx)
+                    _fl = R.franja_label(it["ini"], it["fin"])
+                    pista.append(
+                        f'<div style="position:absolute;left:{(a - lo) / span * 100:.2f}%;'
+                        f'width:{(b - a) / span * 100:.2f}%;top:{ci * alto:.1f}%;'
+                        f'height:{alto:.1f}%;background:{bg};color:{_texto_sobre(bg)};'
+                        f'border-left:3px solid rgba(0,0,0,.28);border-radius:0 5px 5px 0;'
+                        f'display:flex;align-items:center;padding:0 7px;font-size:11px;'
+                        f'font-weight:600;overflow:hidden;white-space:nowrap;'
+                        f'text-overflow:ellipsis" title="{_esc(_fl)}">'
+                        f'{_esc(R.etiqueta_de(it["asig"], tidx))}'
+                        f'{" · " + _esc(_fl) if _fl else ""}</div>')
+        if not items:
+            pista.append('<div style="position:absolute;left:0;top:0;bottom:0;'
+                         'display:flex;align-items:center;padding:0 8px;font-size:11px;'
+                         'color:#9aa7b8">libre</div>')
+        html.append(
+            f'<div style="display:grid;grid-template-columns:130px 1fr;gap:8px;'
+            f'margin-bottom:4px"><div style="{_NOM}">{_esc(nom)}</div>'
+            f'<div style="position:relative;height:26px;background:#f1f5f9;'
+            f'border-radius:6px">' + "".join(pista) + "</div></div>")
+    # La regla de horas se alinea con las pistas dejando la misma columna del nombre.
+    if con_hora_todo:
+        html.append('<div style="display:grid;grid-template-columns:130px 1fr;gap:8px">'
+                    '<div></div>' + _ticks_html(lo, hi) + "</div>")
+    st.markdown("".join(html), unsafe_allow_html=True)
+    st.caption("Trama = asignado sin franja horaria («todo el día»)  ·  "
+               "una persona con dos bloques a la misma hora se pisa a sí misma")
+
+
 def _asignar_al_dia(grupo, lunes, usuario, sem_persona, dia, pid, ini, fin):
     """Añade el proyecto (con franja) al día de la persona SIN pisar sus otras asignaciones;
     guarda la semana completa (1 escritura)."""
@@ -299,9 +466,10 @@ def _asignar_al_dia(grupo, lunes, usuario, sem_persona, dia, pid, ini, fin):
     return R.guardar_persona(grupo, lunes, usuario, sem)
 
 
-def _asignacion_inteligente(grupo, lunes, staff, tidx):
+def _asignacion_inteligente(grupo, lunes, staff, tidx, dias=None):
     """Sugiere a quién asignar a un proyecto en un día/franja = libre esa franja + cumple los
     certificados que exige + sin choque de turno (v279). Asigna a los elegidos con un clic."""
+    dias = dias or R.DIAS
     from core import credentials
     with st.container():   # v287: el título lo da el botón de la fila de herramientas
         try:
@@ -329,7 +497,7 @@ def _asignacion_inteligente(grupo, lunes, staff, tidx):
         certs = [c.strip() for c in str((prj or {}).get("CertsReq", "")).split(";") if c.strip()]
 
         cda, cdb = st.columns([2, 3])
-        _dsel = cda.selectbox("Día", R.DIAS, key="ai_dia",
+        _dsel = cda.selectbox("Día", dias, key="ai_dia",
                               format_func=lambda d: f"{R.DIAS_LABEL[d]} "
                               f"{R.fecha_de_dia(lunes, d).strftime('%d/%m')}")
         c1, c2 = cdb.columns(2)
@@ -402,7 +570,9 @@ def _radar_scan(grupo, lunes, staff, tidx):
     for u in staff:
         usr = u["Usuario"]
         nom = u.get("Nombre") or usr
-        for d in R.DIAS:
+        # ⚠️ DIAS_TODOS, no DIAS: un choque de turno o un certificado que bloquea el
+        # sábado es igual de real que el del martes, y el radar es lo que lo caza.
+        for d in R.DIAS_TODOS:
             items = R.celda_items(datos, usr, d)
             ov = False
             for i in range(len(items)):
@@ -512,8 +682,11 @@ def _ficha_rapida(grupo, usuario):
             st.rerun()
 
 
-def _panel_kpis(grupo, lunes, staff, datos, choques, sin_cumplir):
-    """Fila de KPIs del Panel, con el kit de diseño COPEX (v282/v283)."""
+def _panel_kpis(grupo, lunes, staff, datos, choques, sin_cumplir, dias=None):
+    """Fila de KPIs del Panel, con el kit de diseño COPEX (v282/v283).
+    `dias` = los visibles: «Libres hoy» solo dice «—» si hoy NO está en pantalla
+    (antes decía «fin de semana» aunque el sábado estuviera planificado, v390)."""
+    dias = dias or R.DIAS
     from core import timeclock
     from core import theme
     ab = timeclock.open_now(grupo) if timeclock.is_configured() else []
@@ -521,14 +694,16 @@ def _panel_kpis(grupo, lunes, staff, datos, choques, sin_cumplir):
     en_prj = len({(s["usuario"] or s["nombre"]) for s in ab
                   if s["tipo"] == timeclock.TIPO_PROYECTO})
     off = (clock.today() - lunes).days
-    d = R.DIAS[off] if 0 <= off <= 4 else None
+    d = (R.DIAS_TODOS[off] if (0 <= off < len(R.DIAS_TODOS)
+                               and R.DIAS_TODOS[off] in dias) else None)
     libres = ([u for u in staff if not R.celda_items(datos, u["Usuario"], d)]
               if d else [])
     theme.kpi_row([
         ("Fichados ahora", fich, f"{en_prj} en un proyecto", theme.VERDE if fich else theme.GRIS_TXT),
         ("Libres hoy", (len(libres) if d else "—"),
          (", ".join((u.get("Nombre") or u["Usuario"]) for u in libres[:2]) +
-          ("…" if len(libres) > 2 else "")) if libres else ("sin huecos" if d else "fin de semana"),
+          ("…" if len(libres) > 2 else "")) if libres else
+         ("sin huecos" if d else "hoy no está en la vista"),
          theme.AZUL),
         ("Choques de turno", len(choques), "franjas que se solapan",
          theme.ROJO if choques else theme.GRIS_TXT),
@@ -554,9 +729,13 @@ def render_planificacion(grupo):
     tidx  = R.trabajos_idx(grupo)
     datos = R.get_semana(grupo, lunes)
 
+    # Días VISIBLES de esta semana: los cinco de siempre + los extra que tengan algo
+    # asignado o se hayan añadido a mano (v390).
+    dias = R.dias_con_datos(datos, _extra_pedidos(lunes))
+
     # ── KPIs + estado en vivo (un solo escaneo del radar, reusado en los KPIs) ──
     _scan = _radar_scan(grupo, lunes, staff, tidx)
-    _panel_kpis(grupo, lunes, staff, datos, _scan[0], _scan[1])
+    _panel_kpis(grupo, lunes, staff, datos, _scan[0], _scan[1], dias=dias)
 
     # ── Ficha rápida (aparece al tocar un nombre en el tablero) ──
     if st.session_state.get("_panel_ficha"):
@@ -573,17 +752,23 @@ def render_planificacion(grupo):
         st.session_state["ros_lunes"] = (lunes - timedelta(days=7)).isoformat()
         st.rerun()
     b2.markdown(f"<div style='text-align:center;font-weight:700;font-size:16px;"
-                f"padding-top:6px'>{R.rango_label(lunes)}</div>", unsafe_allow_html=True)
+                f"padding-top:6px'>{R.rango_label(lunes, dias)}</div>",
+                unsafe_allow_html=True)
     if b3.button("▶", key="ros_next", use_container_width=True):
         st.session_state["ros_lunes"] = (lunes + timedelta(days=7)).isoformat()
         st.rerun()
+    # ⚠️ Los VALORES del radio no se tocan al añadir la vista Día: son el estado
+    # guardado en `cpxseg_vista`, y un radio cuyo valor guardado ya no está entre sus
+    # opciones revienta (el fallo que v369 esquivó en Facturas).
     _vista = b4.radio(
-        "vista", ["📋 Tablero", "👀 Disponibilidad"], horizontal=True,
+        "vista", ["📋 Tablero", "🕐 Día", "👀 Disponibilidad"], horizontal=True,
         key="cpxseg_vista", label_visibility="collapsed",   # cpxseg_ = segmentado del kit
-        help="En el tablero: toca una **celda** para asignar o editar (con su franja "
-             "horaria); toca un **nombre** para abrir su ficha rápida.",
+        help="**Tablero**: la semana entera, y se asigna tocando una celda.  ·  "
+             "**Día**: la cuadrilla sobre un reloj, para ver a qué hora está cada "
+             "uno y dónde quedan huecos.  ·  **Disponibilidad**: quién está libre.",
         format_func=lambda o: {
             "📋 Tablero": ":material/calendar_view_week: Tablero",
+            "🕐 Día": ":material/schedule: Día",
             "👀 Disponibilidad": ":material/event_available: Disponibilidad"}.get(o, o))
     if b5.button(":material/assignment: Copiar semana anterior", key="ros_copy",
                  use_container_width=True):
@@ -592,11 +777,25 @@ def render_planificacion(grupo):
         if ok:
             st.rerun()
 
-    # ── Cobertura del día (esto es DATO, no chrome: se queda) ──
-    _cobertura_hoy(lunes, staff, datos)
+    # ── Cobertura del día (DATO, se queda) + añadir/quitar sábado y domingo ──
+    _cc1, _cc2 = st.columns([5, 2])
+    with _cc1:
+        _cobertura_hoy(lunes, staff, datos, dias=dias)
+    with _cc2:
+        _control_dias(lunes, datos, dias)
 
-    if _vista == "👀 Disponibilidad":
-        _dd = st.selectbox("¿Quién está libre el…?", R.DIAS, key="panel_libredia",
+    if _vista == "🕐 Día":
+        # El día por defecto: hoy si está en la semana visible, si no el primero.
+        _off = (clock.today() - lunes).days
+        _hoy_k = (R.DIAS_TODOS[_off] if 0 <= _off < len(R.DIAS_TODOS) else None)
+        _idx = dias.index(_hoy_k) if _hoy_k in dias else 0
+        _dsel = st.radio("Día", dias, index=_idx, horizontal=True,
+                         key="cpxseg_diavista", label_visibility="collapsed",
+                         format_func=lambda d: f"{R.DIAS_LABEL[d]} "
+                         f"{R.fecha_de_dia(lunes, d).strftime('%d/%m')}")
+        _vista_dia_cuadrilla(grupo, lunes, staff, datos, tidx, _dsel)
+    elif _vista == "👀 Disponibilidad":
+        _dd = st.selectbox("¿Quién está libre el…?", dias, key="panel_libredia",
                            format_func=lambda d: f"{R.DIAS_LABEL[d]} "
                            f"{R.fecha_de_dia(lunes, d).strftime('%d/%m')}")
         _libres = [(u.get("Nombre") or u["Usuario"]) for u in staff
@@ -607,16 +806,17 @@ def render_planificacion(grupo):
         else:
             st.warning(f":material/warning: Nadie libre el {R.DIAS_LABEL[_dd]}.")
         st.caption("Verde = libre · gris = ocupado (con su franja horaria).")
-        st.markdown(_disponibilidad_html(staff, lunes, datos, tidx), unsafe_allow_html=True)
+        st.markdown(_disponibilidad_html(staff, lunes, datos, tidx, dias=dias),
+                    unsafe_allow_html=True)
     else:
-        _tablero_editable(grupo, lunes, staff, datos, tidx, marcas=_scan[2])
+        _tablero_editable(grupo, lunes, staff, datos, tidx, marcas=_scan[2], dias=dias)
         # ── El día abierto desde una celda (v387), a ancho completo bajo el tablero ──
         # ⚠️ Se guarda la SEMANA junto a la persona y el día: al navegar de semana,
         # el mismo (usuario, día) sería otra fecha con otros datos — se cierra sola
         # en vez de enseñar el día equivocado. Igual si esa persona ya no está.
         _da = st.session_state.get("_dia_abierto") or {}
         _u = next((x for x in staff if x["Usuario"] == _da.get("u")), None)
-        if _u and _da.get("wk") == lunes.isoformat() and _da.get("d") in R.DIAS:
+        if _u and _da.get("wk") == lunes.isoformat() and _da.get("d") in dias:
             _vista_dia(grupo, lunes, _u["Usuario"], _u.get("Nombre") or _u["Usuario"],
                        _da["d"], datos, tidx)
         elif _da:
@@ -643,16 +843,16 @@ def render_planificacion(grupo):
     if _cur:
         with st.container(border=True):
             if _cur == "asignar":
-                _asignacion_inteligente(grupo, lunes, staff, tidx)
+                _asignacion_inteligente(grupo, lunes, staff, tidx, dias=dias)
             elif _cur == "radar":
                 _radar_personal(grupo, lunes, staff, tidx, scan=_scan)
             elif _cur == "cumpl":
-                _cumplimiento(grupo, lunes, staff, tidx)
+                _cumplimiento(grupo, lunes, staff, tidx, dias=dias)
             else:
                 _catalogo(grupo)
 
 
-def _cumplimiento(grupo, lunes, staff, tidx):
+def _cumplimiento(grupo, lunes, staff, tidx, dias=None):
     """Plan vs real + estado EN VIVO en UNA sola vista (v293).
 
     Antes eran dos herramientas que respondían la MISMA pregunta —¿se está
@@ -680,8 +880,11 @@ def _cumplimiento(grupo, lunes, staff, tidx):
             return
         # Día a comparar: hoy si cae en la semana vista, si no el lunes.
         hoy = clock.today()
-        _idx_def = (hoy - lunes).days if 0 <= (hoy - lunes).days <= 4 else 0
-        _dsel = st.radio("Día", R.DIAS, index=_idx_def, horizontal=True,
+        dias = dias or R.DIAS
+        _hk = (R.DIAS_TODOS[(hoy - lunes).days]
+               if 0 <= (hoy - lunes).days < len(R.DIAS_TODOS) else None)
+        _idx_def = dias.index(_hk) if _hk in dias else 0
+        _dsel = st.radio("Día", dias, index=_idx_def, horizontal=True,
                          format_func=lambda d: f"{R.DIAS_LABEL[d]} "
                          f"{R.fecha_de_dia(lunes, d).strftime('%d/%m')}",
                          key="cpxseg_cumpl_dia", label_visibility="collapsed")
@@ -812,12 +1015,15 @@ def render_board_readonly(grupo, resaltar_usuario=""):
     if c1.button("◀", key="rosf_prev", use_container_width=True):
         st.session_state["ros_lunes"] = (lunes - timedelta(days=7)).isoformat()
         st.rerun()
+    # El campo no añade días: ve el fin de semana solo si HAY algo planificado —
+    # que es justo cuando necesita verlo (v390).
+    _dias = R.dias_con_datos(datos)
     c2.markdown(f"<div style='text-align:center;font-weight:700;padding-top:6px'>"
-                f"{R.rango_label(lunes)}</div>", unsafe_allow_html=True)
+                f"{R.rango_label(lunes, _dias)}</div>", unsafe_allow_html=True)
     if c3.button("▶", key="rosf_next", use_container_width=True):
         st.session_state["ros_lunes"] = (lunes + timedelta(days=7)).isoformat()
         st.rerun()
-    st.markdown(_grid_html(staff, lunes, datos, tidx, resaltar_usuario),
+    st.markdown(_grid_html(staff, lunes, datos, tidx, resaltar_usuario, dias=_dias),
                 unsafe_allow_html=True)
 
 
@@ -864,7 +1070,7 @@ def _cumplimiento_celda(usuario, pid):
         pass
 
 
-def _tablero_editable(grupo, lunes, staff, datos, tidx, marcas=None):
+def _tablero_editable(grupo, lunes, staff, datos, tidx, marcas=None, dias=None):
     """Board del admin EDITABLE EN SITIO (v217): cada celda es un `st.popover`
     coloreado con el color de su trabajo (clase `st-key-<key>` sobre el trigger —
     verificado en vivo antes de construir). Al tocar la celda se edita AHÍ MISMO
@@ -873,7 +1079,11 @@ def _tablero_editable(grupo, lunes, staff, datos, tidx, marcas=None):
     Una celda vacía (＋) también asigna en sitio. Reemplaza el editor por-persona de
     abajo (v159). El board del campo sigue siendo el HTML de `_grid_html`.
     """
-    dias = R.DIAS
+    # ⚠️ `dias` puede traer sábado/domingo (v390). Los DOS bucles de abajo (el que
+    # genera el CSS de color y el que pinta las celdas) tienen que recorrer LA MISMA
+    # lista: el índice `idx` es la key del widget y la clase CSS a la vez, así que si
+    # divergieran, cada celda se pintaría del color de otra.
+    dias = dias or R.DIAS
     _wk = lunes.strftime("%Y%m%d")   # las keys llevan la SEMANA: al navegar semanas, una
                                      # celda no hereda la selección de otra (evita pisar datos).
     op = _opciones(grupo, tidx)
@@ -1062,13 +1272,16 @@ def _tablero_editable(grupo, lunes, staff, datos, tidx, marcas=None):
                 # escribir la clave de un widget ya instanciado (regla v111) y el
                 # rerun CIERRA el popover — habría que reabrirlo para guardar. El
                 # check va ANTES para poder deshabilitar el selector cuando manda él.
-                _all = st.checkbox("Toda la semana (Lun–Vie)", key=f"pvwa_{_wk}_{idx}")
+                # La etiqueta sigue a los días VISIBLES: con el sábado en pantalla
+                # decir «Lun–Vie» y luego escribir seis días sería mentir.
+                _all = st.checkbox(f"Toda la semana ({R.DIAS_LABEL[dias[0]]}–"
+                                   f"{R.DIAS_LABEL[dias[-1]]})", key=f"pvwa_{_wk}_{idx}")
                 _dd = st.multiselect(
-                    "Aplicar a estos días", R.DIAS, default=[d], key=f"pvw_{_wk}_{idx}",
+                    "Aplicar a estos días", dias, default=[d], key=f"pvw_{_wk}_{idx}",
                     disabled=_all,
                     format_func=lambda x: f"{R.DIAS_LABEL[x]} "
                                           f"{R.fecha_de_dia(lunes, x).strftime('%d/%m')}")
-                _destino = list(R.DIAS) if _all else _dd
+                _destino = list(dias) if _all else _dd
                 if len(_destino) > 1:
                     st.caption(f":material/content_copy: Se guardará igual en "
                                f"**{len(_destino)} días**.")
@@ -1101,10 +1314,11 @@ def _tablero_editable(grupo, lunes, staff, datos, tidx, marcas=None):
                 col.caption(nota)
 
 
-def _grid_html(staff, lunes, datos, tidx, resaltar="") -> str:
+def _grid_html(staff, lunes, datos, tidx, resaltar="", dias=None) -> str:
+    dias = dias or R.DIAS
     ths = ['<th style="text-align:left;padding:6px 8px;font-size:12px;color:#6b7280;'
            'position:sticky;left:0;background:#fff;">Persona</th>']
-    for d in R.DIAS:
+    for d in dias:
         f = R.fecha_de_dia(lunes, d)
         ths.append(f'<th style="padding:6px 8px;font-size:12px;color:#6b7280;'
                    f'min-width:120px;">{R.DIAS_LABEL[d]} {f.strftime("%d/%m")}</th>')
@@ -1117,7 +1331,7 @@ def _grid_html(staff, lunes, datos, tidx, resaltar="") -> str:
         celdas = [f'<td style="padding:5px 8px;font-size:13px;font-weight:{"800" if _mio else "600"};'
                   f'color:#1f2937;white-space:nowrap;position:sticky;left:0;background:{_nbg};'
                   f'border-right:1px solid #eef1f5;">{"<span style=\"font-family:&#39;Material Symbols Rounded&#39;;vertical-align:-2px\">arrow_forward</span> " if _mio else ""}{_esc(nom)}</td>']
-        for d in R.DIAS:
+        for d in dias:
             items = R.celda_items(datos, usr, d)              # v277: con franja horaria
             nota  = R.celda(datos, usr, d).get("nota", "")
             if items:
@@ -1274,10 +1488,11 @@ def _esc(s) -> str:
     return (str(s).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;"))
 
 
-def _disponibilidad_html(staff, lunes, datos, tidx) -> str:
+def _disponibilidad_html(staff, lunes, datos, tidx, dias=None) -> str:
+    dias = dias or R.DIAS
     ths = ['<th style="text-align:left;padding:6px 8px;font-size:12px;color:#6b7280;'
            'position:sticky;left:0;background:#fff;">Persona</th>']
-    for d in R.DIAS:
+    for d in dias:
         f = R.fecha_de_dia(lunes, d)
         ths.append(f'<th style="padding:6px 8px;font-size:12px;color:#6b7280;'
                    f'min-width:110px;">{R.DIAS_LABEL[d]} {f.strftime("%d/%m")}</th>')
@@ -1288,7 +1503,7 @@ def _disponibilidad_html(staff, lunes, datos, tidx) -> str:
         celdas = [f'<td style="padding:5px 8px;font-size:13px;font-weight:600;color:#1f2937;'
                   f'white-space:nowrap;position:sticky;left:0;background:#fff;'
                   f'border-right:1px solid #eef1f5;">{_esc(nom)}</td>']
-        for d in R.DIAS:
+        for d in dias:
             items = R.celda_items(datos, usr, d)
             if not items:
                 cont = ('<div style="background:#EAF3DE;color:#3B6D11;border-radius:5px;'

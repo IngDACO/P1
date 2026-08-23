@@ -237,13 +237,23 @@ def render_ruta_dia(grupo):
         st.markdown("<div style='height:30px'></div>", unsafe_allow_html=True)
         st.markdown(f":gray[{_DIAS_L[fecha.weekday()]} {fecha.day} de "
                     f"{_MES_L[fecha.month]}]")
-    # ⚠️ El roster es de lunes a viernes (`asignaciones_dia` devuelve [] en fin de
-    # semana), así que un sábado TODO el mundo salía como "sin plan" sin que nada
-    # dijera por qué. Ahora se dice y se corta aquí.
+    # ⚠️ v390: el fin de semana ya se puede planificar, así que aquí solo se corta
+    # si REALMENTE no hay nada ese día — antes se cortaba por ser sábado y eso
+    # ocultaría una ruta que alguien acaba de planificar. (El corte sigue haciendo
+    # falta: sin él, un sábado normal saldría con todo el mundo «sin plan» y sin
+    # que nada dijera por qué.)
     if fecha.weekday() > 4:
-        st.info(":material/weekend: Fin de semana — la planificación es de lunes a "
-                "viernes, así que no hay ruta para este día.")
-        return
+        from core import roster as _R
+        try:
+            _hay = _R.dia_tiene_datos(_R.get_semana(grupo, _R.lunes_de(fecha)),
+                                      _R.DIAS_TODOS[fecha.weekday()])
+        except Exception:
+            _hay = []
+        if not _hay:
+            st.info(":material/weekend: No hay nada planificado para este "
+                    f"{_DIAS_L[fecha.weekday()].lower()}. La semana normal es de "
+                    "lunes a viernes; el fin de semana se añade desde el Panel.")
+            return
 
     try:
         campos = [u for u in auth.list_users(grupo)

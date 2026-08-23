@@ -30,8 +30,40 @@ ROSTER_SHEET   = "Roster"
 ROSTER_HEADERS = ["ID", "Grupo", "Semana", "Usuario", "DatosJSON"]
 
 # Días de la semana laboral (claves internas) + etiqueta visible.
-DIAS = ["lun", "mar", "mie", "jue", "vie"]
-DIAS_LABEL = {"lun": "Lun", "mar": "Mar", "mie": "Mié", "jue": "Jue", "vie": "Vie"}
+DIAS = ["lun", "mar", "mie", "jue", "vie"]          # la semana normal de la cuadrilla
+DIAS_EXTRA = ["sab", "dom"]                        # se añaden a una semana concreta (v390)
+DIAS_TODOS = DIAS + DIAS_EXTRA                     # ⚠️ el ORDEN es el de weekday()
+DIAS_LABEL = {"lun": "Lun", "mar": "Mar", "mie": "Mié", "jue": "Jue", "vie": "Vie",
+              "sab": "Sáb", "dom": "Dom"}
+
+
+def dias_con_datos(datos, extra_pedidos=()) -> list:
+    """Los días que hay que PINTAR en una semana: los cinco de siempre, más los
+    extra que o bien tienen algo asignado o bien se han pedido a mano (v390).
+
+    ⚠️ Un día extra CON datos se muestra siempre, se haya pedido o no: si dependiera
+    solo del botón, planificar un sábado y recargar lo escondería — y un dato que la
+    app guarda pero no puede enseñar es el fallo de v340 (archivar sin poder volver).
+    """
+    con_datos = set()
+    for _sem in (datos or {}).values():
+        for _d, _c in (_sem or {}).items():
+            if _d in DIAS_EXTRA and (_norm_cell(_c)["items"] or
+                                     _norm_cell(_c)["nota"].strip()):
+                con_datos.add(_d)
+    pedidos = set(extra_pedidos or ())
+    return DIAS + [d for d in DIAS_EXTRA if d in con_datos or d in pedidos]
+
+
+def dia_tiene_datos(datos, dia) -> list:
+    """Usuarios con algo asignado ese día — para no dejar quitar una columna con
+    trabajo dentro (y poder DECIR de quién es)."""
+    out = []
+    for u, _sem in (datos or {}).items():
+        c = _norm_cell((_sem or {}).get(dia, {}))
+        if c["items"] or c["nota"].strip():
+            out.append(u)
+    return out
 
 # Estados (NO-trabajo). Claves reservadas (no colisionan con TRB-####). El usuario
 # eligió: OFF, Leave, Formación + nota libre.
@@ -84,12 +116,16 @@ def lunes_de(d=None) -> date:
 
 
 def fecha_de_dia(lunes, dia_key) -> date:
-    """Fecha real de un día ('lun'..'vie') de la semana que empieza en `lunes`."""
-    return lunes + timedelta(days=DIAS.index(dia_key))
+    """Fecha real de un día ('lun'..'dom') de la semana que empieza en `lunes`.
+    ⚠️ Índice sobre DIAS_TODOS, que va en el orden de `weekday()`: así 'sab' cae en
+    lunes+5 sin tocar la aritmética que ya había."""
+    return lunes + timedelta(days=DIAS_TODOS.index(dia_key))
 
 
-def rango_label(lunes) -> str:
-    fin = lunes + timedelta(days=4)
+def rango_label(lunes, dias=None) -> str:
+    """Etiqueta del rango visible. Con sábado en pantalla el rango es hasta el
+    sábado — decir «– vie» mientras se ve una columna del sábado sería mentir."""
+    fin = lunes + timedelta(days=DIAS_TODOS.index((dias or DIAS)[-1]))
     return f"{lunes.strftime('%d/%m')} – {fin.strftime('%d/%m/%Y')}"
 
 
@@ -504,14 +540,17 @@ def guardar_persona(grupo, lunes, usuario, dias: dict) -> tuple:
 
 def asignaciones_dia(grupo, usuario, fecha=None) -> list:
     """TODAS las asignaciones de una persona un día (varias posibles, v274). Cada una:
-    {asig, nota, proyecto_id, etiqueta, color, es_estado}. [] si fin de semana o vacío.
-    La `nota` es una sola por día (se repite en cada asignación)."""
+    {asig, nota, proyecto_id, etiqueta, color, es_estado}. [] si no hay nada ese día.
+    La `nota` es una sola por día (se repite en cada asignación).
+
+    ⚠️ v390: el sábado y el domingo YA NO se descartan de entrada. Antes se cortaba
+    por `weekday() > 4` porque la rejilla era Lun–Vie; ahora se puede planificar un
+    fin de semana, y devolver [] escondería lo que alguien acaba de asignar (lo vería
+    en el tablero y no en su móvil). Si no hay nada guardado, sale [] igual."""
     fecha = fecha or clock.today()
     if isinstance(fecha, datetime):
         fecha = fecha.date()
-    if fecha.weekday() > 4:                     # sáb/dom: no hay rejilla
-        return []
-    dia = DIAS[fecha.weekday()]
+    dia = DIAS_TODOS[fecha.weekday()]
     lunes = lunes_de(fecha)
     sem = get_semana(grupo, lunes)
     raw = _norm_cell((sem.get(str(usuario), {}) or {}).get(dia, {}))

@@ -1153,17 +1153,21 @@ def _agenda_hoy(grupo):
     from core import projects as P
 
     hoy = clock.today()
-    if hoy.weekday() > 4:
-        st.info("Hoy es fin de semana — la planificación es de lunes a viernes.")
-        return
-
-    dia = R.DIAS[hoy.weekday()]
+    # ⚠️ v390: ya no se corta en seco el fin de semana. Desde que se puede añadir
+    # sábado o domingo a una semana, cortar aquí escondería la agenda del día en
+    # que la cuadrilla SÍ está trabajando. Si nadie tiene nada, se dice abajo.
+    dia = R.DIAS_TODOS[hoy.weekday()]
     lunes = R.lunes_de(hoy)
     try:
         sem = R.get_semana(grupo, lunes)
         tidx = R.trabajos_idx(grupo)
     except Exception:
         sem, tidx = {}, {}
+    if dia in R.DIAS_EXTRA and not R.dia_tiene_datos(sem, dia):
+        st.info(f"Hoy es {R.DIAS_LABEL[dia].lower()} y no hay nada planificado. "
+                f"La semana normal es de lunes a viernes; el fin de semana se "
+                f"añade desde el Panel cuando hace falta.")
+        return
 
     staff = [u for u in auth.list_users(grupo) if str(u.get("Rol", "")).lower() == "campo"]
     if not staff:
