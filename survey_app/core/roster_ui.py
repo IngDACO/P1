@@ -1011,8 +1011,13 @@ def _tablero_editable(grupo, lunes, staff, datos, tidx, marcas=None):
                 # «Ver el día» → el detalle se pinta DEBAJO del tablero, a ancho
                 # completo. Aquí dentro no: el popover mide ~300 px y una línea de
                 # tiempo con sus horas no se lee (se midieron las tres opciones).
-                # ⚠️ El rerun cierra el popover, que es lo que se quiere: se ha ido
-                # a MIRAR el día, no a editarlo.
+                # ⚠️ El popover NO se cierra con el rerun (medido en producción: el
+                # estado de apertura vive en el frontend y Streamlit no lo toca).
+                # Queda abierto sobre el tablero hasta que se toque fuera o se vuelva
+                # a tocar la celda. No se fuerza su cierre a propósito: la única vía
+                # sería remontarlo cambiándole la `key`, y eso arrastra el CSS del
+                # color de la celda a una key variable — un mecanismo frágil por un
+                # clic. Un popover se cierra tocando fuera, como cualquier desplegable.
                 # Se ofrece con UNA asignación además de con varias: el motivo del
                 # botón es el día doble, pero esconderlo en las celdas simples haría
                 # que la función solo se descubra por accidente, y con una sola
