@@ -1041,6 +1041,25 @@ def _grupo_usuarios(grupo):
         _linea += f" · :red[:material/cancel:] **{_nvc}** cred. vencida(s)"
     st.markdown(_linea)
 
+    # ⚠️ Quién RECIBE las alarmas del grupo y no tiene por dónde recibirlas. La
+    # alarma se escribe igual, pero no sale de la app: solo la ve quien entre a
+    # mirar — y desde v373 un control de seguridad en NO abre alarma. Va AQUÍ,
+    # que es donde se carga el email, y no en el resumen del día (su rejilla es de
+    # nueve indicadores fijos, v305). Estas cuentas no salen en la tabla de abajo:
+    # son administradores y propietarios, no personal de campo.
+    try:
+        from core import admin_digest as _ad
+        _sc = (_ad.group_digest(grupo) or {}).get("avisos_sin_canal") or []
+    except Exception:
+        _sc = []
+    if _sc:
+        st.warning(
+            ":material/notifications_off: **Las alarmas de este grupo no le llegan a "
+            f"{len(_sc)}** de sus destinatarios: "
+            + ", ".join(f"**{x['usuario']}** ({x['rol']})" for x in _sc)
+            + ". Sin email ni Telegram, el aviso queda dentro de la app. "
+              "Se arregla cargándoles un email en su ficha.")
+
     # ── Tabla CLICKEABLE → abre la ficha de esa persona ──
     _rows = [{
         "Usuario": u["Usuario"], "Nombre": u["Nombre"] or u["Usuario"],

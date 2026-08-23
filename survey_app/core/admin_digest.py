@@ -82,6 +82,29 @@ def group_digest(grupo) -> dict:
         if not (str(u.get("Email", "")).strip() and str(u.get("TelegramChatID", "")).strip()):
             campo_sin.append(u.get("Usuario", ""))
 
+    # ── Quién RECIBE las alarmas de este grupo y no tiene por dónde recibirlas ──
+    # ⚠️ Criterio distinto al del campo a propósito (la lección de v325: dos cosas
+    # distintas no van en el mismo aviso). Al campo se le exigen los DOS canales
+    # (v79, es requisito para usar la app); a un admin o propietario le basta UNO
+    # para enterarse. Sin ninguno, la alarma se escribe en la hoja y no sale de ahí:
+    # solo la ve quien entre a mirar. Importa desde que un check en NO abre alarma
+    # (v373). Sale de `list_users()`, ya cacheado → 0 lecturas nuevas.
+    avisos_sin_canal = []
+    try:
+        from core import alerts as _al
+        _dest = set(_al._admins_and_owners(grupo))
+        for u in auth.list_users():
+            if str(u.get("Usuario", "")) not in _dest:
+                continue
+            if str(u.get("Activo", "SI")).strip().upper() not in auth._ACTIVE_OK:
+                continue                       # una cuenta inactiva no es un pendiente
+            if not (str(u.get("Email", "")).strip()
+                    or str(u.get("TelegramChatID", "")).strip()):
+                avisos_sin_canal.append({"usuario": str(u.get("Usuario", "")),
+                                         "rol": str(u.get("Rol", ""))})
+    except Exception as e:
+        logger.warning("digest: no se pudo revisar los canales de aviso: %s", e)
+
     sin_asig = [{"id": str(p.get("ID", "")), "nombre": p.get("Nombre", "")}
                 for p in activos
                 if not [x for x in str(p.get("CampoAsignados", "")).split(";") if x.strip()]]
@@ -115,9 +138,14 @@ def group_digest(grupo) -> dict:
         "vencidos": sorted(vencidos, key=lambda x: x["dias"]),
         "near_miss": near, "campo_sin_contacto": campo_sin, "sin_asignar": sin_asig,
         "cred_venc": cred_venc, "sobre_presupuesto": sobre_pres,
+        "avisos_sin_canal": avisos_sin_canal,
     }
 
 
+# ⚠️ `avisos_sin_canal` NO entra aquí: `has_pending` decide si el resumen del día
+# tiene algo que decir, y su rejilla es de NUEVE indicadores fijos en 2 filas (v305).
+# Meter un décimo rompería ese reparto y su guardián. El dato se muestra donde se
+# arregla —Planificación · Usuarios— y el agente lo conoce por `digest_text`.
 _PENDING_KEYS = ("retrasos", "alarmas", "por_vencer", "vencidos",
                  "near_miss", "campo_sin_contacto", "sin_asignar", "cred_venc",
                  "sobre_presupuesto")
@@ -149,6 +177,11 @@ def digest_text(d) -> str:
     if d["campo_sin_contacto"]:
         L.append("Campo sin contacto completo (no se les puede notificar): "
                  + ", ".join(d["campo_sin_contacto"]))
+    if d.get("avisos_sin_canal"):
+        L.append("Reciben las alarmas pero NO tienen email ni Telegram (la alarma "
+                 "queda en la app y no les llega): "
+                 + ", ".join(f"{x['usuario']} ({x['rol']})"
+                             for x in d["avisos_sin_canal"]))
     if d.get("cred_venc"):
         L.append("Credenciales por vencer/vencidas: "
                  + "; ".join(f"{c['usuario']} · {c['tipo']} "
