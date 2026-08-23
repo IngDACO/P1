@@ -136,9 +136,9 @@ def render_nominas(grupo):
     _ev = st.dataframe(
         df, use_container_width=True, hide_index=True,
         on_select="rerun", selection_mode="single-row", key="nom_tbl",
-        column_config={"Base": st.column_config.NumberColumn("Base", format="$%d"),
-                       "Neto": st.column_config.NumberColumn("Neto", format="$%d"),
-                       "Tarifa/h": st.column_config.NumberColumn("Tarifa/h", format="$%.2f")})
+        column_config={"Base": st.column_config.NumberColumn("Base", format="$%,d"),
+                       "Neto": st.column_config.NumberColumn("Neto", format="$%,d"),
+                       "Tarifa/h": st.column_config.NumberColumn("Tarifa/h", format="$%,.2f")})
     st.caption(f"{len(_rows)} nómina(s)  ·  base {T.dinero(sum(_num(x.get('Base')) for x in _rows), 0)}"
                f"  ·  neto {T.dinero(sum(_num(x.get('Neto')) for x in _rows), 0)}"
                "  ·  «Tarifa/h» vacía = esa persona no la tiene puesta.")
@@ -183,8 +183,8 @@ def _generar(grupo):
             "Tarifa/h": _num(rates.get(k, 0)),
             "Base": round(v["horas"] * _num(rates.get(k, 0)), 0),
         } for k, v in sorted(horas.items())]), use_container_width=True, hide_index=True,
-            column_config={"Tarifa/h": st.column_config.NumberColumn("Tarifa/h", format="$%d"),
-                           "Base": st.column_config.NumberColumn("Base", format="$%d")})
+            column_config={"Tarifa/h": st.column_config.NumberColumn("Tarifa/h", format="$%,d"),
+                           "Base": st.column_config.NumberColumn("Base", format="$%,d")})
     else:
         st.info("Nadie tiene horas de jornada en ese periodo.")
 
@@ -261,7 +261,7 @@ def _detalle(grupo, nid):
             column_config={
                 "Concepto": st.column_config.TextColumn("Concepto", width="large"),
                 "Tipo": st.column_config.SelectboxColumn("Tipo", options=payroll.TIPOS, required=True),
-                "Monto": st.column_config.NumberColumn("Monto", format="$%.2f", min_value=0.0),
+                "Monto": st.column_config.NumberColumn("Monto", format="$%,.2f", min_value=0.0),
             })
         if est != "anulada" and st.button(":material/save: Guardar conceptos", key=f"nom_save_{nid}"):
             conceptos = []

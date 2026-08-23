@@ -83,7 +83,7 @@ def render_cotizaciones(grupo):
     _ev = st.dataframe(df, use_container_width=True, hide_index=True,
                        on_select="rerun", selection_mode="single-row", key="cot_tbl",
                        column_config={
-                           "Total": st.column_config.NumberColumn("Total", format="$%.2f"),
+                           "Total": st.column_config.NumberColumn("Total", format="$%,.2f"),
                            "Margen": st.column_config.NumberColumn("Margen", format="%.1f%%")})
     _sr = list(_ev.selection.rows)
     if _sr and _sr[0] < len(cots):
@@ -136,14 +136,14 @@ def _editor_lineas(grupo, key: str, lineas: list) -> list:
         # precio son consecuencia, y se muestran bloqueados para que quede claro.
         disabled=["Concepto", "Costo", "Margen %", "Precio"],
         column_config={
-            "Costo": st.column_config.NumberColumn("Costo", format="$%.2f",
+            "Costo": st.column_config.NumberColumn("Costo", format="$%,.2f",
                                                    help="Lo que te cuesta a ti. No lo ve el cliente."),
             "Ganancia $": st.column_config.NumberColumn(
-                "Ganancia $", format="$%.2f", min_value=0.0,
+                "Ganancia $", format="$%,.2f", min_value=0.0,
                 help="Lo que quieres ganar en este rubro. El margen % se calcula solo."),
             "Margen %": st.column_config.NumberColumn("Margen %", format="%.1f%%",
                                                       help="Se calcula: ganancia ÷ costo."),
-            "Precio": st.column_config.NumberColumn("Precio", format="$%.2f",
+            "Precio": st.column_config.NumberColumn("Precio", format="$%,.2f",
                                                     help="Costo + ganancia. Es lo que ve el cliente."),
             "Cant.": st.column_config.NumberColumn("Cant.", min_value=0.0)})
 
@@ -279,7 +279,7 @@ def _detalle(grupo, cid):
             "Cant.": _num(l.get("cantidad")),
             "Precio": round(_num(l.get("precio_total")), 2),
         } for l in lineas]), hide_index=True, use_container_width=True,
-            column_config={"Precio": st.column_config.NumberColumn("Precio", format="$%.2f")})
+            column_config={"Precio": st.column_config.NumberColumn("Precio", format="$%,.2f")})
         _totales_html(t, c.get("ImpuestoPct"))
 
     # ── Acciones según el estado ─────────────────────────────────

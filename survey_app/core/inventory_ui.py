@@ -147,7 +147,7 @@ def render_inventario(grupo):
     _ev = st.dataframe(
         df, use_container_width=True, hide_index=True,
         on_select="rerun", selection_mode="single-row", key="inv_tbl",
-        column_config={"Valor": st.column_config.NumberColumn("Valor", format="$%d")})
+        column_config={"Valor": st.column_config.NumberColumn("Valor", format="$%,d")})
     _sr = list(_ev.selection.rows)
     if _sr:
         st.session_state["_inv_open"] = str(_rows[_sr[0]].get("ID", ""))
@@ -297,7 +297,7 @@ def _detalle(grupo, aid):
             "Costo":   (round(_num(m.get("Costo")), 0) if str(m.get("Costo", "")).strip() else None),
             "Nota":    m.get("Nota", "") or "",
         } for m in _mr]), use_container_width=True, hide_index=True,
-            column_config={"Costo": st.column_config.NumberColumn("Costo", format="$%d")})
+            column_config={"Costo": st.column_config.NumberColumn("Costo", format="$%,d")})
 
     # Editar
     st.markdown("#### :material/edit: Editar activo")
@@ -436,15 +436,15 @@ def _reportes(grupo):
                 "Compra": round(v["compra"], 0), "Actual": round(v["actual"], 0),
             } for k, v in sorted(rep["por_categoria"].items())]),
                 use_container_width=True, hide_index=True,
-                column_config={"Compra": st.column_config.NumberColumn("Compra", format="$%d"),
-                               "Actual": st.column_config.NumberColumn("Actual", format="$%d")})
+                column_config={"Compra": st.column_config.NumberColumn("Compra", format="$%,d"),
+                               "Actual": st.column_config.NumberColumn("Actual", format="$%,d")})
         with cb:
             st.markdown("**Por ubicación**")
             st.dataframe(pd.DataFrame([{
                 "Ubicación": k, "Activos": v["n"], "Valor actual": round(v["actual"], 0),
             } for k, v in sorted(rep["por_ubicacion"].items())]),
                 use_container_width=True, hide_index=True,
-                column_config={"Valor actual": st.column_config.NumberColumn("Valor actual", format="$%d")})
+                column_config={"Valor actual": st.column_config.NumberColumn("Valor actual", format="$%,d")})
 
 
 def _categorias_expander(grupo):

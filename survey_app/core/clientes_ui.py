@@ -137,7 +137,7 @@ def render_contactos(grupo):
     _colcfg = {"Avance": st.column_config.ProgressColumn(
         "Avance", min_value=0, max_value=100, format="%d%%")}
     if _hay_costo:
-        _colcfg["Costo"] = st.column_config.NumberColumn("Costo", format="$%d")
+        _colcfg["Costo"] = st.column_config.NumberColumn("Costo", format="$%,d")
     _ev = st.dataframe(
         df, use_container_width=True, hide_index=True,
         on_select="rerun", selection_mode="single-row", key="cli_tbl",
@@ -297,8 +297,8 @@ def _detalle_cliente(grupo, key):
             _fev = st.dataframe(
                 _fdf, use_container_width=True, hide_index=True,
                 on_select="rerun", selection_mode="single-row", key=f"cli_facs_{cid}",
-                column_config={"Total": st.column_config.NumberColumn("Total", format="$%d"),
-                               "Cobrado": st.column_config.NumberColumn("Cobrado", format="$%d")})
+                column_config={"Total": st.column_config.NumberColumn("Total", format="$%,d"),
+                               "Cobrado": st.column_config.NumberColumn("Cobrado", format="$%,d")})
             _fs = list(_fev.selection.rows)
             if _fs:
                 st.session_state["_fac_open"] = str(_fr[_fs[0]].get("ID", ""))

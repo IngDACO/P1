@@ -81,9 +81,9 @@ def render_facturas(grupo):
         df, use_container_width=True, hide_index=True,
         on_select="rerun", selection_mode="single-row", key="fac_tbl",
         column_config={
-            "Total":     st.column_config.NumberColumn("Total", format="$%d"),
-            "Cobrado":   st.column_config.NumberColumn("Cobrado", format="$%d"),
-            "Pendiente": st.column_config.NumberColumn("Pendiente", format="$%d"),
+            "Total":     st.column_config.NumberColumn("Total", format="$%,d"),
+            "Cobrado":   st.column_config.NumberColumn("Cobrado", format="$%,d"),
+            "Pendiente": st.column_config.NumberColumn("Pendiente", format="$%,d"),
         })
     _sr = list(_ev.selection.rows)
     if _sr:
@@ -121,7 +121,7 @@ def _detalle_factura(grupo, fid):
                 "Concepto": str(x.get("concepto", "")),
                 "Importe":  round(_num(x.get("importe")), 2),
             } for x in _ln]), use_container_width=True, hide_index=True,
-                column_config={"Importe": st.column_config.NumberColumn("Importe", format="$%.2f")})
+                column_config={"Importe": st.column_config.NumberColumn("Importe", format="$%,.2f")})
         _imp_pct = _num(f.get("ImpuestoPct"))
         from core import theme as _T                      # v309: escapa el `$` (LaTeX)
         st.markdown(f"Subtotal: **{_T.dinero(_num(f.get('Subtotal')))}**  ·  "
@@ -272,7 +272,7 @@ def _nueva_factura(grupo):
             "Concepto": st.column_config.TextColumn("Concepto", width="large"),
             "Proyecto": st.column_config.SelectboxColumn(
                 "Proyecto", options=["(ninguno)"] + prj_names, required=False),
-            "Importe":  st.column_config.NumberColumn("Importe", format="$%.2f", min_value=0.0),
+            "Importe":  st.column_config.NumberColumn("Importe", format="$%,.2f", min_value=0.0),
         })
 
     c1, c2, c3 = st.columns(3)

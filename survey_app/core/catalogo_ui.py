@@ -76,7 +76,7 @@ def render_catalogo(grupo):
         _ev = st.dataframe(df, use_container_width=True, hide_index=True,
                            on_select="rerun", selection_mode="single-row", key="cat_tbl",
                            column_config={"Costo": st.column_config.NumberColumn(
-                               "Costo", format="$%.2f", help="Producto: costo unitario. "
+                               "Costo", format="$%,.2f", help="Producto: costo unitario. "
                                                              "Servicio: horas × tarifa.")})
         _sr = list(_ev.selection.rows)
         if _sr and _sr[0] < len(items):

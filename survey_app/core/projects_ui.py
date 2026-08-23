@@ -1423,8 +1423,18 @@ def _cartera_lista(proys, alarmas, delays, aheads, costos, pendientes=None):
         column_config={
             "Avance": st.column_config.ProgressColumn(
                 "Avance", min_value=0, max_value=100, format="%d%%"),
+            # ⚠️ v399: la coma del formato NO es cosmética. Con `"$%.0f"` esta
+            # celda pintaba `$27883` mientras la tarjeta de al lado —y el pie de
+            # esta misma tabla, que sale de `theme.dinero`— ponían `$27,883`: la
+            # misma cifra con dos caras en la misma pantalla. Medido interceptando
+            # `fillText` (el DOM no sirve: glide pinta en canvas y su nodo
+            # accesible lleva el valor CRUDO, `27882.67`). Se corrigieron los 39
+            # formatos de dinero de la app, no solo este.
+            # ⚠️ `%d` NO se cambió por `%.0f` en ningún sitio: uno TRUNCA y el otro
+            # REDONDEA (3305.76 → $3,305 vs $3,306), así que sustituirlo movería
+            # cifras en pantalla sin que nadie lo pidiera.
             "Sin facturar": st.column_config.NumberColumn(
-                "Sin facturar", format="$%.0f",
+                "Sin facturar", format="$%,.0f",
                 help="Ingreso estimado de la obra menos lo ya facturado. "
                      "Se factura desde la tarjeta o desde la propia obra."),
         })
@@ -3215,14 +3225,14 @@ def _editor_ganancia_hora(pid, _items, _gh, _T):
             # bloqueados, igual que en la cotización (v355).
             disabled=["Persona", "Horas", "Costo/h", "Precio/h", "Ganas"],
             column_config={
-                "Costo/h": st.column_config.NumberColumn("Costo/h", format="$%.2f",
+                "Costo/h": st.column_config.NumberColumn("Costo/h", format="$%,.2f",
                                                          help="Su tarifa. Lo que te cuesta."),
                 "Ganancia/h": st.column_config.NumberColumn(
-                    "Ganancia/h", format="$%.2f", min_value=0.0,
+                    "Ganancia/h", format="$%,.2f", min_value=0.0,
                     help="Lo que quieres ganar por cada hora suya en esta obra."),
-                "Precio/h": st.column_config.NumberColumn("Precio/h", format="$%.2f",
+                "Precio/h": st.column_config.NumberColumn("Precio/h", format="$%,.2f",
                                                           help="Costo + ganancia. Lo que se le cobra al cliente."),
-                "Ganas": st.column_config.NumberColumn("Ganas", format="$%.2f",
+                "Ganas": st.column_config.NumberColumn("Ganas", format="$%,.2f",
                                                        help="Horas × ganancia/h.")})
 
     _nuevo = {str(_ed.iloc[i]["Persona"]): P._num(_ed.iloc[i]["Ganancia/h"])
@@ -3846,10 +3856,10 @@ def _pnl_por_proyecto(grupo: str, T):
         "Margen %": r["margen"],
     } for r in rows]), hide_index=True, use_container_width=True,
         column_config={
-            "Facturado":    st.column_config.NumberColumn(format="$%.0f"),
-            "Mano de obra": st.column_config.NumberColumn(format="$%.0f"),
-            "Compras":      st.column_config.NumberColumn(format="$%.0f"),
-            "Resultado":    st.column_config.NumberColumn(format="$%.0f"),
+            "Facturado":    st.column_config.NumberColumn(format="$%,.0f"),
+            "Mano de obra": st.column_config.NumberColumn(format="$%,.0f"),
+            "Compras":      st.column_config.NumberColumn(format="$%,.0f"),
+            "Resultado":    st.column_config.NumberColumn(format="$%,.0f"),
             "Margen %":     st.column_config.NumberColumn(format="%.1f%%"),
         })
     _t = sum(r["resultado"] for r in rows)
@@ -3935,15 +3945,15 @@ def render_group_profitability(grupo: str):
         disabled=["Proyecto", "Costo", "Ingreso estimado", "Ganancia",
                   "Facturado", "Por facturar"],
         column_config={
-            "Costo":            st.column_config.NumberColumn(format="$%d"),
+            "Costo":            st.column_config.NumberColumn(format="$%,d"),
             "Margen %":         st.column_config.NumberColumn(
                                     "Margen %", format="%.1f%%", min_value=0.0,
                                     max_value=500.0, step=1.0,
                                     help="Editable: cámbialo y pulsa Guardar."),
-            "Ingreso estimado": st.column_config.NumberColumn(format="$%d"),
-            "Ganancia":         st.column_config.NumberColumn(format="$%d"),
-            "Facturado":        st.column_config.NumberColumn(format="$%d"),
-            "Por facturar":     st.column_config.NumberColumn(format="$%d"),
+            "Ingreso estimado": st.column_config.NumberColumn(format="$%,d"),
+            "Ganancia":         st.column_config.NumberColumn(format="$%,d"),
+            "Facturado":        st.column_config.NumberColumn(format="$%,d"),
+            "Por facturar":     st.column_config.NumberColumn(format="$%,d"),
         })
     # Solo lo que CAMBIO de verdad (comparando contra el valor original de cada fila)
     _cambios = {}
