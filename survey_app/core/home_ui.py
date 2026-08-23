@@ -500,7 +500,9 @@ def _banda_prestart():
         st.markdown(
             '<div style="background:#fff4e5;border-left:5px solid #e67e22;'
             'border-radius:8px;padding:9px 14px;margin-bottom:10px;">'
-            '<span style="font-weight:700;color:#a35b12;font-size:15px;">'
+            # ⚠️ 16px, no 15: la escala tipográfica de v333 tiene 9 pasos y su
+            # guardián falla con cualquier tamaño fuera de ellos.
+            '<span style="font-weight:700;color:#a35b12;font-size:16px;">'
             '⚠️ Falta el Pre-Start de hoy</span>'
             f'<span style="color:#7a5b3a;font-size:13px;"> · estás fichado en '
             f'<b>{_nom}</b> y hoy nadie ha registrado la charla de seguridad.</span></div>',
