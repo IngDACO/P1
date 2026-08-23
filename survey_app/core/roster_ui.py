@@ -100,6 +100,162 @@ def _solapa(i1, f1, i2, f2) -> bool:
     return a1 < b2 and b1 < a2
 
 
+_EJE_MIN = 240   # 4 h: por debajo, un día de una hora daría un eje sin contexto
+
+
+def _clase_franja(it) -> str:
+    """`hora` (franja utilizable) · `dia` (ini/fin vacíos = día completo, v277) ·
+    `rara` (trae hora pero no forma un intervalo positivo: fin ≤ inicio, o falta uno).
+    ⚠️ Las `rara` NO se descartan en silencio — se listan y se dicen: una franja mal
+    tecleada dibujada como bloque saldría con ancho 0 o negativo y no se vería."""
+    a, b = _min(it.get("ini")), _min(it.get("fin"))
+    if a is None and b is None:
+        return "dia"
+    return "hora" if (a is not None and b is not None and b > a) else "rara"
+
+
+def _carriles(items):
+    """Reparte las franjas en carriles paralelos: dos que se solapan NUNCA comparten
+    carril, así el choque se VE en vez de quedar un bloque tapando al otro (que es
+    justo lo que la celda del tablero esconde tras el «+N» de v295)."""
+    carriles = []
+    for it in sorted(items, key=lambda x: (_min(x["ini"]), _min(x["fin"]))):
+        for c in carriles:
+            if not any(_solapa(it["ini"], it["fin"], o["ini"], o["fin"]) for o in c):
+                c.append(it)
+                break
+        else:
+            carriles.append([it])
+    return carriles
+
+
+def _hm(m) -> str:
+    return f"{m // 60:02d}:{m % 60:02d}"
+
+
+def _vista_dia(grupo, lunes, usuario, nom, dia, datos, tidx):
+    """El día de UNA persona, desglosado y a escala, a ancho completo (v387).
+
+    La celda del tablero solo cabe «primero +N» (v295), así que un día con varias
+    obras esconde precisamente lo que hay que decidir: a qué hora va cada una y si
+    se pisan. Aquí se ve el día entero.
+
+    ⚠️ El EJE HORARIO solo se dibuja para las asignaciones que TRAEN hora. Medido
+    sobre los datos reales antes de diseñarlo: 32 de 35 asignaciones no la tienen
+    (el roster nació sin franja; `ini`/`fin` vacíos significan «día completo»,
+    v277). Colocarlas en un eje sería inventarse una precisión que el dato no
+    tiene, y dejaría un gráfico casi vacío con pinta de roto → van como banda
+    aparte, declaradas como lo que son.
+    """
+    f = R.fecha_de_dia(lunes, dia)
+    items = R.celda_items(datos, usuario, dia)
+    nota = R.celda(datos, usuario, dia).get("nota", "")
+    con_hora = [it for it in items if _clase_franja(it) == "hora"]
+
+    with st.container(border=True):
+        c1, c2 = st.columns([4, 2])
+        c1.markdown(f"<div style='font-size:18px;font-weight:600'>{_esc(nom)} · "
+                    f"{R.DIAS_LABEL[dia]} {f.strftime('%d/%m')}</div>",
+                    unsafe_allow_html=True)
+        _tot = sum(_min(it["fin"]) - _min(it["ini"]) for it in con_hora)
+        _res = f"{len(items)} asignación" + ("es" if len(items) != 1 else "")
+        if _tot:
+            _res += f" · {_tot / 60:.1f} h con horario"
+        c2.markdown(f"<div style='font-size:13px;color:#5b6472;text-align:right;"
+                    f"padding-top:8px'>{_res}</div>", unsafe_allow_html=True)
+
+        if not items:
+            st.info("Este día está sin asignar.")
+        # ── El aviso que la celda no puede dar: dos obras en la misma franja ──
+        _pares = [(a, b) for i, a in enumerate(con_hora) for b in con_hora[i + 1:]
+                  if _solapa(a["ini"], a["fin"], b["ini"], b["fin"])]
+        if _pares:
+            _txt = " · ".join(f"{R.etiqueta_de(a['asig'], tidx)} ↔ "
+                              f"{R.etiqueta_de(b['asig'], tidx)}" for a, b in _pares)
+            st.warning(f":material/warning: **Se pisan en la misma franja:** {_txt}. "
+                       f"O es un día partido que falta detallar, o alguien está "
+                       f"contado dos veces a la misma hora.")
+
+        # ── Línea de tiempo (solo lo que tiene horario) ──
+        if con_hora:
+            lo = max(0, (min(_min(it["ini"]) for it in con_hora) // 60 - 1) * 60)
+            hi = min(1440, (-(-max(_min(it["fin"]) for it in con_hora) // 60) + 1) * 60)
+            if hi - lo < _EJE_MIN:
+                # ⚠️ Ampliar por ARRIBA no basta: `hi` está topado en las 24:00, así
+                # que un turno que acaba cerca de medianoche se quedaba con un eje
+                # más corto que el mínimo. Si no cabe hacia arriba, se baja `lo`.
+                hi = min(1440, lo + _EJE_MIN)
+                lo = max(0, hi - _EJE_MIN)
+            span = hi - lo
+            filas = []
+            for c in _carriles(con_hora):
+                bl = []
+                for it in c:
+                    a, b = _min(it["ini"]), _min(it["fin"])
+                    bg = R.color_de(it["asig"], tidx)
+                    bl.append(
+                        f'<div style="position:absolute;left:{(a - lo) / span * 100:.2f}%;'
+                        f'width:{(b - a) / span * 100:.2f}%;top:0;bottom:0;background:{bg};'
+                        f'color:{_texto_sobre(bg)};border-left:3px solid rgba(0,0,0,.28);'
+                        f'border-radius:0 5px 5px 0;display:flex;align-items:center;'
+                        f'padding:0 8px;font-size:12px;font-weight:600;overflow:hidden;'
+                        f'white-space:nowrap;text-overflow:ellipsis">'
+                        f'{_esc(R.etiqueta_de(it["asig"], tidx))} · '
+                        f'{_esc(it["ini"])}–{_esc(it["fin"])}</div>')
+                filas.append('<div style="position:relative;height:28px;background:#f1f5f9;'
+                             'border-radius:6px;margin-bottom:5px">' + "".join(bl) + "</div>")
+            paso = 60 if span <= 480 else 120
+            marcas, m = [], lo
+            while m <= hi:
+                # ⚠️ Los ticks de los extremos NO se centran: con translateX(-50%) la
+                # mitad del primero se sale del contenedor y se recorta.
+                _tr = ("none" if m == lo else
+                       "translateX(-100%)" if m + paso > hi else "translateX(-50%)")
+                marcas.append(f'<span style="position:absolute;'
+                              f'left:{(m - lo) / span * 100:.2f}%;transform:{_tr}">'
+                              f'{_hm(m)}</span>')
+                m += paso
+            st.markdown("".join(filas) +
+                        '<div style="position:relative;height:18px;font-size:11px;'
+                        'color:#8a929e">' + "".join(marcas) + "</div>",
+                        unsafe_allow_html=True)
+
+        # ── Detalle por asignación (activo: cada obra se abre desde aquí) ──
+        _ETQ = {"dia": "todo el día", "rara": "franja incompleta"}
+        for i, it in enumerate(items):
+            k = _clase_franja(it)
+            cl = st.columns([4, 2, 1, 2])
+            bg = R.color_de(it["asig"], tidx)
+            cl[0].markdown(
+                f"<div style='padding-top:6px'><span style='display:inline-block;"
+                f"width:11px;height:11px;border-radius:3px;background:{bg};"
+                f"margin-right:8px'></span><span style='font-size:14px'>"
+                f"{_esc(R.etiqueta_de(it['asig'], tidx))}</span></div>",
+                unsafe_allow_html=True)
+            _fr = (f"{it['ini']}–{it['fin']}" if k == "hora"
+                   else _ETQ[k] + (f" ({it['ini'] or '—'}→{it['fin'] or '—'})"
+                                   if k == "rara" else ""))
+            cl[1].markdown(f"<div style='font-size:13px;color:#5b6472;padding-top:7px'>"
+                           f"{_esc(_fr)}</div>", unsafe_allow_html=True)
+            _du = (f"{(_min(it['fin']) - _min(it['ini'])) / 60:.1f} h"
+                   if k == "hora" else "—")
+            cl[2].markdown(f"<div style='font-size:13px;color:#5b6472;padding-top:7px'>"
+                           f"{_du}</div>", unsafe_allow_html=True)
+            _pv = R.proyecto_de(it["asig"], tidx)
+            if _pv and cl[3].button(f"→ {R.etiqueta_de(it['asig'], tidx)}",
+                                    key=f"vdop_{lunes:%Y%m%d}_{usuario}_{dia}_{i}",
+                                    use_container_width=True):
+                st.session_state["_prjsel_pending"] = _pv
+                st.session_state["_admin_nav_pending"] = ("proyectos", "📊 Proyectos")
+                st.rerun()
+
+        if nota:
+            st.caption(f":material/sticky_note_2: {nota}")
+        if st.button(":material/close: Cerrar", key=f"vdcl_{lunes:%Y%m%d}"):
+            st.session_state.pop("_dia_abierto", None)
+            st.rerun()
+
+
 def _asignar_al_dia(grupo, lunes, usuario, sem_persona, dia, pid, ini, fin):
     """Añade el proyecto (con franja) al día de la persona SIN pisar sus otras asignaciones;
     guarda la semana completa (1 escritura)."""
@@ -423,6 +579,17 @@ def render_planificacion(grupo):
         st.markdown(_disponibilidad_html(staff, lunes, datos, tidx), unsafe_allow_html=True)
     else:
         _tablero_editable(grupo, lunes, staff, datos, tidx, marcas=_scan[2])
+        # ── El día abierto desde una celda (v387), a ancho completo bajo el tablero ──
+        # ⚠️ Se guarda la SEMANA junto a la persona y el día: al navegar de semana,
+        # el mismo (usuario, día) sería otra fecha con otros datos — se cierra sola
+        # en vez de enseñar el día equivocado. Igual si esa persona ya no está.
+        _da = st.session_state.get("_dia_abierto") or {}
+        _u = next((x for x in staff if x["Usuario"] == _da.get("u")), None)
+        if _u and _da.get("wk") == lunes.isoformat() and _da.get("d") in R.DIAS:
+            _vista_dia(grupo, lunes, _u["Usuario"], _u.get("Nombre") or _u["Usuario"],
+                       _da["d"], datos, tidx)
+        elif _da:
+            st.session_state.pop("_dia_abierto", None)
 
     # ── HERRAMIENTAS: una fila, un panel (v287) ─────────────────────────────
     # Antes eran 5 bloques APILADOS (asignación, radar, en vivo, plan-vs-real, catálogo)
@@ -810,6 +977,21 @@ def _tablero_editable(grupo, lunes, staff, datos, tidx, marcas=None):
             with col.popover(et or "＋", key=f"roscel_{_wk}_{idx}", use_container_width=True):
                 f = R.fecha_de_dia(lunes, d)
                 st.caption(f"**{_esc(nom)}** · {R.DIAS_LABEL[d]} {f.strftime('%d/%m')}")
+                # «Ver el día» → el detalle se pinta DEBAJO del tablero, a ancho
+                # completo. Aquí dentro no: el popover mide ~300 px y una línea de
+                # tiempo con sus horas no se lee (se midieron las tres opciones).
+                # ⚠️ El rerun cierra el popover, que es lo que se quiere: se ha ido
+                # a MIRAR el día, no a editarlo.
+                # Se ofrece con UNA asignación además de con varias: el motivo del
+                # botón es el día doble, pero esconderlo en las celdas simples haría
+                # que la función solo se descubra por accidente, y con una sola
+                # también dice su horario, su duración y la nota.
+                if items_cur and st.button(":material/timeline: Ver el día",
+                                           key=f"pvd_{_wk}_{idx}",
+                                           use_container_width=True):
+                    st.session_state["_dia_abierto"] = {"u": usuario, "d": d,
+                                                        "wk": lunes.isoformat()}
+                    st.rerun()
                 _def = [etq_by_val[a] for a in asigs if a in etq_by_val]
                 _sel = st.multiselect("Asignaciones del día (puedes elegir varias)",
                                       etq, default=_def, key=f"pva_{_wk}_{idx}")
