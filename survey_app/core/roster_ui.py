@@ -747,7 +747,10 @@ def render_planificacion(grupo):
     # después de v287: el tablero —a lo que se viene— arrancaba media pantalla abajo.
     # El caption pasó a `help` del toggle: útil el primer día, ruido a partir del segundo.
     # El radio va DENTRO de una columna = 1 solo nivel (no son columnas anidadas).
-    b1, b2, b3, b4, b5 = st.columns([1, 3, 1, 4, 3])
+    # ⚠️ Pesos revisados en v390: con TRES vistas el segmentado ya no cabía en su
+    # columna en una ventana estrecha (medido a 780 px: se partía en vertical y
+    # «Disponibilidad» salía cortada como «Disponibili»).
+    b1, b2, b3, b4, b5 = st.columns([0.8, 2.4, 0.8, 5.2, 2.8])
     if b1.button("◀", key="ros_prev", use_container_width=True):
         st.session_state["ros_lunes"] = (lunes - timedelta(days=7)).isoformat()
         st.rerun()
@@ -766,10 +769,12 @@ def render_planificacion(grupo):
         help="**Tablero**: la semana entera, y se asigna tocando una celda.  ·  "
              "**Día**: la cuadrilla sobre un reloj, para ver a qué hora está cada "
              "uno y dónde quedan huecos.  ·  **Disponibilidad**: quién está libre.",
+        # Etiquetas CORTAS (solo display; el valor es el estado guardado y no se
+        # toca): «Disponibilidad» a secas no cabe con tres opciones y se recortaba.
         format_func=lambda o: {
-            "📋 Tablero": ":material/calendar_view_week: Tablero",
+            "📋 Tablero": ":material/calendar_view_week: Semana",
             "🕐 Día": ":material/schedule: Día",
-            "👀 Disponibilidad": ":material/event_available: Disponibilidad"}.get(o, o))
+            "👀 Disponibilidad": ":material/event_available: Libres"}.get(o, o))
     if b5.button(":material/assignment: Copiar semana anterior", key="ros_copy",
                  use_container_width=True):
         ok, msg = R.copiar_semana(grupo, lunes - timedelta(days=7), lunes)
