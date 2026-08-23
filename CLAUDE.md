@@ -205,6 +205,15 @@ Estas cinco mordieron en una sola tanda:
 10. **Comprobar el ÁMBITO, no la presencia** (v342, repetido): un import local dentro de
     OTRA función hace creer que el módulo está disponible. Y el verificador no debe
     descender a los `def` al mirar el ámbito de módulo — ahí es donde se autoengaña.
+13. ⚠️ **Correr un SUBCONJUNTO de guardianes es peor que no tenerlos** (v385). Venía
+    ejecutando la lista que recordaba: «13 en verde» mientras la suite completa tenía
+    48 y **13 fallaban**, dos de ellos introducidos ese mismo día. Un subconjunto
+    curado da la sensación de cobertura sin la cobertura. → **La suite ENTERA, siempre.**
+    Y cuando un guardián lleva tiempo en rojo, clasificarlo: *caducado* (el código
+    cambió a propósito → se actualiza la afirmación **con la razón escrita**) o
+    *regresión* (se arregla el código). Relajarlo porque molesta es taparse los ojos;
+    y ⚠️ **antes de «arreglar» lo que denuncia, mirar el código acusado** — uno de
+    ellos señalaba un fallo que no existía (`get_all_records` contiene `_records`).
 12. ⚠️ **Una sonda NEGATIVA no vale hasta validarla con un caso conocido-bueno** (v375).
     Concluí que un modal «no se pintaba nunca» porque mi `MutationObserver` buscaba
     `div[role="dialog"]` —el marcado del Streamlit LOCAL— y el del Cloud es
@@ -5838,7 +5847,56 @@ descartar**: solo desaparece cuando el Pre-Start está hecho. El chip del sideba
 se pierde de vista —el sidebar se pliega en el móvil— y el modal se cierra y no vuelve.
 0 llamadas nuevas: `open_sessions` y `hecho_hoy` salen de registros ya cacheados.
 
-## Versiones desplegadas (v383 = actual)
+## ⚠️ LA SUITE ENTERA: 13 rojos que nadie veía (v384-v385)
+El usuario preguntó qué quedaba pendiente. Al auditar en serio salió que **yo venía
+corriendo un subconjunto elegido por mí**: cuando reportaba «13 guardianes en verde»,
+la suite completa tenía **48** y **13 fallaban**. Dos de esos rojos los había
+introducido ese mismo día.
+
+**REGLA: se corre la suite ENTERA, no la lista que uno recuerda.** Un subconjunto
+curado da la sensación de cobertura sin la cobertura, y los rojos se acumulan fuera
+del campo de visión — que es exactamente el modo de fallo que los guardianes existen
+para evitar.
+
+### Los 3 fallos REALES
+| Guardián | Qué era | ¿Del día? |
+|---|---|---|
+| v333 | La banda del Pre-Start con `font-size:15px`, fuera de la escala de 9 pasos | sí, mío |
+| v322 | `import pandas` muerto en `prestart_ui` al sustituir la tabla de asistentes por los lienzos | sí, mío |
+| v323 | **5 `except: pass` se tragaban el apunte de auditoría** sin dejar rastro: `registrar` logea lo suyo, pero si revienta `diff` o el import, el histórico se queda con un hueco que nadie puede explicar | no: venían de v342/v352 |
+
+### Los 9 CADUCADOS — actualizados, no relajados
+Todos fallaban porque el código cambió **a propósito** y su afirmación envejeció:
+- **v296 · v297 · v298** exigían que existieran la nav vieja, `_SHELL_NUEVA` y
+  `render_owner_panel` — **borrados en v299**. Fallaban *por haber ganado*. Invertidos
+  a «sigue borrado», que es lo que hay que proteger a partir de ahora (regla v140/v146).
+- **v295 · v301**: el CSS de la cabecera del tablero, reescrito en v301 y normalizado
+  por la escala de v333.
+- **v306**: exigía que `Tipo` fuera la ÚLTIMA columna; v360 y v373 añadieron dos
+  después — también al final, que es lo que la regla protege de verdad.
+- **v309**: su fixture de gastos no llevaba `Grupo`, y **v310 cambió la definición** de
+  las compras del P&L (de «los proyectos del grupo» a «la columna Grupo»); además
+  buscaba enlaces literales que **v317 convirtió en datos**.
+- **v313**: cuatro patrones viejos — v325 partió `sin_tarifa` en accionable y de-baja,
+  el KPI pasó de `st.metric` a `_kpi_card`, el texto dice «obra(s)» y no «proyecto(s)»,
+  y el `['e']` es el `except … as e` (falso positivo conocido desde v145).
+- **v317**: exigía 3 herramientas; **v318 hizo la composición la cuarta**, a petición
+  del usuario tras verla fija.
+- **v321**: su mock esperaba 1.750 de ingreso, pero **v361 movió el cálculo** a
+  `project_revenue`, que consulta cotización y ganancias. La regla que defiende se
+  comprueba ahora contra **datos reales** (`check_v321_real.py`), que es más fuerte.
+
+⚠️ En cada uno quedó escrito **qué cambió y por qué**: dentro de seis meses, un
+guardián ablandado y uno actualizado se parecen mucho si nadie dejó la razón.
+
+### ⚠️ Y un FALSO POSITIVO que casi rompe código sano
+v323 acusaba a `catalogo` y `orders` de sacar el `_next_id` de la caché —lo que
+repetiría un ID, y **el ID es la identidad**—. Los dos leen FRESCO y su docstring lo
+dice: el guardián buscaba la subcadena `_records` y **`get_all_records` la contiene**.
+Es la trampa nº2 (*grep ≠ uso*) dentro de un guardián. Corregido a AST por nombre de
+llamada. **Antes de «arreglar» lo que un chequeo denuncia, mirar el código acusado.**
+
+## Versiones desplegadas (v385 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -5846,6 +5904,8 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v385 | **Auditoría de la suite ENTERA**: venía corriendo un subconjunto elegido por mí, así que «13 en verde» ocultaba que de **48 guardianes fallaban 13** — dos introducidos ese mismo día. **3 fallos reales**: el `font-size:15px` de la banda nueva (fuera de la escala de v333), un `import pandas` muerto en `prestart_ui`, y **5 `except: pass` que se tragaban el apunte de auditoría** sin dejar rastro (de v342/v352). **9 caducados**, actualizados con la razón escrita al lado, no relajados: los tres de la nav exigían código que **v299 borró** (fallaban por haber ganado), y el resto miraba CSS, columnas, fixtures y enlaces que v301/v310/v313/v317/v318/v325/v333/v361 cambiaron a propósito. **Y un falso positivo del propio guardián**: acusaba a `catalogo` y `orders` de leer el `_next_id` de la caché porque buscaba la subcadena `_records`… y **`get_all_records` la contiene** (la trampa nº2, *grep ≠ uso*, dentro de un chequeo). REGLA: se corre la suite entera, no la lista que uno recuerda |
+| v384 | Fix: la banda del Pre-Start usaba `font-size:15px`, fuera de la escala tipográfica de v333 |
 | v383 | **Firma DIBUJADA en el Pre-Start** (una por asistente, solo en el PDF) + **banda de aviso en la barra superior** que no se puede descartar hasta que el Pre-Start esté hecho. La dependencia (`streamlit-drawable-canvas`, de 2023) se probó ANTES contra el Streamlit 1.57 que corre aquí: captura el trazo (543 B en blanco → 5.245 B firmado) y reportlab lo acepta; import perezoso, así que si falla se cae a las iniciales en vez de dejar sin registrar la charla. ⚠️ **Tres trampas**: detectar la firma por el canal ALFA daba **58.800 píxeles de trazo en un lienzo VACÍO** (todos «firmados»); `json.dumps` **no serializa bytes**, así que sin filtrar la firma el registro habría fallado entero (y en base64 seis firmas rozan el tope de 50.000 caracteres por celda); y la columna de firma medía el **9%** del ancho —dimensionada para dos iniciales— y partía el encabezado como «Signatur / e», lo que solo se vio extrayendo el texto del PDF generado. + `logger` inexistente en el `except` de la firma (el NameError latente de v370), con el guardián ejercitando esa rama |
 | v381 | ⚠️ **v380 arregló la función equivocada.** Con la pantalla delante, las alarmas ya salían y las 12 tarjetas **seguían en `0h`**: el arreglo fue a `project_hours_bulk` dando por hecho que era la de la cartera, y `render_owner_projects` llama a **`project_hours()` una vez por obra**. El test daba ✓ sobre una función que esa pantalla no usa. **REGLA: antes de arreglar lo que pinta una pantalla, mirar QUÉ función llama** — el guardián lo comprueba primero y solo después mide. + otro cero peligroso: **`datos_asociados`**, el recuento que se enseña ANTES de borrar un proyecto, le daba **0 en todo** al propietario («no cuelga nada» con 25 fichajes, 3 gastos y 11 actividades colgando) |
 | v380 | ⚠️ **La fase 2 se dejó dos huecos, y solo se vieron EN PANTALLA**: con la sesión de propietario los proyectos salían pero **todas las tarjetas marcaban `0h`** (el demo tiene 484 fichajes) y **0 alarmas** (el admin veía 19). Mis tests medían `list_projects`, pero una tarjeta se arma con **cuatro fuentes** y cada una tiene su propio camino al libro: las horas van por la hoja del fichaje y `open_counts_all()` **ni siquiera recibe grupo**. Cerrados con el mismo patrón. **REGLA: cuando una pantalla se compone de varias fuentes, compararlas TODAS contra quien las tiene bien** — arreglar la principal y dar la pantalla por buena deja ceros con pinta de dato. Guardián nuevo que compara horas, alarmas, gastos y retrasos del propietario contra los del admin |
