@@ -8,7 +8,6 @@ import io
 import logging
 
 import streamlit as st
-import pandas as pd
 
 from core import prestart as PS
 from core import projects as P

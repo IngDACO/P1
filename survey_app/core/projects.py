@@ -710,8 +710,11 @@ def update_project(pid: str, fields: dict) -> tuple:
         # no cambiaba nunca porque no se escribía nada).
         auditoria.registrar("proyecto", pid, auditoria.diff(_antes, _escritos),
                             grupo=str(_antes.get("Grupo", "")))
-    except Exception:
-        pass
+    except Exception as e:
+        # ⚠️ Deja RASTRO (regla v323): `registrar` ya logea sus propios fallos, pero
+        # si lo que revienta es `diff` o el import, el apunte se perdía en silencio
+        # y el histórico se quedaba con un hueco que nadie podía explicar.
+        logger.warning("projects: no se pudo auditar %s: %s", pid, e)
     return True, "Proyecto actualizado."
 def delete_project(pid: str) -> tuple:
     pws, err = _projects_ws()

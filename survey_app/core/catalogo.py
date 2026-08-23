@@ -263,8 +263,10 @@ def actualizar(cid, fields: dict) -> tuple:
         from core import auditoria
         auditoria.registrar("catalogo", cid, auditoria.diff(antes or {}, escritos),
                             grupo=str((antes or {}).get("Grupo", "")))
-    except Exception:
-        pass
+    except Exception as e:
+        # Deja RASTRO (regla v323): el precio de lo que vendes sin apunte y sin log
+        # es justo el hueco que v352 vino a cerrar.
+        logger.warning("catalogo: no se pudo auditar %s: %s", cid, e)
     return True, "Artículo actualizado."
 
 

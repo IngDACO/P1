@@ -564,8 +564,10 @@ def set_rate(usuario: str, tarifa) -> tuple:
         auditoria.registrar("usuario", usuario,
                             auditoria.diff(_antes, {"TarifaHora": tarifa}),
                             grupo=str(_antes.get("Grupo", "")))
-    except Exception:
-        pass
+    except Exception as e:
+        # Deja RASTRO (regla v323): `registrar` logea lo suyo, pero si revienta
+        # `diff` o el import, el apunte se perdía en silencio.
+        logger.warning("auth: no se pudo auditar la tarifa de %s: %s", usuario, e)
     return True, f"Tarifa de '{usuario}' actualizada."
 
 

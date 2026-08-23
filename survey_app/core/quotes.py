@@ -470,8 +470,8 @@ def set_estado(cid, estado) -> tuple:
         from core import auditoria
         auditoria.registrar("cotizacion", cid, {"Estado": [antes, estado]},
                             grupo=str(c.get("Grupo", "")))
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("quotes: no se pudo auditar el estado de %s: %s", cid, e)
     return True, f"Cotización marcada como {estado}."
 
 
@@ -558,8 +558,10 @@ def aceptar_y_crear_proyecto(cid, nombre="", tipo="Instalación", fecha_inicio=N
         auditoria.registrar("cotizacion", cid,
                             {"Estado": [estado_de(c), ACEPTADA], "ProyectoID": ["", res]},
                             grupo=str(c.get("Grupo", "")))
-    except Exception:
-        pass
+    except Exception as e:
+        # Aceptar una cotización CREA el proyecto: si el apunte se pierde sin log,
+        # no queda constancia de quién convirtió esa venta en obra.
+        logger.warning("quotes: no se pudo auditar la aceptación de %s: %s", cid, e)
     return True, res
 
 
