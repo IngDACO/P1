@@ -747,10 +747,12 @@ def render_planificacion(grupo):
     # después de v287: el tablero —a lo que se viene— arrancaba media pantalla abajo.
     # El caption pasó a `help` del toggle: útil el primer día, ruido a partir del segundo.
     # El radio va DENTRO de una columna = 1 solo nivel (no son columnas anidadas).
-    # ⚠️ Pesos revisados en v390: con TRES vistas el segmentado ya no cabía en su
-    # columna en una ventana estrecha (medido a 780 px: se partía en vertical y
-    # «Disponibilidad» salía cortada como «Disponibili»).
-    b1, b2, b3, b4, b5 = st.columns([0.8, 2.4, 0.8, 5.2, 2.8])
+    # ⚠️ v392: la barra pasa de CINCO columnas a cuatro. Con tres vistas, el
+    # segmentado necesita ~330 px y en una ventana de 780 le tocaban 163 → se partía
+    # en vertical. «Copiar semana anterior» baja a la fila de la cobertura, que tiene
+    # sitio de sobra, y ese ancho se lo queda el toggle. (No se le da una fila propia:
+    # v291 unificó cuatro bandas de chrome en una y no se van a volver a separar.)
+    b1, b2, b3, b4 = st.columns([0.7, 2, 0.7, 8.6])
     if b1.button("◀", key="ros_prev", use_container_width=True):
         st.session_state["ros_lunes"] = (lunes - timedelta(days=7)).isoformat()
         st.rerun()
@@ -775,19 +777,19 @@ def render_planificacion(grupo):
             "📋 Tablero": ":material/calendar_view_week: Semana",
             "🕐 Día": ":material/schedule: Día",
             "👀 Disponibilidad": ":material/event_available: Libres"}.get(o, o))
-    if b5.button(":material/assignment: Copiar semana anterior", key="ros_copy",
-                 use_container_width=True):
-        ok, msg = R.copiar_semana(grupo, lunes - timedelta(days=7), lunes)
-        (flash.exito if ok else st.warning)(msg)
-        if ok:
-            st.rerun()
-
-    # ── Cobertura del día (DATO, se queda) + añadir/quitar sábado y domingo ──
-    _cc1, _cc2 = st.columns([5, 2])
+    # ── Cobertura del día (DATO, se queda) + días extra + copiar semana ──
+    _cc1, _cc2, _cc3 = st.columns([4, 2, 2])
     with _cc1:
         _cobertura_hoy(lunes, staff, datos, dias=dias)
     with _cc2:
         _control_dias(lunes, datos, dias)
+    with _cc3:
+        if st.button(":material/assignment: Copiar semana anterior", key="ros_copy",
+                     use_container_width=True):
+            ok, msg = R.copiar_semana(grupo, lunes - timedelta(days=7), lunes)
+            (flash.exito if ok else st.warning)(msg)
+            if ok:
+                st.rerun()
 
     if _vista == "🕐 Día":
         # El día por defecto: hoy si está en la semana visible, si no el primero.
