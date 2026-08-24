@@ -262,6 +262,32 @@ Estas cinco mordieron en una sola tanda:
     repetido. → Al integrar un componente, mirar su firma (`inspect.signature`) y
     medirlo EN EL TAMAÑO EN QUE SE VA A USAR — para el Pre-Start, el teléfono.
 
+**Añadidas en v397-v399 (la tanda de facturar desde la cartera y el formato del dinero):**
+
+18. ⚠️ **Lo que pinta `st.dataframe` NO está en el DOM: está en un canvas.**
+    glide-data-grid pinta las celdas en `<canvas>` y su nodo accesible lleva el
+    valor **CRUDO** (`27882.67`), no el formateado. Así que ninguna sonda del DOM
+    puede responder «¿cómo se ve esta columna?». → La técnica que SÍ funciona es
+    **interceptar `CanvasRenderingContext2D.prototype.fillText`** y forzar un
+    repintado (mover el scroll de verdad, o un `resize_window` REAL — un
+    `new Event('resize')` sintético no dispara nada, glide observa su contenedor).
+    Con eso se lee exactamente lo que ve el usuario. Y ⚠️ los `[role="columnheader"]`
+    miden **0×0 en (0,0)**: preguntarles por geometría da «está fuera de pantalla»
+    hasta para la primera columna. Lo que sí informa es la **virtualización**: solo
+    las columnas EN VISTA existen en el DOM (validado moviendo el scroll y viendo
+    cambiar el conjunto entero).
+19. ⚠️ **Un guardián lanzado desde el directorio equivocado da rojos que no existen.**
+    Streamlit busca `.streamlit/secrets.toml` **relativo al CWD**, así que correr la
+    suite desde `C:\Users\diego` tumbó 16 guardianes con «No secrets found» y
+    parecían regresiones. Se corren con `cwd=survey_app`. Y ⚠️ **espaciados**: 16 de
+    ellos leen la hoja real y el techo son 60 lecturas/min — amontonarlos es
+    provocarse un 429 y volver a leer un rojo falso (es el error de v377, cometido
+    en el script que venía a verificar).
+20. ⚠️ **Antes de sustituir un especificador de formato, mirar qué hace con los
+    decimales.** `%d` **trunca** y `%.0f` **redondea**: 3305.76 sale `$3,305` con uno
+    y `$3,306` con el otro. «Unificar los formatos» habría movido cifras en pantalla
+    sin que nadie lo pidiera. Se inserta la coma y cada columna conserva su semántica.
+
 **Y la regla de siempre, que volvió a aplicar:** antes de borrar el LECTOR de un mecanismo, buscar
 sus ESCRITORES y convertirlos. En v299 `_nav_pending` tenía dos vivos («Abrir proyecto» tras el
 survey y «Reabrir cálculo»); borrar solo el lector los habría dejado como botones que no hacen
@@ -6073,7 +6099,52 @@ Sobrescribí `P1/.claude/launch.json` por leer la ruta equivocada antes de escri
 commitear que hubiera ahí se perdieron. **Leer el fichero que se va a escribir, no uno
 parecido.**
 
-## Versiones desplegadas (v395 = actual)
+## Facturar desde la cartera (v397-v398)
+Petición del usuario: *«en la tabla de proyectos vamos a agregar una opción para que se puedan
+generar los invoices de cada proyecto desde la tabla o ficha»*. Decisiones suyas: **botón en la
+tarjeta** y las archivadas **con la casilla de siempre** (v149/v340/v369).
+- **`invoices.pendiente_por_proyecto(grupo, incluir_archivados=True)`** — el mapa, en UN sitio.
+  ⚠️ `finance.sin_facturar` DELEGA en él en vez de repetir el bucle: dos definiciones del mismo
+  dinero es lo que produjo los fallos de v310, v321 y v361.
+- **`_ir_a_facturar(pid, grupo)`** extraída para que el botón de la tarjeta y el de la ficha hagan
+  EXACTAMENTE lo mismo (resolución del cliente por `ClienteID`, y sin preseleccionar un valor que
+  no esté entre las opciones del selectbox — el fallo que v357/v358 ya habían pagado).
+- Tarjeta: insignia con el importe + botón **Facturar** solo si `pendiente > 0` y el rol gestiona;
+  sin pendiente, solo «Abrir →». Lista: columna **Sin facturar** como NÚMERO (ordenable), no texto.
+- ⚠️ **v398: existir no es servir.** La columna se puso la décima de trece y, medido en producción
+  con la tabla a ~520 px, **había que hacer scroll horizontal para encontrarla**. Se movió junto al
+  nombre. Una columna que hay que buscar no cumple la función por la que se añadió.
+- ⚠️ **Falsa alarma resuelta midiendo:** el botón «Facturar» aparecía DOS veces en el DOM. El
+  segundo mide **0×0 en (0,0)** — es el nodo de medida que Streamlit añade a un botón con `help=`.
+  Se pinta uno solo.
+
+## El dinero tenía dos caras en la misma pantalla (v399)
+Visto verificando v398: la celda pintaba **`$27883`** y la tarjeta de al lado **`$27,883`**. El pie
+de esa misma tabla sale de `theme.dinero` (que sí agrupa), así que la contradicción estaba a dos
+centímetros. Causa: `NumberColumn(format="$%.0f")` es printf, y `%f` no agrupa.
+- **No era una columna, eran 39** en 7 módulos (`$%d`×20 · `$%.2f`×14 · `$%.0f`×5): Rentabilidad,
+  Facturas, Nóminas, Inventario, Contactos, Catálogo, Cotizaciones y la cartera. Todas las TABLAS
+  decían `$27883` mientras todos los KPI y pies decían `$27,883`. Arreglar solo una habría dejado
+  esa columna como la única distinta.
+- El printf de Streamlit **sí acepta `,`** (`"$%,d"`). ⚠️ Verificado, no leído: la documentación lo
+  dice, pero lo que decide es lo que PINTA — mini-app + intercepción de `fillText` (trampa nº18).
+- ⚠️ **`%d` no se cambió por `%.0f`**: uno trunca y el otro redondea (trampa nº20).
+- ⚠️ **Las columnas EDITABLES se probaron tecleando** (Cotizaciones, Nóminas, Ganancia/h): el editor
+  se siembra con el valor CRUDO (`1500`, no `$1,500.00`) y al escribir `3456.78` Python recibe
+  `3456.78`. El separador no toca ni la edición ni el valor devuelto.
+- Guardián `verif_v399.py`: por AST (no por texto — un formato en un comentario no es un uso), NINGUNA
+  columna de dinero puede quedarse sin separador, y se comprueba que siguen conviviendo las que
+  truncan y las que redondean. Probado contra el caso roto.
+
+### Deuda anotada, NO resuelta: `use_container_width`
+Streamlit 1.57 lo marca deprecado («will be removed in a future version», sin versión anunciada) a
+favor de `width="stretch"`. La app lo usa en **200 sitios de 21 ficheros**. No se migró: es un cambio
+que toca la maqueta de TODAS las pantallas por una retirada sin fecha, y no se puede verificar en
+producción a bajo coste. ⚠️ Y tiene trampa: **`st_folium(..., use_container_width=True)`**
+(`route_ui.py`, `home_ui.py`) es un parámetro DEL COMPONENTE, no de Streamlit — convertirlo lo rompe,
+y es justo el arreglo de v307 que llenó el hueco blanco de la Ruta del día.
+
+## Versiones desplegadas (v399 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -6081,6 +6152,10 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v399 | **El dinero tenía dos caras en la misma pantalla**: la celda pintaba `$27883` y la tarjeta de al lado `$27,883` (y el pie de esa MISMA tabla también, porque sale de `theme.dinero`). No era una columna: eran **39 en 7 módulos** — todas las TABLAS de dinero de la app sin separador de miles frente a todos los KPI con él. ⚠️ El veredicto no se puede leer en el DOM: `st.dataframe` pinta en canvas y su nodo accesible lleva el valor CRUDO, así que se midió **interceptando `fillText`** (trampa nº18). ⚠️ `%d` NO se cambió por `%.0f`: uno trunca y el otro redondea, y unificarlos habría movido cifras (trampa nº20). ⚠️ Las columnas EDITABLES probadas tecleando: el editor se siembra con `1500`, no con `$1,500.00`, y devuelve el número intacto. Guardián `verif_v399.py` + suite **53/53** |
+| v398 | **Existir no es servir**: la columna «Sin facturar» era la décima de trece y, medido en producción con la tabla a ~520 px, **había que hacer scroll horizontal para encontrarla** — no cumplía la función por la que se añadió. Se movió junto al nombre |
+| v397 | **Facturar desde la cartera**: insignia con el importe + botón «Facturar» en la tarjeta (solo donde hay pendiente y solo para gestión), columna «Sin facturar» ORDENABLE en la lista, y el atajo en la cabecera de la ficha. `pendiente_por_proyecto` es la ÚNICA definición del mapa (`finance.sin_facturar` delega) y `_ir_a_facturar` la única de la navegación. ⚠️ Falsa alarma resuelta midiendo: el botón salía dos veces en el DOM y el segundo mide 0×0 — es el nodo del tooltip de `help=` |
+| v396 | Documentación de v387-v395 en CLAUDE.md |
 | v395 | **Se avisa de las alarmas que no le llegan a nadie**: un destinatario sin email ni Telegram recibe la alarma *dentro* de la app y solo la ve si entra a mirar — y desde v373 un control de seguridad en NO abre alarma. Medido en la hoja real: de los 5 destinatarios de `cliente1`, a **3 no les llega** (`dacox`, `Arcantox`, `admin1`), aunque siempre llega a 2. El aviso va **donde se arregla** (Planificación · Usuarios, sobre la tabla del email). ⚠️ Criterio distinto al del campo a propósito (a un gestor le basta UN canal; al campo se le exigen los dos, v79 — mezclarlos sería el error de v325) y ⚠️ **no entra en `_PENDING_KEYS`**: la rejilla del resumen es de nueve indicadores fijos con guardián (v305). 0 lecturas nuevas |
 | v394 | La barra del Panel **cabe en una fila a media pantalla**, esta vez MIDIENDO: la fila da 406 px y el `gap` por defecto se comía 48. ⚠️ Y el rango largo se partía en **3 líneas** dentro de 56 px — eso era lo que hinchaba la fila, invisible hasta medir su altura. Tres recortes: `gap="xxsmall"` (−36), rango sin año (−75) y menos padding **acotado a este** segmentado (−36). Medido en producción: barra de 70 → **40 px**, las tres vistas en una fila, 0 recortes |
 | v393 | ⚠️ **La firma del Pre-Start no cabía en un móvil**: `st_canvas` nace con `width=600` y no acepta `use_container_width`, así que en un viewport de 375 px el lienzo salía de 600 dentro de un hueco de 343 y **la mitad derecha quedaba fuera de pantalla** — el `st_folium` de 500 px de v307 otra vez. Ahora 300 px (medido: cabe entero). ⚠️ Sigue sin demostrarse que un DEDO complete el trazo: necesita un teléfono real. + **auto-poblar** rellena el fin de semana **solo si en esa semana ya hay alguien trabajándolo** (la condición sale del dato, no de una preferencia: ni impone sábados ni obliga a añadir a mano en una semana que la cuadrilla sí trabaja) |
