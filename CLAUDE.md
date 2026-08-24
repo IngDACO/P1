@@ -5772,8 +5772,13 @@ centímetros. Causa: `NumberColumn(format="$%.0f")` es printf, y `%f` no agrupa.
   truncan y las que redondean. Probado contra el caso roto.
 
 ### Deuda anotada, NO resuelta: `use_container_width`
-Streamlit 1.57 lo marca deprecado («will be removed in a future version», sin versión anunciada) a
-favor de `width="stretch"`. La app lo usa en **200 sitios de 21 ficheros**. No se migró: es un cambio
+⚠️ **Corrección (v402):** escribí que era una retirada «sin versión anunciada» y es FALSO. El propio
+runtime lo dice al arrancar: **«`use_container_width` will be removed after 2025-12-31»** — hay fecha,
+y ya pasó. O sea que esto no es «algún día», está en tiempo de descuento y puede desaparecer en
+cualquier versión que Streamlit publique. Lo vi en los logs de una mini-app, no leyendo la doc.
+
+Streamlit 1.57 lo marca deprecado a favor de `width="stretch"` / `width="content"`.
+La app lo usa en **200 sitios de 21 ficheros**. No se migró: es un cambio
 que toca la maqueta de TODAS las pantallas por una retirada sin fecha, y no se puede verificar en
 producción a bajo coste. ⚠️ Y tiene trampa: **`st_folium(..., use_container_width=True)`**
 (`route_ui.py`, `home_ui.py`) es un parámetro DEL COMPONENTE, no de Streamlit — convertirlo lo rompe,
@@ -5787,6 +5792,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v402 | **Facturar desde la LISTA**: el usuario avisó de que «desde la tabla de proyectos no puedo hacer los invoices, solo ver si ya está facturado o no» — y era una decisión mía de v397. Ahora elegir una fila **ya no abre el proyecto**: muestra las dos acciones explícitas («Abrir →» y «Facturar»), como Finanzas·Gastos (v215) y Usuarios (v226). Decisión suya sabiendo el coste: abrir pasa de 1 a 2 clics. ⚠️ **NO se hizo enlazando la celda**, que era la idea de partida, y eso se decidió MIDIENDO: un `LinkColumn` **ordena por la URL, no por el importe** (`$980 · $5,200 · $27,883 · $2,960` = el alfabético de los PRJ-####), y en el bundle que distribuye Streamlit su clic hace `window.open(url,"_blank")` + `preventDefault()` → no recarga la pestaña, pero **abre una pestaña nueva = sesión nueva**, o sea el login si no está tildada la cookie de v221. ⚠️ El guardián de v397 afirmaba «la lista NO factura»: **caducado**, reescrito sobre el principio que sigue vivo (ninguna acción puede colgar de la selección, todas bajo un botón) y probado contra el código roto |
 | v401 | **Narrativa v102-v130 comprimida**: 29 secciones y 502 líneas → 137, conservando las 6 REGLAS, los avisos ⚠️, el dominio de los planos y un índice de los símbolos que solo se nombraban ahí. ⚠️ Se comprimió **solo** eso: de las 889 líneas «antiguas», más de la mitad son el CONTRATO de un módulo (`plumb.py`, `auth.py`, `timeclock.py`, `projects.py`…) y llevan versión en el título sin ser narrativa. ⚠️ El chequeo no fue «parece bien»: se extrajo cada span de código del texto viejo y se comprobó que siguiera existiendo en el documento — y hubo que **afinar la sonda**, porque comparar el span literal daba 128 falsos perdidos (`_do_calculo()` no casa con `_do_calculo`) y empujaba a inflar el texto nuevo sin motivo. Documento: 6.498 → 6.133 líneas (549 → 519 KB) |
 | v400 | Documentación de v396-v399 en CLAUDE.md |
 | v399 | **El dinero tenía dos caras en la misma pantalla**: la celda pintaba `$27883` y la tarjeta de al lado `$27,883` (y el pie de esa MISMA tabla también, porque sale de `theme.dinero`). No era una columna: eran **39 en 7 módulos** — todas las TABLAS de dinero de la app sin separador de miles frente a todos los KPI con él. ⚠️ El veredicto no se puede leer en el DOM: `st.dataframe` pinta en canvas y su nodo accesible lleva el valor CRUDO, así que se midió **interceptando `fillText`** (trampa nº18). ⚠️ `%d` NO se cambió por `%.0f`: uno trunca y el otro redondea, y unificarlos habría movido cifras (trampa nº20). ⚠️ Las columnas EDITABLES probadas tecleando: el editor se siembra con `1500`, no con `$1,500.00`, y devuelve el número intacto. Guardián `verif_v399.py` + suite **53/53** |

@@ -1361,15 +1361,26 @@ def _cartera_clickeable(proys, alarmas, delays, aheads, costos,
                     st.rerun()
 
 
-def _cartera_lista(proys, alarmas, delays, aheads, costos, pendientes=None):
+def _cartera_lista(proys, alarmas, delays, aheads, costos, pendientes=None,
+                   grupo="", puede_facturar=False):
     """Vista LISTA de la cartera (v228): la típica tabla — proyectos por filas, datos por
-    columnas — CLICKEABLE (seleccionar una fila abre el detalle, igual que las tarjetas).
-    Alternativa a `_cartera_clickeable`; se elige con el toggle de vista.
+    columnas. Alternativa a `_cartera_clickeable`; se elige con el toggle de vista.
 
-    ⚠️ Aquí NO hay botón de facturar, y es a propósito: la selección de fila ya
-    significa «abrir el proyecto» (v228) y no se le pueden dar dos significados al
-    mismo clic. La columna «Sin facturar» dice dónde está el dinero —y se puede
-    ordenar por ella—; el botón vive en la tarjeta y en la ficha (v397).
+    ⚠️ v402: **elegir una fila ya no abre el proyecto**. Antes lo abría al instante, y eso
+    dejaba la Lista como un sitio donde solo se MIRA el dinero: se veía «Sin facturar» y no
+    se podía cobrar sin salir. Ahora la fila se selecciona y aparecen debajo las dos
+    acciones explícitas — «Abrir →» y «Facturar» —, que es como ya funcionan Finanzas·Gastos
+    (v215) y Usuarios (v226). Decisión del usuario, sabiendo el coste: **abrir pasa de 1 clic
+    a 2**, y abrir es lo más frecuente.
+
+    ⚠️ Y NO se hizo con un enlace en la celda, que era la idea de partida. Medido en el
+    bundle que distribuye Streamlit (`DataFrame.*.js`), el clic de una celda de enlace hace
+    `window.open(url, "_blank", …)` + `preventDefault()`: no recarga la pestaña actual
+    —bien—, pero **abre una pestaña nueva**, y una pestaña nueva es una SESIÓN nueva, así
+    que sin la cookie de «mantener la sesión» (opcional y desmarcada desde v221) el usuario
+    aterriza en el login. Además un `LinkColumn` **ordena por la URL, no por el importe**
+    (medido: $980 · $5,200 · $27,883 · $2,960, que es el orden alfabético de los PRJ-####),
+    y esta columna existe justamente para ordenar por dónde está el dinero.
     """
     pendientes = pendientes or {}
     proys = sorted(proys, key=lambda p: (-delays.get(str(p.get("ID", "")), 0),
@@ -1445,16 +1456,38 @@ def _cartera_lista(proys, alarmas, delays, aheads, costos, pendientes=None):
         _n = sum(1 for p in proys if pendientes.get(str(p.get("ID", "")), 0.0) > 0)
         st.caption(f":material/receipt: **{_Tl.dinero(_tot, 0)}** sin facturar "
                    f"en {_n} obra(s) de las que se ven.")
-    st.caption(":material/touch_app: Toca una fila para abrir el proyecto.  "
+    st.caption(":material/touch_app: Toca una fila y elige qué hacer con ella.  "
                "Ppto = % del presupuesto ejecutado (:orange[:material/warning:] si se pasó) y over = sobre presupuesto.")
     try:
         _sr = list(_ev.selection.rows)
     except Exception:
         _sr = []
     if _sr and _sr[0] < len(proys):
-        st.session_state["_admin_open_proj"] = str(proys[_sr[0]].get("ID", ""))
-        st.session_state.pop("cart_tbl", None)   # limpia la selección → no re-abre al volver
-        st.rerun()
+        # ⚠️ La selección NO actúa por sí sola (v402): solo muestra las acciones. Si volviera
+        # a abrir el proyecto aquí, el mismo clic tendría dos significados y el botón de
+        # facturar no se llegaría a ver nunca.
+        from core import theme as _Tb
+        _sp = proys[_sr[0]]
+        _spid = str(_sp.get("ID", ""))
+        _spf = float((pendientes or {}).get(_spid, 0.0) or 0)
+        _con_fac = _spf > 0 and puede_facturar
+        _cs = st.columns([4.4, 1.5, 1.5]) if _con_fac else st.columns([5.9, 1.5])
+        _cs[0].markdown(
+            f"**{_sp.get('Nombre', '')}**  \n"
+            + (f":material/receipt: {_Tb.dinero(_spf, 0)} sin facturar"
+               if _spf > 0 else ":material/check: nada pendiente de facturar"))
+        if _cs[1].button("Abrir →", key="cartlist_open", use_container_width=True):
+            st.session_state["_admin_open_proj"] = _spid
+            st.session_state.pop("cart_tbl", None)   # limpia la selección → no re-abre al volver
+            st.rerun()
+        if _con_fac and _cs[2].button(
+                ":material/receipt_long: Facturar", key="cartlist_fac", type="primary",
+                use_container_width=True,
+                help=f"Nueva factura con esta obra y su cliente ya elegidos · "
+                     f"pendiente {_Tb.dinero(_spf, 0)}"):
+            _ir_a_facturar(_spid, grupo)
+            st.session_state.pop("cart_tbl", None)
+            st.rerun()
 
 
 def _panel_proyectos(grupo: str):
@@ -1562,7 +1595,8 @@ def _panel_proyectos(grupo: str):
     if not _proys_f:
         st.caption("Ningún proyecto coincide con el filtro.")
     elif _view == "📋 Lista":
-        _cartera_lista(_proys_f, alarmas, delays, aheads, costos, pendientes=_pend)
+        _cartera_lista(_proys_f, alarmas, delays, aheads, costos, pendientes=_pend,
+                       grupo=grupo, puede_facturar=True)
     else:
         st.caption("Cada tarjeta muestra el resumen; toca «Abrir» para ver el detalle.")
         _cartera_clickeable(_proys_f, alarmas, delays, aheads, costos,
