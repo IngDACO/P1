@@ -2968,508 +2968,143 @@ alarmas, cronograma, proyeccion, editar, actividades, paquete de obra, reconstru
 documentos, eliminar). Es el mismo problema que tenia el Survey antes de v114 (7 pasos en scroll unico)
 y la solucion conocida que funciono fue sub-navegacion con **radio** (NO st.tabs, regla de v56).
 
-## Herramientas de calculo, parte 2: las cuatro completas (v130)
-Cierra lo empezado en v129. Ahora **Plomadas, Corte de rieles, Corte de buffers y Belting** comparten:
-resultados persistentes, dibujo tecnico, PDF (`tool_pdf`) y guardado contra el proyecto
-(`tool_save_ui` → hoja `Calculos` + Drive).
-- **Fix del bug v110 en las tres restantes.** En Plomadas colgaban **80 lineas** del boton (los 4
-  graficos CAD de v123 se borraban al tocar nada); en Rieles dos bloques y en Belting uno. Patron
-  aplicado: el boton SOLO computa y guarda en `session_state`; el render vive fuera.
-  Verificado por AST: ningun bloque de mas de 6 lineas cuelga ya de un `st.button`, salvo el de Rieles
-  Caso 2 que es **solo computo** (arma `rows` y llama a compute_case2), sin render.
-- **`rail_cut.rail_cut_svg(res, caso, n2500, n5000)`** — diagrama nuevo. Caso 1 es alzado REAL: la pila
-  de rieles estandar instalados (A) contra la longitud requerida por elevador (RC/RCW); lo que
-  sobresale es la diferencia. Caso 2 son barras comparativas, porque ahi no hay pila que dibujar (los
-  valores vienen medidos en obra) — dibujar una geometria inventada seria mentir.
-- ⚠️ **Signo de Cut\*: la app NO documenta que significa** (la UI solo mostraba el numero crudo). Con
-  datos de prueba realistas los cortes salen NEGATIVOS. La leyenda del dibujo dice "diferencia contra A
-  (mismo valor con signo que la tabla)" en vez de "material a cortar": describe lo que se sabe sin
-  afirmar una direccion de corte que no esta definida en ninguna parte. **PENDIENTE de confirmar con el
-  usuario** — es una decision de dominio, y es una operacion irreversible.
+## Survey y primeros lotes (v102-v130) — comprimido en v401
 
-## Herramientas de calculo, parte 1: registro en el proyecto (v129)
-Las cuatro herramientas (Plomadas, Corte de rieles, Corte de buffers, Belting) eran **islas**: ni PDF,
-ni descarga, ni rastro en el proyecto. Calculabas, mirabas y ahi moria.
-### ⚠️ Bug estructural encontrado en LAS CUATRO (mismo que v110)
-Los resultados se calculaban y dibujaban **dentro de `if st.button(...)`**, asi que desaparecian con
-cualquier interaccion. En Plomadas colgaban **80 lineas** del boton: los 4 graficos CAD de v123 se
-borraban al tocar nada. Ademas hacia IMPOSIBLE un boton de guardar (al pulsarlo se perdia todo).
-Patron correcto: el boton solo COMPUTA y guarda en `session_state`; el render vive FUERA.
-### Infraestructura nueva (comun a las 4)
-- **`core/toolruns.py`** — hoja **`Calculos`** (ID·ProyectoID·Grupo·Herramienta·Fecha·Usuario·Resumen·
-  DatosJSON·Archivo·DriveID). `registrar()` archiva el PDF en Drive + lo registra como documento del
-  proyecto + escribe la fila. Mismo patron que `prestart.submit` (Drive en best-effort: si falla, la
-  fila igual se guarda). Lecturas cacheadas ttl 30 + invalidacion al escribir; `_next_id` lee FRESCO.
-- **`core/tool_pdf.py`** — `tool_pdf(titulo, meta, svgs, tablas, notas)`: un solo generador para las
-  cuatro, asi comparten cara entre si y con el paquete de obra del Survey.
-- **`core/tool_save_ui.py`** — `render_guardar(...)`: descarga + selector de proyecto (por rol, mismo
-  criterio que el Pre-Start) + guardado. Vive en un sitio para no divergir en cuatro.
-### Hecho en esta version
-- **🛡 Corte de buffers** completo: persistencia, **diagrama nuevo** (`buffer_cut.buffer_cut_svg`:
-  alzado con el nivel HKP del plano, el HKPR real de cada buffer y el material a cortar achurado en
-  rojo; escala vertical ajustada al rango y declarado en el pie), PDF y guardado en el proyecto.
-- PENDIENTE en v130: Plomadas, Corte de rieles (necesita dibujo) y Belting.
+⚠️ **Esto eran 29 secciones y 502 líneas de relato.** Se comprimió a lo que sigue VIVO: las reglas
+que nacieron aquí y los contratos que no están documentados en ningún otro sitio. El relato completo
+(quién rompió qué y cómo se cazó) está en `git log` y en el ZIP de cada deploy — **no se ha borrado
+nada, se ha dejado de cargar en cada sesión**. Si una de estas reglas se rompe, el detalle de por qué
+existe está a un `git log -S` de distancia.
 
-## Plano unico de la sesion + paquete de obra desde el proyecto (v128)
-**El hallazgo de integracion mas grande de la app:** Survey, Plomadas, Corte de rieles, Corte de buffers
-y Belting tenian **cinco `file_uploader` distintos**, asi que el tecnico subia el MISMO plano hasta cinco
-veces para el mismo elevador. Y `extractors/schindler.py` ya tenia todos los extractores juntos
-(`extract_from_pdf`, `extract_number_of_stops`, `extract_car_guide_rail`, `extract_belting`,
-`extract_hkp`): un unico PDF puede alimentarlas todas.
-- **`core/plan_store.py`**: `guardar()` / `actual()` / `selector(label, key)`. El Survey registra el plano
-  al cargarlo; las otras cuatro lo ofrecen con `selector`, que devuelve un `_Plano` (BytesIO **con
-  `.name`**) para que sustituya al UploadedFile sin tocar la logica: los llamadores usan `.name` como
-  guarda de identidad, el patron obligatorio de v112. Lo que se suba en cualquier herramienta queda
-  registrado, asi que da igual por donde empieces.
-  Verificado con un plano REAL: HKP=70, HQ=14045, HGP=85, NS=6 leidos del objeto compartido.
-- **`core/survey_calc.py` → `recalcular(params, matriz)`**: el proyecto guarda ParamsJSON (que ya incluye
-  toda la config: OMEGA_SIDE/WALL_*/CTRL_*/NS) y MatrizJSON, pero **NO la solucion**, que es derivada.
-  Esto rehace SOLO la parte determinista de `_do_calculo` (sin IA, sin correo, sin cronograma, sin
-  Streamlit). La logica sigue en calculations/optimizer/plumb: aqui solo se encadenan llamadas.
-  **Verificado ejecutando ambos caminos sobre los mismos datos: `best` identico y `lim_map` identico.**
-- **Paquete de obra desde el detalle del proyecto** (projects_ui): recalcula y arma el PDF sin pasar por
-  el Survey. Antes habia que reconstruir el proyecto en el Survey y volver a calcular.
-### ⚠️ Error que cometi
-Inserte `from core import plan_store` usando `lineno` del ultimo import; en `plumb_ui.py` el ultimo es
-un import **multilinea entre parentesis**, asi que la linea cayo DENTRO del parentesis → SyntaxError.
-Correcto: usar **`end_lineno`** del nodo AST, no `lineno`.
+### Reglas de Streamlit que nacieron aquí (todas siguen vigentes)
+| | Regla |
+|---|---|
+| **v110** | Un `st.button` **solo COMPUTA** y guarda en `session_state`; el render vive FUERA, o desaparece con cualquier interacción. Los efectos CAROS (IA, correo, escrituras) sí van dentro, para que no se repitan en cada rerun. Era el bug estructural de las 5 herramientas |
+| **v111** | **Nunca** escribir `st.session_state[clave_de_widget]` después de instanciar ese widget → patrón **pendiente + rerun** (aplicar antes de crear ningún widget). Es la regla más citada del documento |
+| **v112** | Todo `st.file_uploader` que dispare efectos necesita **guarda por identidad de archivo** (`f"{name}:{size}"`): el uploader CONSERVA el archivo entre reruns, así que sin guarda el efecto se repite en cada pasada y pisa lo que el usuario escribió |
+| **v117** | Si borras una clave de `session_state`: o la **reinicias** a su valor por defecto, o **todas** sus lecturas pasan a `.get()`. El acceso por atributo (`st.session_state.x`) lanza `AttributeError`; `.get()` no |
+| **v118** | Streamlit **descarta el estado de un widget que no se renderiza** en ese rerun. Si puede dejar de dibujarse (fases, tabs, condicionales) hay que «tocar» su clave (`st[k] = st[k]`) o su valor se pierde |
+| **v108** | Lecturas de **DISPLAY** siempre por lector cacheado; las rutas de **ESCRITURA** (`clock_in/out`, `add/delete`, `save_activities`, `_find_row`, `verify_login`) leen **FRESCO** a propósito |
 
-## Survey: chequeo al asignar campo + fin de la numeracion (v127)
-Revision de INTEGRACION del Survey. Se asignaban usuarios de campo **sin mirar nada de lo que la app
-ya sabe de ellos**, y la app lo sabe todo (v79 contacto, v104 credenciales):
-- **Credenciales**: aviso si algun asignado tiene una credencial **vencida o por vencer**
-  (`credentials.list_for` + `status`). Informativo, NO bloquea (un ticket puede estar en tramite).
-- **Contacto**: aviso si falta email o Telegram. Sin ellos no reciben la asignacion NI las inducciones,
-  y ademas no pueden usar la app (bloqueo duro de v79).
-- ⚠️ **El selector de campo se saco FUERA del `st.form`**: dentro de un form los widgets NO escriben en
-  session_state hasta el submit, asi que un aviso "en vivo" ahi dentro es imposible. Ahora el aviso
-  aparece al elegir, ANTES de guardar, que es cuando sirve.
-- **Fallo silencioso corregido**: el resultado de la notificacion se mostraba con `if _nn:` → si no se
-  notificaba a NADIE no se decia nada y parecia que habia salido. Ahora informa siempre: todos / parcial
-  / ninguno, y avisa aparte si no hay canales configurados.
-- **Numeracion 1-7 eliminada** (herencia del scroll unico anterior a v114): en Datos se veia 1,2,3 y en
-  Resultados 4,5,6,7 sin que existieran los otros. Titulos con icono y sin numero.
-### ⚠️ Error que cometi
-Llame `credentials.status_label(_estado)` cuando su firma es `status_label(vencimiento)` — recibe la
-FECHA, no el estado. `status_label("vencido")` devuelve **"—"** (porque `status("vencido")` no parsea y
-da ""), asi que el aviso habria mostrado "White Card: —" en vez de "🔴 vencido". Lo caza **inspeccionar
-la firma y probar la funcion con datos reales**, no asumir por el nombre.
+### Chequeos que nacieron aquí (repetirlos, no reinventarlos)
+- ⚠️ **v120 · `py_compile` no detecta un error semántico.** Un solo error de indentación sacó un bloque
+  fuera de su fase y dejó *tres* síntomas (NameError, pasos en la fase equivocada, matriz invisible) con
+  el fichero compilando perfecto. **Chequeo tras tocar el Survey:** por AST, los nombres que una fase USA
+  y solo la otra ASIGNA — en ambas direcciones debe dar vacío.
+- ⚠️ **v126 · dónde CAE la línea que insertas.** Un bloque metido fuera de `_render_survey_results` usaba
+  locales de esa función → `NameError` seguro, y el chequeo global de nombres NO lo ve (existen en otra
+  parte del árbol). Verificar la función contenedora y que sus locales estén asignadas ANTES de esa línea.
+- ⚠️ **v128 · al insertar tras un import, `end_lineno`, no `lineno`.** Con un import multilínea entre
+  paréntesis, `lineno` mete la línea DENTRO del paréntesis → SyntaxError.
+- ⚠️ **v125 · dos formas de romper una extracción:** copiar el RANGO del primer al último import (arrastra
+  lo que haya en medio — se coló la barrera de login entera, que se habría ejecutado AL IMPORTAR: hay que
+  recoger las líneas de CADA nodo import), y renombrar la llamada sin la definición (`ImportError` que
+  `py_compile` no ve → **importar el módulo de verdad** y resolver cada `from X import Y`).
+- ⚠️ **v127 · validar la FIRMA, no el nombre.** `credentials.status_label(estado)` cuando recibe una
+  FECHA devuelve `"—"` sin fallar: el aviso habría dicho «White Card: —» en vez de «🔴 vencido». Es el
+  primer caso de la que luego se llamaría regla v135.
+- ⚠️ **v121 · medir el SVG, no mirarlo.** En dos revisiones a ojo vi fallos que no existían y no vi el que
+  sí: la cabina salía FUERA del hueco. Se caza midiendo el DOM del SVG, no observándolo.
 
-## Survey lote 3: cierre de ciclo, paquete de obra y duplicados (v126)
-- **`core/field_pack.py` → `field_pack_pdf(...)`**: UN PDF con lo que necesita quien va a terreno —
-  cabecera del proyecto, isometrica del hueco, plantas por piso a escala y el replanteo de plomadas
-  (planta + isometrica + **ficha de medidas**). Tras v119-v123 las piezas existian pero SUELTAS: habia
-  que ir seccion por seccion descargandolas. NO lleva interpretaciones, log ni formulas: no es el
-  informe del cliente ni el de admin. Opcion "solo pisos con incidencias" (reusa `floors_with_issues`).
-  Boton en el Survey, dentro de `_render_survey_results`.
-- **Cierre del ciclo al guardar**: antes terminaba en el texto muerto "Gestionalo en Mi grupo →
-  Proyectos". Ahora hay boton **"Abrir proyecto ➜"** que navega de verdad: `_nav_pending` (aplicado
-  antes del radio `main_nav` en app.py) + `_prjsel_pending` (aplicado antes del selectbox
-  `adminproj_sel` en projects_ui) + `owner_sec` si es propietario. Patron pendiente+rerun de v111:
-  jamas escribir la clave de un widget ya instanciado.
-- **Aviso de duplicados**: `create_project` no comprobaba nada. Un proyecto = un elevador y el survey se
-  repite por elevador, asi que era facil crear el mismo dos veces y repartir horas/gastos entre
-  duplicados. Ahora compara el nombre normalizado contra los del grupo, lista los coincidentes y exige
-  marcar una casilla para crear igualmente.
-### ⚠️ Error que cometi (chequeo nuevo a repetir)
-Inserte el bloque del paquete en la fase Resultados pero **FUERA de `_render_survey_results`**, donde NO
-existen `best`/`lim_map`/`ctrl_in_frame_` (son locales de esa funcion) y ademas se dibujaba sin haber
-calculado → `NameError` seguro. El chequeo global de nombres NO lo detecta: esos nombres existen en OTRA
-parte del arbol. **Chequeo correcto: verificar en que funcion cae la linea insertada y que las locales
-que usa esten asignadas ANTES de esa linea, dentro de esa misma funcion.**
+### Dominio, del Survey y los planos (esto NO es historia, es cómo funciona)
+- ⚠️ **`TL` NO es la profundidad útil de la planta; es `TK`.** `BC_CALC = TS − TKSW − TK/2 − 25`, así que
+  desde la pared frontal TKSW (en obra, FL/FR) llega al **eje de rieles**, y ese eje está a **media
+  profundidad del cuerpo** (TK/2). Usar TL metía la cabina 1.176 mm hacia atrás y no cabía en TS (v121).
+- **OL/OR se miden desde el borde de la cabina** (`LIMIT_OL/OR = BKS/2 + RAIL/2 − BT/2 − FRAME`), así que
+  la apertura se POSICIONA con ellos (`dx0 = cx0 + OL`), no se centra y luego se rotula. Comprobación que
+  cierra: `OL + marco + BT + marco + OR = ancho de cabina` (v121).
+- ⚠️ **v122 · el optimizador va en pasos de 0,5 mm**, así que todo display de RL/FB o de la matriz lleva
+  **al menos 1 decimal**: con `.0f`, RL −6.0 y RL −6.5 daban la MISMA etiqueta y dos soluciones distintas
+  eran indistinguibles en el desplegable. Helper `diagrams._mm(v)` (entero si lo es, 1 decimal si no).
+- ⚠️ **v124 · el log del optimizador es SOLO del propietario** (ni el administrador del grupo cliente lo
+  ve): expone los pasos, los descartes y el porqué — la lógica propietaria que el agente tiene prohibido
+  revelar (v27) y que el informe del cliente excluye a propósito.
+- **v124 · leyenda de color** bajo cada matriz, con las MISMAS palabras que los planos: WR·WL·FR·FL
+  incumplen por DEBAJO del límite, OR·OL por ENCIMA.
+- ⚠️ **v119 · isométrica: planta a escala real pero ALTURA COMPRIMIDA**, y declarado en el subtítulo (18 m
+  contra 1,3 m sin comprimir es una astilla ilegible). El presupuesto reparte el alto entre el rombo de la
+  base y la columna; **no poner un piso mínimo a `kz`**, desborda el lienzo. Y en isométrica con Z arriba
+  solo se dibujan las caras que MIRAN al observador (esquina inferior = `x=max, y=max`).
+- **v119 · escala real con DETALLE ampliado** cuando la holgura mínima del piso baja de 25 mm (×3 a ×40):
+  es la razón de ser de la escala real — lo crítico se amplía en vez de falsear todo el plano. Las cotas
+  con vano <36 px sacan el valor afuera con directriz.
+- ⚠️ **v123 · `bs_check`** — BS del plano contra `SF1+BKS+2·RAIL+SF2`. Si no cuadran, el encaje usa
+  (BSR−BS)/2 y **los plomos quedan mal ubicados EN SILENCIO**. Se avisa en la app y en el dibujo.
+- **v123 · `di + DBP + dd = BSR` es una IDENTIDAD del modelo**, así que su valor no es como chequeo
+  interno sino **como verificación de obra**: el instalador mide di y dd con cinta y comprueba el cierre.
+- ⚠️ **v130 · el signo de `Cut*` no está definido en ninguna parte** y la UI solo mostraba el número
+  crudo. La leyenda dice «diferencia contra A (mismo valor con signo que la tabla)» en vez de «material a
+  cortar»: describe lo que se sabe sin afirmar una dirección de corte. **Sigue PENDIENTE de confirmar con
+  el usuario** — es decisión de dominio y el corte es irreversible.
 
-## Survey lote 2: extraido a core/survey_ui.py (v125)
-El Survey era el UNICO modulo grande dentro de `app.py`: **1243 de sus ~1650 lineas**, frente a
-plumb_ui (154), prestart_ui (147), timeclock_ui (206), projects_ui (1075), que si tienen el suyo.
-Esa concentracion causo v118 y v120 (indentacion en un archivo enorme con fases anidadas, compilaba
-perfecto y rompia en produccion). Ahora **app.py 321 lineas / core/survey_ui.py 1353**.
-- `render_survey_tab(_ROL, _GRUPO)`. Los parametros se llaman `_ROL`/`_GRUPO` A PROPOSITO: el cuerpo
-  movido los usa tal cual, asi la extraccion **no tuvo que renombrar nada** dentro de 1243 lineas.
-- Se mudaron con el: `SURVEY_COLS`, `USER_ONLY`, `_GRUPOS_PARAM`, `_cfg_from_state`, `_init_state`
-  (renombrado `init_state`, publico: app.py lo llama al arrancar). Unico consumidor externo era él.
-- Perfil de dependencias medido ANTES de mover: 48 nombres, 42 imports + 1 def + 5 asignaciones →
-  extraccion limpia. Merece la pena medir esto antes de cortar.
-### ⚠️ Dos errores que cometi y como se cazaron (repetir estos chequeos)
-1. **Copie el RANGO del primer al ultimo import** de app.py. Como app.py tiene imports en la l.200,
-   arrastro todo lo que habia en medio: **la barrera de login entera** (`if not render_login():
-   st.stop()`) quedo a nivel de modulo en survey_ui, y se habria ejecutado AL IMPORTAR. Correcto:
-   recoger las lineas de CADA nodo import, no el rango.
-2. **Renombre la llamada `init_state()` en app.py pero no la definicion** → `ImportError` seguro en
-   produccion. `py_compile` NO lo detecta. Lo caza **importar el modulo de verdad** y resolver cada
-   `from X import Y` contra el modulo real.
-### Chequeos que dejaron el cambio verificado
-`scratchpad/verificar.py`: (1) todo nombre resuelve dentro de la funcion —contando imports locales y
-`except as e`, o da falsos positivos—; (2) sin fugas entre fases; (3) el log sigue bajo `_ROL`;
-(4) nada de login/sesion se colo; (5) sin `_ROL` de modulo. Ademas: importar `core.survey_ui`,
-resolver todos los imports contra modulos reales (ojo: `from core import notify` da falso positivo,
-un submodulo no es atributo del paquete hasta importarlo), y **diff del cuerpo movido: 0 diferencias
-en 1243 lineas**.
+### Piezas que se construyeron en este tramo y siguen en uso
+- **`core/plan_store.py`** (v128) — el plano ÚNICO de la sesión: `guardar()` / `actual()` / `selector()`.
+  Antes había **cinco `file_uploader`** y el técnico subía el mismo PDF cinco veces. `selector` devuelve un
+  `_Plano` (BytesIO **con `.name`**) para que sustituya al UploadedFile sin tocar la lógica de los
+  llamadores, que usan `.name` como guarda de identidad (v112).
+- **`core/survey_calc.py` → `recalcular(params, matriz)`** (v128) — rehace SOLO la parte determinista del
+  cálculo (sin IA, sin correo, sin Streamlit) desde ParamsJSON+MatrizJSON, porque **la solución no se
+  guarda: es derivada**. Verificado dando `best` y `lim_map` idénticos al camino del Survey.
+- **`core/toolruns.py` + `tool_pdf.py` + `tool_save_ui.py`** (v129-v130) — lo que convirtió las 4
+  herramientas de cálculo de islas en algo que alimenta el proyecto: hoja `Calculos`, un solo generador de
+  PDF y un solo bloque de guardado. Drive en best-effort (si falla, la fila igual se guarda).
+- **`plumb_iso_svg` · `plumb_detail_svg` · `plumb_card_svg`** (v123) — la isométrica con los dos hilos
+  cayendo (el replanteo es una operación VERTICAL, que la planta no puede dar), el detalle 3D con caída de
+  hilo real, y la **ficha de replanteo**: en el andamio no hace falta un plano bonito, hacen falta 5
+  números legibles desde el móvil.
+- **`shaft_iso_svg(params, limits, solution, ns, lim_map, proyecto, h_piso)`** (v119) — isométrica 30° del
+  hueco completo, con los niveles con incidencia en rojo (reusa `floors_with_issues`).
+- **`user_report.py` como presentación** (v116) — portada a sangre (`_portada`), pie «X de Y»
+  (`_NumeradoCanvas`, 2 pasadas), **`numero_informe()` → `INF-AAAAMMDD-HHMM`** (único y ordenable, sin
+  estado), veredicto con semáforo, tarjetas KPI, glosario, alcance y bloque de firma.
+- **Solución ACTIVA elegible** (v115, `sol_activa`) — el optimizador propone varias óptimas y antes
+  diagramas/plomado/informe usaban SIEMPRE `best`; al elegir otra se reescribe `best` y se RECALCULA el
+  plomado, para que todo aguas abajo quede consistente. Con ella: `floors_with_issues` (filtro de pisos) y
+  `floor_plans_pdf` (diagramas sueltos, la vía SIN IA que hizo innecesario el paquete de obra en v146).
+- **Aviso de duplicados al crear proyecto** (v126) — un proyecto es un elevador y el survey se repite por
+  elevador; sin aviso era fácil crear el mismo dos veces y repartir horas y gastos entre duplicados.
+- **Survey en 2 fases** (v114) + **extraído a `core/survey_ui.py`** (v125, 1.243 líneas fuera de `app.py`)
+  + **`_cfg_from_state()`**, obligado porque el cómputo usaba locales de una fase que puede no renderizarse.
 
-## Survey lote 1: confidencialidad del log + leyenda de color (v124)
-Revision del Survey tras v113-v123. Dos incoherencias encontradas por inspeccion:
-- ⚠️ **El log del optimizador estaba a la vista de TODOS los roles**, incluido `campo` (el Survey esta en
-  `_HERR`, herramientas comunes). Expone los pasos evaluados, los descartes y por que → es la logica
-  propietaria que el agente IA tiene PROHIBIDO revelar (v27) y que el informe del cliente excluye a
-  proposito. En el Survey solo estaban protegidos el paso 6 (informe) y el 7 (guardar). Ahora el log es
-  **solo del propietario** (decision del usuario; ni el administrador del grupo cliente lo ve).
-  El reindentado del bloque (45 lineas) se hizo por AST y se VERIFICO por AST que el `with` quedara
-  dentro del `if _ROL` — es el mismo patron que causo v120, no se toca a mano.
-- **Las tablas llevaban color sin leyenda desde v93** (se quito del sidebar y nunca se repuso): celdas en
-  rojo/naranja sin nada que explicara el criterio. Nuevo `_leyenda_matriz()` bajo la matriz ajustada y
-  bajo la matriz de cada solucion. Usa las MISMAS palabras que los planos ("fuera de limite") para que
-  tabla y dibujo se lean como un solo lenguaje, y recuerda el criterio opuesto: WR·WL·FR·FL incumplen por
-  DEBAJO del limite, OR·OL por ENCIMA.
-Verificado que `cell_state` (tablas) y `_c` (dibujos) marcan EXACTAMENTE las mismas celdas, incluido el
-ajuste −70 del controlador en el ultimo nivel → no habia que tocar logica, solo paleta y palabras.
+### Módulos que nacieron en este tramo
+- **`core/credentials.py`** (v104) — hoja `Credenciales`; catálogo AU (White Card, Forklift, Dogging,
+  Rigging, EWP, Working at Heights, First Aid, Driver License + clases). `status(venc)` =
+  vigente / por_vencer (≤30 d) / vencido; `expiring(grupo)`; `notify_expiring` deduplicado por
+  `UltimoAviso` <25 d; `matrix(grupo)` para el cumplimiento del equipo (v107).
+- **`core/expenses.py`** (v105) — hoja `Gastos`. **Costo total = compras + mano de obra**, con
+  `labor_cost` = Σ(horas × tarifa/hora de cada persona) y la tarifa **por usuario** en `Login.TarifaHora`.
+  `Proyectos.Presupuesto` + `project_cost` → {compras, mano_obra, total, presupuesto, pct, over}.
+- ⚠️ **El fichaje se identifica por `Usuario` (login), no por Nombre** (v106): columna `Usuario` en la
+  hoja; las filas ANTIGUAS (sin ella) caen al `Nombre`. Evita mezclar las horas de dos homónimos — el
+  fallo que volvió en v151, v306, v319, v348 y que en v363 obligó a un resolvedor único (`clave_de`).
+- **Dos relojes en el fichaje** (v103): columna `Tipo` = `general` | `proyecto`, `switch_project` (cerrar
+  segmento + abrir otro en un toque) y `group_hours` con `sin_asignar = general − Σproyecto`. Nació con el
+  rol `conductor`, **que se eliminó en v163** al comprobar que era un subconjunto del campo; el modelo de
+  dos relojes se generalizó a todos los roles en v150.
+- **`extract_number_of_stops`** (v102) — el NS se lee del plano; el default de init bajó de 6 a **2**
+  (mínimo neutro), porque un 6 por defecto se quedaba pegado y nadie notaba que no se había leído.
 
-## Plomado: planta a escala + 2 vistas 3D + ficha de replanteo (v123)
-`plumb_svg` reescrito y 3 funciones nuevas en `core/plumb.py`. Mismo tratamiento CAD que las plantas.
-⚠️ **El fallo de fondo: el dibujo NO estaba a escala.** `sx` y `sy` mapeaban X e Y a rangos distintos →
-**vertical 1.7× la horizontal** (medido). El triangulo plantilla→plomos, que es JUSTO lo que se mide con
-cinta en obra, salia deformado. Ahora **una sola escala** mm→px; origen X = pared real izquierda (V4=0),
-eje Y = profundidad desde la pared frontal.
-- Lenguaje de plano: muros achurados, paredes teoricas en eje-punto, plomos como circulo+centro, cuerdas
-  d1/d2, cotas DBP/di/dd/DBPW/RW/LT, cajetin. Reusa `_hatch`/`_dim_h`/`_dim_v` de `diagrams.py`
-  (importadas, NO duplicadas; no hay ciclo porque diagrams no importa plumb).
-- **`plumb_iso_svg`** — isometrica con los DOS HILOS cayendo desde arriba hasta la solera, con su peso.
-  Es lo que la planta no puede dar: el replanteo es una operacion VERTICAL. Solo dibuja los planos que el
-  plomado conoce de verdad (paredes reales izq/der + frontal); **el fondo se deja abierto** porque el
-  plomado no recibe TS. Altura esquematica (no recibe la altura del hueco) y se declara en el pie.
-- **`plumb_detail_svg`** — detalle 3D de ejecucion. ⚠️ La 1a version era un plano inclinado con el mismo
-  triangulo que la planta, deformado por la proyeccion: **anadia ruido, no informacion**. Se reoriento
-  dandole CAIDA de hilo real (`Hh = dbp*0.72`) para que ensene la vertical. Presupuesto de lienzo
-  obligatorio (alto de hilo + rombo del plano) o C2 se sale por abajo.
-- **`plumb_card_svg`** — ficha de replanteo: DBP, d1, d2, di, dd en tipografia grande + la comprobacion.
-  En el andamio no hace falta un plano bonito, hacen falta 5 numeros legibles desde el movil.
-- **Cierre `di + DBP + dd = BSR`** — es una IDENTIDAD del modelo (verificado en los 3 modos), asi que su
-  valor NO es como chequeo interno sino **como verificacion de obra**: el instalador mide di y dd con
-  cinta y comprueba que cierran contra BSR.
-- **`bs_check`** — BS del plano vs `SF1+BKS+2·RAIL+SF2`. Si no cuadran, el encaje usa (BSR−BS)/2 y **los
-  plomos quedan mal ubicados EN SILENCIO**. Se avisa en la app (st.error) y en el dibujo. Lo descubri
-  tropezando yo mismo con un dato de prueba incoherente.
-- **Sacrificio Z/Omega** dibujado (lado, cuanto, y "NO CABE" si `fuera_rango`) en modo independiente.
-- `_n()` pasa a formato adaptativo: `DBPW = TKSW−150+fb` arrastra el fb del survey (pasos de 0.5 mm).
-- Integrado en app.py (survey), plumb_ui.py (pestana), report.py e user_report.py.
-- Verificado: PDF real en los 4 modos (survey / BSR<BS / BSR>BS / BS incoherente), cierre exacto en los
-  3 validos y aviso en el 4o; SVG sin `<defs>/<marker>/<pattern>`, svglib convierte los 4 graficos.
-
-## El optimizador trabaja en pasos de 0.5 mm — NO redondear al mostrar (v122)
-Pregunta del usuario: "la solucion activa redondea los valores?". Respuesta: **el dato NO se redondea
-en ningun punto del calculo**; el selectbox guarda el dict completo (`r["optimizer_result"]["best"] =
-_nueva`). Pero **varias PANTALLAS si redondeaban a entero**, y una de ellas causaba un problema real:
-- `optimizer.optimize` barre `np.arange(-max_rl, max_rl+0.5, 0.5)` → **RL y FB pueden ser x.5**.
-- La etiqueta del selector de solucion activa usaba `:+.0f` → **RL −6.0 y RL −6.5 daban la MISMA
-  etiqueta** y las soluciones no se podian distinguir en el desplegable. Ahora `:+.1f`.
-- Esos medios milimetros se PROPAGAN a la matriz (`WL += rl`, `FR += fb`...), asi que las cotas del
-  plano con `.0f` rotulaban 71.5 como "72": la cota afirmaba un valor que no era el medido.
-- Nuevo helper **`diagrams._mm(v)`**: entero si el valor lo es, 1 decimal si no. Aplicado a
-  WL/WR/FL/FR/OL/OR/TK/BC, a la cota EJES y al Detalle. Asi las cotas siguen limpias donde el valor es
-  entero y revelan el medio milimetro donde existe.
-- Ya estaban bien (`.1f`): la metrica RL/FB del resumen, el informe cliente y el informe admin.
-⚠️ REGLA: cualquier display de RL/FB o de la matriz va con **al menos 1 decimal**. Con `.0f` no solo se
-pierde precision: se pueden volver INDISTINGUIBLES dos soluciones distintas.
-
-## Fix CRITICO de geometria en los dibujos (v121)
-Los planos de v119 salian con **la cabina fuera del hueco** (se escapaba por arriba del muro de fondo).
-Dos suposiciones mias, mal:
-**1. FL/FR NO llegan al frente de la cabina, llegan al EJE DE RIELES.** Identidad exacta de
-`calculations.py` l.98: `BC_CALC = TS − TKSW − TK/2 − 25` ⇒ `TS = TKSW + TK/2 + 25 + BC_CALC`. O sea,
-desde la pared frontal: TKSW (en obra = FL/FR) llega al eje de rieles, y **ese eje esta a MEDIA
-profundidad del cuerpo de cabina (TK/2)**. Yo situaba el frente de la cabina a (FL+FR)/2 del muro y
-ademas usaba TL como profundidad → con FL≈1176 y TL=2365 la cabina se iba 1176 mm hacia atras y no
-cabia en TS. Ahora: cuerpo **TK centrado en el eje de rieles**, rieles dibujados sobre los laterales a
-su profundidad real (FL izq / FR der, que es justo lo que se mide en obra), y cota **BC** atras.
-⚠️ TL (= CS+TKS+TSW) NO es la profundidad util para la planta; la profundidad del cuerpo es **TK**.
-**2. La apertura se centraba en un eje calculado pero se rotulaba con OL/OR medidos** → el numero no
-correspondia al tramo dibujado (en el caso real, OL 277 y OR 62 salian sobre tramos casi iguales).
-OL/OR se miden **desde el borde de la cabina** (ver `LIMIT_OL/OR = BKS/2 + RAIL/2 − BT/2 − FRAME`), asi
-que ahora la apertura se POSICIONA con ellos: `dx0 = cx0 + OL`, `dx1 = cx0 + (cab_w − OR)`, y el
-sobrante a cada lado es el FRAME, que se dibuja. La cota entre ejes pasa a rotular la distancia
-**medida** (`EJES n→R/L`) en vez del OFFSET de diseno, para no afirmar un numero que no se dibuja.
-- El "DETALLE" ampliado ya solo considera **WL/WR**: son las unicas holguras que se desvanecen a escala
-  real. FL/FR son distancias largas (pared→eje de rieles), no holguras.
-- `shaft_iso_svg` arrastraba el mismo error de profundidad: corregido igual.
-Verificado midiendo el SVG en el DOM con los datos reales del usuario: WL=72, WR=294, cabina 1288×2328,
-`cabina_dentro=true`, y OL 277 + marco 24,5 + BT 900 + marco 24,5 + OR 62 = **1288 = ancho de cabina**.
-⚠️ Leccion de proceso: en dos revisiones a ojo crei ver fallos que NO existian (nivel rojo, cabina
-atravesando el foso) y no vi este, que si era real. **Medir el SVG, no mirarlo.**
-
-## Fix CRITICO: indentacion rompio las 2 fases del Survey (v120)
-Regresion de **v118** que se detecto en produccion: `NameError: sc2` al entrar a Resultados, los 7 pasos
-saliendo en la fase Datos y **la matriz del survey invisible**. Un solo error de indentacion los causaba
-los tres. En el paso 3, el bloque del checkbox del Excel (lineas 1186-1194) quedo a **4 espacios en vez
-de 8**, o sea FUERA de `if _fase == _FASE_DATOS:`. Consecuencias en cadena:
-1. Ese bloque pasaba a ejecutarse en AMBAS fases → en Resultados `sc2` no existe → NameError.
-2. El `if` de la fase Datos **terminaba** en la linea 1185, asi que todo lo posterior (pasos 4-7) dejo de
-   estar dentro de la fase.
-3. Peor: las lineas siguientes (a 8 espacios) quedaron absorbidas como cuerpo del `if ... sc2.button(
-   "Volver a importar el Excel")`, que esta a 4 → el editor de la matriz y el import de Excel solo
-   existian dentro de esa rama, **y despues de un `st.rerun()`** → codigo inalcanzable. Por eso no se veia
-   la matriz y por eso cargar un Excel no hacia nada.
-Fix: reindentar 1186-1194 (+4). Verificado por AST: la fase Datos cubre los pasos 1-3 (1015-1307) y el
-`else` los pasos 4-7 (1312-1542).
-⚠️ **Chequeo que conviene repetir tras tocar el Survey** (detecta la clase de bug de v114/v118): comparar
-por AST los nombres que una fase USA y solo la otra ASIGNA. Ambas direcciones deben dar vacio. Un
-`py_compile` NO detecta nada de esto: el archivo compila perfecto, el error es semantico.
-
-## Dibujos del survey: plano tecnico a escala + isometrica (v119)
-`floor_plan_svg` reescrito. Antes era un esquema con holguras FALSEADAS (`_clearance_px` comprimia el
-valor a 14-92 px) y globos de color: se veia infantil y ademas **enganaba** (una holgura de 5 mm y otra
-de 200 mm se dibujaban casi igual).
-- **Proporcion REAL:** una sola escala mm→px para ancho y profundidad, derivada de la geometria que ya
-  existia (`ancho = WL + BKS+2·RAIL + WR`, `prof = TS`, `TL`, `BC_CALC`). Lo que se ve es lo que hay.
-- **Lenguaje de plano:** muros achurados, cotas con lineas de extension + marcas diagonales, jerarquia de
-  grosores (muro 2.4 / cabina 1.6 / cotas 0.6), ejes eje-punto, cajetin (PISO n/N, proyecto) y leyenda.
-  **El rojo se reserva** a las cotas fuera de limite (antes todo era de colores y no destacaba nada).
-- **Cotas cortas:** a escala real 45 mm ≈ 12 px y el numero no cabe entre las marcas → `_dim_h/_dim_v`
-  detectan el vano <36 px y sacan el valor afuera con directriz (solucion estandar de dibujo tecnico).
-- **DETALLE automatico** cuando la holgura minima del piso es <25 mm: amplia esa esquina con **escala
-  propia calculada** (llena el recuadro; ×3 a ×40) y marca el punto en el dibujo principal. Es la razon
-  de ser de la escala real: lo critico se amplia en vez de falsear todo el plano.
-- **Ambos desplazamientos:** OFFSET_CABIN como cota entre el eje de la cabina y el eje de la apertura;
-  RL/FB con contorno fantasma "POS. DISENO" **solo si el desplazamiento supera 2 px** — si no, iria
-  cota sobre cota ilegible, asi que los valores van a un recuadro DESPLAZAMIENTO siempre legible.
-- **`shaft_iso_svg(params, limits, solution, ns, lim_map, proyecto, h_piso)`** — isometrica 30° del hueco
-  completo: pisos apilados, puertas en la pared de acceso, cabina como bloque solido y **niveles con
-  incidencia en rojo** (reusa `floors_with_issues`, clave `matrix`). Lienzo VERTICAL (460×700).
-  ⚠️ **Planta a escala real pero ALTURA COMPRIMIDA y declarado en el subtitulo:** sin comprimir, 18 m
-  contra 1,3 m dan una astilla ilegible; comprimida al maximo deja de leerse como hueco. El presupuesto
-  reparte el alto entre el rombo de la base y la columna (`kz = (VH-200-diam)/H`; **no poner un piso
-  minimo a kz**, pisa el presupuesto y desborda el lienzo).
-  ⚠️ En isometrica con Z arriba solo se dibujan las caras que MIRAN al observador (esquina inferior =
-  `x=max, y=max`); dibujar las traseras saca cunas por fuera del solido.
-- Integrado en: app (expander "🧊 Vista isometrica", alto 730; plantas 500 px/piso), informe cliente
-  (§5 "Diagramas del hueco", isometrica + plantas) e informe admin. `report.py`/`user_report.py` pasan
-  `rl`/`fb`/`n_floors`/`proyecto`.
-- Se eliminaron `_clearance_px`, `_label_box`, `_state` y `_f` (0 usos tras el cambio).
-- Verificado: SVG valido, sin `<defs>/<marker>/<pattern>`, `svg2rlg` lo convierte y **los 24 textos
-  (incluidas las cotas rotadas) llegan al PDF**; PDF real de 3 paginas generado.
-
-## Fix: perdida de datos al cambiar de fase + Excel pisando el PDF (v118)
-**1. CRITICO — Streamlit descarta el estado de un widget que NO se renderiza en el rerun.** Con el Survey en
-2 fases (v114), al pasar a "Resultados" los `inp_*`, `ns`, `cfg_*` y proyecto/cliente/ubicacion/ingeniero
-(que solo se dibujan en "Datos") se PERDIAN. Fix: al inicio de la seccion, antes de crear ningun widget, se
-re-asignan a si mismas (`st.session_state[k] = st.session_state[k]`) -> las mantiene vivas entre fases.
-REGLA: si un widget puede dejar de renderizarse (fases/tabs/condicionales), hay que "tocar" su clave en cada
-rerun o su valor se pierde.
-**2. El import de Excel pisaba los parametros leidos del PDF.** El .xlsx guarda tambien parametros y
-configuracion y se restauraban siempre. Ahora hay checkbox "Restaurar tambien parametros y configuracion"
-(por defecto DESMARCADO: solo se importa la matriz, el plano manda) + boton "Volver a importar el Excel"
-para reimportar con otra opcion. El mensaje de exito indica que se importo.
-
-## Fix: crash tras "Empezar un survey nuevo" (v117)
-`AttributeError` en `st.session_state.last_pdf_name`. El reset de v113 BORRABA claves que luego se leen con
-acceso por ATRIBUTO (`st.session_state.last_pdf_name`, `.calc_results`...). `_init_state()` no las repone
-porque solo corre una vez (flag `initialized`), asi que la clave quedaba ausente y el acceso por atributo
-lanza AttributeError (el acceso por `.get()` no).
-Fix doble: (1) el reset ahora **reinicia a su valor por defecto** las claves criticas (pdf_extracted,
-last_pdf_name, pdf_bytes, ns, survey_df, calc_results, proyecto/cliente/ubicacion/ingeniero) en vez de
-borrarlas; solo se borran las auxiliares. (2) las lecturas de esas claves pasan a `.get()`.
-REGLA: si borras una clave de session_state, o la reinicias, o todas sus lecturas usan `.get()`.
-
-## Informe del CLIENTE rediseñado como presentacion (v116)
-`core/user_report.py` reescrito en forma (el contenido tecnico se conserva). Concepto: documento visual,
-no una lista de secciones.
-- **Portada a sangre** dibujada en el canvas (`_portada`): azul COPEX, logo (`static/icon-512.png`),
-  titulo grande y ficha del proyecto (cliente, proyecto, ubicacion, nº informe, fecha, paradas, preparado por).
-- **Pie con paginacion "X de Y"** + barra de acento lateral en todas las paginas de contenido:
-  `_NumeradoCanvas` (2 pasadas, receta estandar de ReportLab). La portada no lleva pie.
-- **Nº de informe automatico**: `numero_informe()` -> `INF-AAAAMMDD-HHMM` (unico y ordenable, sin estado).
-- **Separadores de seccion tipo diapositiva** (`_section`): numero grande + titulo sobre banda azul.
-- **Veredicto con semaforo** (`_veredicto`) al inicio Y en conclusiones: apto / apto con observaciones /
-  sin solucion, derivado de `total_off`.
-- **Tarjetas KPI** (`_kpi_cards`), **callouts** (`_callout`) para lo accionable, **tablas cebra** (`_zebra`).
-- **Secciones nuevas**: 10 Alcance y metodologia + limitaciones, 11 Glosario en tarjetas 2 columnas,
-  12 Conclusiones + bloque de firma (preparado por / recibido por). Indice de contenidos tras el veredicto.
-- **Datos ampliados**: el Survey ahora pide Proyecto / Cliente / Ubicacion / Ingeniero (antes 'Proyecto o
-  Cliente' en un solo campo). Van a `all_params` (CLIENTE/UBICACION) y prellenan el guardado de proyecto.
-Validado generando un PDF real: 8 paginas con portada, nº informe, glosario, alcance, conclusiones y firma.
-
-## Survey mas pro: 8 mejoras (v115)
-1. **Solucion ACTIVA elegible** (`sol_activa`): el optimizador propone varias soluciones optimas pero antes
-   diagramas/plomado/informe usaban SIEMPRE `best`. Ahora un selectbox permite elegir otra por criterio de
-   obra; al cambiar se escribe `calc_results["optimizer_result"]["best"]` y se RECALCULA el plomado, asi
-   todo lo aguas abajo (diagramas, informes, guardar proyecto) queda consistente.
-2. **Resumen ejecutivo** arriba de los resultados: RL, FB, nº fuera de limite, nº de soluciones + semaforo.
-3. **Checklist listo-para-calcular** en la fase Datos (plano / parametros / matriz).
-4. **Diagrama con filtro de pisos**: `diagrams.floors_with_issues` + `render_floor_plans_html(floors=...)`
-   (conserva el indice real del piso, asi las etiquetas siguen bien). Modos: Con incidencias / Todos / Elegir.
-5. **Validacion temprana**: `validate_inputs` tambien en la fase Datos, no solo al calcular.
-6. **Duplicar para el siguiente elevador** (opcional): conserva parametros+config, limpia matriz y resultados.
-7. **Comparar soluciones lado a lado** (tabla con RL/FB/OFF por columna).
-8. **Exportar diagramas sueltos a PDF**: `diagrams.floor_plans_pdf` (reusa `report._svg_flowable`), se genera
-   bajo demanda con un boton (no en cada rerun).
-Al recalcular se descartan `sol_activa`, `_diag_pdf` y `diag_pisos` (evita indices fuera de rango/PDF viejo).
-
-## Survey en 2 fases (v114)
-Los 7 pasos en scroll unico se reorganizaron en **2 fases** con `st.radio` (NO st.tabs):
-**📝 Datos del survey** (pasos 1-3: plano, parametros, matriz) y **📊 Resultados e informes** (4-7:
-resultados, cronograma, informe cliente, guardar proyecto). Al pulsar "Calcular y ver resultados" se
-computa y salta solo a Resultados (via `_fase_pending` + rerun, porque no se puede escribir la clave de
-un widget ya instanciado). En Resultados hay boton "Recalcular con los datos actuales".
-**Cambio tecnico obligado:** el computo usaba variables locales del paso 2 (`omega_side`, `wall_limiting`,
-`ctrl_side`...) que NO existen cuando esa fase no se renderiza -> nuevo `_cfg_from_state()` que lee la
-configuracion de session_state (fuente de verdad). Lo usan `_survey_signature()` y `_do_calculo()`.
-El bloque del boton se convirtio en la funcion `_do_calculo()`, invocable desde ambas fases.
-Definidos fuera de las fases (accesibles a las dos): make_highlighter, _survey_signature,
-_render_survey_results, _do_calculo.
-
-## Survey: estetica e integracion (v113)
-- **Marca por campo ✅/✏️** en los parametros del plano + metrica "Leidos del plano: X/17" y aviso con los
-  que faltan. Recupera la senal perdida en v93 al quitar el panel del sidebar (sin volver a ocupar el sidebar).
-- **Parametros agrupados por significado** (`_GRUPOS_PARAM`): Hueco / Cabina / Puerta-umbral / Frontal /
-  Laterales / Contrapeso, en vez de una grilla plana de 17 numeros. Lo no agrupado cae en "Otros".
-- **Configuracion** con titulo propio; "Parametros del usuario" -> "Parametros medidos en obra".
-- **Boton "Empezar un survey nuevo"** (expander con aviso): limpia inp_*/cfg_*/ns/matriz/resultados de la
-  sesion. Se procesa ANTES de crear los widgets (misma regla que el import).
-- **Integracion con Reconstruir proyecto:** projects_ui marca `_rebuilt_from`; el Survey muestra
-  "Cargaste el proyecto X, pulsa Calcular" y el aviso se limpia al calcular.
-
-## Fix CRITICO: el import de Excel se repetia en cada rerun (v112)
-Regresion introducida por v111. El `file_uploader` CONSERVA el archivo entre reruns; el bloque de import
-estaba bajo `if uploaded_excel is not None:` (sin guarda). Antes de v111 no se notaba porque el import
-crasheaba de inmediato; al arreglarlo, pasaba a re-importar en CADA rerun y **pisaba los valores leidos del
-PDF o escritos a mano** ("los valores se modifican solos"), ademas de re-lanzar rerun.
-Fix: guarda `last_excel_id = f"{name}:{size}"` (mismo patron que la carga de PDF, que si la tenia). Se marca
-tanto en exito como en error (no reintenta en bucle). Ademas NADA se muta hasta tener todo parseado: la
-matriz tambien viaja en `_import_pending["df"]` y se aplica arriba con el resto.
-REGLA: todo `st.file_uploader` que dispare efectos debe llevar guarda por identidad de archivo.
-
-## Fix import de Excel (v111)
-`st.session_state.ns cannot be modified after the widget with key ns is instantiated`. El import de la matriz
-escribia **claves de widgets YA creados** en la misma pasada: `ns` (Paso 3), todos los `inp_*` (Paso 2) y los
-`cfg_*` (Paso 2). Fallaba en el primero; los demas habrian fallado igual -> el import estaba roto entero.
-Fix (patron "pendiente + rerun"): el import guarda `st.session_state["_import_pending"] = {ns, params, cfg}`
-y hace rerun; al inicio de la seccion Survey, ANTES de crear cualquier widget, se aplica y se borra.
-`survey_df` si se escribe directo (no es clave de widget; el editor usa key="survey_editor").
-REGLA: nunca escribir st.session_state[clave_de_widget] despues de instanciar ese widget; usar pendiente+rerun
-(la carga de PDF ya lo hacia bien porque ocurre en el Paso 1, antes de los widgets).
-
-## Survey: resultados persistentes (v110)
-**Bug estructural corregido.** Todo el Paso 4 (matriz ajustada, resumen, soluciones del optimizador, log,
-diagramas de planta, BSR vs BS, plomado definitivo) se dibujaba DENTRO de `if st.button("Calcular")`, asi que
-cualquier interaccion posterior (cambiar un dato, descargar, abrir un expander, el chat) lo borraba y obligaba
-a recalcular. Refactor en `app.py`:
-- `_render_survey_results(r)`: funcion nueva con TODO el render, lee de `st.session_state.calc_results`.
-  Se llama FUERA del boton -> los resultados sobreviven a los reruns.
-- El boton ahora solo COMPUTA y guarda. Los efectos secundarios (optimize, find_bs_step, compute_plumb,
-  generate_interpretation/user, generate_report + send_usage_notification por correo) siguen DENTRO del boton
-  para que NO se repitan en cada rerun (antes: re-envio de correo / re-llamadas a la IA imposibles; ahora
-  garantizado por construccion).
-- `_survey_signature()`: huella md5 de parametros+config+matriz. Se guarda en `_calc_sig` al calcular; si al
-  redibujar la huella cambio, avisa "resultados del calculo anterior, pulsa Calcular".
-Verificado: orden sig<render<boton<render-persistente<PASO5, efectos secundarios dentro del boton, y cero
-nombres indefinidos en la funcion de render (chequeo AST).
-
-## Limpieza de codigo muerto (v109)
-Auditoria: se listaron todas las `def` y se conto su uso real en el repo. Eliminado (0 referencias):
-- `timeclock.validate_user` + `_get_users_ws` + `USERS_SHEET`/`USERS_HEADERS` -> **flujo viejo de PIN**
-  (el login por PIN se reemplazo por auth en v53). Al borrarlo, la app ya NO puede recrear la pestana
-  `Usuarios` del Sheets.
-- `timeclock.get_records`, `auth.can_manage_users`, `manuals.manual_names`, `alerts.open_count`,
-  `projects.set_estado_manual`, `session_cookie.available`.
-Verificado tras la limpieza: los 40 modulos compilan e importan; no hay imports sin usar.
-Pestanas del Sheets en uso: Sheet1(fichaje), Login, Grupos, Proyectos, Actividades, Agrupaciones,
-Documentos, Rieles, Alarmas, Manuales, PreStarts, Credenciales, Gastos. **`Usuarios` ya no se usa.**
-
-## Auditoria de llamadas #2 (v108)
-Auditoria completa de `get_all_records` por funcion contenedora (display vs escritura). Hallazgos y fix:
-- `timeclock.open_sessions` y `timeclock.group_hours` leian la hoja ENTERA **en cada render** (pestana de
-  fichaje y reporte de horas). Fix: `timeclock._cached_records()` (ttl 20 s) + `_invalidate_records()` al
-  hacer clock in/out (asi el estado del reloj se ve al instante tras fichar).
-- `auth.list_groups` leia la hoja Grupos en cada render de los paneles del propietario. Fix: `_group_records`
-  (ttl 60 s) + `_invalidate_groups()` en add/delete.
-- `expenses.group_expenses` recorria todos los proyectos (project_cost/labor_cost) en cada render -> cacheado 60 s.
-REGLA: lecturas de DISPLAY siempre por lector cacheado; las rutas de ESCRITURA (clock_in/out, add/delete,
-save_activities, _find_row, verify_login/session) leen FRESCO a proposito.
-
-## Lote 2 + extras (v107)
-- **Matriz de compliance:** `credentials.matrix(grupo)` -> (tipos, filas) usuarios x credenciales con
-  semaforo (verde vigente / amarillo por vencer / rojo vencido / - no registrada). En admin -> Usuarios -> Credenciales.
-- **Panel del propietario con tarjetas:** `render_owner_projects` usa `_portfolio_html(show_group=True)`
-  (badge del grupo en el subtitulo) + la tabla queda en un expander.
-- **Resumen multi-grupo del propietario:** `admin_digest.owner_digest()` (cacheado 60 s) -> nueva seccion
-  Administracion -> "Resumen": por grupo activos/avance/retrasos/alarmas/vencidos/credenciales/sobre presupuesto.
-- **Dashboard de agrupacion:** `projects_ui._dashboard_agrupacion` en el panel de Agrupaciones: avance
-  consolidado ponderado, elevadores, horas, costo total vs presupuesto sumado, tabla por proyecto + barras.
-- **Reconstruir proyecto:** en el detalle, "Cargar este proyecto en el Survey" restaura ParamsJSON+MatrizJSON
-  a session_state (inp_*, ns, survey_df) para recalcular y regenerar informes.
-- **Briefing por Telegram/email:** boton "Enviarmelo" en el Resumen del dia (usa notify.notify_user).
-  Limitacion: Streamlit no tiene cron, se envia a demanda (no a una hora fija).
-- **Login persistente con cookies:** `core/session_cookie.py` (extra-streamlit-components, import PEREZOSO
-  con fallback: sin la libreria la app funciona igual). Guarda `usuario|token` 7 dias; al abrir valida con
-  `auth.validate_session(usuario, token)` contra la hoja Login (token = el de la sesion unica) y restaura.
-  Se limpia al cerrar sesion. Dependencia nueva en requirements.
-- **Ronda de optimizacion (como v92):** `projects.gaps_by_group` (cache 60 s) evita reconstruir el cronograma
-  de cada proyecto varias veces por render (KPIs + tarjetas + tabla + radar); `admin_digest.group_digest` y
-  `expenses.over_budget` cacheados 60 s. Nuevos helpers `delays_of_group` / `aheads_of_group`.
-
-## Lote de mejoras + fichaje por USUARIO (v106)
-- ⚠️ **Fichaje identificado por Usuario (login), no por Nombre.** Columna `Usuario` en la hoja de fichaje
-  (migra sola). `timeclock._matches(r,usuario,nombre,grupo)`: usa `Usuario`; las filas ANTIGUAS (sin
-  Usuario) caen al `Nombre`. clock_in/clock_out/open_sessions/switch_project aceptan `usuario=`;
-  `group_hours` agrupa por usuario (devuelve `usuario` + `nombre`). `auth.rate_map` indexa por Usuario **y**
-  por Nombre (respaldo); `expenses.labor_cost` costea por Usuario. Evita mezclar horas de homónimos.
-- **Adelantos:** `projects._gaps_for` → `delays_for` (gap>0.5) y **`aheads_for`** (gap<-0.5). Tarjetas del
-  admin: retraso = borde rojo + ⏰ N d; **adelanto = borde verde + ⏩ N d**. Tabla del propietario: columna ⏩.
-- **Presupuesto al crear** el proyecto (survey → Guardar como proyecto, `create_project(presupuesto=)`).
-- **Gráficas de costos** en 💰 Gastos: barras costo por proyecto (compras vs MO) y por categoría (st.bar_chart).
-- **Reenvío de inducciones**: si el admin cambia `InduccionLinks` al editar, se reenvían a los ya asignados.
-
-## Control de costos por proyecto: gastos + mano de obra (v105)
-`core/expenses.py` — hoja **`Gastos`** (ID,ProyectoID,Grupo,Fecha,Categoria,Proveedor,Descripcion,Valor,
-DriveID,Archivo,CreadoPor,Creado; migra sola). Recibos por proyecto (foto/PDF a Drive, carpeta "COPEX
-Recibos") + valor + categoría (`CATEGORIAS`). Los cargan **admin, campo y conductor**.
-- **Costo total = compras + mano de obra.** `labor_cost(pid,grupo)` = Σ (horas de cada persona en el proyecto
-  × su **tarifa/hora**). Tarifa **por usuario**: columna `Login.TarifaHora` (v105; `auth.set_rate`,
-  `auth.rate_map` {Nombre:tarifa}, incluida en `list_users`). El fichaje se cruza por Nombre.
-- **Presupuesto por proyecto**: columna `Proyectos.Presupuesto` (editable en el detalle). `project_cost` →
-  {compras, mano_obra, total, presupuesto, pct, over}. Sobre presupuesto entra al **radar** (`sobre_presupuesto`
-  en admin_digest → chip 💸 en Resumen del día + briefing).
-- UI (`projects_ui`): `render_expenses(pid,grupo,can_delete)` (panel de costos + cargar recibo + lista +
-  descargar/eliminar) en el detalle admin (can_delete), 📋 Mis proyectos (campo) y 📋 Proyectos (conductor,
-  selector). Reporte del admin: 🛠 Mi grupo → **💰 Gastos** (`render_group_expenses`: por proyecto compras/MO/
-  total/presupuesto/%, desglose por categoría, **export CSV**). Tarifa se fija en 🔧/👥 Usuarios (`set_rate`).
-
-## Credenciales / tickets por usuario (v104)
-`core/credentials.py` — hoja **`Credenciales`** (ID,Usuario,Grupo,Tipo,Numero,Clase,Emision,Vencimiento,
-DriveID,Archivo,Nota,UltimoAviso,ActualizadoPor,Fecha; migra sola). Catálogo AU (`CATALOGO`: White Card,
-Forklift LF, Dogging DG, Rigging RB/RI/RA, EWP/Boom WP, Working at Heights, First Aid, Driver License +
-clases, Otro). `status(venc)` = vigente/por_vencer(≤30 d)/vencido/''; `expiring(grupo)`; CRUD `add/update/
-delete`; `upload_file` (foto/documento a Drive, carpeta "COPEX Credenciales"); `notify_expiring(grupo)`
-(avisa admin/propietario + usuario dueño, deduplicado por UltimoAviso <25 d).
-- Gestión (admin en 🔧 Usuarios, propietario en 👥 Usuarios): `auth_ui.render_credenciales(usuario,grupo,
-  editable=True)` — agregar (al crear el usuario o luego)/editar/eliminar + subir foto o documento. El aviso
-  de vencimientos se dispara 1 vez por sesión al abrir el panel del admin.
-- El usuario ve las suyas: `auth_ui.render_my_credentials` → nav **🎫 Mis credenciales** (campo y conductor).
-- **Radar:** `admin_digest.group_digest` añade `cred_venc` → chip 🎫 en el Resumen del día + el briefing IA.
-
-## Rol conductor + fichaje de 2 relojes + cronómetro (v103)
-Nuevo rol **`conductor`** (auth.ROLES). Ficha con DOS relojes en paralelo (hoja fichaje gana columna
-**`Tipo`** = `general`|`proyecto`, migra sola en `_cached_ws`; filas viejas = proyecto):
-- **Jornada general** (total de horas del día) + **segmentos por proyecto** (para fichar a un proyecto
-  DEBE haber jornada general abierta). Un usuario puede tener 1 general + 1 proyecto abiertos a la vez.
-- `timeclock`: `clock_in/clock_out(..., tipo)`, `open_sessions(nombre,grupo)`, `switch_project` (cambio en
-  1 toque = cierra segmento + abre nuevo), `elapsed_seconds`, `group_hours(grupo,days)` (resumen por usuario:
-  general, proyecto, **sin_asignar = general − Σproyecto** = transporte/espera, y desglose por proyecto).
-- UI `timeclock_ui`: `_render_normal` (todos los roles: proyecto + **cronómetro en vivo** client-side JS,
-  `_chronometer`) y `_render_conductor` (2 relojes, cronómetro en ambos, cambio de proyecto, aviso de jornada
-  olvidada `_aviso_olvido`). **El cronómetro es para TODOS** los roles en el fichaje.
-- Nav conductor: `⏱ Fichaje` (2 relojes) + `📋 Proyectos` (`projects_ui.render_conductor_projects`: lista
-  solo lectura, datos básicos + Maps, SIN avances ni actividades).
-- Reporte **solo admin**: 🛠 Mi grupo → **⏱ Horas** (`projects_ui.render_group_hours`) = horas de TODOS los
-  usuarios del grupo (Hoy/Semana/Mes/Todo) con general, proyectos, sin asignar y desglose. Sesiones abiertas
-  cuentan con el tiempo transcurrido. Creación de conductores: admin en 🔧 Usuarios (rol campo|conductor;
-  conductor no exige email/Telegram).
-
-## Fix NS desde el plano (v102)
-NS (número de paradas) volvía a quedar pegado en un default de 6 y **no se leía del PDF**. Fix:
-`extractors.schindler.extract_number_of_stops(pdf)` (regex `NUMBER OF STOPS\s+(\d{1,2})` sobre texto
-posicional + plano) → app.py, al cargar el PDF, setea `st.session_state["ns"]` (2–50) y muestra caption
-`ns_msg`. El default de init pasó de **6 → 2** (mínimo neutro; el NS real sale del plano). La lógica de
-resize de la matriz (survey_df) ya ajusta las filas al cambiar NS. Validado: NORTH SYD y AGECARE → NS=6
-(coincide con travel/floor-height HQ/HE).
-
+### Símbolos que solo se nombran en este tramo
+Se listan porque al comprimir eran las ÚNICAS menciones del documento; el detalle está en el código.
+- **`diagrams`**: `_hatch` · `_dim_h` · `_dim_v` (achurado y cotas) — ⚠️ `plumb.py` los **importa**, no los
+  duplica, y no hay ciclo porque `diagrams` NO importa `plumb`. Además `_leyenda_matriz()` y
+  `render_floor_plans_html(floors=…)`.
+- **`user_report`**: `_portada` · `_NumeradoCanvas` · `_section` · `_veredicto` · `_kpi_cards` ·
+  `_callout` · `_zebra` · `numero_informe()`.
+- **`plumb`**: `plumb_iso_svg` · `plumb_detail_svg` (caída de hilo `Hh = dbp*0.72`) · `plumb_card_svg` ·
+  `bs_check`.
+- **dibujos de corte**: `rail_cut.rail_cut_svg(res, caso, n2500, n5000)` (Caso 1 = alzado real contra la
+  pila A; Caso 2 = barras, porque ahí no hay pila que dibujar sin inventarla) y `buffer_cut.buffer_cut_svg`.
+- **`survey_ui`**: `_do_calculo()` · `_survey_signature()` · `_cfg_from_state()` · `SURVEY_COLS` ·
+  `USER_ONLY` · `_GRUPOS_PARAM` · `_rebuilt_from` (marca de «reconstruido desde el proyecto»).
+- **caché y helpers nacidos aquí**: `timeclock._cached_records` / `_invalidate_records` ·
+  `auth._group_records` / `_invalidate_groups` · `auth.rate_map` · `timeclock.elapsed_seconds` ·
+  `projects.gaps_by_group` · `projects._gaps_for` → `delays_for` / `aheads_for` · `expenses.over_budget` ·
+  `expenses.CATEGORIAS` · `credentials.list_for` / `credentials.matrix` · `auth_ui.render_my_credentials` ·
+  `projects_ui._dashboard_agrupacion` / `render_group_hours`.
+- ⚠️ **v109 · la hoja `Usuarios` del Sheets ya no se usa y la app NO puede recrearla**: al sustituir el
+  login por PIN con `auth` (v53) se borró su flujo entero (`timeclock.validate_user`, `_get_users_ws`,
+  `USERS_SHEET` / `USERS_HEADERS`). Si algún día reaparece esa pestaña, no la ha creado esta app.
 ## HOME del admin: densidad + 3 columnas + fix de los deep-links del resumen (v303)
 El usuario: *"la veo muy vacía; la agenda y los proyectos están arrinconados; el resumen del día
 ocupa mucho espacio; y arriba del buscador hay un espacio en blanco"*. Además dejó dos decisiones
@@ -6152,6 +5787,8 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v401 | **Narrativa v102-v130 comprimida**: 29 secciones y 502 líneas → 137, conservando las 6 REGLAS, los avisos ⚠️, el dominio de los planos y un índice de los símbolos que solo se nombraban ahí. ⚠️ Se comprimió **solo** eso: de las 889 líneas «antiguas», más de la mitad son el CONTRATO de un módulo (`plumb.py`, `auth.py`, `timeclock.py`, `projects.py`…) y llevan versión en el título sin ser narrativa. ⚠️ El chequeo no fue «parece bien»: se extrajo cada span de código del texto viejo y se comprobó que siguiera existiendo en el documento — y hubo que **afinar la sonda**, porque comparar el span literal daba 128 falsos perdidos (`_do_calculo()` no casa con `_do_calculo`) y empujaba a inflar el texto nuevo sin motivo. Documento: 6.498 → 6.133 líneas (549 → 519 KB) |
+| v400 | Documentación de v396-v399 en CLAUDE.md |
 | v399 | **El dinero tenía dos caras en la misma pantalla**: la celda pintaba `$27883` y la tarjeta de al lado `$27,883` (y el pie de esa MISMA tabla también, porque sale de `theme.dinero`). No era una columna: eran **39 en 7 módulos** — todas las TABLAS de dinero de la app sin separador de miles frente a todos los KPI con él. ⚠️ El veredicto no se puede leer en el DOM: `st.dataframe` pinta en canvas y su nodo accesible lleva el valor CRUDO, así que se midió **interceptando `fillText`** (trampa nº18). ⚠️ `%d` NO se cambió por `%.0f`: uno trunca y el otro redondea, y unificarlos habría movido cifras (trampa nº20). ⚠️ Las columnas EDITABLES probadas tecleando: el editor se siembra con `1500`, no con `$1,500.00`, y devuelve el número intacto. Guardián `verif_v399.py` + suite **53/53** |
 | v398 | **Existir no es servir**: la columna «Sin facturar» era la décima de trece y, medido en producción con la tabla a ~520 px, **había que hacer scroll horizontal para encontrarla** — no cumplía la función por la que se añadió. Se movió junto al nombre |
 | v397 | **Facturar desde la cartera**: insignia con el importe + botón «Facturar» en la tarjeta (solo donde hay pendiente y solo para gestión), columna «Sin facturar» ORDENABLE en la lista, y el atajo en la cabecera de la ficha. `pendiente_por_proyecto` es la ÚNICA definición del mapa (`finance.sin_facturar` delega) y `_ir_a_facturar` la única de la navegación. ⚠️ Falsa alarma resuelta midiendo: el botón salía dos veces en el DOM y el segundo mide 0×0 — es el nodo del tooltip de `help=` |
