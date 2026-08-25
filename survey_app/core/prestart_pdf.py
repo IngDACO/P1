@@ -124,6 +124,68 @@ def _notebox(text, st, holgura=26):
     return t
 
 
+def generate_anexo_firmas_pdf(info: dict) -> bytes:
+    """Hoja de ANEXO con las firmas de quien se incorporó a la obra más tarde (v403).
+
+    ⚠️ Se ANEXA, no se reescribe, y no es una preferencia de estilo: **las firmas
+    originales solo viven dentro del PDF ya emitido** — la hoja guarda nombre e
+    iniciales, nunca la imagen (v383) —, así que regenerar el documento entero
+    BORRARÍA la firma de quien sí estuvo en la charla de las 7:00. Y aunque se
+    pudieran recuperar, un documento de seguridad firmado no se reescribe: se le
+    añade una hoja, con su hora, igual que circula la hoja en papel.
+
+    `info` = {marca, ps_id, fecha, proyecto, location,
+              firmas: [{name, initial, sig, hora}]}
+    """
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=A4, leftMargin=15 * mm, rightMargin=15 * mm,
+                            topMargin=12 * mm, bottomMargin=12 * mm,
+                            title=f"Anexo de firmas · {info.get('ps_id', '')}")
+    st = _styles()
+    el = [Paragraph(_esc(info.get("marca", "")), st["PSBrand"]), _sp(2),
+          _band("ANEXO DE FIRMAS — incorporaciones posteriores a la charla", st,
+                "Estas personas ficharon en la obra después de emitirse el Pre-Start "
+                "y firmaron al llegar."),
+          _sp(4)]
+
+    ref = [[Paragraph("<b>Pre-Start</b><br/>" + _esc(info.get("ps_id", "")), st["PSInfo"]),
+            Paragraph("<b>Fecha</b><br/>" + _esc(info.get("fecha", "")), st["PSInfo"]),
+            Paragraph("<b>Proyecto</b><br/>" + _esc(info.get("proyecto", "")), st["PSInfo"]),
+            Paragraph("<b>Location</b><br/>" + _esc(info.get("location", "")), st["PSInfo"])]]
+    t = Table(ref, colWidths=[W * 0.18, W * 0.18, W * 0.32, W * 0.32])
+    t.setStyle(TableStyle([("GRID", (0, 0), (-1, -1), 0.5, C_BLACK),
+                           ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                           ("LEFTPADDING", (0, 0), (-1, -1), 5),
+                           ("TOPPADDING", (0, 0), (-1, -1), 4),
+                           ("BOTTOMPADDING", (0, 0), (-1, -1), 4)]))
+    el += [t, _sp(8)]
+
+    filas = [[Paragraph("<b>Print name</b>", st["PSQ"]),
+              Paragraph("<b>Initial</b>", st["PSQ"]),
+              Paragraph("<b>Signature</b>", st["PSQ"]),
+              Paragraph("<b>Hora</b>", st["PSQ"])]]
+    for a in (info.get("firmas") or []):
+        filas.append([Paragraph(_esc(a.get("name", "")), st["PSBody"]),
+                      Paragraph(_esc(a.get("initial", "")), st["PSQ"]),
+                      _celda_firma(a, st),
+                      Paragraph(_esc(a.get("hora", "")), st["PSQ"])])
+    # ⚠️ Mismo reparto que la tabla de asistentes del documento original: la columna
+    # de firma se lleva el 16,3% que v383 tuvo que reequilibrar, porque con el 9%
+    # de antes hasta el encabezado se partía por la mitad.
+    tf = Table(filas, colWidths=[W * 0.42, W * 0.12, W * 0.30, W * 0.16])
+    tf.setStyle(TableStyle([("GRID", (0, 0), (-1, -1), 0.5, C_BLACK),
+                            ("BACKGROUND", (0, 0), (-1, 0), C_BAND),
+                            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                            ("LEFTPADDING", (0, 0), (-1, -1), 5),
+                            ("TOPPADDING", (0, 0), (-1, -1), 4),
+                            ("BOTTOMPADDING", (0, 0), (-1, -1), 4)]))
+    el += [tf, _sp(10),
+           Paragraph("Este anexo no modifica el Pre-Start original: se añade a él. "
+                     "Cada firma queda con la hora en que se recogió.", st["PSSmall"])]
+    doc.build(el)
+    return buf.getvalue()
+
+
 def generate_prestart_pdf(data: dict) -> bytes:
     buf = io.BytesIO()
     doc = SimpleDocTemplate(buf, pagesize=A4, leftMargin=15 * mm, rightMargin=15 * mm,

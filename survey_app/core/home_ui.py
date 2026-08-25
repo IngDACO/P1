@@ -490,11 +490,38 @@ def _banda_prestart():
         if not prj:
             return                  # sin obra fichada no hay Pre-Start que reclamar
         pid = str(prj.get("proyecto_id", "") or "")
-        if not pid or prestart.hecho_hoy(pid, a.get("grupo", "")):
+        if not pid:
+            return
+        # ⚠️ v403: dos motivos distintos para avisar, y antes solo se veía el primero.
+        # Si la obra YA tiene Pre-Start hoy pero tú no estás entre los asistentes, el
+        # aviso no desaparece: cambia a «fírmalo». Hasta v402, quien fichaba después
+        # de la charla no recibía nada y acababa trabajando sin constar en el
+        # documento de seguridad.
+        _falta = not prestart.hecho_hoy(pid, a.get("grupo", ""))
+        _porfirmar = {} if _falta else prestart.pendiente_de_firma(
+            pid, a.get("grupo", ""), a.get("nombre") or a.get("usuario", ""))
+        if not _falta and not _porfirmar:
             return
     except Exception:
         return                      # nunca estorbar por un fallo del aviso
     _nom = str(prj.get("proyecto", "") or "esta obra")
+    if not _falta:
+        c1, c2 = st.columns([5, 1])
+        with c1:
+            st.markdown(
+                '<div style="background:#fff4e5;border-left:5px solid #e67e22;'
+                'border-radius:8px;padding:9px 14px;margin-bottom:10px;">'
+                '<span style="font-weight:700;color:#a35b12;font-size:16px;">'
+                '⚠️ Firma el Pre-Start de hoy</span>'
+                f'<span style="color:#7a5b3a;font-size:13px;"> · la charla de '
+                f'<b>{_nom}</b> ya está hecha, pero tú no constas entre quienes '
+                f'la firmaron.</span></div>', unsafe_allow_html=True)
+        with c2:
+            if st.button(":material/draw: Firmar", key="banda_ps_firmar",
+                         type="primary", use_container_width=True):
+                from core.timeclock_ui import _ir_a_prestart
+                _ir_a_prestart()
+        return
     c1, c2 = st.columns([5, 1])
     with c1:
         st.markdown(

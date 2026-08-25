@@ -135,6 +135,53 @@ def _projects_for(rol, usuario, grupo):
     return P.list_projects_for_field(usuario, grupo=grupo)
 
 
+def _bloque_firmar(info: dict, grupo: str, nombre: str, usuario: str):
+    """«La charla ya está hecha: firma tú» — para quien llega después (v403).
+
+    ⚠️ NO ofrece rehacer el Pre-Start, y es a propósito: la charla del sitio es una
+    por obra y día. Lo que faltaba no era otra charla, era **constar en la que hubo**.
+    """
+    from core import flash
+    with st.container(border=True):
+        st.markdown(":material/draw: **Esta obra ya tiene el Pre-Start de hoy — fírmalo**")
+        st.caption(
+            f"{info.get('id', '')} · lo registró **{info.get('facilitador', '') or '—'}**"
+            + (f" · {info.get('location', '')}" if info.get("location") else "")
+            + (" · ya firmaron: " + ", ".join(info.get("asistentes", []))
+               if info.get("asistentes") else ""))
+        c1, c2 = st.columns([1, 2])
+        ini = c1.text_input("Initial", value=_initials(nombre), key="ps_tarde_ini")
+        firma = None
+        st_canvas = _canvas_disponible()
+        with c2:
+            if st_canvas is not None:
+                st.caption("Firma aquí")
+                # ⚠️ 300 px, no los 600 por defecto del componente: en un móvil de
+                # 375 el lienzo se salía de la pantalla y no se podía firmar (v393).
+                res = st_canvas(stroke_width=2, stroke_color="#111111",
+                                background_color="#ffffff", height=90, width=300,
+                                drawing_mode="freedraw", key="ps_firma_tarde",
+                                display_toolbar=True)
+                firma = _firma_png(res)
+            else:
+                st.caption("Sin lienzo disponible: se registran las iniciales tecleadas.")
+        if st.button(":material/draw: Firmar el Pre-Start", key="ps_tarde_ok",
+                     type="primary"):
+            if st_canvas is not None and not firma:
+                st.error("Dibuja tu firma antes de enviarla.")
+            elif not str(ini or "").strip():
+                st.error("Pon al menos tus iniciales.")
+            else:
+                r = PS.firmar(info.get("id", ""), grupo, nombre, ini, firma, usuario)
+                if r.get("ok"):
+                    # ⚠️ por `flash`: lo que sigue es un rerun y se llevaría el mensaje (v365)
+                    flash.exito(f"Firmado. Se añadió tu firma al {info.get('id', '')} "
+                                "como hoja de anexo, sin tocar el documento original.")
+                    st.rerun()
+                else:
+                    st.error(r.get("error") or "No se pudo firmar.")
+
+
 def render_prestart_tab():
     st.markdown("### :material/health_and_safety: Pre-Start diario")
     st.caption("Registro de la charla de seguridad antes de empezar en obra. Genera el PDF, "
@@ -187,6 +234,22 @@ def render_prestart_tab():
     prj = idmap[sel]
     pid = str(prj.get("ID", ""))
     pgrupo = str(prj.get("Grupo", "")) or grupo
+
+    # ── ¿La charla ya está hecha y me falta firmar? (v403) ──
+    # ⚠️ Al CAMPO se le corta aquí: lo que necesita es constar en la charla que hubo,
+    # no rellenar otra. Dejarle el formulario completo debajo invitaría a emitir un
+    # SEGUNDO Pre-Start del mismo día y la misma obra — dos documentos para una charla,
+    # que es justo lo que hoy no impide nada. Gestión sí sigue, porque a veces hay que
+    # registrar una segunda charla de verdad (otro turno, otra cuadrilla).
+    try:
+        _pf = PS.pendiente_de_firma(pid, pgrupo, nombre or usuario)
+    except Exception as e:                                        # noqa: BLE001
+        logger.warning("prestart: no se pudo mirar la firma pendiente: %s", e)
+        _pf = {}
+    if _pf:
+        _bloque_firmar(_pf, pgrupo, nombre or usuario, usuario)
+        if rol == "campo":
+            return
 
     # ── Encabezado ──
     c1, c2, c3 = st.columns(3)

@@ -8,6 +8,7 @@ del proyecto en Drive + lo registra como documento → guarda una fila en la hoj
 
 Nombre de archivo: `ddmmyyyy AB CD EF.pdf` (fecha + iniciales de los asistentes).
 """
+import io
 import json
 import logging
 
@@ -171,6 +172,158 @@ def hecho_hoy(pid, grupo: str = "") -> bool:
         if _parse_date(r.get("Fecha")) == hoy:
             return True
     return False
+
+
+def _norm_nombre(s) -> str:
+    """Nombre comparable: sin acentos, sin dobles espacios y sin may/min.
+
+    ⚠️ Los asistentes se TECLEAN, así que comparar en crudo dejaría fuera a
+    «José Pérez» frente a «jose perez». Vive aquí y no en `num.py` porque es una
+    regla de este dominio, no de números; si algún día hace falta en otro sitio, se
+    sube a un módulo común en vez de copiarse (la lección de los cinco `_num`, v323).
+    """
+    import unicodedata
+    t = unicodedata.normalize("NFKD", str(s or ""))
+    t = "".join(c for c in t if not unicodedata.combining(c))
+    return " ".join(t.lower().split())
+
+
+def pendiente_de_firma(pid, grupo: str = "", persona: str = "") -> dict:
+    """El Pre-Start de HOY de esa obra que a `persona` le falta por firmar, o {}.
+
+    ⚠️ Complementa a `hecho_hoy`, no lo sustituye: aquel responde «¿hay que HACER la
+    charla?» (por obra y día) y este «¿tengo que FIRMARLA yo?». Son dos preguntas
+    distintas y confundirlas fue el hueco de v374: en cuanto el facilitador emitía el
+    Pre-Start, quien fichaba después no recibía ningún aviso y **acababa trabajando en
+    esa obra sin constar en el documento de seguridad**.
+
+    Devuelve {} si no hay Pre-Start hoy (entonces manda `hecho_hoy`: hay que hacerlo)
+    o si la persona ya está entre los asistentes.
+    """
+    pid = str(pid or "").strip()
+    quien = _norm_nombre(persona)
+    if not pid or not quien:
+        return {}
+    hoy = clock.today(grupo)
+    for r in _records():
+        if str(r.get("ProyectoID", "")).strip() != pid:
+            continue
+        if _parse_date(r.get("Fecha")) != hoy:
+            continue
+        d = leer(r)
+        # ⚠️ `leer` devuelve los asistentes ya como texto legible; se comparan
+        # normalizados. Si el nombre no casa se pedirá firmar otra vez, que es el
+        # fallo tolerable: el intolerable es no pedirlo nunca.
+        if quien in {_norm_nombre(a) for a in d.get("asistentes", [])}:
+            return {}
+        return {"id": str(r.get("ID", "")), "fecha": str(r.get("Fecha", "")),
+                "facilitador": str(r.get("Facilitador", "")),
+                "location": str(r.get("Location", "")),
+                "drive_id": str(r.get("DriveID", "")),
+                "archivo": str(r.get("Archivo", "")),
+                "asistentes": d.get("asistentes", [])}
+    return {}
+
+
+def firmar(ps_id: str, grupo: str, nombre: str, iniciales: str = "",
+           firma_png=None, usuario: str = "") -> dict:
+    """Añade la firma de quien llegó después AL Pre-Start ya emitido (v403).
+
+    Devuelve {ok, error, pdf, drive_id}. El PDF resultante es el original **más una
+    hoja de anexo**: ver `prestart_pdf.generate_anexo_firmas_pdf` para por qué no se
+    regenera el documento entero.
+    """
+    res = {"ok": False, "error": "", "pdf": None, "drive_id": ""}
+    ps_id = str(ps_id or "").strip()
+    if not ps_id or not str(nombre or "").strip():
+        res["error"] = "Falta el Pre-Start o el nombre de quien firma."
+        return res
+
+    w = _ws()
+    if w is None:
+        res["error"] = "No se pudo abrir la hoja de pre-starts."
+        return res
+    # ⚠️ FRESCO, no de la caché: esto decide en qué FILA se escribe (regla v323).
+    filas = w.get_all_records(numericise_ignore=["all"])
+    idx = next((i for i, r in enumerate(filas) if str(r.get("ID", "")).strip() == ps_id), -1)
+    if idx < 0:
+        res["error"] = f"No se encontró el Pre-Start {ps_id}."
+        return res
+    fila = filas[idx]
+    hora = clock.now(grupo).strftime("%H:%M")
+
+    # 1) el anexo, y el PDF final = original + anexo (pypdf, ya es dependencia)
+    nuevo_pdf, drive_id = None, str(fila.get("DriveID", "") or "")
+    try:
+        from core import drive_store
+        from core import prestart_pdf
+        anexo = prestart_pdf.generate_anexo_firmas_pdf({
+            "marca": grupo, "ps_id": ps_id, "fecha": str(fila.get("Fecha", "")),
+            "proyecto": str(fila.get("ProyectoID", "")),
+            "location": str(fila.get("Location", "")),
+            "firmas": [{"name": nombre, "initial": iniciales,
+                        "sig": firma_png, "hora": hora}]})
+        if drive_id and drive_store.is_available():
+            from pypdf import PdfReader, PdfWriter
+            orig = drive_store.download(drive_id)
+            wr = PdfWriter()
+            for p in PdfReader(io.BytesIO(orig)).pages:
+                wr.add_page(p)
+            for p in PdfReader(io.BytesIO(anexo)).pages:
+                wr.add_page(p)
+            out = io.BytesIO()
+            wr.write(out)
+            nuevo_pdf = out.getvalue()
+        else:
+            nuevo_pdf = anexo          # sin Drive, al menos queda el anexo suelto
+    except Exception as e:                                        # noqa: BLE001
+        logger.warning("prestart.firmar: no se pudo componer el PDF: %s", e)
+    res["pdf"] = nuevo_pdf
+
+    # 2) subir el PDF nuevo ANTES de tocar la fila, y borrar el viejo DESPUÉS
+    #    ⚠️ El orden importa (lección de v343): si se borrara primero y algo fallara,
+    #    el Pre-Start se quedaría sin documento. Así, en el peor caso hay un archivo
+    #    de más — visible y recuperable — en vez de uno de menos.
+    nuevo_id = ""
+    try:
+        from core import drive_store
+        from core import projects
+        pid = str(fila.get("ProyectoID", ""))
+        fname = str(fila.get("Archivo", "")) or f"{ps_id}.pdf"
+        if nuevo_pdf and pid and drive_store.is_available():
+            nuevo_id = drive_store.upload(pid, fname, nuevo_pdf, "application/pdf")
+            projects.add_document(pid, fname, "prestart", nuevo_id, usuario or nombre)
+    except Exception as e:                                        # noqa: BLE001
+        logger.warning("prestart.firmar: no se pudo archivar el PDF: %s", e)
+
+    # 3) la fila: el asistente se AÑADE a los que ya estaban
+    try:
+        asist = json.loads(fila.get("Asistentes", "") or "[]")
+    except Exception:
+        asist = []
+    asist.append({"name": str(nombre), "initial": str(iniciales or ""),
+                  "firmado": bool(firma_png), "hora": hora, "tarde": True})
+    try:
+        col_a = HEADERS.index("Asistentes") + 1
+        w.update_cell(idx + 2, col_a, json.dumps(asist, ensure_ascii=False))
+        if nuevo_id:
+            w.update_cell(idx + 2, HEADERS.index("DriveID") + 1, nuevo_id)
+        _invalidate()
+    except Exception as e:                                        # noqa: BLE001
+        res["error"] = f"No se pudo guardar la firma: {e}"
+        return res
+
+    # 4) ya con la fila apuntando al nuevo, el viejo sobra (best-effort)
+    if nuevo_id and drive_id and nuevo_id != drive_id:
+        try:
+            from core import drive_store
+            drive_store.delete(drive_id)
+        except Exception as e:                                    # noqa: BLE001
+            logger.warning("prestart.firmar: no se pudo borrar el PDF anterior: %s", e)
+
+    res["ok"] = True
+    res["drive_id"] = nuevo_id or drive_id
+    return res
 
 
 def _next_id(recs) -> str:

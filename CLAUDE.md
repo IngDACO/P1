@@ -5784,6 +5784,45 @@ producción a bajo coste. ⚠️ Y tiene trampa: **`st_folium(..., use_container
 (`route_ui.py`, `home_ui.py`) es un parámetro DEL COMPONENTE, no de Streamlit — convertirlo lo rompe,
 y es justo el arreglo de v307 que llenó el hueco blanco de la Ruta del día.
 
+## Quien llega después también firma el Pre-Start (v403)
+Duda del usuario: *«cuando alguien realiza el pre start y luego alguien llega y ficha en ese
+proyecto, tiene que firmar también. ¿Esto está funcionando así?»*. **No lo estaba**, y el hueco
+venía de una decisión propia de v374.
+- `hecho_hoy` responde «¿hay que HACER la charla?» — por obra y día, correcto para el recordatorio.
+  Pero el aviso colgaba SOLO de eso, así que en cuanto el facilitador emitía el Pre-Start, quien
+  fichaba después **no recibía nada**: ni modal, ni chip, ni banda. Nunca se le pedía firmar y
+  acababa trabajando en esa obra **sin constar en el documento de seguridad**.
+- Y aunque hubiera querido, no podía: `prestart.py` solo tenía `submit`, sin forma de añadir un
+  asistente a un Pre-Start ya emitido. La única salida era un SEGUNDO Pre-Start del mismo día y la
+  misma obra — dos documentos para una charla, y nada lo impide.
+- **`pendiente_de_firma(pid, grupo, persona)`** es la segunda pregunta: «¿tengo que firmarla YO?».
+  Convive con `hecho_hoy`, no lo sustituye; confundirlas fue justo el fallo.
+- **`firmar(ps_id, grupo, nombre, iniciales, firma_png, usuario)`** añade la firma.
+
+### ⚠️ Por qué se ANEXA una hoja en vez de regenerar el PDF
+Las firmas originales **no se guardan en ninguna parte**: la hoja guarda nombre, iniciales y un
+`firmado: true`, y la imagen vive solo dentro del PDF ya emitido (v383, por el tope de 50.000
+caracteres por celda). Así que regenerar el documento **borraría la firma de quien sí estuvo en la
+charla**. Se compone `original + anexo` con `pypdf` (ya era dependencia), y cada firma tardía queda
+con **su hora** y marcada `tarde: true`. Es además lo correcto de por sí: un documento de seguridad
+firmado no se reescribe, se le añade una hoja — como circula la hoja en papel.
+
+### Detalles que deciden
+- ⚠️ **Orden de escrituras** (lección de v343): se sube el PDF nuevo → se actualiza la fila → y
+  SOLO entonces se borra el viejo de Drive. Al revés, un fallo a mitad dejaría el Pre-Start sin
+  documento; así, en el peor caso sobra un archivo, que se ve y se recupera. Verificado midiendo el
+  orden real: `download → upload → add_document → delete`.
+- ⚠️ **El nombre se compara normalizado** (sin acentos, sin dobles espacios, sin may/min) porque los
+  asistentes se TECLEAN. Si aun así no casa, se pide firmar otra vez: ese es el fallo tolerable; el
+  intolerable es no pedirlo nunca.
+- ⚠️ **Al CAMPO se le corta el formulario** cuando solo le falta firmar: dejarle debajo el Pre-Start
+  completo invitaría a emitir el segundo documento del día. Gestión sí sigue viéndolo, porque a
+  veces hay una segunda charla de verdad (otro turno, otra cuadrilla).
+- ⚠️ `io` **no estaba importado** en `prestart.py` y el `BytesIO` iba dentro de un `try/except`: el
+  PDF se habría dejado de componer **en silencio**. Es el NameError latente de v370, cazado al releer.
+- El aviso no desaparece, **cambia de motivo**: banda, chip y modal pasan de «Falta el Pre-Start» a
+  «Fírmalo», con su propio `st.dialog` (el título va en el decorador, así que hacen falta dos).
+
 ## Versiones desplegadas (v399 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
@@ -5792,6 +5831,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v403 | **Quien llega después firma el Pre-Start**: hasta ahora, en cuanto alguien registraba la charla, el que fichaba más tarde en esa obra **no recibía ningún aviso** y trabajaba sin constar en el documento de seguridad — hueco de una decisión propia de v374, que ató el recordatorio a «¿hay charla?» olvidando «¿consto yo en ella?». Nuevas `pendiente_de_firma` y `firmar`; el aviso no desaparece, cambia de motivo. ⚠️ **Se ANEXA una hoja, no se regenera el PDF**: las firmas originales solo viven dentro del documento emitido (v383), así que rehacerlo borraría la de quien sí estuvo en la charla — se compone `original + anexo` con `pypdf` y cada firma tardía lleva su hora. ⚠️ Orden de escrituras de v343 (subir el nuevo → actualizar la fila → borrar el viejo), verificado midiendo el orden real. ⚠️ `io` no estaba importado en `prestart.py` y el `BytesIO` iba dentro de un `try`: el PDF se habría dejado de componer en silencio (el NameError latente de v370) |
 | v402 | **Facturar desde la LISTA**: el usuario avisó de que «desde la tabla de proyectos no puedo hacer los invoices, solo ver si ya está facturado o no» — y era una decisión mía de v397. Ahora elegir una fila **ya no abre el proyecto**: muestra las dos acciones explícitas («Abrir →» y «Facturar»), como Finanzas·Gastos (v215) y Usuarios (v226). Decisión suya sabiendo el coste: abrir pasa de 1 a 2 clics. ⚠️ **NO se hizo enlazando la celda**, que era la idea de partida, y eso se decidió MIDIENDO: un `LinkColumn` **ordena por la URL, no por el importe** (`$980 · $5,200 · $27,883 · $2,960` = el alfabético de los PRJ-####), y en el bundle que distribuye Streamlit su clic hace `window.open(url,"_blank")` + `preventDefault()` → no recarga la pestaña, pero **abre una pestaña nueva = sesión nueva**, o sea el login si no está tildada la cookie de v221. ⚠️ El guardián de v397 afirmaba «la lista NO factura»: **caducado**, reescrito sobre el principio que sigue vivo (ninguna acción puede colgar de la selección, todas bajo un botón) y probado contra el código roto |
 | v401 | **Narrativa v102-v130 comprimida**: 29 secciones y 502 líneas → 137, conservando las 6 REGLAS, los avisos ⚠️, el dominio de los planos y un índice de los símbolos que solo se nombraban ahí. ⚠️ Se comprimió **solo** eso: de las 889 líneas «antiguas», más de la mitad son el CONTRATO de un módulo (`plumb.py`, `auth.py`, `timeclock.py`, `projects.py`…) y llevan versión en el título sin ser narrativa. ⚠️ El chequeo no fue «parece bien»: se extrajo cada span de código del texto viejo y se comprobó que siguiera existiendo en el documento — y hubo que **afinar la sonda**, porque comparar el span literal daba 128 falsos perdidos (`_do_calculo()` no casa con `_do_calculo`) y empujaba a inflar el texto nuevo sin motivo. Documento: 6.498 → 6.133 líneas (549 → 519 KB) |
 | v400 | Documentación de v396-v399 en CLAUDE.md |

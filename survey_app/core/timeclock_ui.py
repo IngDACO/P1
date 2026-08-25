@@ -115,6 +115,35 @@ def _dialogo_prestart(obra: str):
         st.rerun()
 
 
+def _pend_firma_de(pid, grupo) -> dict:
+    """El Pre-Start de hoy de esa obra que a MÍ me falta firmar, o {} (v403)."""
+    a = st.session_state.get("auth", {}) or {}
+    try:
+        return prestart.pendiente_de_firma(pid, grupo,
+                                           a.get("nombre") or a.get("usuario", "")) or {}
+    except Exception:
+        return {}
+
+
+@st.dialog(":material/draw: Firma el Pre-Start de hoy", width="small",
+           on_dismiss=_ps_descartar)
+def _dialogo_firmar(obra: str, quien: str = ""):
+    """Pop-up cuando la charla YA está hecha pero tú no la has firmado (v403)."""
+    st.markdown(f"Acabas de fichar a **{obra}**. La charla de seguridad de hoy ya está "
+                "registrada, pero **tú no constas entre quienes la firmaron**.")
+    st.caption("La lista de asistentes es el registro de quién recibió la charla. "
+               "Tu firma se añade a ese mismo Pre-Start, en una hoja de anexo con su hora."
+               + (f" La registró {quien}." if quien else ""))
+    c1, c2 = st.columns(2)
+    if c1.button(":material/draw: Firmar ahora", type="primary",
+                 use_container_width=True, key="ps_dlgf_ir"):
+        _ps_descartar()
+        _ir_a_prestart()
+    if c2.button("Ahora no", use_container_width=True, key="ps_dlgf_no"):
+        _ps_descartar()
+        st.rerun()
+
+
 def aviso_prestart_pendiente(grupo: str = ""):
     """El modal, evaluado como CONDICIÓN de estado y no como evento de un solo uso.
 
@@ -136,12 +165,27 @@ def aviso_prestart_pendiente(grupo: str = ""):
     pid, nombre = str(p.get("pid", "")), str(p.get("nombre", ""))
     if not pid or st.session_state.get(f"_ps_visto_{pid}"):
         return
-    try:                                   # si ya lo hicieron, no se insiste
-        if prestart.hecho_hoy(pid, grupo or p.get("grupo", "")):
+    _g = grupo or p.get("grupo", "")
+    # ⚠️ El `try` cubre SOLO la consulta, no el diálogo. Antes envolvía las dos cosas y
+    # eso tenía un modo de fallo feo: si algo reventaba al pedir la firma, se caía al
+    # diálogo de «Falta el Pre-Start» y se le decía a alguien que la charla no estaba
+    # hecha cuando sí lo estaba — invitándole a emitir un SEGUNDO documento del día,
+    # que es justo lo que v403 viene a evitar. Lo destapó el guardián de v375.
+    try:
+        _hecho = prestart.hecho_hoy(pid, _g)
+    except Exception:
+        _hecho = False
+    if _hecho:
+        # v403: «ya lo hicieron» dejó de ser motivo suficiente para callarse. Si la
+        # charla está hecha pero yo no la firmé, el aviso no desaparece: cambia de
+        # motivo. Hasta v402 aquí se hacía `pop` y quien llegaba después de la charla
+        # no volvía a saber nada de ella.
+        _pf = _pend_firma_de(pid, _g)          # ya devuelve {} si algo falla
+        if not _pf:
             st.session_state.pop("_ps_aviso", None)
             return
-    except Exception:
-        pass
+        _dialogo_firmar(nombre or "esta obra", str(_pf.get("facilitador", "")))
+        return
     _dialogo_prestart(nombre or "esta obra")
 
 
@@ -153,6 +197,13 @@ def _chip_prestart(pid, nombre_obra, grupo):
     """
     try:
         if prestart.hecho_hoy(pid, grupo):
+            # v403: hecha pero sin mi firma → el chip sigue, con otro motivo
+            if not _pend_firma_de(pid, grupo):
+                return
+            st.warning(":material/draw: Firma el **Pre-Start** de hoy de esta obra.")
+            if st.button(":material/draw: Firmar", use_container_width=True,
+                         key="sb_ps_firmar"):
+                _ir_a_prestart()
             return
     except Exception:
         return                       # sin pre-starts configurados: no se estorba
