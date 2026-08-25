@@ -26,22 +26,49 @@ def is_configured() -> bool:
 
 
 def _ws():
-    ws, err = timeclock._get_worksheet()
-    if err:
-        return None, err
+    """La hoja `Rieles` — ⚠️ del libro MAESTRO, no del libro del grupo.
+
+    v404 · FALLO REAL: el catálogo de rieles es GLOBAL (v359 lo puso junto a `Login`,
+    `Grupos` y `Manuales`, en el maestro). Pero esto se abría con
+    `timeclock._get_worksheet()`, que devuelve el libro **del grupo de la sesión**, así
+    que desde que hay un libro por cliente se **ESCRIBÍA en el libro del cliente y se
+    LEÍA del maestro** — porque el lector va por `hojas.registros`, que resuelve con
+    `sheet_id_para`. Medido en la demo: 2 rieles en el maestro, 0 en el libro donde
+    escribía. Efecto: un riel nuevo no se encontraba NUNCA, así que al cargar un plano
+    **RAIL se quedaba en 0** (el síntoma que v157 dio por cerrado), y editar o borrar
+    un riel del catálogo real respondía «Referencia no encontrada».
+
+    `get_sheet` resuelve el libro con el MISMO `sheet_id_para` que usa el lector, así
+    que escritura y lectura vuelven a caer en el mismo sitio. Además crea la hoja y
+    migra la cabecera, que es lo que hacía a mano el bloque anterior.
+    """
+    if not timeclock._secrets_present():
+        return None, ("El catálogo de rieles no está conectado: faltan credenciales "
+                      "(gcp_service_account) o TIMECLOCK_SHEET_ID en los Secrets.")
     try:
-        ss = ws.spreadsheet
-        try:
-            w = ss.worksheet(RIELES_SHEET)
-        except Exception:
-            w = ss.add_worksheet(title=RIELES_SHEET, rows=200, cols=len(RIELES_HEADERS))
-            w.append_row(RIELES_HEADERS)
-        if not w.row_values(1):
-            w.append_row(RIELES_HEADERS)
-        return w, None
+        return timeclock.get_sheet(RIELES_SHEET, tuple(RIELES_HEADERS)), None
     except Exception as e:
         logger.warning("rails: no se pudo abrir la hoja %s: %s", RIELES_SHEET, e)
         return None, f"No se pudo abrir la hoja {RIELES_SHEET}: {e}"
+
+
+def _invalidate():
+    """⚠️ Las DOS cachés, no solo la del módulo.
+
+    `_records` lee por `hojas.registros`, o sea del LOTE de v339, que tiene su propia
+    caché. Limpiar solo `_records` lo repuebla con el lote viejo y el riel recién
+    creado no aparece hasta 120 s después — el «lo guardé y no sale» que v339 dejó
+    documentado y que v344 encontró vivo en `projects`.
+    """
+    try:
+        from core import hojas
+        hojas.invalidar()
+    except Exception:
+        pass
+    try:
+        _records.clear()
+    except Exception:
+        pass
 
 
 @st.cache_data(ttl=120, show_spinner=False)
@@ -89,7 +116,7 @@ def add_riel(referencia, ancho, altura) -> tuple:
     if get_rail(referencia):
         return False, f"La referencia '{referencia}' ya existe."
     w.append_row([referencia, str(ancho), str(altura)], value_input_option="RAW")
-    _records.clear()
+    _invalidate()
     return True, f"Riel '{referencia}' agregado."
 
 
@@ -105,7 +132,7 @@ def update_riel(referencia, ancho=None, altura=None) -> tuple:
                 w.update_cell(row, 2, str(ancho))
             if altura is not None:
                 w.update_cell(row, 3, str(altura))
-            _records.clear()
+            _invalidate()
             return True, "Riel actualizado."
     return False, "Referencia no encontrada."
 
@@ -118,6 +145,6 @@ def delete_riel(referencia) -> tuple:
     for i, r in enumerate(recs):
         if _norm(r.get("Referencia", "")) == _norm(referencia):
             w.delete_rows(i + 2)
-            _records.clear()
+            _invalidate()
             return True, "Riel eliminado."
     return False, "Referencia no encontrada."
