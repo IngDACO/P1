@@ -138,7 +138,7 @@ def location_picker(key, lat=None, lng=None, direccion=""):
     c1, c2 = st.columns([4, 1])
     q = c1.text_input("Buscar dirección", value=direccion, key=f"{key}_q",
                       label_visibility="collapsed", placeholder=":material/search: Buscar dirección…")
-    if c2.button("Buscar", key=f"{key}_btn", use_container_width=True):
+    if c2.button("Buscar", key=f"{key}_btn", width="stretch"):
         _cands = geocode_candidates(q)
         st.session_state[f"{key}_cands"] = _cands
         st.session_state.pop(f"{key}_applied", None)     # reaplicar el mejor de esta búsqueda

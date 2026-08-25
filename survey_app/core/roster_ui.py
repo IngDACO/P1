@@ -268,7 +268,7 @@ def _vista_dia(grupo, lunes, usuario, nom, dia, datos, tidx):
             _pv = R.proyecto_de(it["asig"], tidx)
             if _pv and cl[3].button(f"→ {R.etiqueta_de(it['asig'], tidx)}",
                                     key=f"vdop_{lunes:%Y%m%d}_{usuario}_{dia}_{i}",
-                                    use_container_width=True):
+                                    width="stretch"):
                 st.session_state["_prjsel_pending"] = _pv
                 st.session_state["_admin_nav_pending"] = ("proyectos", "📊 Proyectos")
                 st.rerun()
@@ -304,7 +304,7 @@ def _control_dias(lunes, datos, dias):
         lbl = R.DIAS_LABEL[d]
         if d not in dias:
             if cols[i].button(f":material/add: {lbl}", key=f"rosadd_{lunes:%Y%m%d}_{d}",
-                              use_container_width=True,
+                              width="stretch",
                               help=f"Añadir el {lbl.lower()}ado a esta semana"
                                    if d == "sab" else f"Añadir el {lbl.lower()}ingo"):
                 st.session_state.setdefault("_ros_extra", {})[lunes.isoformat()] = \
@@ -315,7 +315,7 @@ def _control_dias(lunes, datos, dias):
             # datos que la app guarda (el fallo de v340). Se dice de quién es.
             con = R.dia_tiene_datos(datos, d)
             if cols[i].button(f":material/close: {lbl}", key=f"rosdel_{lunes:%Y%m%d}_{d}",
-                              use_container_width=True, disabled=bool(con),
+                              width="stretch", disabled=bool(con),
                               help=(f"No se puede quitar: hay {len(con)} persona(s) "
                                     f"con trabajo ese día ({', '.join(con[:3])})"
                                     if con else f"Quitar el {lbl.lower()} de esta semana")):
@@ -529,7 +529,7 @@ def _asignacion_inteligente(grupo, lunes, staff, tidx, dias=None):
             _pick = st.multiselect("Sugeridos (libres) — elige a quién asignar:",
                                    list(_opts), key="ai_pick")
             if st.button(f":material/check: Asignar {len(_pick)} a «{_psel}»", key="ai_go",
-                         type="primary", use_container_width=True, disabled=not _pick):
+                         type="primary", width="stretch", disabled=not _pick):
                 _n = 0
                 for _lbl in _pick:
                     _u = _opts[_lbl]
@@ -676,7 +676,7 @@ def _ficha_rapida(grupo, usuario):
         except Exception:
             pass
 
-        if st.button("→ Ver ficha completa", key="fp_full", use_container_width=True):
+        if st.button("→ Ver ficha completa", key="fp_full", width="stretch"):
             st.session_state["gp_fichasel"] = f"{nom} ({usuario})"
             st.session_state["_admin_nav_pending"] = ("planificacion", "👷 Usuarios")
             st.rerun()
@@ -763,14 +763,14 @@ def render_planificacion(grupo):
 }
 </style>""", unsafe_allow_html=True)
     b1, b2, b3, b4 = st.columns([0.6, 2.3, 0.6, 8.5], gap="xxsmall")
-    if b1.button("◀", key="ros_prev", use_container_width=True):
+    if b1.button("◀", key="ros_prev", width="stretch"):
         st.session_state["ros_lunes"] = (lunes - timedelta(days=7)).isoformat()
         st.rerun()
     b2.markdown(f"<div style='text-align:center;font-weight:700;font-size:14px;"
                 f"padding-top:9px;white-space:nowrap'>"
                 f"{R.rango_label(lunes, dias, corto=True)}</div>",
                 unsafe_allow_html=True)
-    if b3.button("▶", key="ros_next", use_container_width=True):
+    if b3.button("▶", key="ros_next", width="stretch"):
         st.session_state["ros_lunes"] = (lunes + timedelta(days=7)).isoformat()
         st.rerun()
     # ⚠️ Los VALORES del radio no se tocan al añadir la vista Día: son el estado
@@ -796,7 +796,7 @@ def render_planificacion(grupo):
         _control_dias(lunes, datos, dias)
     with _cc3:
         if st.button(":material/assignment: Copiar semana anterior", key="ros_copy",
-                     use_container_width=True):
+                     width="stretch"):
             ok, msg = R.copiar_semana(grupo, lunes - timedelta(days=7), lunes)
             (flash.exito if ok else st.warning)(msg)
             if ok:
@@ -855,7 +855,7 @@ def render_planificacion(grupo):
     _tc = st.columns(len(_TOOLS))
     _cur = st.session_state.get("_panel_tool", "")
     for _i, (_k, _lbl) in enumerate(_TOOLS):
-        if _tc[_i].button(_lbl, key=f"ptool_{_k}", use_container_width=True):
+        if _tc[_i].button(_lbl, key=f"ptool_{_k}", width="stretch"):
             st.session_state["_panel_tool"] = "" if _cur == _k else _k
             st.rerun()
     if _cur:
@@ -1030,7 +1030,7 @@ def render_board_readonly(grupo, resaltar_usuario=""):
     datos = R.get_semana(grupo, lunes)
 
     c1, c2, c3 = st.columns([1, 3, 1])
-    if c1.button("◀", key="rosf_prev", use_container_width=True):
+    if c1.button("◀", key="rosf_prev", width="stretch"):
         st.session_state["ros_lunes"] = (lunes - timedelta(days=7)).isoformat()
         st.rerun()
     # El campo no añade días: ve el fin de semana solo si HAY algo planificado —
@@ -1038,7 +1038,7 @@ def render_board_readonly(grupo, resaltar_usuario=""):
     _dias = R.dias_con_datos(datos)
     c2.markdown(f"<div style='text-align:center;font-weight:700;padding-top:6px'>"
                 f"{R.rango_label(lunes, _dias)}</div>", unsafe_allow_html=True)
-    if c3.button("▶", key="rosf_next", use_container_width=True):
+    if c3.button("▶", key="rosf_next", width="stretch"):
         st.session_state["ros_lunes"] = (lunes + timedelta(days=7)).isoformat()
         st.rerun()
     st.markdown(_grid_html(staff, lunes, datos, tidx, resaltar_usuario, dias=_dias),
@@ -1206,7 +1206,7 @@ def _tablero_editable(grupo, lunes, staff, datos, tidx, marcas=None, dias=None):
         usuario = u["Usuario"]
         nom = u.get("Nombre") or usuario
         cols = st.columns(anchos)
-        if cols[0].button(nom, key=f"pnm_{_wk}_{pi}", use_container_width=True,
+        if cols[0].button(nom, key=f"pnm_{_wk}_{pi}", width="stretch",
                           help="Ver ficha rápida de la persona"):
             st.session_state["_panel_ficha"] = usuario
             st.rerun()
@@ -1233,7 +1233,7 @@ def _tablero_editable(grupo, lunes, staff, datos, tidx, marcas=None, dias=None):
                     _fl = ""
                 _trig.append(R.etiqueta_de(it["asig"], tidx) + (f" {_fl}" if _fl else ""))
             et = f"{_trig[0]} +{len(_trig) - 1}" if len(_trig) > 2 else " · ".join(_trig)
-            with col.popover(et or "＋", key=f"roscel_{_wk}_{idx}", use_container_width=True):
+            with col.popover(et or "＋", key=f"roscel_{_wk}_{idx}", width="stretch"):
                 f = R.fecha_de_dia(lunes, d)
                 st.caption(f"**{_esc(nom)}** · {R.DIAS_LABEL[d]} {f.strftime('%d/%m')}")
                 # «Ver el día» → el detalle se pinta DEBAJO del tablero, a ancho
@@ -1252,7 +1252,7 @@ def _tablero_editable(grupo, lunes, staff, datos, tidx, marcas=None, dias=None):
                 # también dice su horario, su duración y la nota.
                 if items_cur and st.button(":material/timeline: Ver el día",
                                            key=f"pvd_{_wk}_{idx}",
-                                           use_container_width=True):
+                                           width="stretch"):
                     st.session_state["_dia_abierto"] = {"u": usuario, "d": d,
                                                         "wk": lunes.isoformat()}
                     st.rerun()
@@ -1304,7 +1304,7 @@ def _tablero_editable(grupo, lunes, staff, datos, tidx, marcas=None, dias=None):
                     st.caption(f":material/content_copy: Se guardará igual en "
                                f"**{len(_destino)} días**.")
                 if st.button(":material/save: Guardar", key=f"pvs_{_wk}_{idx}", type="primary",
-                             use_container_width=True, disabled=not _destino):
+                             width="stretch", disabled=not _destino):
                     ok, msg = _guardar_celda(grupo, lunes, usuario, datos, _destino,
                                              _items, _nota)
                     if ok:
@@ -1324,7 +1324,7 @@ def _tablero_editable(grupo, lunes, staff, datos, tidx, marcas=None, dias=None):
                 for _v in _selvals:
                     _pv = R.proyecto_de(_v, tidx)
                     if _pv and st.button(f"→ {R.etiqueta_de(_v, tidx)}",
-                                         key=f"pvo_{_wk}_{idx}_{_v}", use_container_width=True):
+                                         key=f"pvo_{_wk}_{idx}_{_v}", width="stretch"):
                         st.session_state["_prjsel_pending"] = _pv
                         st.session_state["_admin_nav_pending"] = ("proyectos", "📊 Proyectos")
                         st.rerun()
@@ -1448,7 +1448,7 @@ def _catalogo(grupo):
                                            index=_nombres.index(_cur) if _cur in _nombres else 0)
                         g1, g2 = st.columns([1, 1])
                         if g1.button(":material/save: Guardar cambios", key=f"teds_{tid}",
-                                     type="primary", use_container_width=True):
+                                     type="primary", width="stretch"):
                             if not _nm.strip():
                                 st.error("El nombre es obligatorio.")
                             else:
@@ -1471,7 +1471,7 @@ def _catalogo(grupo):
                                        f"conserva** tal cual.")
                         _conf = g2.checkbox("Confirmo eliminarlo", key=f"tedcf_{tid}")
                         if g2.button(":material/delete: Eliminar", key=f"tedd_{tid}",
-                                     disabled=not _conf, use_container_width=True):
+                                     disabled=not _conf, width="stretch"):
                             ok, msg = R.delete_trabajo(grupo, tid)
                             (flash.exito if ok else st.warning)(msg)
                             if ok:
@@ -1491,7 +1491,7 @@ def _catalogo(grupo):
         c3.markdown(f"<div style='width:20px;height:20px;border-radius:5px;"
                     f"background:{_colmap[colnom]};border:1px solid #e3e8ef'></div>",
                     unsafe_allow_html=True)
-        if st.button("Crear trabajo", key="trab_add", use_container_width=True):
+        if st.button("Crear trabajo", key="trab_add", width="stretch"):
             if not nom.strip():
                 st.error("El nombre es obligatorio.")
             else:

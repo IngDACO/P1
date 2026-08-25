@@ -121,7 +121,7 @@ def _asistentes_con_firma(yo: str) -> list:
 
     c1, c2 = st.columns([1, 4])
     if c1.button(":material/person_add: Añadir asistente", key="ps_add_att",
-                 use_container_width=True):
+                 width="stretch"):
         st.session_state["ps_n_asist"] = int(st.session_state["ps_n_asist"]) + 1
         st.rerun()
     return [a for a in out if a["name"]]
@@ -328,7 +328,7 @@ def render_prestart_tab():
     if _pend:
         st.caption("Falta por completar: " + " · ".join(_pend))
 
-    if st.button(":material/health_and_safety: Generar y archivar Pre-Start", type="primary", use_container_width=True,
+    if st.button(":material/health_and_safety: Generar y archivar Pre-Start", type="primary", width="stretch",
                  key="ps_submit", disabled=bool(_pend)):
         data = {
             "grupo": pgrupo, "proyecto_id": pid, "proyecto_nombre": prj.get("Nombre", ""),
@@ -363,7 +363,7 @@ def render_prestart_tab():
                 st.caption(":orange[:material/warning:] No se pudo abrir la alarma de los "
                            "checks en NO; avisa al administrador.")
             st.download_button(":material/download: Descargar PDF", data=res["pdf"], file_name=res["filename"],
-                               mime="application/pdf", use_container_width=True, key="ps_dl")
+                               mime="application/pdf", width="stretch", key="ps_dl")
 
     # ── Historial ──
     _historial(pid)

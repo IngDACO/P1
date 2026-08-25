@@ -80,7 +80,7 @@ def render_cotizaciones(grupo):
         "Margen": round(_num(c.get("MargenPct")), 1),
         "Estado": Q.estado_de(c),
     } for c in cots])
-    _ev = st.dataframe(df, use_container_width=True, hide_index=True,
+    _ev = st.dataframe(df, width="stretch", hide_index=True,
                        on_select="rerun", selection_mode="single-row", key="cot_tbl",
                        column_config={
                            "Total": st.column_config.NumberColumn("Total", format="$%,.2f"),
@@ -131,7 +131,7 @@ def _editor_lineas(grupo, key: str, lineas: list) -> list:
             "Precio": _num(l.get("precio_total")),
             "Quitar": False,
         } for l in lineas]),
-        hide_index=True, use_container_width=True, key=f"{key}_ed",
+        hide_index=True, width="stretch", key=f"{key}_ed",
         # ⚠️ v355: lo único que se teclea del precio es la GANANCIA. El margen y el
         # precio son consecuencia, y se muestran bloqueados para que quede claro.
         disabled=["Concepto", "Costo", "Margen %", "Precio"],
@@ -191,7 +191,7 @@ def _nueva(grupo):
         t = Q.totales(lineas, imp)
         _totales_html(t, imp)
         if st.button(":material/save: Crear cotización", type="primary",
-                     key="cot_new_save", use_container_width=True):
+                     key="cot_new_save", width="stretch"):
             f = _map[_cli]
             ok, msg = Q.crear(grupo, f.get("ID", ""), f.get("Nombre", ""), lineas,
                               impuesto_pct=imp, nota=nota, creado_por=_creado_por())
@@ -278,7 +278,7 @@ def _detalle(grupo, cid):
             "Concepto": l.get("concepto", ""),
             "Cant.": _num(l.get("cantidad")),
             "Precio": round(_num(l.get("precio_total")), 2),
-        } for l in lineas]), hide_index=True, use_container_width=True,
+        } for l in lineas]), hide_index=True, width="stretch",
             column_config={"Precio": st.column_config.NumberColumn("Precio", format="$%,.2f")})
         _totales_html(t, c.get("ImpuestoPct"))
 
@@ -287,27 +287,27 @@ def _detalle(grupo, cid):
     a1, a2, a3 = st.columns(3)
     if est == Q.BORRADOR:
         if a1.button(":material/send: Marcar como enviada", key=f"cot_env_{cid}",
-                     type="primary", use_container_width=True):
+                     type="primary", width="stretch"):
             ok, msg = Q.set_estado(cid, Q.ENVIADA)
             (flash.exito if ok else st.error)(msg)
             if ok:
                 st.rerun()
     elif est in (Q.ENVIADA, Q.VENCIDA):
         if a1.button(":material/check_circle: El cliente la aceptó", key=f"cot_ok_{cid}",
-                     type="primary", use_container_width=True):
+                     type="primary", width="stretch"):
             ok, msg = Q.set_estado(cid, Q.ACEPTADA)
             (flash.exito if ok else st.error)(msg)
             if ok:
                 st.rerun()
         if a2.button(":material/block: La rechazó", key=f"cot_no_{cid}",
-                     use_container_width=True):
+                     width="stretch"):
             ok, msg = Q.set_estado(cid, Q.RECHAZADA)
             (flash.exito if ok else st.error)(msg)
             if ok:
                 st.rerun()
     if est != Q.BORRADOR:
         if a3.button(":material/content_copy: Nueva versión", key=f"cot_v2_{cid}",
-                     use_container_width=True,
+                     width="stretch",
                      help="Clona esta cotización como borrador para cambiarla. La actual se conserva."):
             ok, msg = Q.nueva_version(cid, creado_por=_creado_por())
             if ok:
@@ -359,7 +359,7 @@ def _crear_proyecto(grupo, c, t):
                 "sobre-presupuesto salta cuando te comes el margen, no cuando ya "
                 "estás perdiendo dinero.")
         if st.form_submit_button(":material/add_circle: Crear el proyecto",
-                                 type="primary", use_container_width=True):
+                                 type="primary", width="stretch"):
             ok, msg = Q.aceptar_y_crear_proyecto(
                 c.get("ID"), nombre=nombre, tipo=tipo, fecha_inicio=ini,
                 ns=ns, ubicacion=ubic, creado_por=_creado_por())

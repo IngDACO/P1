@@ -134,7 +134,7 @@ def render_nominas(grupo):
         "Estado":   str(x.get("Estado", "")),
     } for x in _rows])
     _ev = st.dataframe(
-        df, use_container_width=True, hide_index=True,
+        df, width="stretch", hide_index=True,
         on_select="rerun", selection_mode="single-row", key="nom_tbl",
         column_config={"Base": st.column_config.NumberColumn("Base", format="$%,d"),
                        "Neto": st.column_config.NumberColumn("Neto", format="$%,d"),
@@ -182,7 +182,7 @@ def _generar(grupo):
             "Usuario": v["nombre"], "Horas": round(v["horas"], 1),
             "Tarifa/h": _num(rates.get(k, 0)),
             "Base": round(v["horas"] * _num(rates.get(k, 0)), 0),
-        } for k, v in sorted(horas.items())]), use_container_width=True, hide_index=True,
+        } for k, v in sorted(horas.items())]), width="stretch", hide_index=True,
             column_config={"Tarifa/h": st.column_config.NumberColumn("Tarifa/h", format="$%,d"),
                            "Base": st.column_config.NumberColumn("Base", format="$%,d")})
     else:
@@ -257,7 +257,7 @@ def _detalle(grupo, nid):
                  "Monto": _num(c.get("monto"))} for c in _cs] or \
                [{"Concepto": "", "Tipo": "deduccion", "Monto": 0.0}]
         _ed = st.data_editor(
-            pd.DataFrame(_pre), num_rows="dynamic", use_container_width=True, key=f"nom_ed_{nid}",
+            pd.DataFrame(_pre), num_rows="dynamic", width="stretch", key=f"nom_ed_{nid}",
             column_config={
                 "Concepto": st.column_config.TextColumn("Concepto", width="large"),
                 "Tipo": st.column_config.SelectboxColumn("Tipo", options=payroll.TIPOS, required=True),

@@ -100,7 +100,7 @@ def render_credenciales(usuario, grupo, editable=False, key_prefix="cr"):
             "Tipo": r.get("Tipo"), "Número": r.get("Numero"), "Clase": r.get("Clase"),
             "Emisión": r.get("Emision") or "—", "Vence": r.get("Vencimiento") or "—",
             "Estado": C.status_label(r.get("Vencimiento")),
-        } for r in creds]), hide_index=True, use_container_width=True)
+        } for r in creds]), hide_index=True, width="stretch")
         # Documentos adjuntos agrupados (antes: botones sueltos apilados bajo la tabla)
         _docs = [r for r in creds if str(r.get("DriveID", "")).strip()]
         if _docs:
@@ -232,7 +232,7 @@ def render_login() -> bool:
     c = st.columns([2, 1, 2])
     with c[1]:
         if os.path.exists(_LOGO):
-            st.image(_LOGO, use_container_width=True)
+            st.image(_LOGO, width="stretch")
         else:
             st.markdown("<h1 style='text-align:center;letter-spacing:.2em;color:#1a3a5c'>COPEX</h1>",
                         unsafe_allow_html=True)
@@ -269,7 +269,7 @@ def render_login() -> bool:
             nm = st.text_input("Nombre", key="setup_n")
             p1 = st.text_input("Contraseña", type="password", key="setup_p1")
             p2 = st.text_input("Repetir contraseña", type="password", key="setup_p2")
-            if st.button("Crear propietario", type="primary", use_container_width=True):
+            if st.button("Crear propietario", type="primary", width="stretch"):
                 if not u or not p1:
                     st.error("Completa usuario y contraseña.")
                 elif p1 != p2:
@@ -328,14 +328,14 @@ def render_login() -> bool:
                     st.session_state.get("login_remember", False))
                 st.rerun()
 
-            if st.button("Iniciar sesión", type="primary", use_container_width=True):
+            if st.button("Iniciar sesión", type="primary", width="stretch"):
                 _do_login(force=False)
 
             if st.session_state.get("_blocked_user"):
                 st.caption("Si eres **tú** y dejaste la sesión abierta en otro dispositivo, "
                            "puedes cerrarla e iniciar aquí.")
                 if st.button(":material/lock_open: Cerrar la otra sesión e iniciar aquí",
-                             use_container_width=True):
+                             width="stretch"):
                     _do_login(force=True)
     return False
 
@@ -357,7 +357,7 @@ def render_user_bar():
                "campo": ":material/engineering: Campo"}.get(a.get("rol"), a.get("rol", ""))
     grupo = a.get("grupo") or ("todos" if a.get("rol") == "propietario" else "—")
     st.markdown(f"**{a.get('nombre','')}**  \n{rol_lbl}  \n:material/business: {grupo}")
-    if st.button(":material/logout: Cerrar sesión", use_container_width=True, key="logout_btn"):
+    if st.button(":material/logout: Cerrar sesión", width="stretch", key="logout_btn"):
         try:
             auth.end_session(a.get("usuario", ""), a.get("token"))   # libera la cuenta
         except Exception:
@@ -380,7 +380,7 @@ def render_user_bar():
 def _owner_grupos():
     grupos = auth.list_groups()
     if grupos:
-        st.dataframe(pd.DataFrame(grupos), hide_index=True, use_container_width=True)
+        st.dataframe(pd.DataFrame(grupos), hide_index=True, width="stretch")
     else:
         st.info("Aún no hay grupos. Crea el primero abajo.")
     with st.form("form_grupo", clear_on_submit=True):
@@ -411,13 +411,13 @@ def _owner_grupos():
                                        placeholder="https://docs.google.com/spreadsheets/d/…")
                 _c1, _c2 = st.columns(2)
                 if _c1.button(":material/link: Guardar enlace", key="gsheet_save",
-                              use_container_width=True):
+                              width="stretch"):
                     ok, msg = auth.set_group_sheet_id(_gl, _nuevo)
                     (flash.exito if ok else st.error)(msg)
                     if ok:
                         st.rerun()
                 if _sid_now and _c2.button(":material/link_off: Volver al maestro",
-                                           key="gsheet_del", use_container_width=True):
+                                           key="gsheet_del", width="stretch"):
                     ok, msg = auth.set_group_sheet_id(_gl, "")
                     (flash.exito if ok else st.error)(msg)
                     if ok:
@@ -573,7 +573,7 @@ def _owner_usuarios():
                           "Rol": u.get("Rol", ""), "Grupo": u.get("Grupo", "") or "—",
                           "Activo": u.get("Activo", "SI"),
                           "Email": u.get("Email", "") or "—", "Contacto": _cont})
-        st.dataframe(pd.DataFrame(_rows), hide_index=True, use_container_width=True)
+        st.dataframe(pd.DataFrame(_rows), hide_index=True, width="stretch")
         _faltan = [u["Usuario"] for u in users
                    if str(u.get("Rol", "")).lower() == "campo"
                    and not (str(u.get("Email", "")).strip()
@@ -666,7 +666,7 @@ def _owner_resumen():
         "Retraso": d["retrasos"], "Alarmas": d["alarmas"],
         "Vencidos": d["vencidos"], "Credenciales": d["cred_venc"],
         "Sobre pres.": d["sobre_presupuesto"],
-    } for d in data]), hide_index=True, use_container_width=True)
+    } for d in data]), hide_index=True, width="stretch")
     _urg = [d for d in data if d["pendientes"]]
     if _urg:
         st.warning("Grupos con pendientes: " + ", ".join(d["grupo"] for d in _urg))
@@ -703,7 +703,7 @@ def _owner_manuales():
             "Fragmentos": r.get("NumFrags"),
             "Fecha": r.get("Fecha"),
             "Por": r.get("SubidoPor"),
-        } for r in ups]), hide_index=True, use_container_width=True)
+        } for r in ups]), hide_index=True, width="stretch")
         with st.expander("Quitar un manual", icon=":material/delete:"):
             opciones = {f"{r.get('Nombre')}  ·  {r.get('Fecha')}": r.get("ID") for r in ups}
             _mid = ui.elegir("Manual", opciones, key="man_del_sel",
@@ -756,7 +756,7 @@ def _owner_rieles():
             "Referencia": r.get("Referencia"),
             "Altura diente desde espalda (RAIL)": r.get("AlturaDiente"),
             "Ancho diente": r.get("AnchoDiente"),
-        } for r in data]), hide_index=True, use_container_width=True)
+        } for r in data]), hide_index=True, width="stretch")
     else:
         st.info("Catálogo vacío. Agrega el primer riel abajo.")
 
@@ -849,7 +849,7 @@ def _ficha_usuario(u, grupo, owner=False, sel_key="gp_fichasel"):
         _a1, _a2 = st.columns(2)      # v227: contraseña | tarifa lado a lado
         with _a1:
             np_ = st.text_input("Nueva contraseña", type="password", key=f"{k}_np")
-            if st.button("Cambiar contraseña", key=f"{k}_chp", use_container_width=True):
+            if st.button("Cambiar contraseña", key=f"{k}_chp", width="stretch"):
                 if np_:
                     ok, msg = auth.set_password(sel, np_); (st.success if ok else st.error)(msg)
                 else:
@@ -858,7 +858,7 @@ def _ficha_usuario(u, grupo, owner=False, sel_key="gp_fichasel"):
             tar = st.number_input(":material/payments: Tarifa por hora", min_value=0.0, step=1.0,
                                   value=float(str(u.get("TarifaHora", "") or 0).replace(",", ".") or 0),
                                   key=f"{k}_tar", help="Para costear la mano de obra.")
-            if st.button("Guardar tarifa", key=f"{k}_savetar", use_container_width=True):
+            if st.button("Guardar tarifa", key=f"{k}_savetar", width="stretch"):
                 ok, msg = auth.set_rate(sel, tar); (flash.exito if ok else st.error)(msg)
                 if ok:
                     st.rerun()
@@ -883,12 +883,12 @@ def _ficha_usuario(u, grupo, owner=False, sel_key="gp_fichasel"):
                     st.rerun()
         if activo:
             if st.button(":material/block: Desactivar (no podrá entrar)", key=f"{k}_de",
-                         use_container_width=True):
+                         width="stretch"):
                 ok, msg = auth.set_active(sel, False); (flash.exito if ok else st.error)(msg)
                 if ok:
                     st.rerun()
         else:
-            if st.button(":material/check_circle: Activar", key=f"{k}_act", use_container_width=True):
+            if st.button(":material/check_circle: Activar", key=f"{k}_act", width="stretch"):
                 ok, msg = auth.set_active(sel, True); (flash.exito if ok else st.error)(msg)
                 if ok:
                     st.rerun()
@@ -928,7 +928,7 @@ def _ficha_usuario(u, grupo, owner=False, sel_key="gp_fichasel"):
             _ac = st.columns(2)
             for _i, _p in enumerate(asg):
                 if _ac[_i % 2].button(f":material/apartment: {_p.get('Nombre', '')}", key=f"{k}_gp_{_i}",
-                                      use_container_width=True):
+                                      width="stretch"):
                     st.session_state["_prjsel_pending"] = str(_p.get("ID", ""))
                     st.session_state["_admin_nav_pending"] = ("proyectos", "📊 Proyectos")
                     st.rerun()
@@ -1068,7 +1068,7 @@ def _grupo_usuarios(grupo):
         "Credenciales": _ico.get(_peor.get(u["Usuario"].strip().lower()), "—"),
         "Tarifa/h": u.get("TarifaHora", "") or "—",
     } for u in gente]
-    _ev = st.dataframe(pd.DataFrame(_rows), hide_index=True, use_container_width=True,
+    _ev = st.dataframe(pd.DataFrame(_rows), hide_index=True, width="stretch",
                        on_select="rerun", selection_mode="single-row", key="gu_tbl")
     st.caption(":material/touch_app: Toca una fila para abrir y gestionar la ficha de esa persona.  "
                "Credenciales: vigente / por vencer / vencido / — sin registrar.")
@@ -1094,7 +1094,7 @@ def _grupo_usuarios(grupo):
                 with st.expander("Matriz de credenciales (usuarios × tickets)",
                                  icon=":material/table_chart:"):
                     st.caption("Credenciales: vigente / por vencer (≤30 d) / vencido / — no registrada")
-                    st.dataframe(pd.DataFrame(filas), hide_index=True, use_container_width=True)
+                    st.dataframe(pd.DataFrame(filas), hide_index=True, width="stretch")
         except Exception:
             pass
     with st.expander("Crear usuario de campo", icon=":material/person_add:"):

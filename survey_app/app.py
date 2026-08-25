@@ -293,7 +293,7 @@ with st.sidebar:
 
         # Limpiar
         if st.session_state.chat_history:
-            if st.button(":material/delete: Limpiar conversación", use_container_width=True, key="clear_chat_sb"):
+            if st.button(":material/delete: Limpiar conversación", width="stretch", key="clear_chat_sb"):
                 st.session_state.chat_history = []
                 st.rerun()
 

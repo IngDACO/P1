@@ -145,7 +145,7 @@ def render_inventario(grupo):
         "Valor":       round(INV.valor_actual(a), 0),
     } for a in _rows])
     _ev = st.dataframe(
-        df, use_container_width=True, hide_index=True,
+        df, width="stretch", hide_index=True,
         on_select="rerun", selection_mode="single-row", key="inv_tbl",
         column_config={"Valor": st.column_config.NumberColumn("Valor", format="$%,d")})
     _sr = list(_ev.selection.rows)
@@ -296,7 +296,7 @@ def _detalle(grupo, aid):
             "Usuario": m.get("Usuario", "") or "—",
             "Costo":   (round(_num(m.get("Costo")), 0) if str(m.get("Costo", "")).strip() else None),
             "Nota":    m.get("Nota", "") or "",
-        } for m in _mr]), use_container_width=True, hide_index=True,
+        } for m in _mr]), width="stretch", hide_index=True,
             column_config={"Costo": st.column_config.NumberColumn("Costo", format="$%,d")})
 
     # Editar
@@ -435,7 +435,7 @@ def _reportes(grupo):
                 "Categoría": k, "Activos": v["n"],
                 "Compra": round(v["compra"], 0), "Actual": round(v["actual"], 0),
             } for k, v in sorted(rep["por_categoria"].items())]),
-                use_container_width=True, hide_index=True,
+                width="stretch", hide_index=True,
                 column_config={"Compra": st.column_config.NumberColumn("Compra", format="$%,d"),
                                "Actual": st.column_config.NumberColumn("Actual", format="$%,d")})
         with cb:
@@ -443,7 +443,7 @@ def _reportes(grupo):
             st.dataframe(pd.DataFrame([{
                 "Ubicación": k, "Activos": v["n"], "Valor actual": round(v["actual"], 0),
             } for k, v in sorted(rep["por_ubicacion"].items())]),
-                use_container_width=True, hide_index=True,
+                width="stretch", hide_index=True,
                 column_config={"Valor actual": st.column_config.NumberColumn("Valor actual", format="$%,d")})
 
 

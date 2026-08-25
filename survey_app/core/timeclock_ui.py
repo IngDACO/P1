@@ -107,10 +107,10 @@ def _dialogo_prestart(obra: str):
                "Si ya la hicisteis, regístrala para que quede el PDF firmado.")
     c1, c2 = st.columns(2)
     if c1.button(":material/health_and_safety: Hacerlo ahora", type="primary",
-                 use_container_width=True, key="ps_dlg_ir"):
+                 width="stretch", key="ps_dlg_ir"):
         _ps_descartar()
         _ir_a_prestart()
-    if c2.button("Ahora no", use_container_width=True, key="ps_dlg_no"):
+    if c2.button("Ahora no", width="stretch", key="ps_dlg_no"):
         _ps_descartar()
         st.rerun()
 
@@ -136,10 +136,10 @@ def _dialogo_firmar(obra: str, quien: str = ""):
                + (f" La registró {quien}." if quien else ""))
     c1, c2 = st.columns(2)
     if c1.button(":material/draw: Firmar ahora", type="primary",
-                 use_container_width=True, key="ps_dlgf_ir"):
+                 width="stretch", key="ps_dlgf_ir"):
         _ps_descartar()
         _ir_a_prestart()
-    if c2.button("Ahora no", use_container_width=True, key="ps_dlgf_no"):
+    if c2.button("Ahora no", width="stretch", key="ps_dlgf_no"):
         _ps_descartar()
         st.rerun()
 
@@ -201,14 +201,14 @@ def _chip_prestart(pid, nombre_obra, grupo):
             if not _pend_firma_de(pid, grupo):
                 return
             st.warning(":material/draw: Firma el **Pre-Start** de hoy de esta obra.")
-            if st.button(":material/draw: Firmar", use_container_width=True,
+            if st.button(":material/draw: Firmar", width="stretch",
                          key="sb_ps_firmar"):
                 _ir_a_prestart()
             return
     except Exception:
         return                       # sin pre-starts configurados: no se estorba
     st.warning(":material/warning: Falta el **Pre-Start** de hoy en esta obra.")
-    if st.button(":material/health_and_safety: Hacerlo ahora", use_container_width=True,
+    if st.button(":material/health_and_safety: Hacerlo ahora", width="stretch",
                  key="sb_ps_ir"):
         _ir_a_prestart()
 
@@ -261,7 +261,7 @@ def _sidebar_fichado(nombre, usuario, grupo, gen, prj):
     if prj:
         _pn = str(prj.get("proyecto") or "Proyecto").replace("&", "&amp;").replace("<", "&lt;")
         _chrono_mini(prj["clock_in"], _pn, _VERDE, "sb_chrono_prj")
-        if st.button(":material/cancel: Salir del proyecto", use_container_width=True,
+        if st.button(":material/cancel: Salir del proyecto", width="stretch",
                      key="sb_tc_prj_out"):
             ok, msg = timeclock.clock_out(nombre, grupo,
                                           tipo=timeclock.TIPO_PROYECTO, usuario=usuario)
@@ -270,7 +270,7 @@ def _sidebar_fichado(nombre, usuario, grupo, gen, prj):
                 st.rerun()
     if gen:
         _lbl = ("Cerrar la jornada" if not prj else "Cerrar jornada y proyecto")
-        if st.button(f":material/logout: {_lbl}", use_container_width=True,
+        if st.button(f":material/logout: {_lbl}", width="stretch",
                      key="sb_tc_gen_out"):
             ok, msg = timeclock.cerrar_jornada(nombre, grupo, usuario)
             (flash.exito if ok else st.error)(msg)
@@ -295,7 +295,7 @@ def _sidebar_sin_fichar(nombre, usuario, grupo, rol):
         proys = []
     if not proys:
         # Sin obras que imputar, al menos que pueda abrir su jornada (el tiempo pagado).
-        if st.button(":material/play_circle: Abrir jornada", use_container_width=True,
+        if st.button(":material/play_circle: Abrir jornada", width="stretch",
                      type="primary", key="sb_tc_gen_in"):
             ok, msg = timeclock.clock_in(nombre, "", "", grupo,
                                          tipo=timeclock.TIPO_GENERAL, usuario=usuario)
@@ -323,7 +323,7 @@ def _sidebar_sin_fichar(nombre, usuario, grupo, rol):
                     continue
                 _hechos.add(_rpid)
                 if st.button(f":material/check_circle: Fichar a {_a['etiqueta']}",
-                             use_container_width=True, type="primary",
+                             width="stretch", type="primary",
                              key=f"sb_tc_roster_{_rpid}"):
                     _fichar(nombre, nom_de.get(_rpid, ""), grupo, usuario, _rpid)
     except Exception:
@@ -332,7 +332,7 @@ def _sidebar_sin_fichar(nombre, usuario, grupo, rol):
         st.caption("Tu asignación de hoy. ¿Otra obra?")
 
     _pid = ui.elegir("Proyecto", idmap, key="sb_tc_prj_sel", vacio="— elige la obra —")
-    if st.button(":material/check_circle: Fichar", use_container_width=True,
+    if st.button(":material/check_circle: Fichar", width="stretch",
                  type=("secondary" if _hechos else "primary"),
                  key="sb_tc_prj_in", disabled=(_pid is None)):
         _fichar(nombre, nom_de.get(_pid, ""), grupo, usuario, _pid)
@@ -416,7 +416,7 @@ def _aviso_olvido(nombre, grupo, usuario, sess):
     ok_rango = ci_min is not None and ci_min < fin <= clock.now()
     if not ok_rango:
         st.caption(":orange[:material/warning:] La hora de fin debe estar entre la entrada y ahora.")
-    if st.button(":material/cancel: Cerrar sesión olvidada", key="olv_btn", use_container_width=True,
+    if st.button(":material/cancel: Cerrar sesión olvidada", key="olv_btn", width="stretch",
                  disabled=not ok_rango):
         for tipo in stale:
             timeclock.clock_out(nombre, grupo, tipo=tipo, usuario=usuario, out_ts=fin)
@@ -515,7 +515,7 @@ def render_timeclock_tab():
             _chronometer(gen["clock_in"], "Llevas abierta", _AZUL, "chrono_gen")
             st.caption(f"Desde las {gen['clock_in'][11:16]}."
                        + ("  Al cerrarla se cierra también el proyecto en curso." if prj else ""))
-            if st.button(":material/cancel: Cerrar la jornada", use_container_width=True, key="tc_gen_out"):
+            if st.button(":material/cancel: Cerrar la jornada", width="stretch", key="tc_gen_out"):
                 ok, msg = timeclock.cerrar_jornada(nombre, grupo, usuario)
                 (flash.exito if ok else st.error)(msg)
                 if ok:
@@ -523,7 +523,7 @@ def render_timeclock_tab():
         else:
             st.caption("La jornada es tu tiempo de trabajo del día. Se abre sola al "
                        "fichar a un proyecto, o puedes abrirla aquí.")
-            if st.button(":material/check_circle: Abrir jornada", use_container_width=True, key="tc_gen_in",
+            if st.button(":material/check_circle: Abrir jornada", width="stretch", key="tc_gen_in",
                          type="primary"):
                 ok, msg = timeclock.clock_in(nombre, "", "", grupo,
                                              tipo=timeclock.TIPO_GENERAL, usuario=usuario)
@@ -555,7 +555,7 @@ def render_timeclock_tab():
             st.markdown(f"Estás en **{prj['proyecto'] or '—'}**")
             _chronometer(prj["clock_in"], "En este proyecto", _VERDE, "chrono_prj")
             c1, c2 = st.columns(2)
-            if c1.button(":material/cancel: Salir del proyecto", use_container_width=True, key="tc_prj_out"):
+            if c1.button(":material/cancel: Salir del proyecto", width="stretch", key="tc_prj_out"):
                 ok, msg = timeclock.clock_out(nombre, grupo,
                                               tipo=timeclock.TIPO_PROYECTO, usuario=usuario)
                 (flash.exito if ok else st.error)(msg)
@@ -573,7 +573,7 @@ def render_timeclock_tab():
                 with c2:
                     _nuevo = ui.elegir("Cambiar de proyecto", _otros, key="tc_switch",
                                        vacio="— cambiar a… —")
-                    if st.button(":material/sync: Cambiar", use_container_width=True, key="tc_switch_btn",
+                    if st.button(":material/sync: Cambiar", width="stretch", key="tc_switch_btn",
                                  disabled=(_nuevo is None)):
                         _nom = _nom_de.get(_nuevo, "")
                         ok, msg = timeclock.switch_project(nombre, grupo, _nom,
@@ -601,7 +601,7 @@ def render_timeclock_tab():
                         _hechos.add(_rpid)
                         _rnom = _nom_de.get(_rpid, "")     # v308: el nombre, no la etiqueta
                         if st.button(f":material/check_circle: Fichar a {_a['etiqueta']} (tu asignación de hoy)",
-                                     use_container_width=True, type="primary",
+                                     width="stretch", type="primary",
                                      key=f"tc_roster_in_{_rpid}"):
                             ok, msg, auto = timeclock.fichar_proyecto(
                                 nombre, _rnom, grupo, usuario, _rpid)
@@ -616,7 +616,7 @@ def render_timeclock_tab():
                 pass
             _pid = ui.elegir("¿En qué proyecto vas a trabajar?", idmap, key="tc_prj_sel",
                              vacio="— elige el proyecto —")
-            if st.button(":material/check_circle: Fichar al proyecto", use_container_width=True, type="primary",
+            if st.button(":material/check_circle: Fichar al proyecto", width="stretch", type="primary",
                          key="tc_prj_in", disabled=(_pid is None)):
                 _nom = _nom_de.get(_pid, "")               # v308: el nombre, no la etiqueta
                 ok, msg, auto = timeclock.fichar_proyecto(nombre, _nom, grupo, usuario, _pid)
@@ -653,7 +653,7 @@ def render_timeclock_tab():
                 "Entrada": f["entrada"][5:16].replace("-", "/"),
                 "Salida": (f["salida"][11:16] if f["salida"] else "en curso"),
                 "Horas": f["horas"],
-            } for f in _mios]), hide_index=True, use_container_width=True)
+            } for f in _mios]), hide_index=True, width="stretch")
 
     st.caption(":material/lock: Tus fichajes son privados. La administración ve el resumen de "
                "horas del grupo, no el detalle de cada persona.")

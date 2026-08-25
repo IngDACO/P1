@@ -139,7 +139,7 @@ def render_contactos(grupo):
     if _hay_costo:
         _colcfg["Costo"] = st.column_config.NumberColumn("Costo", format="$%,d")
     _ev = st.dataframe(
-        df, use_container_width=True, hide_index=True,
+        df, width="stretch", hide_index=True,
         on_select="rerun", selection_mode="single-row", key="cli_tbl",
         column_config=_colcfg,
     )
@@ -250,7 +250,7 @@ def _detalle_cliente(grupo, key):
         for i, p in enumerate(sorted(proys, key=lambda x: str(x.get("Nombre", "")).lower())):
             pid = str(p.get("ID", ""))
             _lbl = f"**{p.get('Nombre', '')}** · {p.get('Estado', '')} · {int(_num(p.get('Avance')))}%"
-            if cols[i % 2].button(_lbl, key=f"cli_prj_{pid}", use_container_width=True):
+            if cols[i % 2].button(_lbl, key=f"cli_prj_{pid}", width="stretch"):
                 st.session_state["_prjsel_pending"] = pid
                 st.session_state["_admin_nav_pending"] = ("proyectos", "📊 Proyectos")
                 st.rerun()
@@ -295,7 +295,7 @@ def _detalle_cliente(grupo, key):
                 "Estado":  INV.estado_cobro(x),
             } for x in _fr])
             _fev = st.dataframe(
-                _fdf, use_container_width=True, hide_index=True,
+                _fdf, width="stretch", hide_index=True,
                 on_select="rerun", selection_mode="single-row", key=f"cli_facs_{cid}",
                 column_config={"Total": st.column_config.NumberColumn("Total", format="$%,d"),
                                "Cobrado": st.column_config.NumberColumn("Cobrado", format="$%,d")})

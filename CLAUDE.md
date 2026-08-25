@@ -5771,7 +5771,18 @@ centímetros. Causa: `NumberColumn(format="$%.0f")` es printf, y `%f` no agrupa.
   columna de dinero puede quedarse sin separador, y se comprueba que siguen conviviendo las que
   truncan y las que redondean. Probado contra el caso roto.
 
-### Deuda anotada, NO resuelta: `use_container_width`
+### RESUELTA en v405 — `use_container_width` → `width="stretch"`
+200 sitios convertidos en 21 ficheros. **3 NO se tocaron**, y los tres a propósito: los
+dos `st_folium` (su parámetro es del COMPONENTE — convertirlo rompe el mapa, que es el
+arreglo de v307) y ⚠️ **un COMENTARIO** de `route_ui` que contiene el literal; un
+reemplazo por texto lo habría reescrito y el comentario habría pasado a decir una
+mentira sobre un parámetro que a propósito se conserva. Por eso la migración va por
+**lista blanca de AST**: solo se toca lo que el árbol confirma como argumento real.
+Medido antes de convertir: los 8 elementos implicados aceptan `width` (tipo `Width`,
+que admite `"stretch"`). Guardián `verif_v405.py`: ningún elemento de Streamlit puede
+volver a usarlo; los de terceros sí. Lo de abajo queda como el registro del problema.
+
+### Deuda anotada (resuelta en v405): `use_container_width`
 ⚠️ **Corrección (v402):** escribí que era una retirada «sin versión anunciada» y es FALSO. El propio
 runtime lo dice al arrancar: **«`use_container_width` will be removed after 2025-12-31»** — hay fecha,
 y ya pasó. O sea que esto no es «algún día», está en tiempo de descuento y puede desaparecer en
@@ -5831,6 +5842,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v405 | **`use_container_width` → `width="stretch"`**, 200 sitios en 21 ficheros. El runtime anunciaba la retirada **«after 2025-12-31»** — fecha ya pasada, así que podía desaparecer en cualquier versión. ⚠️ **3 no se tocaron**: los dos `st_folium` (parámetro del COMPONENTE; convertirlo rompe el mapa de v307) y **un comentario** que contiene el literal — por eso la migración va por lista blanca de AST y no por texto, o el comentario habría acabado mintiendo. Medido antes: los 8 elementos aceptan `width` |
 | v404 | ⚠️ **El catálogo de rieles escribía en un libro y leía de otro** desde v359. `Rieles` es hoja GLOBAL (vive en el maestro), pero `rails._ws()` la abría con `timeclock._get_worksheet()`, que devuelve el libro **del grupo de la sesión** — mientras el lector va por `hojas.registros`, que resuelve con `sheet_id_para`. Medido en la demo: **2 rieles en el maestro, 0 en el libro donde escribía**. Efecto: un riel nuevo **no se encontraba nunca** → al cargar un plano **RAIL se quedaba en 0**, el síntoma que v157 dio por cerrado; y editar o borrar un riel real respondía «Referencia no encontrada». Ahora usa `get_sheet`, el mismo resolutor que el lector. + `_invalidate` tira **las dos** cachés (la del módulo y el LOTE de v339, o el riel nuevo no se ve en 120 s). ⚠️ Lo encontró el banco de pruebas nuevo en su primera vuelta completa — no una revisión de código |
 | v403 | **Quien llega después firma el Pre-Start**: hasta ahora, en cuanto alguien registraba la charla, el que fichaba más tarde en esa obra **no recibía ningún aviso** y trabajaba sin constar en el documento de seguridad — hueco de una decisión propia de v374, que ató el recordatorio a «¿hay charla?» olvidando «¿consto yo en ella?». Nuevas `pendiente_de_firma` y `firmar`; el aviso no desaparece, cambia de motivo. ⚠️ **Se ANEXA una hoja, no se regenera el PDF**: las firmas originales solo viven dentro del documento emitido (v383), así que rehacerlo borraría la de quien sí estuvo en la charla — se compone `original + anexo` con `pypdf` y cada firma tardía lleva su hora. ⚠️ Orden de escrituras de v343 (subir el nuevo → actualizar la fila → borrar el viejo), verificado midiendo el orden real. ⚠️ `io` no estaba importado en `prestart.py` y el `BytesIO` iba dentro de un `try`: el PDF se habría dejado de componer en silencio (el NameError latente de v370) |
 | v402 | **Facturar desde la LISTA**: el usuario avisó de que «desde la tabla de proyectos no puedo hacer los invoices, solo ver si ya está facturado o no» — y era una decisión mía de v397. Ahora elegir una fila **ya no abre el proyecto**: muestra las dos acciones explícitas («Abrir →» y «Facturar»), como Finanzas·Gastos (v215) y Usuarios (v226). Decisión suya sabiendo el coste: abrir pasa de 1 a 2 clics. ⚠️ **NO se hizo enlazando la celda**, que era la idea de partida, y eso se decidió MIDIENDO: un `LinkColumn` **ordena por la URL, no por el importe** (`$980 · $5,200 · $27,883 · $2,960` = el alfabético de los PRJ-####), y en el bundle que distribuye Streamlit su clic hace `window.open(url,"_blank")` + `preventDefault()` → no recarga la pestaña, pero **abre una pestaña nueva = sesión nueva**, o sea el login si no está tildada la cookie de v221. ⚠️ El guardián de v397 afirmaba «la lista NO factura»: **caducado**, reescrito sobre el principio que sigue vivo (ninguna acción puede colgar de la selección, todas bajo un botón) y probado contra el código roto |

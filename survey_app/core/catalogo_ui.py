@@ -73,7 +73,7 @@ def render_catalogo(grupo):
             "Costo": CAT.costo_de(i, 1),
             "Activo": "🟢" if str(i.get("Activo", "SI")).upper() != "NO" else "🔴",
         } for i in items])
-        _ev = st.dataframe(df, use_container_width=True, hide_index=True,
+        _ev = st.dataframe(df, width="stretch", hide_index=True,
                            on_select="rerun", selection_mode="single-row", key="cat_tbl",
                            column_config={"Costo": st.column_config.NumberColumn(
                                "Costo", format="$%,.2f", help="Producto: costo unitario. "
@@ -114,7 +114,7 @@ def _alta(grupo):
             desc = st.text_input("Descripción (opcional)",
                                  placeholder="lo que verá el cliente en la cotización")
             if st.form_submit_button(":material/save: Guardar artículo",
-                                     use_container_width=True):
+                                     width="stretch"):
                 ok, msg = CAT.crear(grupo, nombre, tipo=tipo, costo_unit=costo,
                                     horas_est=horas, tarifa_hora=tarifa, unidad=unidad,
                                     categoria=categoria, descripcion=desc,
@@ -170,7 +170,7 @@ def _detalle(grupo, cid):
                                             if str(it.get("Unidad", "")) in CAT.UNIDADES else 0))
             campos = {"CostoUnit": costo, "Unidad": unidad}
         desc = st.text_input("Descripción", value=str(it.get("Descripcion", "")))
-        if st.form_submit_button(":material/save: Guardar cambios", use_container_width=True):
+        if st.form_submit_button(":material/save: Guardar cambios", width="stretch"):
             campos.update({"Nombre": nombre, "Categoria": categoria, "Descripcion": desc})
             ok, msg = CAT.actualizar(cid, campos)
             (flash.exito if ok else st.error)(msg)
@@ -186,7 +186,7 @@ def _detalle(grupo, cid):
             st.caption("Deja de ofrecerse al cotizar, pero no se borra: las cotizaciones "
                        "que ya lo usan siguen mostrándolo.")
             if st.button(":material/archive: Desactivar", key=f"cat_off_{cid}",
-                         use_container_width=True):
+                         width="stretch"):
                 ok, msg = CAT.set_activo(cid, False)
                 (flash.exito if ok else st.error)(msg)
                 if ok:

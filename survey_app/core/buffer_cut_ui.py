@@ -90,12 +90,12 @@ def render_buffer_cut_tab():
     if base is None or len(base) != n:
         base = pd.DataFrame({"Buffer": [f"Buffer {i+1}" for i in range(n)],
                              "HKPR (mm)": [0.0] * n})
-    edit = st.data_editor(base, use_container_width=True, hide_index=True,
+    edit = st.data_editor(base, width="stretch", hide_index=True,
                           num_rows="fixed", disabled=["Buffer"], key="bc_editor")
     st.session_state["bc_df"] = edit
 
     # ── 4. Calcular (solo computa; el render va fuera) ──────
-    if st.button(":material/shield: Calcular cortes", type="primary", use_container_width=True,
+    if st.button(":material/shield: Calcular cortes", type="primary", width="stretch",
                  key="bc_calc"):
         hkpr_list = [float(x) for x in edit["HKPR (mm)"].tolist()]
         st.session_state[_K] = compute_buffer_cut(hkp, hkpr_list)
@@ -119,7 +119,7 @@ def render_buffer_cut_tab():
         "Estado":     "revisar" if b["warn"] else "OK",
     } for b in res["buffers"]]
     st.subheader("Resultado — cortes (mm)")
-    st.dataframe(pd.DataFrame(filas), use_container_width=True, hide_index=True)
+    st.dataframe(pd.DataFrame(filas), width="stretch", hide_index=True)
 
     svg = buffer_cut_svg(res, proyecto=_pr)
     st.subheader(":material/architecture: Diagrama de cortes")

@@ -102,7 +102,7 @@ def render_belting_tab():
         hgpr_list.append(v)
 
     # ── Cálculo (solo computa; el render va fuera) ──────────
-    if st.button(":material/swap_vert: Calcular belting", type="primary", use_container_width=True,
+    if st.button(":material/swap_vert: Calcular belting", type="primary", width="stretch",
                  key="belt_calc"):
         st.session_state[_K] = {"results": compute_belting(hgp, hq, hgpr_list),
                                 "hgp": hgp, "hq": hq}
@@ -126,7 +126,7 @@ def render_belting_tab():
                      f"{'por debajo' if r['dsts'] >= 0 else 'por encima'} del FFL top",
     } for r in results]
     st.subheader(":material/table_rows: Resultados (DSTS por elevador)")
-    st.dataframe(pd.DataFrame(filas), use_container_width=True, hide_index=True)
+    st.dataframe(pd.DataFrame(filas), width="stretch", hide_index=True)
     _formula = (f"DSTS = HGPR − HGP({_hgp:.0f}) − HQ({_hq:.0f})/1000 "
                 f"= HGPR − {_hgp + _hq / 1000.0:.1f} mm")
     st.caption(_formula)

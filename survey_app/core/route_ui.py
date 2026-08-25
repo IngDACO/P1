@@ -186,7 +186,7 @@ def render_mi_ruta(usuario, grupo):
     url = gmaps_dir_url(ruta, desde_actual=True)
     if url:
         st.link_button("Abrir la ruta en Google Maps", url,
-                       icon=":material/navigation:", use_container_width=True)
+                       icon=":material/navigation:", width="stretch")
         st.caption("La navegación paso a paso la abre Google Maps desde tu "
                    "ubicación actual, pasando por todas las obras en este orden.")
     if sin_ubic:
@@ -222,11 +222,11 @@ def render_ruta_dia(grupo):
                           help="A dónde va cada persona de campo según la planificación.")
     cp.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
     cn.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
-    if cp.button(":material/chevron_left:", key="rd_prev", use_container_width=True,
+    if cp.button(":material/chevron_left:", key="rd_prev", width="stretch",
                  help="Día anterior"):
         st.session_state["_rd_salto"] = -1
         st.rerun()
-    if cn.button(":material/chevron_right:", key="rd_next", use_container_width=True,
+    if cn.button(":material/chevron_right:", key="rd_next", width="stretch",
                  help="Día siguiente"):
         st.session_state["_rd_salto"] = 1
         st.rerun()
@@ -331,22 +331,22 @@ def render_ruta_dia(grupo):
     k1, k2, k3, k4 = st.columns(4)
     if k1.button(f":material/engineering: En obra\n\n{len(en_obra)}\n\n"
                  f"de {_n_pers} persona{'' if _n_pers == 1 else 's'}",
-                 key="cpxkpi_rd_obra", use_container_width=True):
+                 key="cpxkpi_rd_obra", width="stretch"):
         _nav("planificacion", "🎛 Panel")
     if k2.button(f":material/location_on: Sitios\n\n{len(sitios)}\n\n"
                  + ("con gente hoy" if sitios else "ninguno hoy"),
-                 key="cpxkpi_rd_sitios", use_container_width=True):
+                 key="cpxkpi_rd_sitios", width="stretch"):
         _nav("proyectos", "📊 Proyectos")
     if k3.button(f":material/wrong_location: Sin ubicación\n\n{len(sin_coord)}\n\n"
                  + ("fija el pin" if sin_coord else "todas ubicadas"),
-                 key="cpxkpi_rd_sinubic", use_container_width=True):
+                 key="cpxkpi_rd_sinubic", width="stretch"):
         _nav("proyectos", "📊 Proyectos")
     # ⚠️ El pie NO se corta a lo bruto: `", ".join(nombres)[:18]` partía un nombre por
     # la mitad. Con una persona se dice quién es; con varias, cuántas.
     _sub_plan = ("todos planificados" if not sin_plan
                  else (sin_plan[0] if len(sin_plan) == 1 else f"{len(sin_plan)} personas"))
     if k4.button(f":material/help: Sin plan\n\n{len(sin_plan)}\n\n{_sub_plan}",
-                 key="cpxkpi_rd_sinplan", use_container_width=True):
+                 key="cpxkpi_rd_sinplan", width="stretch"):
         _nav("planificacion", "🎛 Panel")
 
     if not sitios:
@@ -379,18 +379,18 @@ def render_ruta_dia(grupo):
                         + ", ".join(s["personas"]))
                     st.link_button("Cómo llegar", gmaps_dir_url([s], desde_actual=True),
                                    icon=":material/navigation:",
-                                   use_container_width=True)
+                                   width="stretch")
             if len(ruta) > 1:
                 st.link_button("Abrir la ruta completa en Google Maps",
                                gmaps_dir_url(ruta, desde_actual=False),
-                               icon=":material/route:", use_container_width=True,
+                               icon=":material/route:", width="stretch",
                                type="primary")
 
     if en_obra:
         import pandas as pd
         st.markdown("**Quién va a dónde**")
         st.dataframe(pd.DataFrame(en_obra), hide_index=True,
-                     use_container_width=True)
+                     width="stretch")
         st.caption(":material/info: «Estado» compara la planificación con el fichaje "
                    "real de ese día.")
 

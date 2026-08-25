@@ -234,13 +234,13 @@ def render_kpis(grupo: str):
 
     m1, m2, m3 = st.columns(3)
     if m1.button(f":material/folder: Activos\n\n{_act}\n\n{_sub_act}",
-                 key="cpxkpi_activos", use_container_width=True):
+                 key="cpxkpi_activos", width="stretch"):
         _ir_a("proyectos", "📊 Proyectos")
     if m2.button(f":material/trending_up: Avance\n\n{k['avg']}%\n\n{_sub_avg}",
-                 key="cpxkpi_avance", use_container_width=True):
+                 key="cpxkpi_avance", width="stretch"):
         _ir_a("proyectos", "📊 Proyectos")
     if m3.button(f":material/schedule: Horas\n\n{_hor} h\n\n{_sub_hor}",
-                 key="cpxkpi_horas", use_container_width=True):
+                 key="cpxkpi_horas", width="stretch"):
         _ir_a("finanzas", "⏱ Horas")
 
 
@@ -364,7 +364,7 @@ def _resumen_del_dia(grupo: str):
             for _col, (slug, icon, lbl, _urgb, cnt, _sec, _sub, _secn, _fn) in \
                     zip(st.columns(5), _fila):
                 if _col.button(f"{icon} {lbl} · {cnt}", key=f"resind_{slug}",
-                               use_container_width=True,
+                               width="stretch",
                                help=f"Ver el detalle e ir a {_secn} a resolverlo"):
                     _cur = st.session_state.get("_res_sel")
                     st.session_state["_res_sel"] = None if _cur == slug else slug
@@ -582,7 +582,7 @@ def _plano_section(pid: str, prj: dict):
         with st.expander(f"Ver los {len(par)} parámetros del plano"):
             st.dataframe(pd.DataFrame([{"Parámetro": k, "Valor": v}
                                        for k, v in sorted(par.items())]),
-                         hide_index=True, use_container_width=True)
+                         hide_index=True, width="stretch")
     _cargar_plano(pid)
 
 
@@ -607,7 +607,7 @@ def _galeria_fotos(fotos, pid, por_pagina=6):
                 _b = None
                 try:
                     _b = drive_store.download(did)     # cacheado 5 min
-                    st.image(_b, use_container_width=True)
+                    st.image(_b, width="stretch")
                 except Exception:
                     st.caption(":material/broken_image: no disponible")
                 pie = str(d.get("Nombre", ""))
@@ -617,7 +617,7 @@ def _galeria_fotos(fotos, pid, por_pagina=6):
                 # de la foto sin una segunda llamada a Drive.
                 if _b is not None:
                     st.download_button(":material/download:", data=_b, file_name=pie or f"{did}.jpg",
-                                       key=f"fdl_{pid}_{did}", use_container_width=True)
+                                       key=f"fdl_{pid}_{did}", width="stretch")
     if len(fotos) > n_ver:
         if st.button(f"Ver {min(por_pagina, len(fotos) - n_ver)} más "
                      f"({len(fotos) - n_ver} restantes)", key=f"masfotos_{pid}"):
@@ -743,7 +743,7 @@ def _archivos_section(pid: str):
         _ev = st.dataframe(pd.DataFrame([{
             "Archivo": e["nombre"], "Tipo": e["label"],
             "Subido por": e["por"], "Fecha": _fecha_corta(e["fecha"]),
-        } for e in resto]), hide_index=True, use_container_width=True,
+        } for e in resto]), hide_index=True, width="stretch",
             on_select="rerun", selection_mode="single-row", key=f"arch_tbl_{pid}")
         st.caption(":material/touch_app: Toca una fila para descargar o reabrir ese archivo.")
         try:
@@ -774,19 +774,19 @@ def _acciones_archivo(pid, e, puede_borrar):
             st.download_button(":material/download: Descargar " + (e["nombre"] or "archivo"),
                                data=drive_store.download(did),
                                file_name=e["nombre"] or f"{did}.pdf",
-                               key=f"arch_dl_{pid}_{did}", use_container_width=True)
+                               key=f"arch_dl_{pid}_{did}", width="stretch")
         except Exception as ex:
             st.error(f"No se pudo descargar: {ex}")
     if reabrible:
         if st.button(":material/replay: Reabrir en la herramienta", key=f"arch_reab_{pid}",
-                     use_container_width=True):
+                     width="stretch"):
             if tool_save_ui.pedir_reapertura(run, h, _CALC_NAV[h]):
                 st.rerun()
             else:
                 st.warning("Este cálculo no guardó sus entradas (es anterior a v148).")
     if puede_borrar and es_doc:
         if st.button(":material/delete: Borrar", key=f"arch_del_{pid}_{did or e['nombre']}",
-                     use_container_width=True):
+                     width="stretch"):
             if did:
                 drive_store.delete(did)
             P.delete_document_record(pid, did)
@@ -966,7 +966,7 @@ def _nuevo_proyecto_form(grupo: str, key: str = "nuevo"):
                                 placeholder="https://...",
                                 help="Se envían por Telegram/email a los asignados.")
             enviar = st.form_submit_button(":material/add_circle: Crear proyecto",
-                                           use_container_width=True)
+                                           width="stretch")
 
         if enviar:
             if not nom.strip():
@@ -1193,7 +1193,7 @@ def _cumplimiento_equipo(pid, grupo, prj):
         for t in req:
             fila[t] = _ico.get(comp["por_tipo"].get(t, "falta"), "—")
         filas.append(fila)
-    st.dataframe(pd.DataFrame(filas), hide_index=True, use_container_width=True)
+    st.dataframe(pd.DataFrame(filas), hide_index=True, width="stretch")
     st.caption(":green[:material/check_circle:] vigente · :orange[:material/schedule:] por vencer (renovar) · :red[:material/cancel:] vencido · — falta.  "
                "**Cumple** = ningún certificado requerido vencido ni faltante.")
 
@@ -1347,16 +1347,16 @@ def _cartera_clickeable(proys, alarmas, delays, aheads, costos,
                 if _pf > 0 and puede_facturar:
                     _ba, _bf = st.columns(2)
                     if _ba.button("Abrir →", key=f"cartbtn_{_idx}",
-                                  use_container_width=True):
+                                  width="stretch"):
                         st.session_state["_admin_open_proj"] = _pid
                         st.rerun()
                     if _bf.button(":material/receipt_long: Facturar", key=f"cartfac_{_idx}",
-                                  use_container_width=True, type="primary",
+                                  width="stretch", type="primary",
                                   help=f"Nueva factura con esta obra y su cliente ya "
                                        f"elegidos · pendiente {theme.dinero(_pf, 0)}"):
                         _ir_a_facturar(_pid, grupo)
                         st.rerun()
-                elif st.button("Abrir →", key=f"cartbtn_{_idx}", use_container_width=True):
+                elif st.button("Abrir →", key=f"cartbtn_{_idx}", width="stretch"):
                     st.session_state["_admin_open_proj"] = _pid
                     st.rerun()
 
@@ -1429,7 +1429,7 @@ def _cartera_lista(proys, alarmas, delays, aheads, costos, pendientes=None,
             "Alertas": str(_al) if _al else "",
         })
     _ev = st.dataframe(
-        pd.DataFrame(_rows), hide_index=True, use_container_width=True,
+        pd.DataFrame(_rows), hide_index=True, width="stretch",
         on_select="rerun", selection_mode="single-row", key="cart_tbl",
         column_config={
             "Avance": st.column_config.ProgressColumn(
@@ -1476,13 +1476,13 @@ def _cartera_lista(proys, alarmas, delays, aheads, costos, pendientes=None,
             f"**{_sp.get('Nombre', '')}**  \n"
             + (f":material/receipt: {_Tb.dinero(_spf, 0)} sin facturar"
                if _spf > 0 else ":material/check: nada pendiente de facturar"))
-        if _cs[1].button("Abrir →", key="cartlist_open", use_container_width=True):
+        if _cs[1].button("Abrir →", key="cartlist_open", width="stretch"):
             st.session_state["_admin_open_proj"] = _spid
             st.session_state.pop("cart_tbl", None)   # limpia la selección → no re-abre al volver
             st.rerun()
         if _con_fac and _cs[2].button(
                 ":material/receipt_long: Facturar", key="cartlist_fac", type="primary",
-                use_container_width=True,
+                width="stretch",
                 help=f"Nueva factura con esta obra y su cliente ya elegidos · "
                      f"pendiente {_Tb.dinero(_spf, 0)}"):
             _ir_a_facturar(_spid, grupo)
@@ -1772,7 +1772,7 @@ def _equipo_proyecto(pid, grupo):
         return
     st.dataframe(pd.DataFrame([{"Persona": x["usuario"], "Horas": x["horas"]}
                                for x in _lb["items"]]),
-                 hide_index=True, use_container_width=True)
+                 hide_index=True, width="stretch")
     st.caption(f"Total: **{_lb['horas']:.1f} h**")
 
 
@@ -2061,7 +2061,7 @@ def _detalle_proyecto(pid: str, grupo: str = None):
             _fc1, _fc2 = st.columns([3, 1])
             _fc1.markdown(f":material/receipt: Sin facturar: **{_Tc.dinero(_pend_cab, 0)}**")
             if _fc2.button(":material/receipt_long: Facturar", key=f"faccab_{pid}",
-                           use_container_width=True, type="primary",
+                           width="stretch", type="primary",
                            help="Nueva factura con esta obra y su cliente ya elegidos."):
                 _ir_a_facturar(pid, grupo)
                 st.rerun()
@@ -2208,7 +2208,7 @@ def _detalle_proyecto(pid: str, grupo: str = None):
                 help=f"Venta de la MO = costo × (1+margen). Default del grupo: {_defm:.0f}% "
                      f"(lo fija el propietario en Grupos).")
 
-            if st.form_submit_button(":material/save: Guardar cambios", use_container_width=True):
+            if st.form_submit_button(":material/save: Guardar cambios", width="stretch"):
                 # Validar sin `st.stop()`: pararia el render de TODO lo que va
                 # debajo (actividades, archivar...) y la pagina quedaria a medias.
                 _err = ""
@@ -2303,7 +2303,7 @@ def _detalle_proyecto(pid: str, grupo: str = None):
                 "Avance %": P._num(a.get("Avance")),
             } for a in acts])
             _edited = st.data_editor(
-                _adf, use_container_width=True, hide_index=True, num_rows="fixed",
+                _adf, width="stretch", hide_index=True, num_rows="fixed",
                 key=f"acted_{pid}", disabled=["Avance %"],
                 column_config={
                     "Orden": st.column_config.NumberColumn("Orden", min_value=1, step=1,
@@ -2371,7 +2371,7 @@ def _detalle_proyecto(pid: str, grupo: str = None):
             st.info(":material/inventory_2: Este proyecto está **archivado**: no aparece en las listas "
                     "ni en los informes, pero no se ha perdido nada.")
             if st.button(":material/recycling: Restaurar proyecto", key=f"unarch_{pid}",
-                         use_container_width=True):
+                         width="stretch"):
                 ok, msg = P.set_archivado(pid, False)
                 (flash.exito if ok else st.error)(msg)
                 if ok:
@@ -2381,7 +2381,7 @@ def _detalle_proyecto(pid: str, grupo: str = None):
                 st.caption("Desaparece de las listas y de los informes, pero se "
                            "conserva entero y puede restaurarse cuando quieras. "
                            "Es lo recomendado al cerrar una obra.")
-                if st.button(":material/inventory_2: Archivar", key=f"arch_{pid}", use_container_width=True):
+                if st.button(":material/inventory_2: Archivar", key=f"arch_{pid}", width="stretch"):
                     ok, msg = P.set_archivado(pid, True)
                     (flash.exito if ok else st.error)(msg)
                     if ok:
@@ -2406,7 +2406,7 @@ def _detalle_proyecto(pid: str, grupo: str = None):
                 _tecleado = st.text_input(
                     f"Escribe «{prj.get('Nombre','')}» para confirmar", key=f"delnom_{pid}")
                 if st.button("Eliminar definitivamente", key=f"del_{pid}",
-                             use_container_width=True,
+                             width="stretch",
                              disabled=(_tecleado.strip() != str(prj.get("Nombre", "")).strip())):
                     ok, msg = P.delete_project(pid)
                     (flash.exito if ok else st.error)(msg)
@@ -2559,7 +2559,7 @@ def _dashboard_agrupacion(ag, grupo):
             "Costo": _cs[i], "vs media $": _dev(_cs[i], _cm),
             "Alertas": _na or "",
         })
-    st.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True)
+    st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch")
     st.caption("«vs media» compara cada elevador con el promedio de la agrupación; "
                "solo se marca si se desvía 15% o más.")
 
@@ -2596,7 +2596,7 @@ def _miembros_editor(ags_proys, todos, key, pesos_actuales=None):
         st.caption("No hay proyectos en el grupo todavía.")
         return {}
     ed = st.data_editor(
-        pd.DataFrame(filas), hide_index=True, use_container_width=True,
+        pd.DataFrame(filas), hide_index=True, width="stretch",
         num_rows="fixed", key=key,
         disabled=["Proyecto", "Avance %", "Ya en otra"],
         column_config={
@@ -2675,7 +2675,7 @@ def _cartera_agrupaciones(ags, grupo):
             if r["fecha"]:
                 _extra += f" · :material/event: {r['fecha'].strftime('%d/%m')}"
             _lbl = f"**:material/account_tree: {r['a'].get('Nombre', '')}** · {r['n']} elev · {_av}%{_extra}"
-            if _cols[_j].button(_lbl, key=f"agrc_{_idx}", use_container_width=True):
+            if _cols[_j].button(_lbl, key=f"agrc_{_idx}", width="stretch"):
                 st.session_state["_admin_open_agr"] = r["aid"]
                 st.rerun()
 
@@ -2715,7 +2715,7 @@ def _panel_agrupaciones(grupo: str):
                 st.warning(f"{len(_sel)} proyectos: cada cambio es una escritura "
                            "en la hoja; puede tardar unos segundos.")
             if st.button(":material/save: Guardar los proyectos de la agrupación",
-                         key=f"agmemsave_{_ag['ID']}", use_container_width=True):
+                         key=f"agmemsave_{_ag['ID']}", width="stretch"):
                 with st.spinner("Guardando..."):
                     ok, msg = P.set_grouping_members(_ag["ID"], _sel, grupo)
                 (flash.exito if ok else st.error)(msg)
@@ -2746,7 +2746,7 @@ def _panel_agrupaciones(grupo: str):
         nom = st.text_input("Nombre de la agrupación", key="nueva_agr_nom")
         des = st.text_input("Descripción (opcional)", key="nueva_agr_des")
         _nuevos = _miembros_editor(nom_ags, todos, "agmem_nueva")
-        if st.button("Crear agrupación", key="nueva_agr_btn", use_container_width=True):
+        if st.button("Crear agrupación", key="nueva_agr_btn", width="stretch"):
             if not nom.strip():
                 st.error("El nombre es obligatorio.")
             else:
@@ -2828,7 +2828,7 @@ def render_owner_projects():
                 unsafe_allow_html=True)
 
     with st.expander(":material/assignment: Ver tabla detallada"):
-        st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True,
+        st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True,
                      column_config={"Mapa": st.column_config.LinkColumn("Mapa", display_text="Abrir")})
 
     st.markdown("#### :material/search: Abrir proyecto")
@@ -2861,7 +2861,7 @@ def _field_activities(pid):
         "Nota": str(a.get("Nota", "")),
     } for a in acts])
     _ed = st.data_editor(
-        _df, hide_index=True, use_container_width=True, num_rows="fixed",
+        _df, hide_index=True, width="stretch", num_rows="fixed",
         key=f"fldacts_{pid}",
         disabled=["N", "Actividad", "Inicio real", "Fin real"],
         column_config={
@@ -2870,7 +2870,7 @@ def _field_activities(pid):
             "Nota": st.column_config.TextColumn(help="Opcional"),
         })
     st.caption("Las fechas se registran solas: **inicio** al pasar de 0, **fin** al llegar a 100.")
-    if st.button(":material/save: Guardar avances", key=f"fldsave_{pid}", use_container_width=True):
+    if st.button(":material/save: Guardar avances", key=f"fldsave_{pid}", width="stretch"):
         cambios, _vacias = [], []
         for i, a in enumerate(acts):
             r = _ed.iloc[i]
@@ -3141,14 +3141,14 @@ def _ordenes_section(pid, grupo, editable=True, key_prefix="ord"):
                         value=float(_n(o.get("Valor"))), key=f"{key_prefix}_ordv_{_oid}",
                         help="Si llegó por otro importe, corrígelo aquí antes de recibir.")
                     if _b.button("Recibir", key=f"{key_prefix}_ordr_{_oid}",
-                                 use_container_width=True):
+                                 width="stretch"):
                         ok, msg = O.marcar_recibida(
                             _oid, _real, st.session_state.get("auth", {}).get("usuario", ""))
                         (flash.exito if ok else st.error)(msg)
                         if ok:
                             st.rerun()
                     if _c2.button("Cancelar", key=f"{key_prefix}_ordc_{_oid}",
-                                  use_container_width=True):
+                                  width="stretch"):
                         ok, msg = O.cancelar(_oid)
                         (flash.exito if ok else st.error)(msg)
                         if ok:
@@ -3171,7 +3171,7 @@ def _ordenes_section(pid, grupo, editable=True, key_prefix="ord"):
                                            "como atrasada — no se puede decir que llega "
                                            "tarde si nadie dijo cuándo llegaba.")
                 if st.form_submit_button(":material/add_circle: Registrar orden",
-                                         use_container_width=True):
+                                         width="stretch"):
                     ok, msg = O.crear(
                         pid, grupo, _prov, _val, descripcion=_desc, categoria=_cat,
                         fecha_esperada=_fe.strftime("%Y-%m-%d") if _fe else "",
@@ -3254,7 +3254,7 @@ def _editor_ganancia_hora(pid, _items, _gh, _T):
                 "Ganas": round(P._num(x.get("horas"))
                                * P._num(_gh.get(str(x.get("usuario", "")), 0)), 2),
             } for x in _items]),
-            hide_index=True, use_container_width=True, key=f"gh_ed_{pid}",
+            hide_index=True, width="stretch", key=f"gh_ed_{pid}",
             # ⚠️ Solo se teclea la GANANCIA. Precio/h y «Ganas» son consecuencia y van
             # bloqueados, igual que en la cotización (v355).
             disabled=["Persona", "Horas", "Costo/h", "Precio/h", "Ganas"],
@@ -3278,14 +3278,14 @@ def _editor_ganancia_hora(pid, _items, _gh, _T):
                  "facturan a costo (decisión de v360).")
     _c1, _c2 = st.columns([2, 1])
     if _c1.button(":material/save: Guardar ganancias", key=f"gh_save_{pid}",
-                  type="primary", use_container_width=True):
+                  type="primary", width="stretch"):
         ok, msg = P.set_ganancia_hora(pid, _nuevo)
         (flash.exito if ok else st.error)(msg)
         if ok:
             st.rerun()
     # ⚠️ La vuelta atrás: si migraste una obra por error, se puede deshacer (v346).
     if _gh and _c2.button(":material/undo: Volver al %", key=f"gh_undo_{pid}",
-                          use_container_width=True,
+                          width="stretch",
                           help="Quita las ganancias por hora y vuelve al margen %."):
         ok, msg = P.set_ganancia_hora(pid, {})
         (flash.exito if ok else st.error)(msg)
@@ -3323,7 +3323,7 @@ def _ganancia_fija_ui(pid, rev, _fija, _T, _modelo):
         _c1.caption("Con este importe, el ingreso estimado de la obra sería **"
                     + _T.dinero(_ing) + "** sobre un costo de " + _T.dinero(_costo) + ".")
     if _c2.button(":material/save: Guardar ganancia fija", key=f"gf_save_{pid}",
-                  use_container_width=True):
+                  width="stretch"):
         ok, msg = P.set_ganancia_fija(pid, _nf)
         (flash.exito if ok else st.error)(msg)
         if ok:
@@ -3389,7 +3389,7 @@ def _facturar_atajo(pid, grupo, prj_nombre=""):
                         + _T.dinero(facturado, 0) + ")")
     with _c2:
         if st.button(":material/receipt_long: Facturar esta obra", key="fac_atajo_" + str(pid),
-                     use_container_width=True, type="primary" if pend > 0 else "secondary",
+                     width="stretch", type="primary" if pend > 0 else "secondary",
                      help="Abre la nueva factura con este cliente y este proyecto ya elegidos."):
             _ir_a_facturar(pid, grupo)
             st.rerun()
@@ -3515,7 +3515,7 @@ def render_expenses(pid, grupo, can_delete=False, key_prefix="ex"):
         st.dataframe(pd.DataFrame([{
             "Usuario": x["usuario"], "Horas": x["horas"],
             "Tarifa/h": x["tarifa"], "Costo": x["costo"],
-        } for x in lb["items"]]), hide_index=True, use_container_width=True)
+        } for x in lb["items"]]), hide_index=True, width="stretch")
         if lb["sin_tarifa"]:
             st.warning(":material/warning: Sin tarifa/hora, así que sus horas suman **$0** al costo: **"
                        + ", ".join(lb["sin_tarifa"]) + "**. Se fija en :material/build: Usuarios.")
@@ -3579,7 +3579,7 @@ def render_expenses(pid, grupo, can_delete=False, key_prefix="ex"):
                 cc = st.columns([6, 1])
                 if _did:
                     if cc[0].button(_lbl, key=f"{key_prefix}_open_{_rid}",
-                                    use_container_width=True):
+                                    width="stretch"):
                         _cur = st.session_state.get(f"{key_prefix}_rcb")
                         st.session_state[f"{key_prefix}_rcb"] = None if _cur == _rid else _rid
                         st.rerun()
@@ -3601,7 +3601,7 @@ def render_expenses(pid, grupo, can_delete=False, key_prefix="ex"):
                     from core import drive_store
                     _data = drive_store.download(str(_ro.get("DriveID", "")).strip())
                     if _arch.lower().endswith((".png", ".jpg", ".jpeg")):
-                        st.image(_data, caption=_arch, use_container_width=True)
+                        st.image(_data, caption=_arch, width="stretch")
                     else:
                         st.info(f":material/description: {_arch} — es un PDF; descárgalo para verlo.")
                     st.download_button(":material/download: Descargar recibo", data=_data, file_name=_arch,
@@ -3759,7 +3759,7 @@ def render_pnl(grupo: str):
     for _fila in (_IND[:4], _IND[4:]):
         for _col, _x in zip(st.columns(4), _fila):
             if _col.button(f"{_x[1]} {_x[2]} · {_x[3]}", key=f"pnlind_{_x[0]}",
-                           use_container_width=True,
+                           width="stretch",
                            help="Ver el detalle e ir a resolverlo"):
                 _cur0 = st.session_state.get("_pnl_ind")
                 st.session_state["_pnl_ind"] = None if _cur0 == _x[0] else _x[0]
@@ -3784,7 +3784,7 @@ def render_pnl(grupo: str):
     _tc = st.columns(len(_TOOLS))
     _cur = st.session_state.get("_pnl_tool", "")
     for _i2, (_k, _lbl) in enumerate(_TOOLS):
-        if _tc[_i2].button(_lbl, key=f"pnltool_{_k}", use_container_width=True):
+        if _tc[_i2].button(_lbl, key=f"pnltool_{_k}", width="stretch"):
             st.session_state["_pnl_tool"] = "" if _cur == _k else _k
             st.rerun()
     if _cur:
@@ -3888,7 +3888,7 @@ def _pnl_por_proyecto(grupo: str, T):
         "Compras": r["compras"],
         "Resultado": r["resultado"],
         "Margen %": r["margen"],
-    } for r in rows]), hide_index=True, use_container_width=True,
+    } for r in rows]), hide_index=True, width="stretch",
         column_config={
             "Facturado":    st.column_config.NumberColumn(format="$%,.0f"),
             "Mano de obra": st.column_config.NumberColumn(format="$%,.0f"),
@@ -3975,7 +3975,7 @@ def render_group_profitability(grupo: str):
         "Por facturar":     round(r["por_facturar"], 0),
     } for r in _orden])
     _ed = st.data_editor(
-        _df, use_container_width=True, hide_index=True, key="rent_ed",
+        _df, width="stretch", hide_index=True, key="rent_ed",
         disabled=["Proyecto", "Costo", "Ingreso estimado", "Ganancia",
                   "Facturado", "Por facturar"],
         column_config={
@@ -4121,7 +4121,7 @@ def render_group_expenses(grupo: str):
             "": ("sobre" if f["over"] else
                  ("pedido" if f.get("over_comp") else
                   ("riesgo" if f["over_proj"] else "ok"))),
-        } for f in con_pres]), hide_index=True, use_container_width=True,
+        } for f in con_pres]), hide_index=True, width="stretch",
             on_select="rerun", selection_mode="single-row", key="ge_tbl")
         st.caption(":material/touch_app: Toca una fila y «Abrir» para ir a ese proyecto. **Proyección** = costo al "
                    "terminar al ritmo actual. sobre = ya se pasó · pedido = se pasará con "
@@ -4142,7 +4142,7 @@ def render_group_expenses(grupo: str):
         st.dataframe(pd.DataFrame([{
             "Proyecto": f["nombre"], "Compras": f["compras"],
             "Mano de obra": f["mano_obra"], "Costo total": f["total"],
-        } for f in sin_pres]), hide_index=True, use_container_width=True)
+        } for f in sin_pres]), hide_index=True, width="stretch")
         st.caption(f"{len(sin_pres)} proyecto(s) sin presupuesto: no hay contra qué comparar "
                    "su gasto. Se define en el detalle del proyecto → :material/edit: Datos.")
 
@@ -4244,7 +4244,7 @@ def render_group_hours(grupo: str):
             "Costo M.O.": d["costo"] or 0,
         })
     # v215: tabla CLICKEABLE → abre la ficha de la persona (Planificación · Usuarios).
-    _hev = st.dataframe(pd.DataFrame(filas), use_container_width=True, hide_index=True,
+    _hev = st.dataframe(pd.DataFrame(filas), width="stretch", hide_index=True,
                         on_select="rerun", selection_mode="single-row", key="gh_tbl")
     st.caption(":material/touch_app: Toca una persona y «Abrir ficha» para gestionarla.")
     try:
@@ -4320,6 +4320,6 @@ def render_group_hours(grupo: str):
                 _fila[_p] = round(_h, 2) if _h else ""
             _mat.append(_fila)
         if _mat:
-            st.dataframe(pd.DataFrame(_mat), use_container_width=True, hide_index=True)
+            st.dataframe(pd.DataFrame(_mat), width="stretch", hide_index=True)
             st.caption("Cada celda: horas que esa persona imputó a ese proyecto en el periodo. "
                        "Las columnas son los proyectos.")

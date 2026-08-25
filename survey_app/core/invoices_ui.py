@@ -78,7 +78,7 @@ def render_facturas(grupo):
         "Estado":    I.estado_cobro(f),
     } for f in _rows])
     _ev = st.dataframe(
-        df, use_container_width=True, hide_index=True,
+        df, width="stretch", hide_index=True,
         on_select="rerun", selection_mode="single-row", key="fac_tbl",
         column_config={
             "Total":     st.column_config.NumberColumn("Total", format="$%,d"),
@@ -120,7 +120,7 @@ def _detalle_factura(grupo, fid):
             st.dataframe(pd.DataFrame([{
                 "Concepto": str(x.get("concepto", "")),
                 "Importe":  round(_num(x.get("importe")), 2),
-            } for x in _ln]), use_container_width=True, hide_index=True,
+            } for x in _ln]), width="stretch", hide_index=True,
                 column_config={"Importe": st.column_config.NumberColumn("Importe", format="$%,.2f")})
         _imp_pct = _num(f.get("ImpuestoPct"))
         from core import theme as _T                      # v309: escapa el `$` (LaTeX)
@@ -267,7 +267,7 @@ def _nueva_factura(grupo):
     st.caption("Líneas de la factura — edita, agrega o quita. El «Proyecto» enlaza la línea para "
                "no volver a facturarla.")
     _ed = st.data_editor(
-        pd.DataFrame(_pre), num_rows="dynamic", use_container_width=True, key="fac_lineas",
+        pd.DataFrame(_pre), num_rows="dynamic", width="stretch", key="fac_lineas",
         column_config={
             "Concepto": st.column_config.TextColumn("Concepto", width="large"),
             "Proyecto": st.column_config.SelectboxColumn(

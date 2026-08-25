@@ -111,11 +111,11 @@ def render_plumb_tab():
     if base is None or len(base) != n:
         base = pd.DataFrame({"Elevador": [f"Elevador {i+1}" for i in range(n)],
                              "BSR (mm)": [0.0] * n})
-    bsr_edit = st.data_editor(base, use_container_width=True, hide_index=True,
+    bsr_edit = st.data_editor(base, width="stretch", hide_index=True,
                               num_rows="fixed", disabled=["Elevador"], key="plb_bsr_editor")
     st.session_state["plb_bsr_df"] = bsr_edit
 
-    if st.button(":material/straighten: Calcular plomadas", type="primary", use_container_width=True, key="plb_calc"):
+    if st.button(":material/straighten: Calcular plomadas", type="primary", width="stretch", key="plb_calc"):
         bsr_list = [float(x or 0) for x in bsr_edit["BSR (mm)"].tolist()]
         st.session_state["plb_res_multi"] = {"n": n, "results": [compute_plumb({
             "BKS": bks, "RAIL": rail, "TKSW": tksw, "LengthTemplate": lt,
@@ -158,7 +158,7 @@ def render_plumb_tab():
             "dd (plomo→pared der)": round(v.get("plomo_der_pared_der", 0), 1),
             "di+DBP+dd": round(cierre, 1),
         })
-    st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True)
+    st.dataframe(pd.DataFrame(_rows), width="stretch", hide_index=True)
     st.caption("Comprobación de obra: **di + DBP + dd = BSR**. Si no cierra, hay error de medida.")
 
     # ── Diagramas de un elevador ──

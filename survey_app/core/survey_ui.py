@@ -322,12 +322,12 @@ def render_survey_tab(_ROL, _GRUPO):
                     {"Parámetro": k, "Valor": round(v, 3) if isinstance(v, (int, float)) else v}
                     for k, v in limits.items()
                 ]),
-                use_container_width=True, hide_index=True
+                width="stretch", hide_index=True
             )
 
         st.subheader("Matriz SURVEY ajustada")
         st.dataframe(survey_adj_df.style.apply(highlight, axis=None),
-                     use_container_width=True)
+                     width="stretch")
         _leyenda_matriz()
 
         st.subheader("Resumen por columna — Estado inicial")
@@ -354,7 +354,7 @@ def render_survey_tab(_ROL, _GRUPO):
                 "Min / Max (mm)":      ext,
                 "Diferencia (mm)":     round(analysis[f"DIF_{col}"], 2),
             })
-        st.dataframe(pd.DataFrame(summary), use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame(summary), width="stretch", hide_index=True)
 
         st.info(
             f"**MAX OFF RL:** {analysis['MAX_OFF_RL']:.2f} mm  |  "
@@ -424,7 +424,7 @@ def render_survey_tab(_ROL, _GRUPO):
                             "Fuera": s["total_off"],
                             **{c: _obc.get(c, 0) for c in SURVEY_COLS},
                         })
-                    st.dataframe(pd.DataFrame(_comp), hide_index=True, use_container_width=True)
+                    st.dataframe(pd.DataFrame(_comp), hide_index=True, width="stretch")
             for idx_sol, sol in enumerate(sorted_solutions):
                 is_best   = (sol["rl"], sol["fb"]) == best_pair
                 fb_ap     = sol.get("fb_applied", sol["fb"])
@@ -449,7 +449,7 @@ def render_survey_tab(_ROL, _GRUPO):
                     sol_highlighter = make_highlighter(lim_map, sol_min, sol_max, cut_cols,
                                                        ctrl_in_frame_, ctrl_side_)
                     st.dataframe(sol_df.style.apply(sol_highlighter, axis=None),
-                                 use_container_width=True)
+                                 width="stretch")
                     _leyenda_matriz()
                     if not wall_limiting_:
                         st.caption("CUT OR / CUT OL: valor a cortar si OR/OL supera el límite (OR/OL − LIMIT). Positivo = requiere corte. Blanco = dentro del límite.")
@@ -475,7 +475,7 @@ def render_survey_tab(_ROL, _GRUPO):
                             lbl:             round(ext_c, 2),
                             "Dif vs Límite": round(dif_c, 2),
                         })
-                    st.dataframe(pd.DataFrame(sol_sum), use_container_width=True, hide_index=True)
+                    st.dataframe(pd.DataFrame(sol_sum), width="stretch", hide_index=True)
 
             # El log expone la traza del optimizador (pasos, descartes y por que).
             # Es logica propietaria: misma regla que ya aplica el agente IA y que
@@ -525,7 +525,7 @@ def render_survey_tab(_ROL, _GRUPO):
                                 return ["background-color:#1a3a2a;color:#a8e6cf"] * len(row)
                             return [""] * len(row)
                         st.dataframe(df_log.style.apply(_hl, axis=1),
-                                     use_container_width=True, hide_index=True)
+                                     width="stretch", hide_index=True)
         else:
             st.error("No se encontró combinación válida.")
 
@@ -610,7 +610,7 @@ def render_survey_tab(_ROL, _GRUPO):
             pm2.metric("DBPW", f"{plumb_res['dbpw']:.1f} mm")
             pm3.metric("RW",   f"{plumb_res['rw']:.1f} mm")
             st.dataframe(pd.DataFrame(plumb_table(plumb_res)),
-                         use_container_width=True, hide_index=True)
+                         width="stretch", hide_index=True)
             _pr_ = str(st.session_state.get("proyecto", ""))
             _bs = plumb_res.get("bs_check") or {}
             if _bs and not _bs.get("ok", True):
@@ -646,7 +646,7 @@ def render_survey_tab(_ROL, _GRUPO):
                 )
             st.markdown("**:material/straighten: Verificación en campo — distancias plomo ↔ pared real**")
             st.dataframe(pd.DataFrame(plumb_checks(plumb_res)),
-                         use_container_width=True, hide_index=True)
+                         width="stretch", hide_index=True)
             if float(all_params.get("LengthTemplate", 0.0)) <= 0:
                 st.info(":material/lightbulb: Ingresa **LengthTemplate** en los parámetros para ver el "
                         "template completo (punto P, cortes C1/C2 y diagonales).")
@@ -1087,7 +1087,7 @@ def render_survey_tab(_ROL, _GRUPO):
         st.caption("Ingresa o edita las medidas en campo (mm).")
         edited_df = st.data_editor(
             st.session_state.survey_df,
-            use_container_width=True,
+            width="stretch",
             num_rows="fixed",
             key="survey_editor"
         )
@@ -1111,7 +1111,7 @@ def render_survey_tab(_ROL, _GRUPO):
             data      = excel_bytes,
             file_name = "survey_matrix.xlsx",
             mime      = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            use_container_width=True
+            width="stretch"
         )
 
         # ══════════════════════════════════════════════════════
@@ -1151,7 +1151,7 @@ def render_survey_tab(_ROL, _GRUPO):
                     st.warning(_x)
 
         if st.button(":material/play_arrow: Calcular y ver resultados", type="primary",
-                     use_container_width=True, key="btn_calc_datos"):
+                     width="stretch", key="btn_calc_datos"):
             _do_calculo()
             st.session_state["_fase_pending"] = _FASE_RES
             st.rerun()
@@ -1174,7 +1174,7 @@ def render_survey_tab(_ROL, _GRUPO):
             if st.session_state.get("_calc_sig") and st.session_state["_calc_sig"] != _survey_signature():
                 st.warning(":material/warning: Cambiaste datos desde el último cálculo. Lo de abajo corresponde "
                            "al cálculo anterior — recalcula para actualizarlo.")
-            if st.button(":material/sync: Recalcular con los datos actuales", use_container_width=True,
+            if st.button(":material/sync: Recalcular con los datos actuales", width="stretch",
                          key="btn_recalc"):
                 _do_calculo()
                 st.rerun()
@@ -1199,7 +1199,7 @@ def render_survey_tab(_ROL, _GRUPO):
             if sched_rows:
                 edited = st.data_editor(
                     pd.DataFrame(sched_rows),
-                    use_container_width=True, hide_index=True, num_rows="fixed",
+                    width="stretch", hide_index=True, num_rows="fixed",
                     disabled=["Actividad"], key="sched_editor",
                 )
                 st.session_state["sched_rows"] = edited.to_dict("records")
@@ -1249,7 +1249,7 @@ def render_survey_tab(_ROL, _GRUPO):
                         f"Motivo: {interp_usr.get('_error', interp.get('_error', 'no disponible'))}.\n\n"
                         "Configura `ANTHROPIC_API_KEY` en los Secrets de Streamlit Cloud y vuelve a calcular."
                     )
-                elif st.button(":material/description: Generar informe del cliente", use_container_width=True):
+                elif st.button(":material/description: Generar informe del cliente", width="stretch"):
                     with st.spinner("Generando informe del cliente..."):
                         user_pdf = generate_user_report(
                             project_params      = r["all_params"],
@@ -1267,7 +1267,7 @@ def render_survey_tab(_ROL, _GRUPO):
                         data      = user_pdf,
                         file_name = f"informe_{proj}.pdf",
                         mime      = "application/pdf",
-                        use_container_width=True
+                        width="stretch"
                     )
             else:
                 st.info("Realiza el cálculo primero para poder generar el informe.")
@@ -1327,7 +1327,7 @@ def render_survey_tab(_ROL, _GRUPO):
                         pass
 
                     if st.button(":material/save: Guardar el survey en este proyecto",
-                                 use_container_width=True, key="sv_save_prj",
+                                 width="stretch", key="sv_save_prj",
                                  disabled=(_prj is None)):
                         _pid = str(_prj.get("ID", ""))
                         _usr = st.session_state.get("auth", {}).get("usuario", "")
@@ -1417,7 +1417,7 @@ def render_survey_tab(_ROL, _GRUPO):
                     _c1, _c2 = st.columns([3, 1])
                     _c1.info(f"Proyecto **{_pc['id']} · {_pc['nombre']}** actualizado con "
                              "este survey.")
-                    if _c2.button("Abrir proyecto ➜", use_container_width=True,
+                    if _c2.button("Abrir proyecto ➜", width="stretch",
                                   key="ir_al_proyecto"):
                         st.session_state["_prjsel_pending"] = _pc["id"]
                         # v299: la nav vieja (`_nav_pending` + el radio `main_nav`) se

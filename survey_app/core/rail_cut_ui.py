@@ -116,14 +116,14 @@ def render_rail_cut_tab():
         if base is None or len(base) != n:
             base = pd.DataFrame({"Elevador": [f"Elevador {i+1}" for i in range(n)],
                                  "L (mm)": [0.0] * n})
-        L_edit = st.data_editor(base, use_container_width=True, hide_index=True,
+        L_edit = st.data_editor(base, width="stretch", hide_index=True,
                                 num_rows="fixed", disabled=["Elevador"], key="rc_L_editor")
         st.session_state["rc_L_df"] = L_edit
 
         # El boton SOLO computa: antes todo el resultado colgaba de aqui y se
         # perdia con cualquier interaccion (bug estructural de v110).
         if st.button(":material/content_cut: Calcular cortes (Caso 1)", type="primary",
-                     use_container_width=True, key="rc_calc1"):
+                     width="stretch", key="rc_calc1"):
             L_list = [float(x) for x in L_edit["L (mm)"].tolist()]
             st.session_state["rc_res"] = {
                 "caso": 1, "res": compute_case1(lfkk, lfgk, n2500, n5000, L_list),
@@ -138,10 +138,10 @@ def render_rail_cut_tab():
                 _kpi("Elevadores", str(_e["n"]))]), unsafe_allow_html=True)
             mat = _result_matrix(["CutRC", "CutRCW"], res["elevadores"], _e["n"])
             st.subheader("Resultado — cortes (mm)")
-            st.dataframe(mat, use_container_width=True)
+            st.dataframe(mat, width="stretch")
             with st.expander("Detalle (RC, RCW)"):
                 det = _result_matrix(["RC", "RCW"], res["elevadores"], _e["n"])
-                st.dataframe(det, use_container_width=True)
+                st.dataframe(det, width="stretch")
 
             svg = rail_cut_svg(res, caso=1, n2500=_e["n2500"], n5000=_e["n5000"], proyecto=_pr)
             st.subheader(":material/architecture: Diagrama de cortes")
@@ -188,12 +188,12 @@ def render_rail_cut_tab():
         if base is None or list(base.columns) != cols_expected:
             base = pd.DataFrame({"Riel": rieles,
                                  **{f"Elevador {i+1}": [0.0] * 4 for i in range(n)}})
-        in_edit = st.data_editor(base, use_container_width=True, hide_index=True,
+        in_edit = st.data_editor(base, width="stretch", hide_index=True,
                                  num_rows="fixed", disabled=["Riel"], key="rc_in_editor")
         st.session_state["rc_in_df"] = in_edit
 
         if st.button(":material/content_cut: Calcular cortes (Caso 2)", type="primary",
-                     use_container_width=True, key="rc_calc2"):
+                     width="stretch", key="rc_calc2"):
             rows = []
             for i in range(n):
                 col = in_edit[f"Elevador {i+1}"].tolist()
@@ -213,7 +213,7 @@ def render_rail_cut_tab():
             st.caption(f"Sub-caso: {_e['sub']}")
             mat = _result_matrix(["CutRZ", "CutRO", "CutRF", "CutRB"], res, _e["n"])
             st.subheader("Resultado — cortes (mm)")
-            st.dataframe(mat, use_container_width=True)
+            st.dataframe(mat, width="stretch")
 
             svg = rail_cut_svg({"elevadores": res}, caso=2, proyecto=_pr)
             st.subheader(":material/architecture: Diagrama de cortes")

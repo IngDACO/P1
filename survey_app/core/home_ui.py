@@ -388,7 +388,7 @@ def sidebar_menu() -> str:
         _has = _k in _SUBS
         _open = _has and _k == _exp
         _mark = ("  ▾" if _open else ("  ▸" if _has else ""))
-        if st.button(_lbl + _mark, key=f"navsec_{_k}", use_container_width=True):
+        if st.button(_lbl + _mark, key=f"navsec_{_k}", width="stretch"):
             if _has:
                 # v230: SOLO desplegar/plegar; NO navegar → no se carga el contenido de la
                 # sub-pestaña hasta que se toca una hija (evita "abrir todo de una vez").
@@ -400,7 +400,7 @@ def sidebar_menu() -> str:
         if _open:                              # acordeón: solo la DESPLEGADA muestra sus hijas
             _sk, _subs = _SUBS[_k]
             for _i, (_sid, _sdisp) in enumerate(_subs):
-                if st.button(_sdisp, key=f"navsub_{_k}_{_i}", use_container_width=True):
+                if st.button(_sdisp, key=f"navsub_{_k}_{_i}", width="stretch"):
                     st.session_state["_admin_expanded"] = _k
                     navegar(_k, _sid)          # navega con el ID interno (deep-links intactos)
     _track_history(_cur)
@@ -437,7 +437,7 @@ def render_topbar(grupo):
     cback, c1, cver, c2 = st.columns([1, 7, 1.4, 1])
     with cback:
         if st.button("←", key="nav_back_btn", help="Volver atrás",
-                     use_container_width=True, disabled=not puede_atras()):
+                     width="stretch", disabled=not puede_atras()):
             ir_atras()
     with c1:
         # v330: el buscador YA busca. Para el CAMPO sigue sin mostrarse: su nav es
@@ -518,7 +518,7 @@ def _banda_prestart():
                 f'la firmaron.</span></div>', unsafe_allow_html=True)
         with c2:
             if st.button(":material/draw: Firmar", key="banda_ps_firmar",
-                         type="primary", use_container_width=True):
+                         type="primary", width="stretch"):
                 from core.timeclock_ui import _ir_a_prestart
                 _ir_a_prestart()
         return
@@ -536,7 +536,7 @@ def _banda_prestart():
             unsafe_allow_html=True)
     with c2:
         if st.button(":material/health_and_safety: Hacerlo", key="banda_ps_ir",
-                     type="primary", use_container_width=True):
+                     type="primary", width="stretch"):
             from core.timeclock_ui import _ir_a_prestart
             _ir_a_prestart()
 
@@ -659,7 +659,7 @@ def _pantalla_busqueda(q: str, grupo) -> bool:
     res = buscar(qn, grupo)
     _c1, _c2 = st.columns([6, 1])
     _c1.markdown(f"#### :material/search: {len(res)} resultado(s) para «{qn}»")
-    if _c2.button("Limpiar", key="busq_limpiar", use_container_width=True):
+    if _c2.button("Limpiar", key="busq_limpiar", width="stretch"):
         st.session_state["_search_clear"] = True
         st.rerun()
 
@@ -676,7 +676,7 @@ def _pantalla_busqueda(q: str, grupo) -> bool:
         st.markdown(f"**{_ETQ[_tipo]}** · {len(_grupo_res)}")
         for _i, _r in enumerate(_grupo_res[:12]):
             if st.button(f"{_r['icono']} {_r['titulo']}\n\n{_r['pie']}",
-                         key=f"busq_{_tipo}_{_i}", use_container_width=True):
+                         key=f"busq_{_tipo}_{_i}", width="stretch"):
                 _abrir_resultado(_r)
         if len(_grupo_res) > 12:
             st.caption(f"…y {len(_grupo_res) - 12} más. Afina el término.")
@@ -751,7 +751,7 @@ def _campana(grupo):
         alerts = []
     label = (f":material/notifications: {len(alerts)}" if alerts
              else ":material/notifications:")
-    with st.popover(label, use_container_width=True):
+    with st.popover(label, width="stretch"):
         st.markdown(":material/notifications: **Alertas**")
         if not alerts:
             st.caption("Sin alertas por ahora.")
@@ -918,7 +918,7 @@ def _hub_herramientas():
             with _cols[_j].container(border=True):
                 st.markdown(f"#### {_dispv}")
                 st.caption(_desc.get(_id, ""))
-                if st.button("Abrir →", key=f"hubherr_{_i}", use_container_width=True):
+                if st.button("Abrir →", key=f"hubherr_{_i}", width="stretch"):
                     navegar("herramientas", _id)
 
 
@@ -1104,7 +1104,7 @@ def _resumen_proyecto_home(grupo, pid):
             st.caption(f":material/place: {_ub}")
     st.markdown("")
     if st.button("→ Ver proyecto completo", key="hpr_full", type="primary",
-                 use_container_width=True):
+                 width="stretch"):
         st.session_state.pop("_home_proj_sel", None)
         st.session_state["_prjsel_pending"] = str(pid)
         navegar("proyectos", "📊 Proyectos")
@@ -1167,7 +1167,7 @@ def _proyectos_home(grupo):
         if _al:
             _extra += f" · :material/notifications: {_al}"
         _lbl = f"{p.get('Nombre', '')} · {_av}%{_extra}"
-        if st.button(_lbl, key=f"hp_{_i}", use_container_width=True):
+        if st.button(_lbl, key=f"hp_{_i}", width="stretch"):
             st.session_state["_home_proj_sel"] = _pid      # v206: abre el resumen aquí
             st.rerun()
 
@@ -1258,7 +1258,7 @@ def _agenda_hoy(grupo):
         _etqs = " · ".join(x for x in f.get("etqs", []) if x)
         _lbl = f"{f['nombre']} · {_etqs or 'sin asignar'}"
         _hlp = " · ".join(list(f.get("proys", [])) + ([f["nota"]] if f.get("nota") else [])) or None
-        if st.button(_lbl, key=f"agper_{_i}", use_container_width=True, help=_hlp):
+        if st.button(_lbl, key=f"agper_{_i}", width="stretch", help=_hlp):
             _u = f.get("usuario", "")
             _nom = f.get("nombre", "") or _u
             st.session_state["gp_fichasel"] = f"{_nom} ({_u})"   # pre-selecciona la persona
