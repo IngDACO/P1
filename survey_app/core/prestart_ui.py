@@ -149,6 +149,14 @@ def _bloque_firmar(info: dict, grupo: str, nombre: str, usuario: str):
             + (f" · {info.get('location', '')}" if info.get("location") else "")
             + (" · ya firmaron: " + ", ".join(info.get("asistentes", []))
                if info.get("asistentes") else ""))
+        # ⚠️ v406: si hoy hubo MÁS de una charla en esta obra, se dice. Se ofrece la
+        # más reciente porque es la más probable, pero cuál le tocaba a cada uno no lo
+        # sabe la app — y elegir en silencio sería peor que avisar.
+        _otras = int(info.get("otras", 0) or 0)
+        if _otras:
+            st.warning(f":material/info: Hoy hay **{_otras + 1} charlas** registradas en "
+                       f"esta obra. Se te ofrece la más reciente; si firmaste otra, "
+                       f"díselo a quien la registró.")
         c1, c2 = st.columns([1, 2])
         ini = c1.text_input("Initial", value=_initials(nombre), key="ps_tarde_ini")
         firma = None

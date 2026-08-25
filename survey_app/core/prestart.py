@@ -205,24 +205,36 @@ def pendiente_de_firma(pid, grupo: str = "", persona: str = "") -> dict:
     if not pid or not quien:
         return {}
     hoy = clock.today(grupo)
-    for r in _records():
-        if str(r.get("ProyectoID", "")).strip() != pid:
-            continue
-        if _parse_date(r.get("Fecha")) != hoy:
-            continue
+    # ⚠️ v406: se miran TODAS las charlas del día, no la primera. Nada impide dos
+    # Pre-Starts de la misma obra el mismo día (dos turnos, dos cuadrillas… o un
+    # duplicado), y mirando solo la primera fila pasaba esto: quien firmaba la
+    # SEGUNDA seguía viendo «te falta firmar» por la primera, para siempre. Salió al
+    # sembrar sin querer un segundo Pre-Start en una obra que ya tenía el suyo.
+    candidatos = [r for r in _records()
+                  if str(r.get("ProyectoID", "")).strip() == pid
+                  and _parse_date(r.get("Fecha")) == hoy]
+    if not candidatos:
+        return {}
+    for r in candidatos:
         d = leer(r)
         # ⚠️ `leer` devuelve los asistentes ya como texto legible; se comparan
         # normalizados. Si el nombre no casa se pedirá firmar otra vez, que es el
         # fallo tolerable: el intolerable es no pedirlo nunca.
         if quien in {_norm_nombre(a) for a in d.get("asistentes", [])}:
-            return {}
-        return {"id": str(r.get("ID", "")), "fecha": str(r.get("Fecha", "")),
-                "facilitador": str(r.get("Facilitador", "")),
-                "location": str(r.get("Location", "")),
-                "drive_id": str(r.get("DriveID", "")),
-                "archivo": str(r.get("Archivo", "")),
-                "asistentes": d.get("asistentes", [])}
-    return {}
+            return {}                      # firmó ALGUNA de las de hoy: no se insiste
+    # ⚠️ Si hay varias y no firmó ninguna, se ofrece la ÚLTIMA: las filas se añaden al
+    # final, así que es la charla más reciente — la que con más probabilidad es la suya.
+    # No se puede saber cuál le tocaba, así que se dice cuántas hay (`otras`) en vez de
+    # elegir en silencio.
+    r = candidatos[-1]
+    d = leer(r)
+    return {"id": str(r.get("ID", "")), "fecha": str(r.get("Fecha", "")),
+            "facilitador": str(r.get("Facilitador", "")),
+            "location": str(r.get("Location", "")),
+            "drive_id": str(r.get("DriveID", "")),
+            "archivo": str(r.get("Archivo", "")),
+            "asistentes": d.get("asistentes", []),
+            "otras": len(candidatos) - 1}
 
 
 def firmar(ps_id: str, grupo: str, nombre: str, iniciales: str = "",
