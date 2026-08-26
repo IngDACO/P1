@@ -336,15 +336,31 @@ def render_prestart_tab():
     if _pend:
         st.caption("Falta por completar: " + " · ".join(_pend))
 
+    # ⚠️ v407 · si esta obra YA tiene charla hoy, `submit` la bloquea. Aquí se ofrece
+    # la salida explícita, para que un segundo turno real se pueda registrar — pero
+    # marcándolo, no por descuido. El aviso se muestra ANTES del botón: enterarse
+    # después de rellenar el formulario entero sería una tomadura de pelo.
+    _forzar = False
+    try:
+        _ya_hoy = PS.hecho_hoy(pid, pgrupo)
+    except Exception:
+        _ya_hoy = False
+    if _ya_hoy:
+        st.warning(":material/warning: **Esta obra ya tiene el Pre-Start de hoy.** "
+                   "Si solo faltas tú por constar, fírmalo arriba en vez de crear otro.")
+        _forzar = st.checkbox(
+            "Hubo una SEGUNDA charla hoy (otro turno u otra cuadrilla): regístrala igual",
+            key="ps_forzar")
+
     if st.button(":material/health_and_safety: Generar y archivar Pre-Start", type="primary", width="stretch",
-                 key="ps_submit", disabled=bool(_pend)):
+                 key="ps_submit", disabled=bool(_pend) or (_ya_hoy and not _forzar)):
         data = {
             "grupo": pgrupo, "proyecto_id": pid, "proyecto_nombre": prj.get("Nombre", ""),
             "fecha": f_fecha, "hora": f_hora, "location": f_loc, "facilitador": f_fac,
             "activities_notes": act_notes, "s1": s1,
             "near_miss": nm, "near_miss_desc": nm_desc, "s3": s3,
             "general_notes": gen_notes, "attendees": attendees,
-            "creado_por": usuario,
+            "creado_por": usuario, "forzar": bool(_forzar),
         }
         with st.spinner("Generando PDF y archivando..."):
             res = PS.submit(data)

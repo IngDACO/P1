@@ -384,7 +384,32 @@ def submit(data: dict) -> dict:
     o algún check en NO (v373).
     Devuelve {ok, id, pdf, filename, drive_id, alarma, alarma_checks, checks_no, error}."""
     res = {"ok": False, "id": "", "pdf": None, "filename": "", "drive_id": "",
-           "alarma": False, "alarma_checks": False, "checks_no": [], "error": ""}
+           "alarma": False, "alarma_checks": False, "checks_no": [], "error": "",
+           "ya_hay": ""}
+
+    # 0) ⚠️ v407 · ¿ya hay charla hoy en esta obra?
+    # Hasta v406 nada lo impedía y era fácil emitir dos documentos para una sola
+    # charla — me pasó a mí sembrando datos, y el segundo además dejaba a los del
+    # primero sin poder «firmar» (v406). Se BLOQUEA, pero con salida explícita
+    # (`forzar`): hay un caso legítimo —otro turno, otra cuadrilla— y negarse en
+    # redondo dejaría SIN REGISTRAR una charla que ocurrió, que es peor que el
+    # duplicado. Mismo patrón que el aviso de proyectos duplicados de v126.
+    _pid0 = str(data.get("proyecto_id", "")).strip()
+    _g0 = str(data.get("grupo", "")).strip()
+    if _pid0 and not data.get("forzar"):
+        _hoy = clock.today(_g0)
+        _ya = [r for r in _records()
+               if str(r.get("ProyectoID", "")).strip() == _pid0
+               and _parse_date(r.get("Fecha")) == _hoy]
+        if _ya:
+            _ids = ", ".join(str(r.get("ID", "")) for r in _ya)
+            res["ya_hay"] = _ids
+            res["error"] = (
+                f"Esta obra ya tiene el Pre-Start de hoy ({_ids}), registrado por "
+                f"{_ya[-1].get('Facilitador') or '—'}. Si solo faltas tú por constar, "
+                f"fírmalo en vez de crear otro. Si de verdad hubo una SEGUNDA charla "
+                f"(otro turno u otra cuadrilla), márcalo y se registra igual.")
+            return res
 
     # 1) PDF
     try:
