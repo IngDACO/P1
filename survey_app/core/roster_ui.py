@@ -1133,6 +1133,45 @@ def _tablero_editable(grupo, lunes, staff, datos, tidx, marcas=None, dias=None):
   text-align: left !important; width: 100%; color: #1e4e79;
 }
 [class*="st-key-pnm_"] button:hover { background: #f4f7fb !important; }
+
+/* ── REJILLA del tablero (v410) ─────────────────────────────────────────────
+   El board eran celdas flotando sobre blanco: con 9 personas × 5-7 días, seguir
+   una fila hasta el viernes o una columna hacia abajo obligaba a ir contando.
+   Ahora las filas y los días llevan línea, y la cabecera se ancla con una más
+   marcada.
+   ⚠️ El `!important` del borde inferior NO es decorativo: medido, sin él salía
+   `0px rgb(250,250,250)` — o sea que ganaba una regla de Streamlit. La vertical
+   sí entraba sin él; que una de las dos aplique no significa que apliquen las dos.
+   ⚠️ Mecanismo medido en vivo antes de escribirlo (v304/v332: un selector que no
+   casa NO da error, la app se ve «casi bien» y nadie lo nota). Estructura real:
+   `.st-key-rosgrid` (stVerticalBlock) > stLayoutWrapper > stHorizontalBlock (fila)
+   > stColumn (día). */
+.st-key-rosgrid [data-testid="stHorizontalBlock"],
+.st-key-roshead [data-testid="stHorizontalBlock"] {
+  padding: 3px 0 !important; margin: 0 !important; gap: 0 !important;
+}
+.st-key-rosgrid [data-testid="stHorizontalBlock"] {
+  border-bottom: 1px solid #e6eaf0 !important;
+}
+.st-key-roshead [data-testid="stHorizontalBlock"] {
+  border-bottom: 2px solid #cfd8e3 !important; padding-bottom: 4px !important;
+}
+.st-key-rosgrid [data-testid="stColumn"],
+.st-key-roshead [data-testid="stColumn"] {
+  border-right: 1px solid #dfe5ec; padding: 0 4px !important;
+}
+.st-key-rosgrid [data-testid="stColumn"]:last-child,
+.st-key-roshead [data-testid="stColumn"]:last-child { border-right: none; }
+/* ⚠️ Lo de DENTRO de una celda NO es rejilla. Un popover CERRADO ya lleva su
+   `st.columns` (el de la franja horaria) en el DOM dentro de `.st-key-roscel_*`,
+   así que sin esta exclusión el editor saldría cuadriculado. Se excluye por el
+   contenedor de la celda y no con una cadena de hijos directos: el
+   `stLayoutWrapper` intermedio es reciente y esa cadena se rompe en silencio si
+   Streamlit mete otro nivel (es el fallo de v327). */
+.st-key-rosgrid [class*="st-key-roscel_"] [data-testid="stHorizontalBlock"],
+.st-key-rosgrid [class*="st-key-roscel_"] [data-testid="stColumn"] {
+  border: none !important; padding: revert !important; gap: revert !important;
+}
 </style>""", unsafe_allow_html=True)
 
     # 1) CSS de color por celda (color de la 1ª asignación; las vacías, tenues) +
@@ -1189,7 +1228,13 @@ def _tablero_editable(grupo, lunes, staff, datos, tidx, marcas=None, dias=None):
 
     # 2) Cabecera (persona + días)
     anchos = [1.4] + [1] * len(dias)
-    h = st.columns(anchos)
+    # ⚠️ Los contenedores de la rejilla se usan como OBJETO (`_head.columns(...)`), NO
+    # con `with`: así el bucle de filas no hay que reindentarlo, que es exactamente la
+    # clase de cambio que rompió v120 (un error de indentación sacó un bloque de su
+    # fase y el fichero seguía compilando) y v148. Verificado en vivo que esta forma
+    # produce el mismo DOM que el `with`.
+    _head = st.container(key="roshead")
+    h = _head.columns(anchos)
     # Cabecera de la rejilla (v301): 13.5px + seminegrita y TODO centrado — a 12px
     # gris claro apenas se leía, y "Persona" iba alineada a la izquierda mientras los
     # días ya estaban centrados, así que la fila no cuadraba.
@@ -1202,10 +1247,11 @@ def _tablero_editable(grupo, lunes, staff, datos, tidx, marcas=None, dias=None):
                           f"{f.strftime('%d/%m')}</div>", unsafe_allow_html=True)
 
     # 3) Filas: nombre + una celda-popover por día
+    _grid = st.container(key="rosgrid")
     for pi, u in enumerate(staff):
         usuario = u["Usuario"]
         nom = u.get("Nombre") or usuario
-        cols = st.columns(anchos)
+        cols = _grid.columns(anchos)
         if cols[0].button(nom, key=f"pnm_{_wk}_{pi}", width="stretch",
                           help="Ver ficha rápida de la persona"):
             st.session_state["_panel_ficha"] = usuario

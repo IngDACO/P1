@@ -5931,7 +5931,57 @@ también el `if _ya_hoy:` exterior, que es el PADRE del `if _pf:` — hay que mi
 **más interno** que envuelve el literal. Probado contra el código roto en 3 casos (los
 caza). Suite entera: **58/58** (ver trampa nº23: 4 de los «rojos» eran de la consola).
 
-## Versiones desplegadas (v408 = actual)
+## Rejilla en el Panel de planificación (v410)
+Petición del usuario: *«ponle grid al panel de planificación para que sea más fácil la
+visualización»*. El board eran celdas-popover **flotando sobre blanco**: con 9 personas
+× 5-7 días, seguir una fila hasta el viernes o bajar por un día obligaba a ir contando
+con el dedo. Ahora las filas llevan línea, los días llevan línea y la cabecera se ancla
+con una más marcada.
+
+### Cómo se implementó sin reindentar nada
+La cabecera y las filas se envuelven en `st.container(key="roshead")` /
+`st.container(key="rosgrid")`, y el CSS cuelga de esas clases. ⚠️ Los contenedores se
+usan como **OBJETO** (`_head.columns(...)` / `_grid.columns(...)`), **no** con `with`:
+así el bucle de filas no hay que reindentarlo, que es exactamente la clase de cambio que
+rompió v120 y v148. Verificado en vivo que esa forma produce el MISMO DOM que el `with`.
+
+### Lo que hubo que medir (y por qué)
+Estructura real, medida antes de escribir una línea de CSS (v304/v332: un selector que
+no casa **no da error**, la app se ve «casi bien» y nadie lo nota):
+`.st-key-rosgrid` (**stVerticalBlock**) > **stLayoutWrapper** > **stHorizontalBlock**
+(la fila) > **stColumn** (el día).
+- ⚠️ **El borde inferior necesita `!important` y el derecho no.** Medido: sin él, la
+  fila salía en `0px rgb(250,250,250)` — ganaba una regla de Streamlit. Que una de las
+  dos reglas aplique no significa que apliquen las dos.
+- ⚠️ **Lo de DENTRO de una celda no es rejilla.** Un popover **cerrado** ya lleva su
+  `st.columns` (la franja horaria) en el DOM dentro de `.st-key-roscel_*`: sin excluirlo,
+  el editor de la celda saldría cuadriculado. Se excluye por el contenedor de la celda y
+  **no** con una cadena de hijos directos, porque el `stLayoutWrapper` intermedio es
+  reciente y esa cadena se rompe en silencio si Streamlit mete otro nivel (fallo de v327).
+  (El popover ABIERTO además se portalea fuera del contenedor, así que hay doble seguro.)
+- El `st.columns(2)` de la franja horaria se queda como `st.columns` **a propósito**: va
+  dentro de la celda y el CSS lo excluye.
+- Las verticales se subieron de `#eef1f5` a `#dfe5ec`: al primer intento eran
+  invisibles. ⚠️ Y para juzgarlo hubo que capturar a **escala 1:1** (viewport = tamaño de
+  la captura) y en **tema claro**: el panel escalaba 1440→800 y se comía las líneas de
+  1 px, y la mini-app arrancaba en tema oscuro, donde estos colores no dicen nada.
+
+### Verificación
+`verif_v410.py`: los contenedores existen con SU key, **todas** las columnas del tablero
+cuelgan de `_head`/`_grid` (y las de dentro del popover se identifican y se excluyen del
+chequeo), y el CSS trae sus reglas. ⚠️ Uno de sus chequeos daba **OK con la exclusión
+BORRADA**, porque miraba dos subcadenas que existen por otros motivos
+(`st-key-roscel_` está en el CSS de densidad y `border: none !important` en el de
+`pnm_`); se cambió por el selector completo. **Lo delató probar el guardián contra el
+código roto** — sin esa prueba habría quedado un chequeo que solo aprueba. Los 5 casos
+rotos se cazan. Suite entera: **59/59**.
+
+### Ofrecido y NO hecho (decisión del usuario)
+Franjas alternas por fila (zebra) y resaltar la columna de HOY. Las dos ayudan a leer un
+tablero largo, pero no se pidieron y la zebra compite con el color del trabajo, que es
+la señal principal del board.
+
+## Versiones desplegadas (v410 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -5939,6 +5989,8 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v410 | **Rejilla en el Panel de planificación** (pedida por el usuario): las celdas dejan de flotar sobre blanco — línea por fila, línea por día y cabecera anclada con una más marcada, para poder seguir una persona hasta el viernes o un día hacia abajo sin ir contando. Cabecera y filas envueltas en `st.container(key=…)`, usados como **objeto** (`_grid.columns(...)`) y no con `with`, para **no reindentar** el bucle (la clase de cambio que rompió v120/v148). ⚠️ Medido antes de escribir el CSS: el borde inferior necesita `!important` (sin él ganaba una regla de Streamlit y salía `0px`) y el derecho no; y **un popover CERRADO ya lleva su `st.columns` dentro de `.st-key-roscel_*`**, así que sin excluirlo el editor de la celda saldría cuadriculado. ⚠️ Para juzgar el resultado hubo que capturar a **1:1** y en **tema claro**: el panel escalaba 1440→800 y se comía las líneas de 1 px. Guardián `verif_v410.py` — ⚠️ uno de sus chequeos daba **OK con la exclusión borrada** (miraba subcadenas que existen por otros motivos); lo delató probarlo contra el código roto |
+| v409 | Documentación de v408 en CLAUDE.md: el barrido de las 24 pantallas, las trampas 21-23 (el recorte por *clip* sin elipsis, «encoger cambia un problema visible por uno invisible», y los rojos de la suite que venían de la consola) y la **corrección de v334** sobre qué prueba la barra de versión |
 | v408 | **Barrido de las 24 pantallas del admin.** ⚠️ La primera vuelta corrió a **800×292** y a ese ancho no prueba lo que parece (el error de v335): repetida a **1440×900** midiendo el desborde DENTRO de cada tabla, `Proyectos · Lista` ocupaba **1339 px en 1054**, así que `Usuarios`, `Situación` y `Alertas` —las tres señales de «esto necesita atención»— quedaban al otro lado del scroll, y al ir a buscarlas **se perdía el `ID`** por la izquierda. ⚠️ NO se arregló encogiendo: se probó y con 13 columnas y nombres de obra reales no cabe sin **CORTAR** texto — y el corte es INVISIBLE, porque glide recorta por *clip* sin elipsis (hubo que medir `measureText` del canvas: se comía 60 px del nombre de obra y 60 del cliente). La cura es la de v398: no achicar, **priorizar** — las de atención suben junto al nombre, el contexto baja a la derecha, y `ID`/`Proyecto` van **`pinned`** (verificado con un scroll real de 255 px: siguen en su sitio; 10 de 13 columnas visibles de entrada, 0 textos cortados). + el aviso de duplicado del Pre-Start decía siempre *«fírmalo arriba»* colgando de `hecho_hoy`, cuando el bloque de firma cuelga de `pendiente_de_firma`: a quien ya constaba se le señalaba algo que no estaba en pantalla (las dos preguntas que v403 separó, remezcladas en el texto). Con bandera `_pf_ok` para no afirmar «ya constas» tras un fallo de lectura |
 | v407 | **Se bloquea el segundo Pre-Start del mismo día y la misma obra.** Hasta ahora nada lo impedía y era fácil emitir dos documentos para una sola charla — me pasó a mí sembrando datos. ⚠️ **Bloqueo con salida explícita, no bloqueo duro**: hay un caso legítimo (otro turno, otra cuadrilla) y negarse en redondo dejaría **sin registrar una charla que ocurrió**, que es peor que el duplicado; hay que marcar una casilla, igual que el aviso de proyectos duplicados de v126. El guardián va en `submit`, no en la UI, para que ningún camino lo esquive; el aviso sale **antes** del formulario, no después de rellenarlo |
 | v406 | ⚠️ **`pendiente_de_firma` solo miraba la PRIMERA charla del día.** Nada impide dos Pre-Starts de la misma obra el mismo día (dos turnos, dos cuadrillas, o un duplicado), y con dos, **quien firmaba la segunda seguía viendo «te falta firmar» por la primera, para siempre**. Ahora se miran TODAS las del día: si firmó alguna, no se insiste; si no firmó ninguna se le ofrece **la más reciente** y se le DICE que hay más de una, porque cuál le tocaba no lo sabe la app y elegir en silencio sería peor. Salió de un error mío sembrando datos: metí sin querer un segundo Pre-Start en una obra que ya tenía el suyo, y la app lo aceptó |
