@@ -288,6 +288,31 @@ Estas cinco mordieron en una sola tanda:
     y `$3,306` con el otro. «Unificar los formatos» habría movido cifras en pantalla
     sin que nadie lo pidiera. Se inserta la coma y cada columna conserva su semántica.
 
+**Añadida en v408 (la tanda del barrido de pantallas):**
+
+21. ⚠️ **`st.dataframe` recorta el texto por CLIP, sin elipsis — buscar «…» es una
+    sonda ciega.** Al estrechar columnas, interceptar `fillText` y filtrar por `…` dio
+    **0 truncados** con nueve textos cortados de verdad: glide llama a `fillText` con la
+    cadena ENTERA y deja que el canvas la recorte, así que ni hay «…» ni el DOM lo
+    delata. Lo que sí mide es **`this.measureText(t).width` dentro del propio hook**,
+    comparado con el ancho declarado de esa columna menos el padding: ahí aparecieron
+    los 60 px que se comía el nombre de obra y los 60 del cliente. Es la nº12 (sonda
+    negativa sin validar) en su forma más cara, porque el «0 truncados» **invitaba a
+    apretar más**. → Y la sonda quedó validada por el camino: el mismo medidor que
+    encontró los 9 cortes es el que después dio 0, así que ese 0 significa algo.
+22. ⚠️ **Encoger para que quepa puede cambiar un problema visible por uno invisible.**
+    Con 12-13 columnas y nombres de obra reales NO hay reparto de anchos que entre en
+    1054 px. «Que quepa todo» habría dejado la tabla sin scroll y con los nombres
+    leídos a medias — peor que desplazarse, porque el corte no se anuncia. La cura es
+    la de v398: **no achicar, PRIORIZAR** lo que se ve primero, y `pinned` para que la
+    identidad no se escape por la izquierda mientras miras la derecha.
+23. ⚠️ **Un rojo de la SUITE puede ser de la consola, no del código.** Cuatro
+    guardianes salían con código ≠ 0 imprimiendo `TODO OK`: el hijo hereda un stdout
+    en **cp1252** y morían con `UnicodeEncodeError` al pintar un emoji (🔩, 🌐). Se
+    arregla en el runner (`env` con `PYTHONIOENCODING=utf-8`), no relajando a los
+    guardianes. Misma familia que el CWD de v19: **el entorno de ejecución fabricando
+    falsos rojos**, que es lo que empuja a «arreglar» código sano.
+
 **Y la regla de siempre, que volvió a aplicar:** antes de borrar el LECTOR de un mecanismo, buscar
 sus ESCRITORES y convertirlos. En v299 `_nav_pending` tenía dos vivos («Abrir proyecto» tras el
 survey y «Reabrir cálculo»); borrar solo el lector los habría dejado como botones que no hacen
@@ -5834,7 +5859,79 @@ firmado no se reescribe, se le añade una hoja — como circula la hoja en papel
 - El aviso no desaparece, **cambia de motivo**: banda, chip y modal pasan de «Falta el Pre-Start» a
   «Fírmalo», con su propio `st.dialog` (el título va en el decorador, así que hacen falta dos).
 
-## Versiones desplegadas (v399 = actual)
+## Barrido de las 24 pantallas del admin + lo que destapó (v408)
+Se abrieron **las 24 pantallas del rol administrador** una a una, navegando por los
+botones del sidebar dentro de la MISMA sesión (`st-key-navsec_*` / `navsub_*` con
+`.click()`): la navegación por URL se descartó porque cada `location.replace` dentro del
+iframe lo dejaba en blanco y cada recarga cuesta un arranque. Ninguna dio excepción ni
+desborde de página.
+
+### ⚠️ Un barrido a un viewport que no es el de diseño no prueba lo que parece
+La primera vuelta corrió con el panel a **800×292**, que es lo que había. Sirve para «¿se
+rompe en estrecho?» y **no dice nada del ancho de diseño**, que es donde vive el admin
+(la interfaz del admin es para PC, decisión del usuario en v303). Es el error de v335,
+donde medí a 780 px porque `preview_start` me había reseteado el viewport. Se repitió la
+parte que depende del ancho —las que llevan tabla— a **1440×900**, midiendo el desborde
+**DENTRO de cada tabla** (`scrollWidth` vs `clientWidth` del `.dvn-scroller`), no el de la
+página: una tabla puede desbordar su caja sin que el documento se entere.
+
+### El hallazgo: en `Proyectos · Lista` lo urgente estaba al otro lado del scroll
+Contenido **1339 px** para **1054 visibles**. Moviendo el scroll y releyendo las
+cabeceras (la rejilla VIRTUALIZA: en el DOM solo existen las columnas en vista, así que
+el conjunto que aparece ES el visible), las tres que había que ir a buscar eran
+**`Usuarios`, `Situación` y `Alertas`** — justo las tres señales de «esto necesita
+atención». Y al desplazarte a verlas, **`ID` se salía por la izquierda**: mirabas qué
+obra va mal sin saber cuál es, con el nombre pudiendo repetirse (v306).
+
+### Lo que se probó y se DESCARTÓ, con el número delante
+| Variante | Contenido | Visible | Oculto |
+|---|---|---|---|
+| como estaba | 1335 | 1064 | **271** |
+| solo anchos, 13 columnas | 1164 | 1064 | **100** |
+| anchos + quitar `Tipo` | 1064 | 1064 | **0**… y **9 textos cortados** |
+La tercera «cabía» a costa de comerse 60 px del nombre de obra y 60 del cliente. Ver
+trampas nº21 y nº22: sin medir `measureText` eso pasa por bueno.
+
+### La cura, la de v398: no achicar, priorizar
+`ID` · `Proyecto` (**`pinned`**) · `Sin facturar` · `Avance` · `Ritmo` · `Avisos` ·
+`Estado` · `Equipo` · luego el contexto (`Cliente`, `Tipo`, `Inicio`, `Fin`, `Ppto`).
+Medido tras el cambio: **10 de 13 columnas visibles de entrada** (antes las de atención
+no estaban), **0 textos cortados**, y tras un scroll real de 255 px `ID` y `Proyecto`
+**siguen en su sitio**. Los anchos salen de medir el texto real más largo de cada
+columna, no de elegirlos a ojo.
+
+### Y el aviso del Pre-Start que señalaba al vacío
+El bloqueo de duplicado de v407 decía siempre *«fírmalo ARRIBA»*, pero colgaba de
+`hecho_hoy` (¿hay charla?) mientras el bloque de firma cuelga de `pendiente_de_firma`
+(¿me toca a mí?) — las dos preguntas que **v403 separó a propósito**, remezcladas en el
+texto. A quien ya constaba se le señalaba un bloque que no se estaba pintando. Ahora el
+texto se decide por `_pf`. ⚠️ Con una bandera **`_pf_ok`**: `_pf` también queda vacío si
+la consulta FALLA, y ahí no se puede afirmar «ya constas» — es el fallo de v375 en la
+otra dirección.
+
+### ⚠️ CORRIGE a v334: la barra de versión NO garantiza que TODO el código sea nuevo
+v334 dejó escrito que «si la barra dice v334, se está ejecutando v334». **Es demasiado
+fuerte.** Tras desplegar v408 la barra decía **v408** y `Proyectos · Lista` seguía
+pintando el orden de columnas de v407, con los mismos 285 px ocultos. Comprobado antes
+de culpar a nadie: el commit subido SÍ lleva el cambio (`git show HEAD:…`) y esa tabla
+la pinta una sola función (`cart_tbl` aparece solo en `_cartera_lista`, así que no es el
+error de v381 de mirar la función equivocada). La explicación está en cómo se mide:
+`_VERSION = _leer_version()` corre **al importar `home_ui`**, así que la barra prueba
+que **`home_ui`** se re-importó — no que lo hayan hecho los otros 50 módulos. Streamlit
+Cloud puede recargar unos y conservar otros en `sys.modules`.
+→ **Para afirmar que un cambio está corriendo, hay que ver el CAMBIO, no la versión.**
+La barra sirve para descartar («si dice la vieja, seguro que no»), no para confirmar.
+Y hasta que el proceso reinicie de verdad, lo desplegado no es lo que se ejecuta.
+
+### Verificación
+Guardián `verif_v408.py` sobre el PRINCIPIO y no sobre la forma (v392): toda señal de
+atención antes que todo contexto, `ID`/`Proyecto` pinned, y el texto «fírmalo arriba»
+colgando de `_pf`. ⚠️ Su primera versión daba **FALLO con el código correcto**: contaba
+también el `if _ya_hoy:` exterior, que es el PADRE del `if _pf:` — hay que mirar el `if`
+**más interno** que envuelve el literal. Probado contra el código roto en 3 casos (los
+caza). Suite entera: **58/58** (ver trampa nº23: 4 de los «rojos» eran de la consola).
+
+## Versiones desplegadas (v408 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -5842,6 +5939,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v408 | **Barrido de las 24 pantallas del admin.** ⚠️ La primera vuelta corrió a **800×292** y a ese ancho no prueba lo que parece (el error de v335): repetida a **1440×900** midiendo el desborde DENTRO de cada tabla, `Proyectos · Lista` ocupaba **1339 px en 1054**, así que `Usuarios`, `Situación` y `Alertas` —las tres señales de «esto necesita atención»— quedaban al otro lado del scroll, y al ir a buscarlas **se perdía el `ID`** por la izquierda. ⚠️ NO se arregló encogiendo: se probó y con 13 columnas y nombres de obra reales no cabe sin **CORTAR** texto — y el corte es INVISIBLE, porque glide recorta por *clip* sin elipsis (hubo que medir `measureText` del canvas: se comía 60 px del nombre de obra y 60 del cliente). La cura es la de v398: no achicar, **priorizar** — las de atención suben junto al nombre, el contexto baja a la derecha, y `ID`/`Proyecto` van **`pinned`** (verificado con un scroll real de 255 px: siguen en su sitio; 10 de 13 columnas visibles de entrada, 0 textos cortados). + el aviso de duplicado del Pre-Start decía siempre *«fírmalo arriba»* colgando de `hecho_hoy`, cuando el bloque de firma cuelga de `pendiente_de_firma`: a quien ya constaba se le señalaba algo que no estaba en pantalla (las dos preguntas que v403 separó, remezcladas en el texto). Con bandera `_pf_ok` para no afirmar «ya constas» tras un fallo de lectura |
 | v407 | **Se bloquea el segundo Pre-Start del mismo día y la misma obra.** Hasta ahora nada lo impedía y era fácil emitir dos documentos para una sola charla — me pasó a mí sembrando datos. ⚠️ **Bloqueo con salida explícita, no bloqueo duro**: hay un caso legítimo (otro turno, otra cuadrilla) y negarse en redondo dejaría **sin registrar una charla que ocurrió**, que es peor que el duplicado; hay que marcar una casilla, igual que el aviso de proyectos duplicados de v126. El guardián va en `submit`, no en la UI, para que ningún camino lo esquive; el aviso sale **antes** del formulario, no después de rellenarlo |
 | v406 | ⚠️ **`pendiente_de_firma` solo miraba la PRIMERA charla del día.** Nada impide dos Pre-Starts de la misma obra el mismo día (dos turnos, dos cuadrillas, o un duplicado), y con dos, **quien firmaba la segunda seguía viendo «te falta firmar» por la primera, para siempre**. Ahora se miran TODAS las del día: si firmó alguna, no se insiste; si no firmó ninguna se le ofrece **la más reciente** y se le DICE que hay más de una, porque cuál le tocaba no lo sabe la app y elegir en silencio sería peor. Salió de un error mío sembrando datos: metí sin querer un segundo Pre-Start en una obra que ya tenía el suyo, y la app lo aceptó |
 | v405 | **`use_container_width` → `width="stretch"`**, 200 sitios en 21 ficheros. El runtime anunciaba la retirada **«after 2025-12-31»** — fecha ya pasada, así que podía desaparecer en cualquier versión. ⚠️ **3 no se tocaron**: los dos `st_folium` (parámetro del COMPONENTE; convertirlo rompe el mapa de v307) y **un comentario** que contiene el literal — por eso la migración va por lista blanca de AST y no por texto, o el comentario habría acabado mintiendo. Medido antes: los 8 elementos aceptan `width` |
