@@ -5981,7 +5981,59 @@ Franjas alternas por fila (zebra) y resaltar la columna de HOY. Las dos ayudan a
 tablero largo, pero no se pidieron y la zebra compite con el color del trabajo, que es
 la señal principal del board.
 
-## Versiones desplegadas (v410 = actual)
+## Franjas alternas + columna de HOY en el Panel (v411)
+Las dos las pidió el usuario tras ver la rejilla de v410, y las dos sirven a lo mismo:
+**no perder el renglón** en un tablero de 8-20 personas × 5-7 días. La rejilla puso las
+líneas; esto ancla la vista.
+
+### La zebra va por KEY de fila, no por `nth-child`
+Lo natural sería `.st-key-rosgrid > [data-testid="stLayoutWrapper"]:nth-child(even)`.
+⚠️ **No se hace así**: ese wrapper es un nivel que Streamlit intercala y es reciente —
+una regla atada a él se rompe **en silencio** si mañana mete otro (es el fallo de v327),
+y una zebra que desaparece sola no da ningún error. Se usa un `st.container(key=
+f"rosrow_{_wk}_{pi}")` por fila y se pinta por su key: el MISMO mecanismo que el módulo
+ya emplea para el color de cada celda, que no depende de la estructura interna.
+
+### «Hoy» solo si cae en la semana que se está viendo
+`_hoy_idx` sale de comparar `R.fecha_de_dia(lunes, d)` con `clock.today(grupo)`. Si no
+aparece, **no se resalta nada**: marcar una columna al navegar a otra semana sería peor
+que no marcar, porque mentiría. Se tiñe la columna en el cuerpo y en la cabecera con
+`nth-child(i+2)` — la 1ª columna es «Persona» —, y ⚠️ eso es fiable porque se midió en
+producción que los hijos de una fila son **todos `stColumn`**, sin divs de separación.
+
+### ⚠️ La celda vacía tenía que dejar de tener fondo
+Con su `#f8fafc` propio tapaba la zebra y la franja de hoy **justo en las celdas
+vacías**, que son la mayoría del tablero — o sea, en el único sitio donde esas dos
+señales tienen espacio para verse. Pasa a `transparent`, conservando su borde punteado.
+
+### ⚠️ «hoy» va en una segunda línea, y eso salió de medir
+A 1440 la columna deja 136 px útiles y «Mié 26/08 · hoy» mide 85: cabría. Pero con la
+ventana estrecha la columna baja a **55 px**, donde ni la fecha sola (53) va holgada. En
+una segunda línea de 11 px no compite por ancho a ningún tamaño.
+⚠️ La primera medición la tomé con el viewport restaurado a «desktop» y concluí que NO
+cabía; repetida al ancho de diseño, cabía de sobra. Es el error de v335 otra vez —
+**medir al ancho equivocado da una decisión equivocada**, en las dos direcciones.
+
+### Dos guardianes que caducaron por este cambio (actualizados, no relajados)
+- **v410** exigía que las columnas colgaran literalmente de `_head`/`_grid`; ahora las
+  filas cuelgan de `_row`. Lo que la regla protege no es el nombre de la variable, sino
+  que **ninguna columna cuelgue de `st` directamente** — si lo hiciera, caería fuera de
+  los contenedores keyed y se irían rejilla, zebra y columna de hoy sin fallar nada.
+- **v301** exigía que el literal `style='{_CAB}'` saliera **2 veces**; con la variante de
+  hoy sale una. Lo que protege es que «Persona» y los días compartan el mismo estilo
+  base (antes Persona iba a la izquierda y los días centrados, y la fila no cuadraba),
+  y eso se comprueba ahora directamente.
+
+### Verificación
+`verif_v411.py`, probado contra el código roto en 4 casos (quitar el contenedor por
+fila, marcar hoy sin comprobar la semana, devolverle el fondo a la celda vacía, colgar
+la zebra del wrapper): los caza los 4. ⚠️ Uno de sus chequeos daba **FALLO con el código
+correcto**: miraba `"stLayoutWrapper" not in ...` y ese nombre aparece en un **comentario
+CSS dentro de la cadena de estilos**, que `tokenize` no quita porque para Python es parte
+de un string. Es la trampa nº2 (grep ≠ uso) en su variante más escurridiza. Suite entera:
+**60/60**.
+
+## Versiones desplegadas (v411 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -5989,6 +6041,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v411 | **Franjas alternas + columna de HOY en el Panel** (pedidas por el usuario tras ver la rejilla): filas pares con fondo tenue y el día de hoy teñido en cuerpo y cabecera, con subrayado azul y la palabra «hoy». ⚠️ La zebra va por **key de fila** (`st.container(key="rosrow_…")`), NO con `nth-child` sobre el `stLayoutWrapper` que Streamlit intercala: atarla a ese wrapper la rompería **en silencio** si mañana mete otro nivel (v327). ⚠️ «Hoy» solo se marca si **cae en la semana visible** — al navegar a otra semana no se resalta nada, porque marcar un día cualquiera como hoy mentiría. ⚠️ La celda vacía pasa a **transparente**: su `#f8fafc` tapaba las dos señales justo en las celdas vacías, que son la mayoría del tablero. ⚠️ «hoy» va en **segunda línea** porque con la ventana estrecha la columna baja a 55 px y ni la fecha sola cabe holgada — y la primera medición, tomada al ancho equivocado, decía lo contrario (error de v335). Caducaron y se actualizaron los guardianes de **v410** y **v301**, con la razón escrita al lado |
 | v410 | **Rejilla en el Panel de planificación** (pedida por el usuario): las celdas dejan de flotar sobre blanco — línea por fila, línea por día y cabecera anclada con una más marcada, para poder seguir una persona hasta el viernes o un día hacia abajo sin ir contando. Cabecera y filas envueltas en `st.container(key=…)`, usados como **objeto** (`_grid.columns(...)`) y no con `with`, para **no reindentar** el bucle (la clase de cambio que rompió v120/v148). ⚠️ Medido antes de escribir el CSS: el borde inferior necesita `!important` (sin él ganaba una regla de Streamlit y salía `0px`) y el derecho no; y **un popover CERRADO ya lleva su `st.columns` dentro de `.st-key-roscel_*`**, así que sin excluirlo el editor de la celda saldría cuadriculado. ⚠️ Para juzgar el resultado hubo que capturar a **1:1** y en **tema claro**: el panel escalaba 1440→800 y se comía las líneas de 1 px. Guardián `verif_v410.py` — ⚠️ uno de sus chequeos daba **OK con la exclusión borrada** (miraba subcadenas que existen por otros motivos); lo delató probarlo contra el código roto |
 | v409 | Documentación de v408 en CLAUDE.md: el barrido de las 24 pantallas, las trampas 21-23 (el recorte por *clip* sin elipsis, «encoger cambia un problema visible por uno invisible», y los rojos de la suite que venían de la consola) y la **corrección de v334** sobre qué prueba la barra de versión |
 | v408 | **Barrido de las 24 pantallas del admin.** ⚠️ La primera vuelta corrió a **800×292** y a ese ancho no prueba lo que parece (el error de v335): repetida a **1440×900** midiendo el desborde DENTRO de cada tabla, `Proyectos · Lista` ocupaba **1339 px en 1054**, así que `Usuarios`, `Situación` y `Alertas` —las tres señales de «esto necesita atención»— quedaban al otro lado del scroll, y al ir a buscarlas **se perdía el `ID`** por la izquierda. ⚠️ NO se arregló encogiendo: se probó y con 13 columnas y nombres de obra reales no cabe sin **CORTAR** texto — y el corte es INVISIBLE, porque glide recorta por *clip* sin elipsis (hubo que medir `measureText` del canvas: se comía 60 px del nombre de obra y 60 del cliente). La cura es la de v398: no achicar, **priorizar** — las de atención suben junto al nombre, el contexto baja a la derecha, y `ID`/`Proyecto` van **`pinned`** (verificado con un scroll real de 255 px: siguen en su sitio; 10 de 13 columnas visibles de entrada, 0 textos cortados). + el aviso de duplicado del Pre-Start decía siempre *«fírmalo arriba»* colgando de `hecho_hoy`, cuando el bloque de firma cuelga de `pendiente_de_firma`: a quien ya constaba se le señalaba algo que no estaba en pantalla (las dos preguntas que v403 separó, remezcladas en el texto). Con bandera `_pf_ok` para no afirmar «ya constas» tras un fallo de lectura |

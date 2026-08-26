@@ -1207,15 +1207,53 @@ def _tablero_editable(grupo, lunes, staff, datos, tidx, marcas=None, dias=None):
             else:
                 # Celda vacía: fuera el chevron del popover — con solo el ＋ se lee
                 # como un hueco donde asignar, no como un desplegable.
+                # ⚠️ v411: el fondo pasa de `#f8fafc` a TRANSPARENTE. Con un fondo
+                # propio tapaba la franja alterna y la columna de hoy justo en las
+                # celdas vacías, que son la mayoría del tablero — o sea, en el sitio
+                # donde esas dos señales tienen que verse.
                 # ⚠️ El chevron NO es un <svg>: es un Material Symbol de FUENTE
                 # (span[data-testid=stIconMaterial]). Se usa el data-testid, que es
                 # contrato de Streamlit; las clases `st-emotion-cache-*` cambian de
                 # versión a versión. Verificado en vivo.
-                css.append(f".st-key-{key} button{{background:#f8fafc!important;"
+                css.append(f".st-key-{key} button{{background:transparent!important;"
                            f"color:#b6c0cd!important;border:1px dashed #e2e8f0!important;"
                            f"{_sombra}}}"
                            f".st-key-{key} button [data-testid='stIconMaterial']"
                            f"{{display:none!important;}}")
+    # 1b) FRANJAS ALTERNAS + COLUMNA DE HOY (v411). Las dos existen para lo mismo: no
+    #     perder el renglón. La rejilla de v410 dio las líneas; con 8-20 personas y
+    #     hasta 7 días, además hace falta poder anclar la vista.
+    #     ⚠️ La zebra va por CONTENEDOR-POR-FILA con su propia key, no con
+    #     `nth-child` sobre el `stLayoutWrapper` que Streamlit intercala: ese wrapper
+    #     es reciente y una regla atada a él se rompe EN SILENCIO si mañana mete otro
+    #     nivel (v327). Las keys son el mecanismo que este módulo ya usa para el color
+    #     de cada celda, y no depende de la estructura interna.
+    _zebra = []
+    for pi in range(len(staff)):
+        if pi % 2 == 1:
+            _zebra.append(f".st-key-rosrow_{_wk}_{pi}{{background:#f6f8fa;}}")
+    # ⚠️ «Hoy» solo si CAE en la semana que se está viendo: al navegar a otra semana no
+    # se resalta nada (si no, se marcaría un día cualquiera como si fuera hoy).
+    _hoy = clock.today(grupo)
+    _hoy_idx = next((i for i, d in enumerate(dias)
+                     if R.fecha_de_dia(lunes, d) == _hoy), None)
+    if _hoy_idx is not None:
+        # ⚠️ `nth-child(N+2)`: la 1ª columna es «Persona», así que el día `i` es la
+        # `i+2`. Medido en producción que los hijos de una fila son TODOS `stColumn`
+        # (sin divs de separación), que es lo que hace fiable el `nth-child`.
+        _n = _hoy_idx + 2
+        _zebra.append(
+            f".st-key-rosgrid [data-testid='stHorizontalBlock']>"
+            f"[data-testid='stColumn']:nth-child({_n}),"
+            f".st-key-roshead [data-testid='stHorizontalBlock']>"
+            f"[data-testid='stColumn']:nth-child({_n})"
+            f"{{background:rgba(46,109,164,.10);}}")
+        _zebra.append(
+            f".st-key-roshead [data-testid='stHorizontalBlock']>"
+            f"[data-testid='stColumn']:nth-child({_n})"
+            f"{{box-shadow:inset 0 -3px 0 0 #2e6da4;}}")
+    css.extend(_zebra)
+
     if css:
         st.markdown("<style>" + "".join(css) + "</style>", unsafe_allow_html=True)
     _leyenda = [f":material/schedule: la hora solo aparece si difiere del turno "
@@ -1240,18 +1278,30 @@ def _tablero_editable(grupo, lunes, staff, datos, tidx, marcas=None, dias=None):
     # días ya estaban centrados, así que la fila no cuadraba.
     _CAB = ("font-size:13px;font-weight:600;color:#5b6472;"
             "text-align:center;margin-bottom:6px")
+    _CAB_HOY = ("font-size:13px;font-weight:700;color:#1e4e79;"
+                "text-align:center;margin-bottom:6px")
     h[0].markdown(f"<div style='{_CAB}'>Persona</div>", unsafe_allow_html=True)
     for i, d in enumerate(dias):
         f = R.fecha_de_dia(lunes, d)
-        h[i + 1].markdown(f"<div style='{_CAB}'>{R.DIAS_LABEL[d]} "
-                          f"{f.strftime('%d/%m')}</div>", unsafe_allow_html=True)
+        _es_hoy = (i == _hoy_idx)
+        # ⚠️ «hoy» va en una SEGUNDA LÍNEA, no pegado a la fecha. Medido: a 1440 la
+        # columna deja 136 px útiles y «Mié 26/08 · hoy» mide 85 —cabría—, pero con la
+        # ventana estrecha la columna baja a 55 px y ahí ni la fecha sola (53) va
+        # holgada. En una segunda línea no compite por ancho a ningún tamaño.
+        _extra = ("<div style='font-size:11px;font-weight:700;color:#2e6da4;"
+                  "line-height:1.1'>hoy</div>") if _es_hoy else ""
+        h[i + 1].markdown(f"<div style='{_CAB_HOY if _es_hoy else _CAB}'>"
+                          f"{R.DIAS_LABEL[d]} {f.strftime('%d/%m')}{_extra}</div>",
+                          unsafe_allow_html=True)
 
     # 3) Filas: nombre + una celda-popover por día
     _grid = st.container(key="rosgrid")
     for pi, u in enumerate(staff):
         usuario = u["Usuario"]
         nom = u.get("Nombre") or usuario
-        cols = _grid.columns(anchos)
+        # Un contenedor POR FILA para poder pintarle la franja alterna por su key.
+        _row = _grid.container(key=f"rosrow_{_wk}_{pi}")
+        cols = _row.columns(anchos)
         if cols[0].button(nom, key=f"pnm_{_wk}_{pi}", width="stretch",
                           help="Ver ficha rápida de la persona"):
             st.session_state["_panel_ficha"] = usuario
