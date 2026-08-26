@@ -1417,23 +1417,38 @@ def _cartera_lista(proys, alarmas, delays, aheads, costos, pendientes=None,
             # scroll para encontrarla** — o sea que no cumplía su función, que es
             # ver el dinero pendiente de un vistazo. Existir no es servir.
             "Sin facturar": round(pendientes.get(_pid, 0.0), 2),
-            "Tipo": str(p.get("Tipo", "") or "—"),
-            "Estado": str(p.get("Estado", "") or "—"),
+            # ⚠️ v408 · el ORDEN de estas claves es el de las columnas (pandas respeta
+            # el orden de inserción), y aquí decide qué se ve sin desplazarse. Medido en
+            # producción a 1440: la tabla ocupaba 1339 px en 1054 visibles, así que
+            # `Usuarios`, `Situación` y `Alertas` —las tres señales de «esto necesita
+            # atención»— quedaban al otro lado del scroll, y al ir a buscarlas se
+            # perdía el `ID` por la izquierda.
+            # ⚠️ NO se arregló encogiendo columnas: se probó y NO cabe. Con 12-13
+            # columnas y nombres de obra reales no hay reparto de anchos que quepa sin
+            # CORTAR texto — glide recorta por *clip*, SIN elipsis, así que el corte no
+            # deja «…» ni se ve en el DOM: hubo que medir `measureText` del canvas
+            # contra el ancho de cada columna para descubrir que se comía 60 px del
+            # nombre de obra y 60 del cliente. Encoger habría cambiado un problema
+            # visible (hay que desplazarse) por uno invisible (lees un nombre a medias).
+            # La cura es la de v398: no achicar, PRIORIZAR lo que se ve primero.
             "Avance": max(0, min(100, int(P._num(p.get("Avance"))))),
+            "Situación": _sit,
+            "Alertas": str(_al) if _al else "",
+            "Estado": str(p.get("Estado", "") or "—"),
+            "Usuarios": _users,
+            # De aquí en adelante, contexto: se consulta, no se vigila.
             "Cliente": str(p.get("Cliente", "") or "—"),
+            "Tipo": str(p.get("Tipo", "") or "—"),
             "Inicio": _ddmm(p.get("FechaInicio")),
             "Fin": _ddmm(p.get("FechaFinEst")),
             "Ppto": _ppto,
-            "Usuarios": _users,
-            "Situación": _sit,
-            "Alertas": str(_al) if _al else "",
         })
     _ev = st.dataframe(
         pd.DataFrame(_rows), hide_index=True, width="stretch",
         on_select="rerun", selection_mode="single-row", key="cart_tbl",
         column_config={
             "Avance": st.column_config.ProgressColumn(
-                "Avance", min_value=0, max_value=100, format="%d%%"),
+                "Avance", min_value=0, max_value=100, format="%d%%", width=78),
             # ⚠️ v399: la coma del formato NO es cosmética. Con `"$%.0f"` esta
             # celda pintaba `$27883` mientras la tarjeta de al lado —y el pie de
             # esta misma tabla, que sale de `theme.dinero`— ponían `$27,883`: la
@@ -1445,9 +1460,26 @@ def _cartera_lista(proys, alarmas, delays, aheads, costos, pendientes=None,
             # REDONDEA (3305.76 → $3,305 vs $3,306), así que sustituirlo movería
             # cifras en pantalla sin que nadie lo pidiera.
             "Sin facturar": st.column_config.NumberColumn(
-                "Sin facturar", format="$%,.0f",
+                "Sin facturar", format="$%,.0f", width=104,
                 help="Ingreso estimado de la obra menos lo ya facturado. "
                      "Se factura desde la tarjeta o desde la propia obra."),
+            # ⚠️ v408 · `pinned` en las dos de identidad. Antes, al desplazarse para
+            # llegar a `Ritmo`/`Avisos`, el `ID` se salía por la izquierda — o sea que
+            # justo mientras mirabas qué obra tiene problemas dejabas de saber CUÁL es,
+            # y el ID es la identidad (el nombre puede repetirse). Verificado con un
+            # scroll real: tras 255 px, `ID` y `Proyecto` siguen en su sitio.
+            "ID":        st.column_config.TextColumn("ID", width=76, pinned=True),
+            "Proyecto":  st.column_config.TextColumn("Proyecto", width=248, pinned=True),
+            # Anchos medidos contra el texto REAL más largo de cada columna (peor caso),
+            # no elegidos a ojo: con estos, 0 textos cortados.
+            "Situación": st.column_config.TextColumn(
+                "Ritmo", width=100,
+                help="Días de retraso o de adelanto respecto al plan."),
+            "Alertas":   st.column_config.TextColumn(
+                "Avisos", width=70, help="Alarmas abiertas de la obra."),
+            "Estado":    st.column_config.TextColumn("Estado", width=92),
+            "Usuarios":  st.column_config.NumberColumn(
+                "Equipo", width=70, help="Personas de campo asignadas."),
         })
     _tot = sum(pendientes.get(str(p.get("ID", "")), 0.0) for p in proys)
     if _tot > 0:

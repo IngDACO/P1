@@ -249,11 +249,17 @@ def render_prestart_tab():
     # SEGUNDO Pre-Start del mismo día y la misma obra — dos documentos para una charla,
     # que es justo lo que hoy no impide nada. Gestión sí sigue, porque a veces hay que
     # registrar una segunda charla de verdad (otro turno, otra cuadrilla).
+    # ⚠️ `_pf_ok` distingue «consultado, no le falta firmar» de «no se pudo consultar».
+    # Los dos dejan `_pf` vacío, pero significan cosas distintas: el aviso de v407 de más
+    # abajo afirma que YA CONSTAS, y eso no se puede decir cuando la consulta ha fallado.
+    # Es el fallo de v375 (un `try` que abarcaba de más hacía decir «Falta el Pre-Start»
+    # a quien solo tenía que firmar), aquí en la otra dirección.
+    _pf_ok = True
     try:
         _pf = PS.pendiente_de_firma(pid, pgrupo, nombre or usuario)
     except Exception as e:                                        # noqa: BLE001
         logger.warning("prestart: no se pudo mirar la firma pendiente: %s", e)
-        _pf = {}
+        _pf, _pf_ok = {}, False
     if _pf:
         _bloque_firmar(_pf, pgrupo, nombre or usuario, usuario)
         if rol == "campo":
@@ -346,8 +352,21 @@ def render_prestart_tab():
     except Exception:
         _ya_hoy = False
     if _ya_hoy:
-        st.warning(":material/warning: **Esta obra ya tiene el Pre-Start de hoy.** "
-                   "Si solo faltas tú por constar, fírmalo arriba en vez de crear otro.")
+        # ⚠️ v408 · el texto se decide por `_pf`, no por `_ya_hoy`. Antes decía siempre
+        # «fírmalo ARRIBA», pero el bloque de firma solo se pinta a quien le falta
+        # firmar: a quien ya constaba se le señalaba algo que no estaba en pantalla.
+        # Son las dos preguntas que v403 separó a propósito —«¿hay charla?» y «¿me toca
+        # firmar a mí?»— y el aviso las había vuelto a mezclar.
+        if _pf:
+            st.warning(":material/warning: **Esta obra ya tiene el Pre-Start de hoy.** "
+                       "Si solo faltas tú por constar, fírmalo arriba en vez de crear otro.")
+        elif _pf_ok:
+            st.warning(":material/warning: **Esta obra ya tiene el Pre-Start de hoy "
+                       "y tú ya constas en él.** Solo hace falta otro si hubo una "
+                       "segunda charla de verdad.")
+        else:
+            st.warning(":material/warning: **Esta obra ya tiene el Pre-Start de hoy.** "
+                       "Solo hace falta otro si hubo una segunda charla de verdad.")
         _forzar = st.checkbox(
             "Hubo una SEGUNDA charla hoy (otro turno u otra cuadrilla): regístrala igual",
             key="ps_forzar")
