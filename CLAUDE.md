@@ -6082,7 +6082,49 @@ en vez de leerlo del código, así que seguía en verde con el escape BORRADO: u
 que pasa en vacío respecto a lo que dice auditar. Ahora comprueba por AST que la
 expresión del `title` lleva el reemplazo. Suite entera: **61/61**.
 
-## Versiones desplegadas (v412 = actual)
+## Homónimos en Planificación: dos personas, dos filas idénticas (v413)
+Salió de una pregunta del usuario —«¿ya está todo cerrado?»— y de mirar el tablero en vez
+de responder que sí. En el Panel había **dos filas «Mei Chen»**, dos personas distintas
+que se veían EXACTAMENTE iguales: al asignar la obra no había forma de saber a cuál se le
+estaba poniendo, en la pantalla cuyo único propósito es repartir el trabajo.
+
+⚠️ **`auth.etiqueta_usuarios` existía desde v319 y solo la usaba Nóminas.** Su propio
+docstring dice que el nombre PUEDE repetirse y que ya había mordido en Horas (v151). La
+Planificación seguía pintando `Nombre or Usuario` en sus **8 vistas**. Sexta aparición del
+patrón (v151 · v306 · v319 · v348): la regla se escribe una vez y no se lleva a las
+pantallas nuevas.
+
+### Hallazgo de propina: no era solo cosmético
+En `_asignacion_inteligente` el nombre es **clave de un diccionario de opciones**
+(`_opts = {f"{estado} {nom}": usr}`). Con dos homónimos del mismo estado la clave
+**colisiona y una persona queda IMPOSIBLE de elegir**, en silencio — el fallo de v147 y
+v150. El desempate no lo maquilla: lo arregla.
+
+### Lo que NO había que tocar (y se vio auditando ANTES de editar)
+- ⚠️ **`_ficha_rapida`** arma un deep-link con `gp_fichasel = f"{nom} ({usuario})"`. Con
+  la etiqueta quedaría «Mei Chen (mchen) (mchen)» y el parseo del destino se rompería.
+  Conserva el nombre CRUDO y pinta con una variable aparte. Es exactamente el fallo de
+  v308: cambiar lo que se MUESTRA y romper lo que se GUARDA.
+- ⚠️ El `nom` de **`_catalogo`** no es una persona: es el nombre de un TRABAJO
+  (`R.add_trabajo(grupo, num, nom, …)`). Un reemplazo por patrón lo habría arrastrado.
+Los dos se auditaron listando, por AST, **cada lectura de `nom` función por función**
+antes de cambiar una línea.
+
+### `_etq(staff, grupo)`
+Delega en `auth.etiqueta_usuarios` (una sola definición de la regla) y ⚠️ **desempata
+sobre TODO el grupo, no sobre la lista visible**: si se hiciera sobre `staff`, la misma
+persona sería «Mei Chen» en una pantalla donde está sola y «Mei Chen (mchen)» en otra —
+y una identidad que cambia de nombre según la pantalla no es una identidad. `list_users`
+está cacheada (v92) → 0 lecturas nuevas; si falla, degrada a lo visible.
+
+### Verificación
+`verif_v413.py`: las 7 vistas de personas desempatan, `_ficha_rapida` conserva el crudo,
+`_catalogo` queda fuera, y el ámbito es el grupo. Probado contra el código roto en 4 casos
+(los caza). ⚠️ Uno de sus chequeos daba **FALLO con el código correcto**: buscaba el
+literal `"{nom} ({usuario})"` y un f-string se descompone en trozos (`" ("`, `")"`) —
+hubo que mirar el árbol, no el texto. Tercera vez en el día. Suite: **62/62**.
+
+## Versiones desplegadas (v413 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -6090,6 +6132,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v413 | **Homónimos en Planificación**: en el Panel había **dos filas «Mei Chen»** —dos personas distintas idénticas en pantalla—, así que al asignar la obra no se sabía a cuál. ⚠️ `auth.etiqueta_usuarios` existía **desde v319 y solo la usaba Nóminas**; las 8 vistas de Planificación seguían pintando `Nombre or Usuario` (sexta aparición del patrón: v151·v306·v319·v348). Nuevo `_etq`, que delega en esa función y ⚠️ desempata sobre **todo el grupo**, no sobre la lista visible (si no, la misma persona cambiaría de nombre según la pantalla). **De propina**: en `_asignacion_inteligente` el nombre es CLAVE de un dict de opciones, así que dos homónimos del mismo estado **colisionaban y una era imposible de elegir** (v147/v150) — el desempate lo arregla, no lo maquilla. ⚠️ NO se tocaron dos sitios, vistos auditando por AST cada lectura de `nom` ANTES de editar: `_ficha_rapida` (su `nom` alimenta el deep-link `gp_fichasel`; con la etiqueta quedaría «Mei Chen (mchen) (mchen)» — el fallo de v308) y `_catalogo` (su `nom` es el nombre de un TRABAJO, no de una persona) |
 | v412 | **La celda del Panel deja de estirar su fila**: una sola celda con dos asignaciones y franja horaria triplicaba su fila. Medido a 1440: filas de **36 a 116 px**, y el culpable no era la celda (53) sino **la NOTA (61)**, que ocupaba más que el trabajo que anota. La nota pasa a una línea con elipsis + texto completo en el `title`, y el label se topa a 2 líneas → filas de **108/144/38 a 63/63/38** (−43% de alto). ⚠️ La primera medición, tomada al ancho del PANEL, daba 36–421 px: habría dimensionado el arreglo para un problema 7,5× peor que el real — **tercera vez en el día** que medir al ancho equivocado cambia la conclusión (v335). ⚠️ El clamp necesita **tres** propiedades y aun así el navegador **blockifica** el `display` (el `<p>` está en un flex), así que el tope real lo garantiza un `max-height` de respaldo. ⚠️ Verificado que el selector NO alcanza a los botones del editor (el popover abierto se portalea fuera). ⚠️ El `title` escapa también las COMILLAS: `_esc` no las toca y una comilla permitiría inyectar atributos |
 | v411 | **Franjas alternas + columna de HOY en el Panel** (pedidas por el usuario tras ver la rejilla): filas pares con fondo tenue y el día de hoy teñido en cuerpo y cabecera, con subrayado azul y la palabra «hoy». ⚠️ La zebra va por **key de fila** (`st.container(key="rosrow_…")`), NO con `nth-child` sobre el `stLayoutWrapper` que Streamlit intercala: atarla a ese wrapper la rompería **en silencio** si mañana mete otro nivel (v327). ⚠️ «Hoy» solo se marca si **cae en la semana visible** — al navegar a otra semana no se resalta nada, porque marcar un día cualquiera como hoy mentiría. ⚠️ La celda vacía pasa a **transparente**: su `#f8fafc` tapaba las dos señales justo en las celdas vacías, que son la mayoría del tablero. ⚠️ «hoy» va en **segunda línea** porque con la ventana estrecha la columna baja a 55 px y ni la fecha sola cabe holgada — y la primera medición, tomada al ancho equivocado, decía lo contrario (error de v335). Caducaron y se actualizaron los guardianes de **v410** y **v301**, con la razón escrita al lado |
 | v410 | **Rejilla en el Panel de planificación** (pedida por el usuario): las celdas dejan de flotar sobre blanco — línea por fila, línea por día y cabecera anclada con una más marcada, para poder seguir una persona hasta el viernes o un día hacia abajo sin ir contando. Cabecera y filas envueltas en `st.container(key=…)`, usados como **objeto** (`_grid.columns(...)`) y no con `with`, para **no reindentar** el bucle (la clase de cambio que rompió v120/v148). ⚠️ Medido antes de escribir el CSS: el borde inferior necesita `!important` (sin él ganaba una regla de Streamlit y salía `0px`) y el derecho no; y **un popover CERRADO ya lleva su `st.columns` dentro de `.st-key-roscel_*`**, así que sin excluirlo el editor de la celda saldría cuadriculado. ⚠️ Para juzgar el resultado hubo que capturar a **1:1** y en **tema claro**: el panel escalaba 1440→800 y se comía las líneas de 1 px. Guardián `verif_v410.py` — ⚠️ uno de sus chequeos daba **OK con la exclusión borrada** (miraba subcadenas que existen por otros motivos); lo delató probarlo contra el código roto |

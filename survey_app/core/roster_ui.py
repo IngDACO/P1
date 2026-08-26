@@ -37,6 +37,34 @@ def _staff(grupo):
         return []
 
 
+def _etq(staff=None, grupo=""):
+    """`{usuario: etiqueta}` — el nombre de cada persona, con el LOGIN detrás **solo si
+    ese nombre se repite**. Delega en `auth.etiqueta_usuarios` (v319).
+
+    ⚠️ v413. `auth.etiqueta_usuarios` existe desde v319 y **solo la usaba Nóminas**: la
+    Planificación seguía pintando `Nombre or Usuario` en sus 8 vistas. En el grupo real
+    hay DOS personas llamadas «Mei Chen», así que en el tablero salían dos filas
+    idénticas y no había forma de saber a cuál se le estaba asignando la obra — en la
+    pantalla donde precisamente se reparte el trabajo. Sexta aparición del patrón
+    (v151 Horas · v306 Proyectos · v319 Nóminas · v348 avisos).
+
+    ⚠️ El desempate se hace sobre TODO el grupo, no sobre la lista visible: si se hiciera
+    sobre `staff`, la misma persona saldría «Mei Chen» en una pantalla donde está sola y
+    «Mei Chen (mchen)» en otra donde están las dos, y una identidad que cambia de nombre
+    según la pantalla no es una identidad. `list_users` está cacheada (v92) → 0 lecturas
+    nuevas. Si no hay grupo o falla la lectura, se cae a la lista visible: peor desempate,
+    pero nunca un nombre vacío.
+    """
+    _g = str(grupo or "") or str((st.session_state.get("auth") or {}).get("grupo", "") or "")
+    base = []
+    if _g:
+        try:
+            base = auth.list_users(grupo=_g) or []
+        except Exception:
+            base = []
+    return auth.etiqueta_usuarios(base or (staff or []))
+
+
 def _texto_sobre(hex_color) -> str:
     """Negro o blanco según la luminancia del fondo, para que el texto se lea."""
     try:
@@ -396,8 +424,9 @@ def _vista_dia_cuadrilla(grupo, lunes, staff, datos, tidx, dia):
     _NOM = ("font-size:13px;color:#1f2937;font-weight:600;white-space:nowrap;"
             "overflow:hidden;text-overflow:ellipsis;padding-top:6px")
     html = []
+    _et = _etq(staff, grupo)
     for u, items, ch in filas:
-        nom = u.get("Nombre") or u["Usuario"]
+        nom = _et.get(u["Usuario"]) or u.get("Nombre") or u["Usuario"]
         pista = []
         # (a) lo que NO tiene hora ocupa el fondo de la fila, con trama: se ve que
         #     está asignado sin afirmar a qué hora.
@@ -509,9 +538,10 @@ def _asignacion_inteligente(grupo, lunes, staff, tidx, dias=None):
 
         datos = R.get_semana(grupo, lunes)
         libres, ocupados = [], []
+        _et = _etq(staff, grupo)
         for u in staff:
             usr = u["Usuario"]
-            nom = u.get("Nombre") or usr
+            nom = _et.get(usr) or u.get("Nombre") or usr
             items = R.celda_items(datos, usr, _dsel)
             choca = any(_solapa(ini, fin, it["ini"], it["fin"]) for it in items)
             comp = credentials.compliance(usr, certs) if certs else {"cumple": True, "por_tipo": {}}
@@ -567,9 +597,10 @@ def _radar_scan(grupo, lunes, staff, tidx):
     datos = R.get_semana(grupo, lunes)
     choques, sin_cumplir, _seen = [], [], set()
     marcas, _comp = {}, {}          # _comp: cachea compliance por (usuario, proyecto)
+    _et = _etq(staff, grupo)
     for u in staff:
         usr = u["Usuario"]
-        nom = u.get("Nombre") or usr
+        nom = _et.get(usr) or u.get("Nombre") or usr
         # ⚠️ DIAS_TODOS, no DIAS: un choque de turno o un certificado que bloquea el
         # sábado es igual de real que el del martes, y el radar es lo que lo caza.
         for d in R.DIAS_TODOS:
@@ -642,10 +673,11 @@ def _ficha_rapida(grupo, usuario):
     de hoy (con franja), certificados y un botón a su ficha 360° completa."""
     from core import credentials
     u = auth.get_user(usuario) or {}
-    nom = u.get("Nombre") or usuario
+    nom = u.get("Nombre") or usuario          # ⚠️ CRUDO: lo consume el deep-link de abajo
+    _nom_v = _etq([u], grupo).get(usuario) or nom      # el que se pinta
     with st.container(border=True):
         cA, cB = st.columns([5, 1])
-        cA.markdown(f"**{_esc(nom)}**"
+        cA.markdown(f"**{_esc(_nom_v)}**"
                     + (f" · {_esc(u.get('Rol', ''))}" if u.get("Rol") else ""))
         if cB.button("✕", key="fp_close"):
             st.session_state.pop("_panel_ficha", None)
@@ -941,9 +973,10 @@ def _cumplimiento(grupo, lunes, staff, tidx, dias=None):
 
         n_ok = n_desvio = n_sin = 0
         filas = []
+        _et = _etq(staff, grupo)
         for u in staff:
             usr = u["Usuario"]
-            nom = u.get("Nombre") or usr
+            nom = _et.get(usr) or u.get("Nombre") or usr
             plan_asigs = R.celda_asigs(datos, usr, _dsel)          # v274: varias por día
             plan_pids = {R.proyecto_de(a, tidx) for a in plan_asigs if R.proyecto_de(a, tidx)}
             plan_lbl = ", ".join(R.etiqueta_de(a, tidx) for a in plan_asigs
@@ -1319,9 +1352,10 @@ def _tablero_editable(grupo, lunes, staff, datos, tidx, marcas=None, dias=None):
 
     # 3) Filas: nombre + una celda-popover por día
     _grid = st.container(key="rosgrid")
+    _et = _etq(staff, grupo)
     for pi, u in enumerate(staff):
         usuario = u["Usuario"]
-        nom = u.get("Nombre") or usuario
+        nom = _et.get(usuario) or u.get("Nombre") or usuario
         # Un contenedor POR FILA para poder pintarle la franja alterna por su key.
         _row = _grid.container(key=f"rosrow_{_wk}_{pi}")
         cols = _row.columns(anchos)
@@ -1474,9 +1508,10 @@ def _grid_html(staff, lunes, datos, tidx, resaltar="", dias=None) -> str:
         ths.append(f'<th style="padding:6px 8px;font-size:12px;color:#6b7280;'
                    f'min-width:120px;">{R.DIAS_LABEL[d]} {f.strftime("%d/%m")}</th>')
     filas = []
+    _et = _etq(staff)
     for u in staff:
         usr = u["Usuario"]
-        nom = u.get("Nombre") or usr
+        nom = _et.get(usr) or u.get("Nombre") or usr
         _mio = (str(usr) == str(resaltar))
         _nbg = "#fff7e6" if _mio else "#fff"
         celdas = [f'<td style="padding:5px 8px;font-size:13px;font-weight:{"800" if _mio else "600"};'
@@ -1648,9 +1683,10 @@ def _disponibilidad_html(staff, lunes, datos, tidx, dias=None) -> str:
         ths.append(f'<th style="padding:6px 8px;font-size:12px;color:#6b7280;'
                    f'min-width:110px;">{R.DIAS_LABEL[d]} {f.strftime("%d/%m")}</th>')
     filas = []
+    _et = _etq(staff)
     for u in staff:
         usr = u["Usuario"]
-        nom = u.get("Nombre") or usr
+        nom = _et.get(usr) or u.get("Nombre") or usr
         celdas = [f'<td style="padding:5px 8px;font-size:13px;font-weight:600;color:#1f2937;'
                   f'white-space:nowrap;position:sticky;left:0;background:#fff;'
                   f'border-right:1px solid #eef1f5;">{_esc(nom)}</td>']
