@@ -1122,6 +1122,29 @@ def _tablero_editable(grupo, lunes, staff, datos, tidx, marcas=None, dias=None):
 [class*="st-key-roscel_"] button p {
   font-size:12px !important; font-weight: 600 !important;
   text-align: left !important; width: 100%; white-space: normal !important;
+  /* ── Tope de altura de la celda (v412) ──────────────────────────────────
+     Medido en producción a 1440: las filas iban de 36 a 116 px y el tablero
+     entero a 546. Una sola celda con dos asignaciones y franja horaria
+     («prueba2 7:00–11:00 · prueba 3 11:30–15:30») estiraba SU fila al triple,
+     y con ella la rejilla dejaba de servir para comparar días de un vistazo.
+     Se acota a 2 líneas; el contenido entero sigue estando a un clic, en el
+     editor de la celda.
+     ⚠️ `-webkit-line-clamp` necesita las TRES propiedades (display, box-orient
+     y overflow); con una sola no recorta y no da ningún error.
+     ⚠️ Y aun con las tres, el navegador BLOCKIFICA el `display:-webkit-box` a
+     `flow-root` porque el `<p>` vive dentro de un contenedor flex — medido: la
+     única regla que toca `display` es esta y el computed sale `flow-root`. En
+     Chrome el clamp sigue recortando, pero la altura del tablero no puede
+     depender de un comportamiento que no controlo: el `max-height` (2 líneas ×
+     1.2 × 12px = 28.8) lo garantiza en cualquier navegador.
+     ⚠️ Este selector NO alcanza a los botones del editor: el popover ABIERTO se
+     portalea FUERA de `.st-key-roscel_` (verificado en vivo: su `max-height`
+     sale `none` y su texto no se corta). */
+  display: -webkit-box !important;
+  -webkit-line-clamp: 2 !important;
+  -webkit-box-orient: vertical !important;
+  overflow: hidden !important;
+  max-height: 29px !important;
 }
 [class*="st-key-pnm_"] button {
   padding: 4px 8px !important; min-height: 0 !important;
@@ -1425,7 +1448,21 @@ def _tablero_editable(grupo, lunes, staff, datos, tidx, marcas=None, dias=None):
                         st.session_state["_admin_nav_pending"] = ("proyectos", "📊 Proyectos")
                         st.rerun()
             if nota:
-                col.caption(nota)
+                # ⚠️ v412: la nota era un `st.caption` y en producción medía **61 px**
+                # frente a los 53 de la propia celda — ocupaba MÁS que el trabajo que
+                # anota, y era el mayor responsable de que su fila triplicara a las
+                # demás. Pasa a UNA línea con elipsis y el texto completo en el `title`
+                # nativo: se acota lo que OCUPA, no lo que se puede saber (además sigue
+                # entero en el editor de la celda).
+                # ⚠️ Se escapan las comillas ADEMÁS del HTML: `_esc` no las toca, y una
+                # comilla en la nota rompería el atributo `title` — que aquí no es solo
+                # un fallo de pintado, es una vía para inyectar atributos.
+                _nt = _esc(nota)
+                col.markdown(
+                    f'<div title="{_nt.replace(chr(34), "&quot;")}" '
+                    f'style="font-size:11px;color:#6b7280;line-height:1.3;'
+                    f'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;'
+                    f'padding:0 2px">{_nt}</div>', unsafe_allow_html=True)
 
 
 def _grid_html(staff, lunes, datos, tidx, resaltar="", dias=None) -> str:

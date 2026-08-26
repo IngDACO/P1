@@ -6033,7 +6033,56 @@ CSS dentro de la cadena de estilos**, que `tokenize` no quita porque para Python
 de un string. Es la trampa nº2 (grep ≠ uso) en su variante más escurridiza. Suite entera:
 **60/60**.
 
-## Versiones desplegadas (v411 = actual)
+## La celda del Panel deja de estirar su fila (v412)
+Salió de mirar el tablero tras v411: una fila triplicaba a las demás. **Medido a 1440**
+—el ancho donde vive el admin— antes de tocar nada:
+```
+filas de 36 a 116 px · tablero 546 px
+peor fila = celda de 53 px (2 líneas) + NOTA de 61 px
+```
+⚠️ La primera medición la tomé al ancho del panel (~780) y daba **36–421 px y 1785 de
+tablero**: un problema 7,5× peor que el real. Habría dimensionado el arreglo para un
+caso que a la medida de diseño no existe. **Tercera vez en el día** que medir al ancho
+equivocado cambia la conclusión (v335).
+
+### El culpable no era la celda: era la nota
+61 px la nota contra 53 la celda — **ocupaba más que el trabajo que anota**. Pasa a UNA
+línea con elipsis y el texto completo en el `title` nativo: se acota lo que OCUPA, no lo
+que se puede saber (y sigue entero en el editor de la celda). El label de la celda se
+topa a 2 líneas.
+```
+antes:  108 · 144 · 38 px   (total 290)
+ahora:   63 ·  63 · 38 px   (total 164, −43%)
+```
+
+### ⚠️ El clamp NO se sostiene solo
+`-webkit-line-clamp` necesita las TRES propiedades (`display:-webkit-box`, `box-orient`,
+`overflow`) — con una sola no recorta y no da ningún error. Y aun con las tres, el
+navegador **blockifica** el `display` a `flow-root` porque el `<p>` vive dentro de un
+contenedor flex: medido, la única regla que toca `display` es la nuestra y el computed
+sale `flow-root`. En Chrome el clamp sigue recortando, pero la altura del tablero no
+puede depender de un comportamiento que no controlamos → **`max-height` como respaldo**
+(2 líneas × 1.2 × 12px = 28.8). Cinta y tirantes.
+
+### ⚠️ Lo que había que descartar antes de desplegar
+El selector `[class*="st-key-roscel_"] button p` **también alcanzaría a los botones del
+editor** de la celda, y un `max-height` ahí les cortaría el texto. Verificado en vivo:
+el popover ABIERTO se portalea FUERA de `.st-key-roscel_`, así que su `max-height` sale
+`none` y su texto no se corta. El editor queda intacto.
+
+### ⚠️ Y el `title` es un atributo, no solo texto
+`_esc` escapa `&`, `<` y `>` pero **no las comillas**. Una nota con una comilla no solo
+rompería el atributo: permitiría inyectar otros (`" onmouseover="…`). Se escapa también
+la comilla, y el guardián lo comprueba **leyéndolo del código**.
+
+### Verificación
+`verif_v412.py`, probado contra el código roto en 4 casos: los caza los 4 — pero solo
+tras arreglarlo. ⚠️ Su chequeo del escape **reproducía el `.replace` en el propio test**
+en vez de leerlo del código, así que seguía en verde con el escape BORRADO: un chequeo
+que pasa en vacío respecto a lo que dice auditar. Ahora comprueba por AST que la
+expresión del `title` lleva el reemplazo. Suite entera: **61/61**.
+
+## Versiones desplegadas (v412 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -6041,6 +6090,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v412 | **La celda del Panel deja de estirar su fila**: una sola celda con dos asignaciones y franja horaria triplicaba su fila. Medido a 1440: filas de **36 a 116 px**, y el culpable no era la celda (53) sino **la NOTA (61)**, que ocupaba más que el trabajo que anota. La nota pasa a una línea con elipsis + texto completo en el `title`, y el label se topa a 2 líneas → filas de **108/144/38 a 63/63/38** (−43% de alto). ⚠️ La primera medición, tomada al ancho del PANEL, daba 36–421 px: habría dimensionado el arreglo para un problema 7,5× peor que el real — **tercera vez en el día** que medir al ancho equivocado cambia la conclusión (v335). ⚠️ El clamp necesita **tres** propiedades y aun así el navegador **blockifica** el `display` (el `<p>` está en un flex), así que el tope real lo garantiza un `max-height` de respaldo. ⚠️ Verificado que el selector NO alcanza a los botones del editor (el popover abierto se portalea fuera). ⚠️ El `title` escapa también las COMILLAS: `_esc` no las toca y una comilla permitiría inyectar atributos |
 | v411 | **Franjas alternas + columna de HOY en el Panel** (pedidas por el usuario tras ver la rejilla): filas pares con fondo tenue y el día de hoy teñido en cuerpo y cabecera, con subrayado azul y la palabra «hoy». ⚠️ La zebra va por **key de fila** (`st.container(key="rosrow_…")`), NO con `nth-child` sobre el `stLayoutWrapper` que Streamlit intercala: atarla a ese wrapper la rompería **en silencio** si mañana mete otro nivel (v327). ⚠️ «Hoy» solo se marca si **cae en la semana visible** — al navegar a otra semana no se resalta nada, porque marcar un día cualquiera como hoy mentiría. ⚠️ La celda vacía pasa a **transparente**: su `#f8fafc` tapaba las dos señales justo en las celdas vacías, que son la mayoría del tablero. ⚠️ «hoy» va en **segunda línea** porque con la ventana estrecha la columna baja a 55 px y ni la fecha sola cabe holgada — y la primera medición, tomada al ancho equivocado, decía lo contrario (error de v335). Caducaron y se actualizaron los guardianes de **v410** y **v301**, con la razón escrita al lado |
 | v410 | **Rejilla en el Panel de planificación** (pedida por el usuario): las celdas dejan de flotar sobre blanco — línea por fila, línea por día y cabecera anclada con una más marcada, para poder seguir una persona hasta el viernes o un día hacia abajo sin ir contando. Cabecera y filas envueltas en `st.container(key=…)`, usados como **objeto** (`_grid.columns(...)`) y no con `with`, para **no reindentar** el bucle (la clase de cambio que rompió v120/v148). ⚠️ Medido antes de escribir el CSS: el borde inferior necesita `!important` (sin él ganaba una regla de Streamlit y salía `0px`) y el derecho no; y **un popover CERRADO ya lleva su `st.columns` dentro de `.st-key-roscel_*`**, así que sin excluirlo el editor de la celda saldría cuadriculado. ⚠️ Para juzgar el resultado hubo que capturar a **1:1** y en **tema claro**: el panel escalaba 1440→800 y se comía las líneas de 1 px. Guardián `verif_v410.py` — ⚠️ uno de sus chequeos daba **OK con la exclusión borrada** (miraba subcadenas que existen por otros motivos); lo delató probarlo contra el código roto |
 | v409 | Documentación de v408 en CLAUDE.md: el barrido de las 24 pantallas, las trampas 21-23 (el recorte por *clip* sin elipsis, «encoger cambia un problema visible por uno invisible», y los rojos de la suite que venían de la consola) y la **corrección de v334** sobre qué prueba la barra de versión |
