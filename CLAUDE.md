@@ -6185,7 +6185,48 @@ es el número de líneas: es que la nota **tenga un tope** y no pueda volver a e
 fila sin control (medía 61 px, más que la celda). Reescrito sobre eso y probado contra el
 código roto: caza que la nota pierda el clamp o el `max-height`.
 
-## Versiones desplegadas (v415 = actual)
+## Las escrituras de Drive: eran 3, no 4, y ya solo queda 1 (v416)
+Llevaba varias respuestas arrastrando en la lista de pendientes «las 4 escrituras de
+Drive, sin ejercitar». Al ir a cerrarlo, **la foto del estado corrigió mi propia
+afirmación** — que es lo que pasa cuando se repite un pendiente sin volver a comprobarlo:
+
+| Función | Estado REAL |
+|---|---|
+| `expenses.upload_receipt` | **ya estaba ejercitada**: 2 gastos con recibo JPG y DriveID |
+| `credentials.upload_file` | 0 de 6 credenciales con documento → ejercitada AHORA |
+| `manuals.add_manual` | la hoja `Manuales` **ni existía** |
+| `manuals.delete_manual` | idem |
+
+Y Drive en general está más que rodado: **27 documentos con DriveID** (9 pre-start, 7
+planos, 3 informes, 3 fotos, 3 cálculos, 2 matrices).
+
+### Cómo se ejercitó sin poder ejecutarlo en local
+`drive_store.is_available()` da **False en local** (las credenciales `[gdrive]` viven solo
+en los Secrets del Cloud), así que la subida hay que hacerla contra la app desplegada. El
+panel del navegador no tiene herramienta de subida, pero **sí se puede inyectar el archivo
+en el `<input type=file>`** con `DataTransfer` + evento `change`, y Streamlit lo acepta
+igual que una subida humana. Para el `text_input` hace falta el **setter nativo** de
+`HTMLInputElement.prototype.value`: asignar `.value` a secas no lo ve React.
+⚠️ Y la tabla de Usuarios es un grid en canvas, donde los clics sintéticos no llegan (v375
+otra vez). El camino que sí funciona es de BOTONES: Panel → clic en el nombre → ficha
+rápida → «Ver ficha completa».
+
+### Verificado de ida y vuelta, no solo «no dio error»
+- **Subida**: fila `CR-0007` con `DriveID` real, y el archivo EN Drive —
+  `apatel_White_Card_PRUEBA-drive-v416.pdf`, 394 bytes (los mismos que se inyectaron) y
+  Drive leyendo su contenido (`"PRUEBA v416 - credencial"`), o sea PDF íntegro y válido.
+  La app además compone el nombre `{usuario}_{tipo}_{archivo}`.
+- **Borrado**: la hoja vuelve a 6 filas **y el archivo desaparece de Drive** (`Requested
+  entity was not found`). Limpia las dos cosas, sin dejar basura — que era la duda.
+- Producción queda **sin rastro** de la prueba.
+
+### Lo único que queda
+`manuals.add_manual` / `delete_manual`: son del panel **📚 Manuales del PROPIETARIO**
+(`dacox` / `Arcantox`), y la sesión de trabajo entra como administrador. No se puede
+ejercitar sin esa cuenta. Es la parte de menor riesgo: un banco de documentos para el
+asistente, no toca dinero ni planificación.
+
+## Versiones desplegadas (v416 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -6193,6 +6234,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v416 | **Ejercitadas las escrituras de Drive** (solo documentación: no cambia código). ⚠️ La foto del estado **corrigió lo que yo venía repitiendo**: no eran 4 pendientes sino 3 — `expenses.upload_receipt` ya estaba ejercitada (2 recibos reales con DriveID) — y Drive está rodado (**27 documentos** con DriveID). `credentials.upload_file` ejercitada ahora de ida y vuelta: fila `CR-0007` + archivo real en Drive (394 bytes, contenido legible), y al borrar **desaparecen las dos cosas**, sin basura. Producción sin rastro. ⚠️ En local no se puede (`is_available()` = False), así que se hizo contra el Cloud **inyectando el archivo en el `<input type=file>` con `DataTransfer`** — con el setter NATIVO para el `text_input`, porque asignar `.value` a secas no lo ve React, y llegando a la ficha **por botones**, ya que la tabla de Usuarios es canvas y no acepta clics sintéticos. Queda solo `manuals.add/delete_manual`, que exigen la cuenta de **propietario** |
 | v415 | **La nota del Panel pasa de UNA línea a HASTA dos.** Medir cambió mi propia recomendación (yo dije «esperar a verlo en uso»): de las **3 notas reales, 2 se cortaban**, y a un aviso —«⚠️ se pisa: dos obras a la vez»— le faltaban **3 px** de 135. Las notas de este tablero son avisos: cortarlas es cortar lo que hay que leer de un vistazo. ⚠️ **«Hasta» dos, no dos**: con `-webkit-line-clamp` la nota corta sigue en una línea (14 px), así que el alto extra lo pagan las 2 filas que lo necesitan, no las 8 — no se deshace lo que ganó v412. ⚠️ `max-height` de respaldo, porque el navegador **blockifica** el `display:-webkit-box`. ⚠️ Y la mini-app **no reproducía el ancho** (sin sidebar, sus columnas son más anchas y la nota cabía): valida el MECANISMO, mientras que el ancho sale de medir producción. Guardián de v412 **caducado y reescrito** sobre lo que protege de verdad (que la nota tenga tope, no que tenga una línea) |
 | v414 | **El nombre de obra deja de ir al filo** en `Proyectos · Lista` (pendiente de v408): la columna medía 248 px (232 útiles) y el nombre más largo ocupa **224** — ocho píxeles de margen. ⚠️ Y el corte es **SILENCIOSO**: comprobado MIRÁNDOLO en una mini-app, glide **no dibuja «…»**, recorta en seco, así que un nombre a medias parece completo (en v408 lo afirmé desde una prueba más débil: que el hook recibiera el texto entero dice qué se le PASA a `fillText`, no qué se ve). Medido el coste: a **272** entran las **mismas 10 columnas** que a 248 y el margen sube de 8 a **32 px**; a 300 se cae `Tipo`. ⚠️ Ningún ancho fijo garantiza que quepa cualquier nombre — lo que cierra el caso es que al seleccionar la fila la tira de acciones (v402) muestra el nombre **completo** |
 | v413 | **Homónimos en Planificación**: en el Panel había **dos filas «Mei Chen»** —dos personas distintas idénticas en pantalla—, así que al asignar la obra no se sabía a cuál. ⚠️ `auth.etiqueta_usuarios` existía **desde v319 y solo la usaba Nóminas**; las 8 vistas de Planificación seguían pintando `Nombre or Usuario` (sexta aparición del patrón: v151·v306·v319·v348). Nuevo `_etq`, que delega en esa función y ⚠️ desempata sobre **todo el grupo**, no sobre la lista visible (si no, la misma persona cambiaría de nombre según la pantalla). **De propina**: en `_asignacion_inteligente` el nombre es CLAVE de un dict de opciones, así que dos homónimos del mismo estado **colisionaban y una era imposible de elegir** (v147/v150) — el desempate lo arregla, no lo maquilla. ⚠️ NO se tocaron dos sitios, vistos auditando por AST cada lectura de `nom` ANTES de editar: `_ficha_rapida` (su `nom` alimenta el deep-link `gp_fichasel`; con la etiqueta quedaría «Mei Chen (mchen) (mchen)» — el fallo de v308) y `_catalogo` (su `nom` es el nombre de un TRABAJO, no de una persona) |
