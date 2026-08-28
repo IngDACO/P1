@@ -6360,7 +6360,43 @@ está pasando es el inverso. Se dijo tal cual en vez de dar por buena la premisa
 `verif_v419.py`, probado contra el código roto en 3 casos (devolver el campo editable,
 dejar que `_q` pise el texto, quitar el aviso): los caza los 3. Suite: **64/64**.
 
-## Versiones desplegadas (v419 = actual)
+## Dar de alta un cliente sin salir de la cotización (v420)
+Petición del usuario: *«si estoy haciendo una cotización, que no tenga que salirme porque
+es para un cliente nuevo»*. El selector solo ofrecía fichas existentes y, si NO había
+ninguna, la pantalla hacía **`return`** con un «créalos en Contactos»: el primer
+presupuesto de un cliente nuevo era imposible sin pasar antes por otra sección.
+**Cotizar es lo primero que se hace con un cliente nuevo** — pedir la ficha de antemano
+es el orden al revés.
+
+Ahora el selector trae **➕ Nuevo cliente** con nombre, contacto, teléfono y email, y la
+ficha se crea en Contactos al guardar.
+
+### ⚠️ La ficha se crea ANTES, y si falla no hay cotización
+Aquí no vale el «Otro (escribir uno nuevo)» de los proyectos, que guarda el cliente como
+TEXTO suelto sin ficha (de ahí los clientes `vd`/`ci` que aparecieron en v357). Una
+cotización necesita **`ClienteID`**: es lo que usa `aceptar_y_crear_proyecto` (v354) para
+que la obra nazca con su cliente, y sin él, facturarla después no encuentra la ficha.
+Por eso el orden es: alta → si sale bien, cotización. Nunca al revés.
+
+### ⚠️ Un nombre duplicado no puede dejar al usuario tirado
+`create_cliente` no admite dos fichas con el mismo nombre en un grupo. Fallar ahí dejaría
+al usuario con la cotización entera escrita y sin poder guardarla, así que se **reutiliza
+la ficha existente** y se dice (buscándola también entre las inactivas). Es coherente con
+la regla que la propia función impone: dentro del grupo, ese nombre es UNO.
+
+### ⚠️ Y las keys del formulario se limpian en las DOS salidas
+Sin eso, la siguiente cotización abre con el nombre del cliente anterior ya escrito — y
+enlazarla al cliente equivocado es de las cosas más caras de deshacer.
+
+### Verificación
+`verif_v420.py`, probado contra el código roto en 4 casos: los caza los 4 **tras
+corregirlo**. ⚠️ El chequeo de la limpieza pedía «cada key aparece ≥ 2 veces», y eso lo
+pasaba el código con la limpieza BORRADA de una de las dos salidas (crear el widget +
+limpiar en la otra ya suman 2). Se cambió a comprobar **por bloque**: las dos salidas
+deben limpiar las cuatro keys. Otra vez, lo destapó probar el guardián contra el código
+roto, no leerlo. Suite: **65/65**.
+
+## Versiones desplegadas (v420 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -6368,6 +6404,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v420 | **Dar de alta un cliente sin salir de la cotización** (pedido por el usuario). Antes había que irse a Contactos y volver a empezar, y **sin ningún cliente la pantalla hacía `return`**: el primer presupuesto de un cliente nuevo era imposible sin pasar por otra sección. Ahora el selector trae **➕ Nuevo cliente**. ⚠️ Aquí NO vale el «Otro» de los proyectos, que guarda el cliente como TEXTO sin ficha (de ahí los `vd`/`ci` de v357): una cotización necesita **`ClienteID`**, que es lo que usa `aceptar_y_crear_proyecto` (v354) para que la obra nazca con su cliente. Por eso **la ficha se crea ANTES y, si falla, no hay cotización**. ⚠️ Un nombre duplicado **reutiliza** la ficha existente en vez de dejar al usuario con la cotización escrita y sin poder guardarla. ⚠️ Las keys se limpian en **las dos** salidas (cancelar y guardar) o la siguiente cotización hereda el cliente anterior. Guardián: su chequeo de la limpieza era demasiado laxo (`≥2 apariciones`) y pasaba con la limpieza borrada de una salida — se cambió a comprobar **por bloque**; lo destapó probarlo contra el código roto |
 | v419 | **Una sola ubicación por proyecto: la del mapa** (pedido por el usuario: «hay una en el mapa y otra en los datos, y no tiene por qué haber 2»). ⚠️ La causa: **v272 unificó solo la mitad** — al CREAR la ubicación ya salía del mapa, y la EDICIÓN se quedó con el `text_input` suelto, desconectado del pin. Como el TEXTO es lo que leen Home, Ruta del día, Pre-Start y los avisos (las coordenadas solo el mapa y la ruta), un proyecto con pin y sin texto **parecía no estar ubicado en todas partes menos en el mapa**. El campo pasa a solo lectura y sale del pin; + aviso del caso inverso (dirección sin pin, hoy `PRJ-0016`), que no sale en ningún mapa y nadie lo decía. ⚠️ **No se geocodifica sola**: un pin inventado que nadie ha mirado manda a alguien al sitio equivocado. ⚠️ El texto **solo se pisa si el pin se toca** (hay direcciones a mano que el geocoder reescribiría — fallo de v360) y **solo desde `_addr`, nunca `_q`** (media búsqueda sin confirmar acabaría siendo la dirección). Medido antes: 15 con ambas, 1 con texto sin pin, **0 con pin sin texto** — el caso descrito es posible pero hoy no se da, y se dijo |
 | v418 | **El Pre-Start deja de pedir lo que ya sabe** (dos peticiones del usuario). **(1)** El proyecto se preselecciona por tener **FICHAJE ABIERTO**, no por el rol: existía desde v170 pero detrás de `if rol == "campo"`, porque aquella versión asumió que «admin/propietario no fichan» — ⚠️ falso desde **v150**, y el admin ficha a diario. **(2)** Los asistentes se **eligen de la cuadrilla** (asignados + fichados hoy, estos preseleccionados) en vez de teclearse, conservando el **nombre libre** para subcontratistas o visitas; ⚠️ la firma se indexa **por persona, no por posición** (con índices, añadir a alguien pasaba la firma dibujada a otro). **(3)** ⚠️ Y por eso se guarda el **LOGIN** del asistente: con la lista, dos homónimos generan entradas IDÉNTICAS y firmar una apagaría el aviso de la otra. Se guarda el nombre limpio + el login aparte (nunca la etiqueta de v413 — fallo de v308), y ⚠️ **el respaldo por nombre hubo que acotarlo a los asistentes SIN login**, porque comparándolo contra todos anulaba el desempate: **lo cazó la prueba, no leer el código**. Compatible con lo ya registrado |
 | v417 | **Manuales ejercitados: se cierra el inventario de escrituras** (solo documentación). Con la sesión de PROPIETARIO: alta → «2 fragmentos indexados», hoja `Manuales` **creada** en el maestro (es global, v359) y `MAN-….json.gz` en Drive — ⚠️ confirma que a Drive **no va el PDF** sino los fragmentos troceados (v91); borrado → hoja a 0 filas **y archivo fuera de Drive**, con el botón bloqueado hasta confirmar (v139). ⚠️ **Tres obstáculos de método**: un PDF hecho a mano **revienta pypdf** (sin `startxref`) y habría hecho culpar a `add_manual`; el puente de JS **corrompe** 3.5 KB de base64 y el `fetch` a localhost está bloqueado por *mixed content* (https), así que hubo que **trocear y verificar** (3580 chars → 2683 bytes → `%PDF`…`%%EOF`); y el checkbox de Streamlit **no se marca clicando el `<input>`** (está oculto: recibe el clic el `div` de la casilla, como el chevron de v294). Falsa sospecha descartada leyendo el código: el nombre cae al del fichero por diseño (`nombre.strip() or up.name`). **Quedan solo las rutas que avisan a personas reales**, excluidas a propósito |

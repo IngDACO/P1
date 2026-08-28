@@ -166,17 +166,36 @@ def _editor_lineas(grupo, key: str, lineas: list) -> list:
 def _nueva(grupo):
     from core import auth
     if st.button(":material/arrow_back: Cancelar", key="cot_new_back"):
-        for k in ("_cot_nueva", "new_lineas", "new_sel"):
+        for k in ("_cot_nueva", "new_lineas", "new_sel", "cot_new_cli",
+                  "cot_new_cli_nom", "cot_new_cli_cto",
+                  "cot_new_cli_tel", "cot_new_cli_mail"):
             st.session_state.pop(k, None)
         st.rerun()
     st.markdown("## :material/request_quote: Nueva cotización")
 
+    # ⚠️ v420: el cliente se puede crear AQUÍ. Antes, si era nuevo, había que salir a
+    # Contactos, darlo de alta y volver a empezar la cotización — y si no había NINGÚN
+    # cliente, esta pantalla ni siquiera dejaba entrar (`return`), así que el primer
+    # presupuesto de una instalación nueva era imposible sin pasar antes por otra
+    # sección. Cotizar es lo primero que se hace con un cliente nuevo: pedirle la ficha
+    # de antemano es el orden al revés.
     fichas = C.list_clientes(grupo)
-    if not fichas:
-        st.warning(":material/contacts: No hay clientes. Créalos en :material/contacts: Contactos.")
-        return
+    _NUEVO = "➕ Nuevo cliente"
     _map = {f"{f.get('Nombre','')}": f for f in fichas}
-    _cli = st.selectbox("Cliente", list(_map), key="cot_new_cli")
+    _cli = st.selectbox("Cliente", list(_map) + [_NUEVO], key="cot_new_cli",
+                        index=len(_map) if not fichas else 0)
+    _nuevo_cli = {}
+    if _cli == _NUEVO:
+        with st.container(border=True):
+            st.caption(":material/person_add: Se creará su ficha en Contactos al guardar "
+                       "la cotización, y quedará enlazada a ella.")
+            n1, n2 = st.columns(2)
+            _nuevo_cli["nombre"] = n1.text_input("Nombre del cliente *",
+                                                 key="cot_new_cli_nom")
+            _nuevo_cli["contacto"] = n2.text_input("Persona de contacto",
+                                                   key="cot_new_cli_cto")
+            _nuevo_cli["telefono"] = n1.text_input("Teléfono", key="cot_new_cli_tel")
+            _nuevo_cli["email"] = n2.text_input("Email", key="cot_new_cli_mail")
 
     lineas = st.session_state.get("new_lineas", [])
     lineas = _editor_lineas(grupo, "new", lineas)
@@ -192,11 +211,44 @@ def _nueva(grupo):
         _totales_html(t, imp)
         if st.button(":material/save: Crear cotización", type="primary",
                      key="cot_new_save", width="stretch"):
-            f = _map[_cli]
+            # ⚠️ v420: si el cliente es nuevo, su ficha se crea PRIMERO y solo si sale
+            # bien se crea la cotización. Al revés quedaría una cotización sin
+            # `ClienteID`, y ese enlace es el que usa `aceptar_y_crear_proyecto` (v354)
+            # para que la obra nazca con su cliente — sin él, luego facturarla no
+            # encuentra la ficha (el fallo que costó v357).
+            if _cli == _NUEVO:
+                _nom = str(_nuevo_cli.get("nombre", "")).strip()
+                if not _nom:
+                    st.error("El nombre del cliente es obligatorio.")
+                    return
+                _ok_c, _res = C.create_cliente(
+                    grupo, _nom, contacto=_nuevo_cli.get("contacto", ""),
+                    telefono=_nuevo_cli.get("telefono", ""),
+                    email=_nuevo_cli.get("email", ""), creado_por=_creado_por())
+                if _ok_c:
+                    f = {"ID": _res, "Nombre": _nom}
+                else:
+                    # ⚠️ El nombre ya existía: `create_cliente` no deja duplicados por
+                    # grupo. En vez de dejar al usuario en un callejón —con la
+                    # cotización entera escrita y sin poder guardarla—, se REUTILIZA esa
+                    # ficha y se dice. Es coherente con la regla que la propia función
+                    # impone: dentro de un grupo, ese nombre es UNO.
+                    _ya = next((x for x in C.list_clientes(grupo, incluir_inactivos=True)
+                                if C._norm(x.get("Nombre")) == C._norm(_nom)), None)
+                    if not _ya:
+                        st.error(f"No se pudo crear el cliente: {_res}")
+                        return
+                    f = _ya
+                    st.info(f":material/info: Ya existía una ficha de **{_nom}**; "
+                            f"la cotización se enlaza a esa.")
+            else:
+                f = _map[_cli]
             ok, msg = Q.crear(grupo, f.get("ID", ""), f.get("Nombre", ""), lineas,
                               impuesto_pct=imp, nota=nota, creado_por=_creado_por())
             if ok:
-                for k in ("_cot_nueva", "new_lineas", "new_sel"):
+                for k in ("_cot_nueva", "new_lineas", "new_sel", "cot_new_cli",
+                  "cot_new_cli_nom", "cot_new_cli_cto",
+                  "cot_new_cli_tel", "cot_new_cli_mail"):
                     st.session_state.pop(k, None)
                 st.session_state["_cot_open"] = msg
                 st.rerun()
