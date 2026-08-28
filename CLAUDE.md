@@ -6268,7 +6268,55 @@ campo va vacío, y mi texto no llegó a enviarse. La app hizo lo correcto.
 (`notify_expiring`, `near_miss=YES` / check en NO), excluidas a propósito y con la lógica
 cubierta por `verif_alarma_no.py` con el envío interceptado.
 
-## Versiones desplegadas (v417 = actual)
+## El Pre-Start deja de pedir lo que ya sabe (v418)
+Dos peticiones del usuario sobre el Pre-Start, y una tercera pieza que hace falta para
+que la segunda no rompa nada.
+
+### 1. El proyecto: manda el FICHAJE, no el rol
+*«Si ya estoy fichado en un proyecto, no tengo por qué buscarlo».* La preselección
+**existía desde v170**… detrás de un `if rol == "campo":`, porque aquella versión dio por
+hecho que «admin/propietario no fichan». ⚠️ **Es falso desde v150**, donde el fichaje pasó
+a ser de dos relojes para TODOS los roles — y el administrador ficha a diario (comprobado
+en pantalla: jornada abierta imputada a `prueba2`). Ahora la preselección cuelga de tener
+**fichaje abierto**. Quien no ficha (el propietario) sigue eligiendo de la lista.
+**Lección: una condición de ROL que en realidad quería decir «quien ficha» envejece en
+cuanto cambia quién ficha.**
+
+### 2. Los asistentes: se eligen, no se teclean
+Antes cada asistente era un `text_input`. Ahora salen de la **cuadrilla**: los
+**asignados** al proyecto **+ los que han fichado hoy** en esa obra (decisión del
+usuario: la unión, porque los asignados son el plan y los fichados la realidad), con los
+que han fichado **preseleccionados**. Se conserva la vía de **nombre libre** para quien no
+está de alta —un subcontratista, una visita—: el formato en papel admite a cualquiera.
+⚠️ 0 lecturas nuevas: `list_users` y los fichajes del día ya están cacheados.
+⚠️ **La firma se indexa por PERSONA, no por posición.** Con `ps_firma_{i}`, añadir o
+quitar a alguien recolocaba los índices y la firma ya dibujada pasaba a otro — en el
+documento donde la firma es justo lo que vale.
+
+### 3. ⚠️ Y por eso hay que guardar el LOGIN del asistente
+Los asistentes se casaban **solo por nombre**, y el nombre puede repetirse (dos «Mei
+Chen», v413). Mientras se tecleaban, dos homónimos podían escribirse distinto; **con la
+lista producen entradas idénticas**, así que la mejora 2 habría introducido el fallo:
+firmar una apagaría el aviso de la otra. Se guarda `usuario` junto al nombre y
+`pendiente_de_firma` casa **primero por login**.
+- ⚠️ Se guarda el **nombre limpio + el login aparte**, nunca la etiqueta `Nombre (login)`
+  de v413: esa etiqueta es para ELEGIR en la lista. Meterla como nombre rompería el match
+  — es el fallo de v308.
+- ⚠️ **El respaldo por nombre hubo que ACOTARLO**, y esto lo cazó la prueba, no la
+  lectura: con el respaldo comparando contra todos los asistentes, «Mei Chen» casaba por
+  nombre y **el desempate por login no servía de nada** (el primer intento falló ese
+  caso). Ahora, si quien pregunta tiene login, solo puede casar con asistentes que NO lo
+  tengan (registros anteriores a v418 e invitados a mano).
+- **Compatible**: lo ya registrado no tiene `usuario` y sigue casando por nombre;
+  verificado, junto al caso de no pasar `usuario` en absoluto.
+
+### Verificación
+`verif_v418.py`, probado contra el código roto en **5 casos** (volver a atar la
+preselección al rol, quitar el multiselect, dejar de mirar quién fichó, devolver el
+respaldo por nombre a «todos», y dejar de guardar el login): los caza los 5. Suite:
+**63/63**.
+
+## Versiones desplegadas (v418 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -6276,6 +6324,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v418 | **El Pre-Start deja de pedir lo que ya sabe** (dos peticiones del usuario). **(1)** El proyecto se preselecciona por tener **FICHAJE ABIERTO**, no por el rol: existía desde v170 pero detrás de `if rol == "campo"`, porque aquella versión asumió que «admin/propietario no fichan» — ⚠️ falso desde **v150**, y el admin ficha a diario. **(2)** Los asistentes se **eligen de la cuadrilla** (asignados + fichados hoy, estos preseleccionados) en vez de teclearse, conservando el **nombre libre** para subcontratistas o visitas; ⚠️ la firma se indexa **por persona, no por posición** (con índices, añadir a alguien pasaba la firma dibujada a otro). **(3)** ⚠️ Y por eso se guarda el **LOGIN** del asistente: con la lista, dos homónimos generan entradas IDÉNTICAS y firmar una apagaría el aviso de la otra. Se guarda el nombre limpio + el login aparte (nunca la etiqueta de v413 — fallo de v308), y ⚠️ **el respaldo por nombre hubo que acotarlo a los asistentes SIN login**, porque comparándolo contra todos anulaba el desempate: **lo cazó la prueba, no leer el código**. Compatible con lo ya registrado |
 | v417 | **Manuales ejercitados: se cierra el inventario de escrituras** (solo documentación). Con la sesión de PROPIETARIO: alta → «2 fragmentos indexados», hoja `Manuales` **creada** en el maestro (es global, v359) y `MAN-….json.gz` en Drive — ⚠️ confirma que a Drive **no va el PDF** sino los fragmentos troceados (v91); borrado → hoja a 0 filas **y archivo fuera de Drive**, con el botón bloqueado hasta confirmar (v139). ⚠️ **Tres obstáculos de método**: un PDF hecho a mano **revienta pypdf** (sin `startxref`) y habría hecho culpar a `add_manual`; el puente de JS **corrompe** 3.5 KB de base64 y el `fetch` a localhost está bloqueado por *mixed content* (https), así que hubo que **trocear y verificar** (3580 chars → 2683 bytes → `%PDF`…`%%EOF`); y el checkbox de Streamlit **no se marca clicando el `<input>`** (está oculto: recibe el clic el `div` de la casilla, como el chevron de v294). Falsa sospecha descartada leyendo el código: el nombre cae al del fichero por diseño (`nombre.strip() or up.name`). **Quedan solo las rutas que avisan a personas reales**, excluidas a propósito |
 | v416 | **Ejercitadas las escrituras de Drive** (solo documentación: no cambia código). ⚠️ La foto del estado **corrigió lo que yo venía repitiendo**: no eran 4 pendientes sino 3 — `expenses.upload_receipt` ya estaba ejercitada (2 recibos reales con DriveID) — y Drive está rodado (**27 documentos** con DriveID). `credentials.upload_file` ejercitada ahora de ida y vuelta: fila `CR-0007` + archivo real en Drive (394 bytes, contenido legible), y al borrar **desaparecen las dos cosas**, sin basura. Producción sin rastro. ⚠️ En local no se puede (`is_available()` = False), así que se hizo contra el Cloud **inyectando el archivo en el `<input type=file>` con `DataTransfer`** — con el setter NATIVO para el `text_input`, porque asignar `.value` a secas no lo ve React, y llegando a la ficha **por botones**, ya que la tabla de Usuarios es canvas y no acepta clics sintéticos. Queda solo `manuals.add/delete_manual`, que exigen la cuenta de **propietario** |
 | v415 | **La nota del Panel pasa de UNA línea a HASTA dos.** Medir cambió mi propia recomendación (yo dije «esperar a verlo en uso»): de las **3 notas reales, 2 se cortaban**, y a un aviso —«⚠️ se pisa: dos obras a la vez»— le faltaban **3 px** de 135. Las notas de este tablero son avisos: cortarlas es cortar lo que hay que leer de un vistazo. ⚠️ **«Hasta» dos, no dos**: con `-webkit-line-clamp` la nota corta sigue en una línea (14 px), así que el alto extra lo pagan las 2 filas que lo necesitan, no las 8 — no se deshace lo que ganó v412. ⚠️ `max-height` de respaldo, porque el navegador **blockifica** el `display:-webkit-box`. ⚠️ Y la mini-app **no reproducía el ancho** (sin sidebar, sus columnas son más anchas y la nota cabía): valida el MECANISMO, mientras que el ancho sale de medir producción. Guardián de v412 **caducado y reescrito** sobre lo que protege de verdad (que la nota tenga tope, no que tenga una línea) |

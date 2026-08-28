@@ -72,26 +72,119 @@ def _firma_png(res, fondo="#ffffff"):
         return None
 
 
-def _asistentes_con_firma(yo: str) -> list:
-    """Lista de asistentes, cada uno con su nombre y su firma DIBUJADA (v383).
+def _cuadrilla(prj, pid, grupo) -> list:
+    """Quién puede firmar esta charla: los ASIGNADOS al proyecto + los que han FICHADO
+    HOY en esa obra. Devuelve `[{usuario, nombre, etiqueta, ficho}]` (v418).
 
-    ⚠️ Deja de ser un `st.data_editor`: una tabla no puede llevar un lienzo dentro.
-    Es una lista de filas (nombre + recuadro de firma) con un botón para añadir,
-    que además se parece más al formato en papel donde cada uno firma su línea.
+    Decisión del usuario: la unión de las dos, no solo una. Los asignados son el plan y
+    los fichados son la realidad — quien echa una mano sin estar asignado aparece igual,
+    y quien está asignado sale aunque todavía no haya fichado cuando se hace la charla.
+
+    ⚠️ 0 lecturas nuevas: `list_users` y los fichajes del día ya están cacheados.
     """
-    st.session_state.setdefault("ps_n_asist", 1)
+    from core import auth
+    from core import timeclock
+    asignados = [u.strip() for u in str(prj.get("CampoAsignados", "") or "").split(";")
+                 if u.strip()]
+    try:
+        _hoy = timeclock.proyectos_por_usuario_dia(grupo, clock.today(grupo)) or {}
+    except Exception as e:                                        # noqa: BLE001
+        logger.warning("prestart: no se pudo mirar quién fichó hoy: %s", e)
+        _hoy = {}
+    ficharon = [u for u, prjs in _hoy.items()
+                if any(str(p.get("pid", "")) == str(pid) for p in (prjs or []))]
+
+    try:
+        users = auth.list_users(grupo=grupo) or []
+    except Exception:
+        users = []
+    nom_de = {str(u.get("Usuario", "")): str(u.get("Nombre", "") or u.get("Usuario", ""))
+              for u in users}
+    # ⚠️ La etiqueta desambigua homónimos SOLO para elegir en la lista (v413); lo que se
+    # GUARDA es el nombre + el login, nunca la etiqueta. Es el fallo de v308.
+    etq_de = auth.etiqueta_usuarios(users)
+
+    out, vistos = [], set()
+    for u in ficharon + asignados:                # los que ficharon, primero
+        if u in vistos or u not in nom_de:
+            continue
+        vistos.add(u)
+        out.append({"usuario": u, "nombre": nom_de[u],
+                    "etiqueta": etq_de.get(u) or nom_de[u], "ficho": u in ficharon})
+    return out
+
+
+def _clave_firma(a) -> str:
+    """Clave ESTABLE del lienzo de una persona.
+
+    ⚠️ No se indexa por posición: al añadir o quitar a alguien, los índices se
+    recolocan y la firma ya dibujada pasaría a otra persona — precisamente en el
+    documento donde la firma es lo que vale.
+    """
+    base = str(a.get("usuario") or a.get("nombre") or "")
+    return "".join(c if c.isalnum() else "_" for c in base)[:28]
+
+
+def _asistentes_con_firma(yo: str, yo_usuario: str, cuadrilla: list) -> list:
+    """Asistentes con su firma DIBUJADA (v383), elegidos de la CUADRILLA (v418).
+
+    ⚠️ Antes el nombre se TECLEABA uno a uno. Con la cuadrilla del proyecto delante,
+    escribirlo es trabajo manual y además abre la puerta al dedazo: un nombre mal
+    escrito no casa con `pendiente_de_firma` y a esa persona se le seguiría pidiendo
+    firmar una charla en la que ya consta.
+
+    Se conserva la vía de **nombre libre** para quien no está dado de alta (un
+    subcontratista, una visita): el formato en papel admite a cualquiera y en obra pasa.
+    """
     st_canvas = _canvas_disponible()
     if st_canvas is None:
         st.warning(":material/warning: El lienzo de firma no está disponible en este "
                    "despliegue; se registran las iniciales tecleadas.")
 
+    por_etq = {a["etiqueta"]: a for a in cuadrilla}
+    # Por defecto, quien HA FICHADO hoy aquí (están, seguro) y uno mismo.
+    _def = [a["etiqueta"] for a in cuadrilla
+            if a["ficho"] or (yo_usuario and a["usuario"] == yo_usuario)]
+    if cuadrilla:
+        sel = st.multiselect(
+            "¿Quiénes asisten a la charla?", list(por_etq.keys()), default=_def,
+            key="ps_asist_sel",
+            help="Salen los asignados a la obra y los que han fichado hoy en ella.")
+    else:
+        sel = []
+        st.caption(":material/info: Esta obra no tiene a nadie asignado ni fichado hoy; "
+                   "añade abajo a quien asista.")
+
+    st.session_state.setdefault("ps_invitados", [])
+    with st.expander(":material/person_add: ¿Falta alguien que no está en la lista?"):
+        c1, c2 = st.columns([3, 1])
+        _nuevo = c1.text_input("Nombre y apellido", key="ps_invit_nom",
+                               placeholder="Subcontratista, visita…")
+        if c2.button("Añadir", key="ps_invit_add", width="stretch") and _nuevo.strip():
+            if _nuevo.strip() not in st.session_state["ps_invitados"]:
+                st.session_state["ps_invitados"].append(_nuevo.strip())
+            st.rerun()
+        if st.session_state["ps_invitados"]:
+            st.caption("Añadidos: " + " · ".join(st.session_state["ps_invitados"]))
+            if st.button("Quitar el último", key="ps_invit_del"):
+                st.session_state["ps_invitados"].pop()
+                st.rerun()
+
+    personas = [dict(por_etq[e]) for e in sel if e in por_etq]
+    personas += [{"usuario": "", "nombre": n, "etiqueta": n, "ficho": False}
+                 for n in st.session_state["ps_invitados"]]
+    if not personas:
+        st.caption(":orange[Elige al menos a una persona para poder firmar.]")
+
     out = []
-    for i in range(int(st.session_state["ps_n_asist"])):
+    for a in personas:
+        nom = a["nombre"]
+        _k = _clave_firma(a)
         c1, c2 = st.columns([2, 3])
         with c1:
-            nom = st.text_input(f"Nombre {i + 1}", key=f"ps_att_nom_{i}",
-                                value=(yo if i == 0 else ""),
-                                placeholder="Nombre y apellido")
+            st.markdown(f"**{nom}**")
+            st.caption("fichó hoy aquí" if a["ficho"] else
+                       ("de la cuadrilla" if a["usuario"] else "añadido a mano"))
         firma = None
         with c2:
             if st_canvas is not None:
@@ -106,24 +199,18 @@ def _asistentes_con_firma(yo: str) -> list:
                 # manda el móvil aunque en escritorio el recuadro se vea más pequeño.
                 res = st_canvas(stroke_width=2, stroke_color="#111111",
                                 background_color="#ffffff", height=90, width=300,
-                                drawing_mode="freedraw", key=f"ps_firma_{i}",
+                                drawing_mode="freedraw", key=f"ps_firma_{_k}",
                                 display_toolbar=True)
                 firma = _firma_png(res)
-                if nom.strip():
-                    st.caption(":green[✓ firmado]" if firma
-                               else ":orange[falta la firma]")
+                st.caption(":green[✓ firmado]" if firma else ":orange[falta la firma]")
             else:
-                ini = st.text_input(f"Iniciales {i + 1}", key=f"ps_att_ini_{i}",
-                                    value=_initials(nom) if nom else "")
-                out.append({"name": nom.strip(), "initial": ini.strip(), "sig": None})
+                ini = st.text_input("Iniciales", key=f"ps_att_ini_{_k}",
+                                    value=_initials(nom))
+                out.append({"name": nom, "initial": ini.strip(),
+                            "usuario": a["usuario"], "sig": None})
                 continue
-        out.append({"name": nom.strip(), "initial": _initials(nom), "sig": firma})
-
-    c1, c2 = st.columns([1, 4])
-    if c1.button(":material/person_add: Añadir asistente", key="ps_add_att",
-                 width="stretch"):
-        st.session_state["ps_n_asist"] = int(st.session_state["ps_n_asist"]) + 1
-        st.rerun()
+        out.append({"name": nom, "initial": _initials(nom),
+                    "usuario": a["usuario"], "sig": firma})
     return [a for a in out if a["name"]]
 
 
@@ -216,23 +303,29 @@ def render_prestart_tab():
     # como en 📋 Mis proyectos (v138). No es "el primero de la lista" que evitó v139:
     # es una señal FUERTE (donde está trabajando) que se MUESTRA y sigue siendo
     # cambiable. El pre-start se archiva y la near miss abre alarma en ese proyecto.
+    # ⚠️ v418: la preselección ya NO depende del ROL, sino de tener FICHAJE ABIERTO.
+    # v170 la limitó al campo dando por hecho que «admin/propietario no fichan», y es
+    # falso: desde v150 el fichaje es de dos relojes para TODOS los roles y el
+    # administrador ficha a diario. Resultado: quien ya estaba fichado en la obra tenía
+    # que volver a buscarla en el desplegable. Ahora manda el dato (¿dónde estás
+    # fichado?) y no la etiqueta del rol. Quien no tenga fichaje abierto —el
+    # propietario, que no ficha— sigue eligiendo de la lista, sin cambio.
     _fich_key = None
-    if rol == "campo":
-        try:
-            from core import timeclock
-            _ses = timeclock.open_sessions(nombre, grupo, usuario)
-            _open = (_ses.get(timeclock.TIPO_PROYECTO)
-                     or _ses.get(timeclock.TIPO_GENERAL) or {})
-            _fpid = str(_open.get("proyecto_id", "")).strip()
-            _fpn  = str(_open.get("proyecto", "")).strip()
-            if _fpid:                                  # ID primero, nombre de respaldo (v145)
-                _fich_key = next((k for k in idmap if k.endswith(f"({_fpid})")), None)
-            if not _fich_key and _fpn:
-                _fich_key = next((k for k in idmap if k.startswith(_fpn + " (")), None)
-        except Exception:
-            pass
-        if _fich_key and "ps_proy" not in st.session_state:
-            st.session_state["ps_proy"] = _fich_key
+    try:
+        from core import timeclock
+        _ses = timeclock.open_sessions(nombre, grupo, usuario)
+        _open = (_ses.get(timeclock.TIPO_PROYECTO)
+                 or _ses.get(timeclock.TIPO_GENERAL) or {})
+        _fpid = str(_open.get("proyecto_id", "")).strip()
+        _fpn  = str(_open.get("proyecto", "")).strip()
+        if _fpid:                                  # ID primero, nombre de respaldo (v145)
+            _fich_key = next((k for k in idmap if k.endswith(f"({_fpid})")), None)
+        if not _fich_key and _fpn:
+            _fich_key = next((k for k in idmap if k.startswith(_fpn + " (")), None)
+    except Exception:
+        pass
+    if _fich_key and "ps_proy" not in st.session_state:
+        st.session_state["ps_proy"] = _fich_key
     sel = st.selectbox("Proyecto", [_VACIO] + list(idmap.keys()), key="ps_proy")
     if _fich_key and sel == _fich_key:
         st.caption(":material/schedule: Es el proyecto donde fichaste hoy. Cámbialo si el pre-start es de otro.")
@@ -256,7 +349,7 @@ def render_prestart_tab():
     # a quien solo tenía que firmar), aquí en la otra dirección.
     _pf_ok = True
     try:
-        _pf = PS.pendiente_de_firma(pid, pgrupo, nombre or usuario)
+        _pf = PS.pendiente_de_firma(pid, pgrupo, nombre or usuario, usuario=usuario)
     except Exception as e:                                        # noqa: BLE001
         logger.warning("prestart: no se pudo mirar la firma pendiente: %s", e)
         _pf, _pf_ok = {}, False
@@ -323,7 +416,8 @@ def render_prestart_tab():
 
     # ── 5. Attendees — cada uno FIRMA (v383) ──
     st.markdown("**5. Attendees**")
-    attendees = _asistentes_con_firma(nombre or usuario)
+    attendees = _asistentes_con_firma(nombre or usuario, usuario,
+                                  _cuadrilla(prj, pid, pgrupo))
 
     st.markdown("---")
     # Qué falta por responder (checks sin marcar + near miss + al menos 1 asistente)

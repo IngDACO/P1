@@ -138,6 +138,18 @@ def leer(r) -> dict:
         "checks": checks, "n_no": n_no,
         "act_notes": r.get("ActividadesNotas", ""), "gen_notes": r.get("NotasGenerales", ""),
         "asistentes": [str(a.get("name", "")).strip() for a in asist if a.get("name")],
+        # ⚠️ v418: los LOGINS de quienes constan y se eligieron de la lista. Es lo que
+        # permite a `pendiente_de_firma` casar exacto en vez de por nombre —que puede
+        # repetirse—. Los tecleados a mano no traen login y siguen casando por nombre.
+        "asistentes_usuarios": [str(a.get("usuario", "")).strip() for a in asist
+                                if str(a.get("usuario", "") or "").strip()],
+        # ⚠️ Los que NO traen login: son los únicos con los que vale casar por NOMBRE
+        # cuando quien pregunta sí tiene login. Si se comparara contra todos, el
+        # respaldo por nombre anularía el desempate y firmar una «Mei Chen» apagaría
+        # el aviso de la otra — que es justo lo que este dato viene a evitar.
+        "asistentes_sin_login": [str(a.get("name", "")).strip() for a in asist
+                                 if a.get("name")
+                                 and not str(a.get("usuario", "") or "").strip()],
         "archivo": r.get("Archivo", ""), "drive_id": r.get("DriveID", ""),
     }
 
@@ -188,7 +200,7 @@ def _norm_nombre(s) -> str:
     return " ".join(t.lower().split())
 
 
-def pendiente_de_firma(pid, grupo: str = "", persona: str = "") -> dict:
+def pendiente_de_firma(pid, grupo: str = "", persona: str = "", usuario: str = "") -> dict:
     """El Pre-Start de HOY de esa obra que a `persona` le falta por firmar, o {}.
 
     ⚠️ Complementa a `hecho_hoy`, no lo sustituye: aquel responde «¿hay que HACER la
@@ -202,7 +214,13 @@ def pendiente_de_firma(pid, grupo: str = "", persona: str = "") -> dict:
     """
     pid = str(pid or "").strip()
     quien = _norm_nombre(persona)
-    if not pid or not quien:
+    # ⚠️ v418: el LOGIN, cuando se conoce, manda sobre el nombre. El nombre puede
+    # repetirse (dos «Mei Chen» en el grupo real, v413) y desde que los asistentes se
+    # eligen de una lista las dos generan entradas idénticas: sin el login, firmar una
+    # apagaría el aviso de la otra. Es opcional a propósito — los asistentes tecleados
+    # a mano (un subcontratista) no tienen login y siguen casando por nombre.
+    quien_u = str(usuario or "").strip().lower()
+    if not pid or not (quien or quien_u):
         return {}
     hoy = clock.today(grupo)
     # ⚠️ v406: se miran TODAS las charlas del día, no la primera. Nada impide dos
@@ -220,7 +238,15 @@ def pendiente_de_firma(pid, grupo: str = "", persona: str = "") -> dict:
         # ⚠️ `leer` devuelve los asistentes ya como texto legible; se comparan
         # normalizados. Si el nombre no casa se pedirá firmar otra vez, que es el
         # fallo tolerable: el intolerable es no pedirlo nunca.
-        if quien in {_norm_nombre(a) for a in d.get("asistentes", [])}:
+        _us = {str(u).strip().lower() for u in d.get("asistentes_usuarios", [])}
+        if quien_u and quien_u in _us:
+            return {}                      # consta por LOGIN: match exacto
+        # ⚠️ Respaldo por NOMBRE, acotado: si quien pregunta tiene login, solo puede
+        # casar con asistentes que NO lo tengan (registros anteriores a v418 o invitados
+        # tecleados a mano). Comparar contra todos haría que firmar una «Mei Chen»
+        # apagase el aviso de la otra, que es el caso que el login viene a resolver.
+        _nombres = d.get("asistentes_sin_login", []) if quien_u else d.get("asistentes", [])
+        if quien and quien in {_norm_nombre(a) for a in _nombres}:
             return {}                      # firmó ALGUNA de las de hoy: no se insiste
     # ⚠️ Si hay varias y no firmó ninguna, se ofrece la ÚLTIMA: las filas se añaden al
     # final, así que es la charla más reciente — la que con más probabilidad es la suya.
@@ -362,10 +388,19 @@ def _asistentes_para_hoja(attendees) -> list:
     """
     out = []
     for a in (attendees or []):
-        out.append({"name": str(a.get("name", "")),
-                    "initial": str(a.get("initial", "")),
-                    # rastro de QUE firmó, sin la imagen
-                    "firmado": bool(a.get("sig"))})
+        fila = {"name": str(a.get("name", "")),
+                "initial": str(a.get("initial", "")),
+                # rastro de QUE firmó, sin la imagen
+                "firmado": bool(a.get("sig"))}
+        # ⚠️ v418: el LOGIN del asistente, cuando se eligió de la lista de la cuadrilla.
+        # Los asistentes se casaban solo por NOMBRE, y el nombre puede repetirse (en el
+        # grupo real hay dos «Mei Chen», v413): con la lista de la cuadrilla las dos
+        # producen entradas idénticas y `pendiente_de_firma` no podría distinguir quién
+        # firmó. Con el usuario, el match es exacto. Se omite si el asistente se tecleó
+        # a mano (un subcontratista no tiene login) → ahí sigue mandando el nombre.
+        if str(a.get("usuario", "") or "").strip():
+            fila["usuario"] = str(a["usuario"]).strip()
+        out.append(fila)
     return out
 
 
