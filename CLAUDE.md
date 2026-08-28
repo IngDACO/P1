@@ -6124,7 +6124,35 @@ está cacheada (v92) → 0 lecturas nuevas; si falla, degrada a lo visible.
 literal `"{nom} ({usuario})"` y un f-string se descompone en trozos (`" ("`, `")"`) —
 hubo que mirar el árbol, no el texto. Tercera vez en el día. Suite: **62/62**.
 
-## Versiones desplegadas (v413 = actual)
+## El nombre de obra deja de ir al filo (v414)
+Pendiente que quedó de v408: la columna `Proyecto` medía **248 px** (232 útiles) y el
+nombre más largo del grupo («Stockland Wetherill Park — Instalación») ocupa **224**. Ocho
+píxeles de margen: un nombre 2-3 caracteres más largo se cortaba.
+
+### ⚠️ Y el corte es SILENCIOSO — comprobado, no supuesto
+Antes de decidir el ancho había que responder algo que cambia la respuesta: ¿glide dibuja
+«…» al no caber? Si la pusiera, el corte se notaría y el problema sería menor. Se montó
+una mini-app con un nombre largo en una columna estrecha y **se miró**: pinta
+`…Instalación y puesta en marcha fase` y ahí se acaba, **sin elipsis**. Un nombre a medias
+parece un nombre completo.
+⚠️ En v408 ya lo había afirmado, pero desde una prueba más débil (el hook recibía el texto
+entero, lo que dice qué se le PASA a `fillText`, no qué se ve). Ahora está mirado.
+
+### 272 es el máximo que no cuesta nada
+| ancho | contenido | oculto | columnas en la vista inicial |
+|---|---|---|---|
+| 248 (antes) | 1320 | 256 | **10** |
+| **272** | 1344 | 280 | **10** ← mismas |
+| 300 | 1372 | 308 | 9 (se cae `Tipo`) |
+El margen del nombre pasa de **8 a 32 px** (~5 caracteres) y no se pierde ninguna columna:
+solo hay 24 px más de scroll hacia lo que YA estaba fuera (`Inicio · Fin · Ppto`).
+
+### Lo que de verdad cierra el caso
+Ningún ancho fijo puede garantizar que quepa cualquier nombre. Lo que lo cierra es que al
+**seleccionar la fila**, la tira de acciones (v402) muestra el nombre **completo** — así
+que el nombre siempre es recuperable con un clic, aunque en la tabla salga cortado.
+
+## Versiones desplegadas (v414 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -6132,6 +6160,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v414 | **El nombre de obra deja de ir al filo** en `Proyectos · Lista` (pendiente de v408): la columna medía 248 px (232 útiles) y el nombre más largo ocupa **224** — ocho píxeles de margen. ⚠️ Y el corte es **SILENCIOSO**: comprobado MIRÁNDOLO en una mini-app, glide **no dibuja «…»**, recorta en seco, así que un nombre a medias parece completo (en v408 lo afirmé desde una prueba más débil: que el hook recibiera el texto entero dice qué se le PASA a `fillText`, no qué se ve). Medido el coste: a **272** entran las **mismas 10 columnas** que a 248 y el margen sube de 8 a **32 px**; a 300 se cae `Tipo`. ⚠️ Ningún ancho fijo garantiza que quepa cualquier nombre — lo que cierra el caso es que al seleccionar la fila la tira de acciones (v402) muestra el nombre **completo** |
 | v413 | **Homónimos en Planificación**: en el Panel había **dos filas «Mei Chen»** —dos personas distintas idénticas en pantalla—, así que al asignar la obra no se sabía a cuál. ⚠️ `auth.etiqueta_usuarios` existía **desde v319 y solo la usaba Nóminas**; las 8 vistas de Planificación seguían pintando `Nombre or Usuario` (sexta aparición del patrón: v151·v306·v319·v348). Nuevo `_etq`, que delega en esa función y ⚠️ desempata sobre **todo el grupo**, no sobre la lista visible (si no, la misma persona cambiaría de nombre según la pantalla). **De propina**: en `_asignacion_inteligente` el nombre es CLAVE de un dict de opciones, así que dos homónimos del mismo estado **colisionaban y una era imposible de elegir** (v147/v150) — el desempate lo arregla, no lo maquilla. ⚠️ NO se tocaron dos sitios, vistos auditando por AST cada lectura de `nom` ANTES de editar: `_ficha_rapida` (su `nom` alimenta el deep-link `gp_fichasel`; con la etiqueta quedaría «Mei Chen (mchen) (mchen)» — el fallo de v308) y `_catalogo` (su `nom` es el nombre de un TRABAJO, no de una persona) |
 | v412 | **La celda del Panel deja de estirar su fila**: una sola celda con dos asignaciones y franja horaria triplicaba su fila. Medido a 1440: filas de **36 a 116 px**, y el culpable no era la celda (53) sino **la NOTA (61)**, que ocupaba más que el trabajo que anota. La nota pasa a una línea con elipsis + texto completo en el `title`, y el label se topa a 2 líneas → filas de **108/144/38 a 63/63/38** (−43% de alto). ⚠️ La primera medición, tomada al ancho del PANEL, daba 36–421 px: habría dimensionado el arreglo para un problema 7,5× peor que el real — **tercera vez en el día** que medir al ancho equivocado cambia la conclusión (v335). ⚠️ El clamp necesita **tres** propiedades y aun así el navegador **blockifica** el `display` (el `<p>` está en un flex), así que el tope real lo garantiza un `max-height` de respaldo. ⚠️ Verificado que el selector NO alcanza a los botones del editor (el popover abierto se portalea fuera). ⚠️ El `title` escapa también las COMILLAS: `_esc` no las toca y una comilla permitiría inyectar atributos |
 | v411 | **Franjas alternas + columna de HOY en el Panel** (pedidas por el usuario tras ver la rejilla): filas pares con fondo tenue y el día de hoy teñido en cuerpo y cabecera, con subrayado azul y la palabra «hoy». ⚠️ La zebra va por **key de fila** (`st.container(key="rosrow_…")`), NO con `nth-child` sobre el `stLayoutWrapper` que Streamlit intercala: atarla a ese wrapper la rompería **en silencio** si mañana mete otro nivel (v327). ⚠️ «Hoy» solo se marca si **cae en la semana visible** — al navegar a otra semana no se resalta nada, porque marcar un día cualquiera como hoy mentiría. ⚠️ La celda vacía pasa a **transparente**: su `#f8fafc` tapaba las dos señales justo en las celdas vacías, que son la mayoría del tablero. ⚠️ «hoy» va en **segunda línea** porque con la ventana estrecha la columna baja a 55 px y ni la fecha sola cabe holgada — y la primera medición, tomada al ancho equivocado, decía lo contrario (error de v335). Caducaron y se actualizaron los guardianes de **v410** y **v301**, con la razón escrita al lado |

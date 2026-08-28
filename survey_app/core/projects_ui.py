@@ -1469,7 +1469,20 @@ def _cartera_lista(proys, alarmas, delays, aheads, costos, pendientes=None,
             # y el ID es la identidad (el nombre puede repetirse). Verificado con un
             # scroll real: tras 255 px, `ID` y `Proyecto` siguen en su sitio.
             "ID":        st.column_config.TextColumn("ID", width=76, pinned=True),
-            "Proyecto":  st.column_config.TextColumn("Proyecto", width=248, pinned=True),
+            # ⚠️ v414 · 248 → 272. Medido en producción: el nombre más largo del grupo
+            # («Stockland Wetherill Park — Instalación») ocupa 224 px de los 232 útiles,
+            # o sea **8 px de margen**: un nombre 2-3 caracteres más largo se cortaba.
+            # Y el corte es SILENCIOSO — comprobado a propósito en una mini-app: glide
+            # NO dibuja «…», recorta en seco, así que un nombre a medias parece completo.
+            # A 272 el margen pasa a 32 px (~5 caracteres) y ⚠️ **no se pierde ninguna
+            # columna de la vista inicial**: siguen entrando las mismas 10, solo hay 24 px
+            # más de scroll hacia lo que YA estaba fuera (Inicio · Fin · Ppto).
+            # ⚠️ No se sube más: a 300 se cae `Tipo` de la vista. 272 es el máximo que
+            # no cuesta nada.
+            # Un ancho fijo nunca puede garantizar que quepa cualquier nombre; lo que
+            # cierra el caso es que al seleccionar la fila la tira de acciones muestra el
+            # nombre COMPLETO (v402).
+            "Proyecto":  st.column_config.TextColumn("Proyecto", width=272, pinned=True),
             # Anchos medidos contra el texto REAL más largo de cada columna (peor caso),
             # no elegidos a ojo: con estos, 0 textos cortados.
             "Situación": st.column_config.TextColumn(
