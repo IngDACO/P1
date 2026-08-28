@@ -1491,12 +1491,25 @@ def _tablero_editable(grupo, lunes, staff, datos, tidx, marcas=None, dias=None):
                 # ⚠️ Se escapan las comillas ADEMÁS del HTML: `_esc` no las toca, y una
                 # comilla en la nota rompería el atributo `title` — que aquí no es solo
                 # un fallo de pintado, es una vía para inyectar atributos.
+                # ⚠️ v415: de UNA línea a HASTA DOS. La de v412 (`nowrap` + elipsis)
+                # cortaba **2 de las 3 notas reales** del grupo, y a la peor
+                # —«⚠️ se pisa: dos obras a la vez», que es justo un aviso— le faltaban
+                # **3 px** de 135. Las notas de este tablero son avisos: cortarlas es
+                # cortar lo que hay que leer de un vistazo.
+                # ⚠️ «HASTA» dos, no «dos»: con `-webkit-line-clamp` la nota corta sigue
+                # ocupando UNA línea (14 px, medido) y solo la larga paga el alto, así
+                # que no se deshace lo que ganó v412 — lo pagan las 2 filas que lo
+                # necesitan, no las 8.
+                # ⚠️ `max-height` de respaldo: el navegador blockifica el
+                # `display:-webkit-box` (sale `flow-root`, medido), así que el tope real
+                # lo pone él — misma lección que el label de la celda en v412.
                 _nt = _esc(nota)
                 col.markdown(
                     f'<div title="{_nt.replace(chr(34), "&quot;")}" '
                     f'style="font-size:11px;color:#6b7280;line-height:1.3;'
-                    f'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;'
-                    f'padding:0 2px">{_nt}</div>', unsafe_allow_html=True)
+                    f'overflow:hidden;padding:0 2px;display:-webkit-box;'
+                    f'-webkit-line-clamp:2;-webkit-box-orient:vertical;'
+                    f'max-height:29px">{_nt}</div>', unsafe_allow_html=True)
 
 
 def _grid_html(staff, lunes, datos, tidx, resaltar="", dias=None) -> str:

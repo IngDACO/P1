@@ -6152,7 +6152,40 @@ Ningún ancho fijo puede garantizar que quepa cualquier nombre. Lo que lo cierra
 **seleccionar la fila**, la tira de acciones (v402) muestra el nombre **completo** — así
 que el nombre siempre es recuperable con un clic, aunque en la tabla salga cortado.
 
-## Versiones desplegadas (v414 = actual)
+## La nota del Panel: de UNA línea a HASTA dos (v415)
+v412 acotó la nota a una línea y bajó el alto del tablero un 30%. Al ir a cerrar el
+pendiente, **medir en producción cambió mi propia recomendación** (yo había dicho
+«esperar a verlo en uso»):
+```
+3 notas reales · 2 CORTADAS
+«cambia de obra a media mañana»   154 px de texto en 135 de caja  (faltan 19)
+«⚠️ se pisa: dos obras a la vez»  138 px en 135                   (faltan  3)
+«refuerzo de fin de semana»       136 px en 136                   (cabe justo)
+```
+A un **aviso** le faltaban **3 píxeles**. Y las notas de este tablero son avisos: cortarlas
+es cortar justo lo que hay que leer de un vistazo.
+
+### «HASTA dos», no «dos»
+Con `-webkit-line-clamp:2` la nota corta **sigue ocupando una línea** (14 px, medido en la
+mini-app), así que no se deshace lo que ganó v412: el alto extra solo lo pagan las filas
+con nota larga — hoy 2 de 8, no las 8. Es la diferencia entre acotar y estirar.
+⚠️ `max-height` de respaldo otra vez: el navegador **blockifica** el `display:-webkit-box`
+(sale `flow-root`, medido), así que el tope real lo pone él, no el clamp. Misma lección
+que el label de la celda en v412.
+
+### ⚠️ La mini-app NO reproducía el ancho, y se vio a tiempo
+En la mini-app la nota de 154 px cabía en una línea: sin el sidebar de 300 px, sus
+columnas son más anchas que las de producción. Lo que la mini-app SÍ valida es el
+mecanismo (clamp, tope, que la corta no crezca); el ancho sale de la medición en
+producción. **Separar qué prueba cada banco es lo que evita el OK en falso.**
+
+### Guardián caducado (actualizado, no relajado)
+`verif_v412` exigía literalmente `nowrap` + `ellipsis`, o sea UNA línea. Lo que protege no
+es el número de líneas: es que la nota **tenga un tope** y no pueda volver a estirar la
+fila sin control (medía 61 px, más que la celda). Reescrito sobre eso y probado contra el
+código roto: caza que la nota pierda el clamp o el `max-height`.
+
+## Versiones desplegadas (v415 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -6160,6 +6193,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v415 | **La nota del Panel pasa de UNA línea a HASTA dos.** Medir cambió mi propia recomendación (yo dije «esperar a verlo en uso»): de las **3 notas reales, 2 se cortaban**, y a un aviso —«⚠️ se pisa: dos obras a la vez»— le faltaban **3 px** de 135. Las notas de este tablero son avisos: cortarlas es cortar lo que hay que leer de un vistazo. ⚠️ **«Hasta» dos, no dos**: con `-webkit-line-clamp` la nota corta sigue en una línea (14 px), así que el alto extra lo pagan las 2 filas que lo necesitan, no las 8 — no se deshace lo que ganó v412. ⚠️ `max-height` de respaldo, porque el navegador **blockifica** el `display:-webkit-box`. ⚠️ Y la mini-app **no reproducía el ancho** (sin sidebar, sus columnas son más anchas y la nota cabía): valida el MECANISMO, mientras que el ancho sale de medir producción. Guardián de v412 **caducado y reescrito** sobre lo que protege de verdad (que la nota tenga tope, no que tenga una línea) |
 | v414 | **El nombre de obra deja de ir al filo** en `Proyectos · Lista` (pendiente de v408): la columna medía 248 px (232 útiles) y el nombre más largo ocupa **224** — ocho píxeles de margen. ⚠️ Y el corte es **SILENCIOSO**: comprobado MIRÁNDOLO en una mini-app, glide **no dibuja «…»**, recorta en seco, así que un nombre a medias parece completo (en v408 lo afirmé desde una prueba más débil: que el hook recibiera el texto entero dice qué se le PASA a `fillText`, no qué se ve). Medido el coste: a **272** entran las **mismas 10 columnas** que a 248 y el margen sube de 8 a **32 px**; a 300 se cae `Tipo`. ⚠️ Ningún ancho fijo garantiza que quepa cualquier nombre — lo que cierra el caso es que al seleccionar la fila la tira de acciones (v402) muestra el nombre **completo** |
 | v413 | **Homónimos en Planificación**: en el Panel había **dos filas «Mei Chen»** —dos personas distintas idénticas en pantalla—, así que al asignar la obra no se sabía a cuál. ⚠️ `auth.etiqueta_usuarios` existía **desde v319 y solo la usaba Nóminas**; las 8 vistas de Planificación seguían pintando `Nombre or Usuario` (sexta aparición del patrón: v151·v306·v319·v348). Nuevo `_etq`, que delega en esa función y ⚠️ desempata sobre **todo el grupo**, no sobre la lista visible (si no, la misma persona cambiaría de nombre según la pantalla). **De propina**: en `_asignacion_inteligente` el nombre es CLAVE de un dict de opciones, así que dos homónimos del mismo estado **colisionaban y una era imposible de elegir** (v147/v150) — el desempate lo arregla, no lo maquilla. ⚠️ NO se tocaron dos sitios, vistos auditando por AST cada lectura de `nom` ANTES de editar: `_ficha_rapida` (su `nom` alimenta el deep-link `gp_fichasel`; con la etiqueta quedaría «Mei Chen (mchen) (mchen)» — el fallo de v308) y `_catalogo` (su `nom` es el nombre de un TRABAJO, no de una persona) |
 | v412 | **La celda del Panel deja de estirar su fila**: una sola celda con dos asignaciones y franja horaria triplicaba su fila. Medido a 1440: filas de **36 a 116 px**, y el culpable no era la celda (53) sino **la NOTA (61)**, que ocupaba más que el trabajo que anota. La nota pasa a una línea con elipsis + texto completo en el `title`, y el label se topa a 2 líneas → filas de **108/144/38 a 63/63/38** (−43% de alto). ⚠️ La primera medición, tomada al ancho del PANEL, daba 36–421 px: habría dimensionado el arreglo para un problema 7,5× peor que el real — **tercera vez en el día** que medir al ancho equivocado cambia la conclusión (v335). ⚠️ El clamp necesita **tres** propiedades y aun así el navegador **blockifica** el `display` (el `<p>` está en un flex), así que el tope real lo garantiza un `max-height` de respaldo. ⚠️ Verificado que el selector NO alcanza a los botones del editor (el popover abierto se portalea fuera). ⚠️ El `title` escapa también las COMILLAS: `_esc` no las toca y una comilla permitiría inyectar atributos |
