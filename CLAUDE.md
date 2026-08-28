@@ -6316,7 +6316,51 @@ preselección al rol, quitar el multiselect, dejar de mirar quién fichó, devol
 respaldo por nombre a «todos», y dejar de guardar el login): los caza los 5. Suite:
 **63/63**.
 
-## Versiones desplegadas (v418 = actual)
+## Una sola ubicación por proyecto: la del mapa (v419)
+El usuario: *«hay una ubicación en el mapa y otra en los datos, y no tiene por qué haber
+2… hay proyectos que se ubican en el mapa pero en los datos no tienen ubicación, y las
+otras partes de la app no ven nada»*. Diagnóstico exacto.
+
+### Por qué el síntoma es tan asimétrico
+El **texto** (`Ubicacion`) es lo que lee casi todo — Home, Ruta del día, Pre-Start,
+notificaciones y el detalle —; las **coordenadas** (`Lat`/`Lng`) solo las usan el mapa de
+Home, la ruta y el propio picker. Así que un proyecto con pin y sin texto **parece no
+estar ubicado** en todas partes menos en el mapa.
+
+### ⚠️ La causa: v272 unificó la MITAD
+v272 ya había resuelto esto al **crear** («la Ubicación se toma de la dirección que
+buscaste en el mapa → ya no se pide dos veces»), y la **edición** se quedó con el
+`text_input("Ubicación")` suelto, desconectado del pin que vive fuera del form. Dos
+entradas para el mismo dato, sin nada que las case: se podía guardar cualquiera sola.
+**Media unificación es justo lo que produce el desajuste.**
+Y el picker ya guardaba la dirección elegida en `{key}_addr` con el comentario *«para
+reusarla como texto de Ubicación»* — escrito y sin leer, el patrón de v131/v148.
+
+### Lo que se hizo (decisión del usuario: el mapa manda)
+El campo pasa a **solo lectura** y sale del pin, como al crear. Más el aviso del caso
+inverso: obra **con dirección y sin pin** (hoy `PRJ-0016`), que no aparece en ningún mapa
+y hasta ahora no lo decía nadie.
+- ⚠️ **NO se geocodifica sola** (decisión del usuario): un pin inventado que nadie ha
+  mirado puede mandar a alguien al sitio equivocado, y esto es una app de obra. Se avisa
+  y se ubica con un botón.
+- ⚠️ **El texto solo se pisa si el pin se TOCA.** Hay direcciones puestas a mano
+  («Gagiope», «259 Cleveland Redfern») que el geocoder reescribiría: cambiarlas en frío
+  al guardar cualquier proyecto es el fallo de v360.
+- ⚠️ **Solo vale `_addr`, nunca `_q`.** `_q` es la caja de búsqueda: si alguien teclea
+  media dirección y no pulsa Buscar, ese texto a medias acabaría siendo la ubicación de
+  la obra. (Al crear sí se usa `_q` de respaldo, porque allí no hay valor previo que
+  conservar — la diferencia es deliberada.)
+
+### Medido antes de tocar
+15 proyectos con las dos cosas · **1 con texto y sin pin** · **0 con pin y sin texto**. O
+sea: el caso que el usuario describe es posible por diseño pero hoy no se da; el que sí
+está pasando es el inverso. Se dijo tal cual en vez de dar por buena la premisa.
+
+### Verificación
+`verif_v419.py`, probado contra el código roto en 3 casos (devolver el campo editable,
+dejar que `_q` pise el texto, quitar el aviso): los caza los 3. Suite: **64/64**.
+
+## Versiones desplegadas (v419 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -6324,6 +6368,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v419 | **Una sola ubicación por proyecto: la del mapa** (pedido por el usuario: «hay una en el mapa y otra en los datos, y no tiene por qué haber 2»). ⚠️ La causa: **v272 unificó solo la mitad** — al CREAR la ubicación ya salía del mapa, y la EDICIÓN se quedó con el `text_input` suelto, desconectado del pin. Como el TEXTO es lo que leen Home, Ruta del día, Pre-Start y los avisos (las coordenadas solo el mapa y la ruta), un proyecto con pin y sin texto **parecía no estar ubicado en todas partes menos en el mapa**. El campo pasa a solo lectura y sale del pin; + aviso del caso inverso (dirección sin pin, hoy `PRJ-0016`), que no sale en ningún mapa y nadie lo decía. ⚠️ **No se geocodifica sola**: un pin inventado que nadie ha mirado manda a alguien al sitio equivocado. ⚠️ El texto **solo se pisa si el pin se toca** (hay direcciones a mano que el geocoder reescribiría — fallo de v360) y **solo desde `_addr`, nunca `_q`** (media búsqueda sin confirmar acabaría siendo la dirección). Medido antes: 15 con ambas, 1 con texto sin pin, **0 con pin sin texto** — el caso descrito es posible pero hoy no se da, y se dijo |
 | v418 | **El Pre-Start deja de pedir lo que ya sabe** (dos peticiones del usuario). **(1)** El proyecto se preselecciona por tener **FICHAJE ABIERTO**, no por el rol: existía desde v170 pero detrás de `if rol == "campo"`, porque aquella versión asumió que «admin/propietario no fichan» — ⚠️ falso desde **v150**, y el admin ficha a diario. **(2)** Los asistentes se **eligen de la cuadrilla** (asignados + fichados hoy, estos preseleccionados) en vez de teclearse, conservando el **nombre libre** para subcontratistas o visitas; ⚠️ la firma se indexa **por persona, no por posición** (con índices, añadir a alguien pasaba la firma dibujada a otro). **(3)** ⚠️ Y por eso se guarda el **LOGIN** del asistente: con la lista, dos homónimos generan entradas IDÉNTICAS y firmar una apagaría el aviso de la otra. Se guarda el nombre limpio + el login aparte (nunca la etiqueta de v413 — fallo de v308), y ⚠️ **el respaldo por nombre hubo que acotarlo a los asistentes SIN login**, porque comparándolo contra todos anulaba el desempate: **lo cazó la prueba, no leer el código**. Compatible con lo ya registrado |
 | v417 | **Manuales ejercitados: se cierra el inventario de escrituras** (solo documentación). Con la sesión de PROPIETARIO: alta → «2 fragmentos indexados», hoja `Manuales` **creada** en el maestro (es global, v359) y `MAN-….json.gz` en Drive — ⚠️ confirma que a Drive **no va el PDF** sino los fragmentos troceados (v91); borrado → hoja a 0 filas **y archivo fuera de Drive**, con el botón bloqueado hasta confirmar (v139). ⚠️ **Tres obstáculos de método**: un PDF hecho a mano **revienta pypdf** (sin `startxref`) y habría hecho culpar a `add_manual`; el puente de JS **corrompe** 3.5 KB de base64 y el `fetch` a localhost está bloqueado por *mixed content* (https), así que hubo que **trocear y verificar** (3580 chars → 2683 bytes → `%PDF`…`%%EOF`); y el checkbox de Streamlit **no se marca clicando el `<input>`** (está oculto: recibe el clic el `div` de la casilla, como el chevron de v294). Falsa sospecha descartada leyendo el código: el nombre cae al del fichero por diseño (`nombre.strip() or up.name`). **Quedan solo las rutas que avisan a personas reales**, excluidas a propósito |
 | v416 | **Ejercitadas las escrituras de Drive** (solo documentación: no cambia código). ⚠️ La foto del estado **corrigió lo que yo venía repitiendo**: no eran 4 pendientes sino 3 — `expenses.upload_receipt` ya estaba ejercitada (2 recibos reales con DriveID) — y Drive está rodado (**27 documentos** con DriveID). `credentials.upload_file` ejercitada ahora de ida y vuelta: fila `CR-0007` + archivo real en Drive (394 bytes, contenido legible), y al borrar **desaparecen las dos cosas**, sin basura. Producción sin rastro. ⚠️ En local no se puede (`is_available()` = False), así que se hizo contra el Cloud **inyectando el archivo en el `<input type=file>` con `DataTransfer`** — con el setter NATIVO para el `text_input`, porque asignar `.value` a secas no lo ve React, y llegando a la ficha **por botones**, ya que la tabla de Usuarios es canvas y no acepta clics sintéticos. Queda solo `manuals.add/delete_manual`, que exigen la cuenta de **propietario** |

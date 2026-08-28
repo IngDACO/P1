@@ -2164,6 +2164,18 @@ def _detalle_proyecto(pid: str, grupo: str = None):
 
         # ── Ubicación en el mapa (fuera del form: el mapa necesita reruns) — v193 ──
         from core import location_ui
+        # ⚠️ v419: el caso inverso — dirección escrita pero SIN pin. Esa obra no sale en
+        # el mapa de Home ni en la Ruta del día, y hasta ahora no lo decía nadie: había
+        # que abrir el proyecto y darse cuenta. Se avisa, pero NO se geocodifica sola
+        # (decisión del usuario): un pin inventado que nadie ha mirado puede mandar a
+        # alguien al sitio equivocado, y esto es una app de obra.
+        _sin_pin = (str(prj.get("Ubicacion", "") or "").strip()
+                    and location_ui.to_float(prj.get("Lat")) is None)
+        if _sin_pin:
+            st.warning(":material/wrong_location: **Esta obra no está en el mapa.** Tiene "
+                       f"dirección (*{prj.get('Ubicacion')}*) pero no un punto, así que no "
+                       "aparece en el mapa de Home ni en la Ruta del día. Ábrelo abajo y "
+                       "pulsa **Buscar** para ubicarla.")
         with st.expander("Ubicación en el mapa (pin del proyecto)", icon=":material/map:",
                          expanded=not location_ui.to_float(prj.get("Lat"))):
             _plat, _plng = location_ui.location_picker(
@@ -2211,7 +2223,29 @@ def _detalle_proyecto(pid: str, grupo: str = None):
             tipo = e1.selectbox("Tipo de proyecto", _tp_opts,
                                 index=_tp_opts.index(_tp_cur) if _tp_cur in _tp_opts else 0,
                                 help="Solo «Instalación» usa el cronograma estándar de obra.")
-            ubic     = e2.text_input("Ubicación", value=prj.get("Ubicacion", ""))
+            # ⚠️ v419: la ubicación sale del MAPA, no de un campo suelto. v272 ya lo hizo
+            # al CREAR («ya no se pide dos veces») y la edición se quedó con el
+            # `text_input` desconectado del pin: por eso un proyecto podía tener pin sin
+            # dirección —y entonces Home, Ruta del día, Pre-Start y los avisos, que leen
+            # el TEXTO, lo mostraban como si no estuviera ubicado— o dirección sin pin.
+            # Dos entradas para un dato es la fuente del problema, no su síntoma.
+            # ⚠️ Solo se pisa el texto si el pin se ha TOCADO en esta pantalla
+            # (`_addr`/`_q` del picker). Si no, se conserva el que hay: reescribir en
+            # frío cambiaría direcciones puestas a mano («Gagiope», «259 Cleveland
+            # Redfern») por la versión del geocoder sin que nadie lo pidiera — es la
+            # lección de v360.
+            # ⚠️ Solo `_addr` —la dirección CONFIRMADA por el geocoder—, nunca `_q`. `_q`
+            # es la caja de búsqueda: si alguien teclea media dirección y no pulsa
+            # Buscar, se guardaría ese texto a medias como ubicación del proyecto. (Al
+            # CREAR sí se usa `_q` de respaldo porque allí no hay valor previo que
+            # conservar; aquí sí lo hay.)
+            ubic = str(prj.get("Ubicacion", "") or "")
+            _ubi_mapa = str(st.session_state.get(f"edloc_{pid}_addr") or "").strip()
+            if _ubi_mapa:
+                ubic = _ubi_mapa
+            e2.text_input("Ubicación", value=ubic, disabled=True,
+                          help="Sale del pin del mapa (arriba). Muévelo o busca la "
+                               "dirección para cambiarla.")
             modelo   = e2.text_input("Modelo", value=prj.get("Modelo", ""))
             ing      = e1.text_input("Ingeniero", value=prj.get("Ingeniero", ""))
             # Calendario, no texto libre: ver `_a_fecha`. El valor se guarda
