@@ -6226,7 +6226,49 @@ rápida → «Ver ficha completa».
 ejercitar sin esa cuenta. Es la parte de menor riesgo: un banco de documentos para el
 asistente, no toca dinero ni planificación.
 
-## Versiones desplegadas (v416 = actual)
+## Manuales ejercitados: se cierra el inventario de escrituras (v417)
+Última de las 75. `manuals.add_manual` / `delete_manual` son del panel **📚 Manuales del
+PROPIETARIO**, así que hizo falta la sesión de `dacox`. Ciclo completo, verificado en las
+dos puntas:
+- **Alta**: «Manual agregado: **2 fragmentos indexados**» · hoja `Manuales` **creada**
+  (no existía) en el **MAESTRO** —es hoja global (v359)— con
+  `MAN-20260828164513 · 2 frags · dacox` · y en Drive `MAN-20260828164513.json.gz`
+  (653 B, `application/gzip`). ⚠️ Confirma el diseño de v91: a Drive **no va el PDF**,
+  van los FRAGMENTOS troceados y comprimidos.
+- **Borrado**: hoja a **0 filas** y el archivo **fuera de Drive** (`Requested entity was
+  not found`). Y el botón Eliminar estaba **deshabilitado** hasta marcar «Confirmo» — la
+  protección de v139, funcionando.
+- Producción sin rastro.
+
+### ⚠️ Tres obstáculos de método, y lo que enseñan
+1. **Un PDF mal formado habría culpado al código equivocado.** `add_manual` extrae texto
+   con pypdf, así que hacía falta un PDF *de verdad*. Se comprobó ANTES: un PDF construido
+   a mano sin `startxref` **revienta pypdf** (`PdfReadError`). De haberlo inyectado, el
+   fallo habría parecido de `add_manual`.
+2. **El puente de JS corrompe los payloads grandes.** Pasar 3.5 KB de base64 en un solo
+   `javascript_exec` llegó alterado y `atob` falló. El `fetch` a un servidor local tampoco
+   sirve: la app es **https** y el navegador bloquea `http://127.0.0.1` por *mixed
+   content*. Lo que funcionó: **trocear en 6, acumular en `window`, y verificar antes de
+   usar** — longitud del base64 (3580), bytes decodificados (2683) y que empiece por
+   `%PDF` y acabe en `%%EOF`. Sin esa verificación, un trozo corrupto habría subido un PDF
+   roto y el diagnóstico habría ido al sitio equivocado.
+3. **El checkbox de Streamlit no se marca clicando el `<input>`.** Ni el `<label>`: el
+   `input` está oculto (1 px) y quien recibe el clic es el `div` que dibuja la casilla.
+   Hubo que despachar la secuencia `pointerdown/mousedown/pointerup/mouseup/click` sobre
+   ese div. Misma familia que el chevron de v294: **el elemento que se ve no es el que el
+   DOM dice**.
+
+### Falsa sospecha descartada mirando el código
+El nombre que tecleé no se aplicó (quedó el del fichero). No es un fallo: `auth_ui` hace
+`nm = nombre.strip() or up.name.rsplit(".",1)[0]` — cae al nombre del archivo cuando el
+campo va vacío, y mi texto no llegó a enviarse. La app hizo lo correcto.
+
+### Estado del inventario
+**75 de 75 escrituras ejercitadas**, salvo las que mandan avisos a personas reales
+(`notify_expiring`, `near_miss=YES` / check en NO), excluidas a propósito y con la lógica
+cubierta por `verif_alarma_no.py` con el envío interceptado.
+
+## Versiones desplegadas (v417 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -6234,6 +6276,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v417 | **Manuales ejercitados: se cierra el inventario de escrituras** (solo documentación). Con la sesión de PROPIETARIO: alta → «2 fragmentos indexados», hoja `Manuales` **creada** en el maestro (es global, v359) y `MAN-….json.gz` en Drive — ⚠️ confirma que a Drive **no va el PDF** sino los fragmentos troceados (v91); borrado → hoja a 0 filas **y archivo fuera de Drive**, con el botón bloqueado hasta confirmar (v139). ⚠️ **Tres obstáculos de método**: un PDF hecho a mano **revienta pypdf** (sin `startxref`) y habría hecho culpar a `add_manual`; el puente de JS **corrompe** 3.5 KB de base64 y el `fetch` a localhost está bloqueado por *mixed content* (https), así que hubo que **trocear y verificar** (3580 chars → 2683 bytes → `%PDF`…`%%EOF`); y el checkbox de Streamlit **no se marca clicando el `<input>`** (está oculto: recibe el clic el `div` de la casilla, como el chevron de v294). Falsa sospecha descartada leyendo el código: el nombre cae al del fichero por diseño (`nombre.strip() or up.name`). **Quedan solo las rutas que avisan a personas reales**, excluidas a propósito |
 | v416 | **Ejercitadas las escrituras de Drive** (solo documentación: no cambia código). ⚠️ La foto del estado **corrigió lo que yo venía repitiendo**: no eran 4 pendientes sino 3 — `expenses.upload_receipt` ya estaba ejercitada (2 recibos reales con DriveID) — y Drive está rodado (**27 documentos** con DriveID). `credentials.upload_file` ejercitada ahora de ida y vuelta: fila `CR-0007` + archivo real en Drive (394 bytes, contenido legible), y al borrar **desaparecen las dos cosas**, sin basura. Producción sin rastro. ⚠️ En local no se puede (`is_available()` = False), así que se hizo contra el Cloud **inyectando el archivo en el `<input type=file>` con `DataTransfer`** — con el setter NATIVO para el `text_input`, porque asignar `.value` a secas no lo ve React, y llegando a la ficha **por botones**, ya que la tabla de Usuarios es canvas y no acepta clics sintéticos. Queda solo `manuals.add/delete_manual`, que exigen la cuenta de **propietario** |
 | v415 | **La nota del Panel pasa de UNA línea a HASTA dos.** Medir cambió mi propia recomendación (yo dije «esperar a verlo en uso»): de las **3 notas reales, 2 se cortaban**, y a un aviso —«⚠️ se pisa: dos obras a la vez»— le faltaban **3 px** de 135. Las notas de este tablero son avisos: cortarlas es cortar lo que hay que leer de un vistazo. ⚠️ **«Hasta» dos, no dos**: con `-webkit-line-clamp` la nota corta sigue en una línea (14 px), así que el alto extra lo pagan las 2 filas que lo necesitan, no las 8 — no se deshace lo que ganó v412. ⚠️ `max-height` de respaldo, porque el navegador **blockifica** el `display:-webkit-box`. ⚠️ Y la mini-app **no reproducía el ancho** (sin sidebar, sus columnas son más anchas y la nota cabía): valida el MECANISMO, mientras que el ancho sale de medir producción. Guardián de v412 **caducado y reescrito** sobre lo que protege de verdad (que la nota tenga tope, no que tenga una línea) |
 | v414 | **El nombre de obra deja de ir al filo** en `Proyectos · Lista` (pendiente de v408): la columna medía 248 px (232 útiles) y el nombre más largo ocupa **224** — ocho píxeles de margen. ⚠️ Y el corte es **SILENCIOSO**: comprobado MIRÁNDOLO en una mini-app, glide **no dibuja «…»**, recorta en seco, así que un nombre a medias parece completo (en v408 lo afirmé desde una prueba más débil: que el hook recibiera el texto entero dice qué se le PASA a `fillText`, no qué se ve). Medido el coste: a **272** entran las **mismas 10 columnas** que a 248 y el margen sube de 8 a **32 px**; a 300 se cae `Tipo`. ⚠️ Ningún ancho fijo garantiza que quepa cualquier nombre — lo que cierra el caso es que al seleccionar la fila la tira de acciones (v402) muestra el nombre **completo** |
