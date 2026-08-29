@@ -6953,6 +6953,27 @@ posicional se añadieron en el MISMO cambio (lección v363, donde olvidar eso de
   nada de su nav; cada rol resuelve la suya, con el número derivado de la constante) y con
   la razón escrita al lado. Y `verif_v322` sí cazó algo real: un `import auth` sin usar.
 
+### La bandeja del admin, ejercitada EN PANTALLA (no solo leída)
+⚠️ Al abrirla estaba VACÍA, y verificar una bandeja vacía es el paso en vacío
+(trampa nº1): lo que hay que ver es la tarjeta con sus avisos. Se sembró una
+solicitud real eligiendo **a quien más obras tenía asignadas** esos días, se verificó
+en la pantalla del Cloud y se borró después (roster respaldado y restaurado al
+detalle). Lo que pintó, con datos reales:
+- «Javier López — Vacaciones · 3 día(s) · 🟡 pendiente», su motivo y su saldo;
+- ⚠️ *«Ya está asignado esos días a **Meriton Zetland — Torre B**, **prueba2**. Si
+  apruebas, esos días quedan libres en el tablero»* — el aviso que es la razón de ser
+  de la versión;
+- «Quién podría cubrirlo (4 días)» → *nadie libre ese día* en los cuatro. ⚠️ Eso NO
+  se dio por bueno: se comprobó **por fuera de `sustitutos`**, contando el roster
+  crudo, que los 8 de campo estaban ocupados los tres días (trampa nº12).
+- **Aprobar** funcionó de punta a punta: *«Ausencia aprobada. 3 día(s) marcados en el
+  planificador»* —mensaje que **sobrevive al `st.rerun()`**, o sea `flash` (v365/366)
+  haciendo su trabajo—, los indicadores pasando a `PENDIENTES 0 · PRÓXIMOS 7 DÍAS 1`,
+  y el tablero con `LEAVE · Vacaciones · AUS-0001` en los 3 días **pisando** las obras
+  (a propósito) y dejando jueves y viernes intactos.
+- ⚠️ El primer clic en «Aprobar» no hizo nada y el botón estaba **a y=987 con un
+  viewport de 900**: fuera de vista. Medir dónde cae el clic, otra vez.
+
 ## ⚠️ El icono del selector de ausencias salía LITERAL en pantalla (v431)
 Encontrado **mirando la pantalla** en el Cloud, no leyendo código: el desplegable
 «¿Qué necesitas?» mostraba `:material/beach_access: Vacaciones`. Las opciones de un
