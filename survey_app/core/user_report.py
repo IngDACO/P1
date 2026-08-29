@@ -10,6 +10,7 @@ páginas de contenido.
 NO incluye lógica interna, fórmulas ni log del optimizador (regla de confidencialidad).
 """
 import io
+import logging
 import os
 
 from reportlab.lib.pagesizes import A4
@@ -28,6 +29,9 @@ from core.schedule import schedule_svg, schedule_table
 from core.plumb    import (plumb_svg, plumb_table, plumb_checks,
                            plumb_iso_svg, plumb_card_svg)
 from core import clock
+from core.i18n import d
+
+logger = logging.getLogger(__name__)
 
 W          = 170 * mm
 C_COPEX    = colors.HexColor("#1a3a5c")
@@ -180,7 +184,7 @@ class _NumeradoCanvas(_canvas.Canvas):
         self.setFillColor(colors.HexColor("#8a94a6"))
         izq = " · ".join(x for x in (self.meta.get("proyecto"), self.meta.get("informe")) if x)
         self.drawString(20 * mm, 7.5 * mm, izq[:90])
-        self.drawRightString(w - 20 * mm, 7.5 * mm, f"Página {pagina} de {total}")
+        self.drawRightString(w - 20 * mm, 7.5 * mm, d("Page {a} of {b}", a=pagina, b=total))
         self.restoreState()
 
 
@@ -209,11 +213,11 @@ def _portada(canv, doc, meta):
 
     canv.setFillColor(C_MUTED)
     canv.setFont("Helvetica", 9)
-    canv.drawString(20 * mm, h - 110 * mm, "INFORME TÉCNICO")
+    canv.drawString(20 * mm, h - 110 * mm, d("TECHNICAL REPORT"))
     canv.setFillColor(C_WHITE)
     canv.setFont("Helvetica-Bold", 24)
-    canv.drawString(20 * mm, h - 121 * mm, "Posicionamiento")
-    canv.drawString(20 * mm, h - 133 * mm, "de elevador")
+    canv.drawString(20 * mm, h - 121 * mm, d("Elevator"))
+    canv.drawString(20 * mm, h - 133 * mm, d("positioning"))
     canv.setFillColor(C_COPEX2)
     canv.rect(20 * mm, h - 140 * mm, 22 * mm, 1.6 * mm, fill=1, stroke=0)
 
@@ -221,9 +225,9 @@ def _portada(canv, doc, meta):
     y0 = 38 * mm
     canv.setFillColor(colors.HexColor("#24476b"))
     canv.rect(16 * mm, y0, w - 32 * mm, 46 * mm, fill=1, stroke=0)
-    filas = [("Cliente", meta.get("cliente") or "—", "Informe", meta.get("informe") or "—"),
-             ("Proyecto", meta.get("proyecto") or "—", "Fecha", meta.get("fecha") or "—"),
-             ("Ubicación", meta.get("ubicacion") or "—", "Paradas", str(meta.get("ns") or "—"))]
+    filas = [(d("Client"), meta.get("cliente") or "—", d("Report"), meta.get("informe") or "—"),
+             (d("Project"), meta.get("proyecto") or "—", d("Date"), meta.get("fecha") or "—"),
+             (d("Location"), meta.get("ubicacion") or "—", d("Stops"), str(meta.get("ns") or "—"))]
     yy = y0 + 36 * mm
     for l1, v1, l2, v2 in filas:
         canv.setFont("Helvetica", 7.5); canv.setFillColor(C_MUTED)
@@ -235,7 +239,7 @@ def _portada(canv, doc, meta):
         yy -= 15 * mm
 
     canv.setFont("Helvetica", 7.5); canv.setFillColor(C_MUTED)
-    canv.drawString(20 * mm, 22 * mm, f"Preparado por: {meta.get('ingeniero') or '—'}")
+    canv.drawString(20 * mm, 22 * mm, d("Prepared by: {x}", x=meta.get("ingeniero") or "—"))
     canv.drawString(20 * mm, 17 * mm, "COPEX · Elevator Survey Analyzer")
     canv.restoreState()
 
@@ -243,7 +247,7 @@ def _portada(canv, doc, meta):
 def _ia_text(text, styles):
     """Devuelve SIEMPRE una lista de flowables."""
     if not text or str(text).startswith("[Interpretación no disponible"):
-        return [Paragraph("<i>Interpretación no disponible.</i>", styles["UBody"])]
+        return [Paragraph(f"<i>{d('Interpretation not available.')}</i>", styles["UBody"])]
     parts = [p.strip() for p in str(text).split("\n") if p.strip()]
     return [Paragraph(para, styles["UBody"]) for para in parts]
 
@@ -279,18 +283,36 @@ def generate_user_report(project_params, calculated, optimizer_result,
 
     # ── Veredicto: lo primero que ve el cliente ─────────────
     _off = int(best.get("total_off", 0)) if best else -1
-    _cortes = "requiere cortes" in str(ia.get("cortes", "")).lower() or "cortar" in str(ia.get("cortes", "")).lower()
+    # ⚠️ v437: si hay cortes se decide con los DATOS (`interpretation.cortes_por_piso`),
+    # no leyendo el texto que escribió la IA. Antes era
+    # `"requiere cortes" in ia["cortes"]`: frágil ya —basta con que el modelo redacte
+    # distinto— e imposible al pasar el informe al inglés, porque esa frase española
+    # no casaría nunca y el veredicto diría «sin valores fuera de límite» en un hueco
+    # que sí necesita cortarse.
+    # ⚠️ El parámetro se llama `calculated` (es lo que `calculate_limits` devuelve).
+    # Mi primera versión escribió `limits` y el `except` de abajo se tragó el
+    # NameError dejando `_cortes = False` para siempre: solo lo delató GENERAR el PDF
+    # y leer el log. Un `except` alrededor de código recién escrito esconde justo el
+    # fallo que acabas de introducir (v323 · v338 · v344).
+    try:
+        from core.interpretation import cortes_por_piso
+        _cortes = bool(cortes_por_piso(calculated or {}, best or {}))
+    except Exception as e:
+        logger.warning("user_report: no se pudieron calcular los cortes: %s", e)
+        _cortes = False
     if best is None:
-        _col, _tit = C_RED, "No se encontró una solución válida"
-        _det = "Con los parámetros y medidas actuales no hay una combinación que cumpla los límites."
+        _col, _tit = C_RED, d("No valid solution was found")
+        _det = d("With the current parameters and site measurements there is no "
+                 "combination that meets the limits.")
     elif _off == 0:
-        _col, _tit = C_GREEN, "El hueco es apto para la instalación"
-        _det = "La solución propuesta cumple todos los límites" + (
-               ", con los cortes indicados en la sección 3." if _cortes else ", sin valores fuera de límite.")
+        _col, _tit = C_GREEN, d("The shaft is suitable for installation")
+        _det = d("The proposed solution meets every limit") + (
+               d(", with the cuts listed in section 3.") if _cortes
+               else d(", with no values out of limit."))
     else:
-        _col, _tit = C_ORANGE, "Apto con observaciones"
-        _det = (f"La solución deja {_off} valor(es) fuera de límite que requieren atención "
-                "antes o durante el montaje.")
+        _col, _tit = C_ORANGE, d("Suitable with observations")
+        _det = d("The solution leaves {n} value(s) out of limit that need attention "
+                 "before or during installation.", n=_off)
     story += [_veredicto(_tit, _det, _col, styles), _sp(10)]
 
     # ── Ficha del proyecto (datos ampliados) ────────────────
@@ -298,10 +320,10 @@ def generate_user_report(project_params, calculated, optimizer_result,
         return [Paragraph(f"<b>{l1}</b>", styles["UInfo"]), Paragraph(str(v1), styles["UInfo"]),
                 Paragraph(f"<b>{l2}</b>", styles["UInfo"]), Paragraph(str(v2), styles["UInfo"])]
     it = Table([
-        _fila("Cliente", meta["cliente"], "Nº de informe", n_inf),
-        _fila("Proyecto", meta["proyecto"], "Fecha", fecha),
-        _fila("Ubicación", meta["ubicacion"], "Modelo", meta["modelo"]),
-        _fila("Ingeniero responsable", meta["ingeniero"], "Número de paradas", meta["ns"]),
+        _fila(d("Client"), meta["cliente"], d("Report no."), n_inf),
+        _fila(d("Project"), meta["proyecto"], d("Date"), fecha),
+        _fila(d("Location"), meta["ubicacion"], d("Model"), meta["modelo"]),
+        _fila(d("Engineer in charge"), meta["ingeniero"], d("Number of stops"), meta["ns"]),
     ], colWidths=[W * 0.24, W * 0.30, W * 0.22, W * 0.24])
     _cmds_it = [
         ("BACKGROUND", (0, 0), (-1, -1), C_LIGHT),
@@ -313,15 +335,15 @@ def generate_user_report(project_params, calculated, optimizer_result,
     story += [it, _sp(12)]
 
     # ── Índice ──────────────────────────────────────────────
-    _idx = ["1. Resumen de la solución", "2. Posicionamiento final", "3. Cortes necesarios",
-            "4. Matriz de la solución", "5. Diagramas de planta por piso"]
+    _idx = [d("1. Solution summary"), d("2. Final positioning"), d("3. Cuts required"),
+            d("4. Solution matrix"), d("5. Floor plan diagrams")]
     if schedule and schedule.get("activities"):
-        _idx.append("6. Cronograma y curva S")
-    _idx += ["7. Implementación en obra", "8. Verificación final"]
+        _idx.append(d("6. Schedule and S-curve"))
+    _idx += [d("7. Site implementation"), d("8. Final verification")]
     if plumb:
-        _idx.append("9. Esquema de plomado definitivo")
-    _idx += ["10. Alcance y metodología", "11. Glosario de términos", "12. Conclusiones"]
-    story += [Paragraph("<b>Contenido</b>", styles["UBody"]), _sp(3)]
+        _idx.append(d("9. Final plumb line layout"))
+    _idx += [d("10. Scope and methodology"), d("11. Glossary"), d("12. Conclusions")]
+    story += [Paragraph(f"<b>{d('Contents')}</b>", styles["UBody"]), _sp(3)]
     _ic = Table([[Paragraph(f"· {x}", styles["UInfo"])] for x in _idx], colWidths=[W])
     _ic.setStyle(TableStyle([
         ("TOPPADDING", (0, 0), (-1, -1), 2), ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
@@ -330,42 +352,44 @@ def generate_user_report(project_params, calculated, optimizer_result,
     story += [_ic, _sp(12)]
 
     # ── Resumen ejecutivo ───────────────────────────────────
-    story += [_section("1. Resumen de la solución", styles), _sp(5)]
+    story += [_section(d("1. Solution summary"), styles), _sp(5)]
     story += _ia_text(ia.get("resumen"), styles)
     story += [_sp(10)]
 
     # ── Solución final (RL/FB) ──────────────────────────────
-    story += [_section("2. Posicionamiento final", styles), _sp(5)]
+    story += [_section(d("2. Final positioning"), styles), _sp(5)]
     if best:
         rl = best.get("rl", 0)
         fb = best.get("fb_applied", best.get("fb", 0))
         off = best.get("total_off", 0)
         story += [_kpi_cards([
-            ("Desplazamiento lateral (RL)", f"{rl:+.1f} mm", None),
-            ("Desplazamiento frontal (FB)", f"{fb:+.1f} mm", None),
-            ("Valores fuera de límite", f"{off}", "#1e8449" if off == 0 else "#c0392b"),
-            ("Paradas", str(meta["ns"]), None),
+            (d("Lateral shift (RL)"), f"{rl:+.1f} mm", None),
+            (d("Front shift (FB)"), f"{fb:+.1f} mm", None),
+            (d("Values out of limit"), f"{off}", "#1e8449" if off == 0 else "#c0392b"),
+            (d("Stops"), str(meta["ns"]), None),
         ], styles), _sp(8)]
         story += [_callout(
-            f"<b>Acción principal:</b> desplazar el bloque de cabina <b>{abs(rl):.1f} mm</b> hacia "
-            f"{'la derecha' if rl >= 0 else 'la izquierda'} y <b>{abs(fb):.1f} mm</b> hacia "
-            f"{'atrás' if fb >= 0 else 'adelante'} respecto a la posición de diseño.", styles), _sp(8)]
+            d("<b>Main action:</b> shift the car block <b>{lat} mm</b> to the {dir_lat} "
+              "and <b>{frt} mm</b> to the {dir_frt}, relative to the design position.",
+              lat=f"{abs(rl):.1f}", frt=f"{abs(fb):.1f}",
+              dir_lat=d("right") if rl >= 0 else d("left"),
+              dir_frt=d("rear") if fb >= 0 else d("front")), styles), _sp(8)]
     else:
-        story += [Paragraph("No se encontró una solución válida.", styles["UBody"]), _sp(8)]
+        story += [Paragraph(d("No valid solution was found."), styles["UBody"]), _sp(8)]
 
-    story += [Paragraph("<b>Desplazamientos a realizar:</b>", styles["UBody"])]
+    story += [Paragraph(f"<b>{d('Shifts to carry out:')}</b>", styles["UBody"])]
     story += list(_ia_text(ia.get("desplazamientos"), styles))
     story += [_sp(10)]
 
     # ── Cortes ──────────────────────────────────────────────
-    story += [_section("3. Cortes necesarios", styles), _sp(5)]
+    story += [_section(d("3. Cuts required"), styles), _sp(5)]
     story += list(_ia_text(ia.get("cortes"), styles))
     story += [_sp(10)]
 
     # ── Matriz de la solución ───────────────────────────────
     if best and best.get("matrix"):
-        story += [_section("4. Matriz de la solución (por piso)", styles), _sp(5)]
-        header = [Paragraph("<b>Piso</b>", styles["UCell"])] + \
+        story += [_section(d("4. Solution matrix (by floor)"), styles), _sp(5)]
+        header = [Paragraph(f"<b>{d('Floor')}</b>", styles["UCell"])] + \
                  [Paragraph(f"<b>{c}</b>", styles["UCell"]) for c in survey_cols]
         rows = [header]
         cmds = [
@@ -389,16 +413,16 @@ def generate_user_report(project_params, calculated, optimizer_result,
         t = Table(rows, colWidths=col_w)
         t.setStyle(TableStyle(_zebra(cmds, len(rows))))
         story += [t, _sp(4),
-                  Paragraph("Celdas en rojo: valores que requieren atención (holgura por debajo del "
-                            "mínimo, o apertura que requiere corte).", styles["USmall"]), _sp(10)]
+                  Paragraph(d("Cells in red: values needing attention (clearance below the minimum, "
+                              "or an opening that requires cutting)."), styles["USmall"]), _sp(10)]
 
     # ── Diagramas de planta por piso ────────────────────────
     if best and best.get("matrix"):
-        story += [PageBreak(), _section("5. Diagramas del hueco", styles), _sp(4),
-                  Paragraph("Plantas a proporción real, con cotas acotadas contra su límite. "
-                            "Las cotas en <b>rojo</b> son las que quedan fuera de límite; el "
-                            "resto cumple. Cuando una holgura es muy ajustada se añade un "
-                            "<b>Detalle</b> ampliado de esa esquina.",
+        story += [PageBreak(), _section(d("5. Shaft diagrams"), styles), _sp(4),
+                  Paragraph(d("Floor plans drawn to real proportion, with every dimension checked "
+                              "against its limit. Dimensions in <b>red</b> are out of limit; the "
+                              "rest comply. Where a clearance is very tight, an enlarged "
+                              "<b>Detail</b> of that corner is added."),
                             styles["UInfo"]), _sp(6)]
         mat = best["matrix"]
         n   = len(mat)
@@ -426,17 +450,19 @@ def generate_user_report(project_params, calculated, optimizer_result,
 
     # ── Cronograma y curva S ────────────────────────────────
     if schedule and schedule.get("activities"):
-        story += [PageBreak(), _section("6. Cronograma y curva S del proyecto", styles), _sp(4),
-                  Paragraph(f"Inicio: <b>{schedule['start_date'].strftime('%d/%m/%Y')}</b>  ·  "
-                            f"Fin estimado: <b>{schedule['fecha_fin'].strftime('%d/%m/%Y')}</b>  ·  "
-                            f"Duración total: <b>{schedule['total_dias']} días</b>.", styles["UBody"]), _sp(4)]
+        story += [PageBreak(), _section(d("6. Project schedule and S-curve"), styles), _sp(4),
+                  Paragraph(d("Start: <b>{ini}</b>  ·  Estimated finish: <b>{fin}</b>  ·  "
+                              "Total duration: <b>{n} days</b>.",
+                              ini=schedule["start_date"].strftime("%d/%m/%Y"),
+                              fin=schedule["fecha_fin"].strftime("%d/%m/%Y"),
+                              n=schedule["total_dias"]), styles["UBody"]), _sp(4)]
         sdraw = _svg_flowable(schedule_svg(schedule), W)
         if sdraw is not None:
             story += [sdraw, _sp(6)]
         # tabla de actividades
         srows = schedule_table(schedule)
         thead = [Paragraph(f"<b>{h}</b>", styles["UCell"]) for h in
-                 ["Actividad", "Inicio", "Fin", "Días", "Peso %"]]
+                 [d("Activity"), d("Start"), d("Finish"), d("Days"), d("Weight %")]]
         trows = [thead]
         for r in srows:
             trows.append([
@@ -456,24 +482,24 @@ def generate_user_report(project_params, calculated, optimizer_result,
         story += [st, _sp(10)]
 
     # ── Implementación y verificación ───────────────────────
-    story += [PageBreak(), _section("7. Implementación en obra", styles), _sp(5)]
+    story += [PageBreak(), _section(d("7. Site implementation"), styles), _sp(5)]
     story += list(_ia_text(ia.get("implementacion"), styles))
     story += [_sp(10)]
-    story += [_section("8. Verificación final", styles), _sp(5)]
+    story += [_section(d("8. Final verification"), styles), _sp(5)]
     story += list(_ia_text(ia.get("verificacion"), styles))
 
     # ── Esquema de plomado definitivo ───────────────────────
     if plumb:
         _pd = plumb.get("displacement") or {}
-        story += [PageBreak(), _section("9. Esquema de plomado definitivo", styles), _sp(4),
-                  Paragraph("Ubicación final de las líneas de plomada con los desplazamientos del "
-                            "análisis. El conjunto (plomos, paredes teóricas y template) se desplaza "
-                            "en bloque; las paredes reales quedan fijas. El eje cero es la pared real "
-                            "izquierda.", styles["UBody"]), _sp(4)]
+        story += [PageBreak(), _section(d("9. Final plumb line layout"), styles), _sp(4),
+                  Paragraph(d("Final position of the plumb lines including the shifts from the "
+                              "analysis. The assembly (plumb lines, theoretical walls and "
+                              "template) moves as one block; the real walls stay fixed. The "
+                              "zero axis is the left real wall."), styles["UBody"]), _sp(4)]
         if _pd.get("origen") == "survey":
             story += [Paragraph(
-                f"Desplazamiento aplicado: lateral = <b>{_pd.get('rl', 0):.1f} mm</b> · "
-                f"frontal = <b>{_pd.get('fb', 0):.1f} mm</b>.", styles["UBody"]), _sp(4)]
+                d("Shift applied: lateral = <b>{a} mm</b> · front = <b>{b} mm</b>.",
+                  a=f"{_pd.get('rl', 0):.1f}", b=f"{_pd.get('fb', 0):.1f}"), styles["UBody"]), _sp(4)]
         pdraw = _svg_flowable(plumb_svg(plumb, proyecto=meta["proyecto"]), W)
         if pdraw is not None:
             story += [pdraw, _sp(6)]
@@ -482,11 +508,11 @@ def generate_user_report(project_params, calculated, optimizer_result,
             story += [piso, _sp(8)]
         pfic = _svg_flowable(plumb_card_svg(plumb, proyecto=meta["proyecto"]), W * 0.62)
         if pfic is not None:
-            story += [_callout("<b>Ficha de replanteo</b> — los valores a medir con cinta "
-                               "en obra. La comprobación de cierre debe dar BSR.", styles),
+            story += [_callout(d("<b>Set-out card</b> — the values to measure with a tape on "
+                                 "site. The closing check must add up to BSR."), styles),
                       _sp(4), pfic, _sp(6)]
         phead = [Paragraph(f"<b>{h}</b>", styles["UCell"]) for h in
-                 ["Línea", "X inicial (mm)", "X final (mm)", "Desplazada"]]
+                 [d("Line"), d("Initial X (mm)"), d("Final X (mm)"), d("Shifted")]]
         ptrows = [phead]
         for r in plumb_table(plumb):
             ptrows.append([Paragraph(str(r["Línea"]), styles["UInfo"]),
@@ -503,9 +529,9 @@ def generate_user_report(project_params, calculated, optimizer_result,
         story += [ptab, _sp(6)]
 
         # Distancias de verificación en campo (plomo ↔ pared real)
-        story += [Paragraph("<b>Verificación en campo — distancias plomo ↔ pared real</b>",
+        story += [Paragraph(f"<b>{d('Site verification — plumb line ↔ real wall distances')}</b>",
                             styles["UBody"]), _sp(2)]
-        chead = [Paragraph(f"<b>{h}</b>", styles["UCell"]) for h in ["Medida", "Distancia (mm)"]]
+        chead = [Paragraph(f"<b>{h}</b>", styles["UCell"]) for h in [d("Measurement"), d("Distance (mm)")]]
         ctrows = [chead]
         for r in plumb_checks(plumb):
             ctrows.append([Paragraph(str(r["Medida"]), styles["UInfo"]),
@@ -520,42 +546,48 @@ def generate_user_report(project_params, calculated, optimizer_result,
         story += [ctab, _sp(10)]
 
     # ── 10. Alcance y metodología ───────────────────────────
-    story += [PageBreak(), _section("10. Alcance y metodología", styles), _sp(5)]
+    story += [PageBreak(), _section(d("10. Scope and methodology"), styles), _sp(5)]
     story += [Paragraph(
-        "Este informe determina la <b>posición óptima del bloque de cabina</b> (rieles y guías) dentro "
-        "del hueco existente, a partir de las medidas tomadas en obra nivel a nivel y de los parámetros "
-        "del plano del fabricante.", styles["UBody"])]
+        d("This report determines the <b>optimum position of the car block</b> (rails and "
+          "guides) within the existing shaft, based on the measurements taken on site level "
+          "by level and on the parameters of the manufacturer's drawing."), styles["UBody"])]
     story += [Paragraph(
-        "<b>Qué se midió:</b> en cada parada se registran las holguras laterales (izquierda y derecha), "
-        "la distancia de la pared frontal al eje de rieles y el espacio disponible a cada lado de la "
-        "apertura de puerta de rellano.", styles["UBody"])]
+        d("<b>What was measured:</b> at every stop we record the side clearances (left and "
+          "right), the distance from the front wall to the rail axis, and the space available "
+          "on each side of the landing door opening."), styles["UBody"])]
     story += [Paragraph(
-        "<b>Cómo se evalúa:</b> cada medida se compara contra su límite admisible. Se busca la "
-        "combinación de desplazamiento lateral y frontal que minimiza los incumplimientos, respetando "
-        "las restricciones físicas del hueco y, cuando aplica, la pared limitante y el controlador "
-        "integrado en el marco.", styles["UBody"]), _sp(4)]
+        d("<b>How it is assessed:</b> every measurement is compared against its allowable "
+          "limit. We look for the combination of lateral and front shift that minimises the "
+          "breaches, respecting the physical constraints of the shaft and, where it applies, "
+          "the limiting wall and the controller built into the frame."), styles["UBody"]), _sp(4)]
     story += [_callout(
-        "<b>Limitaciones y validez.</b> Las conclusiones se basan en las medidas aportadas y en los "
-        "parámetros del plano vigentes a la fecha del informe. Cambios en el hueco, en el equipo o "
-        "medidas tomadas con criterios distintos pueden alterar el resultado. Los valores están "
-        "expresados en milímetros y deben verificarse en obra antes del montaje definitivo.",
+        d("<b>Limitations and validity.</b> The conclusions are based on the measurements "
+          "supplied and on the drawing parameters current at the date of this report. Changes "
+          "to the shaft or to the equipment, or measurements taken to different criteria, may "
+          "alter the result. All values are in millimetres and must be verified on site before "
+          "final installation."),
         styles, color=C_ORANGE), _sp(10)]
 
     # ── 11. Glosario (tarjetas, no una tabla gris) ──────────
-    story += [_section("11. Glosario de términos", styles), _sp(5)]
+    story += [_section(d("11. Glossary"), styles), _sp(5)]
     _terms = [
-        ("RL", "Desplazamiento lateral del bloque de cabina respecto al diseño."),
-        ("FB", "Desplazamiento frontal (hacia el fondo o hacia la puerta)."),
-        ("WR / WL", "Holgura entre el bloque de cabina y la pared derecha / izquierda."),
-        ("FR / FL", "Distancia de la pared frontal al eje del riel derecho / izquierdo."),
-        ("OR / OL", "Espacio a la derecha / izquierda en la apertura de puerta de rellano."),
-        ("BS / BSR", "Ancho del hueco según plano / ancho realmente medido en obra."),
-        ("Plomada", "Línea vertical de referencia para alinear los rieles en toda la altura."),
-        ("Corte", "Material a retirar cuando la apertura supera el límite admisible."),
+        ("RL", d("Lateral shift of the car block relative to the design.")),
+        ("FB", d("Front shift (towards the rear wall or towards the door).")),
+        ("WR / WL", d("Clearance between the car block and the right / left wall.")),
+        ("FR / FL", d("Distance from the front wall to the right / left rail axis.")),
+        ("OR / OL", d("Space to the right / left in the landing door opening.")),
+        ("BS / BSR", d("Shaft width per drawing / width actually measured on site.")),
+        (d("Plumb line"), d("Vertical reference line used to align the rails over the "
+                            "full height.")),
+        (d("Cut"), d("Material to be removed when the opening exceeds the allowable limit.")),
     ]
     _cards, _fila_t = [], []
-    for i, (t, d) in enumerate(_terms):
-        _fila_t.append(Paragraph(f"<b>{t}</b><br/><font size=8 color='#555555'>{d}</font>",
+    # ⚠️ La variable del bucle NO puede llamarse `d`: taparía a la función `d()` del
+    # motor de idiomas en TODA la función (Python la marca local en el ámbito entero),
+    # y las etiquetas de arriba reventarían con UnboundLocalError. Lo cazó generar el
+    # PDF de verdad — ni compilar ni importar lo ven.
+    for i, (_term, _def) in enumerate(_terms):
+        _fila_t.append(Paragraph(f"<b>{_term}</b><br/><font size=8 color='#555555'>{_def}</font>",
                                  styles["UTerm"]))
         if len(_fila_t) == 2:
             _cards.append(_fila_t); _fila_t = []
@@ -572,33 +604,36 @@ def generate_user_report(project_params, calculated, optimizer_result,
     story += [_gt, _sp(12)]
 
     # ── 12. Conclusiones y firma (cierra como abrió) ────────
-    story += [PageBreak(), _section("12. Conclusiones", styles), _sp(5)]
+    story += [PageBreak(), _section(d("12. Conclusions"), styles), _sp(5)]
     story += [_veredicto(_tit, _det, _col, styles), _sp(8)]
     if best:
         _concl = [
-            f"El posicionamiento propuesto es RL {best.get('rl', 0):+.1f} mm y "
-            f"FB {best.get('fb_applied', best.get('fb', 0)):+.1f} mm.",
-            "Los diagramas de planta muestran, piso a piso, cómo queda el encaje de la cabina.",
+            d("The proposed positioning is RL {rl} mm and FB {fb} mm.",
+              rl=f"{best.get('rl', 0):+.1f}",
+              fb=f"{best.get('fb_applied', best.get('fb', 0)):+.1f}"),
+            d("The floor plans show, level by level, how the car fits in the shaft."),
         ]
         if _off:
-            _concl.append(f"Quedan {_off} valor(es) fuera de límite: revisar las celdas marcadas en "
-                          "la matriz antes de fijar los brackets.")
+            _concl.append(d("{n} value(s) remain out of limit: review the cells marked in the "
+                            "matrix before fixing the brackets.", n=_off))
         else:
-            _concl.append("No quedan valores fuera de límite con la solución adoptada.")
-        _concl.append("Verificar en obra las distancias de plomada indicadas antes del montaje definitivo.")
+            _concl.append(d("No values remain out of limit with the solution adopted."))
+        _concl.append(d("Verify the plumb line distances shown on site before final installation."))
         for _c in _concl:
             story += [Paragraph(f"· {_c}", styles["UBody"])]
     story += [_sp(16)]
 
     _firma = Table([
-        [Paragraph("<font size=8 color='#666666'>PREPARADO POR</font><br/><br/><br/>"
+        [Paragraph(f"<font size=8 color='#666666'>{d('PREPARED BY')}</font><br/><br/><br/>"
                    "_______________________________<br/>"
                    f"<b>{meta['ingeniero']}</b><br/>"
-                   "<font size=8 color='#666666'>Ingeniero responsable · COPEX</font>", styles["UInfo"]),
-         Paragraph("<font size=8 color='#666666'>RECIBIDO POR</font><br/><br/><br/>"
+                   f"<font size=8 color='#666666'>{d('Engineer in charge')} · COPEX</font>",
+                   styles["UInfo"]),
+         Paragraph(f"<font size=8 color='#666666'>{d('RECEIVED BY')}</font><br/><br/><br/>"
                    "_______________________________<br/>"
                    f"<b>{meta['cliente']}</b><br/>"
-                   "<font size=8 color='#666666'>Nombre, cargo y fecha</font>", styles["UInfo"])],
+                   f"<font size=8 color='#666666'>{d('Name, position and date')}</font>",
+                   styles["UInfo"])],
     ], colWidths=[W / 2, W / 2])
     _firma.setStyle(TableStyle([
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
@@ -606,10 +641,13 @@ def generate_user_report(project_params, calculated, optimizer_result,
     ]))
     story += [_firma, _sp(14)]
     story += [HRFlowable(width="100%", thickness=0.5, color=colors.lightgrey), _sp(4),
-              Paragraph(f"COPEX · Elevator Survey Analyzer · {n_inf} · Generado el {fecha}",
-                        styles["USmall"])]
+              Paragraph(d("COPEX · Elevator Survey Analyzer · {n} · Generated on {f}",
+                          n=n_inf, f=fecha), styles["USmall"])]
 
-    doc.build(story, onFirstPage=lambda c, d: _portada(c, d, meta),
+    # ⚠️ El argumento NO se llama `d` (era `lambda c, d:`): aquí sería inofensivo —la
+    # lambda tiene su propio ámbito— pero está a una edición de repetir el fallo del
+    # glosario, y el guardián prohíbe el nombre en todo el módulo por eso mismo.
+    doc.build(story, onFirstPage=lambda c, _doc: _portada(c, _doc, meta),
               canvasmaker=_NumeradoCanvas)
     buf.seek(0)
     return buf.getvalue()

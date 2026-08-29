@@ -6,6 +6,8 @@ texto interpretativo estructurado por sección, listo para incluir en el PDF.
 import json
 import streamlit as st
 
+from core.i18n import d
+
 try:
     import anthropic
 except Exception:                 # que un fallo de la librería NO tumbe toda la app
@@ -206,34 +208,70 @@ def _fallback(reason: str) -> dict:
 # ══════════════════════════════════════════════════════════════
 # INTERPRETACIÓN PARA EL INFORME DEL USUARIO (cliente)
 # ══════════════════════════════════════════════════════════════
-USER_SYSTEM_PROMPT = """Eres un ingeniero senior de COPEX, especialista en instalación de elevadores.
-Redactas un informe PROFESIONAL dirigido al CLIENTE / técnico de instalación en obra.
+# ⚠️ El informe del CLIENTE sale SIEMPRE en inglés, como el resto de documentos que
+# salen de la empresa (regla de `i18n.d`): su idioma no puede depender de cómo tenga
+# la pantalla quien lo genera. Si algún día se quiere en español, se añade un
+# parámetro de idioma AQUÍ y se elige el prompt — nunca se ata al idioma de la UI.
+USER_SYSTEM_PROMPT = """You are a senior COPEX engineer specialising in elevator installation.
+You are writing a PROFESSIONAL report addressed to the CLIENT / the installation technician on site.
 
-Tu objetivo: explicar la solución final de posicionamiento del elevador de forma clara, directa
-y accionable, SIN dejar ninguna duda de cómo implementarla en campo.
+Your goal: explain the final elevator positioning solution clearly, directly and in an
+actionable way, leaving no doubt about how to implement it in the field.
 
-REGLAS:
-- Escribe en español profesional, claro y seguro (no académico, no ambiguo).
-- NO reveles fórmulas internas, algoritmos, nombres de variables técnicas internas ni cómo se calculó.
-- Habla en términos de ACCIÓN: qué desplazamiento hacer, en qué dirección, cuántos milímetros y por qué.
-- Si hay cortes necesarios, indícalos con precisión (dónde, cuánto en mm, en qué piso).
-- Usa un tono que transmita que la solución es la definitiva y correcta.
-- Devuelve ÚNICAMENTE un objeto JSON válido con las claves indicadas, sin texto fuera del JSON.
+RULES:
+- Write in professional, clear, confident English (not academic, not ambiguous).
+- Do NOT reveal internal formulas, algorithms, internal variable names or how it was calculated.
+- Speak in terms of ACTION: what shift to make, in which direction, how many millimetres and why.
+- If cuts are required, state them precisely (where, how many mm, on which floor).
+- Use a tone that conveys that this is the final, correct solution.
+- Return ONLY a valid JSON object with the keys given, with no text outside the JSON.
 
-Conocimiento (para interpretar, NO para exponer fórmulas):
-- RL = desplazamiento lateral del bloque cabina (+ izquierda, − derecha).
-- FB = desplazamiento frontal (+ hacia atrás).
-- OR/OL = espacio en la apertura de la puerta de rellano; si exceden el máximo se requiere corte físico.
-- WR/WL = holguras laterales; FR/FL = distancia de la pared frontal al riel.
+Background knowledge (to interpret, NOT to expose formulas):
+- RL = lateral shift of the car block (+ left, - right).
+- FB = front shift (+ towards the rear).
+- OR/OL = space in the landing door opening; exceeding the maximum requires a physical cut.
+- WR/WL = side clearances; FR/FL = distance from the front wall to the rail.
 """
 
+# ⚠️ Las CLAVES son DATO, no etiqueta: se guardan en `Proyectos.InterpJSON` y las lee
+# `user_report` (`ia.get("resumen")`). Traducirlas dejaría las cinco secciones de texto
+# EN BLANCO en todos los informes, sin ningún error. Solo se traduce la descripción.
 USER_SCHEMA = {
-    "resumen":        "Resumen ejecutivo (3-5 frases) de la solución final de posicionamiento, en lenguaje claro para el cliente. Debe dar confianza de que es la solución definitiva.",
-    "desplazamientos":"Instrucción precisa de los desplazamientos a realizar: RL (lateral) y FB (frontal), con valores en mm, dirección clara (izquierda/derecha, adelante/atrás) y el motivo de cada uno. Que el técnico sepa exactamente qué mover.",
-    "cortes":         "Si hay cortes necesarios (piso, cuántos mm, en qué lado de la apertura), descríbelos con precisión y por qué. Si NO se requiere ningún corte, dilo claramente y con seguridad.",
-    "implementacion": "Pasos concretos y ordenados para implementar la solución en obra (lista breve, accionable).",
-    "verificacion":   "Qué debe verificar el técnico tras la instalación para confirmar que quedó correcto (checklist breve).",
+    "resumen":        "Executive summary (3-5 sentences) of the final positioning solution, in plain language for the client. It must give confidence that this is the definitive solution.",
+    "desplazamientos":"Precise instruction of the shifts to carry out: RL (lateral) and FB (front), with values in mm, a clear direction (left/right, forward/rear) and the reason for each. The technician must know exactly what to move.",
+    "cortes":         "If cuts are required (floor, how many mm, which side of the opening), describe them precisely and why. If NO cut is required, say so clearly and with confidence.",
+    "implementacion": "Concrete, ordered steps to implement the solution on site (short, actionable list).",
+    "verificacion":   "What the technician must check after installation to confirm it is correct (short checklist).",
 }
+
+
+def cortes_por_piso(lim: dict, best: dict) -> list:
+    """Los cortes que exige la solución: `[{piso, cortar_OR_mm, cortar_OL_mm}]`.
+
+    ⚠️ Es la ÚNICA definición de «hay cortes», y existe por un motivo concreto: el
+    veredicto del informe del cliente lo deducía **leyendo el texto que escribe la
+    IA** (`"requiere cortes" in ia["cortes"]`). Eso ya era frágil —basta con que el
+    modelo redacte distinto— y se rompía del todo al pasar el informe al inglés: la
+    frase en español no casaría nunca y el veredicto diría «sin valores fuera de
+    límite» en un hueco que sí necesita cortes. Un dato se saca de los datos.
+
+    Criterio: OR/OL por ENCIMA de su límite (la convención de v16), por piso.
+    """
+    lim_or = float(lim.get("LIMIT_OR", 0) or 0)
+    lim_ol = float(lim.get("LIMIT_OL", 0) or 0)
+    out = []
+    for i, row in enumerate((best or {}).get("matrix", []) or []):
+        c_or = round(float(row.get("OR", 0) or 0) - lim_or, 1)
+        c_ol = round(float(row.get("OL", 0) or 0) - lim_ol, 1)
+        piso = {}
+        if c_or > 0:
+            piso["cortar_OR_mm"] = c_or
+        if c_ol > 0:
+            piso["cortar_OL_mm"] = c_ol
+        if piso:
+            piso["piso"] = i + 1
+            out.append(piso)
+    return out
 
 
 def _build_user_payload(calc_results: dict, all_params: dict) -> str:
@@ -243,19 +281,7 @@ def _build_user_payload(calc_results: dict, all_params: dict) -> str:
     opt  = r.get("optimizer_result", {})
     best = opt.get("best", {}) or {}
 
-    # Cortes por piso (OR/OL que exceden su límite)
-    lim_or = float(lim.get("LIMIT_OR", 0))
-    lim_ol = float(lim.get("LIMIT_OL", 0))
-    cortes = []
-    for i, row in enumerate(best.get("matrix", []) or []):
-        c_or = round(float(row.get("OR", 0)) - lim_or, 1)
-        c_ol = round(float(row.get("OL", 0)) - lim_ol, 1)
-        piso = {}
-        if c_or > 0: piso["cortar_OR_mm"] = c_or
-        if c_ol > 0: piso["cortar_OL_mm"] = c_ol
-        if piso:
-            piso["piso"] = i + 1
-            cortes.append(piso)
+    cortes = cortes_por_piso(lim, best)
 
     payload = {
         "proyecto": {
@@ -274,9 +300,9 @@ def _build_user_payload(calc_results: dict, all_params: dict) -> str:
         } if best else None,
         "cortes_necesarios": cortes if cortes else "Ninguno",
         "instrucciones": (
-            "Redacta el informe para el cliente. Retorna SOLO un JSON con estas claves: "
+            "Write the client report. Return ONLY a JSON with these keys: "
             + ", ".join(f'"{k}"' for k in USER_SCHEMA.keys())
-            + ". Cada valor es una cadena de texto en español profesional."
+            + ". Each value must be a string of professional ENGLISH text."
         ),
     }
     return json.dumps(payload, ensure_ascii=False, indent=2)
@@ -285,10 +311,10 @@ def _build_user_payload(calc_results: dict, all_params: dict) -> str:
 def generate_user_interpretation(calc_results: dict, all_params: dict) -> dict:
     """Interpretación orientada al cliente para el informe descargable."""
     if anthropic is None:
-        return _user_fallback("librería anthropic no disponible en el entorno.")
+        return _user_fallback(d("the anthropic library is not available in this environment."))
     api_key = st.secrets.get("ANTHROPIC_API_KEY", "")
     if not api_key:
-        return _user_fallback("API key no configurada.")
+        return _user_fallback(d("API key not configured."))
     try:
         client  = anthropic.Anthropic(api_key=api_key)
         payload = _build_user_payload(calc_results, all_params)
@@ -301,7 +327,7 @@ def generate_user_interpretation(calc_results: dict, all_params: dict) -> dict:
         raw   = response.content[0].text.strip()
         start = raw.find("{"); end = raw.rfind("}") + 1
         if start == -1 or end == 0:
-            return _user_fallback("La API no retornó JSON válido.")
+            return _user_fallback(d("The API did not return valid JSON."))
         data = json.loads(raw[start:end])
         for key in USER_SCHEMA:
             data.setdefault(key, None)
