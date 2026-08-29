@@ -313,6 +313,23 @@ Estas cinco mordieron en una sola tanda:
     guardianes. Misma familia que el CWD de v19: **el entorno de ejecución fabricando
     falsos rojos**, que es lo que empuja a «arreglar» código sano.
 
+24. ⚠️ **El `selectbox` de Streamlit ya NO es baseweb: es `react-aria`** (visto en
+    v430, en el Cloud). No hay `data-baseweb="select"` ni
+    `div[data-testid="stSelectboxVirtualDropdown"]` —el marcado que documentó
+    v420—: hoy es `div.react-aria-ComboBox` con un `<input role="combobox">` y un
+    `<button>` de chevron, y las opciones salen en un `[role="listbox"]`. Una sonda
+    escrita contra el marcado viejo devuelve **cero opciones con el desplegable
+    delante**. Es v304 y v375 otra vez: **el DOM de Streamlit cambia entre
+    versiones**, así que al tocar una sonda vieja hay que volver a mirar el DOM.
+25. ⚠️ **Un clic que «no hace nada» puede ser que la pestaña esté OCULTA.** En v430
+    ni el desplegable ni un checkbox respondían, y estuve a punto de reportar que el
+    formulario no funcionaba. Lo que pasaba lo dijo una sola línea:
+    `document.visibilityState === "hidden"` — con el panel del navegador no visible,
+    los eventos sintéticos no llegan. → **Antes de culpar a la app, validar la
+    entrada con un control conocido-bueno** (si el checkbox tampoco cambia, el
+    problema es tuyo) **y mirar `visibilityState`**. Es la nº12 aplicada a la
+    escritura en vez de a la lectura.
+
 **Y la regla de siempre, que volvió a aplicar:** antes de borrar el LECTOR de un mecanismo, buscar
 sus ESCRITORES y convertirlos. En v299 `_nav_pending` tenía dos vivos («Abrir proyecto» tras el
 survey y «Reabrir cálculo»); borrar solo el lector los habría dejado como botones que no hacen
