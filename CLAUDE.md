@@ -6641,7 +6641,81 @@ tras afinarlo**, y las tres por el mismo motivo (un localizador flojo):
 usado sin importar en `render_group_hours` (en este módulo los imports son locales,
 patrón v342) — NameError que solo aparecería al abrir la pantalla. Suite: **68/68**.
 
-## Versiones desplegadas (v425 = actual)
+## ⚠️ UNA FACTURA ANULADA CONTABA COMO INGRESO EN EL P&L (v426)
+Encontrado ejercitando el **ciclo de negocio completo** contra la hoja real (cliente →
+cotización → obra → horas → compra → factura → cobro → nómina → P&L). No lo encontró
+leer el código: lo encontró que **una cifra no cuadraba**.
+
+```python
+facs = [f for f in INV.list_facturas(grupo)          # excluye anuladas   ← FALSO
+        if _en_rango(f.get("Fecha"), desde, hasta)]
+```
+El comentario y el docstring afirmaban un filtro que **no existe**: `list_facturas` no
+mira el estado (a diferencia de `list_nominas`, que sí tiene `incluir_anuladas=False`).
+
+### ⚠️ La asimetría es lo que lo hacía peligroso
+Los **costos** anulados sí se excluían (nóminas) y los **ingresos** anulados no, así que
+el error solo iba en la dirección de **parecer más rentable**. Medido en la hoja real:
+una anulada de $1.100 con $400 cobrados inflaba `facturado`, `cobrado`, `por_cobrar` y
+la `ganancia` del grupo. Y anular es justamente **cómo se corrige una factura mal
+emitida**: el mecanismo de corrección no corregía el P&L.
+
+### ⚠️ NO se arregla cambiando el default de `list_facturas`
+La lista de Facturas y el detalle del cliente **necesitan mostrarlas**; ocultarlas de
+raíz sería el fallo de v340 (lo que se puede ocultar tiene que poder verse). Se filtra
+**en `pnl`**, que es donde faltaba. `resumen_cliente`, `facturado_por_proyecto` y los
+totales de la lista ya filtraban a mano — la app era **inconsistente consigo misma**.
+`estado_cobro` sí devuelve `"anulada"`, así que el «vencido» nunca estuvo afectado.
+
+### Verificación
+`verif_v426.py` es de **COMPORTAMIENTO**: parchea `list_facturas` con un conjunto
+conocido (dos vivas de $1.000 + una anulada de $500 con $200 cobrados) y comprueba qué
+cuenta cada función — así no reproduce la lógica que audita (el error de v412).
+⚠️ Y su chequeo de «las anuladas siguen visibles» **pasaba en vacío**: llamaba a
+`list_facturas`, que el propio guardián tiene parcheada, así que romper la función real
+no cambiaba nada. Ahora mira el CÓDIGO de la función por AST. Los dos sentidos se cazan.
+Suite: **69/69**.
+
+## FLUJOS COMPLETOS EJERCITADOS (v426)
+Dos recorridos de punta a punta contra la hoja real, con limpieza verificada.
+
+### Localizaciones — 8 pasos, 27 comprobaciones
+alta → **quién la ve** (las dos vías + quien no tiene ninguna) → fichaje → pre-start →
+gasto → asignación puntual por Planificación → seguimiento → cierre y reapertura.
+Resultado: `apatel` jornada 307 h · obra 276,33 h · **interno 6,0 h**, con costo de obra
+y costo interno separados; el almacén con $640 de compras + $240 de mano de obra.
+- ⚠️ **Cinco «fallos» que eran de la PRUEBA, no del código**: fiché y cerré en 4
+  segundos, así que la fila quedó con **0,0 h** y todo lo que cuelga de las horas salió
+  a cero. Se arregla cerrando con `out_ts` (el arreglo de v164). Y `open_sessions`
+  devuelve las dos claves con `None`, no un dict vacío — lo dice su docstring.
+
+### Ciclo de negocio — 7 pasos, 26 comprobaciones
+`precio = costo + ganancia` por línea (v355) → cotización → aceptar **crea la obra** con
+su `ClienteID` y **presupuesto = COSTO cotizado** (no el precio) → cuadrilla → 10 h →
+compra → avance 17,2% y estado «En progreso» → **pendiente = $4.000, el precio pactado**
+(v370) → factura con GST → cobro parcial → cobrada → nómina → resultado por proyecto y
+rentabilidad, ambos con el ingreso pactado.
+- ⚠️ **La base de la nómina salió $384 y no $400, y es CORRECTO**: la jornada empezó a
+  las 14:24 y `out_ts` cayó a las 00:24 del día siguiente, así que de las 10 h solo
+  **9,6 caen en el periodo** — es el reparto por medianoche de v164 funcionando. Mi
+  expectativa era la equivocada.
+
+### ⚠️ Y el hallazgo que destapó todo: los IDs SE RECICLAN
+`_next_project_id` es `max + 1`, así que **borrar de verdad el último proyecto libera su
+ID**. Habían quedado sin limpiar **9 filas de pruebas del 26/08** (3 facturas, 2
+artículos, 1 trabajo, 1 cliente, 1 alarma, 1 cálculo), y dos de esas facturas apuntaban
+a `PRJ-0017`. Al recrear ese ID en el flujo, **la obra nueva heredó $1.000 de
+facturación ajena** y su pendiente bajó de $4.000 a $3.000. Fue lo que hizo tirar del
+hilo hasta el fallo de las anuladas.
+- Limpiadas las 9 filas tras comprobar que **ninguna tenía dependencias** (catálogo sin
+  cotizaciones que lo usen, trabajo sin roster, cliente sin proyectos/facturas).
+- La hoja **`Auditoria` NO se toca**: es el registro de lo que pasó, y borrarlo sería
+  borrar la evidencia.
+- ⚠️ **Queda como riesgo abierto**: en la app real borrar de verdad es solo del
+  propietario y con confirmación (v149), pero el reciclaje de IDs existe. Pendiente de
+  decidir con el usuario si se evita (no reciclar) o se avisa al crear.
+
+## Versiones desplegadas (v426 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -6649,6 +6723,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v426 | ⚠️ **Una factura ANULADA contaba como INGRESO en el P&L.** El comentario decía `# excluye anuladas` y el docstring también, pero `list_facturas` **no filtra por estado** (a diferencia de `list_nominas`). ⚠️ La asimetría es lo grave: los **costos** anulados sí se excluían, así que el error solo iba en la dirección de **parecer más rentable** — y anular es justamente cómo se corrige una factura mal emitida. Medido: una anulada de $1.100 con $400 cobrados inflaba facturado, cobrado, por-cobrar y ganancia. NO se arregla cambiando el default (la lista y el detalle del cliente **necesitan mostrarlas**: sería el fallo de v340), sino filtrando en `pnl`, que era el único de los cinco consumidores que no lo hacía. **Lo encontró ejercitar el ciclo de negocio completo, no leer código.** Guardián de COMPORTAMIENTO (parchea `list_facturas` con un conjunto conocido) — ⚠️ y su chequeo de «siguen visibles» **pasaba en vacío** porque llamaba a la función parcheada; ahora mira el código por AST. + **dos flujos completos ejercitados** (localizaciones y negocio, 53 comprobaciones) y **9 filas de pruebas del 26/08 sin limpiar**, que por el **reciclaje de IDs** (`max+1`) hicieron que una obra nueva heredara $1.000 de facturación ajena |
 | v425 | **El overhead deja de ser un hueco anónimo.** Las 172 h que nadie imputa a obra caían en «sin asignar» junto a los traslados, y el gasto de la oficina se sumaba a un KPI llamado **«Costo cargado a obras»** — mintiendo, igual que las horas antes de v422. Ahora: «En estructura» (h) y «+ $X interna» en Finanzas·Horas; **«Gasto de estructura»** aparte en Gastos, con la torta partiendo la mano de obra en «(obras)»/«(estructura)» para seguir sumando el grupo; y en la conciliación una fila **de desglose sangrada**, ⚠️ NO un sumando — añadirla descuadraría la cadena de v313. Todo **condicional**: sin localizaciones las tres pantallas quedan idénticas (comprobado por AST). La aritmética se extrajo a `_partir_gasto` **para que el guardián ejercite la función real y no una copia** (el error de v412): invariante `total_obra + total_int` = el costo del grupo de antes ($81.657,96 sin moverse), y ⚠️ las compras **huérfanas se quedan en obra** porque no se sabe de quién son. Guardián probado contra 9 casos rotos; **tres solo se cazaron tras afinarlo**, los tres por localizadores flojos (buscar la vista por docstring → rojo inexistente; buscar `"interno"` como subcadena del fuente → pasaba con la separación rota; mirar todos los dicts en vez del que se ENTREGA → el acumulador lo tapaba). ⚠️ Y el guardián de v322 cazó el fallo de v423 **por segunda vez**: `theme` sin importar (imports locales, v342) |
 | v424 | ⚠️ **Las 4 tarjetas KPI de Localizaciones salían INVISIBLES.** `_kpi_card` **devuelve** el HTML y no lo pinta; `with k[0]: _kpi_card(...)` es código válido que no lanza y descarta el string. **Ningún guardián podía verlo** —no hay error que atrapar—: lo cazó mirar la pantalla en producción, como el `:material/` literal de v375. Regla v135 por quinta vez en la tanda. Guardián nuevo y GENERAL: ninguna llamada a `_kpi_card` en todo el repo puede ser una sentencia suelta que tire su valor |
 | v423 | **Localizaciones internas: su SECCIÓN.** v422 las ocultó de todo; sin esto quedarían inalcanzables (media regla v340). Sub-pestaña **🏢 Localizaciones** en Proyectos: KPIs (horas «no se cargan a obra», gasto de estructura «no se factura»), tarjeta-botón por sitio, alta que pide mucho menos que una obra (sin NS, fechas, presupuesto, cliente ni margen) y ficha con Equipo · Gastos · Pre-Start · Archivos · Datos (incluye **Cerrada**). El **campo** ve su sitio en «Mis proyectos» con avisos, recibos y archivos, pero **sin «Avance»** ni barra de progreso — no tiene actividades. ⚠️ Cuatro suposiciones mías rotas por ejecutar en vez de leer (v135): `labor_breakdown` usa `items` y no `personas`; `prestart.list_for` **no existe**; **`near_miss` es un BOOL** y compararlo con `"YES"` habría pintado en **verde un pre-start con incidente**; y `E`/`theme` se importan DENTRO de cada función en `projects_ui` (v342) → mi bloque daba **NameError al abrir la pantalla**, cazado por el guardián de v322 porque mi propio chequeo de nombres libres se autoengañaba mirando imports de cualquier nivel. Guardián probado contra 8 casos rotos; dos solo se cazaron **tras afinarlo** (uno pasaba porque `es_interno` aparecía por otro motivo; otro **fallaba con el código correcto** por su propia aritmética) |

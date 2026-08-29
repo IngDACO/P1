@@ -278,8 +278,20 @@ def pnl(grupo: str, desde=None, hasta=None) -> dict:
     from core import invoices as INV
     from core import payroll as PR
 
-    facs = [f for f in INV.list_facturas(grupo)          # excluye anuladas
-            if _en_rango(f.get("Fecha"), desde, hasta)]
+    # ⚠️ v426 — LAS ANULADAS SE EXCLUYEN AQUÍ, A MANO.
+    # Este comentario decía «excluye anuladas» y era FALSO: `list_facturas` NO filtra
+    # por estado (a diferencia de `list_nominas`, que sí tiene `incluir_anuladas`).
+    # O sea que el P&L contaba como ingreso las facturas ANULADAS — y anular es
+    # justamente cómo se corrige una factura mal emitida. Medido en la hoja real: una
+    # anulada de $1.100 con $400 cobrados inflaba `facturado`, `cobrado` y la
+    # `ganancia` del grupo. Asimetría fea: los COSTOS anulados sí se excluían (las
+    # nóminas), así que el error solo iba en la dirección de parecer más rentable.
+    # ⚠️ No se arregla cambiando el DEFAULT de `list_facturas`: la lista de Facturas y
+    # el detalle del cliente NECESITAN mostrarlas, y ocultarlas de raíz sería el fallo
+    # de v340 (lo que se puede ocultar tiene que poder verse).
+    facs = [f for f in INV.list_facturas(grupo)
+            if str(f.get("Estado", "")).lower() != "anulada"
+            and _en_rango(f.get("Fecha"), desde, hasta)]
     facturado = round(sum(_num(f.get("Total")) for f in facs), 2)
     cobrado   = round(sum(_num(f.get("Cobrado")) for f in facs), 2)
     vencido   = round(sum(_num(f.get("Total")) - _num(f.get("Cobrado"))
