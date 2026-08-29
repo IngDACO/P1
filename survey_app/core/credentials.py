@@ -201,6 +201,10 @@ def expiring(grupo, days=DIAS_AVISO) -> list:
 
 # ── Escrituras ───────────────────────────────────────────────────
 def _next_id(recs) -> str:
+    """CR-#### sin reciclar (v428): `delete` borra la fila de verdad, así que su ID
+    quedaría libre. Hoy nada referencia una credencial desde otra hoja, pero el
+    documento en Drive se nombra con `{usuario}_{tipo}_{archivo}` y el histórico de
+    avisos vive en la propia fila: reutilizar el número mezclaría dos expedientes."""
     mx = 0
     for r in recs:
         i = str(r.get("ID", ""))
@@ -209,7 +213,12 @@ def _next_id(recs) -> str:
                 mx = max(mx, int(i.split("-")[1]))
             except Exception:
                 pass
-    return f"CR-{mx + 1:04d}"
+    try:
+        from core import hojas
+        return hojas.siguiente_id_libre("CR-", mx, propia=SHEET)
+    except Exception as e:
+        logger.warning("credentials: no se pudo comprobar IDs referenciados: %s", e)
+        return f"CR-{mx + 1:04d}"
 
 
 def add(usuario, grupo, tipo, numero="", clase="", emision="", vencimiento="",

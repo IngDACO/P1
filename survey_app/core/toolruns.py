@@ -116,15 +116,36 @@ def list_for(pid: str) -> list:
 
 
 def _next_id() -> str:
-    """Lee FRESCO a propósito: es ruta de escritura (regla de v108)."""
+    """Lee FRESCO a propósito: es ruta de escritura (regla de v108).
+
+    ⚠️ v428 — antes contaba FILAS, no el máximo. Nada borra cálculos desde la app, así
+    que hoy no colisionaba; pero borrar una fila del medio (a mano, o si algún día se
+    añade un «eliminar cálculo») habría emitido un ID **ya existente** — el fallo que
+    en `roster` sí estaba vivo. El mismo patrón frágil, arreglado igual: máximo real,
+    y saltando los que otra hoja referencie (v427). Un cálculo se enlaza a su PDF por
+    `DriveID` y a su proyecto, así que reutilizar el número mezclaría dos registros.
+    """
     w = _ws()
     if w is None:
         return "CAL-0001"
+    mx = 0
     try:
-        n = len(w.get_all_values()) - 1      # menos la cabecera
-    except Exception:
-        n = 0
-    return f"CAL-{max(0, n) + 1:04d}"
+        for fila in w.get_all_values()[1:]:
+            cid = str(fila[0] if fila else "")
+            if cid.startswith("CAL-"):
+                try:
+                    mx = max(mx, int(cid.split("-")[1]))
+                except Exception:
+                    pass
+    except Exception as e:
+        logger.warning("toolruns._next_id: %s", e)
+        return "CAL-0001"
+    try:
+        from core import hojas
+        return hojas.siguiente_id_libre("CAL-", mx, propia=SHEET)
+    except Exception as e:
+        logger.warning("toolruns: no se pudo comprobar IDs referenciados: %s", e)
+        return f"CAL-{mx + 1:04d}"
 
 
 def registrar(pid: str, grupo: str, herramienta: str, resumen: str,

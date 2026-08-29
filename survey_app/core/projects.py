@@ -364,7 +364,15 @@ def create_grouping(grupo: str, nombre: str, descripcion: str = "") -> tuple:
                 pass
         if str(r.get("Grupo", "")) == str(grupo) and str(r.get("Nombre", "")) == nombre:
             return False, "Ya existe una agrupación con ese nombre en el grupo."
-    gid = f"AGR-{mx + 1:04d}"
+    # ⚠️ v428: sin reciclar. `delete_grouping` borra la fila de verdad, así que su ID
+    # queda libre — y los proyectos guardan `AgrupacionID`. Reutilizarlo metería en la
+    # agrupación nueva los elevadores que colgaban de la borrada.
+    try:
+        from core import hojas
+        gid = hojas.siguiente_id_libre("AGR-", mx, propia=GROUPINGS_SHEET)
+    except Exception as e:
+        logger.warning("projects: no se pudo comprobar IDs de agrupación: %s", e)
+        gid = f"AGR-{mx + 1:04d}"
     gws.append_row([gid, grupo, nombre, descripcion], value_input_option="RAW")
     _invalidate()
     return True, gid

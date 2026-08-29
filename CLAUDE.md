@@ -6762,7 +6762,54 @@ misma. Estaba cubierta dos veces (por `ids_referenciados` y por los tres generad
 pero es la función pública y depender de que el llamador se acuerde es como se cuelan
 los fallos silenciosos. Suite: **70/70**.
 
-## Versiones desplegadas (v427 = actual)
+## ⚠️ UN GENERADOR DE IDs CONTABA FILAS — y ya colisionaba (v428)
+v427 arregló proyecto/cliente/gasto. Al barrer el resto apareció algo **peor que el
+reciclaje**: `roster._next_id` derivaba el ID del **NÚMERO DE FILAS**
+(`len(get_all_values()) - 1`), no del máximo. Y `delete_trabajo` borra la fila de
+verdad cuando el trabajo no está asignado en ningún roster.
+
+### Estaba roto EN PRODUCCIÓN, medido
+```
+Trabajos: 4 filas · IDs ['TRB-0002','TRB-0003','TRB-0004','TRB-0005']
+contando filas emitiría: TRB-0005   ·   ¿ya existe? True
+```
+El siguiente trabajo que alguien creara habría **machacado a uno existente**. Y como
+`trabajos_idx` indexa por ID, uno de los dos desaparece del índice y **las celdas del
+tablero asignadas a él resuelven al trabajo equivocado** —nombre y color de otro— sin
+ningún error visible. Ahora emite `TRB-0006`.
+
+⚠️ Diferencia con el reciclaje de v427: allí el ID quedaba libre tras borrar el ÚLTIMO;
+aquí basta con borrar **uno del medio** para que el conteo baje y choque con uno vivo.
+
+### Alcance
+El guardián encontró el mismo patrón en **`toolruns._next_id`** (`CAL-`). Ahí no
+colisionaba hoy por casualidad (3 filas con IDs 0001-0003), pero borrar una del medio
+daba el mismo choque. Arreglados los dos, y extendido el salto de v427 a
+**agrupaciones** (`delete_grouping` borra, y los proyectos guardan `AgrupacionID`:
+reutilizar el ID metería en la agrupación nueva los elevadores de la borrada) y a
+**credenciales**. Con esto son **siete** generadores protegidos.
+
+### Verificación
+`verif_v428.py`: por AST, **ningún** `_next_*id*` del repo puede usar `len(hoja)`; los
+siete usan `siguiente_id_libre` con respaldo; y el caso concreto se reproduce con la
+hoja REAL que estaba rota (4 filas, IDs 0002-0005 → `TRB-0006`), más huecos en medio,
+hoja vacía y hoja ilegible. Probado contra 4 versiones rotas: las caza las 4.
+Ejecutado contra producción: `TRB-0006`, `ROS-0036`, `CR-0007`, `CAL-0004`.
+Suite: **71/71**.
+
+## Cierre de pendientes (v428)
+- ⚠️ **v426 demostrado EN VIVO**, que era lo que faltaba: se emitió una factura real de
+  $5.500, se cobraron $1.500 y se anuló. El P&L volvió **exactamente** a
+  `101.157,21 / 31.415,20 / 8.526,60`, mientras la lógica vieja habría dejado
+  **+$5.500 de ingresos y +$1.500 de cobros fantasma**. Y la anulada **sigue viéndose**
+  en la lista con su estado (regla v340).
+- ⚠️ **Una alarma que iba a dar y no era**: la columna «Estado» de Facturas parecía no
+  existir en el DOM. Es la virtualización de `st.dataframe` (trampa nº18) — y medido al
+  ancho de diseño (**1440**), las 8 columnas caben con **0 px ocultos**. El scroll que
+  vi era del panel a 528 px. **Iba a arreglar algo que no está roto**: el error de v335,
+  evitado por medir donde toca.
+
+## Versiones desplegadas (v428 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -6770,6 +6817,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v428 | ⚠️ **Un generador de IDs contaba FILAS, y ya COLISIONABA en producción.** `roster._next_id` hacía `len(hoja)-1+1`, y `delete_trabajo` borra la fila cuando el trabajo no está asignado: medido, 4 filas con IDs `TRB-0002..0005` → el siguiente alta emitía **TRB-0005, que ya existía**. Como `trabajos_idx` indexa por ID, uno de los dos desaparece y **las celdas del tablero resuelven al trabajo equivocado** (nombre y color de otro) sin ningún error. Peor que el reciclaje de v427: ahí hacía falta borrar el ÚLTIMO, aquí basta con **uno del medio**. Mismo patrón encontrado por el guardián en `toolruns` (`CAL-`), que no chocaba hoy por casualidad. Arreglados los dos + salto extendido a **agrupaciones** (borrarlas y recrearlas metería los elevadores de la vieja en la nueva) y **credenciales** → **siete** generadores protegidos. + ⚠️ **v426 demostrado EN VIVO**: factura real de $5.500 con $1.500 cobrados, anulada → el P&L vuelve exactamente a su sitio, mientras la lógica vieja habría dejado **+$5.500 de ingresos fantasma**. + ⚠️ Una alarma descartada por medir: la columna «Estado» de Facturas «no existía» en el DOM — era la virtualización de `st.dataframe`, y a **1440 px caben las 8 columnas con 0 ocultas**; iba a arreglar algo que no está roto (el error de v335) |
 | v427 | ⚠️ **Los IDs ya no se reciclan.** Los 13 generadores hacen `max(los vivos)+1`, así que borrar la fila con el ID más alto **libera el número** y el siguiente alta lo reutiliza, heredando los huérfanos del anterior (medido en v426: $1.000 de facturación ajena). Nuevas `hojas.ids_referenciados` / `siguiente_id_libre`: al emitir, se salta el ID que aparezca **en cualquier otra hoja** — por texto (hay referencias dentro de JSON), incluyendo **`Auditoria`** (donde queda constancia de lo borrado) y excluyendo la hoja propia. Lee FRESCO porque decide qué ID se emite (v323); medido **0,44 s en caliente**. Degrada al comportamiento de siempre si falla. Aplicado a las tres entidades que se borran Y se referencian: proyecto, cliente y gasto. Verificado contra la hoja real: emitiría `PRJ-0018` en vez de reciclar el 0017. Guardián probado contra 7 casos rotos; ⚠️ **dos solo se cazaron tras corregirlo**: uno buscaba el NOMBRE `propia_l` (que sobrevive al borrar la comparación) y su versión funcional dio un **FALLO inexistente** por el CWD de los secrets (v19) — un guardián no puede depender del directorio desde el que se lance |
 | v426 | ⚠️ **Una factura ANULADA contaba como INGRESO en el P&L.** El comentario decía `# excluye anuladas` y el docstring también, pero `list_facturas` **no filtra por estado** (a diferencia de `list_nominas`). ⚠️ La asimetría es lo grave: los **costos** anulados sí se excluían, así que el error solo iba en la dirección de **parecer más rentable** — y anular es justamente cómo se corrige una factura mal emitida. Medido: una anulada de $1.100 con $400 cobrados inflaba facturado, cobrado, por-cobrar y ganancia. NO se arregla cambiando el default (la lista y el detalle del cliente **necesitan mostrarlas**: sería el fallo de v340), sino filtrando en `pnl`, que era el único de los cinco consumidores que no lo hacía. **Lo encontró ejercitar el ciclo de negocio completo, no leer código.** Guardián de COMPORTAMIENTO (parchea `list_facturas` con un conjunto conocido) — ⚠️ y su chequeo de «siguen visibles» **pasaba en vacío** porque llamaba a la función parcheada; ahora mira el código por AST. + **dos flujos completos ejercitados** (localizaciones y negocio, 53 comprobaciones) y **9 filas de pruebas del 26/08 sin limpiar**, que por el **reciclaje de IDs** (`max+1`) hicieron que una obra nueva heredara $1.000 de facturación ajena |
 | v425 | **El overhead deja de ser un hueco anónimo.** Las 172 h que nadie imputa a obra caían en «sin asignar» junto a los traslados, y el gasto de la oficina se sumaba a un KPI llamado **«Costo cargado a obras»** — mintiendo, igual que las horas antes de v422. Ahora: «En estructura» (h) y «+ $X interna» en Finanzas·Horas; **«Gasto de estructura»** aparte en Gastos, con la torta partiendo la mano de obra en «(obras)»/«(estructura)» para seguir sumando el grupo; y en la conciliación una fila **de desglose sangrada**, ⚠️ NO un sumando — añadirla descuadraría la cadena de v313. Todo **condicional**: sin localizaciones las tres pantallas quedan idénticas (comprobado por AST). La aritmética se extrajo a `_partir_gasto` **para que el guardián ejercite la función real y no una copia** (el error de v412): invariante `total_obra + total_int` = el costo del grupo de antes ($81.657,96 sin moverse), y ⚠️ las compras **huérfanas se quedan en obra** porque no se sabe de quién son. Guardián probado contra 9 casos rotos; **tres solo se cazaron tras afinarlo**, los tres por localizadores flojos (buscar la vista por docstring → rojo inexistente; buscar `"interno"` como subcadena del fuente → pasaba con la separación rota; mirar todos los dicts en vez del que se ENTREGA → el acumulador lo tapaba). ⚠️ Y el guardián de v322 cazó el fallo de v423 **por segunda vez**: `theme` sin importar (imports locales, v342) |

@@ -209,14 +209,45 @@ def _invalidate():
 
 
 def _next_id(ws, prefijo) -> str:
-    """FRESCO a propósito (ruta de escritura, regla v108)."""
+    """FRESCO a propósito (ruta de escritura, regla v108).
+
+    ⚠️ v428 — ANTES CONTABA FILAS, y eso producía **colisiones**, no un simple
+    reciclaje: `delete_trabajo` borra la fila de verdad cuando el trabajo no está
+    asignado en ningún roster, así que al borrar uno del medio el conteo baja y el
+    siguiente alta emite un ID **que ya existe**.
+
+    Estaba pasando de verdad. Medido en la hoja real: 4 filas con IDs
+    `TRB-0002..TRB-0005`, así que `len-1+1` daba **TRB-0005**, ya usado. Y como
+    `trabajos_idx` indexa por ID, uno de los dos habría desaparecido del índice y las
+    celdas del tablero que lo tienen asignado resolverían al trabajo equivocado —
+    nombre y color de otro— sin ningún error.
+
+    Ahora: **máximo real + 1**, y además saltando los que otra hoja siga referenciando
+    (v427). Un trabajo se referencia en `Roster.DatosJSON`, así que reutilizar su ID
+    reasignaría solo las celdas del histórico.
+    """
     if ws is None:
         return f"{prefijo}-0001"
+    mx = 0
     try:
-        n = len(ws.get_all_values()) - 1
-    except Exception:
-        n = 0
-    return f"{prefijo}-{max(0, n) + 1:04d}"
+        for fila in ws.get_all_values()[1:]:
+            tid = str(fila[0] if fila else "")
+            if tid.startswith(f"{prefijo}-"):
+                try:
+                    mx = max(mx, int(tid.split("-")[1]))
+                except Exception:
+                    pass
+    except Exception as e:
+        logger.warning("roster._next_id(%s): %s", prefijo, e)
+        return f"{prefijo}-0001"
+    try:
+        from core import hojas
+        return hojas.siguiente_id_libre(f"{prefijo}-", mx,
+                                        propia=(TRAB_SHEET if prefijo == "TRB"
+                                                else ROSTER_SHEET))
+    except Exception as e:
+        logger.warning("roster: no se pudo comprobar IDs referenciados: %s", e)
+        return f"{prefijo}-{mx + 1:04d}"
 
 
 # ── Catálogo de trabajos ─────────────────────────────────────────
