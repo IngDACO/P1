@@ -336,6 +336,20 @@ Estas cinco mordieron en una sola tanda:
     problema es tuyo) **y mirar `visibilityState`**. Es la nº12 aplicada a la
     escritura en vez de a la lectura.
 
+26. ⚠️ **Un `\b` escrito dentro de un heredoc de bash se convierte en el
+    carácter 0x08.** El regex queda pidiendo un backspace literal y **no casa
+    nunca**, sin dar ningún error: en v436 dejó pasar un texto del Pre-Start en
+    español y en v438 una etiqueta de plomada, las dos con un OK en verde. Se ve
+    con `cat -A` (`^H`), no leyendo el fichero. → **Todo `\b`, `\n` o `\w` se
+    escribe a un fichero con la herramienta de escritura, nunca por heredoc.** Es
+    la familia de v429 (los `\n` escapados que rompieron un guardián dos veces).
+27. ⚠️ **Un barrido del FUENTE no mide lo que se ve.** El volcado de literales por
+    AST de v438 se dejó **cinco** etiquetas en español: filtraba cadenas de más de
+    95 caracteres y exigía `>texto</text>` en una sola línea, así que no vio los
+    títulos largos ni los que llevan entidades HTML (`&#183;`). Aparecieron al
+    **generar el SVG y leer su texto**. → Para afirmar «no queda nada en X»,
+    medirlo sobre la SALIDA, no sobre el código que la produce.
+
 **Y la regla de siempre, que volvió a aplicar:** antes de borrar el LECTOR de un mecanismo, buscar
 sus ESCRITORES y convertirlos. En v299 `_nav_pending` tenía dos vivos («Abrir proyecto» tras el
 survey y «Reabrir cálculo»); borrar solo el lector los habría dejado como botones que no hacen
@@ -7241,7 +7255,70 @@ se GUARDAN en la hoja `Actividades` → migración del histórico). El informe d
 no está entero en inglés hasta que caigan esas tres, y conviene saberlo antes de
 enseñárselo a un cliente.
 
-## Versiones desplegadas (v437 = actual)
+## i18n F1c: los DIAGRAMAS y las PLOMADAS. **F1 CERRADO** (v438)
+
+Petición del usuario tras v437: *«adelanta los diagramas y las plomadas, cierra F1»* —
+o sea, sacar de F4/F5 lo único que impedía que un documento saliera entero en inglés.
+**80 etiquetas** en seis módulos (`plumb`, `diagrams`, `schedule`, `rail_cut`,
+`buffer_cut`, `belting`), que son las que se pintan dentro del informe del cliente y de
+los cuatro PDF de las herramientas de cálculo.
+
+**Resultado medido en el PDF del cliente: de 37 líneas en español a 0**, salvo los 11
+nombres de actividad, que son DATO.
+
+### ⚠️ El motor se importa con ALIAS `_d`, no como `d`
+En estos seis módulos `d` ya es una variable corriente —días, dicts, deltas— en **14
+sitios**, y Python marca el nombre local en el **ámbito ENTERO** de la función: un
+`d = 0` al final del cuerpo revienta las etiquetas de arriba con `UnboundLocalError`.
+Es exactamente el fallo del glosario de v437, y renombrar 14 variables es más riesgo
+que aliasear el import. El guardián prohíbe importarlo como `d` pelado.
+
+### Lo que NO se traduce, y por qué
+| | |
+|---|---|
+| **Claves** de `schedule_table` / `plumb_table` / `plumb_checks` (11) | las indexan `report.py` y `user_report.py` (`r["Actividad"]`, `r["Línea"]`, `r["Medida"]`) → KeyError o columna vacía |
+| **Nombres de las actividades** (`schedule.PHASES`) | son DATO: se guardan en la hoja `Actividades`. Traducirlos dejaría los proyectos viejos en español y los nuevos en inglés, sin forma de casarlos → van con la migración del histórico |
+| Claves internas (`origen`, `peso`, `izq`, `der`, `cabina`, `contra`) | banderas, no texto |
+⚠️ **Los VALORES sí**: `LINE_NAMES` viaja como valor de la clave `"Línea"`, y ahí sí se
+traduce. Verificado antes de tocarlo que **nadie compara** contra esos nombres.
+
+### ⚠️ El barrido ESTÁTICO se dejó cinco restos; los cazó RENDERIZAR
+El volcado de literales por AST filtraba cadenas de más de 95 caracteres y su regex
+exigía `>texto</text>` **en una sola línea**. Con eso se escaparon cinco etiquetas que
+solo aparecieron al generar los SVG y leer su texto:
+`FICHA DE REPLANTEO` · el título y el subtítulo de **belting** · el subtítulo y la
+leyenda del **Caso 2** de rieles (llevan entidades HTML, `&#183;`). → Un barrido del
+FUENTE mide lo que está escrito; solo el barrido de lo RENDERIZADO mide lo que se ve.
+
+### Verificación
+`verif_v438.py`, **59 comprobaciones**: claves intactas, actividades en español, alias
+`_d` sin tapar, 0 etiquetas en el fuente, y los **11 SVG generados** (planta,
+isométrica, 4 de plomada, cronograma, rieles caso 1 y 2, buffers, belting) sin español,
+con su texto inglés ESPERADO presente y ⚠️ **sin `<defs>`/`<marker>`**, que svglib no
+convierte y haría desaparecer el diagrama del PDF sin ningún error (regla v39).
+Probado contra **12 roturas**: las caza las 12 — pero **cuatro solo tras corregirlo**:
+- «traducir UN nombre de actividad» pasaba: mi chequeo era un `or` sobre varios, así que
+  otro casaba. Y sustituirlo por «cuántos parecen españoles» dio **FALLO con el código
+  correcto** (5 de los 11 no llevan ni acento ni palabra funcional: «Brackets /
+  soportes»). Se exigen **tres nombres concretos, verbatim**.
+- «una etiqueta de plomada vuelve al español» no la veía **nadie**: `LINE_NAMES` no vive
+  dentro de un `<text>` y `plumb_svg` usa `LINE_SHORT`. Se comprueban los VALORES que
+  las tablas entregan.
+- «la leyenda del cronograma vuelve al español» se escapaba porque *Planificado* no
+  lleva acento ni palabra funcional → se añadieron chequeos **POSITIVOS** (el inglés
+  esperado tiene que estar), y fue justo eso lo que destapó el `FICHA DE REPLANTEO`.
+- la rotura del `<marker>` estaba **mal apuntada**: caía en el stub 10×10 px del retorno
+  temprano, un camino que el test no dibuja. Una rotura en código que nadie ejercita no
+  prueba nada.
+
+### ⚠️ La trampa del `\b` en el heredoc, POR SEGUNDA VEZ en la misma tanda
+El chequeo de los valores de plomada se insertó desde un heredoc de bash, y `\b` se
+convirtió en el **carácter 0x08** (backspace). El regex quedó pidiendo un backspace
+literal, así que **no casaba nunca** — y dejó pasar «Plomo riel izquierdo» dando OK.
+Es el mismo fallo de v436, cometido otra vez ese mismo día. Se vio con `cat -A`, no
+leyendo. → **Cualquier `\b`, `\n` o `\w` va por fichero escrito, nunca por heredoc.**
+
+## Versiones desplegadas (v438 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -7249,6 +7326,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v438 | **i18n F1c: los DIAGRAMAS y las PLOMADAS — F1 CERRADO** (pedido por el usuario: «adelanta los diagramas y las plomadas»). 80 etiquetas en 6 módulos; el informe del cliente pasa de **37 líneas en español a 0**, salvo los 11 nombres de actividad, que son DATO de la hoja `Actividades`. ⚠️ El motor se importa con **alias `_d`**: en estos módulos `d` ya es variable en 14 sitios y taparía la función en el ámbito entero (el fallo de v437). ⚠️ NO se tocan las 11 CLAVES de `schedule_table`/`plumb_table`/`plumb_checks` (las indexan los informes) — pero sus VALORES sí, tras comprobar que nadie compara contra ellos. ⚠️ **El barrido estático se dejó CINCO restos** (filtraba cadenas largas y exigía el `<text>` en una línea): los cazó **renderizar los SVG y leer su texto**. Guardián de 59 comprobaciones sobre los **11 SVG generados** (incluido que sigan sin `<defs>`/`<marker>`, o svglib los tira del PDF), probado contra **12 roturas** — cuatro solo se cazaron tras corregirlo: un `or` que dejaba traducir un nombre, un umbral que daba **FALLO con el código correcto**, «Planificado» invisible para el detector de español (→ chequeos POSITIVOS, que de paso destaparon un `FICHA DE REPLANTEO`), y una rotura apuntada a un stub que nadie dibuja. ⚠️ Y **la trampa del `\b` del heredoc por SEGUNDA vez** (v436): 0x08 en el regex → no casa nunca y aprueba en verde |
 | v437 | **i18n F1b: el informe del CLIENTE en inglés**, con el prompt de la IA incluido — traducir solo los encabezados habría dejado **5 de las 12 secciones en español**, porque las escribe el modelo. ⚠️ **Y detrás había un fallo**: el veredicto se deducía del TEXTO de la IA (`"requiere cortes" in ia["cortes"]`), frágil ya en español e **imposible en inglés** — habría dicho «sin valores fuera de límite» en un hueco que sí hay que cortar. Nueva `interpretation.cortes_por_piso`, única definición, compartida con el payload de la IA. ⚠️ **NO se traducen las claves** de `USER_SCHEMA` (se guardan en `InterpJSON`: traducirlas dejaría las 5 secciones EN BLANCO) ni las de las tablas de cronograma y plomado. ⚠️ **Dos fallos míos que solo se vieron GENERANDO el PDF**: la variable del bucle del glosario se llamaba `d` y **tapaba la función del motor** en toda la función (UnboundLocalError; compilar e importar no lo ven), y `cortes_por_piso(limits…)` con el parámetro llamado `calculated` → NameError **que mi propio `except` se tragaba** dejando `_cortes=False` (v323/v338/v344 otra vez), visto solo al leer el log. Guardián probado contra **10 roturas**; dos solo se cazaron tras corregirlo — uno miraba el ÍNDICE en vez de la cabecera, y su sustituto daba **FALLO con el código correcto** porque `_section` PARTE el título |
 | v434 | ⚠️ **`list_users` se COMÍA las columnas nuevas de Login**: las fechas de alta se escribieron y se verificaron bien (`get_user` devuelve la fila entera), pero un barrido posterior las daba todas vacías — la proyección de `list_users` eran **8 campos escritos a mano**, así que `FechaIngreso` desaparecía al leerla, sin lanzar ni avisar. Ahora se deriva de `LOGIN_HEADERS` menos los secretos ⚠️ (la proyección NO se puede quitar: existe para que el hash y el token no salgan de ahí, v79). **Tercer sitio en dos versiones** con el mismo patrón — una lista de columnas a mano en paralelo a `*_HEADERS` (v363 la fila posicional, v433 `auth._COL`). + **datos de la demo rellenados**: fecha de alta de las 13 cuentas (las 10 con fichajes, derivadas de su PRIMER fichaje), tarifa a quien contaba $0, y email `@example.com` (RFC 2606: no entregable, no puede llegarle a nadie real). ⚠️ **Telegram NO**: un `chat_id` inventado mandaría los avisos al teléfono de un desconocido. Caducó `verif_v395` (exigía que siguiera habiendo 3 sin canal): reescrito sobre el comportamiento con un caso construido |
 | v433 | **El saldo de vacaciones pasa a ir por ANIVERSARIO de cada persona** (decisión del usuario; en AU no va por año natural) + se arregla el reparto al cambiar de año: unas vacaciones 28/12→08/01 descontaban **10 días a 2026 y 0 a 2027** cuando son **4 y 6** — el total salía bien y el reparto no. `dias_usados` cuenta ahora los DÍAS dentro del periodo, con la misma regla que el pago. Nueva columna `Login.FechaIngreso`; ⚠️ **sin ella no se inventa un aniversario**: cae al año natural y lo DICE en las dos pantallas (v325). ⚠️ El **29 de febrero** retrocede al 28 en vez de lanzar. ⚠️ **Y el fallo que solo se vio EJECUTANDO**: `auth._COL` era un literal en paralelo a `LOGIN_HEADERS`, así que la columna se migró en la hoja y la escritura moría con `Error: 'FechaIngreso'` — ni los imports ni ningún guardián lo ven. Ahora se DERIVA, y el barrido confirma que era el ÚNICO a mano de los 13 del repo. Guardián: 104 comprobaciones, **25 roturas probadas** — ⚠️ una solo se cazó tras corregirlo (miraba el código en vez del RESULTADO, y una versión que devolvía siempre 0 pasaba) |

@@ -21,6 +21,8 @@ SVG sin <marker>/<defs> → compatible con Streamlit (components.html) y
 ReportLab (svglib.svg2rlg).
 """
 
+from core.i18n import d as _d
+
 
 
 
@@ -205,12 +207,12 @@ def floor_plan_svg(params: dict, limits: dict, row: dict, floor_idx: int,
         gx0, gy0 = cx0 - _rl * esc, cy0 + _fb * esc
         p.append(f'<rect x="{gx0:.1f}" y="{gy0:.1f}" width="{cw:.1f}" height="{ch:.1f}" '
                  f'fill="none" stroke="#9aa7b8" stroke-width="1" stroke-dasharray="6,4"/>')
-        p.append(f'<text x="{gx0+4:.1f}" y="{gy0-3:.1f}" font-size="7" fill="#667080">POS. DISEÑO</text>')
+        p.append(f'<text x="{gx0+4:.1f}" y="{gy0-3:.1f}" font-size="7" fill="#667080">{_d("DESIGN POS.")}</text>')
 
     p.append(f'<rect x="{cx0:.1f}" y="{cy0:.1f}" width="{cw:.1f}" height="{ch:.1f}" '
              f'fill="#f7fafd" stroke="#1a3a5c" stroke-width="1.6"/>')
     p.append(f'<text x="{cx0+cw/2:.1f}" y="{cy0+ch/2-2:.1f}" text-anchor="middle" '
-             f'font-size="10" fill="#1a3a5c" letter-spacing="0.08em">CABINA</text>')
+             f'font-size="10" fill="#1a3a5c" letter-spacing="0.08em">{_d("CAR")}</text>')
     p.append(f'<text x="{cx0+cw/2:.1f}" y="{cy0+ch/2+11:.1f}" text-anchor="middle" '
              f'font-size="7.5" fill="#5b6472">BKS+2·RAIL = {cab_w:.0f} mm</text>')
 
@@ -239,7 +241,7 @@ def floor_plan_svg(params: dict, limits: dict, row: dict, floor_idx: int,
             p.append(f'<rect x="{_mx:.1f}" y="{y1-2.5:.1f}" width="{marco:.1f}" height="5" '
                      f'fill="#8a94a6"/>')
     p.append(f'<text x="{eje_ap:.1f}" y="{y1+mur+22:.1f}" text-anchor="middle" font-size="8" '
-             f'fill="#5f6b7a">APERTURA BT {bt:.0f}</text>')
+             f'fill="#5f6b7a">{_d("BT OPENING")} {bt:.0f}</text>')
 
     # ── Ejes: cabina vs apertura ─────────────────────
     p.append(f'<line x1="{eje_cab:.1f}" y1="{y0-mur-6:.1f}" x2="{eje_cab:.1f}" y2="{y1+mur+6:.1f}" '
@@ -281,9 +283,9 @@ def floor_plan_svg(params: dict, limits: dict, row: dict, floor_idx: int,
 
     # Rótulos de orientación
     p.append(f'<text x="{x0-mur:.1f}" y="{y0-mur-30:.1f}" font-size="8" fill="#5b6472" '
-             f'letter-spacing="0.1em">FONDO DEL HUECO</text>')
+             f'letter-spacing="0.1em">{_d("SHAFT REAR")}</text>')
     p.append(f'<text x="{x0-mur:.1f}" y="{y1+mur+50:.1f}" font-size="8" fill="#5b6472" '
-             f'letter-spacing="0.1em">PARED FRONTAL — ACCESO</text>')
+             f'letter-spacing="0.1em">{_d("FRONT WALL — ACCESS")}</text>')
 
     # ── DETALLE A: se amplía la holgura crítica (<25 mm) ───
     crit = min([(wl, "WL", lim_wl), (wr, "WR", lim_wr)], key=lambda z: z[0])
@@ -293,8 +295,8 @@ def floor_plan_svg(params: dict, limits: dict, row: dict, floor_idx: int,
         p.append(f'<rect x="{bx}" y="{by}" width="{bw}" height="{bh}" fill="#fbfcfe" '
                  f'stroke="#1f2937" stroke-width="0.8"/>')
         p.append(f'<text x="{bx+6}" y="{by+14}" font-size="8.5" fill="#1f2937" '
-                 f'font-weight="bold">DETALLE A — {crit[1]}</text>')
-        p.append(f'<text x="{bx+6}" y="{by+25}" font-size="7.5" fill="#5b6472">ampliado ×{z:.0f}</text>')
+                 f'font-weight="bold">{_d("DETAIL A")} — {crit[1]}</text>')
+        p.append(f'<text x="{bx+6}" y="{by+25}" font-size="7.5" fill="#5b6472">{_d("enlarged")} ×{z:.0f}</text>')
         gap = crit[0] * esc * z
         mx, my = bx + 30, by + 46
         p.append(_hatch(mx - 10, my, 10, 52, "left"))
@@ -315,11 +317,11 @@ def floor_plan_svg(params: dict, limits: dict, row: dict, floor_idx: int,
         p.append(f'<rect x="{dxb}" y="{dyb}" width="152" height="52" fill="#f7fafd" '
                  f'stroke="#1a3a5c" stroke-width="0.8"/>')
         p.append(f'<text x="{dxb+6}" y="{dyb+15}" font-size="8" fill="#1a3a5c" '
-                 f'font-weight="bold">DESPLAZAMIENTO</text>')
+                 f'font-weight="bold">{_d("SHIFT")}</text>')
         p.append(f'<text x="{dxb+6}" y="{dyb+30}" font-size="8" fill="#1f2937">'
-                 f'RL {_rl:+.1f} mm  (lateral)</text>')
+                 f'RL {_rl:+.1f} mm  ({_d("lateral")})</text>')
         p.append(f'<text x="{dxb+6}" y="{dyb+44}" font-size="8" fill="#1f2937">'
-                 f'FB {_fb:+.1f} mm  (frontal)</text>')
+                 f'FB {_fb:+.1f} mm  ({_d("front")})</text>')
 
     # ── Cajetín ────────────────────────────────────────────
     tx, ty, tw, th = 492, 336, 152, 86
@@ -330,18 +332,18 @@ def floor_plan_svg(params: dict, limits: dict, row: dict, floor_idx: int,
                  f'stroke="#1f2937" stroke-width="0.5"/>')
     _tot = f" / {n_floors}" if n_floors else ""
     p.append(f'<text x="{tx+6}" y="{ty+16}" font-size="9.5" fill="#1f2937" '
-             f'font-weight="bold">PISO {floor_idx+1}{_tot}</text>')
+             f'font-weight="bold">{_d("FLOOR")} {floor_idx+1}{_tot}</text>')
     p.append(f'<text x="{tx+6}" y="{ty+38}" font-size="7.5" fill="#5f6b7a">'
-             f'Proporción real · cotas en mm</text>')
+             f'{_d("Real proportion · dimensions in mm")}</text>')
     p.append(f'<text x="{tx+6}" y="{ty+59}" font-size="7.5" fill="#5f6b7a">'
              f'{(proyecto or "COPEX")[:24]}</text>')
     p.append(f'<text x="{tx+6}" y="{ty+79}" font-size="7" fill="#5b6472">'
-             f'Planta · vista superior</text>')
+             f'{_d("Plan · top view")}</text>')
 
     # Leyenda de color
     p.append(f'<rect x="{tx}" y="{ty+th+8}" width="9" height="9" fill="#fcebeb" '
              f'stroke="#c0392b" stroke-width="0.6"/>')
-    p.append(f'<text x="{tx+14}" y="{ty+th+16}" font-size="7" fill="#5b6472">valor fuera de límite</text>')
+    p.append(f'<text x="{tx+14}" y="{ty+th+16}" font-size="7" fill="#5b6472">{_d("value out of limit")}</text>')
 
     p.append("</svg>")
     return "".join(p)
@@ -371,7 +373,7 @@ def render_floor_plans_html(params: dict, limits: dict, solution: dict | None,
     `floors`: lista de índices a dibujar (None = todos). El índice real del piso se
     conserva, así las etiquetas siguen siendo correctas aunque se filtre."""
     if not solution or not solution.get("matrix"):
-        return "<p style='color:#888;font-family:system-ui'>No hay solución para graficar.</p>"
+        return f"<p style='color:#888;font-family:system-ui'>{_d('No solution to plot.')}</p>"
     mat = solution["matrix"]
     n   = len(mat)
     blocks = []
@@ -427,7 +429,7 @@ def floor_plans_pdf(params: dict, limits: dict, solution: dict | None, lim_map: 
             continue
         if puestos and puestos % 2 == 0:
             story.append(PageBreak())
-        story += [Paragraph(f"Piso {i + 1}", ss["Heading3"]), dib, Spacer(1, 10)]
+        story += [Paragraph(_d("Floor {n}", n=i + 1), ss["Heading3"]), dib, Spacer(1, 10)]
         puestos += 1
     if not puestos:
         return None
@@ -544,7 +546,7 @@ def shaft_iso_svg(params: dict, limits: dict, solution: dict, ns: int,
     p.append(_poly(top,  "#4d8fd0", "#12293f", 1.0, 0.95))
     tcx = sum(a for a, _ in top) / 4; tcy = sum(b for _, b in top) / 4
     p.append(f'<text x="{tcx:.1f}" y="{tcy+3:.1f}" text-anchor="middle" font-size="9" '
-             f'fill="#ffffff" letter-spacing="0.08em">CABINA</text>')
+             f'fill="#ffffff" letter-spacing="0.08em">{_d("CAR")}</text>')
 
     # Aristas vivas del hueco
     for a, b in [((0, 0, 0), (0, 0, H)), ((W, 0, 0), (W, 0, H)), ((0, D, 0), (0, D, H))]:
@@ -556,9 +558,9 @@ def shaft_iso_svg(params: dict, limits: dict, solution: dict, ns: int,
     fy = VH - 74
     p.append(f'<rect x="18" y="{fy}" width="{VW-36}" height="42" fill="#f7fafd" '
              f'stroke="#c3ccd8" stroke-width="0.8"/>')
-    for j, (et, va) in enumerate([("Ancho del hueco", f"{W:.0f} mm"),
-                                  ("Profundidad", f"{D:.0f} mm"),
-                                  ("Bloque cabina", f"{cab_w:.0f} mm")]):
+    for j, (et, va) in enumerate([(_d("Shaft width"), f"{W:.0f} mm"),
+                                  (_d("Depth"), f"{D:.0f} mm"),
+                                  (_d("Car block"), f"{cab_w:.0f} mm")]):
         cx_ = 18 + (VW - 36) * (j + 0.5) / 3
         p.append(f'<text x="{cx_:.0f}" y="{fy+17}" text-anchor="middle" font-size="7.5" '
                  f'fill="#5b6472">{et}</text>')
@@ -567,14 +569,14 @@ def shaft_iso_svg(params: dict, limits: dict, solution: dict, ns: int,
 
     # Cajetín
     p.append(f'<text x="18" y="26" font-size="11" fill="#1f2937" font-weight="bold">'
-             f'VISTA ISOMÉTRICA DEL HUECO</text>')
+             f'{_d("SHAFT ISOMETRIC VIEW")}</text>')
     p.append(f'<text x="18" y="40" font-size="8" fill="#5b6472">'
-             f'{(proyecto or "COPEX")[:40]} · {ns} paradas · planta a escala, '
-             f'altura comprimida (no a escala)</text>')
+             f'{(proyecto or "COPEX")[:40]} · {ns} {_d("stops")} · '
+             f'{_d("plan to scale, compressed height (not to scale)")}</text>')
     if malos:
         p.append(f'<rect x="18" y="{VH-24}" width="9" height="9" fill="#fbe9e7" '
                  f'stroke="#c0392b" stroke-width="0.7"/>')
         p.append(f'<text x="32" y="{VH-16}" font-size="8" fill="#5b6472">'
-                 f'nivel con valores fuera de límite</text>')
+                 f'{_d("level with values out of limit")}</text>')
     p.append("</svg>")
     return "".join(p)

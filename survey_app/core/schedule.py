@@ -9,6 +9,8 @@ Las duraciones y pesos son editables por el usuario; la curva S se recalcula.
 Pesos con distribución en "S" (bajo al inicio, alto en el medio, bajo al final)
 → el avance acumulado planificado dibuja la clásica curva S.
 """
+
+from core.i18n import d as _d
 from datetime import date, timedelta
 
 # (nombre, dur_base_dias, dias_por_parada, peso, condicion)
@@ -302,11 +304,11 @@ def schedule_svg(sched: dict, real_curve: list = None, today_day: float = None,
           '.cpx-traza{animation:none;stroke-dashoffset:0}}'
           '</style>') if animar else "",
          f'<text x="18" y="24" font-size="13" fill="#1a3a5c" font-weight="bold">'
-         f'CRONOGRAMA Y AVANCE</text>',
+         f'{_d("SCHEDULE AND PROGRESS")}</text>',
          f'<text x="18" y="39" font-size="8.5" fill="#5b6472">'
          f'{_esc(titulo) + " · " if titulo else ""}'
          f'{start.strftime("%d/%m/%Y")} → {sched["fecha_fin"].strftime("%d/%m/%Y")} · '
-         f'{total} días · {n} actividades</text>']
+         f'{total} {_d("days")} · {n} {_d("activities")}</text>']
 
     # ── Rejilla vertical: la comparten Gantt y curva ────────
     step = 5 if fin_eje > 15 else (2 if fin_eje > 6 else 1)
@@ -326,7 +328,7 @@ def schedule_svg(sched: dict, real_curve: list = None, today_day: float = None,
                  f'y2="{sc_top+sc_h:.1f}" stroke="{C_HOY}" stroke-width="1.1" '
                  f'stroke-dasharray="5,3"/>')
         p.append(f'<text x="{hx:.1f}" y="{gantt_top-11:.1f}" text-anchor="middle" '
-                 f'font-size="8.5" fill="{C_HOY}" font-weight="bold">HOY</text>')
+                 f'font-size="8.5" fill="{C_HOY}" font-weight="bold">{_d("TODAY")}</text>')
 
     # ── Gantt con jerarquia ─────────────────────────────────
     for i, a in enumerate(acts):
@@ -440,11 +442,11 @@ def schedule_svg(sched: dict, real_curve: list = None, today_day: float = None,
 
     # ── Leyenda ─────────────────────────────────────────────
     lgx, lgy = ML, sc_top + sc_h + 30
-    leyenda = [("Planificado", C_PLAN, False), ("Real", C_REAL, False)]
+    leyenda = [(_d("Planned"), C_PLAN, False), (_d("Actual"), C_REAL, False)]
     if real_curve and len(real_curve) > 1:
-        leyenda.append(("Brecha", C_HOY, True))
+        leyenda.append((_d("Gap"), C_HOY, True))
     if proj_x and real_curve and len(real_curve) > 1:      # igual que al dibujarla
-        leyenda.append(("Proyección al ritmo actual", C_PROJ, True))
+        leyenda.append((_d("Projection at current rate"), C_PROJ, True))
     for et, col, tenue in leyenda:
         p.append(f'<rect x="{lgx:.1f}" y="{lgy-7:.1f}" width="13" height="3.5" '
                  f'fill="{col}"' + (' fill-opacity="0.28"' if tenue else '') + '/>')

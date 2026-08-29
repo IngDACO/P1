@@ -11,6 +11,8 @@ Todo en mm. Si CutBuffer < 0, no hay nada que cortar (el buffer real ya queda po
 debajo del teórico → revisar en obra), se marca como aviso.
 """
 
+from core.i18n import d as _d
+
 
 def compute_buffer_cut(hkp: float, hkpr_list: list) -> dict:
     """hkp: valor del plano. hkpr_list: HKPR real de cada buffer.
@@ -92,10 +94,11 @@ def buffer_cut_svg(res: dict, proyecto: str = "") -> str:
          f'display:block;margin:0 auto">',
          f'<rect x="0" y="0" width="{VW}" height="{VH}" fill="#ffffff"/>',
          f'<text x="18" y="24" font-size="11" fill="{INK}" font-weight="bold">'
-         f'CORTE DE BUFFERS</text>',
+         f'{_d("BUFFER CUTTING")}</text>',
          f'<text x="18" y="37" font-size="8" fill="{MUT}">'
-         f'cortar el buffer baja su borde y agranda la holgura sticker↔buffer '
-         f'hasta HKP = {_mm(hkp)} mm · corte = HKP − HKPR</text>']
+         f'{_d("cutting the buffer lowers its edge and widens the sticker")}↔'
+         f'{_d("buffer clearance up to")} HKP = {_mm(hkp)} mm · '
+         f'{_d("cut")} = HKP − HKPR</text>']
     if proyecto:
         p.append(f'<text x="{VW-18}" y="24" text-anchor="end" font-size="9" '
                  f'fill="{INK}" font-weight="bold">{_esc(proyecto)}</text>')
@@ -104,13 +107,13 @@ def buffer_cut_svg(res: dict, proyecto: str = "") -> str:
     p.append(f'<rect x="{x0}" y="{y_stick-STICK_H}" width="{x1-x0}" height="{STICK_H}" '
              f'fill="{NAVY}"/>')
     p.append(f'<text x="{(x0+x1)/2:.0f}" y="{y_stick-2}" text-anchor="middle" '
-             f'font-size="8" fill="#ffffff" font-weight="bold">STICKER DE CABINA</text>')
+             f'font-size="8" fill="#ffffff" font-weight="bold">{_d("CAR STICKER")}</text>')
 
     # ── Línea HKP: borde superior de diseño (común a todos) ──
     p.append(f'<line x1="{x0}" y1="{y_hkp}" x2="{x1}" y2="{y_hkp}" '
              f'stroke="{NAVY}" stroke-width="1.3" stroke-dasharray="9,3,2,3"/>')
     p.append(f'<text x="{x1}" y="{y_hkp-4}" text-anchor="end" font-size="8.5" '
-             f'fill="{NAVY}" font-weight="bold">HKP diseño {_mm(hkp)}</text>')
+             f'fill="{NAVY}" font-weight="bold">HKP {_d("design")} {_mm(hkp)}</text>')
 
     # ── Cota de la holgura HKP en el margen izquierdo (no a escala: ≈) ──
     xd = 24
@@ -148,7 +151,7 @@ def buffer_cut_svg(res: dict, proyecto: str = "") -> str:
             p.append(f'<line x1="{xL-4:.1f}" y1="{yreal:.1f}" x2="{cx+bw/2+4:.1f}" '
                      f'y2="{yreal:.1f}" stroke="{AMBER}" stroke-width="2"/>')
             p.append(f'<text x="{cx:.1f}" y="{(y_hkp+yreal)/2+3:.1f}" text-anchor="middle" '
-                     f'font-size="8" fill="{AMBER}" font-weight="bold">revisar</text>')
+                     f'font-size="8" fill="{AMBER}" font-weight="bold">{_d("review")}</text>')
         else:
             # cuerpo final del buffer: borde superior en la línea HKP (tras cortar)
             p.append(f'<rect x="{xL:.1f}" y="{y_hkp}" width="{bw}" height="{BUF_H}" '
@@ -173,13 +176,13 @@ def buffer_cut_svg(res: dict, proyecto: str = "") -> str:
                              f'text-anchor="middle" font-size="8.5" fill="{RED}" '
                              f'font-weight="bold">{_mm(corte)}</text>')
                 p.append(f'<text x="{cx:.1f}" y="{yreal-4:.1f}" text-anchor="middle" '
-                         f'font-size="7.5" fill="{RED}">borde real</text>')
+                         f'font-size="7.5" fill="{RED}">{_d("real edge")}</text>')
             else:
                 # corte ≈ 0: el borde real ya coincide con el de diseño
                 p.append(f'<line x1="{xL-4:.1f}" y1="{y_hkp}" x2="{cx+bw/2+4:.1f}" '
                          f'y2="{y_hkp}" stroke="{GREEN}" stroke-width="2"/>')
                 p.append(f'<text x="{cx:.1f}" y="{y_hkp-4:.1f}" text-anchor="middle" '
-                         f'font-size="7.5" fill="{GREEN}">sin corte</text>')
+                         f'font-size="7.5" fill="{GREEN}">{_d("no cut")}</text>')
 
         # etiqueta bajo cada buffer
         _cc = RED if (corte > 0.05 and not warn) else (AMBER if warn else GREEN)
@@ -189,18 +192,18 @@ def buffer_cut_svg(res: dict, proyecto: str = "") -> str:
                  f'font-size="7.5" fill="{MUT}">HKPR {_mm(hkpr)}</text>')
         p.append(f'<text x="{cx:.1f}" y="{y_bot+40:.0f}" text-anchor="middle" '
                  f'font-size="7.5" fill="{_cc}" font-weight="bold">'
-                 f'corte {_mm(corte)}</text>')
+                 f'{_d("cut")} {_mm(corte)}</text>')
 
     # ── Leyenda ──
     p.append(f'<rect x="18" y="{VH-24}" width="9" height="9" fill="{REDBG}" '
              f'stroke="{RED}" stroke-width="0.7"/>')
-    p.append(f'<text x="31" y="{VH-16}" font-size="7.5" fill="{MUT}">material a cortar '
-             f'(rebaja el buffer hasta HKP)</text>')
+    p.append(f'<text x="31" y="{VH-16}" font-size="7.5" fill="{MUT}">{_d("material to cut")} '
+             f'({_d("lowers the buffer down to HKP")})</text>')
     p.append(f'<rect x="230" y="{VH-24}" width="9" height="9" fill="{AMBERBG}" '
              f'stroke="{AMBER}" stroke-width="0.7" stroke-dasharray="2,1.5"/>')
-    p.append(f'<text x="243" y="{VH-16}" font-size="7.5" fill="{MUT}">holgura ya mayor '
-             f'que HKP → revisar</text>')
+    p.append(f'<text x="243" y="{VH-16}" font-size="7.5" fill="{MUT}">{_d("clearance already greater")} '
+             f'{_d("than HKP → review")}</text>')
     p.append(f'<text x="{VW-18}" y="{VH-16}" text-anchor="end" font-size="7" fill="{MUT}">'
-             f'holgura ≈ no a escala · corte a escala ampliada</text>')
+             f'{_d("clearance ≈ not to scale · cut at enlarged scale")}</text>')
     p.append("</svg>")
     return "".join(p)

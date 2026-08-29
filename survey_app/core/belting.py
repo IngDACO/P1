@@ -12,6 +12,8 @@ Cálculo (todo en mm; HGP/HGPR/HQ/DSTS en mm):
   · DSTS > 0 = cuánto BAJA la cabina respecto al FFL del piso más alto.
 """
 
+from core.i18n import d as _d
+
 
 def compute_dsts(hgp, hq, hgpr) -> float:
     return float(hgpr) - float(hgp) - float(hq) / 1000.0
@@ -70,10 +72,10 @@ def belting_svg(results: list, proyecto: str = "") -> str:
          f'display:block;margin:0 auto">',
          f'<rect x="0" y="0" width="{VW}" height="{VH}" fill="#ffffff"/>',
          f'<text x="18" y="22" font-size="12" fill="#1a3a5c" font-weight="bold">'
-         f'BELTING — posición de la cabina respecto al FFL del piso más alto</text>',
+         f'{_d("BELTING — car position relative to the FFL of the top floor")}</text>',
          f'<text x="18" y="36" font-size="8.5" fill="{MUT}">'
-         f'DSTS = cuánto baja (+, por debajo) o sube (−, por encima) la cabina · '
-         f'posición a escala ampliada</text>']
+         f'{_d("DSTS = how far the car goes down (+, below) or up (-, above)")} · '
+         f'{_d("position at enlarged scale")}</text>']
     if proyecto:
         p.append(f'<text x="{VW-18}" y="22" text-anchor="end" font-size="9" '
                  f'fill="#1f2937" font-weight="bold">{_esc(proyecto)}</text>')
@@ -82,7 +84,7 @@ def belting_svg(results: list, proyecto: str = "") -> str:
     p.append(f'<line x1="{ML}" y1="{y_ffl}" x2="{VW-ML}" y2="{y_ffl}" '
              f'stroke="{RED}" stroke-width="2"/>')
     p.append(f'<text x="{ML+2}" y="{y_ffl-4}" font-size="8.5" fill="{RED}" '
-             f'font-weight="bold">FFL piso más alto</text>')
+             f'font-weight="bold">FFL {_d("top floor")}</text>')
 
     for i, r in enumerate(results):
         x0 = ML + i * colw
@@ -102,7 +104,7 @@ def belting_svg(results: list, proyecto: str = "") -> str:
                  f'height="{cab_h}" rx="3" fill="{CABF}" stroke="{CABS}" '
                  f'stroke-width="1.2"/>')
         p.append(f'<text x="{cx:.1f}" y="{roof+cab_h/2+3:.1f}" text-anchor="middle" '
-                 f'font-size="9" fill="{CABS}">Cabina</text>')
+                 f'font-size="9" fill="{CABS}">{_d("Car")}</text>')
 
         # cota DSTS: del FFL al techo de la cabina (línea; el valor va al pie
         # para no solaparse con la cabina cuando el DSTS es pequeño/negativo)
@@ -117,13 +119,13 @@ def belting_svg(results: list, proyecto: str = "") -> str:
 
         # etiquetas al pie (línea base fija, alineadas entre elevadores)
         if dsts > 0.05:
-            _dir, _dc = "por debajo del FFL", RED
+            _dir, _dc = _d("below FFL"), RED
         elif dsts < -0.05:
-            _dir, _dc = "por encima del FFL", CABS
+            _dir, _dc = _d("above FFL"), CABS
         else:
-            _dir, _dc = "en el FFL", MUT
+            _dir, _dc = _d("at FFL"), MUT
         p.append(f'<text x="{cx:.1f}" y="266" text-anchor="middle" font-size="9.5" '
-                 f'fill="{INK}" font-weight="bold">Elevador {r["elevador"]}</text>')
+                 f'fill="{INK}" font-weight="bold">{_d("Elevator")} {r["elevador"]}</text>')
         p.append(f'<text x="{cx:.1f}" y="279" text-anchor="middle" font-size="9" '
                  f'fill="{_dc}" font-weight="bold">DSTS {_mm(dsts)} mm</text>')
         p.append(f'<text x="{cx:.1f}" y="290" text-anchor="middle" font-size="7.5" '

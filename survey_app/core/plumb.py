@@ -25,24 +25,28 @@ Modelo de encaje:
 """
 import math
 
+from core.i18n import d as _d
+
 from core.diagrams import _hatch, _dim_h, _dim_v
 
 EPS = 1e-9
 
 # Nombres propios de cada línea (V1..V6 son solo claves internas)
 LINE_NAMES = {
-    "V1": "Plomo riel izquierdo",
-    "V2": "Plomo riel derecho",
-    "V3": "Pared teórica izquierda",
-    "V4": "Pared real izquierda",
-    "V5": "Pared teórica derecha",
-    "V6": "Pared real derecha",
+    # ⚠️ Son ETIQUETAS: nadie compara contra ellas (barrido de todo el repo),
+    # solo se pintan y viajan como VALOR de la clave "Línea", que sí es dato.
+    "V1": _d("Left rail plumb line"),
+    "V2": _d("Right rail plumb line"),
+    "V3": _d("Left theoretical wall"),
+    "V4": _d("Left real wall"),
+    "V5": _d("Right theoretical wall"),
+    "V6": _d("Right real wall"),
 }
 # Versión corta para el diagrama (poco espacio)
 LINE_SHORT = {
-    "V1": "Riel I",  "V2": "Riel D",
-    "V3": "Teór I",  "V5": "Teór D",
-    "V4": "Real I",  "V6": "Real D",
+    "V1": _d("Rail L"),  "V2": _d("Rail R"),
+    "V3": _d("Theor L"),  "V5": _d("Theor R"),
+    "V4": _d("Real L"),  "V6": _d("Real R"),
 }
 
 
@@ -246,7 +250,7 @@ def plumb_svg(res: dict, proyecto: str = "") -> str:
     p.append(f'<line x1="{px0:.1f}" y1="{py1:.1f}" x2="{px1:.1f}" y2="{py1:.1f}" '
              f'stroke="#1f2937" stroke-width="2.2"/>')
     p.append(f'<text x="{px0:.1f}" y="{py1+mur+30:.1f}" font-size="8" fill="#5b6472" '
-             f'letter-spacing="0.1em">PARED FRONTAL</text>')
+             f'letter-spacing="0.1em">{_d("FRONT WALL")}</text>')
 
     # ── Paredes teóricas (del plano) ───────────────────────
     for nm in ("V3", "V5"):
@@ -254,7 +258,7 @@ def plumb_svg(res: dict, proyecto: str = "") -> str:
         p.append(f'<line x1="{xt:.1f}" y1="{SY(dbpw)-14:.1f}" x2="{xt:.1f}" y2="{py1:.1f}" '
                  f'stroke="#9aa7b8" stroke-width="0.9" stroke-dasharray="9,3,2,3"/>')
         p.append(f'<text x="{xt:.1f}" y="{SY(dbpw)-19:.1f}" text-anchor="middle" font-size="7" '
-                 f'fill="#667080">pared teórica</text>')
+                 f'fill="#667080">{_d("theoretical wall")}</text>')
 
     # ── Plomos (V1/V2) — en planta son puntos; el hilo cae en vertical ──
     yC = SY(dbpw)
@@ -285,7 +289,7 @@ def plumb_svg(res: dict, proyecto: str = "") -> str:
              f'stroke="#1f2937" stroke-width="1.6"/>')
     p.append(f'<text x="{xP+11:.1f}" y="{yP+11:.1f}" font-size="9" fill="#1f2937" '
              f'font-weight="bold">P</text>')
-    p.append(f'<text x="{xP+11:.1f}" y="{yP+21:.1f}" font-size="7" fill="#5b6472">plantilla</text>')
+    p.append(f'<text x="{xP+11:.1f}" y="{yP+21:.1f}" font-size="7" fill="#5b6472">{_d("template")}</text>')
 
     # ── Cotas ──────────────────────────────────────────────
     p.append(_dim_h(SX(lines["V1"]["x"]), SX(lines["V2"]["x"]), yC - 30,
@@ -312,7 +316,7 @@ def plumb_svg(res: dict, proyecto: str = "") -> str:
     p.append(f'<rect x="{cx}" y="{cy}" width="152" height="66" fill="#f7fafd" '
              f'stroke="#1a3a5c" stroke-width="0.8"/>')
     p.append(f'<text x="{cx+6}" y="{cy+15}" font-size="8" fill="#1a3a5c" '
-             f'font-weight="bold">COMPROBAR EN OBRA</text>')
+             f'font-weight="bold">{_d("CHECK ON SITE")}</text>')
     p.append(f'<text x="{cx+6}" y="{cy+31}" font-size="8.5" fill="#1f2937">'
              f'di + DBP + dd</text>')
     p.append(f'<text x="{cx+6}" y="{cy+45}" font-size="8.5" fill="#1f2937">'
@@ -326,7 +330,7 @@ def plumb_svg(res: dict, proyecto: str = "") -> str:
         p.append(f'<rect x="{cx}" y="{yb}" width="152" height="60" fill="#fcebeb" '
                  f'stroke="#c0392b" stroke-width="0.9"/>')
         p.append(f'<text x="{cx+6}" y="{yb+15}" font-size="8" fill="#c0392b" '
-                 f'font-weight="bold">⚠ BS INCOHERENTE</text>')
+                 f'font-weight="bold">{_d("⚠ BS INCONSISTENT")}</text>')
         p.append(f'<text x="{cx+6}" y="{yb+30}" font-size="7.5" fill="#1f2937">'
                  f'plano {_n(bsc.get("bs_plano"))} vs</text>')
         p.append(f'<text x="{cx+6}" y="{yb+42}" font-size="7.5" fill="#1f2937">'
@@ -344,7 +348,7 @@ def plumb_svg(res: dict, proyecto: str = "") -> str:
                  f'fill="{"#fcebeb" if fuera else "#f7fafd"}" '
                  f'stroke="{"#c0392b" if fuera else "#9aa7b8"}" stroke-width="0.8"/>')
         p.append(f'<text x="{cx+6}" y="{yb+15}" font-size="8" fill="#1a3a5c" '
-                 f'font-weight="bold">AJUSTE BSR &lt; BS</text>')
+                 f'font-weight="bold">{_d("BSR &lt; BS ADJUSTMENT")}</text>')
         p.append(f'<text x="{cx+6}" y="{yb+30}" font-size="7.5" fill="#1f2937">'
                  f'sobra {_n(disp.get("dif_bs"))} mm</text>')
         p.append(f'<text x="{cx+6}" y="{yb+44}" font-size="7.5" fill="#1f2937">'
@@ -353,7 +357,7 @@ def plumb_svg(res: dict, proyecto: str = "") -> str:
                  f'lado Omega: {_n(disp.get("omega_sacrificio"))}</text>')
         if fuera:
             p.append(f'<text x="{cx+6}" y="{yb+71}" font-size="7.5" fill="#c0392b" '
-                     f'font-weight="bold">NO CABE — revisar</text>')
+                     f'font-weight="bold">{_d("DOES NOT FIT — review")}</text>')
         yb += alto + 10
 
     tx, ty = 492, 348
@@ -363,13 +367,13 @@ def plumb_svg(res: dict, proyecto: str = "") -> str:
         p.append(f'<line x1="{tx}" y1="{ty+dy}" x2="{tx+152}" y2="{ty+dy}" '
                  f'stroke="#1f2937" stroke-width="0.5"/>')
     p.append(f'<text x="{tx+6}" y="{ty+16}" font-size="9.5" fill="#1f2937" '
-             f'font-weight="bold">REPLANTEO DE PLOMADAS</text>')
+             f'font-weight="bold">{_d("PLUMB LINE SET-OUT")}</text>')
     p.append(f'<text x="{tx+6}" y="{ty+38}" font-size="7.5" fill="#5f6b7a">'
-             f'Proporción real · cotas en mm</text>')
+             f'{_d("Real proportion · dimensions in mm")}</text>')
     p.append(f'<text x="{tx+6}" y="{ty+60}" font-size="7.5" fill="#5f6b7a">'
              f'{(proyecto or "COPEX")[:24]}</text>')
     p.append(f'<text x="{tx+6}" y="{ty+71}" font-size="7" fill="#5b6472">'
-             f'Origen X: pared real izquierda</text>')
+             f'{_d("X origin: left real wall")}</text>')
 
     p.append("</svg>")
     return "".join(p)
@@ -470,9 +474,9 @@ def plumb_iso_svg(res: dict, altura: float = 0.0, proyecto: str = "") -> str:
                  f'stroke="#8a94a6" stroke-width="0.9"/>')
 
     p.append(f'<text x="18" y="26" font-size="11" fill="#1f2937" font-weight="bold">'
-             f'PLOMADAS — VISTA ISOMÉTRICA</text>')
+             f'{_d("PLUMB LINES — ISOMETRIC VIEW")}</text>')
     p.append(f'<text x="18" y="40" font-size="8" fill="#5b6472">'
-             f'{(proyecto or "COPEX")[:38]} · planta a escala, altura esquemática</text>')
+             f'{(proyecto or "COPEX")[:38]} · {_d("plan to scale, schematic height")}</text>')
 
     fy = VH - 62
     p.append(f'<rect x="18" y="{fy}" width="{VW-36}" height="42" fill="#f7fafd" '
@@ -583,9 +587,10 @@ def plumb_detail_svg(res: dict, proyecto: str = "") -> str:
              f'font-size="9" fill="#1a3a5c">DBP {_n(dbp)}</text>')
 
     p.append(f'<text x="18" y="26" font-size="11" fill="#1f2937" font-weight="bold">'
-             f'DETALLE DE REPLANTEO</text>')
+             f'{_d("SET-OUT DETAIL")}</text>')
     p.append(f'<text x="18" y="40" font-size="8" fill="#5b6472">'
-             f'plantilla, plomos y cuerdas a medir · {(proyecto or "COPEX")[:30]}</text>')
+             f'{_d("template, plumb lines and chords to measure")} · '
+             f'{(proyecto or "COPEX")[:30]}</text>')
     p.append("</svg>")
     return "".join(p)
 
@@ -599,11 +604,11 @@ def plumb_card_svg(res: dict, proyecto: str = "") -> str:
     vf = res.get("verif") or {}
     cierre = res.get("cierre") or {}
     items = [
-        ("DBP", res["dbp"],  "entre los dos plomos"),
-        ("d1",  res["d1"],   "plantilla P → plomo C1"),
-        ("d2",  res["d2"],   "plantilla P → plomo C2"),
-        ("di",  vf.get("plomo_izq_pared_izq", 0.0), "pared real izq → C1"),
-        ("dd",  vf.get("plomo_der_pared_der", 0.0), "C2 → pared real der"),
+        ("DBP", res["dbp"],  _d("between the two plumb lines")),
+        ("d1",  res["d1"],   _d("template P → plumb line C1")),
+        ("d2",  res["d2"],   _d("template P → plumb line C2")),
+        ("di",  vf.get("plomo_izq_pared_izq", 0.0), _d("left real wall → C1")),
+        ("dd",  vf.get("plomo_der_pared_der", 0.0), _d("C2 → right real wall")),
     ]
     VW, fila = 470, 52
     VH = 96 + fila * len(items) + 58
@@ -613,9 +618,9 @@ def plumb_card_svg(res: dict, proyecto: str = "") -> str:
          f'<rect x="0" y="0" width="{VW}" height="{VH}" fill="#ffffff"/>',
          f'<rect x="0" y="0" width="{VW}" height="58" fill="#1a3a5c"/>',
          f'<text x="20" y="26" font-size="15" fill="#ffffff" font-weight="bold">'
-         f'FICHA DE REPLANTEO</text>',
+         f'{_d("SET-OUT CARD")}</text>',
          f'<text x="20" y="45" font-size="9.5" fill="#b0c8e8">'
-         f'{(proyecto or "COPEX")[:44]} · medidas en mm</text>']
+         f'{(proyecto or "COPEX")[:44]} · {_d("dimensions in mm")}</text>']
 
     y = 76
     for i, (cod, val, desc) in enumerate(items):
@@ -630,7 +635,7 @@ def plumb_card_svg(res: dict, proyecto: str = "") -> str:
 
     p.append(f'<rect x="0" y="{y-14:.0f}" width="{VW}" height="46" fill="#eaf3de"/>')
     p.append(f'<text x="20" y="{y+4:.0f}" font-size="9.5" fill="#3b6d11" '
-             f'font-weight="bold">COMPROBACIÓN</text>')
+             f'font-weight="bold">{_d("CHECK")}</text>')
     p.append(f'<text x="20" y="{y+20:.0f}" font-size="10" fill="#1f2937">'
              f'di + DBP + dd = {_n(cierre.get("suma", 0))} = BSR</text>')
     p.append("</svg>")
@@ -646,7 +651,7 @@ def plumb_table(res: dict) -> list:
             "Línea":          LINE_NAMES.get(name, name),
             "X inicial (mm)": round(d["x0"], 2),
             "X final (mm)":   round(d["x"], 2),
-            "Desplazada":     "Sí" if moved else "—",
+            "Desplazada":     _d("Yes") if moved else "—",
         })
     return rows
 
@@ -655,8 +660,8 @@ def plumb_checks(res: dict) -> list:
     """Distancias de verificación en campo: de cada plomo a su pared real (mm)."""
     v = res.get("verif") or {}
     return [
-        {"Medida": "Pared real izquierda → plomo riel izquierdo",
+        {"Medida": _d("Left real wall → left rail plumb line"),
          "Distancia (mm)": round(v.get("plomo_izq_pared_izq", 0.0), 1)},
-        {"Medida": "Plomo riel derecho → pared real derecha",
+        {"Medida": _d("Right rail plumb line → right real wall"),
          "Distancia (mm)": round(v.get("plomo_der_pared_der", 0.0), 1)},
     ]
