@@ -23,7 +23,13 @@ logger = logging.getLogger(__name__)
 LOGIN_SHEET   = "Login"
 # Columnas nuevas al final para no romper filas existentes (migración segura).
 LOGIN_HEADERS = ["Usuario", "Password", "Rol", "Nombre", "Activo", "Grupo",
-                 "SessionToken", "SessionTime", "Email", "TelegramChatID", "TarifaHora"]
+                 "SessionToken", "SessionTime", "Email", "TelegramChatID", "TarifaHora",
+                 # v433: fecha de alta en la empresa. La usa el saldo de vacaciones,
+                 # que en AU va por ANIVERSARIO de cada persona y no por año natural
+                 # (decisión del usuario). Va AL FINAL → migra sola; una fila que no
+                 # la traiga cae al año natural y la app lo DICE, en vez de dar un
+                 # saldo que parece bueno y no lo es.
+                 "FechaIngreso"]
 GROUPS_SHEET   = "Grupos"
 GROUPS_HEADERS = ["Grupo", "Descripcion", "Activo", "Zona", "MargenDefault", "ImpuestoDefault",
                   "SuperDefault", "RetencionDefault",
@@ -33,9 +39,13 @@ GROUPS_HEADERS = ["Grupo", "Descripcion", "Activo", "Zona", "MargenDefault", "Im
 ROLES         = ["propietario", "administrador", "campo"]
 _ACTIVE_OK    = ("", "SI", "SÍ", "YES", "Y", "TRUE", "1", "X")
 # Columnas (1-based) en la hoja Login
-_COL = {"Usuario": 1, "Password": 2, "Rol": 3, "Nombre": 4, "Activo": 5, "Grupo": 6,
-        "SessionToken": 7, "SessionTime": 8, "Email": 9, "TelegramChatID": 10,
-        "TarifaHora": 11}
+# ⚠️ DERIVADO de LOGIN_HEADERS, nunca escrito a mano. Estaba a mano —un literal en
+# paralelo a la lista de cabeceras— y al añadir `FechaIngreso` en v433 la columna se
+# migró en la hoja pero `_COL` no la conocía: `set_fecha_ingreso` moría con
+# «Error: 'FechaIngreso'». Solo se vio EJECUTÁNDOLA contra la hoja real; ni el
+# guardián ni los imports lo detectan. Es la familia de `MargenPct` (v344) y de la
+# fila posicional de v363: dos sitios que describen lo mismo y se desincronizan.
+_COL = {h: i + 1 for i, h in enumerate(LOGIN_HEADERS)}
 
 # Sesión ÚNICA por cuenta ("primero gana"): un segundo login se bloquea mientras la
 # sesión activa siga viva. El heartbeat marca vida; si se abandona > SESSION_TIMEOUT s,
@@ -541,6 +551,46 @@ def list_users(grupo: str = None) -> list:
             "TarifaHora":     str(r.get("TarifaHora", "")),
         })
     return out
+
+
+def fecha_ingreso(usuario: str):
+    """Fecha de alta en la empresa como `date`, o None si no está puesta.
+
+    ⚠️ Devuelve None —no una fecha inventada— cuando falta o no se entiende: quien
+    llama tiene que poder DECIR que está estimando, en vez de enseñar un saldo que
+    parece exacto (el patrón de v325 con «sin tarifa» vs «de baja»).
+    """
+    from core.num import parse_date as _pd
+    try:
+        return _pd((get_user(usuario) or {}).get("FechaIngreso"))
+    except Exception:
+        return None
+
+
+def set_fecha_ingreso(usuario: str, fecha) -> tuple:
+    """Fija la fecha de alta (ISO). Decide el año de vacaciones de esa persona."""
+    lws, err = _get_login_ws()
+    if err:
+        return False, err
+    row, rec = _find_row(lws, usuario)
+    if row is None:
+        return False, "Usuario no encontrado."
+    _antes = dict(rec or {})
+    _val = "" if not fecha else str(fecha)[:10]
+    try:
+        lws.update_cell(row, _COL["FechaIngreso"], _val)
+    except Exception as e:
+        return False, f"Error: {e}"
+    _invalidate_login()
+    # v342: mueve el saldo de vacaciones de esa persona → deja rastro.
+    try:
+        from core import auditoria
+        auditoria.registrar("usuario", usuario,
+                            auditoria.diff(_antes, {"FechaIngreso": _val}),
+                            grupo=str(_antes.get("Grupo", "")))
+    except Exception as e:
+        logger.warning("auth.set_fecha_ingreso: auditoría: %s", e)
+    return True, "Fecha de ingreso actualizada."
 
 
 def set_rate(usuario: str, tarifa) -> tuple:

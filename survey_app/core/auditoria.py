@@ -51,8 +51,11 @@ CAMPOS_CLAVE = {
     "MargenMO", "Presupuesto", "Avance", "Estado", "EstadoManual",
     "FechaInicio", "FechaFinEst", "Cliente", "ClienteID", "Nombre",
     "CampoAsignados", "AgrupacionID", "PesoEnAgrupacion",
-    # persona
-    "TarifaHora", "Rol", "Grupo", "Activo",
+    # persona. ⚠️ `FechaIngreso` (v433) decide el año de vacaciones de esa persona,
+    # o sea cuántos días le quedan: moverla mueve su saldo, así que entra aquí en el
+    # MISMO lote en que se crea (la regla que v344/v352/v373 aprendieron a base de
+    # descubrir campos de dinero sin rastro).
+    "TarifaHora", "Rol", "Grupo", "Activo", "FechaIngreso",
     # factura / nómina  (el cobro y el pago se siguen por `Estado` + `Cobrado`)
     "Total", "Cobrado", "ImpuestoPct", "Neto", "Base",
     # catálogo (v352): el precio de lo que vendes mueve dinero tanto como el margen.

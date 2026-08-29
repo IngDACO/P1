@@ -35,7 +35,6 @@ from datetime import timedelta
 import streamlit as st
 
 from core import clock, timeclock
-from core.num import num as _num
 from core.num import parse_date as _parse_date
 
 logger = logging.getLogger(__name__)
@@ -207,35 +206,94 @@ def ausentes_en(grupo, dia=None) -> list:
     return out
 
 
-def dias_usados(grupo, usuario, tipo, anio=None) -> float:
-    """Días APROBADOS de ese tipo en el año (base del saldo).
+def _mismo_dia_mes(anio, mes, dia):
+    """La fecha (anio, mes, dia), retrocediendo si ese día no existe ese año.
+
+    ⚠️ Existe por el **29 de febrero**: quien entró un 29/02 no tiene aniversario en
+    los años normales, y `date(2027, 2, 29)` lanza. Se usa el 28.
+    """
+    from datetime import date as _date
+    while dia > 28:
+        try:
+            return _date(anio, mes, dia)
+        except ValueError:
+            dia -= 1
+    from datetime import date as _d2
+    return _d2(anio, mes, dia)
+
+
+def periodo_saldo(grupo, usuario, ref=None) -> dict:
+    """El «año de vacaciones» vigente de esa persona: {desde, hasta, origen}.
+
+    ⚠️ Va por el **ANIVERSARIO de alta** de cada uno (decisión del usuario, v433), que
+    es lo habitual en AU: quien entró un 15 de marzo cuenta de 15/03 a 14/03. No por
+    año natural — con el año natural, el saldo de todo el equipo se reiniciaba el 1 de
+    enero aunque cada uno lleve en la empresa desde un mes distinto.
+
+    ⚠️ Sin `FechaIngreso` NO se inventa un aniversario: se cae al año natural y se
+    dice (`origen: "natural"`), para que la pantalla pueda avisar de que ese saldo es
+    una estimación. Un saldo que parece exacto y no lo es es peor que uno que avisa
+    (la lección de v325 y de «sin tarifa» vs «de baja»).
+    """
+    from datetime import date as _date
+    ref = ref or clock.today(grupo)
+    try:
+        from core import auth
+        fi = auth.fecha_ingreso(usuario)
+    except Exception as e:
+        logger.warning("ausencias.periodo_saldo: %s", e)
+        fi = None
+    if fi:
+        anio = ref.year if (ref.month, ref.day) >= (fi.month, fi.day) else ref.year - 1
+        d0 = _mismo_dia_mes(anio, fi.month, fi.day)
+        d1 = _mismo_dia_mes(anio + 1, fi.month, fi.day) - timedelta(days=1)
+        return {"desde": d0, "hasta": d1, "origen": "aniversario", "ingreso": fi}
+    return {"desde": _date(ref.year, 1, 1), "hasta": _date(ref.year, 12, 31),
+            "origen": "natural", "ingreso": None}
+
+
+def dias_usados(grupo, usuario, tipo, desde=None, hasta=None) -> float:
+    """Días APROBADOS de ese tipo DENTRO del periodo [desde, hasta] (base del saldo).
+
+    ⚠️ Cuenta los DÍAS que caen dentro, no las filas cuyo `Desde` cae en el año. Antes
+    una ausencia se descontaba ENTERA del año en que empezaba, así que unas vacaciones
+    de Navidad (28/12 → 08/01, 10 días hábiles) le quitaban **los 10 a 2026** y **0 a
+    2027**, cuando en realidad son 4 y 6. El total salía bien y el reparto por año, no.
 
     ⚠️ Solo las aprobadas: contar las pendientes haría que el saldo bajara antes de
     que nadie decidiera nada, y una solicitud rechazada devolvería días que nunca se
     gastaron. La enfermedad se registra ya aprobada, así que cuenta desde el aviso.
     """
-    anio = anio or clock.today(grupo).year
-    tot = 0.0
+    if desde is None or hasta is None:
+        p = periodo_saldo(grupo, usuario)
+        desde, hasta = p["desde"], p["hasta"]
+    d0, d1 = _parse_date(desde), _parse_date(hasta)
+    if not d0 or not d1:
+        return 0.0
+    tot = 0
     for r in _records():
         if (str(r.get("Grupo", "")) != str(grupo)
                 or str(r.get("Usuario", "")) != str(usuario)
                 or str(r.get("Tipo", "")) != str(tipo)
                 or str(r.get("Estado", "")) != APROBADA):
             continue
-        d0 = _parse_date(r.get("Desde"))
-        if d0 and d0.year == anio:
-            tot += _num(r.get("Dias"))
-    return round(tot, 1)
+        # los MISMOS días que se pidieron (con o sin fin de semana), recortados al
+        # periodo — la misma regla que usa el pago (`horas_pagadas_grupo`)
+        tot += sum(1 for d in dias_del_rango(r.get("Desde"), r.get("Hasta"),
+                                             incluye_findes(r))
+                   if d0 <= d <= d1)
+    return round(float(tot), 1)
 
 
-def saldo(grupo, usuario, tipo, anio=None) -> dict:
-    """{asignados, usados, restantes} — DERIVADO, nunca guardado (ver el módulo)."""
+def saldo(grupo, usuario, tipo, ref=None) -> dict:
+    """{asignados, usados, restantes, periodo} — DERIVADO, nunca guardado (ver módulo)."""
     cfg = TIPOS.get(tipo, {})
     asignados = float(cfg.get("dias_anio", 0) or 0)
-    usados = dias_usados(grupo, usuario, tipo, anio)
+    p = periodo_saldo(grupo, usuario, ref)
+    usados = dias_usados(grupo, usuario, tipo, p["desde"], p["hasta"])
     return {"asignados": asignados, "usados": usados,
             "restantes": round(asignados - usados, 1),
-            "ilimitado": asignados <= 0}
+            "ilimitado": asignados <= 0, "periodo": p}
 
 
 def solapadas(grupo, usuario, desde, hasta, excluir=None) -> list:

@@ -4,6 +4,7 @@ UI de login, barra de usuario y paneles de gestión (propietario / administrador
 import os
 import re
 import time
+from datetime import date
 import streamlit as st
 import pandas as pd
 
@@ -862,6 +863,27 @@ def _ficha_usuario(u, grupo, owner=False, sel_key="gp_fichasel"):
                 ok, msg = auth.set_rate(sel, tar); (flash.exito if ok else st.error)(msg)
                 if ok:
                     st.rerun()
+        # ⚠️ v433: la FECHA DE ALTA decide el año de vacaciones de esa persona (en AU
+        # va por aniversario, no por año natural). Sin ella el saldo se estima por año
+        # natural y la pantalla del campo lo dice, así que aquí se ve qué falta.
+        _f1, _f2 = st.columns(2)
+        with _f1:
+            _fi = auth.fecha_ingreso(sel)
+            _nf = st.date_input(":material/event_available: Fecha de alta en la empresa",
+                                value=_fi, key=f"{k}_fing", format="YYYY-MM-DD",
+                                min_value=date(1990, 1, 1), max_value=date(2100, 12, 31),
+                                help="Desde aquí cuenta su año de vacaciones.")
+        with _f2:
+            st.caption("")
+            if st.button("Guardar fecha de alta", key=f"{k}_savefing", width="stretch"):
+                ok, msg = auth.set_fecha_ingreso(sel, _nf)
+                (flash.exito if ok else st.error)(msg)
+                if ok:
+                    st.rerun()
+        if not _fi:
+            st.caption(":material/warning: Sin fecha de alta: su saldo de vacaciones "
+                       "se cuenta por año natural (1 ene – 31 dic), no desde su "
+                       "aniversario.")
         if owner:   # el propietario también reasigna rol y grupo (v184)
             _gopts = [""] + [g["Grupo"] for g in auth.list_groups()]
             _rc, _gc = st.columns(2)

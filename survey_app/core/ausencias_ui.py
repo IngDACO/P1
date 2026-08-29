@@ -54,11 +54,13 @@ def render_mis_ausencias():
 
     # ── Saldo ──────────────────────────────────────────────────────
     tarj = []
+    _per = None
     for t, cfg in AU.TIPOS.items():
         s = AU.saldo(grupo, usuario, t)
+        _per = _per or s.get("periodo")
         if s["ilimitado"]:
             tarj.append(_kpi(cfg["nombre"], f"{s['usados']:.0f}",
-                             pie="días usados este año"))
+                             pie="días usados en el periodo"))
         else:
             _col = "#c0392b" if s["restantes"] <= 0 else None
             tarj.append(_kpi(cfg["nombre"], f"{s['restantes']:.0f}",
@@ -66,6 +68,20 @@ def render_mis_ausencias():
                              color=_col))
     st.markdown('<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:8px">'
                 + "".join(tarj) + "</div>", unsafe_allow_html=True)
+    # ⚠️ v433: DE QUÉ periodo habla el saldo. Sin esto, «te quedan 14» no dice hasta
+    # cuándo, y con el año por aniversario cada persona tiene el suyo. Y si falta la
+    # fecha de alta, se avisa de que es una estimación en vez de dar un número que
+    # parece exacto.
+    if _per:
+        if _per["origen"] == "aniversario":
+            st.caption(f":material/event_available: Tu año de vacaciones va del "
+                       f"**{_per['desde']}** al **{_per['hasta']}** "
+                       f"(desde que entraste, el {_per['ingreso']}).")
+        else:
+            st.caption(f":material/help: Contamos por año natural "
+                       f"(**{_per['desde']}** → **{_per['hasta']}**) porque no consta "
+                       "tu fecha de alta. Pídele a tu responsable que la cargue y el "
+                       "saldo pasará a contar desde tu aniversario.")
 
     # ── Pedir ──────────────────────────────────────────────────────
     with st.expander("Pedir un día libre, vacaciones o avisar de una baja",
