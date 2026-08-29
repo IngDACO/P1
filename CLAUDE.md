@@ -6835,7 +6835,102 @@ pasó) y el fichero seguía igual. Se arregló escribiendo el bloque a un ficher
 **concatenando**, sin escapes. Es la lección de v148 —no reescribir por texto lo que
 puedes insertar como líneas— aplicada a un guardián.
 
-## Versiones desplegadas (v429 = actual)
+## AUSENCIAS: el equipo las pide y la app hace el resto (v430)
+Petición del usuario: *«auto gestión de los usuarios en donde puedan solicitar un día
+off, vacaciones y ausencia por enfermedad. Esta solicitud debe llegar a los
+administradores para ser aprobadas o no. De forma automática se debe registrar en la
+agenda/planificador y **todo lo que esto implica**»*.
+
+Hasta ahora la única forma de que alguien constara ausente era que un administrador le
+pusiera `OFF` o `LEAVE` a mano en el tablero: la persona avisaba por fuera (mensaje,
+llamada) y alguien tenía que acordarse de reflejarlo. Sin rastro de quién pidió qué, sin
+saber si se aprobó y sin saldo.
+
+### Decisiones del usuario (AskUserQuestion)
+Enfermedad = **aviso inmediato, sin esperar aprobación** · el pago **depende del tipo** ·
+**saldo por persona y tipo** · al aprobar, **avisar y sugerir sustituto**.
+
+### Los tres tipos NO comparten flujo, y eso es deliberado
+| | Aprobación | Pagado | Días/año | En el tablero |
+|---|---|---|---|---|
+| Vacaciones | sí | sí | 20 | LEAVE |
+| Baja por enfermedad | **NO** | sí | 10 | LEAVE |
+| Día libre | sí | **no** | — | OFF |
+⚠️ Nadie sabe el lunes que el jueves estará en cama. Meter la enfermedad en un flujo de
+«solicitar → esperar» haría que la app estorbe justo el día que alguien está enfermo, y
+dejaría el tablero mintiendo hasta que un admin entrara a aprobar. Se registra YA y el
+administrador la ve después.
+
+### Lo que NO se inventó
+`estado_roster` reusa los estados que el tablero **ya pinta** (`roster.ESTADOS`), así que
+colores, histórico y `_opciones` siguen funcionando sin tocarlos; el tipo concreto viaja
+en la NOTA del día. Y el **saldo se DERIVA** (asignación anual − días aprobados del año),
+nunca se guarda: un saldo almacenado se desincroniza en cuanto alguien cancela o un admin
+corrige un rango — el mismo criterio que `invoices.estado_cobro` y `quotes` (v353).
+
+### «Todo lo que esto implica» = aprobar ESCRIBE en el planificador
+- **`aplicar_al_roster`** marca los días. ⚠️ **PISA lo que hubiera**, a propósito: si la
+  ausencia está aprobada esa persona no está, y dejar la obra asignada haría que el
+  tablero, la ruta del día y «plan vs real» siguieran contando con ella. ⚠️ `quitar=True`
+  **no restaura** la asignación anterior: un hueco se ve en la cobertura del día; un
+  doble asignado, no. Una escritura por SEMANA, no por día.
+- **`choques`** enseña al admin, ANTES de decidir, las obras que quedarían sin esa
+  persona; **`sustitutos`** dice quién puede cubrirlas, reusando lo que la app ya sabe
+  (`roster` para quién tiene el día libre + `credentials.compliance` para los
+  certificados que la obra exige, v219) en vez de inventar un criterio nuevo.
+- La bandeja además avisa de cuánta gente más está fuera esos días y de si la persona se
+  pasaría de saldo: aprobar a ciegas es justo lo que esto viene a evitar.
+
+### ⚠️ EL FALLO DE DINERO: aprobar vacaciones significaba cobrar $0
+La base de la nómina sale de las horas **FICHADAS**, y quien está de vacaciones no ficha.
+Peor: quien estuvo fuera el periodo ENTERO no aparecía en `horas_por_usuario_rango`, así
+que **no se le generaba nómina en absoluto** — no es que cobrara de menos, es que no
+cobraba. `generar` recorre ahora la **UNIÓN** de fichados y ausentes.
+- ⚠️ La ausencia entra como **DEVENGO con `origen: "ausencia"`, NUNCA sumada a `Base`**.
+  `Base` y la columna `Horas` son «lo trabajado», y es contra eso que `conciliacion_mo`
+  (v313) contrasta la jornada fichada: meterlo dentro haría que **cada vacación aprobada
+  apareciera como un descuadre («sin explicar») que no existe**.
+- ⚠️ Retención y superannuation se calculan sobre **base + ausencia**: un día de
+  vacaciones es salario ordinario, y dejarlo fuera lo pagaría sin impuesto ni super.
+- El P&L lo recoge solo (`costo_nomina = base + devengos + aportes` desde v309). La
+  conciliación gana su fila **como SUMANDO** (a diferencia del desglose de v425, que es
+  informativo) para que la cadena siga cerrando en `costo_real`.
+
+### ⚠️ EL SEGUNDO FALLO, y lo cazó EJERCITAR LA NÓMINA, no leer el código
+A una persona con la baja pedida «incluyendo fines de semana» se le descontaron **12 días
+de saldo y la nómina le pagó 8**: `Dias` los contaba y `horas_pagadas` recontaba el rango
+por su cuenta, con el criterio por defecto. Dos definiciones del mismo rango, la familia
+de los cinco `_num` divergentes de v323.
+→ Columna **`Findes`** (al final, migra sola) y una **invariante que ahora se comprueba**:
+*lo pagado = los días que se descontaron × 8 h*. ⚠️ La columna y su valor en la fila
+posicional se añadieron en el MISMO cambio (lección v363, donde olvidar eso dejó
+`create_project` muerto 3 versiones).
+
+### Verificación
+- Guardián `verif_v430.py`, **69 comprobaciones**, probado contra **15 versiones rotas**:
+  las caza las 15 — pero **dos solo tras corregirlo**, y las dos por chequeos míos que
+  pasaban **en vacío**: buscaban las subcadenas `"st.rerun"` y `"len("` en un `ast.dump`,
+  donde los nodos se escriben `Attribute(attr='rerun')` y `Call(func=Name(id='len'))`, así
+  que ninguna función entraba en el filtro. Sustituí un `flash.exito` por `st.success` y
+  puse `_next_id` a contar filas (el fallo REAL de v428) y **no cazó ninguno de los dos**.
+- Con él entra a la suite el guardián de la **regla v353**, que no existía: todo módulo
+  con `SHEET = "X"` que lea `hojas.registros(SHEET)` **sin cabeceras** necesita `X` en
+  `HOJAS_LECTURA`, o lee **vacío PARA SIEMPRE sin ningún error**. Barrido: 0 casos.
+- **Ejercitado contra la hoja real** (método v344), incluida la nómina: `admin1` con 10,66
+  h fichadas + 3 días de vacaciones → Base $426,40 (solo lo trabajado) + devengo $960 +
+  retención y super sobre los $1.386,40; `campo2` con **0 h fichadas** recibe colilla de
+  **$2.448 neto**; `conciliacion_mo` con `sin_explicar = −0,00`. Cancelar devuelve el
+  saldo y limpia el tablero. Producción devuelta a 38 nóminas, 0 ausencias y el roster
+  restaurado.
+- ⚠️ Un tercer «fallo» era del test: comprobaba que tras cancelar **nadie** constara
+  ausente ese día, y quien seguía de baja era otra persona. El código estaba bien.
+- Suite entera: **72/72**. Se pusieron rojos `verif_v297/v298/v299` por exigir que el
+  campo tuviera **6 secciones exactas** — **caducados, no regresiones**: fallaban por
+  añadirle una a propósito (trampa nº16). Actualizados sobre el PRINCIPIO (no se le pierde
+  nada de su nav; cada rol resuelve la suya, con el número derivado de la constante) y con
+  la razón escrita al lado. Y `verif_v322` sí cazó algo real: un `import auth` sin usar.
+
+## Versiones desplegadas (v430 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -6843,6 +6938,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v430 | **Autogestión de ausencias**: el equipo pide vacaciones o día libre y avisa de una baja, el admin aprueba, y al aprobar **se escribe en el planificador** con el aviso de las obras que quedan sin esa persona y quién puede cubrirlas. Saldo por persona y tipo, DERIVADO (nunca guardado). ⚠️ La enfermedad **no espera aprobación**: nadie sabe el lunes que el jueves estará en cama, y esperar dejaría el tablero mintiendo. ⚠️ **EL FALLO DE DINERO**: la base de la nómina sale de las horas FICHADAS, así que aprobar unas vacaciones significaba cobrar $0 — y quien estuvo fuera el periodo ENTERO **no recibía colilla en absoluto**, porque no aparecía en las horas; `generar` recorre ahora la UNIÓN de fichados y ausentes. La ausencia va como **DEVENGO con `origen`, nunca sumada a `Base`**: dentro haría que cada vacación apareciera como un descuadre inexistente en la conciliación de v313. ⚠️ **El segundo fallo lo cazó ejercitar la nómina de verdad**: a quien pidió el rango «con fin de semana» se le quitaban **12 días de saldo pagándole 8**, porque cada lado recontaba el rango con su criterio → columna `Findes` y la invariante *lo pagado = lo descontado*. Guardián probado contra **15 roturas** — ⚠️ dos solo se cazaron tras corregirlo, las dos por chequeos míos que corrían **en vacío** (buscaban `"st.rerun"` y `"len("` como subcadenas de un `ast.dump`, donde esos nodos no se escriben así). Entra además el guardián de la **regla v353**, que no existía en la suite |
 | v429 | **La pantalla de Costos deja de hablarle a la localización de lo que no tiene** (pedido por el usuario tras verlo con el rol campo). Eran **tres** piezas, no una: «Costará al terminar» («—» fijo, no hay avance que proyectar), «Presupuesto» («—» fijo, su ficha ni lo ofrece) y ⚠️ el titular *«se define en Datos»*, que era **falso** — ahí ese campo no existe, así que mandaba a buscar algo que no está. Quitar solo la primera habría dejado las otras a medias (v419). Titular propio: «Gasto de estructura: no se le carga a ninguna obra ni se le factura a un cliente». + **verificado en pantalla con el rol campo** todo v423: tarjetas Estado/Tipo/Responsable en vez de Avance/Cliente, sin barra de progreso, y menú de 3 (Avisos·Recibos·Archivos) sin «Avance». ⚠️ La localización no aparecía en su selector y estuve a punto de diagnosticar un fallo: era la **caché de 120 s** |
 | v428 | ⚠️ **Un generador de IDs contaba FILAS, y ya COLISIONABA en producción.** `roster._next_id` hacía `len(hoja)-1+1`, y `delete_trabajo` borra la fila cuando el trabajo no está asignado: medido, 4 filas con IDs `TRB-0002..0005` → el siguiente alta emitía **TRB-0005, que ya existía**. Como `trabajos_idx` indexa por ID, uno de los dos desaparece y **las celdas del tablero resuelven al trabajo equivocado** (nombre y color de otro) sin ningún error. Peor que el reciclaje de v427: ahí hacía falta borrar el ÚLTIMO, aquí basta con **uno del medio**. Mismo patrón encontrado por el guardián en `toolruns` (`CAL-`), que no chocaba hoy por casualidad. Arreglados los dos + salto extendido a **agrupaciones** (borrarlas y recrearlas metería los elevadores de la vieja en la nueva) y **credenciales** → **siete** generadores protegidos. + ⚠️ **v426 demostrado EN VIVO**: factura real de $5.500 con $1.500 cobrados, anulada → el P&L vuelve exactamente a su sitio, mientras la lógica vieja habría dejado **+$5.500 de ingresos fantasma**. + ⚠️ Una alarma descartada por medir: la columna «Estado» de Facturas «no existía» en el DOM — era la virtualización de `st.dataframe`, y a **1440 px caben las 8 columnas con 0 ocultas**; iba a arreglar algo que no está roto (el error de v335) |
 | v427 | ⚠️ **Los IDs ya no se reciclan.** Los 13 generadores hacen `max(los vivos)+1`, así que borrar la fila con el ID más alto **libera el número** y el siguiente alta lo reutiliza, heredando los huérfanos del anterior (medido en v426: $1.000 de facturación ajena). Nuevas `hojas.ids_referenciados` / `siguiente_id_libre`: al emitir, se salta el ID que aparezca **en cualquier otra hoja** — por texto (hay referencias dentro de JSON), incluyendo **`Auditoria`** (donde queda constancia de lo borrado) y excluyendo la hoja propia. Lee FRESCO porque decide qué ID se emite (v323); medido **0,44 s en caliente**. Degrada al comportamiento de siempre si falla. Aplicado a las tres entidades que se borran Y se referencian: proyecto, cliente y gasto. Verificado contra la hoja real: emitiría `PRJ-0018` en vez de reciclar el 0017. Guardián probado contra 7 casos rotos; ⚠️ **dos solo se cazaron tras corregirlo**: uno buscaba el NOMBRE `propia_l` (que sobrevive al borrar la comparación) y su versión funcional dio un **FALLO inexistente** por el CWD de los secrets (v19) — un guardián no puede depender del directorio desde el que se lance |
