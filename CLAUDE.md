@@ -6525,7 +6525,56 @@ enseñar una tabla de avance que no aplica. v424: el overhead **visible** («M.O
 al lado de «cargada a obras», gasto de estructura), que es donde las 172 h dejan de ser
 un hueco anónimo.
 
-## Versiones desplegadas (v422 = actual)
+## Localizaciones internas: su sección (v423)
+v422 puso el cerrojo de datos. Eso solo las dejaría **inalcanzables** —se podrían crear
+y no habría forma de verlas—, que es media aplicación de la regla v340. Esta es su cara
+visible: sub-pestaña **🏢 Localizaciones** en Proyectos (sección propia, decisión del
+usuario, para que la cartera de obras quede limpia y ninguna vista futura tenga que
+acordarse de excluirlas).
+
+- **Lista**: 4 KPIs (localizaciones abiertas, horas trabajadas «no se cargan a obra»,
+  gasto de estructura «no se factura», personas) + tarjeta-botón por sitio con horas,
+  gasto, asignados y avisos ANTES de abrir (patrón v223).
+- **Alta**: pide MUCHO menos que una obra, y ese es el punto — sin NS, sin fechas, sin
+  presupuesto, sin cliente y sin margen. `create_project` sin `activities` la deja sin
+  cronograma y `derive_estado` la marca «Abierta» por su tipo.
+- **Ficha** con el segmentado del kit (v316): 👥 Equipo (quién ha fichado y cuánto, con
+  su costo rotulado como estructura) · 💰 Gastos (reusa `render_expenses`) · 🦺 Pre-Start ·
+  📎 Archivos (reusa `_archivos_section`) · ✏️ Datos (editar, **Cerrada**, archivar).
+- **El campo** ve su sitio en «Mis proyectos» —con avisos, recibos y archivos— pero **sin
+  la pestaña «Avance»** ni la barra de progreso: no tiene actividades, así que sería una
+  tabla vacía y un 0% permanente. Sus tarjetas muestran Tipo y Responsable en vez de
+  Avance y Cliente.
+
+### ⚠️ Cuatro suposiciones mías rotas, todas por ejecutar en vez de leer (regla v135)
+| Supuse | Es |
+|---|---|
+| `labor_breakdown(...)["personas"]` | **`["items"]`**, y cada fila trae `usuario`, no el nombre |
+| `prestart.list_for(pid)` | **no existe** — es `list_prestarts(pid)`, de un solo argumento |
+| `near_miss == "YES"` | es un **BOOL**. Comparado con `"YES"` daba SIEMPRE False → **habría pintado en verde un pre-start con incidente**, en la única pantalla donde ese semáforo sirve |
+| `E` y `theme` disponibles | en `projects_ui` se importan **DENTRO de cada función** (patrón v342): el bloque nuevo los usaba sin importarlos → **NameError al abrir la pantalla**. Lo cazó el guardián de v322, no yo |
+
+⚠️ Y mi propio chequeo de nombres libres dijo «ninguno» porque recogía los imports de
+CUALQUIER nivel del árbol — el mismo autoengaño de v342/v366. El de v322 lo hace bien
+porque compara el ÁMBITO, no la presencia.
+
+### Verificación
+`verif_v423.py`: la sub-pestaña existe **y el despachador compara contra el ID exacto**
+(un display en vez del ID navega a ninguna parte — el fallo real de v303); la pantalla no
+usa cronograma, SPI, margen ni facturación, y el alta no escribe campos de obra; el
+cerrojo de aislamiento de v351 va **después** de traer el objeto y **antes** de pintar; el
+alta pasa `tipo` y NO `activities`; y al campo se le recorta «Avance» solo si es interna.
+Probado contra **8 versiones rotas**: las caza las 8 — pero dos solo **tras afinarlo**:
+- ⚠️ «al campo se le devuelve la tabla de avance» pasaba, porque yo comprobaba que
+  `es_interno` APARECIERA y la función también lo usa para las tarjetas. Se cambió a
+  estructural: las opciones del menú salen de una **variable** (una lista literal no se
+  puede recortar) y hay un `if es_interno(...)` que la reasigna.
+- ⚠️ Un chequeo daba **FALLO con el código correcto**: pedía `"TIPOS" in _attrs` para
+  luego negarlo, y los atributos son nombres exactos (`TIPOS_INTERNOS` no contiene a
+  `TIPOS`) — el test fallando por su propia aritmética, como en v363/v372.
+Suite: **67/67**.
+
+## Versiones desplegadas (v423 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -6533,6 +6582,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v423 | **Localizaciones internas: su SECCIÓN.** v422 las ocultó de todo; sin esto quedarían inalcanzables (media regla v340). Sub-pestaña **🏢 Localizaciones** en Proyectos: KPIs (horas «no se cargan a obra», gasto de estructura «no se factura»), tarjeta-botón por sitio, alta que pide mucho menos que una obra (sin NS, fechas, presupuesto, cliente ni margen) y ficha con Equipo · Gastos · Pre-Start · Archivos · Datos (incluye **Cerrada**). El **campo** ve su sitio en «Mis proyectos» con avisos, recibos y archivos, pero **sin «Avance»** ni barra de progreso — no tiene actividades. ⚠️ Cuatro suposiciones mías rotas por ejecutar en vez de leer (v135): `labor_breakdown` usa `items` y no `personas`; `prestart.list_for` **no existe**; **`near_miss` es un BOOL** y compararlo con `"YES"` habría pintado en **verde un pre-start con incidente**; y `E`/`theme` se importan DENTRO de cada función en `projects_ui` (v342) → mi bloque daba **NameError al abrir la pantalla**, cazado por el guardián de v322 porque mi propio chequeo de nombres libres se autoengañaba mirando imports de cualquier nivel. Guardián probado contra 8 casos rotos; dos solo se cazaron **tras afinarlo** (uno pasaba porque `es_interno` aparecía por otro motivo; otro **fallaba con el código correcto** por su propia aritmética) |
 | v422 | **Localizaciones internas (oficina/almacén/taller): el CERROJO** (pedido por el usuario; sin UI todavía). Se modelan como proyecto para reusar fichaje, pre-start, gastos, roster y documentos, pero **no se le facturan a nadie**: su costo es estructura. Familia nueva dentro de `Tipo` (sin columna nueva), `es_interno()` como ÚNICA definición, estado propio **Abierta/Cerrada** (sin actividades el avance es 0 y quedarían «Planificadas» para siempre). El cerrojo es el **DEFAULT de `list_projects`**, que protege los **59 call-sites** de golpe; se clasificaron uno a uno como en v149. ⚠️ Dos decisiones no obvias: `group_expenses` **SÍ** las incluye (si no, sus compras salían como **HUÉRFANAS**, avisando de dinero perfectamente imputado) y `group_hours`/`jornada_y_proyecto` separan `interno` de `proyecto`, o el primer fichaje en la oficina habría inflado «cargado a obras» — la cifra que v313 definió como *lo que se le cobra al cliente*. Quién ficha ahí: asignado permanente (= «perfil de oficina», sin rol ni columna nuevos) o puesto por el roster, que ahora entra al selector y no solo al botón; ⚠️ y se cierra el fallback que regalaba **todos** los proyectos a un usuario de campo sin asignaciones. Verificado: **18/18 cifras idénticas** contra el código viejo (`git stash`) — ⚠️ pero eso solo prueba que con cero localizaciones nada cambia, así que la prueba positiva fue una localización REAL con gasto y horas. Guardián en las DOS direcciones, 6 casos rotos cazados |
 | v420 | **Dar de alta un cliente sin salir de la cotización** (pedido por el usuario). Antes había que irse a Contactos y volver a empezar, y **sin ningún cliente la pantalla hacía `return`**: el primer presupuesto de un cliente nuevo era imposible sin pasar por otra sección. Ahora el selector trae **➕ Nuevo cliente**. ⚠️ Aquí NO vale el «Otro» de los proyectos, que guarda el cliente como TEXTO sin ficha (de ahí los `vd`/`ci` de v357): una cotización necesita **`ClienteID`**, que es lo que usa `aceptar_y_crear_proyecto` (v354) para que la obra nazca con su cliente. Por eso **la ficha se crea ANTES y, si falla, no hay cotización**. ⚠️ Un nombre duplicado **reutiliza** la ficha existente en vez de dejar al usuario con la cotización escrita y sin poder guardarla. ⚠️ Las keys se limpian en **las dos** salidas (cancelar y guardar) o la siguiente cotización hereda el cliente anterior. Guardián: su chequeo de la limpieza era demasiado laxo (`≥2 apariciones`) y pasaba con la limpieza borrada de una salida — se cambió a comprobar **por bloque**; lo destapó probarlo contra el código roto. **Ejercitado en producción**: `COT-0008` creó la ficha `CLI-0008` y quedó enlazada por `ClienteID`; repetir el nombre con otro may/min reutilizó esa misma ficha (`COT-0009` → `CLI-0008`, **una sola ficha**). Producción sin rastro. ⚠️ De paso: la barra lateral decía **v420** y el topbar **v419** a la vez — Cloud recargó unos módulos y conservó otros, y `quotes_ui` era el nuevo; **la versión no prueba nada en ninguna de las dos direcciones, solo el CAMBIO** |
 | v419 | **Una sola ubicación por proyecto: la del mapa** (pedido por el usuario: «hay una en el mapa y otra en los datos, y no tiene por qué haber 2»). ⚠️ La causa: **v272 unificó solo la mitad** — al CREAR la ubicación ya salía del mapa, y la EDICIÓN se quedó con el `text_input` suelto, desconectado del pin. Como el TEXTO es lo que leen Home, Ruta del día, Pre-Start y los avisos (las coordenadas solo el mapa y la ruta), un proyecto con pin y sin texto **parecía no estar ubicado en todas partes menos en el mapa**. El campo pasa a solo lectura y sale del pin; + aviso del caso inverso (dirección sin pin, hoy `PRJ-0016`), que no sale en ningún mapa y nadie lo decía. ⚠️ **No se geocodifica sola**: un pin inventado que nadie ha mirado manda a alguien al sitio equivocado. ⚠️ El texto **solo se pisa si el pin se toca** (hay direcciones a mano que el geocoder reescribiría — fallo de v360) y **solo desde `_addr`, nunca `_q`** (media búsqueda sin confirmar acabaría siendo la dirección). Medido antes: 15 con ambas, 1 con texto sin pin, **0 con pin sin texto** — el caso descrito es posible pero hoy no se da, y se dijo |

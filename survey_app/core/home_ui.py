@@ -47,7 +47,13 @@ _SUBSECCIONES = {
         ("👷 Usuarios", ":material/badge: Usuarios")]),
     "proyectos": ("adm_proy_sub", [
         ("📊 Proyectos", ":material/format_list_bulleted: Proyectos"),
-        ("🗂 Agrupaciones", ":material/account_tree: Agrupaciones")]),
+        ("🗂 Agrupaciones", ":material/account_tree: Agrupaciones"),
+        # v423: sección PROPIA para las localizaciones internas (oficina/almacén/taller).
+        # Decisión del usuario frente a mezclarlas en la cartera con un filtro: así la
+        # cartera de obras queda limpia y ninguna vista futura tiene que acordarse de
+        # excluirlas. ⚠️ El ID conserva el emoji porque ES el identificador que usan los
+        # deep-links y el matching de `_seccion_*` (v232); el display es lo único nuevo.
+        ("🏢 Localizaciones", ":material/business: Localizaciones")]),
     "finanzas": ("adm_fin_sub", [
         ("📊 Resumen", ":material/insights: Resumen"),
         ("💰 Gastos", ":material/receipt_long: Gastos"),
@@ -864,10 +870,14 @@ def _seccion_planificacion(grupo):
 def _seccion_proyectos(grupo):
     from core import projects_ui as PU
     sub = _sub_header("proyectos")
-    if sub == "📊 Proyectos":
-        PU._panel_proyectos(grupo)
-    else:
+    if sub == "🏢 Localizaciones":
+        PU.render_localizaciones(grupo)
+    elif sub == "🗂 Agrupaciones":
         PU._panel_agrupaciones(grupo)
+    else:
+        # El default sigue siendo la cartera de obras: es la pantalla de trabajo, y un
+        # valor desconocido (un deep-link viejo) debe caer ahí, no en Agrupaciones.
+        PU._panel_proyectos(grupo)
 
 
 def _seccion_finanzas(grupo):
