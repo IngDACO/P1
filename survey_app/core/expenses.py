@@ -414,6 +414,12 @@ def group_expenses(grupo) -> dict:
 
 # ── Escrituras ───────────────────────────────────────────────────
 def _next_id(recs) -> str:
+    """G-##### incremental, **saltando los referenciados** (v427).
+
+    ⚠️ Un recibo SÍ se borra de verdad (`delete`), así que su ID se recicla — y las
+    órdenes de compra guardan el `GastoID` del gasto que crearon al recibirlas (v343).
+    Reutilizarlo enlazaría una orden con un recibo que no es el suyo.
+    """
     mx = 0
     for r in recs:
         i = str(r.get("ID", ""))
@@ -422,7 +428,12 @@ def _next_id(recs) -> str:
                 mx = max(mx, int(i.split("-")[1]))
             except Exception:
                 pass
-    return f"G-{mx + 1:05d}"
+    try:
+        from core import hojas
+        return hojas.siguiente_id_libre("G-", mx, propia=SHEET, ancho=5)
+    except Exception as e:
+        logger.warning("expenses: no se pudo comprobar IDs referenciados: %s", e)
+        return f"G-{mx + 1:05d}"
 
 
 def upload_receipt(pid, filename, data, mime="application/octet-stream") -> str:

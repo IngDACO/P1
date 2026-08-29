@@ -303,7 +303,16 @@ def derive_estado(avance: float, estado_manual: str = "", tipo: str = "") -> str
 
 
 def _next_project_id(pws) -> str:
-    """PRJ-#### incremental (máximo existente + 1)."""
+    """PRJ-#### incremental, **saltando los que otra hoja aún referencia** (v427).
+
+    ⚠️ `max + 1` sobre las filas VIVAS recicla el ID de un proyecto borrado, y con él
+    los huérfanos que hubieran quedado apuntando ahí. Medido en v426: dos facturas de
+    una prueba vieja apuntaban a `PRJ-0017` y, al recrear ese ID, la obra nueva
+    **heredó $1.000 de facturación ajena**. El proyecto es la entidad con más
+    referencias de toda la app (fichajes, gastos, actividades, documentos,
+    pre-starts, alarmas, cálculos, órdenes, roster, inventario, cotizaciones y las
+    líneas de factura), así que es donde más duele.
+    """
     mx = 0
     for r in pws.get_all_records(numericise_ignore=["all"]):
         pid = str(r.get("ID", ""))
@@ -312,7 +321,13 @@ def _next_project_id(pws) -> str:
                 mx = max(mx, int(pid.split("-")[1]))
             except Exception:
                 pass
-    return f"PRJ-{mx + 1:04d}"
+    try:
+        from core import hojas
+        return hojas.siguiente_id_libre("PRJ-", mx, propia=PROJECTS_SHEET)
+    except Exception as e:
+        # Un fallo aquí no puede impedir crear: se cae al comportamiento de siempre.
+        logger.warning("projects: no se pudo comprobar IDs referenciados: %s", e)
+        return f"PRJ-{mx + 1:04d}"
 
 
 def _find_row(ws, header, value):

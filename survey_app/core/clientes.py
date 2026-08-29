@@ -136,7 +136,12 @@ def _ids_frescos(col: str = "ID") -> list:
 
 
 def _next_id() -> str:
-    """CLI-#### incremental (máximo existente + 1). Lee FRESCO: es escritura."""
+    """CLI-#### incremental. Lee FRESCO (es escritura) y **salta los referenciados**.
+
+    ⚠️ v427: un ID reciclado arrastra lo que colgaba del anterior. Aquí la ficha del
+    cliente es la que enlazan proyectos, cotizaciones y facturas por `ClienteID`, así
+    que reutilizar un CLI-#### le pegaría a un cliente nuevo la facturación de otro.
+    """
     mx = 0
     for cid in _ids_frescos():
         cid = str(cid)
@@ -145,7 +150,12 @@ def _next_id() -> str:
                 mx = max(mx, int(cid.split("-")[1]))
             except Exception:
                 pass
-    return f"CLI-{mx + 1:04d}"
+    try:
+        from core import hojas
+        return hojas.siguiente_id_libre("CLI-", mx, propia=CLIENTES_SHEET)
+    except Exception as e:
+        logger.warning("clientes: no se pudo comprobar IDs referenciados: %s", e)
+        return f"CLI-{mx + 1:04d}"
 
 
 def create_cliente(grupo, nombre, contacto="", telefono="", email="",

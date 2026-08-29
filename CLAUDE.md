@@ -6715,7 +6715,54 @@ hilo hasta el fallo de las anuladas.
   propietario y con confirmación (v149), pero el reciclaje de IDs existe. Pendiente de
   decidir con el usuario si se evita (no reciclar) o se avisa al crear.
 
-## Versiones desplegadas (v426 = actual)
+## ⚠️ LOS IDs YA NO SE RECICLAN (v427)
+Cierra el riesgo que destapó v426. **Los 13 generadores de la app** hacen
+`max(los vivos) + 1`, así que borrar la fila con el ID más alto **libera ese número** y
+el siguiente alta lo reutiliza — arrastrando lo que hubiera quedado apuntando ahí.
+
+### Dónde importa de verdad
+Solo donde se BORRA la fila. Casi nada lo hace: proyectos, clientes, activos, facturas,
+nóminas y artículos se **archivan o anulan** (v149/v340), y eso mantiene el ID ocupado.
+Borran de verdad 13 funciones; de ellas, las que además tienen referencias apuntando son
+**proyecto** (la que más: fichajes, gastos, actividades, documentos, pre-starts, alarmas,
+cálculos, órdenes, roster, inventario, cotizaciones y líneas de factura), **cliente**
+(proyectos, cotizaciones, facturas) y **gasto** (`orders.GastoID`). Esas tres se arreglan.
+
+### `hojas.ids_referenciados` + `siguiente_id_libre`
+Al emitir un ID se comprueba si ya aparece **en cualquier otra hoja** y, si sí, se salta
+al siguiente libre.
+- **Por texto, a propósito**: saber en qué columna vive cada referencia obligaría a
+  mantener un mapa de 12 hojas que envejecería a la siguiente que se añada. Además hay
+  referencias dentro de JSON (líneas de factura, `DatosJSON` del roster).
+- ⚠️ **`Auditoria` cuenta**: ahí queda constancia de lo borrado, y eso es justo la señal
+  — ese ID *se usó*, y reutilizarlo mezclaría dos historiales.
+- ⚠️ **La hoja propia se excluye**, o ningún ID vivo podría emitirse.
+- **Lee FRESCO** (1 `batchGet`): decide qué ID se emite, y usar caché para eso es como
+  se corrompen los datos (v323). Medido: **0,44 s en caliente** — los 6,5 s de la
+  primera llamada son autenticar y abrir el libro, que en la app ya está cacheado.
+- **Degrada al comportamiento de siempre** si la lectura falla, con red propia además de
+  la de los tres generadores: un problema de red no puede impedir dar de alta.
+
+Verificado contra la hoja real: detecta que `PRJ-0017` sigue referenciado y emitiría
+**`PRJ-0018`** — sin el arreglo habría reciclado el 0017 y heredado su rastro.
+
+### Verificación
+`verif_v427.py`, probado contra **7 versiones rotas**: las caza las 7 — y **dos solo
+tras corregir el guardián**, las dos por el mismo motivo (chequeos que pasaban en vacío):
+- ⚠️ «excluye la hoja propia» buscaba el NOMBRE `propia_l`, que sigue existiendo aunque
+  se borre la comparación → pasaba con el filtro roto. Ahora se ejercita con un libro
+  simulado.
+- ⚠️ Y ese chequeo funcional dio primero un **FALLO que no existía**: sin `chdir` a
+  `survey_app` los secrets no se encuentran (v19), la resolución del libro lanzaba y el
+  `except` devolvía vacío. Se parchea también `sheet_id_para`: **un guardián no puede
+  depender del directorio desde el que se lance.**
+
+⚠️ Y el propio guardián encontró un hueco real: `siguiente_id_libre` no se protegía a sí
+misma. Estaba cubierta dos veces (por `ids_referenciados` y por los tres generadores),
+pero es la función pública y depender de que el llamador se acuerde es como se cuelan
+los fallos silenciosos. Suite: **70/70**.
+
+## Versiones desplegadas (v427 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -6723,6 +6770,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v427 | ⚠️ **Los IDs ya no se reciclan.** Los 13 generadores hacen `max(los vivos)+1`, así que borrar la fila con el ID más alto **libera el número** y el siguiente alta lo reutiliza, heredando los huérfanos del anterior (medido en v426: $1.000 de facturación ajena). Nuevas `hojas.ids_referenciados` / `siguiente_id_libre`: al emitir, se salta el ID que aparezca **en cualquier otra hoja** — por texto (hay referencias dentro de JSON), incluyendo **`Auditoria`** (donde queda constancia de lo borrado) y excluyendo la hoja propia. Lee FRESCO porque decide qué ID se emite (v323); medido **0,44 s en caliente**. Degrada al comportamiento de siempre si falla. Aplicado a las tres entidades que se borran Y se referencian: proyecto, cliente y gasto. Verificado contra la hoja real: emitiría `PRJ-0018` en vez de reciclar el 0017. Guardián probado contra 7 casos rotos; ⚠️ **dos solo se cazaron tras corregirlo**: uno buscaba el NOMBRE `propia_l` (que sobrevive al borrar la comparación) y su versión funcional dio un **FALLO inexistente** por el CWD de los secrets (v19) — un guardián no puede depender del directorio desde el que se lance |
 | v426 | ⚠️ **Una factura ANULADA contaba como INGRESO en el P&L.** El comentario decía `# excluye anuladas` y el docstring también, pero `list_facturas` **no filtra por estado** (a diferencia de `list_nominas`). ⚠️ La asimetría es lo grave: los **costos** anulados sí se excluían, así que el error solo iba en la dirección de **parecer más rentable** — y anular es justamente cómo se corrige una factura mal emitida. Medido: una anulada de $1.100 con $400 cobrados inflaba facturado, cobrado, por-cobrar y ganancia. NO se arregla cambiando el default (la lista y el detalle del cliente **necesitan mostrarlas**: sería el fallo de v340), sino filtrando en `pnl`, que era el único de los cinco consumidores que no lo hacía. **Lo encontró ejercitar el ciclo de negocio completo, no leer código.** Guardián de COMPORTAMIENTO (parchea `list_facturas` con un conjunto conocido) — ⚠️ y su chequeo de «siguen visibles» **pasaba en vacío** porque llamaba a la función parcheada; ahora mira el código por AST. + **dos flujos completos ejercitados** (localizaciones y negocio, 53 comprobaciones) y **9 filas de pruebas del 26/08 sin limpiar**, que por el **reciclaje de IDs** (`max+1`) hicieron que una obra nueva heredara $1.000 de facturación ajena |
 | v425 | **El overhead deja de ser un hueco anónimo.** Las 172 h que nadie imputa a obra caían en «sin asignar» junto a los traslados, y el gasto de la oficina se sumaba a un KPI llamado **«Costo cargado a obras»** — mintiendo, igual que las horas antes de v422. Ahora: «En estructura» (h) y «+ $X interna» en Finanzas·Horas; **«Gasto de estructura»** aparte en Gastos, con la torta partiendo la mano de obra en «(obras)»/«(estructura)» para seguir sumando el grupo; y en la conciliación una fila **de desglose sangrada**, ⚠️ NO un sumando — añadirla descuadraría la cadena de v313. Todo **condicional**: sin localizaciones las tres pantallas quedan idénticas (comprobado por AST). La aritmética se extrajo a `_partir_gasto` **para que el guardián ejercite la función real y no una copia** (el error de v412): invariante `total_obra + total_int` = el costo del grupo de antes ($81.657,96 sin moverse), y ⚠️ las compras **huérfanas se quedan en obra** porque no se sabe de quién son. Guardián probado contra 9 casos rotos; **tres solo se cazaron tras afinarlo**, los tres por localizadores flojos (buscar la vista por docstring → rojo inexistente; buscar `"interno"` como subcadena del fuente → pasaba con la separación rota; mirar todos los dicts en vez del que se ENTREGA → el acumulador lo tapaba). ⚠️ Y el guardián de v322 cazó el fallo de v423 **por segunda vez**: `theme` sin importar (imports locales, v342) |
 | v424 | ⚠️ **Las 4 tarjetas KPI de Localizaciones salían INVISIBLES.** `_kpi_card` **devuelve** el HTML y no lo pinta; `with k[0]: _kpi_card(...)` es código válido que no lanza y descarta el string. **Ningún guardián podía verlo** —no hay error que atrapar—: lo cazó mirar la pantalla en producción, como el `:material/` literal de v375. Regla v135 por quinta vez en la tanda. Guardián nuevo y GENERAL: ninguna llamada a `_kpi_card` en todo el repo puede ser una sentencia suelta que tire su valor |
