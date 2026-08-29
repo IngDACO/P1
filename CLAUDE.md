@@ -6592,7 +6592,56 @@ quinta vez en esta tanda — comprobar qué DEVUELVE una función, no solo cómo
 puede ser una sentencia suelta (`ast.Expr`) que tire su valor. Barrido: 0 casos hoy.
 Probado contra el código roto: lo caza. Suite: **67/67**.
 
-## Versiones desplegadas (v424 = actual)
+## El overhead deja de ser un hueco anónimo (v425)
+v422 separó el DATO y v423 le dio su sección, pero en Finanzas seguía sin verse: las
+**172 h** de jornada que nadie imputa a una obra caían en «sin asignar» junto a los
+traslados, y el gasto de la oficina se sumaba a un KPI que se llama **«Costo cargado a
+obras»** — o sea, mintiendo, exactamente lo que v422 evitó en las horas.
+
+- **Finanzas · Horas**: KPI **«En estructura»** (horas) + el pie «+ $X interna» bajo
+  «M.O. cargada a obras», columna nueva en la tabla y el caption que reparte la jornada
+  en traslados vs estructura.
+- **Conciliación**: fila de desglose ⚠️ **sangrada y en gris**, porque es el desglose de
+  «pagadas y no cargadas» y **no un sumando nuevo** — añadirla a la cadena la
+  descuadraría, y la cadena de v313 cierra.
+- **Finanzas · Gastos**: KPI **«Gasto de estructura»** aparte, con su desglose
+  (mano de obra + compras) y el aviso de que no entra en el % consumido pero sí en el
+  P&L. La torta parte la mano de obra en «(obras)» y «(estructura)» para seguir sumando
+  el grupo entero — si no, mezclaría dos ámbitos y dejaría de cuadrar con nada, que es
+  el fallo de v310 en versión nueva.
+
+### ⚠️ Todo lo nuevo es CONDICIONAL
+Sin localizaciones, ninguna tarjeta, columna ni fila aparece: las tres pantallas quedan
+**idénticas**. El guardián lo comprueba por AST (que cada elemento cuelgue de un
+`if … > 0`), no de palabra.
+
+### `_partir_gasto(ge)` — la aritmética, en una función pura
+Se extrajo de la vista **para que el guardián ejercite la de verdad en vez de
+reproducirla** (el error de v412, que reprodujo un `.replace` en el propio test y lo
+dejó pasando con el código roto). Verificado con datos reales y simulados:
+- **INVARIANTE**: `total_obra + total_int` es exactamente el costo del grupo de antes de
+  v425 → sin localizaciones no se mueve ni un número (comprobado: $81.657,96).
+- ⚠️ Las compras **HUÉRFANAS se quedan del lado de obra**: no se sabe de quién son, y
+  llamarlas estructura sería afirmar algo que nadie sabe. Por eso `compras_obra` se
+  calcula RESTANDO las internas al total del grupo, no sumando las de obra — así se
+  conserva la invariante de v310 y ninguna compra se pierde.
+
+### Verificación
+`verif_v425.py`, probado contra **9 versiones rotas**: las caza las 9 — pero **tres solo
+tras afinarlo**, y las tres por el mismo motivo (un localizador flojo):
+- buscaba la vista de la conciliación por su **docstring** y no la encontraba (empieza
+  por «El puente entre…») → **rojo que no existía**; ahora va por nombre;
+- comprobaba `"interno"` como **subcadena del fuente** de `group_hours`, y borrando la
+  clave del resultado quedaban otras apariciones (`a["interno"]`, `_ids_internos`) → el
+  chequeo pasaba con la separación ROTA;
+- y al mirar «todos los dicts» de la función seguía pasando, porque el **acumulador**
+  interno también tiene esa clave. Ahora mira el dict que la función ENTREGA.
+
+⚠️ Y el guardián de v322 me cazó **el mismo fallo de v423 por segunda vez**: `theme`
+usado sin importar en `render_group_hours` (en este módulo los imports son locales,
+patrón v342) — NameError que solo aparecería al abrir la pantalla. Suite: **68/68**.
+
+## Versiones desplegadas (v425 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -6600,6 +6649,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v425 | **El overhead deja de ser un hueco anónimo.** Las 172 h que nadie imputa a obra caían en «sin asignar» junto a los traslados, y el gasto de la oficina se sumaba a un KPI llamado **«Costo cargado a obras»** — mintiendo, igual que las horas antes de v422. Ahora: «En estructura» (h) y «+ $X interna» en Finanzas·Horas; **«Gasto de estructura»** aparte en Gastos, con la torta partiendo la mano de obra en «(obras)»/«(estructura)» para seguir sumando el grupo; y en la conciliación una fila **de desglose sangrada**, ⚠️ NO un sumando — añadirla descuadraría la cadena de v313. Todo **condicional**: sin localizaciones las tres pantallas quedan idénticas (comprobado por AST). La aritmética se extrajo a `_partir_gasto` **para que el guardián ejercite la función real y no una copia** (el error de v412): invariante `total_obra + total_int` = el costo del grupo de antes ($81.657,96 sin moverse), y ⚠️ las compras **huérfanas se quedan en obra** porque no se sabe de quién son. Guardián probado contra 9 casos rotos; **tres solo se cazaron tras afinarlo**, los tres por localizadores flojos (buscar la vista por docstring → rojo inexistente; buscar `"interno"` como subcadena del fuente → pasaba con la separación rota; mirar todos los dicts en vez del que se ENTREGA → el acumulador lo tapaba). ⚠️ Y el guardián de v322 cazó el fallo de v423 **por segunda vez**: `theme` sin importar (imports locales, v342) |
 | v424 | ⚠️ **Las 4 tarjetas KPI de Localizaciones salían INVISIBLES.** `_kpi_card` **devuelve** el HTML y no lo pinta; `with k[0]: _kpi_card(...)` es código válido que no lanza y descarta el string. **Ningún guardián podía verlo** —no hay error que atrapar—: lo cazó mirar la pantalla en producción, como el `:material/` literal de v375. Regla v135 por quinta vez en la tanda. Guardián nuevo y GENERAL: ninguna llamada a `_kpi_card` en todo el repo puede ser una sentencia suelta que tire su valor |
 | v423 | **Localizaciones internas: su SECCIÓN.** v422 las ocultó de todo; sin esto quedarían inalcanzables (media regla v340). Sub-pestaña **🏢 Localizaciones** en Proyectos: KPIs (horas «no se cargan a obra», gasto de estructura «no se factura»), tarjeta-botón por sitio, alta que pide mucho menos que una obra (sin NS, fechas, presupuesto, cliente ni margen) y ficha con Equipo · Gastos · Pre-Start · Archivos · Datos (incluye **Cerrada**). El **campo** ve su sitio en «Mis proyectos» con avisos, recibos y archivos, pero **sin «Avance»** ni barra de progreso — no tiene actividades. ⚠️ Cuatro suposiciones mías rotas por ejecutar en vez de leer (v135): `labor_breakdown` usa `items` y no `personas`; `prestart.list_for` **no existe**; **`near_miss` es un BOOL** y compararlo con `"YES"` habría pintado en **verde un pre-start con incidente**; y `E`/`theme` se importan DENTRO de cada función en `projects_ui` (v342) → mi bloque daba **NameError al abrir la pantalla**, cazado por el guardián de v322 porque mi propio chequeo de nombres libres se autoengañaba mirando imports de cualquier nivel. Guardián probado contra 8 casos rotos; dos solo se cazaron **tras afinarlo** (uno pasaba porque `es_interno` aparecía por otro motivo; otro **fallaba con el código correcto** por su propia aritmética) |
 | v422 | **Localizaciones internas (oficina/almacén/taller): el CERROJO** (pedido por el usuario; sin UI todavía). Se modelan como proyecto para reusar fichaje, pre-start, gastos, roster y documentos, pero **no se le facturan a nadie**: su costo es estructura. Familia nueva dentro de `Tipo` (sin columna nueva), `es_interno()` como ÚNICA definición, estado propio **Abierta/Cerrada** (sin actividades el avance es 0 y quedarían «Planificadas» para siempre). El cerrojo es el **DEFAULT de `list_projects`**, que protege los **59 call-sites** de golpe; se clasificaron uno a uno como en v149. ⚠️ Dos decisiones no obvias: `group_expenses` **SÍ** las incluye (si no, sus compras salían como **HUÉRFANAS**, avisando de dinero perfectamente imputado) y `group_hours`/`jornada_y_proyecto` separan `interno` de `proyecto`, o el primer fichaje en la oficina habría inflado «cargado a obras» — la cifra que v313 definió como *lo que se le cobra al cliente*. Quién ficha ahí: asignado permanente (= «perfil de oficina», sin rol ni columna nuevos) o puesto por el roster, que ahora entra al selector y no solo al botón; ⚠️ y se cierra el fallback que regalaba **todos** los proyectos a un usuario de campo sin asignaciones. Verificado: **18/18 cifras idénticas** contra el código viejo (`git stash`) — ⚠️ pero eso solo prueba que con cero localizaciones nada cambia, así que la prueba positiva fue una localización REAL con gasto y horas. Guardián en las DOS direcciones, 6 casos rotos cazados |

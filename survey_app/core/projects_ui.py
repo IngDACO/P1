@@ -3939,14 +3939,24 @@ def _pnl_conciliacion(cc: dict, T, periodo_completo: bool = True):
             ("− horas cobradas que NO pagaste (imputadas sin jornada)",
              cc["cobrado_no_pagado"], "#c0392b"),
             ("+ horas pagadas que NO cargaste (traslados, espera)",
-             cc["pagado_no_cargado"], "#c77700"),
-            ("= base que deberías pagar", cc["base_teorica"], "bold"),
-            ("Base realmente puesta en nóminas", cc["base_nomina"], ""),
-            ("+ aportes de ley (super)", cc["aportes"], "#c77700"),
-            ("= costo real de la mano de obra", cc["costo_real"], "bold")]
+             cc["pagado_no_cargado"], "#c77700")]
+    # ⚠️ v425: DESGLOSE de la fila de arriba, no un sumando nuevo — lo interno ya está
+    # dentro de «pagadas y no cargadas», y añadirlo como fila propia descuadraría la
+    # cadena. Va pegado a lo que desglosa y solo si hay algo: hasta ahora ese renglón
+    # era un residuo anónimo donde cabía igual un traslado que una jornada de almacén.
+    if cc.get("interno", 0.0) > 0:
+        _fil.append(("· de las cuales, trabajo en estructura (oficina, almacén)",
+                     cc["interno"], "sub"))
+    _fil += [("= base que deberías pagar", cc["base_teorica"], "bold"),
+             ("Base realmente puesta en nóminas", cc["base_nomina"], ""),
+             ("+ aportes de ley (super)", cc["aportes"], "#c77700"),
+             ("= costo real de la mano de obra", cc["costo_real"], "bold")]
     _h = ['<table style="width:100%;border-collapse:collapse;font-size:13px">']
     for _lb, _v, _st in _fil:
         _b = "font-weight:700;border-top:1px solid #e6e9ef;" if _st == "bold" else ""
+        # el desglose va sangrado y en gris, para que no se lea como un sumando
+        if _st == "sub":
+            _b = "padding-left:18px;color:#5b6472;font-size:12px;"
         _c = f"color:{_st};" if _st.startswith("#") else ""
         _h.append(f'<tr><td style="padding:4px 0;{_b}">{T._esc(_lb)}</td>'
                   f'<td style="padding:4px 0;text-align:right;{_b}{_c}">'
@@ -4127,6 +4137,46 @@ def render_group_profitability(grupo: str):
                          "en el proyecto.")
 
 
+def _partir_gasto(ge: dict) -> dict:
+    """Separa el gasto del grupo en OBRA y ESTRUCTURA (v425).
+
+    ⚠️ `group_expenses` incluye las localizaciones internas desde v422, y con razón:
+    su gasto es costo REAL del grupo, y excluirlo repetiría el fallo de v310 con los
+    archivados (KPI a $0 mientras la torta mostraba $1.500). Pero el KPI de esa
+    pantalla se llama **«Costo cargado a obras»**, así que meterle la oficina lo haría
+    MENTIR — el mismo problema que v422 resolvió en las horas. Se parten las dos
+    cifras: la de obra conserva su significado y la de estructura se nombra.
+
+    ⚠️ Las compras HUÉRFANAS (sin proyecto, o de uno borrado) se quedan del lado de
+    obra: no se sabe de quién son, y moverlas a estructura sería afirmar algo que
+    nadie sabe. Por eso `compras_obra` se calcula RESTANDO las internas al total del
+    grupo, en vez de sumando las de obra — así se conserva la invariante de v310
+    (`compras_grupo == Σ compras por proyecto + huérfanas`) y ninguna compra se pierde.
+
+    Invariante que el guardián comprueba: `total_obra + total_int` es exactamente el
+    costo del grupo de antes de v425, así que sin localizaciones NADA se mueve.
+
+    Es una función APARTE, y no aritmética suelta dentro de la vista, para que el
+    guardián pueda ejercitar la de verdad en vez de reproducirla (el error de v412).
+    """
+    filas = ge.get("proyectos") or []
+    internas = [f for f in filas if f.get("interno")]
+    obras = [f for f in filas if not f.get("interno")]
+    mo_int = round(sum(f.get("mano_obra", 0) for f in internas), 2)
+    cmp_int = round(sum(f.get("compras", 0) for f in internas), 2)
+    mo_obra = round(sum(f.get("mano_obra", 0) for f in obras), 2)
+    cmp_grupo = ge.get("compras_grupo", sum(f.get("compras", 0) for f in filas))
+    cmp_obra = round(cmp_grupo - cmp_int, 2)
+    return {
+        "obras": obras, "internas": internas,
+        "mo_obra": mo_obra, "compras_obra": cmp_obra,
+        "total_obra": round(mo_obra + cmp_obra, 2),
+        "mo_int": mo_int, "compras_int": cmp_int,
+        "total_int": round(mo_int + cmp_int, 2),
+        "huerfanos": ge.get("huerfanos", {"n": 0, "total": 0.0}),
+    }
+
+
 def render_group_expenses(grupo: str):
     from core import expenses as E
     from core import theme as T          # v309: `T.dinero` escapa el `$` (LaTeX)
@@ -4144,9 +4194,11 @@ def render_group_expenses(grupo: str):
     # ⚠️ v310: UNA sola definición de gasto del grupo. `filas` ya incluye los
     # proyectos archivados, y `compras_grupo` son TODAS las compras del grupo
     # (incluidas las huérfanas), así que el KPI y la torta por fin dicen lo mismo.
-    _mo   = round(sum(f["mano_obra"] for f in filas), 2)
-    _huer = ge.get("huerfanos", {"n": 0, "total": 0.0})
-    tot   = round(_mo + ge.get("compras_grupo", sum(f["compras"] for f in filas)), 2)
+    _p = _partir_gasto(ge)
+    _int_filas, filas = _p["internas"], _p["obras"]
+    _mo_int, _cmp_int, tot_int = _p["mo_int"], _p["compras_int"], _p["total_int"]
+    _mo, tot = _p["mo_obra"], _p["total_obra"]
+    _huer = _p["huerfanos"]
     tot_pres = sum(f["presupuesto"] for f in filas)
     tot_proj = sum((f["proyectado"] or f["total"]) for f in filas)
     con_pres = [f for f in filas if f["presupuesto"] > 0]
@@ -4168,8 +4220,20 @@ def render_group_expenses(grupo: str):
     if _comp_tot:
         tarj.insert(1, _kpi_card("Comprometido", T.dinero(_comp_tot, 0), T.AMBAR,
                                  pie="pedido, aún sin recibir"))
+    # v425: la estructura, con su nombre. Solo si existe: sin localizaciones la
+    # pantalla queda EXACTAMENTE como estaba.
+    if tot_int > 0:
+        tarj.append(_kpi_card("Gasto de estructura", T.dinero(tot_int, 0),
+                              pie="oficina y almacén"))
     st.markdown('<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:8px">'
                 + "".join(tarj) + "</div>", unsafe_allow_html=True)
+    if tot_int > 0:
+        st.caption(f":material/business: **{T.dinero(tot_int, 0)}** de estructura "
+                   f"({T.dinero(_mo_int, 0)} de mano de obra + {T.dinero(_cmp_int, 0)} "
+                   "de compras) en "
+                   f"{len(_int_filas)} localización(es). **No se le carga a ninguna obra "
+                   "ni entra en el % consumido**, pero sí es costo del grupo y cuenta "
+                   "en el P&L.")
 
     # Dinero registrado que no cuelga de ningún proyecto: se DICE, no se descarta.
     if _huer["n"]:
@@ -4204,13 +4268,24 @@ def render_group_expenses(grupo: str):
     # EXACTAMENTE los mismos números que la torta (mismas categorías, mismos $ y
     # mismos %): dos gráficos para el mismo dato. La torta se queda porque es la
     # que el usuario pidió (v224) y además incluye la mano de obra.
+    # ⚠️ v425: la torta es el gasto de TODO el grupo, y `por_categoria` incluye las
+    # compras de estructura. Si la mano de obra fuera solo la de obra, la torta
+    # mezclaría dos ámbitos y dejaría de cuadrar con nada — el fallo de v310 en versión
+    # nueva. Se parte la mano de obra en dos rubros y la torta sigue sumando el grupo
+    # entero. Sin localizaciones, `_mo_int` es 0 y el rubro ni aparece: idéntico a antes.
     _catg = ge["por_categoria"]
-    _rubros = [("Mano de obra", _mo)] + sorted(_catg.items(), key=lambda x: -x[1])
+    _rubros = [("Mano de obra" + (" (obras)" if _mo_int > 0 else ""), _mo)]
+    if _mo_int > 0:
+        _rubros.append(("Mano de obra (estructura)", _mo_int))
+    _rubros += sorted(_catg.items(), key=lambda x: -x[1])
     _rubros = [(k, v) for k, v in _rubros if v and v > 0]
     if _rubros:
         st.markdown("**Gasto por rubro**")
         st.markdown(_torta_html(_rubros, sum(v for _, v in _rubros)),
                     unsafe_allow_html=True)
+        if tot_int > 0:
+            st.caption("Incluye la estructura: esta torta es el gasto del **grupo**, "
+                       "no solo el cargado a obras.")
 
 
     # ── Proyectos CON presupuesto (tabla CLICKEABLE → abre el proyecto, v215) ──
@@ -4267,6 +4342,11 @@ def render_group_expenses(grupo: str):
 # ── Reporte del ADMIN: horas de TODOS los usuarios del grupo ──
 def render_group_hours(grupo: str):
     from core import timeclock
+    # ⚠️ import LOCAL, como el resto del módulo (patrón v342). Se me olvidó por SEGUNDA
+    # vez en esta tanda —la primera fue en `render_localizaciones`— y lo cazó el
+    # guardián de v322, no yo: aquí `theme` no está a nivel de módulo, así que usarlo
+    # sin importar es un NameError que solo aparece al abrir la pantalla.
+    from core import theme
     # ⚠️ SIN cabecera propia: `home_ui._sub_header` ya pinta «Finanzas · X» encima.
     # Era el 5º título duplicado de la app (v212, v291, v314, v319 y este barrido).
     if not timeclock.is_configured():
@@ -4301,7 +4381,11 @@ def render_group_hours(grupo: str):
     tot_proy = sum(d["proyecto"] for d in data)
     tot_sina = sum(d["sin_asignar"] for d in data)
     tot_cost = sum(d["costo"] for d in data)
-    activos  = sum(1 for d in data if d["general"] or d["proyecto"])
+    # v425: el trabajo en oficina/almacén, que hasta ahora era un residuo anónimo
+    # dentro de «sin asignar». Se paga y no se le carga a ningún cliente.
+    tot_intn = sum(d.get("interno", 0.0) for d in data)
+    tot_cint = sum(d.get("costo_interno", 0.0) for d in data)
+    activos  = sum(1 for d in data if d["general"] or d["proyecto"] or d.get("interno"))
     pct_sina = (100 * tot_sina / tot_jorn) if tot_jorn > 0 else 0
     _dudoso  = [d for d in data if d["sin_asignar_indet"]]
 
@@ -4311,10 +4395,18 @@ def render_group_hours(grupo: str):
     # la hacía indistinguible del «Costos» del P&L, que es otro número.
     tarj = [_kpi_card("Personas", activos),
             _kpi_card("Jornada", f"{tot_jorn:.1f} h"),
-            _kpi_card("En proyectos", f"{tot_proy:.1f} h"),
-            _kpi_card("Sin asignar", "—" if _dudoso else f"{tot_sina:.1f} h",
-                      "#c0392b" if (_dudoso or pct_sina > 25) else None),
-            _kpi_card("M.O. cargada a obras", f"${tot_cost:,.0f}")]
+            _kpi_card("En proyectos", f"{tot_proy:.1f} h")]
+    # v425: la tarjeta de estructura solo aparece si hay algo que contar. Sin
+    # localizaciones sería un 0 permanente ocupando sitio, y la pantalla queda
+    # EXACTAMENTE como estaba.
+    if tot_intn > 0:
+        tarj.append(_kpi_card("En estructura", f"{tot_intn:.1f} h",
+                              pie="oficina, almacén"))
+    tarj += [_kpi_card("Sin asignar", "—" if _dudoso else f"{tot_sina:.1f} h",
+                       "#c0392b" if (_dudoso or pct_sina > 25) else None),
+             _kpi_card("M.O. cargada a obras", f"${tot_cost:,.0f}",
+                       pie=(f"+ {theme.dinero(tot_cint, 0)} interna"
+                            if tot_cint > 0 else None))]
     st.markdown('<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:6px">'
                 + "".join(tarj) + "</div>", unsafe_allow_html=True)
 
@@ -4330,9 +4422,15 @@ def render_group_hours(grupo: str):
                  "abrir jornada, así que esas horas **se cargan al cliente y no entran en "
                  "ninguna nómina**. Por eso «sin asignar» sale como «—»: no es calculable.")
     elif tot_jorn > 0:
+        # v425: con estructura, «sin asignar» ya no la incluye — así que el % dice de
+        # verdad lo que no se sabe, y lo que sí se sabe se nombra aparte.
+        _extra = (f" Otro **{100 * tot_intn / tot_jorn:.0f}%** fue trabajo en "
+                  f"**estructura** (oficina/almacén): se paga y no se le carga a "
+                  "ninguna obra." if tot_intn > 0 else "")
         st.caption(f"**{pct_sina:.0f}%** de la jornada del grupo fue traslados y espera "
-                   "(sin asignar). M.O. cargada = horas imputadas × tarifa de cada persona; "
-                   "no incluye los aportes de ley (ver Resumen → Conciliación).")
+                   f"(sin asignar).{_extra} M.O. cargada = horas imputadas × tarifa de "
+                   "cada persona; no incluye los aportes de ley (ver Resumen → "
+                   "Conciliación).")
 
     # ── Tabla por persona (con costo; sin el Login técnico) ──
     # (`_etiqueta` y `_nombres` se definen arriba: los usa también el aviso)
@@ -4340,14 +4438,21 @@ def render_group_hours(grupo: str):
     filas = []
     for d in data:
         _sa = ("—" if d["sin_asignar_indet"] else f"{d['sin_asignar']:.2f}")
-        filas.append({
+        _f = {
             "Usuario": _etiqueta(d),
             "Jornada (h)": d["general"],
             "En proyectos (h)": d["proyecto"],
+        }
+        # v425: la columna solo existe si el grupo tiene estructura. Añadir una de
+        # ceros a todo el mundo es ruido, y la tabla ya tiene 6 columnas.
+        if tot_intn > 0:
+            _f["En estructura (h)"] = d.get("interno", 0.0)
+        _f.update({
             "Sin asignar (h)": _sa,
             "Tarifa/h": d["tarifa"] or "—",
             "Costo M.O.": d["costo"] or 0,
         })
+        filas.append(_f)
     # v215: tabla CLICKEABLE → abre la ficha de la persona (Planificación · Usuarios).
     _hev = st.dataframe(pd.DataFrame(filas), width="stretch", hide_index=True,
                         on_select="rerun", selection_mode="single-row", key="gh_tbl")
