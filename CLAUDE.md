@@ -6974,6 +6974,58 @@ detalle). Lo que pintó, con datos reales:
 - ⚠️ El primer clic en «Aprobar» no hizo nada y el botón estaba **a y=987 con un
   viewport de 900**: fuera de vista. Medir dónde cae el clic, otra vez.
 
+## El saldo de vacaciones, por ANIVERSARIO de cada persona (v433)
+Salió de una pregunta del usuario sobre una línea de la auditoría de v432 («el saldo
+cuenta por el año en que empieza la ausencia»). Al medirlo, eran dos cosas.
+
+### 1 · Una ausencia se descontaba ENTERA del año en que empezaba
+Vacaciones de Navidad, 28/12 → 08/01, **10 días hábiles: 4 en 2026 y 6 en 2027**:
+| | la app decía | lo correcto |
+|---|---|---|
+| 2026 | usados **10** → quedan 10 | usados 4 → quedan 16 |
+| 2027 | usados **0** → quedan 20 | usados 6 → quedan 14 |
+El total no se perdía (30 días disponibles en los dos casos), pero el REPARTO estaba
+mal: comía 6 días de más al saldo de 2026 y regalaba 6 al de 2027. `dias_usados` pasa
+a contar los **días que caen dentro del periodo**, no las filas cuyo `Desde` cae en el
+año — con la misma regla que el pago (`incluye_findes`), para que saldo y nómina no
+puedan divergir.
+
+### 2 · Y el «año» pasa a ser el de cada persona (decisión del usuario)
+En AU el año de vacaciones va por **aniversario de alta**, no por año natural. Nueva
+columna `Login.FechaIngreso` (al final → migra sola) + `auth.fecha_ingreso` /
+`set_fecha_ingreso`, y `ausencias.periodo_saldo` devuelve el periodo vigente de esa
+persona: quien entró un 15/03 cuenta de 15/03 a 14/03.
+- ⚠️ **Sin fecha de alta NO se inventa un aniversario**: se cae al año natural y se
+  DICE, tanto en la pantalla del campo («no consta tu fecha de alta») como en la ficha
+  del admin. Un saldo que parece exacto y no lo es es peor que uno que avisa (v325).
+- ⚠️ **El 29 de febrero**: quien entró un 29/02 no tiene aniversario los años normales
+  y `date(2027, 2, 29)` lanza. `_mismo_dia_mes` retrocede al 28.
+- `FechaIngreso` entra en `CAMPOS_CLAVE` **en el mismo lote**: mueve el saldo de una
+  persona, así que deja rastro (la regla que v344/v352/v373 aprendieron a golpes).
+
+### ⚠️ EL FALLO QUE SOLO SE VIO EJECUTANDO: `auth._COL` estaba escrito A MANO
+Añadida la columna, la hoja la migró sola… y `set_fecha_ingreso` moría con
+**`Error: 'FechaIngreso'`**: `_COL` era un literal `{"Usuario": 1, …}` en paralelo a
+`LOGIN_HEADERS`, y no conocía la columna nueva. No lo detectan ni los imports, ni
+`compileall`, ni ninguno de los guardianes que había — **solo llamar a la función
+contra la hoja real**. Es la familia de `MargenPct` (v344) y de la fila posicional de
+v363: dos sitios que describen lo mismo y se desincronizan.
+- Ahora se DERIVA (`{h: i + 1 for i, h in enumerate(LOGIN_HEADERS)}`), así no puede
+  volver a divergir. **Barrido del repo**: era el ÚNICO a mano; los otros 12 mapas de
+  columnas ya se derivaban. Guardián nuevo y general: ningún `{columna: n}` literal.
+
+### Verificación
+Guardián de **104 comprobaciones**, probado contra **25 roturas** — todas cazadas,
+pero ⚠️ una solo **tras corregirlo**: el chequeo del reparto miraba que
+`dias_del_rango` apareciera en el código, así que una versión que devolvía siempre 0
+pasaba igual. Ahora **ejecuta** el caso de Navidad y exige 4/6. Ejercitado contra la
+hoja real de punta a punta: escribir la fecha → el periodo pasa a `2026-03-15 →
+2027-03-14` → rastro en la auditoría (`{"FechaIngreso": ["", "2024-03-15"]}`) →
+restaurado. Suite: **72/72**.
+
+⚠️ **Pendiente del usuario**: nadie del equipo tiene `FechaIngreso` cargada, así que
+hoy todos los saldos se cuentan por año natural y la app lo dice en cada pantalla.
+
 ## ⚠️ SE PAGABA DOS VECES EL MISMO DÍA + los dos avisos que faltaban (v432)
 Salió de la pregunta del usuario «¿ya quedó todo cerrado?» — auditando en vez de
 responder que sí.
@@ -7061,7 +7113,7 @@ problema es tuyo, no de la app). Es la nº12 aplicada a la escritura.
 ⚠️ Confirmado además que el clic llega al **`<div>`** que dibuja la casilla, no al
 `<input type=checkbox>` (que está oculto): la lección de v417, intacta.
 
-## Versiones desplegadas (v432 = actual)
+## Versiones desplegadas (v433 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -7069,6 +7121,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v433 | **El saldo de vacaciones pasa a ir por ANIVERSARIO de cada persona** (decisión del usuario; en AU no va por año natural) + se arregla el reparto al cambiar de año: unas vacaciones 28/12→08/01 descontaban **10 días a 2026 y 0 a 2027** cuando son **4 y 6** — el total salía bien y el reparto no. `dias_usados` cuenta ahora los DÍAS dentro del periodo, con la misma regla que el pago. Nueva columna `Login.FechaIngreso`; ⚠️ **sin ella no se inventa un aniversario**: cae al año natural y lo DICE en las dos pantallas (v325). ⚠️ El **29 de febrero** retrocede al 28 en vez de lanzar. ⚠️ **Y el fallo que solo se vio EJECUTANDO**: `auth._COL` era un literal en paralelo a `LOGIN_HEADERS`, así que la columna se migró en la hoja y la escritura moría con `Error: 'FechaIngreso'` — ni los imports ni ningún guardián lo ven. Ahora se DERIVA, y el barrido confirma que era el ÚNICO a mano de los 13 del repo. Guardián: 104 comprobaciones, **25 roturas probadas** — ⚠️ una solo se cazó tras corregirlo (miraba el código en vez del RESULTADO, y una versión que devolvía siempre 0 pasaba) |
 | v432 | ⚠️ **Se pagaba DOS VECES el mismo día**: si alguien tenía una ausencia pagada aprobada y además FICHÓ ese día, la nómina sumaba las dos cosas — medido, 8,75 h trabajadas + 8 h de baja = **$670 por un día**, invisible en la colilla (cada línea está bien; solo el total del día delata). Es v364 con otra forma. **Decisión del usuario: completar la jornada** — la ausencia paga solo lo que falta (fichó 4,68 → se añaden 3,32; fichó 8,75 → nada), y el recorte **se informa** en vez de aplicarse en silencio. ⚠️ **Mi primer chequeo pasó EN FALSO**: buscaba `"fich"` en el código y lo encontró **en un comentario mío**; lo mismo volvió a pasar dos veces al ampliar el guardián — las tres se arreglan mirando la ESTRUCTURA (la clave del dict devuelto, el `ImportFrom` real), no una subcadena. + los dos avisos que faltaban (al **asignar** personal con ausencias en esas fechas, y al **cancelar** una ya aprobada) + **rechazar** y **los avisos** ejercitados con el envío interceptado → las 6 rutas de escritura de v430 cerradas. Guardián: 82 comprobaciones, **20 roturas probadas** |
 | v431 | ⚠️ **El icono del selector de ausencias salía LITERAL** (`:material/beach_access: Vacaciones`): las opciones de un `selectbox` **no interpretan** `:material/…:` — `st.radio` sí (v234), así que la regla es POR WIDGET. Visto **mirando la pantalla**, no leyendo código. ⚠️ No se dio por bueno a la primera: podía ser una **ligadura de fuente** (trampa nº5), y mi sonda dio `false` también para el caso conocido-bueno — hubo que mirar el marcado real antes de acusar (un icono de verdad es `<span role="img">` con la fuente Material). Barrido del repo: 0 selectbox más afectados; los 7 `:material/` restantes son radios y se quedan. Guardián general nuevo. ⚠️ **Y el fallo de método**: ni el desplegable ni un checkbox respondían y llegué a atribuirlo a la pestaña oculta; **no era eso** — instrumentar los eventos midió que un clic pedido en (235, 318) aterrizaba en **(1088, 1472)**, ×4,63. Medir dónde cae el clic antes de teorizar |
 | v430 | **Autogestión de ausencias**: el equipo pide vacaciones o día libre y avisa de una baja, el admin aprueba, y al aprobar **se escribe en el planificador** con el aviso de las obras que quedan sin esa persona y quién puede cubrirlas. Saldo por persona y tipo, DERIVADO (nunca guardado). ⚠️ La enfermedad **no espera aprobación**: nadie sabe el lunes que el jueves estará en cama, y esperar dejaría el tablero mintiendo. ⚠️ **EL FALLO DE DINERO**: la base de la nómina sale de las horas FICHADAS, así que aprobar unas vacaciones significaba cobrar $0 — y quien estuvo fuera el periodo ENTERO **no recibía colilla en absoluto**, porque no aparecía en las horas; `generar` recorre ahora la UNIÓN de fichados y ausentes. La ausencia va como **DEVENGO con `origen`, nunca sumada a `Base`**: dentro haría que cada vacación apareciera como un descuadre inexistente en la conciliación de v313. ⚠️ **El segundo fallo lo cazó ejercitar la nómina de verdad**: a quien pidió el rango «con fin de semana» se le quitaban **12 días de saldo pagándole 8**, porque cada lado recontaba el rango con su criterio → columna `Findes` y la invariante *lo pagado = lo descontado*. Guardián probado contra **15 roturas** — ⚠️ dos solo se cazaron tras corregirlo, las dos por chequeos míos que corrían **en vacío** (buscaban `"st.rerun"` y `"len("` como subcadenas de un `ast.dump`, donde esos nodos no se escriben así). Entra además el guardián de la **regla v353**, que no existía en la suite |
