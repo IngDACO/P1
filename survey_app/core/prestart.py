@@ -26,17 +26,23 @@ HEADERS = ["ID", "ProyectoID", "Grupo", "Fecha", "Hora", "Location", "Facilitado
            "NotasGenerales", "Asistentes", "Archivo", "DriveID", "CreadoPor", "Creado"]
 
 # Sección 1 — YES/NO
+# ⚠️ La CLAVE es el dato y el TEXTO es lo que se lee. En la hoja se guarda
+# `{"permisos": "YES", …}` — la clave, nunca el texto—, así que traducir la segunda
+# columna no toca ni un registro histórico. El texto vuelve al INGLÉS (v436), que es
+# además la lengua del formulario original de CI Liftworx que esto calca (v172 los
+# había pasado al español para que coincidieran con la pantalla; ahora coinciden en
+# inglés, porque la pantalla también se traduce).
 CHECKS_S1 = [
-    ("permisos",        "Permisos obtenidos y revisados por cambios desde su emisión"),
-    ("toolbox",         "Notas del toolbox del builder revisadas y discutidas"),
-    ("subcontratistas", "Coordinación con subcontratistas y otros oficios en obra"),
-    ("preop",           "Chequeos/inspecciones pre-operacionales diarios hechos o asignados"),
+    ("permisos",        "Permits obtained and reviewed for changes since issue"),
+    ("toolbox",         "Builder's toolbox notes reviewed and discussed"),
+    ("subcontratistas", "Coordination with subcontractors and other trades on site"),
+    ("preop",           "Daily pre-operational checks/inspections completed or allocated"),
 ]
 # Sección 3 — Shaft Protection: NO/YES/N/A
 CHECKS_S3 = [
-    ("cages",        "Landing cages íntegras (fijas, seguras, sin huecos inaceptables)"),
-    ("landings",     "Landings libres de escombros y herramientas que puedan caer al hueco"),
-    ("penetrations", "Penetraciones del hueco adecuadamente cubiertas"),
+    ("cages",        "Landing cages intact (fixed, secure, no unacceptable gaps)"),
+    ("landings",     "Landings clear of debris and tools that could fall into the shaft"),
+    ("penetrations", "Shaft penetrations adequately covered"),
 ]
 OPTS_YN  = ["YES", "NO"]
 OPTS_YNA = ["YES", "NO", "N/A"]

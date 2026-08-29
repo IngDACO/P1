@@ -16,6 +16,7 @@ from reportlab.lib.units import mm
 from reportlab.lib.enums import TA_CENTER
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 
+from core.i18n import d          # v436: documento, idioma base
 from core.prestart import CHECKS_S1, CHECKS_S3
 
 # ⚠️ v383: `_celda_firma` registra en el log si una firma viene ilegible. Sin esta
@@ -140,16 +141,16 @@ def generate_anexo_firmas_pdf(info: dict) -> bytes:
     buf = io.BytesIO()
     doc = SimpleDocTemplate(buf, pagesize=A4, leftMargin=15 * mm, rightMargin=15 * mm,
                             topMargin=12 * mm, bottomMargin=12 * mm,
-                            title=f"Anexo de firmas · {info.get('ps_id', '')}")
+                            title=d("Signature addendum {id}", id=info.get("ps_id", "")))
     st = _styles()
     el = [Paragraph(_esc(info.get("marca", "")), st["PSBrand"]), _sp(2),
-          _band("ANEXO DE FIRMAS — incorporaciones posteriores a la charla", st,
-                "Estas personas ficharon en la obra después de emitirse el Pre-Start "
-                "y firmaron al llegar."),
+          _band(d("SIGNATURE ADDENDUM — people who joined after the briefing"), st,
+                d("These people clocked on site after this Pre-Start was issued and "
+                  "signed on arrival.")),
           _sp(4)]
 
     ref = [[Paragraph("<b>Pre-Start</b><br/>" + _esc(info.get("ps_id", "")), st["PSInfo"]),
-            Paragraph("<b>Fecha</b><br/>" + _esc(info.get("fecha", "")), st["PSInfo"]),
+            Paragraph(f"<b>{d('Date')}</b><br/>" + _esc(info.get("fecha", "")), st["PSInfo"]),
             Paragraph("<b>Proyecto</b><br/>" + _esc(info.get("proyecto", "")), st["PSInfo"]),
             Paragraph("<b>Location</b><br/>" + _esc(info.get("location", "")), st["PSInfo"])]]
     t = Table(ref, colWidths=[W * 0.18, W * 0.18, W * 0.32, W * 0.32])
@@ -163,7 +164,7 @@ def generate_anexo_firmas_pdf(info: dict) -> bytes:
     filas = [[Paragraph("<b>Print name</b>", st["PSQ"]),
               Paragraph("<b>Initial</b>", st["PSQ"]),
               Paragraph("<b>Signature</b>", st["PSQ"]),
-              Paragraph("<b>Hora</b>", st["PSQ"])]]
+              Paragraph(f"<b>{d('Time')}</b>", st["PSQ"])]]
     for a in (info.get("firmas") or []):
         filas.append([Paragraph(_esc(a.get("name", "")), st["PSBody"]),
                       Paragraph(_esc(a.get("initial", "")), st["PSQ"]),
@@ -180,8 +181,9 @@ def generate_anexo_firmas_pdf(info: dict) -> bytes:
                             ("TOPPADDING", (0, 0), (-1, -1), 4),
                             ("BOTTOMPADDING", (0, 0), (-1, -1), 4)]))
     el += [tf, _sp(10),
-           Paragraph("Este anexo no modifica el Pre-Start original: se añade a él. "
-                     "Cada firma queda con la hora en que se recogió.", st["PSSmall"])]
+           Paragraph(d("This addendum does not modify the original Pre-Start: it is "
+                       "attached to it. Each signature keeps the time it was taken."),
+                     st["PSSmall"])]
     doc.build(el)
     return buf.getvalue()
 
@@ -199,7 +201,7 @@ def generate_prestart_pdf(data: dict) -> bytes:
     story += [Paragraph(_esc(grupo), st["PSBrand"]),
               Paragraph("Daily Pre-Start", st["PSTitle2"])]
     if proyecto:
-        story += [Paragraph("Proyecto: " + _esc(proyecto), st["PSProj"])]
+        story += [Paragraph(d("Project: ") + _esc(proyecto), st["PSProj"])]
     story += [_sp(8)]
 
     # ── Fila: Date · Time · Location · Facilitated by (bordeada, como el template) ──
@@ -316,7 +318,8 @@ def generate_prestart_pdf(data: dict) -> bytes:
     ]))
     story += [attab, _sp(10)]
 
-    story += [Paragraph(f"Generado el {clock.now().strftime('%d/%m/%Y %H:%M')} · {_esc(grupo)}",
+    story += [Paragraph(d("Generated on {f} · {g}", f=clock.now().strftime("%d/%m/%Y %H:%M"),
+                          g=_esc(grupo)),
                         st["PSSmall"])]
 
     doc.build(story)

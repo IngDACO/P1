@@ -1,9 +1,16 @@
 """PDF de factura (tax invoice) para enviar al cliente.
 
-Una página A4: marca del grupo + «FACTURA / TAX INVOICE», datos (Nº/fecha/
-vencimiento/estado), «Facturar a» (cliente + contacto de su ficha), tabla de
-líneas, y totales (subtotal · impuesto · total · cobrado · por cobrar).
+Una página A4: marca del grupo + «TAX INVOICE», datos (nº/fecha/vencimiento/estado),
+«Bill to» (cliente + contacto de su ficha), tabla de líneas, y totales (subtotal ·
+impuesto · total · cobrado · por cobrar).
 Mismo lenguaje visual que `tool_pdf` (reportlab platypus).
+
+⚠️ El texto va en INGLÉS y pasa por `i18n.d()`, que ignora el idioma de la interfaz
+(v436): este documento sale de la empresa y su idioma no puede depender de cómo tenga
+la pantalla quien pulsa el botón.
+⚠️ El ESTADO se muestra con `i18n.etiqueta()`: en la hoja sigue siendo `"cobrada"` /
+`"vencida"` —así lo compara `estado_cobro` y medio módulo de finanzas— y solo cambia
+cómo se lee.
 """
 import io as _io
 
@@ -14,6 +21,8 @@ from reportlab.lib.units import mm
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 from core import invoices as I
+from core import i18n
+from core.i18n import d
 from core.num import num as _num
 
 C_BRAND = colors.HexColor("#1a3a5c")
@@ -36,26 +45,26 @@ def generate_invoice_pdf(factura: dict, cliente: dict = None, grupo_nombre: str 
     buf = _io.BytesIO()
     doc = SimpleDocTemplate(buf, pagesize=A4, leftMargin=16 * mm, rightMargin=16 * mm,
                             topMargin=16 * mm, bottomMargin=16 * mm,
-                            title=f"Factura {factura.get('Numero', '')}")
+                            title=d("Invoice {n}", n=factura.get("Numero", "")))
     story = []
 
     marca = grupo_nombre or str(factura.get("Grupo", ""))
-    head = Table([[Paragraph(str(marca), mk), Paragraph("FACTURA / TAX INVOICE", ti)]],
+    head = Table([[Paragraph(str(marca), mk), Paragraph(d("TAX INVOICE"), ti)]],
                  colWidths=[90 * mm, 88 * mm])
     head.setStyle(TableStyle([("ALIGN", (1, 0), (1, 0), "RIGHT"), ("VALIGN", (0, 0), (-1, -1), "TOP")]))
     story += [head, Spacer(1, 10)]
 
     est = I.estado_cobro(factura)
     meta = Table([
-        [Paragraph("Nº", sm), Paragraph(str(factura.get("Numero", "")), Hb)],
-        [Paragraph("Fecha", sm), Paragraph(str(factura.get("Fecha", "")), H)],
-        [Paragraph("Vencimiento", sm), Paragraph(str(factura.get("Vencimiento", "") or "—"), H)],
-        [Paragraph("Estado", sm), Paragraph(est, H)],
+        [Paragraph(d("Invoice no."), sm), Paragraph(str(factura.get("Numero", "")), Hb)],
+        [Paragraph(d("Date"), sm), Paragraph(str(factura.get("Fecha", "")), H)],
+        [Paragraph(d("Due"), sm), Paragraph(str(factura.get("Vencimiento", "") or "—"), H)],
+        [Paragraph(d("Status"), sm), Paragraph(i18n.etiqueta(est), H)],
     ], colWidths=[24 * mm, 34 * mm])
     meta.setStyle(TableStyle([("TOPPADDING", (0, 0), (-1, -1), 1), ("BOTTOMPADDING", (0, 0), (-1, -1), 1)]))
 
     cli = cliente or {}
-    bill = [Paragraph("<b>Facturar a</b>", Hb),
+    bill = [Paragraph(f"<b>{d('Bill to')}</b>", Hb),
             Paragraph(str(factura.get("ClienteNombre", "") or cli.get("Nombre", "") or "—"), H)]
     for k in ("Contacto", "Direccion", "Email", "Telefono"):
         v = str(cli.get(k, "")).strip()
@@ -65,8 +74,8 @@ def generate_invoice_pdf(factura: dict, cliente: dict = None, grupo_nombre: str 
     info.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP")]))
     story += [info, Spacer(1, 12)]
 
-    data = [[Paragraph("<b>Concepto</b>", ParagraphStyle("hh", parent=Hb, textColor=colors.white)),
-             Paragraph("<b>Importe</b>", ParagraphStyle("hr", parent=Hb, textColor=colors.white))]]
+    data = [[Paragraph(f"<b>{d('Description')}</b>", ParagraphStyle("hh", parent=Hb, textColor=colors.white)),
+             Paragraph(f"<b>{d('Amount')}</b>", ParagraphStyle("hr", parent=Hb, textColor=colors.white))]]
     for ln in I.lineas_de(factura):
         data.append([Paragraph(str(ln.get("concepto", "")), H), Paragraph(_money(ln.get("importe")), H)])
     t = Table(data, colWidths=[133 * mm, 45 * mm])
@@ -82,11 +91,11 @@ def generate_invoice_pdf(factura: dict, cliente: dict = None, grupo_nombre: str 
     imp_pct = _num(factura.get("ImpuestoPct"))
     por_cobrar = _num(factura.get("Total")) - _num(factura.get("Cobrado"))
     tot = Table([
-        ["Subtotal", _money(factura.get("Subtotal"))],
-        [f"Impuesto ({imp_pct:.0f}%)", _money(factura.get("Impuesto"))],
-        ["TOTAL", _money(factura.get("Total"))],
-        ["Cobrado", _money(factura.get("Cobrado"))],
-        ["Por cobrar", _money(por_cobrar)],
+        [d("Subtotal"), _money(factura.get("Subtotal"))],
+        [d("Tax ({pct}%)", pct=f"{imp_pct:.0f}"), _money(factura.get("Impuesto"))],
+        [d("TOTAL"), _money(factura.get("Total"))],
+        [d("Paid"), _money(factura.get("Cobrado"))],
+        [d("Balance due"), _money(por_cobrar)],
     ], colWidths=[48 * mm, 40 * mm], hAlign="RIGHT")
     tot.setStyle(TableStyle([
         ("ALIGN", (0, 0), (-1, -1), "RIGHT"), ("FONTSIZE", (0, 0), (-1, -1), 9),
@@ -96,7 +105,7 @@ def generate_invoice_pdf(factura: dict, cliente: dict = None, grupo_nombre: str 
     story += [tot, Spacer(1, 10)]
 
     if str(factura.get("Nota", "")).strip():
-        story += [Paragraph(f"<b>Nota:</b> {factura.get('Nota')}", sm)]
+        story += [Paragraph(f"<b>{d('Note:')}</b> {factura.get('Nota')}", sm)]
 
     doc.build(story)
     return buf.getvalue()

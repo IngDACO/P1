@@ -1,4 +1,4 @@
-"""PDF de cotización para enviar al cliente (v353).
+"""PDF de cotización para enviar al cliente (texto en INGLÉS, v436) (v353).
 
 Misma cara que `invoice_pdf` a propósito: quien recibe la cotización y luego la factura
 tiene que ver dos documentos de la misma casa. Una página A4: marca del grupo +
@@ -17,6 +17,8 @@ from reportlab.lib.units import mm
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 from core import quotes as Q
+from core import i18n
+from core.i18n import d
 from core.num import num as _num
 
 C_BRAND = colors.HexColor("#1a3a5c")
@@ -40,11 +42,11 @@ def generate_quote_pdf(cot: dict, cliente: dict = None, grupo_nombre: str = "") 
     num = str(cot.get("Numero", ""))
     doc = SimpleDocTemplate(buf, pagesize=A4, leftMargin=16 * mm, rightMargin=16 * mm,
                             topMargin=16 * mm, bottomMargin=16 * mm,
-                            title=f"Cotización {num}")
+                            title=d("Quote {n}", n=num))
     story = []
 
     marca = grupo_nombre or str(cot.get("Grupo", ""))
-    head = Table([[Paragraph(str(marca), mk), Paragraph("COTIZACIÓN", ti)]],
+    head = Table([[Paragraph(str(marca), mk), Paragraph(d("QUOTE"), ti)]],
                  colWidths=[90 * mm, 88 * mm])
     head.setStyle(TableStyle([("ALIGN", (1, 0), (1, 0), "RIGHT"),
                               ("VALIGN", (0, 0), (-1, -1), "TOP")]))
@@ -52,16 +54,16 @@ def generate_quote_pdf(cot: dict, cliente: dict = None, grupo_nombre: str = "") 
 
     _ver = int(_num(cot.get("Version"), 1))
     meta = Table([
-        [Paragraph("Nº", sm), Paragraph(num + (f"  ·  v{_ver}" if _ver > 1 else ""), Hb)],
-        [Paragraph("Fecha", sm), Paragraph(str(cot.get("Fecha", "")), H)],
-        [Paragraph("Válida hasta", sm), Paragraph(str(cot.get("Validez", "") or "—"), Hb)],
-        [Paragraph("Estado", sm), Paragraph(Q.estado_de(cot), H)],
+        [Paragraph(d("Quote no."), sm), Paragraph(num + (f"  ·  v{_ver}" if _ver > 1 else ""), Hb)],
+        [Paragraph(d("Date"), sm), Paragraph(str(cot.get("Fecha", "")), H)],
+        [Paragraph(d("Valid until"), sm), Paragraph(str(cot.get("Validez", "") or "—"), Hb)],
+        [Paragraph(d("Status"), sm), Paragraph(i18n.etiqueta(Q.estado_de(cot)), H)],
     ], colWidths=[26 * mm, 34 * mm])
     meta.setStyle(TableStyle([("TOPPADDING", (0, 0), (-1, -1), 1),
                               ("BOTTOMPADDING", (0, 0), (-1, -1), 1)]))
 
     cli = cliente or {}
-    para = [Paragraph("<b>Para</b>", Hb),
+    para = [Paragraph(f"<b>{d('To')}</b>", Hb),
             Paragraph(str(cot.get("ClienteNombre", "") or cli.get("Nombre", "") or "—"), H)]
     for k in ("Contacto", "Direccion", "Email", "Telefono"):
         v = str(cli.get(k, "") or "").strip()
@@ -72,8 +74,8 @@ def generate_quote_pdf(cot: dict, cliente: dict = None, grupo_nombre: str = "") 
     story += [bloque, Spacer(1, 12)]
 
     # ── Líneas: SIN costo ni margen (ver el módulo) ──────────────
-    filas = [[Paragraph("<b>Concepto</b>", Hb), Paragraph("<b>Cant.</b>", Hb),
-              Paragraph("<b>Importe</b>", Hb)]]
+    filas = [[Paragraph(f"<b>{d('Description')}</b>", Hb), Paragraph(f"<b>{d('Qty')}</b>", Hb),
+              Paragraph(f"<b>{d('Amount')}</b>", Hb)]]
     for l in Q.lineas_de(cot):
         txt = str(l.get("concepto", ""))
         desc = str(l.get("descripcion", "") or "").strip()
@@ -96,12 +98,13 @@ def generate_quote_pdf(cot: dict, cliente: dict = None, grupo_nombre: str = "") 
     story += [tab, Spacer(1, 10)]
 
     imp_pct = _num(cot.get("ImpuestoPct"))
-    tot = [["Subtotal", _money(cot.get("Subtotal"))]]
+    tot = [[d("Subtotal"), _money(cot.get("Subtotal"))]]
     if imp_pct > 0:
-        tot.append([f"Impuesto ({imp_pct:g}%)", _money(cot.get("Impuesto"))])
-    tot.append(["TOTAL", _money(cot.get("Total"))])
-    t = Table([[Paragraph(a, Hb if a == "TOTAL" else H),
-                Paragraph(b, Hb if a == "TOTAL" else H)] for a, b in tot],
+        tot.append([d("Tax ({pct}%)", pct=f"{imp_pct:g}"), _money(cot.get("Impuesto"))])
+    tot.append([d("TOTAL"), _money(cot.get("Total"))])
+    _ult = len(tot) - 1
+    t = Table([[Paragraph(a, Hb if i == _ult else H),
+                Paragraph(b, Hb if i == _ult else H)] for i, (a, b) in enumerate(tot)],
               colWidths=[42 * mm, 34 * mm], hAlign="RIGHT")
     t.setStyle(TableStyle([("ALIGN", (1, 0), (1, -1), "RIGHT"),
                            ("LINEABOVE", (0, len(tot) - 1), (-1, len(tot) - 1), 0.6, C_BRAND),
@@ -111,10 +114,10 @@ def generate_quote_pdf(cot: dict, cliente: dict = None, grupo_nombre: str = "") 
 
     nota = str(cot.get("Nota", "") or "").strip()
     if nota:
-        story += [Paragraph("<b>Notas</b>", Hb), Paragraph(nota, H), Spacer(1, 8)]
+        story += [Paragraph(f"<b>{d('Notes')}</b>", Hb), Paragraph(nota, H), Spacer(1, 8)]
     story += [Paragraph(
-        f"Cotización válida hasta el {cot.get('Validez', '') or '—'}. "
-        "Precios sujetos a confirmación por escrito una vez vencida esa fecha.", sm)]
+        d("This quote is valid until {v}. Prices are subject to written "
+          "confirmation after that date.", v=cot.get("Validez", "") or "—"), sm)]
 
     doc.build(story)
     return buf.getvalue()

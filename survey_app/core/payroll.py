@@ -274,7 +274,11 @@ def generar(grupo, desde, hasta, super_pct=0.0, ret_pct=0.0, creado_por="") -> d
         # ni superannuation. Los dos porcentajes siguen siendo editables después.
         bruto = round(base + monto_aus, 2)
         if ret_pct > 0:
-            conceptos.append({"concepto": "Retención de impuesto (PAYG)",
+            # ⚠️ v436: el texto se GUARDA en `ConceptosJSON`, así que esto solo afecta a
+            # las nóminas NUEVAS; las ya emitidas conservan el suyo en español (son
+            # datos históricos). Nadie compara este texto — se comparan `tipo` y
+            # `origen`, que siguen igual.
+            conceptos.append({"concepto": "Income tax withheld (PAYG)",
                               "tipo": "deduccion", "monto": round(bruto * ret_pct / 100.0, 2)})
         if super_pct > 0:
             conceptos.append({"concepto": "Superannuation",

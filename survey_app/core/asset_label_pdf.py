@@ -7,6 +7,8 @@ from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
 from reportlab.platypus import Image, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
+from core.i18n import d          # v436: la etiqueta va SIEMPRE en el idioma base
+
 C_BRAND = colors.HexColor("#1a3a5c")
 C_MUTE = colors.HexColor("#7a8699")
 
@@ -22,16 +24,20 @@ def generate_label_pdf(activo: dict, qr_png: bytes, grupo_nombre: str = "") -> b
     buf = _io.BytesIO()
     doc = SimpleDocTemplate(buf, pagesize=A4, leftMargin=18 * mm, rightMargin=18 * mm,
                             topMargin=18 * mm, bottomMargin=18 * mm,
-                            title=f"Etiqueta {activo.get('ID', '')}")
+                            title=d("Label {id}", id=activo.get("ID", "")))
     story = []
 
     qr = Image(_io.BytesIO(qr_png), width=48 * mm, height=48 * mm)
     lineas = [Paragraph(str(activo.get("Nombre", "")), nom),
               Paragraph(str(activo.get("ID", "")), idst)]
-    for lbl, key in (("Categoría", "Categoria"), ("Marca/Modelo", None), ("Serie", "Serie")):
+    # ⚠️ Las ramas van por la CLAVE, nunca por el texto de la etiqueta: al traducir
+    # «Marca/Modelo» a «Make/Model» la comparación por texto dejó de cumplirse y esa
+    # línea desapareció de la etiqueta, sin ningún error. Es el modo de fallo típico
+    # de una traducción, y lo cometí en el primer módulo que toqué.
+    for lbl, key in ((d("Category"), "Categoria"), (d("Make/Model"), None), (d("Serial"), "Serie")):
         if key == "Serie":
             v = str(activo.get("Serie", "")).strip()
-        elif lbl == "Marca/Modelo":
+        elif key is None:
             v = " ".join(x for x in (str(activo.get("Marca", "")).strip(),
                                      str(activo.get("Modelo", "")).strip()) if x)
         else:

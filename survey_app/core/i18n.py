@@ -94,6 +94,27 @@ def t(texto: str, **kw) -> str:
     return texto
 
 
+def d(texto: str, **kw) -> str:
+    """Texto de DOCUMENTO: **siempre en el idioma base**, pase lo que pase (v436).
+
+    ⚠️ Una factura, una cotización o una colilla salen de la empresa y las lee otra
+    persona; su idioma no puede depender de cómo tenga la interfaz quien pulsa el
+    botón. Sin esto, el día que alguien traduzca al español un `"Date"` para su
+    pantalla, esa misma clave se aplicaría a la factura —el modelo es clave = texto
+    inglés, así que un texto se comparte entre pantalla y documento— y saldría una
+    factura en español para un cliente australiano. Un fallo caro y silencioso.
+
+    Si algún día hace falta emitir en el idioma del CLIENTE, se cambia aquí y solo
+    aquí: es el único punto por el que pasa el texto de los documentos.
+    """
+    if kw and texto:
+        try:
+            return texto.format(**kw)
+        except Exception as e:
+            logger.warning("i18n.d: no se pudo formatear %r: %s", texto, e)
+    return texto
+
+
 def _dic(idi: str) -> dict:
     if idi == "es":
         try:
@@ -144,6 +165,8 @@ VALORES = {
     "EPP": "PPE", "Consumible": "Consumable",
     # catálogo
     "producto": "product", "servicio": "service",
+    # conceptos de nómina (payroll: `tipo`)
+    "devengo": "earning", "deduccion": "deduction", "aporte": "contribution",
 }
 
 
