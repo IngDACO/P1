@@ -3518,11 +3518,30 @@ def render_expenses(pid, grupo, can_delete=False, key_prefix="ex"):
     pres  = cp["presupuesto"]
     proy  = cp["proyectado"]
 
+    # ⚠️ v429: una LOCALIZACIÓN interna no termina, no lleva presupuesto (decisión del
+    # usuario en v423) y su costo no se compara con nada. Las tres piezas que siguen
+    # están escritas para una OBRA:
+    #   · «Costará al terminar» proyecta con `total × 100 / avance`, y aquí no hay
+    #     avance → salía «—» fijo;
+    #   · «Presupuesto» salía «—» fijo, porque su ficha ni siquiera lo ofrece;
+    #   · y el titular decía «no tiene presupuesto asignado… se define en Datos»,
+    #     que es **falso**: en la ficha de una localización ese campo NO existe, así
+    #     que mandaba a buscar algo que no está.
+    # Quitar solo la primera dejaría las otras dos diciendo lo mismo a medias — el
+    # desajuste de media-unificación de v419.
+    _loc = P.es_interno(P.get_project(pid) or {})
+
     # ── Titular: una frase antes de cualquier numero ──
     # ⚠️ v349: los importes van por `theme.dinero` (formatea Y escapa el `$`). Con dos
     # `$` sueltos en la misma cadena, Streamlit la renderiza como LaTeX (regla v309).
     from core import theme as _T
-    if proy and pres > 0 and proy > pres * 1.02:
+    if _loc:
+        _t = ("Gasto de **estructura**: no se le carga a ninguna obra ni se le "
+              "factura a un cliente."
+              if cp["total"] > 0 else
+              "Todavía no hay gastos registrados en esta localización.")
+        _c, _fn = "#6b7280", st.info
+    elif proy and pres > 0 and proy > pres * 1.02:
         _t = (f"A este ritmo el proyecto costara **{_T.dinero(proy, 0)}**, "
               f"**{_T.dinero(proy - pres, 0)} por encima** del presupuesto")
         _c, _fn = "#c0392b", st.error
@@ -3541,9 +3560,10 @@ def render_expenses(pid, grupo, can_delete=False, key_prefix="ex"):
     # ── Tarjetas KPI ──
     tarj = [_kpi_card("Costo total", f"${cp['total']:,.0f}"),
             _kpi_card("Compras", f"${cp['compras']:,.0f}"),
-            _kpi_card("Mano de obra", f"${cp['mano_obra']:,.0f}"),
-            _kpi_card("Presupuesto", f"${pres:,.0f}" if pres > 0 else "—"),
-            _kpi_card("Costará al terminar", f"${proy:,.0f}" if proy else "—", _c)]
+            _kpi_card("Mano de obra", f"${cp['mano_obra']:,.0f}")]
+    if not _loc:                       # v429: ninguna de las dos aplica a una localización
+        tarj += [_kpi_card("Presupuesto", f"${pres:,.0f}" if pres > 0 else "—"),
+                 _kpi_card("Costará al terminar", f"${proy:,.0f}" if proy else "—", _c)]
     # v343: lo COMPROMETIDO solo se enseña si hay algo pedido — una tarjeta en $0
     # en todos los proyectos sería ruido.
     if cp.get("comprometido"):

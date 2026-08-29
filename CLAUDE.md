@@ -6809,7 +6809,33 @@ Suite: **71/71**.
   vi era del panel a 528 px. **Iba a arreglar algo que no está roto**: el error de v335,
   evitado por medir donde toca.
 
-## Versiones desplegadas (v428 = actual)
+## La pantalla de Costos deja de hablarle a la localización de cosas que no tiene (v429)
+Petición del usuario: *«quítale lo de costará al terminar a las localizaciones»*, visto
+en pantalla con el rol campo.
+
+Al mirarlo, el mismo defecto estaba en **tres** piezas del mismo bloque, y quitar solo
+una habría dejado las otras dos diciendo lo mismo a medias — el desajuste de
+media-unificación de v419:
+| Pieza | Qué hacía en una localización |
+|---|---|
+| «Costará al terminar» | proyecta con `total × 100 / avance`, y aquí no hay avance → **«—» fijo** |
+| «Presupuesto» | **«—» fijo**: su ficha ni siquiera ofrece el campo (decisión de v423) |
+| El titular | ⚠️ *«no tiene presupuesto asignado… se define en :material/edit: Datos»* — **falso**: ahí ese campo NO existe, así que mandaba a buscar algo que no está |
+
+Las dos tarjetas se ocultan y el titular tiene su propia frase: *«Gasto de estructura:
+no se le carga a ninguna obra ni se le factura a un cliente»*. La barra de presupuesto
+ya estaba protegida (`if pres > 0`, y una localización nunca lo tiene).
+
+Guardián: las tres piezas tienen que colgar de un `if` sobre `es_interno`. Probado
+contra 2 versiones rotas. Suite: **71/71**.
+
+⚠️ Al ampliar `verif_v423.py` rompí el fichero **dos veces** insertando texto con
+`\n` escapado dentro de un heredoc: la primera corrección pareció aplicarse (el assert
+pasó) y el fichero seguía igual. Se arregló escribiendo el bloque a un fichero aparte y
+**concatenando**, sin escapes. Es la lección de v148 —no reescribir por texto lo que
+puedes insertar como líneas— aplicada a un guardián.
+
+## Versiones desplegadas (v429 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -6817,6 +6843,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v429 | **La pantalla de Costos deja de hablarle a la localización de lo que no tiene** (pedido por el usuario tras verlo con el rol campo). Eran **tres** piezas, no una: «Costará al terminar» («—» fijo, no hay avance que proyectar), «Presupuesto» («—» fijo, su ficha ni lo ofrece) y ⚠️ el titular *«se define en Datos»*, que era **falso** — ahí ese campo no existe, así que mandaba a buscar algo que no está. Quitar solo la primera habría dejado las otras a medias (v419). Titular propio: «Gasto de estructura: no se le carga a ninguna obra ni se le factura a un cliente». + **verificado en pantalla con el rol campo** todo v423: tarjetas Estado/Tipo/Responsable en vez de Avance/Cliente, sin barra de progreso, y menú de 3 (Avisos·Recibos·Archivos) sin «Avance». ⚠️ La localización no aparecía en su selector y estuve a punto de diagnosticar un fallo: era la **caché de 120 s** |
 | v428 | ⚠️ **Un generador de IDs contaba FILAS, y ya COLISIONABA en producción.** `roster._next_id` hacía `len(hoja)-1+1`, y `delete_trabajo` borra la fila cuando el trabajo no está asignado: medido, 4 filas con IDs `TRB-0002..0005` → el siguiente alta emitía **TRB-0005, que ya existía**. Como `trabajos_idx` indexa por ID, uno de los dos desaparece y **las celdas del tablero resuelven al trabajo equivocado** (nombre y color de otro) sin ningún error. Peor que el reciclaje de v427: ahí hacía falta borrar el ÚLTIMO, aquí basta con **uno del medio**. Mismo patrón encontrado por el guardián en `toolruns` (`CAL-`), que no chocaba hoy por casualidad. Arreglados los dos + salto extendido a **agrupaciones** (borrarlas y recrearlas metería los elevadores de la vieja en la nueva) y **credenciales** → **siete** generadores protegidos. + ⚠️ **v426 demostrado EN VIVO**: factura real de $5.500 con $1.500 cobrados, anulada → el P&L vuelve exactamente a su sitio, mientras la lógica vieja habría dejado **+$5.500 de ingresos fantasma**. + ⚠️ Una alarma descartada por medir: la columna «Estado» de Facturas «no existía» en el DOM — era la virtualización de `st.dataframe`, y a **1440 px caben las 8 columnas con 0 ocultas**; iba a arreglar algo que no está roto (el error de v335) |
 | v427 | ⚠️ **Los IDs ya no se reciclan.** Los 13 generadores hacen `max(los vivos)+1`, así que borrar la fila con el ID más alto **libera el número** y el siguiente alta lo reutiliza, heredando los huérfanos del anterior (medido en v426: $1.000 de facturación ajena). Nuevas `hojas.ids_referenciados` / `siguiente_id_libre`: al emitir, se salta el ID que aparezca **en cualquier otra hoja** — por texto (hay referencias dentro de JSON), incluyendo **`Auditoria`** (donde queda constancia de lo borrado) y excluyendo la hoja propia. Lee FRESCO porque decide qué ID se emite (v323); medido **0,44 s en caliente**. Degrada al comportamiento de siempre si falla. Aplicado a las tres entidades que se borran Y se referencian: proyecto, cliente y gasto. Verificado contra la hoja real: emitiría `PRJ-0018` en vez de reciclar el 0017. Guardián probado contra 7 casos rotos; ⚠️ **dos solo se cazaron tras corregirlo**: uno buscaba el NOMBRE `propia_l` (que sobrevive al borrar la comparación) y su versión funcional dio un **FALLO inexistente** por el CWD de los secrets (v19) — un guardián no puede depender del directorio desde el que se lance |
 | v426 | ⚠️ **Una factura ANULADA contaba como INGRESO en el P&L.** El comentario decía `# excluye anuladas` y el docstring también, pero `list_facturas` **no filtra por estado** (a diferencia de `list_nominas`). ⚠️ La asimetría es lo grave: los **costos** anulados sí se excluían, así que el error solo iba en la dirección de **parecer más rentable** — y anular es justamente cómo se corrige una factura mal emitida. Medido: una anulada de $1.100 con $400 cobrados inflaba facturado, cobrado, por-cobrar y ganancia. NO se arregla cambiando el default (la lista y el detalle del cliente **necesitan mostrarlas**: sería el fallo de v340), sino filtrando en `pnl`, que era el único de los cinco consumidores que no lo hacía. **Lo encontró ejercitar el ciclo de negocio completo, no leer código.** Guardián de COMPORTAMIENTO (parchea `list_facturas` con un conjunto conocido) — ⚠️ y su chequeo de «siguen visibles» **pasaba en vacío** porque llamaba a la función parcheada; ahora mira el código por AST. + **dos flujos completos ejercitados** (localizaciones y negocio, 53 comprobaciones) y **9 filas de pruebas del 26/08 sin limpiar**, que por el **reciclaje de IDs** (`max+1`) hicieron que una obra nueva heredara $1.000 de facturación ajena |
