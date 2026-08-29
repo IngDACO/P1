@@ -4807,16 +4807,20 @@ def render_localizaciones(grupo: str):
              for p in locs)
     _n = len({u for p in locs for u in _loc_personas(p)})
 
-    k = st.columns(4)
-    with k[0]:
+    # ⚠️ `_kpi_card` DEVUELVE el HTML, no lo pinta. Mi primera versión hacía
+    # `with k[0]: _kpi_card(...)` dentro de columnas y las cuatro tarjetas salían
+    # INVISIBLES — código válido que no lanza, así que ningún guardián lo vio: lo cazó
+    # mirar la pantalla en producción (como el `:material/` literal de v375). El patrón
+    # correcto es el del resto del repo: construir la lista y pintarla de una vez.
+    _tarj = [
         _kpi_card("Localizaciones", str(len(_abiertas)),
-                  pie=f"de {len(locs)}" if len(locs) != len(_abiertas) else "abiertas")
-    with k[1]:
-        _kpi_card("Horas trabajadas", f"{_h:,.0f}", pie="no se cargan a obra")
-    with k[2]:
-        _kpi_card("Gasto de estructura", theme.dinero(_g, 0), pie="no se factura")
-    with k[3]:
-        _kpi_card("Personas", str(_n), pie="asignadas de forma habitual")
+                  pie=f"de {len(locs)}" if len(locs) != len(_abiertas) else "abiertas"),
+        _kpi_card("Horas trabajadas", f"{_h:,.0f}", pie="no se cargan a obra"),
+        _kpi_card("Gasto de estructura", theme.dinero(_g, 0), pie="no se factura"),
+        _kpi_card("Personas", str(_n), pie="asignadas de forma habitual"),
+    ]
+    st.markdown('<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:8px">'
+                + "".join(_tarj) + "</div>", unsafe_allow_html=True)
 
     st.caption("Oficinas, almacenes y talleres: aquí se ficha, se hace el pre-start y "
                "se cargan los gastos de administración. **No tienen cronograma ni "
