@@ -220,6 +220,15 @@ def generar(grupo, desde, hasta, super_pct=0.0, ret_pct=0.0, creado_por="") -> d
         # Best-effort: un fallo leyendo ausencias no puede impedir pagar lo trabajado.
         logger.warning("payroll.generar: no se pudieron leer las ausencias: %s", e)
 
+    # v432: días en que la ausencia se recortó porque además se fichó. Se informan
+    # para que el ajuste NO sea silencioso (ver `ausencias.horas_pagadas_grupo`).
+    recortes = []
+    for _k, _v in (aus or {}).items():
+        for _r in _v.get("recortados", []):
+            recortes.append({"nombre": _v.get("nombre") or _k, "usuario": _k,
+                             "fecha": str(_r["fecha"]), "fichadas": _r["fichadas"],
+                             "pagadas": _r["pagadas"]})
+
     rows, creadas, omitidas, sin_tarifa, solapadas = [], 0, 0, [], []
     base_num = _max_num()
     for clave in sorted(set(horas) | set(aus)):
@@ -292,7 +301,7 @@ def generar(grupo, desde, hasta, super_pct=0.0, ret_pct=0.0, creado_por="") -> d
         _veces[nom] = _veces.get(nom, 0) + 1
     st_txt = [f"{nom} ({clave})" if _veces[nom] > 1 else nom for nom, clave in sin_tarifa]
     return {"creadas": creadas, "omitidas": omitidas, "sin_tarifa": st_txt,
-            "solapadas": solapadas}
+            "solapadas": solapadas, "recortes": recortes}
 
 
 def _find_row(w, nid):

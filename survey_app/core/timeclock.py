@@ -814,6 +814,45 @@ def horas_por_usuario_rango(grupo: str, desde, hasta) -> dict:
     return {k: {"nombre": v["nombre"], "horas": round(v["horas"], 2)} for k, v in out.items()}
 
 
+def horas_por_usuario_dia(grupo: str, desde, hasta) -> dict:
+    """`{clave: {date: horas}}` — jornada fichada de cada persona, DÍA A DÍA.
+
+    Mismo recorrido y mismos segmentos que `horas_por_usuario_rango` (v164), solo que
+    sin agregar: lo necesita `ausencias.horas_pagadas_grupo` para no pagar dos veces
+    el mismo día. Un total por periodo no sirve ahí — hay que saber QUÉ días.
+    """
+    from datetime import date as _date, datetime as _datetime
+
+    def _to_date(v):
+        if isinstance(v, _datetime):
+            return v.date()
+        if isinstance(v, _date):
+            return v
+        try:
+            return _datetime.strptime(str(v)[:10], "%Y-%m-%d").date()
+        except Exception:
+            return None
+    desde, hasta = _to_date(desde), _to_date(hasta)
+    if desde is None or hasta is None:
+        return {}
+    grupo = (grupo or "").strip()
+    out = {}
+    _pn = mapa_nombres(grupo)
+    for r in _cached_records():
+        if str(r.get("Grupo", "")).strip() != grupo:
+            continue
+        if _tipo_of(r) != TIPO_GENERAL:
+            continue
+        clave = clave_de(r, _pn)
+        if not clave:
+            continue
+        for d, hh in _row_segmentos(r):
+            if desde <= d <= hasta and hh > 0:
+                _u = out.setdefault(clave, {})
+                _u[d] = round(_u.get(d, 0.0) + hh, 2)
+    return out
+
+
 def jornada_y_proyecto(grupo: str, desde=None, hasta=None) -> dict:
     """`{clave: {nombre, jornada, proyecto}}` — horas de JORNADA y horas IMPUTADAS a
     proyectos de cada persona en [desde, hasta] (fechas `date`; None = todo).

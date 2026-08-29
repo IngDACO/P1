@@ -152,14 +152,48 @@ def render_mis_ausencias():
                 st.caption(" · ".join(_pie))
             if str(r.get("Estado")) in AU.VIGENTES:
                 if st.button(":material/undo: Cancelar", key=f"auscan_{r['ID']}"):
+                    _estaba = str(r.get("Estado")) == AU.APROBADA
                     ok, msg = AU.cancelar(r["ID"], usuario)
                     if ok:
                         # si ya estaba en el tablero, hay que quitarla de ahí
                         AU.aplicar_al_roster(r, quitar=True)
+                        # ⚠️ v432: cancelar una APROBADA devuelve esos días al tablero,
+                        # y quien la aprobó pudo haber reorganizado la cuadrilla
+                        # contando con la ausencia. La solicitud le llegaba; la
+                        # cancelación no. Solo para las aprobadas: retirar una
+                        # pendiente no cambia nada que nadie hubiera planificado.
+                        if _estaba:
+                            _avisar_cancelacion(grupo, nombre, r)
                         flash.exito(msg)
                         st.rerun()
                     else:
                         st.error(msg)
+
+
+def _avisar_cancelacion(grupo, nombre, r):
+    """Avisa de que una ausencia YA APROBADA se ha cancelado (v432).
+
+    ⚠️ Best-effort, como los demás avisos: la cancelación ya está guardada y el
+    tablero ya está limpio cuando se llega aquí.
+    """
+    try:
+        from core import notify
+        from core.alerts import _admins_and_owners
+        cfg = AU.TIPOS.get(str(r.get("Tipo", "")), {})
+        _subj = (f"CANCELADA — {cfg.get('nombre', r.get('Tipo'))}: {nombre} "
+                 f"({r.get('Desde')} → {r.get('Hasta')})")
+        _lines = [f"<b>{nombre}</b> ha CANCELADO su "
+                  f"<b>{cfg.get('nombre', r.get('Tipo'))}</b> "
+                  f"del {r.get('Desde')} al {r.get('Hasta')}.",
+                  "Esos días vuelven a quedar libres en el planificador: si habías "
+                  "reorganizado la cuadrilla, revísalo."]
+        for d in _admins_and_owners(grupo):
+            try:
+                notify.notify_user(d, _subj, _lines)
+            except Exception:
+                pass
+    except Exception as e:
+        logger.warning("ausencias_ui._avisar_cancelacion: %s", e)
 
 
 def _avisar_admins(grupo, nombre, tipo, desde, hasta, cfg):

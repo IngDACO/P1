@@ -1098,11 +1098,15 @@ def _autoagenda(grupo, pid, nuevos, quitados, fecha_ini, fecha_fin):
         st.caption(m)
 
 
-def _avisar_asignados(usuarios, grupo=None, exclude_pid=None, certs_req=None):
+def _avisar_asignados(usuarios, grupo=None, exclude_pid=None, certs_req=None,
+                      fechas=None):
     """Avisos ANTES de asignar (v219): contacto, credenciales, si YA está en otro
-    proyecto (y hasta cuándo), y cumplimiento de los certificados que EXIGE el proyecto.
+    proyecto (y hasta cuándo), cumplimiento de los certificados que EXIGE el proyecto,
+    y (v432) si esa persona tiene una AUSENCIA aprobada o pedida en esas fechas.
     Todo informativo — no bloquea (una asignación con solapes o pendientes puede ser
-    deliberada). `exclude_pid` = el proyecto actual (no se cuenta a sí mismo)."""
+    deliberada). `exclude_pid` = el proyecto actual (no se cuenta a sí mismo).
+    `fechas` = (inicio, fin) del proyecto: si llega, solo se avisa de las ausencias
+    que CRUZAN ese rango; si no, de las que aún no han terminado."""
     sin_contacto, cred_mal = [], []
     no_cumplen, cert_pv = [], []          # feature 3: certificados requeridos
 
@@ -1158,6 +1162,41 @@ def _avisar_asignados(usuarios, grupo=None, exclude_pid=None, certs_req=None):
             except Exception:
                 pass
 
+    # ⚠️ v432: ausencias. Se podía asignar a alguien a una obra justo en su semana de
+    # vacaciones y nada lo decía — el tablero sí las respeta (auto-poblar solo llena
+    # celdas VACÍAS), pero quien asigna no se enteraba hasta el lunes.
+    fuera = []
+    if grupo:
+        try:
+            from core import ausencias as _AU
+            from core import clock as _clk
+            from core.num import parse_date as _pd
+            _ini = _pd(fechas[0]) if fechas and fechas[0] else None
+            _fin = _pd(fechas[1]) if fechas and fechas[1] else None
+            _hoy = _clk.today(grupo)
+            for u in usuarios:
+                for a in _AU.list_group(grupo, usuario=u):
+                    if str(a.get("Estado", "")) not in _AU.VIGENTES:
+                        continue
+                    _d0, _d1 = _pd(a.get("Desde")), _pd(a.get("Hasta"))
+                    if not _d0 or not _d1:
+                        continue
+                    if _ini and _fin:
+                        if not _AU._solapan(_d0, _d1, _ini, _fin):
+                            continue          # no cruza las fechas de la obra
+                    elif _d1 < _hoy:
+                        continue              # sin fechas de obra: solo lo que no pasó
+                    _t = _AU.TIPOS.get(str(a.get("Tipo", "")), {})
+                    fuera.append(f"**{u}**: {_t.get('nombre', a.get('Tipo'))} "
+                                 f"del {a.get('Desde')} al {a.get('Hasta')}"
+                                 + ("" if str(a.get("Estado")) == _AU.APROBADA
+                                    else " (aún sin aprobar)"))
+        except Exception as e:
+            logger.warning("_avisar_asignados: ausencias: %s", e)
+
+    if fuera:
+        st.warning(":material/event_busy: **No estarán disponibles esos días:**\n\n"
+                   + "\n".join(f"- {x}" for x in fuera))
     if ocupados:
         st.info(":material/push_pin: **Ya asignados a otro proyecto:**\n\n"
                 + "\n".join(f"- {x}" for x in ocupados))
@@ -2162,7 +2201,11 @@ def _detalle_proyecto(pid: str, grupo: str = None):
             key=f"certs_{pid}",
             help="Al asignar personal se avisa y marca a quien no los cumpla.")
         # feature 1 (ya en otro proyecto) + feature 3 (cumplimiento vs certs requeridos)
-        _avisar_asignados(asignados, grupo, exclude_pid=pid, certs_req=_ecerts)
+        # + v432: las ausencias que cruzan las fechas DE ESTA obra (aquí sí se saben;
+        # en el alta nueva las fechas viven dentro del form y aún no están escritas,
+        # así que allí se avisa de las ausencias que todavía no han terminado).
+        _avisar_asignados(asignados, grupo, exclude_pid=pid, certs_req=_ecerts,
+                          fechas=(prj.get("FechaInicio"), prj.get("FechaFinEst")))
 
         # ── Ubicación en el mapa (fuera del form: el mapa necesita reruns) — v193 ──
         from core import location_ui

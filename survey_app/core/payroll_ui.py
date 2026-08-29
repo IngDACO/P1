@@ -223,6 +223,19 @@ def _generar(grupo):
                         "veces:\n\n" + _líneas +
                         "\n\nAjusta las fechas para que no se crucen, o anula esas nóminas "
                         "en la lista de abajo y vuelve a generar.")
+        # ⚠️ v432: días en que la persona tenía ausencia pagada Y además fichó. Un día
+        # vale UNA jornada, así que la ausencia paga solo lo que falta — pero el ajuste
+        # se DICE: un recorte de dinero que nadie ve es la mitad del problema que
+        # venía a arreglar (antes se pagaban las dos cosas, $670 por un día).
+        _rec = res.get("recortes") or []
+        if _rec:
+            _l = "\n".join(
+                f"- **{r['nombre']}** el {r['fecha']}: fichó {r['fichadas']:g} h, "
+                f"así que su ausencia paga {r['pagadas']:g} h (no la jornada entera)"
+                for r in _rec[:12])
+            flash.info(":material/schedule: **Días con ausencia Y fichaje** — se paga "
+                       "una sola jornada por día:\n\n" + _l
+                       + ("\n\n…y otros más." if len(_rec) > 12 else ""))
         st.session_state.pop("_nom_gen", None)
         st.rerun()
 

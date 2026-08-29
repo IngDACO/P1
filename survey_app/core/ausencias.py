@@ -268,7 +268,16 @@ def horas_pagadas_grupo(grupo, desde, hasta) -> dict:
     ⚠️ Esto es lo que evita que aprobar unas vacaciones signifique cobrar $0: la base
     de la nómina sale de las horas FICHADAS (`timeclock.horas_por_usuario_rango`), y
     quien está de vacaciones no ficha. Devuelve `{usuario: {horas, dias, por_tipo,
-    nombre}}`.
+    nombre, recortados}}`.
+
+    ⚠️ **UN DÍA VALE UNA JORNADA, NUNCA DOS** (decisión del usuario, v432). Si esa
+    persona además FICHÓ ese día, la ausencia paga solo lo que FALTA hasta la jornada:
+    fichó 3 h → se le añaden 5; fichó 8,75 → no se le añade nada. Sin esto se cobraba
+    dos veces el mismo día — medido en la hoja real: 8,75 h trabajadas + 8 h de baja =
+    $670 por un día, y ninguna línea de la colilla se veía mal (solo el total del día
+    delataba). Es el fallo de v364 con otra forma.
+    ⚠️ Lo recortado se DEVUELVE (`recortados`) en vez de aplicarse en silencio: un
+    ajuste de dinero que nadie ve es la mitad del problema que se viene a arreglar.
 
     ⚠️ Solo cuenta los días que caen DENTRO del periodo pedido: una ausencia a caballo
     de dos nóminas se reparte, no se paga entera en la primera.
@@ -281,6 +290,14 @@ def horas_pagadas_grupo(grupo, desde, hasta) -> dict:
     d0, d1 = _parse_date(desde), _parse_date(hasta)
     if not d0 or not d1:
         return {}
+    # jornada ya fichada, día a día, para no pagar dos veces el mismo día
+    try:
+        fichadas = timeclock.horas_por_usuario_dia(grupo, d0, d1)
+    except Exception as e:
+        # ⚠️ Si esto falla NO se paga a ciegas la jornada completa: se deja el día sin
+        # recorte y se dice en `recortados`, para que el aviso de la nómina lo saque.
+        logger.warning("ausencias: no se pudieron leer las horas fichadas: %s", e)
+        fichadas = {}
     out = {}
     for r in _records():
         if (str(r.get("Grupo", "")) != str(grupo)
@@ -299,10 +316,18 @@ def horas_pagadas_grupo(grupo, desde, hasta) -> dict:
             continue
         clave = str(r.get("Usuario", ""))
         e = out.setdefault(clave, {"horas": 0.0, "dias": 0.0, "por_tipo": {},
-                                   "nombre": str(r.get("Nombre") or clave)})
+                                   "nombre": str(r.get("Nombre") or clave),
+                                   "recortados": []})
+        _suyas = fichadas.get(clave, {})
+        for d in _d:
+            _ya = float(_suyas.get(d, 0.0) or 0.0)
+            _pag = max(0.0, HORAS_DIA - _ya)
+            e["horas"] = round(e["horas"] + _pag, 2)
+            if _ya > 0:
+                e["recortados"].append({"fecha": d, "fichadas": round(_ya, 2),
+                                        "pagadas": round(_pag, 2), "tipo": tipo})
         e["por_tipo"][tipo] = e["por_tipo"].get(tipo, 0) + len(_d)
         e["dias"] += len(_d)
-        e["horas"] = round(e["dias"] * HORAS_DIA, 2)
     return out
 
 
@@ -310,7 +335,7 @@ def horas_pagadas(grupo, usuario, desde, hasta) -> dict:
     """Lo mismo, para UNA persona. Delega para no duplicar el criterio."""
     return (horas_pagadas_grupo(grupo, desde, hasta).get(str(usuario))
             or {"horas": 0.0, "dias": 0.0, "por_tipo": {},
-                "nombre": str(usuario)})
+                "nombre": str(usuario), "recortados": []})
 
 
 def etiqueta_ausencias(por_tipo: dict) -> str:
