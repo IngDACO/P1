@@ -321,6 +321,12 @@ Estas cinco mordieron en una sola tanda:
     escrita contra el marcado viejo devuelve **cero opciones con el desplegable
     delante**. Es v304 y v375 otra vez: **el DOM de Streamlit cambia entre
     versiones**, así que al tocar una sonda vieja hay que volver a mirar el DOM.
+    ⚠️ Y de paso: **las OPCIONES de un `selectbox` NO interpretan `:material/…:`** —
+    se pintan como texto plano y el `:material/sick:` sale LITERAL en pantalla. En
+    `st.radio` sí funciona (v234, verificado en vivo), así que la regla es POR
+    WIDGET. Para afirmarlo hay que mirar el nodo: un icono de verdad es un
+    `<span role="img">` con `font-family: "Material Symbols Rounded"`; si el texto
+    trae los dos puntos y la fuente del cuerpo, es un literal (no una ligadura).
 25. ⚠️ **Un clic que «no hace nada» puede ser que la pestaña esté OCULTA.** En v430
     ni el desplegable ni un checkbox respondían, y estuve a punto de reportar que el
     formulario no funcionaba. Lo que pasaba lo dijo una sola línea:
@@ -6947,7 +6953,38 @@ posicional se añadieron en el MISMO cambio (lección v363, donde olvidar eso de
   nada de su nav; cada rol resuelve la suya, con el número derivado de la constante) y con
   la razón escrita al lado. Y `verif_v322` sí cazó algo real: un `import auth` sin usar.
 
-## Versiones desplegadas (v430 = actual)
+## ⚠️ El icono del selector de ausencias salía LITERAL en pantalla (v431)
+Encontrado **mirando la pantalla** en el Cloud, no leyendo código: el desplegable
+«¿Qué necesitas?» mostraba `:material/beach_access: Vacaciones`. Las opciones de un
+`st.selectbox` **no interpretan** `:material/…:`; `st.radio` sí (v234).
+- ⚠️ **No se dio por bueno a la primera** (v375): podía ser una ligadura de fuente
+  (trampa nº5), donde `innerText` da el nombre del icono aunque se pinte el glifo. Se
+  comprobó contra un **caso conocido-bueno** —un botón del menú lateral, que sí pinta
+  icono— y el contraste es limpio: el menú tiene `<span role="img">` con
+  `font-family:"Material Symbols Rounded"`; la opción es texto plano, con los dos
+  puntos y la fuente del cuerpo. Y ⚠️ **mi primera sonda dio `false` también para el
+  caso bueno**, así que no valía: hubo que mirar el marcado real antes de acusar.
+- **Barrido del repo** (lección v349: cuando el fallo aparece, buscar TODOS): 0
+  selectbox afectados aparte de este; los **7** `:material/` restantes son `st.radio`
+  y se quedan. Guardián nuevo y general: ningún `selectbox`/`multiselect` puede
+  llevarlo en sus opciones ni en su `format_func`.
+- Los tipos pasan a un solo campo **`emoji`** (🌴 · 🤒 · 📅) en vez de `icono`: dos
+  campos que puedan divergir es la familia de los cinco `_num` de v323.
+
+### ⚠️ Y el fallo de método que costó media hora: mis clics caían a 4,6× de distancia
+Ni el desplegable ni un checkbox respondían, y llegué a escribir que la pestaña
+oculta (`visibilityState === "hidden"`) lo explicaba. **No era eso**: con la pestaña
+ya visible seguía sin responder. Lo resolvió **instrumentar** en vez de suponer — un
+listener de `pointerdown/click` sobre el documento — y la medida fue inmediata: pedí
+un clic en (235, 318) y a la página llegó en **(1088, 1472)**, un factor de **×4,63**
+que yo no estaba aplicando. Con la transformación medida, el clic entra donde debe.
+→ **REGLA: si un clic «no hace nada», medir DÓNDE aterriza antes de teorizar**, y
+validar la entrada con un control conocido-bueno (si el checkbox tampoco cambia, el
+problema es tuyo, no de la app). Es la nº12 aplicada a la escritura.
+⚠️ Confirmado además que el clic llega al **`<div>`** que dibuja la casilla, no al
+`<input type=checkbox>` (que está oculto): la lección de v417, intacta.
+
+## Versiones desplegadas (v431 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -6955,6 +6992,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v431 | ⚠️ **El icono del selector de ausencias salía LITERAL** (`:material/beach_access: Vacaciones`): las opciones de un `selectbox` **no interpretan** `:material/…:` — `st.radio` sí (v234), así que la regla es POR WIDGET. Visto **mirando la pantalla**, no leyendo código. ⚠️ No se dio por bueno a la primera: podía ser una **ligadura de fuente** (trampa nº5), y mi sonda dio `false` también para el caso conocido-bueno — hubo que mirar el marcado real antes de acusar (un icono de verdad es `<span role="img">` con la fuente Material). Barrido del repo: 0 selectbox más afectados; los 7 `:material/` restantes son radios y se quedan. Guardián general nuevo. ⚠️ **Y el fallo de método**: ni el desplegable ni un checkbox respondían y llegué a atribuirlo a la pestaña oculta; **no era eso** — instrumentar los eventos midió que un clic pedido en (235, 318) aterrizaba en **(1088, 1472)**, ×4,63. Medir dónde cae el clic antes de teorizar |
 | v430 | **Autogestión de ausencias**: el equipo pide vacaciones o día libre y avisa de una baja, el admin aprueba, y al aprobar **se escribe en el planificador** con el aviso de las obras que quedan sin esa persona y quién puede cubrirlas. Saldo por persona y tipo, DERIVADO (nunca guardado). ⚠️ La enfermedad **no espera aprobación**: nadie sabe el lunes que el jueves estará en cama, y esperar dejaría el tablero mintiendo. ⚠️ **EL FALLO DE DINERO**: la base de la nómina sale de las horas FICHADAS, así que aprobar unas vacaciones significaba cobrar $0 — y quien estuvo fuera el periodo ENTERO **no recibía colilla en absoluto**, porque no aparecía en las horas; `generar` recorre ahora la UNIÓN de fichados y ausentes. La ausencia va como **DEVENGO con `origen`, nunca sumada a `Base`**: dentro haría que cada vacación apareciera como un descuadre inexistente en la conciliación de v313. ⚠️ **El segundo fallo lo cazó ejercitar la nómina de verdad**: a quien pidió el rango «con fin de semana» se le quitaban **12 días de saldo pagándole 8**, porque cada lado recontaba el rango con su criterio → columna `Findes` y la invariante *lo pagado = lo descontado*. Guardián probado contra **15 roturas** — ⚠️ dos solo se cazaron tras corregirlo, las dos por chequeos míos que corrían **en vacío** (buscaban `"st.rerun"` y `"len("` como subcadenas de un `ast.dump`, donde esos nodos no se escriben así). Entra además el guardián de la **regla v353**, que no existía en la suite |
 | v429 | **La pantalla de Costos deja de hablarle a la localización de lo que no tiene** (pedido por el usuario tras verlo con el rol campo). Eran **tres** piezas, no una: «Costará al terminar» («—» fijo, no hay avance que proyectar), «Presupuesto» («—» fijo, su ficha ni lo ofrece) y ⚠️ el titular *«se define en Datos»*, que era **falso** — ahí ese campo no existe, así que mandaba a buscar algo que no está. Quitar solo la primera habría dejado las otras a medias (v419). Titular propio: «Gasto de estructura: no se le carga a ninguna obra ni se le factura a un cliente». + **verificado en pantalla con el rol campo** todo v423: tarjetas Estado/Tipo/Responsable en vez de Avance/Cliente, sin barra de progreso, y menú de 3 (Avisos·Recibos·Archivos) sin «Avance». ⚠️ La localización no aparecía en su selector y estuve a punto de diagnosticar un fallo: era la **caché de 120 s** |
 | v428 | ⚠️ **Un generador de IDs contaba FILAS, y ya COLISIONABA en producción.** `roster._next_id` hacía `len(hoja)-1+1`, y `delete_trabajo` borra la fila cuando el trabajo no está asignado: medido, 4 filas con IDs `TRB-0002..0005` → el siguiente alta emitía **TRB-0005, que ya existía**. Como `trabajos_idx` indexa por ID, uno de los dos desaparece y **las celdas del tablero resuelven al trabajo equivocado** (nombre y color de otro) sin ningún error. Peor que el reciclaje de v427: ahí hacía falta borrar el ÚLTIMO, aquí basta con **uno del medio**. Mismo patrón encontrado por el guardián en `toolruns` (`CAL-`), que no chocaba hoy por casualidad. Arreglados los dos + salto extendido a **agrupaciones** (borrarlas y recrearlas metería los elevadores de la vieja en la nueva) y **credenciales** → **siete** generadores protegidos. + ⚠️ **v426 demostrado EN VIVO**: factura real de $5.500 con $1.500 cobrados, anulada → el P&L vuelve exactamente a su sitio, mientras la lógica vieja habría dejado **+$5.500 de ingresos fantasma**. + ⚠️ Una alarma descartada por medir: la columna «Estado» de Facturas «no existía» en el DOM — era la virtualización de `st.dataframe`, y a **1440 px caben las 8 columnas con 0 ocultas**; iba a arreglar algo que no está roto (el error de v335) |
