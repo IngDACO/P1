@@ -7011,8 +7011,18 @@ reinicio las dos versiones coinciden y se comprobó, con datos reales:
   (4,68 h) + devengo $132,80 (3,32 h) = $320 = 8 h exactas**.
 - Producción restaurada: 38 nóminas, 0 ausencias, P&L de vuelta en 101.157,21 /
   8.526,60 — idéntico al de antes de las pruebas.
-- ⬜ **Queda sin ver**: la línea del periodo en «Mis ausencias» del CAMPO (hace falta
-  esa sesión; la de trabajo era de administrador).
+- **Mis ausencias (campo)**, con la sesión de campo: las 3 tarjetas de saldo y
+  *«Tu año de vacaciones va del **2026-06-23** al **2027-06-22** (desde que entraste,
+  el 2026-06-23)»* — el aniversario real de esa persona.
+- ⚠️ Y la **otra rama**, que es la que importa de verdad: quitándole la fecha de alta
+  (temporalmente) la pantalla pasa a *«Contamos por año natural (2026-01-01 →
+  2026-12-31) porque no consta tu fecha de alta. Pídele a tu responsable que la
+  cargue…»*. O sea que el saldo estimado **se anuncia como estimado** en vez de
+  parecer exacto (v325). Fecha restaurada después; ninguna cuenta del grupo se queda
+  sin ella.
+
+Con esto, las **4 pantallas de v432-v434 están verificadas en pantalla**, no solo por
+código.
 
 ### Datos de la demo rellenados (a petición del usuario)
 `FechaIngreso` de las 13 cuentas — las 10 con fichajes se derivaron de su **primer
