@@ -6974,6 +6974,44 @@ detalle). Lo que pintó, con datos reales:
 - ⚠️ El primer clic en «Aprobar» no hizo nada y el botón estaba **a y=987 con un
   viewport de 900**: fuera de vista. Medir dónde cae el clic, otra vez.
 
+## ⚠️ `list_users` se COMÍA las columnas nuevas de Login (v434)
+Salió al rellenar las fechas de alta del equipo: se escribieron 10, se verificaron
+leyendo… y un barrido posterior las daba **todas vacías**. La hoja cruda las tenía
+(columna 12, con sus fechas). El fallo era de LECTURA:
+- `get_user` devuelve la fila ENTERA → por eso `auth.fecha_ingreso` sí las veía y la
+  verificación de v433 pasó.
+- **`list_users` proyectaba a 8 campos escritos a mano**, así que `FechaIngreso` —y
+  cualquier columna futura— **desaparecía al leerla**. No lanza, no avisa: la columna
+  simplemente no existe para quien pregunte por ahí.
+→ La proyección se DERIVA ahora de `LOGIN_HEADERS` menos `_CAMPOS_SECRETOS`. ⚠️ La
+proyección **no se puede sustituir por «devuelve la fila entera»**: existe para que el
+hash de la contraseña y el token de sesión no salgan de ahí (v79). Guardián: la lista
+se deriva, los tres secretos siguen fuera, y **se ejecuta** contra la hoja real para
+comprobar que una fila trae todas las columnas no secretas y ninguna secreta.
+
+⚠️ **Es el TERCER sitio en dos versiones** con el mismo patrón: `auth._COL` (v433),
+esta proyección, y antes la fila posicional de `create_project` (v363). Todos son
+**una lista de columnas escrita a mano en paralelo a `*_HEADERS`**. Regla: al añadir
+una columna, buscar TODO lo que enumere columnas de esa hoja — y si se puede derivar,
+derivarlo, que es la única forma de que no vuelva a divergir.
+
+### Datos de la demo rellenados (a petición del usuario)
+`FechaIngreso` de las 13 cuentas — las 10 con fichajes se derivaron de su **primer
+fichaje** (dato real, no inventado); las 3 sin fichajes llevan una fecha de prueba.
+Tarifa a `nsanchez` (38) y `Admin2` (45), que contaban $0. Email a `dacox`,
+`Arcantox` y `admin1` con dominio **`example.com`** — ⚠️ reservado por la RFC 2606
+para pruebas: no existe buzón, así que ningún correo de la demo puede llegarle por
+error a una persona real.
+⚠️ **Telegram NO se rellenó**, y no es un olvido: un `chat_id` es el identificador de
+una conversación REAL, así que inventar un número podría mandar los avisos de la demo
+al teléfono de un desconocido. Solo se puede vincular después de que la persona pulse
+Start en el bot (v77).
+
+⚠️ Y con esto **caducó `verif_v395`**, que exigía «hay 3 conocidos sin canal»: falló
+**por haber ganado**, como los de la nav en v385. Reescrito sobre el comportamiento —
+detecta a quien no tiene canal usando un caso CONSTRUIDO, y no lo menciona cuando no
+hay nadie— en vez de depender de que el pendiente siga abierto en producción.
+
 ## El saldo de vacaciones, por ANIVERSARIO de cada persona (v433)
 Salió de una pregunta del usuario sobre una línea de la auditoría de v432 («el saldo
 cuenta por el año en que empieza la ausencia»). Al medirlo, eran dos cosas.
@@ -7113,7 +7151,7 @@ problema es tuyo, no de la app). Es la nº12 aplicada a la escritura.
 ⚠️ Confirmado además que el clic llega al **`<div>`** que dibuja la casilla, no al
 `<input type=checkbox>` (que está oculto): la lección de v417, intacta.
 
-## Versiones desplegadas (v433 = actual)
+## Versiones desplegadas (v434 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -7121,6 +7159,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v434 | ⚠️ **`list_users` se COMÍA las columnas nuevas de Login**: las fechas de alta se escribieron y se verificaron bien (`get_user` devuelve la fila entera), pero un barrido posterior las daba todas vacías — la proyección de `list_users` eran **8 campos escritos a mano**, así que `FechaIngreso` desaparecía al leerla, sin lanzar ni avisar. Ahora se deriva de `LOGIN_HEADERS` menos los secretos ⚠️ (la proyección NO se puede quitar: existe para que el hash y el token no salgan de ahí, v79). **Tercer sitio en dos versiones** con el mismo patrón — una lista de columnas a mano en paralelo a `*_HEADERS` (v363 la fila posicional, v433 `auth._COL`). + **datos de la demo rellenados**: fecha de alta de las 13 cuentas (las 10 con fichajes, derivadas de su PRIMER fichaje), tarifa a quien contaba $0, y email `@example.com` (RFC 2606: no entregable, no puede llegarle a nadie real). ⚠️ **Telegram NO**: un `chat_id` inventado mandaría los avisos al teléfono de un desconocido. Caducó `verif_v395` (exigía que siguiera habiendo 3 sin canal): reescrito sobre el comportamiento con un caso construido |
 | v433 | **El saldo de vacaciones pasa a ir por ANIVERSARIO de cada persona** (decisión del usuario; en AU no va por año natural) + se arregla el reparto al cambiar de año: unas vacaciones 28/12→08/01 descontaban **10 días a 2026 y 0 a 2027** cuando son **4 y 6** — el total salía bien y el reparto no. `dias_usados` cuenta ahora los DÍAS dentro del periodo, con la misma regla que el pago. Nueva columna `Login.FechaIngreso`; ⚠️ **sin ella no se inventa un aniversario**: cae al año natural y lo DICE en las dos pantallas (v325). ⚠️ El **29 de febrero** retrocede al 28 en vez de lanzar. ⚠️ **Y el fallo que solo se vio EJECUTANDO**: `auth._COL` era un literal en paralelo a `LOGIN_HEADERS`, así que la columna se migró en la hoja y la escritura moría con `Error: 'FechaIngreso'` — ni los imports ni ningún guardián lo ven. Ahora se DERIVA, y el barrido confirma que era el ÚNICO a mano de los 13 del repo. Guardián: 104 comprobaciones, **25 roturas probadas** — ⚠️ una solo se cazó tras corregirlo (miraba el código en vez del RESULTADO, y una versión que devolvía siempre 0 pasaba) |
 | v432 | ⚠️ **Se pagaba DOS VECES el mismo día**: si alguien tenía una ausencia pagada aprobada y además FICHÓ ese día, la nómina sumaba las dos cosas — medido, 8,75 h trabajadas + 8 h de baja = **$670 por un día**, invisible en la colilla (cada línea está bien; solo el total del día delata). Es v364 con otra forma. **Decisión del usuario: completar la jornada** — la ausencia paga solo lo que falta (fichó 4,68 → se añaden 3,32; fichó 8,75 → nada), y el recorte **se informa** en vez de aplicarse en silencio. ⚠️ **Mi primer chequeo pasó EN FALSO**: buscaba `"fich"` en el código y lo encontró **en un comentario mío**; lo mismo volvió a pasar dos veces al ampliar el guardián — las tres se arreglan mirando la ESTRUCTURA (la clave del dict devuelto, el `ImportFrom` real), no una subcadena. + los dos avisos que faltaban (al **asignar** personal con ausencias en esas fechas, y al **cancelar** una ya aprobada) + **rechazar** y **los avisos** ejercitados con el envío interceptado → las 6 rutas de escritura de v430 cerradas. Guardián: 82 comprobaciones, **20 roturas probadas** |
 | v431 | ⚠️ **El icono del selector de ausencias salía LITERAL** (`:material/beach_access: Vacaciones`): las opciones de un `selectbox` **no interpretan** `:material/…:` — `st.radio` sí (v234), así que la regla es POR WIDGET. Visto **mirando la pantalla**, no leyendo código. ⚠️ No se dio por bueno a la primera: podía ser una **ligadura de fuente** (trampa nº5), y mi sonda dio `false` también para el caso conocido-bueno — hubo que mirar el marcado real antes de acusar (un icono de verdad es `<span role="img">` con la fuente Material). Barrido del repo: 0 selectbox más afectados; los 7 `:material/` restantes son radios y se quedan. Guardián general nuevo. ⚠️ **Y el fallo de método**: ni el desplegable ni un checkbox respondían y llegué a atribuirlo a la pestaña oculta; **no era eso** — instrumentar los eventos midió que un clic pedido en (235, 318) aterrizaba en **(1088, 1472)**, ×4,63. Medir dónde cae el clic antes de teorizar |
