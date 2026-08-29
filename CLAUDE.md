@@ -6974,6 +6974,62 @@ detalle). Lo que pintó, con datos reales:
 - ⚠️ El primer clic en «Aprobar» no hizo nada y el botón estaba **a y=987 con un
   viewport de 900**: fuera de vista. Medir dónde cae el clic, otra vez.
 
+## ⚠️ SE PAGABA DOS VECES EL MISMO DÍA + los dos avisos que faltaban (v432)
+Salió de la pregunta del usuario «¿ya quedó todo cerrado?» — auditando en vez de
+responder que sí.
+
+### El fallo: ausencia pagada + fichaje el MISMO día
+La base de la nómina son las horas FICHADAS y el devengo son los días de ausencia × 8 h.
+**Nada cruzaba las dos cosas.** Medido con datos reales: `campo1` fichó **8,75 h** el
+21/08; con una baja aprobada ese mismo día se le pagaban **8,75 h trabajadas + 8 h de
+baja = $670 por UN día**. Invisible en la colilla —cada línea está bien—, solo el total
+del día delata. Es el fallo de v364 (periodos que solapan) con otra forma.
+- **Decisión del usuario: completar la jornada.** La ausencia paga solo lo que FALTA:
+  fichó 4,68 h → se le añaden 3,32; fichó 8,75 → no se le añade nada. Un día vale una
+  jornada, nunca dos. Verificado en los dos casos contra la hoja real.
+- ⚠️ **El recorte se INFORMA** (`recortes` → aviso en la pantalla de nóminas): un
+  ajuste de dinero que nadie ve es la mitad del problema que se venía a arreglar.
+- ⚠️ Si falla la lectura de fichajes **no se paga a ciegas** la jornada completa: se
+  deja sin recorte y se dice.
+- Nueva `timeclock.horas_por_usuario_dia` — mismo recorrido y mismos segmentos que
+  `horas_por_usuario_rango` (v164), sin agregar: un total por periodo no sirve, hay
+  que saber QUÉ días.
+
+### ⚠️ Y mi primer chequeo de esto PASÓ EN FALSO
+Buscaba la subcadena `"fich"` en el código de `generar` para ver si cruzaba los datos…
+y la encontró **en un comentario mío**, así que dio «sí lo cruza» con el fallo dentro.
+Trampa nº2 (grep ≠ uso) **dentro del auditor**. Solo se vio ejecutándolo con datos
+reales. Lo mismo volvió a pasar DOS veces al ampliar el guardián (buscaba `"recortes"` y
+`"ausencias"`, palabras que también están en los comentarios): las tres veces el arreglo
+es mirar la ESTRUCTURA — la clave en el dict devuelto, el `ImportFrom` real.
+
+### Los dos avisos que faltaban (decisión del usuario: sí a los dos)
+- **Al asignar personal**: `_avisar_asignados` avisaba de otras obras y de certificados
+  (v219) pero no de las ausencias, así que se podía asignar a alguien a una obra justo
+  en su semana de vacaciones sin que nada lo dijera. Ahora se avisa, acotado a las
+  fechas de esa obra cuando se saben (en el detalle sí; en el alta nueva las fechas
+  viven dentro del `st.form` y aún no están escritas, así que allí se avisa de las
+  ausencias que todavía no han terminado).
+- **Al cancelar una APROBADA**: la solicitud le llegaba al admin y la cancelación no,
+  aunque devuelve esos días al tablero y quizá ya había reorganizado la cuadrilla. Solo
+  para las aprobadas: retirar una pendiente no cambia nada que nadie hubiera planificado.
+
+### Lo que la auditoría cerró de paso
+**Rechazar** una solicitud (queda rechazada con su nota, no se puede re-resolver, no
+gasta saldo, no bloquea volver a pedir esas fechas) y **los avisos**, ejercitados con
+`notify.notify_user` INTERCEPTADO (mandan correo y Telegram a gente real, mismo criterio
+que `notify_expiring` en v417): asunto y cuerpo correctos, la baja dice que ya se
+registró en vez de que espera aprobación, y con el correo caído no revienta el registro.
+Con eso, **las 6 rutas de escritura de v430 están ejercitadas**.
+
+### Límites que quedan ANOTADOS (alcance, no fallos)
+- Un día de ausencia vale **8 h para todo el mundo** (`HORAS_DIA`): no hay jornada por
+  persona en el modelo, así que alguien a media jornada cobraría 8 h por día.
+- El saldo cuenta por el año en que **empieza** la ausencia: una a caballo de dos años
+  se descuenta entera del primero.
+- `admin1`, `dacox` y `Arcantox` no tienen email ni Telegram, así que el aviso de una
+  solicitud **no les sale de la app** — el pendiente de v395, del usuario.
+
 ## ⚠️ El icono del selector de ausencias salía LITERAL en pantalla (v431)
 Encontrado **mirando la pantalla** en el Cloud, no leyendo código: el desplegable
 «¿Qué necesitas?» mostraba `:material/beach_access: Vacaciones`. Las opciones de un
@@ -7005,7 +7061,7 @@ problema es tuyo, no de la app). Es la nº12 aplicada a la escritura.
 ⚠️ Confirmado además que el clic llega al **`<div>`** que dibuja la casilla, no al
 `<input type=checkbox>` (que está oculto): la lección de v417, intacta.
 
-## Versiones desplegadas (v431 = actual)
+## Versiones desplegadas (v432 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -7013,6 +7069,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v432 | ⚠️ **Se pagaba DOS VECES el mismo día**: si alguien tenía una ausencia pagada aprobada y además FICHÓ ese día, la nómina sumaba las dos cosas — medido, 8,75 h trabajadas + 8 h de baja = **$670 por un día**, invisible en la colilla (cada línea está bien; solo el total del día delata). Es v364 con otra forma. **Decisión del usuario: completar la jornada** — la ausencia paga solo lo que falta (fichó 4,68 → se añaden 3,32; fichó 8,75 → nada), y el recorte **se informa** en vez de aplicarse en silencio. ⚠️ **Mi primer chequeo pasó EN FALSO**: buscaba `"fich"` en el código y lo encontró **en un comentario mío**; lo mismo volvió a pasar dos veces al ampliar el guardián — las tres se arreglan mirando la ESTRUCTURA (la clave del dict devuelto, el `ImportFrom` real), no una subcadena. + los dos avisos que faltaban (al **asignar** personal con ausencias en esas fechas, y al **cancelar** una ya aprobada) + **rechazar** y **los avisos** ejercitados con el envío interceptado → las 6 rutas de escritura de v430 cerradas. Guardián: 82 comprobaciones, **20 roturas probadas** |
 | v431 | ⚠️ **El icono del selector de ausencias salía LITERAL** (`:material/beach_access: Vacaciones`): las opciones de un `selectbox` **no interpretan** `:material/…:` — `st.radio` sí (v234), así que la regla es POR WIDGET. Visto **mirando la pantalla**, no leyendo código. ⚠️ No se dio por bueno a la primera: podía ser una **ligadura de fuente** (trampa nº5), y mi sonda dio `false` también para el caso conocido-bueno — hubo que mirar el marcado real antes de acusar (un icono de verdad es `<span role="img">` con la fuente Material). Barrido del repo: 0 selectbox más afectados; los 7 `:material/` restantes son radios y se quedan. Guardián general nuevo. ⚠️ **Y el fallo de método**: ni el desplegable ni un checkbox respondían y llegué a atribuirlo a la pestaña oculta; **no era eso** — instrumentar los eventos midió que un clic pedido en (235, 318) aterrizaba en **(1088, 1472)**, ×4,63. Medir dónde cae el clic antes de teorizar |
 | v430 | **Autogestión de ausencias**: el equipo pide vacaciones o día libre y avisa de una baja, el admin aprueba, y al aprobar **se escribe en el planificador** con el aviso de las obras que quedan sin esa persona y quién puede cubrirlas. Saldo por persona y tipo, DERIVADO (nunca guardado). ⚠️ La enfermedad **no espera aprobación**: nadie sabe el lunes que el jueves estará en cama, y esperar dejaría el tablero mintiendo. ⚠️ **EL FALLO DE DINERO**: la base de la nómina sale de las horas FICHADAS, así que aprobar unas vacaciones significaba cobrar $0 — y quien estuvo fuera el periodo ENTERO **no recibía colilla en absoluto**, porque no aparecía en las horas; `generar` recorre ahora la UNIÓN de fichados y ausentes. La ausencia va como **DEVENGO con `origen`, nunca sumada a `Base`**: dentro haría que cada vacación apareciera como un descuadre inexistente en la conciliación de v313. ⚠️ **El segundo fallo lo cazó ejercitar la nómina de verdad**: a quien pidió el rango «con fin de semana» se le quitaban **12 días de saldo pagándole 8**, porque cada lado recontaba el rango con su criterio → columna `Findes` y la invariante *lo pagado = lo descontado*. Guardián probado contra **15 roturas** — ⚠️ dos solo se cazaron tras corregirlo, las dos por chequeos míos que corrían **en vacío** (buscaban `"st.rerun"` y `"len("` como subcadenas de un `ast.dump`, donde esos nodos no se escriben así). Entra además el guardián de la **regla v353**, que no existía en la suite |
 | v429 | **La pantalla de Costos deja de hablarle a la localización de lo que no tiene** (pedido por el usuario tras verlo con el rol campo). Eran **tres** piezas, no una: «Costará al terminar» («—» fijo, no hay avance que proyectar), «Presupuesto» («—» fijo, su ficha ni lo ofrece) y ⚠️ el titular *«se define en Datos»*, que era **falso** — ahí ese campo no existe, así que mandaba a buscar algo que no está. Quitar solo la primera habría dejado las otras a medias (v419). Titular propio: «Gasto de estructura: no se le carga a ninguna obra ni se le factura a un cliente». + **verificado en pantalla con el rol campo** todo v423: tarjetas Estado/Tipo/Responsable en vez de Avance/Cliente, sin barra de progreso, y menú de 3 (Avisos·Recibos·Archivos) sin «Avance». ⚠️ La localización no aparecía en su selector y estuve a punto de diagnosticar un fallo: era la **caché de 120 s** |
