@@ -76,7 +76,9 @@ def render_mis_ausencias():
         _tipos = list(AU.TIPOS)
         tipo = st.selectbox(
             "¿Qué necesitas?", _tipos, key="aus_tipo",
-            format_func=lambda t: f"{AU.TIPOS[t]['icono']} {AU.TIPOS[t]['nombre']}")
+            # ⚠️ EMOJI, no `:material/…:`: en las opciones de un selectbox el material
+            # sale como texto literal (medido en el Cloud). En `st.radio` sí funciona.
+            format_func=lambda t: f"{AU.TIPOS[t]['emoji']} {AU.TIPOS[t]['nombre']}")
         cfg = AU.TIPOS[tipo]
         if not cfg["aprobacion"]:
             st.info(":material/info: Una baja por enfermedad **se registra al momento**: "

@@ -69,18 +69,23 @@ VIGENTES = (PENDIENTE, APROBADA)
 # `dias_anio` y `pagado` son los valores de arranque (AU, jornada completa) y se
 # pueden ajustar por grupo — como el margen y el impuesto (v353). ⚠️ Esto NO es un
 # motor de convenio: es un registro con saldo, y la app no calcula derechos legales.
+# ⚠️ El icono es un EMOJI, no un `:material/…:`. Medido en el Cloud: las OPCIONES de
+# un `st.selectbox` se pintan como texto plano —sin nodo de icono y con la fuente del
+# cuerpo—, así que el `:material/sick:` salía LITERAL en pantalla. En `st.radio` sí
+# se interpreta (v234, verificado en vivo), pero en un selectbox no. Un solo campo, y
+# emoji, que se pinta en cualquier sitio.
 VACACIONES, ENFERMEDAD, LIBRE = "vacaciones", "enfermedad", "libre"
 TIPOS = {
     VACACIONES: {"nombre": "Vacaciones", "estado_roster": "LEAVE",
                  "aprobacion": True,  "pagado": True,  "dias_anio": 20,
-                 "icono": ":material/beach_access:"},
+                 "emoji": "🌴"},
     ENFERMEDAD: {"nombre": "Baja por enfermedad", "estado_roster": "LEAVE",
                  # ⚠️ Sin aprobación previa: ver el docstring del módulo.
                  "aprobacion": False, "pagado": True,  "dias_anio": 10,
-                 "icono": ":material/sick:"},
+                 "emoji": "🤒"},
     LIBRE:      {"nombre": "Día libre", "estado_roster": "OFF",
                  "aprobacion": True,  "pagado": False, "dias_anio": 0,
-                 "icono": ":material/event_busy:"},
+                 "emoji": "📅"},
 }
 
 # Horas que vale un día de ausencia PAGADA en la nómina. Se usa solo para eso.
