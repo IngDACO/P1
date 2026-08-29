@@ -44,6 +44,9 @@ _SUBSECCIONES = {
     "planificacion": ("adm_plan_sub", [
         ("🎛 Panel", ":material/dashboard: Panel"),
         ("🗺 Ruta del día", ":material/route: Ruta del día"),
+        # v430: la bandeja de ausencias vive AQUÍ, junto al tablero que va a modificar
+        # — aprobar una escribe en el planificador, así que el sitio natural es este.
+        ("🌴 Ausencias", ":material/event_busy: Ausencias"),
         ("👷 Usuarios", ":material/badge: Usuarios")]),
     "proyectos": ("adm_proy_sub", [
         ("📊 Proyectos", ":material/format_list_bulleted: Proyectos"),
@@ -95,6 +98,10 @@ _SECCIONES_CAMPO = [
     ("herramientas", ":material/build: Herramientas"),
     ("credenciales", ":material/badge: Mis credenciales"),
     ("colillas",     ":material/payments: Mis colillas"),
+    # v430: la autogestión de ausencias. Va SUELTA, como el Pre-Start (v154): pedir
+    # un día o avisar de una baja no es «un proyecto» ni «una herramienta», y
+    # enterrarla un nivel le costaría un toque a quien la usa desde el móvil.
+    ("ausencias",    ":material/event_busy: Mis ausencias"),
 ]
 # Sus Herramientas son las 5 TÉCNICAS: el Pre-Start ya es sección propia, y
 # duplicarlo lo dejaría en dos sitios (el patrón de v140 que evitamos).
@@ -794,7 +801,7 @@ def render_admin_content(key, grupo):
         render_owner_seccion(_sub_header("administracion"))
         return
 
-    if key in ("misproyectos", "prestart", "credenciales", "colillas"):
+    if key in ("misproyectos", "prestart", "credenciales", "colillas", "ausencias"):
         _usr = st.session_state.get("auth", {}).get("usuario", "")
         if key == "misproyectos":
             from core.projects_ui import render_field_projects
@@ -805,6 +812,9 @@ def render_admin_content(key, grupo):
         elif key == "credenciales":
             from core.auth_ui import render_my_credentials
             render_my_credentials()
+        elif key == "ausencias":
+            from core import ausencias_ui
+            ausencias_ui.render_mis_ausencias()
         else:
             from core.payroll_ui import render_mis_colillas
             render_mis_colillas(_usr, grupo)
@@ -862,6 +872,9 @@ def _seccion_planificacion(grupo):
     elif sub == "🗺 Ruta del día":
         from core import route_ui
         route_ui.render_ruta_dia(grupo)
+    elif sub == "🌴 Ausencias":
+        from core import ausencias_ui
+        ausencias_ui.render_bandeja(grupo)
     else:
         from core.auth_ui import _grupo_usuarios
         _grupo_usuarios(grupo)

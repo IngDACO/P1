@@ -382,14 +382,21 @@ def conciliacion_mo(grupo: str, desde=None, hasta=None) -> dict:
             (sin_tarifa if _vivo else de_baja).append(h["nombre"])
 
     # Lo REALMENTE liquidado en nóminas del periodo (por `PeriodoHasta`, como el P&L)
-    base_nom = aportes = 0.0
+    base_nom = aportes = ausencias = 0.0
     for n in PR.list_nominas(grupo):
         if not _en_rango(n.get("PeriodoHasta"), desde, hasta):
             continue
         base_nom += _num(n.get("Base"))
         for c in PR.conceptos_de(n):
-            if str(c.get("tipo", "")).lower() == "aporte":
+            _t = str(c.get("tipo", "")).lower()
+            if _t == "aporte":
                 aportes += _num(c.get("monto"))
+            # v430: vacaciones y bajas pagadas. Van como DEVENGO y NO en `Base`
+            # (`Base` es lo trabajado, que es contra lo que se contrasta la jornada
+            # fichada), así que sin contarlas aquí el «costo real» las perdería —
+            # y es dinero que sale de caja igual que el resto.
+            elif _t == "devengo" and str(c.get("origen", "")) == "ausencia":
+                ausencias += _num(c.get("monto"))
 
     base_teorica = cargado - cobrado_no_pagado + pagado_no_cargado
     return {
@@ -400,8 +407,9 @@ def conciliacion_mo(grupo: str, desde=None, hasta=None) -> dict:
         "pagado_no_cargado":  round(pagado_no_cargado, 2),
         "base_teorica":       round(base_teorica, 2),
         "base_nomina":        round(base_nom, 2),
+        "ausencias":          round(ausencias, 2),
         "aportes":            round(aportes, 2),
-        "costo_real":         round(base_nom + aportes, 2),
+        "costo_real":         round(base_nom + ausencias + aportes, 2),
         # lo que la cadena no explica: nóminas editadas a mano, o trabajo aún sin nómina
         "sin_explicar":       round(base_teorica - base_nom, 2),
         "sin_tarifa":         sorted(set(sin_tarifa)),

@@ -207,9 +207,25 @@ def generar(grupo, desde, hasta, super_pct=0.0, ret_pct=0.0, creado_por="") -> d
                      "hasta": str(f.get("PeriodoHasta", "")),
                      "nombre": str(f.get("Nombre", "") or f.get("Usuario", ""))})
 
+    # ⚠️ v430: las AUSENCIAS PAGADAS. La base sale de las horas FICHADAS, y quien está
+    # de vacaciones o de baja no ficha: sin esto, aprobarle unas vacaciones a alguien
+    # significaba pagarle $0 esa quincena — y si estuvo fuera el periodo ENTERO, ni
+    # siquiera aparecía en `horas`, así que **no se le generaba nómina en absoluto**.
+    # Por eso las claves se unen abajo en vez de recorrer solo lo fichado.
+    aus = {}
+    try:
+        from core import ausencias as AU
+        aus = AU.horas_pagadas_grupo(grupo, desde, hasta)
+    except Exception as e:
+        # Best-effort: un fallo leyendo ausencias no puede impedir pagar lo trabajado.
+        logger.warning("payroll.generar: no se pudieron leer las ausencias: %s", e)
+
     rows, creadas, omitidas, sin_tarifa, solapadas = [], 0, 0, [], []
     base_num = _max_num()
-    for clave, info in sorted(horas.items()):
+    for clave in sorted(set(horas) | set(aus)):
+        info = horas.get(clave) or {
+            "horas": 0.0,
+            "nombre": str((aus.get(clave) or {}).get("nombre") or clave)}
         if (clave, d_iso, h_iso) in existentes:
             omitidas += 1
             continue
@@ -229,12 +245,31 @@ def generar(grupo, desde, hasta, super_pct=0.0, ret_pct=0.0, creado_por="") -> d
             continue
         base = round(_num(info["horas"]) * tarifa, 2)
         conceptos = []
+
+        # ⚠️ v430: la ausencia pagada va como DEVENGO, **no sumada a `Base`**. `Base` y
+        # la columna `Horas` son «lo trabajado», y es contra eso que `conciliacion_mo`
+        # (v313) contrasta la jornada fichada: meterlo dentro haría que cada vacación
+        # aprobada apareciera como un descuadre («sin explicar») que no existe.
+        _a = aus.get(clave) or {}
+        _ah = _num(_a.get("horas"))
+        monto_aus = round(_ah * tarifa, 2) if _ah > 0 else 0.0
+        if monto_aus > 0:
+            from core import ausencias as _AU
+            conceptos.append({
+                "concepto": (_AU.etiqueta_ausencias(_a.get("por_tipo"))
+                             or "Ausencia pagada") + f" — {_ah:g} h",
+                "tipo": "devengo", "monto": monto_aus, "origen": "ausencia"})
+
+        # ⚠️ La retención y el aporte se calculan sobre base + ausencia pagada: un día
+        # de vacaciones es salario ordinario, y dejarlo fuera lo pagaría sin impuesto
+        # ni superannuation. Los dos porcentajes siguen siendo editables después.
+        bruto = round(base + monto_aus, 2)
         if ret_pct > 0:
             conceptos.append({"concepto": "Retención de impuesto (PAYG)",
-                              "tipo": "deduccion", "monto": round(base * ret_pct / 100.0, 2)})
+                              "tipo": "deduccion", "monto": round(bruto * ret_pct / 100.0, 2)})
         if super_pct > 0:
             conceptos.append({"concepto": "Superannuation",
-                              "tipo": "aporte", "monto": round(base * super_pct / 100.0, 2)})
+                              "tipo": "aporte", "monto": round(bruto * super_pct / 100.0, 2)})
         nt = neto(base, conceptos)
         base_num += 1
         rows.append([

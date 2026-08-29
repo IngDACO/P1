@@ -47,7 +47,7 @@ HOJAS_LECTURA = (
     "Sheet1",
     "Proyectos", "Actividades", "Agrupaciones", "Documentos", "Alarmas",
     "Login", "Grupos", "Credenciales", "Gastos", "Clientes", "Facturas",
-    "Nominas", "Activos", "InvCategorias", "MovimientosActivo",
+    "Nominas", "Activos", "InvCategorias", "MovimientosActivo", "Ausencias",
     "Roster", "Trabajos", "PreStarts", "Calculos", "Rieles",
     "Auditoria", "Ordenes",
     "Catalogo", "Cotizaciones",   # v352/v353 — cotizaciones     # v342 — si no entra aquí, sería una llamada suelta

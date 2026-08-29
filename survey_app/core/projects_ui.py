@@ -3968,8 +3968,14 @@ def _pnl_conciliacion(cc: dict, T, periodo_completo: bool = True):
         _fil.append(("· de las cuales, trabajo en estructura (oficina, almacén)",
                      cc["interno"], "sub"))
     _fil += [("= base que deberías pagar", cc["base_teorica"], "bold"),
-             ("Base realmente puesta en nóminas", cc["base_nomina"], ""),
-             ("+ aportes de ley (super)", cc["aportes"], "#c77700"),
+             ("Base realmente puesta en nóminas", cc["base_nomina"], "")]
+    # ⚠️ v430: este SÍ es un sumando (a diferencia del desglose de arriba). Vacaciones
+    # y bajas pagadas no son horas fichadas, así que no están en la base ni pueden
+    # estarlo —la base es lo que se contrasta contra la jornada—, pero salen de caja.
+    if cc.get("ausencias", 0.0) > 0:
+        _fil.append(("+ ausencias pagadas (vacaciones, bajas)",
+                     cc["ausencias"], "#c77700"))
+    _fil += [("+ aportes de ley (super)", cc["aportes"], "#c77700"),
              ("= costo real de la mano de obra", cc["costo_real"], "bold")]
     _h = ['<table style="width:100%;border-collapse:collapse;font-size:13px">']
     for _lb, _v, _st in _fil:
