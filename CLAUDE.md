@@ -6995,6 +6995,25 @@ esta proyección, y antes la fila posicional de `create_project` (v363). Todos s
 una columna, buscar TODO lo que enumere columnas de esa hoja — y si se puede derivar,
 derivarlo, que es la única forma de que no vuelva a divergir.
 
+### Verificado EN PANTALLA tras reiniciar (v432-v434)
+⚠️ Primero NO se pudo: sidebar decía **v434** y topbar **v431**, y la ficha de usuario
+no mostraba el campo nuevo — que sí estaba en el commit desplegado (comprobado contra
+`HEAD`). «Desplegado ≠ corriendo» otra vez; hizo falta reiniciar el proceso. Tras el
+reinicio las dos versiones coinciden y se comprobó, con datos reales:
+- **Ficha de usuario**: «Fecha de alta en la empresa» con su valor (2026-06-23) y su
+  botón; sin el aviso de que falta (porque no falta).
+- **Aviso al asignar** (✏️ Datos de PRJ-0011): *«No estarán disponibles esos días:
+  mchen: Vacaciones del 2026-09-14 al 2026-09-18»*, encima del aviso de otras obras.
+  ⚠️ Y **discrimina**: con una obra cuyas fechas NO cruzan la ausencia, no aparece.
+- **Aviso de la nómina**: *«Días con ausencia Y fichaje — se paga una sola jornada por
+  día: asfgjjd el 2026-08-27: fichó 4.68 h, así que su ausencia paga 3.32 h»*,
+  sobreviviendo al `st.rerun()`. La colilla lo confirma al céntimo: **base $187,20
+  (4,68 h) + devengo $132,80 (3,32 h) = $320 = 8 h exactas**.
+- Producción restaurada: 38 nóminas, 0 ausencias, P&L de vuelta en 101.157,21 /
+  8.526,60 — idéntico al de antes de las pruebas.
+- ⬜ **Queda sin ver**: la línea del periodo en «Mis ausencias» del CAMPO (hace falta
+  esa sesión; la de trabajo era de administrador).
+
 ### Datos de la demo rellenados (a petición del usuario)
 `FechaIngreso` de las 13 cuentas — las 10 con fichajes se derivaron de su **primer
 fichaje** (dato real, no inventado); las 3 sin fichajes llevan una fecha de prueba.
