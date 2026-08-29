@@ -154,6 +154,12 @@ def group_profitability(grupo: str) -> dict:
             for p in P.list_projects(grupo=grupo, incluir_archivados=True)}
     rows, t_costo, t_ing = [], 0.0, 0.0
     for r in ge["proyectos"]:
+        # ⚠️ v422: una localización interna NO tiene rentabilidad — no se le factura a
+        # nadie. Sin este corte saldría como una obra a **margen 0%** (con su aviso),
+        # con pérdida garantizada, y arrastraría el total del grupo hacia abajo. Su
+        # costo sí cuenta como estructura, y por eso `group_expenses` sí la trae.
+        if r.get("interno"):
+            continue
         pid = str(r["id"])
         rev = project_revenue(pid, grupo, prjs.get(pid))
         costo, ingreso = rev["costo"], rev["ingreso"]
@@ -343,11 +349,16 @@ def conciliacion_mo(grupo: str, desde=None, hasta=None) -> dict:
     # fila donde ponerla. Se cuenta aparte para que el pendiente siga siendo
     # accionable y no arrastre gente que nadie puede arreglar.
     conocidas = auth.claves_conocidas()
-    cargado = cobrado_no_pagado = pagado_no_cargado = 0.0
+    cargado = cobrado_no_pagado = pagado_no_cargado = interno = 0.0
     sin_tarifa, de_baja = [], []
     for clave, h in hp.items():
         t = _num(rates.get(clave, 0))
         cargado += h["proyecto"] * t
+        # v422: el trabajo en oficina/almacén se paga y NO se le carga a ningún
+        # cliente. Queda dentro de `pagado_no_cargado` (que es lo que es) y además se
+        # devuelve suelto, para poder decir a QUÉ se fue ese hueco en vez de dejarlo
+        # como un residuo anónimo — hoy son 172 h en el grupo real.
+        interno += h.get("interno", 0.0) * t
         _d = (h["proyecto"] - h["jornada"]) * t
         if _d > 0:
             cobrado_no_pagado += _d
@@ -371,6 +382,8 @@ def conciliacion_mo(grupo: str, desde=None, hasta=None) -> dict:
     base_teorica = cargado - cobrado_no_pagado + pagado_no_cargado
     return {
         "cargado":            round(cargado, 2),
+        # v422: la parte de `pagado_no_cargado` que SÍ tiene explicación: estructura.
+        "interno":            round(interno, 2),
         "cobrado_no_pagado":  round(cobrado_no_pagado, 2),
         "pagado_no_cargado":  round(pagado_no_cargado, 2),
         "base_teorica":       round(base_teorica, 2),

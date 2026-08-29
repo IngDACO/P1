@@ -354,7 +354,16 @@ def group_expenses(grupo) -> dict:
     # mientras SÍ salían en la torta (que suma por la columna Grupo). Auditada la hoja
     # real: los $1.500 del grupo eran de PRJ-0001, archivado → el KPI decía $0.
     # Archivar un proyecto NO des-gasta el dinero: ese costo sigue siendo del grupo.
-    proys, por_cat, filas = P.list_projects(grupo=grupo, incluir_archivados=True), {}, []
+    # ⚠️ v422: **incluir_internos=True**, y por DOS motivos distintos:
+    #   1. el gasto de la oficina o el almacén es costo REAL del grupo — excluirlo de
+    #      «Costo actual» repetiría exactamente el fallo de v310 con los archivados;
+    #   2. `_ids` (abajo) se construye desde esta lista, así que sin las internas sus
+    #      compras se contarían como HUÉRFANAS y la pantalla avisaría de «$X en N
+    #      compras sin proyecto» — un aviso falso sobre dinero perfectamente imputado.
+    # Cada fila sale marcada con `interno`, y quien habla de rentabilidad de obra
+    # (`group_profitability`) las descarta.
+    proys, por_cat, filas = P.list_projects(grupo=grupo, incluir_archivados=True,
+                                            incluir_internos=True), {}, []
     # v343: UNA pasada por las órdenes para todo el grupo, en vez de una consulta por
     # proyecto dentro del bucle (el patrón de `project_hours_bulk`).
     try:
@@ -374,6 +383,10 @@ def group_expenses(grupo) -> dict:
                       "comprometido": c["comprometido"], "total_comp": c["total_comp"],
                       "over_comp": c["over_comp"],
                       "avance": av, "proyectado": proyectado,
+                      # v422: costo de ESTRUCTURA, no de obra. La marca viaja en la
+                      # fila para que cada consumidor decida, en vez de que cada uno
+                      # se invente su forma de reconocerlas.
+                      "interno": P.es_interno(p),
                       # se saldra del presupuesto al ritmo actual (aunque hoy aun no)
                       "over_proj": bool(c["presupuesto"] > 0 and proyectado
                                         and proyectado > c["presupuesto"])})

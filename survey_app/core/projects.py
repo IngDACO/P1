@@ -69,8 +69,60 @@ PROJECTS_HEADERS = [
 # estándar de obra; los demás nacen con UNA actividad genérica (ver `create_project`).
 TIPO_INSTALACION = "Instalación"
 TIPOS = [TIPO_INSTALACION, "Delivery", "Ripout", "Otro"]
+
+# ── v422: LOCALIZACIONES INTERNAS (oficina, almacén, taller) ──────────────────
+# No todo el mundo trabaja en obra: hay gente de oficina y de almacén que también
+# ficha, hace su pre-start y genera gastos. Se modelan como un proyecto para reusar
+# toda la fontanería que ya existe (fichaje, pre-start, gastos, documentos, alarmas,
+# roster) SIN duplicar nada — pero con una diferencia que lo decide todo:
+#
+#   ⚠️ Una localización interna NO SE LE FACTURA A NADIE.
+#
+# Su costo es ESTRUCTURA, no obra. Medido antes de construir: sin cerrojo, la oficina
+# aparecería como «$X sin facturar» (un pendiente que nadie puede cerrar), como una
+# obra a margen 0% en Rentabilidad, con pérdida garantizada en el resultado por
+# proyecto, y su 0% eterno arrastraría el avance promedio del grupo. Además movería
+# sus horas a «cargado a obras», que es lo que en v313 el usuario definió como *lo
+# que se le cobra al cliente*.
+#
+# El cerrojo es el DEFAULT de `list_projects` (`incluir_internos=False`): así los ~59
+# call-sites quedan protegidos de golpe y solo quien las necesita las pide. Es el
+# mismo patrón que `incluir_archivados` (v149) — y la misma trampa, al revés: por eso
+# v423 les da su propia sección, porque *lo que se puede ocultar tiene que poder
+# verse* (regla v340).
+TIPO_OFICINA = "Oficina"
+TIPOS_INTERNOS = [TIPO_OFICINA, "Almacén", "Taller"]
+
+# Estados propios: una localización no está «Planificada al 0%» — está abierta o
+# cerrada. No tiene actividades, así que su avance sería 0 para siempre y
+# `derive_estado` la dejaría eternamente en «Planificado», que no significa nada.
+INTERNO_ABIERTA = "Abierta"
+INTERNO_CERRADA = "Cerrada"
+
 TIPO_ICONO = {TIPO_INSTALACION: ":material/construction:", "Delivery": ":material/local_shipping:",
-              "Ripout": ":material/delete_sweep:", "Otro": ":material/category:"}
+              "Ripout": ":material/delete_sweep:", "Otro": ":material/category:",
+              TIPO_OFICINA: ":material/business:", "Almacén": ":material/warehouse:",
+              "Taller": ":material/handyman:"}
+
+
+def es_interno(prj) -> bool:
+    """¿Es una localización interna (oficina/almacén/taller) y no una obra?
+
+    UNA sola definición, a propósito: cinco copias divergentes de un helper es lo
+    que causó los fallos de v323. Acepta el dict del proyecto o su tipo suelto.
+    """
+    tipo = prj.get("Tipo", "") if isinstance(prj, dict) else prj
+    return str(tipo or "").strip() in TIPOS_INTERNOS
+
+
+def solo_obras(proys) -> list:
+    """Las que SÍ son obra (para cualquier cifra que se le cobre a un cliente)."""
+    return [p for p in proys if not es_interno(p)]
+
+
+def solo_internas(proys) -> list:
+    """Las localizaciones internas (para el costo de estructura)."""
+    return [p for p in proys if es_interno(p)]
 ACTIVITIES_HEADERS = [
     "ProyectoID", "Orden", "Nombre", "DuracionDias", "Peso", "Avance",
     "FechaInicioReal", "FechaFinReal", "Nota",
@@ -230,10 +282,19 @@ def compute_avance(activities: list) -> float:
     return round(acc / tot_peso, 1)
 
 
-def derive_estado(avance: float, estado_manual: str = "") -> str:
-    """Estado automático por avance, salvo override manual (En pausa / Cancelado)."""
+def derive_estado(avance: float, estado_manual: str = "", tipo: str = "") -> str:
+    """Estado automático por avance, salvo override manual (En pausa / Cancelado).
+
+    ⚠️ v422: una localización interna NO tiene actividades, así que su avance es 0
+    para siempre y la máquina de estados de obra la dejaría eternamente en
+    «Planificado» — una oficina «planificada» no significa nada. Se le da su propio
+    par: **Abierta / Cerrada**. El override manual (archivar, pausar) sigue mandando,
+    porque es lo que hace que `list_projects` la oculte y que se pueda restaurar.
+    """
     if estado_manual in ("En pausa", "Cancelado", "Archivado"):
         return estado_manual
+    if es_interno(tipo):
+        return INTERNO_CERRADA if estado_manual == INTERNO_CERRADA else INTERNO_ABIERTA
     if avance <= 0:
         return "Planificado"
     if avance >= 100:
@@ -325,7 +386,7 @@ def create_project(grupo, nombre, cliente="", ubicacion="", modelo="", ns=0,
     pid = _next_project_id(pws)
     campo = ";".join(campo_asignados or [])
     avance = compute_avance(activities or [])
-    estado = derive_estado(avance, "")
+    estado = derive_estado(avance, "", tipo)      # v422: «Abierta» si es interna
 
     row = [
         pid, grupo, nombre, cliente, ubicacion, modelo, str(ns),
@@ -473,8 +534,10 @@ ARCHIVADO = "Archivado"
 
 
 def list_projects(grupo: str = None, agrupacion_id: str = None,
-                  incluir_archivados: bool = False) -> list:
-    """Proyectos del grupo. **Oculta los archivados salvo que se pidan** (v149).
+                  incluir_archivados: bool = False,
+                  incluir_internos: bool = False) -> list:
+    """Proyectos del grupo. **Oculta los archivados salvo que se pidan** (v149)
+    y **las localizaciones internas salvo que se pidan** (v422).
 
     ⚠️ Archivar sustituye a borrar: `delete_project` solo quitaba el proyecto y
     sus actividades, dejando huerfanos sus documentos (con sus archivos en
@@ -486,6 +549,22 @@ def list_projects(grupo: str = None, agrupacion_id: str = None,
     el mapa nombre->ID de `project_hours_bulk`, el proyecto del clock-in
     (`plan_ui`) y el chequeo de nombres duplicados. Si no, archivar romperia esas
     resoluciones en silencio.
+
+    ⚠️ **`incluir_internos` sigue exactamente la misma regla, y por el mismo motivo.**
+    El default OCULTA la oficina y el almacén, así que toda cifra de obra —cartera,
+    KPIs, rentabilidad, «sin facturar», retrasos— queda protegida sin tocar sus 59
+    call-sites. Tienen que pedirlas explícitamente:
+
+      · las **resoluciones por identidad**, o el enlace se rompe en silencio:
+        `project_hours_bulk` (las horas fichadas al almacén se PERDERÍAN),
+        `roster.trabajos_idx` (una localización asignada en el tablero saldría sin
+        nombre ni color), la agenda de HOME, el buscador y `plan_data.del_proyecto`;
+      · **dónde se ficha y se trabaja**: `list_projects_for_field`, el fichaje, el
+        pre-start, el roster y la ubicación de un activo del inventario — el almacén
+        es justo donde están las cosas.
+
+    Y NO deben pedirlas: nada que hable de dinero de cliente, de cronograma o de la
+    cartera de obras. `verif_v422.py` lo comprueba en las DOS direcciones.
     """
     out = []
     for r in _registros_visibles(PROJECTS_SHEET, grupo):
@@ -495,7 +574,22 @@ def list_projects(grupo: str = None, agrupacion_id: str = None,
             continue
         if not incluir_archivados and str(r.get("Estado", "")) == ARCHIVADO:
             continue
+        if not incluir_internos and es_interno(r):
+            continue
         out.append(r)
+    return out
+
+
+def list_locations(grupo: str = None, incluir_cerradas: bool = False) -> list:
+    """Las localizaciones internas del grupo (oficina/almacén/taller).
+
+    La cara B de `solo_obras`: quien quiera hablar de estructura pide esto, en vez
+    de acordarse de pasar `incluir_internos=True` y filtrar a mano.
+    """
+    out = solo_internas(list_projects(grupo=grupo, incluir_archivados=True,
+                                      incluir_internos=True))
+    if not incluir_cerradas:
+        out = [p for p in out if str(p.get("Estado", "")) not in (INTERNO_CERRADA, ARCHIVADO)]
     return out
 
 
@@ -575,8 +669,12 @@ def set_archivado(pid: str, archivar: bool = True) -> tuple:
         return False, "Proyecto no encontrado."
     if archivar:
         return update_project(pid, {"EstadoManual": ARCHIVADO, "Estado": ARCHIVADO})
+    # ⚠️ v422: con el tipo. Sin él, restaurar una localización interna la devolvía a
+    # «Planificado» en vez de «Abierta» — se puede archivar y no se puede volver bien,
+    # que es media aplicación de la regla v340.
     return update_project(pid, {"EstadoManual": "",
-                                "Estado": derive_estado(_num(prj.get("Avance")), "")})
+                                "Estado": derive_estado(_num(prj.get("Avance")), "",
+                                                        prj.get("Tipo", ""))})
 
 
 def datos_asociados(pid: str) -> dict:
@@ -615,10 +713,18 @@ def datos_asociados(pid: str) -> dict:
     return out
 
 
-def list_projects_for_field(usuario: str, grupo: str = None) -> list:
-    """Proyectos donde el usuario de campo está asignado (CampoAsignados)."""
+def list_projects_for_field(usuario: str, grupo: str = None,
+                            incluir_internos: bool = False) -> list:
+    """Proyectos donde el usuario de campo está asignado (CampoAsignados).
+
+    ⚠️ v422: `CampoAsignados` es también lo que define un «perfil de oficina» — estar
+    asignado de forma PERMANENTE a la oficina o al almacén. No se inventó ni un rol ni
+    una columna para eso: el mecanismo que ya decide qué proyectos ve cada quien sirve
+    igual, y un almacenero no puede ser rol `administrador` (vería las finanzas).
+    Quien las necesita (fichaje, pre-start) pasa `incluir_internos=True`.
+    """
     out = []
-    for r in list_projects(grupo=grupo):
+    for r in list_projects(grupo=grupo, incluir_internos=incluir_internos):
         asignados = [x.strip() for x in str(r.get("CampoAsignados", "")).split(";") if x.strip()]
         if usuario in asignados:
             out.append(r)
@@ -779,7 +885,8 @@ def update_activity_progress(pid: str, orden, avance, fecha_inicio="", fecha_fin
     nuevo  = compute_avance(proj_acts)
     prj    = get_project(pid)                       # cacheado
     manual = str(prj.get("EstadoManual", "")) if prj else ""
-    update_project(pid, {"Avance": nuevo, "Estado": derive_estado(nuevo, manual)})
+    _tipo  = str(prj.get("Tipo", "")) if prj else ""
+    update_project(pid, {"Avance": nuevo, "Estado": derive_estado(nuevo, manual, _tipo)})
     # update_project ya invalida el caché de lecturas
     return True, f"Avance actualizado. Proyecto: {nuevo}%"
 
@@ -790,7 +897,8 @@ def _recompute_project_avance(pid):
     nuevo  = compute_avance(acts)
     prj    = get_project(pid)
     manual = str(prj.get("EstadoManual", "")) if prj else ""
-    update_project(pid, {"Avance": nuevo, "Estado": derive_estado(nuevo, manual)})
+    _tipo  = str(prj.get("Tipo", "")) if prj else ""
+    update_project(pid, {"Avance": nuevo, "Estado": derive_estado(nuevo, manual, _tipo)})
     return nuevo
 
 
@@ -943,7 +1051,10 @@ def project_hours_bulk(grupo: str = None) -> dict:
     idx = {}                                   # nombre normalizado -> ID
     # Mapa de resolucion, no lista: incluye archivados para que sus fichajes
     # historicos sigan sumando bajo su ID.
-    for p in list_projects(grupo=grupo, incluir_archivados=True):
+    # ⚠️ v422: e incluye las localizaciones internas por el MISMO motivo — es un mapa
+    # de identidad, no una lista de obras. Sin ellas, las horas fichadas al almacén no
+    # resolverían su ID y se perderían de la cuenta, en silencio.
+    for p in list_projects(grupo=grupo, incluir_archivados=True, incluir_internos=True):
         n = str(p.get("Nombre", "")).strip().casefold()
         if n:
             idx[n] = str(p.get("ID", ""))

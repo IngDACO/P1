@@ -976,8 +976,10 @@ def _nuevo_proyecto_form(grupo: str, key: str = "nuevo"):
             ubi = (st.session_state.get(f"nploc_{key}_addr")
                    or st.session_state.get(f"nploc_{key}_q") or "").strip()
             # Incluye archivados: crear un homonimo de uno archivado tambien confunde.
+            # v422: y las internas — llamar a una obra igual que el almacén confunde igual.
             dups = [f"{p.get('ID')} · {p.get('Nombre')}"
-                    for p in P.list_projects(grupo, incluir_archivados=True)
+                    for p in P.list_projects(grupo, incluir_archivados=True,
+                                             incluir_internos=True)
                     if " ".join(str(p.get("Nombre") or "").lower().split())
                     == " ".join(nom.lower().split())]
             if dups and not st.session_state.get(f"np_dup_{key}"):
@@ -2316,7 +2318,13 @@ def _detalle_proyecto(pid: str, grupo: str = None):
                         "Ingeniero": ing, "FechaInicio": f_ini, "FechaFinEst": f_fin,
                         "CampoAsignados": ";".join(asignados),
                         "AgrupacionID": ag_id, "PesoEnAgrupacion": peso,
-                        "EstadoManual": est_man, "Estado": P.derive_estado(avance, est_man),
+                        # ⚠️ v422: el tipo que se está GUARDANDO, no el que tenía. Si en
+                        # esta misma edición pasa a ser una localización interna, su
+                        # estado tiene que salir «Abierta» en la misma escritura — con
+                        # el tipo viejo quedaría «Planificado al 0%» para siempre.
+                        "EstadoManual": est_man,
+                        "Estado": P.derive_estado(avance, est_man,
+                                                  "" if tipo == _TIPO_VACIO else tipo),
                         "Instrucciones": instr, "InduccionLinks": ind, "Presupuesto": presup,
                         "MargenMO": margen,
                         "Lat": "" if _plat is None else _plat,

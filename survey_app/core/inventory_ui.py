@@ -68,7 +68,10 @@ def _proyectos(grupo):
     """
     try:
         from core import projects as P
-        _ps = [p for p in P.list_projects(grupo=grupo) if str(p.get("ID", "")).strip()]
+        # v422: **con las localizaciones internas**. Un activo vive en el ALMACÉN más
+        # que en ninguna obra: excluirlas dejaría el inventario sin su ubicación natural.
+        _ps = [p for p in P.list_projects(grupo=grupo, incluir_internos=True)
+               if str(p.get("ID", "")).strip()]
         _lbl = P.etiqueta_proyectos(_ps)
         return [str(p.get("ID", "")) for p in _ps], _lbl
     except Exception:

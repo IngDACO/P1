@@ -583,7 +583,9 @@ def buscar(q: str, grupo) -> list:
 
     try:
         from core import projects as P
-        for p in P.list_projects(grupo, incluir_archivados=True):
+        # v422: el buscador encuentra también las localizaciones internas — buscar algo
+        # es justo cuando no sabes en qué lista vive.
+        for p in P.list_projects(grupo, incluir_archivados=True, incluir_internos=True):
             pid = str(p.get("ID", ""))
             r = _rank(pid, p.get("Nombre"), p.get("Cliente"), p.get("Ubicacion"))
             if r is None:
@@ -1056,7 +1058,9 @@ def _resumen_proyecto_home(grupo, pid):
     if st.button("← Volver a la lista", key="hpr_back"):
         st.session_state.pop("_home_proj_sel", None)
         st.rerun()
-    prj = next((p for p in P.list_projects(grupo, incluir_archivados=True)
+    # v422: resolución por ID — mapa de identidad, no lista de obras.
+    prj = next((p for p in P.list_projects(grupo, incluir_archivados=True,
+                                           incluir_internos=True)
                 if str(p.get("ID", "")) == str(pid)), None)
     if not prj:
         st.warning("Proyecto no encontrado.")
@@ -1202,7 +1206,10 @@ def _agenda_hoy(grupo):
         return
 
     try:
-        pmap = {str(p.get("ID", "")): str(p.get("Nombre", "")) for p in P.list_projects(grupo, incluir_archivados=True)}
+        # v422: mapa ID→nombre de la agenda. Con las internas: si alguien tiene el
+        # almacén asignado hoy, su fila saldría sin nombre.
+        pmap = {str(p.get("ID", "")): str(p.get("Nombre", ""))
+                for p in P.list_projects(grupo, incluir_archivados=True, incluir_internos=True)}
     except Exception:
         pmap = {}
 

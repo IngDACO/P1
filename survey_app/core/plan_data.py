@@ -128,7 +128,8 @@ def del_proyecto(pid: str) -> dict:
     """Datos del plano guardados en el proyecto ({} si no hay)."""
     from core import projects as P
     # Busqueda por ID: un proyecto archivado tiene que seguir devolviendo su plano.
-    for r in P.list_projects(incluir_archivados=True):
+    # v422: y las internas, por ser resolución por identidad (aunque no tengan plano).
+    for r in P.list_projects(incluir_archivados=True, incluir_internos=True):
         if str(r.get("ID", "")) == str(pid):
             try:
                 return json.loads(r.get("PlanoJSON") or "{}")

@@ -502,8 +502,10 @@ def _asignacion_inteligente(grupo, lunes, staff, tidx, dias=None):
     from core import credentials
     with st.container():   # v287: el título lo da el botón de la fila de herramientas
         try:
-            proys = [p for p in P.list_projects(grupo)
-                     if str(p.get("Estado", "")) not in ("Completado", "Cancelado", "Archivado")]
+            # v422: incluye las localizaciones internas (ver `_opciones`).
+            proys = [p for p in P.list_projects(grupo, incluir_internos=True)
+                     if str(p.get("Estado", "")) not in ("Completado", "Cancelado",
+                                                         "Archivado", P.INTERNO_CERRADA)]
         except Exception:
             proys = []
         if not proys:
@@ -1566,8 +1568,12 @@ def _opciones(grupo, tidx):
     crear un 'trabajo' que lo enlace. Los proyectos completados/cancelados no se ofrecen."""
     op = [("— sin asignar —", "")]
     try:
-        for p in P.list_projects(grupo=grupo):
-            if str(p.get("Estado", "")) in ("Completado", "Cancelado"):
+        # v422: **con las localizaciones internas**. Asignar el almacén desde el tablero
+        # es la vía por la que alguien de obra puede fichar ahí un día suelto, sin darle
+        # acceso permanente — es lo que el usuario pidió como «asignados en momentos
+        # particulares mediante la planificación».
+        for p in P.list_projects(grupo=grupo, incluir_internos=True):
+            if str(p.get("Estado", "")) in ("Completado", "Cancelado", P.INTERNO_CERRADA):
                 continue
             op.append((str(p.get("Nombre", "")), str(p.get("ID", ""))))
     except Exception:

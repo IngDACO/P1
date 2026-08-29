@@ -265,7 +265,11 @@ def trabajos_idx(grupo) -> dict:
            if str(r.get("Grupo", "")) == str(grupo)}
     try:
         from core import projects as P
-        for p in P.list_projects(grupo=grupo, incluir_archivados=True):
+        # ⚠️ v422: **con las localizaciones internas**. Este índice es lo que resuelve
+        # nombre y color de un `asig`; sin ellas, asignar el almacén en el tablero
+        # pintaría una celda muda — y asignar ahí puntualmente es justo la vía por la
+        # que alguien de obra puede fichar en una localización.
+        for p in P.list_projects(grupo=grupo, incluir_archivados=True, incluir_internos=True):
             pid = str(p.get("ID", ""))
             if pid:
                 idx.setdefault(pid, {"ID": pid, "Numero": "",

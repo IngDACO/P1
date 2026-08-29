@@ -823,10 +823,20 @@ def jornada_y_proyecto(grupo: str, desde=None, hasta=None) -> dict:
     imputado**, así que la diferencia entre las dos columnas ES el hueco entre lo
     que sale de caja y lo que se le puede cobrar al cliente. `group_hours` no vale
     aquí porque su ventana es móvil (`days`) y el P&L trabaja con un rango.
+
+    ⚠️ v422 — `proyecto` cuenta SOLO las horas imputadas a una OBRA. Las fichadas a una
+    localización interna (oficina, almacén) van aparte, en `interno`. No es un matiz de
+    presentación: `conciliacion_mo` llama `cargado` a `proyecto × tarifa` y lo rotula
+    «cargado a obras», que es literalmente *lo que se le cobra al cliente*. Sin separar,
+    el primer fichaje en la oficina habría inflado esa cifra con overhead que nadie
+    factura, y el número habría cambiado de significado sin que nadie lo notara.
+    ⚠️ La cadena de v313 sigue cerrando igual: lo interno pasa a contarse como jornada
+    no imputada, que es exactamente lo que es.
     """
     grupo = (grupo or "").strip()
     out = {}
     _pn = mapa_nombres(grupo)               # v363: resolver identidad una sola vez
+    _int = _ids_internos(grupo)             # v422: qué PRJ-#### son estructura
     for r in _cached_records():
         if str(r.get("Grupo", "")).strip() != grupo:
             continue
@@ -838,23 +848,55 @@ def jornada_y_proyecto(grupo: str, desde=None, hasta=None) -> dict:
         if h <= 0:
             continue
         a = out.setdefault(clave, {"nombre": str(r.get("Nombre", "")).strip() or clave,
-                                   "jornada": 0.0, "proyecto": 0.0})
-        a["jornada" if _tipo_of(r) == TIPO_GENERAL else "proyecto"] += h
+                                   "jornada": 0.0, "proyecto": 0.0, "interno": 0.0})
+        if _tipo_of(r) == TIPO_GENERAL:
+            a["jornada"] += h
+        elif str(r.get("ProyectoID", "")).strip() in _int:
+            a["interno"] += h
+        else:
+            a["proyecto"] += h
     for a in out.values():
-        a["jornada"] = round(a["jornada"], 2)
-        a["proyecto"] = round(a["proyecto"], 2)
+        for k in ("jornada", "proyecto", "interno"):
+            a[k] = round(a[k], 2)
     return out
+
+
+@st.cache_data(ttl=120, show_spinner=False)
+def _ids_internos(grupo: str) -> set:
+    """{PRJ-####} de las localizaciones internas del grupo (v422).
+
+    ⚠️ La clave de caché es el GRUPO, y con eso basta para no repetir la fuga entre
+    inquilinos de v378: allí la clave era solo el título de la hoja mientras el libro
+    salía de la sesión; aquí cada grupo tiene su libro, así que `grupo` es una clave
+    MÁS específica que el libro, no menos. Y no empieza por guión bajo — que es lo que
+    dejó inerte aquel arreglo, porque `st.cache_data` excluye de la clave los
+    argumentos cuyo nombre empieza por `_`.
+
+    Incluye las cerradas: una localización que se cierra no des-hace las horas que se
+    le ficharon, y seguirlas contando como obra las convertiría en facturables.
+    """
+    try:
+        from core import projects as P
+        return {str(p.get("ID", "")) for p in P.list_locations(grupo, incluir_cerradas=True)}
+    except Exception:
+        return set()
 
 
 def group_hours(grupo: str, days=None) -> list:
     """Resumen de horas por usuario del grupo (para el admin). days=None=todo, 7=semana.
-    Devuelve [{usuario, general, proyecto, sin_asignar, por_proyecto{nombre:horas}}]. Las
-    sesiones abiertas cuentan con el tiempo transcurrido hasta ahora."""
+    Devuelve [{usuario, general, proyecto, interno, sin_asignar, por_proyecto{nombre:horas}}].
+    Las sesiones abiertas cuentan con el tiempo transcurrido hasta ahora.
+
+    ⚠️ v422: `proyecto` y `costo` son SOLO obra; el trabajo en oficina/almacén va en
+    `interno`/`costo_interno`. El KPI que come esto se llama «M.O. cargada a obras»
+    (v320) y meterle estructura lo haría mentir. `por_proyecto` sí las lista —esa
+    tabla responde *dónde puso su tiempo*, y el almacén es una respuesta legítima."""
     records = _cached_records()             # lectura cacheada (display)
     grupo = (grupo or "").strip()
     desde = (clock.now() - timedelta(days=days)).date() if days else None
     agg = {}
     _pn = mapa_nombres(grupo)               # v363: resolver identidad una sola vez
+    _int = _ids_internos(grupo)             # v422: qué PRJ-#### son estructura
     for r in records:
         if str(r.get("Grupo", "")).strip() != grupo:
             continue
@@ -872,12 +914,12 @@ def group_hours(grupo: str, days=None) -> list:
         h = sum(hh for d, hh in _row_segmentos(r) if desde is None or d >= desde)
         if h <= 0:
             continue
-        a = agg.setdefault(clave, {"general": 0.0, "proyecto": 0.0, "por": {},
-                                   "nombre": nombre})
+        a = agg.setdefault(clave, {"general": 0.0, "proyecto": 0.0, "interno": 0.0,
+                                   "por": {}, "nombre": nombre})
         if _tipo_of(r) == TIPO_GENERAL:
             a["general"] += h
         else:
-            a["proyecto"] += h
+            a["interno" if str(pid_of(r)).strip() in _int else "proyecto"] += h
             # Con ID se resuelve al nombre ACTUAL: si el proyecto se renombro,
             # sus horas viejas ya no salen bajo dos etiquetas distintas.
             pn = _nombre_actual(pid_of(r), r.get("Proyecto", "")) or "(sin proyecto)"
@@ -895,21 +937,26 @@ def group_hours(grupo: str, days=None) -> list:
 
     out = []
     for clave, a in agg.items():
-        gen, pro = a["general"], a["proyecto"]
+        gen, pro, itn = a["general"], a["proyecto"], a["interno"]
         # ⚠️ `sin_asignar` = jornada − proyectos SOLO tiene sentido si la jornada
         # cubre lo imputado. Si se imputo a proyectos MAS que la jornada abierta
         # (fichajes de proyecto sin abrir jornada, lo normal antes de v150), el
         # resultado es INDETERMINADO, no 0: marcarlo en vez de un cero que engaña.
         # Umbral de 3 min: por debajo es ruido de redondeo (dos tramos que cierran
         # con segundos de diferencia), no un dato realmente incompleto.
-        indet = pro > gen + 0.05
+        indet = (pro + itn) > gen + 0.05
         tarifa = float(rates.get(clave, 0.0) or 0.0)
         out.append({
             "usuario": clave,
             "nombre": a.get("nombre", clave),
             "general": round(gen, 2),
             "proyecto": round(pro, 2),
-            "sin_asignar": round(max(0.0, gen - pro), 2),
+            # v422: la jornada se reparte en obra + estructura + lo que aún no se sabe.
+            # Restar `itn` hace que «sin asignar» signifique de verdad «sin explicar»,
+            # en vez de mezclar el trabajo de oficina con el hueco. Con 0 localizaciones
+            # `itn` vale 0 y NINGUNA cifra actual se mueve.
+            "interno": round(itn, 2),
+            "sin_asignar": round(max(0.0, gen - pro - itn), 2),
             "sin_asignar_indet": indet,
             "tarifa": tarifa,
             # v325: ¿sigue dada de alta? Si no, su tarifa 0 no es "falta ponerla"
@@ -917,7 +964,8 @@ def group_hours(grupo: str, days=None) -> list:
             # asume que sí, para no acusar de baja a nadie por un error de lectura.
             "existe": (not conocidas) or clave in conocidas
                       or a.get("nombre", "") in conocidas,
-            "costo": round(pro * tarifa, 2),      # costo = horas imputadas × tarifa
+            "costo": round(pro * tarifa, 2),      # costo = horas imputadas A OBRA × tarifa
+            "costo_interno": round(itn * tarifa, 2),   # v422: estructura, no se factura
             "por_proyecto": {k: round(v, 2) for k, v in a["por"].items()},
         })
     out.sort(key=lambda x: -(x["general"] or x["proyecto"]))

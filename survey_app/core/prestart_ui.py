@@ -215,11 +215,14 @@ def _asistentes_con_firma(yo: str, yo_usuario: str, cuadrilla: list) -> list:
 
 
 def _projects_for(rol, usuario, grupo):
+    # v422: **con las localizaciones internas**. El pre-start es la charla de seguridad
+    # del SITIO, y un almacén es un sitio con sus riesgos (montacargas, estanterías,
+    # manipulación) — de hecho es una de las tres cosas que se pidieron para ellas.
     if rol == "propietario":
-        return P.list_projects()
+        return P.list_projects(incluir_internos=True)
     if rol == "administrador":
-        return P.list_projects(grupo=grupo)
-    return P.list_projects_for_field(usuario, grupo=grupo)
+        return P.list_projects(grupo=grupo, incluir_internos=True)
+    return P.list_projects_for_field(usuario, grupo=grupo, incluir_internos=True)
 
 
 def _bloque_firmar(info: dict, grupo: str, nombre: str, usuario: str):

@@ -915,7 +915,10 @@ def _ficha_usuario(u, grupo, owner=False, sel_key="gp_fichasel"):
         _h = (gh["general"] + gh["proyecto"]) if gh else 0.0
         _pp = (gh.get("por_proyecto") or {}) if gh else {}
         rec = E.by_user(grupo, sel) if E.is_configured() else {"n": 0, "total": 0.0}
-        asg = ([p for p in P.list_projects(grupo=grupo)
+        # v422: **con las internas**. Esto es «dónde trabaja esta persona», y para
+        # alguien de oficina su asignación permanente ES la oficina: sin ellas, su
+        # ficha diría «0 proyectos asignados» teniendo su sitio asignado.
+        asg = ([p for p in P.list_projects(grupo=grupo, incluir_internos=True)
                 if sel in [x.strip() for x in str(p.get("CampoAsignados", "")).split(";")]]
                if es_campo else [])
         c1.metric("Horas registradas", f"{_h:.1f}")

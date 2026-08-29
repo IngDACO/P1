@@ -431,18 +431,74 @@ def _proyectos_para(rol, usuario, grupo):
     el `ProyectoID` vacío (v145) y entonces las horas dependían de que el nombre
     coincidiera exacto: con un dedazo **no contaban para ningún proyecto** y
     desaparecían del costo de mano de obra, sin ningún aviso.
+
+    ⚠️ v422 — quién puede fichar en una LOCALIZACIÓN interna (oficina/almacén), que es
+    distinto de quién puede fichar en una obra. Dos vías, y solo dos:
+
+      1. **Perfil de oficina** = estar asignado de forma permanente a ella
+         (`CampoAsignados`). No hay rol nuevo ni columna nueva: el mecanismo que ya
+         decide qué proyectos ve cada quien sirve igual, y un almacenero no puede ser
+         rol `administrador` porque vería las finanzas.
+      2. **Asignado puntualmente por la planificación**: si el roster le pone hoy esa
+         localización, la ve HOY. Se añade aquí, al selector, y no solo como el botón
+         de atajo — si no, quien pasa la mañana en el almacén tiene que acordarse de
+         pulsarlo antes de que el día avance.
+
+    ⚠️ Y el FALLBACK deja de regalarlas: un usuario de campo sin ninguna asignación
+    recibía **todos** los proyectos del grupo, así que la oficina se le colaría a
+    cualquiera. Ese agujero ya existía para las obras; aquí se cierra al menos para lo
+    interno, que es lo que se acaba de crear.
     """
     try:
+        _hoy = _asignadas_hoy(usuario, grupo)
         if rol == "campo":
-            asignados = projects_data.list_projects_for_field(usuario, grupo=grupo)
-            if asignados:
-                return asignados, True
+            asignados = projects_data.list_projects_for_field(
+                usuario, grupo=grupo, incluir_internos=True)
+            if asignados or _hoy:
+                return _mezclar(asignados, _hoy), True
+            # Sin nada asignado: las obras del grupo, NUNCA las localizaciones.
             return projects_data.list_projects(grupo=grupo), False
+        # Gestión (administrador/propietario) sí ficha en la oficina.
         if rol == "propietario":
-            return projects_data.list_projects(), True
-        return projects_data.list_projects(grupo=grupo), True
+            return projects_data.list_projects(incluir_internos=True), True
+        return projects_data.list_projects(grupo=grupo, incluir_internos=True), True
     except Exception:
         return [], True
+
+
+def _asignadas_hoy(usuario, grupo) -> list:
+    """Proyectos que el ROSTER le asigna hoy a esta persona (v422).
+
+    Es la segunda vía de acceso a una localización: «asignado en un momento
+    particular mediante la planificación». Sale de `roster.asignaciones_dia`, el
+    mismo dato que ya alimenta el atajo de v274/v374 → **0 lecturas nuevas**.
+    """
+    out = []
+    try:
+        from core import roster
+        if not roster.is_configured():
+            return []
+        for _a in roster.asignaciones_dia(grupo, usuario):
+            _pid = str(_a.get("proyecto_id") or "").strip()
+            if not _pid:
+                continue
+            _p = projects_data.get_project(_pid)
+            if _p and str(_p.get("Grupo", "")) == str(grupo):
+                out.append(_p)
+    except Exception:
+        return []
+    return out
+
+
+def _mezclar(a, b) -> list:
+    """Une dos listas de proyectos sin repetir, conservando el orden (a manda)."""
+    vistos, out = set(), []
+    for p in list(a) + list(b):
+        pid = str(p.get("ID", ""))
+        if pid and pid not in vistos:
+            vistos.add(pid)
+            out.append(p)
+    return out
 
 
 def render_timeclock_tab():

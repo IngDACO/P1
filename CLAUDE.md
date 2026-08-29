@@ -6421,7 +6421,111 @@ superior. Y las opciones de un `selectbox` **no son `li`**: viven en un
 `div[data-testid="stSelectboxVirtualDropdown"]`, así que buscarlas como `li[role="option"]` daba
 **0 opciones** con el desplegable abierto (`aria-expanded=true`) y ahí estaban las seis.
 
-## Versiones desplegadas (v420 = actual)
+## LOCALIZACIONES INTERNAS — el cerrojo (v422)
+Petición del usuario: *«no todos los usuarios trabajan en campo, hay usuarios que
+trabajan en la oficina/almacenes que deben poder hacer clock in/out, pre-start y gastos
+asociados a la administración… como un proyecto indefinido, con el seguimiento que ya
+tenemos pero sin curva S ni actividades programadas»*.
+
+El 80% de la fontanería ya existía (fichar a un proyecto, pre-start por proyecto, gastos
+por proyecto). Lo que faltaba no era funcionalidad: era **el cerrojo que impide que una
+localización se cuele en el dinero de obra**. Esta versión es solo eso — sin UI nueva.
+
+### Medido antes de construir, en la hoja real
+| | |
+|---|---|
+| **172 h** de jornada pagadas **sin imputar a ninguna obra** (de 1.739,5 h) | el hueco que se venía a tapar |
+| **0 de 13 gastos sin `ProyectoID`** | no había forma de cargar un gasto administrativo: todo gasto exigía una obra |
+
+### El modelo: una familia dentro de `Tipo`, sin columna nueva
+```
+TIPOS          = Instalación · Delivery · Ripout · Otro      (obra, se factura)
+TIPOS_INTERNOS = Oficina · Almacén · Taller                  (interno, NUNCA se factura)
+es_interno(prj) = Tipo in TIPOS_INTERNOS                     ← UNA sola definición
+```
+Da la subclasificación gratis y ningún selector de obra las ofrece por accidente. Sin
+actividades ni cronograma **declarado**, no por descuido. Y estado propio
+**Abierta/Cerrada**: sin actividades el avance es 0 para siempre y la máquina de estados
+de obra las dejaría eternamente en «Planificado», que no significa nada.
+
+### El cerrojo es el DEFAULT, no 59 parches
+`list_projects(..., incluir_internos=False)` protege los **59 call-sites** de golpe —
+mismo patrón que `incluir_archivados` (v149)— y solo quien las necesita las pide. Los
+call-sites se clasificaron uno a uno, como en v149:
+- ⚠️ **Resoluciones por identidad**, que se romperían EN SILENCIO: `project_hours_bulk`
+  (las horas fichadas al almacén se perderían de la cuenta), `roster.trabajos_idx` (su
+  celda del tablero saldría **muda**, sin nombre ni color), la agenda de HOME, el
+  buscador y `plan_data.del_proyecto`.
+- **Dónde se ficha y se trabaja**: `list_projects_for_field`, fichaje, pre-start, roster
+  e inventario — *el almacén es justo donde están las cosas*.
+- Y **nadie que hable de dinero de cliente, cronograma o cartera**.
+
+⚠️ `get_project` NO pasa por el filtro (va directo a los registros), así que resuelve
+cualquier ID: el cerrojo no puede dejar una localización inalcanzable por su ID.
+
+### ⚠️ Dos decisiones de dinero que NO son obvias
+1. **`group_expenses` SÍ las incluye** (marcando `interno: True`), y `group_profitability`
+   las descarta. Excluirlas del costo del grupo repetiría el fallo de v310 con los
+   archivados — y peor: `_ids` se construye desde esa lista, así que sus compras se
+   habrían contado como **HUÉRFANAS**, avisando de «$X en compras sin proyecto» sobre
+   dinero perfectamente imputado.
+2. **`jornada_y_proyecto` y `group_hours` separan `interno` de `proyecto`.** No es
+   presentación: `conciliacion_mo` llama `cargado` a `proyecto × tarifa` y lo rotula
+   «cargado a obras», que en v313 el usuario definió como *lo que se le cobra al
+   cliente*. Sin separar, el primer fichaje en la oficina habría inflado esa cifra con
+   overhead que nadie factura. La cadena de v313 **sigue cerrando**: lo interno pasa a
+   contarse como jornada no imputada, que es exactamente lo que es.
+
+### Quién puede fichar en una localización (decisión del usuario)
+*«solo perfiles de administración y usuarios que se asignen en momentos particulares
+mediante la planificación»* → dos vías, y **ninguna inventa un rol ni una columna**:
+1. **Perfil de oficina = asignado permanente** (`CampoAsignados`), el mecanismo que ya
+   decide qué ve cada quien. Un almacenero no puede ser rol `administrador` (vería las
+   finanzas).
+2. **Asignado por el roster**: v218 ya permite asignar un PRJ directo en el tablero.
+   Ahora entra también **al selector** del fichaje, no solo como el botón de atajo de
+   v274/v374 — si no, quien pasa la mañana en el almacén tiene que acordarse de pulsarlo.
+⚠️ **Y se cierra un agujero que ya existía**: el fallback de `_proyectos_para` daba
+**todos** los proyectos del grupo a un usuario de campo sin asignaciones. «Solo quien se
+asigne» no se cumplía ni para las obras; ahora al menos lo interno no se regala.
+
+### Verificación
+1. **Ninguna cifra actual se mueve**: foto de 18 agregados (cartera, gastos, P&L,
+   rentabilidad, conciliación, horas por persona, pendiente por proyecto, gaps…) con el
+   código NUEVO contra el VIEJO (`git stash`, no de memoria) → **18/18 idénticas**, con
+   tolerancia FÍSICA porque hay sesiones abiertas corriendo contra el reloj (v363).
+2. ⚠️ **Pero eso solo prueba que con cero localizaciones nada cambia** — un
+   `incluir_internos` que no filtrara daría lo mismo (el paso en vacío, trampa nº1). La
+   prueba positiva es una localización REAL: creada, con un gasto de $500 y 3 h
+   fichadas. No sale en cartera/facturación/SPI/resultado; sí en `list_locations`, roster
+   (con su nombre) y fichaje; su gasto suma al grupo, marcado interno y **sin contarse
+   huérfano**; y las 3 h van a `interno` ($120) dejando «cargado a obras» **intacto**.
+   Producción devuelta a 16 proyectos, 13 gastos y 496 fichajes.
+3. Guardián `verif_v422.py` en las **DOS direcciones** (quién NO puede pedirlas y quién
+   DEBE seguir pidiéndolas), probado contra 6 versiones rotas: las caza las 6. Suite: **66/66**.
+
+### ⚠️ Tres tropiezos de método, los tres míos y los tres ya conocidos
+- **La primera foto salió TODA a cero** y casi la doy por buena: sin `session_state.auth`
+  el cerrojo de aislamiento de v351 bloquea toda lectura, así que comparar dos fotos de
+  ceros no prueba nada. Hay que **simular la sesión**.
+- **El script escribió el JSON DENTRO del repo** (`os.chdir` + ruta relativa). Lo delató
+  `git status`. Es el error de v377: una exportación de datos nunca va ahí, porque el
+  deploy hace `git add` de todo.
+- **Regla v135, dos veces en el mismo script**: `expenses.add` devuelve `(ok, MENSAJE)`,
+  no `(ok, id)` — así que la limpieza borró 0 gastos y **dejó $500 sueltos en
+  producción**; y `timeclock._get_worksheet()` devuelve `(ws, err)`, no el worksheet.
+  Además la limpieza por `ProyectoID` **no alcanza la fila de JORNADA**, que por
+  definición no lo tiene, y dejó 3 h sueltas. Las tres se corrigieron a mano.
+
+### Pendiente (v423 · v424)
+v423: sub-pestaña **🏢 Localizaciones** y su ficha (alta, horas por persona, gastos,
+pre-start, archivos), más `INTERNO_CERRADA` en el selector de estado y decidir qué ve el
+campo en «Mis proyectos» — hoy `render_field_projects` las excluye a propósito, para no
+enseñar una tabla de avance que no aplica. v424: el overhead **visible** («M.O. interna»
+al lado de «cargada a obras», gasto de estructura), que es donde las 172 h dejan de ser
+un hueco anónimo.
+
+## Versiones desplegadas (v422 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -6429,6 +6533,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v422 | **Localizaciones internas (oficina/almacén/taller): el CERROJO** (pedido por el usuario; sin UI todavía). Se modelan como proyecto para reusar fichaje, pre-start, gastos, roster y documentos, pero **no se le facturan a nadie**: su costo es estructura. Familia nueva dentro de `Tipo` (sin columna nueva), `es_interno()` como ÚNICA definición, estado propio **Abierta/Cerrada** (sin actividades el avance es 0 y quedarían «Planificadas» para siempre). El cerrojo es el **DEFAULT de `list_projects`**, que protege los **59 call-sites** de golpe; se clasificaron uno a uno como en v149. ⚠️ Dos decisiones no obvias: `group_expenses` **SÍ** las incluye (si no, sus compras salían como **HUÉRFANAS**, avisando de dinero perfectamente imputado) y `group_hours`/`jornada_y_proyecto` separan `interno` de `proyecto`, o el primer fichaje en la oficina habría inflado «cargado a obras» — la cifra que v313 definió como *lo que se le cobra al cliente*. Quién ficha ahí: asignado permanente (= «perfil de oficina», sin rol ni columna nuevos) o puesto por el roster, que ahora entra al selector y no solo al botón; ⚠️ y se cierra el fallback que regalaba **todos** los proyectos a un usuario de campo sin asignaciones. Verificado: **18/18 cifras idénticas** contra el código viejo (`git stash`) — ⚠️ pero eso solo prueba que con cero localizaciones nada cambia, así que la prueba positiva fue una localización REAL con gasto y horas. Guardián en las DOS direcciones, 6 casos rotos cazados |
 | v420 | **Dar de alta un cliente sin salir de la cotización** (pedido por el usuario). Antes había que irse a Contactos y volver a empezar, y **sin ningún cliente la pantalla hacía `return`**: el primer presupuesto de un cliente nuevo era imposible sin pasar por otra sección. Ahora el selector trae **➕ Nuevo cliente**. ⚠️ Aquí NO vale el «Otro» de los proyectos, que guarda el cliente como TEXTO sin ficha (de ahí los `vd`/`ci` de v357): una cotización necesita **`ClienteID`**, que es lo que usa `aceptar_y_crear_proyecto` (v354) para que la obra nazca con su cliente. Por eso **la ficha se crea ANTES y, si falla, no hay cotización**. ⚠️ Un nombre duplicado **reutiliza** la ficha existente en vez de dejar al usuario con la cotización escrita y sin poder guardarla. ⚠️ Las keys se limpian en **las dos** salidas (cancelar y guardar) o la siguiente cotización hereda el cliente anterior. Guardián: su chequeo de la limpieza era demasiado laxo (`≥2 apariciones`) y pasaba con la limpieza borrada de una salida — se cambió a comprobar **por bloque**; lo destapó probarlo contra el código roto. **Ejercitado en producción**: `COT-0008` creó la ficha `CLI-0008` y quedó enlazada por `ClienteID`; repetir el nombre con otro may/min reutilizó esa misma ficha (`COT-0009` → `CLI-0008`, **una sola ficha**). Producción sin rastro. ⚠️ De paso: la barra lateral decía **v420** y el topbar **v419** a la vez — Cloud recargó unos módulos y conservó otros, y `quotes_ui` era el nuevo; **la versión no prueba nada en ninguna de las dos direcciones, solo el CAMBIO** |
 | v419 | **Una sola ubicación por proyecto: la del mapa** (pedido por el usuario: «hay una en el mapa y otra en los datos, y no tiene por qué haber 2»). ⚠️ La causa: **v272 unificó solo la mitad** — al CREAR la ubicación ya salía del mapa, y la EDICIÓN se quedó con el `text_input` suelto, desconectado del pin. Como el TEXTO es lo que leen Home, Ruta del día, Pre-Start y los avisos (las coordenadas solo el mapa y la ruta), un proyecto con pin y sin texto **parecía no estar ubicado en todas partes menos en el mapa**. El campo pasa a solo lectura y sale del pin; + aviso del caso inverso (dirección sin pin, hoy `PRJ-0016`), que no sale en ningún mapa y nadie lo decía. ⚠️ **No se geocodifica sola**: un pin inventado que nadie ha mirado manda a alguien al sitio equivocado. ⚠️ El texto **solo se pisa si el pin se toca** (hay direcciones a mano que el geocoder reescribiría — fallo de v360) y **solo desde `_addr`, nunca `_q`** (media búsqueda sin confirmar acabaría siendo la dirección). Medido antes: 15 con ambas, 1 con texto sin pin, **0 con pin sin texto** — el caso descrito es posible pero hoy no se da, y se dijo |
 | v418 | **El Pre-Start deja de pedir lo que ya sabe** (dos peticiones del usuario). **(1)** El proyecto se preselecciona por tener **FICHAJE ABIERTO**, no por el rol: existía desde v170 pero detrás de `if rol == "campo"`, porque aquella versión asumió que «admin/propietario no fichan» — ⚠️ falso desde **v150**, y el admin ficha a diario. **(2)** Los asistentes se **eligen de la cuadrilla** (asignados + fichados hoy, estos preseleccionados) en vez de teclearse, conservando el **nombre libre** para subcontratistas o visitas; ⚠️ la firma se indexa **por persona, no por posición** (con índices, añadir a alguien pasaba la firma dibujada a otro). **(3)** ⚠️ Y por eso se guarda el **LOGIN** del asistente: con la lista, dos homónimos generan entradas IDÉNTICAS y firmar una apagaría el aviso de la otra. Se guarda el nombre limpio + el login aparte (nunca la etiqueta de v413 — fallo de v308), y ⚠️ **el respaldo por nombre hubo que acotarlo a los asistentes SIN login**, porque comparándolo contra todos anulaba el desempate: **lo cazó la prueba, no leer el código**. Compatible con lo ya registrado |
