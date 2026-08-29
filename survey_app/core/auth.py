@@ -533,23 +533,32 @@ def end_session(usuario: str, token: str = None):
 
 
 # ── Gestión de usuarios ──────────────────────────────────────
+# ⚠️ Lo que NUNCA sale de `list_users`: el hash de la contraseña y el token de sesión.
+# La proyección existe por eso (v79: la tabla de usuarios no enseña el hash), no por
+# capricho — así que no se puede sustituir por «devuelve la fila entera».
+_CAMPOS_SECRETOS = ("Password", "SessionToken", "SessionTime")
+
+
 def list_users(grupo: str = None) -> list:
-    """Todos los usuarios, o solo los de un grupo si se indica (lectura cacheada)."""
+    """Todos los usuarios, o solo los de un grupo si se indica (lectura cacheada).
+
+    ⚠️ Devuelve **todas las columnas de `LOGIN_HEADERS` menos las secretas**, no una
+    lista escrita a mano. Estaba a mano y, al añadir `FechaIngreso` (v433), el dato se
+    guardaba bien y **`list_users` lo borraba al leerlo**: la hoja tenía la fecha y
+    cualquier pantalla que preguntara por aquí veía "". No lanza, no avisa — la
+    columna simplemente no existe para quien la lee. Misma familia que `auth._COL`
+    escrito a mano: dos sitios que describen las mismas columnas.
+    """
+    _campos = [h for h in LOGIN_HEADERS if h not in _CAMPOS_SECRETOS]
     out = []
     for r in _login_records_cached():
         g = str(r.get("Grupo", "")).strip()
         if grupo is not None and g.lower() != grupo.strip().lower():
             continue
-        out.append({
-            "Usuario": str(r.get("Usuario", "")),
-            "Rol":     str(r.get("Rol", "")),
-            "Nombre":  str(r.get("Nombre", "")),
-            "Grupo":   g,
-            "Activo":  str(r.get("Activo", "SI")),
-            "Email":          str(r.get("Email", "")),
-            "TelegramChatID": str(r.get("TelegramChatID", "")),
-            "TarifaHora":     str(r.get("TarifaHora", "")),
-        })
+        fila = {h: str(r.get(h, "")) for h in _campos}
+        fila["Grupo"] = g
+        fila["Activo"] = str(r.get("Activo", "SI"))
+        out.append(fila)
     return out
 
 
