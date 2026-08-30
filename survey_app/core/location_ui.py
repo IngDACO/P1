@@ -175,7 +175,7 @@ def location_picker(key, lat=None, lng=None, direccion=""):
     center = [slat, slng] if slat is not None else list(_SYDNEY)
     m = folium.Map(location=center, zoom_start=17 if slat is not None else 11)
     if slat is not None:
-        folium.Marker(center, tooltip="Ubicación del proyecto",
+        folium.Marker(center, tooltip="Project location",
                       icon=folium.Icon(color="red")).add_to(m)
     out = st_folium(m, key=f"{key}_map", height=360,
                     returned_objects=["last_clicked"])

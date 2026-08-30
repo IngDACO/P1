@@ -66,7 +66,7 @@ def selector_proyecto(key: str, ayuda: str = "") -> tuple:
     idmap = {f"{p.get('Nombre')} ({p.get('ID')})": p for p in proys}
     opciones = ["— sin proyecto (cargar plano a mano) —"] + list(idmap.keys())
     sel = st.selectbox(t("Project"), opciones, key=f"pl_prj_{key}",
-                       help=ayuda or "Usa los datos del plano guardados en el proyecto.")
+                       help=ayuda or "It uses the drawing data stored on the project.")
     if sel == opciones[0]:
         return None, {}
     prj = idmap[sel]

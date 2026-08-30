@@ -368,6 +368,20 @@ Estas cinco mordieron en una sola tanda:
     funciones con las dependencias de Sheets sustituidas y mirar lo que pintan. Si al
     traducir aparece una llamada `t(...)` en una función donde `t` ya era una variable,
     Python la marca local en el ámbito ENTERO y revienta — y nada de lo anterior lo ve.
+30. ⚠️ **Un invariante mide una FORMA, no el fenómeno — y su «0» solo cubre esa forma.**
+    El de v440 («toda cadena de display envuelta en `t()`») daba **0** con **230 frases
+    en español** delante: mira el ARGUMENTO de la llamada, así que un trozo de f-string
+    y una cadena armada antes en una variable (`msg = f"…"; st.success(msg)`) pasan por
+    delante sin que salte nada. Es **literalmente** el guardián del LaTeX de v309, que
+    tampoco veía las variables, y el aviso de v349 («cuando el mismo fallo reaparece, la
+    pregunta no es solo ¿lo arreglo? sino **¿por qué mi chequeo no lo vio?**») aplicado
+    al i18n. → Un «0» hay que leerlo como *«0 de lo que esta red puede ver»*, y por eso
+    hacen falta VARIAS redes cuyos huecos no coincidan: en v441, posición (etiquetas
+    sueltas) + idioma sobre frases largas (lo que la posición no alcanza) + un barrido
+    propio para lo que no es display (el PDF de las herramientas). ⚠️ Y el corolario
+    incómodo: **cada red nueva descubre una bolsa nueva** — tras las dos primeras
+    quedaban aún ~215 etiquetas CORTAS dentro de listas de tuplas, invisibles para las
+    dos. «No queda nada» solo se puede afirmar de la forma que se ha medido.
 
 **Y la regla de siempre, que volvió a aplicar:** antes de borrar el LECTOR de un mecanismo, buscar
 sus ESCRITORES y convertirlos. En v299 `_nav_pending` tenía dos vivos («Abrir proyecto» tras el
@@ -7274,6 +7288,100 @@ se GUARDAN en la hoja `Actividades` → migración del histórico). El informe d
 no está entero en inglés hasta que caigan esas tres, y conviene saberlo antes de
 enseñárselo a un cliente.
 
+## i18n F4 + ⚠️ EL INVARIANTE DABA 0 CON 230 FRASES EN ESPAÑOL DETRÁS (v441)
+
+F4 son las **5 herramientas técnicas** (Survey · Plomada · Rieles · Buffers · Belting):
+sus pantallas (128+53+38+23+22 etiquetas) y —lo que no estaba previsto— **su PDF**. Pero
+lo que define esta versión es lo que se encontró al ir a cerrarla.
+
+### ⚠️ El invariante de v440 estaba en verde y quedaban 230 frases en español
+«0 cadenas sueltas sin `t()` en los 23 módulos» era CIERTO y no significaba lo que yo
+había dicho: ese chequeo mira el **argumento** de la llamada de display, así que
+**un trozo de f-string y una cadena armada antes en una variable** pasan por delante.
+```python
+msg = f":green[…] Guardado como **{res['id']}** en {prj.get('Nombre')}."   # ← invisible
+st.success(msg)                                                             # ← lo que mira
+```
+Es **el mismo agujero del guardián del LaTeX de v309**, que tampoco veía las variables, y
+justo lo que v349 avisó que había que preguntarse. Con eso, **F2 y F3 no estaban
+terminadas** aunque las declaré cerradas.
+- **Cómo se destapó**: buscando un ancla para probar el guardián contra código roto
+  (regla v410). Al mirar `plumb_ui` para elegir la rotura apareció una nota del PDF en
+  español, y tirando del hilo salieron 230.
+- **La red que lo mide**: toda cadena del módulo que no esté ya dentro de `t()`/`d()` y
+  que sea una FRASE (3+ palabras separadas por espacio), cruzada con un detector de
+  español. ⚠️ **Aquí sí vale el detector de idioma** que la trampa nº28 prohíbe en
+  general: su ceguera es con etiquetas CORTAS sin acento ni artículo («Fichar», «Firma»)
+  — y ésas ya las cubre el invariante de posición. Las dos redes cubren lo que cada una
+  se deja; ninguna sola bastaba.
+- ⚠️ Afinar la red costó dos pasadas: contar «palabras» con `[A-Za-z]{2,}` marcaba
+  `sidebar_chat_input` como frase de tres y ahogaba el barrido en **1.375** falsos
+  positivos. Con palabras separadas por ESPACIO quedaron 697, y cruzadas con el español, 230.
+
+### El PDF de las 4 herramientas: no era pantalla, así que no lo miraba NADIE
+`tool_pdf(...)` no es una función de display (el invariante no lo mira) y sus etiquetas
+son de 1-3 palabras (la red de frases tampoco). Estaba **entero en español** — título,
+ficha, cabeceras de tabla y notas — y ese PDF se descarga, se archiva en Drive y **se
+lleva a obra**: la pantalla en inglés y su documento en español es el desajuste de
+media-unificación de v419. Va con **`d()`**, no con `t()`: un documento que sale de la
+empresa se escribe en el idioma BASE, no en el de la pantalla de quien lo genera (v436).
+- ⚠️ **NO se tocan** `herramienta="plomada"|…` (clave de `toolruns.HERRAMIENTAS`, se
+  guarda en la hoja `Calculos`) ni las claves de `datos=` (van a `DatosJSON` y las lee
+  `entradas_de` al reabrir un cálculo, v148). El guardián comprueba que siguen intactas.
+- `tool_pdf.py` en sí **no tenía texto propio** (solo estructura): se comprobó antes de
+  tocarlo, en vez de traducir por si acaso.
+
+### Lo que NO se traduce, y por qué (mirado uno a uno, no por lote)
+| | |
+|---|---|
+| **`'🗺 Ruta del día'`** | es el **ID** de la sub-pestaña: lo compara `sub ==` y lo usan los deep-links (v232). Traducirlo rompe la navegación **sin dar ningún error** |
+| `'En progreso'` · `'En pausa'` | son ESTADOS guardados en la hoja `Proyectos` |
+| `'Duración (d)'` | la LEEN `report.py` y `user_report.py`: contrato entre módulos |
+| los bloques `<style>` | son comentarios CSS míos, no pantalla |
+Y al revés: `'Todo el cliente'` (opción de radio comparada en el mismo módulo) y
+`'En la agrupación'`/`'Ya en otra'` (nombres de columna del editor de miembros) **sí** se
+traducen, pero **todas sus apariciones juntas** — media traducción deja la lectura
+buscando una columna que ya no existe. Se detectaron con un barrido que marca lo que
+aparece en una comparación, como clave de dict o en más de un fichero.
+
+### ⚠️ Medir, no estimar: los pies de los KPI se salían del ancho
+Al traducir, `verif_v303` se puso rojo — y con razón: su tabla de anchos está **medida**,
+y dice que un pie nuevo obliga a ir a medirlo. Medidos: **«nobody clocked in» 98 px** y
+**«across the company» 106**, sobre **93 útiles**. Se cambiaron por «no hours yet» (67) y
+«company-wide» (79).
+- ⚠️ Y antes de fiarme del banco de medida lo **calibré contra los valores que v303 ya
+  había medido** (trampa nº12): mi banco lee **+2 a +6 px** más ancho (60→62, 84→88,
+  59→63), así que sus números no son intercambiables — por eso se eligieron textos con
+  margen, para que ese sesgo no decida. La diferencia queda escrita en la tabla.
+
+### Verificación
+`verif_v441.py`, **26 comprobaciones**, probado contra **9 roturas** (una por chequeo):
+las caza las 9. Incluye ejecutar `tool_pdf` de verdad y comprobar que devuelve un `%PDF`
+— *importar no ejecuta* (v378). Suite entera: **81/81**.
+- **6 guardianes CADUCADOS** por el cambio de idioma, actualizados con la razón al lado
+  (regla v385), NO relajados: v303 (los pies, re-medidos), v390 y v395 (reanclados al
+  PRINCIPIO en vez de a la frase), v423 y v425 (el titular y la fila de estructura, ahora
+  sin distinguir caja) y v430 — que ⚠️ **reventaba con `ValueError: substring not found`**
+  en vez de fallar legible, la misma queja que v385 le hizo a v301.
+- ⚠️ Y un fallo de método repetido: escribir anclas con `\n` **por heredoc** las convierte
+  en saltos reales y no casan nunca (trampa nº26, tercera vez). Se escriben con la
+  herramienta de escritura.
+
+### ⚠️ Lo que QUEDA, medido (no «me parece que falta algo»)
+- **~215 etiquetas CORTAS** (2 palabras) dentro de listas de tuplas y f-strings, que
+  ninguna de las dos redes ve: `"+ ausencias pagadas (vacaciones, bajas)"`,
+  `"Mano de obra (estructura)"`, `"— elige el proyecto —"`, `"Con incidencias"`… Se
+  arreglaron solo las 4 que un guardián señalaba; el resto va en su propia tanda.
+- **~30 claves de dict que son CABECERA de tabla** (`A (pila instalada)`, `Composición`,
+  `Fórmula`, `Emisión`, `Situación`…). ⚠️ De las 49 encontradas, **12 son DATO puro**
+  (`por_tipo`, `en_uso`, `creado_por`…) y tres no se pueden tocar solas: `En progreso` /
+  `En pausa` son estados **guardados en la hoja** y `Duración (d)` es contrato con los
+  informes. Esa parte arrastra migración de histórico.
+- **F5** (internos): `report.py`, `email_notify.py`, `chat_agent.py`, `admin_digest.py`,
+  `interpretation.SYSTEM_PROMPT`. ⚠️ `pre_i18n.py` ya tiene marcados los **`d`/`_d` que
+  son variables** en 7 módulos: hay que renombrarlos ANTES de traducir, no después (es lo
+  que rompió `quotes_ui` en v440).
+
 ## i18n F3: TODA la interfaz de gestión, en inglés (v440)
 
 15 módulos, **~1.100 etiquetas**: `projects_ui` (479 únicas), `auth_ui`, `roster_ui`,
@@ -7497,7 +7605,7 @@ literal, así que **no casaba nunca** — y dejó pasar «Plomo riel izquierdo»
 Es el mismo fallo de v436, cometido otra vez ese mismo día. Se vio con `cat -A`, no
 leyendo. → **Cualquier `\b`, `\n` o `\w` va por fichero escrito, nunca por heredoc.**
 
-## Versiones desplegadas (v440 = actual)
+## Versiones desplegadas (v441 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -7505,6 +7613,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v441 | **i18n F4: las 5 herramientas técnicas + su PDF** — y, al ir a cerrarla, el hallazgo: ⚠️ **el invariante de v440 daba «0 cadenas sueltas» con 230 FRASES en español detrás.** Mide el ARGUMENTO de la llamada de display, así que un trozo de f-string y una cadena armada antes en una variable (`msg = f"…"; st.success(msg)`) pasan por delante — **el mismo agujero del guardián del LaTeX de v309**, o sea que F2 y F3 NO estaban terminadas. Red nueva: toda cadena sin envolver que sea una FRASE (3+ palabras) cruzada con el detector de español — ⚠️ aquí sí vale, porque su ceguera son las etiquetas CORTAS y ésas las cubre el invariante de posición. + **el PDF de las 4 herramientas estaba entero en español** y no lo miraba nadie (`tool_pdf` no es display y sus etiquetas son de 1-3 palabras), aunque **se lleva a obra**: va con `d()` (idioma BASE, v436), sin tocar `herramienta=` ni las claves de `datos=`, que son DATO. ⚠️ `verif_v303` se puso rojo con razón: los pies KPI ingleses medían **98 y 106 px sobre 93 útiles** — y el banco de medida se **calibró** antes de fiarse (lee +2..+6 px que el de v303). 9 roturas probadas, 6 guardianes caducados actualizados con su razón (v430 **reventaba** en vez de fallar legible), suite 81/81. ⚠️ **Queda medido**: ~215 etiquetas cortas y ~30 cabeceras que son clave de dict, tres de ellas atadas a datos guardados |
 | v440 | **i18n F3: TODA la interfaz de gestión en inglés** — 15 módulos, ~1.100 etiquetas, **0 cadenas sueltas sin `t()`**. ⚠️ Antes hubo que tapar tres huecos del extractor, los tres silenciosos: filtraba por **idioma** (ciego a 13 de 15 palabras probadas), se traía **claves de widget** (`st.form(key)` → la clave dependería del idioma y el formulario perdería su estado) y no veía **cabeceras de tabla ni tarjetas KPI** (71 `column_config` + las etiquetas dentro de `kpi_row`). En `column_config` se traduce la etiqueta y **nunca la clave**, que es la columna que `st.data_editor` devuelve. ⚠️ **Volví a romper `quotes_ui`** metiendo `t(...)` donde `t` ya era variable — tercera vez (v437, v439): la causa era comprobar el ámbito DESPUÉS de traducir, así que ahora hay **pre-vuelo** (`pre_i18n.py`), que señaló 46 funciones. ⚠️ Su primera versión daba falsos positivos: un `lambda t:` y un `[t for t, e in …]` **no ligan `t`** (trampa nº3) — los reales eran 7. Guardián probado contra 6 roturas; **dos solo se cazaron tras corregirlo**, las dos por medir por idioma: una afirmaba una clave que no existe (**FALLO con el código correcto**) y la otra no veía «Neto a pagar». El invariante que sí mide: **toda cadena suelta de display envuelta en `t()`** |
 | v439 | **i18n F1d + F2: los correos y LA APP DE CAMPO, en inglés** — cierra F1 y hace F2 entera (235 reemplazos: 13 en `notify`/`alerts`, 222 en los 4 módulos de obra). Los correos van con **`d` (idioma BASE)** y la pantalla con `t`. ⚠️ **Dos `UnboundLocalError` que introduje yo**: al traducir aparecieron llamadas a `t()` en funciones donde `t` YA era variable, y Python la marca local en el ámbito ENTERO — el peor dejaba **«Mis ausencias» sin abrir** (`'str' object is not callable`). Mi verificación fue «compilan e importan», que **no ejercita nada**. ⚠️ Y los cambios de `notify`/`alerts` **no estaban en el disco** pese a figurar como hechos: se reaplicaron y se verificaron GENERANDO los mensajes. ⚠️ **Y dije que F2 estaba terminada con 47 etiquetas aún en español**: mi detector busca acentos y palabras funcionales, y «Fichar», «Firma», «Pendientes» o «Mis ausencias» no tienen ninguna de las dos (tercera vez del mismo agujero: v438, el guardián de v439 y esto). Lo destapó el smoke test al EJECUTAR la pantalla; el barrido pasa a ser por POSICIÓN (literal de display sin `t()`), no por idioma. Guardián probado contra 8 roturas — **tres solo se cazaron tras corregirlo**: comprobar PRESENCIA dejaba pasar traducir 1 de 6 apariciones de una clave, «Registrados» es invisible para el detector de español (→ chequeos POSITIVOS, el «Planificado» de v438) y una rotura apuntaba a un módulo **sin ningún logger**. ⚠️ Corrección de escala: lo pendiente son **3.122 literales**, no los 1.153 que cité — mi lista blanca veía solo una parte, y el número incluye datos |
 | v438 | **i18n F1c: los DIAGRAMAS y las PLOMADAS — F1 CERRADO** (pedido por el usuario: «adelanta los diagramas y las plomadas»). 80 etiquetas en 6 módulos; el informe del cliente pasa de **37 líneas en español a 0**, salvo los 11 nombres de actividad, que son DATO de la hoja `Actividades`. ⚠️ El motor se importa con **alias `_d`**: en estos módulos `d` ya es variable en 14 sitios y taparía la función en el ámbito entero (el fallo de v437). ⚠️ NO se tocan las 11 CLAVES de `schedule_table`/`plumb_table`/`plumb_checks` (las indexan los informes) — pero sus VALORES sí, tras comprobar que nadie compara contra ellos. ⚠️ **El barrido estático se dejó CINCO restos** (filtraba cadenas largas y exigía el `<text>` en una línea): los cazó **renderizar los SVG y leer su texto**. Guardián de 59 comprobaciones sobre los **11 SVG generados** (incluido que sigan sin `<defs>`/`<marker>`, o svglib los tira del PDF), probado contra **12 roturas** — cuatro solo se cazaron tras corregirlo: un `or` que dejaba traducir un nombre, un umbral que daba **FALLO con el código correcto**, «Planificado» invisible para el detector de español (→ chequeos POSITIVOS, que de paso destaparon un `FICHA DE REPLANTEO`), y una rotura apuntada a un stub que nadie dibuja. ⚠️ Y **la trampa del `\b` del heredoc por SEGUNDA vez** (v436): 0x08 en el regex → no casa nunca y aprueba en verde |

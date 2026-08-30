@@ -198,7 +198,7 @@ def _detalle_cliente(grupo, key):
             else:
                 st.error(msg)
         if f.get("Direccion"):
-            st.markdown(maps.maps_link_md(f.get("Direccion"), "Ver dirección en el mapa"))
+            st.markdown(maps.maps_link_md(f.get("Direccion"), "See the address on the map"))
 
     # Resumen
     with der:

@@ -142,7 +142,7 @@ def render_credenciales(usuario, grupo, editable=False, key_prefix="cr"):
                 clase = ""
             c3, c4 = st.columns(2)
             emi = _fecha_input(c3, "Emisión", key=f"{key_prefix}_emi")
-            ven = _fecha_input(c4, "Vencimiento (vacío si no vence)", key=f"{key_prefix}_ven")
+            ven = _fecha_input(c4, "Expiry (blank if it does not expire)", key=f"{key_prefix}_ven")
             arch = st.file_uploader(t("Photo or document (optional)"),
                                     type=["pdf", "png", "jpg", "jpeg"], key=f"{key_prefix}_file")
             nota = st.text_input(t("Note"))
@@ -168,7 +168,7 @@ def render_credenciales(usuario, grupo, editable=False, key_prefix="cr"):
             _kid = str(r.get("ID", ""))
             c1, c2 = st.columns(2)
             enum = c1.text_input(t("Number"), value=r.get("Numero", ""), key=f"{key_prefix}_enum_{_kid}")
-            even = _fecha_input(c2, "Vencimiento (vacío si no vence)", r.get("Vencimiento", ""),
+            even = _fecha_input(c2, "Expiry (blank if it does not expire)", r.get("Vencimiento", ""),
                                 key=f"{key_prefix}_even_{_kid}")
             enota = st.text_input(t("Note"), value=r.get("Nota", ""), key=f"{key_prefix}_enota_{_kid}")
             b1, b2 = st.columns(2)
@@ -237,10 +237,7 @@ def render_login() -> bool:
             st.markdown("<h1 style='text-align:center;letter-spacing:.2em;color:#1a3a5c'>COPEX</h1>",
                         unsafe_allow_html=True)
     st.markdown(
-        "<p style='text-align:center;color:#5b6472;margin-top:-8px;font-size:16px;'>"
-        "Gestión de instalación de elevadores"
-        "<br><span style='font-size:13px;color:#8b95a5;'>Proyectos · Cuadrilla · Costos · "
-        "Herramientas técnicas</span></p>",
+        "<p style='text-align:center;color:#5b6472;margin-top:-8px;font-size:16px;'>Lift installation management<br><span style='font-size:13px;color:#8b95a5;'>Projects · Crew · Costs · Technical tools</span></p>",
         unsafe_allow_html=True)
 
     # ⚠️ v365: los mensajes que sobrevivieron a un rerun también se pintan AQUÍ. El
@@ -276,7 +273,7 @@ def render_login() -> bool:
                 else:
                     ok, msg = auth.add_user(u, p1, "propietario", nm)
                     if ok:
-                        flash.exito(msg + "  Ahora inicia sesión.")
+                        flash.exito(msg + "  Now sign in.")
                         st.rerun()
                     else:
                         st.error(msg)
@@ -295,7 +292,7 @@ def render_login() -> bool:
             def _do_login(force=False):
                 res = auth.verify_login(u, p)
                 if not res.get("ok"):
-                    st.error(res.get("error", "Error de autenticación."))
+                    st.error(res.get("error", "Authentication error."))
                     return
                 if force:
                     auth.end_session(res["usuario"], None)   # cerrar la otra sesión
@@ -415,17 +412,13 @@ def _owner_grupos():
                     if ok:
                         st.rerun()
                 if _sid_now:
-                    st.success(":material/check_circle: **" + _gl + "** usa su propio "
-                               "libro. `Login`, `Grupos` y `Rieles` siguen en el maestro: "
-                               "son el registro de la app, no datos suyos.")
+                    st.success(":material/check_circle: **" + _gl + "** uses its own spreadsheet. `Login`, `Grupos` and `Rieles` stay in the master book: they are the app's own register, not that client's data.")
             # ⚠️ El límite se DICE. Un consolidado al que le faltan clientes sin avisar
             # es peor que no tenerlo (ver v359).
             _fuera = auth.grupos_con_libro_propio()
             if _fuera:
-                st.warning(":material/warning: Con clientes en libros aparte, los "
-                           "**resúmenes consolidados del propietario** todavía solo "
-                           "cuentan los del maestro. Fuera del consolidado: **"
-                           + ", ".join(_fuera) + "**. Cada cliente sí ve lo suyo completo.")
+                st.warning(":material/warning: With clients in separate books, the **owner's consolidated summaries** still only count the ones in the master book. Left out of the consolidation: **"
+                           + ", ".join(_fuera) + "**. Each client does see all of their own data.")
 
     # ── Zona horaria por grupo (v173) ──
     # Define en qué hora LOCAL se graban los registros de cada grupo (cada empresa
@@ -569,7 +562,7 @@ def _owner_usuarios():
                    and not (str(u.get("Email", "")).strip()
                             and str(u.get("TelegramChatID", "")).strip())]
         if _faltan:
-            st.warning(":material/warning: Campo sin contacto completo (no pueden usar la app): "
+            st.warning(":material/warning: Field users without full contact details (they cannot use the app): "
                        + ", ".join(_faltan))
 
     # ── Crear usuario (rol + grupo) ──
@@ -597,7 +590,7 @@ def _owner_usuarios():
     if users:
         st.markdown(t("#### :material/manage_accounts: Manage a user"))
         _gf = ui.elegir(t("Filter by company"), [g["Grupo"] for g in auth.list_groups()],
-                        key="ow_ficha_gfil", vacio="— todos los grupos —")
+                        key="ow_ficha_gfil", vacio="— all companies —")
         _cands = [u for u in users if (not _gf or str(u.get("Grupo", "")) == _gf)]
         _map = {f"{u['Nombre'] or u['Usuario']} ({u['Usuario']}) · {u.get('Grupo') or 'sin grupo'}": u
                 for u in _cands}
@@ -646,7 +639,7 @@ def _owner_resumen():
     if not _P.is_configured():
         st.warning(t("This needs Google Sheets configured."))
         return
-    with st.spinner("Reuniendo el estado de cada grupo…"):
+    with st.spinner("Gathering the status of each company…"):
         data = admin_digest.owner_digest()
     if not data:
         st.info(t("No companies with data yet."))
@@ -1058,11 +1051,10 @@ def _grupo_usuarios(grupo):
         _sc = []
     if _sc:
         st.warning(
-            ":material/notifications_off: **Las alarmas de este grupo no le llegan a "
-            f"{len(_sc)}** de sus destinatarios: "
+            ":material/notifications_off: **This company's alerts do not reach "
+            f"{len(_sc)}** of their recipients: "
             + ", ".join(f"**{x['usuario']}** ({x['rol']})" for x in _sc)
-            + ". Sin email ni Telegram, el aviso queda dentro de la app. "
-              "Se arregla cargándoles un email en su ficha.")
+            + ". With no email and no Telegram, the alert stays inside the app. Fix it by adding an email on their profile.")
 
     # ── Tabla CLICKEABLE → abre la ficha de esa persona ──
     _rows = [{

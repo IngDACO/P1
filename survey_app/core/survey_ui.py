@@ -13,6 +13,8 @@ extraccion no tuvo que renombrar nada.
 """
 
 import logging
+
+from core.i18n import t
 import streamlit as st
 
 from core import flash
@@ -81,9 +83,9 @@ USER_ONLY = {
     "BSR":            "Ancho real del hueco medido en obra (mm)",
     "FS":             "Distancia frontal de seguridad (mm)",
     "FRAME":          "Marco de puerta de entrada (mm)",
-    "RAIL":           "Ancho de la cabeza del riel (mm)",
+    "RAIL":           "Rail head width (mm)",
     "OFFSET_CABIN":   "Offset de cabina (mm)",
-    "LengthTemplate": "Longitud del template de plomada (mm) — para el esquema de plomado",
+    "LengthTemplate": "Plumb template length (mm) — for the plumb layout",
 }
 
 def init_state():
@@ -164,28 +166,26 @@ def render_survey_tab(_ROL, _GRUPO):
             st.session_state[f"inp_{_k}"] = float(_v)
         for _k, _v in (_pend.get("cfg") or {}).items():
             st.session_state[_k] = _v
-        st.success(":material/check_circle: Matriz, parámetros y configuración cargados desde el Excel."
+        st.success(":material/check_circle: Matrix, parameters and settings loaded from the Excel file."
                    if _pend.get("todo") else
-                   ":green[:material/check_circle:] Matriz cargada desde el Excel (los parámetros del plano se conservan).")
+                   ":green[:material/check_circle:] Matrix loaded from the Excel file (the drawing's parameters are kept).")
 
     if st.session_state.pop("_dup_msg", False):
-        st.success(":material/summarize: Survey duplicado: se conservaron parámetros y configuración. "
-                   "Ingresa la matriz del siguiente elevador y calcula.")
+        st.success(t(":material/summarize: Survey duplicated: parameters and configuration were kept. Enter the matrix for the next lift and calculate."))
 
     # Aviso cuando se llega desde "Reconstruir proyecto" (Mi grupo → detalle)
     if st.session_state.get("_rebuilt_from"):
-        st.info(f":material/download: Cargaste el proyecto **{st.session_state['_rebuilt_from']}**. "
-                "Pulsa **:material/play_arrow: Calcular** para regenerar diagramas e informes.")
+        st.info(f":material/download: You loaded project **{st.session_state['_rebuilt_from']}**. "
+                "Press **:material/play_arrow: Calculate** to regenerate diagrams and reports.")
 
     # ── Identificación del proyecto ───────────────────────
     # NO se teclea: el survey alimenta un proyecto que YA existe (v135) y ese
     # proyecto trae proyecto/cliente/ubicación/ingeniero. Se toman de él al
     # elegirlo (en el selector del plano, más abajo) y se usan en el informe.
     # En modo «sin proyecto» el informe va sin ellos.
-    with st.expander(":material/cleaning_services: Empezar un survey nuevo"):
-        st.caption("Borra parámetros, matriz, configuración y resultados de esta sesión. "
-                   "No afecta a los proyectos ya guardados.")
-        if st.button(":material/cleaning_services: Limpiar todo y empezar de cero", key="btn_reset_survey"):
+    with st.expander(t(":material/cleaning_services: Start a new survey")):
+        st.caption(t("Clears the parameters, matrix, configuration and results of this session. It does not affect projects already saved."))
+        if st.button(t(":material/cleaning_services: Clear everything and start over"), key="btn_reset_survey"):
             st.session_state["_reset_survey"] = True
             st.rerun()
 
@@ -200,7 +200,7 @@ def render_survey_tab(_ROL, _GRUPO):
     if _fp:
         st.session_state["survey_fase"] = _fp
     _FASE_DATOS, _FASE_RES = "📝 Datos del survey", "📊 Resultados e informes"
-    _fase = st.radio("Fase", [_FASE_DATOS, _FASE_RES], horizontal=True,
+    _fase = st.radio(t("Phase"), [_FASE_DATOS, _FASE_RES], horizontal=True,
                      format_func=lambda o: {_FASE_DATOS: ":material/edit: Datos del survey",
                                             _FASE_RES: ":material/insights: Resultados e informes"}.get(o, o),
                      key="survey_fase", label_visibility="collapsed")
@@ -255,20 +255,7 @@ def render_survey_tab(_ROL, _GRUPO):
         lean como un solo lenguaje.
         """
         st.markdown(
-            '<div style="display:flex;flex-wrap:wrap;gap:14px;align-items:center;'
-            'font-size:12px;color:#5f6b7a;margin:-6px 0 10px 2px">'
-            '<span><span style="display:inline-block;width:11px;height:11px;'
-            'background:#c0392b;border-radius:2px;vertical-align:-1px"></span> '
-            'fuera de límite — el valor más crítico de su columna</span>'
-            '<span><span style="display:inline-block;width:11px;height:11px;'
-            'background:#f1948a;border-radius:2px;vertical-align:-1px"></span> '
-            'fuera de límite</span>'
-            '<span><span style="display:inline-block;width:11px;height:11px;'
-            'background:#e67e22;border-radius:2px;vertical-align:-1px"></span> '
-            'requiere corte (OR/OL)</span>'
-            '<span style="opacity:.85">WR·WL·FR·FL incumplen por <b>debajo</b> '
-            'del límite; OR·OL por <b>encima</b>.</span>'
-            '</div>', unsafe_allow_html=True)
+            '<div style="display:flex;flex-wrap:wrap;gap:14px;align-items:center;font-size:12px;color:#5f6b7a;margin:-6px 0 10px 2px"><span><span style="display:inline-block;width:11px;height:11px;background:#c0392b;border-radius:2px;vertical-align:-1px"></span> out of limit — the most critical value in its column</span><span><span style="display:inline-block;width:11px;height:11px;background:#f1948a;border-radius:2px;vertical-align:-1px"></span> out of limit</span><span><span style="display:inline-block;width:11px;height:11px;background:#e67e22;border-radius:2px;vertical-align:-1px"></span> needs cutting (OR/OL)</span><span style="opacity:.85">WR·WL·FR·FL fail <b>below</b> the limit; OR·OL fail <b>above</b> it.</span></div>', unsafe_allow_html=True)
 
     def _render_survey_results(r):
         """Dibuja TODOS los resultados del cálculo leyendo de `calc_results`.
@@ -303,20 +290,20 @@ def render_survey_tab(_ROL, _GRUPO):
         if _b:
             _off = int(_b.get("total_off", 0))
             e1, e2, e3, e4 = st.columns(4)
-            e1.metric("Lateral (RL)",  f"{_b['rl']:+.1f} mm")
-            e2.metric("Frontal (FB)",  f"{_b.get('fb_applied', _b['fb']):+.1f} mm")
-            e3.metric("Fuera de límite", _off)
-            e4.metric("Soluciones óptimas", len(opt_result.get("all_solutions", [])))
+            e1.metric(t("Lateral (RL)"),  f"{_b['rl']:+.1f} mm")
+            e2.metric(t("Front (FB)"),  f"{_b.get('fb_applied', _b['fb']):+.1f} mm")
+            e3.metric(t("Out of limit"), _off)
+            e4.metric(t("Optimal solutions"), len(opt_result.get("all_solutions", [])))
             if _off == 0:
-                st.success(":material/check_circle: Solución encontrada **sin valores fuera de límite**.")
+                st.success(t(":material/check_circle: Solution found **with no values out of limit**."))
             else:
                 _cols_off = [c for c in SURVEY_COLS if (_b.get("off_by_col") or {}).get(c, 0)]
-                st.warning(f":material/warning: La solución activa deja **{_off} valor(es) fuera de límite**"
+                st.warning(f":material/warning: The active solution leaves **{_off} value(s) out of limit**"
                            + (f" en: **{', '.join(_cols_off)}**." if _cols_off else "."))
         else:
-            st.error(":material/cancel: No se encontró ninguna combinación válida con estos parámetros.")
+            st.error(t(":material/cancel: No valid combination was found with these parameters."))
 
-        with st.expander("Parámetros calculados", icon=":material/calculate:", expanded=False):
+        with st.expander(t("Calculated parameters"), icon=":material/calculate:", expanded=False):
             st.dataframe(
                 pd.DataFrame([
                     {"Parámetro": k, "Valor": round(v, 3) if isinstance(v, (int, float)) else v}
@@ -325,12 +312,12 @@ def render_survey_tab(_ROL, _GRUPO):
                 width="stretch", hide_index=True
             )
 
-        st.subheader("Matriz SURVEY ajustada")
+        st.subheader(t("Adjusted SURVEY matrix"))
         st.dataframe(survey_adj_df.style.apply(highlight, axis=None),
                      width="stretch")
         _leyenda_matriz()
 
-        st.subheader("Resumen por columna — Estado inicial")
+        st.subheader(t("Column summary — initial state"))
         summary = []
         for col in SURVEY_COLS:
             lim_c = lim_map[col]
@@ -361,19 +348,19 @@ def render_survey_tab(_ROL, _GRUPO):
             f"**MAX OFF FB:** {analysis['MAX_OFF_FB']:.2f} mm  |  "
             f"**BC_CALC:** {limits.get('BC_CALC', 0):.2f} mm  |  "
             f"**DIF TSW-FS:** {limits.get('DIF_TSW_FS', 0):.2f} mm  |  "
-            f"**FB máx. hacia atrás:** {limits.get('FB_MAX_BACK', 0):.2f} mm"
+            f"**FB max. backwards:** {limits.get('FB_MAX_BACK', 0):.2f} mm"
         )
 
         # ── Optimización ──────────────────────────────────────
-        st.subheader(":material/search: Optimización")
+        st.subheader(t(":material/search: Optimisation"))
         best          = opt_result.get("best")
         all_solutions = opt_result.get("all_solutions", [])
         step_log      = opt_result.get("step_log", [])
 
         if best:
             st.success(
-                f":green[:material/check_circle:] Se encontraron **{len(all_solutions)} solución(es) óptima(s)** con "
-                f"**{best['total_off']} valor(es) fuera de límite**"
+                f":green[:material/check_circle:] Found **{len(all_solutions)} optimal solution(s)** with "
+                f"**{best['total_off']} value(s) out of limit**"
             )
             best_pair = (best["rl"], best["fb"])
             sorted_solutions = sorted(
@@ -394,7 +381,7 @@ def render_survey_tab(_ROL, _GRUPO):
                 _lbl = [f"RL {s['rl']:+.1f} · FB {s.get('fb_applied', s['fb']):+.1f} · "
                         f"{s['total_off']} fuera" for s in sorted_solutions]
                 _sel = st.selectbox(
-                    ":material/star: Solución activa — se usa en diagramas, plomado e informes",
+                    t(":material/star: Active solution — used in diagrams, plumb setting and reports"),
                     range(len(_lbl)), index=_idx_act, format_func=lambda k: _lbl[k],
                     key="sol_activa",
                 )
@@ -413,7 +400,7 @@ def render_survey_tab(_ROL, _GRUPO):
                         r["plumb"] = None
                     st.rerun()
 
-                with st.expander("Comparar soluciones lado a lado", icon=":material/compare:", expanded=False):
+                with st.expander(t("Compare solutions side by side"), icon=":material/compare:", expanded=False):
                     _comp = []
                     for k, s in enumerate(sorted_solutions):
                         _obc = s.get("off_by_col", {}) or {}
@@ -452,7 +439,7 @@ def render_survey_tab(_ROL, _GRUPO):
                                  width="stretch")
                     _leyenda_matriz()
                     if not wall_limiting_:
-                        st.caption("CUT OR / CUT OL: valor a cortar si OR/OL supera el límite (OR/OL − LIMIT). Positivo = requiere corte. Blanco = dentro del límite.")
+                        st.caption(t("CUT OR / CUT OL: how much to cut if OR/OL exceeds the limit (OR/OL − LIMIT). Positive = a cut is needed. Blank = within the limit."))
                     sol_sum = []
                     for col in SURVEY_COLS:
                         col_vals = [x[col] for x in sol["matrix"]]
@@ -473,7 +460,7 @@ def render_survey_tab(_ROL, _GRUPO):
                             "Fuera límite":  off_c,
                             "Niveles":       ", ".join(viols_s) if viols_s else "—",
                             lbl:             round(ext_c, 2),
-                            "Dif vs Límite": round(dif_c, 2),
+                            "Diff vs Limit": round(dif_c, 2),
                         })
                     st.dataframe(pd.DataFrame(sol_sum), width="stretch", hide_index=True)
 
@@ -481,17 +468,17 @@ def render_survey_tab(_ROL, _GRUPO):
             # Es logica propietaria: misma regla que ya aplica el agente IA y que
             # excluye el informe del cliente. Solo el propietario lo ve.
             if _ROL == "propietario":
-                with st.expander(f"Log del optimizador ({len(step_log)} pasos evaluados)", icon=":material/list_alt:", expanded=False):
+                with st.expander(f"Optimiser log ({len(step_log)} steps evaluated)", icon=":material/list_alt:", expanded=False):
                     valid_steps  = [s for s in step_log if s.get("status") == "VALID"]
                     skip_steps   = [s for s in step_log if s.get("status") == "SKIP"]
                     skip_phys    = [s for s in skip_steps if s.get("skip_type", "").startswith("physical")]
                     skip_wall    = [s for s in skip_steps if s.get("skip_type") == "wall"]
                     skip_frame   = [s for s in skip_steps if s.get("skip_type") == "frame_opening"]
                     st.caption(
-                        f"Válidos: {len(valid_steps)}  |  "
-                        f"Omitidos por límite físico (RL/FB): {len(skip_phys)}  |  "
-                        f"Omitidos por pared: {len(skip_wall)}  |  "
-                        f"Omitidos por apertura tapada: {len(skip_frame)}"
+                        f"Valid: {len(valid_steps)}  |  "
+                        f"Skipped for physical limit (RL/FB): {len(skip_phys)}  |  "
+                        f"Skipped for the wall: {len(skip_wall)}  |  "
+                        f"Skipped for a blocked opening: {len(skip_frame)}"
                     )
                     if valid_steps:
                         opt_pairs = {(s["rl"], s["fb"]) for s in all_solutions}
@@ -527,18 +514,16 @@ def render_survey_tab(_ROL, _GRUPO):
                         st.dataframe(df_log.style.apply(_hl, axis=1),
                                      width="stretch", hide_index=True)
         else:
-            st.error("No se encontró combinación válida.")
+            st.error(t("No valid combination was found."))
 
         # ── Diagrama físico — planta por piso ─────────────────
-        st.subheader(":material/architecture: Diagrama de posicionamiento — planta por piso")
-        st.caption("Vista superior de cómo encaja la cabina en el shaft en cada piso "
-                   "(matriz de la solución seleccionada). Verde = dentro de límite, "
-                   "naranja = al límite, rojo = fuera.")
+        st.subheader(t(":material/architecture: Positioning diagram — plan view per floor"))
+        st.caption(t("Top view of how the car fits in the shaft on each floor (matrix of the selected solution). Green = within limit, orange = at the limit, red = out."))
         if best and best.get("matrix"):
             n_floors = len(best["matrix"])
             _prob = floors_with_issues(best, lim_map)
 
-            with st.expander("Vista isométrica del hueco", icon=":material/view_in_ar:", expanded=False):
+            with st.expander(t("Isometric view of the shaft"), icon=":material/view_in_ar:", expanded=False):
                 components.html(
                     shaft_iso_svg(all_params, limits, best, n_floors, lim_map,
                                   proyecto=str(st.session_state.get("proyecto", ""))),
@@ -546,19 +531,19 @@ def render_survey_tab(_ROL, _GRUPO):
                 )
 
             _modo = st.radio(
-                "Pisos a mostrar",
+                t("Floors to show"),
                 ["Con incidencias", "Todos", "Elegir"],
                 horizontal=True, key="diag_modo", label_visibility="collapsed",
             )
             if _modo == "Con incidencias":
                 _floors = _prob or list(range(n_floors))
                 st.caption(f"Mostrando {len(_floors)} de {n_floors} pisos"
-                           + ("" if _prob else " (ninguno tiene incidencias: se muestran todos)"))
+                           + ("" if _prob else " (none has any issue: all are shown)"))
             elif _modo == "Todos":
                 _floors = list(range(n_floors))
             else:
                 _floors = st.multiselect(
-                    "Pisos", list(range(n_floors)),
+                    t("Floors"), list(range(n_floors)),
                     default=_prob[:1] or [0], key="diag_pisos",
                     format_func=lambda i: f"Piso {i + 1}",
                 )
@@ -570,7 +555,7 @@ def render_survey_tab(_ROL, _GRUPO):
                     scrolling=True,
                 )
                 # Exportar los diagramas sueltos (para mandar a obra sin el informe)
-                if st.button(":material/picture_as_pdf: Preparar PDF de estos diagramas", key="btn_diag_pdf"):
+                if st.button(t(":material/picture_as_pdf: Prepare a PDF of these diagrams"), key="btn_diag_pdf"):
                     with st.spinner("Generando PDF de diagramas..."):
                         st.session_state["_diag_pdf"] = floor_plans_pdf(
                             all_params, limits, best, lim_map, ctrl_in_frame_, ctrl_side_,
@@ -578,36 +563,34 @@ def render_survey_tab(_ROL, _GRUPO):
                             titulo=f"Diagramas de posicionamiento — "
                                    f"{all_params.get('PROYECTO') or 'Survey'}")
                 if st.session_state.get("_diag_pdf"):
-                    st.download_button(":material/download: Descargar diagramas (PDF)",
+                    st.download_button(t(":material/download: Download diagrams (PDF)"),
                                        data=st.session_state["_diag_pdf"],
                                        file_name="diagramas_posicionamiento.pdf",
                                        mime="application/pdf", key="dl_diag_pdf")
 
         # ── BSR vs BS ─────────────────────────────────────────
-        st.subheader(":material/straighten: Análisis BSR vs BS")
+        st.subheader(t(":material/straighten: BSR vs BS analysis"))
         if not bs_result.get("needed"):
-            st.success("BSR ≥ BS — No se requiere ajuste de shaft.")
+            st.success(t("BSR ≥ BS — no shaft adjustment is needed."))
         elif bs_result.get("step") is None:
-            st.error(f"No se encontró paso. DIF BS = {bs_result.get('dif_original')} mm")
+            st.error(f"No step was found. DIF BS = {bs_result.get('dif_original')} mm")
         else:
             st.success(
-                f":green[:material/check_circle:] Paso: **{bs_result['step']} mm**  |  "
-                f"Rango: **{bs_result['range']}**  |  Zona: **{bs_result['range_name']}**"
+                f":green[:material/check_circle:] Step: **{bs_result['step']} mm**  |  "
+                f"Range: **{bs_result['range']}**  |  Zone: **{bs_result['range_name']}**"
             )
 
         # ── Plomado definitivo (con el desplazamiento del survey) ──
-        st.subheader(":material/straighten: Plomado definitivo (según el survey)")
-        st.caption("Esquema de plomado con los desplazamientos que determinó el survey. "
-                   "El conjunto (plomos + paredes teóricas + template) se mueve; las paredes "
-                   "reales quedan fijas (eje cero = pared real izquierda).")
+        st.subheader(t(":material/straighten: Final plumb setting (from the survey)"))
+        st.caption(t("Plumb layout with the shifts the survey worked out. The assembly (plumb points + theoretical walls + template) moves; the real walls stay fixed (zero axis = real left wall)."))
         if plumb_res and best:
             st.info(
-                f"Desplazamiento aplicado:  lateral (rl) = **{best['rl']:.1f} mm**  ·  "
-                f"frontal (fb) = **{best['fb_applied']:.1f} mm**."
+                f"Shift applied:  lateral (rl) = **{best['rl']:.1f} mm**  ·  "
+                f"front (fb) = **{best['fb_applied']:.1f} mm**."
             )
             pm1, pm2, pm3 = st.columns(3)
-            pm1.metric("DBP",  f"{plumb_res['dbp']:.1f} mm")
-            pm2.metric("DBPW", f"{plumb_res['dbpw']:.1f} mm")
+            pm1.metric(t("DBP"),  f"{plumb_res['dbp']:.1f} mm")
+            pm2.metric(t("DBPW"), f"{plumb_res['dbpw']:.1f} mm")
             pm3.metric("RW",   f"{plumb_res['rw']:.1f} mm")
             st.dataframe(pd.DataFrame(plumb_table(plumb_res)),
                          width="stretch", hide_index=True)
@@ -615,10 +598,10 @@ def render_survey_tab(_ROL, _GRUPO):
             _bs = plumb_res.get("bs_check") or {}
             if _bs and not _bs.get("ok", True):
                 st.error(
-                    f":orange[:material/warning:] **BS incoherente:** el plano dice **{_bs['bs_plano']:.0f}** pero "
+                    f":orange[:material/warning:] **BS does not add up:** the drawing says **{_bs['bs_plano']:.0f}** but "
                     f"SF1+BKS+2·RAIL+SF2 = **{_bs['bs_componentes']:.0f}** "
-                    f"(dif {_bs['dif']:+.0f} mm). El encaje usa (BSR−BS)/2, así que con este "
-                    f"desajuste los plomos quedan mal ubicados. Revisa BS, SF1, SF2, BKS o RAIL."
+                    f"(diff {_bs['dif']:+.0f} mm). The fit uses (BSR−BS)/2, so with this "
+                    f"mismatch the plumb points end up in the wrong place. Check BS, SF1, SF2, BKS or RAIL."
                 )
             components.html(
                 '<!DOCTYPE html><html><body style="margin:0;background:transparent">'
@@ -626,7 +609,7 @@ def render_survey_tab(_ROL, _GRUPO):
                 height=500, scrolling=False,
             )
             _v3d, _vfi = st.columns(2)
-            with _v3d.expander("Vistas 3D del replanteo", icon=":material/view_in_ar:", expanded=False):
+            with _v3d.expander(t("3D views of the setting out"), icon=":material/view_in_ar:", expanded=False):
                 components.html(
                     '<!DOCTYPE html><html><body style="margin:0;background:transparent">'
                     + plumb_iso_svg(plumb_res, proyecto=_pr_) + '</body></html>',
@@ -637,28 +620,27 @@ def render_survey_tab(_ROL, _GRUPO):
                     + plumb_detail_svg(plumb_res, proyecto=_pr_) + '</body></html>',
                     height=500, scrolling=False,
                 )
-            with _vfi.expander("Ficha de replanteo (para obra)", icon=":material/assignment:", expanded=False):
-                st.caption("Los números a medir con cinta. Imprímela o ábrela en el móvil.")
+            with _vfi.expander(t("Setting-out card (for site)"), icon=":material/assignment:", expanded=False):
+                st.caption(t("The numbers to measure with a tape. Print it or open it on your phone."))
                 components.html(
                     '<!DOCTYPE html><html><body style="margin:0;background:transparent">'
                     + plumb_card_svg(plumb_res, proyecto=_pr_) + '</body></html>',
                     height=430, scrolling=False,
                 )
-            st.markdown("**:material/straighten: Verificación en campo — distancias plomo ↔ pared real**")
+            st.markdown(t("**:material/straighten: On-site check — plumb ↔ real wall distances**"))
             st.dataframe(pd.DataFrame(plumb_checks(plumb_res)),
                          width="stretch", hide_index=True)
             if float(all_params.get("LengthTemplate", 0.0)) <= 0:
-                st.info(":material/lightbulb: Ingresa **LengthTemplate** en los parámetros para ver el "
-                        "template completo (punto P, cortes C1/C2 y diagonales).")
+                st.info(t(":material/lightbulb: Enter **LengthTemplate** in the parameters to see the full template (point P, cuts C1/C2 and diagonals)."))
         else:
-            st.caption("Se mostrará cuando el survey encuentre una solución válida.")
+            st.caption(t("It will be shown once the survey finds a valid solution."))
 
         # ── Estado de las interpretaciones IA ─────────────────
         if not interpretation.get("_ok"):
             st.error(
-                f":orange[:material/warning:] **No se pudo generar la interpretación técnica:** {interpretation.get('_error')}\n\n"
-                "Los informes **requieren** la interpretación IA. Verifica que "
-                "`ANTHROPIC_API_KEY` esté configurada en los **Secrets de Streamlit Cloud**."
+                f":orange[:material/warning:] **The technical interpretation could not be generated:** {interpretation.get('_error')}\n\n"
+                "The reports **require** the AI interpretation. Check that "
+                "`ANTHROPIC_API_KEY` is configured in the **Streamlit Cloud Secrets**."
             )
 
     def _do_calculo():
@@ -690,7 +672,7 @@ def render_survey_tab(_ROL, _GRUPO):
         # ── Validación de inputs ─────────────────────────────
         issues = validate_inputs(all_params)
         if issues:
-            st.error(":material/warning: Problemas en los parámetros — revisar antes de calcular:")
+            st.error(t(":material/warning: Problems in the parameters — check before calculating:"))
             for issue in issues:
                 st.error(f"  • {issue}")
             st.stop()
@@ -698,7 +680,7 @@ def render_survey_tab(_ROL, _GRUPO):
         try:
             limits = calculate_limits(all_params)
         except Exception as e:
-            st.error(f"Error en cálculo: {e}")
+            st.error(f"Error in the calculation: {e}")
             st.stop()
 
         all_params.update(limits)
@@ -712,7 +694,7 @@ def render_survey_tab(_ROL, _GRUPO):
         lim_map = {c: limits[f"LIMIT_{c}"] for c in SURVEY_COLS}
 
         # ── Optimización ──────────────────────────────────────
-        with st.spinner(":material/search: Buscando combinación óptima..."):
+        with st.spinner(":material/search: Searching for the optimal combination..."):
             opt_result = optimize(survey_adj, limits, all_params)
         best_sol = opt_result.get("best")
         if not best_sol:
@@ -739,7 +721,7 @@ def render_survey_tab(_ROL, _GRUPO):
                 plumb_res = compute_plumb(_plumb_inp, survey_disp=_sdisp)
             except Exception as e:
                 plumb_res = None
-                st.warning(f"No se pudo generar el plomado definitivo: {e}")
+                st.warning(f"The final plumb setting could not be generated: {e}")
 
         # ── Interpretaciones IA (admin + usuario) ─────────────
         _calc_for_ia = {
@@ -748,9 +730,9 @@ def render_survey_tab(_ROL, _GRUPO):
             "optimizer_result": opt_result,
             "bs_result":        bs_result,
         }
-        with st.spinner(":material/smart_toy: Generando interpretación técnica con IA..."):
+        with st.spinner(":material/smart_toy: Generating the technical interpretation with AI..."):
             interpretation = generate_interpretation(_calc_for_ia, all_params)
-        with st.spinner(":material/smart_toy: Generando interpretación del informe de cliente..."):
+        with st.spinner(":material/smart_toy: Generating the client report's interpretation..."):
             interpretation_user = generate_user_interpretation(_calc_for_ia, all_params)
 
         # ── Persistir para el render y los reportes ───────────
@@ -788,7 +770,7 @@ def render_survey_tab(_ROL, _GRUPO):
         admin_pdf = None
         if interpretation.get("_ok"):
             try:
-                with st.spinner(":material/description: Preparando informe interno de administración..."):
+                with st.spinner(":material/description: Preparing the internal admin report..."):
                     admin_pdf = generate_report(
                         project_params   = all_params,
                         calculated       = limits,
@@ -804,7 +786,7 @@ def render_survey_tab(_ROL, _GRUPO):
                         plumb            = plumb_res,
                     )
             except Exception as e:
-                st.warning(f"No se pudo generar el informe admin para el correo: {e}")
+                st.warning(f"The admin report for the email could not be generated: {e}")
 
         # ── Notificación por correo (con informe admin adjunto) ─
         send_usage_notification(
@@ -820,15 +802,15 @@ def render_survey_tab(_ROL, _GRUPO):
             admin_report    = admin_pdf,
         )
         if admin_pdf:
-            st.info(":material/mail: Informe interno de administración enviado por correo.")
+            st.info(t(":material/mail: Internal management report sent by email."))
         if interpretation.get("_ok"):
-            st.success(":material/smart_toy: Interpretaciones generadas correctamente.")
-        st.success(":material/check_circle: Cálculo e interpretación completados.")
+            st.success(t(":material/smart_toy: Interpretations generated successfully."))
+        st.success(t(":material/check_circle: Calculation and interpretation completed."))
 
     if _fase == _FASE_DATOS:
         # PASO 1 — CARGAR PDF
         # ══════════════════════════════════════════════════════
-        st.header(":material/description: Plano del elevador")
+        st.header(t(":material/description: Lift drawing"))
 
         # ── Proyecto: sus datos del plano, ya leídos ─────────
         # Desde v137 el plano se lee UNA vez al crear el proyecto. Aquí solo se
@@ -846,7 +828,7 @@ def render_survey_tab(_ROL, _GRUPO):
             _rep = " · ".join(x for x in (str(_prj_sv.get("Cliente", "")),
                                           str(_prj_sv.get("Ubicacion", "")),
                                           str(_prj_sv.get("Ingeniero", ""))) if x)
-            st.caption(":material/info: El informe usará los datos de este proyecto"
+            st.caption(":material/info: The report will use this project's details"
                        + (f": {_rep}." if _rep else "."))
             if str(_prj_sv.get("Ubicacion", "")).strip():
                 from core import maps as _maps
@@ -861,15 +843,15 @@ def render_survey_tab(_ROL, _GRUPO):
             _mapa_sv["rail_altura"] = "inp_RAIL"   # altura del diente, del catálogo
             _n_sv = plan_ui.aplicar(_plano_sv, _mapa_sv)
             if _n_sv:
-                st.caption(f":green[:material/check_circle:] {_n_sv} valor(es) tomados del plano del proyecto. "
-                           "Revísalos y completa los medidos en obra.")
+                st.caption(f":green[:material/check_circle:] {_n_sv} value(s) taken from the project drawing. "
+                           "Check them and fill in the ones measured on site.")
             if _plano_sv.get("rail"):
-                st.caption(f":material/train: Riel del plano: **{_plano_sv['rail']}** "
-                           "— ajusta RAIL si el catálogo no lo tiene.")
+                st.caption(f":material/train: Rail from the drawing: **{_plano_sv['rail']}** "
+                           "— adjust RAIL if the catalogue does not have it.")
 
         col_brand, col_pdf = st.columns([1, 3])
-        col_brand.selectbox("Marca", ["Schindler"], key="brand")   # placeholder p/ futura expansión
-        pdf_file = col_pdf.file_uploader("PDF de planos", type=["pdf"])
+        col_brand.selectbox(t("Brand"), ["Schindler"], key="brand")   # placeholder p/ futura expansión
+        pdf_file = col_pdf.file_uploader(t("Drawings PDF"), type=["pdf"])
 
         if pdf_file is not None and pdf_file.name != st.session_state.get("last_pdf_name"):
             with st.spinner(":material/hourglass_empty: Extrayendo datos del PDF..."):
@@ -894,15 +876,15 @@ def render_survey_tab(_ROL, _GRUPO):
                     if _info and _info.get("altura"):
                         st.session_state["inp_RAIL"] = float(_info["altura"])
                         st.session_state["rail_ref_msg"] = (
-                            f":green[:material/check_circle:] Riel de cabina **{_code}** → RAIL = **{_info['altura']} mm** "
-                            "(altura del diente desde la espalda, del catálogo).")
+                            f":green[:material/check_circle:] Car guide rail **{_code}** → RAIL = **{_info['altura']} mm** "
+                            "(tooth height from the back, from the catalogue).")
                     else:
                         st.session_state["rail_ref_msg"] = (
-                            f":orange[:material/warning:] Riel **{_code}** detectado pero **no está en el catálogo de Rieles**. "
-                            "Ingresa RAIL a mano o agrégalo al catálogo.")
+                            f":orange[:material/warning:] Rail **{_code}** was detected but **it is not in the Rails catalogue**. "
+                            "Enter RAIL by hand or add it to the catalogue.")
                 else:
                     st.session_state["rail_ref_msg"] = (
-                        ":blue[:material/info:] No se detectó el código del riel de cabina; ingresa RAIL a mano.")
+                        ":blue[:material/info:] The car guide rail code was not detected; enter RAIL by hand.")
             except Exception:
                 pass
             # ── Número de paradas: NUMBER OF STOPS del plano → NS ──
@@ -912,20 +894,19 @@ def render_survey_tab(_ROL, _GRUPO):
                 _ns = extract_number_of_stops(pdf_file)
                 if _ns and 2 <= _ns <= 50:
                     st.session_state["ns"] = int(_ns)
-                    st.session_state["ns_msg"] = f":green[:material/check_circle:] NUMBER OF STOPS del plano → NS = **{_ns}**."
+                    st.session_state["ns_msg"] = f":green[:material/check_circle:] NUMBER OF STOPS from the drawing → NS = **{_ns}**."
                 else:
-                    st.session_state["ns_msg"] = (":blue[:material/info:] No se detectó NUMBER OF STOPS en el plano; "
-                                                  "ingresa NS a mano.")
+                    st.session_state["ns_msg"] = (":blue[:material/info:] NUMBER OF STOPS was not detected on the drawing; enter NS by hand.")
             except Exception:
                 pass
             found   = sum(1 for v in extracted.values() if v is not None)
             missing = [k for k,v in extracted.items() if v is None]
-            flash.exito(f":material/check_circle: {found}/{len(extracted)} parámetros encontrados.")
+            flash.exito(f":material/check_circle: {found}/{len(extracted)} parameters found.")
             if missing:
-                st.warning(f":material/warning: Ingresar manualmente: **{', '.join(missing)}**")
+                st.warning(f":material/warning: Enter by hand: **{', '.join(missing)}**")
             st.rerun()
         elif pdf_file and pdf_file.name == st.session_state.get("last_pdf_name"):
-            st.info(f":material/description: Datos de: **{pdf_file.name}** — ver sidebar.")
+            st.info(f":material/description: Data from: **{pdf_file.name}** — see the sidebar.")
 
         if st.session_state.get("rail_ref_msg"):
             _m = st.session_state["rail_ref_msg"]
@@ -935,7 +916,7 @@ def render_survey_tab(_ROL, _GRUPO):
         # ══════════════════════════════════════════════════════
         # PASO 2 — PARÁMETROS
         # ══════════════════════════════════════════════════════
-        st.header(":material/tune: Parámetros")
+        st.header(t(":material/tune: Parameters"))
 
         # Marca por campo: ✅ leído del plano · ✏️ a completar a mano.
         # (Recupera la señal que se perdió al quitar el panel del sidebar en v93.)
@@ -950,13 +931,13 @@ def render_survey_tab(_ROL, _GRUPO):
             _found = [p for p, v in _ext.items() if v is not None]
             _miss  = [p for p, v in _ext.items() if v is None]
             _r1, _r2 = st.columns([1, 2])
-            _r1.metric("Leídos del plano", f"{len(_found)}/{len(_ext)}")
+            _r1.metric(t("Read from the drawing"), f"{len(_found)}/{len(_ext)}")
             if _miss:
                 _r2.warning(":material/edit: Completa a mano: **" + "**, **".join(_miss) + "**")
             else:
-                _r2.success(":green[:material/check_circle:] El plano aportó todos los parámetros.")
+                _r2.success(t(":green[:material/check_circle:] The drawing supplied every parameter."))
 
-        with st.expander("Parámetros del plano (editables)", icon=":material/description:", expanded=True):
+        with st.expander(t("Drawing parameters (editable)"), icon=":material/description:", expanded=True):
             _pendientes = list(PDF_PARAMS)
             for _titulo, _lista in _GRUPOS_PARAM:
                 _ps = [p for p in _lista if p in _pendientes]
@@ -973,7 +954,7 @@ def render_survey_tab(_ROL, _GRUPO):
                     )
                     _pendientes.remove(p)
             if _pendientes:      # cualquier parámetro nuevo que no esté agrupado
-                st.markdown("**Otros**")
+                st.markdown(t("**Others**"))
                 _cols = st.columns(4)
                 for j, p in enumerate(_pendientes):
                     _cols[j % 4].number_input(
@@ -981,7 +962,7 @@ def render_survey_tab(_ROL, _GRUPO):
                         help  = PARAM_DESCRIPTIONS.get(p, ""), key = f"inp_{p}",
                     )
 
-        with st.expander("Parámetros medidos en obra", icon=":material/straighten:", expanded=True):
+        with st.expander(t("Parameters measured on site"), icon=":material/straighten:", expanded=True):
             cols = st.columns(len(USER_ONLY))
             for j, (p, desc) in enumerate(USER_ONLY.items()):
                 cols[j].number_input(
@@ -991,23 +972,23 @@ def render_survey_tab(_ROL, _GRUPO):
                     key   = f"inp_{p}",
                 )
 
-        st.markdown("**:material/tune: Configuración**")
+        st.markdown(t("**:material/tune: Configuration**"))
         c1, c2, c3 = st.columns(3)
-        c1.radio("Lado del Omega",        ["R", "L"], horizontal=True, key="cfg_omega_side")
-        c2.radio("¿Hay pared limitante?", ["N", "Y"], horizontal=True, key="cfg_wall_yn")
-        c3.radio("Lado offset cabina",    ["R", "L"], horizontal=True, key="cfg_offset_side")
+        c1.radio(t("Omega side"),        ["R", "L"], horizontal=True, key="cfg_omega_side")
+        c2.radio(t("Is there a limiting wall?"), ["N", "Y"], horizontal=True, key="cfg_wall_yn")
+        c3.radio(t("Car offset side"),    ["R", "L"], horizontal=True, key="cfg_offset_side")
 
         wall_limiting = (st.session_state.cfg_wall_yn == "Y")
         if wall_limiting:
             wc1, wc2 = st.columns(2)
-            wc1.number_input("Parada limitante", min_value=1, step=1, key="cfg_wall_stop")
-            wc2.radio("Lado de la pared",        ["R", "L"], horizontal=True, key="cfg_wall_side")
+            wc1.number_input(t("Limiting stop"), min_value=1, step=1, key="cfg_wall_stop")
+            wc2.radio(t("Wall side"),        ["R", "L"], horizontal=True, key="cfg_wall_side")
 
         cc1, cc2 = st.columns(2)
-        cc1.radio("¿Controlador hace parte del frame?", ["N", "Y"], horizontal=True, key="cfg_ctrl_yn")
+        cc1.radio(t("Is the controller part of the frame?"), ["N", "Y"], horizontal=True, key="cfg_ctrl_yn")
         ctrl_in_frame = (st.session_state.cfg_ctrl_yn == "Y")
         if ctrl_in_frame:
-            cc2.radio("Lado del controlador", ["R", "L"], horizontal=True, key="cfg_ctrl_side")
+            cc2.radio(t("Controller side"), ["R", "L"], horizontal=True, key="cfg_ctrl_side")
 
         # Lectura final de configuración para resto del flujo
         omega_side  = st.session_state.cfg_omega_side
@@ -1019,11 +1000,11 @@ def render_survey_tab(_ROL, _GRUPO):
         # ══════════════════════════════════════════════════════
         # PASO 3 — MATRIZ SURVEY
         # ══════════════════════════════════════════════════════
-        st.header(":material/grid_on: Matriz del survey")
+        st.header(t(":material/grid_on: Survey matrix"))
 
         sc1, sc2, sc3 = st.columns([1, 2, 2])
 
-        sc1.number_input("Número de paradas (NS)", min_value=2, max_value=50, step=1, key="ns")
+        sc1.number_input(t("Number of stops (NS)"), min_value=2, max_value=50, step=1, key="ns")
         if st.session_state.get("ns_msg"):
             sc1.caption(st.session_state["ns_msg"])
 
@@ -1039,13 +1020,13 @@ def render_survey_tab(_ROL, _GRUPO):
             st.rerun()
 
         # Cargar Excel
-        uploaded_excel = sc2.file_uploader(":material/folder_open: Cargar matriz (.xlsx)", type=["xlsx"], key="excel_uploader")
+        uploaded_excel = sc2.file_uploader(t(":material/folder_open: Load matrix (.xlsx)"), type=["xlsx"], key="excel_uploader")
         # Por defecto solo se importa la MATRIZ: si ya cargaste el plano, los parámetros del
         # PDF mandan y no deben ser pisados por los que venían guardados en el Excel.
-        _imp_todo = sc2.checkbox("Restaurar también parámetros y configuración del Excel",
+        _imp_todo = sc2.checkbox(t("Also restore parameters and configuration from the Excel file"),
                                  value=False, key="excel_imp_todo",
-                                 help="Desmarcado: solo se importa la matriz de medidas.")
-        if st.session_state.get("last_excel_id") and sc2.button(":material/refresh: Volver a importar el Excel",
+                                 help=t("Unticked: only the measurement matrix is imported."))
+        if st.session_state.get("last_excel_id") and sc2.button(t(":material/refresh: Import the Excel again"),
                                                                 key="btn_reimport_xls"):
             st.session_state.pop("last_excel_id", None)
             st.rerun()
@@ -1082,9 +1063,9 @@ def render_survey_tab(_ROL, _GRUPO):
                 st.rerun()
             except Exception as e:
                 st.session_state["last_excel_id"] = _xls_id   # no reintentar en bucle
-                sc2.error(f"Error al importar Excel: {e}")
+                sc2.error(f"Error importing the Excel file: {e}")
 
-        st.caption("Ingresa o edita las medidas en campo (mm).")
+        st.caption(t("Enter or edit the measurements taken on site (mm)."))
         edited_df = st.data_editor(
             st.session_state.survey_df,
             width="stretch",
@@ -1107,7 +1088,7 @@ def render_survey_tab(_ROL, _GRUPO):
         }
         excel_bytes = export_survey_excel(edited_df, info_dict, config_dict)
         sc3.download_button(
-            label     = ":material/download: Guardar matriz (.xlsx)",
+            label     = t(":material/download: Save matrix (.xlsx)"),
             data      = excel_bytes,
             file_name = "survey_matrix.xlsx",
             mime      = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -1123,9 +1104,9 @@ def render_survey_tab(_ROL, _GRUPO):
         _falt = [p for p, v in _ex.items() if v is None] if _ex else []
         _nsv  = int(st.session_state.get("ns", 2))
         _chips = [
-            (":green[:material/check_circle:] Plano cargado" if _ex else ":gray[:material/radio_button_unchecked:] Sin plano (parámetros a mano)"),
-            (":green[:material/check_circle:] Parámetros completos" if (_ex and not _falt)
-             else (f":orange[:material/warning:] {len(_falt)} parámetro(s) sin leer" if _falt else ":material/edit: Parámetros manuales")),
+            (":green[:material/check_circle:] Plano cargado" if _ex else ":gray[:material/radio_button_unchecked:] No drawing (parameters by hand)"),
+            (":green[:material/check_circle:] Parameters complete" if (_ex and not _falt)
+             else (f":orange[:material/warning:] {len(_falt)} parameter(s) not read" if _falt else ":material/edit: Manual parameters")),
             f":green[:material/check_circle:] Matriz: {_nsv} niveles",
         ]
         st.markdown("  ·  ".join(_chips))
@@ -1146,35 +1127,32 @@ def render_survey_tab(_ROL, _GRUPO):
         except Exception:
             _iss0 = []
         if _iss0:
-            with st.expander(f":material/warning: {len(_iss0)} aviso(s) en los parámetros", expanded=False):
+            with st.expander(f":material/warning: {len(_iss0)} warning(s) in the parameters", expanded=False):
                 for _x in _iss0:
                     st.warning(_x)
 
-        if st.button(":material/play_arrow: Calcular y ver resultados", type="primary",
+        if st.button(t(":material/play_arrow: Calculate and see the results"), type="primary",
                      width="stretch", key="btn_calc_datos"):
             _do_calculo()
             st.session_state["_fase_pending"] = _FASE_RES
             st.rerun()
 
-        with st.expander(":material/summarize: Duplicar para el siguiente elevador"):
-            st.caption("Conserva parámetros y configuración de este survey y limpia la matriz "
-                       "y los resultados. Útil cuando hay varios elevadores en el mismo hueco.")
-            if st.button(":material/summarize: Duplicar survey", key="btn_dup_survey"):
+        with st.expander(t(":material/summarize: Duplicate for the next lift")):
+            st.caption(t("Keeps this survey's parameters and configuration and clears the matrix and the results. Useful when there are several lifts in the same shaft."))
+            if st.button(t(":material/summarize: Duplicate survey"), key="btn_dup_survey"):
                 st.session_state["_dup_survey"] = True
                 st.rerun()
 
 
     else:
 
-        st.header(":material/insights: Resultados")
+        st.header(t(":material/insights: Results"))
         if not st.session_state.calc_results:
-            st.info("Aún no hay cálculo. Ve a **:material/edit: Datos del survey**, completa la "
-                    "información y pulsa **:material/play_arrow: Calcular y ver resultados**.")
+            st.info(t("No calculation yet. Go to **:material/edit: Survey data**, fill in the information and press **:material/play_arrow: Calculate and see the results**."))
         else:
             if st.session_state.get("_calc_sig") and st.session_state["_calc_sig"] != _survey_signature():
-                st.warning(":material/warning: Cambiaste datos desde el último cálculo. Lo de abajo corresponde "
-                           "al cálculo anterior — recalcula para actualizarlo.")
-            if st.button(":material/sync: Recalcular con los datos actuales", width="stretch",
+                st.warning(t(":material/warning: You changed data since the last calculation. What is below belongs to the previous one — recalculate to update it."))
+            if st.button(t(":material/sync: Recalculate with the current data"), width="stretch",
                          key="btn_recalc"):
                 _do_calculo()
                 st.rerun()
@@ -1182,17 +1160,15 @@ def render_survey_tab(_ROL, _GRUPO):
 
         # PASO 5 — GESTIÓN DE PROYECTO (cronograma + curva S)
         # ══════════════════════════════════════════════════════
-        st.header(":material/calendar_month: Cronograma")
+        st.header(t(":material/calendar_month: Schedule"))
         if st.session_state.calc_results:
-            st.caption("Cronograma y curva S generados automáticamente según el proyecto "
-                       "(escalados por NS y por los hallazgos del análisis). Ajusta duraciones "
-                       "y pesos si lo necesitas — la curva S se recalcula sola.")
+            st.caption(t("Schedule and S-curve generated automatically for the project (scaled by NS and by what the analysis found). Adjust durations and weights if you need to — the S-curve recalculates itself."))
 
             if "sched_start" not in st.session_state:
                 st.session_state["sched_start"] = clock.today()
 
             gc1, gc2 = st.columns([1, 2])
-            start = gc1.date_input("Fecha de inicio del proyecto", key="sched_start")
+            start = gc1.date_input(t("Project start date"), key="sched_start")
 
             # Editor de actividades (nombre bloqueado; duración y peso editables)
             sched_rows = st.session_state.get("sched_rows", [])
@@ -1212,9 +1188,9 @@ def render_survey_tab(_ROL, _GRUPO):
                 st.session_state.calc_results["schedule"] = sched
 
                 m1, m2, m3 = st.columns(3)
-                m1.metric("Duración total", f"{sched['total_dias']} días")
-                m2.metric("Inicio",       sched["start_date"].strftime("%d/%m/%Y"))
-                m3.metric("Fin estimado", sched["fecha_fin"].strftime("%d/%m/%Y"))
+                m1.metric(t("Total duration"), f"{sched['total_dias']} days")
+                m2.metric(t("Start"),       sched["start_date"].strftime("%d/%m/%Y"))
+                m3.metric(t("Estimated finish"), sched["fecha_fin"].strftime("%d/%m/%Y"))
 
                 components.html(
                     '<!DOCTYPE html><html><body style="margin:0;background:transparent">'
@@ -1224,20 +1200,17 @@ def render_survey_tab(_ROL, _GRUPO):
                     scrolling=False,
                 )
         else:
-            st.info("Realiza el cálculo primero para generar el cronograma.")
+            st.info(t("Do the calculation first to generate the schedule."))
 
         # ══════════════════════════════════════════════════════
         # PASO 6 — INFORME DEL CLIENTE  (solo propietario / administrador)
         # ══════════════════════════════════════════════════════
         if not can_reports(_ROL):
-            st.header(":material/description: Informe del cliente")
-            st.caption(":material/lock: La descarga de informes está disponible para administración "
-                       "(propietario / administrador).")
+            st.header(t(":material/description: Client report"))
+            st.caption(t(":material/lock: Report downloads are available to management (owner / administrator)."))
         else:
-            st.header(":material/description: Informe del cliente")
-            st.caption("Informe profesional para entregar al cliente (solución final, diagramas e "
-                       "instrucciones de implementación). El informe técnico interno se envía "
-                       "automáticamente por correo a administración.")
+            st.header(t(":material/description: Client report"))
+            st.caption(t("A professional report to hand to the client (final solution, diagrams and implementation instructions). The internal technical report is emailed to management automatically."))
 
             if st.session_state.calc_results:
                 r          = st.session_state.calc_results
@@ -1245,11 +1218,11 @@ def render_survey_tab(_ROL, _GRUPO):
                 interp_usr = r.get("interpretation_user") or {}
                 if not interp_usr.get("_ok"):
                     st.error(
-                        ":red[:material/block:] **No se puede generar el informe sin la interpretación IA.**\n\n"
-                        f"Motivo: {interp_usr.get('_error', interp.get('_error', 'no disponible'))}.\n\n"
-                        "Configura `ANTHROPIC_API_KEY` en los Secrets de Streamlit Cloud y vuelve a calcular."
+                        ":red[:material/block:] **The report cannot be generated without the AI interpretation.**\n\n"
+                        f"Reason: {interp_usr.get('_error', interp.get('_error', 'not available'))}.\n\n"
+                        "Configure `ANTHROPIC_API_KEY` in the Streamlit Cloud Secrets and calculate again."
                     )
-                elif st.button(":material/description: Generar informe del cliente", width="stretch"):
+                elif st.button(t(":material/description: Generate the client report"), width="stretch"):
                     with st.spinner("Generando informe del cliente..."):
                         user_pdf = generate_user_report(
                             project_params      = r["all_params"],
@@ -1263,14 +1236,14 @@ def render_survey_tab(_ROL, _GRUPO):
                         )
                     proj = (r["all_params"].get("PROYECTO") or "cliente").replace(" ", "_")
                     st.download_button(
-                        label     = ":material/download: Descargar informe del cliente",
+                        label     = t(":material/download: Download the client report"),
                         data      = user_pdf,
                         file_name = f"informe_{proj}.pdf",
                         mime      = "application/pdf",
                         width="stretch"
                     )
             else:
-                st.info("Realiza el cálculo primero para poder generar el informe.")
+                st.info(t("Do the calculation first so the report can be generated."))
 
         # ══════════════════════════════════════════════════════
         # PASO 7 — GUARDAR COMO PROYECTO  (solo administrador / propietario)
@@ -1284,31 +1257,29 @@ def render_survey_tab(_ROL, _GRUPO):
         # survey, y atar la creación al survey obligaba a tenerlo hecho para
         # poder dar de alta el proyecto.
         if _ROL in ("administrador", "propietario"):
-            st.header(":material/save: Guardar en el proyecto")
+            st.header(t(":material/save: Save to the project"))
             if not st.session_state.get("calc_results"):
-                st.info("Calcula primero para poder guardar el survey en un proyecto.")
+                st.info(t("Calculate first so the survey can be saved to a project."))
             elif not projects_data.is_configured():
-                st.caption(":material/lock: Requiere Google Sheets configurado.")
+                st.caption(t(":material/lock: This needs Google Sheets configured."))
             else:
                 r  = st.session_state.calc_results
                 ap = r["all_params"]
                 _proys = (projects_data.list_projects() if _ROL == "propietario"
                           else projects_data.list_projects(_GRUPO))
                 if not _proys:
-                    st.info("No hay proyectos todavía. Créalo en "
-                            + ("**👑 Administración → :material/folder: Proyectos**" if _ROL == "propietario"
+                    st.info("There are no projects yet. Create one in "
+                            + ("**👑 Administration → :material/folder: Projects**" if _ROL == "propietario"
                                else "**:material/build: Mi grupo → :material/bar_chart: Proyectos → :material/add: Nuevo proyecto**")
-                            + " y vuelve aquí para adjuntarle este survey.")
+                            + " and come back here to attach this survey to it.")
                 else:
-                    st.caption("Se adjuntan los parámetros, la matriz y las interpretaciones "
-                               "al proyecto, y se archivan plano, matriz e informe del cliente. "
-                               "El cronograma y los avances del proyecto NO se tocan.")
+                    st.caption(t("The parameters, the matrix and the interpretations are attached to the project, and the drawing, the matrix and the client report are filed. The project's schedule and progress are NOT touched."))
                     _idmap = {f"{p.get('Nombre')} ({p.get('ID')})": p for p in _proys}
-                    _sel = st.selectbox("Proyecto de destino",
+                    _sel = st.selectbox(t("Target project"),
                                         [_VACIO] + list(_idmap.keys()),
                                         key="sv_prj_sel")
                     if not _sel or _sel == _VACIO:
-                        st.caption("Elige a qué proyecto adjuntar este survey.")
+                        st.caption(t("Choose which project to attach this survey to."))
                         _prj = None
                     else:
                         _prj = _idmap[_sel]
@@ -1320,13 +1291,13 @@ def render_survey_tab(_ROL, _GRUPO):
                         _ns_prj = int(float(_prj.get("NS") or 0))
                         _ns_sv  = int(float(ap.get("NS") or 0))
                         if _ns_prj and _ns_sv and _ns_prj != _ns_sv:
-                            st.warning(f":material/warning: El proyecto tiene **NS = {_ns_prj}** y este survey "
-                                       f"**NS = {_ns_sv}**. Revisa cuál es el correcto: el "
-                                       "cronograma del proyecto se calculó con el suyo.")
+                            st.warning(f":material/warning: The project has **NS = {_ns_prj}** and this survey has "
+                                       f"**NS = {_ns_sv}**. Check which one is right: the "
+                                       "project schedule was worked out with its own.")
                     except Exception:
                         pass
 
-                    if st.button(":material/save: Guardar el survey en este proyecto",
+                    if st.button(t(":material/save: Save the survey to this project"),
                                  width="stretch", key="sv_save_prj",
                                  disabled=(_prj is None)):
                         _pid = str(_prj.get("ID", ""))
@@ -1338,7 +1309,7 @@ def render_survey_tab(_ROL, _GRUPO):
                             interp={"admin": r.get("interpretation"),
                                     "user":  r.get("interpretation_user")})
                         if not ok:
-                            st.error(f"No se pudo guardar: {msg}")
+                            st.error(f"It could not be saved: {msg}")
                         else:
                             _best = (r.get("optimizer_result") or {}).get("best") or {}
                             st.session_state["_prj_creado"] = {
@@ -1351,7 +1322,7 @@ def render_survey_tab(_ROL, _GRUPO):
                                     herramienta="survey",
                                     resumen=(f"RL {_best.get('rl', 0):+.1f} · "
                                              f"FB {_best.get('fb_applied', _best.get('fb', 0)):+.1f} · "
-                                             f"{_best.get('total_off', 0)} fuera de límite"),
+                                             f"{_best.get('total_off', 0)} out of limit"),
                                     datos={"rl": _best.get("rl"), "fb": _best.get("fb"),
                                            "total_off": _best.get("total_off"),
                                            "ns": ap.get("NS")},
@@ -1405,19 +1376,19 @@ def render_survey_tab(_ROL, _GRUPO):
                                     st.caption(":material/attach_file: Documentos archivados, salvo: "
                                                + ", ".join(_fallos) + ".")
                                 else:
-                                    st.caption(":material/attach_file: Documentos archivados en Drive.")
+                                    st.caption(t(":material/attach_file: Documents filed in Drive."))
                             elif drive_store.is_configured():
-                                st.caption(":material/attach_file: Documentos no archivados: Drive no conectado.")
+                                st.caption(t(":material/attach_file: Documents not filed: Drive is not connected."))
 
-                            st.success(f":material/check_circle: Survey guardado en **{_prj.get('Nombre')}**.")
+                            st.success(f":material/check_circle: Survey saved to **{_prj.get('Nombre')}**.")
 
                 # ── Cerrar el ciclo: llevar al proyecto ──
                 _pc = st.session_state.get("_prj_creado")
                 if _pc:
                     _c1, _c2 = st.columns([3, 1])
-                    _c1.info(f"Proyecto **{_pc['id']} · {_pc['nombre']}** actualizado con "
-                             "este survey.")
-                    if _c2.button("Abrir proyecto ➜", width="stretch",
+                    _c1.info(f"Project **{_pc['id']} · {_pc['nombre']}** updated with "
+                             "this survey.")
+                    if _c2.button(t("Open project ➜"), width="stretch",
                                   key="ir_al_proyecto"):
                         st.session_state["_prjsel_pending"] = _pc["id"]
                         # v299: la nav vieja (`_nav_pending` + el radio `main_nav`) se

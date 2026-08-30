@@ -177,7 +177,7 @@ def render_group_header(grupo: str):
         # banda. Los otros 5 usos de ese tono (PDF, email, cajetín) van sobre el azul
         # OSCURO, donde da 9.1:1, así que solo se cambia este. #e2ecf9 → 4.58:1.
         # El nombre de la empresa (blanco, 5.47:1) no se toca: es lo que hay que resaltar.
-        '<div style="color:#e2ecf9;font-size:13px;margin-top:2px;">Centro de control del grupo</div>'
+        '<div style="color:#e2ecf9;font-size:13px;margin-top:2px;">Company control centre</div>'
         '</div></div>',
         unsafe_allow_html=True,
     )
@@ -195,17 +195,20 @@ def _kpi_pies(k: dict) -> tuple:
     """
     _act, _rie, _tot = k["activos"], k["riesgo"], k["total"]
     if not _act:
-        _sub_act = f"de {_tot} en total" if _tot else "ninguno todavía"
+        _sub_act = f"of {_tot} in total" if _tot else "none yet"
     elif not _rie:
-        _sub_act = "todos al día"
+        _sub_act = "all up to date"
     elif _rie >= _act:                      # todos los activos van retrasados
-        _sub_act = f"los {_act} en retraso"
+        _sub_act = f"all {_act} behind"
     else:
-        _sub_act = f"{_rie} en retraso"
+        _sub_act = f"{_rie} behind"
     # ⚠️ "media de N obras" mide 94 px con N de 2 cifras → NO cabe, por 1 px. "de N obras" = 59.
-    _sub_avg = ("sin avance aún" if not k["avg"]
-                else f"de {_act} obra" + ("s" if _act != 1 else ""))
-    _sub_hor = "nadie ha fichado" if not k["horas"] else "en todo el grupo"
+    # Los pies ingleses se MIDIERON igual (v441): el tope es de ANCHO, no de caracteres.
+    _sub_avg = ("no progress yet" if not k["avg"]
+                else f"of {_act} job" + ("s" if _act != 1 else ""))
+    # ⚠️ MEDIDOS (v441): "nobody clocked in" da 98 px y "across the company" 106, sobre
+    # 93 útiles — los dos se salían. Estos dos caben con margen (67 y 79).
+    _sub_hor = "no hours yet" if not k["horas"] else "company-wide"
     return _sub_act, _sub_avg, _sub_hor
 
 
@@ -313,13 +316,13 @@ def _resumen_del_dia(grupo: str):
     # expander (`:red[...]` → rgb(255,108,108) en el <summary>).
     _p = "" if _tot == 1 else "s"
     if _tot == 0:
-        _titulo = ":material/notifications: Resumen del día — :green[todo en orden]"
+        _titulo = ":material/notifications: Today's summary — :green[all in order]"
     elif _urg:
-        _titulo = (f":material/notifications: Resumen del día — "
-                   f":red[{_urg} urgente{'' if _urg == 1 else 's'}] · {_tot} pendiente{_p}")
+        _titulo = (f":material/notifications: Today's summary — "
+                   f":red[{_urg} urgent] · {_tot} pending{_p}")
     else:
-        _titulo = (f":material/notifications: Resumen del día — "
-                   f":orange[{_tot} pendiente{_p}]")
+        _titulo = (f":material/notifications: Today's summary — "
+                   f":orange[{_tot} pending{_p}]")
 
     with st.expander(_titulo, expanded=True, key="cpxresumen"):
         # colorear cada botón-indicador por severidad (clase st-key-<key>, v169)
@@ -398,7 +401,7 @@ def _resumen_del_dia(grupo: str):
                     _u = st.session_state.get("auth", {}).get("usuario", "")
                     _txt = st.session_state.get(key, "")
                     try:
-                        rr = notify.notify_user(_u, f"🔔 Resumen del día — {grupo}",
+                        rr = notify.notify_user(_u, f"🔔 Today's summary — {grupo}",
                                                 [l for l in str(_txt).split("\n") if l.strip()])
                         if rr.get("email") or rr.get("telegram"):
                             st.success(t(":material/send: Summary sent."))
@@ -931,8 +934,8 @@ def _nuevo_proyecto_form(grupo: str, key: str = "nuevo"):
             if _es_inst:
                 ns = c2.number_input(t("Number of stops (NS) *"), min_value=2, max_value=50,
                                      step=1, key=f"np_ns_{key}",
-                                     help=("Leído del plano." if (_plano or {}).get("ns")
-                                           else "Define la duración de las actividades."))
+                                     help=("Read from the drawing." if (_plano or {}).get("ns")
+                                           else "It sets how long the activities take."))
                 # La fecha de FIN no se teclea: sale del NS + las actividades estándar de
                 # instalación (`build_schedule`), cuyas duraciones escalan con el NS. Preview:
                 try:
@@ -977,9 +980,9 @@ def _nuevo_proyecto_form(grupo: str, key: str = "nuevo"):
                     if " ".join(str(p.get("Nombre") or "").lower().split())
                     == " ".join(nom.lower().split())]
             if dups and not st.session_state.get(f"np_dup_{key}"):
-                st.warning(":material/warning: Ya existe un proyecto con ese nombre: "
+                st.warning(":material/warning: A project with that name already exists: "
                            + ", ".join(dups)
-                           + ". Si es otro elevador, marca la casilla y crea de nuevo.")
+                           + ". If it is a different lift, tick the box and create it again.")
                 st.checkbox(t("Create even though the name is repeated"), key=f"np_dup_{key}")
                 return
 
@@ -1044,8 +1047,8 @@ def _nuevo_proyecto_form(grupo: str, key: str = "nuevo"):
 
             st.success(f":material/check_circle: Proyecto **{res}** creado con "
                        f"{len(sched.get('activities', []))} actividades"
-                       + (" y los datos del plano cargados." if _plano else ".")
-                       + " El survey y las demás herramientas ya pueden alimentarlo.")
+                       + (" and the drawing data loaded." if _plano else ".")
+                       + " The survey and the other tools can now feed it.")
             if asg:
                 _notificar_asignados(asg, {
                     "Nombre": nom.strip(), "Cliente": cli, "Ubicacion": ubi,
@@ -1068,24 +1071,21 @@ def _autoagenda(grupo, pid, nuevos, quitados, fecha_ini, fecha_fin):
         if nuevos and fecha_ini and fecha_fin:
             r = R.autopoblar_proyecto(grupo, pid, nuevos, fecha_ini, fecha_fin)
             if r["llenadas"]:
-                _oc = (f" · {r['ocupadas']} día(s) ya ocupados se respetaron"
+                _oc = (f" · {r['ocupadas']} day(s) already taken were left alone"
                        if r["ocupadas"] else "")
                 msgs.append(f":material/calendar_month: Planificador: {r['llenadas']} día(s) asignados a "
                             f"{len(nuevos)} persona(s) en {r['semanas']} semana(s){_oc}.")
             elif r["ocupadas"]:
-                msgs.append(":material/calendar_month: Planificador: los días del rango ya estaban ocupados; "
-                            "no se pisó nada.")
+                msgs.append(":material/calendar_month: Planner: the days in the range were already taken; nothing was overwritten.")
         elif nuevos and not fecha_fin:
-            msgs.append(":material/calendar_month: El proyecto no tiene **fecha de fin**, así que no se "
-                        "auto-planificó. Ponla en :material/edit: Datos, o planifica a mano en "
-                        ":material/calendar_month: Planificación.")
+            msgs.append(":material/calendar_month: The project has no **end date**, so nothing was auto-planned. Set one in :material/edit: Details, or plan by hand in :material/calendar_month: Planning.")
     except Exception:
         pass
     try:
         if quitados:
             n = R.limpiar_proyecto(grupo, pid, quitados)
             if n:
-                msgs.append(f":material/cleaning_services: Planificador: se quitaron {n} día(s) de los desasignados.")
+                msgs.append(f":material/cleaning_services: Planificador: se quitaron {n} day(s) of those unassigned.")
     except Exception:
         pass
     for m in msgs:
@@ -1184,29 +1184,29 @@ def _avisar_asignados(usuarios, grupo=None, exclude_pid=None, certs_req=None,
                     fuera.append(f"**{u}**: {_t.get('nombre', a.get('Tipo'))} "
                                  f"del {a.get('Desde')} al {a.get('Hasta')}"
                                  + ("" if str(a.get("Estado")) == _AU.APROBADA
-                                    else " (aún sin aprobar)"))
+                                    else " (not approved yet)"))
         except Exception as e:
             logger.warning("_avisar_asignados: ausencias: %s", e)
 
     if fuera:
-        st.warning(":material/event_busy: **No estarán disponibles esos días:**\n\n"
+        st.warning(":material/event_busy: **They will not be available on those days:**\n\n"
                    + "\n".join(f"- {x}" for x in fuera))
     if ocupados:
-        st.info(":material/push_pin: **Ya asignados a otro proyecto:**\n\n"
+        st.info(":material/push_pin: **Already assigned to another project:**\n\n"
                 + "\n".join(f"- {x}" for x in ocupados))
     if no_cumplen:
-        st.error(":material/cancel: **No cumplen los certificados que exige el proyecto:**\n\n"
+        st.error(":material/cancel: **They do not meet the certificates this project requires:**\n\n"
                  + "\n".join(f"- {x}" for x in no_cumplen))
     if cert_pv:
         st.warning(":material/schedule: **Certificados requeridos POR VENCER (renovar):**\n\n"
                    + "\n".join(f"- {x}" for x in cert_pv))
     if cred_mal:
-        st.warning(":material/badge: **Otras credenciales a revisar antes de mandarlos a obra:**\n\n"
+        st.warning(":material/badge: **Other credentials to check before sending them to site:**\n\n"
                    + "\n".join(f"- {x}" for x in cred_mal))
     if sin_contacto:
         st.warning(":material/warning: **Sin contacto completo (email + Telegram):** "
                    + ", ".join(sin_contacto)
-                   + ". No recibirán la asignación ni las inducciones.")
+                   + ". They will not receive the assignment or the inductions.")
 
 
 def _cumplimiento_equipo(pid, grupo, prj):
@@ -1850,13 +1850,15 @@ def _equipo_proyecto(pid, grupo):
     st.caption(f"Total: **{_lb['horas']:.1f} h**")
 
 
+# ⚠️ Las CLAVES son los nombres REALES de columna (`auditoria` guarda por ellos): no se
+# tocan. Lo que se traduce son los VALORES, que es lo único que se pinta.
 _CAMPO_LEGIBLE = {
-    "MargenPct": "Margen (%)", "Presupuesto": "Presupuesto", "Avance": "Avance (%)",
-    "Estado": "Estado", "EstadoManual": "Estado manual", "FechaInicio": "Fecha de inicio",
-    "FechaFinEst": "Fecha de fin estimada", "Cliente": "Cliente", "ClienteID": "Cliente",
-    "Nombre": "Nombre", "CampoAsignados": "Personal asignado",
-    "AgrupacionID": "Agrupación", "PesoEnAgrupacion": "Peso en la agrupación",
-    "TarifaHora": "Tarifa por hora",
+    "MargenPct": "Margin (%)", "Presupuesto": "Budget", "Avance": "Progress (%)",
+    "Estado": "Status", "EstadoManual": "Manual status", "FechaInicio": "Start date",
+    "FechaFinEst": "Estimated end date", "Cliente": "Client", "ClienteID": "Client",
+    "Nombre": "Name", "CampoAsignados": "Assigned staff",
+    "AgrupacionID": "Grouping", "PesoEnAgrupacion": "Weight in the grouping",
+    "TarifaHora": "Hourly rate",
 }
 
 
@@ -1907,17 +1909,17 @@ def _estado_section(pid: str, grupo: str, prj: dict):
     # procesa markdown dentro de HTML → en pantalla salían los asteriscos literales
     # ("Vas **54 puntos por debajo** del plan"). Se emite `<b>` con el color del estado.
     if dv <= -1:
-        _tit_html, _col = (f"Vas <b>{abs(dv):.0f} puntos por debajo</b> del plan", "#c0392b")
+        _tit_html, _col = (f"Vas <b>{abs(dv):.0f} points behind</b> plan", "#c0392b")
     elif dv >= 1:
-        _tit_html, _col = (f"Vas <b>{dv:.0f} puntos por encima</b> del plan", "#1e8449")
+        _tit_html, _col = (f"Vas <b>{dv:.0f} points ahead of</b> plan", "#1e8449")
     else:
-        _tit_html, _col = ("Vas <b>en línea con el plan</b>", "#2e6da4")
+        _tit_html, _col = ("You are <b>on plan</b>", "#2e6da4")
     # ⚠️ proj["today_day"] viene CLAMPADO al total: en un proyecto pasado de fecha
     # diria "día 29 de 29" llevando 40. El real es ps["today_day"].
     _hoy_real = ps["today_day"]
     _tot      = proj.get("total", 0)
     _dia_txt  = (f"día {_hoy_real} de {_tot}" if _hoy_real <= _tot
-                 else f"día {_hoy_real} — {_hoy_real - _tot} más de los {_tot} planificados")
+                 else f"día {_hoy_real} — {_hoy_real - _tot} more than the {_tot} planificados")
 
     # ── KPIs (tarjetas, no st.metric planos) ──
     _fin = (proj["fecha_proj"].strftime("%d/%m/%Y")
@@ -1984,9 +1986,9 @@ def _estado_section(pid: str, grupo: str, prj: dict):
                    + ", ".join(x["nombre"] for x in d["arrastradas"][:3])
                    + "**, así que **"
                    + ", ".join(x["nombre"] for x in d["paradas"][:3])
-                   + "** aún no ha arrancado. Ahí está el retraso.")
+                   + "** has not started yet. That is where the delay is.")
     elif d["paradas"]:
-        st.warning(":material/stethoscope: Sin empezar y ya tocaba: **"
+        st.warning(":material/stethoscope: Not started and already due: **"
                    + ", ".join(x["nombre"] for x in d["paradas"][:3]) + "**.")
 
     # ── Dos bloques LARGOS enfrentados: actividades | alarmas y equipo ──
@@ -2319,9 +2321,9 @@ def _detalle_proyecto(pid: str, grupo: str = None):
                 # debajo (actividades, archivar...) y la pagina quedaria a medias.
                 _err = ""
                 if not str(nombre).strip():
-                    _err = "El nombre del proyecto no puede quedar vacío."
+                    _err = "The project name cannot be left empty."
                 elif f_ini and f_fin and f_fin < f_ini:
-                    _err = "La fecha de fin no puede ser anterior a la de inicio."
+                    _err = "The end date cannot be earlier than the start date."
                 f_ini, f_fin = _iso(f_ini), _iso(f_fin)
                 if _err:
                     st.error(_err)
@@ -2381,7 +2383,7 @@ def _detalle_proyecto(pid: str, grupo: str = None):
 
                     # Aviso de cambio al campo ya asignado (los nuevos ya recibieron la asignación)
                     try:
-                        alerts.notify_change(pid, grupo, "Se actualizaron los datos del proyecto.",
+                        alerts.notify_change(pid, grupo, "The project details were updated.",
                                              st.session_state.get("auth", {}).get("usuario", ""),
                                              [x for x in asignados if x not in nuevos], nombre)
                     except Exception:
@@ -2437,7 +2439,7 @@ def _detalle_proyecto(pid: str, grupo: str = None):
                 ok, msg = P.save_activities(pid, edits)
                 (flash.exito if ok else st.error)(msg)
                 if ok:
-                    _aviso_cambio("Se actualizó la tabla de actividades del cronograma.")
+                    _aviso_cambio("The schedule's activity table was updated.")
                     st.rerun()
         else:
             st.caption(t("No activities recorded."))
@@ -2457,7 +2459,7 @@ def _detalle_proyecto(pid: str, grupo: str = None):
                         ok, msg = P.add_activity(pid, an.strip(), ad, ap)
                         (flash.exito if ok else st.error)(msg)
                         if ok:
-                            _aviso_cambio(f"Se agregó la actividad: {an.strip()}.")
+                            _aviso_cambio(f"Activity added: {an.strip()}.")
                             st.rerun()
             if acts:
                 st.markdown(t("**:material/delete: Delete activity**"))
@@ -2472,7 +2474,7 @@ def _detalle_proyecto(pid: str, grupo: str = None):
                         ok, msg = P.delete_activity(pid, _orden)
                         (flash.exito if ok else st.error)(msg)
                         if ok:
-                            _aviso_cambio("Se eliminó una actividad del cronograma.")
+                            _aviso_cambio("An activity was removed from the schedule.")
                             st.rerun()
         # ── Rastro de cambios (v342) ──
         _historial_section(pid)
@@ -2506,7 +2508,7 @@ def _detalle_proyecto(pid: str, grupo: str = None):
                 _hay = {k: v for k, v in _aso.items() if v}
                 st.warning(t("The project and its activities will be deleted. **This cannot be undone.** Almost always what you want is to archive it."))
                 if _hay:
-                    st.markdown("Quedará sin proyecto: "
+                    st.markdown("It will be left with no project: "
                                 + " · ".join(f"**{v}** {k.lower()}"
                                              for k, v in _hay.items()))
                     st.caption(t("Those rows and their files in Drive are NOT deleted: they end up pointing at a project that no longer exists."))
@@ -2610,16 +2612,16 @@ def _dashboard_agrupacion(ag, grupo):
         _d = delays.get(proj["critico_id"])
         st.markdown(
             f":material/event: **La entrega la marca «{proj['critico']}»** — proyectada para "
-            f"**{_fecha}**" + (f", con **{_d:.0f} días de retraso**." if _d else
+            f"**{_fecha}**" + (f", con **{_d:.0f} days behind**." if _d else
                                ", en fecha.")
-            + "  Es donde más rinde reforzar.")
+            + "  That is where reinforcing pays off most.")
     if proj.get("sin_datos"):
-        st.caption("Sin cronograma para proyectar: " + ", ".join(proj["sin_datos"]))
+        st.caption("No schedule to project from: " + ", ".join(proj["sin_datos"]))
 
     if tot_pres > 0:
         _p = round(100 * tot_c / tot_pres)
         (st.error if tot_c > tot_pres else st.caption)(
-            f"Presupuesto de la agrupación ${tot_pres:,.0f} · {_p}% consumido"
+            f"Grouping budget ${tot_pres:,.0f} · {_p}% consumido"
             + (" :red[:material/block:] SOBRE PRESUPUESTO" if tot_c > tot_pres else ""))
 
     # ── Curva S CONSOLIDADA (plan vs real de todo el conjunto) ──
@@ -2670,8 +2672,8 @@ def _dashboard_agrupacion(ag, grupo):
 
     _out = [r["Elevador"] for r in rows if r["vs media h"].startswith("+")]
     if _out:
-        st.info(":material/warning: Consumen bastantes más horas que sus gemelos: **"
-                + ", ".join(_out) + "**. Vale la pena mirar por qué.")
+        st.info(":material/warning: They use noticeably more hours than their twins: **"
+                + ", ".join(_out) + "**. Worth looking into why.")
 
     st.bar_chart(pd.DataFrame({"Avance %": [r["Avance %"] for r in rows]},
                               index=[r["Elevador"] for r in rows]))
@@ -2690,11 +2692,11 @@ def _miembros_editor(ags_proys, todos, key, pesos_actuales=None):
         pid = str(p.get("ID", ""))
         otra = str(p.get("AgrupacionID", ""))
         filas.append({
-            "En la agrupación": pid in pesos_actuales,
+            "In the grouping": pid in pesos_actuales,
             "Proyecto": f"{p.get('Nombre')} ({pid})",
             "Peso": float(pesos_actuales.get(pid, 1.0)),
             "Avance %": P._num(p.get("Avance")),
-            "Ya en otra": (ags_proys.get(otra, "") if otra and otra not in
+            "Already in another": (ags_proys.get(otra, "") if otra and otra not in
                            (None, "") and pid not in pesos_actuales else ""),
         })
     if not filas:
@@ -2703,18 +2705,18 @@ def _miembros_editor(ags_proys, todos, key, pesos_actuales=None):
     ed = st.data_editor(
         pd.DataFrame(filas), hide_index=True, width="stretch",
         num_rows="fixed", key=key,
-        disabled=["Proyecto", "Avance %", "Ya en otra"],
+        disabled=["Proyecto", "Avance %", "Already in another"],
         column_config={
-            "En la agrupación": st.column_config.CheckboxColumn(width="small"),
+            "In the grouping": st.column_config.CheckboxColumn(width="small"),
             "Peso": st.column_config.NumberColumn(
                 min_value=0.0, step=0.5,
                 help=t("How much this lift weighs in the consolidated progress.")),
-            "Ya en otra": st.column_config.TextColumn(
+            "Already in another": st.column_config.TextColumn(
                 t(":material/warning: Already in another"), help=t("Ticking it here MOVES it to this group.")),
         })
     out = {}
     for _, r in ed.iterrows():
-        if bool(r["En la agrupación"]):
+        if bool(r["In the grouping"]):
             pid = str(r["Proyecto"]).rsplit("(", 1)[-1].rstrip(")")
             out[pid] = float(r["Peso"] or 1.0)
     return out
@@ -2867,7 +2869,7 @@ def _panel_agrupaciones(grupo: str):
                             st.warning(f"Group created, but: {msg2}")
                     flash.exito(f"Agrupación creada ({res})"
                                + (f" con {_n} elevador(es)." if _n else
-                                  ". Añádele elevadores desde su panel."))
+                                  ". Add lifts to it from its panel."))
                     st.rerun()
 
 
@@ -2989,8 +2991,7 @@ def _field_activities(pid):
             if nav != int(P._num(a.get("Avance"))) or nnota != str(a.get("Nota", "")):
                 cambios.append({"orden": a.get("Orden"), "avance": nav, "nota": nnota})
         _msg_vac = ("Dejaste el avance en blanco en: **" + "**, **".join(_vacias)
-                    + "**. Esas quedan como estaban — escribe un número (0-100) "
-                      "si querías cambiarlas.") if _vacias else ""
+                    + "**. Those are left as they were — type a number (0-100) if you meant to change them.") if _vacias else ""
         if not cambios:
             # Sin rerun: se pinta aquí mismo (encolarlo lo dejaría de fantasma)
             if _msg_vac:
@@ -3324,25 +3325,19 @@ def _ganancia_section(pid, grupo):
     with st.expander(t(":material/savings: How much you make on this job"),
                      expanded=bool(rev.get("sin_ganancia")) or _a_costo):
         if _modelo == "cotizado":
-            st.success(":material/check_circle: El ingreso de esta obra es el **precio "
-                       "pactado** en la cotización " + f"**{rev.get('cotizacion','')}**. "
-                       "El " + f"{rev['margen_pct']:g}%" + " es consecuencia de ese precio.")
+            st.success(":material/check_circle: This job's revenue is the **agreed price** on quote " + f"**{rev.get('cotizacion','')}**. "
+                       "El " + f"{rev['margen_pct']:g}%" + " follows from that price.")
             if P._num(rev.get("fija_ignorada")) > 0:
-                st.warning(":material/info: Esta obra tiene una ganancia fija de "
-                           + _T.dinero(rev["fija_ignorada"]) + " que **no se usa**: manda "
-                           "el precio que el cliente firmó. Ponla a 0 para quitar el ruido.")
+                st.warning(":material/info: This job has a fixed profit of "
+                           + _T.dinero(rev["fija_ignorada"]) + " that is **not used**: the price the client signed wins. Set it to 0 to remove the noise.")
         elif _modelo.startswith("margen"):
-            st.info(":material/info: La mano de obra de esta obra todavía usa el **modelo "
-                    "viejo**: un " + f"**{rev['margen_pct']:g}%** sobre ella. En cuanto "
-                    "pongas aquí lo que quieres ganar por hora, pasa al modelo nuevo "
-                    "(importe por rubro) y el % se calcula solo.")
+            st.info(":material/info: This job's labour still uses the **old model**: a " + f"**{rev['margen_pct']:g}%** on top of it. As soon as you "
+                    "set what you want to earn per hour here, it moves to the new model "
+                    "(an amount per line) and the % works itself out.")
         else:
-            st.success(":material/check_circle: Esta obra ya usa el modelo por rubro. "
-                       "El " + f"{rev['margen_pct']:g}%" + " de margen es consecuencia, "
-                       "no un dato que hayas tecleado.")
+            st.success(":material/check_circle: This job already uses the per-line model. The " + f"{rev['margen_pct']:g}%" + " margin follows from it; it is not something you typed.")
         if rev.get("sin_ganancia"):
-            st.warning(":material/person_alert: Sin ganancia puesta, así que su trabajo "
-                       "se facturaría **a costo**: **" + ", ".join(rev["sin_ganancia"])
+            st.warning(":material/person_alert: With no profit set, their work would be invoiced **at cost**: **" + ", ".join(rev["sin_ganancia"])
                        + "**.")
 
         # ⚠️ El editor solo si hay gente: con la lista vacía, `disabled=[...]` y
@@ -3387,9 +3382,8 @@ def _editor_ganancia_hora(pid, _items, _gh, _T):
               for i in range(len(_ed)) if P._num(_ed.iloc[i]["Ganancia/h"]) > 0}
     _tot = sum(P._num(_ed.iloc[i]["Horas"]) * P._num(_ed.iloc[i]["Ganancia/h"])
                for i in range(len(_ed)))
-    st.caption("Con estos valores ganarías **" + _T.dinero(_tot)
-               + "** de mano de obra en lo fichado hasta ahora. Los materiales se "
-                 "facturan a costo (decisión de v360).")
+    st.caption("With these values you would make **" + _T.dinero(_tot)
+               + "** on the labour clocked so far. Materials are invoiced at cost (decision from v360).")
     _c1, _c2 = st.columns([2, 1])
     if _c1.button(t(":material/save: Save profits"), key=f"gh_save_{pid}",
                   type="primary", width="stretch"):
@@ -3429,8 +3423,8 @@ def _ganancia_fija_ui(pid, rev, _fija, _T, _modelo):
         # Lo que pasaría a valer la obra con este número, para no teclear a ciegas.
         # Se parte del ingreso SIN la fija actual, así el cálculo no la cuenta dos veces.
         _ing = round(P._num(rev.get("ingreso")) - P._num(rev.get("ganancia_fija")) + _nf, 2)
-        _c1.caption("Con este importe, el ingreso estimado de la obra sería **"
-                    + _T.dinero(_ing) + "** sobre un costo de " + _T.dinero(_costo) + ".")
+        _c1.caption("With this amount, the job's estimated revenue would be **"
+                    + _T.dinero(_ing) + "** on a cost of " + _T.dinero(_costo) + ".")
     if _c2.button(t(":material/save: Save fixed profit"), key=f"gf_save_{pid}",
                   width="stretch"):
         ok, msg = P.set_ganancia_fija(pid, _nf)
@@ -3540,25 +3534,23 @@ def render_expenses(pid, grupo, can_delete=False, key_prefix="ex"):
     # `$` sueltos en la misma cadena, Streamlit la renderiza como LaTeX (regla v309).
     from core import theme as _T
     if _loc:
-        _t = ("Gasto de **estructura**: no se le carga a ninguna obra ni se le "
-              "factura a un cliente."
+        _t = ("**Overhead** spend: it is not charged to any job and not invoiced to a client."
               if cp["total"] > 0 else
-              "Todavía no hay gastos registrados en esta localización.")
+              "No spend has been recorded at this location yet.")
         _c, _fn = "#6b7280", st.info
     elif proy and pres > 0 and proy > pres * 1.02:
-        _t = (f"A este ritmo el proyecto costara **{_T.dinero(proy, 0)}**, "
-              f"**{_T.dinero(proy - pres, 0)} por encima** del presupuesto")
+        _t = (f"At this rate the project will cost **{_T.dinero(proy, 0)}**, "
+              f"**{_T.dinero(proy - pres, 0)} over** budget")
         _c, _fn = "#c0392b", st.error
     elif proy and pres > 0:
-        _t = (f"A este ritmo el proyecto costara **{_T.dinero(proy, 0)}**, dentro "
-              f"del presupuesto de {_T.dinero(pres, 0)}")
+        _t = (f"At this rate the project will cost **{_T.dinero(proy, 0)}**, within "
+              f"the budget of {_T.dinero(pres, 0)}")
         _c, _fn = "#1e8449", st.success
     elif cp["total"] > 0 and pres <= 0:
-        _t = ("Este proyecto **no tiene presupuesto asignado**, así que no hay "
-              "contra qué comparar el gasto. Se define en :material/edit: Datos.")
+        _t = ("This project **has no budget set**, so there is nothing to compare the spend against. Set it in :material/edit: Details.")
         _c, _fn = "#6b7280", st.info
     else:
-        _t, _c, _fn = ("Todavía no hay costos registrados en este proyecto.",
+        _t, _c, _fn = ("No costs have been recorded on this project yet.",
                        "#6b7280", st.info)
 
     # ── Tarjetas KPI ──
@@ -3573,7 +3565,7 @@ def render_expenses(pid, grupo, can_delete=False, key_prefix="ex"):
     if cp.get("comprometido"):
         from core import theme as _th
         tarj.insert(3, _kpi_card(t("Committed"), f"${cp['comprometido']:,.0f}",
-                                 _th.AMBAR, pie="pedido, aún sin recibir"))
+                                 _th.AMBAR, pie="ordered, not received yet"))
     st.markdown('<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px">'
                 + "".join(tarj) + "</div>", unsafe_allow_html=True)
     _fn(_t)
@@ -3646,12 +3638,10 @@ def render_expenses(pid, grupo, can_delete=False, key_prefix="ex"):
             "Tarifa/h": x["tarifa"], "Costo": x["costo"],
         } for x in lb["items"]]), hide_index=True, width="stretch")
         if lb["sin_tarifa"]:
-            st.warning(":material/warning: Sin tarifa/hora, así que sus horas suman **$0** al costo: **"
+            st.warning(":material/warning: With no hourly rate, their hours add **$0** to the cost: **"
                        + ", ".join(lb["sin_tarifa"]) + "**. Se fija en :material/build: Usuarios.")
         if lb.get("de_baja"):          # v325: cuenta eliminada ≠ tarifa sin poner
-            st.info(":material/person_off: **" + ", ".join(lb["de_baja"]) + "**: horas de "
-                    "alguien que **ya no está dado de alta**, así que suman $0 y no hay "
-                    "dónde ponerle tarifa.")
+            st.info(":material/person_off: **" + ", ".join(lb["de_baja"]) + "**: hours from someone **no longer on the books**, so they add $0 and there is nowhere to set a rate.")
 
     # ── Curva de gasto acumulado ──
     _curva = E.spend_curve(pid, grupo)
@@ -3767,9 +3757,9 @@ def render_pnl(grupo: str):
 
     d = F.pnl(grupo, _desde, _hasta)
     if d["facturado"] == 0 and d["costo_total"] == 0:
-        st.info(":material/info: No hay facturas ni costos (nóminas/compras) en este periodo."
+        st.info(":material/info: There are no invoices or costs (payroll/purchases) in this period."
                 if _desde else
-                ":material/info: Aún no hay facturas ni costos (nóminas/compras) registrados.")
+                ":material/info: No invoices or costs (payroll/purchases) have been recorded yet.")
         return
     if _desde:
         st.caption(f":material/date_range: {_desde.strftime('%d/%m/%Y')} → "
@@ -3800,11 +3790,11 @@ def render_pnl(grupo: str):
                             T.VERDE if d["ganancia"] >= 0 else T.ROJO,
                             var=_v.get("ganancia"))
                 + "</div>", unsafe_allow_html=True)
-    _pie = (f"{_nfac} cliente(s) facturado(s)  ·  costos = nóminas + compras"
+    _pie = (f"{_nfac} client(s) invoiced  ·  costs = payroll + purchases"
             + (f"  ·  margen {_mrg:.0f}%" if _mrg is not None else ""))
     if _cmp.get("rango_previo"):
         _d0, _h0 = _cmp["rango_previo"]
-        _pie += (f"  ·  se compara con {_d0.strftime('%d/%m')}–{_h0.strftime('%d/%m')}")
+        _pie += (f"  ·  compared with {_d0.strftime('%d/%m')}–{_h0.strftime('%d/%m')}")
     st.caption(_pie)
 
     # ── Rejilla FIJA de pendientes, clickeables (patron del Resumen del dia) ──
@@ -3835,22 +3825,21 @@ def render_pnl(grupo: str):
     _IND = [
         ("venc", ":material/warning:", "Vencido", T.dinero(d["vencido"], 0), True,
          d["vencido"] > 0, "finanzas", "🧾 Facturas",
-         lambda: f"{T.dinero(d['vencido'])} en facturas pasadas de su vencimiento."),
+         lambda: f"{T.dinero(d['vencido'])} in invoices past their due date."),
         ("cobrar", ":material/receipt:", "Por cobrar", T.dinero(d["por_cobrar"], 0), False,
          d["por_cobrar"] > 0, "finanzas", "🧾 Facturas",
-         lambda: f"{T.dinero(d['por_cobrar'])} facturados y aún sin cobrar."),
+         lambda: f"{T.dinero(d['por_cobrar'])} invoiced and not yet collected."),
         ("sinfac", ":material/request_quote:", "Sin facturar",
          T.dinero(sum(v for _n, v in _sf), 0), True, bool(_sf), "finanzas", "🧾 Facturas",
          lambda: " · ".join(f"{n}: {T.dinero(v, 0)}" for n, v in _sf[:8])
-                 or "Todo lo trabajado está facturado."),
+                 or "Everything worked has been invoiced."),
         ("pagar", ":material/payments:", "Por pagar", T.dinero(d["por_pagar"], 0), False,
          d["por_pagar"] > 0, "finanzas", "👥 Nóminas",
-         lambda: f"{T.dinero(d['por_pagar'])} en nóminas emitidas sin marcar pagadas."),
-        ("sinnom", ":material/schedule:", "Horas sin nómina",
+         lambda: f"{T.dinero(d['por_pagar'])} in payslips issued and not marked paid."),
+        ("sinnom", ":material/schedule:", "Hours with no payslip",
          T.dinero(_cc.get("cobrado_no_pagado", 0), 0), True,
          _cc.get("cobrado_no_pagado", 0) >= 1, "finanzas", "👥 Nóminas",
-         lambda: "Horas imputadas a una obra SIN jornada abierta: se cargan al cliente "
-                 "pero no entran en ninguna nómina, así que inflan el margen."),
+         lambda: "Hours charged to a job with NO workday open: they are billed to the client but do not enter any payslip, so they inflate the margin."),
         # ⚠️ v325: el indicador cuenta SOLO a quien se le puede poner tarifa. Quien
         # ya no está dado de alta no es un pendiente accionable —no hay fila donde
         # ponerla— y sumarlo aquí mandaba a Usuarios a no hacer nada; se menciona
@@ -3858,13 +3847,12 @@ def render_pnl(grupo: str):
         ("sintar", ":material/person_off:", "Sin tarifa",
          f"{len(_cc.get('sin_tarifa') or [])} pers.", False,
          bool(_cc.get("sin_tarifa")), "planificacion", "👷 Usuarios",
-         lambda: "Su trabajo cuenta como $0: " + ", ".join(_cc.get("sin_tarifa") or [])
-                 + (("  ·  Además, con horas pero YA SIN cuenta (no se les puede poner "
-                     "tarifa): " + ", ".join(_cc.get("de_baja") or []))
+         lambda: "Their work counts as $0: " + ", ".join(_cc.get("sin_tarifa") or [])
+                 + (("  ·  Plus, with hours but NO account any more (no rate can be set for them): " + ", ".join(_cc.get("de_baja") or []))
                     if _cc.get("de_baja") else "")),
         ("sinmar", ":material/percent:", "Sin margen", f"{len(_sinmar)} obras", False,
          bool(_sinmar), "finanzas", "📈 Rentabilidad",
-         lambda: "Se factura al costo (ganancia estimada $0): " + ", ".join(_sinmar[:8])),
+         lambda: "Invoiced at cost (estimated profit $0): " + ", ".join(_sinmar[:8])),
         ("over", ":material/trending_down:", "Sobre ppto.", f"{len(_over)}", True,
          bool(_over), "finanzas", "💰 Gastos",
          lambda: ", ".join(_over[:8]) or "Ninguna obra pasada de presupuesto."),
@@ -3958,7 +3946,7 @@ def _pnl_conciliacion(cc: dict, T, periodo_completo: bool = True):
     # cuenta; el importe va en magnitud. Antes la fila restada llevaba el signo en
     # los dos sitios y se leía «− horas cobradas … $-358.80», que parece un error.
     _fil = [("Cargado a las obras (horas imputadas × tarifa)", cc["cargado"], ""),
-            ("− horas cobradas que NO pagaste (imputadas sin jornada)",
+            ("− hours billed that you did NOT pay (charged with no workday)",
              cc["cobrado_no_pagado"], "#c0392b"),
             ("+ horas pagadas que NO cargaste (traslados, espera)",
              cc["pagado_no_cargado"], "#c77700")]
@@ -3967,18 +3955,18 @@ def _pnl_conciliacion(cc: dict, T, periodo_completo: bool = True):
     # cadena. Va pegado a lo que desglosa y solo si hay algo: hasta ahora ese renglón
     # era un residuo anónimo donde cabía igual un traslado que una jornada de almacén.
     if cc.get("interno", 0.0) > 0:
-        _fil.append(("· de las cuales, trabajo en estructura (oficina, almacén)",
+        _fil.append(("· of which, overhead work (office, store)",
                      cc["interno"], "sub"))
-    _fil += [("= base que deberías pagar", cc["base_teorica"], "bold"),
-             ("Base realmente puesta en nóminas", cc["base_nomina"], "")]
+    _fil += [("= base pay you should be paying", cc["base_teorica"], "bold"),
+             ("Base pay actually entered in payslips", cc["base_nomina"], "")]
     # ⚠️ v430: este SÍ es un sumando (a diferencia del desglose de arriba). Vacaciones
     # y bajas pagadas no son horas fichadas, así que no están en la base ni pueden
     # estarlo —la base es lo que se contrasta contra la jornada—, pero salen de caja.
     if cc.get("ausencias", 0.0) > 0:
-        _fil.append(("+ ausencias pagadas (vacaciones, bajas)",
+        _fil.append(("+ paid absences (holiday, sick leave)",
                      cc["ausencias"], "#c77700"))
-    _fil += [("+ aportes de ley (super)", cc["aportes"], "#c77700"),
-             ("= costo real de la mano de obra", cc["costo_real"], "bold")]
+    _fil += [("+ statutory contributions (super)", cc["aportes"], "#c77700"),
+             ("= real cost of labour", cc["costo_real"], "bold")]
     _h = ['<table style="width:100%;border-collapse:collapse;font-size:13px">']
     for _lb, _v, _st in _fil:
         _b = "font-weight:700;border-top:1px solid #e6e9ef;" if _st == "bold" else ""
@@ -4077,10 +4065,10 @@ def render_group_profitability(grupo: str):
     # margen puesto. v321: además se pueden poner AQUÍ, sin salir de la pantalla.
     _m0 = [r["nombre"] for r in rows if P._num(r.get("margen")) <= 0]
     if _m0:
-        st.warning(f":material/percent: **{len(_m0)} obra(s) con margen 0%**, así que su "
-                   "ingreso estimado es exactamente su costo y la ganancia sale $0: "
+        st.warning(f":material/percent: **{len(_m0)} job(s) at 0% margin**, so their "
+                   "estimated revenue is exactly their cost and the profit comes out at $0: "
                    + ", ".join(_m0[:6]) + ("…" if len(_m0) > 6 else "")
-                   + ". Edítalos en la tabla de abajo.")
+                   + ". Edit them in the table below.")
 
     st.markdown('<div style="display:flex;gap:10px;flex-wrap:wrap;margin:2px 0 6px">'
                 + _kpi_card(t("Cost charged"), T.dinero(_tot["costo"], 0))
@@ -4152,8 +4140,7 @@ def render_group_profitability(grupo: str):
         with st.expander(f":material/visibility_off: {len(_sin)} job(s) with no movement "
                          "(no cost and no invoicing)"):
             st.caption(", ".join(r["nombre"] for r in _sin)
-                       + ". No aportan a la rentabilidad todavía; su margen se edita "
-                         "en el proyecto.")
+                       + ". They add nothing to profitability yet; their margin is edited on the project.")
 
 
 def _partir_gasto(ge: dict) -> dict:
@@ -4238,7 +4225,7 @@ def render_group_expenses(grupo: str):
     _comp_tot = round(sum(f.get("comprometido", 0.0) for f in filas), 2)
     if _comp_tot:
         tarj.insert(1, _kpi_card(t("Committed"), T.dinero(_comp_tot, 0), T.AMBAR,
-                                 pie="pedido, aún sin recibir"))
+                                 pie="ordered, not received yet"))
     # v425: la estructura, con su nombre. Solo si existe: sin localizaciones la
     # pantalla queda EXACTAMENTE como estaba.
     if tot_int > 0:
@@ -4260,17 +4247,17 @@ def render_group_expenses(grupo: str):
                    "with no project** (or from a deleted project). They count towards the company "
                    "cost, but not towards any job budget — assign them from the receipt.")
     if n_over:
-        st.error(f":material/block: **{n_over} proyecto(s) ya sobre presupuesto:** "
+        st.error(f":material/block: **{n_over} project(s) already over budget:** "
                  + ", ".join(f["nombre"] for f in filas if f["over"]))
     if n_over_p:
-        st.warning(f":material/warning: **{n_over_p} más se saldrá(n) al ritmo actual** (aún dentro hoy): "
+        st.warning(f":material/warning: **{n_over_p} more will go over at the current rate** (still within budget today): "
                    + ", ".join(f["nombre"] for f in filas if f["over_proj"] and not f["over"]))
     # ⚠️ v343: dentro de presupuesto HOY, pero con lo ya pedido se pasa seguro. Antes
     # esto solo se sabía cuando llegaba la factura, o sea cuando ya no se podía hacer nada.
     _oc = [f["nombre"] for f in filas if f.get("over_comp")]
     if _oc:
-        st.warning(f":material/shopping_cart: **{len(_oc)} se pasará(n) con el material ya "
-                   "pedido** (aún no está recibido): " + ", ".join(_oc))
+        st.warning(f":material/shopping_cart: **{len(_oc)} will go over with the material "
+                   "already ordered** (not received yet): " + ", ".join(_oc))
     # Órdenes que debían haber llegado: obra parada esperando material.
     try:
         from core import orders as _O
@@ -4278,8 +4265,7 @@ def render_group_expenses(grupo: str):
     except Exception:
         _atr = []
     if _atr:
-        st.warning(":material/local_shipping: **" + str(len(_atr)) + " orden(es) de compra "
-                   "sin llegar en la fecha prometida:** "
+        st.warning(":material/local_shipping: **" + str(len(_atr)) + " purchase order(s) that did not arrive on the promised date:** "
                    + " · ".join(f"{o.get('Proveedor','')} ({o['dias']} d)" for o in _atr[:6]))
 
     # ── Gasto por rubro (mano de obra + cada categoría de compra) ─────────
@@ -4293,9 +4279,9 @@ def render_group_expenses(grupo: str):
     # nueva. Se parte la mano de obra en dos rubros y la torta sigue sumando el grupo
     # entero. Sin localizaciones, `_mo_int` es 0 y el rubro ni aparece: idéntico a antes.
     _catg = ge["por_categoria"]
-    _rubros = [("Mano de obra" + (" (obras)" if _mo_int > 0 else ""), _mo)]
+    _rubros = [("Labour" + (" (jobs)" if _mo_int > 0 else ""), _mo)]
     if _mo_int > 0:
-        _rubros.append(("Mano de obra (estructura)", _mo_int))
+        _rubros.append(("Labour (overhead)", _mo_int))
     _rubros += sorted(_catg.items(), key=lambda x: -x[1])
     _rubros = [(k, v) for k, v in _rubros if v and v > 0]
     if _rubros:
@@ -4440,9 +4426,9 @@ def render_group_hours(grupo: str):
     elif tot_jorn > 0:
         # v425: con estructura, «sin asignar» ya no la incluye — así que el % dice de
         # verdad lo que no se sabe, y lo que sí se sabe se nombra aparte.
-        _extra = (f" Otro **{100 * tot_intn / tot_jorn:.0f}%** fue trabajo en "
-                  f"**estructura** (oficina/almacén): se paga y no se le carga a "
-                  "ninguna obra." if tot_intn > 0 else "")
+        _extra = (f" Another **{100 * tot_intn / tot_jorn:.0f}%** was **overhead** work "
+                  f"(office/store): it is paid and not charged to "
+                  "any job." if tot_intn > 0 else "")
         st.caption(f"**{pct_sina:.0f}%** of the company workday was travel and waiting "
                    f"(unallocated).{_extra} Labour charged = hours charged × each "
                    "person rate; it does not include statutory contributions (see Summary → "
@@ -4494,13 +4480,10 @@ def render_group_hours(grupo: str):
     _baja = [_etiqueta(d) for d in data
              if d["proyecto"] > 0 and not d["tarifa"] and not d.get("existe", True)]
     if _sin_tar:
-        st.warning(":material/warning: Sin **tarifa/hora**, así que su costo sale $0: **"
+        st.warning(":material/warning: With no **hourly rate**, their cost comes out at $0: **"
                    + ", ".join(_sin_tar) + "**. Se fija en :material/build: Usuarios.")
     if _baja:
-        st.info(":material/person_off: **" + ", ".join(_baja) + "**: horas de alguien "
-                "que **ya no está dado de alta** (cuenta eliminada). Sus horas siguen "
-                "contando, pero **no hay dónde ponerle tarifa**, así que suman $0. "
-                "Para costearlas habría que volver a crear esa cuenta.")
+        st.info(":material/person_off: **" + ", ".join(_baja) + "**: hours from someone **no longer on the books** (account deleted). Their hours still count, but **there is nowhere to set a rate**, so they add $0. To cost them you would have to recreate that account.")
 
     # ── Reparto por proyecto (a qué elevador va el tiempo del grupo) ──
     por_proy = {}
@@ -4732,8 +4715,7 @@ def _loc_equipo(pid, grupo):
                f"{theme.dinero(filas.get('total', 0))} — ⚠️ this is "
                "**overhead**: it is not charged to any job and not invoiced to anyone.")
     if filas.get("sin_tarifa"):
-        st.warning(":material/warning: Sin tarifa/hora, así que su trabajo aquí cuenta "
-                   "$0: " + ", ".join(filas["sin_tarifa"]))
+        st.warning(":material/warning: With no hourly rate, their work here counts as $0: " + ", ".join(filas["sin_tarifa"]))
 
 
 def _loc_prestarts(pid):

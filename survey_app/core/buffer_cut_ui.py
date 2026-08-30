@@ -8,6 +8,8 @@ añadir un botón de "guardar en el proyecto" (al pulsarlo se perdía todo).
 Ahora el botón solo CALCULA y guarda en session_state; el render vive fuera.
 """
 import streamlit as st
+
+from core.i18n import t, d
 import streamlit.components.v1 as components
 import pandas as pd
 
@@ -36,9 +38,8 @@ def _kpi_row(cards):
 
 
 def render_buffer_cut_tab():
-    st.markdown("### :material/shield: Corte de buffers")
-    st.caption("Calcula cuánto cortar cada buffer. **HKP** sale del plano del proyecto; "
-               "tú indicas el **HKPR** real medido en cada buffer.")
+    st.markdown(t("### :material/shield: Buffer cutting"))
+    st.caption(t("Works out how much to cut off each buffer. **HKP** comes from the project drawing; you enter the actual **HKPR** measured on each buffer."))
 
     # ── Proyecto: de aquí salen los datos del plano ya leídos ──
     # El admin elige el proyecto; al campo le sale del clock-in. Si el proyecto
@@ -48,44 +49,44 @@ def render_buffer_cut_tab():
     # va ANTES de instanciar ninguno (regla v111).
     _reab = tool_save_ui.aplicar_restauracion("buffers")
     if _reab:
-        st.info(f":material/replay: Reabierto el cálculo **{_reab}**. Ajusta lo que necesites y vuelve a calcular.")
+        st.info(f":material/replay: Reopened calculation **{_reab}**. Adjust whatever you need and calculate again.")
 
     _prj, _plano = plan_ui.selector_proyecto("bc")
     _pr = str((_prj or {}).get("Nombre", "") or "")     # v181: al diagrama y al PDF
     if _plano:
         _n = plan_ui.aplicar(_plano, {"hkp": "bc_hkp"})
         if _n:
-            st.caption(":green[:material/check_circle:] HKP tomado(s) del plano del proyecto.")
+            st.caption(t(":green[:material/check_circle:] HKP taken from the project drawing."))
 
     # ── 1. PDF → HKP ────────────────────────────────────────
-    st.markdown("**1. Parámetro del plano (HKP)**")
+    st.markdown(t("**1. Drawing parameter (HKP)**"))
     # Plan B, plegado: desde v137 el plano vive en el PROYECTO y sus valores
     # se rellenan arriba. Esto sigue haciendo falta para un proyecto creado
     # sin plano, o para calcular sin proyecto asignado.
-    with st.expander("¿El proyecto no tiene plano? Cárgalo aquí", icon=":material/description:"):
-        st.caption("Se leerá HKP de este PDF. Lo normal es que ya vengan del plano del proyecto.")
-        pdf = plan_store.selector("PDF de planos (para HKP)", "bc_pdf")
+    with st.expander(t("Does the project have no drawing? Upload it here"), icon=":material/description:"):
+        st.caption(t("HKP will be read from this PDF. Normally it already comes from the project drawing."))
+        pdf = plan_store.selector("Drawing PDF (for HKP)", "bc_pdf")
         if pdf is not None and pdf.name != st.session_state.get("bc_pdf_name"):
             with st.spinner("Leyendo HKP del PDF..."):
                 ex = extract_hkp(pdf)
             st.session_state["bc_pdf_name"] = pdf.name
             if ex.get("HKP") is not None:
                 st.session_state["bc_hkp"] = float(ex["HKP"])
-                st.success(f"HKP encontrado en el PDF: {ex['HKP']:.0f} mm. Verifica abajo.")
+                st.success(f"HKP found in the PDF: {ex['HKP']:.0f} mm. Check below.")
             else:
-                st.warning("No se encontró HKP en el PDF. Ingrésalo manualmente.")
+                st.warning(t("HKP was not found in the PDF. Enter it by hand."))
 
-    hkp = st.number_input("HKP (mm) — sticker de cabina ↔ buffer sirviendo el 1er nivel",
+    hkp = st.number_input(t("HKP (mm) — car sticker ↔ buffer serving the 1st level"),
                           value=float(st.session_state.get("bc_hkp", 0.0)),
                           step=0.5, key="bc_hkp")
 
     # ── 2. Nº de buffers ────────────────────────────────────
-    st.markdown("**2. Buffers**")
-    n = int(st.number_input("¿Cuántos buffers hay?", min_value=1, max_value=12, step=1,
+    st.markdown(t("**2. Buffers**"))
+    n = int(st.number_input(t("How many buffers are there?"), min_value=1, max_value=12, step=1,
                             value=int(st.session_state.get("bc_n", 1)), key="bc_n"))
 
     # ── 3. HKPR real de cada buffer ─────────────────────────
-    st.markdown("**3. HKPR real de cada buffer (mm)**")
+    st.markdown(t("**3. Actual HKPR of each buffer (mm)**"))
     base = st.session_state.get("bc_df")
     if base is None or len(base) != n:
         base = pd.DataFrame({"Buffer": [f"Buffer {i+1}" for i in range(n)],
@@ -95,7 +96,7 @@ def render_buffer_cut_tab():
     st.session_state["bc_df"] = edit
 
     # ── 4. Calcular (solo computa; el render va fuera) ──────
-    if st.button(":material/shield: Calcular cortes", type="primary", width="stretch",
+    if st.button(t(":material/shield: Calculate cuts"), type="primary", width="stretch",
                  key="bc_calc"):
         hkpr_list = [float(x) for x in edit["HKPR (mm)"].tolist()]
         st.session_state[_K] = compute_buffer_cut(hkp, hkpr_list)
@@ -107,40 +108,38 @@ def render_buffer_cut_tab():
     # ── 5. Resultado (persistente entre reruns) ─────────────
     _n_warn = sum(1 for b in res["buffers"] if b["warn"])
     st.markdown(_kpi_row([
-        _kpi("HKP (plano)", f"{res['HKP']:.0f} mm"),
-        _kpi("Buffers", str(len(res["buffers"]))),
-        _kpi("A revisar", str(_n_warn), "#c0392b" if _n_warn else None)]),
+        _kpi(t("HKP (drawing)"), f"{res['HKP']:.0f} mm"),
+        _kpi(t("Buffers"), str(len(res["buffers"]))),
+        _kpi(t("To check"), str(_n_warn), "#c0392b" if _n_warn else None)]),
         unsafe_allow_html=True)
-    st.caption("Corte = HKP − HKPR (por buffer).")
+    st.caption(t("Cut = HKP − HKPR (per buffer)."))
     filas = [{
         "Buffer":     f"Buffer {b['n']}",
         "HKPR (mm)":  round(b["HKPR"], 1),
-        "Corte (mm)": b["CutBuffer"],
-        "Estado":     "revisar" if b["warn"] else "OK",
+        d("Cut (mm)"): b["CutBuffer"],
+        d("Status"):   d("check") if b["warn"] else "OK",
     } for b in res["buffers"]]
-    st.subheader("Resultado — cortes (mm)")
+    st.subheader(t("Result — cuts (mm)"))
     st.dataframe(pd.DataFrame(filas), width="stretch", hide_index=True)
 
     svg = buffer_cut_svg(res, proyecto=_pr)
-    st.subheader(":material/architecture: Diagrama de cortes")
+    st.subheader(t(":material/architecture: Cutting diagram"))
     components.html(
         '<!DOCTYPE html><html><body style="margin:0;background:transparent">'
         + svg + '</body></html>', height=330, scrolling=False)
 
     if any(b["warn"] for b in res["buffers"]):
-        st.warning(":material/warning: Un corte negativo significa que el HKPR real supera al HKP del plano: "
-                   "no hay nada que cortar en ese buffer, revísalo en obra.")
+        st.warning(t(":material/warning: A negative cut means the actual HKPR is greater than the HKP on the drawing: there is nothing to cut off that buffer, check it on site."))
 
     # ── 6. PDF + guardar contra el proyecto ─────────────────
     _cortes = ", ".join(f"B{b['n']}: {b['CutBuffer']}" for b in res["buffers"])
     pdf_bytes = tool_pdf(
-        "Corte de buffers",
-        meta={"Proyecto": _pr or "—", "HKP del plano": f"{res['HKP']:.0f} mm",
+        d("Buffer cutting"),
+        meta={d("Project"): _pr or "—", d("HKP from the drawing"): f"{res['HKP']:.0f} mm",
               "Buffers": str(len(res["buffers"]))},
         svgs=[svg],
-        tablas=[("Cortes por buffer", filas)],
-        notas=["Corte = HKP − HKPR. Un valor negativo indica que el buffer real "
-               "supera al del plano: no hay nada que cortar, revisar en obra."])
-    render_guardar(herramienta="buffers", titulo_pdf="corte de buffers",
+        tablas=[(d("Cuts per buffer"), filas)],
+        notas=["Cut = HKP − HKPR. A negative value means the actual buffer is longer than the drawing says: there is nothing to cut, check on site."])
+    render_guardar(herramienta="buffers", titulo_pdf=d("buffer cutting"),
                    pdf_bytes=pdf_bytes, resumen=f"HKP {res['HKP']:.0f} · {_cortes}",
                    datos=res, nombre_archivo="corte_buffers.pdf", key="bc")

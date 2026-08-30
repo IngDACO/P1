@@ -248,7 +248,7 @@ def _bloque_firmar(info: dict, grupo: str, nombre: str, usuario: str):
                        f"site. The most recent one is offered; if you signed a "
                        f"different one, tell whoever recorded it.")
         c1, c2 = st.columns([1, 2])
-        ini = c1.text_input("Initial", value=_initials(nombre), key="ps_tarde_ini")
+        ini = c1.text_input(t("Initial"), value=_initials(nombre), key="ps_tarde_ini")
         firma = None
         st_canvas = _canvas_disponible()
         with c2:
@@ -361,14 +361,14 @@ def render_prestart_tab():
 
     # ── Encabezado ──
     c1, c2, c3 = st.columns(3)
-    f_fecha = c1.date_input("Date", value=clock.today(), key="ps_fecha")
-    f_hora_t = c2.time_input("Time", value=clock.now().time().replace(second=0, microsecond=0),
+    f_fecha = c1.date_input(t("Date"), value=clock.today(), key="ps_fecha")
+    f_hora_t = c2.time_input(t("Time"), value=clock.now().time().replace(second=0, microsecond=0),
                              key="ps_hora")
     f_hora   = f_hora_t.strftime("%H:%M") if f_hora_t else ""
-    f_loc   = c3.text_input("Location", value=str(prj.get("Ubicacion", "")), key="ps_loc")
+    f_loc   = c3.text_input(t("Location"), value=str(prj.get("Ubicacion", "")), key="ps_loc")
     if f_loc.strip():
         c3.caption(maps.maps_link_md(f_loc, "ver en Maps"))
-    f_fac   = st.text_input("Facilitated by", value=nombre or usuario, key="ps_fac")
+    f_fac   = st.text_input(t("Facilitated by"), value=nombre or usuario, key="ps_fac")
 
     st.markdown("---")
 
@@ -378,7 +378,7 @@ def render_prestart_tab():
     st.caption(t("Answer every item: this is a safety review, not a signature."))
 
     # ── 1. Planned work activities ──
-    st.markdown("**1. Planned work activities today**")
+    st.markdown(t("**1. Planned work activities today**"))
     s1 = {}
     for key, label in PS.CHECKS_S1:
         cc = st.columns([3, 2])
@@ -389,8 +389,8 @@ def render_prestart_tab():
     act_notes = st.text_area(t("Activity notes / SWMS"), key="ps_act", height=70)
 
     # ── 2. Issues / hazard / near miss ──
-    st.markdown("**2. Issues, hazard / near miss reports**")
-    nm = st.radio("Near Miss/Hazard Report submitted", PS.OPTS_YN, horizontal=True,
+    st.markdown(t("**2. Issues, hazard / near miss reports**"))
+    nm = st.radio(t("Near Miss/Hazard Report submitted"), PS.OPTS_YN, horizontal=True,
                   index=None, key="ps_nm")
     # Texto libre SIEMPRE visible (antes solo aparecía al marcar YES): permite
     # describir un issue/hazard aunque no sea un near miss formal.
@@ -401,7 +401,7 @@ def render_prestart_tab():
         st.caption(t(":red[:material/cancel:] You answered YES: describe the near miss/hazard (it will open a project alert)."))
 
     # ── 3. Shaft protection ──
-    st.markdown("**3. Shaft Protection & other daily checks**")
+    st.markdown(t("**3. Shaft Protection & other daily checks**"))
     s3 = {}
     for key, label in PS.CHECKS_S3:
         cc = st.columns([3, 2])
@@ -411,12 +411,12 @@ def render_prestart_tab():
                               key=f"ps_s3_{key}", label_visibility="collapsed")
 
     # ── 4. General notes ──
-    st.markdown("**4. General Notes**")
+    st.markdown(t("**4. General Notes**"))
     gen_notes = st.text_area(t("General notes"), key="ps_gen", height=70,
                              label_visibility="collapsed")
 
     # ── 5. Attendees — cada uno FIRMA (v383) ──
-    st.markdown("**5. Attendees**")
+    st.markdown(t("**5. Attendees**"))
     attendees = _asistentes_con_firma(nombre or usuario, usuario,
                                   _cuadrilla(prj, pid, pgrupo))
 
@@ -531,7 +531,7 @@ def _historial(pid):
         with st.expander(_tit):
             if d["asistentes"]:
                 st.markdown(f"**:material/engineering: {t('Attendees')}:** " + " · ".join(d["asistentes"]))
-            st.markdown("**Checks:**")
+            st.markdown(t("**Checks:**"))
             for c in d["checks"]:
                 _e = {"YES": ":green[:material/check_circle:]", "NO": ":red[:material/cancel:]", "N/A": ":gray[:material/crop_square:]"}.get(c["estado"], ":gray[:material/help:]")
                 st.markdown(f"{_e} {c['label']}  ·  _{c['estado']}_")
@@ -545,7 +545,7 @@ def _historial(pid):
             if _did:
                 try:
                     from core import drive_store
-                    st.download_button(":material/download: PDF", data=drive_store.download(_did),
+                    st.download_button(t(":material/download: PDF"), data=drive_store.download(_did),
                                        file_name=d["archivo"] or f"{d['id']}.pdf",
                                        key=f"ps_hdl_{d['id']}")
                 except Exception:

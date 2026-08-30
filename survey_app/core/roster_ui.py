@@ -219,7 +219,7 @@ def _vista_dia(grupo, lunes, usuario, nom, dia, datos, tidx):
         #  así que no vale pegarle un sufijo al singular)
         _res = f"{len(items)} " + ("asignación" if len(items) == 1 else "asignaciones")
         if _ocup:
-            _res += f" · {_ocup / 60:.1f} h del día ocupadas"
+            _res += f" · {_ocup / 60:.1f} h of the day taken"
         c2.markdown(f"<div style='font-size:13px;color:#5b6472;text-align:right;"
                     f"padding-top:8px'>{_res}</div>", unsafe_allow_html=True)
 
@@ -275,7 +275,7 @@ def _vista_dia(grupo, lunes, usuario, nom, dia, datos, tidx):
                         unsafe_allow_html=True)
 
         # ── Detalle por asignación (activo: cada obra se abre desde aquí) ──
-        _ETQ = {"dia": "todo el día", "rara": "franja incompleta"}
+        _ETQ = {"dia": "all day", "rara": "franja incompleta"}
         for i, it in enumerate(items):
             k = _clase_franja(it)
             cl = st.columns([4, 2, 1, 2])
@@ -346,9 +346,9 @@ def _control_dias(lunes, datos, dias):
             con = R.dia_tiene_datos(datos, d)
             if cols[i].button(f":material/close: {lbl}", key=f"rosdel_{lunes:%Y%m%d}_{d}",
                               width="stretch", disabled=bool(con),
-                              help=(f"No se puede quitar: hay {len(con)} persona(s) "
-                                    f"con trabajo ese día ({', '.join(con[:3])})"
-                                    if con else f"Quitar el {lbl.lower()} de esta semana")):
+                              help=(f"It cannot be removed: there are {len(con)} persona(s) "
+                                    f"with work that day ({', '.join(con[:3])})"
+                                    if con else f"Remove {lbl.lower()} from this week")):
                 st.session_state.setdefault("_ros_extra", {})[lunes.isoformat()] = \
                     [x for x in pedidos if x != d]
                 st.rerun()
@@ -443,7 +443,7 @@ def _vista_dia_cuadrilla(grupo, lunes, staff, datos, tidx, dia):
                 f'<span style="background:{bg};color:{_texto_sobre(bg)};'
                 f'border-radius:4px;padding:1px 7px;font-size:11px;font-weight:600;'
                 f'white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'
-                f'{_esc(R.etiqueta_de(it["asig"], tidx))} · todo el día</span></div>')
+                f'{_esc(R.etiqueta_de(it["asig"], tidx))} · all day</span></div>')
         # (b) las que sí la tienen, a su hora. Si una persona se pisa a sí misma, sus
         #     bloques se reparten en SUB-carriles dentro de su propia fila, para que
         #     la rejilla siga siendo una fila por persona.
@@ -999,16 +999,16 @@ def _cumplimiento(grupo, lunes, staff, tidx, dias=None):
                         # ⚠️ La señal que solo existía en «En vivo»: está trabajando,
                         # pero sus horas no van a ninguna obra. Es el olvido típico.
                         filas.append((":orange[:material/timer:]", nom,
-                                      f"asignado a {plan_lbl} · fichado en jornada pero "
-                                      f"SIN imputar obra{_ahora(usr)}"))
+                                      f"assigned to {plan_lbl} · clocked in for the workday but "
+                                      f"with NO job charged{_ahora(usr)}"))
                     else:
                         filas.append((":orange[:material/warning:]", nom,
-                                      f"asignado a {plan_lbl} · sin fichar aún"))
+                                      f"asignado a {plan_lbl} · not clocked in yet"))
                 elif not falta:
                     n_ok += 1
                     _ex = f" (+ también {real_txt})" if extra else ""
                     filas.append((":green[:material/check_circle:]", nom,
-                                  f"{plan_lbl} — fichó donde tocaba{_ex}{_ahora(usr)}"))
+                                  f"{plan_lbl} — clocked in where they should{_ex}{_ahora(usr)}"))
                 elif plan_pids & real_pids:
                     n_desvio += 1
                     filas.append((":orange[:material/warning:]", nom,
@@ -1023,19 +1023,19 @@ def _cumplimiento(grupo, lunes, staff, tidx, dias=None):
                     _est = ", ".join(R.etiqueta_de(a, tidx) for a in plan_asigs)
                     _d = real_txt if reales else "jornada (sin obra)"
                     filas.append((":blue[:material/info:]", nom,
-                                  f"marcado {_est} pero fichó en {_d}{_ahora(usr)}"))
+                                  f"marcado {_est} but clocked in at {_d}{_ahora(usr)}"))
                 # OFF/Leave sin fichar: correcto, no se lista
             elif trabajos_sin_prj:                          # trabajo(s) sin enlace a PRJ
                 _tr = ", ".join(R.etiqueta_de(a, tidx) for a in trabajos_sin_prj)
-                filas.append(("—", nom, f"{_tr} (sin proyecto que comparar)"
+                filas.append(("—", nom, f"{_tr} (no project to compare against)"
                               + (f" · fichó en {real_txt}" if reales else "")
                               + _ahora(usr)))
             elif reales:                                    # sin plan pero fichó
                 filas.append((":material/help:", nom,
-                              f"sin asignación · fichó en {real_txt}{_ahora(usr)}"))
+                              f"no assignment · clocked in at {real_txt}{_ahora(usr)}"))
             elif _solo_jornada:                             # sin plan y sin imputar
                 filas.append((":orange[:material/timer:]", nom,
-                              f"sin asignación · fichado en jornada, sin imputar obra"
+                              f"no assignment · clocked in for the workday, with no job charged"
                               f"{_ahora(usr)}"))
 
         st.markdown(f":green[:material/check_circle:] {n_ok} where they were due  ·  :red[:material/cancel:] {n_desvio} somewhere else  ·  "
@@ -1311,12 +1311,10 @@ def _tablero_editable(grupo, lunes, staff, datos, tidx, marcas=None, dias=None):
 
     if css:
         st.markdown("<style>" + "".join(css) + "</style>", unsafe_allow_html=True)
-    _leyenda = [f":material/schedule: la hora solo aparece si difiere del turno "
+    _leyenda = [f":material/schedule: the time only shows when it differs from the shift "
                 f"({R.TURNO_DEFAULT[0]}–{R.TURNO_DEFAULT[1]})"]
     if marcas:
-        _leyenda.insert(0, ":red[:material/error:] borde rojo = choque de turno  ·  "
-                           ":orange[:material/shield:] borde ámbar = certificado que "
-                           "bloquea (una celda puede llevar **los dos**)")
+        _leyenda.insert(0, ":red[:material/error:] red border = shift clash  ·  :orange[:material/shield:] amber border = a certificate that blocks (a cell can carry **both**)")
     st.caption("  ·  ".join(_leyenda))
 
     # 2) Cabecera (persona + días)

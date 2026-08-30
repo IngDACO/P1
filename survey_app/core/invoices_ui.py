@@ -229,7 +229,7 @@ def _nueva_factura(grupo):
     # ⚠️ Al DESMARCAR la casilla, la opción elegida puede desaparecer. Un `st.radio` cuyo
     # valor guardado ya no está entre las opciones revienta (es el fallo que v358 evitó al
     # no preseleccionar una etiqueta inexistente). Se suelta ANTES de instanciarlo.
-    if st.session_state.get("fac_scope") not in ["Todo el cliente"] + prj_names:
+    if st.session_state.get("fac_scope") not in ["The whole client"] + prj_names:
         st.session_state.pop("fac_scope", None)
 
     # v357: atajo desde el proyecto. Llega el ID y AQUÍ se resuelve su etiqueta, que es
@@ -237,10 +237,8 @@ def _nueva_factura(grupo):
     # instanciar el radio: escribir la clave de un widget ya creado revienta (v111).
     _av = st.session_state.pop("_fac_aviso_cli", None)
     if _av:
-        st.warning(":material/contacts: Ese proyecto tiene el cliente **" + str(_av)
-                   + "**, que no es una ficha de :material/contacts: Contactos. Elige el "
-                     "cliente a mano, o enlaza el proyecto a su ficha para que el atajo "
-                     "funcione la próxima vez.")
+        st.warning(":material/contacts: That project has the client **" + str(_av)
+                   + "**, which is not a :material/contacts: Contacts record. Choose the client by hand, or link the project to its record so the shortcut works next time.")
     _pend_pid = st.session_state.pop("_fac_prj_pending", None)
     if _pend_pid:
         _et = _lbl.get(str(_pend_pid))
@@ -250,8 +248,8 @@ def _nueva_factura(grupo):
             # ⚠️ Antes, si el proyecto no estaba en la lista, `_et` era None y NO se
             # decía nada: el usuario acababa en «Todo el cliente» sin saber por qué.
             st.info(t(":material/info: That project could not be preselected for this client (check which client it is linked to). Choose the scope by hand."))
-    _scope = st.radio(t("Scope"), ["Todo el cliente"] + prj_names, horizontal=True, key="fac_scope")
-    _scope_prjs = (prjs if _scope == "Todo el cliente"
+    _scope = st.radio(t("Scope"), ["The whole client"] + prj_names, horizontal=True, key="fac_scope")
+    _scope_prjs = (prjs if _scope == "The whole client"
                    else [p for p in prjs if _lbl.get(str(p.get("ID", ""))) == _scope])
 
     # Precarga: una línea por proyecto con lo pendiente de facturar

@@ -70,7 +70,7 @@ def render_nominas(grupo):
 
     # ── Filtro de periodo ────────────────────────────────────────
     # Hoy son 5 filas del mismo periodo; en un año son 60 y la tabla deja de servir.
-    _OPT_TODOS = "Todos los periodos"
+    _OPT_TODOS = "All periods"
     _lbl = {f"{d} → {h}": (d, h) for d, h in _peri}
     _sel = st.selectbox(t("Period"), [_OPT_TODOS] + list(_lbl), key="nom_periodo",
                         label_visibility="collapsed")
@@ -90,9 +90,9 @@ def render_nominas(grupo):
                     if _num(x.get("Horas")) > 0 and _num(x.get("TarifaHora")) <= 0})
     if _cero:
         st.warning(":material/payments: **" + ", ".join(_cero) + "** "
-                   f"tiene{'n' if len(_cero) > 1 else ''} horas trabajadas pero "
-                   "**base $0**: les falta la tarifa/hora. La colilla sale en cero y su "
-                   "trabajo no cuenta en el costo.")
+                   f"ha{'ve' if len(_cero) > 1 else 's'} hours worked but "
+                   "**$0 base pay**: they have no hourly rate. The payslip comes out at "
+                   "zero and their work does not count towards the cost.")
         if st.button(t(":material/badge: Set rates in Users"), key="nom_ir_users"):
             from core import home_ui
             home_ui.navegar("planificacion", "👷 Usuarios")
@@ -113,7 +113,7 @@ def render_nominas(grupo):
         except Exception:
             _falta = []
         if _falta:
-            st.error(":material/person_alert: Sin nómina en este periodo, teniendo horas: "
+            st.error(":material/person_alert: No payslip in this period despite having hours: "
                      + " · ".join(f"**{n}** ({v['jornada']:.1f} h jornada / "
                                   f"{v['proyecto']:.1f} h en obra)" for n, v in _falta))
 
@@ -201,16 +201,14 @@ def _generar(grupo):
         # la shell del otro lado del rerun. Mecanismo ÚNICO para toda la app: tener aquí
         # uno propio y otro general sería el doble camino que hubo que desmontar en v140.
         flash.exito(f"{res.get('creadas', 0)} nómina(s) creada(s)."
-                    + (f" {res['omitidas']} ya existían para ese periodo." if res.get("omitidas") else ""))
+                    + (f" {res['omitidas']} already existed for that period." if res.get("omitidas") else ""))
         # ⚠️ v346: ya NO se crea una colilla de $0. Se salta y se dice a quién, con el
         # camino para arreglarlo; al ponerle la tarifa y regenerar el mismo periodo
         # entra sin duplicar (no dejó fila).
         _st = res.get("sin_tarifa") or []
         if _st:
-            flash.aviso(":material/person_off: **No se generó la nómina de "
-                        + ", ".join(_st) + "**: no tienen tarifa/hora, así que su colilla "
-                        "saldría en $0. Ponles la tarifa en :material/build: Planificación → "
-                        "Usuarios y vuelve a generar este mismo periodo — entrarán sin duplicar.")
+            flash.aviso(":material/person_off: **No payslip was generated for "
+                        + ", ".join(_st) + "**: they have no hourly rate, so their payslip would come out at $0. Set the rate in :material/build: Planning → Users and generate this same period again — they will be included without duplicating.")
         # ⚠️ v364: periodos que SOLAPAN con una nómina ya emitida. El salto de duplicados
         # solo veía la terna exacta, así que un rango corrido pagaba las mismas horas dos
         # veces sin decir nada. Se bloquea y se NOMBRA la nómina que estorba, porque el
@@ -219,11 +217,8 @@ def _generar(grupo):
         if _sol:
             _líneas = "\n".join(f"- **{s['nombre']}** ya tiene `{s['id']}` del "
                                 f"{s['desde']} al {s['hasta']}" for s in _sol)
-            flash.error(":material/event_repeat: **No se generó** porque el periodo elegido se "
-                        "cruza con nóminas ya emitidas — se pagarían las mismas horas dos "
-                        "veces:\n\n" + _líneas +
-                        "\n\nAjusta las fechas para que no se crucen, o anula esas nóminas "
-                        "en la lista de abajo y vuelve a generar.")
+            flash.error(":material/event_repeat: **Nothing was generated** because the chosen period overlaps payslips already issued — the same hours would be paid twice:\n\n" + _líneas +
+                        "\n\nAdjust the dates so they do not overlap, or void those payslips in the list below and generate again.")
         # ⚠️ v432: días en que la persona tenía ausencia pagada Y además fichó. Un día
         # vale UNA jornada, así que la ausencia paga solo lo que falta — pero el ajuste
         # se DICE: un recorte de dinero que nadie ve es la mitad del problema que
@@ -231,12 +226,11 @@ def _generar(grupo):
         _rec = res.get("recortes") or []
         if _rec:
             _l = "\n".join(
-                f"- **{r['nombre']}** el {r['fecha']}: fichó {r['fichadas']:g} h, "
-                f"así que su ausencia paga {r['pagadas']:g} h (no la jornada entera)"
+                f"- **{r['nombre']}** on {r['fecha']}: clocked {r['fichadas']:g} h, "
+                f"so their absence pays {r['pagadas']:g} h (not the whole working day)"
                 for r in _rec[:12])
-            flash.info(":material/schedule: **Días con ausencia Y fichaje** — se paga "
-                       "una sola jornada por día:\n\n" + _l
-                       + ("\n\n…y otros más." if len(_rec) > 12 else ""))
+            flash.info(":material/schedule: **Days with both an absence and a clock-in** — only one working day is paid per day:\n\n" + _l
+                       + ("\n\n…and more." if len(_rec) > 12 else ""))
         st.session_state.pop("_nom_gen", None)
         st.rerun()
 

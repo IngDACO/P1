@@ -168,7 +168,7 @@ def render_mis_ausencias():
             if _pie:
                 st.caption(" · ".join(_pie))
             if str(r.get("Estado")) in AU.VIGENTES:
-                if st.button(":material/undo: Cancelar", key=f"auscan_{r['ID']}"):
+                if st.button(t(":material/undo: Cancel"), key=f"auscan_{r['ID']}"):
                     _estaba = str(r.get("Estado")) == AU.APROBADA
                     ok, msg = AU.cancelar(r["ID"], usuario)
                     if ok:

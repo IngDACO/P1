@@ -2,6 +2,8 @@
 UI de la pestaña de corte de rieles.
 """
 import streamlit as st
+
+from core.i18n import t, d
 import pandas as pd
 
 from core.rail_cut import (extract_lf, compute_case1, compute_case2,
@@ -35,9 +37,8 @@ def _kpi_row(cards):
 
 
 def render_rail_cut_tab():
-    st.markdown("### :material/content_cut: Corte de rieles")
-    st.caption("Calcula el corte de los rieles de cada elevador del shaft. "
-               "LFKK y LFGK salen del plano del proyecto; si falta, se ingresan a mano.")
+    st.markdown(t("### :material/content_cut: Rail cutting"))
+    st.caption(t("Works out the rail cut for each lift in the shaft. LFKK and LFGK come from the project drawing; if it is missing, they are entered by hand."))
 
     # ── 1. PDF → LFKK / LFGK ────────────────────────────────
     # ── Proyecto: de aquí salen los datos del plano ya leídos ──
@@ -48,22 +49,22 @@ def render_rail_cut_tab():
     # va ANTES de instanciar ninguno (regla v111).
     _reab = tool_save_ui.aplicar_restauracion("rieles")
     if _reab:
-        st.info(f":material/replay: Reabierto el cálculo **{_reab}**. Ajusta lo que necesites y vuelve a calcular.")
+        st.info(f":material/replay: Reopened calculation **{_reab}**. Adjust whatever you need and calculate again.")
 
     _prj, _plano = plan_ui.selector_proyecto("rc")
     _pr = str((_prj or {}).get("Nombre", "") or "")     # v180: al diagrama y al PDF
     if _plano:
         _n = plan_ui.aplicar(_plano, {"lfkk": "rc_lfkk", "lfgk": "rc_lfgk"})
         if _n:
-            st.caption(":green[:material/check_circle:] LFKK y LFGK tomado(s) del plano del proyecto.")
+            st.caption(t(":green[:material/check_circle:] LFKK and LFGK taken from the project drawing."))
 
-    st.markdown("**1. Parámetros del plano (LFKK, LFGK)**")
+    st.markdown(t("**1. Drawing parameters (LFKK, LFGK)**"))
     # Plan B, plegado: desde v137 el plano vive en el PROYECTO y sus valores
     # se rellenan arriba. Esto sigue haciendo falta para un proyecto creado
     # sin plano, o para calcular sin proyecto asignado.
-    with st.expander("¿El proyecto no tiene plano? Cárgalo aquí", icon=":material/description:"):
-        st.caption("Se leerá LFKK y LFGK de este PDF. Lo normal es que ya vengan del plano del proyecto.")
-        pdf = plan_store.selector("PDF de planos (para LFKK / LFGK)", "rc_pdf")
+    with st.expander(t("Does the project have no drawing? Upload it here"), icon=":material/description:"):
+        st.caption(t("LFKK and LFGK will be read from this PDF. Normally they already come from the project drawing."))
+        pdf = plan_store.selector("Drawing PDF (for LFKK / LFGK)", "rc_pdf")
         if pdf is not None and pdf.name != st.session_state.get("rc_pdf_name"):
             with st.spinner("Leyendo LFKK / LFGK del PDF..."):
                 lf = extract_lf(pdf)
@@ -73,26 +74,26 @@ def render_rail_cut_tab():
             if lf.get("LFGK") is not None:
                 st.session_state["rc_lfgk"] = float(lf["LFGK"])
             found = [k for k in ("LFKK", "LFGK") if lf.get(k) is not None]
-            st.success(f"Encontrados en el PDF: {', '.join(found) if found else 'ninguno'}. "
-                       "Verifica o completa abajo.")
+            st.success(f"Found in the PDF: {', '.join(found) if found else 'ninguno'}. "
+                       "Check or complete below.")
 
     c1, c2 = st.columns(2)
-    lfkk = c1.number_input("LFKK (mm)", value=float(st.session_state.get("rc_lfkk", 0.0)),
+    lfkk = c1.number_input(t("LFKK (mm)"), value=float(st.session_state.get("rc_lfkk", 0.0)),
                            step=0.5, key="rc_lfkk")
-    lfgk = c2.number_input("LFGK (mm)", value=float(st.session_state.get("rc_lfgk", 0.0)),
+    lfgk = c2.number_input(t("LFGK (mm)"), value=float(st.session_state.get("rc_lfgk", 0.0)),
                            step=0.5, key="rc_lfgk")
 
     # ── 2. Nº de elevadores ─────────────────────────────────
-    st.markdown("**2. Elevadores en el shaft**")
-    n = int(st.number_input("¿Cuántos elevadores hay en el shaft?", min_value=1, max_value=12,
+    st.markdown(t("**2. Lifts in the shaft**"))
+    n = int(st.number_input(t("How many lifts are there in the shaft?"), min_value=1, max_value=12,
                             step=1, value=int(st.session_state.get("rc_n", 1)), key="rc_n"))
 
     # ── 3. Caso ─────────────────────────────────────────────
-    st.markdown("**3. Caso de corte**")
+    st.markdown(t("**3. Cutting case**"))
     caso = st.radio(
-        "¿Qué riel se corta?",
-        ["Caso 1 — primero instalado (el de abajo)",
-         "Caso 2 — último instalado (el de arriba)"],
+        t("Which rail is cut?"),
+        ["Case 1 — first installed (the bottom one)",
+         "Case 2 — last installed (the top one)"],
         key="rc_caso",
     )
 
@@ -102,16 +103,16 @@ def render_rail_cut_tab():
     # CASO 1
     # ════════════════════════════════════════════════════════
     if caso.startswith("Caso 1"):
-        st.markdown("**Caso 1 — datos**")
+        st.markdown(t("**Case 1 — data**"))
         d1, d2 = st.columns(2)
-        n2500 = int(d1.number_input("Nº de rieles de 2500 mm", min_value=0, step=1,
+        n2500 = int(d1.number_input(t("No. of 2500 mm rails"), min_value=0, step=1,
                                     value=int(st.session_state.get("rc_n2500", 0)), key="rc_n2500"))
-        n5000 = int(d2.number_input("Nº de rieles de 5000 mm", min_value=0, step=1,
+        n5000 = int(d2.number_input(t("No. of 5000 mm rails"), min_value=0, step=1,
                                     value=int(st.session_state.get("rc_n5000", 0)), key="rc_n5000"))
         A = n2500 * 2500 + n5000 * 5000
         st.caption(f"A = {n2500}×2500 + {n5000}×5000 = **{A:.0f} mm**")
 
-        st.markdown("**L de cada elevador** (FFL del piso más alto → fondo del shaft):")
+        st.markdown(t("**L for each lift** (FFL of the top floor → bottom of the shaft):"))
         base = st.session_state.get("rc_L_df")
         if base is None or len(base) != n:
             base = pd.DataFrame({"Elevador": [f"Elevador {i+1}" for i in range(n)],
@@ -122,7 +123,7 @@ def render_rail_cut_tab():
 
         # El boton SOLO computa: antes todo el resultado colgaba de aqui y se
         # perdia con cualquier interaccion (bug estructural de v110).
-        if st.button(":material/content_cut: Calcular cortes (Caso 1)", type="primary",
+        if st.button(t(":material/content_cut: Calculate cuts (Case 1)"), type="primary",
                      width="stretch", key="rc_calc1"):
             L_list = [float(x) for x in L_edit["L (mm)"].tolist()]
             st.session_state["rc_res"] = {
@@ -133,18 +134,18 @@ def render_rail_cut_tab():
         if _e and _e.get("caso") == 1:
             res = _e["res"]
             st.markdown(_kpi_row([
-                _kpi("A (pila instalada)", f"{res['A']:.0f} mm"),
-                _kpi("LFKK", f"{lfkk:.0f}"), _kpi("LFGK", f"{lfgk:.0f}"),
-                _kpi("Elevadores", str(_e["n"]))]), unsafe_allow_html=True)
+                _kpi(t("A (stack installed)"), f"{res['A']:.0f} mm"),
+                _kpi(t("LFKK"), f"{lfkk:.0f}"), _kpi(t("LFGK"), f"{lfgk:.0f}"),
+                _kpi(t("Lifts"), str(_e["n"]))]), unsafe_allow_html=True)
             mat = _result_matrix(["CutRC", "CutRCW"], res["elevadores"], _e["n"])
-            st.subheader("Resultado — cortes (mm)")
+            st.subheader(t("Result — cuts (mm)"))
             st.dataframe(mat, width="stretch")
-            with st.expander("Detalle (RC, RCW)"):
+            with st.expander(t("Detail (RC, RCW)")):
                 det = _result_matrix(["RC", "RCW"], res["elevadores"], _e["n"])
                 st.dataframe(det, width="stretch")
 
             svg = rail_cut_svg(res, caso=1, n2500=_e["n2500"], n5000=_e["n5000"], proyecto=_pr)
-            st.subheader(":material/architecture: Diagrama de cortes")
+            st.subheader(t(":material/architecture: Cutting diagram"))
             components.html(
                 '<!DOCTYPE html><html><body style="margin:0;background:transparent">'
                 + svg + '</body></html>', height=390, scrolling=False)
@@ -154,15 +155,14 @@ def render_rail_cut_tab():
                        "RCW (mm)": round(x["RCW"], 1), "CutRCW (mm)": round(x["CutRCW"], 1)}
                       for i, x in enumerate(res["elevadores"])]
             _pdf = tool_pdf(
-                "Corte de rieles — Caso 1",
-                meta={"Proyecto": _pr or "—",
-                      "A (pila instalada)": f"{res['A']:.0f} mm",
-                      "Composición": f"{_e['n2500']}×2500 + {_e['n5000']}×5000",
+                d("Rail cutting — Case 1"),
+                meta={d("Project"): _pr or "—",
+                      d("A (installed stack)"): f"{res['A']:.0f} mm",
+                      d("Make-up"): f"{_e['n2500']}×2500 + {_e['n5000']}×5000",
                       "LFKK / LFGK": f"{lfkk:.0f} / {lfgk:.0f} mm"},
-                svgs=[svg], tablas=[("Cortes por elevador", _filas)],
-                notas=["Caso 1: el riel a cortar es el primero instalado (abajo). "
-                       "CutRC = RC − A, CutRCW = RCW − A."])
-            render_guardar(herramienta="rieles", titulo_pdf="corte de rieles",
+                svgs=[svg], tablas=[(d("Cuts per lift"), _filas)],
+                notas=["Case 1: the rail to cut is the first one installed (at the bottom). CutRC = RC − A, CutRCW = RCW − A."])
+            render_guardar(herramienta="rieles", titulo_pdf=d("rail cutting"),
                            pdf_bytes=_pdf,
                            resumen=("Caso 1 · A " + f"{res['A']:.0f} · "
                                     + ", ".join(f"E{i+1}: {x['CutRC']:.0f}/{x['CutRCW']:.0f}"
@@ -173,15 +173,15 @@ def render_rail_cut_tab():
     # CASO 2
     # ════════════════════════════════════════════════════════
     else:
-        st.markdown("**Caso 2 — sub-caso**")
+        st.markdown(t("**Case 2 — sub-case**"))
         sub = st.radio(
-            "El penúltimo riel está…",
-            ["Por encima del FFL (resta)", "Por debajo del FFL (suma)"],
+            t("The second-to-last rail is…"),
+            ["Above the FFL (subtract)", "Below the FFL (add)"],
             key="rc_sub",
         )
         subcaso = "encima" if sub.startswith("Por encima") else "debajo"
 
-        st.markdown("**Matriz de entrada** (llena RZ, RO, RF, RB de cada elevador):")
+        st.markdown(t("**Input matrix** (fill in RZ, RO, RF, RB for each lift):"))
         rieles = ["RZ", "RO", "RF", "RB"]
         base = st.session_state.get("rc_in_df")
         cols_expected = ["Riel"] + [f"Elevador {i+1}" for i in range(n)]
@@ -192,7 +192,7 @@ def render_rail_cut_tab():
                                  num_rows="fixed", disabled=["Riel"], key="rc_in_editor")
         st.session_state["rc_in_df"] = in_edit
 
-        if st.button(":material/content_cut: Calcular cortes (Caso 2)", type="primary",
+        if st.button(t(":material/content_cut: Calculate cuts (Case 2)"), type="primary",
                      width="stretch", key="rc_calc2"):
             rows = []
             for i in range(n):
@@ -207,16 +207,16 @@ def render_rail_cut_tab():
             res = _e["res"]
             signo = "LFKK/LFGK − R" if _e["subcaso"] == "encima" else "LFKK/LFGK + R"
             st.markdown(_kpi_row([
-                _kpi("Fórmula", signo), _kpi("LFKK", f"{lfkk:.0f}"),
-                _kpi("LFGK", f"{lfgk:.0f}"), _kpi("Elevadores", str(_e["n"]))]),
+                _kpi(t("Formula"), signo), _kpi(t("LFKK"), f"{lfkk:.0f}"),
+                _kpi(t("LFGK"), f"{lfgk:.0f}"), _kpi(t("Lifts"), str(_e["n"]))]),
                 unsafe_allow_html=True)
-            st.caption(f"Sub-caso: {_e['sub']}")
+            st.caption(f"Sub-case: {_e['sub']}")
             mat = _result_matrix(["CutRZ", "CutRO", "CutRF", "CutRB"], res, _e["n"])
-            st.subheader("Resultado — cortes (mm)")
+            st.subheader(t("Result — cuts (mm)"))
             st.dataframe(mat, width="stretch")
 
             svg = rail_cut_svg({"elevadores": res}, caso=2, proyecto=_pr)
-            st.subheader(":material/architecture: Diagrama de cortes")
+            st.subheader(t(":material/architecture: Cutting diagram"))
             components.html(
                 '<!DOCTYPE html><html><body style="margin:0;background:transparent">'
                 + svg + '</body></html>', height=330, scrolling=False)
@@ -226,13 +226,13 @@ def render_rail_cut_tab():
                           for k in ("CutRZ", "CutRO", "CutRF", "CutRB")}}
                       for i, x in enumerate(res)]
             _pdf = tool_pdf(
-                "Corte de rieles — Caso 2",
-                meta={"Proyecto": _pr or "—", "Sub-caso": _e["sub"], "Fórmula": signo,
+                d("Rail cutting — Case 2"),
+                meta={d("Project"): _pr or "—", d("Sub-case"): _e["sub"], d("Formula"): signo,
                       "LFKK / LFGK": f"{lfkk:.0f} / {lfgk:.0f} mm"},
-                svgs=[svg], tablas=[("Cortes por elevador", _filas)],
-                notas=["Caso 2: el riel a cortar es el último instalado (arriba)."])
-            render_guardar(herramienta="rieles", titulo_pdf="corte de rieles",
+                svgs=[svg], tablas=[(d("Cuts per lift"), _filas)],
+                notas=["Case 2: the rail to cut is the last one installed (at the top)."])
+            render_guardar(herramienta="rieles", titulo_pdf=d("rail cutting"),
                            pdf_bytes=_pdf,
-                           resumen=f"Caso 2 ({_e['subcaso']}) · {len(res)} elevador(es)",
+                           resumen=f"Case 2 ({_e['subcaso']}) · {len(res)} lift(s)",
                            datos={"subcaso": _e["subcaso"], "elevadores": res},
                            nombre_archivo="corte_rieles_caso2.pdf", key="rc2")

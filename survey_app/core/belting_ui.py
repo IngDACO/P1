@@ -8,6 +8,8 @@ cualquier interacción (bug de v110). Ahora el botón solo calcula; el render,
 el PDF y el guardado contra el proyecto van fuera.
 """
 import pandas as pd
+
+from core.i18n import t, d
 import streamlit as st
 import streamlit.components.v1 as components
 
@@ -35,9 +37,8 @@ def _kpi_row(cards):
 
 
 def render_belting_tab():
-    st.markdown("### :material/swap_vert: Belting — posición de la cabina para instalar los belts")
-    st.caption("Calcula **DSTS** = cuánto bajar la cabina bajo el FFL del piso más alto para instalar "
-               "los belts respetando el recorrido de diseño.  DSTS = HGPR − HGP − HQ/1000 (mm), por elevador.")
+    st.markdown(t("### :material/swap_vert: Belting — car position for installing the belts"))
+    st.caption(t("Works out **DSTS** = how far to lower the car below the FFL of the top floor to install the belts while respecting the design travel.  DSTS = HGPR − HGP − HQ/1000 (mm), per lift."))
 
     for k in ("belt_hgp", "belt_hq"):
         st.session_state.setdefault(k, 0.0)
@@ -51,21 +52,21 @@ def render_belting_tab():
     # va ANTES de instanciar ninguno (regla v111).
     _reab = tool_save_ui.aplicar_restauracion("belting")
     if _reab:
-        st.info(f":material/replay: Reabierto el cálculo **{_reab}**. Ajusta lo que necesites y vuelve a calcular.")
+        st.info(f":material/replay: Reopened calculation **{_reab}**. Adjust whatever you need and calculate again.")
 
     _prj, _plano = plan_ui.selector_proyecto("belt")
     _pr = str((_prj or {}).get("Nombre", "") or "")     # v183: al diagrama y al PDF
     if _plano:
         _n = plan_ui.aplicar(_plano, {"hq": "belt_hq", "hgp": "belt_hgp"})
         if _n:
-            st.caption(":green[:material/check_circle:] HQ y HGP tomado(s) del plano del proyecto.")
+            st.caption(t(":green[:material/check_circle:] HQ and HGP taken from the project drawing."))
 
     # ── PDF: autocompleta HQ ────────────────────────────────
     # Plan B, plegado: desde v137 el plano vive en el PROYECTO y sus valores
     # se rellenan arriba. Esto sigue haciendo falta para un proyecto creado
     # sin plano, o para calcular sin proyecto asignado.
-    with st.expander("¿El proyecto no tiene plano? Cárgalo aquí", icon=":material/description:"):
-        st.caption("Se leerá HQ y HGP de este PDF. Lo normal es que ya vengan del plano del proyecto.")
+    with st.expander(t("Does the project have no drawing? Upload it here"), icon=":material/description:"):
+        st.caption(t("HQ and HGP will be read from this PDF. Normally they already come from the project drawing."))
         pdf = plan_store.selector(":material/description: PDF de planos (autocompleta HQ)", "belt_pdf")
         if pdf is not None and pdf.name != st.session_state.get("belt_pdf_name"):
             from extractors.schindler import extract_belting
@@ -78,31 +79,31 @@ def render_belting_tab():
             if ex.get("HGP") is not None:
                 st.session_state["belt_hgp"] = float(ex["HGP"]); _found.append(f"HGP={ex['HGP']:.0f}")
             if _found:
-                st.success(f":material/check_circle: Del plano: **{', '.join(_found)} mm**. "
-                           "Ingresa los HGPR reales de cada elevador.")
+                st.success(f":material/check_circle: From the drawing: **{', '.join(_found)} mm**. "
+                           "Enter the actual HGPR for each lift.")
             else:
-                st.warning("No se encontraron HQ/HGP en el plano. Ingrésalos a mano.")
+                st.warning(t("HQ/HGP were not found in the drawing. Enter them by hand."))
             st.rerun()
         elif pdf is not None:
-            st.caption(f":material/description: Plano cargado: **{pdf.name}**")
+            st.caption(f":material/description: Drawing loaded: **{pdf.name}**")
 
     # ── Datos del plano ─────────────────────────────────────
-    st.markdown("**Datos**  ·  :material/description: = del plano · ✏️ = manual")
+    st.markdown(t("**Data**  ·  :material/description: = from the drawing · ✏️ = by hand"))
     c1, c2 = st.columns(2)
-    hq  = c1.number_input(":material/description: HQ — travel height (mm)", step=1.0, key="belt_hq")
-    hgp = c2.number_input(":material/description: HGP — striker↔buffer de diseño (mm)", step=0.5, key="belt_hgp")
+    hq  = c1.number_input(t(":material/description: HQ — travel height (mm)"), step=1.0, key="belt_hq")
+    hgp = c2.number_input(t(":material/description: HGP — design striker↔buffer (mm)"), step=0.5, key="belt_hgp")
 
-    ne = st.number_input("Número de elevadores", min_value=1, max_value=12, step=1, key="belt_ns")
+    ne = st.number_input(t("Number of lifts"), min_value=1, max_value=12, step=1, key="belt_ns")
 
-    st.markdown("**:material/edit: HGPR — distancia REAL striker↔buffer del contrapeso, por elevador (mm)**")
+    st.markdown(t("**:material/edit: HGPR — ACTUAL striker↔buffer distance on the counterweight, per lift (mm)**"))
     hgpr_list = []
     cols = st.columns(min(int(ne), 4))
     for i in range(int(ne)):
-        v = cols[i % len(cols)].number_input(f"HGPR elevador {i+1}", step=0.5, key=f"belt_hgpr_{i}")
+        v = cols[i % len(cols)].number_input(f"HGPR lift {i+1}", step=0.5, key=f"belt_hgpr_{i}")
         hgpr_list.append(v)
 
     # ── Cálculo (solo computa; el render va fuera) ──────────
-    if st.button(":material/swap_vert: Calcular belting", type="primary", width="stretch",
+    if st.button(t(":material/swap_vert: Calculate belting"), type="primary", width="stretch",
                  key="belt_calc"):
         st.session_state[_K] = {"results": compute_belting(hgp, hq, hgpr_list),
                                 "hgp": hgp, "hq": hq}
@@ -114,9 +115,9 @@ def render_belting_tab():
 
     # ── Resultado (persistente entre reruns) ────────────────
     st.markdown(_kpi_row([
-        _kpi("HQ (travel)", f"{_hq:.0f} mm"),
-        _kpi("HGP (diseño)", f"{_hgp:.0f} mm"),
-        _kpi("Elevadores", str(len(results)))]),
+        _kpi(t("HQ (travel)"), f"{_hq:.0f} mm"),
+        _kpi(t("HGP (design)"), f"{_hgp:.0f} mm"),
+        _kpi(t("Lifts"), str(len(results)))]),
         unsafe_allow_html=True)
     filas = [{
         "Elevador":  r["elevador"],
@@ -125,14 +126,14 @@ def render_belting_tab():
         "Posición":  f"{abs(r['dsts']):.0f} mm "
                      f"{'por debajo' if r['dsts'] >= 0 else 'por encima'} del FFL top",
     } for r in results]
-    st.subheader(":material/table_rows: Resultados (DSTS por elevador)")
+    st.subheader(t(":material/table_rows: Results (DSTS per lift)"))
     st.dataframe(pd.DataFrame(filas), width="stretch", hide_index=True)
     _formula = (f"DSTS = HGPR − HGP({_hgp:.0f}) − HQ({_hq:.0f})/1000 "
                 f"= HGPR − {_hgp + _hq / 1000.0:.1f} mm")
     st.caption(_formula)
 
     svg = belting_svg(results, proyecto=_pr)
-    st.subheader(":material/architecture: Diagrama")
+    st.subheader(t(":material/architecture: Diagram"))
     components.html(
         '<!DOCTYPE html><html><body style="margin:0;background:transparent">'
         + svg + '</body></html>', height=330, scrolling=False)
@@ -140,13 +141,13 @@ def render_belting_tab():
     # ── PDF + guardar contra el proyecto ────────────────────
     _resumen = ", ".join(f"E{r['elevador']}: DSTS {r['dsts']}" for r in results)
     pdf_bytes = tool_pdf(
-        "Belting — posición de la cabina",
-        meta={"Proyecto": _pr or "—", "HQ (travel)": f"{_hq:.0f} mm",
-              "HGP (diseño)": f"{_hgp:.0f} mm", "Elevadores": str(len(results))},
+        "Belting — car position",
+        meta={d("Project"): _pr or "—", "HQ (travel)": f"{_hq:.0f} mm",
+              d("HGP (design)"): f"{_hgp:.0f} mm", d("Lifts"): str(len(results))},
         svgs=[svg],
-        tablas=[("DSTS por elevador", filas)],
+        tablas=[(d("DSTS per lift"), filas)],
         notas=[_formula,
-               "DSTS > 0 = bajar la cabina esa distancia bajo el FFL del piso más alto."])
+               "DSTS > 0 = lower the car by that distance below the FFL of the top floor."])
     render_guardar(herramienta="belting", titulo_pdf="belting",
                    pdf_bytes=pdf_bytes, resumen=_resumen,
                    datos={"hgp": _hgp, "hq": _hq, "results": results},
