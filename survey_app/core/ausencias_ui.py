@@ -10,6 +10,8 @@ la ausencia no llega al tablero, la ruta del día y «plan vs real» siguen cont
 alguien que no está.
 """
 import logging
+
+from core.i18n import t
 from datetime import timedelta
 
 import streamlit as st
@@ -33,7 +35,7 @@ def _chip_estado(e: str) -> str:
 def _linea(r) -> str:
     cfg = AU.TIPOS.get(str(r.get("Tipo", "")), {})
     return (f"**{cfg.get('nombre', r.get('Tipo'))}** · {r.get('Desde')} → "
-            f"{r.get('Hasta')} · {r.get('Dias')} día(s) · {_chip_estado(str(r.get('Estado')))}")
+            f"{r.get('Hasta')} · {r.get('Dias')} {t('day(s)')} · {_chip_estado(str(r.get('Estado')))}")
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -43,28 +45,30 @@ def render_mis_ausencias():
     """⚠️ CON título propio: es una sección del campo SIN sub-pestañas, así que la
     shell no pinta ninguna cabecera (regla v320: solo las que cuelgan de una sección
     con subs tienen título duplicado)."""
-    st.markdown("## :material/event_busy: Mis ausencias")
+    st.markdown(t("## :material/event_busy: My absences"))
     a = st.session_state.get("auth", {}) or {}
     usuario = str(a.get("usuario", ""))
     nombre = str(a.get("nombre") or usuario)
     grupo = str(a.get("grupo", ""))
     if not AU.is_configured():
-        st.warning(":material/warning: Las ausencias necesitan Google Sheets configurado.")
+        st.warning(t(":material/warning: Absences need Google Sheets configured."))
         return
 
     # ── Saldo ──────────────────────────────────────────────────────
     tarj = []
     _per = None
-    for t, cfg in AU.TIPOS.items():
-        s = AU.saldo(grupo, usuario, t)
+    # ⚠️ `_tp`, no `t`: la variable del bucle taparía la función de idioma en el
+    # ámbito ENTERO de la función (el fallo del glosario de v437).
+    for _tp, cfg in AU.TIPOS.items():
+        s = AU.saldo(grupo, usuario, _tp)
         _per = _per or s.get("periodo")
         if s["ilimitado"]:
             tarj.append(_kpi(cfg["nombre"], f"{s['usados']:.0f}",
-                             pie="días usados en el periodo"))
+                             pie=t("days used in the period")))
         else:
             _col = "#c0392b" if s["restantes"] <= 0 else None
             tarj.append(_kpi(cfg["nombre"], f"{s['restantes']:.0f}",
-                             pie=f"de {s['asignados']:.0f} · usados {s['usados']:.0f}",
+                             pie=f"{t('of')} {s['asignados']:.0f} · {t('used')} {s['usados']:.0f}",
                              color=_col))
     st.markdown('<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:8px">'
                 + "".join(tarj) + "</div>", unsafe_allow_html=True)
@@ -74,60 +78,57 @@ def render_mis_ausencias():
     # parece exacto.
     if _per:
         if _per["origen"] == "aniversario":
-            st.caption(f":material/event_available: Tu año de vacaciones va del "
-                       f"**{_per['desde']}** al **{_per['hasta']}** "
-                       f"(desde que entraste, el {_per['ingreso']}).")
+            st.caption(f"{t(':material/event_available: Your leave year runs from')} "
+                       f"**{_per['desde']}** to **{_per['hasta']}** "
+                       f"({t('since you started, on')} {_per['ingreso']}).")
         else:
-            st.caption(f":material/help: Contamos por año natural "
-                       f"(**{_per['desde']}** → **{_per['hasta']}**) porque no consta "
-                       "tu fecha de alta. Pídele a tu responsable que la cargue y el "
-                       "saldo pasará a contar desde tu aniversario.")
+            st.caption(f"{t(':material/help: We are counting by calendar year')} "
+                       f"(**{_per['desde']}** → **{_per['hasta']}**) because your start date "
+                       "is not on record. Ask your manager to enter it and the "
+                       "balance will count from your anniversary.")
 
     # ── Pedir ──────────────────────────────────────────────────────
-    with st.expander("Pedir un día libre, vacaciones o avisar de una baja",
+    with st.expander(t("Request a day off or annual leave, or report sick leave"),
                      icon=":material/add_circle:", expanded=True):
         # ⚠️ El tipo va FUERA del form: el formulario tiene que poder reaccionar a él
         # (la enfermedad no se «pide», se avisa) y dentro de un form los widgets no
         # escriben hasta el submit — la razón de v127, v189 y v306.
         _tipos = list(AU.TIPOS)
         tipo = st.selectbox(
-            "¿Qué necesitas?", _tipos, key="aus_tipo",
+            t("What do you need?"), _tipos, key="aus_tipo",
             # ⚠️ EMOJI, no `:material/…:`: en las opciones de un selectbox el material
             # sale como texto literal (medido en el Cloud). En `st.radio` sí funciona.
-            format_func=lambda t: f"{AU.TIPOS[t]['emoji']} {AU.TIPOS[t]['nombre']}")
+            format_func=lambda _k: f"{AU.TIPOS[_k]['emoji']} {AU.TIPOS[_k]['nombre']}")
         cfg = AU.TIPOS[tipo]
         if not cfg["aprobacion"]:
-            st.info(":material/info: Una baja por enfermedad **se registra al momento**: "
-                    "no tienes que esperar a que nadie la apruebe. Tu responsable la verá "
-                    "en cuanto la envíes.")
+            st.info(t(":material/info: Sick leave **is recorded straight away**: you do not have to wait for anyone to approve it. Your manager will see it as soon as you send it."))
         _s = AU.saldo(grupo, usuario, tipo)
         if not _s["ilimitado"]:
             if _s["restantes"] <= 0:
-                st.error(f":material/block: No te quedan días de {cfg['nombre'].lower()} "
-                         f"este año (usados {_s['usados']:.0f} de {_s['asignados']:.0f}). "
-                         "Habla con tu responsable.")
+                st.error(f":material/block: You have no days left of {cfg['nombre'].lower()} "
+                         f"this year (used {_s['usados']:.0f} of {_s['asignados']:.0f}). "
+                         "Talk to your manager.")
             elif _s["restantes"] <= 3:
-                st.warning(f":material/warning: Te quedan solo **{_s['restantes']:.0f} "
-                           f"día(s)** de {cfg['nombre'].lower()} este año.")
+                st.warning(f":material/warning: You have only **{_s['restantes']:.0f} "
+                           f"day(s)** of {cfg['nombre'].lower()} this year.")
 
         with st.form("aus_form"):
             c1, c2 = st.columns(2)
             hoy = clock.today(grupo)
-            desde = c1.date_input("Desde", value=hoy, key="aus_desde")
-            hasta = c2.date_input("Hasta", value=hoy, key="aus_hasta")
-            findes = st.checkbox("Incluir fines de semana", key="aus_findes",
-                                 help="Márcalo solo si en esos días se trabaja. Si no, "
-                                      "no se te descuentan del saldo.")
-            motivo = st.text_input("Motivo (opcional)", key="aus_motivo",
-                                   placeholder="Viaje familiar, cita médica…")
+            desde = c1.date_input(t("From"), value=hoy, key="aus_desde")
+            hasta = c2.date_input(t("To"), value=hoy, key="aus_hasta")
+            findes = st.checkbox(t("Include weekends"), key="aus_findes",
+                                 help=t("Tick this only if those days are worked. Otherwise they are not taken off your balance."))
+            motivo = st.text_input(t("Reason (optional)"), key="aus_motivo",
+                                   placeholder=t("Family trip, medical appointment…"))
             _enviar = st.form_submit_button(
-                (":material/send: Enviar solicitud" if cfg["aprobacion"]
-                 else ":material/send: Registrar la baja"),
+                (t(":material/send: Send request") if cfg["aprobacion"]
+                 else t(":material/send: Record the sick leave")),
                 type="primary", width="stretch")
         if _enviar:
             _d = AU.dias_del_rango(desde, hasta, findes)
             if not _s["ilimitado"] and len(_d) > _s["restantes"]:
-                st.error(f":material/block: Pides **{len(_d)} día(s)** y te quedan "
+                st.error(f":material/block: You are asking for **{len(_d)} {t('day(s)')}** and you have "
                          f"**{_s['restantes']:.0f}**.")
             else:
                 ok, res = AU.solicitar(grupo, usuario, nombre, tipo, desde, hasta,
@@ -144,15 +145,15 @@ def render_mis_ausencias():
                     for k in ("aus_motivo", "aus_findes"):
                         st.session_state.pop(k, None)
                     flash.exito(
-                        f"{cfg['nombre']} registrada ({res})." if not cfg["aprobacion"]
-                        else f"Solicitud enviada ({res}). Te avisaremos al resolverla.")
+                        f"{cfg['nombre']} recorded ({res})." if not cfg["aprobacion"]
+                        else f"{t('Request sent')} ({res}). {t('We will let you know when it is resolved.')}")
                     st.rerun()
 
     # ── Lo mío ─────────────────────────────────────────────────────
-    st.markdown("#### :material/history: Mis solicitudes")
+    st.markdown(t("#### :material/history: My requests"))
     mias = AU.list_group(grupo, usuario=usuario)
     if not mias:
-        st.caption("Todavía no has pedido ninguna ausencia.")
+        st.caption(t("You have not requested any absence yet."))
         return
     for r in mias[:15]:
         with st.container(border=True):
@@ -163,7 +164,7 @@ def render_mis_ausencias():
             if str(r.get("NotaAdmin", "")).strip():
                 _pie.append(f"nota: {r.get('NotaAdmin')}")
             if str(r.get("ResueltaPor", "")).strip():
-                _pie.append(f"resuelta por {r.get('ResueltaPor')}")
+                _pie.append(f"{t('resolved by')} {r.get('ResueltaPor')}")
             if _pie:
                 st.caption(" · ".join(_pie))
             if str(r.get("Estado")) in AU.VIGENTES:
@@ -198,11 +199,11 @@ def _avisar_cancelacion(grupo, nombre, r):
         cfg = AU.TIPOS.get(str(r.get("Tipo", "")), {})
         _subj = (f"CANCELADA — {cfg.get('nombre', r.get('Tipo'))}: {nombre} "
                  f"({r.get('Desde')} → {r.get('Hasta')})")
-        _lines = [f"<b>{nombre}</b> ha CANCELADO su "
+        _lines = [f"<b>{nombre}</b> has CANCELLED their "
                   f"<b>{cfg.get('nombre', r.get('Tipo'))}</b> "
-                  f"del {r.get('Desde')} al {r.get('Hasta')}.",
-                  "Esos días vuelven a quedar libres en el planificador: si habías "
-                  "reorganizado la cuadrilla, revísalo."]
+                  f"from {r.get('Desde')} to {r.get('Hasta')}.",
+                  "Those days are free again in the planner: if you had reorganised "
+                  "the crew, review it."]
         for d in _admins_and_owners(grupo):
             try:
                 notify.notify_user(d, _subj, _lines)
@@ -219,11 +220,11 @@ def _avisar_admins(grupo, nombre, tipo, desde, hasta, cfg):
         from core import notify
         from core.alerts import _admins_and_owners
         _subj = (f"{cfg['nombre']}: {nombre} ({desde} → {hasta})")
-        _lines = [f"<b>{nombre}</b> ha registrado: <b>{cfg['nombre']}</b>",
-                  f"Del {desde} al {hasta}.",
-                  ("Se registró automáticamente (no requiere aprobación)."
+        _lines = [f"<b>{nombre}</b> has recorded: <b>{cfg['nombre']}</b>",
+                  f"From {desde} to {hasta}.",
+                  ("It was recorded automatically (no approval needed)."
                    if not cfg["aprobacion"] else
-                   "Está PENDIENTE de tu aprobación → Planificación · Ausencias.")]
+                   "It is PENDING your approval → Planning · Absences.")]
         for d in _admins_and_owners(grupo):
             try:
                 notify.notify_user(d, _subj, _lines)
@@ -239,7 +240,7 @@ def _avisar_admins(grupo, nombre, tipo, desde, hasta, cfg):
 def render_bandeja(grupo: str):
     """⚠️ SIN título propio: `_sub_header` ya pinta «Planificación · Ausencias»."""
     if not AU.is_configured():
-        st.warning(":material/warning: Las ausencias necesitan Google Sheets configurado.")
+        st.warning(t(":material/warning: Absences need Google Sheets configured."))
         return
     quien = str((st.session_state.get("auth", {}) or {}).get("usuario", ""))
     todas = AU.list_group(grupo)
@@ -251,25 +252,25 @@ def render_bandeja(grupo: str):
                     for d in AU.dias_del_rango(r.get("Desde"), r.get("Hasta"), True))]
     st.markdown('<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:8px">'
                 + "".join([
-                    _kpi("Pendientes", str(len(pend)),
-                         pie="esperan tu decisión",
+                    _kpi(t("Pending"), str(len(pend)),
+                         pie=t("waiting for your decision"),
                          color="#c77700" if pend else None),
-                    _kpi("Fuera hoy", str(len(fuera_hoy)),
-                         pie=", ".join(str(x.get("Nombre")) for x in fuera_hoy) or "nadie"),
-                    _kpi("Próximos 7 días", str(len(_sem)), pie="ausencias aprobadas"),
+                    _kpi(t("Away today"), str(len(fuera_hoy)),
+                         pie=", ".join(str(x.get("Nombre")) for x in fuera_hoy) or t("nobody")),
+                    _kpi(t("Next 7 days"), str(len(_sem)), pie=t("approved absences")),
                 ]) + "</div>", unsafe_allow_html=True)
 
     # ── Pendientes ─────────────────────────────────────────────────
-    st.markdown("#### :material/inbox: Pendientes de aprobar")
+    st.markdown(t("#### :material/inbox: Waiting for approval"))
     if not pend:
-        st.success(":material/check_circle: No hay solicitudes pendientes.")
+        st.success(t(":material/check_circle: No pending requests."))
     for r in pend:
         _tarjeta_pendiente(grupo, r, quien)
 
     # ── Histórico ──────────────────────────────────────────────────
-    with st.expander(f"Histórico ({len(todas)})", icon=":material/history:"):
+    with st.expander(f"History ({len(todas)})", icon=":material/history:"):
         if not todas:
-            st.caption("Sin ausencias registradas.")
+            st.caption(t("No absences recorded."))
         for r in todas[:40]:
             st.markdown(f"`{r['ID']}` · **{r.get('Nombre')}** — " + _linea(r))
 
@@ -286,10 +287,10 @@ def _tarjeta_pendiente(grupo, r, quien):
         # Saldo de esa persona: aprobar a ciegas es lo que esto viene a evitar
         s = AU.saldo(grupo, usuario, str(r.get("Tipo")))
         if not s["ilimitado"]:
-            _txt = (f"Le quedan **{s['restantes']:.0f}** de {s['asignados']:.0f} días "
-                    f"de {cfg.get('nombre', '').lower()} este año")
+            _txt = (f"They have **{s['restantes']:.0f}** of {s['asignados']:.0f} days "
+                    f"{t('of')} {cfg.get('nombre', '').lower()} {t('this year')}")
             (st.error if s["restantes"] < 0 else st.caption)(
-                _txt + (" — **se pasaría del saldo**" if s["restantes"] < 0 else "."))
+                _txt + (t(" — **this would go over the balance**") if s["restantes"] < 0 else "."))
 
         # ⚠️ Las obras que quedarían sin esa persona: lo que «todo lo que implica»
         # significa de verdad. Se enseña ANTES de decidir, no después.
@@ -298,10 +299,9 @@ def _tarjeta_pendiente(grupo, r, quien):
             _obras = {}
             for c in ch:
                 _obras.setdefault(c["etiqueta"], []).append(c["fecha"])
-            st.warning(":material/warning: Ya está asignado esos días a **"
-                       + "**, **".join(_obras) + "**. Si apruebas, esos días quedan "
-                       "libres en el tablero.")
-            with st.expander(f"Quién podría cubrirlo ({len(ch)} día(s))",
+            st.warning(t(":material/warning: They are already assigned on those days to") + " **"
+                       + "**, **".join(_obras) + t("**. If you approve, those days are freed on the board."))
+            with st.expander(f"Who could cover it ({len(ch)} day(s))",
                              icon=":material/group:"):
                 for c in ch:
                     subs = AU.sustitutos(grupo, c["fecha"], c.get("proyecto_id"),
@@ -310,15 +310,15 @@ def _tarjeta_pendiente(grupo, r, quien):
                     _no = [x["nombre"] for x in subs if not x["cumple"]][:3]
                     st.markdown(f"**{c['fecha']}** · {c['etiqueta']}")
                     if _ok:
-                        st.caption(":material/check: libres y con los certificados: "
+                        st.caption(t(":material/check: free and holding the certificates") + ": "
                                    + ", ".join(_ok))
                     elif _no:
-                        st.caption(":material/warning: libres pero SIN los certificados "
-                                   "que exige la obra: " + ", ".join(_no))
+                        st.caption(t(":material/warning: free but WITHOUT the certificates the "
+                                     "site requires") + ": " + ", ".join(_no))
                     else:
-                        st.caption(":material/block: nadie libre ese día.")
+                        st.caption(t(":material/block: nobody free that day."))
         else:
-            st.caption(":material/check: No tiene obras asignadas esos días.")
+            st.caption(t(":material/check: They have no sites assigned on those days."))
 
         # Cobertura: no vaciar el equipo la misma semana
         _otros = set()
@@ -327,13 +327,13 @@ def _tarjeta_pendiente(grupo, r, quien):
                 if str(x.get("ID")) != aid:
                     _otros.add(str(x.get("Nombre")))
         if _otros:
-            st.info(f":material/groups: Esos días ya hay {len(_otros)} persona(s) fuera: "
+            st.info(f":material/groups: {len(_otros)} {t('other person(s) are already away those days')}: "
                     + ", ".join(sorted(_otros)))
 
-        nota = st.text_input("Nota (opcional)", key=f"ausnota_{aid}",
-                             placeholder="Se le mostrará a la persona")
+        nota = st.text_input(t("Note (optional)"), key=f"ausnota_{aid}",
+                             placeholder=t("This will be shown to the person"))
         c1, c2 = st.columns(2)
-        if c1.button(":material/check_circle: Aprobar", key=f"ausok_{aid}",
+        if c1.button(t(":material/check_circle: Approve"), key=f"ausok_{aid}",
                      type="primary", width="stretch"):
             ok, msg = AU.resolver(aid, True, quien, nota)
             if ok:
@@ -343,13 +343,13 @@ def _tarjeta_pendiente(grupo, r, quien):
                 # lo haya aprobado.
                 _ok2, _n = AU.aplicar_al_roster(AU.get(aid) or r)
                 _avisar_persona(usuario, r, True, nota)
-                flash.exito(msg + (f" {_n} día(s) marcados en el planificador."
+                flash.exito(msg + (f" {_n} {t('day(s) marked in the planner.')}"
                                    if _ok2 else
-                                   f" ⚠️ No se pudo escribir en el planificador: {_n}"))
+                                   f" ⚠️ {t('Could not write to the planner')}: {_n}"))
                 st.rerun()
             else:
                 st.error(msg)
-        if c2.button(":material/cancel: Rechazar", key=f"ausno_{aid}",
+        if c2.button(t(":material/cancel: Reject"), key=f"ausno_{aid}",
                      width="stretch"):
             ok, msg = AU.resolver(aid, False, quien, nota)
             if ok:
@@ -366,10 +366,10 @@ def _avisar_persona(usuario, r, aprobada, nota):
         from core import notify
         cfg = AU.TIPOS.get(str(r.get("Tipo", "")), {})
         _s = "aprobada" if aprobada else "rechazada"
-        _l = [f"Tu solicitud de <b>{cfg.get('nombre')}</b> "
-              f"({r.get('Desde')} → {r.get('Hasta')}) ha sido <b>{_s}</b>."]
+        _l = [f"Your request for <b>{cfg.get('nombre')}</b> "
+              f"({r.get('Desde')} → {r.get('Hasta')}) has been <b>{_s}</b>."]
         if str(nota or "").strip():
-            _l.append(f"Nota: {nota}")
-        notify.notify_user(usuario, f"Ausencia {_s}: {r.get('Desde')} → {r.get('Hasta')}", _l)
+            _l.append(f"{t('Note')}: {nota}")
+        notify.notify_user(usuario, f"Absence {_s}: {r.get('Desde')} → {r.get('Hasta')}", _l)
     except Exception as e:
         logger.warning("ausencias_ui._avisar_persona: %s", e)

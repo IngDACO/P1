@@ -350,6 +350,25 @@ Estas cinco mordieron en una sola tanda:
     **generar el SVG y leer su texto**. → Para afirmar «no queda nada en X»,
     medirlo sobre la SALIDA, no sobre el código que la produce.
 
+28. ⚠️ **Un detector por IDIOMA no sirve para decir «ya no queda español».** El
+    barrido de i18n busca acentos y palabras funcionales, así que **«Fichar», «Firma»,
+    «Iniciales», «Pendientes», «Sitios», «Registrados», «Planificado» o «Mis ausencias»
+    son invisibles para él**: no llevan ni acento ni artículo. Con ese detector di F2
+    por terminada y quedaban **47 etiquetas**; el mismo agujero dejó pasar una etiqueta
+    de plomada en v438 y una rotura del guardián en v439 — **tres veces**. → Para
+    afirmar «no queda nada sin traducir» hay que medir por **POSICIÓN**, no por idioma:
+    todo literal que llega a una función de display y NO está envuelto en `t()`, y
+    revisarlo a mano para separar ETIQUETA de DATO (una clave de dict y un texto se ven
+    igual en el AST). Y para los chequeos, **afirmaciones POSITIVAS**: que el inglés
+    esperado ESTÉ, en vez de que el español no esté.
+29. ⚠️ **«Compila e importa» no verifica NADA de una traducción.** Los dos
+    `UnboundLocalError` de v439 —uno dejaba «Mis ausencias» sin abrir— y las 47
+    etiquetas convivieron con `compileall` en verde y los cuatro módulos importando sin
+    queja. **Importar no ejecuta** (v378). Lo que las encontró fue LLAMAR a las
+    funciones con las dependencias de Sheets sustituidas y mirar lo que pintan. Si al
+    traducir aparece una llamada `t(...)` en una función donde `t` ya era una variable,
+    Python la marca local en el ámbito ENTERO y revienta — y nada de lo anterior lo ve.
+
 **Y la regla de siempre, que volvió a aplicar:** antes de borrar el LECTOR de un mecanismo, buscar
 sus ESCRITORES y convertirlos. En v299 `_nav_pending` tenía dos vivos («Abrir proyecto» tras el
 survey y «Reabrir cálculo»); borrar solo el lector los habría dejado como botones que no hacen
@@ -7255,6 +7274,99 @@ se GUARDAN en la hoja `Actividades` → migración del histórico). El informe d
 no está entero en inglés hasta que caigan esas tres, y conviene saberlo antes de
 enseñárselo a un cliente.
 
+## i18n F1d + F2: los correos y LA APP DE CAMPO, en inglés (v439)
+
+Cierra F1 (todo lo que SALE de la empresa) y hace F2 entera. **269 reemplazos**: 13 en
+`notify.py` / `alerts.py` (correos de asignación e inducción, alarmas de problema y de
+cambio) y 256 en los cuatro módulos que usa el técnico en obra — `timeclock_ui`,
+`prestart_ui`, `ausencias_ui`, `route_ui`. Los correos van con **`d` (idioma BASE)** y la
+pantalla con `t`: un correo SALE de la app, así que su idioma no puede depender de cómo
+tenga la pantalla quien lo dispara (regla de v436).
+
+### ⚠️ DOS `UnboundLocalError` que introduje yo, y que «compila e importa» NO ve
+Al traducir aparecieron llamadas a `t()` en funciones donde `t` **ya era una variable**:
+```python
+# timeclock_ui._aviso_olvido
+lineas.append(f"- **{etq}** {t('open since')} ...")   # ← línea 402
+t = _dt.strptime(s["clock_in"], timeclock.FMT)        # ← línea 404: la marca LOCAL
+```
+Python marca el nombre local en el **ámbito ENTERO de la función**, así que las llamadas
+de ARRIBA revientan. Es el fallo del glosario de v437, cometido otra vez el mismo día —
+y el segundo es peor: en `render_mis_ausencias` el `for t, cfg in AU.TIPOS.items()` deja
+`t` como una CADENA, así que `t("What do you need?")` daba **`TypeError: 'str' object is
+not callable`** y la pantalla «Mis ausencias» **no abría en absoluto**.
+Mi verificación de F2 fue *«los cuatro compilan e importan»* y eso **no ejercita nada**:
+importar no ejecuta (la lección de v378). Lo cazó el guardián, mirando el ÁMBITO.
+→ En estos módulos `t` se queda como nombre del motor y las variables se renombran
+(`_ci`, `_tp`, `_k`); en los seis de v438, donde `d` era variable en 14 sitios, se hizo
+al revés (alias `_d`). El criterio es cuál de los dos hay menos veces.
+
+### ⚠️ Los cambios de `notify.py` y `alerts.py` NO estaban en el disco
+El guardián los dio por no aplicados y era cierto: el fichero seguía en español pese a
+que el registro de trabajo decía que se habían aplicado. Se reaplicaron y se verificaron
+**generando los mensajes**, no leyendo el código. Sirve de recordatorio de que un paso
+«hecho» sin evidencia comprobable no está hecho.
+
+### ⚠️ DIJE QUE F2 ESTABA TERMINADA Y QUEDABAN 47 ETIQUETAS EN ESPAÑOL
+Mi barrido usaba un **detector de español** (acentos + palabras funcionales) y dio «0
+restantes». Es falso, y de la peor manera: «Fichar», «Firma», «Iniciales», «Pendientes»,
+«Sitios», «Descargar PDF» o el propio título **«Mis ausencias»** no llevan acento ni
+palabra funcional, así que pasaron por delante. Es el mismo agujero que dejó escapar
+«Planificado» en v438 y «Registrados» en el guardián de esta misma versión — **tres veces
+el mismo detector, tres veces el mismo tipo de palabra**.
+Lo destapó el smoke test, que al EJECUTAR `render_mis_ausencias` imprimió lo que la
+pantalla pinta: `'## :material/event_busy: Mis ausencias'`.
+→ El barrido bueno no busca español: busca **posición**. Todo literal que llega a una
+función de display y NO está envuelto en `t()`, revisado luego a mano para separar
+etiqueta de dato. Con él salieron 47, y el guardián lo lleva ahora como chequeo con
+tope MEDIDO (que el número suba significa que alguien metió una etiqueta suelta).
+
+### ⚠️ Y «compilan e importan» no es una verificación
+Los dos `UnboundLocalError` de arriba y las 47 etiquetas convivieron con un
+`compileall` en verde y los cuatro módulos importando sin queja. Lo que encontró las
+dos cosas fue **llamar a las funciones** (`check_v439_smoke.py`, que ejecuta
+`_aviso_olvido` y `render_mis_ausencias` con las dependencias de Sheets sustituidas y
+mira lo que pintan). Importar no ejecuta — la lección de v378, aplicada a mí mismo.
+
+### Lo que NO se traduce
+Las **claves de dato** — `usuario`, `proyecto`, `fecha`, `clock_in`, `tipo`, `Desde`,
+`Hasta`, `Tipo`, `Estado`, `Usuario`, `Ubicacion`, `ProyectoID` — son claves de dict y
+nombres de columna: traducirlas rompe la lectura **sin dar ningún error**. Tampoco los
+mensajes de **log** (⚠️ `logger.warning` comparte NOMBRE con `st.warning`, y el extractor
+los coló 92 veces en la primera pasada: hay que filtrar por RECEPTOR, no por atributo).
+
+### Verificación
+`verif_v439.py`, 24 comprobaciones, con los correos **generados de verdad** y los
+remitentes interceptados (`notify_user` / `_notify` sustituidos: no sale ni un correo ni
+un Telegram). Probado contra **8 roturas** — y **tres solo se cazaron tras corregir el
+guardián**, las tres por chequeos que aprobaban por el motivo equivocado:
+- **Traducir UNA de las seis apariciones de `"clock_in"`** pasaba: yo comprobaba
+  PRESENCIA, y quedaban cinco. Y una traducción PARCIAL es la peor variante (unos sitios
+  leen la clave vieja y otros la nueva). Ahora se pinta el número **MÍNIMO** de
+  apariciones — mínimo y no igualdad, para que añadir usos legítimos no lo ponga rojo.
+- **«Recorded» → «Registrados»** era invisible: el detector de español busca acentos y
+  palabras funcionales, y «Registrados» no tiene ninguna de las dos. Es exactamente el
+  «Planificado» de v438 → chequeos **POSITIVOS**, el inglés esperado tiene que ESTAR.
+- La rotura del logger apuntaba a `route_ui`, que **no tiene ni una llamada a logger**:
+  una rotura sobre código que no existe no prueba nada (el `<marker>` de v438).
+
+### Cuatro guardianes CADUCADOS (actualizados, no relajados)
+`verif_v307` (Ruta del día), `verif_v308` (Fichaje), `verif_v408` (Pre-Start) y
+`verif_v430` (Ausencias) fijaban literales en ESPAÑOL de los módulos que F2 tradujo.
+Se miró el código acusado antes de tocar nada (regla v385): las cuatro conductas siguen
+intactas y lo único que cambió es el idioma, a propósito. La afirmación se reescribe
+sobre el PRINCIPIO —que la tabla marque los tres estados de fichaje, que exista la
+tarjeta de la semana, que el aviso de duplicado remita a firmar, que el saldo diga de
+qué periodo habla y avise cuando lo estima— con la razón escrita al lado, y donde se
+pudo se ancló a la parte estable (el EMOJI del estado, no la palabra).
+
+### ⚠️ Y la corrección de escala que hay que decir en voz alta
+Lo pendiente NO son los ~1.153 literales que cité al planificar: un barrido completo da
+**3.122**. Mi primera cuenta salía de una lista blanca de funciones de Streamlit y veía
+solo una parte. Ese número incluye además DATOS (columnas, formatos, claves), así que
+cada uno necesita el juicio etiqueta-vs-dato — no es un reemplazo mecánico. F3, F4 y F5
+van fase a fase, con guardián y deploy propios.
+
 ## i18n F1c: los DIAGRAMAS y las PLOMADAS. **F1 CERRADO** (v438)
 
 Petición del usuario tras v437: *«adelanta los diagramas y las plomadas, cierra F1»* —
@@ -7318,7 +7430,7 @@ literal, así que **no casaba nunca** — y dejó pasar «Plomo riel izquierdo»
 Es el mismo fallo de v436, cometido otra vez ese mismo día. Se vio con `cat -A`, no
 leyendo. → **Cualquier `\b`, `\n` o `\w` va por fichero escrito, nunca por heredoc.**
 
-## Versiones desplegadas (v438 = actual)
+## Versiones desplegadas (v439 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -7326,6 +7438,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v439 | **i18n F1d + F2: los correos y LA APP DE CAMPO, en inglés** — cierra F1 y hace F2 entera (235 reemplazos: 13 en `notify`/`alerts`, 222 en los 4 módulos de obra). Los correos van con **`d` (idioma BASE)** y la pantalla con `t`. ⚠️ **Dos `UnboundLocalError` que introduje yo**: al traducir aparecieron llamadas a `t()` en funciones donde `t` YA era variable, y Python la marca local en el ámbito ENTERO — el peor dejaba **«Mis ausencias» sin abrir** (`'str' object is not callable`). Mi verificación fue «compilan e importan», que **no ejercita nada**. ⚠️ Y los cambios de `notify`/`alerts` **no estaban en el disco** pese a figurar como hechos: se reaplicaron y se verificaron GENERANDO los mensajes. ⚠️ **Y dije que F2 estaba terminada con 47 etiquetas aún en español**: mi detector busca acentos y palabras funcionales, y «Fichar», «Firma», «Pendientes» o «Mis ausencias» no tienen ninguna de las dos (tercera vez del mismo agujero: v438, el guardián de v439 y esto). Lo destapó el smoke test al EJECUTAR la pantalla; el barrido pasa a ser por POSICIÓN (literal de display sin `t()`), no por idioma. Guardián probado contra 8 roturas — **tres solo se cazaron tras corregirlo**: comprobar PRESENCIA dejaba pasar traducir 1 de 6 apariciones de una clave, «Registrados» es invisible para el detector de español (→ chequeos POSITIVOS, el «Planificado» de v438) y una rotura apuntaba a un módulo **sin ningún logger**. ⚠️ Corrección de escala: lo pendiente son **3.122 literales**, no los 1.153 que cité — mi lista blanca veía solo una parte, y el número incluye datos |
 | v438 | **i18n F1c: los DIAGRAMAS y las PLOMADAS — F1 CERRADO** (pedido por el usuario: «adelanta los diagramas y las plomadas»). 80 etiquetas en 6 módulos; el informe del cliente pasa de **37 líneas en español a 0**, salvo los 11 nombres de actividad, que son DATO de la hoja `Actividades`. ⚠️ El motor se importa con **alias `_d`**: en estos módulos `d` ya es variable en 14 sitios y taparía la función en el ámbito entero (el fallo de v437). ⚠️ NO se tocan las 11 CLAVES de `schedule_table`/`plumb_table`/`plumb_checks` (las indexan los informes) — pero sus VALORES sí, tras comprobar que nadie compara contra ellos. ⚠️ **El barrido estático se dejó CINCO restos** (filtraba cadenas largas y exigía el `<text>` en una línea): los cazó **renderizar los SVG y leer su texto**. Guardián de 59 comprobaciones sobre los **11 SVG generados** (incluido que sigan sin `<defs>`/`<marker>`, o svglib los tira del PDF), probado contra **12 roturas** — cuatro solo se cazaron tras corregirlo: un `or` que dejaba traducir un nombre, un umbral que daba **FALLO con el código correcto**, «Planificado» invisible para el detector de español (→ chequeos POSITIVOS, que de paso destaparon un `FICHA DE REPLANTEO`), y una rotura apuntada a un stub que nadie dibuja. ⚠️ Y **la trampa del `\b` del heredoc por SEGUNDA vez** (v436): 0x08 en el regex → no casa nunca y aprueba en verde |
 | v437 | **i18n F1b: el informe del CLIENTE en inglés**, con el prompt de la IA incluido — traducir solo los encabezados habría dejado **5 de las 12 secciones en español**, porque las escribe el modelo. ⚠️ **Y detrás había un fallo**: el veredicto se deducía del TEXTO de la IA (`"requiere cortes" in ia["cortes"]`), frágil ya en español e **imposible en inglés** — habría dicho «sin valores fuera de límite» en un hueco que sí hay que cortar. Nueva `interpretation.cortes_por_piso`, única definición, compartida con el payload de la IA. ⚠️ **NO se traducen las claves** de `USER_SCHEMA` (se guardan en `InterpJSON`: traducirlas dejaría las 5 secciones EN BLANCO) ni las de las tablas de cronograma y plomado. ⚠️ **Dos fallos míos que solo se vieron GENERANDO el PDF**: la variable del bucle del glosario se llamaba `d` y **tapaba la función del motor** en toda la función (UnboundLocalError; compilar e importar no lo ven), y `cortes_por_piso(limits…)` con el parámetro llamado `calculated` → NameError **que mi propio `except` se tragaba** dejando `_cortes=False` (v323/v338/v344 otra vez), visto solo al leer el log. Guardián probado contra **10 roturas**; dos solo se cazaron tras corregirlo — uno miraba el ÍNDICE en vez de la cabecera, y su sustituto daba **FALLO con el código correcto** porque `_section` PARTE el título |
 | v434 | ⚠️ **`list_users` se COMÍA las columnas nuevas de Login**: las fechas de alta se escribieron y se verificaron bien (`get_user` devuelve la fila entera), pero un barrido posterior las daba todas vacías — la proyección de `list_users` eran **8 campos escritos a mano**, así que `FechaIngreso` desaparecía al leerla, sin lanzar ni avisar. Ahora se deriva de `LOGIN_HEADERS` menos los secretos ⚠️ (la proyección NO se puede quitar: existe para que el hash y el token no salgan de ahí, v79). **Tercer sitio en dos versiones** con el mismo patrón — una lista de columnas a mano en paralelo a `*_HEADERS` (v363 la fila posicional, v433 `auth._COL`). + **datos de la demo rellenados**: fecha de alta de las 13 cuentas (las 10 con fichajes, derivadas de su PRIMER fichaje), tarifa a quien contaba $0, y email `@example.com` (RFC 2606: no entregable, no puede llegarle a nadie real). ⚠️ **Telegram NO**: un `chat_id` inventado mandaría los avisos al teléfono de un desconocido. Caducó `verif_v395` (exigía que siguiera habiendo 3 sin canal): reescrito sobre el comportamiento con un caso construido |

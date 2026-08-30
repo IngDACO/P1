@@ -11,6 +11,8 @@ Estado: abierta | resuelta.
 """
 import logging
 
+from core.i18n import d as _d
+
 import streamlit as st
 
 from core import timeclock
@@ -47,12 +49,12 @@ def is_configured() -> bool:
 
 def _ws():
     if not timeclock._secrets_present():
-        return None, "Google Sheets no está configurado."
+        return None, _d("Google Sheets is not configured.")
     try:
         return timeclock.get_sheet(ALERTS_SHEET, tuple(ALERTS_HEADERS)), None
     except Exception as e:
         logger.warning("alerts: no se pudo abrir la hoja: %s", e)
-        return None, f"No se pudo abrir la hoja {ALERTS_SHEET}: {e}"
+        return None, f"{_d("Could not open sheet")} {ALERTS_SHEET}: {e}"
 
 
 @st.cache_data(ttl=120, show_spinner=False)
@@ -165,8 +167,8 @@ def resolve_alert(alert_id, resuelto_por) -> tuple:
                  "values": [[clock.now().strftime("%Y-%m-%d %H:%M")]]},
             ], value_input_option="RAW")
             _invalidate()
-            return True, "Alarma resuelta."
-    return False, "Alarma no encontrada."
+            return True, _d("Alert resolved.")
+    return False, _d("Alert not found.")
 
 
 # ── Destinatarios ────────────────────────────────────────────────
@@ -193,9 +195,9 @@ def report_problem(pid, grupo, mensaje, creado_por, project_name="") -> tuple:
     if not ok:
         return False, aid
     _notify(_admins_and_owners(grupo),
-            f"Alarma en proyecto {project_name or pid}",
-            [f"<b>Problema reportado</b> por {creado_por}:", mensaje,
-             f"Proyecto: {project_name or pid}."])
+            f"{_d("Alert on project")} {project_name or pid}",
+            [f"<b>{_d("Problem reported by")}</b> {creado_por}:", mensaje,
+             f"{_d("Project")}: {project_name or pid}."])
     return True, aid
 
 
@@ -204,6 +206,6 @@ def notify_change(pid, grupo, mensaje, creado_por, assigned_users, project_name=
     ok, aid = create_alert(pid, grupo, "admin", "cambio", mensaje, creado_por)
     if assigned_users:
         _notify(assigned_users,
-                f"Actualización en {project_name or pid}",
-                [f"El administrador actualizó el proyecto <b>{project_name or pid}</b>:", mensaje])
+                f"{_d("Update on")} {project_name or pid}",
+                [f"{_d("The administrator updated project")} <b>{project_name or pid}</b>:", mensaje])
     return ok, aid

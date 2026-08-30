@@ -11,6 +11,8 @@ Secrets:
 Degrada con gracia: usa los canales configurados y para los que el usuario tenga contacto.
 """
 import logging
+
+from core.i18n import d as _d
 import smtplib
 from email.mime.text import MIMEText
 
@@ -114,22 +116,23 @@ def notify_assignment(usuario: str, prj: dict) -> dict:
     """Avisa a un usuario de campo que le asignaron un proyecto (con sus datos)."""
     from core import maps
     nombre = prj.get("Nombre") or prj.get("nombre") or ""
-    subject = f"📋 Nuevo proyecto asignado: {nombre}"
+    subject = f"📋 {_d("New project assigned")}: {nombre}"
     _ubic = str(prj.get("Ubicacion", "") or "")
     _ubic_url = maps.maps_url(_ubic)
-    _ubic_line = (f'Ubicación: <a href="{_ubic_url}">{_ubic}</a>' if _ubic_url
-                  else f"Ubicación: {_ubic or '—'}")
+    _ubic_line = (f'{_d("Location")}: <a href="{_ubic_url}">{_ubic}</a>' if _ubic_url
+                  else f"{_d("Location")}: {_ubic or '—'}")
     lines = [
-        f"Te asignaron al proyecto <b>{nombre}</b>.",
-        f"Cliente: {prj.get('Cliente', '—')}",
+        f"{_d("You have been assigned to project")} <b>{nombre}</b>.",
+        f"{_d("Client")}: {prj.get('Cliente', '—')}",
         _ubic_line,
-        f"Inicio: {prj.get('FechaInicio', '—')}  ·  Fin est.: {prj.get('FechaFinEst', '—')}",
+        f"{_d("Start")}: {prj.get('FechaInicio', '—')}  ·  "
+        f"{_d("Est. finish")}: {prj.get('FechaFinEst', '—')}",
     ]
     _links = [l.strip() for l in str(prj.get("InduccionLinks", "") or "").splitlines() if l.strip()]
     if _links:
-        lines.append("📝 <b>Inducciones a completar:</b>")
+        lines.append(f"📝 <b>{_d("Inductions to complete")}:</b>")
         lines += [f'• <a href="{l}">{l}</a>' for l in _links]
-    lines.append("Ábrelo en la app → 📋 Mis proyectos.")
+    lines.append(_d("Open it in the app → 📋 My projects."))
     return notify_user(usuario, subject, lines, _sec("APP_URL", _APP_URL_DEFAULT))
 
 
@@ -138,7 +141,7 @@ def notify_induction(usuario: str, project_name: str, links: list) -> dict:
     links = [str(l).strip() for l in (links or []) if str(l).strip()]
     if not links:
         return {"email": False, "telegram": False}
-    subject = f"📝 Inducciones del proyecto {project_name}"
-    lines = [f"Completa las inducciones del proyecto <b>{project_name}</b>:"]
+    subject = f"📝 {_d("Project inductions")}: {project_name}"
+    lines = [f"{_d("Complete the inductions for project")} <b>{project_name}</b>:"]
     lines += [f'• <a href="{l}">{l}</a>' for l in links]
     return notify_user(usuario, subject, lines)

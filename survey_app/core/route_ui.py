@@ -12,6 +12,8 @@ ni API). La navegación real por carretera la hace **Google Maps por link** (URL
 direcciones), así que NO gasta la API de geocodificación/Directions.
 """
 import math
+
+from core.i18n import t
 import urllib.parse
 import streamlit as st
 
@@ -148,7 +150,7 @@ def render_mi_ruta(usuario, grupo):
     except Exception:
         proys = []
     if not proys:
-        st.caption("No tienes obras activas asignadas.")
+        st.caption(t("You have no active sites assigned."))
         return
 
     paradas, sin_ubic = [], []
@@ -163,8 +165,7 @@ def render_mi_ruta(usuario, grupo):
             sin_ubic.append(str(p.get("Nombre", "")))
 
     if not paradas:
-        st.info("Ninguna de tus obras tiene ubicación en el mapa todavía. "
-                "Pídele al administrador que la fije en el proyecto.")
+        st.info(t("None of your sites has a map location yet. Ask your administrator to set it on the project."))
         return
 
     ruta = ordenar_ruta(paradas)
@@ -177,7 +178,7 @@ def render_mi_ruta(usuario, grupo):
                        key=f"miruta_{usuario}"):
         _mapa_respaldo(marcs)
 
-    st.markdown("**Orden sugerido** (de la más cercana a la más lejana):")
+    st.markdown(t("**Suggested order** (nearest to farthest):"))
     for i, p in enumerate(ruta, 1):
         extra = f" · {p['cliente']}" if p["cliente"] else ""
         dirtxt = f" — {p['ubic']}" if p["ubic"] else ""
@@ -185,12 +186,11 @@ def render_mi_ruta(usuario, grupo):
 
     url = gmaps_dir_url(ruta, desde_actual=True)
     if url:
-        st.link_button("Abrir la ruta en Google Maps", url,
+        st.link_button(t("Open the route in Google Maps"), url,
                        icon=":material/navigation:", width="stretch")
-        st.caption("La navegación paso a paso la abre Google Maps desde tu "
-                   "ubicación actual, pasando por todas las obras en este orden.")
+        st.caption(t("Turn-by-turn navigation opens in Google Maps from your current location, going through every site in this order."))
     if sin_ubic:
-        st.caption(":orange[:material/warning:] Sin ubicación (no entran en la ruta): "
+        st.caption(t(":orange[:material/warning:] No location (they are left out of the route)") + ": "
                    + ", ".join(sin_ubic))
 
 
@@ -217,25 +217,26 @@ def render_ruta_dia(grupo):
     # El `date_input` ocupaba los 1340 px de ancho para una fecha. Se acota y a su
     # lado van los saltos de día (esta pantalla se mira "hoy, y mañana qué").
     cf, cp, cn, cd = st.columns([1.6, 0.7, 0.7, 4])
-    fecha = cf.date_input("Día", value=clock.today(grupo), key="rutadia_fecha",
+    fecha = cf.date_input(t("Day"), value=clock.today(grupo), key="rutadia_fecha",
                           format="DD/MM/YYYY",
-                          help="A dónde va cada persona de campo según la planificación.")
+                          help=t("Where each field member is going according to the plan."))
     cp.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
     cn.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
     if cp.button(":material/chevron_left:", key="rd_prev", width="stretch",
-                 help="Día anterior"):
+                 help=t("Previous day")):
         st.session_state["_rd_salto"] = -1
         st.rerun()
     if cn.button(":material/chevron_right:", key="rd_next", width="stretch",
-                 help="Día siguiente"):
+                 help=t("Next day")):
         st.session_state["_rd_salto"] = 1
         st.rerun()
-    _DIAS_L = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"]
+    _DIAS_L = [t("Monday"), t("Tuesday"), t("Wednesday"), t("Thursday"), t("Friday"),
+               t("Saturday"), t("Sunday")]
     _MES_L = ["", "enero", "febrero", "marzo", "abril", "mayo", "junio", "julio",
               "agosto", "septiembre", "octubre", "noviembre", "diciembre"]
     with cd:
         st.markdown("<div style='height:30px'></div>", unsafe_allow_html=True)
-        st.markdown(f":gray[{_DIAS_L[fecha.weekday()]} {fecha.day} de "
+        st.markdown(f":gray[{_DIAS_L[fecha.weekday()]} {fecha.day} of "
                     f"{_MES_L[fecha.month]}]")
     # ⚠️ v390: el fin de semana ya se puede planificar, así que aquí solo se corta
     # si REALMENTE no hay nada ese día — antes se cortaba por ser sábado y eso
@@ -250,9 +251,9 @@ def render_ruta_dia(grupo):
         except Exception:
             _hay = []
         if not _hay:
-            st.info(":material/weekend: No hay nada planificado para este "
-                    f"{_DIAS_L[fecha.weekday()].lower()}. La semana normal es de "
-                    "lunes a viernes; el fin de semana se añade desde el Panel.")
+            st.info(":material/weekend: Nothing is planned for this "
+                    f"{_DIAS_L[fecha.weekday()].lower()}. The normal week is Monday to "
+                    "Friday; the weekend is added from the Panel.")
             return
 
     try:
@@ -262,7 +263,7 @@ def render_ruta_dia(grupo):
     except Exception:
         campos = []
     if not campos:
-        st.info("No hay usuarios de campo en el grupo.")
+        st.info(t("There are no field users in the group."))
         return
 
     # ── Dónde ficharon DE VERDAD (v307) ──────────────────────────
@@ -299,16 +300,16 @@ def render_ruta_dia(grupo):
                 continue
             prj = P.get_project(pid)
             if not prj:
-                sin_prj.append(f"{nom} — (obra no encontrada)")
+                sin_prj.append(f"{nom} — ({t('site not found')})")
                 continue
             obra = str(prj.get("Nombre", ""))
             # Plan vs real, con las MISMAS tres lecturas que el Panel:
             if pid in _fich_pids:
-                _estado = "🟢 fichado aquí"
+                _estado = t("🟢 clocked in here")
             elif _fich_noms:
-                _estado = "🔴 fichó en " + ", ".join(_fich_noms[:2])
+                _estado = t("🔴 clocked in at") + " " + ", ".join(_fich_noms[:2])
             else:
-                _estado = "⚠️ sin fichar"
+                _estado = t("⚠️ not clocked in")
             c = _coords_de(prj)
             if not c:
                 sin_coord.append(f"{nom} → {obra}")
@@ -321,36 +322,37 @@ def render_ruta_dia(grupo):
             # `continue` y esa persona desaparecía de la tabla — el KPI decía "1 sin
             # ubicación" y no había forma de ver de quién se trataba.
             en_obra.append({"Persona": nom,
-                            "Horario": roster.franja_label(a.get("ini"), a.get("fin")) or "día completo",
-                            "Obra": obra, "Estado": _estado,
-                            "Dirección": str(prj.get("Ubicacion", "")) or "—"})
+                            "Horario": roster.franja_label(a.get("ini"), a.get("fin")) or t("full day"),
+                            t("Site"): obra, t("Status"): _estado,
+                            t("Address"): str(prj.get("Ubicacion", "")) or "—"})
 
     # ── KPIs ACTIVOS, con contexto (mismo criterio que HOME en v303) ──
     _n_pers = len(campos)
     _nav = _KPI_NAV
     k1, k2, k3, k4 = st.columns(4)
-    if k1.button(f":material/engineering: En obra\n\n{len(en_obra)}\n\n"
-                 f"de {_n_pers} persona{'' if _n_pers == 1 else 's'}",
+    if k1.button(f":material/engineering: On site\n\n{len(en_obra)}\n\n"
+                 f"{t('of')} {_n_pers} {t('person') if _n_pers == 1 else t('people')}",
                  key="cpxkpi_rd_obra", width="stretch"):
         _nav("planificacion", "🎛 Panel")
-    if k2.button(f":material/location_on: Sitios\n\n{len(sitios)}\n\n"
-                 + ("con gente hoy" if sitios else "ninguno hoy"),
+    if k2.button(f"{t(':material/location_on: Sites')}\n\n{len(sitios)}\n\n"
+                 + (t("with people today") if sitios else t("none today")),
                  key="cpxkpi_rd_sitios", width="stretch"):
         _nav("proyectos", "📊 Proyectos")
-    if k3.button(f":material/wrong_location: Sin ubicación\n\n{len(sin_coord)}\n\n"
-                 + ("fija el pin" if sin_coord else "todas ubicadas"),
+    if k3.button(f":material/wrong_location: No location\n\n{len(sin_coord)}\n\n"
+                 + (t("set the pin") if sin_coord else t("all located")),
                  key="cpxkpi_rd_sinubic", width="stretch"):
         _nav("proyectos", "📊 Proyectos")
     # ⚠️ El pie NO se corta a lo bruto: `", ".join(nombres)[:18]` partía un nombre por
     # la mitad. Con una persona se dice quién es; con varias, cuántas.
-    _sub_plan = ("todos planificados" if not sin_plan
-                 else (sin_plan[0] if len(sin_plan) == 1 else f"{len(sin_plan)} personas"))
-    if k4.button(f":material/help: Sin plan\n\n{len(sin_plan)}\n\n{_sub_plan}",
+    _sub_plan = (t("all planned") if not sin_plan
+                 else (sin_plan[0] if len(sin_plan) == 1
+                       else f"{len(sin_plan)} {t('people')}"))
+    if k4.button(f":material/help: No plan\n\n{len(sin_plan)}\n\n{_sub_plan}",
                  key="cpxkpi_rd_sinplan", width="stretch"):
         _nav("planificacion", "🎛 Panel")
 
     if not sitios:
-        st.info("Nadie tiene una obra con ubicación asignada para ese día.")
+        st.info(t("Nobody has a site with a location assigned for that day."))
     else:
         # ── Mapa + sitios, lado a lado (v307) ────────────────────
         # Antes el mapa iba a ancho completo (dibujándose a 500 px) y la mitad derecha
@@ -368,37 +370,36 @@ def render_ruta_dia(grupo):
                                numerado=True, key="rutadia_map", height=420):
                 _mapa_respaldo(marcs)
         with col_side:
-            st.markdown("**Sitios de hoy** — en orden de recorrido")
+            st.markdown(t("**Today's sites** — in travel order"))
             for i, s in enumerate(ruta, 1):
                 with st.container(border=True, key=f"rdsitio_{i}"):
                     _n = len(s["personas"])
                     st.markdown(
                         f"**{i}. {s['nombre']}**  \n"
-                        f":gray[{s['dir'] or 'sin dirección'}]  \n"
+                        f":gray[{s['dir'] or t('no address')}]  \n"
                         f":material/group: {_n} persona{'' if _n == 1 else 's'} · "
                         + ", ".join(s["personas"]))
-                    st.link_button("Cómo llegar", gmaps_dir_url([s], desde_actual=True),
+                    st.link_button(t("Directions"), gmaps_dir_url([s], desde_actual=True),
                                    icon=":material/navigation:",
                                    width="stretch")
             if len(ruta) > 1:
-                st.link_button("Abrir la ruta completa en Google Maps",
+                st.link_button(t("Open the full route in Google Maps"),
                                gmaps_dir_url(ruta, desde_actual=False),
                                icon=":material/route:", width="stretch",
                                type="primary")
 
     if en_obra:
         import pandas as pd
-        st.markdown("**Quién va a dónde**")
+        st.markdown(t("**Who goes where**"))
         st.dataframe(pd.DataFrame(en_obra), hide_index=True,
                      width="stretch")
-        st.caption(":material/info: «Estado» compara la planificación con el fichaje "
-                   "real de ese día.")
+        st.caption(t(":material/info: 'Status' compares the plan against the actual clock-ins for that day."))
 
     if sin_coord:
-        st.caption(":orange[:material/warning:] Obra sin ubicación en el mapa (no entra "
-                   "en la ruta): " + " · ".join(sin_coord))
+        st.caption(t(":orange[:material/warning:] Site with no map location (left out of "
+                     "the route)") + ": " + " · ".join(sin_coord))
     if sin_prj:
-        st.caption(":material/info: Asignado a un estado/otro (no es obra): "
+        st.caption(t(":material/info: Assigned to a status/other (not a site)") + ": "
                    + " · ".join(sin_prj))
 
 
