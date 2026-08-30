@@ -3,6 +3,8 @@ Survey Analyzer — UI Streamlit.
 Solo presentación: toda la lógica de cálculo vive en core/.
 """
 import streamlit as st
+
+from core.i18n import t
 import streamlit.components.v1 as components
 import sys, os
 sys.path.insert(0, os.path.dirname(__file__))
@@ -144,8 +146,7 @@ if _time.time() - st.session_state.get("_hb_last", 0) > 50:
     _a = st.session_state.auth
     if not heartbeat(_a.get("usuario", ""), _a.get("token", "")):
         st.session_state.pop("auth", None)
-        st.warning(":material/lock: Tu sesión se cerró: esta cuenta se abrió en otro dispositivo "
-                   "(o expiró por inactividad). Vuelve a iniciar sesión.")
+        st.warning(t(":material/lock: Your session was closed: this account was opened on another device (or it expired through inactivity). Sign in again."))
         st.stop()
 
 # ── Avisos de vencimiento de credenciales (v187): al entrar, 1×/día/grupo ──
@@ -199,27 +200,25 @@ if _ROL == "campo" and not st.session_state.get("_contact_ok"):
     if not _falta_mail and not _falta_tg:
         st.session_state["_contact_ok"] = True
     else:
-        st.markdown("### :material/lock: Falta configurar tu contacto")
+        st.markdown(t("### :material/lock: Your contact details are missing"))
         # ⚠️ Se dice QUIÉN lo resuelve, no solo qué falta: el email no lo puede poner
         # el propio usuario (lo carga su administrador), así que un «pendiente: email»
         # a secas lo deja mirando una pared sin saber a quién pedírselo.
         if _falta_mail and _falta_tg:
-            st.warning("Tu cuenta necesita **email y Telegram**. El **email lo carga tu "
-                       "administrador**; el Telegram lo enlazas tú con el paso de abajo.")
+            st.warning(t("Your account needs **email and Telegram**. The **email is entered by your administrator**; you link the Telegram yourself with the step below."))
         elif _falta_mail:
-            st.warning("Tu cuenta necesita un **email**, y lo carga tu administrador. "
-                       "Avísale y vuelve a entrar — tú no puedes ponerlo desde aquí.")
+            st.warning(t("Your account needs an **email**, and your administrator enters it. Let them know and sign in again — you cannot set it from here."))
         else:
-            st.warning("Solo falta enlazar tu **Telegram**. Es un paso tuyo, aquí abajo.")
+            st.warning(t("All that is left is linking your **Telegram**. That is your step, right below."))
 
         if _falta_tg:
             import re as _re
             _bot  = notify.bot_username()
             _code = _re.sub(r"[^A-Za-z0-9_-]", "", st.session_state.auth.get("usuario", "")) or "user"
-            st.markdown(f"**Tu paso:** abre el bot y pulsa **Start** → "
+            st.markdown(f"**Your step:** open the bot and press **Start** → "
                         f"[t.me/{_bot}](https://t.me/{_bot}?start={_code})")
-            st.caption("Después tu administrador te vincula desde tu ficha.")
-        if st.button(":material/sync: Ya está listo — revisar"):
+            st.caption(t("Your administrator then links you from your record."))
+        if st.button(t(":material/sync: It is done — check again")):
             st.rerun()
         st.stop()
 
@@ -293,7 +292,7 @@ with st.sidebar:
 
         # Limpiar
         if st.session_state.chat_history:
-            if st.button(":material/delete: Limpiar conversación", width="stretch", key="clear_chat_sb"):
+            if st.button(t(":material/delete: Clear the conversation"), width="stretch", key="clear_chat_sb"):
                 st.session_state.chat_history = []
                 st.rerun()
 

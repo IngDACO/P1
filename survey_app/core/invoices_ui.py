@@ -6,6 +6,8 @@ de facturar (ingreso estimado − ya facturado) y las editas libremente antes de
 emitir. Impuesto (GST/IVA) con el default del grupo, editable.
 """
 import pandas as pd
+
+from core.i18n import t
 import streamlit as st
 
 from core import flash
@@ -36,7 +38,7 @@ def render_facturas(grupo):
     # ⚠️ SIN cabecera propia: `home_ui._sub_header` ya pinta «Finanzas · X» encima.
     # Era el 5º título duplicado de la app (v212, v291, v314, v319 y este barrido).
     if not I.is_configured():
-        st.info(":material/info: Configura Google Sheets para gestionar facturas.")
+        st.info(t(":material/info: Configure Google Sheets to manage invoices."))
         return
     if st.session_state.get("_fac_nueva"):
         _nueva_factura(grupo)
@@ -52,20 +54,20 @@ def render_facturas(grupo):
     _venc = sum(_num(f.get("Total")) - _num(f.get("Cobrado"))
                 for f in facturas if I.estado_cobro(f) == "vencida")
     c = st.columns(4)
-    c[0].metric("Facturado", f"${_fac:,.0f}")
-    c[1].metric("Cobrado", f"${_cob:,.0f}")
-    c[2].metric("Por cobrar", f"${_fac - _cob:,.0f}")
-    c[3].metric("Vencido", f"${_venc:,.0f}")
+    c[0].metric(t("Invoiced"), f"${_fac:,.0f}")
+    c[1].metric(t("Collected"), f"${_cob:,.0f}")
+    c[2].metric(t("Outstanding"), f"${_fac - _cob:,.0f}")
+    c[3].metric(t("Overdue"), f"${_venc:,.0f}")
 
-    if st.button(":material/add_circle: Nueva factura", type="primary", key="fac_new_btn"):
+    if st.button(t(":material/add_circle: New invoice"), type="primary", key="fac_new_btn"):
         st.session_state["_fac_nueva"] = True
         st.rerun()
 
     if not facturas:
-        st.caption("Aún no hay facturas. Crea la primera con «Nueva factura».")
+        st.caption(t("No invoices yet. Create the first one with «New invoice»."))
         return
 
-    st.caption("Toca una factura para ver el detalle y registrar cobros.")
+    st.caption(t("Tap an invoice to see the detail and record payments."))
     _rows = sorted(facturas, key=lambda f: str(f.get("Creado", "")), reverse=True)
     df = pd.DataFrame([{
         "Nº":        str(f.get("Numero", "")),
@@ -81,9 +83,9 @@ def render_facturas(grupo):
         df, width="stretch", hide_index=True,
         on_select="rerun", selection_mode="single-row", key="fac_tbl",
         column_config={
-            "Total":     st.column_config.NumberColumn("Total", format="$%,d"),
-            "Cobrado":   st.column_config.NumberColumn("Cobrado", format="$%,d"),
-            "Pendiente": st.column_config.NumberColumn("Pendiente", format="$%,d"),
+            "Total":     st.column_config.NumberColumn(t("Total"), format="$%,d"),
+            "Cobrado":   st.column_config.NumberColumn(t("Collected"), format="$%,d"),
+            "Pendiente": st.column_config.NumberColumn(t("Outstanding"), format="$%,d"),
         })
     _sr = list(_ev.selection.rows)
     if _sr:
@@ -94,12 +96,12 @@ def render_facturas(grupo):
 
 # ── Detalle de una factura ───────────────────────────────────────
 def _detalle_factura(grupo, fid):
-    if st.button(":material/arrow_back: Volver a facturas", key="fac_back"):
+    if st.button(t(":material/arrow_back: Back to invoices"), key="fac_back"):
         st.session_state.pop("_fac_open", None)
         st.rerun()
     f = I.get_factura(fid)
     if not f:
-        st.warning("Factura no encontrada.")
+        st.warning(t("Invoice not found."))
         st.session_state.pop("_fac_open", None)
         return
     # v351: `get_factura` busca por ID en TODA la hoja, sin mirar el grupo.
@@ -109,80 +111,80 @@ def _detalle_factura(grupo, fid):
 
     total, cob = _num(f.get("Total")), _num(f.get("Cobrado"))
     est = I.estado_cobro(f)
-    st.markdown(f"## :material/receipt_long: Factura Nº {f.get('Numero', '')}")
+    st.markdown(f"## :material/receipt_long: Invoice No. {f.get('Numero', '')}")
     st.markdown(f"**{f.get('ClienteNombre', '') or '—'}**  ·  {_EST_FMT.get(est, est)}")
 
     izq, der = st.columns([3, 2])
     with izq:
-        st.markdown("#### :material/list: Líneas")
+        st.markdown(t("#### :material/list: Lines"))
         _ln = I.lineas_de(f)
         if _ln:
             st.dataframe(pd.DataFrame([{
                 "Concepto": str(x.get("concepto", "")),
                 "Importe":  round(_num(x.get("importe")), 2),
             } for x in _ln]), width="stretch", hide_index=True,
-                column_config={"Importe": st.column_config.NumberColumn("Importe", format="$%,.2f")})
+                column_config={"Importe": st.column_config.NumberColumn(t("Amount"), format="$%,.2f")})
         _imp_pct = _num(f.get("ImpuestoPct"))
         from core import theme as _T                      # v309: escapa el `$` (LaTeX)
         st.markdown(f"Subtotal: **{_T.dinero(_num(f.get('Subtotal')))}**  ·  "
-                    f"Impuesto ({_imp_pct:.0f}%): **{_T.dinero(_num(f.get('Impuesto')))}**  ·  "
+                    f"Tax ({_imp_pct:.0f}%): **{_T.dinero(_num(f.get('Impuesto')))}**  ·  "
                     f"Total: **{_T.dinero(total)}**")
         if str(f.get("Nota", "")).strip():
-            st.caption(f"Nota: {f.get('Nota')}")
+            st.caption(f"Note: {f.get('Nota')}")
         try:
             from core import invoice_pdf
             _cli = C.get_cliente(str(f.get("ClienteID", ""))) if f.get("ClienteID") else {}
             _pdf = invoice_pdf.generate_invoice_pdf(f, _cli, grupo)
-            st.download_button(":material/download: Descargar factura (PDF)", data=_pdf,
+            st.download_button(t(":material/download: Download invoice (PDF)"), data=_pdf,
                                file_name=f"Factura_{f.get('Numero', '')}.pdf",
                                mime="application/pdf", key=f"fac_pdf_{fid}")
         except Exception as e:
-            st.caption(f":material/warning: No se pudo generar el PDF: {e}")
+            st.caption(f":material/warning: The PDF could not be generated: {e}")
 
     with der:
-        st.markdown("#### :material/payments: Cobros")
+        st.markdown(t("#### :material/payments: Payments received"))
         # v309: el `help` llevaba DOS importes → perdía los símbolos de moneda.
-        st.metric("Por cobrar", _T.dinero(total - cob),
-                  help=f"Cobrado {_T.dinero(cob)} de {_T.dinero(total)}")
+        st.metric(t("Outstanding"), _T.dinero(total - cob),
+                  help=f"Collected {_T.dinero(cob)} de {_T.dinero(total)}")
         if est != "anulada" and cob < total:
             with st.form(f"cob_{fid}"):
-                _m = st.number_input("Registrar cobro ($)", min_value=0.0,
+                _m = st.number_input(t("Record payment ($)"), min_value=0.0,
                                      max_value=float(round(total - cob, 2)),
                                      value=float(round(total - cob, 2)), step=50.0)
-                _fch = st.date_input("Fecha del cobro", value=clock.today())
-                if st.form_submit_button(":material/check: Registrar cobro", type="primary"):
+                _fch = st.date_input(t("Payment date"), value=clock.today())
+                if st.form_submit_button(t(":material/check: Record payment"), type="primary"):
                     ok, msg = I.registrar_cobro(fid, _m, _fch.isoformat())
                     (flash.exito if ok else st.error)(msg)
                     if ok:
                         st.rerun()
         elif est == "cobrada":
-            st.success(":material/check_circle: Factura cobrada por completo.")
+            st.success(t(":material/check_circle: Invoice fully collected."))
         _cobros = I.cobros_de(f)
         if _cobros:
-            st.caption("Cobros registrados:")
+            st.caption(t("Payments recorded:"))
             for cb in _cobros:
                 st.markdown(f"- {cb.get('fecha', '')}: **${_num(cb.get('monto')):,.2f}**")
         if str(f.get("Estado", "")).lower() != "anulada":
-            with st.expander(":material/block: Anular factura"):
-                st.caption("La saca de las cuentas por cobrar. No se puede deshacer.")
-                if st.button("Anular esta factura", key=f"fac_anul_{fid}"):
+            with st.expander(t(":material/block: Void invoice")):
+                st.caption(t("It is taken out of accounts receivable. This cannot be undone."))
+                if st.button(t("Void this invoice"), key=f"fac_anul_{fid}"):
                     I.anular(fid)
                     st.rerun()
 
 
 # ── Nueva factura ────────────────────────────────────────────────
 def _nueva_factura(grupo):
-    if st.button(":material/arrow_back: Cancelar", key="fac_new_back"):
+    if st.button(t(":material/arrow_back: Cancel"), key="fac_new_back"):
         st.session_state.pop("_fac_nueva", None)
         st.rerun()
-    st.markdown("## :material/add_circle: Nueva factura")
+    st.markdown(t("## :material/add_circle: New invoice"))
 
     fichas = C.list_clientes(grupo)
     if not fichas:
-        st.info(":material/info: Primero crea un cliente en 👥 Contactos.")
+        st.info(t(":material/info: Create a client first in 👥 Contacts."))
         return
     _by_name = {c.get("Nombre", ""): c for c in fichas}
-    cli_sel = st.selectbox(":material/contacts: Cliente", list(_by_name.keys()), key="fac_cli")
+    cli_sel = st.selectbox(t(":material/contacts: Client"), list(_by_name.keys()), key="fac_cli")
     cli = _by_name.get(cli_sel, {})
     cid = str(cli.get("ID", ""))
     cnorm = C._norm(cli.get("Nombre"))
@@ -198,10 +200,9 @@ def _nueva_factura(grupo):
              if C.es_del_cliente(p, cid, cnorm)
              and str(p.get("ID", "")) not in {str(x.get("ID", "")) for x in prjs}]
     if _arch:
-        if st.checkbox(f":material/archive: Incluir obras archivadas ({len(_arch)})",
+        if st.checkbox(f":material/archive: Include archived sites ({len(_arch)})",
                        key="fac_ver_arch",
-                       help="Archivar no es no-cobrar: lo habitual es archivar al terminar "
-                            "y facturar después."):
+                       help=t("Archiving is not the same as not charging: the usual thing is to archive when the job ends and invoice afterwards.")):
             prjs = prjs + _arch
 
     # ⚠️ v358: si el atajo desde el proyecto apunta a una obra que no está en la lista, se
@@ -248,9 +249,8 @@ def _nueva_factura(grupo):
         else:
             # ⚠️ Antes, si el proyecto no estaba en la lista, `_et` era None y NO se
             # decía nada: el usuario acababa en «Todo el cliente» sin saber por qué.
-            st.info(":material/info: No se pudo preseleccionar ese proyecto para este "
-                    "cliente (revisa a qué cliente está enlazado). Elige el alcance a mano.")
-    _scope = st.radio("Alcance", ["Todo el cliente"] + prj_names, horizontal=True, key="fac_scope")
+            st.info(t(":material/info: That project could not be preselected for this client (check which client it is linked to). Choose the scope by hand."))
+    _scope = st.radio(t("Scope"), ["Todo el cliente"] + prj_names, horizontal=True, key="fac_scope")
     _scope_prjs = (prjs if _scope == "Todo el cliente"
                    else [p for p in prjs if _lbl.get(str(p.get("ID", ""))) == _scope])
 
@@ -264,23 +264,22 @@ def _nueva_factura(grupo):
     if not _pre:
         _pre = [{"Concepto": "", "Proyecto": "(ninguno)", "Importe": 0.0}]
 
-    st.caption("Líneas de la factura — edita, agrega o quita. El «Proyecto» enlaza la línea para "
-               "no volver a facturarla.")
+    st.caption(t("Invoice lines — edit, add or remove. The «Project» links the line so it is not invoiced twice."))
     _ed = st.data_editor(
         pd.DataFrame(_pre), num_rows="dynamic", width="stretch", key="fac_lineas",
         column_config={
-            "Concepto": st.column_config.TextColumn("Concepto", width="large"),
+            "Concepto": st.column_config.TextColumn(t("Item"), width="large"),
             "Proyecto": st.column_config.SelectboxColumn(
-                "Proyecto", options=["(ninguno)"] + prj_names, required=False),
-            "Importe":  st.column_config.NumberColumn("Importe", format="$%,.2f", min_value=0.0),
+                t("Project"), options=["(ninguno)"] + prj_names, required=False),
+            "Importe":  st.column_config.NumberColumn(t("Amount"), format="$%,.2f", min_value=0.0),
         })
 
     c1, c2, c3 = st.columns(3)
-    _fecha = c1.date_input("Fecha", value=clock.today(), key="fac_fecha")
-    _venc = c2.date_input("Vencimiento", value=clock.today(), key="fac_venc")
-    _imp = c3.number_input("Impuesto % (GST/IVA)", min_value=0.0, max_value=100.0, step=1.0,
+    _fecha = c1.date_input(t("Date"), value=clock.today(), key="fac_fecha")
+    _venc = c2.date_input(t("Due date"), value=clock.today(), key="fac_venc")
+    _imp = c3.number_input(t("Tax % (GST/VAT)"), min_value=0.0, max_value=100.0, step=1.0,
                            value=float(auth.group_tax_default(grupo)), key="fac_imp")
-    _nota = st.text_input("Nota (opcional)", key="fac_nota")
+    _nota = st.text_input(t("Note (optional)"), key="fac_nota")
 
     # Vista previa de totales
     _lineas = []
@@ -297,12 +296,12 @@ def _nueva_factura(grupo):
     # ⚠️ `theme.dinero` escapa el `$`: con dos importes en la misma línea Streamlit
     # renderizaba esto como una FÓRMULA LaTeX ilegible (v309).
     from core import theme as _T
-    st.markdown(f"Subtotal **{_T.dinero(_sub)}**  ·  Impuesto **{_T.dinero(_impv)}**  ·  "
+    st.markdown(f"Subtotal **{_T.dinero(_sub)}**  ·  Tax **{_T.dinero(_impv)}**  ·  "
                 f"Total **{_T.dinero(_sub + _impv)}**")
 
-    if st.button(":material/receipt_long: Emitir factura", type="primary", key="fac_emit"):
+    if st.button(t(":material/receipt_long: Issue invoice"), type="primary", key="fac_emit"):
         if not _lineas:
-            st.error("Agrega al menos una línea con importe.")
+            st.error(t("Add at least one line with an amount."))
             return
         ok, res = I.create_factura(
             grupo=grupo, cliente_id=cid, cliente_nombre=cli.get("Nombre", ""),

@@ -16,7 +16,9 @@ Rol…), donde el valor por defecto sí ayuda y no dispara ninguna acción.
 """
 import streamlit as st
 
-SIN_SELECCION = "— elige una opción —"
+# ⚠️ NO se envuelve en `t()`: es una CONSTANTE de módulo, evaluada al importar, y el
+# idioma se resuelve por sesión. `elegir()` la traduce al pintarla.
+SIN_SELECCION = "— choose an option —"
 
 
 def elegir(label: str, opciones, key: str, vacio: str = None, **kw):
@@ -34,7 +36,7 @@ def elegir(label: str, opciones, key: str, vacio: str = None, **kw):
     return opciones[sel] if es_dict else sel
 
 
-def confirmar_borrado(key: str, texto: str = "Confirmo que quiero eliminarlo") -> bool:
+def confirmar_borrado(key: str, texto: str = "I confirm I want to delete it") -> bool:
     """Casilla de confirmación para acciones irreversibles.
 
     El desplegable neutro evita apuntar al destino equivocado, pero no el clic

@@ -13,6 +13,8 @@ El mapa geocodifica la `Ubicacion` de texto con OpenStreetMap/Nominatim (sin API
 cacheado). Cuando se valide el look, se decide Google Maps y/o un campo de coordenadas.
 """
 import logging
+
+from core.i18n import t
 import streamlit as st
 import pandas as pd
 
@@ -229,9 +231,9 @@ def _slug(sub_id: str) -> str:
     guarda: si mañana cambia el emoji, el enlace sigue funcionando.
     """
     import unicodedata
-    t = unicodedata.normalize("NFD", str(sub_id or "").lower())
-    t = "".join(c for c in t if unicodedata.category(c) not in ("Mn", "So", "Cn"))
-    return "-".join("".join(ch if ch.isalnum() else " " for ch in t).split())
+    _s = unicodedata.normalize("NFD", str(sub_id or "").lower())
+    _s = "".join(c for c in _s if unicodedata.category(c) not in ("Mn", "So", "Cn"))
+    return "-".join("".join(ch if ch.isalnum() else " " for ch in _s).split())
 
 
 def _sub_por_slug(seccion: str, slug: str):
@@ -396,7 +398,7 @@ def sidebar_menu() -> str:
     _css.append("</style>")
     st.markdown("".join(_css), unsafe_allow_html=True)
 
-    st.markdown("###### NAVEGACIÓN")
+    st.markdown(t("###### NAVIGATION"))
     for _k, _lbl in _SECS:
         _has = _k in _SUBS
         _open = _has and _k == _exp
@@ -449,7 +451,7 @@ def render_topbar(grupo):
                 unsafe_allow_html=True)
     cback, c1, cver, c2 = st.columns([1, 7, 1.4, 1])
     with cback:
-        if st.button("←", key="nav_back_btn", help="Volver atrás",
+        if st.button("←", key="nav_back_btn", help=t("Go back"),
                      width="stretch", disabled=not puede_atras()):
             ir_atras()
     with c1:
@@ -462,8 +464,8 @@ def render_topbar(grupo):
             # siguiente. Escribirla después daría StreamlitAPIException.
             if st.session_state.pop("_search_clear", False):
                 st.session_state["topbar_search"] = ""
-            st.text_input("Buscar", key="topbar_search", label_visibility="collapsed",
-                          placeholder="Buscar proyectos, personas, trabajos…")
+            st.text_input(t("Search"), key="topbar_search", label_visibility="collapsed",
+                          placeholder=t("Search projects, people, jobs…"))
     with cver:
         # v297: la versión vivía en la banda azul COPEX de la nav vieja. Esa banda no
         # vuelve (el admin lleva sin ella desde v190 y no se echó en falta), pero la
@@ -530,7 +532,7 @@ def _banda_prestart():
                 f'<b>{_nom}</b> ya está hecha, pero tú no constas entre quienes '
                 f'la firmaron.</span></div>', unsafe_allow_html=True)
         with c2:
-            if st.button(":material/draw: Firmar", key="banda_ps_firmar",
+            if st.button(t(":material/draw: Sign"), key="banda_ps_firmar",
                          type="primary", width="stretch"):
                 from core.timeclock_ui import _ir_a_prestart
                 _ir_a_prestart()
@@ -548,7 +550,7 @@ def _banda_prestart():
             f'<b>{_nom}</b> y hoy nadie ha registrado la charla de seguridad.</span></div>',
             unsafe_allow_html=True)
     with c2:
-        if st.button(":material/health_and_safety: Hacerlo", key="banda_ps_ir",
+        if st.button(t(":material/health_and_safety: Do it"), key="banda_ps_ir",
                      type="primary", width="stretch"):
             from core.timeclock_ui import _ir_a_prestart
             _ir_a_prestart()
@@ -557,8 +559,8 @@ def _banda_prestart():
 def _norm_busq(s) -> str:
     """Minúsculas y sin acentos: buscar «grua» tiene que encontrar «grúa»."""
     import unicodedata
-    t = unicodedata.normalize("NFD", str(s or "").strip().lower())
-    return "".join(c for c in t if unicodedata.category(c) != "Mn")
+    _s = unicodedata.normalize("NFD", str(s or "").strip().lower())
+    return "".join(c for c in _s if unicodedata.category(c) != "Mn")
 
 
 def buscar(q: str, grupo) -> list:
@@ -630,9 +632,9 @@ def buscar(q: str, grupo) -> list:
         from core import roster as R
         # Solo el catálogo (TRB-####): los proyectos ya salen arriba y `trabajos_idx`
         # los mete como entradas sintéticas, así que usarlo aquí los duplicaría.
-        for t in R.list_trabajos(grupo, incluir_inactivos=True):
-            tid = str(t.get("ID", ""))
-            r = _rank(tid, t.get("Nombre"), t.get("Numero"))
+        for _trb in R.list_trabajos(grupo, incluir_inactivos=True):
+            tid = str(_trb.get("ID", ""))
+            r = _rank(tid, _trb.get("Nombre"), _trb.get("Numero"))
             if r is None:
                 continue
             _num = str(t.get("Numero", "")).strip()
@@ -668,19 +670,18 @@ def _pantalla_busqueda(q: str, grupo) -> bool:
     if not qn:
         return False
     if len(_norm_busq(qn)) < 2:
-        st.caption(":material/search: Escribe al menos dos letras.")
+        st.caption(t(":material/search: Type at least two letters."))
         return True
 
     res = buscar(qn, grupo)
     _c1, _c2 = st.columns([6, 1])
-    _c1.markdown(f"#### :material/search: {len(res)} resultado(s) para «{qn}»")
-    if _c2.button("Limpiar", key="busq_limpiar", width="stretch"):
+    _c1.markdown(f"#### :material/search: {len(res)} result(s) for «{qn}»")
+    if _c2.button(t("Clear"), key="busq_limpiar", width="stretch"):
         st.session_state["_search_clear"] = True
         st.rerun()
 
     if not res:
-        st.info(":material/search_off: Sin coincidencias en proyectos, personas ni "
-                "trabajos. Se busca por nombre, ID, cliente, ubicación, login y correo.")
+        st.info(t(":material/search_off: No matches in projects, people or jobs. The search covers name, ID, client, location, login and email."))
         return True
 
     _ETQ = {"proyecto": "Proyectos", "persona": "Personas", "trabajo": "Trabajos"}
@@ -694,7 +695,7 @@ def _pantalla_busqueda(q: str, grupo) -> bool:
                          key=f"busq_{_tipo}_{_i}", width="stretch"):
                 _abrir_resultado(_r)
         if len(_grupo_res) > 12:
-            st.caption(f"…y {len(_grupo_res) - 12} más. Afina el término.")
+            st.caption(f"…y {len(_grupo_res) - 12} more. Narrow the term.")
     return True
 
 
@@ -767,9 +768,9 @@ def _campana(grupo):
     label = (f":material/notifications: {len(alerts)}" if alerts
              else ":material/notifications:")
     with st.popover(label, width="stretch"):
-        st.markdown(":material/notifications: **Alertas**")
+        st.markdown(t(":material/notifications: **Alerts**"))
         if not alerts:
-            st.caption("Sin alertas por ahora.")
+            st.caption(t("No alerts for now."))
         for a in alerts:
             st.markdown(f"- {a}")
 
@@ -921,7 +922,7 @@ def _seccion_finanzas(grupo):
 def _hub_herramientas():
     """Hub/entrada de Herramientas (v231): una tarjeta por herramienta (qué hace + Abrir).
     «Abrir» navega a la sub-pestaña de esa herramienta."""
-    st.caption("Elige una herramienta:")
+    st.caption(t("Choose a tool:"))
     _desc = {
         "📐 Survey": "Posicionamiento del hueco y matriz de solución; genera los informes "
                      "del cliente y de obra.",
@@ -943,7 +944,7 @@ def _hub_herramientas():
             with _cols[_j].container(border=True):
                 st.markdown(f"#### {_dispv}")
                 st.caption(_desc.get(_id, ""))
-                if st.button("Abrir →", key=f"hubherr_{_i}", width="stretch"):
+                if st.button(t("Open →"), key=f"hubherr_{_i}", width="stretch"):
                     navegar("herramientas", _id)
 
 
@@ -987,13 +988,13 @@ def render_home(grupo):
     col_map, col_pro, col_ag = st.columns([2, 1.5, 1.5], gap="large")
     with col_map:
         PU.render_kpis(grupo)          # los 3 KPIs son la cabecera de esta columna
-        st.markdown("#### :material/map: Proyectos activos")
+        st.markdown(t("#### :material/map: Active projects"))
         _mapa_proyectos(grupo)
     with col_pro:
-        st.markdown("#### :material/folder: Proyectos")
+        st.markdown(t("#### :material/folder: Projects"))
         _proyectos_home(grupo)
     with col_ag:
-        st.markdown("#### :material/list: Agenda de hoy")
+        st.markdown(t("#### :material/list: Today's schedule"))
         _agenda_hoy(grupo)
 
 
@@ -1010,7 +1011,7 @@ def _mapa_proyectos(grupo):
     except Exception:
         proys = []
     if not proys:
-        st.info("No hay proyectos activos ahora mismo.")
+        st.info(t("There are no active projects right now."))
         return
 
     filas, sin_ubic = [], []
@@ -1044,7 +1045,7 @@ def _mapa_proyectos(grupo):
             _out = st_folium(m, key="home_map", height=380,
                              use_container_width=True,
                              returned_objects=["last_object_clicked"])
-            st.caption(":material/place: Toca un pin para abrir el proyecto.")
+            st.caption(t(":material/place: Tap a pin to open the project."))
             # v199: pin ACTIVO → abre ese proyecto (reusa _prjsel_pending del panel)
             _clk = (_out or {}).get("last_object_clicked")
             if _clk:
@@ -1066,8 +1067,7 @@ def _mapa_proyectos(grupo):
                    color="#c0392b", size=80)
             st.caption(":material/place: " + "  ·  ".join(f["nombre"] for f in filas))
     else:
-        st.info("Ninguno de los proyectos en ejecución tiene ubicación todavía. "
-                "Fíjala editando el proyecto → :material/map: Ubicación en el mapa.")
+        st.info(t("None of the running projects has a location yet. Set it by editing the project → :material/map: Location on the map."))
     if sin_ubic:
         st.caption(":orange[:material/warning:] Sin ubicación en el mapa: " + ", ".join(sin_ubic))
 
@@ -1078,7 +1078,7 @@ def _resumen_proyecto_home(grupo, pid):
     para ir al proyecto completo. Se abre al tocar un pin del mapa o un proyecto de la lista."""
     from core import projects as P
     from core import alerts
-    if st.button("← Volver a la lista", key="hpr_back"):
+    if st.button(t("← Back to the list"), key="hpr_back"):
         st.session_state.pop("_home_proj_sel", None)
         st.rerun()
     # v422: resolución por ID — mapa de identidad, no lista de obras.
@@ -1086,7 +1086,7 @@ def _resumen_proyecto_home(grupo, pid):
                                            incluir_internos=True)
                 if str(p.get("ID", "")) == str(pid)), None)
     if not prj:
-        st.warning("Proyecto no encontrado.")
+        st.warning(t("Project not found."))
         return
     av = max(0, min(100, int(P._num(prj.get("Avance")))))
     try:
@@ -1130,7 +1130,7 @@ def _resumen_proyecto_home(grupo, pid):
         except Exception:
             st.caption(f":material/place: {_ub}")
     st.markdown("")
-    if st.button("→ Ver proyecto completo", key="hpr_full", type="primary",
+    if st.button(t("→ See the full project"), key="hpr_full", type="primary",
                  width="stretch"):
         st.session_state.pop("_home_proj_sel", None)
         st.session_state["_prjsel_pending"] = str(pid)
@@ -1152,7 +1152,7 @@ def _proyectos_home(grupo):
     except Exception:
         proys = []
     if not proys:
-        st.info("No hay proyectos activos ahora mismo.")
+        st.info(t("There are no active projects right now."))
         return
     try:
         delays = P.delays_of_group(grupo)
@@ -1167,7 +1167,7 @@ def _proyectos_home(grupo):
         return (-delays.get(_pid, 0), -alarmas.get(_pid, 0), P._num(p.get("Avance")))
     proys.sort(key=_urg)
 
-    st.caption(f"{len(proys)} activo(s) · ordenados por urgencia")
+    st.caption(f"{len(proys)} active · sorted by urgency")
     _css = ["<style>"]
     for _i, p in enumerate(proys):
         _pid = str(p.get("ID", ""))
@@ -1218,14 +1218,14 @@ def _agenda_hoy(grupo):
     except Exception:
         sem, tidx = {}, {}
     if dia in R.DIAS_EXTRA and not R.dia_tiene_datos(sem, dia):
-        st.info(f"Hoy es {R.DIAS_LABEL[dia].lower()} y no hay nada planificado. "
-                f"La semana normal es de lunes a viernes; el fin de semana se "
-                f"añade desde el Panel cuando hace falta.")
+        st.info(f"Today is {R.DIAS_LABEL[dia].lower()} and nothing is planned. "
+                f"The normal week is Monday to Friday; the weekend is "
+                f"added from the Board when it is needed.")
         return
 
     staff = [u for u in auth.list_users(grupo) if str(u.get("Rol", "")).lower() == "campo"]
     if not staff:
-        st.info("No hay personal de campo en el grupo.")
+        st.info(t("There is no field staff in this company."))
         return
 
     try:
@@ -1236,7 +1236,7 @@ def _agenda_hoy(grupo):
     except Exception:
         pmap = {}
 
-    st.caption(f"{R.DIAS_LABEL[dia]} · {len(staff)} personas")
+    st.caption(f"{R.DIAS_LABEL[dia]} · {len(staff)} people")
 
     n_asig = n_off = n_leave = n_sin = 0
     filas = []

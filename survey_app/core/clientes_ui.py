@@ -6,6 +6,8 @@ abren el proyecto en la sección Proyectos). El enlace cliente↔proyecto usa
 `ClienteID` (ID-primero) con respaldo por el texto `Cliente` — ver `core/clientes.py`.
 """
 import pandas as pd
+
+from core.i18n import t
 import streamlit as st
 
 from core import flash
@@ -38,9 +40,9 @@ def _agregados(proys, horas, alarmas, costos):
 
 # ── Vista principal ──────────────────────────────────────────────
 def render_contactos(grupo):
-    st.markdown("## :material/contacts: Clientes")
+    st.markdown(t("## :material/contacts: Clients"))
     if not C.is_configured():
-        st.info(":material/info: Configura Google Sheets para gestionar clientes.")
+        st.info(t(":material/info: Configure Google Sheets to manage clients."))
         return
 
     # Detalle abierto (clave = nombre normalizado del cliente)
@@ -54,15 +56,14 @@ def render_contactos(grupo):
     # los oculta — sin casilla para verlos ni botón para restaurar. Desaparecía y no
     # había forma de recuperarlo desde la app. Es exactamente lo que v149 arregló
     # para los proyectos y a los clientes nunca se les aplicó.
-    _ver_arch = st.checkbox(":material/archive: Ver también los archivados",
+    _ver_arch = st.checkbox(t(":material/archive: Show archived ones too"),
                             key="cli_ver_arch",
-                            help="Los archivados dejan de listarse, pero no se borran: "
-                                 "sus proyectos, horas y facturas siguen intactos.")
+                            help=t("Archived ones stop being listed, but are not deleted: their projects, hours and invoices stay intact."))
     fichas  = C.list_clientes(grupo, incluir_inactivos=_ver_arch)
     _n_arch = len([f for f in C.list_clientes(grupo, incluir_inactivos=True)
                    if str(f.get("Activo", "SI")).upper() in ("NO", "FALSE", "0")])
     if _n_arch and not _ver_arch:
-        st.caption(f":material/inventory_2: {_n_arch} cliente(s) archivado(s) oculto(s).")
+        st.caption(f":material/inventory_2: {_n_arch} archived client(s) hidden.")
     proys   = P.list_projects(grupo=grupo)
     horas   = P.project_hours_bulk(grupo)
     alarmas = alerts.open_counts_all() if alerts.is_configured() else {}
@@ -82,7 +83,7 @@ def render_contactos(grupo):
 
     all_keys = set(by_client) | set(fichas_by_norm)
     if not all_keys:
-        st.caption("Aún no hay clientes. Crea el primero, o crea proyectos con un cliente.")
+        st.caption(t("No clients yet. Create the first one, or create projects with a client."))
         _nuevo_cliente_form(grupo)
         return
 
@@ -101,22 +102,22 @@ def render_contactos(grupo):
     # Fila de salud
     _con_ficha = sum(1 for r in rows if r["ficha"])
     c = st.columns(4)
-    c[0].metric("Clientes", len(rows))
-    c[1].metric("Con ficha", _con_ficha)
-    c[2].metric("Sin ficha", len(rows) - _con_ficha)
-    c[3].metric("Proyectos", sum(r["total"] for r in rows))
+    c[0].metric(t("Clients"), len(rows))
+    c[1].metric(t("With record"), _con_ficha)
+    c[2].metric(t("No record"), len(rows) - _con_ficha)
+    c[3].metric(t("Projects"), sum(r["total"] for r in rows))
 
     # Buscador
-    _q = st.text_input(":material/search: Buscar cliente, contacto, teléfono o email",
-                       key="cli_q", placeholder="escribe para filtrar…").strip().lower()
+    _q = st.text_input(t(":material/search: Search client, contact, phone or email"),
+                       key="cli_q", placeholder=t("type to filter…")).strip().lower()
     if _q:
         rows = [r for r in rows if _q in " ".join([
             r["disp"], r["Contacto"], r["Telefono"], r["Email"]]).lower()]
-    st.caption(f"Toca un cliente para ver su ficha, su resumen y sus proyectos. "
-               f"({len(rows)} cliente(s))")
+    st.caption(f"Tap a client to see its record, summary and projects. "
+               f"({len(rows)} client(s))")
 
     if not rows:
-        st.info(":material/search_off: Ningún cliente coincide con la búsqueda.")
+        st.info(t(":material/search_off: No client matches the search."))
         _nuevo_cliente_form(grupo)
         return
 
@@ -135,9 +136,9 @@ def render_contactos(grupo):
         "Alarmas":   str(r["al"]) if r["al"] else "",
     } for r in rows])
     _colcfg = {"Avance": st.column_config.ProgressColumn(
-        "Avance", min_value=0, max_value=100, format="%d%%")}
+        t("Progress"), min_value=0, max_value=100, format="%d%%")}
     if _hay_costo:
-        _colcfg["Costo"] = st.column_config.NumberColumn("Costo", format="$%,d")
+        _colcfg["Costo"] = st.column_config.NumberColumn(t("Cost"), format="$%,d")
     _ev = st.dataframe(
         df, width="stretch", hide_index=True,
         on_select="rerun", selection_mode="single-row", key="cli_tbl",
@@ -154,7 +155,7 @@ def render_contactos(grupo):
 
 # ── Detalle de un cliente ────────────────────────────────────────
 def _detalle_cliente(grupo, key):
-    if st.button(":material/arrow_back: Volver a clientes", key="cli_back"):
+    if st.button(t(":material/arrow_back: Back to clients"), key="cli_back"):
         st.session_state.pop("_cli_open", None)
         st.rerun()
 
@@ -168,22 +169,21 @@ def _detalle_cliente(grupo, key):
 
     st.markdown(f"## :material/apartment: {disp}")
     if not f:
-        st.info(":material/info: Este cliente aún **no tiene ficha** — sale de sus proyectos. "
-                "Completa el contacto abajo y guarda para crear su ficha (y poder vincular proyectos).")
+        st.info(t(":material/info: This client **has no record yet** — it comes from its projects. Fill in the contact below and save to create the record (and be able to link projects)."))
 
     izq, der = st.columns([3, 2])
 
     # Ficha de contacto (crea si no existe, edita si existe)
     with izq:
-        st.markdown("#### :material/contact_page: Ficha de contacto")
+        st.markdown(t("#### :material/contact_page: Contact record"))
         with st.form(f"cli_form_{key}"):
-            _con = st.text_input("Persona de contacto", value=f.get("Contacto", ""))
+            _con = st.text_input(t("Contact person"), value=f.get("Contacto", ""))
             cc = st.columns(2)
-            _tel  = cc[0].text_input("Teléfono", value=f.get("Telefono", ""))
-            _mail = cc[1].text_input("Email", value=f.get("Email", ""))
-            _dir  = st.text_input("Dirección", value=f.get("Direccion", ""))
-            _notas = st.text_area("Notas", value=f.get("Notas", ""), height=110)
-            _save = st.form_submit_button(":material/save: Guardar ficha", type="primary")
+            _tel  = cc[0].text_input(t("Phone"), value=f.get("Telefono", ""))
+            _mail = cc[1].text_input(t("Email"), value=f.get("Email", ""))
+            _dir  = st.text_input(t("Address"), value=f.get("Direccion", ""))
+            _notas = st.text_area(t("Notes"), value=f.get("Notas", ""), height=110)
+            _save = st.form_submit_button(t(":material/save: Save record"), type="primary")
         if _save:
             campos = {"Contacto": _con, "Telefono": _tel, "Email": _mail,
                       "Direccion": _dir, "Notas": _notas}
@@ -193,7 +193,7 @@ def _detalle_cliente(grupo, key):
                 ok, msg = C.create_cliente(grupo, disp, _con, _tel, _mail, _dir,
                                            _notas, creado_por=_creado_por())
             if ok:
-                flash.exito("Ficha guardada.")
+                flash.exito(t("Record saved."))
                 st.rerun()
             else:
                 st.error(msg)
@@ -202,49 +202,47 @@ def _detalle_cliente(grupo, key):
 
     # Resumen
     with der:
-        st.markdown("#### :material/insights: Resumen")
+        st.markdown(t("#### :material/insights: Summary"))
         horas   = P.project_hours_bulk(grupo)
         alarmas = alerts.open_counts_all() if alerts.is_configured() else {}
         costos  = ({str(r["id"]): _num(r.get("total")) for r in expenses.group_expenses(grupo)["proyectos"]}
                    if expenses.is_configured() else {})
         activos, av, hrs, cost, al = _agregados(proys, horas, alarmas, costos)
         r1 = st.columns(2)
-        r1[0].metric("Proyectos", len(proys))
-        r1[1].metric("Activos", activos)
+        r1[0].metric(t("Projects"), len(proys))
+        r1[1].metric(t("Active"), activos)
         r2 = st.columns(2)
-        r2[0].metric("Avance prom.", f"{av:.0f}%")
-        r2[1].metric("Horas", f"{hrs:.1f}")
+        r2[0].metric(t("Avg. progress"), f"{av:.0f}%")
+        r2[1].metric(t("Hours"), f"{hrs:.1f}")
         if expenses.is_configured():
-            st.metric("Costo total", f"${cost:,.0f}")
+            st.metric(t("Total cost"), f"${cost:,.0f}")
         if al:
-            st.markdown(f":red[:material/notifications:] **{al}** alarma(s) abierta(s)")
+            st.markdown(f":red[:material/notifications:] **{al}** open alert(s)")
         if cid:
             # v340: archivar y RESTAURAR. Antes solo se podía archivar y el cliente
             # desaparecía sin vuelta atrás.
             _ficha = C.get_cliente(cid)
             _archivado = str(_ficha.get("Activo", "SI")).upper() in ("NO", "FALSE", "0")
             if _archivado:
-                st.warning(":material/archive: Esta ficha está **archivada**: no aparece "
-                           "en la lista salvo que marques «Ver también los archivados».")
-                if st.button(":material/restore: Restaurar esta ficha",
+                st.warning(t(":material/archive: This record is **archived**: it does not show in the list unless you tick «Show archived ones too»."))
+                if st.button(t(":material/restore: Restore this record"),
                              key=f"cli_rest_{cid}", type="primary"):
                     ok, msg = C.set_activo(cid, True)
                     (flash.exito if ok else st.error)(msg)
                     if ok:
                         st.rerun()
             else:
-                with st.expander(":material/archive: Archivar cliente"):
-                    st.caption("Deja de listarse; sus proyectos no se tocan. Para volver "
-                               "a verlo, marca «Ver también los archivados» en la lista.")
-                    if st.button("Archivar esta ficha", key=f"cli_arch_{cid}"):
+                with st.expander(t(":material/archive: Archive client")):
+                    st.caption(t("It stops being listed; its projects are untouched. To see it again, tick «Show archived ones too» in the list."))
+                    if st.button(t("Archive this record"), key=f"cli_arch_{cid}"):
                         C.set_activo(cid, False)
                         st.session_state.pop("_cli_open", None)
                         st.rerun()
 
     # Proyectos del cliente (ancho completo, clickeables)
-    st.markdown("#### :material/folder: Proyectos de este cliente")
+    st.markdown(t("#### :material/folder: Projects for this client"))
     if not proys:
-        st.caption("Aún no tiene proyectos vinculados.")
+        st.caption(t("No linked projects yet."))
     else:
         cols = st.columns(2)
         for i, p in enumerate(sorted(proys, key=lambda x: str(x.get("Nombre", "")).lower())):
@@ -259,31 +257,31 @@ def _detalle_cliente(grupo, key):
     if cid:
         otros = [p for p in P.list_projects(grupo=grupo) if not C.es_del_cliente(p, cid, key)]
         if otros:
-            with st.expander(":material/link: Vincular otros proyectos a este cliente"):
-                st.caption("Útil si el proyecto tiene otro texto en «Cliente» o quedó sin vincular.")
+            with st.expander(t(":material/link: Link other projects to this client")):
+                st.caption(t("Useful if the project has different text in «Client» or was left unlinked."))
                 _opts = {f"{p.get('Nombre', '')} ({p.get('ID', '')})": str(p.get("ID", ""))
                          for p in otros}
-                _sel = st.multiselect("Proyectos a vincular", list(_opts.keys()),
+                _sel = st.multiselect(t("Projects to link"), list(_opts.keys()),
                                       key=f"cli_link_{cid}")
-                if st.button(":material/link: Vincular seleccionados", key=f"cli_linkbtn_{cid}"):
+                if st.button(t(":material/link: Link selected"), key=f"cli_linkbtn_{cid}"):
                     if _sel:
                         for _lbl in _sel:
                             P.update_project(_opts[_lbl], {"ClienteID": cid, "Cliente": disp})
-                        flash.exito(f"{len(_sel)} proyecto(s) vinculado(s).")
+                        flash.exito(f"{len(_sel)} project(s) linked.")
                         st.rerun()
                     else:
-                        st.warning("Elige al menos un proyecto.")
+                        st.warning(t("Choose at least one project."))
 
     # ── Estado de cuenta: facturas del cliente (v259) ──
     from core import invoices as INV
     if cid and INV.is_configured():
-        st.markdown("#### :material/receipt: Facturación")
+        st.markdown(t("#### :material/receipt: Invoicing"))
         rc = INV.resumen_cliente(grupo, cid)
         fc = st.columns(4)
-        fc[0].metric("Facturado", f"${rc['facturado']:,.0f}")
-        fc[1].metric("Cobrado", f"${rc['cobrado']:,.0f}")
-        fc[2].metric("Pendiente", f"${rc['pendiente']:,.0f}")
-        fc[3].metric("Vencido", f"${rc['vencido']:,.0f}")
+        fc[0].metric(t("Invoiced"), f"${rc['facturado']:,.0f}")
+        fc[1].metric(t("Collected"), f"${rc['cobrado']:,.0f}")
+        fc[2].metric(t("Outstanding"), f"${rc['pendiente']:,.0f}")
+        fc[3].metric(t("Overdue"), f"${rc['vencido']:,.0f}")
         _facs = INV.list_facturas(grupo, cid)
         if _facs:
             _fr = sorted(_facs, key=lambda x: str(x.get("Creado", "")), reverse=True)
@@ -297,8 +295,8 @@ def _detalle_cliente(grupo, key):
             _fev = st.dataframe(
                 _fdf, width="stretch", hide_index=True,
                 on_select="rerun", selection_mode="single-row", key=f"cli_facs_{cid}",
-                column_config={"Total": st.column_config.NumberColumn("Total", format="$%,d"),
-                               "Cobrado": st.column_config.NumberColumn("Cobrado", format="$%,d")})
+                column_config={"Total": st.column_config.NumberColumn(t("Total"), format="$%,d"),
+                               "Cobrado": st.column_config.NumberColumn(t("Collected"), format="$%,d")})
             _fs = list(_fev.selection.rows)
             if _fs:
                 st.session_state["_fac_open"] = str(_fr[_fs[0]].get("ID", ""))
@@ -306,8 +304,8 @@ def _detalle_cliente(grupo, key):
                 st.session_state.pop(f"cli_facs_{cid}", None)
                 st.rerun()
         else:
-            st.caption("Sin facturas todavía.")
-        if st.button(":material/add_circle: Nueva factura para este cliente", key=f"cli_newfac_{cid}"):
+            st.caption(t("No invoices yet."))
+        if st.button(t(":material/add_circle: New invoice for this client"), key=f"cli_newfac_{cid}"):
             st.session_state["_fac_nueva"] = True
             st.session_state["fac_cli"] = disp   # preselecciona el cliente en el form de factura
             st.session_state["_admin_nav_pending"] = ("finanzas", "🧾 Facturas")
@@ -316,22 +314,22 @@ def _detalle_cliente(grupo, key):
 
 # ── Alta de cliente ──────────────────────────────────────────────
 def _nuevo_cliente_form(grupo):
-    with st.expander(":material/add_circle: Nuevo cliente"):
+    with st.expander(t(":material/add_circle: New client")):
         with st.form("cli_nuevo"):
-            _nom = st.text_input("Nombre del cliente *")
+            _nom = st.text_input(t("Client name *"))
             cc = st.columns(2)
-            _con = cc[0].text_input("Persona de contacto")
-            _tel = cc[1].text_input("Teléfono")
+            _con = cc[0].text_input(t("Contact person"))
+            _tel = cc[1].text_input(t("Phone"))
             cc2 = st.columns(2)
-            _mail = cc2[0].text_input("Email")
-            _dir  = cc2[1].text_input("Dirección")
-            _notas = st.text_area("Notas", height=80)
-            _crear = st.form_submit_button(":material/add: Crear cliente", type="primary")
+            _mail = cc2[0].text_input(t("Email"))
+            _dir  = cc2[1].text_input(t("Address"))
+            _notas = st.text_area(t("Notes"), height=80)
+            _crear = st.form_submit_button(t(":material/add: Create client"), type="primary")
         if _crear:
             ok, msg = C.create_cliente(grupo, _nom, _con, _tel, _mail, _dir, _notas,
                                        creado_por=_creado_por())
             if ok:
-                flash.exito("Cliente creado.")
+                flash.exito(t("Client created."))
                 st.session_state["_cli_open"] = _norm(_nom)
                 st.rerun()
             else:

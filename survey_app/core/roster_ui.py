@@ -7,6 +7,8 @@ anterior" y el catálogo de trabajos.
 """
 from datetime import timedelta, time as _time
 
+from core.i18n import t
+
 import streamlit as st
 
 from core import flash
@@ -222,18 +224,18 @@ def _vista_dia(grupo, lunes, usuario, nom, dia, datos, tidx):
                     f"padding-top:8px'>{_res}</div>", unsafe_allow_html=True)
 
         if not items:
-            st.info("Este día está sin asignar.")
+            st.info(t("Nothing is assigned on this day."))
         # ── El aviso que la celda no puede dar: dos obras en la misma franja ──
         _pares = [(a, b) for i, a in enumerate(con_hora) for b in con_hora[i + 1:]
                   if _solapa(a["ini"], a["fin"], b["ini"], b["fin"])]
         if _pares:
             _txt = " · ".join(f"{R.etiqueta_de(a['asig'], tidx)} ↔ "
                               f"{R.etiqueta_de(b['asig'], tidx)}" for a, b in _pares)
-            st.warning(f":material/warning: **Se pisan en la misma franja:** {_txt}. "
-                       f"Suman **{_suma / 60:.1f} h asignadas** sobre "
-                       f"**{_ocup / 60:.1f} h de día**, así que ese rato se está "
-                       f"cargando a dos obras: o es un día partido que falta "
-                       f"detallar, o alguien está contado dos veces.")
+            st.warning(f":material/warning: **They overlap in the same slot:** {_txt}. "
+                       f"They add up to **{_suma / 60:.1f} h assigned** over "
+                       f"**{_ocup / 60:.1f} h of day**, so that time is being "
+                       f"charged to two sites: either it is a split day that "
+                       f"needs detailing, or someone is counted twice.")
 
         # ── Línea de tiempo (solo lo que tiene horario) ──
         if con_hora:
@@ -306,7 +308,7 @@ def _vista_dia(grupo, lunes, usuario, nom, dia, datos, tidx):
         # La key lleva la MISMA tripleta que las de arriba (semana, persona, día):
         # solo con la semana, dos vistas en la misma pasada chocarían y cortarían el
         # render a partir de ahí.
-        if st.button(":material/close: Cerrar",
+        if st.button(t(":material/close: Close"),
                      key=f"vdcl_{lunes:%Y%m%d}_{usuario}_{dia}"):
             st.session_state.pop("_dia_abierto", None)
             st.rerun()
@@ -411,13 +413,11 @@ def _vista_dia_cuadrilla(grupo, lunes, staff, datos, tidx, dia):
     c1.markdown(f"<div style='font-size:18px;font-weight:600'>{R.DIAS_LABEL[dia]} "
                 f"{f.strftime('%d/%m')}</div>", unsafe_allow_html=True)
     c2.markdown(f"<div style='font-size:13px;color:#5b6472;text-align:right;"
-                f"padding-top:8px'>{n_obra} con asignación · {n_libres} libres</div>",
+                f"padding-top:8px'>{n_obra} with an assignment · {n_libres} free</div>",
                 unsafe_allow_html=True)
 
     if not con_hora_todo:
-        st.info("Nadie tiene franja horaria este día, así que no hay nada que situar "
-                "en el reloj. Las asignaciones sin hora se listan abajo como «todo "
-                "el día».")
+        st.info(t("Nobody has a time slot on this day, so there is nothing to place on the clock. Assignments with no time are listed below as «all day»."))
 
     lo, hi = _eje_de(con_hora_todo) if con_hora_todo else (0, 0)
     span = (hi - lo) or 1
@@ -479,8 +479,7 @@ def _vista_dia_cuadrilla(grupo, lunes, staff, datos, tidx, dia):
         html.append('<div style="display:grid;grid-template-columns:130px 1fr;gap:8px">'
                     '<div></div>' + _ticks_html(lo, hi) + "</div>")
     st.markdown("".join(html), unsafe_allow_html=True)
-    st.caption("Trama = asignado sin franja horaria («todo el día»)  ·  "
-               "una persona con dos bloques a la misma hora se pisa a sí misma")
+    st.caption(t("Hatched = assigned with no time slot («all day»)  ·  a person with two blocks at the same time overlaps themselves"))
 
 
 def _asignar_al_dia(grupo, lunes, usuario, sem_persona, dia, pid, ini, fin):
@@ -509,7 +508,7 @@ def _asignacion_inteligente(grupo, lunes, staff, tidx, dias=None):
         except Exception:
             proys = []
         if not proys:
-            st.caption("No hay proyectos activos para asignar.")
+            st.caption(t("There are no active projects to assign."))
             return
         # ⚠️ v306: la clave es el **ID**, no el nombre. Con `{Nombre: ID}` dos proyectos
         # homónimos colapsaban y uno quedaba IMPOSIBLE de elegir aquí, en silencio (el
@@ -518,7 +517,7 @@ def _asignacion_inteligente(grupo, lunes, staff, tidx, dias=None):
         _opts = [str(p.get("ID")) for p in proys]
         _lbl = {str(p.get("ID")): f"{p.get('Nombre') or '(sin nombre)'} ({p.get('ID')})"
                 for p in proys}
-        _psel = st.selectbox("Proyecto", ["—"] + _opts, key="ai_prj",
+        _psel = st.selectbox(t("Project"), ["—"] + _opts, key="ai_prj",
                              format_func=lambda i: "— elige el proyecto —" if i == "—"
                              else _lbl.get(i, i))
         if _psel == "—":
@@ -528,12 +527,12 @@ def _asignacion_inteligente(grupo, lunes, staff, tidx, dias=None):
         certs = [c.strip() for c in str((prj or {}).get("CertsReq", "")).split(";") if c.strip()]
 
         cda, cdb = st.columns([2, 3])
-        _dsel = cda.selectbox("Día", dias, key="ai_dia",
+        _dsel = cda.selectbox(t("Day"), dias, key="ai_dia",
                               format_func=lambda d: f"{R.DIAS_LABEL[d]} "
                               f"{R.fecha_de_dia(lunes, d).strftime('%d/%m')}")
         c1, c2 = cdb.columns(2)
-        _ti = c1.time_input("Inicio", value=_to_time(R.TURNO_DEFAULT[0]), key="ai_ini", step=900)
-        _tf = c2.time_input("Fin", value=_to_time(R.TURNO_DEFAULT[1]), key="ai_fin", step=900)
+        _ti = c1.time_input(t("Start"), value=_to_time(R.TURNO_DEFAULT[0]), key="ai_ini", step=900)
+        _tf = c2.time_input(t("End"), value=_to_time(R.TURNO_DEFAULT[1]), key="ai_fin", step=900)
         ini, fin = _ti.strftime("%H:%M"), _tf.strftime("%H:%M")
         if certs:
             st.caption(":material/badge: Exige: " + " · ".join(certs))
@@ -554,13 +553,13 @@ def _asignacion_inteligente(grupo, lunes, staff, tidx, dias=None):
         libres.sort(key=lambda f: (0 if f["cumple"] else 1, f["nom"]))
 
         if not libres:
-            st.warning(f":material/warning: Nadie libre el {R.DIAS_LABEL[_dsel]} en {ini}–{fin}.")
+            st.warning(f":material/warning: Nobody free on {R.DIAS_LABEL[_dsel]} en {ini}–{fin}.")
         else:
             _opts = {f"{f['estado']} {f['nom']}" + ("" if f["cumple"] else " — no cumple"): f["usr"]
                      for f in libres}
-            _pick = st.multiselect("Sugeridos (libres) — elige a quién asignar:",
+            _pick = st.multiselect(t("Suggested (free) — choose who to assign:"),
                                    list(_opts), key="ai_pick")
-            if st.button(f":material/check: Asignar {len(_pick)} a «{_psel}»", key="ai_go",
+            if st.button(f":material/check: Assign {len(_pick)} a «{_psel}»", key="ai_go",
                          type="primary", width="stretch", disabled=not _pick):
                 _n = 0
                 for _lbl in _pick:
@@ -572,7 +571,7 @@ def _asignacion_inteligente(grupo, lunes, staff, tidx, dias=None):
                         except Exception:
                             pass
                         _n += 1
-                flash.exito(f"Asignados {_n} a «{_psel}» el {R.DIAS_LABEL[_dsel]} {ini}–{fin}.")
+                flash.exito(f"Assigned {_n} a «{_psel}» el {R.DIAS_LABEL[_dsel]} {ini}–{fin}.")
                 st.rerun()
         if ocupados:
             st.caption(":material/block: Ocupados esa franja: "
@@ -658,14 +657,14 @@ def _radar_personal(grupo, lunes, staff, tidx, scan=None):
     n = len(choques) + len(sin_cumplir)
     with st.container():   # v287: vive en la fila de herramientas del Panel
         if not n:
-            st.success("Sin choques de turno ni certificados que bloqueen esta semana.")
+            st.success(t("No shift clashes and no blocking certificates this week."))
             return
         if choques:
-            st.markdown("**:orange[:material/warning:] Choques de turno:**")
+            st.markdown(t("**:orange[:material/warning:] Shift clashes:**"))
             for c in choques:
                 st.markdown(f"- {_esc(c)}")
         if sin_cumplir:
-            st.markdown("**:red[:material/block:] Certificados que bloquean:**")
+            st.markdown(t("**:red[:material/block:] Blocking certificates:**"))
             for c in sin_cumplir:
                 st.markdown(f"- {_esc(c)}")
 
@@ -697,9 +696,9 @@ def _ficha_rapida(grupo, usuario):
                 a["etiqueta"] + (f" {R.franja_label(a['ini'], a['fin'])}"
                                  if R.franja_label(a["ini"], a["fin"]) else "")
                 for a in aa if a.get("etiqueta"))
-            st.markdown(f":material/today: **Hoy:** {_esc(_h)}")
+            st.markdown(f":material/today: **Today:** {_esc(_h)}")
         else:
-            st.caption(":material/today: Hoy: sin asignación")
+            st.caption(t(":material/today: Today: no assignment"))
 
         try:
             creds = credentials.list_for(usuario)
@@ -710,7 +709,7 @@ def _ficha_rapida(grupo, usuario):
         except Exception:
             pass
 
-        if st.button("→ Ver ficha completa", key="fp_full", width="stretch"):
+        if st.button(t("→ See full record"), key="fp_full", width="stretch"):
             st.session_state["gp_fichasel"] = f"{nom} ({usuario})"
             st.session_state["_admin_nav_pending"] = ("planificacion", "👷 Usuarios")
             st.rerun()
@@ -733,15 +732,15 @@ def _panel_kpis(grupo, lunes, staff, datos, choques, sin_cumplir, dias=None):
     libres = ([u for u in staff if not R.celda_items(datos, u["Usuario"], d)]
               if d else [])
     theme.kpi_row([
-        ("Fichados ahora", fich, f"{en_prj} en un proyecto", theme.VERDE if fich else theme.GRIS_TXT),
-        ("Libres hoy", (len(libres) if d else "—"),
-         (", ".join((u.get("Nombre") or u["Usuario"]) for u in libres[:2]) +
+        (t("Clocked in now"), fich, f"{en_prj} on a project", theme.VERDE if fich else theme.GRIS_TXT),
+        (t("Free today"), (len(libres) if d else "—"),
+         (", ".join((u.get(t("Name")) or u["Usuario"]) for u in libres[:2]) +
           ("…" if len(libres) > 2 else "")) if libres else
-         ("sin huecos" if d else "hoy no está en la vista"),
+         (t("no gaps") if d else t("today is not in this view")),
          theme.AZUL),
-        ("Choques de turno", len(choques), "franjas que se solapan",
+        (t("Shift clashes"), len(choques), t("overlapping time slots"),
          theme.ROJO if choques else theme.GRIS_TXT),
-        ("Certs que bloquean", len(sin_cumplir), "asignado sin cumplir",
+        (t("Blocking certs"), len(sin_cumplir), t("assigned without meeting them"),
          theme.AMBAR if sin_cumplir else theme.GRIS_TXT),
     ])
 
@@ -751,12 +750,12 @@ def render_planificacion(grupo):
     # justo encima. Un "#### Panel de personal" aquí repetía el título en la misma
     # pantalla (mismo caso que el % de avance duplicado de v212).
     if not R.is_configured():
-        st.warning("La planificación necesita Google Sheets configurado.")
+        st.warning(t("Planning needs Google Sheets configured."))
         return
 
     staff = _staff(grupo)
     if not staff:
-        st.info("Aún no tienes personal de campo. Créalo en :material/build: Usuarios de campo.")
+        st.info(t("You have no field staff yet. Create them in :material/build: Field users."))
         return
 
     lunes = _semana_activa()
@@ -811,11 +810,9 @@ def render_planificacion(grupo):
     # guardado en `cpxseg_vista`, y un radio cuyo valor guardado ya no está entre sus
     # opciones revienta (el fallo que v369 esquivó en Facturas).
     _vista = b4.radio(
-        "vista", ["📋 Tablero", "🕐 Día", "👀 Disponibilidad"], horizontal=True,
+        t("view"), ["📋 Tablero", "🕐 Día", "👀 Disponibilidad"], horizontal=True,
         key="cpxseg_vista", label_visibility="collapsed",   # cpxseg_ = segmentado del kit
-        help="**Tablero**: la semana entera, y se asigna tocando una celda.  ·  "
-             "**Día**: la cuadrilla sobre un reloj, para ver a qué hora está cada "
-             "uno y dónde quedan huecos.  ·  **Disponibilidad**: quién está libre.",
+        help=t("**Board**: the whole week, assign by tapping a cell.  ·  **Day**: the crew on a clock, to see what time each person is on and where the gaps are.  ·  **Availability**: who is free."),
         # Etiquetas CORTAS (solo display; el valor es el estado guardado y no se
         # toca): «Disponibilidad» a secas no cabe con tres opciones y se recortaba.
         format_func=lambda o: {
@@ -829,7 +826,7 @@ def render_planificacion(grupo):
     with _cc2:
         _control_dias(lunes, datos, dias)
     with _cc3:
-        if st.button(":material/assignment: Copiar semana anterior", key="ros_copy",
+        if st.button(t(":material/assignment: Copy previous week"), key="ros_copy",
                      width="stretch"):
             ok, msg = R.copiar_semana(grupo, lunes - timedelta(days=7), lunes)
             (flash.exito if ok else st.warning)(msg)
@@ -841,13 +838,13 @@ def render_planificacion(grupo):
         _off = (clock.today() - lunes).days
         _hoy_k = (R.DIAS_TODOS[_off] if 0 <= _off < len(R.DIAS_TODOS) else None)
         _idx = dias.index(_hoy_k) if _hoy_k in dias else 0
-        _dsel = st.radio("Día", dias, index=_idx, horizontal=True,
+        _dsel = st.radio(t("Day"), dias, index=_idx, horizontal=True,
                          key="cpxseg_diavista", label_visibility="collapsed",
                          format_func=lambda d: f"{R.DIAS_LABEL[d]} "
                          f"{R.fecha_de_dia(lunes, d).strftime('%d/%m')}")
         _vista_dia_cuadrilla(grupo, lunes, staff, datos, tidx, _dsel)
     elif _vista == "👀 Disponibilidad":
-        _dd = st.selectbox("¿Quién está libre el…?", dias, key="panel_libredia",
+        _dd = st.selectbox(t("Who is free on…?"), dias, key="panel_libredia",
                            format_func=lambda d: f"{R.DIAS_LABEL[d]} "
                            f"{R.fecha_de_dia(lunes, d).strftime('%d/%m')}")
         _libres = [(u.get("Nombre") or u["Usuario"]) for u in staff
@@ -856,8 +853,8 @@ def render_planificacion(grupo):
             st.success(f":material/person_check: **{len(_libres)}** libres el "
                        f"{R.DIAS_LABEL[_dd]}: " + _esc(", ".join(_libres)))
         else:
-            st.warning(f":material/warning: Nadie libre el {R.DIAS_LABEL[_dd]}.")
-        st.caption("Verde = libre · gris = ocupado (con su franja horaria).")
+            st.warning(f":material/warning: Nobody free on {R.DIAS_LABEL[_dd]}.")
+        st.caption(t("Green = free · grey = busy (with its time slot)."))
         st.markdown(_disponibilidad_html(staff, lunes, datos, tidx, dias=dias),
                     unsafe_allow_html=True)
     else:
@@ -928,7 +925,7 @@ def _cumplimiento(grupo, lunes, staff, tidx, dias=None):
     from core import timeclock
     with st.container():   # v287: vive en la fila de herramientas del Panel
         if not timeclock.is_configured():
-            st.caption("Necesita el fichaje configurado.")
+            st.caption(t("This needs the time clock configured."))
             return
         # Día a comparar: hoy si cae en la semana vista, si no el lunes.
         hoy = clock.today()
@@ -936,7 +933,7 @@ def _cumplimiento(grupo, lunes, staff, tidx, dias=None):
         _hk = (R.DIAS_TODOS[(hoy - lunes).days]
                if 0 <= (hoy - lunes).days < len(R.DIAS_TODOS) else None)
         _idx_def = dias.index(_hk) if _hk in dias else 0
-        _dsel = st.radio("Día", dias, index=_idx_def, horizontal=True,
+        _dsel = st.radio(t("Day"), dias, index=_idx_def, horizontal=True,
                          format_func=lambda d: f"{R.DIAS_LABEL[d]} "
                          f"{R.fecha_de_dia(lunes, d).strftime('%d/%m')}",
                          key="cpxseg_cumpl_dia", label_visibility="collapsed")
@@ -968,10 +965,10 @@ def _cumplimiento(grupo, lunes, staff, tidx, dias=None):
         if es_hoy:
             _n_prj = sum(1 for v in vivo.values() if v["prj"])
             if vivo:
-                st.markdown(f":green[:material/sensors:] **{len(vivo)}** fichados ahora "
-                            f"· {_n_prj} en un proyecto")
+                st.markdown(f":green[:material/sensors:] **{len(vivo)}** clocked in right now "
+                            f"· {_n_prj} on a project")
             else:
-                st.caption(":material/sensors: Nadie fichado en este momento.")
+                st.caption(t(":material/sensors: Nobody is clocked in right now."))
 
         n_ok = n_desvio = n_sin = 0
         filas = []
@@ -1041,10 +1038,10 @@ def _cumplimiento(grupo, lunes, staff, tidx, dias=None):
                               f"sin asignación · fichado en jornada, sin imputar obra"
                               f"{_ahora(usr)}"))
 
-        st.markdown(f":green[:material/check_circle:] {n_ok} donde tocaba  ·  :red[:material/cancel:] {n_desvio} en otro sitio  ·  "
-                    f":orange[:material/warning:] {n_sin} sin fichar")
+        st.markdown(f":green[:material/check_circle:] {n_ok} where they were due  ·  :red[:material/cancel:] {n_desvio} somewhere else  ·  "
+                    f":orange[:material/warning:] {n_sin} not clocked in")
         if not filas:
-            st.caption("Nada que comparar este día (sin asignaciones a proyecto ni fichajes).")
+            st.caption(t("Nothing to compare on this day (no project assignments and no time entries)."))
         for ic, nom, txt in filas:
             st.markdown(f"{ic}  **{_esc(nom)}** — {_esc(txt)}")
 
@@ -1116,9 +1113,9 @@ def _cumplimiento_celda(usuario, pid):
         _ic = {"vigente": "🟢", "por_vencer": "🟡", "vencido": "🔴", "falta": "⚪"}
         bits = " · ".join(f"{_ic.get(e, '⚪')} {t}" for t, e in comp["por_tipo"].items())
         if comp["cumple"]:
-            st.success(f"Cumple los certificados del proyecto: {bits}")
+            st.success(f"Meets the certificates required by the project: {bits}")
         else:
-            st.warning(f":material/warning: No cumple todos los certificados: {bits}")
+            st.warning(f":material/warning: Does not meet all the certificates: {bits}")
     except Exception:
         pass
 
@@ -1338,7 +1335,7 @@ def _tablero_editable(grupo, lunes, staff, datos, tidx, marcas=None, dias=None):
             "text-align:center;margin-bottom:6px")
     _CAB_HOY = ("font-size:13px;font-weight:700;color:#1e4e79;"
                 "text-align:center;margin-bottom:6px")
-    h[0].markdown(f"<div style='{_CAB}'>Persona</div>", unsafe_allow_html=True)
+    h[0].markdown(f"<div style='{_CAB}'>Person</div>", unsafe_allow_html=True)
     for i, d in enumerate(dias):
         f = R.fecha_de_dia(lunes, d)
         _es_hoy = (i == _hoy_idx)
@@ -1362,7 +1359,7 @@ def _tablero_editable(grupo, lunes, staff, datos, tidx, marcas=None, dias=None):
         _row = _grid.container(key=f"rosrow_{_wk}_{pi}")
         cols = _row.columns(anchos)
         if cols[0].button(nom, key=f"pnm_{_wk}_{pi}", width="stretch",
-                          help="Ver ficha rápida de la persona"):
+                          help=t("Quick view of this person")):
             st.session_state["_panel_ficha"] = usuario
             st.rerun()
         for di, d in enumerate(dias):
@@ -1405,14 +1402,14 @@ def _tablero_editable(grupo, lunes, staff, datos, tidx, marcas=None, dias=None):
                 # botón es el día doble, pero esconderlo en las celdas simples haría
                 # que la función solo se descubra por accidente, y con una sola
                 # también dice su horario, su duración y la nota.
-                if items_cur and st.button(":material/timeline: Ver el día",
+                if items_cur and st.button(t(":material/timeline: View the day"),
                                            key=f"pvd_{_wk}_{idx}",
                                            width="stretch"):
                     st.session_state["_dia_abierto"] = {"u": usuario, "d": d,
                                                         "wk": lunes.isoformat()}
                     st.rerun()
                 _def = [etq_by_val[a] for a in asigs if a in etq_by_val]
-                _sel = st.multiselect("Asignaciones del día (puedes elegir varias)",
+                _sel = st.multiselect(t("Assignments for the day (you can pick several)"),
                                       etq, default=_def, key=f"pva_{_wk}_{idx}")
                 _selvals = [val_by_etq[e] for e in _sel]
                 # Por cada asignación: si es PROYECTO/TRABAJO → franja horaria (default 7:00–15:30)
@@ -1427,16 +1424,16 @@ def _tablero_editable(grupo, lunes, staff, datos, tidx, marcas=None, dias=None):
                         _cumplimiento_celda(usuario, _pv)
                     _ci, _cf = fr_cur.get(_v, R.TURNO_DEFAULT)
                     _c1, _c2 = st.columns(2)
-                    _ti = _c1.time_input(f"{R.etiqueta_de(_v, tidx)} · inicio",
+                    _ti = _c1.time_input(f"{R.etiqueta_de(_v, tidx)} · start",
                                          value=_to_time(_ci, R.TURNO_DEFAULT[0]),
                                          key=f"pvi_{_wk}_{idx}_{_v}", step=900)
-                    _tf = _c2.time_input(f"{R.etiqueta_de(_v, tidx)} · fin",
+                    _tf = _c2.time_input(f"{R.etiqueta_de(_v, tidx)} · end",
                                          value=_to_time(_cf, R.TURNO_DEFAULT[1]),
                                          key=f"pvf_{_wk}_{idx}_{_v}", step=900)
                     _items.append({"asig": _v, "ini": _ti.strftime("%H:%M"),
                                    "fin": _tf.strftime("%H:%M")})
-                _nota = st.text_input("Nota (para todo el día)", value=nota, key=f"pvn_{_wk}_{idx}",
-                                      placeholder="vehículo, equipo…")
+                _nota = st.text_input(t("Note (for the whole day)"), value=nota, key=f"pvn_{_wk}_{idx}",
+                                      placeholder=t("vehicle, equipment…"))
                 # v301: planificar VARIOS días de una. Antes era un check "toda la
                 # semana" (o uno, o los cinco), así que asignar a alguien 2-3 días
                 # obligaba a abrir una celda por día. Arranca con el día tocado.
@@ -1447,18 +1444,18 @@ def _tablero_editable(grupo, lunes, staff, datos, tidx, marcas=None, dias=None):
                 # check va ANTES para poder deshabilitar el selector cuando manda él.
                 # La etiqueta sigue a los días VISIBLES: con el sábado en pantalla
                 # decir «Lun–Vie» y luego escribir seis días sería mentir.
-                _all = st.checkbox(f"Toda la semana ({R.DIAS_LABEL[dias[0]]}–"
+                _all = st.checkbox(f"The whole week ({R.DIAS_LABEL[dias[0]]}–"
                                    f"{R.DIAS_LABEL[dias[-1]]})", key=f"pvwa_{_wk}_{idx}")
                 _dd = st.multiselect(
-                    "Aplicar a estos días", dias, default=[d], key=f"pvw_{_wk}_{idx}",
+                    t("Apply to these days"), dias, default=[d], key=f"pvw_{_wk}_{idx}",
                     disabled=_all,
                     format_func=lambda x: f"{R.DIAS_LABEL[x]} "
                                           f"{R.fecha_de_dia(lunes, x).strftime('%d/%m')}")
                 _destino = list(dias) if _all else _dd
                 if len(_destino) > 1:
-                    st.caption(f":material/content_copy: Se guardará igual en "
-                               f"**{len(_destino)} días**.")
-                if st.button(":material/save: Guardar", key=f"pvs_{_wk}_{idx}", type="primary",
+                    st.caption(f":material/content_copy: It will be saved the same on "
+                               f"**{len(_destino)} days**.")
+                if st.button(t(":material/save: Save"), key=f"pvs_{_wk}_{idx}", type="primary",
                              width="stretch", disabled=not _destino):
                     ok, msg = _guardar_celda(grupo, lunes, usuario, datos, _destino,
                                              _items, _nota)
@@ -1589,9 +1586,7 @@ def _opciones(grupo, tidx):
 
 def _catalogo(grupo):
     with st.container():   # v287: vive en la fila de herramientas del Panel
-        st.caption("Para trabajos que **no** son un proyecto: entregas, cursos, policía, "
-                   "traslados… Los **proyectos se asignan directo** en el tablero (ya son un "
-                   "trabajo en sí mismos), no hace falta crearlos aquí.")
+        st.caption(t("For work that is **not** a project: deliveries, courses, traffic control, transfers… **Projects are assigned directly** on the board (they are a job in themselves), there is no need to create them here."))
         # incluir_inactivos: los desactivados SÍ se listan (para reactivarlos).
         # Los ELIMINADOS no: su fila solo existe para que el histórico del tablero
         # siga resolviendo nombre y color (v301).
@@ -1614,7 +1609,7 @@ def _catalogo(grupo):
                 if cc[2].button("Activar" if not _act else "Desactivar", key=f"trab_act_{tid}"):
                     R.set_activo_trabajo(tid, not _act)
                     st.rerun()
-                if cc[3].button(":material/edit: Editar", key=f"trab_ed_{tid}"):
+                if cc[3].button(t(":material/edit: Edit"), key=f"trab_ed_{tid}"):
                     st.session_state["_trab_edit"] = "" if _edit == tid else tid
                     st.rerun()
 
@@ -1625,19 +1620,19 @@ def _catalogo(grupo):
                 if _edit == tid:
                     with st.container(border=True):
                         e1, e2, e3 = st.columns([1, 2.5, 1.5])
-                        _n = e1.text_input("Número", value=str(r.get("Numero", "")),
+                        _n = e1.text_input(t("Number"), value=str(r.get("Numero", "")),
                                            key=f"tedn_{tid}")
-                        _nm = e2.text_input("Nombre", value=str(r.get("Nombre", "")),
+                        _nm = e2.text_input(t("Name"), value=str(r.get("Nombre", "")),
                                             key=f"tednm_{tid}")
                         _cur = _colinv.get(str(r.get("Color", "")).lower())
                         _nombres = list(_colmap)
-                        _cn = e3.selectbox("Color", _nombres, key=f"tedc_{tid}",
+                        _cn = e3.selectbox(t("Colour"), _nombres, key=f"tedc_{tid}",
                                            index=_nombres.index(_cur) if _cur in _nombres else 0)
                         g1, g2 = st.columns([1, 1])
-                        if g1.button(":material/save: Guardar cambios", key=f"teds_{tid}",
+                        if g1.button(t(":material/save: Save changes"), key=f"teds_{tid}",
                                      type="primary", width="stretch"):
                             if not _nm.strip():
-                                st.error("El nombre es obligatorio.")
+                                st.error(t("The name is required."))
                             else:
                                 ok, msg = R.update_trabajo(tid, {
                                     "Numero": _n.strip(), "Nombre": _nm.strip(),
@@ -1652,12 +1647,12 @@ def _catalogo(grupo):
                         # planificadas). Se dice ANTES de pulsar, no después.
                         _usos = R.usos_de_trabajo(grupo, tid)
                         if _usos:
-                            g2.caption(f":material/history: Está en **{_usos}** "
-                                       f"{'día ya planificado' if _usos == 1 else 'días ya planificados'}: "
-                                       f"al eliminarlo sale del catálogo, pero **el histórico se "
-                                       f"conserva** tal cual.")
-                        _conf = g2.checkbox("Confirmo eliminarlo", key=f"tedcf_{tid}")
-                        if g2.button(":material/delete: Eliminar", key=f"tedd_{tid}",
+                            g2.caption(f":material/history: It is used in **{_usos}** "
+                                       f"{'day already planned' if _usos == 1 else 'days already planned'}: "
+                                       f"deleting it takes it out of the catalogue, but **the "
+                                       f"history is kept** as it is.")
+                        _conf = g2.checkbox(t("I confirm I want to delete it"), key=f"tedcf_{tid}")
+                        if g2.button(t(":material/delete: Delete"), key=f"tedd_{tid}",
                                      disabled=not _conf, width="stretch"):
                             ok, msg = R.delete_trabajo(grupo, tid)
                             (flash.exito if ok else st.warning)(msg)
@@ -1665,22 +1660,22 @@ def _catalogo(grupo):
                                 st.session_state["_trab_edit"] = ""
                                 st.rerun()
         else:
-            st.caption("Aún no hay trabajos. Añade el primero abajo.")
+            st.caption(t("No jobs yet. Add the first one below."))
 
-        st.markdown("**:material/add: Nuevo trabajo** (no-proyecto)")
+        st.markdown(t("**:material/add: New job** (non-project)"))
         c1, c2, c3 = st.columns([1, 2.5, 1.5])
-        num = c1.text_input("Número", key="trab_num", placeholder="89")
-        nom = c2.text_input("Nombre", key="trab_nom", placeholder="Entrega / Curso / Traslado…")
-        colnom = c3.selectbox("Color", list(_colmap.keys()), key="trab_col")   # _colmap: arriba
+        num = c1.text_input(t("Number"), key="trab_num", placeholder="89")
+        nom = c2.text_input(t("Name"), key="trab_nom", placeholder=t("Delivery / Course / Transfer…"))
+        colnom = c3.selectbox(t("Colour"), list(_colmap.keys()), key="trab_col")   # _colmap: arriba
         # Muestra del color con el MISMO lenguaje que la lista de arriba (cuadradito
         # de 20×20). Antes era una franja a todo el ancho que se leía como un
         # artefacto de renderizado atravesando la tarjeta, no como una muestra.
         c3.markdown(f"<div style='width:20px;height:20px;border-radius:5px;"
                     f"background:{_colmap[colnom]};border:1px solid #e3e8ef'></div>",
                     unsafe_allow_html=True)
-        if st.button("Crear trabajo", key="trab_add", width="stretch"):
+        if st.button(t("Create job"), key="trab_add", width="stretch"):
             if not nom.strip():
-                st.error("El nombre es obligatorio.")
+                st.error(t("The name is required."))
             else:
                 ok, res = R.add_trabajo(grupo, num, nom, _colmap[colnom], "")
                 (flash.exito if ok else st.error)(

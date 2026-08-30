@@ -2,6 +2,8 @@
 UI de login, barra de usuario y paneles de gestión (propietario / administrador).
 """
 import os
+
+from core.i18n import t
 import re
 import time
 from datetime import date
@@ -19,13 +21,13 @@ def _contacto_uno(sel, key_prefix="cc"):
     admin después de que el usuario pulse Start en el bot."""
     from core import notify
     rec = auth.get_user(sel)
-    em  = st.text_input(":material/mail: Email", value=str(rec.get("Email", "")), key=f"{key_prefix}_em")
-    if st.button("Guardar email", key=f"{key_prefix}_emb"):
+    em  = st.text_input(t(":material/mail: Email"), value=str(rec.get("Email", "")), key=f"{key_prefix}_em")
+    if st.button(t("Save email"), key=f"{key_prefix}_emb"):
         ok, msg = auth.set_contact(sel, email=em)
         (flash.exito if ok else st.error)(msg)
         if ok:
             st.rerun()
-    st.markdown("**:material/send: Telegram**")
+    st.markdown(t("**:material/send: Telegram**"))
     tg = str(rec.get("TelegramChatID", "")).strip()
     if not notify.telegram_configured() or not notify.bot_username():
         # ⚠️ v368: antes esto era un callejón sin salida. Decía «no configurado» y ya:
@@ -33,37 +35,34 @@ def _contacto_uno(sel, key_prefix="cc"):
         # entrada exigiéndosele justo esto. Ahora se dice que NO se le exige (el
         # bloqueo de `app.py` solo pide los canales que existen) y se ofrece la salida
         # manual, por si el chat_id se consiguió por otra vía.
-        st.caption(":material/info: Telegram no está configurado en esta instalación "
-                   "(falta el bot en Secrets), así que **no se le exige** para entrar. "
-                   "Con el email basta.")
-        with st.expander("Poner el chat_id a mano", icon=":material/edit:"):
-            _man = st.text_input("Chat ID de Telegram", value=tg, key=f"{key_prefix}_tgman",
-                                 help="Solo si ya lo tienes por otra vía. Sin bot "
-                                      "configurado, la app no puede enviarle nada.")
-            if st.button("Guardar chat_id", key=f"{key_prefix}_tgmanb"):
+        st.caption(t(":material/info: Telegram is not configured on this installation (the bot is missing from Secrets), so it is **not required** to sign in. Email is enough."))
+        with st.expander(t("Enter the chat_id by hand"), icon=":material/edit:"):
+            _man = st.text_input(t("Telegram chat ID"), value=tg, key=f"{key_prefix}_tgman",
+                                 help=t("Only if you already have it another way. With no bot configured the app cannot send them anything."))
+            if st.button(t("Save chat_id"), key=f"{key_prefix}_tgmanb"):
                 ok, msg = auth.set_contact(sel, telegram=_man.strip())
                 (flash.exito if ok else st.error)(msg)
                 if ok:
                     st.rerun()
     elif tg:
-        st.success(":material/check_circle: Telegram vinculado.")
-        if st.button("Desvincular Telegram", key=f"{key_prefix}_tgu"):
+        st.success(t(":material/check_circle: Telegram linked."))
+        if st.button(t("Unlink Telegram"), key=f"{key_prefix}_tgu"):
             auth.set_contact(sel, telegram="")
             st.rerun()
     else:
         bot  = notify.bot_username()
         code = re.sub(r"[^A-Za-z0-9_-]", "", sel) or "user"
-        st.caption("1) El usuario abre el bot y pulsa **Start** (envíale este link):")
+        st.caption(t("1) The user opens the bot and presses **Start** (send them this link):"))
         st.code(f"https://t.me/{bot}?start={code}")
-        st.caption("2) Cuando lo haya hecho, pulsa:")
-        if st.button(":material/link: Vincular Telegram de este usuario", key=f"{key_prefix}_tgl"):
+        st.caption(t("2) Once they have, press:"))
+        if st.button(t(":material/link: Link this user's Telegram"), key=f"{key_prefix}_tgl"):
             cid = notify.telegram_find_chat_by_code(code)
             if cid:
                 auth.set_contact(sel, telegram=cid)
-                flash.exito(":material/check_circle: Telegram vinculado.")
+                flash.exito(t(":material/check_circle: Telegram linked."))
                 st.rerun()
             else:
-                st.error("No encontré su mensaje. Asegúrate de que pulsó Start y reintenta.")
+                st.error(t("I could not find their message. Make sure they pressed Start and try again."))
 
 
 def _fecha_input(col, label, valor_actual="", *, key):
@@ -86,17 +85,17 @@ def render_credenciales(usuario, grupo, editable=False, key_prefix="cr"):
     eliminar, subir foto/documento); editable=False → solo lectura (el propio usuario)."""
     from core import credentials as C
     if not C.is_configured():
-        st.info("Las credenciales necesitan Google Sheets configurado.")
+        st.info(t("Credentials need Google Sheets configured."))
         return
     creds = C.list_for(usuario)
     if creds:
         # KPIs de un vistazo (v186): vigentes / por vencer / vencidas
         _sts = [C.status(r.get("Vencimiento")) for r in creds]
         k1, k2, k3, k4 = st.columns(4)
-        k1.metric("Credenciales", len(creds))
-        k2.metric(":material/check_circle: Vigentes", sum(1 for s in _sts if s == "vigente"))
-        k3.metric(":material/schedule: Por vencer", sum(1 for s in _sts if s == "por_vencer"))
-        k4.metric(":material/cancel: Vencidas", sum(1 for s in _sts if s == "vencido"))
+        k1.metric(t("Credentials"), len(creds))
+        k2.metric(t(":material/check_circle: Valid"), sum(1 for s in _sts if s == "vigente"))
+        k3.metric(t(":material/schedule: Expiring"), sum(1 for s in _sts if s == "por_vencer"))
+        k4.metric(t(":material/cancel: Expired"), sum(1 for s in _sts if s == "vencido"))
         st.dataframe(pd.DataFrame([{
             "Tipo": r.get("Tipo"), "Número": r.get("Numero"), "Clase": r.get("Clase"),
             "Emisión": r.get("Emision") or "—", "Vence": r.get("Vencimiento") or "—",
@@ -105,7 +104,7 @@ def render_credenciales(usuario, grupo, editable=False, key_prefix="cr"):
         # Documentos adjuntos agrupados (antes: botones sueltos apilados bajo la tabla)
         _docs = [r for r in creds if str(r.get("DriveID", "")).strip()]
         if _docs:
-            with st.expander(f":material/download: Documentos ({len(_docs)})"):
+            with st.expander(f":material/download: Documents ({len(_docs)})"):
                 from core import drive_store
                 for r in _docs:
                     try:
@@ -116,70 +115,70 @@ def render_credenciales(usuario, grupo, editable=False, key_prefix="cr"):
                     except Exception:
                         pass
     else:
-        st.caption("Sin credenciales registradas.")
+        st.caption(t("No credentials recorded."))
 
     if not editable:
         return
     admin_usr = st.session_state.get("auth", {}).get("usuario", "")
 
-    with st.expander("Agregar credencial", icon=":material/add_circle:"):
+    with st.expander(t("Add credential"), icon=":material/add_circle:"):
         # 'Tipo' va FUERA del form (v189): así, al cambiarlo, la app se re-renderiza
         # y podemos mostrar solo los campos que aplican — "especifica" para 'Otro' y
         # "Clase" solo para licencia de conducir. Dentro de un form no hay rerun hasta
         # el submit, así que ahí no se puede condicionar. El Tipo queda seleccionado
         # tras agregar (cómodo para cargar varias del mismo tipo).
-        tipo = st.selectbox("Tipo", C.CATALOGO, key=f"{key_prefix}_tipo")
+        tipo = st.selectbox(t("Type"), C.CATALOGO, key=f"{key_prefix}_tipo")
         _es_otro = (tipo == "Otro")
         _es_lic  = (tipo == "Driver License")
-        tipo_otro = (st.text_input("Especifica el tipo", key=f"{key_prefix}_tipootro")
+        tipo_otro = (st.text_input(t("Specify the type"), key=f"{key_prefix}_tipootro")
                      if _es_otro else "")
         with st.form(f"{key_prefix}_add_{usuario}", clear_on_submit=True):
             if _es_lic:
                 c1, c2 = st.columns(2)
-                num   = c1.text_input("Número")
-                clase = c2.selectbox("Clase (licencia)", C.CLASES_LICENCIA, key=f"{key_prefix}_clase")
+                num   = c1.text_input(t("Number"))
+                clase = c2.selectbox(t("Class (licence)"), C.CLASES_LICENCIA, key=f"{key_prefix}_clase")
             else:
-                num   = st.text_input("Número")
+                num   = st.text_input(t("Number"))
                 clase = ""
             c3, c4 = st.columns(2)
             emi = _fecha_input(c3, "Emisión", key=f"{key_prefix}_emi")
             ven = _fecha_input(c4, "Vencimiento (vacío si no vence)", key=f"{key_prefix}_ven")
-            arch = st.file_uploader("Foto o documento (opcional)",
+            arch = st.file_uploader(t("Photo or document (optional)"),
                                     type=["pdf", "png", "jpg", "jpeg"], key=f"{key_prefix}_file")
-            nota = st.text_input("Nota")
-            if st.form_submit_button("Agregar"):
-                t = tipo_otro.strip() if (_es_otro and tipo_otro.strip()) else tipo
+            nota = st.text_input(t("Note"))
+            if st.form_submit_button(t("Add")):
+                _tp = tipo_otro.strip() if (_es_otro and tipo_otro.strip()) else tipo
                 did, fname = "", ""
                 if arch is not None:
                     fname = arch.name
-                    did = C.upload_file(usuario, t, arch.name, arch.getvalue(),
+                    did = C.upload_file(usuario, _tp, arch.name, arch.getvalue(),
                                         arch.type or "application/octet-stream")
                     if not did:
-                        st.warning("No se pudo subir el archivo a Drive; se guarda el resto.")
+                        st.warning(t("The file could not be uploaded to Drive; everything else is saved."))
                 ok, msg = C.add(usuario, grupo, t, num, clase, emi, ven, did, fname, nota, admin_usr)
                 (flash.exito if ok else st.error)(msg)
                 if ok:
                     st.rerun()
 
     if creds:
-        with st.expander("Editar / eliminar credencial", icon=":material/edit:"):
+        with st.expander(t("Edit / delete credential"), icon=":material/edit:"):
             idmap = {f"{r.get('Tipo')} · {r.get('Numero') or 's/n'} ({r.get('ID')})": r for r in creds}
-            sel = st.selectbox("Credencial", list(idmap.keys()), key=f"{key_prefix}_esel")
+            sel = st.selectbox(t("Credential"), list(idmap.keys()), key=f"{key_prefix}_esel")
             r = idmap[sel]
             _kid = str(r.get("ID", ""))
             c1, c2 = st.columns(2)
-            enum = c1.text_input("Número", value=r.get("Numero", ""), key=f"{key_prefix}_enum_{_kid}")
+            enum = c1.text_input(t("Number"), value=r.get("Numero", ""), key=f"{key_prefix}_enum_{_kid}")
             even = _fecha_input(c2, "Vencimiento (vacío si no vence)", r.get("Vencimiento", ""),
                                 key=f"{key_prefix}_even_{_kid}")
-            enota = st.text_input("Nota", value=r.get("Nota", ""), key=f"{key_prefix}_enota_{_kid}")
+            enota = st.text_input(t("Note"), value=r.get("Nota", ""), key=f"{key_prefix}_enota_{_kid}")
             b1, b2 = st.columns(2)
-            if b1.button(":material/save: Guardar", key=f"{key_prefix}_eupd"):
+            if b1.button(t(":material/save: Save"), key=f"{key_prefix}_eupd"):
                 ok, msg = C.update(r.get("ID"), {"Numero": enum, "Vencimiento": even, "Nota": enota,
                                                  "ActualizadoPor": admin_usr})
                 (flash.exito if ok else st.error)(msg)
                 if ok:
                     st.rerun()
-            if b2.button(":material/delete: Eliminar", key=f"{key_prefix}_edel"):
+            if b2.button(t(":material/delete: Delete"), key=f"{key_prefix}_edel"):
                 ok, msg = C.delete(r.get("ID"))
                 (flash.exito if ok else st.error)(msg)
                 if ok:
@@ -189,8 +188,8 @@ def render_credenciales(usuario, grupo, editable=False, key_prefix="cr"):
 def render_my_credentials():
     """Vista de solo lectura de las credenciales del usuario logueado."""
     a = st.session_state.get("auth", {})
-    st.markdown("### :material/badge: Mis credenciales")
-    st.caption("Tus tickets y credenciales registrados por tu administrador. Muéstralos en obra si te los piden.")
+    st.markdown(t("### :material/badge: My credentials"))
+    st.caption(t("Your tickets and credentials as recorded by your administrator. Show them on site if you are asked for them."))
     render_credenciales(a.get("usuario", ""), a.get("grupo", ""), editable=False, key_prefix="mycr")
 
 
@@ -250,8 +249,7 @@ def render_login() -> bool:
     flash.mostrar()
 
     if not auth.is_configured():
-        st.error(":material/lock: El acceso no está conectado a Google Sheets. "
-                 "Configura los Secrets (gcp_service_account + TIMECLOCK_SHEET_ID) en Streamlit Cloud.")
+        st.error(t(":material/lock: Sign-in is not connected to Google Sheets. Configure the Secrets (gcp_service_account + TIMECLOCK_SHEET_ID) in Streamlit Cloud."))
         return False
 
     try:
@@ -265,16 +263,16 @@ def render_login() -> bool:
     mid = st.columns([1, 2, 1])[1].container(border=True)
     with mid:
         if first_run:
-            st.info(":material/shield_person: **Configuración inicial** — crea la cuenta de propietario.")
-            u  = st.text_input("Usuario", key="setup_u")
-            nm = st.text_input("Nombre", key="setup_n")
-            p1 = st.text_input("Contraseña", type="password", key="setup_p1")
-            p2 = st.text_input("Repetir contraseña", type="password", key="setup_p2")
-            if st.button("Crear propietario", type="primary", width="stretch"):
+            st.info(t(":material/shield_person: **Initial setup** — create the owner account."))
+            u  = st.text_input(t("Username"), key="setup_u")
+            nm = st.text_input(t("Name"), key="setup_n")
+            p1 = st.text_input(t("Password"), type="password", key="setup_p1")
+            p2 = st.text_input(t("Repeat password"), type="password", key="setup_p2")
+            if st.button(t("Create owner"), type="primary", width="stretch"):
                 if not u or not p1:
-                    st.error("Completa usuario y contraseña.")
+                    st.error(t("Fill in username and password."))
                 elif p1 != p2:
-                    st.error("Las contraseñas no coinciden.")
+                    st.error(t("The passwords do not match."))
                 else:
                     ok, msg = auth.add_user(u, p1, "propietario", nm)
                     if ok:
@@ -283,18 +281,16 @@ def render_login() -> bool:
                     else:
                         st.error(msg)
         else:
-            st.markdown("#### Iniciar sesión")
-            u = st.text_input("Usuario", key="login_u")
-            p = st.text_input("Contraseña", type="password", key="login_p")
+            st.markdown(t("#### Sign in"))
+            u = st.text_input(t("Username"), key="login_u")
+            p = st.text_input(t("Password"), type="password", key="login_p")
             # v221: la persistencia por cookie (v107/v188) pasa a ser OPCIONAL. Sin
             # tildar (por defecto) la sesión dura solo esta pestaña; al tildar se guarda
             # la cookie de 7 días y no hay que volver a escribir usuario/contraseña en
             # este dispositivo. Déjalo sin marcar en equipos compartidos.
-            st.checkbox("Mantener la sesión iniciada en este dispositivo",
+            st.checkbox(t("Keep me signed in on this device"),
                         value=False, key="login_remember",
-                        help="Si lo activas, este dispositivo recordará tu sesión ~7 días y "
-                             "no tendrás que volver a escribir usuario y contraseña. "
-                             "Déjalo sin marcar en un equipo compartido o público.")
+                        help=t("If you turn this on, this device will remember your session for about 7 days and you will not have to type your username and password again. Leave it unticked on a shared or public computer."))
 
             def _do_login(force=False):
                 res = auth.verify_login(u, p)
@@ -329,13 +325,12 @@ def render_login() -> bool:
                     st.session_state.get("login_remember", False))
                 st.rerun()
 
-            if st.button("Iniciar sesión", type="primary", width="stretch"):
+            if st.button(t("Sign in"), type="primary", width="stretch"):
                 _do_login(force=False)
 
             if st.session_state.get("_blocked_user"):
-                st.caption("Si eres **tú** y dejaste la sesión abierta en otro dispositivo, "
-                           "puedes cerrarla e iniciar aquí.")
-                if st.button(":material/lock_open: Cerrar la otra sesión e iniciar aquí",
+                st.caption(t("If this is **you** and you left the session open on another device, you can close it and sign in here."))
+                if st.button(t(":material/lock_open: Close the other session and sign in here"),
                              width="stretch"):
                     _do_login(force=True)
     return False
@@ -358,7 +353,7 @@ def render_user_bar():
                "campo": ":material/engineering: Campo"}.get(a.get("rol"), a.get("rol", ""))
     grupo = a.get("grupo") or ("todos" if a.get("rol") == "propietario" else "—")
     st.markdown(f"**{a.get('nombre','')}**  \n{rol_lbl}  \n:material/business: {grupo}")
-    if st.button(":material/logout: Cerrar sesión", width="stretch", key="logout_btn"):
+    if st.button(t(":material/logout: Sign out"), width="stretch", key="logout_btn"):
         try:
             auth.end_session(a.get("usuario", ""), a.get("token"))   # libera la cuenta
         except Exception:
@@ -383,11 +378,11 @@ def _owner_grupos():
     if grupos:
         st.dataframe(pd.DataFrame(grupos), hide_index=True, width="stretch")
     else:
-        st.info("Aún no hay grupos. Crea el primero abajo.")
+        st.info(t("No companies yet. Create the first one below."))
     with st.form("form_grupo", clear_on_submit=True):
-        gn = st.text_input("Nombre del grupo (empresa cliente)")
-        gd = st.text_input("Descripción (opcional)")
-        if st.form_submit_button(":material/add: Crear grupo"):
+        gn = st.text_input(t("Company name (client company)"))
+        gd = st.text_input(t("Description (optional)"))
+        if st.form_submit_button(t(":material/add: Create company")):
             ok, msg = auth.add_group(gn, gd)
             (flash.exito if ok else st.error)(msg)
             if ok: st.rerun()
@@ -396,28 +391,24 @@ def _owner_grupos():
     # Aislamiento de datos: cada empresa puede vivir en su propio fichero, en vez de
     # compartirlo separada solo por una columna `Grupo`.
     if grupos:
-        with st.expander("Libro de datos de cada cliente", icon=":material/menu_book:"):
-            st.caption("Cada empresa cliente puede tener su **propio archivo de Google "
-                       "Sheets**, para que sus datos no compartan fichero con los de "
-                       "otra. Vacío = usa el libro maestro.")
-            _gl = ui.elegir("Grupo", [g["Grupo"] for g in grupos], key="gsheet_sel",
+        with st.expander(t("Each client's data workbook"), icon=":material/menu_book:"):
+            st.caption(t("Each client company can have its **own Google Sheets file**, so its data does not share a file with anyone else's. Empty = it uses the master workbook."))
+            _gl = ui.elegir(t("Company"), [g["Grupo"] for g in grupos], key="gsheet_sel",
                             vacio="— elige un grupo —")
             if _gl:
                 _sid_now = auth.group_sheet_id(_gl)
-                st.markdown(":material/info: Crea una hoja de cálculo en blanco, "
-                            "**compártela como editor** con la cuenta de servicio de la "
-                            "app, y pega aquí su enlace o su ID.")
-                _nuevo = st.text_input("Enlace o ID del libro", value=_sid_now,
+                st.markdown(t(":material/info: Create a blank spreadsheet, **share it as editor** with the app's service account, and paste its link or its ID here."))
+                _nuevo = st.text_input(t("Workbook link or ID"), value=_sid_now,
                                        key="gsheet_val",
                                        placeholder="https://docs.google.com/spreadsheets/d/…")
                 _c1, _c2 = st.columns(2)
-                if _c1.button(":material/link: Guardar enlace", key="gsheet_save",
+                if _c1.button(t(":material/link: Save link"), key="gsheet_save",
                               width="stretch"):
                     ok, msg = auth.set_group_sheet_id(_gl, _nuevo)
                     (flash.exito if ok else st.error)(msg)
                     if ok:
                         st.rerun()
-                if _sid_now and _c2.button(":material/link_off: Volver al maestro",
+                if _sid_now and _c2.button(t(":material/link_off: Back to the master"),
                                            key="gsheet_del", width="stretch"):
                     ok, msg = auth.set_group_sheet_id(_gl, "")
                     (flash.exito if ok else st.error)(msg)
@@ -440,11 +431,12 @@ def _owner_grupos():
     # Define en qué hora LOCAL se graban los registros de cada grupo (cada empresa
     # puede estar en otro país). Sin fijar → clock.DEFAULT_TZ.
     if grupos:
-        with st.expander("Zona horaria de cada grupo", icon=":material/schedule:"):
-            st.caption("En qué hora local se graban los registros (fichaje, pre-start, "
-                       f"alarmas…) de ese grupo. Sin fijar = {clock.DEFAULT_TZ}.")
+        with st.expander(t("Each company's time zone"), icon=":material/schedule:"):
+            st.caption(t("The local time in which that company's records are written "
+                         "(time clock, pre-start, alerts…). Not set = ")
+                       + f"{clock.DEFAULT_TZ}.")
             _gz = {g["Grupo"]: (g.get("Zona") or "") for g in grupos}
-            gzsel = ui.elegir("Grupo", list(_gz.keys()), key="tz_g_sel", vacio="— elige un grupo —")
+            gzsel = ui.elegir(t("Company"), list(_gz.keys()), key="tz_g_sel", vacio="— elige un grupo —")
             if gzsel:
                 _cur = _gz.get(gzsel) or clock.DEFAULT_TZ
                 _opts = ["Australia/Sydney", "Australia/Brisbane", "Australia/Adelaide",
@@ -452,17 +444,17 @@ def _owner_grupos():
                          "Europe/Madrid", "America/New_York", "America/Los_Angeles", "UTC"]
                 if _cur not in _opts:
                     _opts = [_cur] + _opts
-                znew = st.selectbox("Zona horaria (IANA)", _opts, index=_opts.index(_cur),
+                znew = st.selectbox(t("Time zone (IANA)"), _opts, index=_opts.index(_cur),
                                     key="tz_z_sel")
                 try:
                     from zoneinfo import ZoneInfo
                     from datetime import datetime as _dtn
-                    st.caption(f"En **{znew}** ahora son las "
+                    st.caption(f"In **{znew}** it is now "
                                f"**{_dtn.now(ZoneInfo(znew)).strftime('%H:%M')}**.  "
-                               f"(Actual del grupo: {_gz.get(gzsel) or 'sin fijar'})")
+                               f"(Company's current one: {_gz.get(gzsel) or 'not set'})")
                 except Exception:
                     pass
-                if st.button(":material/save: Guardar zona", key="tz_save"):
+                if st.button(t(":material/save: Save time zone"), key="tz_save"):
                     ok, msg = auth.set_group_timezone(gzsel, znew)
                     (flash.exito if ok else st.error)(msg)
                     if ok:
@@ -470,10 +462,9 @@ def _owner_grupos():
 
     # ── Margen de facturación por defecto por grupo (v257) ──
     if grupos:
-        with st.expander("Margen de facturación por defecto", icon=":material/trending_up:"):
-            st.caption("Ganancia (%) sobre la mano de obra que se cobra al cliente. Cada proyecto "
-                       "puede sobrescribirlo (✏️ Datos). Base de la 'tarifa de venta' y la rentabilidad.")
-            gmsel = ui.elegir("Grupo", [g["Grupo"] for g in grupos], key="mg_g_sel",
+        with st.expander(t("Default invoicing margin"), icon=":material/trending_up:"):
+            st.caption(t("Profit (%) on the labour charged to the client. Each project can override it (✏️ Data). It is the basis of the sell rate and of profitability."))
+            gmsel = ui.elegir(t("Company"), [g["Grupo"] for g in grupos], key="mg_g_sel",
                               vacio="— elige un grupo —")
             if gmsel:
                 def _f_mg(v):
@@ -482,9 +473,9 @@ def _owner_grupos():
                     except Exception:
                         return 0.0
                 _curm = next((_f_mg(g.get("MargenDefault")) for g in grupos if g["Grupo"] == gmsel), 0.0)
-                mnew = st.number_input("Margen por defecto (%)", min_value=0.0, max_value=500.0,
+                mnew = st.number_input(t("Default margin (%)"), min_value=0.0, max_value=500.0,
                                        step=1.0, value=_curm, key="mg_val")
-                if st.button(":material/save: Guardar margen", key="mg_save"):
+                if st.button(t(":material/save: Save margin"), key="mg_save"):
                     ok, msg = auth.set_group_margin_default(gmsel, mnew)
                     (flash.exito if ok else st.error)(msg)
                     if ok:
@@ -492,10 +483,9 @@ def _owner_grupos():
 
     # ── Impuesto de facturación por defecto (GST/IVA) por grupo (v258) ──
     if grupos:
-        with st.expander("Impuesto de facturación por defecto (GST/IVA)", icon=":material/receipt_long:"):
-            st.caption("Se aplica por defecto a las facturas nuevas; editable por factura. "
-                       "Australia = 10 (GST).")
-            gtsel = ui.elegir("Grupo", [g["Grupo"] for g in grupos], key="tx_g_sel",
+        with st.expander(t("Default invoicing tax (GST/VAT)"), icon=":material/receipt_long:"):
+            st.caption(t("Applied by default to new invoices; editable per invoice. Australia = 10 (GST)."))
+            gtsel = ui.elegir(t("Company"), [g["Grupo"] for g in grupos], key="tx_g_sel",
                               vacio="— elige un grupo —")
             if gtsel:
                 def _f_tx(v):
@@ -504,9 +494,9 @@ def _owner_grupos():
                     except Exception:
                         return 0.0
                 _curt = next((_f_tx(g.get("ImpuestoDefault")) for g in grupos if g["Grupo"] == gtsel), 0.0)
-                tnew = st.number_input("Impuesto por defecto (%)", min_value=0.0, max_value=100.0,
+                tnew = st.number_input(t("Default tax (%)"), min_value=0.0, max_value=100.0,
                                        step=1.0, value=_curt, key="tx_val")
-                if st.button(":material/save: Guardar impuesto", key="tx_save"):
+                if st.button(t(":material/save: Save tax"), key="tx_save"):
                     ok, msg = auth.set_group_tax_default(gtsel, tnew)
                     (flash.exito if ok else st.error)(msg)
                     if ok:
@@ -514,10 +504,9 @@ def _owner_grupos():
 
     # ── Nómina: super y retención por defecto por grupo (v260) ──
     if grupos:
-        with st.expander("Nómina: super y retención por defecto", icon=":material/payments:"):
-            st.caption("Se precargan al generar una nómina; editables por nómina. "
-                       "Australia: super ~11.5%. No es cálculo fiscal certificado.")
-            gnsel = ui.elegir("Grupo", [g["Grupo"] for g in grupos], key="nomcfg_g_sel",
+        with st.expander(t("Payroll: default super and withholding"), icon=":material/payments:"):
+            st.caption(t("These are preloaded when payroll is generated; editable per payslip. Australia: super ~11.5%. This is not a certified tax calculation."))
+            gnsel = ui.elegir(t("Company"), [g["Grupo"] for g in grupos], key="nomcfg_g_sel",
                               vacio="— elige un grupo —")
             if gnsel:
                 def _f_n(v, dflt):
@@ -530,26 +519,26 @@ def _owner_grupos():
                         return dflt
                 _g = next((g for g in grupos if g["Grupo"] == gnsel), {})
                 nc1, nc2 = st.columns(2)
-                _sup = nc1.number_input("Superannuation % (aporte)", min_value=0.0, max_value=100.0,
+                _sup = nc1.number_input(t("Superannuation % (employer contribution)"), min_value=0.0, max_value=100.0,
                                         step=0.5, value=_f_n(_g.get("SuperDefault"), 11.5), key="nom_supdef")
-                _ret = nc2.number_input("Retención de impuesto % (deducción)", min_value=0.0, max_value=100.0,
+                _ret = nc2.number_input(t("Tax withholding % (deduction)"), min_value=0.0, max_value=100.0,
                                         step=1.0, value=_f_n(_g.get("RetencionDefault"), 0.0), key="nom_retdef")
-                if st.button(":material/save: Guardar nómina", key="nomcfg_save"):
+                if st.button(t(":material/save: Save payroll settings"), key="nomcfg_save"):
                     ok1, _m1 = auth.set_group_num_setting(gnsel, "SuperDefault", _sup)
                     ok2, _m2 = auth.set_group_num_setting(gnsel, "RetencionDefault", _ret)
                     if ok1 and ok2:
-                        flash.exito("Configuración de nómina actualizada.")
+                        flash.exito(t("Payroll settings updated."))
                         st.rerun()
                     else:
                         st.error(_m1 if not ok1 else _m2)
 
     if grupos:
-        gsel = ui.elegir("Eliminar grupo", [g["Grupo"] for g in grupos],
+        gsel = ui.elegir(t("Delete company"), [g["Grupo"] for g in grupos],
                          key="del_g_sel", vacio="— ningún grupo —")
         if gsel:
             _ok_del = ui.confirmar_borrado("del_g_ok",
-                                           f"Confirmo eliminar el grupo **{gsel}**")
-            if st.button(":material/delete: Eliminar grupo", key="del_g_btn", disabled=not _ok_del):
+                                           f"I confirm I want to delete the company **{gsel}**")
+            if st.button(t(":material/delete: Delete company"), key="del_g_btn", disabled=not _ok_del):
                 ok, msg = auth.delete_group(gsel)
                 (flash.exito if ok else st.error)(msg)
                 if ok: st.rerun()
@@ -585,18 +574,18 @@ def _owner_usuarios():
 
     # ── Crear usuario (rol + grupo) ──
     grupo_opts = [""] + [g["Grupo"] for g in auth.list_groups()]
-    with st.expander("Crear usuario", icon=":material/person_add:"):
+    with st.expander(t("Create user"), icon=":material/person_add:"):
         with st.form("form_user", clear_on_submit=True):
-            u  = st.text_input("Usuario")
-            nm = st.text_input("Nombre")
-            rl = st.selectbox("Rol", auth.ROLES)
-            gr = st.selectbox("Grupo", grupo_opts,
-                              help="Propietario puede ir sin grupo; admin y campo requieren grupo.")
-            pw = st.text_input("Contraseña", type="password")
-            em = st.text_input(":material/mail: Email (obligatorio para campo)")
-            if st.form_submit_button("Crear usuario"):
+            u  = st.text_input(t("Username"))
+            nm = st.text_input(t("Name"))
+            rl = st.selectbox(t("Role"), auth.ROLES)
+            gr = st.selectbox(t("Company"), grupo_opts,
+                              help=t("An owner can have no company; admin and field users need one."))
+            pw = st.text_input(t("Password"), type="password")
+            em = st.text_input(t(":material/mail: Email (required for field users)"))
+            if st.form_submit_button(t("Create user")):
                 if rl == "campo" and not em.strip():
-                    st.error("El email es obligatorio para usuarios de campo.")
+                    st.error(t("Email is required for field users."))
                 else:
                     ok, msg = auth.add_user(u, pw, rl, nm, gr)
                     if ok and em.strip():
@@ -606,13 +595,13 @@ def _owner_usuarios():
 
     # ── Gestionar un usuario: ficha 360° (una sola selección) ──
     if users:
-        st.markdown("#### :material/manage_accounts: Gestionar un usuario")
-        _gf = ui.elegir("Filtrar por grupo", [g["Grupo"] for g in auth.list_groups()],
+        st.markdown(t("#### :material/manage_accounts: Manage a user"))
+        _gf = ui.elegir(t("Filter by company"), [g["Grupo"] for g in auth.list_groups()],
                         key="ow_ficha_gfil", vacio="— todos los grupos —")
         _cands = [u for u in users if (not _gf or str(u.get("Grupo", "")) == _gf)]
         _map = {f"{u['Nombre'] or u['Usuario']} ({u['Usuario']}) · {u.get('Grupo') or 'sin grupo'}": u
                 for u in _cands}
-        _elegido = ui.elegir("Usuario", _map, key="ow_fichasel", vacio="— elige un usuario —")
+        _elegido = ui.elegir(t("Username"), _map, key="ow_fichasel", vacio="— elige un usuario —")
         if _elegido:
             st.markdown("---")
             # ⚠️ v379: la ficha muestra el TRABAJO de esa persona (horas, recibos,
@@ -652,15 +641,15 @@ def render_owner_seccion(sec: str):
 def _owner_resumen():
     """Resumen multi-grupo del propietario: estado de cada empresa cliente."""
     from core import admin_digest
-    st.markdown("#### :material/public: Resumen de todos los grupos")
+    st.markdown(t("#### :material/public: Summary of all companies"))
     from core import projects as _P
     if not _P.is_configured():
-        st.warning("Necesita Google Sheets configurado.")
+        st.warning(t("This needs Google Sheets configured."))
         return
     with st.spinner("Reuniendo el estado de cada grupo…"):
         data = admin_digest.owner_digest()
     if not data:
-        st.info("Aún no hay grupos con datos.")
+        st.info(t("No companies with data yet."))
         return
     st.dataframe(pd.DataFrame([{
         "Grupo": d["grupo"], "Activos": d["activos"], "Avance %": d["avance"],
@@ -672,31 +661,29 @@ def _owner_resumen():
     if _urg:
         st.warning("Grupos con pendientes: " + ", ".join(d["grupo"] for d in _urg))
     else:
-        st.success("Ningún grupo tiene pendientes urgentes.")
+        st.success(t("No company has anything urgent pending."))
 
 
 def _owner_manuales():
     """Banco de manuales para el agente de IA: subir/quitar (self-service)."""
     from core import manuals
-    st.markdown("#### :material/menu_book: Banco de manuales del asistente")
-    st.caption("El asistente de IA consulta estos manuales para responder dudas técnicas de "
-               "instalación y **cita la fuente** (manual · sección · página).")
+    st.markdown(t("#### :material/menu_book: The assistant's manual library"))
+    st.caption(t("The AI assistant consults these manuals to answer technical installation questions and **cites the source** (manual · section · page)."))
 
     # Pre-cargados (repo, solo lectura)
     pre = manuals.repo_manual_names()
     if pre:
-        st.markdown("**Pre-cargados** (incluidos en la app):")
+        st.markdown(t("**Preloaded** (shipped with the app):"))
         for nm in pre:
             st.markdown(f"- :material/menu_book: {nm}")
 
     if not manuals.storage_available():
-        st.info("Para subir manuales nuevos hace falta Google Drive + Sheets configurados "
-                "(mismos secrets que documentos y fichaje).")
+        st.info(t("Uploading new manuals needs Google Drive + Sheets configured (the same secrets as documents and the time clock)."))
         return
 
     # Subidos por el propietario (Drive)
     st.markdown("---")
-    st.markdown("**Subidos por ti:**")
+    st.markdown(t("**Uploaded by you:**"))
     ups = manuals.list_uploaded()
     if ups:
         st.dataframe(pd.DataFrame([{
@@ -705,30 +692,29 @@ def _owner_manuales():
             "Fecha": r.get("Fecha"),
             "Por": r.get("SubidoPor"),
         } for r in ups]), hide_index=True, width="stretch")
-        with st.expander("Quitar un manual", icon=":material/delete:"):
+        with st.expander(t("Remove a manual"), icon=":material/delete:"):
             opciones = {f"{r.get('Nombre')}  ·  {r.get('Fecha')}": r.get("ID") for r in ups}
-            _mid = ui.elegir("Manual", opciones, key="man_del_sel",
+            _mid = ui.elegir(t("Manual"), opciones, key="man_del_sel",
                              vacio="— ningún manual —")
             if _mid:
                 _ok_del = ui.confirmar_borrado("man_del_ok",
-                                               "Confirmo eliminar este manual")
-                if st.button(":material/delete: Eliminar", key="man_del_btn", disabled=not _ok_del):
+                                               t("I confirm I want to delete this manual"))
+                if st.button(t(":material/delete: Delete"), key="man_del_btn", disabled=not _ok_del):
                     if manuals.delete_manual(_mid):
-                        flash.exito("Manual eliminado.")
+                        flash.exito(t("Manual deleted."))
                         st.rerun()
                     else:
-                        st.error("No se pudo eliminar.")
+                        st.error(t("It could not be deleted."))
     else:
-        st.info("Aún no has subido manuales. Agrega el primero abajo.")
+        st.info(t("You have not uploaded any manuals yet. Add the first one below."))
 
-    with st.expander("Subir manual", icon=":material/upload_file:", expanded=not ups):
-        st.caption("Acepta un PDF con texto (no escaneado) o un ZIP con varios PDFs. "
-                   "Evita PDFs enormes (>50 MB): se procesan en el navegador.")
-        up = st.file_uploader("Archivo (PDF o ZIP)", type=["pdf", "zip"], key="man_up_file")
-        nombre = st.text_input("Nombre del manual (ej. 'KONE MonoSpace')", key="man_up_name")
-        if st.button(":material/upload: Procesar y guardar", key="man_up_btn", disabled=up is None):
+    with st.expander(t("Upload manual"), icon=":material/upload_file:", expanded=not ups):
+        st.caption(t("It accepts a PDF with text (not scanned) or a ZIP with several PDFs. Avoid huge PDFs (>50 MB): they are processed in the browser."))
+        up = st.file_uploader(t("File (PDF or ZIP)"), type=["pdf", "zip"], key="man_up_file")
+        nombre = st.text_input(t("Manual name (e.g. 'KONE MonoSpace')"), key="man_up_name")
+        if st.button(t(":material/upload: Process and save"), key="man_up_btn", disabled=up is None):
             if up is None:
-                st.error("Selecciona un archivo.")
+                st.error(t("Choose a file."))
             else:
                 nm = nombre.strip() or up.name.rsplit(".", 1)[0]
                 with st.spinner("Extrayendo texto e indexando…"):
@@ -738,18 +724,17 @@ def _owner_manuales():
                 if err:
                     st.error(err)
                 else:
-                    flash.exito(f"Manual «{nm}» agregado: {n} fragmentos indexados.")
+                    flash.exito(f"Manual «{nm}» added: {n} fragments indexed.")
                     st.rerun()
 
 
 def _owner_rieles():
     """Catálogo de rieles: referencia → medidas (para autocompletar RAIL desde el plano)."""
     from core import rails
-    st.markdown("#### :material/train: Catálogo de rieles")
-    st.caption("Al cargar un plano, el lector detecta el código del **CAR GUIDE RAIL** y "
-               "autocompleta **RAIL** con la *altura del diente desde la espalda* de esta tabla.")
+    st.markdown(t("#### :material/train: Rail catalogue"))
+    st.caption(t("When a drawing is loaded, the reader detects the **CAR GUIDE RAIL** code and fills in **RAIL** with the *tooth height from the back* from this table."))
     if not rails.is_configured():
-        st.warning("Necesita Google Sheets configurado.")
+        st.warning(t("This needs Google Sheets configured."))
         return
     data = rails.list_rieles()
     if data:
@@ -759,18 +744,18 @@ def _owner_rieles():
             "Ancho diente": r.get("AnchoDiente"),
         } for r in data]), hide_index=True, width="stretch")
     else:
-        st.info("Catálogo vacío. Agrega el primer riel abajo.")
+        st.info(t("The catalogue is empty. Add the first rail below."))
 
-    with st.expander("Agregar riel", icon=":material/add_circle:", expanded=not data):
+    with st.expander(t("Add rail"), icon=":material/add_circle:", expanded=not data):
         with st.form("form_riel", clear_on_submit=True):
-            ref = st.text_input("Referencia (ej. T75-3/B)")
+            ref = st.text_input(t("Reference (e.g. T75-3/B)"))
             rc1, rc2 = st.columns(2)
-            alt = rc1.number_input("Altura del diente desde la espalda (RAIL) mm",
+            alt = rc1.number_input(t("Tooth height from the back (RAIL) mm"),
                                    min_value=0.0, step=0.5)
-            anc = rc2.number_input("Ancho del diente (mm)", min_value=0.0, step=0.5)
-            if st.form_submit_button("Agregar"):
+            anc = rc2.number_input(t("Tooth width (mm)"), min_value=0.0, step=0.5)
+            if st.form_submit_button(t("Add")):
                 if not ref.strip():
-                    st.error("La referencia es obligatoria.")
+                    st.error(t("The reference is required."))
                 else:
                     ok, msg = rails.add_riel(ref.strip(), anc, alt)
                     (flash.exito if ok else st.error)(msg)
@@ -778,22 +763,22 @@ def _owner_rieles():
                         st.rerun()
 
     if data:
-        with st.expander("Editar / eliminar riel", icon=":material/edit:"):
+        with st.expander(t("Edit / delete rail"), icon=":material/edit:"):
             refs = [r.get("Referencia") for r in data]
-            sel  = st.selectbox("Referencia", refs, key="riel_sel")
+            sel  = st.selectbox(t("Reference"), refs, key="riel_sel")
             _cur = rails.get_rail(sel) or {}
             ec1, ec2 = st.columns(2)
-            el = ec1.number_input("Altura diente desde espalda (RAIL)", min_value=0.0, step=0.5,
+            el = ec1.number_input(t("Tooth height from back (RAIL)"), min_value=0.0, step=0.5,
                                   value=float(_cur.get("altura") or 0.0), key="riel_el")
-            ea = ec2.number_input("Ancho diente", min_value=0.0, step=0.5,
+            ea = ec2.number_input(t("Tooth width"), min_value=0.0, step=0.5,
                                   value=float(_cur.get("ancho") or 0.0), key="riel_ea")
             b1, b2 = st.columns(2)
-            if b1.button(":material/save: Guardar", key="riel_save"):
+            if b1.button(t(":material/save: Save"), key="riel_save"):
                 ok, msg = rails.update_riel(sel, ea, el)
                 (flash.exito if ok else st.error)(msg)
                 if ok:
                     st.rerun()
-            if b2.button(":material/delete: Eliminar", key="riel_del"):
+            if b2.button(t(":material/delete: Delete"), key="riel_del"):
                 ok, msg = rails.delete_riel(sel)
                 (flash.exito if ok else st.error)(msg)
                 if ok:
@@ -837,7 +822,7 @@ def _ficha_usuario(u, grupo, owner=False, sel_key="gp_fichasel"):
 
     # v237: format_func muestra iconos Material; las OPCIONES siguen siendo el ID (emoji)
     # → el match de abajo (if _sec == "🔑 Acceso"…) no cambia.
-    _sec = st.radio("Sección del usuario",
+    _sec = st.radio(t("User section"),
                     ["🔑 Acceso", "📇 Contacto", "🎫 Credenciales", "📊 Su trabajo", "🗑"],
                     format_func=lambda o: {"🔑 Acceso": ":material/key: Acceso",
                                            "📇 Contacto": ":material/contact_page: Contacto",
@@ -849,17 +834,17 @@ def _ficha_usuario(u, grupo, owner=False, sel_key="gp_fichasel"):
     if _sec == "🔑 Acceso":
         _a1, _a2 = st.columns(2)      # v227: contraseña | tarifa lado a lado
         with _a1:
-            np_ = st.text_input("Nueva contraseña", type="password", key=f"{k}_np")
-            if st.button("Cambiar contraseña", key=f"{k}_chp", width="stretch"):
+            np_ = st.text_input(t("New password"), type="password", key=f"{k}_np")
+            if st.button(t("Change password"), key=f"{k}_chp", width="stretch"):
                 if np_:
                     ok, msg = auth.set_password(sel, np_); (st.success if ok else st.error)(msg)
                 else:
-                    st.error("Escribe la nueva contraseña.")
+                    st.error(t("Type the new password."))
         with _a2:
-            tar = st.number_input(":material/payments: Tarifa por hora", min_value=0.0, step=1.0,
+            tar = st.number_input(t(":material/payments: Hourly rate"), min_value=0.0, step=1.0,
                                   value=float(str(u.get("TarifaHora", "") or 0).replace(",", ".") or 0),
-                                  key=f"{k}_tar", help="Para costear la mano de obra.")
-            if st.button("Guardar tarifa", key=f"{k}_savetar", width="stretch"):
+                                  key=f"{k}_tar", help=t("Used to cost the labour."))
+            if st.button(t("Save rate"), key=f"{k}_savetar", width="stretch"):
                 ok, msg = auth.set_rate(sel, tar); (flash.exito if ok else st.error)(msg)
                 if ok:
                     st.rerun()
@@ -869,59 +854,55 @@ def _ficha_usuario(u, grupo, owner=False, sel_key="gp_fichasel"):
         _f1, _f2 = st.columns(2)
         with _f1:
             _fi = auth.fecha_ingreso(sel)
-            _nf = st.date_input(":material/event_available: Fecha de alta en la empresa",
+            _nf = st.date_input(t(":material/event_available: Start date at the company"),
                                 value=_fi, key=f"{k}_fing", format="YYYY-MM-DD",
                                 min_value=date(1990, 1, 1), max_value=date(2100, 12, 31),
-                                help="Desde aquí cuenta su año de vacaciones.")
+                                help=t("Their leave year is counted from here."))
         with _f2:
             st.caption("")
-            if st.button("Guardar fecha de alta", key=f"{k}_savefing", width="stretch"):
+            if st.button(t("Save start date"), key=f"{k}_savefing", width="stretch"):
                 ok, msg = auth.set_fecha_ingreso(sel, _nf)
                 (flash.exito if ok else st.error)(msg)
                 if ok:
                     st.rerun()
         if not _fi:
-            st.caption(":material/warning: Sin fecha de alta: su saldo de vacaciones "
-                       "se cuenta por año natural (1 ene – 31 dic), no desde su "
-                       "aniversario.")
+            st.caption(t(":material/warning: With no start date their leave balance is counted by calendar year (1 Jan – 31 Dec), not from their anniversary."))
         if owner:   # el propietario también reasigna rol y grupo (v184)
             _gopts = [""] + [g["Grupo"] for g in auth.list_groups()]
             _rc, _gc = st.columns(2)
             _rcur = str(u.get("Rol", "") or "campo")
-            _nrol = _rc.selectbox("Rol", auth.ROLES,
+            _nrol = _rc.selectbox(t("Role"), auth.ROLES,
                                   index=auth.ROLES.index(_rcur) if _rcur in auth.ROLES else 0,
                                   key=f"{k}_rol")
-            if _rc.button("Aplicar rol", key=f"{k}_chrol"):
+            if _rc.button(t("Apply role"), key=f"{k}_chrol"):
                 ok, msg = auth.set_role(sel, _nrol); (flash.exito if ok else st.error)(msg)
                 if ok:
                     st.rerun()
             _gcur = str(u.get("Grupo", "") or "")
-            _ngrp = _gc.selectbox("Grupo", _gopts,
+            _ngrp = _gc.selectbox(t("Company"), _gopts,
                                   index=_gopts.index(_gcur) if _gcur in _gopts else 0,
                                   key=f"{k}_grp")
-            if _gc.button("Aplicar grupo", key=f"{k}_chgrp"):
+            if _gc.button(t("Apply company"), key=f"{k}_chgrp"):
                 ok, msg = auth.set_group(sel, _ngrp); (flash.exito if ok else st.error)(msg)
                 if ok:
                     st.rerun()
         if activo:
-            if st.button(":material/block: Desactivar (no podrá entrar)", key=f"{k}_de",
+            if st.button(t(":material/block: Deactivate (they will not be able to sign in)"), key=f"{k}_de",
                          width="stretch"):
                 ok, msg = auth.set_active(sel, False); (flash.exito if ok else st.error)(msg)
                 if ok:
                     st.rerun()
         else:
-            if st.button(":material/check_circle: Activar", key=f"{k}_act", width="stretch"):
+            if st.button(t(":material/check_circle: Activate"), key=f"{k}_act", width="stretch"):
                 ok, msg = auth.set_active(sel, True); (flash.exito if ok else st.error)(msg)
                 if ok:
                     st.rerun()
 
     elif _sec == "📇 Contacto":
         if not es_campo:
-            st.caption("El contacto (email + Telegram) solo es obligatorio para "
-                       "usuarios de campo. Puedes registrarlo igual.")
+            st.caption(t("Contact details (email + Telegram) are only required for field users. You can record them anyway."))
         elif not contacto_ok:
-            st.warning(":material/warning: Sin contacto completo **no puede usar la app** y no recibe "
-                       "asignaciones ni inducciones.")
+            st.warning(t(":material/warning: Without complete contact details they **cannot use the app** and receive no assignments or inductions."))
         _contacto_uno(sel, key_prefix=f"{k}_cc")
 
     elif _sec == "🎫 Credenciales":
@@ -943,13 +924,13 @@ def _ficha_usuario(u, grupo, owner=False, sel_key="gp_fichasel"):
         asg = ([p for p in P.list_projects(grupo=grupo, incluir_internos=True)
                 if sel in [x.strip() for x in str(p.get("CampoAsignados", "")).split(";")]]
                if es_campo else [])
-        c1.metric("Horas registradas", f"{_h:.1f}")
-        c2.metric("Recibos cargados", rec["n"])
-        c3.metric("Proyectos asignados", len(asg))
+        c1.metric(t("Hours recorded"), f"{_h:.1f}")
+        c2.metric(t("Receipts uploaded"), rec["n"])
+        c3.metric(t("Projects assigned"), len(asg))
 
         # v227: proyectos asignados CLICKEABLES → abren el proyecto (elementos activos).
         if asg:
-            st.markdown("**Asignado a** — toca para abrir:")
+            st.markdown(t("**Assigned to** — tap to open:"))
             _ac = st.columns(2)
             for _i, _p in enumerate(asg):
                 if _ac[_i % 2].button(f":material/apartment: {_p.get('Nombre', '')}", key=f"{k}_gp_{_i}",
@@ -958,7 +939,7 @@ def _ficha_usuario(u, grupo, owner=False, sel_key="gp_fichasel"):
                     st.session_state["_admin_nav_pending"] = ("proyectos", "📊 Proyectos")
                     st.rerun()
         elif es_campo:
-            st.caption("Sin proyectos asignados.")
+            st.caption(t("No projects assigned."))
 
         # Horas por proyecto de esta persona (del fichaje): dónde ha puesto su tiempo.
         if _pp:
@@ -966,15 +947,13 @@ def _ficha_usuario(u, grupo, owner=False, sel_key="gp_fichasel"):
                         + " · ".join(f"{_n} {_hh:.1f} h"
                                      for _n, _hh in sorted(_pp.items(), key=lambda x: -x[1])))
         if rec["n"]:
-            st.caption(f"Ha cargado recibos por **${rec['total']:,.0f}** en total.")
-        st.caption("Las horas y los recibos se gestionan desde :material/schedule: Fichaje y el detalle de "
-                   "cada proyecto; aquí es un resumen.")
+            st.caption(f"They have uploaded receipts totalling **${rec['total']:,.0f}** in all.")
+        st.caption(t("Hours and receipts are managed from :material/schedule: Time clock and each project's detail; this is a summary."))
 
     else:  # 🗑 eliminar
-        st.warning("Eliminar quita al usuario y su acceso. Sus fichajes, recibos y "
-                   "credenciales ya registrados **no se borran** (quedan a su nombre).")
-        if ui.confirmar_borrado(f"{k}_delok", f"Confirmo eliminar a «{sel}»"):
-            if st.button("Eliminar definitivamente", key=f"{k}_del"):
+        st.warning(t("Deleting removes the user and their access. Their time entries, receipts and credentials already recorded **are not deleted** (they stay under their name)."))
+        if ui.confirmar_borrado(f"{k}_delok", f"I confirm I want to delete «{sel}»"):
+            if st.button(t("Delete permanently"), key=f"{k}_del"):
                 ok, msg = auth.delete_user(sel); (flash.exito if ok else st.error)(msg)
                 if ok:
                     st.session_state.pop(sel_key, None)
@@ -984,14 +963,14 @@ def _ficha_usuario(u, grupo, owner=False, sel_key="gp_fichasel"):
 def _crear_usuario_form(grupo):
     """Alta de un usuario de campo (email obligatorio; el Telegram se vincula luego)."""
     with st.form("form_campo", clear_on_submit=True):
-        u  = st.text_input("Usuario")
-        nm = st.text_input("Nombre")
-        pw = st.text_input("Contraseña", type="password")
-        em = st.text_input(":material/mail: Email (OBLIGATORIO para campo)")
-        st.caption("El Telegram se vincula en su ficha tras crearlo.")
-        if st.form_submit_button("Crear"):
+        u  = st.text_input(t("Username"))
+        nm = st.text_input(t("Name"))
+        pw = st.text_input(t("Password"), type="password")
+        em = st.text_input(t(":material/mail: Email (REQUIRED for field users)"))
+        st.caption(t("Telegram is linked from their record once created."))
+        if st.form_submit_button(t("Create")):
             if not em.strip():
-                st.error("El email es obligatorio para usuarios de campo.")
+                st.error(t("Email is required for field users."))
             else:
                 ok, msg = auth.add_user(u, pw, "campo", nm, grupo)
                 if ok and em.strip():
@@ -1011,8 +990,8 @@ def _grupo_usuarios(grupo):
     gente = [u for u in users if u["Rol"].lower() == "campo"]
 
     if not gente:
-        st.info("Aún no tienes usuarios de campo. Crea el primero aquí.")
-        with st.expander("Crear usuario de campo", icon=":material/person_add:", expanded=True):
+        st.info(t("You have no field users yet. Create the first one here."))
+        with st.expander(t("Create field user"), icon=":material/person_add:", expanded=True):
             _crear_usuario_form(grupo)
         return
 
@@ -1095,8 +1074,7 @@ def _grupo_usuarios(grupo):
     } for u in gente]
     _ev = st.dataframe(pd.DataFrame(_rows), hide_index=True, width="stretch",
                        on_select="rerun", selection_mode="single-row", key="gu_tbl")
-    st.caption(":material/touch_app: Toca una fila para abrir y gestionar la ficha de esa persona.  "
-               "Credenciales: vigente / por vencer / vencido / — sin registrar.")
+    st.caption(t(":material/touch_app: Tap a row to open and manage that person's record.  Credentials: valid / expiring / expired / — not recorded."))
     try:
         _sr = list(_ev.selection.rows)
     except Exception:
@@ -1116,13 +1094,13 @@ def _grupo_usuarios(grupo):
         try:
             tipos, filas = C.matrix(grupo)
             if tipos:
-                with st.expander("Matriz de credenciales (usuarios × tickets)",
+                with st.expander(t("Credentials matrix (users × tickets)"),
                                  icon=":material/table_chart:"):
-                    st.caption("Credenciales: vigente / por vencer (≤30 d) / vencido / — no registrada")
+                    st.caption(t("Credentials: valid / expiring (≤30 d) / expired / — not recorded"))
                     st.dataframe(pd.DataFrame(filas), hide_index=True, width="stretch")
         except Exception:
             pass
-    with st.expander("Crear usuario de campo", icon=":material/person_add:"):
+    with st.expander(t("Create field user"), icon=":material/person_add:"):
         _crear_usuario_form(grupo)
 
 

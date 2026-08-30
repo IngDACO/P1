@@ -14,6 +14,8 @@ sus campos y sepa a dónde guardar.
 """
 import streamlit as st
 
+from core.i18n import t
+
 from core import projects as P
 from core import plan_data
 from core import timeclock
@@ -50,9 +52,7 @@ def selector_proyecto(key: str, ayuda: str = "") -> tuple:
     if rol == "campo":
         prj = _proyecto_fichado(auth)
         if not prj:
-            st.info(":material/info: **Ficha primero en :material/schedule: Fichaje** eligiendo el proyecto en el que "
-                    "trabajas. Así la herramienta usa los datos de su plano y no "
-                    "tendrás que cargar el PDF.")
+            st.info(t(":material/info: **Clock in first at :material/schedule: Time clock**, choosing the project you are working on. That way the tool uses its drawing data and you will not have to upload the PDF."))
             return None, {}
         datos = plan_data.del_proyecto(str(prj.get("ID", "")))
         _cabecera(prj, datos, fichado=True)
@@ -65,7 +65,7 @@ def selector_proyecto(key: str, ayuda: str = "") -> tuple:
         return None, {}
     idmap = {f"{p.get('Nombre')} ({p.get('ID')})": p for p in proys}
     opciones = ["— sin proyecto (cargar plano a mano) —"] + list(idmap.keys())
-    sel = st.selectbox("Proyecto", opciones, key=f"pl_prj_{key}",
+    sel = st.selectbox(t("Project"), opciones, key=f"pl_prj_{key}",
                        help=ayuda or "Usa los datos del plano guardados en el proyecto.")
     if sel == opciones[0]:
         return None, {}
@@ -82,11 +82,11 @@ def _cabecera(prj: dict, datos: dict, fichado: bool):
         if datos.get("faltan"):
             st.caption(f":orange[:material/warning:] El plano no dio: {', '.join(datos['faltan'][:8])}"
                        + ("…" if len(datos["faltan"]) > 8 else "")
-                       + " — ingrésalos a mano.")
+                       + " — enter them by hand.")
     else:
-        st.warning(f"**{prj.get('Nombre')}** no tiene los datos del plano cargados. "
-                   "Cárgalos en el proyecto (:material/build: Mi grupo → abrir el proyecto → "
-                   ":material/attach_file: Archivos) o sube el PDF aquí abajo.")
+        st.warning(f"**{prj.get('Nombre')}** has no drawing data loaded. "
+                   "Load it on the project (:material/build: My company → open the project → "
+                   ":material/attach_file: Files) or upload the PDF below.")
 
 
 def aplicar(datos: dict, mapa: dict) -> int:

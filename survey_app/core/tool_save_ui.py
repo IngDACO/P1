@@ -9,6 +9,8 @@ Flujo: elegir proyecto → descargar el PDF → guardarlo contra el proyecto
 """
 import streamlit as st
 
+from core.i18n import t
+
 from core import projects as P
 from core import toolruns
 
@@ -110,12 +112,12 @@ def render_guardar(herramienta: str, titulo_pdf: str, pdf_bytes: bytes,
 
     st.markdown("---")
     c1, c2 = st.columns([1, 1])
-    c1.download_button(f":material/download: Descargar {titulo_pdf} (PDF)", data=pdf_bytes,
+    c1.download_button(f":material/download: Download {titulo_pdf} (PDF)", data=pdf_bytes,
                        file_name=nombre_archivo, mime="application/pdf",
                        width="stretch", key=f"dl_{key}")
 
     if not toolruns.is_configured():
-        c2.caption(":material/lock: Guardar en el proyecto requiere Google Sheets configurado.")
+        c2.caption(t(":material/lock: Saving to the project needs Google Sheets configured."))
         return
 
     a = st.session_state.get("auth", {}) or {}
@@ -124,7 +126,7 @@ def render_guardar(herramienta: str, titulo_pdf: str, pdf_bytes: bytes,
     nombre = a.get("nombre") or usuario
     proys = _proyectos_de(rol, usuario, grupo)
     if not proys:
-        c2.caption("No hay proyectos disponibles para asociar este cálculo.")
+        c2.caption(t("There are no projects available to attach this calculation to."))
         return
 
     idmap = {f"{p.get('Nombre')} ({p.get('ID')})": p for p in proys}
@@ -143,7 +145,7 @@ def render_guardar(herramienta: str, titulo_pdf: str, pdf_bytes: bytes,
                 msg += " (El PDF no se archivó en Drive: revisa la conexión.)"
             st.success(msg)
         else:
-            st.error(f"No se pudo guardar: {res.get('error')}")
+            st.error(f"It could not be saved: {res.get('error')}")
 
     # ── Campo: destino AUTOMÁTICO = el proyecto donde fichó ──
     # No lo elige de una lista; ya está trabajando allí. Mismo criterio que el plano
@@ -169,24 +171,24 @@ def render_guardar(herramienta: str, titulo_pdf: str, pdf_bytes: bytes,
 
     with c2:
         if _fich is not None:
-            st.caption(f":material/save: Se guardará en **{_fich.get('Nombre')}** — donde fichaste.")
-            if st.button(":material/save: Guardar en el proyecto", width="stretch",
+            st.caption(f":material/save: It will be saved to **{_fich.get('Nombre')}** — where you clocked in.")
+            if st.button(t(":material/save: Save to the project"), width="stretch",
                          key=f"save_{key}"):
                 _guardar(_fich)
-            with st.expander("¿Es de otro proyecto?"):
-                sel = st.selectbox("Proyecto", [_VACIO] + list(idmap.keys()),
+            with st.expander(t("Is it for a different project?")):
+                sel = st.selectbox(t("Project"), [_VACIO] + list(idmap.keys()),
                                    key=f"prj_{key}", label_visibility="collapsed")
-                if st.button("Guardar en el elegido", key=f"save2_{key}",
+                if st.button(t("Save to the chosen one"), key=f"save2_{key}",
                              width="stretch",
                              disabled=(not sel or sel == _VACIO)):
                     _guardar(idmap[sel])
         else:
             if rol == "campo":
-                st.caption("Aún no has fichado a un proyecto (:material/schedule: Fichaje). Elige uno:")
+                st.caption(t("You have not clocked in to a project yet (:material/schedule: Time clock). Choose one:"))
             # Sin preseleccion: guardar el calculo contra otro elevador ensucia su
             # historial y su carpeta de Drive sin que nadie lo note.
-            sel = st.selectbox("Guardar en el proyecto", [_VACIO] + list(idmap.keys()),
+            sel = st.selectbox(t("Save to the project"), [_VACIO] + list(idmap.keys()),
                                key=f"prj_{key}")
-            if st.button(":material/save: Guardar en el proyecto", width="stretch",
+            if st.button(t(":material/save: Save to the project"), width="stretch",
                          key=f"save_{key}", disabled=(not sel or sel == _VACIO)):
                 _guardar(idmap[sel])

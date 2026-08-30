@@ -7274,6 +7274,73 @@ se GUARDAN en la hoja `Actividades` → migración del histórico). El informe d
 no está entero en inglés hasta que caigan esas tres, y conviene saberlo antes de
 enseñárselo a un cliente.
 
+## i18n F3: TODA la interfaz de gestión, en inglés (v440)
+
+15 módulos, **~1.100 etiquetas**: `projects_ui` (479 únicas), `auth_ui`, `roster_ui`,
+`inventory_ui`, `home_ui`, los cinco de finanzas/CRM (`clientes_ui`, `catalogo_ui`,
+`invoices_ui`, `payroll_ui`, `quotes_ui`) y los pequeños (`location_ui`, `plan_ui`,
+`tool_save_ui`, `ui_common`, `app.py`). **0 cadenas sueltas sin `t()`** en los 15.
+
+### ⚠️ Antes de traducir nada hubo que arreglar TRES huecos del extractor
+Los tres fallan en silencio, y el primero es el que arruinó F2:
+| Hueco | Qué habría pasado |
+|---|---|
+| filtraba por **IDIOMA** | el agujero de v439: medido, era ciego a **13 de 15** («Fichar», «Firma», «Iniciales», «Pendientes», «Sitios»…). Ahora extrae por POSICIÓN y la decisión etiqueta-vs-dato se toma al escribir el diccionario, que es donde se puede mirar |
+| se traía **CLAVES de widget** | `st.form("cli_nuevo")` recibe la key como primer posicional; envolverla en `t()` la haría depender del idioma y **el formulario perdería su estado al cambiarlo**. Igual `ui.confirmar_borrado(key, texto)` |
+| no veía **cabeceras de tabla** ni **tarjetas KPI** | 71 `column_config` en el repo y las etiquetas dentro de `kpi_row([( … )])` —el número grande de cada pantalla— se quedaban en español |
+
+Y al abrir el tercero apareció su reverso: al descender por las listas se colaban
+**claves de dict** (`_tot["margen_pct"]`, `f["a_pagar"]`), que son el índice de un
+`Subscript` en la misma tupla que la etiqueta. Se excluyen, junto con lo que ya está
+dentro de un `t(...)`. ⚠️ Y en `column_config` se traduce la ETIQUETA pero **nunca la
+CLAVE**: es el nombre de la columna que `st.data_editor` DEVUELVE, y el código la lee
+por ese nombre — traducirla deja la lectura buscando una columna que no existe.
+
+### ⚠️ VOLVÍ A ROMPER UN MÓDULO, por hacerlo en el orden equivocado
+Al traducir `quotes_ui` metí llamadas `t(...)` en tres funciones donde **`t` ya era la
+variable de totales**: «Nueva cotización» y el detalle no habrían abierto. Es el fallo de
+v437 y v439 por **tercera vez**, y la causa no es el código: yo comprobaba el ámbito
+DESPUÉS de traducir, cuando el daño ya está escrito en el fichero.
+→ **`pre_i18n.py`**: pre-vuelo que lista, ANTES de tocar un módulo, qué funciones usan
+`t`/`d` como variable. Pasado sobre lo que quedaba: **46 funciones** en 5 módulos. Ese
+chequeo evitó repetir el fallo 46 veces.
+⚠️ Y su primera versión daba **falsos positivos** por descender a ámbitos que son
+propios: un `lambda t:` y un `[t for t, e in …]` **no ligan `t`** en la función que los
+contiene (trampa nº3). Con eso corregido, los `t` reales a renombrar eran 7, no 46.
+
+### ⚠️ Tres fallos de la herramienta que cazó su propio `ast.parse`
+`aplicar.py` se niega a escribir un fichero que no compile, y esa guarda cobró:
+1. Decidía «esto lleva comillas» mirando si el trozo EMPIEZA por comilla — y
+   `'>Persona</div>` (de `f"<div style='{_CAB}'>Persona</div>"`) empieza por un apóstrofo
+   que es **contenido**. Le añadía comillas y dejaba la f-string abierta.
+2. Al arreglar eso rompí el caso MULTILÍNEA: la comilla de cierre está en la última línea
+   y `crudo` es el resto de la PRIMERA, así que los cuatro literales largos se
+   reescribían **sin comillas**.
+3. La forma que funciona no es una heurística de caracteres sino **parsear el trozo**: si
+   es una expresión de cadena válida, es un literal; si no, es texto de dentro de una
+   f-string.
+⚠️ Y hay un TERCER caso que se deja A MANO a propósito: una cadena normal concatenada
+con una f-string (`st.caption("texto " f"**{x}**…")`), donde el span EMPIEZA en la comilla
+de apertura y TERMINA dentro de la f-string. Automatizarlo en un módulo de 5.000 líneas
+es más riesgo que valor: los 35 de `projects_ui` van con ancla, verificables de un vistazo.
+⚠️ Y las anclas son de **UNA LÍNEA**: las multilínea obligan a copiar la indentación de la
+continuación al carácter, y 20 de 27 no casaron al primer intento.
+
+### El guardián
+`verif_v440.py`, 25 comprobaciones, probado contra **6 roturas**: las caza las 6 — pero
+**dos solo tras corregirlo**, y las dos por lo mismo, medir por IDIOMA:
+- afirmaba que `clientes_ui` tenía la clave `"Pendiente"` y **no existe** (ahí es una
+  etiqueta de `st.metric`), así que daba **FALLO con el código correcto**. Se reescribió
+  sobre la REGLA —ninguna clave de `column_config` puede ser un `t(...)`— en vez de sobre
+  una lista adivinada.
+- devolver `t("Net pay")` a `"Neto a pagar"` **no lo veía**: sin acentos ni palabras
+  funcionales. El invariante que sí mide no habla de idioma: **toda cadena SUELTA que
+  llegue a una función de display tiene que estar envuelta en `t()`** (los trozos de
+  f-string no se pueden envolver y se marcan aparte). Hoy son **0**.
+⚠️ Para que ese cero significara algo hubo que arreglar el extractor dos veces más:
+contaba como «sin envolver» lo que ya estaba dentro de `t(...)`, y al aplanar las listas
+perdía la marca de f-string, así que 7 trozos salían como cadenas sueltas.
+
 ## i18n F1d + F2: los correos y LA APP DE CAMPO, en inglés (v439)
 
 Cierra F1 (todo lo que SALE de la empresa) y hace F2 entera. **269 reemplazos**: 13 en
@@ -7430,7 +7497,7 @@ literal, así que **no casaba nunca** — y dejó pasar «Plomo riel izquierdo»
 Es el mismo fallo de v436, cometido otra vez ese mismo día. Se vio con `cat -A`, no
 leyendo. → **Cualquier `\b`, `\n` o `\w` va por fichero escrito, nunca por heredoc.**
 
-## Versiones desplegadas (v439 = actual)
+## Versiones desplegadas (v440 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -7438,6 +7505,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v440 | **i18n F3: TODA la interfaz de gestión en inglés** — 15 módulos, ~1.100 etiquetas, **0 cadenas sueltas sin `t()`**. ⚠️ Antes hubo que tapar tres huecos del extractor, los tres silenciosos: filtraba por **idioma** (ciego a 13 de 15 palabras probadas), se traía **claves de widget** (`st.form(key)` → la clave dependería del idioma y el formulario perdería su estado) y no veía **cabeceras de tabla ni tarjetas KPI** (71 `column_config` + las etiquetas dentro de `kpi_row`). En `column_config` se traduce la etiqueta y **nunca la clave**, que es la columna que `st.data_editor` devuelve. ⚠️ **Volví a romper `quotes_ui`** metiendo `t(...)` donde `t` ya era variable — tercera vez (v437, v439): la causa era comprobar el ámbito DESPUÉS de traducir, así que ahora hay **pre-vuelo** (`pre_i18n.py`), que señaló 46 funciones. ⚠️ Su primera versión daba falsos positivos: un `lambda t:` y un `[t for t, e in …]` **no ligan `t`** (trampa nº3) — los reales eran 7. Guardián probado contra 6 roturas; **dos solo se cazaron tras corregirlo**, las dos por medir por idioma: una afirmaba una clave que no existe (**FALLO con el código correcto**) y la otra no veía «Neto a pagar». El invariante que sí mide: **toda cadena suelta de display envuelta en `t()`** |
 | v439 | **i18n F1d + F2: los correos y LA APP DE CAMPO, en inglés** — cierra F1 y hace F2 entera (235 reemplazos: 13 en `notify`/`alerts`, 222 en los 4 módulos de obra). Los correos van con **`d` (idioma BASE)** y la pantalla con `t`. ⚠️ **Dos `UnboundLocalError` que introduje yo**: al traducir aparecieron llamadas a `t()` en funciones donde `t` YA era variable, y Python la marca local en el ámbito ENTERO — el peor dejaba **«Mis ausencias» sin abrir** (`'str' object is not callable`). Mi verificación fue «compilan e importan», que **no ejercita nada**. ⚠️ Y los cambios de `notify`/`alerts` **no estaban en el disco** pese a figurar como hechos: se reaplicaron y se verificaron GENERANDO los mensajes. ⚠️ **Y dije que F2 estaba terminada con 47 etiquetas aún en español**: mi detector busca acentos y palabras funcionales, y «Fichar», «Firma», «Pendientes» o «Mis ausencias» no tienen ninguna de las dos (tercera vez del mismo agujero: v438, el guardián de v439 y esto). Lo destapó el smoke test al EJECUTAR la pantalla; el barrido pasa a ser por POSICIÓN (literal de display sin `t()`), no por idioma. Guardián probado contra 8 roturas — **tres solo se cazaron tras corregirlo**: comprobar PRESENCIA dejaba pasar traducir 1 de 6 apariciones de una clave, «Registrados» es invisible para el detector de español (→ chequeos POSITIVOS, el «Planificado» de v438) y una rotura apuntaba a un módulo **sin ningún logger**. ⚠️ Corrección de escala: lo pendiente son **3.122 literales**, no los 1.153 que cité — mi lista blanca veía solo una parte, y el número incluye datos |
 | v438 | **i18n F1c: los DIAGRAMAS y las PLOMADAS — F1 CERRADO** (pedido por el usuario: «adelanta los diagramas y las plomadas»). 80 etiquetas en 6 módulos; el informe del cliente pasa de **37 líneas en español a 0**, salvo los 11 nombres de actividad, que son DATO de la hoja `Actividades`. ⚠️ El motor se importa con **alias `_d`**: en estos módulos `d` ya es variable en 14 sitios y taparía la función en el ámbito entero (el fallo de v437). ⚠️ NO se tocan las 11 CLAVES de `schedule_table`/`plumb_table`/`plumb_checks` (las indexan los informes) — pero sus VALORES sí, tras comprobar que nadie compara contra ellos. ⚠️ **El barrido estático se dejó CINCO restos** (filtraba cadenas largas y exigía el `<text>` en una línea): los cazó **renderizar los SVG y leer su texto**. Guardián de 59 comprobaciones sobre los **11 SVG generados** (incluido que sigan sin `<defs>`/`<marker>`, o svglib los tira del PDF), probado contra **12 roturas** — cuatro solo se cazaron tras corregirlo: un `or` que dejaba traducir un nombre, un umbral que daba **FALLO con el código correcto**, «Planificado» invisible para el detector de español (→ chequeos POSITIVOS, que de paso destaparon un `FICHA DE REPLANTEO`), y una rotura apuntada a un stub que nadie dibuja. ⚠️ Y **la trampa del `\b` del heredoc por SEGUNDA vez** (v436): 0x08 en el regex → no casa nunca y aprueba en verde |
 | v437 | **i18n F1b: el informe del CLIENTE en inglés**, con el prompt de la IA incluido — traducir solo los encabezados habría dejado **5 de las 12 secciones en español**, porque las escribe el modelo. ⚠️ **Y detrás había un fallo**: el veredicto se deducía del TEXTO de la IA (`"requiere cortes" in ia["cortes"]`), frágil ya en español e **imposible en inglés** — habría dicho «sin valores fuera de límite» en un hueco que sí hay que cortar. Nueva `interpretation.cortes_por_piso`, única definición, compartida con el payload de la IA. ⚠️ **NO se traducen las claves** de `USER_SCHEMA` (se guardan en `InterpJSON`: traducirlas dejaría las 5 secciones EN BLANCO) ni las de las tablas de cronograma y plomado. ⚠️ **Dos fallos míos que solo se vieron GENERANDO el PDF**: la variable del bucle del glosario se llamaba `d` y **tapaba la función del motor** en toda la función (UnboundLocalError; compilar e importar no lo ven), y `cortes_por_piso(limits…)` con el parámetro llamado `calculated` → NameError **que mi propio `except` se tragaba** dejando `_cortes=False` (v323/v338/v344 otra vez), visto solo al leer el log. Guardián probado contra **10 roturas**; dos solo se cazaron tras corregirlo — uno miraba el ÍNDICE en vez de la cabecera, y su sustituto daba **FALLO con el código correcto** porque `_section` PARTE el título |

@@ -6,6 +6,8 @@ Campo: «Mis colillas» (solo lectura + descargar su colilla PDF).
 """
 from datetime import timedelta
 
+from core.i18n import t
+
 import pandas as pd
 import streamlit as st
 
@@ -29,7 +31,7 @@ def render_nominas(grupo):
     4ª vez que aparecía este título duplicado (v212, v291, v314).
     """
     if not payroll.is_configured():
-        st.info(":material/info: Configura Google Sheets para gestionar nóminas.")
+        st.info(t(":material/info: Configure Google Sheets to manage payroll."))
         return
     if st.session_state.get("_nom_gen"):
         _generar(grupo)
@@ -51,26 +53,26 @@ def render_nominas(grupo):
     # `theme._esc`, que deshace ese escape al montar el HTML (v312).
     from core import theme as T
     T.kpi_row([
-        ("Por pagar", T.dinero(r["a_pagar"], 0),
-         f"{len(noms) - _npag} emitida(s) sin pagar",
+        (t("To pay"), T.dinero(r["a_pagar"], 0),
+         f"{len(noms) - _npag} issued and unpaid",
          T.ROJO if r["a_pagar"] > 0 else T.AZUL),
-        ("Pagado", T.dinero(r["pagado"], 0), f"{_npag} pagada(s)"),
-        ("Nóminas", str(r["n"]), f"{len(_peri)} periodo(s)"),
+        (t("Paid"), T.dinero(r["pagado"], 0), f"{_npag} paid"),
+        (t("Payslips"), str(r["n"]), f"{len(_peri)} period(s)"),
     ])
 
-    if st.button(":material/add_circle: Generar nómina", type="primary", key="nom_gen_btn"):
+    if st.button(t(":material/add_circle: Generate payroll"), type="primary", key="nom_gen_btn"):
         st.session_state["_nom_gen"] = True
         st.rerun()
 
     if not noms:
-        st.caption("Aún no hay nóminas. Genera la primera con «Generar nómina».")
+        st.caption(t("No payslips yet. Generate the first one with «Generate payroll»."))
         return
 
     # ── Filtro de periodo ────────────────────────────────────────
     # Hoy son 5 filas del mismo periodo; en un año son 60 y la tabla deja de servir.
     _OPT_TODOS = "Todos los periodos"
     _lbl = {f"{d} → {h}": (d, h) for d, h in _peri}
-    _sel = st.selectbox("Periodo", [_OPT_TODOS] + list(_lbl), key="nom_periodo",
+    _sel = st.selectbox(t("Period"), [_OPT_TODOS] + list(_lbl), key="nom_periodo",
                         label_visibility="collapsed")
     _rows = [x for x in noms
              if _sel == _OPT_TODOS
@@ -91,7 +93,7 @@ def render_nominas(grupo):
                    f"tiene{'n' if len(_cero) > 1 else ''} horas trabajadas pero "
                    "**base $0**: les falta la tarifa/hora. La colilla sale en cero y su "
                    "trabajo no cuenta en el costo.")
-        if st.button(":material/badge: Poner tarifas en Usuarios", key="nom_ir_users"):
+        if st.button(t(":material/badge: Set rates in Users"), key="nom_ir_users"):
             from core import home_ui
             home_ui.navegar("planificacion", "👷 Usuarios")
 
@@ -122,7 +124,7 @@ def render_nominas(grupo):
     from core import auth as _A
     _et = _A.etiqueta_usuarios([{"Usuario": x.get("Usuario"), "Nombre": x.get("Nombre")}
                                 for x in noms])
-    st.caption("Toca una nómina para ver el detalle, editar conceptos y marcar pagada.")
+    st.caption(t("Tap a payslip to see the detail, edit items and mark it paid."))
     df = pd.DataFrame([{
         "Usuario":  _et.get(str(x.get("Usuario", "")), str(x.get("Nombre", ""))),
         "Periodo":  f"{x.get('PeriodoDesde', '')} → {x.get('PeriodoHasta', '')}",
@@ -136,12 +138,12 @@ def render_nominas(grupo):
     _ev = st.dataframe(
         df, width="stretch", hide_index=True,
         on_select="rerun", selection_mode="single-row", key="nom_tbl",
-        column_config={"Base": st.column_config.NumberColumn("Base", format="$%,d"),
-                       "Neto": st.column_config.NumberColumn("Neto", format="$%,d"),
-                       "Tarifa/h": st.column_config.NumberColumn("Tarifa/h", format="$%,.2f")})
-    st.caption(f"{len(_rows)} nómina(s)  ·  base {T.dinero(sum(_num(x.get('Base')) for x in _rows), 0)}"
-               f"  ·  neto {T.dinero(sum(_num(x.get('Neto')) for x in _rows), 0)}"
-               "  ·  «Tarifa/h» vacía = esa persona no la tiene puesta.")
+        column_config={"Base": st.column_config.NumberColumn(t("Base pay"), format="$%,d"),
+                       "Neto": st.column_config.NumberColumn(t("Net"), format="$%,d"),
+                       "Tarifa/h": st.column_config.NumberColumn(t("Rate/h"), format="$%,.2f")})
+    st.caption(f"{len(_rows)} payslip(s)  ·  base pay {T.dinero(sum(_num(x.get('Base')) for x in _rows), 0)}"
+               f"  ·  net {T.dinero(sum(_num(x.get('Neto')) for x in _rows), 0)}"
+               "  ·  an empty «Rate/h» means that person has no rate set.")
     _sr = list(_ev.selection.rows)
     if _sr:
         st.session_state["_nom_open"] = str(_rows[_sr[0]].get("ID", ""))
@@ -150,45 +152,44 @@ def render_nominas(grupo):
 
 
 def _generar(grupo):
-    if st.button(":material/arrow_back: Cancelar", key="nom_gen_back"):
+    if st.button(t(":material/arrow_back: Cancel"), key="nom_gen_back"):
         st.session_state.pop("_nom_gen", None)
         st.rerun()
-    st.markdown("## :material/add_circle: Generar nómina")
+    st.markdown(t("## :material/add_circle: Generate payroll"))
 
     hoy = clock.today(grupo)
-    per = st.radio("Periodicidad", ["Semanal", "Quincenal", "Mensual", "Personalizado"],
+    per = st.radio(t("Frequency"), ["Semanal", "Quincenal", "Mensual", "Personalizado"],
                    horizontal=True, key="nom_per")
     _d0 = {"Semanal": hoy - timedelta(days=6), "Quincenal": hoy - timedelta(days=13),
            "Mensual": hoy - timedelta(days=29)}.get(per, hoy - timedelta(days=6))
     c1, c2 = st.columns(2)
-    desde = c1.date_input("Desde", value=_d0, key=f"nom_desde_{per}")
-    hasta = c2.date_input("Hasta", value=hoy, key=f"nom_hasta_{per}")
+    desde = c1.date_input(t("From"), value=_d0, key=f"nom_desde_{per}")
+    hasta = c2.date_input(t("To"), value=hoy, key=f"nom_hasta_{per}")
 
     _sup = auth.group_num_setting(grupo, "SuperDefault", 11.5)
     _ret = auth.group_num_setting(grupo, "RetencionDefault", 0.0)
     c3, c4 = st.columns(2)
-    sup = c3.number_input("Superannuation % (aporte)", min_value=0.0, max_value=100.0,
+    sup = c3.number_input(t("Superannuation % (employer contribution)"), min_value=0.0, max_value=100.0,
                           value=float(_sup), step=0.5, key="nom_sup")
-    ret = c4.number_input("Retención de impuesto % (deducción)", min_value=0.0, max_value=100.0,
+    ret = c4.number_input(t("Tax withholding % (deduction)"), min_value=0.0, max_value=100.0,
                           value=float(_ret), step=1.0, key="nom_ret")
-    st.caption(":material/info: Los % de super y retención vienen del grupo y son editables aquí y en "
-               "cada nómina. No es un cálculo fiscal certificado; valida los importes.")
+    st.caption(t(":material/info: The super and withholding percentages come from the company and can be edited here and on each payslip. This is not a certified tax calculation; check the amounts."))
 
     horas = timeclock.horas_por_usuario_rango(grupo, desde, hasta)
     rates = auth.rate_map(grupo)
     if horas:
-        st.markdown(f"**{len(horas)} usuario(s)** con horas de jornada en el periodo:")
+        st.markdown(f"**{len(horas)} user(s)** with workday hours in the period:")
         st.dataframe(pd.DataFrame([{
             "Usuario": v["nombre"], "Horas": round(v["horas"], 1),
             "Tarifa/h": _num(rates.get(k, 0)),
             "Base": round(v["horas"] * _num(rates.get(k, 0)), 0),
         } for k, v in sorted(horas.items())]), width="stretch", hide_index=True,
-            column_config={"Tarifa/h": st.column_config.NumberColumn("Tarifa/h", format="$%,d"),
-                           "Base": st.column_config.NumberColumn("Base", format="$%,d")})
+            column_config={"Tarifa/h": st.column_config.NumberColumn(t("Rate/h"), format="$%,d"),
+                           "Base": st.column_config.NumberColumn(t("Base pay"), format="$%,d")})
     else:
-        st.info("Nadie tiene horas de jornada en ese periodo.")
+        st.info(t("Nobody has workday hours in that period."))
 
-    if st.button(":material/payments: Generar nóminas", type="primary", disabled=not horas,
+    if st.button(t(":material/payments: Generate payslips"), type="primary", disabled=not horas,
                  key="nom_do"):
         res = payroll.generar(grupo, desde.isoformat(), hasta.isoformat(), sup, ret, _creado_por())
         if res.get("error"):
@@ -241,12 +242,12 @@ def _generar(grupo):
 
 
 def _detalle(grupo, nid):
-    if st.button(":material/arrow_back: Volver a nóminas", key="nom_back"):
+    if st.button(t(":material/arrow_back: Back to payroll"), key="nom_back"):
         st.session_state.pop("_nom_open", None)
         st.rerun()
     f = payroll.get_nomina(nid)
     if not f:
-        st.warning("Nómina no encontrada.")
+        st.warning(t("Payslip not found."))
         st.session_state.pop("_nom_open", None)
         return
     if not tenant.exigir(f, "Esta nómina"):        # v351
@@ -254,17 +255,17 @@ def _detalle(grupo, nid):
         return
     base = _num(f.get("Base"))
     est = str(f.get("Estado", "emitida"))
-    st.markdown(f"## :material/payments: Nómina — {f.get('Nombre', '')}")
+    st.markdown(f"## :material/payments: Payslip — {f.get('Nombre', '')}")
     # ⚠️ v309: dos importes en la misma línea → Streamlit lo renderizaba como LaTeX
     # (la tarifa y la base salían como fórmula). `theme.dinero` escapa el `$`.
     from core import theme as _T
-    st.markdown(f"Periodo **{f.get('PeriodoDesde', '')} → {f.get('PeriodoHasta', '')}**  ·  "
+    st.markdown(f"Period **{f.get('PeriodoDesde', '')} → {f.get('PeriodoHasta', '')}**  ·  "
                 f"{_num(f.get('Horas')):.1f} h × {_T.dinero(f.get('TarifaHora'))} = "
-                f"base **{_T.dinero(base)}**  ·  estado: **{est}**")
+                f"base pay **{_T.dinero(base)}**  ·  status: **{est}**")
 
     izq, der = st.columns([3, 2])
     with izq:
-        st.markdown("#### :material/list: Conceptos (devengos, deducciones, aportes)")
+        st.markdown(t("#### :material/list: Items (earnings, deductions, employer contributions)"))
         _cs = payroll.conceptos_de(f)
         _pre = [{"Concepto": c.get("concepto", ""), "Tipo": c.get("tipo", "deduccion"),
                  "Monto": _num(c.get("monto"))} for c in _cs] or \
@@ -272,11 +273,11 @@ def _detalle(grupo, nid):
         _ed = st.data_editor(
             pd.DataFrame(_pre), num_rows="dynamic", width="stretch", key=f"nom_ed_{nid}",
             column_config={
-                "Concepto": st.column_config.TextColumn("Concepto", width="large"),
-                "Tipo": st.column_config.SelectboxColumn("Tipo", options=payroll.TIPOS, required=True),
-                "Monto": st.column_config.NumberColumn("Monto", format="$%,.2f", min_value=0.0),
+                "Concepto": st.column_config.TextColumn(t("Item"), width="large"),
+                "Tipo": st.column_config.SelectboxColumn(t("Type"), options=payroll.TIPOS, required=True),
+                "Monto": st.column_config.NumberColumn(t("Amount"), format="$%,.2f", min_value=0.0),
             })
-        if est != "anulada" and st.button(":material/save: Guardar conceptos", key=f"nom_save_{nid}"):
+        if est != "anulada" and st.button(t(":material/save: Save items"), key=f"nom_save_{nid}"):
             conceptos = []
             for _, rr in _ed.iterrows():
                 con = str(rr.get("Concepto", "")).strip()
@@ -292,28 +293,28 @@ def _detalle(grupo, nid):
                 st.rerun()
 
     with der:
-        st.metric("Neto a pagar", f"${_num(f.get('Neto')):,.2f}")
+        st.metric(t("Net pay"), f"${_num(f.get('Neto')):,.2f}")
         try:
             from core import payslip_pdf
             _pdf = payslip_pdf.generate_payslip_pdf(f, grupo)
-            st.download_button(":material/download: Descargar colilla (PDF)", data=_pdf,
+            st.download_button(t(":material/download: Download payslip (PDF)"), data=_pdf,
                                file_name=f"Colilla_{f.get('Nombre', '')}_{f.get('PeriodoHasta', '')}.pdf",
                                mime="application/pdf", key=f"nom_pdf_{nid}")
         except Exception as e:
-            st.caption(f":material/warning: No se pudo generar el PDF: {e}")
+            st.caption(f":material/warning: The PDF could not be generated: {e}")
         if est == "pagada":
-            st.success(f":material/check_circle: Pagada ({f.get('FechaPago', '')}).")
+            st.success(f":material/check_circle: Paid ({f.get('FechaPago', '')}).")
         elif est != "anulada":
             with st.form(f"nom_pay_{nid}"):
-                _fch = st.date_input("Fecha de pago", value=clock.today(grupo))
-                if st.form_submit_button(":material/check: Marcar pagada", type="primary"):
+                _fch = st.date_input(t("Payment date"), value=clock.today(grupo))
+                if st.form_submit_button(t(":material/check: Mark as paid"), type="primary"):
                     ok, msg = payroll.marcar_pagada(nid, _fch.isoformat())
                     (flash.exito if ok else st.error)(msg)
                     if ok:
                         st.rerun()
         if est != "anulada":
-            with st.expander(":material/block: Anular nómina"):
-                if st.button("Anular esta nómina", key=f"nom_anul_{nid}"):
+            with st.expander(t(":material/block: Void payslip")):
+                if st.button(t("Void this payslip"), key=f"nom_anul_{nid}"):
                     payroll.anular(nid)
                     st.session_state.pop("_nom_open", None)
                     st.rerun()
@@ -321,23 +322,23 @@ def _detalle(grupo, nid):
 
 # ── Vista del campo: Mis colillas ────────────────────────────────
 def render_mis_colillas(usuario, grupo):
-    st.markdown("## :material/payments: Mis colillas de pago")
+    st.markdown(t("## :material/payments: My payslips"))
     if not payroll.is_configured():
-        st.info(":material/info: Aún no está disponible.")
+        st.info(t(":material/info: Not available yet."))
         return
     noms = payroll.list_nominas(grupo, usuario=usuario)
     if not noms:
-        st.caption("Aún no tienes colillas de pago.")
+        st.caption(t("You have no payslips yet."))
         return
     for f in sorted(noms, key=lambda x: str(x.get("PeriodoHasta", "")), reverse=True):
         with st.container(border=True):
             st.markdown(f"**{f.get('PeriodoDesde', '')} → {f.get('PeriodoHasta', '')}**  ·  "
-                        f"{_num(f.get('Horas')):.1f} h  ·  neto **${_num(f.get('Neto')):,.2f}**  ·  "
+                        f"{_num(f.get('Horas')):.1f} h  ·  net **${_num(f.get('Neto')):,.2f}**  ·  "
                         f"{f.get('Estado', '')}")
             try:
                 from core import payslip_pdf
                 _pdf = payslip_pdf.generate_payslip_pdf(f, grupo)
-                st.download_button(":material/download: Descargar colilla", data=_pdf,
+                st.download_button(t(":material/download: Download payslip"), data=_pdf,
                                    file_name=f"Colilla_{f.get('PeriodoHasta', '')}.pdf",
                                    mime="application/pdf", key=f"myp_{f.get('ID', '')}")
             except Exception as e:

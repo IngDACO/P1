@@ -3,6 +3,8 @@
 ⚠️ SIN cabecera propia: `home_ui._sub_header` ya pinta «Finanzas · Cotizaciones».
 """
 import pandas as pd
+
+from core.i18n import t
 import streamlit as st
 
 from core import flash
@@ -29,7 +31,7 @@ def _creado_por() -> str:
 
 def render_cotizaciones(grupo):
     if not Q.is_configured():
-        st.info(":material/info: Configura Google Sheets para cotizar.")
+        st.info(t(":material/info: Configure Google Sheets to create quotes."))
         return
     if st.session_state.get("_cot_nueva"):
         _nueva(grupo)
@@ -40,25 +42,24 @@ def render_cotizaciones(grupo):
 
     r = Q.resumen(grupo)
     T.kpi_row([
-        ("En la calle", T.dinero(r["en_calle"], 0),
-         f"{r['por_estado'].get(Q.ENVIADA, 0)} enviada(s) sin respuesta", T.AMBAR),
-        ("Ganado", T.dinero(r["ganado"], 0),
-         f"{r['por_estado'].get(Q.ACEPTADA, 0)} aceptada(s)", T.VERDE),
+        (t("Out with clients"), T.dinero(r["en_calle"], 0),
+         f"{r['por_estado'].get(Q.ENVIADA, 0)} sent, awaiting reply", T.AMBAR),
+        (t("Won"), T.dinero(r["ganado"], 0),
+         f"{r['por_estado'].get(Q.ACEPTADA, 0)} accepted", T.VERDE),
         # ⚠️ sin cotizaciones decididas la conversión NO es 0%: es que aún no se puede
         # calcular. Un 0% ahí sería la trampa de v320 («sin asignar» que mentía).
-        ("Conversión", f"{r['conversion']:.0f}%" if r["conversion"] is not None else "—",
-         "de las decididas" if r["conversion"] is not None else "aún no hay decididas"),
-        ("Cotizaciones", str(r["n"]), f"{r['por_estado'].get(Q.VENCIDA, 0)} vencida(s)"),
+        (t("Conversion"), f"{r['conversion']:.0f}%" if r["conversion"] is not None else "—",
+         t("of those decided") if r["conversion"] is not None else t("none decided yet")),
+        (t("Quotes"), str(r["n"]), f"{r['por_estado'].get(Q.VENCIDA, 0)} expired"),
     ])
 
-    if st.button(":material/add_circle: Nueva cotización", type="primary", key="cot_new_btn"):
+    if st.button(t(":material/add_circle: New quote"), type="primary", key="cot_new_btn"):
         st.session_state["_cot_nueva"] = True
         st.rerun()
 
     cots = Q.list_cotizaciones(grupo)
     if not cots:
-        st.caption("Todavía no hay cotizaciones. Empieza con «Nueva cotización» — "
-                   "los artículos salen de :material/sell: Catálogo.")
+        st.caption(t("No quotes yet. Start with «New quote» — the items come from :material/sell: Catalogue."))
         return
 
     _venc = [c for c in cots if Q.estado_de(c) == Q.VENCIDA]
@@ -69,7 +70,7 @@ def render_cotizaciones(grupo):
                        for c in _venc[:5])
                    + ". Saca una versión nueva si sigue en pie.")
 
-    st.caption("Toca una cotización para ver el detalle, el PDF y marcar el resultado.")
+    st.caption(t("Tap a quote to see the detail, the PDF and record the outcome."))
     df = pd.DataFrame([{
         "Nº": str(c.get("Numero", "")) + (f" v{int(_num(c.get('Version'), 1))}"
                                           if _num(c.get("Version"), 1) > 1 else ""),
@@ -83,8 +84,8 @@ def render_cotizaciones(grupo):
     _ev = st.dataframe(df, width="stretch", hide_index=True,
                        on_select="rerun", selection_mode="single-row", key="cot_tbl",
                        column_config={
-                           "Total": st.column_config.NumberColumn("Total", format="$%,.2f"),
-                           "Margen": st.column_config.NumberColumn("Margen", format="%.1f%%")})
+                           "Total": st.column_config.NumberColumn(t("Total"), format="$%,.2f"),
+                           "Margen": st.column_config.NumberColumn(t("Margin"), format="%.1f%%")})
     _sr = list(_ev.selection.rows)
     if _sr and _sr[0] < len(cots):
         st.session_state["_cot_open"] = str(cots[_sr[0]].get("ID", ""))
@@ -98,14 +99,13 @@ def _editor_lineas(grupo, key: str, lineas: list) -> list:
     from core import auth
     items = CAT.list_items(grupo)
     if not items:
-        st.warning(":material/sell: El catálogo está vacío. Da de alta productos y "
-                   "servicios en :material/sell: Catálogo antes de cotizar.")
+        st.warning(t(":material/sell: The catalogue is empty. Add products and services in :material/sell: Catalogue before quoting."))
         return lineas
     etq = CAT.etiqueta_items(items)          # v306: el ID solo si el nombre se repite
-    _sel = st.multiselect("Añadir del catálogo", list(etq),
+    _sel = st.multiselect(t("Add from the catalogue"), list(etq),
                           format_func=lambda i: etq.get(i, i), key=f"{key}_sel",
-                          help="Elige los artículos; luego ajustas cantidad y margen.")
-    if _sel and st.button(":material/add: Añadir a la cotización", key=f"{key}_add"):
+                          help=t("Choose the items; then adjust quantity and margin."))
+    if _sel and st.button(t(":material/add: Add to the quote"), key=f"{key}_add"):
         _m = auth.group_margin_default(grupo)
         _ya = {l.get("catalogo_id") for l in lineas}
         for cid in _sel:
@@ -116,11 +116,10 @@ def _editor_lineas(grupo, key: str, lineas: list) -> list:
         st.rerun()
 
     if not lineas:
-        st.caption("Sin líneas todavía.")
+        st.caption(t("No lines yet."))
         return lineas
 
-    st.markdown("**Líneas** — pon **cuánto quieres ganar** en cada rubro; "
-                "el margen % y el precio salen solos")
+    st.markdown(t("**Lines** — enter **how much you want to make** on each item; the margin % and the price follow on their own"))
     ed = st.data_editor(
         pd.DataFrame([{
             "Concepto": l.get("concepto", ""),
@@ -136,16 +135,16 @@ def _editor_lineas(grupo, key: str, lineas: list) -> list:
         # precio son consecuencia, y se muestran bloqueados para que quede claro.
         disabled=["Concepto", "Costo", "Margen %", "Precio"],
         column_config={
-            "Costo": st.column_config.NumberColumn("Costo", format="$%,.2f",
-                                                   help="Lo que te cuesta a ti. No lo ve el cliente."),
+            "Costo": st.column_config.NumberColumn(t("Cost"), format="$%,.2f",
+                                                   help=t("What it costs you. The client does not see this.")),
             "Ganancia $": st.column_config.NumberColumn(
-                "Ganancia $", format="$%,.2f", min_value=0.0,
-                help="Lo que quieres ganar en este rubro. El margen % se calcula solo."),
-            "Margen %": st.column_config.NumberColumn("Margen %", format="%.1f%%",
-                                                      help="Se calcula: ganancia ÷ costo."),
-            "Precio": st.column_config.NumberColumn("Precio", format="$%,.2f",
-                                                    help="Costo + ganancia. Es lo que ve el cliente."),
-            "Cant.": st.column_config.NumberColumn("Cant.", min_value=0.0)})
+                t("Profit $"), format="$%,.2f", min_value=0.0,
+                help=t("How much you want to make on this item. The margin % is worked out for you.")),
+            "Margen %": st.column_config.NumberColumn(t("Margin %"), format="%.1f%%",
+                                                      help=t("Worked out as profit ÷ cost.")),
+            "Precio": st.column_config.NumberColumn(t("Price"), format="$%,.2f",
+                                                    help=t("Cost + profit. This is what the client sees.")),
+            "Cant.": st.column_config.NumberColumn(t("Qty"), min_value=0.0)})
 
     # ⚠️ La cantidad se reaplica sobre el artículo del catálogo (el costo depende de
     # ella); la ganancia, sobre el costo ya congelado.
@@ -165,13 +164,13 @@ def _editor_lineas(grupo, key: str, lineas: list) -> list:
 
 def _nueva(grupo):
     from core import auth
-    if st.button(":material/arrow_back: Cancelar", key="cot_new_back"):
+    if st.button(t(":material/arrow_back: Cancel"), key="cot_new_back"):
         for k in ("_cot_nueva", "new_lineas", "new_sel", "cot_new_cli",
                   "cot_new_cli_nom", "cot_new_cli_cto",
                   "cot_new_cli_tel", "cot_new_cli_mail"):
             st.session_state.pop(k, None)
         st.rerun()
-    st.markdown("## :material/request_quote: Nueva cotización")
+    st.markdown(t("## :material/request_quote: New quote"))
 
     # ⚠️ v420: el cliente se puede crear AQUÍ. Antes, si era nuevo, había que salir a
     # Contactos, darlo de alta y volver a empezar la cotización — y si no había NINGÚN
@@ -182,34 +181,33 @@ def _nueva(grupo):
     fichas = C.list_clientes(grupo)
     _NUEVO = "➕ Nuevo cliente"
     _map = {f"{f.get('Nombre','')}": f for f in fichas}
-    _cli = st.selectbox("Cliente", list(_map) + [_NUEVO], key="cot_new_cli",
+    _cli = st.selectbox(t("Client"), list(_map) + [_NUEVO], key="cot_new_cli",
                         index=len(_map) if not fichas else 0)
     _nuevo_cli = {}
     if _cli == _NUEVO:
         with st.container(border=True):
-            st.caption(":material/person_add: Se creará su ficha en Contactos al guardar "
-                       "la cotización, y quedará enlazada a ella.")
+            st.caption(t(":material/person_add: Their record will be created in Contacts when the quote is saved, and linked to it."))
             n1, n2 = st.columns(2)
-            _nuevo_cli["nombre"] = n1.text_input("Nombre del cliente *",
+            _nuevo_cli["nombre"] = n1.text_input(t("Client name *"),
                                                  key="cot_new_cli_nom")
-            _nuevo_cli["contacto"] = n2.text_input("Persona de contacto",
+            _nuevo_cli["contacto"] = n2.text_input(t("Contact person"),
                                                    key="cot_new_cli_cto")
-            _nuevo_cli["telefono"] = n1.text_input("Teléfono", key="cot_new_cli_tel")
-            _nuevo_cli["email"] = n2.text_input("Email", key="cot_new_cli_mail")
+            _nuevo_cli["telefono"] = n1.text_input(t("Phone"), key="cot_new_cli_tel")
+            _nuevo_cli["email"] = n2.text_input(t("Email"), key="cot_new_cli_mail")
 
     lineas = st.session_state.get("new_lineas", [])
     lineas = _editor_lineas(grupo, "new", lineas)
     st.session_state["new_lineas"] = lineas
 
-    imp = st.number_input("Impuesto %", min_value=0.0, step=1.0,
+    imp = st.number_input(t("Tax %"), min_value=0.0, step=1.0,
                           value=float(auth.group_tax_default(grupo)), key="cot_new_imp",
-                          help="Sale del valor por defecto del grupo.")
-    nota = st.text_area("Notas para el cliente (opcional)", key="cot_new_nota")
+                          help=t("Taken from the company default."))
+    nota = st.text_area(t("Notes for the client (optional)"), key="cot_new_nota")
 
     if lineas:
-        t = Q.totales(lineas, imp)
-        _totales_html(t, imp)
-        if st.button(":material/save: Crear cotización", type="primary",
+        _tot = Q.totales(lineas, imp)
+        _totales_html(_tot, imp)
+        if st.button(t(":material/save: Create quote"), type="primary",
                      key="cot_new_save", width="stretch"):
             # ⚠️ v420: si el cliente es nuevo, su ficha se crea PRIMERO y solo si sale
             # bien se crea la cotización. Al revés quedaría una cotización sin
@@ -219,7 +217,7 @@ def _nueva(grupo):
             if _cli == _NUEVO:
                 _nom = str(_nuevo_cli.get("nombre", "")).strip()
                 if not _nom:
-                    st.error("El nombre del cliente es obligatorio.")
+                    st.error(t("The client name is required."))
                     return
                 _ok_c, _res = C.create_cliente(
                     grupo, _nom, contacto=_nuevo_cli.get("contacto", ""),
@@ -236,11 +234,11 @@ def _nueva(grupo):
                     _ya = next((x for x in C.list_clientes(grupo, incluir_inactivos=True)
                                 if C._norm(x.get("Nombre")) == C._norm(_nom)), None)
                     if not _ya:
-                        st.error(f"No se pudo crear el cliente: {_res}")
+                        st.error(f"The client could not be created: {_res}")
                         return
                     f = _ya
-                    st.info(f":material/info: Ya existía una ficha de **{_nom}**; "
-                            f"la cotización se enlaza a esa.")
+                    st.info(f":material/info: A record already existed for **{_nom}**; "
+                            f"the quote is linked to that one.")
             else:
                 f = _map[_cli]
             ok, msg = Q.crear(grupo, f.get("ID", ""), f.get("Nombre", ""), lineas,
@@ -256,28 +254,28 @@ def _nueva(grupo):
                 st.error(msg)
 
 
-def _totales_html(t: dict, imp_pct):
+def _totales_html(_tot: dict, imp_pct):
     """Totales + lo que el cliente NO ve (costo y ganancia), que es lo que te interesa."""
     T.kpi_row([
-        ("Subtotal", T.dinero(t["subtotal"], 0), "antes de impuesto"),
-        ("Impuesto", T.dinero(t["impuesto"], 0), f"{_num(imp_pct):g}%"),
-        ("Total al cliente", T.dinero(t["total"], 0), "lo que se le cobra", T.AZUL),
-        ("Tu ganancia", T.dinero(t["ganancia"], 0),
-         f"margen efectivo {t['margen_pct']:.1f}%", T.VERDE),
+        (t("Subtotal"), T.dinero(_tot["subtotal"], 0), t("before tax")),
+        (t("Tax"), T.dinero(_tot["impuesto"], 0), f"{_num(imp_pct):g}%"),
+        (t("Total to client"), T.dinero(_tot["total"], 0), t("what they are charged"), T.AZUL),
+        (t("Your profit"), T.dinero(_tot["ganancia"], 0),
+         f"effective margin {_tot['margen_pct']:.1f}%", T.VERDE),
     ])
-    if t["horas"]:
-        st.caption(f":material/schedule: La cotización incluye **{t['horas']:g} horas** de "
-                   "servicio. Al aceptarla podrás compararlas con las horas fichadas.")
+    if _tot["horas"]:
+        st.caption(f":material/schedule: The quote includes **{_tot['horas']:g} service hours**. Once accepted "
+                   "you can compare them against the hours clocked.")
 
 
 # ── Detalle ──────────────────────────────────────────────────────
 def _detalle(grupo, cid):
-    if st.button(":material/arrow_back: Volver a cotizaciones", key="cot_back"):
+    if st.button(t(":material/arrow_back: Back to quotes"), key="cot_back"):
         st.session_state.pop("_cot_open", None)
         st.rerun()
     c = Q.get_cotizacion(cid)
     if not c:
-        st.warning("Cotización no encontrada.")
+        st.warning(t("Quote not found."))
         st.session_state.pop("_cot_open", None)
         return
     # v351: `get_cotizacion` busca por ID en toda la hoja, sin mirar el grupo.
@@ -294,7 +292,7 @@ def _detalle(grupo, cid):
                 + (f"  ·  viene de {c.get('Origen')}" if c.get("Origen") else ""))
 
     lineas = Q.lineas_de(c)
-    t = Q.totales(lineas, _num(c.get("ImpuestoPct")))
+    _tot = Q.totales(lineas, _num(c.get("ImpuestoPct")))
 
     if est == Q.BORRADOR:
         _des = Q.desactualizadas(c)
@@ -308,17 +306,16 @@ def _detalle(grupo, cid):
             st.warning(":material/sync_problem: **El catálogo cambió** desde que armaste "
                        "esta cotización: " + _txt + ". Los precios de la cotización NO se "
                        "tocan solos.")
-            if st.button(":material/sync: Actualizar precios desde el catálogo",
+            if st.button(t(":material/sync: Refresh prices from the catalogue"),
                          key="cot_upd_" + str(cid),
-                         help="Trae los costos de hoy conservando lo que quieres ganar "
-                              "en cada línea."):
+                         help=t("Brings today's costs across while keeping what you want to make on each line.")):
                 ok, msg = Q.actualizar_precios(cid)
                 (flash.exito if ok else st.error)(msg)
                 if ok:
                     st.rerun()
         nuevas = _editor_lineas(grupo, f"ed{cid}", lineas)
         if nuevas != lineas:
-            if st.button(":material/save: Guardar cambios", key=f"cot_save_{cid}",
+            if st.button(t(":material/save: Save changes"), key=f"cot_save_{cid}",
                          type="primary"):
                 ok, msg = Q.guardar_lineas(cid, nuevas)
                 (flash.exito if ok else st.error)(msg)
@@ -331,36 +328,36 @@ def _detalle(grupo, cid):
             "Cant.": _num(l.get("cantidad")),
             "Precio": round(_num(l.get("precio_total")), 2),
         } for l in lineas]), hide_index=True, width="stretch",
-            column_config={"Precio": st.column_config.NumberColumn("Precio", format="$%,.2f")})
-        _totales_html(t, c.get("ImpuestoPct"))
+            column_config={"Precio": st.column_config.NumberColumn(t("Price"), format="$%,.2f")})
+        _totales_html(_tot, c.get("ImpuestoPct"))
 
     # ── Acciones según el estado ─────────────────────────────────
     st.markdown("---")
     a1, a2, a3 = st.columns(3)
     if est == Q.BORRADOR:
-        if a1.button(":material/send: Marcar como enviada", key=f"cot_env_{cid}",
+        if a1.button(t(":material/send: Mark as sent"), key=f"cot_env_{cid}",
                      type="primary", width="stretch"):
             ok, msg = Q.set_estado(cid, Q.ENVIADA)
             (flash.exito if ok else st.error)(msg)
             if ok:
                 st.rerun()
     elif est in (Q.ENVIADA, Q.VENCIDA):
-        if a1.button(":material/check_circle: El cliente la aceptó", key=f"cot_ok_{cid}",
+        if a1.button(t(":material/check_circle: The client accepted it"), key=f"cot_ok_{cid}",
                      type="primary", width="stretch"):
             ok, msg = Q.set_estado(cid, Q.ACEPTADA)
             (flash.exito if ok else st.error)(msg)
             if ok:
                 st.rerun()
-        if a2.button(":material/block: La rechazó", key=f"cot_no_{cid}",
+        if a2.button(t(":material/block: They rejected it"), key=f"cot_no_{cid}",
                      width="stretch"):
             ok, msg = Q.set_estado(cid, Q.RECHAZADA)
             (flash.exito if ok else st.error)(msg)
             if ok:
                 st.rerun()
     if est != Q.BORRADOR:
-        if a3.button(":material/content_copy: Nueva versión", key=f"cot_v2_{cid}",
+        if a3.button(t(":material/content_copy: New version"), key=f"cot_v2_{cid}",
                      width="stretch",
-                     help="Clona esta cotización como borrador para cambiarla. La actual se conserva."):
+                     help=t("Clones this quote as a draft so you can change it. The current one is kept.")):
             ok, msg = Q.nueva_version(cid, creado_por=_creado_por())
             if ok:
                 st.session_state["_cot_open"] = msg
@@ -374,43 +371,41 @@ def _detalle(grupo, cid):
         cli = next((x for x in C.list_clientes(grupo, incluir_inactivos=True)
                     if str(x.get("ID", "")) == str(c.get("ClienteID", ""))), None)
         pdf = quote_pdf.generate_quote_pdf(c, cli, grupo)
-        st.download_button(":material/download: Descargar cotización (PDF)", data=pdf,
+        st.download_button(t(":material/download: Download quote (PDF)"), data=pdf,
                            file_name=f"Cotizacion_{c.get('Numero','')}.pdf",
                            mime="application/pdf", key=f"cot_pdf_{cid}")
     except Exception as e:
-        st.warning(f":material/warning: No se pudo generar el PDF: {e}")
+        st.warning(f":material/warning: The PDF could not be generated: {e}")
 
     # ── Fase 3: de cotización ganada a obra ──────────────────────
     if est == Q.ACEPTADA and not str(c.get("ProyectoID", "")).strip():
-        _crear_proyecto(grupo, c, t)
+        _crear_proyecto(grupo, c, _tot)
     elif str(c.get("ProyectoID", "")).strip():
         _comparacion(cid, c)
 
 
-def _crear_proyecto(grupo, c, t):
+def _crear_proyecto(grupo, c, _tot):
     """Aceptada y sin obra todavía: darla de alta con lo ya pactado."""
     st.markdown("---")
-    st.markdown("### :material/construction: Convertirla en proyecto")
-    st.caption("Nace con el cliente, el presupuesto y el margen que acabas de cotizar. "
-               "Desde ahí sigue el flujo de siempre: costos, horas y factura.")
+    st.markdown(t("### :material/construction: Turn it into a project"))
+    st.caption(t("It starts with the client, the budget and the margin you have just quoted. From there the usual flow follows: costs, hours and invoice."))
     with st.form("cot_prj_" + str(c.get("ID"))):
         c1, c2 = st.columns(2)
-        nombre = c1.text_input("Nombre del proyecto",
+        nombre = c1.text_input(t("Project name"),
                                value=str(c.get("ClienteNombre", "")) + " — Nº"
                                      + str(c.get("Numero", "")))
-        tipo = c2.selectbox("Tipo", ["Instalación", "Delivery", "Ripout", "Otro"])
+        tipo = c2.selectbox(t("Type"), ["Instalación", "Delivery", "Ripout", "Otro"])
         c3, c4 = st.columns(2)
-        ini = c3.date_input("Fecha de inicio", value=clock.today(grupo))
-        ns = c4.number_input("Paradas (NS)", min_value=0, step=1, value=0,
-                             help="Solo la instalación genera el cronograma estándar; "
-                                  "con NS 0 el proyecto nace sin actividades.")
-        ubic = st.text_input("Ubicación (opcional)")
+        ini = c3.date_input(t("Start date"), value=clock.today(grupo))
+        ns = c4.number_input(t("Stops (NS)"), min_value=0, step=1, value=0,
+                             help=t("Only an installation generates the standard schedule; with NS 0 the project starts with no activities."))
+        ubic = st.text_input(t("Location (optional)"))
         st.info(":material/savings: Presupuesto del proyecto: **"
-                + T.dinero(t["costo"], 0) + "** — es tu **costo** cotizado, no el precio "
-                "al cliente (" + T.dinero(t["subtotal"], 0) + "). Así la alerta de "
+                + T.dinero(_tot["costo"], 0) + "** — es tu **costo** cotizado, no el precio "
+                "al cliente (" + T.dinero(_tot["subtotal"], 0) + "). Así la alerta de "
                 "sobre-presupuesto salta cuando te comes el margen, no cuando ya "
                 "estás perdiendo dinero.")
-        if st.form_submit_button(":material/add_circle: Crear el proyecto",
+        if st.form_submit_button(t(":material/add_circle: Create the project"),
                                  type="primary", width="stretch"):
             ok, msg = Q.aceptar_y_crear_proyecto(
                 c.get("ID"), nombre=nombre, tipo=tipo, fecha_inicio=ini,
@@ -452,9 +447,9 @@ def _comparacion(cid, c):
         _g, _etq, _pie = None, "Ganancia proyectada", "aún no hay avance ni costo"
     _cg = T.VERDE if (_g is not None and _g >= _gc) else (T.ROJO if _g is not None else None)
     T.kpi_row([
-        _tarj("Horas", comp["horas"], "h"),
-        _tarj("Costo", comp["costo"]),
-        ("Ingreso", T.dinero(comp["ingreso"], 0), "lo que aceptó el cliente"),
+        _tarj(t("Hours"), comp["horas"], "h"),
+        _tarj(t("Cost"), comp["costo"]),
+        (t("Revenue"), T.dinero(comp["ingreso"], 0), t("what the client accepted")),
         (_etq, T.dinero(_g, 0) if _g is not None else "—", _pie, _cg),
     ])
     if comp["costo_proyectado"] is not None:

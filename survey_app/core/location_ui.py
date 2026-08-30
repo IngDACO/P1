@@ -11,6 +11,8 @@ FUERA de cualquier `st.form` (igual que el multiselect de asignados en el detall
 """
 import streamlit as st
 
+from core.i18n import t
+
 _SYDNEY = (-33.8688, 151.2093)   # centro por defecto si aún no hay pin
 
 
@@ -128,23 +130,21 @@ def location_picker(key, lat=None, lng=None, direccion=""):
         st.session_state[klng] = lng
     slat, slng = st.session_state.get(klat), st.session_state.get(klng)
 
-    st.caption(":material/place: Escribe la dirección y pulsa **Buscar**: la app la ubica sola. "
-               "Si hay varias coincidencias, elige la correcta. (Opcional: clic en el mapa para afinar.)")
+    st.caption(t(":material/place: Type the address and press **Search**: the app locates it on its own. If there are several matches, choose the right one. (Optional: click the map to fine-tune.)"))
     if geocoder_activo() == "google":
-        st.caption("🎯 Precisión: **Google** (número de casa exacto).")
+        st.caption(t("🎯 Accuracy: **Google** (exact street number)."))
     else:
-        st.caption("≈ Precisión aproximada (OpenStreetMap). Falta la API key de Google "
-                   "para ubicar el número exacto.")
+        st.caption(t("≈ Approximate accuracy (OpenStreetMap). The Google API key is missing, so the exact street number cannot be located."))
     c1, c2 = st.columns([4, 1])
-    q = c1.text_input("Buscar dirección", value=direccion, key=f"{key}_q",
-                      label_visibility="collapsed", placeholder=":material/search: Buscar dirección…")
-    if c2.button("Buscar", key=f"{key}_btn", width="stretch"):
+    q = c1.text_input(t("Search address"), value=direccion, key=f"{key}_q",
+                      label_visibility="collapsed", placeholder=t(":material/search: Search address…"))
+    if c2.button(t("Search"), key=f"{key}_btn", width="stretch"):
         _cands = geocode_candidates(q)
         st.session_state[f"{key}_cands"] = _cands
         st.session_state.pop(f"{key}_applied", None)     # reaplicar el mejor de esta búsqueda
         st.session_state.pop(f"{key}_candsel", None)
         if not _cands:
-            st.warning("No encontré esa dirección. Añade ciudad/estado/país, o haz clic en el mapa.")
+            st.warning(t("I could not find that address. Add city/state/country, or click on the map."))
         st.rerun()
 
     # Resultados de la última búsqueda: SIEMPRE se muestran como opciones (aunque sea uno,
@@ -153,7 +153,7 @@ def location_picker(key, lat=None, lng=None, direccion=""):
     _cands = st.session_state.get(f"{key}_cands") or []
     if _cands:
         _labels = [c["label"] for c in _cands]
-        _sel = st.selectbox(f":material/place: Resultado ({len(_cands)}) — confírmalo o elige otro:",
+        _sel = st.selectbox(f":material/place: Result ({len(_cands)}) — confirm it or choose another:",
                             _labels, key=f"{key}_candsel")
         _c = _cands[_labels.index(_sel)]
         if st.session_state.get(f"{key}_applied") != _sel:
@@ -166,11 +166,10 @@ def location_picker(key, lat=None, lng=None, direccion=""):
         import folium
         from streamlit_folium import st_folium
     except Exception:
-        st.info("Mapa no disponible; ingresa las coordenadas a mano (las ves en Google Maps: "
-                "clic derecho → coordenadas).")
+        st.info(t("The map is not available; enter the coordinates by hand (you can see them in Google Maps: right-click → coordinates)."))
         m1, m2 = st.columns(2)
-        _la = m1.text_input("Lat", value="" if slat is None else str(slat), key=f"{key}_mlat")
-        _ln = m2.text_input("Lng", value="" if slng is None else str(slng), key=f"{key}_mlng")
+        _la = m1.text_input(t("Lat"), value="" if slat is None else str(slat), key=f"{key}_mlat")
+        _ln = m2.text_input(t("Lng"), value="" if slng is None else str(slng), key=f"{key}_mlng")
         return to_float(_la), to_float(_ln)
 
     center = [slat, slng] if slat is not None else list(_SYDNEY)
@@ -191,7 +190,7 @@ def location_picker(key, lat=None, lng=None, direccion=""):
 
     slat, slng = st.session_state.get(klat), st.session_state.get(klng)
     if slat is not None:
-        st.caption(f"Coordenadas fijadas: **{slat:.5f}, {slng:.5f}**")
+        st.caption(f"Coordinates set: **{slat:.5f}, {slng:.5f}**")
     else:
-        st.caption("_Sin ubicación fijada aún._")
+        st.caption(t("_No location set yet._"))
     return slat, slng
