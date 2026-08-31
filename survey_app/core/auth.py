@@ -16,6 +16,7 @@ import uuid
 
 import streamlit as st
 
+from core.i18n import t
 from core import timeclock
 
 logger = logging.getLogger(__name__)
@@ -79,20 +80,20 @@ def _get_login_ws():
     # El handle (y la migración de columnas) se cachea una vez por proceso en
     # timeclock.get_sheet → no re-lee la cabecera en cada llamada.
     if not timeclock._secrets_present():
-        return None, "El acceso no está configurado (faltan credenciales en Secrets)."
+        return None, t("Access is not configured (credentials missing from Secrets).")
     try:
         return timeclock.get_sheet(LOGIN_SHEET, tuple(LOGIN_HEADERS)), None
     except Exception as e:
-        return None, f"No se pudo abrir la hoja Login: {e}"
+        return None, f"{t('Could not open the Login sheet')}: {e}"
 
 
 def _get_groups_ws():
     if not timeclock._secrets_present():
-        return None, "El acceso no está configurado (faltan credenciales en Secrets)."
+        return None, t("Access is not configured (credentials missing from Secrets).")
     try:
         return timeclock.get_sheet(GROUPS_SHEET, tuple(GROUPS_HEADERS)), None
     except Exception as e:
-        return None, f"No se pudo abrir la hoja Grupos: {e}"
+        return None, f"{t('Could not open the Groups sheet')}: {e}"
 
 
 # ── Lectura CACHEADA del sheet Login (para rutas de display, no de sesión) ──
@@ -177,7 +178,7 @@ def set_group_timezone(grupo: str, zona: str) -> tuple:
     try:
         col = gws.row_values(1).index("Zona") + 1
     except ValueError:
-        return False, "La columna Zona aún no existe en la hoja Grupos."
+        return False, t("The Zona column does not exist yet in the Groups sheet.")
     for i, r in enumerate(gws.get_all_records(numericise_ignore=["all"])):
         if str(r.get("Grupo", "")).strip().lower() == (grupo or "").strip().lower():
             try:
@@ -215,13 +216,13 @@ def set_group_margin_default(grupo: str, pct) -> tuple:
     try:
         col = gws.row_values(1).index("MargenDefault") + 1
     except ValueError:
-        return False, "La columna MargenDefault aún no existe en la hoja Grupos."
+        return False, t("The MargenDefault column does not exist yet in the Groups sheet.")
     for i, r in enumerate(gws.get_all_records(numericise_ignore=["all"])):
         if str(r.get("Grupo", "")).strip().lower() == (grupo or "").strip().lower():
             try:
                 gws.update_cell(i + 2, col, str(pct))
                 _invalidate_groups()
-                return True, "Margen por defecto actualizado."
+                return True, t("Default margin updated.")
             except Exception as e:
                 return False, f"Error: {e}"
     return False, "Grupo no encontrado."
@@ -255,7 +256,7 @@ def set_group_num_setting(grupo: str, field: str, val) -> tuple:
     try:
         col = gws.row_values(1).index(field) + 1
     except ValueError:
-        return False, f"La columna {field} aún no existe en la hoja Grupos."
+        return False, f"{t('The column')} {field} {t('does not exist yet in the Groups sheet.')}"
     for i, r in enumerate(gws.get_all_records(numericise_ignore=["all"])):
         if str(r.get("Grupo", "")).strip().lower() == (grupo or "").strip().lower():
             try:
@@ -291,13 +292,13 @@ def set_group_tax_default(grupo: str, pct) -> tuple:
     try:
         col = gws.row_values(1).index("ImpuestoDefault") + 1
     except ValueError:
-        return False, "La columna ImpuestoDefault aún no existe en la hoja Grupos."
+        return False, t("The ImpuestoDefault column does not exist yet in the Groups sheet.")
     for i, r in enumerate(gws.get_all_records(numericise_ignore=["all"])):
         if str(r.get("Grupo", "")).strip().lower() == (grupo or "").strip().lower():
             try:
                 gws.update_cell(i + 2, col, str(pct))
                 _invalidate_groups()
-                return True, "Impuesto por defecto actualizado."
+                return True, t("Default tax updated.")
             except Exception as e:
                 return False, f"Error: {e}"
     return False, "Grupo no encontrado."
@@ -309,10 +310,10 @@ def add_group(nombre: str, descripcion: str = "", zona: str = "") -> tuple:
         return False, err
     nombre = (nombre or "").strip()
     if not nombre:
-        return False, "El nombre del grupo es obligatorio."
+        return False, t("The group name is required.")
     for r in gws.get_all_records(numericise_ignore=["all"]):
         if str(r.get("Grupo", "")).strip().lower() == nombre.lower():
-            return False, f"El grupo '{nombre}' ya existe."
+            return False, f"{t('Group')} '{nombre}' {t('already exists.')}"
     try:
         gws.append_row([nombre, descripcion, "SI", zona], value_input_option="RAW")
     except Exception as e:
@@ -330,7 +331,7 @@ def delete_group(nombre: str) -> tuple:
             try:
                 gws.delete_rows(i + 2)
                 _invalidate_groups()
-                return True, f"Grupo '{nombre}' eliminado."
+                return True, f"{t('Group')} '{nombre}' {t('deleted.')}"
             except Exception as e:
                 return False, f"Error: {e}"
     return False, "Grupo no encontrado."
@@ -376,15 +377,15 @@ def verify_login(usuario: str, pw: str) -> dict:
         if str(r.get("Usuario", "")).strip().lower() == usuario.lower():
             activo = str(r.get("Activo", "SI")).strip().upper()
             if activo not in _ACTIVE_OK:
-                return {"ok": False, "error": "Usuario inactivo."}
+                return {"ok": False, "error": t("Inactive user.")}
             if verify_password(pw, str(r.get("Password", ""))):
                 return {"ok": True,
                         "usuario": str(r.get("Usuario", "")),
                         "rol":     str(r.get("Rol", "campo")).strip().lower(),
                         "nombre":  str(r.get("Nombre", "")) or usuario,
                         "grupo":   str(r.get("Grupo", "")).strip()}
-            return {"ok": False, "error": "Contraseña incorrecta."}
-    return {"ok": False, "error": "Usuario no encontrado."}
+            return {"ok": False, "error": t("Wrong password.")}
+    return {"ok": False, "error": t("User not found.")}
 
 
 # ── Sesión única por cuenta ("primero gana") ─────────────────
@@ -392,18 +393,30 @@ def verify_login(usuario: str, pw: str) -> dict:
 # literal suelto) porque la UI la compara para decidir si ofrece el botón
 # "cerrar la otra sesión e iniciar aquí": ese botón solo tiene sentido cuando
 # hay otra sesión de verdad, no cuando la hoja no respondió.
-SESION_OCUPADA = "Esta cuenta ya tiene una sesión activa en otro dispositivo."
+#
+# ⚠️ NO lleva `t()`: esto se evalúa AL IMPORTAR el módulo, cuando todavía no hay
+# sesión, así que la traducción quedaría CONGELADA en el idioma de ese momento — y
+# con el diccionario español lleno, el usuario vería inglés aquí y solo aquí. Peor
+# aún: si alguien lo "arreglara" traduciendo un lado de la comparación y no el otro,
+# `tok == SESION_OCUPADA` dejaría de casar y **el botón de «cerrar la otra sesión»
+# desaparecería** sin dar ningún error. La constante es el CENTINELA (dato interno,
+# se compara) y la traducción va donde se PINTA (`auth_ui`), que es la misma
+# separación etiqueta/dato de todo el módulo i18n.
+SESION_OCUPADA = "This account already has an active session on another device."
 
 
 def _session_active(rec) -> bool:
     """¿La cuenta tiene una sesión viva? (token no vacío y heartbeat reciente)."""
     if not str(rec.get("SessionToken", "")).strip():
         return False
+    # ⚠️ NO `t`: ese nombre es la función de traducción a nivel de módulo, y usarlo
+    # aquí la taparía en TODO el ámbito de la función — el fallo de v437/v439/v440.
+    # Renombrado ANTES de traducir, que es el orden que evita el daño (pre_i18n).
     try:
-        t = int(float(rec.get("SessionTime", 0)))
+        _ts = int(float(rec.get("SessionTime", 0)))
     except Exception:
-        t = 0
-    return (int(time.time()) - t) < SESSION_TIMEOUT
+        _ts = 0
+    return (int(time.time()) - _ts) < SESSION_TIMEOUT
 
 
 def start_session(usuario: str) -> tuple:
@@ -417,9 +430,9 @@ def start_session(usuario: str) -> tuple:
     except Exception:
         # Sin leer la hoja no se puede saber si la cuenta ya tiene sesión activa.
         # Se BLOQUEA (no se abre a ciegas) pero con un mensaje accionable.
-        return False, "No se pudo verificar la sesión (la hoja no respondió). Reintenta en unos segundos."
+        return False, t("Could not verify the session (the sheet did not respond). Try again in a few seconds.")
     if row is None:
-        return False, "Usuario no encontrado."
+        return False, t("User not found.")
     if _session_active(rec):
         return False, SESION_OCUPADA
     token = uuid.uuid4().hex
@@ -427,7 +440,7 @@ def start_session(usuario: str) -> tuple:
         lws.update_cell(row, _COL["SessionToken"], token)
         lws.update_cell(row, _COL["SessionTime"], str(int(time.time())))
     except Exception as e:
-        return False, f"No se pudo iniciar sesión: {e}"
+        return False, f"{t('Could not sign in')}: {e}"
     return True, token
 
 
@@ -500,7 +513,7 @@ def set_contact(usuario: str, email: str = None, telegram: str = None) -> tuple:
         return False, err
     row, _ = _find_row(lws, usuario)
     if row is None:
-        return False, "Usuario no encontrado."
+        return False, t("User not found.")
     try:
         if email is not None:
             lws.update_cell(row, _COL["Email"], str(email).strip())
@@ -583,7 +596,7 @@ def set_fecha_ingreso(usuario: str, fecha) -> tuple:
         return False, err
     row, rec = _find_row(lws, usuario)
     if row is None:
-        return False, "Usuario no encontrado."
+        return False, t("User not found.")
     _antes = dict(rec or {})
     _val = "" if not fecha else str(fecha)[:10]
     try:
@@ -599,7 +612,7 @@ def set_fecha_ingreso(usuario: str, fecha) -> tuple:
                             grupo=str(_antes.get("Grupo", "")))
     except Exception as e:
         logger.warning("auth.set_fecha_ingreso: auditoría: %s", e)
-    return True, "Fecha de ingreso actualizada."
+    return True, t("Start date updated.")
 
 
 def set_rate(usuario: str, tarifa) -> tuple:
@@ -609,7 +622,7 @@ def set_rate(usuario: str, tarifa) -> tuple:
         return False, err
     row, rec = _find_row(lws, usuario)
     if row is None:
-        return False, "Usuario no encontrado."
+        return False, t("User not found.")
     _antes = dict(rec or {})            # v342: el ANTES, de la fila que ya se leyó
     try:
         lws.update_cell(row, _COL["TarifaHora"], str(tarifa))
@@ -627,7 +640,7 @@ def set_rate(usuario: str, tarifa) -> tuple:
         # Deja RASTRO (regla v323): `registrar` logea lo suyo, pero si revienta
         # `diff` o el import, el apunte se perdía en silencio.
         logger.warning("auth: no se pudo auditar la tarifa de %s: %s", usuario, e)
-    return True, f"Tarifa de '{usuario}' actualizada."
+    return True, f"{t('Rate for')} '{usuario}' {t('updated.')}"
 
 
 def etiqueta_usuarios(users) -> dict:
@@ -697,22 +710,22 @@ def add_user(usuario: str, pw: str, rol: str, nombre: str = "",
         return False, err
     usuario = (usuario or "").strip()
     if not usuario or not pw:
-        return False, "Usuario y contraseña son obligatorios."
+        return False, t("Username and password are required.")
     if rol not in ROLES:
-        return False, "Rol inválido."
+        return False, t("Invalid role.")
     if rol in ("administrador", "campo") and not (grupo or "").strip():
-        return False, "Los usuarios administrador y de campo deben pertenecer a un grupo."
+        return False, t("Administrator and field users must belong to a group.")
     row, _ = _find_row(lws, usuario)
     if row is not None:
-        return False, f"El usuario '{usuario}' ya existe."
+        return False, f"{t('User')} '{usuario}' {t('already exists.')}"
     try:
         lws.append_row([usuario, hash_password(pw), rol, nombre or usuario,
                         "SI" if activo else "NO", (grupo or "").strip()],
                        value_input_option="RAW")
     except Exception as e:
-        return False, f"Error creando usuario: {e}"
+        return False, f"{t('Error creating user')}: {e}"
     _invalidate_login()
-    return True, f"Usuario '{usuario}' creado ({rol})."
+    return True, f"{t('User')} '{usuario}' {t('created')} ({rol})."
 
 
 def set_group(usuario: str, grupo: str) -> tuple:
@@ -721,13 +734,13 @@ def set_group(usuario: str, grupo: str) -> tuple:
         return False, err
     row, _ = _find_row(lws, usuario)
     if row is None:
-        return False, "Usuario no encontrado."
+        return False, t("User not found.")
     try:
         lws.update_cell(row, _COL["Grupo"], (grupo or "").strip())
     except Exception as e:
         return False, f"Error: {e}"
     _invalidate_login()
-    return True, f"Grupo de '{usuario}' → {grupo or '(sin grupo)'}."
+    return True, f"{t('Group for')} '{usuario}' → {grupo or t('(no group)')}."
 
 
 def set_password(usuario: str, pw: str) -> tuple:
@@ -735,33 +748,33 @@ def set_password(usuario: str, pw: str) -> tuple:
     if err:
         return False, err
     if not pw:
-        return False, "La contraseña no puede estar vacía."
+        return False, t("The password cannot be empty.")
     row, _ = _find_row(lws, usuario)
     if row is None:
-        return False, "Usuario no encontrado."
+        return False, t("User not found.")
     try:
         lws.update_cell(row, 2, hash_password(pw))
     except Exception as e:
         return False, f"Error: {e}"
     _invalidate_login()
-    return True, f"Contraseña de '{usuario}' actualizada."
+    return True, f"{t('Password for')} '{usuario}' {t('updated.')}"
 
 
 def set_role(usuario: str, rol: str) -> tuple:
     if rol not in ROLES:
-        return False, "Rol inválido."
+        return False, t("Invalid role.")
     lws, err = _get_login_ws()
     if err:
         return False, err
     row, _ = _find_row(lws, usuario)
     if row is None:
-        return False, "Usuario no encontrado."
+        return False, t("User not found.")
     try:
         lws.update_cell(row, 3, rol)
     except Exception as e:
         return False, f"Error: {e}"
     _invalidate_login()
-    return True, f"Rol de '{usuario}' → {rol}."
+    return True, f"{t('Role for')} '{usuario}' → {rol}."
 
 
 def set_active(usuario: str, activo: bool) -> tuple:
@@ -770,7 +783,7 @@ def set_active(usuario: str, activo: bool) -> tuple:
         return False, err
     row, _ = _find_row(lws, usuario)
     if row is None:
-        return False, "Usuario no encontrado."
+        return False, t("User not found.")
     try:
         lws.update_cell(row, 5, "SI" if activo else "NO")
     except Exception as e:
@@ -785,13 +798,13 @@ def delete_user(usuario: str) -> tuple:
         return False, err
     row, _ = _find_row(lws, usuario)
     if row is None:
-        return False, "Usuario no encontrado."
+        return False, t("User not found.")
     try:
         lws.delete_rows(row)
     except Exception as e:
         return False, f"Error: {e}"
     _invalidate_login()
-    return True, f"Usuario '{usuario}' eliminado."
+    return True, f"{t('User')} '{usuario}' {t('deleted.')}"
 
 
 # ── Helpers de rol ───────────────────────────────────────────
@@ -830,7 +843,7 @@ def set_group_sheet_id(grupo: str, sheet_id) -> tuple:
                  and str(g.get("Grupo", "")).strip().casefold() != str(grupo).strip().casefold()]
         if otros:
             # dos clientes en el mismo libro es justo lo que este cambio viene a evitar
-            return False, f"Ese libro ya es de: {', '.join(otros)}."
+            return False, f"{t('That workbook already belongs to')}: {', '.join(otros)}."
     try:
         recs = gws.get_all_records(numericise_ignore=["all"])
     except Exception as e:
@@ -847,7 +860,7 @@ def set_group_sheet_id(grupo: str, sheet_id) -> tuple:
                 timeclock.invalidar_libros()
             except Exception:
                 pass
-            return True, ("Libro enlazado." if sid else "Grupo devuelto al libro maestro.")
+            return True, ("Libro enlazado." if sid else t("Group returned to the master workbook."))
     return False, "Grupo no encontrado."
 
 

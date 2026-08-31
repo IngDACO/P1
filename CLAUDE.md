@@ -7288,6 +7288,90 @@ se GUARDAN en la hoja `Actividades` → migración del histórico). El informe d
 no está entero en inglés hasta que caigan esas tres, y conviene saberlo antes de
 enseñárselo a un cliente.
 
+## i18n F5a: los mensajes de BACKEND que la interfaz pinta (v445)
+
+Empieza **F5**, la última fase: los módulos internos. Aquí no vale la red de
+POSICIÓN de v440 —no hay llamadas a `st.*`—, así que lo que decide es el **DESTINO**
+de cada cadena:
+
+| | |
+|---|---|
+| **se traduce** | lo que la función **DEVUELVE**: la UI lo pinta con `flash`/`st.error` |
+| **NO se toca** | los mensajes de `logger` (nadie los ve) y los **nombres de columna** que viajan en el MISMO `return` (`"Usuario"`, `"Nombre"`, `"Estado"`): son el DATO del libro, y traducirlos rompe la lectura en silencio |
+
+Se empieza por `auth.py` y `timeclock.py` porque son los que más se ven: **cada login**
+pasa por `verify_login` y **cada jornada** por `clock_in`/`clock_out`. 42 mensajes.
+
+### ⚠️ El orden: renombrar ANTES, no después
+`pre_i18n` marcó `t` como variable en `auth._session_active` y `d` en tres funciones
+de `timeclock`. La local de `auth` se renombró a `_ts` **antes** de traducir; en
+`timeclock` solo entra `t`, porque meter `d` habría tapado la variable en tres
+funciones. Es el fallo de v437/v439/v440, y hacerlo en este orden es lo que lo evita.
+⚠️ Comprobado además que `i18n` solo importa `logging` y `streamlit` —módulo HOJA—,
+así que importarlo desde el backend **no crea ciclo**.
+
+### ⚠️ Correr el mismo parche dos veces duplicó un import
+`from core.i18n import t` acabó **dos veces** en `timeclock`: el ancla seguía
+casando en la segunda pasada. Y en `auth` pasó lo contrario — el ancla del import era
+**ambigua** (`from core import timeclock` aparece dos veces), así que **no se aplicó
+mientras las llamadas `t()` sí**, dejando un `NameError` esperando en cada login.
+Lo cazó el chequeo de importes que v443 había añadido, que es exactamente para esto.
+**Un parche idempotente no es un lujo: es la diferencia entre repetirlo y romperlo.**
+
+### ⚠️ Y TRES «fallos» del smoke que eran del test, no del código
+- `verify_login` devuelve un **dict** `{"ok":…, "error":…}`, no una tupla: al
+  desempaquetarlo obtenía las CLAVES y daba dos fallos con el código perfecto.
+- `_segmentos_dia(ci_str, fin_dt)` recibe un **datetime** como segundo argumento, no
+  una cadena: pasándole texto devolvía `[]` y parecía roto.
+- Y esperaba «required» de `verify_login("","")`, pero esa validación vive en
+  `auth_ui`: el backend responde «User not found.», que es correcto.
+Regla v135, tres veces en un solo script. **Mirar la firma y la FORMA del dato antes
+de afirmar que algo falla.**
+
+### Verificación
+`verif_v445.py` (23 comprobaciones) **EJECUTA** los mensajes (importar no ejecuta,
+v378): login inexistente, rol inválido, grupo sin nombre, clock-out sin fichaje, y
+`_session_active` en sus dos ramas —la función donde vivía la `t` renombrada—.
+Comprueba además que `LOGIN_HEADERS`/`GROUPS_HEADERS` y las constantes
+`TIPO_GENERAL`/`TIPO_PROYECTO` siguen siendo el dato. Probado contra **6 roturas**:
+las caza las 6 — ⚠️ pero **una solo tras corregirlo**: comprobaba `'"Usuario"' in
+fuente` y esa cadena aparece en medio módulo, así que traducir la cabecera REAL
+pasaba igual. Ahora se compara contra la **constante**, no por subcadena.
+
+### ⚠️ Y el hallazgo del rojo de la suite: un `t()` que se CONGELA al importar
+`verif_auth_guards` se puso rojo y, al mirar el código acusado (regla v385), había
+algo peor que un guardián caducado:
+
+```python
+SESION_OCUPADA = t("This account already has an active session on another device.")
+```
+
+Eso se evalúa **al IMPORTAR `auth`**, cuando todavía no hay sesión ni idioma elegido,
+así que la cadena queda **congelada** en el idioma de ese instante. Y esta constante
+no es un texto cualquiera: **se compara** (`auth_ui` hace `tok == auth.SESION_OCUPADA`
+para decidir si ofrece el botón «cerrar la otra sesión e iniciar aquí»). El día que se
+llene el diccionario español, traducir un lado y no el otro **haría desaparecer ese
+botón sin dar ningún error** — que es justo el fallo silencioso que toda esta
+migración intenta evitar, esta vez desde dentro del propio motor.
+
+Arreglo: la constante vuelve a ser un **CENTINELA** (dato interno, se compara) y la
+traducción se mueve a donde se PINTA (`st.error(f"…: {t(tok)}")`). Es la misma
+separación etiqueta/dato del resto del módulo i18n.
+⚠️ Barrido del repo: **`d()` a nivel de módulo SÍ vale** —devuelve siempre el idioma
+base (v436), así que `plumb.LINE_NAMES` está bien—, y **`app.py` no cuenta**: no es un
+módulo importado, es el script que Streamlit re-ejecuta entero en cada rerun, así que
+ahí no se congela nada (incluirlo daba 8 falsos positivos). Con las dos exclusiones,
+0 casos. Guardián permanente, validado en las dos direcciones.
+
+### Lo que queda de F5
+Medido con `medir_f5.py`, que separa RETORNO (lo que la UI pinta) de LOG (no se
+toca): quedan **~460 mensajes de retorno** en los demás módulos internos, más el
+informe ADMIN (`report.py`), los correos (`email_notify`) y los prompts de la IA
+(`interpretation.SYSTEM_PROMPT`, `chat_agent`), que deciden en qué idioma escribe el
+modelo. Los siguientes por visibilidad: `quotes.py` (56), `finance.py` (47),
+`projects.py` (32), `ausencias.py` (31), `expenses.py` (24), `roster.py` (22),
+`inventory.py` (22), `orders.py` (18), `credentials.py` (16), `catalogo.py` (15).
+
 ## i18n: las CABECERAS DE TABLA y la QUINTA red (v444)
 
 Cierra las «~30 cabeceras de tabla que son clave de dict» que v441 dejó medidas y
@@ -7851,7 +7935,7 @@ literal, así que **no casaba nunca** — y dejó pasar «Plomo riel izquierdo»
 Es el mismo fallo de v436, cometido otra vez ese mismo día. Se vio con `cat -A`, no
 leyendo. → **Cualquier `\b`, `\n` o `\w` va por fichero escrito, nunca por heredoc.**
 
-## Versiones desplegadas (v444 = actual)
+## Versiones desplegadas (v445 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -7859,6 +7943,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v445 | **F5a: los mensajes de BACKEND que la interfaz pinta** — empieza la última fase. Aquí no vale la red de POSICIÓN (no hay llamadas a `st.*`): decide el **DESTINO** de la cadena — se traduce lo que la función **DEVUELVE** (la UI lo pinta con `flash`), y ⚠️ **NO** los mensajes de `logger` ni los **nombres de columna que viajan en el mismo `return`** (`"Usuario"`, `"Nombre"`), que son el DATO del libro. Se empieza por `auth.py` y `timeclock.py` (42 mensajes) porque son los que más se ven: cada login y cada jornada pasan por ahí. ⚠️ **El orden**: la local `t` de `auth._session_active` se renombró ANTES de traducir (pre_i18n), y en `timeclock` solo entra `t` porque `d` ya es variable en tres funciones. ⚠️ **Correr el mismo parche dos veces duplicó un import** en `timeclock`, y en `auth` el ancla era ambigua, así que **el import no se aplicó mientras las llamadas `t()` sí** — un `NameError` esperando en cada login, cazado por el chequeo de importes de v443. ⚠️ Y **tres «fallos» del smoke eran del test**: `verify_login` devuelve un dict y no una tupla, `_segmentos_dia` recibe un datetime y no una cadena, y la validación de campos obligatorios vive en `auth_ui` — regla v135 tres veces en un script. 6 roturas probadas; una solo tras corregir el guardián, que miraba `'"Usuario"' in fuente` cuando esa cadena aparece en medio módulo |
 | v444 | **Las CABECERAS DE TABLA que son clave de dict, y la QUINTA red.** ⚠️ Aquí no se decide por idioma: una clave de dict y una etiqueta **se ven igual en el AST**, así que `riesgo_claves.py` clasifica las 70 candidatas por lo que HACEN — 15 son IDENTIFICADOR (opción de widget o comparada con `==`: traducirla deja la rama MUERTA), 10 son COLUMNA DE EDITOR (el `_snapshot` de v148 las guarda en `DatosJSON`), 17 SE LEEN desde otro módulo y 4 son VALOR de `i18n`. Las **31 traducibles** se aplicaron **por AST y por posición**, nunca por texto: `"Credenciales"` es también el nombre de una hoja y `"Horas"`/`"Estado"` son columnas reales del libro. ⚠️ **El clasificador dio por SEGURA una que no lo era**: `'Riel'` es columna del editor persistido y no la vio porque `["Riel"]` dentro de una lista no es un `Subscript` — un falso «se puede» invita a romper justo lo que hay que proteger. + **QUINTA red**: etiquetas de UNA palabra dentro de TUPLAS (`("cred", …, "Credenciales", …)`, `f"→ Ir a {secn}"`), invisibles para las cuatro redes anteriores y que van a mano porque la misma cadena es dato en otro sitio; ⚠️ mi propia exclusión de nombres de hoja **tapaba dos etiquetas reales**. ⚠️ Y el chequeo de `column_config` **se aprobaba a sí mismo** (contaba sus propias claves como si fueran de la fila) y decía «0 huérfanas» con media traducción rota delante. 7 roturas probadas — dos solo tras corregir el guardián, las dos por comprobar PRESENCIA en vez del literal exacto |
 | v443 | **La CUARTA red del i18n: la f-string ENTERA, no sus trozos.** Salió clasificando los 6 rojos de la suite: el desglose de alertas del propietario estaba **a medias** (`f"{n} behind schedule"` traducido y `f"{n} alarmas"` no). ⚠️ Una f-string **no es una cadena, es una lista de trozos**, así que las tres redes anteriores —que miran cadenas COMPLETAS— no ven ni un **fragmento de UNA palabra** (`f"{n} alarmas"`, que además NO se puede envolver en `t()`) ni una **f-string a medio traducir** (`f"Collected {x} de {y}"`, cuyo español solo aparece al CONCATENAR los trozos). Barrido: **141 en `core/`, 48 en interfaz** — fases que yo había declarado cerradas. ⚠️ **Y la red se validó contra un caso construido y FALLÓ**: veía «de» pero **no «alarmas»** —su léxico eran palabras funcionales y ésa es un sustantivo sin acento—, o sea que el caso que originó la versión se le escapaba (trampa nº28, cuarta vez); con el léxico del dominio aparecieron **9 más**. ⚠️ **`Elevador` NO se traduce**: es la columna del editor de entrada que el `_snapshot` de v148 guarda en `DatosJSON` —`CAL-0002` ya tiene una— y renombrarla rompería «reabrir el cálculo»; sí las tablas de RESULTADO, que viajan al PDF de obra. ⚠️ Y un **NameError camino de producción**: `d('Works')` en un módulo que solo importa `t` (el fallo de v423), invisible para `compileall` y para el import. 7 roturas probadas — una solo tras corregir el guardián, que comprobaba PRESENCIA y con DOS tablas dejaba pasar romper una. Los 6 rojos eran CADUCADOS, ⚠️ uno **por el CALENDARIO** (miraba la semana actual, así que se ponía rojo todos los lunes) |
 | v442 | **La TERCERA red del i18n, los VALORES en pantalla y ⚠️ una RAMA que dejé MUERTA.** En v441 traduje la opción del radio de corte de rieles y NO su comparación (`caso.startswith("Caso 1")`): **la rama del Caso 1 no se ejecutaba nunca** y la herramienta caía en silencio al Caso 2 — sin error ni test rojo. Lo vi por casualidad. Arreglado con una CONSTANTE compartida + guardián que comprueba que toda comparación casa con las opciones de su widget (29 vigiladas); ⚠️ hubo que escribirlo **tres veces** porque las dos primeras daban 0 con la rama muerta delante (un comentario mío la «producía»; luego una etiqueta del PDF casaba como prefijo) y **mi propio arreglo lo cegó** al pasar las opciones a constantes. + **188 etiquetas cortas** (2 palabras dentro de tuplas y f-strings) que ninguna de las dos redes anteriores veía. + ⚠️ **`i18n.etiqueta()` existía desde v436 y la interfaz NO la usaba**: 160 lecturas de estados/tipos/roles/categorías en 16 módulos, todas pintando el español crudo (solo la usaban los 3 PDF) — el patrón «se escribe y nadie lo lee». Enrutados los puntos que se PINTAN, sin tocar las comparaciones ni los dicts que se escriben en la hoja; el selector de estado usa `format_func`. ⚠️ Y el fallo de ámbito por CUARTA vez: `_etq` ya era variable local en `render_nominas` → «'dict' object is not callable», cazado por pre-vuelo y comprobado EJECUTANDO la pantalla. 6 roturas probadas |

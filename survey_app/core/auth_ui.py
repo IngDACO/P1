@@ -305,7 +305,11 @@ def render_login() -> bool:
                         st.session_state["_blocked_user"] = res["usuario"]
                     else:
                         st.session_state.pop("_blocked_user", None)
-                    st.error(f":material/lock: {tok}")
+                    # ⚠️ La traducción va AQUÍ, no en la constante: `SESION_OCUPADA`
+                    # se evalúa al importar `auth` (sin sesión) y quedaría congelada.
+                    # `t()` devuelve el original si no lo conoce, así que el mensaje
+                    # de error de la API pasa igual de limpio.
+                    st.error(f":material/lock: {t(tok)}")
                     return
                 st.session_state.pop("_blocked_user", None)
                 st.session_state["auth"] = {

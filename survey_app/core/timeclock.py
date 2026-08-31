@@ -13,6 +13,7 @@ from datetime import datetime, timedelta, date, time
 from time import sleep as _dormir   # ⚠️ `time` de arriba es datetime.time, NO el módulo
 
 import streamlit as st
+from core.i18n import t
 from core import clock
 from core.num import num as _num
 
@@ -193,13 +194,14 @@ def _cached_ws(sheet_id: str = ""):
 def _get_worksheet():
     """Devuelve (worksheet, None) o (None, mensaje_error)."""
     if not _secrets_present():
-        return None, ("El fichaje no está conectado: faltan credenciales "
-                      "(gcp_service_account) o TIMECLOCK_SHEET_ID en los Secrets.")
+        return None, t("The timeclock is not connected: credentials "
+                       "(gcp_service_account) or TIMECLOCK_SHEET_ID are missing "
+                       "from Secrets.")
     try:
         return _cached_ws(), None
     except Exception as e:
         # Error transitorio de la API (rate limit, red…). No es falta de config.
-        return None, f"Conexión temporalmente no disponible con Google Sheets: {e}"
+        return None, f"{t('Connection to Google Sheets temporarily unavailable')}: {e}"
 
 
 @st.cache_resource(show_spinner=False)
@@ -391,20 +393,21 @@ def clock_in(nombre: str, proyecto: str, ubicacion: str, grupo: str = "",
     grupo  = (grupo or "").strip()
     tipo   = (tipo or TIPO_PROYECTO).strip().lower()
     if not nombre:
-        return False, "No hay usuario en sesión."
+        return False, t("No user is signed in.")
 
     try:
         records = ws.get_all_records(numericise_ignore=['all'])
     except Exception as e:
-        return False, f"Error leyendo la hoja: {e}"
+        return False, f"{t('Error reading the sheet')}: {e}"
 
     # ¿Ya hay una sesión abierta del MISMO tipo para este usuario+grupo?
     for r in records:
         if (_matches(r, usuario, nombre, grupo)
                 and str(r.get("Estado", "")).strip().upper() == "ABIERTO"
                 and _tipo_of(r) == tipo):
-            etq = "jornada" if tipo == TIPO_GENERAL else "proyecto"
-            return False, f"Ya tienes un clock in de {etq} abierto desde {r.get('Clock In')}."
+            etq = t("workday") if tipo == TIPO_GENERAL else t("project")
+            return False, (f"{t('You already have a clock in for')} {etq} "
+                           f"{t('open since')} {r.get('Clock In')}.")
 
     try:
         ws.append_row([nombre, "", proyecto or "", ubicacion or "",
@@ -412,10 +415,10 @@ def clock_in(nombre: str, proyecto: str, ubicacion: str, grupo: str = "",
                        str(proyecto_id or "")],
                       value_input_option="RAW")
     except Exception as e:
-        return False, f"Error escribiendo el fichaje: {e}"
+        return False, f"{t('Error writing the timeclock entry')}: {e}"
     _invalidate_records()
-    etq = "Jornada (general)" if tipo == TIPO_GENERAL else "Proyecto"
-    return True, f"✅ Clock IN {etq} a las {_now()}."
+    etq = t("Workday (general)") if tipo == TIPO_GENERAL else t("Project")
+    return True, f"✅ Clock IN {etq} {t('at')} {_now()}."
 
 
 def clock_out(nombre: str, grupo: str = "", tipo: str = TIPO_PROYECTO,
@@ -433,12 +436,12 @@ def clock_out(nombre: str, grupo: str = "", tipo: str = TIPO_PROYECTO,
     grupo  = (grupo or "").strip()
     tipo   = (tipo or TIPO_PROYECTO).strip().lower()
     if not nombre:
-        return False, "No hay usuario en sesión."
+        return False, t("No user is signed in.")
 
     try:
         records = ws.get_all_records(numericise_ignore=['all'])
     except Exception as e:
-        return False, f"Error leyendo la hoja: {e}"
+        return False, f"{t('Error reading the sheet')}: {e}"
 
     # Buscar la sesión abierta más reciente del tipo (de abajo hacia arriba)
     target_row = None
@@ -451,8 +454,8 @@ def clock_out(nombre: str, grupo: str = "", tipo: str = TIPO_PROYECTO,
             target_in  = str(r.get("Clock In", ""))
 
     if target_row is None:
-        etq = "jornada" if tipo == TIPO_GENERAL else "proyecto"
-        return False, f"No tienes un clock in de {etq} abierto."
+        etq = t("workday") if tipo == TIPO_GENERAL else t("project")
+        return False, f"{t('You have no open clock in for')} {etq}."
 
     if out_ts is None:
         out_ts = _now()
@@ -476,10 +479,11 @@ def clock_out(nombre: str, grupo: str = "", tipo: str = TIPO_PROYECTO,
                           "values": [[out_ts, str(horas), "CERRADO"]]}],
                         value_input_option="RAW")
     except Exception as e:
-        return False, f"Error actualizando el fichaje: {e}"
+        return False, f"{t('Error updating the timeclock entry')}: {e}"
 
     _invalidate_records()
-    return True, f"✅ Clock OUT a las {out_ts}. Horas trabajadas: {horas}."
+    return True, (f"✅ Clock OUT {t('at')} {out_ts}. "
+                  f"{t('Hours worked')}: {horas}.")
 
 
 @st.cache_data(ttl=120, show_spinner=False)
