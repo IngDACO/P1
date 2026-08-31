@@ -126,14 +126,14 @@ def render_contactos(grupo):
         "Cliente":   r["disp"],
         "Ficha":     "sí" if r["ficha"] else "—",
         "Contacto":  r["Contacto"] or "—",
-        "Teléfono":  r["Telefono"] or "—",
+        "Phone":  r["Telefono"] or "—",
         "Email":     r["Email"] or "—",
-        "Proyectos": r["total"],
-        "Activos":   r["activos"],
+        "Projects": r["total"],
+        "Active":   r["activos"],
         "Avance":    int(round(r["av"])),
         "Horas":     round(r["hrs"], 1),
         **({"Costo": round(r["cost"], 0)} if _hay_costo else {}),
-        "Alarmas":   str(r["al"]) if r["al"] else "",
+        "Alarms":   str(r["al"]) if r["al"] else "",
     } for r in rows])
     _colcfg = {"Avance": st.column_config.ProgressColumn(
         t("Progress"), min_value=0, max_value=100, format="%d%%")}

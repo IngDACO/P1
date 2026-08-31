@@ -306,7 +306,7 @@ def render_survey_tab(_ROL, _GRUPO):
         with st.expander(t("Calculated parameters"), icon=":material/calculate:", expanded=False):
             st.dataframe(
                 pd.DataFrame([
-                    {"Parámetro": k, "Valor": round(v, 3) if isinstance(v, (int, float)) else v}
+                    {"Parameter": k, "Valor": round(v, 3) if isinstance(v, (int, float)) else v}
                     for k, v in limits.items()
                 ]),
                 width="stretch", hide_index=True
@@ -335,8 +335,8 @@ def render_survey_tab(_ROL, _GRUPO):
                   if col in OR_OL_COLS else round(analysis[f"MIN_{col}"], 2)
             summary.append({
                 "Columna":             col,
-                "Límite (mm)":         round(lim_c, 2),
-                "Fuera límite":        analysis[f"{col}_OFF_COUNT"],
+                "Limit (mm)":         round(lim_c, 2),
+                "Out of limit":        analysis[f"{col}_OFF_COUNT"],
                 "Niveles incumplidos": ", ".join(viols) if viols else "—",
                 "Min / Max (mm)":      ext,
                 "Diferencia (mm)":     round(analysis[f"DIF_{col}"], 2),
@@ -456,8 +456,8 @@ def render_survey_tab(_ROL, _GRUPO):
                             viols_s = [str(i+1) for i, v in enumerate(col_vals) if v < lim_c]
                         sol_sum.append({
                             "Columna":       col,
-                            "Límite (mm)":   round(lim_c, 2),
-                            "Fuera límite":  off_c,
+                            "Limit (mm)":   round(lim_c, 2),
+                            "Out of limit":  off_c,
                             "Niveles":       ", ".join(viols_s) if viols_s else "—",
                             lbl:             round(ext_c, 2),
                             "Diff vs Limit": round(dif_c, 2),

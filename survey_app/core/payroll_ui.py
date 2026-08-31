@@ -131,7 +131,7 @@ def render_nominas(grupo):
         "Usuario":  _et.get(str(x.get("Usuario", "")), str(x.get("Nombre", ""))),
         "Periodo":  f"{x.get('PeriodoDesde', '')} → {x.get('PeriodoHasta', '')}",
         "Horas":    round(_num(x.get("Horas")), 1),
-        "Tarifa/h": (round(_num(x.get("TarifaHora")), 2)
+        "Rate/h": (round(_num(x.get("TarifaHora")), 2)
                      if _num(x.get("TarifaHora")) > 0 else None),
         "Base":     round(_num(x.get("Base")), 0),
         "Neto":     round(_num(x.get("Neto")), 0),
@@ -142,7 +142,7 @@ def render_nominas(grupo):
         on_select="rerun", selection_mode="single-row", key="nom_tbl",
         column_config={"Base": st.column_config.NumberColumn(t("Base pay"), format="$%,d"),
                        "Neto": st.column_config.NumberColumn(t("Net"), format="$%,d"),
-                       "Tarifa/h": st.column_config.NumberColumn(t("Rate/h"), format="$%,.2f")})
+                       "Rate/h": st.column_config.NumberColumn(t("Rate/h"), format="$%,.2f")})
     st.caption(f"{len(_rows)} payslip(s)  ·  base pay {T.dinero(sum(_num(x.get('Base')) for x in _rows), 0)}"
                f"  ·  net {T.dinero(sum(_num(x.get('Neto')) for x in _rows), 0)}"
                "  ·  an empty «Rate/h» means that person has no rate set.")
@@ -183,10 +183,10 @@ def _generar(grupo):
         st.markdown(f"**{len(horas)} user(s)** with workday hours in the period:")
         st.dataframe(pd.DataFrame([{
             "Usuario": v["nombre"], "Horas": round(v["horas"], 1),
-            "Tarifa/h": _num(rates.get(k, 0)),
+            "Rate/h": _num(rates.get(k, 0)),
             "Base": round(v["horas"] * _num(rates.get(k, 0)), 0),
         } for k, v in sorted(horas.items())]), width="stretch", hide_index=True,
-            column_config={"Tarifa/h": st.column_config.NumberColumn(t("Rate/h"), format="$%,d"),
+            column_config={"Rate/h": st.column_config.NumberColumn(t("Rate/h"), format="$%,d"),
                            "Base": st.column_config.NumberColumn(t("Base pay"), format="$%,d")})
     else:
         st.info(t("Nobody has workday hours in that period."))

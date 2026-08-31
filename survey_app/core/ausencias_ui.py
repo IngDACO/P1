@@ -28,8 +28,8 @@ def _kpi(label, valor, pie=None, color=None):
 
 
 def _chip_estado(e: str) -> str:
-    return {AU.PENDIENTE: "🟡 pendiente", AU.APROBADA: "🟢 aprobada",
-            AU.RECHAZADA: "🔴 rechazada", AU.CANCELADA: "⚪ cancelada"}.get(e, e)
+    return {AU.PENDIENTE: "🟡 pending", AU.APROBADA: "🟢 approved",
+            AU.RECHAZADA: "🔴 rejected", AU.CANCELADA: "⚪ cancelled"}.get(e, e)
 
 
 def _linea(r) -> str:

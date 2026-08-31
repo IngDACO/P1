@@ -142,10 +142,10 @@ def render_inventario(grupo):
     st.caption(f"Tap an asset to see its record, its QR code and manage it. ({len(_rows)})")
     df = pd.DataFrame([{
         "Nombre":      a.get("Nombre", ""),
-        "Categoría":   a.get("Categoria", "") or "—",
+        "Category":   a.get("Categoria", "") or "—",
         "Estado":      a.get("Estado", ""),
-        "Ubicación":   _ubic_txt(a),
-        "Asignado a":  a.get("AsignadoA", "") or "—",
+        "Location":   _ubic_txt(a),
+        "Assigned to":  a.get("AsignadoA", "") or "—",
         "Valor":       round(INV.valor_actual(a), 0),
     } for a in _rows])
     _ev = st.dataframe(
@@ -430,7 +430,7 @@ def _reportes(grupo):
         with ca:
             st.markdown(t("**By category**"))
             st.dataframe(pd.DataFrame([{
-                "Categoría": k, "Activos": v["n"],
+                "Category": k, "Active": v["n"],
                 "Compra": round(v["compra"], 0), "Actual": round(v["actual"], 0),
             } for k, v in sorted(rep["por_categoria"].items())]),
                 width="stretch", hide_index=True,
@@ -439,7 +439,7 @@ def _reportes(grupo):
         with cb:
             st.markdown(t("**By location**"))
             st.dataframe(pd.DataFrame([{
-                "Ubicación": k, "Activos": v["n"], "Valor actual": round(v["actual"], 0),
+                "Location": k, "Active": v["n"], "Valor actual": round(v["actual"], 0),
             } for k, v in sorted(rep["por_ubicacion"].items())]),
                 width="stretch", hide_index=True,
                 column_config={"Valor actual": st.column_config.NumberColumn(t("Current value"), format="$%,d")})

@@ -77,14 +77,14 @@ def render_cotizaciones(grupo):
         "Fecha": c.get("Fecha", ""),
         "Vence": c.get("Validez", "") or "—",
         "Total": round(_num(c.get("Total")), 2),
-        "Margen": round(_num(c.get("MargenPct")), 1),
+        "Margin": round(_num(c.get("MargenPct")), 1),
         "Estado": Q.estado_de(c),
     } for c in cots])
     _ev = st.dataframe(df, width="stretch", hide_index=True,
                        on_select="rerun", selection_mode="single-row", key="cot_tbl",
                        column_config={
                            "Total": st.column_config.NumberColumn(t("Total"), format="$%,.2f"),
-                           "Margen": st.column_config.NumberColumn(t("Margin"), format="%.1f%%")})
+                           "Margin": st.column_config.NumberColumn(t("Margin"), format="%.1f%%")})
     _sr = list(_ev.selection.rows)
     if _sr and _sr[0] < len(cots):
         st.session_state["_cot_open"] = str(cots[_sr[0]].get("ID", ""))

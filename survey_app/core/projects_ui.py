@@ -278,32 +278,32 @@ def _resumen_del_dia(grupo: str):
     # slug, icono, etiqueta, urgente, count, sección, sub_pestaña, nombre_sección, detalle()
     inds = [
         ("retrasos", ":material/error:", "Behind schedule", True, len(d["retrasos"]),
-         "proyectos", "📊 Proyectos", "Proyectos",
+         "proyectos", "📊 Proyectos", "Projects",
          lambda: ", ".join(f"{r['nombre']} ({r['dias']}d)" for r in d["retrasos"][:15])),
-        ("vencidos", ":material/block:", "Vencidos", True, len(d["vencidos"]),
-         "proyectos", "📊 Proyectos", "Proyectos",
+        ("vencidos", ":material/block:", "Overdue", True, len(d["vencidos"]),
+         "proyectos", "📊 Proyectos", "Projects",
          lambda: ", ".join(f"{v['nombre']} ({v['fin']})" for v in d["vencidos"][:15])),
         ("porvencer", ":material/event:", "Due soon", False, len(d["por_vencer"]),
-         "proyectos", "📊 Proyectos", "Proyectos",
+         "proyectos", "📊 Proyectos", "Projects",
          lambda: ", ".join(f"{v['nombre']} ({v['dias']}d)" for v in d["por_vencer"][:15])),
         ("sinasig", ":material/engineering:", "Unassigned", False, len(d["sin_asignar"]),
-         "proyectos", "📊 Proyectos", "Proyectos",
+         "proyectos", "📊 Proyectos", "Projects",
          lambda: ", ".join(s["nombre"] for s in d["sin_asignar"][:15])),
         ("sincont", ":material/contact_page:", "No contact details", False, len(d["campo_sin_contacto"]),
-         "planificacion", "👷 Usuarios", "Usuarios",
+         "planificacion", "👷 Usuarios", "Users",
          lambda: ", ".join(d["campo_sin_contacto"][:15])),
-        ("cred", ":material/badge:", "Credenciales", False, len(d.get("cred_venc", [])),
-         "planificacion", "👷 Usuarios", "Usuarios",
+        ("cred", ":material/badge:", "Credentials", False, len(d.get("cred_venc", [])),
+         "planificacion", "👷 Usuarios", "Users",
          lambda: ", ".join(f"{c['tipo']}·{c['usuario']} ({c['dias']}d)"
                            for c in d.get("cred_venc", [])[:15])),
-        ("alarmas", ":material/notifications:", "Alarmas", True, _al_n,
-         "proyectos", "📊 Proyectos", "Proyectos",
+        ("alarmas", ":material/notifications:", "Alarms", True, _al_n,
+         "proyectos", "📊 Proyectos", "Projects",
          lambda: ", ".join(f"{a['nombre']} ({a['n']})" for a in d["alarmas"][:15])),
         ("near", ":material/health_and_safety:", "Near miss", False, len(d["near_miss"]),
-         "proyectos", "📊 Proyectos", "Proyectos",
+         "proyectos", "📊 Proyectos", "Projects",
          lambda: ", ".join(f"{n['proyecto']} ({n['fecha']})" for n in d["near_miss"][:15])),
-        ("sobrep", ":material/payments:", "Sobre presup.", False, len(d.get("sobre_presupuesto", [])),
-         "finanzas", "💰 Gastos", "Gastos",
+        ("sobrep", ":material/payments:", "Over budget", False, len(d.get("sobre_presupuesto", [])),
+         "finanzas", "💰 Gastos", "Expenses",
          lambda: f"{len(d.get('sobre_presupuesto', []))} project(s) over budget"),
     ]
     _urg = sum(c for (_s, _i, _l, u, c, *_r) in inds if u)
@@ -382,7 +382,7 @@ def _resumen_del_dia(grupo: str):
             st.markdown(f"**{icon} {lbl} — {cnt}**")
             if cnt:
                 st.caption(fn())
-                if st.button(f"→ Ir a {secn}", key=f"go_{slug}", type="primary"):
+                if st.button(f"→ {t('Go to')} {secn}", key=f"go_{slug}", type="primary"):
                     _ir_a(sec, sub)
             else:
                 st.caption(t("Nothing pending here. :green[:material/check_circle:]"))
@@ -437,9 +437,9 @@ _CAMPO_VER  = {"plano", "informe_cliente", "matriz_survey", "foto",
                "prestart", "calculo"}
 _CAMPO_SUBE = ["foto"]                                                # campo solo sube fotos
 # Etiquetas legibles para el filtro de tipo del buscador (v165).
-_TIPO_LABEL = {"plano": "Plano", "informe_cliente": "Client report",
+_TIPO_LABEL = {"plano": "Drawing", "informe_cliente": "Client report",
                "informe_admin": "Informe admin", "matriz_survey": "Matriz survey",
-               "foto": "Fotos", "certificado": "Certificados",
+               "foto": "Photos", "certificado": "Certificates",
                "prestart": "Pre-Start", "calculo": "Cálculos", "otro": "Otros"}
 _TIPO_ORDER = ["plano", "informe_cliente", "informe_admin", "matriz_survey",
                "calculo", "prestart", "foto", "certificado", "otro"]
@@ -580,7 +580,7 @@ def _plano_section(pid: str, prj: dict):
     par = datos.get("params") or {}
     if par:
         with st.expander(f"See the {len(par)} drawing parameters"):
-            st.dataframe(pd.DataFrame([{"Parámetro": k, "Valor": v}
+            st.dataframe(pd.DataFrame([{"Parameter": k, "Valor": v}
                                        for k, v in sorted(par.items())]),
                          hide_index=True, width="stretch")
     _cargar_plano(pid)
@@ -1224,7 +1224,7 @@ def _cumplimiento_equipo(pid, grupo, prj):
     filas = []
     for u in asign:
         comp = credentials.compliance(u, req)
-        fila = {"Usuario": u, "Cumple": "sí" if comp["cumple"] else "NO"}
+        fila = {"Usuario": u, "Compliant": "sí" if comp["cumple"] else "NO"}
         for _c in req:
             fila[_c] = _ico.get(comp["por_tipo"].get(_c, "falta"), "—")
         filas.append(fila)
@@ -1465,10 +1465,10 @@ def _cartera_lista(proys, alarmas, delays, aheads, costos, pendientes=None,
             # visible (hay que desplazarse) por uno invisible (lees un nombre a medias).
             # La cura es la de v398: no achicar, PRIORIZAR lo que se ve primero.
             "Avance": max(0, min(100, int(P._num(p.get("Avance"))))),
-            "Situación": _sit,
-            "Alertas": str(_al) if _al else "",
+            "Status": _sit,
+            "Alerts": str(_al) if _al else "",
             "Estado": _etq(str(p.get("Estado", ""))) or "—",
-            "Usuarios": _users,
+            "Users": _users,
             # De aquí en adelante, contexto: se consulta, no se vigila.
             "Cliente": str(p.get("Cliente", "") or "—"),
             "Tipo": str(p.get("Tipo", "") or "—"),
@@ -1517,13 +1517,13 @@ def _cartera_lista(proys, alarmas, delays, aheads, costos, pendientes=None,
             "Proyecto":  st.column_config.TextColumn(t("Project"), width=272, pinned=True),
             # Anchos medidos contra el texto REAL más largo de cada columna (peor caso),
             # no elegidos a ojo: con estos, 0 textos cortados.
-            "Situación": st.column_config.TextColumn(
+            "Status": st.column_config.TextColumn(
                 t("Pace"), width=100,
                 help=t("Days behind or ahead of the plan.")),
-            "Alertas":   st.column_config.TextColumn(
+            "Alerts":   st.column_config.TextColumn(
                 t("Alerts"), width=70, help=t("Open alerts on the job.")),
             "Estado":    st.column_config.TextColumn(t("Status"), width=92),
-            "Usuarios":  st.column_config.NumberColumn(
+            "Users":  st.column_config.NumberColumn(
                 t("Team"), width=70, help=t("Field staff assigned.")),
         })
     _tot = sum(pendientes.get(str(p.get("ID", "")), 0.0) for p in proys)
@@ -2663,11 +2663,11 @@ def _dashboard_agrupacion(ag, grupo):
             "Avance %": P._num(p.get("Avance")),
             "Peso": P._num(p.get("PesoEnAgrupacion")),
             "Entrega prev.": _pf.strftime("%d/%m") if _pf else "—",
-            "Situación": (f"{delays[pid]:.0f} d behind" if pid in delays
+            "Status": (f"{delays[pid]:.0f} d behind" if pid in delays
                      else (f"{aheads[pid]:.0f} d ahead" if pid in aheads else "on time")),
             "Horas": _hs[i], "vs media h": _dev(_hs[i], _hm),
             "Costo": _cs[i], "vs media $": _dev(_cs[i], _cm),
-            "Alertas": _na or "",
+            "Alerts": _na or "",
         })
     st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch")
     st.caption(t("«vs avg» compares each lift with the group average; it is only flagged if it differs by 15% or more."))
@@ -2911,17 +2911,17 @@ def render_owner_projects():
             "ID":        p.get("ID"),
             "Grupo":     p.get("Grupo"),
             "Proyecto":  p.get("Nombre"),
-            "Alertas":     f"{_na}" if _na else "",
+            "Alerts":     f"{_na}" if _na else "",
             "Cliente":   p.get("Cliente"),
-            "Ubicación": ubic,
+            "Location": ubic,
             "Mapa":        maps.maps_url(ubic),
             "Estado":    _etq(est),
-            "Retraso": f"{_d:.0f} d" if _d else "",
-            "Adelanto": f"{_ad:.0f} d" if _ad else "",
+            "Behind": f"{_d:.0f} d" if _d else "",
+            "Ahead": f"{_ad:.0f} d" if _ad else "",
             "Avance %":  P._num(p.get("Avance")),
             "Horas":     P.project_hours(p.get("Nombre"), p.get("Grupo"),
                                         pid=str(p.get("ID", ""))),
-            "Agrupación": ags.get(str(p.get("AgrupacionID", "")), ""),
+            "Grouping": ags.get(str(p.get("AgrupacionID", "")), ""),
         })
     # Cartera de tarjetas (mismo look del admin) + tabla detallada abajo
     _hb = {}
@@ -3637,7 +3637,7 @@ def render_expenses(pid, grupo, can_delete=False, key_prefix="ex"):
         st.markdown(t("**Labour by person**"))
         st.dataframe(pd.DataFrame([{
             "Usuario": x["usuario"], "Horas": x["horas"],
-            "Tarifa/h": x["tarifa"], "Costo": x["costo"],
+            "Rate/h": x["tarifa"], "Costo": x["costo"],
         } for x in lb["items"]]), hide_index=True, width="stretch")
         if lb["sin_tarifa"]:
             st.warning(":material/warning: With no hourly rate, their hours add **$0** to the cost: **"
@@ -3916,7 +3916,7 @@ def render_pnl(grupo: str):
                 else:
                     st.caption(t("No invoices in this period."))
             elif _cur == "comp":
-                _comp = [(x, y) for x, y in (("Nóminas", d["costo_nomina"]),
+                _comp = [(x, y) for x, y in (("Payroll", d["costo_nomina"]),
                                              ("Compras / materiales", d["compras"]))
                          if y > 0]
                 if len(_comp) > 1:
@@ -4015,14 +4015,14 @@ def _pnl_por_proyecto(grupo: str, T):
         "Proyecto": r["nombre"],
         "Facturado": r["facturado"],
         "Labour": r["mo"],
-        "Compras": r["compras"],
+        "Purchases": r["compras"],
         "Resultado": r["resultado"],
         "Margen %": r["margen"],
     } for r in rows]), hide_index=True, width="stretch",
         column_config={
             "Facturado":    st.column_config.NumberColumn(format="$%,.0f"),
             "Labour": st.column_config.NumberColumn(format="$%,.0f"),
-            "Compras":      st.column_config.NumberColumn(format="$%,.0f"),
+            "Purchases":      st.column_config.NumberColumn(format="$%,.0f"),
             "Resultado":    st.column_config.NumberColumn(format="$%,.0f"),
             "Margen %":     st.column_config.NumberColumn(format="%.1f%%"),
         })
@@ -4302,8 +4302,8 @@ def render_group_expenses(grupo: str):
             # v343: la columna solo aparece si el grupo tiene algo pedido
             **({"Comprometido": f.get("comprometido", 0.0)} if _comp_tot else {}),
             "Presupuesto": f["presupuesto"],
-            "% consumido": f["pct"], "Avance %": f["avance"],
-            "Proyección": f["proyectado"] if f["proyectado"] is not None else "—",
+            "% used": f["pct"], "Avance %": f["avance"],
+            "Forecast": f["proyectado"] if f["proyectado"] is not None else "—",
             "": ("sobre" if f["over"] else
                  ("pedido" if f.get("over_comp") else
                   ("riesgo" if f["over_proj"] else "ok"))),
@@ -4324,7 +4324,7 @@ def render_group_expenses(grupo: str):
     if sin_pres:
         st.markdown(t("**Projects with no budget set**"))
         st.dataframe(pd.DataFrame([{
-            "Proyecto": f["nombre"], "Compras": f["compras"],
+            "Proyecto": f["nombre"], "Purchases": f["compras"],
             "Labour": f["mano_obra"], "Total cost": f["total"],
         } for f in sin_pres]), hide_index=True, width="stretch")
         st.caption(f"{len(sin_pres)} project(s) with no budget: there is nothing to compare "
@@ -4334,9 +4334,9 @@ def render_group_expenses(grupo: str):
 
     # ── Export para contabilidad ──
     _csv = pd.DataFrame([{
-        "Proyecto": f["nombre"], "Compras": f["compras"], "Labour": f["mano_obra"],
+        "Proyecto": f["nombre"], "Purchases": f["compras"], "Labour": f["mano_obra"],
         "Total cost": f["total"], "Presupuesto": f["presupuesto"],
-        "% consumido": f["pct"], "Avance %": f["avance"], "Proyeccion": f["proyectado"],
+        "% used": f["pct"], "Avance %": f["avance"], "Proyeccion": f["proyectado"],
     } for f in filas])
     st.download_button(t(":material/download: Export CSV (accounting)"),
                        data=_csv.to_csv(index=False).encode("utf-8"),
@@ -4444,7 +4444,7 @@ def render_group_hours(grupo: str):
         _sa = ("—" if d["sin_asignar_indet"] else f"{d['sin_asignar']:.2f}")
         _f = {
             "Usuario": _etiqueta(d),
-            "Jornada (h)": d["general"],
+            "Shift (h)": d["general"],
             "On jobs (h)": d["proyecto"],
         }
         # v425: la columna solo existe si el grupo tiene estructura. Añadir una de
@@ -4453,7 +4453,7 @@ def render_group_hours(grupo: str):
             _f["On overhead (h)"] = d.get("interno", 0.0)
         _f.update({
             "Unassigned (h)": _sa,
-            "Tarifa/h": d["tarifa"] or "—",
+            "Rate/h": d["tarifa"] or "—",
             "Labour cost": d["costo"] or 0,
         })
         filas.append(_f)
@@ -4707,11 +4707,11 @@ def _loc_equipo(pid, grupo):
         _et = {}
     _df = pd.DataFrame([{"Persona": _et.get(str(r.get("usuario")), str(r.get("usuario"))),
                          "Horas": round(float(r.get("horas", 0)), 2),
-                         "Tarifa/h": float(r.get("tarifa", 0)),
+                         "Rate/h": float(r.get("tarifa", 0)),
                          "Costo": float(r.get("costo", 0))} for r in _p])
     st.dataframe(_df, width="stretch", hide_index=True,
                  column_config={"Horas": st.column_config.NumberColumn(format="%.2f"),
-                                "Tarifa/h": st.column_config.NumberColumn(format="$%,.2f"),
+                                "Rate/h": st.column_config.NumberColumn(format="$%,.2f"),
                                 "Costo": st.column_config.NumberColumn(format="$%,.2f")})
     st.caption(f"**{float(filas.get('horas', 0)):,.1f} h** · "
                f"{theme.dinero(filas.get('total', 0))} — ⚠️ this is "

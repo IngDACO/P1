@@ -76,7 +76,7 @@ def render_facturas(grupo):
         "Vence":     str(f.get("Vencimiento", "") or "—"),
         "Total":     round(_num(f.get("Total")), 0),
         "Cobrado":   round(_num(f.get("Cobrado")), 0),
-        "Pendiente": round(_num(f.get("Total")) - _num(f.get("Cobrado")), 0),
+        "Outstanding": round(_num(f.get("Total")) - _num(f.get("Cobrado")), 0),
         "Estado":    I.estado_cobro(f),
     } for f in _rows])
     _ev = st.dataframe(
@@ -85,7 +85,7 @@ def render_facturas(grupo):
         column_config={
             "Total":     st.column_config.NumberColumn(t("Total"), format="$%,d"),
             "Cobrado":   st.column_config.NumberColumn(t("Collected"), format="$%,d"),
-            "Pendiente": st.column_config.NumberColumn(t("Outstanding"), format="$%,d"),
+            "Outstanding": st.column_config.NumberColumn(t("Outstanding"), format="$%,d"),
         })
     _sr = list(_ev.selection.rows)
     if _sr:

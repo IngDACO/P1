@@ -65,9 +65,9 @@ def render_catalogo(grupo):
     if items:
         st.caption(t("Tap an item to edit it. **Cost** is what it costs you; the margin is set when quoting, line by line."))
         df = pd.DataFrame([{
-            "Artículo": i.get("Nombre", ""),
+            "Item": i.get("Nombre", ""),
             "Tipo": str(i.get("Tipo", "")),
-            "Categoría": i.get("Categoria", "") or "—",
+            "Category": i.get("Categoria", "") or "—",
             "Unidad": i.get("Unidad", "") or "—",
             "Horas": (round(_num(i.get("HorasEst")), 2)
                       if str(i.get("Tipo", "")) == CAT.SERVICIO else None),

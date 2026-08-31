@@ -684,7 +684,7 @@ def _pantalla_busqueda(q: str, grupo) -> bool:
         st.info(t(":material/search_off: No matches in projects, people or jobs. The search covers name, ID, client, location, login and email."))
         return True
 
-    _ETQ = {"proyecto": "Proyectos", "persona": "Personas", "trabajo": "Trabajos"}
+    _ETQ = {"proyecto": "Projects", "persona": "People", "trabajo": "Jobs"}
     for _tipo in ("proyecto", "persona", "trabajo"):
         _grupo_res = [r for r in res if r["tipo"] == _tipo]
         if not _grupo_res:

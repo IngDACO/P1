@@ -97,8 +97,8 @@ def render_credenciales(usuario, grupo, editable=False, key_prefix="cr"):
         k3.metric(t(":material/schedule: Expiring"), sum(1 for s in _sts if s == "por_vencer"))
         k4.metric(t(":material/cancel: Expired"), sum(1 for s in _sts if s == "vencido"))
         st.dataframe(pd.DataFrame([{
-            "Tipo": r.get("Tipo"), "Número": r.get("Numero"), "Clase": r.get("Clase"),
-            "Emisión": r.get("Emision") or "—", "Vence": r.get("Vencimiento") or "—",
+            "Tipo": r.get("Tipo"), "Number": r.get("Numero"), "Clase": r.get("Clase"),
+            "Issued": r.get("Emision") or "—", "Vence": r.get("Vencimiento") or "—",
             "Estado": C.status_label(r.get("Vencimiento")),
         } for r in creds]), hide_index=True, width="stretch")
         # Documentos adjuntos agrupados (antes: botones sueltos apilados bajo la tabla)
@@ -645,9 +645,9 @@ def _owner_resumen():
         st.info(t("No companies with data yet."))
         return
     st.dataframe(pd.DataFrame([{
-        "Grupo": d["grupo"], "Activos": d["activos"], "Avance %": d["avance"],
-        "Retraso": d["retrasos"], "Alarmas": d["alarmas"],
-        "Vencidos": d["vencidos"], "Credenciales": d["cred_venc"],
+        "Grupo": d["grupo"], "Active": d["activos"], "Avance %": d["avance"],
+        "Behind": d["retrasos"], "Alarms": d["alarmas"],
+        "Overdue": d["vencidos"], "Credentials": d["cred_venc"],
         "Sobre pres.": d["sobre_presupuesto"],
     } for d in data]), hide_index=True, width="stretch")
     _urg = [d for d in data if d["pendientes"]]
@@ -683,7 +683,7 @@ def _owner_manuales():
             "Manual": r.get("Nombre"),
             "Fragmentos": r.get("NumFrags"),
             "Fecha": r.get("Fecha"),
-            "Por": r.get("SubidoPor"),
+            "By": r.get("SubidoPor"),
         } for r in ups]), hide_index=True, width="stretch")
         with st.expander(t("Remove a manual"), icon=":material/delete:"):
             opciones = {f"{r.get('Nombre')}  ·  {r.get('Fecha')}": r.get("ID") for r in ups}
@@ -1061,8 +1061,8 @@ def _grupo_usuarios(grupo):
         "Usuario": u["Usuario"], "Nombre": u["Nombre"] or u["Usuario"],
         "Activo": "sí" if _activo(u) else "no",
         "Contacto": "sí" if _cont_ok(u) else "falta",
-        "Credenciales": _ico.get(_peor.get(u["Usuario"].strip().lower()), "—"),
-        "Tarifa/h": u.get("TarifaHora", "") or "—",
+        "Credentials": _ico.get(_peor.get(u["Usuario"].strip().lower()), "—"),
+        "Rate/h": u.get("TarifaHora", "") or "—",
     } for u in gente]
     _ev = st.dataframe(pd.DataFrame(_rows), hide_index=True, width="stretch",
                        on_select="rerun", selection_mode="single-row", key="gu_tbl")

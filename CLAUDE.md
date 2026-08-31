@@ -7288,6 +7288,80 @@ se GUARDAN en la hoja `Actividades` → migración del histórico). El informe d
 no está entero en inglés hasta que caigan esas tres, y conviene saberlo antes de
 enseñárselo a un cliente.
 
+## i18n: las CABECERAS DE TABLA y la QUINTA red (v444)
+
+Cierra las «~30 cabeceras de tabla que son clave de dict» que v441 dejó medidas y
+pendientes, y de paso destapa una quinta forma que ninguna red anterior veía.
+
+### ⚠️ Aquí no se decide por idioma: se mide qué hace cada cadena
+Una clave de dict y una etiqueta **se ven igual en el AST**, así que traducir por
+barrido es justo como se rompe algo en silencio. `riesgo_claves.py` clasifica las 70
+candidatas en cinco cajones, y **cuatro de ellos no se tocan**:
+
+| | Por qué NO | Cuántas |
+|---|---|---|
+| **IDENTIFICADOR** | es opción de un widget o se compara con `==` → traducirla deja la rama **MUERTA** (el fallo de v441 en corte de rieles) | 15 |
+| **COLUMNA DE EDITOR** | el código LEE la tabla editada por ese nombre **y** el `_snapshot` de v148 lo guarda en `DatosJSON` | 10 |
+| **SE LEE** | se indexa por ella desde otro módulo (`Duración (d)` es contrato con los informes) | 17 |
+| **VALOR i18n** | es el DATO en español de la hoja; `etiqueta()` lo traduce al MOSTRARLO (v442) | 4 |
+| **TRADUCIBLE** | solo se pinta | **31** |
+
+Las 31 se aplicaron **por AST y por posición**, tocando únicamente los nodos que el
+árbol confirma como clave de un dict literal. ⚠️ **NO por texto**: `"Credenciales"`
+es también el nombre de una hoja y `"Horas"`/`"Estado"` son columnas reales del
+libro — un `str.replace` sobre el fuente habría roto la lectura de Sheets sin dar
+ningún error. 63 claves reescritas en 9 módulos.
+
+### ⚠️ El clasificador dio por SEGURA una que no lo era
+En su primera versión ponía **`'Riel'`** en TRADUCIBLE, y `'Riel'` es la columna del
+editor de corte de rieles: está en `disabled=["Riel"]`, en `cols_expected` y dentro
+del DataFrame que se persiste en `DatosJSON`. No la vio porque `["Riel"]` dentro de
+una lista **no es un `Subscript`**, que era lo único que miraba. Un falso «se puede»
+es peor que no clasificar: invita a romper justo lo que hay que proteger. Se añadió
+el cajón COLUMNA DE EDITOR y `'Riel'` se movió solo.
+
+### QUINTA red: etiquetas de UNA palabra dentro de tuplas
+Al verificar apareció otra bolsa: `("cred", ":material/badge:", "Credenciales", …)`,
+`("alarmas", …, "Alarmas", …)` y el botón `f"→ Ir a {secn}"`. **Ninguna de las cuatro
+redes anteriores las ve**: la de posición mira el argumento de `st.*` (aquí es la
+TUPLA), la de frases pide 3+ palabras, la de cortas 2, y la de f-strings mira
+f-strings. Van **a mano**, una a una, porque la misma cadena es dato en otro sitio:
+`"Credenciales"`/`"Alarmas"` son nombres de hoja, y `"Proyectos"`/`"Usuarios"`
+conviven con los IDs `"📊 Proyectos"`/`"👷 Usuarios"`, **que no se tocan**. En cada
+tupla del resumen del día se traduce el 3º (etiqueta) y el 8º (nombre visible) y se
+dejan intactos el 6º (clave de sección) y el 7º (ID de sub-pestaña).
+⚠️ Y de paso: mi propia lista de exclusión de nombres de hoja **tapaba dos etiquetas
+reales**, porque la misma palabra es dato en un sitio y rótulo en otro. Una exclusión
+global es cómoda y miente.
+
+### ⚠️ El chequeo de `column_config` se APROBABA A SÍ MISMO
+El modo de fallo de esta tanda es traducir la clave de la FILA y no la del
+`column_config` (o al revés): Streamlit **no da error**, la columna pierde formato,
+ancho y etiqueta, y la tabla se descoloca. El chequeo compara las claves del
+`column_config` contra las de las filas de esa función… y el `column_config` es
+también un dict dentro de la función, así que se contaba a sí mismo y la resta salía
+vacía **siempre**. Con la mitad de la traducción rota delante seguía diciendo
+«0 huérfanas». Lo destapó probarlo contra código roto, no leerlo. Hoy vigila **24
+tablas**.
+
+### Verificación
+`verif_v444.py` (25 comprobaciones) probado contra **7 roturas**: las caza las 7 —
+⚠️ pero **dos solo tras corregirlo**, las dos por comprobar PRESENCIA en vez del
+literal exacto: la del `column_config` (arriba) y la de los chips de ausencias, donde
+«approved» aparece también en otro texto del módulo, así que el chip devuelto al
+español seguía en verde. Es la lección de v439 por tercera vez.
+`verif_v408` caducó otra vez (fijaba `Situación`/`Alertas`/`Usuarios`) y se reescribió
+para **resolver el nombre real** de cada columna en vez de fijarlo: así el chequeo
+sigue midiendo lo que dice medir aunque se traduzca el resto.
+
+### Lo que QUEDA
+- **F5**: `report.py` (11 f-strings + `Dif vs Límite`, `Parámetro`…), `auth.py` (13),
+  `timeclock.py` (9), `prestart.py` (6), `credentials.py` (5), `admin_digest.py` (5),
+  `chat_agent.py` (4), `ausencias.py` (4), `email_notify.py`, `interpretation`.
+- Las **36 claves que NO se pueden traducir solas**, cada una con su cajón y su razón.
+  Sacarlas de ahí es migración de histórico, no traducción.
+- Los **nombres de actividad** de la hoja `Actividades` y los conceptos de nómina.
+
 ## i18n: la CUARTA red — la f-string ENTERA, no sus trozos (v443)
 
 Salió al clasificar los 6 rojos de la suite tras v442. Uno de ellos (`verif_v298`)
@@ -7777,7 +7851,7 @@ literal, así que **no casaba nunca** — y dejó pasar «Plomo riel izquierdo»
 Es el mismo fallo de v436, cometido otra vez ese mismo día. Se vio con `cat -A`, no
 leyendo. → **Cualquier `\b`, `\n` o `\w` va por fichero escrito, nunca por heredoc.**
 
-## Versiones desplegadas (v443 = actual)
+## Versiones desplegadas (v444 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -7785,6 +7859,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v444 | **Las CABECERAS DE TABLA que son clave de dict, y la QUINTA red.** ⚠️ Aquí no se decide por idioma: una clave de dict y una etiqueta **se ven igual en el AST**, así que `riesgo_claves.py` clasifica las 70 candidatas por lo que HACEN — 15 son IDENTIFICADOR (opción de widget o comparada con `==`: traducirla deja la rama MUERTA), 10 son COLUMNA DE EDITOR (el `_snapshot` de v148 las guarda en `DatosJSON`), 17 SE LEEN desde otro módulo y 4 son VALOR de `i18n`. Las **31 traducibles** se aplicaron **por AST y por posición**, nunca por texto: `"Credenciales"` es también el nombre de una hoja y `"Horas"`/`"Estado"` son columnas reales del libro. ⚠️ **El clasificador dio por SEGURA una que no lo era**: `'Riel'` es columna del editor persistido y no la vio porque `["Riel"]` dentro de una lista no es un `Subscript` — un falso «se puede» invita a romper justo lo que hay que proteger. + **QUINTA red**: etiquetas de UNA palabra dentro de TUPLAS (`("cred", …, "Credenciales", …)`, `f"→ Ir a {secn}"`), invisibles para las cuatro redes anteriores y que van a mano porque la misma cadena es dato en otro sitio; ⚠️ mi propia exclusión de nombres de hoja **tapaba dos etiquetas reales**. ⚠️ Y el chequeo de `column_config` **se aprobaba a sí mismo** (contaba sus propias claves como si fueran de la fila) y decía «0 huérfanas» con media traducción rota delante. 7 roturas probadas — dos solo tras corregir el guardián, las dos por comprobar PRESENCIA en vez del literal exacto |
 | v443 | **La CUARTA red del i18n: la f-string ENTERA, no sus trozos.** Salió clasificando los 6 rojos de la suite: el desglose de alertas del propietario estaba **a medias** (`f"{n} behind schedule"` traducido y `f"{n} alarmas"` no). ⚠️ Una f-string **no es una cadena, es una lista de trozos**, así que las tres redes anteriores —que miran cadenas COMPLETAS— no ven ni un **fragmento de UNA palabra** (`f"{n} alarmas"`, que además NO se puede envolver en `t()`) ni una **f-string a medio traducir** (`f"Collected {x} de {y}"`, cuyo español solo aparece al CONCATENAR los trozos). Barrido: **141 en `core/`, 48 en interfaz** — fases que yo había declarado cerradas. ⚠️ **Y la red se validó contra un caso construido y FALLÓ**: veía «de» pero **no «alarmas»** —su léxico eran palabras funcionales y ésa es un sustantivo sin acento—, o sea que el caso que originó la versión se le escapaba (trampa nº28, cuarta vez); con el léxico del dominio aparecieron **9 más**. ⚠️ **`Elevador` NO se traduce**: es la columna del editor de entrada que el `_snapshot` de v148 guarda en `DatosJSON` —`CAL-0002` ya tiene una— y renombrarla rompería «reabrir el cálculo»; sí las tablas de RESULTADO, que viajan al PDF de obra. ⚠️ Y un **NameError camino de producción**: `d('Works')` en un módulo que solo importa `t` (el fallo de v423), invisible para `compileall` y para el import. 7 roturas probadas — una solo tras corregir el guardián, que comprobaba PRESENCIA y con DOS tablas dejaba pasar romper una. Los 6 rojos eran CADUCADOS, ⚠️ uno **por el CALENDARIO** (miraba la semana actual, así que se ponía rojo todos los lunes) |
 | v442 | **La TERCERA red del i18n, los VALORES en pantalla y ⚠️ una RAMA que dejé MUERTA.** En v441 traduje la opción del radio de corte de rieles y NO su comparación (`caso.startswith("Caso 1")`): **la rama del Caso 1 no se ejecutaba nunca** y la herramienta caía en silencio al Caso 2 — sin error ni test rojo. Lo vi por casualidad. Arreglado con una CONSTANTE compartida + guardián que comprueba que toda comparación casa con las opciones de su widget (29 vigiladas); ⚠️ hubo que escribirlo **tres veces** porque las dos primeras daban 0 con la rama muerta delante (un comentario mío la «producía»; luego una etiqueta del PDF casaba como prefijo) y **mi propio arreglo lo cegó** al pasar las opciones a constantes. + **188 etiquetas cortas** (2 palabras dentro de tuplas y f-strings) que ninguna de las dos redes anteriores veía. + ⚠️ **`i18n.etiqueta()` existía desde v436 y la interfaz NO la usaba**: 160 lecturas de estados/tipos/roles/categorías en 16 módulos, todas pintando el español crudo (solo la usaban los 3 PDF) — el patrón «se escribe y nadie lo lee». Enrutados los puntos que se PINTAN, sin tocar las comparaciones ni los dicts que se escriben en la hoja; el selector de estado usa `format_func`. ⚠️ Y el fallo de ámbito por CUARTA vez: `_etq` ya era variable local en `render_nominas` → «'dict' object is not callable», cazado por pre-vuelo y comprobado EJECUTANDO la pantalla. 6 roturas probadas |
 | v441 | **i18n F4: las 5 herramientas técnicas + su PDF** — y, al ir a cerrarla, el hallazgo: ⚠️ **el invariante de v440 daba «0 cadenas sueltas» con 230 FRASES en español detrás.** Mide el ARGUMENTO de la llamada de display, así que un trozo de f-string y una cadena armada antes en una variable (`msg = f"…"; st.success(msg)`) pasan por delante — **el mismo agujero del guardián del LaTeX de v309**, o sea que F2 y F3 NO estaban terminadas. Red nueva: toda cadena sin envolver que sea una FRASE (3+ palabras) cruzada con el detector de español — ⚠️ aquí sí vale, porque su ceguera son las etiquetas CORTAS y ésas las cubre el invariante de posición. + **el PDF de las 4 herramientas estaba entero en español** y no lo miraba nadie (`tool_pdf` no es display y sus etiquetas son de 1-3 palabras), aunque **se lleva a obra**: va con `d()` (idioma BASE, v436), sin tocar `herramienta=` ni las claves de `datos=`, que son DATO. ⚠️ `verif_v303` se puso rojo con razón: los pies KPI ingleses medían **98 y 106 px sobre 93 útiles** — y el banco de medida se **calibró** antes de fiarse (lee +2..+6 px que el de v303). 9 roturas probadas, 6 guardianes caducados actualizados con su razón (v430 **reventaba** en vez de fallar legible), suite 81/81. ⚠️ **Queda medido**: ~215 etiquetas cortas y ~30 cabeceras que son clave de dict, tres de ellas atadas a datos guardados |
