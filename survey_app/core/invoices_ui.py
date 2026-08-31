@@ -25,13 +25,23 @@ def _creado_por() -> str:
     return str(a.get("usuario", "") or a.get("nombre", ""))
 
 
+# ⚠️ Sin `t()`: este dict se construye al IMPORTAR el módulo, cuando todavía no hay
+# sesión, así que la traducción quedaría CONGELADA en el idioma de ese instante (el
+# fallo de `auth.SESION_OCUPADA`, v445 — y van cinco). Las CLAVES son además el DATO
+# que devuelve `invoices.estado_cobro`. La traducción va en `_est_fmt()`, al pintar.
 _EST_FMT = {
-    "pendiente": ":gray[:material/schedule:] pendiente",
-    "parcial":   ":orange[:material/payments:] parcial",
-    "cobrada":   ":green[:material/check_circle:] cobrada",
-    "vencida":   ":red[:material/warning:] vencida",
-    "anulada":   ":gray[:material/block:] anulada",
+    "pendiente": (":gray[:material/schedule:]", "outstanding"),
+    "parcial":   (":orange[:material/payments:]", "partial"),
+    "cobrada":   (":green[:material/check_circle:]", "paid"),
+    "vencida":   (":red[:material/warning:]", "overdue"),
+    "anulada":   (":gray[:material/block:]", "voided"),
 }
+
+
+def _est_fmt(est: str) -> str:
+    """El estado de cobro, con su icono, en el idioma de la PANTALLA."""
+    _ic, _tx = _EST_FMT.get(str(est), ("", str(est)))
+    return f"{_ic} {t(_tx)}".strip()
 
 
 def render_facturas(grupo):
@@ -112,7 +122,7 @@ def _detalle_factura(grupo, fid):
     total, cob = _num(f.get("Total")), _num(f.get("Cobrado"))
     est = I.estado_cobro(f)
     st.markdown(f"## :material/receipt_long: Invoice No. {f.get('Numero', '')}")
-    st.markdown(f"**{f.get('ClienteNombre', '') or '—'}**  ·  {_EST_FMT.get(est, est)}")
+    st.markdown(f"**{f.get('ClienteNombre', '') or '—'}**  ·  {_est_fmt(est)}")
 
     izq, der = st.columns([3, 2])
     with izq:

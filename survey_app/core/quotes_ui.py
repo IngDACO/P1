@@ -452,7 +452,7 @@ def _comparacion(cid, c):
                    + T.dinero(comp["costo"]["cotizado"], 0) + " cotizados.")
     _av = comp["avance"]
     if comp["costo"]["dif"] > 0 and _av < 100:
-        st.warning(":material/warning: Llevas **" + T.dinero(comp["costo"]["dif"], 0)
+        st.warning(":material/warning: " + t("You are at") + " **" + T.dinero(comp["costo"]["dif"], 0)
                    + " above** what was quoted, with the project at **"
                    + ("%.0f" % _av) + "%**. At this rate the final profit will be lower than quoted.")
     elif comp["costo"]["dif"] <= 0 and _av > 0:

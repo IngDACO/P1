@@ -26,13 +26,13 @@ logger = logging.getLogger(__name__)
 # Las labels son display; la lógica usa la CLAVE, así que cambiarlas es seguro.
 _SECCIONES = [
     ("home",          ":material/home: Home"),
-    ("fichaje",       ":material/schedule: Fichaje"),
-    ("planificacion", ":material/calendar_month: Planificación"),
+    ("fichaje",       ":material/schedule: Timeclock"),
+    ("planificacion", ":material/calendar_month: Planning"),
     ("proyectos",     ":material/folder: Projects"),
-    ("finanzas",      ":material/payments: Finanzas"),
-    ("inventario",    ":material/inventory_2: Inventario"),
-    ("herramientas",  ":material/build: Herramientas"),
-    ("contactos",     ":material/contacts: Contactos"),
+    ("finanzas",      ":material/payments: Finance"),
+    ("inventario",    ":material/inventory_2: Inventory"),
+    ("herramientas",  ":material/build: Tools"),
+    ("contactos",     ":material/contacts: Contacts"),
 ]
 _LBL2KEY = {lbl: k for k, lbl in _SECCIONES}
 
@@ -52,26 +52,26 @@ _SUBSECCIONES = {
         ("👷 Usuarios", ":material/badge: Users")]),
     "proyectos": ("adm_proy_sub", [
         ("📊 Proyectos", ":material/format_list_bulleted: Projects"),
-        ("🗂 Agrupaciones", ":material/account_tree: Agrupaciones"),
+        ("🗂 Agrupaciones", ":material/account_tree: Groupings"),
         # v423: sección PROPIA para las localizaciones internas (oficina/almacén/taller).
         # Decisión del usuario frente a mezclarlas en la cartera con un filtro: así la
         # cartera de obras queda limpia y ninguna vista futura tiene que acordarse de
         # excluirlas. ⚠️ El ID conserva el emoji porque ES el identificador que usan los
         # deep-links y el matching de `_seccion_*` (v232); el display es lo único nuevo.
-        ("🏢 Localizaciones", ":material/business: Localizaciones")]),
+        ("🏢 Localizaciones", ":material/business: Locations")]),
     "finanzas": ("adm_fin_sub", [
-        ("📊 Resumen", ":material/insights: Resumen"),
-        ("💰 Gastos", ":material/receipt_long: Gastos"),
-        ("🧾 Facturas", ":material/receipt: Facturas"),
+        ("📊 Resumen", ":material/insights: Summary"),
+        ("💰 Gastos", ":material/receipt_long: Expenses"),
+        ("🧾 Facturas", ":material/receipt: Invoices"),
         ("👥 Nóminas", ":material/payments: Payroll"),
         ("⏱ Horas", ":material/schedule: Hours"),
-        ("📈 Rentabilidad", ":material/trending_up: Rentabilidad"),
-        ("📄 Cotizaciones", ":material/request_quote: Cotizaciones"),
-        ("📚 Catálogo", ":material/sell: Catálogo")]),
+        ("📈 Rentabilidad", ":material/trending_up: Profitability"),
+        ("📄 Cotizaciones", ":material/request_quote: Quotes"),
+        ("📚 Catálogo", ":material/sell: Catalogue")]),
     "herramientas": ("adm_herr_sub", [
-        ("🧰 Inicio", ":material/apps: Inicio"),
+        ("🧰 Inicio", ":material/apps: Home"),
         ("📐 Survey", ":material/architecture: Survey"),
-        ("🔩 Plomada", ":material/straighten: Plomada"),
+        ("🔩 Plomada", ":material/straighten: Plumb line"),
         ("✂️ Rieles", ":material/content_cut: Rails"),
         ("🛡 Buffers", ":material/shield: Buffers"),
         ("🎗 Belting", ":material/swap_vert: Belting"),
@@ -95,11 +95,11 @@ _SUBKEY = {k: v[0] for k, v in _SUBSECCIONES.items()}   # {seccion: clave_de_est
 # nivel le costaría un toque cada mañana justo a quien lo usa en el móvil.
 _SECCIONES_CAMPO = [
     ("misproyectos", ":material/assignment: My projects"),
-    ("fichaje",      ":material/schedule: Fichaje"),
+    ("fichaje",      ":material/schedule: Timeclock"),
     ("prestart",     ":material/health_and_safety: Pre-Start"),
-    ("herramientas", ":material/build: Herramientas"),
+    ("herramientas", ":material/build: Tools"),
     ("credenciales", ":material/badge: My credentials"),
-    ("colillas",     ":material/payments: Mis colillas"),
+    ("colillas",     ":material/payments: My payslips"),
     # v430: la autogestión de ausencias. Va SUELTA, como el Pre-Start (v154): pedir
     # un día o avisar de una baja no es «un proyecto» ni «una herramienta», y
     # enterrarla un nivel le costaría un toque a quien la usa desde el móvil.
@@ -117,21 +117,21 @@ _SUBSECCIONES_CAMPO = {
 # (sin fichaje — no ficha, decisión de v93). Las 6 pestañas internas de su panel
 # pasan a ser sub-secciones de la shell.
 _SECCIONES_OWNER = [
-    ("administracion", ":material/shield_person: Administración"),
+    ("administracion", ":material/shield_person: Administration"),
     ("prestart",       ":material/health_and_safety: Pre-Start"),
-    ("herramientas",   ":material/build: Herramientas"),
+    ("herramientas",   ":material/build: Tools"),
 ]
 _SUBSECCIONES_OWNER = {
     # ⚠️ La clave de estado es `owner_sec`, LA MISMA del radio viejo, a propósito:
     # hay un deep-link (`survey_ui` al guardar un survey) que escribe
     # `owner_sec = "📁 Proyectos"`. Reutilizarla lo mantiene vivo sin tocarlo.
     "administracion": ("owner_sec", [
-        ("🌐 Resumen",   ":material/dashboard: Resumen"),
-        ("🏢 Grupos",    ":material/business: Grupos"),
+        ("🌐 Resumen",   ":material/dashboard: Summary"),
+        ("🏢 Grupos",    ":material/business: Groups"),
         ("👥 Usuarios",  ":material/group: Users"),
         ("📁 Proyectos", ":material/folder: Projects"),
         ("🚆 Rieles",    ":material/train: Rails"),
-        ("📚 Manuales",  ":material/menu_book: Manuales")]),
+        ("📚 Manuales",  ":material/menu_book: Manuals")]),
     "herramientas": _SUBSECCIONES_CAMPO["herramientas"],   # las 5 técnicas, sin Pre-Start
 }
 

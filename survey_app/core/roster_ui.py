@@ -574,7 +574,7 @@ def _asignacion_inteligente(grupo, lunes, staff, tidx, dias=None):
                 flash.exito(f"Assigned {_n} to «{_psel}» on {R.DIAS_LABEL[_dsel]} {ini}–{fin}.")
                 st.rerun()
         if ocupados:
-            st.caption(":material/block: Ocupados esa franja: "
+            st.caption(":material/block: " + t("Busy in that slot") + ": "
                        + _esc(", ".join(f["nom"] for f in ocupados)))
 
 
@@ -818,7 +818,7 @@ def render_planificacion(grupo):
         format_func=lambda o: {
             "📋 Tablero": ":material/calendar_view_week: Week",
             "🕐 Día": ":material/schedule: Day",
-            "👀 Disponibilidad": ":material/event_available: Libres"}.get(o, o))
+            "👀 Disponibilidad": ":material/event_available: Free"}.get(o, o))
     # ── Cobertura del día (DATO, se queda) + días extra + copiar semana ──
     _cc1, _cc2, _cc3 = st.columns([4, 2, 2])
     with _cc1:

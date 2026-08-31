@@ -2148,7 +2148,7 @@ def _detalle_proyecto(pid: str, grupo: str = None):
                     format_func=lambda o: {"📊 Estado": ":material/insights: Status",
                                            "✏️ Datos": ":material/edit: Datos",
                                            "💰 Costos": ":material/payments: Costs",
-                                           "📎 Archivos": ":material/folder: Archivos"}.get(o, o),
+                                           "📎 Archivos": ":material/folder: Files"}.get(o, o),
                     # v316: key `cpxseg_*` → el SEGMENTADO del kit (v292): sin bolitas,
                     # con marco y el elegido resaltado. Es la pieza para "una de N", que
                     # es lo que son estas 4 secciones. ⚠️ NO se usa la fila de botones del
@@ -3116,9 +3116,9 @@ def render_field_projects(usuario: str, grupo: str):
         _opts = _opts[1:]
     _sec = st.radio(t("Section"), _opts,
                     format_func=lambda o: {"🏗 Avance": ":material/trending_up: Avance",
-                                           "🚨 Avisos": ":material/report: Avisos",
-                                           "💰 Recibos": ":material/receipt: Recibos",
-                                           "📎 Archivos": ":material/folder: Archivos"}.get(o, o),
+                                           "🚨 Avisos": ":material/report: Alerts",
+                                           "💰 Recibos": ":material/receipt: Receipts",
+                                           "📎 Archivos": ":material/folder: Files"}.get(o, o),
                     # v316: mismo segmentado que el detalle del admin. El campo ve la
                     # misma pieza que el admin: la coherencia entre pantallas es lo que
                     # hace que parezca un producto y no cuatro cosas pegadas.
@@ -3917,7 +3917,7 @@ def render_pnl(grupo: str):
                     st.caption(t("No invoices in this period."))
             elif _cur == "comp":
                 _comp = [(x, y) for x, y in (("Payroll", d["costo_nomina"]),
-                                             ("Compras / materiales", d["compras"]))
+                                             (t("Purchases / materials"), d["compras"]))
                          if y > 0]
                 if len(_comp) > 1:
                     st.markdown(t("**Cost breakdown**"))

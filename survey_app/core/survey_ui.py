@@ -1373,7 +1373,7 @@ def render_survey_tab(_ROL, _GRUPO):
                                     except Exception:
                                         _fallos.append("client report")
                                 if _fallos:
-                                    st.caption(":material/attach_file: Documentos archivados, salvo: "
+                                    st.caption(":material/attach_file: " + t("Documents filed, except") + ": "
                                                + ", ".join(_fallos) + ".")
                                 else:
                                     st.caption(t(":material/attach_file: Documents filed in Drive."))

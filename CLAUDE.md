@@ -1090,8 +1090,18 @@ deslogueo. Se revirtió v168 (handler de query param en app.py + el `clicable`/`
 ### ⚠️ Contra aceptada por el usuario
 Con `st.columns` (nombre + 5 días) el board pierde el scroll horizontal del HTML y en móvil queda más
 apretado. El usuario lo aceptó a cambio de que el clic sea 100% fiable en la sesión.
+### ⚠️ Y el `t()` congelado al importar mordió por QUINTA vez — en esta misma versión
+Al traducir el chip de estado de factura metí `t("outstanding")` dentro de un dict de
+MÓDULO. **Tres guardianes** (v445, v446, v447) lo cazaron a la vez, y los tres decían
+lo mismo. Van cinco: `auth.SESION_OCUPADA`, `ausencias.TIPOS`, `plan_data.USA`,
+`toolruns.HERRAMIENTAS` y ahora `invoices_ui._EST_FMT` — **las cinco cometidas
+DESPUÉS de documentar la regla**. El arreglo es siempre el mismo: la constante guarda
+el texto BASE (y aquí sus CLAVES son además el dato que devuelve `estado_cobro`) y la
+traducción se mueve a una función que se llama al PINTAR (`_est_fmt()`). El chequeo se
+añadió también al guardián de cierre, para que no dependa de correr otro.
+
 ### Verificación
-Mecanismo `st-key` probado en vivo (botón coloreado, clase presente). Modelo de la rejilla: 2 celdas no
+`verif_v449.py`Mecanismo `st-key` probado en vivo (botón coloreado, clase presente). Modelo de la rejilla: 2 celdas no
 vacías → 2 reglas CSS, 1 navegable (solo la enlazada a PRJ). v168 sin restos (`abrir_prj`/`clicable`),
 plumbing en sesión (`_prjsel_pending`+`_gruposec_pending`), `_tablero_editable` 0 nombres libres, compila.
 
@@ -7288,6 +7298,55 @@ se GUARDAN en la hoja `Actividades` → migración del histórico). El informe d
 no está entero en inglés hasta que caigan esas tres, y conviene saberlo antes de
 enseñárselo a un cliente.
 
+## i18n CERRADO del todo: la navegación y las últimas etiquetas (v449)
+
+Al medir con las tres redes a la vez tras v448 aparecieron **32 etiquetas** que
+seguían en español, casi todas en el sitio más visible de la app: **los displays de
+la navegación**. `_SECCIONES` y `_SUBSECCIONES` estaban a medias — «Projects» al lado
+de «Finanzas», «Rails» al lado de «Plomada».
+
+⚠️ Cada entrada es **(ID, display)** y solo se toca el segundo: el ID lleva emoji
+porque **ES el identificador** — lo compara `sub ==` y lo usan los deep-links
+(`_ir_a`, `_admin_nav_pending`, `owner_sec`). Traducirlo dejaría la rama muerta y la
+navegación rota sin dar ningún error.
+
+### ⚠️ Y el chequeo que faltaba: la RAMA MUERTA de las sub-pestañas
+El guardián de ramas muertas (v442) solo mira opciones de `radio`/`selectbox`; estos
+IDs viven en tuplas de un dict. Chequeo nuevo: **cada ID definido en `_SUBSECCIONES`
+tiene que aparecer en un `sub == "…"`**. Hubo que escribirlo dos veces:
+
+1. La primera versión comprobaba «el ID sigue estando en el fichero» — y con la
+   definición traducida y la comparación intacta, **el ID sigue estando** (aparece dos
+   veces). Pasaba con la rama muerta delante. Lo destapó probarla contra código roto.
+2. La segunda daba **dos ramas muertas que no existen**: asumí que el que se despacha
+   por el `else` es «el último de la lista», y no lo es — en finanzas es `⏱ Horas`
+   (el 5.º de 8) y en proyectos es el **primero**. El invariante correcto es POR
+   SECCIÓN: un `if/elif/else` puede dejar **exactamente uno** sin comparar; dos
+   significa que un ID cambió en un lado y no en el otro.
+
+### El recuento final, con las tres redes
+| | |
+|---|---|
+| **Interfaz** (23 módulos) | **0** etiquetas en español |
+| **Backend** (60 módulos) | **0** mensajes en español |
+
+Y lo que queda en español es, todo, lo que **no se puede** traducir:
+| | Por qué |
+|---|---|
+| Estados, tipos, roles y categorías | son el DATO de Google Sheets; `i18n.etiqueta()` los traduce solo al MOSTRARLOS (v442) |
+| Nombres de actividad (`schedule.PHASES`) | se guardan en la hoja `Actividades`: traducirlos partiría el histórico |
+| IDs de sub-pestaña, claves de dict, columnas del libro | son identificadores; traducirlos deja de casar sin dar error |
+| `"COPEX Activos"` | es una CARPETA de Drive: renombrarla dejaría los activos ya subidos en la vieja |
+| La base de conocimiento de `chat_agent` | 353 líneas de dominio; la regla de estilo ya ordena responder en inglés (v448) |
+| Los comentarios y docstrings del código | son para quien lo mantiene, no para quien lo usa |
+
+### Verificación
+`verif_v449.py` (15 comprobaciones) mide con las tres redes sobre TODO el repo,
+⚠️ **valida cada red contra un caso construido antes de creerse su cero** (trampa
+nº12) y afirma las exclusiones una a una — de modo que traducir mañana un nombre de
+actividad, o renombrar la carpeta de Drive, salta. Probado contra **6 roturas**: las
+caza las 6.
+
 ## i18n F5 CERRADO: el informe ADMIN, los correos y los prompts de la IA (v448)
 
 Última pieza de la migración. Con esto **la app no tiene un solo texto en español
@@ -8119,7 +8178,7 @@ literal, así que **no casaba nunca** — y dejó pasar «Plomo riel izquierdo»
 Es el mismo fallo de v436, cometido otra vez ese mismo día. Se vio con `cat -A`, no
 leyendo. → **Cualquier `\b`, `\n` o `\w` va por fichero escrito, nunca por heredoc.**
 
-## Versiones desplegadas (v448 = actual)
+## Versiones desplegadas (v449 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -8127,6 +8186,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v449 | **i18n CERRADO del todo: la navegación y las últimas etiquetas.** Al medir con las tres redes tras v448 aparecieron **32** que seguían en español, casi todas en lo más visible: los displays de `_SECCIONES`/`_SUBSECCIONES`, a medias («Projects» al lado de «Finanzas»). ⚠️ Cada entrada es **(ID, display)** y solo se toca el segundo: el ID lleva emoji porque **ES el identificador** que compara `sub ==` y usan los deep-links. ⚠️ Y faltaba el chequeo de **RAMA MUERTA para las sub-pestañas** (el de v442 solo mira opciones de widget); hubo que escribirlo **dos veces**: la primera comprobaba «el ID sigue en el fichero» y **pasaba con la rama muerta delante** (aparece dos veces: definición y comparación), y la segunda daba **dos ramas muertas inexistentes** por asumir que el del `else` es «el último de la lista» — en finanzas es el 5.º de 8 y en proyectos el PRIMERO. El invariante correcto es por SECCIÓN: un `if/elif/else` deja **exactamente uno** sin comparar. **Recuento final: 0 en interfaz y 0 en backend**; lo que queda en español es solo lo que no se puede traducir (datos, IDs, nombres de actividad, la carpeta de Drive `COPEX Activos` y la base de conocimiento del asistente), cada uno afirmado por el guardián. 6 roturas |
 | v448 | **F5 CERRADO: el informe ADMIN, los correos y los prompts de la IA** — la app ya no tiene un solo texto en español salvo lo que es DATO. El informe admin (101 cadenas) va con `_d()` aplicado **por AST y por posición**, ⚠️ refusando toda cadena que se use como ÍNDICE (`'Duración (d)'`, `'Línea'`: son contrato con `schedule_table`/`plumb_table`). ⚠️ **El barrido del FUENTE se dejó 22 líneas** y las encontró **generar el PDF y leer su texto** — la trampa nº27 otra vez —, capturando además el log del módulo, porque el veredicto va dentro de un `try/except` que registra y sigue (el fallo real de v437). ⚠️ Y el prefijo `"[Interpretación no disponible"` se **produce** en `interpretation` y se **compara** en `report` y `user_report`: los cuatro a la vez, o el informe imprimiría el mensaje de error como si fuera la interpretación. ⚠️ **Decisión de criterio dicha en voz alta**: la base de conocimiento de `chat_agent` (353 líneas) se queda en español y solo se traduce la REGLA DE ESTILO, que ahora ordena responder en inglés — el modelo lee español, y traducir contenido técnico denso mete riesgo de error en el conocimiento del asistente a cambio de nada. Quedan tres exclusiones declaradas: los nombres de actividad (dato de la hoja `Actividades`), esa base de conocimiento, y las CLAVES de schemas y columnas. 7 roturas probadas |
 | v447 | **F5c: los 14 módulos de backend que quedaban** — con esto el backend no tiene un solo mensaje en español. ⚠️ Aquí lo peligroso no fue traducir sino **RENOMBRAR**: `pre_i18n` marcó 25 funciones con `t`/`d` como variable, y renombrar es DOS pasos. El que se me escapó, en `payroll.neto`, era `elif t == "deduccion"` — con `t` ya importado como la función de idioma **no da error**: la comparación sale siempre False y **las deducciones dejan de restarse del neto a pagar**. Un fallo de dinero, silencioso, con `compileall` e imports en verde; lo encontró preguntarle al AST por todos los `Name` llamados `t` tras cada renombrado. ⚠️ Y me tapé a mí mismo dos veces más: en `manuals` renombré la variable del bucle a `_tok`, **que ya era el TOKENIZADOR del módulo** (shadowing dentro del arreglo del shadowing), y el **`t()` congelado al importar** salió otras dos veces (`plan_data.USA`, `toolruns.HERRAMIENTAS`) — cuatro en tres versiones, las cuatro cazadas por el guardián de v445. ⚠️ Y la foto de 261 líneas que prueba que **ningún número se movió** dio primero «IDÉNTICAS» comparando **dos ficheros vacíos** (el script fallaba con el stderr silenciado): el paso en vacío dentro de la propia comprobación. 7 roturas probadas — una solo tras integrar el chequeo de importes, que vivía aparte: *un chequeo que no está en la suite no protege nada* |
 | v446 | **F5b: seis módulos de backend más** (`quotes`, `projects`, `ausencias`, `orders`, `catalogo`, `clientes`; 88 mensajes). ⚠️ Aquí el riesgo de traducir un DATO es máximo y se midió antes: `projects.derive_estado` **devuelve** `"En progreso"`/`"Planificado"`, que se escriben en la hoja y se comparan en 387 sitios. ⚠️ **Renombrar es dos pasos**: al pasar los `t = totales(...)` de `quotes` a `_tot` quedaron **16 usos de `t["subtotal"]` colgando** —`NameError` en cuanto alguien creara una cotización—, encontrados preguntando al AST por todos los `Name` llamados `t` (16 antes, 0 después). ⚠️ Y **cometí el fallo de v445 veinte minutos después de documentarlo**: metí `t()` dentro de `ausencias.TIPOS`, que se construye a nivel de módulo, así que las etiquetas quedaban congeladas al importar — lo cazó el guardián recién escrito; la constante guarda el texto BASE y `nombre_tipo()` traduce al pintar (en los correos se queda en base, regla v436). ⚠️ Al mover esas lecturas escribí `nombre_tipo(k)` cuando **la variable del bucle es `_tp`**: otro `NameError` que habría reventado «Mis ausencias» y que ni `compileall` ni el import ven. ⚠️ Y **cuatro «fallos» del smoke eran del test** (firmas de `solicitar`, `crear` ×2 y `create_cliente`) — regla v135, novena vez. 7 roturas probadas |

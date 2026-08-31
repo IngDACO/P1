@@ -173,7 +173,7 @@ def _detalle(grupo, aid):
         st.session_state.pop("_inv_open", None)
         return
     # v351: entra por el QR (`?activo=`), que puede ser el de otra empresa.
-    if not tenant.exigir(a, "Este activo"):
+    if not tenant.exigir(a, t("This asset")):
         st.session_state.pop("_inv_open", None)
         return
 

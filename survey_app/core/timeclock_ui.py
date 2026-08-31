@@ -572,7 +572,7 @@ def render_timeclock_tab():
     with col_jor:
         st.markdown(t("#### :material/schedule: Workday"))
         if gen:
-            _chronometer(gen["clock_in"], "Llevas abierta", _AZUL, "chrono_gen")
+            _chronometer(gen["clock_in"], t("Open for"), _AZUL, "chrono_gen")
             st.caption(f"{t('Since')} {gen['clock_in'][11:16]}."
                        + (t("  Closing it also closes the project in progress.") if prj else ""))
             if st.button(t(":material/cancel: Close the workday"), width="stretch", key="tc_gen_out"):

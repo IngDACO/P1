@@ -810,9 +810,10 @@ def _ficha_usuario(u, grupo, owner=False, sel_key="gp_fichasel"):
         fichando = bool(_ses.get(T.TIPO_GENERAL) or _ses.get(T.TIPO_PROYECTO))
     except Exception:
         fichando = False
-    chips = [(":green[:material/check_circle:] Activo" if activo else ":red[:material/cancel:] Inactivo"),
-             (":material/schedule: Fichando ahora" if fichando else ""),
-             ((":green[:material/contact_page:] Contacto OK" if contacto_ok else ":orange[:material/warning:] No contact details")
+    chips = [(":green[:material/check_circle:] " + t("Active") if activo
+              else ":red[:material/cancel:] " + t("Inactive")),
+             (":material/schedule: " + t("Clocked in now") if fichando else ""),
+             ((":green[:material/contact_page:] " + t("Contact OK") if contacto_ok else ":orange[:material/warning:] No contact details")
               if es_campo else "")]
     st.markdown(f"**{u.get('Nombre') or sel}**  ·  _{_etq(str(u['Rol']))}_  ·  "
                 + "  ·  ".join(c for c in chips if c))
