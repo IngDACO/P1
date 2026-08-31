@@ -7288,6 +7288,67 @@ se GUARDAN en la hoja `Actividades` → migración del histórico). El informe d
 no está entero en inglés hasta que caigan esas tres, y conviene saberlo antes de
 enseñárselo a un cliente.
 
+## i18n F5 CERRADO: el informe ADMIN, los correos y los prompts de la IA (v448)
+
+Última pieza de la migración. Con esto **la app no tiene un solo texto en español
+salvo lo que es DATO**, y las tres excepciones que quedan están declaradas, no
+olvidadas.
+
+### El informe ADMIN (101 cadenas)
+Va con **`_d()`** —alias, porque `d` ya es variable en `fstr()`— porque es un
+documento: sale de la empresa y su idioma no puede depender de la pantalla de quien
+lo genera (regla v436). Aplicado **por AST y por posición**, ⚠️ **refusando** toda
+cadena que se use como ÍNDICE en algún módulo: son el contrato con `schedule_table`
+y `plumb_table` (`'Actividad'`, `'Duración (d)'`, `'Línea'`), y traducirlas deja la
+lectura buscando una clave que no existe.
+
+### ⚠️ El barrido del FUENTE se dejó 22 líneas; las encontró GENERAR el PDF
+Tras las 64 primeras cadenas, el fuente daba «0 pendientes» y el PDF renderizado
+seguía con **22 líneas en español**: trozos de f-string y líneas de un diagrama ASCII
+que ninguna red del fuente alcanza. Es exactamente la trampa nº27 (v438) repetida:
+**para afirmar «no queda nada», medir sobre la SALIDA**. Se generó el informe de
+verdad (88 KB, proyecto real de la hoja) y se leyó su texto con `pypdf`.
+⚠️ Y hubo que **capturar el log del módulo** además de mirar el PDF: el veredicto va
+dentro de un `try/except` que registra y sigue, así que un `NameError` ahí no revienta
+nada — fue el fallo real de v437 en el informe hermano.
+
+### ⚠️ El prefijo que se PRODUCE en un sitio y se COMPARA en dos
+`"[Interpretación no disponible"` lo genera `interpretation.py` (×2) y lo comparan
+`report.py` y `user_report.py` para saber si la IA falló. **Los cuatro tenían que
+cambiar a la vez**: traducir solo unos deja la comparación sin casar y el informe
+imprimiría el mensaje de error *como si fuera la interpretación*. El guardián lo fija
+en los tres ficheros.
+
+### Los prompts: el idioma en que ESCRIBE el modelo
+`interpretation.SYSTEM_PROMPT` (el del informe admin) pasa al inglés, igual que v437
+hizo con el del cliente; sus **CLAVES** de schema no se tocan (se guardan en
+`InterpJSON` y traducirlas dejaría las 7 secciones en blanco).
+
+### ⚠️ Una decisión de criterio, dicha en voz alta
+La **base de conocimiento de `chat_agent.SYSTEM_PROMPT` (353 líneas)** se queda en
+español. Lo que decide el idioma de la respuesta es la regla de estilo, que ahora
+dice *«responde SIEMPRE en inglés técnico claro, aunque esta guía esté escrita en
+español»* — y el modelo lee español sin problema. Traducir 353 líneas de geometría
+del hueco, fórmulas y casos 1/2 mete **riesgo de error de traducción en el
+conocimiento del asistente** a cambio de cero beneficio visible. Es una exclusión
+DELIBERADA con su razón, no un olvido; si se prefiere lo contrario, es un cambio
+acotado a ese bloque.
+
+### Las tres exclusiones que quedan, y por qué
+| | |
+|---|---|
+| **`schedule.PHASES`** (10 nombres de actividad) | se GUARDAN en la hoja `Actividades`: traducirlos dejaría los proyectos viejos en español y los nuevos en inglés **sin forma de casarlos**. Es migración de histórico |
+| **La base de conocimiento del asistente** | ver arriba |
+| **Las CLAVES** de schemas, columnas, estados y IDs de sub-pestaña | son el DATO. Traducir un dato no da error: deja de casar |
+
+### Verificación
+`verif_v448.py` (24 comprobaciones) **genera el informe**, lee su texto y comprueba
+que 0 líneas llevan español salvo los nombres de actividad —que además **afirma que
+SIGUEN en español**, para que traducirlos algún día salte y obligue a mirar la
+migración del histórico—. Probado contra **7 roturas**: las caza las 7, incluidas
+«se traduce una clave del schema» y «el comparador del prefijo se desincroniza», que
+son las dos que fallarían en silencio.
+
 ## i18n F5c: los 14 módulos de backend que quedaban (v447)
 
 `expenses`, `roster`, `inventory`, `credentials`, `payroll`, `prestart`, `rails`,
@@ -8058,7 +8119,7 @@ literal, así que **no casaba nunca** — y dejó pasar «Plomo riel izquierdo»
 Es el mismo fallo de v436, cometido otra vez ese mismo día. Se vio con `cat -A`, no
 leyendo. → **Cualquier `\b`, `\n` o `\w` va por fichero escrito, nunca por heredoc.**
 
-## Versiones desplegadas (v447 = actual)
+## Versiones desplegadas (v448 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -8066,6 +8127,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v448 | **F5 CERRADO: el informe ADMIN, los correos y los prompts de la IA** — la app ya no tiene un solo texto en español salvo lo que es DATO. El informe admin (101 cadenas) va con `_d()` aplicado **por AST y por posición**, ⚠️ refusando toda cadena que se use como ÍNDICE (`'Duración (d)'`, `'Línea'`: son contrato con `schedule_table`/`plumb_table`). ⚠️ **El barrido del FUENTE se dejó 22 líneas** y las encontró **generar el PDF y leer su texto** — la trampa nº27 otra vez —, capturando además el log del módulo, porque el veredicto va dentro de un `try/except` que registra y sigue (el fallo real de v437). ⚠️ Y el prefijo `"[Interpretación no disponible"` se **produce** en `interpretation` y se **compara** en `report` y `user_report`: los cuatro a la vez, o el informe imprimiría el mensaje de error como si fuera la interpretación. ⚠️ **Decisión de criterio dicha en voz alta**: la base de conocimiento de `chat_agent` (353 líneas) se queda en español y solo se traduce la REGLA DE ESTILO, que ahora ordena responder en inglés — el modelo lee español, y traducir contenido técnico denso mete riesgo de error en el conocimiento del asistente a cambio de nada. Quedan tres exclusiones declaradas: los nombres de actividad (dato de la hoja `Actividades`), esa base de conocimiento, y las CLAVES de schemas y columnas. 7 roturas probadas |
 | v447 | **F5c: los 14 módulos de backend que quedaban** — con esto el backend no tiene un solo mensaje en español. ⚠️ Aquí lo peligroso no fue traducir sino **RENOMBRAR**: `pre_i18n` marcó 25 funciones con `t`/`d` como variable, y renombrar es DOS pasos. El que se me escapó, en `payroll.neto`, era `elif t == "deduccion"` — con `t` ya importado como la función de idioma **no da error**: la comparación sale siempre False y **las deducciones dejan de restarse del neto a pagar**. Un fallo de dinero, silencioso, con `compileall` e imports en verde; lo encontró preguntarle al AST por todos los `Name` llamados `t` tras cada renombrado. ⚠️ Y me tapé a mí mismo dos veces más: en `manuals` renombré la variable del bucle a `_tok`, **que ya era el TOKENIZADOR del módulo** (shadowing dentro del arreglo del shadowing), y el **`t()` congelado al importar** salió otras dos veces (`plan_data.USA`, `toolruns.HERRAMIENTAS`) — cuatro en tres versiones, las cuatro cazadas por el guardián de v445. ⚠️ Y la foto de 261 líneas que prueba que **ningún número se movió** dio primero «IDÉNTICAS» comparando **dos ficheros vacíos** (el script fallaba con el stderr silenciado): el paso en vacío dentro de la propia comprobación. 7 roturas probadas — una solo tras integrar el chequeo de importes, que vivía aparte: *un chequeo que no está en la suite no protege nada* |
 | v446 | **F5b: seis módulos de backend más** (`quotes`, `projects`, `ausencias`, `orders`, `catalogo`, `clientes`; 88 mensajes). ⚠️ Aquí el riesgo de traducir un DATO es máximo y se midió antes: `projects.derive_estado` **devuelve** `"En progreso"`/`"Planificado"`, que se escriben en la hoja y se comparan en 387 sitios. ⚠️ **Renombrar es dos pasos**: al pasar los `t = totales(...)` de `quotes` a `_tot` quedaron **16 usos de `t["subtotal"]` colgando** —`NameError` en cuanto alguien creara una cotización—, encontrados preguntando al AST por todos los `Name` llamados `t` (16 antes, 0 después). ⚠️ Y **cometí el fallo de v445 veinte minutos después de documentarlo**: metí `t()` dentro de `ausencias.TIPOS`, que se construye a nivel de módulo, así que las etiquetas quedaban congeladas al importar — lo cazó el guardián recién escrito; la constante guarda el texto BASE y `nombre_tipo()` traduce al pintar (en los correos se queda en base, regla v436). ⚠️ Al mover esas lecturas escribí `nombre_tipo(k)` cuando **la variable del bucle es `_tp`**: otro `NameError` que habría reventado «Mis ausencias» y que ni `compileall` ni el import ven. ⚠️ Y **cuatro «fallos» del smoke eran del test** (firmas de `solicitar`, `crear` ×2 y `create_cliente`) — regla v135, novena vez. 7 roturas probadas |
 | v445 | **F5a: los mensajes de BACKEND que la interfaz pinta** — empieza la última fase. Aquí no vale la red de POSICIÓN (no hay llamadas a `st.*`): decide el **DESTINO** de la cadena — se traduce lo que la función **DEVUELVE** (la UI lo pinta con `flash`), y ⚠️ **NO** los mensajes de `logger` ni los **nombres de columna que viajan en el mismo `return`** (`"Usuario"`, `"Nombre"`), que son el DATO del libro. Se empieza por `auth.py` y `timeclock.py` (42 mensajes) porque son los que más se ven: cada login y cada jornada pasan por ahí. ⚠️ **El orden**: la local `t` de `auth._session_active` se renombró ANTES de traducir (pre_i18n), y en `timeclock` solo entra `t` porque `d` ya es variable en tres funciones. ⚠️ **Correr el mismo parche dos veces duplicó un import** en `timeclock`, y en `auth` el ancla era ambigua, así que **el import no se aplicó mientras las llamadas `t()` sí** — un `NameError` esperando en cada login, cazado por el chequeo de importes de v443. ⚠️ Y **tres «fallos» del smoke eran del test**: `verify_login` devuelve un dict y no una tupla, `_segmentos_dia` recibe un datetime y no una cadena, y la validación de campos obligatorios vive en `auth_ui` — regla v135 tres veces en un script. 6 roturas probadas; una solo tras corregir el guardián, que miraba `'"Usuario"' in fuente` cuando esa cadena aparece en medio módulo |

@@ -83,14 +83,14 @@ def send_usage_notification(
     if best:
         fb_ap  = best.get("fb_applied", best["fb"])
         extra  = abs(fb_ap - best["fb"]) > 0.01
-        fb_str = f"{fb_ap:.1f} mm" + (" ⚠️ (con push extra por pared)" if extra else "")
+        fb_str = f"{fb_ap:.1f} mm" + (" ⚠️ (with extra push for the wall)" if extra else "")
         sol_html = f"""
-        <h3 style="color:#1a3a5c;margin-top:20px">Solución óptima</h3>
+        <h3 style="color:#1a3a5c;margin-top:20px">Optimal solution</h3>
         <table style="border-collapse:collapse;width:100%;font-size:14px">
           {row("RL (desplazamiento lateral)", f"{best['rl']:+.1f} mm", True)}
           {row("FB (desplazamiento frontal)", fb_str, True)}
-          {row("Valores fuera de límite",     str(best['total_off']), best['total_off'] > 0)}
-          {row("OFF por columna",             str(best.get('off_by_col', {})))}
+          {row("Values out of limit",     str(best['total_off']), best['total_off'] > 0)}
+          {row("OFF per column",             str(best.get('off_by_col', {})))}
         </table>"""
     else:
         sol_html = "<p style='color:red'>No se encontró solución válida.</p>"
@@ -98,13 +98,13 @@ def send_usage_notification(
     bs_html = ""
     if bs_result:
         if not bs_result.get("needed"):
-            bs_html = row("BSR vs BS", "BSR ≥ BS — Sin ajuste requerido ✅")
+            bs_html = row("BSR vs BS", "BSR ≥ BS — No adjustment required ✅")
         elif bs_result.get("step"):
             bs_html = row("BSR vs BS",
                 f"Paso: {bs_result['step']} mm — Zona: {bs_result.get('range_name')} ⚠️", True)
         else:
             bs_html = row("BSR vs BS",
-                f"DIF = {bs_result.get('dif_original')} mm — No encontrado en rangos ❌", True)
+                f"DIF = {bs_result.get('dif_original')} mm — Not found in any range ❌", True)
 
     p = all_params
     html = f"""
@@ -133,8 +133,8 @@ def send_usage_notification(
       {row("TS",               f"{p.get('TS', '—')} mm")}
       {row("TKSW / TSW / FS",  f"{p.get('TKSW', '—')} / {p.get('TSW', '—')} / {p.get('FS', '—')} mm")}
       {row("Paradas (NS)",     str(p.get('NS', '—')))}
-      {row("Pared limitante",  f"{'Sí — Parada ' + str(p.get('WALL_STOP')) + ' lado ' + str(p.get('WALL_SIDE')) if p.get('WALL_LIMITING') else 'No'}")}
-      {row("Ctrl en frame",    f"{'Sí — lado ' + str(p.get('CTRL_SIDE')) if p.get('CTRL_IN_FRAME') else 'No'}")}
+      {row("Pared limitante",  f"{'Yes — Stop ' + str(p.get('WALL_STOP')) + ' side ' + str(p.get('WALL_SIDE')) if p.get('WALL_LIMITING') else 'No'}")}
+      {row("Ctrl in frame",    f"{'Yes — side ' + str(p.get('CTRL_SIDE')) if p.get('CTRL_IN_FRAME') else 'No'}")}
     </table>
 
     <h3 style="color:#1a3a5c;margin-top:20px">Estado inicial del survey</h3>
@@ -158,7 +158,7 @@ def send_usage_notification(
     <div style="margin-top:24px;padding:10px 16px;background:#f0f7ff;
                 border-radius:6px;font-size:12px;color:#666">
         Notificación automática generada por COPEX Survey Analyzer.<br>
-        {"Adjuntos: plano PDF + " if pdf_bytes else ""}Matriz survey incluida arriba.
+        {"Attachments: drawing PDF + " if pdf_bytes else ""}Survey matrix included above.
     </div>
     </body></html>
     """

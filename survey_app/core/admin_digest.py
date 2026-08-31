@@ -18,6 +18,7 @@ from core import prestart
 from core import clock
 from core.num import parse_date as _parse_date
 
+from core.i18n import t
 logger = logging.getLogger(__name__)
 
 _DONE = ("Completado", "Cancelado")
@@ -157,41 +158,44 @@ def has_pending(d) -> bool:
 
 def digest_text(d) -> str:
     """Hechos en texto (para el prompt del agente y como fallback sin IA)."""
-    L = [f"Grupo {d['grupo']}: {d['n_activos']} proyecto(s) activo(s) de {d['n_total']}, "
-         f"avance promedio {d['avance_prom']}%, {d['horas']} horas registradas."]
+    L = [f"{t('Group')} {d['grupo']}: {d['n_activos']} "
+         + t("active project(s) of") + f" {d['n_total']}, "
+         + t("average progress") + f" {d['avance_prom']}%, {d['horas']} "
+         + t("hours recorded.")]
     if d["vencidos"]:
-        L.append("VENCIDOS: " + "; ".join(f"{x['nombre']} (hace {abs(x['dias'])} d, fin {x['fin']})"
+        L.append(t("OVERDUE:") + " " + "; ".join(f"{x['nombre']} ({abs(x['dias'])} d {t('ago')}, {t('end')} {x['fin']})"
                                           for x in d["vencidos"]))
     if d["por_vencer"]:
-        L.append("Por vencer (≤7 d): " + "; ".join(f"{x['nombre']} (en {x['dias']} d, {x['fin']})"
+        L.append(t("Due soon (≤7 d):") + " " + "; ".join(f"{x['nombre']} ({t('in')} {x['dias']} d, {x['fin']})"
                                                     for x in d["por_vencer"]))
     if d["retrasos"]:
-        L.append("En retraso (SPI): " + "; ".join(f"{x['nombre']} ({x['dias']} d)" for x in d["retrasos"]))
+        L.append(t("Behind schedule (SPI):") + " " + "; ".join(f"{x['nombre']} ({x['dias']} d)" for x in d["retrasos"]))
     if d["alarmas"]:
-        L.append("Alarmas abiertas: " + "; ".join(f"{x['nombre']} ({x['n']})" for x in d["alarmas"]))
+        L.append(t("Open alarms:") + " " + "; ".join(f"{x['nombre']} ({x['n']})" for x in d["alarmas"]))
     if d["near_miss"]:
-        L.append("Near miss recientes (≤7 d): "
+        L.append(t("Recent near misses (≤7 d):") + " "
                  + "; ".join(f"{x['proyecto']} ({x['fecha']}: {x['desc'] or 's/d'})" for x in d["near_miss"]))
     if d["sin_asignar"]:
-        L.append("Sin campo asignado: " + "; ".join(x["nombre"] for x in d["sin_asignar"]))
+        L.append(t("No field staff assigned:") + " " + "; ".join(x["nombre"] for x in d["sin_asignar"]))
     if d["campo_sin_contacto"]:
-        L.append("Campo sin contacto completo (no se les puede notificar): "
+        L.append(t("Field staff without full contact details "
+                   "(they cannot be notified):") + " "
                  + ", ".join(d["campo_sin_contacto"]))
     if d.get("avisos_sin_canal"):
-        L.append("Reciben las alarmas pero NO tienen email ni Telegram (la alarma "
-                 "queda en la app y no les llega): "
+        L.append(t("They receive the alarms but have NO email or Telegram (the "
+                   "alarm stays in the app and never reaches them):") + " "
                  + ", ".join(f"{x['usuario']} ({x['rol']})"
                              for x in d["avisos_sin_canal"]))
     if d.get("cred_venc"):
-        L.append("Credenciales por vencer/vencidas: "
+        L.append(t("Credentials expiring/expired:") + " "
                  + "; ".join(f"{c['usuario']} · {c['tipo']} "
                              f"({'VENCIDA' if c['dias'] < 0 else f'en {c['dias']} d'})"
                              for c in d["cred_venc"]))
     if d.get("sobre_presupuesto"):
-        L.append("Sobre presupuesto: "
+        L.append(t("Over budget:") + " "
                  + "; ".join(f"{x['nombre']} ({x['pct']}%)" for x in d["sobre_presupuesto"]))
     if len(L) == 1:
-        L.append("Sin pendientes urgentes.")
+        L.append(t("No urgent items."))
     return "\n".join(L)
 
 
@@ -246,7 +250,7 @@ def group_snapshot_text(grupo, max_proys=30) -> str:
     b = _base(grupo)
     proys, delays, horas, alarmas = b["proys"], b["delays"], b["horas"], b["alarmas"]
     if not proys:
-        return f"El grupo {grupo} no tiene proyectos."
+        return f"{t('Group')} {grupo} {t('has no projects.')}"
     lines = [f"## ESTADO EN VIVO DEL GRUPO {grupo} ({len(proys)} proyectos)"]
     for p in proys[:max_proys]:
         pid = str(p.get("ID", ""))
@@ -267,7 +271,8 @@ def group_snapshot_text(grupo, max_proys=30) -> str:
     for u in auth.list_users(grupo):
         if str(u.get("Rol", "")).lower() == "campo":
             ok = str(u.get("Email", "")).strip() and str(u.get("TelegramChatID", "")).strip()
-            us.append(f"{u.get('Usuario', '')}{'' if ok else ' (SIN contacto completo)'}")
+            us.append(f"{u.get('Usuario', '')}"
+                      + ("" if ok else " " + t("(NO full contact details)")))
     if us:
-        lines.append("Usuarios de campo: " + ", ".join(us))
+        lines.append(t("Field staff:") + " " + ", ".join(us))
     return "\n".join(lines)

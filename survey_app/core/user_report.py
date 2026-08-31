@@ -246,7 +246,7 @@ def _portada(canv, doc, meta):
 
 def _ia_text(text, styles):
     """Devuelve SIEMPRE una lista de flowables."""
-    if not text or str(text).startswith("[Interpretación no disponible"):
+    if not text or str(text).startswith("[Interpretation unavailable"):
         return [Paragraph(f"<i>{d('Interpretation not available.')}</i>", styles["UBody"])]
     parts = [p.strip() for p in str(text).split("\n") if p.strip()]
     return [Paragraph(para, styles["UBody"]) for para in parts]

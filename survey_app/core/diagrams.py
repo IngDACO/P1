@@ -395,7 +395,7 @@ def render_floor_plans_html(params: dict, limits: dict, solution: dict | None,
 
 def floor_plans_pdf(params: dict, limits: dict, solution: dict | None, lim_map: dict,
                     ctrl_in_frame=False, ctrl_side=None, floors=None,
-                    titulo="Diagramas de posicionamiento") -> bytes | None:
+                    titulo="Positioning diagrams") -> bytes | None:
     """PDF suelto con los diagramas de planta (para enviar a obra sin el informe completo)."""
     if not solution or not solution.get("matrix"):
         return None

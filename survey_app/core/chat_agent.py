@@ -195,7 +195,8 @@ El paso encontrado indica cuánto hay que ampliar o corregir el shaft.
 - **Vibraciones y ruidos:** desalineación de rieles, desgaste de guías, tensión incorrecta del contrapeso
 
 ## Estilo de respuesta
-- Responde siempre en español técnico claro
+- Responde SIEMPRE en inglés técnico claro, aunque esta guía esté escrita en español
+  y aunque el usuario escriba en otro idioma (a menos que te lo pida expresamente)
 - Sé específico: si hay datos del survey activo en el contexto, úsalos directamente
 - Da valores numéricos con unidades (mm)
 - Identifica qué es crítico, qué es aceptable y qué requiere atención inmediata
@@ -410,7 +411,7 @@ def _build_context_block(calc_results: dict | None, all_params: dict | None) -> 
     if not calc_results and not all_params:
         return ""
 
-    lines = ["\n---\n## Datos del survey actual en sesión\n"]
+    lines = ["\n---\n## Current survey data in session\n"]
 
     # Parámetros clave
     if all_params:
@@ -461,18 +462,18 @@ def _build_context_block(calc_results: dict | None, all_params: dict | None) -> 
             lines.append(f"- FB extra aplicado: {best.get('fb_extra_applied', False)}")
             obc = best.get("off_by_col", {})
             if obc:
-                lines.append(f"- OFF por columna: {obc}")
+                lines.append(f"- OFF per column: {obc}")
 
         # BSR vs BS
         bs = r.get("bs_result", {})
         if bs:
             lines.append("\n### BSR vs BS")
             if not bs.get("needed"):
-                lines.append("- BSR >= BS: no se requiere ajuste")
+                lines.append("- BSR >= BS: no adjustment required")
             elif bs.get("step"):
-                lines.append(f"- Paso requerido: {bs['step']} mm  Rango: {bs.get('range_name')}")
+                lines.append(f"- Step required: {bs['step']} mm  Range: {bs.get('range_name')}")
             else:
-                lines.append(f"- DIF BS = {bs.get('dif_original')} mm (no encontrado en rangos)")
+                lines.append(f"- DIF BS = {bs.get('dif_original')} mm (not found in any range)")
 
     lines.append("---")
     return "\n".join(lines)
@@ -495,10 +496,10 @@ def get_chat_response(
     grupo:   grupo del admin → se le inyecta el estado en vivo de su portafolio.
     """
     if anthropic is None:
-        return "⚠️ La librería anthropic no está disponible en el entorno."
+        return "⚠️ The anthropic library is not available in this environment."
     api_key = st.secrets.get("ANTHROPIC_API_KEY", "")
     if not api_key:
-        return "⚠️ API key no configurada. Agrega ANTHROPIC_API_KEY en .streamlit/secrets.toml"
+        return "⚠️ API key not configured. Add ANTHROPIC_API_KEY to .streamlit/secrets.toml"
 
     client = anthropic.Anthropic(api_key=api_key)
 
@@ -546,11 +547,11 @@ def get_chat_response(
         )
         return response.content[0].text
     except anthropic.AuthenticationError:
-        return "⚠️ API key inválida. Verifica ANTHROPIC_API_KEY en secrets.toml"
+        return "⚠️ Invalid API key. Check ANTHROPIC_API_KEY in secrets.toml"
     except anthropic.RateLimitError:
-        return "⚠️ Límite de rate alcanzado. Intenta en unos segundos."
+        return "⚠️ Rate limit reached. Try again in a few seconds."
     except Exception as e:
-        return f"⚠️ Error al contactar la API: {e}"
+        return f"⚠️ Error contacting the API: {e}"
 
 
 def admin_briefing(grupo: str) -> str:
@@ -561,7 +562,7 @@ def admin_briefing(grupo: str) -> str:
         d = admin_digest.group_digest(grupo)
         facts = admin_digest.digest_text(d)
     except Exception as e:
-        return f"No se pudo armar el resumen: {e}"
+        return f"Could not build the summary: {e}"
 
     api_key = st.secrets.get("ANTHROPIC_API_KEY", "") if anthropic is not None else ""
     if not api_key:
@@ -569,16 +570,18 @@ def admin_briefing(grupo: str) -> str:
 
     system = (
         SYSTEM_PROMPT + "\n\n" + _PERSONA["administrador"] + "\n\n"
-        "Genera un RESUMEN EJECUTIVO muy breve (viñetas, máximo ~8 líneas) de lo más relevante que el "
-        "administrador tiene PENDIENTE hoy en su grupo, priorizando lo urgente (vencidos, retrasos, alarmas, "
-        "near miss) y cerrando con 1-2 acciones sugeridas. Concreto y accionable. Usa SOLO los datos provistos; "
-        "no inventes. Si no hay pendientes, dilo en una línea.")
+        "Write a very short EXECUTIVE SUMMARY in English (bullets, at most ~8 lines) of what matters most "
+        "among what the administrator has PENDING in their group today, putting the urgent first "
+        "(overdue, delays, alarms, near misses) and closing with 1-2 suggested actions. Concrete and "
+        "actionable. Use ONLY the data provided; do not invent anything. If there is nothing pending, "
+        "say so in one line.")
     try:
         client = anthropic.Anthropic(api_key=api_key)
         resp = client.messages.create(
             model=MODEL, max_tokens=600, system=system,
             messages=[{"role": "user",
-                       "content": "Datos del grupo hoy:\n\n" + facts + "\n\nDame el resumen de pendientes."}])
+                       "content": "Group data today:\n\n" + facts
+                                  + "\n\nGive me the summary of pending items."}])
         return resp.content[0].text
     except Exception:
         return facts   # ante cualquier fallo de API, muestra los hechos

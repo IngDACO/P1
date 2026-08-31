@@ -16,43 +16,46 @@ except Exception:                 # que un fallo de la librería NO tumbe toda l
 MODEL      = "claude-haiku-4-5"
 MAX_TOKENS = 4096
 
-SYSTEM_PROMPT = """Eres un ingeniero senior especialista en instalación de elevadores Schindler.
-Tu tarea es analizar los datos de un survey de instalación y generar una interpretación técnica
-detallada, clara y útil para el equipo de instalación en campo.
+SYSTEM_PROMPT = """You are a senior engineer specialising in Schindler elevator installation.
+Your task is to analyse the data of an installation survey and produce a technical
+interpretation that is detailed, clear and useful for the installation team on site.
 
-Recibirás los datos completos del análisis en formato JSON y debes retornar ÚNICAMENTE un objeto
-JSON válido con las claves indicadas. No incluyas texto fuera del JSON.
+You will receive the full analysis data as JSON and must return ONLY a valid JSON object
+with the keys given. Do not include any text outside the JSON.
 
-Conocimiento técnico disponible:
-- BS = ancho total del hueco = SF1 + BKS + 2×RAIL + SF2
-- BSR = ancho real medido en obra (puede diferir de BS)
-- BKS + 2×RAIL = bloque cabina (tratado como un solo bloque rígido)
-- WR/WL: espacio lateral entre bloque cabina y paredes (mínimo = LIMIT_WR/WL)
-- FR/FL: distancia pared frontal al centro del riel por nivel (mínimo = LIMIT_FR/FL)
-- OR/OL: espacio en la apertura de la puerta de rellano (máximo = LIMIT_OR/OL, si excede → corte físico)
-- RL: desplazamiento lateral del bloque cabina (positivo = izquierda, negativo = derecha)
-- FB: desplazamiento frontal (positivo = hacia atrás)
-- FB extra: push adicional para evadir pared limitante cuando OR/OL exceden el límite
-- FRAME: marco de puerta de cabina — RL hacia la pared no puede superar FRAME cuando hay evasión
-- Caso 1 (WALL_LIMITING=True): hay una pared que no se puede cortar; OR/OL cuentan como OFF
-- Caso 2 (WALL_LIMITING=False): OR/OL se gestionan como corte físico, no cuentan como OFF
+Technical background:
+- BS = total shaft width = SF1 + BKS + 2×RAIL + SF2
+- BSR = actual width measured on site (may differ from BS)
+- BKS + 2×RAIL = car block (treated as a single rigid block)
+- WR/WL: side clearance between the car block and the walls (minimum = LIMIT_WR/WL)
+- FR/FL: distance from the front wall to the rail centre, per level (minimum = LIMIT_FR/FL)
+- OR/OL: clearance at the landing door opening (maximum = LIMIT_OR/OL; if exceeded → physical cut)
+- RL: lateral displacement of the car block (positive = left, negative = right)
+- FB: front-to-back displacement (positive = towards the rear)
+- FB extra: additional push to clear a limiting wall when OR/OL exceed the limit
+- FRAME: car door frame — RL towards the wall cannot exceed FRAME when there is avoidance
+- Case 1 (WALL_LIMITING=True): there is a wall that cannot be cut; OR/OL count as OFF
+- Case 2 (WALL_LIMITING=False): OR/OL are handled as a physical cut and do not count as OFF
 
-Reglas de redacción:
-- Responde siempre en español técnico claro
-- Sé específico: usa los valores numéricos del JSON en tu análisis
-- Identifica claramente qué es crítico, qué es aceptable y qué requiere atención en campo
-- Máximo 4-6 oraciones por sección (conciso pero completo)
-- No repitas los datos crudos; INTERPRETA su significado físico y sus implicaciones
+Writing rules:
+- Always answer in clear, technical English
+- Be specific: use the numeric values from the JSON in your analysis
+- State clearly what is critical, what is acceptable and what needs attention on site
+- At most 4-6 sentences per section (concise but complete)
+- Do not repeat the raw data; INTERPRET its physical meaning and its implications
 """
 
 INTERPRETATION_SCHEMA = {
-    "parametros":          "Análisis de la geometría del hueco: holguras SF1/SF2, relación BS vs BSR, BKS y RAIL. ¿El hueco es generoso o ajustado? ¿Hay asimetría relevante?",
-    "estado_inicial":      "Análisis del estado de la matriz survey antes de cualquier ajuste. ¿Qué columnas están fuera de límite? ¿Cuáles son los pisos más problemáticos? ¿Es el problema lateral, frontal o de apertura?",
-    "desplazamientos":     "Interpretación de MAX_OFF_RL y MAX_OFF_FB. ¿Qué tan grandes son los desplazamientos necesarios? ¿Qué implica físicamente mover los rieles esa cantidad?",
-    "solucion_optima":     "Explicación de la solución encontrada: qué significa el RL y FB seleccionados, por qué se eligió esa combinación, qué mejoras aporta vs el estado inicial, cuántas violaciones quedan y en qué columnas.",
-    "evasion_pared":       "Análisis de la evasión de pared limitante (si aplica). Explica qué ocurrió: por qué se aplicó el FB extra, cuánto fue el push real, qué se ganó con ello, y qué restricción impone el FRAME sobre el RL. Si no aplica, retorna null.",
-    "bsr_vs_bs":           "Interpretación del resultado BSR vs BS. ¿El hueco está dentro de tolerancia? Si se requiere ajuste, qué implica el paso y rango encontrado para el trabajo en campo.",
-    "consideraciones":     "Lista de 3-5 puntos concretos que el equipo de instalación debe verificar o tener en cuenta en campo, basados en los resultados del análisis."
+    # ⚠️ Las CLAVES no se tocan: se guardan en `Proyectos.InterpJSON` y las lee
+    # `report.py` con `ia.get("parametros")`. Traducirlas dejaría las 7 secciones en
+    # blanco en todos los informes, sin dar ningún error (la regla de v437).
+    "parametros":          "Analysis of the shaft geometry: SF1/SF2 clearances, BS vs BSR, BKS and RAIL. Is the shaft generous or tight? Is there any relevant asymmetry?",
+    "estado_inicial":      "State of the survey matrix before any adjustment. Which columns are out of limit? Which floors are the most problematic? Is the problem lateral, front-to-back or at the opening?",
+    "desplazamientos":     "Interpretation of MAX_OFF_RL and MAX_OFF_FB. How large are the required displacements? What does moving the rails that much mean physically?",
+    "solucion_optima":     "Explanation of the solution found: what the selected RL and FB mean, why that combination was chosen, what it improves against the initial state, how many breaches remain and in which columns.",
+    "evasion_pared":       "Analysis of the limiting-wall avoidance (if it applies). Explain what happened: why the extra FB was applied, how big the actual push was, what it achieved, and what constraint FRAME imposes on RL. If it does not apply, return null.",
+    "bsr_vs_bs":           "Interpretation of the BSR vs BS result. Is the shaft within tolerance? If an adjustment is required, what the step and range found mean for the work on site.",
+    "consideraciones":     "A list of 3-5 concrete points the installation team must check or bear in mind on site, based on the results of the analysis."
 }
 
 
@@ -124,7 +127,7 @@ def _build_data_payload(calc_results: dict, all_params: dict) -> str:
             "FB_extra_usado":  best.get("fb_extra_applied", False),
             "total_OFF":       best.get("total_off"),
             "OFF_por_columna": best.get("off_by_col", {}),
-            "caso":            "Caso 1 (pared limitante)" if p.get("WALL_LIMITING") else "Caso 2 (sin pared limitante)",
+            "caso":            "Case 1 (limiting wall)" if p.get("WALL_LIMITING") else "Case 2 (no limiting wall)",
         } if best else None,
         "bsr_vs_bs": {
             "BSR":         p.get("BSR"),
@@ -136,10 +139,10 @@ def _build_data_payload(calc_results: dict, all_params: dict) -> str:
             "dif_original": bs.get("dif_original"),
         },
         "instrucciones": (
-            "Analiza estos datos y retorna SOLO un JSON con estas claves: "
+            "Analyse this data and return ONLY a JSON object with these keys: "
             + ", ".join(f'"{k}"' for k in INTERPRETATION_SCHEMA.keys())
-            + ". Para 'evasion_pared' retorna null si WALL_LIMITING es False o si "
-            "FB_extra_usado es False. Cada valor debe ser una cadena de texto en español."
+            + ". For 'evasion_pared' return null if WALL_LIMITING is False or if "
+            "FB_extra_usado is False. Every value must be a text string in English."
         ),
     }
     return json.dumps(payload, ensure_ascii=False, indent=2)
@@ -152,7 +155,7 @@ def generate_interpretation(calc_results: dict, all_params: dict) -> dict:
     En caso de error retorna un dict con mensajes de fallback.
     """
     if anthropic is None:
-        return _fallback("librería anthropic no disponible en el entorno.")
+        return _fallback("the anthropic library is not available in this environment.")
     api_key = st.secrets.get("ANTHROPIC_API_KEY", "")
     if not api_key:
         return _fallback("API key no configurada.")
@@ -174,7 +177,7 @@ def generate_interpretation(calc_results: dict, all_params: dict) -> dict:
         start = raw.find("{")
         end   = raw.rfind("}") + 1
         if start == -1 or end == 0:
-            return _fallback("La API no retornó JSON válido.")
+            return _fallback("The API did not return valid JSON.")
 
         data = json.loads(raw[start:end])
 
@@ -188,16 +191,16 @@ def generate_interpretation(calc_results: dict, all_params: dict) -> dict:
         return data
 
     except anthropic.AuthenticationError:
-        return _fallback("API key inválida.")
+        return _fallback("Invalid API key.")
     except json.JSONDecodeError:
-        return _fallback("Error al parsear respuesta de la API.")
+        return _fallback("Could not parse the API response.")
     except Exception as e:
         return _fallback(f"Error: {e}")
 
 
 def _fallback(reason: str) -> dict:
     """Retorna interpretación vacía marcada como fallida."""
-    msg = f"[Interpretación no disponible: {reason}]"
+    msg = f"[Interpretation unavailable: {reason}]"
     d = {key: (None if key == "evasion_pared" else msg)
          for key in INTERPRETATION_SCHEMA}
     d["_ok"]    = False
@@ -334,15 +337,15 @@ def generate_user_interpretation(calc_results: dict, all_params: dict) -> dict:
         data["_ok"] = True; data["_error"] = None
         return data
     except anthropic.AuthenticationError:
-        return _user_fallback("API key inválida.")
+        return _user_fallback("Invalid API key.")
     except json.JSONDecodeError:
-        return _user_fallback("Error al parsear respuesta de la API.")
+        return _user_fallback("Could not parse the API response.")
     except Exception as e:
         return _user_fallback(f"Error: {e}")
 
 
 def _user_fallback(reason: str) -> dict:
-    msg = f"[Interpretación no disponible: {reason}]"
+    msg = f"[Interpretation unavailable: {reason}]"
     d = {key: msg for key in USER_SCHEMA}
     d["_ok"] = False; d["_error"] = reason
     return d

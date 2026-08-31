@@ -14,6 +14,7 @@ from reportlab.platypus import (
 )
 from reportlab.lib.enums import TA_CENTER, TA_LEFT
 
+from core.i18n import d as _d
 from core.highlighting import (
     cell_state, ctrl_applies_to_cell, reportlab_commands, OR_OL_COLS,
 )
@@ -91,7 +92,7 @@ def _calc_block(label, formula, substitution, result_str, styles, ok=None):
     else:             res_color = "#1a5276"
     rows = [
         [Paragraph(f"<b>{label}</b>", styles["Normal2"]), ""],
-        [Paragraph(f"  Fórmula:       {formula}",        styles["FormulaLine"]), ""],
+        [Paragraph(f"  Formula:       {formula}",        styles["FormulaLine"]), ""],
         [Paragraph(f"  Sustitución:   = {substitution}", styles["FormulaLine"]), ""],
         [Paragraph(f'  <font color="{res_color}"><b>Resultado:      {result_str}</b></font>', styles["ResultLine"]), ""],
     ]
@@ -151,9 +152,9 @@ def _svg_flowable(svg_str, max_width):
         return None
 
 
-def _ia_block(text, styles, title="🤖 Interpretación técnica"):
+def _ia_block(text, styles, title=_d("🤖 Technical interpretation")):
     """Bloque visual para la interpretación generada por IA."""
-    if not text or text.startswith("[Interpretación no disponible"):
+    if not text or text.startswith("[Interpretation unavailable"):
         return sp(2)
     rows = [
         [Paragraph(f"<b>{title}</b>", styles["Note"])],
@@ -261,15 +262,15 @@ def _dg_bc_calc(ts, tksw, tk, bc_calc):
         "  FRONTAL                                            HUECO",
         "    |                                                  |",
         "    |<-- TKSW -->@-- TK/2 --|-- ... --|<-- BC_CALC -->|",
-        "    |          riel         |  cabina |               |25|",
+        "    |          rail         |   car   |               |25|",
         "    +---------------------------------+---------------+--+",
         "    |        BLOQUE CABINA = TL                       |  |",
         "    +-------------------------------------------------+--+",
         "",
-        f"    TKSW    = {tksw:.0f} mm   (pared frontal -> centro riel)",
-        f"    TK/2    = {tk2:.0f} mm   (centro riel -> fondo cabina)",
-        f"    BC_CALC = {bc_calc:.0f} mm   (espacio libre detras de cabina)",
-        "    25 mm    (holgura minima de seguridad al fondo)",
+        f"    TKSW    = {tksw:.0f} mm   (front wall -> rail centre)",
+        f"    TK/2    = {tk2:.0f} mm   (rail centre -> car rear)",
+        f"    BC_CALC = {bc_calc:.0f} mm   (free space behind the car)",
+        "    25 mm    (minimum safety clearance at the rear)",
         f"    TS      = {ts:.0f} mm  =  TKSW + TK/2 + BC_CALC + 25",
     ]
 
@@ -294,7 +295,7 @@ def _dg_lateral_limits(lwl, lol, lwr, lor, bks, rail, offset_cabin, offset_side)
         f"    LIMIT OL = {lol:.1f} mm   |   LIMIT OR = {lor:.1f} mm",
         f"    BKS = {bks:.0f} mm   |   RAIL = {rail:.0f} mm",
         "",
-        "  OR/OL: si v > LIMIT -> requiere CORTE en la apertura de la puerta",
+        "  OR/OL: if v > LIMIT -> a CUT is required at the door opening",
     ]
 
 
@@ -318,11 +319,11 @@ def _dg_fb(max_fb, fb_max_back, bc_calc, dif_tsw_fs):
             "           VALIDO              |              SKIP",
             "  <----------------------------|]-------------------------------->  FB (mm)",
             f"  -MAX_OFF_FB={-max_fb:.1f}              0                      +MAX_OFF_FB=+{max_fb:.1f}",
-            "                         FB_MAX_BACK = 0.0  (sin desplazamiento hacia atras)",
+            "                         FB_MAX_BACK = 0.0  (no rearward displacement)",
         ]
     elif fb_max_back >= max_fb:
         lines += [
-            "                     VALIDO  (BC_CALC no restringe el rango FB)",
+            "                     VALID  (BC_CALC does not restrict the FB range)",
             "  <----------------------------------------------------------->  FB (mm)",
             f"  -MAX_OFF_FB={-max_fb:.1f}                         +MAX_OFF_FB=+{max_fb:.1f}",
         ]
@@ -498,7 +499,7 @@ def generate_report(project_params, calculated, survey_original,
     # ── PORTADA ──────────────────────────────────────────────
     tt = Table([
         [Paragraph("ELEVATOR SURVEY ANALYZER", styles["ReportTitle"])],
-        [Paragraph("Reporte de cálculo con trazabilidad completa — incluyendo cada paso del optimizador", styles["ReportSub"])]
+        [Paragraph(_d("Calculation report with full traceability — including every optimiser step"), styles["ReportSub"])]
     ], colWidths=[W])
     tt.setStyle(TableStyle([
         ("BACKGROUND",    (0,0),(-1,-1), C_HEADER),
@@ -510,18 +511,18 @@ def generate_report(project_params, calculated, survey_original,
               sp(10)]
 
     # ── 1. PARÁMETROS DE ENTRADA ─────────────────────────────
-    story += [_section_header("1. PARÁMETROS DE ENTRADA", styles), sp(4)]
-    story += [Paragraph("1.1  Extraídos del PDF", styles["SubHead"])]
+    story += [_section_header(_d("1. INPUT PARAMETERS"), styles), sp(4)]
+    story += [Paragraph(_d("1.1  Extracted from the PDF"), styles["SubHead"])]
     story += [_param_table({k: p.get(k) for k in
         ["BS","BT","BK","BKS","TK","TKA","TKS","TSW","TKSW","TS","SF1","SF2","SG","TG","BGS","BKF1","BKF2"]
     }, styles), sp(6)]
-    story += [Paragraph("1.2  Ingresados por el usuario", styles["SubHead"])]
+    story += [Paragraph(_d("1.2  Entered by the user"), styles["SubHead"])]
     story += [_param_table({k: p.get(k) for k in
         ["BSR","FS","FRAME","RAIL","OFFSET_CABIN"]
     }, styles, cols=5), sp(6)]
 
     # ── 1.3  Condiciones y configuración ──────────────────────
-    story += [Paragraph("1.3  Condiciones y configuración del proyecto", styles["SubHead"])]
+    story += [Paragraph(_d("1.3  Project conditions and configuration"), styles["SubHead"])]
     wall_lim   = p.get("WALL_LIMITING", False)
     ctrl_fr    = p.get("CTRL_IN_FRAME", False)
     wall_stop_ = p.get("WALL_STOP")
@@ -537,9 +538,9 @@ def generate_report(project_params, calculated, survey_original,
          Paragraph("<b>Valor</b>",                 styles["Normal2"]),
          Paragraph("<b>Condición / Parámetro</b>", styles["Normal2"]),
          Paragraph("<b>Valor</b>",                 styles["Normal2"])],
-        [Paragraph("Número de paradas (NS)",        styles["Normal2"]),
+        [Paragraph(_d("Number of stops (NS)"),        styles["Normal2"]),
          Paragraph(str(ns_),                        styles["Normal2"]),
-         Paragraph("Lado del Omega",                styles["Normal2"]),
+         Paragraph(_d("Omega side"),                styles["Normal2"]),
          Paragraph(_side(p.get("OMEGA_SIDE")),      styles["Normal2"])],
         [Paragraph("Lado offset cabina",            styles["Normal2"]),
          Paragraph(_side(p.get("OFFSET_SIDE")),     styles["Normal2"]),
@@ -549,9 +550,9 @@ def generate_report(project_params, calculated, survey_original,
          Paragraph(_yn(wall_lim),                   styles["Normal2"]),
          Paragraph("Parada limitante / Lado pared", styles["Normal2"]),
          Paragraph(f"{int(wall_stop_) if wall_stop_ is not None else '—'} / {_side(wall_side_)}", styles["Normal2"])],
-        [Paragraph("Controlador en frame?",         styles["Normal2"]),
+        [Paragraph(_d("Controller in frame?"),         styles["Normal2"]),
          Paragraph(_yn(ctrl_fr),                    styles["Normal2"]),
-         Paragraph("Lado del controlador",          styles["Normal2"]),
+         Paragraph(_d("Controller side"),          styles["Normal2"]),
          Paragraph(_side(ctrl_s_),                  styles["Normal2"])],
     ]
     cfg_cw = [W*0.35, W*0.15, W*0.35, W*0.15]
@@ -575,37 +576,37 @@ def generate_report(project_params, calculated, survey_original,
     cfg_t.setStyle(TableStyle(cfg_cmds))
     story += [cfg_t, sp(4)]
     story += [_ia_block(ia.get("parametros"), styles,
-                        "🤖 Interpretación — Geometría y configuración del proyecto"), sp(8)]
+                        _d("🤖 Interpretation — Project geometry and configuration")), sp(8)]
 
     # ── 2. DIMENSIONES DE CABINA ─────────────────────────────
-    story += [_section_header("2. DIMENSIONES DE CABINA", styles), sp(4)]
+    story += [_section_header(_d("2. CAR DIMENSIONS"), styles), sp(4)]
     cs        = fv("TK") + fv("TKA")
     tl        = cs + fv("TKS") + fv("TSW")
     bc_calc_v = fv("BC_CALC")
     tlbc      = tl + bc_calc_v
     story += [
-        _calc_block("CS — Profundidad total de cabina",
+        _calc_block(_d("CS — Total car depth"),
             "CS = TK + TKA",
             f"{fstr('TK')} + {fstr('TKA')}",
             f"CS = {cs:.2f} mm", styles), sp(3),
-        _calc_block("TL — Profundidad del bloque cabina (riel a riel)",
+        _calc_block(_d("TL — Car block depth (rail to rail)"),
             "TL = CS + TKS + TSW",
             f"{cs:.2f} + {fstr('TKS')} + {fstr('TSW')}",
             f"TL = {tl:.2f} mm", styles), sp(3),
-        _calc_block("BC_CALC — Espacio libre detras de la cabina",
+        _calc_block(_d("BC_CALC — Free space behind the car"),
             "BC_CALC = TS - TKSW - (TK / 2) - 25",
             f"{fstr('TS')} - {fstr('TKSW')} - ({fstr('TK')} / 2) - 25",
             f"BC_CALC = {bc_calc_v:.2f} mm", styles), sp(3),
-        _calc_block("TLBC — Longitud total con espacio trasero",
+        _calc_block(_d("TLBC — Total length including rear clearance"),
             "TLBC = TL + BC_CALC",
             f"{tl:.2f} + {bc_calc_v:.2f}",
             f"TLBC = {tlbc:.2f} mm", styles), sp(4),
-        _diagram_block("Perfil longitudinal del hueco",
+        _diagram_block(_d("Longitudinal shaft profile"),
             _dg_bc_calc(fv("TS"), fv("TKSW"), fv("TK"), bc_calc_v), styles), sp(8),
     ]
 
     # ── 3. LÍMITES GEOMÉTRICOS ───────────────────────────────
-    story += [_section_header("3. LÍMITES GEOMÉTRICOS", styles), sp(4)]
+    story += [_section_header(_d("3. GEOMETRIC LIMITS"), styles), sp(4)]
     lwr = fv("SF2") + fv("RAIL") / 2
     lfr = fv("TKSW") - 150
     lwl = fv("SF1") + fv("RAIL") / 2
@@ -627,7 +628,7 @@ def generate_report(project_params, calculated, survey_original,
         z_side, zb_sf   = "R", "SF2"
 
     story += [
-        Paragraph("3.1  Límites laterales", styles["SubHead"]),
+        Paragraph(_d("3.1  Side limits"), styles["SubHead"]),
         _calc_block("LIMIT WR",  "LIMIT WR = SF2 + (RAIL / 2)",
             f"{fstr('SF2')} + ({fstr('RAIL')} / 2)", f"LIMIT WR = {lwr:.2f} mm", styles), sp(3),
         _calc_block("LIMIT WL",  "LIMIT WL = SF1 + (RAIL / 2)",
@@ -646,17 +647,17 @@ def generate_report(project_params, calculated, survey_original,
         _diagram_block("Seccion transversal — Limites laterales",
             _dg_lateral_limits(lwl, lol, lwr, lor, fv("BKS"), fv("RAIL"),
                                fv("OFFSET_CABIN"), _off_s), styles), sp(6),
-        Paragraph("3.2  Límites frontales", styles["SubHead"]),
+        Paragraph(_d("3.2  Front limits"), styles["SubHead"]),
         _calc_block("LIMIT FR",  "LIMIT FR = TKSW - 150",
             f"{fstr('TKSW')} - 150", f"LIMIT FR = {lfr:.2f} mm", styles), sp(3),
         _calc_block("LIMIT FL",  "LIMIT FL = TKSW - 150",
             f"{fstr('TKSW')} - 150", f"LIMIT FL = {lfl:.2f} mm", styles), sp(6),
-        Paragraph("3.3  Límites Omega / Zona B", styles["SubHead"]),
+        Paragraph(_d("3.3  Omega / Zone B limits"), styles["SubHead"]),
         _calc_block("LIMIT OB (raw)", "LIMIT OB = (SG - (TG/2)) x 0.3",
             f"({fstr('SG')} - ({fstr('TG')}/2)) x 0.3",
             f"LIMIT OB raw = {lob_raw:.2f} mm", styles), sp(3),
         _calc_block("LIMIT ZB (raw)",
-            f"LIMIT ZB = {zb_sf} x 0.3  (Z lado {z_side}, opuesto al Omega={omega})",
+            f"LIMIT ZB = {zb_sf} x 0.3  (Z side {z_side}, opposite Omega={omega})",
             f"{fstr(zb_sf)} x 0.3",
             f"LIMIT ZB raw = {lzb_raw:.2f} mm", styles), sp(4),
         Paragraph(
@@ -667,7 +668,7 @@ def generate_report(project_params, calculated, survey_original,
     ]
 
     # ── 4. OFFSETS ───────────────────────────────────────────
-    story += [PageBreak(), _section_header("4. CÁLCULO DE OFFSETS", styles), sp(4)]
+    story += [PageBreak(), _section_header(_d("4. OFFSET CALCULATION"), styles), sp(4)]
     wrt = fv("WRT"); frt = fv("FRT"); wlt = fv("WLT"); flt = fv("FLT")
     bsr = fv("BSR"); bs  = fv("BS")
     off_fr = lfr - frt
@@ -675,7 +676,7 @@ def generate_report(project_params, calculated, survey_original,
     off_wr = lwr - wrt + (bsr - bs) / 2
     off_wl = lwl - wlt + (bsr - bs) / 2
     story += [
-        Paragraph("Totales de la última fila de la matriz SURVEY:", styles["Note"]),
+        Paragraph(_d("Totals from the last row of the SURVEY matrix:"), styles["Note"]),
         _param_table({"WRT": wrt, "FRT": frt, "ORT": fv("ORT"), "WLT": wlt, "FLT": flt, "OLT": fv("OLT")}, styles, cols=3), sp(4),
         _calc_block("Offset FR", "Offset FR = LIMIT FR - FRT",
             f"{lfr:.2f} - {frt:.2f}", f"Offset FR = {off_fr:.2f} mm", styles), sp(3),
@@ -696,12 +697,12 @@ def generate_report(project_params, calculated, survey_original,
     ]
 
     # ── 5. MATRIZ ORIGINAL ───────────────────────────────────
-    story += [_section_header("5. MATRIZ SURVEY — MEDIDAS EN CAMPO", styles), sp(4),
-              Paragraph("Valores medidos en obra antes de aplicar offsets:", styles["Note"]), sp(4),
+    story += [_section_header(_d("5. SURVEY MATRIX — FIELD MEASUREMENTS"), styles), sp(4),
+              Paragraph(_d("Values measured on site before applying offsets:"), styles["Note"]), sp(4),
               _survey_table(survey_original, {c: 9999 for c in survey_cols}, {}, styles), sp(8)]
 
     # ── 6. MATRIZ AJUSTADA ───────────────────────────────────
-    story += [_section_header("6. MATRIZ SURVEY AJUSTADA Y ANÁLISIS", styles), sp(4)]
+    story += [_section_header(_d("6. ADJUSTED SURVEY MATRIX AND ANALYSIS"), styles), sp(4)]
     min_vals = {f"MIN_{c}": analysis[f"MIN_{c}"] for c in survey_cols}
     max_vals = {f"MAX_{c}": analysis.get(f"MAX_{c}", analysis[f"MIN_{c}"]) for c in survey_cols}
     wall_limiting  = p.get("WALL_LIMITING", False)
@@ -713,7 +714,7 @@ def generate_report(project_params, calculated, survey_original,
                             ctrl_in_frame=rpt_ctrl, ctrl_side=rpt_ctrl_side), sp(6)]
 
     # DIF por columna
-    story += [Paragraph("6.1  Diferencias respecto a límites (columna por columna)", styles["SubHead"]), sp(3)]
+    story += [Paragraph(_d("6.1  Differences against limits (column by column)"), styles["SubHead"]), sp(3)]
     for col in survey_cols:
         lim   = lim_map[col]; min_v = analysis[f"MIN_{col}"]
         max_v = analysis.get(f"MAX_{col}", min_v)
@@ -726,7 +727,7 @@ def generate_report(project_params, calculated, survey_original,
             subst_text   = f"{lim:.2f} - {min_v:.2f}"
         story += [_calc_block(f"DIF {col}",
             formula_text, subst_text,
-            f"DIF {col} = {dif_v:.2f} mm  |  {off_c} valor(es) fuera de límite",
+            f"DIF {col} = {dif_v:.2f} mm  |  {off_c} value(s) out of limit",
             styles, ok=(dif_v <= 0)), sp(3)]
 
     max_rl = analysis["MAX_OFF_RL"]; max_fb = analysis["MAX_OFF_FB"]
@@ -746,13 +747,13 @@ def generate_report(project_params, calculated, survey_original,
 
     # ── 6.2 ESTADO INICIAL ─────────────────────────────────────
     story += [
-        Paragraph("6.2  Estado inicial — límites incumplidos antes de la optimización",
+        Paragraph(_d("6.2  Initial state — limits breached before optimisation"),
                   styles["SubHead"]),
         sp(2),
         Paragraph(
-            "Análisis del estado de la cabina ajustada ANTES de aplicar cualquier "
-            "desplazamiento de optimización. Permite identificar qué límites se incumplen "
-            "y en qué niveles, como punto de partida para evaluar las mejoras obtenidas.",
+            _d("State of the adjusted car BEFORE applying any optimisation "
+               "displacement. It shows which limits are breached and at which "
+               "levels, as the starting point for judging the improvement."),
             styles["Note"]),
         sp(3),
     ]
@@ -762,44 +763,44 @@ def generate_report(project_params, calculated, survey_original,
                                 rpt_ctrl, rpt_ctrl_side)
     story += [sp(4),
               _ia_block(ia.get("estado_inicial"), styles,
-                        "🤖 Interpretación — Estado inicial del hueco"), sp(3),
+                        _d("🤖 Interpretation — Initial shaft state")), sp(3),
               _ia_block(ia.get("desplazamientos"), styles,
-                        "🤖 Interpretación — Desplazamientos requeridos"), sp(8)]
+                        _d("🤖 Interpretation — Required displacements")), sp(8)]
 
     # ── 7. OPTIMIZACIÓN ───────────────────────────────────────
-    story += [PageBreak(), _section_header("7. OPTIMIZACIÓN — TRAZABILIDAD COMPLETA DE CADA PASO", styles), sp(4)]
+    story += [PageBreak(), _section_header(_d("7. OPTIMISATION — FULL TRACEABILITY OF EVERY STEP"), styles), sp(4)]
 
     story += [
-        Paragraph("7.1  Parámetros del optimizador", styles["SubHead"]),
-        _calc_block("Rango de búsqueda RL",
+        Paragraph(_d("7.1  Optimiser parameters"), styles["SubHead"]),
+        _calc_block(_d("RL search range"),
             "RL ∈ [-MAX OFF RL, +MAX OFF RL]  paso 0.5 mm",
             f"[{-max_rl:.2f}, {max_rl:.2f}]",
             f"Total pasos RL evaluados: {int(max_rl*2/0.5)+1}", styles), sp(3),
-        _calc_block("Rango de búsqueda FB",
+        _calc_block(_d("FB search range"),
             "FB ∈ [-MAX OFF FB, +MAX OFF FB]  paso 0.5 mm",
             f"[{-max_fb:.2f}, {max_fb:.2f}]",
             f"Total pasos FB evaluados: {int(max_fb*2/0.5)+1}", styles), sp(4),
-        Paragraph("Restricciones aplicadas en cada paso:", styles["SubHead2"]),
+        Paragraph(_d("Constraints applied at each step:"), styles["SubHead2"]),
         Paragraph(f"  - Si RL < 0: |RL| <= LIMIT R = {lr:.2f} mm", styles["Normal2"]),
         Paragraph(f"  - Si RL > 0: |RL| <= LIMIT L = {ll:.2f} mm", styles["Normal2"]),
         Paragraph(f"  - Pared limitante: {'Si - Parada ' + str(p.get('WALL_STOP','?')) + ' lado ' + str(p.get('WALL_SIDE','?')) if wall_limiting else 'No aplica'}", styles["Normal2"]),
-        Paragraph(f"  - TSW={fstr('TSW')} vs FS={fstr('FS')} - FS-TSW={fv('FS')-fv('TSW'):.1f} mm - FB extra activo: {'Si' if fv('FS') > fv('TSW') and wall_limiting else 'No'}", styles["Normal2"]),
+        Paragraph(f"  - TSW={fstr('TSW')} vs FS={fstr('FS')} - FS-TSW={fv('FS')-fv('TSW'):.1f} mm - FB extra active: {'Si' if fv('FS') > fv('TSW') and wall_limiting else 'No'}", styles["Normal2"]),
         Paragraph(
-            f"  - Controlador en frame: {'Si - lado ' + str(p.get('CTRL_SIDE','?')) + ' -> ultimo nivel: LIMIT_O' + str(p.get('CTRL_SIDE','?')) + ' - 70 mm' if rpt_ctrl else 'No'}",
+            f"  - Controller in frame: {'Si - lado ' + str(p.get('CTRL_SIDE','?')) + ' -> ultimo nivel: LIMIT_O' + str(p.get('CTRL_SIDE','?')) + ' - 70 mm' if rpt_ctrl else 'No'}",
             styles["Normal2"]),
         sp(4),
-        _diagram_block("Diagrama de rango RL",
+        _diagram_block(_d("RL range diagram"),
             _dg_rl(lr, ll, max_rl), styles), sp(4),
-        _diagram_block("Diagrama de rango FB",
+        _diagram_block(_d("FB range diagram"),
             _dg_fb(max_fb, fv("FB_MAX_BACK"), fv("BC_CALC"), fv("DIF_TSW_FS")), styles), sp(6),
     ]
 
     # ── 7.2  Log de todos los pasos ─────────────────────────────
-    story += [Paragraph("7.2  Log de todos los pasos evaluados", styles["SubHead"]), sp(3)]
+    story += [Paragraph(_d("7.2  Log of every step evaluated"), styles["SubHead"]), sp(3)]
 
     valid_steps = [s for s in step_log if s.get("status") == "VALID"]
 
-    story += [Paragraph(f"Total combinaciones evaluadas: {len(step_log)}  |  Válidas: {len(valid_steps)}", styles["Note"]), sp(3)]
+    story += [Paragraph(f"Total combinations evaluated: {len(step_log)}  |  Valid: {len(valid_steps)}", styles["Note"]), sp(3)]
 
     best_total = best["total_off"] if best else None
     min_off_steps = [s for s in valid_steps if s.get("total_off") == best_total] \
@@ -807,12 +808,12 @@ def generate_report(project_params, calculated, survey_original,
 
     story += [
         Paragraph(
-            f"Iteraciones con el menor número de valores OFF ({best_total if best_total is not None else 'N/A'}):",
+            f"Iterations with the fewest OFF values ({best_total if best_total is not None else 'N/A'}):",
             styles["SubHead2"]
         ),
         Paragraph(
-            f"Se muestran {len(min_off_steps)} de {len(valid_steps)} iteraciones válidas "
-            f"(solo las que alcanzan el mínimo de {best_total} valor(es) fuera de límite).",
+            f"Showing {len(min_off_steps)} of {len(valid_steps)} valid iterations "
+            f"(only those reaching the minimum of {best_total} value(s) out of limit).",
             styles["Note"]
         ),
         sp(2)
@@ -886,9 +887,9 @@ def generate_report(project_params, calculated, survey_original,
             )
         )
         story += [
-            _calc_block("Resumen de optimización",
-                "Criterio 1: menor número de valores fuera de límite\nCriterio 2 (desempate): menor desplazamiento total |RL| + |FB aplicado|",
-                f"Candidatos con mínimo OFF: {n_sol}  |  Valores fuera de límite: {best['total_off']}",
+            _calc_block(_d("Optimisation summary"),
+                _d("Criterion 1: fewest values out of limit\nCriterion 2 (tie-break): lowest total displacement |RL| + |FB applied|"),
+                f"Candidates with minimum OFF: {n_sol}  |  Values out of limit: {best['total_off']}",
                 f"Seleccionado: RL={best['rl']:.1f} mm, FB iterado={best['fb']:.1f} mm, FB aplicado={best.get('fb_applied', best['fb']):.1f} mm",
                 styles, ok=(best["total_off"] == 0)),
             sp(6),
@@ -899,9 +900,9 @@ def generate_report(project_params, calculated, survey_original,
             fb_ap     = sol.get("fb_applied", sol["fb"])
             fb_suffix = f"  |  FB aplic. = {fb_ap:.1f} mm" if abs(fb_ap - sol["fb"]) > 0.01 else ""
             story += [
-                _subheader(f"{prefix}Solución {idx_sol+1} de {n_sol} — RL = {sol['rl']} mm  |  FB = {sol['fb']} mm{fb_suffix}", styles),
+                _subheader(f"{prefix}Solution {idx_sol+1} of {n_sol} — RL = {sol['rl']} mm  |  FB = {sol['fb']} mm{fb_suffix}", styles),
                 sp(3),
-                Paragraph("Matriz con desplazamientos aplicados:", styles["Note"]), sp(3),
+                Paragraph(_d("Matrix with displacements applied:"), styles["Note"]), sp(3),
             ]
             sol_df  = pd.DataFrame(sol["matrix"])
             sol_min = {f"MIN_{c}": min(sol_df[c]) for c in survey_cols}
@@ -923,8 +924,8 @@ def generate_report(project_params, calculated, survey_original,
                                      ctrl_in_frame=rpt_ctrl, ctrl_side=rpt_ctrl_side), sp(3)]
             if not wall_limiting:
                 story += [Paragraph(
-                    "CUT OR = OR - LIMIT OR  /  CUT OL = OL - LIMIT OL  "
-                    "(valor a cortar si supera el límite; vacío = dentro del límite)",
+                    _d("CUT OR = OR - LIMIT OR  /  CUT OL = OL - LIMIT OL  "
+                       "(amount to cut if it exceeds the limit; blank = within)"),
                     styles["Note"]), sp(3)]
             sol_sum = []
             for col in survey_cols:
@@ -946,24 +947,24 @@ def generate_report(project_params, calculated, survey_original,
                     "Fuera límite":  off,
                     "Niveles":       ", ".join(viols) if viols else "—",
                     lbl:             f"{ext:.2f}",
-                    "Dif vs Límite": f"{dif:.2f}",
+                    _d("Diff vs Limit"): f"{dif:.2f}",
                 })
             story += [_summary_table(sol_sum, styles), sp(6)]
     else:
-        story += [Paragraph("No se encontró combinación válida.", styles["Normal2"]), sp(4)]
+        story += [Paragraph(_d("No valid combination was found."), styles["Normal2"]), sp(4)]
 
     story += [_ia_block(ia.get("solucion_optima"), styles,
-                        "🤖 Interpretación — Solución óptima encontrada"), sp(3)]
+                        _d("🤖 Interpretation — Optimal solution found")), sp(3)]
     if ia.get("evasion_pared"):
         story += [_ia_block(ia.get("evasion_pared"), styles,
-                            "🤖 Interpretación — Evasión de pared limitante"), sp(3)]
+                            _d("🤖 Interpretation — Limiting wall avoidance")), sp(3)]
     story += [sp(4)]
 
     # ── 8. DIAGRAMA DE POSICIONAMIENTO — PLANTA POR PISO ──────
-    story += [PageBreak(), _section_header("8. DIAGRAMA DE POSICIONAMIENTO — PLANTA POR PISO", styles), sp(2),
-              Paragraph("Vista superior del encaje de la cabina en el shaft, piso a piso "
-                        "(matriz de la solución seleccionada). Verde = dentro de límite, "
-                        "naranja = al límite, rojo = fuera.", styles["Note"]), sp(4)]
+    story += [PageBreak(), _section_header(_d("8. POSITIONING DIAGRAM — FLOOR PLAN PER LEVEL"), styles), sp(2),
+              Paragraph(_d("Top view of how the car fits in the shaft, floor by floor "
+                           "(matrix of the selected solution). Green = within limit, "
+                           "orange = at the limit, red = out."), styles["Note"]), sp(4)]
     diag_sol = best if best else None
     if diag_sol and diag_sol.get("matrix"):
         mat        = diag_sol["matrix"]
@@ -985,15 +986,15 @@ def generate_report(project_params, calculated, survey_original,
                 if drawn % 2 == 0 and i < n_fl - 1:
                     story += [PageBreak()]
         if drawn == 0:
-            story += [Paragraph("Diagrama no disponible en este entorno.", styles["Note"]), sp(6)]
+            story += [Paragraph(_d("Diagram not available in this environment."), styles["Note"]), sp(6)]
     else:
-        story += [Paragraph("No hay solución para graficar.", styles["Note"]), sp(6)]
+        story += [Paragraph(_d("No solution to plot."), styles["Note"]), sp(6)]
 
     # ── 9. BSR vs BS ─────────────────────────────────────────
-    story += [PageBreak(), _section_header("9. ANÁLISIS BSR vs BS", styles), sp(4)]
+    story += [PageBreak(), _section_header(_d("9. BSR vs BS ANALYSIS"), styles), sp(4)]
     if not bs_result.get("needed"):
-        story += [_calc_block("Condición", "BSR >= BS  ->  Sin ajuste requerido",
-            f"{fstr('BSR')} >= {fstr('BS')}", "No se requiere ajuste de shaft",
+        story += [_calc_block("Condición", _d("BSR >= BS  ->  No adjustment required"),
+            f"{fstr('BSR')} >= {fstr('BS')}", _d("No shaft adjustment required"),
             styles, ok=True), sp(6)]
     else:
         dif_bs = bs_result.get("dif_original", 0)
@@ -1001,41 +1002,41 @@ def generate_report(project_params, calculated, survey_original,
             _calc_block("DIF BS", "DIF BS = BS - BSR  (cuando BSR < BS)",
                 f"{fstr('BS')} - {fstr('BSR')}", f"DIF BS = {dif_bs:.2f} mm",
                 styles, ok=False), sp(4),
-            Paragraph("Búsqueda del paso en los 3 rangos (paso 0.5 mm):", styles["SubHead2"]),
-            _calc_block("Rango 1 — Zona ZB", "Ciclos de 0 hasta LIMIT ZB",
-                f"[0  ->  {lzb:.2f}]", "Buscando paso donde la resta de DIF BS llega a 0", styles), sp(3),
-            _calc_block("Rango 2 — Zona OB", "Ciclos de LIMIT ZB hasta (LIMIT ZB + LIMIT OB)",
-                f"[{lzb:.2f}  ->  {lzb+lob:.2f}]", "Buscando paso donde la resta de DIF BS llega a 0", styles), sp(3),
-            _calc_block("Rango 3 — Zona extendida", "Ciclos de (LIMIT ZB + LIMIT OB) hasta 1000",
-                f"[{lzb+lob:.2f}  ->  1000]", "Buscando paso donde la resta de DIF BS llega a 0", styles), sp(4),
+            Paragraph(_d("Step search across the 3 ranges (0.5 mm step):"), styles["SubHead2"]),
+            _calc_block("Rango 1 — Zona ZB", _d("Cycles from 0 to LIMIT ZB"),
+                f"[0  ->  {lzb:.2f}]", _d("Looking for the step where the DIF BS subtraction reaches 0"), styles), sp(3),
+            _calc_block("Rango 2 — Zona OB", _d("Cycles from LIMIT ZB to (LIMIT ZB + LIMIT OB)"),
+                f"[{lzb:.2f}  ->  {lzb+lob:.2f}]", _d("Looking for the step where the DIF BS subtraction reaches 0"), styles), sp(3),
+            _calc_block("Rango 3 — Zona extendida", _d("Cycles from (LIMIT ZB + LIMIT OB) to 1000"),
+                f"[{lzb+lob:.2f}  ->  1000]", _d("Looking for the step where the DIF BS subtraction reaches 0"), styles), sp(4),
         ]
         if bs_result.get("step") is not None:
             story += [_calc_block("Resultado", "Paso encontrado",
                 f"Rango: {bs_result.get('range')}  |  Zona: {bs_result.get('range_name')}",
                 f"Paso = {bs_result.get('step')} mm", styles, ok=True)]
         else:
-            story += [Paragraph("No se encontró paso en ningún rango.", styles["Normal2"])]
+            story += [Paragraph(_d("No step was found in any range."), styles["Normal2"])]
         story.append(sp(4))
 
     story += [_ia_block(ia.get("bsr_vs_bs"), styles,
-                        "🤖 Interpretación — Análisis BSR vs BS"), sp(6)]
+                        _d("🤖 Interpretation — BSR vs BS analysis")), sp(6)]
 
     # ── 10. CONSIDERACIONES FINALES ──────────────────────────
     if ia.get("consideraciones"):
         story += [
-            _section_header("10. CONSIDERACIONES FINALES Y PUNTOS A VERIFICAR EN CAMPO", styles),
+            _section_header(_d("10. FINAL CONSIDERATIONS AND POINTS TO CHECK ON SITE"), styles),
             sp(4),
             _ia_block(ia.get("consideraciones"), styles,
-                      "🤖 Puntos críticos para el equipo de instalación"),
+                      _d("🤖 Critical points for the installation team")),
             sp(8),
         ]
 
     # ── 11. CRONOGRAMA Y CURVA S ─────────────────────────────
     if schedule and schedule.get("activities"):
-        story += [PageBreak(), _section_header("11. GESTIÓN DE PROYECTO — CRONOGRAMA Y CURVA S", styles), sp(2),
-                  Paragraph(f"Inicio: {schedule['start_date'].strftime('%d/%m/%Y')}  |  "
-                            f"Fin estimado: {schedule['fecha_fin'].strftime('%d/%m/%Y')}  |  "
-                            f"Duración: {schedule['total_dias']} días", styles["Note"]), sp(4)]
+        story += [PageBreak(), _section_header(_d("11. PROJECT MANAGEMENT — SCHEDULE AND S-CURVE"), styles), sp(2),
+                  Paragraph(f"Start: {schedule['start_date'].strftime('%d/%m/%Y')}  |  "
+                            f"Estimated finish: {schedule['fecha_fin'].strftime('%d/%m/%Y')}  |  "
+                            f"Duration: {schedule['total_dias']} days", styles["Note"]), sp(4)]
         sdraw = _svg_flowable(schedule_svg(schedule), W)
         if sdraw is not None:
             story += [sdraw, sp(6)]
@@ -1064,10 +1065,11 @@ def generate_report(project_params, calculated, survey_original,
     if plumb:
         _pd = plumb.get("displacement") or {}
         story += [PageBreak(),
-                  _section_header("12. ESQUEMA DE PLOMADO DEFINITIVO", styles), sp(2),
-                  Paragraph("Plomado con los desplazamientos determinados por el survey. El conjunto "
-                            "(plomos + paredes teóricas + template) se desplaza en bloque; las paredes "
-                            "reales quedan fijas. Eje cero = pared real izquierda.", styles["Note"]), sp(2)]
+                  _section_header(_d("12. FINAL PLUMB LINE LAYOUT"), styles), sp(2),
+                  Paragraph(_d("Plumb lines with the displacements determined by the survey. The "
+                               "assembly (plumb lines + theoretical walls + template) moves "
+                               "as a block; the real walls stay fixed. Zero axis = left "
+                               "real wall."), styles["Note"]), sp(2)]
         if _pd.get("origen") == "survey":
             story += [Paragraph(
                 f"Desplazamiento aplicado: lateral (rl) = {_pd.get('rl', 0):.1f} mm · "
@@ -1119,8 +1121,8 @@ def generate_report(project_params, calculated, survey_original,
 
     # ── PIE ──────────────────────────────────────────────────
     story += [sp(8), HRFlowable(width="100%", thickness=0.5, color=colors.lightgrey), sp(4),
-              Paragraph("Elevator Survey Analyzer — Reporte generado automáticamente", styles["SmallCenter"]),
-              Paragraph(f"Fecha: {clock.now().strftime('%d/%m/%Y %H:%M')}", styles["SmallCenter"])]
+              Paragraph(_d("Elevator Survey Analyzer — Automatically generated report"), styles["SmallCenter"]),
+              Paragraph(f"Date: {clock.now().strftime('%d/%m/%Y %H:%M')}", styles["SmallCenter"])]
 
     doc.build(story)
     buf.seek(0)

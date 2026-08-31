@@ -20,7 +20,7 @@ def validate_inputs(p: dict) -> list:
             issues.append(f"{k} debe ser > 0 (actual: {v})")
     # BSR debería estar definido (puede igualar BS)
     if p.get("BSR") is None or float(p.get("BSR", 0)) <= 0:
-        issues.append("BSR debe estar definido y > 0")
+        issues.append("BSR must be defined and > 0")
     # FS debería ser ≥ TSW para que tenga sentido la lógica de pared
     fs, tsw = p.get("FS"), p.get("TSW")
     if fs is not None and tsw is not None and float(fs) < float(tsw):
