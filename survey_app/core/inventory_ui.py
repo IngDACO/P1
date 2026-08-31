@@ -6,7 +6,7 @@ Movimientos (entradas/salidas) y el escaneo que abre la ficha llegan en la Fase 
 """
 import logging
 
-from core.i18n import t
+from core.i18n import t, etiqueta as _etq
 import pandas as pd
 import streamlit as st
 
@@ -25,7 +25,7 @@ def _creado_por() -> str:
     return str(a.get("usuario", "") or a.get("nombre", ""))
 
 
-_EST_LBL = {"disponible": ":green[disponible]", "en_uso": ":blue[en uso]",
+_EST_LBL = {"disponible": ":green[disponible]", "en_uso": ":blue[in use]",
             "mantenimiento": ":orange[mantenimiento]", "dañado": ":red[dañado]",
             "baja": ":gray[baja]"}
 
@@ -178,7 +178,7 @@ def _detalle(grupo, aid):
         return
 
     st.markdown(f"## :material/inventory_2: {a.get('Nombre', '')}")
-    st.markdown(f"**{a.get('ID', '')}**  ·  {a.get('Categoria', '') or '—'}  ·  "
+    st.markdown(f"**{a.get('ID', '')}**  ·  {_etq(str(a.get('Categoria', ''))) or '—'}  ·  "
                 f"{_EST_LBL.get(a.get('Estado', ''), a.get('Estado', ''))}")
 
     izq, der = st.columns([3, 2])
@@ -196,8 +196,8 @@ def _detalle(grupo, aid):
                   help=t("Straight-line depreciation over the useful life."))
         st.markdown(f"**Location:** {_ubic_txt(a)}  ·  **Condition:** {a.get('Condicion', '') or '—'}")
         if str(a.get("AsignadoA", "")).strip():
-            st.markdown(f"**Asignado a:** {a.get('AsignadoA')}"
-                        + (f" · devolución {a.get('FechaDevolucion')}" if a.get("FechaDevolucion") else ""))
+            st.markdown(f"**{t('Assigned to')}:** {a.get('AsignadoA')}"
+                        + (f" · {t('due back')} {a.get('FechaDevolucion')}" if a.get("FechaDevolucion") else ""))
         _pm = str(a.get("ProximoMant", "")).strip()
         if _pm:
             _pd = INV._parse_date(_pm)
@@ -238,11 +238,11 @@ def _detalle(grupo, aid):
                 if _dt == "proyecto":
                     # El VALOR es el ID (identidad); la etiqueta es el nombre (comodidad).
                     _pids, _plbl = _proyectos(grupo)
-                    _ref = st.selectbox(t("Project"), _pids or ["(sin proyectos)"],
+                    _ref = st.selectbox(t("Project"), _pids or ["(no projects)"],
                                         key=f"inv_srp_{aid}",
                                         format_func=lambda i: _plbl.get(i, i))
                 elif _dt == "usuario":
-                    _ref = st.selectbox(t("User"), _usuarios(grupo) or ["(sin usuarios)"], key=f"inv_sru_{aid}")
+                    _ref = st.selectbox(t("User"), _usuarios(grupo) or ["(no users)"], key=f"inv_sru_{aid}")
                 else:
                     _ref = st.text_input(t("Destination"), key=f"inv_srt_{aid}")
                 _resp = st.selectbox(t("Person responsible"), ["—"] + _usuarios(grupo), key=f"inv_srsp_{aid}")
@@ -294,7 +294,7 @@ def _detalle(grupo, aid):
         _mr = sorted(movs, key=lambda m: str(m.get("Creado", "")), reverse=True)
         st.dataframe(pd.DataFrame([{
             "Fecha":   m.get("Fecha", ""),
-            "Tipo":    m.get("Tipo", ""),
+            "Tipo":    _etq(str(m.get("Tipo", ""))),
             "Desde":   m.get("DesdeUbic", "") or "—",
             "Hacia":   m.get("HaciaUbic", "") or "—",
             "Usuario": m.get("Usuario", "") or "—",
@@ -327,7 +327,7 @@ def _detalle(grupo, aid):
         vc = e2.number_input(t("Purchase value"), min_value=0.0, step=10.0,
                              value=_num(a.get("ValorCompra")))
         c3, c4 = st.columns(2)
-        f_compra = _fecha_input("Fecha de compra", a.get("FechaCompra"), f"inv_fc_{aid}")
+        f_compra = _fecha_input("Purchase date", a.get("FechaCompra"), f"inv_fc_{aid}")
         vida = c4.number_input(t("Useful life (years)"), min_value=0.0, step=1.0,
                                value=_num(a.get("VidaUtilAnios")))
         prox = _fecha_input("Próximo mantenimiento", a.get("ProximoMant"), f"inv_pm_{aid}")
@@ -384,7 +384,7 @@ def _registro(grupo):
         vc = c1.number_input(t("Purchase value"), min_value=0.0, step=10.0)
         vida = c2.number_input(t("Useful life (years)"), min_value=0.0, step=1.0,
                                help=t("Used for depreciation. 0 = do not depreciate."))
-        f_compra = _fecha_input("Fecha de compra", "", "inv_reg_fc")
+        f_compra = _fecha_input("Purchase date", "", "inv_reg_fc")
         prox = _fecha_input("Próximo mantenimiento", "", "inv_reg_pm")
         nota = st.text_area(t("Note"), height=70)
         crear = st.form_submit_button(t(":material/add: Register"), type="primary")

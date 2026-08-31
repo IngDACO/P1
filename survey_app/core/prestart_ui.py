@@ -367,7 +367,7 @@ def render_prestart_tab():
     f_hora   = f_hora_t.strftime("%H:%M") if f_hora_t else ""
     f_loc   = c3.text_input(t("Location"), value=str(prj.get("Ubicacion", "")), key="ps_loc")
     if f_loc.strip():
-        c3.caption(maps.maps_link_md(f_loc, "ver en Maps"))
+        c3.caption(maps.maps_link_md(f_loc, "see on Maps"))
     f_fac   = st.text_input(t("Facilitated by"), value=nombre or usuario, key="ps_fac")
 
     st.markdown("---")

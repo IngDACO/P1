@@ -3,7 +3,7 @@ UI de login, barra de usuario y paneles de gestión (propietario / administrador
 """
 import os
 
-from core.i18n import t
+from core.i18n import t, etiqueta as _etq
 import re
 import time
 from datetime import date
@@ -592,9 +592,9 @@ def _owner_usuarios():
         _gf = ui.elegir(t("Filter by company"), [g["Grupo"] for g in auth.list_groups()],
                         key="ow_ficha_gfil", vacio="— all companies —")
         _cands = [u for u in users if (not _gf or str(u.get("Grupo", "")) == _gf)]
-        _map = {f"{u['Nombre'] or u['Usuario']} ({u['Usuario']}) · {u.get('Grupo') or 'sin grupo'}": u
+        _map = {f"{u['Nombre'] or u['Usuario']} ({u['Usuario']}) · {u.get('Grupo') or "no company"}": u
                 for u in _cands}
-        _elegido = ui.elegir(t("Username"), _map, key="ow_fichasel", vacio="— elige un usuario —")
+        _elegido = ui.elegir(t("Username"), _map, key="ow_fichasel", vacio="— choose a user —")
         if _elegido:
             st.markdown("---")
             # ⚠️ v379: la ficha muestra el TRABAJO de esa persona (horas, recibos,
@@ -652,7 +652,7 @@ def _owner_resumen():
     } for d in data]), hide_index=True, width="stretch")
     _urg = [d for d in data if d["pendientes"]]
     if _urg:
-        st.warning("Grupos con pendientes: " + ", ".join(d["grupo"] for d in _urg))
+        st.warning("Companies with pending items: " + ", ".join(d["grupo"] for d in _urg))
     else:
         st.success(t("No company has anything urgent pending."))
 
@@ -808,9 +808,9 @@ def _ficha_usuario(u, grupo, owner=False, sel_key="gp_fichasel"):
         fichando = False
     chips = [(":green[:material/check_circle:] Activo" if activo else ":red[:material/cancel:] Inactivo"),
              (":material/schedule: Fichando ahora" if fichando else ""),
-             ((":green[:material/contact_page:] Contacto OK" if contacto_ok else ":orange[:material/warning:] Sin contacto")
+             ((":green[:material/contact_page:] Contacto OK" if contacto_ok else ":orange[:material/warning:] No contact details")
               if es_campo else "")]
-    st.markdown(f"**{u.get('Nombre') or sel}**  ·  _{u['Rol']}_  ·  "
+    st.markdown(f"**{u.get('Nombre') or sel}**  ·  _{_etq(str(u['Rol']))}_  ·  "
                 + "  ·  ".join(c for c in chips if c))
 
     # v237: format_func muestra iconos Material; las OPCIONES siguen siendo el ID (emoji)
@@ -819,8 +819,8 @@ def _ficha_usuario(u, grupo, owner=False, sel_key="gp_fichasel"):
                     ["🔑 Acceso", "📇 Contacto", "🎫 Credenciales", "📊 Su trabajo", "🗑"],
                     format_func=lambda o: {"🔑 Acceso": ":material/key: Acceso",
                                            "📇 Contacto": ":material/contact_page: Contacto",
-                                           "🎫 Credenciales": ":material/badge: Credenciales",
-                                           "📊 Su trabajo": ":material/work: Su trabajo",
+                                           "🎫 Credenciales": ":material/badge: Credentials",
+                                           "📊 Su trabajo": ":material/work: Their work",
                                            "🗑": ":material/delete:"}.get(o, o),
                     horizontal=True, key=f"{k}_sec", label_visibility="collapsed")
 
@@ -936,7 +936,7 @@ def _ficha_usuario(u, grupo, owner=False, sel_key="gp_fichasel"):
 
         # Horas por proyecto de esta persona (del fichaje): dónde ha puesto su tiempo.
         if _pp:
-            st.markdown("**Horas por proyecto:** "
+            st.markdown("**Hours per project:** "
                         + " · ".join(f"{_n} {_hh:.1f} h"
                                      for _n, _hh in sorted(_pp.items(), key=lambda x: -x[1])))
         if rec["n"]:
@@ -1029,11 +1029,11 @@ def _grupo_usuarios(grupo):
     _nsc = sum(1 for u in gente if not _cont_ok(u))
     _npv = sum(1 for u in gente if _peor.get(u["Usuario"].strip().lower()) == "por_vencer")
     _nvc = sum(1 for u in gente if _peor.get(u["Usuario"].strip().lower()) == "vencido")
-    _linea = f":material/group: **{len(gente)}** personas · :green[:material/check_circle:] **{_nact}** activos"
+    _linea = f":material/group: **{len(gente)}** people · :green[:material/check_circle:] **{_nact}** active"
     if _nsc:
-        _linea += f" · :orange[:material/warning:] **{_nsc}** sin contacto"
+        _linea += f" · :orange[:material/warning:] **{_nsc}** with no contact details"
     if _npv:
-        _linea += f" · :orange[:material/schedule:] **{_npv}** cred. por vencer"
+        _linea += f" · :orange[:material/schedule:] **{_npv}** cred. expiring"
     if _nvc:
         _linea += f" · :red[:material/cancel:] **{_nvc}** cred. vencida(s)"
     st.markdown(_linea)
@@ -1053,7 +1053,7 @@ def _grupo_usuarios(grupo):
         st.warning(
             ":material/notifications_off: **This company's alerts do not reach "
             f"{len(_sc)}** of their recipients: "
-            + ", ".join(f"**{x['usuario']}** ({x['rol']})" for x in _sc)
+            + ", ".join(f"**{x['usuario']}** ({_etq(str(x['rol']))})" for x in _sc)
             + ". With no email and no Telegram, the alert stays inside the app. Fix it by adding an email on their profile.")
 
     # ── Tabla CLICKEABLE → abre la ficha de esa persona ──

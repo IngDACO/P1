@@ -178,7 +178,7 @@ def _nueva(grupo):
     # sección. Cotizar es lo primero que se hace con un cliente nuevo: pedirle la ficha
     # de antemano es el orden al revés.
     fichas = C.list_clientes(grupo)
-    _NUEVO = "➕ Nuevo cliente"
+    _NUEVO = "➕ New client"
     _map = {f"{f.get('Nombre','')}": f for f in fichas}
     _cli = st.selectbox(t("Client"), list(_map) + [_NUEVO], key="cot_new_cli",
                         index=len(_map) if not fichas else 0)
@@ -288,7 +288,7 @@ def _detalle(grupo, cid):
                 + (f"  ·  v{_ver}" if _ver > 1 else ""))
     st.markdown(f"**{c.get('ClienteNombre', '') or '—'}**  ·  {_EST_FMT.get(est, est)}"
                 f"  ·  válida hasta {c.get('Validez', '') or '—'}"
-                + (f"  ·  viene de {c.get('Origen')}" if c.get("Origen") else ""))
+                + (f"  ·  from {c.get('Origen')}" if c.get("Origen") else ""))
 
     lineas = Q.lineas_de(c)
     _tot = Q.totales(lineas, _num(c.get("ImpuestoPct")))
@@ -397,7 +397,7 @@ def _crear_proyecto(grupo, c, _tot):
         ns = c4.number_input(t("Stops (NS)"), min_value=0, step=1, value=0,
                              help=t("Only an installation generates the standard schedule; with NS 0 the project starts with no activities."))
         ubic = st.text_input(t("Location (optional)"))
-        st.info(":material/savings: Presupuesto del proyecto: **"
+        st.info(":material/savings: Project budget: **"
                 + T.dinero(_tot["costo"], 0) + "** — that is your quoted **cost**, not the price to the client (" + T.dinero(_tot["subtotal"], 0) + "). That way the over-budget alert fires when you are eating into the margin, not when you are already losing money.")
         if st.form_submit_button(t(":material/add_circle: Create the project"),
                                  type="primary", width="stretch"):
@@ -416,7 +416,7 @@ def _comparacion(cid, c):
     st.markdown("---")
     comp = Q.comparacion(cid)
     if not comp:
-        st.caption("Enlazada al proyecto " + str(c.get("ProyectoID")) + ".")
+        st.caption("Linked to project " + str(c.get("ProyectoID")) + ".")
         return
     st.markdown("### :material/compare_arrows: Cotizado vs. real — " + comp["proyecto"])
 
@@ -433,22 +433,22 @@ def _comparacion(cid, c):
     # solo se llama «real» cuando el proyecto está al 100%.
     _gc = comp["ganancia_cotizada"]
     if comp["terminado"]:
-        _g, _etq, _pie = comp["ganancia_real"], "Ganancia real", "obra terminada"
+        _g, _lbl_g, _pie = comp["ganancia_real"], t("Actual profit"), t("job finished")
     elif comp["ganancia_proyectada"] is not None:
-        _g, _etq = comp["ganancia_proyectada"], "Ganancia proyectada"
-        _pie = "al ritmo actual · cotizaste " + T.dinero(_gc, 0)
+        _g, _lbl_g = comp["ganancia_proyectada"], t("Projected profit")
+        _pie = "at the current rate · you quoted " + T.dinero(_gc, 0)
     else:
-        _g, _etq, _pie = None, "Ganancia proyectada", "there is no progress and no cost yet"
+        _g, _lbl_g, _pie = None, t("Projected profit"), t("there is no progress and no cost yet")
     _cg = T.VERDE if (_g is not None and _g >= _gc) else (T.ROJO if _g is not None else None)
     T.kpi_row([
         _tarj(t("Hours"), comp["horas"], "h"),
         _tarj(t("Cost"), comp["costo"]),
         (t("Revenue"), T.dinero(comp["ingreso"], 0), t("what the client accepted")),
-        (_etq, T.dinero(_g, 0) if _g is not None else "—", _pie, _cg),
+        (_lbl_g, T.dinero(_g, 0) if _g is not None else "—", _pie, _cg),
     ])
     if comp["costo_proyectado"] is not None:
         st.caption(":material/trending_up: At the current rate the job will cost "
-                   + T.dinero(comp["costo_proyectado"], 0) + " contra los "
+                   + T.dinero(comp["costo_proyectado"], 0) + " against the "
                    + T.dinero(comp["costo"]["cotizado"], 0) + " cotizados.")
     _av = comp["avance"]
     if comp["costo"]["dif"] > 0 and _av < 100:

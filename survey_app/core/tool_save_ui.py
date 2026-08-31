@@ -22,7 +22,7 @@ _PENDIENTE = "_toolrestore"
 
 # Opción neutra: sin ella el selectbox devuelve el primer proyecto y se
 # escribiría sobre un elevador que nadie eligió.
-_VACIO = "— elige el proyecto —"
+_VACIO = "— choose the project —"
 
 
 def _proyectos_de(rol, usuario, grupo):
@@ -140,7 +140,7 @@ def render_guardar(herramienta: str, titulo_pdf: str, pdf_bytes: bytes,
                 datos={"entradas": _snapshot(herramienta), "resultados": datos},
                 usuario=usuario, pdf=pdf_bytes, filename=nombre_archivo)
         if res.get("ok"):
-            msg = f":green[:material/check_circle:] Guardado como **{res['id']}** en {prj.get('Nombre')}."
+            msg = f":green[:material/check_circle:] Saved as **{res['id']}** in {prj.get('Nombre')}."
             if not res.get("drive_id"):
                 msg += " (The PDF was not filed in Drive: check the connection.)"
             st.success(msg)

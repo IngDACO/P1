@@ -47,7 +47,7 @@ logger = logging.getLogger(__name__)
 
 # Opción neutra: sin ella el selectbox devuelve el primer proyecto y se
 # escribiría sobre un elevador que nadie eligió.
-_VACIO = "— elige el proyecto —"
+_VACIO = "— choose the project —"
 
 SURVEY_COLS = ["WR", "FR", "OR", "WL", "FL", "OL"]
 
@@ -80,11 +80,11 @@ _GRUPOS_PARAM = [
 ]
 
 USER_ONLY = {
-    "BSR":            "Ancho real del hueco medido en obra (mm)",
-    "FS":             "Distancia frontal de seguridad (mm)",
-    "FRAME":          "Marco de puerta de entrada (mm)",
+    "BSR":            "Actual shaft width measured on site (mm)",
+    "FS":             "Front safety distance (mm)",
+    "FRAME":          "Entrance door frame (mm)",
     "RAIL":           "Rail head width (mm)",
-    "OFFSET_CABIN":   "Offset de cabina (mm)",
+    "OFFSET_CABIN":   "Car offset (mm)",
     "LengthTemplate": "Plumb template length (mm) — for the plumb layout",
 }
 
@@ -154,7 +154,7 @@ def render_survey_tab(_ROL, _GRUPO):
         for _k in ("_calc_sig", "sched_rows", "sched_start", "_diag_pdf", "_rebuilt_from"):
             st.session_state.pop(_k, None)
         st.session_state["_dup_msg"] = True
-        st.session_state["_fase_pending"] = "📝 Datos del survey"
+        st.session_state["_fase_pending"] = "📝 Survey data"
 
     _pend = st.session_state.pop("_import_pending", None)
     if _pend:
@@ -199,9 +199,9 @@ def render_survey_tab(_ROL, _GRUPO):
     _fp = st.session_state.pop("_fase_pending", None)
     if _fp:
         st.session_state["survey_fase"] = _fp
-    _FASE_DATOS, _FASE_RES = "📝 Datos del survey", "📊 Resultados e informes"
+    _FASE_DATOS, _FASE_RES = "📝 Survey data", "📊 Resultados e informes"
     _fase = st.radio(t("Phase"), [_FASE_DATOS, _FASE_RES], horizontal=True,
-                     format_func=lambda o: {_FASE_DATOS: ":material/edit: Datos del survey",
+                     format_func=lambda o: {_FASE_DATOS: ":material/edit: Survey data",
                                             _FASE_RES: ":material/insights: Resultados e informes"}.get(o, o),
                      key="survey_fase", label_visibility="collapsed")
     st.markdown("---")
@@ -299,7 +299,7 @@ def render_survey_tab(_ROL, _GRUPO):
             else:
                 _cols_off = [c for c in SURVEY_COLS if (_b.get("off_by_col") or {}).get(c, 0)]
                 st.warning(f":material/warning: The active solution leaves **{_off} value(s) out of limit**"
-                           + (f" en: **{', '.join(_cols_off)}**." if _cols_off else "."))
+                           + (f" in: **{', '.join(_cols_off)}**." if _cols_off else "."))
         else:
             st.error(t(":material/cancel: No valid combination was found with these parameters."))
 
@@ -532,12 +532,12 @@ def render_survey_tab(_ROL, _GRUPO):
 
             _modo = st.radio(
                 t("Floors to show"),
-                ["Con incidencias", "Todos", "Elegir"],
+                ["With issues", "Todos", "Elegir"],
                 horizontal=True, key="diag_modo", label_visibility="collapsed",
             )
-            if _modo == "Con incidencias":
+            if _modo == "With issues":
                 _floors = _prob or list(range(n_floors))
-                st.caption(f"Mostrando {len(_floors)} de {n_floors} pisos"
+                st.caption(f"Showing {len(_floors)} of {n_floors} floors"
                            + ("" if _prob else " (none has any issue: all are shown)"))
             elif _modo == "Todos":
                 _floors = list(range(n_floors))
@@ -556,11 +556,11 @@ def render_survey_tab(_ROL, _GRUPO):
                 )
                 # Exportar los diagramas sueltos (para mandar a obra sin el informe)
                 if st.button(t(":material/picture_as_pdf: Prepare a PDF of these diagrams"), key="btn_diag_pdf"):
-                    with st.spinner("Generando PDF de diagramas..."):
+                    with st.spinner("Generating the diagrams PDF..."):
                         st.session_state["_diag_pdf"] = floor_plans_pdf(
                             all_params, limits, best, lim_map, ctrl_in_frame_, ctrl_side_,
                             floors=_floors,
-                            titulo=f"Diagramas de posicionamiento — "
+                            titulo=f"Positioning diagrams — "
                                    f"{all_params.get('PROYECTO') or 'Survey'}")
                 if st.session_state.get("_diag_pdf"):
                     st.download_button(t(":material/download: Download diagrams (PDF)"),
@@ -832,7 +832,7 @@ def render_survey_tab(_ROL, _GRUPO):
                        + (f": {_rep}." if _rep else "."))
             if str(_prj_sv.get("Ubicacion", "")).strip():
                 from core import maps as _maps
-                st.caption(_maps.maps_link_md(_prj_sv.get("Ubicacion"), ":material/place: ver en Maps"))
+                st.caption(_maps.maps_link_md(_prj_sv.get("Ubicacion"), ":material/place: see on Maps"))
         else:
             # Sin proyecto: cálculo suelto, el informe va sin identidad.
             for _kid in ("proyecto", "cliente", "ubicacion", "ingeniero"):
@@ -854,7 +854,7 @@ def render_survey_tab(_ROL, _GRUPO):
         pdf_file = col_pdf.file_uploader(t("Drawings PDF"), type=["pdf"])
 
         if pdf_file is not None and pdf_file.name != st.session_state.get("last_pdf_name"):
-            with st.spinner(":material/hourglass_empty: Extrayendo datos del PDF..."):
+            with st.spinner(":material/hourglass_empty: Extracting data from the PDF..."):
                 extracted = extract_from_pdf(pdf_file)
             st.session_state.pdf_extracted = extracted
             st.session_state.last_pdf_name = pdf_file.name
@@ -933,7 +933,7 @@ def render_survey_tab(_ROL, _GRUPO):
             _r1, _r2 = st.columns([1, 2])
             _r1.metric(t("Read from the drawing"), f"{len(_found)}/{len(_ext)}")
             if _miss:
-                _r2.warning(":material/edit: Completa a mano: **" + "**, **".join(_miss) + "**")
+                _r2.warning(":material/edit: Fill in by hand: **" + "**, **".join(_miss) + "**")
             else:
                 _r2.success(t(":green[:material/check_circle:] The drawing supplied every parameter."))
 
@@ -1104,7 +1104,7 @@ def render_survey_tab(_ROL, _GRUPO):
         _falt = [p for p, v in _ex.items() if v is None] if _ex else []
         _nsv  = int(st.session_state.get("ns", 2))
         _chips = [
-            (":green[:material/check_circle:] Plano cargado" if _ex else ":gray[:material/radio_button_unchecked:] No drawing (parameters by hand)"),
+            (":green[:material/check_circle:] Drawing loaded" if _ex else ":gray[:material/radio_button_unchecked:] No drawing (parameters by hand)"),
             (":green[:material/check_circle:] Parameters complete" if (_ex and not _falt)
              else (f":orange[:material/warning:] {len(_falt)} parameter(s) not read" if _falt else ":material/edit: Manual parameters")),
             f":green[:material/check_circle:] Matriz: {_nsv} niveles",
@@ -1223,7 +1223,7 @@ def render_survey_tab(_ROL, _GRUPO):
                         "Configure `ANTHROPIC_API_KEY` in the Streamlit Cloud Secrets and calculate again."
                     )
                 elif st.button(t(":material/description: Generate the client report"), width="stretch"):
-                    with st.spinner("Generando informe del cliente..."):
+                    with st.spinner("Generating the client report..."):
                         user_pdf = generate_user_report(
                             project_params      = r["all_params"],
                             calculated          = r["limits"],
@@ -1270,7 +1270,7 @@ def render_survey_tab(_ROL, _GRUPO):
                 if not _proys:
                     st.info("There are no projects yet. Create one in "
                             + ("**👑 Administration → :material/folder: Projects**" if _ROL == "propietario"
-                               else "**:material/build: Mi grupo → :material/bar_chart: Proyectos → :material/add: Nuevo proyecto**")
+                               else "**:material/build: My company → :material/bar_chart: Projects → :material/add: New project**")
                             + " and come back here to attach this survey to it.")
                 else:
                     st.caption(t("The parameters, the matrix and the interpretations are attached to the project, and the drawing, the matrix and the client report are filed. The project's schedule and progress are NOT touched."))
@@ -1338,7 +1338,7 @@ def render_survey_tab(_ROL, _GRUPO):
                             # Documentos base en Drive (best-effort)
                             if drive_store.is_configured() and drive_store.is_available():
                                 _fallos = []
-                                with st.spinner("Archivando documentos en Drive..."):
+                                with st.spinner("Filing documents in Drive..."):
                                     try:
                                         pb = st.session_state.get("pdf_bytes")
                                         if pb:
@@ -1371,7 +1371,7 @@ def render_survey_tab(_ROL, _GRUPO):
                                             projects_data.add_document(_pid, "informe_cliente.pdf",
                                                                        "informe_cliente", fid, _usr)
                                     except Exception:
-                                        _fallos.append("informe cliente")
+                                        _fallos.append("client report")
                                 if _fallos:
                                     st.caption(":material/attach_file: Documentos archivados, salvo: "
                                                + ", ".join(_fallos) + ".")

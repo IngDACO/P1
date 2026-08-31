@@ -14,7 +14,7 @@ cacheado). Cuando se valide el look, se decide Google Maps y/o un campo de coord
 """
 import logging
 
-from core.i18n import t
+from core.i18n import t, etiqueta as _etq
 import streamlit as st
 import pandas as pd
 
@@ -28,7 +28,7 @@ _SECCIONES = [
     ("home",          ":material/home: Home"),
     ("fichaje",       ":material/schedule: Fichaje"),
     ("planificacion", ":material/calendar_month: Planificación"),
-    ("proyectos",     ":material/folder: Proyectos"),
+    ("proyectos",     ":material/folder: Projects"),
     ("finanzas",      ":material/payments: Finanzas"),
     ("inventario",    ":material/inventory_2: Inventario"),
     ("herramientas",  ":material/build: Herramientas"),
@@ -48,10 +48,10 @@ _SUBSECCIONES = {
         ("🗺 Ruta del día", ":material/route: Day route"),
         # v430: la bandeja de ausencias vive AQUÍ, junto al tablero que va a modificar
         # — aprobar una escribe en el planificador, así que el sitio natural es este.
-        ("🌴 Ausencias", ":material/event_busy: Ausencias"),
-        ("👷 Usuarios", ":material/badge: Usuarios")]),
+        ("🌴 Ausencias", ":material/event_busy: Absences"),
+        ("👷 Usuarios", ":material/badge: Users")]),
     "proyectos": ("adm_proy_sub", [
-        ("📊 Proyectos", ":material/format_list_bulleted: Proyectos"),
+        ("📊 Proyectos", ":material/format_list_bulleted: Projects"),
         ("🗂 Agrupaciones", ":material/account_tree: Agrupaciones"),
         # v423: sección PROPIA para las localizaciones internas (oficina/almacén/taller).
         # Decisión del usuario frente a mezclarlas en la cartera con un filtro: así la
@@ -63,8 +63,8 @@ _SUBSECCIONES = {
         ("📊 Resumen", ":material/insights: Resumen"),
         ("💰 Gastos", ":material/receipt_long: Gastos"),
         ("🧾 Facturas", ":material/receipt: Facturas"),
-        ("👥 Nóminas", ":material/payments: Nóminas"),
-        ("⏱ Horas", ":material/schedule: Horas"),
+        ("👥 Nóminas", ":material/payments: Payroll"),
+        ("⏱ Horas", ":material/schedule: Hours"),
         ("📈 Rentabilidad", ":material/trending_up: Rentabilidad"),
         ("📄 Cotizaciones", ":material/request_quote: Cotizaciones"),
         ("📚 Catálogo", ":material/sell: Catálogo")]),
@@ -72,7 +72,7 @@ _SUBSECCIONES = {
         ("🧰 Inicio", ":material/apps: Inicio"),
         ("📐 Survey", ":material/architecture: Survey"),
         ("🔩 Plomada", ":material/straighten: Plomada"),
-        ("✂️ Rieles", ":material/content_cut: Rieles"),
+        ("✂️ Rieles", ":material/content_cut: Rails"),
         ("🛡 Buffers", ":material/shield: Buffers"),
         ("🎗 Belting", ":material/swap_vert: Belting"),
         ("🦺 Pre-Start", ":material/health_and_safety: Pre-Start")]),
@@ -94,16 +94,16 @@ _SUBKEY = {k: v[0] for k, v in _SUBSECCIONES.items()}   # {seccion: clave_de_est
 # Herramientas: es seguridad de obra y su acción diaria (regla v154); enterrarlo un
 # nivel le costaría un toque cada mañana justo a quien lo usa en el móvil.
 _SECCIONES_CAMPO = [
-    ("misproyectos", ":material/assignment: Mis proyectos"),
+    ("misproyectos", ":material/assignment: My projects"),
     ("fichaje",      ":material/schedule: Fichaje"),
     ("prestart",     ":material/health_and_safety: Pre-Start"),
     ("herramientas", ":material/build: Herramientas"),
-    ("credenciales", ":material/badge: Mis credenciales"),
+    ("credenciales", ":material/badge: My credentials"),
     ("colillas",     ":material/payments: Mis colillas"),
     # v430: la autogestión de ausencias. Va SUELTA, como el Pre-Start (v154): pedir
     # un día o avisar de una baja no es «un proyecto» ni «una herramienta», y
     # enterrarla un nivel le costaría un toque a quien la usa desde el móvil.
-    ("ausencias",    ":material/event_busy: Mis ausencias"),
+    ("ausencias",    ":material/event_busy: My absences"),
 ]
 # Sus Herramientas son las 5 TÉCNICAS: el Pre-Start ya es sección propia, y
 # duplicarlo lo dejaría en dos sitios (el patrón de v140 que evitamos).
@@ -128,9 +128,9 @@ _SUBSECCIONES_OWNER = {
     "administracion": ("owner_sec", [
         ("🌐 Resumen",   ":material/dashboard: Resumen"),
         ("🏢 Grupos",    ":material/business: Grupos"),
-        ("👥 Usuarios",  ":material/group: Usuarios"),
-        ("📁 Proyectos", ":material/folder: Proyectos"),
-        ("🚆 Rieles",    ":material/train: Rieles"),
+        ("👥 Usuarios",  ":material/group: Users"),
+        ("📁 Proyectos", ":material/folder: Projects"),
+        ("🚆 Rieles",    ":material/train: Rails"),
         ("📚 Manuales",  ":material/menu_book: Manuales")]),
     "herramientas": _SUBSECCIONES_CAMPO["herramientas"],   # las 5 técnicas, sin Pre-Start
 }
@@ -519,7 +519,7 @@ def _banda_prestart():
             return
     except Exception:
         return                      # nunca estorbar por un fallo del aviso
-    _nom = str(prj.get("proyecto", "") or "esta obra")
+    _nom = str(prj.get("proyecto", "") or "this job")
     if not _falta:
         c1, c2 = st.columns([5, 1])
         with c1:
@@ -695,7 +695,7 @@ def _pantalla_busqueda(q: str, grupo) -> bool:
                          key=f"busq_{_tipo}_{_i}", width="stretch"):
                 _abrir_resultado(_r)
         if len(_grupo_res) > 12:
-            st.caption(f"…y {len(_grupo_res) - 12} more. Narrow the term.")
+            st.caption(f"…and {len(_grupo_res) - 12} more. Narrow the term.")
     return True
 
 
@@ -720,15 +720,19 @@ def _alertas(grupo) -> list:
             for g in admin_digest.owner_digest():
                 _p = []
                 if g["retrasos"]:
-                    _p.append(f"{g['retrasos']} en retraso")
+                    _p.append(f"{g['retrasos']} behind schedule")
+                # ⚠️ Fragmentos de f-string de UNA palabra: la red de etiquetas
+                # cortas pide 2+, así que estos tres se le escaparon en v442 y
+                # seguían en español. No se pueden envolver en `t()` (son trozos
+                # de f-string, v441), así que van en el idioma BASE directamente.
                 if g["alarmas"]:
-                    _p.append(f"{g['alarmas']} alarmas")
+                    _p.append(f"{g['alarmas']} alarms")
                 if g["vencidos"]:
-                    _p.append(f"{g['vencidos']} vencidos")
+                    _p.append(f"{g['vencidos']} overdue")
                 if g["cred_venc"]:
-                    _p.append(f"{g['cred_venc']} credenciales")
+                    _p.append(f"{g['cred_venc']} credentials")
                 if g["sobre_presupuesto"]:
-                    _p.append(f"{g['sobre_presupuesto']} sobre presupuesto")
+                    _p.append(f"{g['sobre_presupuesto']} over budget")
                 if _p:
                     out.append(f":material/business: **{g['grupo']}** — " + " · ".join(_p))
         except Exception:
@@ -740,7 +744,7 @@ def _alertas(grupo) -> list:
             for e in C.expiring(grupo)[:10]:
                 if _es_campo and str(e.get("usuario", "")).strip().lower() != _yo:
                     continue
-                est = ":red[:material/cancel:] vencida" if e["dias"] < 0 else f":orange[:material/schedule:] vence en {e['dias']} d"
+                est = ":red[:material/cancel:] vencida" if e["dias"] < 0 else f":orange[:material/schedule:] expires in {e['dias']} d"
                 out.append(f":material/badge: {e['tipo']} · {e['usuario']} — {est}")
     except Exception:
         pass
@@ -929,7 +933,7 @@ def _hub_herramientas():
         "✂️ Rieles": "How much to cut off each guide rail (Case 1 / Case 2).",
         "🛡 Buffers": "How much to cut off each buffer (HKP − HKPR).",
         "🎗 Belting": "The height to leave the car at to install the belts (DSTS).",
-        "🦺 Pre-Start": "Charla diaria de seguridad de obra (Daily Pre-Start).",
+        "🦺 Pre-Start": "Daily site safety talk (Daily Pre-Start).",
     }
     # display (icono) desde _SUBSECCIONES (consistente con el sidebar); navega con el ID.
     _herr = [(_id, _d) for _id, _d in _subsecciones()["herramientas"][1] if _id != "🧰 Inicio"]
@@ -1105,13 +1109,13 @@ def _resumen_proyecto_home(grupo, pid):
         f"<div style='background:#f0f2f5;border-radius:8px;height:14px;overflow:hidden;"
         f"margin:2px 0 8px;'><div style='background:{_bar};height:100%;width:{av}%;'></div></div>",
         unsafe_allow_html=True)
-    bits = [f":material/bar_chart: **{av}%**", f"{_sem} {_e(prj.get('Estado'))}"]
+    bits = [f":material/bar_chart: **{av}%**", f"{_sem} {_e(_etq(str(prj.get('Estado', ''))))}"]
     if prj.get("Cliente"):
         bits.append(f":material/business: {_e(prj.get('Cliente'))}")
     if dl:
-        bits.append(f":red[:material/schedule:] {dl} d de retraso")
+        bits.append(f":red[:material/schedule:] {dl} d behind")
     elif ah:
-        bits.append(f":green[:material/schedule:] {ah} d de adelanto")
+        bits.append(f":green[:material/schedule:] {ah} d ahead")
     if al:
         bits.append(f":material/notifications: {al} alarma(s)")
     st.markdown("  ·  ".join(bits))
@@ -1270,8 +1274,8 @@ def _agenda_hoy(grupo):
     # resumen
     st.markdown(
         f"<div style='margin:2px 0 8px 0;font-size:14px;color:#374151;'>"
-        f"<b>{n_asig}</b> asignados &nbsp;·&nbsp; <b>{n_off}</b> OFF &nbsp;·&nbsp; "
-        f"<b>{n_leave}</b> leave &nbsp;·&nbsp; <b>{n_sin}</b> sin asignar</div>",
+        f"<b>{n_asig}</b> assigned &nbsp;·&nbsp; <b>{n_off}</b> OFF &nbsp;·&nbsp; "
+        f"<b>{n_leave}</b> leave &nbsp;·&nbsp; <b>{n_sin}</b> unassigned</div>",
         unsafe_allow_html=True)
 
     # v199: cada persona es un BOTÓN → su ficha (Planificación · Usuarios). El borde
@@ -1285,7 +1289,7 @@ def _agenda_hoy(grupo):
 
     for _i, f in enumerate(filas):
         _etqs = " · ".join(x for x in f.get("etqs", []) if x)
-        _lbl = f"{f['nombre']} · {_etqs or 'sin asignar'}"
+        _lbl = f"{f['nombre']} · {_etqs or "unassigned"}"
         _hlp = " · ".join(list(f.get("proys", [])) + ([f["nota"]] if f.get("nota") else [])) or None
         if st.button(_lbl, key=f"agper_{_i}", width="stretch", help=_hlp):
             _u = f.get("usuario", "")

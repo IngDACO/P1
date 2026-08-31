@@ -27,7 +27,7 @@ def _kpi(label, value, color=None):
 def _encaje_txt(disp) -> str:
     """Resumen accionable del encaje de un elevador (para la tabla)."""
     if not disp:
-        return "sin desplazar (BSR = BS)"
+        return "no shift (BSR = BS)"
     if disp.get("centrado"):
         return f"centrado · holgura {disp.get('holgura_lado', 0):.0f} mm/lado"
     if disp.get("fuera_rango"):
@@ -68,7 +68,7 @@ def render_plumb_tab():
         pdf = plan_store.selector(":material/description: Drawing PDF (fills in from the drawing)", "plb_pdf")
         if pdf is not None and pdf.name != st.session_state.get("plb_pdf_name"):
             from extractors.schindler import extract_from_pdf
-            with st.spinner("Leyendo el plano..."):
+            with st.spinner("Reading the drawing..."):
                 ex = extract_from_pdf(pdf)
             st.session_state["plb_pdf_name"] = pdf.name
             mapping = {"BKS": "plb_bks", "TKSW": "plb_tksw", "SF1": "plb_sf1", "SF2": "plb_sf2",
@@ -165,9 +165,9 @@ def render_plumb_tab():
     # ── Diagramas de un elevador ──
     st.markdown(t("#### :material/architecture: Diagrams for one lift"))
     sel = st.selectbox(t("View the setting out for lift"), list(range(1, n + 1)),
-                       format_func=lambda i: f"Elevador {i}", key="plb_sel_e")
+                       format_func=lambda i: f"{t('Lift')} {i}", key="plb_sel_e")
     r = results[sel - 1]
-    _pr = (f"{_pr_base} · Elevador {sel}" if _pr_base else f"Elevador {sel}")
+    _pr = (f"{_pr_base} · {d('Lift')} {sel}" if _pr_base else f"{d('Lift')} {sel}")
 
     disp = r.get("displacement")
     if disp and disp.get("centrado"):

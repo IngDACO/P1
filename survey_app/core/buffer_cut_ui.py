@@ -67,7 +67,7 @@ def render_buffer_cut_tab():
         st.caption(t("HKP will be read from this PDF. Normally it already comes from the project drawing."))
         pdf = plan_store.selector("Drawing PDF (for HKP)", "bc_pdf")
         if pdf is not None and pdf.name != st.session_state.get("bc_pdf_name"):
-            with st.spinner("Leyendo HKP del PDF..."):
+            with st.spinner("Reading HKP from the PDF..."):
                 ex = extract_hkp(pdf)
             st.session_state["bc_pdf_name"] = pdf.name
             if ex.get("HKP") is not None:

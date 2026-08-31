@@ -67,10 +67,10 @@ def render_belting_tab():
     # sin plano, o para calcular sin proyecto asignado.
     with st.expander(t("Does the project have no drawing? Upload it here"), icon=":material/description:"):
         st.caption(t("HQ and HGP will be read from this PDF. Normally they already come from the project drawing."))
-        pdf = plan_store.selector(":material/description: PDF de planos (autocompleta HQ)", "belt_pdf")
+        pdf = plan_store.selector(":material/description: Drawing PDF (fills in HQ)", "belt_pdf")
         if pdf is not None and pdf.name != st.session_state.get("belt_pdf_name"):
             from extractors.schindler import extract_belting
-            with st.spinner("Leyendo el plano..."):
+            with st.spinner("Reading the drawing..."):
                 ex = extract_belting(pdf)
             st.session_state["belt_pdf_name"] = pdf.name
             _found = []
@@ -120,11 +120,11 @@ def render_belting_tab():
         _kpi(t("Lifts"), str(len(results)))]),
         unsafe_allow_html=True)
     filas = [{
-        "Elevador":  r["elevador"],
+        d("Lift"):   r["elevador"],
         "HGPR (mm)": r["hgpr"],
         "DSTS (mm)": r["dsts"],
-        "Posición":  f"{abs(r['dsts']):.0f} mm "
-                     f"{'por debajo' if r['dsts'] >= 0 else 'por encima'} del FFL top",
+        d("Position"): f"{abs(r['dsts']):.0f} mm "
+                     f"{"below" if r['dsts'] >= 0 else "above"} from the top FFL",
     } for r in results]
     st.subheader(t(":material/table_rows: Results (DSTS per lift)"))
     st.dataframe(pd.DataFrame(filas), width="stretch", hide_index=True)

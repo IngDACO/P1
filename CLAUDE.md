@@ -7288,6 +7288,178 @@ se GUARDAN en la hoja `Actividades` → migración del histórico). El informe d
 no está entero en inglés hasta que caigan esas tres, y conviene saberlo antes de
 enseñárselo a un cliente.
 
+## i18n: la CUARTA red — la f-string ENTERA, no sus trozos (v443)
+
+Salió al clasificar los 6 rojos de la suite tras v442. Uno de ellos (`verif_v298`)
+señalaba el desglose de alertas del propietario, y al mirarlo estaba **a medias**:
+
+```python
+_p.append(f"{g['retrasos']} behind schedule")   # traducido en v439
+_p.append(f"{g['alarmas']} alarmas")            # ← seguía en español
+_p.append(f"{g['vencidos']} vencidos")          # ← y este
+_p.append(f"{g['cred_venc']} credenciales")     # ← y este
+```
+
+### ⚠️ El hueco: una f-string NO es una cadena, es una lista de trozos
+Las tres redes de v441/v442 miran cadenas **completas**. Un trozo de f-string por
+separado no parece nada, así que se colaron dos formas enteras:
+
+| Forma | Por qué se escapa |
+|---|---|
+| **fragmento de UNA palabra** — `f"{n} alarmas"` | la red de frases pide 3+ palabras y la de cortas 2; y **no se puede envolver en `t()`**, porque es un trozo, no una cadena |
+| **f-string A MEDIO TRADUCIR** — `f"Collected {x} de {y}"` | cada trozo suelto es inocuo; el español solo aparece al **CONCATENARLOS** |
+
+La red buena concatena los trozos literales de cada f-string y mira ESO. Es la
+trampa nº30 otra vez, con su corolario: **cada red nueva descubre una bolsa nueva**.
+Barrido: **141 f-strings** con español en todo `core/`, **48 en módulos de interfaz**
+—fases que yo había declarado cerradas—. Traducidas las 37 reales de interfaz.
+
+### ⚠️ Y la red se validó contra un caso construido — y FALLÓ
+El guardián prueba su propia red con `f"Collected {x} de {x}"` y `f"{x} alarmas"`.
+Vio la primera y **no vio la segunda**: su léxico eran palabras FUNCIONALES (de, la,
+con…) y `alarmas` es un sustantivo sin acento — o sea que **el caso que originó toda
+la versión se le habría escapado**. Es la trampa nº28 por cuarta vez. Con el léxico
+del dominio añadido aparecieron **9 más** que la primera versión no veía
+(«actividades», «pendiente», «adelantado», «d retraso», «% consumido»).
+Sin esa sonda, habría desplegado un «0» que no significaba nada (trampa nº12).
+
+### ⚠️ Lo que NO se traduce, y por qué: `Elevador` es un DATO
+`f"Elevador {i+1}"` es la columna del **EDITOR DE ENTRADA** de rieles y plomada, y el
+`_snapshot` de v148 guarda esos DataFrame **con sus nombres de columna** en
+`DatosJSON`. Medido en la hoja real: **`CAL-0002` ya tiene una con la columna
+`Elevador`**, así que renombrarla rompería «reabrir el cálculo» — y el código la lee
+de vuelta (`in_edit[f"Elevador {i+1}"]`). Se queda, con la razón escrita.
+Sí se tradujeron las tablas de **RESULTADO** (`_filas`), que se construyen y se
+consumen en el sitio **y viajan al PDF que se lleva a obra**, donde todo lo demás ya
+estaba en inglés desde v441.
+
+### ⚠️ Un NameError que habría llegado a producción
+Al traducir metí `d('Works')` en `invoices_ui`, que **solo importa `t`**. No lo ven
+`compileall` ni el import (v378): habría reventado al facturar desde un proyecto. Es
+el fallo de v423 (`theme` sin importar) y lo cazó un chequeo nuevo — que ⚠️ hubo que
+afinar, porque en su primera versión acusaba a `roster_ui` por su **propio**
+`_etq(staff, grupo)` (v413) y por un `from datetime import date as _d` local: dos
+falsos positivos que me habrían llevado a «arreglar» código sano (regla v385).
+
+### Verificación
+`verif_v443.py` (8 comprobaciones) + smoke que **EJECUTA** `_result_matrix`, genera
+el PDF de rieles y comprueba que **no lleva la cabecera vieja**, y llama al desglose
+del propietario. Probado contra **7 roturas**: las caza las 7 — pero ⚠️ **una solo
+tras corregir el guardián**: comprobaba PRESENCIA de la cabecera nueva y hay DOS
+tablas (Caso 1 y Caso 2), así que romper una dejaba la otra casando. Traducir la
+mitad es peor que no traducir nada (lección de v439). Ahora cuenta las dos.
+
+### Los 6 rojos de la suite, clasificados (regla v385)
+Los seis eran **CADUCADOS**, ninguno regresión, y se actualizaron con su razón:
+- **v298** el desglose de alertas · **v397** la columna `Not invoiced` · **v408** la
+  misma en el orden de la Lista · **v420** «New client» · **v425** «On overhead (h)»
+  — los cinco por el cambio de idioma, deliberado.
+- ⚠️ **`verif_sim_f` caducó POR EL CALENDARIO, no por código**: miraba
+  `lunes_de(today())`, así que se ponía rojo **todos los lunes** — los casos sembrados
+  viven en la semana en que se sembraron (2026-08-24). **Un ancla sobre un blanco
+  móvil no es una afirmación.** Lo que ese chequeo quiere decir es «la demo CONTIENE
+  cada caso que la interfaz tiene que saber pintar», así que ahora los busca en TODAS
+  las semanas y dice en cuál está cada uno. ⚠️ Salvo el del sábado: la columna la
+  tiene que abrir **la semana que tiene sábado**, no otra cualquiera.
+
+### Lo que QUEDA, medido
+- **93 f-strings con español fuera de la interfaz**: `report.py` (11), `auth.py` (13),
+  `timeclock.py` (9), `prestart.py` (6), `credentials.py` (5), `admin_digest.py` (5),
+  `chat_agent.py` (4), `ausencias.py` (4)… Son mensajes de backend y del informe
+  admin → **F5**.
+- Las **~30 cabeceras de tabla que son clave de dict** (`Situación`, `Alertas`,
+  `Usuarios`, `Composición`, `Emisión`…). ⚠️ Tres no se pueden tocar solas:
+  `En progreso`/`En pausa` son estados guardados y `Duración (d)` es contrato con los
+  informes.
+- La **migración del histórico**: nombres de actividad en la hoja `Actividades` y los
+  conceptos de nómina.
+
+## i18n: la TERCERA red, los VALORES, y ⚠️ UNA RAMA QUE DEJÉ MUERTA (v442)
+
+Cierra lo que v441 dejó **medido y sin hacer**. Y de paso destapa el fallo más caro de
+toda la migración, que lo había introducido yo mismo un deploy antes.
+
+### ⚠️ EL FALLO: traduje la opción de un radio y no su comparación
+```python
+caso = st.radio(t("Which rail is cut?"),
+                ["Case 1 — first installed (the bottom one)",   # ← traducida en v441
+                 "Case 2 — last installed (the top one)"])
+...
+if caso.startswith("Caso 1"):                                   # ← NO traducida
+```
+`startswith` dejó de casar **para siempre**: la rama del **Caso 1 de corte de rieles**
+no se ejecutaba nunca y la herramienta caía en silencio al Caso 2 — sin error, sin traza,
+sin test rojo, solo un cálculo equivocado. Es exactamente la regla de oro de esta
+migración («traducir un DATO no da error, deja de casar») mordiendo desde el lado del que
+traduce. **Lo vi por casualidad**, leyendo un aviso de cambio de fichero.
+- Arreglo: la opción va a una CONSTANTE y la rama compara contra ella, así no pueden
+  volver a divergir.
+- Guardián nuevo (`verif_ramas_muertas.py`): recoge las opciones LITERALES de cada
+  `radio`/`selectbox` y comprueba que todo `== / in / startswith` sobre esa variable casa
+  con alguna. **29 comparaciones vigiladas.**
+- ⚠️ Y hubo que escribirlo **tres veces**, porque las dos primeras versiones daban **0
+  con la rama muerta delante**:
+  1. contando el TEXTO del fichero → mi propio comentario (`# CASO 1`) hacía creer que el
+     valor existía. La trampa nº2 (grep ≠ uso) dentro del guardián.
+  2. preguntando «¿lo produce alguien en el repo?» → `'Caso 1 · A '`, una etiqueta del
+     PDF, casaba como prefijo. Demasiado laxo.
+  3. ⚠️ Y al probarlo contra código roto, **mi propio arreglo lo cegó**: al pasar las
+     opciones a constantes, un guardián que solo entiende literales deja de mirar ese
+     widget. Ahora resuelve las constantes locales. *Hacer el código más robusto puede
+     apagar el chequeo que encontró el fallo.*
+
+### La TERCERA red: 188 etiquetas cortas
+Ni el invariante de posición (mira el argumento de `st.*`) ni la red de FRASES (pide 3+
+palabras) veían las etiquetas de DOS palabras dentro de listas de tuplas y f-strings:
+`"+ ausencias pagadas (vacaciones, bajas)"`, `"Mano de obra (estructura)"`,
+`"— elige el proyecto —"`, `"Con incidencias"`… Traducidas 188; las que quedan son
+exclusiones con razón (IDs de sub-pestaña, estados guardados, valores de
+`credentials.status`, bloques CSS y el JS del cronómetro).
+
+### ⚠️ `i18n.etiqueta()` existía desde v436 y la interfaz NO la usaba
+`i18n.VALORES` traduce los datos que viven en español en la hoja —estados, tipos, roles,
+categorías, estados de factura/nómina/cotización, tipos de ausencia— **sin tocarlos**:
+solo cambia cómo se MUESTRAN. Medido: **160 lecturas de esos valores en 16 módulos de
+interfaz y CERO usos de `etiqueta()`** — solo la usaban los 3 PDF. O sea que en pantalla
+seguían saliendo «En progreso», «vencida», «campo», «Materiales». Es el patrón «se
+escribe y nadie lo lee» de v131/v148, esta vez con el propio i18n.
+- Enrutados los puntos que se PINTAN: chip de estado de la cartera y del detalle, columna
+  Estado de la Lista, tabla de la agrupación, tabla del propietario, KPIs de una
+  localización, estado de una orden, rol en la ficha y en el aviso de alarmas, categoría
+  de catálogo e inventario, estado de nómina.
+- ⚠️ **NO se tocan** las comparaciones ni los dicts que se ESCRIBEN en la hoja
+  (`"Estado": P.derive_estado(...)` dentro de `update_project`): ahí el valor español ES
+  el dato. Y el selector de estado manual usa **`format_func`**, que cambia lo que se lee
+  sin tocar lo que devuelve.
+
+### ⚠️ Y el fallo de ámbito, POR CUARTA VEZ
+Al enrutar los valores metí `_etq(...)` en `render_nominas`, donde `_etq` **ya era una
+variable local** (el dict de `auth.etiqueta_usuarios`). Python marca el nombre local en el
+ámbito ENTERO, así que la pantalla de Nóminas habría reventado con **«'dict' object is
+not callable»** — el mismo fallo de v437 (glosario), v439 (dos `UnboundLocalError`) y v440
+(`quotes_ui`). Lo cazó un pre-vuelo de ámbito ANTES de desplegar; la variable local pasó a
+`_etu` y el guardián lo vigila desde ahora.
+- Y se comprobó **EJECUTANDO** `render_nominas` con Sheets sustituido (`check_v442_smoke`):
+  *importar no ejecuta* (v378), y ni `compileall` ni el import ven este fallo.
+
+### Verificación
+`verif_v442.py` (14 comprobaciones) + `verif_ramas_muertas.py`, probados contra **6
+roturas**: las cazan las 6 — pero ⚠️ **tres solo tras corregir las roturas o el guardián**,
+y las tres por el mismo motivo, apuntar mal: una apuntaba a un texto que estaba DENTRO de
+`t()` (que la red excluye a propósito), otra a un fichero equivocado, y la tercera reveló
+la ceguera de las constantes. Suite entera al día.
+- ⚠️ Dos falsos positivos MÍOS, corregidos: `background:#eaf3de` aporta la «palabra» «de»
+  y daba por española una cadena de CSS; y `ESTADOS_MANUAL` incluye la cadena VACÍA (la
+  opción «sin override»), que hacía fallar el chequeo con el código correcto.
+
+### Lo que queda
+- **~30 cabeceras de tabla que son clave de dict** (`A (pila instalada)`, `Composición`,
+  `Emisión`, `Situación`…). ⚠️ Tres no se pueden tocar solas: `En progreso`/`En pausa` son
+  estados guardados y `Duración (d)` es contrato con los informes.
+- **F5** (internos): `report.py`, `email_notify.py`, `chat_agent.py`, `admin_digest.py`,
+  `interpretation.SYSTEM_PROMPT`, y las etiquetas de `expenses.spend_svg` — un diagrama
+  que v438 no tocó porque vive en un módulo de datos, no en `diagrams.py`.
+
 ## i18n F4 + ⚠️ EL INVARIANTE DABA 0 CON 230 FRASES EN ESPAÑOL DETRÁS (v441)
 
 F4 son las **5 herramientas técnicas** (Survey · Plomada · Rieles · Buffers · Belting):
@@ -7605,7 +7777,7 @@ literal, así que **no casaba nunca** — y dejó pasar «Plomo riel izquierdo»
 Es el mismo fallo de v436, cometido otra vez ese mismo día. Se vio con `cat -A`, no
 leyendo. → **Cualquier `\b`, `\n` o `\w` va por fichero escrito, nunca por heredoc.**
 
-## Versiones desplegadas (v441 = actual)
+## Versiones desplegadas (v443 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -7613,6 +7785,8 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v443 | **La CUARTA red del i18n: la f-string ENTERA, no sus trozos.** Salió clasificando los 6 rojos de la suite: el desglose de alertas del propietario estaba **a medias** (`f"{n} behind schedule"` traducido y `f"{n} alarmas"` no). ⚠️ Una f-string **no es una cadena, es una lista de trozos**, así que las tres redes anteriores —que miran cadenas COMPLETAS— no ven ni un **fragmento de UNA palabra** (`f"{n} alarmas"`, que además NO se puede envolver en `t()`) ni una **f-string a medio traducir** (`f"Collected {x} de {y}"`, cuyo español solo aparece al CONCATENAR los trozos). Barrido: **141 en `core/`, 48 en interfaz** — fases que yo había declarado cerradas. ⚠️ **Y la red se validó contra un caso construido y FALLÓ**: veía «de» pero **no «alarmas»** —su léxico eran palabras funcionales y ésa es un sustantivo sin acento—, o sea que el caso que originó la versión se le escapaba (trampa nº28, cuarta vez); con el léxico del dominio aparecieron **9 más**. ⚠️ **`Elevador` NO se traduce**: es la columna del editor de entrada que el `_snapshot` de v148 guarda en `DatosJSON` —`CAL-0002` ya tiene una— y renombrarla rompería «reabrir el cálculo»; sí las tablas de RESULTADO, que viajan al PDF de obra. ⚠️ Y un **NameError camino de producción**: `d('Works')` en un módulo que solo importa `t` (el fallo de v423), invisible para `compileall` y para el import. 7 roturas probadas — una solo tras corregir el guardián, que comprobaba PRESENCIA y con DOS tablas dejaba pasar romper una. Los 6 rojos eran CADUCADOS, ⚠️ uno **por el CALENDARIO** (miraba la semana actual, así que se ponía rojo todos los lunes) |
+| v442 | **La TERCERA red del i18n, los VALORES en pantalla y ⚠️ una RAMA que dejé MUERTA.** En v441 traduje la opción del radio de corte de rieles y NO su comparación (`caso.startswith("Caso 1")`): **la rama del Caso 1 no se ejecutaba nunca** y la herramienta caía en silencio al Caso 2 — sin error ni test rojo. Lo vi por casualidad. Arreglado con una CONSTANTE compartida + guardián que comprueba que toda comparación casa con las opciones de su widget (29 vigiladas); ⚠️ hubo que escribirlo **tres veces** porque las dos primeras daban 0 con la rama muerta delante (un comentario mío la «producía»; luego una etiqueta del PDF casaba como prefijo) y **mi propio arreglo lo cegó** al pasar las opciones a constantes. + **188 etiquetas cortas** (2 palabras dentro de tuplas y f-strings) que ninguna de las dos redes anteriores veía. + ⚠️ **`i18n.etiqueta()` existía desde v436 y la interfaz NO la usaba**: 160 lecturas de estados/tipos/roles/categorías en 16 módulos, todas pintando el español crudo (solo la usaban los 3 PDF) — el patrón «se escribe y nadie lo lee». Enrutados los puntos que se PINTAN, sin tocar las comparaciones ni los dicts que se escriben en la hoja; el selector de estado usa `format_func`. ⚠️ Y el fallo de ámbito por CUARTA vez: `_etq` ya era variable local en `render_nominas` → «'dict' object is not callable», cazado por pre-vuelo y comprobado EJECUTANDO la pantalla. 6 roturas probadas |
 | v441 | **i18n F4: las 5 herramientas técnicas + su PDF** — y, al ir a cerrarla, el hallazgo: ⚠️ **el invariante de v440 daba «0 cadenas sueltas» con 230 FRASES en español detrás.** Mide el ARGUMENTO de la llamada de display, así que un trozo de f-string y una cadena armada antes en una variable (`msg = f"…"; st.success(msg)`) pasan por delante — **el mismo agujero del guardián del LaTeX de v309**, o sea que F2 y F3 NO estaban terminadas. Red nueva: toda cadena sin envolver que sea una FRASE (3+ palabras) cruzada con el detector de español — ⚠️ aquí sí vale, porque su ceguera son las etiquetas CORTAS y ésas las cubre el invariante de posición. + **el PDF de las 4 herramientas estaba entero en español** y no lo miraba nadie (`tool_pdf` no es display y sus etiquetas son de 1-3 palabras), aunque **se lleva a obra**: va con `d()` (idioma BASE, v436), sin tocar `herramienta=` ni las claves de `datos=`, que son DATO. ⚠️ `verif_v303` se puso rojo con razón: los pies KPI ingleses medían **98 y 106 px sobre 93 útiles** — y el banco de medida se **calibró** antes de fiarse (lee +2..+6 px que el de v303). 9 roturas probadas, 6 guardianes caducados actualizados con su razón (v430 **reventaba** en vez de fallar legible), suite 81/81. ⚠️ **Queda medido**: ~215 etiquetas cortas y ~30 cabeceras que son clave de dict, tres de ellas atadas a datos guardados |
 | v440 | **i18n F3: TODA la interfaz de gestión en inglés** — 15 módulos, ~1.100 etiquetas, **0 cadenas sueltas sin `t()`**. ⚠️ Antes hubo que tapar tres huecos del extractor, los tres silenciosos: filtraba por **idioma** (ciego a 13 de 15 palabras probadas), se traía **claves de widget** (`st.form(key)` → la clave dependería del idioma y el formulario perdería su estado) y no veía **cabeceras de tabla ni tarjetas KPI** (71 `column_config` + las etiquetas dentro de `kpi_row`). En `column_config` se traduce la etiqueta y **nunca la clave**, que es la columna que `st.data_editor` devuelve. ⚠️ **Volví a romper `quotes_ui`** metiendo `t(...)` donde `t` ya era variable — tercera vez (v437, v439): la causa era comprobar el ámbito DESPUÉS de traducir, así que ahora hay **pre-vuelo** (`pre_i18n.py`), que señaló 46 funciones. ⚠️ Su primera versión daba falsos positivos: un `lambda t:` y un `[t for t, e in …]` **no ligan `t`** (trampa nº3) — los reales eran 7. Guardián probado contra 6 roturas; **dos solo se cazaron tras corregirlo**, las dos por medir por idioma: una afirmaba una clave que no existe (**FALLO con el código correcto**) y la otra no veía «Neto a pagar». El invariante que sí mide: **toda cadena suelta de display envuelta en `t()`** |
 | v439 | **i18n F1d + F2: los correos y LA APP DE CAMPO, en inglés** — cierra F1 y hace F2 entera (235 reemplazos: 13 en `notify`/`alerts`, 222 en los 4 módulos de obra). Los correos van con **`d` (idioma BASE)** y la pantalla con `t`. ⚠️ **Dos `UnboundLocalError` que introduje yo**: al traducir aparecieron llamadas a `t()` en funciones donde `t` YA era variable, y Python la marca local en el ámbito ENTERO — el peor dejaba **«Mis ausencias» sin abrir** (`'str' object is not callable`). Mi verificación fue «compilan e importan», que **no ejercita nada**. ⚠️ Y los cambios de `notify`/`alerts` **no estaban en el disco** pese a figurar como hechos: se reaplicaron y se verificaron GENERANDO los mensajes. ⚠️ **Y dije que F2 estaba terminada con 47 etiquetas aún en español**: mi detector busca acentos y palabras funcionales, y «Fichar», «Firma», «Pendientes» o «Mis ausencias» no tienen ninguna de las dos (tercera vez del mismo agujero: v438, el guardián de v439 y esto). Lo destapó el smoke test al EJECUTAR la pantalla; el barrido pasa a ser por POSICIÓN (literal de display sin `t()`), no por idioma. Guardián probado contra 8 roturas — **tres solo se cazaron tras corregirlo**: comprobar PRESENCIA dejaba pasar traducir 1 de 6 apariciones de una clave, «Registrados» es invisible para el detector de español (→ chequeos POSITIVOS, el «Planificado» de v438) y una rotura apuntaba a un módulo **sin ningún logger**. ⚠️ Corrección de escala: lo pendiente son **3.122 literales**, no los 1.153 que cité — mi lista blanca veía solo una parte, y el número incluye datos |

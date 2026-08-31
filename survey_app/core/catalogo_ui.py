@@ -6,7 +6,7 @@ Base de las cotizaciones. ⚠️ SIN cabecera propia: `home_ui._sub_header` ya p
 """
 import pandas as pd
 
-from core.i18n import t
+from core.i18n import t, etiqueta as _etq
 import streamlit as st
 
 from core import flash
@@ -144,9 +144,9 @@ def _detalle(grupo, cid):
     activo = str(it.get("Activo", "SI")).upper() != "NO"
     st.markdown(f"## :material/sell: {it.get('Nombre', '')}")
     st.markdown(f"**{it.get('ID', '')}**  ·  {_TIPO_LBL.get(str(it.get('Tipo','')), '')}"
-                f"  ·  {it.get('Categoria', '') or '—'}  ·  "
-                f"costo {T.dinero(CAT.costo_de(it, 1))}"
-                + ("" if activo else "  ·  :red[desactivado]"))
+                f"  ·  {_etq(str(it.get('Categoria', ''))) or '—'}  ·  "
+                f"cost {T.dinero(CAT.costo_de(it, 1))}"
+                + ("" if activo else "  ·  :red[" + t("inactive") + "]"))
 
     with st.form(f"cat_edit_{cid}"):
         c1, c2 = st.columns(2)

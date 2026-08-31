@@ -6,7 +6,7 @@ Campo: «Mis colillas» (solo lectura + descargar su colilla PDF).
 """
 from datetime import timedelta
 
-from core.i18n import t
+from core.i18n import t, etiqueta as _etq
 
 import pandas as pd
 import streamlit as st
@@ -107,15 +107,17 @@ def render_nominas(grupo):
             _f = lambda s: _dt.strptime(str(s)[:10], "%Y-%m-%d").date()
             _hp = timeclock.jornada_y_proyecto(grupo, _f(_d), _f(_h))
             _con = {str(x.get("Usuario", "")) for x in _rows}
-            _etq = auth.etiqueta_usuarios(auth.list_users(grupo))
-            _falta = [(_etq.get(u, u), v) for u, v in _hp.items()
+            # ⚠️ NO `_etq`: ese nombre es la función `i18n.etiqueta` a nivel de módulo,
+            # y asignarlo aquí la tapa en TODA la función (v437/v439/v440, cuarta vez).
+            _etu = auth.etiqueta_usuarios(auth.list_users(grupo))
+            _falta = [(_etu.get(u, u), v) for u, v in _hp.items()
                       if u not in _con and (v["jornada"] > 0 or v["proyecto"] > 0)]
         except Exception:
             _falta = []
         if _falta:
             st.error(":material/person_alert: No payslip in this period despite having hours: "
-                     + " · ".join(f"**{n}** ({v['jornada']:.1f} h jornada / "
-                                  f"{v['proyecto']:.1f} h en obra)" for n, v in _falta))
+                     + " · ".join(f"**{n}** ({v['jornada']:.1f} h on shift / "
+                                  f"{v['proyecto']:.1f} h on jobs)" for n, v in _falta))
 
     # ── Tabla ────────────────────────────────────────────────────
     # ⚠️ El nombre PUEDE repetirse (hay dos `fijiofgjei` y dos `lksdfkldsf`): sin el
@@ -133,7 +135,7 @@ def render_nominas(grupo):
                      if _num(x.get("TarifaHora")) > 0 else None),
         "Base":     round(_num(x.get("Base")), 0),
         "Neto":     round(_num(x.get("Neto")), 0),
-        "Estado":   str(x.get("Estado", "")),
+        "Estado":   _etq(str(x.get("Estado", ""))),
     } for x in _rows])
     _ev = st.dataframe(
         df, width="stretch", hide_index=True,
@@ -200,7 +202,7 @@ def _generar(grupo):
         # (gente sin tarifa) y el bloqueo de solape de v364. Van a `flash`, que los pinta
         # la shell del otro lado del rerun. Mecanismo ÚNICO para toda la app: tener aquí
         # uno propio y otro general sería el doble camino que hubo que desmontar en v140.
-        flash.exito(f"{res.get('creadas', 0)} nómina(s) creada(s)."
+        flash.exito(f"{res.get('creadas', 0)} payslip(s) created."
                     + (f" {res['omitidas']} already existed for that period." if res.get("omitidas") else ""))
         # ⚠️ v346: ya NO se crea una colilla de $0. Se salta y se dice a quién, con el
         # camino para arreglarlo; al ponerle la tarifa y regenerar el mismo periodo
@@ -215,8 +217,8 @@ def _generar(grupo):
         # error es invisible después: cada colilla suelta sale bien.
         _sol = res.get("solapadas") or []
         if _sol:
-            _líneas = "\n".join(f"- **{s['nombre']}** ya tiene `{s['id']}` del "
-                                f"{s['desde']} al {s['hasta']}" for s in _sol)
+            _líneas = "\n".join(f"- **{s['nombre']}** already has `{s['id']}` from "
+                                f"{s['desde']} to {s['hasta']}" for s in _sol)
             flash.error(":material/event_repeat: **Nothing was generated** because the chosen period overlaps payslips already issued — the same hours would be paid twice:\n\n" + _líneas +
                         "\n\nAdjust the dates so they do not overlap, or void those payslips in the list below and generate again.")
         # ⚠️ v432: días en que la persona tenía ausencia pagada Y además fichó. Un día
@@ -244,7 +246,7 @@ def _detalle(grupo, nid):
         st.warning(t("Payslip not found."))
         st.session_state.pop("_nom_open", None)
         return
-    if not tenant.exigir(f, "Esta nómina"):        # v351
+    if not tenant.exigir(f, "This payslip"):        # v351
         st.session_state.pop("_nom_open", None)
         return
     base = _num(f.get("Base"))
@@ -328,7 +330,7 @@ def render_mis_colillas(usuario, grupo):
         with st.container(border=True):
             st.markdown(f"**{f.get('PeriodoDesde', '')} → {f.get('PeriodoHasta', '')}**  ·  "
                         f"{_num(f.get('Horas')):.1f} h  ·  net **${_num(f.get('Neto')):,.2f}**  ·  "
-                        f"{f.get('Estado', '')}")
+                        f"{_etq(str(f.get('Estado', '')))}")
             try:
                 from core import payslip_pdf
                 _pdf = payslip_pdf.generate_payslip_pdf(f, grupo)

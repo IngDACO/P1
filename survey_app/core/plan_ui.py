@@ -64,7 +64,7 @@ def selector_proyecto(key: str, ayuda: str = "") -> tuple:
     if not proys:
         return None, {}
     idmap = {f"{p.get('Nombre')} ({p.get('ID')})": p for p in proys}
-    opciones = ["— sin proyecto (cargar plano a mano) —"] + list(idmap.keys())
+    opciones = ["— no project (load the drawing by hand) —"] + list(idmap.keys())
     sel = st.selectbox(t("Project"), opciones, key=f"pl_prj_{key}",
                        help=ayuda or "It uses the drawing data stored on the project.")
     if sel == opciones[0]:
@@ -77,10 +77,10 @@ def selector_proyecto(key: str, ayuda: str = "") -> tuple:
 
 def _cabecera(prj: dict, datos: dict, fichado: bool):
     if datos:
-        st.caption((":material/schedule: Fichado en " if fichado else ":material/description: ")
+        st.caption((":material/schedule: Clocked in at " if fichado else ":material/description: ")
                    + f"**{prj.get('Nombre')}** · {plan_data.resumen(datos)}")
         if datos.get("faltan"):
-            st.caption(f":orange[:material/warning:] El plano no dio: {', '.join(datos['faltan'][:8])}"
+            st.caption(f":orange[:material/warning:] The drawing did not give: {', '.join(datos['faltan'][:8])}"
                        + ("…" if len(datos["faltan"]) > 8 else "")
                        + " — enter them by hand.")
     else:

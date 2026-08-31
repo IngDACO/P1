@@ -107,12 +107,12 @@ def _cobertura_hoy(lunes, staff, datos, dias=None):
             estado += 1
         else:
             sin.append(u.get("Nombre") or u["Usuario"])
-    partes = [f":green[:material/check_circle:] **{en_obra}** en obra"]
+    partes = [f":green[:material/check_circle:] **{en_obra}** on site"]
     if sin:
         _n = ", ".join(sin[:4]) + ("…" if len(sin) > 4 else "")
-        partes.append(f":orange[:material/warning:] **{len(sin)}** sin asignar ({_esc(_n)})")
+        partes.append(f":orange[:material/warning:] **{len(sin)}** unassigned ({_esc(_n)})")
     else:
-        partes.append(":green[:material/check_circle:] nadie sin asignar")
+        partes.append(":green[:material/check_circle:] nobody unassigned")
     if estado:
         partes.append(f":gray[:material/crop_square:] **{estado}** OFF/Leave")
     st.markdown(f"**{R.DIAS_LABEL[d]} {fecha.strftime('%d/%m')}** · " + " · ".join(partes))
@@ -335,8 +335,8 @@ def _control_dias(lunes, datos, dias):
         if d not in dias:
             if cols[i].button(f":material/add: {lbl}", key=f"rosadd_{lunes:%Y%m%d}_{d}",
                               width="stretch",
-                              help=f"Añadir el {lbl.lower()}ado a esta semana"
-                                   if d == "sab" else f"Añadir el {lbl.lower()}ingo"):
+                              help=f"Add {lbl.lower()} to this week"
+                                   if d == "sab" else f"Add {lbl.lower()}ingo"):
                 st.session_state.setdefault("_ros_extra", {})[lunes.isoformat()] = \
                     pedidos + [d]
                 st.rerun()
@@ -515,10 +515,10 @@ def _asignacion_inteligente(grupo, lunes, staff, tidx, dias=None):
         # mismo fallo de v147/v150, que se arregló en el fichaje y no aquí). El nombre
         # es solo la etiqueta que se muestra, y lleva el ID detrás para desempatar.
         _opts = [str(p.get("ID")) for p in proys]
-        _lbl = {str(p.get("ID")): f"{p.get('Nombre') or '(sin nombre)'} ({p.get('ID')})"
+        _lbl = {str(p.get("ID")): f"{p.get('Nombre') or "(no name)"} ({p.get('ID')})"
                 for p in proys}
         _psel = st.selectbox(t("Project"), ["—"] + _opts, key="ai_prj",
-                             format_func=lambda i: "— elige el proyecto —" if i == "—"
+                             format_func=lambda i: "— choose the project —" if i == "—"
                              else _lbl.get(i, i))
         if _psel == "—":
             return
@@ -553,9 +553,9 @@ def _asignacion_inteligente(grupo, lunes, staff, tidx, dias=None):
         libres.sort(key=lambda f: (0 if f["cumple"] else 1, f["nom"]))
 
         if not libres:
-            st.warning(f":material/warning: Nobody free on {R.DIAS_LABEL[_dsel]} en {ini}–{fin}.")
+            st.warning(f":material/warning: Nobody free on {R.DIAS_LABEL[_dsel]} at {ini}–{fin}.")
         else:
-            _opts = {f"{f['estado']} {f['nom']}" + ("" if f["cumple"] else " — no cumple"): f["usr"]
+            _opts = {f"{f['estado']} {f['nom']}" + ("" if f["cumple"] else " — not compliant"): f["usr"]
                      for f in libres}
             _pick = st.multiselect(t("Suggested (free) — choose who to assign:"),
                                    list(_opts), key="ai_pick")
@@ -571,7 +571,7 @@ def _asignacion_inteligente(grupo, lunes, staff, tidx, dias=None):
                         except Exception:
                             pass
                         _n += 1
-                flash.exito(f"Assigned {_n} a «{_psel}» el {R.DIAS_LABEL[_dsel]} {ini}–{fin}.")
+                flash.exito(f"Assigned {_n} to «{_psel}» on {R.DIAS_LABEL[_dsel]} {ini}–{fin}.")
                 st.rerun()
         if ocupados:
             st.caption(":material/block: Ocupados esa franja: "
@@ -688,7 +688,7 @@ def _ficha_rapida(grupo, usuario):
             _cont.append(f":material/mail: {_esc(u.get('Email'))}")
         if str(u.get("TelegramChatID", "")).strip():
             _cont.append(":material/send: Telegram")
-        st.caption(" · ".join(_cont) if _cont else ":material/warning: Sin contacto registrado")
+        st.caption(" · ".join(_cont) if _cont else ":material/warning: No contact details on record")
 
         aa = R.asignaciones_dia(grupo, usuario)
         if aa:
@@ -705,7 +705,7 @@ def _ficha_rapida(grupo, usuario):
             _ic = {"vigente": "🟢", "por_vencer": "🟡", "vencido": "🔴"}
             bits = [f"{_ic.get(credentials.status(c.get('Vencimiento')) or 'vigente', '🟢')} "
                     f"{c.get('Tipo')}" for c in creds]
-            st.caption(":material/badge: " + (" · ".join(bits) if bits else "Sin certificados"))
+            st.caption(":material/badge: " + (" · ".join(bits) if bits else "No certificates"))
         except Exception:
             pass
 
@@ -816,8 +816,8 @@ def render_planificacion(grupo):
         # Etiquetas CORTAS (solo display; el valor es el estado guardado y no se
         # toca): «Disponibilidad» a secas no cabe con tres opciones y se recortaba.
         format_func=lambda o: {
-            "📋 Tablero": ":material/calendar_view_week: Semana",
-            "🕐 Día": ":material/schedule: Día",
+            "📋 Tablero": ":material/calendar_view_week: Week",
+            "🕐 Día": ":material/schedule: Day",
             "👀 Disponibilidad": ":material/event_available: Libres"}.get(o, o))
     # ── Cobertura del día (DATO, se queda) + días extra + copiar semana ──
     _cc1, _cc2, _cc3 = st.columns([4, 2, 2])
@@ -850,7 +850,7 @@ def render_planificacion(grupo):
         _libres = [(u.get("Nombre") or u["Usuario"]) for u in staff
                    if not R.celda_items(datos, u["Usuario"], _dd)]
         if _libres:
-            st.success(f":material/person_check: **{len(_libres)}** libres el "
+            st.success(f":material/person_check: **{len(_libres)}** free on "
                        f"{R.DIAS_LABEL[_dd]}: " + _esc(", ".join(_libres)))
         else:
             st.warning(f":material/warning: Nobody free on {R.DIAS_LABEL[_dd]}.")
@@ -881,7 +881,7 @@ def render_planificacion(grupo):
     _TOOLS = [("asignar", ":material/bolt: Asignar"),
               ("radar", ":material/radar: Radar" + (f" ({_n_rad})" if _n_rad else "")),
               ("cumpl", ":material/fact_check: Cumplimiento"),
-              ("cat", ":material/palette: Trabajos")]
+              ("cat", ":material/palette: Jobs")]
     st.markdown("")
     _tc = st.columns(len(_TOOLS))
     _cur = st.session_state.get("_panel_tool", "")
@@ -960,7 +960,7 @@ def _cumplimiento(grupo, lunes, staff, tidx, dias=None):
             if not _v:
                 return ""
             _s = _v["prj"] or _v["gen"]
-            return f" · :green[en curso {_hm(_s['segundos'])}]"
+            return f" · :green[in progress {_hm(_s['segundos'])}]"
 
         if es_hoy:
             _n_prj = sum(1 for v in vivo.values() if v["prj"])
@@ -1003,32 +1003,32 @@ def _cumplimiento(grupo, lunes, staff, tidx, dias=None):
                                       f"with NO job charged{_ahora(usr)}"))
                     else:
                         filas.append((":orange[:material/warning:]", nom,
-                                      f"asignado a {plan_lbl} · not clocked in yet"))
+                                      f"assigned to {plan_lbl} · not clocked in yet"))
                 elif not falta:
                     n_ok += 1
-                    _ex = f" (+ también {real_txt})" if extra else ""
+                    _ex = f" (+ also {real_txt})" if extra else ""
                     filas.append((":green[:material/check_circle:]", nom,
                                   f"{plan_lbl} — clocked in where they should{_ex}{_ahora(usr)}"))
                 elif plan_pids & real_pids:
                     n_desvio += 1
                     filas.append((":orange[:material/warning:]", nom,
-                                  f"asignado a {plan_lbl} · fichó en {real_txt} "
-                                  f"(faltan algunas){_ahora(usr)}"))
+                                  f"assigned to {plan_lbl} · clocked in at {real_txt} "
+                                  f"(some are missing){_ahora(usr)}"))
                 else:
                     n_desvio += 1
                     filas.append((":red[:material/cancel:]", nom,
-                                  f"asignado a {plan_lbl} · fichó en {real_txt}{_ahora(usr)}"))
+                                  f"assigned to {plan_lbl} · clocked in at {real_txt}{_ahora(usr)}"))
             elif solo_estados:
                 if reales or _solo_jornada:
                     _est = ", ".join(R.etiqueta_de(a, tidx) for a in plan_asigs)
-                    _d = real_txt if reales else "jornada (sin obra)"
+                    _d = real_txt if reales else "workday (no job)"
                     filas.append((":blue[:material/info:]", nom,
                                   f"marcado {_est} but clocked in at {_d}{_ahora(usr)}"))
                 # OFF/Leave sin fichar: correcto, no se lista
             elif trabajos_sin_prj:                          # trabajo(s) sin enlace a PRJ
                 _tr = ", ".join(R.etiqueta_de(a, tidx) for a in trabajos_sin_prj)
                 filas.append(("—", nom, f"{_tr} (no project to compare against)"
-                              + (f" · fichó en {real_txt}" if reales else "")
+                              + (f" · clocked in at {real_txt}" if reales else "")
                               + _ahora(usr)))
             elif reales:                                    # sin plan pero fichó
                 filas.append((":material/help:", nom,
@@ -1561,7 +1561,7 @@ def _opciones(grupo, tidx):
     """[(etiqueta, valor)] para el selector: neutro + PROYECTOS (directo) + trabajos
     (no-proyecto) + estados. Un proyecto ya es asignable por sí mismo (v218): no hay que
     crear un 'trabajo' que lo enlace. Los proyectos completados/cancelados no se ofrecen."""
-    op = [("— sin asignar —", "")]
+    op = [("— unassigned —", "")]
     try:
         # v422: **con las localizaciones internas**. Asignar el almacén desde el tablero
         # es la vía por la que alguien de obra puede fichar ahí un día suelto, sin darle
@@ -1677,7 +1677,7 @@ def _catalogo(grupo):
             else:
                 ok, res = R.add_trabajo(grupo, num, nom, _colmap[colnom], "")
                 (flash.exito if ok else st.error)(
-                    f"Trabajo creado ({res})." if ok else res)
+                    f"Job created ({res})." if ok else res)
                 if ok:
                     st.rerun()
 
@@ -1706,7 +1706,7 @@ def _disponibilidad_html(staff, lunes, datos, tidx, dias=None) -> str:
             items = R.celda_items(datos, usr, d)
             if not items:
                 cont = ('<div style="background:#EAF3DE;color:#3B6D11;border-radius:5px;'
-                        'padding:3px 6px;font-weight:600;text-align:center;">libre</div>')
+                        'padding:3px 6px;font-weight:600;text-align:center;">free</div>')
             else:
                 _cs = []
                 for it in items:

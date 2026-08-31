@@ -7,7 +7,7 @@ emitir. Impuesto (GST/IVA) con el default del grupo, editable.
 """
 import pandas as pd
 
-from core.i18n import t
+from core.i18n import t, d
 import streamlit as st
 
 from core import flash
@@ -145,7 +145,7 @@ def _detalle_factura(grupo, fid):
         st.markdown(t("#### :material/payments: Payments received"))
         # v309: el `help` llevaba DOS importes → perdía los símbolos de moneda.
         st.metric(t("Outstanding"), _T.dinero(total - cob),
-                  help=f"Collected {_T.dinero(cob)} de {_T.dinero(total)}")
+                  help=f"Collected {_T.dinero(cob)} of {_T.dinero(total)}")
         if est != "anulada" and cob < total:
             with st.form(f"cob_{fid}"):
                 _m = st.number_input(t("Record payment ($)"), min_value=0.0,
@@ -257,7 +257,7 @@ def _nueva_factura(grupo):
     for p in _scope_prjs:
         pend = I.pendiente_de_facturar(str(p.get("ID", "")), grupo, p)
         if pend > 0:
-            _pre.append({"Concepto": f"Trabajos — {p.get('Nombre', '')}",
+            _pre.append({"Concepto": f"{d('Works')} — {p.get('Nombre', '')}",
                          "Proyecto": _lbl.get(str(p.get("ID", "")), ""), "Importe": pend})
     if not _pre:
         _pre = [{"Concepto": "", "Proyecto": "(ninguno)", "Importe": 0.0}]

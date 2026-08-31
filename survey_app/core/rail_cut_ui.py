@@ -18,7 +18,7 @@ from core import plan_ui
 
 def _result_matrix(labels, per_elev_values, n):
     """DataFrame: filas = labels, columnas = Elevador 1..n."""
-    cols = {f"Elevador {i+1}": [round(per_elev_values[i][lab], 1) for lab in labels]
+    cols = {f"{d('Lift')} {i+1}": [round(per_elev_values[i][lab], 1) for lab in labels]
             for i in range(n)}
     return pd.DataFrame(cols, index=labels)
 
@@ -66,7 +66,7 @@ def render_rail_cut_tab():
         st.caption(t("LFKK and LFGK will be read from this PDF. Normally they already come from the project drawing."))
         pdf = plan_store.selector("Drawing PDF (for LFKK / LFGK)", "rc_pdf")
         if pdf is not None and pdf.name != st.session_state.get("rc_pdf_name"):
-            with st.spinner("Leyendo LFKK / LFGK del PDF..."):
+            with st.spinner("Reading LFKK / LFGK from the PDF..."):
                 lf = extract_lf(pdf)
             st.session_state["rc_pdf_name"] = pdf.name
             if lf.get("LFKK") is not None:
@@ -74,7 +74,7 @@ def render_rail_cut_tab():
             if lf.get("LFGK") is not None:
                 st.session_state["rc_lfgk"] = float(lf["LFGK"])
             found = [k for k in ("LFKK", "LFGK") if lf.get(k) is not None]
-            st.success(f"Found in the PDF: {', '.join(found) if found else 'ninguno'}. "
+            st.success(f"Found in the PDF: {', '.join(found) if found else 'none'}. "
                        "Check or complete below.")
 
     c1, c2 = st.columns(2)
@@ -90,19 +90,20 @@ def render_rail_cut_tab():
 
     # ── 3. Caso ─────────────────────────────────────────────
     st.markdown(t("**3. Cutting case**"))
-    caso = st.radio(
-        t("Which rail is cut?"),
-        ["Case 1 — first installed (the bottom one)",
-         "Case 2 — last installed (the top one)"],
-        key="rc_caso",
-    )
+    # ⚠️ La opción se guarda en una CONSTANTE y la rama compara contra ella. Antes el
+    # texto estaba escrito dos veces —en el radio y en el `startswith`— y al traducir
+    # solo el del radio (v441) la rama del Caso 1 quedó MUERTA: la herramienta caía
+    # siempre al Caso 2, sin dar ningún error. Con la constante no pueden divergir.
+    _C1 = "Case 1 — first installed (the bottom one)"
+    _C2 = "Case 2 — last installed (the top one)"
+    caso = st.radio(t("Which rail is cut?"), [_C1, _C2], key="rc_caso")
 
     st.markdown("---")
 
     # ════════════════════════════════════════════════════════
     # CASO 1
     # ════════════════════════════════════════════════════════
-    if caso.startswith("Caso 1"):
+    if caso == _C1:
         st.markdown(t("**Case 1 — data**"))
         d1, d2 = st.columns(2)
         n2500 = int(d1.number_input(t("No. of 2500 mm rails"), min_value=0, step=1,
@@ -150,7 +151,7 @@ def render_rail_cut_tab():
                 '<!DOCTYPE html><html><body style="margin:0;background:transparent">'
                 + svg + '</body></html>', height=390, scrolling=False)
 
-            _filas = [{"Elevador": i + 1, "L (mm)": round(x["L"], 1),
+            _filas = [{d("Lift"): i + 1, "L (mm)": round(x["L"], 1),
                        "RC (mm)": round(x["RC"], 1), "CutRC (mm)": round(x["CutRC"], 1),
                        "RCW (mm)": round(x["RCW"], 1), "CutRCW (mm)": round(x["CutRCW"], 1)}
                       for i, x in enumerate(res["elevadores"])]
@@ -179,7 +180,7 @@ def render_rail_cut_tab():
             ["Above the FFL (subtract)", "Below the FFL (add)"],
             key="rc_sub",
         )
-        subcaso = "encima" if sub.startswith("Por encima") else "debajo"
+        subcaso = "encima" if sub.startswith("Above") else "debajo"
 
         st.markdown(t("**Input matrix** (fill in RZ, RO, RF, RB for each lift):"))
         rieles = ["RZ", "RO", "RF", "RB"]
@@ -221,7 +222,7 @@ def render_rail_cut_tab():
                 '<!DOCTYPE html><html><body style="margin:0;background:transparent">'
                 + svg + '</body></html>', height=330, scrolling=False)
 
-            _filas = [{"Elevador": i + 1,
+            _filas = [{d("Lift"): i + 1,
                        **{k: round(float(x.get(k) or 0), 1)
                           for k in ("CutRZ", "CutRO", "CutRF", "CutRB")}}
                       for i, x in enumerate(res)]
