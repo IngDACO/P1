@@ -332,7 +332,7 @@ def plumb_svg(res: dict, proyecto: str = "") -> str:
         p.append(f'<text x="{cx+6}" y="{yb+15}" font-size="8" fill="#c0392b" '
                  f'font-weight="bold">{_d("⚠ BS INCONSISTENT")}</text>')
         p.append(f'<text x="{cx+6}" y="{yb+30}" font-size="7.5" fill="#1f2937">'
-                 f'plano {_n(bsc.get("bs_plano"))} vs</text>')
+                 f'{_d("drawing")} {_n(bsc.get("bs_plano"))} vs</text>')
         p.append(f'<text x="{cx+6}" y="{yb+42}" font-size="7.5" fill="#1f2937">'
                  f'componentes {_n(bsc.get("bs_componentes"))}</text>')
         p.append(f'<text x="{cx+6}" y="{yb+54}" font-size="7.5" fill="#c0392b">'

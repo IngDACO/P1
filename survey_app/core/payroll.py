@@ -21,6 +21,7 @@ import streamlit as st
 from core import auth, clock, timeclock
 from core.num import col_letter as _col_letter, num as _num, parse_date as _parse_date
 
+from core.i18n import t
 logger = logging.getLogger(__name__)
 
 NOMINAS_SHEET = "Nominas"
@@ -61,10 +62,10 @@ def conceptos_de(f: dict) -> list:
 def neto(base, conceptos) -> float:
     tot = _num(base)
     for c in conceptos or []:
-        t = str(c.get("tipo", "")).lower()
-        if t == "devengo":
+        _tp = str(c.get("tipo", "")).lower()
+        if _tp == "devengo":
             tot += _num(c.get("monto"))
-        elif t == "deduccion":
+        elif _tp == "deduccion":
             tot -= _num(c.get("monto"))
     return round(tot, 2)
 
@@ -72,12 +73,12 @@ def neto(base, conceptos) -> float:
 # ── Worksheet + lecturas ─────────────────────────────────────────
 def _ws():
     if not timeclock._secrets_present():
-        return None, "Google Sheets no está configurado."
+        return None, t("Google Sheets is not configured.")
     try:
         return timeclock.get_sheet(NOMINAS_SHEET, tuple(NOMINAS_HEADERS)), None
     except Exception as e:
         logger.warning("payroll: no se pudo abrir la hoja: %s", e)
-        return None, f"No se pudo abrir la hoja {NOMINAS_SHEET}: {e}"
+        return None, f"{t('Could not open sheet')} {NOMINAS_SHEET}: {e}"
 
 
 @st.cache_data(ttl=120, show_spinner=False)
@@ -323,10 +324,10 @@ def update_conceptos(nid: str, conceptos: list) -> tuple:
         return False, err
     f = get_nomina(nid)
     if not f:
-        return False, "Nómina no encontrada."
+        return False, t("Payslip not found.")
     row = _find_row(w, nid)
     if row is None:
-        return False, "Nómina no encontrada."
+        return False, t("Payslip not found.")
     nt = neto(f.get("Base"), conceptos)
     try:
         w.batch_update([
@@ -337,7 +338,7 @@ def update_conceptos(nid: str, conceptos: list) -> tuple:
     except Exception as e:
         return False, str(e)
     _invalidate()
-    return True, "Nómina actualizada."
+    return True, t("Payslip updated.")
 
 
 def marcar_pagada(nid: str, fecha="") -> tuple:
@@ -346,7 +347,7 @@ def marcar_pagada(nid: str, fecha="") -> tuple:
         return False, err
     row = _find_row(w, nid)
     if row is None:
-        return False, "Nómina no encontrada."
+        return False, t("Payslip not found.")
     try:
         w.batch_update([
             {"range": f"{_col_letter(_NCOL['Estado'])}{row}", "values": [["pagada"]]},
@@ -356,7 +357,7 @@ def marcar_pagada(nid: str, fecha="") -> tuple:
     except Exception as e:
         return False, str(e)
     _invalidate()
-    return True, "Nómina marcada como pagada."
+    return True, t("Payslip marked as paid.")
 
 
 def anular(nid: str) -> tuple:
@@ -365,10 +366,10 @@ def anular(nid: str) -> tuple:
         return False, err
     row = _find_row(w, nid)
     if row is None:
-        return False, "Nómina no encontrada."
+        return False, t("Payslip not found.")
     try:
         w.update_cell(row, _NCOL["Estado"], "anulada")
     except Exception as e:
         return False, str(e)
     _invalidate()
-    return True, "Nómina anulada."
+    return True, t("Payslip voided.")

@@ -303,10 +303,10 @@ def pnl(grupo: str, desde=None, hasta=None) -> dict:
             continue
         nbase += _num(n.get("Base"))
         for c in PR.conceptos_de(n):
-            t = str(c.get("tipo", "")).lower()
-            if t == "devengo":
+            _tp = str(c.get("tipo", "")).lower()
+            if _tp == "devengo":
                 ndev += _num(c.get("monto"))
-            elif t == "aporte":
+            elif _tp == "aporte":
                 nap += _num(c.get("monto"))
         if str(n.get("Estado", "")).lower() == "pagada":
             pagado += _num(n.get("Neto"))
@@ -364,19 +364,19 @@ def conciliacion_mo(grupo: str, desde=None, hasta=None) -> dict:
     cargado = cobrado_no_pagado = pagado_no_cargado = interno = 0.0
     sin_tarifa, de_baja = [], []
     for clave, h in hp.items():
-        t = _num(rates.get(clave, 0))
-        cargado += h["proyecto"] * t
+        _tar = _num(rates.get(clave, 0))
+        cargado += h["proyecto"] * _tar
         # v422: el trabajo en oficina/almacén se paga y NO se le carga a ningún
         # cliente. Queda dentro de `pagado_no_cargado` (que es lo que es) y además se
         # devuelve suelto, para poder decir a QUÉ se fue ese hueco en vez de dejarlo
         # como un residuo anónimo — hoy son 172 h en el grupo real.
-        interno += h.get("interno", 0.0) * t
-        _d = (h["proyecto"] - h["jornada"]) * t
+        interno += h.get("interno", 0.0) * _tar
+        _d = (h["proyecto"] - h["jornada"]) * _tar
         if _d > 0:
             cobrado_no_pagado += _d
         else:
             pagado_no_cargado += -_d
-        if t <= 0 and (h["jornada"] > 0 or h["proyecto"] > 0):
+        if _tar <= 0 and (h["jornada"] > 0 or h["proyecto"] > 0):
             _vivo = (not conocidas or clave in conocidas
                      or str(h.get("nombre", "")) in conocidas)
             (sin_tarifa if _vivo else de_baja).append(h["nombre"])

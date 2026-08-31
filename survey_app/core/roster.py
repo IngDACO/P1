@@ -21,6 +21,7 @@ import streamlit as st
 from core import timeclock
 from core import clock
 
+from core.i18n import t
 logger = logging.getLogger(__name__)
 
 TRAB_SHEET   = "Trabajos"
@@ -314,9 +315,9 @@ def trabajos_idx(grupo) -> dict:
 def add_trabajo(grupo, numero, nombre, color, proyecto_id="") -> tuple:
     w = _ws_trab()
     if w is None:
-        return False, "Google Sheets no está configurado."
+        return False, t("Google Sheets is not configured.")
     if not str(nombre).strip():
-        return False, "El nombre del trabajo es obligatorio."
+        return False, t("The job name is required.")
     tid = _next_id(w, "TRB")
     try:
         w.append_row([tid, str(grupo), str(numero).strip(), str(nombre).strip(),
@@ -331,12 +332,12 @@ def add_trabajo(grupo, numero, nombre, color, proyecto_id="") -> tuple:
 def update_trabajo(tid, cambios: dict) -> tuple:
     w = _ws_trab()
     if w is None:
-        return False, "Google Sheets no está configurado."
+        return False, t("Google Sheets is not configured.")
     try:
         recs = w.get_all_values()
         fila = next((i for i, r in enumerate(recs) if r and r[0] == str(tid)), None)
         if fila is None:
-            return False, "Trabajo no encontrado."
+            return False, t("Job not found.")
         col = {h: i for i, h in enumerate(TRAB_HEADERS)}
         peticiones = []
         for k, v in cambios.items():
@@ -348,7 +349,7 @@ def update_trabajo(tid, cambios: dict) -> tuple:
     except Exception as e:
         return False, f"Error actualizando: {e}"
     _invalidate()
-    return True, "Trabajo actualizado."
+    return True, t("Job updated.")
 
 
 def set_activo_trabajo(tid, activo: bool) -> tuple:
@@ -399,23 +400,24 @@ def delete_trabajo(grupo, tid) -> tuple:
     if usos:
         ok, _ = update_trabajo(tid, {"Activo": ELIMINADO})
         if not ok:
-            return False, "No se pudo eliminar."
-        return True, (f"Trabajo eliminado del catálogo. Se conserva el histórico: "
-                      f"sigue viéndose con su nombre y color en {usos} "
-                      f"{'día ya planificado' if usos == 1 else 'días ya planificados'}.")
+            return False, t("Could not delete.")
+        return True, (t("Job removed from the catalogue. The history is kept: it "
+                        "still shows with its name and colour on") + f" {usos} "
+                      + (t("day already planned") if usos == 1
+                         else t("days already planned")) + ".")
     w = _ws_trab()
     if w is None:
-        return False, "Google Sheets no está configurado."
+        return False, t("Google Sheets is not configured.")
     try:
         recs = w.get_all_values()          # FRESCO: ruta de escritura (regla v108)
         fila = next((i for i, r in enumerate(recs) if r and r[0] == str(tid)), None)
         if fila is None:
-            return False, "Trabajo no encontrado."
+            return False, t("Job not found.")
         w.delete_rows(fila + 1)
     except Exception as e:
         return False, f"Error borrando: {e}"
     _invalidate()
-    return True, "Trabajo eliminado."
+    return True, t("Job deleted.")
 
 
 def _a1(fila, col) -> str:
@@ -540,12 +542,12 @@ def franja_label(ini, fin) -> str:
     if not ini and not fin:
         return ""
 
-    def _h(t):
+    def _h(_v):
         try:
-            hh, mm = t.split(":")
+            hh, mm = _v.split(":")
             return f"{int(hh)}:{mm}"
         except Exception:
-            return t
+            return _v
 
     return f"{_h(ini)}–{_h(fin)}" if (ini and fin) else (_h(ini) or _h(fin))
 
@@ -558,7 +560,7 @@ def guardar_persona(grupo, lunes, usuario, dias: dict) -> tuple:
     """
     w = _ws_roster()
     if w is None:
-        return False, "Google Sheets no está configurado."
+        return False, t("Google Sheets is not configured.")
     sem = lunes.isoformat() if hasattr(lunes, "isoformat") else str(lunes)
     limpio = _compact(dias)
     payload = json.dumps(limpio, ensure_ascii=False)
@@ -577,7 +579,7 @@ def guardar_persona(grupo, lunes, usuario, dias: dict) -> tuple:
     except Exception as e:
         return False, f"Error guardando: {e}"
     _invalidate()
-    return True, "Guardado."
+    return True, t("Saved.")
 
 
 def asignaciones_dia(grupo, usuario, fecha=None) -> list:
@@ -611,7 +613,7 @@ def copiar_semana(grupo, lunes_origen, lunes_destino) -> tuple:
     """Clona todas las asignaciones de una semana a otra (1 fila por persona)."""
     datos = get_semana(grupo, lunes_origen)
     if not datos:
-        return False, "La semana de origen está vacía."
+        return False, t("The source week is empty.")
     n = 0
     for usuario, dias in datos.items():
         ok, _ = guardar_persona(grupo, lunes_destino, usuario, dias)

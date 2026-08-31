@@ -15,6 +15,7 @@ from core import timeclock
 from core import clock
 from core.num import col_letter as _col_letter
 
+from core.i18n import t
 logger = logging.getLogger(__name__)
 
 SHEET   = "Credenciales"
@@ -173,14 +174,14 @@ def matrix(grupo) -> tuple:
     filas = []
     for u in auth.list_users(grupo):
         fila = {"Usuario": u.get("Nombre") or u.get("Usuario"), "Rol": u.get("Rol", "")}
-        for t in tipos:
+        for _tp in tipos:
             mias = [c for c in creds
-                    if str(c.get("Usuario", "")) == u.get("Usuario") and str(c.get("Tipo", "")) == t]
+                    if str(c.get("Usuario", "")) == u.get("Usuario") and str(c.get("Tipo", "")) == _tp]
             if not mias:
-                fila[t] = "—"
+                fila[_tp] = "—"
             else:
                 sts = [status(c.get("Vencimiento")) for c in mias]
-                fila[t] = ("vencido" if "vencido" in sts
+                fila[_tp] = ("vencido" if "vencido" in sts
                            else "por vencer" if "por_vencer" in sts else "vigente")
         filas.append(fila)
     return tipos, filas
@@ -225,9 +226,9 @@ def add(usuario, grupo, tipo, numero="", clase="", emision="", vencimiento="",
         drive_id="", archivo="", nota="", actualizado_por="") -> tuple:
     w = _ws()
     if w is None:
-        return False, "Google Sheets no está configurado."
+        return False, t("Google Sheets is not configured.")
     if not str(tipo).strip():
-        return False, "El tipo de credencial es obligatorio."
+        return False, t("The credential type is required.")
     try:
         cid = _next_id(w.get_all_records(numericise_ignore=["all"]))
         w.append_row([cid, str(usuario), str(grupo), str(tipo), str(numero), str(clase),
@@ -236,15 +237,15 @@ def add(usuario, grupo, tipo, numero="", clase="", emision="", vencimiento="",
                       clock.now().strftime("%Y-%m-%d %H:%M")],
                      value_input_option="RAW")
     except Exception as e:
-        return False, f"Error guardando: {e}"
+        return False, f"{t('Error saving')}: {e}"
     _invalidate()
-    return True, f"Credencial «{tipo}» agregada."
+    return True, f"{t('Credential')} «{tipo}» {t('added.')}"
 
 
 def update(cred_id, fields: dict) -> tuple:
     w = _ws()
     if w is None:
-        return False, "Google Sheets no está configurado."
+        return False, t("Google Sheets is not configured.")
     try:
         recs = w.get_all_records(numericise_ignore=["all"])
     except Exception as e:
@@ -260,14 +261,14 @@ def update(cred_id, fields: dict) -> tuple:
                 except Exception as e:
                     return False, f"Error actualizando: {e}"
             _invalidate()
-            return True, "Credencial actualizada."
-    return False, "Credencial no encontrada."
+            return True, t("Credential updated.")
+    return False, t("Credential not found.")
 
 
 def delete(cred_id) -> tuple:
     w = _ws()
     if w is None:
-        return False, "Google Sheets no está configurado."
+        return False, t("Google Sheets is not configured.")
     try:
         recs = w.get_all_records(numericise_ignore=["all"])
     except Exception as e:
@@ -286,8 +287,8 @@ def delete(cred_id) -> tuple:
             except Exception as e:
                 return False, f"Error: {e}"
             _invalidate()
-            return True, "Credencial eliminada."
-    return False, "Credencial no encontrada."
+            return True, t("Credential deleted.")
+    return False, t("Credential not found.")
 
 
 _FOLDER = "COPEX Credenciales"
@@ -347,10 +348,10 @@ def notify_expiring(grupo, days=DIAS_AVISO) -> int:
             continue
         tipo = r.get("Tipo", "")
         usr  = r.get("Usuario", "")
-        estado = "VENCIDA" if dd < 0 else f"vence en {dd} d"
-        subject = f"🎫 Credencial {estado}: {tipo} ({usr})"
-        lines = [f"La credencial <b>{tipo}</b> de <b>{usr}</b> {('está VENCIDA' if dd < 0 else f'vence en {dd} días')}"
-                 f" ({r.get('Vencimiento','')}).", "Actualízala en la app → Usuarios → Credenciales."]
+        estado = "EXPIRED" if dd < 0 else f"expires in {dd} d"
+        subject = f"🎫 Credential {estado}: {tipo} ({usr})"
+        lines = [f"The <b>{tipo}</b> credential for <b>{usr}</b> {('has EXPIRED' if dd < 0 else f'expires in {dd} days')}"
+                 f" ({r.get('Vencimiento','')}).", "Update it in the app → Users → Credentials."]
         dests = list(dict.fromkeys(admins + [usr]))
         sent_any = False
         for d in dests:

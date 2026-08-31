@@ -18,6 +18,7 @@ from core import timeclock
 from core import clock
 from core.num import parse_date as _parse_date
 
+from core.i18n import t
 logger = logging.getLogger(__name__)
 
 SHEET   = "PreStarts"
@@ -201,9 +202,9 @@ def _norm_nombre(s) -> str:
     sube a un módulo común en vez de copiarse (la lección de los cinco `_num`, v323).
     """
     import unicodedata
-    t = unicodedata.normalize("NFKD", str(s or ""))
-    t = "".join(c for c in t if not unicodedata.combining(c))
-    return " ".join(t.lower().split())
+    _s = unicodedata.normalize("NFKD", str(s or ""))
+    _s = "".join(c for c in _s if not unicodedata.combining(c))
+    return " ".join(_s.lower().split())
 
 
 def pendiente_de_firma(pid, grupo: str = "", persona: str = "", usuario: str = "") -> dict:
@@ -280,18 +281,18 @@ def firmar(ps_id: str, grupo: str, nombre: str, iniciales: str = "",
     res = {"ok": False, "error": "", "pdf": None, "drive_id": ""}
     ps_id = str(ps_id or "").strip()
     if not ps_id or not str(nombre or "").strip():
-        res["error"] = "Falta el Pre-Start o el nombre de quien firma."
+        res["error"] = t("The Pre-Start or the signer name is missing.")
         return res
 
     w = _ws()
     if w is None:
-        res["error"] = "No se pudo abrir la hoja de pre-starts."
+        res["error"] = t("Could not open the pre-starts sheet.")
         return res
     # ⚠️ FRESCO, no de la caché: esto decide en qué FILA se escribe (regla v323).
     filas = w.get_all_records(numericise_ignore=["all"])
     idx = next((i for i, r in enumerate(filas) if str(r.get("ID", "")).strip() == ps_id), -1)
     if idx < 0:
-        res["error"] = f"No se encontró el Pre-Start {ps_id}."
+        res["error"] = f"{t('Pre-Start not found')}: {ps_id}."
         return res
     fila = filas[idx]
     hora = clock.now(grupo).strftime("%H:%M")
@@ -354,7 +355,7 @@ def firmar(ps_id: str, grupo: str, nombre: str, iniciales: str = "",
             w.update_cell(idx + 2, HEADERS.index("DriveID") + 1, nuevo_id)
         _invalidate()
     except Exception as e:                                        # noqa: BLE001
-        res["error"] = f"No se pudo guardar la firma: {e}"
+        res["error"] = f"{t('Could not save the signature')}: {e}"
         return res
 
     # 4) ya con la fila apuntando al nuevo, el viejo sobra (best-effort)
@@ -446,10 +447,12 @@ def submit(data: dict) -> dict:
             _ids = ", ".join(str(r.get("ID", "")) for r in _ya)
             res["ya_hay"] = _ids
             res["error"] = (
-                f"Esta obra ya tiene el Pre-Start de hoy ({_ids}), registrado por "
-                f"{_ya[-1].get('Facilitador') or '—'}. Si solo faltas tú por constar, "
-                f"fírmalo en vez de crear otro. Si de verdad hubo una SEGUNDA charla "
-                f"(otro turno u otra cuadrilla), márcalo y se registra igual.")
+                t("This job already has today's Pre-Start") + f" ({_ids}), "
+                + t("recorded by") + f" {_ya[-1].get('Facilitador') or '—'}. "
+                + t("If you are only missing from the list, sign it instead of "
+                    "creating another one. If there really was a SECOND briefing "
+                    "(another shift or crew), tick the box and it is recorded "
+                    "anyway."))
             return res
 
     # 1) PDF
@@ -457,7 +460,7 @@ def submit(data: dict) -> dict:
         from core import prestart_pdf
         pdf = prestart_pdf.generate_prestart_pdf(data)
     except Exception as e:
-        res["error"] = f"No se pudo generar el PDF: {e}"
+        res["error"] = f"{t('Could not generate the PDF')}: {e}"
         return res
     fname = filename_for(data)
     res["pdf"] = pdf
@@ -482,7 +485,7 @@ def submit(data: dict) -> dict:
     # 3) Registro en la hoja
     w = _ws()
     if w is None:
-        res["error"] = "No se pudo abrir la hoja de pre-starts."
+        res["error"] = t("Could not open the pre-starts sheet.")
         return res
     try:
         f = data.get("fecha")
@@ -500,7 +503,7 @@ def submit(data: dict) -> dict:
             fname, drive_id, creado_por, clock.now().strftime("%Y-%m-%d %H:%M"),
         ], value_input_option="RAW")
     except Exception as e:
-        res["error"] = f"No se pudo registrar el pre-start: {e}"
+        res["error"] = f"{t('Could not record the pre-start')}: {e}"
         return res
     _invalidate()
     res["ok"] = True
@@ -510,7 +513,7 @@ def submit(data: dict) -> dict:
     if str(data.get("near_miss", "")).upper() == "YES":
         try:
             from core import alerts
-            msg = "Near Miss/Hazard reportado en el Pre-Start"
+            msg = "Near Miss/Hazard reported in the Pre-Start"
             if data.get("near_miss_desc"):
                 msg += f": {data['near_miss_desc']}"
             ok, _ = alerts.report_problem(pid, grupo, msg, creado_por,
@@ -541,7 +544,7 @@ def submit(data: dict) -> dict:
     if no_ok:
         try:
             from core import alerts
-            msg = (f"Pre-Start con {len(no_ok)} control(es) en NO: "
+            msg = (f"Pre-Start with {len(no_ok)} control(s) marked NO: "
                    + " · ".join(no_ok))
             ok, _ = alerts.report_problem(pid, grupo, msg, creado_por,
                                           data.get("proyecto_nombre", ""))

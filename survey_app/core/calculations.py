@@ -24,7 +24,7 @@ def validate_inputs(p: dict) -> list:
     # FS debería ser ≥ TSW para que tenga sentido la lógica de pared
     fs, tsw = p.get("FS"), p.get("TSW")
     if fs is not None and tsw is not None and float(fs) < float(tsw):
-        issues.append(f"FS ({fs}) < TSW ({tsw}): no hay espacio frontal de seguridad")
+        issues.append(f"FS ({fs}) < TSW ({tsw}): no front safety clearance")
     return issues
 
 

@@ -22,6 +22,8 @@ import os
 import re
 import zipfile
 
+from core.i18n import t
+
 import streamlit as st
 from core import clock
 
@@ -109,13 +111,13 @@ def _index():
     df, tf_list = {}, []
     for d in docs:
         tf = {}
-        for t in d:
-            tf[t] = tf.get(t, 0) + 1
+        for _w in d:
+            tf[_w] = tf.get(_w, 0) + 1
         tf_list.append(tf)
-        for t in set(d):
-            df[t] = df.get(t, 0) + 1
+        for _w in set(d):
+            df[_w] = df.get(_w, 0) + 1
     avgdl = (sum(len(d) for d in docs) / n) if n else 1.0
-    idf = {t: math.log(1 + (n - c + 0.5) / (c + 0.5)) for t, c in df.items()}
+    idf = {_w: math.log(1 + (n - c + 0.5) / (c + 0.5)) for _w, c in df.items()}
     return {"chunks": chunks, "tf": tf_list, "idf": idf,
             "avgdl": avgdl, "dl": [len(d) for d in docs], "n": n}
 
@@ -134,11 +136,11 @@ def search(query, k=6) -> list:
     scored = []
     for i, tf in enumerate(idx["tf"]):
         s, dl = 0.0, idx["dl"][i]
-        for t in q:
-            f = tf.get(t, 0)
+        for _w in q:
+            f = tf.get(_w, 0)
             if not f:
                 continue
-            s += idx["idf"].get(t, 0.0) * (f * (k1 + 1)) / (f + k1 * (1 - b + b * dl / idx["avgdl"]))
+            s += idx["idf"].get(_w, 0.0) * (f * (k1 + 1)) / (f + k1 * (1 - b + b * dl / idx["avgdl"]))
         if s > 0:
             scored.append((s, i))
     scored.sort(reverse=True)
@@ -253,14 +255,14 @@ def add_manual(file_bytes, filename, nombre, subido_por=""):
     """Extrae, trocea y aloja un manual en Drive; lo registra en la hoja.
     Devuelve (num_fragmentos, None) si va bien, o (0, mensaje_error)."""
     if not storage_available():
-        return 0, "El almacenamiento (Drive + hoja) no está configurado."
+        return 0, t("Storage (Drive + sheet) is not configured.")
     nombre = (nombre or os.path.splitext(filename)[0]).strip()
     try:
         chunks = _chunks_from_upload(file_bytes, filename, nombre)
     except Exception as e:
-        return 0, f"No se pudo leer el archivo: {e}"
+        return 0, f"{t('Could not read the file')}: {e}"
     if not chunks:
-        return 0, "No se extrajo texto (¿PDF escaneado/imagen?). Súbelo con OCR aplicado."
+        return 0, t("No text was extracted (scanned/image PDF?). Upload it with OCR applied.")
     try:
         from core import drive_store
         payload = gzip.compress(json.dumps(
@@ -270,12 +272,12 @@ def add_manual(file_bytes, filename, nombre, subido_por=""):
             drive_store.folder(_FOLDER_NAME), f"{mid}.json.gz", payload, "application/gzip")
         w = _index_ws()
         if w is None:
-            return 0, "No se pudo abrir la hoja de manuales."
+            return 0, t("Could not open the manuals sheet.")
         w.append_row([mid, nombre, drive_id, str(len(chunks)),
                       clock.now().strftime("%Y-%m-%d %H:%M"), subido_por],
                      value_input_option="RAW")
     except Exception as e:
-        return 0, f"No se pudo guardar el manual: {e}"
+        return 0, f"{t('Could not save the manual')}: {e}"
     _refresh()
     return len(chunks), None
 

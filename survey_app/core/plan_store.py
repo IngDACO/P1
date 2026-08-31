@@ -16,6 +16,8 @@ import io
 
 import streamlit as st
 
+from core.i18n import t
+
 _K_NOM = "_plano_nombre"
 _K_BYT = "_plano_bytes"
 
@@ -55,13 +57,13 @@ def selector(label: str, key: str, ayuda: str = "") -> object:
     """
     nom, byt = actual()
     if nom and byt:
-        opc = [f"Usar el plano cargado · {nom}", "Cargar otro plano"]
+        opc = [f"{t('Use the loaded drawing')} · {nom}", t("Load another drawing")]
         elec = st.radio(label, opc, key=f"{key}_src", horizontal=True,
                         label_visibility="visible", help=ayuda or None)
         if elec == opc[0]:
             return _Plano(byt, nom)
 
-    up = st.file_uploader(label if not (nom and byt) else "Nuevo plano (PDF)",
+    up = st.file_uploader(label if not (nom and byt) else t("New drawing (PDF)"),
                           type=["pdf"], key=key, help=ayuda or None)
     if up is not None:
         try:

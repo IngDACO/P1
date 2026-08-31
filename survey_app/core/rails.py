@@ -15,6 +15,7 @@ import streamlit as st
 
 from core import timeclock
 
+from core.i18n import t
 logger = logging.getLogger(__name__)
 
 RIELES_SHEET   = "Rieles"
@@ -43,13 +44,14 @@ def _ws():
     migra la cabecera, que es lo que hacía a mano el bloque anterior.
     """
     if not timeclock._secrets_present():
-        return None, ("El catálogo de rieles no está conectado: faltan credenciales "
-                      "(gcp_service_account) o TIMECLOCK_SHEET_ID en los Secrets.")
+        return None, t("The rail catalogue is not connected: credentials "
+                       "(gcp_service_account) or TIMECLOCK_SHEET_ID are missing "
+                       "from Secrets.")
     try:
         return timeclock.get_sheet(RIELES_SHEET, tuple(RIELES_HEADERS)), None
     except Exception as e:
         logger.warning("rails: no se pudo abrir la hoja %s: %s", RIELES_SHEET, e)
-        return None, f"No se pudo abrir la hoja {RIELES_SHEET}: {e}"
+        return None, f"{t('Could not open sheet')} {RIELES_SHEET}: {e}"
 
 
 def _invalidate():
@@ -112,12 +114,12 @@ def add_riel(referencia, ancho, altura) -> tuple:
         return False, err
     referencia = str(referencia).strip()
     if not referencia:
-        return False, "La referencia es obligatoria."
+        return False, t("The reference is required.")
     if get_rail(referencia):
-        return False, f"La referencia '{referencia}' ya existe."
+        return False, f"{t('Reference')} '{referencia}' {t('already exists.')}"
     w.append_row([referencia, str(ancho), str(altura)], value_input_option="RAW")
     _invalidate()
-    return True, f"Riel '{referencia}' agregado."
+    return True, f"{t('Rail')} '{referencia}' {t('added.')}"
 
 
 def update_riel(referencia, ancho=None, altura=None) -> tuple:
@@ -133,7 +135,7 @@ def update_riel(referencia, ancho=None, altura=None) -> tuple:
             if altura is not None:
                 w.update_cell(row, 3, str(altura))
             _invalidate()
-            return True, "Riel actualizado."
+            return True, t("Rail updated.")
     return False, "Referencia no encontrada."
 
 
@@ -146,5 +148,5 @@ def delete_riel(referencia) -> tuple:
         if _norm(r.get("Referencia", "")) == _norm(referencia):
             w.delete_rows(i + 2)
             _invalidate()
-            return True, "Riel eliminado."
+            return True, t("Rail deleted.")
     return False, "Referencia no encontrada."

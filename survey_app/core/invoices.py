@@ -17,6 +17,7 @@ import streamlit as st
 from core import clock, timeclock
 from core.num import col_letter as _col_letter, num as _num, parse_date as _parse_date
 
+from core.i18n import t
 logger = logging.getLogger(__name__)
 
 FACTURAS_SHEET = "Facturas"
@@ -51,12 +52,12 @@ def is_configured() -> bool:
 # ── Worksheet + lecturas cacheadas ───────────────────────────────
 def _ws():
     if not timeclock._secrets_present():
-        return None, "Google Sheets no está configurado."
+        return None, t("Google Sheets is not configured.")
     try:
         return timeclock.get_sheet(FACTURAS_SHEET, tuple(FACTURAS_HEADERS)), None
     except Exception as e:
         logger.warning("invoices: no se pudo abrir la hoja: %s", e)
-        return None, f"No se pudo abrir la hoja {FACTURAS_SHEET}: {e}"
+        return None, f"{t('Could not open sheet')} {FACTURAS_SHEET}: {e}"
 
 
 @st.cache_data(ttl=120, show_spinner=False)
@@ -269,7 +270,7 @@ def create_factura(grupo, cliente_id, cliente_nombre, lineas, impuesto_pct=0.0,
         return False, err
     lineas = [ln for ln in (lineas or []) if _num(ln.get("importe")) != 0 or str(ln.get("concepto", "")).strip()]
     if not lineas:
-        return False, "La factura no tiene líneas."
+        return False, t("The invoice has no lines.")
     subtotal = round(sum(_num(ln.get("importe")) for ln in lineas), 2)
     impuesto = round(subtotal * _num(impuesto_pct) / 100.0, 2)
     total = round(subtotal + impuesto, 2)

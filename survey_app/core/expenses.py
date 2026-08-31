@@ -18,6 +18,7 @@ from core import timeclock
 from core import clock
 from core.num import num as _num
 
+from core.i18n import t
 logger = logging.getLogger(__name__)
 
 SHEET   = "Gastos"
@@ -452,9 +453,9 @@ def add(pid, grupo, valor, categoria="Materiales", proveedor="", descripcion="",
         drive_id="", archivo="", creado_por="", fecha="") -> tuple:
     w = _ws()
     if w is None:
-        return False, "Google Sheets no está configurado."
+        return False, t("Google Sheets is not configured.")
     if _num(valor) <= 0:
-        return False, "El valor del recibo debe ser mayor que 0."
+        return False, t("The receipt value must be greater than 0.")
     try:
         gid = _next_id(w.get_all_records(numericise_ignore=["all"]))
         w.append_row([gid, str(pid), str(grupo),
@@ -472,7 +473,7 @@ def add(pid, grupo, valor, categoria="Materiales", proveedor="", descripcion="",
 def delete(gid) -> tuple:
     w = _ws()
     if w is None:
-        return False, "Google Sheets no está configurado."
+        return False, t("Google Sheets is not configured.")
     try:
         recs = w.get_all_records(numericise_ignore=["all"])
     except Exception as e:
@@ -491,7 +492,7 @@ def delete(gid) -> tuple:
             except Exception as e:
                 return False, f"Error: {e}"
             _invalidate()
-            return True, "Recibo eliminado."
+            return True, t("Receipt deleted.")
     return False, "Recibo no encontrado."
 
 
@@ -599,7 +600,7 @@ def spend_svg(curva: dict, proyectado=None, titulo: str = "") -> str:
                  f'font-size="7.5" fill="#5b6472">{fechas[i][8:10]}/{fechas[i][5:7]}</text>')
 
     lgx = ML
-    for et, col in (("Mano de obra", C_MO), ("Compras", C_CO)):
+    for et, col in ((t("Labour"), C_MO), (t("Purchases"), C_CO)):
         p.append(f'<rect x="{lgx:.1f}" y="{VH-16}" width="13" height="7" fill="{col}" '
                  f'fill-opacity="0.45"/>')
         p.append(f'<text x="{lgx+18:.1f}" y="{VH-10}" font-size="8" fill="#5b6472">{et}</text>')

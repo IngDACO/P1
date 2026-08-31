@@ -14,18 +14,19 @@ import json
 import logging
 from core import clock
 
+from core.i18n import t
 logger = logging.getLogger(__name__)
 
 # Qué herramienta usa cada dato (para poder decir qué falta y a quién afecta)
 USA = {
     "params":  "Survey · Plomadas",
     "ns":      "Survey (paradas)",
-    "rail":    "Survey (RAIL del catálogo)",
+    "rail":    "Survey (RAIL from the catalogue)",
     "hq":      "Belting",
     "hgp":     "Belting",
-    "hkp":     "Corte de buffers",
-    "lfkk":    "Corte de rieles",
-    "lfgk":    "Corte de rieles",
+    "hkp":     "Buffer cutting",
+    "lfkk":    "Rail cutting",
+    "lfgk":    "Rail cutting",
 }
 
 
@@ -45,13 +46,13 @@ def extraer_todo(pdf_file, progreso=None) -> dict:
            "archivo": getattr(pdf_file, "name", ""), "leido": "", "faltan": []}
 
     pasos = [
-        ("params",  "Parámetros del hueco",   lambda f: extract_from_pdf(f)),
-        ("ns",      "Número de paradas",      lambda f: extract_number_of_stops(f)),
-        ("rail",    "Código de riel",         lambda f: extract_car_guide_rail(f)),
-        ("modelo",  "Modelo (línea de producto)", lambda f: extract_product_line(f)),
-        ("belting", "Datos de belting",       lambda f: extract_belting(f)),
+        ("params",  t("Shaft parameters"),   lambda f: extract_from_pdf(f)),
+        ("ns",      t("Number of stops"),      lambda f: extract_number_of_stops(f)),
+        ("rail",    t("Rail code"),         lambda f: extract_car_guide_rail(f)),
+        ("modelo",  t("Model (product line)"), lambda f: extract_product_line(f)),
+        ("belting", t("Belting data"),       lambda f: extract_belting(f)),
         ("hkp",     "HKP (buffers)",          lambda f: extract_hkp(f)),
-        ("lf",      "LFKK / LFGK (rieles)",   lambda f: extract_lf(f)),
+        ("lf",      t("LFKK / LFGK (rails)"),   lambda f: extract_lf(f)),
     ]
     for i, (clave, etiqueta, fn) in enumerate(pasos):
         if progreso:
@@ -105,7 +106,8 @@ def extraer_todo(pdf_file, progreso=None) -> dict:
     faltan = [p for p in PARAMS if p not in out["params"]]
     # Código de riel leído pero sin altura en el catálogo → RAIL no se autocompleta.
     if out.get("rail") and out.get("rail_altura") in (None, "", 0, 0.0):
-        faltan.append(f"RAIL (código {out['rail']} no está en el catálogo de rieles)")
+        faltan.append(f"RAIL ({t('code')} {out['rail']} "
+                      + t("is not in the rail catalogue") + ")")
     for k in ("ns", "rail", "hq", "hgp", "hkp", "lfkk", "lfgk"):
         if out.get(k) in (None, ""):
             faltan.append(k.upper())
@@ -165,14 +167,14 @@ def por_herramienta(datos: dict) -> list:
     par  = f"{npar}/{ntot}" if npar else None
     ralt_txt = (f"{ralt:.0f}" if ralt else None)
     return [
-        {"tool": "Survey de elevador",
-         "items": [("Parámetros del hueco", par), ("N.º de paradas (NS)", _v("ns")),
+        {"tool": t("Lift survey"),
+         "items": [(t("Shaft parameters"), par), (t("No. of stops (NS)"), _v("ns")),
                    ("Riel", riel)]},
-        {"tool": "Líneas de plomada",
-         "items": [("Parámetros del hueco", par), ("RAIL (altura)", ralt_txt)]},
-        {"tool": "Corte de rieles",
+        {"tool": t("Plumb lines"),
+         "items": [(t("Shaft parameters"), par), ("RAIL (altura)", ralt_txt)]},
+        {"tool": t("Rail cutting"),
          "items": [("LFKK", _v("lfkk")), ("LFGK", _v("lfgk"))]},
-        {"tool": "Corte de buffers",
+        {"tool": t("Buffer cutting"),
          "items": [("HKP", _v("hkp"))]},
         {"tool": "Belting",
          "items": [("HQ", _v("hq")), ("HGP", _v("hgp"))]},
@@ -182,7 +184,7 @@ def por_herramienta(datos: dict) -> list:
 def resumen(datos: dict) -> str:
     """Línea legible de qué se leyó del plano."""
     if not datos:
-        return "Sin datos del plano."
+        return t("No drawing data.")
     n, tot = datos.get("n_params", 0), datos.get("n_total", 0)
     partes = [f"{n}/{tot} parámetros"]
     for k, et in (("ns", "NS"), ("rail", "riel"), ("hkp", "HKP"),

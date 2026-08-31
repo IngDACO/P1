@@ -23,6 +23,7 @@ import streamlit as st
 from core import timeclock
 from core import clock
 
+from core.i18n import t
 logger = logging.getLogger(__name__)
 
 SHEET = "Calculos"
@@ -31,10 +32,10 @@ HEADERS = ["ID", "ProyectoID", "Grupo", "Herramienta", "Fecha", "Usuario",
 
 # Etiqueta visible por herramienta (la clave se guarda en la hoja)
 HERRAMIENTAS = {
-    "survey":   "Survey de elevador",
-    "plomada":  "Líneas de plomada",
-    "rieles":   "Corte de rieles",
-    "buffers":  "Corte de buffers",
+    "survey":   "Lift survey",
+    "plomada":  "Plumb lines",
+    "rieles":   "Rail cutting",
+    "buffers":  "Buffer cutting",
     "belting":  "Belting",
 }
 
@@ -154,7 +155,7 @@ def registrar(pid: str, grupo: str, herramienta: str, resumen: str,
     """Guarda el cálculo contra el proyecto. Devuelve {ok, id, drive_id, error}."""
     res = {"ok": False, "id": "", "drive_id": "", "error": ""}
     if not pid:
-        res["error"] = "Falta el proyecto."
+        res["error"] = t("The project is missing.")
         return res
 
     # 1) Archivar el PDF (best-effort: si Drive falla, el registro igual se guarda)
@@ -172,7 +173,7 @@ def registrar(pid: str, grupo: str, herramienta: str, resumen: str,
     # 2) Fila en la hoja
     w = _ws()
     if w is None:
-        res["error"] = "No se pudo abrir la hoja de cálculos."
+        res["error"] = t("Could not open the calculations sheet.")
         return res
     try:
         cid = _next_id()

@@ -31,6 +31,7 @@ import logging
 
 import streamlit as st
 
+from core.i18n import t
 logger = logging.getLogger(__name__)
 
 
@@ -130,5 +131,5 @@ def exigir(obj, etiqueta: str = "Esto", campo: str = "Grupo") -> bool:
         return True
     logger.warning("tenant: %s de grupo %r pedido por %r (grupo %r) — bloqueado",
                    etiqueta, str(g_obj), _auth().get("usuario", ""), grupo_sesion())
-    st.error(f":material/lock: {etiqueta} no existe o no es de tu empresa.")
+    st.error(f":material/lock: {etiqueta} " + t("does not exist or is not yours."))
     return False

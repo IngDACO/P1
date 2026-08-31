@@ -7288,6 +7288,72 @@ se GUARDAN en la hoja `Actividades` → migración del histórico). El informe d
 no está entero en inglés hasta que caigan esas tres, y conviene saberlo antes de
 enseñárselo a un cliente.
 
+## i18n F5c: los 14 módulos de backend que quedaban (v447)
+
+`expenses`, `roster`, `inventory`, `credentials`, `payroll`, `prestart`, `rails`,
+`plan_data`, `invoices`, `manuals`, `toolruns`, `plan_store`, `tenant`, `excel_io`.
+Con esto **el backend de la app queda sin un solo mensaje en español**.
+
+### ⚠️ Aquí lo peligroso no fue traducir: fue RENOMBRAR
+`pre_i18n` marcó **25 funciones** con `t`/`d` como variable. Renombrarlas es DOS
+pasos —la asignación y todos sus usos— y el segundo se me escapó otra vez. El peor,
+en `payroll.neto`:
+
+```python
+_tp = str(c.get("tipo", "")).lower()   # renombrado
+if _tp == "devengo": ...
+elif t == "deduccion":                 # ← se quedó
+```
+
+Con `t` ya importado como la función de idioma, **eso no da error**: la comparación
+sale siempre `False` y **las deducciones dejan de restarse del neto a pagar**. Un
+fallo de dinero, silencioso, en la función que calcula lo que cobra cada persona.
+`compileall` en verde, imports en verde, guardianes en verde. Lo encontró
+**preguntarle al AST por todos los `Name` llamados `t`** después de cada renombrado,
+y por eso el guardián de v447 **ejecuta `neto()`** con un caso conocido.
+
+### ⚠️ Y me tapé a mí mismo dos veces más
+- En `manuals` renombré la variable del bucle a **`_tok`**… que ya era el nombre del
+  **TOKENIZADOR del módulo**. `_index()` reventó con `UnboundLocalError` — el fallo
+  de shadowing cometido *dentro* del arreglo del shadowing. Pasó a `_w`.
+- El **`t()` congelado al importar** salió otras **dos** veces (`plan_data.USA`,
+  `toolruns.HERRAMIENTAS`): son dicts de módulo. Tercera y cuarta vez en tres
+  versiones, y las cuatro las cazó el guardián de v445. Sus valores van en texto
+  BASE, sin envolver; las **claves no se tocan** (se guardan en la hoja `Calculos`).
+
+### La prueba de que no se movió ningún número
+Foto de **261 líneas** con 12 agregados del grupo —`payroll.neto`, `resumen`, P&L,
+conciliación, rentabilidad, gastos, horas por persona, matriz de credenciales,
+valor de inventario— comparada contra el código anterior con **`git stash`** (no de
+memoria, regla v422): **idénticas**. ⚠️ Y el primer intento dio «IDÉNTICAS»
+comparando **dos ficheros vacíos**, porque el script fallaba con el `stderr`
+silenciado: el paso en vacío (trampa nº1) en la propia comprobación. Ahora se exige
+que la foto tenga ≥20 líneas antes de comparar.
+
+### Lo que va en idioma BASE y no lleva `t()` (regla v436)
+Los avisos de vencimiento de `credentials` (correo/Telegram), las dos alarmas del
+`prestart` (llegan por Telegram a los administradores), el concepto de la colilla, los
+títulos del **Excel exportado** y la nota `"Decommissioned"` que se escribe en la hoja.
+Salen de la empresa: su idioma no puede depender de la pantalla de quien los dispara.
+
+### Verificación
+`verif_v447.py` (30 comprobaciones) **EJECUTA** lo que el renombrado pudo romper
+—`payroll.neto`, `conciliacion_mo`, `credentials.matrix`, `manuals.search`,
+`prestart._norm_nombre`, `inventory.ubic_str`, `roster.rango_label`— y comprueba por
+AST que no queda ni un `t` local en los 14. Probado contra **7 roturas**: las caza las
+7 — ⚠️ pero **una solo tras integrar el chequeo de importes**, que vivía en un script
+aparte: *un chequeo que no está en la suite no protege nada*.
+
+### Lo que queda de la migración
+| | |
+|---|---|
+| `report.py` (101) | el **informe ADMIN**: es un documento → `d()`. Es el bloque grande que falta |
+| `interpretation` (17) · `chat_agent` (14) | los **prompts de la IA**, que deciden en qué idioma escribe el modelo |
+| `admin_digest` (18) | los textos del radar del administrador |
+| `email_notify` (10) | correos → idioma base |
+| `schedule.py` (10) | ⚠️ los **nombres de actividad**, que se GUARDAN en la hoja `Actividades`: es migración de histórico, no traducción |
+| `theme.py` (14) | comentarios dentro del CSS (falsos positivos, comprobado) |
+
 ## i18n F5b: seis módulos de backend más (v446)
 
 Sigue a v445 con el mismo criterio —se traduce lo que la función **DEVUELVE**, no lo
@@ -7992,7 +8058,7 @@ literal, así que **no casaba nunca** — y dejó pasar «Plomo riel izquierdo»
 Es el mismo fallo de v436, cometido otra vez ese mismo día. Se vio con `cat -A`, no
 leyendo. → **Cualquier `\b`, `\n` o `\w` va por fichero escrito, nunca por heredoc.**
 
-## Versiones desplegadas (v446 = actual)
+## Versiones desplegadas (v447 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -8000,6 +8066,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v447 | **F5c: los 14 módulos de backend que quedaban** — con esto el backend no tiene un solo mensaje en español. ⚠️ Aquí lo peligroso no fue traducir sino **RENOMBRAR**: `pre_i18n` marcó 25 funciones con `t`/`d` como variable, y renombrar es DOS pasos. El que se me escapó, en `payroll.neto`, era `elif t == "deduccion"` — con `t` ya importado como la función de idioma **no da error**: la comparación sale siempre False y **las deducciones dejan de restarse del neto a pagar**. Un fallo de dinero, silencioso, con `compileall` e imports en verde; lo encontró preguntarle al AST por todos los `Name` llamados `t` tras cada renombrado. ⚠️ Y me tapé a mí mismo dos veces más: en `manuals` renombré la variable del bucle a `_tok`, **que ya era el TOKENIZADOR del módulo** (shadowing dentro del arreglo del shadowing), y el **`t()` congelado al importar** salió otras dos veces (`plan_data.USA`, `toolruns.HERRAMIENTAS`) — cuatro en tres versiones, las cuatro cazadas por el guardián de v445. ⚠️ Y la foto de 261 líneas que prueba que **ningún número se movió** dio primero «IDÉNTICAS» comparando **dos ficheros vacíos** (el script fallaba con el stderr silenciado): el paso en vacío dentro de la propia comprobación. 7 roturas probadas — una solo tras integrar el chequeo de importes, que vivía aparte: *un chequeo que no está en la suite no protege nada* |
 | v446 | **F5b: seis módulos de backend más** (`quotes`, `projects`, `ausencias`, `orders`, `catalogo`, `clientes`; 88 mensajes). ⚠️ Aquí el riesgo de traducir un DATO es máximo y se midió antes: `projects.derive_estado` **devuelve** `"En progreso"`/`"Planificado"`, que se escriben en la hoja y se comparan en 387 sitios. ⚠️ **Renombrar es dos pasos**: al pasar los `t = totales(...)` de `quotes` a `_tot` quedaron **16 usos de `t["subtotal"]` colgando** —`NameError` en cuanto alguien creara una cotización—, encontrados preguntando al AST por todos los `Name` llamados `t` (16 antes, 0 después). ⚠️ Y **cometí el fallo de v445 veinte minutos después de documentarlo**: metí `t()` dentro de `ausencias.TIPOS`, que se construye a nivel de módulo, así que las etiquetas quedaban congeladas al importar — lo cazó el guardián recién escrito; la constante guarda el texto BASE y `nombre_tipo()` traduce al pintar (en los correos se queda en base, regla v436). ⚠️ Al mover esas lecturas escribí `nombre_tipo(k)` cuando **la variable del bucle es `_tp`**: otro `NameError` que habría reventado «Mis ausencias» y que ni `compileall` ni el import ven. ⚠️ Y **cuatro «fallos» del smoke eran del test** (firmas de `solicitar`, `crear` ×2 y `create_cliente`) — regla v135, novena vez. 7 roturas probadas |
 | v445 | **F5a: los mensajes de BACKEND que la interfaz pinta** — empieza la última fase. Aquí no vale la red de POSICIÓN (no hay llamadas a `st.*`): decide el **DESTINO** de la cadena — se traduce lo que la función **DEVUELVE** (la UI lo pinta con `flash`), y ⚠️ **NO** los mensajes de `logger` ni los **nombres de columna que viajan en el mismo `return`** (`"Usuario"`, `"Nombre"`), que son el DATO del libro. Se empieza por `auth.py` y `timeclock.py` (42 mensajes) porque son los que más se ven: cada login y cada jornada pasan por ahí. ⚠️ **El orden**: la local `t` de `auth._session_active` se renombró ANTES de traducir (pre_i18n), y en `timeclock` solo entra `t` porque `d` ya es variable en tres funciones. ⚠️ **Correr el mismo parche dos veces duplicó un import** en `timeclock`, y en `auth` el ancla era ambigua, así que **el import no se aplicó mientras las llamadas `t()` sí** — un `NameError` esperando en cada login, cazado por el chequeo de importes de v443. ⚠️ Y **tres «fallos» del smoke eran del test**: `verify_login` devuelve un dict y no una tupla, `_segmentos_dia` recibe un datetime y no una cadena, y la validación de campos obligatorios vive en `auth_ui` — regla v135 tres veces en un script. 6 roturas probadas; una solo tras corregir el guardián, que miraba `'"Usuario"' in fuente` cuando esa cadena aparece en medio módulo |
 | v444 | **Las CABECERAS DE TABLA que son clave de dict, y la QUINTA red.** ⚠️ Aquí no se decide por idioma: una clave de dict y una etiqueta **se ven igual en el AST**, así que `riesgo_claves.py` clasifica las 70 candidatas por lo que HACEN — 15 son IDENTIFICADOR (opción de widget o comparada con `==`: traducirla deja la rama MUERTA), 10 son COLUMNA DE EDITOR (el `_snapshot` de v148 las guarda en `DatosJSON`), 17 SE LEEN desde otro módulo y 4 son VALOR de `i18n`. Las **31 traducibles** se aplicaron **por AST y por posición**, nunca por texto: `"Credenciales"` es también el nombre de una hoja y `"Horas"`/`"Estado"` son columnas reales del libro. ⚠️ **El clasificador dio por SEGURA una que no lo era**: `'Riel'` es columna del editor persistido y no la vio porque `["Riel"]` dentro de una lista no es un `Subscript` — un falso «se puede» invita a romper justo lo que hay que proteger. + **QUINTA red**: etiquetas de UNA palabra dentro de TUPLAS (`("cred", …, "Credenciales", …)`, `f"→ Ir a {secn}"`), invisibles para las cuatro redes anteriores y que van a mano porque la misma cadena es dato en otro sitio; ⚠️ mi propia exclusión de nombres de hoja **tapaba dos etiquetas reales**. ⚠️ Y el chequeo de `column_config` **se aprobaba a sí mismo** (contaba sus propias claves como si fueran de la fila) y decía «0 huérfanas» con media traducción rota delante. 7 roturas probadas — dos solo tras corregir el guardián, las dos por comprobar PRESENCIA en vez del literal exacto |

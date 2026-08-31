@@ -58,7 +58,7 @@ def export_survey_excel(df: pd.DataFrame, project_info: dict = None,
 
     # Título
     ws.merge_cells("A1:G1")
-    ws["A1"] = "SURVEY ANALYZER — Matriz de medidas en campo (mm)"
+    ws["A1"] = "SURVEY ANALYZER — Field measurement matrix (mm)"
     ws["A1"].font      = Font(color="FFFFFF", bold=True, name="Calibri", size=12)
     ws["A1"].fill      = _HEADER_FILL
     ws["A1"].alignment = _CENTER
@@ -86,11 +86,11 @@ def export_survey_excel(df: pd.DataFrame, project_info: dict = None,
 
     # ── Hoja INFO (parámetros numéricos) ──
     if project_info:
-        _write_info_sheet(wb, "INFO", "Parámetros del proyecto", project_info)
+        _write_info_sheet(wb, "INFO", "Project parameters", project_info)
 
     # ── Hoja CONFIG (condiciones del proyecto) ──
     if project_config:
-        _write_info_sheet(wb, "CONFIG", "Condiciones del proyecto", project_config)
+        _write_info_sheet(wb, "CONFIG", "Project conditions", project_config)
 
     buf = io.BytesIO()
     wb.save(buf)
@@ -159,11 +159,11 @@ def import_survey_excel(file) -> dict:
     try:
         df = pd.read_excel(file, sheet_name="SURVEY", header=1, usecols="A:G")
     except Exception as e:
-        raise ValueError(f"No se pudo leer la hoja SURVEY: {e}")
+        raise ValueError(f"Could not read the SURVEY sheet: {e}")
 
     expected_cols = ["Parada"] + SURVEY_COLS
     if len(df.columns) != len(expected_cols):
-        raise ValueError(f"La hoja SURVEY debe tener {len(expected_cols)} columnas (encontradas: {len(df.columns)})")
+        raise ValueError(f"The SURVEY sheet must have {len(expected_cols)} columns (found: {len(df.columns)})")
     df.columns = expected_cols
     df = df.drop(columns=["Parada"])
     df = df.apply(pd.to_numeric, errors="coerce").fillna(0.0)
