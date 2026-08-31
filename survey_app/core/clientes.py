@@ -17,6 +17,7 @@ import streamlit as st
 from core import clock, timeclock
 from core.num import col_letter as _col_letter
 
+from core.i18n import t
 logger = logging.getLogger(__name__)
 
 CLIENTES_SHEET = "Clientes"
@@ -53,12 +54,12 @@ def _norm(s) -> str:
 # ── Worksheet + lecturas cacheadas ───────────────────────────────
 def _ws():
     if not timeclock._secrets_present():
-        return None, "Google Sheets no está configurado."
+        return None, t("Google Sheets is not configured.")
     try:
         return timeclock.get_sheet(CLIENTES_SHEET, tuple(CLIENTES_HEADERS)), None
     except Exception as e:
         logger.warning("clientes: no se pudo abrir la hoja: %s", e)
-        return None, f"No se pudo abrir la hoja {CLIENTES_SHEET}: {e}"
+        return None, f"{t('Could not open sheet')} {CLIENTES_SHEET}: {e}"
 
 
 @st.cache_data(ttl=120, show_spinner=False)
@@ -166,10 +167,10 @@ def create_cliente(grupo, nombre, contacto="", telefono="", email="",
         return False, err
     nombre = str(nombre or "").strip()
     if not nombre:
-        return False, "El nombre del cliente es obligatorio."
+        return False, t("The client name is required.")
     for r in _records():
         if str(r.get("Grupo", "")) == str(grupo) and _norm(r.get("Nombre")) == _norm(nombre):
-            return False, "Ya existe una ficha de cliente con ese nombre en el grupo."
+            return False, t("A client with that name already exists in this group.")
     cid = _next_id()
     row = [cid, grupo, nombre, str(contacto or ""), str(telefono or ""),
            str(email or ""), str(direccion or ""), str(notas or ""),
@@ -194,7 +195,7 @@ def update_cliente(cid: str, fields: dict) -> tuple:
             row = i + 2  # +1 cabecera, +1 base-1
             break
     if row is None:
-        return False, "Cliente no encontrado."
+        return False, t("Client not found.")
     batch = [{"range": f"{_col_letter(_CCOL[k])}{row}", "values": [[str(v)]]}
              for k, v in fields.items() if k in _CCOL]
     if batch:
@@ -203,7 +204,7 @@ def update_cliente(cid: str, fields: dict) -> tuple:
         except Exception as e:
             return False, str(e)
     _invalidate()
-    return True, "Cliente actualizado."
+    return True, t("Client updated.")
 
 
 def set_activo(cid: str, activo: bool) -> tuple:

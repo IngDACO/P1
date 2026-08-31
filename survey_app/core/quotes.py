@@ -37,6 +37,7 @@ from core.num import col_letter as _col_letter
 from core.num import num as _num
 from core.num import parse_date as _parse_date
 
+from core.i18n import t
 logger = logging.getLogger(__name__)
 
 SHEET = "Cotizaciones"
@@ -201,12 +202,12 @@ def desactualizadas(c: dict) -> list:
         it = CAT.get_item(l.get("catalogo_id"))
         if not it:
             out.append({"i": i, "linea": l, "item": None, "costo_hoy": None,
-                        "motivo": "ya no está en el catálogo"})
+                        "motivo": t("no longer in the catalogue")})
             continue
         hoy = CAT.costo_de(it, _num(l.get("cantidad")))
         if abs(hoy - _num(l.get("costo_total"))) > 0.005:
             out.append({"i": i, "linea": l, "item": it, "costo_hoy": hoy,
-                        "motivo": "cambió en el catálogo"})
+                        "motivo": t("changed in the catalogue")})
     return out
 
 
@@ -219,13 +220,13 @@ def actualizar_precios(cid) -> tuple:
     """
     c = get_cotizacion(cid)
     if not c:
-        return False, "Cotización no encontrada."
+        return False, t("Quote not found.")
     if estado_de(c) != BORRADOR:
-        return False, ("Solo se pueden actualizar precios en un borrador. Esta ya se "
-                       "envió: saca una versión nueva.")
+        return False, t("Prices can only be updated on a draft. This one was "
+                        "already sent: create a new version.")
     des = desactualizadas(c)
     if not des:
-        return False, "Los precios ya están al día."
+        return False, t("Prices are already up to date.")
     lineas = lineas_de(c)
     n, huerf = 0, []
     for d in des:
@@ -239,9 +240,10 @@ def actualizar_precios(cid) -> tuple:
     ok, msg = guardar_lineas(cid, lineas)
     if not ok:
         return False, msg
-    txt = f"{n} línea(s) actualizada(s) con los precios de hoy."
+    txt = f"{n} " + t("line(s) updated with today's prices.")
     if huerf:
-        txt += (" Sin tocar (ya no están en el catálogo): " + ", ".join(huerf) + ".")
+        txt += (" " + t("Untouched (no longer in the catalogue)") + ": "
+                + ", ".join(huerf) + ".")
     return True, txt
 
 
@@ -373,12 +375,12 @@ def crear(grupo, cliente_id, cliente_nombre, lineas, impuesto_pct=0.0,
           validez=None, nota="", creado_por="", origen="") -> tuple:
     w = _ws()
     if w is None:
-        return False, "Google Sheets no está configurado."
+        return False, t("Google Sheets is not configured.")
     if not lineas:
-        return False, "Añade al menos una línea a la cotización."
+        return False, t("Add at least one line to the quote.")
     if not str(cliente_nombre or "").strip():
-        return False, "Elige a quién va la cotización."
-    t = totales(lineas, impuesto_pct)
+        return False, t("Choose who the quote is for.")
+    _tot = totales(lineas, impuesto_pct)
     mx_id, mx_num = _ids_frescos()
     cid, num = f"COT-{mx_id + 1:04d}", f"{mx_num + 1:04d}"
     hoy = clock.today(grupo)
@@ -386,13 +388,13 @@ def crear(grupo, cliente_id, cliente_nombre, lineas, impuesto_pct=0.0,
     try:
         w.append_row([cid, str(grupo), str(cliente_id), str(cliente_nombre), num,
                       hoy.isoformat(), str(val), json.dumps(lineas, ensure_ascii=False),
-                      str(t["subtotal"]), str(_num(impuesto_pct)), str(t["impuesto"]),
-                      str(t["total"]), str(t["margen_pct"]), BORRADOR, "", "1",
+                      str(_tot["subtotal"]), str(_num(impuesto_pct)), str(_tot["impuesto"]),
+                      str(_tot["total"]), str(_tot["margen_pct"]), BORRADOR, "", "1",
                       str(origen), str(nota), str(creado_por),
                       clock.now(grupo).strftime("%Y-%m-%d %H:%M")],
                      value_input_option="RAW")
     except Exception as e:
-        return False, f"Error guardando la cotización: {e}"
+        return False, f"{t('Error saving the quote')}: {e}"
     _invalidate()
     return True, cid
 
@@ -426,41 +428,42 @@ def guardar_lineas(cid, lineas, impuesto_pct=None) -> tuple:
     """Reemplaza las líneas y recalcula los totales. Solo en BORRADOR."""
     w = _ws()
     if w is None:
-        return False, "Google Sheets no está configurado."
+        return False, t("Google Sheets is not configured.")
     row, c = _fila(w, cid)
     if row is None:
-        return False, "Cotización no encontrada."
+        return False, t("Quote not found.")
     if estado_de(c) != BORRADOR:
         # ⚠️ Una cotización ya enviada es un documento que el cliente tiene en la mano:
         # cambiarla por debajo es como reescribir una factura emitida. Se saca una
         # versión nueva (`nueva_version`), que además deja rastro de lo que cambió.
-        return False, ("Esta cotización ya no es un borrador. Crea una versión nueva "
-                       "para cambiarla.")
+        return False, t("This quote is no longer a draft. Create a new version "
+                        "to change it.")
     imp = _num(c.get("ImpuestoPct")) if impuesto_pct is None else _num(impuesto_pct)
-    t = totales(lineas, imp)
+    _tot = totales(lineas, imp)
     ok, err = _set(w, row, {
         "LineasJSON": json.dumps(lineas, ensure_ascii=False),
-        "Subtotal": t["subtotal"], "ImpuestoPct": imp, "Impuesto": t["impuesto"],
-        "Total": t["total"], "MargenPct": t["margen_pct"]})
+        "Subtotal": _tot["subtotal"], "ImpuestoPct": imp, "Impuesto": _tot["impuesto"],
+        "Total": _tot["total"], "MargenPct": _tot["margen_pct"]})
     if not ok:
         return False, err
     _invalidate()
-    return True, "Cotización actualizada."
+    return True, t("Quote updated.")
 
 
 def set_estado(cid, estado) -> tuple:
     if estado not in ESTADOS:
-        return False, f"Estado no válido: {estado}."
+        return False, f"{t('Invalid status')}: {estado}."
     w = _ws()
     if w is None:
-        return False, "Google Sheets no está configurado."
+        return False, t("Google Sheets is not configured.")
     row, c = _fila(w, cid)
     if row is None:
-        return False, "Cotización no encontrada."
+        return False, t("Quote not found.")
     antes = estado_de(c)
     if antes == ACEPTADA and estado != ACEPTADA and str(c.get("ProyectoID", "")).strip():
-        return False, ("Esta cotización ya generó el proyecto "
-                       f"{c.get('ProyectoID')}: no se puede cambiar su estado.")
+        return False, (t("This quote already created project") + " "
+                       + f"{c.get('ProyectoID')}: "
+                       + t("its status cannot be changed."))
     ok, err = _set(w, row, {"Estado": estado})
     if not ok:
         return False, err
@@ -472,7 +475,7 @@ def set_estado(cid, estado) -> tuple:
                             grupo=str(c.get("Grupo", "")))
     except Exception as e:
         logger.warning("quotes: no se pudo auditar el estado de %s: %s", cid, e)
-    return True, f"Cotización marcada como {estado}."
+    return True, f"{t('Quote marked as')} {estado}."
 
 
 def nueva_version(cid, creado_por="") -> tuple:
@@ -483,7 +486,7 @@ def nueva_version(cid, creado_por="") -> tuple:
     """
     c = get_cotizacion(cid)
     if not c:
-        return False, "Cotización no encontrada."
+        return False, t("Quote not found.")
     ok, nuevo = crear(c.get("Grupo"), c.get("ClienteID"), c.get("ClienteNombre"),
                       lineas_de(c), _num(c.get("ImpuestoPct")),
                       nota=str(c.get("Nota", "")), creado_por=creado_por,
@@ -515,13 +518,14 @@ def aceptar_y_crear_proyecto(cid, nombre="", tipo="Instalación", fecha_inicio=N
     """
     c = get_cotizacion(cid)
     if not c:
-        return False, "Cotización no encontrada."
+        return False, t("Quote not found.")
     if str(c.get("ProyectoID", "")).strip():
-        return False, (f"Esta cotización ya generó el proyecto {c.get('ProyectoID')}.")
+        return False, (t("This quote already created project")
+                       + f" {c.get('ProyectoID')}.")
     lineas = lineas_de(c)
     if not lineas:
-        return False, "La cotización no tiene líneas."
-    t = totales(lineas, _num(c.get("ImpuestoPct")))
+        return False, t("The quote has no lines.")
+    _tot = totales(lineas, _num(c.get("ImpuestoPct")))
 
     from core import projects as P
     from core import schedule as S
@@ -538,11 +542,11 @@ def aceptar_y_crear_proyecto(cid, nombre="", tipo="Instalación", fecha_inicio=N
         cliente=str(c.get("ClienteNombre", "")), cliente_id=str(c.get("ClienteID", "")),
         ubicacion=str(ubicacion), ns=int(_num(ns)), fecha_inicio=ini.isoformat(),
         fecha_fin_est=fin, activities=acts,
-        presupuesto=str(t["costo"]),          # ⚠️ el COSTO (ver arriba)
-        margen_mo=str(t["margen_pct"]),       # decisión del usuario: el de la cotización manda
+        presupuesto=str(_tot["costo"]),          # ⚠️ el COSTO (ver arriba)
+        margen_mo=str(_tot["margen_pct"]),       # decisión del usuario: el de la cotización manda
         tipo=str(tipo), creado_por=creado_por)
     if not ok:
-        return False, f"No se pudo crear el proyecto: {res}"
+        return False, f"{t('Could not create the project')}: {res}"
 
     w = _ws()
     row, _r = _fila(w, cid)
@@ -551,8 +555,9 @@ def aceptar_y_crear_proyecto(cid, nombre="", tipo="Instalación", fecha_inicio=N
         _invalidate()
     else:
         # el proyecto ya existe: decirlo, no fingir que no pasó nada
-        return False, (f"Se creó el proyecto {res}, pero no se pudo enlazar con la "
-                       "cotización. Enlázalo a mano.")
+        return False, (f"{t('Project')} {res} "
+                       + t("was created, but it could not be linked to the "
+                           "quote. Link it by hand."))
     try:
         from core import auditoria
         auditoria.registrar("cotizacion", cid,
@@ -576,7 +581,7 @@ def comparacion(cid) -> dict:
     if not pid:
         return {}
     grupo = str(c.get("Grupo", ""))
-    t = totales(lineas_de(c), _num(c.get("ImpuestoPct")))
+    _tot = totales(lineas_de(c), _num(c.get("ImpuestoPct")))
     from core import expenses as E
     from core import projects as P
     try:
@@ -600,19 +605,19 @@ def comparacion(cid) -> dict:
     # familia de v320 y v324). Lo que sí es accionable es la PROYECCIÓN al ritmo
     # actual, igual que `expenses.cost_projection` hace con el presupuesto (v144).
     costo_proy = round(real["total"] * 100.0 / av, 2) if av > 0 and real["total"] > 0 else None
-    gan_proy = round(t["subtotal"] - costo_proy, 2) if costo_proy is not None else None
+    gan_proy = round(_tot["subtotal"] - costo_proy, 2) if costo_proy is not None else None
     return {
         "proyecto_id": pid, "proyecto": str(prj.get("Nombre", "")),
         "avance": av,
         "terminado": av >= 100,
-        "horas": _dif(t["horas"], horas_real),
-        "costo": _dif(t["costo"], real["total"]),
+        "horas": _dif(_tot["horas"], horas_real),
+        "costo": _dif(_tot["costo"], real["total"]),
         # el ingreso es fijo: es lo que el cliente aceptó pagar
-        "ingreso": t["subtotal"],
-        "ganancia_cotizada": t["ganancia"],
+        "ingreso": _tot["subtotal"],
+        "ganancia_cotizada": _tot["ganancia"],
         # ⚠️ None mientras no haya avance o costo: sin base, proyectar es inventar.
         "costo_proyectado": costo_proy,
         "ganancia_proyectada": gan_proy,
         # solo tiene sentido llamarla «real» cuando la obra terminó
-        "ganancia_real": round(t["subtotal"] - real["total"], 2) if av >= 100 else None,
+        "ganancia_real": round(_tot["subtotal"] - real["total"], 2) if av >= 100 else None,
     }

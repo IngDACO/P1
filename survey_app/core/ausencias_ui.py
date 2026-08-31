@@ -34,7 +34,7 @@ def _chip_estado(e: str) -> str:
 
 def _linea(r) -> str:
     cfg = AU.TIPOS.get(str(r.get("Tipo", "")), {})
-    return (f"**{cfg.get('nombre', r.get('Tipo'))}** · {r.get('Desde')} → "
+    return (f"**{AU.nombre_tipo(r.get('Tipo'))}** · {r.get('Desde')} → "
             f"{r.get('Hasta')} · {r.get('Dias')} {t('day(s)')} · {_chip_estado(str(r.get('Estado')))}")
 
 
@@ -63,11 +63,11 @@ def render_mis_ausencias():
         s = AU.saldo(grupo, usuario, _tp)
         _per = _per or s.get("periodo")
         if s["ilimitado"]:
-            tarj.append(_kpi(cfg["nombre"], f"{s['usados']:.0f}",
+            tarj.append(_kpi(AU.nombre_tipo(_tp), f"{s['usados']:.0f}",
                              pie=t("days used in the period")))
         else:
             _col = "#c0392b" if s["restantes"] <= 0 else None
-            tarj.append(_kpi(cfg["nombre"], f"{s['restantes']:.0f}",
+            tarj.append(_kpi(AU.nombre_tipo(_tp), f"{s['restantes']:.0f}",
                              pie=f"{t('of')} {s['asignados']:.0f} · {t('used')} {s['usados']:.0f}",
                              color=_col))
     st.markdown('<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:8px">'
@@ -98,7 +98,7 @@ def render_mis_ausencias():
             t("What do you need?"), _tipos, key="aus_tipo",
             # ⚠️ EMOJI, no `:material/…:`: en las opciones de un selectbox el material
             # sale como texto literal (medido en el Cloud). En `st.radio` sí funciona.
-            format_func=lambda _k: f"{AU.TIPOS[_k]['emoji']} {AU.TIPOS[_k]['nombre']}")
+            format_func=lambda _k: f"{AU.TIPOS[_k]['emoji']} {AU.nombre_tipo(_k)}")
         cfg = AU.TIPOS[tipo]
         if not cfg["aprobacion"]:
             st.info(t(":material/info: Sick leave **is recorded straight away**: you do not have to wait for anyone to approve it. Your manager will see it as soon as you send it."))

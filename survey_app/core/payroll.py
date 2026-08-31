@@ -265,8 +265,10 @@ def generar(grupo, desde, hasta, super_pct=0.0, ret_pct=0.0, creado_por="") -> d
         if monto_aus > 0:
             from core import ausencias as _AU
             conceptos.append({
+                # ⚠️ En idioma BASE, sin `t()`: es el concepto de la COLILLA, que se
+                # imprime y se guarda en la hoja — un documento, no una pantalla (v436).
                 "concepto": (_AU.etiqueta_ausencias(_a.get("por_tipo"))
-                             or "Ausencia pagada") + f" — {_ah:g} h",
+                             or "Paid absence") + f" — {_ah:g} h",
                 "tipo": "devengo", "monto": monto_aus, "origen": "ausencia"})
 
         # ⚠️ La retención y el aporte se calculan sobre base + ausencia pagada: un día

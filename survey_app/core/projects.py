@@ -21,6 +21,7 @@ from core import timeclock
 from core import clock
 from core.num import col_letter as _col_letter, num as _num
 
+from core.i18n import t
 logger = logging.getLogger(__name__)
 
 PROJECTS_SHEET   = "Proyectos"
@@ -186,12 +187,12 @@ def etiqueta_proyectos(proys) -> dict:
 # ── Worksheets (crea la pestaña si no existe) ────────────────────
 def _get_ws(title, headers):
     if not timeclock._secrets_present():
-        return None, "Google Sheets no está configurado."
+        return None, t("Google Sheets is not configured.")
     try:
         return timeclock.get_sheet(title, tuple(headers)), None
     except Exception as e:
         logger.warning("projects: no se pudo abrir la hoja %s: %s", title, e)
-        return None, f"No se pudo abrir la hoja {title}: {e}"
+        return None, f"{t('Could not open sheet')} {title}: {e}"
 
 
 def _projects_ws():   return _get_ws(PROJECTS_SHEET,   PROJECTS_HEADERS)
@@ -363,7 +364,7 @@ def create_grouping(grupo: str, nombre: str, descripcion: str = "") -> tuple:
             except Exception:
                 pass
         if str(r.get("Grupo", "")) == str(grupo) and str(r.get("Nombre", "")) == nombre:
-            return False, "Ya existe una agrupación con ese nombre en el grupo."
+            return False, t("A grouping with that name already exists in this group.")
     # ⚠️ v428: sin reciclar. `delete_grouping` borra la fila de verdad, así que su ID
     # queda libre — y los proyectos guardan `AgrupacionID`. Reutilizarlo metería en la
     # agrupación nueva los elevadores que colgaban de la borrada.
@@ -384,10 +385,10 @@ def delete_grouping(gid: str) -> tuple:
         return False, err
     row = _find_row(gws, "ID", gid)
     if row is None:
-        return False, "Agrupación no encontrada."
+        return False, t("Grouping not found.")
     gws.delete_rows(row)
     _invalidate()
-    return True, "Agrupación eliminada."
+    return True, t("Grouping deleted.")
 
 
 # ── Proyectos ────────────────────────────────────────────────────
@@ -442,8 +443,9 @@ def create_project(grupo, nombre, cliente="", ubicacion="", modelo="", ns=0,
     # ⚠️ La fila es POSICIONAL: si no cuadra con la cabecera, cada dato se guarda en la
     # columna de al lado (silencioso y difícil de ver). Se comprueba aquí, no en un test.
     if len(row) != len(PROJECTS_HEADERS):
-        return False, (f"Error interno: la fila tiene {len(row)} valores y la cabecera "
-                       f"{len(PROJECTS_HEADERS)} columnas.")
+        return False, (f"{t('Internal error: the row has')} {len(row)} "
+                       f"{t('values and the header has')} "
+                       f"{len(PROJECTS_HEADERS)} {t('columns.')}")
     pws.append_row(row, value_input_option="RAW")
 
     # Actividades del cronograma (batch: 1 sola llamada a la API)
@@ -479,7 +481,7 @@ def attach_survey(pid: str, params: dict = None, matriz=None,
     if interp is not None:
         campos["InterpJSON"] = json.dumps(interp or {}, ensure_ascii=False, default=str)
     if not campos:
-        return False, "Nada que adjuntar."
+        return False, t("Nothing to attach.")
     return update_project(pid, campos)
 
 
@@ -689,7 +691,7 @@ def set_archivado(pid: str, archivar: bool = True) -> tuple:
     """Archiva o restaura un proyecto. No borra nada."""
     prj = get_project(pid)
     if not prj:
-        return False, "Proyecto no encontrado."
+        return False, t("Project not found.")
     if archivar:
         return update_project(pid, {"EstadoManual": ARCHIVADO, "Estado": ARCHIVADO})
     # ⚠️ v422: con el tipo. Sin él, restaurar una localización interna la devolvía a
@@ -806,7 +808,7 @@ def update_project(pid: str, fields: dict) -> tuple:
         return False, err
     row = _find_row(pws, "ID", pid)
     if row is None:
-        return False, "Proyecto no encontrado."
+        return False, t("Project not found.")
     # v342: el ANTES se captura aquí, antes de escribir. Sale de la caché (0 llamadas).
     _antes = dict(get_project(pid) or {})
     # ⚠️ v344: lo que de verdad se va a escribir. Una clave que no está en `_PCOL`
@@ -819,8 +821,8 @@ def update_project(pid: str, fields: dict) -> tuple:
         logger.warning("update_project(%s): columnas desconocidas, NO se escriben: %s",
                        pid, ", ".join(_ignorados))
     if fields and not _escritos:
-        return False, ("Ningún campo reconocido: " + ", ".join(_ignorados)
-                       + ". No se guardó nada.")
+        return False, (t("No recognised field") + ": " + ", ".join(_ignorados)
+                       + ". " + t("Nothing was saved."))
     # Una sola llamada a la API (batch) en vez de N update_cell → evita rate limit.
     batch = [{"range": f"{_col_letter(_PCOL[k])}{row}", "values": [[str(v)]]}
              for k, v in _escritos.items()]
@@ -844,14 +846,14 @@ def update_project(pid: str, fields: dict) -> tuple:
         # si lo que revienta es `diff` o el import, el apunte se perdía en silencio
         # y el histórico se quedaba con un hueco que nadie podía explicar.
         logger.warning("projects: no se pudo auditar %s: %s", pid, e)
-    return True, "Proyecto actualizado."
+    return True, t("Project updated.")
 def delete_project(pid: str) -> tuple:
     pws, err = _projects_ws()
     if err:
         return False, err
     row = _find_row(pws, "ID", pid)
     if row is None:
-        return False, "Proyecto no encontrado."
+        return False, t("Project not found.")
     pws.delete_rows(row)
     # borrar sus actividades
     aws, err2 = _activities_ws()
@@ -861,7 +863,7 @@ def delete_project(pid: str) -> tuple:
             if str(recs[i].get("ProyectoID", "")) == str(pid):
                 aws.delete_rows(i + 2)
     _invalidate()
-    return True, "Proyecto eliminado."
+    return True, t("Project deleted.")
 
 
 # ── Actividades ──────────────────────────────────────────────────
@@ -911,7 +913,7 @@ def update_activity_progress(pid: str, orden, avance, fecha_inicio="", fecha_fin
     _tipo  = str(prj.get("Tipo", "")) if prj else ""
     update_project(pid, {"Avance": nuevo, "Estado": derive_estado(nuevo, manual, _tipo)})
     # update_project ya invalida el caché de lecturas
-    return True, f"Avance actualizado. Proyecto: {nuevo}%"
+    return True, f"{t('Progress updated. Project')}: {nuevo}%"
 
 
 def _recompute_project_avance(pid):
@@ -1000,7 +1002,7 @@ def save_field_progress(pid, cambios) -> tuple:
             batch.append({"range": f"{_col_letter(_ACOL['Nota'])}{row}",
                           "values": [[str(c.get("nota", ""))]]})
     if not batch:
-        return True, "Sin cambios que guardar."
+        return True, t("No changes to save.")
     try:
         aws.batch_update(batch, value_input_option="RAW")
     except Exception as ex:
@@ -1040,10 +1042,10 @@ def save_activities(pid, edits) -> tuple:
         try:
             aws.batch_update(batch, value_input_option="RAW")
         except Exception as ex:
-            return False, f"Error guardando actividades: {ex}"
+            return False, f"{t('Error saving activities')}: {ex}"
     _invalidate()
     _recompute_project_avance(pid)
-    return True, "Actividades actualizadas."
+    return True, t("Activities updated.")
 
 
 # ── Horas trabajadas (desde el fichaje) ──────────────────────────
@@ -1130,8 +1132,8 @@ def set_grouping_members(gid: str, miembros: dict, grupo: str = None) -> tuple:
 
     if errores:
         return False, "  ·  ".join(errores[:3])
-    return True, (f"{cambios} proyecto(s) actualizados." if cambios
-                  else "Sin cambios que guardar.")
+    return True, (f"{cambios} " + t("project(s) updated.") if cambios
+                  else t("No changes to save."))
 
 
 def grouping_projection(gid: str, grupo: str = None) -> dict:
@@ -1202,8 +1204,8 @@ def grouping_curve(gid: str, grupo: str = None) -> dict:
         for i in range(1, len(curva)):
             if curva[i][0] >= dia:                       # interpolación lineal
                 (x0, y0), (x1, y1) = curva[i - 1], curva[i]
-                t = (dia - x0) / (x1 - x0) if x1 != x0 else 0
-                return y0 + (y1 - y0) * t
+                _f = (dia - x0) / (x1 - x0) if x1 != x0 else 0
+                return y0 + (y1 - y0) * _f
         return curva[-1][1]
 
     fechas, plan, real = [], [], []
@@ -1300,7 +1302,7 @@ def delete_document_record(pid, drive_id) -> tuple:
         if str(r.get("ProyectoID", "")) == str(pid) and str(r.get("DriveID", "")) == str(drive_id):
             dws.delete_rows(i + 2)
             _invalidate()
-            return True, "Documento eliminado."
+            return True, t("Document deleted.")
     return False, "Registro no encontrado."
 
 

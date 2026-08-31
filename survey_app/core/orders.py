@@ -33,6 +33,7 @@ from core.num import col_letter as _col_letter
 from core.num import num as _num
 from core.num import parse_date as _parse_date
 
+from core.i18n import t
 logger = logging.getLogger(__name__)
 
 SHEET = "Ordenes"
@@ -180,11 +181,11 @@ def crear(pid, grupo, proveedor, valor, descripcion="", categoria="Materiales",
           fecha_esperada="", nota="", creado_por="") -> tuple:
     w = _ws()
     if w is None:
-        return False, "Google Sheets no está configurado."
+        return False, t("Google Sheets is not configured.")
     if _num(valor) <= 0:
-        return False, "El valor de la orden debe ser mayor que 0."
+        return False, t("The order value must be greater than 0.")
     if not str(proveedor).strip():
-        return False, "Indica el proveedor."
+        return False, t("Enter the supplier.")
     oid = _next_id()
     try:
         w.append_row([oid, str(grupo), str(pid), str(proveedor).strip(),
@@ -194,7 +195,7 @@ def crear(pid, grupo, proveedor, valor, descripcion="", categoria="Materiales",
                       clock.now(grupo).strftime("%Y-%m-%d %H:%M")],
                      value_input_option="RAW")
     except Exception as e:
-        return False, f"Error guardando la orden: {e}"
+        return False, f"{t('Error saving the order')}: {e}"
     _invalidate()
     return True, f"Orden {oid} registrada."
 
@@ -230,7 +231,7 @@ def marcar_recibida(oid, valor_real=None, creado_por="") -> tuple:
     """Marca la orden y crea su gasto. En ESTE orden (ver la nota del módulo)."""
     w = _ws()
     if w is None:
-        return False, "Google Sheets no está configurado."
+        return False, t("Google Sheets is not configured.")
     row, r = _fila(w, oid)
     if row is None:
         return False, "Orden no encontrada."
@@ -238,7 +239,7 @@ def marcar_recibida(oid, valor_real=None, creado_por="") -> tuple:
         return False, "Esa orden ya estaba recibida."
     valor = _num(valor_real) if valor_real not in (None, "") else _num(r.get("Valor"))
     if valor <= 0:
-        return False, "El valor recibido debe ser mayor que 0."
+        return False, t("The received value must be greater than 0.")
 
     ok, err = _set(w, row, {"Estado": RECIBIDA,
                             "RecibidaFecha": clock.now(r.get("Grupo")).strftime("%Y-%m-%d")})
@@ -250,11 +251,11 @@ def marcar_recibida(oid, valor_real=None, creado_por="") -> tuple:
     if not ok_g:
         # ⚠️ La orden queda marcada y SIN GastoID a propósito: `sin_gasto()` la
         # detecta y se puede completar. Duplicar el gasto sería peor.
-        return False, (f"Se marcó recibida, pero el gasto NO se registró ({msg_g}). "
-                       "Complétalo desde la lista de órdenes.")
+        return False, (f"{t('Marked as received, but the expense was NOT recorded')} ({msg_g}). "
+                       + t("Complete it from the orders list."))
     _set(w, row, {"GastoID": msg_g})
     _invalidate()
-    return True, f"Orden recibida y cargada al proyecto ({valor:,.2f})."
+    return True, f"{t('Order received and charged to the project')} ({valor:,.2f})."
 
 
 def _crear_gasto(r, valor, creado_por="") -> tuple:
@@ -280,7 +281,7 @@ def completar_gasto(oid, creado_por="") -> tuple:
     """Crea el gasto de una orden que quedó `recibida` sin él."""
     w = _ws()
     if w is None:
-        return False, "Google Sheets no está configurado."
+        return False, t("Google Sheets is not configured.")
     row, r = _fila(w, oid)
     if row is None:
         return False, "Orden no encontrada."
@@ -297,12 +298,12 @@ def completar_gasto(oid, creado_por="") -> tuple:
 def cancelar(oid) -> tuple:
     w = _ws()
     if w is None:
-        return False, "Google Sheets no está configurado."
+        return False, t("Google Sheets is not configured.")
     row, r = _fila(w, oid)
     if row is None:
         return False, "Orden no encontrada."
     if str(r.get("Estado", "")) == RECIBIDA:
-        return False, "Ya se recibió: no se puede cancelar (elimina su recibo si fue un error)."
+        return False, t("Already received: it cannot be cancelled (delete its receipt if it was a mistake).")
     ok, err = _set(w, row, {"Estado": CANCELADA})
     if not ok:
         return False, err

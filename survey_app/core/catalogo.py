@@ -35,6 +35,7 @@ from core import clock, timeclock
 from core.num import col_letter as _col_letter
 from core.num import num as _num
 
+from core.i18n import t
 logger = logging.getLogger(__name__)
 
 SHEET = "Catalogo"
@@ -197,18 +198,18 @@ def crear(grupo, nombre, tipo=PRODUCTO, costo_unit="", horas_est="", tarifa_hora
           unidad="unidad", categoria="", descripcion="", nota="", creado_por="") -> tuple:
     w = _ws()
     if w is None:
-        return False, "Google Sheets no está configurado."
+        return False, t("Google Sheets is not configured.")
     if not str(nombre).strip():
-        return False, "Ponle un nombre al artículo."
+        return False, t("Give the item a name.")
     if tipo not in TIPOS:
-        return False, f"Tipo no válido: {tipo}."
+        return False, f"{t('Invalid type')}: {tipo}."
     # ⚠️ Sin costo el artículo no sirve para cotizar: saldría en $0 y nadie lo notaría
     # hasta ver el total (el mismo fallo de las colillas de $0 que arreglamos en v346).
     if tipo == SERVICIO:
         if _num(horas_est) <= 0 or _num(tarifa_hora) <= 0:
-            return False, "Un servicio necesita horas estimadas y tarifa/hora mayores que 0."
+            return False, t("A service needs estimated hours and an hourly rate greater than 0.")
     elif _num(costo_unit) <= 0:
-        return False, "El costo unitario debe ser mayor que 0."
+        return False, t("The unit cost must be greater than 0.")
     cid = _next_id()
     try:
         w.append_row([cid, str(grupo), str(tipo), str(nombre).strip(), str(descripcion),
@@ -239,17 +240,17 @@ def _fila(w, cid):
 def actualizar(cid, fields: dict) -> tuple:
     w = _ws()
     if w is None:
-        return False, "Google Sheets no está configurado."
+        return False, t("Google Sheets is not configured.")
     row, antes = _fila(w, cid)
     if row is None:
-        return False, "Artículo no encontrado."
+        return False, t("Item not found.")
     # v344: solo lo que la hoja sabe escribir; lo demás se descarta y SE DICE.
     escritos = {k: v for k, v in fields.items() if k in _COL}
     ignorados = [k for k in fields if k not in _COL]
     if ignorados:
         logger.warning("catalogo.actualizar(%s): columnas desconocidas: %s", cid, ignorados)
     if fields and not escritos:
-        return False, "Ningún campo reconocido: " + ", ".join(ignorados)
+        return False, t("No recognised field") + ": " + ", ".join(ignorados)
     lote = [{"range": f"{_col_letter(_COL[k])}{row}", "values": [[str(v)]]}
             for k, v in escritos.items()]
     try:
@@ -267,7 +268,7 @@ def actualizar(cid, fields: dict) -> tuple:
         # Deja RASTRO (regla v323): el precio de lo que vendes sin apunte y sin log
         # es justo el hueco que v352 vino a cerrar.
         logger.warning("catalogo: no se pudo auditar %s: %s", cid, e)
-    return True, "Artículo actualizado."
+    return True, t("Item updated.")
 
 
 def set_activo(cid, activo: bool) -> tuple:

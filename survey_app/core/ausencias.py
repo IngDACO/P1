@@ -37,6 +37,7 @@ import streamlit as st
 from core import clock, timeclock
 from core.num import parse_date as _parse_date
 
+from core.i18n import t
 logger = logging.getLogger(__name__)
 
 SHEET = "Ausencias"
@@ -75,17 +76,31 @@ VIGENTES = (PENDIENTE, APROBADA)
 # emoji, que se pinta en cualquier sitio.
 VACACIONES, ENFERMEDAD, LIBRE = "vacaciones", "enfermedad", "libre"
 TIPOS = {
-    VACACIONES: {"nombre": "Vacaciones", "estado_roster": "LEAVE",
+    VACACIONES: {"nombre": "Annual leave", "estado_roster": "LEAVE",
                  "aprobacion": True,  "pagado": True,  "dias_anio": 20,
                  "emoji": "🌴"},
-    ENFERMEDAD: {"nombre": "Baja por enfermedad", "estado_roster": "LEAVE",
+    ENFERMEDAD: {"nombre": "Sick leave", "estado_roster": "LEAVE",
                  # ⚠️ Sin aprobación previa: ver el docstring del módulo.
                  "aprobacion": False, "pagado": True,  "dias_anio": 10,
                  "emoji": "🤒"},
-    LIBRE:      {"nombre": "Día libre", "estado_roster": "OFF",
+    LIBRE:      {"nombre": "Day off", "estado_roster": "OFF",
                  "aprobacion": True,  "pagado": False, "dias_anio": 0,
                  "emoji": "📅"},
 }
+
+def nombre_tipo(tipo) -> str:
+    """El nombre visible de un tipo de ausencia, en el idioma de la PANTALLA.
+
+    ⚠️ La traducción va aquí y NO dentro de `TIPOS`: ese dict se construye al
+    importar el módulo, cuando no hay sesión, así que un `t()` ahí quedaría
+    congelado en el idioma de ese instante (el fallo de `auth.SESION_OCUPADA`,
+    v445). `TIPOS` guarda el texto BASE, que es el dato; esto lo traduce al pintarlo.
+
+    ⚠️ En los CORREOS no se usa: un aviso que sale de la empresa va en el idioma
+    base, pase lo que pase (regla v436).
+    """
+    return t(str(TIPOS.get(str(tipo), {}).get("nombre", tipo)))
+
 
 # Horas que vale un día de ausencia PAGADA en la nómina. Se usa solo para eso.
 HORAS_DIA = 8.0
@@ -397,10 +412,21 @@ def horas_pagadas(grupo, usuario, desde, hasta) -> dict:
 
 
 def etiqueta_ausencias(por_tipo: dict) -> str:
-    """«Vacaciones (5 d) · Baja por enfermedad (2 d)» — el texto de la colilla."""
+    """«Annual leave (5 d) · Sick leave (2 d)» — el concepto de la COLILLA.
+
+    ⚠️ Va en el idioma BASE a propósito, y por eso lee `TIPOS[...]["nombre"]` crudo
+    en vez de `nombre_tipo()`: esto se imprime en la colilla y se guarda como
+    concepto de la nómina, o sea un DOCUMENTO — su idioma no puede depender de cómo
+    tenga la pantalla quien pulsa «generar» (regla v436).
+
+    ⚠️ La variable del generador se llama `_tp` y no `t`: aquí no tapa nada (una
+    comprensión tiene su propio ámbito, trampa nº3), pero el día que alguien meta un
+    `t(...)` dentro de este generador se encontraría con el tipo de ausencia en vez
+    de la función, y eso no lo ve ni `compileall` ni el import.
+    """
     return " · ".join(
-        f"{TIPOS.get(t, {}).get('nombre', t)} ({int(n)} d)"
-        for t, n in sorted((por_tipo or {}).items()))
+        f"{TIPOS.get(_tp, {}).get('nombre', _tp)} ({int(n)} d)"
+        for _tp, n in sorted((por_tipo or {}).items()))
 
 
 # ── Enganche con el PLANIFICADOR ─────────────────────────────────
@@ -471,7 +497,7 @@ def aplicar_al_roster(a: dict, quitar: bool = False) -> tuple:
     # está, no está — y el tablero ya admite sábado y domingo desde v390.
     dias = dias_del_rango(a.get("Desde"), a.get("Hasta"), incluir_findes=True)
     if not dias:
-        return False, "El rango no tiene días."
+        return False, t("The range has no days.")
     nota = f"{cfg.get('nombre', tipo)} · {a.get('ID', '')}"
     n = 0
     for lunes in sorted({R.lunes_de(d) for d in dias}):
@@ -580,10 +606,10 @@ def solicitar(grupo, usuario, nombre, tipo, desde, hasta, motivo="",
     hace falta, pero mientras tanto el tablero YA dice la verdad.
     """
     if tipo not in TIPOS:
-        return False, f"Tipo de ausencia desconocido: {tipo}"
+        return False, f"{t('Unknown absence type')}: {tipo}"
     w = _ws()
     if w is None:
-        return False, "Google Sheets no está configurado."
+        return False, t("Google Sheets is not configured.")
     # ⚠️ Dos motivos DISTINTOS para no tener días, y decirlos como si fueran el mismo
     # manda a corregir lo que no está mal. Lo cazó el ejercicio: hoy era sábado, así
     # que una baja por enfermedad de HOY a HOY salía «la fecha de fin no puede ser
@@ -591,17 +617,17 @@ def solicitar(grupo, usuario, nombre, tipo, desde, hasta, motivo="",
     # un fin de semana no podía registrarlo, y encima el mensaje mentía.
     _d0, _d1 = _parse_date(desde), _parse_date(hasta)
     if not _d0 or not _d1:
-        return False, "No se entienden las fechas."
+        return False, t("The dates could not be read.")
     if _d1 < _d0:
-        return False, "La fecha de fin no puede ser anterior a la de inicio."
+        return False, t("The end date cannot be earlier than the start date.")
     dias = dias_del_rango(desde, hasta, incluir_findes)
     if not dias:
-        return False, ("Ese rango solo tiene fin de semana. Si en esos días se "
-                       "trabaja, marca «incluir fines de semana».")
+        return False, t("That range only covers the weekend. If those days are "
+                        "worked, tick «include weekends».")
     _sol = solapadas(grupo, usuario, desde, hasta)
     if _sol:
         _r = _sol[0]
-        return False, (f"Ya hay una ausencia que pisa esas fechas: "
+        return False, (f"{t('There is already an absence overlapping those dates')}: "
                        f"{_r.get('ID')} ({TIPOS.get(str(_r.get('Tipo')), {}).get('nombre', _r.get('Tipo'))}, "
                        f"{_r.get('Desde')} → {_r.get('Hasta')}, {_r.get('Estado')}).")
 
@@ -618,8 +644,9 @@ def solicitar(grupo, usuario, nombre, tipo, desde, hasta, motivo="",
             str(usuario), hoy,
             ("SI" if incluir_findes else "NO")]
     if len(fila) != len(HEADERS):
-        return False, (f"Error interno: la fila tiene {len(fila)} valores y la "
-                       f"cabecera {len(HEADERS)} columnas.")
+        return False, (f"{t('Internal error: the row has')} {len(fila)} "
+                       f"{t('values and the header has')} "
+                       f"{len(HEADERS)} {t('columns.')}")
     try:
         w.append_row(fila, value_input_option="RAW")
     except Exception as e:
@@ -639,7 +666,7 @@ def resolver(aid, aprobar: bool, quien, nota="") -> tuple:
     """
     w = _ws()
     if w is None:
-        return False, "Google Sheets no está configurado."
+        return False, t("Google Sheets is not configured.")
     try:
         recs = w.get_all_records(numericise_ignore=["all"])   # FRESCO: es escritura
     except Exception as e:
@@ -650,8 +677,9 @@ def resolver(aid, aprobar: bool, quien, nota="") -> tuple:
         return False, "Solicitud no encontrada."
     actual = str(recs[fila - 2].get("Estado", ""))
     if actual != PENDIENTE:
-        return False, (f"Esa solicitud ya está **{actual}**; no se puede volver a "
-                       "resolver. Para deshacer una ausencia aprobada, cancélala.")
+        return False, (f"{t('That request is already')} **{actual}**; "
+                       + t("it cannot be resolved again. To undo an approved "
+                           "absence, cancel it."))
     nuevo = APROBADA if aprobar else RECHAZADA
     from core.num import col_letter as _cl
     try:
@@ -665,7 +693,7 @@ def resolver(aid, aprobar: bool, quien, nota="") -> tuple:
     except Exception as e:
         return False, f"Error guardando: {e}"
     _invalidate()
-    return True, ("Ausencia aprobada." if aprobar else "Solicitud rechazada.")
+    return True, (t("Absence approved.") if aprobar else "Solicitud rechazada.")
 
 
 def cancelar(aid, quien) -> tuple:
@@ -676,7 +704,7 @@ def cancelar(aid, quien) -> tuple:
     """
     w = _ws()
     if w is None:
-        return False, "Google Sheets no está configurado."
+        return False, t("Google Sheets is not configured.")
     try:
         recs = w.get_all_records(numericise_ignore=["all"])
     except Exception as e:
@@ -686,7 +714,7 @@ def cancelar(aid, quien) -> tuple:
     if fila is None:
         return False, "Solicitud no encontrada."
     if str(recs[fila - 2].get("Estado", "")) not in VIGENTES:
-        return False, "Esa solicitud ya no está vigente."
+        return False, t("That request is no longer active.")
     from core.num import col_letter as _cl
     try:
         w.batch_update([
@@ -698,4 +726,4 @@ def cancelar(aid, quien) -> tuple:
     except Exception as e:
         return False, f"Error guardando: {e}"
     _invalidate()
-    return True, "Ausencia cancelada."
+    return True, t("Absence cancelled.")
