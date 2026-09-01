@@ -14,6 +14,7 @@ from core.tool_save_ui import render_guardar
 from core import tool_save_ui
 from core import plan_store
 from core import plan_ui
+from core import tabla
 
 
 def _result_matrix(labels, per_elev_values, n):
@@ -119,7 +120,7 @@ def render_rail_cut_tab():
             base = pd.DataFrame({"Elevador": [f"Elevador {i+1}" for i in range(n)],
                                  "L (mm)": [0.0] * n})
         L_edit = st.data_editor(base, width="stretch", hide_index=True,
-                                num_rows="fixed", disabled=["Elevador"], key="rc_L_editor")
+                                num_rows="fixed", disabled=["Elevador"], key="rc_L_editor", column_config=tabla.cfg())
         st.session_state["rc_L_df"] = L_edit
 
         # El boton SOLO computa: antes todo el resultado colgaba de aqui y se
@@ -140,10 +141,10 @@ def render_rail_cut_tab():
                 _kpi(t("Lifts"), str(_e["n"]))]), unsafe_allow_html=True)
             mat = _result_matrix(["CutRC", "CutRCW"], res["elevadores"], _e["n"])
             st.subheader(t("Result — cuts (mm)"))
-            st.dataframe(mat, width="stretch")
+            st.dataframe(mat, width="stretch", column_config=tabla.cfg())
             with st.expander(t("Detail (RC, RCW)")):
                 det = _result_matrix(["RC", "RCW"], res["elevadores"], _e["n"])
-                st.dataframe(det, width="stretch")
+                st.dataframe(det, width="stretch", column_config=tabla.cfg())
 
             svg = rail_cut_svg(res, caso=1, n2500=_e["n2500"], n5000=_e["n5000"], proyecto=_pr)
             st.subheader(t(":material/architecture: Cutting diagram"))
@@ -190,7 +191,7 @@ def render_rail_cut_tab():
             base = pd.DataFrame({"Riel": rieles,
                                  **{f"Elevador {i+1}": [0.0] * 4 for i in range(n)}})
         in_edit = st.data_editor(base, width="stretch", hide_index=True,
-                                 num_rows="fixed", disabled=["Riel"], key="rc_in_editor")
+                                 num_rows="fixed", disabled=["Riel"], key="rc_in_editor", column_config=tabla.cfg())
         st.session_state["rc_in_df"] = in_edit
 
         if st.button(t(":material/content_cut: Calculate cuts (Case 2)"), type="primary",
@@ -214,7 +215,7 @@ def render_rail_cut_tab():
             st.caption(f"Sub-case: {_e['sub']}")
             mat = _result_matrix(["CutRZ", "CutRO", "CutRF", "CutRB"], res, _e["n"])
             st.subheader(t("Result — cuts (mm)"))
-            st.dataframe(mat, width="stretch")
+            st.dataframe(mat, width="stretch", column_config=tabla.cfg())
 
             svg = rail_cut_svg({"elevadores": res}, caso=2, proyecto=_pr)
             st.subheader(t(":material/architecture: Cutting diagram"))

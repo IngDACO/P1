@@ -217,7 +217,7 @@ def _vista_dia(grupo, lunes, usuario, nom, dia, datos, tidx):
         _ocup = _ocupado(con_hora)
         # (el plural PIERDE la tilde: «una asignación» pero «dos asignaciones»,
         #  así que no vale pegarle un sufijo al singular)
-        _res = f"{len(items)} " + ("asignación" if len(items) == 1 else "asignaciones")
+        _res = f"{len(items)} " + (t("assignment") if len(items) == 1 else t("assignments"))
         if _ocup:
             _res += f" · {_ocup / 60:.1f} h of the day taken"
         c2.markdown(f"<div style='font-size:13px;color:#5b6472;text-align:right;"
@@ -880,7 +880,7 @@ def render_planificacion(grupo):
     # de tiempo → una sola herramienta «Cumplimiento» (lo vivo va en cada fila).
     _TOOLS = [("asignar", ":material/bolt: Asignar"),
               ("radar", ":material/radar: Radar" + (f" ({_n_rad})" if _n_rad else "")),
-              ("cumpl", ":material/fact_check: Cumplimiento"),
+              ("cumpl", t(":material/fact_check: Compliance")),
               ("cat", ":material/palette: Jobs")]
     st.markdown("")
     _tc = st.columns(len(_TOOLS))

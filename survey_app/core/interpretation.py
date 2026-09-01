@@ -158,7 +158,7 @@ def generate_interpretation(calc_results: dict, all_params: dict) -> dict:
         return _fallback("the anthropic library is not available in this environment.")
     api_key = st.secrets.get("ANTHROPIC_API_KEY", "")
     if not api_key:
-        return _fallback("API key no configurada.")
+        return _fallback(d("API key not configured."))
 
     try:
         client  = anthropic.Anthropic(api_key=api_key)
@@ -301,7 +301,7 @@ def _build_user_payload(calc_results: dict, all_params: dict) -> str:
             "wall_stop":       p.get("WALL_STOP"),
             "wall_side":       p.get("WALL_SIDE"),
         } if best else None,
-        "cortes_necesarios": cortes if cortes else "Ninguno",
+        "cortes_necesarios": cortes if cortes else d("None"),
         "instrucciones": (
             "Write the client report. Return ONLY a JSON with these keys: "
             + ", ".join(f'"{k}"' for k in USER_SCHEMA.keys())

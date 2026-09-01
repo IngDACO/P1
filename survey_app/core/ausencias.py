@@ -639,7 +639,7 @@ def solicitar(grupo, usuario, nombre, tipo, desde, hasta, motivo="",
             _d0.strftime("%Y-%m-%d"), _d1.strftime("%Y-%m-%d"), str(len(dias)),
             str(motivo or ""), estado,
             # una que nace aprobada la «resuelve» el propio sistema, y se dice
-            ("(automático)" if estado == APROBADA else ""),
+            (t("(automatic)") if estado == APROBADA else ""),
             (hoy if estado == APROBADA else ""), "",
             str(usuario), hoy,
             ("SI" if incluir_findes else "NO")]
@@ -650,7 +650,7 @@ def solicitar(grupo, usuario, nombre, tipo, desde, hasta, motivo="",
     try:
         w.append_row(fila, value_input_option="RAW")
     except Exception as e:
-        return False, f"Error guardando: {e}"
+        return False, f"{t('Error saving')}: {e}"
     _invalidate()
     return True, fila[0]
 
@@ -674,7 +674,7 @@ def resolver(aid, aprobar: bool, quien, nota="") -> tuple:
     fila = next((i + 2 for i, r in enumerate(recs)
                  if str(r.get("ID", "")) == str(aid)), None)
     if fila is None:
-        return False, "Solicitud no encontrada."
+        return False, t("Request not found.")
     actual = str(recs[fila - 2].get("Estado", ""))
     if actual != PENDIENTE:
         return False, (f"{t('That request is already')} **{actual}**; "
@@ -691,9 +691,9 @@ def resolver(aid, aprobar: bool, quien, nota="") -> tuple:
             {"range": f"{_cl(_COL['NotaAdmin'])}{fila}", "values": [[str(nota or "")]]},
         ], value_input_option="RAW")
     except Exception as e:
-        return False, f"Error guardando: {e}"
+        return False, f"{t('Error saving')}: {e}"
     _invalidate()
-    return True, (t("Absence approved.") if aprobar else "Solicitud rechazada.")
+    return True, (t("Absence approved.") if aprobar else t("Request rejected."))
 
 
 def cancelar(aid, quien) -> tuple:
@@ -712,7 +712,7 @@ def cancelar(aid, quien) -> tuple:
     fila = next((i + 2 for i, r in enumerate(recs)
                  if str(r.get("ID", "")) == str(aid)), None)
     if fila is None:
-        return False, "Solicitud no encontrada."
+        return False, t("Request not found.")
     if str(recs[fila - 2].get("Estado", "")) not in VIGENTES:
         return False, t("That request is no longer active.")
     from core.num import col_letter as _cl
@@ -724,6 +724,6 @@ def cancelar(aid, quien) -> tuple:
              "values": [[clock.now().strftime("%Y-%m-%d %H:%M")]]},
         ], value_input_option="RAW")
     except Exception as e:
-        return False, f"Error guardando: {e}"
+        return False, f"{t('Error saving')}: {e}"
     _invalidate()
     return True, t("Absence cancelled.")

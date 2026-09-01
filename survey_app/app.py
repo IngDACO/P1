@@ -277,7 +277,7 @@ with st.sidebar:
             with st.chat_message("user", avatar="🧑‍🔧"):
                 st.markdown(prompt)
             with st.chat_message("assistant", avatar="🤖"):
-                with st.spinner("Consultando…"):
+                with st.spinner(t("Searching…")):
                     _r = st.session_state.get("calc_results")
                     _response = get_chat_response(
                         user_message = prompt,

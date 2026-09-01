@@ -7298,6 +7298,138 @@ se GUARDAN en la hoja `Actividades` → migración del histórico). El informe d
 no está entero en inglés hasta que caigan esas tres, y conviene saberlo antes de
 enseñárselo a un cliente.
 
+## ⚠️ LA SEXTA RED: las CABECERAS DE TABLA seguían en español (v450)
+
+El usuario preguntó «¿ya quedó todo en inglés?». La respuesta honesta era **no**, y lo
+que faltaba llevaba desde v449 escondido detrás de un «0» que yo había dado por bueno.
+
+### El hueco: `st.dataframe` pinta la CLAVE del dict
+
+Las filas de esta app se construyen a mano (`{"Cliente": …, "Horas": …}`), así que la
+cabecera que se ve **es la clave**. Y una clave de dict es invisible para las cinco
+redes anteriores, que miran POSICIÓN (el argumento de `st.*`) o IDIOMA (frases,
+etiquetas cortas, f-strings, palabras sueltas) — **ninguna mira claves**, y a propósito:
+v444 las excluyó porque una clave y una etiqueta se ven idénticas en el AST.
+
+Medido: **46 cabeceras en español en 12 tablas**, y lo peor es que estaban **mezcladas
+dentro de la misma tabla** — en Agrupaciones se veía `Alerts` y `Status` en inglés al
+lado de `Elevador`, `Estado` y `Costo`. Eso se nota más que si estuviera todo en español.
+
+### El arreglo es la ETIQUETA, nunca la clave
+
+⚠️ La clave **no se puede renombrar a la ligera**: muchas se leen de vuelta
+(`r["Elevador"]`, `r["Peso"]`, `x["Estado"]`) y varias viajan a `DatosJSON` (v148).
+`column_config` cambia lo que se MUESTRA y deja intacto el nombre que devuelve el
+widget. **No es una suposición**: es lo que la app ya hacía desde v353 —`invoices_ui`
+etiqueta `"Concepto"` como *Item* y luego lee `r.get("Concepto")`—, y se volvió a medir.
+
+Nuevo **`core/tabla.py`** (módulo HOJA: solo `streamlit` + `i18n`): `CABECERAS` (clave
+española → texto BASE inglés) y `cfg(filas=None, extra=None)`, aplicado a las **66
+tablas** de la interfaz. `extra` manda, así que cada tabla conserva sus formatos de
+dinero, anchos y `pinned`.
+
+### Verificado EN VIVO antes de construir encima (4 preguntas, 4 medidas)
+
+⚠️ `st.dataframe` pinta en un `<canvas>`, así que el DOM no responde: hay que
+interceptar `fillText` (trampa nº18) y forzar un repintado REAL.
+
+| Pregunta | Medido |
+|---|---|
+| ¿`Column(label)` cambia la cabecera? | `Cliente · Horas · Costo · Avance %` → **`Client · Hours · Cost · Progress %`** |
+| ¿Cambia cómo se pintan las celdas numéricas? | **NO**: `41.13 · 27882.67 · 46` idénticas con y sin configuración |
+| ¿Qué devuelve el `data_editor`? | **`Cliente \| Horas \| Costo \| Avance %`** — las claves ORIGINALES, así que ninguna lectura se rompe |
+| ¿Tolera claves que la tabla no tiene? | **Sí**, 0 excepciones → el mapa entero se puede pasar a cualquier tabla |
+
+Esa última medida es la que hace el arreglo robusto: **no depende de que mi atribución
+estática de «qué dict alimenta qué tabla» sea correcta**, y ya había fallado dos veces
+mientras medía.
+
+### ⚠️ Cuatro veces se equivocó el propio MEDIDOR, y cada una cambiaba la lista
+
+Esto es lo que hay que recordar, más que el arreglo:
+1. El mapa de dicts iba por NOMBRE de variable en TODO el módulo, así que el `rows` de
+   una función heredaba las cabeceras del `rows` de otra.
+2. Contaba como «valor de celda» el argumento de `p.get("Nombre")`, que es una LECTURA
+   de la hoja y no un texto que se pinte.
+3. Daba por traducida cualquier columna presente en `column_config` — y una entrada
+   **sin etiqueta** (`"Peso": NumberColumn(min_value=0.0)`) sigue pintando «Peso».
+4. **No veía el dict INLINE** (`pd.DataFrame([{…} for r in xs])`, que es la mitad de las
+   tablas) y en cambio atribuía a esa llamada cualquier dict de la función que
+   compartiera nombre con la variable del bucle.
+Con las cuatro corregidas la cuenta pasó de «15» a **90 cabeceras**, de las que 46 eran
+españolas. **Un recuento con el medidor mal es peor que no medir: se traduce lo que no
+es y se deja lo que sí.**
+
+### El tercer mapa espejo del mismo día
+
+`_cumplimiento_equipo` tenía `{"vigente": "vigente", "por_vencer": "por vencer", …}`,
+así que las celdas salían en español **bajo una leyenda ya traducida que además
+describía iconos que la tabla no pinta**: dos textos contándose cosas distintas a dos
+centímetros. Al buscarlo aparecieron **otros dos idénticos** (`auth_ui._ico`,
+`credentials.status_label`), los tres anteriores a `i18n.VALORES` — que ya sabe que
+vigente/por_vencer/vencido son valid/expiring/expired. Cuando el mismo fallo sale tres
+veces el arreglo es **borrar la copia**, no traducirla, y el guardián prohíbe desde
+ahora cualquier dict que mapee un valor de `VALORES` a sí mismo.
+
+### ⚠️ La SÉPTIMA red: español por MORFOLOGÍA, no por lista de palabras
+
+Las seis redes usan un léxico, y un léxico siempre se queda corto: ninguna veía
+«vencida», «devuelto», «mantenimiento» ni «retraso», que estaban **a la vista en la
+campana de avisos**. Es la trampa nº28 por quinta vez. La red nueva marca por la FORMA
+de la palabra (acentos, ñ, y terminaciones que en inglés no existen: -ción, -miento,
+-ado/-ada, -mente, -aje…). Coge más ruido, y ese es el punto: el ruido se descarta
+leyendo, un hueco no se ve.
+⚠️ Hubo que quitarle «no», «si» y «solo» del léxico corto: disparaba sobre
+`'(no name)'` y `'— no client —'`, que están en inglés — **un detector que grita sobre
+lo ya traducido acaba ignorándose entero.**
+
+Con ella salieron **310 literales**, de los que ~180 eran reales. Traducidos: 60
+mensajes de backend que v445-v447 se dejaron (`Error guardando:`, `Factura no
+encontrada.`, `Orden cancelada.`…), los avisos de la campana, los estados del
+inventario, los chips de cotización, los nombres de día del tablero, la paleta de
+colores y los textos sueltos de 20 módulos.
+
+### ⚠️ Y me comí la trampa del `t()` congelado por SEXTA vez
+
+Al traducir los estados del inventario metí `t()` dentro de `_EST_LBL`, que es una
+constante de MÓDULO → se evalúa al importar y la traducción queda congelada. Lo cazó el
+guardián de v445 en la pasada siguiente. **Van seis, todas cometidas después de
+documentar la regla**; por eso el arreglo estándar ya tiene nombre: la constante guarda
+el texto BASE y la traducción se mueve a una función que se llama al PINTAR
+(`_est_lbl()`, `_est_fmt()`).
+
+### Dos NameError latentes, cazados por el chequeo de ámbito
+
+`finance.py` usaba `t()` sin importarlo y `credentials.py` usaba `_etq` sin importarlo:
+los dos habrían reventado la primera vez que alguien abriera esa pantalla, y ni
+`compileall` ni el import los ven (v378). Es el fallo de v423/v425/v443.
+
+### Verificación
+
+`verif_v450.py` (20 comprobaciones) **ejecuta** lo que solo se ve llamando —
+`status_label`, `_est_lbl`, `_est_fmt`, `cfg` — y reusa los guardianes que ya existen en
+vez de reescribirlos. Probado contra **7 roturas**: las caza las 7 — ⚠️ pero **dos solo
+tras corregirlo**, y las dos por el mismo motivo de siempre:
+- el chequeo del `t()` congelado hacía `ast.walk` sobre `tr.body` y **descendía dentro
+  de los `def`** (el autoengaño de v342), así que denunciaba 3.000 llamadas normales;
+- y el de la rama muerta miraba «el literal sigue en el fichero» y **ESCAPABA**, porque
+  sigue estando… en la comparación. Es literalmente el fallo que v449 ya había cometido
+  con los IDs de sub-pestaña. Se reusa el guardián de v442.
+
+⚠️ Y ese guardián de v442 **estaba ciego a su propio arreglo**: las opciones ahora se
+escriben como `list(_PER)` y él solo entendía listas literales, así que dejaba de mirar
+justo el widget recién tocado — **segunda vez que una corrección ciega al chequeo que la
+encontró** (la primera fue en v442 con las constantes). Extendido para resolver
+`list(DICT)`: pasa de vigilar 18 comparaciones a **29**.
+
+### Lo que sigue en español, y por qué
+
+Estados y valores guardados · nombres de actividad (hoja `Actividades`) · IDs de
+sub-pestaña · columnas del libro · la carpeta de Drive `COPEX Activos` · la base de
+conocimiento de `chat_agent` · comentarios y docstrings. **Y el informe ADMIN
+(`report.py`) conserva ~31 líneas que v448 dio por cerradas**: quedan medidas y
+anotadas, no arregladas.
+
 ## i18n CERRADO del todo: la navegación y las últimas etiquetas (v449)
 
 Al medir con las tres redes a la vez tras v448 aparecieron **32 etiquetas** que
@@ -8178,7 +8310,7 @@ literal, así que **no casaba nunca** — y dejó pasar «Plomo riel izquierdo»
 Es el mismo fallo de v436, cometido otra vez ese mismo día. Se vio con `cat -A`, no
 leyendo. → **Cualquier `\b`, `\n` o `\w` va por fichero escrito, nunca por heredoc.**
 
-## Versiones desplegadas (v449 = actual)
+## Versiones desplegadas (v450 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -8186,6 +8318,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v450 | **La SEXTA red: las CABECERAS DE TABLA seguían en español.** El usuario preguntó «¿ya quedó todo en inglés?» y la respuesta era **no**: `st.dataframe` pinta la CLAVE del dict, y las filas de esta app se construyen a mano, así que la cabecera es invisible para las cinco redes anteriores —que miran POSICIÓN o IDIOMA, nunca claves—. Medido: **46 cabeceras en 12 tablas**, y **mezcladas dentro de la misma tabla** (`Alerts` y `Status` en inglés al lado de `Elevador` y `Costo`), que se nota más que si estuviera todo en español. ⚠️ El arreglo es la ETIQUETA, nunca la clave: muchas se leen de vuelta (`r["Elevador"]`, `r["Peso"]`) y varias viajan a `DatosJSON`. Nuevo `core/tabla.py` aplicado a las **66 tablas**. ⚠️ **Verificado en vivo interceptando `fillText`** (el DOM no sirve, v399): `Column(label)` cambia la cabecera, deja las celdas numéricas **idénticas**, el `data_editor` devuelve las claves ORIGINALES y tolera claves que la tabla no tiene —esto último es lo que hace el arreglo robusto, porque deja de depender de mi atribución estática, que falló DOS veces mientras medía—. ⚠️ Y el propio MEDIDOR se equivocó **cuatro** veces (ámbito de módulo en vez de función; el argumento de `.get()` contado como celda; dar por traducida una columna con `column_config` **sin etiqueta**; y no ver el dict INLINE, que es la mitad de las tablas): la cuenta pasó de «15» a **90**. + **SÉPTIMA red** por MORFOLOGÍA en vez de por léxico —ninguna veía «vencida», «devuelto» ni «mantenimiento», a la vista en la campana— con la que se tradujeron **~180** textos más: 60 mensajes de backend que v445-v447 se dejaron, los avisos, los estados de inventario, los chips de cotización, los días del tablero, el correo interno y **las 31 líneas del informe ADMIN que v448 dio por cerradas**. ⚠️ Tres mapas espejo el mismo día (`{"vigente": "vigente"}`) y el **`t()` congelado por SEXTA vez**. 7 roturas |
 | v449 | **i18n CERRADO del todo: la navegación y las últimas etiquetas.** Al medir con las tres redes tras v448 aparecieron **32** que seguían en español, casi todas en lo más visible: los displays de `_SECCIONES`/`_SUBSECCIONES`, a medias («Projects» al lado de «Finanzas»). ⚠️ Cada entrada es **(ID, display)** y solo se toca el segundo: el ID lleva emoji porque **ES el identificador** que compara `sub ==` y usan los deep-links. ⚠️ Y faltaba el chequeo de **RAMA MUERTA para las sub-pestañas** (el de v442 solo mira opciones de widget); hubo que escribirlo **dos veces**: la primera comprobaba «el ID sigue en el fichero» y **pasaba con la rama muerta delante** (aparece dos veces: definición y comparación), y la segunda daba **dos ramas muertas inexistentes** por asumir que el del `else` es «el último de la lista» — en finanzas es el 5.º de 8 y en proyectos el PRIMERO. El invariante correcto es por SECCIÓN: un `if/elif/else` deja **exactamente uno** sin comparar. **Recuento final: 0 en interfaz y 0 en backend**; lo que queda en español es solo lo que no se puede traducir (datos, IDs, nombres de actividad, la carpeta de Drive `COPEX Activos` y la base de conocimiento del asistente), cada uno afirmado por el guardián. 6 roturas |
 | v448 | **F5 CERRADO: el informe ADMIN, los correos y los prompts de la IA** — la app ya no tiene un solo texto en español salvo lo que es DATO. El informe admin (101 cadenas) va con `_d()` aplicado **por AST y por posición**, ⚠️ refusando toda cadena que se use como ÍNDICE (`'Duración (d)'`, `'Línea'`: son contrato con `schedule_table`/`plumb_table`). ⚠️ **El barrido del FUENTE se dejó 22 líneas** y las encontró **generar el PDF y leer su texto** — la trampa nº27 otra vez —, capturando además el log del módulo, porque el veredicto va dentro de un `try/except` que registra y sigue (el fallo real de v437). ⚠️ Y el prefijo `"[Interpretación no disponible"` se **produce** en `interpretation` y se **compara** en `report` y `user_report`: los cuatro a la vez, o el informe imprimiría el mensaje de error como si fuera la interpretación. ⚠️ **Decisión de criterio dicha en voz alta**: la base de conocimiento de `chat_agent` (353 líneas) se queda en español y solo se traduce la REGLA DE ESTILO, que ahora ordena responder en inglés — el modelo lee español, y traducir contenido técnico denso mete riesgo de error en el conocimiento del asistente a cambio de nada. Quedan tres exclusiones declaradas: los nombres de actividad (dato de la hoja `Actividades`), esa base de conocimiento, y las CLAVES de schemas y columnas. 7 roturas probadas |
 | v447 | **F5c: los 14 módulos de backend que quedaban** — con esto el backend no tiene un solo mensaje en español. ⚠️ Aquí lo peligroso no fue traducir sino **RENOMBRAR**: `pre_i18n` marcó 25 funciones con `t`/`d` como variable, y renombrar es DOS pasos. El que se me escapó, en `payroll.neto`, era `elif t == "deduccion"` — con `t` ya importado como la función de idioma **no da error**: la comparación sale siempre False y **las deducciones dejan de restarse del neto a pagar**. Un fallo de dinero, silencioso, con `compileall` e imports en verde; lo encontró preguntarle al AST por todos los `Name` llamados `t` tras cada renombrado. ⚠️ Y me tapé a mí mismo dos veces más: en `manuals` renombré la variable del bucle a `_tok`, **que ya era el TOKENIZADOR del módulo** (shadowing dentro del arreglo del shadowing), y el **`t()` congelado al importar** salió otras dos veces (`plan_data.USA`, `toolruns.HERRAMIENTAS`) — cuatro en tres versiones, las cuatro cazadas por el guardián de v445. ⚠️ Y la foto de 261 líneas que prueba que **ningún número se movió** dio primero «IDÉNTICAS» comparando **dos ficheros vacíos** (el script fallaba con el stderr silenciado): el paso en vacío dentro de la propia comprobación. 7 roturas probadas — una solo tras integrar el chequeo de importes, que vivía aparte: *un chequeo que no está en la suite no protege nada* |

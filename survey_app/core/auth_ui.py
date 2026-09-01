@@ -14,6 +14,7 @@ from core import auth
 from core import ui_common as ui
 from core import clock
 from core import flash          # v365: mensajes que sobreviven al st.rerun()
+from core import tabla
 
 
 def _contacto_uno(sel, key_prefix="cc"):
@@ -100,7 +101,7 @@ def render_credenciales(usuario, grupo, editable=False, key_prefix="cr"):
             "Tipo": r.get("Tipo"), "Number": r.get("Numero"), "Clase": r.get("Clase"),
             "Issued": r.get("Emision") or "—", "Vence": r.get("Vencimiento") or "—",
             "Estado": C.status_label(r.get("Vencimiento")),
-        } for r in creds]), hide_index=True, width="stretch")
+        } for r in creds]), hide_index=True, width="stretch", column_config=tabla.cfg())
         # Documentos adjuntos agrupados (antes: botones sueltos apilados bajo la tabla)
         _docs = [r for r in creds if str(r.get("DriveID", "")).strip()]
         if _docs:
@@ -141,7 +142,7 @@ def render_credenciales(usuario, grupo, editable=False, key_prefix="cr"):
                 num   = st.text_input(t("Number"))
                 clase = ""
             c3, c4 = st.columns(2)
-            emi = _fecha_input(c3, "Emisión", key=f"{key_prefix}_emi")
+            emi = _fecha_input(c3, t("Issued"), key=f"{key_prefix}_emi")
             ven = _fecha_input(c4, "Expiry (blank if it does not expire)", key=f"{key_prefix}_ven")
             arch = st.file_uploader(t("Photo or document (optional)"),
                                     type=["pdf", "png", "jpg", "jpeg"], key=f"{key_prefix}_file")
@@ -377,7 +378,7 @@ def render_user_bar():
 def _owner_grupos():
     grupos = auth.list_groups()
     if grupos:
-        st.dataframe(pd.DataFrame(grupos), hide_index=True, width="stretch")
+        st.dataframe(pd.DataFrame(grupos), hide_index=True, width="stretch", column_config=tabla.cfg())
     else:
         st.info(t("No companies yet. Create the first one below."))
     with st.form("form_grupo", clear_on_submit=True):
@@ -531,7 +532,7 @@ def _owner_grupos():
 
     if grupos:
         gsel = ui.elegir(t("Delete company"), [g["Grupo"] for g in grupos],
-                         key="del_g_sel", vacio="— ningún grupo —")
+                         key="del_g_sel", vacio=t("— no company —"))
         if gsel:
             _ok_del = ui.confirmar_borrado("del_g_ok",
                                            f"I confirm I want to delete the company **{gsel}**")
@@ -553,14 +554,14 @@ def _owner_usuarios():
         for u in users:
             es_campo = str(u.get("Rol", "")).lower() == "campo"
             _cont = ("—" if not es_campo
-                     else ("sí" if (str(u.get("Email", "")).strip()
+                     else (t("yes") if (str(u.get("Email", "")).strip()
                                     and str(u.get("TelegramChatID", "")).strip())
                            else "falta"))
             _rows.append({"Usuario": u.get("Usuario", ""), "Nombre": u.get("Nombre", ""),
                           "Rol": u.get("Rol", ""), "Grupo": u.get("Grupo", "") or "—",
                           "Activo": u.get("Activo", "SI"),
                           "Email": u.get("Email", "") or "—", "Contacto": _cont})
-        st.dataframe(pd.DataFrame(_rows), hide_index=True, width="stretch")
+        st.dataframe(pd.DataFrame(_rows), hide_index=True, width="stretch", column_config=tabla.cfg())
         _faltan = [u["Usuario"] for u in users
                    if str(u.get("Rol", "")).lower() == "campo"
                    and not (str(u.get("Email", "")).strip()
@@ -653,7 +654,7 @@ def _owner_resumen():
         "Behind": d["retrasos"], "Alarms": d["alarmas"],
         "Overdue": d["vencidos"], "Credentials": d["cred_venc"],
         "Sobre pres.": d["sobre_presupuesto"],
-    } for d in data]), hide_index=True, width="stretch")
+    } for d in data]), hide_index=True, width="stretch", column_config=tabla.cfg())
     _urg = [d for d in data if d["pendientes"]]
     if _urg:
         st.warning("Companies with pending items: " + ", ".join(d["grupo"] for d in _urg))
@@ -688,11 +689,11 @@ def _owner_manuales():
             "Fragmentos": r.get("NumFrags"),
             "Fecha": r.get("Fecha"),
             "By": r.get("SubidoPor"),
-        } for r in ups]), hide_index=True, width="stretch")
+        } for r in ups]), hide_index=True, width="stretch", column_config=tabla.cfg())
         with st.expander(t("Remove a manual"), icon=":material/delete:"):
             opciones = {f"{r.get('Nombre')}  ·  {r.get('Fecha')}": r.get("ID") for r in ups}
             _mid = ui.elegir(t("Manual"), opciones, key="man_del_sel",
-                             vacio="— ningún manual —")
+                             vacio=t("— no manual —"))
             if _mid:
                 _ok_del = ui.confirmar_borrado("man_del_ok",
                                                t("I confirm I want to delete this manual"))
@@ -714,7 +715,7 @@ def _owner_manuales():
                 st.error(t("Choose a file."))
             else:
                 nm = nombre.strip() or up.name.rsplit(".", 1)[0]
-                with st.spinner("Extrayendo texto e indexando…"):
+                with st.spinner(t("Extracting text and indexing…")):
                     n, err = manuals.add_manual(
                         up.getvalue(), up.name, nm,
                         subido_por=st.session_state.auth.get("usuario", ""))
@@ -739,7 +740,7 @@ def _owner_rieles():
             "Referencia": r.get("Referencia"),
             "Altura diente desde espalda (RAIL)": r.get("AlturaDiente"),
             "Ancho diente": r.get("AnchoDiente"),
-        } for r in data]), hide_index=True, width="stretch")
+        } for r in data]), hide_index=True, width="stretch", column_config=tabla.cfg())
     else:
         st.info(t("The catalogue is empty. Add the first rail below."))
 
@@ -1020,7 +1021,7 @@ def _grupo_usuarios(grupo):
                     _peor[_uu] = _s
         except Exception:
             pass
-    _ico = {"vencido": "vencido", "por_vencer": "por vencer", "vigente": "vigente"}
+    _ico = {e: _etq(e) for e in ("vencido", "por_vencer", "vigente")}
 
     def _activo(u):
         return str(u.get("Activo", "")).strip().upper() in ("SI", "TRUE", "1", "SÍ")
@@ -1040,7 +1041,7 @@ def _grupo_usuarios(grupo):
     if _npv:
         _linea += f" · :orange[:material/schedule:] **{_npv}** cred. expiring"
     if _nvc:
-        _linea += f" · :red[:material/cancel:] **{_nvc}** cred. vencida(s)"
+        _linea += f" · :red[:material/cancel:] **{_nvc}** {t("expired credential(s)")}"
     st.markdown(_linea)
 
     # ⚠️ Quién RECIBE las alarmas del grupo y no tiene por dónde recibirlas. La
@@ -1064,13 +1065,13 @@ def _grupo_usuarios(grupo):
     # ── Tabla CLICKEABLE → abre la ficha de esa persona ──
     _rows = [{
         "Usuario": u["Usuario"], "Nombre": u["Nombre"] or u["Usuario"],
-        "Activo": "sí" if _activo(u) else "no",
-        "Contacto": "sí" if _cont_ok(u) else "falta",
+        "Activo": t("yes") if _activo(u) else t("no"),
+        "Contacto": t("yes") if _cont_ok(u) else t("missing"),
         "Credentials": _ico.get(_peor.get(u["Usuario"].strip().lower()), "—"),
         "Rate/h": u.get("TarifaHora", "") or "—",
     } for u in gente]
     _ev = st.dataframe(pd.DataFrame(_rows), hide_index=True, width="stretch",
-                       on_select="rerun", selection_mode="single-row", key="gu_tbl")
+                       on_select="rerun", selection_mode="single-row", key="gu_tbl", column_config=tabla.cfg())
     st.caption(t(":material/touch_app: Tap a row to open and manage that person's record.  Credentials: valid / expiring / expired / — not recorded."))
     try:
         _sr = list(_ev.selection.rows)
@@ -1094,7 +1095,7 @@ def _grupo_usuarios(grupo):
                 with st.expander(t("Credentials matrix (users × tickets)"),
                                  icon=":material/table_chart:"):
                     st.caption(t("Credentials: valid / expiring (≤30 d) / expired / — not recorded"))
-                    st.dataframe(pd.DataFrame(filas), hide_index=True, width="stretch")
+                    st.dataframe(pd.DataFrame(filas), hide_index=True, width="stretch", column_config=tabla.cfg())
         except Exception:
             pass
     with st.expander(t("Create field user"), icon=":material/person_add:"):

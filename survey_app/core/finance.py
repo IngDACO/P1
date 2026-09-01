@@ -17,6 +17,7 @@ from core import expenses as E
 from core import projects as P
 from core import timeclock
 from core.num import num as _num
+from core.i18n import t
 
 logger = logging.getLogger(__name__)
 
@@ -478,6 +479,6 @@ def _por_cliente(facs) -> list:
     """
     agg = {}
     for f in facs:
-        k = str(f.get("ClienteNombre", "")).strip() or "(sin cliente)"
+        k = str(f.get("ClienteNombre", "")).strip() or t("(no client)")
         agg[k] = agg.get(k, 0.0) + _num(f.get("Total"))
     return sorted(((k, round(v, 2)) for k, v in agg.items() if v), key=lambda x: -x[1])

@@ -20,6 +20,7 @@ from core import plan_ui
 from core.tool_pdf import tool_pdf
 from core.tool_save_ui import render_guardar
 from core import tool_save_ui
+from core import tabla
 
 _K = "bc_res"
 
@@ -92,7 +93,7 @@ def render_buffer_cut_tab():
         base = pd.DataFrame({"Buffer": [f"Buffer {i+1}" for i in range(n)],
                              "HKPR (mm)": [0.0] * n})
     edit = st.data_editor(base, width="stretch", hide_index=True,
-                          num_rows="fixed", disabled=["Buffer"], key="bc_editor")
+                          num_rows="fixed", disabled=["Buffer"], key="bc_editor", column_config=tabla.cfg())
     st.session_state["bc_df"] = edit
 
     # ── 4. Calcular (solo computa; el render va fuera) ──────
@@ -120,7 +121,7 @@ def render_buffer_cut_tab():
         d("Status"):   d("check") if b["warn"] else "OK",
     } for b in res["buffers"]]
     st.subheader(t("Result — cuts (mm)"))
-    st.dataframe(pd.DataFrame(filas), width="stretch", hide_index=True)
+    st.dataframe(pd.DataFrame(filas), width="stretch", hide_index=True, column_config=tabla.cfg())
 
     svg = buffer_cut_svg(res, proyecto=_pr)
     st.subheader(t(":material/architecture: Cutting diagram"))

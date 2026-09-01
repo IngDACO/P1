@@ -19,6 +19,7 @@ from core import plan_ui
 from core.tool_pdf import tool_pdf
 from core.tool_save_ui import render_guardar
 from core import tool_save_ui
+from core import tabla
 
 _K = "belt_res"
 
@@ -127,7 +128,7 @@ def render_belting_tab():
                      f"{"below" if r['dsts'] >= 0 else "above"} from the top FFL",
     } for r in results]
     st.subheader(t(":material/table_rows: Results (DSTS per lift)"))
-    st.dataframe(pd.DataFrame(filas), width="stretch", hide_index=True)
+    st.dataframe(pd.DataFrame(filas), width="stretch", hide_index=True, column_config=tabla.cfg())
     _formula = (f"DSTS = HGPR − HGP({_hgp:.0f}) − HQ({_hq:.0f})/1000 "
                 f"= HGPR − {_hgp + _hq / 1000.0:.1f} mm")
     st.caption(_formula)

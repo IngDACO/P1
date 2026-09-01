@@ -657,7 +657,7 @@ def resumen_hoy(nombre: str, grupo: str = "", usuario: str = "") -> dict:
             out["general"] += h
         else:
             out["proyecto"] += h
-            pn = _nombre_actual(pid_of(r), r.get("Proyecto", "")) or "(sin proyecto)"
+            pn = _nombre_actual(pid_of(r), r.get("Proyecto", "")) or t("(no project)")
             out["por_proyecto"][pn] = round(out["por_proyecto"].get(pn, 0.0) + h, 2)
     out["general"] = round(out["general"], 2)
     out["proyecto"] = round(out["proyecto"], 2)
@@ -965,7 +965,7 @@ def group_hours(grupo: str, days=None) -> list:
             a["interno" if str(pid_of(r)).strip() in _int else "proyecto"] += h
             # Con ID se resuelve al nombre ACTUAL: si el proyecto se renombro,
             # sus horas viejas ya no salen bajo dos etiquetas distintas.
-            pn = _nombre_actual(pid_of(r), r.get("Proyecto", "")) or "(sin proyecto)"
+            pn = _nombre_actual(pid_of(r), r.get("Proyecto", "")) or t("(no project)")
             a["por"][pn] = a["por"].get(pn, 0.0) + h
     # Tarifa/hora por usuario, para el costo de mano de obra (misma fuente que
     # expenses.labor_cost). Import perezoso: auth no depende de timeclock.

@@ -136,7 +136,7 @@ def update_riel(referencia, ancho=None, altura=None) -> tuple:
                 w.update_cell(row, 3, str(altura))
             _invalidate()
             return True, t("Rail updated.")
-    return False, "Referencia no encontrada."
+    return False, t("Reference not found.")
 
 
 def delete_riel(referencia) -> tuple:
@@ -149,4 +149,4 @@ def delete_riel(referencia) -> tuple:
             w.delete_rows(i + 2)
             _invalidate()
             return True, t("Rail deleted.")
-    return False, "Referencia no encontrada."
+    return False, t("Reference not found.")

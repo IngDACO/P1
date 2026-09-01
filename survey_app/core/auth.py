@@ -184,10 +184,10 @@ def set_group_timezone(grupo: str, zona: str) -> tuple:
             try:
                 gws.update_cell(i + 2, col, str(zona or "").strip())
                 _invalidate_groups()
-                return True, "Zona horaria actualizada."
+                return True, t("Time zone updated.")
             except Exception as e:
                 return False, f"Error: {e}"
-    return False, "Grupo no encontrado."
+    return False, t("Company not found.")
 
 
 def group_margin_default(grupo: str) -> float:
@@ -225,7 +225,7 @@ def set_group_margin_default(grupo: str, pct) -> tuple:
                 return True, t("Default margin updated.")
             except Exception as e:
                 return False, f"Error: {e}"
-    return False, "Grupo no encontrado."
+    return False, t("Company not found.")
 
 
 def group_num_setting(grupo: str, field: str, default: float = 0.0) -> float:
@@ -265,7 +265,7 @@ def set_group_num_setting(grupo: str, field: str, val) -> tuple:
                 return True, f"{field} actualizado."
             except Exception as e:
                 return False, f"Error: {e}"
-    return False, "Grupo no encontrado."
+    return False, t("Company not found.")
 
 
 def group_tax_default(grupo: str) -> float:
@@ -301,7 +301,7 @@ def set_group_tax_default(grupo: str, pct) -> tuple:
                 return True, t("Default tax updated.")
             except Exception as e:
                 return False, f"Error: {e}"
-    return False, "Grupo no encontrado."
+    return False, t("Company not found.")
 
 
 def add_group(nombre: str, descripcion: str = "", zona: str = "") -> tuple:
@@ -334,7 +334,7 @@ def delete_group(nombre: str) -> tuple:
                 return True, f"{t('Group')} '{nombre}' {t('deleted.')}"
             except Exception as e:
                 return False, f"Error: {e}"
-    return False, "Grupo no encontrado."
+    return False, t("Company not found.")
 
 
 def _records(lws):
@@ -520,9 +520,9 @@ def set_contact(usuario: str, email: str = None, telegram: str = None) -> tuple:
         if telegram is not None:
             lws.update_cell(row, _COL["TelegramChatID"], str(telegram).strip())
     except Exception as e:
-        return False, f"Error guardando contacto: {e}"
+        return False, f"{t('Error saving contact')}: {e}"
     _invalidate_login()
-    return True, "Contacto actualizado."
+    return True, t("Contact updated.")
 
 
 def end_session(usuario: str, token: str = None):
@@ -853,15 +853,15 @@ def set_group_sheet_id(grupo: str, sheet_id) -> tuple:
             try:
                 gws.update_cell(i + 2, GROUPS_HEADERS.index("SheetID") + 1, sid)
             except Exception as e:
-                return False, f"Error guardando: {e}"
+                return False, f"{t('Error saving')}: {e}"
             _invalidate_groups()
             try:
                 from core import timeclock
                 timeclock.invalidar_libros()
             except Exception:
                 pass
-            return True, ("Libro enlazado." if sid else t("Group returned to the master workbook."))
-    return False, "Grupo no encontrado."
+            return True, (t("Workbook linked.") if sid else t("Group returned to the master workbook."))
+    return False, t("Company not found.")
 
 
 def grupos_con_libro_propio() -> list:

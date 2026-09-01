@@ -218,7 +218,7 @@ def crear(grupo, nombre, tipo=PRODUCTO, costo_unit="", horas_est="", tarifa_hora
                       str(creado_por), clock.now(grupo).strftime("%Y-%m-%d %H:%M")],
                      value_input_option="RAW")
     except Exception as e:
-        return False, f"Error guardando: {e}"
+        return False, f"{t('Error saving')}: {e}"
     _invalidate()
     return True, cid
 
@@ -256,7 +256,7 @@ def actualizar(cid, fields: dict) -> tuple:
     try:
         w.batch_update(lote, value_input_option="RAW")
     except Exception as e:
-        return False, f"Error actualizando: {e}"
+        return False, f"{t('Error updating')}: {e}"
     _invalidate()
     # ⚠️ FUERA del try y DESPUÉS de invalidar: si falla la anotación, el cambio del
     # usuario ya se hizo y no se deshace por eso (v342/v344).

@@ -18,6 +18,7 @@ from core import clientes as C
 from core import invoices as I
 from core import projects as P
 from core.num import num as _num
+from core import tabla
 
 
 def _creado_por() -> str:
@@ -92,11 +93,11 @@ def render_facturas(grupo):
     _ev = st.dataframe(
         df, width="stretch", hide_index=True,
         on_select="rerun", selection_mode="single-row", key="fac_tbl",
-        column_config={
+        column_config=tabla.cfg(None, {
             "Total":     st.column_config.NumberColumn(t("Total"), format="$%,d"),
             "Cobrado":   st.column_config.NumberColumn(t("Collected"), format="$%,d"),
             "Outstanding": st.column_config.NumberColumn(t("Outstanding"), format="$%,d"),
-        })
+        }))
     _sr = list(_ev.selection.rows)
     if _sr:
         st.session_state["_fac_open"] = str(_rows[_sr[0]].get("ID", ""))
@@ -115,7 +116,7 @@ def _detalle_factura(grupo, fid):
         st.session_state.pop("_fac_open", None)
         return
     # v351: `get_factura` busca por ID en TODA la hoja, sin mirar el grupo.
-    if not tenant.exigir(f, "Esta factura"):
+    if not tenant.exigir(f, t("This invoice")):
         st.session_state.pop("_fac_open", None)
         return
 
@@ -133,7 +134,7 @@ def _detalle_factura(grupo, fid):
                 "Concepto": str(x.get("concepto", "")),
                 "Importe":  round(_num(x.get("importe")), 2),
             } for x in _ln]), width="stretch", hide_index=True,
-                column_config={"Importe": st.column_config.NumberColumn(t("Amount"), format="$%,.2f")})
+                column_config=tabla.cfg(None, {"Importe": st.column_config.NumberColumn(t("Amount"), format="$%,.2f")}))
         _imp_pct = _num(f.get("ImpuestoPct"))
         from core import theme as _T                      # v309: escapa el `$` (LaTeX)
         st.markdown(f"Subtotal: **{_T.dinero(_num(f.get('Subtotal')))}**  ·  "
@@ -232,7 +233,7 @@ def _nueva_factura(grupo):
     # Se marca cuál está archivada: si no, en el radio son indistinguibles de las activas
     # y no se ve por qué aparece una obra que se creía cerrada.
     _ids_arch = {str(p.get("ID", "")) for p in _arch}
-    _lbl = {k: (v + " · archivada" if k in _ids_arch else v) for k, v in _lbl.items()}
+    _lbl = {k: (v + " " + t("· archived") if k in _ids_arch else v) for k, v in _lbl.items()}
     _pid_by_lbl = {v: k for k, v in _lbl.items()}
     prj_names = [_lbl[str(p.get("ID", ""))] for p in prjs]
 
@@ -270,17 +271,17 @@ def _nueva_factura(grupo):
             _pre.append({"Concepto": f"{d('Works')} — {p.get('Nombre', '')}",
                          "Proyecto": _lbl.get(str(p.get("ID", "")), ""), "Importe": pend})
     if not _pre:
-        _pre = [{"Concepto": "", "Proyecto": "(ninguno)", "Importe": 0.0}]
+        _pre = [{"Concepto": "", "Proyecto": "(none)", "Importe": 0.0}]
 
     st.caption(t("Invoice lines — edit, add or remove. The «Project» links the line so it is not invoiced twice."))
     _ed = st.data_editor(
         pd.DataFrame(_pre), num_rows="dynamic", width="stretch", key="fac_lineas",
-        column_config={
+        column_config=tabla.cfg(None, {
             "Concepto": st.column_config.TextColumn(t("Item"), width="large"),
             "Proyecto": st.column_config.SelectboxColumn(
-                t("Project"), options=["(ninguno)"] + prj_names, required=False),
+                t("Project"), options=["(none)"] + prj_names, required=False),
             "Importe":  st.column_config.NumberColumn(t("Amount"), format="$%,.2f", min_value=0.0),
-        })
+        }))
 
     c1, c2, c3 = st.columns(3)
     _fecha = c1.date_input(t("Date"), value=clock.today(), key="fac_fecha")

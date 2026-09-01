@@ -403,7 +403,7 @@ def salida(aid, grupo, usuario="", hacia_tipo="usuario", hacia_ref="",
     if not ok:
         return ok, msg
     _log_mov(grupo, aid, "salida", desde, hacia, usuario, "", nota, creado_por=creado_por)
-    return True, "Salida registrada."
+    return True, t("Check-out recorded.")
 
 
 def entrada(aid, grupo, bodega="", nota="", creado_por="") -> tuple:
@@ -436,7 +436,7 @@ def traslado(aid, grupo, hacia_tipo, hacia_ref, nota="", creado_por="") -> tuple
     if not ok:
         return ok, msg
     _log_mov(grupo, aid, "traslado", desde, hacia, "", "", nota, creado_por=creado_por)
-    return True, "Traslado registrado."
+    return True, t("Transfer recorded.")
 
 
 def mantenimiento(aid, grupo, costo="", proximo="", nota="", en_mant=False, creado_por="") -> tuple:
@@ -454,7 +454,7 @@ def mantenimiento(aid, grupo, costo="", proximo="", nota="", en_mant=False, crea
         if not ok:
             return ok, msg
     _log_mov(grupo, aid, "mantenimiento", ubic_str(a), ubic_str(a), "", costo, nota, creado_por=creado_por)
-    return True, "Mantenimiento registrado."
+    return True, t("Maintenance recorded.")
 
 
 # ── QR ───────────────────────────────────────────────────────────

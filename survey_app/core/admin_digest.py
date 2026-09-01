@@ -251,10 +251,10 @@ def group_snapshot_text(grupo, max_proys=30) -> str:
     proys, delays, horas, alarmas = b["proys"], b["delays"], b["horas"], b["alarmas"]
     if not proys:
         return f"{t('Group')} {grupo} {t('has no projects.')}"
-    lines = [f"## ESTADO EN VIVO DEL GRUPO {grupo} ({len(proys)} proyectos)"]
+    lines = [f"## LIVE STATUS OF {grupo} ({len(proys)} projects)"]
     for p in proys[:max_proys]:
         pid = str(p.get("ID", ""))
-        campo = ", ".join([x for x in str(p.get("CampoAsignados", "")).split(";") if x.strip()]) or "sin asignar"
+        campo = ", ".join([x for x in str(p.get("CampoAsignados", "")).split(";") if x.strip()]) or t("unassigned")
         extra = []
         d = delays.get(pid)
         if d:

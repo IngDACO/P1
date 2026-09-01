@@ -16,6 +16,7 @@ from core import alerts, expenses, maps
 from core import clientes as C
 from core import projects as P
 from core.num import num as _num
+from core import tabla
 
 
 def _norm(s) -> str:
@@ -124,7 +125,7 @@ def render_contactos(grupo):
     _hay_costo = expenses.is_configured()
     df = pd.DataFrame([{
         "Cliente":   r["disp"],
-        "Ficha":     "sí" if r["ficha"] else "—",
+        "Ficha":     t("yes") if r["ficha"] else "—",
         "Contacto":  r["Contacto"] or "—",
         "Phone":  r["Telefono"] or "—",
         "Email":     r["Email"] or "—",
@@ -142,7 +143,7 @@ def render_contactos(grupo):
     _ev = st.dataframe(
         df, width="stretch", hide_index=True,
         on_select="rerun", selection_mode="single-row", key="cli_tbl",
-        column_config=_colcfg,
+        column_config=tabla.cfg(None, _colcfg),
     )
     _sr = list(_ev.selection.rows)
     if _sr:
@@ -295,8 +296,8 @@ def _detalle_cliente(grupo, key):
             _fev = st.dataframe(
                 _fdf, width="stretch", hide_index=True,
                 on_select="rerun", selection_mode="single-row", key=f"cli_facs_{cid}",
-                column_config={"Total": st.column_config.NumberColumn(t("Total"), format="$%,d"),
-                               "Cobrado": st.column_config.NumberColumn(t("Collected"), format="$%,d")})
+                column_config=tabla.cfg(None, {"Total": st.column_config.NumberColumn(t("Total"), format="$%,d"),
+                               "Cobrado": st.column_config.NumberColumn(t("Collected"), format="$%,d")}))
             _fs = list(_fev.selection.rows)
             if _fs:
                 st.session_state["_fac_open"] = str(_fr[_fs[0]].get("ID", ""))

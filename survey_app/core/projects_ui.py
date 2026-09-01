@@ -32,6 +32,7 @@ from core import timeclock
 _VACIO = "— choose a project —"
 from core import ui_common as ui
 from core import clock
+from core import tabla
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +64,7 @@ def _alerts_section(pid, grupo, project_name="", allow_report=False):
                 if not msg.strip():
                     st.error(t("Describe the problem."))
                 else:
-                    with st.spinner("Enviando alarma..."):
+                    with st.spinner(t("Sending alert…")):
                         ok, res = alerts.report_problem(pid, grupo, msg.strip(), usuario, project_name)
                     (flash.exito if ok else st.error)("Alert sent to the administrator." if ok else res)
                     if ok:
@@ -412,7 +413,7 @@ def _resumen_del_dia(grupo: str):
             else:
                 st.caption(t("The assistant writes the company's status in a few sentences, with a recommendation."))
                 if st.button(t("✨ Generate the read"), key=f"brief_gen_{grupo}"):
-                    with st.spinner("Preparando…"):
+                    with st.spinner(t("Preparing…")):
                         from core import chat_agent
                         st.session_state[key] = chat_agent.admin_briefing(grupo)
                     st.rerun()
@@ -440,7 +441,7 @@ _CAMPO_SUBE = ["foto"]                                                # campo so
 _TIPO_LABEL = {"plano": "Drawing", "informe_cliente": "Client report",
                "informe_admin": "Informe admin", "matriz_survey": "Matriz survey",
                "foto": "Photos", "certificado": "Certificates",
-               "prestart": "Pre-Start", "calculo": "Cálculos", "otro": "Otros"}
+               "prestart": "Pre-Start", "calculo": "Calculations", "otro": "Others"}
 _TIPO_ORDER = ["plano", "informe_cliente", "informe_admin", "matriz_survey",
                "calculo", "prestart", "foto", "certificado", "otro"]
 # Reabrir un cálculo en su herramienta (v148): solo estas 4 guardan entradas.
@@ -548,7 +549,7 @@ def _plano_herramientas_html(datos) -> str:
                 chips.append(
                     '<span style="display:inline-block;background:#fdecea;color:#b71c1c;'
                     'border-radius:6px;padding:2px 8px;margin:2px 3px;font-size:12px;">'
-                    f'{label}: {_MI('warning','#e0a021')} falta</span>')
+                    f'{label}: {_MI('warning','#e0a021')} {t("missing")}</span>')
         filas.append(
             '<tr><td style="padding:6px 10px;white-space:nowrap;font-weight:600;'
             'vertical-align:top;border-bottom:1px solid #eef1f5;">'
@@ -582,7 +583,7 @@ def _plano_section(pid: str, prj: dict):
         with st.expander(f"See the {len(par)} drawing parameters"):
             st.dataframe(pd.DataFrame([{"Parameter": k, "Valor": v}
                                        for k, v in sorted(par.items())]),
-                         hide_index=True, width="stretch")
+                         hide_index=True, width="stretch", column_config=tabla.cfg())
     _cargar_plano(pid)
 
 
@@ -700,14 +701,21 @@ def _archivos_section(pid: str):
             + [t for t in cuenta if t not in _TIPO_ORDER]
 
     def _tlabel(_tp):
-        return (f"Todos ({len(entries)})" if _tp == "Todos"
+        return (f"{t('All')} ({len(entries)})" if _tp == "Todos"
                 else f"{_TIPO_LABEL.get(_tp, _tp)} ({cuenta[_tp]})")
+
+    # ⚠️ El VALOR de cada opción se queda en español porque se compara abajo
+    # (`orden == "Más reciente"`). Traducir la opción y no la comparación deja la
+    # rama MUERTA sin dar ningún error — el fallo real de v442. Se traduce el
+    # display con `format_func`, que es lo único que se ve.
+    _ORD = {"Más reciente": "Newest", "Más antiguo": "Oldest",
+            "Name A–Z": "Name A–Z", "Tipo": "Type"}
 
     c1, c2, c3 = st.columns([2, 1.5, 1.5])
     q = c1.text_input(t(":material/search: Search"), key=f"arch_q_{pid}",
                       placeholder=t("name, type…")).strip().lower()
     tsel = c2.selectbox(t("Type"), tipos, format_func=_tlabel, key=f"arch_t_{pid}")
-    orden = c3.selectbox(t("Order"), ["Más reciente", "Más antiguo", "Name A–Z", "Tipo"],
+    orden = c3.selectbox(t("Order"), list(_ORD), format_func=lambda o: t(_ORD[o]),
                          key=f"arch_o_{pid}")
 
     vis = entries
@@ -744,7 +752,7 @@ def _archivos_section(pid: str):
             "Archivo": e["nombre"], "Tipo": e["label"],
             "Uploaded by": e["por"], "Fecha": _fecha_corta(e["fecha"]),
         } for e in resto]), hide_index=True, width="stretch",
-            on_select="rerun", selection_mode="single-row", key=f"arch_tbl_{pid}")
+            on_select="rerun", selection_mode="single-row", key=f"arch_tbl_{pid}", column_config=tabla.cfg())
         st.caption(t(":material/touch_app: Tap a row to download or reopen that file."))
         try:
             _rows = list(_ev.selection.rows)
@@ -896,7 +904,7 @@ def _nuevo_proyecto_form(grupo: str, key: str = "nuevo"):
         from core import clientes as _C
         _cli_fichas = _C.list_clientes(grupo)
         _cli_names = [str(c.get("Nombre", "")) for c in _cli_fichas]
-        _CLI_OTRO = "➕ Otro (escribir uno nuevo)"
+        _CLI_OTRO = t("➕ Other (type a new one)")
         _cli_sel = st.selectbox(t(":material/contacts: Client"),
                                 ["— no client —"] + _cli_names + [_CLI_OTRO],
                                 key=f"np_clisel_{key}",
@@ -1141,7 +1149,7 @@ def _avisar_asignados(usuarios, grupo=None, exclude_pid=None, certs_req=None,
         for p in otros.get(u, []):
             _fin = str(p.get("FechaFinEst", "")).strip()
             ocupados.append(f"**{u}** → :material/apartment: {p.get('Nombre', '')}"
-                            + (f" (hasta {_fin})" if _fin else ""))
+                            + (f" ({t('until')} {_fin})" if _fin else ""))
         if certs_req:
             try:
                 comp = credentials.compliance(u, certs_req)
@@ -1220,16 +1228,22 @@ def _cumplimiento_equipo(pid, grupo, prj):
     if not asign:
         st.caption(t("No field users assigned yet."))
         return
-    _ico = {"vigente": "vigente", "por_vencer": "por vencer", "vencido": "vencido", "falta": "—"}
+    # ⚠️ El estado se muestra con `etiqueta()` (v442), NO con un mapa propio. El que
+    # había aquí traducía «vigente»→«vigente», así que las celdas salían en español
+    # mientras la leyenda de abajo —ya traducida— describía iconos que la tabla no
+    # pinta: dos textos contándose cosas distintas a dos centímetros. `i18n.VALORES`
+    # ya sabe que vigente/por_vencer/vencido/falta son valid/expiring/expired/missing.
     filas = []
     for u in asign:
         comp = credentials.compliance(u, req)
-        fila = {"Usuario": u, "Compliant": "sí" if comp["cumple"] else "NO"}
+        fila = {"Usuario": u, "Compliant": t("Yes") if comp["cumple"] else t("No")}
         for _c in req:
-            fila[_c] = _ico.get(comp["por_tipo"].get(_c, "falta"), "—")
+            _est = comp["por_tipo"].get(_c, "falta")
+            fila[_c] = "—" if _est == "falta" else _etq(_est)
         filas.append(fila)
-    st.dataframe(pd.DataFrame(filas), hide_index=True, width="stretch")
-    st.caption(t(":green[:material/check_circle:] valid · :orange[:material/schedule:] expiring (renew) · :red[:material/cancel:] expired · — missing.  **Compliant** = no required certificate expired or missing."))
+    st.dataframe(pd.DataFrame(filas), hide_index=True, width="stretch", column_config=tabla.cfg())
+    st.caption(t("**Compliant** = no required certificate is expired or missing. "
+                 "«—» means the person does not hold that certificate."))
 
 
 def _notificar_asignados(usuarios, info_prj):
@@ -1479,7 +1493,7 @@ def _cartera_lista(proys, alarmas, delays, aheads, costos, pendientes=None,
     _ev = st.dataframe(
         pd.DataFrame(_rows), hide_index=True, width="stretch",
         on_select="rerun", selection_mode="single-row", key="cart_tbl",
-        column_config={
+        column_config=tabla.cfg(None, {
             "Avance": st.column_config.ProgressColumn(
                 t("Progress"), min_value=0, max_value=100, format="%d%%", width=78),
             # ⚠️ v399: la coma del formato NO es cosmética. Con `"$%.0f"` esta
@@ -1525,7 +1539,7 @@ def _cartera_lista(proys, alarmas, delays, aheads, costos, pendientes=None,
             "Estado":    st.column_config.TextColumn(t("Status"), width=92),
             "Users":  st.column_config.NumberColumn(
                 t("Team"), width=70, help=t("Field staff assigned.")),
-        })
+        }))
     _tot = sum(pendientes.get(str(p.get("ID", "")), 0.0) for p in proys)
     if _tot > 0:
         # ⚠️ `theme` se importa por función en este módulo, no arriba (v342).
@@ -1847,7 +1861,7 @@ def _equipo_proyecto(pid, grupo):
         return
     st.dataframe(pd.DataFrame([{"Persona": x["usuario"], "Horas": x["horas"]}
                                for x in _lb["items"]]),
-                 hide_index=True, width="stretch")
+                 hide_index=True, width="stretch", column_config=tabla.cfg())
     st.caption(f"Total: **{_lb['horas']:.1f} h**")
 
 
@@ -1883,8 +1897,8 @@ def _historial_section(pid: str):
             st.markdown(f"**{r.get('Fecha','')}** · {_quien}")
             for campo, (antes, despues) in (r.get("cambios") or {}).items():
                 _lbl = _CAMPO_LEGIBLE.get(campo, campo)
-                _a = str(antes or "").strip() or "(vacío)"
-                _d = str(despues or "").strip() or "(vacío)"
+                _a = str(antes or "").strip() or t("(empty)")
+                _d = str(despues or "").strip() or t("(empty)")
                 st.markdown(
                     f"&nbsp;&nbsp;&nbsp;&nbsp;{_lbl}: "
                     f"<span style='color:{theme.GRIS_SUAVE}'>{_a}</span> → <b>{_d}</b>",
@@ -2016,7 +2030,7 @@ def _estado_section(pid: str, grupo: str, prj: dict):
             st.markdown((":orange[:material/hourglass_top:] " if x["tarde"]
                          else ":blue[:material/play_arrow:] ")
                         + f"{x['nombre']} — {x['avance']:.0f}%"
-                        + (" _(arrastrada)_" if x["tarde"] else ""))
+                        + (t(" _(carried over)_") if x["tarde"] else ""))
         if not _vistas and not d["en_curso"]:
             st.caption(t("No open or overdue activity."))
         if d["proximo"]:
@@ -2108,7 +2122,7 @@ def _detalle_proyecto(pid: str, grupo: str = None):
         f'<span style="font-size:13px;color:#374151;white-space:nowrap;">'
         f'<b>{_av}%</b> avance</span>'
         f'<span style="font-size:13px;color:#6b7280;white-space:nowrap;">'
-        f'<b style="color:#374151">{_horas:.1f} h</b> trabajadas</span>'
+        f'<b style="color:#374151">{_horas:.1f} h</b> {t("worked")}</span>'
         '</div></div>',
         unsafe_allow_html=True,
     )
@@ -2220,7 +2234,7 @@ def _detalle_proyecto(pid: str, grupo: str = None):
         from core import clientes as _C
         _cli_fichas = _C.list_clientes(grupo)
         _cli_names = [str(c.get("Nombre", "")) for c in _cli_fichas]
-        _CLI_NONE, _CLI_OTRO = "— no client —", "➕ Otro (escribir uno nuevo)"
+        _CLI_NONE, _CLI_OTRO = "— no client —", t("➕ Other (type a new one)")
         _opts_cli = [_CLI_NONE] + _cli_names + [_CLI_OTRO]
         _cur_cid = str(prj.get("ClienteID", "")).strip()
         _cur_txt = str(prj.get("Cliente", "")).strip()
@@ -2293,7 +2307,7 @@ def _detalle_proyecto(pid: str, grupo: str = None):
             actuales = _actuales
 
             ags = P.list_groupings(grupo=grupo)
-            ag_opts = ["(ninguna)"] + [f"{a['ID']} · {a['Nombre']}" for a in ags]
+            ag_opts = ["(none)"] + [f"{a['ID']} · {a['Nombre']}" for a in ags]
             ag_cur  = str(prj.get("AgrupacionID", ""))
             ag_idx  = next((i for i, a in enumerate(ags) if a["ID"] == ag_cur), None)
             ag_sel  = st.selectbox(t("Group of lifts"), ag_opts,
@@ -2330,7 +2344,7 @@ def _detalle_proyecto(pid: str, grupo: str = None):
                 if _err:
                     st.error(_err)
                 else:
-                    ag_id = "" if ag_sel == "(ninguna)" else ag_sel.split(" · ")[0]
+                    ag_id = "" if ag_sel == "(none)" else ag_sel.split(" · ")[0]
                     # Cliente elegido/escrito → texto + ClienteID (v256)
                     if _ecli_sel in _cli_names:
                         cliente = _ecli_sel
@@ -2394,7 +2408,7 @@ def _detalle_proyecto(pid: str, grupo: str = None):
                     # proyecto entre sus fechas y quitar del roster a los desasignados.
                     _quitados = [x for x in actuales if x not in asignados]
                     _autoagenda(grupo, pid, nuevos, _quitados, f_ini, f_fin)
-                    st.toast("Cambios guardados." + (f"  :material/send: {_sent} notificado(s)." if _sent else ""))
+                    st.toast(t("Changes saved.") + (f"  :material/send: {_sent} {t('notified')}." if _sent else ""))
                     st.rerun()
 
         # helper: avisar al campo asignado de un cambio del admin
@@ -2421,13 +2435,13 @@ def _detalle_proyecto(pid: str, grupo: str = None):
             _edited = st.data_editor(
                 _adf, width="stretch", hide_index=True, num_rows="fixed",
                 key=f"acted_{pid}", disabled=["Avance %"],
-                column_config={
+                column_config=tabla.cfg(None, {
                     "Orden": st.column_config.NumberColumn(t("Order"), min_value=1, step=1,
                                                            help=t("Change the number to reorder")),
                     "Días":  st.column_config.NumberColumn(t("Days"), min_value=1, step=1),
                     "Peso":  st.column_config.NumberColumn(t("Weight"), min_value=0.0, step=1.0,
                                                            help=t("Relative weight (the % is worked out proportionally)")),
-                })
+                }))
             st.caption(t("Edit name, days, weight and order; the progress % is read-only (the field team updates it)."))
             if st.button(t(":material/save: Save activity table"), key=f"savetbl_{pid}"):
                 edits = []
@@ -2468,7 +2482,7 @@ def _detalle_proyecto(pid: str, grupo: str = None):
                 _dmap = {f"{int(P._num(a.get('Orden')))} · {a.get('Nombre')}": a.get("Orden")
                          for a in acts}
                 _orden = ui.elegir(t("Activity to delete"), _dmap, key=f"delact_{pid}",
-                                   vacio="— ninguna —")
+                                   vacio=t("— none —"))
                 if _orden is not None:
                     _ok_del = ui.confirmar_borrado(f"delactok_{pid}",
                                                    t("I confirm I want to delete this activity"))
@@ -2613,7 +2627,7 @@ def _dashboard_agrupacion(ag, grupo):
     if proj.get("critico"):
         _d = delays.get(proj["critico_id"])
         st.markdown(
-            f":material/event: **Delivery is set by «{proj['critico']}»** — proyectada para "
+            f":material/event: **Delivery is set by «{proj['critico']}»** — expected "
             f"**{_fecha}**" + (f", with **{_d:.0f} days behind**." if _d else
                                ", on time.")
             + "  That is where reinforcing pays off most.")
@@ -2669,7 +2683,7 @@ def _dashboard_agrupacion(ag, grupo):
             "Costo": _cs[i], "vs media $": _dev(_cs[i], _cm),
             "Alerts": _na or "",
         })
-    st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch")
+    st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch", column_config=tabla.cfg())
     st.caption(t("«vs avg» compares each lift with the group average; it is only flagged if it differs by 15% or more."))
 
     _out = [r["Elevador"] for r in rows if r["vs media h"].startswith("+")]
@@ -2708,14 +2722,14 @@ def _miembros_editor(ags_proys, todos, key, pesos_actuales=None):
         pd.DataFrame(filas), hide_index=True, width="stretch",
         num_rows="fixed", key=key,
         disabled=["Proyecto", "Avance %", "Already in another"],
-        column_config={
+        column_config=tabla.cfg(None, {
             "In the grouping": st.column_config.CheckboxColumn(width="small"),
             "Peso": st.column_config.NumberColumn(
                 min_value=0.0, step=0.5,
                 help=t("How much this lift weighs in the consolidated progress.")),
             "Already in another": st.column_config.TextColumn(
                 t(":material/warning: Already in another"), help=t("Ticking it here MOVES it to this group.")),
-        })
+        }))
     out = {}
     for _, r in ed.iterrows():
         if bool(r["In the grouping"]):
@@ -2824,7 +2838,7 @@ def _panel_agrupaciones(grupo: str):
                            "to the sheet; it may take a few seconds.")
             if st.button(t(":material/save: Save the group's projects"),
                          key=f"agmemsave_{_ag['ID']}", width="stretch"):
-                with st.spinner("Guardando..."):
+                with st.spinner(t("Saving…")):
                     ok, msg = P.set_grouping_members(_ag["ID"], _sel, grupo)
                 (flash.exito if ok else st.error)(msg)
                 if ok:
@@ -2869,7 +2883,7 @@ def _panel_agrupaciones(grupo: str):
                         _n = len(_nuevos)
                         if not ok2:
                             st.warning(f"Group created, but: {msg2}")
-                    flash.exito(f"Agrupación creada ({res})"
+                    flash.exito(f"{t('Grouping created')} ({res})"
                                + (f" with {_n} lift(s)." if _n else
                                   ". Add lifts to it from its panel."))
                     st.rerun()
@@ -2936,7 +2950,7 @@ def render_owner_projects():
 
     with st.expander(t(":material/assignment: See detailed table")):
         st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True,
-                     column_config={"Mapa": st.column_config.LinkColumn(t("Map"), display_text="Abrir")})
+                     column_config=tabla.cfg(None, {"Mapa": st.column_config.LinkColumn(t("Map"), display_text="Abrir")}))
 
     st.markdown(t("#### :material/search: Open project"))
     idmap = {f"{p.get('Grupo')} · {p.get('ID')} · {p.get('Nombre')}": p.get("ID") for p in proys}
@@ -2971,11 +2985,11 @@ def _field_activities(pid):
         _df, hide_index=True, width="stretch", num_rows="fixed",
         key=f"fldacts_{pid}",
         disabled=["N", "Actividad", "Inicio real", "Fin real"],
-        column_config={
+        column_config=tabla.cfg(None, {
             "Avance %": st.column_config.NumberColumn(min_value=0, max_value=100, step=5,
                                                       help=t("Your progress on this activity")),
             "Nota": st.column_config.TextColumn(help=t("Optional")),
-        })
+        }))
     st.caption(t("The dates record themselves: **start** when it goes above 0, **end** when it reaches 100."))
     if st.button(t(":material/save: Save progress"), key=f"fldsave_{pid}", width="stretch"):
         cambios, _vacias = [], []
@@ -3034,7 +3048,7 @@ def render_field_projects(usuario: str, grupo: str):
                 _n = f" · {_nt}" if _nt else ""
                 _est = all(a.get("es_estado") for a in _aa)
                 (st.info if _est else st.success)(
-                    f":material/calendar_month: **Hoy:** {_ets}{_n}")
+                    f"{t(':material/calendar_month: **Today:**')} {_ets}{_n}")
             with st.expander(t(":material/calendar_month: See the week's plan (the whole crew)")):
                 roster_ui.render_board_readonly(grupo, resaltar_usuario=usuario)
     except Exception:
@@ -3369,7 +3383,7 @@ def _editor_ganancia_hora(pid, _items, _gh, _T):
             # ⚠️ Solo se teclea la GANANCIA. Precio/h y «Ganas» son consecuencia y van
             # bloqueados, igual que en la cotización (v355).
             disabled=["Persona", "Horas", "Costo/h", "Precio/h", "Ganas"],
-            column_config={
+            column_config=tabla.cfg(None, {
                 "Costo/h": st.column_config.NumberColumn(t("Cost/h"), format="$%,.2f",
                                                          help=t("Their rate. What it costs you.")),
                 "Ganancia/h": st.column_config.NumberColumn(
@@ -3378,7 +3392,7 @@ def _editor_ganancia_hora(pid, _items, _gh, _T):
                 "Precio/h": st.column_config.NumberColumn(t("Price/h"), format="$%,.2f",
                                                           help=t("Cost + profit. What the client is charged.")),
                 "Ganas": st.column_config.NumberColumn(t("You make"), format="$%,.2f",
-                                                       help=t("Hours × profit/h."))})
+                                                       help=t("Hours × profit/h."))}))
 
     _nuevo = {str(_ed.iloc[i]["Persona"]): P._num(_ed.iloc[i]["Ganancia/h"])
               for i in range(len(_ed)) if P._num(_ed.iloc[i]["Ganancia/h"]) > 0}
@@ -3490,7 +3504,7 @@ def _facturar_atajo(pid, grupo, prj_nombre=""):
                         + _T.dinero(pend, 0) + "**")
             st.caption(t("The project's estimated revenue minus what has already been invoiced."))
         else:
-            st.markdown(":material/check_circle: **Todo facturado** ("
+            st.markdown(t(":material/check_circle: **Everything invoiced**") + " ("
                         + _T.dinero(facturado, 0) + ")")
     with _c2:
         if st.button(t(":material/receipt_long: Invoice this job"), key="fac_atajo_" + str(pid),
@@ -3638,7 +3652,7 @@ def render_expenses(pid, grupo, can_delete=False, key_prefix="ex"):
         st.dataframe(pd.DataFrame([{
             "Usuario": x["usuario"], "Horas": x["horas"],
             "Rate/h": x["tarifa"], "Costo": x["costo"],
-        } for x in lb["items"]]), hide_index=True, width="stretch")
+        } for x in lb["items"]]), hide_index=True, width="stretch", column_config=tabla.cfg())
         if lb["sin_tarifa"]:
             st.warning(":material/warning: With no hourly rate, their hours add **$0** to the cost: **"
                        + ", ".join(lb["sin_tarifa"]) + "**. It is set in :material/build: Users.")
@@ -3745,7 +3759,10 @@ def render_pnl(grupo: str):
 
     # ── Periodo ──────────────────────────────────────────────────
     _hoy = clock.today(grupo)
-    _per = st.radio(t("Period"), ["Este mes", "Trimestre", "Este año", "Todo"],
+    # ⚠️ Los valores se comparan justo debajo → se traduce el display, no la opción.
+    _PER = {"Este mes": "This month", "Trimestre": "Quarter",
+            "Este año": "This year", "Todo": "All"}
+    _per = st.radio(t("Period"), list(_PER), format_func=lambda o: t(_PER[o]),
                     horizontal=True, key="cpxseg_pnl_per", label_visibility="collapsed")
     if _per == "Este mes":
         _desde, _hasta = _hoy.replace(day=1), _hoy
@@ -3825,7 +3842,7 @@ def render_pnl(grupo: str):
 
     # slug, icono, etiqueta, valor, urgente, hay_algo, seccion, sub, detalle()
     _IND = [
-        ("venc", ":material/warning:", "Vencido", T.dinero(d["vencido"], 0), True,
+        ("venc", ":material/warning:", t("Overdue"), T.dinero(d["vencido"], 0), True,
          d["vencido"] > 0, "finanzas", "🧾 Facturas",
          lambda: f"{T.dinero(d['vencido'])} in invoices past their due date."),
         ("cobrar", ":material/receipt:", "To collect", T.dinero(d["por_cobrar"], 0), False,
@@ -3894,9 +3911,9 @@ def render_pnl(grupo: str):
     # La composicion del costo entra aqui como una mas (el usuario la probo fija y
     # prefirio tenerla bajo demanda): asi la pantalla arranca en la rejilla y cada
     # grafico se pide cuando se quiere mirar.
-    _TOOLS = [("conc", ":material/compare_arrows: Conciliación"),
+    _TOOLS = [("conc", t(":material/compare_arrows: Reconciliation")),
               ("cli", ":material/groups: By client"),
-              ("comp", ":material/pie_chart: Composición"),
+              ("comp", t(":material/pie_chart: Breakdown")),
               ("prj", ":material/apartment: By project")]
     _tc = st.columns(len(_TOOLS))
     _cur = st.session_state.get("_pnl_tool", "")
@@ -4019,13 +4036,13 @@ def _pnl_por_proyecto(grupo: str, T):
         "Resultado": r["resultado"],
         "Margen %": r["margen"],
     } for r in rows]), hide_index=True, width="stretch",
-        column_config={
+        column_config=tabla.cfg(None, {
             "Facturado":    st.column_config.NumberColumn(format="$%,.0f"),
             "Labour": st.column_config.NumberColumn(format="$%,.0f"),
             "Purchases":      st.column_config.NumberColumn(format="$%,.0f"),
             "Resultado":    st.column_config.NumberColumn(format="$%,.0f"),
             "Margen %":     st.column_config.NumberColumn(format="%.1f%%"),
-        })
+        }))
     _t = sum(r["resultado"] for r in rows)
     st.markdown(f"Cumulative result across jobs: **{T.dinero(_t, 0)}**")
     st.caption(t("Cost = what is CHARGED to the job (hours charged × rate + purchases). Statutory contributions and unallocated hours do not belong to any one job: the margin covers them (see Reconciliation)."))
@@ -4102,7 +4119,7 @@ def render_group_profitability(grupo: str):
         _df, width="stretch", hide_index=True, key="rent_ed",
         disabled=["Proyecto", "Costo", "Ingreso estimado", "Ganancia",
                   "Facturado", "To invoice"],
-        column_config={
+        column_config=tabla.cfg(None, {
             "Costo":            st.column_config.NumberColumn(format="$%,d"),
             "Margen %":         st.column_config.NumberColumn(
                                     t("Margin %"), format="%.1f%%", min_value=0.0,
@@ -4112,7 +4129,7 @@ def render_group_profitability(grupo: str):
             "Ganancia":         st.column_config.NumberColumn(format="$%,d"),
             "Facturado":        st.column_config.NumberColumn(format="$%,d"),
             "To invoice":     st.column_config.NumberColumn(format="$%,d"),
-        })
+        }))
     # Solo lo que CAMBIO de verdad (comparando contra el valor original de cada fila)
     _cambios = {}
     for _i, r in enumerate(_orden):
@@ -4308,7 +4325,7 @@ def render_group_expenses(grupo: str):
                  ("pedido" if f.get("over_comp") else
                   ("riesgo" if f["over_proj"] else "ok"))),
         } for f in con_pres]), hide_index=True, width="stretch",
-            on_select="rerun", selection_mode="single-row", key="ge_tbl")
+            on_select="rerun", selection_mode="single-row", key="ge_tbl", column_config=tabla.cfg())
         st.caption(t(":material/touch_app: Tap a row and «Open» to go to that project. **Projected** = cost at completion at the current rate. over = already over · ordered = will go over with the material already on order · at risk = will go over at the current rate · ok = within budget."))
         try:
             _grows = list(_gev.selection.rows)
@@ -4326,7 +4343,7 @@ def render_group_expenses(grupo: str):
         st.dataframe(pd.DataFrame([{
             "Proyecto": f["nombre"], "Purchases": f["compras"],
             "Labour": f["mano_obra"], "Total cost": f["total"],
-        } for f in sin_pres]), hide_index=True, width="stretch")
+        } for f in sin_pres]), hide_index=True, width="stretch", column_config=tabla.cfg())
         st.caption(f"{len(sin_pres)} project(s) with no budget: there is nothing to compare "
                    "their spend against. It is set in the project detail → :material/edit: Data.")
 
@@ -4357,8 +4374,11 @@ def render_group_hours(grupo: str):
         st.warning(t("The time clock needs Google Sheets configured."))
         return
 
-    per = st.radio(t("Period"), ["Hoy", "Semana", "Mes", "Todo"], horizontal=True,
-                   key="gh_per", label_visibility="collapsed")
+    # ⚠️ `per` se compara abajo y además indexa `{"Semana": 7, …}` → la opción no se
+    # toca; se traduce el display.
+    _PERH = {"Hoy": "Today", "Semana": "Week", "Mes": "Month", "Todo": "All"}
+    per = st.radio(t("Period"), list(_PERH), format_func=lambda o: t(_PERH[o]),
+                   horizontal=True, key="gh_per", label_visibility="collapsed")
     now = clock.now()
     if per == "Hoy":
         days = (now - now.replace(hour=0, minute=0, second=0, microsecond=0)).total_seconds() / 86400.0
@@ -4405,7 +4425,7 @@ def render_group_hours(grupo: str):
     # EXACTAMENTE como estaba.
     if tot_intn > 0:
         tarj.append(_kpi_card(t("On overhead"), f"{tot_intn:.1f} h",
-                              pie="oficina, almacén"))
+                              pie=t("office, warehouse")))
     tarj += [_kpi_card(t("Unallocated"), "—" if _dudoso else f"{tot_sina:.1f} h",
                        "#c0392b" if (_dudoso or pct_sina > 25) else None),
              _kpi_card(t("Labour charged to jobs"), f"${tot_cost:,.0f}",
@@ -4459,7 +4479,7 @@ def render_group_hours(grupo: str):
         filas.append(_f)
     # v215: tabla CLICKEABLE → abre la ficha de la persona (Planificación · Usuarios).
     _hev = st.dataframe(pd.DataFrame(filas), width="stretch", hide_index=True,
-                        on_select="rerun", selection_mode="single-row", key="gh_tbl")
+                        on_select="rerun", selection_mode="single-row", key="gh_tbl", column_config=tabla.cfg())
     st.caption(t(":material/touch_app: Tap a person and «Open record» to manage them."))
     try:
         _hrows = list(_hev.selection.rows)
@@ -4529,7 +4549,7 @@ def render_group_hours(grupo: str):
                 _fila[_p] = round(_h, 2) if _h else ""
             _mat.append(_fila)
         if _mat:
-            st.dataframe(pd.DataFrame(_mat), width="stretch", hide_index=True)
+            st.dataframe(pd.DataFrame(_mat), width="stretch", hide_index=True, column_config=tabla.cfg())
             st.caption(t("Each cell: hours that person charged to that project in the period. The columns are the projects."))
 
 
@@ -4598,7 +4618,7 @@ def _cartera_localizaciones(locs, grupo, horas, costos, alarmas):
                 st.markdown(f"**{_ico} {p.get('Nombre') or "(no name)"}**")
                 _pie = [f"`{pid}`", _tipo]
                 if _cerrada:
-                    _pie.append(":material/lock: cerrada")
+                    _pie.append(t(":material/lock: closed"))
                 st.caption(" · ".join(_pie))
                 m1, m2, m3 = st.columns(3)
                 m1.markdown(f"**{_h:,.0f} h**  \n<small>worked</small>",
@@ -4710,9 +4730,9 @@ def _loc_equipo(pid, grupo):
                          "Rate/h": float(r.get("tarifa", 0)),
                          "Costo": float(r.get("costo", 0))} for r in _p])
     st.dataframe(_df, width="stretch", hide_index=True,
-                 column_config={"Horas": st.column_config.NumberColumn(format="%.2f"),
+                 column_config=tabla.cfg(None, {"Horas": st.column_config.NumberColumn(format="%.2f"),
                                 "Rate/h": st.column_config.NumberColumn(format="$%,.2f"),
-                                "Costo": st.column_config.NumberColumn(format="$%,.2f")})
+                                "Costo": st.column_config.NumberColumn(format="$%,.2f")}))
     st.caption(f"**{float(filas.get('horas', 0)):,.1f} h** · "
                f"{theme.dinero(filas.get('total', 0))} — ⚠️ this is "
                "**overhead**: it is not charged to any job and not invoiced to anyone.")
@@ -4760,7 +4780,7 @@ def _detalle_localizacion(pid: str, grupo: str):
     # ⚠️ Cerrojo de aislamiento (v351): esta vista trae el objeto por ID GLOBAL, igual
     # que el detalle de proyecto, factura, nómina y activo. Sin esto, editar la URL
     # abriría la oficina de otra empresa cliente.
-    if not tenant.exigir(prj, "Esta localización"):
+    if not tenant.exigir(prj, t("This location")):
         return
     if not P.es_interno(prj):
         st.warning(t("That ID is not an internal location."))
@@ -4777,7 +4797,7 @@ def _detalle_localizacion(pid: str, grupo: str):
         st.markdown(f"### {P.TIPO_ICONO.get(_tipo, ':material/business:')} "
                     f"{prj.get('Nombre') or "(no name)"}")
         _c = [f"`{pid}`", _tipo,
-              (":material/lock: cerrada" if _cerrada else ":material/check_circle: abierta")]
+              (t(":material/lock: closed") if _cerrada else ":material/check_circle: abierta")]
         if str(prj.get("Ingeniero", "")).strip():
             _c.append(f"resp. {prj.get('Ingeniero')}")
         st.caption(" · ".join(_c))
@@ -4850,9 +4870,9 @@ def _editar_localizacion(pid, grupo, prj):
         _opts = ["", P.INTERNO_CERRADA, P.ARCHIVADO]
         est = st.selectbox(t("Status"), _opts,
                            index=_opts.index(_est_act) if _est_act in _opts else 0,
-                           format_func=lambda v: {"": "Abierta",
-                                                  P.INTERNO_CERRADA: "Cerrada",
-                                                  P.ARCHIVADO: "Archivada"}.get(v, v),
+                           format_func=lambda v: {"": t("Open"),
+                                                  P.INTERNO_CERRADA: t("Closed"),
+                                                  P.ARCHIVADO: t("Archived")}.get(v, v),
                            key=f"eloc_est_{pid}",
                            help=t("Closed = no longer used, but its history is kept. Archived = it also disappears from the list."))
         instr = st.text_area(t(":material/push_pin: Instructions / notes"),

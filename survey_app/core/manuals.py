@@ -163,7 +163,7 @@ def context_for(query, k=6, max_chars=4500) -> str:
         if h["seccion"]:
             ref += f" · {h['seccion']}"
         if h["page"]:
-            ref += f" · pág {h['page']}"
+            ref += f" · p. {h['page']}"
         ref += "]"
         block = f"{ref}\n{h['text']}"
         if total + len(block) > max_chars:

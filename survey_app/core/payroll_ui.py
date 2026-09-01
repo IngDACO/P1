@@ -16,6 +16,7 @@ from core import auth, clock, timeclock
 from core import payroll
 from core import flash          # v365: mensajes que sobreviven al st.rerun()
 from core.num import num as _num
+from core import tabla
 
 
 def _creado_por() -> str:
@@ -140,9 +141,9 @@ def render_nominas(grupo):
     _ev = st.dataframe(
         df, width="stretch", hide_index=True,
         on_select="rerun", selection_mode="single-row", key="nom_tbl",
-        column_config={"Base": st.column_config.NumberColumn(t("Base pay"), format="$%,d"),
+        column_config=tabla.cfg(None, {"Base": st.column_config.NumberColumn(t("Base pay"), format="$%,d"),
                        "Neto": st.column_config.NumberColumn(t("Net"), format="$%,d"),
-                       "Rate/h": st.column_config.NumberColumn(t("Rate/h"), format="$%,.2f")})
+                       "Rate/h": st.column_config.NumberColumn(t("Rate/h"), format="$%,.2f")}))
     st.caption(f"{len(_rows)} payslip(s)  ·  base pay {T.dinero(sum(_num(x.get('Base')) for x in _rows), 0)}"
                f"  ·  net {T.dinero(sum(_num(x.get('Neto')) for x in _rows), 0)}"
                "  ·  an empty «Rate/h» means that person has no rate set.")
@@ -186,8 +187,8 @@ def _generar(grupo):
             "Rate/h": _num(rates.get(k, 0)),
             "Base": round(v["horas"] * _num(rates.get(k, 0)), 0),
         } for k, v in sorted(horas.items())]), width="stretch", hide_index=True,
-            column_config={"Rate/h": st.column_config.NumberColumn(t("Rate/h"), format="$%,d"),
-                           "Base": st.column_config.NumberColumn(t("Base pay"), format="$%,d")})
+            column_config=tabla.cfg(None, {"Rate/h": st.column_config.NumberColumn(t("Rate/h"), format="$%,d"),
+                           "Base": st.column_config.NumberColumn(t("Base pay"), format="$%,d")}))
     else:
         st.info(t("Nobody has workday hours in that period."))
 
@@ -268,11 +269,11 @@ def _detalle(grupo, nid):
                [{"Concepto": "", "Tipo": "deduccion", "Monto": 0.0}]
         _ed = st.data_editor(
             pd.DataFrame(_pre), num_rows="dynamic", width="stretch", key=f"nom_ed_{nid}",
-            column_config={
+            column_config=tabla.cfg(None, {
                 "Concepto": st.column_config.TextColumn(t("Item"), width="large"),
                 "Tipo": st.column_config.SelectboxColumn(t("Type"), options=payroll.TIPOS, required=True),
                 "Monto": st.column_config.NumberColumn(t("Amount"), format="$%,.2f", min_value=0.0),
-            })
+            }))
         if est != "anulada" and st.button(t(":material/save: Save items"), key=f"nom_save_{nid}"):
             conceptos = []
             for _, rr in _ed.iterrows():

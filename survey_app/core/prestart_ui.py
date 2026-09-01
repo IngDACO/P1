@@ -527,7 +527,7 @@ def _historial(pid):
         if d["near_miss"]:      _res.append("near miss")
         if d["n_no"]:           _res.append(f"{d['n_no']} check(s) answered NO")
         _tit = (f"{_flag}  {d['fecha']} · {d['facilitador'] or '—'}"
-                + (f"  ·  :orange[:material/warning:] {', '.join(_res)}" if _res else "  ·  todo OK"))
+                + (f"  ·  :orange[:material/warning:] {', '.join(_res)}" if _res else t("  ·  all OK")))
         with st.expander(_tit):
             if d["asistentes"]:
                 st.markdown(f"**:material/engineering: {t('Attendees')}:** " + " · ".join(d["asistentes"]))

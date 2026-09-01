@@ -34,8 +34,8 @@ ROSTER_HEADERS = ["ID", "Grupo", "Semana", "Usuario", "DatosJSON"]
 DIAS = ["lun", "mar", "mie", "jue", "vie"]          # la semana normal de la cuadrilla
 DIAS_EXTRA = ["sab", "dom"]                        # se añaden a una semana concreta (v390)
 DIAS_TODOS = DIAS + DIAS_EXTRA                     # ⚠️ el ORDEN es el de weekday()
-DIAS_LABEL = {"lun": "Lun", "mar": "Mar", "mie": "Mié", "jue": "Jue", "vie": "Vie",
-              "sab": "Sáb", "dom": "Dom"}
+DIAS_LABEL = {"lun": "Mon", "mar": "Tue", "mie": "Wed", "jue": "Thu", "vie": "Fri",
+              "sab": "Sat", "dom": "Sun"}
 
 
 def dias_con_datos(datos, extra_pedidos=()) -> list:
@@ -71,15 +71,15 @@ def dia_tiene_datos(datos, dia) -> list:
 ESTADOS = {
     "OFF":       {"nombre": "OFF",       "color": "#9aa7b8"},   # gris
     "LEAVE":     {"nombre": "Leave",     "color": "#c0392b"},   # rojo
-    "FORMACION": {"nombre": "Formación", "color": "#8e44ad"},   # morado
+    "FORMACION": {"nombre": "Training", "color": "#8e44ad"},   # morado
 }
 
 # Paleta para los trabajos (el color es clave para leer el tablero de un vistazo).
 PALETA = [
-    ("Magenta",  "#e84393"), ("Naranja", "#e67e22"), ("Amarillo", "#f1c40f"),
-    ("Verde",    "#27ae60"), ("Cian",    "#00b5cc"), ("Azul",     "#2e6da4"),
-    ("Rosa",     "#f5a6c3"), ("Lila",    "#9b59b6"), ("Teal",     "#16a085"),
-    ("Durazno",  "#f6b189"), ("Oliva",   "#7f8c8d"), ("Índigo",   "#34495e"),
+    ("Magenta",  "#e84393"), ("Orange",  "#e67e22"), ("Yellow",   "#f1c40f"),
+    ("Green",    "#27ae60"), ("Cyan",    "#00b5cc"), ("Blue",     "#2e6da4"),
+    ("Pink",     "#f5a6c3"), ("Lilac",   "#9b59b6"), ("Teal",     "#16a085"),
+    ("Peach",    "#f6b189"), ("Olive",   "#7f8c8d"), ("Indigo",   "#34495e"),
 ]
 _COLOR_DEFECTO = "#2e6da4"
 
@@ -324,7 +324,7 @@ def add_trabajo(grupo, numero, nombre, color, proyecto_id="") -> tuple:
                       str(color) or _COLOR_DEFECTO, str(proyecto_id or ""), "SI"],
                      value_input_option="RAW")
     except Exception as e:
-        return False, f"Error guardando: {e}"
+        return False, f"{t('Error saving')}: {e}"
     _invalidate()
     return True, tid
 
@@ -347,7 +347,7 @@ def update_trabajo(tid, cambios: dict) -> tuple:
         if peticiones:
             w.batch_update(peticiones, value_input_option="RAW")
     except Exception as e:
-        return False, f"Error actualizando: {e}"
+        return False, f"{t('Error updating')}: {e}"
     _invalidate()
     return True, t("Job updated.")
 
@@ -415,7 +415,7 @@ def delete_trabajo(grupo, tid) -> tuple:
             return False, t("Job not found.")
         w.delete_rows(fila + 1)
     except Exception as e:
-        return False, f"Error borrando: {e}"
+        return False, f"{t('Error deleting')}: {e}"
     _invalidate()
     return True, t("Job deleted.")
 
@@ -577,7 +577,7 @@ def guardar_persona(grupo, lunes, usuario, dias: dict) -> tuple:
             w.batch_update([{"range": _a1(fila + 1, 5), "values": [[payload]]}],
                            value_input_option="RAW")
     except Exception as e:
-        return False, f"Error guardando: {e}"
+        return False, f"{t('Error saving')}: {e}"
     _invalidate()
     return True, t("Saved.")
 
@@ -618,7 +618,7 @@ def copiar_semana(grupo, lunes_origen, lunes_destino) -> tuple:
     for usuario, dias in datos.items():
         ok, _ = guardar_persona(grupo, lunes_destino, usuario, dias)
         n += 1 if ok else 0
-    return True, f"{n} persona(s) copiada(s)."
+    return True, f"{n} " + t("person(s) copied.")
 
 
 def _a_date(x):

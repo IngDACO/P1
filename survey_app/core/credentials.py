@@ -15,7 +15,7 @@ from core import timeclock
 from core import clock
 from core.num import col_letter as _col_letter
 
-from core.i18n import t
+from core.i18n import t, etiqueta as _etq
 logger = logging.getLogger(__name__)
 
 SHEET   = "Credenciales"
@@ -119,8 +119,12 @@ def status(vencimiento) -> str:
 
 
 def status_label(vencimiento) -> str:
-    return {"vigente": "vigente", "por_vencer": "por vencer",
-            "vencido": "vencido", "": "—"}[status(vencimiento)]
+    """Cómo se MUESTRA el estado. ⚠️ `status()` sigue devolviendo el valor español,
+    que es el DATO con el que se compara en medio repo; aquí solo se traduce de cara
+    afuera, con `etiqueta()` — el mapa a mano que había traducía «vigente»→«vigente»
+    y dejaba las celdas en español bajo una leyenda ya en inglés."""
+    _e = status(vencimiento)
+    return _etq(_e) if _e else "—"
 
 
 def dias_para(vencimiento):
@@ -259,7 +263,7 @@ def update(cred_id, fields: dict) -> tuple:
                 try:
                     w.batch_update(batch, value_input_option="RAW")
                 except Exception as e:
-                    return False, f"Error actualizando: {e}"
+                    return False, f"{t('Error updating')}: {e}"
             _invalidate()
             return True, t("Credential updated.")
     return False, t("Credential not found.")

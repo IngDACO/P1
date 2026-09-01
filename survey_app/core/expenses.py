@@ -465,7 +465,7 @@ def add(pid, grupo, valor, categoria="Materiales", proveedor="", descripcion="",
                       clock.now().strftime("%Y-%m-%d %H:%M")],
                      value_input_option="RAW")
     except Exception as e:
-        return False, f"Error guardando: {e}"
+        return False, f"{t('Error saving')}: {e}"
     _invalidate()
     return True, f"Recibo agregado ({_num(valor):.2f})."
 
@@ -493,7 +493,7 @@ def delete(gid) -> tuple:
                 return False, f"Error: {e}"
             _invalidate()
             return True, t("Receipt deleted.")
-    return False, "Recibo no encontrado."
+    return False, t("Receipt not found.")
 
 
 def _esc(s) -> str:
@@ -540,10 +540,10 @@ def spend_svg(curva: dict, proyectado=None, titulo: str = "") -> str:
          f'display:block;margin:0 auto">',
          f'<rect x="0" y="0" width="{VW}" height="{VH}" fill="#ffffff"/>',
          f'<text x="18" y="24" font-size="13" fill="#1a3a5c" font-weight="bold">'
-         f'GASTO ACUMULADO</text>',
+         f'CUMULATIVE SPEND</text>',
          f'<text x="18" y="38" font-size="8.5" fill="#5b6472">'
          f'{_esc(titulo) + " · " if titulo else ""}{fechas[0]} → {fechas[-1]}'
-         f' · {n} movimientos</text>']
+         f' · {n} entries</text>']
 
     # rejilla horizontal
     for k in range(5):

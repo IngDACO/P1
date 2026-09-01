@@ -87,13 +87,13 @@ def send_usage_notification(
         sol_html = f"""
         <h3 style="color:#1a3a5c;margin-top:20px">Optimal solution</h3>
         <table style="border-collapse:collapse;width:100%;font-size:14px">
-          {row("RL (desplazamiento lateral)", f"{best['rl']:+.1f} mm", True)}
-          {row("FB (desplazamiento frontal)", fb_str, True)}
+          {row("RL (lateral shift)", f"{best['rl']:+.1f} mm", True)}
+          {row("FB (front shift)", fb_str, True)}
           {row("Values out of limit",     str(best['total_off']), best['total_off'] > 0)}
           {row("OFF per column",             str(best.get('off_by_col', {})))}
         </table>"""
     else:
-        sol_html = "<p style='color:red'>No se encontró solución válida.</p>"
+        sol_html = "<p style='color:red'>No valid solution was found.</p>"
 
     bs_html = ""
     if bs_result:
@@ -116,15 +116,15 @@ def send_usage_notification(
     </div>
 
     <div style="background:#e8f4f8;padding:10px 20px;border-left:4px solid #2e6da4;margin:16px 0">
-        <strong>Fecha:</strong> {ts}<br>
-        <strong>Proyecto:</strong> {proyecto or '(no especificado)'}<br>
-        <strong>Ingeniero:</strong> {ingeniero or '(no especificado)'}
+        <strong>Date:</strong> {ts}<br>
+        <strong>Project:</strong> {proyecto or '(not specified)'}<br>
+        <strong>Engineer:</strong> {ingeniero or '(not specified)'}
     </div>
 
-    <h3 style="color:#1a3a5c">Parámetros principales</h3>
+    <h3 style="color:#1a3a5c">Main parameters</h3>
     <table style="border-collapse:collapse;width:100%;font-size:14px">
-      {row("BS (plano)",        f"{p.get('BS', '—')} mm")}
-      {row("BSR (obra)",        f"{p.get('BSR', '—')} mm")}
+      {row("BS (drawing)",        f"{p.get('BS', '—')} mm")}
+      {row("BSR (on site)",        f"{p.get('BSR', '—')} mm")}
       {row("BKS",              f"{p.get('BKS', '—')} mm")}
       {row("BT",               f"{p.get('BT', '—')} mm")}
       {row("RAIL",             f"{p.get('RAIL', '—')} mm")}
@@ -132,12 +132,12 @@ def send_usage_notification(
       {row("SF1 / SF2",        f"{p.get('SF1', '—')} / {p.get('SF2', '—')} mm")}
       {row("TS",               f"{p.get('TS', '—')} mm")}
       {row("TKSW / TSW / FS",  f"{p.get('TKSW', '—')} / {p.get('TSW', '—')} / {p.get('FS', '—')} mm")}
-      {row("Paradas (NS)",     str(p.get('NS', '—')))}
-      {row("Pared limitante",  f"{'Yes — Stop ' + str(p.get('WALL_STOP')) + ' side ' + str(p.get('WALL_SIDE')) if p.get('WALL_LIMITING') else 'No'}")}
+      {row("Stops (NS)",     str(p.get('NS', '—')))}
+      {row("Limiting wall",  f"{'Yes — Stop ' + str(p.get('WALL_STOP')) + ' side ' + str(p.get('WALL_SIDE')) if p.get('WALL_LIMITING') else 'No'}")}
       {row("Ctrl in frame",    f"{'Yes — side ' + str(p.get('CTRL_SIDE')) if p.get('CTRL_IN_FRAME') else 'No'}")}
     </table>
 
-    <h3 style="color:#1a3a5c;margin-top:20px">Estado inicial del survey</h3>
+    <h3 style="color:#1a3a5c;margin-top:20px">Initial survey state</h3>
     <table style="border-collapse:collapse;width:100%;font-size:14px">
       {''.join(row(col, f"OFF: {analysis.get(col+'_OFF_COUNT',0)}  |  DIF: {round(analysis.get('DIF_'+col,0),1)} mm",
                analysis.get(col+'_OFF_COUNT',0) > 0)
@@ -148,7 +148,7 @@ def send_usage_notification(
 
     {sol_html}
 
-    <h3 style="color:#1a3a5c;margin-top:20px">Análisis BSR vs BS</h3>
+    <h3 style="color:#1a3a5c;margin-top:20px">BSR vs BS analysis</h3>
     <table style="border-collapse:collapse;width:100%;font-size:14px">
       {bs_html}
     </table>
@@ -166,7 +166,7 @@ def send_usage_notification(
     # ── Enviar via Gmail SMTP ─────────────────────────────
     try:
         msg = MIMEMultipart("mixed")
-        msg["Subject"] = f"COPEX Survey — {proyecto or 'Sin proyecto'} | {ts}"
+        msg["Subject"] = f"COPEX Survey — {proyecto or 'No project'} | {ts}"
         msg["From"]    = gmail_user
         msg["To"]      = notify_to
 

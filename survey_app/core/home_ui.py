@@ -744,7 +744,7 @@ def _alertas(grupo) -> list:
             for e in C.expiring(grupo)[:10]:
                 if _es_campo and str(e.get("usuario", "")).strip().lower() != _yo:
                     continue
-                est = ":red[:material/cancel:] vencida" if e["dias"] < 0 else f":orange[:material/schedule:] expires in {e['dias']} d"
+                est = t(":red[:material/cancel:] expired") if e["dias"] < 0 else f":orange[:material/schedule:] expires in {e['dias']} d"
                 out.append(f":material/badge: {e['tipo']} · {e['usuario']} — {est}")
     except Exception:
         pass
@@ -754,10 +754,10 @@ def _alertas(grupo) -> list:
             for e in INV.alertas(grupo)[:10]:
                 if e["tipo"] == "mantenimiento":
                     out.append(f":material/build: {e['activo']} — "
-                               f":red[mantenimiento vencido hace {e['dias']} d]")
+                               f":red[{t('maintenance overdue by')} {e['dias']} d]")
                 else:
                     out.append(f":material/inventory_2: {e['activo']} — "
-                               f":red[no devuelto hace {e['dias']} d]"
+                               f":red[{t('not returned for')} {e['dias']} d]"
                                + (f" ({e['usuario']})" if e.get("usuario") else ""))
     except Exception:
         pass

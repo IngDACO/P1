@@ -197,7 +197,7 @@ def _avisar_cancelacion(grupo, nombre, r):
         from core import notify
         from core.alerts import _admins_and_owners
         cfg = AU.TIPOS.get(str(r.get("Tipo", "")), {})
-        _subj = (f"CANCELADA — {cfg.get('nombre', r.get('Tipo'))}: {nombre} "
+        _subj = (f"CANCELLED — {cfg.get('nombre', r.get('Tipo'))}: {nombre} "
                  f"({r.get('Desde')} → {r.get('Hasta')})")
         _lines = [f"<b>{nombre}</b> has CANCELLED their "
                   f"<b>{cfg.get('nombre', r.get('Tipo'))}</b> "

@@ -301,10 +301,10 @@ def registrar_cobro(fid: str, monto, fecha="") -> tuple:
         return False, err
     f = get_factura(fid)
     if not f:
-        return False, "Factura no encontrada."
+        return False, t("Invoice not found.")
     row = _find_row(w, fid)
     if row is None:
-        return False, "Factura no encontrada."
+        return False, t("Invoice not found.")
     prev = _num(f.get("Cobrado"))
     nuevo = min(_num(f.get("Total")), round(prev + _num(monto), 2))
     real = round(nuevo - prev, 2)                 # lo efectivamente sumado (respeta el tope)
@@ -322,7 +322,7 @@ def registrar_cobro(fid: str, monto, fecha="") -> tuple:
     except Exception as e:
         return False, str(e)
     _invalidate()
-    return True, "Cobro registrado."
+    return True, t("Payment recorded.")
 
 
 def anular(fid: str) -> tuple:
@@ -331,10 +331,10 @@ def anular(fid: str) -> tuple:
         return False, err
     row = _find_row(w, fid)
     if row is None:
-        return False, "Factura no encontrada."
+        return False, t("Invoice not found.")
     try:
         w.update_cell(row, _FCOL["Estado"], "anulada")
     except Exception as e:
         return False, str(e)
     _invalidate()
-    return True, "Factura anulada."
+    return True, t("Invoice voided.")

@@ -16,6 +16,7 @@ from core import tenant
 from core import clock
 from core import inventory as INV
 from core.num import num as _num
+from core import tabla
 
 logger = logging.getLogger(__name__)
 
@@ -25,9 +26,19 @@ def _creado_por() -> str:
     return str(a.get("usuario", "") or a.get("nombre", ""))
 
 
-_EST_LBL = {"disponible": ":green[disponible]", "en_uso": ":blue[in use]",
-            "mantenimiento": ":orange[mantenimiento]", "dañado": ":red[dañado]",
-            "baja": ":gray[baja]"}
+# ⚠️ SIN `t()`: este dict se construye al IMPORTAR el módulo, cuando todavía no hay
+# sesión, así que la traducción quedaría CONGELADA en el idioma de ese momento — el
+# fallo de `auth.SESION_OCUPADA` (v445), que ya ha mordido seis veces. Las CLAVES son
+# el estado guardado en la hoja y no se tocan; el texto va en el idioma BASE y quien
+# quiera traducirlo lo hace al PINTAR, con `_est_lbl()`.
+_EST_LBL = {"disponible": ":green[available]", "en_uso": ":blue[in use]",
+            "mantenimiento": ":orange[maintenance]", "dañado": ":red[damaged]",
+            "baja": ":gray[written off]"}
+
+
+def _est_lbl(estado) -> str:
+    """El estado del activo, con su color, en el idioma de la PANTALLA."""
+    return t(_EST_LBL.get(str(estado), str(estado)))
 
 
 def _ubic_txt(a) -> str:
@@ -127,8 +138,15 @@ def render_inventario(grupo):
     f1, f2, f3 = st.columns([2, 1, 1])
     q = f1.text_input(t(":material/search: Search"), key="inv_q",
                       placeholder=t("name, serial, brand…")).strip().lower()
-    cat_f = f2.selectbox(t("Category"), ["Todas"] + INV.categorias(grupo), key="inv_catf")
-    est_f = f3.selectbox(t("Status"), ["Todos"] + INV.ESTADOS, key="inv_estf")
+    # ⚠️ Las opciones son el DATO (categoría y estado guardados) y se comparan abajo;
+    # solo se traduce el display: el «todas/todos» con `t()` y el resto con
+    # `etiqueta()`, que es quien sabe traducir un valor de negocio (v442).
+    cat_f = f2.selectbox(t("Category"), ["Todas"] + INV.categorias(grupo),
+                         format_func=lambda o: t("All") if o == "Todas" else _etq(o),
+                         key="inv_catf")
+    est_f = f3.selectbox(t("Status"), ["Todos"] + INV.ESTADOS,
+                         format_func=lambda o: t("All") if o == "Todos" else _etq(o),
+                         key="inv_estf")
     _rows = acts
     if q:
         _rows = [a for a in _rows if q in " ".join(
@@ -151,7 +169,7 @@ def render_inventario(grupo):
     _ev = st.dataframe(
         df, width="stretch", hide_index=True,
         on_select="rerun", selection_mode="single-row", key="inv_tbl",
-        column_config={"Valor": st.column_config.NumberColumn(t("Value"), format="$%,d")})
+        column_config=tabla.cfg(None, {"Valor": st.column_config.NumberColumn(t("Value"), format="$%,d")}))
     _sr = list(_ev.selection.rows)
     if _sr:
         st.session_state["_inv_open"] = str(_rows[_sr[0]].get("ID", ""))
@@ -179,7 +197,7 @@ def _detalle(grupo, aid):
 
     st.markdown(f"## :material/inventory_2: {a.get('Nombre', '')}")
     st.markdown(f"**{a.get('ID', '')}**  ·  {_etq(str(a.get('Categoria', ''))) or '—'}  ·  "
-                f"{_EST_LBL.get(a.get('Estado', ''), a.get('Estado', ''))}")
+                f"{_est_lbl(a.get('Estado', ''))}")
 
     izq, der = st.columns([3, 2])
     with izq:
@@ -202,7 +220,7 @@ def _detalle(grupo, aid):
         if _pm:
             _pd = INV._parse_date(_pm)
             if _pd and _pd < clock.today():
-                st.markdown(f":red[:material/build: Mantenimiento VENCIDO: {_pm}]")
+                st.markdown(f":red[:material/build: {t('Maintenance OVERDUE')}: {_pm}]")
             else:
                 st.markdown(f":material/build: Next service: {_pm}")
         if str(a.get("Nota", "")).strip():
@@ -246,7 +264,7 @@ def _detalle(grupo, aid):
                 else:
                     _ref = st.text_input(t("Destination"), key=f"inv_srt_{aid}")
                 _resp = st.selectbox(t("Person responsible"), ["—"] + _usuarios(grupo), key=f"inv_srsp_{aid}")
-                _dev = _fecha_input("Devolución esperada", "", f"inv_sdev_{aid}")
+                _dev = _fecha_input(t("Expected return"), "", f"inv_sdev_{aid}")
                 _n = st.text_input(t("Note"), key=f"inv_snota_{aid}")
                 if st.button(t(":material/check: Record check-out"), type="primary", key=f"inv_sbtn_{aid}"):
                     _u = ("" if _resp == "—" else _resp) or (_ref if _dt == "usuario" else "")
@@ -275,7 +293,7 @@ def _detalle(grupo, aid):
                     st.rerun()
         with ac[1].expander(t(":material/build: Service")):
             _costo = st.number_input(t("Cost"), min_value=0.0, step=10.0, key=f"inv_mcosto_{aid}")
-            _prox = _fecha_input("Próximo mantenimiento", a.get("ProximoMant"), f"inv_mprox_{aid}")
+            _prox = _fecha_input(t("Next maintenance"), a.get("ProximoMant"), f"inv_mprox_{aid}")
             _enm = st.checkbox(t("Leave the asset IN service"), key=f"inv_menm_{aid}")
             _n = st.text_input(t("Note"), key=f"inv_mnota_{aid}")
             if st.button(t(":material/check: Record service"), key=f"inv_mbtn_{aid}"):
@@ -301,7 +319,7 @@ def _detalle(grupo, aid):
             "Costo":   (round(_num(m.get("Costo")), 0) if str(m.get("Costo", "")).strip() else None),
             "Nota":    m.get("Nota", "") or "",
         } for m in _mr]), width="stretch", hide_index=True,
-            column_config={"Costo": st.column_config.NumberColumn(t("Cost"), format="$%,d")})
+            column_config=tabla.cfg(None, {"Costo": st.column_config.NumberColumn(t("Cost"), format="$%,d")}))
 
     # Editar
     st.markdown(t("#### :material/edit: Edit asset"))
@@ -330,7 +348,7 @@ def _detalle(grupo, aid):
         f_compra = _fecha_input("Purchase date", a.get("FechaCompra"), f"inv_fc_{aid}")
         vida = c4.number_input(t("Useful life (years)"), min_value=0.0, step=1.0,
                                value=_num(a.get("VidaUtilAnios")))
-        prox = _fecha_input("Próximo mantenimiento", a.get("ProximoMant"), f"inv_pm_{aid}")
+        prox = _fecha_input(t("Next maintenance"), a.get("ProximoMant"), f"inv_pm_{aid}")
         nota = st.text_area(t("Note"), value=a.get("Nota", ""), height=80)
         if st.form_submit_button(t(":material/save: Save changes"), type="primary"):
             ok, msg = INV.update_activo(aid, {
@@ -385,7 +403,7 @@ def _registro(grupo):
         vida = c2.number_input(t("Useful life (years)"), min_value=0.0, step=1.0,
                                help=t("Used for depreciation. 0 = do not depreciate."))
         f_compra = _fecha_input("Purchase date", "", "inv_reg_fc")
-        prox = _fecha_input("Próximo mantenimiento", "", "inv_reg_pm")
+        prox = _fecha_input(t("Next maintenance"), "", "inv_reg_pm")
         nota = st.text_area(t("Note"), height=70)
         crear = st.form_submit_button(t(":material/add: Register"), type="primary")
 
@@ -434,15 +452,15 @@ def _reportes(grupo):
                 "Compra": round(v["compra"], 0), "Actual": round(v["actual"], 0),
             } for k, v in sorted(rep["por_categoria"].items())]),
                 width="stretch", hide_index=True,
-                column_config={"Compra": st.column_config.NumberColumn(t("Purchase"), format="$%,d"),
-                               "Actual": st.column_config.NumberColumn(t("Current"), format="$%,d")})
+                column_config=tabla.cfg(None, {"Compra": st.column_config.NumberColumn(t("Purchase"), format="$%,d"),
+                               "Actual": st.column_config.NumberColumn(t("Current"), format="$%,d")}))
         with cb:
             st.markdown(t("**By location**"))
             st.dataframe(pd.DataFrame([{
                 "Location": k, "Active": v["n"], "Valor actual": round(v["actual"], 0),
             } for k, v in sorted(rep["por_ubicacion"].items())]),
                 width="stretch", hide_index=True,
-                column_config={"Valor actual": st.column_config.NumberColumn(t("Current value"), format="$%,d")})
+                column_config=tabla.cfg(None, {"Valor actual": st.column_config.NumberColumn(t("Current value"), format="$%,d")}))
 
 
 def _categorias_expander(grupo):

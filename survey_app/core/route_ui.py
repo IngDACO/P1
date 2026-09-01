@@ -16,6 +16,7 @@ import math
 from core.i18n import t
 import urllib.parse
 import streamlit as st
+from core import tabla
 
 
 # ── Geometría / orden ────────────────────────────────────────────
@@ -392,7 +393,7 @@ def render_ruta_dia(grupo):
         import pandas as pd
         st.markdown(t("**Who goes where**"))
         st.dataframe(pd.DataFrame(en_obra), hide_index=True,
-                     width="stretch")
+                     width="stretch", column_config=tabla.cfg())
         st.caption(t(":material/info: 'Status' compares the plan against the actual clock-ins for that day."))
 
     if sin_coord:

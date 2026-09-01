@@ -420,7 +420,7 @@ def _set(w, row, campos: dict) -> tuple:
     try:
         w.batch_update(lote, value_input_option="RAW")
     except Exception as e:
-        return False, f"Error actualizando: {e}"
+        return False, f"{t('Error updating')}: {e}"
     return True, ""
 
 

@@ -197,7 +197,7 @@ def crear(pid, grupo, proveedor, valor, descripcion="", categoria="Materiales",
     except Exception as e:
         return False, f"{t('Error saving the order')}: {e}"
     _invalidate()
-    return True, f"Orden {oid} registrada."
+    return True, f"{t('Order')} {oid} {t('recorded.')}"
 
 
 def _fila(w, oid):
@@ -223,7 +223,7 @@ def _set(w, row, campos: dict) -> tuple:
     try:
         w.batch_update(lote, value_input_option="RAW")
     except Exception as e:
-        return False, f"Error actualizando: {e}"
+        return False, f"{t('Error updating')}: {e}"
     return True, ""
 
 
@@ -234,9 +234,9 @@ def marcar_recibida(oid, valor_real=None, creado_por="") -> tuple:
         return False, t("Google Sheets is not configured.")
     row, r = _fila(w, oid)
     if row is None:
-        return False, "Orden no encontrada."
+        return False, t("Order not found.")
     if str(r.get("Estado", "")) == RECIBIDA and str(r.get("GastoID", "")).strip():
-        return False, "Esa orden ya estaba recibida."
+        return False, t("That order was already received.")
     valor = _num(valor_real) if valor_real not in (None, "") else _num(r.get("Valor"))
     if valor <= 0:
         return False, t("The received value must be greater than 0.")
@@ -284,15 +284,15 @@ def completar_gasto(oid, creado_por="") -> tuple:
         return False, t("Google Sheets is not configured.")
     row, r = _fila(w, oid)
     if row is None:
-        return False, "Orden no encontrada."
+        return False, t("Order not found.")
     if str(r.get("GastoID", "")).strip():
-        return False, "Esa orden ya tiene su gasto registrado."
+        return False, t("That order already has its expense recorded.")
     ok, msg = _crear_gasto(r, _num(r.get("Valor")), creado_por)
     if not ok:
         return False, msg
     _set(w, row, {"GastoID": msg})
     _invalidate()
-    return True, "Gasto registrado."
+    return True, t("Expense recorded.")
 
 
 def cancelar(oid) -> tuple:
@@ -301,11 +301,11 @@ def cancelar(oid) -> tuple:
         return False, t("Google Sheets is not configured.")
     row, r = _fila(w, oid)
     if row is None:
-        return False, "Orden no encontrada."
+        return False, t("Order not found.")
     if str(r.get("Estado", "")) == RECIBIDA:
         return False, t("Already received: it cannot be cancelled (delete its receipt if it was a mistake).")
     ok, err = _set(w, row, {"Estado": CANCELADA})
     if not ok:
         return False, err
     _invalidate()
-    return True, "Orden cancelada."
+    return True, t("Order cancelled.")

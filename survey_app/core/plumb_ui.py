@@ -14,6 +14,7 @@ from core import plan_ui
 from core.tool_pdf import tool_pdf
 from core.tool_save_ui import render_guardar
 from core import tool_save_ui
+from core import tabla
 
 
 def _kpi(label, value, color=None):
@@ -29,7 +30,7 @@ def _encaje_txt(disp) -> str:
     if not disp:
         return "no shift (BSR = BS)"
     if disp.get("centrado"):
-        return f"centrado · holgura {disp.get('holgura_lado', 0):.0f} mm/lado"
+        return f"{t('centred · clearance')} {disp.get('holgura_lado', 0):.0f} mm/side"
     if disp.get("fuera_rango"):
         return (f":orange[:material/warning:] DOES NOT FIT · Omega {disp.get('omega_sacrificio', 0):.0f} > "
                 f"limit {disp.get('limit_ob', 0):.0f}")
@@ -113,7 +114,7 @@ def render_plumb_tab():
         base = pd.DataFrame({"Elevador": [f"Elevador {i+1}" for i in range(n)],
                              "BSR (mm)": [0.0] * n})
     bsr_edit = st.data_editor(base, width="stretch", hide_index=True,
-                              num_rows="fixed", disabled=["Elevador"], key="plb_bsr_editor")
+                              num_rows="fixed", disabled=["Elevador"], key="plb_bsr_editor", column_config=tabla.cfg())
     st.session_state["plb_bsr_df"] = bsr_edit
 
     if st.button(t(":material/straighten: Calculate plumb lines"), type="primary", width="stretch", key="plb_calc"):
@@ -159,7 +160,7 @@ def render_plumb_tab():
             d("dd (plumb→right wall)"): round(v.get("plomo_der_pared_der", 0), 1),
             "di+DBP+dd": round(cierre, 1),
         })
-    st.dataframe(pd.DataFrame(_rows), width="stretch", hide_index=True)
+    st.dataframe(pd.DataFrame(_rows), width="stretch", hide_index=True, column_config=tabla.cfg())
     st.caption(t("On-site check: **di + DBP + dd = BSR**. If it does not add up, there is a measurement error."))
 
     # ── Diagramas de un elevador ──
@@ -222,4 +223,4 @@ def render_plumb_tab():
                    datos={"n": n,
                           "plantilla": {k: r0.get(k) for k in ("dbp", "dbpw", "rw", "d1", "d2")},
                           "elevadores": _rows},
-                   nombre_archivo="replanteo_plomadas.pdf", key="plb")
+                   nombre_archivo="plumb_setout.pdf", key="plb")

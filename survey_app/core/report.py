@@ -93,8 +93,8 @@ def _calc_block(label, formula, substitution, result_str, styles, ok=None):
     rows = [
         [Paragraph(f"<b>{label}</b>", styles["Normal2"]), ""],
         [Paragraph(f"  Formula:       {formula}",        styles["FormulaLine"]), ""],
-        [Paragraph(f"  Sustitución:   = {substitution}", styles["FormulaLine"]), ""],
-        [Paragraph(f'  <font color="{res_color}"><b>Resultado:      {result_str}</b></font>', styles["ResultLine"]), ""],
+        [Paragraph(f"  {_d('Substitution')}:   = {substitution}", styles["FormulaLine"]), ""],
+        [Paragraph(f'  <font color="{res_color}"><b>{_d('Result')}:      {result_str}</b></font>', styles["ResultLine"]), ""],
     ]
     t = Table(rows, colWidths=[W*0.7, W*0.3])
     t.setStyle(TableStyle([
@@ -279,7 +279,7 @@ def _dg_lateral_limits(lwl, lol, lwr, lor, bks, rail, offset_cabin, offset_side)
     return [
         "  Seccion transversal (vista superior, no proporcional):",
         "",
-        f"  Cabina desplazada hacia: {offset_side}   OFFSET_CABIN = {offset_cabin:.0f} mm",
+        f"  {_d('Car offset towards')}: {offset_side}   OFFSET_CABIN = {offset_cabin:.0f} mm",
         "",
         "  PARED IZQ                                            PARED DER",
         "    |<-- WL -->|<-RAIL-|<---- BKS ---->|-RAIL->|<-- WR -->|",
@@ -308,7 +308,7 @@ def _dg_rl(lr, ll, max_rl):
         "          -LIMIT_R                            +LIMIT_L",
         f"          = {-lr:.1f} mm                        = +{ll:.1f} mm",
         "",
-        f"  Rango total evaluado: -{max_rl:.1f} mm  a  +{max_rl:.1f} mm  (paso 0.5 mm)",
+        f"  {_d('Total range evaluated')}: -{max_rl:.1f} mm  to  +{max_rl:.1f} mm  ({_d('step')} 0.5 mm)",
     ]
 
 
@@ -375,7 +375,7 @@ def _violations_block(surv_list, lim_map, survey_cols, styles,
 
     # ── Tabla resumen por columna ───────────────────────────────
     hdr_s = [Paragraph(f"<b>{h}</b>", styles["Normal2"]) for h in
-             ["Col.", "Límite", "Criterio", "# Viol.", "Niveles incumplidos", "DIF (mm)", "Estado"]]
+             [_d("Col."), _d("Limit"), _d("Criterion"), _d("# Viol."), _d("Levels out of limit"), _d("DIF (mm)"), _d("Status")]]
     rows_s = [hdr_s]
     for col in survey_cols:
         if col not in lim_map:
@@ -507,7 +507,7 @@ def generate_report(project_params, calculated, survey_original,
         ("BOTTOMPADDING", (0,0),(-1,-1), 10),
     ]))
     story += [tt, sp(4),
-              Paragraph(f"Generado: {clock.now().strftime('%d/%m/%Y  %H:%M')}", styles["SmallCenter"]),
+              Paragraph(f"{_d('Generated')}: {clock.now().strftime('%d/%m/%Y  %H:%M')}", styles["SmallCenter"]),
               sp(10)]
 
     # ── 1. PARÁMETROS DE ENTRADA ─────────────────────────────
@@ -534,9 +534,9 @@ def generate_report(project_params, calculated, survey_original,
     def _side(s): return str(s) if s else "—"
 
     cfg_rows = [
-        [Paragraph("<b>Condición / Parámetro</b>", styles["Normal2"]),
+        [Paragraph(f"<b>{_d('Condition / Parameter')}</b>", styles["Normal2"]),
          Paragraph("<b>Valor</b>",                 styles["Normal2"]),
-         Paragraph("<b>Condición / Parámetro</b>", styles["Normal2"]),
+         Paragraph(f"<b>{_d('Condition / Parameter')}</b>", styles["Normal2"]),
          Paragraph("<b>Valor</b>",                 styles["Normal2"])],
         [Paragraph(_d("Number of stops (NS)"),        styles["Normal2"]),
          Paragraph(str(ns_),                        styles["Normal2"]),
@@ -688,10 +688,10 @@ def generate_report(project_params, calculated, survey_original,
         _calc_block("Offset WL", "Offset WL = LIMIT WL - WLT + ((BSR-BS)/2)",
             f"{lwl:.2f} - {wlt:.2f} + (({bsr:.2f}-{bs:.2f})/2)",
             f"Offset WL = {off_wl:.2f} mm", styles), sp(3),
-        _calc_block("Offset OR", "Offset OR = Offset WR  (mismo desplazamiento lateral)",
+        _calc_block("Offset OR", _d("Offset OR = Offset WR  (same lateral shift)"),
             f"= {off_wr:.2f} mm",
             f"Offset OR = {off_wr:.2f} mm", styles), sp(3),
-        _calc_block("Offset OL", "Offset OL = Offset WL  (mismo desplazamiento lateral)",
+        _calc_block("Offset OL", _d("Offset OL = Offset WL  (same lateral shift)"),
             f"= {off_wl:.2f} mm",
             f"Offset OL = {off_wl:.2f} mm", styles), sp(8),
     ]
@@ -775,11 +775,11 @@ def generate_report(project_params, calculated, survey_original,
         _calc_block(_d("RL search range"),
             "RL ∈ [-MAX OFF RL, +MAX OFF RL]  paso 0.5 mm",
             f"[{-max_rl:.2f}, {max_rl:.2f}]",
-            f"Total pasos RL evaluados: {int(max_rl*2/0.5)+1}", styles), sp(3),
+            f"{_d('Total RL steps evaluated')}: {int(max_rl*2/0.5)+1}", styles), sp(3),
         _calc_block(_d("FB search range"),
             "FB ∈ [-MAX OFF FB, +MAX OFF FB]  paso 0.5 mm",
             f"[{-max_fb:.2f}, {max_fb:.2f}]",
-            f"Total pasos FB evaluados: {int(max_fb*2/0.5)+1}", styles), sp(4),
+            f"{_d('Total FB steps evaluated')}: {int(max_fb*2/0.5)+1}", styles), sp(4),
         Paragraph(_d("Constraints applied at each step:"), styles["SubHead2"]),
         Paragraph(f"  - Si RL < 0: |RL| <= LIMIT R = {lr:.2f} mm", styles["Normal2"]),
         Paragraph(f"  - Si RL > 0: |RL| <= LIMIT L = {ll:.2f} mm", styles["Normal2"]),
@@ -874,7 +874,7 @@ def generate_report(project_params, calculated, survey_original,
     story += [t_valid, sp(6)]
 
     # ── 7.3  Resultado final ────────────────────────────────────
-    story += [Paragraph("7.3  Resultado final", styles["SubHead"]), sp(3)]
+    story += [Paragraph(f"7.3  {_d('Final result')}", styles["SubHead"]), sp(3)]
     if best:
         n_sol     = len(all_solutions)
         best_pair_r = (best["rl"], best["fb"])
@@ -890,13 +890,13 @@ def generate_report(project_params, calculated, survey_original,
             _calc_block(_d("Optimisation summary"),
                 _d("Criterion 1: fewest values out of limit\nCriterion 2 (tie-break): lowest total displacement |RL| + |FB applied|"),
                 f"Candidates with minimum OFF: {n_sol}  |  Values out of limit: {best['total_off']}",
-                f"Seleccionado: RL={best['rl']:.1f} mm, FB iterado={best['fb']:.1f} mm, FB aplicado={best.get('fb_applied', best['fb']):.1f} mm",
+                f"{_d('Selected')}: RL={best['rl']:.1f} mm, FB iterated={best['fb']:.1f} mm, FB applied={best.get('fb_applied', best['fb']):.1f} mm",
                 styles, ok=(best["total_off"] == 0)),
             sp(6),
         ]
         for idx_sol, sol in enumerate(sorted_sols):
             is_best   = (sol["rl"], sol["fb"]) == best_pair_r
-            prefix    = "SELECCIONADA - " if is_best else ""
+            prefix    = _d("SELECTED") + " - " if is_best else ""
             fb_ap     = sol.get("fb_applied", sol["fb"])
             fb_suffix = f"  |  FB aplic. = {fb_ap:.1f} mm" if abs(fb_ap - sol["fb"]) > 0.01 else ""
             story += [
@@ -934,12 +934,12 @@ def generate_report(project_params, calculated, survey_original,
                 if col in OR_OL_COLS:
                     ext   = max(cv); dif = ext - lim
                     off   = sum(1 for v in cv if v > lim)
-                    lbl   = "Máximo (mm)"
+                    lbl   = _d("Maximum (mm)")
                     viols = [str(i+1) for i,v in enumerate(cv) if v > lim]
                 else:
                     ext   = min(cv); dif = lim - ext
                     off   = sum(1 for v in cv if v < lim)
-                    lbl   = "Mínimo (mm)"
+                    lbl   = _d("Minimum (mm)")
                     viols = [str(i+1) for i,v in enumerate(cv) if v < lim]
                 sol_sum.append({
                     "Columna":       col,
@@ -993,13 +993,13 @@ def generate_report(project_params, calculated, survey_original,
     # ── 9. BSR vs BS ─────────────────────────────────────────
     story += [PageBreak(), _section_header(_d("9. BSR vs BS ANALYSIS"), styles), sp(4)]
     if not bs_result.get("needed"):
-        story += [_calc_block("Condición", _d("BSR >= BS  ->  No adjustment required"),
+        story += [_calc_block(_d("Condition"), _d("BSR >= BS  ->  No adjustment required"),
             f"{fstr('BSR')} >= {fstr('BS')}", _d("No shaft adjustment required"),
             styles, ok=True), sp(6)]
     else:
         dif_bs = bs_result.get("dif_original", 0)
         story += [
-            _calc_block("DIF BS", "DIF BS = BS - BSR  (cuando BSR < BS)",
+            _calc_block("DIF BS", _d("DIF BS = BS - BSR  (when BSR < BS)"),
                 f"{fstr('BS')} - {fstr('BSR')}", f"DIF BS = {dif_bs:.2f} mm",
                 styles, ok=False), sp(4),
             Paragraph(_d("Step search across the 3 ranges (0.5 mm step):"), styles["SubHead2"]),
@@ -1007,11 +1007,11 @@ def generate_report(project_params, calculated, survey_original,
                 f"[0  ->  {lzb:.2f}]", _d("Looking for the step where the DIF BS subtraction reaches 0"), styles), sp(3),
             _calc_block("Rango 2 — Zona OB", _d("Cycles from LIMIT ZB to (LIMIT ZB + LIMIT OB)"),
                 f"[{lzb:.2f}  ->  {lzb+lob:.2f}]", _d("Looking for the step where the DIF BS subtraction reaches 0"), styles), sp(3),
-            _calc_block("Rango 3 — Zona extendida", _d("Cycles from (LIMIT ZB + LIMIT OB) to 1000"),
+            _calc_block(_d("Range 3 — Extended zone"), _d("Cycles from (LIMIT ZB + LIMIT OB) to 1000"),
                 f"[{lzb+lob:.2f}  ->  1000]", _d("Looking for the step where the DIF BS subtraction reaches 0"), styles), sp(4),
         ]
         if bs_result.get("step") is not None:
-            story += [_calc_block("Resultado", "Paso encontrado",
+            story += [_calc_block(_d("Result"), _d("Step found"),
                 f"Rango: {bs_result.get('range')}  |  Zona: {bs_result.get('range_name')}",
                 f"Paso = {bs_result.get('step')} mm", styles, ok=True)]
         else:
@@ -1042,7 +1042,7 @@ def generate_report(project_params, calculated, survey_original,
             story += [sdraw, sp(6)]
         srows = schedule_table(schedule)
         thead = [Paragraph(f"<b>{h}</b>", styles["Normal2"]) for h in
-                 ["Actividad", "Inicio", "Fin", "Días", "Peso %"]]
+                 [_d("Activity"), _d("Start"), _d("End"), _d("Days"), _d("Weight %")]]
         trows = [thead]
         for r in srows:
             trows.append([
@@ -1072,7 +1072,7 @@ def generate_report(project_params, calculated, survey_original,
                                "real wall."), styles["Note"]), sp(2)]
         if _pd.get("origen") == "survey":
             story += [Paragraph(
-                f"Desplazamiento aplicado: lateral (rl) = {_pd.get('rl', 0):.1f} mm · "
+                f"{_d('Applied shift')}: lateral (rl) = {_pd.get('rl', 0):.1f} mm · "
                 f"frontal (fb) = {_pd.get('fb', 0):.1f} mm.   "
                 f"DBP = {plumb['dbp']:.1f} mm · DBPW = {plumb['dbpw']:.1f} mm · RW = {plumb['rw']:.1f} mm.",
                 styles["Normal2"]), sp(4)]
@@ -1086,7 +1086,7 @@ def generate_report(project_params, calculated, survey_original,
         if pfic is not None:
             story += [pfic, sp(6)]
         phead = [Paragraph(f"<b>{h}</b>", styles["Normal2"]) for h in
-                 ["Línea", "X inicial (mm)", "X final (mm)", "Desplazada"]]
+                 [_d("Line"), _d("X start (mm)"), _d("X end (mm)"), _d("Shifted")]]
         ptrows = [phead]
         for r in plumb_table(plumb):
             ptrows.append([Paragraph(str(r["Línea"]), styles["Normal2"]),
@@ -1103,7 +1103,7 @@ def generate_report(project_params, calculated, survey_original,
         story += [ptab, sp(6)]
 
         # Distancias de verificación en campo (plomo ↔ pared real)
-        story += [Paragraph("<b>Verificación en campo — distancias plomo ↔ pared real</b>",
+        story += [Paragraph(f"<b>{_d('Field check — plumb line ↔ real wall distances')}</b>",
                             styles["Normal2"]), sp(2)]
         chead = [Paragraph(f"<b>{h}</b>", styles["Normal2"]) for h in ["Medida", "Distancia (mm)"]]
         ctrows = [chead]

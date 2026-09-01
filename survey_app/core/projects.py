@@ -179,7 +179,7 @@ def etiqueta_proyectos(proys) -> dict:
     out = {}
     for p in proys or []:
         _pid = str(p.get("ID") or "")
-        _nom = str(p.get("Nombre") or "") or "(sin nombre)"
+        _nom = str(p.get("Nombre") or "") or t("(no name)")
         out[_pid] = f"{_nom} ({_pid})" if _vistos.get(str(p.get("Nombre") or ""), 0) > 1 else _nom
     return out
 
@@ -830,7 +830,7 @@ def update_project(pid: str, fields: dict) -> tuple:
         try:
             pws.batch_update(batch, value_input_option="RAW")
         except Exception as e:
-            return False, f"Error actualizando: {e}"
+            return False, f"{t('Error updating')}: {e}"
     _invalidate()
     # ⚠️ v342: FUERA del try del guardado y DESPUÉS de invalidar. Si la anotación
     # falla, el cambio del usuario ya está hecho y no se va a deshacer por eso.
@@ -889,7 +889,7 @@ def update_activity_progress(pid: str, orden, avance, fecha_inicio="", fecha_fin
             target = i + 2
             break
     if target is None:
-        return False, "Actividad no encontrada."
+        return False, t("Activity not found.")
     aws.update_cell(target, _ACOL["Avance"], str(avance))
     if fecha_inicio:
         aws.update_cell(target, _ACOL["FechaInicioReal"], fecha_inicio)
@@ -938,7 +938,7 @@ def add_activity(pid, nombre, duracion=1, peso=0) -> tuple:
                     str(_num(peso)), "0", "", "", ""], value_input_option="RAW")
     _invalidate()
     _recompute_project_avance(pid)
-    return True, "Actividad agregada."
+    return True, t("Activity added.")
 
 
 def delete_activity(pid, orden) -> tuple:
@@ -953,11 +953,11 @@ def delete_activity(pid, orden) -> tuple:
             target = i + 2
             break
     if target is None:
-        return False, "Actividad no encontrada."
+        return False, t("Activity not found.")
     aws.delete_rows(target)
     _invalidate()
     _recompute_project_avance(pid)
-    return True, "Actividad eliminada."
+    return True, t("Activity deleted.")
 
 
 def save_field_progress(pid, cambios) -> tuple:
@@ -1006,7 +1006,7 @@ def save_field_progress(pid, cambios) -> tuple:
     try:
         aws.batch_update(batch, value_input_option="RAW")
     except Exception as ex:
-        return False, f"Error guardando: {ex}"
+        return False, f"{t('Error saving')}: {ex}"
     # ⚠️ El ORDEN importa: `_recompute_project_avance` lee `list_activities`, que
     #    está CACHEADA (120 s). Hasta v372 esto corría ANTES de `_invalidate()`, así
     #    que el % del proyecto se recalculaba con las actividades VIEJAS — y la
@@ -1016,7 +1016,7 @@ def save_field_progress(pid, cambios) -> tuple:
     #    save_activities) ya lo hacían en este orden.
     _invalidate()
     _recompute_project_avance(pid)
-    return True, "Avances guardados."
+    return True, t("Progress saved.")
 
 
 def save_activities(pid, edits) -> tuple:
@@ -1290,7 +1290,7 @@ def add_document(pid, nombre, tipo, drive_id, subido_por="") -> tuple:
     dws.append_row([pid, nombre, tipo, drive_id, subido_por,
                     clock.now().strftime("%Y-%m-%d %H:%M:%S")], value_input_option="RAW")
     _invalidate()
-    return True, "Documento registrado."
+    return True, t("Document recorded.")
 
 
 def delete_document_record(pid, drive_id) -> tuple:
@@ -1303,7 +1303,7 @@ def delete_document_record(pid, drive_id) -> tuple:
             dws.delete_rows(i + 2)
             _invalidate()
             return True, t("Document deleted.")
-    return False, "Registro no encontrado."
+    return False, t("Record not found.")
 
 
 # ── Ganancia por trabajador y hora (v360) ────────────────────────

@@ -132,7 +132,7 @@ def render_guardar(herramienta: str, titulo_pdf: str, pdf_bytes: bytes,
     idmap = {f"{p.get('Nombre')} ({p.get('ID')})": p for p in proys}
 
     def _guardar(prj):
-        with st.spinner("Guardando..."):
+        with st.spinner(t("Saving…")):
             res = toolruns.registrar(
                 pid=str(prj.get("ID", "")),
                 grupo=str(prj.get("Grupo", grupo)),

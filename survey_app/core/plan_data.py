@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 # Qué herramienta usa cada dato (para poder decir qué falta y a quién afecta)
 USA = {
-    "params":  "Survey · Plomadas",
+    "params":  "Survey · Plumb lines",
     "ns":      "Survey (paradas)",
     "rail":    "Survey (RAIL from the catalogue)",
     "hq":      "Belting",
@@ -186,8 +186,8 @@ def resumen(datos: dict) -> str:
     if not datos:
         return t("No drawing data.")
     n, tot = datos.get("n_params", 0), datos.get("n_total", 0)
-    partes = [f"{n}/{tot} parámetros"]
-    for k, et in (("ns", "NS"), ("rail", "riel"), ("hkp", "HKP"),
+    partes = [f"{n}/{tot} {t('parameters')}"]
+    for k, et in (("ns", "NS"), ("rail", t("rail")), ("hkp", "HKP"),
                   ("hq", "HQ"), ("lfkk", "LFKK")):
         if datos.get(k) not in (None, ""):
             partes.append(f"{et}={datos[k]}")

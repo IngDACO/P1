@@ -15,6 +15,7 @@ from core import catalogo as CAT
 from core import tenant
 from core import theme as T
 from core.num import num as _num
+from core import tabla
 
 
 def _creado_por() -> str:
@@ -22,8 +23,8 @@ def _creado_por() -> str:
     return str(a.get("usuario", "") or a.get("nombre", ""))
 
 
-_TIPO_LBL = {CAT.PRODUCTO: ":material/inventory_2: producto",
-             CAT.SERVICIO: ":material/engineering: servicio"}
+_TIPO_LBL = {CAT.PRODUCTO: ":material/inventory_2: product",
+             CAT.SERVICIO: ":material/engineering: service"}
 
 
 def render_catalogo(grupo):
@@ -51,8 +52,10 @@ def render_catalogo(grupo):
     _c1, _c2 = st.columns([3, 2])
     _q = _c1.text_input(t("Search"), key="cat_q", placeholder=t("name, category…"),
                         label_visibility="collapsed")
-    _tipo = _c2.radio(t("Type"), ["Todos", "Productos", "Servicios"], horizontal=True,
-                      key="cat_tipo", label_visibility="collapsed")
+    # ⚠️ Se comparan abajo (`_tipo == "Productos"`) → se traduce el display, no la opción.
+    _TIPO = {"Todos": "All", "Productos": "Products", "Servicios": "Services"}
+    _tipo = _c2.radio(t("Type"), list(_TIPO), format_func=lambda o: t(_TIPO[o]),
+                      horizontal=True, key="cat_tipo", label_visibility="collapsed")
     if _q.strip():
         _n = _q.strip().casefold()
         items = [i for i in items
@@ -76,8 +79,8 @@ def render_catalogo(grupo):
         } for i in items])
         _ev = st.dataframe(df, width="stretch", hide_index=True,
                            on_select="rerun", selection_mode="single-row", key="cat_tbl",
-                           column_config={"Costo": st.column_config.NumberColumn(
-                               t("Cost"), format="$%,.2f", help=t("Product: unit cost. Service: hours × rate."))})
+                           column_config=tabla.cfg(None, {"Costo": st.column_config.NumberColumn(
+                               t("Cost"), format="$%,.2f", help=t("Product: unit cost. Service: hours × rate."))}))
         _sr = list(_ev.selection.rows)
         if _sr and _sr[0] < len(items):
             st.session_state["_cat_open"] = str(items[_sr[0]].get("ID", ""))
@@ -136,7 +139,7 @@ def _detalle(grupo, cid):
         st.session_state.pop("_cat_open", None)
         return
     # v351: `get_item` busca por ID en TODA la hoja, sin mirar el grupo.
-    if not tenant.exigir(it, "Este artículo"):
+    if not tenant.exigir(it, t("This item")):
         st.session_state.pop("_cat_open", None)
         return
 

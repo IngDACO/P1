@@ -42,6 +42,7 @@ from core                 import plan_ui
 from core                 import plan_store
 from core.auth import can_reports
 from core import clock
+from core import tabla
 
 logger = logging.getLogger(__name__)
 
@@ -202,7 +203,7 @@ def render_survey_tab(_ROL, _GRUPO):
     _FASE_DATOS, _FASE_RES = "📝 Survey data", "📊 Resultados e informes"
     _fase = st.radio(t("Phase"), [_FASE_DATOS, _FASE_RES], horizontal=True,
                      format_func=lambda o: {_FASE_DATOS: ":material/edit: Survey data",
-                                            _FASE_RES: ":material/insights: Resultados e informes"}.get(o, o),
+                                            _FASE_RES: t(":material/insights: Results and reports")}.get(o, o),
                      key="survey_fase", label_visibility="collapsed")
     st.markdown("---")
 
@@ -310,11 +311,11 @@ def render_survey_tab(_ROL, _GRUPO):
                     for k, v in limits.items()
                 ]),
                 width="stretch", hide_index=True
-            )
+            , column_config=tabla.cfg())
 
         st.subheader(t("Adjusted SURVEY matrix"))
         st.dataframe(survey_adj_df.style.apply(highlight, axis=None),
-                     width="stretch")
+                     width="stretch", column_config=tabla.cfg())
         _leyenda_matriz()
 
         st.subheader(t("Column summary — initial state"))
@@ -341,7 +342,7 @@ def render_survey_tab(_ROL, _GRUPO):
                 "Min / Max (mm)":      ext,
                 "Diferencia (mm)":     round(analysis[f"DIF_{col}"], 2),
             })
-        st.dataframe(pd.DataFrame(summary), width="stretch", hide_index=True)
+        st.dataframe(pd.DataFrame(summary), width="stretch", hide_index=True, column_config=tabla.cfg())
 
         st.info(
             f"**MAX OFF RL:** {analysis['MAX_OFF_RL']:.2f} mm  |  "
@@ -411,12 +412,12 @@ def render_survey_tab(_ROL, _GRUPO):
                             "Fuera": s["total_off"],
                             **{c: _obc.get(c, 0) for c in SURVEY_COLS},
                         })
-                    st.dataframe(pd.DataFrame(_comp), hide_index=True, width="stretch")
+                    st.dataframe(pd.DataFrame(_comp), hide_index=True, width="stretch", column_config=tabla.cfg())
             for idx_sol, sol in enumerate(sorted_solutions):
                 is_best   = (sol["rl"], sol["fb"]) == best_pair
                 fb_ap     = sol.get("fb_applied", sol["fb"])
                 fb_suffix = f"  |  FB aplic. = {fb_ap:.1f} mm" if abs(fb_ap - sol["fb"]) > 0.01 else ""
-                sol_label = f"{':material/star: ' if is_best else ''}Solución {idx_sol+1} — RL = {sol['rl']:+.1f} mm  |  FB = {sol['fb']:+.1f} mm{fb_suffix}"
+                sol_label = f"{':material/star: ' if is_best else ''}{t('Solution')} {idx_sol+1} — RL = {sol['rl']:+.1f} mm  |  FB = {sol['fb']:+.1f} mm{fb_suffix}"
                 with st.expander(sol_label, expanded=(idx_sol == 0)):
                     sol_df  = pd.DataFrame(sol["matrix"])
                     sol_min = {f"MIN_{c}": min(sol_df[c]) for c in SURVEY_COLS}
@@ -436,7 +437,7 @@ def render_survey_tab(_ROL, _GRUPO):
                     sol_highlighter = make_highlighter(lim_map, sol_min, sol_max, cut_cols,
                                                        ctrl_in_frame_, ctrl_side_)
                     st.dataframe(sol_df.style.apply(sol_highlighter, axis=None),
-                                 width="stretch")
+                                 width="stretch", column_config=tabla.cfg())
                     _leyenda_matriz()
                     if not wall_limiting_:
                         st.caption(t("CUT OR / CUT OL: how much to cut if OR/OL exceeds the limit (OR/OL − LIMIT). Positive = a cut is needed. Blank = within the limit."))
@@ -462,7 +463,7 @@ def render_survey_tab(_ROL, _GRUPO):
                             lbl:             round(ext_c, 2),
                             "Diff vs Limit": round(dif_c, 2),
                         })
-                    st.dataframe(pd.DataFrame(sol_sum), width="stretch", hide_index=True)
+                    st.dataframe(pd.DataFrame(sol_sum), width="stretch", hide_index=True, column_config=tabla.cfg())
 
             # El log expone la traza del optimizador (pasos, descartes y por que).
             # Es logica propietaria: misma regla que ya aplica el agente IA y que
@@ -487,8 +488,8 @@ def render_survey_tab(_ROL, _GRUPO):
                         for s in valid_steps:
                             obc  = s.get("off_by_col", {})
                             pair = (s["rl"], s["fb"])
-                            if pair == best_p:        estado = "SELECCIONADA"
-                            elif pair in opt_pairs:   estado = "ÓPTIMA"
+                            if pair == best_p:        estado = "SELECTED"
+                            elif pair in opt_pairs:   estado = "OPTIMAL"
                             else:                     estado = ""
                             log_rows.append({
                                 "RL": s["rl"], "FB": s["fb"],
@@ -500,19 +501,19 @@ def render_survey_tab(_ROL, _GRUPO):
                                 "Estado": estado,
                             })
                         log_rows = (
-                            [x for x in log_rows if x["Estado"] == "SELECCIONADA"] +
-                            [x for x in log_rows if x["Estado"] == "ÓPTIMA"] +
+                            [x for x in log_rows if x["Estado"] == "SELECTED"] +
+                            [x for x in log_rows if x["Estado"] == "OPTIMAL"] +
                             [x for x in log_rows if x["Estado"] == ""]
                         )
                         df_log = pd.DataFrame(log_rows)
                         def _hl(row):
-                            if row["Estado"] == "SELECCIONADA":
+                            if row["Estado"] == "SELECTED":
                                 return ["background-color:#7b5c00;color:white;font-weight:bold"] * len(row)
-                            if row["Estado"] == "ÓPTIMA":
+                            if row["Estado"] == "OPTIMAL":
                                 return ["background-color:#1a3a2a;color:#a8e6cf"] * len(row)
                             return [""] * len(row)
                         st.dataframe(df_log.style.apply(_hl, axis=1),
-                                     width="stretch", hide_index=True)
+                                     width="stretch", hide_index=True, column_config=tabla.cfg())
         else:
             st.error(t("No valid combination was found."))
 
@@ -530,9 +531,11 @@ def render_survey_tab(_ROL, _GRUPO):
                     height=730, scrolling=False,
                 )
 
+            # ⚠️ Se comparan abajo → se traduce el display, no la opción.
+            _MODO = {"With issues": "With issues", "Todos": "All", "Elegir": "Choose"}
             _modo = st.radio(
                 t("Floors to show"),
-                ["With issues", "Todos", "Elegir"],
+                list(_MODO), format_func=lambda o: t(_MODO[o]),
                 horizontal=True, key="diag_modo", label_visibility="collapsed",
             )
             if _modo == "With issues":
@@ -565,7 +568,7 @@ def render_survey_tab(_ROL, _GRUPO):
                 if st.session_state.get("_diag_pdf"):
                     st.download_button(t(":material/download: Download diagrams (PDF)"),
                                        data=st.session_state["_diag_pdf"],
-                                       file_name="diagramas_posicionamiento.pdf",
+                                       file_name="positioning_diagrams.pdf",
                                        mime="application/pdf", key="dl_diag_pdf")
 
         # ── BSR vs BS ─────────────────────────────────────────
@@ -593,7 +596,7 @@ def render_survey_tab(_ROL, _GRUPO):
             pm2.metric(t("DBPW"), f"{plumb_res['dbpw']:.1f} mm")
             pm3.metric("RW",   f"{plumb_res['rw']:.1f} mm")
             st.dataframe(pd.DataFrame(plumb_table(plumb_res)),
-                         width="stretch", hide_index=True)
+                         width="stretch", hide_index=True, column_config=tabla.cfg())
             _pr_ = str(st.session_state.get("proyecto", ""))
             _bs = plumb_res.get("bs_check") or {}
             if _bs and not _bs.get("ok", True):
@@ -629,7 +632,7 @@ def render_survey_tab(_ROL, _GRUPO):
                 )
             st.markdown(t("**:material/straighten: On-site check — plumb ↔ real wall distances**"))
             st.dataframe(pd.DataFrame(plumb_checks(plumb_res)),
-                         width="stretch", hide_index=True)
+                         width="stretch", hide_index=True, column_config=tabla.cfg())
             if float(all_params.get("LengthTemplate", 0.0)) <= 0:
                 st.info(t(":material/lightbulb: Enter **LengthTemplate** in the parameters to see the full template (point P, cuts C1/C2 and diagonals)."))
         else:
@@ -1071,7 +1074,7 @@ def render_survey_tab(_ROL, _GRUPO):
             width="stretch",
             num_rows="fixed",
             key="survey_editor"
-        )
+        , column_config=tabla.cfg())
         st.session_state.survey_df = edited_df.copy()
 
         # Exportar Excel
@@ -1177,7 +1180,7 @@ def render_survey_tab(_ROL, _GRUPO):
                     pd.DataFrame(sched_rows),
                     width="stretch", hide_index=True, num_rows="fixed",
                     disabled=["Actividad"], key="sched_editor",
-                )
+                column_config=tabla.cfg())
                 st.session_state["sched_rows"] = edited.to_dict("records")
 
                 custom = [{"nombre": r["Actividad"],

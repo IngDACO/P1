@@ -27,6 +27,7 @@ from core import clock
 # v374: el recordatorio del Pre-Start del día. Sin ciclo: `prestart` importa
 # `timeclock`/`clock`/`num`, nunca esta UI.
 from core import prestart
+from core import tabla
 
 _AZUL, _VERDE, _GRIS, _ROJO = "#1a3a5c", "#1e8449", "#6b7280", "#c0392b"
 
@@ -711,6 +712,6 @@ def render_timeclock_tab():
                 t("In"): f["entrada"][5:16].replace("-", "/"),
                 t("Out"): (f["salida"][11:16] if f["salida"] else t("in progress")),
                 t("Hours"): f["horas"],
-            } for f in _mios]), hide_index=True, width="stretch")
+            } for f in _mios]), hide_index=True, width="stretch", column_config=tabla.cfg())
 
     st.caption(t(":material/lock: Your time entries are private. Management sees the group's hours summary, not each person's detail."))

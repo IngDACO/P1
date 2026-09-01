@@ -4,7 +4,7 @@
 """
 import pandas as pd
 
-from core.i18n import t
+from core.i18n import t, etiqueta as _etq
 import streamlit as st
 
 from core import flash
@@ -16,12 +16,22 @@ from core import quotes as Q
 from core import tenant
 from core import theme as T
 from core.num import num as _num
+from core import tabla
 
-_EST_FMT = {Q.BORRADOR: ":gray[:material/edit_note:] borrador",
-            Q.ENVIADA: ":blue[:material/send:] enviada",
-            Q.ACEPTADA: ":green[:material/check_circle:] aceptada",
-            Q.RECHAZADA: ":gray[:material/block:] rechazada",
-            Q.VENCIDA: ":red[:material/schedule:] vencida"}
+# ⚠️ SIN `t()`: se construye al IMPORTAR, cuando no hay sesión, así que la traducción
+# quedaría congelada — el fallo de `invoices_ui._EST_FMT` (v449) y de otros cinco. Las
+# CLAVES son el estado que guarda la hoja. El icono va aquí y la palabra la pone
+# `_est_fmt()` al PINTAR, con `etiqueta()`, que ya sabe traducir un valor de negocio.
+_EST_ICONO = {Q.BORRADOR: ":gray[:material/edit_note:]",
+              Q.ENVIADA: ":blue[:material/send:]",
+              Q.ACEPTADA: ":green[:material/check_circle:]",
+              Q.RECHAZADA: ":gray[:material/block:]",
+              Q.VENCIDA: ":red[:material/schedule:]"}
+
+
+def _est_fmt(est) -> str:
+    """El estado de la cotización, con su icono, en el idioma de la PANTALLA."""
+    return f"{_EST_ICONO.get(str(est), '')} {_etq(str(est))}".strip()
 
 
 def _creado_por() -> str:
@@ -82,9 +92,9 @@ def render_cotizaciones(grupo):
     } for c in cots])
     _ev = st.dataframe(df, width="stretch", hide_index=True,
                        on_select="rerun", selection_mode="single-row", key="cot_tbl",
-                       column_config={
+                       column_config=tabla.cfg(None, {
                            "Total": st.column_config.NumberColumn(t("Total"), format="$%,.2f"),
-                           "Margin": st.column_config.NumberColumn(t("Margin"), format="%.1f%%")})
+                           "Margin": st.column_config.NumberColumn(t("Margin"), format="%.1f%%")}))
     _sr = list(_ev.selection.rows)
     if _sr and _sr[0] < len(cots):
         st.session_state["_cot_open"] = str(cots[_sr[0]].get("ID", ""))
@@ -133,7 +143,7 @@ def _editor_lineas(grupo, key: str, lineas: list) -> list:
         # ⚠️ v355: lo único que se teclea del precio es la GANANCIA. El margen y el
         # precio son consecuencia, y se muestran bloqueados para que quede claro.
         disabled=["Concepto", "Costo", "Margen %", "Precio"],
-        column_config={
+        column_config=tabla.cfg(None, {
             "Costo": st.column_config.NumberColumn(t("Cost"), format="$%,.2f",
                                                    help=t("What it costs you. The client does not see this.")),
             "Ganancia $": st.column_config.NumberColumn(
@@ -143,7 +153,7 @@ def _editor_lineas(grupo, key: str, lineas: list) -> list:
                                                       help=t("Worked out as profit ÷ cost.")),
             "Precio": st.column_config.NumberColumn(t("Price"), format="$%,.2f",
                                                     help=t("Cost + profit. This is what the client sees.")),
-            "Cant.": st.column_config.NumberColumn(t("Qty"), min_value=0.0)})
+            "Cant.": st.column_config.NumberColumn(t("Qty"), min_value=0.0)}))
 
     # ⚠️ La cantidad se reaplica sobre el artículo del catálogo (el costo depende de
     # ella); la ganancia, sobre el costo ya congelado.
@@ -278,16 +288,16 @@ def _detalle(grupo, cid):
         st.session_state.pop("_cot_open", None)
         return
     # v351: `get_cotizacion` busca por ID en toda la hoja, sin mirar el grupo.
-    if not tenant.exigir(c, "Esta cotización"):
+    if not tenant.exigir(c, t("This quote")):
         st.session_state.pop("_cot_open", None)
         return
 
     est = Q.estado_de(c)
     _ver = int(_num(c.get("Version"), 1))
-    st.markdown(f"## :material/request_quote: Cotización Nº {c.get('Numero', '')}"
+    st.markdown(f"## :material/request_quote: {t('Quote No.')} {c.get('Numero', '')}"
                 + (f"  ·  v{_ver}" if _ver > 1 else ""))
-    st.markdown(f"**{c.get('ClienteNombre', '') or '—'}**  ·  {_EST_FMT.get(est, est)}"
-                f"  ·  válida hasta {c.get('Validez', '') or '—'}"
+    st.markdown(f"**{c.get('ClienteNombre', '') or '—'}**  ·  {_est_fmt(est)}"
+                f"  ·  {t('valid until')} {c.get('Validez', '') or '—'}"
                 + (f"  ·  from {c.get('Origen')}" if c.get("Origen") else ""))
 
     lineas = Q.lineas_de(c)
@@ -325,7 +335,7 @@ def _detalle(grupo, cid):
             "Cant.": _num(l.get("cantidad")),
             "Precio": round(_num(l.get("precio_total")), 2),
         } for l in lineas]), hide_index=True, width="stretch",
-            column_config={"Precio": st.column_config.NumberColumn(t("Price"), format="$%,.2f")})
+            column_config=tabla.cfg(None, {"Precio": st.column_config.NumberColumn(t("Price"), format="$%,.2f")}))
         _totales_html(_tot, c.get("ImpuestoPct"))
 
     # ── Acciones según el estado ─────────────────────────────────
@@ -418,7 +428,7 @@ def _comparacion(cid, c):
     if not comp:
         st.caption("Linked to project " + str(c.get("ProyectoID")) + ".")
         return
-    st.markdown("### :material/compare_arrows: Cotizado vs. real — " + comp["proyecto"])
+    st.markdown(t("### :material/compare_arrows: Quoted vs. actual —") + " " + comp["proyecto"])
 
     def _tarj(etq, d, unidad=""):
         _col = T.VERDE if d["dif"] <= 0 else T.ROJO
@@ -449,7 +459,7 @@ def _comparacion(cid, c):
     if comp["costo_proyectado"] is not None:
         st.caption(":material/trending_up: At the current rate the job will cost "
                    + T.dinero(comp["costo_proyectado"], 0) + " against the "
-                   + T.dinero(comp["costo"]["cotizado"], 0) + " cotizados.")
+                   + T.dinero(comp["costo"]["cotizado"], 0) + " " + t("quoted."))
     _av = comp["avance"]
     if comp["costo"]["dif"] > 0 and _av < 100:
         st.warning(":material/warning: " + t("You are at") + " **" + T.dinero(comp["costo"]["dif"], 0)
