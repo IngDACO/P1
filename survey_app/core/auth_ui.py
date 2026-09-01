@@ -350,10 +350,15 @@ def render_user_bar():
             session_cookie.save(a.get("usuario", ""), a.get("token", ""))
         except Exception:
             pass
-    rol_lbl = {"propietario": ":material/shield_person: Propietario",
-               "administrador": ":material/manage_accounts: Administrador",
-               "campo": ":material/engineering: Campo"}.get(a.get("rol"), a.get("rol", ""))
-    grupo = a.get("grupo") or ("todos" if a.get("rol") == "propietario" else "—")
+    # El ICONO por rol; el NOMBRE lo pone `etiqueta()`, que es quien sabe traducir un
+    # valor de negocio (v442). Antes el rol se pintaba en crudo («Administrador») en la
+    # barra lateral, o sea en TODAS las pantallas y para todos los roles.
+    _rol = str(a.get("rol") or "")
+    _ico_rol = {"propietario": ":material/shield_person:",
+                "administrador": ":material/manage_accounts:",
+                "campo": ":material/engineering:"}.get(_rol, "")
+    rol_lbl = f"{_ico_rol} {_etq(_rol)}".strip() if _rol else ""
+    grupo = a.get("grupo") or (t("all") if _rol == "propietario" else "—")
     st.markdown(f"**{a.get('nombre','')}**  \n{rol_lbl}  \n:material/business: {grupo}")
     if st.button(t(":material/logout: Sign out"), width="stretch", key="logout_btn"):
         try:
@@ -1039,9 +1044,9 @@ def _grupo_usuarios(grupo):
     if _nsc:
         _linea += f" · :orange[:material/warning:] **{_nsc}** with no contact details"
     if _npv:
-        _linea += f" · :orange[:material/schedule:] **{_npv}** cred. expiring"
+        _linea += f" · :orange[:material/schedule:] **{_npv}** {t('cred. expiring')}"
     if _nvc:
-        _linea += f" · :red[:material/cancel:] **{_nvc}** {t("expired credential(s)")}"
+        _linea += f" · :red[:material/cancel:] **{_nvc}** {t('expired credential(s)')}"
     st.markdown(_linea)
 
     # ⚠️ Quién RECIBE las alarmas del grupo y no tiene por dónde recibirlas. La

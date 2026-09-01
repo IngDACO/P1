@@ -71,13 +71,17 @@ def _cfg_from_state():
         "ns":            int(st.session_state.get("ns", 2)),
     }
 
+# ⚠️ SIN `t()`: es una constante de MODULO, evaluada al IMPORTAR — ahi todavia no
+# hay idioma elegido y la etiqueta quedaria congelada. El texto va en BASE (ingles)
+# y la traduccion se hace al PINTAR (ver `_GRUPOS_PARAM` mas abajo, `t(_titulo)`).
+# Las CLAVES de agrupacion son las listas de parametros; el titulo es solo etiqueta.
 _GRUPOS_PARAM = [
-    (":material/crop_free: Hueco",           ["BS", "TS"]),
-    (":material/elevator: Cabina",          ["BK", "TK", "BKS"]),
-    (":material/door_front: Puerta / umbral", ["BT", "TKA", "TKS", "TSW"]),
-    (":material/place: Frontal",         ["TKSW", "BKF1", "BKF2"]),
-    (":material/swap_horiz: Laterales",       ["SF1", "SF2"]),
-    (":material/balance: Contrapeso",      ["BGS", "SG", "TG"]),
+    (":material/crop_free: Shaft",            ["BS", "TS"]),
+    (":material/elevator: Car",               ["BK", "TK", "BKS"]),
+    (":material/door_front: Door / sill",     ["BT", "TKA", "TKS", "TSW"]),
+    (":material/place: Front",                ["TKSW", "BKF1", "BKF2"]),
+    (":material/swap_horiz: Sides",           ["SF1", "SF2"]),
+    (":material/balance: Counterweight",      ["BGS", "SG", "TG"]),
 ]
 
 USER_ONLY = {
@@ -167,9 +171,9 @@ def render_survey_tab(_ROL, _GRUPO):
             st.session_state[f"inp_{_k}"] = float(_v)
         for _k, _v in (_pend.get("cfg") or {}).items():
             st.session_state[_k] = _v
-        st.success(":material/check_circle: Matrix, parameters and settings loaded from the Excel file."
+        st.success(t(":material/check_circle: Matrix, parameters and settings loaded from the Excel file.")
                    if _pend.get("todo") else
-                   ":green[:material/check_circle:] Matrix loaded from the Excel file (the drawing's parameters are kept).")
+                   t(":green[:material/check_circle:] Matrix loaded from the Excel file (the drawing's parameters are kept)."))
 
     if st.session_state.pop("_dup_msg", False):
         st.success(t(":material/summarize: Survey duplicated: parameters and configuration were kept. Enter the matrix for the next lift and calculate."))
@@ -202,7 +206,7 @@ def render_survey_tab(_ROL, _GRUPO):
         st.session_state["survey_fase"] = _fp
     _FASE_DATOS, _FASE_RES = "📝 Survey data", "📊 Resultados e informes"
     _fase = st.radio(t("Phase"), [_FASE_DATOS, _FASE_RES], horizontal=True,
-                     format_func=lambda o: {_FASE_DATOS: ":material/edit: Survey data",
+                     format_func=lambda o: {_FASE_DATOS: t(":material/edit: Survey data"),
                                             _FASE_RES: t(":material/insights: Results and reports")}.get(o, o),
                      key="survey_fase", label_visibility="collapsed")
     st.markdown("---")
@@ -946,7 +950,7 @@ def render_survey_tab(_ROL, _GRUPO):
                 _ps = [p for p in _lista if p in _pendientes]
                 if not _ps:
                     continue
-                st.markdown(f"**{_titulo}**")
+                st.markdown(f"**{t(_titulo)}**")
                 _cols = st.columns(4)
                 for j, p in enumerate(_ps):
                     _cols[j % 4].number_input(

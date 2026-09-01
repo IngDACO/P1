@@ -942,8 +942,8 @@ def _nuevo_proyecto_form(grupo: str, key: str = "nuevo"):
             if _es_inst:
                 ns = c2.number_input(t("Number of stops (NS) *"), min_value=2, max_value=50,
                                      step=1, key=f"np_ns_{key}",
-                                     help=("Read from the drawing." if (_plano or {}).get("ns")
-                                           else "It sets how long the activities take."))
+                                     help=(t("Read from the drawing.") if (_plano or {}).get("ns")
+                                           else t("It sets how long the activities take.")))
                 # La fecha de FIN no se teclea: sale del NS + las actividades estándar de
                 # instalación (`build_schedule`), cuyas duraciones escalan con el NS. Preview:
                 try:
@@ -1670,8 +1670,8 @@ def _panel_proyectos(grupo: str):
                   + (f"  ·  :green[:material/check_circle:] {_na} ahead" if _na else ""))
     # v228: toggle de vista — tarjetas (resumen visual) o lista (tabla clásica).
     _view = _hc2.radio(t("View"), ["📋 Lista", "🃏 Tarjetas"], horizontal=True,
-                       format_func=lambda o: {"🃏 Tarjetas": ":material/grid_view: Tarjetas",
-                                              "📋 Lista": ":material/list: Lista"}.get(o, o),
+                       format_func=lambda o: {"🃏 Tarjetas": t(":material/grid_view: Cards"),
+                                              "📋 Lista": t(":material/list: List")}.get(o, o),
                        key="cart_view", label_visibility="collapsed")
     # Pendiente de facturar de TODO el grupo, en UNA pasada (v397). Medido: ~32 ms y
     # 0 llamadas nuevas a Sheets en un rerun normal — por eso puede ir en la lista
@@ -3776,9 +3776,9 @@ def render_pnl(grupo: str):
 
     d = F.pnl(grupo, _desde, _hasta)
     if d["facturado"] == 0 and d["costo_total"] == 0:
-        st.info(":material/info: There are no invoices or costs (payroll/purchases) in this period."
+        st.info(t(":material/info: There are no invoices or costs (payroll/purchases) in this period.")
                 if _desde else
-                ":material/info: No invoices or costs (payroll/purchases) have been recorded yet.")
+                t(":material/info: No invoices or costs (payroll/purchases) have been recorded yet."))
         return
     if _desde:
         st.caption(f":material/date_range: {_desde.strftime('%d/%m/%Y')} → "
@@ -4930,7 +4930,7 @@ def render_localizaciones(grupo: str):
         _kpi_card(t("Locations"), str(len(_abiertas)),
                   pie=f"of {len(locs)}" if len(locs) != len(_abiertas) else t("open")),
         _kpi_card(t("Hours worked"), f"{_h:,.0f}", pie="not charged to any job"),
-        _kpi_card(t("Overhead spend"), theme.dinero(_g, 0), pie="no se factura"),
+        _kpi_card(t("Overhead spend"), theme.dinero(_g, 0), pie=t("never invoiced")),
         _kpi_card(t("People"), str(_n), pie="assigned on a regular basis"),
     ]
     st.markdown('<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:8px">'

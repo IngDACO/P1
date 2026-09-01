@@ -688,7 +688,7 @@ def _ficha_rapida(grupo, usuario):
             _cont.append(f":material/mail: {_esc(u.get('Email'))}")
         if str(u.get("TelegramChatID", "")).strip():
             _cont.append(":material/send: Telegram")
-        st.caption(" · ".join(_cont) if _cont else ":material/warning: No contact details on record")
+        st.caption(" · ".join(_cont) if _cont else t(":material/warning: No contact details on record"))
 
         aa = R.asignaciones_dia(grupo, usuario)
         if aa:
@@ -1342,7 +1342,7 @@ def _tablero_editable(grupo, lunes, staff, datos, tidx, marcas=None, dias=None):
         # ventana estrecha la columna baja a 55 px y ahí ni la fecha sola (53) va
         # holgada. En una segunda línea no compite por ancho a ningún tamaño.
         _extra = ("<div style='font-size:11px;font-weight:700;color:#2e6da4;"
-                  "line-height:1.1'>hoy</div>") if _es_hoy else ""
+                  "line-height:1.1'>" + t("today") + "</div>") if _es_hoy else ""
         h[i + 1].markdown(f"<div style='{_CAB_HOY if _es_hoy else _CAB}'>"
                           f"{R.DIAS_LABEL[d]} {f.strftime('%d/%m')}{_extra}</div>",
                           unsafe_allow_html=True)

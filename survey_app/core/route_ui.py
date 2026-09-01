@@ -233,8 +233,12 @@ def render_ruta_dia(grupo):
         st.rerun()
     _DIAS_L = [t("Monday"), t("Tuesday"), t("Wednesday"), t("Thursday"), t("Friday"),
                t("Saturday"), t("Sunday")]
-    _MES_L = ["", "enero", "febrero", "marzo", "abril", "mayo", "junio", "julio",
-              "agosto", "septiembre", "octubre", "noviembre", "diciembre"]
+    # Los meses estaban en espanol mientras los dias ya iban por `t()`: la linea
+    # salia MEZCLADA ("Tuesday 1 of septiembre"), que se lee peor que cualquiera de
+    # los dos idiomas entero.
+    _MES_L = ["", t("January"), t("February"), t("March"), t("April"), t("May"),
+              t("June"), t("July"), t("August"), t("September"), t("October"),
+              t("November"), t("December")]
     with cd:
         st.markdown("<div style='height:30px'></div>", unsafe_allow_html=True)
         st.markdown(f":gray[{_DIAS_L[fecha.weekday()]} {fecha.day} of "
@@ -378,7 +382,8 @@ def render_ruta_dia(grupo):
                     st.markdown(
                         f"**{i}. {s['nombre']}**  \n"
                         f":gray[{s['dir'] or t('no address')}]  \n"
-                        f":material/group: {_n} persona{'' if _n == 1 else 's'} · "
+                        f":material/group: {_n} "
+                        + (t("person") if _n == 1 else t("people")) + " · "
                         + ", ".join(s["personas"]))
                     st.link_button(t("Directions"), gmaps_dir_url([s], desde_actual=True),
                                    icon=":material/navigation:",
