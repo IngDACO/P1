@@ -162,6 +162,9 @@ def _generar(grupo):
 
     hoy = clock.today(grupo)
     per = st.radio(t("Frequency"), ["Semanal", "Quincenal", "Mensual", "Personalizado"],
+                   format_func=lambda o: t({"Semanal": "Weekly", "Quincenal": "Fortnightly",
+                                            "Mensual": "Monthly",
+                                            "Personalizado": "Custom"}.get(o, o)),
                    horizontal=True, key="nom_per")
     _d0 = {"Semanal": hoy - timedelta(days=6), "Quincenal": hoy - timedelta(days=13),
            "Mensual": hoy - timedelta(days=29)}.get(per, hoy - timedelta(days=6))

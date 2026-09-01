@@ -816,9 +816,9 @@ def render_planificacion(grupo):
         # Etiquetas CORTAS (solo display; el valor es el estado guardado y no se
         # toca): «Disponibilidad» a secas no cabe con tres opciones y se recortaba.
         format_func=lambda o: {
-            "📋 Tablero": ":material/calendar_view_week: Week",
-            "🕐 Día": ":material/schedule: Day",
-            "👀 Disponibilidad": ":material/event_available: Free"}.get(o, o))
+            "📋 Tablero": t(":material/calendar_view_week: Week"),
+            "🕐 Día": t(":material/schedule: Day"),
+            "👀 Disponibilidad": t(":material/event_available: Free")}.get(o, o))
     # ── Cobertura del día (DATO, se queda) + días extra + copiar semana ──
     _cc1, _cc2, _cc3 = st.columns([4, 2, 2])
     with _cc1:
@@ -1512,7 +1512,7 @@ def _tablero_editable(grupo, lunes, staff, datos, tidx, marcas=None, dias=None):
 def _grid_html(staff, lunes, datos, tidx, resaltar="", dias=None) -> str:
     dias = dias or R.DIAS
     ths = ['<th style="text-align:left;padding:6px 8px;font-size:12px;color:#6b7280;'
-           'position:sticky;left:0;background:#fff;">Persona</th>']
+           'position:sticky;left:0;background:#fff;">' + t('Person') + '</th>']
     for d in dias:
         f = R.fecha_de_dia(lunes, d)
         ths.append(f'<th style="padding:6px 8px;font-size:12px;color:#6b7280;'
@@ -1689,7 +1689,7 @@ def _esc(s) -> str:
 def _disponibilidad_html(staff, lunes, datos, tidx, dias=None) -> str:
     dias = dias or R.DIAS
     ths = ['<th style="text-align:left;padding:6px 8px;font-size:12px;color:#6b7280;'
-           'position:sticky;left:0;background:#fff;">Persona</th>']
+           'position:sticky;left:0;background:#fff;">' + t('Person') + '</th>']
     for d in dias:
         f = R.fecha_de_dia(lunes, d)
         ths.append(f'<th style="padding:6px 8px;font-size:12px;color:#6b7280;'

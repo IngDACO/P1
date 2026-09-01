@@ -744,7 +744,9 @@ def _alertas(grupo) -> list:
             for e in C.expiring(grupo)[:10]:
                 if _es_campo and str(e.get("usuario", "")).strip().lower() != _yo:
                     continue
-                est = t(":red[:material/cancel:] expired") if e["dias"] < 0 else f":orange[:material/schedule:] expires in {e['dias']} d"
+                est = (t(":red[:material/cancel:] expired") if e["dias"] < 0
+                       else t(":orange[:material/schedule:] expires in {n} d")
+                            .replace("{n}", str(e["dias"])))
                 out.append(f":material/badge: {e['tipo']} · {e['usuario']} — {est}")
     except Exception:
         pass

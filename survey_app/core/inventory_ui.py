@@ -252,7 +252,11 @@ def _detalle(grupo, aid):
         ac = st.columns(2)
         if _est == "disponible":
             with ac[0].expander(t(":material/logout: Check out / hand over")):
-                _dt = st.selectbox(t("Destination"), ["proyecto", "usuario", "otro"], key=f"inv_sdt_{aid}")
+                _dt = st.selectbox(t("Destination"), ["proyecto", "usuario", "otro"],
+                                   format_func=lambda o: t({"proyecto": "a project",
+                                                            "usuario": "a person",
+                                                            "otro": "somewhere else"}.get(o, o)),
+                                   key=f"inv_sdt_{aid}")
                 if _dt == "proyecto":
                     # El VALOR es el ID (identidad); la etiqueta es el nombre (comodidad).
                     _pids, _plbl = _proyectos(grupo)

@@ -561,7 +561,7 @@ def _owner_usuarios():
             _cont = ("—" if not es_campo
                      else (t("yes") if (str(u.get("Email", "")).strip()
                                     and str(u.get("TelegramChatID", "")).strip())
-                           else "falta"))
+                           else t("missing")))
             _rows.append({"Usuario": u.get("Usuario", ""), "Nombre": u.get("Nombre", ""),
                           "Rol": u.get("Rol", ""), "Grupo": u.get("Grupo", "") or "—",
                           "Activo": u.get("Activo", "SI"),
@@ -828,10 +828,10 @@ def _ficha_usuario(u, grupo, owner=False, sel_key="gp_fichasel"):
     # → el match de abajo (if _sec == "🔑 Acceso"…) no cambia.
     _sec = st.radio(t("User section"),
                     ["🔑 Acceso", "📇 Contacto", "🎫 Credenciales", "📊 Su trabajo", "🗑"],
-                    format_func=lambda o: {"🔑 Acceso": ":material/key: Acceso",
-                                           "📇 Contacto": ":material/contact_page: Contacto",
-                                           "🎫 Credenciales": ":material/badge: Credentials",
-                                           "📊 Su trabajo": ":material/work: Their work",
+                    format_func=lambda o: {"🔑 Acceso": t(":material/key: Access"),
+                                           "📇 Contacto": t(":material/contact_page: Contact"),
+                                           "🎫 Credenciales": t(":material/badge: Credentials"),
+                                           "📊 Su trabajo": t(":material/work: Their work"),
                                            "🗑": ":material/delete:"}.get(o, o),
                     horizontal=True, key=f"{k}_sec", label_visibility="collapsed")
 

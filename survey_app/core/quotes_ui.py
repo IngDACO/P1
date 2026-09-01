@@ -88,7 +88,7 @@ def render_cotizaciones(grupo):
         "Vence": c.get("Validez", "") or "—",
         "Total": round(_num(c.get("Total")), 2),
         "Margin": round(_num(c.get("MargenPct")), 1),
-        "Estado": Q.estado_de(c),
+        "Estado": _etq(Q.estado_de(c)),
     } for c in cots])
     _ev = st.dataframe(df, width="stretch", hide_index=True,
                        on_select="rerun", selection_mode="single-row", key="cot_tbl",
@@ -401,7 +401,8 @@ def _crear_proyecto(grupo, c, _tot):
         nombre = c1.text_input(t("Project name"),
                                value=str(c.get("ClienteNombre", "")) + " — Nº"
                                      + str(c.get("Numero", "")))
-        tipo = c2.selectbox(t("Type"), ["Instalación", "Delivery", "Ripout", "Otro"])
+        tipo = c2.selectbox(t("Type"), ["Instalación", "Delivery", "Ripout", "Otro"],
+                            format_func=_etq)
         c3, c4 = st.columns(2)
         ini = c3.date_input(t("Start date"), value=clock.today(grupo))
         ns = c4.number_input(t("Stops (NS)"), min_value=0, step=1, value=0,
@@ -415,7 +416,7 @@ def _crear_proyecto(grupo, c, _tot):
                 c.get("ID"), nombre=nombre, tipo=tipo, fecha_inicio=ini,
                 ns=ns, ubicacion=ubic, creado_por=_creado_por())
             if ok:
-                flash.exito("Proyecto " + str(msg) + " created from this quote.")
+                flash.exito(t("Project") + " " + str(msg) + " " + t("created from this quote."))
                 st.rerun()
             else:
                 st.error(msg)
@@ -466,9 +467,9 @@ def _comparacion(cid, c):
                    + " above** what was quoted, with the project at **"
                    + ("%.0f" % _av) + "%**. At this rate the final profit will be lower than quoted.")
     elif comp["costo"]["dif"] <= 0 and _av > 0:
-        st.success(":material/check_circle: Vas **"
+        st.success(":material/check_circle: " + t("You are at") + " **"
                    + T.dinero(abs(comp["costo"]["dif"]), 0) + " below** what was quoted, with the project at " + ("%.0f" % _av) + "%.")
-    if st.button(":material/folder: Abrir " + comp["proyecto"], key="cot_prj_open_" + str(cid)):
+    if st.button(":material/folder: " + t("Open") + " " + comp["proyecto"], key="cot_prj_open_" + str(cid)):
         from core import home_ui
         st.session_state["_prjsel_pending"] = comp["proyecto_id"]
         st.session_state["_admin_open_proj"] = comp["proyecto_id"]

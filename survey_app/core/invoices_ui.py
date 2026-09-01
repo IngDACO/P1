@@ -7,7 +7,7 @@ emitir. Impuesto (GST/IVA) con el default del grupo, editable.
 """
 import pandas as pd
 
-from core.i18n import t, d
+from core.i18n import t, d, etiqueta as _etq
 import streamlit as st
 
 from core import flash
@@ -88,7 +88,7 @@ def render_facturas(grupo):
         "Total":     round(_num(f.get("Total")), 0),
         "Cobrado":   round(_num(f.get("Cobrado")), 0),
         "Outstanding": round(_num(f.get("Total")) - _num(f.get("Cobrado")), 0),
-        "Estado":    I.estado_cobro(f),
+        "Estado":    _etq(I.estado_cobro(f)),
     } for f in _rows])
     _ev = st.dataframe(
         df, width="stretch", hide_index=True,

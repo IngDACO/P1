@@ -1923,10 +1923,13 @@ def _estado_section(pid: str, grupo: str, prj: dict):
     # ⚠️ v311: el titular se pintaba con `**...**` DENTRO de un `<div>` y Streamlit no
     # procesa markdown dentro de HTML → en pantalla salían los asteriscos literales
     # ("Vas **54 puntos por debajo** del plan"). Se emite `<b>` con el color del estado.
+    # ⚠️ v452: la frase va ENTERA como clave de traduccion (con `{n}` de marcador), no
+    # partida en `t("You are") + ... + t("plan")`: el orden de palabras cambia entre
+    # idiomas y tres claves sueltas no se pueden recomponer en otro idioma.
     if dv <= -1:
-        _tit_html, _col = (f"Vas <b>{abs(dv):.0f} points behind</b> plan", "#c0392b")
+        _tit_html, _col = (t("You are <b>{n} points behind</b> plan").replace("{n}", f"{abs(dv):.0f}"), "#c0392b")
     elif dv >= 1:
-        _tit_html, _col = (f"Vas <b>{dv:.0f} points ahead of</b> plan", "#1e8449")
+        _tit_html, _col = (t("You are <b>{n} points ahead of</b> plan").replace("{n}", f"{dv:.0f}"), "#1e8449")
     else:
         _tit_html, _col = ("You are <b>on plan</b>", "#2e6da4")
     # ⚠️ proj["today_day"] viene CLAMPADO al total: en un proyecto pasado de fecha
@@ -2120,7 +2123,7 @@ def _detalle_proyecto(pid: str, grupo: str = None):
         '<div style="flex:1;height:8px;background:#eef1f5;border-radius:20px;overflow:hidden;">'
         f'<div style="height:100%;width:{_av}%;background:{_bar};border-radius:20px;"></div></div>'
         f'<span style="font-size:13px;color:#374151;white-space:nowrap;">'
-        f'<b>{_av}%</b> avance</span>'
+        f'<b>{_av}%</b> ' + t('progress') + '</span>'
         f'<span style="font-size:13px;color:#6b7280;white-space:nowrap;">'
         f'<b style="color:#374151">{_horas:.1f} h</b> {t("worked")}</span>'
         '</div></div>',
@@ -2159,10 +2162,10 @@ def _detalle_proyecto(pid: str, grupo: str = None):
     # emoji) → el match de abajo y cualquier deep-link no cambian.
     _sec = st.radio(t("Project section"),
                     ["📊 Estado", "✏️ Datos", "💰 Costos", "📎 Archivos"],
-                    format_func=lambda o: {"📊 Estado": ":material/insights: Status",
-                                           "✏️ Datos": ":material/edit: Datos",
-                                           "💰 Costos": ":material/payments: Costs",
-                                           "📎 Archivos": ":material/folder: Files"}.get(o, o),
+                    format_func=lambda o: {"📊 Estado": t(":material/insights: Status"),
+                                           "✏️ Datos": t(":material/edit: Data"),
+                                           "💰 Costos": t(":material/payments: Costs"),
+                                           "📎 Archivos": t(":material/folder: Files")}.get(o, o),
                     # v316: key `cpxseg_*` → el SEGMENTADO del kit (v292): sin bolitas,
                     # con marco y el elegido resaltado. Es la pieza para "una de N", que
                     # es lo que son estas 4 secciones. ⚠️ NO se usa la fila de botones del
@@ -2647,7 +2650,7 @@ def _dashboard_agrupacion(ag, grupo):
         cur = {}
     if cur and cur.get("fechas"):
         st.markdown(t("**:material/trending_up: Progress of the whole group — plan vs actual**"))
-        _df = pd.DataFrame({"Planificado": cur["plan"], "Real": cur["real"]},
+        _df = pd.DataFrame({t("Planned"): cur["plan"], t("Actual"): cur["real"]},
                            index=pd.to_datetime(cur["fechas"]))
         st.line_chart(_df, height=240)
         st.caption(t("Weighted by each lift's weight. The actual curve stops at TODAY."))
@@ -2688,10 +2691,10 @@ def _dashboard_agrupacion(ag, grupo):
 
     _out = [r["Elevador"] for r in rows if r["vs media h"].startswith("+")]
     if _out:
-        st.info(":material/warning: They use noticeably more hours than their twins: **"
-                + ", ".join(_out) + "**. Worth looking into why.")
+        st.info(t(":material/warning: They use noticeably more hours than their twins:") + " **"
+                + ", ".join(_out) + "**. " + t("Worth looking into why."))
 
-    st.bar_chart(pd.DataFrame({"Avance %": [r["Avance %"] for r in rows]},
+    st.bar_chart(pd.DataFrame({t("Progress %"): [r["Avance %"] for r in rows]},
                               index=[r["Elevador"] for r in rows]))
 
 
@@ -3129,10 +3132,10 @@ def render_field_projects(usuario: str, grupo: str):
     if P.es_interno(prj):
         _opts = _opts[1:]
     _sec = st.radio(t("Section"), _opts,
-                    format_func=lambda o: {"🏗 Avance": ":material/trending_up: Avance",
-                                           "🚨 Avisos": ":material/report: Alerts",
-                                           "💰 Recibos": ":material/receipt: Receipts",
-                                           "📎 Archivos": ":material/folder: Files"}.get(o, o),
+                    format_func=lambda o: {"🏗 Avance": t(":material/trending_up: Progress"),
+                                           "🚨 Avisos": t(":material/report: Alerts"),
+                                           "💰 Recibos": t(":material/receipt: Receipts"),
+                                           "📎 Archivos": t(":material/folder: Files")}.get(o, o),
                     # v316: mismo segmentado que el detalle del admin. El campo ve la
                     # misma pieza que el admin: la coherencia entre pantallas es lo que
                     # hace que parezca un producto y no cuatro cosas pegadas.
@@ -4796,8 +4799,9 @@ def _detalle_localizacion(pid: str, grupo: str):
     with st.container(border=True):
         st.markdown(f"### {P.TIPO_ICONO.get(_tipo, ':material/business:')} "
                     f"{prj.get('Nombre') or "(no name)"}")
-        _c = [f"`{pid}`", _tipo,
-              (t(":material/lock: closed") if _cerrada else ":material/check_circle: abierta")]
+        _c = [f"`{pid}`", _etq(_tipo),
+              (t(":material/lock: closed") if _cerrada
+               else t(":material/check_circle: open"))]
         if str(prj.get("Ingeniero", "")).strip():
             _c.append(f"resp. {prj.get('Ingeniero')}")
         st.caption(" · ".join(_c))
@@ -4808,6 +4812,11 @@ def _detalle_localizacion(pid: str, grupo: str):
 
     _sec = st.segmented_control(
         t("Section"), ["👥 Equipo", "💰 Gastos", "🦺 Pre-Start", "📎 Archivos", "✏️ Datos"],
+        format_func=lambda o: {"👥 Equipo": t(":material/groups: Team"),
+                               "💰 Gastos": t(":material/payments: Expenses"),
+                               "🦺 Pre-Start": t(":material/health_and_safety: Pre-Start"),
+                               "📎 Archivos": t(":material/folder: Files"),
+                               "✏️ Datos": t(":material/edit: Data")}.get(o, o),
         default="👥 Equipo", key="cpxseg_loc_sec", label_visibility="collapsed")
     _sec = _sec or "👥 Equipo"
 

@@ -7,7 +7,7 @@ abren el proyecto en la sección Proyectos). El enlace cliente↔proyecto usa
 """
 import pandas as pd
 
-from core.i18n import t
+from core.i18n import t, etiqueta as _etq
 import streamlit as st
 
 from core import flash
@@ -291,7 +291,7 @@ def _detalle_cliente(grupo, key):
                 "Fecha":   str(x.get("Fecha", "")),
                 "Total":   round(_num(x.get("Total")), 0),
                 "Cobrado": round(_num(x.get("Cobrado")), 0),
-                "Estado":  INV.estado_cobro(x),
+                "Estado":  _etq(INV.estado_cobro(x)),
             } for x in _fr])
             _fev = st.dataframe(
                 _fdf, width="stretch", hide_index=True,

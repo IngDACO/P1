@@ -7298,6 +7298,268 @@ se GUARDAN en la hoja `Actividades` → migración del histórico). El informe d
 no está entero en inglés hasta que caigan esas tres, y conviene saberlo antes de
 enseñárselo a un cliente.
 
+## RECORRER LA APP: 24 pantallas, y CINCO redes más de i18n (v451-v452)
+
+Petición del usuario: *«vas a entrar en la app y vas a ejercitar cada uno de los
+botones, funcionalidades y acciones para garantizar que todo esté funcionando como
+debería»*, con la demo autorizada para crear, modificar o borrar lo que hiciera falta.
+
+**Resultado del recorrido: las 24 pantallas del administrador, 0 excepciones.** Lo que
+salió no fueron pantallas rotas — salieron **cinco formas nuevas** de texto sin traducir
+que ninguna de las siete redes de v450 podía ver.
+
+### ⚠️ La lección de fondo, otra vez: cada red nueva descubre una bolsa nueva
+
+v449 declaró el i18n «cerrado del todo» y v450 encontró 46 cabeceras. Ahora, mirando la
+app en vez del código, aparecen cinco formas más. **El «0» de una red solo significa
+«0 de lo que esa red sabe ver»**, y por eso la afirmación honesta no es «no queda nada»
+sino «no queda nada *de estas doce formas*».
+
+| # | La forma | Por qué se escapaba | Encontrado |
+|---|---|---|---|
+| **8** | el argumento de display es un **TERNARIO** (`st.info(A if c else B)`) | la red de POSICIÓN mira si el argumento es un `Constant`, y un `IfExp` no lo es | 7 ramas |
+| **9** | valor de dict dentro de un **`format_func`** | el literal no llega a `st.*`: llega al lambda | 12 valores |
+| **10** | widget cuyas opciones son literales y **NO tiene `format_func`** | pinta el dato CRUDO; en esta app la opción casi nunca es una etiqueta | 4 widgets |
+| **11** | cabecera **`<th>` escrita a mano en HTML** | `tabla.cfg()` (v450) solo alcanza a `st.dataframe` | 2 |
+| **12** | **valor de negocio crudo dentro de una CELDA** | la celda no es una llamada a `st.*`: es un valor en el dict que alimenta `pd.DataFrame` | 3 |
+| **13** | **nombre de columna que alimenta un CHART** | esa clave ES la leyenda; `tabla.cfg()` solo alcanza a `st.dataframe` | 3 |
+
+⚠️ Y las cinco comparten algo incómodo: **la mayoría ya estaba en inglés**, así que la
+red de IDIOMA tampoco podía verlas. El daño no era una fuga visible, sino que **no se
+traducirían nunca** cuando se llene el diccionario español — un fallo que no aparece
+hasta que alguien mire la pantalla en el otro idioma.
+
+### El español que SÍ estaba a la vista
+
+Todo era **traducción a medias**, que es el peor caso (v443): en el mismo widget, unas
+etiquetas en inglés y otras en español.
+- **Detalle de proyecto**: `edit Datos` junto a Status/Costs/Files · `62% avance` junto a
+  `116.7 h worked` · el titular `Vas 34 points behind plan`, cuya tercera rama ya decía
+  «You are on plan».
+- **Ficha de usuario**: `Acceso` y `Contacto` junto a `Credentials` y `Their work`.
+- **Mis proyectos (campo)**: `Avance` junto a Alerts / Receipts / Files.
+- **Localizaciones**: las 5 sub-secciones en crudo, porque el `segmented_control` no
+  llevaba `format_func`.
+- **Survey**: los 6 grupos de parámetros (`Hueco`, `Cabina`, `Puerta / umbral`, `Frontal`,
+  `Laterales`, `Contrapeso`) — ⚠️ **invisibles hasta para la red morfológica de v450**:
+  ninguno lleva acento ni terminación marcada.
+- **Facturas · Cotizaciones · Contactos**: la columna Estado con `parcial · cobrada ·
+  vencida · pendiente` en crudo, a dos centímetros de un KPI que ya decía OUTSTANDING.
+- **Panel · Libres**: la cabecera `Persona`, en una tabla HTML.
+- **Ruta del día**: los meses en español dentro de una línea cuyo día ya iba traducido
+  («Tuesday 1 of **septiembre**»).
+
+### ⚠️ EL FALLO QUE INTRODUJE YO, y que COMPILABA
+
+Al arreglar la duodécima red barrí «clave `"Estado"` en un dict» y salieron **cinco**
+sitios. Los traduje los cinco. **Dos de ellos no eran filas de tabla: eran el dict que se
+ESCRIBE en la hoja** (`update_project`). O sea que habría guardado el estado en INGLÉS en
+Google Sheets — el peor fallo posible de esta migración, porque un DATO traducido deja de
+casar **en silencio** y lo comparan 387 sitios.
+
+Y encima el parche dejó `_etq(P.derive_estado(avance, est_man), "" if …)`: el paréntesis
+se comió el tercer argumento, así que `derive_estado` pasó a recibir dos. **Compilaba.**
+
+Lo destapó mirar el dict entero antes de dar el cambio por bueno, no el compilador. Es la
+lección de v444 —clasificar por lo que la cadena HACE, no por cómo se ve— y por eso la
+red 12 solo mira los dicts que están **dentro de un `pd.DataFrame`**, que es lo que
+significa «fila de tabla». El guardián lo comprueba en las dos direcciones: que las tres
+celdas se traduzcan **y** que las dos escrituras sigan crudas.
+
+Del mismo lote: metí `_etq(...)` en dos módulos que **no lo importaban** (`clientes_ui`,
+`invoices_ui`) → NameError al abrir esas pantallas, que `compileall` da por bueno. Es el
+fallo de v423/v425/v443, y ahora lo vigila un chequeo general: todo módulo que use `_etq`
+lo tiene a nivel de módulo.
+
+### Lo que NO se toca, con su razón
+
+- Las **OPCIONES** de todo widget: son el ID que compara `sub ==`, el valor que se guarda
+  en la hoja o la clave que indexa un dict. Traducirlas deja la rama MUERTA sin dar
+  ningún error (v442). Solo cambia el `format_func`.
+- **`_GRUPOS_PARAM`** es constante de MÓDULO: `t()` ahí se congela al importar. El texto
+  va en BASE y `t()` se aplica al PINTAR — el arreglo estándar, que ya lleva **seis**
+  reincidencias.
+- El **tipo de proyecto** del alta desde cotización se muestra con `etiqueta()`, no
+  traduciendo la opción: se escribe en `Proyectos.Tipo`.
+
+### Las acciones ejercitadas EN LA INTERFAZ (no la función de backend)
+
+El inventario de escrituras está al 75/75 desde v417, pero eso ejercita la FUNCIÓN. Entre
+la función y el botón están el formulario, la validación, el `flash` y el rerun.
+- **Fichaje desde el sidebar**: el botón nace `disabled` y se habilita al elegir (v139) ·
+  Clock IN → *«Clock IN Project at 21:57:27. Your workday was opened too»*, o sea el flash
+  SOBREVIVE al rerun (v365) y la jornada se abre sola (v150) · el sidebar cambia a
+  CLOCKED IN con los dos cronómetros (3 iframes) · Clock OUT → 0.03 h. **0 excepciones.**
+- **Tablero de Planificación**: abrir la celda vacía → asignar → ⚠️ **el aviso de
+  certificados de v219 salta EN VIVO dentro del editor** («Does not meet all the
+  certificates: 🟢 White Card · ⚪ Working at Heights») con su franja horaria → guardar →
+  la celda muestra la obra → **deshacer** → vuelve a `＋`. Ciclo completo y sin rastro.
+- **Buscador** (v330): «meriton» → 4 resultados con ID y cliente; al tocar uno abre el
+  detalle y **la caja se limpia sola** (la bandera de v111).
+- **Campana**: 4 avisos de credenciales, con sus días.
+- **Pre-Start**: la preselección por FICHAJE de v418, y el bloqueo de duplicado de v407
+  con el texto afinado de v408 — *«This site already has today's Pre-Start **and you are
+  already on it**»*, que es la rama `_pf` vacío. Nunca se había visto ese caso en vivo.
+- **Las 3 vistas del Panel** (Semana · Día · Libres) y el desempate de homónimos de v413
+  funcionando (`Mei Chen (mchen)` / `Mei Chen (mchen2)`).
+
+### ⚠️ Cuatro falsas alarmas, descartadas MIDIENDO antes de reportarlas
+
+1. **«Resultados e informes» en el Survey.** Parecía español sin traducir. `git show
+   ab68a2d` lo desmiente: **v450 ya lo tradujo** y lo que corría era `survey_ui` STALE.
+   Es «desplegado ≠ corriendo» (v333/v408) enturbiando la lectura de pantalla — por eso
+   se desplegó v451 antes de seguir, para forzar un proceso limpio.
+2. **«Car offset side» dentro del Pre-Start.** Un widget del Survey en medio de otra
+   pantalla habría sido grave. Medido por AST del DOM: **no está** — mi `innerText` cazó
+   un estado intermedio del intercambio de árbol tras navegar. Leer el DOM justo después
+   de una navegación puede capturar el render anterior a medio reemplazar.
+3. **El recordatorio del Pre-Start que no salía** al fichar. No es un fallo: `ps_forzar`
+   estaba en la página, o sea que **esa obra ya tenía su Pre-Start** y yo ya constaba —
+   exactamente cuando v403 dice que no debe salir nada.
+4. **El multiselect «sin opciones».** Mi sonda buscaba `[role="option"]`, que es como los
+   marca el **selectbox**; el multiselect usa `data-testid="stMultiSelectDropdown"` y sus
+   opciones no llevan ese rol. Las 11 estaban ahí. Trampa nº24 otra vez: **el DOM de
+   Streamlit cambia POR WIDGET**, no solo por versión.
+
+### ⚠️ Y la red 8, ENSANCHADA: el ternario ASIMÉTRICO
+
+Abriendo la ficha de una localización apareció `PRJ-0018 · Oficina · abierta`, con
+esto detrás:
+
+```python
+(t(":material/lock: closed") if _cerrada else ":material/check_circle: abierta")
+```
+
+Una rama traducida y la otra en español. **El guardián de la octava red no lo vio**
+porque solo miraba el ternario cuando es el ARGUMENTO de un `st.*`, y este vive dentro
+de una lista que luego se junta con `" · ".join(...)`.
+
+→ La señal que SÍ se puede buscar en todo el repo sin falsos positivos es la
+**ASIMETRÍA**: si una rama pasa por `t()` y la otra es un literal, es traducción a
+medias, esté donde esté. Con esa red aparecieron **3 más**: la columna «Contacto» de
+Usuarios mostrando `yes` y `falta` juntos, la campana (`expires in 8 d` sin `t()`) y el
+historial de Pre-Start. ⚠️ Y hubo que filtrar iconos y separadores: una rama cuyo
+literal es solo `"  ·  :orange[:material/warning:] "` no tiene nada que traducir, y una
+red que grita sobre lo que ya está bien acaba ignorándose entera.
+
+De paso, el **tipo** de la localización (`Oficina`) salía crudo: pasa por `etiqueta()`,
+que ya lo sabe traducir — ⚠️ pero la CLAVE de `TIPO_ICONO` sigue siendo el valor
+crudo, o el icono dejaría de resolverse.
+
+### Más acciones ejercitadas, con producción devuelta a su sitio
+
+- **Alta de cliente** de punta a punta desde el formulario: «Client created.» → abre su
+  ficha con el resumen → **archivar** (la lista vuelve a 5 y el contador pasa a «2
+  archived client(s) hidden») → **la vuelta**: marcar la casilla y la lista pasa a 7.
+  Es la regla v340 completa, funcionando en vivo.
+- **Localizaciones** y **Usuarios** (matriz de credenciales + formulario de alta), sin
+  excepciones.
+- ⚠️ **NO se dio de alta un usuario**: ese formulario exige escribir una contraseña,
+  y eso no lo hago yo aunque sea la demo.
+- **Limpieza verificada con foto antes/después**: `Clientes` 7 → 6 filas y el fichaje
+  504 → 502 (las DOS filas del ejercicio, jornada + proyecto — que de paso vuelve a
+  confirmar que fichar a un proyecto abre la jornada sola). Ninguna de prueba queda.
+
+### Límite del banco de pruebas, dicho como límite y no como fallo
+
+**No puedo seleccionar una fila de un `st.dataframe` desde aquí.** Instrumentado: mi clic
+aterriza donde debe (521, 460 CSS, dentro del `dvn-scroller`) pero llegan solo
+`pointerdown` y `click` — **sin `mousedown`**, que es lo que glide-data-grid necesita; ni
+despachándolo a mano sobre el scroller responde. No es un defecto de la app (esa selección
+se construyó y verificó en producción en v226/v228/v402): es que no puedo generar eventos
+de confianza. Las fichas de detalle se alcanzaron por el buscador y por los botones.
+
+### Dos trampas de método nuevas
+
+- ⚠️ **`compileall` devolvió 0 SIN COMPILAR NADA.** Lancé `python -m compileall -q
+  core/x.py` desde `core/`, así que las rutas no existían: imprimió «Can't list» y **salió
+  con 0**, de modo que mi `&& echo "compilan OK"` dio un OK en falso. Comprobar que algo
+  compila exige que la comprobación haya visto el fichero — se hizo con `ast.parse`, que
+  revienta si no lo encuentra.
+- ⚠️ **Un bloque añadido al final de un guardián queda DESPUÉS del `sys.exit`** y no se
+  ejecuta nunca: un chequeo en vacío escrito por descuido. Se vio porque el guardián
+  seguía dando «TODO OK» sin imprimir las secciones nuevas.
+- Y la **trampa nº26 por cuarta vez**: un `\n` dentro de un heredoc se convirtió en salto
+  real y partió una línea del guardián en dos. Se repara con `chr(10)` o con la
+  herramienta de escritura, nunca por heredoc.
+
+### ⚠️ Y la DECIMOTERCERA: la LEYENDA de un chart
+
+Los nombres de columna del DataFrame que va a `st.line_chart` / `st.bar_chart` **SON la
+leyenda que se pinta**, y ahí no llega `tabla.cfg()` (que es solo para `st.dataframe`) ni
+ninguna de las doce redes anteriores: no es una llamada a `st.*` con un literal, es una
+clave de dict. En el dashboard de agrupación se leía **«Planificado / Real» bajo una curva
+cuyo título ya estaba en inglés**.
+
+⚠️ **El primer barrido dio 19 casos y 16 eran falsos.** Atribuía al chart TODOS los `_df`
+del MÓDULO, así que cualquier DataFrame que compartiera nombre de variable con el del
+gráfico entraba. Es **exactamente el error de ámbito del medidor de v450**, repetido tres
+versiones después: un recuento con el medidor mal es peor que no medir, porque se traduce
+lo que no toca y se deja lo que sí. Acotado a la FUNCIÓN, quedan 3 reales.
+
+### La traducción a medias dentro del MISMO `if/elif`
+
+En el detalle de cotización, una rama decía `t("You are at")` y la de al lado **«Vas»** —
+las dos ramas del mismo bloque, en dos idiomas. Y es el mismo «Vas» que ya se había
+arreglado en `projects_ui`: **se corrigió una copia y no la otra**. Con él, otros dos
+literales españoles del módulo (`":material/folder: Abrir "` y `"Proyecto {x} created from
+this quote."`, que además mezclaba los dos idiomas en una sola frase).
+
+El guardián lo afirma **en POSITIVO** —las DOS ramas tienen que pasar por `t()`—, nunca por
+ausencia de español: un detector de idioma es ciego a las palabras sin acento y ya dejó
+pasar esto mismo dos veces (trampa nº28).
+
+### ⚠️ Lo que NO se cerró, dicho como pendiente y no como hecho
+
+Queda una forma más: el literal de display que vive en una **CONCATENACIÓN**
+(`st.info("texto " + var + " más texto")`). No es el ARGUMENTO de la llamada sino un
+operando de un `BinOp`, así que la red de POSICIÓN no lo ve — es la red 4 (la f-string
+entera) con `+` en vez de interpolación.
+
+⚠️ **Y aquí la medida corrigió mi propia estimación, en las dos direcciones.** Dije «~80
+llamadas» a ojo; contadas por AST son **127 trozos**, y clasificados:
+
+| | | |
+|---|---|---|
+| **97** | CSS y HTML | **no hay nada que traducir**: son estilos, no texto de interfaz |
+| **30** | frases ya en INGLÉS | esto es la bolsa real |
+| **0** | español | por eso hoy no se ve nada raro en pantalla |
+
+O sea que la bolsa que importa es de **30, no de 80**, y el daño es el de siempre: no se
+traducirían nunca cuando se llene el diccionario español. Estimar «~80» era peor que no
+dar número, porque inflaba el trabajo pendiente **y** ocultaba que las 97 restantes no son
+trabajo en absoluto. La lista clasificada queda en `pendiente_concat.txt`.
+
+No se arreglan en esta tanda —30 puntos que hay que decidir uno a uno y meterlos al final
+de una versión que ya tocó 12 ficheros es como se cuelan los fallos silenciosos—, pero
+quedan **dichos y contados**, no fingidos cerrados. La afirmación honesta pasa a ser «no
+queda nada de estas TRECE formas», que es distinto de «no queda nada».
+
+### Verificación
+
+Dos guardianes nuevos (`verif_v451.py`, `verif_v452.py`) con las cinco redes, **cada una
+validada contra un caso construido antes de creerse su cero** (trampa nº12), y probados
+contra **14 roturas**: las cazan las 14 — ⚠️ pero tres solo **tras corregir el guardián**,
+y las tres por el mismo motivo de siempre, comparar por SUBCADENA: `":material/edit: Data"`
+casa dentro de `":material/edit: Datos"`, así que la rotura pasaba. El chequeo se reescribió
+ESTRUCTURAL (ningún valor de dict de un `format_func` es un literal suelto), que además
+cubre el caso general en vez de un literal adivinado.
+
+⚠️ Y un chequeo mío hubo que **retirarlo**: medía por AUSENCIA de español, que es justo lo
+que la trampa nº28 prohíbe. Los que quedan son POSITIVOS — exigen que el inglés esperado
+ESTÉ.
+
+**`verif_v311` se puso rojo: CADUCADO, no regresión.** Leía los titulares suponiendo que
+eran f-strings, y al pasarlos por `t()` dos se convirtieron en concatenaciones (`BinOp`):
+leía 1 de 3 y daba rojo con el código correcto. Lo que la regla de v311 protege no es la
+forma del literal, sino que el énfasis vaya en `<b>` y nunca en `**` (el markdown no se
+procesa dentro de HTML). Lector ensanchado, con la razón escrita al lado.
+
+Suite entera: **101 guardianes, 0 rojo** (680 s). ⚠️ Escribí «103» dando por hecho que las redes nuevas eran ficheros nuevos: son **chequeos DENTRO** de `verif_v452.py`, así que el recuento de la suite no se mueve. Segunda cifra sin medir en la misma tanda — el número lo dice la suite, no yo. Y de paso, fuera el `SyntaxWarning` que `tabla.py`
+imprimía en cada arranque (la tabla markdown de su docstring lleva `\|`; el docstring pasa
+a raw, el texto no cambia).
+
+
 ## ⚠️ LA SEXTA RED: las CABECERAS DE TABLA seguían en español (v450)
 
 El usuario preguntó «¿ya quedó todo en inglés?». La respuesta honesta era **no**, y lo
@@ -8310,7 +8572,7 @@ literal, así que **no casaba nunca** — y dejó pasar «Plomo riel izquierdo»
 Es el mismo fallo de v436, cometido otra vez ese mismo día. Se vio con `cat -A`, no
 leyendo. → **Cualquier `\b`, `\n` o `\w` va por fichero escrito, nunca por heredoc.**
 
-## Versiones desplegadas (v450 = actual)
+## Versiones desplegadas (v452 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -8318,6 +8580,8 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v452 | **Recorrido de las 24 pantallas del admin: 0 excepciones** — y **SEIS redes más** de i18n que ninguna de las siete de v450 veía: el **ternario** de display (`st.info(A if c else B)`, que no es un `Constant`), el **valor de dict en un `format_func`**, el **widget SIN `format_func`** (pinta el dato crudo), la **cabecera `<th>` escrita a mano** (a la que `tabla.cfg()` no llega) y el **valor de negocio dentro de una CELDA** (que no es una llamada a `st.*`). En pantalla salía todo a MEDIAS: `edit Datos` junto a Status/Costs, `62% avance` junto a `h worked`, `Vas 34 points behind plan` cuya tercera rama ya decía «You are», las 5 sub-secciones de Localizaciones en crudo y la columna Estado con `parcial · cobrada · vencida`. ⚠️ **Y el fallo que introduje yo, compilando**: al barrer «clave Estado en un dict» traduje CINCO sitios y **dos eran el dict que se ESCRIBE en la hoja** → habría guardado el estado en INGLÉS en Sheets, el peor fallo posible (un dato traducido deja de casar en silencio, y lo comparan 387 sitios); además el paréntesis se comió un argumento de `derive_estado`. Por eso la red 12 solo mira dicts dentro de un `pd.DataFrame`. + `_etq` metido en 2 módulos que no lo importaban (NameError que `compileall` aprueba). **Acciones ejercitadas en la INTERFAZ**: fichaje de punta a punta desde el sidebar, el editor de celda del tablero con el aviso de certificados de v219 EN VIVO (asignar → guardar → deshacer), buscador, campana y las 3 vistas del Panel. ⚠️ **Cuatro falsas alarmas descartadas midiendo** (survey_ui stale, un residuo de render a medio intercambiar, un recordatorio que no salía porque no debía, y el multiselect «sin opciones» porque usé el selector del selectbox). ⚠️ Y dos trampas nuevas: **`compileall` devolvió 0 sin compilar nada** (rutas inexistentes → OK en falso) y un bloque añadido **después del `sys.exit`** de un guardián, que no se ejecuta nunca. 16 roturas probadas, 3 cazadas solo tras dejar de comparar por subcadena. ⚠️ Y la red 8 hubo que ENSANCHARLA: solo miraba el ternario cuando era el ARGUMENTO de un `st.*`, asi que se le escapo `t("closed") if _cerrada else ":material/check_circle: abierta"` (vive dentro de una lista que se junta). La senal buscable en todo el repo es la **ASIMETRIA** — una rama por `t()` y la otra literal —, y con ella salieron 3 mas: la columna Contacto con `yes` y `falta` juntos, la campana y el historial de Pre-Start. + la **red 13**: el nombre de columna que alimenta un `line_chart`/`bar_chart` **ES la leyenda**, y ahi no llega `tabla.cfg()` — se leia «Planificado / Real» bajo una curva ya titulada en ingles; ⚠️ mi primer barrido dio **19 casos y 16 eran falsos** por atribuir al grafico todos los `_df` del MODULO, el error de ambito del medidor de v450 repetido. + las **DOS ramas del mismo if/elif** de la cotizacion, una con `t("You are at")` y la otra con «Vas» — el mismo «Vas» que ya se arreglo en `projects_ui`, o sea que se corrigio una copia y no la otra. ⚠️ **Queda ABIERTO, MEDIDO y dicho**: el literal de display dentro de una CONCATENACION no lo ve la red de POSICION (es un operando de un `BinOp`, no el argumento). Estime «~80» a ojo y contados son **127 trozos**: **97 son CSS/HTML** (nada que traducir), **30 frases ya en ingles** —la bolsa real— y **0 en espanol**, por eso hoy no se ve nada raro. Estimar era peor que no dar numero: inflaba el pendiente y ocultaba que 97 no son trabajo |
+| v451 | La **OCTAVA red** (los 7 ternarios de display) + los **6 grupos de parámetros del Survey** (`Hueco`, `Cabina`, `Puerta / umbral`, `Frontal`, `Laterales`, `Contrapeso`) — ⚠️ invisibles hasta para la red morfológica de v450, porque ninguno lleva acento ni terminación marcada — y las 7 etiquetas del recorrido de pantallas (rol del sidebar por `etiqueta()`, «hoy» del tablero, los MESES de la Ruta del día que salían mezclados con el día ya traducido, persona/personas, el toggle Cards/List y «never invoiced»). ⚠️ `_GRUPOS_PARAM` es constante de MÓDULO: el texto va en BASE y `t()` se aplica al PINTAR, o se congelaría al importar (van seis). 5 roturas |
 | v450 | **La SEXTA red: las CABECERAS DE TABLA seguían en español.** El usuario preguntó «¿ya quedó todo en inglés?» y la respuesta era **no**: `st.dataframe` pinta la CLAVE del dict, y las filas de esta app se construyen a mano, así que la cabecera es invisible para las cinco redes anteriores —que miran POSICIÓN o IDIOMA, nunca claves—. Medido: **46 cabeceras en 12 tablas**, y **mezcladas dentro de la misma tabla** (`Alerts` y `Status` en inglés al lado de `Elevador` y `Costo`), que se nota más que si estuviera todo en español. ⚠️ El arreglo es la ETIQUETA, nunca la clave: muchas se leen de vuelta (`r["Elevador"]`, `r["Peso"]`) y varias viajan a `DatosJSON`. Nuevo `core/tabla.py` aplicado a las **66 tablas**. ⚠️ **Verificado en vivo interceptando `fillText`** (el DOM no sirve, v399): `Column(label)` cambia la cabecera, deja las celdas numéricas **idénticas**, el `data_editor` devuelve las claves ORIGINALES y tolera claves que la tabla no tiene —esto último es lo que hace el arreglo robusto, porque deja de depender de mi atribución estática, que falló DOS veces mientras medía—. ⚠️ Y el propio MEDIDOR se equivocó **cuatro** veces (ámbito de módulo en vez de función; el argumento de `.get()` contado como celda; dar por traducida una columna con `column_config` **sin etiqueta**; y no ver el dict INLINE, que es la mitad de las tablas): la cuenta pasó de «15» a **90**. + **SÉPTIMA red** por MORFOLOGÍA en vez de por léxico —ninguna veía «vencida», «devuelto» ni «mantenimiento», a la vista en la campana— con la que se tradujeron **~180** textos más: 60 mensajes de backend que v445-v447 se dejaron, los avisos, los estados de inventario, los chips de cotización, los días del tablero, el correo interno y **las 31 líneas del informe ADMIN que v448 dio por cerradas**. ⚠️ Tres mapas espejo el mismo día (`{"vigente": "vigente"}`) y el **`t()` congelado por SEXTA vez**. 7 roturas |
 | v449 | **i18n CERRADO del todo: la navegación y las últimas etiquetas.** Al medir con las tres redes tras v448 aparecieron **32** que seguían en español, casi todas en lo más visible: los displays de `_SECCIONES`/`_SUBSECCIONES`, a medias («Projects» al lado de «Finanzas»). ⚠️ Cada entrada es **(ID, display)** y solo se toca el segundo: el ID lleva emoji porque **ES el identificador** que compara `sub ==` y usan los deep-links. ⚠️ Y faltaba el chequeo de **RAMA MUERTA para las sub-pestañas** (el de v442 solo mira opciones de widget); hubo que escribirlo **dos veces**: la primera comprobaba «el ID sigue en el fichero» y **pasaba con la rama muerta delante** (aparece dos veces: definición y comparación), y la segunda daba **dos ramas muertas inexistentes** por asumir que el del `else` es «el último de la lista» — en finanzas es el 5.º de 8 y en proyectos el PRIMERO. El invariante correcto es por SECCIÓN: un `if/elif/else` deja **exactamente uno** sin comparar. **Recuento final: 0 en interfaz y 0 en backend**; lo que queda en español es solo lo que no se puede traducir (datos, IDs, nombres de actividad, la carpeta de Drive `COPEX Activos` y la base de conocimiento del asistente), cada uno afirmado por el guardián. 6 roturas |
 | v448 | **F5 CERRADO: el informe ADMIN, los correos y los prompts de la IA** — la app ya no tiene un solo texto en español salvo lo que es DATO. El informe admin (101 cadenas) va con `_d()` aplicado **por AST y por posición**, ⚠️ refusando toda cadena que se use como ÍNDICE (`'Duración (d)'`, `'Línea'`: son contrato con `schedule_table`/`plumb_table`). ⚠️ **El barrido del FUENTE se dejó 22 líneas** y las encontró **generar el PDF y leer su texto** — la trampa nº27 otra vez —, capturando además el log del módulo, porque el veredicto va dentro de un `try/except` que registra y sigue (el fallo real de v437). ⚠️ Y el prefijo `"[Interpretación no disponible"` se **produce** en `interpretation` y se **compara** en `report` y `user_report`: los cuatro a la vez, o el informe imprimiría el mensaje de error como si fuera la interpretación. ⚠️ **Decisión de criterio dicha en voz alta**: la base de conocimiento de `chat_agent` (353 líneas) se queda en español y solo se traduce la REGLA DE ESTILO, que ahora ordena responder en inglés — el modelo lee español, y traducir contenido técnico denso mete riesgo de error en el conocimiento del asistente a cambio de nada. Quedan tres exclusiones declaradas: los nombres de actividad (dato de la hoja `Actividades`), esa base de conocimiento, y las CLAVES de schemas y columnas. 7 roturas probadas |

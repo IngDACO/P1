@@ -524,8 +524,9 @@ def _historial(pid):
     for d in prev:
         _flag = (":red[:material/cancel:]" if (d["near_miss"] or d["n_no"]) else ":green[:material/check_circle:]")
         _res = []
-        if d["near_miss"]:      _res.append("near miss")
-        if d["n_no"]:           _res.append(f"{d['n_no']} check(s) answered NO")
+        if d["near_miss"]:      _res.append(t("near miss"))
+        if d["n_no"]:           _res.append(t("{n} check(s) answered NO")
+                                            .replace("{n}", str(d["n_no"])))
         _tit = (f"{_flag}  {d['fecha']} · {d['facilitador'] or '—'}"
                 + (f"  ·  :orange[:material/warning:] {', '.join(_res)}" if _res else t("  ·  all OK")))
         with st.expander(_tit):

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Cabeceras de tabla en el idioma de la pantalla, SIN tocar la clave (v450).
+r"""Cabeceras de tabla en el idioma de la pantalla, SIN tocar la clave (v450).
 
 ## El problema que resuelve
 
