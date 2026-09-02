@@ -988,9 +988,9 @@ def _nuevo_proyecto_form(grupo: str, key: str = "nuevo"):
                     if " ".join(str(p.get("Nombre") or "").lower().split())
                     == " ".join(nom.lower().split())]
             if dups and not st.session_state.get(f"np_dup_{key}"):
-                st.warning(":material/warning: A project with that name already exists: "
-                           + ", ".join(dups)
-                           + ". If it is a different lift, tick the box and create it again.")
+                st.warning(t(":material/warning: A project with that name already exists: {x}. "
+                             "If it is a different lift, tick the box and create it again.")
+                           .replace("{x}", ", ".join(dups)))
                 st.checkbox(t("Create even though the name is repeated"), key=f"np_dup_{key}")
                 return
 
@@ -1019,7 +1019,7 @@ def _nuevo_proyecto_form(grupo: str, key: str = "nuevo"):
                 # proyecto se quedaría clavado en 0% para siempre y el campo no tendría
                 # dónde reportar. Con una sola, avanza 0→100 sin fingir un plan de obra.
                 _dias = max(1, ((f_fin_manual - f_ini).days + 1) if f_fin_manual else 1)
-                _acts = [{"nombre": "Ejecución", "duracion": _dias, "peso": 1}]
+                _acts = [{"nombre": "Execution", "duracion": _dias, "peso": 1}]
             ok, res = P.create_project(
                 grupo=grupo, nombre=nom.strip(), cliente=cli, cliente_id=_cli_id, ubicacion=ubi,
                 modelo=mod, ns=int(ns), ingeniero=ing, campo_asignados=asg, tipo=_tipo,
@@ -1053,10 +1053,12 @@ def _nuevo_proyecto_form(grupo: str, key: str = "nuevo"):
                 for _k in (_kd, f"{_kd}_bytes", f"{_kd}_id"):
                     st.session_state.pop(_k, None)
 
-            st.success(f":material/check_circle: Project **{res}** created with "
-                       f"{len(sched.get('activities', []))} activities"
-                       + (" and the drawing data loaded." if _plano else ".")
-                       + " The survey and the other tools can now feed it.")
+            st.success((t(":material/check_circle: Project **{p}** created with {n} activities "
+                          "and the drawing data loaded.") if _plano else
+                        t(":material/check_circle: Project **{p}** created with {n} activities."))
+                       .replace("{p}", str(res))
+                       .replace("{n}", str(len(sched.get("activities", []))))
+                       + " " + t("The survey and the other tools can now feed it."))
             if asg:
                 _notificar_asignados(asg, {
                     "Nombre": nom.strip(), "Cliente": cli, "Ubicacion": ubi,
@@ -1212,9 +1214,9 @@ def _avisar_asignados(usuarios, grupo=None, exclude_pid=None, certs_req=None,
         st.warning(":material/badge: **Other credentials to check before sending them to site:**\n\n"
                    + "\n".join(f"- {x}" for x in cred_mal))
     if sin_contacto:
-        st.warning(":material/warning: **Without full contact details (email + Telegram):** "
-                   + ", ".join(sin_contacto)
-                   + ". They will not receive the assignment or the inductions.")
+        st.warning(t(":material/warning: **Without full contact details (email + Telegram):** "
+                     "{x}. They will not receive the assignment or the inductions.")
+                   .replace("{x}", ", ".join(sin_contacto)))
 
 
 def _cumplimiento_equipo(pid, grupo, prj):
@@ -2000,14 +2002,13 @@ def _estado_section(pid: str, grupo: str, prj: dict):
 
     # El diagnostico: el equipo sigue en trabajo viejo y lo de hoy no arranca
     if d["paradas"] and d["arrastradas"]:
-        st.warning(":material/stethoscope: The crew is still finishing **"
-                   + ", ".join(x["nombre"] for x in d["arrastradas"][:3])
-                   + "**, so **"
-                   + ", ".join(x["nombre"] for x in d["paradas"][:3])
-                   + "** has not started yet. That is where the delay is.")
+        st.warning(t(":material/stethoscope: The crew is still finishing **{a}**, so **{b}** "
+                     "has not started yet. That is where the delay is.")
+                   .replace("{a}", ", ".join(x["nombre"] for x in d["arrastradas"][:3]))
+                   .replace("{b}", ", ".join(x["nombre"] for x in d["paradas"][:3])))
     elif d["paradas"]:
-        st.warning(":material/stethoscope: Not started and already due: **"
-                   + ", ".join(x["nombre"] for x in d["paradas"][:3]) + "**.")
+        st.warning(t(":material/stethoscope: Not started and already due: **{x}**.")
+                   .replace("{x}", ", ".join(x["nombre"] for x in d["paradas"][:3])))
 
     # ── Dos bloques LARGOS enfrentados: actividades | alarmas y equipo ──
     _izq, _der = st.columns([3, 2], gap="large")
@@ -2630,10 +2631,11 @@ def _dashboard_agrupacion(ag, grupo):
     if proj.get("critico"):
         _d = delays.get(proj["critico_id"])
         st.markdown(
-            f":material/event: **Delivery is set by «{proj['critico']}»** — expected "
-            f"**{_fecha}**" + (f", with **{_d:.0f} days behind**." if _d else
-                               ", on time.")
-            + "  That is where reinforcing pays off most.")
+            (t(":material/event: **Delivery is set by «{c}»** — expected **{f}**, with "
+               "**{d} days behind**.") .replace("{d}", f"{_d:.0f}") if _d else
+             t(":material/event: **Delivery is set by «{c}»** — expected **{f}**, on time."))
+            .replace("{c}", str(proj["critico"])).replace("{f}", str(_fecha))
+            + "  " + t("That is where reinforcing pays off most."))
     if proj.get("sin_datos"):
         st.caption("No schedule to project from: " + ", ".join(proj["sin_datos"]))
 
@@ -2691,8 +2693,8 @@ def _dashboard_agrupacion(ag, grupo):
 
     _out = [r["Elevador"] for r in rows if r["vs media h"].startswith("+")]
     if _out:
-        st.info(t(":material/warning: They use noticeably more hours than their twins:") + " **"
-                + ", ".join(_out) + "**. " + t("Worth looking into why."))
+        st.info(t(":material/warning: They use noticeably more hours than their twins: **{x}**. "
+                  "Worth looking into why.").replace("{x}", ", ".join(_out)))
 
     st.bar_chart(pd.DataFrame({t("Progress %"): [r["Avance %"] for r in rows]},
                               index=[r["Elevador"] for r in rows]))
@@ -3344,20 +3346,26 @@ def _ganancia_section(pid, grupo):
     with st.expander(t(":material/savings: How much you make on this job"),
                      expanded=bool(rev.get("sin_ganancia")) or _a_costo):
         if _modelo == "cotizado":
-            st.success(":material/check_circle: This job's revenue is the **agreed price** on quote " + f"**{rev.get('cotizacion','')}**. "
-                       "The " + f"{rev['margen_pct']:g}%" + " follows from that price.")
+            st.success(t(":material/check_circle: This job's revenue is the **agreed price** on "
+                         "quote **{q}**. The {m}% follows from that price.")
+                       .replace("{q}", str(rev.get("cotizacion", "")))
+                       .replace("{m}", f"{rev['margen_pct']:g}"))
             if P._num(rev.get("fija_ignorada")) > 0:
-                st.warning(":material/info: This job has a fixed profit of "
-                           + _T.dinero(rev["fija_ignorada"]) + " that is **not used**: the price the client signed wins. Set it to 0 to remove the noise.")
+                st.warning(t(":material/info: This job has a fixed profit of {x} that is **not "
+                             "used**: the price the client signed wins. Set it to 0 to remove the "
+                             "noise.").replace("{x}", _T.dinero(rev["fija_ignorada"])))
         elif _modelo.startswith("margen"):
             st.info(":material/info: This job's labour still uses the **old model**: a " + f"**{rev['margen_pct']:g}%** on top of it. As soon as you "
                     "set what you want to earn per hour here, it moves to the new model "
                     "(an amount per line) and the % works itself out.")
         else:
-            st.success(":material/check_circle: This job already uses the per-line model. The " + f"{rev['margen_pct']:g}%" + " margin follows from it; it is not something you typed.")
+            st.success(t(":material/check_circle: This job already uses the per-line model. The "
+                         "{m}% margin follows from it; it is not something you typed.")
+                       .replace("{m}", f"{rev['margen_pct']:g}"))
         if rev.get("sin_ganancia"):
-            st.warning(":material/person_alert: With no profit set, their work would be invoiced **at cost**: **" + ", ".join(rev["sin_ganancia"])
-                       + "**.")
+            st.warning(t(":material/person_alert: With no profit set, their work would be "
+                         "invoiced **at cost**: **{x}**.")
+                       .replace("{x}", ", ".join(rev["sin_ganancia"])))
 
         # ⚠️ El editor solo si hay gente: con la lista vacía, `disabled=[...]` y
         #    `column_config` apuntarían a columnas que no existen.
@@ -3401,8 +3409,9 @@ def _editor_ganancia_hora(pid, _items, _gh, _T):
               for i in range(len(_ed)) if P._num(_ed.iloc[i]["Ganancia/h"]) > 0}
     _tot = sum(P._num(_ed.iloc[i]["Horas"]) * P._num(_ed.iloc[i]["Ganancia/h"])
                for i in range(len(_ed)))
-    st.caption("With these values you would make **" + _T.dinero(_tot)
-               + "** on the labour clocked so far. Materials are invoiced at cost (decision from v360).")
+    st.caption(t("With these values you would make **{x}** on the labour clocked so far. "
+                 "Materials are invoiced at cost (decision from v360).")
+               .replace("{x}", _T.dinero(_tot)))
     _c1, _c2 = st.columns([2, 1])
     if _c1.button(t(":material/save: Save profits"), key=f"gh_save_{pid}",
                   type="primary", width="stretch"):
@@ -3442,8 +3451,9 @@ def _ganancia_fija_ui(pid, rev, _fija, _T, _modelo):
         # Lo que pasaría a valer la obra con este número, para no teclear a ciegas.
         # Se parte del ingreso SIN la fija actual, así el cálculo no la cuenta dos veces.
         _ing = round(P._num(rev.get("ingreso")) - P._num(rev.get("ganancia_fija")) + _nf, 2)
-        _c1.caption("With this amount, the job's estimated revenue would be **"
-                    + _T.dinero(_ing) + "** on a cost of " + _T.dinero(_costo) + ".")
+        _c1.caption(t("With this amount, the job's estimated revenue would be **{a}** on a "
+                      "cost of {b}.")
+                    .replace("{a}", _T.dinero(_ing)).replace("{b}", _T.dinero(_costo)))
     if _c2.button(t(":material/save: Save fixed profit"), key=f"gf_save_{pid}",
                   width="stretch"):
         ok, msg = P.set_ganancia_fija(pid, _nf)
@@ -3721,7 +3731,7 @@ def render_expenses(pid, grupo, can_delete=False, key_prefix="ex"):
                         st.session_state[f"{key_prefix}_rcb"] = None if _cur == _rid else _rid
                         st.rerun()
                 else:
-                    cc[0].caption(_lbl + " · no file")
+                    cc[0].caption(_lbl + " · " + t("no file"))
                 if can_delete and cc[1].button(":material/delete:", key=f"{key_prefix}_del_{_rid}"):
                     ok, msg = E.delete(r.get("ID"))
                     (flash.exito if ok else st.error)(msg)
@@ -4087,10 +4097,11 @@ def render_group_profitability(grupo: str):
     # margen puesto. v321: además se pueden poner AQUÍ, sin salir de la pantalla.
     _m0 = [r["nombre"] for r in rows if P._num(r.get("margen")) <= 0]
     if _m0:
-        st.warning(f":material/percent: **{len(_m0)} job(s) at 0% margin**, so their "
-                   "estimated revenue is exactly their cost and the profit comes out at $0: "
-                   + ", ".join(_m0[:6]) + ("…" if len(_m0) > 6 else "")
-                   + ". Edit them in the table below.")
+        st.warning(t(":material/percent: **{n} job(s) at 0% margin**, so their estimated "
+                     "revenue is exactly their cost and the profit comes out at $0: {x}. "
+                     "Edit them in the table below.")
+                   .replace("{n}", str(len(_m0)))
+                   .replace("{x}", ", ".join(_m0[:6]) + ("…" if len(_m0) > 6 else "")))
 
     st.markdown('<div style="display:flex;gap:10px;flex-wrap:wrap;margin:2px 0 6px">'
                 + _kpi_card(t("Cost charged"), T.dinero(_tot["costo"], 0))

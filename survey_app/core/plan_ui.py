@@ -80,9 +80,10 @@ def _cabecera(prj: dict, datos: dict, fichado: bool):
         st.caption((":material/schedule: Clocked in at " if fichado else ":material/description: ")
                    + f"**{prj.get('Nombre')}** · {plan_data.resumen(datos)}")
         if datos.get("faltan"):
-            st.caption(f":orange[:material/warning:] The drawing did not give: {', '.join(datos['faltan'][:8])}"
-                       + ("…" if len(datos["faltan"]) > 8 else "")
-                       + " — enter them by hand.")
+            st.caption(t(":orange[:material/warning:] The drawing did not give: {x} — enter "
+                         "them by hand.")
+                       .replace("{x}", ", ".join(datos["faltan"][:8])
+                                + ("…" if len(datos["faltan"]) > 8 else "")))
     else:
         st.warning(f"**{prj.get('Nombre')}** has no drawing data loaded. "
                    "Load it on the project (:material/build: My company → open the project → "

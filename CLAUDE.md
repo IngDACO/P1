@@ -7147,8 +7147,13 @@ hoja real de punta a punta: escribir la fecha → el periodo pasa a `2026-03-15 
 2027-03-14` → rastro en la auditoría (`{"FechaIngreso": ["", "2024-03-15"]}`) →
 restaurado. Suite: **72/72**.
 
-⚠️ **Pendiente del usuario**: nadie del equipo tiene `FechaIngreso` cargada, así que
-hoy todos los saldos se cuentan por año natural y la app lo dice en cada pantalla.
+⚠️ ~~Pendiente del usuario: nadie tiene `FechaIngreso` cargada~~ → **CERRADO en v434**:
+las 13 cuentas la tienen (auditado en la hoja el 02/09/2026: 0 sin fecha), así que los
+saldos ya se cuentan por aniversario y no por año natural.
+
+⚠️ **Y la lección de seguimiento**: este «PENDIENTE» siguió escrito 18 versiones después
+de resolverse. Un documento que acumula pendientes ya cerrados vuelve la lista inútil —
+al preguntar «¿qué queda?» hay que **auditar contra los datos**, no recitar el documento.
 
 ## ⚠️ SE PAGABA DOS VECES EL MISMO DÍA + los dos avisos que faltaban (v432)
 Salió de la pregunta del usuario «¿ya quedó todo cerrado?» — auditando en vez de
@@ -7297,6 +7302,120 @@ y los **nombres de las actividades** del cronograma (`schedule.ACTIVIDADES`, que
 se GUARDAN en la hoja `Actividades` → migración del histórico). El informe del cliente
 no está entero en inglés hasta que caigan esas tres, y conviene saberlo antes de
 enseñárselo a un cliente.
+
+## CERRAR LOS PENDIENTES: la red 14 y la migración del histórico (v453)
+
+Petición del usuario, en dos tiempos: *«¿entonces qué hay pendiente? ¿y por qué no se ha
+hecho?»* y, tras la respuesta, *«no dejes nada pendiente»*.
+
+### ⚠️ La lista de pendientes del documento estaba MAL, y en las dos direcciones
+
+Al auditar contra los datos —en vez de recitar el documento— salió que:
+- **`FechaIngreso` figuraba como pendiente y llevaba 18 versiones resuelto** (las 13
+  cuentas la tienen). Un documento que acumula pendientes ya cerrados hace la lista
+  inútil.
+- Y al revés: **el signo de `Cut*` llevaba pendiente desde v130** sin que yo lo
+  recordara en ninguna respuesta.
+
+→ **REGLA: cuando alguien pregunta «¿qué falta?», se audita contra los datos.** La
+respuesta de memoria estaba equivocada por los dos lados.
+
+### La DECIMOCUARTA red: la CONCATENACIÓN
+
+`st.info("texto " + var + " más texto")`. El literal **no es el argumento** de la llamada
+sino un operando de un `BinOp`, así que la red de POSICIÓN (v440) no lo ve. Es la red 4
+(la f-string entera) con `+` en vez de interpolación.
+
+⚠️ **Y la medida corrigió mi propia estimación en las dos direcciones.** Dije «~80
+llamadas» a ojo; contadas por AST eran **127**, y clasificadas: **97 CSS/HTML** (no hay
+nada que traducir), **30 frases ya en inglés** y **0 en español**. O sea que la bolsa
+real era de 30, no de 80. Estimar fue peor que no dar número: inflaba el pendiente **y**
+ocultaba que 97 no eran trabajo.
+
+**El arreglo no es envolver cada trozo**: un trozo no es una frase y el orden de las
+palabras cambia entre idiomas. Cada frase pasa a ser UNA clave con marcadores, y quedan
+**0 frases sueltas** en los 23 módulos de interfaz.
+
+⚠️ Eso abre un modo de fallo nuevo y SILENCIOSO: si un marcador no casa con su
+sustitución, el `{x}` **se pinta literal** y no salta nada. De ahí el chequeo 2.
+
+⚠️ Y de paso se descubrió que **el motor ya aceptaba `t("… {x} …", x=valor)`**
+(`i18n.py:88` hace el `.format()`), que es la forma nativa y más limpia que la cadena de
+`.replace()` que usé. Las 27 frases nuevas funcionan igual; queda anotado que la forma
+preferida es la de kwargs.
+
+### La migración del histórico, que era la razón real de no haberlo hecho
+
+Los nombres de actividad **se guardan en la hoja `Actividades`**, así que traducir solo
+el código habría dejado los proyectos viejos en español y los nuevos en inglés **sin
+forma de casarlos**. Por eso v438 puso un guardián que exigía que siguieran en español:
+no era pereza, era que faltaba decidir la migración.
+
+- **0 comparaciones** con nombres de fase en todo el repo (verificado por AST antes de
+  tocar nada): se puede traducir sin dejar ramas muertas.
+- **123 de 123 filas** migradas en **1 `batch_update`**, con respaldo previo **fuera del
+  repo** (v377) y verificadas leyendo: 0 en español.
+- El concepto de nómina `Retención de impuesto (PAYG)` → `Income tax withheld (PAYG)` en
+  **25 filas**. El código ya lo decía en inglés desde v447; lo que faltaba era el dato.
+
+⚠️ **Lo que NO se migró, y es deliberado**: el `tipo` del concepto
+(`aporte`/`deduccion`/`devengo`) y las BANDERAS de `PHASES` (`cortes`, `shaft`). Los dos
+se COMPARAN, así que traducirlos deja la rama muerta sin dar error (v442/v447).
+Comprobado ejecutando que **el neto sale idéntico** con el concepto en español o en
+inglés (850.0 en los dos): el nombre no decide el dinero.
+
+### ⚠️ El guardián se equivocó CUATRO veces, y cada una enseña algo distinto
+
+Ninguna se vio leyéndolo: todas salieron de probarlo contra código roto y contra código
+sano.
+
+| # | Qué hacía | Por qué |
+|---|---|---|
+| 1 | **10 «marcadores sin replace» que no existían** | `ast.walk` visita también los nodos INTERMEDIOS de `t(...).replace(A).replace(B)`, y cada uno ve un solo replace |
+| 2 | **1 falso positivo más, en un ternario** | el `.replace()` que vive DENTRO de una rama no es hijo directo del externo → se procesaba como cadena suelta |
+| 3 | **3 roturas SE ESCAPARON** | comprobaba «el literal está en el fichero» y aparece en VARIOS sitios (la constante *y* la comparación), así que traducir uno seguía pasando — la trampa nº2 dentro del guardián |
+| 4 | **22 falsos positivos** | miraba solo `.replace()` e ignoraba que el motor acepta **kwargs**, que es como lo hacen los 20 módulos de PDF |
+
+**La invariante que sí funciona** para lo que se compara no es «el literal existe», sino
+**COMPARADOS ⊆ ESCRITOS**: si `neto()` compara un valor que nadie escribe, esa rama está
+muerta. ⚠️ Y la dirección importa: `escritos ⊆ comparados` daba **FALLO con el código
+correcto**, porque `aporte` se escribe y `neto()` no lo compara **a propósito** (el
+superannuation no descuenta del neto, v346).
+
+### Verificación
+
+`verif_v453.py` (18 comprobaciones), con cada red **validada contra un caso construido**
+antes de creerse su cero, y probado contra **5 roturas: las caza las 5** — pero solo
+después de las cuatro correcciones de arriba. Y `verif_v438` **caducó a propósito**: su
+afirmación se invirtió (de «siguen en español» a «están en inglés y casan con el
+histórico migrado») con la razón escrita al lado, que es lo que pide la regla v385.
+
+### ⚠️ Los dos guardianes que se pusieron rojos hicieron su trabajo
+
+`verif_v448` y `verif_v449` afirmaban que los nombres de actividad **siguen en español**,
+y `verif_v448` lo decía con todas las letras en su docstring: *«para que traducirlos algún
+día salte y obligue a mirar la migración del histórico»*. Al traducirlos, saltaron. Eso no
+es un guardián caducado por descuido: es **la única forma de que un cambio de código
+obligue a mirar los datos que ese código escribe**. Los tres (con el de v438) se
+invirtieron con la razón escrita al lado, nunca relajados.
+
+⚠️ Y uno de esos rojos, al reproducirlo a mano, salió como `No secrets found`: la
+**trampa nº19** (el guardián lanzado desde el directorio equivocado, que fabrica rojos que
+no existen). El fallo REAL solo apareció al correrlo con `cwd=survey_app`, como hace la
+suite. Diagnosticar desde la ejecución equivocada habría llevado a buscar un problema de
+secrets que no existía.
+
+### ⚠️ Lo que sigue abierto, y por qué NO es «no haberlo hecho»
+
+- **5 cuentas sin Telegram** (`dacox`, `admin1`, `Arcantox`, `Admin2`, `dmoreno`): un
+  `chat_id` identifica una conversación REAL y **inventarlo mandaría los avisos de la
+  demo al teléfono de un desconocido**. La persona pulsa Start en el bot y entonces se
+  vincula. No es mío.
+- **El signo de `Cut*`** (v130): decisión de dominio, y el corte es irreversible.
+- **La red 12 y el titular de cotización, sin ver en pantalla**: las dos listas son
+  `st.dataframe` en canvas — no se puede seleccionar fila ni leer celdas desde el banco.
+  Límite dicho, no verificación fingida.
+
 
 ## RECORRER LA APP: 24 pantallas, y CINCO redes más de i18n (v451-v452)
 
@@ -7534,6 +7653,55 @@ No se arreglan en esta tanda —30 puntos que hay que decidir uno a uno y meterl
 de una versión que ya tocó 12 ficheros es como se cuelan los fallos silenciosos—, pero
 quedan **dichos y contados**, no fingidos cerrados. La afirmación honesta pasa a ser «no
 queda nada de estas TRECE formas», que es distinto de «no queda nada».
+
+### ⚠️ «Desplegado ≠ corriendo», ahora MEDIDO en tres módulos a la vez
+
+Tras desplegar v452 el commit era correcto (`git show HEAD:…` lo confirma) y la pantalla
+seguía sirviendo el código viejo. Medido en tres sitios independientes, que es lo que
+convierte la sospecha en diagnóstico:
+
+| Módulo | Evidencia en pantalla | |
+|---|---|---|
+| `app.py` | sidebar y título de pestaña dicen **v452** | fresco |
+| `home_ui` | topbar dice **v451** | stale |
+| `projects_ui` | leyenda del chart en «Planificado / Real» | stale |
+| `roster_ui` | cabecera **«Persona»**, con los días ya en inglés | stale |
+
+O sea: Streamlit Cloud **re-ejecutó `app.py` y conservó TODOS los `core.*`** en
+`sys.modules`. No es que un módulo concreto se atasque — es que el proceso no ha
+reiniciado, y hasta que lo haga **lo desplegado no es lo que se ejecuta**.
+
+**Tras el reinicio del proceso (lo hizo el usuario), verificado VIENDO EL CAMBIO** — no la
+versión — en cinco sitios que cubren cinco redes distintas:
+
+| Red | Dónde | Antes | Ahora |
+|---|---|---|---|
+| **13** | curva de la agrupación | `Planificado` · `Real` | **`Planned` · `Actual`** |
+| **11** | Panel · Libres (`<th>` a mano) | `Persona` | **`Person`** |
+| **10** | ficha de localización | los IDs crudos | **`Team · Expenses · Pre-Start · Files · Data`** |
+| **8** | cabecera de localización | `Oficina` · `abierta` | **`Office` · `open`** |
+| **9** | sub-pestañas del proyecto | `edit Datos` junto a Status/Costs | **`Status · Data · Costs · Files`** |
+
+Y la concatenación del avance: **`18% progress`**, que era «18% avance».
+
+⚠️ **Dos cambios NO se pudieron verificar en pantalla, y se dice como LÍMITE del banco, no
+como verificado**: la celda de estado de las tablas (red 12) y el titular `You are at` de
+la cotización. Las dos listas son `st.dataframe`, o sea **canvas**: no puedo seleccionar
+una fila (falta el `mousedown` que glide necesita) ni leer sus celdas — el interceptor de
+`fillText` **se validó a sí mismo** (capturó su `SONDA_OK`) pero glide cachea su contexto y
+no pasa por él. Quedan cubiertos por el guardián estático y por el smoke que ejecuta
+`etiqueta()`, que es una garantía más débil que haberlo visto, y por eso se dice.
+
+→ El método que funciona no es mirar la versión (v408 ya corrigió a v334 en eso), sino
+**medir el CAMBIO en dos o tres módulos distintos**: si `app.py` es nuevo y varios `core.*`
+son viejos a la vez, el diagnóstico es el proceso, no el código — y buscar el fallo en el
+código sería perseguir algo que no existe.
+
+⚠️ Y por el camino, dos sondas que iban a mentir: `body.innerText` **no contiene las celdas
+de un `st.dataframe`** (van en canvas, trampa nº18), así que un «0 en español» ahí no
+significa nada; y el interceptor de `fillText` devolvió 0 hasta que **se validó contra un
+caso conocido-bueno** (pintar `SONDA_OK` en un canvas propio) — sin esa validación, el 0
+habría pasado por prueba de que la columna ya estaba traducida.
 
 ### Verificación
 
@@ -8572,7 +8740,7 @@ literal, así que **no casaba nunca** — y dejó pasar «Plomo riel izquierdo»
 Es el mismo fallo de v436, cometido otra vez ese mismo día. Se vio con `cat -A`, no
 leyendo. → **Cualquier `\b`, `\n` o `\w` va por fichero escrito, nunca por heredoc.**
 
-## Versiones desplegadas (v452 = actual)
+## Versiones desplegadas (v453 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -8580,6 +8748,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v453 | **Se cierran los pendientes que eran míos** (petición: «no dejes nada pendiente»). ⚠️ Al auditar contra los DATOS en vez del documento, la lista de pendientes estaba mal **en las dos direcciones**: `FechaIngreso` figuraba abierta y llevaba **18 versiones resuelta**, y el signo de `Cut*` llevaba pendiente desde v130 sin que yo lo recordara. + **red 14, la CONCATENACION** (`st.info("a " + v + " b")`): el literal no es el argumento sino un operando de un `BinOp`, invisible para la red de POSICION. ⚠️ Y la medida corrigio mi estimacion en las dos direcciones — dije «~80» y eran **127**, de los que **97 son CSS/HTML** (nada que traducir), **30 frases inglesas** y **0 en espanol**: estimar inflaba el pendiente Y ocultaba que 97 no eran trabajo. 27 frases reconstruidas como clave con marcadores → **0 sueltas**. + **MIGRACION DEL HISTORICO**, que era la razon real de no haberlo hecho: los nombres de actividad se GUARDAN en la hoja, asi que traducir solo el codigo dejaba los proyectos viejos en espanol **sin forma de casarlos** — **123/123 filas migradas en 1 batch** (respaldo fuera del repo, verificadas leyendo) + 25 conceptos de nomina. ⚠️ NO se migra lo que se COMPARA (el `tipo` del concepto y las banderas de `PHASES`), y se comprobo ejecutando que **el neto sale identico** con el nombre en espanol o en ingles. ⚠️ El guardian se equivoco **cuatro veces**, ninguna visible leyendolo: 10 falsos positivos por visitar los nodos INTERMEDIOS de una cadena `.replace()`, 1 mas por el ternario, **3 roturas ESCAPADAS** por comprobar presencia de subcadena cuando el literal esta en varios sitios, y **22 falsos positivos** por ignorar que el motor acepta `t("…{x}…", x=v)` — la forma NATIVA que usan los 20 modulos de PDF. La invariante que si sirve es **COMPARADOS ⊆ ESCRITOS** (al reves daba FALLO con el codigo correcto: `aporte` se escribe y `neto()` no lo compara a proposito, v346). 5/5 roturas cazadas; `verif_v438` **invertido** con su razon |
 | v452 | **Recorrido de las 24 pantallas del admin: 0 excepciones** — y **SEIS redes más** de i18n que ninguna de las siete de v450 veía: el **ternario** de display (`st.info(A if c else B)`, que no es un `Constant`), el **valor de dict en un `format_func`**, el **widget SIN `format_func`** (pinta el dato crudo), la **cabecera `<th>` escrita a mano** (a la que `tabla.cfg()` no llega) y el **valor de negocio dentro de una CELDA** (que no es una llamada a `st.*`). En pantalla salía todo a MEDIAS: `edit Datos` junto a Status/Costs, `62% avance` junto a `h worked`, `Vas 34 points behind plan` cuya tercera rama ya decía «You are», las 5 sub-secciones de Localizaciones en crudo y la columna Estado con `parcial · cobrada · vencida`. ⚠️ **Y el fallo que introduje yo, compilando**: al barrer «clave Estado en un dict» traduje CINCO sitios y **dos eran el dict que se ESCRIBE en la hoja** → habría guardado el estado en INGLÉS en Sheets, el peor fallo posible (un dato traducido deja de casar en silencio, y lo comparan 387 sitios); además el paréntesis se comió un argumento de `derive_estado`. Por eso la red 12 solo mira dicts dentro de un `pd.DataFrame`. + `_etq` metido en 2 módulos que no lo importaban (NameError que `compileall` aprueba). **Acciones ejercitadas en la INTERFAZ**: fichaje de punta a punta desde el sidebar, el editor de celda del tablero con el aviso de certificados de v219 EN VIVO (asignar → guardar → deshacer), buscador, campana y las 3 vistas del Panel. ⚠️ **Cuatro falsas alarmas descartadas midiendo** (survey_ui stale, un residuo de render a medio intercambiar, un recordatorio que no salía porque no debía, y el multiselect «sin opciones» porque usé el selector del selectbox). ⚠️ Y dos trampas nuevas: **`compileall` devolvió 0 sin compilar nada** (rutas inexistentes → OK en falso) y un bloque añadido **después del `sys.exit`** de un guardián, que no se ejecuta nunca. 16 roturas probadas, 3 cazadas solo tras dejar de comparar por subcadena. ⚠️ Y la red 8 hubo que ENSANCHARLA: solo miraba el ternario cuando era el ARGUMENTO de un `st.*`, asi que se le escapo `t("closed") if _cerrada else ":material/check_circle: abierta"` (vive dentro de una lista que se junta). La senal buscable en todo el repo es la **ASIMETRIA** — una rama por `t()` y la otra literal —, y con ella salieron 3 mas: la columna Contacto con `yes` y `falta` juntos, la campana y el historial de Pre-Start. + la **red 13**: el nombre de columna que alimenta un `line_chart`/`bar_chart` **ES la leyenda**, y ahi no llega `tabla.cfg()` — se leia «Planificado / Real» bajo una curva ya titulada en ingles; ⚠️ mi primer barrido dio **19 casos y 16 eran falsos** por atribuir al grafico todos los `_df` del MODULO, el error de ambito del medidor de v450 repetido. + las **DOS ramas del mismo if/elif** de la cotizacion, una con `t("You are at")` y la otra con «Vas» — el mismo «Vas» que ya se arreglo en `projects_ui`, o sea que se corrigio una copia y no la otra. ⚠️ **Queda ABIERTO, MEDIDO y dicho**: el literal de display dentro de una CONCATENACION no lo ve la red de POSICION (es un operando de un `BinOp`, no el argumento). Estime «~80» a ojo y contados son **127 trozos**: **97 son CSS/HTML** (nada que traducir), **30 frases ya en ingles** —la bolsa real— y **0 en espanol**, por eso hoy no se ve nada raro. Estimar era peor que no dar numero: inflaba el pendiente y ocultaba que 97 no son trabajo |
 | v451 | La **OCTAVA red** (los 7 ternarios de display) + los **6 grupos de parámetros del Survey** (`Hueco`, `Cabina`, `Puerta / umbral`, `Frontal`, `Laterales`, `Contrapeso`) — ⚠️ invisibles hasta para la red morfológica de v450, porque ninguno lleva acento ni terminación marcada — y las 7 etiquetas del recorrido de pantallas (rol del sidebar por `etiqueta()`, «hoy» del tablero, los MESES de la Ruta del día que salían mezclados con el día ya traducido, persona/personas, el toggle Cards/List y «never invoiced»). ⚠️ `_GRUPOS_PARAM` es constante de MÓDULO: el texto va en BASE y `t()` se aplica al PINTAR, o se congelaría al importar (van seis). 5 roturas |
 | v450 | **La SEXTA red: las CABECERAS DE TABLA seguían en español.** El usuario preguntó «¿ya quedó todo en inglés?» y la respuesta era **no**: `st.dataframe` pinta la CLAVE del dict, y las filas de esta app se construyen a mano, así que la cabecera es invisible para las cinco redes anteriores —que miran POSICIÓN o IDIOMA, nunca claves—. Medido: **46 cabeceras en 12 tablas**, y **mezcladas dentro de la misma tabla** (`Alerts` y `Status` en inglés al lado de `Elevador` y `Costo`), que se nota más que si estuviera todo en español. ⚠️ El arreglo es la ETIQUETA, nunca la clave: muchas se leen de vuelta (`r["Elevador"]`, `r["Peso"]`) y varias viajan a `DatosJSON`. Nuevo `core/tabla.py` aplicado a las **66 tablas**. ⚠️ **Verificado en vivo interceptando `fillText`** (el DOM no sirve, v399): `Column(label)` cambia la cabecera, deja las celdas numéricas **idénticas**, el `data_editor` devuelve las claves ORIGINALES y tolera claves que la tabla no tiene —esto último es lo que hace el arreglo robusto, porque deja de depender de mi atribución estática, que falló DOS veces mientras medía—. ⚠️ Y el propio MEDIDOR se equivocó **cuatro** veces (ámbito de módulo en vez de función; el argumento de `.get()` contado como celda; dar por traducida una columna con `column_config` **sin etiqueta**; y no ver el dict INLINE, que es la mitad de las tablas): la cuenta pasó de «15» a **90**. + **SÉPTIMA red** por MORFOLOGÍA en vez de por léxico —ninguna veía «vencida», «devuelto» ni «mantenimiento», a la vista en la campana— con la que se tradujeron **~180** textos más: 60 mensajes de backend que v445-v447 se dejaron, los avisos, los estados de inventario, los chips de cotización, los días del tablero, el correo interno y **las 31 líneas del informe ADMIN que v448 dio por cerradas**. ⚠️ Tres mapas espejo el mismo día (`{"vigente": "vigente"}`) y el **`t()` congelado por SEXTA vez**. 7 roturas |

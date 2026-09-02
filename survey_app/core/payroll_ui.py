@@ -223,8 +223,12 @@ def _generar(grupo):
         if _sol:
             _líneas = "\n".join(f"- **{s['nombre']}** already has `{s['id']}` from "
                                 f"{s['desde']} to {s['hasta']}" for s in _sol)
-            flash.error(":material/event_repeat: **Nothing was generated** because the chosen period overlaps payslips already issued — the same hours would be paid twice:\n\n" + _líneas +
-                        "\n\nAdjust the dates so they do not overlap, or void those payslips in the list below and generate again.")
+            flash.error(t(":material/event_repeat: **Nothing was generated** because the chosen "
+                          "period overlaps payslips already issued — the same hours would be paid "
+                          "twice:")
+                        + "\n\n" + _líneas + "\n\n"
+                        + t("Adjust the dates so they do not overlap, or void those payslips in "
+                            "the list below and generate again."))
         # ⚠️ v432: días en que la persona tenía ausencia pagada Y además fichó. Un día
         # vale UNA jornada, así que la ausencia paga solo lo que falta — pero el ajuste
         # se DICE: un recorte de dinero que nadie ve es la mitad del problema que

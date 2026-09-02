@@ -15,19 +15,19 @@ from datetime import date, timedelta
 
 # (nombre, dur_base_dias, dias_por_parada, peso, condicion)
 PHASES = [
-    ("Survey y replanteo",                    1, 0.0,  3, None),
-    ("Plomadas y líneas de referencia",       1, 0.2,  5, None),
-    ("Brackets / soportes",                   1, 0.4,  8, None),
-    ("Montaje de rieles (guías)",             2, 0.6, 18, None),
-    ("Ajuste de hueco / cortes",              1, 0.2,  5, "cortes"),
-    ("Ajuste de shaft (BSR < BS)",            1, 0.0,  4, "shaft"),
-    ("Cabina y contrapeso",                   3, 0.0, 15, None),
-    ("Puertas de rellano",                    1, 0.5, 14, None),
-    ("Máquina y controlador",                 2, 0.0, 10, None),
-    ("Cableado eléctrico",                    1, 0.3,  9, None),
-    ("Nivelación y ajustes",                  2, 0.0,  5, None),
-    ("Pruebas (carga, velocidad, seguridad)", 2, 0.0,  4, None),
-    ("Certificación y entrega",               1, 0.0,  2, None),
+    ("Survey and setting out",                    1, 0.0,  3, None),
+    ("Plumb lines and reference lines",       1, 0.2,  5, None),
+    ("Brackets / supports",                   1, 0.4,  8, None),
+    ("Guide rail installation",             2, 0.6, 18, None),
+    ("Shaft adjustment / cuts",              1, 0.2,  5, "cortes"),
+    ("Shaft adjustment (BSR < BS)",            1, 0.0,  4, "shaft"),
+    ("Car and counterweight",                   3, 0.0, 15, None),
+    ("Landing doors",                    1, 0.5, 14, None),
+    ("Machine and controller",                 2, 0.0, 10, None),
+    ("Electrical wiring",                    1, 0.3,  9, None),
+    ("Levelling and adjustments",                  2, 0.0,  5, None),
+    ("Testing (load, speed, safety)", 2, 0.0,  4, None),
+    ("Certification and handover",               1, 0.0,  2, None),
 ]
 
 

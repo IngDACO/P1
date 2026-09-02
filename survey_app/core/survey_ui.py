@@ -1275,10 +1275,12 @@ def render_survey_tab(_ROL, _GRUPO):
                 _proys = (projects_data.list_projects() if _ROL == "propietario"
                           else projects_data.list_projects(_GRUPO))
                 if not _proys:
-                    st.info("There are no projects yet. Create one in "
-                            + ("**👑 Administration → :material/folder: Projects**" if _ROL == "propietario"
-                               else "**:material/build: My company → :material/bar_chart: Projects → :material/add: New project**")
-                            + " and come back here to attach this survey to it.")
+                    st.info(t("There are no projects yet. Create one in {x} and come back here "
+                              "to attach this survey to it.")
+                            .replace("{x}", t("**👑 Administration → :material/folder: Projects**")
+                                     if _ROL == "propietario" else
+                                     t("**:material/build: My company → :material/bar_chart: "
+                                       "Projects → :material/add: New project**")))
                 else:
                     st.caption(t("The parameters, the matrix and the interpretations are attached to the project, and the drawing, the matrix and the client report are filed. The project's schedule and progress are NOT touched."))
                     _idmap = {f"{p.get('Nombre')} ({p.get('ID')})": p for p in _proys}

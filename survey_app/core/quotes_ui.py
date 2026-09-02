@@ -74,10 +74,12 @@ def render_cotizaciones(grupo):
 
     _venc = [c for c in cots if Q.estado_de(c) == Q.VENCIDA]
     if _venc:
-        st.warning(":material/schedule: **" + str(len(_venc)) + " expired quote(s)** with no answer: " + " · ".join(
+        st.warning(t(":material/schedule: **{n} expired quote(s)** with no answer: {x}. "
+                     "Issue a new version if it still stands.")
+                   .replace("{n}", str(len(_venc)))
+                   .replace("{x}", " · ".join(
                        f"{c.get('ClienteNombre','')} ({T.dinero(c.get('Total'), 0)})"
-                       for c in _venc[:5])
-                   + ". Issue a new version if it still stands.")
+                       for c in _venc[:5])))
 
     st.caption(t("Tap a quote to see the detail, the PDF and record the outcome."))
     df = pd.DataFrame([{
@@ -312,7 +314,9 @@ def _detalle(grupo, cid):
                 + (" → " + T.dinero(d["costo_hoy"]) if d["costo_hoy"] is not None
                    else " (" + d["motivo"] + ")")
                 for d in _des[:6])
-            st.warning(":material/sync_problem: **The catalogue changed** since you built this quote: " + _txt + ". The quote's prices do NOT change on their own.")
+            st.warning(t(":material/sync_problem: **The catalogue changed** since you built "
+                         "this quote: {x}. The quote's prices do NOT change on their own.")
+                       .replace("{x}", _txt))
             if st.button(t(":material/sync: Refresh prices from the catalogue"),
                          key="cot_upd_" + str(cid),
                          help=t("Brings today's costs across while keeping what you want to make on each line.")):
@@ -408,8 +412,11 @@ def _crear_proyecto(grupo, c, _tot):
         ns = c4.number_input(t("Stops (NS)"), min_value=0, step=1, value=0,
                              help=t("Only an installation generates the standard schedule; with NS 0 the project starts with no activities."))
         ubic = st.text_input(t("Location (optional)"))
-        st.info(":material/savings: Project budget: **"
-                + T.dinero(_tot["costo"], 0) + "** — that is your quoted **cost**, not the price to the client (" + T.dinero(_tot["subtotal"], 0) + "). That way the over-budget alert fires when you are eating into the margin, not when you are already losing money.")
+        st.info(t(":material/savings: Project budget: **{a}** — that is your quoted **cost**, "
+                  "not the price to the client ({b}). That way the over-budget alert fires when "
+                  "you are eating into the margin, not when you are already losing money.")
+                .replace("{a}", T.dinero(_tot["costo"], 0))
+                .replace("{b}", T.dinero(_tot["subtotal"], 0)))
         if st.form_submit_button(t(":material/add_circle: Create the project"),
                                  type="primary", width="stretch"):
             ok, msg = Q.aceptar_y_crear_proyecto(
@@ -427,7 +434,7 @@ def _comparacion(cid, c):
     st.markdown("---")
     comp = Q.comparacion(cid)
     if not comp:
-        st.caption("Linked to project " + str(c.get("ProyectoID")) + ".")
+        st.caption(t("Linked to project {x}.").replace("{x}", str(c.get("ProyectoID"))))
         return
     st.markdown(t("### :material/compare_arrows: Quoted vs. actual —") + " " + comp["proyecto"])
 
@@ -458,17 +465,21 @@ def _comparacion(cid, c):
         (_lbl_g, T.dinero(_g, 0) if _g is not None else "—", _pie, _cg),
     ])
     if comp["costo_proyectado"] is not None:
-        st.caption(":material/trending_up: At the current rate the job will cost "
-                   + T.dinero(comp["costo_proyectado"], 0) + " against the "
-                   + T.dinero(comp["costo"]["cotizado"], 0) + " " + t("quoted."))
+        st.caption(t(":material/trending_up: At the current rate the job will cost {a} "
+                     "against the {b} quoted.")
+                   .replace("{a}", T.dinero(comp["costo_proyectado"], 0))
+                   .replace("{b}", T.dinero(comp["costo"]["cotizado"], 0)))
     _av = comp["avance"]
     if comp["costo"]["dif"] > 0 and _av < 100:
-        st.warning(":material/warning: " + t("You are at") + " **" + T.dinero(comp["costo"]["dif"], 0)
-                   + " above** what was quoted, with the project at **"
-                   + ("%.0f" % _av) + "%**. At this rate the final profit will be lower than quoted.")
+        st.warning(t(":material/warning: You are at **{m} above** what was quoted, with the "
+                     "project at **{p}%**. At this rate the final profit will be lower than quoted.")
+                   .replace("{m}", T.dinero(comp["costo"]["dif"], 0))
+                   .replace("{p}", "%.0f" % _av))
     elif comp["costo"]["dif"] <= 0 and _av > 0:
-        st.success(":material/check_circle: " + t("You are at") + " **"
-                   + T.dinero(abs(comp["costo"]["dif"]), 0) + " below** what was quoted, with the project at " + ("%.0f" % _av) + "%.")
+        st.success(t(":material/check_circle: You are at **{m} below** what was quoted, with "
+                     "the project at **{p}%**.")
+                   .replace("{m}", T.dinero(abs(comp["costo"]["dif"]), 0))
+                   .replace("{p}", "%.0f" % _av))
     if st.button(":material/folder: " + t("Open") + " " + comp["proyecto"], key="cot_prj_open_" + str(cid)):
         from core import home_ui
         st.session_state["_prjsel_pending"] = comp["proyecto_id"]

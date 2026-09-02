@@ -427,8 +427,10 @@ def _owner_grupos():
             # es peor que no tenerlo (ver v359).
             _fuera = auth.grupos_con_libro_propio()
             if _fuera:
-                st.warning(":material/warning: With clients in separate books, the **owner's consolidated summaries** still only count the ones in the master book. Left out of the consolidation: **"
-                           + ", ".join(_fuera) + "**. Each client does see all of their own data.")
+                st.warning(t(":material/warning: With clients in separate books, the **owner's "
+                             "consolidated summaries** still only count the ones in the master book. "
+                             "Left out of the consolidation: **{x}**. Each client does see all of "
+                             "their own data.").replace("{x}", ", ".join(_fuera)))
 
     # ── Zona horaria por grupo (v173) ──
     # Define en qué hora LOCAL se graban los registros de cada grupo (cada empresa
@@ -1062,10 +1064,11 @@ def _grupo_usuarios(grupo):
         _sc = []
     if _sc:
         st.warning(
-            ":material/notifications_off: **This company's alerts do not reach "
-            f"{len(_sc)}** of their recipients: "
-            + ", ".join(f"**{x['usuario']}** ({_etq(str(x['rol']))})" for x in _sc)
-            + ". With no email and no Telegram, the alert stays inside the app. Fix it by adding an email on their profile.")
+            t(":material/notifications_off: **This company's alerts do not reach {n}** of their "
+              "recipients: {x}. With no email and no Telegram, the alert stays inside the app. "
+              "Fix it by adding an email on their profile.")
+            .replace("{n}", str(len(_sc)))
+            .replace("{x}", ", ".join(f"**{x['usuario']}** ({_etq(str(x['rol']))})" for x in _sc)))
 
     # ── Tabla CLICKEABLE → abre la ficha de esa persona ──
     _rows = [{
