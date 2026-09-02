@@ -743,6 +743,93 @@ def _owner_manuales():
                     flash.exito(f"Manual «{nm}» added: {n} fragments indexed.")
                     st.rerun()
 
+    # ⚠️ Al final y SIEMPRE: es mantenimiento del mismo Drive del que habla esta
+    # pantalla, y sin él los archivos de un proyecto borrado quedan inalcanzables
+    # (su botón vivía en la ficha del proyecto, que ya no existe).
+    _owner_drive_limpieza()
+
+
+def _owner_drive_limpieza():
+    """Mantenimiento del Drive de la app: ver qué hay y borrar lo huérfano (v456).
+
+    ⚠️ Existe porque al vaciar la demo las FILAS se borran y los archivos se quedan en
+    Drive — y el botón de borrar un documento vive en la ficha del proyecto, así que en
+    cuanto el proyecto desaparece **ya no hay forma de alcanzarlos desde la app**.
+
+    ⚠️ Solo para el PROPIETARIO y con confirmación tecleada: borra de verdad, no manda a
+    la papelera. La salvaguarda de fondo es el SCOPE `drive.file`, que impide ver nada
+    que la app no haya creado.
+    """
+    from core import drive_store as DS
+    from core import projects as P
+
+    st.markdown("---")
+    with st.expander(t(":material/cleaning_services: Drive maintenance"), expanded=False):
+        st.caption(t("What this app has stored in Drive. Only what the app itself created "
+                     "is visible here — your personal files are out of reach."))
+        if not DS.is_available():
+            st.info(t("Google Drive is not connected."))
+            return
+        if not st.button(t(":material/refresh: Scan Drive"), key="dl_scan"):
+            return
+        try:
+            inv = DS.inventario()
+        except Exception as e:
+            st.error(f"{t('Could not read Drive')}: {e}")
+            return
+
+        # ⚠️ Se compara contra los proyectos VIVOS de TODOS los grupos: una carpeta
+        # PRJ-#### de otro cliente no es huérfana aunque este propietario no la liste.
+        _vivos = {str(p.get("ID")) for p in P.list_projects(incluir_archivados=True,
+                                                            incluir_internos=True)}
+        filas, huerfanos, todo = [], [], []
+        for c in inv["carpetas"]:
+            for sub in c["subcarpetas"]:
+                _n = len(sub.get("archivos", []))
+                _hu = sub["nombre"].startswith("PRJ-") and sub["nombre"] not in _vivos
+                filas.append({"Folder": f"{c['nombre']} / {sub['nombre']}",
+                              "Files": _n,
+                              "Status": t("orphan") if _hu else t("in use")})
+                _ids = [a["id"] for a in sub.get("archivos", [])] + [sub["id"]]
+                todo += _ids
+                if _hu:
+                    huerfanos += _ids
+            if c["archivos"]:
+                filas.append({"Folder": c["nombre"], "Files": len(c["archivos"]),
+                              "Status": t("loose files")})
+                todo += [a["id"] for a in c["archivos"]]
+
+        if not filas:
+            st.success(t(":material/check_circle: Drive is already empty."))
+            return
+        st.dataframe(pd.DataFrame(filas), hide_index=True, width="stretch",
+                     column_config=tabla.cfg(None))
+        st.caption(t("{n} file(s) in total, {h} of them in folders of jobs that no longer "
+                     "exist.").replace("{n}", str(inv["total"])).replace("{h}", str(
+                         sum(1 for c in inv["carpetas"] for s in c["subcarpetas"]
+                             if s["nombre"].startswith("PRJ-") and s["nombre"] not in _vivos
+                             for _ in s.get("archivos", [])))))
+
+        _que = st.radio(t("What do you want to delete?"),
+                        ["huerfanos", "todo"], horizontal=True, key="dl_que",
+                        format_func=lambda o: {
+                            "huerfanos": t("Only folders of jobs that no longer exist"),
+                            "todo": t("Everything the app has in Drive")}.get(o, o))
+        _ids = huerfanos if _que == "huerfanos" else todo
+        st.warning(t(":material/warning: This deletes **{n} item(s) permanently** — it does "
+                     "not go to the bin and cannot be undone.")
+                   .replace("{n}", str(len(_ids))))
+        _tec = st.text_input(t("Type DELETE to confirm"), key="dl_conf")
+        if st.button(t(":material/delete_forever: Delete now"), key="dl_go", type="primary",
+                     disabled=(_tec.strip().upper() != "DELETE" or not _ids)):
+            ok, errores = DS.borrar(_ids)
+            if errores:
+                st.error(t("{n} could not be deleted:").replace("{n}", str(len(errores)))
+                         + " " + ", ".join(errores[:5]))
+            flash.exito(t(":material/check_circle: {n} item(s) deleted from Drive.")
+                        .replace("{n}", str(ok)))
+            st.rerun()
+
 
 def _owner_rieles():
     """Catálogo de rieles: referencia → medidas (para autocompletar RAIL desde el plano)."""

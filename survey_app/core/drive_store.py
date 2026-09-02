@@ -162,3 +162,83 @@ def delete(file_id: str):
         requests.delete(f"{_API}/{file_id}", headers=_headers())
     except Exception as e:
         logger.warning("drive_store: no se pudo borrar %s: %s", file_id, e)
+
+# ══════════════════════════════════════════════════════════
+#  Mantenimiento: inventario y limpieza (v456)
+# ══════════════════════════════════════════════════════════
+# ⚠️ La salvaguarda de fondo es el SCOPE: `drive.file` solo deja ver y tocar lo que
+# ESTA app creó. Aunque estas funciones recorran «todo», no pueden alcanzar ni un
+# archivo personal del usuario — por eso se puede ofrecer un borrado masivo sin que
+# sea temerario. NO cambiar el scope sin revisar esto.
+
+
+def _hijos(folder_id: str) -> list:
+    """[{id, name, mimeType, size}] de lo que cuelga de una carpeta."""
+    out, token = [], None
+    while True:
+        params = {"q": f"'{folder_id}' in parents and trashed = false",
+                  "fields": "nextPageToken, files(id,name,mimeType,size)",
+                  "spaces": "drive", "pageSize": 200}
+        if token:
+            params["pageToken"] = token
+        r = requests.get(_API, headers=_headers(), params=params)
+        r.raise_for_status()
+        d = r.json()
+        out += d.get("files", [])
+        token = d.get("nextPageToken")
+        if not token:
+            return out
+
+
+def inventario() -> dict:
+    """Qué hay HOY en el Drive de la app: carpetas de primer nivel y su contenido.
+
+    {raiz, carpetas:[{id, nombre, archivos:[...], n, bytes}], total, bytes}
+    """
+    root = _root_id()
+    carpetas = []
+    for f in _hijos(root):
+        if f.get("mimeType") == FOLDER_MIME:
+            hijos = _hijos(f["id"])
+            carpetas.append({
+                "id": f["id"], "nombre": f.get("name", ""),
+                "archivos": [h for h in hijos if h.get("mimeType") != FOLDER_MIME],
+                "subcarpetas": [h for h in hijos if h.get("mimeType") == FOLDER_MIME]})
+    # las subcarpetas de proyecto cuelgan de «COPEX Proyectos», un nivel más abajo
+    for c in carpetas:
+        for sub in c["subcarpetas"]:
+            sub["archivos"] = [h for h in _hijos(sub["id"])
+                               if h.get("mimeType") != FOLDER_MIME]
+    def _n(c):
+        return len(c["archivos"]) + sum(len(s.get("archivos", [])) for s in c["subcarpetas"])
+    for c in carpetas:
+        c["n"] = _n(c)
+    return {"raiz": root, "carpetas": carpetas,
+            "total": sum(c["n"] for c in carpetas)}
+
+
+def borrar(ids: list) -> tuple:
+    """Borra archivos o carpetas por id. Devuelve (borrados, [errores]).
+
+    ⚠️ Devuelve los errores en vez de tragárselos como `delete()`: en una limpieza
+    masiva, «no se pudo borrar 3 de 31» es justo lo que hay que saber (v323).
+    """
+    ok, errores = 0, []
+    for fid in ids:
+        try:
+            r = requests.delete(f"{_API}/{fid}", headers=_headers())
+            if r.status_code in (200, 204):
+                ok += 1
+            else:
+                errores.append(f"{fid}: HTTP {r.status_code}")
+        except Exception as e:
+            errores.append(f"{fid}: {e}")
+    if ok:
+        # las carpetas están cacheadas 10 min: sin esto, la app seguiría creyendo que
+        # existen y escribiría en un id que ya no está.
+        for fn in (_root_id, project_folder, folder):
+            try:
+                fn.clear()
+            except Exception as e:
+                logger.warning("drive_store: no se pudo limpiar la caché: %s", e)
+    return ok, errores

@@ -7312,6 +7312,57 @@ se GUARDAN en la hoja `Actividades` → migración del histórico). El informe d
 no está entero en inglés hasta que caigan esas tres, y conviene saberlo antes de
 enseñárselo a un cliente.
 
+## Vaciar la demo, y la limpieza de Drive que faltaba (v456)
+
+Petición del usuario: *«eliminar todos los proyectos, usuarios de campo y todo lo
+asociado… con el fin de dejar de ver ruido en las futuras pruebas»*, y después *«borra
+también los archivos de Drive»*.
+
+### Lo que se vació
+**23 hojas, 869 filas** del libro de `cliente1` y **8 usuarios de campo** del `Login`.
+Se conservan: las **5 cuentas de gestión** (2 propietarios + 3 administradores), la hoja
+**`Auditoria`** (decisión del usuario: es el registro de qué pasó) y **todas las
+cabeceras** — sin cabecera, la siguiente escritura cae en la columna de al lado (v323).
+Respaldo previo completo (50 hojas, 987 filas) **fuera del repo**, porque el `Login`
+lleva hashes de contraseña y emails.
+
+⚠️ **Comprobado que la app aguanta en vacío**: 17 funciones de agregado ejecutadas sin
+una sola excepción, y las pantallas explican su estado («No payslips yet…», «No clients
+yet…») en vez de quedarse en blanco.
+
+### ⚠️ EL ERROR DE ORDEN: se vació antes de borrar Drive
+Los 31 archivos de Drive quedaron **inalcanzables desde la app**: el botón de borrar un
+documento vive en la ficha de su proyecto, y los proyectos ya no existían. Hubo que
+recuperar sus `DriveID` **del respaldo** y programar una limpieza nueva.
+→ **Al vaciar un entorno, lo que vive FUERA de la hoja se borra PRIMERO**: la hoja es el
+índice, y sin índice lo de fuera se queda huérfano y sin manija.
+
+### `drive_store.inventario()` / `borrar()` + «Drive maintenance»
+Pantalla en Administración → Manuales (solo PROPIETARIO): escanea, marca qué carpetas
+`PRJ-####` ya no corresponden a ningún proyecto vivo, y borra las huérfanas o todo, con
+**DELETE tecleado** para habilitar el botón.
+- ⚠️ La salvaguarda de fondo no es la confirmación: es el **scope `drive.file`**, que
+  impide a la app ver nada que ella no haya creado. Por eso un borrado masivo aquí no
+  puede tocar un archivo personal.
+- ⚠️ `borrar()` **devuelve los errores** en vez de tragárselos como `delete()`: en una
+  limpieza masiva, «3 de 31 no se pudieron borrar» es justo lo que hay que saber (v323).
+- Y **invalida la caché de carpetas** (10 min): sin eso la app seguiría escribiendo en un
+  id que ya no existe.
+- ⚠️ Se ENGANCHA al final de `_owner_manuales`. Escribir la función y no llamarla es el
+  patrón «se escribe y nadie lo lee» de v131/v148.
+
+### ⚠️ Vaciar la demo dejó 3 guardianes en rojo, y eso NO se arregla relajándolos
+`check_report_smoke`, `verif_sim_f` y `check_f5b_smoke` dependían de que hubiera datos.
+Un guardián sin datos **no debe salir verde** (sería el OK-en-vacío de la trampa nº1) ni
+**rojo** (no hay nada roto). El runner gana una tercera categoría: **código 2 = SIN
+DATOS**, que se cuenta y se lista aparte, con el aviso de que *esas afirmaciones dejaron
+de comprobarse*. Así vaciar el entorno no deja rojos crónicos —lo que hace que una suite
+se acabe ignorando (v385)— pero tampoco disimula la pérdida de cobertura.
+
+⚠️ `check_f5b_smoke` era distinto: su chequeo del mensaje «campo desconocido» necesita un
+proyecto que EXISTA, porque si no `update_project` corta antes con «not found». Ahora
+busca uno cualquiera y, si no hay, lo dice. Ese volvió a verde.
+
 ## Se ELIMINA el modelo viejo de ganancia: el % sobre el total (v455)
 
 Petición del usuario: *«quiero que elimines del todo el viejo modelo de ganancia sobre el
@@ -8891,7 +8942,7 @@ literal, así que **no casaba nunca** — y dejó pasar «Plomo riel izquierdo»
 Es el mismo fallo de v436, cometido otra vez ese mismo día. Se vio con `cat -A`, no
 leyendo. → **Cualquier `\b`, `\n` o `\w` va por fichero escrito, nunca por heredoc.**
 
-## Versiones desplegadas (v455 = actual)
+## Versiones desplegadas (v456 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -8899,6 +8950,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v456 | **Se vacía la demo** (23 hojas, 869 filas; 8 usuarios de campo) conservando las 5 cuentas de gestion, la hoja `Auditoria` y **todas las cabeceras**; respaldo completo fuera del repo. Comprobado que la app **aguanta en vacio**: 17 agregados sin una excepcion y cada pantalla explica su estado. ⚠️ **ERROR DE ORDEN**: se vacio ANTES de borrar Drive, y los 31 archivos quedaron **inalcanzables desde la app** (el boton de borrar vive en la ficha del proyecto, que ya no existe) → hubo que sacar sus IDs del respaldo. **Lo que vive FUERA de la hoja se borra PRIMERO.** + `drive_store.inventario()/borrar()` y la pantalla **Drive maintenance** (solo propietario, con DELETE tecleado): ⚠️ la salvaguarda real es el **scope `drive.file`**, que impide ver nada que la app no haya creado. ⚠️ Y vaciar dejo **3 guardianes en rojo**: se resuelve con una tercera categoria en el runner —**codigo 2 = SIN DATOS**, ni verde (seria un OK que no comprobo nada) ni rojo (no hay nada roto)—, listada aparte con el aviso de que esas afirmaciones dejaron de comprobarse |
 | v455 | **Se elimina el modelo viejo de ganancia** (% sobre la mano de obra), a peticion del usuario: convivian DOS formas de contestar «cuanto gano con esta obra» desde v360. Queda: precio pactado si vino de cotizacion → ganancia por rubro (por hora + fija) → **la obra vale su COSTO** y se avisa de quien trabajaria sin ganancia. El `%` pasa a ser siempre CONSECUENCIA, nunca entrada, asi que desaparecen el campo «Margin on labour» y el **editor de margenes de Rentabilidad** (v321). ⚠️ **Medido antes de tocar** porque mueve dinero: 10 de 19 obras lo usaban pero **solo 4 cambiaban de cifra** (las demas tienen costo 0) → ingreso del grupo **118.233,77 → 116.757,97**, y la ejecucion posterior dio EXACTAMENTE ese numero. ⚠️ La columna `MargenMO` **NO se quita de la cabecera** (desplazaria 20 columnas y la fila es POSICIONAL — el fallo de v363); se vacia su contenido. ⚠️ Y `MargenDefault` hacia **DOS trabajos**: el modelo viejo Y el punto de partida del margen de una linea de COTIZACION (el precio al cliente). Borrarlo, como se pidio, habria dejado cada linea nueva en 0% — se conservo y se señalo, porque **una instruccion dada sin conocer un efecto colateral no autoriza ese efecto**. 3/3 roturas cazadas |
 | v454 | ⚠️ **Una obra creada desde COTIZACION nacia SIN actividades** — encontrado por accidente al verificar en pantalla el titular «You are at», que no se pintaba NUNCA. La causa no era el titular: `PRJ-0016` (un Ripout) tenia **cero actividades**, y el avance se calcula sobre ellas, asi que la obra estaba **clavada en 0% para siempre**, el campo **no tenia donde reportar** y el bloque «cotizado vs real» no podia pintar nada. La regla es de **v306** y estaba aplicada **solo en el alta manual**: el camino de aceptar una cotizacion (v354) dejaba `acts = None`. Misma forma que v419/v358/v322 — **una regla aplicada a un camino y no a su gemelo**, por eso el guardian mira LOS DOS y exige que usen el MISMO nombre. ⚠️ Llevaba desde v354 y **ningun guardian podia verlo**: compila, devuelve ok y crea el proyecto — solo aparece mirando la pantalla y preguntandose por que un texto no sale nunca. Dato reparado (0 → 1 actividad); el 35% de avance que puse para provocar la frase se devolvio a 0 |
 | v453 | **Se cierran los pendientes que eran míos** (petición: «no dejes nada pendiente»). ⚠️ Al auditar contra los DATOS en vez del documento, la lista de pendientes estaba mal **en las dos direcciones**: `FechaIngreso` figuraba abierta y llevaba **18 versiones resuelta**, y el signo de `Cut*` llevaba pendiente desde v130 sin que yo lo recordara. + **red 14, la CONCATENACION** (`st.info("a " + v + " b")`): el literal no es el argumento sino un operando de un `BinOp`, invisible para la red de POSICION. ⚠️ Y la medida corrigio mi estimacion en las dos direcciones — dije «~80» y eran **127**, de los que **97 son CSS/HTML** (nada que traducir), **30 frases inglesas** y **0 en espanol**: estimar inflaba el pendiente Y ocultaba que 97 no eran trabajo. 27 frases reconstruidas como clave con marcadores → **0 sueltas**. + **MIGRACION DEL HISTORICO**, que era la razon real de no haberlo hecho: los nombres de actividad se GUARDAN en la hoja, asi que traducir solo el codigo dejaba los proyectos viejos en espanol **sin forma de casarlos** — **123/123 filas migradas en 1 batch** (respaldo fuera del repo, verificadas leyendo) + 25 conceptos de nomina. ⚠️ NO se migra lo que se COMPARA (el `tipo` del concepto y las banderas de `PHASES`), y se comprobo ejecutando que **el neto sale identico** con el nombre en espanol o en ingles. ⚠️ El guardian se equivoco **cuatro veces**, ninguna visible leyendolo: 10 falsos positivos por visitar los nodos INTERMEDIOS de una cadena `.replace()`, 1 mas por el ternario, **3 roturas ESCAPADAS** por comprobar presencia de subcadena cuando el literal esta en varios sitios, y **22 falsos positivos** por ignorar que el motor acepta `t("…{x}…", x=v)` — la forma NATIVA que usan los 20 modulos de PDF. La invariante que si sirve es **COMPARADOS ⊆ ESCRITOS** (al reves daba FALLO con el codigo correcto: `aporte` se escribe y `neto()` no lo compara a proposito, v346). 5/5 roturas cazadas; `verif_v438` **invertido** con su razon |
