@@ -536,6 +536,15 @@ def aceptar_y_crear_proyecto(cid, nombre="", tipo="Instalación", fecha_inicio=N
     if str(tipo) == "Instalación" and _num(ns) > 0:
         sch = S.build_schedule(int(_num(ns)), ini, {})
         acts, fin = sch["activities"], sch["fecha_fin"].isoformat()
+    else:
+        # ⚠️ …pero NO con CERO actividades. El avance es Σ(peso·avance)/Σpeso sobre las
+        # actividades, así que sin ninguna la obra se queda clavada en 0% para siempre,
+        # el campo no tiene dónde reportar y el bloque «cotizado vs real» de esta misma
+        # cotización nunca puede pintar su titular (depende del avance).
+        # La regla es de v306 y el alta MANUAL sí la aplicaba; este camino se quedó sin
+        # ella — media unificación, el patrón de v419. Con UNA actividad la obra avanza
+        # 0→100 sin fingir un plan de obra que nadie ha hecho.
+        acts = [{"nombre": "Execution", "duracion": 1, "peso": 1}]
 
     ok, res = P.create_project(
         c.get("Grupo"), str(nombre).strip() or f"{c.get('ClienteNombre','')} — Nº{c.get('Numero','')}",

@@ -3137,10 +3137,19 @@ existe está a un `git log -S` de distancia.
   (BSR−BS)/2 y **los plomos quedan mal ubicados EN SILENCIO**. Se avisa en la app y en el dibujo.
 - **v123 · `di + DBP + dd = BSR` es una IDENTIDAD del modelo**, así que su valor no es como chequeo
   interno sino **como verificación de obra**: el instalador mide di y dd con cinta y comprueba el cierre.
-- ⚠️ **v130 · el signo de `Cut*` no está definido en ninguna parte** y la UI solo mostraba el número
-  crudo. La leyenda dice «diferencia contra A (mismo valor con signo que la tabla)» en vez de «material a
-  cortar»: describe lo que se sabe sin afirmar una dirección de corte. **Sigue PENDIENTE de confirmar con
-  el usuario** — es decisión de dominio y el corte es irreversible.
+- ⚠️ **v130 · el signo de `Cut*`** — la leyenda dice «diferencia contra A» en vez de «material a cortar»:
+  describe lo que se sabe sin afirmar una dirección de corte. **Sigue pendiente de decidir (el usuario lo
+  aplazó el 02/09/2026), pero el ANÁLISIS ya está hecho** y no hay que repetirlo:
+
+  | | Fórmula | Qué significa el número |
+  |---|---|---|
+  | **Caso 1** | `A = n2500·2500 + n5000·5000` · `RC = L + LFKK` · `CutRC = RC − A` | **es una DIFERENCIA** contra la pila instalada: negativo = la pila supera lo requerido → **sobra**, se cortan \|x\| mm; positivo = **falta** riel. Coincide con lo que el dibujo pinta desde v177 |
+  | **Caso 2** | `encima: LF − R*` · **`debajo: LF + R*`** | **NO es una diferencia.** En «debajo» es una **SUMA**: nunca sale negativo y CRECE con la medida de obra (`RZ=100 → 3015`, `RZ=3000 → 5915`). El signo ahí no puede significar sobra/falta |
+
+  ⚠️ **Por eso una sola leyenda para los dos casos sería FALSA en uno**, y es probablemente la razón real
+  de que v130 la dejara neutra: intentó cubrir ambos con una frase y no se puede. Lo que hace falta son
+  **dos leyendas separadas**, y la única pregunta abierta es de dominio: en el Caso 2, ¿el número es
+  directamente la longitud a cortar? El corte es irreversible, así que no se rotula sin esa confirmación.
 
 ### Piezas que se construyeron en este tramo y siguen en uso
 - **`core/plan_store.py`** (v128) — el plano ÚNICO de la sesión: `guardar()` / `actual()` / `selector()`.
@@ -7303,6 +7312,46 @@ se GUARDAN en la hoja `Actividades` → migración del histórico). El informe d
 no está entero en inglés hasta que caigan esas tres, y conviene saberlo antes de
 enseñárselo a un cliente.
 
+## ⚠️ UNA OBRA CREADA DESDE COTIZACIÓN NACÍA SIN ACTIVIDADES (v454)
+
+Salió **por accidente**, intentando verificar en pantalla el titular «You are at» de una
+cotización: no se pintaba nunca. La razón no era el titular — era que la única obra creada
+desde una cotización (`PRJ-0016`, un Ripout) había nacido con **CERO actividades**.
+
+El avance es `Σ(peso·avance)/Σpeso` sobre las actividades, así que sin ninguna:
+1. la obra se queda **clavada en 0% para siempre** (estaba así, en producción);
+2. el **campo no tiene dónde reportar** su trabajo;
+3. y el bloque «cotizado vs real» **nunca puede pintar su titular**, porque depende del
+   avance. Ese tercer síntoma fue el que llevó hasta el fallo.
+
+### La causa: media unificación, otra vez
+
+La regla es de **v306** —*«los demás tipos nacen con UNA actividad genérica, no con cero:
+sin ninguna el proyecto se quedaría clavado en 0% para siempre y el campo no tendría dónde
+reportar»*— y estaba aplicada **solo en el alta MANUAL**. El camino que crea la obra al
+**aceptar una cotización** (v354) se quedó sin ella y dejaba `acts = None` para todo lo que
+no fuera Instalación.
+
+⚠️ Es la misma forma que v419 (la ubicación unificada a medias), v358 (archivar y
+facturar) y v322 (archivar y agrupar): **una regla aplicada a un camino y no a su gemelo**.
+Por eso el guardián no mira un sitio, mira LOS DOS — y además exige que usen **el mismo
+nombre** de actividad, porque si divergieran el histórico tendría dos nombres para lo mismo
+según por dónde se creó la obra.
+
+### Lo que enseña sobre verificar
+
+Este fallo llevaba desde v354 y **ningún guardián podía verlo**: el código compila, la
+función devuelve `ok=True` y el proyecto se crea. Solo aparece **al mirar la pantalla y
+preguntarse por qué un texto no sale nunca**. Es el argumento de v452 —recorrer la app— en
+su forma más barata: la frase que no aparece era el síntoma, no el problema.
+
+### Verificación
+
+`verif_v454.py`, probado contra el código ROTO (el que había): lo caza. Y el dato dañado se
+reparó — `PRJ-0016` pasa de 0 actividades a 1. ⚠️ El **35% de avance** que le puse para
+provocar la frase se devolvió a 0: era dato mío. La **actividad se queda**, porque es la
+reparación del fallo, no parte de la prueba.
+
 ## CERRAR LOS PENDIENTES: la red 14 y la migración del histórico (v453)
 
 Petición del usuario, en dos tiempos: *«¿entonces qué hay pendiente? ¿y por qué no se ha
@@ -7389,6 +7438,20 @@ antes de creerse su cero, y probado contra **5 roturas: las caza las 5** — per
 después de las cuatro correcciones de arriba. Y `verif_v438` **caducó a propósito**: su
 afirmación se invirtió (de «siguen en español» a «están en inglés y casan con el
 histórico migrado») con la razón escrita al lado, que es lo que pide la regla v385.
+
+### ⚠️ Y por TERCERA vez, un fichero de trabajo se coló en el repo
+
+Los dos JSON de la migración (`mapa_actividades.json`, `plan_migracion.json`) se
+escribieron con `survey_app` como CWD, y `backup_survey.ps1` hace **`git add` de todo**:
+acabaron empujados a GitHub. No llevaban secretos —el mapeo de nombres y los números de
+fila— y se sacaron en el commit siguiente, pero es el mismo fallo de **v377** (el respaldo
+con hashes y emails, que entonces cazó `git status`) y de **v422** (el JSON de la foto).
+
+⚠️ La regla ya estaba escrita las dos veces y volvió a pasar, así que el problema no es
+saberla: es que **el CWD por defecto de un script lanzado desde el repo ES el repo**. Lo
+que lo evita es escribir siempre a una ruta ABSOLUTA fuera de él —como sí hicieron los
+respaldos de esta misma tanda, que fueron a `C:\Users\diego\respaldo_sheets\`— y mirar
+`git status` **ANTES** de desplegar, no después.
 
 ### ⚠️ Los dos guardianes que se pusieron rojos hicieron su trabajo
 
@@ -7684,13 +7747,19 @@ versión — en cinco sitios que cubren cinco redes distintas:
 
 Y la concatenación del avance: **`18% progress`**, que era «18% avance».
 
-⚠️ **Dos cambios NO se pudieron verificar en pantalla, y se dice como LÍMITE del banco, no
-como verificado**: la celda de estado de las tablas (red 12) y el titular `You are at` de
-la cotización. Las dos listas son `st.dataframe`, o sea **canvas**: no puedo seleccionar
-una fila (falta el `mousedown` que glide necesita) ni leer sus celdas — el interceptor de
-`fillText` **se validó a sí mismo** (capturó su `SONDA_OK`) pero glide cachea su contexto y
-no pasa por él. Quedan cubiertos por el guardián estático y por el smoke que ejecuta
-`etiqueta()`, que es una garantía más débil que haberlo visto, y por eso se dice.
+⚠️ **La red 12 SÍ se verificó, en v453, y el intento fallido de v452 enseñó por qué.**
+El interceptor de `fillText` devolvía 0 porque **se instalaba DESPUÉS de que glide
+pintara**; instalándolo ANTES y navegando dentro de la SPA (sin recargar) captura 118
+llamadas. Y como la rejilla **virtualiza**, la columna `Status` no existe hasta que entra
+en vista: hubo que mover `scrollLeft` de verdad. Resultado: **20 celdas de estado
+pintadas, todas en inglés (`collected`, `overdue`), 0 en español**.
+
+⚠️ **Lo que sigue sin poder verificarse es el titular `You are at`**, porque exige
+SELECCIONAR una fila. Medido otra vez con un clic real de la herramienta: llegan
+`pointerdown@481,583` y `click@481,583` — **sin `mousedown`**, que es lo que glide
+necesita. Es límite del banco, no defecto de la app. ⚠️ Y por poco lo reporto como
+resuelto: mi sonda decía `abrio_detalle: true` porque el regex casó con el «PDF» del
+sidebar. Mirar la pantalla después lo desmintió.
 
 → El método que funciona no es mirar la versión (v408 ya corrigió a v334 en eso), sino
 **medir el CAMBIO en dos o tres módulos distintos**: si `app.py` es nuevo y varios `core.*`
@@ -8740,7 +8809,7 @@ literal, así que **no casaba nunca** — y dejó pasar «Plomo riel izquierdo»
 Es el mismo fallo de v436, cometido otra vez ese mismo día. Se vio con `cat -A`, no
 leyendo. → **Cualquier `\b`, `\n` o `\w` va por fichero escrito, nunca por heredoc.**
 
-## Versiones desplegadas (v453 = actual)
+## Versiones desplegadas (v454 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -8748,6 +8817,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v454 | ⚠️ **Una obra creada desde COTIZACION nacia SIN actividades** — encontrado por accidente al verificar en pantalla el titular «You are at», que no se pintaba NUNCA. La causa no era el titular: `PRJ-0016` (un Ripout) tenia **cero actividades**, y el avance se calcula sobre ellas, asi que la obra estaba **clavada en 0% para siempre**, el campo **no tenia donde reportar** y el bloque «cotizado vs real» no podia pintar nada. La regla es de **v306** y estaba aplicada **solo en el alta manual**: el camino de aceptar una cotizacion (v354) dejaba `acts = None`. Misma forma que v419/v358/v322 — **una regla aplicada a un camino y no a su gemelo**, por eso el guardian mira LOS DOS y exige que usen el MISMO nombre. ⚠️ Llevaba desde v354 y **ningun guardian podia verlo**: compila, devuelve ok y crea el proyecto — solo aparece mirando la pantalla y preguntandose por que un texto no sale nunca. Dato reparado (0 → 1 actividad); el 35% de avance que puse para provocar la frase se devolvio a 0 |
 | v453 | **Se cierran los pendientes que eran míos** (petición: «no dejes nada pendiente»). ⚠️ Al auditar contra los DATOS en vez del documento, la lista de pendientes estaba mal **en las dos direcciones**: `FechaIngreso` figuraba abierta y llevaba **18 versiones resuelta**, y el signo de `Cut*` llevaba pendiente desde v130 sin que yo lo recordara. + **red 14, la CONCATENACION** (`st.info("a " + v + " b")`): el literal no es el argumento sino un operando de un `BinOp`, invisible para la red de POSICION. ⚠️ Y la medida corrigio mi estimacion en las dos direcciones — dije «~80» y eran **127**, de los que **97 son CSS/HTML** (nada que traducir), **30 frases inglesas** y **0 en espanol**: estimar inflaba el pendiente Y ocultaba que 97 no eran trabajo. 27 frases reconstruidas como clave con marcadores → **0 sueltas**. + **MIGRACION DEL HISTORICO**, que era la razon real de no haberlo hecho: los nombres de actividad se GUARDAN en la hoja, asi que traducir solo el codigo dejaba los proyectos viejos en espanol **sin forma de casarlos** — **123/123 filas migradas en 1 batch** (respaldo fuera del repo, verificadas leyendo) + 25 conceptos de nomina. ⚠️ NO se migra lo que se COMPARA (el `tipo` del concepto y las banderas de `PHASES`), y se comprobo ejecutando que **el neto sale identico** con el nombre en espanol o en ingles. ⚠️ El guardian se equivoco **cuatro veces**, ninguna visible leyendolo: 10 falsos positivos por visitar los nodos INTERMEDIOS de una cadena `.replace()`, 1 mas por el ternario, **3 roturas ESCAPADAS** por comprobar presencia de subcadena cuando el literal esta en varios sitios, y **22 falsos positivos** por ignorar que el motor acepta `t("…{x}…", x=v)` — la forma NATIVA que usan los 20 modulos de PDF. La invariante que si sirve es **COMPARADOS ⊆ ESCRITOS** (al reves daba FALLO con el codigo correcto: `aporte` se escribe y `neto()` no lo compara a proposito, v346). 5/5 roturas cazadas; `verif_v438` **invertido** con su razon |
 | v452 | **Recorrido de las 24 pantallas del admin: 0 excepciones** — y **SEIS redes más** de i18n que ninguna de las siete de v450 veía: el **ternario** de display (`st.info(A if c else B)`, que no es un `Constant`), el **valor de dict en un `format_func`**, el **widget SIN `format_func`** (pinta el dato crudo), la **cabecera `<th>` escrita a mano** (a la que `tabla.cfg()` no llega) y el **valor de negocio dentro de una CELDA** (que no es una llamada a `st.*`). En pantalla salía todo a MEDIAS: `edit Datos` junto a Status/Costs, `62% avance` junto a `h worked`, `Vas 34 points behind plan` cuya tercera rama ya decía «You are», las 5 sub-secciones de Localizaciones en crudo y la columna Estado con `parcial · cobrada · vencida`. ⚠️ **Y el fallo que introduje yo, compilando**: al barrer «clave Estado en un dict» traduje CINCO sitios y **dos eran el dict que se ESCRIBE en la hoja** → habría guardado el estado en INGLÉS en Sheets, el peor fallo posible (un dato traducido deja de casar en silencio, y lo comparan 387 sitios); además el paréntesis se comió un argumento de `derive_estado`. Por eso la red 12 solo mira dicts dentro de un `pd.DataFrame`. + `_etq` metido en 2 módulos que no lo importaban (NameError que `compileall` aprueba). **Acciones ejercitadas en la INTERFAZ**: fichaje de punta a punta desde el sidebar, el editor de celda del tablero con el aviso de certificados de v219 EN VIVO (asignar → guardar → deshacer), buscador, campana y las 3 vistas del Panel. ⚠️ **Cuatro falsas alarmas descartadas midiendo** (survey_ui stale, un residuo de render a medio intercambiar, un recordatorio que no salía porque no debía, y el multiselect «sin opciones» porque usé el selector del selectbox). ⚠️ Y dos trampas nuevas: **`compileall` devolvió 0 sin compilar nada** (rutas inexistentes → OK en falso) y un bloque añadido **después del `sys.exit`** de un guardián, que no se ejecuta nunca. 16 roturas probadas, 3 cazadas solo tras dejar de comparar por subcadena. ⚠️ Y la red 8 hubo que ENSANCHARLA: solo miraba el ternario cuando era el ARGUMENTO de un `st.*`, asi que se le escapo `t("closed") if _cerrada else ":material/check_circle: abierta"` (vive dentro de una lista que se junta). La senal buscable en todo el repo es la **ASIMETRIA** — una rama por `t()` y la otra literal —, y con ella salieron 3 mas: la columna Contacto con `yes` y `falta` juntos, la campana y el historial de Pre-Start. + la **red 13**: el nombre de columna que alimenta un `line_chart`/`bar_chart` **ES la leyenda**, y ahi no llega `tabla.cfg()` — se leia «Planificado / Real» bajo una curva ya titulada en ingles; ⚠️ mi primer barrido dio **19 casos y 16 eran falsos** por atribuir al grafico todos los `_df` del MODULO, el error de ambito del medidor de v450 repetido. + las **DOS ramas del mismo if/elif** de la cotizacion, una con `t("You are at")` y la otra con «Vas» — el mismo «Vas» que ya se arreglo en `projects_ui`, o sea que se corrigio una copia y no la otra. ⚠️ **Queda ABIERTO, MEDIDO y dicho**: el literal de display dentro de una CONCATENACION no lo ve la red de POSICION (es un operando de un `BinOp`, no el argumento). Estime «~80» a ojo y contados son **127 trozos**: **97 son CSS/HTML** (nada que traducir), **30 frases ya en ingles** —la bolsa real— y **0 en espanol**, por eso hoy no se ve nada raro. Estimar era peor que no dar numero: inflaba el pendiente y ocultaba que 97 no son trabajo |
 | v451 | La **OCTAVA red** (los 7 ternarios de display) + los **6 grupos de parámetros del Survey** (`Hueco`, `Cabina`, `Puerta / umbral`, `Frontal`, `Laterales`, `Contrapeso`) — ⚠️ invisibles hasta para la red morfológica de v450, porque ninguno lleva acento ni terminación marcada — y las 7 etiquetas del recorrido de pantallas (rol del sidebar por `etiqueta()`, «hoy» del tablero, los MESES de la Ruta del día que salían mezclados con el día ya traducido, persona/personas, el toggle Cards/List y «never invoiced»). ⚠️ `_GRUPOS_PARAM` es constante de MÓDULO: el texto va en BASE y `t()` se aplica al PINTAR, o se congelaría al importar (van seis). 5 roturas |
