@@ -467,8 +467,12 @@ def _owner_grupos():
 
     # ── Margen de facturación por defecto por grupo (v257) ──
     if grupos:
-        with st.expander(t("Default invoicing margin"), icon=":material/trending_up:"):
-            st.caption(t("Profit (%) on the labour charged to the client. Each project can override it (✏️ Data). It is the basis of the sell rate and of profitability."))
+        with st.expander(t("Starting margin for quote lines"), icon=":material/trending_up:"):
+            # ⚠️ Ya NO es «el margen de las obras»: el % sobre el total se eliminó. La
+            # ganancia va por RUBRO, y esto es solo el punto de partida de una línea.
+            st.caption(t("Only the starting point when you add a catalogue item to a quote — the "
+                         "profit is set line by line, on each item charged to the client. What a "
+                         "job earns is set on the job itself: per hour, or a fixed amount."))
             gmsel = ui.elegir(t("Company"), [g["Grupo"] for g in grupos], key="mg_g_sel",
                               vacio="— elige un grupo —")
             if gmsel:
@@ -478,8 +482,15 @@ def _owner_grupos():
                     except Exception:
                         return 0.0
                 _curm = next((_f_mg(g.get("MargenDefault")) for g in grupos if g["Grupo"] == gmsel), 0.0)
-                mnew = st.number_input(t("Default margin (%)"), min_value=0.0, max_value=500.0,
-                                       step=1.0, value=_curm, key="mg_val")
+                # ⚠️ Ya NO es «el margen de las obras»: el modelo de % sobre la mano de
+                # obra se retiró. Esto solo da el punto de PARTIDA de una línea nueva de
+                # cotización, donde lo que se teclea es la ganancia en dinero (v355).
+                mnew = st.number_input(
+                    t("Starting margin for a new quote line (%)"),
+                    min_value=0.0, max_value=500.0, step=1.0, value=_curm, key="mg_val",
+                    help=t("Only the starting point when you add a catalogue item to a quote. "
+                           "What a job earns is set on the job itself, per hour or as a fixed "
+                           "amount."))
                 if st.button(t(":material/save: Save margin"), key="mg_save"):
                     ok, msg = auth.set_group_margin_default(gmsel, mnew)
                     (flash.exito if ok else st.error)(msg)

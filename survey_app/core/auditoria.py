@@ -48,7 +48,10 @@ HEADERS = ["ID", "Grupo", "Fecha", "Usuario", "Entidad", "EntidadID",
 # contra la hoja real, no ningún test. `verif_v344.py` lo comprueba desde ahora.
 CAMPOS_CLAVE = {
     # proyecto
-    "MargenMO", "Presupuesto", "Avance", "Estado", "EstadoManual",
+    # ⚠️ "MargenMO" salió de aquí al retirar el modelo viejo: ya no se escribe desde
+    # ningún sitio, así que vigilarlo sería ruido. Lo que sí mueve dinero hoy es la
+    # ganancia por rubro, que ya está más abajo.
+    "Presupuesto", "Avance", "Estado", "EstadoManual",
     "FechaInicio", "FechaFinEst", "Cliente", "ClienteID", "Nombre",
     "CampoAsignados", "AgrupacionID", "PesoEnAgrupacion",
     # persona. ⚠️ `FechaIngreso` (v433) decide el año de vacaciones de esa persona,

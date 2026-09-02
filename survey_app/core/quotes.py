@@ -16,9 +16,10 @@ que se pactó, no lo que hay hoy. Es el mismo principio del historial de inventa
 ## El margen manda aquí
 
 Decisión del usuario: el margen se pone **línea a línea** (a un cliente le cobras 20% y a
-otro 35% por lo mismo) y al aceptar la cotización el margen efectivo se escribe como
-`MargenMO` del proyecto. Una sola fuente de verdad, en vez de dos números que digan cosas
-distintas del mismo trabajo.
+otro 35% por lo mismo). ⚠️ Al aceptar, el margen efectivo YA NO se copia al proyecto: el
+ingreso de una obra cotizada es el **precio pactado**, que `finance.project_revenue` lee de
+esta misma cotización (v370). Guardar además un % sería un segundo número diciendo lo
+mismo, y bastaría editar uno para que dejaran de coincidir.
 
 ## Estados
 
@@ -261,7 +262,8 @@ def totales(lineas: list, impuesto_pct=0.0) -> dict:
     horas = round(sum(_num(l.get("horas")) for l in lineas or []), 2)
     return {"costo": costo, "subtotal": sub, "impuesto": imp,
             "total": round(sub + imp, 2), "ganancia": round(sub - costo, 2),
-            # margen efectivo = el que se escribirá como MargenMO al aceptar
+            # margen efectivo de la cotización: es de LECTURA (el precio al cliente sale
+            # de la ganancia por línea, v355). No se copia a ningún sitio.
             "margen_pct": round(100.0 * (sub - costo) / costo, 2) if costo > 0 else 0.0,
             "horas": horas}
 
@@ -552,7 +554,10 @@ def aceptar_y_crear_proyecto(cid, nombre="", tipo="Instalación", fecha_inicio=N
         ubicacion=str(ubicacion), ns=int(_num(ns)), fecha_inicio=ini.isoformat(),
         fecha_fin_est=fin, activities=acts,
         presupuesto=str(_tot["costo"]),          # ⚠️ el COSTO (ver arriba)
-        margen_mo=str(_tot["margen_pct"]),       # decisión del usuario: el de la cotización manda
+        # ⚠️ Aquí se escribía `margen_mo` (el modelo viejo). Ya no: el ingreso de una obra
+        # cotizada es el PRECIO PACTADO (v370), que `project_revenue` lee de la propia
+        # cotización. Guardar además un % sería un segundo número diciendo lo mismo, y de
+        # los dos saldría una cifra distinta en cuanto uno se editara.
         tipo=str(tipo), creado_por=creado_por)
     if not ok:
         return False, f"{t('Could not create the project')}: {res}"

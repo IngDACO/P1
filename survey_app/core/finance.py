@@ -1,14 +1,26 @@
-"""Finanzas — Fase 1: margen y rentabilidad.
+"""Finanzas — el lado del INGRESO, sobre el lado del COSTO que ya existe.
 
-Cierra el lado que faltaba (INGRESO) sobre el lado del COSTO que ya existe. La
-'tarifa de venta' de la mano de obra = costo × (1 + margen%). El margen sale del
-proyecto (`Proyectos.MargenMO`) o, si está vacío, del default del grupo
-(`Grupos.MargenDefault`, lo fija el propietario). Los materiales se facturan a
-costo por defecto (el margen sobre materiales queda para una fase futura).
+⚠️ **La ganancia NO es un porcentaje sobre el total.** El modelo de `%` sobre la mano
+de obra (`Proyectos.MargenMO` / `Grupos.MargenDefault`) se ELIMINÓ a petición del
+usuario: quedaba de la Fase 1 y convivía con el modelo por RUBRO de v360, así que
+había dos formas de contestar «cuánto gano con esta obra».
 
-Reusa `expenses.labor_cost` / `expenses.project_expenses` / `expenses.group_expenses`
-(el lado del costo) — aquí solo se aplica el margen y se compara contra el costo.
-Es una estimación de facturación total; las facturas reales llegan en la Fase 2.
+El ingreso se resuelve en **tres** casos, y en este orden:
+
+1. **Cotizada** (v370) — el ingreso es el **precio que el cliente firmó**. Es un hecho,
+   no una estimación: adivinarlo desde el costo sería contradecir un dato que ya se
+   tiene.
+2. **Por rubro** (v360) — cada persona aporta `horas × su ganancia/hora` en esta obra,
+   más la **ganancia fija** de la obra (v373), que cubre el delivery y el suministro,
+   donde la mano de obra no es el valor.
+3. **Sin nada de lo anterior** — la obra vale su **costo**, y se AVISA de quién
+   trabajaría sin ganancia. No se inventa un margen que nadie ha decidido.
+
+En los tres casos los **materiales van a costo**, y el `%` es **consecuencia**, nunca
+una entrada.
+
+Reusa `expenses.labor_cost` / `project_expenses` / `group_expenses` (el lado del costo).
+Es una estimación de facturación; las facturas reales son `invoices`.
 """
 import logging
 
@@ -22,14 +34,6 @@ from core.i18n import t
 logger = logging.getLogger(__name__)
 
 
-def project_margin(pid: str, grupo: str, prj: dict = None) -> float:
-    """Margen % efectivo del proyecto: el suyo si está puesto, si no el default del grupo."""
-    if prj is None:
-        prj = P.get_project(pid) or {}
-    raw = str(prj.get("MargenMO", "")).strip()
-    if raw != "":
-        return _num(raw)
-    return auth.group_margin_default(grupo)
 
 
 def project_revenue(pid: str, grupo: str, prj: dict = None) -> dict:
@@ -117,25 +121,27 @@ def project_revenue(pid: str, grupo: str, prj: dict = None) -> dict:
                 "sin_ganancia": [d["usuario"] for d in detalle
                                  if d["ganancia_hora"] <= 0 and d["horas"] > 0]}
 
-    # ── Modelo viejo (respaldo): % sobre la mano de obra ──────────
-    # ⚠️ Se conserva para que las obras anteriores a v360 NO cambien de cifra sin
-    # que nadie lo pida. En cuanto se le ponga ganancia/hora, esa obra pasa al nuevo.
-    mo  = E.labor_cost(pid, grupo)
-    m   = project_margin(pid, grupo, prj)
-    mo_fact = round(mo * (1 + m / 100.0), 2)
-    costo   = round(mo + mat, 2)
-    # ⚠️ La ganancia fija se suma también aquí: el caso que la motiva —un delivery sin
-    # horas— vive justo en este modelo, donde `mo × (1+m)` no tiene sobre qué aplicarse
-    # y el ingreso salía igual al costo. Con fija = 0 el resultado es IDÉNTICO al de
-    # antes de v373, así que ninguna obra existente se mueve.
-    ingreso = round(mo_fact + mat + fija, 2)
+    # ── Sin ganancia definida: la obra vale su COSTO ──────────────
+    # ⚠️ Aquí vivía el MODELO VIEJO (`mo × (1 + MargenMO/100)`), eliminado a petición
+    # del usuario: la ganancia ya no es un % sobre el total, es un IMPORTE por rubro
+    # (v360) — por hora de cada persona, o fija por obra (v373).
+    #
+    # Sin ganancia/hora, sin cotización y sin fija, el ingreso estimado es el costo:
+    # no se inventa un margen que nadie ha decidido. `sin_ganancia` lo AVISA con los
+    # nombres, que es el patrón de v346 — un cero silencioso no se nota hasta ver el
+    # total.
+    mo    = E.labor_cost(pid, grupo)
+    costo = round(mo + mat, 2)
+    _lb   = E.labor_breakdown(pid, grupo)
+    _con_horas = [str(i.get("usuario", "")) for i in _lb.get("items", [])
+                  if _num(i.get("horas")) > 0]
     return {"costo_mo": round(mo, 2), "materiales": round(mat, 2), "costo": costo,
-            "margen_pct": m, "mo_facturable": mo_fact, "ingreso": ingreso,
-            "margen_total_pct": round(100.0 * (ingreso - costo) / costo, 2) if costo > 0 else 0.0,
-            "ganancia": round(ingreso - costo, 2),
-            "ganancia_fija": round(fija, 2),
-            "modelo": "margen+fija" if fija > 0 else "margen",
-            "por_persona": [], "sin_ganancia": []}
+            "margen_pct": 0.0, "mo_facturable": round(mo, 2),
+            "ingreso": round(costo + fija, 2),
+            "margen_total_pct": round(100.0 * fija / costo, 2) if costo > 0 else 0.0,
+            "ganancia": round(fija, 2), "ganancia_fija": round(fija, 2),
+            "modelo": "fija" if fija > 0 else "a_costo",
+            "por_persona": [], "sin_ganancia": _con_horas}
 
 
 def group_profitability(grupo: str) -> dict:

@@ -1893,7 +1893,8 @@ def _historial_section(pid: str):
     if not filas:
         return
     with st.expander(f":material/history: Change history ({len(filas)})"):
-        st.caption(t("Changes that move money or the job's status are recorded (margin, budget, dates, progress, client, staff)."))
+        st.caption(t("Changes that move money or the job's status are recorded (profit per hour, "
+                 "fixed profit, budget, dates, progress, client, staff)."))
         for r in filas:
             _quien = str(r.get("Usuario", "") or "—")
             st.markdown(f"**{r.get('Fecha','')}** · {_quien}")
@@ -2327,14 +2328,6 @@ def _detalle_proyecto(pid: str, grupo: str = None):
                                    if str(prj.get("EstadoManual", "")) in P.ESTADOS_MANUAL else 0)
             presup  = st.number_input(t(":material/payments: Project budget (0 = no budget)"),
                                       min_value=0.0, step=100.0, value=P._num(prj.get("Presupuesto")))
-            _defm = auth.group_margin_default(grupo)
-            _m0 = (P._num(prj.get("MargenMO")) if str(prj.get("MargenMO", "")).strip() != ""
-                   else float(_defm))
-            margen  = st.number_input(
-                t(":material/trending_up: Margin on labour (%) — what you charge the client"),
-                min_value=0.0, max_value=500.0, step=1.0, value=_m0,
-                help=f"Labour sell price = cost × (1+margin). Company default: {_defm:.0f}% "
-                     f"(the owner sets it in Companies).")
 
             if st.form_submit_button(t(":material/save: Save changes"), width="stretch"):
                 # Validar sin `st.stop()`: pararia el render de TODO lo que va
@@ -2373,7 +2366,6 @@ def _detalle_proyecto(pid: str, grupo: str = None):
                         "Estado": P.derive_estado(avance, est_man,
                                                   "" if tipo == _TIPO_VACIO else tipo),
                         "Instrucciones": instr, "InduccionLinks": ind, "Presupuesto": presup,
-                        "MargenMO": margen,
                         "Lat": "" if _plat is None else _plat,
                         "Lng": "" if _plng is None else _plng,
                         "CertsReq": ";".join(_ecerts),
@@ -3354,10 +3346,13 @@ def _ganancia_section(pid, grupo):
                 st.warning(t(":material/info: This job has a fixed profit of {x} that is **not "
                              "used**: the price the client signed wins. Set it to 0 to remove the "
                              "noise.").replace("{x}", _T.dinero(rev["fija_ignorada"])))
-        elif _modelo.startswith("margen"):
-            st.info(":material/info: This job's labour still uses the **old model**: a " + f"**{rev['margen_pct']:g}%** on top of it. As soon as you "
-                    "set what you want to earn per hour here, it moves to the new model "
-                    "(an amount per line) and the % works itself out.")
+        elif _modelo == "a_costo":
+            # ⚠️ Aquí iba el aviso del MODELO VIEJO (un % sobre la mano de obra),
+            # eliminado a petición del usuario. Ahora, sin ganancia definida, la obra
+            # vale su costo — y eso hay que DECIRLO, no dejarlo en un cero silencioso.
+            st.warning(t(":material/info: This job has **no profit set**, so it would be "
+                         "invoiced at cost. Set what you want to earn per hour below, or a "
+                         "fixed profit for the whole job."))
         else:
             st.success(t(":material/check_circle: This job already uses the per-line model. The "
                          "{m}% margin follows from it; it is not something you typed.")
@@ -3419,10 +3414,12 @@ def _editor_ganancia_hora(pid, _items, _gh, _T):
         (flash.exito if ok else st.error)(msg)
         if ok:
             st.rerun()
-    # ⚠️ La vuelta atrás: si migraste una obra por error, se puede deshacer (v346).
-    if _gh and _c2.button(t(":material/undo: Back to the %"), key=f"gh_undo_{pid}",
+    # ⚠️ La vuelta atrás ya NO es «volver al %» —ese modelo se eliminó—: es dejar la
+    # obra SIN ganancia por hora, o sea valiendo su costo, que es lo que la app avisa.
+    if _gh and _c2.button(t(":material/undo: Clear the hourly profits"), key=f"gh_undo_{pid}",
                           width="stretch",
-                          help=t("Removes the hourly profits and goes back to the margin %.")):
+                          help=t("Removes what you set per hour. The job then goes back to being "
+                                 "worth its cost until you set a profit again.")):
         ok, msg = P.set_ganancia_hora(pid, {})
         (flash.exito if ok else st.error)(msg)
         if ok:
@@ -3768,7 +3765,9 @@ def render_pnl(grupo: str):
     """
     from core import finance as F
     from core import theme as T
-    st.caption(t("What was actually invoiced minus the costs (payroll + purchases) = profit. «Profitability» is the estimate from the margin; this is what actually happened."))
+    st.caption(t("What was actually invoiced minus the costs (payroll + purchases) = profit. "
+                 "«Profitability» is the estimate from the profit set on each item; this is what "
+                 "actually happened."))
 
     # ── Periodo ──────────────────────────────────────────────────
     _hoy = clock.today(grupo)
@@ -4069,7 +4068,10 @@ def render_group_profitability(grupo: str):
     from core import finance as F
     from core import invoices as INV
     from core import theme as T
-    st.caption(t("What each job cost (hours charged × rate + materials) against what you would charge (labour × (1 + margin) + materials). The margins are edited right here, and you can see how much of that estimate is already invoiced."))
+    st.caption(t("What each job cost (hours charged × rate + materials) against what you would "
+                 "charge: the agreed price if it came from a quote, or cost + the profit set on "
+                 "each item — per hour for each person, plus any fixed profit. You can also see "
+                 "how much of that estimate is already invoiced."))
     data = F.group_profitability(grupo)
     if not data["rows"]:
         st.info(t(":material/info: No projects with recorded cost yet (hours or purchases)."))
@@ -4092,14 +4094,15 @@ def render_group_profitability(grupo: str):
     _t_fac = round(sum(r["facturado"] for r in rows), 2)
     _t_pdt = round(sum(r["por_facturar"] for r in rows), 2)
 
-    # ⚠️ v313: con margen 0% el "ingreso estimado" es IGUAL al costo, así que la
-    # ganancia estimada sale 0 y la pantalla parecía rota. No lo está: es que no hay
-    # margen puesto. v321: además se pueden poner AQUÍ, sin salir de la pantalla.
+    # ⚠️ v313: sin ganancia definida el "ingreso estimado" es IGUAL al costo, así que la
+    # ganancia sale 0 y la pantalla parece rota. No lo está: es que nadie ha dicho cuánto
+    # quiere ganar. Se avisa con nombres y se manda a la obra, que es donde se pone —
+    # ya no se teclea aquí, porque el % dejó de ser una entrada.
     _m0 = [r["nombre"] for r in rows if P._num(r.get("margen")) <= 0]
     if _m0:
-        st.warning(t(":material/percent: **{n} job(s) at 0% margin**, so their estimated "
+        st.warning(t(":material/percent: **{n} job(s) with no profit set**, so their estimated "
                      "revenue is exactly their cost and the profit comes out at $0: {x}. "
-                     "Edit them in the table below.")
+                     "Set it on each job, per hour or as a fixed amount.")
                    .replace("{n}", str(len(_m0)))
                    .replace("{x}", ", ".join(_m0[:6]) + ("…" if len(_m0) > 6 else "")))
 
@@ -4129,51 +4132,27 @@ def render_group_profitability(grupo: str):
         "Facturado":        round(r["facturado"], 0),
         "To invoice":     round(r["por_facturar"], 0),
     } for r in _orden])
-    _ed = st.data_editor(
-        _df, width="stretch", hide_index=True, key="rent_ed",
-        disabled=["Proyecto", "Costo", "Ingreso estimado", "Ganancia",
-                  "Facturado", "To invoice"],
+    # ⚠️ Antes esto era un `data_editor` para teclear el margen % de cada obra (v321).
+    # Se retira con el modelo viejo: el `%` ya no es una ENTRADA sino la consecuencia de
+    # la ganancia por rubro, así que editarlo aquí volvería a crear dos formas de
+    # contestar «cuánto gano» — que es justo lo que este cambio elimina. La ganancia se
+    # pone en la obra (por hora o fija) y el % se deriva.
+    st.dataframe(
+        _df, width="stretch", hide_index=True,
         column_config=tabla.cfg(None, {
             "Costo":            st.column_config.NumberColumn(format="$%,d"),
-            "Margen %":         st.column_config.NumberColumn(
-                                    t("Margin %"), format="%.1f%%", min_value=0.0,
-                                    max_value=500.0, step=1.0,
-                                    help=t("Editable: change it and press Save.")),
+            "Margen %":         st.column_config.NumberColumn(t("Margin %"), format="%.1f%%"),
             "Ingreso estimado": st.column_config.NumberColumn(format="$%,d"),
             "Ganancia":         st.column_config.NumberColumn(format="$%,d"),
             "Facturado":        st.column_config.NumberColumn(format="$%,d"),
             "To invoice":     st.column_config.NumberColumn(format="$%,d"),
         }))
-    # Solo lo que CAMBIO de verdad (comparando contra el valor original de cada fila)
-    _cambios = {}
-    for _i, r in enumerate(_orden):
-        try:
-            _nuevo = float(_ed.iloc[_i]["Margen %"])
-        except Exception:
-            continue
-        if abs(_nuevo - float(r["margen"])) > 0.001:
-            _cambios[r["id"]] = _nuevo
-    if _cambios:
-        st.info(f":material/edit: {len(_cambios)} margin(s) to save.")
-        # ⚠️ Es UNA escritura por proyecto cambiado. Con 6 obras da igual; si algún día
-        # son 60 y se cambian todas de golpe, hay que agrupar (patrón del 429 de v80).
-        if st.button(t(":material/save: Save margins"), type="primary", key="rent_save"):
-            _ok = 0
-            for _pid, _m in _cambios.items():
-                try:
-                    P.update_project(_pid, {"MargenMO": str(_m)})
-                    _ok += 1
-                except Exception as e:
-                    st.error(f"{_pid}: {e}")
-            flash.exito(f":material/check_circle: {_ok} margin(s) saved.")
-            st.session_state.pop("rent_ed", None)
-            st.rerun()
 
     if _sin:
         with st.expander(f":material/visibility_off: {len(_sin)} job(s) with no movement "
                          "(no cost and no invoicing)"):
-            st.caption(", ".join(r["nombre"] for r in _sin)
-                       + ". They add nothing to profitability yet; their margin is edited on the project.")
+            st.caption(t("{x}. They add nothing to profitability yet.")
+                       .replace("{x}", ", ".join(r["nombre"] for r in _sin)))
 
 
 def _partir_gasto(ge: dict) -> dict:

@@ -191,11 +191,16 @@ def set_group_timezone(grupo: str, zona: str) -> tuple:
 
 
 def group_margin_default(grupo: str) -> float:
-    """Margen (%) por defecto del grupo sobre la mano de obra (`Grupos.MargenDefault`).
+    """Margen (%) con el que ARRANCA una línea nueva de cotización (`Grupos.MargenDefault`).
 
-    Es la base de la 'tarifa de venta': lo que se cobra al cliente por la MO =
-    costo × (1 + margen%). Cada proyecto puede sobrescribirlo (`Proyectos.MargenMO`).
-    Lectura cacheada (`_group_records`). 0.0 si no está configurado."""
+    ⚠️ Este valor YA NO tiene nada que ver con la ganancia de un proyecto: el modelo de
+    «% sobre la mano de obra» se eliminó, y hoy la ganancia de una obra es un IMPORTE por
+    rubro (por hora de cada persona, o fija por obra).
+
+    Lo único que hace ahora es dar un punto de partida al añadir un artículo del catálogo
+    a una cotización (`quotes_ui`), donde lo que se teclea es la GANANCIA en dinero y el %
+    se deriva (v355). Es el precio AL CLIENTE, no lo que se estima ganar en la obra.
+    """
     g = (grupo or "").strip().lower()
     if not g:
         return 0.0

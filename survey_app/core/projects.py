@@ -46,17 +46,20 @@ PROJECTS_HEADERS = [
     # v255: enlace robusto al cliente (CLI-#### de la hoja Clientes). El campo `Cliente`
     # (texto) se conserva; el match usa ID-primero, nombre-de-respaldo (como el fichaje, v145).
     "ClienteID",
-    # v257: margen (%) sobre la mano de obra para facturar al cliente. Vacío = usa el
-    # default del grupo (Grupos.MargenDefault). Base de la 'tarifa de venta' (Fase 1 finanzas).
+    # ⚠️ COLUMNA MUERTA. Era el margen (%) sobre la mano de obra del modelo viejo,
+    # RETIRADO: la ganancia es hoy un IMPORTE por rubro (GananciaHoraJSON / GananciaFija).
+    # Se conserva en la cabecera a propósito: quitarla desplazaría las 20 columnas
+    # siguientes y, como la fila es POSICIONAL, cada dato caería en la de al lado.
+    # Se escribe vacía y no la lee nadie.
     "MargenMO",
     # v306: qué clase de trabajo es. NO es cosmético: solo la instalación tiene el
     # cronograma estándar de 11 actividades que escalan con el NS, y ese plan alimenta
     # avance, curva S, SPI y el indicador «En retraso». Los proyectos anteriores a v306
     # lo tienen VACÍO a propósito (no se tocó la hoja): se muestran como "sin tipo".
     "Tipo",
-    # v360: {usuario: ganancia $/h} de ESTE proyecto. La ganancia deja de ser
-    # un % y pasa a ser un IMPORTE por rubro. VACÍO = sigue el modelo viejo
-    # (MargenMO), para que ninguna obra cambie de cifra sin pedirlo.
+    # v360: {usuario: ganancia $/h} de ESTE proyecto. La ganancia es un IMPORTE por
+    # rubro, no un %. VACÍO = la obra vale su COSTO (y la app avisa de quién trabajaría
+    # sin ganancia); antes caía al modelo viejo del %, que se retiró.
     "GananciaHoraJSON",
     # v373: ganancia FIJA de la obra, en dinero. Cubre el hueco que v370 dejó abierto:
     # una obra cuyo valor NO está en las horas (un delivery, un suministro) y que NO
@@ -397,7 +400,7 @@ def create_project(grupo, nombre, cliente="", ubicacion="", modelo="", ns=0,
                    params=None, matriz=None, interp=None, activities=None,
                    creado_por="", agrupacion_id="", peso_agrupacion=0,
                    instrucciones="", induccion_links="", presupuesto="",
-                   lat="", lng="", certs_req="", cliente_id="", margen_mo="",
+                   lat="", lng="", certs_req="", cliente_id="",
                    tipo="") -> tuple:
     """Crea un proyecto (fila en Proyectos + filas en Actividades). Devuelve (ok, id|error)."""
     pws, err = _projects_ws()
@@ -425,12 +428,16 @@ def create_project(grupo, nombre, cliente="", ubicacion="", modelo="", ns=0,
         str(lat or ""), str(lng or ""),     # v194: coordenadas fijadas al crear (pin en el mapa)
         str(certs_req or ""),               # v219: certificados requeridos por el proyecto
         str(cliente_id or ""),              # v255: enlace robusto a la ficha de cliente
-        str(margen_mo or ""),               # v257: margen % sobre MO (vacío = default del grupo)
+        "",                                 # MargenMO: columna MUERTA (modelo viejo, retirado).
+        #                                     ⚠️ Se deja en HEADERS a propósito: quitarla
+        #                                     DESPLAZARÍA las 20 columnas siguientes y cada
+        #                                     dato caería en la de al lado (la fila es
+        #                                     POSICIONAL). Se escribe vacía y nadie la lee.
         str(tipo or ""),                    # v306: instalación / delivery / ripout / otro
         "",                                 # v360: GananciaHoraJSON — una obra NACE sin ganancias
-        #                                     por hora puestas, así que arranca en el modelo viejo
-        #                                     (MargenMO) y se migra cuando alguien decida cuánto
-        #                                     ganar con cada persona. ⚠️ v363: esta línea FALTABA
+        #                                     por hora, así que arranca valiendo su COSTO hasta que
+        #                                     alguien decida cuánto ganar con cada persona (o ponga
+        #                                     una ganancia fija). ⚠️ v363: esta línea FALTABA
         #                                     desde v360 (se añadió la columna a la cabecera y no
         #                                     su valor aquí), y el guardián de abajo dejaba
         #                                     «Nuevo proyecto» y «aceptar cotización» MUERTOS.
@@ -1332,9 +1339,9 @@ def set_ganancia_hora(pid: str, mapa: dict) -> tuple:
 def ganancia_fija(pid: str, prj: dict = None) -> float:
     """Ganancia FIJA de la obra, en dinero (v373). 0.0 si no tiene.
 
-    ⚠️ Es un importe a nivel de PROYECTO, no por persona ni por hora: existe para
-    las obras cuyo valor no está en las horas (un delivery, un suministro), donde
-    `costo + margen sobre la mano de obra` da exactamente el costo.
+    ⚠️ Es un importe a nivel de PROYECTO, no por persona ni por hora: existe para las
+    obras cuyo valor no está en las horas (un delivery, un suministro), donde la
+    ganancia por hora no tiene sobre qué aplicarse y la obra saldría valiendo su costo.
     """
     if prj is None:
         prj = get_project(pid) or {}

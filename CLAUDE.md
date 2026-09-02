@@ -7312,6 +7312,88 @@ se GUARDAN en la hoja `Actividades` → migración del histórico). El informe d
 no está entero en inglés hasta que caigan esas tres, y conviene saberlo antes de
 enseñárselo a un cliente.
 
+## Se ELIMINA el modelo viejo de ganancia: el % sobre el total (v455)
+
+Petición del usuario: *«quiero que elimines del todo el viejo modelo de ganancia sobre el
+total del proyecto»*. Convivían **dos formas de contestar la misma pregunta** desde v360, y
+esa es exactamente la clase de duplicidad que produjo los fallos de v310, v321 y v361.
+
+### Qué queda, y en este orden
+1. **Cotizada** (v370) → el **precio que el cliente firmó**. Es un hecho, no una
+   estimación: adivinarlo desde el costo sería contradecir un dato que ya se tiene.
+2. **Por rubro** (v360 + v373) → `horas × ganancia/hora` de cada persona, más la ganancia
+   **fija** de la obra.
+3. **Nada de lo anterior** → la obra vale su **COSTO**, y se AVISA de quién trabajaría sin
+   ganancia. No se inventa un margen que nadie ha decidido (patrón v346: un cero
+   silencioso no se nota hasta ver el total).
+
+El `%` pasa a ser **siempre una consecuencia**, nunca una entrada. Con ello desaparecen el
+campo «Margin on labour» del formulario de la obra y el **editor de márgenes de
+Rentabilidad** (v321): editar ahí el % volvería a crear la segunda fuente de verdad.
+
+### ⚠️ Medido ANTES de tocar, porque mueve dinero en pantalla
+10 de 19 obras usaban el modelo viejo, pero **solo 4 cambiaban de cifra** — las demás
+tienen costo 0, así que el % no se aplicaba sobre nada:
+
+| Obra | Ingreso antes | Después | Dif |
+|---|---|---|---|
+| Stockland Wetherill Park | 10.168,83 | 8.857,36 | **−1.311,47** |
+| prueba2 | 983,82 | 819,85 | −163,97 |
+| Steph · prueba 3 | 1,96 | 1,60 | −0,36 |
+| **Grupo** | **118.233,77** | **116.757,97** | **−1.475,80** |
+
+La ejecución posterior dio **exactamente** 116.757,97, que es lo que convierte la
+predicción en verificación. El usuario decidió no migrar esas 4 («son de prueba»).
+
+### ⚠️ La columna NO se quita de la cabecera, aunque el dato sí se borre
+`MargenMO` **sigue en `PROJECTS_HEADERS`**: quitarla desplazaría las 20 columnas
+siguientes y, como la fila de `create_project` es POSICIONAL, **cada dato caería en la de
+al lado** — el fallo que mató esa función durante 3 versiones en v363. Se escribe vacía,
+no la lee nadie, y el guardián comprueba que fila y cabecera siguen casando (33 = 33). Su
+CONTENIDO sí se vació en la hoja (4 valores), con respaldo fuera del repo.
+
+### ⚠️ Y `Grupos.MargenDefault` hacía DOS trabajos, no uno
+El usuario pidió borrarlo también. Al auditarlo antes de tocarlo resultó que alimenta
+**dos cosas distintas**:
+- el modelo viejo de ganancia de la obra → eso se elimina;
+- y el **punto de partida del margen de una línea de cotización** (`quotes_ui`), que es el
+  **precio AL CLIENTE** — otra cosa, y viva.
+
+Vaciarlo habría hecho que cada línea nueva arrancara en **0 %**. Se conservó, se reescribió
+su docstring y su etiqueta para que digan su propósito REAL, y se dejó la decisión al
+usuario con el dato delante. **Una instrucción dada sin conocer un efecto colateral no
+autoriza ese efecto**: lo que corresponde es señalarlo, no ejecutarlo a ciegas ni ignorarlo.
+
+### ⚠️ TRAMPA NUEVA: correr las ROTURAS mientras corre la suite
+
+La suite salió con **7 rojos** y el primero que miré (`verif_v455`) acababa de darme
+`TODO OK` un minuto antes. La causa era mía: lancé `romper_v455.py` **mientras la suite
+estaba corriendo**, y ese script modifica ficheros del repo y los restaura al terminar —
+así que la suite leyó código roto a mitad de camino.
+
+→ **Los scripts de rotura NUNCA se lanzan en paralelo con la suite.** Modifican el árbol
+de trabajo, así que cualquier cosa que lea el código a la vez obtiene basura. Es la
+familia del CWD de v19 y de la consola cp1252 de v23: **el entorno de ejecución
+fabricando rojos que no existen**, que es lo que empuja a «arreglar» código sano.
+
+Y de los 7, tras rehacerlo limpio: **1 era regresión mía de verdad** (al reescribir un
+texto dejé una frase suelta en una concatenación — la cazó el guardián de v453, que es
+exactamente para lo que existe), **5 eran caducados** por el cambio deliberado y se
+actualizaron con su razón escrita, y **1 era el falso rojo del solapamiento**.
+
+⚠️ El caso de `verif_v321` merece nota: era **el guardián del editor de márgenes**, y ese
+editor ya no existe. No se borró — se reescribió sobre lo que sigue vivo: que un proyecto
+ARCHIVADO no desaparezca de la rentabilidad (la regla de fondo que v321 encontró) y que
+la tabla sea ahora de **solo lectura**. Un guardián cuyo objeto desaparece no se tira: se
+reapunta a la regla que defendía.
+
+### Verificación
+`verif_v455.py` (18 comprobaciones) **ejecuta** `project_revenue` sobre las 19 obras reales
+y comprueba que ya no aparece ningún modelo `margen`; busca además la **FORMA** de la
+fórmula vieja (`mo × (1 + x/100)`) en todo el repo, no un nombre — y esa red se valida
+contra un caso construido antes de creerse su cero (trampa nº12). Probado contra **3
+roturas: las caza las 3**, incluida la de quitar la columna de la cabecera.
+
 ## ⚠️ UNA OBRA CREADA DESDE COTIZACIÓN NACÍA SIN ACTIVIDADES (v454)
 
 Salió **por accidente**, intentando verificar en pantalla el titular «You are at» de una
@@ -8809,7 +8891,7 @@ literal, así que **no casaba nunca** — y dejó pasar «Plomo riel izquierdo»
 Es el mismo fallo de v436, cometido otra vez ese mismo día. Se vio con `cat -A`, no
 leyendo. → **Cualquier `\b`, `\n` o `\w` va por fichero escrito, nunca por heredoc.**
 
-## Versiones desplegadas (v454 = actual)
+## Versiones desplegadas (v455 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -8817,6 +8899,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v455 | **Se elimina el modelo viejo de ganancia** (% sobre la mano de obra), a peticion del usuario: convivian DOS formas de contestar «cuanto gano con esta obra» desde v360. Queda: precio pactado si vino de cotizacion → ganancia por rubro (por hora + fija) → **la obra vale su COSTO** y se avisa de quien trabajaria sin ganancia. El `%` pasa a ser siempre CONSECUENCIA, nunca entrada, asi que desaparecen el campo «Margin on labour» y el **editor de margenes de Rentabilidad** (v321). ⚠️ **Medido antes de tocar** porque mueve dinero: 10 de 19 obras lo usaban pero **solo 4 cambiaban de cifra** (las demas tienen costo 0) → ingreso del grupo **118.233,77 → 116.757,97**, y la ejecucion posterior dio EXACTAMENTE ese numero. ⚠️ La columna `MargenMO` **NO se quita de la cabecera** (desplazaria 20 columnas y la fila es POSICIONAL — el fallo de v363); se vacia su contenido. ⚠️ Y `MargenDefault` hacia **DOS trabajos**: el modelo viejo Y el punto de partida del margen de una linea de COTIZACION (el precio al cliente). Borrarlo, como se pidio, habria dejado cada linea nueva en 0% — se conservo y se señalo, porque **una instruccion dada sin conocer un efecto colateral no autoriza ese efecto**. 3/3 roturas cazadas |
 | v454 | ⚠️ **Una obra creada desde COTIZACION nacia SIN actividades** — encontrado por accidente al verificar en pantalla el titular «You are at», que no se pintaba NUNCA. La causa no era el titular: `PRJ-0016` (un Ripout) tenia **cero actividades**, y el avance se calcula sobre ellas, asi que la obra estaba **clavada en 0% para siempre**, el campo **no tenia donde reportar** y el bloque «cotizado vs real» no podia pintar nada. La regla es de **v306** y estaba aplicada **solo en el alta manual**: el camino de aceptar una cotizacion (v354) dejaba `acts = None`. Misma forma que v419/v358/v322 — **una regla aplicada a un camino y no a su gemelo**, por eso el guardian mira LOS DOS y exige que usen el MISMO nombre. ⚠️ Llevaba desde v354 y **ningun guardian podia verlo**: compila, devuelve ok y crea el proyecto — solo aparece mirando la pantalla y preguntandose por que un texto no sale nunca. Dato reparado (0 → 1 actividad); el 35% de avance que puse para provocar la frase se devolvio a 0 |
 | v453 | **Se cierran los pendientes que eran míos** (petición: «no dejes nada pendiente»). ⚠️ Al auditar contra los DATOS en vez del documento, la lista de pendientes estaba mal **en las dos direcciones**: `FechaIngreso` figuraba abierta y llevaba **18 versiones resuelta**, y el signo de `Cut*` llevaba pendiente desde v130 sin que yo lo recordara. + **red 14, la CONCATENACION** (`st.info("a " + v + " b")`): el literal no es el argumento sino un operando de un `BinOp`, invisible para la red de POSICION. ⚠️ Y la medida corrigio mi estimacion en las dos direcciones — dije «~80» y eran **127**, de los que **97 son CSS/HTML** (nada que traducir), **30 frases inglesas** y **0 en espanol**: estimar inflaba el pendiente Y ocultaba que 97 no eran trabajo. 27 frases reconstruidas como clave con marcadores → **0 sueltas**. + **MIGRACION DEL HISTORICO**, que era la razon real de no haberlo hecho: los nombres de actividad se GUARDAN en la hoja, asi que traducir solo el codigo dejaba los proyectos viejos en espanol **sin forma de casarlos** — **123/123 filas migradas en 1 batch** (respaldo fuera del repo, verificadas leyendo) + 25 conceptos de nomina. ⚠️ NO se migra lo que se COMPARA (el `tipo` del concepto y las banderas de `PHASES`), y se comprobo ejecutando que **el neto sale identico** con el nombre en espanol o en ingles. ⚠️ El guardian se equivoco **cuatro veces**, ninguna visible leyendolo: 10 falsos positivos por visitar los nodos INTERMEDIOS de una cadena `.replace()`, 1 mas por el ternario, **3 roturas ESCAPADAS** por comprobar presencia de subcadena cuando el literal esta en varios sitios, y **22 falsos positivos** por ignorar que el motor acepta `t("…{x}…", x=v)` — la forma NATIVA que usan los 20 modulos de PDF. La invariante que si sirve es **COMPARADOS ⊆ ESCRITOS** (al reves daba FALLO con el codigo correcto: `aporte` se escribe y `neto()` no lo compara a proposito, v346). 5/5 roturas cazadas; `verif_v438` **invertido** con su razon |
 | v452 | **Recorrido de las 24 pantallas del admin: 0 excepciones** — y **SEIS redes más** de i18n que ninguna de las siete de v450 veía: el **ternario** de display (`st.info(A if c else B)`, que no es un `Constant`), el **valor de dict en un `format_func`**, el **widget SIN `format_func`** (pinta el dato crudo), la **cabecera `<th>` escrita a mano** (a la que `tabla.cfg()` no llega) y el **valor de negocio dentro de una CELDA** (que no es una llamada a `st.*`). En pantalla salía todo a MEDIAS: `edit Datos` junto a Status/Costs, `62% avance` junto a `h worked`, `Vas 34 points behind plan` cuya tercera rama ya decía «You are», las 5 sub-secciones de Localizaciones en crudo y la columna Estado con `parcial · cobrada · vencida`. ⚠️ **Y el fallo que introduje yo, compilando**: al barrer «clave Estado en un dict» traduje CINCO sitios y **dos eran el dict que se ESCRIBE en la hoja** → habría guardado el estado en INGLÉS en Sheets, el peor fallo posible (un dato traducido deja de casar en silencio, y lo comparan 387 sitios); además el paréntesis se comió un argumento de `derive_estado`. Por eso la red 12 solo mira dicts dentro de un `pd.DataFrame`. + `_etq` metido en 2 módulos que no lo importaban (NameError que `compileall` aprueba). **Acciones ejercitadas en la INTERFAZ**: fichaje de punta a punta desde el sidebar, el editor de celda del tablero con el aviso de certificados de v219 EN VIVO (asignar → guardar → deshacer), buscador, campana y las 3 vistas del Panel. ⚠️ **Cuatro falsas alarmas descartadas midiendo** (survey_ui stale, un residuo de render a medio intercambiar, un recordatorio que no salía porque no debía, y el multiselect «sin opciones» porque usé el selector del selectbox). ⚠️ Y dos trampas nuevas: **`compileall` devolvió 0 sin compilar nada** (rutas inexistentes → OK en falso) y un bloque añadido **después del `sys.exit`** de un guardián, que no se ejecuta nunca. 16 roturas probadas, 3 cazadas solo tras dejar de comparar por subcadena. ⚠️ Y la red 8 hubo que ENSANCHARLA: solo miraba el ternario cuando era el ARGUMENTO de un `st.*`, asi que se le escapo `t("closed") if _cerrada else ":material/check_circle: abierta"` (vive dentro de una lista que se junta). La senal buscable en todo el repo es la **ASIMETRIA** — una rama por `t()` y la otra literal —, y con ella salieron 3 mas: la columna Contacto con `yes` y `falta` juntos, la campana y el historial de Pre-Start. + la **red 13**: el nombre de columna que alimenta un `line_chart`/`bar_chart` **ES la leyenda**, y ahi no llega `tabla.cfg()` — se leia «Planificado / Real» bajo una curva ya titulada en ingles; ⚠️ mi primer barrido dio **19 casos y 16 eran falsos** por atribuir al grafico todos los `_df` del MODULO, el error de ambito del medidor de v450 repetido. + las **DOS ramas del mismo if/elif** de la cotizacion, una con `t("You are at")` y la otra con «Vas» — el mismo «Vas» que ya se arreglo en `projects_ui`, o sea que se corrigio una copia y no la otra. ⚠️ **Queda ABIERTO, MEDIDO y dicho**: el literal de display dentro de una CONCATENACION no lo ve la red de POSICION (es un operando de un `BinOp`, no el argumento). Estime «~80» a ojo y contados son **127 trozos**: **97 son CSS/HTML** (nada que traducir), **30 frases ya en ingles** —la bolsa real— y **0 en espanol**, por eso hoy no se ve nada raro. Estimar era peor que no dar numero: inflaba el pendiente y ocultaba que 97 no son trabajo |
