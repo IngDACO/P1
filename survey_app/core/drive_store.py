@@ -195,6 +195,12 @@ def inventario() -> dict:
 
     {raiz, carpetas:[{id, nombre, archivos:[...], n, bytes}], total, bytes}
     """
+    # ⚠️ La raíz ES «COPEX Proyectos» (ROOT_NAME), así que las carpetas `PRJ-####`
+    # cuelgan DIRECTAMENTE de ella — no hay un nivel intermedio. Mi primera versión
+    # asumió `raíz / COPEX Proyectos / PRJ-#### / archivos` y buscaba los proyectos un
+    # nivel más abajo del que están: resultado, **0 huérfanos con 32 archivos delante**.
+    # Y la prueba con Drive simulado no lo cazó porque el mock reproducía MI suposición
+    # en vez de la estructura real — el OK en falso de v309.
     root = _root_id()
     carpetas = []
     for f in _hijos(root):
@@ -204,7 +210,8 @@ def inventario() -> dict:
                 "id": f["id"], "nombre": f.get("name", ""),
                 "archivos": [h for h in hijos if h.get("mimeType") != FOLDER_MIME],
                 "subcarpetas": [h for h in hijos if h.get("mimeType") == FOLDER_MIME]})
-    # las subcarpetas de proyecto cuelgan de «COPEX Proyectos», un nivel más abajo
+    # Se sigue bajando un nivel más: un almacén como «COPEX Recibos» puede tener
+    # subcarpetas propias, y así el recuento no se deja archivos fuera.
     for c in carpetas:
         for sub in c["subcarpetas"]:
             sub["archivos"] = [h for h in _hijos(sub["id"])

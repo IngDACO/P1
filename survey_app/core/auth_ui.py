@@ -782,33 +782,52 @@ def _owner_drive_limpieza():
         # PRJ-#### de otro cliente no es huérfana aunque este propietario no la liste.
         _vivos = {str(p.get("ID")) for p in P.list_projects(incluir_archivados=True,
                                                             incluir_internos=True)}
+
+        # ⚠️ La raíz de Drive ES «COPEX Proyectos», así que las carpetas `PRJ-####`
+        # cuelgan de ella DIRECTAMENTE. Mi primera versión las buscaba un nivel más
+        # abajo (en `subcarpetas`) y daba **0 huérfanos con 32 archivos delante** — y la
+        # prueba con un Drive simulado no lo cazó, porque el mock reproducía MI
+        # suposición en vez de la estructura real (el OK en falso de v309).
+        # Se recorren los DOS niveles: lo que cuelga de la raíz y lo que cuelga de una
+        # carpeta que no es de proyecto (p. ej. «COPEX Recibos» con sus subcarpetas).
+        def _clasificar(nombre, ident, archivos, ruta):
+            """→ (fila, ids, es_huerfana). Una carpeta PRJ-#### que ya no corresponde a
+            ningún proyecto vivo es huérfana CON todo su contenido."""
+            _hu = nombre.startswith("PRJ-") and nombre not in _vivos
+            _est = t("orphan") if _hu else (t("in use") if nombre.startswith("PRJ-")
+                                            else t("storage"))
+            return ({"Folder": ruta, "Files": len(archivos), "Status": _est},
+                    [a["id"] for a in archivos] + [ident], _hu)
+
         filas, huerfanos, todo = [], [], []
         for c in inv["carpetas"]:
-            for sub in c["subcarpetas"]:
-                _n = len(sub.get("archivos", []))
-                _hu = sub["nombre"].startswith("PRJ-") and sub["nombre"] not in _vivos
-                filas.append({"Folder": f"{c['nombre']} / {sub['nombre']}",
-                              "Files": _n,
-                              "Status": t("orphan") if _hu else t("in use")})
-                _ids = [a["id"] for a in sub.get("archivos", [])] + [sub["id"]]
+            _fila, _ids, _hu = _clasificar(c["nombre"], c["id"], c.get("archivos", []),
+                                           c["nombre"])
+            if c.get("archivos") or c["nombre"].startswith("PRJ-"):
+                filas.append(_fila)
                 todo += _ids
                 if _hu:
                     huerfanos += _ids
-            if c["archivos"]:
-                filas.append({"Folder": c["nombre"], "Files": len(c["archivos"]),
-                              "Status": t("loose files")})
-                todo += [a["id"] for a in c["archivos"]]
+            for sub in c.get("subcarpetas", []):
+                _f2, _i2, _h2 = _clasificar(sub["nombre"], sub["id"],
+                                            sub.get("archivos", []),
+                                            f"{c['nombre']} / {sub['nombre']}")
+                filas.append(_f2)
+                todo += _i2
+                if _h2:
+                    huerfanos += _i2
 
         if not filas:
             st.success(t(":material/check_circle: Drive is already empty."))
             return
         st.dataframe(pd.DataFrame(filas), hide_index=True, width="stretch",
                      column_config=tabla.cfg(None))
+        # ⚠️ El recuento se DERIVA de la misma clasificación que decide qué se borra. Si
+        # se contara aparte, el número y el botón podrían decir cosas distintas — que es
+        # justo lo que pasó: el caption decía «0» mientras había 32 archivos.
+        _n_hu = sum(f["Files"] for f in filas if f["Status"] == t("orphan"))
         st.caption(t("{n} file(s) in total, {h} of them in folders of jobs that no longer "
-                     "exist.").replace("{n}", str(inv["total"])).replace("{h}", str(
-                         sum(1 for c in inv["carpetas"] for s in c["subcarpetas"]
-                             if s["nombre"].startswith("PRJ-") and s["nombre"] not in _vivos
-                             for _ in s.get("archivos", [])))))
+                     "exist.").replace("{n}", str(inv["total"])).replace("{h}", str(_n_hu)))
 
         _que = st.radio(t("What do you want to delete?"),
                         ["huerfanos", "todo"], horizontal=True, key="dl_que",
