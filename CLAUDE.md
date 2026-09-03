@@ -7366,13 +7366,52 @@ que formatea distinto que el código genera fallos en falso**.
 - La versión que sí vale recoge los `ast.Constant` del cuerpo de cada función, sin depender
   del formato del dump.
 
+### ⚠️ «Desplegado ≠ corriendo», con el reparto AL REVÉS que en v452
+Tras desplegar, la barra lateral decía **v459**, el topbar **v458** … y `projects_ui`
+**era el nuevo** (la pantalla ya mostraba «Head installer/s»). O sea que Streamlit
+recargó `app.py` y `projects_ui` y conservó `home_ui` — justo al contrario que en
+v452, donde lo fresco era solo `app.py`.
+→ Refuerza la corrección que v408 le hizo a v334, y la endurece: **la versión no prueba
+nada en NINGUNA de las dos direcciones**. Una versión vieja en la barra no significa
+que tu cambio no esté corriendo, igual que una nueva no significa que sí. Solo se
+comprueba mirando el CAMBIO.
+
 ### Verificación
-`verif_v459.py` (19 comprobaciones): ningún `text_input` para el responsable en los cuatro
+`verif_v459.py` (22 comprobaciones): ningún `text_input` para el responsable en los cuatro
 caminos (alta y edición de obra, alta y edición de localización), los cuatro guardados unen
 con «;», cada lista ofrece a quien debe (por AST, sobre el CUERPO de cada helper), los
 helpers **EJECUTADOS** (importar no ejecuta, v378) y los dos documentos que salen de la
 empresa —correo de asignación e informe del cliente— diciendo «Head installer/s». Probado
-contra **7 roturas: las caza las 7**.
+contra **8 roturas: las caza las 8**.
+
+**Verificado EN PRODUCCIÓN** con las dos listas a la vez, en la misma sesión y el mismo
+grupo — que es lo que demuestra las dos reglas de golpe:
+
+| Campo | Placeholder | Opciones |
+|---|---|---|
+| **Head installer/s** (obra) | `No options to select` | ninguna, con el aviso «No field users yet…» |
+| **Person in charge** (localización) | `Choose options` | **asfgjjd · Bobo · Diego Moreno** |
+
+Los dos son `stMultiSelect` (no `stTextInput`) y muestran **nombres**, no logins
+(`Diego Moreno`, no `dmoreno`): `_etq_us` haciendo su trabajo.
+⚠️ El vacío del primero **no se dio por bueno**: antes se validó la sonda contra un caso
+conocido-bueno de la misma pantalla —el multiselect de certificados, que devolvió sus 9
+opciones—, porque «no hay opciones» puede ser una sonda mal apuntada (v375). Y no se
+escribió nada: los dos formularios se abrieron y se cerraron sin enviarlos.
+
+### ⚠️ Y me dejé el camino gemelo: el informe al cliente iba a decir «campo1;mchen»
+Salió de auditar «¿queda algo pendiente?» **contra el código** en vez de darlo por cerrado.
+`survey_ui` llena `session_state["ingeniero"]` con la columna **CRUDA**, y esa clave es
+justo la que pintan `user_report` (informe del CLIENTE) y `email_notify`. O sea que el
+documento que se le manda al cliente habría mostrado los LOGIN separados por «;» — el
+fallo que esta versión venía a evitar, en el sitio más visible de todos.
+- Es **media unificación** otra vez (v419 con la ubicación, v454 con las actividades): la
+  regla aplicada en `projects_ui` —donde «Reconstruir en el Survey» SÍ resolvía el
+  nombre— y no en su gemelo.
+- ⚠️ **Mi guardián no podía verlo**: comprobaba que los documentos dijeran «Head
+  installer/s», o sea la ETIQUETA, no que el VALOR llegara resuelto. Chequeo nuevo, y
+  general: ningún módulo puede asignar a la clave `ingeniero` algo que salga de leer la
+  columna. Probado contra el código roto.
 
 ### ⚠️ Y escribí un helper que YA EXISTÍA: tres copias del mismo filtro
 `_field_users(grupo)` ya estaba en el módulo (v135) y hace exactamente lo que mi
@@ -7694,10 +7733,15 @@ secrets que no existía.
 
 ### ⚠️ Lo que sigue abierto, y por qué NO es «no haberlo hecho»
 
-- **5 cuentas sin Telegram** (`dacox`, `admin1`, `Arcantox`, `Admin2`, `dmoreno`): un
-  `chat_id` identifica una conversación REAL y **inventarlo mandaría los avisos de la
-  demo al teléfono de un desconocido**. La persona pulsa Start en el bot y entonces se
-  vincula. No es mío.
+- ~~**5 cuentas sin Telegram**~~ → ⚠️ **CERRADO, y el pendiente estaba mal enunciado.**
+  Es cierto que esas 5 cuentas no tienen `chat_id` (y sigue sin poder inventarse: un
+  `chat_id` identifica una conversación REAL, así que ponerlo a mano mandaría los avisos
+  al teléfono de un desconocido — se vincula cuando la persona pulsa Start). Pero lo que
+  el pendiente afirmaba —que **a 3 destinatarios no les llega la alarma** (v395)— ya no
+  es verdad: **v434 les cargó el email**, así que los 5 tienen canal. Medido ejecutando,
+  no leyendo: `group_digest(...)["avisos_sin_canal"] == []` y los 5 destinatarios de
+  `_admins_and_owners` con `email=True`. Es el error de v453 —un pendiente ya resuelto
+  que sigue escrito— **repetido en el mismo documento que lo denuncia**.
 - **El signo de `Cut*`** (v130): decisión de dominio, y el corte es irreversible.
 - **La red 12 y el titular de cotización, sin ver en pantalla**: las dos listas son
   `st.dataframe` en canvas — no se puede seleccionar fila ni leer celdas desde el banco.

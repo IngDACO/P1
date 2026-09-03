@@ -831,10 +831,15 @@ def render_survey_tab(_ROL, _GRUPO):
             st.session_state["proyecto"]  = str(_prj_sv.get("Nombre", ""))
             st.session_state["cliente"]   = str(_prj_sv.get("Cliente", ""))
             st.session_state["ubicacion"] = str(_prj_sv.get("Ubicacion", ""))
-            st.session_state["ingeniero"] = str(_prj_sv.get("Ingeniero", ""))
+            # ⚠️ El NOMBRE, no los login. La columna guarda «campo1;mchen» (v459) y
+            # esta clave es la que pintan el informe del CLIENTE y el correo: sin
+            # resolver, el documento que se le manda al cliente diría «campo1;mchen».
+            _ing_sv = projects_data.head_installers_label(
+                _prj_sv, str(_prj_sv.get("Grupo", _GRUPO)))
+            st.session_state["ingeniero"] = _ing_sv
             _rep = " · ".join(x for x in (str(_prj_sv.get("Cliente", "")),
                                           str(_prj_sv.get("Ubicacion", "")),
-                                          str(_prj_sv.get("Ingeniero", ""))) if x)
+                                          _ing_sv) if x)
             st.caption(":material/info: The report will use this project's details"
                        + (f": {_rep}." if _rep else "."))
             if str(_prj_sv.get("Ubicacion", "")).strip():
