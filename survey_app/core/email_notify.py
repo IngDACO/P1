@@ -118,7 +118,7 @@ def send_usage_notification(
     <div style="background:#e8f4f8;padding:10px 20px;border-left:4px solid #2e6da4;margin:16px 0">
         <strong>Date:</strong> {ts}<br>
         <strong>Project:</strong> {proyecto or '(not specified)'}<br>
-        <strong>Engineer:</strong> {ingeniero or '(not specified)'}
+        <strong>Head installer/s:</strong> {ingeniero or '(not specified)'}
     </div>
 
     <h3 style="color:#1a3a5c">Main parameters</h3>

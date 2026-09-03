@@ -7312,6 +7312,97 @@ se GUARDAN en la hoja `Actividades` → migración del histórico). El informe d
 no está entero en inglés hasta que caigan esas tres, y conviene saberlo antes de
 enseñárselo a un cliente.
 
+## «Engineer in charge» pasa a ser HEAD INSTALLER/S, de una lista (v459)
+
+Petición del usuario: *«cambiar en proyectos el engineer in charge por head installer/s,
+el cual o los cuales deben ser seleccionados de la lista de usuarios»*, con tres
+decisiones suyas: **solo usuarios de campo**, **los nombres separados por coma** al
+mostrarlos, y la regla general — *«lo único que debe ser de texto libre es cuando estamos
+creando algo nuevo; de resto todo debe ser de listas»*.
+
+### Por qué la lista no es cosmética
+Escrito a mano, el responsable de una obra era una cadena que **no casaba con nadie**:
+una errata («Javer López») no da error, deja el proyecto con un responsable que no existe
+en el sistema y que ningún filtro puede cruzar. Es la misma familia que el fichaje antes
+de v145 (el nombre del proyecto tecleado) y que las localizaciones antes de v306.
+
+### Qué se guarda: los LOGIN, unidos por «;»
+Igual que `CampoAsignados`. ⚠️ **El login ES la identidad**: dos personas pueden llamarse
+igual —ya pasó con «Mei Chen» (v413)— y un nombre puede cambiar; el login no. El nombre se
+resuelve solo al MOSTRAR, con `projects.head_installers_label`, que además **desempata
+homónimos** reusando `auth.etiqueta_usuarios` (v319) sobre TODO el grupo, no sobre la lista
+visible — si no, la misma persona cambiaría de nombre según la pantalla (v413).
+- ⚠️ **La columna sigue llamándose `Ingeniero`**. Renombrarla obligaría a tocar los ~10
+  sitios que la leen sin ganar nada, y el nombre de una columna es un identificador
+  interno, no una etiqueta de pantalla: se cambia lo que se MUESTRA, nunca la clave
+  (v232/v442).
+- ⚠️ **Sin migración de histórico**: lo guardado antes es un NOMBRE, no un login, así que
+  `head_installers` lo devuelve tal cual y `head_installers_label` lo muestra crudo. Un
+  responsable viejo no desaparece del informe; simplemente no resuelve a una ficha.
+
+### Quién puede serlo (dos reglas distintas, a propósito)
+| | Quién sale en la lista |
+|---|---|
+| **Head installer/s** de una obra | **solo usuarios de CAMPO** (decisión del usuario): es quien va a obra |
+| **Responsable** de una localización | **cualquiera del grupo**: una oficina o un almacén los suele llevar alguien de administración, así que filtrar por campo dejaría fuera al responsable real |
+
+Por eso hay dos helpers (`_field_users`, `_usuarios_de`) y no uno con parámetro: la
+diferencia es de DOMINIO, y un flag invita a pasarlo mal.
+⚠️ Los dos degradan a lista vacía si falla la lectura, y la pantalla **lo dice** («No field
+users yet: create them in Planning → Users») en vez de mostrar un desplegable vacío sin
+explicación (patrón v325: un pendiente que nadie puede cerrar es peor que no tenerlo).
+
+### ⚠️ El guardián FALLABA con el código correcto — por su propio formato
+El chequeo de «solo campo» no puede ir por subcadena: `== "campo"` aparece en **5 sitios**
+del módulo, así que romper `_campos_de` lo dejaría en verde (la trampa nº2, *grep ≠ uso*,
+dentro del guardián). Al pasarlo a AST cometí el error gemelo: comparé contra
+`'"campo"' in ast.dump(...)` y **`ast.dump` usa `repr`, o sea comillas SIMPLES** → FALLO
+con el código perfecto. Es el `"40"` vs `"40.0"` de v372 y el `sorted()` de v15: **un test
+que formatea distinto que el código genera fallos en falso**.
+- ⚠️ Y lo peor no es el rojo: **invalidó la primera tanda de roturas**. Las 6 salieron
+  «CAZADAS» mientras el guardián estaba rojo de base, así que ninguna probaba nada — un OK
+  en falso invertido. Hubo que arreglarlo y **repetir las 6**. Lección: antes de creerse un
+  «6/6 cazadas», comprobar que el guardián está VERDE con el código bueno.
+- La versión que sí vale recoge los `ast.Constant` del cuerpo de cada función, sin depender
+  del formato del dump.
+
+### Verificación
+`verif_v459.py` (19 comprobaciones): ningún `text_input` para el responsable en los cuatro
+caminos (alta y edición de obra, alta y edición de localización), los cuatro guardados unen
+con «;», cada lista ofrece a quien debe (por AST, sobre el CUERPO de cada helper), los
+helpers **EJECUTADOS** (importar no ejecuta, v378) y los dos documentos que salen de la
+empresa —correo de asignación e informe del cliente— diciendo «Head installer/s». Probado
+contra **7 roturas: las caza las 7**.
+
+### ⚠️ Y escribí un helper que YA EXISTÍA: tres copias del mismo filtro
+`_field_users(grupo)` ya estaba en el módulo (v135) y hace exactamente lo que mi
+`_campos_de`, más dos bloques inline idénticos repartidos por el fichero. O sea que dejé
+**tres definiciones** de «los usuarios de campo del grupo» donde antes había dos. Es el
+patrón de los cinco `_num` divergentes de v323 —donde dos de las divergencias eran fallos
+de dinero— y la regla de v140/v146: al añadir un mecanismo hay que comprobar que no existe
+ya. Dos definiciones de lo mismo no fallan hoy; divergen mañana.
+- Se queda `_field_users` (el que ya tenía call-site) y desaparece `_campos_de`; −24 líneas.
+- ⚠️ **`_usuarios_de` NO es una copia y se queda**: es la regla CONTRARIA (todos los del
+  grupo, para el responsable de una localización) y no existía. Un solo helper con un flag
+  habría invitado a pasarlo mal.
+- **Chequeo permanente**: por AST, el filtro `Rol == "campo"` puede aparecer **UNA sola
+  vez** en el módulo. Probado contra el código roto (reintroducir una copia inline).
+
+### ⚠️ Dos chequeos míos que medían otra cosa, en la misma tanda
+1. El del guardián comparaba contra `ast.dump`, que usa `repr` → comillas SIMPLES, así que
+   `'"campo"'` **nunca casa** y daba FALLO con el código correcto. Y eso **invalidó la
+   primera tanda de roturas**: las 6 salieron «CAZADAS» con el guardián rojo de base, o sea
+   que ninguna probaba nada. Antes de creerse un «6/6», comprobar que el guardián está
+   VERDE con el código bueno.
+2. El del script de limpieza imprimía «bloques inline restantes: **0**» contando `'campo'`
+   con comillas **simples**, que no aparece nunca en el fuente (allí es `"campo"`). Con esa
+   cifra habría dado la limpieza por terminada dejando **una copia viva** — la encontró el
+   chequeo nuevo del guardián, no el script que venía a hacer la limpieza.
+
+Los dos son la misma familia que el `"40"` vs `"40.0"` de v372 y el `sorted()` de v15: **un
+chequeo que formatea o mide distinto que el código produce veredictos falsos en las dos
+direcciones**, y el peligroso es el verde.
+
 ## Vaciar la demo, y la limpieza de Drive que faltaba (v456)
 
 Petición del usuario: *«eliminar todos los proyectos, usuarios de campo y todo lo
@@ -8950,6 +9041,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v459 | **«Engineer in charge» pasa a ser HEAD INSTALLER/S, elegidos de una LISTA** (petición del usuario; decisiones suyas: solo usuarios de CAMPO, y los nombres separados por coma). Escrito a mano, el responsable era una cadena que **no casaba con nadie**: una errata no da error, deja la obra con un responsable que no existe y que ningún filtro puede cruzar. Se guardan los **LOGIN** unidos por «;» (el login ES la identidad: dos personas pueden llamarse igual —«Mei Chen», v413— y un nombre puede cambiar) y el nombre se resuelve al MOSTRAR, desempatando homónimos. ⚠️ La columna sigue llamándose `Ingeniero`: se cambia lo que se MUESTRA, nunca la clave (v232/v442). Los cuatro caminos pasan a multiselect — obra (solo campo) y localización (**todos** los del grupo: una oficina la suele llevar administración, y filtrar por campo dejaría fuera al responsable real). ⚠️ **Y escribí un helper que YA EXISTÍA**: `_field_users` hace exactamente lo mismo, así que dejé **tres** definiciones del filtro «rol == campo» en el módulo — el patrón de los cinco `_num` divergentes de v323; unificadas, con chequeo permanente. ⚠️ **Dos chequeos míos midiendo otra cosa**: el guardián comparaba contra `ast.dump` (que usa `repr`, comillas SIMPLES) → **FALLO con el código correcto**, y eso **invalidó la primera tanda de roturas** (6/6 «cazadas» con el guardián rojo de base, o sea ninguna probaba nada); y el script de limpieza decía «0 copias restantes» contando `'campo'` en comillas simples, que no aparece nunca en el fuente — con esa cifra habría dado la limpieza por buena **dejando una copia viva**. 7/7 roturas |
 | v456 | **Se vacía la demo** (23 hojas, 869 filas; 8 usuarios de campo) conservando las 5 cuentas de gestion, la hoja `Auditoria` y **todas las cabeceras**; respaldo completo fuera del repo. Comprobado que la app **aguanta en vacio**: 17 agregados sin una excepcion y cada pantalla explica su estado. ⚠️ **ERROR DE ORDEN**: se vacio ANTES de borrar Drive, y los 31 archivos quedaron **inalcanzables desde la app** (el boton de borrar vive en la ficha del proyecto, que ya no existe) → hubo que sacar sus IDs del respaldo. **Lo que vive FUERA de la hoja se borra PRIMERO.** + `drive_store.inventario()/borrar()` y la pantalla **Drive maintenance** (solo propietario, con DELETE tecleado): ⚠️ la salvaguarda real es el **scope `drive.file`**, que impide ver nada que la app no haya creado. ⚠️ Y vaciar dejo **3 guardianes en rojo**: se resuelve con una tercera categoria en el runner —**codigo 2 = SIN DATOS**, ni verde (seria un OK que no comprobo nada) ni rojo (no hay nada roto)—, listada aparte con el aviso de que esas afirmaciones dejaron de comprobarse |
 | v455 | **Se elimina el modelo viejo de ganancia** (% sobre la mano de obra), a peticion del usuario: convivian DOS formas de contestar «cuanto gano con esta obra» desde v360. Queda: precio pactado si vino de cotizacion → ganancia por rubro (por hora + fija) → **la obra vale su COSTO** y se avisa de quien trabajaria sin ganancia. El `%` pasa a ser siempre CONSECUENCIA, nunca entrada, asi que desaparecen el campo «Margin on labour» y el **editor de margenes de Rentabilidad** (v321). ⚠️ **Medido antes de tocar** porque mueve dinero: 10 de 19 obras lo usaban pero **solo 4 cambiaban de cifra** (las demas tienen costo 0) → ingreso del grupo **118.233,77 → 116.757,97**, y la ejecucion posterior dio EXACTAMENTE ese numero. ⚠️ La columna `MargenMO` **NO se quita de la cabecera** (desplazaria 20 columnas y la fila es POSICIONAL — el fallo de v363); se vacia su contenido. ⚠️ Y `MargenDefault` hacia **DOS trabajos**: el modelo viejo Y el punto de partida del margen de una linea de COTIZACION (el precio al cliente). Borrarlo, como se pidio, habria dejado cada linea nueva en 0% — se conservo y se señalo, porque **una instruccion dada sin conocer un efecto colateral no autoriza ese efecto**. 3/3 roturas cazadas |
 | v454 | ⚠️ **Una obra creada desde COTIZACION nacia SIN actividades** — encontrado por accidente al verificar en pantalla el titular «You are at», que no se pintaba NUNCA. La causa no era el titular: `PRJ-0016` (un Ripout) tenia **cero actividades**, y el avance se calcula sobre ellas, asi que la obra estaba **clavada en 0% para siempre**, el campo **no tenia donde reportar** y el bloque «cotizado vs real» no podia pintar nada. La regla es de **v306** y estaba aplicada **solo en el alta manual**: el camino de aceptar una cotizacion (v354) dejaba `acts = None`. Misma forma que v419/v358/v322 — **una regla aplicada a un camino y no a su gemelo**, por eso el guardian mira LOS DOS y exige que usen el MISMO nombre. ⚠️ Llevaba desde v354 y **ningun guardian podia verlo**: compila, devuelve ok y crea el proyecto — solo aparece mirando la pantalla y preguntandose por que un texto no sale nunca. Dato reparado (0 → 1 actividad); el 35% de avance que puse para provocar la frase se devolvio a 0 |

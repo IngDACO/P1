@@ -37,6 +37,35 @@ from core import tabla
 logger = logging.getLogger(__name__)
 
 
+def _usuarios_de(grupo: str) -> list:
+    """LOGIN de TODOS los usuarios del grupo — para el responsable de una localización.
+
+    ⚠️ Aquí no se filtra por «campo»: una oficina o un almacén los suele llevar alguien
+    de administración, así que limitarlo al campo dejaría fuera al responsable real.
+    """
+    try:
+        return [str(u["Usuario"]) for u in auth.list_users(grupo)]
+    except Exception as e:
+        logger.warning("_usuarios_de: no se pudo leer la lista de usuarios: %s", e)
+        return []
+
+
+def _etq_us(logins) -> dict:
+    """`{login: etiqueta}` para pintar una persona en un selector.
+
+    ⚠️ El desempate de homónimos se hace sobre TODO el grupo, no sobre la lista visible:
+    si no, la misma persona sería «Mei Chen» en una pantalla y «Mei Chen (mchen)» en
+    otra, y una identidad que cambia de nombre según la pantalla no es una identidad
+    (la lección de v413).
+    """
+    try:
+        _us = auth.list_users()
+        _e = auth.etiqueta_usuarios(_us)
+        return {u: _e.get(u, u) for u in logins}
+    except Exception:
+        return {u: u for u in logins}
+
+
 def _alerts_section(pid, grupo, project_name="", allow_report=False):
     """Alarmas abiertas del proyecto + resolver; si allow_report, el campo puede reportar."""
     if not alerts.is_configured():
@@ -839,12 +868,7 @@ def _nuevo_proyecto_form(grupo: str, key: str = "nuevo"):
     from core.schedule import build_schedule
 
     with st.expander(t("New project"), icon=":material/add_circle:"):
-        campos = []
-        try:
-            campos = [u["Usuario"] for u in auth.list_users(grupo)
-                      if str(u.get("Rol", "")) == "campo"]
-        except Exception:
-            pass
+        campos = _field_users(grupo)
 
         # ── Plano del elevador (fuera del form, para poder prellenar) ──
         # De aqui salen NS y los parametros que usan las 5 herramientas. Se lee
@@ -935,7 +959,15 @@ def _nuevo_proyecto_form(grupo: str, key: str = "nuevo"):
         with st.form(f"np_form_{key}"):
             nom = st.text_input(t("Project name *"), key=f"np_nom_{key}")
             c1, c2 = st.columns(2)
-            ing = c1.text_input(t("Engineer in charge"), key=f"np_ing_{key}")
+            # ⚠️ De LISTA, no texto libre (decisión del usuario): el head installer es
+            # una persona del equipo, y escribir su nombre a mano permitía erratas que
+            # no casan con nadie. Se guardan los LOGIN; el nombre se resuelve al mostrar.
+            ing = c1.multiselect(
+                t("Head installer/s"), campos,
+                format_func=lambda u: _etq_us(campos).get(u, u),
+                key=f"np_ing_{key}",
+                help=(t("Field users of this company.") if campos else
+                      t("No field users yet: create them in Planning → Users.")))
             f_ini = c1.date_input(t("Start date"), value=clock.today(),
                                   key=f"np_ini_{key}")
             f_fin_manual = None
@@ -1022,7 +1054,7 @@ def _nuevo_proyecto_form(grupo: str, key: str = "nuevo"):
                 _acts = [{"nombre": "Execution", "duracion": _dias, "peso": 1}]
             ok, res = P.create_project(
                 grupo=grupo, nombre=nom.strip(), cliente=cli, cliente_id=_cli_id, ubicacion=ubi,
-                modelo=mod, ns=int(ns), ingeniero=ing, campo_asignados=asg, tipo=_tipo,
+                modelo=mod, ns=int(ns), ingeniero=";".join(ing), campo_asignados=asg, tipo=_tipo,
                 fecha_inicio=f_ini.strftime("%Y-%m-%d"),
                 fecha_fin_est=_fin,
                 activities=_acts,
@@ -1270,7 +1302,14 @@ def _notificar_asignados(usuarios, info_prj):
 
 
 def _field_users(grupo):
-    """Usuarios de campo del grupo (para asignar a un proyecto)."""
+    """LOGIN de los usuarios de campo del grupo.
+
+    Los usa quien se ASIGNA a una obra y, desde v459, quién puede ser **head
+    installer** — ⚠️ solo campo (decisión del usuario): es quien va a obra, así que
+    ofrecer administradores alargaría la lista con gente que no aplica.
+    ⚠️ Definición ÚNICA a propósito: había tres copias de este filtro repartidas por
+    el módulo, y dos definiciones de lo mismo no fallan hoy, divergen mañana (v323).
+    """
     try:
         return [u["Usuario"] for u in auth.list_users(grupo)
                 if str(u.get("Rol", "")) == "campo"]
@@ -2297,7 +2336,13 @@ def _detalle_proyecto(pid: str, grupo: str = None):
             e2.text_input(t("Location"), value=ubic, disabled=True,
                           help=t("It comes from the map pin (above). Move it or search the address to change it."))
             modelo   = e2.text_input(t("Model"), value=prj.get("Modelo", ""))
-            ing      = e1.text_input(t("Engineer"), value=prj.get("Ingeniero", ""))
+            _cmp_ed = _field_users(grupo)
+            ing = e1.multiselect(
+                t("Head installer/s"), _cmp_ed,
+                default=[u for u in P.head_installers(prj) if u in _cmp_ed],
+                format_func=lambda u: _etq_us(_cmp_ed).get(u, u),
+                help=(t("Field users of this company.") if _cmp_ed else
+                      t("No field users yet: create them in Planning → Users.")))
             # Calendario, no texto libre: ver `_a_fecha`. El valor se guarda
             # siempre en ISO, que es lo unico que `project_schedule` sabe leer.
             f_ini    = e2.date_input(t("Start date"), value=_a_fecha(prj.get("FechaInicio")),
@@ -2355,7 +2400,7 @@ def _detalle_proyecto(pid: str, grupo: str = None):
                         "Nombre": nombre, "Cliente": cliente, "ClienteID": _ecli_id,
                         "Tipo": ("" if tipo == _TIPO_VACIO else tipo),
                         "Ubicacion": ubic, "Modelo": modelo,
-                        "Ingeniero": ing, "FechaInicio": f_ini, "FechaFinEst": f_fin,
+                        "Ingeniero": ";".join(ing), "FechaInicio": f_ini, "FechaFinEst": f_fin,
                         "CampoAsignados": ";".join(asignados),
                         "AgrupacionID": ag_id, "PesoEnAgrupacion": peso,
                         # ⚠️ v422: el tipo que se está GUARDANDO, no el que tenía. Si en
@@ -2567,7 +2612,7 @@ def _detalle_proyecto(pid: str, grupo: str = None):
                         except Exception:
                             pass
                     st.session_state["proyecto"]  = str(prj.get("Nombre", ""))
-                    st.session_state["ingeniero"] = str(prj.get("Ingeniero", ""))
+                    st.session_state["ingeniero"] = P.head_installers_label(prj, grupo)
                     st.session_state["_rebuilt_from"] = str(prj.get("Nombre", ""))
                     st.success(t(":material/check_circle: Loaded. Go to **:material/architecture: Survey** and press **Calculate** to regenerate everything."))
         # ── Archivos del proyecto (buscable) ──
@@ -3106,7 +3151,8 @@ def render_field_projects(usuario: str, grupo: str):
     if P.es_interno(prj):
         tarj = [_kpi_card(t("Status"), _etq(est)),
                 _kpi_card(t("Type"), _etq(str(prj.get("Tipo", ""))) or t("Internal")),
-                _kpi_card(t("Person in charge"), prj.get("Ingeniero") or "—")]
+                _kpi_card(t("Person in charge"),
+                          P.head_installers_label(prj, grupo) or "—")]
     else:
         tarj = [_kpi_card(t("Status"), est),
                 _kpi_card(t("Project progress"), f"{avance:.0f}%"),
@@ -4637,12 +4683,7 @@ def _nueva_localizacion_form(grupo: str):
     deja sin cronograma, y `derive_estado` la marca «Abierta» por su tipo (v422).
     """
     with st.expander(t("New location"), icon=":material/add_circle:"):
-        campos = []
-        try:
-            campos = [u["Usuario"] for u in auth.list_users(grupo)
-                      if str(u.get("Rol", "")) == "campo"]
-        except Exception:
-            pass
+        campos = _field_users(grupo)
 
         # ⚠️ FUERA del form (el mapa necesita reruns) e INLINE, sin expander propio:
         # esto ya vive dentro de un expander y Streamlit no permite anidarlos (v210).
@@ -4668,7 +4709,11 @@ def _nueva_localizacion_form(grupo: str):
                                 placeholder=t("Sydney office, Chullora store…"))
             c1, c2 = st.columns(2)
             tipo = c1.selectbox(t("Type *"), P.TIPOS_INTERNOS, key="nloc_tipo")
-            resp = c2.text_input(t("Person in charge"), key="nloc_resp", placeholder=t("optional"))
+            # ⚠️ El NOMBRE de la localización sí es texto libre (es la cosa nueva que se
+            # está creando); el responsable NO, porque es una persona que ya existe.
+            resp = c2.multiselect(t("Person in charge"), _usuarios_de(grupo),
+                                  format_func=lambda u: _etq_us(_usuarios_de(grupo)).get(u, u),
+                                  key="nloc_resp")
             instr = st.text_area(t(":material/push_pin: Instructions / notes"), key="nloc_ins",
                                  placeholder=t("Hours, access, site rules…"))
             _guardar = st.form_submit_button(t(":material/save: Create location"),
@@ -4678,7 +4723,7 @@ def _nueva_localizacion_form(grupo: str):
                 st.error(t("The name is required."))
                 return
             _ok, _res = P.create_project(
-                grupo, nom.strip(), ubicacion=_ubi, ingeniero=resp.strip(),
+                grupo, nom.strip(), ubicacion=_ubi, ingeniero=";".join(resp),
                 campo_asignados=asg, instrucciones=instr, tipo=tipo,
                 lat="" if _lat is None else _lat,
                 lng="" if _lng is None else _lng,
@@ -4793,7 +4838,7 @@ def _detalle_localizacion(pid: str, grupo: str):
               (t(":material/lock: closed") if _cerrada
                else t(":material/check_circle: open"))]
         if str(prj.get("Ingeniero", "")).strip():
-            _c.append(f"resp. {prj.get('Ingeniero')}")
+            _c.append(f"resp. {P.head_installers_label(prj, grupo)}")
         st.caption(" · ".join(_c))
         if str(prj.get("Ubicacion", "")).strip():
             st.markdown(maps.maps_link_md(prj.get("Ubicacion")))
@@ -4835,12 +4880,7 @@ def _detalle_localizacion(pid: str, grupo: str):
 
 
 def _editar_localizacion(pid, grupo, prj):
-    campos = []
-    try:
-        campos = [u["Usuario"] for u in auth.list_users(grupo)
-                  if str(u.get("Rol", "")) == "campo"]
-    except Exception:
-        pass
+    campos = _field_users(grupo)
     _actuales = _loc_personas(prj)
     # Fuera del form: para avisar en vivo de contacto/credenciales al asignar (v149).
     _asg = st.multiselect(t(":material/engineering: Who normally works here"),
@@ -4861,8 +4901,13 @@ def _editar_localizacion(pid, grupo, prj):
         tipo = c1.selectbox(t("Type *"), P.TIPOS_INTERNOS,
                             index=P.TIPOS_INTERNOS.index(_tp) if P.es_interno(_tp) else 0,
                             key=f"eloc_tipo_{pid}")
-        resp = c2.text_input(t("Person in charge"), value=str(prj.get("Ingeniero", "")),
-                             key=f"eloc_resp_{pid}")
+        # ⚠️ De LISTA como todo lo demás. Aquí NO se filtra por «campo»: una oficina
+        # o un almacén los suele llevar alguien de administración.
+        _us_loc = _usuarios_de(grupo)
+        resp = c2.multiselect(t("Person in charge"), _us_loc,
+                              default=[u for u in P.head_installers(prj) if u in _us_loc],
+                              format_func=lambda u: _etq_us(_us_loc).get(u, u),
+                              key=f"eloc_resp_{pid}")
         # ⚠️ «Cerrada» es el estado propio de una localización (v422): no tiene avance,
         # así que «En pausa»/«Completado» no significan nada aquí.
         _est_act = str(prj.get("EstadoManual", "")) or ""
@@ -4885,7 +4930,7 @@ def _editar_localizacion(pid, grupo, prj):
             return
         _ok, _msg = P.update_project(pid, {
             "Nombre": nom.strip(), "Tipo": tipo,
-            "Ingeniero": resp.strip(), "Instrucciones": instr,
+            "Ingeniero": ";".join(resp), "Instrucciones": instr,
             "CampoAsignados": ";".join(_asg),
             "EstadoManual": est,
             "Estado": P.derive_estado(0, est, tipo),

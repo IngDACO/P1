@@ -1356,3 +1356,43 @@ def set_ganancia_fija(pid: str, valor) -> tuple:
     """
     v = max(0.0, _num(valor))
     return update_project(pid, {"GananciaFija": str(round(v, 2)) if v > 0 else ""})
+
+# ══════════════════════════════════════════════════════════
+#  Head installer/s (v459) — antes «Engineer in charge»
+# ══════════════════════════════════════════════════════════
+# ⚠️ Se guardan los LOGIN, no los nombres, separados por «;» (igual que
+# `CampoAsignados`). El login ES la identidad: dos personas pueden llamarse igual —
+# ya pasó con «Mei Chen» (v413)— y un nombre además puede cambiar, mientras que el
+# login no. El nombre se resuelve solo al MOSTRAR.
+#
+# ⚠️ La columna sigue llamándose `Ingeniero`: renombrarla obligaría a tocar los ~10
+# sitios que la leen sin ganar nada, y el nombre de una columna es un identificador
+# interno, no una etiqueta de pantalla (la regla de v232/v442: se cambia lo que se
+# MUESTRA, nunca la clave).
+def head_installers(prj: dict) -> list:
+    """Los LOGIN de los head installers de una obra. [] si no hay."""
+    return [x.strip() for x in str((prj or {}).get("Ingeniero", "")).split(";") if x.strip()]
+
+
+def head_installers_label(prj: dict, grupo: str = "") -> str:
+    """«Javier López, Mei Chen» — para pantalla, informes y correos.
+
+    ⚠️ Desempata homónimos con `auth.etiqueta_usuarios` (v413): si dos personas se
+    llaman igual, se añade el login para poder distinguirlas.
+    ⚠️ Y degrada al valor CRUDO si no se puede leer la lista de usuarios: un fallo de
+    lectura no puede dejar el informe sin responsable.
+    """
+    _ids = head_installers(prj)
+    if not _ids:
+        return ""
+    try:
+        from core import auth
+        _us = auth.list_users(grupo or str((prj or {}).get("Grupo", "")))
+        _etq = auth.etiqueta_usuarios(_us)
+        _por_login = {str(u.get("Usuario")): u for u in _us}
+        return ", ".join(_etq.get(i) or str(_por_login.get(i, {}).get("Nombre") or i)
+                         for i in _ids)
+    except Exception as e:
+        logger.warning("head_installers_label: no se pudo resolver el nombre: %s", e)
+        return ", ".join(_ids)
+

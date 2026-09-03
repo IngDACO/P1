@@ -323,7 +323,7 @@ def generate_user_report(project_params, calculated, optimizer_result,
         _fila(d("Client"), meta["cliente"], d("Report no."), n_inf),
         _fila(d("Project"), meta["proyecto"], d("Date"), fecha),
         _fila(d("Location"), meta["ubicacion"], d("Model"), meta["modelo"]),
-        _fila(d("Engineer in charge"), meta["ingeniero"], d("Number of stops"), meta["ns"]),
+        _fila(d("Head installer/s"), meta["ingeniero"], d("Number of stops"), meta["ns"]),
     ], colWidths=[W * 0.24, W * 0.30, W * 0.22, W * 0.24])
     _cmds_it = [
         ("BACKGROUND", (0, 0), (-1, -1), C_LIGHT),
@@ -627,7 +627,7 @@ def generate_user_report(project_params, calculated, optimizer_result,
         [Paragraph(f"<font size=8 color='#666666'>{d('PREPARED BY')}</font><br/><br/><br/>"
                    "_______________________________<br/>"
                    f"<b>{meta['ingeniero']}</b><br/>"
-                   f"<font size=8 color='#666666'>{d('Engineer in charge')} · COPEX</font>",
+                   f"<font size=8 color='#666666'>{d('Head installer/s')} · COPEX</font>",
                    styles["UInfo"]),
          Paragraph(f"<font size=8 color='#666666'>{d('RECEIVED BY')}</font><br/><br/><br/>"
                    "_______________________________<br/>"
