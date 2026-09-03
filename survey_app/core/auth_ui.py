@@ -770,12 +770,20 @@ def _owner_drive_limpieza():
         if not DS.is_available():
             st.info(t("Google Drive is not connected."))
             return
-        if not st.button(t(":material/refresh: Scan Drive"), key="dl_scan"):
-            return
-        try:
-            inv = DS.inventario()
-        except Exception as e:
-            st.error(f"{t('Could not read Drive')}: {e}")
+        # ⚠️ REGLA v110: un `st.button` solo COMPUTA y guarda en `session_state`; el
+        # render vive FUERA. Con el inventario dentro del `if st.button(...)`, tocar el
+        # radio o escribir DELETE disparaba un rerun, el botón valía False y la tabla
+        # DESAPARECÍA — así que había que reescanear… y al tocar el radio otra vez se
+        # perdía de nuevo: un bucle en el que nunca se podía llegar a borrar. Se vio
+        # usándola, no leyéndola.
+        if st.button(t(":material/refresh: Scan Drive"), key="dl_scan"):
+            try:
+                st.session_state["_dl_inv"] = DS.inventario()
+            except Exception as e:
+                st.session_state.pop("_dl_inv", None)
+                st.error(f"{t('Could not read Drive')}: {e}")
+        inv = st.session_state.get("_dl_inv")
+        if not inv:
             return
 
         # ⚠️ Se compara contra los proyectos VIVOS de TODOS los grupos: una carpeta
@@ -847,6 +855,9 @@ def _owner_drive_limpieza():
                          + " " + ", ".join(errores[:5]))
             flash.exito(t(":material/check_circle: {n} item(s) deleted from Drive.")
                         .replace("{n}", str(ok)))
+            # ⚠️ El inventario guardado ya no es cierto: tirarlo obliga a reescanear y
+            # evita enseñar una tabla de archivos que acaban de borrarse.
+            st.session_state.pop("_dl_inv", None)
             st.rerun()
 
 
