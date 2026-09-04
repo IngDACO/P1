@@ -90,6 +90,15 @@ CABECERAS = {
     # documentos, fechas y notas
     "Archivo": "File",
     "Fecha": "Date",
+    # v461 · bandeja de correcciones de fichaje. ⚠️ Van AQUI y no envueltas en
+    # `t()` en su modulo: la CLAVE es el nombre de columna que el codigo lee de
+    # vuelta, y solo la ETIQUETA cambia (v450). Tres de estas cuatro se le
+    # escaparon al detector por idioma —«Campo», «Antes», «Ahora» no llevan
+    # acento ni palabra funcional—, la ceguera de la trampa nº28.
+    "Campo": "Field",
+    "Antes": "Before",
+    "Ahora": "Now",
+    "Revisor": "Reviewed by",
     "Nota": "Note",
     "Valor": "Value",
     "Numero": "Number",

@@ -51,6 +51,9 @@ HOJAS_LECTURA = (
     "Roster", "Trabajos", "PreStarts", "Calculos", "Rieles",
     "Auditoria", "Ordenes",
     "Catalogo", "Cotizaciones",   # v352/v353 — cotizaciones     # v342 — si no entra aquí, sería una llamada suelta
+    # ⚠️ v461: si NO entra aquí, `registros(SHEET)` sin cabeceras devuelve None y
+    # `correcciones` leería VACÍO PARA SIEMPRE, sin un solo error (regla v353).
+    "CorreccionesFichaje",
 )
 
 

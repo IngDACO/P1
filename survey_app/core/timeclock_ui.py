@@ -20,10 +20,15 @@ import streamlit as st
 from core import flash
 import streamlit.components.v1 as components
 
+import logging
+
 from core import timeclock
 from core import projects as projects_data
 from core import ui_common as ui
 from core import clock
+from core import correcciones
+
+logger = logging.getLogger(__name__)
 # v374: el recordatorio del Pre-Start del día. Sin ciclo: `prestart` importa
 # `timeclock`/`clock`/`num`, nunca esta UI.
 from core import prestart
@@ -418,16 +423,154 @@ def _aviso_olvido(nombre, grupo, usuario, sess):
     d_fin = c1.date_input(t("Day you finished"), value=sugerido.date(), key="olv_d")
     t_fin = c2.time_input(t("Time"), value=sugerido.time().replace(second=0, microsecond=0),
                           key="olv_t")
-    fin = _dt.combine(d_fin, t_fin)
+    fin = datetime.combine(d_fin, t_fin)
     ok_rango = ci_min is not None and ci_min < fin <= clock.now()
     if not ok_rango:
         st.caption(t(":orange[:material/warning:] The finish time must be between the clock-in and now."))
     if st.button(t(":material/cancel: Close forgotten session"), key="olv_btn", width="stretch",
                  disabled=not ok_rango):
         for tipo in stale:
-            timeclock.clock_out(nombre, grupo, tipo=tipo, usuario=usuario, out_ts=fin)
-        flash.exito(t("Session closed at the time given."))
+            _s = stale[tipo]
+            _ok, _ = timeclock.clock_out(nombre, grupo, tipo=tipo, usuario=usuario,
+                                         out_ts=fin)
+            # ⚠️ Se anota DESPUÉS de cerrar y su fallo no deshace el cierre: la
+            # sesión ya estaba sangrando horas contra el reloj y pararla es lo
+            # urgente. Si el apunte falla, queda en el log (criterio de v342).
+            if _ok:
+                try:
+                    correcciones.registrar(
+                        grupo, usuario, nombre, tipo, _s.get("proyecto", ""),
+                        correcciones.CAMPO_OUT, "", fin.strftime(timeclock.FMT),
+                        motivo=t("Forgotten clock out (session left open)"))
+                except Exception as _e:
+                    logger.warning("no se pudo anotar la corrección: %s", _e)
+        flash.exito(t("Session closed at the time given. Your supervisor will review it."))
         st.rerun()
+
+
+def _sesiones_de_hoy(nombre, grupo, usuario) -> list:
+    """Los fichajes de HOY de esta persona, abiertos o cerrados."""
+    try:
+        return [r for r in timeclock.mis_fichajes(nombre, grupo, usuario, limite=20)
+                if _es_hoy(r.get("entrada"))]
+    except Exception as e:
+        logger.warning("_sesiones_de_hoy: %s", e)
+        return []
+
+
+def _corregir_horas(nombre, grupo, usuario, sess):
+    """«Se me olvidó fichar»: poner la hora REAL de entrada o de salida.
+
+    Decisiones del usuario (v461): la hora nueva **se aplica ya** y el
+    administrador la revisa después; y **solo el mismo día** — lo de ayer ya no se
+    toca aquí (la excepción es cerrar una sesión que sigue ABIERTA, que hace
+    `_aviso_olvido`, porque esa sigue acumulando horas contra el reloj).
+    """
+    _hoy = _sesiones_de_hoy(nombre, grupo, usuario)
+    _gen = sess.get(timeclock.TIPO_GENERAL)
+    _prj = sess.get(timeclock.TIPO_PROYECTO)
+    with st.expander(t("Did you forget to clock in or out?"),
+                     icon=":material/schedule_send:"):
+        st.caption(t("Put the time you actually started or finished. It applies "
+                     "right away and your supervisor reviews it. Today only."))
+        # ── (a) Empecé antes de fichar y AÚN NO he fichado ──
+        if not _gen and not _prj:
+            st.markdown(t("**I started earlier and had not clocked in**"))
+            _c1, _c2 = st.columns([2, 1])
+            _t0 = _c1.time_input(t("Time I actually started"),
+                                 value=clock.now(grupo).time().replace(second=0,
+                                                                      microsecond=0),
+                                 key="cor_in_t")
+            _ini = datetime.combine(clock.today(grupo), _t0)
+            _ok_ini = _ini < clock.now(grupo)
+            if not _ok_ini:
+                st.caption(t(":orange[:material/warning:] That time is still to come."))
+            if _c2.button(t(":material/play_circle: Open workday at that time"),
+                          key="cor_in_btn", width="stretch", disabled=not _ok_ini):
+                _ok, _msg = timeclock.clock_in(
+                    nombre, "", "", grupo, tipo=timeclock.TIPO_GENERAL,
+                    usuario=usuario, in_ts=_ini)
+                if _ok:
+                    correcciones.registrar(
+                        grupo, usuario, nombre, timeclock.TIPO_GENERAL, "",
+                        correcciones.CAMPO_IN,
+                        clock.now(grupo).strftime(timeclock.FMT),
+                        _ini.strftime(timeclock.FMT),
+                        motivo=t("Forgot to clock in"))
+                    flash.exito(t("Clocked in at the time given. Your supervisor "
+                                  "will review it."))
+                else:
+                    flash.error(_msg)
+                st.rerun()
+        # ── (b) Ya fiché, pero con la hora equivocada ──
+        if not _hoy:
+            return
+        st.markdown(t("**Fix the time of one of today's entries**"))
+        _et = {}
+        for _i, _r in enumerate(_hoy):
+            _lab = (f"{_r.get('proyecto') or t('Workday (general)')} · "
+                    f"{str(_r.get('entrada'))[11:16]}"
+                    + (f" → {str(_r.get('salida'))[11:16]}" if _r.get('salida')
+                       else f" → {t('open')}"))
+            # ⚠️ Dos fichajes del mismo proyecto entrados en el MISMO minuto dan
+            # la misma etiqueta, y un dict la colapsa: una de las dos filas
+            # quedaría IMPOSIBLE de corregir, sin ningún error. Es el fallo de
+            # v147/v150/v413 — una clave hecha con datos del usuario tiene que ser
+            # única DE VERDAD o pierde filas en silencio.
+            if _lab in _et:
+                _lab = f"{_lab}  ({_i + 1})"
+            _et[_lab] = _r
+        _sel = ui.elegir(t("Entry"), list(_et), key="cor_sel")
+        if not _sel:
+            return
+        _r = _et[_sel]
+        # ⚠️ Solo se ofrece corregir la SALIDA si existe: en una sesión abierta la
+        # salida se pone al cerrar, y ofrecer las dos invitaría a inventarse una.
+        _campos = [correcciones.CAMPO_IN] + ([correcciones.CAMPO_OUT]
+                                             if _r.get("salida") else [])
+        _cual = st.radio(t("What was wrong?"), _campos, horizontal=True,
+                         key="cor_campo")
+        _act = str(_r.get("entrada") if _cual == correcciones.CAMPO_IN
+                   else _r.get("salida"))
+        try:
+            _base = datetime.strptime(_act, timeclock.FMT)
+        except Exception:
+            st.caption(t("That entry has an unreadable time; ask your supervisor."))
+            return
+        _c1, _c2 = st.columns([2, 1])
+        _nt = _c1.time_input(t("Correct time"), value=_base.time().replace(
+            second=0, microsecond=0), key="cor_new_t")
+        _nuevo = datetime.combine(clock.today(grupo), _nt)
+        _motivo = st.text_input(t("Why (optional)"), key="cor_motivo",
+                                placeholder=t("I forgot to clock in on arrival…"))
+        # La entrada no puede ir por delante de la salida ni al revés.
+        _otro = (_r.get("salida") if _cual == correcciones.CAMPO_IN
+                 else _r.get("entrada"))
+        _valido = _nuevo <= clock.now(grupo)
+        if _valido and _otro:
+            try:
+                _o = datetime.strptime(str(_otro), timeclock.FMT)
+                _valido = (_nuevo < _o if _cual == correcciones.CAMPO_IN
+                           else _nuevo > _o)
+            except Exception:
+                pass
+        if not _valido:
+            st.caption(t(":orange[:material/warning:] The clock in must come before "
+                         "the clock out, and neither can be in the future."))
+        if st.button(t(":material/save: Apply the correct time"), key="cor_btn",
+                     width="stretch", disabled=not _valido):
+            _ok, _msg = timeclock.corregir_fichaje(
+                grupo=grupo, usuario=usuario, nombre=nombre,
+                tipo=_r.get("tipo"), campo=_cual, valor_actual=_act,
+                valor_nuevo=_nuevo)
+            if _ok:
+                correcciones.registrar(
+                    grupo, usuario, nombre, _r.get("tipo"), _r.get("proyecto", ""),
+                    _cual, _act, _nuevo.strftime(timeclock.FMT), motivo=_motivo)
+                flash.exito(t("Time corrected. Your supervisor will review it."))
+            else:
+                flash.error(_msg)
+            st.rerun()
 
 
 def _proyectos_para(rol, usuario, grupo):
@@ -527,6 +670,7 @@ def render_timeclock_tab():
     st.caption(f"**{nombre}**" + (f"  ·  {t('group')} **{grupo}**" if grupo else "")
                + t("  ·  your time entries are private."))
     _aviso_olvido(nombre, grupo, usuario, sess)
+    _corregir_horas(nombre, grupo, usuario, sess)
 
     # ── Estado: una FRANJA, no una tarjeta KPI (v308) ──
     # "Sin fichar" no es una cifra y competía visualmente con las horas; además, sin

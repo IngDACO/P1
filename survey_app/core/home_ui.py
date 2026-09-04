@@ -49,6 +49,10 @@ _SUBSECCIONES = {
         # v430: la bandeja de ausencias vive AQUÍ, junto al tablero que va a modificar
         # — aprobar una escribe en el planificador, así que el sitio natural es este.
         ("🌴 Ausencias", ":material/event_busy: Absences"),
+        # v461: las correcciones de fichaje son la misma clase de cosa —alguien
+        # pide, el admin aprueba— así que van junto a la otra bandeja en vez de
+        # esconderse en Finanzas, donde nadie entra a aprobar nada.
+        ("⏱ Correcciones", ":material/schedule_send: Time fixes"),
         ("👷 Usuarios", ":material/badge: Users")]),
     "proyectos": ("adm_proy_sub", [
         ("📊 Proyectos", ":material/format_list_bulleted: Projects"),
@@ -882,6 +886,9 @@ def _seccion_planificacion(grupo):
     elif sub == "🌴 Ausencias":
         from core import ausencias_ui
         ausencias_ui.render_bandeja(grupo)
+    elif sub == "⏱ Correcciones":
+        from core import correcciones_ui
+        correcciones_ui.render_bandeja(grupo)
     else:
         from core.auth_ui import _grupo_usuarios
         _grupo_usuarios(grupo)

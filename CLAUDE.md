@@ -7312,6 +7312,145 @@ se GUARDAN en la hoja `Actividades` → migración del histórico). El informe d
 no está entero en inglés hasta que caigan esas tres, y conviene saberlo antes de
 enseñárselo a un cliente.
 
+## CORREGIR EL FICHAJE: el campo pone la hora real, el admin la revisa (v461)
+
+Petición del usuario: *«permitir modificar clock in/out en caso de olvido por parte del
+usuario de campo. Admin debe aprobar estas modificaciones… si un usuario inicia a
+trabajar pero se le olvidó hacer clock in y luego se acuerda, que pueda poner la hora en
+la que inició. De igual forma con el clock out»*.
+
+Hasta ahora el técnico que llegaba a las 7:00 y se acordaba de fichar a las 9:00 perdía
+esas dos horas: no había forma de arreglarlo salvo pedirle al administrador que tocara la
+hoja a mano.
+
+### Las tres decisiones del usuario
+| | |
+|---|---|
+| **Cuándo cuenta** | la hora nueva **se aplica YA**; el admin la revisa después y puede revertirla |
+| **Si el periodo ya se pagó** | se permite, pero al admin **se le dice qué nómina lo cubre** |
+| **Plazo** | **el mismo día**… con una excepción, que es lo que se discutió aparte |
+
+### ⚠️ La excepción no es un capricho: una sesión abierta SANGRA horas
+`_row_segmentos` cuenta una fila `ABIERTO` **hasta AHORA** (v164). Medido con la función
+real, una entrada a las 7:00 sin salida da:
+```
+mismo día 10,56 h · al día siguiente 34,56 h · a los 2 días 58,56 h · a los 5 días 130,56 h
+```
+A 40 $/h son **2.342 USD** por una sesión olvidada de dos días, y esas horas entran en la
+nómina y en el costo de la obra. Por eso cerrar una sesión que sigue abierta se puede
+hacer aunque sea de otro día: no es corregir el pasado, es parar una hemorragia. Es lo
+único que se salta la regla del mismo día, y también pasa por la bandeja.
+
+### ⚠️ El punto que decide si esto sirve de algo: RECALCULAR las Horas
+Cambiar solo el timestamp no habría movido nada. `_row_segmentos` **respeta la columna
+`Horas` guardada** para una fila cerrada de un solo día (v164, y es a propósito: así el
+total con `days=None` no cambia). O sea que corregir la entrada de 09:00 a 07:00 habría
+dejado la nómina y el costo de la obra **exactamente igual, sin que nadie lo notara** —
+la corrección se vería en pantalla y no existiría para el dinero. `corregir_fichaje`
+recalcula y escribe `Horas` en el mismo `batch_update`.
+- ⚠️ Una sesión **abierta** no recibe Horas: sus horas se calculan al vuelo contra el
+  reloj, y escribir un 0 la haría parecer una jornada de cero horas (el cero silencioso
+  de v346).
+- La fila se localiza por **usuario + hora actual + tipo**, no por número de fila: las
+  filas se desplazan y una referencia posicional envejece mal.
+
+### ⚠️ El caso que REVERTIR no puede resolver — y que apareció al repasar
+Un cierre de sesión olvidada **no tiene «hora anterior»**: estaba abierta. Así que
+revertirlo la devolvería a abierta, o sea a volver a acumular contra el reloj — el
+problema que se acababa de arreglar. Y dejarla cerrada sin hora de salida es peor.
+→ Ahí el botón no es «revertir» sino **`ajustar`**: el admin fija la hora correcta, que
+es lo que necesita de verdad. ⚠️ Solo cambia la HORA (el DÍA es el del fichaje; moverlo
+lo pasaría a otra jornada, a otra nómina y a otro día de costo) y **reescribe
+`ValorNuevo`**: si no, el histórico diría una hora y la hoja otra — un rastro que miente
+es peor que no tenerlo.
+⚠️ El orden es el de v343 en las dos: **primero el fichaje, después la marca**. Al revés,
+un fallo a mitad deja la corrección marcada como resuelta con el fichaje aún cambiado.
+
+### Lo que NO se inventó
+El vocabulario de estados es el de `ausencias` (v430) — pendiente/aprobada/revertida—
+porque la app ya tiene un flujo de «alguien pide, el admin resuelve», y dos vocabularios
+para lo mismo divergen. La bandeja vive **junto a la de ausencias** en Planificación, no
+en Finanzas, por lo mismo: es la misma clase de cosa y ahí es donde el admin aprueba.
+
+### ⚠️ El guardián dio FALLO con el código CORRECTO, y por la FORMA del dato
+`_SUBSECCIONES[k]` es una tupla `(clave_estado, [(id, display), …])` y yo la leí como si
+fuera la lista, así que el chequeo decía «el ID no está definido en la navegación» con el
+ID perfectamente puesto. Es la regla v135 aplicada a mi propio chequeo: **mirar la forma
+del dato antes de indexarlo**. Y es la advertencia de v459 en su otra cara — un guardián
+rojo de base invalida la tanda de roturas, así que se arregla y se repite.
+
+### ⚠️ Y una rotura SE ESCAPÓ, por comparar por subcadena
+El chequeo de «ajustar reescribe ValorNuevo» buscaba el literal, y **`ValorNuevo`
+aparece dos veces** en esa función (también al LEERLO). Borrando la escritura, la otra
+aparición seguía casando y el guardián pasaba. Es la trampa nº2 otra vez (v449, v452,
+v453). Reescrito como estructural: por AST, `ValorNuevo` tiene que estar entre las
+CLAVES del dict que se le pasa a `_set`.
+
+### Cuatro suposiciones mías rotas por ejecutar en vez de leer (regla v135)
+| Supuse | Es |
+|---|---|
+| `mis_fichajes(..., dias=1)` | el parámetro es **`limite`** → habría sido TypeError |
+| `_dt` disponible en el módulo | solo existe como local de `_aviso_olvido` |
+| `logger` en `timeclock_ui` | **no existía**: NameError esperando en el `except` (v370) |
+| el 4.º de `kpi_row` es texto | es el **ACENTO** (color): `None` acaba como `--cpx-accent:None` |
+
+### Ejercitado contra la hoja REAL (método v344), con limpieza verificada
+foto → fichar con hora retroactiva → cerrar → corregir → registrar → revertir → aprobar →
+ajustar → limpiar → foto. **21 comprobaciones, 0 fallos, 0 filas de rastro.**
+Lo que demuestra el ciclo completo, leyendo de vuelta cada paso:
+- la hoja guarda **07:00**, la hora que dijo la persona, no «ahora»;
+- corregir 07:00 → 09:00 mueve las **Horas de 10,0 a 8,0**;
+- **revertir** devuelve las dos cosas (07:00 y 10,0 h) y la corrección no se puede
+  revisar dos veces;
+- **ajustar** un cierre olvidado a las 15:00 deja **6,0 h** y el rastro con la hora REAL,
+  sin mover el día.
+
+⚠️ **El aviso «ese día ya se pagó» se probó en las DOS direcciones.** La demo está vacía
+de nóminas, así que comprobar solo que devuelve `""` sería el paso en vacío (trampa nº1):
+un `return ""` fijo lo pasaría. Con casos construidos: detecta la nómina que cubre el
+día, y **no** dispara con una de otro periodo ni con la de otra persona.
+
+### Verificación
+`verif_v461.py`, **26 comprobaciones**, probado contra **11 roturas: las caza las 11** —
+una solo tras corregirlo (la de la subcadena), y el guardián se dejó **verde con el
+código bueno antes** de creerse ningún recuento. Incluye un caso de CONTROL (un cambio
+inocuo que debe seguir pasando), porque un guardián que grita con cualquier edición no
+distingue nada.
+
+### ⚠️ La suite destapó SEIS rojos, y cinco eran míos
+Correr la suite entera (regla v385) dio **94 verde · 6 rojo**. Clasificados uno a uno,
+mirando el código acusado antes de tocar nada:
+
+| Guardián | Qué era | Veredicto |
+|---|---|---|
+| **v365** | mis 3 `(st.toast if ok else st.error)` | **REAL**: introduje un segundo mecanismo de mensaje donde la app ya tiene uno — medido, **74 sitios** usan `(flash.exito if ok else st.error)` y solo 3 usaban toast: **los míos**. Es el patrón que v140/v146 desmontan. Convertidos |
+| **v322** | un `import auth` sin usar | **REAL, y peor de lo que decía**: sobraba porque me había dejado a medias la regla de los homónimos — la bandeja mostraba `Nombre` a secas, así que **dos personas homónimas salían idénticas en la pantalla donde se decide sobre sus horas**. Séptima aparición del patrón (v151·v306·v319·v348·v413) |
+| **v442·v443·v449** | la cabecera `'Revisado por'` | **REAL**, y el guardián solo vio **una de cuatro**: `Campo`, `Antes` y `Ahora` tampoco estaban en `tabla.CABECERAS`, así que la tabla habría salido `Person · Campo · Antes · Ahora · Status` — **traducción a medias dentro de la misma tabla**, el peor caso según v450. Se le escapan por ser palabras cortas sin acento (trampa nº28) |
+| **v441** | `'cor_sel'` y dos `'Estado'` | **FALSOS POSITIVOS**, pero el código era el raro: `'cor_sel'` es la **KEY** del widget y **solo mi llamada** de las 21 del repo la pasaba como posicional; y los dos `'Estado'` eran `r.get("Estado")` dentro de `kpi_row` (una LECTURA de columna, el error nº2 del medidor de v450). Se alinea el código con la convención en vez de relajar el guardián |
+
+⚠️ **Y la clave de cabecera se dejó de UNA palabra a propósito**: la red de v442 mira
+cadenas de 2+ palabras, y por eso las ~60 claves españolas del repo (`Cliente`, `Horas`,
+`Costo`…) no disparan — todas son de una palabra. `"Revisado por"` era la única
+excepción del repo entero. Se renombró a `"Revisor"` y se añadió al mapa: **la etiqueta
+sigue siendo traducible** (patrón v450) y no se toca el guardián.
+
+### ⚠️ Y mi propio guardián me cazó con un falso positivo MÍO
+El chequeo de etiquetas marcó `logger.warning(...)` como texto de pantalla: **`logger.warning`
+comparte NOMBRE con `st.warning`**, y yo filtraba por atributo en vez de por RECEPTOR — el
+error que v439 documenta con 92 casos. Peor: con el guardián rojo por eso, **la tanda de
+roturas que corrí a continuación no valía nada** (el control salía «FALLA» porque todo
+fallaba). Es la lección de v459 en la misma versión que la cita: **antes de creerse un
+«11/11 cazadas», comprobar que el guardián está VERDE con el código bueno.** Arreglado,
+repetido: 27 verde de base, 11/11 roturas.
+
+### Dos huecos del extractor de i18n, dichos y no arreglados
+`i18n_tool.piezas` no sabe que el 3.er posicional de `ui.elegir(label, opciones, key)` es
+una key, ni que el argumento de `.get()` es una lectura de columna. Nadie los había
+pisado porque el repo pasa la key por nombre y no hace `.get()` dentro de un `kpi_row`.
+**Se alineó el código y se dejó el extractor intacto**: tocar la herramienta compartida
+—la usan las redes de v440/v441/v449/v452— al cierre de una versión es más riesgo que
+valor, y el hueco queda escrito aquí en vez de fingido cerrado.
+
 ## «Engineer in charge» pasa a ser HEAD INSTALLER/S, de una lista (v459)
 
 Petición del usuario: *«cambiar en proyectos el engineer in charge por head installer/s,
@@ -9077,7 +9216,7 @@ literal, así que **no casaba nunca** — y dejó pasar «Plomo riel izquierdo»
 Es el mismo fallo de v436, cometido otra vez ese mismo día. Se vio con `cat -A`, no
 leyendo. → **Cualquier `\b`, `\n` o `\w` va por fichero escrito, nunca por heredoc.**
 
-## Versiones desplegadas (v456 = actual)
+## Versiones desplegadas (v461 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -9085,6 +9224,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v461 | **Corregir el fichaje: el campo pone la hora real y el admin la revisa** (petición del usuario; decisiones suyas: se aplica YA, se avisa si el periodo ya se pagó, y solo el mismo día). ⚠️ **Lo que decide si sirve de algo es recalcular las `Horas`**: `_row_segmentos` respeta la columna guardada para una fila cerrada del mismo día (v164), así que cambiar solo el timestamp habría dejado la nómina y el costo de la obra **idénticos, sin que nadie lo notara**. ⚠️ La excepción del «mismo día» está MEDIDA: una sesión abierta acumula contra el reloj —10,6 h el mismo día, **130,6 h a los cinco**, 2.342 USD a 40 $/h—, así que cerrarla no es corregir el pasado, es parar una hemorragia. ⚠️ Y al repasar apareció el caso que **revertir no puede resolver**: un cierre olvidado no tiene «hora anterior», así que revertirlo la devolvería a abierta → el admin **ajusta** la hora, sin mover el DÍA (otro día es otra nómina). ⚠️ **La suite destapó 6 rojos y 5 eran míos**: metí `st.toast` donde la app usa `flash` en 74 sitios; el `import auth` que sobraba delataba que me dejé a medias la regla de HOMÓNIMOS (séptima vez); y de las 4 cabeceras sin traducir el guardián **solo vio una** —las otras tres son palabras cortas sin acento, la trampa nº28—. ⚠️ Y mi propio guardián dio **FALLO con el código correcto** dos veces: leyendo `_SUBSECCIONES` como si fuera una lista (es una tupla, regla v135) y tomando `logger.warning` por texto de pantalla (filtrar por RECEPTOR, v439) — con él rojo de base, **una tanda de 11 roturas «cazadas» no probaba nada** (v459). Ejercitado contra la hoja real de punta a punta sin rastro; 27 comprobaciones, 11/11 roturas, suite **100 verde · 0 rojo** |
 | v459 | **«Engineer in charge» pasa a ser HEAD INSTALLER/S, elegidos de una LISTA** (petición del usuario; decisiones suyas: solo usuarios de CAMPO, y los nombres separados por coma). Escrito a mano, el responsable era una cadena que **no casaba con nadie**: una errata no da error, deja la obra con un responsable que no existe y que ningún filtro puede cruzar. Se guardan los **LOGIN** unidos por «;» (el login ES la identidad: dos personas pueden llamarse igual —«Mei Chen», v413— y un nombre puede cambiar) y el nombre se resuelve al MOSTRAR, desempatando homónimos. ⚠️ La columna sigue llamándose `Ingeniero`: se cambia lo que se MUESTRA, nunca la clave (v232/v442). Los cuatro caminos pasan a multiselect — obra (solo campo) y localización (**todos** los del grupo: una oficina la suele llevar administración, y filtrar por campo dejaría fuera al responsable real). ⚠️ **Y escribí un helper que YA EXISTÍA**: `_field_users` hace exactamente lo mismo, así que dejé **tres** definiciones del filtro «rol == campo» en el módulo — el patrón de los cinco `_num` divergentes de v323; unificadas, con chequeo permanente. ⚠️ **Dos chequeos míos midiendo otra cosa**: el guardián comparaba contra `ast.dump` (que usa `repr`, comillas SIMPLES) → **FALLO con el código correcto**, y eso **invalidó la primera tanda de roturas** (6/6 «cazadas» con el guardián rojo de base, o sea ninguna probaba nada); y el script de limpieza decía «0 copias restantes» contando `'campo'` en comillas simples, que no aparece nunca en el fuente — con esa cifra habría dado la limpieza por buena **dejando una copia viva**. 7/7 roturas |
 | v456 | **Se vacía la demo** (23 hojas, 869 filas; 8 usuarios de campo) conservando las 5 cuentas de gestion, la hoja `Auditoria` y **todas las cabeceras**; respaldo completo fuera del repo. Comprobado que la app **aguanta en vacio**: 17 agregados sin una excepcion y cada pantalla explica su estado. ⚠️ **ERROR DE ORDEN**: se vacio ANTES de borrar Drive, y los 31 archivos quedaron **inalcanzables desde la app** (el boton de borrar vive en la ficha del proyecto, que ya no existe) → hubo que sacar sus IDs del respaldo. **Lo que vive FUERA de la hoja se borra PRIMERO.** + `drive_store.inventario()/borrar()` y la pantalla **Drive maintenance** (solo propietario, con DELETE tecleado): ⚠️ la salvaguarda real es el **scope `drive.file`**, que impide ver nada que la app no haya creado. ⚠️ Y vaciar dejo **3 guardianes en rojo**: se resuelve con una tercera categoria en el runner —**codigo 2 = SIN DATOS**, ni verde (seria un OK que no comprobo nada) ni rojo (no hay nada roto)—, listada aparte con el aviso de que esas afirmaciones dejaron de comprobarse |
 | v455 | **Se elimina el modelo viejo de ganancia** (% sobre la mano de obra), a peticion del usuario: convivian DOS formas de contestar «cuanto gano con esta obra» desde v360. Queda: precio pactado si vino de cotizacion → ganancia por rubro (por hora + fija) → **la obra vale su COSTO** y se avisa de quien trabajaria sin ganancia. El `%` pasa a ser siempre CONSECUENCIA, nunca entrada, asi que desaparecen el campo «Margin on labour» y el **editor de margenes de Rentabilidad** (v321). ⚠️ **Medido antes de tocar** porque mueve dinero: 10 de 19 obras lo usaban pero **solo 4 cambiaban de cifra** (las demas tienen costo 0) → ingreso del grupo **118.233,77 → 116.757,97**, y la ejecucion posterior dio EXACTAMENTE ese numero. ⚠️ La columna `MargenMO` **NO se quita de la cabecera** (desplazaria 20 columnas y la fila es POSICIONAL — el fallo de v363); se vacia su contenido. ⚠️ Y `MargenDefault` hacia **DOS trabajos**: el modelo viejo Y el punto de partida del margen de una linea de COTIZACION (el precio al cliente). Borrarlo, como se pidio, habria dejado cada linea nueva en 0% — se conservo y se señalo, porque **una instruccion dada sin conocer un efecto colateral no autoriza ese efecto**. 3/3 roturas cazadas |

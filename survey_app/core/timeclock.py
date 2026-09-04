@@ -383,9 +383,15 @@ def _matches(r, usuario: str, nombre: str, grupo: str) -> bool:
 
 def clock_in(nombre: str, proyecto: str, ubicacion: str, grupo: str = "",
              tipo: str = TIPO_PROYECTO, usuario: str = "",
-             proyecto_id: str = "") -> tuple:
+             proyecto_id: str = "", in_ts=None) -> tuple:
     """Registra un clock in (tipo 'general' o 'proyecto'). Devuelve (ok, mensaje).
-    Un usuario puede tener a la vez UNA sesión general y UNA de proyecto abiertas."""
+    Un usuario puede tener a la vez UNA sesión general y UNA de proyecto abiertas.
+
+    `in_ts` (datetime o str) permite fichar a una hora distinta de «ahora»: es el
+    olvido de ENTRADA (v461) — llegué a las 7:00 y me acuerdo de fichar a las 9:00.
+    ⚠️ Es el gemelo del `out_ts` que `clock_out` tiene desde v164; aquella versión
+    resolvió la salida olvidada y dejó la entrada sin arreglo posible.
+    """
     ws, err = _get_worksheet()
     if err:
         return False, err
@@ -409,16 +415,24 @@ def clock_in(nombre: str, proyecto: str, ubicacion: str, grupo: str = "",
             return False, (f"{t('You already have a clock in for')} {etq} "
                            f"{t('open since')} {r.get('Clock In')}.")
 
+    # ⚠️ La hora se normaliza ANTES de escribir: la fila es POSICIONAL y este
+    # valor va a la columna «Clock In», que es la que todo lo demás parsea.
+    if in_ts is None:
+        in_ts = _now()
+    elif hasattr(in_ts, "strftime"):
+        in_ts = in_ts.strftime(FMT)
+    else:
+        in_ts = str(in_ts)
     try:
         ws.append_row([nombre, "", proyecto or "", ubicacion or "",
-                       _now(), "", "", "ABIERTO", grupo, tipo, usuario or "",
+                       in_ts, "", "", "ABIERTO", grupo, tipo, usuario or "",
                        str(proyecto_id or "")],
                       value_input_option="RAW")
     except Exception as e:
         return False, f"{t('Error writing the timeclock entry')}: {e}"
     _invalidate_records()
     etq = t("Workday (general)") if tipo == TIPO_GENERAL else t("Project")
-    return True, f"✅ Clock IN {etq} {t('at')} {_now()}."
+    return True, f"✅ Clock IN {etq} {t('at')} {in_ts}."
 
 
 def clock_out(nombre: str, grupo: str = "", tipo: str = TIPO_PROYECTO,
@@ -484,6 +498,71 @@ def clock_out(nombre: str, grupo: str = "", tipo: str = TIPO_PROYECTO,
     _invalidate_records()
     return True, (f"✅ Clock OUT {t('at')} {out_ts}. "
                   f"{t('Hours worked')}: {horas}.")
+
+
+def corregir_fichaje(grupo, usuario, nombre, tipo, campo,
+                     valor_actual, valor_nuevo) -> tuple:
+    """Cambia la hora de entrada o de salida de UN fichaje. Devuelve (ok, msg).
+
+    ⚠️ La fila se localiza por **usuario + hora actual + tipo**, no por su número:
+    las filas se desplazan y una referencia posicional envejece mal. Esa terna es
+    única — un usuario no puede tener dos fichajes del mismo tipo abiertos al mismo
+    segundo (`clock_in` lo impide).
+
+    ⚠️ **Las Horas se recalculan aquí.** Si se cambiara solo el timestamp, la
+    columna `Horas` seguiría con el valor viejo y `_row_segmentos` la respeta para
+    las filas cerradas de un solo día (v164) — o sea que la corrección no movería
+    ni la nómina ni el costo de la obra, y nadie lo notaría.
+    """
+    ws, err = _get_worksheet()
+    if err:
+        return False, err
+    campo = str(campo or "").strip()
+    if campo not in ("Clock In", "Clock Out"):
+        return False, t("Only the clock in or the clock out can be corrected.")
+    if hasattr(valor_nuevo, "strftime"):
+        valor_nuevo = valor_nuevo.strftime(FMT)
+    valor_nuevo = str(valor_nuevo or "").strip()
+    valor_actual = str(valor_actual or "").strip()
+    try:
+        registros = ws.get_all_records(numericise_ignore=['all'])
+    except Exception as e:
+        return False, f"{t('Error reading the sheet')}: {e}"
+
+    fila = None
+    for i, r in enumerate(registros):
+        if (_matches(r, usuario, nombre, grupo)
+                and _tipo_of(r) == str(tipo or "").strip().lower()
+                and str(r.get(campo, "")).strip() == valor_actual):
+            fila, actual = i + 2, r
+    if fila is None:
+        return False, t("That time entry no longer exists with the given time.")
+
+    _ci = valor_nuevo if campo == "Clock In" else str(actual.get("Clock In", ""))
+    _co = valor_nuevo if campo == "Clock Out" else str(actual.get("Clock Out", ""))
+    # ⚠️ Una sesión ABIERTA no tiene salida: sus horas se calculan al vuelo contra
+    # el reloj, así que la columna se deja vacía en vez de escribir un 0 que
+    # parecería una jornada de cero horas (el cero silencioso de v346).
+    horas = ""
+    if _ci and _co:
+        try:
+            _t0, _t1 = datetime.strptime(_ci, FMT), datetime.strptime(_co, FMT)
+            if _t1 <= _t0:
+                return False, t("The clock out must be after the clock in.")
+            horas = round((_t1 - _t0).total_seconds() / 3600.0, 2)
+        except Exception:
+            horas = ""
+
+    col = "E" if campo == "Clock In" else "F"
+    try:
+        _w = [{"range": f"{col}{fila}", "values": [[valor_nuevo]]}]
+        if horas != "":
+            _w.append({"range": f"G{fila}", "values": [[str(horas)]]})
+        ws.batch_update(_w, value_input_option="RAW")
+    except Exception as e:
+        return False, f"{t('Error updating the timeclock entry')}: {e}"
+    _invalidate_records()
+    return True, f"{campo} → {valor_nuevo}"
 
 
 @st.cache_data(ttl=120, show_spinner=False)
