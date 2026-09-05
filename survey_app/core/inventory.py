@@ -342,6 +342,24 @@ def ubic_ref_label(ref: str) -> str:
         return ref
 
 
+def ubic_texto(txt, etq=None) -> str:
+    """Traduce un texto de ubicacion YA COMPUESTO (`"bodega: Bodega central"`).
+
+    ⚠️ Es SOLO para pantalla. El historial de movimientos guarda ese texto ya
+    formado —y en español, que es el DATO (v464)—, asi que la unica forma de que la
+    tabla no diga `bodega:` al lado de una ficha que dice `warehouse:` es traducir
+    el PREFIJO al pintarlo. No toca la hoja, asi que arregla tambien el historico
+    sin ninguna migracion.
+    ⚠️ Se parte por el PRIMER ": " y solo se traduce el prefijo: la referencia puede
+    ser un nombre de obra con dos puntos dentro.
+    """
+    _t = str(txt or "")
+    if not etq or ": " not in _t:
+        return etq(_t) if (etq and _t) else _t
+    _pre, _resto = _t.split(": ", 1)
+    return "%s: %s" % (etq(_pre), _resto)
+
+
 def ubic_str(a: dict, etq=None) -> str:
     """Ubicación legible.
 

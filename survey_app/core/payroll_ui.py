@@ -133,7 +133,7 @@ def render_nominas(grupo):
         "Periodo":  f"{x.get('PeriodoDesde', '')} → {x.get('PeriodoHasta', '')}",
         "Horas":    round(_num(x.get("Horas")), 1),
         "Rate/h": (round(_num(x.get("TarifaHora")), 2)
-                     if _num(x.get("TarifaHora")) > 0 else None),
+                     if _num(x.get("TarifaHora")) > 0 else float("nan")),
         "Base":     round(_num(x.get("Base")), 0),
         "Neto":     round(_num(x.get("Neto")), 0),
         "Estado":   _etq(str(x.get("Estado", ""))),

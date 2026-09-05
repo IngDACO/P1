@@ -7,7 +7,7 @@ Los fragmentos (chunks) de cada manual se guardan como
 
   1. Pre-cargados en el repo: `survey_app/manuals/*.json.gz` (KONE, S5500).
   2. Subidos por el propietario desde la app (self-service): se guardan en Google
-     Drive (carpeta 'COPEX Manuales') y se registran en la hoja `Manuales`. Al
+     Drive (carpeta 'COPEX Manuals') y se registran en la hoja `Manuals`. Al
      subir un PDF/ZIP, la app extrae el texto, lo trocea y sube el .json.gz a Drive.
 
 Todo se indexa con **BM25 en Python puro** (sin dependencias ni APIs extra). El
@@ -31,7 +31,7 @@ _DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "manuals")
 
 _SHEET   = "Manuals"
 _HEADERS = ["ID", "Nombre", "DriveID", "NumFrags", "Fecha", "SubidoPor"]
-_FOLDER_NAME = "COPEX Manuales"
+_FOLDER_NAME = "COPEX Manuals"
 _WORDS_PER_CHUNK = 180
 
 

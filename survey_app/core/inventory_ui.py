@@ -324,10 +324,14 @@ def _detalle(grupo, aid):
         st.dataframe(pd.DataFrame([{
             "Fecha":   m.get("Fecha", ""),
             "Tipo":    _etq(str(m.get("Tipo", ""))),
-            "Desde":   m.get("DesdeUbic", "") or "—",
-            "Hacia":   m.get("HaciaUbic", "") or "—",
+            "Desde":   INV.ubic_texto(m.get("DesdeUbic", ""), _etq) or "—",
+            "Hacia":   INV.ubic_texto(m.get("HaciaUbic", ""), _etq) or "—",
             "Usuario": m.get("Usuario", "") or "—",
-            "Costo":   (round(_num(m.get("Costo")), 0) if str(m.get("Costo", "")).strip() else None),
+            # ⚠️ NaN y no None: si TODA la columna es None, pandas la deja en
+            # `object` y Streamlit pinta el literal «None»; con NaN es float y
+            # sale vacia (medido, no supuesto).
+            "Costo":   (round(_num(m.get("Costo")), 0) if str(m.get("Costo", "")).strip()
+                        else float("nan")),
             "Nota":    m.get("Nota", "") or "",
         } for m in _mr]), width="stretch", hide_index=True,
             column_config=tabla.cfg(None, {"Costo": st.column_config.NumberColumn(t("Cost"), format="$%,d")}))
@@ -427,7 +431,7 @@ def _registro(grupo):
             try:
                 from core import drive_store
                 if drive_store.is_available():
-                    foto_id = drive_store.upload_to(drive_store.folder("COPEX Activos"),
+                    foto_id = drive_store.upload_to(drive_store.folder("COPEX Assets"),
                                                     _foto.name, _foto.getvalue(),
                                                     _foto.type or "image/jpeg")
             except Exception as e:

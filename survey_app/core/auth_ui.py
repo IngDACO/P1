@@ -791,7 +791,7 @@ def _owner_drive_limpieza():
         _vivos = {str(p.get("ID")) for p in P.list_projects(incluir_archivados=True,
                                                             incluir_internos=True)}
 
-        # ⚠️ La raíz de Drive ES «COPEX Proyectos», así que las carpetas `PRJ-####`
+        # ⚠️ La raíz de Drive ES «COPEX Projects», así que las carpetas `PRJ-####`
         # cuelgan de ella DIRECTAMENTE. Mi primera versión las buscaba un nivel más
         # abajo (en `subcarpetas`) y daba **0 huérfanos con 32 archivos delante** — y la
         # prueba con un Drive simulado no lo cazó, porque el mock reproducía MI

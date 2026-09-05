@@ -6,7 +6,7 @@ Secrets (Streamlit):
   client_id     = "..."
   client_secret = "..."
   refresh_token = "..."
-  # opcional: root_folder_id = "..."  (carpeta raíz; si no, se crea 'COPEX Proyectos')
+  # opcional: root_folder_id = "..."  (carpeta raíz; si no, se crea 'COPEX Projects')
 
 Usa google-auth + requests (sin dependencias nuevas). Estructura en Drive:
   <raíz> / <PRJ-id> / <archivos>
@@ -22,7 +22,19 @@ import streamlit as st
 logger = logging.getLogger(__name__)
 
 SCOPES      = ["https://www.googleapis.com/auth/drive.file"]
-ROOT_NAME   = "COPEX Proyectos"
+ROOT_NAME   = "COPEX Projects"
+
+# ── Carpetas en ingles, con respaldo al nombre viejo (v467) ───────────────────
+# ⚠️ Las carpetas se buscan POR NOMBRE y se CREAN si no aparecen, asi que cambiar
+# solo la constante dejaria los archivos ya subidos en la carpeta vieja: invisibles
+# para la app y sin ningun error. Aqui se resuelve al reves — si aparece la vieja se
+# le CAMBIA EL NOMBRE, que en Drive conserva el contenido (los ficheros cuelgan por
+# id, no por nombre). Se auto-repara la primera vez que se toca cada carpeta.
+LEGADO_CARPETAS = {
+    "COPEX Projects": "COPEX Proyectos",
+    "COPEX Assets":   "COPEX Activos",
+    "COPEX Manuals":  "COPEX Manuales",
+}
 FOLDER_MIME = "application/vnd.google-apps.folder"
 _API        = "https://www.googleapis.com/drive/v3/files"
 _UPLOAD     = "https://www.googleapis.com/upload/drive/v3/files"
@@ -81,6 +93,39 @@ def _find_folder(name, parent=None):
     return files[0]["id"] if files else None
 
 
+def _rename_folder(fid, nombre):
+    """Renombra una carpeta. Conserva su contenido: los ficheros cuelgan por id."""
+    r = requests.patch("%s/%s" % (_API, fid), headers=_headers(),
+                       json={"name": nombre}, params={"fields": "id,name"})
+    r.raise_for_status()
+    return r.json().get("id")
+
+
+def carpeta_con_legado(name, parent=None):
+    """Id de la carpeta `name`, renombrando la vieja si es la que existe.
+
+    ⚠️ El orden importa: primero se busca el nombre NUEVO, y solo si no esta se
+    mira el viejo. Al reves, una instalacion ya migrada volveria a tocar Drive en
+    cada arranque.
+    """
+    fid = _find_folder(name, parent=parent)
+    if fid:
+        return fid
+    viejo = LEGADO_CARPETAS.get(name)
+    if viejo:
+        fid = _find_folder(viejo, parent=parent)
+        if fid:
+            try:
+                _rename_folder(fid, name)
+                logger.info("drive: carpeta %r renombrada a %r", viejo, name)
+            except Exception as e:
+                # Si el renombrado falla se sigue usando la carpeta VIEJA: mejor el
+                # nombre en español que perder de vista los archivos.
+                logger.warning("drive: no se pudo renombrar %r: %s", viejo, e)
+            return fid
+    return _create_folder(name, parent=parent)
+
+
 def _create_folder(name, parent=None):
     body = {"name": name, "mimeType": FOLDER_MIME}
     if parent:
@@ -96,7 +141,7 @@ def _root_id():
         rid = st.secrets["gdrive"].get("root_folder_id")
     except Exception:
         rid = None
-    return rid or _find_folder(ROOT_NAME) or _create_folder(ROOT_NAME)
+    return rid or carpeta_con_legado(ROOT_NAME)
 
 
 @st.cache_data(ttl=600, show_spinner=False)
@@ -109,9 +154,9 @@ def project_folder(pid: str) -> str:
 @st.cache_data(ttl=600, show_spinner=False)
 def folder(name: str) -> str:
     """Id de una subcarpeta con nombre `name` bajo la raíz (la crea si no existe).
-    Útil para almacenes que no son de un proyecto (p. ej. 'COPEX Manuales')."""
+    Útil para almacenes que no son de un proyecto (p. ej. 'COPEX Manuals')."""
     root = _root_id()
-    return _find_folder(name, parent=root) or _create_folder(name, parent=root)
+    return carpeta_con_legado(name, parent=root)
 
 
 # ── Archivos ─────────────────────────────────────────────────────
@@ -195,9 +240,9 @@ def inventario() -> dict:
 
     {raiz, carpetas:[{id, nombre, archivos:[...], n, bytes}], total, bytes}
     """
-    # ⚠️ La raíz ES «COPEX Proyectos» (ROOT_NAME), así que las carpetas `PRJ-####`
+    # ⚠️ La raíz ES «COPEX Projects» (ROOT_NAME), así que las carpetas `PRJ-####`
     # cuelgan DIRECTAMENTE de ella — no hay un nivel intermedio. Mi primera versión
-    # asumió `raíz / COPEX Proyectos / PRJ-#### / archivos` y buscaba los proyectos un
+    # asumió `raíz / COPEX Projects / PRJ-#### / archivos` y buscaba los proyectos un
     # nivel más abajo del que están: resultado, **0 huérfanos con 32 archivos delante**.
     # Y la prueba con Drive simulado no lo cazó porque el mock reproducía MI suposición
     # en vez de la estructura real — el OK en falso de v309.

@@ -72,8 +72,11 @@ def render_catalogo(grupo):
             "Tipo": _etq(str(i.get("Tipo", ""))),
             "Category": _etq(str(i.get("Categoria", ""))) or "—",
             "Unidad": _etq(str(i.get("Unidad", ""))) or "—",
+            # ⚠️ NaN, no None: una columna ENTERA de None la deja pandas en
+            # `object` y Streamlit pinta el literal «None» (pasaba con un
+            # catalogo de solo productos).
             "Horas": (round(_num(i.get("HorasEst")), 2)
-                      if str(i.get("Tipo", "")) == CAT.SERVICIO else None),
+                      if str(i.get("Tipo", "")) == CAT.SERVICIO else float("nan")),
             "Costo": CAT.costo_de(i, 1),
             "Activo": "🟢" if str(i.get("Activo", "SI")).upper() != "NO" else "🔴",
         } for i in items])
