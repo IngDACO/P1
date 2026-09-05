@@ -11,6 +11,7 @@ import pandas as pd
 import streamlit as st
 
 from core import auth, clock, correcciones as C, flash, theme, timeclock
+from core import i18n
 from core.i18n import t
 
 logger = logging.getLogger(__name__)
@@ -166,7 +167,9 @@ def render_bandeja(grupo: str):
                 "Campo": str(r.get("Campo", "")),
                 "Antes": _hhmm(r.get("ValorAnterior")),
                 "Ahora": _hhmm(r.get("ValorNuevo")),
-                "Estado": str(r.get("Estado", "")),
+                # ⚠️ El VALOR se muestra traducido, la hoja guarda el español
+                # (v442): `etiqueta()` cambia lo que se ve, nunca el dato.
+                "Estado": i18n.etiqueta(str(r.get("Estado", ""))),
                 "Revisor": str(r.get("RevisadoPor", "")),
                 "Fecha": str(r.get("RevisadoFecha", ""))[:16],
             } for r in hechas])

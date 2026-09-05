@@ -148,6 +148,11 @@ VALORES = {
     # ausencias
     "vacaciones": "annual leave", "enfermedad": "sick leave", "libre": "day off",
     "pendiente": "pending", "aprobada": "approved", "rechazada": "rejected",
+    # v461 · estado propio de las correcciones de fichaje. Los otros dos ya
+    # estaban (los usa `ausencias`, de donde se tomo el vocabulario); sin este,
+    # la tabla del historial mostraba «revertida» en una fila por lo demas en
+    # ingles — traduccion a medias, el peor caso (v443/v450).
+    "revertida": "reverted",
     "cancelada": "cancelled",
     # facturas / nóminas / cotizaciones
     "emitida": "issued", "pagada": "paid", "anulada": "voided", "cobrada": "collected",

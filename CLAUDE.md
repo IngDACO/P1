@@ -9216,7 +9216,42 @@ literal, así que **no casaba nunca** — y dejó pasar «Plomo riel izquierdo»
 Es el mismo fallo de v436, cometido otra vez ese mismo día. Se vio con `cat -A`, no
 leyendo. → **Cualquier `\b`, `\n` o `\w` va por fichero escrito, nunca por heredoc.**
 
-## Versiones desplegadas (v461 = actual)
+## ⚠️ Un estado NUEVO sale en español aunque la pantalla esté traducida (v462)
+
+Encontrado **mirando una captura** de la verificación en producción de v461: la columna
+`Status` del historial de correcciones decía **«revertida»** en una fila cuyas otras seis
+columnas estaban en inglés — traducción a medias dentro de la MISMA tabla, que v450
+documenta como el peor caso.
+
+### Fallaron DOS cosas a la vez, y arreglar una sola no habría cambiado nada
+1. la celda pintaba `str(r.get("Estado"))` **crudo**, sin pasar por `i18n.etiqueta()`
+   (la red 12 de v452);
+2. y aunque hubiera pasado, **`revertida` no estaba en `i18n.VALORES`**: el vocabulario
+   se tomó de `ausencias` (v430), que trae `pendiente`/`aprobada`/`rechazada` — y
+   `revertida` es el estado PROPIO de v461, así que nació fuera del mapa.
+
+⚠️ **Un valor nuevo no entra solo en el mapa, y no da ningún error**: `etiqueta()`
+devuelve tal cual lo que no conoce, que es lo correcto para un nombre de obra o una nota
+—y exactamente lo que esconde un estado recién inventado—.
+
+### Por qué ningún guardián lo vio
+Las catorce redes de i18n miden el **CÓDIGO** (literales de display sin `t()`), y aquí no
+hay literal: el texto viene de la HOJA. La red 12 sí cubre esta forma, pero su chequeo fija
+las tres celdas CONCRETAS que v452 encontró — el guardián acotado al caso que se vio, otra
+vez (v309, v349, v441).
+
+**Chequeo nuevo y GENERAL** (dentro de `verif_v461.py`, para que no dependa de correr otro):
+todo valor de `correcciones.ESTADOS` tiene que estar en `i18n.VALORES`;
+`etiqueta(REVERTIDA)` tiene que dar «reverted»; ⚠️ el **DATO sigue en español**
+(`REVERTIDA == "revertida"`, `APROBADA == "aprobada"` — traducirlo dejaría de casar en
+silencio, v442); y por AST, la celda del historial tiene que pasar por `etiqueta()`. Así el
+próximo estado que alguien añada a ese módulo no se puede colar.
+
+### Verificación
+`verif_v461.py` pasa de 26 a **31 comprobaciones**, las 11 roturas se siguen cazando y la
+suite entera queda en **100 verde · 0 rojo**.
+
+## Versiones desplegadas (v462 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -9224,6 +9259,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v462 | ⚠️ **Un estado NUEVO sale en espanol aunque la pantalla este traducida.** Visto **mirando una captura** de la verificacion de v461: la columna `Status` del historial decia **«revertida»** en una fila cuyas otras seis columnas iban en ingles — traduccion a medias dentro de la MISMA tabla (v450). Fallaban DOS cosas a la vez y arreglar una sola no cambiaba nada: la celda pintaba el valor CRUDO sin `etiqueta()`, y **`revertida` no estaba en `i18n.VALORES`** — el vocabulario se tomo de `ausencias` (pendiente/aprobada/rechazada) y ese estado es PROPIO de v461, asi que nacio fuera del mapa. ⚠️ Un valor nuevo no entra solo, y **no da ningun error**: `etiqueta()` devuelve tal cual lo que no conoce —correcto para un nombre de obra, y justo lo que esconde un estado recien inventado—. ⚠️ Y ningun guardian podia verlo: las 14 redes de i18n miden el CODIGO y aqui el texto viene de la HOJA; la red 12 cubre la forma pero su chequeo fija las tres celdas concretas de v452 (el guardian acotado al caso que se vio, v309/v349/v441). Chequeo nuevo y GENERAL: todo valor de `ESTADOS` en `VALORES`, la etiqueta traducida, ⚠️ el **DATO sigue en espanol** (traducirlo dejaria de casar en silencio) y la celda por `etiqueta()`. 31 comprobaciones, 11/11 roturas, suite **100 verde · 0 rojo** |
 | v461 | **Corregir el fichaje: el campo pone la hora real y el admin la revisa** (petición del usuario; decisiones suyas: se aplica YA, se avisa si el periodo ya se pagó, y solo el mismo día). ⚠️ **Lo que decide si sirve de algo es recalcular las `Horas`**: `_row_segmentos` respeta la columna guardada para una fila cerrada del mismo día (v164), así que cambiar solo el timestamp habría dejado la nómina y el costo de la obra **idénticos, sin que nadie lo notara**. ⚠️ La excepción del «mismo día» está MEDIDA: una sesión abierta acumula contra el reloj —10,6 h el mismo día, **130,6 h a los cinco**, 2.342 USD a 40 $/h—, así que cerrarla no es corregir el pasado, es parar una hemorragia. ⚠️ Y al repasar apareció el caso que **revertir no puede resolver**: un cierre olvidado no tiene «hora anterior», así que revertirlo la devolvería a abierta → el admin **ajusta** la hora, sin mover el DÍA (otro día es otra nómina). ⚠️ **La suite destapó 6 rojos y 5 eran míos**: metí `st.toast` donde la app usa `flash` en 74 sitios; el `import auth` que sobraba delataba que me dejé a medias la regla de HOMÓNIMOS (séptima vez); y de las 4 cabeceras sin traducir el guardián **solo vio una** —las otras tres son palabras cortas sin acento, la trampa nº28—. ⚠️ Y mi propio guardián dio **FALLO con el código correcto** dos veces: leyendo `_SUBSECCIONES` como si fuera una lista (es una tupla, regla v135) y tomando `logger.warning` por texto de pantalla (filtrar por RECEPTOR, v439) — con él rojo de base, **una tanda de 11 roturas «cazadas» no probaba nada** (v459). Ejercitado contra la hoja real de punta a punta sin rastro; 27 comprobaciones, 11/11 roturas, suite **100 verde · 0 rojo** |
 | v459 | **«Engineer in charge» pasa a ser HEAD INSTALLER/S, elegidos de una LISTA** (petición del usuario; decisiones suyas: solo usuarios de CAMPO, y los nombres separados por coma). Escrito a mano, el responsable era una cadena que **no casaba con nadie**: una errata no da error, deja la obra con un responsable que no existe y que ningún filtro puede cruzar. Se guardan los **LOGIN** unidos por «;» (el login ES la identidad: dos personas pueden llamarse igual —«Mei Chen», v413— y un nombre puede cambiar) y el nombre se resuelve al MOSTRAR, desempatando homónimos. ⚠️ La columna sigue llamándose `Ingeniero`: se cambia lo que se MUESTRA, nunca la clave (v232/v442). Los cuatro caminos pasan a multiselect — obra (solo campo) y localización (**todos** los del grupo: una oficina la suele llevar administración, y filtrar por campo dejaría fuera al responsable real). ⚠️ **Y escribí un helper que YA EXISTÍA**: `_field_users` hace exactamente lo mismo, así que dejé **tres** definiciones del filtro «rol == campo» en el módulo — el patrón de los cinco `_num` divergentes de v323; unificadas, con chequeo permanente. ⚠️ **Dos chequeos míos midiendo otra cosa**: el guardián comparaba contra `ast.dump` (que usa `repr`, comillas SIMPLES) → **FALLO con el código correcto**, y eso **invalidó la primera tanda de roturas** (6/6 «cazadas» con el guardián rojo de base, o sea ninguna probaba nada); y el script de limpieza decía «0 copias restantes» contando `'campo'` en comillas simples, que no aparece nunca en el fuente — con esa cifra habría dado la limpieza por buena **dejando una copia viva**. 7/7 roturas |
 | v456 | **Se vacía la demo** (23 hojas, 869 filas; 8 usuarios de campo) conservando las 5 cuentas de gestion, la hoja `Auditoria` y **todas las cabeceras**; respaldo completo fuera del repo. Comprobado que la app **aguanta en vacio**: 17 agregados sin una excepcion y cada pantalla explica su estado. ⚠️ **ERROR DE ORDEN**: se vacio ANTES de borrar Drive, y los 31 archivos quedaron **inalcanzables desde la app** (el boton de borrar vive en la ficha del proyecto, que ya no existe) → hubo que sacar sus IDs del respaldo. **Lo que vive FUERA de la hoja se borra PRIMERO.** + `drive_store.inventario()/borrar()` y la pantalla **Drive maintenance** (solo propietario, con DELETE tecleado): ⚠️ la salvaguarda real es el **scope `drive.file`**, que impide ver nada que la app no haya creado. ⚠️ Y vaciar dejo **3 guardianes en rojo**: se resuelve con una tercera categoria en el runner —**codigo 2 = SIN DATOS**, ni verde (seria un OK que no comprobo nada) ni rojo (no hay nada roto)—, listada aparte con el aviso de que esas afirmaciones dejaron de comprobarse |
