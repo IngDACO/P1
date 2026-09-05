@@ -9448,7 +9448,82 @@ usuarios 5) y las pantallas de Catálogo, Inventario y Usuarios correctas.
 ⚠️ **Y la trampa nº19 dos veces en la misma tanda**: guardianes lanzados desde el
 scratchpad en vez de `survey_app` → `No secrets found` → rojos que no existían.
 
-## Versiones desplegadas (v466 = actual)
+## Las COLUMNAS pasan a nombre inglés (v468) — y lo que costó
+
+Sigue a v465-v467. Es la capa grande: **160 columnas** nombradas en **2.573 sitios**,
+más la cabecera de 51 pestañas.
+
+### El diseño que la hace posible: canonizar al LEER
+`core/columnas.py` (módulo HOJA, **134 entradas, una sola fuente de verdad**) y
+`hojas.registros` traduce la CABECERA una vez por hoja, así que el código ve siempre el
+nombre nuevo tenga el libro el viejo o el nuevo. Las **48 lecturas por clave** que no
+pasan por el lote se envuelven en `canonizar`.
+
+⚠️ **Las escrituras no necesitan nada**: `_COL` se deriva de las cabeceras por POSICIÓN
+y renombrar una columna **no la mueve**. Verificado: 28 cabeceras, misma longitud, sin
+duplicados, ninguna posición desplazada.
+
+⚠️ Y `get_sheet` compara **canonizando**: con las cabeceras en inglés y la hoja en
+español, todas parecerían faltar y su migración reescribiría la fila 1 a ciegas — si el
+orden no coincidiera al 100 %, dejaría datos bajo la cabecera equivocada.
+
+### ⚠️ Tres fallos SILENCIOSOS, y ninguno se encontró leyendo código
+1. **Un VALOR de negocio renombrado.** La categoría de un activo coincide con el nombre
+   de una columna, así que el transformador la cambió: habría descasado con los activos
+   ya guardados. Lo denunció un guardián. Barrido posterior en las dos formas en que
+   puede esconderse: dentro de las 13 listas de negocio (1, ese) y como **objetivo de
+   una comparación** (1, y al mirarlo era correcto). Comparar el *nombre de la columna*
+   es normal; comparar un *valor* renombrado deja la rama muerta.
+2. **11 claves de `column_config`.** Ese dict **no** está dentro de `pd.DataFrame(...)`,
+   así que se renombró mientras las claves de la tabla no: la columna pierde formato,
+   etiqueta y ancho. ⚠️ Y al arreglarlo aparecieron **4 del caso contrario**: tablas
+   cuyo dict de filas se construye con `.append(...)` FUERA de la llamada, donde las
+   claves **sí** se renombraron. No hay regla global: cada `column_config` debe casar
+   con SU tabla.
+3. **`col_offset` del AST es un offset en BYTES, no en caracteres.** Cortando el texto
+   por caracteres, cualquier línea con «·», tilde o emoji antes del literal salía
+   desplazada. La guarda «si no empieza por comilla, salta» **evitó corromper nada**
+   —verificado por AST: 1.965 literales cambiados y **0 sin explicar** en 87 ficheros—
+   pero dejó **78 sitios sin migrar**, que devuelven cadena vacía en silencio.
+   Corregido cortando por bytes; la migración quedó **idempotente** (2ª pasada: 0).
+
+### ⚠️ 33 guardianes en rojo — un tercio de la suite
+Clasificados **antes** de tocarlos: **27 mecánicos** (solo usan columnas en sus datos de
+prueba) y **6 que afirman sobre el NOMBRE**. A esos seis no se les aplicó el renombrado:
+convertir «las cabeceras siguen en español» en «ahora son inglesas» a ciegas es relajar
+la afirmación, no decidirla. Uno se **invirtió con su razón escrita**.
+⚠️ De los mecánicos, 11 no se arreglaron con el renombrado porque la columna aparecía
+**dentro de otra cadena, en un regex o como KWARG**. Y uno señaló un fallo REAL: tras el
+renombrado, un literal servía a la vez de clave de traducción y de objetivo de
+comparación — y esa rama hacía lo mismo que su `else`, así que se eliminó.
+
+### ⚠️ Y el guardián que aprobaba una rotura real
+El chequeo de la migración de cabecera buscaba la palabra `canon` **en cualquier parte**
+de `get_sheet`; la rotura cambiaba solo el `if` y la línea que la calcula seguía ahí.
+Trampa nº2 (*grep ≠ uso*) dentro del guardián. Reescrito sobre la CONDICIÓN del bucle.
+Con eso: **5/5 roturas cazadas**, control verde antes y después.
+
+### ⚠️ El canario de v465 solo probaba UN módulo
+Al renombrar las pestañas se comprobó que el Cloud tenía el código nuevo renombrando una
+hoja con datos y viendo que seguían en pantalla. Eso probaba que **ese** módulo era
+fresco, no los demás. Horas después aparecieron **3 pestañas vacías recreadas**: un
+módulo todavía viejo las pidió por su nombre antiguo y `get_sheet` las creó. Estaban
+completamente vacías (0 celdas con contenido) y se borraron, así que no se perdió nada
+— pero **un canario vale para el módulo que ejercita**, no para el proceso.
+
+### ⚠️ Y un 0 que no significaba lo que parecía
+Repitiendo el canario con las columnas, el catálogo mostró **0 items** y estuve a punto
+de concluir que el renombrado lo rompía. Era la **caché** (TTL 120 s) con el resultado
+de cuando la hoja estaba vacía: con la caché caliente mostraba 1 con las cabeceras ya
+renombradas. **Un canario sobre datos cacheados no prueba nada hasta que la caché
+caduca.**
+
+### Deuda anotada
+Las **claves de display** quedaron inconsistentes: unas tablas en español (dict inline,
+excluido a propósito) y otras en inglés (construido con `.append`). Funciona y está
+verificado, pero quien toque esas tablas se lo encontrará.
+
+## Versiones desplegadas (v468 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -9456,6 +9531,8 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v468 | **Las 160 COLUMNAS pasan a nombre INGLES** (2.573 sitios). Lo hace posible canonizar al LEER: `core/columnas.py` (una sola fuente) y el lector traduce la CABECERA, asi que el codigo ve el nombre nuevo tenga el libro el viejo o el nuevo; las **escrituras no necesitan nada** porque van por POSICION y renombrar no mueve la columna. **Tres fallos silenciosos**: un **VALOR de negocio renombrado** por coincidir con una columna (habria descasado con los activos guardados); **11 claves de `column_config`** descolocadas (ese dict no esta dentro de `pd.DataFrame`) mas **4 del caso contrario** (filas construidas FUERA de la llamada); y **`col_offset` del AST es un offset en BYTES**, asi que cortando por caracteres el reemplazo salia desplazado en toda linea con acento — la guarda impidio corromper nada (0 cambios sin explicar en 87 ficheros) pero dejo **78 sitios sin migrar**, que devuelven cadena vacia en silencio. **33 guardianes en rojo**: 27 mecanicos, 6 que AFIRMAN sobre el nombre (invertidos con su razon, no relajados) y uno que señalo un fallo real de codigo. Y **mi guardian aprobaba una rotura real** por buscar la palabra en toda la funcion en vez de en la CONDICION. Suite 104 verde |
+| v467 | **El historial del inventario deja de estar en español** (`ubic_texto` traduce el texto YA COMPUESTO al pintar: pantalla en ingles, hoja en español — arregla tambien el historico **sin migracion**), **ninguna columna pinta el literal «None»** (con TODA la columna vacia pandas la deja en `object` y Streamlit imprime el texto; con `NaN` sale vacia — medido) y las **carpetas de Drive** pasan a ingles con **auto-renombrado**: se buscan POR NOMBRE, asi que cambiar solo la constante dejaria los 27 documentos ya subidos en la carpeta vieja; renombrar en Drive conserva el contenido, crear es lo que los deja huerfanos. 4/4 roturas |
 | v466 | ⚠️ **El indice de pestañas NO caduca, y renombrar dejaba las pantallas a CERO.** Tras renombrar las 44, el Catalogo mostraba **0 items** con la hoja llena: `_libro` vive en **`@st.cache_resource`, sin TTL**, asi que el proceso seguia pidiendo `Catalogo` —una hoja que ya no existe—, el lote entero fallaba en cada pasada y **los datos seguian intactos en el libro**. Solo se arreglaba reiniciando a mano, asi que se cierra en el codigo: si el lote falla **se tira el indice**, y `get_sheet` **lo refresca y vuelve a mirar ANTES de crear** — que era el camino por el que un indice viejo podia fabricar una pestaña vacia y ponerse a escribir en ella |
 | v465 | **Las 27 pestañas pasan a nombre INGLES** (peticion del usuario), con **capa de compatibilidad**: `titulo_real` pide el nombre nuevo y acepta el viejo, porque ⚠️ `get_sheet` **crea** la hoja si no la encuentra — codigo y libro desincronizados no dan error, fabrican una pestaña vacia donde escribir. Tres pasos: codigo que acepta los dos → renombrar → retirar el respaldo (v467). ⚠️ Antes de renombrar se comprobo que el Cloud tuviera el codigo nuevo con un **canario POSITIVO** (renombrar `Activos`→`Assets` y ver que sigue mostrando 1 activo): el primero, sobre una hoja vacia, **no valia** porque la ruta de lectura no crea hojas. 26 literales traducidos por AST (solo donde el literal ES una hoja) + `HOJAS_LECTURA` + el lote re-keyeado al nombre canonico. ⚠️ El guardian de **v445 me cazo reintroduciendo su propio fallo**: `t = str(title)` tapa la funcion de traduccion en el ambito entero. Los otros 2 rojos, caducados (el libro FALSO de v427 nombraba las hojas en español; v430 exigia el literal «Ausencias», reanclado a la constante). 44 pestañas renombradas en los 2 libros, **0 con nombre viejo, 0 recreadas** |
 | v464 | **Un lote no basta: el mapa estaba a medias en CUATRO listas mas.** v463 se desplego y se verifico en produccion, y **mirar esas mismas capturas** destapo `catalogo.UNIDADES`, `inventory.CONDICIONES`, `UBIC_TIPOS` y `MOV_TIPOS` saliendo crudas — `unidad`/`juego` bajo la cabecera *Unit*, `bueno`/`regular` en la ficha, `bodega:` en la ubicacion y `salida`/`traslado` en el historial. 12 entradas mas al mapa; ⚠️ **`m`, `m²` y `kg` NO se mapean**: son simbolos iguales en los dos idiomas y un mapa espejo es la segunda definicion que v450 mando borrar. ⚠️ **El casi-fallo**: lo natural era traducir dentro de `ubic_str` (una sola definicion, v306), pero **5 de sus 6 llamadas son de `_log_mov`** y ese texto **se ESCRIBE en el historial** — habria guardado `warehouse: X` como DATO, el fallo que v452 estuvo a punto de cometer; el traductor entra por **parametro opcional**, asi la pantalla traduce y la escritura sigue en espanol. ⚠️ **Y una rotura SE ESCAPO**: la red del guardian miraba `COLS = {Estado, Categoria, Tipo, Rol}` y **`Unidad` no estaba**, asi que devolver esa celda a crudo daba 0 (11 cazadas · 1 escapada) — la red ve solo la forma que se le enseño, dentro del guardian escrito para esa misma leccion una version antes. Con `COLS` ampliada y **verde de base** (el paso que v459/v461 se saltaron): **12/12 · 0 escapadas** |
