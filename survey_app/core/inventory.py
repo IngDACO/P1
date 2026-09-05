@@ -14,6 +14,7 @@ import logging
 import streamlit as st
 
 from core import clock, timeclock
+from core import columnas
 from core.num import col_letter as _col_letter, num as _num, parse_date as _parse_date
 
 from core.i18n import t
@@ -21,19 +22,19 @@ logger = logging.getLogger(__name__)
 
 ACTIVOS_SHEET = "Assets"
 ACTIVOS_HEADERS = [
-    "ID", "Grupo", "Nombre", "Categoria", "Marca", "Modelo", "Serie",
-    "FotoDriveID", "FechaCompra", "ValorCompra", "VidaUtilAnios",
-    "Estado", "Condicion", "UbicacionTipo", "UbicacionRef", "AsignadoA",
-    "FechaDevolucion", "ProximoMant", "Nota", "Activo", "CreadoPor", "Creado",
+    "ID", "Group", "Name", "Category", "Brand", "Model", "Serial",
+    "PhotoDriveID", "PurchaseDate", "PurchaseValue", "UsefulLifeYears",
+    "Status", "Condition", "LocationType", "LocationRef", "AssignedTo",
+    "ReturnDate", "NextService", "Note", "Active", "CreatedBy", "Created",
 ]
 _ACOL = {h: i + 1 for i, h in enumerate(ACTIVOS_HEADERS)}
 
 CAT_SHEET = "AssetCategories"
-CAT_HEADERS = ["Grupo", "Nombre"]
+CAT_HEADERS = ["Group", "Name"]
 
 MOV_SHEET = "AssetMovements"
-MOV_HEADERS = ["ID", "Grupo", "ActivoID", "Tipo", "Fecha", "DesdeUbic", "HaciaUbic",
-               "Usuario", "Costo", "Nota", "CreadoPor", "Creado"]
+MOV_HEADERS = ["ID", "Group", "AssetID", "Type", "Date", "FromLocation", "ToLocation",
+               "User", "Cost", "Note", "CreatedBy", "Created"]
 MOV_TIPOS = ["salida", "entrada", "traslado", "mantenimiento", "baja"]
 
 ESTADOS = ["disponible", "en_uso", "mantenimiento", "dañado", "baja"]
@@ -113,8 +114,8 @@ def _invalidate():
 # ── Categorías (catálogo editable) ───────────────────────────────
 def categorias(grupo: str) -> list:
     """Categorías del grupo: los defaults + las añadidas (dedup, ordenadas)."""
-    extra = [str(r.get("Nombre", "")).strip() for r in _records(CAT_SHEET)
-             if str(r.get("Grupo", "")) == str(grupo) and str(r.get("Nombre", "")).strip()]
+    extra = [str(r.get("Name", "")).strip() for r in _records(CAT_SHEET)
+             if str(r.get("Group", "")) == str(grupo) and str(r.get("Name", "")).strip()]
     return sorted(set(CAT_DEFAULT) | set(extra), key=str.lower)
 
 
@@ -136,8 +137,8 @@ def del_categoria(grupo: str, nombre: str) -> tuple:
     w, err = _ws(CAT_SHEET)
     if err:
         return False, err
-    for i, r in enumerate(w.get_all_records(numericise_ignore=["all"])):
-        if str(r.get("Grupo", "")) == str(grupo) and str(r.get("Nombre", "")).strip() == str(nombre).strip():
+    for i, r in enumerate(columnas.canonizar(w.get_all_records(numericise_ignore=["all"]))):
+        if str(r.get("Group", "")) == str(grupo) and str(r.get("Name", "")).strip() == str(nombre).strip():
             w.delete_rows(i + 2)
             _invalidate()
             return True, t("Category deleted.")
@@ -148,9 +149,9 @@ def del_categoria(grupo: str, nombre: str) -> tuple:
 def list_activos(grupo: str = None, incluir_baja: bool = False) -> list:
     out = []
     for r in _records(ACTIVOS_SHEET):
-        if grupo is not None and str(r.get("Grupo", "")) != str(grupo):
+        if grupo is not None and str(r.get("Group", "")) != str(grupo):
             continue
-        if not incluir_baja and str(r.get("Activo", "SI")).upper() in ("NO", "FALSE", "0"):
+        if not incluir_baja and str(r.get("Active", "SI")).upper() in ("NO", "FALSE", "0"):
             continue
         out.append(r)
     return out
@@ -228,7 +229,7 @@ def update_activo(aid: str, fields: dict) -> tuple:
     if err:
         return False, err
     row = None
-    for i, r in enumerate(w.get_all_records(numericise_ignore=["all"])):
+    for i, r in enumerate(columnas.canonizar(w.get_all_records(numericise_ignore=["all"]))):
         if str(r.get("ID", "")) == str(aid):
             row = i + 2
             break
@@ -247,10 +248,10 @@ def update_activo(aid: str, fields: dict) -> tuple:
 
 def dar_de_baja(aid: str, grupo: str = "", motivo: str = "", creado_por: str = "") -> tuple:
     a = get_activo(aid)
-    ok, msg = update_activo(aid, {"Activo": "NO", "Estado": "baja",
-                                  "Nota": (motivo or "Decommissioned")})
+    ok, msg = update_activo(aid, {"Active": "NO", "Status": "baja",
+                                  "Note": (motivo or "Decommissioned")})
     if ok:
-        _log_mov(grupo or str(a.get("Grupo", "")), aid, "baja", ubic_str(a), "baja",
+        _log_mov(grupo or str(a.get("Group", "")), aid, "baja", ubic_str(a), "baja",
                  "", "", motivo, creado_por=creado_por)
     return ok, msg
 
@@ -258,9 +259,9 @@ def dar_de_baja(aid: str, grupo: str = "", motivo: str = "", creado_por: str = "
 # ── Valor / depreciación (línea recta) ───────────────────────────
 def valor_actual(a: dict) -> float:
     """Valor depreciado (línea recta): compra × (1 − años/vida útil), ≥ 0."""
-    vc = _num(a.get("ValorCompra"))
-    vida = _num(a.get("VidaUtilAnios"))
-    fc = _parse_date(a.get("FechaCompra"))
+    vc = _num(a.get("PurchaseValue"))
+    vida = _num(a.get("UsefulLifeYears"))
+    fc = _parse_date(a.get("PurchaseDate"))
     if vc <= 0 or vida <= 0 or not fc:
         return round(vc, 2)
     anios = (clock.today() - fc).days / 365.25
@@ -274,10 +275,10 @@ def resumen(grupo: str) -> dict:
     v_compra = v_actual = 0.0
     mant_venc = 0
     for a in acts:
-        por_estado[a.get("Estado", "")] = por_estado.get(a.get("Estado", ""), 0) + 1
-        v_compra += _num(a.get("ValorCompra"))
+        por_estado[a.get("Status", "")] = por_estado.get(a.get("Status", ""), 0) + 1
+        v_compra += _num(a.get("PurchaseValue"))
         v_actual += valor_actual(a)
-        pm = _parse_date(a.get("ProximoMant"))
+        pm = _parse_date(a.get("NextService"))
         if pm and pm < hoy:
             mant_venc += 1
     return {"n": len(acts), "por_estado": por_estado,
@@ -291,15 +292,15 @@ def alertas(grupo: str) -> list:
     out = []
     hoy = clock.today()
     for a in list_activos(grupo):
-        pm = _parse_date(a.get("ProximoMant"))
+        pm = _parse_date(a.get("NextService"))
         if pm and pm < hoy:
-            out.append({"tipo": "mantenimiento", "activo": str(a.get("Nombre", "")),
+            out.append({"tipo": "mantenimiento", "activo": str(a.get("Name", "")),
                         "id": str(a.get("ID", "")), "dias": (hoy - pm).days})
-        fd = _parse_date(a.get("FechaDevolucion"))
-        if fd and fd < hoy and str(a.get("Estado", "")).lower() == "en_uso":
-            out.append({"tipo": "no_devuelto", "activo": str(a.get("Nombre", "")),
+        fd = _parse_date(a.get("ReturnDate"))
+        if fd and fd < hoy and str(a.get("Status", "")).lower() == "en_uso":
+            out.append({"tipo": "no_devuelto", "activo": str(a.get("Name", "")),
                         "id": str(a.get("ID", "")), "dias": (hoy - fd).days,
-                        "usuario": str(a.get("AsignadoA", ""))})
+                        "usuario": str(a.get("AssignedTo", ""))})
     return out
 
 
@@ -308,13 +309,13 @@ def reporte_valor(grupo: str) -> dict:
     cat, ubi = {}, {}
     for a in list_activos(grupo):
         va = valor_actual(a)
-        vc = _num(a.get("ValorCompra"))
-        k = str(a.get("Categoria", "")) or "—"
+        vc = _num(a.get("PurchaseValue"))
+        k = str(a.get("Category", "")) or "—"
         d = cat.setdefault(k, {"n": 0, "compra": 0.0, "actual": 0.0})
         d["n"] += 1
         d["compra"] += vc
         d["actual"] += va
-        u = str(a.get("UbicacionTipo", "")) or "—"
+        u = str(a.get("LocationType", "")) or "—"
         e = ubi.setdefault(u, {"n": 0, "actual": 0.0})
         e["n"] += 1
         e["actual"] += va
@@ -337,7 +338,7 @@ def ubic_ref_label(ref: str) -> str:
     try:
         from core import projects as P
         p = P.get_project(ref)
-        return f"{p.get('Nombre') or ref}" if p else ref
+        return f"{p.get('Name') or ref}" if p else ref
     except Exception:
         return ref
 
@@ -368,19 +369,19 @@ def ubic_str(a: dict, etq=None) -> str:
     y traducirlo metería inglés en el dato — el fallo que casi se cuela en v452. Así
     la composición sigue teniendo UNA definición (v306) sin arriesgar la escritura.
     """
-    _tp = str(a.get("UbicacionTipo", "") or "")
+    _tp = str(a.get("LocationType", "") or "")
     if etq:
         _tp = etq(_tp)
-    ref = ubic_ref_label(a.get("UbicacionRef", ""))
+    ref = ubic_ref_label(a.get("LocationRef", ""))
     return f"{_tp}: {ref}" if ref else (_tp or "—")
 
 
 def list_movimientos(grupo: str = None, activo_id: str = None) -> list:
     out = []
     for r in _records(MOV_SHEET):
-        if grupo is not None and str(r.get("Grupo", "")) != str(grupo):
+        if grupo is not None and str(r.get("Group", "")) != str(grupo):
             continue
-        if activo_id is not None and str(r.get("ActivoID", "")) != str(activo_id):
+        if activo_id is not None and str(r.get("AssetID", "")) != str(activo_id):
             continue
         out.append(r)
     return out
@@ -424,9 +425,9 @@ def salida(aid, grupo, usuario="", hacia_tipo="usuario", hacia_ref="",
     # nombre ya resuelto: debe seguir leyéndose años después aunque el proyecto se
     # archive o cambie de nombre — un log cuenta lo que pasó, no lo que hay ahora.
     hacia = (f"{hacia_tipo}: {ubic_ref_label(hacia_ref)}" if hacia_ref else hacia_tipo)
-    ok, msg = update_activo(aid, {"Estado": "en_uso", "UbicacionTipo": hacia_tipo,
-                                  "UbicacionRef": hacia_ref, "AsignadoA": usuario,
-                                  "FechaDevolucion": fecha_devolucion})
+    ok, msg = update_activo(aid, {"Status": "en_uso", "LocationType": hacia_tipo,
+                                  "LocationRef": hacia_ref, "AssignedTo": usuario,
+                                  "ReturnDate": fecha_devolucion})
     if not ok:
         return ok, msg
     _log_mov(grupo, aid, "salida", desde, hacia, usuario, "", nota, creado_por=creado_por)
@@ -439,12 +440,12 @@ def entrada(aid, grupo, bodega="", nota="", creado_por="") -> tuple:
     if not a:
         return False, t("Asset not found.")
     desde = ubic_str(a)
-    ok, msg = update_activo(aid, {"Estado": "disponible", "UbicacionTipo": "bodega",
-                                  "UbicacionRef": bodega, "AsignadoA": "", "FechaDevolucion": ""})
+    ok, msg = update_activo(aid, {"Status": "disponible", "LocationType": "bodega",
+                                  "LocationRef": bodega, "AssignedTo": "", "ReturnDate": ""})
     if not ok:
         return ok, msg
     _log_mov(grupo, aid, "entrada", desde, (f"bodega: {bodega}" if bodega else "bodega"),
-             a.get("AsignadoA", ""), "", nota, creado_por=creado_por)
+             a.get("AssignedTo", ""), "", nota, creado_por=creado_por)
     return True, t("Return recorded.")
 
 
@@ -459,7 +460,7 @@ def traslado(aid, grupo, hacia_tipo, hacia_ref, nota="", creado_por="") -> tuple
     # ID crudo, así que el mismo sitio aparecía como «proyecto: PRJ-0005» al llegar y
     # como «proyecto: prueba2» al salir — dos grafías para el mismo evento.
     hacia = f"{hacia_tipo}: {ubic_ref_label(hacia_ref)}" if hacia_ref else hacia_tipo
-    ok, msg = update_activo(aid, {"UbicacionTipo": hacia_tipo, "UbicacionRef": hacia_ref})
+    ok, msg = update_activo(aid, {"LocationType": hacia_tipo, "LocationRef": hacia_ref})
     if not ok:
         return ok, msg
     _log_mov(grupo, aid, "traslado", desde, hacia, "", "", nota, creado_por=creado_por)
@@ -473,9 +474,9 @@ def mantenimiento(aid, grupo, costo="", proximo="", nota="", en_mant=False, crea
         return False, t("Asset not found.")
     campos = {}
     if proximo:
-        campos["ProximoMant"] = proximo
+        campos["NextService"] = proximo
     if en_mant:
-        campos["Estado"] = "mantenimiento"
+        campos["Status"] = "mantenimiento"
     if campos:
         ok, msg = update_activo(aid, campos)
         if not ok:

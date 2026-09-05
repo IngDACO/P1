@@ -34,6 +34,7 @@ from datetime import timedelta
 import streamlit as st
 
 from core import clock, timeclock
+from core import columnas
 from core.num import col_letter as _col_letter
 from core.num import num as _num
 from core.num import parse_date as _parse_date
@@ -42,9 +43,9 @@ from core.i18n import t
 logger = logging.getLogger(__name__)
 
 SHEET = "Quotes"
-HEADERS = ["ID", "Grupo", "ClienteID", "ClienteNombre", "Numero", "Fecha", "Validez",
-           "LineasJSON", "Subtotal", "ImpuestoPct", "Impuesto", "Total", "MargenPct",
-           "Estado", "ProyectoID", "Version", "Origen", "Nota", "CreadoPor", "Creado"]
+HEADERS = ["ID", "Group", "ClientID", "ClientName", "Number", "Date", "ValidUntil",
+           "LinesJSON", "Subtotal", "TaxPct", "Tax", "Total", "MarginPct",
+           "Status", "ProjectID", "Version", "Source", "Note", "CreatedBy", "Created"]
 
 BORRADOR, ENVIADA, ACEPTADA, RECHAZADA = "borrador", "enviada", "aceptada", "rechazada"
 VENCIDA = "vencida"                       # ⚠️ derivado, nunca se guarda
@@ -141,15 +142,15 @@ def linea_de(item: dict, cantidad=1, margen_pct=None, ganancia=None) -> dict:
         precio = round(costo * (1.0 + m / 100.0), 2)
     return {
         "catalogo_id": str(item.get("ID", "")),
-        "tipo": str(item.get("Tipo", "")),
-        "concepto": str(item.get("Nombre", "")),
-        "descripcion": str(item.get("Descripcion", "")),
-        "unidad": str(item.get("Unidad", "")),
+        "tipo": str(item.get("Type", "")),
+        "concepto": str(item.get("Name", "")),
+        "descripcion": str(item.get("Description", "")),
+        "unidad": str(item.get("Unit", "")),
         "cantidad": cant,
         # las horas viajan en la línea: son la base del «cotizado vs real» (fase 3)
         "horas": CAT.horas_de(item, cant),
-        "costo_unit": _num(item.get("CostoUnit")) if str(item.get("Tipo", "")) != CAT.SERVICIO
-                      else round(_num(item.get("HorasEst")) * _num(item.get("TarifaHora")), 2),
+        "costo_unit": _num(item.get("UnitCost")) if str(item.get("Type", "")) != CAT.SERVICIO
+                      else round(_num(item.get("EstHours")) * _num(item.get("HourlyRate")), 2),
         "costo_total": costo,
         "margen_pct": m,
         "precio_total": precio,
@@ -270,7 +271,7 @@ def totales(lineas: list, impuesto_pct=0.0) -> dict:
 
 def lineas_de(c: dict) -> list:
     try:
-        return json.loads(c.get("LineasJSON", "") or "[]")
+        return json.loads(c.get("LinesJSON", "") or "[]")
     except Exception as e:
         logger.warning("quotes: LineasJSON inválido en %s: %s", c.get("ID"), e)
         return []
@@ -279,10 +280,10 @@ def lineas_de(c: dict) -> list:
 # ── Lecturas ─────────────────────────────────────────────────────
 def estado_de(c: dict) -> str:
     """⚠️ `vencida` se DERIVA de la validez; nunca se guarda (como `estado_cobro`)."""
-    est = str(c.get("Estado", "") or BORRADOR).lower()
+    est = str(c.get("Status", "") or BORRADOR).lower()
     if est in (ACEPTADA, RECHAZADA):
         return est
-    v = _parse_date(c.get("Validez"))
+    v = _parse_date(c.get("ValidUntil"))
     if est == ENVIADA and v and v < clock.today():
         return VENCIDA
     return est
@@ -291,12 +292,12 @@ def estado_de(c: dict) -> str:
 def list_cotizaciones(grupo=None, cliente_id=None, incluir_rechazadas=True) -> list:
     out = list(_records())
     if grupo:
-        out = [c for c in out if str(c.get("Grupo", "")) == str(grupo)]
+        out = [c for c in out if str(c.get("Group", "")) == str(grupo)]
     if cliente_id:
-        out = [c for c in out if str(c.get("ClienteID", "")) == str(cliente_id)]
+        out = [c for c in out if str(c.get("ClientID", "")) == str(cliente_id)]
     if not incluir_rechazadas:
         out = [c for c in out if estado_de(c) != RECHAZADA]
-    return sorted(out, key=lambda c: str(c.get("Fecha", "")), reverse=True)
+    return sorted(out, key=lambda c: str(c.get("Date", "")), reverse=True)
 
 
 def get_cotizacion(cid) -> dict:
@@ -320,7 +321,7 @@ def cotizacion_de_proyecto(pid) -> dict:
     if not pid:
         return {}
     for c in _records():
-        if str(c.get("ProyectoID", "")).strip() == pid and estado_de(c) == ACEPTADA:
+        if str(c.get("ProjectID", "")).strip() == pid and estado_de(c) == ACEPTADA:
             return c
     return {}
 
@@ -328,7 +329,7 @@ def cotizacion_de_proyecto(pid) -> dict:
 @st.cache_data(ttl=120, show_spinner=False)
 def resumen(grupo) -> dict:
     """Lo que importa de un cotizador: cuánto hay en la calle y cuánto se gana."""
-    cs = [c for c in _records() if str(c.get("Grupo", "")) == str(grupo)]
+    cs = [c for c in _records() if str(c.get("Group", "")) == str(grupo)]
     por_estado, en_calle, ganado = {}, 0.0, 0.0
     for c in cs:
         e = estado_de(c)
@@ -354,7 +355,7 @@ def _ids_frescos() -> tuple:
     if w is None:
         return 0, 0
     try:
-        recs = w.get_all_records(numericise_ignore=["all"])
+        recs = columnas.canonizar(w.get_all_records(numericise_ignore=["all"]))
     except Exception as e:
         logger.warning("quotes._ids_frescos: %s", e)
         return 0, 0
@@ -367,7 +368,7 @@ def _ids_frescos() -> tuple:
             except Exception:
                 pass
         try:
-            mx_num = max(mx_num, int(_num(r.get("Numero"))))
+            mx_num = max(mx_num, int(_num(r.get("Number"))))
         except Exception:
             pass
     return mx_id, mx_num
@@ -404,7 +405,7 @@ def crear(grupo, cliente_id, cliente_nombre, lineas, impuesto_pct=0.0,
 def _fila(w, cid):
     """(nº de fila, registro) leyendo FRESCO (regla v323)."""
     try:
-        recs = w.get_all_records(numericise_ignore=["all"])
+        recs = columnas.canonizar(w.get_all_records(numericise_ignore=["all"]))
     except Exception as e:
         logger.warning("quotes._fila: %s", e)
         return None, None
@@ -440,12 +441,12 @@ def guardar_lineas(cid, lineas, impuesto_pct=None) -> tuple:
         # versión nueva (`nueva_version`), que además deja rastro de lo que cambió.
         return False, t("This quote is no longer a draft. Create a new version "
                         "to change it.")
-    imp = _num(c.get("ImpuestoPct")) if impuesto_pct is None else _num(impuesto_pct)
+    imp = _num(c.get("TaxPct")) if impuesto_pct is None else _num(impuesto_pct)
     _tot = totales(lineas, imp)
     ok, err = _set(w, row, {
-        "LineasJSON": json.dumps(lineas, ensure_ascii=False),
-        "Subtotal": _tot["subtotal"], "ImpuestoPct": imp, "Impuesto": _tot["impuesto"],
-        "Total": _tot["total"], "MargenPct": _tot["margen_pct"]})
+        "LinesJSON": json.dumps(lineas, ensure_ascii=False),
+        "Subtotal": _tot["subtotal"], "TaxPct": imp, "Tax": _tot["impuesto"],
+        "Total": _tot["total"], "MarginPct": _tot["margen_pct"]})
     if not ok:
         return False, err
     _invalidate()
@@ -462,19 +463,19 @@ def set_estado(cid, estado) -> tuple:
     if row is None:
         return False, t("Quote not found.")
     antes = estado_de(c)
-    if antes == ACEPTADA and estado != ACEPTADA and str(c.get("ProyectoID", "")).strip():
+    if antes == ACEPTADA and estado != ACEPTADA and str(c.get("ProjectID", "")).strip():
         return False, (t("This quote already created project") + " "
-                       + f"{c.get('ProyectoID')}: "
+                       + f"{c.get('ProjectID')}: "
                        + t("its status cannot be changed."))
-    ok, err = _set(w, row, {"Estado": estado})
+    ok, err = _set(w, row, {"Status": estado})
     if not ok:
         return False, err
     _invalidate()
     # ⚠️ FUERA del try del guardado y DESPUÉS de invalidar (v342/v344).
     try:
         from core import auditoria
-        auditoria.registrar("cotizacion", cid, {"Estado": [antes, estado]},
-                            grupo=str(c.get("Grupo", "")))
+        auditoria.registrar("cotizacion", cid, {"Status": [antes, estado]},
+                            grupo=str(c.get("Group", "")))
     except Exception as e:
         logger.warning("quotes: no se pudo auditar el estado de %s: %s", cid, e)
     return True, f"{t('Quote marked as')} {estado}."
@@ -489,9 +490,9 @@ def nueva_version(cid, creado_por="") -> tuple:
     c = get_cotizacion(cid)
     if not c:
         return False, t("Quote not found.")
-    ok, nuevo = crear(c.get("Grupo"), c.get("ClienteID"), c.get("ClienteNombre"),
-                      lineas_de(c), _num(c.get("ImpuestoPct")),
-                      nota=str(c.get("Nota", "")), creado_por=creado_por,
+    ok, nuevo = crear(c.get("Group"), c.get("ClientID"), c.get("ClientName"),
+                      lineas_de(c), _num(c.get("TaxPct")),
+                      nota=str(c.get("Note", "")), creado_por=creado_por,
                       origen=str(c.get("ID", "")))
     if not ok:
         return False, nuevo
@@ -521,17 +522,17 @@ def aceptar_y_crear_proyecto(cid, nombre="", tipo="Instalación", fecha_inicio=N
     c = get_cotizacion(cid)
     if not c:
         return False, t("Quote not found.")
-    if str(c.get("ProyectoID", "")).strip():
+    if str(c.get("ProjectID", "")).strip():
         return False, (t("This quote already created project")
-                       + f" {c.get('ProyectoID')}.")
+                       + f" {c.get('ProjectID')}.")
     lineas = lineas_de(c)
     if not lineas:
         return False, t("The quote has no lines.")
-    _tot = totales(lineas, _num(c.get("ImpuestoPct")))
+    _tot = totales(lineas, _num(c.get("TaxPct")))
 
     from core import projects as P
     from core import schedule as S
-    ini = fecha_inicio or clock.today(c.get("Grupo"))
+    ini = fecha_inicio or clock.today(c.get("Group"))
     acts, fin = None, ""
     # Solo la instalación tiene cronograma estándar (regla v306): a un delivery o un
     # ripout se le inventarían 11 actividades y ensuciarían avance, SPI y el radar.
@@ -549,8 +550,8 @@ def aceptar_y_crear_proyecto(cid, nombre="", tipo="Instalación", fecha_inicio=N
         acts = [{"nombre": "Execution", "duracion": 1, "peso": 1}]
 
     ok, res = P.create_project(
-        c.get("Grupo"), str(nombre).strip() or f"{c.get('ClienteNombre','')} — Nº{c.get('Numero','')}",
-        cliente=str(c.get("ClienteNombre", "")), cliente_id=str(c.get("ClienteID", "")),
+        c.get("Group"), str(nombre).strip() or f"{c.get('ClientName','')} — Nº{c.get('Number','')}",
+        cliente=str(c.get("ClientName", "")), cliente_id=str(c.get("ClientID", "")),
         ubicacion=str(ubicacion), ns=int(_num(ns)), fecha_inicio=ini.isoformat(),
         fecha_fin_est=fin, activities=acts,
         presupuesto=str(_tot["costo"]),          # ⚠️ el COSTO (ver arriba)
@@ -565,7 +566,7 @@ def aceptar_y_crear_proyecto(cid, nombre="", tipo="Instalación", fecha_inicio=N
     w = _ws()
     row, _r = _fila(w, cid)
     if row is not None:
-        _set(w, row, {"Estado": ACEPTADA, "ProyectoID": res})
+        _set(w, row, {"Status": ACEPTADA, "ProjectID": res})
         _invalidate()
     else:
         # el proyecto ya existe: decirlo, no fingir que no pasó nada
@@ -575,8 +576,8 @@ def aceptar_y_crear_proyecto(cid, nombre="", tipo="Instalación", fecha_inicio=N
     try:
         from core import auditoria
         auditoria.registrar("cotizacion", cid,
-                            {"Estado": [estado_de(c), ACEPTADA], "ProyectoID": ["", res]},
-                            grupo=str(c.get("Grupo", "")))
+                            {"Status": [estado_de(c), ACEPTADA], "ProjectID": ["", res]},
+                            grupo=str(c.get("Group", "")))
     except Exception as e:
         # Aceptar una cotización CREA el proyecto: si el apunte se pierde sin log,
         # no queda constancia de quién convirtió esa venta en obra.
@@ -591,17 +592,17 @@ def comparacion(cid) -> dict:
     comparar, y devolver ceros sería fingir un dato (la trampa de v320).
     """
     c = get_cotizacion(cid)
-    pid = str((c or {}).get("ProyectoID", "")).strip()
+    pid = str((c or {}).get("ProjectID", "")).strip()
     if not pid:
         return {}
-    grupo = str(c.get("Grupo", ""))
-    _tot = totales(lineas_de(c), _num(c.get("ImpuestoPct")))
+    grupo = str(c.get("Group", ""))
+    _tot = totales(lineas_de(c), _num(c.get("TaxPct")))
     from core import expenses as E
     from core import projects as P
     try:
         real = E.project_cost(pid, grupo)
         prj = P.get_project(pid) or {}
-        horas_real = P.project_hours(str(prj.get("Nombre", "")), grupo, pid=pid)
+        horas_real = P.project_hours(str(prj.get("Name", "")), grupo, pid=pid)
     except Exception as e:
         logger.warning("quotes.comparacion(%s): %s", cid, e)
         return {}
@@ -612,7 +613,7 @@ def comparacion(cid) -> dict:
                 # ⚠️ None, no 0: sin base no hay porcentaje que valga (v341)
                 "pct": round(100.0 * (rl - cot) / cot, 1) if abs(cot) > 0.005 else None}
 
-    av = _num(prj.get("Avance"))
+    av = _num(prj.get("Progress"))
     # ⚠️ A mitad de obra, `ingreso − costo` NO es la ganancia: es lo que todavía no has
     # gastado. Con el proyecto al 0% y $900 de costo daba $3.499 «de ganancia» contra
     # $893 cotizados, en verde — un número cierto que cuenta una historia falsa (la
@@ -621,7 +622,7 @@ def comparacion(cid) -> dict:
     costo_proy = round(real["total"] * 100.0 / av, 2) if av > 0 and real["total"] > 0 else None
     gan_proy = round(_tot["subtotal"] - costo_proy, 2) if costo_proy is not None else None
     return {
-        "proyecto_id": pid, "proyecto": str(prj.get("Nombre", "")),
+        "proyecto_id": pid, "proyecto": str(prj.get("Name", "")),
         "avance": av,
         "terminado": av >= 100,
         "horas": _dif(_tot["horas"], horas_real),

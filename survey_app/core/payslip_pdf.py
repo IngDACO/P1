@@ -27,7 +27,7 @@ def _money(v) -> str:
 
 def _conceptos(nom):
     try:
-        return json.loads(nom.get("ConceptosJSON", "") or "[]")
+        return json.loads(nom.get("ConceptsJSON", "") or "[]")
     except Exception:
         return []
 
@@ -43,22 +43,22 @@ def generate_payslip_pdf(nomina: dict, grupo_nombre: str = "") -> bytes:
     buf = _io.BytesIO()
     doc = SimpleDocTemplate(buf, pagesize=A4, leftMargin=16 * mm, rightMargin=16 * mm,
                             topMargin=16 * mm, bottomMargin=16 * mm,
-                            title=f"Colilla {nomina.get('Nombre', '')}")
+                            title=f"Colilla {nomina.get('Name', '')}")
     story = []
 
-    marca = grupo_nombre or str(nomina.get("Grupo", ""))
+    marca = grupo_nombre or str(nomina.get("Group", ""))
     head = Table([[Paragraph(str(marca), mk), Paragraph(d("PAYSLIP"), ti)]],
                  colWidths=[90 * mm, 88 * mm])
     head.setStyle(TableStyle([("ALIGN", (1, 0), (1, 0), "RIGHT"), ("VALIGN", (0, 0), (-1, -1), "TOP")]))
     story += [head, Spacer(1, 10)]
 
-    est = str(nomina.get("Estado", "emitida"))
-    if est == "pagada" and str(nomina.get("FechaPago", "")).strip():
-        est = f"pagada ({nomina.get('FechaPago')})"
+    est = str(nomina.get("Status", "emitida"))
+    if est == "pagada" and str(nomina.get("PaymentDate", "")).strip():
+        est = f"pagada ({nomina.get('PaymentDate')})"
     emp = Table([
-        [Paragraph(d("Employee"), sm), Paragraph(str(nomina.get("Nombre", "")), Hb),
-         Paragraph(d("Period"), sm), Paragraph(f"{nomina.get('PeriodoDesde', '')} → {nomina.get('PeriodoHasta', '')}", H)],
-        [Paragraph(d("Hours"), sm), Paragraph(f"{_num(nomina.get('Horas')):.2f} h", H),
+        [Paragraph(d("Employee"), sm), Paragraph(str(nomina.get("Name", "")), Hb),
+         Paragraph(d("Period"), sm), Paragraph(f"{nomina.get('PeriodFrom', '')} → {nomina.get('PeriodTo', '')}", H)],
+        [Paragraph(d("Hours"), sm), Paragraph(f"{_num(nomina.get('Hours')):.2f} h", H),
          Paragraph(d("Status"), sm), Paragraph(i18n.etiqueta(est), H)],
     ], colWidths=[22 * mm, 67 * mm, 22 * mm, 67 * mm])
     emp.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP"),
@@ -70,8 +70,8 @@ def generate_payslip_pdf(nomina: dict, grupo_nombre: str = "") -> bytes:
     data = [[Paragraph(f"<b>{d('Item')}</b>", ParagraphStyle("hh", parent=Hb, textColor=colors.white)),
              Paragraph(f"<b>{d('Type')}</b>", ParagraphStyle("ht", parent=Hb, textColor=colors.white)),
              Paragraph(f"<b>{d('Amount')}</b>", ParagraphStyle("hr", parent=Hb, textColor=colors.white))]]
-    data.append([Paragraph(d("Labour ({h} h × {r})", h=f"{_num(nomina.get('Horas')):.2f}",
-                          r=_money(nomina.get("TarifaHora"))), H),
+    data.append([Paragraph(d("Labour ({h} h × {r})", h=f"{_num(nomina.get('Hours')):.2f}",
+                          r=_money(nomina.get("HourlyRate"))), H),
                  Paragraph(d("earning"), H), Paragraph(_money(base), H)])
     for c in conceptos:
         data.append([Paragraph(str(c.get("concepto", "")), H),
@@ -92,7 +92,7 @@ def generate_payslip_pdf(nomina: dict, grupo_nombre: str = "") -> bytes:
     tot = Table([
         [d("Gross (base + earnings)"), _money(base + dev)],
         [d("Deductions"), _money(ded)],
-        [d("NET PAY"), _money(nomina.get("Neto"))],
+        [d("NET PAY"), _money(nomina.get("Net"))],
     ], colWidths=[50 * mm, 40 * mm], hAlign="RIGHT")
     tot.setStyle(TableStyle([
         ("ALIGN", (0, 0), (-1, -1), "RIGHT"), ("FONTSIZE", (0, 0), (-1, -1), 9),

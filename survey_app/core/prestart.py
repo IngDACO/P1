@@ -16,15 +16,16 @@ import streamlit as st
 
 from core import timeclock
 from core import clock
+from core import columnas
 from core.num import parse_date as _parse_date
 
 from core.i18n import t
 logger = logging.getLogger(__name__)
 
 SHEET   = "PreStarts"
-HEADERS = ["ID", "ProyectoID", "Grupo", "Fecha", "Hora", "Location", "Facilitador",
-           "ActividadesNotas", "NearMiss", "NearMissDesc", "S1JSON", "S3JSON",
-           "NotasGenerales", "Asistentes", "Archivo", "DriveID", "CreadoPor", "Creado"]
+HEADERS = ["ID", "ProjectID", "Group", "Date", "Time", "Location", "FacilitatedBy",
+           "ActivityNotes", "NearMiss", "NearMissDesc", "S1JSON", "S3JSON",
+           "GeneralNotes", "Attendees", "File", "DriveID", "CreatedBy", "Created"]
 
 # Sección 1 — YES/NO
 # ⚠️ La CLAVE es el dato y el TEXTO es lo que se lee. En la hoja se guarda
@@ -133,17 +134,17 @@ def leer(r) -> dict:
     n_no = sum(1 for c in checks if c["estado"] == "NO")
 
     try:
-        asist = _json.loads(r.get("Asistentes", "") or "[]")
+        asist = _json.loads(r.get("Attendees", "") or "[]")
     except Exception:
         asist = []
 
     return {
-        "id": r.get("ID", ""), "fecha": r.get("Fecha", ""), "hora": r.get("Hora", ""),
-        "facilitador": r.get("Facilitador", ""), "location": r.get("Location", ""),
+        "id": r.get("ID", ""), "fecha": r.get("Date", ""), "hora": r.get("Time", ""),
+        "facilitador": r.get("FacilitatedBy", ""), "location": r.get("Location", ""),
         "near_miss": str(r.get("NearMiss", "")).upper() == "YES",
         "near_miss_desc": r.get("NearMissDesc", ""),
         "checks": checks, "n_no": n_no,
-        "act_notes": r.get("ActividadesNotas", ""), "gen_notes": r.get("NotasGenerales", ""),
+        "act_notes": r.get("ActivityNotes", ""), "gen_notes": r.get("GeneralNotes", ""),
         "asistentes": [str(a.get("name", "")).strip() for a in asist if a.get("name")],
         # ⚠️ v418: los LOGINS de quienes constan y se eligieron de la lista. Es lo que
         # permite a `pendiente_de_firma` casar exacto en vez de por nombre —que puede
@@ -157,13 +158,13 @@ def leer(r) -> dict:
         "asistentes_sin_login": [str(a.get("name", "")).strip() for a in asist
                                  if a.get("name")
                                  and not str(a.get("usuario", "") or "").strip()],
-        "archivo": r.get("Archivo", ""), "drive_id": r.get("DriveID", ""),
+        "archivo": r.get("File", ""), "drive_id": r.get("DriveID", ""),
     }
 
 
 def list_prestarts(pid) -> list:
     """Pre-starts de un proyecto, más recientes primero."""
-    out = [r for r in _records() if str(r.get("ProyectoID", "")) == str(pid)]
+    out = [r for r in _records() if str(r.get("ProjectID", "")) == str(pid)]
     return list(reversed(out))
 
 
@@ -182,13 +183,13 @@ def hecho_hoy(pid, grupo: str = "") -> bool:
         return False
     hoy = clock.today(grupo)
     for r in _records():
-        if str(r.get("ProyectoID", "")).strip() != pid:
+        if str(r.get("ProjectID", "")).strip() != pid:
             continue
         # ⚠️ Se PARSEA la fecha en vez de comparar el texto: `submit` la escribe en
         # ISO, pero una fila vieja o tocada a mano puede traer `20/08/2026` y una
         # comparación de cadenas diría «no hecho» con el Pre-Start delante — el
         # mismo fallo que v323 destapó en las facturas que se caían del P&L.
-        if _parse_date(r.get("Fecha")) == hoy:
+        if _parse_date(r.get("Date")) == hoy:
             return True
     return False
 
@@ -236,8 +237,8 @@ def pendiente_de_firma(pid, grupo: str = "", persona: str = "", usuario: str = "
     # SEGUNDA seguía viendo «te falta firmar» por la primera, para siempre. Salió al
     # sembrar sin querer un segundo Pre-Start en una obra que ya tenía el suyo.
     candidatos = [r for r in _records()
-                  if str(r.get("ProyectoID", "")).strip() == pid
-                  and _parse_date(r.get("Fecha")) == hoy]
+                  if str(r.get("ProjectID", "")).strip() == pid
+                  and _parse_date(r.get("Date")) == hoy]
     if not candidatos:
         return {}
     for r in candidatos:
@@ -261,11 +262,11 @@ def pendiente_de_firma(pid, grupo: str = "", persona: str = "", usuario: str = "
     # elegir en silencio.
     r = candidatos[-1]
     d = leer(r)
-    return {"id": str(r.get("ID", "")), "fecha": str(r.get("Fecha", "")),
-            "facilitador": str(r.get("Facilitador", "")),
+    return {"id": str(r.get("ID", "")), "fecha": str(r.get("Date", "")),
+            "facilitador": str(r.get("FacilitatedBy", "")),
             "location": str(r.get("Location", "")),
             "drive_id": str(r.get("DriveID", "")),
-            "archivo": str(r.get("Archivo", "")),
+            "archivo": str(r.get("File", "")),
             "asistentes": d.get("asistentes", []),
             "otras": len(candidatos) - 1}
 
@@ -289,7 +290,7 @@ def firmar(ps_id: str, grupo: str, nombre: str, iniciales: str = "",
         res["error"] = t("Could not open the pre-starts sheet.")
         return res
     # ⚠️ FRESCO, no de la caché: esto decide en qué FILA se escribe (regla v323).
-    filas = w.get_all_records(numericise_ignore=["all"])
+    filas = columnas.canonizar(w.get_all_records(numericise_ignore=["all"]))
     idx = next((i for i, r in enumerate(filas) if str(r.get("ID", "")).strip() == ps_id), -1)
     if idx < 0:
         res["error"] = f"{t('Pre-Start not found')}: {ps_id}."
@@ -303,8 +304,8 @@ def firmar(ps_id: str, grupo: str, nombre: str, iniciales: str = "",
         from core import drive_store
         from core import prestart_pdf
         anexo = prestart_pdf.generate_anexo_firmas_pdf({
-            "marca": grupo, "ps_id": ps_id, "fecha": str(fila.get("Fecha", "")),
-            "proyecto": str(fila.get("ProyectoID", "")),
+            "marca": grupo, "ps_id": ps_id, "fecha": str(fila.get("Date", "")),
+            "proyecto": str(fila.get("ProjectID", "")),
             "location": str(fila.get("Location", "")),
             "firmas": [{"name": nombre, "initial": iniciales,
                         "sig": firma_png, "hora": hora}]})
@@ -333,8 +334,8 @@ def firmar(ps_id: str, grupo: str, nombre: str, iniciales: str = "",
     try:
         from core import drive_store
         from core import projects
-        pid = str(fila.get("ProyectoID", ""))
-        fname = str(fila.get("Archivo", "")) or f"{ps_id}.pdf"
+        pid = str(fila.get("ProjectID", ""))
+        fname = str(fila.get("File", "")) or f"{ps_id}.pdf"
         if nuevo_pdf and pid and drive_store.is_available():
             nuevo_id = drive_store.upload(pid, fname, nuevo_pdf, "application/pdf")
             projects.add_document(pid, fname, "prestart", nuevo_id, usuario or nombre)
@@ -343,13 +344,13 @@ def firmar(ps_id: str, grupo: str, nombre: str, iniciales: str = "",
 
     # 3) la fila: el asistente se AÑADE a los que ya estaban
     try:
-        asist = json.loads(fila.get("Asistentes", "") or "[]")
+        asist = json.loads(fila.get("Attendees", "") or "[]")
     except Exception:
         asist = []
     asist.append({"name": str(nombre), "initial": str(iniciales or ""),
                   "firmado": bool(firma_png), "hora": hora, "tarde": True})
     try:
-        col_a = HEADERS.index("Asistentes") + 1
+        col_a = HEADERS.index("Attendees") + 1
         w.update_cell(idx + 2, col_a, json.dumps(asist, ensure_ascii=False))
         if nuevo_id:
             w.update_cell(idx + 2, HEADERS.index("DriveID") + 1, nuevo_id)
@@ -441,14 +442,14 @@ def submit(data: dict) -> dict:
     if _pid0 and not data.get("forzar"):
         _hoy = clock.today(_g0)
         _ya = [r for r in _records()
-               if str(r.get("ProyectoID", "")).strip() == _pid0
-               and _parse_date(r.get("Fecha")) == _hoy]
+               if str(r.get("ProjectID", "")).strip() == _pid0
+               and _parse_date(r.get("Date")) == _hoy]
         if _ya:
             _ids = ", ".join(str(r.get("ID", "")) for r in _ya)
             res["ya_hay"] = _ids
             res["error"] = (
                 t("This job already has today's Pre-Start") + f" ({_ids}), "
-                + t("recorded by") + f" {_ya[-1].get('Facilitador') or '—'}. "
+                + t("recorded by") + f" {_ya[-1].get('FacilitatedBy') or '—'}. "
                 + t("If you are only missing from the list, sign it instead of "
                     "creating another one. If there really was a SECOND briefing "
                     "(another shift or crew), tick the box and it is recorded "
@@ -490,7 +491,7 @@ def submit(data: dict) -> dict:
     try:
         f = data.get("fecha")
         fecha_s = f.strftime("%Y-%m-%d") if hasattr(f, "strftime") else str(f)
-        aid = _next_id(w.get_all_records(numericise_ignore=["all"]))
+        aid = _next_id(columnas.canonizar(w.get_all_records(numericise_ignore=["all"])))
         w.append_row([
             aid, pid, grupo, fecha_s, str(data.get("hora", "")),
             str(data.get("location", "")), str(data.get("facilitador", "")),

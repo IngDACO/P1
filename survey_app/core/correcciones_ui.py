@@ -55,8 +55,8 @@ def _dif_horas(r) -> str:
     es otra cosa."""
     from datetime import datetime
     try:
-        a = datetime.strptime(str(r.get("ValorAnterior")), timeclock.FMT)
-        b = datetime.strptime(str(r.get("ValorNuevo")), timeclock.FMT)
+        a = datetime.strptime(str(r.get("OldValue")), timeclock.FMT)
+        b = datetime.strptime(str(r.get("NewValue")), timeclock.FMT)
         d = (b - a).total_seconds() / 3600.0
         return f"{d:+.2f} h"
     except Exception:
@@ -65,31 +65,31 @@ def _dif_horas(r) -> str:
 
 def _tarjeta(grupo, r, quien, etq):
     _id = str(r.get("ID", ""))
-    _campo = str(r.get("Campo", ""))
+    _campo = str(r.get("Field", ""))
     _es_in = _campo == C.CAMPO_IN
     with st.container(border=True, key=f"cor_{_id}"):
         c1, c2 = st.columns([3, 2])
         # ⚠️ Dos personas pueden llamarse igual: en la pantalla donde se decide
         # sobre las horas de alguien, dos tarjetas idénticas son inservibles.
-        _usr = str(r.get("Usuario", ""))
-        _nom = etq.get(_usr) or str(r.get("Nombre") or _usr or "—")
+        _usr = str(r.get("User", ""))
+        _nom = etq.get(_usr) or str(r.get("Name") or _usr or "—")
         c1.markdown(f"**{_nom}** · "
                     + (t("clock in") if _es_in else t("clock out"))
-                    + f" · `{r.get('Tipo', '')}`"
-                    + (f" · {r.get('Proyecto')}" if str(r.get("Proyecto", "")).strip()
+                    + f" · `{r.get('Type', '')}`"
+                    + (f" · {r.get('Project')}" if str(r.get("Project", "")).strip()
                        else ""))
         # ⚠️ Las DOS horas juntas: sin la anterior, el admin no puede juzgar nada.
         c1.markdown(t("Was **{a}** → now **{b}**  ·  {d}",
-                      a=_hhmm(r.get("ValorAnterior")) if str(r.get("ValorAnterior", "")).strip()
+                      a=_hhmm(r.get("OldValue")) if str(r.get("OldValue", "")).strip()
                       else t("(open)"),
-                      b=_hhmm(r.get("ValorNuevo")), d=_dif_horas(r)))
-        if str(r.get("Motivo", "")).strip():
-            c1.caption(f"«{r.get('Motivo')}»")
-        c2.caption(t("Asked on {x}", x=str(r.get("Creado", ""))[:16]))
+                      b=_hhmm(r.get("NewValue")), d=_dif_horas(r)))
+        if str(r.get("Reason", "")).strip():
+            c1.caption(f"«{r.get('Reason')}»")
+        c2.caption(t("Asked on {x}", x=str(r.get("Created", ""))[:16]))
 
         # ⚠️ El aviso que pidió el usuario: si ese día ya se pagó, se dice CUÁL nómina,
         # para que se pueda ir a mirar en vez de un «ojo» que no lleva a ningún sitio.
-        _nom_id = str(r.get("NominaCubre", "")).strip()
+        _nom_id = str(r.get("PayslipCovers", "")).strip()
         if _nom_id:
             st.warning(t(":material/warning: That day was already paid in **{x}** — "
                          "check whether it needs regularising.", x=_nom_id))
@@ -106,10 +106,10 @@ def _tarjeta(grupo, r, quien, etq):
         # Revertirlo la devolvería a abierta, o sea a acumular horas contra el
         # reloj — 34 h al día siguiente, 130 a los cinco. Así que ahí no se
         # revierte: se AJUSTA, que es lo que el admin necesita de verdad.
-        _sin_previo = not str(r.get("ValorAnterior", "")).strip()
+        _sin_previo = not str(r.get("OldValue", "")).strip()
         if _sin_previo:
             _h = b2.time_input(t("Set the right time"),
-                               value=_hora_de(r.get("ValorNuevo")),
+                               value=_hora_de(r.get("NewValue")),
                                key=f"cor_fix_{_id}")
             if b2.button(t(":material/save: Apply this time"),
                          key=f"cor_fixb_{_id}", width="stretch"):
@@ -134,10 +134,10 @@ def render_bandeja(grupo: str):
     _etq_us = _etq(grupo)
     pend = C.pendientes(grupo)
     hechas = [r for r in C.list_group(grupo)
-              if str(r.get("Estado", "")).strip().lower() != C.PENDIENTE]
+              if str(r.get("Status", "")).strip().lower() != C.PENDIENTE]
 
-    _n_aprob = sum(1 for r in hechas if str(r.get("Estado")) == C.APROBADA)
-    _n_rev = sum(1 for r in hechas if str(r.get("Estado")) == C.REVERTIDA)
+    _n_aprob = sum(1 for r in hechas if str(r.get("Status")) == C.APROBADA)
+    _n_rev = sum(1 for r in hechas if str(r.get("Status")) == C.REVERTIDA)
     theme.kpi_row([
         (t("To review"), str(len(pend)), t("time fixes"),
          # ⚠️ El 4º elemento es el ACENTO (borde), no texto: `theme.AMBAR` va bien
@@ -162,16 +162,16 @@ def render_bandeja(grupo: str):
     if hechas:
         with st.expander(t("History"), icon=":material/history:"):
             _f = pd.DataFrame([{
-                "Persona": (_etq_us.get(str(r.get("Usuario", "")))
-                            or str(r.get("Nombre") or r.get("Usuario") or "")),
-                "Campo": str(r.get("Campo", "")),
-                "Antes": _hhmm(r.get("ValorAnterior")),
-                "Ahora": _hhmm(r.get("ValorNuevo")),
+                "Persona": (_etq_us.get(str(r.get("User", "")))
+                            or str(r.get("Name") or r.get("User") or "")),
+                "Campo": str(r.get("Field", "")),
+                "Antes": _hhmm(r.get("OldValue")),
+                "Ahora": _hhmm(r.get("NewValue")),
                 # ⚠️ El VALOR se muestra traducido, la hoja guarda el español
                 # (v442): `etiqueta()` cambia lo que se ve, nunca el dato.
-                "Estado": i18n.etiqueta(str(r.get("Estado", ""))),
-                "Revisor": str(r.get("RevisadoPor", "")),
-                "Fecha": str(r.get("RevisadoFecha", ""))[:16],
+                "Estado": i18n.etiqueta(str(r.get("Status", ""))),
+                "Revisor": str(r.get("ReviewedBy", "")),
+                "Fecha": str(r.get("ReviewedDate", ""))[:16],
             } for r in hechas])
             from core import tabla
             st.dataframe(_f, hide_index=True, width="stretch",

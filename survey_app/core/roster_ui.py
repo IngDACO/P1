@@ -34,7 +34,7 @@ def _staff(grupo):
     """Personal de campo del grupo que va al tablero."""
     try:
         return [u for u in auth.list_users(grupo=grupo)
-                if str(u.get("Rol", "")).lower() == "campo"]
+                if str(u.get("Role", "")).lower() == "campo"]
     except Exception:
         return []
 
@@ -100,13 +100,13 @@ def _cobertura_hoy(lunes, staff, datos, dias=None):
     fecha = R.fecha_de_dia(lunes, d)
     en_obra, estado, sin = 0, 0, []
     for u in staff:
-        asigs = R.celda_asigs(datos, u["Usuario"], d)     # v274: varias por día
+        asigs = R.celda_asigs(datos, u["User"], d)     # v274: varias por día
         if any(a not in R.ESTADOS for a in asigs):
             en_obra += 1
         elif asigs:                                       # solo estados (OFF/Leave/…)
             estado += 1
         else:
-            sin.append(u.get("Nombre") or u["Usuario"])
+            sin.append(u.get("Name") or u["User"])
     partes = [f":green[:material/check_circle:] **{en_obra}** on site"]
     if sin:
         _n = ", ".join(sin[:4]) + ("…" if len(sin) > 4 else "")
@@ -400,7 +400,7 @@ def _vista_dia_cuadrilla(grupo, lunes, staff, datos, tidx, dia):
     f = R.fecha_de_dia(lunes, dia)
     filas, con_hora_todo, n_libres, n_obra = [], [], 0, 0
     for u in staff:
-        items = R.celda_items(datos, u["Usuario"], dia)
+        items = R.celda_items(datos, u["User"], dia)
         ch = [it for it in items if _clase_franja(it) == "hora"]
         con_hora_todo.extend(ch)
         if items:
@@ -426,7 +426,7 @@ def _vista_dia_cuadrilla(grupo, lunes, staff, datos, tidx, dia):
     html = []
     _et = _etq(staff, grupo)
     for u, items, ch in filas:
-        nom = _et.get(u["Usuario"]) or u.get("Nombre") or u["Usuario"]
+        nom = _et.get(u["User"]) or u.get("Name") or u["User"]
         pista = []
         # (a) lo que NO tiene hora ocupa el fondo de la fila, con trama: se ve que
         #     está asignado sin afirmar a qué hora.
@@ -503,7 +503,7 @@ def _asignacion_inteligente(grupo, lunes, staff, tidx, dias=None):
         try:
             # v422: incluye las localizaciones internas (ver `_opciones`).
             proys = [p for p in P.list_projects(grupo, incluir_internos=True)
-                     if str(p.get("Estado", "")) not in ("Completado", "Cancelado",
+                     if str(p.get("Status", "")) not in ("Completado", "Cancelado",
                                                          "Archivado", P.INTERNO_CERRADA)]
         except Exception:
             proys = []
@@ -515,7 +515,7 @@ def _asignacion_inteligente(grupo, lunes, staff, tidx, dias=None):
         # mismo fallo de v147/v150, que se arregló en el fichaje y no aquí). El nombre
         # es solo la etiqueta que se muestra, y lleva el ID detrás para desempatar.
         _opts = [str(p.get("ID")) for p in proys]
-        _lbl = {str(p.get("ID")): f"{p.get('Nombre') or "(no name)"} ({p.get('ID')})"
+        _lbl = {str(p.get("ID")): f"{p.get('Name') or "(no name)"} ({p.get('ID')})"
                 for p in proys}
         _psel = st.selectbox(t("Project"), ["—"] + _opts, key="ai_prj",
                              format_func=lambda i: "— choose the project —" if i == "—"
@@ -524,7 +524,7 @@ def _asignacion_inteligente(grupo, lunes, staff, tidx, dias=None):
             return
         pid = _psel
         prj = P.get_project(pid)
-        certs = [c.strip() for c in str((prj or {}).get("CertsReq", "")).split(";") if c.strip()]
+        certs = [c.strip() for c in str((prj or {}).get("RequiredCerts", "")).split(";") if c.strip()]
 
         cda, cdb = st.columns([2, 3])
         _dsel = cda.selectbox(t("Day"), dias, key="ai_dia",
@@ -541,8 +541,8 @@ def _asignacion_inteligente(grupo, lunes, staff, tidx, dias=None):
         libres, ocupados = [], []
         _et = _etq(staff, grupo)
         for u in staff:
-            usr = u["Usuario"]
-            nom = _et.get(usr) or u.get("Nombre") or usr
+            usr = u["User"]
+            nom = _et.get(usr) or u.get("Name") or usr
             items = R.celda_items(datos, usr, _dsel)
             choca = any(_solapa(ini, fin, it["ini"], it["fin"]) for it in items)
             comp = credentials.compliance(usr, certs) if certs else {"cumple": True, "por_tipo": {}}
@@ -600,8 +600,8 @@ def _radar_scan(grupo, lunes, staff, tidx):
     marcas, _comp = {}, {}          # _comp: cachea compliance por (usuario, proyecto)
     _et = _etq(staff, grupo)
     for u in staff:
-        usr = u["Usuario"]
-        nom = _et.get(usr) or u.get("Nombre") or usr
+        usr = u["User"]
+        nom = _et.get(usr) or u.get("Name") or usr
         # ⚠️ DIAS_TODOS, no DIAS: un choque de turno o un certificado que bloquea el
         # sábado es igual de real que el del martes, y el radar es lo que lo caza.
         for d in R.DIAS_TODOS:
@@ -628,7 +628,7 @@ def _radar_scan(grupo, lunes, staff, tidx):
                 _k = (usr, pid)
                 if _k not in _comp:              # una sola consulta por persona×proyecto
                     prj = P.get_project(pid)
-                    certs = [c.strip() for c in str((prj or {}).get("CertsReq", "")).split(";")
+                    certs = [c.strip() for c in str((prj or {}).get("RequiredCerts", "")).split(";")
                              if c.strip()]
                     _comp[_k] = credentials.compliance(usr, certs) if certs else None
                 comp = _comp[_k]
@@ -674,12 +674,12 @@ def _ficha_rapida(grupo, usuario):
     de hoy (con franja), certificados y un botón a su ficha 360° completa."""
     from core import credentials
     u = auth.get_user(usuario) or {}
-    nom = u.get("Nombre") or usuario          # ⚠️ CRUDO: lo consume el deep-link de abajo
+    nom = u.get("Name") or usuario          # ⚠️ CRUDO: lo consume el deep-link de abajo
     _nom_v = _etq([u], grupo).get(usuario) or nom      # el que se pinta
     with st.container(border=True):
         cA, cB = st.columns([5, 1])
         cA.markdown(f"**{_esc(_nom_v)}**"
-                    + (f" · {_esc(u.get('Rol', ''))}" if u.get("Rol") else ""))
+                    + (f" · {_esc(u.get('Role', ''))}" if u.get("Role") else ""))
         if cB.button("✕", key="fp_close"):
             st.session_state.pop("_panel_ficha", None)
             st.rerun()
@@ -703,8 +703,8 @@ def _ficha_rapida(grupo, usuario):
         try:
             creds = credentials.list_for(usuario)
             _ic = {"vigente": "🟢", "por_vencer": "🟡", "vencido": "🔴"}
-            bits = [f"{_ic.get(credentials.status(c.get('Vencimiento')) or 'vigente', '🟢')} "
-                    f"{c.get('Tipo')}" for c in creds]
+            bits = [f"{_ic.get(credentials.status(c.get('ExpiryDate')) or 'vigente', '🟢')} "
+                    f"{c.get('Type')}" for c in creds]
             st.caption(":material/badge: " + (" · ".join(bits) if bits else "No certificates"))
         except Exception:
             pass
@@ -729,12 +729,12 @@ def _panel_kpis(grupo, lunes, staff, datos, choques, sin_cumplir, dias=None):
     off = (clock.today() - lunes).days
     d = (R.DIAS_TODOS[off] if (0 <= off < len(R.DIAS_TODOS)
                                and R.DIAS_TODOS[off] in dias) else None)
-    libres = ([u for u in staff if not R.celda_items(datos, u["Usuario"], d)]
+    libres = ([u for u in staff if not R.celda_items(datos, u["User"], d)]
               if d else [])
     theme.kpi_row([
         (t("Clocked in now"), fich, f"{en_prj} on a project", theme.VERDE if fich else theme.GRIS_TXT),
         (t("Free today"), (len(libres) if d else "—"),
-         (", ".join((u.get(t("Name")) or u["Usuario"]) for u in libres[:2]) +
+         (", ".join((u.get(t("Name")) or u["User"]) for u in libres[:2]) +
           ("…" if len(libres) > 2 else "")) if libres else
          (t("no gaps") if d else t("today is not in this view")),
          theme.AZUL),
@@ -847,8 +847,8 @@ def render_planificacion(grupo):
         _dd = st.selectbox(t("Who is free on…?"), dias, key="panel_libredia",
                            format_func=lambda d: f"{R.DIAS_LABEL[d]} "
                            f"{R.fecha_de_dia(lunes, d).strftime('%d/%m')}")
-        _libres = [(u.get("Nombre") or u["Usuario"]) for u in staff
-                   if not R.celda_items(datos, u["Usuario"], _dd)]
+        _libres = [(u.get("Name") or u["User"]) for u in staff
+                   if not R.celda_items(datos, u["User"], _dd)]
         if _libres:
             st.success(f":material/person_check: **{len(_libres)}** free on "
                        f"{R.DIAS_LABEL[_dd]}: " + _esc(", ".join(_libres)))
@@ -864,9 +864,9 @@ def render_planificacion(grupo):
         # el mismo (usuario, día) sería otra fecha con otros datos — se cierra sola
         # en vez de enseñar el día equivocado. Igual si esa persona ya no está.
         _da = st.session_state.get("_dia_abierto") or {}
-        _u = next((x for x in staff if x["Usuario"] == _da.get("u")), None)
+        _u = next((x for x in staff if x["User"] == _da.get("u")), None)
         if _u and _da.get("wk") == lunes.isoformat() and _da.get("d") in dias:
-            _vista_dia(grupo, lunes, _u["Usuario"], _u.get("Nombre") or _u["Usuario"],
+            _vista_dia(grupo, lunes, _u["User"], _u.get("Name") or _u["User"],
                        _da["d"], datos, tidx)
         elif _da:
             st.session_state.pop("_dia_abierto", None)
@@ -974,8 +974,8 @@ def _cumplimiento(grupo, lunes, staff, tidx, dias=None):
         filas = []
         _et = _etq(staff, grupo)
         for u in staff:
-            usr = u["Usuario"]
-            nom = _et.get(usr) or u.get("Nombre") or usr
+            usr = u["User"]
+            nom = _et.get(usr) or u.get("Name") or usr
             plan_asigs = R.celda_asigs(datos, usr, _dsel)          # v274: varias por día
             plan_pids = {R.proyecto_de(a, tidx) for a in plan_asigs if R.proyecto_de(a, tidx)}
             plan_lbl = ", ".join(R.etiqueta_de(a, tidx) for a in plan_asigs
@@ -1104,7 +1104,7 @@ def _cumplimiento_celda(usuario, pid):
     proyecto no exige certificados."""
     try:
         prj = P.get_project(pid)
-        certs = [c.strip() for c in str((prj or {}).get("CertsReq", "")).split(";")
+        certs = [c.strip() for c in str((prj or {}).get("RequiredCerts", "")).split(";")
                  if c.strip()]
         if not certs:
             return
@@ -1241,13 +1241,13 @@ def _tablero_editable(grupo, lunes, staff, datos, tidx, marcas=None, dias=None):
     for pi, u in enumerate(staff):
         for di, d in enumerate(dias):
             idx = pi * len(dias) + di
-            _asigs = R.celda_asigs(datos, u["Usuario"], d)
+            _asigs = R.celda_asigs(datos, u["User"], d)
             asig = _asigs[0] if _asigs else ""
             key = f"roscel_{_wk}_{idx}"
             # Anillos: rojo DENTRO (choque) y ámbar FUERA (cert). `box-shadow` admite
             # varias capas, así que una celda con los dos problemas los enseña LOS DOS.
             # v292 daba prioridad al rojo y eso escondía el cert (verificado en vivo).
-            _m = marcas.get((u["Usuario"], d)) or set()
+            _m = marcas.get((u["User"], d)) or set()
             _capas = []
             if "choque" in _m:
                 _capas.append(f"0 0 0 2px {theme.ROJO}")
@@ -1351,8 +1351,8 @@ def _tablero_editable(grupo, lunes, staff, datos, tidx, marcas=None, dias=None):
     _grid = st.container(key="rosgrid")
     _et = _etq(staff, grupo)
     for pi, u in enumerate(staff):
-        usuario = u["Usuario"]
-        nom = _et.get(usuario) or u.get("Nombre") or usuario
+        usuario = u["User"]
+        nom = _et.get(usuario) or u.get("Name") or usuario
         # Un contenedor POR FILA para poder pintarle la franja alterna por su key.
         _row = _grid.container(key=f"rosrow_{_wk}_{pi}")
         cols = _row.columns(anchos)
@@ -1520,8 +1520,8 @@ def _grid_html(staff, lunes, datos, tidx, resaltar="", dias=None) -> str:
     filas = []
     _et = _etq(staff)
     for u in staff:
-        usr = u["Usuario"]
-        nom = _et.get(usr) or u.get("Nombre") or usr
+        usr = u["User"]
+        nom = _et.get(usr) or u.get("Name") or usr
         _mio = (str(usr) == str(resaltar))
         _nbg = "#fff7e6" if _mio else "#fff"
         celdas = [f'<td style="padding:5px 8px;font-size:13px;font-weight:{"800" if _mio else "600"};'
@@ -1568,14 +1568,14 @@ def _opciones(grupo, tidx):
         # acceso permanente — es lo que el usuario pidió como «asignados en momentos
         # particulares mediante la planificación».
         for p in P.list_projects(grupo=grupo, incluir_internos=True):
-            if str(p.get("Estado", "")) in ("Completado", "Cancelado", P.INTERNO_CERRADA):
+            if str(p.get("Status", "")) in ("Completado", "Cancelado", P.INTERNO_CERRADA):
                 continue
-            op.append((str(p.get("Nombre", "")), str(p.get("ID", ""))))
+            op.append((str(p.get("Name", "")), str(p.get("ID", ""))))
     except Exception:
         pass
     for r in R.list_trabajos(grupo):
-        num = str(r.get("Numero", "")).strip()
-        op.append((f"{num}. {r.get('Nombre','')}" if num else f"{r.get('Nombre','')}",
+        num = str(r.get("Number", "")).strip()
+        op.append((f"{num}. {r.get('Name','')}" if num else f"{r.get('Name','')}",
                    str(r.get("ID", ""))))
     for k, v in R.ESTADOS.items():
         op.append((str(v["nombre"]), k))
@@ -1595,13 +1595,13 @@ def _catalogo(grupo):
         if trabajos:
             for r in trabajos:
                 tid = str(r.get("ID", ""))
-                _act = str(r.get("Activo", "SI")).upper() in ("SI", "SÍ", "TRUE", "1")
+                _act = str(r.get("Active", "SI")).upper() in ("SI", "SÍ", "TRUE", "1")
                 cc = st.columns([0.5, 3.6, 1.6, 1.3])
                 cc[0].markdown(f"<div style='width:20px;height:20px;border-radius:5px;"
                                f"background:{r.get('Color','#2e6da4')};margin-top:4px'></div>",
                                unsafe_allow_html=True)
-                _prj = str(r.get("ProyectoID", "")).strip()
-                cc[1].markdown(f"**{str(r.get('Numero','')).strip()}. {r.get('Nombre','')}**"
+                _prj = str(r.get("ProjectID", "")).strip()
+                cc[1].markdown(f"**{str(r.get('Number','')).strip()}. {r.get('Name','')}**"
                                + (f"  ·  :material/link: {_prj}" if _prj else "")
                                + ("" if _act else "  ·  _inactivo_"))
                 if cc[2].button("Activar" if not _act else "Desactivar", key=f"trab_act_{tid}"):
@@ -1618,9 +1618,9 @@ def _catalogo(grupo):
                 if _edit == tid:
                     with st.container(border=True):
                         e1, e2, e3 = st.columns([1, 2.5, 1.5])
-                        _n = e1.text_input(t("Number"), value=str(r.get("Numero", "")),
+                        _n = e1.text_input(t("Number"), value=str(r.get("Number", "")),
                                            key=f"tedn_{tid}")
-                        _nm = e2.text_input(t("Name"), value=str(r.get("Nombre", "")),
+                        _nm = e2.text_input(t("Name"), value=str(r.get("Name", "")),
                                             key=f"tednm_{tid}")
                         _cur = _colinv.get(str(r.get("Color", "")).lower())
                         _nombres = list(_colmap)
@@ -1633,7 +1633,7 @@ def _catalogo(grupo):
                                 st.error(t("The name is required."))
                             else:
                                 ok, msg = R.update_trabajo(tid, {
-                                    "Numero": _n.strip(), "Nombre": _nm.strip(),
+                                    "Number": _n.strip(), "Name": _nm.strip(),
                                     "Color": _colmap[_cn]})
                                 (flash.exito if ok else st.error)(msg)
                                 if ok:
@@ -1697,8 +1697,8 @@ def _disponibilidad_html(staff, lunes, datos, tidx, dias=None) -> str:
     filas = []
     _et = _etq(staff)
     for u in staff:
-        usr = u["Usuario"]
-        nom = _et.get(usr) or u.get("Nombre") or usr
+        usr = u["User"]
+        nom = _et.get(usr) or u.get("Name") or usr
         celdas = [f'<td style="padding:5px 8px;font-size:13px;font-weight:600;color:#1f2937;'
                   f'white-space:nowrap;position:sticky;left:0;background:#fff;'
                   f'border-right:1px solid #eef1f5;">{_esc(nom)}</td>']

@@ -161,7 +161,7 @@ if _ROL in ("administrador", "propietario"):
         if _cred.is_configured():
             _hoy = _clk.today()
             _grps = ([_GRUPO] if _ROL == "administrador"
-                     else [g["Grupo"] for g in _auth.list_groups()])
+                     else [g["Group"] for g in _auth.list_groups()])
             for _g in _grps:
                 _kav = f"_credaviso_{_g}_{_hoy}"
                 if _g and not st.session_state.get(_kav):

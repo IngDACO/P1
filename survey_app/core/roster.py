@@ -25,10 +25,10 @@ from core.i18n import t
 logger = logging.getLogger(__name__)
 
 TRAB_SHEET   = "Jobs"
-TRAB_HEADERS = ["ID", "Grupo", "Numero", "Nombre", "Color", "ProyectoID", "Activo"]
+TRAB_HEADERS = ["ID", "Group", "Number", "Name", "Color", "ProjectID", "Active"]
 
 ROSTER_SHEET   = "Roster"
-ROSTER_HEADERS = ["ID", "Grupo", "Semana", "Usuario", "DatosJSON"]
+ROSTER_HEADERS = ["ID", "Group", "Week", "User", "DataJSON"]
 
 # Días de la semana laboral (claves internas) + etiqueta visible.
 DIAS = ["lun", "mar", "mie", "jue", "vie"]          # la semana normal de la cuadrilla
@@ -266,15 +266,15 @@ _ACTIVO_OK = ("SI", "SÍ", "TRUE", "1")
 def list_trabajos(grupo, incluir_inactivos=False, incluir_eliminados=False) -> list:
     out = []
     for r in _trab_records():
-        if str(r.get("Grupo", "")) != str(grupo):
+        if str(r.get("Group", "")) != str(grupo):
             continue
-        _act = str(r.get("Activo", "SI")).strip().upper()
+        _act = str(r.get("Active", "SI")).strip().upper()
         if _act == ELIMINADO and not incluir_eliminados:
             continue
         if not incluir_inactivos and _act not in _ACTIVO_OK:
             continue
         out.append(r)
-    out.sort(key=lambda r: _num_orden(r.get("Numero", "")))
+    out.sort(key=lambda r: _num_orden(r.get("Number", "")))
     return out
 
 
@@ -294,7 +294,7 @@ def trabajos_idx(grupo) -> dict:
     asignación/fichaje histórico a un proyecto archivado siga resolviendo su nombre.
     (TRB-#### y PRJ-#### nunca colisionan; `setdefault` no pisa un trabajo real.)"""
     idx = {str(r.get("ID", "")): r for r in _trab_records()
-           if str(r.get("Grupo", "")) == str(grupo)}
+           if str(r.get("Group", "")) == str(grupo)}
     try:
         from core import projects as P
         # ⚠️ v422: **con las localizaciones internas**. Este índice es lo que resuelve
@@ -304,9 +304,9 @@ def trabajos_idx(grupo) -> dict:
         for p in P.list_projects(grupo=grupo, incluir_archivados=True, incluir_internos=True):
             pid = str(p.get("ID", ""))
             if pid:
-                idx.setdefault(pid, {"ID": pid, "Numero": "",
-                                     "Nombre": str(p.get("Nombre", "")),
-                                     "Color": _color_proyecto(pid), "ProyectoID": pid})
+                idx.setdefault(pid, {"ID": pid, "Number": "",
+                                     "Name": str(p.get("Name", "")),
+                                     "Color": _color_proyecto(pid), "ProjectID": pid})
     except Exception:
         pass
     return idx
@@ -353,7 +353,7 @@ def update_trabajo(tid, cambios: dict) -> tuple:
 
 
 def set_activo_trabajo(tid, activo: bool) -> tuple:
-    return update_trabajo(tid, {"Activo": "SI" if activo else "NO"})
+    return update_trabajo(tid, {"Active": "SI" if activo else "NO"})
 
 
 def usos_de_trabajo(grupo, tid) -> int:
@@ -369,10 +369,10 @@ def usos_de_trabajo(grupo, tid) -> int:
         return 0
     n = 0
     for r in _roster_records():
-        if str(r.get("Grupo", "")) != str(grupo):
+        if str(r.get("Group", "")) != str(grupo):
             continue
         try:
-            datos = json.loads(r.get("DatosJSON", "") or "{}")
+            datos = json.loads(r.get("DataJSON", "") or "{}")
         except Exception:
             continue
         for d in DIAS:
@@ -398,7 +398,7 @@ def delete_trabajo(grupo, tid) -> tuple:
     """
     usos = usos_de_trabajo(grupo, tid)
     if usos:
-        ok, _ = update_trabajo(tid, {"Activo": ELIMINADO})
+        ok, _ = update_trabajo(tid, {"Active": ELIMINADO})
         if not ok:
             return False, t("Could not delete.")
         return True, (t("Job removed from the catalogue. The history is kept: it "
@@ -444,15 +444,15 @@ def etiqueta_de(asig, tidx) -> str:
         return ESTADOS[asig]["nombre"]
     r = tidx.get(asig)
     if r:
-        num = str(r.get("Numero", "")).strip()
-        return (f"{num}. {r.get('Nombre','')}" if num else str(r.get("Nombre", "")))
+        num = str(r.get("Number", "")).strip()
+        return (f"{num}. {r.get('Name','')}" if num else str(r.get("Name", "")))
     return "?"
 
 
 def proyecto_de(asig, tidx) -> str:
     """PRJ enlazado a la asignación (o '' si es estado / trabajo sin enlace)."""
     r = tidx.get(str(asig or ""))
-    return str(r.get("ProyectoID", "")).strip() if r else ""
+    return str(r.get("ProjectID", "")).strip() if r else ""
 
 
 # ── Roster semanal ───────────────────────────────────────────────
@@ -461,13 +461,13 @@ def get_semana(grupo, lunes) -> dict:
     sem = lunes.isoformat() if hasattr(lunes, "isoformat") else str(lunes)
     out = {}
     for r in _roster_records():
-        if str(r.get("Grupo", "")) != str(grupo) or str(r.get("Semana", "")) != sem:
+        if str(r.get("Group", "")) != str(grupo) or str(r.get("Week", "")) != sem:
             continue
         try:
-            datos = json.loads(r.get("DatosJSON", "") or "{}")
+            datos = json.loads(r.get("DataJSON", "") or "{}")
         except Exception:
             datos = {}
-        out[str(r.get("Usuario", ""))] = datos
+        out[str(r.get("User", ""))] = datos
     return out
 
 

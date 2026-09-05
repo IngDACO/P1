@@ -53,7 +53,7 @@ def render_rail_cut_tab():
         st.info(f":material/replay: Reopened calculation **{_reab}**. Adjust whatever you need and calculate again.")
 
     _prj, _plano = plan_ui.selector_proyecto("rc")
-    _pr = str((_prj or {}).get("Nombre", "") or "")     # v180: al diagrama y al PDF
+    _pr = str((_prj or {}).get("Name", "") or "")     # v180: al diagrama y al PDF
     if _plano:
         _n = plan_ui.aplicar(_plano, {"lfkk": "rc_lfkk", "lfgk": "rc_lfgk"})
         if _n:

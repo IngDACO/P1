@@ -33,9 +33,9 @@ def _chip_estado(e: str) -> str:
 
 
 def _linea(r) -> str:
-    cfg = AU.TIPOS.get(str(r.get("Tipo", "")), {})
-    return (f"**{AU.nombre_tipo(r.get('Tipo'))}** · {r.get('Desde')} → "
-            f"{r.get('Hasta')} · {r.get('Dias')} {t('day(s)')} · {_chip_estado(str(r.get('Estado')))}")
+    cfg = AU.TIPOS.get(str(r.get("Type", "")), {})
+    return (f"**{AU.nombre_tipo(r.get('Type'))}** · {r.get('From')} → "
+            f"{r.get('To')} · {r.get('Days')} {t('day(s)')} · {_chip_estado(str(r.get('Status')))}")
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -159,17 +159,17 @@ def render_mis_ausencias():
         with st.container(border=True):
             st.markdown(_linea(r))
             _pie = []
-            if str(r.get("Motivo", "")).strip():
-                _pie.append(str(r.get("Motivo")))
-            if str(r.get("NotaAdmin", "")).strip():
-                _pie.append(f"nota: {r.get('NotaAdmin')}")
-            if str(r.get("ResueltaPor", "")).strip():
-                _pie.append(f"{t('resolved by')} {r.get('ResueltaPor')}")
+            if str(r.get("Reason", "")).strip():
+                _pie.append(str(r.get("Reason")))
+            if str(r.get("AdminNote", "")).strip():
+                _pie.append(f"nota: {r.get('AdminNote')}")
+            if str(r.get("ResolvedBy", "")).strip():
+                _pie.append(f"{t('resolved by')} {r.get('ResolvedBy')}")
             if _pie:
                 st.caption(" · ".join(_pie))
-            if str(r.get("Estado")) in AU.VIGENTES:
+            if str(r.get("Status")) in AU.VIGENTES:
                 if st.button(t(":material/undo: Cancel"), key=f"auscan_{r['ID']}"):
-                    _estaba = str(r.get("Estado")) == AU.APROBADA
+                    _estaba = str(r.get("Status")) == AU.APROBADA
                     ok, msg = AU.cancelar(r["ID"], usuario)
                     if ok:
                         # si ya estaba en el tablero, hay que quitarla de ahí
@@ -196,12 +196,12 @@ def _avisar_cancelacion(grupo, nombre, r):
     try:
         from core import notify
         from core.alerts import _admins_and_owners
-        cfg = AU.TIPOS.get(str(r.get("Tipo", "")), {})
-        _subj = (f"CANCELLED — {cfg.get('nombre', r.get('Tipo'))}: {nombre} "
-                 f"({r.get('Desde')} → {r.get('Hasta')})")
+        cfg = AU.TIPOS.get(str(r.get("Type", "")), {})
+        _subj = (f"CANCELLED — {cfg.get('nombre', r.get('Type'))}: {nombre} "
+                 f"({r.get('From')} → {r.get('To')})")
         _lines = [f"<b>{nombre}</b> has CANCELLED their "
-                  f"<b>{cfg.get('nombre', r.get('Tipo'))}</b> "
-                  f"from {r.get('Desde')} to {r.get('Hasta')}.",
+                  f"<b>{cfg.get('nombre', r.get('Type'))}</b> "
+                  f"from {r.get('From')} to {r.get('To')}.",
                   "Those days are free again in the planner: if you had reorganised "
                   "the crew, review it."]
         for d in _admins_and_owners(grupo):
@@ -244,19 +244,19 @@ def render_bandeja(grupo: str):
         return
     quien = str((st.session_state.get("auth", {}) or {}).get("usuario", ""))
     todas = AU.list_group(grupo)
-    pend = [r for r in todas if str(r.get("Estado")) == AU.PENDIENTE]
+    pend = [r for r in todas if str(r.get("Status")) == AU.PENDIENTE]
     hoy = clock.today(grupo)
     fuera_hoy = AU.ausentes_en(grupo, hoy)
-    _sem = [r for r in todas if str(r.get("Estado")) == AU.APROBADA
+    _sem = [r for r in todas if str(r.get("Status")) == AU.APROBADA
             and any(hoy <= d <= hoy + timedelta(days=7)
-                    for d in AU.dias_del_rango(r.get("Desde"), r.get("Hasta"), True))]
+                    for d in AU.dias_del_rango(r.get("From"), r.get("To"), True))]
     st.markdown('<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:8px">'
                 + "".join([
                     _kpi(t("Pending"), str(len(pend)),
                          pie=t("waiting for your decision"),
                          color="#c77700" if pend else None),
                     _kpi(t("Away today"), str(len(fuera_hoy)),
-                         pie=", ".join(str(x.get("Nombre")) for x in fuera_hoy) or t("nobody")),
+                         pie=", ".join(str(x.get("Name")) for x in fuera_hoy) or t("nobody")),
                     _kpi(t("Next 7 days"), str(len(_sem)), pie=t("approved absences")),
                 ]) + "</div>", unsafe_allow_html=True)
 
@@ -272,20 +272,20 @@ def render_bandeja(grupo: str):
         if not todas:
             st.caption(t("No absences recorded."))
         for r in todas[:40]:
-            st.markdown(f"`{r['ID']}` · **{r.get('Nombre')}** — " + _linea(r))
+            st.markdown(f"`{r['ID']}` · **{r.get('Name')}** — " + _linea(r))
 
 
 def _tarjeta_pendiente(grupo, r, quien):
     aid = str(r.get("ID"))
-    usuario = str(r.get("Usuario"))
-    cfg = AU.TIPOS.get(str(r.get("Tipo", "")), {})
+    usuario = str(r.get("User"))
+    cfg = AU.TIPOS.get(str(r.get("Type", "")), {})
     with st.container(border=True, key=f"auspend_{aid}"):
-        st.markdown(f"**{r.get('Nombre')}** — " + _linea(r))
-        if str(r.get("Motivo", "")).strip():
-            st.caption(f":material/notes: {r.get('Motivo')}")
+        st.markdown(f"**{r.get('Name')}** — " + _linea(r))
+        if str(r.get("Reason", "")).strip():
+            st.caption(f":material/notes: {r.get('Reason')}")
 
         # Saldo de esa persona: aprobar a ciegas es lo que esto viene a evitar
-        s = AU.saldo(grupo, usuario, str(r.get("Tipo")))
+        s = AU.saldo(grupo, usuario, str(r.get("Type")))
         if not s["ilimitado"]:
             _txt = (f"They have **{s['restantes']:.0f}** of {s['asignados']:.0f} days "
                     f"{t('of')} {cfg.get('nombre', '').lower()} {t('this year')}")
@@ -294,7 +294,7 @@ def _tarjeta_pendiente(grupo, r, quien):
 
         # ⚠️ Las obras que quedarían sin esa persona: lo que «todo lo que implica»
         # significa de verdad. Se enseña ANTES de decidir, no después.
-        ch = AU.choques(grupo, usuario, r.get("Desde"), r.get("Hasta"))
+        ch = AU.choques(grupo, usuario, r.get("From"), r.get("To"))
         if ch:
             _obras = {}
             for c in ch:
@@ -322,10 +322,10 @@ def _tarjeta_pendiente(grupo, r, quien):
 
         # Cobertura: no vaciar el equipo la misma semana
         _otros = set()
-        for d in AU.dias_del_rango(r.get("Desde"), r.get("Hasta"), True):
+        for d in AU.dias_del_rango(r.get("From"), r.get("To"), True):
             for x in AU.ausentes_en(grupo, d):
                 if str(x.get("ID")) != aid:
-                    _otros.add(str(x.get("Nombre")))
+                    _otros.add(str(x.get("Name")))
         if _otros:
             st.info(f":material/groups: {len(_otros)} {t('other person(s) are already away those days')}: "
                     + ", ".join(sorted(_otros)))
@@ -364,12 +364,12 @@ def _avisar_persona(usuario, r, aprobada, nota):
     """Best-effort: la decisión ya está guardada cuando se llega aquí."""
     try:
         from core import notify
-        cfg = AU.TIPOS.get(str(r.get("Tipo", "")), {})
+        cfg = AU.TIPOS.get(str(r.get("Type", "")), {})
         _s = "aprobada" if aprobada else "rechazada"
         _l = [f"Your request for <b>{cfg.get('nombre')}</b> "
-              f"({r.get('Desde')} → {r.get('Hasta')}) has been <b>{_s}</b>."]
+              f"({r.get('From')} → {r.get('To')}) has been <b>{_s}</b>."]
         if str(nota or "").strip():
             _l.append(f"{t('Note')}: {nota}")
-        notify.notify_user(usuario, f"Absence {_s}: {r.get('Desde')} → {r.get('Hasta')}", _l)
+        notify.notify_user(usuario, f"Absence {_s}: {r.get('From')} → {r.get('To')}", _l)
     except Exception as e:
         logger.warning("ausencias_ui._avisar_persona: %s", e)

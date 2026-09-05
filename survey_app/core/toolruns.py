@@ -27,8 +27,8 @@ from core.i18n import t
 logger = logging.getLogger(__name__)
 
 SHEET = "ToolRuns"
-HEADERS = ["ID", "ProyectoID", "Grupo", "Herramienta", "Fecha", "Usuario",
-           "Resumen", "DatosJSON", "Archivo", "DriveID"]
+HEADERS = ["ID", "ProjectID", "Group", "Tool", "Date", "User",
+           "Summary", "DataJSON", "File", "DriveID"]
 
 # Etiqueta visible por herramienta (la clave se guarda en la hoja)
 HERRAMIENTAS = {
@@ -104,7 +104,7 @@ def entradas_de(fila) -> dict:
     devuelven {} y simplemente no ofrecen "reabrir".
     """
     try:
-        d = json.loads(str(fila.get("DatosJSON", "")) or "{}")
+        d = json.loads(str(fila.get("DataJSON", "")) or "{}")
     except Exception:
         return {}
     return d.get("entradas") or {} if isinstance(d, dict) else {}
@@ -112,8 +112,8 @@ def entradas_de(fila) -> dict:
 
 def list_for(pid: str) -> list:
     """Historial de cálculos de un proyecto, del más reciente al más antiguo."""
-    out = [r for r in _records() if str(r.get("ProyectoID", "")) == str(pid)]
-    return sorted(out, key=lambda r: str(r.get("Fecha", "")), reverse=True)
+    out = [r for r in _records() if str(r.get("ProjectID", "")) == str(pid)]
+    return sorted(out, key=lambda r: str(r.get("Date", "")), reverse=True)
 
 
 def _next_id() -> str:

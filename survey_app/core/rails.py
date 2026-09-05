@@ -14,12 +14,13 @@ import logging
 import streamlit as st
 
 from core import timeclock
+from core import columnas
 
 from core.i18n import t
 logger = logging.getLogger(__name__)
 
 RIELES_SHEET   = "Rails"
-RIELES_HEADERS = ["Referencia", "AnchoDiente", "AlturaDiente"]
+RIELES_HEADERS = ["Reference", "ToothWidth", "ToothHeight"]
 
 
 def is_configured() -> bool:
@@ -101,10 +102,10 @@ def get_rail(referencia) -> dict:
         return None
     key = _norm(referencia)
     for r in _records():
-        if _norm(r.get("Referencia", "")) == key:
-            return {"referencia": str(r.get("Referencia", "")),
-                    "ancho":  _f(r.get("AnchoDiente")),
-                    "altura": _f(r.get("AlturaDiente"))}
+        if _norm(r.get("Reference", "")) == key:
+            return {"referencia": str(r.get("Reference", "")),
+                    "ancho":  _f(r.get("ToothWidth")),
+                    "altura": _f(r.get("ToothHeight"))}
     return None
 
 
@@ -126,9 +127,9 @@ def update_riel(referencia, ancho=None, altura=None) -> tuple:
     w, err = _ws()
     if err:
         return False, err
-    recs = w.get_all_records(numericise_ignore=["all"])
+    recs = columnas.canonizar(w.get_all_records(numericise_ignore=["all"]))
     for i, r in enumerate(recs):
-        if _norm(r.get("Referencia", "")) == _norm(referencia):
+        if _norm(r.get("Reference", "")) == _norm(referencia):
             row = i + 2
             if ancho is not None:
                 w.update_cell(row, 2, str(ancho))
@@ -143,9 +144,9 @@ def delete_riel(referencia) -> tuple:
     w, err = _ws()
     if err:
         return False, err
-    recs = w.get_all_records(numericise_ignore=["all"])
+    recs = columnas.canonizar(w.get_all_records(numericise_ignore=["all"]))
     for i, r in enumerate(recs):
-        if _norm(r.get("Referencia", "")) == _norm(referencia):
+        if _norm(r.get("Reference", "")) == _norm(referencia):
             w.delete_rows(i + 2)
             _invalidate()
             return True, t("Rail deleted.")

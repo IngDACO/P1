@@ -53,7 +53,7 @@ def render_buffer_cut_tab():
         st.info(f":material/replay: Reopened calculation **{_reab}**. Adjust whatever you need and calculate again.")
 
     _prj, _plano = plan_ui.selector_proyecto("bc")
-    _pr = str((_prj or {}).get("Nombre", "") or "")     # v181: al diagrama y al PDF
+    _pr = str((_prj or {}).get("Name", "") or "")     # v181: al diagrama y al PDF
     if _plano:
         _n = plan_ui.aplicar(_plano, {"hkp": "bc_hkp"})
         if _n:

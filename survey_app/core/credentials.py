@@ -13,15 +13,16 @@ import streamlit as st
 
 from core import timeclock
 from core import clock
+from core import columnas
 from core.num import col_letter as _col_letter
 
 from core.i18n import t, etiqueta as _etq
 logger = logging.getLogger(__name__)
 
 SHEET   = "Credentials"
-HEADERS = ["ID", "Usuario", "Grupo", "Tipo", "Numero", "Clase", "Emision",
-           "Vencimiento", "DriveID", "Archivo", "Nota", "UltimoAviso",
-           "ActualizadoPor", "Fecha"]
+HEADERS = ["ID", "User", "Group", "Type", "Number", "Class", "IssueDate",
+           "ExpiryDate", "DriveID", "File", "Note", "LastNotice",
+           "UpdatedBy", "Date"]
 
 # Catálogo de tipos (construcción AU) + "Otro" libre
 CATALOGO = [
@@ -135,12 +136,12 @@ def dias_para(vencimiento):
 # ── Lecturas ─────────────────────────────────────────────────────
 def list_for(usuario) -> list:
     u = str(usuario or "").strip().lower()
-    return [r for r in _records() if str(r.get("Usuario", "")).strip().lower() == u]
+    return [r for r in _records() if str(r.get("User", "")).strip().lower() == u]
 
 
 def list_group(grupo) -> list:
     g = str(grupo or "").strip()
-    return [r for r in _records() if str(r.get("Grupo", "")) == g]
+    return [r for r in _records() if str(r.get("Group", "")) == g]
 
 
 def compliance(usuario, requeridos) -> dict:
@@ -156,12 +157,12 @@ def compliance(usuario, requeridos) -> dict:
     _orden = {"vigente": 3, "por_vencer": 2, "vencido": 1, "falta": 0}
     por_tipo, cumple = {}, True
     for tipo in requeridos:
-        matching = [c for c in creds if str(c.get("Tipo", "")).strip() == str(tipo).strip()]
+        matching = [c for c in creds if str(c.get("Type", "")).strip() == str(tipo).strip()]
         if not matching:
             por_tipo[tipo] = "falta"
             cumple = False
             continue
-        est = max(((status(c.get("Vencimiento")) or "vigente") for c in matching),
+        est = max(((status(c.get("ExpiryDate")) or "vigente") for c in matching),
                   key=lambda e: _orden.get(e, 0))
         por_tipo[tipo] = est
         if est == "vencido":
@@ -174,17 +175,17 @@ def matrix(grupo) -> tuple:
     Celda: 🟢 vigente · 🟡 por vencer · 🔴 vencido · — no tiene."""
     from core import auth
     creds = list_group(grupo)
-    tipos = sorted({str(c.get("Tipo", "")) for c in creds if str(c.get("Tipo", "")).strip()})
+    tipos = sorted({str(c.get("Type", "")) for c in creds if str(c.get("Type", "")).strip()})
     filas = []
     for u in auth.list_users(grupo):
-        fila = {"Usuario": u.get("Nombre") or u.get("Usuario"), "Rol": u.get("Rol", "")}
+        fila = {"User": u.get("Name") or u.get("User"), "Role": u.get("Role", "")}
         for _tp in tipos:
             mias = [c for c in creds
-                    if str(c.get("Usuario", "")) == u.get("Usuario") and str(c.get("Tipo", "")) == _tp]
+                    if str(c.get("User", "")) == u.get("User") and str(c.get("Type", "")) == _tp]
             if not mias:
                 fila[_tp] = "—"
             else:
-                sts = [status(c.get("Vencimiento")) for c in mias]
+                sts = [status(c.get("ExpiryDate")) for c in mias]
                 fila[_tp] = ("vencido" if "vencido" in sts
                            else "por vencer" if "por_vencer" in sts else "vigente")
         filas.append(fila)
@@ -195,11 +196,11 @@ def expiring(grupo, days=DIAS_AVISO) -> list:
     """Credenciales del grupo por vencer (≤days) o vencidas, ordenadas por urgencia."""
     out = []
     for r in list_group(grupo):
-        dd = dias_para(r.get("Vencimiento"))
+        dd = dias_para(r.get("ExpiryDate"))
         if dd is not None and dd <= days:
-            out.append({"usuario": r.get("Usuario", ""), "tipo": r.get("Tipo", ""),
-                        "vencimiento": r.get("Vencimiento", ""), "dias": dd,
-                        "estado": status(r.get("Vencimiento"))})
+            out.append({"usuario": r.get("User", ""), "tipo": r.get("Type", ""),
+                        "vencimiento": r.get("ExpiryDate", ""), "dias": dd,
+                        "estado": status(r.get("ExpiryDate"))})
     out.sort(key=lambda x: x["dias"])
     return out
 
@@ -234,7 +235,7 @@ def add(usuario, grupo, tipo, numero="", clase="", emision="", vencimiento="",
     if not str(tipo).strip():
         return False, t("The credential type is required.")
     try:
-        cid = _next_id(w.get_all_records(numericise_ignore=["all"]))
+        cid = _next_id(columnas.canonizar(w.get_all_records(numericise_ignore=["all"])))
         w.append_row([cid, str(usuario), str(grupo), str(tipo), str(numero), str(clase),
                       str(emision), str(vencimiento), str(drive_id), str(archivo),
                       str(nota), "", str(actualizado_por),
@@ -251,7 +252,7 @@ def update(cred_id, fields: dict) -> tuple:
     if w is None:
         return False, t("Google Sheets is not configured.")
     try:
-        recs = w.get_all_records(numericise_ignore=["all"])
+        recs = columnas.canonizar(w.get_all_records(numericise_ignore=["all"]))
     except Exception as e:
         return False, f"Error leyendo: {e}"
     for i, r in enumerate(recs):
@@ -274,7 +275,7 @@ def delete(cred_id) -> tuple:
     if w is None:
         return False, t("Google Sheets is not configured.")
     try:
-        recs = w.get_all_records(numericise_ignore=["all"])
+        recs = columnas.canonizar(w.get_all_records(numericise_ignore=["all"]))
     except Exception as e:
         return False, f"Error leyendo: {e}"
     for i, r in enumerate(recs):
@@ -323,7 +324,7 @@ def notify_expiring(grupo, days=DIAS_AVISO) -> int:
     except Exception:
         return 0
     try:
-        recs = w.get_all_records(numericise_ignore=["all"])
+        recs = columnas.canonizar(w.get_all_records(numericise_ignore=["all"]))
     except Exception:
         return 0
 
@@ -331,9 +332,9 @@ def notify_expiring(grupo, days=DIAS_AVISO) -> int:
     admins = []
     try:
         for u in auth.list_users():
-            rol = str(u.get("Rol", "")).lower()
-            if rol == "propietario" or (rol == "administrador" and str(u.get("Grupo", "")) == str(grupo)):
-                admins.append(u["Usuario"])
+            rol = str(u.get("Role", "")).lower()
+            if rol == "propietario" or (rol == "administrador" and str(u.get("Group", "")) == str(grupo)):
+                admins.append(u["User"])
     except Exception:
         pass
 
@@ -341,21 +342,21 @@ def notify_expiring(grupo, days=DIAS_AVISO) -> int:
     enviados = 0
     marcar = []                    # filas a sellar con la fecha de aviso
     for i, r in enumerate(recs):
-        if str(r.get("Grupo", "")) != str(grupo):
+        if str(r.get("Group", "")) != str(grupo):
             continue
-        dd = dias_para(r.get("Vencimiento"))
+        dd = dias_para(r.get("ExpiryDate"))
         if dd is None or dd > days:
             continue
         # dedup: no reenviar si ya se avisó hace <25 días
-        ult = _parse(r.get("UltimoAviso"))
+        ult = _parse(r.get("LastNotice"))
         if ult and (hoy - ult).days < 25:
             continue
-        tipo = r.get("Tipo", "")
-        usr  = r.get("Usuario", "")
+        tipo = r.get("Type", "")
+        usr  = r.get("User", "")
         estado = "EXPIRED" if dd < 0 else f"expires in {dd} d"
         subject = f"🎫 Credential {estado}: {tipo} ({usr})"
         lines = [f"The <b>{tipo}</b> credential for <b>{usr}</b> {('has EXPIRED' if dd < 0 else f'expires in {dd} days')}"
-                 f" ({r.get('Vencimiento','')}).", "Update it in the app → Users → Credentials."]
+                 f" ({r.get('ExpiryDate','')}).", "Update it in the app → Users → Credentials."]
         dests = list(dict.fromkeys(admins + [usr]))
         sent_any = False
         for d in dests:
@@ -375,7 +376,7 @@ def notify_expiring(grupo, days=DIAS_AVISO) -> int:
     # entrar — el escenario del 429 que v80 arregló en proyectos, contra un techo
     # DURO de 60 lecturas/min. Ahora es **1 batch_update** pase lo que pase.
     if marcar:
-        col = _col_letter(_col("UltimoAviso"))
+        col = _col_letter(_col("LastNotice"))
         sello = hoy.strftime(FMT_FECHA)
         try:
             w.batch_update([{"range": f"{col}{f}", "values": [[sello]]}

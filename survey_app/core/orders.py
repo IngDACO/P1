@@ -29,6 +29,7 @@ import logging
 import streamlit as st
 
 from core import clock, timeclock
+from core import columnas
 from core.num import col_letter as _col_letter
 from core.num import num as _num
 from core.num import parse_date as _parse_date
@@ -37,9 +38,9 @@ from core.i18n import t
 logger = logging.getLogger(__name__)
 
 SHEET = "PurchaseOrders"
-HEADERS = ["ID", "Grupo", "ProyectoID", "Proveedor", "Descripcion", "Categoria",
-           "Valor", "Fecha", "FechaEsperada", "Estado", "GastoID", "RecibidaFecha",
-           "Nota", "CreadoPor", "Creado"]
+HEADERS = ["ID", "Group", "ProjectID", "Supplier", "Description", "Category",
+           "Amount", "Date", "ExpectedDate", "Status", "ExpenseID", "ReceivedDate",
+           "Note", "CreatedBy", "Created"]
 
 PENDIENTE, RECIBIDA, CANCELADA = "pendiente", "recibida", "cancelada"
 ESTADOS = (PENDIENTE, RECIBIDA, CANCELADA)
@@ -104,23 +105,23 @@ def _invalidate():
 
 # ── Lecturas ─────────────────────────────────────────────────────
 def list_for(pid, estado=None) -> list:
-    out = [r for r in _records() if str(r.get("ProyectoID", "")) == str(pid)]
+    out = [r for r in _records() if str(r.get("ProjectID", "")) == str(pid)]
     if estado:
-        out = [r for r in out if str(r.get("Estado", "")) == estado]
-    return sorted(out, key=lambda r: str(r.get("Fecha", "")), reverse=True)
+        out = [r for r in out if str(r.get("Status", "")) == estado]
+    return sorted(out, key=lambda r: str(r.get("Date", "")), reverse=True)
 
 
 def list_group(grupo, estado=None) -> list:
-    out = [r for r in _records() if str(r.get("Grupo", "")) == str(grupo)]
+    out = [r for r in _records() if str(r.get("Group", "")) == str(grupo)]
     if estado:
-        out = [r for r in out if str(r.get("Estado", "")) == estado]
-    return sorted(out, key=lambda r: str(r.get("Fecha", "")), reverse=True)
+        out = [r for r in out if str(r.get("Status", "")) == estado]
+    return sorted(out, key=lambda r: str(r.get("Date", "")), reverse=True)
 
 
 def comprometido(pid) -> float:
     """Lo pedido y aún no recibido de un proyecto. Solo PENDIENTE cuenta:
     lo recibido ya vive en `Gastos` y lo cancelado no se debe."""
-    return round(sum(_num(r.get("Valor")) for r in list_for(pid, PENDIENTE)), 2)
+    return round(sum(_num(r.get("Amount")) for r in list_for(pid, PENDIENTE)), 2)
 
 
 def comprometido_por_proyecto(grupo) -> dict:
@@ -128,10 +129,10 @@ def comprometido_por_proyecto(grupo) -> dict:
     llamarían a `comprometido()` una vez por proyecto."""
     out = {}
     for r in _records():
-        if str(r.get("Grupo", "")) != str(grupo) or str(r.get("Estado", "")) != PENDIENTE:
+        if str(r.get("Group", "")) != str(grupo) or str(r.get("Status", "")) != PENDIENTE:
             continue
-        pid = str(r.get("ProyectoID", ""))
-        out[pid] = round(out.get(pid, 0.0) + _num(r.get("Valor")), 2)
+        pid = str(r.get("ProjectID", ""))
+        out[pid] = round(out.get(pid, 0.0) + _num(r.get("Amount")), 2)
     return out
 
 
@@ -143,7 +144,7 @@ def atrasadas(grupo) -> list:
     """
     hoy, out = clock.today(grupo), []
     for r in list_group(grupo, PENDIENTE):
-        f = _parse_date(r.get("FechaEsperada"))
+        f = _parse_date(r.get("ExpectedDate"))
         if f and f < hoy:
             out.append({**r, "dias": (hoy - f).days})
     return sorted(out, key=lambda x: -x["dias"])
@@ -153,7 +154,7 @@ def sin_gasto(grupo) -> list:
     """Recibidas a las que les falta su fila en `Gastos` (ver la nota de arriba):
     su costo NO está contado en ningún sitio hasta que se complete."""
     return [r for r in list_group(grupo, RECIBIDA)
-            if not str(r.get("GastoID", "")).strip()]
+            if not str(r.get("ExpenseID", "")).strip()]
 
 
 # ── Escrituras ───────────────────────────────────────────────────
@@ -165,7 +166,7 @@ def _next_id() -> str:
         return "ORD-00001"
     mx = 0
     try:
-        for r in w.get_all_records(numericise_ignore=["all"]):
+        for r in columnas.canonizar(w.get_all_records(numericise_ignore=["all"])):
             i = str(r.get("ID", ""))
             if i.startswith("ORD-"):
                 try:
@@ -204,7 +205,7 @@ def _fila(w, oid):
     """(nº de fila 1-based, registro) leyendo FRESCO: decidir DÓNDE escribir con
     una caché es como se corrompen los datos (v323)."""
     try:
-        recs = w.get_all_records(numericise_ignore=["all"])
+        recs = columnas.canonizar(w.get_all_records(numericise_ignore=["all"]))
     except Exception as e:
         logger.warning("orders._fila: %s", e)
         return None, None
@@ -235,14 +236,14 @@ def marcar_recibida(oid, valor_real=None, creado_por="") -> tuple:
     row, r = _fila(w, oid)
     if row is None:
         return False, t("Order not found.")
-    if str(r.get("Estado", "")) == RECIBIDA and str(r.get("GastoID", "")).strip():
+    if str(r.get("Status", "")) == RECIBIDA and str(r.get("ExpenseID", "")).strip():
         return False, t("That order was already received.")
-    valor = _num(valor_real) if valor_real not in (None, "") else _num(r.get("Valor"))
+    valor = _num(valor_real) if valor_real not in (None, "") else _num(r.get("Amount"))
     if valor <= 0:
         return False, t("The received value must be greater than 0.")
 
-    ok, err = _set(w, row, {"Estado": RECIBIDA,
-                            "RecibidaFecha": clock.now(r.get("Grupo")).strftime("%Y-%m-%d")})
+    ok, err = _set(w, row, {"Status": RECIBIDA,
+                            "ReceivedDate": clock.now(r.get("Group")).strftime("%Y-%m-%d")})
     if not ok:
         return False, err
     _invalidate()
@@ -253,7 +254,7 @@ def marcar_recibida(oid, valor_real=None, creado_por="") -> tuple:
         # detecta y se puede completar. Duplicar el gasto sería peor.
         return False, (f"{t('Marked as received, but the expense was NOT recorded')} ({msg_g}). "
                        + t("Complete it from the orders list."))
-    _set(w, row, {"GastoID": msg_g})
+    _set(w, row, {"ExpenseID": msg_g})
     _invalidate()
     return True, f"{t('Order received and charged to the project')} ({valor:,.2f})."
 
@@ -261,10 +262,10 @@ def marcar_recibida(oid, valor_real=None, creado_por="") -> tuple:
 def _crear_gasto(r, valor, creado_por="") -> tuple:
     """(ok, id_del_gasto | mensaje de error)."""
     from core import expenses as E
-    ok, msg = E.add(str(r.get("ProyectoID", "")), str(r.get("Grupo", "")), valor,
-                    categoria=str(r.get("Categoria", "")) or "Materiales",
-                    proveedor=str(r.get("Proveedor", "")),
-                    descripcion=f"Orden {r.get('ID','')} · {r.get('Descripcion','')}".strip(" ·"),
+    ok, msg = E.add(str(r.get("ProjectID", "")), str(r.get("Group", "")), valor,
+                    categoria=str(r.get("Category", "")) or "Materiales",
+                    proveedor=str(r.get("Supplier", "")),
+                    descripcion=f"Orden {r.get('ID','')} · {r.get('Description','')}".strip(" ·"),
                     creado_por=creado_por)
     if not ok:
         return False, msg
@@ -285,12 +286,12 @@ def completar_gasto(oid, creado_por="") -> tuple:
     row, r = _fila(w, oid)
     if row is None:
         return False, t("Order not found.")
-    if str(r.get("GastoID", "")).strip():
+    if str(r.get("ExpenseID", "")).strip():
         return False, t("That order already has its expense recorded.")
-    ok, msg = _crear_gasto(r, _num(r.get("Valor")), creado_por)
+    ok, msg = _crear_gasto(r, _num(r.get("Amount")), creado_por)
     if not ok:
         return False, msg
-    _set(w, row, {"GastoID": msg})
+    _set(w, row, {"ExpenseID": msg})
     _invalidate()
     return True, t("Expense recorded.")
 
@@ -302,9 +303,9 @@ def cancelar(oid) -> tuple:
     row, r = _fila(w, oid)
     if row is None:
         return False, t("Order not found.")
-    if str(r.get("Estado", "")) == RECIBIDA:
+    if str(r.get("Status", "")) == RECIBIDA:
         return False, t("Already received: it cannot be cancelled (delete its receipt if it was a mistake).")
-    ok, err = _set(w, row, {"Estado": CANCELADA})
+    ok, err = _set(w, row, {"Status": CANCELADA})
     if not ok:
         return False, err
     _invalidate()

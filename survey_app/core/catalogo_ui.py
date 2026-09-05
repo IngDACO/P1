@@ -59,26 +59,26 @@ def render_catalogo(grupo):
     if _q.strip():
         _n = _q.strip().casefold()
         items = [i for i in items
-                 if _n in f"{i.get('Nombre','')} {i.get('Categoria','')} {i.get('Descripcion','')}".casefold()]
+                 if _n in f"{i.get('Name','')} {i.get('Category','')} {i.get('Description','')}".casefold()]
     if _tipo == "Productos":
-        items = [i for i in items if str(i.get("Tipo", "")) == CAT.PRODUCTO]
+        items = [i for i in items if str(i.get("Type", "")) == CAT.PRODUCTO]
     elif _tipo == "Servicios":
-        items = [i for i in items if str(i.get("Tipo", "")) == CAT.SERVICIO]
+        items = [i for i in items if str(i.get("Type", "")) == CAT.SERVICIO]
 
     if items:
         st.caption(t("Tap an item to edit it. **Cost** is what it costs you; the margin is set when quoting, line by line."))
         df = pd.DataFrame([{
-            "Item": i.get("Nombre", ""),
-            "Tipo": _etq(str(i.get("Tipo", ""))),
-            "Category": _etq(str(i.get("Categoria", ""))) or "—",
-            "Unidad": _etq(str(i.get("Unidad", ""))) or "—",
+            "Item": i.get("Name", ""),
+            "Tipo": _etq(str(i.get("Type", ""))),
+            "Category": _etq(str(i.get("Category", ""))) or "—",
+            "Unidad": _etq(str(i.get("Unit", ""))) or "—",
             # ⚠️ NaN, no None: una columna ENTERA de None la deja pandas en
             # `object` y Streamlit pinta el literal «None» (pasaba con un
             # catalogo de solo productos).
-            "Horas": (round(_num(i.get("HorasEst")), 2)
-                      if str(i.get("Tipo", "")) == CAT.SERVICIO else float("nan")),
+            "Horas": (round(_num(i.get("EstHours")), 2)
+                      if str(i.get("Type", "")) == CAT.SERVICIO else float("nan")),
             "Costo": CAT.costo_de(i, 1),
-            "Activo": "🟢" if str(i.get("Activo", "SI")).upper() != "NO" else "🔴",
+            "Activo": "🟢" if str(i.get("Active", "SI")).upper() != "NO" else "🔴",
         } for i in items])
         _ev = st.dataframe(df, width="stretch", hide_index=True,
                            on_select="rerun", selection_mode="single-row", key="cat_tbl",
@@ -146,38 +146,38 @@ def _detalle(grupo, cid):
         st.session_state.pop("_cat_open", None)
         return
 
-    es_serv = str(it.get("Tipo", "")) == CAT.SERVICIO
-    activo = str(it.get("Activo", "SI")).upper() != "NO"
-    st.markdown(f"## :material/sell: {it.get('Nombre', '')}")
-    st.markdown(f"**{it.get('ID', '')}**  ·  {_TIPO_LBL.get(str(it.get('Tipo','')), '')}"
-                f"  ·  {_etq(str(it.get('Categoria', ''))) or '—'}  ·  "
+    es_serv = str(it.get("Type", "")) == CAT.SERVICIO
+    activo = str(it.get("Active", "SI")).upper() != "NO"
+    st.markdown(f"## :material/sell: {it.get('Name', '')}")
+    st.markdown(f"**{it.get('ID', '')}**  ·  {_TIPO_LBL.get(str(it.get('Type','')), '')}"
+                f"  ·  {_etq(str(it.get('Category', ''))) or '—'}  ·  "
                 f"cost {T.dinero(CAT.costo_de(it, 1))}"
                 + ("" if activo else "  ·  :red[" + t("inactive") + "]"))
 
     with st.form(f"cat_edit_{cid}"):
         c1, c2 = st.columns(2)
-        nombre = c1.text_input(t("Name"), value=str(it.get("Nombre", "")))
+        nombre = c1.text_input(t("Name"), value=str(it.get("Name", "")))
         categoria = c2.selectbox(t("Category"), CAT.categorias(grupo),
-                                 index=max(0, CAT.categorias(grupo).index(str(it.get("Categoria", "")))
-                                           if str(it.get("Categoria", "")) in CAT.categorias(grupo) else 0))
+                                 index=max(0, CAT.categorias(grupo).index(str(it.get("Category", "")))
+                                           if str(it.get("Category", "")) in CAT.categorias(grupo) else 0))
         if es_serv:
             c3, c4 = st.columns(2)
             horas = c3.number_input(t("Estimated hours"), min_value=0.0, step=0.5,
-                                    value=float(_num(it.get("HorasEst"))))
+                                    value=float(_num(it.get("EstHours"))))
             tarifa = c4.number_input(t("Rate/hour (cost)"), min_value=0.0, step=5.0,
-                                     value=float(_num(it.get("TarifaHora"))))
-            campos = {"HorasEst": horas, "TarifaHora": tarifa}
+                                     value=float(_num(it.get("HourlyRate"))))
+            campos = {"EstHours": horas, "HourlyRate": tarifa}
         else:
             c3, c4 = st.columns(2)
             costo = c3.number_input(t("Unit cost"), min_value=0.0, step=1.0,
-                                    value=float(_num(it.get("CostoUnit"))))
+                                    value=float(_num(it.get("UnitCost"))))
             unidad = c4.selectbox(t("Unit"), CAT.UNIDADES,
-                                  index=max(0, list(CAT.UNIDADES).index(str(it.get("Unidad", "")))
-                                            if str(it.get("Unidad", "")) in CAT.UNIDADES else 0))
-            campos = {"CostoUnit": costo, "Unidad": unidad}
-        desc = st.text_input(t("Description"), value=str(it.get("Descripcion", "")))
+                                  index=max(0, list(CAT.UNIDADES).index(str(it.get("Unit", "")))
+                                            if str(it.get("Unit", "")) in CAT.UNIDADES else 0))
+            campos = {"UnitCost": costo, "Unit": unidad}
+        desc = st.text_input(t("Description"), value=str(it.get("Description", "")))
         if st.form_submit_button(t(":material/save: Save changes"), width="stretch"):
-            campos.update({"Nombre": nombre, "Categoria": categoria, "Descripcion": desc})
+            campos.update({"Name": nombre, "Category": categoria, "Description": desc})
             ok, msg = CAT.actualizar(cid, campos)
             (flash.exito if ok else st.error)(msg)
             if ok:

@@ -35,15 +35,16 @@ from datetime import timedelta
 import streamlit as st
 
 from core import clock, timeclock
+from core import columnas
 from core.num import parse_date as _parse_date
 
 from core.i18n import t
 logger = logging.getLogger(__name__)
 
 SHEET = "Absences"
-HEADERS = ["ID", "Grupo", "Usuario", "Nombre", "Tipo", "Desde", "Hasta", "Dias",
-           "Motivo", "Estado", "ResueltaPor", "ResueltaFecha", "NotaAdmin",
-           "CreadoPor", "Creado",
+HEADERS = ["ID", "Group", "User", "Name", "Type", "From", "To", "Days",
+           "Reason", "Status", "ResolvedBy", "ResolvedDate", "AdminNote",
+           "CreatedBy", "Created",
            # ⚠️ `Findes` NO es un detalle: sin ella, un rango pedido «con fines de
            # semana» descuenta 12 días del saldo y la nómina paga 8, porque cada
            # lado recuenta el rango con un criterio distinto. Lo cazó ejercitar la
@@ -51,7 +52,7 @@ HEADERS = ["ID", "Grupo", "Usuario", "Nombre", "Tipo", "Desde", "Hasta", "Dias",
            # valor se añadió a la fila en el mismo cambio (lección v363: cabecera y
            # fila posicional siempre juntas). Una fila anterior no la trae → "" →
            # días hábiles, que era el comportamiento por defecto.
-           "Findes"]
+           "IncludesWeekends"]
 
 _COL = {h: i + 1 for i, h in enumerate(HEADERS)}
 
@@ -174,7 +175,7 @@ def incluye_findes(r: dict) -> bool:
 
     Una fila anterior a la columna devuelve False, que es lo que hacía entonces.
     """
-    return str(r.get("Findes", "")).strip().upper() in ("SI", "SÍ", "TRUE", "1")
+    return str(r.get("IncludesWeekends", "")).strip().upper() in ("SI", "SÍ", "TRUE", "1")
 
 
 def _solapan(a0, a1, b0, b1) -> bool:
@@ -184,12 +185,12 @@ def _solapan(a0, a1, b0, b1) -> bool:
 
 # ── Lecturas ─────────────────────────────────────────────────────
 def list_group(grupo, estado=None, usuario=None) -> list:
-    out = [r for r in _records() if str(r.get("Grupo", "")) == str(grupo)]
+    out = [r for r in _records() if str(r.get("Group", "")) == str(grupo)]
     if estado:
-        out = [r for r in out if str(r.get("Estado", "")) == estado]
+        out = [r for r in out if str(r.get("Status", "")) == estado]
     if usuario is not None:
-        out = [r for r in out if str(r.get("Usuario", "")) == str(usuario)]
-    return sorted(out, key=lambda r: str(r.get("Desde", "")), reverse=True)
+        out = [r for r in out if str(r.get("User", "")) == str(usuario)]
+    return sorted(out, key=lambda r: str(r.get("From", "")), reverse=True)
 
 
 def pendientes(grupo) -> list:
@@ -211,11 +212,11 @@ def ausentes_en(grupo, dia=None) -> list:
     dia = dia or clock.today(grupo)
     out = []
     for r in _records():
-        if str(r.get("Grupo", "")) != str(grupo):
+        if str(r.get("Group", "")) != str(grupo):
             continue
-        if str(r.get("Estado", "")) not in VIGENTES:
+        if str(r.get("Status", "")) not in VIGENTES:
             continue
-        d0, d1 = _parse_date(r.get("Desde")), _parse_date(r.get("Hasta"))
+        d0, d1 = _parse_date(r.get("From")), _parse_date(r.get("To"))
         if d0 and d1 and d0 <= dia <= d1:
             out.append(r)
     return out
@@ -287,14 +288,14 @@ def dias_usados(grupo, usuario, tipo, desde=None, hasta=None) -> float:
         return 0.0
     tot = 0
     for r in _records():
-        if (str(r.get("Grupo", "")) != str(grupo)
-                or str(r.get("Usuario", "")) != str(usuario)
-                or str(r.get("Tipo", "")) != str(tipo)
-                or str(r.get("Estado", "")) != APROBADA):
+        if (str(r.get("Group", "")) != str(grupo)
+                or str(r.get("User", "")) != str(usuario)
+                or str(r.get("Type", "")) != str(tipo)
+                or str(r.get("Status", "")) != APROBADA):
             continue
         # los MISMOS días que se pidieron (con o sin fin de semana), recortados al
         # periodo — la misma regla que usa el pago (`horas_pagadas_grupo`)
-        tot += sum(1 for d in dias_del_rango(r.get("Desde"), r.get("Hasta"),
+        tot += sum(1 for d in dias_del_rango(r.get("From"), r.get("To"),
                                              incluye_findes(r))
                    if d0 <= d <= d1)
     return round(float(tot), 1)
@@ -323,13 +324,13 @@ def solapadas(grupo, usuario, desde, hasta, excluir=None) -> list:
         return []
     out = []
     for r in _records():
-        if (str(r.get("Grupo", "")) != str(grupo)
-                or str(r.get("Usuario", "")) != str(usuario)
-                or str(r.get("Estado", "")) not in VIGENTES):
+        if (str(r.get("Group", "")) != str(grupo)
+                or str(r.get("User", "")) != str(usuario)
+                or str(r.get("Status", "")) not in VIGENTES):
             continue
         if excluir and str(r.get("ID", "")) == str(excluir):
             continue
-        e0, e1 = _parse_date(r.get("Desde")), _parse_date(r.get("Hasta"))
+        e0, e1 = _parse_date(r.get("From")), _parse_date(r.get("To"))
         if e0 and e1 and _solapan(d0, d1, e0, e1):
             out.append(r)
     return out
@@ -373,23 +374,23 @@ def horas_pagadas_grupo(grupo, desde, hasta) -> dict:
         fichadas = {}
     out = {}
     for r in _records():
-        if (str(r.get("Grupo", "")) != str(grupo)
-                or str(r.get("Estado", "")) != APROBADA):
+        if (str(r.get("Group", "")) != str(grupo)
+                or str(r.get("Status", "")) != APROBADA):
             continue
-        tipo = str(r.get("Tipo", ""))
+        tipo = str(r.get("Type", ""))
         if not TIPOS.get(tipo, {}).get("pagado"):
             continue
         # ⚠️ Los MISMOS días que se descontaron del saldo, no un recuento propio:
         # si el rango se pidió con fin de semana, `Dias` los cuenta y la paga
         # también. Lo contrario le quitaba 12 días de saldo pagándole 8.
-        _d = [d for d in dias_del_rango(r.get("Desde"), r.get("Hasta"),
+        _d = [d for d in dias_del_rango(r.get("From"), r.get("To"),
                                         incluye_findes(r))
               if d0 <= d <= d1]
         if not _d:
             continue
-        clave = str(r.get("Usuario", ""))
+        clave = str(r.get("User", ""))
         e = out.setdefault(clave, {"horas": 0.0, "dias": 0.0, "por_tipo": {},
-                                   "nombre": str(r.get("Nombre") or clave),
+                                   "nombre": str(r.get("Name") or clave),
                                    "recortados": []})
         _suyas = fichadas.get(clave, {})
         for d in _d:
@@ -488,14 +489,14 @@ def aplicar_al_roster(a: dict, quitar: bool = False) -> tuple:
     Una escritura por SEMANA (`guardar_persona` escribe la fila entera), no por día.
     """
     from core import roster as R
-    tipo = str(a.get("Tipo", ""))
+    tipo = str(a.get("Type", ""))
     cfg = TIPOS.get(tipo, {})
     estado = cfg.get("estado_roster", "OFF")
-    usuario = str(a.get("Usuario", ""))
-    grupo = str(a.get("Grupo", ""))
+    usuario = str(a.get("User", ""))
+    grupo = str(a.get("Group", ""))
     # Se marcan TODOS los días del rango, fin de semana incluido: si la persona no
     # está, no está — y el tablero ya admite sábado y domingo desde v390.
-    dias = dias_del_rango(a.get("Desde"), a.get("Hasta"), incluir_findes=True)
+    dias = dias_del_rango(a.get("From"), a.get("To"), incluir_findes=True)
     if not dias:
         return False, t("The range has no days.")
     nota = f"{cfg.get('nombre', tipo)} · {a.get('ID', '')}"
@@ -534,11 +535,11 @@ def sustitutos(grupo, fecha, proyecto_id=None, excluir=None) -> list:
     exige (v219). Devuelve `[{usuario, nombre, cumple, faltan}]`.
     """
     from core import roster as R, auth
-    fuera = {str(x.get("Usuario", "")) for x in ausentes_en(grupo, fecha)}
+    fuera = {str(x.get("User", "")) for x in ausentes_en(grupo, fecha)}
     try:
         gente = [u for u in auth.list_users(grupo)
-                 if str(u.get("Rol", "")) == "campo"
-                 and str(u.get("Activo", "SI")).upper() != "NO"]
+                 if str(u.get("Role", "")) == "campo"
+                 and str(u.get("Active", "SI")).upper() != "NO"]
     except Exception:
         return []
     try:
@@ -551,12 +552,12 @@ def sustitutos(grupo, fecha, proyecto_id=None, excluir=None) -> list:
         try:
             from core import projects as P
             _p = P.get_project(proyecto_id) or {}
-            _req = [x.strip() for x in str(_p.get("CertsReq", "")).split(";") if x.strip()]
+            _req = [x.strip() for x in str(_p.get("RequiredCerts", "")).split(";") if x.strip()]
         except Exception:
             _req = []
     out = []
     for u in gente:
-        us = str(u.get("Usuario", ""))
+        us = str(u.get("User", ""))
         if us == str(excluir) or us in fuera:
             continue
         if R._norm_cell((sem.get(us, {}) or {}).get(dia, {})).get("items"):
@@ -571,7 +572,7 @@ def sustitutos(grupo, fecha, proyecto_id=None, excluir=None) -> list:
                           if e in ("falta", "vencido")]
             except Exception:
                 pass
-        out.append({"usuario": us, "nombre": str(u.get("Nombre") or us),
+        out.append({"usuario": us, "nombre": str(u.get("Name") or us),
                     "cumple": cumple, "faltan": faltan})
     # los que cumplen primero: el admin ve antes a quien puede ir de verdad
     return sorted(out, key=lambda x: (not x["cumple"], x["nombre"]))
@@ -628,13 +629,13 @@ def solicitar(grupo, usuario, nombre, tipo, desde, hasta, motivo="",
     if _sol:
         _r = _sol[0]
         return False, (f"{t('There is already an absence overlapping those dates')}: "
-                       f"{_r.get('ID')} ({TIPOS.get(str(_r.get('Tipo')), {}).get('nombre', _r.get('Tipo'))}, "
-                       f"{_r.get('Desde')} → {_r.get('Hasta')}, {_r.get('Estado')}).")
+                       f"{_r.get('ID')} ({TIPOS.get(str(_r.get('Type')), {}).get('nombre', _r.get('Type'))}, "
+                       f"{_r.get('From')} → {_r.get('To')}, {_r.get('Status')}).")
 
     cfg = TIPOS[tipo]
     estado = PENDIENTE if cfg["aprobacion"] else APROBADA
     hoy = clock.now(grupo).strftime("%Y-%m-%d %H:%M")
-    fila = [_next_id(w.get_all_records(numericise_ignore=["all"])),
+    fila = [_next_id(columnas.canonizar(w.get_all_records(numericise_ignore=["all"]))),
             str(grupo), str(usuario), str(nombre or usuario), str(tipo),
             _d0.strftime("%Y-%m-%d"), _d1.strftime("%Y-%m-%d"), str(len(dias)),
             str(motivo or ""), estado,
@@ -668,14 +669,14 @@ def resolver(aid, aprobar: bool, quien, nota="") -> tuple:
     if w is None:
         return False, t("Google Sheets is not configured.")
     try:
-        recs = w.get_all_records(numericise_ignore=["all"])   # FRESCO: es escritura
+        recs = columnas.canonizar(w.get_all_records(numericise_ignore=["all"]))   # FRESCO: es escritura
     except Exception as e:
         return False, f"Error leyendo: {e}"
     fila = next((i + 2 for i, r in enumerate(recs)
                  if str(r.get("ID", "")) == str(aid)), None)
     if fila is None:
         return False, t("Request not found.")
-    actual = str(recs[fila - 2].get("Estado", ""))
+    actual = str(recs[fila - 2].get("Status", ""))
     if actual != PENDIENTE:
         return False, (f"{t('That request is already')} **{actual}**; "
                        + t("it cannot be resolved again. To undo an approved "
@@ -684,11 +685,11 @@ def resolver(aid, aprobar: bool, quien, nota="") -> tuple:
     from core.num import col_letter as _cl
     try:
         w.batch_update([
-            {"range": f"{_cl(_COL['Estado'])}{fila}", "values": [[nuevo]]},
-            {"range": f"{_cl(_COL['ResueltaPor'])}{fila}", "values": [[str(quien)]]},
-            {"range": f"{_cl(_COL['ResueltaFecha'])}{fila}",
+            {"range": f"{_cl(_COL['Status'])}{fila}", "values": [[nuevo]]},
+            {"range": f"{_cl(_COL['ResolvedBy'])}{fila}", "values": [[str(quien)]]},
+            {"range": f"{_cl(_COL['ResolvedDate'])}{fila}",
              "values": [[clock.now().strftime("%Y-%m-%d %H:%M")]]},
-            {"range": f"{_cl(_COL['NotaAdmin'])}{fila}", "values": [[str(nota or "")]]},
+            {"range": f"{_cl(_COL['AdminNote'])}{fila}", "values": [[str(nota or "")]]},
         ], value_input_option="RAW")
     except Exception as e:
         return False, f"{t('Error saving')}: {e}"
@@ -706,21 +707,21 @@ def cancelar(aid, quien) -> tuple:
     if w is None:
         return False, t("Google Sheets is not configured.")
     try:
-        recs = w.get_all_records(numericise_ignore=["all"])
+        recs = columnas.canonizar(w.get_all_records(numericise_ignore=["all"]))
     except Exception as e:
         return False, f"Error leyendo: {e}"
     fila = next((i + 2 for i, r in enumerate(recs)
                  if str(r.get("ID", "")) == str(aid)), None)
     if fila is None:
         return False, t("Request not found.")
-    if str(recs[fila - 2].get("Estado", "")) not in VIGENTES:
+    if str(recs[fila - 2].get("Status", "")) not in VIGENTES:
         return False, t("That request is no longer active.")
     from core.num import col_letter as _cl
     try:
         w.batch_update([
-            {"range": f"{_cl(_COL['Estado'])}{fila}", "values": [[CANCELADA]]},
-            {"range": f"{_cl(_COL['ResueltaPor'])}{fila}", "values": [[str(quien)]]},
-            {"range": f"{_cl(_COL['ResueltaFecha'])}{fila}",
+            {"range": f"{_cl(_COL['Status'])}{fila}", "values": [[CANCELADA]]},
+            {"range": f"{_cl(_COL['ResolvedBy'])}{fila}", "values": [[str(quien)]]},
+            {"range": f"{_cl(_COL['ResolvedDate'])}{fila}",
              "values": [[clock.now().strftime("%Y-%m-%d %H:%M")]]},
         ], value_input_option="RAW")
     except Exception as e:

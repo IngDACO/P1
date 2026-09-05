@@ -26,11 +26,12 @@ from core.i18n import t
 
 import streamlit as st
 from core import clock
+from core import columnas
 
 _DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "manuals")
 
 _SHEET   = "Manuals"
-_HEADERS = ["ID", "Nombre", "DriveID", "NumFrags", "Fecha", "SubidoPor"]
+_HEADERS = ["ID", "Name", "DriveID", "NumChunks", "Date", "UploadedBy"]
 _FOLDER_NAME = "COPEX Manuals"
 _WORDS_PER_CHUNK = 180
 
@@ -66,7 +67,7 @@ def _drive_records() -> list:
     if w is None:
         return []
     try:
-        return w.get_all_records(numericise_ignore=["all"])
+        return columnas.canonizar(w.get_all_records(numericise_ignore=["all"]))
     except Exception:
         return []
 
@@ -288,7 +289,7 @@ def delete_manual(manual_id) -> bool:
     if w is None:
         return False
     try:
-        recs = w.get_all_records(numericise_ignore=["all"])
+        recs = columnas.canonizar(w.get_all_records(numericise_ignore=["all"]))
     except Exception:
         return False
     for i, rec in enumerate(recs):

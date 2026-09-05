@@ -44,7 +44,7 @@ def _usuarios_de(grupo: str) -> list:
     de administración, así que limitarlo al campo dejaría fuera al responsable real.
     """
     try:
-        return [str(u["Usuario"]) for u in auth.list_users(grupo)]
+        return [str(u["User"]) for u in auth.list_users(grupo)]
     except Exception as e:
         logger.warning("_usuarios_de: no se pudo leer la lista de usuarios: %s", e)
         return []
@@ -75,9 +75,9 @@ def _alerts_section(pid, grupo, project_name="", allow_report=False):
     st.markdown(f"**{':red[:material/notifications:] ' + str(len(abiertas)) if abiertas else ':material/notifications:'} Alerts**")
     if abiertas:
         for al in abiertas:
-            emo = ":red[:material/error:]" if str(al.get("Tipo")) == "problema" else ":blue[:material/info:]"
+            emo = ":red[:material/error:]" if str(al.get("Type")) == "problema" else ":blue[:material/info:]"
             c = st.columns([6, 1])
-            c[0].write(f"{emo} _{al.get('Fecha')}_ · **{al.get('CreadoPor')}**: {al.get('Mensaje')}")
+            c[0].write(f"{emo} _{al.get('Date')}_ · **{al.get('CreatedBy')}**: {al.get('Message')}")
             if c[1].button(":material/check_circle:", key=f"resolv_{al.get('ID')}", help=t("Mark as resolved")):
                 ok, msg = alerts.resolve_alert(al.get("ID"), usuario)
                 if ok:
@@ -134,8 +134,8 @@ def _kpis(grupo=None) -> dict:
     horas   = P.project_hours_bulk(grupo)
     alarmas = alerts.open_counts_all() if alerts.is_configured() else {}
     ids     = {str(p.get("ID", "")) for p in proys}
-    activos = [p for p in proys if str(p.get("Estado", "")) not in ("Completado", "Cancelado")]
-    avances = [P._num(p.get("Avance")) for p in proys]
+    activos = [p for p in proys if str(p.get("Status", "")) not in ("Completado", "Cancelado")]
+    avances = [P._num(p.get("Progress")) for p in proys]
     return {
         "total":   len(proys),
         "activos": len(activos),
@@ -640,9 +640,9 @@ def _galeria_fotos(fotos, pid, por_pagina=6):
                     st.image(_b, width="stretch")
                 except Exception:
                     st.caption(t(":material/broken_image: not available"))
-                pie = str(d.get("Nombre", ""))
-                st.caption(f"{pie[:26]}\n\n{_fecha_corta(d.get('Fecha'))}"
-                           + (f" · {d.get('SubidoPor')}" if d.get("SubidoPor") else ""))
+                pie = str(d.get("Name", ""))
+                st.caption(f"{pie[:26]}\n\n{_fecha_corta(d.get('Date'))}"
+                           + (f" · {d.get('UploadedBy')}" if d.get("UploadedBy") else ""))
                 # Reutiliza los bytes ya bajados para la miniatura: descarga directa
                 # de la foto sin una segunda llamada a Drive.
                 if _b is not None:
@@ -684,22 +684,22 @@ def _archivos_section(pid: str):
 
     # ── Unir documentos + cálculos reabribles sin PDF (casados por DriveID) ──
     docs = [d for d in P.list_documents(pid)
-            if ver_tipos is None or str(d.get("Tipo", "")) in ver_tipos]
+            if ver_tipos is None or str(d.get("Type", "")) in ver_tipos]
     runs = toolruns.list_for(pid) if toolruns.is_configured() else []
     runs_by_drive = {str(r.get("DriveID", "")).strip(): r
                      for r in runs if str(r.get("DriveID", "")).strip()}
     entries, casados = [], set()
     for d in docs:
-        tipo = str(d.get("Tipo", ""))
+        tipo = str(d.get("Type", ""))
         did  = str(d.get("DriveID", "")).strip()
         run  = runs_by_drive.get(did) if tipo == "calculo" else None
         if run:
             casados.add(did)
         entries.append({
             "tipo": tipo, "label": _TIPO_LABEL.get(tipo, tipo or "otro"),
-            "nombre": str(d.get("Nombre", "")), "fecha": str(d.get("Fecha", "")),
-            "por": str(d.get("SubidoPor", "")), "did": did,
-            "resumen": str(run.get("Resumen", "")) if run else "",
+            "nombre": str(d.get("Name", "")), "fecha": str(d.get("Date", "")),
+            "por": str(d.get("UploadedBy", "")), "did": did,
+            "resumen": str(run.get("Summary", "")) if run else "",
             "doc": d, "run": run})
     # Cálculos con entradas guardadas pero SIN PDF archivado (Drive estaba caído):
     # no son un "archivo" descargable, pero sí se pueden reabrir. No se pierden.
@@ -710,13 +710,13 @@ def _archivos_section(pid: str):
                 continue
             if not toolruns.entradas_de(r):
                 continue
-            h = str(r.get("Herramienta", ""))
+            h = str(r.get("Tool", ""))
             entries.append({
                 "tipo": "calculo", "label": _TIPO_LABEL["calculo"],
                 "nombre": (f"{toolruns.HERRAMIENTAS.get(h, '')} "
-                           f"{str(r.get('Resumen', ''))[:40]}").strip(),
-                "fecha": str(r.get("Fecha", "")), "por": str(r.get("Usuario", "")),
-                "did": did, "resumen": str(r.get("Resumen", "")),
+                           f"{str(r.get('Summary', ''))[:40]}").strip(),
+                "fecha": str(r.get("Date", "")), "por": str(r.get("User", "")),
+                "did": did, "resumen": str(r.get("Summary", "")),
                 "doc": None, "run": r})
 
     if not entries:
@@ -738,7 +738,7 @@ def _archivos_section(pid: str):
     # rama MUERTA sin dar ningún error — el fallo real de v442. Se traduce el
     # display con `format_func`, que es lo único que se ve.
     _ORD = {"Más reciente": "Newest", "Más antiguo": "Oldest",
-            "Name A–Z": "Name A–Z", "Tipo": "Type"}
+            "Name A–Z": "Name A–Z", "Type": "Type"}
 
     c1, c2, c3 = st.columns([2, 1.5, 1.5])
     q = c1.text_input(t(":material/search: Search"), key=f"arch_q_{pid}",
@@ -802,7 +802,7 @@ def _acciones_archivo(pid, e, puede_borrar):
     """Descargar / reabrir / borrar el archivo elegido. Solo aquí se descarga."""
     did = e["did"]
     run = e.get("run")
-    h = str((run or {}).get("Herramienta", ""))
+    h = str((run or {}).get("Tool", ""))
     reabrible = bool(run) and h in _CALC_NAV and bool(toolruns.entradas_de(run))
     es_doc = e.get("doc") is not None
 
@@ -927,7 +927,7 @@ def _nuevo_proyecto_form(grupo: str, key: str = "nuevo"):
         # ── Cliente: elegir uno existente o escribir uno nuevo (fuera del form) ──
         from core import clientes as _C
         _cli_fichas = _C.list_clientes(grupo)
-        _cli_names = [str(c.get("Nombre", "")) for c in _cli_fichas]
+        _cli_names = [str(c.get("Name", "")) for c in _cli_fichas]
         _CLI_OTRO = t("➕ Other (type a new one)")
         _cli_sel = st.selectbox(t(":material/contacts: Client"),
                                 ["— no client —"] + _cli_names + [_CLI_OTRO],
@@ -1014,10 +1014,10 @@ def _nuevo_proyecto_form(grupo: str, key: str = "nuevo"):
                    or st.session_state.get(f"nploc_{key}_q") or "").strip()
             # Incluye archivados: crear un homonimo de uno archivado tambien confunde.
             # v422: y las internas — llamar a una obra igual que el almacén confunde igual.
-            dups = [f"{p.get('ID')} · {p.get('Nombre')}"
+            dups = [f"{p.get('ID')} · {p.get('Name')}"
                     for p in P.list_projects(grupo, incluir_archivados=True,
                                              incluir_internos=True)
-                    if " ".join(str(p.get("Nombre") or "").lower().split())
+                    if " ".join(str(p.get("Name") or "").lower().split())
                     == " ".join(nom.lower().split())]
             if dups and not st.session_state.get(f"np_dup_{key}"):
                 st.warning(t(":material/warning: A project with that name already exists: {x}. "
@@ -1030,7 +1030,7 @@ def _nuevo_proyecto_form(grupo: str, key: str = "nuevo"):
             if _cli_sel in _cli_names:
                 cli = _cli_sel
                 _cli_id = next((str(c.get("ID", "")) for c in _cli_fichas
-                                if str(c.get("Nombre", "")) == _cli_sel), "")
+                                if str(c.get("Name", "")) == _cli_sel), "")
             elif _cli_sel == _CLI_OTRO:
                 cli, _cli_id = _cli_new.strip(), ""
             else:
@@ -1093,11 +1093,11 @@ def _nuevo_proyecto_form(grupo: str, key: str = "nuevo"):
                        + " " + t("The survey and the other tools can now feed it."))
             if asg:
                 _notificar_asignados(asg, {
-                    "Nombre": nom.strip(), "Cliente": cli, "Ubicacion": ubi,
-                    "FechaInicio": f_ini.strftime("%Y-%m-%d"),
-                    "FechaFinEst": (sched["fecha_fin"].strftime("%Y-%m-%d")
+                    "Name": nom.strip(), "Client": cli, "Location": ubi,
+                    "StartDate": f_ini.strftime("%Y-%m-%d"),
+                    "EndDateEst": (sched["fecha_fin"].strftime("%Y-%m-%d")
                                     if sched.get("fecha_fin") else ""),
-                    "InduccionLinks": inds})
+                    "InductionLinks": inds})
                 # v219: auto-poblar el planificador con el proyecto entre sus fechas.
                 _autoagenda(grupo, res, asg, [], f_ini,
                             sched.get("fecha_fin") if sched.get("fecha_fin") else None)
@@ -1153,9 +1153,9 @@ def _avisar_asignados(usuarios, grupo=None, exclude_pid=None, certs_req=None,
             for p in P.list_projects(grupo):
                 if str(p.get("ID", "")) == str(exclude_pid or ""):
                     continue
-                if str(p.get("Estado", "")) in ("Completado", "Cancelado"):
+                if str(p.get("Status", "")) in ("Completado", "Cancelado"):
                     continue
-                for u in [x.strip() for x in str(p.get("CampoAsignados", "")).split(";")
+                for u in [x.strip() for x in str(p.get("FieldAssigned", "")).split(";")
                           if x.strip()]:
                     otros.setdefault(u, []).append(p)
         except Exception:
@@ -1173,16 +1173,16 @@ def _avisar_asignados(usuarios, grupo=None, exclude_pid=None, certs_req=None,
         try:
             for c in credentials.list_for(u):
                 # los tipos REQUERIDOS por el proyecto los cubre el chequeo de abajo
-                if certs_req and str(c.get("Tipo", "")).strip() in certs_req:
+                if certs_req and str(c.get("Type", "")).strip() in certs_req:
                     continue
-                if credentials.status(c.get("Vencimiento")) in ("vencido", "por_vencer"):
-                    cred_mal.append(f"{u} — {c.get('Tipo', 'credencial')}: "
-                                    f"{credentials.status_label(c.get('Vencimiento'))}")
+                if credentials.status(c.get("ExpiryDate")) in ("vencido", "por_vencer"):
+                    cred_mal.append(f"{u} — {c.get('Type', 'credencial')}: "
+                                    f"{credentials.status_label(c.get('ExpiryDate'))}")
         except Exception:
             pass
         for p in otros.get(u, []):
-            _fin = str(p.get("FechaFinEst", "")).strip()
-            ocupados.append(f"**{u}** → :material/apartment: {p.get('Nombre', '')}"
+            _fin = str(p.get("EndDateEst", "")).strip()
+            ocupados.append(f"**{u}** → :material/apartment: {p.get('Name', '')}"
                             + (f" ({t('until')} {_fin})" if _fin else ""))
         if certs_req:
             try:
@@ -1212,9 +1212,9 @@ def _avisar_asignados(usuarios, grupo=None, exclude_pid=None, certs_req=None,
             _hoy = _clk.today(grupo)
             for u in usuarios:
                 for a in _AU.list_group(grupo, usuario=u):
-                    if str(a.get("Estado", "")) not in _AU.VIGENTES:
+                    if str(a.get("Status", "")) not in _AU.VIGENTES:
                         continue
-                    _d0, _d1 = _pd(a.get("Desde")), _pd(a.get("Hasta"))
+                    _d0, _d1 = _pd(a.get("From")), _pd(a.get("To"))
                     if not _d0 or not _d1:
                         continue
                     if _ini and _fin:
@@ -1222,10 +1222,10 @@ def _avisar_asignados(usuarios, grupo=None, exclude_pid=None, certs_req=None,
                             continue          # no cruza las fechas de la obra
                     elif _d1 < _hoy:
                         continue              # sin fechas de obra: solo lo que no pasó
-                    _t = _AU.TIPOS.get(str(a.get("Tipo", "")), {})
-                    fuera.append(f"**{u}**: {_t.get('nombre', a.get('Tipo'))} "
-                                 f"from {a.get('Desde')} to {a.get('Hasta')}"
-                                 + ("" if str(a.get("Estado")) == _AU.APROBADA
+                    _t = _AU.TIPOS.get(str(a.get("Type", "")), {})
+                    fuera.append(f"**{u}**: {_t.get('nombre', a.get('Type'))} "
+                                 f"from {a.get('From')} to {a.get('To')}"
+                                 + ("" if str(a.get("Status")) == _AU.APROBADA
                                     else " (not approved yet)"))
         except Exception as e:
             logger.warning("_avisar_asignados: ausencias: %s", e)
@@ -1254,11 +1254,11 @@ def _avisar_asignados(usuarios, grupo=None, exclude_pid=None, certs_req=None,
 def _cumplimiento_equipo(pid, grupo, prj):
     """Tabla VIVA de cumplimiento de certificados del equipo asignado (v219): asignados
     × certificados requeridos, ✅/🟡/🔴/—. Solo si el proyecto define requeridos."""
-    req = [x.strip() for x in str(prj.get("CertsReq", "")).split(";") if x.strip()]
+    req = [x.strip() for x in str(prj.get("RequiredCerts", "")).split(";") if x.strip()]
     if not req:
         return
     st.markdown(t("**:material/verified_user: Team certificate compliance**"))
-    asign = [x.strip() for x in str(prj.get("CampoAsignados", "")).split(";") if x.strip()]
+    asign = [x.strip() for x in str(prj.get("FieldAssigned", "")).split(";") if x.strip()]
     if not asign:
         st.caption(t("No field users assigned yet."))
         return
@@ -1270,7 +1270,7 @@ def _cumplimiento_equipo(pid, grupo, prj):
     filas = []
     for u in asign:
         comp = credentials.compliance(u, req)
-        fila = {"Usuario": u, "Compliant": t("Yes") if comp["cumple"] else t("No")}
+        fila = {"User": u, "Compliant": t("Yes") if comp["cumple"] else t("No")}
         for _c in req:
             _est = comp["por_tipo"].get(_c, "falta")
             fila[_c] = "—" if _est == "falta" else _etq(_est)
@@ -1311,8 +1311,8 @@ def _field_users(grupo):
     el módulo, y dos definiciones de lo mismo no fallan hoy, divergen mañana (v323).
     """
     try:
-        return [u["Usuario"] for u in auth.list_users(grupo)
-                if str(u.get("Rol", "")) == "campo"]
+        return [u["User"] for u in auth.list_users(grupo)
+                if str(u.get("Role", "")) == "campo"]
     except Exception:
         return []
 
@@ -1373,12 +1373,12 @@ def _cartera_clickeable(proys, alarmas, delays, aheads, costos,
                 break
             p = proys[_idx]
             _pid = str(p.get("ID", ""))
-            _av = max(0, min(100, int(P._num(p.get("Avance")))))
+            _av = max(0, min(100, int(P._num(p.get("Progress")))))
             _dl, _ah, _al = delays.get(_pid, 0), aheads.get(_pid, 0), alarmas.get(_pid, 0)
             _col = _salud(_pid)
-            _est = str(p.get("Estado", "") or "—")
+            _est = str(p.get("Status", "") or "—")
             _pbg, _pfg = _pill.get(_est, ("#eceff3", "#5f5e5a"))
-            _users = len([x for x in str(p.get("CampoAsignados", "")).split(";") if x.strip()])
+            _users = len([x for x in str(p.get("FieldAssigned", "")).split(";") if x.strip()])
             _c = costos.get(_pid) or {}
             if P._num(_c.get("presupuesto")) > 0:
                 _ppto = f"{int(round(P._num(_c.get('pct'))))}% ppto" + (" " + _MI("warning", "#e0a021") if _c.get("over") else "")
@@ -1405,7 +1405,7 @@ def _cartera_clickeable(proys, alarmas, delays, aheads, costos,
                 f"<span style='width:9px;height:9px;border-radius:50%;background:{_col};"
                 "flex:none;'></span>"
                 "<span style='font-weight:700;font-size:14px;overflow:hidden;"
-                f"text-overflow:ellipsis;white-space:nowrap;'>{esc(p.get('Nombre', ''))}</span></div>"
+                f"text-overflow:ellipsis;white-space:nowrap;'>{esc(p.get('Name', ''))}</span></div>"
                 f"<span style='background:{_pbg};color:{_pfg};font-size:11px;padding:2px 8px;"
                 f"border-radius:6px;white-space:nowrap;'>{esc(_est)}</span></div>"
                 "<div style='display:flex;align-items:center;gap:8px;margin-bottom:6px;'>"
@@ -1420,12 +1420,12 @@ def _cartera_clickeable(proys, alarmas, delays, aheads, costos,
                 "font-family:monospace;'>"
                 f"{esc(_pid)}"
                 + (f"<span style='font-family:inherit;color:#6b7280;'> · "
-                   f"{esc(str(p.get('Tipo', '')).strip())}</span>"
-                   if str(p.get('Tipo', '')).strip() else "")
+                   f"{esc(str(p.get('Type', '')).strip())}</span>"
+                   if str(p.get('Type', '')).strip() else "")
                 + "</div>"
                 f"<div style='font-size:12px;color:#6b7280;margin-bottom:5px;'>{_MI('person')} "
-                f"{esc(p.get('Cliente', '') or '—')} · {_MI('calendar_month')} {_ddmm(p.get('FechaInicio'))} → "
-                f"{_ddmm(p.get('FechaFinEst'))}</div>"
+                f"{esc(p.get('Client', '') or '—')} · {_MI('calendar_month')} {_ddmm(p.get('StartDate'))} → "
+                f"{_ddmm(p.get('EndDateEst'))}</div>"
                 f"<div style='font-size:12px;color:#374151;'>{_chips}</div>")
             with _cols[_j].container(border=True, key=f"cart_{_idx}"):
                 st.markdown(_html, unsafe_allow_html=True)
@@ -1493,13 +1493,13 @@ def _cartera_lista(proys, alarmas, delays, aheads, costos, pendientes=None,
         _c = costos.get(_pid) or {}
         _ppto = (f"{int(round(P._num(_c.get('pct'))))}%" + (" over" if _c.get("over") else "")
                  if P._num(_c.get("presupuesto")) > 0 else "—")
-        _users = len([x for x in str(p.get("CampoAsignados", "")).split(";") if x.strip()])
+        _users = len([x for x in str(p.get("FieldAssigned", "")).split(";") if x.strip()])
         _sit = (f"{_dl} d behind" if _dl else (f"{_ah} d ahead" if _ah else "—"))
         _rows.append({
             # v306: el ID primero. Es la identidad real (el nombre puede repetirse), y
             # tenerlo en la tabla permite dictarlo, buscarlo y cruzarlo con la hoja.
             "ID": _pid,
-            "Proyecto": str(p.get("Nombre", "")),
+            "Project": str(p.get("Name", "")),
             # ⚠️ v398: junto al nombre, no al final. Medido en producción: con 13
             # columnas y la tabla a ~520 px, puesta la décima **había que hacer
             # scroll para encontrarla** — o sea que no cumplía su función, que es
@@ -1519,23 +1519,23 @@ def _cartera_lista(proys, alarmas, delays, aheads, costos, pendientes=None,
             # nombre de obra y 60 del cliente. Encoger habría cambiado un problema
             # visible (hay que desplazarse) por uno invisible (lees un nombre a medias).
             # La cura es la de v398: no achicar, PRIORIZAR lo que se ve primero.
-            "Avance": max(0, min(100, int(P._num(p.get("Avance"))))),
+            "Progress": max(0, min(100, int(P._num(p.get("Progress"))))),
             "Status": _sit,
             "Alerts": str(_al) if _al else "",
-            "Estado": _etq(str(p.get("Estado", ""))) or "—",
+            "Status": _etq(str(p.get("Status", ""))) or "—",
             "Users": _users,
             # De aquí en adelante, contexto: se consulta, no se vigila.
-            "Cliente": str(p.get("Cliente", "") or "—"),
-            "Tipo": str(p.get("Tipo", "") or "—"),
-            "Inicio": _ddmm(p.get("FechaInicio")),
-            "Fin": _ddmm(p.get("FechaFinEst")),
+            "Client": str(p.get("Client", "") or "—"),
+            "Type": str(p.get("Type", "") or "—"),
+            "Inicio": _ddmm(p.get("StartDate")),
+            "Fin": _ddmm(p.get("EndDateEst")),
             "Ppto": _ppto,
         })
     _ev = st.dataframe(
         pd.DataFrame(_rows), hide_index=True, width="stretch",
         on_select="rerun", selection_mode="single-row", key="cart_tbl",
         column_config=tabla.cfg(None, {
-            "Avance": st.column_config.ProgressColumn(
+            "Progress": st.column_config.ProgressColumn(
                 t("Progress"), min_value=0, max_value=100, format="%d%%", width=78),
             # ⚠️ v399: la coma del formato NO es cosmética. Con `"$%.0f"` esta
             # celda pintaba `$27883` mientras la tarjeta de al lado —y el pie de
@@ -1569,7 +1569,7 @@ def _cartera_lista(proys, alarmas, delays, aheads, costos, pendientes=None,
             # Un ancho fijo nunca puede garantizar que quepa cualquier nombre; lo que
             # cierra el caso es que al seleccionar la fila la tira de acciones muestra el
             # nombre COMPLETO (v402).
-            "Proyecto":  st.column_config.TextColumn(t("Project"), width=272, pinned=True),
+            "Project":  st.column_config.TextColumn(t("Project"), width=272, pinned=True),
             # Anchos medidos contra el texto REAL más largo de cada columna (peor caso),
             # no elegidos a ojo: con estos, 0 textos cortados.
             "Status": st.column_config.TextColumn(
@@ -1577,7 +1577,7 @@ def _cartera_lista(proys, alarmas, delays, aheads, costos, pendientes=None,
                 help=t("Days behind or ahead of the plan.")),
             "Alerts":   st.column_config.TextColumn(
                 t("Alerts"), width=70, help=t("Open alerts on the job.")),
-            "Estado":    st.column_config.TextColumn(t("Status"), width=92),
+            "Status":    st.column_config.TextColumn(t("Status"), width=92),
             "Users":  st.column_config.NumberColumn(
                 t("Team"), width=70, help=t("Field staff assigned.")),
         }))
@@ -1604,7 +1604,7 @@ def _cartera_lista(proys, alarmas, delays, aheads, costos, pendientes=None,
         _con_fac = _spf > 0 and puede_facturar
         _cs = st.columns([4.4, 1.5, 1.5]) if _con_fac else st.columns([5.9, 1.5])
         _cs[0].markdown(
-            f"**{_sp.get('Nombre', '')}**  \n"
+            f"**{_sp.get('Name', '')}**  \n"
             + (f":material/receipt: {_Tb.dinero(_spf, 0)} not invoiced"
                if _spf > 0 else ":material/check: nothing left to invoice"))
         if _cs[1].button(t("Open →"), key="cartlist_open", width="stretch"):
@@ -1643,7 +1643,7 @@ def _panel_proyectos(grupo: str):
     proys = P.list_projects(grupo=grupo, incluir_archivados=_ver_arch)
     if not _ver_arch:
         _n_arch = len([p for p in P.list_projects(grupo=grupo, incluir_archivados=True)
-                       if str(p.get("Estado", "")) == P.ARCHIVADO])
+                       if str(p.get("Status", "")) == P.ARCHIVADO])
         if _n_arch:
             st.caption(f":material/inventory_2: {_n_arch} archived project(s) hidden.")
     if not proys:
@@ -1679,7 +1679,7 @@ def _panel_proyectos(grupo: str):
     # v306: filtro por TIPO. Solo aparece si el grupo tiene proyectos de más de un tipo
     # (o alguno sin marcar): con todo igual sería un desplegable que no filtra nada.
     _SIN_T = "— no type —"
-    _tipos_pres = sorted({str(p.get("Tipo", "")).strip() or _SIN_T for p in proys})
+    _tipos_pres = sorted({str(p.get("Type", "")).strip() or _SIN_T for p in proys})
     _tsel = "Todos"
     if len(_tipos_pres) > 1:
         _tsel = st.selectbox(t("Type"), ["Todos"] + _tipos_pres, key="cart_tipo",
@@ -1690,17 +1690,17 @@ def _panel_proyectos(grupo: str):
         _pid = str(p.get("ID", ""))
         # El ID entra en la búsqueda: es la identidad del proyecto y ahora se ve, así
         # que tiene que poder buscarse por él (pegar "PRJ-0007" y que salga).
-        if _ql and _ql not in (f"{p.get('Nombre', '')} {p.get('Cliente', '')} "
+        if _ql and _ql not in (f"{p.get('Name', '')} {p.get('Client', '')} "
                                f"{_pid}").lower():
             return False
-        if _tsel != "Todos" and (str(p.get("Tipo", "")).strip() or _SIN_T) != _tsel:
+        if _tsel != "Todos" and (str(p.get("Type", "")).strip() or _SIN_T) != _tsel:
             return False
         if _filt == "🔴 Retraso":
             return bool(delays.get(_pid))
         if _filt == "🟢 Adelanto":
             return bool(aheads.get(_pid))
         if _filt == "⏸ En pausa":
-            return str(p.get("Estado", "")) == "En pausa"
+            return str(p.get("Status", "")) == "En pausa"
         return True
     _proys_f = [p for p in proys if _pasa(p)]
 
@@ -1745,18 +1745,18 @@ def _portfolio_html(proys, horas, alarmas, ags, delays=None, aheads=None,
     aheads = aheads or {}
     parts = []
     for p in proys:
-        est = str(p.get("Estado", ""))
+        est = str(p.get("Status", ""))
         bg, fg, bar = _estado_colors(est)
-        av  = P._num(p.get("Avance"))
-        nom = str(p.get("Nombre", "")) or "(no name)"
+        av  = P._num(p.get("Progress"))
+        nom = str(p.get("Name", "")) or "(no name)"
         pid = str(p.get("ID", ""))
         hrs = horas.get(str(p.get("ID", "")), 0.0)
         na  = alarmas.get(pid, 0)
-        ag  = ags.get(str(p.get("AgrupacionID", "")), "")
-        sub = f"{pid} · {str(p.get('Cliente','')) or '—'}" + (f" · {ag}" if ag else "")
-        if show_group and p.get("Grupo"):
-            sub = f"{_MI('business')} {p.get('Grupo')} · " + sub
-        ubic = str(p.get("Ubicacion", "") or "")
+        ag  = ags.get(str(p.get("GroupingID", "")), "")
+        sub = f"{pid} · {str(p.get('Client','')) or '—'}" + (f" · {ag}" if ag else "")
+        if show_group and p.get("Group"):
+            sub = f"{_MI('business')} {p.get('Group')} · " + sub
+        ubic = str(p.get("Location", "") or "")
         ubic_html = (f'<div style="font-size:11px;white-space:nowrap;overflow:hidden;'
                      f'text-overflow:ellipsis;">{maps.maps_link_html(ubic, ubic, color="#2e6da4")}</div>'
                      if ubic else "")
@@ -1809,8 +1809,8 @@ def _portfolio_html(proys, horas, alarmas, ags, delays=None, aheads=None,
 def _induccion_section(pid, prj, grupo=None, allow_send=False):
     """Muestra instrucciones particulares + inducciones (links) del proyecto.
     Si allow_send, el admin puede (re)enviarlas por Telegram/email a los asignados."""
-    instr = str(prj.get("Instrucciones", "") or "").strip()
-    links = P.parse_links(prj.get("InduccionLinks", ""))
+    instr = str(prj.get("Instructions", "") or "").strip()
+    links = P.parse_links(prj.get("InductionLinks", ""))
     if not instr and not links:
         return
     with st.expander(t(":material/push_pin: Project instructions and inductions"), expanded=bool(links)):
@@ -1822,13 +1822,13 @@ def _induccion_section(pid, prj, grupo=None, allow_send=False):
             for l in links:
                 st.markdown(f"- [{l}]({l})")
             if allow_send and notify.any_channel_configured():
-                asignados = [x.strip() for x in str(prj.get("CampoAsignados", "")).split(";") if x.strip()]
+                asignados = [x.strip() for x in str(prj.get("FieldAssigned", "")).split(";") if x.strip()]
                 if asignados and st.button(t(":material/send: Resend the induction to those assigned"),
                                            key=f"send_ind_{pid}"):
                     n = 0
                     for un in asignados:
                         try:
-                            rr = notify.notify_induction(un, prj.get("Nombre", ""), links)
+                            rr = notify.notify_induction(un, prj.get("Name", ""), links)
                             if rr.get("email") or rr.get("telegram"):
                                 n += 1
                         except Exception:
@@ -1909,12 +1909,12 @@ def _equipo_proyecto(pid, grupo):
 # ⚠️ Las CLAVES son los nombres REALES de columna (`auditoria` guarda por ellos): no se
 # tocan. Lo que se traduce son los VALORES, que es lo único que se pinta.
 _CAMPO_LEGIBLE = {
-    "MargenPct": "Margin (%)", "Presupuesto": "Budget", "Avance": "Progress (%)",
-    "Estado": "Status", "EstadoManual": "Manual status", "FechaInicio": "Start date",
-    "FechaFinEst": "Estimated end date", "Cliente": "Client", "ClienteID": "Client",
-    "Nombre": "Name", "CampoAsignados": "Assigned staff",
-    "AgrupacionID": "Grouping", "PesoEnAgrupacion": "Weight in the grouping",
-    "TarifaHora": "Hourly rate",
+    "MarginPct": "Margin (%)", "Budget": "Budget", "Progress": "Progress (%)",
+    "Status": "Status", "ManualStatus": "Manual status", "StartDate": "Start date",
+    "EndDateEst": "Estimated end date", "Client": "Client", "ClientID": "Client",
+    "Name": "Name", "FieldAssigned": "Assigned staff",
+    "GroupingID": "Grouping", "WeightInGrouping": "Weight in the grouping",
+    "HourlyRate": "Hourly rate",
 }
 
 
@@ -1935,8 +1935,8 @@ def _historial_section(pid: str):
         st.caption(t("Changes that move money or the job's status are recorded (profit per hour, "
                  "fixed profit, budget, dates, progress, client, staff)."))
         for r in filas:
-            _quien = str(r.get("Usuario", "") or "—")
-            st.markdown(f"**{r.get('Fecha','')}** · {_quien}")
+            _quien = str(r.get("User", "") or "—")
+            st.markdown(f"**{r.get('Date','')}** · {_quien}")
             for campo, (antes, despues) in (r.get("cambios") or {}).items():
                 _lbl = _CAMPO_LEGIBLE.get(campo, campo)
                 _a = str(antes or "").strip() or t("(empty)")
@@ -1952,7 +1952,7 @@ def _estado_section(pid: str, grupo: str, prj: dict):
     ritmo, el desglose y el cronograma van a ancho completo abajo)."""
     ps = P.project_schedule(pid)
     if not (ps and ps["sched"].get("activities")):
-        _alerts_section(pid, grupo, prj.get("Nombre", ""), allow_report=False)
+        _alerts_section(pid, grupo, prj.get("Name", ""), allow_report=False)
         st.info(t("This project has no activities, so there is no schedule to follow. Add them in :material/edit: Data."))
         return
 
@@ -2082,7 +2082,7 @@ def _estado_section(pid: str, grupo: str, prj: dict):
                        f"{d['proximo']['fecha'].strftime('%d/%m/%Y')} "
                        f"(in {d['proximo']['faltan']:.0f} days).")
     with _der:
-        _alerts_section(pid, grupo, prj.get("Nombre", ""), allow_report=False)
+        _alerts_section(pid, grupo, prj.get("Name", ""), allow_report=False)
         st.markdown("")
         _equipo_proyecto(pid, grupo)
 
@@ -2097,7 +2097,7 @@ def _estado_section(pid: str, grupo: str, prj: dict):
         '<!DOCTYPE html><html><body style="margin:0;background:transparent">'
         + schedule_svg(ps["sched"], real_curve=ps["real"], today_day=ps["today_day"],
                        avances=ps.get("avances"), proj=proj,
-                       titulo=prj.get("Nombre", ""), vw=_VW,
+                       titulo=prj.get("Name", ""), vw=_VW,
                        animar=True)      # v336: pantalla sí, PDF no
         + '</body></html>',
         # ⚠️ el alto sale de la MISMA formula que el SVG (antes era `300 + n*21`,
@@ -2120,7 +2120,7 @@ def _detalle_proyecto(pid: str, grupo: str = None):
         st.session_state.pop("_admin_open_proj", None)
         return
     # El grupo se toma del propio proyecto (así el propietario puede abrir cualquiera)
-    grupo = str(prj.get("Grupo", "")) or (grupo or "")
+    grupo = str(prj.get("Group", "")) or (grupo or "")
 
     # ⚠️ v379: el PROPIETARIO entra aquí en datos de OTRO libro (v359). Su sesión no
     # tiene grupo, así que sin declarar el ámbito todo lo de abajo —costos, horas,
@@ -2132,25 +2132,25 @@ def _detalle_proyecto(pid: str, grupo: str = None):
         with tenant.como_grupo(grupo):
             return _detalle_proyecto(pid, grupo)
 
-    avance = P._num(prj.get("Avance"))
-    est    = str(prj.get("Estado", ""))
+    avance = P._num(prj.get("Progress"))
+    est    = str(prj.get("Status", ""))
     _bg, _fg, _bar = _estado_colors(est)
-    _cli  = str(prj.get("Cliente", "")) or "—"
-    _ubic = (" · " + maps.maps_link_html(prj.get("Ubicacion"))) if prj.get("Ubicacion") else ""
+    _cli  = str(prj.get("Client", "")) or "—"
+    _ubic = (" · " + maps.maps_link_html(prj.get("Location"))) if prj.get("Location") else ""
     # v306: el ID a la vista. Es LA identidad del proyecto (el nombre puede repetirse),
     # así que se muestra siempre y en monoespaciada, para poder dictarlo o buscarlo.
-    _tp = str(prj.get("Tipo", "")).strip()
+    _tp = str(prj.get("Type", "")).strip()
     # v315: TODO en la tarjeta. Antes debajo iban dos `st.metric` de ~660 px para dos
     # números y una barra de progreso a ancho completo que repetía el mismo %: ~130 px
     # de cabecera para lo que cabe en una línea. La derecha de la tarjeta estaba vacía.
-    _horas = P.project_hours(prj.get("Nombre"), grupo, pid=pid)
+    _horas = P.project_hours(prj.get("Name"), grupo, pid=pid)
     _av = max(0, min(100, int(round(avance))))
     st.markdown(
         f'<div style="border:1px solid #e6e9ef;border-left:4px solid {_bar};border-radius:10px;'
         'padding:12px 16px;margin-bottom:10px;background:#fff;">'
         '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;'
         'flex-wrap:wrap;">'
-        f'<div style="font-size:18px;font-weight:800;color:#1f2937;">{prj.get("Nombre","")}'
+        f'<div style="font-size:18px;font-weight:800;color:#1f2937;">{prj.get("Name","")}'
         f'<span style="font-family:monospace;font-size:12px;color:#667080;font-weight:500;'
         f'margin-left:8px;">{pid}</span></div>'
         f'<span style="font-size:12px;padding:3px 11px;border-radius:20px;background:{_bg};'
@@ -2235,14 +2235,14 @@ def _detalle_proyecto(pid: str, grupo: str = None):
         # habia quedado dentro, y asignar gente a un proyecto EXISTENTE es la
         # accion del dia a dia.
         _campos_disp = _field_users(grupo)
-        _actuales = [x.strip() for x in str(prj.get("CampoAsignados", "")).split(";")
+        _actuales = [x.strip() for x in str(prj.get("FieldAssigned", "")).split(";")
                      if x.strip()]
         _opts = sorted(set(_campos_disp) | set(_actuales))
         asignados = st.multiselect(t(":material/engineering: Field users assigned"), _opts,
                                    default=_actuales, key=f"asig_{pid}")
         _ecerts = st.multiselect(
             t(":material/badge: Certificates the project requires"), credentials.CATALOGO,
-            default=[x.strip() for x in str(prj.get("CertsReq", "")).split(";") if x.strip()],
+            default=[x.strip() for x in str(prj.get("RequiredCerts", "")).split(";") if x.strip()],
             key=f"certs_{pid}",
             help=t("When staff are assigned, anyone who does not meet them is flagged."))
         # feature 1 (ya en otro proyecto) + feature 3 (cumplimiento vs certs requeridos)
@@ -2250,7 +2250,7 @@ def _detalle_proyecto(pid: str, grupo: str = None):
         # en el alta nueva las fechas viven dentro del form y aún no están escritas,
         # así que allí se avisa de las ausencias que todavía no han terminado).
         _avisar_asignados(asignados, grupo, exclude_pid=pid, certs_req=_ecerts,
-                          fechas=(prj.get("FechaInicio"), prj.get("FechaFinEst")))
+                          fechas=(prj.get("StartDate"), prj.get("EndDateEst")))
 
         # ── Ubicación en el mapa (fuera del form: el mapa necesita reruns) — v193 ──
         from core import location_ui
@@ -2259,11 +2259,11 @@ def _detalle_proyecto(pid: str, grupo: str = None):
         # que abrir el proyecto y darse cuenta. Se avisa, pero NO se geocodifica sola
         # (decisión del usuario): un pin inventado que nadie ha mirado puede mandar a
         # alguien al sitio equivocado, y esto es una app de obra.
-        _sin_pin = (str(prj.get("Ubicacion", "") or "").strip()
+        _sin_pin = (str(prj.get("Location", "") or "").strip()
                     and location_ui.to_float(prj.get("Lat")) is None)
         if _sin_pin:
             st.warning(":material/wrong_location: **This job is not on the map.** It has an "
-                       f"address (*{prj.get('Ubicacion')}*) but no point, so it does not "
+                       f"address (*{prj.get('Location')}*) but no point, so it does not "
                        "appear on the Home map or in the Day route. Open it below and "
                        "press **Search** to place it.")
         with st.expander(t("Location on the map (project pin)"), icon=":material/map:",
@@ -2272,19 +2272,19 @@ def _detalle_proyecto(pid: str, grupo: str = None):
                 f"edloc_{pid}",
                 lat=location_ui.to_float(prj.get("Lat")),
                 lng=location_ui.to_float(prj.get("Lng")),
-                direccion=str(prj.get("Ubicacion", "")))
+                direccion=str(prj.get("Location", "")))
 
         # ── Cliente: elegir existente o escribir uno nuevo (fuera del form) — v256 ──
         from core import clientes as _C
         _cli_fichas = _C.list_clientes(grupo)
-        _cli_names = [str(c.get("Nombre", "")) for c in _cli_fichas]
+        _cli_names = [str(c.get("Name", "")) for c in _cli_fichas]
         _CLI_NONE, _CLI_OTRO = "— no client —", t("➕ Other (type a new one)")
         _opts_cli = [_CLI_NONE] + _cli_names + [_CLI_OTRO]
-        _cur_cid = str(prj.get("ClienteID", "")).strip()
-        _cur_txt = str(prj.get("Cliente", "")).strip()
+        _cur_cid = str(prj.get("ClientID", "")).strip()
+        _cur_txt = str(prj.get("Client", "")).strip()
         _cur_name = ""
         if _cur_cid:
-            _cur_name = next((str(c.get("Nombre", "")) for c in _cli_fichas
+            _cur_name = next((str(c.get("Name", "")) for c in _cli_fichas
                               if str(c.get("ID", "")) == _cur_cid), "")
         if not _cur_name and _cur_txt:
             _cur_name = next((n for n in _cli_names if _C._norm(n) == _C._norm(_cur_txt)), "")
@@ -2302,13 +2302,13 @@ def _detalle_proyecto(pid: str, grupo: str = None):
         # ── Editar datos ──
         with st.form(f"edit_{pid}"):
             st.markdown(t("**Project data**"))
-            nombre   = st.text_input(t("Name"), value=prj.get("Nombre", ""))
+            nombre   = st.text_input(t("Name"), value=prj.get("Name", ""))
             e1, e2 = st.columns(2)
             # v306: tipo editable. `_SIN_TIPO` primero para los proyectos anteriores a
             # v306, que lo tienen vacío: se ven como "sin tipo" hasta que se marquen, en
             # vez de fingir que todos eran instalaciones.
             _TIPO_VACIO = "— no type —"
-            _tp_cur = str(prj.get("Tipo", "")).strip()
+            _tp_cur = str(prj.get("Type", "")).strip()
             _tp_opts = ([_TIPO_VACIO] + P.TIPOS) if _tp_cur not in P.TIPOS else list(P.TIPOS)
             tipo = e1.selectbox(t("Project type"), _tp_opts,
                                 index=_tp_opts.index(_tp_cur) if _tp_cur in _tp_opts else 0,
@@ -2329,13 +2329,13 @@ def _detalle_proyecto(pid: str, grupo: str = None):
             # Buscar, se guardaría ese texto a medias como ubicación del proyecto. (Al
             # CREAR sí se usa `_q` de respaldo porque allí no hay valor previo que
             # conservar; aquí sí lo hay.)
-            ubic = str(prj.get("Ubicacion", "") or "")
+            ubic = str(prj.get("Location", "") or "")
             _ubi_mapa = str(st.session_state.get(f"edloc_{pid}_addr") or "").strip()
             if _ubi_mapa:
                 ubic = _ubi_mapa
             e2.text_input(t("Location"), value=ubic, disabled=True,
                           help=t("It comes from the map pin (above). Move it or search the address to change it."))
-            modelo   = e2.text_input(t("Model"), value=prj.get("Modelo", ""))
+            modelo   = e2.text_input(t("Model"), value=prj.get("Model", ""))
             _cmp_ed = _field_users(grupo)
             ing = e1.multiselect(
                 t("Head installer/s"), _cmp_ed,
@@ -2345,34 +2345,34 @@ def _detalle_proyecto(pid: str, grupo: str = None):
                       t("No field users yet: create them in Planning → Users.")))
             # Calendario, no texto libre: ver `_a_fecha`. El valor se guarda
             # siempre en ISO, que es lo unico que `project_schedule` sabe leer.
-            f_ini    = e2.date_input(t("Start date"), value=_a_fecha(prj.get("FechaInicio")),
+            f_ini    = e2.date_input(t("Start date"), value=_a_fecha(prj.get("StartDate")),
                                      format="YYYY-MM-DD")
-            f_fin    = e1.date_input(t("Estimated finish date"), value=_a_fecha(prj.get("FechaFinEst")),
+            f_fin    = e1.date_input(t("Estimated finish date"), value=_a_fecha(prj.get("EndDateEst")),
                                      format="YYYY-MM-DD")
-            instr    = st.text_area(t(":material/push_pin: Specific instructions"), value=prj.get("Instrucciones", ""))
+            instr    = st.text_area(t(":material/push_pin: Specific instructions"), value=prj.get("Instructions", ""))
             ind      = st.text_area(t(":material/description: Inductions (one link per line)"),
-                                    value=prj.get("InduccionLinks", ""),
+                                    value=prj.get("InductionLinks", ""),
                                     help=t("They are sent by Telegram/email when a field user is assigned."))
 
             actuales = _actuales
 
             ags = P.list_groupings(grupo=grupo)
-            ag_opts = ["(none)"] + [f"{a['ID']} · {a['Nombre']}" for a in ags]
-            ag_cur  = str(prj.get("AgrupacionID", ""))
+            ag_opts = ["(none)"] + [f"{a['ID']} · {a['Name']}" for a in ags]
+            ag_cur  = str(prj.get("GroupingID", ""))
             ag_idx  = next((i for i, a in enumerate(ags) if a["ID"] == ag_cur), None)
             ag_sel  = st.selectbox(t("Group of lifts"), ag_opts,
                                    index=(ag_idx + 1) if ag_idx is not None else 0)
             # Peso por defecto 1: si queda en 0 el avance de la agrupación da 0
             # aunque los elevadores estén al 100% (Σpeso·avance / Σpeso).
             peso    = st.number_input(t("Weight in the group"), min_value=0.0, step=0.5,
-                                      value=P._num(prj.get("PesoEnAgrupacion")) or 1.0,
+                                      value=P._num(prj.get("WeightInGrouping")) or 1.0,
                                       help=t("How much this lift weighs in its group's consolidated progress."))
             est_man = st.selectbox(t("Manual status (override)"), P.ESTADOS_MANUAL,
                                    format_func=_etq,
-                                   index=P.ESTADOS_MANUAL.index(str(prj.get("EstadoManual", "")))
-                                   if str(prj.get("EstadoManual", "")) in P.ESTADOS_MANUAL else 0)
+                                   index=P.ESTADOS_MANUAL.index(str(prj.get("ManualStatus", "")))
+                                   if str(prj.get("ManualStatus", "")) in P.ESTADOS_MANUAL else 0)
             presup  = st.number_input(t(":material/payments: Project budget (0 = no budget)"),
-                                      min_value=0.0, step=100.0, value=P._num(prj.get("Presupuesto")))
+                                      min_value=0.0, step=100.0, value=P._num(prj.get("Budget")))
 
             if st.form_submit_button(t(":material/save: Save changes"), width="stretch"):
                 # Validar sin `st.stop()`: pararia el render de TODO lo que va
@@ -2391,36 +2391,36 @@ def _detalle_proyecto(pid: str, grupo: str = None):
                     if _ecli_sel in _cli_names:
                         cliente = _ecli_sel
                         _ecli_id = next((str(c.get("ID", "")) for c in _cli_fichas
-                                         if str(c.get("Nombre", "")) == _ecli_sel), "")
+                                         if str(c.get("Name", "")) == _ecli_sel), "")
                     elif _ecli_sel == _CLI_OTRO:
                         cliente, _ecli_id = _ecli_new.strip(), ""
                     else:
                         cliente, _ecli_id = "", ""
                     P.update_project(pid, {   # todo en UNA escritura (batch) → sin rate limit
-                        "Nombre": nombre, "Cliente": cliente, "ClienteID": _ecli_id,
-                        "Tipo": ("" if tipo == _TIPO_VACIO else tipo),
-                        "Ubicacion": ubic, "Modelo": modelo,
-                        "Ingeniero": ";".join(ing), "FechaInicio": f_ini, "FechaFinEst": f_fin,
-                        "CampoAsignados": ";".join(asignados),
-                        "AgrupacionID": ag_id, "PesoEnAgrupacion": peso,
+                        "Name": nombre, "Client": cliente, "ClientID": _ecli_id,
+                        "Type": ("" if tipo == _TIPO_VACIO else tipo),
+                        "Location": ubic, "Model": modelo,
+                        "HeadInstallers": ";".join(ing), "StartDate": f_ini, "EndDateEst": f_fin,
+                        "FieldAssigned": ";".join(asignados),
+                        "GroupingID": ag_id, "WeightInGrouping": peso,
                         # ⚠️ v422: el tipo que se está GUARDANDO, no el que tenía. Si en
                         # esta misma edición pasa a ser una localización interna, su
                         # estado tiene que salir «Abierta» en la misma escritura — con
                         # el tipo viejo quedaría «Planificado al 0%» para siempre.
-                        "EstadoManual": est_man,
-                        "Estado": P.derive_estado(avance, est_man,
+                        "ManualStatus": est_man,
+                        "Status": P.derive_estado(avance, est_man,
                                                   "" if tipo == _TIPO_VACIO else tipo),
-                        "Instrucciones": instr, "InduccionLinks": ind, "Presupuesto": presup,
+                        "Instructions": instr, "InductionLinks": ind, "Budget": presup,
                         "Lat": "" if _plat is None else _plat,
                         "Lng": "" if _plng is None else _plng,
-                        "CertsReq": ";".join(_ecerts),
+                        "RequiredCerts": ";".join(_ecerts),
                     })
                     # Notificar a los usuarios de campo recién asignados
                     nuevos = [x for x in asignados if x not in actuales]
                     _sent = 0
                     if nuevos:
-                        _info = {"Nombre": nombre, "Cliente": cliente, "Ubicacion": ubic,
-                                 "FechaInicio": f_ini, "FechaFinEst": f_fin, "InduccionLinks": ind}
+                        _info = {"Name": nombre, "Client": cliente, "Location": ubic,
+                                 "StartDate": f_ini, "EndDateEst": f_fin, "InductionLinks": ind}
                         for un in nuevos:
                             try:
                                 rr = notify.notify_assignment(un, _info)
@@ -2429,7 +2429,7 @@ def _detalle_proyecto(pid: str, grupo: str = None):
                             except Exception:
                                 pass
                     # Si cambiaron las inducciones, reenviarlas a los ya asignados
-                    if str(ind).strip() != str(prj.get("InduccionLinks", "")).strip():
+                    if str(ind).strip() != str(prj.get("InductionLinks", "")).strip():
                         _links = P.parse_links(ind)
                         if _links:
                             for un in [x for x in asignados if x not in nuevos]:
@@ -2453,12 +2453,12 @@ def _detalle_proyecto(pid: str, grupo: str = None):
                     st.rerun()
 
         # helper: avisar al campo asignado de un cambio del admin
-        _asig_now = [x.strip() for x in str(prj.get("CampoAsignados", "")).split(";") if x.strip()]
+        _asig_now = [x.strip() for x in str(prj.get("FieldAssigned", "")).split(";") if x.strip()]
         def _aviso_cambio(txt):
             try:
                 alerts.notify_change(pid, grupo, txt,
                                      st.session_state.get("auth", {}).get("usuario", ""),
-                                     _asig_now, prj.get("Nombre", ""))
+                                     _asig_now, prj.get("Name", ""))
             except Exception:
                 pass
 
@@ -2467,11 +2467,11 @@ def _detalle_proyecto(pid: str, grupo: str = None):
         acts = P.list_activities(pid)
         if acts:
             _adf = pd.DataFrame([{
-                "Orden": int(P._num(a.get("Orden"))),
-                "Actividad": a.get("Nombre"),
-                "Días": int(P._num(a.get("DuracionDias")) or 1),
-                "Peso": P._num(a.get("Peso")),
-                "Avance %": P._num(a.get("Avance")),
+                "Orden": int(P._num(a.get("Order"))),
+                "Actividad": a.get("Name"),
+                "Días": int(P._num(a.get("DurationDays")) or 1),
+                "Peso": P._num(a.get("Weight")),
+                "Avance %": P._num(a.get("Progress")),
             } for a in acts])
             _edited = st.data_editor(
                 _adf, width="stretch", hide_index=True, num_rows="fixed",
@@ -2488,11 +2488,11 @@ def _detalle_proyecto(pid: str, grupo: str = None):
                 edits = []
                 for i, a in enumerate(acts):
                     r = _edited.iloc[i]
-                    edits.append({"orden0": a.get("Orden"),
-                                  "Nombre": str(r["Actividad"]).strip(),
-                                  "DuracionDias": int(r["Días"]),
-                                  "Peso": float(r["Peso"]),
-                                  "Orden": int(r["Orden"])})
+                    edits.append({"orden0": a.get("Order"),
+                                  "Name": str(r["Actividad"]).strip(),
+                                  "DurationDays": int(r["Días"]),
+                                  "Weight": float(r["Weight"]),
+                                  "Order": int(r["Order"])})
                 ok, msg = P.save_activities(pid, edits)
                 (flash.exito if ok else st.error)(msg)
                 if ok:
@@ -2520,7 +2520,7 @@ def _detalle_proyecto(pid: str, grupo: str = None):
                             st.rerun()
             if acts:
                 st.markdown(t("**:material/delete: Delete activity**"))
-                _dmap = {f"{int(P._num(a.get('Orden')))} · {a.get('Nombre')}": a.get("Orden")
+                _dmap = {f"{int(P._num(a.get('Order')))} · {a.get('Name')}": a.get("Order")
                          for a in acts}
                 _orden = ui.elegir(t("Activity to delete"), _dmap, key=f"delact_{pid}",
                                    vacio=t("— none —"))
@@ -2537,7 +2537,7 @@ def _detalle_proyecto(pid: str, grupo: str = None):
         _historial_section(pid)
 
         # ── Archivar / eliminar ──
-        _archivado = str(prj.get("Estado", "")) == P.ARCHIVADO
+        _archivado = str(prj.get("Status", "")) == P.ARCHIVADO
         if _archivado:
             st.info(t(":material/inventory_2: This project is **archived**: it does not appear in lists or reports, but nothing has been lost."))
             if st.button(t(":material/recycling: Restore project"), key=f"unarch_{pid}",
@@ -2570,10 +2570,10 @@ def _detalle_proyecto(pid: str, grupo: str = None):
                                              for k, v in _hay.items()))
                     st.caption(t("Those rows and their files in Drive are NOT deleted: they end up pointing at a project that no longer exists."))
                 _tecleado = st.text_input(
-                    f"Type «{prj.get('Nombre','')}» to confirm", key=f"delnom_{pid}")
+                    f"Type «{prj.get('Name','')}» to confirm", key=f"delnom_{pid}")
                 if st.button(t("Delete permanently"), key=f"del_{pid}",
                              width="stretch",
-                             disabled=(_tecleado.strip() != str(prj.get("Nombre", "")).strip())):
+                             disabled=(_tecleado.strip() != str(prj.get("Name", "")).strip())):
                     ok, msg = P.delete_project(pid)
                     (flash.exito if ok else st.error)(msg)
                     if ok:
@@ -2611,9 +2611,9 @@ def _detalle_proyecto(pid: str, grupo: str = None):
                             st.session_state["survey_df"] = pd.DataFrame(matriz)
                         except Exception:
                             pass
-                    st.session_state["proyecto"]  = str(prj.get("Nombre", ""))
+                    st.session_state["proyecto"]  = str(prj.get("Name", ""))
                     st.session_state["ingeniero"] = P.head_installers_label(prj, grupo)
-                    st.session_state["_rebuilt_from"] = str(prj.get("Nombre", ""))
+                    st.session_state["_rebuilt_from"] = str(prj.get("Name", ""))
                     st.success(t(":material/check_circle: Loaded. Go to **:material/architecture: Survey** and press **Calculate** to regenerate everything."))
         # ── Archivos del proyecto (buscable) ──
         _archivos_section(pid)
@@ -2715,14 +2715,14 @@ def _dashboard_agrupacion(ag, grupo):
         _na = alarmas.get(pid, 0)
         _pf = next((x["fecha"] for x in proj.get("detalle", []) if x["id"] == pid), None)
         rows.append({
-            "Elevador": p.get("Nombre"), "Estado": _etq(str(p.get("Estado", ""))),
-            "Avance %": P._num(p.get("Avance")),
-            "Peso": P._num(p.get("PesoEnAgrupacion")),
+            "Elevador": p.get("Name"), "Status": _etq(str(p.get("Status", ""))),
+            "Avance %": P._num(p.get("Progress")),
+            "Weight": P._num(p.get("WeightInGrouping")),
             "Entrega prev.": _pf.strftime("%d/%m") if _pf else "—",
             "Status": (f"{delays[pid]:.0f} d behind" if pid in delays
                      else (f"{aheads[pid]:.0f} d ahead" if pid in aheads else "on time")),
-            "Horas": _hs[i], "vs media h": _dev(_hs[i], _hm),
-            "Costo": _cs[i], "vs media $": _dev(_cs[i], _cm),
+            "Hours": _hs[i], "vs media h": _dev(_hs[i], _hm),
+            "Cost": _cs[i], "vs media $": _dev(_cs[i], _cm),
             "Alerts": _na or "",
         })
     st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch", column_config=tabla.cfg())
@@ -2748,12 +2748,12 @@ def _miembros_editor(ags_proys, todos, key, pesos_actuales=None):
     filas = []
     for p in todos:
         pid = str(p.get("ID", ""))
-        otra = str(p.get("AgrupacionID", ""))
+        otra = str(p.get("GroupingID", ""))
         filas.append({
             "In the grouping": pid in pesos_actuales,
-            "Proyecto": f"{p.get('Nombre')} ({pid})",
-            "Peso": float(pesos_actuales.get(pid, 1.0)),
-            "Avance %": P._num(p.get("Avance")),
+            "Project": f"{p.get('Name')} ({pid})",
+            "Weight": float(pesos_actuales.get(pid, 1.0)),
+            "Avance %": P._num(p.get("Progress")),
             "Already in another": (ags_proys.get(otra, "") if otra and otra not in
                            (None, "") and pid not in pesos_actuales else ""),
         })
@@ -2763,10 +2763,10 @@ def _miembros_editor(ags_proys, todos, key, pesos_actuales=None):
     ed = st.data_editor(
         pd.DataFrame(filas), hide_index=True, width="stretch",
         num_rows="fixed", key=key,
-        disabled=["Proyecto", "Avance %", "Already in another"],
+        disabled=["Project", "Avance %", "Already in another"],
         column_config=tabla.cfg(None, {
             "In the grouping": st.column_config.CheckboxColumn(width="small"),
-            "Peso": st.column_config.NumberColumn(
+            "Weight": st.column_config.NumberColumn(
                 min_value=0.0, step=0.5,
                 help=t("How much this lift weighs in the consolidated progress.")),
             "Already in another": st.column_config.TextColumn(
@@ -2775,8 +2775,8 @@ def _miembros_editor(ags_proys, todos, key, pesos_actuales=None):
     out = {}
     for _, r in ed.iterrows():
         if bool(r["In the grouping"]):
-            pid = str(r["Proyecto"]).rsplit("(", 1)[-1].rstrip(")")
-            out[pid] = float(r["Peso"] or 1.0)
+            pid = str(r["Project"]).rsplit("(", 1)[-1].rstrip(")")
+            out[pid] = float(r["Weight"] or 1.0)
     return out
 
 
@@ -2796,7 +2796,7 @@ def _cartera_agrupaciones(ags, grupo):
     rows = []
     for a in ags:
         aid = str(a.get("ID", ""))
-        miemb = [p for p in proys_all if str(p.get("AgrupacionID", "")) == aid]
+        miemb = [p for p in proys_all if str(p.get("GroupingID", "")) == aid]
         av = P.grouping_progress(aid)["avance"]
         fecha, gap = None, 0.0
         for p in miemb:
@@ -2839,7 +2839,7 @@ def _cartera_agrupaciones(ags, grupo):
                 _extra += f" · :material/notifications: {r['n_al']}"
             if r["fecha"]:
                 _extra += f" · :material/event: {r['fecha'].strftime('%d/%m')}"
-            _lbl = f"**:material/account_tree: {r['a'].get('Nombre', '')}** · {r['n']} elev · {_av}%{_extra}"
+            _lbl = f"**:material/account_tree: {r['a'].get('Name', '')}** · {r['n']} elev · {_av}%{_extra}"
             if _cols[_j].button(_lbl, key=f"agrc_{_idx}", width="stretch"):
                 st.session_state["_admin_open_agr"] = r["aid"]
                 st.rerun()
@@ -2848,7 +2848,7 @@ def _cartera_agrupaciones(ags, grupo):
 def _panel_agrupaciones(grupo: str):
     ags = P.list_groupings(grupo=grupo)
     todos = P.list_projects(grupo=grupo)
-    nom_ags = {a["ID"]: a["Nombre"] for a in ags}
+    nom_ags = {a["ID"]: a["Name"] for a in ags}
 
     # ── Agrupación ABIERTA (de una tarjeta) → tablero + gestión, sin anidar ──
     _open = st.session_state.get("_admin_open_agr")
@@ -2865,7 +2865,7 @@ def _panel_agrupaciones(grupo: str):
         st.markdown("---")
         with st.expander(t(":material/build: Projects in this group")):
             st.caption(t("Tick the lifts that belong to it. Unticking one **ungroups** it, it is not deleted."))
-            _act = {str(p.get("ID")): P._num(p.get("PesoEnAgrupacion")) or 1.0
+            _act = {str(p.get("ID")): P._num(p.get("WeightInGrouping")) or 1.0
                     for p in P.list_projects(grupo=grupo, agrupacion_id=_ag["ID"], incluir_archivados=True)}
             # ⚠️ Un miembro ARCHIVADO no está en `todos` (la lista oculta archivados
             # desde v149), así que no tendría casilla y `set_grouping_members` lo
@@ -2941,7 +2941,7 @@ def render_owner_projects():
     proys = P.list_projects(incluir_archivados=_ver_arch)   # todos los grupos
     _grupos = []
     try:
-        _grupos = [g["Grupo"] for g in auth.list_groups(only_active=True)]
+        _grupos = [g["Group"] for g in auth.list_groups(only_active=True)]
     except Exception:
         pass
     if _grupos:
@@ -2951,38 +2951,38 @@ def render_owner_projects():
         if not _grupos:
             st.info(t("No companies yet. Create one in **:material/business: Companies** so projects can be recorded."))
         return
-    ags = {a["ID"]: a["Nombre"] for a in P.list_groupings()}
+    ags = {a["ID"]: a["Name"] for a in P.list_groupings()}
     alarmas = alerts.open_counts_all() if alerts.is_configured() else {}
     delays = _delays(proys)
     aheads = _aheads(proys)
     rows = []
     for p in proys:
-        est = str(p.get("Estado", ""))
+        est = str(p.get("Status", ""))
         pid = str(p.get("ID", ""))
         _na = alarmas.get(pid, 0)
         _d  = delays.get(pid)
         _ad = aheads.get(pid)
-        ubic = str(p.get("Ubicacion", "") or "")
+        ubic = str(p.get("Location", "") or "")
         rows.append({
             "ID":        p.get("ID"),
-            "Grupo":     p.get("Grupo"),
-            "Proyecto":  p.get("Nombre"),
+            "Group":     p.get("Group"),
+            "Project":  p.get("Name"),
             "Alerts":     f"{_na}" if _na else "",
-            "Cliente":   p.get("Cliente"),
+            "Client":   p.get("Client"),
             "Location": ubic,
             "Mapa":        maps.maps_url(ubic),
-            "Estado":    _etq(est),
+            "Status":    _etq(est),
             "Behind": f"{_d:.0f} d" if _d else "",
             "Ahead": f"{_ad:.0f} d" if _ad else "",
-            "Avance %":  P._num(p.get("Avance")),
-            "Horas":     P.project_hours(p.get("Nombre"), p.get("Grupo"),
+            "Avance %":  P._num(p.get("Progress")),
+            "Hours":     P.project_hours(p.get("Name"), p.get("Group"),
                                         pid=str(p.get("ID", ""))),
-            "Grouping": ags.get(str(p.get("AgrupacionID", "")), ""),
+            "Grouping": ags.get(str(p.get("GroupingID", "")), ""),
         })
     # Cartera de tarjetas (mismo look del admin) + tabla detallada abajo
     _hb = {}
     for p in proys:
-        _hb[str(p.get("ID", ""))] = P.project_hours(p.get("Nombre"), p.get("Grupo"),
+        _hb[str(p.get("ID", ""))] = P.project_hours(p.get("Name"), p.get("Group"),
                                                     pid=str(p.get("ID", "")))
     st.markdown(f"**{t('Portfolio')} — {len(proys)} project(s)**"
                 + (f"  ·  :red[:material/cancel:] {len(delays)} behind schedule" if delays else "")
@@ -2995,7 +2995,7 @@ def render_owner_projects():
                      column_config=tabla.cfg(None, {"Mapa": st.column_config.LinkColumn(t("Map"), display_text="Abrir")}))
 
     st.markdown(t("#### :material/search: Open project"))
-    idmap = {f"{p.get('Grupo')} · {p.get('ID')} · {p.get('Nombre')}": p.get("ID") for p in proys}
+    idmap = {f"{p.get('Group')} · {p.get('ID')} · {p.get('Name')}": p.get("ID") for p in proys}
     _opts = [_VACIO] + list(idmap.keys())
     sel = st.selectbox(t("Project"), _opts, key="ownerproj_sel")
     if sel and sel != _VACIO:
@@ -3016,12 +3016,12 @@ def _field_activities(pid):
         st.caption(t("This project has no activities recorded."))
         return
     _df = pd.DataFrame([{
-        "N": int(P._num(a.get("Orden"))),
-        "Actividad": a.get("Nombre"),
-        "Avance %": int(P._num(a.get("Avance"))),
-        "Inicio real": str(a.get("FechaInicioReal", "")) or "—",
-        "Fin real": str(a.get("FechaFinReal", "")) or "—",
-        "Nota": str(a.get("Nota", "")),
+        "N": int(P._num(a.get("Order"))),
+        "Actividad": a.get("Name"),
+        "Avance %": int(P._num(a.get("Progress"))),
+        "Inicio real": str(a.get("ActualStartDate", "")) or "—",
+        "Fin real": str(a.get("ActualEndDate", "")) or "—",
+        "Nota": str(a.get("Note", "")),
     } for a in acts])
     _ed = st.data_editor(
         _df, hide_index=True, width="stretch", num_rows="fixed",
@@ -3037,17 +3037,17 @@ def _field_activities(pid):
         cambios, _vacias = [], []
         for i, a in enumerate(acts):
             r = _ed.iloc[i]
-            _av, _nt = r["Avance %"], r["Nota"]
+            _av, _nt = r["Avance %"], r["Note"]
             # ⚠️ Una celda BORRADA vuelve como NaN: `int(NaN)` reventaba el guardado
             #    ENTERO (se perdía toda la edición, no solo esa fila) y `str(NaN)`
             #    guardaba el texto "nan" como nota del campo.
             if pd.isna(_av):
-                _vacias.append(str(a.get("Nombre", "")))
+                _vacias.append(str(a.get("Name", "")))
                 continue                    # vaciar no es poner 0: se deja como estaba
             nav = int(P._num(_av))
             nnota = "" if pd.isna(_nt) else str(_nt)
-            if nav != int(P._num(a.get("Avance"))) or nnota != str(a.get("Nota", "")):
-                cambios.append({"orden": a.get("Orden"), "avance": nav, "nota": nnota})
+            if nav != int(P._num(a.get("Progress"))) or nnota != str(a.get("Note", "")):
+                cambios.append({"orden": a.get("Order"), "avance": nav, "nota": nnota})
         _msg_vac = ("You left the progress blank on: **" + "**, **".join(_vacias)
                     + "**. Those are left as they were — type a number (0-100) if you meant to change them.") if _vacias else ""
         if not cambios:
@@ -3113,7 +3113,7 @@ def render_field_projects(usuario: str, grupo: str):
         st.info(t("You have no projects assigned yet. The administrator assigns you to a project."))
         return
 
-    idmap = {f"{p.get('Nombre')} ({p.get('ID')}) — {p.get('Estado')}": p.get("ID")
+    idmap = {f"{p.get('Name')} ({p.get('ID')}) — {p.get('Status')}": p.get("ID")
              for p in proys}
     # Si el usuario tiene fichaje abierto, se abre ESE proyecto: es donde está
     # trabajando ahora (mismo criterio que usan las herramientas desde v137).
@@ -3143,20 +3143,20 @@ def render_field_projects(usuario: str, grupo: str):
         return
 
     # ── Cabecera: tarjetas KPI (mismo lenguaje que el resto) ──
-    avance = P._num(prj.get("Avance"))
-    est    = str(prj.get("Estado", ""))
-    _ub = str(prj.get("Ubicacion", "") or "")
+    avance = P._num(prj.get("Progress"))
+    est    = str(prj.get("Status", ""))
+    _ub = str(prj.get("Location", "") or "")
     # v423: una localización interna no tiene avance ni cliente — enseñar «0%» y «—»
     # no informa de nada; en su sitio va lo que sí la identifica.
     if P.es_interno(prj):
         tarj = [_kpi_card(t("Status"), _etq(est)),
-                _kpi_card(t("Type"), _etq(str(prj.get("Tipo", ""))) or t("Internal")),
+                _kpi_card(t("Type"), _etq(str(prj.get("Type", ""))) or t("Internal")),
                 _kpi_card(t("Person in charge"),
                           P.head_installers_label(prj, grupo) or "—")]
     else:
         tarj = [_kpi_card(t("Status"), est),
                 _kpi_card(t("Project progress"), f"{avance:.0f}%"),
-                _kpi_card(t("Client"), prj.get("Cliente") or "—")]
+                _kpi_card(t("Client"), prj.get("Client") or "—")]
     st.markdown('<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:8px">'
                 + "".join(tarj) + "</div>", unsafe_allow_html=True)
     if not P.es_interno(prj):
@@ -3184,7 +3184,7 @@ def render_field_projects(usuario: str, grupo: str):
         _induccion_section(pid, prj, grupo, allow_send=False)
         _field_activities(pid)
     elif _sec == "🚨 Avisos":
-        _alerts_section(pid, grupo, prj.get("Nombre", ""), allow_report=True)
+        _alerts_section(pid, grupo, prj.get("Name", ""), allow_report=True)
     elif _sec == "💰 Recibos":
         render_expenses(pid, grupo, can_delete=False, key_prefix="fld")
     else:   # :material/attach_file: Archivos
@@ -3277,7 +3277,7 @@ def _ordenes_section(pid, grupo, editable=True, key_prefix="ord"):
         ords = O.list_for(pid)
     except Exception:
         return
-    _pend = [o for o in ords if str(o.get("Estado", "")) == O.PENDIENTE]
+    _pend = [o for o in ords if str(o.get("Status", "")) == O.PENDIENTE]
     _tit = f"Purchase orders ({len(_pend)} pending)"
 
     with st.expander(f":material/shopping_cart: {_tit}", expanded=False):
@@ -3286,21 +3286,21 @@ def _ordenes_section(pid, grupo, editable=True, key_prefix="ord"):
         if ords:
             _hoy = clock.today(grupo)
             for o in ords:
-                _est = str(o.get("Estado", ""))
+                _est = str(o.get("Status", ""))
                 _oid = str(o.get("ID", ""))
-                _fesp = O._parse_date(o.get("FechaEsperada"))
+                _fesp = O._parse_date(o.get("ExpectedDate"))
                 _tarde = bool(_est == O.PENDIENTE and _fesp and _fesp < _hoy)
-                _lin = (f"{_ORD_ICONO.get(_est,'')} **{o.get('Proveedor','')}** · "
-                        f"{theme.dinero(_n(o.get('Valor')))} · "
-                        f"{o.get('Descripcion','') or '—'}")
+                _lin = (f"{_ORD_ICONO.get(_est,'')} **{o.get('Supplier','')}** · "
+                        f"{theme.dinero(_n(o.get('Amount')))} · "
+                        f"{o.get('Description','') or '—'}")
                 if _fesp:
                     _lin += f" · llega {_fesp.strftime('%d/%m')}"
                 if _tarde:
                     _lin += f"  :red[**{(_hoy - _fesp).days} d late**]"
                 st.markdown(_lin)
-                st.caption(f"{_oid} · {_etq(_est)} · ordered {o.get('Fecha','')}")
+                st.caption(f"{_oid} · {_etq(_est)} · ordered {o.get('Date','')}")
 
-                if _est == O.RECIBIDA and not str(o.get("GastoID", "")).strip():
+                if _est == O.RECIBIDA and not str(o.get("ExpenseID", "")).strip():
                     # ⚠️ Se marcó recibida pero su gasto no llegó a escribirse: ese
                     # costo NO está contado en ningún sitio hasta completarlo.
                     st.warning(t(":material/warning: This order is received but **its cost was not recorded**, so it is not being counted."))
@@ -3316,7 +3316,7 @@ def _ordenes_section(pid, grupo, editable=True, key_prefix="ord"):
                     _a, _b, _c2 = st.columns([2, 1, 1])
                     _real = _a.number_input(
                         t("Value received"), min_value=0.0, step=10.0,
-                        value=float(_n(o.get("Valor"))), key=f"{key_prefix}_ordv_{_oid}",
+                        value=float(_n(o.get("Amount"))), key=f"{key_prefix}_ordv_{_oid}",
                         help=t("If it arrived at a different amount, correct it here before receiving."))
                     if _b.button(t("Receive"), key=f"{key_prefix}_ordr_{_oid}",
                                  width="stretch"):
@@ -3434,7 +3434,7 @@ def _editor_ganancia_hora(pid, _items, _gh, _T):
             hide_index=True, width="stretch", key=f"gh_ed_{pid}",
             # ⚠️ Solo se teclea la GANANCIA. Precio/h y «Ganas» son consecuencia y van
             # bloqueados, igual que en la cotización (v355).
-            disabled=["Persona", "Horas", "Costo/h", "Precio/h", "Ganas"],
+            disabled=["Persona", "Hours", "Costo/h", "Precio/h", "Ganas"],
             column_config=tabla.cfg(None, {
                 "Costo/h": st.column_config.NumberColumn(t("Cost/h"), format="$%,.2f",
                                                          help=t("Their rate. What it costs you.")),
@@ -3448,7 +3448,7 @@ def _editor_ganancia_hora(pid, _items, _gh, _T):
 
     _nuevo = {str(_ed.iloc[i]["Persona"]): P._num(_ed.iloc[i]["Ganancia/h"])
               for i in range(len(_ed)) if P._num(_ed.iloc[i]["Ganancia/h"]) > 0}
-    _tot = sum(P._num(_ed.iloc[i]["Horas"]) * P._num(_ed.iloc[i]["Ganancia/h"])
+    _tot = sum(P._num(_ed.iloc[i]["Hours"]) * P._num(_ed.iloc[i]["Ganancia/h"])
                for i in range(len(_ed)))
     st.caption(t("With these values you would make **{x}** on the labour clocked so far. "
                  "Materials are invoiced at cost (decision from v360).")
@@ -3525,14 +3525,14 @@ def _ir_a_facturar(pid, grupo):
         _fichas = _C.list_clientes(grupo)
     except Exception:
         _fichas = []
-    _nombres = {str(f.get("Nombre", "")) for f in _fichas}
-    _porid = next((str(f.get("Nombre", "")) for f in _fichas
-                   if str(f.get("ID", "")) == str(prj.get("ClienteID", ""))), "")
-    _cli = _porid or str(prj.get("Cliente", "") or "")
+    _nombres = {str(f.get("Name", "")) for f in _fichas}
+    _porid = next((str(f.get("Name", "")) for f in _fichas
+                   if str(f.get("ID", "")) == str(prj.get("ClientID", ""))), "")
+    _cli = _porid or str(prj.get("Client", "") or "")
     if _cli in _nombres:
         st.session_state["fac_cli"] = _cli
     else:
-        st.session_state["_fac_aviso_cli"] = str(prj.get("Cliente", "") or "—")
+        st.session_state["_fac_aviso_cli"] = str(prj.get("Client", "") or "—")
     st.session_state["_fac_prj_pending"] = str(pid)
     st.session_state["_admin_nav_pending"] = ("finanzas", "🧾 Facturas")
 
@@ -3671,7 +3671,7 @@ def render_expenses(pid, grupo, can_delete=False, key_prefix="ex"):
 
     # ── Facturar esta obra (atajo, v357) ─────────────────────────
     if can_delete:                      # solo gestión: el campo no factura
-        _facturar_atajo(pid, grupo, prj_nombre=str(P.get_project(pid).get("Nombre", "")))
+        _facturar_atajo(pid, grupo, prj_nombre=str(P.get_project(pid).get("Name", "")))
 
     # ── Órdenes de compra: el dinero comprometido (v343) ──
     _ordenes_section(pid, grupo, editable=can_delete, key_prefix=key_prefix)
@@ -3717,7 +3717,7 @@ def render_expenses(pid, grupo, can_delete=False, key_prefix="ex"):
 
     # ── Curva de gasto acumulado ──
     _curva = E.spend_curve(pid, grupo)
-    _svg   = E.spend_svg(_curva, proy, str(P.get_project(pid).get("Nombre", ""))) if _curva else ""
+    _svg   = E.spend_svg(_curva, proy, str(P.get_project(pid).get("Name", ""))) if _curva else ""
     if _svg:
         components.html(
             '<!DOCTYPE html><html><body style="margin:0;background:transparent">'
@@ -3761,9 +3761,9 @@ def render_expenses(pid, grupo, can_delete=False, key_prefix="ex"):
             for r in items:
                 _rid = str(r.get("ID", ""))
                 _did = str(r.get("DriveID", "")).strip()
-                _lbl = f":material/receipt_long: {r.get('Fecha')} · {r.get('Categoria')} · ${E._num(r.get('Valor')):,.0f}"
-                _ex = " · ".join(x for x in [str(r.get('Proveedor') or ''),
-                                             str(r.get('Descripcion') or '')] if x)
+                _lbl = f":material/receipt_long: {r.get('Date')} · {r.get('Category')} · ${E._num(r.get('Amount')):,.0f}"
+                _ex = " · ".join(x for x in [str(r.get('Supplier') or ''),
+                                             str(r.get('Description') or '')] if x)
                 if _ex:
                     _lbl += f" · {_ex}"
                 cc = st.columns([6, 1])
@@ -3786,7 +3786,7 @@ def render_expenses(pid, grupo, can_delete=False, key_prefix="ex"):
             _sel = st.session_state.get(f"{key_prefix}_rcb")
             _ro = next((x for x in items if str(x.get("ID")) == str(_sel)), None) if _sel else None
             if _ro and str(_ro.get("DriveID", "")).strip():
-                _arch = str(_ro.get("Archivo", "recibo"))
+                _arch = str(_ro.get("File", "recibo"))
                 try:
                     from core import drive_store
                     _data = drive_store.download(str(_ro.get("DriveID", "")).strip())
@@ -4324,7 +4324,7 @@ def render_group_expenses(grupo: str):
         _atr = []
     if _atr:
         st.warning(":material/local_shipping: **" + str(len(_atr)) + " purchase order(s) that did not arrive on the promised date:** "
-                   + " · ".join(f"{o.get('Proveedor','')} ({o['dias']} d)" for o in _atr[:6]))
+                   + " · ".join(f"{o.get('Supplier','')} ({o['dias']} d)" for o in _atr[:6]))
 
     # ── Gasto por rubro (mano de obra + cada categoría de compra) ─────────
     # ⚠️ v310: se quitó el bloque de barras «Compras por categoría». Mostraba
@@ -4415,14 +4415,14 @@ def render_group_hours(grupo: str):
 
     # ⚠️ `per` se compara abajo y además indexa `{"Semana": 7, …}` → la opción no se
     # toca; se traduce el display.
-    _PERH = {"Hoy": "Today", "Semana": "Week", "Mes": "Month", "Todo": "All"}
+    _PERH = {"Hoy": "Today", "Week": "Week", "Mes": "Month", "Todo": "All"}
     per = st.radio(t("Period"), list(_PERH), format_func=lambda o: t(_PERH[o]),
                    horizontal=True, key="gh_per", label_visibility="collapsed")
     now = clock.now()
     if per == "Hoy":
         days = (now - now.replace(hour=0, minute=0, second=0, microsecond=0)).total_seconds() / 86400.0
     else:
-        days = {"Semana": 7, "Mes": 30, "Todo": None}[per]
+        days = {"Week": 7, "Mes": 30, "Todo": None}[per]
 
     data = timeclock.group_hours(grupo, days=days)
     if not data:
@@ -4502,7 +4502,7 @@ def render_group_hours(grupo: str):
     for d in data:
         _sa = ("—" if d["sin_asignar_indet"] else f"{d['sin_asignar']:.2f}")
         _f = {
-            "Usuario": _etiqueta(d),
+            "User": _etiqueta(d),
             "Shift (h)": d["general"],
             "On jobs (h)": d["proyecto"],
         }
@@ -4630,7 +4630,7 @@ def _loc_datos(grupo):
 
 
 def _loc_personas(prj) -> list:
-    return [x.strip() for x in str(prj.get("CampoAsignados", "")).split(";") if x.strip()]
+    return [x.strip() for x in str(prj.get("FieldAssigned", "")).split(";") if x.strip()]
 
 
 def _cartera_localizaciones(locs, grupo, horas, costos, alarmas):
@@ -4640,7 +4640,7 @@ def _cartera_localizaciones(locs, grupo, horas, costos, alarmas):
         st.info(t(":material/info: No locations yet. Create the office or the store below so the team can clock in, do their pre-start and charge costs to it."))
         return
     # Abiertas primero, y dentro de cada grupo por gasto (donde más se va el dinero).
-    _ord = sorted(locs, key=lambda p: (str(p.get("Estado")) != P.INTERNO_ABIERTA,
+    _ord = sorted(locs, key=lambda p: (str(p.get("Status")) != P.INTERNO_ABIERTA,
                                        -float((costos.get(str(p.get("ID")), {}) or {})
                                               .get("total", 0) or 0)))
     for _i in range(0, len(_ord), 2):
@@ -4650,11 +4650,11 @@ def _cartera_localizaciones(locs, grupo, horas, costos, alarmas):
             _c = costos.get(pid, {}) or {}
             _h = float(horas.get(pid, 0.0) or 0.0)
             _al = int(alarmas.get(pid, 0) or 0)
-            _cerrada = str(p.get("Estado")) != P.INTERNO_ABIERTA
-            _tipo = str(p.get("Tipo", "")) or "Interno"
+            _cerrada = str(p.get("Status")) != P.INTERNO_ABIERTA
+            _tipo = str(p.get("Type", "")) or "Interno"
             _ico = P.TIPO_ICONO.get(_tipo, ":material/business:")
             with _cols[_j].container(border=True, key=f"loccard_{pid}"):
-                st.markdown(f"**{_ico} {p.get('Nombre') or "(no name)"}**")
+                st.markdown(f"**{_ico} {p.get('Name') or "(no name)"}**")
                 _pie = [f"`{pid}`", _tipo]
                 if _cerrada:
                     _pie.append(t(":material/lock: closed"))
@@ -4666,8 +4666,8 @@ def _cartera_localizaciones(locs, grupo, horas, costos, alarmas):
                             "<small>spent</small>", unsafe_allow_html=True)
                 m3.markdown(f"**{len(_loc_personas(p))}**  \n<small>assigned</small>",
                             unsafe_allow_html=True)
-                if str(p.get("Ubicacion", "")).strip():
-                    st.caption(f":material/place: {p.get('Ubicacion')}")
+                if str(p.get("Location", "")).strip():
+                    st.caption(f":material/place: {p.get('Location')}")
                 if _al:
                     st.markdown(f":red[:material/notifications_active: {_al} open alert(s)]")
                 if st.button(t("Open →"), key=f"locopen_{pid}", width="stretch"):
@@ -4732,8 +4732,8 @@ def _nueva_localizacion_form(grupo: str):
                 st.error(f"It could not be created: {_res}")
                 return
             if asg:
-                _notificar_asignados(asg, {"ID": _res, "Nombre": nom.strip(),
-                                           "Ubicacion": _ubi, "Grupo": grupo})
+                _notificar_asignados(asg, {"ID": _res, "Name": nom.strip(),
+                                           "Location": _ubi, "Group": grupo})
             for k in ("nloc_nom", "nloc_resp", "nloc_ins", "nloc_asg"):
                 st.session_state.pop(k, None)
             flash.exito(f"Location created: {_res} · {nom.strip()}")
@@ -4829,21 +4829,21 @@ def _detalle_localizacion(pid: str, grupo: str):
         st.session_state.pop("_loc_open", None)
         st.rerun()
 
-    _tipo = str(prj.get("Tipo", "")) or "Interno"
-    _cerrada = str(prj.get("Estado")) != P.INTERNO_ABIERTA
+    _tipo = str(prj.get("Type", "")) or "Interno"
+    _cerrada = str(prj.get("Status")) != P.INTERNO_ABIERTA
     with st.container(border=True):
         st.markdown(f"### {P.TIPO_ICONO.get(_tipo, ':material/business:')} "
-                    f"{prj.get('Nombre') or "(no name)"}")
+                    f"{prj.get('Name') or "(no name)"}")
         _c = [f"`{pid}`", _etq(_tipo),
               (t(":material/lock: closed") if _cerrada
                else t(":material/check_circle: open"))]
-        if str(prj.get("Ingeniero", "")).strip():
+        if str(prj.get("HeadInstallers", "")).strip():
             _c.append(f"resp. {P.head_installers_label(prj, grupo)}")
         st.caption(" · ".join(_c))
-        if str(prj.get("Ubicacion", "")).strip():
-            st.markdown(maps.maps_link_md(prj.get("Ubicacion")))
-    if str(prj.get("Instrucciones", "")).strip():
-        st.info(prj.get("Instrucciones"))
+        if str(prj.get("Location", "")).strip():
+            st.markdown(maps.maps_link_md(prj.get("Location")))
+    if str(prj.get("Instructions", "")).strip():
+        st.info(prj.get("Instructions"))
 
     _sec = st.segmented_control(
         t("Section"), ["👥 Equipo", "💰 Gastos", "🦺 Pre-Start", "📎 Archivos", "✏️ Datos"],
@@ -4868,7 +4868,7 @@ def _detalle_localizacion(pid: str, grupo: str):
                 st.caption(t("They can always clock in here. For a single day, assign it from Planning."))
             else:
                 st.caption(t("Nobody permanently assigned. Only those who have it set for today in Planning will be able to clock in."))
-            _alerts_section(pid, grupo, project_name=prj.get("Nombre"))
+            _alerts_section(pid, grupo, project_name=prj.get("Name"))
     elif _sec == "💰 Gastos":
         render_expenses(pid, grupo, can_delete=True, key_prefix="loc")
     elif _sec == "🦺 Pre-Start":
@@ -4891,10 +4891,10 @@ def _editar_localizacion(pid, grupo, prj):
         _avisar_asignados(_nuevos, grupo, exclude_pid=pid)
 
     with st.form(f"eloc_form_{pid}"):
-        nom = st.text_input(t("Name *"), value=str(prj.get("Nombre", "")),
+        nom = st.text_input(t("Name *"), value=str(prj.get("Name", "")),
                             key=f"eloc_nom_{pid}")
         c1, c2 = st.columns(2)
-        _tp = str(prj.get("Tipo", "")) or P.TIPOS_INTERNOS[0]
+        _tp = str(prj.get("Type", "")) or P.TIPOS_INTERNOS[0]
         # ⚠️ La pertenencia se pregunta con `es_interno`, la definición ÚNICA, no
         # comparando contra la lista aquí — el guardián de v422 lo exige, y con razón:
         # así solo hay un sitio donde cambiar qué cuenta como interno.
@@ -4910,7 +4910,7 @@ def _editar_localizacion(pid, grupo, prj):
                               key=f"eloc_resp_{pid}")
         # ⚠️ «Cerrada» es el estado propio de una localización (v422): no tiene avance,
         # así que «En pausa»/«Completado» no significan nada aquí.
-        _est_act = str(prj.get("EstadoManual", "")) or ""
+        _est_act = str(prj.get("ManualStatus", "")) or ""
         _opts = ["", P.INTERNO_CERRADA, P.ARCHIVADO]
         est = st.selectbox(t("Status"), _opts,
                            index=_opts.index(_est_act) if _est_act in _opts else 0,
@@ -4920,7 +4920,7 @@ def _editar_localizacion(pid, grupo, prj):
                            key=f"eloc_est_{pid}",
                            help=t("Closed = no longer used, but its history is kept. Archived = it also disappears from the list."))
         instr = st.text_area(t(":material/push_pin: Instructions / notes"),
-                             value=str(prj.get("Instrucciones", "")),
+                             value=str(prj.get("Instructions", "")),
                              key=f"eloc_ins_{pid}")
         _guardar = st.form_submit_button(t(":material/save: Save"), type="primary",
                                          width="stretch")
@@ -4929,19 +4929,19 @@ def _editar_localizacion(pid, grupo, prj):
             st.error(t("The name is required."))
             return
         _ok, _msg = P.update_project(pid, {
-            "Nombre": nom.strip(), "Tipo": tipo,
-            "Ingeniero": ";".join(resp), "Instrucciones": instr,
-            "CampoAsignados": ";".join(_asg),
-            "EstadoManual": est,
-            "Estado": P.derive_estado(0, est, tipo),
+            "Name": nom.strip(), "Type": tipo,
+            "HeadInstallers": ";".join(resp), "Instructions": instr,
+            "FieldAssigned": ";".join(_asg),
+            "ManualStatus": est,
+            "Status": P.derive_estado(0, est, tipo),
         })
         if not _ok:
             st.error(_msg)
             return
         if _nuevos:
-            _notificar_asignados(_nuevos, {"ID": pid, "Nombre": nom.strip(),
-                                           "Ubicacion": prj.get("Ubicacion", ""),
-                                           "Grupo": grupo})
+            _notificar_asignados(_nuevos, {"ID": pid, "Name": nom.strip(),
+                                           "Location": prj.get("Location", ""),
+                                           "Group": grupo})
         flash.exito(t("Location updated."))
         st.rerun()
 
@@ -4959,7 +4959,7 @@ def render_localizaciones(grupo: str):
 
     from core import theme
     locs, horas, costos, alarmas = _loc_datos(grupo)
-    _abiertas = [p for p in locs if str(p.get("Estado")) == P.INTERNO_ABIERTA]
+    _abiertas = [p for p in locs if str(p.get("Status")) == P.INTERNO_ABIERTA]
     _h = sum(float(horas.get(str(p.get("ID")), 0) or 0) for p in locs)
     _g = sum(float((costos.get(str(p.get("ID")), {}) or {}).get("total", 0) or 0)
              for p in locs)

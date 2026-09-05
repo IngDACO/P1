@@ -115,20 +115,20 @@ def notify_user(usuario: str, subject: str, lines: list, link: str = None) -> di
 def notify_assignment(usuario: str, prj: dict) -> dict:
     """Avisa a un usuario de campo que le asignaron un proyecto (con sus datos)."""
     from core import maps
-    nombre = prj.get("Nombre") or prj.get("nombre") or ""
+    nombre = prj.get("Name") or prj.get("nombre") or ""
     subject = f"📋 {_d("New project assigned")}: {nombre}"
-    _ubic = str(prj.get("Ubicacion", "") or "")
+    _ubic = str(prj.get("Location", "") or "")
     _ubic_url = maps.maps_url(_ubic)
     _ubic_line = (f'{_d("Location")}: <a href="{_ubic_url}">{_ubic}</a>' if _ubic_url
                   else f"{_d("Location")}: {_ubic or '—'}")
     lines = [
         f"{_d("You have been assigned to project")} <b>{nombre}</b>.",
-        f"{_d("Client")}: {prj.get('Cliente', '—')}",
+        f"{_d("Client")}: {prj.get('Client', '—')}",
         _ubic_line,
-        f"{_d("Start")}: {prj.get('FechaInicio', '—')}  ·  "
-        f"{_d("Est. finish")}: {prj.get('FechaFinEst', '—')}",
+        f"{_d("Start")}: {prj.get('StartDate', '—')}  ·  "
+        f"{_d("Est. finish")}: {prj.get('EndDateEst', '—')}",
     ]
-    _links = [l.strip() for l in str(prj.get("InduccionLinks", "") or "").splitlines() if l.strip()]
+    _links = [l.strip() for l in str(prj.get("InductionLinks", "") or "").splitlines() if l.strip()]
     if _links:
         lines.append(f"📝 <b>{_d("Inductions to complete")}:</b>")
         lines += [f'• <a href="{l}">{l}</a>' for l in _links]

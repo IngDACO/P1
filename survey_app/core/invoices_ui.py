@@ -60,9 +60,9 @@ def render_facturas(grupo):
 
     facturas = I.list_facturas(grupo)
     # Totales del grupo (cuentas por cobrar)
-    _fac = sum(_num(f.get("Total")) for f in facturas if str(f.get("Estado", "")).lower() != "anulada")
-    _cob = sum(_num(f.get("Cobrado")) for f in facturas if str(f.get("Estado", "")).lower() != "anulada")
-    _venc = sum(_num(f.get("Total")) - _num(f.get("Cobrado"))
+    _fac = sum(_num(f.get("Total")) for f in facturas if str(f.get("Status", "")).lower() != "anulada")
+    _cob = sum(_num(f.get("Collected")) for f in facturas if str(f.get("Status", "")).lower() != "anulada")
+    _venc = sum(_num(f.get("Total")) - _num(f.get("Collected"))
                 for f in facturas if I.estado_cobro(f) == "vencida")
     c = st.columns(4)
     c[0].metric(t("Invoiced"), f"${_fac:,.0f}")
@@ -79,15 +79,15 @@ def render_facturas(grupo):
         return
 
     st.caption(t("Tap an invoice to see the detail and record payments."))
-    _rows = sorted(facturas, key=lambda f: str(f.get("Creado", "")), reverse=True)
+    _rows = sorted(facturas, key=lambda f: str(f.get("Created", "")), reverse=True)
     df = pd.DataFrame([{
-        "Nº":        str(f.get("Numero", "")),
-        "Cliente":   str(f.get("ClienteNombre", "") or "—"),
-        "Fecha":     str(f.get("Fecha", "")),
-        "Vence":     str(f.get("Vencimiento", "") or "—"),
+        "Nº":        str(f.get("Number", "")),
+        "Cliente":   str(f.get("ClientName", "") or "—"),
+        "Fecha":     str(f.get("Date", "")),
+        "Vence":     str(f.get("ExpiryDate", "") or "—"),
         "Total":     round(_num(f.get("Total")), 0),
-        "Cobrado":   round(_num(f.get("Cobrado")), 0),
-        "Outstanding": round(_num(f.get("Total")) - _num(f.get("Cobrado")), 0),
+        "Cobrado":   round(_num(f.get("Collected")), 0),
+        "Outstanding": round(_num(f.get("Total")) - _num(f.get("Collected")), 0),
         "Estado":    _etq(I.estado_cobro(f)),
     } for f in _rows])
     _ev = st.dataframe(
@@ -120,10 +120,10 @@ def _detalle_factura(grupo, fid):
         st.session_state.pop("_fac_open", None)
         return
 
-    total, cob = _num(f.get("Total")), _num(f.get("Cobrado"))
+    total, cob = _num(f.get("Total")), _num(f.get("Collected"))
     est = I.estado_cobro(f)
-    st.markdown(f"## :material/receipt_long: Invoice No. {f.get('Numero', '')}")
-    st.markdown(f"**{f.get('ClienteNombre', '') or '—'}**  ·  {_est_fmt(est)}")
+    st.markdown(f"## :material/receipt_long: Invoice No. {f.get('Number', '')}")
+    st.markdown(f"**{f.get('ClientName', '') or '—'}**  ·  {_est_fmt(est)}")
 
     izq, der = st.columns([3, 2])
     with izq:
@@ -135,19 +135,19 @@ def _detalle_factura(grupo, fid):
                 "Importe":  round(_num(x.get("importe")), 2),
             } for x in _ln]), width="stretch", hide_index=True,
                 column_config=tabla.cfg(None, {"Importe": st.column_config.NumberColumn(t("Amount"), format="$%,.2f")}))
-        _imp_pct = _num(f.get("ImpuestoPct"))
+        _imp_pct = _num(f.get("TaxPct"))
         from core import theme as _T                      # v309: escapa el `$` (LaTeX)
         st.markdown(f"Subtotal: **{_T.dinero(_num(f.get('Subtotal')))}**  ·  "
-                    f"Tax ({_imp_pct:.0f}%): **{_T.dinero(_num(f.get('Impuesto')))}**  ·  "
+                    f"Tax ({_imp_pct:.0f}%): **{_T.dinero(_num(f.get('Tax')))}**  ·  "
                     f"Total: **{_T.dinero(total)}**")
-        if str(f.get("Nota", "")).strip():
-            st.caption(f"Note: {f.get('Nota')}")
+        if str(f.get("Note", "")).strip():
+            st.caption(f"Note: {f.get('Note')}")
         try:
             from core import invoice_pdf
-            _cli = C.get_cliente(str(f.get("ClienteID", ""))) if f.get("ClienteID") else {}
+            _cli = C.get_cliente(str(f.get("ClientID", ""))) if f.get("ClientID") else {}
             _pdf = invoice_pdf.generate_invoice_pdf(f, _cli, grupo)
             st.download_button(t(":material/download: Download invoice (PDF)"), data=_pdf,
-                               file_name=f"Factura_{f.get('Numero', '')}.pdf",
+                               file_name=f"Factura_{f.get('Number', '')}.pdf",
                                mime="application/pdf", key=f"fac_pdf_{fid}")
         except Exception as e:
             st.caption(f":material/warning: The PDF could not be generated: {e}")
@@ -175,7 +175,7 @@ def _detalle_factura(grupo, fid):
             st.caption(t("Payments recorded:"))
             for cb in _cobros:
                 st.markdown(f"- {cb.get('fecha', '')}: **${_num(cb.get('monto')):,.2f}**")
-        if str(f.get("Estado", "")).lower() != "anulada":
+        if str(f.get("Status", "")).lower() != "anulada":
             with st.expander(t(":material/block: Void invoice")):
                 st.caption(t("It is taken out of accounts receivable. This cannot be undone."))
                 if st.button(t("Void this invoice"), key=f"fac_anul_{fid}"):
@@ -194,11 +194,11 @@ def _nueva_factura(grupo):
     if not fichas:
         st.info(t(":material/info: Create a client first in 👥 Contacts."))
         return
-    _by_name = {c.get("Nombre", ""): c for c in fichas}
+    _by_name = {c.get("Name", ""): c for c in fichas}
     cli_sel = st.selectbox(t(":material/contacts: Client"), list(_by_name.keys()), key="fac_cli")
     cli = _by_name.get(cli_sel, {})
     cid = str(cli.get("ID", ""))
-    cnorm = C._norm(cli.get("Nombre"))
+    cnorm = C._norm(cli.get("Name"))
 
     # Proyectos del cliente (para precargar y para el desplegable de líneas)
     prjs = [p for p in P.list_projects(grupo=grupo) if C.es_del_cliente(p, cid, cnorm)]
@@ -223,7 +223,7 @@ def _nueva_factura(grupo):
     _peek = st.session_state.get("_fac_prj_pending")
     if _peek and str(_peek) not in {str(p.get("ID", "")) for p in prjs}:
         _extra = P.get_project(str(_peek)) or {}
-        if _extra and str(_extra.get("Grupo", "")) == str(grupo):
+        if _extra and str(_extra.get("Group", "")) == str(grupo):
             prjs = prjs + [_extra]
     # ⚠️ v306: por ID, no por nombre. Antes el alcance y la línea de la factura se casaban
     # con `{Nombre: ID}`: con dos proyectos homónimos el radio mostraba DOS opciones
@@ -268,17 +268,17 @@ def _nueva_factura(grupo):
     for p in _scope_prjs:
         pend = I.pendiente_de_facturar(str(p.get("ID", "")), grupo, p)
         if pend > 0:
-            _pre.append({"Concepto": f"{d('Works')} — {p.get('Nombre', '')}",
-                         "Proyecto": _lbl.get(str(p.get("ID", "")), ""), "Importe": pend})
+            _pre.append({"Concepto": f"{d('Works')} — {p.get('Name', '')}",
+                         "Project": _lbl.get(str(p.get("ID", "")), ""), "Importe": pend})
     if not _pre:
-        _pre = [{"Concepto": "", "Proyecto": "(none)", "Importe": 0.0}]
+        _pre = [{"Concepto": "", "Project": "(none)", "Importe": 0.0}]
 
     st.caption(t("Invoice lines — edit, add or remove. The «Project» links the line so it is not invoiced twice."))
     _ed = st.data_editor(
         pd.DataFrame(_pre), num_rows="dynamic", width="stretch", key="fac_lineas",
         column_config=tabla.cfg(None, {
             "Concepto": st.column_config.TextColumn(t("Item"), width="large"),
-            "Proyecto": st.column_config.SelectboxColumn(
+            "Project": st.column_config.SelectboxColumn(
                 t("Project"), options=["(none)"] + prj_names, required=False),
             "Importe":  st.column_config.NumberColumn(t("Amount"), format="$%,.2f", min_value=0.0),
         }))
@@ -297,7 +297,7 @@ def _nueva_factura(grupo):
         con = str(r.get("Concepto", "")).strip()
         if imp == 0 and not con:
             continue
-        pnom = str(r.get("Proyecto", ""))
+        pnom = str(r.get("Project", ""))
         _lineas.append({"concepto": con, "importe": imp,
                         "proyecto_id": _pid_by_lbl.get(pnom, "")})
     _sub = round(sum(l["importe"] for l in _lineas), 2)
@@ -313,7 +313,7 @@ def _nueva_factura(grupo):
             st.error(t("Add at least one line with an amount."))
             return
         ok, res = I.create_factura(
-            grupo=grupo, cliente_id=cid, cliente_nombre=cli.get("Nombre", ""),
+            grupo=grupo, cliente_id=cid, cliente_nombre=cli.get("Name", ""),
             lineas=_lineas, impuesto_pct=_imp, fecha=_fecha.isoformat(),
             vencimiento=_venc.isoformat(), nota=_nota, creado_por=_creado_por())
         if ok:

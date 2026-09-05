@@ -86,7 +86,7 @@ def _cuadrilla(prj, pid, grupo) -> list:
     """
     from core import auth
     from core import timeclock
-    asignados = [u.strip() for u in str(prj.get("CampoAsignados", "") or "").split(";")
+    asignados = [u.strip() for u in str(prj.get("FieldAssigned", "") or "").split(";")
                  if u.strip()]
     try:
         _hoy = timeclock.proyectos_por_usuario_dia(grupo, clock.today(grupo)) or {}
@@ -100,7 +100,7 @@ def _cuadrilla(prj, pid, grupo) -> list:
         users = auth.list_users(grupo=grupo) or []
     except Exception:
         users = []
-    nom_de = {str(u.get("Usuario", "")): str(u.get("Nombre", "") or u.get("Usuario", ""))
+    nom_de = {str(u.get("User", "")): str(u.get("Name", "") or u.get("User", ""))
               for u in users}
     # ⚠️ La etiqueta desambigua homónimos SOLO para elegir en la lista (v413); lo que se
     # GUARDA es el nombre + el login, nunca la etiqueta. Es el fallo de v308.
@@ -299,7 +299,7 @@ def render_prestart_tab():
                    else t("Create a project from the Survey.")))
         return
 
-    idmap = {f"{p.get('Nombre')} ({p.get('ID')})": p for p in proys}
+    idmap = {f"{p.get('Name')} ({p.get('ID')})": p for p in proys}
     # Campo: preselecciona el proyecto donde FICHÓ (lo primero que hace en el día),
     # como en 📋 Mis proyectos (v138). No es "el primero de la lista" que evitó v139:
     # es una señal FUERTE (donde está trabajando) que se MUESTRA y sigue siendo
@@ -335,7 +335,7 @@ def render_prestart_tab():
         return
     prj = idmap[sel]
     pid = str(prj.get("ID", ""))
-    pgrupo = str(prj.get("Grupo", "")) or grupo
+    pgrupo = str(prj.get("Group", "")) or grupo
 
     # ── ¿La charla ya está hecha y me falta firmar? (v403) ──
     # ⚠️ Al CAMPO se le corta aquí: lo que necesita es constar en la charla que hubo,
@@ -365,7 +365,7 @@ def render_prestart_tab():
     f_hora_t = c2.time_input(t("Time"), value=clock.now().time().replace(second=0, microsecond=0),
                              key="ps_hora")
     f_hora   = f_hora_t.strftime("%H:%M") if f_hora_t else ""
-    f_loc   = c3.text_input(t("Location"), value=str(prj.get("Ubicacion", "")), key="ps_loc")
+    f_loc   = c3.text_input(t("Location"), value=str(prj.get("Location", "")), key="ps_loc")
     if f_loc.strip():
         c3.caption(maps.maps_link_md(f_loc, "see on Maps"))
     f_fac   = st.text_input(t("Facilitated by"), value=nombre or usuario, key="ps_fac")
@@ -465,7 +465,7 @@ def render_prestart_tab():
     if st.button(t(":material/health_and_safety: Generate and file Pre-Start"), type="primary", width="stretch",
                  key="ps_submit", disabled=bool(_pend) or (_ya_hoy and not _forzar)):
         data = {
-            "grupo": pgrupo, "proyecto_id": pid, "proyecto_nombre": prj.get("Nombre", ""),
+            "grupo": pgrupo, "proyecto_id": pid, "proyecto_nombre": prj.get("Name", ""),
             "fecha": f_fecha, "hora": f_hora, "location": f_loc, "facilitador": f_fac,
             "activities_notes": act_notes, "s1": s1,
             "near_miss": nm, "near_miss_desc": nm_desc, "s3": s3,

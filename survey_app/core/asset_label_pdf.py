@@ -28,18 +28,16 @@ def generate_label_pdf(activo: dict, qr_png: bytes, grupo_nombre: str = "") -> b
     story = []
 
     qr = Image(_io.BytesIO(qr_png), width=48 * mm, height=48 * mm)
-    lineas = [Paragraph(str(activo.get("Nombre", "")), nom),
+    lineas = [Paragraph(str(activo.get("Name", "")), nom),
               Paragraph(str(activo.get("ID", "")), idst)]
     # ⚠️ Las ramas van por la CLAVE, nunca por el texto de la etiqueta: al traducir
     # «Marca/Modelo» a «Make/Model» la comparación por texto dejó de cumplirse y esa
     # línea desapareció de la etiqueta, sin ningún error. Es el modo de fallo típico
     # de una traducción, y lo cometí en el primer módulo que toqué.
-    for lbl, key in ((d("Category"), "Categoria"), (d("Make/Model"), None), (d("Serial"), "Serie")):
-        if key == "Serie":
-            v = str(activo.get("Serie", "")).strip()
-        elif key is None:
-            v = " ".join(x for x in (str(activo.get("Marca", "")).strip(),
-                                     str(activo.get("Modelo", "")).strip()) if x)
+    for lbl, key in ((d("Category"), "Category"), (d("Make/Model"), None), (d("Serial"), "Serial")):
+        if key is None:
+            v = " ".join(x for x in (str(activo.get("Brand", "")).strip(),
+                                     str(activo.get("Model", "")).strip()) if x)
         else:
             v = str(activo.get(key, "")).strip()
         if v:

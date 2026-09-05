@@ -31,8 +31,8 @@ def _creado_por() -> str:
 def _agregados(proys, horas, alarmas, costos):
     """(activos, avance_prom, horas, costo, alarmas) de una lista de proyectos."""
     activos = [x for x in proys
-               if str(x.get("Estado", "")) not in ("Completado", "Cancelado", "Archivado")]
-    av = (sum(_num(x.get("Avance")) for x in proys) / len(proys)) if proys else 0.0
+               if str(x.get("Status", "")) not in ("Completado", "Cancelado", "Archivado")]
+    av = (sum(_num(x.get("Progress")) for x in proys) / len(proys)) if proys else 0.0
     hrs = sum(horas.get(str(x.get("ID", "")), 0.0) for x in proys)
     cost = sum(costos.get(str(x.get("ID", "")), 0.0) for x in proys)
     al = sum(int(_num(alarmas.get(str(x.get("ID", "")), 0))) for x in proys)
@@ -62,7 +62,7 @@ def render_contactos(grupo):
                             help=t("Archived ones stop being listed, but are not deleted: their projects, hours and invoices stay intact."))
     fichas  = C.list_clientes(grupo, incluir_inactivos=_ver_arch)
     _n_arch = len([f for f in C.list_clientes(grupo, incluir_inactivos=True)
-                   if str(f.get("Activo", "SI")).upper() in ("NO", "FALSE", "0")])
+                   if str(f.get("Active", "SI")).upper() in ("NO", "FALSE", "0")])
     if _n_arch and not _ver_arch:
         st.caption(f":material/inventory_2: {_n_arch} archived client(s) hidden.")
     proys   = P.list_projects(grupo=grupo)
@@ -72,7 +72,7 @@ def render_contactos(grupo):
                if expenses.is_configured() else {})
 
     fichas_by_id   = {str(f.get("ID", "")): f for f in fichas}
-    fichas_by_norm = {_norm(f.get("Nombre")): f for f in fichas}
+    fichas_by_norm = {_norm(f.get("Name")): f for f in fichas}
 
     # Proyectos agrupados por cliente (ID-primero, respaldo por nombre)
     by_client = {}
@@ -92,10 +92,10 @@ def render_contactos(grupo):
     for k in all_keys:
         f  = fichas_by_norm.get(k, {})
         pr = by_client.get(k, {}).get("proys", [])
-        disp = f.get("Nombre") or by_client.get(k, {}).get("nombre") or "—"
+        disp = f.get("Name") or by_client.get(k, {}).get("nombre") or "—"
         activos, av, hrs, cost, al = _agregados(pr, horas, alarmas, costos)
         rows.append({"key": k, "disp": disp, "ficha": bool(f),
-                     "Contacto": f.get("Contacto", ""), "Telefono": f.get("Telefono", ""),
+                     "ContactName": f.get("ContactName", ""), "Phone": f.get("Phone", ""),
                      "Email": f.get("Email", ""), "total": len(pr), "activos": activos,
                      "av": av, "hrs": hrs, "cost": cost, "al": al})
     rows.sort(key=lambda r: (-r["activos"], -r["total"], r["disp"].lower()))
@@ -113,7 +113,7 @@ def render_contactos(grupo):
                        key="cli_q", placeholder=t("type to filter…")).strip().lower()
     if _q:
         rows = [r for r in rows if _q in " ".join([
-            r["disp"], r["Contacto"], r["Telefono"], r["Email"]]).lower()]
+            r["disp"], r["ContactName"], r["Phone"], r["Email"]]).lower()]
     st.caption(f"Tap a client to see its record, summary and projects. "
                f"({len(rows)} client(s))")
 
@@ -126,8 +126,8 @@ def render_contactos(grupo):
     df = pd.DataFrame([{
         "Cliente":   r["disp"],
         "Ficha":     t("yes") if r["ficha"] else "—",
-        "Contacto":  r["Contacto"] or "—",
-        "Phone":  r["Telefono"] or "—",
+        "Contacto":  r["ContactName"] or "—",
+        "Phone":  r["Phone"] or "—",
         "Email":     r["Email"] or "—",
         "Projects": r["total"],
         "Active":   r["activos"],
@@ -136,10 +136,10 @@ def render_contactos(grupo):
         **({"Costo": round(r["cost"], 0)} if _hay_costo else {}),
         "Alarms":   str(r["al"]) if r["al"] else "",
     } for r in rows])
-    _colcfg = {"Avance": st.column_config.ProgressColumn(
+    _colcfg = {"Progress": st.column_config.ProgressColumn(
         t("Progress"), min_value=0, max_value=100, format="%d%%")}
     if _hay_costo:
-        _colcfg["Costo"] = st.column_config.NumberColumn(t("Cost"), format="$%,d")
+        _colcfg["Cost"] = st.column_config.NumberColumn(t("Cost"), format="$%,d")
     _ev = st.dataframe(
         df, width="stretch", hide_index=True,
         on_select="rerun", selection_mode="single-row", key="cli_tbl",
@@ -161,12 +161,12 @@ def _detalle_cliente(grupo, key):
         st.rerun()
 
     fichas = C.list_clientes(grupo)
-    fichas_by_norm = {_norm(f.get("Nombre")): f for f in fichas}
+    fichas_by_norm = {_norm(f.get("Name")): f for f in fichas}
     fichas_by_id   = {str(f.get("ID", "")): f for f in fichas}
     f = fichas_by_norm.get(key, {})
     cid = str(f.get("ID", ""))
     proys = [p for p in P.list_projects(grupo=grupo) if C.es_del_cliente(p, cid, key)]
-    disp = f.get("Nombre") or (proys[0].get("Cliente") if proys else key)
+    disp = f.get("Name") or (proys[0].get("Client") if proys else key)
 
     st.markdown(f"## :material/apartment: {disp}")
     if not f:
@@ -178,16 +178,16 @@ def _detalle_cliente(grupo, key):
     with izq:
         st.markdown(t("#### :material/contact_page: Contact record"))
         with st.form(f"cli_form_{key}"):
-            _con = st.text_input(t("Contact person"), value=f.get("Contacto", ""))
+            _con = st.text_input(t("Contact person"), value=f.get("ContactName", ""))
             cc = st.columns(2)
-            _tel  = cc[0].text_input(t("Phone"), value=f.get("Telefono", ""))
+            _tel  = cc[0].text_input(t("Phone"), value=f.get("Phone", ""))
             _mail = cc[1].text_input(t("Email"), value=f.get("Email", ""))
-            _dir  = st.text_input(t("Address"), value=f.get("Direccion", ""))
-            _notas = st.text_area(t("Notes"), value=f.get("Notas", ""), height=110)
+            _dir  = st.text_input(t("Address"), value=f.get("Address", ""))
+            _notas = st.text_area(t("Notes"), value=f.get("Notes", ""), height=110)
             _save = st.form_submit_button(t(":material/save: Save record"), type="primary")
         if _save:
-            campos = {"Contacto": _con, "Telefono": _tel, "Email": _mail,
-                      "Direccion": _dir, "Notas": _notas}
+            campos = {"ContactName": _con, "Phone": _tel, "Email": _mail,
+                      "Address": _dir, "Notes": _notas}
             if cid:
                 ok, msg = C.update_cliente(cid, campos)
             else:
@@ -198,8 +198,8 @@ def _detalle_cliente(grupo, key):
                 st.rerun()
             else:
                 st.error(msg)
-        if f.get("Direccion"):
-            st.markdown(maps.maps_link_md(f.get("Direccion"), "See the address on the map"))
+        if f.get("Address"):
+            st.markdown(maps.maps_link_md(f.get("Address"), "See the address on the map"))
 
     # Resumen
     with der:
@@ -223,7 +223,7 @@ def _detalle_cliente(grupo, key):
             # v340: archivar y RESTAURAR. Antes solo se podía archivar y el cliente
             # desaparecía sin vuelta atrás.
             _ficha = C.get_cliente(cid)
-            _archivado = str(_ficha.get("Activo", "SI")).upper() in ("NO", "FALSE", "0")
+            _archivado = str(_ficha.get("Active", "SI")).upper() in ("NO", "FALSE", "0")
             if _archivado:
                 st.warning(t(":material/archive: This record is **archived**: it does not show in the list unless you tick «Show archived ones too»."))
                 if st.button(t(":material/restore: Restore this record"),
@@ -246,9 +246,9 @@ def _detalle_cliente(grupo, key):
         st.caption(t("No linked projects yet."))
     else:
         cols = st.columns(2)
-        for i, p in enumerate(sorted(proys, key=lambda x: str(x.get("Nombre", "")).lower())):
+        for i, p in enumerate(sorted(proys, key=lambda x: str(x.get("Name", "")).lower())):
             pid = str(p.get("ID", ""))
-            _lbl = f"**{p.get('Nombre', '')}** · {p.get('Estado', '')} · {int(_num(p.get('Avance')))}%"
+            _lbl = f"**{p.get('Name', '')}** · {p.get('Status', '')} · {int(_num(p.get('Progress')))}%"
             if cols[i % 2].button(_lbl, key=f"cli_prj_{pid}", width="stretch"):
                 st.session_state["_prjsel_pending"] = pid
                 st.session_state["_admin_nav_pending"] = ("proyectos", "📊 Proyectos")
@@ -260,14 +260,14 @@ def _detalle_cliente(grupo, key):
         if otros:
             with st.expander(t(":material/link: Link other projects to this client")):
                 st.caption(t("Useful if the project has different text in «Client» or was left unlinked."))
-                _opts = {f"{p.get('Nombre', '')} ({p.get('ID', '')})": str(p.get("ID", ""))
+                _opts = {f"{p.get('Name', '')} ({p.get('ID', '')})": str(p.get("ID", ""))
                          for p in otros}
                 _sel = st.multiselect(t("Projects to link"), list(_opts.keys()),
                                       key=f"cli_link_{cid}")
                 if st.button(t(":material/link: Link selected"), key=f"cli_linkbtn_{cid}"):
                     if _sel:
                         for _lbl in _sel:
-                            P.update_project(_opts[_lbl], {"ClienteID": cid, "Cliente": disp})
+                            P.update_project(_opts[_lbl], {"ClientID": cid, "Client": disp})
                         flash.exito(f"{len(_sel)} project(s) linked.")
                         st.rerun()
                     else:
@@ -285,12 +285,12 @@ def _detalle_cliente(grupo, key):
         fc[3].metric(t("Overdue"), f"${rc['vencido']:,.0f}")
         _facs = INV.list_facturas(grupo, cid)
         if _facs:
-            _fr = sorted(_facs, key=lambda x: str(x.get("Creado", "")), reverse=True)
+            _fr = sorted(_facs, key=lambda x: str(x.get("Created", "")), reverse=True)
             _fdf = pd.DataFrame([{
-                "Nº":      str(x.get("Numero", "")),
-                "Fecha":   str(x.get("Fecha", "")),
+                "Nº":      str(x.get("Number", "")),
+                "Fecha":   str(x.get("Date", "")),
                 "Total":   round(_num(x.get("Total")), 0),
-                "Cobrado": round(_num(x.get("Cobrado")), 0),
+                "Cobrado": round(_num(x.get("Collected")), 0),
                 "Estado":  _etq(INV.estado_cobro(x)),
             } for x in _fr])
             _fev = st.dataframe(

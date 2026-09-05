@@ -19,6 +19,7 @@ import logging
 import streamlit as st
 
 from core import auth, clock, timeclock
+from core import columnas
 from core.num import col_letter as _col_letter, num as _num, parse_date as _parse_date
 
 from core.i18n import t
@@ -26,9 +27,9 @@ logger = logging.getLogger(__name__)
 
 NOMINAS_SHEET = "Payroll"
 NOMINAS_HEADERS = [
-    "ID", "Grupo", "Usuario", "Nombre", "PeriodoDesde", "PeriodoHasta",
-    "Horas", "TarifaHora", "Base", "ConceptosJSON", "Neto",
-    "FechaPago", "Estado", "Nota", "CreadoPor", "Creado",
+    "ID", "Group", "User", "Name", "PeriodFrom", "PeriodTo",
+    "Hours", "HourlyRate", "Base", "ConceptsJSON", "Net",
+    "PaymentDate", "Status", "Note", "CreatedBy", "Created",
 ]
 _NCOL = {h: i + 1 for i, h in enumerate(NOMINAS_HEADERS)}
 TIPOS = ["devengo", "deduccion", "aporte"]
@@ -54,7 +55,7 @@ def is_configured() -> bool:
 
 def conceptos_de(f: dict) -> list:
     try:
-        return json.loads(f.get("ConceptosJSON", "") or "[]")
+        return json.loads(f.get("ConceptsJSON", "") or "[]")
     except Exception:
         return []
 
@@ -113,11 +114,11 @@ def _invalidate():
 def list_nominas(grupo: str = None, usuario: str = None, incluir_anuladas: bool = False) -> list:
     out = []
     for r in _records():
-        if grupo is not None and str(r.get("Grupo", "")) != str(grupo):
+        if grupo is not None and str(r.get("Group", "")) != str(grupo):
             continue
-        if usuario is not None and str(r.get("Usuario", "")) != str(usuario):
+        if usuario is not None and str(r.get("User", "")) != str(usuario):
             continue
-        if not incluir_anuladas and str(r.get("Estado", "")).lower() == "anulada":
+        if not incluir_anuladas and str(r.get("Status", "")).lower() == "anulada":
             continue
         out.append(r)
     return out
@@ -136,10 +137,10 @@ def resumen(grupo: str) -> dict:
     n = 0
     for f in list_nominas(grupo):
         n += 1
-        if str(f.get("Estado", "")).lower() == "pagada":
-            pg += _num(f.get("Neto"))
+        if str(f.get("Status", "")).lower() == "pagada":
+            pg += _num(f.get("Net"))
         else:
-            ap += _num(f.get("Neto"))
+            ap += _num(f.get("Net"))
     return {"a_pagar": round(ap, 2), "pagado": round(pg, 2), "n": n}
 
 
@@ -183,7 +184,7 @@ def generar(grupo, desde, hasta, super_pct=0.0, ret_pct=0.0, creado_por="") -> d
     # que poder rehacerse (el principio de v340 con lo archivado). La fila anulada se
     # queda como rastro de lo que se corrigió; `list_nominas` la oculta por defecto y
     # ni `resumen` ni el `costo_nomina` del P&L la cuentan, así que no se duplica nada.
-    existentes = {(str(f.get("Usuario", "")), str(f.get("PeriodoDesde", "")), str(f.get("PeriodoHasta", "")))
+    existentes = {(str(f.get("User", "")), str(f.get("PeriodFrom", "")), str(f.get("PeriodTo", "")))
                   for f in list_nominas(grupo)}
 
     # ⚠️ v364: el salto de duplicados de arriba compara la TERNA EXACTA, así que un
@@ -197,16 +198,16 @@ def generar(grupo, desde, hasta, super_pct=0.0, ret_pct=0.0, creado_por="") -> d
     solapes = {}
     if _d and _h:
         for f in list_nominas(grupo):            # ya excluye las anuladas (v347)
-            fd, fh = _parse_date(f.get("PeriodoDesde")), _parse_date(f.get("PeriodoHasta"))
+            fd, fh = _parse_date(f.get("PeriodFrom")), _parse_date(f.get("PeriodTo"))
             if not fd or not fh:
                 continue                          # sin fechas legibles no se puede afirmar
-            if str(f.get("PeriodoDesde", "")) == d_iso and str(f.get("PeriodoHasta", "")) == h_iso:
+            if str(f.get("PeriodFrom", "")) == d_iso and str(f.get("PeriodTo", "")) == h_iso:
                 continue                          # el duplicado EXACTO ya lo trata `existentes`
             if fd <= _h and _d <= fh:             # intersección de intervalos cerrados
-                solapes.setdefault(str(f.get("Usuario", "")), []).append(
-                    {"id": str(f.get("ID", "")), "desde": str(f.get("PeriodoDesde", "")),
-                     "hasta": str(f.get("PeriodoHasta", "")),
-                     "nombre": str(f.get("Nombre", "") or f.get("Usuario", ""))})
+                solapes.setdefault(str(f.get("User", "")), []).append(
+                    {"id": str(f.get("ID", "")), "desde": str(f.get("PeriodFrom", "")),
+                     "hasta": str(f.get("PeriodTo", "")),
+                     "nombre": str(f.get("Name", "") or f.get("User", ""))})
 
     # ⚠️ v430: las AUSENCIAS PAGADAS. La base sale de las horas FICHADAS, y quien está
     # de vacaciones o de baja no ficha: sin esto, aprobarle unas vacaciones a alguien
@@ -312,7 +313,7 @@ def generar(grupo, desde, hasta, super_pct=0.0, ret_pct=0.0, creado_por="") -> d
 
 
 def _find_row(w, nid):
-    for i, r in enumerate(w.get_all_records(numericise_ignore=["all"])):
+    for i, r in enumerate(columnas.canonizar(w.get_all_records(numericise_ignore=["all"]))):
         if str(r.get("ID", "")) == str(nid):
             return i + 2
     return None
@@ -331,9 +332,9 @@ def update_conceptos(nid: str, conceptos: list) -> tuple:
     nt = neto(f.get("Base"), conceptos)
     try:
         w.batch_update([
-            {"range": f"{_col_letter(_NCOL['ConceptosJSON'])}{row}",
+            {"range": f"{_col_letter(_NCOL['ConceptsJSON'])}{row}",
              "values": [[json.dumps(conceptos, ensure_ascii=False)]]},
-            {"range": f"{_col_letter(_NCOL['Neto'])}{row}", "values": [[str(nt)]]},
+            {"range": f"{_col_letter(_NCOL['Net'])}{row}", "values": [[str(nt)]]},
         ], value_input_option="RAW")
     except Exception as e:
         return False, str(e)
@@ -350,8 +351,8 @@ def marcar_pagada(nid: str, fecha="") -> tuple:
         return False, t("Payslip not found.")
     try:
         w.batch_update([
-            {"range": f"{_col_letter(_NCOL['Estado'])}{row}", "values": [["pagada"]]},
-            {"range": f"{_col_letter(_NCOL['FechaPago'])}{row}",
+            {"range": f"{_col_letter(_NCOL['Status'])}{row}", "values": [["pagada"]]},
+            {"range": f"{_col_letter(_NCOL['PaymentDate'])}{row}",
              "values": [[str(fecha or clock.today().isoformat())]]},
         ], value_input_option="RAW")
     except Exception as e:
@@ -368,7 +369,7 @@ def anular(nid: str) -> tuple:
     if row is None:
         return False, t("Payslip not found.")
     try:
-        w.update_cell(row, _NCOL["Estado"], "anulada")
+        w.update_cell(row, _NCOL["Status"], "anulada")
     except Exception as e:
         return False, str(e)
     _invalidate()

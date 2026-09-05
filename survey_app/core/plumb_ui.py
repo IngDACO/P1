@@ -54,7 +54,7 @@ def render_plumb_tab():
 
     # ── Proyecto: el plano ya leído ──
     _prj, _plano = plan_ui.selector_proyecto("plb")
-    _pr_base = str((_prj or {}).get("Nombre", "") or "")     # v179: el proyecto SÍ se conoce
+    _pr_base = str((_prj or {}).get("Name", "") or "")     # v179: el proyecto SÍ se conoce
     if _plano:
         _n = plan_ui.aplicar(_plano, {
             "params.BKS": "plb_bks", "params.TKSW": "plb_tksw",

@@ -16,14 +16,15 @@ import streamlit as st
 
 from core import timeclock
 from core import clock
+from core import columnas
 from core.num import num as _num
 
 from core.i18n import t
 logger = logging.getLogger(__name__)
 
 SHEET   = "Expenses"
-HEADERS = ["ID", "ProyectoID", "Grupo", "Fecha", "Categoria", "Proveedor",
-           "Descripcion", "Valor", "DriveID", "Archivo", "CreadoPor", "Creado"]
+HEADERS = ["ID", "ProjectID", "Group", "Date", "Category", "Supplier",
+           "Description", "Amount", "DriveID", "File", "CreatedBy", "Created"]
 CATEGORIAS = ["Materiales", "Herramientas", "Transporte", "Combustible",
               "Subcontrato", "Alquiler", "Otros"]
 _FOLDER = "COPEX Recibos"
@@ -92,7 +93,7 @@ def _invalidate():
 
 # ── Lecturas ─────────────────────────────────────────────────────
 def list_for(pid) -> list:
-    return [r for r in _records() if str(r.get("ProyectoID", "")) == str(pid)]
+    return [r for r in _records() if str(r.get("ProjectID", "")) == str(pid)]
 
 
 def by_user(grupo, usuario) -> dict:
@@ -103,20 +104,20 @@ def by_user(grupo, usuario) -> dict:
     """
     n, total = 0, 0.0
     for r in _records():
-        if str(r.get("Grupo", "")) == str(grupo) and str(r.get("CreadoPor", "")) == str(usuario):
+        if str(r.get("Group", "")) == str(grupo) and str(r.get("CreatedBy", "")) == str(usuario):
             n += 1
-            total += _num(r.get("Valor"))
+            total += _num(r.get("Amount"))
     return {"n": n, "total": round(total, 2)}
 
 
 def project_expenses(pid) -> dict:
     """{total, por_categoria{cat:val}, items[]} de las compras del proyecto."""
     items = list_for(pid)
-    total = sum(_num(r.get("Valor")) for r in items)
+    total = sum(_num(r.get("Amount")) for r in items)
     por = {}
     for r in items:
-        c = str(r.get("Categoria", "")) or "Otros"
-        por[c] = por.get(c, 0.0) + _num(r.get("Valor"))
+        c = str(r.get("Category", "")) or "Otros"
+        por[c] = por.get(c, 0.0) + _num(r.get("Amount"))
     return {"total": round(total, 2), "por_categoria": {k: round(v, 2) for k, v in por.items()},
             "items": items}
 
@@ -132,9 +133,9 @@ def _mismo_proyecto(fila, pid: str, nombre: str) -> bool:
 
 def _horas_de(r) -> float:
     """Horas de una fila de fichaje; las sesiones ABIERTAS cuentan lo transcurrido."""
-    if str(r.get("Estado", "")).strip().upper() == "ABIERTO":
+    if str(r.get("Status", "")).strip().upper() == "ABIERTO":
         return round(timeclock.elapsed_seconds(r.get("Clock In")) / 3600.0, 2)
-    return _num(r.get("Horas"))
+    return _num(r.get("Hours"))
 
 
 def labor_breakdown(pid, grupo) -> dict:
@@ -152,7 +153,7 @@ def labor_breakdown(pid, grupo) -> dict:
         return {"items": [], "total": 0.0, "horas": 0.0,
                 "sin_tarifa": [], "de_baja": []}
 
-    nombre = str(prj.get("Nombre", ""))
+    nombre = str(prj.get("Name", ""))
     rates  = auth.rate_map(grupo)
 
     # ⚠️ v362: unificar a la MISMA persona. Los fichajes anteriores a v106 no tienen
@@ -175,7 +176,7 @@ def labor_breakdown(pid, grupo) -> dict:
     for r in P._fichaje_records():
         if not _mismo_proyecto(r, pid, nombre):
             continue
-        if str(r.get("Grupo", "")) != str(grupo):
+        if str(r.get("Group", "")) != str(grupo):
             continue
         h = _horas_de(r)
         if h <= 0:
@@ -219,7 +220,7 @@ def cost_projection(pid, grupo) -> dict:
     """
     from core import projects as P
     c   = project_cost(pid, grupo)
-    av  = _num(P.get_project(pid).get("Avance"))
+    av  = _num(P.get_project(pid).get("Progress"))
     out = dict(c)
     out["avance"] = av
     if av <= 0 or c["total"] <= 0:
@@ -248,20 +249,20 @@ def spend_curve(pid, grupo) -> dict:
     prj = P.get_project(pid)
     if not prj:
         return {}
-    nombre = str(prj.get("Nombre", ""))
+    nombre = str(prj.get("Name", ""))
     rates  = auth.rate_map(grupo)
 
     dia = {}                                   # fecha "YYYY-MM-DD" -> {compras, mo}
     for r in list_for(pid):
-        f = str(r.get("Fecha", ""))[:10]
+        f = str(r.get("Date", ""))[:10]
         if f:
             dia.setdefault(f, {"compras": 0.0, "mo": 0.0})
-            dia[f]["compras"] += _num(r.get("Valor"))
+            dia[f]["compras"] += _num(r.get("Amount"))
     _pn = timeclock.mapa_nombres(grupo)      # v363: identidad resuelta una sola vez
     for r in P._fichaje_records():
         if not _mismo_proyecto(r, pid, nombre):
             continue
-        if str(r.get("Grupo", "")) != str(grupo):
+        if str(r.get("Group", "")) != str(grupo):
             continue
         clave = timeclock.clave_de(r, _pn)
         tarifa = rates.get(clave, 0.0)
@@ -287,7 +288,7 @@ def spend_curve(pid, grupo) -> dict:
         mo.append(round(acc_m, 2))
         total.append(round(acc_c + acc_m, 2))
     return {"fechas": fechas, "compras": compras, "mano_obra": mo, "total": total,
-            "presupuesto": _num(prj.get("Presupuesto"))}
+            "presupuesto": _num(prj.get("Budget"))}
 
 
 
@@ -306,7 +307,7 @@ def project_cost(pid, grupo, comprometido=None) -> dict:
     compras = project_expenses(pid)["total"]
     mo = labor_cost(pid, grupo)
     total = round(compras + mo, 2)
-    pres = _num(P.get_project(pid).get("Presupuesto"))
+    pres = _num(P.get_project(pid).get("Budget"))
     pct = round(100 * total / pres) if pres > 0 else None
     if comprometido is None:
         try:
@@ -331,11 +332,11 @@ def over_budget(grupo) -> list:
     from core import projects as P
     out = []
     for p in P.list_projects(grupo=grupo):
-        if str(p.get("Estado", "")) in ("Completado", "Cancelado"):
+        if str(p.get("Status", "")) in ("Completado", "Cancelado"):
             continue
         c = project_cost(p.get("ID"), grupo)
         if c["over"]:
-            out.append({"id": p.get("ID"), "nombre": p.get("Nombre"),
+            out.append({"id": p.get("ID"), "nombre": p.get("Name"),
                         "total": c["total"], "presupuesto": c["presupuesto"], "pct": c["pct"]})
     return out
 
@@ -374,10 +375,10 @@ def group_expenses(grupo) -> dict:
         _comp = {}
     for p in proys:
         c  = project_cost(p.get("ID"), grupo, comprometido=_comp.get(str(p.get("ID", "")), 0.0))
-        av = _num(p.get("Avance"))
+        av = _num(p.get("Progress"))
         proyectado = (round(c["total"] * 100.0 / av, 2)
                       if av > 0 and c["total"] > 0 else None)
-        filas.append({"id": p.get("ID"), "nombre": p.get("Nombre"),
+        filas.append({"id": p.get("ID"), "nombre": p.get("Name"),
                       "compras": c["compras"], "mano_obra": c["mano_obra"],
                       "total": c["total"], "presupuesto": c["presupuesto"],
                       "pct": c["pct"], "over": c["over"],
@@ -399,12 +400,12 @@ def group_expenses(grupo) -> dict:
     _ids = {str(p.get("ID", "")) for p in proys}
     huerf_n, huerf_tot = 0, 0.0
     for r in _records():
-        if str(r.get("Grupo", "")) == str(grupo):
-            cat = str(r.get("Categoria", "")) or "Otros"
-            por_cat[cat] = por_cat.get(cat, 0.0) + _num(r.get("Valor"))
-            if str(r.get("ProyectoID", "")) not in _ids:
+        if str(r.get("Group", "")) == str(grupo):
+            cat = str(r.get("Category", "")) or "Otros"
+            por_cat[cat] = por_cat.get(cat, 0.0) + _num(r.get("Amount"))
+            if str(r.get("ProjectID", "")) not in _ids:
                 huerf_n += 1
-                huerf_tot += _num(r.get("Valor"))
+                huerf_tot += _num(r.get("Amount"))
     return {"proyectos": filas,
             "por_categoria": {k: round(v, 2) for k, v in por_cat.items()},
             "huerfanos": {"n": huerf_n, "total": round(huerf_tot, 2)},
@@ -457,7 +458,7 @@ def add(pid, grupo, valor, categoria="Materiales", proveedor="", descripcion="",
     if _num(valor) <= 0:
         return False, t("The receipt value must be greater than 0.")
     try:
-        gid = _next_id(w.get_all_records(numericise_ignore=["all"]))
+        gid = _next_id(columnas.canonizar(w.get_all_records(numericise_ignore=["all"])))
         w.append_row([gid, str(pid), str(grupo),
                       str(fecha or clock.now().strftime("%Y-%m-%d")),
                       str(categoria), str(proveedor), str(descripcion),
@@ -475,7 +476,7 @@ def delete(gid) -> tuple:
     if w is None:
         return False, t("Google Sheets is not configured.")
     try:
-        recs = w.get_all_records(numericise_ignore=["all"])
+        recs = columnas.canonizar(w.get_all_records(numericise_ignore=["all"]))
     except Exception as e:
         return False, f"Error leyendo: {e}"
     for i, r in enumerate(recs):

@@ -32,6 +32,7 @@ import logging
 import streamlit as st
 
 from core import clock, timeclock
+from core import columnas
 from core.num import col_letter as _col_letter
 from core.num import num as _num
 
@@ -39,8 +40,8 @@ from core.i18n import t
 logger = logging.getLogger(__name__)
 
 SHEET = "Catalogue"
-HEADERS = ["ID", "Grupo", "Tipo", "Nombre", "Descripcion", "Unidad", "Categoria",
-           "CostoUnit", "HorasEst", "TarifaHora", "Activo", "Nota", "CreadoPor", "Creado"]
+HEADERS = ["ID", "Group", "Type", "Name", "Description", "Unit", "Category",
+           "UnitCost", "EstHours", "HourlyRate", "Active", "Note", "CreatedBy", "Created"]
 
 PRODUCTO, SERVICIO = "producto", "servicio"
 TIPOS = (PRODUCTO, SERVICIO)
@@ -109,13 +110,13 @@ def _invalidate():
 
 # ── Lecturas ─────────────────────────────────────────────────────
 def list_items(grupo, tipo=None, incluir_inactivos=False) -> list:
-    out = [r for r in _records() if str(r.get("Grupo", "")) == str(grupo)]
+    out = [r for r in _records() if str(r.get("Group", "")) == str(grupo)]
     if not incluir_inactivos:
-        out = [r for r in out if str(r.get("Activo", "SI")).upper() != "NO"]
+        out = [r for r in out if str(r.get("Active", "SI")).upper() != "NO"]
     if tipo:
-        out = [r for r in out if str(r.get("Tipo", "")) == tipo]
-    return sorted(out, key=lambda r: (str(r.get("Categoria", "")),
-                                      str(r.get("Nombre", "")).casefold()))
+        out = [r for r in out if str(r.get("Type", "")) == tipo]
+    return sorted(out, key=lambda r: (str(r.get("Category", "")),
+                                      str(r.get("Name", "")).casefold()))
 
 
 def get_item(cid) -> dict:
@@ -128,22 +129,22 @@ def costo_de(item: dict, cantidad=1) -> float:
     producto → CostoUnit × cantidad · servicio → HorasEst × TarifaHora × cantidad
     """
     c = _num(cantidad, 0.0)
-    if str(item.get("Tipo", "")) == SERVICIO:
-        return round(_num(item.get("HorasEst")) * _num(item.get("TarifaHora")) * c, 2)
-    return round(_num(item.get("CostoUnit")) * c, 2)
+    if str(item.get("Type", "")) == SERVICIO:
+        return round(_num(item.get("EstHours")) * _num(item.get("HourlyRate")) * c, 2)
+    return round(_num(item.get("UnitCost")) * c, 2)
 
 
 def horas_de(item: dict, cantidad=1) -> float:
     """Horas que aporta esta línea (0 en un producto). Base del «cotizado vs real»."""
-    if str(item.get("Tipo", "")) != SERVICIO:
+    if str(item.get("Type", "")) != SERVICIO:
         return 0.0
-    return round(_num(item.get("HorasEst")) * _num(cantidad, 0.0), 2)
+    return round(_num(item.get("EstHours")) * _num(cantidad, 0.0), 2)
 
 
 def categorias(grupo) -> list:
     """Las de siempre + las que se hayan usado (como en inventario)."""
-    extra = {str(r.get("Categoria", "")).strip() for r in list_items(grupo, incluir_inactivos=True)
-             if str(r.get("Categoria", "")).strip()}
+    extra = {str(r.get("Category", "")).strip() for r in list_items(grupo, incluir_inactivos=True)
+             if str(r.get("Category", "")).strip()}
     return sorted(set(CAT_DEFAULT) | extra, key=str.lower)
 
 
@@ -156,20 +157,20 @@ def etiqueta_items(items: list) -> dict:
     """
     veces = {}
     for it in items:
-        n = str(it.get("Nombre", ""))
+        n = str(it.get("Name", ""))
         veces[n] = veces.get(n, 0) + 1
     return {str(it.get("ID", "")):
-            (f"{it.get('Nombre', '')} ({it.get('ID', '')})"
-             if veces.get(str(it.get("Nombre", "")), 0) > 1 else str(it.get("Nombre", "")))
+            (f"{it.get('Name', '')} ({it.get('ID', '')})"
+             if veces.get(str(it.get("Name", "")), 0) > 1 else str(it.get("Name", "")))
             for it in items}
 
 
 def resumen(grupo) -> dict:
     items = list_items(grupo, incluir_inactivos=True)
-    act = [i for i in items if str(i.get("Activo", "SI")).upper() != "NO"]
+    act = [i for i in items if str(i.get("Active", "SI")).upper() != "NO"]
     return {"n": len(act),
-            "productos": sum(1 for i in act if str(i.get("Tipo", "")) == PRODUCTO),
-            "servicios": sum(1 for i in act if str(i.get("Tipo", "")) == SERVICIO),
+            "productos": sum(1 for i in act if str(i.get("Type", "")) == PRODUCTO),
+            "servicios": sum(1 for i in act if str(i.get("Type", "")) == SERVICIO),
             "inactivos": len(items) - len(act)}
 
 
@@ -182,7 +183,7 @@ def _next_id() -> str:
         return "CAT-00001"
     mx = 0
     try:
-        for r in w.get_all_records(numericise_ignore=["all"]):
+        for r in columnas.canonizar(w.get_all_records(numericise_ignore=["all"])):
             i = str(r.get("ID", ""))
             if i.startswith("CAT-"):
                 try:
@@ -227,7 +228,7 @@ def _fila(w, cid):
     """(nº de fila, registro) leyendo FRESCO: decidir DÓNDE escribir con una caché es
     como se corrompen los datos (v323)."""
     try:
-        recs = w.get_all_records(numericise_ignore=["all"])
+        recs = columnas.canonizar(w.get_all_records(numericise_ignore=["all"]))
     except Exception as e:
         logger.warning("catalogo._fila: %s", e)
         return None, None
@@ -263,7 +264,7 @@ def actualizar(cid, fields: dict) -> tuple:
     try:
         from core import auditoria
         auditoria.registrar("catalogo", cid, auditoria.diff(antes or {}, escritos),
-                            grupo=str((antes or {}).get("Grupo", "")))
+                            grupo=str((antes or {}).get("Group", "")))
     except Exception as e:
         # Deja RASTRO (regla v323): el precio de lo que vendes sin apunte y sin log
         # es justo el hueco que v352 vino a cerrar.
@@ -274,4 +275,4 @@ def actualizar(cid, fields: dict) -> tuple:
 def set_activo(cid, activo: bool) -> tuple:
     """Desactivar NO borra: las cotizaciones viejas deben seguir resolviendo su nombre
     (regla v340 — y siempre con vuelta)."""
-    return actualizar(cid, {"Activo": "SI" if activo else "NO"})
+    return actualizar(cid, {"Active": "SI" if activo else "NO"})

@@ -45,10 +45,10 @@ def generate_invoice_pdf(factura: dict, cliente: dict = None, grupo_nombre: str 
     buf = _io.BytesIO()
     doc = SimpleDocTemplate(buf, pagesize=A4, leftMargin=16 * mm, rightMargin=16 * mm,
                             topMargin=16 * mm, bottomMargin=16 * mm,
-                            title=d("Invoice {n}", n=factura.get("Numero", "")))
+                            title=d("Invoice {n}", n=factura.get("Number", "")))
     story = []
 
-    marca = grupo_nombre or str(factura.get("Grupo", ""))
+    marca = grupo_nombre or str(factura.get("Group", ""))
     head = Table([[Paragraph(str(marca), mk), Paragraph(d("TAX INVOICE"), ti)]],
                  colWidths=[90 * mm, 88 * mm])
     head.setStyle(TableStyle([("ALIGN", (1, 0), (1, 0), "RIGHT"), ("VALIGN", (0, 0), (-1, -1), "TOP")]))
@@ -56,17 +56,17 @@ def generate_invoice_pdf(factura: dict, cliente: dict = None, grupo_nombre: str 
 
     est = I.estado_cobro(factura)
     meta = Table([
-        [Paragraph(d("Invoice no."), sm), Paragraph(str(factura.get("Numero", "")), Hb)],
-        [Paragraph(d("Date"), sm), Paragraph(str(factura.get("Fecha", "")), H)],
-        [Paragraph(d("Due"), sm), Paragraph(str(factura.get("Vencimiento", "") or "—"), H)],
+        [Paragraph(d("Invoice no."), sm), Paragraph(str(factura.get("Number", "")), Hb)],
+        [Paragraph(d("Date"), sm), Paragraph(str(factura.get("Date", "")), H)],
+        [Paragraph(d("Due"), sm), Paragraph(str(factura.get("ExpiryDate", "") or "—"), H)],
         [Paragraph(d("Status"), sm), Paragraph(i18n.etiqueta(est), H)],
     ], colWidths=[24 * mm, 34 * mm])
     meta.setStyle(TableStyle([("TOPPADDING", (0, 0), (-1, -1), 1), ("BOTTOMPADDING", (0, 0), (-1, -1), 1)]))
 
     cli = cliente or {}
     bill = [Paragraph(f"<b>{d('Bill to')}</b>", Hb),
-            Paragraph(str(factura.get("ClienteNombre", "") or cli.get("Nombre", "") or "—"), H)]
-    for k in ("Contacto", "Direccion", "Email", "Telefono"):
+            Paragraph(str(factura.get("ClientName", "") or cli.get("Name", "") or "—"), H)]
+    for k in ("ContactName", "Address", "Email", "Phone"):
         v = str(cli.get(k, "")).strip()
         if v:
             bill.append(Paragraph(v, sm))
@@ -88,13 +88,13 @@ def generate_invoice_pdf(factura: dict, cliente: dict = None, grupo_nombre: str 
         ("TOPPADDING", (0, 0), (-1, -1), 5), ("BOTTOMPADDING", (0, 0), (-1, -1), 5)]))
     story += [t, Spacer(1, 8)]
 
-    imp_pct = _num(factura.get("ImpuestoPct"))
-    por_cobrar = _num(factura.get("Total")) - _num(factura.get("Cobrado"))
+    imp_pct = _num(factura.get("TaxPct"))
+    por_cobrar = _num(factura.get("Total")) - _num(factura.get("Collected"))
     tot = Table([
         [d("Subtotal"), _money(factura.get("Subtotal"))],
-        [d("Tax ({pct}%)", pct=f"{imp_pct:.0f}"), _money(factura.get("Impuesto"))],
+        [d("Tax ({pct}%)", pct=f"{imp_pct:.0f}"), _money(factura.get("Tax"))],
         [d("TOTAL"), _money(factura.get("Total"))],
-        [d("Paid"), _money(factura.get("Cobrado"))],
+        [d("Paid"), _money(factura.get("Collected"))],
         [d("Balance due"), _money(por_cobrar)],
     ], colWidths=[48 * mm, 40 * mm], hAlign="RIGHT")
     tot.setStyle(TableStyle([
@@ -104,8 +104,8 @@ def generate_invoice_pdf(factura: dict, cliente: dict = None, grupo_nombre: str 
         ("TOPPADDING", (0, 0), (-1, -1), 3), ("BOTTOMPADDING", (0, 0), (-1, -1), 3)]))
     story += [tot, Spacer(1, 10)]
 
-    if str(factura.get("Nota", "")).strip():
-        story += [Paragraph(f"<b>{d('Note:')}</b> {factura.get('Nota')}", sm)]
+    if str(factura.get("Note", "")).strip():
+        story += [Paragraph(f"<b>{d('Note:')}</b> {factura.get('Note')}", sm)]
 
     doc.build(story)
     return buf.getvalue()

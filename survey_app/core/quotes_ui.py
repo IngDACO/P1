@@ -78,18 +78,18 @@ def render_cotizaciones(grupo):
                      "Issue a new version if it still stands.")
                    .replace("{n}", str(len(_venc)))
                    .replace("{x}", " · ".join(
-                       f"{c.get('ClienteNombre','')} ({T.dinero(c.get('Total'), 0)})"
+                       f"{c.get('ClientName','')} ({T.dinero(c.get('Total'), 0)})"
                        for c in _venc[:5])))
 
     st.caption(t("Tap a quote to see the detail, the PDF and record the outcome."))
     df = pd.DataFrame([{
-        "Nº": str(c.get("Numero", "")) + (f" v{int(_num(c.get('Version'), 1))}"
+        "Nº": str(c.get("Number", "")) + (f" v{int(_num(c.get('Version'), 1))}"
                                           if _num(c.get("Version"), 1) > 1 else ""),
-        "Cliente": c.get("ClienteNombre", "") or "—",
-        "Fecha": c.get("Fecha", ""),
-        "Vence": c.get("Validez", "") or "—",
+        "Cliente": c.get("ClientName", "") or "—",
+        "Fecha": c.get("Date", ""),
+        "Vence": c.get("ValidUntil", "") or "—",
         "Total": round(_num(c.get("Total")), 2),
-        "Margin": round(_num(c.get("MargenPct")), 1),
+        "Margin": round(_num(c.get("MarginPct")), 1),
         "Estado": _etq(Q.estado_de(c)),
     } for c in cots])
     _ev = st.dataframe(df, width="stretch", hide_index=True,
@@ -144,7 +144,7 @@ def _editor_lineas(grupo, key: str, lineas: list) -> list:
         hide_index=True, width="stretch", key=f"{key}_ed",
         # ⚠️ v355: lo único que se teclea del precio es la GANANCIA. El margen y el
         # precio son consecuencia, y se muestran bloqueados para que quede claro.
-        disabled=["Concepto", "Costo", "Margen %", "Precio"],
+        disabled=["Concepto", "Cost", "Margen %", "Precio"],
         column_config=tabla.cfg(None, {
             "Costo": st.column_config.NumberColumn(t("Cost"), format="$%,.2f",
                                                    help=t("What it costs you. The client does not see this.")),
@@ -191,7 +191,7 @@ def _nueva(grupo):
     # de antemano es el orden al revés.
     fichas = C.list_clientes(grupo)
     _NUEVO = "➕ New client"
-    _map = {f"{f.get('Nombre','')}": f for f in fichas}
+    _map = {f"{f.get('Name','')}": f for f in fichas}
     _cli = st.selectbox(t("Client"), list(_map) + [_NUEVO], key="cot_new_cli",
                         index=len(_map) if not fichas else 0)
     _nuevo_cli = {}
@@ -235,7 +235,7 @@ def _nueva(grupo):
                     telefono=_nuevo_cli.get("telefono", ""),
                     email=_nuevo_cli.get("email", ""), creado_por=_creado_por())
                 if _ok_c:
-                    f = {"ID": _res, "Nombre": _nom}
+                    f = {"ID": _res, "Name": _nom}
                 else:
                     # ⚠️ El nombre ya existía: `create_cliente` no deja duplicados por
                     # grupo. En vez de dejar al usuario en un callejón —con la
@@ -243,7 +243,7 @@ def _nueva(grupo):
                     # ficha y se dice. Es coherente con la regla que la propia función
                     # impone: dentro de un grupo, ese nombre es UNO.
                     _ya = next((x for x in C.list_clientes(grupo, incluir_inactivos=True)
-                                if C._norm(x.get("Nombre")) == C._norm(_nom)), None)
+                                if C._norm(x.get("Name")) == C._norm(_nom)), None)
                     if not _ya:
                         st.error(f"The client could not be created: {_res}")
                         return
@@ -252,7 +252,7 @@ def _nueva(grupo):
                             f"the quote is linked to that one.")
             else:
                 f = _map[_cli]
-            ok, msg = Q.crear(grupo, f.get("ID", ""), f.get("Nombre", ""), lineas,
+            ok, msg = Q.crear(grupo, f.get("ID", ""), f.get("Name", ""), lineas,
                               impuesto_pct=imp, nota=nota, creado_por=_creado_por())
             if ok:
                 for k in ("_cot_nueva", "new_lineas", "new_sel", "cot_new_cli",
@@ -296,14 +296,14 @@ def _detalle(grupo, cid):
 
     est = Q.estado_de(c)
     _ver = int(_num(c.get("Version"), 1))
-    st.markdown(f"## :material/request_quote: {t('Quote No.')} {c.get('Numero', '')}"
+    st.markdown(f"## :material/request_quote: {t('Quote No.')} {c.get('Number', '')}"
                 + (f"  ·  v{_ver}" if _ver > 1 else ""))
-    st.markdown(f"**{c.get('ClienteNombre', '') or '—'}**  ·  {_est_fmt(est)}"
-                f"  ·  {t('valid until')} {c.get('Validez', '') or '—'}"
-                + (f"  ·  from {c.get('Origen')}" if c.get("Origen") else ""))
+    st.markdown(f"**{c.get('ClientName', '') or '—'}**  ·  {_est_fmt(est)}"
+                f"  ·  {t('valid until')} {c.get('ValidUntil', '') or '—'}"
+                + (f"  ·  from {c.get('Source')}" if c.get("Source") else ""))
 
     lineas = Q.lineas_de(c)
-    _tot = Q.totales(lineas, _num(c.get("ImpuestoPct")))
+    _tot = Q.totales(lineas, _num(c.get("TaxPct")))
 
     if est == Q.BORRADOR:
         _des = Q.desactualizadas(c)
@@ -332,7 +332,7 @@ def _detalle(grupo, cid):
                 (flash.exito if ok else st.error)(msg)
                 if ok:
                     st.rerun()
-        _totales_html(Q.totales(nuevas, _num(c.get("ImpuestoPct"))), c.get("ImpuestoPct"))
+        _totales_html(Q.totales(nuevas, _num(c.get("TaxPct"))), c.get("TaxPct"))
     else:
         st.dataframe(pd.DataFrame([{
             "Concepto": l.get("concepto", ""),
@@ -340,7 +340,7 @@ def _detalle(grupo, cid):
             "Precio": round(_num(l.get("precio_total")), 2),
         } for l in lineas]), hide_index=True, width="stretch",
             column_config=tabla.cfg(None, {"Precio": st.column_config.NumberColumn(t("Price"), format="$%,.2f")}))
-        _totales_html(_tot, c.get("ImpuestoPct"))
+        _totales_html(_tot, c.get("TaxPct"))
 
     # ── Acciones según el estado ─────────────────────────────────
     st.markdown("---")
@@ -380,18 +380,18 @@ def _detalle(grupo, cid):
     try:
         from core import quote_pdf
         cli = next((x for x in C.list_clientes(grupo, incluir_inactivos=True)
-                    if str(x.get("ID", "")) == str(c.get("ClienteID", ""))), None)
+                    if str(x.get("ID", "")) == str(c.get("ClientID", ""))), None)
         pdf = quote_pdf.generate_quote_pdf(c, cli, grupo)
         st.download_button(t(":material/download: Download quote (PDF)"), data=pdf,
-                           file_name=f"Cotizacion_{c.get('Numero','')}.pdf",
+                           file_name=f"Cotizacion_{c.get('Number','')}.pdf",
                            mime="application/pdf", key=f"cot_pdf_{cid}")
     except Exception as e:
         st.warning(f":material/warning: The PDF could not be generated: {e}")
 
     # ── Fase 3: de cotización ganada a obra ──────────────────────
-    if est == Q.ACEPTADA and not str(c.get("ProyectoID", "")).strip():
+    if est == Q.ACEPTADA and not str(c.get("ProjectID", "")).strip():
         _crear_proyecto(grupo, c, _tot)
-    elif str(c.get("ProyectoID", "")).strip():
+    elif str(c.get("ProjectID", "")).strip():
         _comparacion(cid, c)
 
 
@@ -403,8 +403,8 @@ def _crear_proyecto(grupo, c, _tot):
     with st.form("cot_prj_" + str(c.get("ID"))):
         c1, c2 = st.columns(2)
         nombre = c1.text_input(t("Project name"),
-                               value=str(c.get("ClienteNombre", "")) + " — Nº"
-                                     + str(c.get("Numero", "")))
+                               value=str(c.get("ClientName", "")) + " — Nº"
+                                     + str(c.get("Number", "")))
         tipo = c2.selectbox(t("Type"), ["Instalación", "Delivery", "Ripout", "Otro"],
                             format_func=_etq)
         c3, c4 = st.columns(2)
@@ -434,7 +434,7 @@ def _comparacion(cid, c):
     st.markdown("---")
     comp = Q.comparacion(cid)
     if not comp:
-        st.caption(t("Linked to project {x}.").replace("{x}", str(c.get("ProyectoID"))))
+        st.caption(t("Linked to project {x}.").replace("{x}", str(c.get("ProjectID"))))
         return
     st.markdown(t("### :material/compare_arrows: Quoted vs. actual —") + " " + comp["proyecto"])
 

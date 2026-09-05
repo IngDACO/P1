@@ -18,22 +18,23 @@ import streamlit as st
 
 from core.i18n import t
 from core import timeclock
+from core import columnas
 
 logger = logging.getLogger(__name__)
 
 LOGIN_SHEET   = "Login"
 # Columnas nuevas al final para no romper filas existentes (migración segura).
-LOGIN_HEADERS = ["Usuario", "Password", "Rol", "Nombre", "Activo", "Grupo",
-                 "SessionToken", "SessionTime", "Email", "TelegramChatID", "TarifaHora",
+LOGIN_HEADERS = ["User", "Password", "Role", "Name", "Active", "Group",
+                 "SessionToken", "SessionTime", "Email", "TelegramChatID", "HourlyRate",
                  # v433: fecha de alta en la empresa. La usa el saldo de vacaciones,
                  # que en AU va por ANIVERSARIO de cada persona y no por año natural
                  # (decisión del usuario). Va AL FINAL → migra sola; una fila que no
                  # la traiga cae al año natural y la app lo DICE, en vez de dar un
                  # saldo que parece bueno y no lo es.
-                 "FechaIngreso"]
+                 "StartedOn"]
 GROUPS_SHEET   = "Groups"
-GROUPS_HEADERS = ["Grupo", "Descripcion", "Activo", "Zona", "MargenDefault", "ImpuestoDefault",
-                  "SuperDefault", "RetencionDefault",
+GROUPS_HEADERS = ["Group", "Description", "Active", "TimeZone", "DefaultMargin", "DefaultTax",
+                  "DefaultSuper", "DefaultWithholding",
                   # v359: libro de Google propio de este cliente. Vacío = el
                   # maestro (así `cliente1` sigue donde estaba, sin migrar).
                   "SheetID"]
@@ -146,13 +147,13 @@ def list_groups(only_active: bool = False) -> list:
     """Grupos (lectura CACHEADA: se llamaba en cada render de los paneles del propietario)."""
     out = []
     for r in _group_records():
-        activo = str(r.get("Activo", "SI")).strip().upper() in _ACTIVE_OK
+        activo = str(r.get("Active", "SI")).strip().upper() in _ACTIVE_OK
         if only_active and not activo:
             continue
-        out.append({"Grupo": str(r.get("Grupo", "")),
-                    "Descripcion": str(r.get("Descripcion", "")),
-                    "Activo": "SI" if activo else "NO",
-                    "Zona": str(r.get("Zona", "")).strip()})
+        out.append({"Group": str(r.get("Group", "")),
+                    "Description": str(r.get("Description", "")),
+                    "Active": "SI" if activo else "NO",
+                    "TimeZone": str(r.get("TimeZone", "")).strip()})
     return out
 
 
@@ -165,8 +166,8 @@ def group_timezone(grupo: str) -> str:
     if not g:
         return ""
     for r in _group_records():
-        if str(r.get("Grupo", "")).strip().lower() == g:
-            return str(r.get("Zona", "")).strip()
+        if str(r.get("Group", "")).strip().lower() == g:
+            return str(r.get("TimeZone", "")).strip()
     return ""
 
 
@@ -176,11 +177,11 @@ def set_group_timezone(grupo: str, zona: str) -> tuple:
     if err:
         return False, err
     try:
-        col = gws.row_values(1).index("Zona") + 1
+        col = gws.row_values(1).index("TimeZone") + 1
     except ValueError:
         return False, t("The Zona column does not exist yet in the Groups sheet.")
-    for i, r in enumerate(gws.get_all_records(numericise_ignore=["all"])):
-        if str(r.get("Grupo", "")).strip().lower() == (grupo or "").strip().lower():
+    for i, r in enumerate(columnas.canonizar(gws.get_all_records(numericise_ignore=["all"]))):
+        if str(r.get("Group", "")).strip().lower() == (grupo or "").strip().lower():
             try:
                 gws.update_cell(i + 2, col, str(zona or "").strip())
                 _invalidate_groups()
@@ -205,9 +206,9 @@ def group_margin_default(grupo: str) -> float:
     if not g:
         return 0.0
     for r in _group_records():
-        if str(r.get("Grupo", "")).strip().lower() == g:
+        if str(r.get("Group", "")).strip().lower() == g:
             try:
-                return float(str(r.get("MargenDefault", "") or 0).replace(",", "."))
+                return float(str(r.get("DefaultMargin", "") or 0).replace(",", "."))
             except Exception:
                 return 0.0
     return 0.0
@@ -219,11 +220,11 @@ def set_group_margin_default(grupo: str, pct) -> tuple:
     if err:
         return False, err
     try:
-        col = gws.row_values(1).index("MargenDefault") + 1
+        col = gws.row_values(1).index("DefaultMargin") + 1
     except ValueError:
         return False, t("The MargenDefault column does not exist yet in the Groups sheet.")
-    for i, r in enumerate(gws.get_all_records(numericise_ignore=["all"])):
-        if str(r.get("Grupo", "")).strip().lower() == (grupo or "").strip().lower():
+    for i, r in enumerate(columnas.canonizar(gws.get_all_records(numericise_ignore=["all"]))):
+        if str(r.get("Group", "")).strip().lower() == (grupo or "").strip().lower():
             try:
                 gws.update_cell(i + 2, col, str(pct))
                 _invalidate_groups()
@@ -242,7 +243,7 @@ def group_num_setting(grupo: str, field: str, default: float = 0.0) -> float:
     if not g:
         return default
     for r in _group_records():
-        if str(r.get("Grupo", "")).strip().lower() == g:
+        if str(r.get("Group", "")).strip().lower() == g:
             raw = str(r.get(field, "")).strip()
             if raw == "":
                 return default
@@ -262,8 +263,8 @@ def set_group_num_setting(grupo: str, field: str, val) -> tuple:
         col = gws.row_values(1).index(field) + 1
     except ValueError:
         return False, f"{t('The column')} {field} {t('does not exist yet in the Groups sheet.')}"
-    for i, r in enumerate(gws.get_all_records(numericise_ignore=["all"])):
-        if str(r.get("Grupo", "")).strip().lower() == (grupo or "").strip().lower():
+    for i, r in enumerate(columnas.canonizar(gws.get_all_records(numericise_ignore=["all"]))):
+        if str(r.get("Group", "")).strip().lower() == (grupo or "").strip().lower():
             try:
                 gws.update_cell(i + 2, col, str(val))
                 _invalidate_groups()
@@ -281,9 +282,9 @@ def group_tax_default(grupo: str) -> float:
     if not g:
         return 0.0
     for r in _group_records():
-        if str(r.get("Grupo", "")).strip().lower() == g:
+        if str(r.get("Group", "")).strip().lower() == g:
             try:
-                return float(str(r.get("ImpuestoDefault", "") or 0).replace(",", "."))
+                return float(str(r.get("DefaultTax", "") or 0).replace(",", "."))
             except Exception:
                 return 0.0
     return 0.0
@@ -295,11 +296,11 @@ def set_group_tax_default(grupo: str, pct) -> tuple:
     if err:
         return False, err
     try:
-        col = gws.row_values(1).index("ImpuestoDefault") + 1
+        col = gws.row_values(1).index("DefaultTax") + 1
     except ValueError:
         return False, t("The ImpuestoDefault column does not exist yet in the Groups sheet.")
-    for i, r in enumerate(gws.get_all_records(numericise_ignore=["all"])):
-        if str(r.get("Grupo", "")).strip().lower() == (grupo or "").strip().lower():
+    for i, r in enumerate(columnas.canonizar(gws.get_all_records(numericise_ignore=["all"]))):
+        if str(r.get("Group", "")).strip().lower() == (grupo or "").strip().lower():
             try:
                 gws.update_cell(i + 2, col, str(pct))
                 _invalidate_groups()
@@ -316,8 +317,8 @@ def add_group(nombre: str, descripcion: str = "", zona: str = "") -> tuple:
     nombre = (nombre or "").strip()
     if not nombre:
         return False, t("The group name is required.")
-    for r in gws.get_all_records(numericise_ignore=["all"]):
-        if str(r.get("Grupo", "")).strip().lower() == nombre.lower():
+    for r in columnas.canonizar(gws.get_all_records(numericise_ignore=["all"])):
+        if str(r.get("Group", "")).strip().lower() == nombre.lower():
             return False, f"{t('Group')} '{nombre}' {t('already exists.')}"
     try:
         gws.append_row([nombre, descripcion, "SI", zona], value_input_option="RAW")
@@ -331,8 +332,8 @@ def delete_group(nombre: str) -> tuple:
     gws, err = _get_groups_ws()
     if err:
         return False, err
-    for i, r in enumerate(gws.get_all_records(numericise_ignore=["all"])):
-        if str(r.get("Grupo", "")).strip().lower() == (nombre or "").strip().lower():
+    for i, r in enumerate(columnas.canonizar(gws.get_all_records(numericise_ignore=["all"]))):
+        if str(r.get("Group", "")).strip().lower() == (nombre or "").strip().lower():
             try:
                 gws.delete_rows(i + 2)
                 _invalidate_groups()
@@ -343,7 +344,7 @@ def delete_group(nombre: str) -> tuple:
 
 
 def _records(lws):
-    return lws.get_all_records(numericise_ignore=["all"])
+    return columnas.canonizar(lws.get_all_records(numericise_ignore=["all"]))
 
 
 def _find_row(lws, usuario):
@@ -357,7 +358,7 @@ def _find_row(lws, usuario):
     """
     usuario = (usuario or "").strip().lower()
     for i, r in enumerate(_records(lws)):
-        if str(r.get("Usuario", "")).strip().lower() == usuario:
+        if str(r.get("User", "")).strip().lower() == usuario:
             return i + 2, r
     return None, None
 
@@ -379,16 +380,16 @@ def verify_login(usuario: str, pw: str) -> dict:
         return {"ok": False, "error": err}
     usuario = (usuario or "").strip()
     for r in _records(lws):
-        if str(r.get("Usuario", "")).strip().lower() == usuario.lower():
-            activo = str(r.get("Activo", "SI")).strip().upper()
+        if str(r.get("User", "")).strip().lower() == usuario.lower():
+            activo = str(r.get("Active", "SI")).strip().upper()
             if activo not in _ACTIVE_OK:
                 return {"ok": False, "error": t("Inactive user.")}
             if verify_password(pw, str(r.get("Password", ""))):
                 return {"ok": True,
-                        "usuario": str(r.get("Usuario", "")),
-                        "rol":     str(r.get("Rol", "campo")).strip().lower(),
-                        "nombre":  str(r.get("Nombre", "")) or usuario,
-                        "grupo":   str(r.get("Grupo", "")).strip()}
+                        "usuario": str(r.get("User", "")),
+                        "rol":     str(r.get("Role", "campo")).strip().lower(),
+                        "nombre":  str(r.get("Name", "")) or usuario,
+                        "grupo":   str(r.get("Group", "")).strip()}
             return {"ok": False, "error": t("Wrong password.")}
     return {"ok": False, "error": t("User not found.")}
 
@@ -492,12 +493,12 @@ def validate_session(usuario: str, token: str) -> dict:
         return {}
     if str(rec.get("SessionToken", "")).strip() != str(token).strip():
         return {}
-    if str(rec.get("Activo", "SI")).strip().upper() not in _ACTIVE_OK:
+    if str(rec.get("Active", "SI")).strip().upper() not in _ACTIVE_OK:
         return {}
-    return {"usuario": str(rec.get("Usuario", "")),
-            "rol":     str(rec.get("Rol", "campo")).strip().lower(),
-            "nombre":  str(rec.get("Nombre", "")) or usuario,
-            "grupo":   str(rec.get("Grupo", "")).strip(),
+    return {"usuario": str(rec.get("User", "")),
+            "rol":     str(rec.get("Role", "campo")).strip().lower(),
+            "nombre":  str(rec.get("Name", "")) or usuario,
+            "grupo":   str(rec.get("Group", "")).strip(),
             "token":   token}
 
 
@@ -506,7 +507,7 @@ def get_user(usuario: str) -> dict:
     Uso para contacto/display; las rutas de sesión leen fresco vía _find_row."""
     usuario = (usuario or "").strip().lower()
     for r in _login_records_cached():
-        if str(r.get("Usuario", "")).strip().lower() == usuario:
+        if str(r.get("User", "")).strip().lower() == usuario:
             return r
     return {}
 
@@ -570,12 +571,12 @@ def list_users(grupo: str = None) -> list:
     _campos = [h for h in LOGIN_HEADERS if h not in _CAMPOS_SECRETOS]
     out = []
     for r in _login_records_cached():
-        g = str(r.get("Grupo", "")).strip()
+        g = str(r.get("Group", "")).strip()
         if grupo is not None and g.lower() != grupo.strip().lower():
             continue
         fila = {h: str(r.get(h, "")) for h in _campos}
-        fila["Grupo"] = g
-        fila["Activo"] = str(r.get("Activo", "SI"))
+        fila["Group"] = g
+        fila["Active"] = str(r.get("Active", "SI"))
         out.append(fila)
     return out
 
@@ -589,7 +590,7 @@ def fecha_ingreso(usuario: str):
     """
     from core.num import parse_date as _pd
     try:
-        return _pd((get_user(usuario) or {}).get("FechaIngreso"))
+        return _pd((get_user(usuario) or {}).get("StartedOn"))
     except Exception:
         return None
 
@@ -605,7 +606,7 @@ def set_fecha_ingreso(usuario: str, fecha) -> tuple:
     _antes = dict(rec or {})
     _val = "" if not fecha else str(fecha)[:10]
     try:
-        lws.update_cell(row, _COL["FechaIngreso"], _val)
+        lws.update_cell(row, _COL["StartedOn"], _val)
     except Exception as e:
         return False, f"Error: {e}"
     _invalidate_login()
@@ -613,8 +614,8 @@ def set_fecha_ingreso(usuario: str, fecha) -> tuple:
     try:
         from core import auditoria
         auditoria.registrar("usuario", usuario,
-                            auditoria.diff(_antes, {"FechaIngreso": _val}),
-                            grupo=str(_antes.get("Grupo", "")))
+                            auditoria.diff(_antes, {"StartedOn": _val}),
+                            grupo=str(_antes.get("Group", "")))
     except Exception as e:
         logger.warning("auth.set_fecha_ingreso: auditoría: %s", e)
     return True, t("Start date updated.")
@@ -630,7 +631,7 @@ def set_rate(usuario: str, tarifa) -> tuple:
         return False, t("User not found.")
     _antes = dict(rec or {})            # v342: el ANTES, de la fila que ya se leyó
     try:
-        lws.update_cell(row, _COL["TarifaHora"], str(tarifa))
+        lws.update_cell(row, _COL["HourlyRate"], str(tarifa))
     except Exception as e:
         return False, f"Error: {e}"
     _invalidate_login()
@@ -639,8 +640,8 @@ def set_rate(usuario: str, tarifa) -> tuple:
     try:
         from core import auditoria
         auditoria.registrar("usuario", usuario,
-                            auditoria.diff(_antes, {"TarifaHora": tarifa}),
-                            grupo=str(_antes.get("Grupo", "")))
+                            auditoria.diff(_antes, {"HourlyRate": tarifa}),
+                            grupo=str(_antes.get("Group", "")))
     except Exception as e:
         # Deja RASTRO (regla v323): `registrar` logea lo suyo, pero si revienta
         # `diff` o el import, el apunte se perdía en silencio.
@@ -661,12 +662,12 @@ def etiqueta_usuarios(users) -> dict:
     """
     _n = {}
     for u in users or []:
-        _n[str(u.get("Nombre") or "")] = _n.get(str(u.get("Nombre") or ""), 0) + 1
+        _n[str(u.get("Name") or "")] = _n.get(str(u.get("Name") or ""), 0) + 1
     out = {}
     for u in users or []:
-        _u = str(u.get("Usuario") or "")
-        _nom = str(u.get("Nombre") or "") or _u
-        out[_u] = f"{_nom} ({_u})" if _n.get(str(u.get("Nombre") or ""), 0) > 1 else _nom
+        _u = str(u.get("User") or "")
+        _nom = str(u.get("Name") or "") or _u
+        out[_u] = f"{_nom} ({_u})" if _n.get(str(u.get("Name") or ""), 0) > 1 else _nom
     return out
 
 
@@ -676,13 +677,13 @@ def rate_map(grupo: str = None) -> dict:
     m = {}
     for u in list_users(grupo):
         try:
-            v = float(str(u.get("TarifaHora", "") or 0).replace(",", "."))
+            v = float(str(u.get("HourlyRate", "") or 0).replace(",", "."))
         except Exception:
             v = 0.0
-        if u.get("Usuario"):
-            m[u["Usuario"]] = v
-        if u.get("Nombre"):
-            m.setdefault(u["Nombre"], v)
+        if u.get("User"):
+            m[u["User"]] = v
+        if u.get("Name"):
+            m.setdefault(u["Name"], v)
     return m
 
 
@@ -701,7 +702,7 @@ def claves_conocidas(grupo: str = None) -> set:
     """
     out = set()
     for u in list_users(grupo):
-        for k in ("Usuario", "Nombre"):
+        for k in ("User", "Name"):
             v = str(u.get(k, "") or "").strip()
             if v:
                 out.add(v)
@@ -741,7 +742,7 @@ def set_group(usuario: str, grupo: str) -> tuple:
     if row is None:
         return False, t("User not found.")
     try:
-        lws.update_cell(row, _COL["Grupo"], (grupo or "").strip())
+        lws.update_cell(row, _COL["Group"], (grupo or "").strip())
     except Exception as e:
         return False, f"Error: {e}"
     _invalidate_login()
@@ -828,7 +829,7 @@ def group_sheet_id(grupo: str) -> str:
     if not grupo:
         return ""
     for g in _group_records():
-        if str(g.get("Grupo", "")).strip().casefold() == str(grupo).strip().casefold():
+        if str(g.get("Group", "")).strip().casefold() == str(grupo).strip().casefold():
             return str(g.get("SheetID", "") or "").strip()
     return ""
 
@@ -843,18 +844,18 @@ def set_group_sheet_id(grupo: str, sheet_id) -> tuple:
     if "/spreadsheets/d/" in sid:
         sid = sid.split("/spreadsheets/d/")[1].split("/")[0]
     if sid:
-        otros = [str(g.get("Grupo")) for g in _group_records()
+        otros = [str(g.get("Group")) for g in _group_records()
                  if str(g.get("SheetID", "")).strip() == sid
-                 and str(g.get("Grupo", "")).strip().casefold() != str(grupo).strip().casefold()]
+                 and str(g.get("Group", "")).strip().casefold() != str(grupo).strip().casefold()]
         if otros:
             # dos clientes en el mismo libro es justo lo que este cambio viene a evitar
             return False, f"{t('That workbook already belongs to')}: {', '.join(otros)}."
     try:
-        recs = gws.get_all_records(numericise_ignore=["all"])
+        recs = columnas.canonizar(gws.get_all_records(numericise_ignore=["all"]))
     except Exception as e:
         return False, f"Error leyendo: {e}"
     for i, g in enumerate(recs):
-        if str(g.get("Grupo", "")).strip().casefold() == str(grupo).strip().casefold():
+        if str(g.get("Group", "")).strip().casefold() == str(grupo).strip().casefold():
             try:
                 gws.update_cell(i + 2, GROUPS_HEADERS.index("SheetID") + 1, sid)
             except Exception as e:
@@ -874,7 +875,7 @@ def grupos_con_libro_propio() -> list:
 
     Lo usan las vistas CONSOLIDADAS del propietario para avisar de que su resumen
     no los incluye todavía (ver el límite documentado en v359)."""
-    return [str(g.get("Grupo", "")) for g in _group_records()
+    return [str(g.get("Group", "")) for g in _group_records()
             if str(g.get("SheetID", "") or "").strip()]
 
 
@@ -891,7 +892,7 @@ def grupos_por_libro() -> list:
     """
     vistos, out = set(), []
     for g in _group_records():
-        nombre = str(g.get("Grupo", "")).strip()
+        nombre = str(g.get("Group", "")).strip()
         if not nombre:
             continue
         sid = str(g.get("SheetID", "") or "").strip()      # vacío = el maestro

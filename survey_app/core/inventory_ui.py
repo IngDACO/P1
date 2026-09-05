@@ -71,8 +71,8 @@ def _fecha_input(label, valor, key):
 def _usuarios(grupo):
     try:
         from core import auth
-        return [str(u.get("Usuario", "")) for u in auth.list_users(grupo)
-                if str(u.get("Usuario", "")).strip()]
+        return [str(u.get("User", "")) for u in auth.list_users(grupo)
+                if str(u.get("User", "")).strip()]
     except Exception:
         return []
 
@@ -134,7 +134,7 @@ def render_inventario(grupo):
                             help=t("A written-off asset leaves the inventory but keeps its movement history and its QR code."))
     acts = INV.list_activos(grupo, incluir_baja=_ver_baja)
     _n_baja = len([a for a in INV.list_activos(grupo, incluir_baja=True)
-                   if str(a.get("Activo", "SI")).upper() in ("NO", "FALSE", "0")])
+                   if str(a.get("Active", "SI")).upper() in ("NO", "FALSE", "0")])
     if _n_baja and not _ver_baja:
         st.caption(f":material/inventory_2: {_n_baja} written-off asset(s) hidden.")
     if not acts:
@@ -157,20 +157,20 @@ def render_inventario(grupo):
     _rows = acts
     if q:
         _rows = [a for a in _rows if q in " ".join(
-            str(a.get(k, "")) for k in ("Nombre", "Serie", "Marca", "Modelo", "ID")).lower()]
+            str(a.get(k, "")) for k in ("Name", "Serial", "Brand", "Model", "ID")).lower()]
     if cat_f != "Todas":
-        _rows = [a for a in _rows if str(a.get("Categoria", "")) == cat_f]
+        _rows = [a for a in _rows if str(a.get("Category", "")) == cat_f]
     if est_f != "Todos":
-        _rows = [a for a in _rows if str(a.get("Estado", "")) == est_f]
-    _rows = sorted(_rows, key=lambda a: str(a.get("Nombre", "")).lower())
+        _rows = [a for a in _rows if str(a.get("Status", "")) == est_f]
+    _rows = sorted(_rows, key=lambda a: str(a.get("Name", "")).lower())
 
     st.caption(f"Tap an asset to see its record, its QR code and manage it. ({len(_rows)})")
     df = pd.DataFrame([{
-        "Nombre":      a.get("Nombre", ""),
-        "Category":   _etq(str(a.get("Categoria", ""))) or "—",
-        "Estado":      _etq(str(a.get("Estado", ""))),
+        "Nombre":      a.get("Name", ""),
+        "Category":   _etq(str(a.get("Category", ""))) or "—",
+        "Estado":      _etq(str(a.get("Status", ""))),
         "Location":   _ubic_txt(a),
-        "Assigned to":  a.get("AsignadoA", "") or "—",
+        "Assigned to":  a.get("AssignedTo", "") or "—",
         "Valor":       round(INV.valor_actual(a), 0),
     } for a in _rows])
     _ev = st.dataframe(
@@ -202,36 +202,36 @@ def _detalle(grupo, aid):
         st.session_state.pop("_inv_open", None)
         return
 
-    st.markdown(f"## :material/inventory_2: {a.get('Nombre', '')}")
-    st.markdown(f"**{a.get('ID', '')}**  ·  {_etq(str(a.get('Categoria', ''))) or '—'}  ·  "
-                f"{_est_lbl(a.get('Estado', ''))}")
+    st.markdown(f"## :material/inventory_2: {a.get('Name', '')}")
+    st.markdown(f"**{a.get('ID', '')}**  ·  {_etq(str(a.get('Category', ''))) or '—'}  ·  "
+                f"{_est_lbl(a.get('Status', ''))}")
 
     izq, der = st.columns([3, 2])
     with izq:
-        if a.get("FotoDriveID"):
+        if a.get("PhotoDriveID"):
             try:
                 from core import drive_store
-                st.image(drive_store.download(a.get("FotoDriveID")), width=220)
+                st.image(drive_store.download(a.get("PhotoDriveID")), width=220)
             except Exception:
                 pass
-        vc, va = _num(a.get("ValorCompra")), INV.valor_actual(a)
+        vc, va = _num(a.get("PurchaseValue")), INV.valor_actual(a)
         m1, m2 = st.columns(2)
         m1.metric(t("Purchase value"), f"${vc:,.0f}")
         m2.metric(t("Current value"), f"${va:,.0f}",
                   help=t("Straight-line depreciation over the useful life."))
-        st.markdown(f"**Location:** {_ubic_txt(a)}  ·  **Condition:** {_etq(str(a.get('Condicion', ''))) or '—'}")
-        if str(a.get("AsignadoA", "")).strip():
-            st.markdown(f"**{t('Assigned to')}:** {a.get('AsignadoA')}"
-                        + (f" · {t('due back')} {a.get('FechaDevolucion')}" if a.get("FechaDevolucion") else ""))
-        _pm = str(a.get("ProximoMant", "")).strip()
+        st.markdown(f"**Location:** {_ubic_txt(a)}  ·  **Condition:** {_etq(str(a.get('Condition', ''))) or '—'}")
+        if str(a.get("AssignedTo", "")).strip():
+            st.markdown(f"**{t('Assigned to')}:** {a.get('AssignedTo')}"
+                        + (f" · {t('due back')} {a.get('ReturnDate')}" if a.get("ReturnDate") else ""))
+        _pm = str(a.get("NextService", "")).strip()
         if _pm:
             _pd = INV._parse_date(_pm)
             if _pd and _pd < clock.today():
                 st.markdown(f":red[:material/build: {t('Maintenance OVERDUE')}: {_pm}]")
             else:
                 st.markdown(f":material/build: Next service: {_pm}")
-        if str(a.get("Nota", "")).strip():
-            st.caption(a.get("Nota"))
+        if str(a.get("Note", "")).strip():
+            st.caption(a.get("Note"))
 
     with der:
         st.markdown(t("#### :material/qr_code_2: QR code"))
@@ -252,7 +252,7 @@ def _detalle(grupo, aid):
             st.caption(f"The QR code could not be generated: {e}")
 
     # ── Acciones (salida/entrada/traslado/mantenimiento) ──
-    _est = str(a.get("Estado", "")).lower()
+    _est = str(a.get("Status", "")).lower()
     _cp = _creado_por()
     if _est != "baja":
         st.markdown(t("#### :material/swap_horiz: Actions"))
@@ -304,7 +304,7 @@ def _detalle(grupo, aid):
                     st.rerun()
         with ac[1].expander(t(":material/build: Service")):
             _costo = st.number_input(t("Cost"), min_value=0.0, step=10.0, key=f"inv_mcosto_{aid}")
-            _prox = _fecha_input(t("Next maintenance"), a.get("ProximoMant"), f"inv_mprox_{aid}")
+            _prox = _fecha_input(t("Next maintenance"), a.get("NextService"), f"inv_mprox_{aid}")
             _enm = st.checkbox(t("Leave the asset IN service"), key=f"inv_menm_{aid}")
             _n = st.text_input(t("Note"), key=f"inv_mnota_{aid}")
             if st.button(t(":material/check: Record service"), key=f"inv_mbtn_{aid}"):
@@ -320,19 +320,19 @@ def _detalle(grupo, aid):
     if not movs:
         st.caption(t("No movements yet."))
     else:
-        _mr = sorted(movs, key=lambda m: str(m.get("Creado", "")), reverse=True)
+        _mr = sorted(movs, key=lambda m: str(m.get("Created", "")), reverse=True)
         st.dataframe(pd.DataFrame([{
-            "Fecha":   m.get("Fecha", ""),
-            "Tipo":    _etq(str(m.get("Tipo", ""))),
-            "Desde":   INV.ubic_texto(m.get("DesdeUbic", ""), _etq) or "—",
-            "Hacia":   INV.ubic_texto(m.get("HaciaUbic", ""), _etq) or "—",
-            "Usuario": m.get("Usuario", "") or "—",
+            "Fecha":   m.get("Date", ""),
+            "Tipo":    _etq(str(m.get("Type", ""))),
+            "Desde":   INV.ubic_texto(m.get("FromLocation", ""), _etq) or "—",
+            "Hacia":   INV.ubic_texto(m.get("ToLocation", ""), _etq) or "—",
+            "Usuario": m.get("User", "") or "—",
             # ⚠️ NaN y no None: si TODA la columna es None, pandas la deja en
             # `object` y Streamlit pinta el literal «None»; con NaN es float y
             # sale vacia (medido, no supuesto).
-            "Costo":   (round(_num(m.get("Costo")), 0) if str(m.get("Costo", "")).strip()
+            "Costo":   (round(_num(m.get("Cost")), 0) if str(m.get("Cost", "")).strip()
                         else float("nan")),
-            "Nota":    m.get("Nota", "") or "",
+            "Nota":    m.get("Note", "") or "",
         } for m in _mr]), width="stretch", hide_index=True,
             column_config=tabla.cfg(None, {"Costo": st.column_config.NumberColumn(t("Cost"), format="$%,d")}))
 
@@ -340,42 +340,42 @@ def _detalle(grupo, aid):
     st.markdown(t("#### :material/edit: Edit asset"))
     with st.form(f"inv_edit_{aid}"):
         e1, e2 = st.columns(2)
-        nombre = e1.text_input(t("Name"), value=a.get("Nombre", ""))
+        nombre = e1.text_input(t("Name"), value=a.get("Name", ""))
         cats = INV.categorias(grupo)
-        _ci = cats.index(a.get("Categoria")) if a.get("Categoria") in cats else 0
+        _ci = cats.index(a.get("Category")) if a.get("Category") in cats else 0
         categoria = e2.selectbox(t("Category"), cats, index=_ci)
-        marca = e1.text_input(t("Brand"), value=a.get("Marca", ""))
-        modelo = e2.text_input(t("Model"), value=a.get("Modelo", ""))
-        serie = e1.text_input(t("Serial no."), value=a.get("Serie", ""))
-        _ei = INV.ESTADOS.index(a.get("Estado")) if a.get("Estado") in INV.ESTADOS else 0
+        marca = e1.text_input(t("Brand"), value=a.get("Brand", ""))
+        modelo = e2.text_input(t("Model"), value=a.get("Model", ""))
+        serie = e1.text_input(t("Serial no."), value=a.get("Serial", ""))
+        _ei = INV.ESTADOS.index(a.get("Status")) if a.get("Status") in INV.ESTADOS else 0
         estado = e2.selectbox(t("Status"), INV.ESTADOS, index=_ei)
-        _cdi = INV.CONDICIONES.index(a.get("Condicion")) if a.get("Condicion") in INV.CONDICIONES else 0
+        _cdi = INV.CONDICIONES.index(a.get("Condition")) if a.get("Condition") in INV.CONDICIONES else 0
         condicion = e1.selectbox(t("Condition"), INV.CONDICIONES, index=_cdi)
-        _ui = INV.UBIC_TIPOS.index(a.get("UbicacionTipo")) if a.get("UbicacionTipo") in INV.UBIC_TIPOS else 0
+        _ui = INV.UBIC_TIPOS.index(a.get("LocationType")) if a.get("LocationType") in INV.UBIC_TIPOS else 0
         ubic_t = e2.selectbox(t("Location (type)"), INV.UBIC_TIPOS, index=_ui)
-        ubic_r = e1.text_input(t("Location (detail)"), value=a.get("UbicacionRef", ""),
+        ubic_r = e1.text_input(t("Location (detail)"), value=a.get("LocationRef", ""),
                                help=t("Store or person holding it. If the asset is on a site, this holds the project ID (PRJ-####) — it is set automatically when the check-out is recorded; the list shows the name."))
-        if str(a.get("UbicacionRef", "")).startswith("PRJ-"):
-            e1.caption(f":material/folder: {INV.ubic_ref_label(a.get('UbicacionRef'))}")
+        if str(a.get("LocationRef", "")).startswith("PRJ-"):
+            e1.caption(f":material/folder: {INV.ubic_ref_label(a.get('LocationRef'))}")
         vc = e2.number_input(t("Purchase value"), min_value=0.0, step=10.0,
-                             value=_num(a.get("ValorCompra")))
+                             value=_num(a.get("PurchaseValue")))
         c3, c4 = st.columns(2)
-        f_compra = _fecha_input("Purchase date", a.get("FechaCompra"), f"inv_fc_{aid}")
+        f_compra = _fecha_input("Purchase date", a.get("PurchaseDate"), f"inv_fc_{aid}")
         vida = c4.number_input(t("Useful life (years)"), min_value=0.0, step=1.0,
-                               value=_num(a.get("VidaUtilAnios")))
-        prox = _fecha_input(t("Next maintenance"), a.get("ProximoMant"), f"inv_pm_{aid}")
-        nota = st.text_area(t("Note"), value=a.get("Nota", ""), height=80)
+                               value=_num(a.get("UsefulLifeYears")))
+        prox = _fecha_input(t("Next maintenance"), a.get("NextService"), f"inv_pm_{aid}")
+        nota = st.text_area(t("Note"), value=a.get("Note", ""), height=80)
         if st.form_submit_button(t(":material/save: Save changes"), type="primary"):
             ok, msg = INV.update_activo(aid, {
-                "Nombre": nombre, "Categoria": categoria, "Marca": marca, "Modelo": modelo,
-                "Serie": serie, "Estado": estado, "Condicion": condicion,
-                "UbicacionTipo": ubic_t, "UbicacionRef": ubic_r, "ValorCompra": vc,
-                "FechaCompra": f_compra, "VidaUtilAnios": vida, "ProximoMant": prox, "Nota": nota})
+                "Name": nombre, "Category": categoria, "Brand": marca, "Model": modelo,
+                "Serial": serie, "Status": estado, "Condition": condicion,
+                "LocationType": ubic_t, "LocationRef": ubic_r, "PurchaseValue": vc,
+                "PurchaseDate": f_compra, "UsefulLifeYears": vida, "NextService": prox, "Note": nota})
             (flash.exito if ok else st.error)(msg)
             if ok:
                 st.rerun()
 
-    if str(a.get("Estado", "")).lower() != "baja":
+    if str(a.get("Status", "")).lower() != "baja":
         with st.expander(t(":material/block: Write off")):
             st.caption(t("Takes the asset out of the inventory (it stays in the history). To see it again, tick «Show written-off ones too»."))
             _mot = st.text_input(t("Reason"), key=f"inv_baja_mot_{aid}")
@@ -388,7 +388,7 @@ def _detalle(grupo, aid):
         st.warning(t(":material/block: This asset is **written off**: it does not appear in the inventory unless you tick «Show written-off ones too»."))
         if st.button(t(":material/restore: Reactivate this asset"),
                      key=f"inv_react_{aid}", type="primary"):
-            ok, msg = INV.update_activo(aid, {"Activo": "SI", "Estado": "disponible"})
+            ok, msg = INV.update_activo(aid, {"Active": "SI", "Status": "disponible"})
             (flash.exito if ok else st.error)(msg)
             if ok:
                 st.rerun()

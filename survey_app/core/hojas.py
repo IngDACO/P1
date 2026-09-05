@@ -33,6 +33,7 @@ import logging
 
 import streamlit as st
 
+from core import columnas
 from core import timeclock
 
 logger = logging.getLogger(__name__)
@@ -156,13 +157,15 @@ def registros(titulo: str, cabeceras=None, grupo: str = None):
             return None                   # que el llamador use su propio lector
         try:
             w = timeclock.get_sheet(titulo, tuple(cabeceras), grupo=grupo)
-            return w.get_all_records(numericise_ignore=["all"])
+            return columnas.canonizar(w.get_all_records(numericise_ignore=["all"]))
         except Exception as e:
             logger.warning("hojas: lectura suelta de %s falló: %s", titulo, e)
             return []
     if not datos:
         return []
-    cab = [str(c) for c in datos[0]]
+    # ⚠️ v468: se canoniza la CABECERA (una vez), no fila a fila: asi el codigo ve
+    # siempre el nombre nuevo, tenga el libro el viejo o el nuevo.
+    cab = [columnas.canon(str(c)) for c in datos[0]]
     n = len(cab)
     out = []
     for fila in datos[1:]:

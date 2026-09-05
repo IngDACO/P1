@@ -129,18 +129,18 @@ def render_guardar(herramienta: str, titulo_pdf: str, pdf_bytes: bytes,
         c2.caption(t("There are no projects available to attach this calculation to."))
         return
 
-    idmap = {f"{p.get('Nombre')} ({p.get('ID')})": p for p in proys}
+    idmap = {f"{p.get('Name')} ({p.get('ID')})": p for p in proys}
 
     def _guardar(prj):
         with st.spinner(t("Saving…")):
             res = toolruns.registrar(
                 pid=str(prj.get("ID", "")),
-                grupo=str(prj.get("Grupo", grupo)),
+                grupo=str(prj.get("Group", grupo)),
                 herramienta=herramienta, resumen=resumen,
                 datos={"entradas": _snapshot(herramienta), "resultados": datos},
                 usuario=usuario, pdf=pdf_bytes, filename=nombre_archivo)
         if res.get("ok"):
-            msg = f":green[:material/check_circle:] Saved as **{res['id']}** in {prj.get('Nombre')}."
+            msg = f":green[:material/check_circle:] Saved as **{res['id']}** in {prj.get('Name')}."
             if not res.get("drive_id"):
                 msg += " (The PDF was not filed in Drive: check the connection.)"
             st.success(msg)
@@ -163,7 +163,7 @@ def render_guardar(herramienta: str, titulo_pdf: str, pdf_bytes: bytes,
             for _p in proys:
                 if (_fpid and str(_p.get("ID", "")).strip() == _fpid) or \
                    (not _fpid and _fpn and
-                    str(_p.get("Nombre", "")).strip().casefold() == _fpn.casefold()):
+                    str(_p.get("Name", "")).strip().casefold() == _fpn.casefold()):
                     _fich = _p
                     break
         except Exception:
@@ -171,7 +171,7 @@ def render_guardar(herramienta: str, titulo_pdf: str, pdf_bytes: bytes,
 
     with c2:
         if _fich is not None:
-            st.caption(f":material/save: It will be saved to **{_fich.get('Nombre')}** — where you clocked in.")
+            st.caption(f":material/save: It will be saved to **{_fich.get('Name')}** — where you clocked in.")
             if st.button(t(":material/save: Save to the project"), width="stretch",
                          key=f"save_{key}"):
                 _guardar(_fich)

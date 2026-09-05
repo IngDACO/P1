@@ -19,9 +19,11 @@ from core.num import num as _num
 
 logger = logging.getLogger(__name__)
 
-HEADERS = ["Nombre", "PIN", "Proyecto", "Ubicacion",
-           "Clock In", "Clock Out", "Horas", "Estado", "Grupo", "Tipo", "Usuario",
-           "ProyectoID"]
+from core import columnas   # módulo HOJA: sin ciclos
+
+HEADERS = ["Name", "PIN", "Project", "Location",
+           "Clock In", "Clock Out", "Hours", "Status", "Group", "Type", "User",
+           "ProjectID"]
 FMT = "%Y-%m-%d %H:%M:%S"
 # Tipo de fichaje: 'general' (jornada del día) | 'proyecto' (segmento por proyecto).
 # Filas antiguas sin Tipo se tratan como 'proyecto'.
@@ -332,8 +334,15 @@ def get_sheet(title: str, headers: tuple, grupo: str = None):
         cabeceras[clave] = list(headers)
     else:
         # Migración: agrega columnas faltantes en su posición canónica.
+        # ⚠️ v468: se compara CANONIZANDO. Con `HEADERS` en inglés y la hoja todavía
+        # en español, `h not in head` daría verdadero para TODAS y este bucle
+        # reescribiría la fila 1 entera a ciegas — y si el orden de la hoja no
+        # coincidiera al 100 % con el de HEADERS, dejaría datos bajo la cabecera
+        # equivocada. Con la canonización, una columna vieja CUENTA como presente:
+        # el renombrado de la fila 1 se hace aparte, verificado, no aquí.
+        _head_canon = {columnas.canon(x) for x in head}
         for i, h in enumerate(headers, start=1):
-            if h not in head:
+            if columnas.canon(h) not in _head_canon:
                 try:
                     if w.col_count < i:
                         w.add_cols(i - w.col_count)
@@ -365,12 +374,12 @@ def _now() -> str:
 
 def _tipo_of(r) -> str:
     """Tipo de una fila; vacío se trata como 'proyecto' (compat filas antiguas)."""
-    return (str(r.get("Tipo", "")).strip().lower() or TIPO_PROYECTO)
+    return (str(r.get("Type", "")).strip().lower() or TIPO_PROYECTO)
 
 
 def pid_of(r) -> str:
     """ProyectoID de una fila de fichaje ('' en las filas anteriores a v145)."""
-    return str(r.get("ProyectoID", "")).strip()
+    return str(r.get("ProjectID", "")).strip()
 
 
 def es_del_proyecto(r, pid: str, nombre: str) -> bool:
@@ -385,7 +394,7 @@ def es_del_proyecto(r, pid: str, nombre: str) -> bool:
     rp = pid_of(r)
     if rp and pid:
         return rp == str(pid).strip()
-    return (str(r.get("Proyecto", "")).strip().casefold()
+    return (str(r.get("Project", "")).strip().casefold()
             == str(nombre or "").strip().casefold())
 
 
@@ -399,9 +408,9 @@ def mapa_nombres(grupo: str = "") -> dict:
     out = {}
     try:
         for u in auth.list_users(grupo):
-            n = str(u.get("Nombre", "")).strip().casefold()
+            n = str(u.get("Name", "")).strip().casefold()
             if n:
-                out.setdefault(n, []).append(str(u.get("Usuario", "")).strip())
+                out.setdefault(n, []).append(str(u.get("User", "")).strip())
     except Exception as e:                 # sin Login legible no se resuelve nada,
         logger.warning("timeclock.mapa_nombres: %s", e)   # pero tampoco se rompe
     return out
@@ -425,10 +434,10 @@ def clave_de(r, por_nombre: dict = None) -> str:
     —los hubo, `fijiofgjei` tenía dos— adivinar MEZCLARÍA a dos personas distintas,
     que es peor que dejarlas separadas.
     """
-    u = str(r.get("Usuario", "")).strip()
+    u = str(r.get("User", "")).strip()
     if u:
         return u
-    nom = str(r.get("Nombre", "")).strip()
+    nom = str(r.get("Name", "")).strip()
     cand = (por_nombre or {}).get(nom.casefold(), [])
     return cand[0] if len(cand) == 1 else nom
 
@@ -436,12 +445,12 @@ def clave_de(r, por_nombre: dict = None) -> str:
 def _matches(r, usuario: str, nombre: str, grupo: str) -> bool:
     """¿La fila es de este usuario? Identifica por **Usuario** (login, v106); las filas
     antiguas sin Usuario caen al Nombre visible."""
-    if str(r.get("Grupo", "")).strip() != (grupo or "").strip():
+    if str(r.get("Group", "")).strip() != (grupo or "").strip():
         return False
-    ru = str(r.get("Usuario", "")).strip()
+    ru = str(r.get("User", "")).strip()
     if ru:
         return ru.lower() == (usuario or "").strip().lower()
-    return str(r.get("Nombre", "")).strip() == (nombre or "").strip()
+    return str(r.get("Name", "")).strip() == (nombre or "").strip()
 
 
 def clock_in(nombre: str, proyecto: str, ubicacion: str, grupo: str = "",
@@ -465,14 +474,14 @@ def clock_in(nombre: str, proyecto: str, ubicacion: str, grupo: str = "",
         return False, t("No user is signed in.")
 
     try:
-        records = ws.get_all_records(numericise_ignore=['all'])
+        records = columnas.canonizar(ws.get_all_records(numericise_ignore=['all']))
     except Exception as e:
         return False, f"{t('Error reading the sheet')}: {e}"
 
     # ¿Ya hay una sesión abierta del MISMO tipo para este usuario+grupo?
     for r in records:
         if (_matches(r, usuario, nombre, grupo)
-                and str(r.get("Estado", "")).strip().upper() == "ABIERTO"
+                and str(r.get("Status", "")).strip().upper() == "ABIERTO"
                 and _tipo_of(r) == tipo):
             etq = t("workday") if tipo == TIPO_GENERAL else t("project")
             return False, (f"{t('You already have a clock in for')} {etq} "
@@ -516,7 +525,7 @@ def clock_out(nombre: str, grupo: str = "", tipo: str = TIPO_PROYECTO,
         return False, t("No user is signed in.")
 
     try:
-        records = ws.get_all_records(numericise_ignore=['all'])
+        records = columnas.canonizar(ws.get_all_records(numericise_ignore=['all']))
     except Exception as e:
         return False, f"{t('Error reading the sheet')}: {e}"
 
@@ -525,7 +534,7 @@ def clock_out(nombre: str, grupo: str = "", tipo: str = TIPO_PROYECTO,
     target_in  = None
     for idx, r in enumerate(records):
         if (_matches(r, usuario, nombre, grupo)
-                and str(r.get("Estado", "")).strip().upper() == "ABIERTO"
+                and str(r.get("Status", "")).strip().upper() == "ABIERTO"
                 and _tipo_of(r) == tipo):
             target_row = idx + 2   # +2: fila 1 = cabecera, records 0-indexado
             target_in  = str(r.get("Clock In", ""))
@@ -588,7 +597,7 @@ def corregir_fichaje(grupo, usuario, nombre, tipo, campo,
     valor_nuevo = str(valor_nuevo or "").strip()
     valor_actual = str(valor_actual or "").strip()
     try:
-        registros = ws.get_all_records(numericise_ignore=['all'])
+        registros = columnas.canonizar(ws.get_all_records(numericise_ignore=['all']))
     except Exception as e:
         return False, f"{t('Error reading the sheet')}: {e}"
 
@@ -692,7 +701,7 @@ def _row_segmentos(r) -> list:
     """Segmentos por día de UNA fila de fichaje. Abierta = hasta ahora; cerrada =
     hasta el Clock Out. Si la salida no parsea, cae a las Horas guardadas (1 día)."""
     ci = str(r.get("Clock In", ""))
-    if str(r.get("Estado", "")).strip().upper() == "ABIERTO":
+    if str(r.get("Status", "")).strip().upper() == "ABIERTO":
         return _segmentos_dia(ci, clock.now())
     try:
         fin = datetime.strptime(str(r.get("Clock Out", "")), FMT)
@@ -701,14 +710,14 @@ def _row_segmentos(r) -> list:
             d = datetime.strptime(ci, FMT).date()
         except Exception:
             return []
-        h = _num(r.get("Horas"))
+        h = _num(r.get("Hours"))
         return [(d, h)] if h > 0 else []
     segs = _segmentos_dia(ci, fin)
     # Fila cerrada de UN solo día: respeta las Horas GUARDADAS (lo que ya veía el
     # reporte del admin) en vez de recomputar del timestamp → el total con days=None
     # queda IDÉNTICO. Solo las que cruzan medianoche se reparten por segmento.
     if len(segs) == 1:
-        h = _num(r.get("Horas"))
+        h = _num(r.get("Hours"))
         return [(segs[0][0], h)] if h > 0 else []
     return segs
 
@@ -719,9 +728,9 @@ def open_sessions(nombre: str, grupo: str = "", usuario: str = "") -> dict:
     try:
         for r in _cached_records():          # lectura cacheada (display)
             if (_matches(r, usuario, nombre, grupo)
-                    and str(r.get("Estado", "")).strip().upper() == "ABIERTO"):
+                    and str(r.get("Status", "")).strip().upper() == "ABIERTO"):
                 out[_tipo_of(r)] = {"clock_in": str(r.get("Clock In", "")),
-                                    "proyecto": str(r.get("Proyecto", "")),
+                                    "proyecto": str(r.get("Project", "")),
                                     "proyecto_id": pid_of(r)}
     except Exception:
         pass
@@ -734,13 +743,13 @@ def open_now(grupo: str) -> list:
     out = []
     try:
         for r in _cached_records():
-            if str(r.get("Grupo", "")).strip() != str(grupo).strip():
+            if str(r.get("Group", "")).strip() != str(grupo).strip():
                 continue
-            if str(r.get("Estado", "")).strip().upper() != "ABIERTO":
+            if str(r.get("Status", "")).strip().upper() != "ABIERTO":
                 continue
             _ci = str(r.get("Clock In", ""))
-            out.append({"usuario": str(r.get("Usuario", "")), "nombre": str(r.get("Nombre", "")),
-                        "tipo": _tipo_of(r), "proyecto": str(r.get("Proyecto", "")),
+            out.append({"usuario": str(r.get("User", "")), "nombre": str(r.get("Name", "")),
+                        "tipo": _tipo_of(r), "proyecto": str(r.get("Project", "")),
                         "proyecto_id": pid_of(r), "clock_in": _ci,
                         "segundos": elapsed_seconds(_ci)})
     except Exception:
@@ -799,7 +808,7 @@ def resumen_hoy(nombre: str, grupo: str = "", usuario: str = "") -> dict:
             out["general"] += h
         else:
             out["proyecto"] += h
-            pn = _nombre_actual(pid_of(r), r.get("Proyecto", "")) or t("(no project)")
+            pn = _nombre_actual(pid_of(r), r.get("Project", "")) or t("(no project)")
             out["por_proyecto"][pn] = round(out["por_proyecto"].get(pn, 0.0) + h, 2)
     out["general"] = round(out["general"], 2)
     out["proyecto"] = round(out["proyecto"], 2)
@@ -848,11 +857,11 @@ def mis_fichajes(nombre: str, grupo: str = "", usuario: str = "", limite: int = 
             continue
         filas.append({
             "tipo": _tipo_of(r),
-            "proyecto": _nombre_actual(pid_of(r), r.get("Proyecto", "")),
+            "proyecto": _nombre_actual(pid_of(r), r.get("Project", "")),
             "entrada": str(r.get("Clock In", "")),
             "salida": str(r.get("Clock Out", "")),
-            "horas": _num(r.get("Horas")),
-            "abierto": str(r.get("Estado", "")).strip().upper() == "ABIERTO",
+            "horas": _num(r.get("Hours")),
+            "abierto": str(r.get("Status", "")).strip().upper() == "ABIERTO",
         })
     filas.sort(key=lambda x: x["entrada"], reverse=True)
     return filas[:limite]
@@ -878,7 +887,7 @@ def _nombre_actual(pid: str, nombre_fila: str) -> str:
     try:
         from core import projects as P
         prj = P.get_project(str(pid).strip())
-        return str(prj.get("Nombre", "")).strip() or nom if prj else nom
+        return str(prj.get("Name", "")).strip() or nom if prj else nom
     except Exception:
         return nom
 
@@ -897,7 +906,7 @@ def proyectos_por_usuario_dia(grupo: str, fecha) -> dict:
     out = {}
     _pn = mapa_nombres(grupo)               # v363: resolver identidad una sola vez
     for r in _cached_records():
-        if str(r.get("Grupo", "")).strip() != str(grupo).strip():
+        if str(r.get("Group", "")).strip() != str(grupo).strip():
             continue
         if _tipo_of(r) != TIPO_PROYECTO:
             continue
@@ -907,7 +916,7 @@ def proyectos_por_usuario_dia(grupo: str, fecha) -> dict:
             continue
         clave = clave_de(r, _pn)
         entry = {"pid": pid_of(r),
-                 "nombre": _nombre_actual(pid_of(r), r.get("Proyecto", ""))}
+                 "nombre": _nombre_actual(pid_of(r), r.get("Project", ""))}
         if not entry["pid"] and not entry["nombre"]:
             continue                              # fichaje sin proyecto: nada que comparar
         out.setdefault(clave, [])
@@ -944,12 +953,12 @@ def horas_por_usuario_rango(grupo: str, desde, hasta) -> dict:
     out = {}
     _pn = mapa_nombres(grupo)               # v363: resolver identidad una sola vez
     for r in _cached_records():
-        if str(r.get("Grupo", "")).strip() != grupo:
+        if str(r.get("Group", "")).strip() != grupo:
             continue
         if _tipo_of(r) != TIPO_GENERAL:
             continue
         clave = clave_de(r, _pn)
-        nombre = str(r.get("Nombre", "")).strip() or clave
+        nombre = str(r.get("Name", "")).strip() or clave
         if not clave:
             continue
         h = sum(hh for d, hh in _row_segmentos(r) if desde <= d <= hasta)
@@ -985,7 +994,7 @@ def horas_por_usuario_dia(grupo: str, desde, hasta) -> dict:
     out = {}
     _pn = mapa_nombres(grupo)
     for r in _cached_records():
-        if str(r.get("Grupo", "")).strip() != grupo:
+        if str(r.get("Group", "")).strip() != grupo:
             continue
         if _tipo_of(r) != TIPO_GENERAL:
             continue
@@ -1023,7 +1032,7 @@ def jornada_y_proyecto(grupo: str, desde=None, hasta=None) -> dict:
     _pn = mapa_nombres(grupo)               # v363: resolver identidad una sola vez
     _int = _ids_internos(grupo)             # v422: qué PRJ-#### son estructura
     for r in _cached_records():
-        if str(r.get("Grupo", "")).strip() != grupo:
+        if str(r.get("Group", "")).strip() != grupo:
             continue
         clave = clave_de(r, _pn)
         if not clave:
@@ -1032,11 +1041,11 @@ def jornada_y_proyecto(grupo: str, desde=None, hasta=None) -> dict:
                 if (desde is None or d >= desde) and (hasta is None or d <= hasta))
         if h <= 0:
             continue
-        a = out.setdefault(clave, {"nombre": str(r.get("Nombre", "")).strip() or clave,
+        a = out.setdefault(clave, {"nombre": str(r.get("Name", "")).strip() or clave,
                                    "jornada": 0.0, "proyecto": 0.0, "interno": 0.0})
         if _tipo_of(r) == TIPO_GENERAL:
             a["jornada"] += h
-        elif str(r.get("ProyectoID", "")).strip() in _int:
+        elif str(r.get("ProjectID", "")).strip() in _int:
             a["interno"] += h
         else:
             a["proyecto"] += h
@@ -1083,12 +1092,12 @@ def group_hours(grupo: str, days=None) -> list:
     _pn = mapa_nombres(grupo)               # v363: resolver identidad una sola vez
     _int = _ids_internos(grupo)             # v422: qué PRJ-#### son estructura
     for r in records:
-        if str(r.get("Grupo", "")).strip() != grupo:
+        if str(r.get("Group", "")).strip() != grupo:
             continue
         # Clave por USUARIO (login); las filas antiguas sin Usuario se resuelven por
         # su Nombre contra las cuentas del grupo (v363, `clave_de`).
         clave  = clave_de(r, _pn)
-        nombre = str(r.get("Nombre", "")).strip() or clave
+        nombre = str(r.get("Name", "")).strip() or clave
         if not clave:
             continue
         # Horas por DÍA de la fila, filtradas a la ventana. Partir en medianoche hace
@@ -1107,7 +1116,7 @@ def group_hours(grupo: str, days=None) -> list:
             a["interno" if str(pid_of(r)).strip() in _int else "proyecto"] += h
             # Con ID se resuelve al nombre ACTUAL: si el proyecto se renombro,
             # sus horas viejas ya no salen bajo dos etiquetas distintas.
-            pn = _nombre_actual(pid_of(r), r.get("Proyecto", "")) or t("(no project)")
+            pn = _nombre_actual(pid_of(r), r.get("Project", "")) or t("(no project)")
             a["por"][pn] = a["por"].get(pn, 0.0) + h
     # Tarifa/hora por usuario, para el costo de mano de obra (misma fuente que
     # expenses.labor_cost). Import perezoso: auth no depende de timeclock.

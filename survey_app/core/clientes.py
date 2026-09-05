@@ -15,6 +15,7 @@ import logging
 import streamlit as st
 
 from core import clock, timeclock
+from core import columnas
 from core.num import col_letter as _col_letter
 
 from core.i18n import t
@@ -22,8 +23,8 @@ logger = logging.getLogger(__name__)
 
 CLIENTES_SHEET = "Clients"
 CLIENTES_HEADERS = [
-    "ID", "Grupo", "Nombre", "Contacto", "Telefono", "Email",
-    "Direccion", "Notas", "Activo", "CreadoPor", "Creado",
+    "ID", "Group", "Name", "ContactName", "Phone", "Email",
+    "Address", "Notes", "Active", "CreatedBy", "Created",
 ]
 _CCOL = {h: i + 1 for i, h in enumerate(CLIENTES_HEADERS)}
 
@@ -96,9 +97,9 @@ def list_clientes(grupo: str = None, incluir_inactivos: bool = False) -> list:
     """Fichas de cliente del grupo (las que tienen fila en la hoja)."""
     out = []
     for r in _records():
-        if grupo is not None and str(r.get("Grupo", "")) != str(grupo):
+        if grupo is not None and str(r.get("Group", "")) != str(grupo):
             continue
-        if not incluir_inactivos and str(r.get("Activo", "SI")).upper() in ("NO", "FALSE", "0"):
+        if not incluir_inactivos and str(r.get("Active", "SI")).upper() in ("NO", "FALSE", "0"):
             continue
         out.append(r)
     return out
@@ -169,7 +170,7 @@ def create_cliente(grupo, nombre, contacto="", telefono="", email="",
     if not nombre:
         return False, t("The client name is required.")
     for r in _records():
-        if str(r.get("Grupo", "")) == str(grupo) and _norm(r.get("Nombre")) == _norm(nombre):
+        if str(r.get("Group", "")) == str(grupo) and _norm(r.get("Name")) == _norm(nombre):
             return False, t("A client with that name already exists in this group.")
     cid = _next_id()
     row = [cid, grupo, nombre, str(contacto or ""), str(telefono or ""),
@@ -187,7 +188,7 @@ def update_cliente(cid: str, fields: dict) -> tuple:
         return False, err
     row = None
     try:
-        recs = w.get_all_records(numericise_ignore=["all"])   # fresco al escribir
+        recs = columnas.canonizar(w.get_all_records(numericise_ignore=["all"]))   # fresco al escribir
     except Exception as e:
         return False, str(e)
     for i, r in enumerate(recs):
@@ -208,7 +209,7 @@ def update_cliente(cid: str, fields: dict) -> tuple:
 
 
 def set_activo(cid: str, activo: bool) -> tuple:
-    return update_cliente(cid, {"Activo": "SI" if activo else "NO"})
+    return update_cliente(cid, {"Active": "SI" if activo else "NO"})
 
 
 # ── Enlace cliente↔proyecto (ID-primero, nombre-de-respaldo) ─────
@@ -220,10 +221,10 @@ def es_del_cliente(proyecto: dict, cid: str, nombre_norm: str) -> bool:
     proyecto vinculado por ID sigue casando aunque le renombren el texto, y los
     proyectos viejos (sin ID) siguen casando por nombre.
     """
-    pid_cli = str(proyecto.get("ClienteID", "")).strip()
+    pid_cli = str(proyecto.get("ClientID", "")).strip()
     if pid_cli:
         return bool(cid) and pid_cli == str(cid)
-    return _norm(proyecto.get("Cliente")) == nombre_norm
+    return _norm(proyecto.get("Client")) == nombre_norm
 
 
 def client_key(proyecto: dict, fichas_by_id: dict):
@@ -232,7 +233,7 @@ def client_key(proyecto: dict, fichas_by_id: dict):
     Si el `ClienteID` resuelve a una ficha, se agrupa bajo el NOMBRE de la ficha
     (aunque el texto `Cliente` difiera); si no, bajo el texto `Cliente`.
     """
-    pid_cli = str(proyecto.get("ClienteID", "")).strip()
+    pid_cli = str(proyecto.get("ClientID", "")).strip()
     f = fichas_by_id.get(pid_cli) if pid_cli else None
-    nom = (f.get("Nombre") if f else str(proyecto.get("Cliente", "")).strip())
+    nom = (f.get("Name") if f else str(proyecto.get("Client", "")).strip())
     return _norm(nom), nom

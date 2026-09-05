@@ -34,8 +34,8 @@ from core import clock, timeclock
 logger = logging.getLogger(__name__)
 
 SHEET = "AuditTrail"
-HEADERS = ["ID", "Grupo", "Fecha", "Usuario", "Entidad", "EntidadID",
-           "Accion", "CambiosJSON"]
+HEADERS = ["ID", "Group", "Date", "User", "Entity", "EntityID",
+           "Action", "ChangesJSON"]
 
 # Solo lo que mueve dinero o cambia el estado del negocio.
 #
@@ -51,28 +51,28 @@ CAMPOS_CLAVE = {
     # ⚠️ "MargenMO" salió de aquí al retirar el modelo viejo: ya no se escribe desde
     # ningún sitio, así que vigilarlo sería ruido. Lo que sí mueve dinero hoy es la
     # ganancia por rubro, que ya está más abajo.
-    "Presupuesto", "Avance", "Estado", "EstadoManual",
-    "FechaInicio", "FechaFinEst", "Cliente", "ClienteID", "Nombre",
-    "CampoAsignados", "AgrupacionID", "PesoEnAgrupacion",
+    "Budget", "Progress", "Status", "ManualStatus",
+    "StartDate", "EndDateEst", "Client", "ClientID", "Name",
+    "FieldAssigned", "GroupingID", "WeightInGrouping",
     # persona. ⚠️ `FechaIngreso` (v433) decide el año de vacaciones de esa persona,
     # o sea cuántos días le quedan: moverla mueve su saldo, así que entra aquí en el
     # MISMO lote en que se crea (la regla que v344/v352/v373 aprendieron a base de
     # descubrir campos de dinero sin rastro).
-    "TarifaHora", "Rol", "Grupo", "Activo", "FechaIngreso",
+    "HourlyRate", "Role", "Group", "Active", "StartedOn",
     # factura / nómina  (el cobro y el pago se siguen por `Estado` + `Cobrado`)
-    "Total", "Cobrado", "ImpuestoPct", "Neto", "Base",
+    "Total", "Collected", "TaxPct", "Net", "Base",
     # catálogo (v352): el precio de lo que vendes mueve dinero tanto como el margen.
     # ⚠️ Faltaban al principio y la prueba lo cazó: se cambió un costo de 185,50 a
     # 199,90 y el histórico quedó vacío. Es el mismo fallo que `MargenPct` en v344 —
     # el enganche estaba, el nombre del campo no. El guardián solo comprobaba una
     # dirección (que cada CAMPO_CLAVE exista); ahora también mira que los campos de
     # dinero del catálogo estén en la lista.
-    "CostoUnit", "HorasEst", "TarifaHora",
+    "UnitCost", "EstHours", "HourlyRate",
     # ganancia del proyecto (v373). ⚠️ `GananciaHoraJSON` decide desde v360 lo que se
     # le cobra al cliente por cada hora y llevaba 13 versiones SIN auditar: el mismo
     # hueco que `MargenMO` en v344 y `CostoUnit` en v352, tercera vez. Si un campo
     # mueve dinero, entra aquí en el MISMO lote en que se crea.
-    "GananciaHoraJSON", "GananciaFija",
+    "HourlyProfitJSON", "FixedProfit",
 }
 
 
@@ -192,16 +192,16 @@ def historial(grupo: str = None, entidad: str = None, entidad_id: str = None,
     """Cambios, del más reciente al más antiguo, con los cambios ya parseados."""
     out = []
     for r in _records():
-        if grupo and str(r.get("Grupo", "")) != str(grupo):
+        if grupo and str(r.get("Group", "")) != str(grupo):
             continue
-        if entidad and str(r.get("Entidad", "")) != str(entidad):
+        if entidad and str(r.get("Entity", "")) != str(entidad):
             continue
-        if entidad_id and str(r.get("EntidadID", "")) != str(entidad_id):
+        if entidad_id and str(r.get("EntityID", "")) != str(entidad_id):
             continue
         try:
-            cam = json.loads(r.get("CambiosJSON", "") or "{}")
+            cam = json.loads(r.get("ChangesJSON", "") or "{}")
         except Exception:
             cam = {}
         out.append({**r, "cambios": cam})
-    out.sort(key=lambda x: str(x.get("Fecha", "")), reverse=True)
+    out.sort(key=lambda x: str(x.get("Date", "")), reverse=True)
     return out[:limite]

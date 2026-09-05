@@ -297,16 +297,16 @@ def pnl(grupo: str, desde=None, hasta=None) -> dict:
     # el detalle del cliente NECESITAN mostrarlas, y ocultarlas de raíz sería el fallo
     # de v340 (lo que se puede ocultar tiene que poder verse).
     facs = [f for f in INV.list_facturas(grupo)
-            if str(f.get("Estado", "")).lower() != "anulada"
-            and _en_rango(f.get("Fecha"), desde, hasta)]
+            if str(f.get("Status", "")).lower() != "anulada"
+            and _en_rango(f.get("Date"), desde, hasta)]
     facturado = round(sum(_num(f.get("Total")) for f in facs), 2)
-    cobrado   = round(sum(_num(f.get("Cobrado")) for f in facs), 2)
-    vencido   = round(sum(_num(f.get("Total")) - _num(f.get("Cobrado"))
+    cobrado   = round(sum(_num(f.get("Collected")) for f in facs), 2)
+    vencido   = round(sum(_num(f.get("Total")) - _num(f.get("Collected"))
                           for f in facs if INV.estado_cobro(f) == "vencida"), 2)
 
     nbase = ndev = nap = por_pagar = pagado = 0.0
     for n in PR.list_nominas(grupo):                     # excluye anuladas
-        if not _en_rango(n.get("PeriodoHasta"), desde, hasta):
+        if not _en_rango(n.get("PeriodTo"), desde, hasta):
             continue
         nbase += _num(n.get("Base"))
         for c in PR.conceptos_de(n):
@@ -315,10 +315,10 @@ def pnl(grupo: str, desde=None, hasta=None) -> dict:
                 ndev += _num(c.get("monto"))
             elif _tp == "aporte":
                 nap += _num(c.get("monto"))
-        if str(n.get("Estado", "")).lower() == "pagada":
-            pagado += _num(n.get("Neto"))
+        if str(n.get("Status", "")).lower() == "pagada":
+            pagado += _num(n.get("Net"))
         else:
-            por_pagar += _num(n.get("Neto"))
+            por_pagar += _num(n.get("Net"))
     costo_nomina = round(nbase + ndev + nap, 2)
 
     # Compras = TODAS las del grupo (v310, definición ÚNICA: la misma que usa la
@@ -327,9 +327,9 @@ def pnl(grupo: str, desde=None, hasta=None) -> dict:
     # la misma pregunta tenía tres respuestas distintas en la app. Se cuenta por la
     # columna `Grupo`, así que una compra sin proyecto tampoco se pierde (la pantalla
     # la muestra aparte como huérfana).
-    compras = round(sum(_num(r.get("Valor")) for r in E._records()
-                        if str(r.get("Grupo", "")).strip() == str(grupo).strip()
-                        and _en_rango(r.get("Fecha"), desde, hasta)), 2)
+    compras = round(sum(_num(r.get("Amount")) for r in E._records()
+                        if str(r.get("Group", "")).strip() == str(grupo).strip()
+                        and _en_rango(r.get("Date"), desde, hasta)), 2)
     costo_total = round(costo_nomina + compras, 2)
     ganancia = round(facturado - costo_total, 2)
     return {"facturado": facturado, "cobrado": cobrado,
@@ -391,7 +391,7 @@ def conciliacion_mo(grupo: str, desde=None, hasta=None) -> dict:
     # Lo REALMENTE liquidado en nóminas del periodo (por `PeriodoHasta`, como el P&L)
     base_nom = aportes = ausencias = 0.0
     for n in PR.list_nominas(grupo):
-        if not _en_rango(n.get("PeriodoHasta"), desde, hasta):
+        if not _en_rango(n.get("PeriodTo"), desde, hasta):
             continue
         base_nom += _num(n.get("Base"))
         for c in PR.conceptos_de(n):
@@ -450,7 +450,7 @@ def resultado_por_proyecto(grupo: str) -> list:
         if f <= 0 and mo <= 0 and co <= 0:
             continue                       # obra sin movimiento: no aporta nada al cuadro
         costo = round(mo + co, 2)
-        out.append({"id": pid, "nombre": str(p.get("Nombre", "")),
+        out.append({"id": pid, "nombre": str(p.get("Name", "")),
                     "facturado": round(f, 2), "mo": round(mo, 2), "compras": round(co, 2),
                     "costo": costo, "resultado": round(f - costo, 2),
                     "margen": (round(100.0 * (f - costo) / f, 1) if f > 0 else None)})
@@ -468,7 +468,7 @@ def sin_facturar(grupo: str) -> list:
     # tercera copia — el patrón que causó los cinco `_num` divergentes de v323.
     from core import invoices as INV
     _pend = INV.pendiente_por_proyecto(grupo)
-    _nom = {str(p.get("ID", "")): str(p.get("Nombre", ""))
+    _nom = {str(p.get("ID", "")): str(p.get("Name", ""))
             for p in P.list_projects(grupo=grupo, incluir_archivados=True)}
     out = [(_nom.get(pid, pid), v) for pid, v in _pend.items()]
     return sorted(out, key=lambda x: -x[1])
@@ -485,6 +485,6 @@ def _por_cliente(facs) -> list:
     """
     agg = {}
     for f in facs:
-        k = str(f.get("ClienteNombre", "")).strip() or t("(no client)")
+        k = str(f.get("ClientName", "")).strip() or t("(no client)")
         agg[k] = agg.get(k, 0.0) + _num(f.get("Total"))
     return sorted(((k, round(v, 2)) for k, v in agg.items() if v), key=lambda x: -x[1])

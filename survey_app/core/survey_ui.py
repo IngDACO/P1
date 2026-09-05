@@ -502,18 +502,18 @@ def render_survey_tab(_ROL, _GRUPO):
                                 "WR": obc.get("WR", 0), "FR": obc.get("FR", 0),
                                 "OR": obc.get("OR", 0), "WL": obc.get("WL", 0),
                                 "FL": obc.get("FL", 0), "OL": obc.get("OL", 0),
-                                "Estado": estado,
+                                "Status": estado,
                             })
                         log_rows = (
-                            [x for x in log_rows if x["Estado"] == "SELECTED"] +
-                            [x for x in log_rows if x["Estado"] == "OPTIMAL"] +
-                            [x for x in log_rows if x["Estado"] == ""]
+                            [x for x in log_rows if x["Status"] == "SELECTED"] +
+                            [x for x in log_rows if x["Status"] == "OPTIMAL"] +
+                            [x for x in log_rows if x["Status"] == ""]
                         )
                         df_log = pd.DataFrame(log_rows)
                         def _hl(row):
-                            if row["Estado"] == "SELECTED":
+                            if row["Status"] == "SELECTED":
                                 return ["background-color:#7b5c00;color:white;font-weight:bold"] * len(row)
-                            if row["Estado"] == "OPTIMAL":
+                            if row["Status"] == "OPTIMAL":
                                 return ["background-color:#1a3a2a;color:#a8e6cf"] * len(row)
                             return [""] * len(row)
                         st.dataframe(df_log.style.apply(_hl, axis=1),
@@ -828,23 +828,23 @@ def render_survey_tab(_ROL, _GRUPO):
         # Seguro escribir estas claves: dejaron de ser widgets al quitar los
         # text_input de arriba (habría sido el error de v111 si aún lo fueran).
         if _prj_sv:
-            st.session_state["proyecto"]  = str(_prj_sv.get("Nombre", ""))
-            st.session_state["cliente"]   = str(_prj_sv.get("Cliente", ""))
-            st.session_state["ubicacion"] = str(_prj_sv.get("Ubicacion", ""))
+            st.session_state["proyecto"]  = str(_prj_sv.get("Name", ""))
+            st.session_state["cliente"]   = str(_prj_sv.get("Client", ""))
+            st.session_state["ubicacion"] = str(_prj_sv.get("Location", ""))
             # ⚠️ El NOMBRE, no los login. La columna guarda «campo1;mchen» (v459) y
             # esta clave es la que pintan el informe del CLIENTE y el correo: sin
             # resolver, el documento que se le manda al cliente diría «campo1;mchen».
             _ing_sv = projects_data.head_installers_label(
-                _prj_sv, str(_prj_sv.get("Grupo", _GRUPO)))
+                _prj_sv, str(_prj_sv.get("Group", _GRUPO)))
             st.session_state["ingeniero"] = _ing_sv
-            _rep = " · ".join(x for x in (str(_prj_sv.get("Cliente", "")),
-                                          str(_prj_sv.get("Ubicacion", "")),
+            _rep = " · ".join(x for x in (str(_prj_sv.get("Client", "")),
+                                          str(_prj_sv.get("Location", "")),
                                           _ing_sv) if x)
             st.caption(":material/info: The report will use this project's details"
                        + (f": {_rep}." if _rep else "."))
-            if str(_prj_sv.get("Ubicacion", "")).strip():
+            if str(_prj_sv.get("Location", "")).strip():
                 from core import maps as _maps
-                st.caption(_maps.maps_link_md(_prj_sv.get("Ubicacion"), ":material/place: see on Maps"))
+                st.caption(_maps.maps_link_md(_prj_sv.get("Location"), ":material/place: see on Maps"))
         else:
             # Sin proyecto: cálculo suelto, el informe va sin identidad.
             for _kid in ("proyecto", "cliente", "ubicacion", "ingeniero"):
@@ -1288,7 +1288,7 @@ def render_survey_tab(_ROL, _GRUPO):
                                        "Projects → :material/add: New project**")))
                 else:
                     st.caption(t("The parameters, the matrix and the interpretations are attached to the project, and the drawing, the matrix and the client report are filed. The project's schedule and progress are NOT touched."))
-                    _idmap = {f"{p.get('Nombre')} ({p.get('ID')})": p for p in _proys}
+                    _idmap = {f"{p.get('Name')} ({p.get('ID')})": p for p in _proys}
                     _sel = st.selectbox(t("Target project"),
                                         [_VACIO] + list(_idmap.keys()),
                                         key="sv_prj_sel")
@@ -1327,12 +1327,12 @@ def render_survey_tab(_ROL, _GRUPO):
                         else:
                             _best = (r.get("optimizer_result") or {}).get("best") or {}
                             st.session_state["_prj_creado"] = {
-                                "id": _pid, "nombre": str(_prj.get("Nombre", ""))}
+                                "id": _pid, "nombre": str(_prj.get("Name", ""))}
 
                             # Registro en el historial de cálculos del proyecto
                             try:
                                 toolruns.registrar(
-                                    pid=_pid, grupo=str(_prj.get("Grupo", _GRUPO)),
+                                    pid=_pid, grupo=str(_prj.get("Group", _GRUPO)),
                                     herramienta="survey",
                                     resumen=(f"RL {_best.get('rl', 0):+.1f} · "
                                              f"FB {_best.get('fb_applied', _best.get('fb', 0)):+.1f} · "
@@ -1394,7 +1394,7 @@ def render_survey_tab(_ROL, _GRUPO):
                             elif drive_store.is_configured():
                                 st.caption(t(":material/attach_file: Documents not filed: Drive is not connected."))
 
-                            st.success(f":material/check_circle: Survey saved to **{_prj.get('Nombre')}**.")
+                            st.success(f":material/check_circle: Survey saved to **{_prj.get('Name')}**.")
 
                 # ── Cerrar el ciclo: llevar al proyecto ──
                 _pc = st.session_state.get("_prj_creado")

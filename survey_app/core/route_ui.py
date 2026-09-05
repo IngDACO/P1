@@ -86,7 +86,7 @@ def _coords_de(prj) -> tuple:
     lat = location_ui.to_float(prj.get("Lat"))
     lon = location_ui.to_float(prj.get("Lng"))
     if lat is None or lon is None:
-        c = location_ui.geocode(str(prj.get("Ubicacion", "")))
+        c = location_ui.geocode(str(prj.get("Location", "")))
         if c:
             lat, lon = c
     return (lat, lon) if (lat is not None and lon is not None) else None
@@ -147,7 +147,7 @@ def render_mi_ruta(usuario, grupo):
     _INACTIVOS = ("Completado", "Cancelado", "Archivado")
     try:
         proys = [p for p in P.list_projects_for_field(usuario, grupo=grupo)
-                 if str(p.get("Estado", "")) not in _INACTIVOS]
+                 if str(p.get("Status", "")) not in _INACTIVOS]
     except Exception:
         proys = []
     if not proys:
@@ -159,11 +159,11 @@ def render_mi_ruta(usuario, grupo):
         c = _coords_de(p)
         if c:
             paradas.append({"lat": c[0], "lon": c[1],
-                            "nombre": str(p.get("Nombre", "")),
-                            "cliente": str(p.get("Cliente", "")),
-                            "ubic": str(p.get("Ubicacion", ""))})
+                            "nombre": str(p.get("Name", "")),
+                            "cliente": str(p.get("Client", "")),
+                            "ubic": str(p.get("Location", ""))})
         else:
-            sin_ubic.append(str(p.get("Nombre", "")))
+            sin_ubic.append(str(p.get("Name", "")))
 
     if not paradas:
         st.info(t("None of your sites has a map location yet. Ask your administrator to set it on the project."))
@@ -263,8 +263,8 @@ def render_ruta_dia(grupo):
 
     try:
         campos = [u for u in auth.list_users(grupo)
-                  if str(u.get("Rol", "")) == "campo"
-                  and str(u.get("Activo", "SI")).strip().upper() in auth._ACTIVE_OK]
+                  if str(u.get("Role", "")) == "campo"
+                  and str(u.get("Active", "SI")).strip().upper() in auth._ACTIVE_OK]
     except Exception:
         campos = []
     if not campos:
@@ -285,8 +285,8 @@ def render_ruta_dia(grupo):
     en_obra = []       # filas de la tabla
     sin_coord, sin_prj, sin_plan = [], [], []
     for u in campos:
-        usr = str(u.get("Usuario", ""))
-        nom = str(u.get("Nombre", "") or usr)
+        usr = str(u.get("User", ""))
+        nom = str(u.get("Name", "") or usr)
         try:
             aa = roster.asignaciones_dia(grupo, usr, fecha)   # v274: varias por día
         except Exception:
@@ -307,7 +307,7 @@ def render_ruta_dia(grupo):
             if not prj:
                 sin_prj.append(f"{nom} — ({t('site not found')})")
                 continue
-            obra = str(prj.get("Nombre", ""))
+            obra = str(prj.get("Name", ""))
             # Plan vs real, con las MISMAS tres lecturas que el Panel:
             if pid in _fich_pids:
                 _estado = t("🟢 clocked in here")
@@ -321,7 +321,7 @@ def render_ruta_dia(grupo):
             else:
                 s = sitios.setdefault(pid, {"nombre": obra, "lat": c[0], "lon": c[1],
                                             "personas": [],
-                                            "dir": str(prj.get("Ubicacion", ""))})
+                                            "dir": str(prj.get("Location", ""))})
                 s["personas"].append(nom)
             # ⚠️ La fila entra AUNQUE la obra no tenga ubicación: antes se hacía
             # `continue` y esa persona desaparecía de la tabla — el KPI decía "1 sin
@@ -329,7 +329,7 @@ def render_ruta_dia(grupo):
             en_obra.append({"Persona": nom,
                             "Horario": roster.franja_label(a.get("ini"), a.get("fin")) or t("full day"),
                             t("Site"): obra, t("Status"): _estado,
-                            t("Address"): str(prj.get("Ubicacion", "")) or "—"})
+                            t("Address"): str(prj.get("Location", "")) or "—"})
 
     # ── KPIs ACTIVOS, con contexto (mismo criterio que HOME en v303) ──
     _n_pers = len(campos)

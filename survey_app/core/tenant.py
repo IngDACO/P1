@@ -117,7 +117,7 @@ def puede_ver(obj_grupo) -> bool:
     return g_obj.casefold() == grupo_sesion().strip().casefold()
 
 
-def exigir(obj, etiqueta: str = "This item", campo: str = "Grupo") -> bool:
+def exigir(obj, etiqueta: str = "This item", campo: str = "Group") -> bool:
     """Guardián de las vistas de detalle.
 
     Devuelve True si se puede seguir. Si no, pinta el aviso y devuelve False, para

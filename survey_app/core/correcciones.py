@@ -41,13 +41,13 @@ from core.i18n import t
 logger = logging.getLogger(__name__)
 
 SHEET = "TimeCorrections"
-HEADERS = ["ID", "Grupo", "Usuario", "Nombre", "Tipo", "Proyecto",
-           "Campo", "ValorAnterior", "ValorNuevo", "Motivo",
-           "Estado", "Creado", "RevisadoPor", "RevisadoFecha", "NotaAdmin",
+HEADERS = ["ID", "Group", "User", "Name", "Type", "Project",
+           "Field", "OldValue", "NewValue", "Reason",
+           "Status", "Created", "ReviewedBy", "ReviewedDate", "AdminNote",
            # ⚠️ Se guarda el ID de la nómina que YA cubría ese día, si la había. No
            # es decorativo: es lo que convierte «esto ya se pagó» en algo que el
            # admin puede ir a mirar, en vez de un aviso genérico que no lleva a nada.
-           "NominaCubre"]
+           "PayslipCovers"]
 _COL = {h: i + 1 for i, h in enumerate(HEADERS)}
 
 # ── Estados ──────────────────────────────────────────────────────
@@ -130,14 +130,14 @@ def list_group(grupo, estado=None, usuario=None) -> list:
     _g = str(grupo or "").strip().lower()
     out = []
     for r in _records():
-        if str(r.get("Grupo", "")).strip().lower() != _g:
+        if str(r.get("Group", "")).strip().lower() != _g:
             continue
-        if estado and str(r.get("Estado", "")).strip().lower() != estado:
+        if estado and str(r.get("Status", "")).strip().lower() != estado:
             continue
-        if usuario and str(r.get("Usuario", "")).strip() != str(usuario):
+        if usuario and str(r.get("User", "")).strip() != str(usuario):
             continue
         out.append(r)
-    return sorted(out, key=lambda r: str(r.get("Creado", "")), reverse=True)
+    return sorted(out, key=lambda r: str(r.get("Created", "")), reverse=True)
 
 
 def pendientes(grupo) -> list:
@@ -169,9 +169,9 @@ def nomina_que_cubre(grupo, usuario, fecha) -> str:
         if not d:
             return ""
         for n in payroll.list_nominas(grupo):
-            if str(n.get("Usuario", "")).strip() != str(usuario).strip():
+            if str(n.get("User", "")).strip() != str(usuario).strip():
                 continue
-            d0, d1 = parse_date(n.get("PeriodoDesde")), parse_date(n.get("PeriodoHasta"))
+            d0, d1 = parse_date(n.get("PeriodFrom")), parse_date(n.get("PeriodTo"))
             if d0 and d1 and d0 <= d <= d1:
                 return str(n.get("ID", ""))
     except Exception as e:
@@ -238,11 +238,11 @@ def aprobar(cid, revisor, nota="") -> tuple:
     r = get(cid)
     if not r:
         return False, t("Correction not found.")
-    if str(r.get("Estado", "")).strip().lower() != PENDIENTE:
+    if str(r.get("Status", "")).strip().lower() != PENDIENTE:
         return False, t("This correction was already reviewed.")
-    ok, msg = _set(cid, {"Estado": APROBADA, "RevisadoPor": str(revisor or ""),
-                         "RevisadoFecha": clock.now(r.get("Grupo")).strftime(timeclock.FMT),
-                         "NotaAdmin": str(nota or "")})
+    ok, msg = _set(cid, {"Status": APROBADA, "ReviewedBy": str(revisor or ""),
+                         "ReviewedDate": clock.now(r.get("Group")).strftime(timeclock.FMT),
+                         "AdminNote": str(nota or "")})
     return (True, t("Correction approved.")) if ok else (False, msg)
 
 
@@ -261,9 +261,9 @@ def ajustar(cid, revisor, hora, nota="") -> tuple:
     r = get(cid)
     if not r:
         return False, t("Correction not found.")
-    if str(r.get("Estado", "")).strip().lower() != PENDIENTE:
+    if str(r.get("Status", "")).strip().lower() != PENDIENTE:
         return False, t("This correction was already reviewed.")
-    actual = str(r.get("ValorNuevo", "")).strip()
+    actual = str(r.get("NewValue", "")).strip()
     from datetime import datetime
     try:
         base = datetime.strptime(actual, timeclock.FMT)
@@ -275,15 +275,15 @@ def ajustar(cid, revisor, hora, nota="") -> tuple:
                          minute=getattr(hora, "minute", 0),
                          second=0, microsecond=0)
     ok, msg = timeclock.corregir_fichaje(
-        grupo=r.get("Grupo"), usuario=r.get("Usuario"), nombre=r.get("Nombre"),
-        tipo=r.get("Tipo"), campo=r.get("Campo"),
+        grupo=r.get("Group"), usuario=r.get("User"), nombre=r.get("Name"),
+        tipo=r.get("Type"), campo=r.get("Field"),
         valor_actual=actual, valor_nuevo=nuevo)
     if not ok:
         return False, f"{t('The time entry could not be updated')}: {msg}"
-    ok2, msg2 = _set(cid, {"ValorNuevo": nuevo.strftime(timeclock.FMT),
-                           "Estado": APROBADA, "RevisadoPor": str(revisor or ""),
-                           "RevisadoFecha": clock.now(r.get("Grupo")).strftime(timeclock.FMT),
-                           "NotaAdmin": str(nota or "")})
+    ok2, msg2 = _set(cid, {"NewValue": nuevo.strftime(timeclock.FMT),
+                           "Status": APROBADA, "ReviewedBy": str(revisor or ""),
+                           "ReviewedDate": clock.now(r.get("Group")).strftime(timeclock.FMT),
+                           "AdminNote": str(nota or "")})
     if not ok2:
         return False, (t("The time entry was updated, but the correction could not "
                          "be marked as reviewed: ") + str(msg2))
@@ -301,17 +301,17 @@ def revertir(cid, revisor, nota="") -> tuple:
     r = get(cid)
     if not r:
         return False, t("Correction not found.")
-    if str(r.get("Estado", "")).strip().lower() != PENDIENTE:
+    if str(r.get("Status", "")).strip().lower() != PENDIENTE:
         return False, t("This correction was already reviewed.")
     ok, msg = timeclock.corregir_fichaje(
-        grupo=r.get("Grupo"), usuario=r.get("Usuario"), nombre=r.get("Nombre"),
-        tipo=r.get("Tipo"), campo=r.get("Campo"),
-        valor_actual=r.get("ValorNuevo"), valor_nuevo=r.get("ValorAnterior"))
+        grupo=r.get("Group"), usuario=r.get("User"), nombre=r.get("Name"),
+        tipo=r.get("Type"), campo=r.get("Field"),
+        valor_actual=r.get("NewValue"), valor_nuevo=r.get("OldValue"))
     if not ok:
         return False, f"{t('The time entry could not be restored')}: {msg}"
-    ok2, msg2 = _set(cid, {"Estado": REVERTIDA, "RevisadoPor": str(revisor or ""),
-                           "RevisadoFecha": clock.now(r.get("Grupo")).strftime(timeclock.FMT),
-                           "NotaAdmin": str(nota or "")})
+    ok2, msg2 = _set(cid, {"Status": REVERTIDA, "ReviewedBy": str(revisor or ""),
+                           "ReviewedDate": clock.now(r.get("Group")).strftime(timeclock.FMT),
+                           "AdminNote": str(nota or "")})
     if not ok2:
         # El fichaje YA se restauró: se dice, en vez de fingir que no pasó nada.
         return False, (t("The time entry was restored, but the correction could not "

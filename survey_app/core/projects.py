@@ -19,6 +19,7 @@ import streamlit as st
 
 from core import timeclock
 from core import clock
+from core import columnas
 from core.num import col_letter as _col_letter, num as _num
 
 from core.i18n import t
@@ -29,44 +30,44 @@ ACTIVITIES_SHEET = "Activities"
 GROUPINGS_SHEET  = "Groupings"
 
 PROJECTS_HEADERS = [
-    "ID", "Grupo", "Nombre", "Cliente", "Ubicacion", "Modelo", "NS",
-    "Estado", "EstadoManual", "FechaInicio", "FechaFinEst", "Ingeniero",
-    "CampoAsignados", "Avance", "AgrupacionID", "PesoEnAgrupacion",
-    "ParamsJSON", "MatrizJSON", "InterpJSON", "CreadoPor", "Creado",
-    "Instrucciones", "InduccionLinks", "Presupuesto",
+    "ID", "Group", "Name", "Client", "Location", "Model", "NS",
+    "Status", "ManualStatus", "StartDate", "EndDateEst", "HeadInstallers",
+    "FieldAssigned", "Progress", "GroupingID", "WeightInGrouping",
+    "ParamsJSON", "MatrixJSON", "InterpJSON", "CreatedBy", "Created",
+    "Instructions", "InductionLinks", "Budget",
     # v137: datos leidos del PLANO (distintos de ParamsJSON, que es el survey e
     # incluye lo medido en obra). Se extraen UNA vez al cargar el plano y los
     # consumen las 5 herramientas sin volver a abrir el PDF.
-    "PlanoJSON",
+    "DrawingJSON",
     # v193: coordenadas para el pin en el mapa (se fijan con el selector de ubicación).
     "Lat", "Lng",
     # v219: certificados/tickets que EXIGE el proyecto (tipos del catálogo, `;`), para
     # avisar y marcar a los asignados que no cumplen.
-    "CertsReq",
+    "RequiredCerts",
     # v255: enlace robusto al cliente (CLI-#### de la hoja Clientes). El campo `Cliente`
     # (texto) se conserva; el match usa ID-primero, nombre-de-respaldo (como el fichaje, v145).
-    "ClienteID",
+    "ClientID",
     # ⚠️ COLUMNA MUERTA. Era el margen (%) sobre la mano de obra del modelo viejo,
     # RETIRADO: la ganancia es hoy un IMPORTE por rubro (GananciaHoraJSON / GananciaFija).
     # Se conserva en la cabecera a propósito: quitarla desplazaría las 20 columnas
     # siguientes y, como la fila es POSICIONAL, cada dato caería en la de al lado.
     # Se escribe vacía y no la lee nadie.
-    "MargenMO",
+    "LabourMargin",
     # v306: qué clase de trabajo es. NO es cosmético: solo la instalación tiene el
     # cronograma estándar de 11 actividades que escalan con el NS, y ese plan alimenta
     # avance, curva S, SPI y el indicador «En retraso». Los proyectos anteriores a v306
     # lo tienen VACÍO a propósito (no se tocó la hoja): se muestran como "sin tipo".
-    "Tipo",
+    "Type",
     # v360: {usuario: ganancia $/h} de ESTE proyecto. La ganancia es un IMPORTE por
     # rubro, no un %. VACÍO = la obra vale su COSTO (y la app avisa de quién trabajaría
     # sin ganancia); antes caía al modelo viejo del %, que se retiró.
-    "GananciaHoraJSON",
+    "HourlyProfitJSON",
     # v373: ganancia FIJA de la obra, en dinero. Cubre el hueco que v370 dejó abierto:
     # una obra cuyo valor NO está en las horas (un delivery, un suministro) y que NO
     # nació de una cotización valía exactamente lo que costó, porque los materiales
     # van a costo en los dos modelos. Medido: «Bespoke — Delivery Chullora» estimado
     # en $380 habiendo facturado $5.200. VACÍO = no aporta nada (retrocompatible).
-    "GananciaFija",
+    "FixedProfit",
 ]
 
 # Tipos de proyecto (v306). `TIPO_INSTALACION` es el único que genera el cronograma
@@ -115,7 +116,7 @@ def es_interno(prj) -> bool:
     UNA sola definición, a propósito: cinco copias divergentes de un helper es lo
     que causó los fallos de v323. Acepta el dict del proyecto o su tipo suelto.
     """
-    tipo = prj.get("Tipo", "") if isinstance(prj, dict) else prj
+    tipo = prj.get("Type", "") if isinstance(prj, dict) else prj
     return str(tipo or "").strip() in TIPOS_INTERNOS
 
 
@@ -128,12 +129,12 @@ def solo_internas(proys) -> list:
     """Las localizaciones internas (para el costo de estructura)."""
     return [p for p in proys if es_interno(p)]
 ACTIVITIES_HEADERS = [
-    "ProyectoID", "Orden", "Nombre", "DuracionDias", "Peso", "Avance",
-    "FechaInicioReal", "FechaFinReal", "Nota",
+    "ProjectID", "Order", "Name", "DurationDays", "Weight", "Progress",
+    "ActualStartDate", "ActualEndDate", "Note",
 ]
-GROUPINGS_HEADERS = ["ID", "Grupo", "Nombre", "Descripcion"]
+GROUPINGS_HEADERS = ["ID", "Group", "Name", "Description"]
 DOCUMENTS_SHEET   = "Documents"
-DOCUMENTS_HEADERS = ["ProyectoID", "Nombre", "Tipo", "DriveID", "SubidoPor", "Fecha"]
+DOCUMENTS_HEADERS = ["ProjectID", "Name", "Type", "DriveID", "UploadedBy", "Date"]
 
 _PCOL = {h: i + 1 for i, h in enumerate(PROJECTS_HEADERS)}
 _ACOL = {h: i + 1 for i, h in enumerate(ACTIVITIES_HEADERS)}
@@ -178,12 +179,12 @@ def etiqueta_proyectos(proys) -> dict:
     """
     _vistos = {}
     for p in proys or []:
-        _vistos[str(p.get("Nombre") or "")] = _vistos.get(str(p.get("Nombre") or ""), 0) + 1
+        _vistos[str(p.get("Name") or "")] = _vistos.get(str(p.get("Name") or ""), 0) + 1
     out = {}
     for p in proys or []:
         _pid = str(p.get("ID") or "")
-        _nom = str(p.get("Nombre") or "") or t("(no name)")
-        out[_pid] = f"{_nom} ({_pid})" if _vistos.get(str(p.get("Nombre") or ""), 0) > 1 else _nom
+        _nom = str(p.get("Name") or "") or t("(no name)")
+        out[_pid] = f"{_nom} ({_pid})" if _vistos.get(str(p.get("Name") or ""), 0) > 1 else _nom
     return out
 
 
@@ -279,10 +280,10 @@ def _invalidate():
 # ── Helpers de dominio ───────────────────────────────────────────
 def compute_avance(activities: list) -> float:
     """% del proyecto = Σ(peso × avance) / Σ(peso).  activities: list de dicts."""
-    tot_peso = sum(_num(a.get("Peso")) for a in activities)
+    tot_peso = sum(_num(a.get("Weight")) for a in activities)
     if tot_peso <= 0:
         return 0.0
-    acc = sum(_num(a.get("Peso")) * _num(a.get("Avance")) for a in activities)
+    acc = sum(_num(a.get("Weight")) * _num(a.get("Progress")) for a in activities)
     return round(acc / tot_peso, 1)
 
 
@@ -318,7 +319,7 @@ def _next_project_id(pws) -> str:
     líneas de factura), así que es donde más duele.
     """
     mx = 0
-    for r in pws.get_all_records(numericise_ignore=["all"]):
+    for r in columnas.canonizar(pws.get_all_records(numericise_ignore=["all"])):
         pid = str(r.get("ID", ""))
         if pid.startswith("PRJ-"):
             try:
@@ -336,7 +337,7 @@ def _next_project_id(pws) -> str:
 
 def _find_row(ws, header, value):
     """Nº de fila (1-based, incluye cabecera) del primer registro con header==value."""
-    records = ws.get_all_records(numericise_ignore=["all"])
+    records = columnas.canonizar(ws.get_all_records(numericise_ignore=["all"]))
     for i, r in enumerate(records):
         if str(r.get(header, "")) == str(value):
             return i + 2  # +1 cabecera, +1 base-1
@@ -347,7 +348,7 @@ def _find_row(ws, header, value):
 def list_groupings(grupo: str = None) -> list:
     out = []
     for r in _records(GROUPINGS_SHEET):
-        if grupo is not None and str(r.get("Grupo", "")) != str(grupo):
+        if grupo is not None and str(r.get("Group", "")) != str(grupo):
             continue
         out.append(r)
     return out
@@ -357,7 +358,7 @@ def create_grouping(grupo: str, nombre: str, descripcion: str = "") -> tuple:
     gws, err = _groupings_ws()
     if err:
         return False, err
-    existing = gws.get_all_records(numericise_ignore=["all"])
+    existing = columnas.canonizar(gws.get_all_records(numericise_ignore=["all"]))
     mx = 0
     for r in existing:
         gid = str(r.get("ID", ""))
@@ -366,7 +367,7 @@ def create_grouping(grupo: str, nombre: str, descripcion: str = "") -> tuple:
                 mx = max(mx, int(gid.split("-")[1]))
             except Exception:
                 pass
-        if str(r.get("Grupo", "")) == str(grupo) and str(r.get("Nombre", "")) == nombre:
+        if str(r.get("Group", "")) == str(grupo) and str(r.get("Name", "")) == nombre:
             return False, t("A grouping with that name already exists in this group.")
     # ⚠️ v428: sin reciclar. `delete_grouping` borra la fila de verdad, así que su ID
     # queda libre — y los proyectos guardan `AgrupacionID`. Reutilizarlo metería en la
@@ -457,9 +458,9 @@ def create_project(grupo, nombre, cliente="", ubicacion="", modelo="", ns=0,
 
     # Actividades del cronograma (batch: 1 sola llamada a la API)
     act_rows = [[
-        pid, str(i + 1), a.get("nombre", a.get("Nombre", f"Actividad {i+1}")),
-        str(a.get("duracion", a.get("DuracionDias", 0))),
-        str(a.get("peso", a.get("Peso", 0))),
+        pid, str(i + 1), a.get("nombre", a.get("Name", f"Actividad {i+1}")),
+        str(a.get("duracion", a.get("DurationDays", 0))),
+        str(a.get("peso", a.get("Weight", 0))),
         "0", "", "", "",
     ] for i, a in enumerate(activities or [])]
     if act_rows:
@@ -484,7 +485,7 @@ def attach_survey(pid: str, params: dict = None, matriz=None,
     if params is not None:
         campos["ParamsJSON"] = json.dumps(params or {}, ensure_ascii=False, default=str)
     if matriz is not None:
-        campos["MatrizJSON"] = json.dumps(matriz or [], ensure_ascii=False, default=str)
+        campos["MatrixJSON"] = json.dumps(matriz or [], ensure_ascii=False, default=str)
     if interp is not None:
         campos["InterpJSON"] = json.dumps(interp or {}, ensure_ascii=False, default=str)
     if not campos:
@@ -502,7 +503,7 @@ def _gaps_for(proys) -> dict:
     dias_gap > 0 = retraso, < 0 = adelanto."""
     out = {}
     for p in proys:
-        if str(p.get("Estado", "")) in ("Completado", "Cancelado"):
+        if str(p.get("Status", "")) in ("Completado", "Cancelado"):
             continue
         try:
             ps = project_schedule(p.get("ID"))
@@ -600,11 +601,11 @@ def list_projects(grupo: str = None, agrupacion_id: str = None,
     """
     out = []
     for r in _registros_visibles(PROJECTS_SHEET, grupo):
-        if grupo is not None and str(r.get("Grupo", "")) != str(grupo):
+        if grupo is not None and str(r.get("Group", "")) != str(grupo):
             continue
-        if agrupacion_id is not None and str(r.get("AgrupacionID", "")) != str(agrupacion_id):
+        if agrupacion_id is not None and str(r.get("GroupingID", "")) != str(agrupacion_id):
             continue
-        if not incluir_archivados and str(r.get("Estado", "")) == ARCHIVADO:
+        if not incluir_archivados and str(r.get("Status", "")) == ARCHIVADO:
             continue
         if not incluir_internos and es_interno(r):
             continue
@@ -621,7 +622,7 @@ def list_locations(grupo: str = None, incluir_cerradas: bool = False) -> list:
     out = solo_internas(list_projects(grupo=grupo, incluir_archivados=True,
                                       incluir_internos=True))
     if not incluir_cerradas:
-        out = [p for p in out if str(p.get("Estado", "")) not in (INTERNO_CERRADA, ARCHIVADO)]
+        out = [p for p in out if str(p.get("Status", "")) not in (INTERNO_CERRADA, ARCHIVADO)]
     return out
 
 
@@ -700,13 +701,13 @@ def set_archivado(pid: str, archivar: bool = True) -> tuple:
     if not prj:
         return False, t("Project not found.")
     if archivar:
-        return update_project(pid, {"EstadoManual": ARCHIVADO, "Estado": ARCHIVADO})
+        return update_project(pid, {"ManualStatus": ARCHIVADO, "Status": ARCHIVADO})
     # ⚠️ v422: con el tipo. Sin él, restaurar una localización interna la devolvía a
     # «Planificado» en vez de «Abierta» — se puede archivar y no se puede volver bien,
     # que es media aplicación de la regla v340.
-    return update_project(pid, {"EstadoManual": "",
-                                "Estado": derive_estado(_num(prj.get("Avance")), "",
-                                                        prj.get("Tipo", ""))})
+    return update_project(pid, {"ManualStatus": "",
+                                "Status": derive_estado(_num(prj.get("Progress")), "",
+                                                        prj.get("Type", ""))})
 
 
 def datos_asociados(pid: str) -> dict:
@@ -718,7 +719,7 @@ def datos_asociados(pid: str) -> dict:
     fichajes es el peor sitio posible para un cero falso.
     """
     _prj = get_project(pid) or {}
-    _g = str(_prj.get("Grupo", "")) or None
+    _g = str(_prj.get("Group", "")) or None
     out = {}
     from core import tenant
     with tenant.como_grupo(_g or tenant.grupo_sesion()):
@@ -726,10 +727,10 @@ def datos_asociados(pid: str) -> dict:
             out["Documentos"] = len(list_documents(pid))
         except Exception:
             out["Documentos"] = 0
-        for etiqueta, hoja, col in (("Gastos", "Gastos", "ProyectoID"),
-                                    ("Cálculos", "Calculos", "ProyectoID"),
-                                    ("Pre-Starts", "PreStarts", "ProyectoID"),
-                                    ("Alarmas", "Alarmas", "ProyectoID")):
+        for etiqueta, hoja, col in (("Gastos", "Gastos", "ProjectID"),
+                                    ("Cálculos", "Calculos", "ProjectID"),
+                                    ("Pre-Starts", "PreStarts", "ProjectID"),
+                                    ("Alarmas", "Alarmas", "ProjectID")):
             try:
                 out[etiqueta] = sum(1 for r in _records(hoja)
                                     if str(r.get(col, "")) == str(pid))
@@ -737,7 +738,7 @@ def datos_asociados(pid: str) -> dict:
                 out[etiqueta] = 0
         try:
             out["Actividades"] = len(list_activities(pid))
-            nom = str(_prj.get("Nombre", ""))
+            nom = str(_prj.get("Name", ""))
             out["Fichajes"] = sum(1 for r in _fichaje_records()
                                   if timeclock.es_del_proyecto(r, pid, nom))
         except Exception:
@@ -757,7 +758,7 @@ def list_projects_for_field(usuario: str, grupo: str = None,
     """
     out = []
     for r in list_projects(grupo=grupo, incluir_internos=incluir_internos):
-        asignados = [x.strip() for x in str(r.get("CampoAsignados", "")).split(";") if x.strip()]
+        asignados = [x.strip() for x in str(r.get("FieldAssigned", "")).split(";") if x.strip()]
         if usuario in asignados:
             out.append(r)
     return out
@@ -773,11 +774,11 @@ def add_field_user(pid: str, usuario: str) -> tuple:
     prj = get_project(pid)
     if not prj:
         return False, False
-    actuales = [x.strip() for x in str(prj.get("CampoAsignados", "")).split(";") if x.strip()]
+    actuales = [x.strip() for x in str(prj.get("FieldAssigned", "")).split(";") if x.strip()]
     if usuario in actuales:
         return True, False
     actuales.append(usuario)
-    ok, _ = update_project(pid, {"CampoAsignados": ";".join(actuales)})
+    ok, _ = update_project(pid, {"FieldAssigned": ";".join(actuales)})
     return ok, ok
 
 
@@ -802,7 +803,7 @@ def get_project_full(pid: str) -> dict:
             logger.warning("projects: JSON inválido en %s de %s: %s", key, pid, e)
             return {} if "Matriz" not in key else []
     r["params"]     = _load("ParamsJSON")
-    r["matriz"]     = _load("MatrizJSON")
+    r["matriz"]     = _load("MatrixJSON")
     r["interp"]     = _load("InterpJSON")
     r["activities"] = list_activities(pid)
     return r
@@ -847,7 +848,7 @@ def update_project(pid: str, fields: dict) -> tuple:
         # cambio que la hoja nunca recibió, y en cada guardado otra vez (el «antes»
         # no cambiaba nunca porque no se escribía nada).
         auditoria.registrar("proyecto", pid, auditoria.diff(_antes, _escritos),
-                            grupo=str(_antes.get("Grupo", "")))
+                            grupo=str(_antes.get("Group", "")))
     except Exception as e:
         # ⚠️ Deja RASTRO (regla v323): `registrar` ya logea sus propios fallos, pero
         # si lo que revienta es `diff` o el import, el apunte se perdía en silencio
@@ -865,9 +866,9 @@ def delete_project(pid: str) -> tuple:
     # borrar sus actividades
     aws, err2 = _activities_ws()
     if not err2:
-        recs = aws.get_all_records(numericise_ignore=["all"])
+        recs = columnas.canonizar(aws.get_all_records(numericise_ignore=["all"]))
         for i in range(len(recs) - 1, -1, -1):
-            if str(recs[i].get("ProyectoID", "")) == str(pid):
+            if str(recs[i].get("ProjectID", "")) == str(pid):
                 aws.delete_rows(i + 2)
     _invalidate()
     return True, t("Project deleted.")
@@ -876,8 +877,8 @@ def delete_project(pid: str) -> tuple:
 # ── Actividades ──────────────────────────────────────────────────
 def list_activities(pid: str) -> list:
     out = [r for r in _records(ACTIVITIES_SHEET)
-           if str(r.get("ProyectoID", "")) == str(pid)]
-    out.sort(key=lambda r: _num(r.get("Orden")))
+           if str(r.get("ProjectID", "")) == str(pid)]
+    out.sort(key=lambda r: _num(r.get("Order")))
     return out
 
 
@@ -889,36 +890,36 @@ def update_activity_progress(pid: str, orden, avance, fecha_inicio="", fecha_fin
     if err:
         return False, err
     avance = max(0.0, min(100.0, _num(avance)))
-    recs = aws.get_all_records(numericise_ignore=["all"])
+    recs = columnas.canonizar(aws.get_all_records(numericise_ignore=["all"]))
     target = None
     for i, r in enumerate(recs):
-        if str(r.get("ProyectoID", "")) == str(pid) and str(r.get("Orden", "")) == str(orden):
+        if str(r.get("ProjectID", "")) == str(pid) and str(r.get("Order", "")) == str(orden):
             target = i + 2
             break
     if target is None:
         return False, t("Activity not found.")
-    aws.update_cell(target, _ACOL["Avance"], str(avance))
+    aws.update_cell(target, _ACOL["Progress"], str(avance))
     if fecha_inicio:
-        aws.update_cell(target, _ACOL["FechaInicioReal"], fecha_inicio)
+        aws.update_cell(target, _ACOL["ActualStartDate"], fecha_inicio)
     if fecha_fin:
-        aws.update_cell(target, _ACOL["FechaFinReal"], fecha_fin)
+        aws.update_cell(target, _ACOL["ActualEndDate"], fecha_fin)
     if nota is not None:
-        aws.update_cell(target, _ACOL["Nota"], nota)
+        aws.update_cell(target, _ACOL["Note"], nota)
 
     # Recalcular el avance del proyecto EN MEMORIA (recs ya leídas, sin re-leer)
     proj_acts = []
     for r in recs:
-        if str(r.get("ProyectoID", "")) != str(pid):
+        if str(r.get("ProjectID", "")) != str(pid):
             continue
         rr = dict(r)
-        if str(rr.get("Orden", "")) == str(orden):
-            rr["Avance"] = avance
+        if str(rr.get("Order", "")) == str(orden):
+            rr["Progress"] = avance
         proj_acts.append(rr)
     nuevo  = compute_avance(proj_acts)
     prj    = get_project(pid)                       # cacheado
-    manual = str(prj.get("EstadoManual", "")) if prj else ""
-    _tipo  = str(prj.get("Tipo", "")) if prj else ""
-    update_project(pid, {"Avance": nuevo, "Estado": derive_estado(nuevo, manual, _tipo)})
+    manual = str(prj.get("ManualStatus", "")) if prj else ""
+    _tipo  = str(prj.get("Type", "")) if prj else ""
+    update_project(pid, {"Progress": nuevo, "Status": derive_estado(nuevo, manual, _tipo)})
     # update_project ya invalida el caché de lecturas
     return True, f"{t('Progress updated. Project')}: {nuevo}%"
 
@@ -928,9 +929,9 @@ def _recompute_project_avance(pid):
     acts   = list_activities(pid)
     nuevo  = compute_avance(acts)
     prj    = get_project(pid)
-    manual = str(prj.get("EstadoManual", "")) if prj else ""
-    _tipo  = str(prj.get("Tipo", "")) if prj else ""
-    update_project(pid, {"Avance": nuevo, "Estado": derive_estado(nuevo, manual, _tipo)})
+    manual = str(prj.get("ManualStatus", "")) if prj else ""
+    _tipo  = str(prj.get("Type", "")) if prj else ""
+    update_project(pid, {"Progress": nuevo, "Status": derive_estado(nuevo, manual, _tipo)})
     return nuevo
 
 
@@ -940,7 +941,7 @@ def add_activity(pid, nombre, duracion=1, peso=0) -> tuple:
     if err:
         return False, err
     acts  = list_activities(pid)
-    orden = int(max([_num(a.get("Orden")) for a in acts], default=0) + 1)
+    orden = int(max([_num(a.get("Order")) for a in acts], default=0) + 1)
     aws.append_row([pid, str(orden), str(nombre), str(int(_num(duracion) or 1)),
                     str(_num(peso)), "0", "", "", ""], value_input_option="RAW")
     _invalidate()
@@ -953,10 +954,10 @@ def delete_activity(pid, orden) -> tuple:
     aws, err = _activities_ws()
     if err:
         return False, err
-    recs = aws.get_all_records(numericise_ignore=["all"])
+    recs = columnas.canonizar(aws.get_all_records(numericise_ignore=["all"]))
     target = None
     for i, r in enumerate(recs):
-        if str(r.get("ProyectoID", "")) == str(pid) and str(r.get("Orden", "")) == str(orden):
+        if str(r.get("ProjectID", "")) == str(pid) and str(r.get("Order", "")) == str(orden):
             target = i + 2
             break
     if target is None:
@@ -983,9 +984,9 @@ def save_field_progress(pid, cambios) -> tuple:
     if err:
         return False, err
     hoy = clock.today().isoformat()
-    recs = aws.get_all_records(numericise_ignore=["all"])
-    rowmap = {str(r.get("Orden", "")): (i + 2, r)
-              for i, r in enumerate(recs) if str(r.get("ProyectoID", "")) == str(pid)}
+    recs = columnas.canonizar(aws.get_all_records(numericise_ignore=["all"]))
+    rowmap = {str(r.get("Order", "")): (i + 2, r)
+              for i, r in enumerate(recs) if str(r.get("ProjectID", "")) == str(pid)}
     batch = []
     for c in (cambios or []):
         hit = rowmap.get(str(c.get("orden")))
@@ -993,20 +994,20 @@ def save_field_progress(pid, cambios) -> tuple:
             continue
         row, r = hit
         av = max(0.0, min(100.0, _num(c.get("avance"))))
-        fi = str(r.get("FechaInicioReal", "")).strip()
-        ff = str(r.get("FechaFinReal", "")).strip()
-        batch.append({"range": f"{_col_letter(_ACOL['Avance'])}{row}", "values": [[str(av)]]})
+        fi = str(r.get("ActualStartDate", "")).strip()
+        ff = str(r.get("ActualEndDate", "")).strip()
+        batch.append({"range": f"{_col_letter(_ACOL['Progress'])}{row}", "values": [[str(av)]]})
         if av > 0 and not fi:                        # arranca → inicio real = hoy
-            batch.append({"range": f"{_col_letter(_ACOL['FechaInicioReal'])}{row}",
+            batch.append({"range": f"{_col_letter(_ACOL['ActualStartDate'])}{row}",
                           "values": [[hoy]]})
         if av >= 100 and not ff:                     # completa → fin real = hoy
-            batch.append({"range": f"{_col_letter(_ACOL['FechaFinReal'])}{row}",
+            batch.append({"range": f"{_col_letter(_ACOL['ActualEndDate'])}{row}",
                           "values": [[hoy]]})
         elif av < 100 and ff:                        # reabierta → borrar fin real
-            batch.append({"range": f"{_col_letter(_ACOL['FechaFinReal'])}{row}",
+            batch.append({"range": f"{_col_letter(_ACOL['ActualEndDate'])}{row}",
                           "values": [[""]]})
         if "nota" in c:
-            batch.append({"range": f"{_col_letter(_ACOL['Nota'])}{row}",
+            batch.append({"range": f"{_col_letter(_ACOL['Note'])}{row}",
                           "values": [[str(c.get("nota", ""))]]})
     if not batch:
         return True, t("No changes to save.")
@@ -1033,15 +1034,15 @@ def save_activities(pid, edits) -> tuple:
     aws, err = _activities_ws()
     if err:
         return False, err
-    recs = aws.get_all_records(numericise_ignore=["all"])
-    rowmap = {str(r.get("Orden", "")): i + 2
-              for i, r in enumerate(recs) if str(r.get("ProyectoID", "")) == str(pid)}
+    recs = columnas.canonizar(aws.get_all_records(numericise_ignore=["all"]))
+    rowmap = {str(r.get("Order", "")): i + 2
+              for i, r in enumerate(recs) if str(r.get("ProjectID", "")) == str(pid)}
     batch = []
     for e in edits:
         row = rowmap.get(str(e.get("orden0")))
         if row is None:
             continue
-        for field in ("Nombre", "DuracionDias", "Peso", "Orden"):
+        for field in ("Name", "DurationDays", "Weight", "Order"):
             if field in e and field in _ACOL:
                 batch.append({"range": f"{_col_letter(_ACOL[field])}{row}",
                               "values": [[str(e[field])]]})
@@ -1066,9 +1067,9 @@ def project_hours(proyecto_nombre: str, grupo: str = None, pid: str = "") -> flo
     for r in _fichajes_visibles(grupo):
         if not timeclock.es_del_proyecto(r, pid, proyecto_nombre):
             continue
-        if grupo is not None and str(r.get("Grupo", "")) != str(grupo):
+        if grupo is not None and str(r.get("Group", "")) != str(grupo):
             continue
-        total += _num(r.get("Horas"))
+        total += _num(r.get("Hours"))
     return round(total, 2)
 
 
@@ -1087,7 +1088,7 @@ def project_hours_bulk(grupo: str = None) -> dict:
     # de identidad, no una lista de obras. Sin ellas, las horas fichadas al almacén no
     # resolverían su ID y se perderían de la cuenta, en silencio.
     for p in list_projects(grupo=grupo, incluir_archivados=True, incluir_internos=True):
-        n = str(p.get("Nombre", "")).strip().casefold()
+        n = str(p.get("Name", "")).strip().casefold()
         if n:
             idx[n] = str(p.get("ID", ""))
     out = {}
@@ -1097,13 +1098,13 @@ def project_hours_bulk(grupo: str = None) -> dict:
     # proyectos. Mismo criterio que `_registros_visibles`: el grupo explícito manda
     # solo si quien pregunta puede verlo, para no convertir el argumento en llave.
     for r in _fichajes_visibles(grupo):
-        if grupo is not None and str(r.get("Grupo", "")) != str(grupo):
+        if grupo is not None and str(r.get("Group", "")) != str(grupo):
             continue
         pid = timeclock.pid_of(r) or idx.get(
-            str(r.get("Proyecto", "")).strip().casefold(), "")
+            str(r.get("Project", "")).strip().casefold(), "")
         if not pid:
             continue                           # fichaje de algo que ya no existe
-        out[pid] = out.get(pid, 0.0) + _num(r.get("Horas"))
+        out[pid] = out.get(pid, 0.0) + _num(r.get("Hours"))
     return {k: round(v, 2) for k, v in out.items()}
 
 
@@ -1118,21 +1119,21 @@ def set_grouping_members(gid: str, miembros: dict, grupo: str = None) -> tuple:
     Los proyectos que estaban y ya no figuran se DESAGRUPAN (no se borran).
     Devuelve (ok, mensaje). ⚠️ Es 1 escritura por proyecto que cambia.
     """
-    actuales = {str(p.get("ID")): _num(p.get("PesoEnAgrupacion"))
+    actuales = {str(p.get("ID")): _num(p.get("WeightInGrouping"))
                 for p in list_projects(grupo=grupo, agrupacion_id=gid, incluir_archivados=True)}
     nuevos = {str(k): float(v or 1) for k, v in (miembros or {}).items()}
 
     cambios, errores = 0, []
     for pid, peso in nuevos.items():                   # altas y cambios de peso
         if pid not in actuales or abs(actuales[pid] - peso) > 1e-9:
-            ok, msg = update_project(pid, {"AgrupacionID": gid,
-                                           "PesoEnAgrupacion": peso})
+            ok, msg = update_project(pid, {"GroupingID": gid,
+                                           "WeightInGrouping": peso})
             cambios += 1 if ok else 0
             if not ok:
                 errores.append(f"{pid}: {msg}")
     for pid in actuales:                               # bajas
         if pid not in nuevos:
-            ok, msg = update_project(pid, {"AgrupacionID": "", "PesoEnAgrupacion": 0})
+            ok, msg = update_project(pid, {"GroupingID": "", "WeightInGrouping": 0})
             cambios += 1 if ok else 0
             if not ok:
                 errores.append(f"{pid}: {msg}")
@@ -1154,7 +1155,7 @@ def grouping_projection(gid: str, grupo: str = None) -> dict:
            "sin_datos": [], "detalle": []}
     cache = projections_by_group(grupo) if grupo else {}
     for p in list_projects(grupo=grupo, agrupacion_id=gid, incluir_archivados=True):
-        pid, nom = str(p.get("ID", "")), str(p.get("Nombre", ""))
+        pid, nom = str(p.get("ID", "")), str(p.get("Name", ""))
         pr = cache.get(pid)                       # cacheado por grupo (60 s)
         if pr is None:
             ps = project_schedule(pid)
@@ -1188,7 +1189,7 @@ def grouping_curve(gid: str, grupo: str = None) -> dict:
         ps = project_schedule(str(p.get("ID", "")))
         if not ps:
             continue
-        peso = _num(p.get("PesoEnAgrupacion")) or 1.0
+        peso = _num(p.get("WeightInGrouping")) or 1.0
         series.append({"peso": peso, "inicio": ps["sched"]["start_date"],
                        "plan": ps["sched"]["scurve"], "real": ps["real"],
                        "hoy": ps["today_day"]})
@@ -1235,11 +1236,11 @@ def grouping_curve(gid: str, grupo: str = None) -> dict:
 def grouping_progress(gid: str) -> dict:
     """Avance ponderado de una agrupación: Σ(peso_proy × avance_proy)/Σ(peso)."""
     proys = list_projects(agrupacion_id=gid, incluir_archivados=True)
-    tot_peso = sum(_num(p.get("PesoEnAgrupacion")) for p in proys)
+    tot_peso = sum(_num(p.get("WeightInGrouping")) for p in proys)
     if tot_peso <= 0:
         avance = 0.0
     else:
-        avance = round(sum(_num(p.get("PesoEnAgrupacion")) * _num(p.get("Avance"))
+        avance = round(sum(_num(p.get("WeightInGrouping")) * _num(p.get("Progress"))
                            for p in proys) / tot_peso, 1)
     return {"avance": avance, "n_proyectos": len(proys), "peso_total": tot_peso}
 
@@ -1254,15 +1255,15 @@ def project_schedule(pid: str):
     if not prj or not acts:
         return None
     try:
-        y, m, d = str(prj.get("FechaInicio", "")).split("-")
+        y, m, d = str(prj.get("StartDate", "")).split("-")
         start = date(int(y), int(m), int(d))
     except Exception:
         start = clock.today()
-    custom = [{"nombre":   a.get("Nombre", ""),
-               "duracion": _num(a.get("DuracionDias")) or 1.0,
-               "peso":     _num(a.get("Peso"))} for a in acts]
+    custom = [{"nombre":   a.get("Name", ""),
+               "duracion": _num(a.get("DurationDays")) or 1.0,
+               "peso":     _num(a.get("Weight"))} for a in acts]
     sched     = build_schedule(1, start, {}, custom_rows=custom)
-    avances   = [_num(a.get("Avance")) for a in acts]
+    avances   = [_num(a.get("Progress")) for a in acts]
     today_day = (clock.today() - start).days
 
     def _day_off(s):
@@ -1271,7 +1272,7 @@ def project_schedule(pid: str):
             return (date(int(y), int(m), int(dd)) - start).days
         except Exception:
             return None
-    windows = [(_day_off(a.get("FechaInicioReal")), _day_off(a.get("FechaFinReal")))
+    windows = [(_day_off(a.get("ActualStartDate")), _day_off(a.get("ActualEndDate")))
                for a in acts]
 
     real = real_scurve(sched, avances, upto_day=today_day, windows=windows)  # se corta en HOY
@@ -1287,7 +1288,7 @@ def _documents_ws():
 
 def list_documents(pid: str) -> list:
     return [r for r in _records(DOCUMENTS_SHEET)
-            if str(r.get("ProyectoID", "")) == str(pid)]
+            if str(r.get("ProjectID", "")) == str(pid)]
 
 
 def add_document(pid, nombre, tipo, drive_id, subido_por="") -> tuple:
@@ -1304,9 +1305,9 @@ def delete_document_record(pid, drive_id) -> tuple:
     dws, err = _documents_ws()
     if err:
         return False, err
-    recs = dws.get_all_records(numericise_ignore=["all"])
+    recs = columnas.canonizar(dws.get_all_records(numericise_ignore=["all"]))
     for i, r in enumerate(recs):
-        if str(r.get("ProyectoID", "")) == str(pid) and str(r.get("DriveID", "")) == str(drive_id):
+        if str(r.get("ProjectID", "")) == str(pid) and str(r.get("DriveID", "")) == str(drive_id):
             dws.delete_rows(i + 2)
             _invalidate()
             return True, t("Document deleted.")
@@ -1319,7 +1320,7 @@ def ganancia_hora(pid: str, prj: dict = None) -> dict:
     if prj is None:
         prj = get_project(pid) or {}
     try:
-        d = json.loads(str(prj.get("GananciaHoraJSON", "") or "{}"))
+        d = json.loads(str(prj.get("HourlyProfitJSON", "") or "{}"))
         return {str(k): _num(v) for k, v in d.items() if _num(v) != 0}
     except Exception as e:
         logger.warning("projects: GananciaHoraJSON inválido en %s: %s", pid, e)
@@ -1333,7 +1334,7 @@ def set_ganancia_hora(pid: str, mapa: dict) -> tuple:
     vuelta atrás legítima: si te equivocaste al migrarlo, puedes deshacerlo.
     """
     limpio = {str(k): round(_num(v), 2) for k, v in (mapa or {}).items() if _num(v) > 0}
-    return update_project(pid, {"GananciaHoraJSON": json.dumps(limpio, ensure_ascii=False)})
+    return update_project(pid, {"HourlyProfitJSON": json.dumps(limpio, ensure_ascii=False)})
 
 
 def ganancia_fija(pid: str, prj: dict = None) -> float:
@@ -1345,7 +1346,7 @@ def ganancia_fija(pid: str, prj: dict = None) -> float:
     """
     if prj is None:
         prj = get_project(pid) or {}
-    return max(0.0, _num(prj.get("GananciaFija")))
+    return max(0.0, _num(prj.get("FixedProfit")))
 
 
 def set_ganancia_fija(pid: str, valor) -> tuple:
@@ -1355,7 +1356,7 @@ def set_ganancia_fija(pid: str, valor) -> tuple:
     equivocaste de obra, se deshace sin dejar un número inventado en la estimación.
     """
     v = max(0.0, _num(valor))
-    return update_project(pid, {"GananciaFija": str(round(v, 2)) if v > 0 else ""})
+    return update_project(pid, {"FixedProfit": str(round(v, 2)) if v > 0 else ""})
 
 # ══════════════════════════════════════════════════════════
 #  Head installer/s (v459) — antes «Engineer in charge»
@@ -1371,7 +1372,7 @@ def set_ganancia_fija(pid: str, valor) -> tuple:
 # MUESTRA, nunca la clave).
 def head_installers(prj: dict) -> list:
     """Los LOGIN de los head installers de una obra. [] si no hay."""
-    return [x.strip() for x in str((prj or {}).get("Ingeniero", "")).split(";") if x.strip()]
+    return [x.strip() for x in str((prj or {}).get("HeadInstallers", "")).split(";") if x.strip()]
 
 
 def head_installers_label(prj: dict, grupo: str = "") -> str:
@@ -1387,10 +1388,10 @@ def head_installers_label(prj: dict, grupo: str = "") -> str:
         return ""
     try:
         from core import auth
-        _us = auth.list_users(grupo or str((prj or {}).get("Grupo", "")))
+        _us = auth.list_users(grupo or str((prj or {}).get("Group", "")))
         _etq = auth.etiqueta_usuarios(_us)
-        _por_login = {str(u.get("Usuario")): u for u in _us}
-        return ", ".join(_etq.get(i) or str(_por_login.get(i, {}).get("Nombre") or i)
+        _por_login = {str(u.get("User")): u for u in _us}
+        return ", ".join(_etq.get(i) or str(_por_login.get(i, {}).get("Name") or i)
                          for i in _ids)
     except Exception as e:
         logger.warning("head_installers_label: no se pudo resolver el nombre: %s", e)

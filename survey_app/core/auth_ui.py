@@ -91,16 +91,16 @@ def render_credenciales(usuario, grupo, editable=False, key_prefix="cr"):
     creds = C.list_for(usuario)
     if creds:
         # KPIs de un vistazo (v186): vigentes / por vencer / vencidas
-        _sts = [C.status(r.get("Vencimiento")) for r in creds]
+        _sts = [C.status(r.get("ExpiryDate")) for r in creds]
         k1, k2, k3, k4 = st.columns(4)
         k1.metric(t("Credentials"), len(creds))
         k2.metric(t(":material/check_circle: Valid"), sum(1 for s in _sts if s == "vigente"))
         k3.metric(t(":material/schedule: Expiring"), sum(1 for s in _sts if s == "por_vencer"))
         k4.metric(t(":material/cancel: Expired"), sum(1 for s in _sts if s == "vencido"))
         st.dataframe(pd.DataFrame([{
-            "Tipo": r.get("Tipo"), "Number": r.get("Numero"), "Clase": r.get("Clase"),
-            "Issued": r.get("Emision") or "—", "Vence": r.get("Vencimiento") or "—",
-            "Estado": C.status_label(r.get("Vencimiento")),
+            "Tipo": r.get("Type"), "Number": r.get("Number"), "Clase": r.get("Class"),
+            "Issued": r.get("IssueDate") or "—", "Vence": r.get("ExpiryDate") or "—",
+            "Estado": C.status_label(r.get("ExpiryDate")),
         } for r in creds]), hide_index=True, width="stretch", column_config=tabla.cfg())
         # Documentos adjuntos agrupados (antes: botones sueltos apilados bajo la tabla)
         _docs = [r for r in creds if str(r.get("DriveID", "")).strip()]
@@ -109,9 +109,9 @@ def render_credenciales(usuario, grupo, editable=False, key_prefix="cr"):
                 from core import drive_store
                 for r in _docs:
                     try:
-                        st.download_button(f":material/download: {r.get('Tipo')} — {r.get('Archivo', 'archivo')}",
+                        st.download_button(f":material/download: {r.get('Type')} — {r.get('File', 'archivo')}",
                                            data=drive_store.download(str(r.get("DriveID", "")).strip()),
-                                           file_name=r.get("Archivo", "credencial"),
+                                           file_name=r.get("File", "credencial"),
                                            key=f"{key_prefix}_dl_{r.get('ID')}")
                     except Exception:
                         pass
@@ -163,19 +163,19 @@ def render_credenciales(usuario, grupo, editable=False, key_prefix="cr"):
 
     if creds:
         with st.expander(t("Edit / delete credential"), icon=":material/edit:"):
-            idmap = {f"{r.get('Tipo')} · {r.get('Numero') or 's/n'} ({r.get('ID')})": r for r in creds}
+            idmap = {f"{r.get('Type')} · {r.get('Number') or 's/n'} ({r.get('ID')})": r for r in creds}
             sel = st.selectbox(t("Credential"), list(idmap.keys()), key=f"{key_prefix}_esel")
             r = idmap[sel]
             _kid = str(r.get("ID", ""))
             c1, c2 = st.columns(2)
-            enum = c1.text_input(t("Number"), value=r.get("Numero", ""), key=f"{key_prefix}_enum_{_kid}")
-            even = _fecha_input(c2, "Expiry (blank if it does not expire)", r.get("Vencimiento", ""),
+            enum = c1.text_input(t("Number"), value=r.get("Number", ""), key=f"{key_prefix}_enum_{_kid}")
+            even = _fecha_input(c2, "Expiry (blank if it does not expire)", r.get("ExpiryDate", ""),
                                 key=f"{key_prefix}_even_{_kid}")
-            enota = st.text_input(t("Note"), value=r.get("Nota", ""), key=f"{key_prefix}_enota_{_kid}")
+            enota = st.text_input(t("Note"), value=r.get("Note", ""), key=f"{key_prefix}_enota_{_kid}")
             b1, b2 = st.columns(2)
             if b1.button(t(":material/save: Save"), key=f"{key_prefix}_eupd"):
-                ok, msg = C.update(r.get("ID"), {"Numero": enum, "Vencimiento": even, "Nota": enota,
-                                                 "ActualizadoPor": admin_usr})
+                ok, msg = C.update(r.get("ID"), {"Number": enum, "ExpiryDate": even, "Note": enota,
+                                                 "UpdatedBy": admin_usr})
                 (flash.exito if ok else st.error)(msg)
                 if ok:
                     st.rerun()
@@ -400,7 +400,7 @@ def _owner_grupos():
     if grupos:
         with st.expander(t("Each client's data workbook"), icon=":material/menu_book:"):
             st.caption(t("Each client company can have its **own Google Sheets file**, so its data does not share a file with anyone else's. Empty = it uses the master workbook."))
-            _gl = ui.elegir(t("Company"), [g["Grupo"] for g in grupos], key="gsheet_sel",
+            _gl = ui.elegir(t("Company"), [g["Group"] for g in grupos], key="gsheet_sel",
                             vacio="— elige un grupo —")
             if _gl:
                 _sid_now = auth.group_sheet_id(_gl)
@@ -440,7 +440,7 @@ def _owner_grupos():
             st.caption(t("The local time in which that company's records are written "
                          "(time clock, pre-start, alerts…). Not set = ")
                        + f"{clock.DEFAULT_TZ}.")
-            _gz = {g["Grupo"]: (g.get("Zona") or "") for g in grupos}
+            _gz = {g["Group"]: (g.get("TimeZone") or "") for g in grupos}
             gzsel = ui.elegir(t("Company"), list(_gz.keys()), key="tz_g_sel", vacio="— elige un grupo —")
             if gzsel:
                 _cur = _gz.get(gzsel) or clock.DEFAULT_TZ
@@ -473,7 +473,7 @@ def _owner_grupos():
             st.caption(t("Only the starting point when you add a catalogue item to a quote — the "
                          "profit is set line by line, on each item charged to the client. What a "
                          "job earns is set on the job itself: per hour, or a fixed amount."))
-            gmsel = ui.elegir(t("Company"), [g["Grupo"] for g in grupos], key="mg_g_sel",
+            gmsel = ui.elegir(t("Company"), [g["Group"] for g in grupos], key="mg_g_sel",
                               vacio="— elige un grupo —")
             if gmsel:
                 def _f_mg(v):
@@ -481,7 +481,7 @@ def _owner_grupos():
                         return float(str(v).replace(",", ".") or 0)
                     except Exception:
                         return 0.0
-                _curm = next((_f_mg(g.get("MargenDefault")) for g in grupos if g["Grupo"] == gmsel), 0.0)
+                _curm = next((_f_mg(g.get("DefaultMargin")) for g in grupos if g["Group"] == gmsel), 0.0)
                 # ⚠️ Ya NO es «el margen de las obras»: el modelo de % sobre la mano de
                 # obra se retiró. Esto solo da el punto de PARTIDA de una línea nueva de
                 # cotización, donde lo que se teclea es la ganancia en dinero (v355).
@@ -501,7 +501,7 @@ def _owner_grupos():
     if grupos:
         with st.expander(t("Default invoicing tax (GST/VAT)"), icon=":material/receipt_long:"):
             st.caption(t("Applied by default to new invoices; editable per invoice. Australia = 10 (GST)."))
-            gtsel = ui.elegir(t("Company"), [g["Grupo"] for g in grupos], key="tx_g_sel",
+            gtsel = ui.elegir(t("Company"), [g["Group"] for g in grupos], key="tx_g_sel",
                               vacio="— elige un grupo —")
             if gtsel:
                 def _f_tx(v):
@@ -509,7 +509,7 @@ def _owner_grupos():
                         return float(str(v).replace(",", ".") or 0)
                     except Exception:
                         return 0.0
-                _curt = next((_f_tx(g.get("ImpuestoDefault")) for g in grupos if g["Grupo"] == gtsel), 0.0)
+                _curt = next((_f_tx(g.get("DefaultTax")) for g in grupos if g["Group"] == gtsel), 0.0)
                 tnew = st.number_input(t("Default tax (%)"), min_value=0.0, max_value=100.0,
                                        step=1.0, value=_curt, key="tx_val")
                 if st.button(t(":material/save: Save tax"), key="tx_save"):
@@ -522,7 +522,7 @@ def _owner_grupos():
     if grupos:
         with st.expander(t("Payroll: default super and withholding"), icon=":material/payments:"):
             st.caption(t("These are preloaded when payroll is generated; editable per payslip. Australia: super ~11.5%. This is not a certified tax calculation."))
-            gnsel = ui.elegir(t("Company"), [g["Grupo"] for g in grupos], key="nomcfg_g_sel",
+            gnsel = ui.elegir(t("Company"), [g["Group"] for g in grupos], key="nomcfg_g_sel",
                               vacio="— elige un grupo —")
             if gnsel:
                 def _f_n(v, dflt):
@@ -533,15 +533,15 @@ def _owner_grupos():
                         return float(s.replace(",", "."))
                     except Exception:
                         return dflt
-                _g = next((g for g in grupos if g["Grupo"] == gnsel), {})
+                _g = next((g for g in grupos if g["Group"] == gnsel), {})
                 nc1, nc2 = st.columns(2)
                 _sup = nc1.number_input(t("Superannuation % (employer contribution)"), min_value=0.0, max_value=100.0,
-                                        step=0.5, value=_f_n(_g.get("SuperDefault"), 11.5), key="nom_supdef")
+                                        step=0.5, value=_f_n(_g.get("DefaultSuper"), 11.5), key="nom_supdef")
                 _ret = nc2.number_input(t("Tax withholding % (deduction)"), min_value=0.0, max_value=100.0,
-                                        step=1.0, value=_f_n(_g.get("RetencionDefault"), 0.0), key="nom_retdef")
+                                        step=1.0, value=_f_n(_g.get("DefaultWithholding"), 0.0), key="nom_retdef")
                 if st.button(t(":material/save: Save payroll settings"), key="nomcfg_save"):
-                    ok1, _m1 = auth.set_group_num_setting(gnsel, "SuperDefault", _sup)
-                    ok2, _m2 = auth.set_group_num_setting(gnsel, "RetencionDefault", _ret)
+                    ok1, _m1 = auth.set_group_num_setting(gnsel, "DefaultSuper", _sup)
+                    ok2, _m2 = auth.set_group_num_setting(gnsel, "DefaultWithholding", _ret)
                     if ok1 and ok2:
                         flash.exito(t("Payroll settings updated."))
                         st.rerun()
@@ -549,7 +549,7 @@ def _owner_grupos():
                         st.error(_m1 if not ok1 else _m2)
 
     if grupos:
-        gsel = ui.elegir(t("Delete company"), [g["Grupo"] for g in grupos],
+        gsel = ui.elegir(t("Delete company"), [g["Group"] for g in grupos],
                          key="del_g_sel", vacio=t("— no company —"))
         if gsel:
             _ok_del = ui.confirmar_borrado("del_g_ok",
@@ -570,18 +570,18 @@ def _owner_usuarios():
     if users:
         _rows = []
         for u in users:
-            es_campo = str(u.get("Rol", "")).lower() == "campo"
+            es_campo = str(u.get("Role", "")).lower() == "campo"
             _cont = ("—" if not es_campo
                      else (t("yes") if (str(u.get("Email", "")).strip()
                                     and str(u.get("TelegramChatID", "")).strip())
                            else t("missing")))
-            _rows.append({"Usuario": u.get("Usuario", ""), "Nombre": u.get("Nombre", ""),
-                          "Rol": u.get("Rol", ""), "Grupo": u.get("Grupo", "") or "—",
-                          "Activo": u.get("Activo", "SI"),
-                          "Email": u.get("Email", "") or "—", "Contacto": _cont})
+            _rows.append({"User": u.get("User", ""), "Name": u.get("Name", ""),
+                          "Role": u.get("Role", ""), "Group": u.get("Group", "") or "—",
+                          "Active": u.get("Active", "SI"),
+                          "Email": u.get("Email", "") or "—", "ContactName": _cont})
         st.dataframe(pd.DataFrame(_rows), hide_index=True, width="stretch", column_config=tabla.cfg())
-        _faltan = [u["Usuario"] for u in users
-                   if str(u.get("Rol", "")).lower() == "campo"
+        _faltan = [u["User"] for u in users
+                   if str(u.get("Role", "")).lower() == "campo"
                    and not (str(u.get("Email", "")).strip()
                             and str(u.get("TelegramChatID", "")).strip())]
         if _faltan:
@@ -589,7 +589,7 @@ def _owner_usuarios():
                        + ", ".join(_faltan))
 
     # ── Crear usuario (rol + grupo) ──
-    grupo_opts = [""] + [g["Grupo"] for g in auth.list_groups()]
+    grupo_opts = [""] + [g["Group"] for g in auth.list_groups()]
     with st.expander(t("Create user"), icon=":material/person_add:"):
         with st.form("form_user", clear_on_submit=True):
             u  = st.text_input(t("Username"))
@@ -612,10 +612,10 @@ def _owner_usuarios():
     # ── Gestionar un usuario: ficha 360° (una sola selección) ──
     if users:
         st.markdown(t("#### :material/manage_accounts: Manage a user"))
-        _gf = ui.elegir(t("Filter by company"), [g["Grupo"] for g in auth.list_groups()],
+        _gf = ui.elegir(t("Filter by company"), [g["Group"] for g in auth.list_groups()],
                         key="ow_ficha_gfil", vacio="— all companies —")
-        _cands = [u for u in users if (not _gf or str(u.get("Grupo", "")) == _gf)]
-        _map = {f"{u['Nombre'] or u['Usuario']} ({u['Usuario']}) · {u.get('Grupo') or "no company"}": u
+        _cands = [u for u in users if (not _gf or str(u.get("Group", "")) == _gf)]
+        _map = {f"{u['Name'] or u['User']} ({u['User']}) · {u.get('Group') or "no company"}": u
                 for u in _cands}
         _elegido = ui.elegir(t("Username"), _map, key="ow_fichasel", vacio="— choose a user —")
         if _elegido:
@@ -625,8 +625,8 @@ def _owner_usuarios():
             # sesión del propietario no tiene grupo, así que sin declarar el ámbito
             # esos bloques salían vacíos. `Login` es global y se lee igual.
             from core import tenant as _tnt
-            with _tnt.como_grupo(_elegido.get("Grupo", "")):
-                _ficha_usuario(_elegido, _elegido.get("Grupo", ""),
+            with _tnt.como_grupo(_elegido.get("Group", "")):
+                _ficha_usuario(_elegido, _elegido.get("Group", ""),
                                owner=True, sel_key="ow_fichasel")
 
 
@@ -703,13 +703,13 @@ def _owner_manuales():
     ups = manuals.list_uploaded()
     if ups:
         st.dataframe(pd.DataFrame([{
-            "Manual": r.get("Nombre"),
-            "Fragmentos": r.get("NumFrags"),
-            "Fecha": r.get("Fecha"),
-            "By": r.get("SubidoPor"),
+            "Manual": r.get("Name"),
+            "Fragmentos": r.get("NumChunks"),
+            "Fecha": r.get("Date"),
+            "By": r.get("UploadedBy"),
         } for r in ups]), hide_index=True, width="stretch", column_config=tabla.cfg())
         with st.expander(t("Remove a manual"), icon=":material/delete:"):
-            opciones = {f"{r.get('Nombre')}  ·  {r.get('Fecha')}": r.get("ID") for r in ups}
+            opciones = {f"{r.get('Name')}  ·  {r.get('Date')}": r.get("ID") for r in ups}
             _mid = ui.elegir(t("Manual"), opciones, key="man_del_sel",
                              vacio=t("— no manual —"))
             if _mid:
@@ -872,9 +872,9 @@ def _owner_rieles():
     data = rails.list_rieles()
     if data:
         st.dataframe(pd.DataFrame([{
-            "Referencia": r.get("Referencia"),
-            "Altura diente desde espalda (RAIL)": r.get("AlturaDiente"),
-            "Ancho diente": r.get("AnchoDiente"),
+            "Referencia": r.get("Reference"),
+            "Altura diente desde espalda (RAIL)": r.get("ToothHeight"),
+            "Ancho diente": r.get("ToothWidth"),
         } for r in data]), hide_index=True, width="stretch", column_config=tabla.cfg())
     else:
         st.info(t("The catalogue is empty. Add the first rail below."))
@@ -897,7 +897,7 @@ def _owner_rieles():
 
     if data:
         with st.expander(t("Edit / delete rail"), icon=":material/edit:"):
-            refs = [r.get("Referencia") for r in data]
+            refs = [r.get("Reference") for r in data]
             sel  = st.selectbox(t("Reference"), refs, key="riel_sel")
             _cur = rails.get_rail(sel) or {}
             ec1, ec2 = st.columns(2)
@@ -933,16 +933,16 @@ def _ficha_usuario(u, grupo, owner=False, sel_key="gp_fichasel"):
     from core import projects as P
     from core import timeclock as T
     from core import expenses as E
-    sel   = u["Usuario"]
-    es_campo = u["Rol"].lower() == "campo"
+    sel   = u["User"]
+    es_campo = u["Role"].lower() == "campo"
     k = f"fu_{sel}"
 
     # ── Estado de un vistazo ──
     contacto_ok = bool(str(u.get("Email", "")).strip()
                        and str(u.get("TelegramChatID", "")).strip())
-    activo = str(u.get("Activo", "")).strip().upper() in ("SI", "TRUE", "1", "SÍ")
+    activo = str(u.get("Active", "")).strip().upper() in ("SI", "TRUE", "1", "SÍ")
     try:
-        _ses = T.open_sessions(u.get("Nombre") or sel, grupo, sel)
+        _ses = T.open_sessions(u.get("Name") or sel, grupo, sel)
         fichando = bool(_ses.get(T.TIPO_GENERAL) or _ses.get(T.TIPO_PROYECTO))
     except Exception:
         fichando = False
@@ -951,7 +951,7 @@ def _ficha_usuario(u, grupo, owner=False, sel_key="gp_fichasel"):
              (":material/schedule: " + t("Clocked in now") if fichando else ""),
              ((":green[:material/contact_page:] " + t("Contact OK") if contacto_ok else ":orange[:material/warning:] No contact details")
               if es_campo else "")]
-    st.markdown(f"**{u.get('Nombre') or sel}**  ·  _{_etq(str(u['Rol']))}_  ·  "
+    st.markdown(f"**{u.get('Name') or sel}**  ·  _{_etq(str(u['Role']))}_  ·  "
                 + "  ·  ".join(c for c in chips if c))
 
     # v237: format_func muestra iconos Material; las OPCIONES siguen siendo el ID (emoji)
@@ -976,7 +976,7 @@ def _ficha_usuario(u, grupo, owner=False, sel_key="gp_fichasel"):
                     st.error(t("Type the new password."))
         with _a2:
             tar = st.number_input(t(":material/payments: Hourly rate"), min_value=0.0, step=1.0,
-                                  value=float(str(u.get("TarifaHora", "") or 0).replace(",", ".") or 0),
+                                  value=float(str(u.get("HourlyRate", "") or 0).replace(",", ".") or 0),
                                   key=f"{k}_tar", help=t("Used to cost the labour."))
             if st.button(t("Save rate"), key=f"{k}_savetar", width="stretch"):
                 ok, msg = auth.set_rate(sel, tar); (flash.exito if ok else st.error)(msg)
@@ -1002,9 +1002,9 @@ def _ficha_usuario(u, grupo, owner=False, sel_key="gp_fichasel"):
         if not _fi:
             st.caption(t(":material/warning: With no start date their leave balance is counted by calendar year (1 Jan – 31 Dec), not from their anniversary."))
         if owner:   # el propietario también reasigna rol y grupo (v184)
-            _gopts = [""] + [g["Grupo"] for g in auth.list_groups()]
+            _gopts = [""] + [g["Group"] for g in auth.list_groups()]
             _rc, _gc = st.columns(2)
-            _rcur = str(u.get("Rol", "") or "campo")
+            _rcur = str(u.get("Role", "") or "campo")
             _nrol = _rc.selectbox(t("Role"), auth.ROLES,
                                   index=auth.ROLES.index(_rcur) if _rcur in auth.ROLES else 0,
                                   key=f"{k}_rol")
@@ -1012,7 +1012,7 @@ def _ficha_usuario(u, grupo, owner=False, sel_key="gp_fichasel"):
                 ok, msg = auth.set_role(sel, _nrol); (flash.exito if ok else st.error)(msg)
                 if ok:
                     st.rerun()
-            _gcur = str(u.get("Grupo", "") or "")
+            _gcur = str(u.get("Group", "") or "")
             _ngrp = _gc.selectbox(t("Company"), _gopts,
                                   index=_gopts.index(_gcur) if _gcur in _gopts else 0,
                                   key=f"{k}_grp")
@@ -1056,7 +1056,7 @@ def _ficha_usuario(u, grupo, owner=False, sel_key="gp_fichasel"):
         # alguien de oficina su asignación permanente ES la oficina: sin ellas, su
         # ficha diría «0 proyectos asignados» teniendo su sitio asignado.
         asg = ([p for p in P.list_projects(grupo=grupo, incluir_internos=True)
-                if sel in [x.strip() for x in str(p.get("CampoAsignados", "")).split(";")]]
+                if sel in [x.strip() for x in str(p.get("FieldAssigned", "")).split(";")]]
                if es_campo else [])
         c1.metric(t("Hours recorded"), f"{_h:.1f}")
         c2.metric(t("Receipts uploaded"), rec["n"])
@@ -1067,7 +1067,7 @@ def _ficha_usuario(u, grupo, owner=False, sel_key="gp_fichasel"):
             st.markdown(t("**Assigned to** — tap to open:"))
             _ac = st.columns(2)
             for _i, _p in enumerate(asg):
-                if _ac[_i % 2].button(f":material/apartment: {_p.get('Nombre', '')}", key=f"{k}_gp_{_i}",
+                if _ac[_i % 2].button(f":material/apartment: {_p.get('Name', '')}", key=f"{k}_gp_{_i}",
                                       width="stretch"):
                     st.session_state["_prjsel_pending"] = str(_p.get("ID", ""))
                     st.session_state["_admin_nav_pending"] = ("proyectos", "📊 Proyectos")
@@ -1121,7 +1121,7 @@ def _grupo_usuarios(grupo):
     El aviso de vencimientos ya NO se dispara aquí (desde v187 corre al login, app.py)."""
     from core import credentials as C
     users = auth.list_users(grupo=grupo)
-    gente = [u for u in users if u["Rol"].lower() == "campo"]
+    gente = [u for u in users if u["Role"].lower() == "campo"]
 
     if not gente:
         st.info(t("You have no field users yet. Create the first one here."))
@@ -1140,7 +1140,7 @@ def _grupo_usuarios(grupo):
         st.session_state["_gu_open"] = _du
         st.session_state.pop("gu_tbl", None)      # descarta cualquier selección previa
     _op = st.session_state.get("_gu_open")
-    if _op and not any(u["Usuario"] == _op for u in gente):   # p.ej. tras eliminarlo
+    if _op and not any(u["User"] == _op for u in gente):   # p.ej. tras eliminarlo
         st.session_state.pop("_gu_open", None)
         st.session_state.pop("gu_tbl", None)
 
@@ -1150,8 +1150,8 @@ def _grupo_usuarios(grupo):
         _rank = {"vencido": 3, "por_vencer": 2, "vigente": 1}
         try:
             for r in C.list_group(grupo):
-                _uu = str(r.get("Usuario", "")).strip().lower()
-                _s = C.status(r.get("Vencimiento"))
+                _uu = str(r.get("User", "")).strip().lower()
+                _s = C.status(r.get("ExpiryDate"))
                 if _s and _rank.get(_s, 0) > _rank.get(_peor.get(_uu, ""), 0):
                     _peor[_uu] = _s
         except Exception:
@@ -1159,7 +1159,7 @@ def _grupo_usuarios(grupo):
     _ico = {e: _etq(e) for e in ("vencido", "por_vencer", "vigente")}
 
     def _activo(u):
-        return str(u.get("Activo", "")).strip().upper() in ("SI", "TRUE", "1", "SÍ")
+        return str(u.get("Active", "")).strip().upper() in ("SI", "TRUE", "1", "SÍ")
 
     def _cont_ok(u):
         return bool(str(u.get("Email", "")).strip()
@@ -1168,8 +1168,8 @@ def _grupo_usuarios(grupo):
     # ── Fila de SALUD del equipo (de un vistazo) ──
     _nact = sum(1 for u in gente if _activo(u))
     _nsc = sum(1 for u in gente if not _cont_ok(u))
-    _npv = sum(1 for u in gente if _peor.get(u["Usuario"].strip().lower()) == "por_vencer")
-    _nvc = sum(1 for u in gente if _peor.get(u["Usuario"].strip().lower()) == "vencido")
+    _npv = sum(1 for u in gente if _peor.get(u["User"].strip().lower()) == "por_vencer")
+    _nvc = sum(1 for u in gente if _peor.get(u["User"].strip().lower()) == "vencido")
     _linea = f":material/group: **{len(gente)}** people · :green[:material/check_circle:] **{_nact}** active"
     if _nsc:
         _linea += f" · :orange[:material/warning:] **{_nsc}** with no contact details"
@@ -1200,11 +1200,11 @@ def _grupo_usuarios(grupo):
 
     # ── Tabla CLICKEABLE → abre la ficha de esa persona ──
     _rows = [{
-        "Usuario": u["Usuario"], "Nombre": u["Nombre"] or u["Usuario"],
-        "Activo": t("yes") if _activo(u) else t("no"),
-        "Contacto": t("yes") if _cont_ok(u) else t("missing"),
-        "Credentials": _ico.get(_peor.get(u["Usuario"].strip().lower()), "—"),
-        "Rate/h": u.get("TarifaHora", "") or "—",
+        "User": u["User"], "Name": u["Name"] or u["User"],
+        "Active": t("yes") if _activo(u) else t("no"),
+        "ContactName": t("yes") if _cont_ok(u) else t("missing"),
+        "Credentials": _ico.get(_peor.get(u["User"].strip().lower()), "—"),
+        "Rate/h": u.get("HourlyRate", "") or "—",
     } for u in gente]
     _ev = st.dataframe(pd.DataFrame(_rows), hide_index=True, width="stretch",
                        on_select="rerun", selection_mode="single-row", key="gu_tbl", column_config=tabla.cfg())
@@ -1214,9 +1214,9 @@ def _grupo_usuarios(grupo):
     except Exception:
         _sr = []
     if _sr and _sr[0] < len(gente):
-        st.session_state["_gu_open"] = gente[_sr[0]]["Usuario"]
+        st.session_state["_gu_open"] = gente[_sr[0]]["User"]
     _op = st.session_state.get("_gu_open")
-    _oi = next((i for i, u in enumerate(gente) if u["Usuario"] == _op), None) if _op else None
+    _oi = next((i for i, u in enumerate(gente) if u["User"] == _op), None) if _op else None
     if _oi is not None:
         st.markdown("---")
         # sel_key por defecto (gp_fichasel, ya popeado aquí): al eliminar deja `_gu_open`

@@ -121,7 +121,7 @@ def extraer_todo(pdf_file, progreso=None) -> dict:
 def guardar(pid: str, datos: dict) -> tuple:
     """Escribe los datos del plano en el proyecto."""
     from core import projects as P
-    return P.update_project(pid, {"PlanoJSON": json.dumps(datos or {},
+    return P.update_project(pid, {"DrawingJSON": json.dumps(datos or {},
                                                           ensure_ascii=False,
                                                           default=str)})
 
@@ -134,7 +134,7 @@ def del_proyecto(pid: str) -> dict:
     for r in P.list_projects(incluir_archivados=True, incluir_internos=True):
         if str(r.get("ID", "")) == str(pid):
             try:
-                return json.loads(r.get("PlanoJSON") or "{}")
+                return json.loads(r.get("DrawingJSON") or "{}")
             except Exception:
                 return {}
     return {}

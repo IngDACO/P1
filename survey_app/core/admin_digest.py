@@ -28,7 +28,7 @@ def _base(grupo) -> dict:
     proys = P.list_projects(grupo=grupo)
     return {
         "proys":   proys,
-        "activos": [p for p in proys if str(p.get("Estado", "")) not in _DONE],
+        "activos": [p for p in proys if str(p.get("Status", "")) not in _DONE],
         "delays":  P.delays_for(proys),
         "horas":   P.project_hours_bulk(grupo),
         "alarmas": alerts.open_counts_all() if alerts.is_configured() else {},
@@ -40,24 +40,24 @@ def group_digest(grupo) -> dict:
     b = _base(grupo)
     proys, activos, delays, horas, alarmas = (b["proys"], b["activos"], b["delays"],
                                               b["horas"], b["alarmas"])
-    name = {str(p.get("ID", "")): p.get("Nombre", "") for p in proys}
+    name = {str(p.get("ID", "")): p.get("Name", "") for p in proys}
     hoy = clock.today()
 
     retrasos = sorted(
         [{"id": pid, "nombre": name.get(pid, pid), "dias": round(d)} for pid, d in delays.items()],
         key=lambda x: -x["dias"])
 
-    al = [{"id": str(p.get("ID", "")), "nombre": p.get("Nombre", ""),
+    al = [{"id": str(p.get("ID", "")), "nombre": p.get("Name", ""),
            "n": alarmas.get(str(p.get("ID", "")), 0)}
           for p in activos if alarmas.get(str(p.get("ID", "")), 0)]
 
     por_vencer, vencidos = [], []
     for p in activos:
-        ff = _parse_date(p.get("FechaFinEst"))
+        ff = _parse_date(p.get("EndDateEst"))
         if not ff:
             continue
         dd = (ff - hoy).days
-        item = {"id": str(p.get("ID", "")), "nombre": p.get("Nombre", ""),
+        item = {"id": str(p.get("ID", "")), "nombre": p.get("Name", ""),
                 "fin": ff.strftime("%Y-%m-%d"), "dias": dd}
         if dd < 0:
             vencidos.append(item)
@@ -69,19 +69,19 @@ def group_digest(grupo) -> dict:
         try:
             for ps in prestart.list_prestarts(p.get("ID")):
                 if str(ps.get("NearMiss", "")).upper() == "YES":
-                    fd = _parse_date(ps.get("Fecha"))
+                    fd = _parse_date(ps.get("Date"))
                     if fd and (hoy - fd).days <= 7:
-                        near.append({"proyecto": p.get("Nombre", ""), "fecha": ps.get("Fecha", ""),
+                        near.append({"proyecto": p.get("Name", ""), "fecha": ps.get("Date", ""),
                                      "desc": ps.get("NearMissDesc", "")})
         except Exception:
             pass
 
     campo_sin = []
     for u in auth.list_users(grupo):
-        if str(u.get("Rol", "")).lower() != "campo":
+        if str(u.get("Role", "")).lower() != "campo":
             continue
         if not (str(u.get("Email", "")).strip() and str(u.get("TelegramChatID", "")).strip()):
-            campo_sin.append(u.get("Usuario", ""))
+            campo_sin.append(u.get("User", ""))
 
     # ── Quién RECIBE las alarmas de este grupo y no tiene por dónde recibirlas ──
     # ⚠️ Criterio distinto al del campo a propósito (la lección de v325: dos cosas
@@ -95,20 +95,20 @@ def group_digest(grupo) -> dict:
         from core import alerts as _al
         _dest = set(_al._admins_and_owners(grupo))
         for u in auth.list_users():
-            if str(u.get("Usuario", "")) not in _dest:
+            if str(u.get("User", "")) not in _dest:
                 continue
-            if str(u.get("Activo", "SI")).strip().upper() not in auth._ACTIVE_OK:
+            if str(u.get("Active", "SI")).strip().upper() not in auth._ACTIVE_OK:
                 continue                       # una cuenta inactiva no es un pendiente
             if not (str(u.get("Email", "")).strip()
                     or str(u.get("TelegramChatID", "")).strip()):
-                avisos_sin_canal.append({"usuario": str(u.get("Usuario", "")),
-                                         "rol": str(u.get("Rol", ""))})
+                avisos_sin_canal.append({"usuario": str(u.get("User", "")),
+                                         "rol": str(u.get("Role", ""))})
     except Exception as e:
         logger.warning("digest: no se pudo revisar los canales de aviso: %s", e)
 
-    sin_asig = [{"id": str(p.get("ID", "")), "nombre": p.get("Nombre", "")}
+    sin_asig = [{"id": str(p.get("ID", "")), "nombre": p.get("Name", "")}
                 for p in activos
-                if not [x for x in str(p.get("CampoAsignados", "")).split(";") if x.strip()]]
+                if not [x for x in str(p.get("FieldAssigned", "")).split(";") if x.strip()]]
 
     # Credenciales por vencer/vencidas del grupo
     cred_venc = []
@@ -128,7 +128,7 @@ def group_digest(grupo) -> dict:
     except Exception:
         pass
 
-    avances = [P._num(p.get("Avance")) for p in proys]
+    avances = [P._num(p.get("Progress")) for p in proys]
     return {
         "grupo": grupo,
         "n_total": len(proys), "n_activos": len(activos),
@@ -217,7 +217,7 @@ def owner_digest() -> list:
     alarmas, vencidos, cred_venc, sobre_presupuesto, pendientes}]."""
     out = []
     try:
-        grupos = [g["Grupo"] for g in auth.list_groups()]
+        grupos = [g["Group"] for g in auth.list_groups()]
     except Exception:
         grupos = []
     from core import tenant
@@ -254,7 +254,7 @@ def group_snapshot_text(grupo, max_proys=30) -> str:
     lines = [f"## LIVE STATUS OF {grupo} ({len(proys)} projects)"]
     for p in proys[:max_proys]:
         pid = str(p.get("ID", ""))
-        campo = ", ".join([x for x in str(p.get("CampoAsignados", "")).split(";") if x.strip()]) or t("unassigned")
+        campo = ", ".join([x for x in str(p.get("FieldAssigned", "")).split(";") if x.strip()]) or t("unassigned")
         extra = []
         d = delays.get(pid)
         if d:
@@ -263,15 +263,15 @@ def group_snapshot_text(grupo, max_proys=30) -> str:
         if na:
             extra.append(f"{na} alarma(s)")
         lines.append(
-            f"- [{pid}] {p.get('Nombre', '')} | {p.get('Estado', '')} | avance {P._num(p.get('Avance')):.0f}% "
-            f"| fin est {p.get('FechaFinEst', '') or '—'} | campo: {campo} "
+            f"- [{pid}] {p.get('Name', '')} | {p.get('Status', '')} | avance {P._num(p.get('Progress')):.0f}% "
+            f"| fin est {p.get('EndDateEst', '') or '—'} | campo: {campo} "
             f"| {horas.get(str(p.get('ID', '')), 0.0):.0f} h"
             + (" | " + ", ".join(extra) if extra else ""))
     us = []
     for u in auth.list_users(grupo):
-        if str(u.get("Rol", "")).lower() == "campo":
+        if str(u.get("Role", "")).lower() == "campo":
             ok = str(u.get("Email", "")).strip() and str(u.get("TelegramChatID", "")).strip()
-            us.append(f"{u.get('Usuario', '')}"
+            us.append(f"{u.get('User', '')}"
                       + ("" if ok else " " + t("(NO full contact details)")))
     if us:
         lines.append(t("Field staff:") + " " + ", ".join(us))

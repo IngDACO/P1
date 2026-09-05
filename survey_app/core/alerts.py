@@ -19,13 +19,14 @@ from core import timeclock
 from core import notify
 from core import auth
 from core import clock
+from core import columnas
 from core.num import col_letter as _col_letter
 
 logger = logging.getLogger(__name__)
 
 ALERTS_SHEET   = "Alerts"
-ALERTS_HEADERS = ["ID", "ProyectoID", "Grupo", "Origen", "Tipo", "Mensaje",
-                  "CreadoPor", "Fecha", "Estado", "ResueltoPor", "FechaResuelta"]
+ALERTS_HEADERS = ["ID", "ProjectID", "Group", "Source", "Type", "Message",
+                  "CreatedBy", "Date", "Status", "ResolvedBy", "ResolvedDate"]
 _COL = {h: i + 1 for i, h in enumerate(ALERTS_HEADERS)}
 
 
@@ -88,9 +89,9 @@ def _invalidate():
 
 # ── Lecturas ─────────────────────────────────────────────────────
 def list_alerts(pid, estado=None) -> list:
-    out = [r for r in _records() if str(r.get("ProyectoID", "")) == str(pid)]
+    out = [r for r in _records() if str(r.get("ProjectID", "")) == str(pid)]
     if estado:
-        out = [r for r in out if str(r.get("Estado", "")) == estado]
+        out = [r for r in out if str(r.get("Status", "")) == estado]
     return out
 
 
@@ -104,8 +105,8 @@ def open_counts_all() -> dict:
     """
     d = {}
     for r in _alarmas_visibles():
-        if str(r.get("Estado", "")) == "abierta":
-            k = str(r.get("ProyectoID", ""))
+        if str(r.get("Status", "")) == "abierta":
+            k = str(r.get("ProjectID", ""))
             d[k] = d.get(k, 0) + 1
     return d
 
@@ -144,7 +145,7 @@ def create_alert(pid, grupo, origen, tipo, mensaje, creado_por) -> tuple:
     w, err = _ws()
     if err:
         return False, err
-    aid = _next_id(w.get_all_records(numericise_ignore=["all"]))
+    aid = _next_id(columnas.canonizar(w.get_all_records(numericise_ignore=["all"])))
     w.append_row([aid, str(pid), str(grupo), origen, tipo, str(mensaje), str(creado_por),
                   clock.now().strftime("%Y-%m-%d %H:%M"), "abierta", "", ""],
                  value_input_option="RAW")
@@ -156,14 +157,14 @@ def resolve_alert(alert_id, resuelto_por) -> tuple:
     w, err = _ws()
     if err:
         return False, err
-    recs = w.get_all_records(numericise_ignore=["all"])
+    recs = columnas.canonizar(w.get_all_records(numericise_ignore=["all"]))
     for i, r in enumerate(recs):
         if str(r.get("ID", "")) == str(alert_id):
             row = i + 2
             w.batch_update([
-                {"range": f"{_col_letter(_COL['Estado'])}{row}", "values": [["resuelta"]]},
-                {"range": f"{_col_letter(_COL['ResueltoPor'])}{row}", "values": [[str(resuelto_por)]]},
-                {"range": f"{_col_letter(_COL['FechaResuelta'])}{row}",
+                {"range": f"{_col_letter(_COL['Status'])}{row}", "values": [["resuelta"]]},
+                {"range": f"{_col_letter(_COL['ResolvedBy'])}{row}", "values": [[str(resuelto_por)]]},
+                {"range": f"{_col_letter(_COL['ResolvedDate'])}{row}",
                  "values": [[clock.now().strftime("%Y-%m-%d %H:%M")]]},
             ], value_input_option="RAW")
             _invalidate()
@@ -174,9 +175,9 @@ def resolve_alert(alert_id, resuelto_por) -> tuple:
 # ── Destinatarios ────────────────────────────────────────────────
 def _admins_and_owners(grupo) -> list:
     users = auth.list_users()
-    out = [u["Usuario"] for u in users
-           if str(u.get("Rol", "")).lower() == "administrador" and str(u.get("Grupo", "")) == str(grupo)]
-    out += [u["Usuario"] for u in users if str(u.get("Rol", "")).lower() == "propietario"]
+    out = [u["User"] for u in users
+           if str(u.get("Role", "")).lower() == "administrador" and str(u.get("Group", "")) == str(grupo)]
+    out += [u["User"] for u in users if str(u.get("Role", "")).lower() == "propietario"]
     return list(dict.fromkeys(out))
 
 

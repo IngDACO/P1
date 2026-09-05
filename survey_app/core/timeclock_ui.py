@@ -317,7 +317,7 @@ def _sidebar_sin_fichar(nombre, usuario, grupo, rol):
     # ⚠️ El NOMBRE limpio va aparte de la etiqueta: la etiqueta puede llevar el ID
     # detrás (`prueba (PRJ-0007)`) y `fichar_proyecto` lo escribe TAL CUAL en la
     # columna `Proyecto` de la hoja — el fallo que v308 tuvo que corregir.
-    nom_de = {str(p.get("ID", "")): str(p.get("Nombre", "")) for p in proys}
+    nom_de = {str(p.get("ID", "")): str(p.get("Name", "")) for p in proys}
 
     # ── Atajo: tu asignación de hoy (del tablero) ──
     # Acción EXPLÍCITA (dice a qué fichará), no una preselección silenciosa (v138).
@@ -632,7 +632,7 @@ def _asignadas_hoy(usuario, grupo) -> list:
             if not _pid:
                 continue
             _p = projects_data.get_project(_pid)
-            if _p and str(_p.get("Grupo", "")) == str(grupo):
+            if _p and str(_p.get("Group", "")) == str(grupo):
                 out.append(_p)
     except Exception:
         return []
@@ -753,7 +753,7 @@ def render_timeclock_tab():
         # que lo escribe TAL CUAL en la columna `Proyecto` de la hoja → el fichaje quedaba
         # con un nombre inventado. No rompía las cuentas (manda el ProyectoID desde v145),
         # pero el dato guardado tiene que ser el nombre de verdad.
-        _nom_de = {str(p.get("ID", "")): str(p.get("Nombre", "")) for p in proys}
+        _nom_de = {str(p.get("ID", "")): str(p.get("Name", "")) for p in proys}
 
         if prj:
             st.markdown(f"You are on **{prj['proyecto'] or '—'}**")

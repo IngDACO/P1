@@ -36,7 +36,7 @@ def _proyecto_fichado(auth: dict):
     # igual en vez de dejar la herramienta sin datos del plano y sin explicacion.
     for p in P.list_projects(grupo=auth.get("grupo", "") or None,
                              incluir_archivados=True):
-        if str(p.get("Nombre", "")).strip() == nombre:
+        if str(p.get("Name", "")).strip() == nombre:
             return p
     return None
 
@@ -63,7 +63,7 @@ def selector_proyecto(key: str, ayuda: str = "") -> tuple:
              else P.list_projects(grupo=auth.get("grupo", "")))
     if not proys:
         return None, {}
-    idmap = {f"{p.get('Nombre')} ({p.get('ID')})": p for p in proys}
+    idmap = {f"{p.get('Name')} ({p.get('ID')})": p for p in proys}
     opciones = ["— no project (load the drawing by hand) —"] + list(idmap.keys())
     sel = st.selectbox(t("Project"), opciones, key=f"pl_prj_{key}",
                        help=ayuda or "It uses the drawing data stored on the project.")
@@ -78,14 +78,14 @@ def selector_proyecto(key: str, ayuda: str = "") -> tuple:
 def _cabecera(prj: dict, datos: dict, fichado: bool):
     if datos:
         st.caption((":material/schedule: Clocked in at " if fichado else ":material/description: ")
-                   + f"**{prj.get('Nombre')}** · {plan_data.resumen(datos)}")
+                   + f"**{prj.get('Name')}** · {plan_data.resumen(datos)}")
         if datos.get("faltan"):
             st.caption(t(":orange[:material/warning:] The drawing did not give: {x} — enter "
                          "them by hand.")
                        .replace("{x}", ", ".join(datos["faltan"][:8])
                                 + ("…" if len(datos["faltan"]) > 8 else "")))
     else:
-        st.warning(f"**{prj.get('Nombre')}** has no drawing data loaded. "
+        st.warning(f"**{prj.get('Name')}** has no drawing data loaded. "
                    "Load it on the project (:material/build: My company → open the project → "
                    ":material/attach_file: Files) or upload the PDF below.")
 

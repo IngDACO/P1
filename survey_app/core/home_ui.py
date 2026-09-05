@@ -606,29 +606,29 @@ def buscar(q: str, grupo) -> list:
         # es justo cuando no sabes en qué lista vive.
         for p in P.list_projects(grupo, incluir_archivados=True, incluir_internos=True):
             pid = str(p.get("ID", ""))
-            r = _rank(pid, p.get("Nombre"), p.get("Cliente"), p.get("Ubicacion"))
+            r = _rank(pid, p.get("Name"), p.get("Client"), p.get("Location"))
             if r is None:
                 continue
-            _arch = "ARCHIV" in str(p.get("EstadoManual") or p.get("Estado") or "").upper()
-            _pie = " · ".join(x for x in [pid, str(p.get("Cliente", "")).strip(),
+            _arch = "ARCHIV" in str(p.get("ManualStatus") or p.get("Status") or "").upper()
+            _pie = " · ".join(x for x in [pid, str(p.get("Client", "")).strip(),
                                           "archivado" if _arch else ""] if x)
             out.append({"tipo": "proyecto", "icono": ":material/folder:", "orden": r,
-                        "titulo": str(p.get("Nombre", "")) or pid, "pie": _pie, "id": pid})
+                        "titulo": str(p.get("Name", "")) or pid, "pie": _pie, "id": pid})
     except Exception as e:
         logger.warning("buscar: proyectos falló: %s", e)
 
     try:
         from core import auth as A
         for u in A.list_users(grupo):
-            usr = str(u.get("Usuario", ""))
-            r = _rank(usr, u.get("Nombre"), u.get("Email"))
+            usr = str(u.get("User", ""))
+            r = _rank(usr, u.get("Name"), u.get("Email"))
             if r is None:
                 continue
-            _pie = " · ".join(x for x in [usr, str(u.get("Rol", "")).strip(),
-                                          str(u.get("Grupo", "")).strip()] if x)
+            _pie = " · ".join(x for x in [usr, str(u.get("Role", "")).strip(),
+                                          str(u.get("Group", "")).strip()] if x)
             out.append({"tipo": "persona", "icono": ":material/badge:", "orden": r,
-                        "titulo": str(u.get("Nombre", "")) or usr, "pie": _pie,
-                        "id": usr, "nombre": str(u.get("Nombre", "")) or usr})
+                        "titulo": str(u.get("Name", "")) or usr, "pie": _pie,
+                        "id": usr, "nombre": str(u.get("Name", "")) or usr})
     except Exception as e:
         logger.warning("buscar: personas falló: %s", e)
 
@@ -638,15 +638,15 @@ def buscar(q: str, grupo) -> list:
         # los mete como entradas sintéticas, así que usarlo aquí los duplicaría.
         for _trb in R.list_trabajos(grupo, incluir_inactivos=True):
             tid = str(_trb.get("ID", ""))
-            r = _rank(tid, _trb.get("Nombre"), _trb.get("Numero"))
+            r = _rank(tid, _trb.get("Name"), _trb.get("Number"))
             if r is None:
                 continue
-            _num = str(t.get("Numero", "")).strip()
+            _num = str(t.get("Number", "")).strip()
             _pie = " · ".join(x for x in [tid, f"nº {_num}" if _num else "",
-                                          "" if str(t.get("Activo", "SI")).upper() == "SI"
+                                          "" if str(t.get("Active", "SI")).upper() == "SI"
                                           else "inactivo"] if x)
             out.append({"tipo": "trabajo", "icono": ":material/construction:", "orden": r,
-                        "titulo": str(t.get("Nombre", "")) or tid, "pie": _pie, "id": tid})
+                        "titulo": str(t.get("Name", "")) or tid, "pie": _pie, "id": tid})
     except Exception as e:
         logger.warning("buscar: trabajos falló: %s", e)
 
@@ -1019,7 +1019,7 @@ def _mapa_proyectos(grupo):
     _ACTIVOS = ("Planificado", "En progreso")
     try:
         proys = [p for p in P.list_projects(grupo)
-                 if str(p.get("Estado", "")) in _ACTIVOS]
+                 if str(p.get("Status", "")) in _ACTIVOS]
     except Exception:
         proys = []
     if not proys:
@@ -1033,14 +1033,14 @@ def _mapa_proyectos(grupo):
         lat = location_ui.to_float(p.get("Lat"))
         lng = location_ui.to_float(p.get("Lng"))
         if lat is None or lng is None:
-            coord = location_ui.geocode(str(p.get("Ubicacion", "")))
+            coord = location_ui.geocode(str(p.get("Location", "")))
             if coord:
                 lat, lng = coord
         if lat is not None and lng is not None:
-            filas.append({"lat": lat, "lon": lng, "nombre": str(p.get("Nombre", "")),
+            filas.append({"lat": lat, "lon": lng, "nombre": str(p.get("Name", "")),
                           "pid": str(p.get("ID", ""))})
         else:
-            sin_ubic.append(str(p.get("Nombre", "")))
+            sin_ubic.append(str(p.get("Name", "")))
 
     if filas:
         try:
@@ -1100,7 +1100,7 @@ def _resumen_proyecto_home(grupo, pid):
     if not prj:
         st.warning(t("Project not found."))
         return
-    av = max(0, min(100, int(P._num(prj.get("Avance")))))
+    av = max(0, min(100, int(P._num(prj.get("Progress")))))
     try:
         dl = P.delays_of_group(grupo).get(str(pid), 0)
         ah = P.aheads_of_group(grupo).get(str(pid), 0)
@@ -1113,14 +1113,14 @@ def _resumen_proyecto_home(grupo, pid):
     def _e(s):
         return str(s or "").replace("&", "&amp;").replace("<", "&lt;")
 
-    st.markdown(f"### {_e(prj.get('Nombre'))}")
+    st.markdown(f"### {_e(prj.get('Name'))}")
     st.markdown(
         f"<div style='background:#f0f2f5;border-radius:8px;height:14px;overflow:hidden;"
         f"margin:2px 0 8px;'><div style='background:{_bar};height:100%;width:{av}%;'></div></div>",
         unsafe_allow_html=True)
-    bits = [f":material/bar_chart: **{av}%**", f"{_sem} {_e(_etq(str(prj.get('Estado', ''))))}"]
-    if prj.get("Cliente"):
-        bits.append(f":material/business: {_e(prj.get('Cliente'))}")
+    bits = [f":material/bar_chart: **{av}%**", f"{_sem} {_e(_etq(str(prj.get('Status', ''))))}"]
+    if prj.get("Client"):
+        bits.append(f":material/business: {_e(prj.get('Client'))}")
     if dl:
         bits.append(f":red[:material/schedule:] {dl} d behind")
     elif ah:
@@ -1128,13 +1128,13 @@ def _resumen_proyecto_home(grupo, pid):
     if al:
         bits.append(f":material/notifications: {al} alarma(s)")
     st.markdown("  ·  ".join(bits))
-    _fi = str(prj.get("FechaInicio", "") or "—")
-    _ff = str(prj.get("FechaFinEst", "") or "—")
+    _fi = str(prj.get("StartDate", "") or "—")
+    _ff = str(prj.get("EndDateEst", "") or "—")
     st.caption(f":material/calendar_month: {_fi} → {_ff}" + (f"  ·  :material/elevator: {_e(prj.get('NS'))} paradas" if prj.get("NS") else ""))
-    _asg = [x.strip() for x in str(prj.get("CampoAsignados", "")).split(";") if x.strip()]
+    _asg = [x.strip() for x in str(prj.get("FieldAssigned", "")).split(";") if x.strip()]
     if _asg:
         st.caption(f":material/engineering: {', '.join(_asg[:6])}")
-    _ub = str(prj.get("Ubicacion", "") or "")
+    _ub = str(prj.get("Location", "") or "")
     if _ub:
         try:
             from core import maps
@@ -1160,7 +1160,7 @@ def _proyectos_home(grupo):
     from core import alerts
     _ACTIVOS = ("Planificado", "En progreso")
     try:
-        proys = [p for p in P.list_projects(grupo) if str(p.get("Estado", "")) in _ACTIVOS]
+        proys = [p for p in P.list_projects(grupo) if str(p.get("Status", "")) in _ACTIVOS]
     except Exception:
         proys = []
     if not proys:
@@ -1176,14 +1176,14 @@ def _proyectos_home(grupo):
     # urgencia: primero los de más retraso, luego más alarmas, luego menor avance
     def _urg(p):
         _pid = str(p.get("ID", ""))
-        return (-delays.get(_pid, 0), -alarmas.get(_pid, 0), P._num(p.get("Avance")))
+        return (-delays.get(_pid, 0), -alarmas.get(_pid, 0), P._num(p.get("Progress")))
     proys.sort(key=_urg)
 
     st.caption(f"{len(proys)} active · sorted by urgency")
     _css = ["<style>"]
     for _i, p in enumerate(proys):
         _pid = str(p.get("ID", ""))
-        _av = max(0, min(100, int(P._num(p.get("Avance")))))
+        _av = max(0, min(100, int(P._num(p.get("Progress")))))
         _dl, _ah = delays.get(_pid, 0), aheads.get(_pid, 0)
         _col = "#c0392b" if _dl else ("#1e8449" if _ah else "#2e6da4")
         _tint = "#fdecec" if _dl else ("#e8f5ee" if _ah else "#e8eef6")
@@ -1196,7 +1196,7 @@ def _proyectos_home(grupo):
 
     for _i, p in enumerate(proys):
         _pid = str(p.get("ID", ""))
-        _av = max(0, min(100, int(P._num(p.get("Avance")))))
+        _av = max(0, min(100, int(P._num(p.get("Progress")))))
         _dl, _ah, _al = delays.get(_pid, 0), aheads.get(_pid, 0), alarmas.get(_pid, 0)
         _extra = ""
         if _dl:
@@ -1205,7 +1205,7 @@ def _proyectos_home(grupo):
             _extra += f" · :material/schedule: {_ah}d"
         if _al:
             _extra += f" · :material/notifications: {_al}"
-        _lbl = f"{p.get('Nombre', '')} · {_av}%{_extra}"
+        _lbl = f"{p.get('Name', '')} · {_av}%{_extra}"
         if st.button(_lbl, key=f"hp_{_i}", width="stretch"):
             st.session_state["_home_proj_sel"] = _pid      # v206: abre el resumen aquí
             st.rerun()
@@ -1235,7 +1235,7 @@ def _agenda_hoy(grupo):
                 f"added from the Board when it is needed.")
         return
 
-    staff = [u for u in auth.list_users(grupo) if str(u.get("Rol", "")).lower() == "campo"]
+    staff = [u for u in auth.list_users(grupo) if str(u.get("Role", "")).lower() == "campo"]
     if not staff:
         st.info(t("There is no field staff in this company."))
         return
@@ -1243,7 +1243,7 @@ def _agenda_hoy(grupo):
     try:
         # v422: mapa ID→nombre de la agenda. Con las internas: si alguien tiene el
         # almacén asignado hoy, su fila saldría sin nombre.
-        pmap = {str(p.get("ID", "")): str(p.get("Nombre", ""))
+        pmap = {str(p.get("ID", "")): str(p.get("Name", ""))
                 for p in P.list_projects(grupo, incluir_archivados=True, incluir_internos=True)}
     except Exception:
         pmap = {}
@@ -1253,8 +1253,8 @@ def _agenda_hoy(grupo):
     n_asig = n_off = n_leave = n_sin = 0
     filas = []
     for u in staff:
-        usr = u["Usuario"]
-        nombre = u.get("Nombre") or usr
+        usr = u["User"]
+        nombre = u.get("Name") or usr
         items = R.celda_items(sem, usr, dia)          # v277: varias por día, con franja
         asigs = [it["asig"] for it in items]
         nota = R.celda(sem, usr, dia).get("nota", "").strip()
