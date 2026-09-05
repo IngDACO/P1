@@ -45,15 +45,15 @@ HOJAS_LECTURA = (
     # de obra, conciliación, plan-vs-real). Se llama así porque es la hoja original
     # del libro; el nombre no se toca (renombrarla rompería `_cached_ws`).
     "Sheet1",
-    "Proyectos", "Actividades", "Agrupaciones", "Documentos", "Alarmas",
-    "Login", "Grupos", "Credenciales", "Gastos", "Clientes", "Facturas",
-    "Nominas", "Activos", "InvCategorias", "MovimientosActivo", "Ausencias",
-    "Roster", "Trabajos", "PreStarts", "Calculos", "Rieles",
-    "Auditoria", "Ordenes",
-    "Catalogo", "Cotizaciones",   # v352/v353 — cotizaciones     # v342 — si no entra aquí, sería una llamada suelta
+    "Projects", "Activities", "Groupings", "Documents", "Alerts",
+    "Login", "Groups", "Credentials", "Expenses", "Clients", "Invoices",
+    "Payroll", "Assets", "AssetCategories", "AssetMovements", "Absences",
+    "Roster", "Jobs", "ToolRuns", "Rails",
+    "AuditTrail", "PurchaseOrders",
+    "Catalogue", "Quotes",   # v352/v353 — cotizaciones     # v342 — si no entra aquí, sería una llamada suelta
     # ⚠️ v461: si NO entra aquí, `registros(SHEET)` sin cabeceras devuelve None y
     # `correcciones` leería VACÍO PARA SIEMPRE, sin un solo error (regla v353).
-    "CorreccionesFichaje",
+    "TimeCorrections",
 )
 
 
@@ -94,18 +94,27 @@ def _lote(sheet_id: str = "") -> dict:
         return {}
     try:
         hay = _existentes(sheet_id)
-        pedir = [h for h in HOJAS_LECTURA if h.strip().lower() in hay]
-        if not pedir:
+        # v465: se pide el titulo que EXISTE (el nuevo o, mientras el libro no se
+        # haya renombrado, el viejo) y se devuelve bajo el nombre CANONICO, para
+        # que `registros("Projects")` funcione con el libro en cualquiera de los
+        # dos estados. Sin esto el lote se saltaria esas hojas y cada una costaria
+        # una llamada suelta — el problema que v339 vino a quitar.
+        _reales = {}
+        for h in HOJAS_LECTURA:
+            r = timeclock.titulo_real(h, sheet_id)
+            if r.strip().lower() in hay:
+                _reales[r] = h
+        if not _reales:
             return {}
         # `values_batch_get` acepta A1 por hoja. Sin límite de columna: trae lo que haya.
-        rangos = [f"'{h}'" for h in pedir]
+        rangos = [f"'{r}'" for r in _reales]
         r = lib.values_batch_get(rangos)
         out = {}
         for tramo in (r.get("valueRanges") or []):
             # el rango vuelve como "'Hoja'!A1:Z99" → recuperamos el título
             rng = str(tramo.get("range", ""))
             titulo = rng.split("!")[0].strip("'")
-            out[titulo] = tramo.get("values") or []
+            out[_reales.get(titulo, titulo)] = tramo.get("values") or []
         return out
     except Exception as e:
         # Si el lote falla (una hoja que aún no existe, un hipo de la API), NO se

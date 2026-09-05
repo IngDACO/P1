@@ -19,7 +19,7 @@ from core.num import col_letter as _col_letter, num as _num, parse_date as _pars
 from core.i18n import t
 logger = logging.getLogger(__name__)
 
-ACTIVOS_SHEET = "Activos"
+ACTIVOS_SHEET = "Assets"
 ACTIVOS_HEADERS = [
     "ID", "Grupo", "Nombre", "Categoria", "Marca", "Modelo", "Serie",
     "FotoDriveID", "FechaCompra", "ValorCompra", "VidaUtilAnios",
@@ -28,10 +28,10 @@ ACTIVOS_HEADERS = [
 ]
 _ACOL = {h: i + 1 for i, h in enumerate(ACTIVOS_HEADERS)}
 
-CAT_SHEET = "InvCategorias"
+CAT_SHEET = "AssetCategories"
 CAT_HEADERS = ["Grupo", "Nombre"]
 
-MOV_SHEET = "MovimientosActivo"
+MOV_SHEET = "AssetMovements"
 MOV_HEADERS = ["ID", "Grupo", "ActivoID", "Tipo", "Fecha", "DesdeUbic", "HaciaUbic",
                "Usuario", "Costo", "Nota", "CreadoPor", "Creado"]
 MOV_TIPOS = ["salida", "entrada", "traslado", "mantenimiento", "baja"]

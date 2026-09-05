@@ -18,7 +18,7 @@ from core import timeclock
 from core.i18n import t
 logger = logging.getLogger(__name__)
 
-RIELES_SHEET   = "Rieles"
+RIELES_SHEET   = "Rails"
 RIELES_HEADERS = ["Referencia", "AnchoDiente", "AlturaDiente"]
 
 

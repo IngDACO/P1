@@ -24,9 +24,9 @@ from core.num import col_letter as _col_letter, num as _num
 from core.i18n import t
 logger = logging.getLogger(__name__)
 
-PROJECTS_SHEET   = "Proyectos"
-ACTIVITIES_SHEET = "Actividades"
-GROUPINGS_SHEET  = "Agrupaciones"
+PROJECTS_SHEET   = "Projects"
+ACTIVITIES_SHEET = "Activities"
+GROUPINGS_SHEET  = "Groupings"
 
 PROJECTS_HEADERS = [
     "ID", "Grupo", "Nombre", "Cliente", "Ubicacion", "Modelo", "NS",
@@ -132,7 +132,7 @@ ACTIVITIES_HEADERS = [
     "FechaInicioReal", "FechaFinReal", "Nota",
 ]
 GROUPINGS_HEADERS = ["ID", "Grupo", "Nombre", "Descripcion"]
-DOCUMENTS_SHEET   = "Documentos"
+DOCUMENTS_SHEET   = "Documents"
 DOCUMENTS_HEADERS = ["ProyectoID", "Nombre", "Tipo", "DriveID", "SubidoPor", "Fecha"]
 
 _PCOL = {h: i + 1 for i, h in enumerate(PROJECTS_HEADERS)}

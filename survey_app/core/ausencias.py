@@ -40,7 +40,7 @@ from core.num import parse_date as _parse_date
 from core.i18n import t
 logger = logging.getLogger(__name__)
 
-SHEET = "Ausencias"
+SHEET = "Absences"
 HEADERS = ["ID", "Grupo", "Usuario", "Nombre", "Tipo", "Desde", "Hasta", "Dias",
            "Motivo", "Estado", "ResueltaPor", "ResueltaFecha", "NotaAdmin",
            "CreadoPor", "Creado",

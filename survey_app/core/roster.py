@@ -24,7 +24,7 @@ from core import clock
 from core.i18n import t
 logger = logging.getLogger(__name__)
 
-TRAB_SHEET   = "Trabajos"
+TRAB_SHEET   = "Jobs"
 TRAB_HEADERS = ["ID", "Grupo", "Numero", "Nombre", "Color", "ProyectoID", "Activo"]
 
 ROSTER_SHEET   = "Roster"

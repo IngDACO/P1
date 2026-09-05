@@ -20,7 +20,7 @@ from core.num import col_letter as _col_letter
 from core.i18n import t
 logger = logging.getLogger(__name__)
 
-CLIENTES_SHEET = "Clientes"
+CLIENTES_SHEET = "Clients"
 CLIENTES_HEADERS = [
     "ID", "Grupo", "Nombre", "Contacto", "Telefono", "Email",
     "Direccion", "Notas", "Activo", "CreadoPor", "Creado",

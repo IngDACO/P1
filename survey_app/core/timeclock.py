@@ -97,7 +97,52 @@ def _http_client_cls():
 # ── Un libro por empresa cliente (v359) ─────────────────────────
 # Hojas que viven SIEMPRE en el libro maestro: son el registro de la app, no datos de
 # un cliente. `Login` además se lee ANTES de saber a qué grupo perteneces.
-SHEETS_GLOBALES = {"login", "grupos", "rieles", "manuales"}
+SHEETS_GLOBALES = {"login", "grupos", "rieles", "manuales",
+                   "groups", "rails", "manuals"}
+
+# ── Pestañas en inglés, con respaldo al nombre viejo (v465) ───────────────────
+# ⚠️ Esta capa NO es cosmética y no es opcional: `get_sheet` **crea** la hoja si no
+# la encuentra, así que un libro que todavía tenga `Proyectos` mientras el código
+# pide `Projects` haría que la app se fabricara una pestaña VACÍA y escribiera ahí
+# —sin un solo error, con los datos intactos al lado y la pantalla en blanco—. Es
+# el peor modo de fallo posible porque es silencioso.
+# Con el respaldo, renombrar el libro y desplegar el código dejan de tener que ser
+# simultáneos: el código acepta los DOS nombres. Se retira cuando los dos libros
+# estén renombrados y verificados.
+LEGADO = {
+    "projects": "Proyectos", "activities": "Actividades",
+    "groupings": "Agrupaciones", "documents": "Documentos",
+    "alerts": "Alarmas", "groups": "Grupos", "credentials": "Credenciales",
+    "expenses": "Gastos", "clients": "Clientes", "invoices": "Facturas",
+    "payroll": "Nominas", "assets": "Activos",
+    "assetcategories": "InvCategorias", "assetmovements": "MovimientosActivo",
+    "absences": "Ausencias", "jobs": "Trabajos", "toolruns": "Calculos",
+    "rails": "Rieles", "audittrail": "Auditoria", "purchaseorders": "Ordenes",
+    "catalogue": "Catalogo", "quotes": "Cotizaciones",
+    "timecorrections": "CorreccionesFichaje", "manuals": "Manuales",
+}
+
+
+def titulo_real(title: str, sheet_id: str = "") -> str:
+    """El título que EXISTE en ESTE libro: el nuevo si está, si no el viejo.
+
+    ⚠️ Cuesta 0 llamadas: sale del índice que `_libro()` ya construye y cachea
+    (v290). Y si el índice no se puede leer, devuelve el nombre NUEVO en vez de
+    adivinar — un fallo de red no puede hacer que se escriba en otra pestaña.
+    """
+    _t = str(title).strip()
+    _viejo = LEGADO.get(_t.lower())
+    if not _viejo:
+        return _t
+    try:
+        _hojas, _cab = _libro(sheet_id or sheet_id_para(_t))
+        if _t.lower() in (_hojas or {}):
+            return _t
+        if _viejo.lower() in (_hojas or {}):
+            return _viejo
+    except Exception as e:
+        logger.warning("titulo_real: no se pudo leer el indice (%s): se usa %r", e, _t)
+    return _t
 
 
 def _sheet_maestro() -> str:
@@ -246,6 +291,9 @@ def get_sheet(title: str, headers: tuple, grupo: str = None):
     lanza excepción → NO se cachea → se reintenta en la próxima llamada."""
     # v359: cada hoja se busca en SU libro (global → maestro; si no, el del grupo).
     _sid = sheet_id_para(title, grupo)
+    # v465: si el libro aun tiene el nombre viejo, se usa ESE. Sin esto, la rama
+    # de abajo crearia una pestaña vacia y escribiria ahi, en silencio.
+    title = titulo_real(title, _sid)
     hojas, cabeceras = _libro(_sid)
     clave = title.strip().lower()
     w = hojas.get(clave)

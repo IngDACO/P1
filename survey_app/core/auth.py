@@ -31,7 +31,7 @@ LOGIN_HEADERS = ["Usuario", "Password", "Rol", "Nombre", "Activo", "Grupo",
                  # la traiga cae al año natural y la app lo DICE, en vez de dar un
                  # saldo que parece bueno y no lo es.
                  "FechaIngreso"]
-GROUPS_SHEET   = "Grupos"
+GROUPS_SHEET   = "Groups"
 GROUPS_HEADERS = ["Grupo", "Descripcion", "Activo", "Zona", "MargenDefault", "ImpuestoDefault",
                   "SuperDefault", "RetencionDefault",
                   # v359: libro de Google propio de este cliente. Vacío = el
@@ -127,7 +127,7 @@ def _invalidate_login():
 def _group_records() -> list:
     """Registros de "Grupos" (por lote, v339)."""
     from core import hojas          # perezoso: evita el ciclo con timeclock
-    return hojas.registros("Grupos", GROUPS_HEADERS) or []
+    return hojas.registros("Groups", GROUPS_HEADERS) or []
 
 
 def _invalidate_groups():

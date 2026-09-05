@@ -20,7 +20,7 @@ from core.num import col_letter as _col_letter, num as _num, parse_date as _pars
 from core.i18n import t
 logger = logging.getLogger(__name__)
 
-FACTURAS_SHEET = "Facturas"
+FACTURAS_SHEET = "Invoices"
 FACTURAS_HEADERS = [
     "ID", "Grupo", "ClienteID", "ClienteNombre", "Numero", "Fecha", "Vencimiento",
     "LineasJSON", "Subtotal", "ImpuestoPct", "Impuesto", "Total",

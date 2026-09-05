@@ -36,7 +36,7 @@ from core.num import parse_date as _parse_date
 from core.i18n import t
 logger = logging.getLogger(__name__)
 
-SHEET = "Ordenes"
+SHEET = "PurchaseOrders"
 HEADERS = ["ID", "Grupo", "ProyectoID", "Proveedor", "Descripcion", "Categoria",
            "Valor", "Fecha", "FechaEsperada", "Estado", "GastoID", "RecibidaFecha",
            "Nota", "CreadoPor", "Creado"]

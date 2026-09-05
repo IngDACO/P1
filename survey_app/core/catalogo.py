@@ -38,7 +38,7 @@ from core.num import num as _num
 from core.i18n import t
 logger = logging.getLogger(__name__)
 
-SHEET = "Catalogo"
+SHEET = "Catalogue"
 HEADERS = ["ID", "Grupo", "Tipo", "Nombre", "Descripcion", "Unidad", "Categoria",
            "CostoUnit", "HorasEst", "TarifaHora", "Activo", "Nota", "CreadoPor", "Creado"]
 

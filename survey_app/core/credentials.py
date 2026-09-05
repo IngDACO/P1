@@ -18,7 +18,7 @@ from core.num import col_letter as _col_letter
 from core.i18n import t, etiqueta as _etq
 logger = logging.getLogger(__name__)
 
-SHEET   = "Credenciales"
+SHEET   = "Credentials"
 HEADERS = ["ID", "Usuario", "Grupo", "Tipo", "Numero", "Clase", "Emision",
            "Vencimiento", "DriveID", "Archivo", "Nota", "UltimoAviso",
            "ActualizadoPor", "Fecha"]

@@ -29,7 +29,7 @@ from core import clock
 
 _DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "manuals")
 
-_SHEET   = "Manuales"
+_SHEET   = "Manuals"
 _HEADERS = ["ID", "Nombre", "DriveID", "NumFrags", "Fecha", "SubidoPor"]
 _FOLDER_NAME = "COPEX Manuales"
 _WORDS_PER_CHUNK = 180

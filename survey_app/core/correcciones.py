@@ -40,7 +40,7 @@ from core.i18n import t
 
 logger = logging.getLogger(__name__)
 
-SHEET = "CorreccionesFichaje"
+SHEET = "TimeCorrections"
 HEADERS = ["ID", "Grupo", "Usuario", "Nombre", "Tipo", "Proyecto",
            "Campo", "ValorAnterior", "ValorNuevo", "Motivo",
            "Estado", "Creado", "RevisadoPor", "RevisadoFecha", "NotaAdmin",

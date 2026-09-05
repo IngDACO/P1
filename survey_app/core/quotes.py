@@ -41,7 +41,7 @@ from core.num import parse_date as _parse_date
 from core.i18n import t
 logger = logging.getLogger(__name__)
 
-SHEET = "Cotizaciones"
+SHEET = "Quotes"
 HEADERS = ["ID", "Grupo", "ClienteID", "ClienteNombre", "Numero", "Fecha", "Validez",
            "LineasJSON", "Subtotal", "ImpuestoPct", "Impuesto", "Total", "MargenPct",
            "Estado", "ProyectoID", "Version", "Origen", "Nota", "CreadoPor", "Creado"]

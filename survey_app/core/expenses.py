@@ -21,7 +21,7 @@ from core.num import num as _num
 from core.i18n import t
 logger = logging.getLogger(__name__)
 
-SHEET   = "Gastos"
+SHEET   = "Expenses"
 HEADERS = ["ID", "ProyectoID", "Grupo", "Fecha", "Categoria", "Proveedor",
            "Descripcion", "Valor", "DriveID", "Archivo", "CreadoPor", "Creado"]
 CATEGORIAS = ["Materiales", "Herramientas", "Transporte", "Combustible",

@@ -33,7 +33,7 @@ from core import clock, timeclock
 
 logger = logging.getLogger(__name__)
 
-SHEET = "Auditoria"
+SHEET = "AuditTrail"
 HEADERS = ["ID", "Grupo", "Fecha", "Usuario", "Entidad", "EntidadID",
            "Accion", "CambiosJSON"]
 

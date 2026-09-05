@@ -23,7 +23,7 @@ from core.num import col_letter as _col_letter
 
 logger = logging.getLogger(__name__)
 
-ALERTS_SHEET   = "Alarmas"
+ALERTS_SHEET   = "Alerts"
 ALERTS_HEADERS = ["ID", "ProyectoID", "Grupo", "Origen", "Tipo", "Mensaje",
                   "CreadoPor", "Fecha", "Estado", "ResueltoPor", "FechaResuelta"]
 _COL = {h: i + 1 for i, h in enumerate(ALERTS_HEADERS)}
@@ -61,7 +61,7 @@ def _ws():
 def _records_cached(libro: str):
     """Registros de "Alarmas" (por lote, v339)."""
     from core import hojas          # perezoso: evita el ciclo con timeclock
-    return hojas.registros("Alarmas", ALERTS_HEADERS) or []
+    return hojas.registros("Alerts", ALERTS_HEADERS) or []
 
 
 
