@@ -154,6 +154,10 @@ VALORES = {
     # ingles — traduccion a medias, el peor caso (v443/v450).
     "revertida": "reverted",
     "cancelada": "cancelled",
+    # v463 · estado de una ORDEN de compra (orders.ESTADOS). `pendiente` y
+    # `cancelada` ya estaban, asi que una orden recibida salia en español
+    # entre dos que si se traducian.
+    "recibida": "received",
     # facturas / nóminas / cotizaciones
     "emitida": "issued", "pagada": "paid", "anulada": "voided", "cobrada": "collected",
     "parcial": "partial", "vencida": "overdue",
@@ -165,11 +169,19 @@ VALORES = {
     # categorías de gasto (expenses.CATEGORIAS)
     "Materiales": "Materials", "Herramientas": "Tools", "Transporte": "Transport",
     "Combustible": "Fuel", "Subcontrato": "Subcontractor", "Alquiler": "Rental",
+    "Otros": "Other",
     # inventario (inventory.CAT_DEFAULT)
     "Herramienta": "Tool", "Equipo": "Equipment", "Vehículo": "Vehicle",
     "EPP": "PPE", "Consumible": "Consumable",
-    # catálogo
+    # v463 · estado del ACTIVO (inventory.ESTADOS). ⚠️ El TEXTO vive aquí y el COLOR
+    # se queda en `inventory_ui._EST_LBL`: hasta v462 el texto vivía SOLO allí, así que
+    # la ficha del activo decía «available» y su tabla «disponible» — el mismo activo en
+    # dos idiomas a dos clics. Una definición del texto, el color aparte (v450).
+    "disponible": "available", "en_uso": "in use", "mantenimiento": "maintenance",
+    "dañado": "damaged", "baja": "written off",
+    # catálogo (Tipo + catalogo.CAT_DEFAULT)
     "producto": "product", "servicio": "service",
+    "Equipos": "Equipment", "Ingeniería": "Engineering", "Mantenimiento": "Maintenance",
     # conceptos de nómina (payroll: `tipo`)
     "devengo": "earning", "deduccion": "deduction", "aporte": "contribution",
 }

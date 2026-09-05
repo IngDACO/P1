@@ -9251,7 +9251,91 @@ próximo estado que alguien añada a ese módulo no se puede colar.
 `verif_v461.py` pasa de 26 a **31 comprobaciones**, las 11 roturas se siguen cazando y la
 suite entera queda en **100 verde · 0 rojo**.
 
-## Versiones desplegadas (v462 = actual)
+## El arreglo de v462 estaba ACOTADO: la misma forma vivía en 4 celdas más (v463)
+
+Salió de una pregunta del usuario —*«¿ya está todo cerrado y funcionando?»*— auditada
+contra el CÓDIGO en vez de contestada de memoria. La respuesta era **no**: mi chequeo de
+v462 miraba solo `correcciones`, y generalizarlo destapó el mismo fallo vivo en dos
+pantallas más, con sus **dos mitades**.
+
+| Pantalla | Se veía |
+|---|---|
+| **Catálogo** | `producto` / `servicio` bajo la cabecera *Type*, y la categoría bajo *Category* |
+| **Inventario** | la categoría bajo *Category* y el **estado** bajo *Status* |
+
+Las dos tablas pasan por `tabla.cfg()`, así que **la cabecera estaba en inglés y la celda
+en español** — el contraste exacto que hizo saltar «revertida».
+
+### ⚠️ El inventario se contradecía consigo mismo
+Su ficha usaba `_est_lbl()` y decía **«available»**; su tabla, a dos clics, decía
+**«disponible»**. El mismo activo en dos idiomas, porque el TEXTO del estado vivía en un
+mapa propio del módulo (`_EST_LBL`) y la tabla no lo usaba. Es la segunda definición que
+v450 mandó borrar, sobreviviendo donde nadie la había mirado.
+
+### Y el mapa estaba a medias en dos listas
+`catalogo.CAT_DEFAULT` tiene 7 categorías: **3 se traducían y 4 no** — y las 3 que
+funcionaban lo hacían **por casualidad**, porque coinciden con claves de la lista de
+gastos. En `expenses.CATEGORIAS` faltaba `Otros`, 1 de 7. Es la mitad silenciosa de v462:
+*un valor nuevo no entra solo en el mapa, y `etiqueta()` devuelve tal cual lo que no
+conoce* — correcto para un nombre de obra, y justo lo que esconde una categoría.
+
+### ⚠️ El arreglo OBVIO habría sido un fallo nuevo
+Meter `_est_lbl()` en la tabla parecía lo natural: es la función del módulo para eso. Pero
+devuelve **markdown de color** (`:green[available]`), que `st.markdown` renderiza y una
+celda de `st.dataframe` pinta **literal**. Se vio mirando qué DEVUELVE la función y dónde
+se usaba (regla v135), no leyendo su nombre.
+→ El texto se mueve a `i18n.VALORES` (**una** definición) y `_EST_COLOR` se queda solo con
+el color; `_est_lbl()` los compone. La tabla usa `_etq()` pelado.
+- ⚠️ **La ficha tiene que pintar EXACTAMENTE lo de antes**, y eso se comprueba ejecutando
+  contra el diccionario viejo verbatim: 5 de 5 idénticas. Si un arreglo de la tabla
+  cambiara la ficha, se habría movido algo que ya estaba bien.
+- ⚠️ **El DATO no se toca**: `inventory.py` compara `== "en_uso"` e `inventory_ui`
+  `== "disponible"`. Traducir la constante dejaría esas dos ramas muertas **sin dar
+  ningún error** (v442).
+
+### Dos falsos positivos que NO se tocaron
+Mirar el código acusado antes de editar (regla v385) evitó romper código sano: el `Tipo`
+de una CREDENCIAL (*White Card*, *Forklift* — ya en inglés y fuera del mapa a propósito) y
+un `.get("Tipo")` del catálogo que es una **COMPARACIÓN** (`== SERVICIO`), no un pintado —
+mi red miraba todos los `.get` del valor. Y `roster.ESTADOS` queda fuera del guardián: sus
+claves (`OFF`/`LEAVE`/`FORMACION`) son identificadores y lo que se pinta es su `nombre`,
+que ya está en inglés.
+
+### ⚠️ La lista FIJA del guardián era el mismo fallo que venía a arreglar
+La primera versión comprobaba **8 listas escritas a mano**, o sea un guardián acotado a lo
+que yo había mirado. Se cambió por DESCUBRIMIENTO en ejecución (importar cada módulo de
+`core` y leer sus constantes) y aparecieron **13**: las 5 que faltaban se definen por
+**NOMBRE** —`ESTADOS = (PENDIENTE, APROBADA, …)`— así que ningún barrido de literales las
+ve, y son justo las de `correcciones` (v461), `ausencias` (v430), `quotes` y `orders`.
+→ Y ahí salió **un fallo real más**: `orders.ESTADOS` tenía `recibida` **sin traducir**
+mientras `pendiente` y `cancelada` sí lo estaban, así que una orden recibida salía en
+español entre dos que no. El estado de una orden se pinta con `_etq()`, o sea que se veía.
+
+### ⚠️ Y el CONTROL cazó que mi propio guardián REVENTABA
+Al sustituir el chequeo 3 borré la línea que importaba `inventory`/`catalogo`, y el
+chequeo 4 los usa → **`NameError` en la línea 155**: el guardián moría a media ejecución y
+yo solo miré la parte de arriba de la salida, que decía «ok».
+⚠️ Un guardián que revienta devuelve código ≠ 0 **siempre**, así que **las 8 roturas
+salieron «cazadas» sin probar nada** — la trampa de v459/v461 otra vez, ahora causada por
+mí mismo dentro del arreglo. Lo detectó **únicamente el caso de CONTROL** (un cambio
+inocuo que debe pasar): sin él, la tanda entera habría pasado por verificación. Arreglado
+el import, repetido: **9/9 (8 roturas + control)**.
+
+### ⚠️ La trampa nº26, otra vez (van cinco)
+Escribí una rotura con `<<PY` **sin comillas**, así que bash interpretó los backticks del
+comentario como sustitución de comando (`orders.ESTADOS: command not found`) y el fichero
+quedó con el comentario mutilado. El heredoc va **siempre** entre comillas (`<<'PY'`).
+
+### El guardián, esta vez GENERAL
+`verif_v463.py` (8 comprobaciones) no fija los sitios que vi: recorre **todos** los
+`*_ui.py` y falla si cualquier dict-fila de un `pd.DataFrame` lee una columna de negocio
+sin `etiqueta()`; exige que las **8 listas** de valores estén mapeadas; que el dato siga en
+español; que `_EST_COLOR` guarde colores y no frases; y que `_est_lbl` no aparezca dentro
+de un `DataFrame`. ⚠️ La red se **valida contra un caso construido** (ve la celda cruda y
+no marca la traducida) antes de creerse su cero — trampa nº12. Probado contra **7 roturas
++ 1 CONTROL**: caza las 7 y deja pasar el control.
+
+## Versiones desplegadas (v463 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -9259,6 +9343,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v463 | **El arreglo de v462 estaba ACOTADO: la misma forma vivia en 4 celdas mas.** Salio de auditar «¿ya esta todo cerrado?» contra el CODIGO en vez de contestarlo de memoria. En **Catalogo** e **Inventario** la cabecera iba en ingles (pasan por `tabla.cfg()`) y la celda en espanol — el contraste exacto de «revertida». ⚠️ Y el inventario **se contradecia consigo mismo**: su ficha decia *available* y su tabla *disponible*, porque el TEXTO del estado vivia en un mapa propio del modulo — la segunda definicion que v450 mando borrar, viva donde nadie miro. + el mapa a medias en dos listas: de las 7 categorias del catalogo **3 se traducian por CASUALIDAD** (coinciden con claves de gastos) y 4 no. ⚠️ **El arreglo obvio habria sido un fallo nuevo**: meter `_est_lbl()` en la tabla, que devuelve markdown de color (`:green[available]`) y una celda de `st.dataframe` pinta LITERAL — se vio mirando que DEVUELVE la funcion (v135). El texto se mueve a `i18n.VALORES` (una definicion), el color se queda en `_EST_COLOR`, y ⚠️ **la ficha pinta exactamente lo de antes** (5/5 verificadas contra el diccionario viejo verbatim) y **el DATO no se toca** (`== "en_uso"` quedaria muerto sin dar error). 2 falsos positivos NO tocados por mirar el codigo acusado (el Tipo de credencial, ya en ingles; y un `.get("Tipo")` que es una COMPARACION). Guardian **general**, no fijado a los sitios que vi: recorre todos los `*_ui.py`, valida su red contra un caso construido antes de creerse su cero (trampa n12), y caza **8 roturas + 1 CONTROL**. ⚠️ Su primera version comprobaba una lista FIJA de 8 —el mismo fallo que venia a arreglar—: por DESCUBRIMIENTO salen **13**, porque 5 se definen por NOMBRE y ningun barrido de literales las ve; ahi aparecio otro fallo real, `orders.ESTADOS` con **`recibida` sin traducir** entre `pendiente` y `cancelada`, que si lo estaban. ⚠️ Y el **CONTROL cazo que mi propio guardian REVENTABA** (borre un import al parchearlo): un guardian que revienta devuelve codigo ≠ 0 siempre, asi que las 8 roturas salian «cazadas» **sin probar nada** — v459 otra vez, y solo el control lo vio |
 | v462 | ⚠️ **Un estado NUEVO sale en espanol aunque la pantalla este traducida.** Visto **mirando una captura** de la verificacion de v461: la columna `Status` del historial decia **«revertida»** en una fila cuyas otras seis columnas iban en ingles — traduccion a medias dentro de la MISMA tabla (v450). Fallaban DOS cosas a la vez y arreglar una sola no cambiaba nada: la celda pintaba el valor CRUDO sin `etiqueta()`, y **`revertida` no estaba en `i18n.VALORES`** — el vocabulario se tomo de `ausencias` (pendiente/aprobada/rechazada) y ese estado es PROPIO de v461, asi que nacio fuera del mapa. ⚠️ Un valor nuevo no entra solo, y **no da ningun error**: `etiqueta()` devuelve tal cual lo que no conoce —correcto para un nombre de obra, y justo lo que esconde un estado recien inventado—. ⚠️ Y ningun guardian podia verlo: las 14 redes de i18n miden el CODIGO y aqui el texto viene de la HOJA; la red 12 cubre la forma pero su chequeo fija las tres celdas concretas de v452 (el guardian acotado al caso que se vio, v309/v349/v441). Chequeo nuevo y GENERAL: todo valor de `ESTADOS` en `VALORES`, la etiqueta traducida, ⚠️ el **DATO sigue en espanol** (traducirlo dejaria de casar en silencio) y la celda por `etiqueta()`. 31 comprobaciones, 11/11 roturas, suite **100 verde · 0 rojo** |
 | v461 | **Corregir el fichaje: el campo pone la hora real y el admin la revisa** (petición del usuario; decisiones suyas: se aplica YA, se avisa si el periodo ya se pagó, y solo el mismo día). ⚠️ **Lo que decide si sirve de algo es recalcular las `Horas`**: `_row_segmentos` respeta la columna guardada para una fila cerrada del mismo día (v164), así que cambiar solo el timestamp habría dejado la nómina y el costo de la obra **idénticos, sin que nadie lo notara**. ⚠️ La excepción del «mismo día» está MEDIDA: una sesión abierta acumula contra el reloj —10,6 h el mismo día, **130,6 h a los cinco**, 2.342 USD a 40 $/h—, así que cerrarla no es corregir el pasado, es parar una hemorragia. ⚠️ Y al repasar apareció el caso que **revertir no puede resolver**: un cierre olvidado no tiene «hora anterior», así que revertirlo la devolvería a abierta → el admin **ajusta** la hora, sin mover el DÍA (otro día es otra nómina). ⚠️ **La suite destapó 6 rojos y 5 eran míos**: metí `st.toast` donde la app usa `flash` en 74 sitios; el `import auth` que sobraba delataba que me dejé a medias la regla de HOMÓNIMOS (séptima vez); y de las 4 cabeceras sin traducir el guardián **solo vio una** —las otras tres son palabras cortas sin acento, la trampa nº28—. ⚠️ Y mi propio guardián dio **FALLO con el código correcto** dos veces: leyendo `_SUBSECCIONES` como si fuera una lista (es una tupla, regla v135) y tomando `logger.warning` por texto de pantalla (filtrar por RECEPTOR, v439) — con él rojo de base, **una tanda de 11 roturas «cazadas» no probaba nada** (v459). Ejercitado contra la hoja real de punta a punta sin rastro; 27 comprobaciones, 11/11 roturas, suite **100 verde · 0 rojo** |
 | v459 | **«Engineer in charge» pasa a ser HEAD INSTALLER/S, elegidos de una LISTA** (petición del usuario; decisiones suyas: solo usuarios de CAMPO, y los nombres separados por coma). Escrito a mano, el responsable era una cadena que **no casaba con nadie**: una errata no da error, deja la obra con un responsable que no existe y que ningún filtro puede cruzar. Se guardan los **LOGIN** unidos por «;» (el login ES la identidad: dos personas pueden llamarse igual —«Mei Chen», v413— y un nombre puede cambiar) y el nombre se resuelve al MOSTRAR, desempatando homónimos. ⚠️ La columna sigue llamándose `Ingeniero`: se cambia lo que se MUESTRA, nunca la clave (v232/v442). Los cuatro caminos pasan a multiselect — obra (solo campo) y localización (**todos** los del grupo: una oficina la suele llevar administración, y filtrar por campo dejaría fuera al responsable real). ⚠️ **Y escribí un helper que YA EXISTÍA**: `_field_users` hace exactamente lo mismo, así que dejé **tres** definiciones del filtro «rol == campo» en el módulo — el patrón de los cinco `_num` divergentes de v323; unificadas, con chequeo permanente. ⚠️ **Dos chequeos míos midiendo otra cosa**: el guardián comparaba contra `ast.dump` (que usa `repr`, comillas SIMPLES) → **FALLO con el código correcto**, y eso **invalidó la primera tanda de roturas** (6/6 «cazadas» con el guardián rojo de base, o sea ninguna probaba nada); y el script de limpieza decía «0 copias restantes» contando `'campo'` en comillas simples, que no aparece nunca en el fuente — con esa cifra habría dado la limpieza por buena **dejando una copia viva**. 7/7 roturas |

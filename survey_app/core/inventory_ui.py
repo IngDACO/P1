@@ -26,19 +26,26 @@ def _creado_por() -> str:
     return str(a.get("usuario", "") or a.get("nombre", ""))
 
 
-# ⚠️ SIN `t()`: este dict se construye al IMPORTAR el módulo, cuando todavía no hay
-# sesión, así que la traducción quedaría CONGELADA en el idioma de ese momento — el
-# fallo de `auth.SESION_OCUPADA` (v445), que ya ha mordido seis veces. Las CLAVES son
-# el estado guardado en la hoja y no se tocan; el texto va en el idioma BASE y quien
-# quiera traducirlo lo hace al PINTAR, con `_est_lbl()`.
-_EST_LBL = {"disponible": ":green[available]", "en_uso": ":blue[in use]",
-            "mantenimiento": ":orange[maintenance]", "dañado": ":red[damaged]",
-            "baja": ":gray[written off]"}
+# ⚠️ Solo el COLOR. El TEXTO vive en `i18n.VALORES` desde v463: tenerlo aquí además
+# dejaba DOS definiciones del mismo estado, y por eso la ficha del activo decía
+# «available» y su tabla «disponible» — el mismo activo en dos idiomas a dos clics.
+# ⚠️ Las CLAVES son el estado guardado en la hoja y NO se tocan: `inventory.py` e
+# `inventory_ui` los comparan (`== "en_uso"`, `== "disponible"`), así que traducir el
+# dato dejaría esas dos ramas muertas sin dar ningún error (v442).
+_EST_COLOR = {"disponible": "green", "en_uso": "blue", "mantenimiento": "orange",
+              "dañado": "red", "baja": "gray"}
 
 
 def _est_lbl(estado) -> str:
-    """El estado del activo, con su color, en el idioma de la PANTALLA."""
-    return t(_EST_LBL.get(str(estado), str(estado)))
+    """El estado del activo CON su color, en el idioma de la pantalla.
+
+    ⚠️ Devuelve MARKDOWN de color, así que vale para `st.markdown` y NO para una celda
+    de `st.dataframe`, que lo pintaría literal (`:green[available]`). En una tabla va
+    `_etq(...)` pelado — que es el mismo texto, sin el color.
+    """
+    _e = str(estado)
+    _c = _EST_COLOR.get(_e)
+    return f":{_c}[{_etq(_e)}]" if _c else _etq(_e)
 
 
 def _ubic_txt(a) -> str:
@@ -160,8 +167,8 @@ def render_inventario(grupo):
     st.caption(f"Tap an asset to see its record, its QR code and manage it. ({len(_rows)})")
     df = pd.DataFrame([{
         "Nombre":      a.get("Nombre", ""),
-        "Category":   a.get("Categoria", "") or "—",
-        "Estado":      a.get("Estado", ""),
+        "Category":   _etq(str(a.get("Categoria", ""))) or "—",
+        "Estado":      _etq(str(a.get("Estado", ""))),
         "Location":   _ubic_txt(a),
         "Assigned to":  a.get("AsignadoA", "") or "—",
         "Valor":       round(INV.valor_actual(a), 0),
