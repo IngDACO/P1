@@ -9375,7 +9375,80 @@ que es una lista **declarada**: una columna de negocio nueva hay que meterla ah�
 bueno** (10 comprobaciones): la tanda de roturas de v459 y v461 no valía nada
 precisamente por saltarse ese paso.
 
-## Versiones desplegadas (v464 = actual)
+## Las PESTAÑAS pasan a nombre inglés (v465-v466)
+
+Petición del usuario: *«pon los nombres de las hojas en inglés también, TODO debe ir
+en inglés»*. Antes de tocar nada se midió el alcance, porque aquí hay tres capas con
+riesgos muy distintos:
+
+| Capa | Sitios que la nombran | Qué pasa si falla |
+|---|---|---|
+| **Hojas** (27) | **67** | ← esta versión |
+| Carpetas de Drive (3) | 3 | se buscan **por nombre**: los 27 documentos ya subidos quedan huérfanos |
+| Columnas (160) | **2.573** | `.get("Estado")` sobre una cabecera ya inglesa devuelve `""`: columnas vacías por toda la app |
+| Valores (80) | **727** | cada comparación que deja de casar es una **rama muerta** silenciosa (v442) |
+
+### ⚠️ El fallo que dicta la secuencia no es una excepción: es una hoja VACÍA
+`get_sheet` **crea** la pestaña si no la encuentra. Así que si el código pide
+`Projects` y el libro todavía tiene `Proyectos`, la app **no da ningún error**: se
+fabrica una pestaña vacía y se pone a escribir ahí, con los datos intactos al lado y
+la pantalla en blanco. Por eso va en tres pasos y no de un tirón:
+
+1. **v465** — el código pide el nombre nuevo y **acepta el viejo**
+   (`timeclock.titulo_real`, una sola definición, 0 llamadas extra: sale del índice
+   que `_libro()` ya cachea).
+2. **Renombrar** las 44 pestañas de los dos libros.
+3. **v467** — retirar el respaldo.
+
+⚠️ Y `titulo_real` devuelve el nombre **NUEVO** si el índice no se puede leer: un
+fallo de red no puede acabar escribiendo en otra pestaña.
+
+### El canario, porque «desplegado ≠ corriendo» aquí se paga caro
+Tras desplegar v465 el topbar decía `v464` y el título `v465`, o sea que los `core.*`
+podían seguir viejos. Renombrar con el código viejo corriendo es exactamente el
+desastre de arriba, así que se comprobó con una prueba POSITIVA: renombrar
+`Activos → Assets` y mirar la pantalla. Siguió mostrando **1 activo**; con el código
+viejo habría pedido `Activos`, no lo habría encontrado y habría mostrado **0**
+creando una pestaña vacía.
+⚠️ El primer canario (`InvCategorias`, 0 filas) **no valía**: la ruta de LECTURA no
+crea hojas —solo `get_sheet`—, así que su «no se recreó» no significaba nada hasta
+comprobar que `registros(titulo, CABECERAS)` sí cae a `get_sheet`.
+
+### ⚠️ Y el renombrado destapó una mina de verdad: el índice NO caduca
+Con las 44 renombradas, el **Catálogo pasó a mostrar 0 items** con la hoja llena
+(`Catalogue`: 2 filas; el lector local devolvía 1). `_libro` —el índice de pestañas—
+vive en **`@st.cache_resource`, que no tiene TTL**: el proceso lo construyó cuando
+las hojas eran españolas, así que seguía pidiendo `Catalogo`, el lote entero fallaba
+en cada pasada y **las pantallas salían a cero con los datos intactos**. Solo se
+arreglaba reiniciando a mano.
+
+**v466** lo cierra en el código, que es donde tiene que estar:
+- si el lote falla, **se tira el índice** y se reconstruye (2 llamadas, y solo cuando
+  ya ha fallado);
+- `get_sheet` **refresca el índice y vuelve a mirar ANTES de crear** — que era el
+  camino por el que un índice viejo podía fabricar la pestaña vacía.
+
+### ⚠️ El guardián de v445 me cazó reintroduciendo su propio fallo
+`titulo_real` empezaba con `t = str(title).strip()`, y `timeclock` importa **`t` como
+la función de traducción** desde v445: Python marca ese nombre local en el ámbito
+ENTERO de la función. Es literalmente el shadowing que aquella versión documentó,
+cometido dentro del arreglo. De los otros dos rojos, los dos eran **caducados**:
+`verif_v427` por su libro FALSO (nombraba las hojas en español, así que `_existentes`
+no casaba y el lote salía vacío → un FALLO que no existía) y `verif_v430` por exigir
+el literal `"Ausencias"` — reanclado a **`ausencias.SHEET`**, así el próximo
+renombrado no lo pone en rojo.
+
+### Verificación
+Guardián `verif_v465.py` (6 bloques) probado contra **3 roturas + control**: las caza
+las 3. Suite **102 verde · 0 rojo** antes de cada uno de los dos despliegues. Tras
+renombrar: **0 pestañas con nombre viejo** en los dos libros, **0 recreadas**, los
+lectores devolviendo lo mismo que antes (catálogo 1, activos 1, movimientos 1,
+usuarios 5) y las pantallas de Catálogo, Inventario y Usuarios correctas.
+
+⚠️ **Y la trampa nº19 dos veces en la misma tanda**: guardianes lanzados desde el
+scratchpad en vez de `survey_app` → `No secrets found` → rojos que no existían.
+
+## Versiones desplegadas (v466 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -9383,6 +9456,8 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v466 | ⚠️ **El indice de pestañas NO caduca, y renombrar dejaba las pantallas a CERO.** Tras renombrar las 44, el Catalogo mostraba **0 items** con la hoja llena: `_libro` vive en **`@st.cache_resource`, sin TTL**, asi que el proceso seguia pidiendo `Catalogo` —una hoja que ya no existe—, el lote entero fallaba en cada pasada y **los datos seguian intactos en el libro**. Solo se arreglaba reiniciando a mano, asi que se cierra en el codigo: si el lote falla **se tira el indice**, y `get_sheet` **lo refresca y vuelve a mirar ANTES de crear** — que era el camino por el que un indice viejo podia fabricar una pestaña vacia y ponerse a escribir en ella |
+| v465 | **Las 27 pestañas pasan a nombre INGLES** (peticion del usuario), con **capa de compatibilidad**: `titulo_real` pide el nombre nuevo y acepta el viejo, porque ⚠️ `get_sheet` **crea** la hoja si no la encuentra — codigo y libro desincronizados no dan error, fabrican una pestaña vacia donde escribir. Tres pasos: codigo que acepta los dos → renombrar → retirar el respaldo (v467). ⚠️ Antes de renombrar se comprobo que el Cloud tuviera el codigo nuevo con un **canario POSITIVO** (renombrar `Activos`→`Assets` y ver que sigue mostrando 1 activo): el primero, sobre una hoja vacia, **no valia** porque la ruta de lectura no crea hojas. 26 literales traducidos por AST (solo donde el literal ES una hoja) + `HOJAS_LECTURA` + el lote re-keyeado al nombre canonico. ⚠️ El guardian de **v445 me cazo reintroduciendo su propio fallo**: `t = str(title)` tapa la funcion de traduccion en el ambito entero. Los otros 2 rojos, caducados (el libro FALSO de v427 nombraba las hojas en español; v430 exigia el literal «Ausencias», reanclado a la constante). 44 pestañas renombradas en los 2 libros, **0 con nombre viejo, 0 recreadas** |
 | v464 | **Un lote no basta: el mapa estaba a medias en CUATRO listas mas.** v463 se desplego y se verifico en produccion, y **mirar esas mismas capturas** destapo `catalogo.UNIDADES`, `inventory.CONDICIONES`, `UBIC_TIPOS` y `MOV_TIPOS` saliendo crudas — `unidad`/`juego` bajo la cabecera *Unit*, `bueno`/`regular` en la ficha, `bodega:` en la ubicacion y `salida`/`traslado` en el historial. 12 entradas mas al mapa; ⚠️ **`m`, `m²` y `kg` NO se mapean**: son simbolos iguales en los dos idiomas y un mapa espejo es la segunda definicion que v450 mando borrar. ⚠️ **El casi-fallo**: lo natural era traducir dentro de `ubic_str` (una sola definicion, v306), pero **5 de sus 6 llamadas son de `_log_mov`** y ese texto **se ESCRIBE en el historial** — habria guardado `warehouse: X` como DATO, el fallo que v452 estuvo a punto de cometer; el traductor entra por **parametro opcional**, asi la pantalla traduce y la escritura sigue en espanol. ⚠️ **Y una rotura SE ESCAPO**: la red del guardian miraba `COLS = {Estado, Categoria, Tipo, Rol}` y **`Unidad` no estaba**, asi que devolver esa celda a crudo daba 0 (11 cazadas · 1 escapada) — la red ve solo la forma que se le enseño, dentro del guardian escrito para esa misma leccion una version antes. Con `COLS` ampliada y **verde de base** (el paso que v459/v461 se saltaron): **12/12 · 0 escapadas** |
 | v463 | **El arreglo de v462 estaba ACOTADO: la misma forma vivia en 4 celdas mas.** Salio de auditar «¿ya esta todo cerrado?» contra el CODIGO en vez de contestarlo de memoria. En **Catalogo** e **Inventario** la cabecera iba en ingles (pasan por `tabla.cfg()`) y la celda en espanol — el contraste exacto de «revertida». ⚠️ Y el inventario **se contradecia consigo mismo**: su ficha decia *available* y su tabla *disponible*, porque el TEXTO del estado vivia en un mapa propio del modulo — la segunda definicion que v450 mando borrar, viva donde nadie miro. + el mapa a medias en dos listas: de las 7 categorias del catalogo **3 se traducian por CASUALIDAD** (coinciden con claves de gastos) y 4 no. ⚠️ **El arreglo obvio habria sido un fallo nuevo**: meter `_est_lbl()` en la tabla, que devuelve markdown de color (`:green[available]`) y una celda de `st.dataframe` pinta LITERAL — se vio mirando que DEVUELVE la funcion (v135). El texto se mueve a `i18n.VALORES` (una definicion), el color se queda en `_EST_COLOR`, y ⚠️ **la ficha pinta exactamente lo de antes** (5/5 verificadas contra el diccionario viejo verbatim) y **el DATO no se toca** (`== "en_uso"` quedaria muerto sin dar error). 2 falsos positivos NO tocados por mirar el codigo acusado (el Tipo de credencial, ya en ingles; y un `.get("Tipo")` que es una COMPARACION). Guardian **general**, no fijado a los sitios que vi: recorre todos los `*_ui.py`, valida su red contra un caso construido antes de creerse su cero (trampa n12), y caza **8 roturas + 1 CONTROL**. ⚠️ Su primera version comprobaba una lista FIJA de 8 —el mismo fallo que venia a arreglar—: por DESCUBRIMIENTO salen **13**, porque 5 se definen por NOMBRE y ningun barrido de literales las ve; ahi aparecio otro fallo real, `orders.ESTADOS` con **`recibida` sin traducir** entre `pendiente` y `cancelada`, que si lo estaban. ⚠️ Y el **CONTROL cazo que mi propio guardian REVENTABA** (borre un import al parchearlo): un guardian que revienta devuelve codigo ≠ 0 siempre, asi que las 8 roturas salian «cazadas» **sin probar nada** — v459 otra vez, y solo el control lo vio |
 | v462 | ⚠️ **Un estado NUEVO sale en espanol aunque la pantalla este traducida.** Visto **mirando una captura** de la verificacion de v461: la columna `Status` del historial decia **«revertida»** en una fila cuyas otras seis columnas iban en ingles — traduccion a medias dentro de la MISMA tabla (v450). Fallaban DOS cosas a la vez y arreglar una sola no cambiaba nada: la celda pintaba el valor CRUDO sin `etiqueta()`, y **`revertida` no estaba en `i18n.VALORES`** — el vocabulario se tomo de `ausencias` (pendiente/aprobada/rechazada) y ese estado es PROPIO de v461, asi que nacio fuera del mapa. ⚠️ Un valor nuevo no entra solo, y **no da ningun error**: `etiqueta()` devuelve tal cual lo que no conoce —correcto para un nombre de obra, y justo lo que esconde un estado recien inventado—. ⚠️ Y ningun guardian podia verlo: las 14 redes de i18n miden el CODIGO y aqui el texto viene de la HOJA; la red 12 cubre la forma pero su chequeo fija las tres celdas concretas de v452 (el guardian acotado al caso que se vio, v309/v349/v441). Chequeo nuevo y GENERAL: todo valor de `ESTADOS` en `VALORES`, la etiqueta traducida, ⚠️ el **DATO sigue en espanol** (traducirlo dejaria de casar en silencio) y la celda por `etiqueta()`. 31 comprobaciones, 11/11 roturas, suite **100 verde · 0 rojo** |
