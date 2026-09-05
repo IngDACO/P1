@@ -66,7 +66,7 @@ CABECERAS = {
     "Cliente": "Client",
     "Elevador": "Lift",
     "Estado": "Status",
-    "Tipo": "Type",
+    "Tipo": "Type", "Unidad": "Unit",
     "Avance %": "Progress %",
     "Peso": "Weight",
     "Inicio": "Start",

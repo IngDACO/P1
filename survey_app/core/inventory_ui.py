@@ -53,7 +53,7 @@ def _ubic_txt(a) -> str:
     de la del backend, así que al hacer que el proyecto se guarde por ID solo se habría
     arreglado una de las dos y la lista seguiría enseñando `PRJ-0007` (el patrón de dos
     mecanismos para lo mismo que v140 mandó no repetir)."""
-    return INV.ubic_str(a)
+    return INV.ubic_str(a, _etq)
 
 
 def _fecha_input(label, valor, key):
@@ -219,7 +219,7 @@ def _detalle(grupo, aid):
         m1.metric(t("Purchase value"), f"${vc:,.0f}")
         m2.metric(t("Current value"), f"${va:,.0f}",
                   help=t("Straight-line depreciation over the useful life."))
-        st.markdown(f"**Location:** {_ubic_txt(a)}  ·  **Condition:** {a.get('Condicion', '') or '—'}")
+        st.markdown(f"**Location:** {_ubic_txt(a)}  ·  **Condition:** {_etq(str(a.get('Condicion', ''))) or '—'}")
         if str(a.get("AsignadoA", "")).strip():
             st.markdown(f"**{t('Assigned to')}:** {a.get('AsignadoA')}"
                         + (f" · {t('due back')} {a.get('FechaDevolucion')}" if a.get("FechaDevolucion") else ""))

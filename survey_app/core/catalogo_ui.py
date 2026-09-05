@@ -71,7 +71,7 @@ def render_catalogo(grupo):
             "Item": i.get("Nombre", ""),
             "Tipo": _etq(str(i.get("Tipo", ""))),
             "Category": _etq(str(i.get("Categoria", ""))) or "—",
-            "Unidad": i.get("Unidad", "") or "—",
+            "Unidad": _etq(str(i.get("Unidad", ""))) or "—",
             "Horas": (round(_num(i.get("HorasEst")), 2)
                       if str(i.get("Tipo", "")) == CAT.SERVICIO else None),
             "Costo": CAT.costo_de(i, 1),

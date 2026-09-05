@@ -158,6 +158,14 @@ VALORES = {
     # `cancelada` ya estaban, asi que una orden recibida salia en español
     # entre dos que si se traducian.
     "recibida": "received",
+    # v464 · inventario: condicion, tipo de ubicacion y tipo de movimiento.
+    # ⚠️ `mantenimiento` y `baja` ya estaban arriba (son estado Y movimiento).
+    "bueno": "good", "regular": "fair", "malo": "poor",
+    "bodega": "warehouse", "usuario": "user", "reparacion": "under repair",
+    "salida": "check-out", "entrada": "check-in", "traslado": "transfer",
+    # v464 · unidades del catalogo. ⚠️ m/m²/kg NO se mapean: son simbolos, iguales
+    # en los dos idiomas, y un mapa espejo es lo que v450 mando borrar.
+    "unidad": "unit", "juego": "set", "global": "lump sum",
     # facturas / nóminas / cotizaciones
     "emitida": "issued", "pagada": "paid", "anulada": "voided", "cobrada": "collected",
     "parcial": "partial", "vencida": "overdue",

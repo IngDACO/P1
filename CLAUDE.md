@@ -9335,7 +9335,47 @@ de un `DataFrame`. ⚠️ La red se **valida contra un caso construido** (ve la 
 no marca la traducida) antes de creerse su cero — trampa nº12. Probado contra **7 roturas
 + 1 CONTROL**: caza las 7 y deja pasar el control.
 
-## Versiones desplegadas (v463 = actual)
+## Un lote no basta: el mapa estaba a medias en CUATRO listas más (v464)
+
+v463 se desplegó y se verificó en producción — *Catalogue: service · Engineering*,
+*Inventory: Tool · available* —, y **mirar esas mismas capturas destapó cuatro listas
+más** cuyos valores seguían saliendo crudos. No es un fallo nuevo: es que el barrido de
+v463 descubrió las listas **por constante** y estas cuatro se pintan en sitios que su
+red no miraba.
+
+| Lista | Se veía |
+|---|---|
+| `catalogo.UNIDADES` | `unidad` · `juego` · `global` bajo la cabecera *Unit* |
+| `inventory.CONDICIONES` | `bueno` · `regular` · `malo` en la ficha del activo |
+| `inventory.UBIC_TIPOS` | `bodega:` · `usuario:` · `reparacion:` en la ubicación |
+| `inventory.MOV_TIPOS` | `salida` · `entrada` · `traslado` en el historial |
+
+⚠️ **`m`, `m²` y `kg` NO se mapean**: son símbolos, idénticos en los dos idiomas, y un
+mapa espejo (`{"m": "m"}`) es exactamente la segunda definición que v450 mandó borrar.
+
+### ⚠️ El casi-fallo: traducir dentro de `ubic_str` habría metido inglés en la HOJA
+La ubicación se compone en `inventory.ubic_str`, así que lo natural era traducir ahí
+—una sola definición, que es la regla de v306—. Pero **5 de sus 6 llamadas son de
+`_log_mov`**, y ese texto **se ESCRIBE en el historial de movimientos**: traducirlo
+dentro habría guardado `warehouse: X` como DATO, que es el fallo que v452 estuvo a punto
+de cometer con el estado del proyecto. Solución: el traductor entra **por parámetro
+opcional** (`ubic_str(a, etq=None)`), así la composición sigue teniendo una definición y
+solo la pantalla la traduce; las escrituras no lo pasan y siguen en español.
+
+### ⚠️ Y una rotura SE ESCAPÓ: la red solo miraba CUATRO columnas
+El guardián de v463 comprueba que ninguna celda de tabla lea una columna de negocio sin
+`etiqueta()`… pero su lista era `COLS = {"Estado", "Categoria", "Tipo", "Rol"}`. Al
+devolver la celda `Unidad` a crudo, **el guardián devolvió 0 y la rotura pasó** (11
+cazadas · 1 escapada). Es la lección de siempre —**la red ve solo la forma que se le
+enseñó**— dentro del guardián escrito para esa misma lección una versión antes.
+`COLS` pasa a incluir `Unidad`, `Condicion` y `UbicacionTipo`, y queda escrito al lado
+que es una lista **declarada**: una columna de negocio nueva hay que meterla ahí.
+
+⚠️ Y antes de creerse el «12/12» se comprobó que el guardián está **VERDE con el código
+bueno** (10 comprobaciones): la tanda de roturas de v459 y v461 no valía nada
+precisamente por saltarse ese paso.
+
+## Versiones desplegadas (v464 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -9343,6 +9383,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v464 | **Un lote no basta: el mapa estaba a medias en CUATRO listas mas.** v463 se desplego y se verifico en produccion, y **mirar esas mismas capturas** destapo `catalogo.UNIDADES`, `inventory.CONDICIONES`, `UBIC_TIPOS` y `MOV_TIPOS` saliendo crudas — `unidad`/`juego` bajo la cabecera *Unit*, `bueno`/`regular` en la ficha, `bodega:` en la ubicacion y `salida`/`traslado` en el historial. 12 entradas mas al mapa; ⚠️ **`m`, `m²` y `kg` NO se mapean**: son simbolos iguales en los dos idiomas y un mapa espejo es la segunda definicion que v450 mando borrar. ⚠️ **El casi-fallo**: lo natural era traducir dentro de `ubic_str` (una sola definicion, v306), pero **5 de sus 6 llamadas son de `_log_mov`** y ese texto **se ESCRIBE en el historial** — habria guardado `warehouse: X` como DATO, el fallo que v452 estuvo a punto de cometer; el traductor entra por **parametro opcional**, asi la pantalla traduce y la escritura sigue en espanol. ⚠️ **Y una rotura SE ESCAPO**: la red del guardian miraba `COLS = {Estado, Categoria, Tipo, Rol}` y **`Unidad` no estaba**, asi que devolver esa celda a crudo daba 0 (11 cazadas · 1 escapada) — la red ve solo la forma que se le enseño, dentro del guardian escrito para esa misma leccion una version antes. Con `COLS` ampliada y **verde de base** (el paso que v459/v461 se saltaron): **12/12 · 0 escapadas** |
 | v463 | **El arreglo de v462 estaba ACOTADO: la misma forma vivia en 4 celdas mas.** Salio de auditar «¿ya esta todo cerrado?» contra el CODIGO en vez de contestarlo de memoria. En **Catalogo** e **Inventario** la cabecera iba en ingles (pasan por `tabla.cfg()`) y la celda en espanol — el contraste exacto de «revertida». ⚠️ Y el inventario **se contradecia consigo mismo**: su ficha decia *available* y su tabla *disponible*, porque el TEXTO del estado vivia en un mapa propio del modulo — la segunda definicion que v450 mando borrar, viva donde nadie miro. + el mapa a medias en dos listas: de las 7 categorias del catalogo **3 se traducian por CASUALIDAD** (coinciden con claves de gastos) y 4 no. ⚠️ **El arreglo obvio habria sido un fallo nuevo**: meter `_est_lbl()` en la tabla, que devuelve markdown de color (`:green[available]`) y una celda de `st.dataframe` pinta LITERAL — se vio mirando que DEVUELVE la funcion (v135). El texto se mueve a `i18n.VALORES` (una definicion), el color se queda en `_EST_COLOR`, y ⚠️ **la ficha pinta exactamente lo de antes** (5/5 verificadas contra el diccionario viejo verbatim) y **el DATO no se toca** (`== "en_uso"` quedaria muerto sin dar error). 2 falsos positivos NO tocados por mirar el codigo acusado (el Tipo de credencial, ya en ingles; y un `.get("Tipo")` que es una COMPARACION). Guardian **general**, no fijado a los sitios que vi: recorre todos los `*_ui.py`, valida su red contra un caso construido antes de creerse su cero (trampa n12), y caza **8 roturas + 1 CONTROL**. ⚠️ Su primera version comprobaba una lista FIJA de 8 —el mismo fallo que venia a arreglar—: por DESCUBRIMIENTO salen **13**, porque 5 se definen por NOMBRE y ningun barrido de literales las ve; ahi aparecio otro fallo real, `orders.ESTADOS` con **`recibida` sin traducir** entre `pendiente` y `cancelada`, que si lo estaban. ⚠️ Y el **CONTROL cazo que mi propio guardian REVENTABA** (borre un import al parchearlo): un guardian que revienta devuelve codigo ≠ 0 siempre, asi que las 8 roturas salian «cazadas» **sin probar nada** — v459 otra vez, y solo el control lo vio |
 | v462 | ⚠️ **Un estado NUEVO sale en espanol aunque la pantalla este traducida.** Visto **mirando una captura** de la verificacion de v461: la columna `Status` del historial decia **«revertida»** en una fila cuyas otras seis columnas iban en ingles — traduccion a medias dentro de la MISMA tabla (v450). Fallaban DOS cosas a la vez y arreglar una sola no cambiaba nada: la celda pintaba el valor CRUDO sin `etiqueta()`, y **`revertida` no estaba en `i18n.VALORES`** — el vocabulario se tomo de `ausencias` (pendiente/aprobada/rechazada) y ese estado es PROPIO de v461, asi que nacio fuera del mapa. ⚠️ Un valor nuevo no entra solo, y **no da ningun error**: `etiqueta()` devuelve tal cual lo que no conoce —correcto para un nombre de obra, y justo lo que esconde un estado recien inventado—. ⚠️ Y ningun guardian podia verlo: las 14 redes de i18n miden el CODIGO y aqui el texto viene de la HOJA; la red 12 cubre la forma pero su chequeo fija las tres celdas concretas de v452 (el guardian acotado al caso que se vio, v309/v349/v441). Chequeo nuevo y GENERAL: todo valor de `ESTADOS` en `VALORES`, la etiqueta traducida, ⚠️ el **DATO sigue en espanol** (traducirlo dejaria de casar en silencio) y la celda por `etiqueta()`. 31 comprobaciones, 11/11 roturas, suite **100 verde · 0 rojo** |
 | v461 | **Corregir el fichaje: el campo pone la hora real y el admin la revisa** (petición del usuario; decisiones suyas: se aplica YA, se avisa si el periodo ya se pagó, y solo el mismo día). ⚠️ **Lo que decide si sirve de algo es recalcular las `Horas`**: `_row_segmentos` respeta la columna guardada para una fila cerrada del mismo día (v164), así que cambiar solo el timestamp habría dejado la nómina y el costo de la obra **idénticos, sin que nadie lo notara**. ⚠️ La excepción del «mismo día» está MEDIDA: una sesión abierta acumula contra el reloj —10,6 h el mismo día, **130,6 h a los cinco**, 2.342 USD a 40 $/h—, así que cerrarla no es corregir el pasado, es parar una hemorragia. ⚠️ Y al repasar apareció el caso que **revertir no puede resolver**: un cierre olvidado no tiene «hora anterior», así que revertirlo la devolvería a abierta → el admin **ajusta** la hora, sin mover el DÍA (otro día es otra nómina). ⚠️ **La suite destapó 6 rojos y 5 eran míos**: metí `st.toast` donde la app usa `flash` en 74 sitios; el `import auth` que sobraba delataba que me dejé a medias la regla de HOMÓNIMOS (séptima vez); y de las 4 cabeceras sin traducir el guardián **solo vio una** —las otras tres son palabras cortas sin acento, la trampa nº28—. ⚠️ Y mi propio guardián dio **FALLO con el código correcto** dos veces: leyendo `_SUBSECCIONES` como si fuera una lista (es una tupla, regla v135) y tomando `logger.warning` por texto de pantalla (filtrar por RECEPTOR, v439) — con él rojo de base, **una tanda de 11 roturas «cazadas» no probaba nada** (v459). Ejercitado contra la hoja real de punta a punta sin rastro; 27 comprobaciones, 11/11 roturas, suite **100 verde · 0 rojo** |

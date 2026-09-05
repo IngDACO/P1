@@ -342,8 +342,17 @@ def ubic_ref_label(ref: str) -> str:
         return ref
 
 
-def ubic_str(a: dict) -> str:
+def ubic_str(a: dict, etq=None) -> str:
+    """Ubicación legible.
+
+    ⚠️ `etq` (un traductor) es SOLO para pantalla y va por parámetro a propósito: las
+    5 llamadas de `_log_mov` NO lo pasan, porque ese texto se ESCRIBE en el historial
+    y traducirlo metería inglés en el dato — el fallo que casi se cuela en v452. Así
+    la composición sigue teniendo UNA definición (v306) sin arriesgar la escritura.
+    """
     _tp = str(a.get("UbicacionTipo", "") or "")
+    if etq:
+        _tp = etq(_tp)
     ref = ubic_ref_label(a.get("UbicacionRef", ""))
     return f"{_tp}: {ref}" if ref else (_tp or "—")
 
