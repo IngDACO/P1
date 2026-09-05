@@ -120,6 +120,17 @@ def _lote(sheet_id: str = "") -> dict:
         # Si el lote falla (una hoja que aún no existe, un hipo de la API), NO se
         # rompe nada: `registros()` cae al lector de siempre, hoja por hoja.
         logger.warning("hojas: el lote falló, se lee hoja por hoja: %s", e)
+        # ⚠️ v466: y se TIRA el índice de pestañas. Vive en `@st.cache_resource`, que
+        # NO caduca, así que si una hoja se renombra el proceso se queda pidiendo el
+        # nombre viejo **para toda su vida**: el lote falla en cada pasada y las
+        # pantallas salen a CERO con los datos intactos en el libro. Pasó al renombrar
+        # las pestañas al inglés (v465) y solo se arreglaba reiniciando a mano.
+        # Tirarlo aquí es barato —se reconstruye en 2 llamadas (v290)— y solo ocurre
+        # cuando el lote ya ha fallado.
+        try:
+            timeclock._libro.clear()
+        except Exception:
+            pass
         return {}
 
 

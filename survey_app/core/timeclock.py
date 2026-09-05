@@ -302,6 +302,21 @@ def get_sheet(title: str, headers: tuple, grupo: str = None):
         # ⚠️ Ahora solo se crea si la hoja NO está en el listado real del libro.
         # Antes bastaba con que `ss.worksheet(title)` lanzara —incluido por un
         # error de API—, así que un hipo podía crear una hoja duplicada.
+        # ⚠️ v466: antes de CREAR, se refresca el indice UNA vez y se vuelve a mirar.
+        # `_libro` vive en `@st.cache_resource`, que no caduca: si una hoja se renombro
+        # despues de construirlo, el proceso creeria que no existe y se fabricaria una
+        # pestaña VACIA donde ponerse a escribir, con los datos intactos al lado y sin
+        # un solo error. Refrescar cuesta 2 llamadas y solo ocurre en este camino.
+        try:
+            _libro.clear()
+            hojas, cabeceras = _libro(_sid)
+            title = titulo_real(title, _sid)
+            clave = title.strip().lower()
+            w = hojas.get(clave)
+        except Exception as e:
+            logger.warning("get_sheet: no se pudo refrescar el indice: %s", e)
+        if w is not None:
+            return w
         ss = _abrir(_sid)
         w = ss.add_worksheet(title=title, rows=500, cols=len(headers))
         w.append_row(list(headers))
