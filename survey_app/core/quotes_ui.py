@@ -144,7 +144,7 @@ def _editor_lineas(grupo, key: str, lineas: list) -> list:
         hide_index=True, width="stretch", key=f"{key}_ed",
         # ⚠️ v355: lo único que se teclea del precio es la GANANCIA. El margen y el
         # precio son consecuencia, y se muestran bloqueados para que quede claro.
-        disabled=["Concepto", "Cost", "Margen %", "Precio"],
+        disabled=["Concepto", "Costo", "Margen %", "Precio"],
         column_config=tabla.cfg(None, {
             "Costo": st.column_config.NumberColumn(t("Cost"), format="$%,.2f",
                                                    help=t("What it costs you. The client does not see this.")),

@@ -65,6 +65,19 @@ CABECERAS = {
     "Proyecto": "Project",
     "Cliente": "Client",
     "Elevador": "Lift",
+    # ⚠️ v471 · estas se pintaban con su CLAVE cruda, en español, dentro de tablas por
+    # lo demas inglesas — la sexta red de v450 con lo que se le escapo. No se puede
+    # renombrar la clave: `Riel` y `Actividad` las LEE el codigo de vuelta y `Riel`
+    # ademas viaja a `DatosJSON` (v443), asi que reabrir un calculo dejaria de casar.
+    # La etiqueta es justo lo que se cambia sin tocar el dato.
+    "Riel": "Rail",
+    "Actividad": "Activity",
+    "Avance": "Progress",
+    "Inicio real": "Actual start",
+    "Fin real": "Actual finish",
+    "Ganancia": "Profit",
+    "Orden": "Order",
+    "Días": "Days",
     "Estado": "Status",
     "Tipo": "Type", "Unidad": "Unit",
     "Avance %": "Progress %",

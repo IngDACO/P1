@@ -9725,7 +9725,63 @@ cambiaba nada — el fallo de v412. Rehecho leyendo la llamada por AST, y de pas
 generalizado: **ninguna llamada a `t()`/`d()` del repo puede tener un marcador sin su
 kwarg**, que si no se pinta `{x}` literal y nada salta (v453).
 
-## Versiones desplegadas (v470 = actual)
+## Auditar «¿qué falta?» destapó una pantalla que revienta (v471)
+
+El usuario pidió no dejar nada pendiente. La lista se auditó **contra el código**, no
+contra el documento — porque en v453 ya estuvo mal en las dos direcciones—, y de la
+única deuda que v468 dejó anotada («las claves de display quedaron inconsistentes»)
+salieron **cinco fallos reales**, uno de ellos un crash.
+
+### ⚠️ EL GRAVE: `KeyError` en 💰 Costos
+```python
+_tot = sum(P._num(_ed.iloc[i]["Hours"]) * ...)   # la fila tiene "Horas"
+```
+El bloque «Cuánto ganas con cada persona» **revienta** en cuanto alguien tiene horas
+fichadas en esa obra. Confirmado con `git log -S`: la clave de la fila es de **v360** y
+esa lectura la introdujo **v468** — o sea que la migración de columnas renombró **la
+lectura y no la clave**, y lleva dos versiones así. Invisible solo porque la demo se
+vació en v456. Probado ejecutando: antes `KeyError`, ahora da 616,95.
+
+### Y otros cuatro del mismo renombrado a medias
+| Dónde | Qué pasaba |
+|---|---|
+| `projects_ui` · `disabled` | decía `"Hours"` con la columna en `"Horas"`, así que **las horas quedaban editables** — y vienen del fichaje |
+| `quotes_ui` · `disabled` | decía `"Cost"` con la columna en `"Costo"`: **el costo de una cotización quedaba editable**, y está congelado a propósito desde v355/v356 porque el precio se calcula sobre él |
+| `clientes_ui` · `column_config` | configuraba `"Progress"` y `"Cost"`, la fila tiene `"Avance"` y `"Costo"` → la barra de progreso no se aplicaba y **la columna de dinero perdió su `$%,d`**, o sea que v468 reintrodujo ahí el fallo de v399 |
+| 8 cabeceras | se pintaban con su **clave cruda, en español**, dentro de tablas por lo demás inglesas (`Actividad`, `Inicio real`, `Fin real`, `Riel`, `Avance`, `Ganancia`) |
+
+⚠️ Las claves NO se renombran: `Riel` y `Actividad` las **lee** el código de vuelta y
+`Riel` además viaja a `DatosJSON` (v443), así que reabrir un cálculo dejaría de casar.
+Lo que se cambia es la ETIQUETA, en `tabla.CABECERAS` — una definición para todas.
+
+### ⚠️ `verif_v444` estaba VERDE con dos de esos huérfanos delante
+Y por su propio fallo documentado, entrando por otra puerta. v444 ya excluye su
+`column_config` de las «filas» porque si no **se aprobaba a sí mismo**… pero solo el
+dict INLINE. Cuando llega por VARIABLE (`_colcfg = {...}` → `tabla.cfg(None, _colcfg)`)
+ese dict sigue viviendo en la función, sus claves entraban en `filas` y el chequeo se
+volvía a aprobar solo. Arreglado resolviendo la variable: pasa de mirar 24 tablas a 25,
+y ahora sí caza el huérfano de `clientes_ui`.
+
+### El guardián nuevo mira las DOS formas que v444 no ve
+Una tabla editable tiene tres cosas que se desincronizan igual de calladas —el
+`column_config` (v444), **la LECTURA del resultado** y **el `disabled`**— y v468 las
+rompió en las tres. `verif_v471` cubre las dos que faltaban, más la cabecera cruda.
+⚠️ Y las tres sondas **resuelven variables**: casi ninguna de estas tablas construye su
+DataFrame inline, y mirando solo dentro de la llamada **4 de 5 salían como huérfanas
+sin serlo** — habría «arreglado» código sano. Es el agujero del medidor de v450.
+⚠️ Cada sonda **se valida a sí misma** contra un caso conocido-bueno antes de creerse su
+cero: es literalmente lo que a v444 le faltaba (trampa nº12).
+Batería: **5 roturas, 5 cazadas** + control verde, con verde de base primero.
+
+### Lo demás de la auditoría, medido y CERRADO
+| | |
+|---|---|
+| **Fallbacks de idioma** (`columnas.canon`, `valores.canon`) | **0 lecturas por clave vieja** en todo el repo: nadie depende de ellos en el CÓDIGO. Solo cubren DATOS viejos, y las hojas ya están migradas. Retirarlos es una DECISIÓN, no un pendiente — y se quedan mientras pueda entrar un cliente con histórico |
+| **Red 14 de i18n** (concatenación) | 14 casos, **0 en español**: son fragmentos de markdown con variables. Cerrado |
+| **Display sin `t()`** | 4, y las 4 son **solo iconos** (`:material/...:`): nada que traducir. ⚠️ El primer barrido dio 25 porque contaba `logger.warning` como texto de pantalla — el error de v439/v461, cometido otra vez; se filtra por RECEPTOR |
+| **7 guardianes «SIN DATOS»** | de 108. **No es un fallo pero sí cobertura perdida**, y sigue abierto: mientras la demo esté vacía, esas 7 afirmaciones no se comprueban |
+
+## Versiones desplegadas (v471 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -9733,6 +9789,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v471 | **Auditar «¿que falta?» destapo una pantalla que REVIENTA.** De la unica deuda que v468 dejo anotada salieron **cinco fallos reales**: ⚠️ el gordo, `_ed.iloc[i]["Hours"]` con la fila en `"Horas"` → **KeyError** en 💰 Costos en cuanto alguien tiene horas fichadas; `git log -S` confirma que v468 renombro **la lectura y no la clave**, y llevaba dos versiones asi, invisible solo porque la demo esta vacia. + dos `disabled` apuntando a columnas inexistentes (**las HORAS y el COSTO de una cotizacion quedaban EDITABLES**, y el costo esta congelado a proposito desde v355) + un `column_config` huerfano que le costo a una columna de dinero su `$%,d` (**v468 reintrodujo ahi el fallo de v399**) + 8 cabeceras pintandose con su clave CRUDA en español. ⚠️ Y **`verif_v444` estaba VERDE con dos de esos huerfanos delante**, por su propio fallo documentado entrando por otra puerta: excluye su `column_config` de las «filas» solo si es INLINE, y por variable volvia a aprobarse a si mismo. Arreglado (24→25 tablas miradas) + `verif_v471` con las dos formas que v444 no ve (la LECTURA del resultado y el `disabled`). ⚠️ Las sondas **resuelven variables** —sin eso 4 de 5 salian huerfanas sin serlo y habria «arreglado» codigo sano— y **se validan a si mismas** contra un caso conocido-bueno. 5/5 roturas |
 | v470 | **Tipo de proyecto «Ripout + Installation»** (peticion del usuario): sustituir un ascensor. El desmontaje entra como **UNA actividad, la primera** —no una tabla de fases, lo corrigio el usuario— y su duracion **escala con las paradas** (3 paradas: 4 d · 12: 9 d; el proyecto de 6 pasa de 29 a 35 d). ⚠️ El cambio de fondo NO es la fase: habia **TRES** sitios preguntando «¿este tipo genera cronograma?» (alta, edicion y aceptar cotizacion) y uno comparaba el **LITERAL** en vez de la constante — anadir un tipo a dos de los tres lo deja comportandose como «Other» sin dar ningun error, que es el fallo de v454 (una obra nacida con CERO actividades, clavada en 0% para siempre). Ahora `projects.genera_cronograma()` es la unica definicion y los tres delegan. ⚠️ `custom_rows` NO reinserta la fase, o se duplicaria en cada guardado del cronograma. Cambiar el tipo sigue sin regenerar el plan (regenerarlo borraria el avance ya reportado, v135) pero **ya se avisa**, por CONDICION y donde se arregla; y los dos `help` que decian «Only Installation» pasaron a mentir y se corrigieron. 23 comprobaciones ejecutando + **13/13 roturas cazadas** — ⚠️ una **SE ESCAPO** porque el chequeo del marcador reproducia la cadena en el guardian en vez de leerla del codigo (el fallo de v412); rehecho por AST y generalizado a todo `t()`/`d()` del repo |
 | v469 | **Los VALORES pasan a INGLES** (61 pares), ultima capa de «todo en ingles». Mismo diseno que las columnas: `core/valores.py` canoniza al LEER, asi que el codigo aguanta las dos formas y se puede desplegar ANTES de migrar la hoja. ⚠️ **Lista blanca por (HOJA, COLUMNA)**, nunca por nombre suelto. **Dos fallos silenciosos**: **(1)** `Sheet1.Type` se quedo FUERA de esa lista mientras `TIPO_PROYECTO` pasaba a `"project"`, asi que las ~500 filas del historico se leian crudas y **ni una hora imputada a una obra contaba como tal** — nomina, costo de obra, conciliacion y reparto por proyecto, todo a cero. ⚠️ Y **el guardian de v469 estaba PROTEGIENDO el fallo** (exigia que quedase fuera, cierto cuando la constante aun era `proyecto`): hacerle caso al rojo sin mirar el codigo acusado lo habria reintroducido — regla v385 con el acusado teniendo razon y el acusador no. Los dos barridos que lo buscaban tampoco lo vieron: uno comparaba por NOMBRE de columna (y `Type` ya estaba, para otra hoja) y el otro solo miraba constantes que son LISTA, y estas son sueltas. **(2)** `estado_cobro` devolvia una MEZCLA (cuatro ramas en espanol y una migrada), asi que el chip de la factura perdia icono y color y salia el texto crudo; se revierte esa rama y las facturas se quedan en espanol de punta a punta. ⚠️ **Y la red que buscaba mezclas era CIEGA a ese caso**: hecha sobre el mapa de MIGRACION, daba 0 con la mezcla delante — un valor migrado fuera de ese mapa es justo donde duele; rehecha sobre el vocabulario completo si lo ve, y solo lo destapo validarla contra un caso conocido-bueno. Los 8 guardianes de «el DATO sigue en espanol» **invertidos con su razon**, no relajados. 9/9 roturas cazadas + control; smoke que ejecuta el viaje completo de un valor (29); y la compatibilidad demostrada **contra la hoja real** (`Role` llega `owner` con la hoja diciendo `propietario`) |
 | v468 | **Las 160 COLUMNAS pasan a nombre INGLES** (2.573 sitios). Lo hace posible canonizar al LEER: `core/columnas.py` (una sola fuente) y el lector traduce la CABECERA, asi que el codigo ve el nombre nuevo tenga el libro el viejo o el nuevo; las **escrituras no necesitan nada** porque van por POSICION y renombrar no mueve la columna. **Tres fallos silenciosos**: un **VALOR de negocio renombrado** por coincidir con una columna (habria descasado con los activos guardados); **11 claves de `column_config`** descolocadas (ese dict no esta dentro de `pd.DataFrame`) mas **4 del caso contrario** (filas construidas FUERA de la llamada); y **`col_offset` del AST es un offset en BYTES**, asi que cortando por caracteres el reemplazo salia desplazado en toda linea con acento — la guarda impidio corromper nada (0 cambios sin explicar en 87 ficheros) pero dejo **78 sitios sin migrar**, que devuelven cadena vacia en silencio. **33 guardianes en rojo**: 27 mecanicos, 6 que AFIRMAN sobre el nombre (invertidos con su razon, no relajados) y uno que señalo un fallo real de codigo. Y **mi guardian aprobaba una rotura real** por buscar la palabra en toda la funcion en vez de en la CONDICION. Suite 104 verde |

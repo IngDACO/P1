@@ -3453,7 +3453,7 @@ def _editor_ganancia_hora(pid, _items, _gh, _T):
             hide_index=True, width="stretch", key=f"gh_ed_{pid}",
             # ⚠️ Solo se teclea la GANANCIA. Precio/h y «Ganas» son consecuencia y van
             # bloqueados, igual que en la cotización (v355).
-            disabled=["Persona", "Hours", "Costo/h", "Precio/h", "Ganas"],
+            disabled=["Persona", "Horas", "Costo/h", "Precio/h", "Ganas"],
             column_config=tabla.cfg(None, {
                 "Costo/h": st.column_config.NumberColumn(t("Cost/h"), format="$%,.2f",
                                                          help=t("Their rate. What it costs you.")),
@@ -3467,7 +3467,11 @@ def _editor_ganancia_hora(pid, _items, _gh, _T):
 
     _nuevo = {str(_ed.iloc[i]["Persona"]): P._num(_ed.iloc[i]["Ganancia/h"])
               for i in range(len(_ed)) if P._num(_ed.iloc[i]["Ganancia/h"]) > 0}
-    _tot = sum(P._num(_ed.iloc[i]["Hours"]) * P._num(_ed.iloc[i]["Ganancia/h"])
+    # ⚠️ La clave de la fila es "Horas" (v360). v468 renombro ESTA LECTURA a
+    # "Hours" y no la clave, asi que `_ed.iloc[i]["Hours"]` lanzaba KeyError y el
+    # bloque reventaba en cuanto alguien tuviera horas fichadas en la obra. Llevaba
+    # dos versiones asi, invisible solo porque la demo esta vacia.
+    _tot = sum(P._num(_ed.iloc[i]["Horas"]) * P._num(_ed.iloc[i]["Ganancia/h"])
                for i in range(len(_ed)))
     st.caption(t("With these values you would make **{x}** on the labour clocked so far. "
                  "Materials are invoiced at cost (decision from v360).")

@@ -136,10 +136,14 @@ def render_contactos(grupo):
         **({"Costo": round(r["cost"], 0)} if _hay_costo else {}),
         "Alarms":   str(r["al"]) if r["al"] else "",
     } for r in rows])
-    _colcfg = {"Progress": st.column_config.ProgressColumn(
+    # ⚠️ Las claves tienen que ser las de la FILA ("Avance"/"Costo"), no la etiqueta.
+    # v468 las renombro aqui y no arriba, asi que las dos quedaban HUERFANAS: la barra
+    # de progreso no se aplicaba y —peor— la columna de dinero perdia su `$%,d`, o sea
+    # que v468 reintrodujo ahi el fallo de v399 (el importe sin separador de miles).
+    _colcfg = {"Avance": st.column_config.ProgressColumn(
         t("Progress"), min_value=0, max_value=100, format="%d%%")}
     if _hay_costo:
-        _colcfg["Cost"] = st.column_config.NumberColumn(t("Cost"), format="$%,d")
+        _colcfg["Costo"] = st.column_config.NumberColumn(t("Cost"), format="$%,d")
     _ev = st.dataframe(
         df, width="stretch", hide_index=True,
         on_select="rerun", selection_mode="single-row", key="cli_tbl",
