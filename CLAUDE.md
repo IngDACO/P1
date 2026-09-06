@@ -9941,7 +9941,72 @@ v459/v461/v463). Suite entera: **109 verde · 0 rojo · 0 roto** (776 s), mas lo
 «SIN DATOS» conocidos de v471 — la demo vacia, que no es un fallo pero tampoco una
 garantia.
 
-## Versiones desplegadas (v472 = actual)
+## El icono LITERAL de la biblioteca, y v472 verificada contra la hoja real (v473)
+
+### ⚠️ `T.section` emite HTML: ahi `:material/…:` NO se interpreta
+La cabecera de la galeria pintaba **`:material_photo_library: Photos`** en pantalla.
+`theme.section` compone HTML y lo saca con `unsafe_allow_html`, y ahi Streamlit no
+procesa la sintaxis de icono (v443, el markdown tampoco). ⚠️ Y **los dos unicos sitios
+del repo que le pasaban `:material/` a una pieza HTML del kit eran mios**: la
+convencion es texto plano, y la incumpli yo.
+- Lo destapo **MIRAR LA PANTALLA** en produccion. Ningun guardian lo veia, como el
+  `:material/schedule:` en crudo de v375 y los KPI invisibles de v424: no hay error
+  que atrapar, solo algo feo a la vista.
+- Chequeo nuevo y **general** (no acotado a la biblioteca): ninguna llamada a
+  `section`/`chip`/`kpi_row`/`_kpi_card` de TODO el repo puede llevar `:material/`,
+  con la sonda validada contra un caso construido antes de creerse su cero.
+
+### v472 ejercitada CONTRA LA HOJA REAL (lo que faltaba)
+El ciclo entero, con foto del antes y del despues y produccion devuelta a su sitio
+(metodo de v344). Lo que quedo demostrado y no se podia demostrar de otra forma:
+- las dos hojas se crean **en el MAESTRO** con sus 12 y 3 columnas exactas;
+- ⚠️ y son GLOBALES **de verdad**: con una sesion de `cliente1`, `Projects` resuelve al
+  libro de la demo y `Library` al maestro — dos libros DISTINTOS. Comprobarlo con la
+  sesion del propietario no habria probado nada: no tiene grupo, asi que su sesion cae
+  en el maestro de todos modos (el paso en vacio, trampa nº1);
+- alta de catalogo → el mensaje **sobrevive al `st.rerun()`** (v365) y los KPI se
+  actualizan, o sea que la invalidacion de caches tambien corre;
+- archivar con archivo: **LIB-0001 → LIB-0002**, IDs secuenciales, dos DriveID
+  distintos, y la miniatura bajandose de Drive para pintarse;
+- **el BORRADO, que era lo critico**: tras quitar los dos, la hoja queda en 0 filas y
+  el propio inventario de Drive de la app responde **«Drive is already empty»** — o
+  sea que desaparecen **la fila Y el archivo**, que es exactamente lo que protege el
+  orden de escrituras de v456;
+- y el borrado **exige confirmacion**, con el boton deshabilitado hasta marcarla (v139).
+
+### ⚠️ DOS TRAMPAS DE METODO NUEVAS, las dos del banco de pruebas
+**29. El arbol de accesibilidad muestra la etiqueta CRUDA: no dice lo que se ve.**
+`read_page` reporto `:material/archive: Show deactivated ones too` **con los dos
+puntos** y estuve a punto de apuntarlo como un literal en pantalla. Es el `aria-label`.
+Medido en el DOM, el mismo elemento pinta un icono de verdad: `span[role="img"]` con
+`font-family: "Material Symbols Rounded"`, glifo `archive`, y `innerText` **sin** los
+dos puntos. Es el reverso de la trampa nº5 — alli el texto accesible ocultaba un icono,
+aqui enseña marcado que no se pinta. Y la misma fuente engaña con los VALORES: mostraba
+el `placeholder` («Choose an option») de unos desplegables que estaban rellenos.
+→ Para afirmar que algo sale en pantalla: `innerText` y el DOM. `read_page` sirve para
+localizar, no para juzgar lo que se ve.
+
+**30. Un checkbox de Streamlit se marca clicando el TEXTO de la etiqueta, no la caja.**
+Un clic en la casilla (13×13) aterrizaba EXACTO —instrumentado con un listener: pedi el
+marco (329,532) y llego a CSS (348,563), justo encima— y **no la marcaba**; tampoco
+`.click()`, ni la secuencia de eventos de v417, ni foco + espacio. Clicando el TEXTO de
+su `<label>`: marcada a la primera.
+⚠️ Antes de concluir nada probe el metodo contra **otro checkbox distinto de la app**
+(v431: *si el control tampoco cambia, el problema es tuyo*), y tampoco se marcaba — o
+sea que era mio, no de la app. Sin esa comprobacion habria reportado un fallo inexistente
+en la casilla de confirmar el borrado, que es de lo mas delicado que hay en la pantalla.
+⚠️ Y ojo con las coordenadas: el marco de la captura (800×660) NO es el de CSS
+(846×698), factor 0,9456. Un clic por `ref` sobre un blanco de 13 px **falla** por ese
+desfase, y sobre uno grande acierta — por eso «a veces funciona».
+
+### ⚠️ Y una falsa alarma que casi reporto como fallo de la app
+El primer item guardo `Brand` **vacio** habiendo seleccionado la marca. No era la app:
+`form_input` sobre un combobox de **react-aria** cambia el texto visible sin avisar a
+React, asi que el widget se quedo en su valor por defecto. Seleccionando la opcion con
+un **clic real**, `LIB-0002` guardo la marca correctamente. Es la leccion de v431 otra
+vez: **validar la entrada antes de acusar al codigo**.
+
+## Versiones desplegadas (v473 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -9949,6 +10014,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v473 | ⚠️ **El icono salia LITERAL** en la cabecera de la biblioteca: `T.section` emite HTML y ahi `:material/…:` no se interpreta (v443) — y los dos unicos sitios del repo que se lo pasaban a una pieza HTML del kit eran mios. Lo destapo **mirar la pantalla**, no un guardian (como v375/v424); chequeo nuevo y general. + **v472 ejercitada contra la hoja REAL**: las hojas se crean en el maestro, son GLOBALES ⚠️ *probado con una sesion de inquilino* (con la del propietario no habria probado nada), IDs secuenciales, Drive subiendo y descargando, y **el borrado deja la hoja en 0 filas y Drive vacio** — la fila Y el archivo, que es lo que protege v456. Produccion devuelta a su sitio. ⚠️ Dos trampas de metodo nuevas: **el arbol de accesibilidad muestra la etiqueta CRUDA** (`read_page` daba `:material/…:` y placeholders de campos que estaban rellenos — el reverso de la nº5) y **un checkbox de Streamlit se marca clicando el TEXTO de la etiqueta, no la caja** (el clic aterrizaba exacto y no marcaba; validado contra otro checkbox de la app, asi que era mio). Y una falsa alarma descartada a tiempo: el `Brand` vacio era `form_input` sobre un combobox react-aria, no la app |
 | v472 | **Biblioteca tecnica** (peticion del usuario): fotos, manuales y fichas con buscador y taxonomia marca/modelo/seccion, GLOBAL y curada por el propietario — cinco decisiones suyas, tres contra mi recomendacion. Aplica lo ya aprendido: hojas globales en minusculas (v359), en el LOTE con **0 llamadas extra** (v339/v353), `get_sheet` y no `_get_worksheet` (v404), galeria paginada porque cada miniatura ES una descarga (v147) y el archivo ANTES que la fila en las dos direcciones (v343/v456). ⚠️ **De paso, dos fallos reales**: el buscador de la barra superior **no devolvia un trabajo NUNCA** desde **v440** —`t.get(...)` con `t` siendo la funcion de i18n, `AttributeError` que el `except` se tragaba, 32 versiones— y `correcciones` llamaba a `siguiente_id_libre` con los argumentos CAMBIADOS desde v461, asi que **el salto de IDs de v427 no se aplicaba ahi**. ⚠️ Pero lo que define la version son **comprobaciones que NO PODIAN FALLAR**: dos roturas se escaparon por `"_POR_PAGINA" in dump` (la constante aparece 4 veces, borrar el corte deja 3) y por `etiqueta(x) == x` (cierto para CUALQUIER cadena que el vocabulario no conozca — v462 del otro lado). **La misma ceguera estaba en `verif_v463`, la regla GENERAL**: medido, cerrarla costaba **3 entradas y 2 exenciones** —una **de v470**, que añadio un tipo y no lo mapeo—, no una migracion. Con la invariante fuerte el guardian **cazo mi propio codigo** (`Type` con `t()` en vez de `etiqueta()`) y luego dio un **falso positivo sobre el arreglo correcto**. ⚠️ Y la suite dio **8 rojos de los que CUATRO eran guardianes anclados a la FORMA** (una lista a mano, **numeros de linea**, texto en la misma linea, «3+ palabras = mensaje»), no fallos del codigo: se arreglaron derivando el dato de su fuente o midiendo estructura. 28 comprobaciones · **15/15 roturas** + control · suite **109 verde** |
 | v471 | **Auditar «¿que falta?» destapo una pantalla que REVIENTA.** De la unica deuda que v468 dejo anotada salieron **cinco fallos reales**: ⚠️ el gordo, `_ed.iloc[i]["Hours"]` con la fila en `"Horas"` → **KeyError** en 💰 Costos en cuanto alguien tiene horas fichadas; `git log -S` confirma que v468 renombro **la lectura y no la clave**, y llevaba dos versiones asi, invisible solo porque la demo esta vacia. + dos `disabled` apuntando a columnas inexistentes (**las HORAS y el COSTO de una cotizacion quedaban EDITABLES**, y el costo esta congelado a proposito desde v355) + un `column_config` huerfano que le costo a una columna de dinero su `$%,d` (**v468 reintrodujo ahi el fallo de v399**) + 8 cabeceras pintandose con su clave CRUDA en español. ⚠️ Y **`verif_v444` estaba VERDE con dos de esos huerfanos delante**, por su propio fallo documentado entrando por otra puerta: excluye su `column_config` de las «filas» solo si es INLINE, y por variable volvia a aprobarse a si mismo. Arreglado (24→25 tablas miradas) + `verif_v471` con las dos formas que v444 no ve (la LECTURA del resultado y el `disabled`). ⚠️ Las sondas **resuelven variables** —sin eso 4 de 5 salian huerfanas sin serlo y habria «arreglado» codigo sano— y **se validan a si mismas** contra un caso conocido-bueno. 5/5 roturas |
 | v470 | **Tipo de proyecto «Ripout + Installation»** (peticion del usuario): sustituir un ascensor. El desmontaje entra como **UNA actividad, la primera** —no una tabla de fases, lo corrigio el usuario— y su duracion **escala con las paradas** (3 paradas: 4 d · 12: 9 d; el proyecto de 6 pasa de 29 a 35 d). ⚠️ El cambio de fondo NO es la fase: habia **TRES** sitios preguntando «¿este tipo genera cronograma?» (alta, edicion y aceptar cotizacion) y uno comparaba el **LITERAL** en vez de la constante — anadir un tipo a dos de los tres lo deja comportandose como «Other» sin dar ningun error, que es el fallo de v454 (una obra nacida con CERO actividades, clavada en 0% para siempre). Ahora `projects.genera_cronograma()` es la unica definicion y los tres delegan. ⚠️ `custom_rows` NO reinserta la fase, o se duplicaria en cada guardado del cronograma. Cambiar el tipo sigue sin regenerar el plan (regenerarlo borraria el avance ya reportado, v135) pero **ya se avisa**, por CONDICION y donde se arregla; y los dos `help` que decian «Only Installation» pasaron a mentir y se corrigieron. 23 comprobaciones ejecutando + **13/13 roturas cazadas** — ⚠️ una **SE ESCAPO** porque el chequeo del marcador reproducia la cadena en el guardian en vez de leerla del codigo (el fallo de v412); rehecho por AST y generalizado a todo `t()`/`d()` del repo |
