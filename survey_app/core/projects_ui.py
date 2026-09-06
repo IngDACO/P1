@@ -945,8 +945,10 @@ def _nuevo_proyecto_form(grupo: str, key: str = "nuevo"):
         # de credencial.)
         _tipo = st.selectbox(t(":material/category: Project type"), P.TIPOS,
                              key=f"np_tipo_{key}",
-                             help=t("Only «Installation» generates the standard job schedule (11 activities that scale with NS)."))
-        _es_inst = (_tipo == P.TIPO_INSTALACION)
+                             help=t("«Installation» and «Ripout + Installation» generate the standard job schedule (activities that scale with the number of stops); the combined type adds the strip-out of the existing lift as the first activity."))
+        # ⚠️ Por el helper, NUNCA comparando el tipo aquí: los tres caminos que
+        # generan cronograma tienen que decidir con la MISMA regla (v470).
+        _es_inst = P.genera_cronograma(_tipo)
 
         # NS lo controla session_state (prellenado del plano arriba); la Ubicación se toma de
         # la dirección que buscaste en el mapa → ya no se pide dos veces (v272).
@@ -979,7 +981,8 @@ def _nuevo_proyecto_form(grupo: str, key: str = "nuevo"):
                 # La fecha de FIN no se teclea: sale del NS + las actividades estándar de
                 # instalación (`build_schedule`), cuyas duraciones escalan con el NS. Preview:
                 try:
-                    _sch_prev = build_schedule(int(ns), f_ini, {})
+                    _sch_prev = build_schedule(int(ns), f_ini, {},
+                                              ripout=P.con_ripout(_tipo))
                     c1.caption(":material/event_available: Estimated finish: "
                                f"**{_sch_prev['fecha_fin'].strftime('%d/%m/%Y')}** "
                                f"({_sch_prev['total_dias']} days) — from the NS and the standard activities.")
@@ -1040,7 +1043,8 @@ def _nuevo_proyecto_form(grupo: str, key: str = "nuevo"):
             # instalación siempre, así que un delivery nacía con 11 actividades falsas —
             # y ese plan alimenta avance, curva S, SPI y el indicador «En retraso».
             if _es_inst:
-                sched = build_schedule(int(ns), f_ini, {})
+                sched = build_schedule(int(ns), f_ini, {},
+                                       ripout=P.con_ripout(_tipo))
                 _fin = (sched["fecha_fin"].strftime("%Y-%m-%d")
                         if sched.get("fecha_fin") else "")
                 _acts = sched.get("activities", [])
@@ -2312,7 +2316,7 @@ def _detalle_proyecto(pid: str, grupo: str = None):
             _tp_opts = ([_TIPO_VACIO] + P.TIPOS) if _tp_cur not in P.TIPOS else list(P.TIPOS)
             tipo = e1.selectbox(t("Project type"), _tp_opts,
                                 index=_tp_opts.index(_tp_cur) if _tp_cur in _tp_opts else 0,
-                                help=t("Only «Installation» uses the standard job schedule."))
+                                help=t("Changing the type here does NOT rebuild the schedule: that would wipe the progress the crew has already reported. Add or remove activities below instead."))
             # ⚠️ v419: la ubicación sale del MAPA, no de un campo suelto. v272 ya lo hizo
             # al CREAR («ya no se pide dos veces») y la edición se quedó con el
             # `text_input` desconectado del pin: por eso un proyecto podía tener pin sin
@@ -2500,6 +2504,21 @@ def _detalle_proyecto(pid: str, grupo: str = None):
                     st.rerun()
         else:
             st.caption(t("No activities recorded."))
+
+        # ⚠️ v470 · Cambiar el tipo NO regenera el cronograma, y es lo correcto:
+        # regenerarlo borraría el avance que el campo ya haya reportado (la razón por la
+        # que `attach_survey` tampoco lo toca desde v135). Pero hasta aquí eso pasaba en
+        # SILENCIO: se marcaba la obra como «Ripout + Installation» y su plan seguía sin
+        # el desmontaje, sin que nada lo dijera. Se avisa por CONDICIÓN, no por evento
+        # (un aviso que solo sale al cambiar el tipo se pierde en el primer rerun,
+        # v375/v383), y aquí —donde está el botón que lo arregla—, no junto al selector.
+        if P.con_ripout(prj.get("Type", "")) and acts:
+            from core.schedule import FASE_RIPOUT as _FR
+            if not any(str(a.get("Name", "")).strip() == _FR[0] for a in acts):
+                st.warning(t("This job is a rip-out plus installation, but its schedule "
+                             "has no strip-out activity. Changing the type does not "
+                             "rebuild the schedule (that would wipe the progress already "
+                             "reported), so add it below: «{act}».", act=_FR[0]))
 
         with st.expander(t("Add / delete activity (the % is recalculated automatically)"),
                          icon=":material/playlist_add:"):

@@ -74,7 +74,30 @@ PROJECTS_HEADERS = [
 # Tipos de proyecto (v306). `TIPO_INSTALACION` es el único que genera el cronograma
 # estándar de obra; los demás nacen con UNA actividad genérica (ver `create_project`).
 TIPO_INSTALACION = "Installation"
-TIPOS = [TIPO_INSTALACION, "Delivery", "Ripout", "Other"]
+# v470 · sustituir un ascensor: primero se desmonta el viejo y luego se instala el
+# nuevo. Genera el MISMO cronograma que una instalación con la actividad de
+# desmontaje delante (`schedule.FASE_RIPOUT`).
+TIPO_RIPOUT_INST = "Ripout + Installation"
+TIPOS = [TIPO_INSTALACION, TIPO_RIPOUT_INST, "Delivery", "Ripout", "Other"]
+
+
+def genera_cronograma(tipo) -> bool:
+    """¿Este tipo nace con el cronograma estándar de obra?
+
+    ⚠️ ÚNICA definición, y no es ceremonia: hasta v470 la pregunta se hacía en TRES
+    sitios —el alta a mano, la edición y `quotes.aceptar_y_crear_proyecto`— y uno de
+    ellos comparaba contra el LITERAL `"Installation"` en vez de la constante. Añadir
+    un tipo a dos de los tres lo deja comportándose como «Other» **sin dar ningún
+    error**: es el fallo de v454, donde una obra creada desde cotización nació con
+    CERO actividades y se quedó clavada en 0% para siempre, porque el avance es
+    Σ(peso·avance)/Σpeso sobre las actividades.
+    """
+    return str(tipo) in (TIPO_INSTALACION, TIPO_RIPOUT_INST)
+
+
+def con_ripout(tipo) -> bool:
+    """¿Lleva por delante la actividad de desmontaje?"""
+    return str(tipo) == TIPO_RIPOUT_INST
 
 # ── v422: LOCALIZACIONES INTERNAS (oficina, almacén, taller) ──────────────────
 # No todo el mundo trabaja en obra: hay gente de oficina y de almacén que también
@@ -105,7 +128,9 @@ TIPOS_INTERNOS = [TIPO_OFICINA, "Warehouse", "Workshop"]
 INTERNO_ABIERTA = "Open"
 INTERNO_CERRADA = "Closed"
 
-TIPO_ICONO = {TIPO_INSTALACION: ":material/construction:", "Delivery": ":material/local_shipping:",
+TIPO_ICONO = {TIPO_INSTALACION: ":material/construction:",
+              TIPO_RIPOUT_INST: ":material/autorenew:",
+              "Delivery": ":material/local_shipping:",
               "Ripout": ":material/delete_sweep:", "Other": ":material/category:",
               TIPO_OFICINA: ":material/business:", "Warehouse": ":material/warehouse:",
               "Workshop": ":material/handyman:"}

@@ -537,8 +537,11 @@ def aceptar_y_crear_proyecto(cid, nombre="", tipo="Installation", fecha_inicio=N
     acts, fin = None, ""
     # Solo la instalación tiene cronograma estándar (regla v306): a un delivery o un
     # ripout se le inventarían 11 actividades y ensuciarían avance, SPI y el radar.
-    if str(tipo) == "Installation" and _num(ns) > 0:
-        sch = S.build_schedule(int(_num(ns)), ini, {})
+    # ⚠️ Antes comparaba el LITERAL "Installation" en vez de la constante: dos
+    # definiciones de la misma regla, y por ahí es por donde v454 se quedó sin
+    # cronograma. Ahora delega en `projects.genera_cronograma`, igual que el alta.
+    if P.genera_cronograma(tipo) and _num(ns) > 0:
+        sch = S.build_schedule(int(_num(ns)), ini, {}, ripout=P.con_ripout(tipo))
         acts, fin = sch["activities"], sch["fecha_fin"].isoformat()
     else:
         # ⚠️ …pero NO con CERO actividades. El avance es Σ(peso·avance)/Σpeso sobre las

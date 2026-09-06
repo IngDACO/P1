@@ -9598,6 +9598,42 @@ no está en el mapa se devuelve tal cual, sin error).
 | **`OFF` · `LEAVE` · `FORMACION`** | claves reservadas del tablero, no texto |
 | **`general`** | ya es palabra inglesa y la pantalla dice «workday» por `t()`; migrarla obligaría a reescribir el `Type` de las ~500 filas del fichaje a cambio de nada |
 
+
+### El despliegue: «desplegado ≠ corriendo», medido con el CAMBIO
+Tras subir v469 el sidebar anunciaba **v469** y la app ejecutaba **v468**. No se
+diagnosticó por la versión —que no prueba nada en ninguna dirección (v334 corregido por
+v408/v452)— sino por el cambio: el formulario del catálogo seguía ofreciendo `Equipos` y
+`unidad`, que son los `CAT_DEFAULT`/`UNIDADES` de v468; los de v469 son `Equipment` y
+`unit`. Y el catálogo estaba vacío, así que no podían venir de la hoja. Tras el reinicio,
+los mismos dos campos dicen **`Engineering` y `unit`**.
+⚠️ **Y por poco lo leo mal**: mi primera sonda devolvió **una sola** opción («Equipos»)
+cuando `CAT_DEFAULT` tiene siete — imposible en las dos versiones. Estaba leyendo el
+valor SELECCIONADO con el desplegable ya cerrado, no las opciones. **Un dato imposible en
+los dos escenarios no concluye nada**: hay que ir a mirar antes de afirmar (trampa nº12).
+
+### Y el orden importaba: la hoja NO se podía migrar antes
+`Login.Role` decide el rol de cada persona, y con el Cloud aún en v468 —que compara
+`== "administrador"`— migrarla habría dejado a las 5 cuentas sin rol reconocido, cayendo
+al default del CAMPO (v297, menor privilegio) sin dar ningún error. Por eso la secuencia
+es desplegar → **ver el cambio** → migrar, y no al revés.
+Migradas después las **5 celdas** (`propietario→owner`, `administrador→administrator`),
+con foto previa **fuera del repo**, verificado leyendo (0 pendientes) y —lo que de verdad
+importa— comprobando que **los 5 roles se reconocen y cada uno conserva su navegación**:
+los dos `owner` con Administración/Pre-Start/Herramientas y los tres `administrator` con
+Home/Fichaje/Planificación/Proyectos/Finanzas. Ninguno cae a la del campo.
+⚠️ Son solo 5 celdas porque la demo se vació en v456; el resto de columnas de la lista
+blanca no tienen datos, así que **esa parte de la migración no está ejercitada con
+volumen** — se dice, en vez de dar por probado lo que no se probó.
+
+### ⚠️ Y migrar la hoja dejó un chequeo midiendo OTRA COSA
+El bloque 7 de `verif_v469` decía «contra la hoja REAL: el rol llega en inglés **con la
+hoja en español**» y medía exactamente eso. Al migrar las 5 celdas, esa afirmación se
+convirtió en la **identidad** —la hoja ya dice `owner`— así que su verde dejó de probar
+la canonización, y nada lo anunció. Es la trampa nº1 en una forma nueva: **un cambio en
+los DATOS puede vaciar un chequeo sin tocar una línea de código.** Partido en las dos
+direcciones: la fila migrada (identidad) y una fila sin migrar (canonización), esta con
+un caso CONSTRUIDO, porque en la hoja ya no queda ninguna.
+
 ### Los 8 guardianes que afirmaban «el DATO sigue en español»
 Caducados por un cambio deliberado, **invertidos con la razón escrita al lado**, nunca
 relajados (regla v385). La afirmación cambia de objeto y no de principio: lo guardado y
@@ -9626,7 +9662,70 @@ una tanda entera sale «cazada» sin probar nada, v459) y un caso de **CONTROL**
 ⚠️ Y la compatibilidad está demostrada **contra la hoja real**, no simulada:
 `get_user('dacox').Role` llega como `owner` con la hoja diciendo `propietario`.
 
-## Versiones desplegadas (v469 = actual)
+## Tipo de proyecto «Ripout + Installation» (v470)
+
+Petición del usuario: *«un nuevo tipo de trabajo que va a ser rip out + instalación»* —
+sustituir un ascensor, o sea desmontar el viejo y montar el nuevo.
+
+### El desmontaje es UNA actividad, no una tabla de fases
+Se propusieron ocho fases de strip-out y el usuario lo corrigió: **«en el combinado el
+rip out entra como la primera actividad»**. Eso quita una tabla entera que mantener y
+deja el cronograma en `FASE_RIPOUT + PHASES`. Su duración **escala con las paradas**
+(decisión suya): más plantas son más puertas de rellano que quitar y más riel que
+desmontar — 3 paradas dan 4 días, 12 dan 9, y el proyecto de 6 paradas pasa de 29 a 35.
+⚠️ Duración y peso son solo el punto de partida: la tabla de actividades es **editable
+por proyecto** desde v83. Y el nombre nace en INGLÉS porque se GUARDA en la hoja
+`Activities`: traducirlo después obliga a migrar el histórico (lo que costó v453).
+
+### ⚠️ El cambio de fondo NO es la fase: es que había TRES sitios decidiendo
+«¿este tipo genera cronograma?» se preguntaba en el alta a mano, en la edición y en
+`quotes.aceptar_y_crear_proyecto` — y **este último comparaba contra el LITERAL**
+`"Installation"` en vez de la constante. Añadir un tipo a dos de los tres lo deja
+comportándose como «Other» **sin dar ningún error**: es exactamente el fallo de v454,
+donde una obra creada desde cotización nació con CERO actividades y se quedó clavada en
+0% para siempre, porque el avance es Σ(peso·avance)/Σpeso sobre las actividades.
+→ **`projects.genera_cronograma(tipo)` es ahora la única definición** y los tres
+delegan, más `con_ripout(tipo)` para la fase. El guardián prohíbe volver a comparar el
+literal, así que el tipo SIGUIENTE que se añada tampoco podrá divergir.
+
+### ⚠️ Y `custom_rows` no puede volver a insertarla
+`build_schedule(..., custom_rows=…)` es el camino que se usa al GUARDAR el cronograma
+editado. Si el `ripout=True` antepusiera la fase también ahí, se duplicaría en **cada
+guardado**. Va solo en la rama automática, y el guardián lo comprueba ejecutando un
+ciclo generar → editar → guardar.
+
+### Cambiar el tipo NO regenera el cronograma, y ahora se dice
+Regenerarlo borraría el avance que el campo ya haya reportado — la misma razón por la
+que `attach_survey` no toca las actividades desde v135. Correcto, pero hasta aquí
+pasaba **en silencio**: se marcaba la obra como «Ripout + Installation» y su plan seguía
+sin el desmontaje. Se avisa por **CONDICIÓN, no por evento** (uno que solo saliera al
+cambiar el tipo se perdería en el primer rerun, v375/v383) y **donde se arregla** —junto
+a la tabla de actividades, con el «Add activity» debajo—, no junto al selector (v395).
+⚠️ De paso, los dos `help` decían «Only «Installation»…» y al añadir el tipo pasaron a
+ser **falsos**: es la familia del comentario de `use_container_width` (v405) y del de
+`inventory_ui` (v469) — un texto que miente sobre el código.
+
+### ⚠️ El default que se queda como literal, a propósito
+`quotes.aceptar_y_crear_proyecto(tipo="Installation")` sigue siendo un literal porque
+`projects` se importa DENTRO de esa función, y reestructurar el grafo de imports de un
+módulo de 600 líneas por un valor por defecto es más riesgo que valor (comprobado que no
+hay ciclo, pero no es razón para tocarlo). En su lugar **se afirma la invariante**: si
+alguien renombra la constante, ese default apuntaría a un tipo que ya no existe y el
+proyecto nacería con un tipo desconocido, en silencio. El guardián lo compara por AST.
+
+### Verificación
+`verif_v470`, **23 comprobaciones**, todo EJECUTANDO (importar no ejecuta, v378, y este
+fallo vive dentro de la función). Incluye que **una instalación normal salga exactamente
+igual que antes** —mismas fases y misma duración—, porque si se moviera, v470 habría
+cambiado el plan de todas las obras nuevas sin que nadie lo pidiera.
+Batería: **13 roturas, 13 cazadas** + control verde, con verde de base primero (v459).
+⚠️ Una **SE ESCAPÓ** al primer intento: el chequeo del marcador `{act}` **reproducía la
+cadena en el propio guardián** en vez de leerla del código, así que romper el código no
+cambiaba nada — el fallo de v412. Rehecho leyendo la llamada por AST, y de paso
+generalizado: **ninguna llamada a `t()`/`d()` del repo puede tener un marcador sin su
+kwarg**, que si no se pinta `{x}` literal y nada salta (v453).
+
+## Versiones desplegadas (v470 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -9634,6 +9733,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v470 | **Tipo de proyecto «Ripout + Installation»** (peticion del usuario): sustituir un ascensor. El desmontaje entra como **UNA actividad, la primera** —no una tabla de fases, lo corrigio el usuario— y su duracion **escala con las paradas** (3 paradas: 4 d · 12: 9 d; el proyecto de 6 pasa de 29 a 35 d). ⚠️ El cambio de fondo NO es la fase: habia **TRES** sitios preguntando «¿este tipo genera cronograma?» (alta, edicion y aceptar cotizacion) y uno comparaba el **LITERAL** en vez de la constante — anadir un tipo a dos de los tres lo deja comportandose como «Other» sin dar ningun error, que es el fallo de v454 (una obra nacida con CERO actividades, clavada en 0% para siempre). Ahora `projects.genera_cronograma()` es la unica definicion y los tres delegan. ⚠️ `custom_rows` NO reinserta la fase, o se duplicaria en cada guardado del cronograma. Cambiar el tipo sigue sin regenerar el plan (regenerarlo borraria el avance ya reportado, v135) pero **ya se avisa**, por CONDICION y donde se arregla; y los dos `help` que decian «Only Installation» pasaron a mentir y se corrigieron. 23 comprobaciones ejecutando + **13/13 roturas cazadas** — ⚠️ una **SE ESCAPO** porque el chequeo del marcador reproducia la cadena en el guardian en vez de leerla del codigo (el fallo de v412); rehecho por AST y generalizado a todo `t()`/`d()` del repo |
 | v469 | **Los VALORES pasan a INGLES** (61 pares), ultima capa de «todo en ingles». Mismo diseno que las columnas: `core/valores.py` canoniza al LEER, asi que el codigo aguanta las dos formas y se puede desplegar ANTES de migrar la hoja. ⚠️ **Lista blanca por (HOJA, COLUMNA)**, nunca por nombre suelto. **Dos fallos silenciosos**: **(1)** `Sheet1.Type` se quedo FUERA de esa lista mientras `TIPO_PROYECTO` pasaba a `"project"`, asi que las ~500 filas del historico se leian crudas y **ni una hora imputada a una obra contaba como tal** — nomina, costo de obra, conciliacion y reparto por proyecto, todo a cero. ⚠️ Y **el guardian de v469 estaba PROTEGIENDO el fallo** (exigia que quedase fuera, cierto cuando la constante aun era `proyecto`): hacerle caso al rojo sin mirar el codigo acusado lo habria reintroducido — regla v385 con el acusado teniendo razon y el acusador no. Los dos barridos que lo buscaban tampoco lo vieron: uno comparaba por NOMBRE de columna (y `Type` ya estaba, para otra hoja) y el otro solo miraba constantes que son LISTA, y estas son sueltas. **(2)** `estado_cobro` devolvia una MEZCLA (cuatro ramas en espanol y una migrada), asi que el chip de la factura perdia icono y color y salia el texto crudo; se revierte esa rama y las facturas se quedan en espanol de punta a punta. ⚠️ **Y la red que buscaba mezclas era CIEGA a ese caso**: hecha sobre el mapa de MIGRACION, daba 0 con la mezcla delante — un valor migrado fuera de ese mapa es justo donde duele; rehecha sobre el vocabulario completo si lo ve, y solo lo destapo validarla contra un caso conocido-bueno. Los 8 guardianes de «el DATO sigue en espanol» **invertidos con su razon**, no relajados. 9/9 roturas cazadas + control; smoke que ejecuta el viaje completo de un valor (29); y la compatibilidad demostrada **contra la hoja real** (`Role` llega `owner` con la hoja diciendo `propietario`) |
 | v468 | **Las 160 COLUMNAS pasan a nombre INGLES** (2.573 sitios). Lo hace posible canonizar al LEER: `core/columnas.py` (una sola fuente) y el lector traduce la CABECERA, asi que el codigo ve el nombre nuevo tenga el libro el viejo o el nuevo; las **escrituras no necesitan nada** porque van por POSICION y renombrar no mueve la columna. **Tres fallos silenciosos**: un **VALOR de negocio renombrado** por coincidir con una columna (habria descasado con los activos guardados); **11 claves de `column_config`** descolocadas (ese dict no esta dentro de `pd.DataFrame`) mas **4 del caso contrario** (filas construidas FUERA de la llamada); y **`col_offset` del AST es un offset en BYTES**, asi que cortando por caracteres el reemplazo salia desplazado en toda linea con acento — la guarda impidio corromper nada (0 cambios sin explicar en 87 ficheros) pero dejo **78 sitios sin migrar**, que devuelven cadena vacia en silencio. **33 guardianes en rojo**: 27 mecanicos, 6 que AFIRMAN sobre el nombre (invertidos con su razon, no relajados) y uno que señalo un fallo real de codigo. Y **mi guardian aprobaba una rotura real** por buscar la palabra en toda la funcion en vez de en la CONDICION. Suite 104 verde |
 | v467 | **El historial del inventario deja de estar en español** (`ubic_texto` traduce el texto YA COMPUESTO al pintar: pantalla en ingles, hoja en español — arregla tambien el historico **sin migracion**), **ninguna columna pinta el literal «None»** (con TODA la columna vacia pandas la deja en `object` y Streamlit imprime el texto; con `NaN` sale vacia — medido) y las **carpetas de Drive** pasan a ingles con **auto-renombrado**: se buscan POR NOMBRE, asi que cambiar solo la constante dejaria los 27 documentos ya subidos en la carpeta vieja; renombrar en Drive conserva el contenido, crear es lo que los deja huerfanos. 4/4 roturas |

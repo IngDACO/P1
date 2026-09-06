@@ -13,6 +13,18 @@ Pesos con distribución en "S" (bajo al inicio, alto en el medio, bajo al final)
 from core.i18n import d as _d
 from datetime import date, timedelta
 
+# ⚠️ v470 · El desmontaje del ascensor existente NO es una tabla de fases aparte:
+# es UNA actividad, la primera del cronograma (decisión del usuario). Su duración
+# escala con las paradas como el resto —más plantas son más puertas de rellano que
+# quitar y más riel que desmontar—, y el peso la deja a la altura de «Car and
+# counterweight», que es un trabajo comparable.
+#
+# ⚠️ El nombre se GUARDA en la hoja `Activities`, así que nace en inglés: traducirlo
+# después obliga a migrar el histórico, que es lo que costó v453. Y duración y peso
+# son solo el punto de partida — la tabla de actividades es editable por proyecto
+# desde v83, así que en obra se ajusta sin tocar código.
+FASE_RIPOUT = ("Ripout of existing lift", 3, 0.5, 15, None)
+
 # (nombre, dur_base_dias, dias_por_parada, peso, condicion)
 PHASES = [
     ("Survey and setting out",                    1, 0.0,  3, None),
@@ -53,11 +65,15 @@ def detect_flags(calc_results: dict) -> dict:
 
 
 def build_schedule(ns: int, start_date: date, flags: dict,
-                   custom_rows: list = None) -> dict:
+                   custom_rows: list = None, ripout: bool = False) -> dict:
     """
     Genera el cronograma. Si `custom_rows` viene (edición del usuario),
     usa sus duraciones/pesos en lugar de los automáticos.
     custom_rows: lista de dicts {nombre, duracion, peso}
+
+    `ripout=True` antepone la actividad de desmontaje (v470, tipo
+    «Ripout + Installation»). ⚠️ NO aplica sobre `custom_rows`: ahí las filas son las
+    que el usuario ya editó, y volver a insertarla las duplicaría en cada guardado.
     """
     ns = max(1, int(ns or 1))
 
@@ -65,7 +81,7 @@ def build_schedule(ns: int, start_date: date, flags: dict,
         base = [(r["nombre"], float(r["duracion"]), float(r["peso"])) for r in custom_rows]
     else:
         base = []
-        for nombre, db, dpp, peso, cond in PHASES:
+        for nombre, db, dpp, peso, cond in ([FASE_RIPOUT] + PHASES if ripout else PHASES):
             if cond and not flags.get(cond):
                 continue
             dur = max(1, round(db + dpp * ns))
