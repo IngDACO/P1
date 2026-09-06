@@ -141,7 +141,9 @@ def _etiqueta(it) -> str:
 def _galeria(fotos):
     """Fotos en rejilla. ⚠️ PAGINADA a propósito (v147): cada miniatura baja los bytes
     de Drive, así que pintarlas todas reintroduce el problema que la lazyness evita."""
-    T.section(t(":material/photo_library: Photos"), t("{n} photo(s)", n=len(fotos)))
+    # ⚠️ Sin `:material/…:`: `T.section` emite HTML y ahi el icono no se
+    # interpreta — saldria el literal en pantalla (v443, y se vio en produccion).
+    T.section(t("Photos"), t("{n} photo(s)", n=len(fotos)))
     dr = _drive()
     if dr is None:
         st.caption(t("Drive is not connected: the photos are listed but cannot be shown."))
@@ -180,7 +182,7 @@ def _galeria(fotos):
 
 
 def _tabla(items):
-    T.section(t(":material/description: Documents"), t("{n} item(s)", n=len(items)))
+    T.section(t("Documents"), t("{n} item(s)", n=len(items)))
     df = pd.DataFrame([{
         "Title": it.get("Title", ""),
         "Brand": str(it.get("Brand", "")) or "—",
