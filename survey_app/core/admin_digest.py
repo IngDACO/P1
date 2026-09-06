@@ -21,7 +21,7 @@ from core.num import parse_date as _parse_date
 from core.i18n import t
 logger = logging.getLogger(__name__)
 
-_DONE = ("Completado", "Cancelado")
+_DONE = ("Completed", "Cancelled")
 
 
 def _base(grupo) -> dict:
@@ -78,7 +78,7 @@ def group_digest(grupo) -> dict:
 
     campo_sin = []
     for u in auth.list_users(grupo):
-        if str(u.get("Role", "")).lower() != "campo":
+        if str(u.get("Role", "")).lower() != "field":
             continue
         if not (str(u.get("Email", "")).strip() and str(u.get("TelegramChatID", "")).strip()):
             campo_sin.append(u.get("User", ""))
@@ -269,7 +269,7 @@ def group_snapshot_text(grupo, max_proys=30) -> str:
             + (" | " + ", ".join(extra) if extra else ""))
     us = []
     for u in auth.list_users(grupo):
-        if str(u.get("Role", "")).lower() == "campo":
+        if str(u.get("Role", "")).lower() == "field":
             ok = str(u.get("Email", "")).strip() and str(u.get("TelegramChatID", "")).strip()
             us.append(f"{u.get('User', '')}"
                       + ("" if ok else " " + t("(NO full contact details)")))

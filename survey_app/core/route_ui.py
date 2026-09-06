@@ -144,7 +144,7 @@ def _mapa_respaldo(marcadores):
 def render_mi_ruta(usuario, grupo):
     """Las obras activas del técnico, ordenadas, con navegación a Google Maps."""
     from core import projects as P
-    _INACTIVOS = ("Completado", "Cancelado", "Archivado")
+    _INACTIVOS = ("Completed", "Cancelled", "Archived")
     try:
         proys = [p for p in P.list_projects_for_field(usuario, grupo=grupo)
                  if str(p.get("Status", "")) not in _INACTIVOS]
@@ -263,7 +263,7 @@ def render_ruta_dia(grupo):
 
     try:
         campos = [u for u in auth.list_users(grupo)
-                  if str(u.get("Role", "")) == "campo"
+                  if str(u.get("Role", "")) == "field"
                   and str(u.get("Active", "SI")).strip().upper() in auth._ACTIVE_OK]
     except Exception:
         campos = []

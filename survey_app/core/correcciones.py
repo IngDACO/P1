@@ -53,7 +53,7 @@ _COL = {h: i + 1 for i, h in enumerate(HEADERS)}
 # ── Estados ──────────────────────────────────────────────────────
 # ⚠️ Se reusa el vocabulario de `ausencias` (v430) en vez de inventar otro: la app ya
 # tiene un flujo de aprobación y dos vocabularios distintos para lo mismo divergen.
-PENDIENTE, APROBADA, REVERTIDA = "pendiente", "aprobada", "revertida"
+PENDIENTE, APROBADA, REVERTIDA = "pending", "approved", "reverted"
 ESTADOS = (PENDIENTE, APROBADA, REVERTIDA)
 
 # Qué campo del fichaje se corrigió.

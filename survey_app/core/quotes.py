@@ -35,6 +35,7 @@ import streamlit as st
 
 from core import clock, timeclock
 from core import columnas
+from core import valores
 from core.num import col_letter as _col_letter
 from core.num import num as _num
 from core.num import parse_date as _parse_date
@@ -47,7 +48,7 @@ HEADERS = ["ID", "Group", "ClientID", "ClientName", "Number", "Date", "ValidUnti
            "LinesJSON", "Subtotal", "TaxPct", "Tax", "Total", "MarginPct",
            "Status", "ProjectID", "Version", "Source", "Note", "CreatedBy", "Created"]
 
-BORRADOR, ENVIADA, ACEPTADA, RECHAZADA = "borrador", "enviada", "aceptada", "rechazada"
+BORRADOR, ENVIADA, ACEPTADA, RECHAZADA = "draft", "sent", "accepted", "rejected"
 VENCIDA = "vencida"                       # ⚠️ derivado, nunca se guarda
 ESTADOS = (BORRADOR, ENVIADA, ACEPTADA, RECHAZADA)
 VALIDEZ_DIAS = 30
@@ -355,7 +356,7 @@ def _ids_frescos() -> tuple:
     if w is None:
         return 0, 0
     try:
-        recs = columnas.canonizar(w.get_all_records(numericise_ignore=["all"]))
+        recs = valores.canonizar(columnas.canonizar(w.get_all_records(numericise_ignore=["all"])), SHEET)
     except Exception as e:
         logger.warning("quotes._ids_frescos: %s", e)
         return 0, 0
@@ -405,7 +406,7 @@ def crear(grupo, cliente_id, cliente_nombre, lineas, impuesto_pct=0.0,
 def _fila(w, cid):
     """(nº de fila, registro) leyendo FRESCO (regla v323)."""
     try:
-        recs = columnas.canonizar(w.get_all_records(numericise_ignore=["all"]))
+        recs = valores.canonizar(columnas.canonizar(w.get_all_records(numericise_ignore=["all"])), SHEET)
     except Exception as e:
         logger.warning("quotes._fila: %s", e)
         return None, None
@@ -505,7 +506,7 @@ def nueva_version(cid, creado_por="") -> tuple:
 
 
 # ── Fase 3: ganarla y comparar contra lo real (v354) ─────────────
-def aceptar_y_crear_proyecto(cid, nombre="", tipo="Instalación", fecha_inicio=None,
+def aceptar_y_crear_proyecto(cid, nombre="", tipo="Installation", fecha_inicio=None,
                              ns=0, ubicacion="", creado_por="") -> tuple:
     """Acepta la cotización y da de alta el proyecto con lo que ya se pactó.
 
@@ -536,7 +537,7 @@ def aceptar_y_crear_proyecto(cid, nombre="", tipo="Instalación", fecha_inicio=N
     acts, fin = None, ""
     # Solo la instalación tiene cronograma estándar (regla v306): a un delivery o un
     # ripout se le inventarían 11 actividades y ensuciarían avance, SPI y el radar.
-    if str(tipo) == "Instalación" and _num(ns) > 0:
+    if str(tipo) == "Installation" and _num(ns) > 0:
         sch = S.build_schedule(int(_num(ns)), ini, {})
         acts, fin = sch["activities"], sch["fecha_fin"].isoformat()
     else:

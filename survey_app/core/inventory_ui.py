@@ -29,11 +29,14 @@ def _creado_por() -> str:
 # ⚠️ Solo el COLOR. El TEXTO vive en `i18n.VALORES` desde v463: tenerlo aquí además
 # dejaba DOS definiciones del mismo estado, y por eso la ficha del activo decía
 # «available» y su tabla «disponible» — el mismo activo en dos idiomas a dos clics.
-# ⚠️ Las CLAVES son el estado guardado en la hoja y NO se tocan: `inventory.py` e
-# `inventory_ui` los comparan (`== "en_uso"`, `== "disponible"`), así que traducir el
-# dato dejaría esas dos ramas muertas sin dar ningún error (v442).
-_EST_COLOR = {"disponible": "green", "en_uso": "blue", "mantenimiento": "orange",
-              "dañado": "red", "baja": "gray"}
+# ⚠️ Las CLAVES son el estado GUARDADO en la hoja. v469 las migró a inglés, y lo
+# que hace que eso sea seguro es que la constante y sus comparaciones se movieron
+# JUNTAS: `inventory.py` e `inventory_ui` comparan ahora contra el mismo valor
+# canónico. Traducir solo una de las dos partes deja la rama MUERTA sin dar ningún
+# error (v442, el Caso 1 de corte de rieles) — lo vigila `verif_v463`.
+# Y una fila SIN migrar sigue casando porque `valores.canon` la traduce al LEER.
+_EST_COLOR = {"available": "green", "in use": "blue", "maintenance": "orange",
+              "damaged": "red", "written off": "gray"}
 
 
 def _est_lbl(estado) -> str:
@@ -254,23 +257,23 @@ def _detalle(grupo, aid):
     # ── Acciones (salida/entrada/traslado/mantenimiento) ──
     _est = str(a.get("Status", "")).lower()
     _cp = _creado_por()
-    if _est != "baja":
+    if _est != "written off":
         st.markdown(t("#### :material/swap_horiz: Actions"))
         ac = st.columns(2)
-        if _est == "disponible":
+        if _est == "available":
             with ac[0].expander(t(":material/logout: Check out / hand over")):
-                _dt = st.selectbox(t("Destination"), ["proyecto", "usuario", "otro"],
-                                   format_func=lambda o: t({"proyecto": "a project",
-                                                            "usuario": "a person",
-                                                            "otro": "somewhere else"}.get(o, o)),
+                _dt = st.selectbox(t("Destination"), ["project", "user", "other"],
+                                   format_func=lambda o: t({"project": "a project",
+                                                            "user": "a person",
+                                                            "other": "somewhere else"}.get(o, o)),
                                    key=f"inv_sdt_{aid}")
-                if _dt == "proyecto":
+                if _dt == "project":
                     # El VALOR es el ID (identidad); la etiqueta es el nombre (comodidad).
                     _pids, _plbl = _proyectos(grupo)
                     _ref = st.selectbox(t("Project"), _pids or ["(no projects)"],
                                         key=f"inv_srp_{aid}",
                                         format_func=lambda i: _plbl.get(i, i))
-                elif _dt == "usuario":
+                elif _dt == "user":
                     _ref = st.selectbox(t("User"), _usuarios(grupo) or ["(no users)"], key=f"inv_sru_{aid}")
                 else:
                     _ref = st.text_input(t("Destination"), key=f"inv_srt_{aid}")
@@ -278,7 +281,7 @@ def _detalle(grupo, aid):
                 _dev = _fecha_input(t("Expected return"), "", f"inv_sdev_{aid}")
                 _n = st.text_input(t("Note"), key=f"inv_snota_{aid}")
                 if st.button(t(":material/check: Record check-out"), type="primary", key=f"inv_sbtn_{aid}"):
-                    _u = ("" if _resp == "—" else _resp) or (_ref if _dt == "usuario" else "")
+                    _u = ("" if _resp == "—" else _resp) or (_ref if _dt == "user" else "")
                     ok, msg = INV.salida(aid, grupo, usuario=_u, hacia_tipo=_dt, hacia_ref=_ref,
                                          fecha_devolucion=_dev, nota=_n, creado_por=_cp)
                     (flash.exito if ok else st.error)(msg)
@@ -375,7 +378,7 @@ def _detalle(grupo, aid):
             if ok:
                 st.rerun()
 
-    if str(a.get("Status", "")).lower() != "baja":
+    if str(a.get("Status", "")).lower() != "written off":
         with st.expander(t(":material/block: Write off")):
             st.caption(t("Takes the asset out of the inventory (it stays in the history). To see it again, tick «Show written-off ones too»."))
             _mot = st.text_input(t("Reason"), key=f"inv_baja_mot_{aid}")
@@ -388,7 +391,7 @@ def _detalle(grupo, aid):
         st.warning(t(":material/block: This asset is **written off**: it does not appear in the inventory unless you tick «Show written-off ones too»."))
         if st.button(t(":material/restore: Reactivate this asset"),
                      key=f"inv_react_{aid}", type="primary"):
-            ok, msg = INV.update_activo(aid, {"Active": "SI", "Status": "disponible"})
+            ok, msg = INV.update_activo(aid, {"Active": "SI", "Status": "available"})
             (flash.exito if ok else st.error)(msg)
             if ok:
                 st.rerun()

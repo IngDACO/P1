@@ -142,6 +142,14 @@ def estado_cobro(f: dict) -> str:
         return "vencida"
     if cob > 0:
         return "parcial"
+    # ⚠️ v469 migro ESTA rama y no las otras cuatro, y eso rompia el chip: la clave de
+    # `invoices_ui._EST_FMT` es el valor que devuelve esta funcion, asi que `pending` no
+    # se encontraba y la factura salia sin icono ni color, con el texto crudo. Traduccion
+    # a medias dentro de la misma funcion, el peor caso (v443/v450). Se revierte en vez de
+    # migrar las otras cuatro: las facturas se quedan en espanol de punta a punta — la
+    # columna `Invoices.Status`, las 5 comparaciones `== "vencida"` y el mapa de chips —
+    # y `(Invoices, Status)` NO esta en la lista blanca de `valores.COLUMNAS`, asi que el
+    # dato llega sin canonizar. La pantalla ya lo traduce con `_est_fmt()` y `etiqueta()`.
     return "pendiente"
 
 

@@ -176,8 +176,8 @@ def resolve_alert(alert_id, resuelto_por) -> tuple:
 def _admins_and_owners(grupo) -> list:
     users = auth.list_users()
     out = [u["User"] for u in users
-           if str(u.get("Role", "")).lower() == "administrador" and str(u.get("Group", "")) == str(grupo)]
-    out += [u["User"] for u in users if str(u.get("Role", "")).lower() == "propietario"]
+           if str(u.get("Role", "")).lower() == "administrator" and str(u.get("Group", "")) == str(grupo)]
+    out += [u["User"] for u in users if str(u.get("Role", "")).lower() == "owner"]
     return list(dict.fromkeys(out))
 
 

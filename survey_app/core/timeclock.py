@@ -28,7 +28,7 @@ FMT = "%Y-%m-%d %H:%M:%S"
 # Tipo de fichaje: 'general' (jornada del día) | 'proyecto' (segmento por proyecto).
 # Filas antiguas sin Tipo se tratan como 'proyecto'.
 TIPO_GENERAL  = "general"
-TIPO_PROYECTO = "proyecto"
+TIPO_PROYECTO = "project"
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 
 

@@ -31,7 +31,7 @@ def _creado_por() -> str:
 def _agregados(proys, horas, alarmas, costos):
     """(activos, avance_prom, horas, costo, alarmas) de una lista de proyectos."""
     activos = [x for x in proys
-               if str(x.get("Status", "")) not in ("Completado", "Cancelado", "Archivado")]
+               if str(x.get("Status", "")) not in ("Completed", "Cancelled", "Archived")]
     av = (sum(_num(x.get("Progress")) for x in proys) / len(proys)) if proys else 0.0
     hrs = sum(horas.get(str(x.get("ID", "")), 0.0) for x in proys)
     cost = sum(costos.get(str(x.get("ID", "")), 0.0) for x in proys)

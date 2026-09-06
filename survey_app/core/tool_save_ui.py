@@ -27,9 +27,9 @@ _VACIO = "— choose the project —"
 
 def _proyectos_de(rol, usuario, grupo):
     """Mismo criterio que el Pre-Start: cada rol ve lo suyo."""
-    if rol == "propietario":
+    if rol == "owner":
         return P.list_projects()
-    if rol == "administrador":
+    if rol == "administrator":
         return P.list_projects(grupo=grupo)
     return P.list_projects_for_field(usuario, grupo=grupo)
 
@@ -152,7 +152,7 @@ def render_guardar(herramienta: str, titulo_pdf: str, pdf_bytes: bytes,
     # (v137), Mis proyectos (v138) y el Pre-Start (v170). ID primero, nombre de
     # respaldo (v145).
     _fich = None
-    if rol == "campo":
+    if rol == "field":
         try:
             from core import timeclock
             _ses = timeclock.open_sessions(nombre, grupo, usuario)
@@ -183,7 +183,7 @@ def render_guardar(herramienta: str, titulo_pdf: str, pdf_bytes: bytes,
                              disabled=(not sel or sel == _VACIO)):
                     _guardar(idmap[sel])
         else:
-            if rol == "campo":
+            if rol == "field":
                 st.caption(t("You have not clocked in to a project yet (:material/schedule: Time clock). Choose one:"))
             # Sin preseleccion: guardar el calculo contra otro elevador ensucia su
             # historial y su carpeta de Drive sin que nadie lo note.

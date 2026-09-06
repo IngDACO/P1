@@ -19,6 +19,7 @@ import streamlit as st
 from core.i18n import t
 from core import timeclock
 from core import columnas
+from core import valores
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +39,7 @@ GROUPS_HEADERS = ["Group", "Description", "Active", "TimeZone", "DefaultMargin",
                   # v359: libro de Google propio de este cliente. Vacío = el
                   # maestro (así `cliente1` sigue donde estaba, sin migrar).
                   "SheetID"]
-ROLES         = ["propietario", "administrador", "campo"]
+ROLES         = ["owner", "administrator", "field"]
 _ACTIVE_OK    = ("", "SI", "SÍ", "YES", "Y", "TRUE", "1", "X")
 # Columnas (1-based) en la hoja Login
 # ⚠️ DERIVADO de LOGIN_HEADERS, nunca escrito a mano. Estaba a mano —un literal en
@@ -180,7 +181,7 @@ def set_group_timezone(grupo: str, zona: str) -> tuple:
         col = gws.row_values(1).index("TimeZone") + 1
     except ValueError:
         return False, t("The Zona column does not exist yet in the Groups sheet.")
-    for i, r in enumerate(columnas.canonizar(gws.get_all_records(numericise_ignore=["all"]))):
+    for i, r in enumerate(valores.canonizar(columnas.canonizar(gws.get_all_records(numericise_ignore=["all"])), LOGIN_SHEET)):
         if str(r.get("Group", "")).strip().lower() == (grupo or "").strip().lower():
             try:
                 gws.update_cell(i + 2, col, str(zona or "").strip())
@@ -223,7 +224,7 @@ def set_group_margin_default(grupo: str, pct) -> tuple:
         col = gws.row_values(1).index("DefaultMargin") + 1
     except ValueError:
         return False, t("The MargenDefault column does not exist yet in the Groups sheet.")
-    for i, r in enumerate(columnas.canonizar(gws.get_all_records(numericise_ignore=["all"]))):
+    for i, r in enumerate(valores.canonizar(columnas.canonizar(gws.get_all_records(numericise_ignore=["all"])), LOGIN_SHEET)):
         if str(r.get("Group", "")).strip().lower() == (grupo or "").strip().lower():
             try:
                 gws.update_cell(i + 2, col, str(pct))
@@ -263,7 +264,7 @@ def set_group_num_setting(grupo: str, field: str, val) -> tuple:
         col = gws.row_values(1).index(field) + 1
     except ValueError:
         return False, f"{t('The column')} {field} {t('does not exist yet in the Groups sheet.')}"
-    for i, r in enumerate(columnas.canonizar(gws.get_all_records(numericise_ignore=["all"]))):
+    for i, r in enumerate(valores.canonizar(columnas.canonizar(gws.get_all_records(numericise_ignore=["all"])), LOGIN_SHEET)):
         if str(r.get("Group", "")).strip().lower() == (grupo or "").strip().lower():
             try:
                 gws.update_cell(i + 2, col, str(val))
@@ -299,7 +300,7 @@ def set_group_tax_default(grupo: str, pct) -> tuple:
         col = gws.row_values(1).index("DefaultTax") + 1
     except ValueError:
         return False, t("The ImpuestoDefault column does not exist yet in the Groups sheet.")
-    for i, r in enumerate(columnas.canonizar(gws.get_all_records(numericise_ignore=["all"]))):
+    for i, r in enumerate(valores.canonizar(columnas.canonizar(gws.get_all_records(numericise_ignore=["all"])), LOGIN_SHEET)):
         if str(r.get("Group", "")).strip().lower() == (grupo or "").strip().lower():
             try:
                 gws.update_cell(i + 2, col, str(pct))
@@ -317,7 +318,7 @@ def add_group(nombre: str, descripcion: str = "", zona: str = "") -> tuple:
     nombre = (nombre or "").strip()
     if not nombre:
         return False, t("The group name is required.")
-    for r in columnas.canonizar(gws.get_all_records(numericise_ignore=["all"])):
+    for r in valores.canonizar(columnas.canonizar(gws.get_all_records(numericise_ignore=["all"])), LOGIN_SHEET):
         if str(r.get("Group", "")).strip().lower() == nombre.lower():
             return False, f"{t('Group')} '{nombre}' {t('already exists.')}"
     try:
@@ -332,7 +333,7 @@ def delete_group(nombre: str) -> tuple:
     gws, err = _get_groups_ws()
     if err:
         return False, err
-    for i, r in enumerate(columnas.canonizar(gws.get_all_records(numericise_ignore=["all"]))):
+    for i, r in enumerate(valores.canonizar(columnas.canonizar(gws.get_all_records(numericise_ignore=["all"])), LOGIN_SHEET)):
         if str(r.get("Group", "")).strip().lower() == (nombre or "").strip().lower():
             try:
                 gws.delete_rows(i + 2)
@@ -344,7 +345,7 @@ def delete_group(nombre: str) -> tuple:
 
 
 def _records(lws):
-    return columnas.canonizar(lws.get_all_records(numericise_ignore=["all"]))
+    return valores.canonizar(columnas.canonizar(lws.get_all_records(numericise_ignore=["all"])), LOGIN_SHEET)
 
 
 def _find_row(lws, usuario):
@@ -387,7 +388,7 @@ def verify_login(usuario: str, pw: str) -> dict:
             if verify_password(pw, str(r.get("Password", ""))):
                 return {"ok": True,
                         "usuario": str(r.get("User", "")),
-                        "rol":     str(r.get("Role", "campo")).strip().lower(),
+                        "rol":     str(r.get("Role", "field")).strip().lower(),
                         "nombre":  str(r.get("Name", "")) or usuario,
                         "grupo":   str(r.get("Group", "")).strip()}
             return {"ok": False, "error": t("Wrong password.")}
@@ -496,7 +497,7 @@ def validate_session(usuario: str, token: str) -> dict:
     if str(rec.get("Active", "SI")).strip().upper() not in _ACTIVE_OK:
         return {}
     return {"usuario": str(rec.get("User", "")),
-            "rol":     str(rec.get("Role", "campo")).strip().lower(),
+            "rol":     str(rec.get("Role", "field")).strip().lower(),
             "nombre":  str(rec.get("Name", "")) or usuario,
             "grupo":   str(rec.get("Group", "")).strip(),
             "token":   token}
@@ -719,7 +720,7 @@ def add_user(usuario: str, pw: str, rol: str, nombre: str = "",
         return False, t("Username and password are required.")
     if rol not in ROLES:
         return False, t("Invalid role.")
-    if rol in ("administrador", "campo") and not (grupo or "").strip():
+    if rol in ("administrator", "field") and not (grupo or "").strip():
         return False, t("Administrator and field users must belong to a group.")
     row, _ = _find_row(lws, usuario)
     if row is not None:
@@ -815,7 +816,7 @@ def delete_user(usuario: str) -> tuple:
 
 # ── Helpers de rol ───────────────────────────────────────────
 def can_reports(rol: str) -> bool:
-    return rol in ("propietario", "administrador")
+    return rol in ("owner", "administrator")
 
 
 
@@ -851,7 +852,7 @@ def set_group_sheet_id(grupo: str, sheet_id) -> tuple:
             # dos clientes en el mismo libro es justo lo que este cambio viene a evitar
             return False, f"{t('That workbook already belongs to')}: {', '.join(otros)}."
     try:
-        recs = columnas.canonizar(gws.get_all_records(numericise_ignore=["all"]))
+        recs = valores.canonizar(columnas.canonizar(gws.get_all_records(numericise_ignore=["all"])), LOGIN_SHEET)
     except Exception as e:
         return False, f"Error leyendo: {e}"
     for i, g in enumerate(recs):

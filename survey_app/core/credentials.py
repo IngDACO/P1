@@ -28,7 +28,7 @@ HEADERS = ["ID", "User", "Group", "Type", "Number", "Class", "IssueDate",
 CATALOGO = [
     "White Card", "Forklift (LF)", "Dogging (DG)", "Rigging Basic (RB)",
     "Rigging Intermediate (RI)", "Rigging Advanced (RA)", "EWP / Boom (WP)",
-    "Working at Heights", "First Aid", "Driver License", "Otro",
+    "Working at Heights", "First Aid", "Driver License", "Other",
 ]
 CLASES_LICENCIA = ["", "C", "LR", "MR", "HR", "HC", "MC"]
 
@@ -333,7 +333,7 @@ def notify_expiring(grupo, days=DIAS_AVISO) -> int:
     try:
         for u in auth.list_users():
             rol = str(u.get("Role", "")).lower()
-            if rol == "propietario" or (rol == "administrador" and str(u.get("Group", "")) == str(grupo)):
+            if rol == "owner" or (rol == "administrator" and str(u.get("Group", "")) == str(grupo)):
                 admins.append(u["User"])
     except Exception:
         pass

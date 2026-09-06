@@ -472,7 +472,7 @@ def render_survey_tab(_ROL, _GRUPO):
             # El log expone la traza del optimizador (pasos, descartes y por que).
             # Es logica propietaria: misma regla que ya aplica el agente IA y que
             # excluye el informe del cliente. Solo el propietario lo ve.
-            if _ROL == "propietario":
+            if _ROL == "owner":
                 with st.expander(f"Optimiser log ({len(step_log)} steps evaluated)", icon=":material/list_alt:", expanded=False):
                     valid_steps  = [s for s in step_log if s.get("status") == "VALID"]
                     skip_steps   = [s for s in step_log if s.get("status") == "SKIP"]
@@ -1268,7 +1268,7 @@ def render_survey_tab(_ROL, _GRUPO):
         # 🛠 Mi grupo → ➕ Nuevo proyecto. Motivo: la obra existe antes que el
         # survey, y atar la creación al survey obligaba a tenerlo hecho para
         # poder dar de alta el proyecto.
-        if _ROL in ("administrador", "propietario"):
+        if _ROL in ("administrator", "owner"):
             st.header(t(":material/save: Save to the project"))
             if not st.session_state.get("calc_results"):
                 st.info(t("Calculate first so the survey can be saved to a project."))
@@ -1277,13 +1277,13 @@ def render_survey_tab(_ROL, _GRUPO):
             else:
                 r  = st.session_state.calc_results
                 ap = r["all_params"]
-                _proys = (projects_data.list_projects() if _ROL == "propietario"
+                _proys = (projects_data.list_projects() if _ROL == "owner"
                           else projects_data.list_projects(_GRUPO))
                 if not _proys:
                     st.info(t("There are no projects yet. Create one in {x} and come back here "
                               "to attach this survey to it.")
                             .replace("{x}", t("**👑 Administration → :material/folder: Projects**")
-                                     if _ROL == "propietario" else
+                                     if _ROL == "owner" else
                                      t("**:material/build: My company → :material/bar_chart: "
                                        "Projects → :material/add: New project**")))
                 else:
@@ -1410,7 +1410,7 @@ def render_survey_tab(_ROL, _GRUPO):
                         # tiene su sección de proyectos: el propietario dentro de
                         # Administración, el administrador en la suya.
                         st.session_state["_admin_nav_pending"] = (
-                            ("administracion", "📁 Proyectos") if _ROL == "propietario"
+                            ("administracion", "📁 Proyectos") if _ROL == "owner"
                             else ("proyectos", "📊 Proyectos"))
                         st.session_state.pop("_prj_creado", None)
                         st.rerun()

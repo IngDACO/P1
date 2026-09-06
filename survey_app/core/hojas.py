@@ -34,6 +34,7 @@ import logging
 import streamlit as st
 
 from core import columnas
+from core import valores
 from core import timeclock
 
 logger = logging.getLogger(__name__)
@@ -157,7 +158,8 @@ def registros(titulo: str, cabeceras=None, grupo: str = None):
             return None                   # que el llamador use su propio lector
         try:
             w = timeclock.get_sheet(titulo, tuple(cabeceras), grupo=grupo)
-            return columnas.canonizar(w.get_all_records(numericise_ignore=["all"]))
+            return valores.canonizar(
+                columnas.canonizar(w.get_all_records(numericise_ignore=["all"])), titulo)
         except Exception as e:
             logger.warning("hojas: lectura suelta de %s falló: %s", titulo, e)
             return []
@@ -171,7 +173,9 @@ def registros(titulo: str, cabeceras=None, grupo: str = None):
     for fila in datos[1:]:
         vals = [str(v) for v in fila[:n]] + [""] * max(0, n - len(fila))
         out.append(dict(zip(cab, vals)))
-    return out
+    # ⚠️ v469: y despues los VALORES, solo en las columnas de negocio. El orden
+    # importa: `valores.canonizar` espera las claves ya canonizadas.
+    return valores.canonizar(out, titulo)
 
 
 # ── IDs que NO se reciclan (v427) ────────────────────────────────────────────

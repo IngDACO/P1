@@ -90,7 +90,7 @@ def _ir_a_prestart():
     propósito: es el IDENTIFICADOR que usa el matching (v232), no un adorno.
     """
     from core import home_ui as _home
-    if str(st.session_state.get("auth", {}).get("rol", "")) == "campo":
+    if str(st.session_state.get("auth", {}).get("rol", "")) == "field":
         _home.navegar("prestart")                       # `navegar` ya hace el rerun
     else:
         _home.navegar("herramientas", "🦺 Pre-Start")
@@ -600,7 +600,7 @@ def _proyectos_para(rol, usuario, grupo):
     """
     try:
         _hoy = _asignadas_hoy(usuario, grupo)
-        if rol == "campo":
+        if rol == "field":
             asignados = projects_data.list_projects_for_field(
                 usuario, grupo=grupo, incluir_internos=True)
             if asignados or _hoy:
@@ -608,7 +608,7 @@ def _proyectos_para(rol, usuario, grupo):
             # Sin nada asignado: las obras del grupo, NUNCA las localizaciones.
             return projects_data.list_projects(grupo=grupo), False
         # Gestión (administrador/propietario) sí ficha en la oficina.
-        if rol == "propietario":
+        if rol == "owner":
             return projects_data.list_projects(incluir_internos=True), True
         return projects_data.list_projects(grupo=grupo, incluir_internos=True), True
     except Exception:

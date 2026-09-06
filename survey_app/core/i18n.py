@@ -162,6 +162,11 @@ VALORES = {
     # ⚠️ `mantenimiento` y `baja` ya estaban arriba (son estado Y movimiento).
     "bueno": "good", "regular": "fair", "malo": "poor",
     "bodega": "warehouse", "usuario": "user", "reparacion": "under repair",
+    # v469 · destino libre de una salida de inventario. Se GUARDA en
+    # `UbicacionTipo`, asi que una fila anterior a la migracion saldria cruda
+    # en una pantalla inglesa — el fallo de v462/v463: un valor que no esta en
+    # el mapa se devuelve tal cual, sin dar ningun error.
+    "otro": "other",
     "salida": "check-out", "entrada": "check-in", "traslado": "transfer",
     # v464 · unidades del catalogo. ⚠️ m/m²/kg NO se mapean: son simbolos, iguales
     # en los dos idiomas, y un mapa espejo es lo que v450 mando borrar.

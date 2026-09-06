@@ -49,7 +49,7 @@ def selector_proyecto(key: str, ayuda: str = "") -> tuple:
     rol = auth.get("rol", "")
 
     # ── Campo: el proyecto viene del fichaje ──
-    if rol == "campo":
+    if rol == "field":
         prj = _proyecto_fichado(auth)
         if not prj:
             st.info(t(":material/info: **Clock in first at :material/schedule: Time clock**, choosing the project you are working on. That way the tool uses its drawing data and you will not have to upload the PDF."))
@@ -59,7 +59,7 @@ def selector_proyecto(key: str, ayuda: str = "") -> tuple:
         return prj, datos
 
     # ── Admin y propietario: eligen el proyecto aquí ──
-    proys = (P.list_projects() if rol == "propietario"
+    proys = (P.list_projects() if rol == "owner"
              else P.list_projects(grupo=auth.get("grupo", "")))
     if not proys:
         return None, {}

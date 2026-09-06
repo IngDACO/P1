@@ -104,7 +104,7 @@ def grupo_sesion() -> str:
 
 
 def es_propietario() -> bool:
-    return rol() == "propietario"
+    return rol() == "owner"
 
 
 def puede_ver(obj_grupo) -> bool:

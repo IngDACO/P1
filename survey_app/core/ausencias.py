@@ -36,6 +36,7 @@ import streamlit as st
 
 from core import clock, timeclock
 from core import columnas
+from core import valores
 from core.num import parse_date as _parse_date
 
 from core.i18n import t
@@ -57,8 +58,8 @@ HEADERS = ["ID", "Group", "User", "Name", "Type", "From", "To", "Days",
 _COL = {h: i + 1 for i, h in enumerate(HEADERS)}
 
 # ── Estados de la solicitud ──────────────────────────────────────
-PENDIENTE, APROBADA, RECHAZADA, CANCELADA = ("pendiente", "aprobada",
-                                             "rechazada", "cancelada")
+PENDIENTE, APROBADA, RECHAZADA, CANCELADA = ("pending", "approved",
+                                             "rejected", "cancelled")
 ESTADOS = (PENDIENTE, APROBADA, RECHAZADA, CANCELADA)
 # Las que ocupan el calendario: una rechazada o cancelada no bloquea a nadie.
 VIGENTES = (PENDIENTE, APROBADA)
@@ -538,7 +539,7 @@ def sustitutos(grupo, fecha, proyecto_id=None, excluir=None) -> list:
     fuera = {str(x.get("User", "")) for x in ausentes_en(grupo, fecha)}
     try:
         gente = [u for u in auth.list_users(grupo)
-                 if str(u.get("Role", "")) == "campo"
+                 if str(u.get("Role", "")) == "field"
                  and str(u.get("Active", "SI")).upper() != "NO"]
     except Exception:
         return []
@@ -635,7 +636,7 @@ def solicitar(grupo, usuario, nombre, tipo, desde, hasta, motivo="",
     cfg = TIPOS[tipo]
     estado = PENDIENTE if cfg["aprobacion"] else APROBADA
     hoy = clock.now(grupo).strftime("%Y-%m-%d %H:%M")
-    fila = [_next_id(columnas.canonizar(w.get_all_records(numericise_ignore=["all"]))),
+    fila = [_next_id(valores.canonizar(columnas.canonizar(w.get_all_records(numericise_ignore=["all"])), SHEET)),
             str(grupo), str(usuario), str(nombre or usuario), str(tipo),
             _d0.strftime("%Y-%m-%d"), _d1.strftime("%Y-%m-%d"), str(len(dias)),
             str(motivo or ""), estado,
@@ -669,7 +670,7 @@ def resolver(aid, aprobar: bool, quien, nota="") -> tuple:
     if w is None:
         return False, t("Google Sheets is not configured.")
     try:
-        recs = columnas.canonizar(w.get_all_records(numericise_ignore=["all"]))   # FRESCO: es escritura
+        recs = valores.canonizar(columnas.canonizar(w.get_all_records(numericise_ignore=["all"])), SHEET)   # FRESCO: es escritura
     except Exception as e:
         return False, f"Error leyendo: {e}"
     fila = next((i + 2 for i, r in enumerate(recs)
@@ -707,7 +708,7 @@ def cancelar(aid, quien) -> tuple:
     if w is None:
         return False, t("Google Sheets is not configured.")
     try:
-        recs = columnas.canonizar(w.get_all_records(numericise_ignore=["all"]))
+        recs = valores.canonizar(columnas.canonizar(w.get_all_records(numericise_ignore=["all"])), SHEET)
     except Exception as e:
         return False, f"Error leyendo: {e}"
     fila = next((i + 2 for i, r in enumerate(recs)

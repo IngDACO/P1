@@ -82,7 +82,7 @@ def generate_quote_pdf(cot: dict, cliente: dict = None, grupo_nombre: str = "") 
         celda = [Paragraph(txt, H)] + ([Paragraph(desc, sm)] if desc else [])
         cant = _num(l.get("cantidad"))
         uni = str(l.get("unidad", "") or "")
-        cant_txt = f"{cant:g}" + (f" {uni}" if uni and uni != "unidad" else "")
+        cant_txt = f"{cant:g}" + (f" {uni}" if uni and uni != "unit" else "")
         filas.append([celda, Paragraph(cant_txt, H),
                       Paragraph(_money(l.get("precio_total")), H)])
     tab = Table(filas, colWidths=[112 * mm, 24 * mm, 42 * mm], repeatRows=1)

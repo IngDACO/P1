@@ -34,7 +34,7 @@ def _staff(grupo):
     """Personal de campo del grupo que va al tablero."""
     try:
         return [u for u in auth.list_users(grupo=grupo)
-                if str(u.get("Role", "")).lower() == "campo"]
+                if str(u.get("Role", "")).lower() == "field"]
     except Exception:
         return []
 
@@ -503,8 +503,8 @@ def _asignacion_inteligente(grupo, lunes, staff, tidx, dias=None):
         try:
             # v422: incluye las localizaciones internas (ver `_opciones`).
             proys = [p for p in P.list_projects(grupo, incluir_internos=True)
-                     if str(p.get("Status", "")) not in ("Completado", "Cancelado",
-                                                         "Archivado", P.INTERNO_CERRADA)]
+                     if str(p.get("Status", "")) not in ("Completed", "Cancelled",
+                                                         "Archived", P.INTERNO_CERRADA)]
         except Exception:
             proys = []
         if not proys:
@@ -1568,7 +1568,7 @@ def _opciones(grupo, tidx):
         # acceso permanente — es lo que el usuario pidió como «asignados en momentos
         # particulares mediante la planificación».
         for p in P.list_projects(grupo=grupo, incluir_internos=True):
-            if str(p.get("Status", "")) in ("Completado", "Cancelado", P.INTERNO_CERRADA):
+            if str(p.get("Status", "")) in ("Completed", "Cancelled", P.INTERNO_CERRADA):
                 continue
             op.append((str(p.get("Name", "")), str(p.get("ID", ""))))
     except Exception:

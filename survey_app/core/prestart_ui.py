@@ -218,9 +218,9 @@ def _projects_for(rol, usuario, grupo):
     # v422: **con las localizaciones internas**. El pre-start es la charla de seguridad
     # del SITIO, y un almacén es un sitio con sus riesgos (montacargas, estanterías,
     # manipulación) — de hecho es una de las tres cosas que se pidieron para ellas.
-    if rol == "propietario":
+    if rol == "owner":
         return P.list_projects(incluir_internos=True)
-    if rol == "administrador":
+    if rol == "administrator":
         return P.list_projects(grupo=grupo, incluir_internos=True)
     return P.list_projects_for_field(usuario, grupo=grupo, incluir_internos=True)
 
@@ -295,7 +295,7 @@ def render_prestart_tab():
     proys = _projects_for(rol, usuario, grupo)
     if not proys:
         st.info(t("No projects available.") + " "
-                + (t("The administrator must assign you to a project.") if rol == "campo"
+                + (t("The administrator must assign you to a project.") if rol == "field"
                    else t("Create a project from the Survey.")))
         return
 
@@ -356,7 +356,7 @@ def render_prestart_tab():
         _pf, _pf_ok = {}, False
     if _pf:
         _bloque_firmar(_pf, pgrupo, nombre or usuario, usuario)
-        if rol == "campo":
+        if rol == "field":
             return
 
     # ── Encabezado ──

@@ -20,6 +20,7 @@ import streamlit as st
 from core import timeclock
 from core import clock
 from core import columnas
+from core import valores
 from core.num import col_letter as _col_letter, num as _num
 
 from core.i18n import t
@@ -72,8 +73,8 @@ PROJECTS_HEADERS = [
 
 # Tipos de proyecto (v306). `TIPO_INSTALACION` es el único que genera el cronograma
 # estándar de obra; los demás nacen con UNA actividad genérica (ver `create_project`).
-TIPO_INSTALACION = "Instalación"
-TIPOS = [TIPO_INSTALACION, "Delivery", "Ripout", "Otro"]
+TIPO_INSTALACION = "Installation"
+TIPOS = [TIPO_INSTALACION, "Delivery", "Ripout", "Other"]
 
 # ── v422: LOCALIZACIONES INTERNAS (oficina, almacén, taller) ──────────────────
 # No todo el mundo trabaja en obra: hay gente de oficina y de almacén que también
@@ -95,19 +96,19 @@ TIPOS = [TIPO_INSTALACION, "Delivery", "Ripout", "Otro"]
 # mismo patrón que `incluir_archivados` (v149) — y la misma trampa, al revés: por eso
 # v423 les da su propia sección, porque *lo que se puede ocultar tiene que poder
 # verse* (regla v340).
-TIPO_OFICINA = "Oficina"
-TIPOS_INTERNOS = [TIPO_OFICINA, "Almacén", "Taller"]
+TIPO_OFICINA = "Office"
+TIPOS_INTERNOS = [TIPO_OFICINA, "Warehouse", "Workshop"]
 
 # Estados propios: una localización no está «Planificada al 0%» — está abierta o
 # cerrada. No tiene actividades, así que su avance sería 0 para siempre y
 # `derive_estado` la dejaría eternamente en «Planificado», que no significa nada.
-INTERNO_ABIERTA = "Abierta"
-INTERNO_CERRADA = "Cerrada"
+INTERNO_ABIERTA = "Open"
+INTERNO_CERRADA = "Closed"
 
 TIPO_ICONO = {TIPO_INSTALACION: ":material/construction:", "Delivery": ":material/local_shipping:",
-              "Ripout": ":material/delete_sweep:", "Otro": ":material/category:",
-              TIPO_OFICINA: ":material/business:", "Almacén": ":material/warehouse:",
-              "Taller": ":material/handyman:"}
+              "Ripout": ":material/delete_sweep:", "Other": ":material/category:",
+              TIPO_OFICINA: ":material/business:", "Warehouse": ":material/warehouse:",
+              "Workshop": ":material/handyman:"}
 
 
 def es_interno(prj) -> bool:
@@ -139,7 +140,7 @@ DOCUMENTS_HEADERS = ["ProjectID", "Name", "Type", "DriveID", "UploadedBy", "Date
 _PCOL = {h: i + 1 for i, h in enumerate(PROJECTS_HEADERS)}
 _ACOL = {h: i + 1 for i, h in enumerate(ACTIVITIES_HEADERS)}
 
-ESTADOS_MANUAL = ["", "En pausa", "Cancelado", "Archivado"]
+ESTADOS_MANUAL = ["", "On hold", "Cancelled", "Archived"]
 FMT_DATE = "%Y-%m-%d"
 
 
@@ -296,15 +297,15 @@ def derive_estado(avance: float, estado_manual: str = "", tipo: str = "") -> str
     par: **Abierta / Cerrada**. El override manual (archivar, pausar) sigue mandando,
     porque es lo que hace que `list_projects` la oculte y que se pueda restaurar.
     """
-    if estado_manual in ("En pausa", "Cancelado", "Archivado"):
+    if estado_manual in ("On hold", "Cancelled", "Archived"):
         return estado_manual
     if es_interno(tipo):
         return INTERNO_CERRADA if estado_manual == INTERNO_CERRADA else INTERNO_ABIERTA
     if avance <= 0:
-        return "Planificado"
+        return "Planned"
     if avance >= 100:
-        return "Completado"
-    return "En progreso"
+        return "Completed"
+    return "In progress"
 
 
 def _next_project_id(pws) -> str:
@@ -319,7 +320,7 @@ def _next_project_id(pws) -> str:
     líneas de factura), así que es donde más duele.
     """
     mx = 0
-    for r in columnas.canonizar(pws.get_all_records(numericise_ignore=["all"])):
+    for r in valores.canonizar(columnas.canonizar(pws.get_all_records(numericise_ignore=["all"])), PROJECTS_SHEET):
         pid = str(r.get("ID", ""))
         if pid.startswith("PRJ-"):
             try:
@@ -337,7 +338,7 @@ def _next_project_id(pws) -> str:
 
 def _find_row(ws, header, value):
     """Nº de fila (1-based, incluye cabecera) del primer registro con header==value."""
-    records = columnas.canonizar(ws.get_all_records(numericise_ignore=["all"]))
+    records = valores.canonizar(columnas.canonizar(ws.get_all_records(numericise_ignore=["all"])), PROJECTS_SHEET)
     for i, r in enumerate(records):
         if str(r.get(header, "")) == str(value):
             return i + 2  # +1 cabecera, +1 base-1
@@ -358,7 +359,7 @@ def create_grouping(grupo: str, nombre: str, descripcion: str = "") -> tuple:
     gws, err = _groupings_ws()
     if err:
         return False, err
-    existing = columnas.canonizar(gws.get_all_records(numericise_ignore=["all"]))
+    existing = valores.canonizar(columnas.canonizar(gws.get_all_records(numericise_ignore=["all"])), PROJECTS_SHEET)
     mx = 0
     for r in existing:
         gid = str(r.get("ID", ""))
@@ -503,7 +504,7 @@ def _gaps_for(proys) -> dict:
     dias_gap > 0 = retraso, < 0 = adelanto."""
     out = {}
     for p in proys:
-        if str(p.get("Status", "")) in ("Completado", "Cancelado"):
+        if str(p.get("Status", "")) in ("Completed", "Cancelled"):
             continue
         try:
             ps = project_schedule(p.get("ID"))
@@ -563,7 +564,7 @@ def aheads_of_group(grupo) -> dict:
     return {k: abs(v) for k, v in gaps_by_group(grupo).items() if v < -0.5}
 
 
-ARCHIVADO = "Archivado"
+ARCHIVADO = "Archived"
 
 
 def list_projects(grupo: str = None, agrupacion_id: str = None,
@@ -866,7 +867,7 @@ def delete_project(pid: str) -> tuple:
     # borrar sus actividades
     aws, err2 = _activities_ws()
     if not err2:
-        recs = columnas.canonizar(aws.get_all_records(numericise_ignore=["all"]))
+        recs = valores.canonizar(columnas.canonizar(aws.get_all_records(numericise_ignore=["all"])), PROJECTS_SHEET)
         for i in range(len(recs) - 1, -1, -1):
             if str(recs[i].get("ProjectID", "")) == str(pid):
                 aws.delete_rows(i + 2)
@@ -890,7 +891,7 @@ def update_activity_progress(pid: str, orden, avance, fecha_inicio="", fecha_fin
     if err:
         return False, err
     avance = max(0.0, min(100.0, _num(avance)))
-    recs = columnas.canonizar(aws.get_all_records(numericise_ignore=["all"]))
+    recs = valores.canonizar(columnas.canonizar(aws.get_all_records(numericise_ignore=["all"])), PROJECTS_SHEET)
     target = None
     for i, r in enumerate(recs):
         if str(r.get("ProjectID", "")) == str(pid) and str(r.get("Order", "")) == str(orden):
@@ -954,7 +955,7 @@ def delete_activity(pid, orden) -> tuple:
     aws, err = _activities_ws()
     if err:
         return False, err
-    recs = columnas.canonizar(aws.get_all_records(numericise_ignore=["all"]))
+    recs = valores.canonizar(columnas.canonizar(aws.get_all_records(numericise_ignore=["all"])), PROJECTS_SHEET)
     target = None
     for i, r in enumerate(recs):
         if str(r.get("ProjectID", "")) == str(pid) and str(r.get("Order", "")) == str(orden):
@@ -984,7 +985,7 @@ def save_field_progress(pid, cambios) -> tuple:
     if err:
         return False, err
     hoy = clock.today().isoformat()
-    recs = columnas.canonizar(aws.get_all_records(numericise_ignore=["all"]))
+    recs = valores.canonizar(columnas.canonizar(aws.get_all_records(numericise_ignore=["all"])), PROJECTS_SHEET)
     rowmap = {str(r.get("Order", "")): (i + 2, r)
               for i, r in enumerate(recs) if str(r.get("ProjectID", "")) == str(pid)}
     batch = []
@@ -1034,7 +1035,7 @@ def save_activities(pid, edits) -> tuple:
     aws, err = _activities_ws()
     if err:
         return False, err
-    recs = columnas.canonizar(aws.get_all_records(numericise_ignore=["all"]))
+    recs = valores.canonizar(columnas.canonizar(aws.get_all_records(numericise_ignore=["all"])), PROJECTS_SHEET)
     rowmap = {str(r.get("Order", "")): i + 2
               for i, r in enumerate(recs) if str(r.get("ProjectID", "")) == str(pid)}
     batch = []
@@ -1305,7 +1306,7 @@ def delete_document_record(pid, drive_id) -> tuple:
     dws, err = _documents_ws()
     if err:
         return False, err
-    recs = columnas.canonizar(dws.get_all_records(numericise_ignore=["all"]))
+    recs = valores.canonizar(columnas.canonizar(dws.get_all_records(numericise_ignore=["all"])), PROJECTS_SHEET)
     for i, r in enumerate(recs):
         if str(r.get("ProjectID", "")) == str(pid) and str(r.get("DriveID", "")) == str(drive_id):
             dws.delete_rows(i + 2)

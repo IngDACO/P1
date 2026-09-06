@@ -374,7 +374,7 @@ internamente (fórmulas, algoritmos, código) — sigue aplicando la regla de co
 # la gestión de proyectos e interpretación). El resto del conocimiento y la
 # regla de confidencialidad son comunes.
 _PERSONA = {
-    "campo": (
+    "field": (
         "## TU INTERLOCUTOR: TÉCNICO DE CAMPO\n"
         "Estás asistiendo a un TÉCNICO que está EN OBRA instalando el elevador. Enfócate en:\n"
         "- Procedimientos de instalación paso a paso, medidas, herramientas y seguridad, apoyándote en "
@@ -385,7 +385,7 @@ _PERSONA = {
         "La gestión de cronogramas, curvas S, informes internos y usuarios NO es su función; si pregunta por eso, "
         "explícale que lo ve el administrador. Lenguaje práctico, claro y directo, como para alguien trabajando en el hueco."
     ),
-    "administrador": (
+    "administrator": (
         "## TU INTERLOCUTOR: ADMINISTRADOR\n"
         "Estás asistiendo a un ADMINISTRADOR que gestiona los proyectos de su grupo (empresa cliente). Enfócate en:\n"
         "- Gestión de proyectos: cronograma, avance, curva S real vs planificada, proyección de días de adelanto/"
@@ -403,7 +403,7 @@ _PERSONA = {
     ),
 }
 # El propietario tiene visión global: usa el mismo asistente que el administrador.
-_PERSONA["propietario"] = _PERSONA["administrador"]
+_PERSONA["owner"] = _PERSONA["administrator"]
 
 
 def _build_context_block(calc_results: dict | None, all_params: dict | None) -> str:
@@ -504,12 +504,12 @@ def get_chat_response(
     client = anthropic.Anthropic(api_key=api_key)
 
     # Persona según el rol + contexto del survey actual
-    persona       = _PERSONA.get(rol, _PERSONA["administrador"])
+    persona       = _PERSONA.get(rol, _PERSONA["administrator"])
     context_block = _build_context_block(calc_results, all_params)
     system = SYSTEM_PROMPT + "\n\n" + persona + context_block
 
     # Estado en vivo del grupo (para el administrador)
-    if rol == "administrador" and grupo:
+    if rol == "administrator" and grupo:
         try:
             from core import admin_digest
             snap = admin_digest.group_snapshot_text(grupo)
@@ -569,7 +569,7 @@ def admin_briefing(grupo: str) -> str:
         return facts   # fallback determinístico (sin IA)
 
     system = (
-        SYSTEM_PROMPT + "\n\n" + _PERSONA["administrador"] + "\n\n"
+        SYSTEM_PROMPT + "\n\n" + _PERSONA["administrator"] + "\n\n"
         "Write a very short EXECUTIVE SUMMARY in English (bullets, at most ~8 lines) of what matters most "
         "among what the administrator has PENDING in their group today, putting the urgent first "
         "(overdue, delays, alarms, near misses) and closing with 1-2 suggested actions. Concrete and "

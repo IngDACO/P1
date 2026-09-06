@@ -30,6 +30,7 @@ import streamlit as st
 
 from core import clock, timeclock
 from core import columnas
+from core import valores
 from core.num import col_letter as _col_letter
 from core.num import num as _num
 from core.num import parse_date as _parse_date
@@ -42,7 +43,7 @@ HEADERS = ["ID", "Group", "ProjectID", "Supplier", "Description", "Category",
            "Amount", "Date", "ExpectedDate", "Status", "ExpenseID", "ReceivedDate",
            "Note", "CreatedBy", "Created"]
 
-PENDIENTE, RECIBIDA, CANCELADA = "pendiente", "recibida", "cancelada"
+PENDIENTE, RECIBIDA, CANCELADA = "pending", "received", "cancelled"
 ESTADOS = (PENDIENTE, RECIBIDA, CANCELADA)
 
 _COL = {h: i + 1 for i, h in enumerate(HEADERS)}
@@ -166,7 +167,7 @@ def _next_id() -> str:
         return "ORD-00001"
     mx = 0
     try:
-        for r in columnas.canonizar(w.get_all_records(numericise_ignore=["all"])):
+        for r in valores.canonizar(columnas.canonizar(w.get_all_records(numericise_ignore=["all"])), SHEET):
             i = str(r.get("ID", ""))
             if i.startswith("ORD-"):
                 try:
@@ -178,7 +179,7 @@ def _next_id() -> str:
     return f"ORD-{mx + 1:05d}"
 
 
-def crear(pid, grupo, proveedor, valor, descripcion="", categoria="Materiales",
+def crear(pid, grupo, proveedor, valor, descripcion="", categoria="Materials",
           fecha_esperada="", nota="", creado_por="") -> tuple:
     w = _ws()
     if w is None:
@@ -205,7 +206,7 @@ def _fila(w, oid):
     """(nº de fila 1-based, registro) leyendo FRESCO: decidir DÓNDE escribir con
     una caché es como se corrompen los datos (v323)."""
     try:
-        recs = columnas.canonizar(w.get_all_records(numericise_ignore=["all"]))
+        recs = valores.canonizar(columnas.canonizar(w.get_all_records(numericise_ignore=["all"])), SHEET)
     except Exception as e:
         logger.warning("orders._fila: %s", e)
         return None, None

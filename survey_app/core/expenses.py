@@ -17,6 +17,7 @@ import streamlit as st
 from core import timeclock
 from core import clock
 from core import columnas
+from core import valores
 from core.num import num as _num
 
 from core.i18n import t
@@ -25,8 +26,8 @@ logger = logging.getLogger(__name__)
 SHEET   = "Expenses"
 HEADERS = ["ID", "ProjectID", "Group", "Date", "Category", "Supplier",
            "Description", "Amount", "DriveID", "File", "CreatedBy", "Created"]
-CATEGORIAS = ["Materiales", "Herramientas", "Transporte", "Combustible",
-              "Subcontrato", "Alquiler", "Otros"]
+CATEGORIAS = ["Materials", "Tools", "Transport", "Fuel",
+              "Subcontractor", "Rental", "Other"]
 _FOLDER = "COPEX Recibos"
 
 
@@ -332,7 +333,7 @@ def over_budget(grupo) -> list:
     from core import projects as P
     out = []
     for p in P.list_projects(grupo=grupo):
-        if str(p.get("Status", "")) in ("Completado", "Cancelado"):
+        if str(p.get("Status", "")) in ("Completed", "Cancelled"):
             continue
         c = project_cost(p.get("ID"), grupo)
         if c["over"]:
@@ -450,7 +451,7 @@ def upload_receipt(pid, filename, data, mime="application/octet-stream") -> str:
         return ""
 
 
-def add(pid, grupo, valor, categoria="Materiales", proveedor="", descripcion="",
+def add(pid, grupo, valor, categoria="Materials", proveedor="", descripcion="",
         drive_id="", archivo="", creado_por="", fecha="") -> tuple:
     w = _ws()
     if w is None:
@@ -458,7 +459,7 @@ def add(pid, grupo, valor, categoria="Materiales", proveedor="", descripcion="",
     if _num(valor) <= 0:
         return False, t("The receipt value must be greater than 0.")
     try:
-        gid = _next_id(columnas.canonizar(w.get_all_records(numericise_ignore=["all"])))
+        gid = _next_id(valores.canonizar(columnas.canonizar(w.get_all_records(numericise_ignore=["all"])), SHEET))
         w.append_row([gid, str(pid), str(grupo),
                       str(fecha or clock.now().strftime("%Y-%m-%d")),
                       str(categoria), str(proveedor), str(descripcion),
@@ -476,7 +477,7 @@ def delete(gid) -> tuple:
     if w is None:
         return False, t("Google Sheets is not configured.")
     try:
-        recs = columnas.canonizar(w.get_all_records(numericise_ignore=["all"]))
+        recs = valores.canonizar(columnas.canonizar(w.get_all_records(numericise_ignore=["all"])), SHEET)
     except Exception as e:
         return False, f"Error leyendo: {e}"
     for i, r in enumerate(recs):

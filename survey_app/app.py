@@ -124,7 +124,7 @@ _GRUPO = st.session_state.auth.get("grupo", "")
 # Deep-link del QR del inventario: escanear `…?activo=ACT-####` abre esa ficha.
 # Debe correr ANTES del sidebar (sidebar_menu aplica `_admin_nav_pending`). Solo
 # el administrador tiene 📦 Inventario (nueva shell). Guard para no re-disparar.
-if _ROL == "administrador":
+if _ROL == "administrator":
     try:
         _scan = st.query_params.get("activo")
     except Exception:
@@ -155,12 +155,12 @@ if _time.time() - st.session_state.get("_hb_last", 0) > 50:
 # cualquier admin/propietario; el admin sobre su grupo, el propietario sobre todos.
 # Deduplicado por día (session_state) y por 25 días en la hoja (UltimoAviso), y
 # envuelto en try para no bloquear nunca la entrada.
-if _ROL in ("administrador", "propietario"):
+if _ROL in ("administrator", "owner"):
     try:
         from core import credentials as _cred, clock as _clk, auth as _auth
         if _cred.is_configured():
             _hoy = _clk.today()
-            _grps = ([_GRUPO] if _ROL == "administrador"
+            _grps = ([_GRUPO] if _ROL == "administrator"
                      else [g["Group"] for g in _auth.list_groups()])
             for _g in _grps:
                 _kav = f"_credaviso_{_g}_{_hoy}"
@@ -185,7 +185,7 @@ if _ROL in ("administrador", "propietario"):
 # los 8 usuarios de campo del grupo encerrados fuera de la app, sin forma de entrar.
 # Es el patrón de v325/v340 — un pendiente que NADIE puede cerrar es peor que no
 # tenerlo: exigir un canal inexistente no protege nada, solo deja gente fuera.
-if _ROL == "campo" and not st.session_state.get("_contact_ok"):
+if _ROL == "field" and not st.session_state.get("_contact_ok"):
     _rec = get_user(st.session_state.auth.get("usuario", ""))
     _has_mail = bool(str(_rec.get("Email", "")).strip())
     _has_tg   = bool(str(_rec.get("TelegramChatID", "")).strip())
@@ -244,7 +244,7 @@ with st.sidebar:
     st.markdown("---")
 
     # ── Cronómetro de fichaje EN VIVO (v202): admin y campo, solo si estás fichado ──
-    if _ROL in ("administrador", "campo"):
+    if _ROL in ("administrator", "field"):
         from core.timeclock_ui import render_sidebar_chrono
         render_sidebar_chrono()
 
@@ -257,11 +257,11 @@ with st.sidebar:
     # ══════════════════════════════════════════════════
     # ASISTENTE IA — desplegable en sidebar
     # ══════════════════════════════════════════════════
-    _agente_lbl = "Field assistant" if _ROL == "campo" else "Management assistant"
+    _agente_lbl = "Field assistant" if _ROL == "field" else "Management assistant"
     with st.expander(f":material/smart_toy: {_agente_lbl} COPEX", expanded=False):
         ctx_label = ":material/link: With the current calculation as context." if st.session_state.get("calc_results") else "No active calculation."
         _foco = ("Focused on installing on site and using the app in the field."
-                 if _ROL == "campo"
+                 if _ROL == "field"
                  else "Focused on project management and interpreting results.")
         st.caption(f"{_foco} {ctx_label}")
 
@@ -311,7 +311,7 @@ _home.render_topbar(_GRUPO)
 # el modal se pinta en el contenedor activo, y así es como se verificó en vivo.
 # Se dispara por bandera en la pasada SIGUIENTE al fichaje, porque el `st.rerun()`
 # de la acción descarta los deltas de la suya (v365).
-if _ROL in ("administrador", "campo"):
+if _ROL in ("administrator", "field"):
     from core.timeclock_ui import aviso_prestart_pendiente
     aviso_prestart_pendiente(_GRUPO)
 # El default NO puede ser "home" fijo: campo y propietario no tienen esa sección;

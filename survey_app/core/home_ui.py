@@ -140,14 +140,14 @@ _SUBSECCIONES_OWNER = {
 }
 
 _SECCIONES_ROL = {
-    "administrador": _SECCIONES,
-    "campo":         _SECCIONES_CAMPO,
-    "propietario":   _SECCIONES_OWNER,
+    "administrator": _SECCIONES,
+    "field":         _SECCIONES_CAMPO,
+    "owner":   _SECCIONES_OWNER,
 }
 _SUBSECCIONES_ROL = {
-    "administrador": _SUBSECCIONES,
-    "campo":         _SUBSECCIONES_CAMPO,
-    "propietario":   _SUBSECCIONES_OWNER,
+    "administrator": _SUBSECCIONES,
+    "field":         _SUBSECCIONES_CAMPO,
+    "owner":   _SUBSECCIONES_OWNER,
 }
 
 
@@ -461,7 +461,7 @@ def render_topbar(grupo):
     with c1:
         # v330: el buscador YA busca. Para el CAMPO sigue sin mostrarse: su nav es
         # corta y todo lo suyo cuelga de "Mis proyectos", así que sería ruido.
-        if _rol() != "campo":
+        if _rol() != "field":
             # ⚠️ Limpiar la caja tras abrir un resultado hay que hacerlo ANTES de
             # instanciar el widget (regla v111): quien lo pide es el clic, que ocurre
             # más abajo en el MISMO run, así que deja la marca y la aplica el
@@ -497,7 +497,7 @@ def _banda_prestart():
     registros ya cacheados que viajan en el lote de v339.
     """
     a = st.session_state.get("auth") or {}
-    if str(a.get("rol", "")) not in ("administrador", "campo"):
+    if str(a.get("rol", "")) not in ("administrator", "field"):
         return                      # el propietario no ficha (v93)
     try:
         from core import timeclock, prestart
@@ -712,13 +712,13 @@ def _alertas(grupo) -> list:
     inventario (activos sin devolver, mantenimientos) es cosa del admin.
     """
     out = []
-    _es_campo = (_rol() == "campo")
+    _es_campo = (_rol() == "field")
     _yo = str(st.session_state.get("auth", {}).get("usuario", "")).strip().lower()
 
     # ── PROPIETARIO (v298): no tiene UN grupo, así que se agrega por grupo ──
     # Reusa `owner_digest()` (v107, cacheado 60 s), que ya recorre todos los grupos:
     # no se inventa un recorrido nuevo ni se multiplican las lecturas de Sheets.
-    if _rol() == "propietario":
+    if _rol() == "owner":
         try:
             from core import admin_digest
             for g in admin_digest.owner_digest():
@@ -800,7 +800,7 @@ def render_admin_content(key, grupo):
     # Va aquí y no en `app.py` para que el enganche sea de UNA línea y ningún
     # llamador cambie. Si hay término escrito, los resultados OCUPAN la pantalla:
     # se ha ido a buscar algo, no a mirar la sección que había debajo.
-    if _rol() != "campo" and _pantalla_busqueda(
+    if _rol() != "field" and _pantalla_busqueda(
             st.session_state.get("topbar_search", ""), grupo):
         return
 
@@ -1016,7 +1016,7 @@ def _mapa_proyectos(grupo):
     from core import location_ui
     # v195: "activos" = Planificado + En progreso. Antes filtraba solo "En progreso",
     # así que un proyecto recién creado (avance 0 → Planificado) nunca aparecía.
-    _ACTIVOS = ("Planificado", "En progreso")
+    _ACTIVOS = ("Planned", "In progress")
     try:
         proys = [p for p in P.list_projects(grupo)
                  if str(p.get("Status", "")) in _ACTIVOS]
@@ -1158,7 +1158,7 @@ def _proyectos_home(grupo):
         return
     from core import projects as P
     from core import alerts
-    _ACTIVOS = ("Planificado", "En progreso")
+    _ACTIVOS = ("Planned", "In progress")
     try:
         proys = [p for p in P.list_projects(grupo) if str(p.get("Status", "")) in _ACTIVOS]
     except Exception:
@@ -1235,7 +1235,7 @@ def _agenda_hoy(grupo):
                 f"added from the Board when it is needed.")
         return
 
-    staff = [u for u in auth.list_users(grupo) if str(u.get("Role", "")).lower() == "campo"]
+    staff = [u for u in auth.list_users(grupo) if str(u.get("Role", "")).lower() == "field"]
     if not staff:
         st.info(t("There is no field staff in this company."))
         return

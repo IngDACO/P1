@@ -33,6 +33,7 @@ import streamlit as st
 
 from core import clock, timeclock
 from core import columnas
+from core import valores
 from core.num import col_letter as _col_letter
 from core.num import num as _num
 
@@ -43,11 +44,11 @@ SHEET = "Catalogue"
 HEADERS = ["ID", "Group", "Type", "Name", "Description", "Unit", "Category",
            "UnitCost", "EstHours", "HourlyRate", "Active", "Note", "CreatedBy", "Created"]
 
-PRODUCTO, SERVICIO = "producto", "servicio"
+PRODUCTO, SERVICIO = "product", "service"
 TIPOS = (PRODUCTO, SERVICIO)
-UNIDADES = ("unidad", "juego", "m", "m²", "kg", "global")
-CAT_DEFAULT = ("Materiales", "Equipos", "Instalación", "Mantenimiento",
-               "Transporte", "Ingeniería", "Otros")
+UNIDADES = ("unit", "set", "m", "m²", "kg", "lump sum")
+CAT_DEFAULT = ("Materials", "Equipment", "Installation", "Maintenance",
+               "Transport", "Engineering", "Other")
 
 _COL = {h: i + 1 for i, h in enumerate(HEADERS)}
 
@@ -183,7 +184,7 @@ def _next_id() -> str:
         return "CAT-00001"
     mx = 0
     try:
-        for r in columnas.canonizar(w.get_all_records(numericise_ignore=["all"])):
+        for r in valores.canonizar(columnas.canonizar(w.get_all_records(numericise_ignore=["all"])), SHEET):
             i = str(r.get("ID", ""))
             if i.startswith("CAT-"):
                 try:
@@ -196,7 +197,7 @@ def _next_id() -> str:
 
 
 def crear(grupo, nombre, tipo=PRODUCTO, costo_unit="", horas_est="", tarifa_hora="",
-          unidad="unidad", categoria="", descripcion="", nota="", creado_por="") -> tuple:
+          unidad="unit", categoria="", descripcion="", nota="", creado_por="") -> tuple:
     w = _ws()
     if w is None:
         return False, t("Google Sheets is not configured.")
@@ -228,7 +229,7 @@ def _fila(w, cid):
     """(nº de fila, registro) leyendo FRESCO: decidir DÓNDE escribir con una caché es
     como se corrompen los datos (v323)."""
     try:
-        recs = columnas.canonizar(w.get_all_records(numericise_ignore=["all"]))
+        recs = valores.canonizar(columnas.canonizar(w.get_all_records(numericise_ignore=["all"])), SHEET)
     except Exception as e:
         logger.warning("catalogo._fila: %s", e)
         return None, None

@@ -129,7 +129,7 @@ def render_credenciales(usuario, grupo, editable=False, key_prefix="cr"):
         # el submit, así que ahí no se puede condicionar. El Tipo queda seleccionado
         # tras agregar (cómodo para cargar varias del mismo tipo).
         tipo = st.selectbox(t("Type"), C.CATALOGO, key=f"{key_prefix}_tipo")
-        _es_otro = (tipo == "Otro")
+        _es_otro = (tipo == "Other")
         _es_lic  = (tipo == "Driver License")
         tipo_otro = (st.text_input(t("Specify the type"), key=f"{key_prefix}_tipootro")
                      if _es_otro else "")
@@ -354,11 +354,11 @@ def render_user_bar():
     # valor de negocio (v442). Antes el rol se pintaba en crudo («Administrador») en la
     # barra lateral, o sea en TODAS las pantallas y para todos los roles.
     _rol = str(a.get("rol") or "")
-    _ico_rol = {"propietario": ":material/shield_person:",
-                "administrador": ":material/manage_accounts:",
-                "campo": ":material/engineering:"}.get(_rol, "")
+    _ico_rol = {"owner": ":material/shield_person:",
+                "administrator": ":material/manage_accounts:",
+                "field": ":material/engineering:"}.get(_rol, "")
     rol_lbl = f"{_ico_rol} {_etq(_rol)}".strip() if _rol else ""
-    grupo = a.get("grupo") or (t("all") if _rol == "propietario" else "—")
+    grupo = a.get("grupo") or (t("all") if _rol == "owner" else "—")
     st.markdown(f"**{a.get('nombre','')}**  \n{rol_lbl}  \n:material/business: {grupo}")
     if st.button(t(":material/logout: Sign out"), width="stretch", key="logout_btn"):
         try:
@@ -570,7 +570,7 @@ def _owner_usuarios():
     if users:
         _rows = []
         for u in users:
-            es_campo = str(u.get("Role", "")).lower() == "campo"
+            es_campo = str(u.get("Role", "")).lower() == "field"
             _cont = ("—" if not es_campo
                      else (t("yes") if (str(u.get("Email", "")).strip()
                                     and str(u.get("TelegramChatID", "")).strip())
@@ -581,7 +581,7 @@ def _owner_usuarios():
                           "Email": u.get("Email", "") or "—", "ContactName": _cont})
         st.dataframe(pd.DataFrame(_rows), hide_index=True, width="stretch", column_config=tabla.cfg())
         _faltan = [u["User"] for u in users
-                   if str(u.get("Role", "")).lower() == "campo"
+                   if str(u.get("Role", "")).lower() == "field"
                    and not (str(u.get("Email", "")).strip()
                             and str(u.get("TelegramChatID", "")).strip())]
         if _faltan:
@@ -600,7 +600,7 @@ def _owner_usuarios():
             pw = st.text_input(t("Password"), type="password")
             em = st.text_input(t(":material/mail: Email (required for field users)"))
             if st.form_submit_button(t("Create user")):
-                if rl == "campo" and not em.strip():
+                if rl == "field" and not em.strip():
                     st.error(t("Email is required for field users."))
                 else:
                     ok, msg = auth.add_user(u, pw, rl, nm, gr)
@@ -934,7 +934,7 @@ def _ficha_usuario(u, grupo, owner=False, sel_key="gp_fichasel"):
     from core import timeclock as T
     from core import expenses as E
     sel   = u["User"]
-    es_campo = u["Role"].lower() == "campo"
+    es_campo = u["Role"].lower() == "field"
     k = f"fu_{sel}"
 
     # ── Estado de un vistazo ──
@@ -1121,7 +1121,7 @@ def _grupo_usuarios(grupo):
     El aviso de vencimientos ya NO se dispara aquí (desde v187 corre al login, app.py)."""
     from core import credentials as C
     users = auth.list_users(grupo=grupo)
-    gente = [u for u in users if u["Role"].lower() == "campo"]
+    gente = [u for u in users if u["Role"].lower() == "field"]
 
     if not gente:
         st.info(t("You have no field users yet. Create the first one here."))

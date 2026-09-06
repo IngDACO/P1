@@ -102,12 +102,12 @@ def _alerts_section(pid, grupo, project_name="", allow_report=False):
 
 # Colores de estado para las píldoras/barras (bg suave, texto oscuro de la misma familia)
 _ESTADO_COLOR = {
-    "En progreso": ("#e6f1fb", "#185fa5", "#2e6da4"),
-    "Planificado": ("#f1f0ec", "#5f5e5a", "#888780"),
-    "Completado":  ("#eaf3de", "#3b6d11", "#639922"),
-    "En pausa":    ("#faeeda", "#854f0b", "#ba7517"),
-    "Cancelado":   ("#fcebeb", "#a32d2d", "#e24b4a"),
-    "Archivado":   ("#eef1f5", "#6b7280", "#9aa7b8"),
+    "In progress": ("#e6f1fb", "#185fa5", "#2e6da4"),
+    "Planned": ("#f1f0ec", "#5f5e5a", "#888780"),
+    "Completed":  ("#eaf3de", "#3b6d11", "#639922"),
+    "On hold":    ("#faeeda", "#854f0b", "#ba7517"),
+    "Cancelled":   ("#fcebeb", "#a32d2d", "#e24b4a"),
+    "Archived":   ("#eef1f5", "#6b7280", "#9aa7b8"),
 }
 
 
@@ -134,7 +134,7 @@ def _kpis(grupo=None) -> dict:
     horas   = P.project_hours_bulk(grupo)
     alarmas = alerts.open_counts_all() if alerts.is_configured() else {}
     ids     = {str(p.get("ID", "")) for p in proys}
-    activos = [p for p in proys if str(p.get("Status", "")) not in ("Completado", "Cancelado")]
+    activos = [p for p in proys if str(p.get("Status", "")) not in ("Completed", "Cancelled")]
     avances = [P._num(p.get("Progress")) for p in proys]
     return {
         "total":   len(proys),
@@ -675,12 +675,12 @@ def _archivos_section(pid: str):
         return
     a = st.session_state.get("auth", {})
     rol, usuario = a.get("rol", ""), a.get("usuario", "")
-    es_campo     = rol == "campo"
+    es_campo     = rol == "field"
     # Admin/propietario: ver_tipos = None -> SIN filtro (un tipo nuevo generado por
     # la app no vuelve a desaparecer de la vista, v134). El campo ve lo suyo.
     ver_tipos    = _CAMPO_VER if es_campo else None
     sube_tipos   = _CAMPO_SUBE if es_campo else _DOC_SUBIR
-    puede_borrar = rol in ("administrador", "propietario")
+    puede_borrar = rol in ("administrator", "owner")
 
     # ── Unir documentos + cálculos reabribles sin PDF (casados por DriveID) ──
     docs = [d for d in P.list_documents(pid)
@@ -1153,7 +1153,7 @@ def _avisar_asignados(usuarios, grupo=None, exclude_pid=None, certs_req=None,
             for p in P.list_projects(grupo):
                 if str(p.get("ID", "")) == str(exclude_pid or ""):
                     continue
-                if str(p.get("Status", "")) in ("Completado", "Cancelado"):
+                if str(p.get("Status", "")) in ("Completed", "Cancelled"):
                     continue
                 for u in [x.strip() for x in str(p.get("FieldAssigned", "")).split(";")
                           if x.strip()]:
@@ -1312,7 +1312,7 @@ def _field_users(grupo):
     """
     try:
         return [u["User"] for u in auth.list_users(grupo)
-                if str(u.get("Role", "")) == "campo"]
+                if str(u.get("Role", "")) == "field"]
     except Exception:
         return []
 
@@ -1342,9 +1342,9 @@ def _cartera_clickeable(proys, alarmas, delays, aheads, costos,
                 pass
         return "—"
 
-    _pill = {"En progreso": ("#e8eef6", "#1e4e79"), "Planificado": ("#f0efe8", "#5f5e5a"),
-             "Completado": ("#e8f5ee", "#1e6e4e"), "En pausa": ("#faeeda", "#8a5a0b"),
-             "Cancelado": ("#fbeaea", "#a12d2d"), "Archivado": ("#eceff3", "#5f5e5a")}
+    _pill = {"In progress": ("#e8eef6", "#1e4e79"), "Planned": ("#f0efe8", "#5f5e5a"),
+             "Completed": ("#e8f5ee", "#1e6e4e"), "On hold": ("#faeeda", "#8a5a0b"),
+             "Cancelled": ("#fbeaea", "#a12d2d"), "Archived": ("#eceff3", "#5f5e5a")}
 
     from core import theme
 
@@ -1700,7 +1700,7 @@ def _panel_proyectos(grupo: str):
         if _filt == "🟢 Adelanto":
             return bool(aheads.get(_pid))
         if _filt == "⏸ En pausa":
-            return str(p.get("Status", "")) == "En pausa"
+            return str(p.get("Status", "")) == "On hold"
         return True
     _proys_f = [p for p in proys if _pasa(p)]
 
@@ -2181,7 +2181,7 @@ def _detalle_proyecto(pid: str, grupo: str = None):
     # NameError seguros — el fallo de ámbito de v342.
     from core import theme as _Tc
     _rol_ok = str((st.session_state.get("auth") or {}).get("rol", "")).lower() in (
-        "administrador", "propietario")
+        "administrator", "owner")
     if _rol_ok:                         # solo gestión: el campo no factura
         try:
             from core import invoices as _INV
@@ -2559,7 +2559,7 @@ def _detalle_proyecto(pid: str, grupo: str = None):
         # y sus actividades, pero deja huerfanos documentos (con sus archivos en
         # Drive), gastos, calculos, pre-starts, alarmas y fichajes — por eso se
         # enseña el inventario antes y se exige teclear el nombre.
-        if st.session_state.get("auth", {}).get("rol") == "propietario":
+        if st.session_state.get("auth", {}).get("rol") == "owner":
             with st.expander(t(":material/delete_forever: Delete permanently (irreversible)")):
                 _aso = P.datos_asociados(pid)
                 _hay = {k: v for k, v in _aso.items() if v}
@@ -3257,8 +3257,8 @@ def _torta_html(pares, total) -> str:
         f'<div style="width:300px;max-width:100%;">{"".join(_leg)}</div></div>')
 
 
-_ORD_ICONO = {"pendiente": ":material/schedule:", "recibida": ":material/check_circle:",
-              "cancelada": ":material/cancel:"}
+_ORD_ICONO = {"pending": ":material/schedule:", "received": ":material/check_circle:",
+              "cancelled": ":material/cancel:"}
 
 
 def _ordenes_section(pid, grupo, editable=True, key_prefix="ord"):
