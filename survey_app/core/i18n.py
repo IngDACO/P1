@@ -143,6 +143,14 @@ VALORES = {
     # tipo de proyecto / localización interna
     "Instalación": "Installation", "Delivery": "Delivery", "Ripout": "Ripout",
     "Otro": "Other", "Oficina": "Office", "Almacén": "Warehouse", "Taller": "Workshop",
+    # ⚠️ v472 · lo añadio v470 y se quedo FUERA del mapa: el tipo existia y
+    # `etiqueta()` lo devolvia tal cual, asi que ni salia mal hoy ni saltaba
+    # nada — el hueco silencioso de v462. Mismo molde que sus cuatro hermanos.
+    "Ripout + Instalación": "Ripout + Installation",
+    # tipo de material de la biblioteca tecnica (v472). `manual` y `datasheet`
+    # no estan a proposito: el primero se escribe igual en los dos idiomas
+    # (seria un mapa espejo) y al segundo habria que inventarle una clave.
+    "foto": "photo", "diagrama": "diagram",
     # roles
     "propietario": "owner", "administrador": "administrator", "campo": "field",
     # ausencias

@@ -33,6 +33,10 @@ _SECCIONES = [
     ("inventario",    ":material/inventory_2: Inventory"),
     ("herramientas",  ":material/build: Tools"),
     ("contactos",     ":material/contacts: Contacts"),
+    # v472 · al FINAL a proposito: una seccion nueva no le reordena la nav
+    # a quien ya la tenia (lo que afirma `verif_v297`, y como entro
+    # «ausencias» en v430).
+    ("biblioteca",    ":material/menu_book: Library"),
 ]
 _LBL2KEY = {lbl: k for k, lbl in _SECCIONES}
 
@@ -108,6 +112,8 @@ _SECCIONES_CAMPO = [
     # un día o avisar de una baja no es «un proyecto» ni «una herramienta», y
     # enterrarla un nivel le costaría un toque a quien la usa desde el móvil.
     ("ausencias",    ":material/event_busy: My absences"),
+    # v472 · igual que arriba: al final, sin mover lo que ya usaba.
+    ("biblioteca",   ":material/menu_book: Library"),
 ]
 # Sus Herramientas son las 5 TÉCNICAS: el Pre-Start ya es sección propia, y
 # duplicarlo lo dejaría en dos sitios (el patrón de v140 que evitamos).
@@ -124,6 +130,7 @@ _SECCIONES_OWNER = [
     ("administracion", ":material/shield_person: Administration"),
     ("prestart",       ":material/health_and_safety: Pre-Start"),
     ("herramientas",   ":material/build: Tools"),
+    ("biblioteca",     ":material/menu_book: Library"),
 ]
 _SUBSECCIONES_OWNER = {
     # ⚠️ La clave de estado es `owner_sec`, LA MISMA del radio viejo, a propósito:
@@ -641,16 +648,44 @@ def buscar(q: str, grupo) -> list:
             r = _rank(tid, _trb.get("Name"), _trb.get("Number"))
             if r is None:
                 continue
-            _num = str(t.get("Number", "")).strip()
+            # ⚠️ v472 · Estas tres lecturas decían `t.get(...)`, y `t` es la FUNCIÓN de
+            # traducción del módulo: `AttributeError`, que el `except` de abajo se
+            # tragaba → **el buscador no devolvía un trabajo NUNCA**, sin un solo error
+            # en pantalla. Entró en v440, cuando se renombró la variable del bucle
+            # `t` → `_trb` para dejarle el nombre al motor de idiomas: se cambió la
+            # asignación y no todos los usos. Es el fallo que v446 y v447 documentan:
+            # **renombrar son DOS pasos**, y el segundo se comprueba preguntándole al
+            # AST por los `Name` que quedan, no con la vista.
+            _num = str(_trb.get("Number", "")).strip()
             _pie = " · ".join(x for x in [tid, f"nº {_num}" if _num else "",
-                                          "" if str(t.get("Active", "SI")).upper() == "SI"
+                                          "" if str(_trb.get("Active", "SI")).upper() == "SI"
                                           else "inactivo"] if x)
             out.append({"tipo": "trabajo", "icono": ":material/construction:", "orden": r,
-                        "titulo": str(t.get("Name", "")) or tid, "pie": _pie, "id": tid})
+                        "titulo": str(_trb.get("Name", "")) or tid, "pie": _pie, "id": tid})
     except Exception as e:
         logger.warning("buscar: trabajos falló: %s", e)
 
-    _peso = {"proyecto": 0, "persona": 1, "trabajo": 2}
+    try:
+        from core import library as LIB
+        # v472 · **0 llamadas nuevas**: la biblioteca es GLOBAL, o sea que vive en el
+        # libro MAESTRO, cuyo lote ya viene caliente de la propia sesión (`Login` se
+        # lee antes que nada). Añadirla solo suma dos rangos a ese `batchGet`.
+        for _it in LIB.list_items():
+            _lid = str(_it.get("ID", ""))
+            r = _rank(_lid, _it.get("Title"), _it.get("Brand"), _it.get("Model"),
+                      _it.get("Section"), _it.get("Notes"))
+            if r is None:
+                continue
+            _pie = " · ".join(x for x in [str(_it.get("Brand", "")).strip(),
+                                          str(_it.get("Model", "")).strip(),
+                                          str(_it.get("Section", "")).strip()] if x)
+            out.append({"tipo": "biblioteca", "icono": ":material/menu_book:", "orden": r,
+                        "titulo": str(_it.get("Title", "")) or _lid, "pie": _pie,
+                        "id": _lid})
+    except Exception as e:
+        logger.warning("buscar: biblioteca falló: %s", e)
+
+    _peso = {"proyecto": 0, "persona": 1, "trabajo": 2, "biblioteca": 3}
     out.sort(key=lambda x: (x["orden"], _peso.get(x["tipo"], 9), _norm_busq(x["titulo"])))
     return out
 
@@ -664,6 +699,10 @@ def _abrir_resultado(res: dict):
     elif res["tipo"] == "persona":
         st.session_state["gp_fichasel"] = f"{res['nombre']} ({res['id']})"
         navegar("planificacion", "👷 Usuarios")
+    elif res["tipo"] == "biblioteca":
+        # v472 · la biblioteca no tiene sub-pestañas: se abre la ficha directamente.
+        st.session_state["_lib_open"] = res["id"]
+        navegar("biblioteca")
     else:
         navegar("planificacion", "🎛 Panel")
 
@@ -685,11 +724,12 @@ def _pantalla_busqueda(q: str, grupo) -> bool:
         st.rerun()
 
     if not res:
-        st.info(t(":material/search_off: No matches in projects, people or jobs. The search covers name, ID, client, location, login and email."))
+        st.info(t(":material/search_off: No matches in projects, people, jobs or the library. The search covers name, ID, client, location, login, email, brand and model."))
         return True
 
-    _ETQ = {"proyecto": "Projects", "persona": "People", "trabajo": "Jobs"}
-    for _tipo in ("proyecto", "persona", "trabajo"):
+    _ETQ = {"proyecto": "Projects", "persona": "People", "trabajo": "Jobs",
+            "biblioteca": "Library"}
+    for _tipo in ("proyecto", "persona", "trabajo", "biblioteca"):
         _grupo_res = [r for r in res if r["tipo"] == _tipo]
         if not _grupo_res:
             continue
@@ -850,6 +890,11 @@ def render_admin_content(key, grupo):
     elif key == "contactos":
         from core.clientes_ui import render_contactos
         render_contactos(grupo)
+    elif key == "biblioteca":
+        # v472 · GLOBAL y para los TRES roles: todos consultan, solo el
+        # propietario sube (la pantalla resuelve el rol por dentro).
+        from core.library_ui import render_biblioteca
+        render_biblioteca(grupo)
     else:
         # ⚠️ El fallback NO puede ser `render_home`: es del admin (KPIs del grupo,
         # mapa, agenda) y el campo no tiene esa sección. Cae a la PRIMERA de su rol.

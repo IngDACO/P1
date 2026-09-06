@@ -100,7 +100,12 @@ def _http_client_cls():
 # Hojas que viven SIEMPRE en el libro maestro: son el registro de la app, no datos de
 # un cliente. `Login` además se lee ANTES de saber a qué grupo perteneces.
 SHEETS_GLOBALES = {"login", "grupos", "rieles", "manuales",
-                   "groups", "rails", "manuals"}
+                   "groups", "rails", "manuals",
+                   # ⚠️ v472: la biblioteca tecnica es GLOBAL (decision del
+                   # usuario, como los manuales). Sin estas dos, cada cliente
+                   # acabaria con su propia biblioteca VACIA en su libro — lo
+                   # contrario de «global», y sin dar ningun error.
+                   "library", "librarymodels"}
 
 # ── Pestañas en inglés, con respaldo al nombre viejo (v465) ───────────────────
 # ⚠️ Esta capa NO es cosmética y no es opcional: `get_sheet` **crea** la hoja si no

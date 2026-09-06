@@ -120,7 +120,12 @@ def _next_id() -> str:
         except Exception:
             pass
     try:
-        return hojas.siguiente_id_libre(SHEET, "COR", n + 1)
+        # ⚠️ La firma es (prefijo, maximo, propia=…): asi estaba con los argumentos
+        # CAMBIADOS —«TimeCorrections» como prefijo y la cadena "COR" donde va un
+        # entero—, y lanzaba `ValueError` que este mismo `except` se tragaba. Efecto:
+        # el salto de IDs de v427 **no se aplicaba nunca aqui** y siempre caia al
+        # `max+1`, que es justo lo que v427 vino a arreglar. En silencio.
+        return hojas.siguiente_id_libre("COR-", n, propia=SHEET)
     except Exception:
         return f"COR-{n + 1:04d}"
 

@@ -56,6 +56,9 @@ HOJAS_LECTURA = (
     # ⚠️ v461: si NO entra aquí, `registros(SHEET)` sin cabeceras devuelve None y
     # `correcciones` leería VACÍO PARA SIEMPRE, sin un solo error (regla v353).
     "TimeCorrections",
+    # ⚠️ v472: misma regla — `library` lee con `hojas.registros(SHEET, HEADERS)`,
+    # asi que fuera del lote costaria una llamada suelta por sesion (v339).
+    "Library", "LibraryModels",
 )
 
 
