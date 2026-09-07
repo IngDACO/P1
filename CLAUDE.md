@@ -10067,7 +10067,49 @@ Las **14 secciones** del elevador de la biblioteca se quedan como estan (decisio
 usuario). Renombrarlas era gratis con la biblioteca vacia; a partir de que haya
 material archivado arrastra migracion de la columna `Section`.
 
-## Versiones desplegadas (v475 = actual)
+## ⚠️ «Invalid role.»: no se podia crear un usuario de campo (v476)
+
+Reportado por el usuario: al dar de alta a alguien de campo desde el panel del admin,
+la app respondia **«Invalid role.»** y no creaba nada.
+
+**v469** paso los roles a ingles —la constante `auth.ROLES`, el dato de la hoja y la
+canonizacion al leer— y **se dejo dos literales en la interfaz**:
+
+| Dónde | Qué pasaba |
+|---|---|
+| `auth_ui:1109` | el admin creando un usuario de campo pasaba `"campo"` → `add_user` valida contra `ROLES` y devolvia «Invalid role.». **Nadie de campo se podia dar de alta** |
+| `auth_ui:275` | el **BOOTSTRAP** (primer propietario con la hoja `Login` vacia) pasaba `"propietario"`. Latente, pero PEOR: una instalacion desde CERO no habria podido crear su primer usuario — la app no arranca |
+
+Es, otra vez, **un valor migrado en un sitio y olvidado en su gemelo**: la misma
+familia que `auth._COL` (v433), la proyeccion de `list_users` (v434) y las tres
+caducidades que destapo v475.
+
+### Se acoto la CLASE antes de tocar, no el caso
+Barrido de literales que canonizan a otra cosa: **101 candidatos → 8 reales → 2 rotos**.
+Los otros 93 son claves internas de dicts (`.get("usuario")`, `.get("proyecto")`) y los
+6 restantes son etiquetas internas cuyo productor y consumidor coinciden. ⚠️ Y eso
+ultimo se COMPROBO, no se supuso: `Alerts.Origin` y `AssetMovements.To` **no estan en
+la lista blanca** de `valores.COLUMNAS`, asi que nunca se canonizan al leer y los dos
+lados siguen de acuerdo; `Login.Role` **si** esta, que es justo lo que hace que una
+fila vieja de la hoja se siga leyendo bien.
+
+### ⚠️ Por que no lo vio ningun guardian
+`verif_v469` barre **`ast.Compare`** —las ramas muertas— y estos dos literales entran
+como **ARGUMENTO**. Un guardian ve solo la forma que se le enseño (v309/v349/v441), y
+esta forma no estaba cubierta. Chequeo nuevo y general en ese mismo fichero: ningun
+literal pasado a `add_user`/`set_role` puede quedar fuera de `auth.ROLES` — **derivado
+de la constante**, no de una lista a mano, y con la sonda validada contra un caso
+conocido-malo antes de creerse su cero.
+
+### ⚠️ Y el shadowing de v440, cometido DENTRO del guardian nuevo
+Escribi `for _f in sorted(os.listdir("core"))` y **`_f` es la LISTA DE FALLOS** de ese
+guardian: al terminar valia `"app.py"`, asi que el veredicto contaba
+`len("app.py") = 6` fallos que no existian. Lo delato que **todas las comprobaciones
+imprimieran «ok» y el contador dijera 6** — un descuadre entre lo que se ve y lo que se
+cuenta. Es exactamente el fallo que este documento lleva versiones describiendo, hecho
+al escribir la red que lo vigila.
+
+## Versiones desplegadas (v476 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -10075,6 +10117,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v476 | ⚠️ **«Invalid role.»: no se podia crear un usuario de campo** (lo reporto el usuario). **v469** migro los roles a ingles y se dejo DOS literales en la interfaz: el alta de campo (`"campo"`) y —peor, aunque latente— el **BOOTSTRAP** del primer propietario (`"propietario"`), o sea que una instalacion desde cero no habria arrancado. Se acoto la CLASE antes de tocar (101 candidatos → 8 reales → 2 rotos; los demas son claves internas o etiquetas que **no se canonizan al leer**, comprobado contra `valores.COLUMNAS`). ⚠️ No lo vio ningun guardian porque `verif_v469` barre **comparaciones** y esto entra como **argumento**: chequeo nuevo derivado de `auth.ROLES` y validado contra un caso conocido-malo. ⚠️ Y escribiendolo cometi el **shadowing de v440 dentro del propio guardian** (`_f`, que es su lista de fallos, como variable de bucle → `len("app.py")` = 6 fallos inexistentes); lo delato que todo saliera «ok» y el contador dijera 6. Suite **116 verde** |
 | v475 | **«No dejes nada pendiente»**: los **7 guardianes SIN DATOS** desde que v456 vació la demo pasan a construir su propio caso (decisión del usuario, en vez de volver a sembrar ruido) → suite **116 verde · 0 rojo · 0 roto y sin bloque SIN DATOS**. ⚠️ Descongelarlos destapó **tres caducidades reales** que tapaban: **43 guardianes simulaban una sesión con un ROL que ya no existe** desde v469 —medido: `es_propietario()` es **False** con el rol en español, así que los caminos de propietario no se ejercitaban—, uno listaba pre-starts por columnas que **v468 renombró**, y otro exigía «Engineer in charge» cuando **v459** lo pasó a «Head installer/s». *Un guardián que no corre no envejece a la vista: envejece a oscuras.* Cada caso construido se valida contra su contrario (un `return False` fijo, una agregación por NOMBRE, leer por GRUPO en vez de por LIBRO…) y el fixture del survey **se auto-comprueba**. ⚠️ Y tres sondas MÍAS fallaron por su forma: mirar solo dicts literales, filtrar `ast.unparse` con comillas dobles (las escribe simples) y usar las claves de SALIDA del roster en vez de las cortas |
 | v474 | Documentación de v473 en CLAUDE.md: el icono LITERAL de la cabecera (`T.section` emite HTML), v472 ejercitada contra la hoja real de punta a punta —incluido el borrado, que deja la hoja en 0 filas y Drive vacío— y las dos trampas de método nuevas (el árbol de accesibilidad muestra la etiqueta CRUDA; un checkbox de Streamlit se marca clicando el TEXTO de la etiqueta, no la caja) |
 | v473 | ⚠️ **El icono salia LITERAL** en la cabecera de la biblioteca: `T.section` emite HTML y ahi `:material/…:` no se interpreta (v443) — y los dos unicos sitios del repo que se lo pasaban a una pieza HTML del kit eran mios. Lo destapo **mirar la pantalla**, no un guardian (como v375/v424); chequeo nuevo y general. + **v472 ejercitada contra la hoja REAL**: las hojas se crean en el maestro, son GLOBALES ⚠️ *probado con una sesion de inquilino* (con la del propietario no habria probado nada), IDs secuenciales, Drive subiendo y descargando, y **el borrado deja la hoja en 0 filas y Drive vacio** — la fila Y el archivo, que es lo que protege v456. Produccion devuelta a su sitio. ⚠️ Dos trampas de metodo nuevas: **el arbol de accesibilidad muestra la etiqueta CRUDA** (`read_page` daba `:material/…:` y placeholders de campos que estaban rellenos — el reverso de la nº5) y **un checkbox de Streamlit se marca clicando el TEXTO de la etiqueta, no la caja** (el clic aterrizaba exacto y no marcaba; validado contra otro checkbox de la app, asi que era mio). Y una falsa alarma descartada a tiempo: el `Brand` vacio era `form_input` sobre un combobox react-aria, no la app |

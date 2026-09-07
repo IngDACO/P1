@@ -272,7 +272,10 @@ def render_login() -> bool:
                 elif p1 != p2:
                     st.error(t("The passwords do not match."))
                 else:
-                    ok, msg = auth.add_user(u, p1, "propietario", nm)
+                    # ⚠️ El rol va en su forma CANONICA (v469). Con "propietario"
+                    # `add_user` devolvia «Invalid role.» y el bootstrap no podia
+                    # crear el primer usuario: la app no arrancaba desde cero.
+                    ok, msg = auth.add_user(u, p1, "owner", nm)
                     if ok:
                         flash.exito(msg + "  Now sign in.")
                         st.rerun()
@@ -1106,7 +1109,9 @@ def _crear_usuario_form(grupo):
             if not em.strip():
                 st.error(t("Email is required for field users."))
             else:
-                ok, msg = auth.add_user(u, pw, "campo", nm, grupo)
+                # ⚠️ Canonico (v469): con "campo" salia «Invalid role.» y no se
+                # podia dar de alta a NADIE de campo — el fallo que se reporto.
+                ok, msg = auth.add_user(u, pw, "field", nm, grupo)
                 if ok and em.strip():
                     auth.set_contact(u, email=em)
                 (flash.exito if ok else st.error)(msg)
