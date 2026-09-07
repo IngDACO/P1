@@ -106,12 +106,14 @@ _SECCIONES_CAMPO = [
     ("fichaje",      ":material/schedule: Timeclock"),
     ("prestart",     ":material/health_and_safety: Pre-Start"),
     ("herramientas", ":material/build: Tools"),
-    ("credenciales", ":material/badge: My credentials"),
-    ("colillas",     ":material/payments: My payslips"),
-    # v430: la autogestión de ausencias. Va SUELTA, como el Pre-Start (v154): pedir
-    # un día o avisar de una baja no es «un proyecto» ni «una herramienta», y
-    # enterrarla un nivel le costaría un toque a quien la usa desde el móvil.
-    ("ausencias",    ":material/event_busy: My absences"),
+    # v478 · Las tres pantallas «mías» bajo UN nivel (petición del usuario): la nav
+    # del campo pasa de 8 a 6, que en un móvil es lo que separa ver el menú entero de
+    # tener que buscarlo. ⚠️ v154/v430 las habían dejado sueltas a propósito —«costaría
+    # un toque cada mañana a quien lo usa en el móvil»—, y eso sigue siendo cierto SOLO
+    # para la acción urgente de ausencias (avisar de una baja), que por eso gana un
+    # atajo desde Fichaje. Credenciales y colillas son consulta ocasional: ahí el toque
+    # de más no le cuesta nada a nadie.
+    ("autogestion",  ":material/account_circle: Self-service"),
     # v472 · igual que arriba: al final, sin mover lo que ya usaba.
     ("biblioteca",   ":material/menu_book: Library"),
 ]
@@ -121,6 +123,14 @@ _SUBSECCIONES_CAMPO = {
     "herramientas": (_SUBSECCIONES["herramientas"][0],
                      [(_i, _d) for _i, _d in _SUBSECCIONES["herramientas"][1]
                       if _i != "🦺 Pre-Start"]),
+    # ⚠️ El ID conserva el emoji porque ES el identificador con el que casa el
+    # despachador y al que apunta el atajo desde Fichaje (v232); el display es lo
+    # único que se traduce. Ausencias va PRIMERA: es la única de las tres con una
+    # acción, y las otras dos son consulta.
+    "autogestion": ("campo_auto_sub", [
+        ("🌴 Ausencias", ":material/event_busy: My absences"),
+        ("🎫 Credenciales", ":material/badge: My credentials"),
+        ("💰 Colillas", ":material/payments: My payslips")]),
 }
 
 # PROPIETARIO (v298): su nav vieja era Administración · Pre-Start · las 5 técnicas
@@ -852,7 +862,7 @@ def render_admin_content(key, grupo):
         render_owner_seccion(_sub_header("administracion"))
         return
 
-    if key in ("misproyectos", "prestart", "credenciales", "colillas", "ausencias"):
+    if key in ("misproyectos", "prestart", "autogestion"):
         _usr = st.session_state.get("auth", {}).get("usuario", "")
         if key == "misproyectos":
             from core.projects_ui import render_field_projects
@@ -860,15 +870,21 @@ def render_admin_content(key, grupo):
         elif key == "prestart":
             from core.prestart_ui import render_prestart_tab
             render_prestart_tab()
-        elif key == "credenciales":
-            from core.auth_ui import render_my_credentials
-            render_my_credentials()
-        elif key == "ausencias":
-            from core import ausencias_ui
-            ausencias_ui.render_mis_ausencias()
         else:
-            from core.payroll_ui import render_mis_colillas
-            render_mis_colillas(_usr, grupo)
+            # v478 · las tres «mías», bajo un solo nivel. ⚠️ Se compara contra el ID
+            # EXACTO (con su emoji), que es lo que guarda el estado y a lo que apunta
+            # el atajo de Fichaje — comparar contra el display navega a ninguna parte
+            # y no da ningún error (el fallo real de v303).
+            _sub = _sub_header("autogestion")
+            if _sub == "🎫 Credenciales":
+                from core.auth_ui import render_my_credentials
+                render_my_credentials()
+            elif _sub == "💰 Colillas":
+                from core.payroll_ui import render_mis_colillas
+                render_mis_colillas(_usr, grupo)
+            else:
+                from core import ausencias_ui
+                ausencias_ui.render_mis_ausencias()
         return
 
     if key == "home":

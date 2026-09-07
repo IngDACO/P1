@@ -121,11 +121,18 @@ def render_credenciales(usuario, grupo, editable=False, key_prefix="cr"):
         k2.metric(t(":material/check_circle: Valid"), sum(1 for s in _sts if s == "vigente"))
         k3.metric(t(":material/schedule: Expiring"), sum(1 for s in _sts if s == "por_vencer"))
         k4.metric(t(":material/cancel: Expired"), sum(1 for s in _sts if s == "vencido"))
+        # ⚠️ v478 · ORDEN pensado para el móvil: lo que se mira primero, primero
+        # (Tipo · Estado · Vence), y lo de contexto detrás. No se oculta ninguna: es
+        # priorizar, no encoger — a 375 px encoger recorta el texto SIN avisar (v408).
         st.dataframe(pd.DataFrame([{
-            "Tipo": r.get("Type"), "Number": r.get("Number"), "Clase": r.get("Class"),
-            "Issued": r.get("IssueDate") or "—", "Vence": r.get("ExpiryDate") or "—",
-            "Estado": C.status_label(r.get("ExpiryDate")),
-        } for r in creds]), hide_index=True, width="stretch", column_config=tabla.cfg())
+            "Tipo": r.get("Type"), "Estado": C.status_label(r.get("ExpiryDate")),
+            "Vence": r.get("ExpiryDate") or "—", "Number": r.get("Number"),
+            "Clase": r.get("Class"), "Issued": r.get("IssueDate") or "—",
+        } for r in creds]), hide_index=True, width="stretch",
+            # ⚠️ `Tipo` ANCLADA: es la identidad, y sin anclar se escapa por la
+            # izquierda justo cuando alguien se desplaza a mirar la fecha.
+            column_config=tabla.cfg(extra={"Tipo": st.column_config.TextColumn(
+                t("Type"), pinned=True)}))
         # Documentos adjuntos agrupados (antes: botones sueltos apilados bajo la tabla)
         _docs = [r for r in creds if str(r.get("DriveID", "")).strip()]
         if _docs:
@@ -215,6 +222,21 @@ def render_my_credentials():
     a = st.session_state.get("auth", {})
     st.markdown(t("### :material/badge: My credentials"))
     st.caption(t("Your tickets and credentials as recorded by your administrator. Show them on site if you are asked for them."))
+    # ⚠️ v478 · Quien ve «vence en 8 días» no puede hacer NADA desde aquí —las carga el
+    # administrador— y la pantalla no decía si alguien más lo sabía. Sí lo sabe:
+    # `notify_expiring` avisa al admin Y al propio dueño (v104/v187). Decirlo evita que
+    # esa persona tenga que ir a preguntar. Solo si hay algo que vence: con todo en
+    # regla sería ruido en la pantalla de quien trabaja desde el móvil.
+    try:
+        from core import credentials as _C
+        _pdte = [c for c in _C.list_for(a.get("usuario", ""))
+                 if _C.status(c.get("ExpiryDate", "")) in ("por_vencer", "vencido")]
+        if _pdte:
+            st.info(t("{n} of them need renewing. Your administrator is warned "
+                      "automatically (and so are you), so you do not have to chase it: "
+                      "bring the new one and they will update it here.", n=len(_pdte)))
+    except Exception:
+        pass          # es DISPLAY opcional: si no se puede mirar, la pantalla sigue
     render_credenciales(a.get("usuario", ""), a.get("grupo", ""), editable=False, key_prefix="mycr")
 
 

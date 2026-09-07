@@ -10164,7 +10164,81 @@ comparaba dos recuentos que hoy son **los dos CERO**, y comparar 0 con 0 no dist
 una lectura buena de una rota. El caso construido trae datos que contar y **exige que
 los haya** antes de comparar.
 
-## Versiones desplegadas (v477 = actual)
+## La AUTOGESTION del campo, y el movil (v478)
+
+Peticion del usuario: *«vamos a juntar my credentials, my payslips y my absences bajo
+un nivel de autogestion»*, con tres criterios suyos — **los avisos repetidos son
+deliberados** («ayudan a que no se pasen por alto»), **haz los ajustes que requieras**,
+y **la cuenta de campo se piensa para el MOVIL: facil, pero igual de completa**.
+
+La nav del campo pasa de **8 a 6**: *Mis proyectos · Fichaje · Pre-Start · Herramientas
+· **Self-service** · Library*. Dentro, las tres, con **ausencias PRIMERA**: es la unica
+con una accion; las otras dos son consulta.
+
+### ⚠️ Esto REVIERTE una decision de v154/v430, y a sabiendas
+Aquellas dejaron esas pantallas sueltas a proposito: *«enterrarla un nivel le costaria
+un toque cada mañana justo a quien lo usa en el movil»*. Medido en el codigo antes de
+tocar, esa razon **no aplica igual a las tres**: en credenciales el campo **solo mira**
+(`editable=False`, las carga el admin) y en colillas mira y descarga; la unica donde
+ACTUA es ausencias — y ahi la accion urgente (avisar de una baja, que v430 registra al
+instante justo por eso) **recupera su toque con un atajo desde Fichaje**, que es la
+pantalla que esa persona abre esa misma mañana.
+⚠️ El atajo solo sale **si NO ha fichado**: quien ya ficho no va a avisar de una baja, y
+seria ruido en la pantalla mas usada. Y no es una duplicacion accidental: es el criterio
+del usuario —los avisos en varios sitios— aplicado a su accion mas urgente.
+
+### ⚠️ Y una CORRECCION mia, sobre una idea que propuse yo
+Propuse arreglar un «callejon sin salida» en credenciales: el campo ve que le vence una
+y no puede hacer nada. **La premisa era incompleta**: `credentials.notify_expiring` ya
+avisa por email/Telegram **al admin Y al propio dueño**, en cada login de administrador
+y sin repetir dentro de ~25 dias (v104/v187). El aviso sale solo.
+Lo que faltaba era de INFORMACION, no de mecanismo —en su pantalla no habia ni una
+palabra de eso— asi que es **una linea, y solo si tiene algo por vencer**. Construir un
+canal nuevo sobre una premisa equivocada habria sido peor que no tocar nada.
+⚠️ Tres cosas de ese parche estaban MAL y se cazaron mirando las firmas ANTES de
+aplicarlo (regla v135): `list_for` toma UN argumento, la columna es `ExpiryDate`, y
+**`auth_ui` no tiene `logger` de modulo** — habria sido el NameError latente de
+v370/v423, en una pantalla del campo.
+
+### El movil: lo que SI se pudo medir sin sesion
+Barrido de las 7 pantallas del campo buscando la clase de fallo que ya mordio dos veces
+aqui (el lienzo de firma de v393, el mapa de v307): **0 anchos fijos** que se salgan de
+375 px. Pero aparecio otro, medible: **la tabla de credenciales tiene 6 columnas**, y a
+375 px eso deja ~60 px por columna con glide **recortando SIN elipsis** (v408) — o sea
+que el numero que hay que enseñar en obra se ve a medias y nadie avisa.
+Cura, la de v408/v398: **priorizar, no encoger**. Orden *Tipo · Estado · Vence · Number
+· Clase · Fecha de emision*, **sin ocultar ninguna**, y `Tipo` **anclada**: es la
+identidad, y sin anclar se escapa por la izquierda justo cuando alguien se desplaza a
+mirar la fecha.
+⚠️ **Lo dinamico queda PENDIENTE y dicho**: medir el recorrido diario a 375 px exige
+entrar como usuario de campo, y eso pide una contraseña. Lo estatico esta hecho; la
+friccion real no se supone.
+
+### ⚠️ CUATRO guardianes caducaron, y uno defendia la decision contraria
+Todos actualizados con su razon escrita, **ninguno relajado**:
+- **v297 · v298** exigian que credenciales y colillas fueran SECCIONES. Pasan a afirmar
+  lo que de verdad protegian: que el campo **siga LLEGANDO** a todo, sea seccion o
+  sub-seccion — y que lo que sigue siendo seccion **no se reordene**.
+- **v303** validaba los destinos de `navegar()` contra la nav del **ADMIN**, y desde
+  v297 los destinos dependen del ROL: el atajo nuevo apunta a una seccion del campo.
+  Pasa a la union de los tres. ⚠️ Eso ENSANCHA el universo a proposito, y queda escrito:
+  lo que ese chequeo caza es el destino que no existe para NADIE.
+- **v430** es el interesante: **defendia la decision contraria a la que el usuario acaba
+  de tomar** («ausencias va suelta»). No se relajo — se reescribio sobre lo que protegia
+  (que el campo llegue a sus ausencias) **y se le añadio una comprobacion que antes no
+  existia**: que el atajo desde Fichaje exista. Asi la razon original de v430 la protege
+  el guardian, no mi palabra: si alguien quita ese atajo, salta.
+
+### Verificacion
+`verif_v478.py`, **20 comprobaciones**: la nav en 6 con nada perdido y ⚠️ **ninguna de
+las tres suelta ademas** (estar en dos sitios es el patron de v140 que esto evita); el
+despachador comparando el **ID exacto** y no el display (v303); el atajo apuntando a un
+destino que EXISTE y colgando de «no fichado»; el aviso de credenciales **EJECUTADO** en
+sus cuatro casos (importar no ejecuta, v378); la tabla priorizada y anclada; y 0 anchos
+fijos, con la sonda **validada contra un `width=600`** antes de creerse su cero.
+Suite entera: **117 verde · 0 rojo · 0 roto**, sin bloque SIN DATOS.
+
+## Versiones desplegadas (v478 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -10172,6 +10246,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v478 | **La autogestión del campo** (petición del usuario): *My credentials · My payslips · My absences* pasan a sub-pestañas de **Self-service** y su nav baja de **8 a 6** — importa porque esa cuenta se usa en el MÓVIL. ⚠️ Revierte a sabiendas la decisión de v154/v430 (*«enterrarla un nivel cuesta un toque cada mañana»*): medido, eso solo aplica a **ausencias**, la única donde el campo ACTÚA, y su acción urgente —avisar de una baja— **recupera el toque con un atajo desde Fichaje**, visible solo si no ha fichado. ⚠️ **Corrección mía**: propuse arreglar un «callejón sin salida» en credenciales y la premisa era incompleta — `notify_expiring` ya avisa al admin Y al dueño (v104/v187), así que el arreglo es **una línea**, no un canal nuevo; y tres errores del parche se cazaron mirando las firmas antes de aplicarlo (v135), incluido un `logger` inexistente. + **móvil**: 0 anchos fijos hostiles en las 7 pantallas, y la tabla de credenciales reordenada con el criterio de v408 (**priorizar, no encoger**) con `Tipo` anclada. ⚠️ Cuatro guardianes caducaron y **uno defendía la decisión contraria** (v430, «ausencias va suelta»): se reescribió sobre lo que protegía **y gana la comprobación de que el atajo exista**. 20 comprobaciones · suite **117 verde** |
 | v477 | **Vincular Telegram fallaba sin decir por qué** (lo reportó el usuario): un solo mensaje para CUATRO causas. ⚠️ Una de ellas **no dejaba ni traza** — con un *webhook* activo Telegram responde **409**, `requests` no lanza y el código se quedaba con la lista vacía, así que vincular no funcionaría NUNCA. ⚠️ Y la causa más probable no es del código: **el `/start <código>` solo se envía si el chat es NUEVO**, así que quien ya había hablado con el bot no manda nada al abrir el enlace — la salida que siempre funciona (escribir el código como mensaje normal) ahora sale en pantalla de entrada. `telegram_diagnostico` distingue las cinco situaciones y `find` delega en ella (v323); las cinco ramas **ejercitadas** interceptando `getUpdates`. ⚠️ El token vive solo en los secrets del Cloud (v368), así que el arreglo es que **la app lo diga**, no adivinarlo. + la suite cazó un rojo que **solo pudo salir por la migración de roles de v475**: `verif_v381` anclado a un proyecto que ya no existe — y su comparación vieja eran **dos ceros** |
 | v476 | ⚠️ **«Invalid role.»: no se podia crear un usuario de campo** (lo reporto el usuario). **v469** migro los roles a ingles y se dejo DOS literales en la interfaz: el alta de campo (`"campo"`) y —peor, aunque latente— el **BOOTSTRAP** del primer propietario (`"propietario"`), o sea que una instalacion desde cero no habria arrancado. Se acoto la CLASE antes de tocar (101 candidatos → 8 reales → 2 rotos; los demas son claves internas o etiquetas que **no se canonizan al leer**, comprobado contra `valores.COLUMNAS`). ⚠️ No lo vio ningun guardian porque `verif_v469` barre **comparaciones** y esto entra como **argumento**: chequeo nuevo derivado de `auth.ROLES` y validado contra un caso conocido-malo. ⚠️ Y escribiendolo cometi el **shadowing de v440 dentro del propio guardian** (`_f`, que es su lista de fallos, como variable de bucle → `len("app.py")` = 6 fallos inexistentes); lo delato que todo saliera «ok» y el contador dijera 6. Suite **116 verde** |
 | v475 | **«No dejes nada pendiente»**: los **7 guardianes SIN DATOS** desde que v456 vació la demo pasan a construir su propio caso (decisión del usuario, en vez de volver a sembrar ruido) → suite **116 verde · 0 rojo · 0 roto y sin bloque SIN DATOS**. ⚠️ Descongelarlos destapó **tres caducidades reales** que tapaban: **43 guardianes simulaban una sesión con un ROL que ya no existe** desde v469 —medido: `es_propietario()` es **False** con el rol en español, así que los caminos de propietario no se ejercitaban—, uno listaba pre-starts por columnas que **v468 renombró**, y otro exigía «Engineer in charge» cuando **v459** lo pasó a «Head installer/s». *Un guardián que no corre no envejece a la vista: envejece a oscuras.* Cada caso construido se valida contra su contrario (un `return False` fijo, una agregación por NOMBRE, leer por GRUPO en vez de por LIBRO…) y el fixture del survey **se auto-comprueba**. ⚠️ Y tres sondas MÍAS fallaron por su forma: mirar solo dicts literales, filtrar `ast.unparse` con comillas dobles (las escribe simples) y usar las claves de SALIDA del roster en vez de las cortas |

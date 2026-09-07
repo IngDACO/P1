@@ -689,6 +689,20 @@ def render_timeclock_tab():
         f'<span style="color:#6b7280;font-size:12px;"> · {_det}</span></div>',
         unsafe_allow_html=True)
 
+    # ── Atajo: «hoy no puedo ir» (v478) ──────────────────────────────────────
+    # ⚠️ v478 metio las tres pantallas «mias» del campo bajo un nivel, y avisar de una
+    # baja es la UNICA accion urgente de las tres: se usa la mañana que alguien se
+    # levanta enfermo, en el movil. v430 la registra al instante justo por eso, asi que
+    # el toque que perdio en el menu se devuelve AQUI, que es la pantalla que esa
+    # persona abre esa misma mañana.
+    # ⚠️ Solo si NO esta fichado: quien ya ficho no va a avisar de una baja, y el
+    # boton solo seria ruido en la pantalla que mas se usa.
+    if rol == "field" and not gen and not prj:
+        if st.button(t(":material/sick: I cannot make it today — report sick leave"),
+                     key="tc_baja", width="stretch"):
+            from core.home_ui import navegar          # perezoso: evita el ciclo
+            navegar("autogestion", "🌴 Ausencias")
+
     # Semana en curso (v308): lo que de verdad quiere saber quien ficha. Sale de los
     # mismos registros cacheados → 0 lecturas nuevas.
     try:
