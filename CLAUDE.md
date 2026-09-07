@@ -10109,7 +10109,62 @@ imprimieran «ok» y el contador dijera 6** — un descuadre entre lo que se ve 
 cuenta. Es exactamente el fallo que este documento lleva versiones describiendo, hecho
 al escribir la red que lo vigila.
 
-## Versiones desplegadas (v476 = actual)
+## Vincular Telegram fallaba SIN decir por que (v477)
+
+Reportado por el usuario: *«no estoy pudiendo conectar el Telegram con un usuario de
+campo; ya di start y aun no conecta»*.
+
+### ⚠️ Un mensaje para CUATRO causas distintas
+`telegram_find_chat_by_code` devolvia `None` y la pantalla decia siempre lo mismo —«no
+encontre su mensaje»— tanto si no habia bot configurado, como si el bot tenia un
+**webhook** activo, como si no habia llegado ningun mensaje, como si habian llegado
+pero ninguno traia el codigo. Sin distinguirlas no habia forma de avanzar: es el
+patron de v325/v340, un pendiente que nadie puede cerrar.
+
+⚠️ Y una de las cuatro **no dejaba ni traza**: Telegram responde **409** cuando el bot
+tiene un webhook activo, `requests` **no lanza** con un status de error y el codigo
+hacia `.json().get("result", [])` → lista vacia. Ni excepcion, ni log, ni pista — y con
+un webhook puesto, vincular no funcionaria NUNCA, se hiciera lo que se hiciera.
+
+### ⚠️ La causa mas probable no es un fallo del codigo: es como funciona Telegram
+**El payload `/start <codigo>` solo se envia cuando el chat con el bot es NUEVO.** Si
+esa persona ya habia hablado con el bot alguna vez, al abrir el enlace no hay boton
+Start —hay caja de texto— y **no se manda nada**. De ahi el «ya di start y no conecta»:
+el mensaje nunca llego. La salida que SIEMPRE funciona es que escriba el codigo a secas
+como un mensaje normal, y el emparejado ya era por subcadena, asi que casa igual. Ahora
+la pantalla lo dice de entrada, sin esperar a que falle.
+
+### Lo que se hizo
+`notify.telegram_diagnostico(code)` distingue las **cinco** situaciones (`sin_token`,
+`webhook`, `sin_mensajes`, `sin_codigo`, `error`) y devuelve tambien cuantos mensajes
+llegaron; `telegram_find_chat_by_code` **delega** en ella en vez de repetir el recorrido
+(v323). La pantalla explica cada caso y que hacer.
+⚠️ Las cinco ramas se EJERCITARON interceptando `getUpdates`, no se leyeron: el 409 del
+webhook, la lista vacia, el mensaje que no trae el codigo y el que si.
+⚠️ Y se descarto la otra hipotesis mirando el codigo acusado: `auth.set_contact` deriva
+las columnas de `LOGIN_HEADERS` (v433) y escribe en `Email`/`TelegramChatID`, que
+existen — el camino de guardado esta sano, el fallo estaba en la busqueda.
+
+⚠️ **No se pudo diagnosticar contra el bot real**: el `TELEGRAM_BOT_TOKEN` vive en los
+secrets del CLOUD, no en los locales (v368). Por eso el arreglo es que **la app lo diga
+en pantalla** en vez de adivinarlo desde aqui.
+
+### ⚠️ Y la suite cazo un rojo que solo pudo salir por la migracion de roles de v475
+`verif_v381` —el guardian de *lo que se enseña antes de un borrado irreversible*— decia
+que al propietario le saldria `Fichajes: 0` donde el admin ve 1. **No era un fallo**, y
+se comprobo antes de tocar nada: estaba anclado a `PRJ-0007`, que dejo de existir al
+vaciarse la demo, y con un pid inexistente `datos_asociados` no puede resolver el grupo
+y cae a la sesion (el propietario, sin grupo, al maestro vacio). Con un proyecto que SI
+existe, los dos devuelven lo mismo.
+Ese rojo **solo pudo aparecer porque v475 migro los roles**: antes el guardian simulaba
+`"propietario"`, que desde v469 no resuelve, asi que ni siquiera entraba en el camino
+del propietario — estaba verde sin comprobar nada.
+⚠️ Y al reanclarlo se vio que la comprobacion vieja era **mas debil de lo que parecia**:
+comparaba dos recuentos que hoy son **los dos CERO**, y comparar 0 con 0 no distingue
+una lectura buena de una rota. El caso construido trae datos que contar y **exige que
+los haya** antes de comparar.
+
+## Versiones desplegadas (v477 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -10117,6 +10172,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v477 | **Vincular Telegram fallaba sin decir por qué** (lo reportó el usuario): un solo mensaje para CUATRO causas. ⚠️ Una de ellas **no dejaba ni traza** — con un *webhook* activo Telegram responde **409**, `requests` no lanza y el código se quedaba con la lista vacía, así que vincular no funcionaría NUNCA. ⚠️ Y la causa más probable no es del código: **el `/start <código>` solo se envía si el chat es NUEVO**, así que quien ya había hablado con el bot no manda nada al abrir el enlace — la salida que siempre funciona (escribir el código como mensaje normal) ahora sale en pantalla de entrada. `telegram_diagnostico` distingue las cinco situaciones y `find` delega en ella (v323); las cinco ramas **ejercitadas** interceptando `getUpdates`. ⚠️ El token vive solo en los secrets del Cloud (v368), así que el arreglo es que **la app lo diga**, no adivinarlo. + la suite cazó un rojo que **solo pudo salir por la migración de roles de v475**: `verif_v381` anclado a un proyecto que ya no existe — y su comparación vieja eran **dos ceros** |
 | v476 | ⚠️ **«Invalid role.»: no se podia crear un usuario de campo** (lo reporto el usuario). **v469** migro los roles a ingles y se dejo DOS literales en la interfaz: el alta de campo (`"campo"`) y —peor, aunque latente— el **BOOTSTRAP** del primer propietario (`"propietario"`), o sea que una instalacion desde cero no habria arrancado. Se acoto la CLASE antes de tocar (101 candidatos → 8 reales → 2 rotos; los demas son claves internas o etiquetas que **no se canonizan al leer**, comprobado contra `valores.COLUMNAS`). ⚠️ No lo vio ningun guardian porque `verif_v469` barre **comparaciones** y esto entra como **argumento**: chequeo nuevo derivado de `auth.ROLES` y validado contra un caso conocido-malo. ⚠️ Y escribiendolo cometi el **shadowing de v440 dentro del propio guardian** (`_f`, que es su lista de fallos, como variable de bucle → `len("app.py")` = 6 fallos inexistentes); lo delato que todo saliera «ok» y el contador dijera 6. Suite **116 verde** |
 | v475 | **«No dejes nada pendiente»**: los **7 guardianes SIN DATOS** desde que v456 vació la demo pasan a construir su propio caso (decisión del usuario, en vez de volver a sembrar ruido) → suite **116 verde · 0 rojo · 0 roto y sin bloque SIN DATOS**. ⚠️ Descongelarlos destapó **tres caducidades reales** que tapaban: **43 guardianes simulaban una sesión con un ROL que ya no existe** desde v469 —medido: `es_propietario()` es **False** con el rol en español, así que los caminos de propietario no se ejercitaban—, uno listaba pre-starts por columnas que **v468 renombró**, y otro exigía «Engineer in charge» cuando **v459** lo pasó a «Head installer/s». *Un guardián que no corre no envejece a la vista: envejece a oscuras.* Cada caso construido se valida contra su contrario (un `return False` fijo, una agregación por NOMBRE, leer por GRUPO en vez de por LIBRO…) y el fixture del survey **se auto-comprueba**. ⚠️ Y tres sondas MÍAS fallaron por su forma: mirar solo dicts literales, filtrar `ast.unparse` con comillas dobles (las escribe simples) y usar las claves de SALIDA del roster en vez de las cortas |
 | v474 | Documentación de v473 en CLAUDE.md: el icono LITERAL de la cabecera (`T.section` emite HTML), v472 ejercitada contra la hoja real de punta a punta —incluido el borrado, que deja la hoja en 0 filas y Drive vacío— y las dos trampas de método nuevas (el árbol de accesibilidad muestra la etiqueta CRUDA; un checkbox de Streamlit se marca clicando el TEXTO de la etiqueta, no la caja) |
