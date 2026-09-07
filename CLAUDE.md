@@ -10006,7 +10006,68 @@ React, asi que el widget se quedo en su valor por defecto. Seleccionando la opci
 un **clic real**, `LIB-0002` guardo la marca correctamente. Es la leccion de v431 otra
 vez: **validar la entrada antes de acusar al codigo**.
 
-## Versiones desplegadas (v474 = actual)
+## Los 7 guardianes que no comprobaban nada, y lo que tapaban (v475)
+
+Peticion del usuario: **«no dejes nada pendiente»**. El unico pendiente real eran los
+**7 guardianes SIN DATOS** desde que v456 vacio la demo — no eran fallos, pero tampoco
+garantia, y llevaban asi desde v471. Decision suya entre tres opciones: **que se apañen
+solos** (construir su caso) en vez de volver a sembrar la demo de ruido.
+
+Suite: **109 verde + 7 sin datos → 116 verde · 0 rojo · 0 roto, y ningun bloque
+«SIN DATOS»**.
+
+### ⚠️ TRES CADUCIDADES REALES que el «SIN DATOS» estaba tapando
+Un guardian que no corre **no envejece a la vista: envejece a oscuras**. Al
+descongelarlos salieron tres cambios deliberados que nadie les habia llevado:
+
+| Qué | Desde |
+|---|---|
+| **43 guardianes simulaban una sesion con un ROL que ya no existe** (`administrador`, `propietario`, `campo`). Medido, no supuesto: `tenant.es_propietario()` devuelve **False** con el rol en español, asi que los caminos de propietario **no se estaban ejercitando** — parte de la suite salia verde bajo una sesion IMPOSIBLE | **v469** |
+| `verif_v374_positivo` listaba los pre-starts por `ProyectoID`/`Fecha` y `hecho_hoy` lee `ProjectID`/`Date`: habria dicho «no hay pre-starts» **aunque los hubiera** | **v468** |
+| `verif_v437` exigia «Engineer in charge» en la firma del informe al CLIENTE, y v459 lo renombro a «Head installer/s» | **v459** |
+
+Las tres son la misma familia que `auth._COL` (v433) y la proyeccion de `list_users`
+(v434): **algo migrado en el codigo y olvidado en lo que lo comprueba**.
+
+### El metodo: caso construido, y cada sonda validada contra su contrario
+Un caso construido sin validar es exactamente el «OK en vacio» que el mecanismo de
+SIN DATOS existia para no fingir (trampa nº1). Asi que cada uno demuestra ademas que
+CAZA lo que dice cazar:
+- `hecho_hoy` con un `return False` fijo **y** con un `return True` fijo — los dos cazados;
+- la agregacion de `pendiente_por_proyecto` indexada por NOMBRE, colando las que no
+  deben nada, o dejandose fuera las archivadas — las tres cazadas;
+- leer una vez por GRUPO en vez de por LIBRO (el fallo REAL de v377), que duplicaria filas;
+- y los detectores del roster, que sobre una semana LIMPIA no pueden inventar ni un caso.
+
+⚠️ Y `fixture_survey` **se auto-comprueba**: si `recalcular` no lo digiere, el guardian
+sale ROJO en vez de dar por generado un informe que nunca se genero. Costo tres intentos
+acertar la geometria, y cada fallo enseño una regla del dominio que no estaba escrita:
+`BS` tiene que cuadrar con `SF1+BKS+2·RAIL+SF2`, `FS − TSW` tiene que caber en
+`BC_CALC`, y ⚠️ **los pisos tienen que DIFERIR entre si** — `apply_offsets` normaliza
+contra la ULTIMA fila, asi que con todos iguales `MAX_OFF_RL` sale ≤ 0, el barrido del
+optimizador queda VACIO y no hay solucion que informar. **Un survey con todos los pisos
+identicos no ejercita nada.**
+
+### ⚠️ TRES SONDAS MIAS que fallaron por su propia FORMA
+Las tres se cazaron midiendo, y las tres habrian dejado el trabajo a medias:
+1. el barrido de roles miraba solo **diccionarios literales**, asi que se dejo los 12
+   que entran por un helper (`como("propietario")`);
+2. el detector de esos helpers dio **0** porque filtraba con `'"auth"'` — comillas
+   DOBLES— sobre `ast.unparse`, que las escribe **simples**. Es el error de v459 con
+   `ast.dump`, cometido otra vez;
+3. la semana construida del roster usaba las claves de SALIDA (`asig`/`ini`/`fin`)
+   cuando lo guardado son las CORTAS (`a`/`i`/`f`): los detectores veian **cero casos**
+   — y lo dijeron, porque la validacion contra el contrario estaba puesta.
+
+⚠️ Y un detalle que se repite: `col_offset` del AST va en **BYTES**, no en caracteres
+(v468), asi que los dos parches de roles cortan sobre los bytes de la linea.
+
+### Y una decision cerrada
+Las **14 secciones** del elevador de la biblioteca se quedan como estan (decision del
+usuario). Renombrarlas era gratis con la biblioteca vacia; a partir de que haya
+material archivado arrastra migracion de la columna `Section`.
+
+## Versiones desplegadas (v475 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -10014,6 +10075,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v475 | **«No dejes nada pendiente»**: los **7 guardianes SIN DATOS** desde que v456 vació la demo pasan a construir su propio caso (decisión del usuario, en vez de volver a sembrar ruido) → suite **116 verde · 0 rojo · 0 roto y sin bloque SIN DATOS**. ⚠️ Descongelarlos destapó **tres caducidades reales** que tapaban: **43 guardianes simulaban una sesión con un ROL que ya no existe** desde v469 —medido: `es_propietario()` es **False** con el rol en español, así que los caminos de propietario no se ejercitaban—, uno listaba pre-starts por columnas que **v468 renombró**, y otro exigía «Engineer in charge» cuando **v459** lo pasó a «Head installer/s». *Un guardián que no corre no envejece a la vista: envejece a oscuras.* Cada caso construido se valida contra su contrario (un `return False` fijo, una agregación por NOMBRE, leer por GRUPO en vez de por LIBRO…) y el fixture del survey **se auto-comprueba**. ⚠️ Y tres sondas MÍAS fallaron por su forma: mirar solo dicts literales, filtrar `ast.unparse` con comillas dobles (las escribe simples) y usar las claves de SALIDA del roster en vez de las cortas |
 | v474 | Documentación de v473 en CLAUDE.md: el icono LITERAL de la cabecera (`T.section` emite HTML), v472 ejercitada contra la hoja real de punta a punta —incluido el borrado, que deja la hoja en 0 filas y Drive vacío— y las dos trampas de método nuevas (el árbol de accesibilidad muestra la etiqueta CRUDA; un checkbox de Streamlit se marca clicando el TEXTO de la etiqueta, no la caja) |
 | v473 | ⚠️ **El icono salia LITERAL** en la cabecera de la biblioteca: `T.section` emite HTML y ahi `:material/…:` no se interpreta (v443) — y los dos unicos sitios del repo que se lo pasaban a una pieza HTML del kit eran mios. Lo destapo **mirar la pantalla**, no un guardian (como v375/v424); chequeo nuevo y general. + **v472 ejercitada contra la hoja REAL**: las hojas se crean en el maestro, son GLOBALES ⚠️ *probado con una sesion de inquilino* (con la del propietario no habria probado nada), IDs secuenciales, Drive subiendo y descargando, y **el borrado deja la hoja en 0 filas y Drive vacio** — la fila Y el archivo, que es lo que protege v456. Produccion devuelta a su sitio. ⚠️ Dos trampas de metodo nuevas: **el arbol de accesibilidad muestra la etiqueta CRUDA** (`read_page` daba `:material/…:` y placeholders de campos que estaban rellenos — el reverso de la nº5) y **un checkbox de Streamlit se marca clicando el TEXTO de la etiqueta, no la caja** (el clic aterrizaba exacto y no marcaba; validado contra otro checkbox de la app, asi que era mio). Y una falsa alarma descartada a tiempo: el `Brand` vacio era `form_input` sobre un combobox react-aria, no la app |
 | v472 | **Biblioteca tecnica** (peticion del usuario): fotos, manuales y fichas con buscador y taxonomia marca/modelo/seccion, GLOBAL y curada por el propietario — cinco decisiones suyas, tres contra mi recomendacion. Aplica lo ya aprendido: hojas globales en minusculas (v359), en el LOTE con **0 llamadas extra** (v339/v353), `get_sheet` y no `_get_worksheet` (v404), galeria paginada porque cada miniatura ES una descarga (v147) y el archivo ANTES que la fila en las dos direcciones (v343/v456). ⚠️ **De paso, dos fallos reales**: el buscador de la barra superior **no devolvia un trabajo NUNCA** desde **v440** —`t.get(...)` con `t` siendo la funcion de i18n, `AttributeError` que el `except` se tragaba, 32 versiones— y `correcciones` llamaba a `siguiente_id_libre` con los argumentos CAMBIADOS desde v461, asi que **el salto de IDs de v427 no se aplicaba ahi**. ⚠️ Pero lo que define la version son **comprobaciones que NO PODIAN FALLAR**: dos roturas se escaparon por `"_POR_PAGINA" in dump` (la constante aparece 4 veces, borrar el corte deja 3) y por `etiqueta(x) == x` (cierto para CUALQUIER cadena que el vocabulario no conozca — v462 del otro lado). **La misma ceguera estaba en `verif_v463`, la regla GENERAL**: medido, cerrarla costaba **3 entradas y 2 exenciones** —una **de v470**, que añadio un tipo y no lo mapeo—, no una migracion. Con la invariante fuerte el guardian **cazo mi propio codigo** (`Type` con `t()` en vez de `etiqueta()`) y luego dio un **falso positivo sobre el arreglo correcto**. ⚠️ Y la suite dio **8 rojos de los que CUATRO eran guardianes anclados a la FORMA** (una lista a mano, **numeros de linea**, texto en la misma linea, «3+ palabras = mensaje»), no fallos del codigo: se arreglaron derivando el dato de su fuente o midiendo estructura. 28 comprobaciones · **15/15 roturas** + control · suite **109 verde** |
