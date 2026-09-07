@@ -10238,7 +10238,59 @@ sus cuatro casos (importar no ejecuta, v378); la tabla priorizada y anclada; y 0
 fijos, con la sonda **validada contra un `width=600`** antes de creerse su cero.
 Suite entera: **117 verde · 0 rojo · 0 roto**, sin bloque SIN DATOS.
 
-## Versiones desplegadas (v478 = actual)
+## La barra superior deja de comerse un cuarto del móvil (v479)
+
+Continuación directa del criterio 3 del usuario en v478 —*«la cuenta de campo se piensa
+para el MÓVIL: fácil, pero igual de completa»*—, y el primer hallazgo que solo aparece
+**midiendo con una sesión de campo abierta a 375×812**, no leyendo el código.
+
+La barra son cuatro columnas —atrás · buscador · versión · campana—. En un móvil
+Streamlit **las apila**: una fila de 44 px se convertía en **112 px en cuatro bandas**, y
+el título de la pantalla empezaba en **y=196**. El **24% del teléfono** gastado en chrome
+antes de ver nada. Con la regla: barra **44 px** y título en **y=128** — **68 px, un 8%
+de la pantalla**, devueltos al contenido. Misma clase que v291 y v394 arreglaron para
+escritorio, en el sitio donde más duele.
+
+### ⚠️ El primer intento ganaba los mismos 68 px y habría desandado v326/v327
+Dejaba los botones en **26 px de ancho**, por debajo del mínimo de 36 que fijó aquella
+auditoría — o sea que habría reintroducido en el móvil justo lo que se arregló para el
+escritorio. **No se vio en la captura: se vio midiendo los botones.** El suelo de 44 px
+lo cierra, y ahora quedan en 44×44 y 44×40.
+
+### ⚠️ Anclado a una KEY, y verificado ANTES de desplegar
+`:first-of-type` depende del ORDEN del documento y se rompe en silencio en cuanto otra
+pantalla pinta una fila antes (v304/v332): **un CSS que no casa no da ningún error**. Va
+anclado a `.st-key-cpxtop`, la técnica de v410.
+Y el ancla nueva **no se dio por buena de palabra**, que es el error que v304 castiga:
+se probó en vivo poniéndole al div la clase que pinta `st.container(key=…)` e inyectando
+**la cadena sacada del fichero por AST**, no una reescrita de memoria. Con **control**:
+quitando la regla la barra vuelve a 112 px y volviendo a ponerla baja a 44.
+⚠️ El control además desactivó una falsa alarma mía: en la lista salía un botón de
+**0×0**. Es un `←` duplicado dentro del envoltorio de tooltip de Streamlit —`rects: 0`,
+no se pinta— y **está igual con y sin la regla**. Sin el control lo habría «arreglado».
+
+### El barrido que se cerró de paso
+v478 dejó dicho que lo dinámico quedaba pendiente por falta de sesión. Con sesión, dos
+cosas más:
+- **Tablas anchas**: de las que el campo ALCANZA de verdad, la única de ≥5 columnas era
+  la de credenciales —ya priorizada en v478—. Las de 6 columnas con dinero
+  (`_editor_ganancia_hora`: Costo/h · Ganancia/h · Precio/h) **no las ve**: cuelgan de
+  `_ganancia_section`, y el campo entra en `render_expenses` con `can_delete=False`.
+  ⚠️ Eso salió de un recorrido sintáctico que decía lo contrario; **mirar el código lo
+  deshizo** (trampa nº2: grep ≠ uso).
+- ⚠️ **Pregunta abierta al usuario, no tocada**: lo que ese mismo recorrido sí confirmó es
+  que las tarjetas de **Costo total · Compras · Mano de obra · Presupuesto · Costo al
+  terminar** y el «llevas gastado X de Y» **no tienen guarda de rol**, así que el campo
+  las ve en 💰 Recibos. El margen está protegido; el costo no. Es una decisión de negocio
+  suya, no un bug que yo deba tapar por mi cuenta.
+
+### Verificación
+El guardián vive en `verif_v478.py` **bloque 7** (misma tanda de trabajo), y afirma lo
+que se midió, no que «haya CSS»: contenedor con key, ancla a `.st-key-cpxtop`, **ausencia
+de `:first-of-type`**, acotado a 640 px y **suelo de 44 px**. `verif_v478` pasa de 20 a
+**25 comprobaciones**. Suite entera: **117 verde · 0 rojo · 0 roto** (807 s).
+
+## Versiones desplegadas (v479 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -10246,6 +10298,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v479 | **La barra superior deja de comerse un cuarto del móvil.** Medido con sesión de campo a 375×812: sus cuatro columnas se **apilaban en 112 px** y el título empezaba en y=196 — el **24% del teléfono** en chrome. Ahora **44 px** y título en y=128: **68 px devueltos al contenido**. ⚠️ El primer intento ganaba lo mismo pero dejaba los botones en **26 px**, bajo el mínimo de 36 de v326/v327 — **se vio midiendo, no mirando la captura**. ⚠️ Anclado a una `key` y no a `:first-of-type` (que se rompe en silencio, v304/v332), y **verificado en vivo antes de desplegar** con la cadena sacada del fichero por AST y **un control** que además desactivó una falsa alarma (un botón 0×0 que es del tooltip de Streamlit y está igual con y sin la regla). + auditoría de tablas del campo: el **margen NO** lo ve (`can_delete=False`), pero las tarjetas de **costo y presupuesto sí** — queda como pregunta al usuario, sin tocar. 25 comprobaciones · suite **117 verde** |
 | v478 | **La autogestión del campo** (petición del usuario): *My credentials · My payslips · My absences* pasan a sub-pestañas de **Self-service** y su nav baja de **8 a 6** — importa porque esa cuenta se usa en el MÓVIL. ⚠️ Revierte a sabiendas la decisión de v154/v430 (*«enterrarla un nivel cuesta un toque cada mañana»*): medido, eso solo aplica a **ausencias**, la única donde el campo ACTÚA, y su acción urgente —avisar de una baja— **recupera el toque con un atajo desde Fichaje**, visible solo si no ha fichado. ⚠️ **Corrección mía**: propuse arreglar un «callejón sin salida» en credenciales y la premisa era incompleta — `notify_expiring` ya avisa al admin Y al dueño (v104/v187), así que el arreglo es **una línea**, no un canal nuevo; y tres errores del parche se cazaron mirando las firmas antes de aplicarlo (v135), incluido un `logger` inexistente. + **móvil**: 0 anchos fijos hostiles en las 7 pantallas, y la tabla de credenciales reordenada con el criterio de v408 (**priorizar, no encoger**) con `Tipo` anclada. ⚠️ Cuatro guardianes caducaron y **uno defendía la decisión contraria** (v430, «ausencias va suelta»): se reescribió sobre lo que protegía **y gana la comprobación de que el atajo exista**. 20 comprobaciones · suite **117 verde** |
 | v477 | **Vincular Telegram fallaba sin decir por qué** (lo reportó el usuario): un solo mensaje para CUATRO causas. ⚠️ Una de ellas **no dejaba ni traza** — con un *webhook* activo Telegram responde **409**, `requests` no lanza y el código se quedaba con la lista vacía, así que vincular no funcionaría NUNCA. ⚠️ Y la causa más probable no es del código: **el `/start <código>` solo se envía si el chat es NUEVO**, así que quien ya había hablado con el bot no manda nada al abrir el enlace — la salida que siempre funciona (escribir el código como mensaje normal) ahora sale en pantalla de entrada. `telegram_diagnostico` distingue las cinco situaciones y `find` delega en ella (v323); las cinco ramas **ejercitadas** interceptando `getUpdates`. ⚠️ El token vive solo en los secrets del Cloud (v368), así que el arreglo es que **la app lo diga**, no adivinarlo. + la suite cazó un rojo que **solo pudo salir por la migración de roles de v475**: `verif_v381` anclado a un proyecto que ya no existe — y su comparación vieja eran **dos ceros** |
 | v476 | ⚠️ **«Invalid role.»: no se podia crear un usuario de campo** (lo reporto el usuario). **v469** migro los roles a ingles y se dejo DOS literales en la interfaz: el alta de campo (`"campo"`) y —peor, aunque latente— el **BOOTSTRAP** del primer propietario (`"propietario"`), o sea que una instalacion desde cero no habria arrancado. Se acoto la CLASE antes de tocar (101 candidatos → 8 reales → 2 rotos; los demas son claves internas o etiquetas que **no se canonizan al leer**, comprobado contra `valores.COLUMNAS`). ⚠️ No lo vio ningun guardian porque `verif_v469` barre **comparaciones** y esto entra como **argumento**: chequeo nuevo derivado de `auth.ROLES` y validado contra un caso conocido-malo. ⚠️ Y escribiendolo cometi el **shadowing de v440 dentro del propio guardian** (`_f`, que es su lista de fallos, como variable de bucle → `len("app.py")` = 6 fallos inexistentes); lo delato que todo saliera «ok» y el contador dijera 6. Suite **116 verde** |

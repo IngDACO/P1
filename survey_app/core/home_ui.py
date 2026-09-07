@@ -467,10 +467,29 @@ def render_topbar(grupo):
     # v303: el padding era 2.4rem y se veía como una franja en blanco sobre el
     # buscador. Lo que tapaba la cabecera oscura es la regla de al lado
     # (`background:transparent`), no el hueco → 2.4rem → 1rem.
-    st.markdown("<style>header[data-testid='stHeader']{background:transparent;}"
-                "div.block-container{padding-top:1rem !important;}</style>",
-                unsafe_allow_html=True)
-    cback, c1, cver, c2 = st.columns([1, 7, 1.4, 1])
+    st.markdown(
+        "<style>header[data-testid='stHeader']{background:transparent;}"
+        "div.block-container{padding-top:1rem !important;}"
+        # ⚠️ v478 · En un MOVIL, Streamlit apila las columnas: esta barra pasaba de una
+        # fila de 44 px a TRES bandas de 112, y el titulo de la pantalla empezaba en
+        # y=196 — el 24% del telefono en chrome. Medido con sesion de campo a 375x812.
+        # Se fuerza a UNA fila por debajo de 640 px, con suelo de 44 px por boton: sin
+        # ese suelo quedaban en 26 px de ancho, bajo el minimo de 36 de v326/v327, y en
+        # el movil es donde peor se pulsa.
+        "@media (max-width:640px){"
+        ".st-key-cpxtop [data-testid='stHorizontalBlock']{flex-wrap:nowrap !important;"
+        "align-items:center !important;gap:8px !important;}"
+        ".st-key-cpxtop [data-testid='stColumn']{flex:0 0 44px !important;"
+        "min-width:44px !important;}"
+        ".st-key-cpxtop [data-testid='stColumn']:nth-child(2){flex:1 1 auto !important;"
+        "min-width:0 !important;}"
+        ".st-key-cpxtop button{width:100% !important;min-width:44px !important;}"
+        "}</style>", unsafe_allow_html=True)
+    # ⚠️ El contenedor se usa como OBJETO (`_top.columns`), no con `with`: asi los
+    # bloques de abajo no hay que reindentarlos, que es la clase de cambio que rompio
+    # v120 y v148.
+    _top = st.container(key="cpxtop")
+    cback, c1, cver, c2 = _top.columns([1, 7, 1.4, 1])
     with cback:
         if st.button("←", key="nav_back_btn", help=t("Go back"),
                      width="stretch", disabled=not puede_atras()):
