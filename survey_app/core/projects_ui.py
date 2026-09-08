@@ -2600,7 +2600,7 @@ def _detalle_proyecto(pid: str, grupo: str = None):
 
     elif _sec == "💰 Costos":
         # ── Gastos / compras ──
-        render_expenses(pid, grupo, can_delete=True, key_prefix="adm")
+        render_expenses(pid, grupo, can_delete=True, key_prefix="adm", ver_costos=True)
 
     elif _sec == "📎 Archivos":
         _plano_section(pid, prj)
@@ -3623,21 +3623,22 @@ def _facturar_atajo(pid, grupo, prj_nombre=""):
             st.rerun()
 
 
-def render_expenses(pid, grupo, can_delete=False, key_prefix="ex"):
-    """Costos del proyecto (v144).
+def _costos_section(pid, grupo, gastos, can_delete, key_prefix):
+    """El dinero de la obra: proyección, presupuesto, compras, mano de obra y curva.
 
-    ⚠️ Antes respondia solo "cuanto llevas gastado". La pregunta accionable es
-    **cuanto vas a gastar**: la barra de presupuesto se ponia roja al pasarse,
-    o sea cuando ya no se puede hacer nada. Ahora la proyeccion al terminar va
-    arriba del todo.
+    ⚠️ v481 · Extraído de `render_expenses` porque **el campo ya no lo ve** (decisión
+    del usuario). Antes vivía suelto en esa función, así que lo veía cualquiera que
+    abriera 💰 Recibos — incluida la **mano de obra persona por persona**, de donde se
+    deduce lo que cobra cada compañero. El campo conserva lo suyo: cargar recibos y
+    verlos.
+
+    ⚠️ Se extrajo TAL CUAL, sin reindentar ni una línea: el bloque ya estaba a
+    profundidad de cuerpo de función. Envolverlo en un `if` habría movido 125 líneas,
+    que es la clase de cambio que rompió v120 y v148.
     """
     from core import expenses as E
-    if not E.is_configured():
-        return
-
     cp    = E.cost_projection(pid, grupo)      # incluye todo lo de project_cost
     lb    = E.labor_breakdown(pid, grupo)
-    gastos = E.project_expenses(pid)
     pres  = cp["presupuesto"]
     proy  = cp["proyectado"]
 
@@ -3778,6 +3779,27 @@ def render_expenses(pid, grupo, can_delete=False, key_prefix="ex"):
         st.caption(t("Cumulative cost day by day. The dashed grey line is the budget; the coloured one is where you end up at the current rate."))
     elif _curva:
         st.caption(t("More than one movement is needed to draw the spend curve."))
+
+
+
+def render_expenses(pid, grupo, can_delete=False, key_prefix="ex",
+                    ver_costos=False):
+    """Costos del proyecto (v144).
+
+    ⚠️ Antes respondia solo "cuanto llevas gastado". La pregunta accionable es
+    **cuanto vas a gastar**: la barra de presupuesto se ponia roja al pasarse,
+    o sea cuando ya no se puede hacer nada. Ahora la proyeccion al terminar va
+    arriba del todo.
+    """
+    from core import expenses as E
+    if not E.is_configured():
+        return
+
+    gastos = E.project_expenses(pid)
+    # ⚠️ v481 · El bloque de dinero, solo para gestión. `ver_costos` por defecto
+    # es False: un sitio de llamada que se olvide NO enseña finanzas.
+    if ver_costos:
+        _costos_section(pid, grupo, gastos, can_delete, key_prefix)
 
     # ── Cargar recibo ──
     with st.expander(t("Upload receipt"), icon=":material/receipt:"):
@@ -4923,7 +4945,7 @@ def _detalle_localizacion(pid: str, grupo: str):
                 st.caption(t("Nobody permanently assigned. Only those who have it set for today in Planning will be able to clock in."))
             _alerts_section(pid, grupo, project_name=prj.get("Name"))
     elif _sec == "💰 Gastos":
-        render_expenses(pid, grupo, can_delete=True, key_prefix="loc")
+        render_expenses(pid, grupo, can_delete=True, key_prefix="loc", ver_costos=True)
     elif _sec == "🦺 Pre-Start":
         _loc_prestarts(pid)
     elif _sec == "📎 Archivos":

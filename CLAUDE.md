@@ -10419,7 +10419,56 @@ conformaba con eso. La espera correcta es **que NO haya formulario de acceso** y
 aparezca una marca de la sección. Una medida tomada en el instante equivocado miente
 igual que un selector que no casa.
 
-## Versiones desplegadas (v480 = actual)
+## El campo deja de ver el dinero de la obra (v481)
+
+Decisión del usuario, tomada sobre la pregunta que dejó abierta v480. Y con un dato que
+apareció **al ir a implementarla**: yo había reportado que el campo veía «las tarjetas de
+costo y el presupuesto», y era **incompleto**. Veía también **la mano de obra PERSONA POR
+PERSONA** (`Labour by person`), que es el dato del que se deduce lo que cobra cada
+compañero, además de las órdenes de compra y la curva de gasto acumulado.
+⚠️ Ese error mío venía de una sonda que probaba la línea del **comentario** de cada
+bloque, que va justo ANTES del `if` que lo protege — así que daba «sin guarda» para
+bloques que sí la tenían y viceversa. Se vio porque **se contradecía con lo que ya había
+leído en el código**, no porque la sonda avisara.
+
+### Qué sale y qué se queda
+Sale de 💰 Recibos para el campo: el titular «a este ritmo costará X, Y por encima», las
+tarjetas **Costo total · Compras · Mano de obra · Presupuesto · Costo al terminar ·
+Comprometido**, la barra «llevas gastado X de Y» con su aviso OVER BUDGET, las órdenes
+de compra, el reparto del costo por categoría, **la mano de obra por persona** y la curva
+de gasto.
+Se queda lo suyo: **cargar recibos y ver los recibos de la obra, con su importe** — sin
+eso la pestaña no sirve para nada. Medido después del cambio: en lo que el campo ve queda
+**1** sola cifra de dinero (el importe del recibo); las otras **17** viven ya en la
+función de gestión.
+El admin y el propietario no cambian en nada.
+
+### ⚠️ Cómo se hizo, que importa tanto como el qué
+- **Extraído, no envuelto.** El bloque son ~140 líneas ya a profundidad de cuerpo de
+  función, así que sacarlo a `_costos_section` **no reindenta ni una línea**. Envolverlo
+  en un `if` habría movido las 140 — la clase de cambio que rompió v120 y v148.
+- **El interruptor es `ver_costos`, no `can_delete`.** Reutilizar `can_delete` habría
+  sido gratis y es una trampa: ese permiso dice «puede borrar recibos», y quien mañana
+  quiera dejar al campo borrar los suyos le abriría las finanzas de la obra **sin
+  enterarse**. Un permiso que decide dos cosas distintas acaba decidiendo la que no era.
+- **Por defecto `False`**: un sitio de llamada nuevo que se olvide **no enseña dinero**.
+  Falla cerrado.
+- **Verificado antes de escribir**: el parche comprueba que la función extraída no quede
+  con ningún nombre huérfano — eso no falla al importar, solo cuando alguien ABRE la
+  pantalla (el NameError latente de v370/v423). ⚠️ Y el verificador acusó primero a
+  `_blq_reparto` y `_blq_categorias`, que son **funciones anidadas dentro de la propia
+  región**: era un fallo del verificador, no del código. Se corrigió y se le puso un
+  **control** que le da un huérfano construido para comprobar que sabe verlo.
+
+### Verificación
+`verif_v481.py`, **17 comprobaciones**. La que vale es la última: **EJECUTA**
+`render_expenses` con `_costos_section` interceptada y comprueba que con el campo **no se
+llama** y con gestión **sí** — ⚠️ el caso positivo al lado del negativo a propósito, porque
+si la función reventara antes de llegar también saldría «no se llamó» y parecería que
+protege (trampa nº12). Lo demás: que el interruptor no sea `can_delete`, que el defecto
+sea `False`, que las cinco piezas de dinero estén fuera y las dos de recibos dentro.
+
+## Versiones desplegadas (v481 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -10427,6 +10476,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v481 | **El campo deja de ver el dinero de la obra** (decisión del usuario sobre la pregunta abierta en v480). ⚠️ Al implementarla apareció que mi reporte era **incompleto**: veía también **la mano de obra PERSONA POR PERSONA**, las órdenes de compra y la curva de gasto — el error venía de una sonda que probaba la línea del **comentario**, no la del `if`. Se queda con lo suyo: cargar y ver recibos con su importe (**1** cifra de dinero frente a **17** que pasan a gestión). ⚠️ **Extraído a `_costos_section`, no envuelto en un `if`**: 140 líneas ya a profundidad de función, así que no se reindenta ni una (v120/v148). ⚠️ Interruptor **`ver_costos`, NO `can_delete`** —ese dice «puede borrar recibos», y reutilizarlo abriría las finanzas a quien mañana pueda borrar las suyas— y **por defecto False**: falla cerrado. 17 comprobaciones, la última **ejecutando** ambos casos |
 | v480 | **El recorrido diario del campo, medido en un móvil** (375×812, con una obra de prueba asignada — sin datos no se podía juzgar la densidad, el pendiente que dejó v478). **(1) Fichaje**: las 4 tarjetas gastaban **230 px enseñando 0.00 h** y empujaban la acción de cada mañana a **y=618/759 de 812** — ahora las acciones van antes y no se pierde ni una cifra (v408). ⚠️ Matiza con medida lo que decía v308 ahí mismo. **(2) Una sola obra**: se abre sola donde se CONSULTA, y donde se ACTÚA es un **botón explícito** — v138 prohíbe preseleccionar al fichar. **(3)** El plan y la ruta bajan detrás de la tarea (la tabla de avance estaba en y=676), ⚠️ con `_contexto()` en **las dos salidas tempranas**, que si no desaparecía para quien aún no tiene obra. **(4)** La barra tenía **197 px vacíos** para el campo: ahora lleva su estado de fichaje, activo, con **0 lecturas nuevas** y textos que **caben medidos**. + se ⚠️ **un fallo de dinero** salido de un rojo que parecía falsa alarma: `es_del_proyecto` con el nombre vacío se quedaba con **todas las jornadas generales** (entra en horas y costo de mano de obra). + se descartó una alarma propia (el campo **no** ve el margen) y queda **una pregunta abierta**: sí ve las tarjetas de costo y presupuesto. 25 comprobaciones · suite **118 verde** · las **6** secciones del campo medidas a 375 px |
 | v479 | **La barra superior deja de comerse un cuarto del móvil.** Medido con sesión de campo a 375×812: sus cuatro columnas se **apilaban en 112 px** y el título empezaba en y=196 — el **24% del teléfono** en chrome. Ahora **44 px** y título en y=128: **68 px devueltos al contenido**. ⚠️ El primer intento ganaba lo mismo pero dejaba los botones en **26 px**, bajo el mínimo de 36 de v326/v327 — **se vio midiendo, no mirando la captura**. ⚠️ Anclado a una `key` y no a `:first-of-type` (que se rompe en silencio, v304/v332), y **verificado en vivo antes de desplegar** con la cadena sacada del fichero por AST y **un control** que además desactivó una falsa alarma (un botón 0×0 que es del tooltip de Streamlit y está igual con y sin la regla). + auditoría de tablas del campo: el **margen NO** lo ve (`can_delete=False`), pero las tarjetas de **costo y presupuesto sí** — queda como pregunta al usuario, sin tocar. 25 comprobaciones · suite **117 verde** |
 | v478 | **La autogestión del campo** (petición del usuario): *My credentials · My payslips · My absences* pasan a sub-pestañas de **Self-service** y su nav baja de **8 a 6** — importa porque esa cuenta se usa en el MÓVIL. ⚠️ Revierte a sabiendas la decisión de v154/v430 (*«enterrarla un nivel cuesta un toque cada mañana»*): medido, eso solo aplica a **ausencias**, la única donde el campo ACTÚA, y su acción urgente —avisar de una baja— **recupera el toque con un atajo desde Fichaje**, visible solo si no ha fichado. ⚠️ **Corrección mía**: propuse arreglar un «callejón sin salida» en credenciales y la premisa era incompleta — `notify_expiring` ya avisa al admin Y al dueño (v104/v187), así que el arreglo es **una línea**, no un canal nuevo; y tres errores del parche se cazaron mirando las firmas antes de aplicarlo (v135), incluido un `logger` inexistente. + **móvil**: 0 anchos fijos hostiles en las 7 pantallas, y la tabla de credenciales reordenada con el criterio de v408 (**priorizar, no encoger**) con `Tipo` anclada. ⚠️ Cuatro guardianes caducaron y **uno defendía la decisión contraria** (v430, «ausencias va suelta»): se reescribió sobre lo que protegía **y gana la comprobación de que el atajo exista**. 20 comprobaciones · suite **117 verde** |
