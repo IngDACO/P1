@@ -38,7 +38,14 @@ GROUPS_HEADERS = ["Group", "Description", "Active", "TimeZone", "DefaultMargin",
                   "DefaultSuper", "DefaultWithholding",
                   # v359: libro de Google propio de este cliente. Vacío = el
                   # maestro (así `cliente1` sigue donde estaba, sin migrar).
-                  "SheetID"]
+                  "SheetID",
+                  # v483: identidad fiscal del cliente. `ABN` y `LegalName` los exige
+                  # un documento titulado «TAX INVOICE» en Australia y los pide la
+                  # contabilidad para casar el contacto; `PaymentTermsDays` es el plazo
+                  # de pago (la UI ponía vencimiento = HOY, o sea vencida al nacer);
+                  # `AccountingJSON` es el mapa a cuentas/impuestos del contable.
+                  # Van AL FINAL → migran solas, como las 30 columnas anteriores.
+                  "ABN", "LegalName", "PaymentTermsDays", "AccountingJSON"]
 ROLES         = ["owner", "administrator", "field"]
 _ACTIVE_OK    = ("", "SI", "SÍ", "YES", "Y", "TRUE", "1", "X")
 # Columnas (1-based) en la hoja Login
@@ -255,8 +262,14 @@ def group_num_setting(grupo: str, field: str, default: float = 0.0) -> float:
     return default
 
 
-def set_group_num_setting(grupo: str, field: str, val) -> tuple:
-    """Fija un ajuste numérico del grupo (columna `field`)."""
+def set_group_setting(grupo: str, field: str, val) -> tuple:
+    """Fija un ajuste del grupo (columna `field`). Escribe TEXTO.
+
+    ⚠️ v483 — se llamaba `set_group_num_setting`, pero nunca fue numérica: siempre
+    escribió `str(val)`. El nombre mentía y habría empujado a clonarla para los
+    ajustes de texto (ABN, razón social, mapa contable), que es como se acaba con
+    dos funciones que hacen lo mismo y se desincronizan. Se renombra en vez de
+    dejar un alias: un concepto, una definición (v323)."""
     gws, err = _get_groups_ws()
     if err:
         return False, err
@@ -273,6 +286,23 @@ def set_group_num_setting(grupo: str, field: str, val) -> tuple:
             except Exception as e:
                 return False, f"Error: {e}"
     return False, t("Company not found.")
+
+
+def group_text_setting(grupo: str, field: str, default: str = "") -> str:
+    """Lee un ajuste de TEXTO del grupo (columna `field` de Groups). Cacheado.
+
+    Hermano de `group_num_setting`: mismo recorrido, sin convertir a número. Lo usan
+    la identidad fiscal (ABN, razón social) y el mapa contable, que son cadenas.
+    `default` si el grupo no está, la columna no existe todavía o viene vacía — o sea
+    que una hoja sin migrar no rompe nada, se comporta como antes.
+    """
+    g = (grupo or "").strip().lower()
+    if not g:
+        return default
+    for r in _group_records():
+        if str(r.get("Group", "")).strip().lower() == g:
+            return str(r.get(field, "") or "").strip() or default
+    return default
 
 
 def group_tax_default(grupo: str) -> float:

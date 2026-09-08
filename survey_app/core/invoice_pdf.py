@@ -13,6 +13,7 @@ la pantalla quien pulsa el botón.
 cómo se lee.
 """
 import io as _io
+import logging
 
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
@@ -28,6 +29,8 @@ from core.num import num as _num
 C_BRAND = colors.HexColor("#1a3a5c")
 C_LIGHT = colors.HexColor("#e8f1fb")
 C_MUTE  = colors.HexColor("#7a8699")
+
+logger = logging.getLogger(__name__)
 
 
 def _money(v) -> str:
@@ -48,8 +51,25 @@ def generate_invoice_pdf(factura: dict, cliente: dict = None, grupo_nombre: str 
                             title=d("Invoice {n}", n=factura.get("Number", "")))
     story = []
 
-    marca = grupo_nombre or str(factura.get("Group", ""))
-    head = Table([[Paragraph(str(marca), mk), Paragraph(d("TAX INVOICE"), ti)]],
+    # ⚠️ v483 — un documento titulado «TAX INVOICE» por 82,50 $ o más tiene que llevar
+    # el ABN y el nombre LEGAL del emisor. Hasta aquí la marca era el nombre INTERNO del
+    # grupo (`cliente1`) y el ABN no existía en ninguna parte del repositorio, así que
+    # todas las facturas emitidas iban incompletas. Se lee del grupo de la propia factura
+    # —no de la sesión— porque el PDF se puede regenerar desde el panel del propietario,
+    # que no tiene grupo. Import perezoso: un fallo leyendo la identidad no puede impedir
+    # emitir la factura, así que degrada al comportamiento anterior.
+    _grp = str(factura.get("Group", "")) or grupo_nombre
+    _ident = {}
+    try:
+        from core import contable
+        _ident = contable.identidad(_grp)
+    except Exception as e:
+        logger.warning("invoice_pdf: no se pudo leer la identidad fiscal de %s: %s", _grp, e)
+    marca = str(_ident.get("legal") or "").strip() or grupo_nombre or _grp
+    _emisor = [Paragraph(str(marca), mk)]
+    if str(_ident.get("abn") or "").strip():
+        _emisor.append(Paragraph(f"{d('ABN')} {_ident['abn']}", sm))
+    head = Table([[_emisor, Paragraph(d("TAX INVOICE"), ti)]],
                  colWidths=[90 * mm, 88 * mm])
     head.setStyle(TableStyle([("ALIGN", (1, 0), (1, 0), "RIGHT"), ("VALIGN", (0, 0), (-1, -1), "TOP")]))
     story += [head, Spacer(1, 10)]

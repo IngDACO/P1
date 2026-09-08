@@ -87,7 +87,8 @@ Google por cliente, zona horaria por grupo y la app entera en inglés.
 |---|---|
 | **Planes y asientos** | La hoja `Groups` no tiene ni una columna de plan o de tope. El modelo de precios por asiento **no se puede hacer cumplir hoy** |
 | **Cobro** | No hay pasarela ni estado de suscripción |
-| **Contabilidad** | Cero integración con Xero/MYOB. Cada factura se teclearía dos veces |
+| ~~**Identidad fiscal**~~ | ✅ **CERRADO en v483**: hasta entonces el PDF decía «TAX INVOICE» **sin ABN ni razón social**, o sea que los clientes emitían documentos incompletos ante la ATO. Ya se configuran por empresa, junto al plazo de pago |
+| **Contabilidad** | ⚠️ **Parcial desde v483 (08/09/2026)**: hay **exportación a CSV** para Xero y MYOB (facturas y gastos, con el proyecto como categoría de seguimiento), así que la factura ya no se teclea dos veces. Lo que NO hay es **integración por API**: el fichero se importa a mano, y que los dos lo acepten no está probado contra una cuenta demo real |
 | **Nómina** | Retención y *superannuation* son porcentajes editables: **no hay STP ni interpretación de awards**. Como costeo de mano de obra es sólido; como nómina certificada, no se puede vender |
 | **Sin señal** | No funciona offline, y el campo trabaja en fosos y sótanos |
 | **Cobro de obra** | Sin variaciones, sin *progress claims* y sin retenciones (el marco de *Security of Payment*) |
@@ -188,9 +189,17 @@ ya captura, no se construye todo en paralelo):
    > mano de obra.
 3. **Fase 3:** contabilidad — **integrar con Xero/MYOB** (estándar en Australia) en vez de construir
    módulo propio (alta complejidad regulatoria/fiscal, mejor no asumirla).
-   > ⏭ **Es lo siguiente, y la decisión sigue siendo la correcta.** Cero líneas de Xero/MYOB en el
-   > repositorio a día de hoy. Antes va lo que permite COBRAR (planes, asientos y alta de cliente),
-   > que hoy no existe.
+   > 🟡 **EMPEZADA (v483, 08/09/2026), y la decisión sigue siendo la correcta.** Están hechas la
+   > **identidad fiscal** (ABN y razón social en la factura) y la **exportación a CSV** para los
+   > dos, que cubre la mayor parte del dolor. Falta la **API**, y ahí la elección está tomada con
+   > datos: **Xero** — ~60 % del mercado AU contra ~20-25 % de MYOB, y ⚠️ el archivo de MYOB
+   > AccountRight puede vivir **en el escritorio del cliente**, donde su API solo responde en la
+   > red local: una app en la nube no lo alcanza. Antes va lo que permite COBRAR (planes, asientos
+   > y alta de cliente), que sigue sin existir.
+   > ⚠️ Y la pregunta abierta que no decide el código: **nómina, ¿conectar o renombrar?** Sigue sin
+   > STP ni interpretación de *awards*, así que como nómina no se puede vender. Las dos salidas
+   > necesitan primero lo mismo —exportar el **parte de horas**, no la colilla—, así que ese trabajo
+   > no se tira decida lo que decida.
 4. **Fase 4 (requiere escala):** modelos predictivos de proyección de instalación con la data histórica
    acumulada — no vender esto antes de tener volumen real de proyectos. Posible feature premium futuro:
    benchmarking entre clientes (con anonimización, cuidando privacidad de datos).
@@ -217,4 +226,4 @@ Cuando el chat técnico cierre algo que este documento da por pendiente, lo actu
 mismo lote**, con la fecha. Y cuando alguien pregunte «¿qué falta?», la respuesta se audita contra
 el repositorio, no contra la memoria de este fichero.
 
-*Última puesta al día del estado de hecho: 08/09/2026 (v481-v482).*
+*Última puesta al día del estado de hecho: 08/09/2026 (v481-v483).*

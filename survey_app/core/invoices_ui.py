@@ -8,6 +8,8 @@ emitir. Impuesto (GST/IVA) con el default del grupo, editable.
 import pandas as pd
 
 from core.i18n import t, d, etiqueta as _etq
+from datetime import timedelta as _timedelta
+
 import streamlit as st
 
 from core import flash
@@ -283,9 +285,21 @@ def _nueva_factura(grupo):
             "Importe":  st.column_config.NumberColumn(t("Amount"), format="$%,.2f", min_value=0.0),
         }))
 
+    try:
+        from core import contable
+        _plazo = int(contable.identidad(grupo).get("plazo") or 14)
+    except Exception:
+        _plazo = 14                       # sin plazo configurado, el estándar de la casa
+
     c1, c2, c3 = st.columns(3)
     _fecha = c1.date_input(t("Date"), value=clock.today(), key="fac_fecha")
-    _venc = c2.date_input(t("Due date"), value=clock.today(), key="fac_venc")
+    # ⚠️ v483 — el vencimiento nacía HOY, o sea que toda factura entraba VENCIDA el
+    # mismo día: el «vencido» del resumen financiero y el estado de la lista se
+    # disparaban al instante, y al exportarla a la contabilidad llegaba en mora sin
+    # haberla mandado. Ahora sale del plazo de pago del grupo (14 días por defecto).
+    _venc = c2.date_input(t("Due date"),
+                          value=clock.today() + _timedelta(days=_plazo),
+                          key="fac_venc")
     _imp = c3.number_input(t("Tax % (GST/VAT)"), min_value=0.0, max_value=100.0, step=1.0,
                            value=float(auth.group_tax_default(grupo)), key="fac_imp")
     _nota = st.text_input(t("Note (optional)"), key="fac_nota")

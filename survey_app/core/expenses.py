@@ -97,6 +97,19 @@ def list_for(pid) -> list:
     return [r for r in _records() if str(r.get("ProjectID", "")) == str(pid)]
 
 
+def list_group(grupo) -> list:
+    """Todas las compras del grupo, la fila cruda.
+
+    Hermana de `list_for(pid)`, para quien necesita el DETALLE del grupo y no el
+    agregado de `group_expenses`. ⚠️ Incluye las de proyectos archivados y las
+    HUÉRFANAS (sin `ProjectID`): el criterio de v310 —archivar no des-gasta el
+    dinero, y una compra sin obra sigue siendo del grupo— y por eso el filtro es
+    por la columna `Group`, que es lo que define de quién es el gasto.
+    """
+    g = str(grupo or "").strip().lower()
+    return [r for r in _records() if str(r.get("Group", "")).strip().lower() == g]
+
+
 def by_user(grupo, usuario) -> dict:
     """Recibos cargados POR este usuario en el grupo: {n, total}.
 

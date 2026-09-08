@@ -75,7 +75,8 @@ _SUBSECCIONES = {
         ("⏱ Horas", ":material/schedule: Hours"),
         ("📈 Rentabilidad", ":material/trending_up: Profitability"),
         ("📄 Cotizaciones", ":material/request_quote: Quotes"),
-        ("📚 Catálogo", ":material/sell: Catalogue")]),
+        ("📚 Catálogo", ":material/sell: Catalogue"),
+        ("📤 Contable", ":material/sync_alt: Accounting")]),
     "herramientas": ("adm_herr_sub", [
         ("🧰 Inicio", ":material/apps: Home"),
         ("📐 Survey", ":material/architecture: Survey"),
@@ -1047,6 +1048,9 @@ def _seccion_finanzas(grupo):
     elif sub == "📚 Catálogo":
         from core.catalogo_ui import render_catalogo
         render_catalogo(grupo)
+    elif sub == "📤 Contable":
+        from core.contable_ui import render_contable
+        render_contable(grupo)
     else:
         PU.render_group_hours(grupo)
 

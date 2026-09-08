@@ -8,6 +8,8 @@ import re
 import time
 from datetime import date
 import streamlit as st
+
+from core.num import num as _num
 import pandas as pd
 
 from core import auth
@@ -589,13 +591,52 @@ def _owner_grupos():
                 _ret = nc2.number_input(t("Tax withholding % (deduction)"), min_value=0.0, max_value=100.0,
                                         step=1.0, value=_f_n(_g.get("DefaultWithholding"), 0.0), key="nom_retdef")
                 if st.button(t(":material/save: Save payroll settings"), key="nomcfg_save"):
-                    ok1, _m1 = auth.set_group_num_setting(gnsel, "DefaultSuper", _sup)
-                    ok2, _m2 = auth.set_group_num_setting(gnsel, "DefaultWithholding", _ret)
+                    ok1, _m1 = auth.set_group_setting(gnsel, "DefaultSuper", _sup)
+                    ok2, _m2 = auth.set_group_setting(gnsel, "DefaultWithholding", _ret)
                     if ok1 and ok2:
                         flash.exito(t("Payroll settings updated."))
                         st.rerun()
                     else:
                         st.error(_m1 if not ok1 else _m2)
+
+    # ── Identidad fiscal del cliente (v483) ──
+    # ⚠️ Va DESPUÉS de lo que ya estaba, no en medio: no se le reordena la pantalla a
+    # quien ya la usa (el principio de v297 aplicado aquí).
+    if grupos:
+        with st.expander(t("Tax identity and payment terms"),
+                         icon=":material/receipt_long:"):
+            st.caption(t("These appear on the invoice PDF. In Australia a document titled "
+                         "«TAX INVOICE» for $82.50 or more must show the seller's ABN."))
+            gfsel = ui.elegir(t("Company"), [g["Group"] for g in grupos], key="fisc_g_sel",
+                              vacio="— elige un grupo —")
+            if gfsel:
+                _gf = next((g for g in grupos if g["Group"] == gfsel), {})
+                _abn_now = str(_gf.get("ABN", "") or "").strip()
+                if not _abn_now:
+                    st.warning(t(":material/warning: This company has no ABN: the invoices "
+                                 "it has already issued say «TAX INVOICE» without one."))
+                fc1, fc2 = st.columns(2)
+                _legal = fc1.text_input(t("Legal name (as it appears on the invoice)"),
+                                        value=str(_gf.get("LegalName", "") or ""),
+                                        key="fisc_legal",
+                                        help=t("If empty, the company name is used."))
+                _abn = fc2.text_input(t("ABN"), value=_abn_now, key="fisc_abn")
+                _plazo = st.number_input(t("Payment terms (days)"), min_value=0, max_value=180,
+                                         step=1,
+                                         value=int(_num(_gf.get("PaymentTermsDays")) or 14),
+                                         key="fisc_plazo",
+                                         help=t("The due date of a new invoice is the date "
+                                                "of issue plus these days."))
+                if st.button(t(":material/save: Save tax identity"), key="fisc_save"):
+                    _r = [auth.set_group_setting(gfsel, "LegalName", _legal.strip()),
+                          auth.set_group_setting(gfsel, "ABN", _abn.strip()),
+                          auth.set_group_setting(gfsel, "PaymentTermsDays", int(_plazo))]
+                    _malo = next((m for ok, m in _r if not ok), "")
+                    if _malo:
+                        st.error(_malo)
+                    else:
+                        flash.exito(t("Tax identity updated."))
+                        st.rerun()
 
     if grupos:
         gsel = ui.elegir(t("Delete company"), [g["Group"] for g in grupos],
