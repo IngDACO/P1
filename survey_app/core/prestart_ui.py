@@ -327,6 +327,13 @@ def render_prestart_tab():
         pass
     if _fich_key and "ps_proy" not in st.session_state:
         st.session_state["ps_proy"] = _fich_key
+    # v480 · Sin fichaje abierto pero con UNA sola obra asignada, se abre sola: misma
+    # señal fuerte de v138 (no hay nada que elegir), mostrada y cambiable.
+    # ⚠️ Solo para el CAMPO: `_projects_for` le devuelve solo las suyas, mientras que a
+    # admin/propietario les da las del grupo — ahi «una» significaria «la empresa tiene
+    # una obra», que no es lo mismo, y seria el «primero de la lista» que evito v139.
+    elif rol == "field" and len(idmap) == 1 and "ps_proy" not in st.session_state:
+        st.session_state["ps_proy"] = next(iter(idmap))
     sel = st.selectbox(t("Project"), [_VACIO] + list(idmap.keys()), key="ps_proy")
     if _fich_key and sel == _fich_key:
         st.caption(t(":material/schedule: This is the project you clocked in to today. Change it if the pre-start is for another one."))

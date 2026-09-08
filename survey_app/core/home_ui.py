@@ -221,6 +221,37 @@ def _subkey():
     return {k: v[0] for k, v in _subsecciones().items()}
 
 
+def _chip_fichaje(grupo):
+    """El estado del fichaje en la barra superior, para el campo (v480).
+
+    ⚠️ **No añade lecturas**: `open_sessions` sale de `_cached_records`, cacheado 120 s,
+    y es el MISMO dato que ya pinta la pantalla de Fichaje. Importa porque la barra se
+    dibuja en todas las pantallas y el techo de la cuenta de servicio es duro (60/min).
+
+    ⚠️ Los tres textos son los MISMOS de la banda de estado de Fichaje, a propósito:
+    una sola forma de decir cada estado (v323), y ni una cadena nueva que quedaría sin
+    traducir en las otras redes (v441-v452). Miden 71, 150 y 83 px con la fuente real de
+    la app y la columna da 173, así que **caben sin recortar** — medido, no supuesto,
+    porque un boton que no cabe parte la fila en dos y deshace lo de v479.
+    """
+    try:
+        from core import timeclock
+        if not timeclock.is_configured():
+            return
+        _a = st.session_state.get("auth", {}) or {}
+        _ses = timeclock.open_sessions(_a.get("nombre", "") or _a.get("usuario", ""),
+                                       grupo, _a.get("usuario", ""))
+    except Exception:
+        return                                  # la barra nunca puede tumbar la pantalla
+    _prj = _ses.get(timeclock.TIPO_PROYECTO)
+    _gen = _ses.get(timeclock.TIPO_GENERAL)
+    _txt = (t("On a project") if _prj else
+            (t("Workday open, no project") if _gen else t("Not clocked in")))
+    if st.button(_txt, key="cpxtop_fichaje", width="stretch",
+                 help=t(":material/schedule: Time clock")):
+        navegar("fichaje")
+
+
 def navegar(seccion, sub_label=None):
     """Deja pendiente saltar a una sección (y sub-pestaña) del admin. Lo usan los
     elementos ACTIVOS (indicadores del resumen, métricas, pines…). Reejecuta."""
@@ -497,7 +528,13 @@ def render_topbar(grupo):
     with c1:
         # v330: el buscador YA busca. Para el CAMPO sigue sin mostrarse: su nav es
         # corta y todo lo suyo cuelga de "Mis proyectos", así que sería ruido.
-        if _rol() != "field":
+        # ⚠️ v480: pero entonces esta columna se quedaba VACIA para el campo —197 de los
+        # 375 px de la fila sin decir nada, medido en el movil—, y encoger la fila solo
+        # la habria hecho mas pequeña. Se LLENA con el dato que esa persona necesita de
+        # un vistazo, y activo: su estado de fichaje, que lleva a Fichaje de un toque.
+        if _rol() == "field":
+            _chip_fichaje(grupo)
+        else:
             # ⚠️ Limpiar la caja tras abrir un resultado hay que hacerlo ANTES de
             # instanciar el widget (regla v111): quien lo pide es el clic, que ocurre
             # más abajo en el MISMO run, así que deja la marca y la aplica el

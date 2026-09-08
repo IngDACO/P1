@@ -399,8 +399,16 @@ def es_del_proyecto(r, pid: str, nombre: str) -> bool:
     rp = pid_of(r)
     if rp and pid:
         return rp == str(pid).strip()
-    return (str(r.get("Project", "")).strip().casefold()
-            == str(nombre or "").strip().casefold())
+    # ⚠️ v480: sin nombre NO hay respaldo posible. Antes `"" == ""` daba True, así que
+    # un proyecto con el `Name` en blanco —o una llamada que lo lea con la clave
+    # equivocada— se quedaba con TODAS las jornadas generales (las que no llevan
+    # proyecto) y con sus horas. Eso entra en `project_hours` y en el costo de mano de
+    # obra, o sea que era un fallo de dinero silencioso. Lo destapó un rojo de la suite
+    # que parecía falsa alarma.
+    _nom = str(nombre or "").strip()
+    if not _nom:
+        return False
+    return str(r.get("Project", "")).strip().casefold() == _nom.casefold()
 
 
 def mapa_nombres(grupo: str = "") -> dict:

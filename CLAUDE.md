@@ -10290,7 +10290,116 @@ que se midió, no que «haya CSS»: contenedor con key, ancla a `.st-key-cpxtop`
 de `:first-of-type`**, acotado a 640 px y **suelo de 44 px**. `verif_v478` pasa de 20 a
 **25 comprobaciones**. Suite entera: **117 verde · 0 rojo · 0 roto** (807 s).
 
-## Versiones desplegadas (v479 = actual)
+## El recorrido diario del campo, medido en un móvil (v480)
+
+Cuatro ajustes, y **ninguno salió de leer el código**: salieron de recorrer la app con
+sesión de campo a 375×812. Para poder medir hubo que crear una obra de prueba y
+asignársela a `campo000` — sin datos, la pantalla del campo era un cartel de vacío y
+**la densidad real no se podía juzgar**, que es justo lo que v478 dejó como pendiente.
+
+### 1 · Fichaje: la acción antes del resumen
+Las cuatro tarjetas ocupaban **230 px —el 28% del teléfono— enseñando «0.00 h»** de un
+día que no ha empezado, y empujaban «Workday» a **y=618** y «Project» a **y=759** con la
+pantalla en 812: la acción de **cada mañana**, bajo el pliegue.
+⚠️ Esto **matiza con medida lo que dejó escrito v308 en ese mismo sitio** —*«en móvil
+Streamlit apila las columnas solo, así que no se pierde nada»*—: horizontalmente no se
+pierde nada; **verticalmente se pierde la pantalla entera**.
+No se quita ni una cifra (v408: priorizar, no encoger): el resumen baja a donde están
+las otras cifras del día —barras por proyecto e historial—, y de paso quedan juntas.
+
+### 2 · Una sola obra: se abre sola al consultar, botón explícito al actuar
+Con **una** obra asignada, elegir en un desplegable es un toque para una lista de uno, y
+hasta elegir no se ve nada. Pero **no es el mismo caso en las tres pantallas**, y esa
+distinción ya estaba escrita en el repo:
+- **Mis proyectos** y **Pre-Start** (se CONSULTA): se abre sola. ⚠️ No es «el primero de
+  la lista» que evitó v139: `list_projects_for_field` devuelve **solo las suyas**, así
+  que una significa que no hay nada que elegir — la señal fuerte, mostrada y cambiable,
+  de v138. En Pre-Start se limita **al campo**: a admin y propietario esa lista les da
+  las del GRUPO, donde «una» significaría otra cosa.
+- **Fichar** (se ACTÚA): **no se preselecciona**. v138 pide aquí una acción que diga a
+  qué obra se fichará, así que se usa el mismo patrón del atajo del roster — un botón
+  con el nombre de la obra. Solo si es **suya** (`propios`) y si el roster no puso ya
+  ese botón.
+⚠️ Y una trampa que casi me como: `_hechos` se creaba **dentro** del `try` del roster.
+Con el roster sin configurar no existiría y el bloque nuevo daría `NameError` — el fallo
+latente de v370/v423. Ahora se crea fuera.
+
+### 3 · El contexto, después de la tarea
+El plan de la semana y la ruta, **plegados**, ocupaban ~95 px arriba y empujaban la tabla
+de «update your progress» a **y=676 de 812**: la única tarea de esa pantalla, bajo el
+pliegue. Se bajan detrás del trabajo —la ruta se mira al salir, no mientras se reporta
+avance— y la línea «Hoy:» se queda arriba, que eso sí es lo primero de la mañana.
+⚠️ La función tiene **dos salidas tempranas** (sin obras asignadas, sin obra elegida).
+Moverlos al final sin más los habría hecho **desaparecer justo para quien todavía no
+tiene obra** — el único caso en que el plan y la ruta son lo único que esa pantalla puede
+ofrecer. Van recogidos en `_contexto()` y se llama en las tres salidas.
+
+### 4 · La barra deja de tener 197 px vacíos
+El buscador es solo del admin (v330), así que para el campo la columna del medio no decía
+**nada**: 197 de los 375 px de la fila. Encogerla solo la habría hecho más pequeña; se
+**llena** con su estado de fichaje, y **activo**: un toque lleva a Fichaje desde cualquier
+pantalla.
+⚠️ **Cero lecturas nuevas**: `open_sessions` sale de `_cached_records` (caché de 120 s),
+el mismo dato que ya pinta Fichaje — y la barra se dibuja en TODAS las pantallas, con el
+techo de 60 lecturas/min de una sola cuenta de servicio.
+⚠️ Los tres textos son los **mismos** de la banda de estado (v323: una sola forma de decir
+cada cosa) y **caben medidos**: 71, 150 y 83 px con la fuente real de la app contra 173
+disponibles. Un botón que no cupiera partiría la fila en dos y desharía v479.
+
+### Lo que se descartó mirando el código, no suponiendo
+Un recorrido sintáctico decía que el campo llegaba a `_editor_ganancia_hora`
+(**Costo/h · Ganancia/h · Precio/h**). **Es falso**: cuelga de `_ganancia_section`, y el
+campo entra en `render_expenses` con `can_delete=False`. Mirar el código deshizo la
+alarma (trampa nº2: grep ≠ uso).
+⚠️ Lo que sí es cierto y **queda como pregunta abierta al usuario, sin tocar**: las
+tarjetas de **Costo total · Compras · Mano de obra · Presupuesto · Costo al terminar** y
+el «llevas gastado X de Y» **no tienen guarda de rol**, así que el campo las ve en
+Recibos. El margen sí está protegido; el costo no. Es una decisión de negocio.
+
+### ⚠️ Los tres rojos de la suite, y el fallo de dinero que había detrás
+Ninguno era una regresión de las cuatro mejoras, y **uno no era falsa alarma**:
+
+- **`es_del_proyecto` con el nombre VACÍO devolvía `True`.** El respaldo por nombre
+  comparaba `"" == ""`, así que una obra cuyo `Name` estuviera en blanco se quedaba con
+  **todas las jornadas generales** —las que no llevan proyecto— y con sus horas. Eso
+  entra en `project_hours` y en el **costo de mano de obra** por sus tres llamadas
+  (`projects.py` ×2, `expenses.py`), o sea que era un error de dinero silencioso. Y el
+  `Name` en blanco no es hipotético: **el cliente tiene acceso a su propio libro**.
+  Ahora, sin nombre no hay respaldo posible.
+- **`check_ceros.py` leía `Nombre`/`Grupo`**, en español: **v468 renombró esas
+  columnas**, así que le llegaba el nombre vacío y —por lo anterior— acusaba a obras
+  inocentes de tener fichajes sin contar. ⚠️ Se mantuvo verde doce versiones **solo
+  porque el libro de la demo no tenía obras**: en cuanto hubo una obra y una jornada,
+  mintió. Es exactamente el guardián que habría gritado en cuanto entrara un cliente
+  real.
+- **`verif_v455`** exigía ver **≥3 modelos de ingreso distintos** en cuanto hubiera UNA
+  obra: su salvaguarda solo contemplaba el libro vacío, y con una obra la variedad es
+  imposible por aritmética. Ahora pide que haya **con qué** comprobar.
+
+### ⚠️ Y tres afirmaciones de v308 que caducaron — reancladas, no relajadas
+Las tres protegían de verdad el fallo de v306 (que a la hoja fuera la **etiqueta** del
+desplegable en vez del **nombre**), pero lo hacían por su FORMA: «0 `next(...)` en la
+función», «3 `_nom_de.get`» y una **lista de keys escrita a mano**. El botón nuevo usa
+`next(iter(idmap))` para el TEXTO y saca el nombre de `_nom_de` — cumple la regla y
+rompía el proxy.
+Ahora afirman lo que protegían, **y más fuerte**: que **TODA** llamada a
+`fichar_proyecto` tome su nombre de `_nom_de`, sean una o diez; y que en la columna del
+Proyecto solo haya keys suyas, **derivado** en vez de listado (v433/v434).
+⚠️ Con **control**: la sonda se valida contra el fallo de v306 **reconstruido**, porque
+un cero que no sabe reconocer el fallo que busca no vale nada (trampa nº12).
+
+### Verificación
+`verif_v480.py`, **25 comprobaciones**. Las que valen: el chip **EJECUTADO** en sus tres
+estados con `st.button` interceptado (importar no ejecuta, v378); **cada salida temprana
+comprobada una por una** con la sonda validada contra un caso construido (trampa nº12);
+que no se perdió ninguna tarjeta; que **no hay preselección silenciosa** al fichar; y que
+los textos del chip son los mismos de la banda, atados a ella y no a una lista escrita a
+mano que se quedaría vieja (v433/v434).
+⚠️ Y un fallo **de la sonda, no del código**: `ast.walk` devolvía el `if prj:` de fuera
+porque el texto del hijo está dentro del padre, y el guardián acusaba a un código
+correcto. Se ató al `test`.
+
+## Versiones desplegadas (v480 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -10298,6 +10407,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v480 | **El recorrido diario del campo, medido en un móvil** (375×812, con una obra de prueba asignada — sin datos no se podía juzgar la densidad, el pendiente que dejó v478). **(1) Fichaje**: las 4 tarjetas gastaban **230 px enseñando 0.00 h** y empujaban la acción de cada mañana a **y=618/759 de 812** — ahora las acciones van antes y no se pierde ni una cifra (v408). ⚠️ Matiza con medida lo que decía v308 ahí mismo. **(2) Una sola obra**: se abre sola donde se CONSULTA, y donde se ACTÚA es un **botón explícito** — v138 prohíbe preseleccionar al fichar. **(3)** El plan y la ruta bajan detrás de la tarea (la tabla de avance estaba en y=676), ⚠️ con `_contexto()` en **las dos salidas tempranas**, que si no desaparecía para quien aún no tiene obra. **(4)** La barra tenía **197 px vacíos** para el campo: ahora lleva su estado de fichaje, activo, con **0 lecturas nuevas** y textos que **caben medidos**. + se ⚠️ **un fallo de dinero** salido de un rojo que parecía falsa alarma: `es_del_proyecto` con el nombre vacío se quedaba con **todas las jornadas generales** (entra en horas y costo de mano de obra). + se descartó una alarma propia (el campo **no** ve el margen) y queda **una pregunta abierta**: sí ve las tarjetas de costo y presupuesto. 25 comprobaciones |
 | v479 | **La barra superior deja de comerse un cuarto del móvil.** Medido con sesión de campo a 375×812: sus cuatro columnas se **apilaban en 112 px** y el título empezaba en y=196 — el **24% del teléfono** en chrome. Ahora **44 px** y título en y=128: **68 px devueltos al contenido**. ⚠️ El primer intento ganaba lo mismo pero dejaba los botones en **26 px**, bajo el mínimo de 36 de v326/v327 — **se vio midiendo, no mirando la captura**. ⚠️ Anclado a una `key` y no a `:first-of-type` (que se rompe en silencio, v304/v332), y **verificado en vivo antes de desplegar** con la cadena sacada del fichero por AST y **un control** que además desactivó una falsa alarma (un botón 0×0 que es del tooltip de Streamlit y está igual con y sin la regla). + auditoría de tablas del campo: el **margen NO** lo ve (`can_delete=False`), pero las tarjetas de **costo y presupuesto sí** — queda como pregunta al usuario, sin tocar. 25 comprobaciones · suite **117 verde** |
 | v478 | **La autogestión del campo** (petición del usuario): *My credentials · My payslips · My absences* pasan a sub-pestañas de **Self-service** y su nav baja de **8 a 6** — importa porque esa cuenta se usa en el MÓVIL. ⚠️ Revierte a sabiendas la decisión de v154/v430 (*«enterrarla un nivel cuesta un toque cada mañana»*): medido, eso solo aplica a **ausencias**, la única donde el campo ACTÚA, y su acción urgente —avisar de una baja— **recupera el toque con un atajo desde Fichaje**, visible solo si no ha fichado. ⚠️ **Corrección mía**: propuse arreglar un «callejón sin salida» en credenciales y la premisa era incompleta — `notify_expiring` ya avisa al admin Y al dueño (v104/v187), así que el arreglo es **una línea**, no un canal nuevo; y tres errores del parche se cazaron mirando las firmas antes de aplicarlo (v135), incluido un `logger` inexistente. + **móvil**: 0 anchos fijos hostiles en las 7 pantallas, y la tabla de credenciales reordenada con el criterio de v408 (**priorizar, no encoger**) con `Tipo` anclada. ⚠️ Cuatro guardianes caducaron y **uno defendía la decisión contraria** (v430, «ausencias va suelta»): se reescribió sobre lo que protegía **y gana la comprobación de que el atajo exista**. 20 comprobaciones · suite **117 verde** |
 | v477 | **Vincular Telegram fallaba sin decir por qué** (lo reportó el usuario): un solo mensaje para CUATRO causas. ⚠️ Una de ellas **no dejaba ni traza** — con un *webhook* activo Telegram responde **409**, `requests` no lanza y el código se quedaba con la lista vacía, así que vincular no funcionaría NUNCA. ⚠️ Y la causa más probable no es del código: **el `/start <código>` solo se envía si el chat es NUEVO**, así que quien ya había hablado con el bot no manda nada al abrir el enlace — la salida que siempre funciona (escribir el código como mensaje normal) ahora sale en pantalla de entrada. `telegram_diagnostico` distingue las cinco situaciones y `find` delega en ella (v323); las cinco ramas **ejercitadas** interceptando `getUpdates`. ⚠️ El token vive solo en los secrets del Cloud (v368), así que el arreglo es que **la app lo diga**, no adivinarlo. + la suite cazó un rojo que **solo pudo salir por la migración de roles de v475**: `verif_v381` anclado a un proyecto que ya no existe — y su comparación vieja eran **dos ceros** |

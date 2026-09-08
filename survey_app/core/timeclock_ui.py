@@ -703,28 +703,15 @@ def render_timeclock_tab():
             from core.home_ui import navegar          # perezoso: evita el ciclo
             navegar("autogestion", "🌴 Ausencias")
 
-    # Semana en curso (v308): lo que de verdad quiere saber quien ficha. Sale de los
-    # mismos registros cacheados → 0 lecturas nuevas.
-    try:
-        sem = timeclock.resumen_semana(nombre, grupo, usuario)
-    except Exception:
-        sem = {"general": 0.0, "proyecto": 0.0, "dias": 0}
-    tarj = [_tarjeta(t("Today's workday"), f"{hoy['general']:.2f} h",
-                     t("the paid time"), _AZUL, bool(gen)),
-            _tarjeta(t("Charged to projects"), f"{hoy['proyecto']:.2f} h",
-                     f"{len(hoy['por_proyecto'])} {t('project(s)')}", _VERDE, bool(prj)),
-            _tarjeta(t("Unassigned"), f"{hoy['sin_asignar']:.2f} h",
-                     t("travel, waiting or a project not clocked in"),
-                     _ROJO if hoy["sin_asignar"] > 2 else None),
-            _tarjeta(t("This week"), f"{sem['general']:.2f} h",
-                     f"{t('Monday to today')} · {sem['dias']} {t('day(s)')}", _AZUL)]
-    st.markdown('<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px">'
-                + "".join(tarj) + "</div>", unsafe_allow_html=True)
-
     # ── Las DOS acciones, lado a lado (v308) ──────────────────────
     # Antes iban apiladas y separadas por una línea, con los botones estirados a todo
     # el ancho. ⚠️ En móvil —donde el campo usa esto— Streamlit apila las columnas
     # solo, así que no se pierde nada; en PC se acaba el scroll y el botón de 1350 px.
+    # ⚠️ v480 MATIZA esa última frase, con medida: apilarse no cuesta ANCHO, pero sí
+    # ALTO — y el alto era el problema. Con las tarjetas delante, este bloque empezaba
+    # en y=618 de 812 en un teléfono, o sea que fichar (lo primero que hace el campo
+    # cada mañana) quedaba bajo el pliegue. Por eso el resumen se movió DEBAJO. Las dos
+    # columnas se quedan como están: esa parte de v308 sigue siendo cierta.
     col_jor, col_prj = st.columns(2, gap="large")
 
     # ── Jornada general ──
@@ -806,11 +793,14 @@ def render_timeclock_tab():
                 st.caption(t("You have no projects assigned; your group's projects are shown."))
             # ── Atajo: tu asignación de hoy (del roster) ──
             # Accion EXPLICITA (dice a que fichara), no una preseleccion silenciosa (v138).
+            # ⚠️ v480: `_hechos` se crea FUERA del try. Dentro, si el roster no esta
+            # configurado o la llamada revienta, no existiria y el bloque de abajo
+            # petaria con NameError — el fallo latente de v370/v423.
+            _hechos = set()
             try:
                 from core import roster
                 if roster.is_configured():
                     _aa = roster.asignaciones_dia(grupo, usuario)   # v274: varias por día
-                    _hechos = set()
                     for _a in _aa:
                         _rpid = (_a or {}).get("proyecto_id", "")
                         if not _rpid or _rpid in _hechos or _rpid not in idmap.values():
@@ -831,17 +821,64 @@ def render_timeclock_tab():
                         st.caption(t("Or pick another project below."))
             except Exception:
                 pass
-            _pid = ui.elegir(t("Which project are you working on?"), idmap, key="tc_prj_sel",
-                             vacio=t("— pick the project —"))
-            if st.button(t(":material/check_circle: Clock in to the project"), width="stretch", type="primary",
-                         key="tc_prj_in", disabled=(_pid is None)):
-                _nom = _nom_de.get(_pid, "")               # v308: el nombre, no la etiqueta
-                ok, msg, auto = timeclock.fichar_proyecto(nombre, _nom, grupo, usuario, _pid)
-                if ok:
-                    flash.exito(msg + (t("  :material/schedule: Your workday was opened too.") if auto else ""))
-                    st.rerun()
-                else:
-                    st.error(msg)
+            # v480 · Con UNA sola obra propia, el desplegable era elegir de una lista de
+            # uno: dos toques en el movil para algo sin alternativa. ⚠️ NO se
+            # preselecciona —v138 pide aqui una accion EXPLICITA que diga a que se
+            # fichara— sino que se usa el MISMO patron del atajo del roster de arriba: un
+            # boton que lleva el nombre de la obra. Se exige `propios` porque sin ello
+            # «una» puede ser el respaldo del grupo, que no es suya (v422), y `not
+            # _hechos` para no repetir el boton que el roster ya puso.
+            if propios and len(idmap) == 1 and not _hechos:
+                _lbl1 = next(iter(idmap))
+                _pid1 = idmap[_lbl1]
+                if st.button(f"{t(':material/check_circle: Clock in to')} {_lbl1}",
+                             width="stretch", type="primary", key="tc_prj_solo"):
+                    _nom = _nom_de.get(_pid1, "")
+                    ok, msg, auto = timeclock.fichar_proyecto(nombre, _nom, grupo, usuario, _pid1)
+                    if ok:
+                        flash.exito(msg + (t("  :material/schedule: Your workday was opened too.") if auto else ""))
+                        st.rerun()
+                    else:
+                        st.error(msg)
+            else:
+                _pid = ui.elegir(t("Which project are you working on?"), idmap, key="tc_prj_sel",
+                                 vacio=t("— pick the project —"))
+                if st.button(t(":material/check_circle: Clock in to the project"), width="stretch", type="primary",
+                             key="tc_prj_in", disabled=(_pid is None)):
+                    _nom = _nom_de.get(_pid, "")           # v308: el nombre, no la etiqueta
+                    ok, msg, auto = timeclock.fichar_proyecto(nombre, _nom, grupo, usuario, _pid)
+                    if ok:
+                        flash.exito(msg + (t("  :material/schedule: Your workday was opened too.") if auto else ""))
+                        st.rerun()
+                    else:
+                        st.error(msg)
+
+    # ⚠️ v480 · MEDIDO a 375x812 con sesion de campo: estas cuatro tarjetas ocupaban
+    # 230 px —el 28% del telefono— enseñando "0.00 h" de un dia que aun no ha empezado, y
+    # empujaban «Workday» a y=618 y «Project» a y=759, o sea la accion de CADA MAÑANA
+    # bajo el pliegue. ⚠️ Esto matiza lo que dejó escrito v308 aqui mismo —«en movil se
+    # apilan solas, asi que no se pierde nada»—: horizontalmente no se pierde nada,
+    # verticalmente se pierde la pantalla entera.
+    # No se quita NI UNA cifra: se baja el resumen a donde estan las otras cifras del
+    # dia (barras por proyecto e historial), que ademas las deja juntas. Criterio de
+    # v408: priorizar, no encoger.
+    # Semana en curso (v308): lo que de verdad quiere saber quien ficha. Sale de los
+    # mismos registros cacheados → 0 lecturas nuevas.
+    try:
+        sem = timeclock.resumen_semana(nombre, grupo, usuario)
+    except Exception:
+        sem = {"general": 0.0, "proyecto": 0.0, "dias": 0}
+    tarj = [_tarjeta(t("Today's workday"), f"{hoy['general']:.2f} h",
+                     t("the paid time"), _AZUL, bool(gen)),
+            _tarjeta(t("Charged to projects"), f"{hoy['proyecto']:.2f} h",
+                     f"{len(hoy['por_proyecto'])} {t('project(s)')}", _VERDE, bool(prj)),
+            _tarjeta(t("Unassigned"), f"{hoy['sin_asignar']:.2f} h",
+                     t("travel, waiting or a project not clocked in"),
+                     _ROJO if hoy["sin_asignar"] > 2 else None),
+            _tarjeta(t("This week"), f"{sem['general']:.2f} h",
+                     f"{t('Monday to today')} · {sem['dias']} {t('day(s)')}", _AZUL)]
+    st.markdown('<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px">'
+                + "".join(tarj) + "</div>", unsafe_allow_html=True)
 
     # ── Lo de hoy, por proyecto ──
     if hoy["por_proyecto"]:

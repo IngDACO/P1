@@ -3092,9 +3092,9 @@ def render_field_projects(usuario: str, grupo: str):
         st.warning(t("Project management needs Google Sheets configured."))
         return
 
-    # ── Planificación de la semana (el campo ve toda la cuadrilla) ──
+    # ── Hoy: UNA linea, arriba del todo (v274/v277) ──
     try:
-        from core import roster, roster_ui
+        from core import roster
         if roster.is_configured():
             _aa = roster.asignaciones_dia(grupo, usuario)   # v274/v277: varias, con franja
             if _aa:
@@ -3110,18 +3110,36 @@ def render_field_projects(usuario: str, grupo: str):
                 _est = all(a.get("es_estado") for a in _aa)
                 (st.info if _est else st.success)(
                     f"{t(':material/calendar_month: **Today:**')} {_ets}{_n}")
-            with st.expander(t(":material/calendar_month: See the week's plan (the whole crew)")):
-                roster_ui.render_board_readonly(grupo, resaltar_usuario=usuario)
     except Exception:
         pass
 
-    # ── Mi ruta del día (v270): mis obras en el mapa, ordenadas para ir a terreno ──
-    with st.expander(t(":material/route: My route (my sites on the map)")):
+    def _contexto():
+        """El plan de la semana y la ruta — contexto, no la tarea (v480).
+
+        ⚠️ MEDIDO a 375x812: plegados ocupaban ~95 px ARRIBA y empujaban la tabla de
+        «update your progress» a y=676 de 812, o sea la unica tarea de esta pantalla
+        bajo el pliegue. No se quita nada ni se encoge nada (v408): se ponen DESPUES
+        del trabajo, que es donde se consultan —la ruta se mira al salir, no mientras
+        se reporta avance—. La linea «Hoy:» si se queda arriba: eso si es lo primero
+        que hay que ver por la mañana.
+        ⚠️ Se llama tambien en las dos salidas tempranas (sin obras asignadas, sin obra
+        elegida): moverlas al final SIN esto las habria hecho desaparecer justo para
+        quien todavia no tiene obra — el caso en que la ruta y el plan son lo unico
+        que esa pantalla puede ofrecer.
+        """
         try:
-            from core import route_ui
-            route_ui.render_mi_ruta(usuario, grupo)
+            from core import roster, roster_ui
+            if roster.is_configured():
+                with st.expander(t(":material/calendar_month: See the week's plan (the whole crew)")):
+                    roster_ui.render_board_readonly(grupo, resaltar_usuario=usuario)
         except Exception:
-            st.caption(t("The route could not be loaded right now."))
+            pass
+        with st.expander(t(":material/route: My route (my sites on the map)")):
+            try:
+                from core import route_ui
+                route_ui.render_mi_ruta(usuario, grupo)
+            except Exception:
+                st.caption(t("The route could not be loaded right now."))
 
     # v423: **con las internas**. Quien trabaja en la oficina o el almacén tiene su sitio
     # asignado ahí (v422) y necesita lo mismo que en una obra: ver sus avisos, cargar
@@ -3130,6 +3148,7 @@ def render_field_projects(usuario: str, grupo: str):
     proys = P.list_projects_for_field(usuario, grupo=grupo, incluir_internos=True)
     if not proys:
         st.info(t("You have no projects assigned yet. The administrator assigns you to a project."))
+        _contexto()                      # v480: sin obra, esto es lo unico que hay
         return
 
     idmap = {f"{p.get('Name')} ({p.get('ID')}) — {p.get('Status')}": p.get("ID")
@@ -3151,9 +3170,17 @@ def render_field_projects(usuario: str, grupo: str):
             _m = next((k for k in idmap if k.startswith(_fich + " (")), None)
             if _m:
                 st.session_state["fieldproj_sel"] = _m
+        # v480 · Si solo tiene UNA obra asignada, se abre sola. MEDIDO en el movil: el
+        # desplegable era un toque para elegir de una lista de uno, y hasta elegir la
+        # pantalla no enseñaba nada. ⚠️ No es «el primero de la lista» que evitó v139:
+        # `list_projects_for_field` devuelve solo las SUYAS, asi que uno significa que no
+        # hay nada que elegir. Se MUESTRA en el desplegable y se puede cambiar (v138).
+        if "fieldproj_sel" not in st.session_state and len(idmap) == 1:
+            st.session_state["fieldproj_sel"] = next(iter(idmap))
     sel = st.selectbox(t("Assigned project"), _opts, key="fieldproj_sel")
     if not sel or sel == _VACIO:
         st.caption(t("Choose the project you are working on. If you clock in at :material/schedule: Time clock, it opens on its own."))
+        _contexto()                      # v480
         return
     pid = idmap[sel]
     prj = P.get_project(pid)
@@ -3208,6 +3235,9 @@ def render_field_projects(usuario: str, grupo: str):
         render_expenses(pid, grupo, can_delete=False, key_prefix="fld")
     else:   # :material/attach_file: Archivos
         _archivos_section(pid)
+
+    # v480 · el contexto, DESPUES de la tarea
+    _contexto()
 
 
 # ── Gastos / compras por proyecto (admin, campo) ──
