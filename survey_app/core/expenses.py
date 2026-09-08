@@ -81,7 +81,7 @@ def _invalidate():
     # (`hojas._lote`). Si no, tras escribir, el dato seguiría saliendo del lote
     # cacheado hasta 120 s y parecería que no se guardó.
     from core import hojas
-    hojas.invalidar()
+    hojas.invalidar(SHEET)
     # ⚠️ v344: y las DERIVADAS. `group_expenses` y `over_budget` cachean el agregado,
     # así que limpiar solo `_records` dejaba el total del grupo y la alerta de
     # sobre-presupuesto con el valor viejo hasta 120 s tras cargar un recibo.

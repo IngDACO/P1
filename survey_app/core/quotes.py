@@ -103,7 +103,7 @@ def _records():
     return _records_cached(_libro_de(SHEET))
 def _invalidate():
     from core import hojas                 # v339: tirar también el LOTE compartido
-    hojas.invalidar()
+    hojas.invalidar(SHEET)
     for fn in (_records_cached, resumen):
         try:
             fn.clear()

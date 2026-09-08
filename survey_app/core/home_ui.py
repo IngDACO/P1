@@ -152,7 +152,9 @@ _SUBSECCIONES_OWNER = {
         ("👥 Usuarios",  ":material/group: Users"),
         ("📁 Proyectos", ":material/folder: Projects"),
         ("🚆 Rieles",    ":material/train: Rails"),
-        ("📚 Manuales",  ":material/menu_book: Manuals")]),
+        ("📚 Manuales",  ":material/menu_book: Manuals"),
+        # v482 · al FINAL, para no reordenarle el menú a quien ya lo usa (v297).
+        ("📈 Cuota",     ":material/speed: API quota")]),
     "herramientas": _SUBSECCIONES_CAMPO["herramientas"],   # las 5 técnicas, sin Pre-Start
 }
 

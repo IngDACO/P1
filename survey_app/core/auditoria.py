@@ -129,7 +129,7 @@ def _records():
     return _records_cached(_libro_de(SHEET))
 def _invalidate():
     from core import hojas
-    hojas.invalidar()
+    hojas.invalidar(SHEET)
     try:
         _records_cached.clear()
     except Exception:

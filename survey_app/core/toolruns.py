@@ -88,7 +88,7 @@ def _invalidate():
     # (`hojas._lote`). Si no, tras escribir, el dato seguiría saliendo del lote
     # cacheado hasta 120 s y parecería que no se guardó.
     from core import hojas
-    hojas.invalidar()
+    hojas.invalidar(SHEET)
     try:
         _records_cached.clear()
     except Exception:

@@ -97,7 +97,7 @@ def _records():
 
 def _invalidate():
     from core import hojas                      # v339: tirar también el LOTE
-    hojas.invalidar()
+    hojas.invalidar(SHEET)
     try:
         _records_cached.clear()
     except Exception as e:

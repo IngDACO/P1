@@ -139,11 +139,45 @@ def _lote(sheet_id: str = "") -> dict:
         return {}
 
 
-def invalidar():
+def invalidar(titulo: str = "", grupo: str = None):
+    """Tira el lote. Con `titulo`, SOLO el del libro donde vive esa hoja.
+
+    ## Por qué recibe el título
+
+    ⚠️ Antes hacía `_lote.clear()` sin argumento, que borra la entrada de **todos los
+    libros**: una escritura de un cliente obligaba a releer a todos los demás, así que
+    los inquilinos se acoplaban entre sí contra el techo de 60 lecturas/min de la
+    ÚNICA cuenta de servicio.
+
+    ⚠️ Y el argumento es el TÍTULO, no el `sheet_id`, porque las hojas GLOBALES
+    (`Login`, `Groups`, `Rails`, `Manuals`, `Library`, `LibraryModels`) viven en el
+    MAESTRO y no en el libro del grupo: resolver «el libro de la sesión» tras escribir
+    en una de ellas limpiaría **otro** libro y dejaría el valor viejo hasta 120 s —
+    el «lo guardé y no sale» que v339 vino a evitar.
+
+    ⚠️ **Sin título se tira ENTERO**, que es el comportamiento de siempre y el seguro:
+    limpiar de más cuesta una lectura; limpiar el libro equivocado enseña datos viejos.
+    Un llamador que se olvide degrada al comportamiento anterior, no rompe nada.
+    """
+    sid = ""
+    if titulo:
+        try:
+            sid = timeclock.sheet_id_para(titulo, grupo)
+        except Exception as e:
+            # No se pudo resolver el libro: se limpia TODO, que es lo conservador.
+            logger.warning("hojas: no se pudo resolver el libro de %s: %s", titulo, e)
     try:
-        _lote.clear()
+        if sid:
+            _lote.clear(sid)
+        else:
+            _lote.clear()
     except Exception:
-        pass
+        # `clear(arg)` existe desde Streamlit 1.36; si algún día no estuviera, se cae
+        # al borrado completo antes que dejar la caché sucia.
+        try:
+            _lote.clear()
+        except Exception:
+            pass
 
 
 def registros(titulo: str, cabeceras=None, grupo: str = None):

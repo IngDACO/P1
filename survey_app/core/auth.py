@@ -117,7 +117,7 @@ def _invalidate_login():
     # (`hojas._lote`). Si no, tras escribir el dato seguiría saliendo del lote
     # cacheado hasta 120 s y parecería que no se guardó.
     from core import hojas
-    hojas.invalidar()
+    hojas.invalidar("Login")
     try:
         _login_records_cached.clear()
     except Exception:
@@ -137,7 +137,7 @@ def _invalidate_groups():
     # (`hojas._lote`). Si no, tras escribir, el dato seguiría saliendo del lote
     # cacheado hasta 120 s y parecería que no se guardó.
     from core import hojas
-    hojas.invalidar()
+    hojas.invalidar("Login")
     try:
         _group_records.clear()
     except Exception:

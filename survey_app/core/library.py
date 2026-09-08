@@ -111,7 +111,7 @@ def _invalidate():
     """⚠️ Tira su caché Y la del LOTE de v339: `_records` lee por `hojas.registros`,
     así que limpiar solo la de aquí dejaría saliendo el valor viejo hasta 120 s — el
     «lo guardé y no sale» que v344 encontró vivo durante cuatro versiones."""
-    hojas.invalidar()
+    hojas.invalidar(SHEET)
     for fn in (_records, _modelos_records):
         try:
             fn.clear()

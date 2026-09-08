@@ -200,7 +200,7 @@ def _invalidate():
     # v339 quedó `f.clear()`, un nombre inexistente, y el `except` se tragaba el
     # NameError → el tablero podía seguir enseñando la asignación vieja hasta 120 s.
     from core import hojas
-    hojas.invalidar()
+    hojas.invalidar(ROSTER_SHEET)
     # ⚠️ v378: las CACHEADAS (`*_cached`), no los envoltorios (ver `projects`).
     for fn in (_trab_records_cached, _roster_records_cached):
         try:

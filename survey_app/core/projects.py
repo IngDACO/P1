@@ -287,7 +287,7 @@ def _invalidate():
     # valor viejo hasta 120 s. No lo vio ningún test: solo salió al ejercitar la
     # escritura contra la hoja real y ver un «antes» rancio en la auditoría.
     from core import hojas
-    hojas.invalidar()
+    hojas.invalidar("Projects")
     # Y las DERIVADAS (v344): `gaps_by_group`/`projections_by_group` cachean el
     # retraso y la fecha proyectada de cada obra; sin limpiarlas, tras tocar las
     # actividades el retraso y el «en riesgo» seguían con el valor viejo.

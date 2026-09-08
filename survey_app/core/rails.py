@@ -65,7 +65,7 @@ def _invalidate():
     """
     try:
         from core import hojas
-        hojas.invalidar()
+        hojas.invalidar(RIELES_SHEET)
     except Exception:
         pass
     try:

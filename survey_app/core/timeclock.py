@@ -68,6 +68,16 @@ _ESPERAS = (0.6, 1.5)
 _HTTP_CLS = None
 
 
+def _anotar_llamada(method, endpoint):
+    """Apunta la llamada en el contador de cuota (v482). NUNCA puede propagar:
+    un medidor que tumba una lectura es peor que no tener medidor."""
+    try:
+        from core import metrics
+        metrics.anota(method, endpoint)
+    except Exception:                       # noqa: BLE001
+        pass
+
+
 def _http_client_cls():
     """Clase de cliente HTTP con reintento acotado (import perezoso de gspread,
     igual que el resto del módulo). Se construye una sola vez."""
@@ -78,8 +88,14 @@ def _http_client_cls():
 
         class _ConReintento(HTTPClient):
             def request(self, *a, **kw):
+                # ⚠️ v482 · Se apunta CADA INTENTO, no cada llamada lógica: un 429
+                # reintentado son dos llamadas contra la cuota, y contar solo la
+                # lógica subestimaría justo la ráfaga que se quiere medir.
+                _m = a[0] if a else kw.get("method", "")
+                _ep = a[1] if len(a) > 1 else kw.get("endpoint", "")
                 for espera in _ESPERAS:
                     try:
+                        _anotar_llamada(_m, _ep)
                         return super().request(*a, **kw)
                     except APIError as e:
                         cod = (getattr(e, "code", None)
@@ -90,6 +106,7 @@ def _http_client_cls():
                         if cod != 429 and cod < 500:
                             raise
                         _dormir(espera)
+                _anotar_llamada(_m, _ep)
                 return super().request(*a, **kw)   # último intento: si falla, propaga
 
         _HTTP_CLS = _ConReintento
@@ -200,7 +217,7 @@ def invalidar_libros():
             logger.warning("timeclock.invalidar_libros: %s: %s", fn, e)
     try:
         from core import hojas
-        hojas.invalidar()
+        hojas.invalidar("Sheet1")
     except Exception:
         pass
 
@@ -672,7 +689,7 @@ def _invalidate_records():
     # (`hojas._lote`). Si no, tras escribir, el dato seguiría saliendo del lote
     # cacheado hasta 120 s y parecería que no se guardó.
     from core import hojas
-    hojas.invalidar()
+    hojas.invalidar("Sheet1")
     try:
         _cached_records_cached.clear()
     except Exception:

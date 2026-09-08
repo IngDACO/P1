@@ -699,8 +699,87 @@ def render_owner_seccion(sec: str):
         render_owner_projects()
     elif sec == "🚆 Rieles":
         _owner_rieles()
+    elif sec == "📈 Cuota":
+        _owner_cuota()
     else:
         _owner_manuales()
+
+
+def _owner_cuota():
+    """Consumo real de la API de Google, medido (v482).
+
+    ⚠️ Responde la pregunta que decide la fase 5 de la ruta: ¿aprieta la cuota de
+    verdad? Hasta ahora se habría contestado por intuición. El contador vive en
+    memoria del proceso (`core/metrics.py`) y **no cuesta ni una llamada**.
+    """
+    from core import metrics, theme as _T
+    st.markdown(t("### :material/speed: Google API quota"))
+    st.caption(t("Measured in this process. The ceiling is **60 reads and 60 writes per minute** for the whole app, because there is a single service account. Restarting the app resets the counter."))
+
+    r = metrics.resumen()
+    if not r["total"]:
+        st.info(t("No calls recorded yet in this process. Move around the app and come back."))
+        return
+
+    _pl, _pe = r["pico"]["lectura"], r["pico"]["escritura"]
+    _al, _ae = r["ahora"]["lectura"], r["ahora"]["escritura"]
+
+    def _color(n):
+        return _T.ROJO if n >= 54 else (_T.AMBAR if n >= 36 else _T.VERDE)
+
+    _T.kpi_row([
+        (t("Reads · last minute"), str(_al), t("of 60"), _color(_al)),
+        (t("Writes · last minute"), str(_ae), t("of 60"), _color(_ae)),
+        (t("Peak reads in one minute"), str(_pl), t("worst minute seen"), _color(_pl)),
+        (t("Peak writes in one minute"), str(_pe), t("worst minute seen"), _color(_pe)),
+    ])
+
+    _mins = r["minutos_vivo"]
+    st.caption(f"{r['total']} {t('calls in')} {_mins:.0f} {t('min')} "
+               f"({(r['total'] / _mins if _mins else 0):.1f} {t('per minute on average')})"
+               + (f" · ⚠️ {t('history truncated: only the most recent calls are kept')}"
+                  if r["truncado"] else ""))
+
+    # ⚠️ El veredicto se dice en palabras, no solo en números: el pico es lo que
+    # decide, no la media — la media siempre sale tranquilizadora.
+    _peor = max(_pl, _pe)
+    if _peor >= 54:
+        st.error(t("The worst minute seen used {n} of the 60 available. The ceiling is real: more service accounts or a different data layer.").replace("{n}", str(_peor)))
+    elif _peor >= 36:
+        st.warning(t("The worst minute seen used {n} of 60. There is room, but a second active client could reach the ceiling.").replace("{n}", str(_peor)))
+    else:
+        st.success(t("The worst minute seen used {n} of 60. The ceiling is not the constraint today.").replace("{n}", str(_peor)))
+
+    # Reparto por libro: dice si el consumo es de un cliente o de todos.
+    if r["por_libro"]:
+        _nom = {}
+        try:
+            for g in auth.list_groups():
+                _sid = str(g.get("SheetID", "") or "").strip()
+                if _sid:
+                    _nom[_sid] = str(g.get("Group", ""))
+        except Exception:
+            pass
+        _filas = [{
+            t("Book"): _nom.get(k, t("master") if k not in _nom else k),
+            t("Reads"): v["lectura"], t("Writes"): v["escritura"],
+            t("Total"): v["lectura"] + v["escritura"],
+        } for k, v in sorted(r["por_libro"].items(),
+                             key=lambda kv: -(kv[1]["lectura"] + kv[1]["escritura"]))]
+        st.markdown(t("**By book**"))
+        st.dataframe(pd.DataFrame(_filas), hide_index=True, width="stretch",
+                     column_config=tabla.cfg())
+
+    if len(r["por_minuto"]) > 1:
+        st.markdown(t("**Calls per minute**"))
+        _df = pd.DataFrame([{t("Reads"): l, t("Writes"): e}
+                            for _c, l, e in r["por_minuto"]])
+        st.line_chart(_df, height=180)
+
+    if st.button(t(":material/restart_alt: Reset the counter"), key="cuota_reset"):
+        metrics.reiniciar()
+        flash.exito(t("Counter reset."))
+        st.rerun()
 
 
 def _owner_resumen():
