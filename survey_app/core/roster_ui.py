@@ -14,6 +14,7 @@ import streamlit as st
 from core import flash
 
 from core import roster as R
+from core import ui_common as ui
 from core import auth
 from core import projects as P
 from core import clock
@@ -1622,10 +1623,13 @@ def _catalogo(grupo):
                                            key=f"tedn_{tid}")
                         _nm = e2.text_input(t("Name"), value=str(r.get("Name", "")),
                                             key=f"tednm_{tid}")
-                        _cur = _colinv.get(str(r.get("Color", "")).lower())
-                        _nombres = list(_colmap)
+                        # ⚠️ v487: un color que no es de la paleta se CONSERVA (antes
+                        # «Save changes» lo cambiaba por el primero de la paleta).
+                        _cur = _colinv.get(str(r.get("Color", "")).lower()) \
+                            or str(r.get("Color", "")).strip()
+                        _nombres, _ci = ui.opciones_con_actual(list(_colmap), _cur)
                         _cn = e3.selectbox(t("Colour"), _nombres, key=f"tedc_{tid}",
-                                           index=_nombres.index(_cur) if _cur in _nombres else 0)
+                                           index=_ci)
                         g1, g2 = st.columns([1, 1])
                         if g1.button(t(":material/save: Save changes"), key=f"teds_{tid}",
                                      type="primary", width="stretch"):
@@ -1634,7 +1638,7 @@ def _catalogo(grupo):
                             else:
                                 ok, msg = R.update_trabajo(tid, {
                                     "Number": _n.strip(), "Name": _nm.strip(),
-                                    "Color": _colmap[_cn]})
+                                    "Color": _colmap.get(_cn, _cn)})
                                 (flash.exito if ok else st.error)(msg)
                                 if ok:
                                     st.session_state["_trab_edit"] = ""

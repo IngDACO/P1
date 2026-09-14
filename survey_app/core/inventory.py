@@ -38,7 +38,13 @@ MOV_HEADERS = ["ID", "Group", "AssetID", "Type", "Date", "FromLocation", "ToLoca
                "User", "Cost", "Note", "CreatedBy", "Created"]
 MOV_TIPOS = ["check-out", "check-in", "transfer", "maintenance", "written off"]
 
-ESTADOS = ["available", "in use", "maintenance", "damaged", "written off"]
+# ⚠️ v487: con NOMBRE, para que nadie vuelva a escribir el estado a mano. Las KPIs
+# de la lista buscaban "disponible"/"en_uso" y, como v469 canoniza el estado al
+# LEER, marcaban 0 SIEMPRE; y el alta y el mantenimiento seguian ESCRIBIENDO en
+# español, dejando la hoja mezclada.
+DISPONIBLE, EN_USO, MANTENIMIENTO, DANADO, BAJA = (
+    "available", "in use", "maintenance", "damaged", "written off")
+ESTADOS = [DISPONIBLE, EN_USO, MANTENIMIENTO, DANADO, BAJA]
 CONDICIONES = ["good", "fair", "poor"]
 UBIC_TIPOS = ["warehouse", "project", "user", "under repair"]
 CAT_DEFAULT = ["Tool", "Equipment", "Vehicle", "PPE", "Consumable", "Other"]
@@ -216,7 +222,7 @@ def create_activo(grupo, nombre, categoria="", marca="", modelo="", serie="",
     row = [aid, grupo, str(nombre).strip(), str(categoria or ""), str(marca or ""),
            str(modelo or ""), str(serie or ""), str(foto_id or ""),
            str(fecha_compra or ""), str(_num(valor_compra)), str(_num(vida_util)),
-           "disponible", str(condicion or "bueno"), str(ubicacion_tipo or "bodega"),
+           DISPONIBLE, str(condicion or CONDICIONES[0]), str(ubicacion_tipo or UBIC_TIPOS[0]),
            str(ubicacion_ref or ""), "", "", str(proximo_mant or ""),
            str(nota or ""), "SI", str(creado_por or ""),
            clock.now().strftime("%Y-%m-%d %H:%M:%S")]
@@ -477,7 +483,7 @@ def mantenimiento(aid, grupo, costo="", proximo="", nota="", en_mant=False, crea
     if proximo:
         campos["NextService"] = proximo
     if en_mant:
-        campos["Status"] = "mantenimiento"
+        campos["Status"] = MANTENIMIENTO
     if campos:
         ok, msg = update_activo(aid, campos)
         if not ok:

@@ -44,3 +44,25 @@ def confirmar_borrado(key: str, texto: str = "I confirm I want to delete it") ->
     proyecto", que sí avisaba.
     """
     return st.checkbox(texto, key=key, value=False)
+
+def opciones_con_actual(opciones, actual):
+    """(opciones, indice) para un desplegable que EDITA un valor ya guardado (v487).
+
+    ⚠️ El patron `L.index(v) if v in L else 0` SOBRESCRIBE EN SILENCIO: si el valor
+    guardado no esta entre las opciones —una categoria que se borro, un rol mal
+    tecleado en la hoja, un color que no es de la paleta— el desplegable muestra la
+    PRIMERA opcion y al pulsar «Guardar» esa primera opcion se escribe encima del dato
+    de verdad, sin que nadie lo haya elegido. En Usuarios era peor: un usuario sin rol
+    salia con **owner** preseleccionado.
+
+    Aqui el valor actual se ANTEPONE a las opciones y queda seleccionado, asi que
+    guardar sin tocar ese campo conserva lo que habia. Un valor vacio no se antepone:
+    no hay dato que proteger y la primera opcion es un defecto legitimo.
+    """
+    ops = list(opciones)
+    act = "" if actual is None else str(actual)
+    if act in ops:
+        return ops, ops.index(act)
+    if act.strip():
+        return [act] + ops, 0
+    return ops, 0

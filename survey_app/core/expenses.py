@@ -28,6 +28,10 @@ HEADERS = ["ID", "ProjectID", "Group", "Date", "Category", "Supplier",
            "Description", "Amount", "DriveID", "File", "CreatedBy", "Created"]
 CATEGORIAS = ["Materials", "Tools", "Transport", "Fuel",
               "Subcontractor", "Rental", "Other"]
+# ⚠️ v487: la categoria de una compra SIN categoria. Era "Otros" en dos sitios, y
+# como el canonico es "Other" la torta partia la misma categoria en DOS trozos,
+# los dos rotulados «Other».
+SIN_CATEGORIA = "Other"
 _FOLDER = "COPEX Recibos"
 
 
@@ -130,7 +134,7 @@ def project_expenses(pid) -> dict:
     total = sum(_num(r.get("Amount")) for r in items)
     por = {}
     for r in items:
-        c = str(r.get("Category", "")) or "Otros"
+        c = str(r.get("Category", "")) or SIN_CATEGORIA
         por[c] = por.get(c, 0.0) + _num(r.get("Amount"))
     return {"total": round(total, 2), "por_categoria": {k: round(v, 2) for k, v in por.items()},
             "items": items}
@@ -415,7 +419,7 @@ def group_expenses(grupo) -> dict:
     huerf_n, huerf_tot = 0, 0.0
     for r in _records():
         if str(r.get("Group", "")) == str(grupo):
-            cat = str(r.get("Category", "")) or "Otros"
+            cat = str(r.get("Category", "")) or SIN_CATEGORIA
             por_cat[cat] = por_cat.get(cat, 0.0) + _num(r.get("Amount"))
             if str(r.get("ProjectID", "")) not in _ids:
                 huerf_n += 1

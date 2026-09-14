@@ -17,6 +17,7 @@ from core import clock
 from core import inventory as INV
 from core.num import num as _num
 from core import tabla
+from core import ui_common as ui
 
 logger = logging.getLogger(__name__)
 
@@ -118,8 +119,10 @@ def render_inventario(grupo):
     est = r["por_estado"]
     c = st.columns(5)
     c[0].metric(t("Assets"), r["n"])
-    c[1].metric(t("Available"), est.get("disponible", 0))
-    c[2].metric(t("In use"), est.get("en_uso", 0))
+    # ⚠️ v487: por la CONSTANTE. Con "disponible"/"en_uso" marcaban 0 SIEMPRE desde
+    # v469, que canoniza el estado al leer: `por_estado` trae "available"/"in use".
+    c[1].metric(t("Available"), est.get(INV.DISPONIBLE, 0))
+    c[2].metric(t("In use"), est.get(INV.EN_USO, 0))
     c[3].metric(t("Current value"), f"${r['valor_actual']:,.0f}",
                 help=f"Purchase value: ${r['valor_compra']:,.0f} (straight-line depreciated)")
     c[4].metric(t("Service overdue"), r["mant_vencido"])
@@ -346,17 +349,20 @@ def _detalle(grupo, aid):
         e1, e2 = st.columns(2)
         nombre = e1.text_input(t("Name"), value=a.get("Name", ""))
         cats = INV.categorias(grupo)
-        _ci = cats.index(a.get("Category")) if a.get("Category") in cats else 0
-        categoria = e2.selectbox(t("Category"), cats, index=_ci)
+        # ⚠️ v487: los cuatro desplegables CONSERVAN el valor guardado aunque ya no
+        # este en la lista (una categoria borrada). Antes mostraban la primera opcion
+        # y «Save changes» la escribia encima, sin que nadie la eligiera.
+        _cats, _ci = ui.opciones_con_actual(cats, a.get("Category"))
+        categoria = e2.selectbox(t("Category"), _cats, index=_ci)
         marca = e1.text_input(t("Brand"), value=a.get("Brand", ""))
         modelo = e2.text_input(t("Model"), value=a.get("Model", ""))
         serie = e1.text_input(t("Serial no."), value=a.get("Serial", ""))
-        _ei = INV.ESTADOS.index(a.get("Status")) if a.get("Status") in INV.ESTADOS else 0
-        estado = e2.selectbox(t("Status"), INV.ESTADOS, index=_ei)
-        _cdi = INV.CONDICIONES.index(a.get("Condition")) if a.get("Condition") in INV.CONDICIONES else 0
-        condicion = e1.selectbox(t("Condition"), INV.CONDICIONES, index=_cdi)
-        _ui = INV.UBIC_TIPOS.index(a.get("LocationType")) if a.get("LocationType") in INV.UBIC_TIPOS else 0
-        ubic_t = e2.selectbox(t("Location (type)"), INV.UBIC_TIPOS, index=_ui)
+        _ests, _ei = ui.opciones_con_actual(INV.ESTADOS, a.get("Status"))
+        estado = e2.selectbox(t("Status"), _ests, index=_ei)
+        _conds, _cdi = ui.opciones_con_actual(INV.CONDICIONES, a.get("Condition"))
+        condicion = e1.selectbox(t("Condition"), _conds, index=_cdi)
+        _ubics, _ubi = ui.opciones_con_actual(INV.UBIC_TIPOS, a.get("LocationType"))
+        ubic_t = e2.selectbox(t("Location (type)"), _ubics, index=_ubi)
         ubic_r = e1.text_input(t("Location (detail)"), value=a.get("LocationRef", ""),
                                help=t("Store or person holding it. If the asset is on a site, this holds the project ID (PRJ-####) — it is set automatically when the check-out is recorded; the list shows the name."))
         if str(a.get("LocationRef", "")).startswith("PRJ-"):

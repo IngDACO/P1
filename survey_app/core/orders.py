@@ -264,7 +264,7 @@ def _crear_gasto(r, valor, creado_por="") -> tuple:
     """(ok, id_del_gasto | mensaje de error)."""
     from core import expenses as E
     ok, msg = E.add(str(r.get("ProjectID", "")), str(r.get("Group", "")), valor,
-                    categoria=str(r.get("Category", "")) or "Materiales",
+                    categoria=str(r.get("Category", "")) or E.CATEGORIAS[0],   # v487: canonico
                     proveedor=str(r.get("Supplier", "")),
                     descripcion=f"Orden {r.get('ID','')} · {r.get('Description','')}".strip(" ·"),
                     creado_por=creado_por)

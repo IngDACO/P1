@@ -1193,17 +1193,23 @@ def _ficha_usuario(u, grupo, owner=False, sel_key="gp_fichasel"):
         if owner:   # el propietario también reasigna rol y grupo (v184)
             _gopts = [""] + [g["Group"] for g in auth.list_groups()]
             _rc, _gc = st.columns(2)
-            _rcur = str(u.get("Role", "") or "campo")
-            _nrol = _rc.selectbox(t("Role"), auth.ROLES,
-                                  index=auth.ROLES.index(_rcur) if _rcur in auth.ROLES else 0,
+            # ⚠️ v487: el defecto era "campo" —español desde v469—, que no esta en
+            # ROLES, asi que un usuario sin rol salia con OWNER preseleccionado y un
+            # «Apply role» distraido lo convertia en propietario. Ahora el defecto es
+            # el canonico y un rol desconocido se ENSEÑA tal cual (set_role lo rechaza).
+            _rcur = str(u.get("Role", "") or "field")
+            _rols, _ri = ui.opciones_con_actual(auth.ROLES, _rcur)
+            _nrol = _rc.selectbox(t("Role"), _rols,
+                                  index=_ri,
                                   key=f"{k}_rol")
             if _rc.button(t("Apply role"), key=f"{k}_chrol"):
                 ok, msg = auth.set_role(sel, _nrol); (flash.exito if ok else st.error)(msg)
                 if ok:
                     st.rerun()
             _gcur = str(u.get("Group", "") or "")
+            _gopts, _gi = ui.opciones_con_actual(_gopts, _gcur)    # v487: se conserva
             _ngrp = _gc.selectbox(t("Company"), _gopts,
-                                  index=_gopts.index(_gcur) if _gcur in _gopts else 0,
+                                  index=_gi,
                                   key=f"{k}_grp")
             if _gc.button(t("Apply company"), key=f"{k}_chgrp"):
                 ok, msg = auth.set_group(sel, _ngrp); (flash.exito if ok else st.error)(msg)

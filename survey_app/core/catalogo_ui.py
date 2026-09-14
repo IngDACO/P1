@@ -16,6 +16,7 @@ from core import tenant
 from core import theme as T
 from core.num import num as _num
 from core import tabla
+from core import ui_common as ui
 
 
 def _creado_por() -> str:
@@ -160,9 +161,9 @@ def _detalle(grupo, cid):
     with st.form(f"cat_edit_{cid}"):
         c1, c2 = st.columns(2)
         nombre = c1.text_input(t("Name"), value=str(it.get("Name", "")))
-        categoria = c2.selectbox(t("Category"), CAT.categorias(grupo),
-                                 index=max(0, CAT.categorias(grupo).index(str(it.get("Category", "")))
-                                           if str(it.get("Category", "")) in CAT.categorias(grupo) else 0))
+        # ⚠️ v487: conserva la categoria/unidad guardada aunque ya no este en la lista.
+        _cats, _ci = ui.opciones_con_actual(CAT.categorias(grupo), it.get("Category", ""))
+        categoria = c2.selectbox(t("Category"), _cats, index=_ci)
         if es_serv:
             c3, c4 = st.columns(2)
             horas = c3.number_input(t("Estimated hours"), min_value=0.0, step=0.5,
@@ -174,9 +175,8 @@ def _detalle(grupo, cid):
             c3, c4 = st.columns(2)
             costo = c3.number_input(t("Unit cost"), min_value=0.0, step=1.0,
                                     value=float(_num(it.get("UnitCost"))))
-            unidad = c4.selectbox(t("Unit"), CAT.UNIDADES,
-                                  index=max(0, list(CAT.UNIDADES).index(str(it.get("Unit", "")))
-                                            if str(it.get("Unit", "")) in CAT.UNIDADES else 0))
+            _unis, _uni = ui.opciones_con_actual(CAT.UNIDADES, it.get("Unit", ""))
+            unidad = c4.selectbox(t("Unit"), _unis, index=_uni)
             campos = {"UnitCost": costo, "Unit": unidad}
         desc = st.text_input(t("Description"), value=str(it.get("Description", "")))
         if st.form_submit_button(t(":material/save: Save changes"), width="stretch"):

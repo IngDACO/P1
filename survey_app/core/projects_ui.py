@@ -696,7 +696,7 @@ def _archivos_section(pid: str):
         if run:
             casados.add(did)
         entries.append({
-            "tipo": tipo, "label": _TIPO_LABEL.get(tipo, tipo or "otro"),
+            "tipo": tipo, "label": _TIPO_LABEL.get(tipo, tipo or t("other")),
             "nombre": str(d.get("Name", "")), "fecha": str(d.get("Date", "")),
             "por": str(d.get("UploadedBy", "")), "did": did,
             "resumen": str(run.get("Summary", "")) if run else "",
@@ -2313,9 +2313,14 @@ def _detalle_proyecto(pid: str, grupo: str = None):
             # vez de fingir que todos eran instalaciones.
             _TIPO_VACIO = "— no type —"
             _tp_cur = str(prj.get("Type", "")).strip()
-            _tp_opts = ([_TIPO_VACIO] + P.TIPOS) if _tp_cur not in P.TIPOS else list(P.TIPOS)
+            # ⚠️ v487: un tipo NO vacio que no este en la lista se conserva. Antes caia
+            # en «— no type —» y al guardar se BORRABA el tipo de la obra.
+            if _tp_cur:
+                _tp_opts, _tp_i = ui.opciones_con_actual(P.TIPOS, _tp_cur)
+            else:
+                _tp_opts, _tp_i = [_TIPO_VACIO] + list(P.TIPOS), 0
             tipo = e1.selectbox(t("Project type"), _tp_opts,
-                                index=_tp_opts.index(_tp_cur) if _tp_cur in _tp_opts else 0,
+                                index=_tp_i,
                                 help=t("Changing the type here does NOT rebuild the schedule: that would wipe the progress the crew has already reported. Add or remove activities below instead."))
             # ⚠️ v419: la ubicación sale del MAPA, no de un campo suelto. v272 ya lo hizo
             # al CREAR («ya no se pide dos veces») y la edición se quedó con el
@@ -2371,10 +2376,11 @@ def _detalle_proyecto(pid: str, grupo: str = None):
             peso    = st.number_input(t("Weight in the group"), min_value=0.0, step=0.5,
                                       value=P._num(prj.get("WeightInGrouping")) or 1.0,
                                       help=t("How much this lift weighs in its group's consolidated progress."))
-            est_man = st.selectbox(t("Manual status (override)"), P.ESTADOS_MANUAL,
-                                   format_func=_etq,
-                                   index=P.ESTADOS_MANUAL.index(str(prj.get("ManualStatus", "")))
-                                   if str(prj.get("ManualStatus", "")) in P.ESTADOS_MANUAL else 0)
+            # ⚠️ v487: un override que no este en la lista se CONSERVA. Antes caia en «»
+            # y al guardar se borraba — que podia des-archivar un proyecto sin querer.
+            _ems, _emi = ui.opciones_con_actual(P.ESTADOS_MANUAL, prj.get("ManualStatus", ""))
+            est_man = st.selectbox(t("Manual status (override)"), _ems,
+                                   format_func=_etq, index=_emi)
             presup  = st.number_input(t(":material/payments: Project budget (0 = no budget)"),
                                       min_value=0.0, step=100.0, value=P._num(prj.get("Budget")))
 
@@ -4987,8 +4993,9 @@ def _editar_localizacion(pid, grupo, prj):
         # así que «En pausa»/«Completado» no significan nada aquí.
         _est_act = str(prj.get("ManualStatus", "")) or ""
         _opts = ["", P.INTERNO_CERRADA, P.ARCHIVADO]
+        _opts, _est_i = ui.opciones_con_actual(_opts, _est_act)    # v487: se conserva
         est = st.selectbox(t("Status"), _opts,
-                           index=_opts.index(_est_act) if _est_act in _opts else 0,
+                           index=_est_i,
                            format_func=lambda v: {"": t("Open"),
                                                   P.INTERNO_CERRADA: t("Closed"),
                                                   P.ARCHIVADO: t("Archived")}.get(v, v),

@@ -10954,7 +10954,91 @@ cuatro tablas **vistas en pantalla** con el código real y datos inyectados por 
 función de LECTURA de cada módulo, no replicando la expresión — que es justo el error
 que me hizo dar v485 por bueno.
 
-## Versiones desplegadas (v486 = actual)
+## ⚠️ Lo que v469 dejó escrito en español, y los desplegables que SOBRESCRIBÍAN (v487)
+
+Salió de la pregunta del usuario *«¿ya quedó todo terminado?»*, **auditada contra el
+código** en vez de contestada de memoria (la regla de v453). La respuesta era no.
+
+### v486, verificado en producción con datos reales (antes de esta versión)
+Tras el reinicio del proceso se vio el parte de horas con los días vacíos y las cifras
+de control (0.09 / 0.04). Las otras tres tablas no tenían filas en la demo, así que se
+sembraron en `cliente1` —2 artículos, 2 nóminas, 1 activo con 2 movimientos, todos
+«ZZ PRUEBA v486»—, se miraron en pantalla (Hours del producto vacío junto a `6.50`,
+Rate/h vacío junto a `$42.50`, Cost vacío junto a `$128`) y se **borraron** con doble
+guarda (ID sembrado **y** marca en la fila). Foto antes/después en solo lectura:
+**idéntica** en filas, IDs y cabeceras.
+⚠️ Dos cosas de la prueba que NO eran fallos de la app, comprobadas antes de reportarlas:
+«To pay» contaba la nómina marcada `paid` porque las nóminas guardan el estado en
+**español** (`pagada`, a propósito desde v469) y la fila cruda la escribí yo en inglés;
+y la categoría `Tools` salía como `Consumable` porque la canónica es `Tool` — pero eso
+destapó lo de abajo.
+
+### ⚠️ 1. Las KPIs de inventario marcaban 0 SIEMPRE desde v469
+```python
+c[1].metric(t("Available"), est.get("disponible", 0))
+c[2].metric(t("In use"), est.get("en_uso", 0))
+```
+`resumen()` cuenta por el estado **ya canonizado** (`available`, `in use`), así que esas
+dos claves no existían nunca. **Ejecutado**: con 2 disponibles y 1 en uso, las dos
+tarjetas daban 0. ⚠️ **El guardián de v469 no podía verlo**: barre `ast.Compare` y aquí
+el valor viejo es la **clave de una búsqueda**. Es v309/v349/v441 otra vez: *la red ve
+solo la forma que se le enseñó*.
+
+### ⚠️ 2. Y se seguía ESCRIBIENDO en español
+Barrido en todas las formas (valor de dict, `x["Col"] = …`, defecto por `or`, fila
+posicional de un `append_row`): **12 sitios**. Los que importan:
+| Dónde | Efecto |
+|---|---|
+| `inventory.create_activo` · `mantenimiento` | `disponible`/`bueno`/`bodega`/`mantenimiento` en la hoja: se canoniza al leer, pero la hoja queda **mezclada** |
+| `expenses` ×2 · `or "Otros"` | una compra sin categoría caía en «Otros» **al lado** de «Other»: la torta partía la misma categoría en **dos trozos, los dos rotulados «Other»** |
+| `orders` · `or "Materiales"` | la categoría del gasto que nace al recibir una orden |
+| `projects_ui` · `or "otro"` | pintaba **«otro»** en la lista de archivos |
+| `auth_ui` · `or "campo"` | ver abajo: el peor |
+Ahora con constantes con nombre (`INV.DISPONIBLE`, `expenses.SIN_CATEGORIA`…).
+
+### ⚠️ 3. `L.index(v) if v in L else 0` SOBRESCRIBE EN SILENCIO
+Delante de un desplegable que EDITA: si el valor guardado no está en la lista —una
+categoría que se borró con `del_categoria`, un rol mal tecleado en la hoja, un color que
+no es de la paleta— se muestra la **primera** opción y «Guardar» la escribe encima, sin
+que nadie la eligiera. **12 sitios en 6 pantallas**: inventario ×4, catálogo ×2, tipo y
+estado manual del proyecto (⚠️ el estado manual podía **des-archivar** una obra), estado
+de una localización, rol y empresa de un usuario, y color de un trabajo.
+⚠️ **El de Usuarios era el peor**: `_rcur = u.get("Role") or "campo"` — y `"campo"` es
+español desde v469, así que **no está en `ROLES`**: un usuario sin rol salía con
+**owner preseleccionado**, y un «Apply role» distraído lo convertía en propietario.
+
+`ui_common.opciones_con_actual(opciones, actual)` es la definición única: el valor actual
+se **antepone** y queda seleccionado, así que guardar sin tocar ese campo conserva lo que
+había. Un vacío no se antepone (no hay dato que proteger). ⚠️ **No muta la lista**: son
+constantes de módulo, y anteponerles un valor las cambiaría para toda la app hasta
+reiniciar el proceso.
+⚠️ En el color hacía falta además tocar el **guardado**: hacía `_colmap[_cn]`, y con un
+color que no es un nombre de la paleta eso lanza `KeyError` y el formulario no guardaría.
+
+### Tres fallos de método míos, los tres cazados por las propias redes
+1. **El primer barrido de búsquedas dio 173 sitios y 171 eran sanos**: `usuario`,
+   `proyecto`, `entrada`, `pendiente`… son valores viejos **y** claves internas de
+   diccionarios que la propia app construye. El discriminador que sí funciona: la clave
+   buscada **no la mete a mano nadie**, así que solo puede venir de los DATOS, que llegan
+   canonizados. Validado contra el fallo construido **y** contra una clave interna sana.
+2. **Los nombres de las 5 funciones exentas los supuse, y 4 no existían.** Lo cazó la
+   comprobación de «exentos que siguen existiendo» del propio guardián — sin ella, una
+   lista de exenciones mal escrita no exime nada y nadie se entera (v135 otra vez).
+3. **Un `AttributeError` al ejecutar la pantalla parecía de la app** y era de mi
+   `st.dataframe` sustituido, que devuelve `None`. Se comprobó re-ejecutando sin el
+   sustituto antes de concluir nada.
+
+### Verificación
+`verif_v469` gana el bloque 10 (búsquedas y escrituras, con la red validada contra el
+caso construido); `verif_v487` el patrón en todo el repo con **exentos por (fichero,
+FUNCIÓN)** y razón escrita (idioma de sesión, días del tablero, posiciones de
+cabecera); `check_v487_smoke` **ejecuta** las KPIs y las dos fichas con valores fuera de
+la lista, con un CONTROL de que un valor de la lista no se duplica. Batería contra los
+**tres a la vez**: 10/10 roturas + CONTROL, con el verde de base primero.
+
+⚠️ La suite dio **1 rojo, caducado y no regresión**: `verif_v442` exigía el TEXTO literal `P.ESTADOS_MANUAL, format_func=_etq,` y ahora las opciones llegan por `_ems`. Reanclado al principio (el desplegable que guarda muestra la etiqueta con `format_func` y no traduce las opciones) — y ⚠️ **su primera versión dejaba pasar la rotura** porque miraba el NOMBRE `_ems` y no lo que se le asigna: hubo que resolver la variable, que es exactamente la lección de v471. Validado con 2 roturas + CONTROL.
+
+## Versiones desplegadas (v487 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -10962,6 +11046,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v487 | ⚠️ **Lo que v469 dejó escrito en español y los desplegables que SOBRESCRIBÍAN**, salido de auditar «¿ya quedó todo?» contra el código. **(1)** Las KPIs «Available»/«In use» de inventario marcaban **0 SIEMPRE**: buscaban `"disponible"`/`"en_uso"` y el estado llega canonizado — ejecutado, 2 disponibles daban 0; ⚠️ el guardián de v469 solo barría comparaciones y aquí el valor viejo era una **clave de búsqueda**. **(2)** 12 sitios seguían **escribiendo** en español (la torta partía «Other» en dos trozos, «otro» en pantalla). **(3)** `L.index(v) if v in L else 0` delante de un formulario que edita **sobrescribía en silencio** en 12 sitios de 6 pantallas —⚠️ podía des-archivar una obra, y en Usuarios el defecto `"campo"` (español) dejaba un usuario sin rol con **owner preseleccionado**—: `ui.opciones_con_actual` conserva el valor guardado. ⚠️ El primer barrido dio 173 búsquedas y **171 eran claves internas sanas** (el discriminador: nadie mete esa clave a mano); y **4 de mis 5 exentos tenían nombres inventados**, cazado por el propio guardián. + v486 **verificado en producción** sembrando y borrando datos (antes/después idéntico). 10/10 roturas contra 3 guardianes a la vez |
 | v486 | ⚠️ **NaN TAMPOCO vacía la celda: v485 arregló el fallo con la cura equivocada** y en producción seguía pintando «None». ⚠️ Mi error: la sonda devolvió `«None»: 8` y **se lo atribuí entero a la columna que esperaba** — eran 2 columnas × 2 filas × 2 repintados, o sea que **la de NaN pintaba «None» también**; con las coordenadas se veía de un golpe (x=335 es el borde derecho de la columna de NaN). *Un agregado no dice nada hasta saber QUÉ cuenta.* Medido con una tabla por caso y control: `nan`/`None`/`pd.NA` pintan «None» con cualquier config —y hasta con `Styler(na_rep="")`—, y lo ÚNICO que vacía la celda es una **CADENA en una columna SIN tipar**, porque una columna tipada convierte incluso `""` en nulo. **No era una tabla: eran CUATRO** (parte, `Rate/h` —cuyo pie PROMETE que vacío = sin tarifa—, Costo de inventario y Horas de catálogo), porque la frase «con NaN sale vacía, medido» está en CLAUDE.md desde v467: *una afirmación equivocada documentada como medida se copia*. Nuevas `tabla.celda`/`derecha` (una definición), con el formato verificado **idéntico** al `NumberColumn` que sustituye (19 valores × 2 formatos, 0 diferencias — son columnas de dinero, y `%d` trunca mientras `.0f` redondea). ⚠️ **Y reintroduje el fallo de v323 dentro del arreglo**: `float()` en vez de `num()` hacía que «1,234.56» —como Sheets formatea el dinero en AU— saliera **VACÍO**, o sea «no hay dato», peor que el `$0` de v323; lo cazó comparar el formato contra el anterior, no leer el código. ⚠️ La red de v467 seguía afirmando «0 celdas con None (se usa NaN)», así que poner NaN **pasaba el chequeo**: ensanchada, y **una rotura se escapó** porque enumeraba posiciones y no vio el nulo en el **DEFECTO de un `.get()`** — la forma exacta de v485; ahora recorre el subárbol (0 falsos positivos). + **3 `.pyc` estaban RASTREADOS** en git pese al `.gitignore`, que no destrackea lo ya añadido | 
 | v485 | ⚠️ **La tabla del parte pintaba «None»** en cada día sin horas — visto MIRANDO la pantalla de v484 en producción, no leyendo. Con la columna entera vacía pandas la deja en `object` y Streamlit imprime el texto: es el fallo de v467 repetido (el CSV sí estaba bien). Arreglado con `NaN`. ⚠️ **Y lo grave era que su red diera «0» con el fallo delante**: tenía TRES cegueras —solo veía el ternario y el `None` literal (lo mío es un `.get()` **sin defecto**), solo miraba DENTRO de `pd.DataFrame(...)` (mi dict llega por **variable**, el agujero de v471) y solo `ast.Dict` (el mío es un **DictComp**)—, así que su cero no significaba nada para esa tabla. ⚠️ Ensancharla de golpe dio **12 falsos positivos** (una fila de hoja se lee por nombre LITERAL y `registros` siempre trae todas las cabeceras → nunca da None) y luego **5 más** al recorrer la función entera. El discriminador real es la **clave VARIABLE**, y la sonda resuelve la variable. Validada en las DOS direcciones tras cada iteración |
 | v484 | **FASE 2.2-A: el parte de horas.** ⚠️ El usuario eligió Xero Payroll y lo primero fue descubrir que **ese destino no existe**: Xero Payroll AU no importa partes por CSV — su artículo no tiene paso de import (⚠️ con la sonda validada: el de facturas, con el mismo cascarón, sí lo tiene), su Product Ideas lo pide y sus foros dicen que iría por API. Así que se construyó lo que sirve en cualquier rama, y ⚠️ **de leer su API salió el diseño**: formato **ANCHO, una columna por día y en ORDEN**, porque `NumberOfUnits` es un array por día → 2.3 será un mapeo. + ⚠️ **una sola definición de «qué día de ausencia se paga»**: el criterio de v432 baja a `horas_pagadas_dia` y el agregado DELEGA —dos implementaciones pagarían días distintos y solo lo delata el total—, **demostrado idéntico en 13 casos** contra la implementación anterior sacada del commit (la demo tiene 0 ausencias, así que la hoja real no probaba nada). + `PayrollID` (el login no lo conoce el proveedor, y el nombre se repite), que ⚠️ **casi dejo sin editor** — el «pendiente que nadie puede cerrar» de v325/v340. ⚠️ **Tres roturas escaparon y solo dos eran huecos míos**: la tercera cambiaba un campo que **nadie lee**, así que salió de la batería en vez de inventar un caso inalcanzable. ⚠️ Y la batería **dejó el doble pago de v432 VIVO en el árbol** al fallar su `finally` con OSError: ahora copia en disco, verifica el restore y **aborta** si no puede. 72 comprobaciones · **17/17 roturas + control** |

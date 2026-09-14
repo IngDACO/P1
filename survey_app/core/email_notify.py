@@ -177,7 +177,7 @@ def send_usage_notification(
         if admin_report:
             adm = MIMEApplication(admin_report, _subtype="pdf")
             adm.add_header("Content-Disposition", "attachment",
-                           filename=f"informe_admin_{(proyecto or 'proyecto').replace(' ', '_')}.pdf")
+                           filename=f"informe_admin_{(proyecto or 'project').replace(' ', '_')}.pdf")
             msg.attach(adm)
 
         # Adjunto: plano PDF del usuario
