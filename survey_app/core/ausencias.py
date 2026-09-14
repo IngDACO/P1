@@ -361,6 +361,43 @@ def horas_pagadas_grupo(grupo, desde, hasta) -> dict:
     todo el equipo, y llamarla en el bucle recorrería la lista una vez por trabajador.
     `horas_pagadas` (una persona) sale de aquí, para que haya UNA definición de qué
     día de ausencia se paga (la lección de los cinco `_num` divergentes de v323).
+    ⚠️ v484 — AGREGA desde `horas_pagadas_dia`, que es donde vive el criterio. Antes
+    lo calculaba aquí, y el parte de horas necesita el mismo dato día a día: dos
+    implementaciones del mismo «qué se paga» acaban pagando días distintos (v323).
+    """
+    out = {}
+    for clave, e in horas_pagadas_dia(grupo, desde, hasta).items():
+        horas = 0.0
+        for _porh in e["dias"].values():
+            for _h in _porh.values():
+                horas = round(horas + _h, 2)
+        out[clave] = {"horas": horas, "dias": e["dias_contados"],
+                      "por_tipo": dict(e["por_tipo"]), "nombre": e["nombre"],
+                      "recortados": list(e["recortados"])}
+    return out
+
+
+def horas_pagadas_dia(grupo, desde, hasta) -> dict:
+    """La ausencia PAGADA día a día y por tipo, que es la forma que pide un parte.
+
+    `{usuario: {nombre, dias: {date: {tipo: horas}}, por_tipo: {tipo: n_dias},
+      dias_contados: n, recortados: [...]}}`
+
+    ⚠️ **Aquí vive el criterio de v432** —«un día vale UNA jornada, nunca dos»— y
+    `horas_pagadas_grupo` agrega desde aquí. Si cada una lo calculara por su cuenta,
+    la nómina y el parte de horas podrían pagar días distintos, y eso no lo delata
+    ninguna línea de la colilla: solo el total del día.
+
+    ⚠️ `por_tipo` y `dias_contados` cuentan TODOS los días del rango, incluidos los
+    que pagan 0 porque esa persona trabajó la jornada entera. Es la semántica de
+    siempre y se conserva a propósito: son días de ausencia CONCEDIDOS, que es lo que
+    descuenta del saldo, y no horas pagadas.
+
+    ⚠️ Y no lleva tope por día: dos ausencias aprobadas sobre el mismo día pagarían
+    dos veces, pero `solicitar` **ya impide** los solapes (`solapadas`), así que poner
+    el tope aquí sería arreglar un caso que la app no permite — y cambiaría el agregado
+    que la nómina ya usa. Si algún día se edita la hoja a mano, ese tope es su propio
+    cambio con su propia prueba.
     """
     d0, d1 = _parse_date(desde), _parse_date(hasta)
     if not d0 or not d1:
@@ -390,19 +427,22 @@ def horas_pagadas_grupo(grupo, desde, hasta) -> dict:
         if not _d:
             continue
         clave = str(r.get("User", ""))
-        e = out.setdefault(clave, {"horas": 0.0, "dias": 0.0, "por_tipo": {},
-                                   "nombre": str(r.get("Name") or clave),
-                                   "recortados": []})
+        e = out.setdefault(clave, {"nombre": str(r.get("Name") or clave),
+                                   "dias": {}, "por_tipo": {},
+                                   "dias_contados": 0.0, "recortados": []})
         _suyas = fichadas.get(clave, {})
         for d in _d:
             _ya = float(_suyas.get(d, 0.0) or 0.0)
             _pag = max(0.0, HORAS_DIA - _ya)
-            e["horas"] = round(e["horas"] + _pag, 2)
+            # ⚠️ Se guarda incluso el 0: ese día EXISTE como ausencia concedida, y el
+            # parte tiene que poder decir «no pagó nada porque trabajó la jornada».
+            _pd = e["dias"].setdefault(d, {})
+            _pd[tipo] = round(_pd.get(tipo, 0.0) + _pag, 2)
             if _ya > 0:
                 e["recortados"].append({"fecha": d, "fichadas": round(_ya, 2),
                                         "pagadas": round(_pag, 2), "tipo": tipo})
         e["por_tipo"][tipo] = e["por_tipo"].get(tipo, 0) + len(_d)
-        e["dias"] += len(_d)
+        e["dias_contados"] += len(_d)
     return out
 
 

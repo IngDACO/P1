@@ -1170,6 +1170,26 @@ def _ficha_usuario(u, grupo, owner=False, sel_key="gp_fichasel"):
                     st.rerun()
         if not _fi:
             st.caption(t(":material/warning: With no start date their leave balance is counted by calendar year (1 Jan – 31 Dec), not from their anniversary."))
+        # ⚠️ v484: el código con el que el PROVEEDOR DE NÓMINA casa a esta persona. Sin
+        # esto la columna existiría y no habría dónde ponerla — el «pendiente que nadie
+        # puede cerrar» de v325/v340, y el parte de horas avisaría de un homónimo
+        # ambiguo sin ofrecer forma de resolverlo. Es OPCIONAL: con el nombre único, el
+        # proveedor casa igual.
+        _p1, _p2 = st.columns(2)
+        with _p1:
+            _pid = st.text_input(t(":material/badge: Payroll ID (optional)"),
+                                  value=str(u.get("PayrollID", "") or ""),
+                                  key=f"{k}_pid",
+                                  help=t("The employee code in Xero Payroll, MYOB or "
+                                         "whoever runs the pay. Only needed when two "
+                                         "people share a name."))
+        with _p2:
+            st.caption("")
+            if st.button(t("Save payroll ID"), key=f"{k}_savepid", width="stretch"):
+                ok, msg = auth.set_login_setting(sel, "PayrollID", _pid)
+                (flash.exito if ok else st.error)(msg)
+                if ok:
+                    st.rerun()
         if owner:   # el propietario también reasigna rol y grupo (v184)
             _gopts = [""] + [g["Group"] for g in auth.list_groups()]
             _rc, _gc = st.columns(2)

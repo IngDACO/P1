@@ -10663,6 +10663,38 @@ el PDF en sus tres estados, y que el despacho deje **exactamente una** sub-secci
 verde de base confirmado ANTES (sin ese paso una tanda entera sale «cazada» sin probar
 nada, v459/v461/v463).
 
+### Verificado EN PRODUCCIÓN con sesión de administrador (14/09/2026)
+Viendo el CAMBIO, no el cartel de versión (v334 corregido por v408/v452 — aquí las dos
+coincidían en v483, o sea proceso reiniciado):
+- **Finanzas → Accounting** es la **novena y última** sub-sección, despachada por su ID;
+- los dos avisos con datos reales (`EXPENSES 1 · 1 rows · TRACKING OPTIONS 1`) y el
+  nombre EXACTO del trabajo que hay que crear antes de importar;
+- ⚠️ **el mapa por perfil, visible**: con Xero la tabla da `Sales 200 · Materials 300 ·
+  Subcontractor 310 · Rental 469`, y al cambiar a MYOB **los mismos rubros dan
+  `5-1000 / 6-1000`** — más el aviso cambiando de «crea la categoría de seguimiento» a
+  «los trabajos ya tienen que existir en el archivo»;
+- y el vencimiento: **`Date 2026-09-14` · `Due date 2026-09-28`**, hoy + 14. Antes de
+  v483 las dos decían lo mismo.
+
+⚠️ **Dos trampas por el camino, y las dos ya conocidas.** (1) El formulario de factura
+decía *«Create a client first»* porque **la demo tiene 0 clientes** desde v456: hubo que
+crear uno de prueba (borrado después, junto a la factura; nunca se envió el formulario).
+(2) Y tras crearlo **la app siguió diciendo lo mismo**: lo creé desde OTRO proceso, así
+que el `_invalidate()` corrió en el mío y la caché de 120 s del proceso de la app seguía
+con la lista vacía — la semántica de `st.cache_data` de v378/v482, en vivo. ⚠️ Antes de
+culpar al formulario se **validó la sonda**: al reintentar encontró los dos campos y la
+frase había desaparecido, así que el cero anterior era estado de la app y no un selector
+mal apuntado (trampa nº12).
+
+⚠️ **Lo que esta sesión NO pudo ver**: el editor de identidad fiscal vive en
+`_owner_grupos`, o sea en el panel del **PROPIETARIO**, y la sesión era de
+administrador. Su camino de escritura sí está ejercitado contra la hoja real (se
+escribieron y se leyeron las tres columnas, y el PDF las mostró), pero la pantalla no.
+📌 **Y eso deja una pregunta de producto abierta**: el ABN lo configura el propietario
+—coherente con `DefaultTax`, `DefaultSuper` y `DefaultWithholding`, que también son
+suyos— así que COPEX tendría que teclear el ABN de cada cliente. Si se prefiere que lo
+ponga el administrador de cada empresa, es mover el bloque de panel.
+
 ### Lo que NO está probado, dicho como límite
 **Que Xero y MYOB acepten el fichero no está demostrado**: hace falta importarlo en una
 cuenta demo, y crear una cuenta no es algo que yo haga. Lo que sí está comprobado es que
@@ -10671,7 +10703,105 @@ nombres de impuesto son los de su documentación. Los perfiles son **datos, no c
 (una lista de columnas y un constructor de fila), así que si el importador pide un ajuste
 es una línea, no una reescritura.
 
-## Versiones desplegadas (v483 = actual)
+## FASE 2.2-A: el parte de horas para la nómina (v484)
+
+El usuario eligió «Xero Payroll» y **lo primero fue descubrir que ese destino no
+existe**: Xero Payroll AU **no importa partes de horas por CSV**. Tres ángulos
+independientes, el primero con la sonda validada contra un caso conocido-bueno:
+
+| Evidencia | Qué dice |
+|---|---|
+| El artículo «Add or edit an employee's timesheet» de Xero Central | **0 menciones** de import/CSV/template. ⚠️ Y la sonda VALE: el de importar facturas, con el mismo cascarón de 1.635 caracteres, da `csv: 2 · template: 2`, porque los títulos de paso sí están en el cascarón |
+| **Product Ideas de Xero** | petición **abierta y popular**: *«AU Payroll \| Timesheets — Ability to Import Timesheet templates from excel»*. Si existiera, no se pediría |
+| Sus foros | importar partes por CSV «no está en sus planes a corto plazo», y el camino sería **por API** — que es lo que hacen TimeDock y Upsheets |
+
+Y su documentación lo confirma desde el otro lado: un parte se crea con
+**`EmployeeID`, `EarningsRateID` y `TrackingItemID` — GUIDs** que solo se obtienen ya
+conectado, y **`NumberOfUnits` es un array con una entrada por día del periodo**.
+
+Así que se construyó **lo que sí sirve en cualquier rama** (decisión del usuario: «A y
+luego B»): el parte propio, que un responsable de nómina teclea y que alimenta a
+cualquier proveedor. ⚠️ Y de leer esa API salió el diseño: **el formato es ANCHO, una
+columna por día y EN ORDEN**, porque así es el array — cuando exista OAuth, 2.3 es un
+mapeo y no una reescritura.
+
+### ⚠️ UNA definición de «qué día de ausencia se paga»
+El parte necesita la ausencia día a día y `horas_pagadas_grupo` solo daba el agregado.
+Reimplementar el criterio en el exportador habría creado **una segunda definición de lo
+que se paga**, y eso no lo delata ninguna línea de la colilla: solo el total del día.
+El criterio baja a **`ausencias.horas_pagadas_dia`** y el agregado **DELEGA**.
+- ⚠️ **La semántica se preserva EXACTA**, incluido lo que parece raro: `por_tipo` y
+  `dias` cuentan TODOS los días del rango, también los que pagan 0 porque la persona
+  trabajó la jornada entera — son días CONCEDIDOS, que es lo que descuenta del saldo.
+- ⚠️ Y **no se le puso tope por día** aunque dos ausencias sobre el mismo día pagarían
+  dos veces: `solicitar` **ya impide** los solapes, así que sería arreglar un caso que
+  la app no permite (lección v369) y cambiaría el agregado que la nómina ya usa.
+- **Demostrado, no supuesto**: la demo tiene 0 ausencias, así que compararlo contra la
+  hoja real habría sido el paso en vacío. Se sacó la implementación ANTERIOR del commit
+  con `git show`, se ejecutó en el espacio de nombres del módulo y se comparó sobre las
+  MISMAS filas: **13 casos idénticos**, incluida la rama del `except`.
+
+### Lo que el parte exporta, y lo que NO
+**Jornada fichada + ausencias pagadas**, que es lo que se PAGA — la misma base que
+`payroll.generar`. ⚠️ Las horas de OBRA no entran: son lo que se le COBRA al cliente y
+pueden ser más que la jornada (la app ya lo mide desde v320/v422), así que sumarlas
+pagaría de más. El desvío **se avisa** en vez de sumarse.
+
+Y el recorte de v432 viaja entero: en un día con ausencia **y** fichaje salen
+`Ordinary Hours 4.68` + `Annual Leave 3.32` = **8.00**. Un día paga una jornada.
+⚠️ Un día sin horas va **VACÍO, no en 0**: un 0 afirma «ese día trabajó cero».
+
+### `PayrollID`, y el pendiente que casi dejo sin cerrar
+Nuestra identidad es el login (v306/v413) y el proveedor no lo conoce: casa por nombre,
+y el nombre **puede repetirse**. Columna nueva al final de `Login` (migra sola),
+opcional, con respaldo al nombre — y el aviso salta **solo cuando el nombre se repite**,
+porque un aviso que grita sobre lo que está bien acaba ignorándose entero (v450).
+- ⚠️ `_COL` (v433) y la proyección de `list_users` (v434) **la recogieron solas**: las
+  dos derivaciones que se hicieron a golpes pagando su precio.
+- ⚠️ **Y se me quedaba sin editor.** La columna existía y no había dónde ponerla: el
+  «pendiente que nadie puede cerrar» de v325/v340, con el parte avisando de un homónimo
+  ambiguo sin ofrecer forma de resolverlo. Está en la ficha → 🔑 Acceso, y el guardián
+  lo exige.
+- Entra en `CAMPOS_CLAVE` **en el mismo lote**: no es un importe, pero equivocarlo paga
+  a otra persona (la regla que v344, v352 y v373 aprendieron a golpes).
+
+### ⚠️ Tres roturas se escaparon, y solo UNA era un fallo del guardián… de dos formas
+| Escapó | Qué era |
+|---|---|
+| el aviso de homónimos salta con nombre ÚNICO | **hueco mío**: en mi fixture la persona de nombre único **no tenía horas**, así que sin horas no entra en el parte y ese caso no se ejercitaba NUNCA |
+| `PayrollID` se mete en MEDIO de la cabecera | **hueco mío**: comprobaba solo el ÚLTIMO elemento, y la rotura insertaba otro nombre antes. Lo que protege la regla es que **nada se cuele delante de las históricas** (v363: las filas se escriben por POSICIÓN), así que ahora se fija el PREFIJO |
+| los días se RECUENTAN en vez de venir del detalle | **NO es un fallo**: medido, **nadie lee `dias`** del agregado —`payroll.generar` usa `recortados`, `nombre`, `horas` y `por_tipo`— así que la rotura no corresponde a ningún defecto. Salió de la batería con la razón escrita, en vez de inventar un caso inalcanzable para justificarla |
+
+### ⚠️ Y la batería dejó código ROTO en el árbol de trabajo
+El `finally` que restaura reventó con **`OSError 22`** al reabrir el fichero, y la tanda
+murió dejando `ausencias.py` **con el doble pago de v432 vivo**. Causa: el patrón
+`io.open(...).write(...)` deja el descriptor a merced del recolector, y en Windows la
+reapertura del mismo fichero en el bucle falla.
+→ Ahora la batería (a) escribe con `with`, (b) hace **copia en disco ANTES** de tocar
+nada, (c) **verifica** el restore leyendo el fichero y reintenta, y (d) **aborta la
+tanda** si no puede, porque seguir con código roto en el árbol es peor que no haber
+probado nada. **Un `finally` que puede fallar no es una garantía.**
+
+### Y la trampa de v455, cometida
+Toqué `auth_ui.py` **con la suite corriendo**, así que esa corrida quedó nula y hubo que
+pararla y repetirla. La regla ya estaba escrita: *los scripts que modifican el árbol
+nunca se solapan con nada que lea el código*.
+
+### Verificación
+`verif_v484.py`, **72 comprobaciones**, todo ejecutando donde importa: el oráculo del
+agregado ⚠️ **escrito aquí y no sacado de `git show HEAD:`** (en cuanto se commitea,
+HEAD tendría el código nuevo y el chequeo se quedaría vacío — un chequeo que caduca
+solo), los conceptos derivados de `ausencias.TIPOS`, el criterio de v432 llegando al
+CSV, el orden de las columnas, el día vacío, las dos guardas del setter genérico, el
+editor del `PayrollID` y **la pantalla entera EJECUTADA**. Batería: **17 roturas, 17
+cazadas + CONTROL verde**, con el verde de base comprobado antes.
+
+### Lo que NO está hecho, dicho como límite
+**B (la API) no está empezada.** Necesita una app en `developer.xero.com` y una
+organización demo, que son del usuario. Lo que este parte deja resuelto es la forma: la
+fila de aquí es la línea de allí y el orden de las columnas es el del array.
+
+## Versiones desplegadas (v484 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -10679,6 +10809,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v484 | **FASE 2.2-A: el parte de horas.** ⚠️ El usuario eligió Xero Payroll y lo primero fue descubrir que **ese destino no existe**: Xero Payroll AU no importa partes por CSV — su artículo no tiene paso de import (⚠️ con la sonda validada: el de facturas, con el mismo cascarón, sí lo tiene), su Product Ideas lo pide y sus foros dicen que iría por API. Así que se construyó lo que sirve en cualquier rama, y ⚠️ **de leer su API salió el diseño**: formato **ANCHO, una columna por día y en ORDEN**, porque `NumberOfUnits` es un array por día → 2.3 será un mapeo. + ⚠️ **una sola definición de «qué día de ausencia se paga»**: el criterio de v432 baja a `horas_pagadas_dia` y el agregado DELEGA —dos implementaciones pagarían días distintos y solo lo delata el total—, **demostrado idéntico en 13 casos** contra la implementación anterior sacada del commit (la demo tiene 0 ausencias, así que la hoja real no probaba nada). + `PayrollID` (el login no lo conoce el proveedor, y el nombre se repite), que ⚠️ **casi dejo sin editor** — el «pendiente que nadie puede cerrar» de v325/v340. ⚠️ **Tres roturas escaparon y solo dos eran huecos míos**: la tercera cambiaba un campo que **nadie lee**, así que salió de la batería en vez de inventar un caso inalcanzable. ⚠️ Y la batería **dejó el doble pago de v432 VIVO en el árbol** al fallar su `finally` con OSError: ahora copia en disco, verifica el restore y **aborta** si no puede. 72 comprobaciones · **17/17 roturas + control** |
 | v483 | **FASE 2 de la ruta: identidad fiscal + exportación contable.** ⚠️ El hallazgo: `invoice_pdf` imprime «TAX INVOICE» en cada factura y **no había ABN en todo el repositorio** —la marca era el nombre INTERNO del grupo—, así que las ya emitidas iban incompletas ante la ATO sin que nada lo dijera. + el vencimiento nacía **HOY**, o sea que toda factura entraba vencida el mismo día. Cuatro columnas nuevas en `Groups` ⚠️ **al final, que es lo que las hace migrar solas** (v363), y el PDF **degrada en tres direcciones**: sin ABN, sin razón social y con la lectura fallando se emite igual. + **CSV para Xero y MYOB** con tres reglas: importes **siempre sin impuesto** (o la casilla «inclusive/exclusive» se contesta mal y el GST sale torcido), el impuesto **REPARTIDO** para que sume exacto —ejercitado contra la hoja real: línea a línea da **9,99** y el reparto **10,00**— y el mapa de cuentas **por PERFIL** (200 de Xero no existe en MYOB, que rechaza la fila entera). Nombres de impuesto y campos de MYOB **verificados en su documentación**. ⚠️ Un error mío de semántica cazado **volcando el CSV**, no leyendo: la 4ª de MYOB es el PO del CLIENTE, no el proyecto. ⚠️ Y una **rotura SE ESCAPÓ** porque el guardián afirmaba la CONSTANTE y no lo que el CSV produce: intercambiar el desempaquetado escribe `OUTPUT` en el fichero con la constante perfecta. ⚠️ + un `NameError` (`_num` sin importar en `auth_ui`) cazado por el chequeo de ámbito antes de desplegar. 80 comprobaciones · **15/15 roturas + control** · 21 contra la hoja real sin rastro |
 | v482 | **FASE 0 de la ruta ERP.** ⚠️ `invalidar()` hacía `_lote.clear()` **sin argumento**, que borra la caché de TODOS los libros: una escritura de un cliente obligaba a releer a los demás contra el techo de 60/min de la única cuenta de servicio. Ahora recibe el **TÍTULO** de la hoja — ⚠️ no el `sheet_id`, porque las GLOBALES viven en el maestro y resolver «el libro de la sesión» limpiaría otro—, y **sin título sigue tirando entero**: un llamador que se olvide degrada, no rompe. + **la app mide su propio consumo** (`core/metrics.py`, enganchado a NUESTRA subclase del cliente HTTP): cada INTENTO (un 429 reintentado son dos llamadas), lectura/escritura por **endpoint** y no por método, y el pico con **ventana deslizante** porque la ráfaga real va de 06:59:40 a 07:00:20. Pantalla en Administración → 📈 Cuota. ⚠️ Tres fallos de método MÍOS, los tres cazados por la batería y no leyendo: un chequeo que medía **cero llamadas** sobre una caché que no había tocado, uno **intermitente según el segundo** en que se lanzara (v443), y la batería **provocándose un 429** (trampa nº19 en el script que venía a verificar). 37 comprobaciones · **11/11 roturas + control** · + `NEGOCIO.md` puesto al día tras **400 versiones** desfasado |
 | v481 | **El campo deja de ver el dinero de la obra** (decisión del usuario sobre la pregunta abierta en v480). ⚠️ Al implementarla apareció que mi reporte era **incompleto**: veía también **la mano de obra PERSONA POR PERSONA**, las órdenes de compra y la curva de gasto — el error venía de una sonda que probaba la línea del **comentario**, no la del `if`. Se queda con lo suyo: cargar y ver recibos con su importe (**1** cifra de dinero frente a **17** que pasan a gestión). ⚠️ **Extraído a `_costos_section`, no envuelto en un `if`**: 140 líneas ya a profundidad de función, así que no se reindenta ni una (v120/v148). ⚠️ Interruptor **`ver_costos`, NO `can_delete`** —ese dice «puede borrar recibos», y reutilizarlo abriría las finanzas a quien mañana pueda borrar las suyas— y **por defecto False**: falla cerrado. 17 comprobaciones, la última **ejecutando** ambos casos |

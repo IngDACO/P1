@@ -32,7 +32,13 @@ LOGIN_HEADERS = ["User", "Password", "Role", "Name", "Active", "Group",
                  # (decisión del usuario). Va AL FINAL → migra sola; una fila que no
                  # la traiga cae al año natural y la app lo DICE, en vez de dar un
                  # saldo que parece bueno y no lo es.
-                 "StartedOn"]
+                 "StartedOn",
+                 # v484: código de empleado del proveedor de nómina (Xero Payroll,
+                 # MYOB, Employment Hero…). ⚠️ El login es NUESTRA identidad y el
+                 # proveedor no lo conoce; casa por nombre, y el nombre se repite.
+                 # OPCIONAL: sin él el parte cae al nombre y AVISA de los homónimos.
+                 # Al final → migra sola, como las 11 columnas anteriores.
+                 "PayrollID"]
 GROUPS_SHEET   = "Groups"
 GROUPS_HEADERS = ["Group", "Description", "Active", "TimeZone", "DefaultMargin", "DefaultTax",
                   "DefaultSuper", "DefaultWithholding",
@@ -624,6 +630,49 @@ def fecha_ingreso(usuario: str):
         return _pd((get_user(usuario) or {}).get("StartedOn"))
     except Exception:
         return None
+
+
+def set_login_setting(usuario: str, campo: str, valor) -> tuple:
+    """Fija una columna de `Login` de esa persona. Escribe TEXTO.
+
+    Hermano de `set_group_setting` (v483). ⚠️ La columna se valida contra `_COL`
+    —que se DERIVA de `LOGIN_HEADERS` desde v433— así que un nombre mal escrito da
+    error en vez de escribir en ninguna parte; y **los campos secretos están
+    prohibidos**, porque un setter genérico que pueda tocar `Password` o
+    `SessionToken` es una puerta que no hace falta abrir.
+
+    ⚠️ NO se refactorizan `set_rate` / `set_fecha_ingreso` / `set_contact` para que
+    deleguen aquí: cada una tiene su propia validación y su propio mensaje, y están
+    en el camino del login. Esto existe para los campos NUEVOS, que es donde la
+    duplicación todavía no ha nacido.
+    """
+    if campo in _CAMPOS_SECRETOS:
+        return False, f"{t('That field cannot be edited here')}: {campo}"
+    if campo not in _COL:
+        return False, f"{t('The column')} {campo} {t('does not exist in the Login sheet.')}"
+    lws, err = _get_login_ws()
+    if err:
+        return False, err
+    row, rec = _find_row(lws, usuario)
+    if row is None:
+        return False, t("User not found.")
+    _antes = dict(rec or {})
+    _val = "" if valor is None else str(valor).strip()
+    try:
+        lws.update_cell(row, _COL[campo], _val)
+    except Exception as e:
+        return False, f"Error: {e}"
+    _invalidate_login()
+    # ⚠️ El apunte va DESPUÉS de escribir y fuera del try del guardado: el cambio ya
+    # se hizo y no se puede deshacer porque falle el rastro (v343).
+    try:
+        from core import auditoria
+        auditoria.registrar("usuario", usuario,
+                            auditoria.diff(_antes, {campo: _val}),
+                            grupo=str(_antes.get("Group", "")))
+    except Exception as e:
+        logger.warning("auth.set_login_setting: auditoría: %s", e)
+    return True, t("Saved.")
 
 
 def set_fecha_ingreso(usuario: str, fecha) -> tuple:

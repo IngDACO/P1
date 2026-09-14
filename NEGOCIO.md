@@ -89,7 +89,7 @@ Google por cliente, zona horaria por grupo y la app entera en inglés.
 | **Cobro** | No hay pasarela ni estado de suscripción |
 | ~~**Identidad fiscal**~~ | ✅ **CERRADO en v483**: hasta entonces el PDF decía «TAX INVOICE» **sin ABN ni razón social**, o sea que los clientes emitían documentos incompletos ante la ATO. Ya se configuran por empresa, junto al plazo de pago |
 | **Contabilidad** | ⚠️ **Parcial desde v483 (08/09/2026)**: hay **exportación a CSV** para Xero y MYOB (facturas y gastos, con el proyecto como categoría de seguimiento), así que la factura ya no se teclea dos veces. Lo que NO hay es **integración por API**: el fichero se importa a mano, y que los dos lo acepten no está probado contra una cuenta demo real |
-| **Nómina** | Retención y *superannuation* son porcentajes editables: **no hay STP ni interpretación de awards**. Como costeo de mano de obra es sólido; como nómina certificada, no se puede vender |
+| **Nómina** | ⚠️ Sigue sin **STP ni interpretación de awards**, así que como nómina certificada no se puede vender. Lo que v484 añade es el puente: **parte de horas exportable** (jornada + ausencias pagadas, persona × día) para que lo procese un proveedor certificado. ⚠️ Y ese trabajo **no se tira decida lo que se decida** — conectar con un proveedor y renombrar el módulo a «costeo de mano de obra» necesitan los dos lo mismo primero |
 | **Sin señal** | No funciona offline, y el campo trabaja en fosos y sótanos |
 | **Cobro de obra** | Sin variaciones, sin *progress claims* y sin retenciones (el marco de *Security of Payment*) |
 | **Portal del cliente** | El constructor o la administración del edificio no puede ver nada |
@@ -196,6 +196,7 @@ ya captura, no se construye todo en paralelo):
    > AccountRight puede vivir **en el escritorio del cliente**, donde su API solo responde en la
    > red local: una app en la nube no lo alcanza. Antes va lo que permite COBRAR (planes, asientos
    > y alta de cliente), que sigue sin existir.
+   > 🟡 **2.2-A hecha (v484)**: hay parte de horas exportable. ⚠️ Y se descubrió algo que cambia el plan: **Xero Payroll AU no importa partes por CSV** —su propia petición de esa función sigue abierta—, así que conectar las horas con Xero exige la **API**, el mismo OAuth que las facturas. Se hacen de una.
    > ⚠️ Y la pregunta abierta que no decide el código: **nómina, ¿conectar o renombrar?** Sigue sin
    > STP ni interpretación de *awards*, así que como nómina no se puede vender. Las dos salidas
    > necesitan primero lo mismo —exportar el **parte de horas**, no la colilla—, así que ese trabajo
@@ -226,4 +227,4 @@ Cuando el chat técnico cierre algo que este documento da por pendiente, lo actu
 mismo lote**, con la fecha. Y cuando alguien pregunte «¿qué falta?», la respuesta se audita contra
 el repositorio, no contra la memoria de este fichero.
 
-*Última puesta al día del estado de hecho: 08/09/2026 (v481-v483).*
+*Última puesta al día del estado de hecho: 14/09/2026 (v481-v484).*

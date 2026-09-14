@@ -58,7 +58,11 @@ CAMPOS_CLAVE = {
     # o sea cuántos días le quedan: moverla mueve su saldo, así que entra aquí en el
     # MISMO lote en que se crea (la regla que v344/v352/v373 aprendieron a base de
     # descubrir campos de dinero sin rastro).
-    "HourlyRate", "Role", "Group", "Active", "StartedOn",
+    # ⚠️ `PayrollID` (v484) decide a QUIÉN le paga el proveedor de nómina: no es un
+    # importe, pero equivocarlo paga a otra persona. Si un campo mueve dinero entra
+    # aquí en el MISMO lote en que se crea — la regla que v344, v352 y v373
+    # aprendieron descubriendo campos de dinero sin rastro.
+    "HourlyRate", "Role", "Group", "Active", "StartedOn", "PayrollID",
     # factura / nómina  (el cobro y el pago se siguen por `Estado` + `Cobrado`)
     "Total", "Collected", "TaxPct", "Net", "Base",
     # catálogo (v352): el precio de lo que vendes mueve dinero tanto como el margen.
