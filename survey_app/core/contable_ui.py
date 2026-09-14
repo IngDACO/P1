@@ -170,18 +170,25 @@ def _partes_section(grupo):
 
     if r["filas"]:
         det = contable.partes(grupo, desde, hasta)
+        # Una sola definición de la etiqueta del día: la usan las filas Y la
+        # configuración de columnas, así que no hay dos listas en paralelo que
+        # puedan desincronizarse (v433/v434).
+        _etq_dia = {d: d.strftime("%a %d/%m") for d in det["dias"]}
         _filas = [dict({t("Employee"): f["nombre"], t("Payroll ID"): f["payroll_id"],
                         t("Earnings rate"): f["etiqueta"]},
-                       # ⚠️ NaN y no None: con la columna entera vacía pandas la deja
-                       # en `object` y Streamlit imprime el texto «None» — el fallo que
-                       # documentó v467, y se veía en la tabla del parte. Con NaN la
-                       # columna es float y la celda sale vacía, igual que en el CSV.
-                       **{d.strftime("%a %d/%m"): f["horas"].get(d, float("nan"))
+                       # ⚠️ Cadena, NO un nulo: `st.dataframe` pinta cualquier nulo
+                       # como el literal «None» en gris y no hay configuración que lo
+                       # evite — el cuadro de lo medido está en `tabla.celda`. Con NaN
+                       # (v485) se seguía viendo «None» en producción. El día sin
+                       # horas sale vacío, igual que en el CSV.
+                       **{_etq_dia[d]: tabla.celda(f["horas"].get(d), 2)
                           for d in det["dias"]},
-                       **{t("Total"): f["total"]})
+                       **{t("Total"): tabla.celda(f["total"], 2)})
                   for f in det["filas"]]
         st.dataframe(pd.DataFrame(_filas), hide_index=True, width="stretch",
-                     column_config=tabla.cfg())
+                     column_config=tabla.cfg(None, dict(
+                         {c: tabla.derecha(c) for c in _etq_dia.values()},
+                         **{t("Total"): tabla.derecha(t("Total"))})))
 
     with st.expander(t("Earnings rate names"), icon=":material/badge:"):
         _editor_conceptos(grupo, contable.mapa(grupo))

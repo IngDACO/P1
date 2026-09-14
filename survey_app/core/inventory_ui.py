@@ -330,14 +330,15 @@ def _detalle(grupo, aid):
             "Desde":   INV.ubic_texto(m.get("FromLocation", ""), _etq) or "—",
             "Hacia":   INV.ubic_texto(m.get("ToLocation", ""), _etq) or "—",
             "Usuario": m.get("User", "") or "—",
-            # ⚠️ NaN y no None: si TODA la columna es None, pandas la deja en
-            # `object` y Streamlit pinta el literal «None»; con NaN es float y
-            # sale vacia (medido, no supuesto).
-            "Costo":   (round(_num(m.get("Cost")), 0) if str(m.get("Cost", "")).strip()
-                        else float("nan")),
+            # ⚠️ Cadena vacía, NO NaN: `st.dataframe` pinta cualquier nulo como el
+            # literal «None» en gris y ninguna `column_config` lo evita — el cuadro
+            # de lo medido está en `tabla.celda`. Lo que decía aquí («con NaN sale
+            # vacia, medido») era FALSO: esta tabla seguía diciendo «None».
+            "Costo":   (tabla.celda(m.get("Cost"), 0, "$")
+                        if str(m.get("Cost", "")).strip() else ""),
             "Nota":    m.get("Note", "") or "",
         } for m in _mr]), width="stretch", hide_index=True,
-            column_config=tabla.cfg(None, {"Costo": st.column_config.NumberColumn(t("Cost"), format="$%,d")}))
+            column_config=tabla.cfg(None, {"Costo": tabla.derecha(t("Cost"))}))
 
     # Editar
     st.markdown(t("#### :material/edit: Edit asset"))

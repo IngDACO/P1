@@ -10810,8 +10810,9 @@ de los días de la tabla del parte salían con el literal **`None`**. El CSV est
 
 Causa: `f["horas"].get(d)` devuelve `None` para los días que faltan y, **con la columna
 entera vacía, pandas la deja en `object` y Streamlit imprime el texto**. Es literalmente
-el fallo que documentó v467, repetido. Arreglo: `float("nan")`, que deja la columna en
-float y la celda vacía.
+el fallo que documentó v467, repetido. ⚠️ **El arreglo de esta versión —`float("nan")`—
+era FALSO y se corrigió en v486: el NaN se pinta «None» igual. Lo único que vacía la
+celda es una CADENA en una columna sin tipar (`tabla.celda`).**
 
 ### ⚠️ Lo grave no era el `None`: era que su red diera «0»
 `verif_v467` tiene una red para exactamente esto, y decía **0 celdas con None** con el
@@ -10847,7 +10848,113 @@ exactamente un sitio con el fallo dentro. Es lo que se hizo.
 La red, validada en las dos direcciones tras cada iteración (tres, hasta que dejó de
 tener falsos positivos y empezó a cazar el caso real), y suite entera.
 
-## Versiones desplegadas (v485 = actual)
+## ⚠️ NaN TAMPOCO vacía la celda: v485 arregló un fallo con la cura equivocada (v486)
+
+v485 cambió el `None` de la tabla del parte por `float("nan")`, lo desplegó, y **en
+producción seguía pintando «None»**. Lo que corrige v486 no es un olvido: es una
+afirmación que llevaba desde v467 escrita como **medida** y era falsa.
+
+### ⚠️ Mi error de medición: leí el AGREGADO y lo atribuí a la columna que esperaba
+La sonda local de v485 pintaba dos columnas a la vez —una de `None` y una de `NaN`— e
+interceptaba `fillText`. Devolvió `«None»: 8` y **se lo asigné entero a la columna de
+`None`**. Eran 2 columnas × 2 filas × 2 repintados: **la de NaN pintaba «None»
+también**. Con las coordenadas se ve de un golpe — la cabecera `NANCOL` en x=172 y
+`NONECOL` en x=351, y los «None» en **x=335 (borde derecho de NANCOL) y x=352** —, pero
+yo solo miré el recuento.
+→ **Un agregado no dice nada hasta saber QUÉ está contando.** Es la trampa nº12 en su
+forma más barata de evitar: la misma sonda, mirando `x`.
+
+### El cuadro, medido con una tabla por caso y control incluido
+Una tabla por candidato con **una sola columna de datos**, para que ningún «None» pueda
+atribuirse a otra cosa:
+
+| valor de la celda | `column_config` de esa columna | se pinta |
+|---|---|---|
+| `nan` · `None` · `pd.NA` | ninguno · `{}` · `Column()` · `NumberColumn` · `+format` · `TextColumn` | **«None»** |
+| `nan` + `Styler(na_rep="")` | — | **«None»** |
+| **`""`** | **ninguno o `Column()`** | **vacío** |
+| `""` | `NumberColumn` (con o sin formato) | **«None»** |
+
+Ese «None» es el **placeholder de valor ausente** de Streamlit, y el control lo
+confirma: con `column_config` **ninguno** también sale (`_F`), así que `tabla.cfg()`
+queda exculpado. Y la última fila es la que decide el arreglo: **una columna TIPADA
+convierte incluso la cadena vacía en nulo**, así que las dos piezas —cadena + columna
+sin tipar— van juntas o ninguna sirve.
+
+⚠️ `st.column_config.Column(label, alignment="right")` conserva los números a la
+derecha, así que no se pierde la lectura de una columna de dinero. Pero `alignment` es
+reciente y `requirements.txt` admite desde 1.39: `tabla.derecha()` **degrada** a la
+columna genérica en vez de tumbar la tabla entera.
+
+### No era una tabla: eran CUATRO
+La frase «con `NaN` sale vacía — **medido**» está en CLAUDE.md desde v467 y se aplicó en
+cuatro sitios, todos vivos:
+
+| Dónde | Qué se veía |
+|---|---|
+| `contable_ui` · el parte de horas | «None» en cada día sin horas (v485) |
+| `payroll_ui` · `Rate/h` | ⚠️ y el pie de esa misma tabla **PROMETE** *«an empty Rate/h means that person has no rate set»* |
+| `inventory_ui` · `Costo` del historial | «None» en el movimiento sin costo |
+| `catalogo_ui` · `Horas` | «None» en cada producto |
+
+**Una afirmación equivocada documentada como medida no se queda quieta: se copia.**
+
+### `tabla.celda` + `tabla.derecha`: una definición, no cuatro comentarios
+El importe se formatea en Python y la columna se declara sin tipar. Verificado
+**ejecutando** que el formato pinta IDÉNTICO al `NumberColumn` que sustituye —19 valores
+× 2 formatos, 0 diferencias—, porque son columnas de dinero y un cambio de formato
+habría movido cada cifra de esas pantallas en silencio. ⚠️ Y `%d` **trunca** mientras
+`.0f` **redondea** (trampa nº20), así que se compara contra el camino viejo COMPLETO: el
+`round()` que hacía el código + el printf de Streamlit.
+
+⚠️ **No usa `theme.dinero`, a propósito**: ese escapa el `$` como `\$` porque Streamlit
+lee LaTeX en markdown (v309), y una celda de `st.dataframe` no es markdown — ahí el
+escape se ve literal. Dos destinos, dos funciones.
+
+### ⚠️ Y REINTRODUJE el fallo de v323 dentro del arreglo
+`celda` hacía `float(valor)`. Con `"1,234.56"` —que es **como Sheets formatea el dinero
+en AU/US**— eso revienta, así que devolvía **vacío**. Es exactamente el fallo que v323
+documentó con cinco implementaciones divergentes de `_num`… y aquí era **peor**: allí
+salía `$0` y aquí sale «no hay dato». Consideré importar `core/num.py`, comprobé que era
+módulo hoja, y luego no lo usé.
+→ Ahora usa `num(valor, None)` —`default=None` para poder distinguir un cero legítimo de
+algo ilegible— y el guardián lo fija por AST, así que nadie puede volver a `float()`.
+**Lo cazó comparar el formato contra el anterior**, no leer el código: 14 de 15 casos
+idénticos y el que difería era ese.
+
+### ⚠️ La red de v467 daba «0» con el fallo delante, otra vez
+v485 la rehizo bien (le quitó tres cegueras) pero su **afirmación** seguía siendo falsa:
+`ok("0 celdas con None (se usa NaN)")`. O sea que «arreglar» un None poniendo NaN
+**pasaba el chequeo y seguía pintando «None»** — que es literalmente lo que hizo v485.
+Ensanchada al NaN en sus tres escrituras (`float("nan")`, `np.nan`, `pd.NA`) y corregida
+la nota, que decía lo contrario de lo medido.
+
+⚠️ **Y una rotura SE ESCAPÓ: enumerar posiciones falló por tercera vez.** Cubría el valor
+directo y la rama `else` de un ternario, y no vio `f["horas"].get(d, float("nan"))` — el
+nulo metido en el **DEFECTO del `.get`**, que es EXACTAMENTE la forma que tenía v485 en
+producción. Se cambió por recorrer el **subárbol** del valor: más ancho, y medido **0
+falsos positivos** en el repo. Validada después en las dos direcciones: 5/5 roturas
+cazadas (las tres escrituras × las tres posiciones) y el CONTROL verde.
+
+⚠️ Y el mismo error en mi guardián nuevo: el chequeo de «`tabla.py` sigue siendo módulo
+hoja» miraba el `module` de un `ImportFrom`, y **`from core import projects` tiene
+`module == "core"`**, que no empieza por `"core."` — la rotura pasaba. Hay que mirar los
+NOMBRES, no solo el módulo.
+
+### Higiene: 3 `.pyc` estaban RASTREADOS en git
+`survey_app/__pycache__/app.cpython-314.pyc` y dos de `extractors/`, pese al
+`.gitignore` — que **no destrackea lo ya añadido**. Bytecode de Python 3.14 viajando al
+Cloud, que corre 3.12 (v66). Destrackeados sin borrarlos del disco.
+
+### Verificación
+`verif_v486.py` (24 comprobaciones, todo EJECUTANDO donde decide: importar no ejecuta,
+v378) probado contra **9 roturas + CONTROL**, con el **verde de base confirmado ANTES**
+(sin ese paso una tanda entera sale «cazada» sin probar nada, v459/v461/v463). Las
+cuatro tablas **vistas en pantalla** con el código real y datos inyectados por la
+función de LECTURA de cada módulo, no replicando la expresión — que es justo el error
+que me hizo dar v485 por bueno.
+
+## Versiones desplegadas (v486 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -10855,6 +10962,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v486 | ⚠️ **NaN TAMPOCO vacía la celda: v485 arregló el fallo con la cura equivocada** y en producción seguía pintando «None». ⚠️ Mi error: la sonda devolvió `«None»: 8` y **se lo atribuí entero a la columna que esperaba** — eran 2 columnas × 2 filas × 2 repintados, o sea que **la de NaN pintaba «None» también**; con las coordenadas se veía de un golpe (x=335 es el borde derecho de la columna de NaN). *Un agregado no dice nada hasta saber QUÉ cuenta.* Medido con una tabla por caso y control: `nan`/`None`/`pd.NA` pintan «None» con cualquier config —y hasta con `Styler(na_rep="")`—, y lo ÚNICO que vacía la celda es una **CADENA en una columna SIN tipar**, porque una columna tipada convierte incluso `""` en nulo. **No era una tabla: eran CUATRO** (parte, `Rate/h` —cuyo pie PROMETE que vacío = sin tarifa—, Costo de inventario y Horas de catálogo), porque la frase «con NaN sale vacía, medido» está en CLAUDE.md desde v467: *una afirmación equivocada documentada como medida se copia*. Nuevas `tabla.celda`/`derecha` (una definición), con el formato verificado **idéntico** al `NumberColumn` que sustituye (19 valores × 2 formatos, 0 diferencias — son columnas de dinero, y `%d` trunca mientras `.0f` redondea). ⚠️ **Y reintroduje el fallo de v323 dentro del arreglo**: `float()` en vez de `num()` hacía que «1,234.56» —como Sheets formatea el dinero en AU— saliera **VACÍO**, o sea «no hay dato», peor que el `$0` de v323; lo cazó comparar el formato contra el anterior, no leer el código. ⚠️ La red de v467 seguía afirmando «0 celdas con None (se usa NaN)», así que poner NaN **pasaba el chequeo**: ensanchada, y **una rotura se escapó** porque enumeraba posiciones y no vio el nulo en el **DEFECTO de un `.get()`** — la forma exacta de v485; ahora recorre el subárbol (0 falsos positivos). + **3 `.pyc` estaban RASTREADOS** en git pese al `.gitignore`, que no destrackea lo ya añadido | 
 | v485 | ⚠️ **La tabla del parte pintaba «None»** en cada día sin horas — visto MIRANDO la pantalla de v484 en producción, no leyendo. Con la columna entera vacía pandas la deja en `object` y Streamlit imprime el texto: es el fallo de v467 repetido (el CSV sí estaba bien). Arreglado con `NaN`. ⚠️ **Y lo grave era que su red diera «0» con el fallo delante**: tenía TRES cegueras —solo veía el ternario y el `None` literal (lo mío es un `.get()` **sin defecto**), solo miraba DENTRO de `pd.DataFrame(...)` (mi dict llega por **variable**, el agujero de v471) y solo `ast.Dict` (el mío es un **DictComp**)—, así que su cero no significaba nada para esa tabla. ⚠️ Ensancharla de golpe dio **12 falsos positivos** (una fila de hoja se lee por nombre LITERAL y `registros` siempre trae todas las cabeceras → nunca da None) y luego **5 más** al recorrer la función entera. El discriminador real es la **clave VARIABLE**, y la sonda resuelve la variable. Validada en las DOS direcciones tras cada iteración |
 | v484 | **FASE 2.2-A: el parte de horas.** ⚠️ El usuario eligió Xero Payroll y lo primero fue descubrir que **ese destino no existe**: Xero Payroll AU no importa partes por CSV — su artículo no tiene paso de import (⚠️ con la sonda validada: el de facturas, con el mismo cascarón, sí lo tiene), su Product Ideas lo pide y sus foros dicen que iría por API. Así que se construyó lo que sirve en cualquier rama, y ⚠️ **de leer su API salió el diseño**: formato **ANCHO, una columna por día y en ORDEN**, porque `NumberOfUnits` es un array por día → 2.3 será un mapeo. + ⚠️ **una sola definición de «qué día de ausencia se paga»**: el criterio de v432 baja a `horas_pagadas_dia` y el agregado DELEGA —dos implementaciones pagarían días distintos y solo lo delata el total—, **demostrado idéntico en 13 casos** contra la implementación anterior sacada del commit (la demo tiene 0 ausencias, así que la hoja real no probaba nada). + `PayrollID` (el login no lo conoce el proveedor, y el nombre se repite), que ⚠️ **casi dejo sin editor** — el «pendiente que nadie puede cerrar» de v325/v340. ⚠️ **Tres roturas escaparon y solo dos eran huecos míos**: la tercera cambiaba un campo que **nadie lee**, así que salió de la batería en vez de inventar un caso inalcanzable. ⚠️ Y la batería **dejó el doble pago de v432 VIVO en el árbol** al fallar su `finally` con OSError: ahora copia en disco, verifica el restore y **aborta** si no puede. 72 comprobaciones · **17/17 roturas + control** |
 | v483 | **FASE 2 de la ruta: identidad fiscal + exportación contable.** ⚠️ El hallazgo: `invoice_pdf` imprime «TAX INVOICE» en cada factura y **no había ABN en todo el repositorio** —la marca era el nombre INTERNO del grupo—, así que las ya emitidas iban incompletas ante la ATO sin que nada lo dijera. + el vencimiento nacía **HOY**, o sea que toda factura entraba vencida el mismo día. Cuatro columnas nuevas en `Groups` ⚠️ **al final, que es lo que las hace migrar solas** (v363), y el PDF **degrada en tres direcciones**: sin ABN, sin razón social y con la lectura fallando se emite igual. + **CSV para Xero y MYOB** con tres reglas: importes **siempre sin impuesto** (o la casilla «inclusive/exclusive» se contesta mal y el GST sale torcido), el impuesto **REPARTIDO** para que sume exacto —ejercitado contra la hoja real: línea a línea da **9,99** y el reparto **10,00**— y el mapa de cuentas **por PERFIL** (200 de Xero no existe en MYOB, que rechaza la fila entera). Nombres de impuesto y campos de MYOB **verificados en su documentación**. ⚠️ Un error mío de semántica cazado **volcando el CSV**, no leyendo: la 4ª de MYOB es el PO del CLIENTE, no el proyecto. ⚠️ Y una **rotura SE ESCAPÓ** porque el guardián afirmaba la CONSTANTE y no lo que el CSV produce: intercambiar el desempaquetado escribe `OUTPUT` en el fichero con la constante perfecta. ⚠️ + un `NameError` (`_num` sin importar en `auth_ui`) cazado por el chequeo de ámbito antes de desplegar. 80 comprobaciones · **15/15 roturas + control** · 21 contra la hoja real sin rastro |
@@ -10873,7 +10981,7 @@ detalle exacto de una versión no listada: `git log`.
 | v470 | **Tipo de proyecto «Ripout + Installation»** (peticion del usuario): sustituir un ascensor. El desmontaje entra como **UNA actividad, la primera** —no una tabla de fases, lo corrigio el usuario— y su duracion **escala con las paradas** (3 paradas: 4 d · 12: 9 d; el proyecto de 6 pasa de 29 a 35 d). ⚠️ El cambio de fondo NO es la fase: habia **TRES** sitios preguntando «¿este tipo genera cronograma?» (alta, edicion y aceptar cotizacion) y uno comparaba el **LITERAL** en vez de la constante — anadir un tipo a dos de los tres lo deja comportandose como «Other» sin dar ningun error, que es el fallo de v454 (una obra nacida con CERO actividades, clavada en 0% para siempre). Ahora `projects.genera_cronograma()` es la unica definicion y los tres delegan. ⚠️ `custom_rows` NO reinserta la fase, o se duplicaria en cada guardado del cronograma. Cambiar el tipo sigue sin regenerar el plan (regenerarlo borraria el avance ya reportado, v135) pero **ya se avisa**, por CONDICION y donde se arregla; y los dos `help` que decian «Only Installation» pasaron a mentir y se corrigieron. 23 comprobaciones ejecutando + **13/13 roturas cazadas** — ⚠️ una **SE ESCAPO** porque el chequeo del marcador reproducia la cadena en el guardian en vez de leerla del codigo (el fallo de v412); rehecho por AST y generalizado a todo `t()`/`d()` del repo |
 | v469 | **Los VALORES pasan a INGLES** (61 pares), ultima capa de «todo en ingles». Mismo diseno que las columnas: `core/valores.py` canoniza al LEER, asi que el codigo aguanta las dos formas y se puede desplegar ANTES de migrar la hoja. ⚠️ **Lista blanca por (HOJA, COLUMNA)**, nunca por nombre suelto. **Dos fallos silenciosos**: **(1)** `Sheet1.Type` se quedo FUERA de esa lista mientras `TIPO_PROYECTO` pasaba a `"project"`, asi que las ~500 filas del historico se leian crudas y **ni una hora imputada a una obra contaba como tal** — nomina, costo de obra, conciliacion y reparto por proyecto, todo a cero. ⚠️ Y **el guardian de v469 estaba PROTEGIENDO el fallo** (exigia que quedase fuera, cierto cuando la constante aun era `proyecto`): hacerle caso al rojo sin mirar el codigo acusado lo habria reintroducido — regla v385 con el acusado teniendo razon y el acusador no. Los dos barridos que lo buscaban tampoco lo vieron: uno comparaba por NOMBRE de columna (y `Type` ya estaba, para otra hoja) y el otro solo miraba constantes que son LISTA, y estas son sueltas. **(2)** `estado_cobro` devolvia una MEZCLA (cuatro ramas en espanol y una migrada), asi que el chip de la factura perdia icono y color y salia el texto crudo; se revierte esa rama y las facturas se quedan en espanol de punta a punta. ⚠️ **Y la red que buscaba mezclas era CIEGA a ese caso**: hecha sobre el mapa de MIGRACION, daba 0 con la mezcla delante — un valor migrado fuera de ese mapa es justo donde duele; rehecha sobre el vocabulario completo si lo ve, y solo lo destapo validarla contra un caso conocido-bueno. Los 8 guardianes de «el DATO sigue en espanol» **invertidos con su razon**, no relajados. 9/9 roturas cazadas + control; smoke que ejecuta el viaje completo de un valor (29); y la compatibilidad demostrada **contra la hoja real** (`Role` llega `owner` con la hoja diciendo `propietario`) |
 | v468 | **Las 160 COLUMNAS pasan a nombre INGLES** (2.573 sitios). Lo hace posible canonizar al LEER: `core/columnas.py` (una sola fuente) y el lector traduce la CABECERA, asi que el codigo ve el nombre nuevo tenga el libro el viejo o el nuevo; las **escrituras no necesitan nada** porque van por POSICION y renombrar no mueve la columna. **Tres fallos silenciosos**: un **VALOR de negocio renombrado** por coincidir con una columna (habria descasado con los activos guardados); **11 claves de `column_config`** descolocadas (ese dict no esta dentro de `pd.DataFrame`) mas **4 del caso contrario** (filas construidas FUERA de la llamada); y **`col_offset` del AST es un offset en BYTES**, asi que cortando por caracteres el reemplazo salia desplazado en toda linea con acento — la guarda impidio corromper nada (0 cambios sin explicar en 87 ficheros) pero dejo **78 sitios sin migrar**, que devuelven cadena vacia en silencio. **33 guardianes en rojo**: 27 mecanicos, 6 que AFIRMAN sobre el nombre (invertidos con su razon, no relajados) y uno que señalo un fallo real de codigo. Y **mi guardian aprobaba una rotura real** por buscar la palabra en toda la funcion en vez de en la CONDICION. Suite 104 verde |
-| v467 | **El historial del inventario deja de estar en español** (`ubic_texto` traduce el texto YA COMPUESTO al pintar: pantalla en ingles, hoja en español — arregla tambien el historico **sin migracion**), **ninguna columna pinta el literal «None»** (con TODA la columna vacia pandas la deja en `object` y Streamlit imprime el texto; con `NaN` sale vacia — medido) y las **carpetas de Drive** pasan a ingles con **auto-renombrado**: se buscan POR NOMBRE, asi que cambiar solo la constante dejaria los 27 documentos ya subidos en la carpeta vieja; renombrar en Drive conserva el contenido, crear es lo que los deja huerfanos. 4/4 roturas |
+| v467 | **El historial del inventario deja de estar en español** (`ubic_texto` traduce el texto YA COMPUESTO al pintar: pantalla en ingles, hoja en español — arregla tambien el historico **sin migracion**), **ninguna columna pinta el literal «None»** (con TODA la columna vacia pandas la deja en `object` y Streamlit imprime el texto; ⚠️ **el «con `NaN` sale vacia — medido» que decia aqui era FALSO, corregido en v486**) y las **carpetas de Drive** pasan a ingles con **auto-renombrado**: se buscan POR NOMBRE, asi que cambiar solo la constante dejaria los 27 documentos ya subidos en la carpeta vieja; renombrar en Drive conserva el contenido, crear es lo que los deja huerfanos. 4/4 roturas |
 | v466 | ⚠️ **El indice de pestañas NO caduca, y renombrar dejaba las pantallas a CERO.** Tras renombrar las 44, el Catalogo mostraba **0 items** con la hoja llena: `_libro` vive en **`@st.cache_resource`, sin TTL**, asi que el proceso seguia pidiendo `Catalogo` —una hoja que ya no existe—, el lote entero fallaba en cada pasada y **los datos seguian intactos en el libro**. Solo se arreglaba reiniciando a mano, asi que se cierra en el codigo: si el lote falla **se tira el indice**, y `get_sheet` **lo refresca y vuelve a mirar ANTES de crear** — que era el camino por el que un indice viejo podia fabricar una pestaña vacia y ponerse a escribir en ella |
 | v465 | **Las 27 pestañas pasan a nombre INGLES** (peticion del usuario), con **capa de compatibilidad**: `titulo_real` pide el nombre nuevo y acepta el viejo, porque ⚠️ `get_sheet` **crea** la hoja si no la encuentra — codigo y libro desincronizados no dan error, fabrican una pestaña vacia donde escribir. Tres pasos: codigo que acepta los dos → renombrar → retirar el respaldo (v467). ⚠️ Antes de renombrar se comprobo que el Cloud tuviera el codigo nuevo con un **canario POSITIVO** (renombrar `Activos`→`Assets` y ver que sigue mostrando 1 activo): el primero, sobre una hoja vacia, **no valia** porque la ruta de lectura no crea hojas. 26 literales traducidos por AST (solo donde el literal ES una hoja) + `HOJAS_LECTURA` + el lote re-keyeado al nombre canonico. ⚠️ El guardian de **v445 me cazo reintroduciendo su propio fallo**: `t = str(title)` tapa la funcion de traduccion en el ambito entero. Los otros 2 rojos, caducados (el libro FALSO de v427 nombraba las hojas en español; v430 exigia el literal «Ausencias», reanclado a la constante). 44 pestañas renombradas en los 2 libros, **0 con nombre viejo, 0 recreadas** |
 | v464 | **Un lote no basta: el mapa estaba a medias en CUATRO listas mas.** v463 se desplego y se verifico en produccion, y **mirar esas mismas capturas** destapo `catalogo.UNIDADES`, `inventory.CONDICIONES`, `UBIC_TIPOS` y `MOV_TIPOS` saliendo crudas — `unidad`/`juego` bajo la cabecera *Unit*, `bueno`/`regular` en la ficha, `bodega:` en la ubicacion y `salida`/`traslado` en el historial. 12 entradas mas al mapa; ⚠️ **`m`, `m²` y `kg` NO se mapean**: son simbolos iguales en los dos idiomas y un mapa espejo es la segunda definicion que v450 mando borrar. ⚠️ **El casi-fallo**: lo natural era traducir dentro de `ubic_str` (una sola definicion, v306), pero **5 de sus 6 llamadas son de `_log_mov`** y ese texto **se ESCRIBE en el historial** — habria guardado `warehouse: X` como DATO, el fallo que v452 estuvo a punto de cometer; el traductor entra por **parametro opcional**, asi la pantalla traduce y la escritura sigue en espanol. ⚠️ **Y una rotura SE ESCAPO**: la red del guardian miraba `COLS = {Estado, Categoria, Tipo, Rol}` y **`Unidad` no estaba**, asi que devolver esa celda a crudo daba 0 (11 cazadas · 1 escapada) — la red ve solo la forma que se le enseño, dentro del guardian escrito para esa misma leccion una version antes. Con `COLS` ampliada y **verde de base** (el paso que v459/v461 se saltaron): **12/12 · 0 escapadas** |

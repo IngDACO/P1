@@ -72,18 +72,21 @@ def render_catalogo(grupo):
             "Tipo": _etq(str(i.get("Type", ""))),
             "Category": _etq(str(i.get("Category", ""))) or "—",
             "Unidad": _etq(str(i.get("Unit", ""))) or "—",
-            # ⚠️ NaN, no None: una columna ENTERA de None la deja pandas en
-            # `object` y Streamlit pinta el literal «None» (pasaba con un
-            # catalogo de solo productos).
-            "Horas": (round(_num(i.get("EstHours")), 2)
-                      if str(i.get("Type", "")) == CAT.SERVICIO else float("nan")),
+            # ⚠️ Cadena vacía, NO NaN: `st.dataframe` pinta cualquier nulo como el
+            # literal «None» en gris, con o sin `column_config` (cuadro de lo medido
+            # en `tabla.celda`). Un producto no tiene horas, y se veía «None».
+            "Horas": (tabla.celda(i.get("EstHours"), 2)
+                      if str(i.get("Type", "")) == CAT.SERVICIO else ""),
             "Costo": CAT.costo_de(i, 1),
             "Activo": "🟢" if str(i.get("Active", "SI")).upper() != "NO" else "🔴",
         } for i in items])
         _ev = st.dataframe(df, width="stretch", hide_index=True,
                            on_select="rerun", selection_mode="single-row", key="cat_tbl",
-                           column_config=tabla.cfg(None, {"Costo": st.column_config.NumberColumn(
-                               t("Cost"), format="$%,.2f", help=t("Product: unit cost. Service: hours × rate."))}))
+                           column_config=tabla.cfg(None, {
+                               "Horas": tabla.derecha(t("Hours")),
+                               "Costo": st.column_config.NumberColumn(
+                                   t("Cost"), format="$%,.2f",
+                                   help=t("Product: unit cost. Service: hours × rate."))}))
         _sr = list(_ev.selection.rows)
         if _sr and _sr[0] < len(items):
             st.session_state["_cat_open"] = str(items[_sr[0]].get("ID", ""))

@@ -48,6 +48,7 @@ Módulo HOJA: solo `streamlit` + `i18n`, así que cualquier `_ui` puede importar
 import streamlit as st
 
 from core.i18n import t
+from core.num import num as _num
 
 # Clave tal como vive en el dict de la fila → texto BASE (inglés).
 # ⚠️ Es un mapa de PRESENTACIÓN. Que una clave esté aquí no la convierte en etiqueta:
@@ -184,3 +185,65 @@ def cfg(filas=None, extra=None):
     if extra:
         out.update(extra)
     return out
+
+
+def derecha(label):
+    """Columna de TEXTO alineada a la derecha, para importes y horas ya formateados.
+
+    ⚠️ `alignment` es un parámetro RECIENTE y `requirements.txt` admite Streamlit
+    desde 1.39: si no está, se degrada a la columna genérica en vez de romper la
+    tabla entera. Una alineación perdida es un detalle; una tabla que no pinta, no.
+    """
+    try:
+        return st.column_config.Column(label, alignment="right")
+    except TypeError:                                     # Streamlit sin `alignment`
+        return st.column_config.Column(label)
+
+
+def celda(valor, dec: int = 2, simbolo: str = "", vacio: str = "") -> str:
+    r"""Número YA FORMATEADO para una celda, o `vacio` cuando NO hay dato (v486).
+
+    ## Por qué existe: Streamlit NO sabe pintar una celda numérica vacía
+
+    ⚠️ Un nulo en `st.dataframe` se pinta como el literal **«None»** en gris, y no
+    hay forma de configurarlo. Medido en 1.57 con una tabla por caso, interceptando
+    `fillText`, y con el control que discrimina:
+
+    | Valor de la celda | `column_config` de esa columna | Se pinta |
+    |---|---|---|
+    | `nan` · `None` · `pd.NA` | ninguno · `{}` · `Column()` · `NumberColumn` · `+format` · `TextColumn` | **«None»** |
+    | `nan` + `Styler(na_rep="")` | — | **«None»** |
+    | **`""`** | **ninguno o `Column()`** | **vacío** |
+    | `""` | `NumberColumn` | **«None»** |
+
+    O sea: **una columna TIPADA convierte incluso `""` en nulo**, así que la única
+    celda que sale vacía es una CADENA en una columna sin tipar. De ahí las dos
+    piezas: el importe se formatea aquí y la columna se declara con `derecha()`.
+
+    ⚠️ Historia, porque el error se escribió DOS veces: v467 documentó «con `NaN`
+    sale vacía — medido» y con esa frase se arreglaron cuatro tablas (catálogo,
+    inventario, nómina y el parte de v485) que seguían pintando «None» en
+    producción. La frase era falsa. Una afirmación equivocada que se documenta como
+    medida no se queda quieta: se copia.
+
+    ⚠️ **No usa `theme.dinero`, a propósito.** Ese escapa el `$` como `\$` porque
+    Streamlit lee LaTeX en markdown (v309); una celda de `st.dataframe` no es
+    markdown y ahí el escape se ve literal. Medido: `$12.50` en una celda sale tal
+    cual. Son dos sitios porque son dos destinos distintos, no por descuido.
+
+    El cero es un DATO (`"$0"`), no una ausencia: solo `None`, la cadena vacía y
+    `NaN` dan `vacio`.
+    """
+    if valor is None:
+        return vacio
+    if isinstance(valor, str) and not valor.strip():
+        return vacio
+    # ⚠️ `num`, NO `float()`: un importe con separador de miles («1,234.56», que es
+    # como Sheets formatea el dinero en AU/US) revienta con `float` — es el fallo que
+    # documentó v323, donde CINCO implementaciones lo leían como 0,00 en silencio.
+    # Aquí sería peor: saldría VACÍO, o sea «no hay dato» en vez de «hay $1.234,56».
+    # `default=None` para poder distinguir un cero legítimo de algo ilegible.
+    v = _num(valor, None)
+    if v is None or v != v:                               # ilegible, pd.NA o NaN
+        return vacio
+    return f"{simbolo}{v:,.{dec}f}"

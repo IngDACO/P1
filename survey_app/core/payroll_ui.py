@@ -132,8 +132,11 @@ def render_nominas(grupo):
         "Usuario":  _et.get(str(x.get("User", "")), str(x.get("Name", ""))),
         "Periodo":  f"{x.get('PeriodFrom', '')} → {x.get('PeriodTo', '')}",
         "Horas":    round(_num(x.get("Hours")), 1),
-        "Rate/h": (round(_num(x.get("HourlyRate")), 2)
-                     if _num(x.get("HourlyRate")) > 0 else float("nan")),
+        # ⚠️ Cadena vacía, NO NaN: un nulo se pinta «None» en gris (ver el cuadro
+        # en `tabla.celda`), y el pie de ESTA tabla promete que un «Rate/h» vacío
+        # significa que esa persona no tiene tarifa puesta. Decía «None».
+        "Rate/h": (tabla.celda(x.get("HourlyRate"), 2, "$")
+                     if _num(x.get("HourlyRate")) > 0 else ""),
         "Base":     round(_num(x.get("Base")), 0),
         "Neto":     round(_num(x.get("Net")), 0),
         "Estado":   _etq(str(x.get("Status", ""))),
@@ -143,7 +146,7 @@ def render_nominas(grupo):
         on_select="rerun", selection_mode="single-row", key="nom_tbl",
         column_config=tabla.cfg(None, {"Base": st.column_config.NumberColumn(t("Base pay"), format="$%,d"),
                        "Neto": st.column_config.NumberColumn(t("Net"), format="$%,d"),
-                       "Rate/h": st.column_config.NumberColumn(t("Rate/h"), format="$%,.2f")}))
+                       "Rate/h": tabla.derecha(t("Rate/h"))}))
     st.caption(f"{len(_rows)} payslip(s)  ·  base pay {T.dinero(sum(_num(x.get('Base')) for x in _rows), 0)}"
                f"  ·  net {T.dinero(sum(_num(x.get('Net')) for x in _rows), 0)}"
                "  ·  an empty «Rate/h» means that person has no rate set.")
