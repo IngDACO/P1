@@ -10801,7 +10801,53 @@ cazadas + CONTROL verde**, con el verde de base comprobado antes.
 organización demo, que son del usuario. Lo que este parte deja resuelto es la forma: la
 fila de aquí es la línea de allí y el orden de las columnas es el del array.
 
-## Versiones desplegadas (v484 = actual)
+## ⚠️ La tabla del parte pintaba «None», y la red que lo vigila estaba CIEGA (v485)
+
+Encontrado **mirando la pantalla** de v484 en producción, no leyendo código: las celdas
+de los días de la tabla del parte salían con el literal **`None`**. El CSV estaba bien
+—ahí emito `""` explícitamente— pero la tabla que lee el responsable de nómina decía
+`None` en cada día sin horas.
+
+Causa: `f["horas"].get(d)` devuelve `None` para los días que faltan y, **con la columna
+entera vacía, pandas la deja en `object` y Streamlit imprime el texto**. Es literalmente
+el fallo que documentó v467, repetido. Arreglo: `float("nan")`, que deja la columna en
+float y la celda vacía.
+
+### ⚠️ Lo grave no era el `None`: era que su red diera «0»
+`verif_v467` tiene una red para exactamente esto, y decía **0 celdas con None** con el
+fallo delante. Tenía **tres** cegueras, y se descubrieron una a una **probándola contra
+el fallo reintroducido**, no leyéndola:
+
+| Ceguera | Por qué se escapaba |
+|---|---|
+| solo veía el ternario `A if c else None` y el `None` literal | lo mío es un **`.get(k)` sin defecto**, que devuelve None *implícitamente* |
+| solo miraba DENTRO de la llamada a `pd.DataFrame(...)` | mi dict se construye fuera y a `DataFrame` le llega una **variable** — el mismo agujero que v471 tuvo que cerrar |
+| solo miraba `ast.Dict` | el mío es un **`ast.DictComp`**, que tiene `.key`/`.value` y no `.keys`/`.values` |
+
+Con las tres, su «0» no significaba nada para esa tabla. **Un «0» vale solo para la
+forma que la red sabe ver** (v450), y esta red llevaba desde v467 sin saber ver ninguna
+de las tres.
+
+### ⚠️ Y ensancharla de golpe la volvió inservible: dos pasadas de falsos positivos
+1. Marcando **todo** `.get()` de un argumento salieron **12 sitios sanos**: una fila de
+   hoja se lee con el nombre LITERAL de su cabecera y `hojas.registros` **siempre las
+   trae todas**, así que `r.get("Type")` nunca da None — da `""`, que sí sale vacío. El
+   discriminador de verdad es la **clave VARIABLE**: lo que puede faltar es la clave
+   calculada.
+2. Recorriendo la **función entera** salieron **5 dicts sanos** que no alimentan ninguna
+   tabla. Se arregló resolviendo la variable que recibe `pd.DataFrame`, que es la sonda
+   de v471.
+
+Las dos veces la tentación era relajar el chequeo o «arreglar» código sano. ⚠️ **Un
+detector que grita sobre lo que está bien acaba ignorándose entero**, así que el criterio
+es: precisión primero, y validar en LAS DOS direcciones — 0 con el código bueno, y caza
+exactamente un sitio con el fallo dentro. Es lo que se hizo.
+
+### Verificación
+La red, validada en las dos direcciones tras cada iteración (tres, hasta que dejó de
+tener falsos positivos y empezó a cazar el caso real), y suite entera.
+
+## Versiones desplegadas (v485 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -10809,6 +10855,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v485 | ⚠️ **La tabla del parte pintaba «None»** en cada día sin horas — visto MIRANDO la pantalla de v484 en producción, no leyendo. Con la columna entera vacía pandas la deja en `object` y Streamlit imprime el texto: es el fallo de v467 repetido (el CSV sí estaba bien). Arreglado con `NaN`. ⚠️ **Y lo grave era que su red diera «0» con el fallo delante**: tenía TRES cegueras —solo veía el ternario y el `None` literal (lo mío es un `.get()` **sin defecto**), solo miraba DENTRO de `pd.DataFrame(...)` (mi dict llega por **variable**, el agujero de v471) y solo `ast.Dict` (el mío es un **DictComp**)—, así que su cero no significaba nada para esa tabla. ⚠️ Ensancharla de golpe dio **12 falsos positivos** (una fila de hoja se lee por nombre LITERAL y `registros` siempre trae todas las cabeceras → nunca da None) y luego **5 más** al recorrer la función entera. El discriminador real es la **clave VARIABLE**, y la sonda resuelve la variable. Validada en las DOS direcciones tras cada iteración |
 | v484 | **FASE 2.2-A: el parte de horas.** ⚠️ El usuario eligió Xero Payroll y lo primero fue descubrir que **ese destino no existe**: Xero Payroll AU no importa partes por CSV — su artículo no tiene paso de import (⚠️ con la sonda validada: el de facturas, con el mismo cascarón, sí lo tiene), su Product Ideas lo pide y sus foros dicen que iría por API. Así que se construyó lo que sirve en cualquier rama, y ⚠️ **de leer su API salió el diseño**: formato **ANCHO, una columna por día y en ORDEN**, porque `NumberOfUnits` es un array por día → 2.3 será un mapeo. + ⚠️ **una sola definición de «qué día de ausencia se paga»**: el criterio de v432 baja a `horas_pagadas_dia` y el agregado DELEGA —dos implementaciones pagarían días distintos y solo lo delata el total—, **demostrado idéntico en 13 casos** contra la implementación anterior sacada del commit (la demo tiene 0 ausencias, así que la hoja real no probaba nada). + `PayrollID` (el login no lo conoce el proveedor, y el nombre se repite), que ⚠️ **casi dejo sin editor** — el «pendiente que nadie puede cerrar» de v325/v340. ⚠️ **Tres roturas escaparon y solo dos eran huecos míos**: la tercera cambiaba un campo que **nadie lee**, así que salió de la batería en vez de inventar un caso inalcanzable. ⚠️ Y la batería **dejó el doble pago de v432 VIVO en el árbol** al fallar su `finally` con OSError: ahora copia en disco, verifica el restore y **aborta** si no puede. 72 comprobaciones · **17/17 roturas + control** |
 | v483 | **FASE 2 de la ruta: identidad fiscal + exportación contable.** ⚠️ El hallazgo: `invoice_pdf` imprime «TAX INVOICE» en cada factura y **no había ABN en todo el repositorio** —la marca era el nombre INTERNO del grupo—, así que las ya emitidas iban incompletas ante la ATO sin que nada lo dijera. + el vencimiento nacía **HOY**, o sea que toda factura entraba vencida el mismo día. Cuatro columnas nuevas en `Groups` ⚠️ **al final, que es lo que las hace migrar solas** (v363), y el PDF **degrada en tres direcciones**: sin ABN, sin razón social y con la lectura fallando se emite igual. + **CSV para Xero y MYOB** con tres reglas: importes **siempre sin impuesto** (o la casilla «inclusive/exclusive» se contesta mal y el GST sale torcido), el impuesto **REPARTIDO** para que sume exacto —ejercitado contra la hoja real: línea a línea da **9,99** y el reparto **10,00**— y el mapa de cuentas **por PERFIL** (200 de Xero no existe en MYOB, que rechaza la fila entera). Nombres de impuesto y campos de MYOB **verificados en su documentación**. ⚠️ Un error mío de semántica cazado **volcando el CSV**, no leyendo: la 4ª de MYOB es el PO del CLIENTE, no el proyecto. ⚠️ Y una **rotura SE ESCAPÓ** porque el guardián afirmaba la CONSTANTE y no lo que el CSV produce: intercambiar el desempaquetado escribe `OUTPUT` en el fichero con la constante perfecta. ⚠️ + un `NameError` (`_num` sin importar en `auth_ui`) cazado por el chequeo de ámbito antes de desplegar. 80 comprobaciones · **15/15 roturas + control** · 21 contra la hoja real sin rastro |
 | v482 | **FASE 0 de la ruta ERP.** ⚠️ `invalidar()` hacía `_lote.clear()` **sin argumento**, que borra la caché de TODOS los libros: una escritura de un cliente obligaba a releer a los demás contra el techo de 60/min de la única cuenta de servicio. Ahora recibe el **TÍTULO** de la hoja — ⚠️ no el `sheet_id`, porque las GLOBALES viven en el maestro y resolver «el libro de la sesión» limpiaría otro—, y **sin título sigue tirando entero**: un llamador que se olvide degrada, no rompe. + **la app mide su propio consumo** (`core/metrics.py`, enganchado a NUESTRA subclase del cliente HTTP): cada INTENTO (un 429 reintentado son dos llamadas), lectura/escritura por **endpoint** y no por método, y el pico con **ventana deslizante** porque la ráfaga real va de 06:59:40 a 07:00:20. Pantalla en Administración → 📈 Cuota. ⚠️ Tres fallos de método MÍOS, los tres cazados por la batería y no leyendo: un chequeo que medía **cero llamadas** sobre una caché que no había tocado, uno **intermitente según el segundo** en que se lanzara (v443), y la batería **provocándose un 429** (trampa nº19 en el script que venía a verificar). 37 comprobaciones · **11/11 roturas + control** · + `NEGOCIO.md` puesto al día tras **400 versiones** desfasado |

@@ -172,7 +172,11 @@ def _partes_section(grupo):
         det = contable.partes(grupo, desde, hasta)
         _filas = [dict({t("Employee"): f["nombre"], t("Payroll ID"): f["payroll_id"],
                         t("Earnings rate"): f["etiqueta"]},
-                       **{d.strftime("%a %d/%m"): f["horas"].get(d)
+                       # ⚠️ NaN y no None: con la columna entera vacía pandas la deja
+                       # en `object` y Streamlit imprime el texto «None» — el fallo que
+                       # documentó v467, y se veía en la tabla del parte. Con NaN la
+                       # columna es float y la celda sale vacía, igual que en el CSV.
+                       **{d.strftime("%a %d/%m"): f["horas"].get(d, float("nan"))
                           for d in det["dias"]},
                        **{t("Total"): f["total"]})
                   for f in det["filas"]]
