@@ -11255,7 +11255,46 @@ nombres viejos y nuevos de `columnas.LEGADO`. Validado en las dos direcciones: c
 de v433 construido **y** una rotura real metida en el árbol, y no marca los días de nómina.
 Suite: **126 verde** + ese rojo corregido y re-verificado.
 
-## Versiones desplegadas (v490 = actual)
+## El parte de horas a Xero Payroll, probado EN PRODUCCIÓN contra la Demo Company (v491)
+
+Solo documentación: v490 verificada de punta a punta el 16/09/2026, con el usuario
+confirmando antes de mandar nada y verificando él mismo el lado de Xero.
+
+### Lo que se vio en producción
+- El bloque «Send to Xero Payroll» **lee en vivo** la Demo Company: 6 empleados (con su
+  email) y los calendarios de nómina, con el periodo quincenal **15–28 sep 2026** propuesto.
+- Datos de prueba en `cliente1`: una jornada de 8 h de «helper 2» el martes 15/09 y unas
+  vacaciones aprobadas el jueves 17/09 (`AUS-0001`). Emparejado a mano con **Oliver Gray**.
+- La vista previa dijo `8.00 h · Annual Leave 8 h · will be sent` — ⚠️ y ese «will be sent»
+  **comprueba el calendario del empleado** (`PayrollCalendarID`), así que ya decía que
+  Oliver Gray está en el quincenal antes de enviar.
+- **1.er envío**: «1 timesheet(s) created, 0 updated, 1 leave application(s) created».
+- ⚠️ **2.º envío, lo mismo otra vez**: «0 created, **1 updated**, 0 leave» + «Annual Leave
+  17/09–17/09 was already in Xero». Las dos protecciones contra duplicados —actualizar el
+  borrador y no repetir el permiso— solo podían probarse contra un Xero real.
+- **El usuario lo verificó en Xero**: un solo parte en borrador, las 8 h en el día correcto
+  y el permiso de 8 h.
+
+### ⚠️ La guarda de la limpieza saltó, y con razón
+`Groups.AccountingJSON` de `cliente1` estaba **vacío** antes de la prueba y después traía
+la configuración contable ENTERA: `guardar_emparejado` escribe `contable.mapa()` —los valores
+de fábrica fusionados— más el emparejado. Antes de devolverlo a vacío se comprobó que todo lo
+demás era **exactamente** lo de fábrica (si hubiera algo configurado por alguien, borrarlo lo
+perdería). ⚠️ Consecuencia anotada, no corregida: guardar el emparejado **congela** los valores
+de fábrica en ese grupo, así que un cambio futuro de un valor por defecto en el código no le
+llegaría. Es el mismo comportamiento que ya tenía el editor del plan de cuentas (v483).
+
+### Limpieza
+Con doble guarda (usuario + horas exactas; ID + marca «ZZ PRUEBA») y foto antes/después en
+SOLO LECTURA: la jornada, `AUS-0001` y el emparejado fuera — **las 9 comprobaciones idénticas**.
+`Auditoria` no se toca. El parte y el permiso de Xero los borra el usuario (la Demo se reinicia).
+
+### ⚠️ Una trampa de método, otra vez
+Un clic sobre un `ref` viejo (`ref_292`) cayó en otro sitio tras un rerun. No cambió nada —se
+comprobó leyendo el valor de TODOS los desplegables antes de seguir—, pero es la regla de
+v431: tras un rerun los `ref` y las coordenadas caducan; se vuelven a buscar.
+
+## Versiones desplegadas (v491 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -11263,6 +11302,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v491 | Documentación: **el parte de horas a Xero Payroll probado EN PRODUCCIÓN** contra la Demo Company. Lectura en vivo de empleados y calendarios; 1.er envío crea parte en borrador + permiso; ⚠️ **reenviar lo mismo ACTUALIZA el borrador y no repite el permiso** (solo probable contra un Xero real). El usuario lo verificó en Xero. ⚠️ La guarda de la limpieza destapó que guardar el emparejado **congela los valores de fábrica** en `AccountingJSON` (comprobado idéntico a fábrica antes de vaciarlo; anotado). Foto antes/después idéntica |
 | v490 | **FASE 2.3-B: parte de horas y ausencias pagadas a Xero Payroll AU** (decisiones del usuario: horas y permisos, borrador, emparejado automático + confirmar, actualizar solo borradores). ⚠️ Leer la especificación cambió el diseño de v484 en tres puntos: las ausencias **no van en el parte** (son LeaveApplications), el periodo **tiene que ser uno del calendario** de Xero o lo rechaza, y el empleado no tiene número (emparejado atado a la organización). Una definición de lo que se paga (`contable.partes`), tipo ordinario de CADA empleado, una entrada por día en orden, permisos con las horas explícitas y en tramos seguidos, y sin duplicar (todas las páginas; si no se puede comprobar, no se crea). + ritmo de 55 llamadas/min y reintento corto ante 429, que también sirven a las facturas. 56 comprobaciones · **15/15 roturas + control** |
 | v489 | **Xero probado EN PRODUCCIÓN contra la Demo Company** + dos arreglos de pantalla. Envío real verificado (factura en borrador, GST 10,00 y total 110,00 — no 9,99 —, comprobado por el usuario en Xero, y el **enlace directo abre la factura**), y ⚠️ **sin duplicados probado de verdad**: borrada la marca en COPEX y reenviada, se ENLAZÓ con el mismo InvoiceID. ⚠️ La primera conexión fue a la organización «COPEX» del usuario, detectado leyendo la fila antes de mandar nada. **(1)** «Desconectar no desconecta»: el título del desplegable parecía el botón — ahora es un botón que pregunta. **(2)** «Ya están todas en Xero» a quien no tenía ninguna. Refresco del token aún sin ejercitar contra Xero (la prueba cupo en 30 min). 105 comprobaciones |
 | v488 | **FASE 2.3-A: conexión con Xero por API** (decisiones del usuario: tokens cifrados en el maestro, facturas primero, permisos de nómina desde el principio). OAuth con `state` **firmado** (la vuelta llega en otra sesión, así que no se puede guardar), token Fernet en una pestaña **propia** del maestro —⚠️ no en `Groups`, que se cachea para todos y rotaría cada media hora—, refresco con **cerrojo** (4 hilos → 1 refresco) y token rotado que no se pierde si falla guardarlo. Envío por lotes: comprueba el número en Xero y **enlaza** en vez de duplicar, y si no puede comprobar **no envía**; importes sin impuesto con el impuesto REPARTIDO de v483. ⚠️ Una sola definición (`documento_venta`) para CSV y API, con el CSV **idéntico byte a byte** en 32 combinaciones. ⚠️ Scopes GRANULARES verificados (la especificación OpenAPI aún lista los viejos). ⚠️ El guardián cazó un fallo real: la categoría de seguimiento iba con el nombre de COPEX y no el de Xero. 99 comprobaciones · **16/16 roturas + control** |
