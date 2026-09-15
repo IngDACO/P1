@@ -11352,7 +11352,20 @@ a vacío con guarda (la primera comprobando que el volcado era exactamente lo de
 muestra la versión nueva, el código nuevo NO está corriendo** — la barra no confirma nada,
 pero una versión vieja en ella sí descarta; entonces hace falta reiniciar antes de verificar.
 
-## Versiones desplegadas (v493 = actual)
+## El refresco del token de Xero, por fin ejercitado contra Xero (v494)
+
+Solo documentación, y cierra un pendiente que arrastraban v488, v489 y v491: el token de
+acceso dura 30 minutos y la prueba de v489 cupo dentro, así que la rotación del refresco
+—cerrojo por empresa, token rotado que se persiste, y si falla guardarlo se conserva en
+memoria— estaba cubierta solo por el guardián con la red sustituida.
+**Evidencia, leída en SOLO LECTURA de `XeroConnections`** (sin tocar la columna del token):
+`ConnectedAt 2026-09-15 17:56:50` · `RefreshedAt 2026-09-16 05:49:25`, o sea **12 horas
+después** — el envío del parte de hoy pidió un token nuevo a Xero, lo consiguió y **persistió
+la rotación**. Con eso, si la rotación no se hubiera guardado, el envío siguiente habría
+fallado con 401: no falló. `Status` sigue `connected` y el token guardado sigue en formato
+Fernet (2.084 caracteres, ningún JWT en claro).
+
+## Versiones desplegadas (v494 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -11360,6 +11373,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v494 | Documentación: **el refresco del token de Xero ya está ejercitado contra Xero** (pendiente desde v488). `ConnectedAt 15/09 17:56` vs `RefreshedAt 16/09 05:49`: el envío del parte pidió token nuevo, lo obtuvo y persistió la rotación — si no se hubiera guardado, el envío siguiente habría dado 401. Leído en solo lectura, sin tocar la columna del token |
 | v493 | Documentación: **v492 verificado en producción tras reiniciar el proceso**. La primera comprobación falló con razón: pestaña en v492 pero `core.*` viejos en memoria (topbar en v489), y «Save matches» seguía volcando la configuración entera — «desplegado ≠ corriendo» por quinta vez, cazado leyendo la hoja y no la versión. Tras el Reboot, el mismo clic escribe **solo** el emparejado. Escrituras de prueba devueltas a vacío con guarda |
 | v492 | **Los ajustes contables se guardan por CLAVES** (pedido por el usuario). Los cuatro escritores volcaban `mapa()` —lo guardado YA fusionado con los valores de fábrica—, así que guardar un emparejado con Xero **congelaba todos los valores por defecto** en el grupo y un cambio futuro en el código dejaba de llegarle. Nueva `contable.guardar_claves`: solo lo tocado, fusión de un nivel (MYOB sobrevive a guardar Xero), ⚠️ lectura FRESCA y **si no puede leer, no escribe** (escribir solo lo nuevo borraría lo guardado). `guardar_mapa` eliminada; una sola búsqueda de la fila del grupo. 28 comprobaciones · **8/8 roturas + control** con el motivo de cada una a la vista · ejercitado contra la hoja real y devuelto a vacío · suite 128 verde |
 | v491 | Documentación: **el parte de horas a Xero Payroll probado EN PRODUCCIÓN** contra la Demo Company. Lectura en vivo de empleados y calendarios; 1.er envío crea parte en borrador + permiso; ⚠️ **reenviar lo mismo ACTUALIZA el borrador y no repite el permiso** (solo probable contra un Xero real). El usuario lo verificó en Xero. ⚠️ La guarda de la limpieza destapó que guardar el emparejado **congela los valores de fábrica** en `AccountingJSON` (comprobado idéntico a fábrica antes de vaciarlo; anotado). Foto antes/después idéntica |
