@@ -11336,7 +11336,23 @@ motivo a la vista. **Contra la hoja real**: guardar el emparejado dejó en `Acco
 solo `xero_empleados`, otra clave lo conservó, y se devolvió exactamente a vacío.
 Suite: **128 verde · 0 rojo · 0 roto**.
 
-## Versiones desplegadas (v492 = actual)
+## v492 verificado EN PRODUCCIÓN — tras reiniciar el proceso (v493)
+
+Solo documentación. La primera comprobación en producción **falló, y con razón**: con la
+pestaña y la barra lateral diciendo **v492**, «Save matches» volvió a escribir la configuración
+contable ENTERA — el comportamiento de v490. El commit desplegado era el bueno (verificado);
+lo que corría no: Streamlit Cloud recargó `app.py` y conservó los `core.*` viejos, y el
+topbar (`home_ui._VERSION`, congelado al importar) seguía en **v489**. Es «desplegado ≠
+corriendo» (v334 → v408 → v452 → v459) por quinta vez, y otra vez lo delató **mirar el CAMBIO**
+—leer la hoja en solo lectura tras pulsar el botón—, no el número de versión.
+Tras el **Reboot app** (lo hizo el usuario): topbar v492 y el mismo clic dejó en
+`AccountingJSON` **solo** `{"xero_empleados": {...}}`. Las dos escrituras de prueba se devolvieron
+a vacío con guarda (la primera comprobando que el volcado era exactamente lo de fábrica).
+⚠️ Regla práctica que sale de aquí: **tras un deploy que toca `core/`, si el topbar no
+muestra la versión nueva, el código nuevo NO está corriendo** — la barra no confirma nada,
+pero una versión vieja en ella sí descarta; entonces hace falta reiniciar antes de verificar.
+
+## Versiones desplegadas (v493 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -11344,6 +11360,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v493 | Documentación: **v492 verificado en producción tras reiniciar el proceso**. La primera comprobación falló con razón: pestaña en v492 pero `core.*` viejos en memoria (topbar en v489), y «Save matches» seguía volcando la configuración entera — «desplegado ≠ corriendo» por quinta vez, cazado leyendo la hoja y no la versión. Tras el Reboot, el mismo clic escribe **solo** el emparejado. Escrituras de prueba devueltas a vacío con guarda |
 | v492 | **Los ajustes contables se guardan por CLAVES** (pedido por el usuario). Los cuatro escritores volcaban `mapa()` —lo guardado YA fusionado con los valores de fábrica—, así que guardar un emparejado con Xero **congelaba todos los valores por defecto** en el grupo y un cambio futuro en el código dejaba de llegarle. Nueva `contable.guardar_claves`: solo lo tocado, fusión de un nivel (MYOB sobrevive a guardar Xero), ⚠️ lectura FRESCA y **si no puede leer, no escribe** (escribir solo lo nuevo borraría lo guardado). `guardar_mapa` eliminada; una sola búsqueda de la fila del grupo. 28 comprobaciones · **8/8 roturas + control** con el motivo de cada una a la vista · ejercitado contra la hoja real y devuelto a vacío · suite 128 verde |
 | v491 | Documentación: **el parte de horas a Xero Payroll probado EN PRODUCCIÓN** contra la Demo Company. Lectura en vivo de empleados y calendarios; 1.er envío crea parte en borrador + permiso; ⚠️ **reenviar lo mismo ACTUALIZA el borrador y no repite el permiso** (solo probable contra un Xero real). El usuario lo verificó en Xero. ⚠️ La guarda de la limpieza destapó que guardar el emparejado **congela los valores de fábrica** en `AccountingJSON` (comprobado idéntico a fábrica antes de vaciarlo; anotado). Foto antes/después idéntica |
 | v490 | **FASE 2.3-B: parte de horas y ausencias pagadas a Xero Payroll AU** (decisiones del usuario: horas y permisos, borrador, emparejado automático + confirmar, actualizar solo borradores). ⚠️ Leer la especificación cambió el diseño de v484 en tres puntos: las ausencias **no van en el parte** (son LeaveApplications), el periodo **tiene que ser uno del calendario** de Xero o lo rechaza, y el empleado no tiene número (emparejado atado a la organización). Una definición de lo que se paga (`contable.partes`), tipo ordinario de CADA empleado, una entrada por día en orden, permisos con las horas explícitas y en tramos seguidos, y sin duplicar (todas las páginas; si no se puede comprobar, no se crea). + ritmo de 55 llamadas/min y reintento corto ante 429, que también sirven a las facturas. 56 comprobaciones · **15/15 roturas + control** |
