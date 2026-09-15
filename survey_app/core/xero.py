@@ -47,6 +47,7 @@ AUTH_URL = "https://login.xero.com/identity/connect/authorize"
 TOKEN_URL = "https://identity.xero.com/connect/token"
 CONNECTIONS_URL = "https://api.xero.com/Connections"
 API_URL = "https://api.xero.com/api.xro/2.0"
+PAYROLL_URL = "https://api.xero.com/payroll.xro/1.0"     # Payroll AU (v490)
 
 SCOPES = ("offline_access",
           "accounting.invoices", "accounting.payments", "accounting.contacts",
@@ -69,6 +70,8 @@ _STATE_MAX_S = 30 * 60          # un login con MFA puede tardar; más no hace fa
 _TIMEOUT = 30
 _POR_LOTE = 50                  # tope recomendado por Xero por petición
 _GST_AU = 10.0                  # OUTPUT = «GST on Income», 10 %
+_CUPO_MIN = 55                  # Xero: 60 llamadas/min por organización; margen de 5
+_ESPERA_429 = 20                # un 429 con espera corta se reintenta UNA vez
 
 
 def _norm(s) -> str:
@@ -230,6 +233,16 @@ def mensajes_error(js) -> list:
             for v in (el or {}).get("ValidationErrors") or []:
                 if (v or {}).get("Message"):
                     out.append(str(v["Message"]))
+        # ⚠️ v490 · Payroll AU devuelve los errores DENTRO de cada objeto de la lista
+        # (`Timesheets[i].ValidationErrors`, `LeaveApplications[i].ValidationErrors`),
+        # no en `Elements`. Sin mirar ahí, el aviso diría solo «A validation exception
+        # occurred» y nadie sabría qué arreglar.
+        for v in js.values():
+            if isinstance(v, list):
+                for el in v:
+                    for ve in (el or {}).get("ValidationErrors") or [] if isinstance(el, dict) else []:
+                        if (ve or {}).get("Message"):
+                            out.append(str(ve["Message"]))
         for k in ("Message", "Detail", "detail", "title", "error_description", "error"):
             if not out and js.get(k):
                 out.append(str(js[k]))
@@ -327,8 +340,8 @@ def _estados_cached(libro: str) -> list:
 
 def estado(grupo: str) -> dict:
     """{conectada, estado, tenant, short_code, por, desde} de la empresa. Cacheado."""
-    vacio = {"conectada": False, "estado": "", "tenant": "", "short_code": "",
-             "por": "", "desde": ""}
+    vacio = {"conectada": False, "estado": "", "tenant": "", "tenant_id": "",
+             "short_code": "", "por": "", "desde": ""}
     if not configuracion()["ok"]:
         return vacio
     try:
@@ -341,6 +354,7 @@ def estado(grupo: str) -> dict:
             est = str(r.get("Status", "") or "")
             return {"conectada": est == CONECTADA and r.get("_con_token", False),
                     "estado": est, "tenant": r.get("TenantName", ""),
+                    "tenant_id": r.get("TenantID", ""),
                     "short_code": r.get("ShortCode", ""),
                     "por": r.get("ConnectedBy", ""), "desde": r.get("ConnectedAt", "")}
     return vacio
@@ -430,29 +444,68 @@ def _token(grupo: str, forzar: bool = False) -> tuple:
         return True, dict(vivo, access=paquete["a"])
 
 
+_LLAMADAS = {}
+_CERROJO_CUPO = threading.Lock()
+
+
+def _espera_cupo(tenant_id: str, ahora=None):
+    """Segundos a esperar para no pasar de `_CUPO_MIN` llamadas en 60 s a ESA
+    organización, y apunta la llamada. Función separada para poder probarla.
+
+    ⚠️ v490 · El parte de un equipo son ~4 llamadas por persona: con 15 personas ya
+    se pasa de 60/min y Xero responde 429 a mitad del envío, dejando a unos con parte
+    y a otros sin él. Esperar un poco es mejor que un envío a medias.
+    """
+    ahora = time.time() if ahora is None else ahora
+    with _CERROJO_CUPO:
+        marcas = [m for m in _LLAMADAS.get(tenant_id, []) if ahora - m < 60]
+        espera = 0.0
+        if len(marcas) >= _CUPO_MIN:
+            espera = max(0.0, 60 - (ahora - marcas[0]) + 0.1)
+        marcas.append(ahora + espera)
+        _LLAMADAS[tenant_id] = marcas
+        return espera
+
+
 def _api(grupo: str, metodo: str, ruta: str, *, params=None, cuerpo=None,
-         cabeceras=None) -> tuple:
+         cabeceras=None, base: str = API_URL) -> tuple:
     """(status, json, cabeceras). status 0 = no se llegó a llamar (mensaje en json)."""
     ok, tok = _token(grupo)
     if not ok:
         return 0, {"Message": tok}, {}
     r = None
-    for intento in (1, 2):
+    refrescado = esperado = False
+    while True:
         h = {"Authorization": f"Bearer {tok['access']}", "xero-tenant-id": tok["tenant_id"],
              "Accept": "application/json"}
         h.update(cabeceras or {})
+        pausa = _espera_cupo(tok["tenant_id"])
+        if pausa:
+            time.sleep(pausa)
         try:
-            r = _http(metodo, API_URL + ruta, params=params, json=cuerpo, headers=h)
+            r = _http(metodo, base + ruta, params=params, json=cuerpo, headers=h)
         except Exception as e:
             logger.warning("xero: %s %s falló: %s", metodo, ruta, type(e).__name__)
             return 0, {"Message": t("Xero could not be reached. Try again.")}, {}
         # ⚠️ Un 401 con un token que creíamos vigente (revocado antes de tiempo): se
         # fuerza UN refresco y se reintenta una vez; dos 401 seguidos ya son reales.
-        if r.status_code == 401 and intento == 1:
+        if r.status_code == 401 and not refrescado:
+            refrescado = True
             ok, tok = _token(grupo, forzar=True)
             if not ok:
                 return 0, {"Message": tok}, {}
             continue
+        # ⚠️ Un 429 con una espera CORTA se reintenta una vez; con una larga se devuelve
+        # (colgar la pantalla un minuto sin decir nada es peor que un aviso).
+        if r.status_code == 429 and not esperado:
+            try:
+                segundos = float(dict(getattr(r, "headers", {}) or {}).get("Retry-After") or 0)
+            except (TypeError, ValueError):
+                segundos = 0
+            if 0 < segundos <= _ESPERA_429:
+                esperado = True
+                time.sleep(segundos)
+                continue
         break
     return r.status_code, _json(r), dict(getattr(r, "headers", {}) or {})
 

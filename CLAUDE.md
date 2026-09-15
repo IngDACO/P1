@@ -11186,7 +11186,76 @@ antes de ese mismo rerun **lo sigue cazando**, y el código real pasa.
 `verif_v488` pasa a **105 comprobaciones**, con los chequeos nuevos validados contra el
 comportamiento viejo (el texto engañoso vuelve a ponerlo rojo). Suite: **126 verde · 0 rojo**.
 
-## Versiones desplegadas (v489 = actual)
+## FASE 2.3-B: el parte de horas y las ausencias pagadas, a Xero Payroll AU (v490)
+
+Decisiones del usuario: **horas Y permisos** (las ausencias pagadas que COPEX ya aprueba
+van también), el parte llega en **borrador**, cada usuario se **empareja solo y se confirma**
+una vez, y un parte que ya existe se **actualiza solo si sigue en borrador**.
+`core/xero_nomina.py` + `xero_ui.render_partes_xero`, dentro de «Timesheet for payroll».
+
+### ⚠️ Lo que la especificación de Xero obligó a cambiar respecto al parte de v484
+Leída la especificación OpenAPI oficial de Payroll AU antes de escribir nada:
+1. **Las ausencias NO van en el parte.** Una línea de parte solo admite un *EarningsRate*;
+   vacaciones y bajas son *LeaveTypes* y se registran como *LeaveApplications*, que creadas
+   por la API quedan **programadas** (aprobadas para pagarse). El CSV de v484 las ponía como
+   líneas — el diseño «cada fila es una línea de allí» era verdad solo para las horas.
+2. **El periodo no es libre**: las fechas del parte tienen que ser EXACTAMENTE un periodo del
+   calendario de nómina del empleado, o Xero lo rechaza. El periodo sale de `PayrollCalendars`
+   (su `StartDate` es el inicio del PRÓXIMO periodo; los anteriores se cuentan hacia atrás) y
+   se valida antes de llamar a nada. Un tipo que no se sabe calcular devuelve [] en vez de
+   inventar fechas.
+3. **Un empleado de Xero AU no tiene número**, solo nombre y email. El emparejado se guarda en
+   `AccountingJSON.xero_empleados` **atado a la ORGANIZACIÓN** (`tenant`): si se reconecta a
+   otra, deja de valer solo en vez de pagar a quien no es.
+
+### Las reglas que fallarían en silencio
+- **Una definición de «qué se paga»**: las horas salen de `contable.partes`, la misma función
+  del CSV (jornada fichada + `ausencias.horas_pagadas_dia`, el criterio de v432).
+- La hora ordinaria usa el **`OrdinaryEarningsRateID` de cada empleado**, no un nombre.
+- `NumberOfUnits` = **una entrada por día del periodo y en orden**, con 0 donde no hay horas.
+- Fechas en `/Date(ms+0000)/` a **medianoche UTC**: con la hora local el día se correría.
+- Los permisos llevan las **horas explícitas** (`LeavePeriods`): sin ellas Xero usa la jornada
+  tipo del empleado, y COPEX ya recortó lo que se paga en un día con fichaje (v432). Van en
+  **tramos de días seguidos**: un permiso de viernes a lunes contaría el fin de semana.
+- **Emparejado**: primero por email, luego por nombre, y **solo parejas únicas** (homónimos o
+  email repetido: no se propone nada — adivinar paga las horas de otro). Guardar se bloquea si
+  dos personas apuntan al mismo empleado. El valor guardado se **antepone** si el empleado ya
+  no está activo (`ui.opciones_con_actual`, v487), en vez de pisarlo en silencio.
+- **No duplicar**: se buscan los partes del empleado **recorriendo TODAS las páginas** (con
+  más de 100 partes, el del periodo puede estar en la segunda); borrador → se actualiza con su
+  `TimesheetID`; aprobado o procesado → no se toca y se dice; y **si no se puede comprobar, no
+  se crea**. Un permiso que se solapa con uno igual ya en Xero no se reenvía.
+- Se manda solo a quien está emparejado, activo y **en ese calendario**; los demás se nombran.
+
+### Tres cosas en `xero.py` que también sirven a las facturas
+- **Ritmo**: `_espera_cupo` no deja pasar de 55 llamadas/min por organización. El parte de un
+  equipo son ~4 llamadas por persona: con 15 personas Xero respondía 429 a mitad del envío,
+  dejando a unos con parte y a otros sin él.
+- Un **429 con espera corta** (≤ 20 s) se reintenta una vez; uno largo se devuelve.
+- `mensajes_error` lee los errores **dentro de cada objeto** (`Timesheets[i].ValidationErrors`),
+  que es donde los pone Payroll AU; sin eso el aviso decía solo «A validation exception occurred».
+
+### Verificación
+`verif_v490.py`, **56 comprobaciones**, todo ejecutando con Xero sustituido: fechas (incluido
+el ejemplo oficial de la especificación), los seis tipos de calendario, el emparejado, el
+parte y los permisos, **el envío en todas sus ramas** (crear, actualizar borrador, no tocar
+aprobado, no crear sin comprobar, página 2, otro calendario, sin emparejar, empleado de baja,
+permiso ya existente, error de validación, tipo de permiso inexistente), ritmo, 429 y la
+pantalla. ⚠️ Una sonda dio un **rojo que no existía**: buscaba «Earnings rate names» como
+texto y lo encontraba en el comentario que explica el cambio — pasada a AST. Batería:
+**15/15 roturas + CONTROL**, con el verde de base primero.
+
+### ⚠️ El único rojo de la suite era un FALSO POSITIVO del guardián de v433
+`verif_v430` (bloque 14) marcaba `xero_nomina._DIAS_TIPO = {"WEEKLY": 7, ...}` como un mapa
+de columnas escrito a mano: su criterio era «dict de 3+ textos → enteros», y los días de un
+periodo de nómina tienen esa forma sin ser columnas. Se miró el código acusado antes de tocar
+nada (regla v385) y el guardián se afinó, no se relajó: un mapa de columnas es uno cuyas
+CLAVES son CABECERAS, y el conjunto se **deriva** de todos los `*_HEADERS` del repo más los
+nombres viejos y nuevos de `columnas.LEGADO`. Validado en las dos direcciones: caza el `_COL`
+de v433 construido **y** una rotura real metida en el árbol, y no marca los días de nómina.
+Suite: **126 verde** + ese rojo corregido y re-verificado.
+
+## Versiones desplegadas (v490 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -11194,6 +11263,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v490 | **FASE 2.3-B: parte de horas y ausencias pagadas a Xero Payroll AU** (decisiones del usuario: horas y permisos, borrador, emparejado automático + confirmar, actualizar solo borradores). ⚠️ Leer la especificación cambió el diseño de v484 en tres puntos: las ausencias **no van en el parte** (son LeaveApplications), el periodo **tiene que ser uno del calendario** de Xero o lo rechaza, y el empleado no tiene número (emparejado atado a la organización). Una definición de lo que se paga (`contable.partes`), tipo ordinario de CADA empleado, una entrada por día en orden, permisos con las horas explícitas y en tramos seguidos, y sin duplicar (todas las páginas; si no se puede comprobar, no se crea). + ritmo de 55 llamadas/min y reintento corto ante 429, que también sirven a las facturas. 56 comprobaciones · **15/15 roturas + control** |
 | v489 | **Xero probado EN PRODUCCIÓN contra la Demo Company** + dos arreglos de pantalla. Envío real verificado (factura en borrador, GST 10,00 y total 110,00 — no 9,99 —, comprobado por el usuario en Xero, y el **enlace directo abre la factura**), y ⚠️ **sin duplicados probado de verdad**: borrada la marca en COPEX y reenviada, se ENLAZÓ con el mismo InvoiceID. ⚠️ La primera conexión fue a la organización «COPEX» del usuario, detectado leyendo la fila antes de mandar nada. **(1)** «Desconectar no desconecta»: el título del desplegable parecía el botón — ahora es un botón que pregunta. **(2)** «Ya están todas en Xero» a quien no tenía ninguna. Refresco del token aún sin ejercitar contra Xero (la prueba cupo en 30 min). 105 comprobaciones |
 | v488 | **FASE 2.3-A: conexión con Xero por API** (decisiones del usuario: tokens cifrados en el maestro, facturas primero, permisos de nómina desde el principio). OAuth con `state` **firmado** (la vuelta llega en otra sesión, así que no se puede guardar), token Fernet en una pestaña **propia** del maestro —⚠️ no en `Groups`, que se cachea para todos y rotaría cada media hora—, refresco con **cerrojo** (4 hilos → 1 refresco) y token rotado que no se pierde si falla guardarlo. Envío por lotes: comprueba el número en Xero y **enlaza** en vez de duplicar, y si no puede comprobar **no envía**; importes sin impuesto con el impuesto REPARTIDO de v483. ⚠️ Una sola definición (`documento_venta`) para CSV y API, con el CSV **idéntico byte a byte** en 32 combinaciones. ⚠️ Scopes GRANULARES verificados (la especificación OpenAPI aún lista los viejos). ⚠️ El guardián cazó un fallo real: la categoría de seguimiento iba con el nombre de COPEX y no el de Xero. 99 comprobaciones · **16/16 roturas + control** |
 | v487 | ⚠️ **Lo que v469 dejó escrito en español y los desplegables que SOBRESCRIBÍAN**, salido de auditar «¿ya quedó todo?» contra el código. **(1)** Las KPIs «Available»/«In use» de inventario marcaban **0 SIEMPRE**: buscaban `"disponible"`/`"en_uso"` y el estado llega canonizado — ejecutado, 2 disponibles daban 0; ⚠️ el guardián de v469 solo barría comparaciones y aquí el valor viejo era una **clave de búsqueda**. **(2)** 12 sitios seguían **escribiendo** en español (la torta partía «Other» en dos trozos, «otro» en pantalla). **(3)** `L.index(v) if v in L else 0` delante de un formulario que edita **sobrescribía en silencio** en 12 sitios de 6 pantallas —⚠️ podía des-archivar una obra, y en Usuarios el defecto `"campo"` (español) dejaba un usuario sin rol con **owner preseleccionado**—: `ui.opciones_con_actual` conserva el valor guardado. ⚠️ El primer barrido dio 173 búsquedas y **171 eran claves internas sanas** (el discriminador: nadie mete esa clave a mano); y **4 de mis 5 exentos tenían nombres inventados**, cazado por el propio guardián. + v486 **verificado en producción** sembrando y borrando datos (antes/después idéntico). 10/10 roturas contra 3 guardianes a la vez |

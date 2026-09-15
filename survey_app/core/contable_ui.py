@@ -118,7 +118,7 @@ def _editor_conceptos(grupo, cfg):
         hide_index=True, width="stretch", disabled=["Concepto"], key="cont_conceptos",
         column_config=tabla.cfg(extra={
             "Concepto": st.column_config.TextColumn(t("Item"), width="medium"),
-            "Cuenta":   st.column_config.TextColumn(t("Earnings rate name in payroll")),
+            "Cuenta":   st.column_config.TextColumn(t("Name in payroll")),
         }))
 
     if st.button(t(":material/save: Save earnings rates"), key="cont_save_conceptos"):
@@ -164,8 +164,8 @@ def _partes_section(grupo):
     # ⚠️ Se dice en la pantalla, no solo en el código: Xero Payroll NO importa partes
     # por CSV (su propia petición de esa función sigue abierta), así que este fichero
     # se teclea o se manda por la API, que es la fase 2.3.
-    st.caption(t("Xero Payroll has no CSV timesheet import, so this is keyed in (or "
-                 "sent through the API later). The day columns are already in the order "
+    st.caption(t("Xero Payroll has no CSV timesheet import, so this file is keyed in — or "
+                 "sent to Xero below. The day columns are already in the order "
                  "its API expects. Unpaid days off are not here: they are not paid."))
 
     if r["filas"]:
@@ -190,7 +190,13 @@ def _partes_section(grupo):
                          {c: tabla.derecha(c) for c in _etq_dia.values()},
                          **{t("Total"): tabla.derecha(t("Total"))})))
 
-    with st.expander(t("Earnings rate names"), icon=":material/badge:"):
+    # v490 · el envío a Xero Payroll: parte + permisos, con el periodo de SU calendario.
+    from core import xero_ui
+    xero_ui.render_partes_xero(grupo)
+
+    # ⚠️ «Payroll names»: desde v490 aquí hay tipos de ganancia Y tipos de permiso, así
+    # que llamarlo «Earnings rate names» mentiría para vacaciones y bajas.
+    with st.expander(t("Payroll names"), icon=":material/badge:"):
         _editor_conceptos(grupo, contable.mapa(grupo))
 
 

@@ -214,3 +214,166 @@ def boton_factura(grupo, f):
         _flash_resultado(res)
         st.rerun()
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Parte de horas y permisos → Xero Payroll AU (v490)
+# ─────────────────────────────────────────────────────────────────────────────
+def _datos_nomina(grupo, forzar=False) -> dict:
+    """Empleados, calendarios y tipos de permiso de Xero, guardados en la SESIÓN.
+
+    ⚠️ En la sesión y no en `st.cache_data`: son datos personales de los empleados de
+    una empresa, y esa caché se comparte por proceso entre todas. Leerlos cuesta 3
+    llamadas a Xero, así que se piden una vez y hay un botón para refrescar.
+    """
+    from core import xero_nomina as XN
+    clave = f"_xero_nomina_{grupo}"
+    if forzar or clave not in st.session_state:
+        with st.spinner(t("Reading employees and pay calendars from Xero…")):
+            st.session_state[clave] = XN.datos(grupo)
+    return st.session_state[clave]
+
+
+def _flash_nomina(res: dict):
+    n_c, n_a, n_p = (len(res["partes_creados"]), len(res["partes_actualizados"]),
+                     len(res["permisos_creados"]))
+    if n_c or n_a or n_p:
+        flash.exito(t("Xero Payroll: {c} timesheet(s) created, {a} updated, {p} leave "
+                      "application(s) created.", c=n_c, a=n_a, p=n_p))
+    for nombre, motivo in res["omitidos"]:
+        flash.info(t("{n}: {m}", n=nombre, m=motivo))
+    for nombre, msgs in res["errores"]:
+        flash.error(t("{n}: {m}", n=nombre, m=" · ".join(msgs)))
+    for a in res["avisos"]:
+        flash.aviso(a)
+
+
+def render_partes_xero(grupo):
+    """Mandar el parte y las ausencias pagadas del periodo a Xero Payroll."""
+    import pandas as pd
+    from core import auth, contable, tabla, ui_common as ui
+    from core import xero_nomina as XN
+
+    st.markdown(t("#### :material/cloud_upload: Send to Xero Payroll"))
+    if not X.configuracion()["ok"] or not X.estado(grupo)["conectada"]:
+        st.caption(t("Connect Xero at the top of this screen to send timesheets and paid "
+                     "leave to Xero Payroll."))
+        return
+    tenant_id = X.estado(grupo)["tenant_id"]
+    d = _datos_nomina(grupo)
+    if st.button(t(":material/refresh: Read again from Xero"), key="xn_releer"):
+        _datos_nomina(grupo, forzar=True)
+        st.rerun()
+    if d.get("error"):
+        st.warning(d["error"])
+        return
+    if not d["empleados"]:
+        st.info(t("This Xero organisation has no active employees in Payroll."))
+        return
+
+    # ── quién es quién ──
+    # ⚠️ Los valores de «activo» son los de `auth`, no una copia: dos listas de lo mismo
+    # divergen (v323).
+    usuarios = [u for u in auth.list_users(grupo)
+                if str(u.get("Active", "")).strip().upper() in auth._ACTIVE_OK]
+    etq_u = auth.etiqueta_usuarios(usuarios)
+    guardado = XN.emparejado(grupo, tenant_id)
+    propuesto = XN.propuesta(usuarios, d["empleados"])
+    etq_e = {"": t("— not in Xero —")}
+    etq_e.update({e["EmployeeID"]: f"{XN.nombre_empleado(e)} · {e.get('Email') or '—'}"
+                  for e in d["empleados"]})
+    base = [""] + [e["EmployeeID"] for e in d["empleados"]]
+    sin_confirmar = [u for u in usuarios if str(u.get("User", "")) not in guardado]
+    with st.expander(t("Who is who in Xero ({n} to confirm)", n=len(sin_confirmar)),
+                     icon=":material/group:", expanded=bool(sin_confirmar)):
+        st.caption(t("Proposed by email, then by name. Check them and save once; people "
+                     "not in Xero Payroll stay «not in Xero»."))
+        elegidos = {}
+        for u in usuarios:
+            login = str(u.get("User", ""))
+            actual = guardado.get(login, propuesto.get(login, ""))
+            # ⚠️ v487: el valor guardado se ANTEPONE si ya no está en la lista (un
+            # empleado dado de baja en Xero), en vez de mostrar otro y pisarlo al guardar.
+            opciones, idx = ui.opciones_con_actual(base, actual)
+            elegidos[login] = st.selectbox(
+                etq_u.get(login, login), opciones, index=idx,
+                format_func=lambda o: etq_e.get(o, t("(no longer active in Xero)")),
+                key=f"xn_emp_{login}")
+        repetidos = {v for v in elegidos.values() if v and list(elegidos.values()).count(v) > 1}
+        if repetidos:
+            st.warning(t("Two people point to the same Xero employee: fix it before saving."))
+        if st.button(t(":material/save: Save matches"), key="xn_guardar",
+                     disabled=bool(repetidos)):
+            ok, msg = XN.guardar_emparejado(grupo, tenant_id, elegidos)
+            (flash.exito if ok else flash.error)(t("Matches saved.") if ok else msg)
+            st.rerun()
+
+    # ── periodo del calendario de Xero ──
+    claves, etiquetas = [], {}
+    for cal in d["calendarios"]:
+        for p in XN.periodos(cal):
+            k = f"{cal.get('PayrollCalendarID')}|{p['inicio'].isoformat()}|{p['fin'].isoformat()}"
+            claves.append(k)
+            etiquetas[k] = t("{c} · {a} – {b}{x}", c=cal.get("Name", ""),
+                             a=p["inicio"].strftime("%a %d %b"),
+                             b=p["fin"].strftime("%a %d %b %Y"),
+                             x=t(" (next pay run)") if p["proximo"] else "")
+    if not claves:
+        st.warning(t("None of the pay calendars in Xero has a period type COPEX can "
+                     "calculate."))
+        return
+    sel = st.selectbox(t("Pay period in Xero"), claves, format_func=lambda k: etiquetas[k],
+                       key="xn_periodo",
+                       help=t("Xero only accepts a timesheet whose dates are exactly a pay "
+                              "period of the employee's pay calendar."))
+    cal_id, ini, fin = sel.split("|")
+
+    # ── lo que se va a mandar ──
+    pareja = XN.emparejado(grupo, tenant_id)
+    emp_por_id = {e["EmployeeID"]: e for e in d["empleados"]}
+    partes = contable.partes(grupo, ini, fin)
+    nombres = contable.mapa(grupo).get("conceptos", {})
+    filas, listas = {}, 0
+    for f in partes.get("filas") or []:
+        r = filas.setdefault(f["usuario"], {"nombre": f["nombre"], "ord": 0.0, "perm": []})
+        if f["concepto"] == contable.ORDINARIAS:
+            r["ord"] += f["total"]
+        else:
+            r["perm"].append(f"{nombres.get(f['concepto'], f['concepto'])} {f['total']:g} h")
+    tabla_filas = []
+    for login, r in sorted(filas.items(), key=lambda kv: kv[1]["nombre"].casefold()):
+        eid = pareja.get(login)
+        emp = emp_por_id.get(eid) if eid else None
+        if not eid:
+            estado = t("not matched — confirm above")
+        elif emp is None:
+            estado = t("matched employee not active in Xero")
+        elif emp.get("PayrollCalendarID") != cal_id:
+            estado = t("on another pay calendar")
+        else:
+            estado = t("will be sent")
+            listas += 1
+        tabla_filas.append({
+            "Persona": etq_u.get(login, r["nombre"]),
+            "Empleado": XN.nombre_empleado(emp) if emp else "—",
+            "Horas": tabla.celda(r["ord"], 2),
+            "Permisos": " · ".join(r["perm"]),
+            "Estado": estado})
+    if not tabla_filas:
+        st.caption(t("Nobody has paid hours in this pay period."))
+        return
+    st.dataframe(pd.DataFrame(tabla_filas), hide_index=True, width="stretch",
+                 column_config=tabla.cfg(None, {
+                     "Persona": st.column_config.Column(t("Person")),
+                     "Empleado": st.column_config.Column(t("Xero employee")),
+                     "Horas": tabla.derecha(t("Ordinary hours")),
+                     "Permisos": st.column_config.Column(t("Paid leave")),
+                     "Estado": st.column_config.Column(t("Status"))}))
+    st.caption(t("Timesheets arrive in Xero as drafts. A timesheet already approved in Xero "
+                 "is not changed, and leave already in Xero is not sent twice."))
+    if st.button(t(":material/send: Send {n} person(s) to Xero Payroll", n=listas),
+                 type="primary", key="xn_enviar", disabled=not listas):
+        with st.spinner(t("Sending to Xero Payroll…")):
+            res = XN.enviar(grupo, cal_id, ini, fin)
+        _flash_nomina(res)
+        st.rerun()
+
