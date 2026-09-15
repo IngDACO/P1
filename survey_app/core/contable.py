@@ -18,7 +18,8 @@ en MYOB `4-1000`. Un solo mapa habría exportado a MYOB códigos que no existen 
 archivo — y MYOB rechaza la fila entera, no la avisa.
 
 Lo que este módulo NO hace, dicho aquí para que no se suponga:
-  · no habla con Xero ni con MYOB (eso es la fase 2.3, OAuth y tokens);
+  · no habla con Xero ni con MYOB: eso es `core/xero.py` (v488), que manda las
+    facturas por la API usando `documento_venta` — la misma definición que el CSV;
   · no crea los contactos: los dos casan por NOMBRE y MYOB además exige que la ficha
     ya exista;
   · no inventa el plan de cuentas: trae el de fábrica de cada uno y se edita.
@@ -300,6 +301,63 @@ def _escribe(columnas, filas) -> str:
 # ─────────────────────────────────────────────────────────────────────────────
 # Ventas (facturas emitidas)
 # ─────────────────────────────────────────────────────────────────────────────
+_ANULADAS = ("anulada", "cancelled", "void")
+
+
+def fichas_clientes(grupo: str) -> dict:
+    """{ClientID: ficha}, incluidos los inactivos: una factura vieja puede ser de un
+    cliente que ya se archivó, y sin su ficha saldría sin email ni dirección."""
+    return {str(c.get("ID", "")): c
+            for c in clientes.list_clientes(grupo, incluir_inactivos=True) or []}
+
+
+def documento_venta(f: dict, etq: dict, fichas: dict):
+    """Una factura, ya repartida en líneas. **La definición ÚNICA** de lo que se exporta.
+
+    La usan el CSV (v483) y el envío por API a Xero (v488). ⚠️ Si cada uno repartiera
+    el impuesto o eligiera el contacto a su manera, la misma factura llegaría a la
+    contabilidad con dos importes distintos según por dónde entrara — y ninguno de los
+    dos caminos daría error (la familia de los cinco `_num` divergentes de v323).
+
+    Devuelve None si no hay nada que exportar (anulada o sin líneas). Las fechas van
+    como `date` (o None): cada destino las escribe en su formato.
+    """
+    if str(f.get("Status", "")).strip().lower() in _ANULADAS:
+        return None
+    lineas = invoices.lineas_de(f) or []
+    if not lineas:
+        return None
+    pct = _num(f.get("TaxPct"))
+    impuestos = reparte_impuesto([_num(ln.get("importe")) for ln in lineas],
+                                 _num(f.get("Tax")))
+    cli = fichas.get(str(f.get("ClientID", ""))) or {}
+    vence = str(f.get("ExpiryDate", "") or "").strip()
+    fecha_d = _parse_date(f.get("Date"))
+    salida = []
+    for ln, imp in zip(lineas, impuestos):
+        pid = str(ln.get("proyecto_id", "") or "")
+        salida.append({
+            "descripcion": str(ln.get("concepto", "") or t("Services"))[:255],
+            "neto": _num(ln.get("importe")),
+            "impuesto": imp,
+            "proyecto_id": pid,
+            "opcion": _opcion_seguimiento(pid, etq.get(pid, "")) if pid else "",
+        })
+    return {
+        "id": str(f.get("ID", "")),
+        "numero": str(f.get("Number", "")),
+        "contacto": str(f.get("ClientName", "") or cli.get("Name", "")),
+        "email": str(cli.get("Email", "")),
+        "direccion": str(cli.get("Address", "")),
+        "fecha": fecha_d,
+        "vence": _parse_date(vence) or fecha_d,
+        "sin_vence": not vence,
+        "pct": pct,
+        "clave_impuesto": "venta_con" if pct else "venta_sin",
+        "lineas": salida,
+    }
+
+
 def csv_ventas(grupo: str, perfil: str, desde=None, hasta=None) -> dict:
     """CSV de facturas del periodo. {csv, filas, documentos, avisos, opciones}."""
     p = PERFILES.get(perfil)
@@ -311,10 +369,7 @@ def csv_ventas(grupo: str, perfil: str, desde=None, hasta=None) -> dict:
     cuentas = cfg.get("cuentas", {}).get(perfil, {})
     etq = _etiquetas(grupo)
     seg = bool(cfg.get("seguimiento", True))
-
-    fichas = {}
-    for c in clientes.list_clientes(grupo, incluir_inactivos=True) or []:
-        fichas[str(c.get("ID", ""))] = c
+    fichas = fichas_clientes(grupo)
 
     avisos, filas, docs, opciones = [], [], 0, set()
     if not ident["abn"]:
@@ -324,43 +379,32 @@ def csv_ventas(grupo: str, perfil: str, desde=None, hasta=None) -> dict:
     facturas = [f for f in invoices.list_facturas(grupo)
                 if _rango(f.get("Date"), desde, hasta)]
     for f in sorted(facturas, key=lambda x: str(x.get("Number", ""))):
-        if str(f.get("Status", "")).strip().lower() in ("anulada", "cancelled", "void"):
+        doc = documento_venta(f, etq, fichas)
+        if not doc:
             continue
-        lineas = invoices.lineas_de(f) or []
-        if not lineas:
-            continue
-        pct = _num(f.get("TaxPct"))
-        impuestos = reparte_impuesto([_num(l.get("importe")) for l in lineas],
-                                     _num(f.get("Tax")))
-        cli = fichas.get(str(f.get("ClientID", ""))) or {}
-        vence = str(f.get("ExpiryDate", "") or "").strip()
-        if not vence:
+        if doc["sin_vence"]:
             avisos.append(t("Invoice {n} has no due date; the date of issue is used.",
-                            n=f.get("Number", "")))
-        fecha_d = _parse_date(f.get("Date"))
-        vence_d = _parse_date(vence) or fecha_d
+                            n=doc["numero"]))
         docs += 1
-        for ln, imp in zip(lineas, impuestos):
-            pid = str(ln.get("proyecto_id", "") or "")
-            opcion = _opcion_seguimiento(pid, etq.get(pid, "")) if pid else ""
+        for ln in doc["lineas"]:
+            opcion = ln["opcion"]
             if seg and opcion:
                 opciones.add(opcion)
-            cod, nombre = IMPUESTOS_XERO["venta_con" if pct else "venta_sin"]
             filas.append(p["fila"]({
                 "cfg": cfg, "seguimiento": seg,
-                "contacto": str(f.get("ClientName", "") or cli.get("Name", "")),
-                "email": str(cli.get("Email", "")),
-                "direccion": str(cli.get("Address", "")),
-                "numero": str(f.get("Number", "")),
+                "contacto": doc["contacto"],
+                "email": doc["email"],
+                "direccion": doc["direccion"],
+                "numero": doc["numero"],
                 "referencia": opcion,
-                "fecha": fecha_d.strftime(_FECHA) if fecha_d else "",
-                "vence": vence_d.strftime(_FECHA) if vence_d else "",
-                "descripcion": str(ln.get("concepto", "") or t("Services"))[:255],
-                "neto": _num(ln.get("importe")),
-                "impuesto": imp,
+                "fecha": doc["fecha"].strftime(_FECHA) if doc["fecha"] else "",
+                "vence": doc["vence"].strftime(_FECHA) if doc["vence"] else "",
+                "descripcion": ln["descripcion"],
+                "neto": ln["neto"],
+                "impuesto": ln["impuesto"],
                 "cuenta": cuentas.get(VENTAS, ""),
-                "impuesto_nombre": nombre,
-                "impuesto_codigo": IMPUESTOS_MYOB["venta_con" if pct else "venta_sin"],
+                "impuesto_nombre": IMPUESTOS_XERO[doc["clave_impuesto"]][1],
+                "impuesto_codigo": IMPUESTOS_MYOB[doc["clave_impuesto"]],
                 "proyecto": opcion,
             }))
     avisos += _avisos_comunes(perfil, cuentas, [VENTAS], cfg, seg, opciones)

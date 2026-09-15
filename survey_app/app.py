@@ -139,6 +139,18 @@ if _ROL == "administrator":
             pass
         st.rerun()
 
+# v488 · Vuelta desde Xero (`?code=&state=`): llega en una pestaña NUEVA, así que se
+# procesa aquí, después del login y antes del sidebar, como el deep-link del QR. Solo
+# importa `xero_ui` si la URL trae esos parámetros: el resto de pasadas no paga nada.
+try:
+    _xq = st.query_params
+    _xero_vuelta = bool(_xq.get("state")) and bool(_xq.get("code") or _xq.get("error"))
+except Exception:
+    _xero_vuelta = False
+if _xero_vuelta:
+    from core import xero_ui as _xui
+    _xui.procesar_retorno(_ROL, _GRUPO)
+
 # ── Sesión única: heartbeat (throttled) + expulsión si otro toma la cuenta ──
 import time as _time
 if _time.time() - st.session_state.get("_hb_last", 0) > 50:

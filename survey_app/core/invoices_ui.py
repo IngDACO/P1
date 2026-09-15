@@ -153,6 +153,9 @@ def _detalle_factura(grupo, fid):
                                mime="application/pdf", key=f"fac_pdf_{fid}")
         except Exception as e:
             st.caption(f":material/warning: The PDF could not be generated: {e}")
+        # v488: la factura en Xero (o el botón para mandarla).
+        from core import xero_ui
+        xero_ui.boton_factura(grupo, f)
 
     with der:
         st.markdown(t("#### :material/payments: Payments received"))

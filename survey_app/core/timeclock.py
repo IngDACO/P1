@@ -122,7 +122,12 @@ SHEETS_GLOBALES = {"login", "grupos", "rieles", "manuales",
                    # usuario, como los manuales). Sin estas dos, cada cliente
                    # acabaria con su propia biblioteca VACIA en su libro — lo
                    # contrario de «global», y sin dar ningun error.
-                   "library", "librarymodels"}
+                   "library", "librarymodels",
+                   # ⚠️ v488: la conexion con Xero de CADA empresa vive en el
+                   # MAESTRO (decision del usuario: tokens cifrados en el libro
+                   # maestro). Sin esto se crearia en el libro del cliente, donde
+                   # el propio cliente puede abrirla.
+                   "xeroconnections"}
 
 # ── Pestañas en inglés, con respaldo al nombre viejo (v465) ───────────────────
 # ⚠️ Esta capa NO es cosmética y no es opcional: `get_sheet` **crea** la hoja si no

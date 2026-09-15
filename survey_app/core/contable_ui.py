@@ -200,7 +200,7 @@ def render_contable(grupo):
     from core import theme as T
 
     st.caption(t("The files your accountant and your payroll officer import, so nothing "
-                 "is typed twice. It does not talk to Xero or MYOB: it produces them."))
+                 "is typed twice. Invoices can also go straight to Xero (below)."))
 
     ident = contable.identidad(grupo)
     if not ident["abn"]:
@@ -245,6 +245,11 @@ def render_contable(grupo):
     if perfil == "xero":
         st.caption(t("At Xero's import screen choose «Tax Exclusive»: this file always "
                      "writes the amount without tax, with the tax in its own column."))
+
+    # v488: la conexión con Xero va DESPUÉS de las descargas, para no reordenarle la
+    # pantalla a quien ya la usa (v297), y usa el MISMO periodo que el CSV.
+    from core import xero_ui
+    xero_ui.render_conexion(grupo, desde, hasta)
 
     cfg = contable.mapa(grupo)
     opciones = sorted(set(ventas["opciones"]) | set(compras["opciones"]))

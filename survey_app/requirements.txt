@@ -30,3 +30,7 @@ segno>=1.6,<2
 # Import PEREZOSO en `prestart_ui`: si el componente no está, el Pre-Start sigue
 # funcionando con nombre e iniciales en vez de romperse.
 streamlit-drawable-canvas>=0.9.3,<1
+# Cifrado de los tokens de Xero (v488). Ya llega como dependencia de google-auth; se
+# fija aqui para que no dependa de que esa libreria la siga arrastrando. Ruedas abi3
+# estables para Python 3.12.
+cryptography>=42,<50

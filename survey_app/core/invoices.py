@@ -28,6 +28,9 @@ FACTURAS_HEADERS = [
     "Collected", "CollectionDate", "Status", "Note", "CreatedBy", "Created",
     # v259: historial de cobros [{fecha, monto}] (Cobrado es el running total).
     "CollectionsJSON",
+    # v488: la factura en Xero. ⚠️ AL FINAL: las filas se escriben por POSICIÓN y
+    # `_FCOL` también, así que una columna en medio desplazaría las siguientes (v363).
+    "XeroInvoiceID", "XeroSentAt",
 ]
 _FCOL = {h: i + 1 for i, h in enumerate(FACTURAS_HEADERS)}
 
@@ -290,7 +293,7 @@ def create_factura(grupo, cliente_id, cliente_nombre, lineas, impuesto_pct=0.0,
            json.dumps(lineas, ensure_ascii=False, default=str),
            str(subtotal), str(_num(impuesto_pct)), str(impuesto), str(total),
            "0", "", "emitida", str(nota or ""), str(creado_por or ""),
-           clock.now().strftime("%Y-%m-%d %H:%M:%S"), json.dumps([])]
+           clock.now().strftime("%Y-%m-%d %H:%M:%S"), json.dumps([]), "", ""]
     w.append_row(row, value_input_option="RAW")
     _invalidate()
     return True, fid
@@ -332,6 +335,46 @@ def registrar_cobro(fid: str, monto, fecha="") -> tuple:
         return False, str(e)
     _invalidate()
     return True, t("Payment recorded.")
+
+
+def marcar_xero(marcas: dict, cuando: str) -> tuple:
+    """Apunta el InvoiceID de Xero de varias facturas: 1 lectura FRESCA + 1 escritura.
+
+    `marcas` = {ID de COPEX: InvoiceID de Xero}. ⚠️ No usa `_find_row` una vez por
+    factura: un lote de 50 serían 50 lecturas contra el techo de 60/min (v339).
+    ⚠️ La columna se busca por su NOMBRE en la cabecera real de la hoja, no por la
+    posición canónica: la migración de cabecera la añade al final, y si una hoja
+    vieja no la tuviera todavía se devuelve error en vez de escribir al lado.
+    """
+    if not marcas:
+        return True, ""
+    w, err = _ws()
+    if err:
+        return False, err
+    try:
+        vals = w.get_all_values() or []
+    except Exception as e:
+        return False, str(e)
+    if not vals:
+        return False, t("Invoice not found.")
+    cab = [columnas.canon(h) for h in vals[0]]
+    if "XeroInvoiceID" not in cab or "XeroSentAt" not in cab or "ID" not in cab:
+        return False, t("The invoices sheet has no Xero columns yet.")
+    ci, cx, cs = cab.index("ID"), cab.index("XeroInvoiceID"), cab.index("XeroSentAt")
+    rangos = []
+    for n, fila in enumerate(vals[1:], start=2):
+        fid = fila[ci] if ci < len(fila) else ""
+        if fid in marcas:
+            rangos.append({"range": f"{_col_letter(cx + 1)}{n}", "values": [[str(marcas[fid])]]})
+            rangos.append({"range": f"{_col_letter(cs + 1)}{n}", "values": [[str(cuando)]]})
+    if not rangos:
+        return False, t("Invoice not found.")
+    try:
+        w.batch_update(rangos, value_input_option="RAW")
+    except Exception as e:
+        return False, str(e)
+    _invalidate()
+    return True, ""
 
 
 def anular(fid: str) -> tuple:
