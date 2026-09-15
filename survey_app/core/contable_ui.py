@@ -78,17 +78,14 @@ def _editor_cuentas(grupo, perfil, cfg):
                                 "always writes the amount WITHOUT tax, whichever this is."))
 
     if st.button(t(":material/save: Save accounting settings"), key=f"cont_save_{perfil}"):
-        nuevo = dict(cfg)
-        # ⚠️ Solo se toca el perfil que se está editando: `mapa()` fusiona sobre los de
-        # fábrica, así que escribir el diccionario entero borraría lo del otro perfil.
-        nuevo.setdefault("cuentas", {})
-        nuevo["cuentas"] = {p: dict(c) for p, c in cfg.get("cuentas", {}).items()}
-        nuevo["cuentas"][perfil] = {
-            filas[i]["_k"]: str(ed.iloc[i]["Cuenta"] or "").strip()
-            for i in range(len(filas))}
-        nuevo["categoria_seguimiento"] = seg.strip() or "Project"
-        nuevo["gastos_incluyen_impuesto"] = bool(dentro)
-        ok, msg = contable.guardar_mapa(grupo, nuevo)
+        # ⚠️ Solo lo de esta pantalla, y de las cuentas solo el perfil que se edita:
+        # `guardar_claves` fusiona un nivel, así que las de MYOB sobreviven a guardar las
+        # de Xero. Antes se escribía `mapa()` entero y se congelaba lo de fábrica (v492).
+        ok, msg = contable.guardar_claves(grupo, {
+            "cuentas": {perfil: {filas[i]["_k"]: str(ed.iloc[i]["Cuenta"] or "").strip()
+                                 for i in range(len(filas))}},
+            "categoria_seguimiento": seg.strip() or "Project",
+            "gastos_incluyen_impuesto": bool(dentro)})
         if ok:
             flash.exito(t("Accounting settings updated."))
             st.rerun()
@@ -122,10 +119,9 @@ def _editor_conceptos(grupo, cfg):
         }))
 
     if st.button(t(":material/save: Save earnings rates"), key="cont_save_conceptos"):
-        nuevo = dict(cfg)
-        nuevo["conceptos"] = {filas[i]["_k"]: str(ed.iloc[i]["Cuenta"] or "").strip()
-                              or filas[i]["_k"] for i in range(len(filas))}
-        ok, msg = contable.guardar_mapa(grupo, nuevo)
+        ok, msg = contable.guardar_claves(grupo, {"conceptos": {
+            filas[i]["_k"]: str(ed.iloc[i]["Cuenta"] or "").strip() or filas[i]["_k"]
+            for i in range(len(filas))}})
         if ok:
             flash.exito(t("Earnings rates updated."))
             st.rerun()

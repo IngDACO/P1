@@ -175,10 +175,11 @@ def emparejado(grupo: str, tenant_id: str) -> dict:
 
 
 def guardar_emparejado(grupo: str, tenant_id: str, mapa_nuevo: dict) -> tuple:
-    cfg = dict(contable.mapa(grupo))
-    cfg["xero_empleados"] = {"tenant": tenant_id,
-                             "map": {str(k): str(v) for k, v in (mapa_nuevo or {}).items() if v}}
-    return contable.guardar_mapa(grupo, cfg)
+    # ⚠️ Solo esta clave (v492): antes se escribía `mapa()` entero y se congelaban en
+    # el grupo todos los valores contables de fábrica.
+    return contable.guardar_claves(grupo, {"xero_empleados": {
+        "tenant": tenant_id,
+        "map": {str(k): str(v) for k, v in (mapa_nuevo or {}).items() if v}}})
 
 
 # ─────────────────────────────────────────────────────────────────────────────

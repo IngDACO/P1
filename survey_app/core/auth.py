@@ -283,15 +283,46 @@ def set_group_setting(grupo: str, field: str, val) -> tuple:
         col = gws.row_values(1).index(field) + 1
     except ValueError:
         return False, f"{t('The column')} {field} {t('does not exist yet in the Groups sheet.')}"
+    fila, _r = _grupo_fresco(gws, grupo)
+    if fila is None:
+        return False, t("Company not found.")
+    try:
+        gws.update_cell(fila, col, str(val))
+        _invalidate_groups()
+        return True, f"{field} actualizado."
+    except Exception as e:
+        return False, f"Error: {e}"
+
+
+def _grupo_fresco(gws, grupo: str):
+    """(fila de la hoja, registro) del grupo leídos FRESCOS, o (None, None).
+
+    Una sola búsqueda para quien escribe (`set_group_setting`) y quien lee para
+    escribir después (`group_text_setting_fresco`): si divergieran, uno podría leer
+    una fila y el otro escribir en otra.
+    """
+    g = (grupo or "").strip().lower()
     for i, r in enumerate(valores.canonizar(columnas.canonizar(gws.get_all_records(numericise_ignore=["all"])), LOGIN_SHEET)):
-        if str(r.get("Group", "")).strip().lower() == (grupo or "").strip().lower():
-            try:
-                gws.update_cell(i + 2, col, str(val))
-                _invalidate_groups()
-                return True, f"{field} actualizado."
-            except Exception as e:
-                return False, f"Error: {e}"
-    return False, t("Company not found.")
+        if str(r.get("Group", "")).strip().lower() == g:
+            return i + 2, r
+    return None, None
+
+
+def group_text_setting_fresco(grupo: str, field: str, default: str = "") -> str:
+    """Como `group_text_setting`, pero SIN caché. Para leer-fusionar-escribir (v492).
+
+    ⚠️ LANZA si no puede leer, en vez de devolver `default`: quien fusiona sobre lo
+    leído escribiría el resultado, y tratar un fallo de lectura como «no había nada»
+    borraría lo que sí había guardado.
+    """
+    gws, err = _get_groups_ws()
+    if err:
+        raise RuntimeError(err)
+    _f, r = _grupo_fresco(gws, grupo)
+    if r is None:
+        raise LookupError(t("Company not found."))
+    v = r.get(field, "")
+    return str(v) if v not in (None, "") else default
 
 
 def group_text_setting(grupo: str, field: str, default: str = "") -> str:

@@ -11294,7 +11294,49 @@ Un clic sobre un `ref` viejo (`ref_292`) cayó en otro sitio tras un rerun. No c
 comprobó leyendo el valor de TODOS los desplegables antes de seguir—, pero es la regla de
 v431: tras un rerun los `ref` y las coordenadas caducan; se vuelven a buscar.
 
-## Versiones desplegadas (v491 = actual)
+## Los ajustes contables se guardan por CLAVES, no volcando `mapa()` entero (v492)
+
+Pedido por el usuario tras verlo en la limpieza de v491: «que guarde solo el emparejado».
+
+### El fallo
+`contable.mapa(grupo)` devuelve lo guardado **ya FUSIONADO con los valores de fábrica**, y
+los cuatro escritores del ajuste (`xero_nomina.guardar_emparejado`, el radio de estado de
+envío de `xero_ui`, y los editores de cuentas y de nombres de nómina de `contable_ui`) lo
+modificaban y lo escribían ENTERO con `guardar_mapa`. Así, guardar un emparejado con Xero
+**congelaba en el grupo todos los valores por defecto** —cuentas, nombres de nómina, moneda,
+categoría de seguimiento—, y un cambio futuro de un valor de fábrica en el código ya no le
+llegaba, sin avisar. En producción: `AccountingJSON` de `cliente1` estaba vacío y salió lleno.
+
+### El arreglo: `contable.guardar_claves(grupo, cambios)`
+- Escribe **solo las claves que se tocan** y conserva todo lo demás guardado.
+- Una clave cuyo valor es un dict se **fusiona UN nivel**: guardar las cuentas de Xero no
+  borra las de MYOB. Un nivel y no más, a propósito: el `map` del emparejado se SUSTITUYE,
+  así que quitar a una persona la quita de verdad en vez de acumularse.
+- ⚠️ Lee lo guardado **FRESCO** (`auth.group_text_setting_fresco`), no de la caché: decide
+  qué se escribe, y fusionar sobre algo de hace 120 s perdería lo que otra sesión acaba de
+  guardar (v323).
+- ⚠️ Si **no puede leer**, NO escribe y lo dice. Tratar un fallo de lectura como «vacío» y
+  escribir solo lo nuevo borraría todo lo que había — es el caso que la lectura fresca
+  **lanza** en vez de devolver el valor por defecto.
+- Un JSON ilegible (que ya nadie podía leer) se reemplaza, dejando rastro en el log.
+- `guardar_mapa` **se elimina**: con cuatro escritores volcando el mismo diccionario, el
+  quinto habría vuelto a hacerlo.
+- `auth._grupo_fresco` es la **única** búsqueda de la fila del grupo, compartida por quien lee
+  para escribir y por `set_group_setting`: si divergieran, se leería una fila y se escribiría
+  en otra.
+
+### Verificación
+`verif_v492.py`, **28 comprobaciones**, ejecutando `guardar_claves` contra una hoja falsa
+(desde vacío, conservar MYOB, quitar un emparejado, no leer de la caché, no escribir si falla
+la lectura, JSON ilegible) + estático (nadie vuelca `mapa()`, solo `contable.py` escribe
+`AccountingJSON`, con la sonda validada contra un volcado construido). Batería: **8/8 roturas
++ CONTROL**, ⚠️ y esta vez **leyendo qué comprobación falla en cada una**: un guardián que
+revienta también «caza» todas las roturas (v459/v463), así que el 8/8 solo vale con el
+motivo a la vista. **Contra la hoja real**: guardar el emparejado dejó en `AccountingJSON`
+solo `xero_empleados`, otra clave lo conservó, y se devolvió exactamente a vacío.
+Suite: **128 verde · 0 rojo · 0 roto**.
+
+## Versiones desplegadas (v492 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -11302,6 +11344,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v492 | **Los ajustes contables se guardan por CLAVES** (pedido por el usuario). Los cuatro escritores volcaban `mapa()` —lo guardado YA fusionado con los valores de fábrica—, así que guardar un emparejado con Xero **congelaba todos los valores por defecto** en el grupo y un cambio futuro en el código dejaba de llegarle. Nueva `contable.guardar_claves`: solo lo tocado, fusión de un nivel (MYOB sobrevive a guardar Xero), ⚠️ lectura FRESCA y **si no puede leer, no escribe** (escribir solo lo nuevo borraría lo guardado). `guardar_mapa` eliminada; una sola búsqueda de la fila del grupo. 28 comprobaciones · **8/8 roturas + control** con el motivo de cada una a la vista · ejercitado contra la hoja real y devuelto a vacío · suite 128 verde |
 | v491 | Documentación: **el parte de horas a Xero Payroll probado EN PRODUCCIÓN** contra la Demo Company. Lectura en vivo de empleados y calendarios; 1.er envío crea parte en borrador + permiso; ⚠️ **reenviar lo mismo ACTUALIZA el borrador y no repite el permiso** (solo probable contra un Xero real). El usuario lo verificó en Xero. ⚠️ La guarda de la limpieza destapó que guardar el emparejado **congela los valores de fábrica** en `AccountingJSON` (comprobado idéntico a fábrica antes de vaciarlo; anotado). Foto antes/después idéntica |
 | v490 | **FASE 2.3-B: parte de horas y ausencias pagadas a Xero Payroll AU** (decisiones del usuario: horas y permisos, borrador, emparejado automático + confirmar, actualizar solo borradores). ⚠️ Leer la especificación cambió el diseño de v484 en tres puntos: las ausencias **no van en el parte** (son LeaveApplications), el periodo **tiene que ser uno del calendario** de Xero o lo rechaza, y el empleado no tiene número (emparejado atado a la organización). Una definición de lo que se paga (`contable.partes`), tipo ordinario de CADA empleado, una entrada por día en orden, permisos con las horas explícitas y en tramos seguidos, y sin duplicar (todas las páginas; si no se puede comprobar, no se crea). + ritmo de 55 llamadas/min y reintento corto ante 429, que también sirven a las facturas. 56 comprobaciones · **15/15 roturas + control** |
 | v489 | **Xero probado EN PRODUCCIÓN contra la Demo Company** + dos arreglos de pantalla. Envío real verificado (factura en borrador, GST 10,00 y total 110,00 — no 9,99 —, comprobado por el usuario en Xero, y el **enlace directo abre la factura**), y ⚠️ **sin duplicados probado de verdad**: borrada la marca en COPEX y reenviada, se ENLAZÓ con el mismo InvoiceID. ⚠️ La primera conexión fue a la organización «COPEX» del usuario, detectado leyendo la fila antes de mandar nada. **(1)** «Desconectar no desconecta»: el título del desplegable parecía el botón — ahora es un botón que pregunta. **(2)** «Ya están todas en Xero» a quien no tenía ninguna. Refresco del token aún sin ejercitar contra Xero (la prueba cupo en 30 min). 105 comprobaciones |

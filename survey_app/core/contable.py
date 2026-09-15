@@ -145,13 +145,45 @@ def mapa(grupo: str) -> dict:
     return cfg
 
 
-def guardar_mapa(grupo: str, cfg: dict) -> tuple:
-    """Guarda los ajustes contables del grupo (una escritura)."""
+def guardar_claves(grupo: str, cambios: dict) -> tuple:
+    """Guarda SOLO estas claves de los ajustes contables; lo demás guardado se conserva.
+
+    ⚠️ v492 — antes cada guardado escribía `mapa()` ENTERO, que es lo guardado ya
+    FUSIONADO con los valores de fábrica: guardar un emparejado con Xero congelaba en
+    el grupo todos los valores por defecto (cuentas, nombres de nómina, moneda…) y un
+    cambio futuro de un valor de fábrica en el código dejaba de llegarle, sin avisar.
+    Visto al limpiar la prueba de v490: `AccountingJSON` estaba vacío y salió lleno.
+
+    Una clave cuyo valor es un dict se fusiona UN nivel (así guardar las cuentas de
+    Xero no borra las de MYOB); el resto sustituye.
+
+    ⚠️ Lee lo guardado FRESCO: decide qué se escribe, y fusionar sobre la caché de
+    120 s perdería la clave que otra sesión acaba de guardar (v323). Si no se puede
+    leer, NO se escribe: escribir solo lo nuevo borraría lo que había.
+    """
     try:
-        crudo = json.dumps(cfg or {}, ensure_ascii=False)
+        crudo = auth.group_text_setting_fresco(grupo, "AccountingJSON", "")
+    except Exception as e:
+        return False, f"{t('The accounting settings could not be read; nothing was saved.')} ({e})"
+    try:
+        guardado = json.loads(crudo) if crudo else {}
+        if not isinstance(guardado, dict):
+            raise ValueError("no es un objeto JSON")
+    except Exception as e:
+        # Ilegible = ya nadie podía leerlo (`mapa()` lo trata como vacío): no hay nada
+        # legible que perder, y queda rastro en vez de sobrescribir en silencio.
+        logger.warning("contable: AccountingJSON ilegible en %s, se reemplaza: %s", grupo, e)
+        guardado = {}
+    for k, v in (cambios or {}).items():
+        if isinstance(v, dict) and isinstance(guardado.get(k), dict):
+            guardado[k] = {**guardado[k], **v}
+        else:
+            guardado[k] = v
+    try:
+        nuevo = json.dumps(guardado, ensure_ascii=False)
     except Exception as e:
         return False, f"Error: {e}"
-    return auth.set_group_setting(grupo, "AccountingJSON", crudo)
+    return auth.set_group_setting(grupo, "AccountingJSON", nuevo)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

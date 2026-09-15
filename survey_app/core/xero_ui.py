@@ -142,9 +142,8 @@ def render_conexion(grupo, desde=None, hasta=None):
     actual = X.estado_envio(grupo)
 
     def _guardar_estado():
-        nuevo = dict(contable.mapa(grupo))
-        nuevo["xero_estado"] = st.session_state.get("cpxseg_xero_estado", actual)
-        ok, msg = contable.guardar_mapa(grupo, nuevo)
+        ok, msg = contable.guardar_claves(
+            grupo, {"xero_estado": st.session_state.get("cpxseg_xero_estado", actual)})
         (flash.exito if ok else flash.error)(t("Saved.") if ok else msg)
 
     st.radio(t("Invoices arrive in Xero as"), list(X.ESTADOS_ENVIO),
