@@ -14,7 +14,6 @@ procesa `procesar_retorno`, llamada desde `app.py` después del login.
 import streamlit as st
 
 from core import flash, invoices, tenant
-from core import ui_common as ui
 from core import xero as X
 from core.i18n import t
 
@@ -84,20 +83,26 @@ def procesar_retorno(rol: str, grupo: str) -> None:
     home_ui.navegar("finanzas", "📤 Contable")
 
 
-def _pendientes(grupo, desde, hasta) -> list:
-    """Facturas del periodo que se pueden mandar y aún no están en Xero."""
+def _pendientes(grupo, desde, hasta) -> dict:
+    """{pendientes: [ID], enviables: n} del periodo.
+
+    ⚠️ Dos cuentas y no una: sin `enviables`, un periodo SIN facturas y uno con todas
+    ya mandadas daban lo mismo, y la pantalla decía «ya están todas en Xero» a quien no
+    tenía ninguna (visto en producción con cliente1 vacío).
+    """
     from core import contable
     etq = contable._etiquetas(grupo)
     fichas = contable.fichas_clientes(grupo)
-    out = []
+    pend, total = [], 0
     for f in invoices.list_facturas(grupo):
-        if str(f.get("XeroInvoiceID", "") or "").strip():
-            continue
         if not contable._rango(f.get("Date"), desde, hasta):
             continue
-        if contable.documento_venta(f, etq, fichas):
-            out.append(str(f.get("ID", "")))
-    return out
+        if not contable.documento_venta(f, etq, fichas):
+            continue
+        total += 1
+        if not str(f.get("XeroInvoiceID", "") or "").strip():
+            pend.append(str(f.get("ID", "")))
+    return {"pendientes": pend, "enviables": total}
 
 
 def render_conexion(grupo, desde=None, hasta=None):
@@ -151,7 +156,8 @@ def render_conexion(grupo, desde=None, hasta=None):
         st.warning(t(":material/warning: No Xero sales account is set: fill it in "
                      "«Chart of accounts and tax» below before sending."))
 
-    pend = _pendientes(grupo, desde, hasta)
+    _p = _pendientes(grupo, desde, hasta)
+    pend = _p["pendientes"]
     if pend:
         if st.button(t(":material/send: Send {n} invoice(s) of this period to Xero",
                        n=len(pend)), type="primary", key="xero_enviar_lote"):
@@ -159,17 +165,30 @@ def render_conexion(grupo, desde=None, hasta=None):
                 res = X.enviar_facturas(grupo, pend)
             _flash_resultado(res)
             st.rerun()
-    else:
+    elif _p["enviables"]:
         st.caption(t("Every invoice of this period is already in Xero."))
+    else:
+        st.caption(t("There are no invoices to send in this period."))
 
-    with st.expander(t("Disconnect Xero"), icon=":material/link_off:"):
-        st.caption(t("COPEX stops sending to this organisation. What is already in Xero "
-                     "stays there."))
-        if ui.confirmar_borrado("xero_desconectar_ok", t("I confirm I want to disconnect")):
-            if st.button(t("Disconnect"), key="xero_desconectar"):
-                ok, msg = X.desconectar(grupo)
-                (flash.exito if ok else flash.error)(msg)
-                st.rerun()
+    # ⚠️ v489: era un desplegable TITULADO «Disconnect Xero» con una casilla y el botón
+    # dentro. El título parecía el botón y solo abría el desplegable: en producción el
+    # usuario lo pulsó y «no desconectaba». Ahora es un botón de verdad que PREGUNTA.
+    if not st.session_state.get("_xero_confirmar_desconexion"):
+        if st.button(t(":material/link_off: Disconnect Xero"), key="xero_desconectar_pedir"):
+            st.session_state["_xero_confirmar_desconexion"] = True
+            st.rerun()
+        return
+    st.warning(t("Disconnect «{o}»? COPEX stops sending invoices to it. What is already in "
+                 "Xero stays there.", o=_md(est["tenant"])))
+    c1, c2 = st.columns(2)
+    if c1.button(t("Yes, disconnect"), type="primary", key="xero_desconectar_si"):
+        st.session_state.pop("_xero_confirmar_desconexion", None)
+        ok, msg = X.desconectar(grupo)
+        (flash.exito if ok else flash.error)(msg)
+        st.rerun()
+    if c2.button(t("Cancel"), key="xero_desconectar_no"):
+        st.session_state.pop("_xero_confirmar_desconexion", None)
+        st.rerun()
 
 
 def boton_factura(grupo, f):
