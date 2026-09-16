@@ -13,6 +13,8 @@ Pesos con distribución en "S" (bajo al inicio, alto en el medio, bajo al final)
 from core.i18n import d as _d
 from datetime import date, timedelta
 
+from core import plan
+
 # ⚠️ v470 · El desmontaje del ascensor existente NO es una tabla de fases aparte:
 # es UNA actividad, la primera del cronograma (decisión del usuario). Su duración
 # escala con las paradas como el resto —más plantas son más puertas de rellano que
@@ -79,6 +81,9 @@ def build_schedule(ns: int, start_date: date, flags: dict,
 
     if custom_rows:
         base = [(r["nombre"], float(r["duracion"]), float(r["peso"])) for r in custom_rows]
+        # v499: cada fila puede traer su orden y sus predecesoras («3;5-2»)
+        red = [{"orden": r.get("orden", i + 1), "duracion": float(r["duracion"]),
+                "pred": r.get("pred", "")} for i, r in enumerate(custom_rows)]
     else:
         base = []
         for nombre, db, dpp, peso, cond in ([FASE_RIPOUT] + PHASES if ripout else PHASES):
@@ -90,20 +95,30 @@ def build_schedule(ns: int, start_date: date, flags: dict,
     # Normalizar pesos a 100
     total_peso = sum(p for _, _, p in base) or 1.0
 
+    # ⚠️ v499: el inicio de cada actividad sale de la RED (`plan.calcular`), no de acumular
+    # duraciones. Con la columna vacía, cada una va detrás de la anterior — exactamente lo
+    # que hacía esta función hasta v498, así que un cronograma existente no se mueve.
+    if not custom_rows:
+        red = [{"orden": i + 1, "duracion": d, "pred": ""} for i, (_n, d, _p) in enumerate(base)]
+    calc = plan.calcular(red)
+    avisos_plan = calc["avisos"]
+
     acts = []
-    cur = 0.0
-    for nombre, dur, peso in base:
+    for i, (nombre, dur, peso) in enumerate(base):
         peso_n = round(peso * 100.0 / total_peso, 1)
+        _r = calc["por_orden"].get(int(red[i]["orden"]), {"inicio": 0.0, "fin": dur, "critica": False})
         acts.append({
             "nombre":       nombre,
-            "inicio":       cur,
+            "inicio":       _r["inicio"],
             "duracion":     dur,
             "peso":         peso_n,
-            "fecha_inicio": start_date + timedelta(days=int(cur)),
-            "fecha_fin":    start_date + timedelta(days=int(cur + dur)),
+            "critica":      _r["critica"],
+            "orden":        int(red[i]["orden"]),
+            "pred":         str(red[i].get("pred", "") or ""),
+            "fecha_inicio": start_date + timedelta(days=int(_r["inicio"])),
+            "fecha_fin":    start_date + timedelta(days=int(_r["inicio"] + dur)),
         })
-        cur += dur
-    total_dias = cur
+    total_dias = calc["total_dias"]
 
     # Curva S: % acumulado planificado por día (progreso lineal dentro de cada actividad)
     scurve = []
@@ -123,6 +138,10 @@ def build_schedule(ns: int, start_date: date, flags: dict,
         "scurve":      scurve,
         "start_date":  start_date,
         "fecha_fin":   start_date + timedelta(days=int(total_dias)),
+        # v499: lo que el encadenado no pudo resolver (ciclo, referencia que ya no existe).
+        # Va en el resultado para que la PANTALLA lo diga: un plan mal encadenado se
+        # dibuja igual, y hay que poder verlo para arreglarlo.
+        "avisos_plan": avisos_plan,
     }
 
 
@@ -373,8 +392,13 @@ def schedule_svg(sched: dict, real_curve: list = None, today_day: float = None,
             p.append(f'<text x="6" y="{y+rowH*0.70:.1f}" font-size="9" fill="{C_HOY}">●</text>')
         p.append(f'<text x="15" y="{y+rowH*0.70:.1f}" font-size="9.5" fill="{txt}">'
                  f'{_esc(nm)}</text>')
+        # ⚠️ v499: la barra de una actividad de la RUTA CRÍTICA lleva borde marcado. Es
+        # la información que trae el encadenado: atrasar ESAS atrasa la entrega; las otras
+        # tienen holgura. Solo el borde — el relleno ya dice el estado (terminada/en curso).
+        _cri = bool(a.get("critica"))
         p.append(f'<rect x="{x0:.1f}" y="{y+3:.1f}" width="{w:.1f}" height="{rowH-8}" '
-                 f'rx="2.5" fill="#eef1f5" stroke="#dfe4ec" stroke-width="0.7"/>')
+                 f'rx="2.5" fill="#eef1f5" stroke="{"#c0392b" if _cri else "#dfe4ec"}" '
+                 f'stroke-width="{1.4 if _cri else 0.7}"/>')
         if av > 0:
             p.append(f'<rect x="{x0:.1f}" y="{y+3:.1f}" width="{w*av/100.0:.1f}" '
                      f'height="{rowH-8}" rx="2.5" fill="{col}" fill-opacity="0.92"/>')

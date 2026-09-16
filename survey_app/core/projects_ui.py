@@ -2484,6 +2484,8 @@ def _detalle_proyecto(pid: str, grupo: str = None):
                 "Orden": int(P._num(a.get("Order"))),
                 "Actividad": a.get("Name"),
                 "Días": int(P._num(a.get("DurationDays")) or 1),
+                # v499: detrás de qué va. Vacío = detrás de la anterior (lo de siempre).
+                "Detras": str(a.get("Predecessors", "") or ""),
                 "Peso": P._num(a.get("Weight")),
                 "Avance %": P._num(a.get("Progress")),
             } for a in acts])
@@ -2496,17 +2498,39 @@ def _detalle_proyecto(pid: str, grupo: str = None):
                     "Días":  st.column_config.NumberColumn(t("Days"), min_value=1, step=1),
                     "Peso":  st.column_config.NumberColumn(t("Weight"), min_value=0.0, step=1.0,
                                                            help=t("Relative weight (the % is worked out proportionally)")),
+                    "Detras": st.column_config.TextColumn(
+                        t("After"),
+                        help=t("Which activity it goes after, by its Order number. Empty = right "
+                               "after the previous one. «-» = starts on day one. «3» = after nº 3; "
+                               "«3+2» waits 2 days; «3-1» overlaps it by a day; «3;5» after both.")),
                 }))
-            st.caption(t("Edit name, days, weight and order; the progress % is read-only (the field team updates it)."))
+            st.caption(t("Edit name, days, weight, order and what each activity goes after; "
+                         "the progress % is read-only (the field team updates it)."))
+            # v499: lo que el encadenado no pudo resolver, DICHO (un plan que se dibuja
+            # bien con una referencia rota es un plan que miente).
+            _sched_av = (P.project_schedule(pid) or {}).get("sched", {}).get("avisos_plan") or []
+            if _sched_av:
+                _n_ciclo = sum(1 for m, _i, _o in _sched_av if m == "ciclo")
+                _faltan = [str(o) for m, _i, o in _sched_av if m == "falta"]
+                if _n_ciclo:
+                    st.warning(t("{n} activity(ies) end up depending on themselves: they were put "
+                                 "back after the previous one. Fix the «After» column.", n=_n_ciclo))
+                if _faltan:
+                    st.warning(t("«After» points to activities that no longer exist: {l}",
+                                 l=", ".join(_faltan)))
             if st.button(t(":material/save: Save activity table"), key=f"savetbl_{pid}"):
                 edits = []
                 for i, a in enumerate(acts):
                     r = _edited.iloc[i]
+                    # ⚠️ Las claves son las del CUADRO («Peso», «Orden»), no las etiquetas
+                    # que se ven («Weight», «Order»): leer por la etiqueta es un KeyError
+                    # que tumbaba el guardado entero (v471, el mismo fallo en Costos).
                     edits.append({"orden0": a.get("Order"),
                                   "Name": str(r["Actividad"]).strip(),
                                   "DurationDays": int(r["Días"]),
-                                  "Weight": float(r["Weight"]),
-                                  "Order": int(r["Order"])})
+                                  "Weight": float(r["Peso"]),
+                                  "Order": int(r["Orden"]),
+                                  "Predecessors": str(r["Detras"] or "").strip()})
                 ok, msg = P.save_activities(pid, edits)
                 (flash.exito if ok else st.error)(msg)
                 if ok:
@@ -3066,7 +3090,9 @@ def _field_activities(pid):
         cambios, _vacias = [], []
         for i, a in enumerate(acts):
             r = _ed.iloc[i]
-            _av, _nt = r["Avance %"], r["Note"]
+            # ⚠️ La columna del cuadro es «Nota»; leerla por su ETIQUETA («Note») es un
+            # KeyError que tumba el guardado del campo entero (v499, mismo fallo que v471).
+            _av, _nt = r["Avance %"], r["Nota"]
             # ⚠️ Una celda BORRADA vuelve como NaN: `int(NaN)` reventaba el guardado
             #    ENTERO (se perdía toda la edición, no solo esa fila) y `str(NaN)`
             #    guardaba el texto "nan" como nota del campo.

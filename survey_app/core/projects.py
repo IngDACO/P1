@@ -21,6 +21,7 @@ from core import timeclock
 from core import clock
 from core import columnas
 from core import valores
+from core import plan                      # v499: el encadenado de actividades
 from core.num import col_letter as _col_letter, num as _num
 
 from core.i18n import t
@@ -157,6 +158,10 @@ def solo_internas(proys) -> list:
 ACTIVITIES_HEADERS = [
     "ProjectID", "Order", "Name", "DurationDays", "Weight", "Progress",
     "ActualStartDate", "ActualEndDate", "Note",
+    # v499: detrás de qué va esta actividad («3;5-2»). ⚠️ AL FINAL: las filas se
+    # escriben por POSICIÓN y colar una columna en medio guarda cada dato en la de al
+    # lado (v363). Vacío = detrás de la anterior, que es lo que la app hacía hasta v498.
+    "Predecessors",
 ]
 GROUPINGS_HEADERS = ["ID", "Group", "Name", "Description"]
 DOCUMENTS_SHEET   = "Documents"
@@ -487,7 +492,7 @@ def create_project(grupo, nombre, cliente="", ubicacion="", modelo="", ns=0,
         pid, str(i + 1), a.get("nombre", a.get("Name", f"Actividad {i+1}")),
         str(a.get("duracion", a.get("DurationDays", 0))),
         str(a.get("peso", a.get("Weight", 0))),
-        "0", "", "", "",
+        "0", "", "", "", str(a.get("pred", a.get("Predecessors", ""))),
     ] for i, a in enumerate(activities or [])]
     if act_rows:
         aws.append_rows(act_rows, value_input_option="RAW")
@@ -969,10 +974,42 @@ def add_activity(pid, nombre, duracion=1, peso=0) -> tuple:
     acts  = list_activities(pid)
     orden = int(max([_num(a.get("Order")) for a in acts], default=0) + 1)
     aws.append_row([pid, str(orden), str(nombre), str(int(_num(duracion) or 1)),
-                    str(_num(peso)), "0", "", "", ""], value_input_option="RAW")
+                    str(_num(peso)), "0", "", "", "", ""], value_input_option="RAW")
     _invalidate()
     _recompute_project_avance(pid)
     return True, t("Activity added.")
+
+
+def limpiar_predecesoras(pid, orden_borrado) -> None:
+    """Quita de las demás actividades la referencia a la que se acaba de borrar (v499).
+
+    ⚠️ Si no, esa referencia apunta a un número que ya no existe: `plan.calcular` la
+    ignoraría con aviso, pero la actividad quedaría empezando el día 0 — un plan que
+    miente en silencio.
+    """
+    aws, err = _activities_ws()
+    if err or "Predecessors" not in _ACOL:
+        return
+    try:
+        recs = valores.canonizar(columnas.canonizar(
+            aws.get_all_records(numericise_ignore=["all"])), PROJECTS_SHEET)
+        batch = []
+        for i, r in enumerate(recs):
+            if str(r.get("ProjectID", "")) != str(pid):
+                continue
+            crudo = str(r.get("Predecessors", "") or "")
+            if not crudo:
+                continue
+            mapa = {o: o for o, _l in plan.parse(crudo) if int(o) != int(_num(orden_borrado))}
+            nuevo = plan.remapear(crudo, mapa)
+            if nuevo != crudo:
+                batch.append({"range": f"{_col_letter(_ACOL['Predecessors'])}{i + 2}",
+                              "values": [[nuevo]]})
+        if batch:
+            aws.batch_update(batch, value_input_option="RAW")
+            _invalidate()
+    except Exception as e:
+        logger.warning("projects.limpiar_predecesoras: %s", e)
 
 
 def delete_activity(pid, orden) -> tuple:
@@ -1063,11 +1100,36 @@ def save_activities(pid, edits) -> tuple:
     recs = valores.canonizar(columnas.canonizar(aws.get_all_records(numericise_ignore=["all"])), PROJECTS_SHEET)
     rowmap = {str(r.get("Order", "")): i + 2
               for i, r in enumerate(recs) if str(r.get("ProjectID", "")) == str(pid)}
+    # ⚠️ v499: si cambian los números de orden, «detrás de la 3» pasaría a apuntar a
+    # OTRA actividad sin que nada avise. Se remapea con el mapa viejo→nuevo, y una
+    # referencia a algo que ya no está se cae de la lista (`plan.remapear`).
+    # ⚠️ El mapa se construye con TODAS las actividades de la obra y los `edits` solo
+    # SOBRESCRIBEN: si saliera de los edits, un guardado PARCIAL (el patrón de
+    # `save_field_progress`, v162) dejaría fuera del mapa a las que no se tocaron y
+    # `remapear` las tiraría de la lista — el plan entero reescrito, sin ningún error.
+    mapa = {}
+    for r in recs:
+        if str(r.get("ProjectID", "")) == str(pid):
+            try:
+                mapa[int(_num(r.get("Order")))] = int(_num(r.get("Order")))
+            except Exception:
+                pass
+    for e in edits:
+        if str(e.get("orden0", "")).strip() != "":
+            mapa[int(_num(e.get("orden0")))] = int(_num(e.get("Order", e.get("orden0"))))
     batch = []
     for e in edits:
         row = rowmap.get(str(e.get("orden0")))
         if row is None:
             continue
+        if "Predecessors" in _ACOL:
+            _p = e.get("Predecessors")
+            if _p is None:                       # no se editó: se conserva y se remapea
+                _p = next((r.get("Predecessors", "") for r in recs
+                           if str(r.get("ProjectID", "")) == str(pid)
+                           and str(r.get("Order", "")) == str(e.get("orden0"))), "")
+            batch.append({"range": f"{_col_letter(_ACOL['Predecessors'])}{row}",
+                          "values": [[plan.remapear(_p, mapa)]]})
         for field in ("Name", "DurationDays", "Weight", "Order"):
             if field in e and field in _ACOL:
                 batch.append({"range": f"{_col_letter(_ACOL[field])}{row}",
@@ -1287,7 +1349,10 @@ def project_schedule(pid: str):
         start = clock.today()
     custom = [{"nombre":   a.get("Name", ""),
                "duracion": _num(a.get("DurationDays")) or 1.0,
-               "peso":     _num(a.get("Weight"))} for a in acts]
+               "peso":     _num(a.get("Weight")),
+               "orden":    _num(a.get("Order")) or (i + 1),
+               "pred":     str(a.get("Predecessors", "") or "")}
+              for i, a in enumerate(acts)]
     sched     = build_schedule(1, start, {}, custom_rows=custom)
     avances   = [_num(a.get("Progress")) for a in acts]
     today_day = (clock.today() - start).days
