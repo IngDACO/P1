@@ -189,7 +189,11 @@ def render_credenciales(usuario, grupo, editable=False, key_prefix="cr"):
                                         arch.type or "application/octet-stream")
                     if not did:
                         st.warning(t("The file could not be uploaded to Drive; everything else is saved."))
-                ok, msg = C.add(usuario, grupo, t, num, clase, emi, ven, did, fname, nota, admin_usr)
+                # ⚠️ `_tp` es el tipo elegido. Aquí ponía `t`, que desde la migración de
+                # i18n es la FUNCIÓN de traducción: la credencial se guardaba con
+                # «<function t at 0x…>» como tipo (v498).
+                ok, msg = C.add(usuario, grupo, _tp, num, clase, emi, ven, did, fname,
+                                nota, admin_usr)
                 (flash.exito if ok else st.error)(msg)
                 if ok:
                     st.rerun()

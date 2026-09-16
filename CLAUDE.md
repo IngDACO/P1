@@ -11501,7 +11501,55 @@ en «— not in Xero —». Es la lección de siempre: una comprobación que pue
 camino no comprueba lo que dice.
 Suite entera: **130 verde · 0 rojo · 0 roto**.
 
-## Versiones desplegadas (v497 = actual)
+## ⚠️ EL TIPO DE CREDENCIAL SE GUARDABA COMO LA FUNCIÓN DE TRADUCCIÓN (v498)
+
+Lo reportó el usuario: «en los tipos de credenciales sale un texto que no corresponde».
+En la hoja, las dos credenciales cargadas tenían como tipo **`<function t at 0x…>`**.
+
+```python
+ok, msg = C.add(usuario, grupo, t, num, clase, ...)   # ← `t` es la FUNCIÓN de i18n
+_tp = tipo_otro.strip() if (_es_otro and tipo_otro.strip()) else tipo   # ← esto es el tipo
+```
+
+### Por qué vivió tanto, y por qué mis pruebas no lo vieron
+- `git log -S` lo data en **v104**, cuando la variable del tipo se llamaba `t` y la llamada
+  era correcta. **v189** la renombró a `tipo` (y añadió `_tp`), y la llamada se quedó con
+  `t`; entonces `t` no existía en `auth_ui`, así que habría sido `NameError`. Cuando
+  **v445** metió `from core.i18n import t`, ese nombre volvió a resolver — pero a la
+  FUNCIÓN. Desde ahí, guardar una credencial escribe la función como tipo, en silencio.
+- ⚠️ **En v350 ejercité `credentials.add` y pasó**, porque el fallo no está en la función
+  sino en **lo que la pantalla le pasa**. Es la lección de v452 con un caso caro: el
+  inventario de «75 de 75 escrituras ejercitadas» medía las FUNCIONES; el formulario es
+  otra cosa. Por eso el guardián de v498 **ejecuta el formulario** y mira qué recibe `add`.
+- Y `str(tipo)` de una función **no está vacío**, así que la guarda del backend
+  («el tipo es obligatorio») la dejaba pasar tan campante.
+
+### Lo arreglado
+1. El formulario manda `_tp` — el tipo elegido, o lo escrito en «Specify the type».
+2. `credentials.add` exige que el tipo sea **TEXTO** (`isinstance(tipo, str)`), y lo
+   comprueba **antes de abrir la hoja**: un dato inválido no merece una llamada a Sheets.
+3. ⚠️ Chequeo nuevo y GENERAL: **ninguna llamada del repo puede pasar `t` como argumento
+   de datos**. Barrido: 5 candidatos, 3 legítimos (`format_func=t`) y 2 que eran variables
+   de comprensión — ⚠️ la comprensión tiene ÁMBITO PROPIO (trampa nº3), así que la sonda
+   lo contempla; aun así esas dos se renombraron a `_c`, porque usar el nombre `t` para
+   otra cosa es pedir el accidente de v447 (donde tapó `t` y **dejó de restar las
+   deducciones del neto**).
+4. De paso: el aviso de certificados al asignar pintaba «falta» y «vencido» **en español**
+   dentro de una f-string. Ahora se traducen al pintar; ⚠️ el literal `'falta'` SIGUE en la
+   comparación, porque ahí es el DATO (v442).
+
+### Verificación
+`verif_v498.py`, **14 comprobaciones**: el formulario EJECUTADO (tipo normal, «Other» con
+texto y «Other» sin texto), la guarda del backend en cuatro formas (función, None, número,
+espacios), el barrido del repo **con la sonda validada contra el fallo real reconstruido**
+(trampa nº12) y el aviso de certificados. Batería: **4/4 roturas + CONTROL**, incluida la
+rotura que reintroduce el fallo exacto del usuario. Suite entera: **131 verde · 0 rojo**.
+
+⚠️ **Las dos credenciales ya guardadas no se tocan por mi cuenta**: el tipo correcto lo sabe
+el usuario, y escribir uno inventado en un registro de seguridad es peor que dejarlo roto a
+la vista. Se le preguntó cuál era cada una.
+
+## Versiones desplegadas (v498 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -11509,6 +11557,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v498 | ⚠️ **El TIPO de credencial se guardaba como la FUNCIÓN de traducción** (lo reportó el usuario: en la hoja ponía «<function t at 0x…>»). El formulario pasaba `t` donde va el tipo: nació correcto en v104 (la variable se llamaba `t`), v189 la renombró y v445 hizo que ese nombre volviera a resolver… a la función de i18n. ⚠️ **Mis pruebas de v350 no lo vieron porque ejercitaron `add`, no el FORMULARIO** — el fallo estaba en lo que la pantalla le pasa. Arreglado + `add` exige que el tipo sea TEXTO (antes de abrir la hoja) + chequeo general: nadie puede pasar `t` como dato (la comprensión tiene ámbito propio, trampa nº3) + «falta»/«vencido» del aviso de certificados, traducidos. 14 comprobaciones · **4/4 roturas + control** · suite 131 verde |
 | v497 | **El emparejado con Xero dice POR QUÉ y se aplica de una vez** (a raíz de «¿cómo automatizamos el emparejado?»). ⚠️ Auditar antes de construir: la propuesta automática YA existía y el desplegable ya venía preseleccionado — lo que faltaba era el motivo de cada fila sin pareja (`sin_email` · `no_esta` · `email_repetido` · `nombre_repetido` · `mismo_empleado`; casi siempre lo que falta está en COPEX, no en Xero) y un botón para recuperar las propuestas en las filas dejadas en «not in Xero». Relleno por BANDERA (v111), sin pisar lo elegido ni duplicar empleado, y `propuesta` DELEGA en la detallada. 24 comprobaciones · **8/8 roturas + control** ⚠️ una se escapó porque el valor por defecto ya hacía pasar el caso · suite 130 verde |
 | v496 | Documentación: **los cobros de Xero probados EN PRODUCCIÓN**. Pago parcial de 40 → COPEX «parcial»; los 70 restantes → «cobrada», con los dos movimientos en el historial marcados `origen: xero`, el estado de cuenta a 0 y el P&L cuadrado; sin novedades no escribe. ⚠️ La protección de duplicados enlazó con la factura de v489 (mismo número y total) y hubo que renumerar. ⚠️ **Error de método propio**: leí el MENSAJE de pantalla en vez del dato, afirmé que Xero devolvía 40 y mandé al usuario a revisar su contabilidad — la hoja ya decía 110. El mensaje no es el dato |
 | v495 | **FASE 2.3-C: lo cobrado en Xero entra en COPEX** (decisiones del usuario: lo registra el contable en Xero, con botón, facturas en borrador avisando, y si no cuadra manda Xero). ⚠️ La especificación decidió tres cosas: el cobrado es `AmountPaid` (una llamada por lote de 40), **`AmountCredited` NO se suma** (nota de crédito no es dinero recibido) y **una factura en borrador tiene AmountPaid 0**, así que sincronizar desde ella pondría a CERO un cobro real — solo se lee de aprobada/pagada. Idempotente (fija, no suma), historial con origen y movimiento negativo, un fallo de red no acusa de borradas, 1 lectura + 1 escritura por lote, y el parser de fechas de Xero pasa a tener UNA definición. 33 comprobaciones · **11/11 roturas + control** ⚠️ tres se escaparon primero: una rotura que no era fallo, un mock que hacía el trabajo del código, y un chequeo que casaba con un comentario · suite 129 verde |

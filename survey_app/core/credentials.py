@@ -229,11 +229,14 @@ def _next_id(recs) -> str:
 
 def add(usuario, grupo, tipo, numero="", clase="", emision="", vencimiento="",
         drive_id="", archivo="", nota="", actualizado_por="") -> tuple:
+    # ⚠️ v498: `str(tipo)` de una FUNCIÓN da «<function t at 0x…>», que pasaba la guarda
+    # vieja tan campante — y así se guardaron dos credenciales. El tipo tiene que ser
+    # TEXTO, y se comprueba ANTES de abrir la hoja: un dato inválido no merece una llamada.
+    if not isinstance(tipo, str) or not tipo.strip():
+        return False, t("The credential type is required.")
     w = _ws()
     if w is None:
         return False, t("Google Sheets is not configured.")
-    if not str(tipo).strip():
-        return False, t("The credential type is required.")
     try:
         cid = _next_id(columnas.canonizar(w.get_all_records(numericise_ignore=["all"])))
         w.append_row([cid, str(usuario), str(grupo), str(tipo), str(numero), str(clase),

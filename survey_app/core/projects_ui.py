@@ -1191,12 +1191,16 @@ def _avisar_asignados(usuarios, grupo=None, exclude_pid=None, certs_req=None,
         if certs_req:
             try:
                 comp = credentials.compliance(u, certs_req)
-                faltan = [t for t in certs_req if comp["por_tipo"].get(t) in ("falta", "vencido")]
-                pv = [t for t in certs_req if comp["por_tipo"].get(t) == "por_vencer"]
+                # ⚠️ La variable NO se llama `t`: aunque una comprensión tiene ámbito propio,
+                # `t` es la función de traducción y usar su nombre es pedir el accidente de
+                # v447 (y el de v498, que guardó la función como tipo de credencial).
+                faltan = [_c for _c in certs_req
+                          if comp["por_tipo"].get(_c) in ("falta", "vencido")]
+                pv = [_c for _c in certs_req if comp["por_tipo"].get(_c) == "por_vencer"]
                 if faltan:
+                    # ⚠️ El valor es el DATO en español; se traduce al PINTAR (v442).
                     no_cumplen.append(f"**{u}**: " + ", ".join(
-                        f"{t} ({'falta' if comp['por_tipo'][t] == 'falta' else 'vencido'})"
-                        for t in faltan))
+                        f"{_c} ({_etq(comp['por_tipo'][_c])})" for _c in faltan))
                 if pv:
                     cert_pv.append(f"**{u}**: " + ", ".join(f"{t}" for t in pv))
             except Exception:
