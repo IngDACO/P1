@@ -70,6 +70,11 @@ PROJECTS_HEADERS = [
     # van a costo en los dos modelos. Medido: «Bespoke — Delivery Chullora» estimado
     # en $380 habiendo facturado $5.200. VACÍO = no aporta nada (retrocompatible).
     "FixedProfit",
+    # v501: la LÍNEA BASE — el plan que se ACORDÓ, congelado con un botón. Guarda la
+    # original, la vigente y el historial de replanificaciones. ⚠️ AL FINAL (v363: las
+    # filas se escriben por POSICIÓN) y OPCIONAL: una obra sin línea base se comporta
+    # exactamente como hasta v500, así que ninguna existente cambia de comportamiento.
+    "BaselineJSON",
 ]
 
 # Tipos de proyecto (v306). `TIPO_INSTALACION` es el único que genera el cronograma
@@ -478,6 +483,9 @@ def create_project(grupo, nombre, cliente="", ubicacion="", modelo="", ns=0,
         #                                     en las horas. ⚠️ Añadir la columna arriba SIN
         #                                     esta línea es exactamente lo que mató a
         #                                     `create_project` durante 3 versiones (v363).
+        "",                                 # v501: BaselineJSON — la obra nace SIN línea
+        #                                     base; se fija con el botón cuando el plan
+        #                                     está acordado (decisión del usuario).
     ]
     # ⚠️ La fila es POSICIONAL: si no cuadra con la cabecera, cada dato se guarda en la
     # columna de al lado (silencioso y difícil de ver). Se comprueba aquí, no en un test.
@@ -1455,6 +1463,66 @@ def set_ganancia_fija(pid: str, valor) -> tuple:
     """
     v = max(0.0, _num(valor))
     return update_project(pid, {"FixedProfit": str(round(v, 2)) if v > 0 else ""})
+
+
+# ══════════════════════════════════════════════════════════
+#  Línea base del cronograma (v501)
+# ══════════════════════════════════════════════════════════
+def get_baseline(pid: str, prj: dict = None) -> dict:
+    """La línea base guardada, o {} si la obra no tiene ninguna."""
+    import json
+    if prj is None:
+        prj = get_project(pid) or {}
+    crudo = str(prj.get("BaselineJSON", "") or "").strip()
+    if not crudo:
+        return {}
+    try:
+        bl = json.loads(crudo)
+        return bl if isinstance(bl, dict) else {}
+    except Exception as e:
+        logger.warning("projects.get_baseline %s: %s", pid, e)
+        return {}
+
+
+def fijar_baseline(pid: str, usuario: str = "") -> tuple:
+    """Congela el plan VIGENTE como línea base (o lo re-fija, conservando la original).
+
+    ⚠️ Lee el BaselineJSON **FRESCO**, no de la caché: aquí se decide qué se escribe, y
+    fusionar sobre algo de hace 120 s perdería la replanificación que otra sesión acaba
+    de registrar (v323/v492). Y si no se puede leer, NO se escribe: tratar un fallo de
+    lectura como «no había línea base» BORRARÍA la original, que es justo lo que esta
+    versión existe para proteger.
+    """
+    import json
+    from core import baseline as BL
+    ps = project_schedule(pid)
+    sched = (ps or {}).get("sched")
+    if not sched or not sched.get("activities"):
+        return False, t("This job has no schedule to freeze yet.")
+    try:
+        pws, err = _projects_ws()
+        if err:
+            return False, err
+        fila = _find_row(pws, "ID", pid)
+        if not fila:
+            return False, t("Job not found.")
+        col = _PCOL.get("BaselineJSON")
+        crudo = ""
+        if col:
+            crudo = str(pws.cell(fila, col).value or "").strip()
+        bl_actual = json.loads(crudo) if crudo else {}
+        if not isinstance(bl_actual, dict):
+            bl_actual = {}
+    except Exception as e:                       # ⚠️ no se escribe a ciegas
+        logger.warning("projects.fijar_baseline %s: %s", pid, e)
+        return False, f"{t('Could not read the current baseline, so nothing was changed')}: {e}"
+
+    bl = BL.fijar(bl_actual, sched, usuario, clock.now().strftime("%Y-%m-%d %H:%M"))
+    ok, msg = update_project(pid, {"BaselineJSON": json.dumps(bl, ensure_ascii=False)})
+    if not ok:
+        return False, msg
+    return True, (t("Baseline set.") if not bl.get("historial")
+                  else t("Baseline updated. The original plan is still kept."))
 
 # ══════════════════════════════════════════════════════════
 #  Head installer/s (v459) — antes «Engineer in charge»

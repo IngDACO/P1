@@ -73,6 +73,8 @@ CABECERAS = {
     # La etiqueta es justo lo que se cambia sin tocar el dato.
     "Riel": "Rail",
     "Actividad": "Activity",
+    # v501 · la línea base: lo acordado contra lo de hoy
+    "Desfase": "Shift",
     "Avance": "Progress",
     "Inicio real": "Actual start",
     "Fin real": "Actual finish",

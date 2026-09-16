@@ -33,6 +33,7 @@ _VACIO = "— choose a project —"
 from core import ui_common as ui
 from core import clock
 from core import tabla
+from core import baseline as _BL          # v501: la línea base (módulo HOJA)
 
 logger = logging.getLogger(__name__)
 
@@ -144,6 +145,16 @@ def _kpis(grupo=None) -> dict:
         "alarmas": sum(v for k, v in alarmas.items() if k in ids),
         "horas":   round(sum(horas.get(str(p.get("ID", "")), 0.0) for p in proys)),
     }
+
+
+def _fmt_fecha(iso: str) -> str:
+    """«2026-09-25» → «25/09/2026». Una fecha ilegible se muestra tal cual, no vacía:
+    perder el dato es peor que enseñarlo con un formato raro."""
+    try:
+        y, m, d = str(iso)[:10].split("-")
+        return f"{int(d):02d}/{int(m):02d}/{y}"
+    except Exception:
+        return str(iso or "")
 
 
 def _kpi_card(label, value, color=None, pie=None, var=None):
@@ -2018,6 +2029,54 @@ def _estado_section(pid: str, grupo: str, prj: dict):
     st.markdown('<div style="display:flex;gap:10px;flex-wrap:wrap;margin:8px 0 10px">'
                 + "".join(tarj) + "</div>", unsafe_allow_html=True)
 
+    # ── v501: contra el plan ACORDADO (la línea base) ────────────
+    # ⚠️ Hasta aquí todo se compara contra el plan VIGENTE, que se recalcula solo: si
+    # alguien alarga una actividad, el plan nuevo pasa a ser «el plan» y la obra parece
+    # ir bien. Esto es lo único que dice que la obra se REPLANIFICÓ, y cuánto.
+    _cmp = _BL.comparar(ps.get("sched") or {}, P.get_baseline(pid, prj))
+    if _cmp.get("hay"):
+        _mv = _cmp["movio"]
+        _c_bl = "#c0392b" if _mv > 0.5 else ("#1e8449" if _mv < -0.5 else None)
+        _n_re = _cmp["replanificaciones"]
+        st.markdown('<div style="display:flex;gap:10px;flex-wrap:wrap;margin:0 0 10px">'
+                    + _kpi_card(t("Agreed delivery"), _fmt_fecha(_cmp["entrega_base"]),
+                                pie=t("baseline set on {f}", f=_cmp["fijada"][:10]))
+                    + _kpi_card(t("Vs the agreed plan"),
+                                (t("on the agreed plan") if abs(_mv) < 0.5
+                                 else f"{_mv:+.0f} d"), _c_bl)
+                    + _kpi_card(t("Re-planned"), _n_re,
+                                pie=(t("never") if not _n_re else None))
+                    + "</div>", unsafe_allow_html=True)
+        if _cmp["actividades"]:
+            with st.expander(t(":material/difference: What changed against the agreed plan "
+                               "({n})", n=len(_cmp["actividades"]))):
+                st.dataframe(pd.DataFrame([{
+                    "Orden": f["orden"], "Actividad": f["nombre"],
+                    "Estado": _etq(f["estado"]),
+                    # los días ACORDADOS → los de HOY, en una sola columna: se lee de un
+                    # golpe, y ⚠️ las claves son de UNA palabra como el resto del repo
+                    # (son el identificador del cuadro; la etiqueta la pone `tabla`).
+                    "Días": (f"{f['dur_base']:.0f} → {f['dur_hoy']:.0f}"
+                             if f["dur_base"] is not None and f["dur_hoy"] is not None
+                             else (f"{f['dur_base']:.0f}" if f["dur_base"] is not None
+                                   else f"{f['dur_hoy']:.0f}")),
+                    "Desfase": (f"{f['movio']:+.0f} d" if f["movio"] is not None else "")}
+                    for f in _cmp["actividades"]]),
+                    width="stretch", hide_index=True,
+                    # ⚠️ Las cabeceras salen de `tabla.CABECERAS` —UNA definición para las
+                    # 66 tablas (v450)—, no traducidas a mano aquí: eso es lo que aquella
+                    # versión vino a eliminar, y lo que deja media tabla en cada idioma.
+                    column_config=tabla.cfg())
+        if _n_re:
+            with st.expander(t(":material/history: Re-planning history ({n})", n=_n_re)):
+                for _h in _cmp["historial"]:
+                    st.markdown(t("· {f} — {q} moved the delivery {m} d "
+                                  "(from {a} to {b})",
+                                  f=_h.get("fijada", "")[:16], q=_h.get("por", "?"),
+                                  m=f"{_h.get('movio', 0):+.0f}",
+                                  a=_fmt_fecha(_h.get("desde", "")),
+                                  b=_fmt_fecha(_h.get("entrega", ""))))
+
     # ── El ritmo: mas accionable que el SPI (banner, ancho completo) ──
     # ⚠️ v324: la guarda pedía `ritmo_nec is not None`, pero `ritmo_nec` vale None
     # EXACTAMENTE cuando `dias_rest <= 0` → el `if dias_rest <= 0` de dentro no
@@ -2536,6 +2595,28 @@ def _detalle_proyecto(pid: str, grupo: str = None):
                 (flash.exito if ok else st.error)(msg)
                 if ok:
                     _aviso_cambio("The schedule's activity table was updated.")
+                    st.rerun()
+
+            # ── v501: congelar el plan ACORDADO ──────────────────
+            # ⚠️ Va AQUÍ, donde se ajusta el plan, y con un botón (decisión del usuario):
+            # fijarla al crear la obra congelaría una plantilla que nadie llegó a acordar.
+            # Y ⚠️ re-fijar NO borra la original: eso es lo que sostiene el reclamo.
+            _bl_act = P.get_baseline(pid, prj)
+            _tiene = bool(_bl_act.get("original"))
+            if _tiene:
+                _o = _bl_act["original"]
+                st.caption(t("Baseline: delivery {f}, set on {c} by {q}.",
+                             f=_fmt_fecha(_o.get("entrega", "")),
+                             c=str(_o.get("fijada", ""))[:10], q=_o.get("por", "?")))
+            else:
+                st.caption(t("No baseline yet: until you freeze it, changing a duration "
+                             "rewrites the plan and nothing records that it moved."))
+            if st.button(t(":material/flag: Re-set the baseline to today's plan") if _tiene
+                         else t(":material/flag: Set this as the agreed plan (baseline)"),
+                         key=f"blset_{pid}"):
+                ok, msg = P.fijar_baseline(pid, (st.session_state.get("auth") or {}).get("usuario", ""))
+                (flash.exito if ok else st.error)(msg)
+                if ok:
                     st.rerun()
         else:
             st.caption(t("No activities recorded."))
