@@ -27,7 +27,6 @@ casar por nombre es frágil y cada persona puede tener su propio tipo ordinario.
 import calendar as _cal
 import datetime as _dt
 import logging
-import re
 
 from core import contable
 from core import xero as X
@@ -37,7 +36,6 @@ from core.num import num as _num, parse_date as _parse_date
 logger = logging.getLogger(__name__)
 
 BORRADOR = "DRAFT"
-_RE_MS = re.compile(r"/Date\((-?\d+)")
 _DIAS_TIPO = {"WEEKLY": 7, "FORTNIGHTLY": 14, "FOURWEEKLY": 28}
 _PERIODOS_ATRAS = 3
 
@@ -53,11 +51,12 @@ def a_ms(d) -> str:
 
 
 def de_ms(valor):
-    """`/Date(ms+0000)/` o `YYYY-MM-DD` → date (o None). Xero devuelve el primero."""
-    m = _RE_MS.search(str(valor or ""))
-    if m:
-        return _dt.datetime.fromtimestamp(int(m.group(1)) / 1000, _dt.timezone.utc).date()
-    return _parse_date(valor)
+    """`/Date(ms+0000)/` o `YYYY-MM-DD` → date (o None).
+
+    ⚠️ Delega en `xero.de_fecha`: al traer el cobrado de una factura (v495) hacía falta
+    el mismo parser, y dos copias de la misma fecha divergen (v323).
+    """
+    return X.de_fecha(valor)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
