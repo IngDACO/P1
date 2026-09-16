@@ -530,8 +530,13 @@ def parse_links(text) -> list:
 
 
 def _gaps_for(proys) -> dict:
-    """{pid: dias_gap} de la proyección (SPI) de los proyectos activos.
-    dias_gap > 0 = retraso, < 0 = adelanto."""
+    """{pid: días de retraso} de los proyectos activos. > 0 = tarde, < 0 = adelanto.
+
+    ⚠️ v500: sale de la CADENA (`dias_cadena`), no del ritmo. El SPI repartía el retraso
+    entre todas las actividades por igual, así que una obra podía ir «en plazo» con la
+    actividad que bloquea a las demás sin empezar; y con avance 0 no daba NINGÚN dato
+    (división por cero), justo cuando más falta hace saber que la obra no arranca.
+    """
     out = {}
     for p in proys:
         if str(p.get("Status", "")) in ("Completed", "Cancelled"):
@@ -539,8 +544,8 @@ def _gaps_for(proys) -> dict:
         try:
             ps = project_schedule(p.get("ID"))
             pr = ps.get("proj") if ps else None
-            if pr and pr.get("pv", 0) > 0:
-                out[str(p.get("ID", ""))] = pr.get("dias_gap", 0)
+            if pr and pr.get("dias_cadena") is not None:
+                out[str(p.get("ID", ""))] = pr.get("dias_cadena", 0)
         except Exception:
             pass
     return out
@@ -569,8 +574,10 @@ def projections_by_group(grupo) -> dict:
             ps = project_schedule(pid)
             pr = ps.get("proj") if ps else None
             if pr:
-                out[pid] = {"fecha": pr.get("fecha_proj"), "spi": pr.get("spi"),
-                            "gap": pr.get("dias_gap")}
+                # v500: la fecha y el retraso salen de la CADENA; el SPI se conserva
+                # porque responde otra pregunta (a qué RITMO se avanza), no cuándo acaba.
+                out[pid] = {"fecha": pr.get("fecha_cadena"), "spi": pr.get("spi"),
+                            "gap": pr.get("dias_cadena")}
         except Exception:
             pass
     return out
@@ -1252,11 +1259,11 @@ def grouping_projection(gid: str, grupo: str = None) -> dict:
             out["sin_datos"].append(nom)
             continue
         fecha, spi = pr.get("fecha"), pr.get("spi")
-        if fecha is None and "fecha_proj" in pr:
-            fecha = pr.get("fecha_proj")
+        if fecha is None and "fecha_cadena" in pr:
+            fecha = pr.get("fecha_cadena")
         out["detalle"].append({"id": pid, "nombre": nom, "fecha": fecha,
                                "spi": spi,
-                               "gap": pr.get("gap", pr.get("dias_gap"))})
+                               "gap": pr.get("gap", pr.get("dias_cadena"))})
         if fecha and (out["fecha"] is None or fecha > out["fecha"]):
             out["fecha"], out["critico"], out["critico_id"] = fecha, nom, pid
         if spi is not None and (out["spi_min"] is None or spi < out["spi_min"]):
@@ -1367,7 +1374,7 @@ def project_schedule(pid: str):
                for a in acts]
 
     real = real_scurve(sched, avances, upto_day=today_day, windows=windows)  # se corta en HOY
-    proj = schedule_projection(sched, avances, today_day)
+    proj = schedule_projection(sched, avances, today_day, windows)
     return {"sched": sched, "real": real, "today_day": today_day,
             "avances": avances, "proj": proj}
 

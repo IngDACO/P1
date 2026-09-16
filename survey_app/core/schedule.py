@@ -208,13 +208,14 @@ def _day_at_pct(sched: dict, pct: float) -> float:
     return sc[-1][0]
 
 
-def schedule_projection(sched: dict, avances: list, today_day) -> dict:
+def schedule_projection(sched: dict, avances: list, today_day, windows=None) -> dict:
     """Proyección avance-vs-fecha (earned value).
       EV (real)  = Σ peso·avance/100  (lo efectivamente hecho)
       PV (plan)  = curva S en hoy
       desvío     = EV − PV  (+ adelantado, − atrasado)
       dias_gap   = hoy − día en que el plan alcanzaba EV  (+ retraso, − adelanto)
-      SPI        = EV / PV ;  fin proyectado = inicio + total/SPI
+      SPI        = EV / PV   (ritmo: a qué velocidad se avanza)
+      fin previsto = por la CADENA (`plan.pronostico`), NO por el SPI — v500
     """
     acts  = sched["activities"]
     total = max(1, sched["total_dias"])
@@ -228,18 +229,35 @@ def schedule_projection(sched: dict, avances: list, today_day) -> dict:
     d_equiv  = _day_at_pct(sched, ev)
     dias_gap = round(float(today_day) - d_equiv, 1)     # + retraso, − adelanto
 
+    # ⚠️ v500: el SPI se CONSERVA porque responde otra pregunta —a qué ritmo se avanza—,
+    # pero ya no produce una fecha. Tener dos respuestas a «cuándo termina» es como
+    # Rentabilidad y el detalle acabaron dando dos ingresos distintos para la misma obra
+    # (v361): mientras coinciden nadie lo nota, y el día que discrepan ya está en pantalla.
     spi = (ev / pv) if pv > 0 else None
-    if spi and spi > 0:
-        proj_total = total / spi
-        proj_dias  = round(proj_total - total, 1)         # + tarde, − antes
-        fecha_proj = start + timedelta(days=int(round(proj_total)))
-    else:
-        proj_dias, fecha_proj = None, None
+
+    # El fin previsto, por la CADENA. El SPI es una regla de tres sobre el % de
+    # avance, así que reparte el retraso entre todas las actividades por igual; la cadena
+    # sabe QUÉ falta y qué arrastra qué — una obra al 50% en la mitad del plazo va «en
+    # hora» para el SPI aunque la actividad que bloquea a las demás no haya empezado.
+    red = [{"orden":    a.get("orden", i + 1),
+            "duracion": a["duracion"],
+            "pred":     a.get("pred", ""),
+            "avance":   (avances[i] if i < len(avances) else 0),
+            "ini_real": (windows[i][0] if windows and i < len(windows) else None),
+            "fin_real": (windows[i][1] if windows and i < len(windows) else None)}
+           for i, a in enumerate(acts)]
+    _pr = plan.pronostico(red, today_day)
+    fin_cadena = _pr["total_dias"]
+    dias_cadena = round(fin_cadena - total, 1)            # + tarde, − antes
+    fecha_cadena = start + timedelta(days=int(round(fin_cadena)))
+    # las que MANDAN en esa fecha: son las que hay que empujar para recuperar
+    criticas_cadena = [o for o, v in _pr["por_orden"].items() if v["critica"]]
 
     return {
         "ev": ev, "pv": pv, "desvio": desvio, "dias_gap": dias_gap,
         "spi": round(spi, 2) if spi else None,
-        "proj_dias": proj_dias, "fecha_proj": fecha_proj,
+        "fecha_cadena": fecha_cadena, "dias_cadena": dias_cadena,
+        "criticas_cadena": criticas_cadena,
         "today_day": t_c, "total": total,
     }
 
@@ -271,7 +289,7 @@ def schedule_svg(sched: dict, real_curve: list = None, today_day: float = None,
     solo la curva), proyeccion al ritmo actual en trazo discontinuo, y jerarquia
     en las barras: terminada / en curso / **deberia haber empezado** / futura.
 
-    `proj` es lo que devuelve schedule_projection. OJO: su `proj_dias` es la
+    `proj` es lo que devuelve schedule_projection. OJO: su `dias_cadena` es la
     DIFERENCIA contra el plan (+ tarde / − antes), no el dia absoluto.
 
     Sin <marker>/<defs> → compatible con Streamlit y svglib.
@@ -296,10 +314,12 @@ def schedule_svg(sched: dict, real_curve: list = None, today_day: float = None,
     gantt_top = MT
     sc_top    = gantt_top + gantt_h + gap
 
-    # Dia absoluto en que se terminaria al ritmo actual (proj_dias es el DELTA)
+    # ⚠️ v500: el dia absoluto en que se terminaria SEGUN LA CADENA (dias_cadena es el
+    # DELTA). Antes salia del ritmo (SPI); si esta clave se quedara con el nombre viejo,
+    # la proyeccion DESAPARECERIA del grafico sin dar ningun error.
     proj_total = None
-    if proj and proj.get("proj_dias") is not None:
-        proj_total = total + float(proj["proj_dias"])
+    if proj and proj.get("dias_cadena") is not None:
+        proj_total = total + float(proj["dias_cadena"])
 
     # El eje se estira para que quepa la proyeccion, pero con TOPE: si el ritmo
     # actual da una fecha lejanisima, estirar hasta alli aplastaria el Gantt (que
@@ -468,8 +488,8 @@ def schedule_svg(sched: dict, real_curve: list = None, today_day: float = None,
         if not proj_cortada:
             p.append(f'<circle cx="{sx(proj_x):.1f}" cy="{sy(100):.1f}" r="3.5" '
                      f'fill="{C_PROJ}"/>')
-        if proj.get("fecha_proj"):
-            _fp = proj["fecha_proj"].strftime("%d/%m")
+        if proj.get("fecha_cadena"):
+            _fp = proj["fecha_cadena"].strftime("%d/%m")
             p.append(f'<text x="{sx(proj_x) - (4 if proj_cortada else 0):.1f}" '
                      f'y="{y_fin - 8:.1f}" '
                      f'text-anchor="{"end" if proj_cortada else "middle"}" font-size="8.5" '

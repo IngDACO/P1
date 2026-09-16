@@ -1967,7 +1967,8 @@ def _estado_section(pid: str, grupo: str, prj: dict):
     d    = _diagnostico(ps)
     proj = ps.get("proj") or {}
     dv   = proj.get("desvio", 0.0)
-    dg   = proj.get("dias_gap", 0.0)
+    # v500: el retraso y el fin previsto salen de la CADENA, no del ritmo (SPI).
+    dg   = proj.get("dias_cadena", 0.0)
 
     # ── Titular: una frase que diga como va, antes de cualquier numero ──
     # ⚠️ v311: el titular se pintaba con `**...**` DENTRO de un `<div>` y Streamlit no
@@ -1990,9 +1991,9 @@ def _estado_section(pid: str, grupo: str, prj: dict):
                  else f"day {_hoy_real} — {_hoy_real - _tot} more than the {_tot} planned")
 
     # ── KPIs (tarjetas, no st.metric planos) ──
-    _fin = (proj["fecha_proj"].strftime("%d/%m/%Y")
-            if proj.get("fecha_proj") else "—")
-    _pd  = proj.get("proj_dias")
+    _fin = (proj["fecha_cadena"].strftime("%d/%m/%Y")
+            if proj.get("fecha_cadena") else "—")
+    _pd  = proj.get("dias_cadena")
     _cf  = "#c0392b" if (_pd is not None and _pd > 0.5) else (
            "#1e8449" if (_pd is not None and _pd < -0.5) else None)
     _est = ("On time" if abs(dg) < 0.5

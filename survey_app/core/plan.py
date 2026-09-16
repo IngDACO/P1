@@ -71,18 +71,12 @@ def _pred_de(acts: list, i: int) -> list:
     return parse(crudo)
 
 
-def calcular(acts: list) -> dict:
-    """Cuándo empieza y termina cada actividad, y cuáles están en la ruta crítica.
+def _preparar(acts: list) -> tuple:
+    """Las dependencias ya resueltas a índices: `({i: [(j, lag)]}, avisos)`.
 
-    `acts`: [{orden, duracion, pred}] en el orden de la hoja. Devuelve
-    `{"por_orden": {orden: {inicio, fin, critica}}, "total_dias", "avisos"}` — días desde
-    el inicio del proyecto, como los usaba `build_schedule`.
-
-    ⚠️ Un ciclo (A detrás de B y B detrás de A) colgaría el cálculo, así que se detecta y
-    esa actividad pasa a ir detrás de la anterior, con aviso. Una obra mal encadenada tiene
-    que seguir dibujándose: es lo que permite verla para arreglarla.
-    ⚠️ Una predecesora que no existe (se borró) se ignora con aviso, en vez de dar por
-    bueno un plan que empieza el día 0 sin que nadie se entere.
+    ⚠️ UNA sola definición para `calcular` y `pronostico`: si cada uno resolviera las
+    dependencias por su cuenta, el plan y el pronóstico podrían discrepar sobre quién va
+    detrás de quién — y eso no da ningún error, solo dos fechas que no cuadran (v323).
     """
     avisos = []
     orden_de = {}
@@ -107,17 +101,86 @@ def calcular(acts: list) -> dict:
 
     # ⚠️ Ciclos: se rompen ANTES de calcular nada (si no, la recursión no termina).
     for i in range(len(acts)):
-        vistos, pila = set(), [i]
-        while pila:
-            k = pila.pop()
-            if k in vistos:
-                continue
-            vistos.add(k)
-            pila.extend(j for j, _l in preds.get(k, []))
         if i in {j for j, _l in preds.get(i, [])} or _hay_ciclo(preds, i):
             avisos.append(("ciclo", i, None))
             preds[i] = [(i - 1, 0)] if i > 0 else []
+    return preds, avisos
 
+
+def pronostico(acts: list, hoy: float = 0.0) -> dict:
+    """Cuándo termina la obra DE VERDAD, partiendo de lo que ya pasó.
+
+    `calcular` responde «cuándo debería»; esta responde «cuándo va a ser», que es la
+    pregunta del cliente. Hasta v499 el fin previsto salía del **ritmo** (SPI: una regla
+    de tres sobre el % de avance), así que una obra podía ir «al 50% en la mitad del
+    plazo» con la actividad que bloquea a todas las demás sin empezar.
+
+    `acts`: [{orden, duracion, pred, avance, ini_real, fin_real}] — `ini_real`/`fin_real`
+    en días desde el inicio (None si no se saben). `hoy` = día actual.
+
+    Las tres reglas, que es donde está el dominio:
+    - **terminada** → su fecha es la REAL: ya no se mueve ni la mueve nadie;
+    - **en curso**  → le queda `duración × (1 − avance)`, y eso corre **desde HOY**;
+    - **sin empezar** → empieza cuando sus predecesoras la dejen, ⚠️ **nunca antes de
+      HOY**: lo que tocaba el martes y no se hizo no se puede hacer el martes.
+    Por eso el retraso se PROPAGA por la cadena en vez de diluirse en un promedio.
+    """
+    preds, avisos = _preparar(acts)
+    hoy = max(0.0, num(hoy))
+    inicio, fin = {}, {}
+    for i in _en_orden(preds, len(acts)):
+        a = acts[i]
+        dur = max(0.0, num(a.get("duracion")))
+        av = max(0.0, min(100.0, num(a.get("avance"))))
+        ini_r, fin_r = a.get("ini_real"), a.get("fin_real")
+        ini_pred = 0.0
+        for j, lag in preds[i]:
+            ini_pred = max(ini_pred, fin.get(j, 0.0) + lag)
+
+        if av >= 100.0:                      # terminada: manda lo que PASÓ
+            ini = num(ini_r) if ini_r is not None else max(0.0, ini_pred)
+            fin[i] = num(fin_r) if fin_r is not None else ini + dur
+        elif av > 0.0:                       # en curso: le queda el resto, desde hoy
+            ini = num(ini_r) if ini_r is not None else max(0.0, ini_pred)
+            fin[i] = max(hoy, ini) + dur * (1.0 - av / 100.0)
+        else:                                # sin empezar: no puede arrancar en el pasado
+            ini = max(ini_pred, hoy)
+            fin[i] = ini + dur
+        inicio[i] = ini
+
+    total = max(fin.values()) if fin else 0.0
+    criticas = set()
+    pila = [i for i in range(len(acts)) if abs(fin.get(i, 0.0) - total) < 1e-6]
+    while pila:
+        i = pila.pop()
+        if i in criticas:
+            continue
+        criticas.add(i)
+        for j, lag in preds.get(i, []):
+            if abs(fin.get(j, 0.0) + lag - inicio.get(i, 0.0)) < 1e-6:
+                pila.append(j)
+
+    return {"por_orden": {int(num(acts[i].get("orden"))): {
+                "inicio": inicio.get(i, 0.0), "fin": fin.get(i, 0.0), "critica": i in criticas}
+                for i in range(len(acts))},
+            "total_dias": total,
+            "avisos": avisos}
+
+
+def calcular(acts: list) -> dict:
+    """Cuándo empieza y termina cada actividad, y cuáles están en la ruta crítica.
+
+    `acts`: [{orden, duracion, pred}] en el orden de la hoja. Devuelve
+    `{"por_orden": {orden: {inicio, fin, critica}}, "total_dias", "avisos"}` — días desde
+    el inicio del proyecto, como los usaba `build_schedule`.
+
+    ⚠️ Un ciclo (A detrás de B y B detrás de A) colgaría el cálculo, así que se detecta y
+    esa actividad pasa a ir detrás de la anterior, con aviso. Una obra mal encadenada tiene
+    que seguir dibujándose: es lo que permite verla para arreglarla.
+    ⚠️ Una predecesora que no existe (se borró) se ignora con aviso, en vez de dar por
+    bueno un plan que empieza el día 0 sin que nadie se entere.
+    """
+    preds, avisos = _preparar(acts)
     inicio, fin = {}, {}
     for i in _en_orden(preds, len(acts)):
         dur = max(0.0, num(acts[i].get("duracion")))
