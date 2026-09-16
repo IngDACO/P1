@@ -141,8 +141,12 @@ def nombre_empleado(e: dict) -> str:
                                 str(e.get("LastName", "")).strip()) if x)
 
 
-def propuesta(usuarios: list, empleados: list) -> dict:
-    """{usuario: EmployeeID} que se PROPONE: primero por email, luego por nombre.
+def propuesta_detallada(usuarios: list, empleados: list) -> dict:
+    """{usuario: {"id", "por", "motivo"}} — la pareja propuesta y POR QUÉ (v497).
+
+    `por` = "email" | "nombre" cuando hay pareja. Si no la hay, `motivo` dice cuál de
+    los cinco casos es, para que el administrador sepa qué arreglar en vez de mirar un
+    «— not in Xero —» mudo: el dato que falta suele estar en COPEX (un correo), no en Xero.
 
     ⚠️ Solo parejas ÚNICAS: si dos empleados de Xero comparten email o nombre (o dos
     usuarios de COPEX apuntan al mismo), no se propone nada. Adivinar ahí pagaría las
@@ -156,13 +160,38 @@ def propuesta(usuarios: list, empleados: list) -> dict:
     out = {}
     for u in usuarios:
         login = str(u.get("User", ""))
-        cand = por_email.get(_cf(u.get("Email"))) if _cf(u.get("Email")) else None
-        if (not cand or len(cand) != 1) and _cf(u.get("Name")):
-            cand = por_nombre.get(_cf(u.get("Name")))
+        email, nombre = _cf(u.get("Email")), _cf(u.get("Name"))
+        cand = por_email.get(email) if email else None
         if cand and len(cand) == 1:
-            out[login] = cand[0]
-    repetidos = {v for v in out.values() if list(out.values()).count(v) > 1}
-    return {k: v for k, v in out.items() if v not in repetidos}
+            out[login] = {"id": cand[0], "por": "email", "motivo": ""}
+            continue
+        ambiguo_email = bool(cand and len(cand) > 1)
+        cand2 = por_nombre.get(nombre) if nombre else None
+        if cand2 and len(cand2) == 1:
+            out[login] = {"id": cand2[0], "por": "nombre", "motivo": ""}
+            continue
+        if ambiguo_email:
+            motivo = "email_repetido"          # dos empleados de Xero con ese correo
+        elif cand2 and len(cand2) > 1:
+            motivo = "nombre_repetido"         # dos empleados de Xero se llaman igual
+        elif not email:
+            motivo = "sin_email"               # en COPEX no tiene correo: es lo que falta
+        else:
+            motivo = "no_esta"                 # su correo y su nombre no están en Xero
+        out[login] = {"id": "", "por": "", "motivo": motivo}
+    # ⚠️ Dos personas de COPEX que caen en el MISMO empleado: ninguna se propone.
+    ids = [v["id"] for v in out.values() if v["id"]]
+    repetidos = {i for i in ids if ids.count(i) > 1}
+    for v in out.values():
+        if v["id"] in repetidos:
+            v.update({"id": "", "por": "", "motivo": "mismo_empleado"})
+    return out
+
+
+def propuesta(usuarios: list, empleados: list) -> dict:
+    """{usuario: EmployeeID} que se PROPONE. DELEGA en `propuesta_detallada` (v497):
+    una sola definición de cómo se empareja (v323)."""
+    return {k: v["id"] for k, v in propuesta_detallada(usuarios, empleados).items() if v["id"]}
 
 
 def emparejado(grupo: str, tenant_id: str) -> dict:

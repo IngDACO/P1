@@ -323,7 +323,8 @@ def render_partes_xero(grupo):
                 if str(u.get("Active", "")).strip().upper() in auth._ACTIVE_OK]
     etq_u = auth.etiqueta_usuarios(usuarios)
     guardado = XN.emparejado(grupo, tenant_id)
-    propuesto = XN.propuesta(usuarios, d["empleados"])
+    detalle = XN.propuesta_detallada(usuarios, d["empleados"])
+    propuesto = {k: v["id"] for k, v in detalle.items() if v["id"]}
     etq_e = {"": t("— not in Xero —")}
     etq_e.update({e["EmployeeID"]: f"{XN.nombre_empleado(e)} · {e.get('Email') or '—'}"
                   for e in d["empleados"]})
@@ -333,6 +334,35 @@ def render_partes_xero(grupo):
                      icon=":material/group:", expanded=bool(sin_confirmar)):
         st.caption(t("Proposed by email, then by name. Check them and save once; people "
                      "not in Xero Payroll stay «not in Xero»."))
+        _n_email = sum(1 for lg, v in detalle.items() if v["por"] == "email" and lg not in guardado)
+        _n_nombre = sum(1 for lg, v in detalle.items() if v["por"] == "nombre" and lg not in guardado)
+        _sin = {lg: v["motivo"] for lg, v in detalle.items() if not v["id"] and lg not in guardado}
+        if _n_email or _n_nombre:
+            st.caption(t("Matched for you: {a} by email · {b} by name. Check and save.",
+                         a=_n_email, b=_n_nombre))
+        if _sin:
+            # ⚠️ Un «— not in Xero —» mudo manda a mirar Xero, y lo que casi siempre falta
+            # está en COPEX (el correo de esa persona). Se dice cuál es el caso de cada uno.
+            _MOT = {
+                "sin_email": t("has no email in COPEX: add it and it will match itself"),
+                "no_esta": t("their email and name are not in Xero Payroll"),
+                "email_repetido": t("two Xero employees share that email"),
+                "nombre_repetido": t("two Xero employees have that name"),
+                "mismo_empleado": t("two people here point to the same Xero employee"),
+            }
+            st.caption(t("Not matched ({n}): ", n=len(_sin)) + " · ".join(
+                f"{_md(etq_u.get(lg, lg))} — {_MOT.get(m, m)}" for lg, m in _sin.items()))
+        # ⚠️ Rellenar las claves de los desplegables va ANTES de instanciarlos (regla v111):
+        # por eso el botón deja una bandera y el relleno ocurre en la pasada siguiente.
+        if st.session_state.pop("_xn_aplicar_propuesta", False):
+            _ya = {st.session_state.get(f"xn_emp_{str(u.get('User', ''))}") for u in usuarios}
+            for u in usuarios:
+                lg = str(u.get("User", ""))
+                pid = propuesto.get(lg, "")
+                # solo donde no hay nada elegido: no se pisa lo que el administrador puso
+                if pid and not st.session_state.get(f"xn_emp_{lg}") and pid not in _ya:
+                    st.session_state[f"xn_emp_{lg}"] = pid
+                    _ya.add(pid)
         elegidos = {}
         for u in usuarios:
             login = str(u.get("User", ""))
@@ -347,6 +377,10 @@ def render_partes_xero(grupo):
         repetidos = {v for v in elegidos.values() if v and list(elegidos.values()).count(v) > 1}
         if repetidos:
             st.warning(t("Two people point to the same Xero employee: fix it before saving."))
+        if propuesto and st.button(t(":material/auto_fix_high: Fill in the {n} proposed "
+                                    "matches", n=len(propuesto)), key="xn_aplicar"):
+            st.session_state["_xn_aplicar_propuesta"] = True
+            st.rerun()
         if st.button(t(":material/save: Save matches"), key="xn_guardar",
                      disabled=bool(repetidos)):
             ok, msg = XN.guardar_emparejado(grupo, tenant_id, elegidos)
