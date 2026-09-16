@@ -11423,7 +11423,43 @@ buscando «de_fecha» **como texto**, y eso aparece en el comentario de la funci
 la LLAMADA por AST (trampa nº2, otra vez dentro de un guardián).
 Suite entera: **129 verde · 0 rojo · 0 roto**.
 
-## Versiones desplegadas (v495 = actual)
+## Los cobros de Xero, probados EN PRODUCCIÓN contra la Demo Company (v496)
+
+Solo documentación. Prueba de punta a punta del 16/09/2026, con el usuario aprobando y
+pagando en Xero (yo no entro en su contabilidad) y confirmando cada paso.
+
+| Momento | Xero | COPEX tras pulsar el botón |
+|---|---|---|
+| aprobada, sin pagos | 0 | por cobrar 110 |
+| pago de **40** | 40 | **parcial**, cobrado 40 |
+| pago de **70** | 110 · *Amount due 0* | **cobrada**, cobrado 110 |
+
+El historial guardó los **dos movimientos por separado** (40 y 70) con `origen: xero`, el
+estado de cuenta del cliente quedó en pendiente 0 y el P&L en cobrado 110 · por cobrar 0.
+Pulsar sin novedades responde «ya cuadraba» y **no escribe** nada.
+- ⚠️ Al mandar la factura, la protección de duplicados de v488 la **enlazó** con la `0001`
+  que la prueba de v489 había dejado en la Demo (mismo número y mismo total). Es la
+  protección funcionando; para la prueba se renumeró a `V495-0001` y se reenvió.
+- ⚠️ **«Desplegado ≠ corriendo» por sexta vez**: tras el deploy el botón no aparecía (los
+  `core.*` viejos seguían en memoria) y hubo que reiniciar el proceso.
+
+### ⚠️ EL ERROR DE MÉTODO: leí el MENSAJE en vez del DATO
+Tras el pago de 70 la pantalla decía «1 invoice(s) already matched Xero», así que **afirmé
+que Xero había devuelto 40** y le pedí al usuario que revisara su contabilidad — cuando el
+trabajo ya estaba hecho: la hoja tenía **110 y las dos líneas del historial**. Lo que leí
+era el mensaje de la pasada anterior (el `flash` se pinta en el rerun siguiente, v365), y
+lo di por evidencia sin mirar la hoja, que estaba a un comando de distancia.
+**REGLA: el mensaje en pantalla NO es el dato.** Para afirmar qué pasó con un registro se
+lee el registro; el texto de la interfaz sirve para ver qué se le dice al usuario, no para
+saber qué se guardó. Es la familia de la sonda mal apuntada de v375, pero al revés: aquí la
+sonda leía bien… otra cosa.
+
+### Limpieza
+Factura y cliente de prueba borrados con doble guarda (ID **y** marca «ZZ PRUEBA v495» **y**
+número): `Invoices` y `Clients` vuelven a 0 filas. En Xero quedan la factura pagada, la de
+v489 y el parte y permiso de v491: los borra el usuario o se van con el reinicio de la Demo.
+
+## Versiones desplegadas (v496 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -11431,6 +11467,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v496 | Documentación: **los cobros de Xero probados EN PRODUCCIÓN**. Pago parcial de 40 → COPEX «parcial»; los 70 restantes → «cobrada», con los dos movimientos en el historial marcados `origen: xero`, el estado de cuenta a 0 y el P&L cuadrado; sin novedades no escribe. ⚠️ La protección de duplicados enlazó con la factura de v489 (mismo número y total) y hubo que renumerar. ⚠️ **Error de método propio**: leí el MENSAJE de pantalla en vez del dato, afirmé que Xero devolvía 40 y mandé al usuario a revisar su contabilidad — la hoja ya decía 110. El mensaje no es el dato |
 | v495 | **FASE 2.3-C: lo cobrado en Xero entra en COPEX** (decisiones del usuario: lo registra el contable en Xero, con botón, facturas en borrador avisando, y si no cuadra manda Xero). ⚠️ La especificación decidió tres cosas: el cobrado es `AmountPaid` (una llamada por lote de 40), **`AmountCredited` NO se suma** (nota de crédito no es dinero recibido) y **una factura en borrador tiene AmountPaid 0**, así que sincronizar desde ella pondría a CERO un cobro real — solo se lee de aprobada/pagada. Idempotente (fija, no suma), historial con origen y movimiento negativo, un fallo de red no acusa de borradas, 1 lectura + 1 escritura por lote, y el parser de fechas de Xero pasa a tener UNA definición. 33 comprobaciones · **11/11 roturas + control** ⚠️ tres se escaparon primero: una rotura que no era fallo, un mock que hacía el trabajo del código, y un chequeo que casaba con un comentario · suite 129 verde |
 | v494 | Documentación: **el refresco del token de Xero ya está ejercitado contra Xero** (pendiente desde v488). `ConnectedAt 15/09 17:56` vs `RefreshedAt 16/09 05:49`: el envío del parte pidió token nuevo, lo obtuvo y persistió la rotación — si no se hubiera guardado, el envío siguiente habría dado 401. Leído en solo lectura, sin tocar la columna del token |
 | v493 | Documentación: **v492 verificado en producción tras reiniciar el proceso**. La primera comprobación falló con razón: pestaña en v492 pero `core.*` viejos en memoria (topbar en v489), y «Save matches» seguía volcando la configuración entera — «desplegado ≠ corriendo» por quinta vez, cazado leyendo la hoja y no la versión. Tras el Reboot, el mismo clic escribe **solo** el emparejado. Escrituras de prueba devueltas a vacío con guarda |
