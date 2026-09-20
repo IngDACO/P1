@@ -1,0 +1,11208 @@
+# HISTORIAL — Survey App IngDACO/P1
+
+Historial completo de versiones. **No se carga solo**: `CLAUDE.md` es el documento que Claude lee
+en cada turno; este se abre a mano cuando hace falta el detalle de una versión.
+
+Separado de `CLAUDE.md` el 20/09/2026, cuando ese archivo llegó a 1,07 MB y dejó de entrar en la
+ventana de contexto. Contenido: 258 secciones detalladas + el índice de 440 versiones al final.
+
+> Para buscar una versión: `grep -n "(v###)" HISTORIAL.md`, o el índice del final.
+
+---
+
+## Planificación: la celda es un BOTÓN nativo que abre el proyecto (v169)
+El enfoque de v168 (celda = `<a href="?abrir_prj=…">`) tenía el riesgo de recargar la página. El usuario
+pidió el plan B: **la celda como botón nativo**, que navega en la MISMA sesión, sin recarga ni riesgo de
+deslogueo. Se revirtió v168 (handler de query param en app.py + el `clicable`/`<a>` de `_grid_html`).
+### `roster_ui._tablero_editable(grupo, lunes, staff, datos, tidx)` (board del admin)
+- El board del admin pasa de HTML a **botones `st.button`**: nombre + una celda por día. Cada celda no
+  vacía es un botón; **navega solo si su trabajo enlaza a un proyecto** (`_prjsel_pending` +
+  `_gruposec_pending` + rerun, en sesión). La nota (vehículo/equipo) va como `caption` bajo el botón.
+- **Color por celda**: se inyecta `<style>.st-key-<key> button{background:…}</style>`. Streamlit (≥1.39)
+  pone la clase `st-key-<key>` en el contenedor de cada widget con `key`. ⚠️ **Verificado EN VIVO** antes
+  de construir (mini-app + inspección del DOM): `.st-key-celda_0 button` sale `background rgb(46,109,164)`.
+  Por eso `requirements.txt` sube a `streamlit>=1.39`.
+- El board del **campo** (`render_board_readonly`) sigue siendo el HTML de `_grid_html` (solo lectura, sin
+  botones) — `_grid_html` volvió a su forma anterior a v168.
+### ⚠️ Contra aceptada por el usuario
+Con `st.columns` (nombre + 5 días) el board pierde el scroll horizontal del HTML y en móvil queda más
+apretado. El usuario lo aceptó a cambio de que el clic sea 100% fiable en la sesión.
+### ⚠️ Y el `t()` congelado al importar mordió por QUINTA vez — en esta misma versión
+Al traducir el chip de estado de factura metí `t("outstanding")` dentro de un dict de
+MÓDULO. **Tres guardianes** (v445, v446, v447) lo cazaron a la vez, y los tres decían
+lo mismo. Van cinco: `auth.SESION_OCUPADA`, `ausencias.TIPOS`, `plan_data.USA`,
+`toolruns.HERRAMIENTAS` y ahora `invoices_ui._EST_FMT` — **las cinco cometidas
+DESPUÉS de documentar la regla**. El arreglo es siempre el mismo: la constante guarda
+el texto BASE (y aquí sus CLAVES son además el dato que devuelve `estado_cobro`) y la
+traducción se mueve a una función que se llama al PINTAR (`_est_fmt()`). El chequeo se
+añadió también al guardián de cierre, para que no dependa de correr otro.
+
+### Verificación
+`verif_v449.py`Mecanismo `st-key` probado en vivo (botón coloreado, clase presente). Modelo de la rejilla: 2 celdas no
+vacías → 2 reglas CSS, 1 navegable (solo la enlazada a PRJ). v168 sin restos (`abrir_prj`/`clicable`),
+plumbing en sesión (`_prjsel_pending`+`_gruposec_pending`), `_tablero_editable` 0 nombres libres, compila.
+
+## Planificación: ir al proyecto desde LA CELDA del tablero (v168 — ⚠️ REEMPLAZADO por botones en v169)
+El usuario rechazó los botones de v167: "quiero que sea desde la celda de la propia tabla". Se
+REVIRTIÓ `_ir_a_proyecto` (los botones) y ahora **la celda misma es clicable**.
+### ⚠️ El board es HTML, no un `st.dataframe` (no hay selección de celda)
+El tablero se dibuja con `_grid_html` (celdas coloreadas por valor; por eso nunca fue un dataframe, y
+`st.dataframe` solo selecciona filas/columnas, no celdas). Para que la CELDA navegue sin salir de
+Streamlit, la celda enlazada a un proyecto se envuelve en **`<a href="?abrir_prj=PRJ-…">`** (query param).
+- **`_grid_html(..., clicable=False)`**: en `clicable=True` (solo la Planificación del admin), la celda
+  cuyo trabajo enlaza a un PRJ es un enlace con un hint "🔗 abrir". El board del campo
+  (`render_board_readonly`) queda `clicable=False` (sin enlaces).
+- **`app.py`** detecta `?abrir_prj=` ANTES del nav: fija `_prjsel_pending` (v126) + `main_nav = 🛠 Mi
+  grupo` + `_gruposec_pending = 📊 Proyectos` (plomería de v167, que SÍ se conserva) + limpia el query
+  param + rerun → abre el detalle del proyecto.
+### ⚠️ Riesgo de deslogueo, mitigado
+Un `<a href>` puede recargar la página; una recarga reinicia session_state. Pero el **login persiste por
+cookie** (`auth_ui` restaura con `session_cookie.load()` al cargar), y el handler fija las claves aunque
+la sesión venga fresca, así que la navegación funciona en recarga suave o dura. **Pendiente de validar
+en el Cloud**: confirmar que el clic navega sin pedir login de nuevo; si la recarga molesta, el plan B
+es un grid de `st.button` coloreados por `st-key-<key>` (misma sesión, sin recarga).
+### Verificación
+`_grid_html(clicable=True)` sobre datos sintéticos: exactamente 1 enlace `?abrir_prj=PRJ-0001` para la
+celda enlazada; OFF/vacía no generan enlace; `clicable=False` (campo) sin enlaces. Handler lee
+`abrir_prj` antes del nav; `_gruposec_pending` se lee antes del radio `grupo_sec`; `_prjsel_pending`
+antes de `adminproj_sel`. Revert de `_ir_a_proyecto` sin referencias colgantes. Compila + import.
+
+## Planificación: ir al proyecto desde el tablero (v167 — ⚠️ REVERTIDO en v168, ver arriba)
+Peticion del usuario: "lo mismo con la tabla de planificacion; quiero poder ir al proyecto seleccionando
+desde ahi". El board del roster es **HTML** (celdas coloreadas — por eso no es `st.dataframe`), asi que
+no se puede hacer la celda clicable como en Archivos (v166); la adaptacion es un **botón por proyecto**.
+### `roster_ui._ir_a_proyecto(grupo, staff, tidx, datos)` (bajo la rejilla, en 📅 Planificación)
+- Recolecta los proyectos DISTINTOS enlazados en la semana visible (`R.proyecto_de` de cada celda;
+  ignora estados OFF/Leave y trabajos sin enlace, dedupe). Solo ofrece los **navegables** (existen y no
+  archivados, via `list_projects`).
+- Un botón por proyecto → abre su detalle en **📊 Proyectos** con un clic, usando el patron de navegacion
+  existente: `_prjsel_pending = pid` (v126, lo lee `_panel_proyectos` antes del selectbox `adminproj_sel`)
+  + **`_gruposec_pending = "📊 Proyectos"`** (NUEVO) + rerun.
+### ⚠️ Plomeria: cambiar de seccion del grupo necesita un pending (regla v111)
+El radio `grupo_sec` (📊 Proyectos · 🗂 Agrupaciones · 📅 Planificación · …) se instancia en
+`render_group_panel` ANTES de que corra `render_planificacion`, asi que no se puede escribir su clave
+despues (StreamlitAPIException). Se añadio `_gruposec_pending`, que se aplica ANTES del radio — igual que
+`main_nav` con `_nav_pending` en app.py.
+### Verificacion
+Recoleccion probada (funciones REALES `R.celda`/`R.proyecto_de` + datos sinteticos): distintos
+`['PRJ-0001','PRJ-0003']`, sin duplicar, sin OFF ni trabajos sin enlace. `_gruposec_pending` se lee
+(pop) ANTES del radio `grupo_sec`; `_prjsel_pending` ANTES de `adminproj_sel`. 0 nombres libres, import
+OK. Alcance: solo la Planificacion del admin (el board del campo en 📋 Mis proyectos abre solo proyectos
+asignados; pendiente si se pide).
+
+## Archivos: descarga desde la tabla (fila clicable) + por foto (v166)
+Peticion del usuario: "la descarga debe ser mas accesible; que este en la tabla donde se ven los
+archivos". En v165 la descarga estaba en un selector aparte debajo de la tabla → habia que buscar el
+archivo por segunda vez.
+### ⚠️ Por que estaba en un selector y no en la tabla
+`st.download_button(data=…)` evalua `data` al RENDERIZAR, no al pulsar: un boton por fila bajaria TODOS
+los archivos de Drive en cada pasada (el problema que arreglo v147). La solucion que mantiene la
+descarga LAZY es la **seleccion de fila** (`st.dataframe(on_select="rerun", selection_mode="single-row")`,
+soportado desde Streamlit 1.35; el pin es `>=1.35`): tocas una fila y solo entonces se descarga ESA.
+### Cambios
+- **Tabla clicable**: al seleccionar una fila aparece debajo su ⬇️ descargar (+ ↩️ reabrir si es
+  calculo, + 🗑 borrar si admin), via `_acciones_archivo`. Se **quito el selector "Abrir / descargar"**
+  de v165 (redundante). ⚠️ Clamp del indice: si cambias el filtro con una fila elegida, el indice podria
+  apuntar fuera de la lista actual — no se abre un archivo equivocado.
+- **Fotos**: la miniatura YA baja los bytes para mostrarse (y `drive_store.download` cachea 5 min), asi
+  que un **⬇️ bajo cada foto** reutiliza esos bytes — descarga directa sin segunda llamada a Drive.
+### Verificacion
+Compila + import real; tabla con `on_select`+`single-row` y accion desde `resto[_rows[0]]`; 0 restos del
+selector viejo (`arch_sel`); 0 nombres libres nuevos (el `ex` es `except as ex`). La descarga sigue LAZY
+(0 descargas hasta elegir fila; la galeria solo baja las fotos visibles y reutiliza sus bytes).
+
+## Archivos: una lista ÚNICA y buscable (v165)
+Peticion del usuario: "si tengo muchos archivos se convierte en un problema encontrar el que quiero".
+El apartado 📎 Archivos eran DOS sub-secciones (Documentos y Calculos) con **tres selectores distintos**
+y listas planas: con 40 archivos, encontrar uno era el problema.
+### Decisiones del usuario (AskUserQuestion)
+Unificar TODO en una sola lista buscable · mecanismo = **buscador + desplegable de tipo con contadores**.
+### `_archivos_section(pid)` (reemplaza a `_documentos_section` + `_calculos_section`, borradas)
+- **Fuente unica: `list_documents`**, que YA es la union de todo — `toolruns.registrar` archiva cada
+  PDF de calculo como documento tipo "calculo" con el **MISMO DriveID** que su fila de calculo. Se casa
+  cada calculo con su toolrun **por DriveID** → «reabrir en la herramienta» sin duplicar. Los calculos
+  reabribles SIN PDF (Drive caido) se agregan como entradas reopen-only (no se pierden).
+- **Barra para acotar**: 🔎 buscar (nombre · tipo · resumen · quien) · **Tipo con contadores**
+  (`Todos (M) · 📄 Informe cliente (3) · 🧮 Calculos (5) · 📷 Fotos (12)…`) · **Orden** (reciente/
+  antiguo/nombre/tipo) · *"Mostrando N de M"*. Reduce a la vez la galeria, la tabla y el descargador.
+- **Render**: galeria de fotos (las que pasan el filtro, sigue LAZY) + tabla del resto. Accion sobre el
+  elegido (lista ya corta): ⬇️ descargar (lazy) · ↩️ reabrir calculo (si tiene entradas) · 🗑 borrar (admin).
+- Los 2 call-sites (detalle admin + 📋 Mis proyectos del campo) llaman a `_archivos_section`. El plano
+  (`_plano_section`) y "🔄 Reconstruir en el Survey" siguen arriba en el detalle admin, intactos.
+### Verificacion
+Contra datos REALES: PRJ-0001 = 11 archivos (2 pre-start, 2 informe, 1 matriz, 3 plano, 3 foto), **0
+DriveID duplicados**; PRJ-0003 = 3; PRJ-0002 vacio. La hoja Calculos sigue con 0 filas (runs=0), asi que
+el dedup de calculos se probo SINTETICO: calculo con PDF = 1 entrada (no 2) reabrible · calculo sin PDF
+= reopen-only sin perderse · calculo sin entradas ni PDF = no aparece. 0 nombres libres nuevos (el `ex`
+es `except as ex`), 0 referencias a las funciones viejas, prompt del agente al dia (regla v133).
+
+## Fichaje del campo: horas por día (medianoche) + olvidos accionables (v164)
+Revision de ⏱ Fichaje desde el rol campo (tecnico/visual/integracion). La UI ya era solida (v150);
+el hallazgo fue de DATOS, con evidencia real: **3 de 16 fichajes cruzan medianoche** (~8.6 h, entrada
+~21:00 → salida ~05:00).
+### ⚠️ Tecnico: las horas se atribuian TODAS al dia del Clock In
+`resumen_hoy` y `group_hours` contaban la sesion entera en el dia de entrada (o la excluian entera de
+la ventana). Consecuencias: (a) el campo veia *"🟡 Jornada abierta · cronometro 5:12"* pero
+*"Jornada de hoy: 0.00 h"* (contradiccion, porque `resumen_hoy` filtraba por dia del Clock In); (b) el
+reporte del admin en **"Hoy"/"Semana"** perdia el tramo trabajado de una sesion que entro el dia
+anterior. **Decision del usuario: partir las horas por dia (medianoche).**
+- **`timeclock._segmentos_dia(ci, fin)`** → `[(date, horas)]`, corta en cada medianoche.
+  **`_row_segmentos(r)`** lo aplica a una fila (abierta = hasta ahora; cerrada = hasta Clock Out).
+  ⚠️ Una fila cerrada de UN solo dia respeta las **Horas GUARDADAS** (no recomputa) → el total con
+  `days=None` queda IDENTICO; solo las que cruzan medianoche se reparten.
+- **`resumen_hoy`** cuenta el segmento de HOY. **`group_hours(grupo, days)`** suma solo los segmentos
+  dentro de la ventana. **`proyectos_por_usuario_dia`** (roster) cuenta el proyecto en cada dia
+  trabajado. **`expenses.spend_curve`** reparte la M.O. por dia real (total sin cambio).
+### Olvidos: aviso ACCIONABLE + cierre honesto
+`_aviso_olvido` deja de ser solo texto: para una sesion abierta de un dia anterior, pide **"a que hora
+terminaste"** (date+time, sugerido = entrada+8 h) y cierra con ESA hora, no con "ahora" → no registra
+las horas fantasma de la noche que nadie trabajo. Valida hora ∈ (entrada, ahora]. **`clock_out` gana
+`out_ts`** opcional (por defecto = ahora); de paso se quito el parametro muerto `nota` (nadie lo pasaba
+desde v150). Tarjeta "Sin asignar": el pie pasa a *"traslados, espera o proyecto sin fichar"* (para un
+tecnico en una obra, sin_asignar grande casi siempre = olvido fichar el proyecto).
+### Verificacion (contra datos REALES, gspread crudo)
+`_segmentos_dia` unidad: mismo dia = total · **16/07 20:31→17/07 05:05 = 3.47+5.09 = 8.57** ✓ · 2 noches
+= 28 h · entrada=salida/basura = []. **`group_hours(days=None)` OLD vs NEW: diff 0.0000 h** en los 4
+usuarios reales (nada perdido). Ventana "Semana": NEW **recupera** el tramo del dia que OLD tiraba
+(`lksdfkldsf` 0 → 5.09 h). 0 nombres libres nuevos (el `e` de clock_out es el `except as e`). Ningun
+call-site pasa `nota`. Import real de los 3 modulos OK.
+
+## Se elimina el rol conductor: era un subconjunto del campo (v163)
+Peticion del usuario: "integrar el perfil del conductor dentro del campo y luego eliminar el conductor".
+### Por que ya no aportaba
+Tras **v150** (fichaje unificado: dos relojes jornada+proyecto para TODOS), el conductor quedo como un
+SUBCONJUNTO del campo. Su unica funcion propia era `render_conductor_projects` (ver todos los proyectos
+del grupo en solo lectura + cargar recibo a cualquiera). **Decisiones del usuario:** (a) mantener el
+bloqueo de contacto de v79 para todo el campo; (b) NO trasladar por ahora lo de "recibo a cualquier
+proyecto"; (c) el unico usuario conductor real (`conductor`/fijiofgjei, cuenta de prueba sin contacto)
+se **ELIMINA**, no se migra.
+### Cambios
+- `auth.ROLES` pasa de 4 a **3 roles** (fuera "conductor"). Los selectores de rol que leen `ROLES`
+  (creacion del propietario) dejan de ofrecerlo solos.
+- `app.py`: fuera el label `_L_CONDPROJ`, la rama de nav del conductor y su enrutado.
+- `projects_ui.render_conductor_projects` **eliminada** (borrada por AST, 27 lineas).
+- `auth_ui`: "Crear usuario" pasa a **solo campo** (email obligatorio siempre); el panorama de usuarios
+  filtra `== "campo"`.
+- `plan_ui`: `rol in ("campo","conductor")` → `rol == "campo"`.
+- `chat_agent`: fuera las 2 lineas del prompt que describian el rol (regla v133).
+- Comentarios/filtros en roster_ui / expenses / timeclock ajustados. `timeclock_ui:9` se deja (es
+  historia correcta: "hasta v149 solo el conductor tenia los dos relojes").
+### Verificacion
+Usuario de prueba borrado (verificado: 0 conductores antes/despues). Import REAL de los 8 modulos
+tocados OK; `auth.ROLES` sin conductor; `render_conductor_projects` ausente y **0 referencias residuales**
+a el / `_L_CONDPROJ` en todo el repo; la nav del campo queda IDENTICA (nada perdido ni ganado); 0 nombres
+libres nuevos en las funciones tocadas de auth_ui; sin variable `rl` huerfana (la que queda es de otro
+form, el del propietario). El prompt del agente ya no menciona el conductor.
+
+## Mis proyectos (campo): sub-pestañas + tabla de avance + fechas reales automaticas (v162)
+Peticion del usuario: revisar 📋 Mis proyectos del campo (tecnico/imagen/integracion). Eran **108
+lineas apiladas en scroll unico** (mismo problema que el detalle del admin antes de v132) y su accion
+NUCLEO —actualizar avance— era la mas incomoda: N expandibles, un guardado cada uno.
+### ⚠️ Tecnico 1: el avance eran N escrituras (429 en potencia)
+`update_activity_progress` hacia hasta 5 `update_cell` por actividad, y el campo lo llamaba una vez por
+expandible. **`projects.save_field_progress(pid, cambios)`** escribe SOLO lo que cambio en 1
+`batch_update` (el patron 429 de v80/v150). El campo edita el avance en UNA tabla (`st.data_editor`,
+Actividad/Avance %/Nota) y guarda una vez; solo se mandan las filas que cambiaron.
+### ⚠️ Tecnico 2: las fechas reales eran texto libre y casi nadie las llenaba
+`FechaInicioReal`/`FechaFinReal` eran `text_input("YYYY-MM-DD")` (mismo fallo de v149) y alimentan la
+curva S real (`windows`). En los 3 proyectos reales estaban TODAS vacias. **Decision del usuario:
+automaticas** — no se teclean:
+- Inicio real = el dia que el avance pasa de 0 (si estaba vacia). Sticky.
+- Fin real = el dia que llega a 100 (si estaba vacia).
+- **Reapertura**: si una actividad al 100% baja de 100, se BORRA el fin real (no dejar "terminada" una
+  fecha que ya no es cierta). Cuando vuelva a 100, nueva fecha.
+### Imagen: sub-pestañas (radio, como el admin) + KPI cards
+Cabecera con tarjetas (estado, avance, cliente) + barra + Maps. Sub-navegacion **radio** (NO st.tabs,
+v56): 🏗 Avance (instrucciones + tabla) · 🚨 Avisos (reportar/ver alarmas) · 💰 Recibos · 📎 Archivos
+(calculos + documentos). Antes todo era un scroll; en el movil el campo va directo a lo suyo.
+La planificacion (roster "hoy" + board, v160) sigue arriba, cross-proyecto.
+### Verificacion
+`save_field_progress` probado en 6 casos (arranca→inicio · ya arrancada→no toca · llega a 100→fin · ya
+100→no re-escribe · reabre→borra fin · sigue en 0→nada): todos correctos. render_field_projects: 0
+nombres sin resolver NUEVOS (AST vs commit anterior), los 8 helpers existen, las 4 ramas del radio
+presentes. El batch real corre por primera vez en el Cloud.
+
+## Tablero de cuadrilla — plan vs real (v161): feature COMPLETA
+Ultimo incremento del roster. El admin ve, por dia, lo ASIGNADO contra lo FICHADO.
+- **`timeclock.proyectos_por_usuario_dia(grupo, fecha)`** — {usuario: [{pid,nombre}]} de los proyectos
+  que cada uno ficho ese dia (segmentos de tipo proyecto). Filtra fichajes sin proyecto (nada que
+  comparar).
+- **`roster_ui._plan_vs_real`** (expander en 📅 Planificacion): selector de dia (hoy por defecto si cae
+  en la semana vista) + KPIs (🟢 donde tocaba · 🔴 en otro sitio · ⚠️ sin fichar) + una linea por
+  persona con su estado. Seis ramas: 🟢 fichó donde tocaba · 🔴 asignado a X, fichó en Y · ⚠️ asignado
+  sin fichar · — trabajo sin enlace a PRJ (nada que comparar) · ℹ️ OFF/Leave pero fichó · ❔ sin plan
+  pero fichó.
+- ⚠️ **Solo compara trabajos enlazados a un PRJ**: un delivery o un estado no tienen fichaje contra que
+  medir. Es la razon de ser del enlace opcional a proyecto.
+### Verificacion
+Las 6 ramas simuladas con roster + fichajes: 🟢1/🔴1/⚠️1 y las 3 informativas, todas donde deben.
+`proyectos_por_usuario_dia` contra los fichajes REALES: 16/07 lksdfkldsf→prueba1, 17/07 vacio (la
+sesion cruzo medianoche, Clock In fue el 16), y el fichaje sin proyecto del 10/07 ya no aparece.
+### Roster COMPLETO (v159–v161)
+v159 base (catalogo + rejilla admin) · v160 campo (ve el board + atajo de fichaje) · v161 plan vs real.
+PENDIENTE solo la validacion en el Cloud: crear trabajos, asignar una semana, copiar semana, y que el
+campo vea su "hoy" — todo eso son escrituras que se estrenan alli.
+
+## Tablero de cuadrilla — el campo lo ve + fichaje con la asignacion del dia (v160)
+Segundo incremento del roster (v159 fue la base). Cierra el lado del CAMPO.
+- **`roster.asignacion_dia(grupo, usuario, fecha)`** — que le toca a una persona un dia: {asig, nota,
+  proyecto_id, etiqueta, color, es_estado}. Fin de semana (weekday>4) o dia sin asignacion → {}.
+- **`roster_ui.render_board_readonly(grupo, resaltar_usuario)`** — el board en SOLO LECTURA (el campo ve
+  toda la cuadrilla, decision del usuario), con su fila resaltada (👉 + fondo). Nav de semana, sin edicion.
+- **Campo → 📋 Mis proyectos**: arriba, "📅 Hoy: <trabajo> · <nota>" destacado + expander con el board
+  completo. Va ANTES del early-return por "sin proyectos", asi que se ve aunque el campo solo tenga
+  trabajos NO enlazados a PRJ.
+- **Fichaje**: si la asignacion de hoy enlaza a un PRJ que el campo tiene, aparece un boton
+  **"🟢 Fichar a <trabajo> (tu asignacion de hoy)"**. ⚠️ Es una accion EXPLICITA (dice a que fichara),
+  no una preseleccion silenciosa — respeta la regla de v138. Si la asignacion es un estado (OFF/Leave)
+  no hay PRJ y no aparece boton.
+### Verificacion
+Sintaxis + import de los 4 modulos; `asignacion_dia` mapea bien el dia (martes→mar, sabado→{}). Todo
+lo que ESCRIBE (guardar_persona, copiar_semana) y el board real siguen sin ejercitarse hasta el Cloud.
+### PENDIENTE (ultimo incremento)
+Plan vs real: en el admin, comparar la asignacion del dia (si enlaza a PRJ) contra donde ficho de
+verdad cada persona, y marcar desvios.
+
+## Tablero semanal de cuadrilla — base: catalogo + rejilla del admin (v159)
+Feature nueva pedida por el usuario (mando un pantallazo de su hoja actual: persona×dia, color por
+sitio, trabajos "89. Talavera", estados OFF/Leave/TAFE, notas de vehiculo/equipo). **Diseno acordado
+antes de construir** (ver memoria feature-roster-planificacion). Decisiones firmes: catalogo de
+trabajos propio con enlace OPCIONAL a PRJ · una asignacion por dia · semana Lun–Vie + copiar semana
+anterior · estados OFF/Leave/Formacion + nota libre · el campo ve todo el tablero · conecta con fichaje.
+### Esta version (la BASE)
+- **`core/roster.py`** — dos hojas nuevas (multi-tenant, migran solas):
+  - **Trabajos**: ID·Grupo·Numero·Nombre·Color·ProyectoID·Activo. CRUD + `trabajos_idx` (resuelve
+    color/etiqueta aunque el trabajo se desactive).
+  - **Roster**: ID·Grupo·Semana(lunes)·Usuario·**DatosJSON** = {lun:{asig,nota},...vie}. **1 fila por
+    persona×semana** (compacto; se lee la semana entera). `get_semana`, `guardar_persona` (1 escritura),
+    `copiar_semana`.
+  - `ESTADOS` (OFF/LEAVE/FORMACION, claves reservadas que no colisionan con TRB-####), `PALETA` (12
+    colores), utilidades de fecha (`lunes_de`, `fecha_de_dia`, `rango_label`).
+- **`core/roster_ui.py`** — seccion **📅 Planificacion** en 🛠 Mi grupo: navegacion de semana + copiar
+  semana anterior + **rejilla HTML coloreada** (como el board del usuario, verificada en navegador) +
+  editar la semana de una persona (selector trabajo/estado + nota por dia, guarda en 1 escritura) +
+  catalogo de trabajos (crear con color de la paleta y enlace opcional a PRJ, activar/desactivar).
+### ⚠️ La rejilla es HTML, no st.data_editor
+`st.data_editor` no colorea celdas por valor, y el color es clave para leer el board. Solucion: HTML
+para VER (con `_texto_sobre` que elige negro/blanco por luminancia del fondo) + edicion persona a
+persona debajo. Verificado en el navegador con datos tipo pantallazo: 9 personas, colores correctos,
+notas, OFF/Leave, columna de nombres fija.
+### Verificacion (logica pura, SIN tocar produccion)
+Crear las hojas escribiria en el Sheet real, asi que se probo solo la logica: semana del miercoles 27/5
+→ lunes 25/5 ✓; resolucion trabajo/estado → color+etiqueta+PRJ ✓; orden por numero ✓; JSON omite
+celdas vacias ✓; los 3 modulos importan. Las escrituras (add_trabajo, guardar_persona, copiar_semana)
+corren por primera vez en el Cloud.
+### PENDIENTE (proximo incremento)
+Campo → "mi semana" (donde voy cada dia) · fichaje pre-rellenado desde el roster · plan vs real
+(asignado a X / ficho en Y, solo para trabajos enlazados a un PRJ).
+
+## Ficha de usuario: 📊 Su trabajo ACTIVA + 🔑 Acceso a doble columna (v227)
+Revisión de las SUB-pestañas de la ficha (`_ficha_usuario`). Auditoría honesta: 📇 Contacto y 🎫 Credenciales
+(v185-189) ya sólidas → no se tocaron; 📊 Su trabajo era PASIVA y 🔑 Acceso estaba apilada.
+- **📊 Su trabajo**: los proyectos asignados dejan de ser texto ("Asignado a: X · Y") y pasan a **botones
+  CLICKEABLES** (rejilla 2 col) que **abren el proyecto** — set `_prjsel_pending` + `_admin_nav_pending=
+  ("proyectos","📊 Proyectos")` (+ `_gruposec_pending` para la nav vieja) + rerun (mismo patrón que el board del
+  roster). Además, **"Horas por proyecto"** de esa persona (de `group_hours(...)["por_proyecto"]`, el dato de
+  v216): dónde puso su tiempo. Los 3 KPIs (horas/recibos/proyectos) se mantienen.
+- **🔑 Acceso**: peinada a **doble columna** — contraseña | tarifa lado a lado (antes apiladas); rol/grupo del
+  propietario ya iban en 2 col; activar/desactivar a ancho completo. ⚠️ Al mover la tarifa a la columna se
+  BORRÓ el bloque de tarifa viejo (mismos keys `{k}_tar`/`{k}_savetar` → habría dado StreamlitDuplicateKey);
+  verificado que cada key aparece 1 sola vez.
+Verificado: compila + import + AST (0 libres) + keys sin duplicar. La ficha se renderiza a nivel top en
+`_grupo_usuarios`, así que los `st.columns` nuevos son 1 nivel (sin anidación). Confirmación visual = Cloud.
+
+## 👷 Usuarios: panorama ACTIVO (fila de salud + tabla clickeable → ficha) (v226)
+Revisión de la sub-pestaña 👷 Usuarios (Planificación). La ficha 360° por persona (`_ficha_usuario`, v153/v184)
+está sólida y NO se tocó. El problema era el PANORAMA: tabla pasiva + un desplegable aparte "elige un usuario"
+para abrir la ficha — el mismo patrón pasivo que el usuario ya hizo cambiar en Proyectos/Finanzas. `_grupo_usuarios`
+reescrita (decisión del usuario: **tabla clickeable**, no tarjetas):
+- **Fila de salud del equipo**: 👥 personas · 🟢 activos · ⚠️ sin contacto · 🟡 cred. por vencer · 🔴 cred.
+  vencida(s). La salud de credenciales por usuario sale de **`credentials.list_group(grupo)` (1 lectura cacheada)**,
+  quedándose con el peor estado por persona.
+- **Tabla CLICKEABLE** (`st.dataframe(on_select="rerun", selection_mode="single-row", key="gu_tbl")`): Usuario ·
+  Nombre · Activo 🟢/🔴 · Contacto ✅/⚠️ · **Credenciales 🟢/🟡/🔴/—** · Tarifa/h. Al **seleccionar una fila** se
+  abre la ficha de esa persona debajo. Se quitó el `ui.elegir` (desplegable) de v153.
+- **Fuente de verdad `_gu_open`** (usuario): maneja (a) **deep-links** `gp_fichasel="Nombre (usuario)"` desde la
+  agenda de HOME (v200) y Finanzas·Horas (v215) — que ya no encuentran el desplegable viejo; se parsea el usuario,
+  se abre su ficha y se descarta la selección de tabla previa; (b) que la ficha persista entre sus reruns; (c) al
+  **eliminar**, `_ficha_usuario` (sel_key por defecto `gp_fichasel`, inerte aquí) deja `_gu_open` apuntando al
+  borrado → el bloque de arriba detecta que ya no existe y cierra la ficha (+ limpia `gu_tbl`).
+- El form de alta se extrajo a **`_crear_usuario_form(grupo)`** (reusado en el estado vacío y en el expander).
+  La matriz de credenciales (expander) y el alta quedan como secundarios abajo.
+Verificado: compila + import + AST (0 libres) + parse del deep-link (todos los formatos). El panel del PROPIETARIO
+(`_owner_usuarios`) NO se tocó (sigue con su selector). Confirmación visual = Cloud (necesita login+Sheets).
+
+## Finanzas/Gastos: torta de gasto por rubro (v224)
+El usuario pidió una **torta** del gasto por rubro debajo de los dos bloques de barras (reparto | compras por
+categoría). Decisión del usuario: rubros = **Mano de obra + cada categoría de compra** (reparto COMPLETO del
+gasto, opción A). Nuevo **`_torta_html(pares, total)`** (junto a `_barras_html`): pie con **CSS
+`conic-gradient`** + leyenda (color · rubro · $ · %) — **sin dependencias de charting** (nada de plotly/
+matplotlib), mismo enfoque HTML que las barras, se renderiza en `st.markdown`. En `render_group_expenses`,
+debajo de los bloques de barras y antes de la tabla "Proyectos con presupuesto":
+`_rubros = [("Mano de obra", ΣMO)] + sorted(por_categoria)` (solo >0), total = `sum(_rubros)` (así los % suman
+100 exacto). ⚠️ **Verificado EN VIVO** que `st.markdown` NO recorta `conic-gradient` (mini-app + DOM: el círculo
+tiene `background-image: conic-gradient(...)` computado; la nota de diagrams.py sobre "Streamlit elimina los
+`<svg>`" aplica a SVG, no a un div con conic-gradient). Compila + import + AST (0 libres) + lógica (tramos
+0→100%, formato $/%). Paleta de 12 colores; MO = azul (#2e6da4, como el reparto).
+
+## Estética fase 3a: radios del detalle + headers de grupo (v234)
+Sigue v232/v233. Chunk acotado del contenido:
+- **Radios de sub-navegación** (`st.radio`): el detalle de proyecto (📊 Estado/✏️ Datos/💰 Costos/📎 Archivos) y
+  el de 📋 Mis proyectos del campo (🏗 Avance/🚨 Avisos/💰 Recibos/📎 Archivos) ahora muestran iconos Material
+  vía **`format_func`** — ⚠️ las OPCIONES siguen siendo el ID con emoji, así que el `if _sec == "📊 Estado"` y
+  cualquier deep-link NO cambian (mismo patrón decouple que la nav). Verificado en vivo que `st.radio` renderiza
+  `:material/` por `format_func`.
+- **Headers**: `#### 💰 Gastos del grupo` / `#### ⏱ Horas del grupo` → `:material/payments:` / `:material/schedule:`.
+Compila + import + matching intacto. PENDIENTE (fase 3 sigue siendo grande): más headers de paneles, botones
+(💾/➕/🔎…) y captions repartidos por projects_ui/auth_ui/survey_ui/tools; estados 🟢🔴🟡 sin tocar; el prompt
+del agente (chat_agent) menciona los emoji viejos — actualizar cuando se cierre la migración de esas etiquetas.
+
+## Estética fase 2: iconos Material en el chrome del admin (v233)
+Sigue v232. Se migró el CHROME (visible en cada página): topbar + barra de usuario.
+- **`home_ui`**: campana 🔔 → `:material/notifications:` (label del popover + header); del buscador se quitó el
+  emoji 🔎 (los placeholders son texto plano, no renderizan `:material/`).
+- **`auth_ui.render_user_bar`** (sidebar, TODOS los roles): rol 👑/🛠/🔧 → `:material/shield_person:` /
+  `:material/manage_accounts:` / `:material/engineering:`; 🏢 grupo → `:material/business:`; 🚪 Cerrar sesión →
+  `:material/logout:`. Monocromo (color del tema), no azul COPEX (es chrome, no nav).
+⚠️ **Verificado en vivo**: los `:material/` renderizan en label de POPOVER, en `st.markdown` (incluso con salto
+de línea `  \n`) y en botón (sin texto literal). Compila + import. PENDIENTE fase 3: cabeceras de los paneles de
+contenido (projects_ui, etc.) y botones (💾/➕/🔎…); los estados 🟢🔴🟡 siguen sin tocar.
+
+## Estética: iconos Material (azul COPEX) en la nav, en vez de emoji (v232)
+El usuario pidió reemplazar los emoji "infantiles" por iconos profesionales dentro de la paleta COPEX (se le
+mostró un mockup; eligió empezar por la **navegación** y dejar los estados 🟢🔴🟡 por ahora). Fase 1 = el
+sidebar del admin (`home_ui`):
+- **Material Symbols nativos** de Streamlit (`:material/xxx:`), monocromo, sin dependencias. ⚠️ **Verificado en
+  vivo** que: (a) renderizan en labels de botón (no solo markdown); (b) el icono es el ÚNICO `<span>` del `<p>`
+  del botón (sin clase/testid) → se pinta SOLO el icono con `[class*="st-key-navsec_"] button p span{color:...}`
+  dejando el texto en su color. Iconos en **azul COPEX #2e6da4**; sección/sub ACTIVA en #1e4e79 (icono+texto) +
+  highlight.
+- `_SECCIONES` labels → `:material/...:` (seguro: la lógica usa la CLAVE). Ej: home/schedule/calendar_month/
+  folder/payments/inventory_2/build/contacts.
+- ⚠️ **Sub-pestañas = (id, display)**: el ID conserva el emoji ("📊 Proyectos") porque es el IDENTIFICADOR que
+  usan los deep-links (`_ir_a`/`_admin_nav_pending` en projects_ui/auth_ui/roster_ui) y el match en `_seccion_*`
+  — NO se toca. `display` (`:material/...:`) es lo único que cambia (sidebar + `_sub_header` + hub). Cero cambios
+  en deep-links. `_sub_header(seccion)` deriva el título de `_SECCIONES` y muestra el display de la sub. El hub
+  toma el display de `_SUBSECCIONES` y navega con el ID.
+Verificado: compila + import + AST (0 libres) + IDs de matching intactos + mecanismos CSS en vivo. Solo rol
+admin. PENDIENTE (fases siguientes): cabeceras/botones del contenido, tablas, y decidir si los estados 🟢🔴🟡
+se migran. Los emoji de otros contextos (chat_agent prompt, plan_data, toolruns, captions) NO se tocaron.
+
+## Herramientas: hub/página de entrada (v231)
+El usuario pidió un hub de entrada para 🛠 Herramientas (se le mostró un mockup vía visualize; eligió la versión
+**simple**, sin el chequeo del plano). Se añadió **"🧰 Inicio"** como PRIMERA sub-pestaña de herramientas
+(`_SUBSECCIONES["herramientas"]`), que es el default → al entrar a Herramientas ves el hub. `_hub_herramientas`
+renderiza una **tarjeta por herramienta** (`st.container(border=True)` en rejilla de 3 col): título + qué hace
+(1 línea) + botón «Abrir →» que hace `navegar("herramientas", <label>)`. Las 6: Survey · Plomada · Rieles ·
+Buffers · Belting · Pre-Start. `_seccion_herramientas` ganó la rama `if sub == "🧰 Inicio": _hub_herramientas()`.
+⚠️ Cambiar el default de Survey→Inicio no rompe nada: "Reconstruir en el Survey" (projects_ui) NO auto-navega
+(solo carga session_state + avisa "ve a Survey"). Verificado: compila + import + AST (0 libres). El chequeo del
+plano por herramienta (v175, `plan_data.por_herramienta`/`del_proyecto`) queda para una posible v2 del hub.
+
+## Nav: desplegar ≠ navegar (no cargar la sub-pestaña al expandir) (v230)
+El usuario notó que al tocar una sección (p.ej. Planificación) SOLO para desplegar sus sub-pestañas, la app ya
+abría/cargaba la 1ª (Tablero). Fix: en `sidebar_menu` se separa **desplegar** de **navegar**.
+- Nuevo estado `_admin_expanded` (sección desplegada en el sidebar), independiente de `admin_nav` (sección
+  ACTIVA cuyo contenido se muestra). Por defecto la activa está desplegada; `""` = todo plegado.
+- Tocar una sección **con** hijas → solo togglea `_admin_expanded` (`st.rerun`, SIN `navegar`) → el contenido
+  actual NO cambia; las hijas se muestran/ocultan. Tocar una sección **sin** hijas → `navegar` directo. Tocar
+  una **hija** → fija `_admin_expanded` + `navegar(sec, sub)` (ahí sí carga).
+- `_aplicar_nav_pending` fija `_admin_expanded=seccion` en cada navegación (deep-links despliegan el destino).
+- La sub activa solo se resalta si la desplegada == la activa (`_exp == _cur`); caret ▾ = desplegada, ▸ =
+  plegada con hijas. Verificado: compila + import + AST (0 libres) + escenarios razonados.
+
+## Navegación del admin: sidebar de 2 niveles (acordeón) (v229)
+El usuario pidió que las sub-pestañas (nivel 2) se desplieguen en la PROPIA barra izquierda, para ir directo
+a una sub-pestaña desde el sidebar. Se le mostró un mockup (visualize) de **acordeón** vs **árbol libre** →
+eligió **acordeón** (solo la sección activa despliega sus hijas). Rediseño de `home_ui.sidebar_menu`:
+- El nivel 1 pasa de `st.radio` a **botones** (para poder anidar las hijas debajo del padre activo). Se estilan
+  como ítems de menú vía CSS `.st-key-…` (borde/fondo transparentes, texto a la izq; activo = fondo #e8eef6 +
+  texto #1e4e79 + negrita). ⚠️ **Verificado EN VIVO** (mini-app + DOM: activo resaltado, sub indentada 26px,
+  inactivas transparentes). La sección activa se guarda en `st.session_state["admin_nav"]` (ya NO es widget →
+  asignación plana).
+- **Sub-pestañas centralizadas** en `_SUBSECCIONES = {seccion: (clave_estado, [labels])}` (antes repartidas en
+  cada `_seccion_*`); `_SUBKEY` se deriva de ahí. Bajo la sección activa se renderizan sus hijas como botones
+  indentados (`navsub_<sec>_<i>`); tocar una → `navegar(sec, sub)`.
+- El selector de nivel 2 **se quitó del contenido** (`_subnav` eliminado): ahora `_sub_header(titulo, seccion)`
+  solo pone la cabecera "## Titulo · <sub actual>" y los `_seccion_*` leen la sub de `session_state`.
+- ⚠️ **Colisión de clases evitada**: las claves de nivel 1 son `navsec_<k>` (NO `nav_<k>`) porque
+  `[class*="st-key-nav_"]` también matchearía `st-key-nav_back_btn` (el botón ← del topbar v205) y lo
+  restylearía. `navsec_`/`navsub_` no matchean `nav_back_btn`.
+- Deep-links intactos (`_admin_nav_pending` → `_aplicar_nav_pending` fija `admin_nav` + la sub-key); back button
+  y `_track_history` igual; `app.py` sin cambios (sidebar_menu devuelve la clave de sección como antes).
+Verificado: compila + import + AST (0 libres) + 0 referencias a `_subnav` + CSS en vivo. Solo rol admin.
+
+## Cartera de proyectos: toggle Tarjetas | Lista (v228)
+El usuario pidió una vista alternativa: además de las tarjetas (v223), la típica **tabla** (proyectos por
+filas, datos por columnas). En `_panel_proyectos` se añadió un **toggle `st.radio` "🃏 Tarjetas | 📋 Lista"**
+(key `cart_view`, junto al header de la cartera). Nueva **`_cartera_lista(proys, alarmas, delays, aheads,
+costos)`**: `st.dataframe` CLICKEABLE con columnas Proyecto · Estado · **Avance (ProgressColumn con barra)** ·
+Cliente · Inicio · Fin · Ppto (% ejecutado, ⚠️ si over) · 👷 usuarios · Situación (🔴/🟢 retraso/adelanto) ·
+🔔 alertas. Al **seleccionar una fila** se abre el detalle (`_admin_open_proj`) y se **popea `cart_tbl`** para
+que al volver NO se re-abra solo (misma técnica anti-loop que v226). ⚠️ **Verificado en vivo** que la columna
+🔔 no puede mezclar int y str (Arrow falla la serialización) → se fuerza a **string** (`str(_al) if _al else
+""`); tras el fix no hay warning de Arrow. `ProgressColumn` existe en 1.57. Ordenación por urgencia igual que
+las tarjetas. Compila + import + AST (0 libres). La cartera del propietario (`_portfolio_html`) no se tocó.
+
+## Cartera de proyectos: tarjeta con resumen completo antes de abrir (v223)
+El usuario pidió ver en el tablero (📊 Proyectos) toda la info del proyecto ANTES de abrirlo. Se le mostraron
+2 opciones (mockup vía visualize) y eligió la **Opción A**: tarjeta con barra de progreso + botón «Abrir».
+`_cartera_clickeable` reescrita (antes: botón-tarjeta con fondo=avance, v207/v208). Cada tarjeta =
+**`st.container(border=True, key=f"cart_{i}")`** con `st.markdown` (HTML) + `st.button("Abrir →")` dentro, y
+muestra los **7 datos**: nombre (+punto de salud) · estado (pill) + % avance (barra real) · cliente · fechas
+inicio→fin (`_ddmm`) · **% presupuesto ejecutado** (⚠️ si over) · **nº de usuarios** (CampoAsignados) · alertas
+(🔔) + retraso/adelanto. Se quitaron las horas (decisión del usuario). Borde IZQUIERDO por salud vía CSS
+`.st-key-cart_{i}{border-left:4px solid <color>}` (⚠️ **verificado en vivo**: el contenedor con `border=True`+
+`key` ES el elemento `.st-key-<key>` y su borde-izq se colorea; `st.container` acepta `key`+`border` en 1.57).
+El **% de presupuesto** sale de **`expenses.group_expenses(grupo)` (1 lectura CACHEADA)** → `{pid:{pct,
+presupuesto,over}}`, no N cálculos; de paso se **quitó la lectura `project_hours_bulk`** del panel (ya no se
+muestran horas). Verificado: compila + import + AST (0 libres) + **render Streamlit real** (mini-app + DOM:
+bordes 🔴/🔵/🟢, barras a %, pills, ⚠️ over, «Abrir» dentro del recuadro). Aplica solo a la cartera del ADMIN
+(`_panel_proyectos`); el propietario sigue con `_portfolio_html`.
+
+## Fix: la sesión recordada moría al cerrar/reabrir (cookie de sesión → persistente) (v222)
+El usuario reportó que, aun tildando "mantener la sesión iniciada" (v221), al **cerrar y reabrir** la app le
+pedía login otra vez (probando en la **PWA instalada** en escritorio y móvil). Diagnóstico: la cookie
+sobrevivía al refresco pero moría al cerrar → se estaba guardando como **cookie de SESIÓN**. Causa: el `set`
+de `extra-streamlit-components` no aplicaba la expiración de forma efectiva (su Python manda `expires_at` ISO,
+pero el resultado en la PWA era una cookie sin persistencia). Fix (v222):
+- **`session_cookie.save` reescrito**: ya NO usa el `set` de la librería. Escribe la cookie **persistente con
+  `max-age`** directamente en el documento de la app vía **`window.parent.document.cookie`** (misma técnica que
+  el mobile-back-trap v205): `copex_session=usuario|token; max-age=604800; path=/; SameSite=Lax`. El origen es
+  el mismo que lee `load()` (el componente de la librería se sirve desde el host de la app), así que la lectura
+  la sigue viendo. `clear()` sigue con el `delete` bloqueante de la librería (el logout hace `st.rerun()`
+  inmediato, que descartaría un `components.html`). Se quitó el import `datetime` (ya no se usa).
+- ⚠️ **Timing**: un `components.html` justo antes de `st.rerun()` se DESCARTA (el rerun tira los deltas del run
+  en curso). Por eso la cookie NO se escribe en `_do_login`; se marca `st.session_state["_remember_session"]`
+  y la escribe **`render_user_bar`** (sidebar, corre en cada página logueada, en un run que TERMINA;
+  idempotente y 'rolling' → refresca los 7 días en cada visita). El restore por cookie también setea el flag;
+  el logout lo limpia (`pop`).
+- **Verificado EN VIVO** (mini-app en preview + inspección): `window.parent.document.cookie` desde el iframe de
+  `components.html` **sí** escribe en el top document; **CookieStore API** confirma `persistent:true`,
+  `expires` ≈ +7 días, `sameSite:lax`, valor `juan|abc123` con el `|` literal (lo lee `load()`). Compila +
+  import + AST (0 libres). Confirmación final en la PWA del usuario = cerrar/reabrir sigue dentro.
+
+## Login: "mantener la sesión iniciada" ahora es OPCIONAL (v221)
+La persistencia por cookie (v107/v188) estaba **siempre activa**: cada login guardaba una cookie de 7 días y al
+refrescar/reabrir la sesión se restauraba sin escribir nada. El usuario pidió que sea **un tick opcional**.
+- **Check "Mantener la sesión iniciada en este dispositivo"** en el login (`auth_ui.render_login`), key
+  `login_remember`, **por defecto SIN tildar** (decisión del usuario; más seguro para equipos compartidos).
+- **`_do_login` solo llama `session_cookie.save` si el check está tildado**; el resto igual. Sin tildar → no hay
+  cookie → la sesión dura solo esa pestaña (refrescar/reabrir pide login). Tildado → cookie 7 días, restaura sin
+  reescribir usuario/contraseña en ese dispositivo. La restauración (`load`+`validate_session`) no cambia: sin
+  cookie, no hay nada que restaurar. Duración (7 d) y sesión única (v75) sin cambios.
+- ⚠️ **Cambia el comportamiento anterior**: quien antes se quedaba logueado por defecto, ahora debe tildar el
+  check. Es lo pedido.
+Verificado: compila + import + AST (0 libres) + 1 solo call-site de `save`, gated. ⚠️ Cookie/navegador: la prueba
+REAL es en el Cloud (tildar → refrescar sigue dentro; sin tildar → refrescar pide login).
+
+## Auto-poblar el planificador con el proyecto entre sus fechas (v220)
+Deploy 2 de 2 de "asignar más inteligente" (feature 2). Al asignar campo a un proyecto, ahora **aparecen
+automáticamente en el planificador**, en ese proyecto (asig=PRJ-####, directo desde v218), **Lun–Vie entre
+FechaInicio y FechaFinEst**. Decisiones del usuario: **todo el rango**, **solo celdas vacías** (no pisa OFF ni
+otro proyecto).
+- **`roster.autopoblar_proyecto(grupo, pid, usuarios, fecha_ini, fecha_fin, solo_vacias=True)`** → {llenadas,
+  ocupadas, actualizadas, nuevas, semanas}. **Eficiente**: lee la hoja UNA vez (`get_all_values`) y escribe en
+  **1 `batch_update`** (filas persona×semana existentes) **+ 1 `append_rows`** (semanas nuevas) — así el span no
+  dispara el rate limit (a diferencia de `guardar_persona`, 2 llamadas por persona/semana). Rellena solo los
+  días Lun–Vie DENTRO de [ini,fin] y solo si la celda está vacía; cuenta las `ocupadas` (respeta OFF/otro
+  proyecto). Tope de seguridad `_MAX_SEMANAS=104`. `_a_date` parsea ISO o date.
+- **`roster.limpiar_proyecto(grupo, pid, usuarios=None)`** → quita del planificador todas las celdas asig==pid
+  (1 batch_update); se usa al **desasignar**.
+- **`projects_ui._autoagenda(grupo, pid, nuevos, quitados, fecha_ini, fecha_fin)`**: helper compartido —
+  auto-puebla los NUEVOS y limpia los DESASIGNADOS, e informa (días asignados / ocupados respetados / sin
+  fecha-fin no planifica). Cableado en crear (`_nuevo_proyecto_form`, tras notificar) y editar
+  (`_detalle_proyecto`, tras guardar: `nuevos` = añadidos, `_quitados` = quitados).
+Verificado: compila + import + AST (0 libres) + tests con worksheet simulado (roster vacío→5 días en fila nueva;
+OFF respetado + fila existente actualizada, 4 llenados; limpiar quita solo el pid y deja OFF). Confirmación = Cloud.
+
+## Asignar personal más inteligente: ya-en-otro-proyecto + certificados requeridos (v219)
+Petición del usuario (facilitar la planificación al asignar campo). Deploy 1 de 2 (el auto-poblado del
+planificador entre fechas del proyecto = feature 2, va aparte). Se amplió el flujo de asignación (crear
+`_nuevo_proyecto_form` + editar `_detalle_proyecto`, ambos ya llamaban `_avisar_asignados` FUERA del form):
+- **Feature 1 — "ya está en otro proyecto (y hasta cuándo)"**: `_avisar_asignados(usuarios, grupo,
+  exclude_pid, certs_req)` ahora, por cada usuario, lista los **otros proyectos activos** del grupo donde ya
+  está asignado + su **FechaFinEst** ("Juan → 🏗 Torre Norte (hasta 15/09)"). Informativo, no bloquea.
+- **Feature 3 — certificados que EXIGE el proyecto**: campo nuevo **`CertsReq`** en Proyectos (tipos del
+  `credentials.CATALOGO`, `;`; migra al final; `create_project` gana `certs_req=""`, +1 en `row` y HEADERS —
+  verificado 28==28). Multiselect "🎫 Certificados que exige el proyecto" en crear y editar. Al asignar,
+  **`credentials.compliance(usuario, requeridos)`** → `{por_tipo:{tipo: vigente|por_vencer|vencido|falta},
+  cumple}`; **cumple = ningún requerido vencido ni faltante** (por-vencer SÍ cumple, solo 🟡; decisión del
+  usuario). `_avisar_asignados` avisa 🔴 quién no cumple (falta/vencido) y 🟡 los por-vencer; los tipos
+  requeridos se excluyen del aviso genérico de credenciales para no duplicar. Vista VIVA `_cumplimiento_equipo`
+  (tabla asignados × certs, ✅/🟡/🔴/—) en 📊 Estado, solo si el proyecto define requeridos.
+Verificado: compila + import + AST (0 libres) + alineación row/headers + lógica de compliance
+(vigente/vencido/falta→no cumple; por_vencer→cumple). Confirmación final = Cloud.
+
+## Planificación: un PROYECTO se asigna directo (ya es un trabajo) (v218)
+El usuario notó redundancia: en el roster solo se podían asignar TRB-#### (catálogo) o estados; para poner a
+alguien en un proyecto había que **crear un "trabajo" que lo enlazara** (`ProyectoID`). Pero **todo proyecto es
+un trabajo en sí mismo** — duplicarlo en el catálogo es ruido. Fix (decisión del usuario; color de proyecto =
+**automático**):
+- **`roster.trabajos_idx(grupo)` se extiende**: además de los TRB-#### del catálogo, mete los **proyectos del
+  grupo (PRJ-####) como entradas sintéticas** `{ID, Numero:"", Nombre, Color:_color_proyecto(pid), ProyectoID:
+  pid}` (con `incluir_archivados=True` para que un histórico a un proyecto archivado siga resolviendo). Así
+  `color_de`/`etiqueta_de`/`proyecto_de` resuelven un PRJ **sin tocar a ningún llamador** (board admin+campo,
+  agenda de HOME, plan-vs-real, `asignacion_dia`/fichaje) — cascada limpia. `setdefault` no pisa un TRB real;
+  TRB-#### y PRJ-#### nunca colisionan.
+- **`roster._color_proyecto(pid)`**: color estable y distinto por proyecto, `hashlib.md5(pid) % PALETA`
+  (⚠️ NO `hash()`, que va salteado por proceso → cambiaría el color en cada arranque).
+- **`roster_ui._opciones`** ahora lista: neutro + **🏗 proyectos activos** (value=PRJ-####; excluye Completado/
+  Cancelado; archivados ya los oculta `list_projects`) + 🔧 trabajos no-proyecto + estados.
+- **`_catalogo` reencuadrado** a "lo que NO es un proyecto" (entregas, cursos, traslados…): se **quitó el campo
+  "Proyecto (opcional)"** del alta de trabajo (ya es redundante). Los trabajos viejos que enlazan a un PRJ
+  siguen mostrándose (🔗, compat); solo no se crean nuevos así. Import `ui_common` quedó sin uso → eliminado.
+- **Compat**: `asig` puede ser PRJ-#### (directo), TRB-#### (catálogo) o estado; el histórico no se migra.
+  Plan-vs-real y "→ Abrir proyecto" del popover (v217) funcionan igual (proyecto_de(PRJ)=el propio PRJ).
+Verificado: compila + import + AST (0 libres) + tests (color estable y de la paleta; el proyecto entra al
+índice y resuelve etiqueta/color/proyecto_de; `_opciones` incluye el activo y excluye el completado).
+
+## Planificación: tablero EDITABLE EN SITIO + cobertura del día (v217)
+Petición del usuario ("el de planificación es muy importante"). Auditoría: la rejilla era **solo de
+lectura/navegación** — para asignar había que bajar a "✏️ Editar la semana de una persona", elegir a UNO en
+un desplegable y editar sus 5 días en un formulario **separado del tablero**, persona por persona (el cuello de
+botella). Rediseño de `roster_ui.render_planificacion` / `_tablero_editable`:
+- **Cada celda es ahora un `st.popover` coloreado** (antes `st.button`). Al tocarla se edita AHÍ MISMO:
+  selectbox de asignación (`_opciones`) + nota + **"Aplicar a toda la semana"** + 💾 Guardar, y si el trabajo
+  enlaza a un proyecto, **"→ Abrir proyecto"** dentro. Una celda vacía (**＋**) también asigna en sitio. Se
+  **eliminó** el editor por-persona de abajo (`_editar_persona` borrada) — el tablero es el editor.
+- ⚠️ **Verificado EN VIVO antes de construir** (lección v169): `st.popover` acepta `key` (streamlit 1.57;
+  pin `>=1.39,<2` resuelve a la última), su *trigger* recibe la clase `.st-key-<key>` (`data-testid=
+  stPopoverButton`) → `.st-key-<key> button{background}` lo colorea (rgb medido), y el CONTENIDO se portalea
+  FUERA del contenedor keyed (`stPopoverBody`) → el CSS de color NO toca los botones del editor. Mini-app en
+  preview + inspección del DOM.
+- **`_guardar_celda(grupo,lunes,usuario,datos,dia,asig,nota,toda_semana)`**: reusa la semana actual de la
+  persona (de `datos`, sin mutarla) y escribe 1 día o los 5 vía `R.guardar_persona` (que omite vacíos =
+  limpiar). Probado: 1 día no toca los otros, toda-la-semana llena los 5, `datos` intacto.
+- **Cobertura del día** (`_cobertura_hoy`): línea sobre el tablero — 🟢 en obra · ⚠️ N sin asignar (nombres) ·
+  ⬜ OFF/Leave del día en vista (hoy si cae en la semana), para ver huecos de un vistazo.
+- **Fix de navegación**: "→ Abrir proyecto" fijaba `_gruposec_pending` (nav VIEJA); ahora fija además
+  `_prjsel_pending` + `_admin_nav_pending=("proyectos","📊 Proyectos")` (nav NUEVA del admin) — funciona en las
+  dos shells. ⚠️ NO se metió doble columna en los expanders secundarios: `_catalogo` usa `st.columns` interno,
+  meterlo en una columna sería anidación de columnas (la "doble anidación" que el usuario prohíbe).
+Verificado: compila + import + AST (0 nombres libres en las 4 funciones) + lógica de guardado + popover en vivo.
+El board del campo (`render_board_readonly`/`_grid_html`) NO se tocó. Confirmación final = Cloud (login+Sheets).
+
+## Horas por usuario × proyecto: se surfacea lo que ya existía (v216)
+Petición del usuario: "quiero saber cuántas horas ha gastado cada usuario en cada proyecto ¿dónde lo veo?; y en
+cada proyecto, quiénes han trabajado y qué tiempo". Auditoría (auditar, no adivinar): **ambos datos ya existían,
+solo no se mostraban del todo**. (Q2, por proyecto → quién) `expenses.labor_breakdown(pid,grupo)` (usuario·horas·
+tarifa·costo) ya alimentaba 💰 Costos → "Mano de obra por persona", pero enmarcado como COSTO. (Q1, usuario × cada
+proyecto) `timeclock.group_hours(grupo,days)` ya devuelve por persona un `por_proyecto{nombre:horas}`, pero
+⏱ Horas solo mostraba el TOTAL "En proyectos" y el reparto agregado del grupo — nunca el split por persona.
+Cambios: (1) **`_equipo_proyecto(pid,grupo)`** — bloque "👷 Quién ha trabajado aquí" (persona·horas + total),
+colocado en la columna DER de 📊 Estado junto a las alarmas (aprovecha la doble columna v211); usa
+`labor_breakdown` sin el costo, degrada limpio si expenses no está configurado. (2) En **`render_group_hours`**,
+al final, matriz **"🔍 Horas por persona y proyecto"** (`st.dataframe`): filas = personas (reusa `_etiqueta`, que
+desempata homónimos), columnas = proyectos, celda = `por_proyecto.get(proyecto)` (vacío si 0). Sin datos nuevos:
+solo mostrar `por_proyecto`. Verificado: compila + import + AST (el único "libre" es `_etiqueta`, def anidada).
+
+## Finanzas: doble columna + tablas activas (v215)
+Apartado 💰 Finanzas (Gastos + Horas). **Gastos** (`render_group_expenses`): (1) "Reparto del costo del grupo"
+| "Compras por categoría" en **doble columna** (antes apiladas y separadas — se movió categorías arriba y se
+quitó su bloque de abajo); (2) tabla **"Proyectos con presupuesto" CLICKEABLE** (`st.dataframe(on_select=
+"rerun")`) → seleccionar fila muestra botón "→ Abrir [proyecto]" → `_prjsel_pending`+`_ir_a("proyectos")`
+(navegación por botón, no auto, para no re-navegar al volver). Reusa `f["id"]` de `group_expenses`. **Horas**
+(`render_group_hours`): tabla por persona CLICKEABLE → botón "→ Abrir ficha de [persona]" → `gp_fichasel`+
+`_ir_a("planificacion","👷 Usuarios")`. Verificado: compila + import + AST. Siguiente apartado: los placeholders
+📦 Inventario y 👥 Contactos (a diseñar), o Fichaje/Herramientas.
+
+## Agrupaciones: cartera clickeable (v214)
+Mismo patrón que Proyectos v207 (las agrupaciones tenían tarjetas pasivas `_agrupaciones_html` + un selector
+aparte "📊 Abrir agrupación" + otro selector de "🗑 Eliminar" abajo). Nuevo `_cartera_agrupaciones(ags,grupo)`:
+tarjetas-botón (fondo=avance consolidado `grouping_progress`, borde=salud por gap del elevador más lento
+`projections_by_group`, label 🗂 nombre·nº elev·%·⏰/⏩·🔔·🎯entrega, rejilla 2 col, ordenadas por urgencia).
+Al tocar → `_admin_open_agr=aid` → abre el dashboard (`_dashboard_agrupacion`) directo + "← Volver" +
+"🔧 Proyectos" (miembros) + "🗑 Eliminar" (movido aquí). Se quitaron los 2 selectores. ⚠️ NESTING (avisado por
+el usuario): verificado que `_dashboard_agrupacion` y `_miembros_editor` NO tienen expanders internos → el
+dashboard va directo y los 2 expanders ("Proyectos"/"Eliminar") son HERMANOS con contenido sin expanders → sin
+doble anidación. Verificado: compila + import + AST. Con esto Proyectos (📊 + 🗂) queda completo.
+
+## Costos: doble columna + recibos activos (v213)
+Revisión de la sub-pestaña 💰 Costos (`render_expenses`). (1) **Doble columna**: "Reparto del costo" (mano de
+obra vs compras) | "Compras por categoría" — los dos gráficos de barras cortos, antes apilados, ahora lado a
+lado (helpers `_blq_reparto`/`_blq_categorias`; si solo hay uno → ancho completo). KPIs, titular+barra de
+presupuesto, tabla de mano de obra y curva de gasto siguen a ancho completo. (2) **Recibos ACTIVOS**: antes
+mostraban una TABLA redundante + botones de solo-descarga; ahora cada recibo es un BOTÓN (fecha·categoría·$·
+proveedor·desc) → al tocar muestra la FOTO inline (`st.image` para png/jpg; los PDF → descarga). Toggle
+`{key_prefix}_rcb`. Se quitó la tabla redundante. Verificado: compila + import + AST. Siguiente sub-pestaña:
+📎 Archivos (archivos como tarjetas clickeables), luego ✏️ Datos.
+
+## Fix: % de avance duplicado en el detalle (v212)
+El usuario notó que el % de avance salía 2 veces al abrir un proyecto: la CABECERA de `_detalle_proyecto`
+(`c1.metric("Avance", X%)` + `st.progress`) y otra vez la KPI "Avance real" de la pestaña 📊 Estado. Se quitó
+la KPI "Avance real" de `_estado_section` (la cabecera es la fuente persistente, visible en todas las
+sub-pestañas). Las KPIs de Estado quedan: Debería ir · Desvío · Situación · Fin proyectado (se leen contra el
+avance de la cabecera). Compila + import.
+
+## Proyectos #5: doble columna en el detalle (📊 Estado) (v211)
+Aplicado [[feedback-doble-columna]] al detalle. `_estado_section` reordenado: se mueve el chequeo de cronograma
+arriba, se calculan titular + KPIs, y se ponen en **doble columna [3,2]**: IZQ = "cómo va" (titular + tarjetas
+KPI) · DER = 🔔 alarmas (`_alerts_section`, que usa columnas internas — OK, Streamlit permite 1 nivel de
+anidado). A ANCHO COMPLETO abajo (sin tocar): el ritmo, "📌 Tocaba hoy | 🔧 En curso" (ya era 2 col), el
+diagnóstico 🩺, próximo hito y el CRONOGRAMA/curva S (SVG ancho). Verificado: compila + import + AST. Con esto
+Proyectos queda 5/5 (falta solo el buscador GLOBAL de la barra superior, que es su propia tanda). Próximo
+apartado a revisar: Finanzas (o el que elija el usuario).
+
+## Fix: "Nuevo proyecto" doblemente anidado (v210)
+El usuario notó que "➕ Nuevo proyecto" quedaba doblemente anidado. Causa: `_nuevo_proyecto_form` YA tiene su
+propio `st.expander("➕ Nuevo proyecto")` (línea 695, se pliega solo), pero en v207 lo envolví en OTRO expander
+en `_panel_proyectos` → dos expanders "Nuevo proyecto" anidados. Además, dentro del 695 había un expander de
+ubicación (v194) → expander-en-expander (Streamlit no lo permite). Fix: (1) `_panel_proyectos` llama
+`_nuevo_proyecto_form(grupo, key="adm")` DIRECTO (sin envolver); (2) el selector de ubicación en
+`_nuevo_proyecto_form` pasa a INLINE (st.markdown + `location_picker`, sin su propio expander). Queda un único
+expander "Nuevo proyecto" sin nada anidado. LECCIÓN: `_nuevo_proyecto_form` ya se auto-pliega; no envolverlo.
+Verificado: compila + import; grep confirma un solo expander "Nuevo proyecto" y sin el de ubicación.
+
+## Proyectos #4: filtro rápido de la cartera (v209)
+Arriba de la cartera (`_panel_proyectos`), en DOBLE columna [2,3]: **búsqueda** por nombre/cliente (`cart_q`,
+filtra al escribir) + **chips** (`st.radio` horizontal `cart_filt`): Todos · 🔴 Retraso · 🟢 Adelanto ·
+⏸ En pausa. Filtra `proys` → `_proys_f` (search en Nombre+Cliente; retraso=delays, adelanto=aheads, pausa=Estado)
+y pasa la lista filtrada a `_cartera_clickeable`. Header "Cartera — N de M". Radio (no st.pills) por el pin
+streamlit>=1.39. Verificado: compila + import + AST. Quedan de Proyectos: #4b enganchar el buscador GLOBAL de la
+barra superior (su propia tanda), y #5 revisar el detalle + doble columna en 📊 Estado (ya aprobado).
+
+## Estética de la cartera + rejilla 2 columnas (v208)
+El usuario notó que las tarjetas-botón (v207) se veían MUY VACÍAS y "de lado a lado" (ancho completo, texto
+centrado). Fix en `_cartera_clickeable`: (1) **rejilla de 2 columnas** (`st.columns(2)`, 2 tarjetas por fila)
+→ más densa/dinámica (aplica [[feedback-doble-columna]]); (2) **texto a la izquierda** de verdad — el
+`justify-content` del botón NO alinea el texto interno; hay que tocar `.st-key-cart_<i> button>div` y
+`button p` (`text-align:left;width:100%`); (3) nombre en **negrita** (`**...**`, markdown en el label del
+botón). Verificado: compila + import + AST. SIGUIENTE (ya aprobado por el usuario): doble columna en el DETALLE
+del proyecto — pestaña 📊 Estado: "cómo va" (titular+KPIs+diagnóstico) | 🔔 alarmas, cronograma a ancho completo.
+
+## Proyectos: cartera CLICKEABLE (v207) — revisión apartado por apartado
+Empieza la mejora de cada apartado con la visión del usuario (activo/compacto/consistente). Proyectos, #1:
+la cartera era PASIVA (`_portfolio_html`, tarjetas HTML) + un selector aparte "🔎 Abrir proyecto" para abrir —
+justo lo que el usuario no quiere. Ahora `_panel_proyectos` usa `_cartera_clickeable(proys,horas,alarmas,
+delays,aheads)`: cada proyecto es un BOTÓN (fondo=avance vía linear-gradient `.st-key-cart_<i>`, borde por
+salud, label nombre·cliente·%·retraso/alarmas/horas, ordenado por urgencia). Al tocar → `_admin_open_proj=pid`
++ rerun → abre el detalle COMPLETO directo (decisión del usuario: no resumen). "← Volver a la cartera" cierra.
+`_prjsel_pending` (de HOME "ver completo"/crear) ahora setea `_admin_open_proj`. Se eliminó el selector
+redundante; el form "➕ Nuevo proyecto" quedó plegado en un expander (crear no es lo diario). `_portfolio_html`
+se conserva (lo usa el panel del propietario). Verificado: compila + import + AST. Próximo en Proyectos:
+#4 filtro/buscador; luego revisar el detalle (Estado/Datos/Costos/Archivos). Pendiente global: Finanzas,
+Inventario, Contactos, buscador topbar, más alertas campana.
+
+## Pin/lista del mapa → resumen del proyecto en HOME (v206)
+Antes el pin del mapa (y la lista de la vista Proyectos) saltaban al proyecto COMPLETO fuera de HOME. Ahora
+abren un RESUMEN en la columna derecha (pestaña Proyectos), sin salir de HOME; el "ver completo" es un paso más.
+Nuevo `home_ui._resumen_proyecto_home(grupo, pid)`: nombre + barra de avance + estado(semáforo) + cliente +
+retraso/adelanto + alarmas + fechas + paradas + asignados + ubicación (maps_link_md) + botón "→ Ver proyecto
+completo" (que sí hace `_prjsel_pending`+`navegar`) + "← Volver a la lista". Pin (`_mapa_proyectos`) y cada
+ítem de la lista (`_proyectos_home`) ahora dejan `_home_proj_sel=pid` (+ `home_right_view="📁 Proyectos"` el pin)
+y `st.rerun()` — se quedan en HOME. `_proyectos_home` muestra el resumen si `_home_proj_sel`, si no la lista.
+Verificado: compila + import + AST; maps.maps_link_md existe.
+
+## Fix móvil: el gesto de retroceso cerraba la app (v205)
+El usuario reportó que en el móvil el gesto/botón de retroceso CIERRA la app. Causa: Streamlit es una sola
+página → la nav interna no crea entradas de historial → el back del sistema "no tiene página anterior" → sale.
+Fix (el camino más fácil, en la web, sirve para navegador y app instalada): `home_ui._mobile_back_trap()`
+(llamado al final de `render_topbar`) inyecta un `components.html` con JS que accede a `window.parent`
+(mismo origen: el iframe de components tiene allow-same-origin) y: (1) hace `history.pushState` una entrada
+'trampa' para que el back nunca salga; (2) en `popstate` (gesto atrás) re-apila y hace click en el botón
+interno `.st-key-nav_back_btn button` (mi "← Atrás") → el back del móvil = el botón atrás. Guard `__copexBack`
+para montarlo una sola vez. ⚠️ NO probable desde aquí (comportamiento móvil): validar en el teléfono. Plan B si
+falla: interceptar el botón físico en el código Capacitor (`copex_mobile`). Verificado: compila + import.
+
+## Botón "← Atrás" en la navegación del admin (v204)
+Pedido del usuario: opción de volver atrás para moverse más rápido. Historial de secciones en session_state:
+`_track_history(cur)` (en `sidebar_menu`, tras resolver la sección) apila la sección anterior en `_nav_hist`
+(tope 20) salvo que el cambio fuera un 'atrás' (flag `_nav_back`, para no rebotar); `puede_atras()` /
+`ir_atras()` (desapila y `navegar(dest)` con `_nav_back`). Botón **"←"** arriba-izquierda de la barra superior
+(`render_topbar`, columnas [1,8,1]), `disabled` cuando no hay historial. Multi-nivel (atrás, atrás…). Funciona
+con cualquier forma de navegar (menú, "→ Ir a", pines, etc.) porque el tracking es sobre el cambio de sección.
+Solo nav del admin (donde está la barra superior). Verificado: compila + import + lógica del historial simulada
+(home→proy→fin, atrás→proy, atrás→home, se desactiva).
+
+## HOME: columna derecha compartida Agenda/Proyectos (v203)
+Pedido del usuario: la columna derecha de HOME (antes fija en "Agenda de hoy") ahora tiene un TOGGLE arriba
+(`st.radio` horizontal, hace de título): **📋 Agenda** | **📁 Proyectos** → cambio rápido sin salir de HOME.
+Agenda = lo de antes. Nuevo `home_ui._proyectos_home(grupo)`: datos importantes de los proyectos ACTIVOS
+(Planificado+En progreso) en compacto — cada proyecto es un BOTÓN cuyo FONDO se llena según el % de avance
+(`linear-gradient` vía `.st-key-hp_<i>` CSS), borde izq por salud (rojo=retraso `delays_of_group`,
+verde=adelanto `aheads_of_group`, azul=en curso), label con % + retraso/adelanto + alarmas
+(`alerts.open_counts_all`). Ordenados por urgencia (retraso desc → alarmas desc → avance asc). Al tocar →
+abre el proyecto (reusa `_prjsel_pending` + `navegar`). Verificado: compila + import + AST; funciones existen.
+
+## Cronómetro de fichaje en el sidebar (v202)
+Pedido del usuario: ver el tiempo en vivo de fichaje desde cualquier sección, no solo en ⏱ Fichaje. Nuevo
+`timeclock_ui.render_sidebar_chrono()` + `_chrono_mini()` (versión compacta del `_chronometer` JS client-side):
+lee `open_sessions(nombre,grupo,usuario)`; si hay jornada general y/o proyecto abiertos, muestra el/los
+cronómetro(s) en vivo ("🕐 Jornada" / "🏗 [proyecto]") en el sidebar. SOLO cuando estás fichado (si no, no
+muestra nada — decisión del usuario). Solo LECTURA (el fichaje se sigue gestionando en la pestaña). Llamado en
+`app.py` en el bloque del sidebar, tras `render_user_bar`, para `_ROL in (administrador, campo)` (owner no ficha).
+Verificado: compila + import + AST (_AZUL/_VERDE son constantes de módulo reales). Visual = Cloud.
+
+## Ajustes estéticos: logo de login + zona negra superior (v201)
+Dos pedidos del usuario. (1) El **logo del login** era muy grande → columnas `st.columns([1,1,1])` → `[2,1,2]`
+en `render_login` (el logo ocupa el tercio central, con `use_container_width`; pasar a [2,1,2] lo deja en ~20%
+del ancho = ~40% más pequeño). (2) En la vista del admin, encima del buscador había una **zona negra** (la
+cabecera por defecto de Streamlit + el hueco superior; en modo oscuro se ve negra). Fix en `home_ui.render_topbar`
+(solo admin): CSS `header[data-testid='stHeader']{background:transparent}` (no se OCULTA para no perder el botón
+de desplegar el sidebar) + `div.block-container{padding-top:2.4rem}`. Compila + import; visual = Cloud.
+
+## Elementos activos: nombres en indicadores + mapa y agenda clickeables (v200)
+Extiende v199 con el principio "todo activo". (1) Indicadores del resumen ahora muestran **nombre visible**
+("🔴 En retraso · 1"), en 3 filas de 3 (`st.columns(3)`) en vez de icono+número en fila de 9. (2) **Pines
+del mapa clickeables** (`home_ui._mapa_proyectos`): `st_folium(..., returned_objects=["last_object_clicked"])`;
+al tocar un pin se busca el proyecto por lat/lng, se deja `_prjsel_pending` (mecanismo que YA usaba el panel
+para abrir un proyecto) y se `navegar("proyectos","📊 Proyectos")` → abre ese proyecto. Guard `_home_map_click`
+para no re-navegar con clics viejos. Cada fila lleva `pid`. (3) **Agenda clickeable** (`_agenda_hoy`): cada
+persona es un BOTÓN (borde izq = color de su trabajo, vía `.st-key-agper_<i>` CSS) → deja `gp_fichasel` =
+"Nombre (usuario)" y `navegar("planificacion","👷 Usuarios")` → abre su ficha. Se quitó `_fila_agenda` (HTML
+pasivo) y el helper `_esc` (sin uso). Verificado: compila + import + AST. `ui.elegir` es un selectbox simple
+(pre-seleccionar con la key funciona). ⚠️ Confirmación visual = Cloud.
+
+## Resumen y métricas ACTIVOS/clickeables (v199)
+Principio del usuario: nada de elementos pasivos; todo clickeable → lleva a una sección o muestra el detalle.
+Aplicado al Centro de control (HOME). Mecanismo de navegación programática en la nueva nav del admin:
+`home_ui.navegar(seccion, sub_label)` / `_ir_a(...)` en projects_ui deja `_admin_nav_pending` en session_state;
+`home_ui._aplicar_nav_pending()` (llamado al inicio de `sidebar_menu`, ANTES de instanciar los radios, regla
+v111) escribe `admin_nav` y la sub-key (`adm_plan_sub`/`adm_proy_sub`/`adm_fin_sub`) → salta a la sección+sub.
+`_resumen_del_dia` rehecho: los **9 indicadores son botones** (colorea cada uno por severidad con `.st-key-<key>`
+CSS, v169; opción c del usuario) en una fila (`st.columns(9)`, icono+número, label en tooltip); al clickear uno
+se guarda `_res_sel` y abajo se muestra su detalle (los "cuáles") + botón **"→ Ir a [sección]"** que navega
+(retrasos/vencidos/por vencer/alarmas/near→Proyectos; sin contacto/credenciales→Planificación·Usuarios;
+sin asignar→Proyectos; sobre presup.→Finanzas·Gastos). Las **3 métricas** (Activos/Avance/Horas) también son
+botones que navegan (Proyectos/Proyectos/Finanzas·Horas). Se quitó la rejilla pasiva y el "Ver detalle" único.
+Verificado: compila + import + AST; mapeo sección→label y sub-key correctos. ⚠️ Confirmación visual = Cloud
+(el coloreado de botones por CSS y la navegación solo se ven en vivo).
+
+## Fusión KPIs + resumen (v197)
+El Centro de control (`render_group_header`) mostraba "En riesgo" y "Alarmas abiertas" como tarjetas KPI Y
+otra vez como indicadores en el resumen (v196) → duplicado. Fusionado: arriba quedan SOLO las métricas del
+portafolio (Proyectos activos · Avance promedio · Horas registradas); "En riesgo"(=retrasos) y "Alarmas"
+viven únicamente en la rejilla de 9 indicadores del resumen. Un solo bloque coherente: métricas del grupo
+arriba + "qué necesita atención" (estado + rejilla fija) abajo. Solo se quitaron 2 tarjetas del display
+(`_kpis` sigue calculando todo). Compila + import.
+
+## Resumen del día con ESTRUCTURA FIJA (v196)
+El resumen (en HOME, dentro de `render_group_header` → `_resumen_del_dia`) cambiaba de forma cada día: los
+chips solo aparecían si había algo (3 un día, 6 otro), y el briefing IA es texto libre variable. Rediseño
+(opción del usuario "b"): (1) **línea de estado** fija (🟢 en orden / 🟡 N pendientes / 🔴 N urgentes;
+urgentes = retrasos+vencidos+alarmas). (2) **rejilla FIJA de 9 indicadores** en 3 columnas (📁 Proyectos:
+retraso/vencidos/por vencer · 👥 Equipo: sin asignar/sin contacto/credenciales · 🔧 Obra-$: alarmas/near
+miss/sobre presup.), SIEMPRE los mismos en el mismo orden, con su número (0 en gris, >0 rojo si urgente /
+ámbar si no) — helper `_ind_card`. (3) **desplegable "📋 Ver detalle"** con los "cuáles". (4) el **briefing
+IA en su propio desplegable colapsado "💬 Lectura del asistente" y BAJO DEMANDA** (botón ✨ Generar; antes se
+generaba automático en cada carga → ahora no gasta IA salvo que se pida). Verificado: compila + import + AST;
+lógica de indicadores/colores probada con digest simulado. group_digest da: retrasos/vencidos/por_vencer
+[{nombre,dias/fin}], alarmas [{nombre,n}], near_miss [{proyecto,fecha}], sin_asignar [{nombre}],
+campo_sin_contacto [usuario], cred_venc [{tipo,usuario,dias}], sobre_presupuesto [.].
+
+## Fix: el mapa de HOME no mostraba proyectos recién creados (v195)
+El usuario creó un proyecto y no aparecía en el mapa. Causa: `_mapa_proyectos` filtraba `Estado=="En progreso"`,
+pero un proyecto recién creado tiene avance 0 → `derive_estado(0)`="Planificado" → quedaba EXCLUIDO tuviera pin
+o no. Fix: el filtro ahora incluye los **activos** = ("Planificado","En progreso"); etiqueta "🗺 Proyectos
+activos" (antes "en ejecución"). Verificado: compila + import; derive_estado(0)=Planificado (ahora incluido).
+
+## Pin de ubicación también al CREAR el proyecto (v194)
+Completa v193. NOTA: desde v135 el Survey ya NO crea proyectos (solo guarda en uno existente); el ÚNICO flujo
+de creación es el formulario "➕ Nuevo proyecto" (`projects_ui._nuevo_proyecto_form`, única llamada a
+`create_project`). Cambios: (1) `create_project` acepta `lat=""`,`lng=""` y su fila posicional se extendió con
+`""`(PlanoJSON, que la fila OMITÍA y se llena aparte) + lat + lng → 27 valores = 27 headers. (2) el formulario
+"➕ Nuevo proyecto" tiene el mismo expander "🗺 Ubicación en el mapa" con `location_ui.location_picker`
+(fuera del st.form) y pasa lat/lng a `create_project`. Así el proyecto NACE con coordenadas. Verificado:
+compila + import + AST; fila = 27 = headers; create_project acepta lat/lng. Con esto, ubicación con pin queda
+completa (crear y editar).
+
+## Ubicación de proyecto con búsqueda + pin en mapa (v193)
+Antes el mapa de HOME geocodificaba el texto `Ubicacion` en cada dibujo (frágil, impreciso). Ahora se
+GUARDAN coordenadas por proyecto. Cambios: (1) requirements +`folium`+`streamlit-folium` (sin API key,
+OpenStreetMap; import perezoso con fallback). (2) `PROJECTS_HEADERS` +`Lat`,`Lng` (al final, migran solas).
+(3) NUEVO `core/location_ui.py`: `location_picker(key,lat,lng,direccion)` = caja "buscar dirección"
+(Nominatim) que centra el mapa + clic en el mapa para fijar/mover el pin (guarda el punto en session_state,
+solo un clic NUEVO mueve el pin vía `_lastclick`); `geocode` (cacheado), `to_float`. Va FUERA de `st.form`.
+(4) `projects_ui._detalle_proyecto`: expander "🗺 Ubicación en el mapa" con el picker ARRIBA del form de editar
+(patrón asignados) + guarda Lat/Lng en `update_project`. (5) `home_ui._mapa_proyectos`: lee Lat/Lng guardadas
+(respaldo: geocode del texto para proyectos viejos), mapa folium con pines etiquetados (popup=nombre,
+returned_objects=[] para no re-renderizar); quitado el `_geocode` local duplicado. Verificado: compila +
+import + AST; Lat/Lng en headers y _PCOL. ⚠️ RIESGO: dependencia nueva en el Cloud (vigilar el build). v194
+pendiente: integrar el picker en CREAR proyecto (Survey → Guardar como proyecto y el "➕ Nuevo proyecto").
+
+## Centro de control reubicado en HOME (v192)
+Auditoría antes→ahora: 13/13 apartados reubicados; lo ÚNICO sin sitio era el "Centro de control del grupo"
+(`projects_ui.render_group_header`: banda 🏢 grupo + KPIs [activos·avance·en riesgo·alarmas·horas] + resumen
+del día con chips de pendientes y briefing IA), que salía arriba de "Mi grupo". Reubicado al tope de
+`home_ui.render_home` (nueva landing), reusando la función tal cual, arriba del mapa y la agenda. Se quitó el
+título "🏠 Home · fecha" redundante (el banner del grupo hace de cabecera). Verificado: compila + import.
+Sigue pendiente: los saltos automáticos (`_nav_pending`/`_gruposec_pending`) no aplican en la nav del admin.
+
+## Integración del contenido en la nueva navegación (v191)
+Se cablearon los apartados de la nueva nav del admin a las funciones que YA existen (reconexión, no reescritura).
+Mapeo (decisiones del usuario): **Fichaje**→`timeclock_ui.render_timeclock_tab`; **Planificación**→sub-menú
+[📋 Tablero=`roster_ui.render_planificacion` · 👷 Usuarios=`auth_ui._grupo_usuarios`] (la gestión de usuarios
+vive AQUÍ, no en Contactos); **Proyectos**→[📊 `PU._panel_proyectos` · 🗂 `PU._panel_agrupaciones`];
+**Finanzas**→[💰 `PU.render_group_expenses` · ⏱ `PU.render_group_hours`]; **Herramientas**→sub-selector de 6
+[Survey=`survey_ui.render_survey_tab(rol,grupo)` · Plomada · Rieles · Buffers · Belting · Pre-Start];
+**Inventario** y **Contactos**→placeholders (nuevos, a desarrollar). Helper `_subnav(titulo,opciones,key)` =
+sub-menú horizontal. `init_state()` corre incondicional en app.py:100, así que el Survey funciona desde aquí.
+Verificado: compila + import + las 13 funciones existen como atributos. Confirmación visual = Cloud.
+PENDIENTE/known: el `_nav_pending` (navegar tras crear proyecto desde el Survey) apunta al radio viejo — no
+aplica en la nav del admin; revisar esos flujos "navegar tras acción" cuando se validen. Diseñar Inventario y
+Contactos. Buscador aún sin backend.
+
+## Nueva navegación del admin: shell + HOME (v190)
+Rediseño de la UX de navegación (pedido del usuario), **solo rol administrador** por ahora (owner/campo
+siguen con la nav vieja). Nuevo `core/home_ui.py`:
+- **Menú lateral de iconos** (en el sidebar, `sidebar_menu()`): 🏠 Home · ⏱ Fichaje · 📅 Planificación ·
+  📁 Proyectos · 💰 Finanzas · 📦 Inventario · 🛠 Herramientas · 👥 Contactos. (Decisión del usuario:
+  Fichaje = icono propio; Pre-Start = una herramienta más dentro de Herramientas.)
+- **Barra superior** (`render_topbar`): buscador (placeholder, aún sin backend) + **campana** (popover)
+  con alertas — de momento credenciales por vencer/vencidas (`credentials.expiring`); más fuentes luego.
+- **HOME real** (`render_home`, doble columna): IZQ mapa de proyectos "En progreso" (`st.map`, sin API key;
+  geocodifica `Ubicacion` de texto con Nominatim/OSM, cacheado 1 día; los sin ubicación se listan aparte);
+  DER agenda de hoy desde el roster (`get_semana`/`celda`/`etiqueta_de`/`color_de`, por persona de campo,
+  con chip de color + nota + proyecto enlazado + resumen asignados/OFF/leave/sin asignar).
+- Los otros 6 apartados son **placeholders** ("en construcción") — decisión del usuario, se integran uno a uno.
+Wiring en `app.py`: en el sidebar, si `_ROL=="administrador"` se renderiza `sidebar_menu()`; y antes de la
+cabecera principal, un branch admin llama `render_topbar`+`render_admin_content` y hace `st.stop()` (salta la
+cabecera y el radio viejo). Verificado: compila + import + AST sin nombres libres. **Confirmación visual =
+Cloud** (necesita login + Sheets; no renderizable local). PENDIENTE/decisiones futuras: Google Maps vs OSM,
+campo de coordenadas por proyecto, qué busca el buscador, más fuentes de alertas, e integrar los placeholders.
+
+## Formulario de credenciales sin clutter (v189)
+Último ítem de la revisión de credenciales. En "➕ Agregar credencial", "Especifica (Otro)" y "Clase
+(licencia)" se mostraban SIEMPRE aunque no aplicaran; dentro de un `st.form` no se puede condicionar (no hay
+rerun hasta el submit). Fix: se sacó el selectbox **Tipo** FUERA del form → al cambiarlo hay rerun y se
+muestran solo los campos que aplican: "Especifica el tipo" solo si Tipo="Otro"; "Clase" solo si
+Tipo="Driver License" (si no, Número a ancho completo, sin columna vacía). El resto sigue dentro del form.
+El Tipo queda seleccionado tras agregar (cómodo para varias del mismo tipo). Backend intacto. Compila +
+import + AST OK. Con esto queda CERRADA la revisión de acceso+credenciales (login persistente v188 confirmado
+por el usuario en el Cloud). Solo queda anotado como futuro: mensajes de login (enumeración de usuarios) y
+la Opción B de `notify_expiring` (job programado).
+
+## Fix login persistente al refrescar (v188)
+El usuario confirmó en el Cloud que lo ÚNICO que falló del lote fue **mantener la sesión al refrescar** (F5
+deslogueaba) — justo lo que quedó marcado para confirmar en vivo. Causa raíz: el enfoque v174→v187
+BLOQUEABA con `time.sleep(0.2)` + `st.rerun()` forzado hasta 3 veces y se rendía (`_cookie_done=True`); pero
+el componente `extra-streamlit-components` entrega la cookie en un rerun NATURAL (mensaje del navegador por
+WebSocket) que durante el `sleep` no se procesa → llegaba SIEMPRE después de rendirse. Además `_mgr()` creaba
+un CookieManager nuevo en cada llamada (re-montaba el componente). Fix: (1) `session_cookie._manager()` crea
+el CookieManager UNA vez por sesión y lo guarda en `session_state` (`_cookie_mgr`); (2) `load()` usa
+`get_all()`; (3) `render_login` ya NO bloquea ni reintenta — solo renderiza el componente y deja que dispare
+su propio rerun (se ve el login un instante y al llegar la cookie se restaura sola); (4) tras logout se marca
+`_no_cookie_restore` para no re-restaurar la sesión recién cerrada (evita la carrera con el delete de la
+cookie). Verificado: compila + import + sin restos de `_cookie_done/_cookie_waits`. Confirmación definitiva =
+F5 en el Cloud (no reproducible localmente: necesita el runtime + el navegador).
+
+## Avisos de vencimiento desacoplados del panel (v187)
+Antes `notify_expiring` se disparaba SOLO al abrir 🔧 Usuarios de campo (`_grupo_usuarios`), 1×/sesión/grupo
+— frágil: si nadie abría ese panel, o el grupo no tenía admin, los vencimientos no se avisaban nunca.
+Investigación: NO hay scheduler en el repo (ni cron, ni st_autorefresh; `ping.yml` es solo `on: push`);
+el digest (`admin_digest`) solo arma datos para mostrar, no notifica; `notify` envía por Gmail SMTP + Telegram
+leyendo `st.secrets`. Elegida la **Opción A** (pragmática, sin infra): el disparo se movió al **login**
+(`app.py`, tras el heartbeat): si `_ROL` es administrador/propietario, corre `notify_expiring` — el admin
+sobre su grupo, el propietario sobre todos —, deduplicado por día en `session_state`
+(`_credaviso_{grupo}_{hoy}`) y por 25 d en la hoja (`UltimoAviso`), envuelto en try para no bloquear la
+entrada. Quitado el disparo de `_grupo_usuarios`. Opción B (job programado con GitHub Action `on: schedule`
++ runner headless) queda ANOTADA como mejora futura (requiere duplicar secretos en GitHub y una capa de
+compatibilidad porque el código lee `st.secrets`, que no existe fuera de Streamlit). Verificado: compila +
+import; el único `_credaviso` restante está en app.py.
+
+## KPIs de credenciales + descargas agrupadas (v186)
+Estético de `render_credenciales`: arriba de la tabla, fila de `st.metric` (Credenciales · 🟢 Vigentes ·
+🟡 Por vencer · 🔴 Vencidas) calculada con `status()` — mismo estilo que la pestaña "Su trabajo" de la ficha;
+sirve al admin y al propio usuario en "Mis credenciales". Los botones de descarga (antes apilados sueltos
+bajo la tabla) ahora van en un expander "⬇️ Documentos (n)". Backend intacto. Compila + import + AST OK.
+Pendientes de la revisión de credenciales (NO hechos, dejados aparte a propósito): desacoplar
+`notify_expiring` del render (hoy es el ÚNICO disparador de avisos → mover a un digest programado, verificar
+scheduler antes); clutter del form (Clase/"Otro" siempre visibles → están dentro de `st.form`, no se puede
+ocultar condicional sin sacarlo del form); unificar mensajes de login (enumeración de usuarios).
+
+## Fechas de credenciales con calendario (v185)
+Hallazgo de la revisión: las fechas de Emisión/Vencimiento eran **texto libre** "YYYY-MM-DD" sin validar;
+un typo → `_parse` la ignora en silencio → esa credencial **nunca dispara la alerta de vencimiento** y sale
+"—". Fix: helper `_fecha_input(col, label, valor_actual="", *, key)` que usa `st.date_input` (calendario,
+opcional con `value=None`, rango 2000–2100), precarga el valor existente parseándolo con `credentials._parse`
+(si estaba mal escrito queda vacío para corregir) y **devuelve siempre ISO `YYYY-MM-DD`** — justo lo que leen
+`_parse`/`status`/alertas, así un typo ya no rompe el aviso. Aplicado a los formularios Agregar (Emisión +
+Vencimiento) y Editar (Vencimiento) de `render_credenciales`. De paso, el form de **Editar** ahora incluye el
+**ID de la credencial en las keys** (`_enum_{id}`, `_even_{id}`, `_enota_{id}`): antes tenían key fija y al
+cambiar de credencial NO se refrescaban los campos (bug de precarga preexistente). Backend `credentials.py`
+NO se toca; las credenciales ya guardadas se siguen leyendo igual (se re-guardan en ISO solo al editarlas).
+Verificado: date→ISO→`status()` cierra; datos viejos DD/MM/YYYY precargan; basura/fuera de rango → vacío.
+Pendientes de la revisión de credenciales: KPIs (vigentes/por vencer/vencidas), desacoplar `notify_expiring`
+del render, unificar mensajes de login, clutter del form (Clase/"Otro" siempre visibles), botones de descarga.
+
+## Panel del propietario unificado a la ficha 360° (v184)
+Revisión estético/integración del bloque acceso+credenciales. Hallazgo gordo: el **administrador**
+gestiona cada persona con la **ficha 360°** (`_ficha_usuario`: pestañas Acceso/Contacto/Credenciales/
+Su trabajo/eliminar, una sola selección), pero el **propietario** (`_owner_usuarios`) seguía con el
+estilo viejo disperso (elegir a la persona en 3 desplegables: modificar / contacto / credenciales).
+La mejora v153 nunca se aplicó al panel del propietario. Unificado:
+- `_ficha_usuario(u, grupo, owner=False, sel_key="gp_fichasel")`: nuevo modo `owner` que, en la pestaña
+  🔑 Acceso, añade reasignar **Rol** y **Grupo** (lo que solo tenía el propietario). El admin la ve igual.
+  `sel_key` parametriza la clave del selector externo a limpiar al eliminar.
+- `_owner_usuarios` rehecho: tabla-resumen (con columna Contacto ✅/⚠️ + aviso de faltantes) → "➕ Crear
+  usuario" (rol+grupo) → "👤 Gestionar un usuario" = filtro por grupo + selector → `_ficha_usuario(..., owner=True)`.
+  Desaparecen los 3 desplegables sueltos ("Modificar usuario", "Contacto de campo", "Credenciales").
+- Borrado el código muerto: `_field_contact_ui` y `_USER_COLS` (ya no se usan).
+NO se tocó: `auth.py` (backend), el panel del administrador, la creación de usuarios ni las credenciales.
+Verificado: compila + import + AST sin nombres libres; el admin sigue llamando `_ficha_usuario` con los
+defaults. Confirmación visual = en el Cloud (necesita la hoja real). Pendientes de la revisión (no hechos
+aún): fechas de credenciales con `date_input`+validación, KPIs de credenciales, desacoplar `notify_expiring`
+del render, unificar mensajes de login.
+
+## Belting: revisión técnico/estético/integración + diagrama replanteado (v183)
+Última de las 5 herramientas técnicas. Tres arreglos:
+- **Integración:** el proyecto se conocía (`_prj`) pero no iba al diagrama ni al PDF. Fix:
+  `belting_svg(..., proyecto="")` lo dibuja arriba-derecha + "Proyecto" al `meta` del PDF.
+- **Estético:** resultados iban directo a la tabla → añadidas tarjetas KPI (`_kpi`): HQ · HGP · nº elevadores.
+- **Técnico/representación (como buffers):** el diagrama ponía la cabina SIEMPRE por debajo del FFL en
+  posición fija, aunque DSTS fuera negativo (cabina por ENCIMA) o distinto entre elevadores —
+  contradecía a la tabla. `belting_svg` reescrito: **FFL = línea de referencia común** y cada cabina
+  a su **DSTS con signo** (debajo si +, encima si −), a escala ampliada común para comparar; valor
+  DSTS con signo al pie (no se solapa con la cabina). `compute_belting` NO cambia.
+Verificado renderizado en navegador (DSTS +40 debajo / 0 en FFL / −20 encima), sin `<defs>/<marker>`.
+Con esto quedan revisadas las 5 técnicas: plomado (v179), rieles (v180), buffers (v181-182), belting (v183).
+
+## Corte de buffers: diagrama replanteado (v182)
+El usuario notó que el diagrama **no representaba bien la geometría**: HKP/HKPR no son alturas, son la
+**holgura** (distancia) entre el **sticker de la cabina** y el **borde superior del buffer** —dos elementos
+que no se tocan—; HKP de diseño (plano), HKPR medida. **Cortar el buffer baja su borde → agranda la
+holgura**; el corte = HKP − HKPR es la rebanada que se quita del borde para pasar de HKPR a HKP.
+`buffer_cut_svg` reescrito: sticker (barra fija arriba) + línea HKP común (borde superior de diseño) +
+por buffer el borde real (a HKPR) y, si HKPR<HKP, la rebanada roja borde-real→línea-HKP = lo que se corta.
+Casos: corte>0 (rebanada roja), corte≈0 ("sin corte" verde en la línea), HKPR>HKP ("revisar" ámbar, borde
+bajo la línea). Holgura sticker↔buffer con "≈" (no a escala); corte a escala ampliada. `compute_buffer_cut`
+NO cambia. Verificado renderizado en navegador (los 3 casos correctos), sin `<defs>/<marker>`, proyecto
+arriba-derecha.
+
+## Corte de buffers: revisión técnico/estético/integración (v181)
+Revisión de 🛡 Corte de buffers — **idéntica a rieles v180** (ya era por buffer, diagrama v129, integración
+compartida). Dos arreglos:
+- **Integración:** el proyecto se conocía (`_prj`) pero no iba al diagrama ni al PDF. Fix:
+  `buffer_cut_svg(..., proyecto="")` lo dibuja arriba-derecha + "Proyecto" al `meta` del PDF.
+- **Estético:** `st.success("HKP = …")` plano → tarjetas KPI (`_kpi`): HKP · nº buffers · nº a revisar
+  (rojo si hay cortes negativos).
+- **Técnico:** sin gaps (por buffer + diagrama + reabrir/guardar-auto ya estaban).
+Verificado: el diagrama muestra el proyecto, sin proyecto no rompe, escape OK, sin `<defs>/<marker>`;
+compute_buffer_cut intacto (warn cuando HKPR>HKP). Compila + import.
+
+## Corte de rieles: revisión técnico/estético/integración (v180)
+Revisión dedicada de ✂️ Corte de rieles (ya estaba en buena forma: es por elevador desde v52, diagramas
+rehechos v177/v178, e integración compartida). Salió ligera — dos arreglos.
+### ⚠️ Integración (el MISMO fallo que plomado v179)
+El proyecto se conocía (`_prj` del selector) pero **no iba al diagrama ni al PDF**: `rail_cut_svg` no
+tenía `proyecto` y el `meta` del PDF no lo incluía. El corte iba a obra sin identificar el proyecto.
+Fix: `rail_cut_svg(..., proyecto="")` dibuja el nombre arriba-derecha (ambos casos) + "Proyecto" al
+`meta` del PDF (Caso 1 y 2).
+### Estético
+`st.success("A = …")` / `st.success("Sub-caso: …")` planos → **tarjetas KPI** (`_kpi`): Caso 1 = A · LFKK
+· LFGK · nº elevadores; Caso 2 = fórmula · LFKK · LFGK · nº elevadores (+ el sub-caso como caption).
+### Técnico: sin gaps
+Ya es por elevador (matriz L / matriz RZ·RO·RF·RB); diagramas ya corregidos; reabrir cálculo y
+guardar-auto-al-fichaje (v176) ya están. No se tocó nada técnico.
+### Verificacion
+Ambos diagramas muestran el proyecto ("North Syd"), sin proyecto no rompe, escape de `& < >` OK, sin
+`<defs>/<marker>` (svglib-compat). Compila + import. Los números (compute_case1/2) intactos.
+
+## Plomadas: revisión técnico/estético/integración — por elevador (v179)
+Revisión dedicada de 🔩 Plomadas (la única herramienta técnica sin un pase con esa dinámica; tenía trabajo
+de dominio v57-64 y el CAD v123, pero no la revisión). Tres hallazgos.
+### ⚠️ Integración (fallo real): el nombre del proyecto se perdía
+`plumb_ui` tenía **`_pr_ = ""` hardcodeado** y con eso dibujaba los 4 SVG y armaba el PDF — el replanteo
+iba a obra SIN identificar el proyecto/elevador, aunque `_prj` estaba disponible del selector. Otro
+"dato disponible que no se usa". Fix: `_pr_base` = nombre del proyecto → a los diagramas (cajetín) y al
+`meta` del PDF.
+### Estético: lenguaje inconsistente
+- DBP/DBPW/RW eran `st.metric` planos → **tarjetas KPI** (`_kpi`, como v143).
+- El encaje BSR<BS era un muro de números crudos (LIMIT_ZB/OB/sacrificios) → contado como ACCIÓN
+  ("acerca X mm al lado Z"; abs para no mostrar "-3") con los umbrales internos en un desplegable.
+### Técnico/dominio: POR ELEVADOR (decisión del usuario)
+Rieles/buffers/belting son por elevador; plomadas era un solo cálculo. **Insight clave**: la PLANTILLA
+(DBP, DBPW, RW, d1, d2) depende de BKS/RAIL/TKSW/LengthTemplate → es **la misma para todo el shaft** (una
+plantilla). Lo que varía por elevador es el **BSR** (ancho real medido en cada hueco) → cambia el
+**encaje** y la **verificación** (di/dd). Rediseño:
+- Entradas compartidas del shaft (una vez) + **matriz BSR por elevador** (como la L de rieles).
+- `compute_plumb` por cada BSR. La plantilla en tarjetas KPI **una vez**; una **tabla por elevador**
+  (BSR · encaje · di · dd · cierre `di+DBP+dd=BSR`); un selector para ver el diagrama de cada elevador.
+- PDF con el proyecto + la plantilla + la tabla por elevador + planta/ficha de cada uno.
+- `plumb.py` NO se tocó (compute y SVG ya trabajan por-resultado); solo se reescribió `render_plumb_tab`.
+### Verificacion
+La plantilla (DBP/DBPW/RW/d1/d2) sale **IDÉNTICA** con 3 BSR distintos (1420/1426/1432) ✓; el encaje y
+di/dd cambian y **cierre = BSR** en los 3 (identidad di+DBP+dd=BSR) ✓; 0 nombres libres; 0 restos del
+estado viejo (plb_res/plb_bsr single → plb_res_multi/plb_bsr_df); compila + import.
+
+## Corte de rieles: sin orden inventado (Caso 1) + esquema de rieles (Caso 2) (v178)
+Dos apuntes del usuario sobre `rail_cut_svg`:
+### Caso 1: "¿de dónde sacas el orden de los rieles?"
+Tenía razón: la app solo tiene los **conteos** (n2500, n5000), NO el orden. El dibujo apilaba los 5000
+abajo y los 2500 arriba — una **secuencia inventada**. `A = n2500·2500 + n5000·5000` es solo un total.
+Fix: la pila estándar A se dibuja como **UN bloque** (altura = A, etiqueta "A · pila estándar"), sin
+inventar la secuencia. La composición sigue en el subtítulo. El resto del Caso 1 (columna requerida,
+corte al pie = primer riel, v177) intacto.
+### Caso 2: "se ve poco profesional" → esquema de rieles (decisión del usuario)
+El Caso 2 no tiene longitudes (RZ/RO/RF/RB se miden en obra), así que las barras comparativas no decían
+mucho. Se rehízo como **esquema de rieles**: por elevador, 4 rieles agrupados —**cabina** (RZ, RO, azul)
+y **contrapeso** (RF, RB, teal)— cada uno con una **banda de corte arriba** (el último riel instalado, el
+que se corta) + línea de corte punteada + el valor del corte encima + etiqueta al pie. ⚠️ Las alturas son
+**ILUSTRATIVAS** (uniformes, no a escala) — se declara en el subtítulo, porque el Caso 2 no tiene
+longitudes reales.
+### Verificacion (geometría medida en el SVG)
+Caso 1: **1 solo bloque** de pila en x=30 (antes n2500+n5000 rects) ✓. Caso 2: 8 cuerpos de riel + 8
+bandas de corte para 2 elevadores ✓, encabezados Cabina/Contrapeso, leyenda por color. Ambos SVG sin
+`<defs>/<marker>` (svglib-compat). Compila. Los números (compute_case1/2) NO cambian, solo el dibujo.
+⚠️ Se corrigió un error propio: `\'` dentro de un f-string de comillas simples (SyntaxError) → variables.
+
+## Corte de rieles Caso 1: el corte va en el PRIMER riel (abajo) (v177)
+Bug reportado: "en el Caso 1 se corta el primer riel instalado (el de más abajo), pero en el dibujo sale
+como si se cortara el de arriba". Cierto: `rail_cut_svg` dibuja las columnas RC/RCW **desde la base
+(piso) hacia arriba**, pero pintaba el corte ARRIBA (entre la punta de la barra y la línea A).
+### Fix (solo el dibujo del Caso 1; los números no cambian)
+- El corte se marca **AL PIE de la columna** (borde inferior en la línea de piso), que es donde está el
+  primer riel instalado. Color por signo: **rojo = recorta** (corte<0) / **verde = añade** (corte>0).
+- Se añadió una **línea de piso** (`base`) para que se vea dónde se apoya el primer riel.
+- Leyenda reescrita: "recorta / añade al 1er riel · el corte va en el riel de ABAJO". Cierra el pendiente
+  de v130 sobre la dirección del corte.
+### Verificacion (geometría medida en el SVG, no a ojo — lección de v121)
+Caso 1 con 2 elevadores (uno recorta CutRC=-1985/-2207, otro añade +515/+293): los 4 rects de corte
+tienen su **borde inferior en el piso (y=270)** ✓; línea de piso en y=270; rojo para recortes, verde para
+añadidos; SVG sin `<defs>/<marker>` (svglib-compat). Compila. Caso 2 (barras) intacto.
+
+## Guardar un cálculo: el campo va SOLO a su proyecto del fichaje (v176)
+Peticion del usuario: "al usar las herramientas, al final me da una lista de a cuál proyecto agregar el
+resultado; no debe ser así: si ya fiché a un proyecto, se debería guardar ahí automáticamente".
+### `tool_save_ui.render_guardar` — destino automático para el campo
+Las 4 herramientas de cálculo (plomada/rieles/buffers/belting) comparten este bloque. Pedía el proyecto
+en un `selectbox` para TODOS los roles. Ahora, para el rol **campo**:
+- Si tiene **fichaje abierto** a un proyecto → destino AUTOMÁTICO = ese proyecto: "💾 Se guardará en X —
+  donde fichaste" + un botón (un toque). Resuelve **ID primero, nombre de respaldo** (v145). Mismo
+  criterio que el plano (v137), Mis proyectos (v138) y el Pre-Start (v170).
+- Salida de emergencia: un expander plegado "¿Es de otro proyecto?" con la lista, por si el cálculo es
+  de otra obra.
+- Campo SIN fichar → cae a la lista (tiene que elegir). Admin/propietario → la lista (trabajan varias obras).
+La lógica de guardado se extrajo a un helper interno `_guardar(prj)` para no duplicar `toolruns.registrar`.
+### Verificacion
+Matching probado: por ID (PRJ-0002→North), por nombre case-insensitive (Prueba1→prueba1), sin fichaje→
+None (cae a la lista). `render_guardar` 0 nombres libres, compila + import. `registrar` intacto.
+
+## El plano alimenta las 5 herramientas, mostradas POR IGUAL (v175)
+Peticion del usuario: "al cargar el plano solo me muestra que leyo 17 parametros (los del survey); las
+otras herramientas tecnicas las maneja como independientes cuando todas son de igual importancia".
+### ⚠️ Era DISPLAY, no extraccion (verificado con evidencia)
+`extraer_todo` YA lee todo para las 5 herramientas. Probado sobre los 2 planos REALES de Downloads:
+NORTH SYD y AGECARE dan **17/17 params + NS + riel(+altura) + HQ + HGP + HKP + LFKK + LFGK, faltan=0**.
+El problema era el framing: el mensaje al cargar lideraba con "17 parametros" (`plan_data.resumen`) y el
+detalle mostraba tarjetas sueltas (HKP, HQ, LFKK…) sin decir a que herramienta alimenta cada una.
+### `plan_data.por_herramienta(datos)` — el plano por herramienta
+Invierte el mapa `USA` (dato→herramienta) para agrupar POR herramienta: devuelve, para cada una de las 5,
+`[(label, valor|None)]`. `projects_ui._plano_herramientas_html` lo pinta como tabla (chip verde con el
+valor / chip rojo "⚠️ falta" por herramienta). Se muestra AL CARGAR (nuevo proyecto + 📐 Datos del plano)
+y en el detalle del proyecto, reemplazando las tarjetas sueltas y el mensaje de "17 parametros":
+`📐 Survey (17/17 · NS · Riel) · 🔩 Plomadas (params · RAIL) · ✂️ Rieles (LFKK · LFGK) · 🛡 Buffers (HKP)
+· 🎗 Belting (HQ · HGP)`. Floats redondos se muestran como enteros (2915.0→2915).
+### Verificacion
+`por_herramienta` con datos completos → las 5 con sus valores; con datos parciales → cada herramienta
+marca lo que le falta. HTML valido. `resumen()` se conserva (aun la usa `plan_ui.py`). Compila + import.
+
+## Fix: refrescar la página deslogueaba (v174)
+Peticion del usuario: "cuando refresco se cierra la sesion". El login persistente por cookie existe
+desde v107, pero no restauraba tras un refresco.
+### Raiz: el componente de cookies + un gate de UN solo intento
+`extra-streamlit-components` `CookieManager.get()` devuelve **None en el PRIMER run** tras un refresco
+(el componente aún no recibió las cookies del navegador; las reporta en un rerun posterior). Pero
+`render_login` marcaba `_cookie_tried=True` en ese primer intento y **nunca reintentaba** → siempre
+caía al login.
+### Fix
+Se REINTENTA la lectura de la cookie unos pocos reruns (`_cookie_waits < 3`, con `time.sleep(0.2)`) antes
+de rendirse, dándole al componente tiempo de reportar. Cuando la cookie llega, `auth.validate_session`
+(que solo compara el token con el de la hoja Login, sin exigir heartbeat) restaura la sesión. El
+heartbeat de sesión única no re-desloguea: el restore deja `_hb_last` fresco y el token no cambió.
+### Verificacion
+Compila + import; 0 `_cookie_tried` colgando (solo en un comentario). ⚠️ El timing del componente de
+cookies solo se prueba de verdad en el navegador: PENDIENTE confirmar en el Cloud que refrescar YA no
+desloguea. Si sigue fallando, plan B: montar un único CookieManager al inicio del app o cambiar el
+mecanismo de persistencia.
+
+## Zona horaria POR GRUPO — hora local correcta multi-país (v173)
+Peticion del usuario: "los registros no coinciden con mi zona horaria" + "¿y si alguien usa la app en
+otro país?". Raiz: **Streamlit Cloud corre en UTC**, asi que cada `datetime.now()`/`date.today()`
+grababa en UTC (~10-11 h corrido para Australia). Y el proceso es COMPARTIDO por todos los usuarios, asi
+que fijar una zona global (`tzset`) no sirve para multi-país (todos quedarian en una sola zona).
+### `core/clock.py` — hora local resuelta POR GRUPO
+- `clock.now(grupo=None)` / `clock.today(grupo=None)` → datetime/date NAIVE en la zona del grupo. Sin
+  `grupo`, la toma del **grupo del usuario en sesión** (`session_state.auth.grupo`). Usa `zoneinfo`
+  (per-sesión, seguro con usuarios concurrentes en distintos países — NO `tzset` global).
+- La zona de cada grupo se guarda en **`Grupos.Zona`** (nueva columna, migra sola via `get_sheet`).
+  `auth.group_timezone(grupo)` (lectura cacheada) + `auth.set_group_timezone`. Sin zona → `DEFAULT_TZ`
+  = **Australia/Sydney** (por eso el grupo actual ya queda bien sin configurar nada).
+- El propietario fija la zona de cada grupo en 👑 Administración → 🏢 Grupos → "🕐 Zona horaria".
+- **`tzdata`** añadido a requirements (para que `zoneinfo` resuelva la zona seguro en el Cloud).
+### Reemplazo masivo (~40 sitios en 22 archivos)
+`datetime.now()`→`clock.now()`, `date.today()`→`clock.today()` en todo core/ (EXCEPTO `session_cookie.py`
+—plomeria de cookies— y `clock.py`). El modelo multi-tenant garantiza que campo/admin solo tocan datos
+de SU grupo, asi que el fallback por sesión da la zona correcta; el propietario (sin grupo) cae al default.
+### ⚠️ Error que cometi y cace: el regex mordio los alias
+`re.sub(r"\bdate\.today\(\)")` tambien matcheo dentro de `_dt.date.today()` y
+`__import__("datetime").date.today()` → los dejo como `_dt.clock.today()` (roto: `clock` como atributo del
+modulo datetime). Cazado con un grep de `algo.clock.now/today` y corregido a mano (projects.py:823,
+projects_ui.py:671). Los alias que el regex NO matcheo (`_dt.now()`, `_date.today()`) se convirtieron
+aparte. REGLA: tras un reemplazo por regex de `X.now()/X.today()`, grep de `\w\.clock\.` para cazar los
+que quedaron como atributo de otra cosa.
+### Verificacion
+51/51 modulos importan; **per-grupo probado**: grupo sin zona→Sydney, grupo mock "usa"→America/New_York,
+horas distintas (14 h). Migracion de la columna via `get_sheet`. 0 `datetime.now()/date.today()` sin
+convertir, 0 `.clock.` mal formado. ⚠️ Arregla los registros DE AHORA EN ADELANTE; los ya guardados
+quedaron en UTC (migracion aparte, opcional). Con esto los turnos normales dejan de "cruzar medianoche"
+(v164), que era un sintoma de este bug.
+
+## PDF del Pre-Start calcado al template CI Liftworx (v172)
+Peticion del usuario: "que el pdf que se genera se vea mas como el que te pase de ejemplo". El ejemplo
+es `Downloads/_Daily Pre-Start Template.pdf` (CI Liftworx): un FORMULARIO blanco y negro con bordes,
+bandas grises por seccion y recuadros de notas. El PDF anterior era colorido/moderno (bandas azules).
+### `prestart_pdf.generate_prestart_pdf` reescrito para calcar el template
+- Blanco y negro, **bordes**, **bandas grises** (`#d9d9d9`) por seccion, recuadros de notas con borde.
+- Fila **Date · Time · Location · Facilitated by** bordeada (como el template).
+- ⚠️ **Reubicacion clave**: los 4 checks que la app llama "Seccion 1" (permisos/toolbox/subcontratistas/
+  preop) en el TEMPLATE van en la **Seccion 3, sub-tabla "Circle one"**. La Seccion 1 del template es
+  solo un recuadro de notas. El PDF ahora respeta eso: Seccion 1 = `activities_notes`; Seccion 3 = los 3
+  shaft checks (`CHECKS_S3`) + la sub-tabla 2×2 "Circle one" con `CHECKS_S1`.
+- **Respuesta marcada = cajita con fondo NEGRO** (helper `_ans`): el "formulario relleno". ⚠️ Sin glyphs
+  Unicode de checkbox (Helvetica no los tiene) — se usa `Table` con `BACKGROUND` negro en la celda
+  seleccionada, 100% fiable.
+- Attendees en **3 pares** (Print Name · Initial), como el template.
+- **Marca = nombre del grupo** (decision del usuario, no "CI Liftworx"); sin el logo skyline (la app no
+  tiene logo por grupo). **Textos de los checks en ESPAÑOL** (decision del usuario: iguales a la pantalla
+  del Pre-Start, para que app y PDF coincidan).
+### Verificacion
+PDF de prueba generado con datos realistas y **revisado visualmente** (render): cabe en 1 pagina A4,
+estructura calcada, respuestas resaltadas correctas (YES/NO/N-A), notas en sus recuadros, 4 asistentes en
+2 filas de 3 pares. Compila + import; firma `generate_prestart_pdf(data)` intacta (sin cambios en
+`submit` ni call-sites). Los datos ya se capturaban desde v97/v158; solo cambia la MAQUETA.
+
+## Pre-Start del campo: preselecciona el proyecto donde fichó + Time estructurado (v170)
+Revision de 🦺 Pre-Start desde el rol CAMPO (quien lo llena en obra, en el movil, cada mañana). Ya era
+solido tras v158; tres mejoras de la experiencia de campo.
+### Integracion: preselecciona el proyecto del FICHAJE
+El campo elegia el proyecto de una lista sin preseleccion cada dia. **Decision del usuario: "lo primero
+que hace el usuario es fichar"** → cuando llega al Pre-Start ya tiene fichaje abierto, asi que se
+preselecciona ESE proyecto (como 📋 Mis proyectos, v138). ⚠️ NO es "el primero de la lista" que evito
+v139: es una señal FUERTE (donde esta trabajando), se MUESTRA ("⏱ Es el proyecto donde fichaste hoy;
+cambialo si el pre-start es de otro") y sigue siendo cambiable. Resuelve **ID primero, nombre de
+respaldo** (v145). Solo para el rol campo (admin/propietario no fichan).
+### Tecnico: "Time" deja de ser texto libre
+Era `text_input` (mismo fallo de las fechas antes de v149): un dedazo quedaba como hora rara en el PDF.
+Pasa a **`st.time_input`** (se guarda como "%H:%M").
+### Detalle: la inicial del asistente se autocompleta
+Al generar, si un asistente tiene el "Initial" vacio se calcula de su nombre (`_initials`) — no hay que
+teclear las dos cosas.
+### Verificacion
+Preseleccion (sintetico): por ID PRJ-0002→North, por nombre Prueba1→Prueba1, sin fichaje→None, ID
+inexistente cae al nombre→Norte. `time_input` 17:16:00→"17:16". `render_prestart_tab` 0 nombres libres,
+compila+import. (Con datos reales no hay fichajes abiertos ahora, asi que la preseleccion se estrena en
+el Cloud cuando alguien fiche y abra el Pre-Start.)
+
+## Pre-Start: lo que se captura por fin se ve + no se puede firmar sin leer (v158)
+Revision del ultimo modulo del admin sin tocar, "con la misma dinamica" (tecnico/imagen/integracion).
+### ⚠️ Tecnico 1: 7 columnas escritas desde v97 y NADIE las leia
+`S1JSON`, `S3JSON`, `Asistentes`, `Location`, `ActividadesNotas`, `NotasGenerales` se guardaban y el
+historial solo mostraba fecha/hora/facilitador/near-miss/archivo. **Un check en NO es una alerta de
+seguridad y quedaba invisible** sin abrir el PDF. `prestart.leer(r)` descompone la fila (checks con su
+estado, n_no, asistentes, notas). Octava aparicion del patron "se escribe y nadie lo lee".
+### ⚠️ Tecnico 2 (el mas serio): el formato se podia FIRMAR SIN LEERLO
+Los checks arrancaban en **YES** (index=0) y el near-miss en **NO** (index=1): entrabas, pulsabas
+Generar y salia un pre-start con todo en verde sin revisar nada — vaciaba la charla de seguridad.
+Decision del usuario: **sin respuesta por defecto** (`index=None`, soportado desde Streamlit 1.30). Hay
+que responder cada check; el boton Generar queda `disabled` y lista lo que falta. Al generar, si hay
+checks en NO se avisan aparte (revisar antes de trabajar).
+### Imagen
+- **KPIs de seguridad**: registrados, con near miss, con checks en NO, fecha del ultimo.
+- **Historial como fichas desplegables** (antes tabla plana de 5 cols): cada pre-start con **semaforo
+  🟢/🔴** (rojo si near miss o algun check en NO), y al abrir: asistentes, cada check con su estado
+  (🟢 YES / 🔴 NO / ⬜ N/A), la descripcion del near miss, las notas y el PDF.
+### Integracion (ya estaba, no se toco)
+El near-miss abre alarma del proyecto y el "Resumen del dia" del admin cuenta los near-miss de la
+semana. PENDIENTE que deje anotado: un check en NO NO abre alarma (solo el near-miss). Podria, pero
+seria cambio de comportamiento — se dejo solo muy visible en la UI.
+### Verificacion
+`leer()` contra los 2 pre-starts REALES de PRJ-0001: PS-0002 (near_miss=YES, 7 checks YES, asistente
+asfgjjd) → 🔴; PS-0001 (near_miss=NO, todo YES, lksdfkldsf) → 🟢. KPIs: 2 registrados, 1 con near miss,
+0 con checks NO. 0 nombres sin resolver en las 3 funciones. Prompt del agente actualizado (regla v133).
+
+## RAIL desde el proyecto: el codigo del riel se resuelve a su altura (v157)
+Bug reportado por el usuario: "esta leyendo el tipo de riel pero no me da el valor que le corresponde;
+RAIL sale en 0".
+### La raiz: el plano da el CODIGO, no la altura
+El plano trae el codigo del riel (p.ej. `T75-3/B`); el VALOR RAIL (altura del diente) sale del
+catalogo de rieles (hoja Rieles, T75-3/B → AlturaDiente 62). El uploader DIRECTO del Survey si hacia
+ese lookup (`rails.get_rail` → `inp_RAIL`, v84/v85), pero el camino **desde el proyecto** (v137,
+`plan_ui.aplicar`) **no lo hacia**: `extraer_todo` guardaba solo el codigo y el mapa no incluia RAIL.
+Asi que al cargar el plano desde el proyecto, RAIL quedaba en 0.
+### Fix
+- **`plan_data.extraer_todo`** consulta el catalogo con el codigo leido y guarda `rail_altura` (y
+  `rail_ancho`) en el plano. Si el codigo no esta en el catalogo, lo pone en `faltan` con el motivo.
+- **Los mapas de `aplicar`** vuelcan `rail_altura`: Survey → `inp_RAIL`, Plomada → `plb_rail`.
+- **`_plano_section`** muestra el riel como "codigo · RAIL 62". Plomada marca RAIL como 📄 (del plano)
+  y corrige los textos que decian que RAIL va a mano.
+### ⚠️ Los planos ya cargados hay que RECARGARLOS
+`rail_altura` se calcula en la extraccion, asi que un PlanoJSON guardado ANTES de v157 no lo tiene. Hay
+que volver a cargar el plano (📎 Archivos → 📐 Datos del plano → Cargar) para que se resuelva la altura.
+### Verificacion
+Viaje completo con el plano REAL (PLANO NORTH SYD.pdf): `extraer_todo` → rail=`T75-3/B`,
+**rail_altura=62.0**, rail_ancho=10.0, faltan=[]; `aplicar({"rail_altura":"inp_RAIL"})` sobre
+session_state vacio → **inp_RAIL=62.0** ✓. Catalogo confirmado (T75-3/B=62, T127-2/B=89). El uploader
+directo del Survey sigue intacto. NO se escribio en produccion (solo lecturas).
+
+## Cargar el plano en un proyecto ya creado (v156)
+Bug reportado por el usuario: "cuando cargo el plano desde Mi grupo → proyecto → Archivos, las
+herramientas no lo ven".
+### La raiz: subir el PDF ≠ extraer sus datos
+Las herramientas leen **`PlanoJSON`** (`plan_data.del_proyecto`). Esa columna solo se poblaba **al
+CREAR el proyecto** (v137, con `extraer_todo` + `guardar`). Subir el plano por el uploader generico de
+📎 Documentos hacia solo `drive_store.upload` + `add_document`: guardaba el PDF pero **NO extraia a
+PlanoJSON**, asi que el plano quedaba invisible para las herramientas. Y un proyecto creado sin plano
+**no tenia NINGUNA forma** de recibirlo despues. Confirmado: los 3 proyectos reales tienen PlanoJSON
+VACIO.
+### Fix: `_cargar_plano(pid)` en el bloque 📐 Datos del plano
+Hace lo mismo que la creacion: sube el PDF + **extrae a PlanoJSON** (barra de progreso ~80 s, guarda de
+identidad `name:size` de v112) + registra el PDF como documento (best-effort). Es el sitio natural,
+justo donde se ven esos datos; cuando estan vacios, invita a cargarlo en vez de dejar un callejon sin
+salida ("se cargan al crear el proyecto").
+### Se cierra la trampa del uploader generico
+**"plano" sale de `_DOC_SUBIR`** (ya no se puede subir por el uploader generico, que no extrae) pero
+sigue en `_DOC_TIPOS`/`_CAMPO_VER` (se VE si ya existe). Una sola forma de cargar plano, y siempre
+extrae. Mismo criterio que v140: no dejar dos mecanismos para lo mismo, uno de los cuales falla en
+silencio.
+### Verificacion
+`extraer_todo` sobre un plano REAL (PLANO NORTH SYD.pdf): 17/17 params, NS=6, T75-3/B, HKP=70,
+HQ=14045, LFKK=2915, faltan=[]; la barra reporta 7 pasos; el JSON serializa (459 chars).
+`guardar`+`del_proyecto` usan el camino ya probado en v137. `plano` fuera de `_DOC_SUBIR` pero visible
+en `_DOC_TIPOS`. 0 nombres sin resolver en las 2 funciones. NO se escribio en produccion al verificar
+(solo `extraer_todo`, que es lectura).
+
+## El Survey ya no pide proyecto/cliente/ubicacion/ingeniero a mano (v155)
+Apunte del usuario: "en el Survey tengo que escribir proyecto, cliente, ubicacion, ingeniero; estos
+campos no son necesarios". Tenia razon: eran **entrada duplicada**. Desde v135 el survey alimenta un
+proyecto que YA existe, y ese proyecto ya trae Nombre/Cliente/Ubicacion/Ingeniero. El survey tenia DOS
+formas de identificar el proyecto a la vez: 4 `text_input` arriba + el selector de proyecto abajo.
+### Que alimentaban esos campos (verificado antes de tocar)
+Solo los INFORMES (portada cliente, informe admin) y el correo — **no el calculo** (no estan en
+`_survey_signature`) y **no se escribian de vuelta al proyecto** (`attach_survey` solo toca
+ParamsJSON/MatrizJSON/InterpJSON). O sea, puro dato de presentacion que el proyecto ya tiene.
+### El cambio
+- Se quitan los 4 `text_input`. La identidad se TOMA del proyecto al elegirlo en el selector del plano:
+  `session_state["proyecto"/"cliente"/"ubicacion"/"ingeniero"]` = Nombre/Cliente/Ubicacion/Ingeniero.
+- ⚠️ **Seguro escribir esas claves** porque dejaron de ser widgets (con los `text_input` vivos habria
+  sido el error de v111). Y NO estan en la firma, asi que no disparan falsos "recalcular".
+- El keep-alive de v118 (L122) ya cubre esas 4 claves → el valor escrito en la fase Datos sobrevive a
+  la fase Resultados (donde los dibujos y el correo lo leen).
+- **Modo «sin proyecto»** (calculo suelto del admin): el `else` limpia las 4 a "" → el informe va sin
+  identidad, sin arrastrar la del proyecto anterior. (Decision del usuario: informe sin esos datos.)
+- Confirmacion al elegir: "📋 El informe usara los datos de este proyecto: Cliente · Ubicacion ·
+  Ingeniero" + enlace a Maps, puesto DONDE el valor esta fresco (no arriba, que iba un render por
+  detras). El bloque de identidad de arriba se elimino (redundante con `_cabecera` del selector).
+### Verificacion
+Los 4 `text_input` fuera; **ningun widget usa ya key proyecto/cliente/ubicacion/ingeniero** (chequeo
+regex); informes y correo siguen leyendo de session_state; de PRJ-0001 real se tomaria
+prueba1 / ci / 259 clveland redfern / daco; sin referencias colgantes a `_id1..4`; importa OK.
+
+## El Survey es una herramienta más; el Pre-Start no es técnico (v154)
+Apunte del usuario: "cuando hablamos de las herramientas me nombras todas menos el survey; ahora el
+survey es una herramienta mas, la mas potente y compleja pero una mas. Las herramientas TECNICAS son:
+survey, plomado, corte de rieles, corte de buffers, belting".
+### Que ya estaba bien
+El Survey YA se trataba como herramienta en el nav (`_HERR`), en `toolruns.HERRAMIENTAS` (clave
+`survey`) y en el prompt del agente ("es una herramienta que alimenta un proyecto, igual que Plomadas").
+La incoherencia principal era **mi lenguaje** ("las 4 herramientas"), heredado de que toolruns/
+tool_save_ui se construyeron para las otras 4.
+### La incoherencia real: el Pre-Start estaba en el saco de las herramientas
+`_HERR` se llamaba "herramientas comunes" e incluia Survey + los 4 calculos **+ Pre-Start diario**.
+Pero el Pre-Start es un formato de SEGURIDAD de obra, no una herramienta tecnica. Decision del usuario:
+separarlo en el nav.
+- **`_HERR` pasa a ser las 5 TECNICAS** (Survey, Plomadas, Rieles, Buffers, Belting), contiguas.
+- **El Pre-Start se coloca con lo operativo** (tras el panel del rol y el fichaje), antes de las tecnicas.
+- Prompt del agente actualizado: distingue "5 herramientas tecnicas" de "Pre-Start (seguridad)".
+### Verificacion
+Solo cambia ORDEN y encabezado, no accesos: comprobado que propietario y campo conservan el MISMO
+conjunto de secciones (nada perdido ni ganado) y el conductor queda intacto (nunca tuvo Pre-Start ni
+tecnicas). Los defaults (1er item por rol) no cambian. El enrutado es por etiqueta (`if _seccion == _L_X`),
+asi que reordenar la lista no lo afecta. Sintaxis + import OK.
+### Pendiente menor (no se toco)
+El Survey se "reabre" con "🔄 Reconstruir en el Survey" mientras las otras 4 usan "↩️ Reabrir en la
+herramienta" (v148): dos nombres para el mismo concepto. Es defendible (el Survey guarda en ParamsJSON,
+no en DatosJSON) pero conviene unificar el LENGUAJE algun dia.
+
+## Usuarios de campo: una ficha 360 por persona (v153)
+Peticion del usuario: la gestion de usuarios "debe ser lo mas completa posible y permitir ver y
+gestionar TODO lo asociado con cada usuario; practica pero completa".
+### ⚠️ El problema: estaba organizada por ACCION, no por PERSONA
+Para gestionar UN usuario habia que elegirlo en **tres desplegables distintos** — uno para el contacto,
+otro para modificar (contraseña/tarifa/activar) y otro para las credenciales — y la tabla de arriba era
+solo lectura. Ademas habia datos de cada persona que **no se veian en ningun sitio de gestion** aunque
+la app los tiene: proyectos asignados, horas, recibos que cargo, si esta fichando ahora.
+### `_ficha_usuario(u, grupo)`: elegir a la persona y gestionarlo todo ahi
+Sub-navegacion con radio (regla v56, NO st.tabs) dentro de la ficha:
+- **🔑 Acceso**: contraseña, tarifa/hora, activar/desactivar.
+- **📇 Contacto**: email + vinculacion de Telegram (reusa `_contacto_uno`, extraido de
+  `_field_contact_ui` para no duplicar; el panel del propietario sigue usando la version con lista).
+- **🎫 Credenciales**: `render_credenciales(editable=True)`, ya existia.
+- **📊 Su trabajo** (nuevo, solo lectura): horas registradas, recibos cargados (`expenses.by_user`,
+  nuevo — `CreadoPor` se guardaba desde v105 y no se leia por usuario) y proyectos asignados. El "todo
+  lo asociado" que se pidio.
+- **🗑**: eliminar con `ui.confirmar_borrado`.
+La ficha **se adapta al rol** (decision del usuario, campo+conductor misma ficha): al conductor no le
+exige contacto ni le muestra proyectos asignados (no van por `CampoAsignados`).
+Arriba queda el **panorama**: tabla-resumen con semaforos de contacto + la matriz de compliance, y
+"➕ Crear usuario" plegado. El selector de la ficha va **sin preseleccion** (`ui.elegir`, v139).
+### Verificacion
+Contra datos REALES: `campo1` (rol campo) muestra sus **3 proyectos asignados** (prueba1/north/norte),
+`conductor` no muestra proyectos (correcto, no van por CampoAsignados); `by_user` cuenta recibos por
+`CreadoPor`; los chips de estado (activo/fichando/contacto) derivan de datos reales. 0 nombres sin
+resolver en las 4 funciones tocadas. **`_field_contact_ui` conserva su firma** para los 2 call-sites
+del panel del propietario (extraje `_contacto_uno` sin cambiar la version con lista). Sin variable
+`campo` huerfana tras la reescritura. Prompt del agente actualizado en el mismo lote (regla v133).
+
+## Gastos del grupo: presupuesto, proyeccion y separar con/sin presupuesto (v152)
+Peticion del usuario. La pestaña era de **v106** y no se habia vuelto a tocar: dos `st.bar_chart`
+grises, una tabla y un `st.metric`. Se quedo atras respecto a Costos (v144), Estado (v143) y Horas
+(v151).
+### ⚠️ Respondia "cuanto llevas" en vez de "cuanto vas a gastar"
+`cost_projection` (proyeccion al terminar = costo·100/avance) existe desde v144 y la vista de grupo
+**no la usaba**, ni mostraba el presupuesto del grupo. La pregunta de gestion no es cuanto lleva
+gastado el grupo sino **si se va a salir del presupuesto** — y eso se sabe hoy, no cuando ya paso.
+`group_expenses` ahora añade por fila `avance`, `proyectado`, `over` y **`over_proj`** (se saldra al
+ritmo actual aunque hoy aun este dentro). Es el UNICO consumidor, asi que enriquecerlo no afecta a nadie.
+### Rehecha con el lenguaje de las otras pestañas
+- **KPIs**: costo actual, presupuesto del grupo, % consumido (rojo si >100), **proyeccion al terminar**
+  (rojo si supera el presupuesto), proyectos sobre presupuesto.
+- **Dos alertas**: ⛔ los que YA se pasaron (`over`) y ⚠️ los que **se pasaran al ritmo actual**
+  (`over_proj`, aun dentro hoy). El caso que importa: $6k de $10k al 30% proyecta $20k → avisa estando
+  al 60% consumido, cuando aun se puede reaccionar.
+- **Se separan** los proyectos CON presupuesto (costo/proyeccion/% + semaforo ⛔⚠️✅) de los SIN
+  presupuesto (solo costo + aviso de que no hay contra que comparar). Antes se mezclaban en una columna
+  "%" que salia vacia — con 2 de 3 proyectos a presupuesto 0, la tabla se veia a medias.
+- Barras HTML (`_barras_html`, v144) para reparto MO/compras y por categoria, en vez de `st.bar_chart`
+  grises. **Quitada la subtabla de categorias** (duplicaba las barras de justo encima).
+- CSV de contabilidad ampliado con avance y proyeccion.
+### Verificacion
+Contra datos REALES: KPIs (costo $359, presup $10.000, proyeccion $778, 4% consumido), separacion
+correcta (prueba1 con presupuesto / north+norte sin), proyeccion de prueba1 778.31. Las **3 ramas de
+alerta** probadas con filas simuladas (sano / ya pasado / se pasara al ritmo / mezcla): ⛔ y ⚠️
+disparan donde deben y el caso $6k→$20k avisa sin estar todavia sobre. 0 nombres sin resolver (el `x`
+es de una lambda).
+
+## Horas del grupo: costo de M.O., KPIs y el "sin asignar" deja de mentir (v151)
+Peticion del usuario: revisar 🛠 Mi grupo → ⏱ Horas (tecnico, imagen y funcionalidad). Eran **dos
+tablas planas** que solo respondian "cuantas horas".
+### ⚠️ El "sin asignar" mostraba CEROS FALSOS
+`sin_asignar` = jornada − Σproyectos, clampado a 0. Pero eso solo vale si todos abren jornada, y hasta
+v150 el fichaje normal no la abria. En los datos reales, `lksdfkldsf` imputa **8.97 h a proyecto con 0
+de jornada** → sin_asignar sale 0, cuando en realidad es **indeterminado**. La metrica parecia precisa
+y no lo era. Ahora `group_hours` marca `sin_asignar_indet` (proyecto > jornada + 3 min de tolerancia)
+y la tabla muestra **«—»** en vez del cero enganoso, con nota explicativa.
+### El costo, que es lo que le faltaba a una vista de GESTION
+`TarifaHora` por usuario y `labor_cost` ya existian, aqui no se cruzaban. `group_hours` añade
+**`tarifa` y `costo`** (horas imputadas × tarifa) por persona + total del grupo. Aviso de quien tiene
+tarifa 0 (su costo sale $0 sin explicacion). Mismo criterio que la pestaña Costos de v144.
+### Imagen: KPIs + reparto por proyecto
+Tarjetas arriba (personas activas, jornada, en proyectos, sin asignar con % en rojo si >25%, costo
+M.O.) y **barras de horas del grupo por proyecto** — a que elevador va el tiempo, que antes estaba
+enterrado en subtablas persona por persona dentro de un expander. Se quito la columna **Login** (ruido
+tecnico) y las subtablas.
+### ⚠️ Bug que introduje al quitar el Login y cace en la verificacion
+El Login era el **desempate**: en los datos reales `conductor` y `fijiofgjei` tienen el MISMO Nombre,
+asi que sin el Login salian como dos filas `fijiofgjei` **indistinguibles** (mismo colapso por homonimo
+de v147/v150). Fix: se añade el login entre parentesis SOLO a los nombres que colisionan. REGLA (ya van
+tres): al usar un nombre legible como identidad visual, comprobar que es UNICO; si no, desempatar.
+### Verificacion
+Contra los datos REALES: KPIs (4 personas, 9.9 h jornada, 17.7 h proyecto, $359 M.O.), costo de
+`lksdfkldsf` 8.97×40=358.8, `sin_asignar_indet` True para quien imputo sin jornada y False para el
+ruido de 1 centesima (admin1 8.68 vs 8.67), reparto por proyecto (prueba1 8.99 / north 8.65 / norte
+0.02), y las dos `fijiofgjei` ya distinguibles. `group_hours` es el UNICO consumidor, asi que ampliar
+su dict no afecta a nadie mas.
+
+## Fichaje: dos relojes para TODOS, sin texto libre y con resumen del dia (v150)
+Peticion del usuario: "mas dinamico, mas profesional; aun salen campos para llenar a mano; el proyecto
+debe poder seleccionarse; y vamos a estandarizar el clock in/out para todos por igual, uno general y
+uno especifico, con cronometro".
+### ⚠️ El texto libre no era cosmetico: PERDIA HORAS
+Habia tres sitios para teclear el proyecto a mano (`_OTRO`, `tc_proyecto`, `cd_prj_txt`). Al usarlos
+el **`ProyectoID` quedaba vacio**, asi que esas horas dependian de que el nombre coincidiera exacto:
+con un dedazo **no contaban para ningun proyecto** y desaparecian del costo de mano de obra, sin
+aviso. Reabria justo el agujero que cerro v145. En los datos reales solo **6 de 12** filas tienen ID.
+Ahora el proyecto SIEMPRE sale de una lista (`ui.elegir`, sin preseleccion).
+### "Ubicacion / Nota": se pedia dos veces y no la leia NADIE
+Verificado en todo el repo: todas las lecturas de `Ubicacion` son la **del proyecto**, no la del
+fichaje. Y en los datos reales esta **vacia en las 12 filas**. Se pedia al entrar y otra vez al salir
+(se anexaba como nota). Eliminada del formulario.
+### Un solo fichaje: jornada + proyecto (decision del usuario)
+`_render_normal` y `_render_conductor` eran dos flujos que divergian; ahora hay **una** funcion.
+El modelo ya existia entero (TIPO_GENERAL/TIPO_PROYECTO, switch_project, `sin_asignar` = jornada −
+Σproyectos, ya clampado a 0), solo lo usaba el conductor. Eso producia datos incoherentes: en la hoja
+real, `lksdfkldsf` tiene **8.97 h de proyecto y 0 de jornada**.
+- **`fichar_proyecto()`** abre la jornada SOLA si no estaba (decision del usuario: los dos relojes
+  para todos, pero sin cobrar un toque extra cada mañana) y lo avisa. **`cerrar_jornada()`** cierra
+  tambien el segmento de proyecto.
+- **`resumen_hoy()`**: horas del DIA NATURAL (no ultimas 24 h) — jornada, imputado y sin asignar. El
+  cronometro solo dice cuanto llevas desde que fichaste; esto dice cuanto llevas en el dia.
+- **`mis_fichajes()`**: los propios, que el usuario no podia ver (el reporte de horas es del admin).
+### ⚠️ `clock_out` hacia hasta 5 llamadas a la API por salida
+3 `update_cell` + (si habia nota) 1 lectura y 1 escritura mas. Con el equipo fichando a la misma hora
+es el escenario del 429 que v80 arreglo en los proyectos. Ahora **1 `batch_update`**.
+### ⚠️ Bug que reintroduje y cace en la verificacion
+El selector de proyectos lo arme con `{nombre: id for p in proys}`: **dos proyectos homonimos
+colapsan y uno queda IMPOSIBLE de fichar**, en silencio. Es exactamente el fallo de v147, cometido
+otra vez tres versiones despues. Desempatado con el ID. Los homonimos son posibles: `create_project`
+solo AVISA de duplicados, no los impide.
+### Verificacion
+`resumen_hoy` probado con fichajes simulados: dia normal (8 h jornada, 3+2.5 imputadas → 2.5 sin
+asignar) · sesion ABIERTA contando el tiempo transcurrido · lo de ayer NO entra · proyecto sin jornada
+no deja `sin_asignar` negativo. `fichar_proyecto` y `cerrar_jornada` probados en los 3 escenarios
+(sin nada abierto → abre general + proyecto, auto=True; jornada ya abierta → solo proyecto; cerrar con
+proyecto abierto → cierra proyecto y luego general). `mis_fichajes` contra los datos REALES.
+0 nombres sin resolver · 0 `text_input` en el modulo · sin referencias huerfanas a las 2 funciones
+eliminadas · prompt del agente actualizado en el MISMO lote (regla v133).
+
+## Pestaña Datos: archivar en vez de borrar, y fechas que no mienten (v149)
+Revision de ✏️ Datos a peticion del usuario ("a mi no se me ocurre mucho, que propones?"). Tres
+problemas reales, ninguno estetico.
+### ⚠️ 1. Las fechas eran texto libre y falseaban el cronograma EN SILENCIO
+`FechaInicio`/`FechaFinEst` eran `text_input`, y `project_schedule` hace `.split("-")` con un `except`
+que **cae a `date.today()` sin avisar**. Comprobado: `16/07/2026`, `16-07-2026`, `2026/07/16` y `""`
+todos caen a hoy. En PRJ-0001 real (dia 12 de 32, 46% real vs 33% plan), reescribir la fecha con barras
+lo manda al **dia 0** y la app dice 46% real contra 0% planificado: *"vas adelantadisimo"*. Quedan
+falseados curva S, retraso, fin proyectado y el radar del admin. Ahora `st.date_input` (+ `_a_fecha`
+para leer lo ya guardado en cualquier formato y `_iso` para guardar siempre en ISO) y validacion de
+que fin >= inicio.
+### ⚠️ 2. Borrar era la accion mas destructiva y la PEOR protegida
+Un clic, **sin casilla de confirmacion** — mientras que borrar UNA actividad si la exige desde v139.
+Y `delete_project` solo quita proyecto + actividades: medido en PRJ-0001, dejaba huerfanos
+**2 documentos (con sus archivos en Drive), 2 pre-starts, 6 alarmas y 4 fichajes**.
+**Decision del usuario: archivar en vez de borrar.**
+- `ARCHIVADO` entra en `ESTADOS_MANUAL` y en `derive_estado` (reusa la maquina de estados existente,
+  sin inventar una paralela). `set_archivado(pid, bool)` archiva y restaura.
+- **`list_projects(..., incluir_archivados=False)`**: el defecto OCULTA. ⚠️ Por eso las **busquedas
+  por identidad** tienen que pedirlo explicitamente, o archivar las romperia en silencio. Clasificados
+  los 30 call-sites: 4 son busquedas (`plan_data.del_proyecto`, el mapa nombre->ID de
+  `project_hours_bulk`, el proyecto del clock-in en `plan_ui`, y el chequeo de duplicados) y 26 son
+  listas.
+- ⚠️ **Sin una forma de VER los archivados, archivar seria un viaje sin vuelta**: el proyecto
+  desaparece de la cartera y no habria como abrirlo para restaurarlo. Casilla "📦 Ver también los
+  archivados" en la cartera del admin y en la tabla del propietario, mas un contador de cuantos hay
+  ocultos. Emoji y color de estado añadidos.
+- **Borrar de verdad: solo propietario**, con el **inventario de lo que quedara huerfano** y hay que
+  **teclear el nombre del proyecto** para habilitar el boton.
+### 3. Asignar campo no avisaba de credenciales vencidas ni contacto faltante
+`_avisar_asignados` existe desde v127 y **solo se usaba al CREAR** el proyecto. Asignar gente a un
+proyecto existente es la accion diaria. La causa es la que v127 ya resolvio en el Survey: el selector
+estaba **dentro del `st.form`**, y ahi los widgets no escriben hasta el submit, asi que el aviso en
+vivo es imposible. Sacado fuera del form.
+### ⚠️ ERROR MIO: `st.stop()` dentro del form, y otra vez la indentacion
+Valide con `st.error(...)` + `st.stop()`. **`st.stop()` corta el render de TODO lo que va debajo**
+(actividades, archivar, eliminar): la pagina se quedaria a medias. Se cambio por `_err` + `if/else`.
+Y al reindentar el guardado bajo el `else` volvi a hacerlo a mano: el `else:` con 2 espacios dejaba las
+9 sentencias del guardado FUERA del condicional, asi que habria guardado igual con el nombre vacio.
+Rehecho **por AST**, midiendo el rango real del bloque, y **verificado por AST** que los 6 efectos
+(`update_project`, las 3 notificaciones, `toast`, `rerun`) quedan DENTRO del else y ninguno fuera.
+### Verificacion
+0 nombres sin resolver nuevos y 0 usos-antes-de-asignar nuevos en los 4 modulos (AST vs commit
+anterior) · `_ver_arch` asignado antes de usarse en las 2 funciones · `ag_id` asignado antes de su uso
+dentro del else · la validacion de fechas compara ANTES de convertir a texto · las 4 ramas del detalle
+intactas · `datos_asociados` probado sobre los proyectos reales.
+
+## Reabrir un calculo guardado (v148)
+Salido de una auditoria del patron "se escribe y nadie lo lee": **`toolruns.DatosJSON` no tenia
+lector**. Cada plomada, corte o belting guardaba su JSON desde v129 y no habia forma de usarlo: de un
+calculo de la semana pasada solo podias bajar el PDF, no abrirlo y cambiar un numero.
+### ⚠️ Al ir a implementarlo, el dato guardado NO servia
+`DatosJSON` guardaba los **RESULTADOS**, no las entradas: plomada metia dbp/dbpw/d1/d2/verif..., que
+son salidas de `compute_plumb`, no BKS/RAIL/TKSW/BSR. **Faltaba justo lo necesario para reabrir.**
+Se corrigio el formato a `{"entradas": {...}, "resultados": {...}}`. Como la hoja `Calculos` tiene
+**0 filas** (nunca se guardo ni un calculo en produccion), no hay formato heredado que sostener; aun
+asi `entradas_de()` devuelve {} con el formato viejo y entonces no se ofrece reabrir.
+REGLA: antes de construir sobre un dato guardado, mirar **que contiene**, no que exista la columna.
+### Como se capturan las entradas
+`tool_save_ui._snapshot(herramienta)` recoge session_state **por PREFIJO** (`plb_`, `rc_`, `bc_`,
+`belt_`) en vez de enumerar claves: asi las que nacen sobre la marcha (`belt_hgpr_2`) entran solas y no
+hay una lista que mantener. Los `DataFrame` (matrices de rieles y buffers) viajan como
+`{"__df__": records}`. Se saltan las claves `*_editor` (los `st.data_editor`): su contenido ya vive en
+el `*_df` de al lado, que **NO es clave de widget** y por tanto es seguro restaurar.
+Los widgets del propio bloque de guardado (`prj_*`, `dl_*`, `save_*`) no empiezan por el prefijo, asi
+que quedan fuera solos — verificado.
+### ⚠️ La restauracion escribe claves de WIDGET (regla v111)
+`aplicar_restauracion()` va **antes de instanciar ningun widget** de la herramienta. Verificado por
+AST en las 4: la llamada esta DENTRO de su `render_*_tab` y su linea es anterior a la del primer
+widget (plumb 34<38, rieles 36<40, buffers 36<40, belting 39<43).
+### ⚠️ ERROR MIO: volvi a romper la indentacion, como en v120
+Mi parche sustituia el texto del ancla sin sus 4 espacios, asi que la linea reinsertada quedaba a
+columna 0 → `IndentationError` en los 4 ficheros. Se revirtio con `git checkout` y se rehizo leyendo
+la **indentacion real** de la linea ancla (`re.match(r"\s*", linea)`) y aplicandosela al bloque.
+REGLA: al insertar codigo por texto, NUNCA reescribir la linea ancla; insertar lineas ANTES de ella
+con su misma indentacion medida del fichero.
+### Verificacion: viaje completo, no solo "compila"
+Simulado el ciclo real de las 4 herramientas — session_state -> `_snapshot` -> `json.dumps` -> columna
+-> `json.loads` -> `entradas_de` -> `aplicar_restauracion` -> session_state vacio:
+plomada 11 claves, rieles 7 (con matriz), buffers 3 (con matriz), belting 6 (claves dinamicas).
+En las 4: nada falta, nada sobra, valores identicos, **matrices reconstruidas** y `bc_editor` excluido.
+Formato viejo y `DatosJSON` corrupto devuelven {} sin romper.
+
+## Pestaña Archivos: el plano visible, fotos en galeria y descarga bajo demanda (v147)
+Cuatro mejoras tras quitar el paquete de obra en v146.
+### ⚠️ La descarga era ANSIOSA: se bajaba TODO Drive en cada render
+`st.download_button(data=...)` evalua `data` **al renderizar**, no al pulsar. Con un
+`download_button` por documento, abrir un proyecto se bajaba de Drive **todos** sus archivos antes de
+que nadie tocara nada. Cacheado 5 min, asi que con 3 documentos no se nota — pero el campo **solo
+puede subir fotos**, asi que ese numero crece sin techo. Estaba igual en Documentos y en Calculos.
+Ahora: lista con metadatos + **`ui.elegir` sin preseleccion** (v139) y solo se descarga **el elegido**.
+Medido con los documentos reales: **0 descargas al renderizar** (antes 2 en PRJ-0001 y 3 en PRJ-0003).
+### Las fotos de obra, en galeria
+El campo solo sube fotos: son la unica ventana del admin a la obra y salian como una fila de texto
+(`📷 foto.jpg · foto`). `_galeria_fotos` las pinta en rejilla de 3 con su fecha y quien la subio.
+**Paginada de 6 en 6 a proposito**: cada miniatura ES una descarga, y mostrarlas todas seria
+reintroducir el problema que acabamos de arreglar.
+### Quien subio cada documento y cuando
+La hoja `Documentos` guarda `SubidoPor` y `Fecha` desde v74 y **la vista los tiraba**. Ya salen en la
+tabla (`campo1 · 16/07 07:44`). Sexta aparicion del patron "se escribe y nadie lo lee".
+### Lo que dijo el plano, dentro del proyecto (`_plano_section`)
+`PlanoJSON` existe desde v137 y solo se veia **al crear el proyecto** o dentro de una herramienta: en
+el detalle tenias el `plano.pdf` colgado sin saber que se extrajo ni si falto algo. Ahora hay tarjetas
+(parametros n/total, NS, riel, HKP, HQ, LFKK/LFGK), **aviso de lo que el plano NO dio** y la tabla
+completa desplegable. Claves verificadas contra `plan_data.extraer_todo` antes de usarlas (el error de
+v135 fue inventarse un nombre de argumento).
+### ⚠️ Bug que casi cuelo: dict comprehension que descarta en SILENCIO
+Construi el mapa del selector con `{etiqueta: doc for doc in docs}`. **Dos documentos con el mismo
+nombre y el mismo minuto** (subida masiva de fotos) colisionan y uno queda **imposible de descargar**,
+sin ningun error. Desempate por los ultimos 6 del DriveID. REGLA: un dict comprehension sobre datos de
+usuario necesita que la clave sea unica DE VERDAD, o pierde filas sin avisar.
+### Verificacion
+Simulada la pestaña con los documentos REALES de los 3 proyectos: iconos, tipos, autor y fecha
+correctos; `_fecha_corta` probada con los 5 timestamps reales y con ''/None/fecha-sin-hora/basura;
+selector sin colisiones; 0 nombres sin resolver nuevos (AST vs commit anterior; el unico "hallazgo"
+era el `e` de un `except ... as e`, falso positivo de mi chequeo). Prompt del agente actualizado en el
+MISMO lote (regla v133).
+
+## Se elimina el paquete de obra: era un subconjunto del informe del cliente (v146)
+El usuario, mirando la pestaña 📎 Archivos: "la opcion de paquete de obra no aporta mucho... aun no
+veo claro si aporta algo tenerlo en la app". Tenia razon, y la comprobacion lo dejo sin defensa.
+### La evidencia: no aportaba NI UN dibujo propio
+`field_pack_pdf` metia `shaft_iso_svg` + `floor_plan_svg` + `plumb_svg`/`plumb_iso_svg`/
+`plumb_card_svg`. **Los cinco estan en `user_report` (L408, L415, L477, L480, L483)**, con las mismas
+funciones y los mismos argumentos — y el informe del cliente **ya se archiva solo** al guardar el
+survey. Los tres del plomado ademas los genera por su cuenta el PDF de 🔩 Plomadas desde v130.
+Su unico diferenciador era **lo que quitaba** (portada, veredicto, IA, glosario, conclusiones, firma):
+una preferencia de formato, no una capacidad ausente.
+### Por que sobrevivio tanto: el patron de v140, otra vez
+Nacio en **v126**. Despues **v129/v130** dieron PDF propio a cada herramienta y **v134** se los hizo
+visibles al campo. Entre las dos le vaciaron la razon de ser y nadie lo retiro. **REGLA (repetida):
+al sustituir un mecanismo por otro mejor, quitar el viejo en el MISMO lote.**
+### ⚠️ Una propuesta mia que RETIRE tras comprobarla
+Propuse que el informe del cliente **degradara sin IA** (generarse sin las 5 secciones de la IA en vez
+de bloquearse, regla de v38) para cubrir el unico caso en que el paquete ganaba: `survey_calc.
+recalcular` es determinista y el informe se bloquea si falla la interpretacion. **Al verificar, la via
+sin IA YA EXISTIA**: `diagrams.floor_plans_pdf` (v115), cuyo docstring dice literalmente "para enviar a
+obra sin el informe completo", ya esta en el Survey. Abrir un modo de fallo nuevo en un documento que
+va al CLIENTE para cubrir algo ya cubierto habria sido peor: el bloqueo de v38 es un control de calidad
+deliberado. Se descarto y el informe no se toco.
+### Eliminado
+`core/field_pack.py` (152 lineas) · `_paquete_obra_section` (42) · sus 2 call-sites · el bloque del
+Survey (29) · 2 imports. **~225 lineas.**
+### Verificacion (borrar lineas DENTRO de funciones es lo que rompio v120)
+1. **Diff estructural por AST contra el commit anterior**: en projects_ui solo desaparece
+   `_paquete_obra_section` y solo cambia `render_field_projects` (32→31 sentencias); en survey_ui solo
+   `_render_survey_results` (44→43). Ninguna otra funcion alterada.
+2. **Las 4 ramas del detalle comparadas una a una**: Estado/Datos/Costos identicas, Archivos 4→3
+   (exactamente la llamada quitada), ninguna rama perdida.
+3. `best`/`lim_map`/`ctrl_in_frame_`/`all_params`/`limits`/`plumb_res` siguen asignados en
+   `_render_survey_results` (las locales de las que dependia el bloque).
+4. Cero referencias residuales en todo el repo; los 5 modulos importan de verdad.
+5. **Prompt del agente actualizado en el MISMO lote** (regla v133): decia que el Survey ofrece un
+   paquete de obra y que Archivos lo contiene. Ahora describe `floor_plans_pdf` y las pestañas reales.
+   ⚠️ La regla de v133 aplica igual al QUITAR, no solo al añadir.
+
+## El fichaje guarda el ProyectoID: trazabilidad que no se pierde al renombrar (v145)
+Decision del usuario tras el hallazgo de v144: el fichaje cruzaba con el proyecto **por NOMBRE**, asi
+que habia fichajes bajo `"Prueba1"` para un proyecto llamado `"prueba1"` cuyas horas **se caian del
+costo EN SILENCIO**, y renombrar un proyecto desligaba todo su historico de mano de obra.
+### Columna `ProyectoID` en la hoja del fichaje (migra sola, va al final)
+- **`timeclock.es_del_proyecto(fila, pid, nombre)`** — regla unica: **ID primero, nombre de respaldo**
+  (normalizado sin may/min ni espacios). Mismo criterio que `_matches` usa con `Usuario` desde v106.
+  La usan `project_hours`, `project_hours_bulk`, `labor_breakdown` y `spend_curve`, para que el costo
+  de mano de obra y las horas del proyecto **no puedan divergir**.
+- **Escritura**: `clock_in(..., proyecto_id=)` y `switch_project(..., new_pid=)`; los 3 call-sites de
+  `timeclock_ui` mandan el ID desde un mapa nombre→ID. Escribir el proyecto a mano deja el ID vacio
+  (y cae al nombre), que es el comportamiento correcto.
+- **`open_sessions`** devuelve tambien `proyecto_id` **sin quitar `proyecto`** (lo consumen plan_ui,
+  projects_ui y timeclock_ui).
+- **`group_hours`** resuelve el nombre ACTUAL via ID (`_nombre_actual`, import perezoso porque
+  `projects` importa `timeclock` → seria circular): un proyecto renombrado deja de aparecer bajo dos
+  etiquetas distintas.
+### ⚠️ `project_hours_bulk` CAMBIA DE CLAVE: {nombre} → {ProyectoID}
+Es el riesgo del lote: **8 call-sites lo indexaban por nombre** (tarjetas de cartera, agrupaciones,
+KPIs, radar del admin, tabla del propietario) y si se escapa uno las horas salen **0 en silencio**.
+Las filas anteriores a v145 no traen ID, asi que su nombre se resuelve contra los proyectos del grupo
+y **tambien acaban sumando bajo el ID correcto** — el relleno del historico no hace falta para que las
+cuentas salgan, solo para trazabilidad.
+### Verificacion contra la base REAL
+Horas totales **8.99 antes y 8.99 despues** (nada perdido); mano de obra **358.8 identica**; bulk y
+`project_hours` coinciden proyecto a proyecto; los 5 casos de `es_del_proyecto` (ID manda sobre nombre,
+ID distinto con nombre igual, fila vieja por nombre sin may/min, fila de otro, pid vacio); y
+`group_hours`, `over_budget`, `group_expenses` y `admin_digest` siguen dando lo mismo. Ademas: **cero
+nombres sin resolver NUEVOS** comparando por AST contra el commit anterior en los 5 modulos tocados
+(los preexistentes son cierres anidados, no fallos).
+### Relleno del historico EJECUTADO (22/07/2026, autorizado por el usuario)
+Se escribio `ProyectoID` en **6 de las 12 filas** del fichaje real, en 1 sola llamada, recalculando
+FRESCO al escribir y con asserts de que el plan seguia siendo el de la vista previa: filas 5/6/8/11 ->
+PRJ-0001 (la 8 es la `"Prueba1"` que se caia), 12 -> PRJ-0003, 13 -> PRJ-0002. Las otras 6 no se
+tocaron (5 sin proyecto, ninguna sin coincidencia). Verificado despues: horas 8.98/0/0.01 y suma 8.99
+**sin cambios**, MO 358.8 sin cambios, y `group_hours` deja de partir `prueba1`/`Prueba1` en dos porque
+`_nombre_actual` resuelve por ID. Comprobada la razon de ser del cambio: con el proyecto renombrado,
+cruzar por ID conserva **8.98 h** y cruzar por nombre da **0.00 h**.
+
+### ⚠️ ERROR MIO: una lectura local NO es solo-lectura si has tocado HEADERS
+Dije que iba a auditar la hoja **sin escribir** y una ejecucion posterior escribio: al editar
+`timeclock.HEADERS` y luego llamar a `project_hours_bulk`, la lectura pasa por **`_cached_ws()`, que
+lleva la migracion de cabecera dentro**, y creo la columna `ProyectoID` en produccion sin avisar.
+Fue benigno (solo la cabecera; las 12 filas de datos quedaron intactas, verificado) pero no era lo
+acordado. **REGLA: `timeclock._cached_ws` / `projects._get_ws` / `alerts._ws` MIGRAN LA CABECERA en
+cualquier acceso. Si has tocado HEADERS, cualquier "lectura" escribe.** Para auditar de verdad hay que
+ir por gspread crudo, sin pasar por los helpers de la app.
+
+## Pestaña Costos: de "cuanto llevas" a "cuanto vas a gastar" (v144)
+Peticion del usuario: "esta muy simple, mas visual, con mas impacto y mas datos; es un apartado muy
+importante". La pestaña eran **3 `st.metric`, una barra y una tabla plana**.
+### ⚠️ El fallo de fondo: respondia la pregunta que ya no se puede accionar
+La barra de presupuesto **solo se ponia roja al pasarse**, o sea cuando ya no hay nada que hacer.
+- **`expenses.cost_projection(pid, grupo)`** — cuanto costara AL TERMINAR al ritmo actual:
+  `proyectado = costo_actual / (avance/100)`. Es el gemelo de "fin proyectado" de v143.
+  Con datos reales: *prueba1* lleva $358 al 46% → **$778 final** contra $10.000 de presupuesto.
+  El caso que importa: **gastar $6.000 de $10.000 al 30% de avance proyecta $20.000** — hoy la barra
+  seguia verde (60% consumido) y no decia absolutamente nada.
+  Añade `por_punto` (costo por punto de avance).
+- **`expenses.labor_breakdown(pid, grupo)`** — mano de obra POR PERSONA. `labor_cost` recorria los
+  fichajes y devolvia **solo el total**, asi que quien consumia las horas era invisible aunque el dato
+  estuviera ahi. `labor_cost` pasa a ser un wrapper (mismo total, verificado: 358.8 antes y despues).
+  Marca **`sin_tarifa`**: con tarifa 0 las horas suman $0 y parecia que el proyecto no costaba MO.
+- **`expenses.spend_curve` + `spend_svg`** — gasto acumulado dia a dia, mano de obra y compras
+  **apiladas** (se ve el reparto, no solo el total), con el presupuesto en discontinua gris y la
+  proyeccion al ritmo actual hasta donde acabas. Sale de datos que ya existian: las compras traen
+  Fecha y cada fichaje aporta horas×tarifa en el dia de su Clock In.
+- **Gasto por categoria: se calculaba desde v105 y la pestaña lo TIRABA.** `project_expenses` devuelve
+  `por_categoria` y solo lo leia el informe de grupo. Quinta vez del patron "se escribe y nadie lo lee".
+- `_barras_html(pares, total, color)` para los desgloses cortos: un `st.bar_chart` obliga a leer un eje
+  para nada; la barra con su numero al lado se lee sola.
+### ⚠️ El cruce de horas va por NOMBRE de proyecto, no por ID
+Encontrado mirando los datos reales: hay fichajes bajo `"Prueba1"` para un proyecto llamado `"prueba1"`
+y **esas horas se caian del costo EN SILENCIO**. `_mismo_proyecto()` normaliza may/min y espacios, lo
+que tapa ese caso concreto — pero **renombrar un proyecto sigue borrando su historico de mano de obra**.
+El arreglo de fondo es guardar el ProyectoID en la hoja de fichaje. PENDIENTE, es cambio de modelo.
+### Verificacion
+`spend_svg` **medido numericamente** sobre el XML (no mirado): linea de presupuesto en sy(6000)=136.0 ✓
+· proyeccion termina en sy(9200)=72.1 y arranca en el ultimo punto x=652 ✓ · roja porque 9200>6000 ✓ ·
+2 areas apiladas ✓ · 15 puntos de curva ✓ · sin `<defs>/<marker>` ✓ · degrada a "" con <2 fechas.
+Las 4 ramas del titular probadas contra los 3 proyectos REALES + el caso sobre-presupuesto simulado.
+`over_budget`, `group_expenses` y `projections_by_group` siguen dando lo mismo; firma de
+`render_expenses` intacta para sus 3 call-sites (admin / campo / conductor).
+
+## Pestaña Estado: la grafica deja de ser una imagen plana (v143)
+Peticion del usuario: "las graficas se ven planas como simples imagenes, quiero algo mas integrado y
+que impacte mas; y los valores, mas informacion mejor presentada".
+### ⚠️ El problema de la grafica no era estetico
+La **brecha entre plan y real —que es toda la historia— habia que deducirla comparando dos lineas
+finas de 2.5 px**. `schedule_svg` reescrito con el lenguaje de los planos (v119-v123):
+- **La brecha se RELLENA** entre las dos curvas: **roja si vas por detras, verde si por delante**. Se
+  ve cuanto y desde cuando de un vistazo, en vez de estimarla a ojo.
+- **HOY cruza TAMBIEN el Gantt** (antes solo la curva) → se ve que actividad cae bajo la linea.
+- **Jerarquia en las barras**: terminada (verde) / en curso (azul) / **tocaba y sigue en 0% (roja
+  achurada + ● en el nombre)** / futura (gris). Ese cuarto estado es el que senala el problema.
+- **Proyeccion al ritmo actual** en trazo discontinuo hasta la fecha proyectada + area bajo la real.
+- ⚠️ **`proj_dias` de `schedule_projection` es la DIFERENCIA contra el plan (+tarde/−antes), NO el dia
+  absoluto.** Usarlo tal cual ponia el punto de proyeccion en el dia 32 en vez del 61.
+- ⚠️ **Tope al eje (`total × 1.32`)**: el eje se estira para que quepa la proyeccion, pero sin tope un
+  SPI malo (fecha lejanisima) **aplastaba el Gantt**, que es el contenido principal. Pasado el tope la
+  proyeccion se dibuja hasta el borde y se rotula "03/09 ▸".
+- ⚠️ **El eje siempre contiene HOY**: con el tope, un proyecto **pasado de fecha perdia su marca de
+  HOY** — justo el que peor va.
+### La informacion: `_diagnostico(ps)` + `_estado_section(pid, grupo, prj)`
+"SPI 0.47" no le dice nada a nadie en obra. Lo que si, calculado de lo que ya habia en `ps`:
+- **Ritmo real vs necesario**: "vas a **1,7 %/dia** y necesitas **6,4 %/dia**: hay que acelerar **×3,8**
+  en los 11 dias que quedan". Mismo dato que el SPI, en unidades que se accionan.
+- **Que tocaba hoy vs que se esta haciendo** (dos columnas) + el diagnostico: "el equipo sigue
+  terminando Brackets, Rieles y Cabina, asi que Puertas de rellano aun no ha arrancado. **Ahi esta el
+  retraso**". Es la causa, no la constatacion.
+- **Proximo hito** con fecha, **titular en una frase** y **tarjetas KPI** (`_kpi_card`) en vez de los 3
+  `st.metric` planos: avance real / deberia ir / desvio / situacion / fin proyectado.
+- ⚠️ **`proj["today_day"]` viene CLAMPADO al total**: el titular habria dicho "dia 29 de 29" en un
+  proyecto que lleva 40. Para mostrar el dia real hay que usar `ps["today_day"]`.
+- ⚠️ **El dia en que se abre la ventana de una actividad NO cuenta como retraso** (`inicio < hoy`
+  estricto): con `<=`, un proyecto **recien creado nacia con una actividad en rojo**.
+### Verificacion
+Geometria **medida en el DOM**, no mirada (leccion de v121): HOY dia 18 → x=339.9 ✓ · fin planificado
+dia 29 → x=416.8 ✓ · proyeccion dia 61.5 → x=644 (borde) ✓ · punto real 30.2% → y=435.7 ✓ · la banda
+de HOY cubre y 46→487 (Gantt + curva) ✓. Cinco escenarios (atrasado / adelantado / al dia / recien
+empieza / sin avance) + la **llamada minima `schedule_svg(sched)`** que usan `report.py`,
+`user_report.py` y `survey_ui.py` (sigue funcionando, sin HOY ni brecha).
+⚠️ `timedelta` **no estaba importado en projects_ui.py** — lo caza el chequeo de nombres libres, y
+habria sido NameError nada mas abrir la pestaña.
+
+## Agrupaciones: cartera de tarjetas + creacion plegada (v142)
+La lista de agrupaciones era una tabla plana (ID / nombre / nº proyectos / avance) que **no decia nada
+util sin entrar**. Ahora usa el MISMO lenguaje que la cartera de proyectos (`_portfolio_html`):
+- **`_agrupaciones_html(ags, grupo)`** — tarjeta por agrupacion: punto de estado, nombre, nº de
+  elevadores, descripcion, **fecha de entrega del conjunto y que elevador la marca**, barra de avance
+  consolidado, horas, costo, 🔔 alarmas y **borde rojo + ⏰ N d** si el elevador critico va retrasado
+  (verde + ⏩ si va adelantado). Mismo criterio visual que los proyectos.
+- **"➕ Nueva agrupacion" pasa a expander plegado**, como "➕ Nuevo proyecto": no es lo que se viene a
+  hacer a diario.
+### ⚠️ Rendimiento: la fecha de entrega es CARA
+`project_schedule` reconstruye el cronograma de un proyecto y **NO esta cacheado**. Pintar la fecha en
+una lista de N agrupaciones × M elevadores lo recalculaba todo en cada rerun — el mismo problema que
+resolvio `gaps_by_group` en v107. Fix: **`projects.projections_by_group(grupo)`** cacheado 60 s
+({pid: {fecha, spi, gap}}); las tarjetas y `grouping_projection` comparten ese calculo.
+REGLA: antes de poner un dato derivado en una LISTA, comprobar cuanto cuesta calcularlo por fila.
+### Verificado con datos simulados (render real en navegador)
+fecha del conjunto = la del elevador MAS LENTO · señala al critico correcto · badge con el gap del
+critico (no el del primero) · horas 210+180+410=800 · costo 3×18500=55.500 · alarmas · borde rojo/verde
+· y **agrupacion SIN miembros no rompe** (0 elevadores + "sin cronograma para proyectar").
+
+## Agrupaciones: se invierte el flujo + dashboard de conjunto (v141)
+Peticion del usuario: "primero debe existir una agrupacion para que al crear el proyecto se seleccione;
+quiero que sea al contrario". Tenia razon — el flujo estaba al reves de como se trabaja: para agrupar 4
+elevadores habia que crear la agrupacion VACIA y luego abrir los 4 proyectos uno por uno, editar cada
+uno y asignarlo. **Cuatro ediciones en cuatro pantallas, sin ver nunca el conjunto.**
+### El flujo se invierte (solo UI: el modelo de datos NO cambia)
+La relacion sigue viviendo en el proyecto (`AgrupacionID` + `PesoEnAgrupacion`); solo cambia DONDE se
+edita, asi que **no hay migracion**.
+- **`projects.set_grouping_members(gid, {pid: peso}, grupo)`** — define de una vez que proyectos la
+  componen. Los que salen se DESAGRUPAN (no se borran). Solo escribe los que cambian.
+- **`projects_ui._miembros_editor`** — tabla con casilla + peso, reusada al crear y al editar miembros.
+  Marca los proyectos que **ya estan en otra agrupacion** para no moverlos sin querer.
+- **Peso por defecto 1** (decision del usuario) en los DOS caminos. ⚠️ Motivo real: `grouping_progress`
+  es `Σ(peso·avance)/Σpeso`, asi que **con todos los pesos en 0 el avance daba 0** aunque los elevadores
+  estuvieran al 100%. Con el flujo viejo era facil que pasara (habia que ponerlo a mano en cada uno).
+- El selector de agrupacion del **editar proyecto se mantiene** (decision del usuario): aqui los dos
+  caminos son utiles — armar la agrupacion de golpe, o asignar estando dentro del proyecto. No es el
+  caso de v140, donde uno era puro residuo.
+### Dashboard de agrupacion, reescrito
+⚠️ **El avance consolidado NO responde la pregunta que importa.** Un edificio se entrega cuando termina
+**el ultimo** elevador, no el promedio. El dashboard decia "62%" y no decia cuando entregas.
+- **`grouping_projection(gid)`** → fecha de entrega del CONJUNTO = max(`fecha_proj` por SPI) + **que
+  elevador la determina** (el critico). Es lo accionable: ahi es donde rinde reforzar.
+- **`grouping_curve(gid)`** → curva S consolidada plan vs real. ⚠️ Cada elevador tiene su propia fecha
+  de inicio, asi que **no se pueden sumar por "dia N"**: se llevan todos a un eje de FECHAS y se
+  combinan ponderando por peso. Interpolacion lineal entre puntos; 0 antes de empezar, ultimo valor
+  despues; la real se corta en HOY. Topado a 100 (los scurve individuales redondean y sumaban 100.2).
+  Verificado con dos cronogramas de inicios y pesos distintos: 0% al inicio, 100% al final.
+- **Comparativa entre elevadores**: en un edificio son unidades casi gemelas, asi que la desviacion de
+  horas/costo respecto al promedio delata al anomalo. Solo se marca si se desvia ≥15%.
+- **Alarmas del conjunto** + **tarjetas KPI** (`_kpi_card`, ya existia) en vez de `st.metric` planos.
+- **Sin agrupacion preseleccionada** (peticion del usuario; mismo criterio de v138/v139).
+Agente IA actualizado en el mismo lote (regla v133).
+
+## Se quita el doble selector de plano (v140)
+Residuo mio de v137. v128 dio a las 5 herramientas un plano de SESION compartido; v137 movio el plano
+AL PROYECTO (mejor), pero **no quito lo anterior**: quedaron dos cosas seguidas pidiendo el mismo plano.
+El usuario abria 🛡 Corte de buffers y veia (1) el selector de proyecto, que rellena HKP solo, y justo
+debajo (2) "PDF de planos (para HKP)" pidiendole un PDF **que ya no hace falta**. Ademas los `caption`
+seguian describiendo el flujo viejo ("Carga el PDF para leer HKP").
+- El uploader pasa a un **expander plegado**: "📄 ¿El proyecto no tiene plano? Cárgalo aquí".
+  **NO se elimina**: sigue haciendo falta con un proyecto creado sin plano, o para calcular sin proyecto
+  asignado. Solo deja de ser lo primero que se ve.
+- Textos actualizados en las 4: ahora describen que los valores vienen del plano del proyecto.
+### Verificacion (el plegado es una REINDENTACION, la clase de cambio que rompio v120)
+1. Limites del bloque localizados por **AST** (la asignacion `pdf = plan_store.selector` + el `if pdf is
+   not None` que lo consume), no por texto.
+2. **Orden preservado**: `aplicar()` y las escrituras del uploader siguen ANTES de crear cada widget
+   (regla v111) — verificado por linea en las 7 claves afectadas.
+3. **Cero lineas de codigo perdidas** (multiconjunto ignorando indentacion); las unicas ausentes son los
+   textos que se cambiaron a proposito.
+4. Uso-antes-de-asignacion limpio en los 4 (chequeo de v138).
+REGLA: al reemplazar un mecanismo por otro mejor, **quitar el viejo en el mismo lote o dejarlo
+explicitamente como plan B**. Dos mecanismos vivos para lo mismo confunden y envejecen mal.
+
+## Auditoria de los 38 desplegables (v139)
+Pregunta del usuario: "casi todas las listas desplegables tienen un valor preseleccionado, revisa cuales
+podemos dejar sin preseleccion". Auditoria completa → **38 selectbox/multiselect**, clasificados por lo
+que pasa AL ELEGIR, no por consistencia estetica:
+### A · Cuatro que BORRAN — lo serio
+`Eliminar grupo` (auth_ui) · `Actividad a eliminar` (projects_ui) · `Manual` (auth_ui) ·
+`Agrupación` (projects_ui). Los cuatro tenian el mismo patron: **destino ya elegido + boton de eliminar
+al lado, SIN confirmacion**. Un clic de mas borraba algo que nadie eligio. (El de "Eliminar proyecto" si
+avisaba; estos no.) Ahora: opcion neutra + **casilla de confirmacion** que habilita el boton.
+### B · Seis que ESCRIBEN en un proyecto
+Fichaje normal y de conductor, Pre-Start, recibo de gastos, guardar un calculo, destino del survey.
+No destruyen, pero **atribuian datos al proyecto equivocado en silencio** — horas y costos al elevador
+que no es. Todos con opcion neutra; el boton de guardar queda `disabled` sin destino.
+### C · El resto se deja IGUAL (decision explicita)
+Marca (Schindler es la unica), Tipo de documento, Categoria de gasto, Rol, Clase, Referencia de riel,
+Estado manual y la navegacion por radio: son **valores de configuracion con defecto util**, no acciones.
+Quitarles el defecto añadiria un clic sin evitar ningun error.
+### `core/ui_common.py`
+`elegir(label, opciones, key, vacio)` (acepta lista o dict; con dict devuelve el VALOR) y
+`confirmar_borrado(key, texto)`. Viven en un sitio para que los 4 bloques de borrado no divergan.
+⚠️ **`st.selectbox` no tiene estado "sin elegir"**: siempre devuelve su primer elemento. Cualquier
+desplegable que dispare una ACCION necesita opcion neutra explicita.
+### ⚠️ Repetido el chequeo de uso-antes-de-asignar (v138)
+Al dejar `_prj = None` en el survey cuando no hay destino, el codigo de abajo seguia usandolo → se
+protegio el bloque NS y el boton (`disabled=(_prj is None)`). Chequeo pasado en los 7 archivos tocados.
+
+## Los selectores ya no abren un proyecto que nadie eligio (v138)
+Pregunta del usuario: "cuando entro siempre tiene que haber un proyecto preseleccionado en Mi grupo?".
+**No, y era un bug de UX real:** `st.selectbox("Proyecto", list(idmap))` **siempre devuelve el primer
+elemento**, asi que `if sel:` era SIEMPRE cierto y al entrar se abria el detalle completo de un proyecto
+arbitrario debajo de la cartera. Coste medido: **8 lecturas de datos** (proyecto, actividades, horas,
+alarmas x2, cronograma, gastos, agrupaciones) que nadie pidio, mas el ruido visual.
+- **Admin y propietario**: opcion neutra `_VACIO` como PRIMERA del selector → el detalle solo se abre al
+  elegir. El `_prjsel_pending` de v126 (boton "Abrir proyecto ➜") sigue funcionando: escribe la clave
+  del selectbox antes de instanciarlo y esa etiqueta sigue en la lista.
+- **Campo**: si tiene **fichaje abierto**, se preselecciona ESE proyecto — es donde esta trabajando, y es
+  el mismo criterio que usan las herramientas desde v137. Si no ha fichado, opcion neutra.
+### ⚠️ Error que cometi + CHEQUEO NUEVO
+Use `a.get("nombre")` en `render_field_projects`, cuya firma es `(usuario, grupo)`: **`a` se asigna 42
+lineas MAS ABAJO** → `UnboundLocalError` seguro. Y **mi chequeo de nombres dijo "ninguno sin resolver"**,
+porque solo comprueba que el nombre exista en la funcion, NO que exista ANTES del uso. Es la misma clase
+de fallo que v126.
+**Chequeo nuevo (añadir al set):** por cada funcion, comparar la linea del PRIMER uso contra la del
+PRIMER asignamiento de cada nombre; si el uso va antes → error. ⚠️ Hay que **excluir variables de
+comprension, de `for` y argumentos de lambdas anidadas**: su ambito no sigue el orden textual y dan
+falsos positivos (`{f"{p...}" for p in xs}` usa `p` en la linea anterior a su `for`).
+
+## El plano vive en el PROYECTO, no en la sesion (v137)
+Cierra la idea de v135: si el proyecto es la entidad principal, **el plano es suyo**. Se lee UNA vez al
+crearlo y sus valores alimentan las 5 herramientas para siempre.
+- **Columna `PlanoJSON`** en Proyectos (migra sola). ⚠️ **Distinta de `ParamsJSON`**: PlanoJSON es lo que
+  DICE el plano; ParamsJSON es el survey, que ademas lleva lo medido en obra (BSR, FS, FRAME, RAIL,
+  OFFSET_CABIN). Mezclarlas romperia el paquete de obra (con solo el plano no se puede recalcular).
+- **`core/plan_data.py`** — `extraer_todo(pdf, progreso)` corre los 6 extractores en una pasada
+  (~75 s con el cache de v136) y devuelve: 17 params + NS + codigo de riel + HQ/HGP + HKP + LFKK/LFGK,
+  mas **`faltan`** (lo que el plano NO dio) y `n_params`. Solo ~490 caracteres en la hoja.
+  Probado con un plano real: **17/17 params, NS=6, T75-3/B, HKP=70, HQ=14045, LFKK=2915, faltan=[]**.
+- **`core/plan_ui.py`** — `selector_proyecto(key)` da el plano segun el ROL (decision del usuario):
+  - **admin/propietario**: eligen el proyecto DENTRO de cada herramienta (trabajan varias obras).
+  - **campo/conductor**: el proyecto sale del **CLOCK-IN** (`timeclock.open_sessions`), que ya lo pedia
+    desde v67 → **cero friccion añadida**. Si no ha fichado, la herramienta se lo pide.
+  `aplicar(datos, mapa)` vuelca valores a `session_state` **solo si el campo esta vacio/en cero**, para
+  no pisar lo que el usuario ajusto a mano.
+- **Al crear el proyecto**: uploader del plano FUERA del `st.form` (dentro, los widgets no escriben hasta
+  el submit y no se podria prellenar el NS), barra de progreso por extractor, guarda de identidad
+  `name:size` (regla v112), prellenado de NS y modelo, y al guardar → `PlanoJSON` + PDF archivado en Drive.
+- **Las 5 herramientas** (Survey, Plomadas, Rieles, Buffers, Belting) leen de ahi.
+  ⚠️ `aplicar` escribe claves de widget → **verificado por linea que corre ANTES de crear cada widget**
+  (regla v111): plumb 34<65, buffers 35<54, belting 38<66, rieles 35<55, survey 871<977.
+- **Aviso de lo que falta**: si el plano no dio un valor se lista, en vez de dejar un cero silencioso.
+- Agente IA actualizado en el MISMO lote (regla v133).
+### Impacto real
+Antes: el tecnico subia el mismo PDF en cada herramienta y esperaba 30-70 s **cada vez**.
+Ahora: 0 s y 0 PDFs para el campo; el coste se paga una vez, en el escritorio del admin.
+
+## Extraccion del plano: una sola lectura (v136)
+⚠️ **Cada uno de los 6 extractores reparseaba el PDF ENTERO.** Medido sobre un plano real de 5 MB:
+params 37 s · NS 28 s · riel 14 s · belting 51 s · HKP 29 s · **LFKK/LFGK 71 s** = **230 s**.
+O sea: un tecnico que abria ✂️ Corte de rieles en obra esperaba **71 segundos**, cada vez.
+- **`schindler.page_texts(pdf_file)`** — lee el PDF UNA vez y devuelve `[(texto_posicional,
+  texto_plano)]` por pagina, cacheado por **md5 del contenido** (max 4 planos; se guarda el texto,
+  no el PDF). El texto plano se calcula ahi tambien porque varios extractores lo usan como segunda
+  fuente y era otra pasada completa.
+- Los 6 extractores (5 en schindler + `rail_cut.extract_lf`) pasan a leer de ahi. **La logica de
+  PARSEO no se toco**: mismos regex, mismo recorrido, solo cambia de donde sale el texto.
+- **230 s → 79 s** (2.9x). El primero paga la lectura; los otros cinco salen en 0.0 s.
+- ✅ **Verificado que los 6 resultados son IDENTICOS** a los de v135 (params, NS=6, T75-3/B,
+  HQ=14045/HGP=85, HKP=70, LFKK=2915/LFGK=2693) y que el cache **no mezcla archivos** (un segundo
+  plano distinto vuelve a leer y da su propio NS).
+REGLA: al tocar los extractores, comparar SIEMPRE los valores contra una corrida previa; son codigo
+delicado y un fallo silencioso ahi envenena todos los calculos.
+
+## ⚠️ CAMBIO DE ARQUITECTURA: el survey deja de crear proyectos (v135)
+**El PROYECTO pasa a ser la entidad principal y el survey una herramienta que lo alimenta**, igual que
+Plomadas, Cortes y Belting. Antes el proyecto SOLO nacia del survey ("Guardar como proyecto"), asi que
+no se podia dar de alta una obra hasta tener el survey hecho — pero la obra existe antes que el survey.
+### Crear proyecto (nuevo)
+`projects_ui._nuevo_proyecto_form(grupo, key)` — expander **➕ Nuevo proyecto** en 🛠 Mi grupo → 📊
+Proyectos y en 👑 Administracion → 📁 Proyectos (el propietario elige grupo). Pide nombre, cliente,
+ubicacion, modelo, ingeniero, **NS**, fecha de inicio, presupuesto, instrucciones e inducciones.
+El **cronograma se genera solo con el NS** (`build_schedule(ns, fecha, {})` → 11 actividades estandar):
+no necesita el survey. Incluye aviso de duplicados y el chequeo de credenciales/contacto de v127
+(extraidos a `_avisar_asignados` / `_notificar_asignados`, compartidos).
+⚠️ **El formulario va ANTES del `return` por lista vacia** en ambos paneles: si no, sin proyectos y sin
+el survey como origen, la app se quedaria SIN forma de crear el primero (sin arranque posible).
+### El survey alimenta un proyecto existente
+`projects.attach_survey(pid, params, matriz, interp)` escribe ParamsJSON/MatrizJSON/InterpJSON en un
+proyecto ya creado (via `update_project`), de las que dependen el paquete de obra
+(`survey_calc.recalcular`) y "Reconstruir proyecto en el Survey" — **siguen funcionando igual**.
+⚠️ `attach_survey` **NO toca las actividades**: el cronograma se crea con el proyecto y el campo ya
+puede tener avances cargados; sobrescribirlo los borraria.
+El survey ademas registra en la hoja `Calculos` (clave `survey`, añadida a `toolruns.HERRAMIENTAS`) y
+archiva plano + matriz + informe del cliente. Si el NS del plano difiere del NS del proyecto, **avisa**
+en vez de pisarlo en silencio (el cronograma se calculo con el del proyecto).
+### Compatibilidad
+Los proyectos existentes ya tienen su ParamsJSON: nada que migrar, solo cambia DONDE se escribe.
+### ⚠️ Error que cometi
+Al reescribir el bloque invente el kwarg `survey_matrix=` en `generate_user_report`, cuya firma real
+lleva `lim_map=`. Habria sido **TypeError al archivar el informe**. Lo caza **validar cada llamada nueva
+contra `inspect.signature` de la funcion real** — chequeo que conviene repetir tras reescribir bloques.
+El agente IA se actualizo en el MISMO lote (regla de v133): ya no dice "Guardar como proyecto".
+
+## Documentos invisibles + el campo recibe lo suyo (v134)
+⚠️ **Bug de 36 versiones, encontrado auditando los modulos pendientes:** `_documentos_section` filtraba
+por `_DOC_TIPOS`, asi que **todo documento generado por la app con un tipo ausente de esa lista
+desaparecia EN SILENCIO — para TODOS los roles, incluido el admin**:
+- **`prestart`** (v97): cada PDF de Pre-Start archivado en el proyecto llevaba 36 versiones invisible.
+- **`calculo`** (v129): los PDF de las herramientas nacieron invisibles.
+Fix de raiz (no parche): se separa **`_DOC_SUBIR`** (solo alimenta el desplegable de subida MANUAL) de lo
+que se VE. El admin/propietario pasa a `ver_tipos = None` → **sin filtro**, asi un tipo nuevo generado por
+la app no puede volver a desaparecer. `_CAMPO_VER` suma `prestart` y `calculo`; iconos 🦺 y 🧮.
+REGLA: un filtro por lista blanca sobre datos que la propia app genera es fail-closed y falla en silencio.
+Para VISUALIZAR, fail-open; la lista blanca solo para lo que el usuario elige al subir.
+### El campo por fin recibe lo que se construyo para el
+El **paquete de obra** se llama literalmente "PDF para terreno" y hasta ahora **solo podia bajarlo el
+admin** (Survey y detalle de proyecto). Los **calculos** (plomada, cortes) los EJECUTA el campo y no los
+veia. Ambos estan ya en 📋 Mis proyectos. El bloque del paquete se extrajo a
+**`_paquete_obra_section(pid, prj)`**, compartido por el detalle del admin y la vista de campo, para que
+las dos no diverjan.
+### Auditoria de los modulos pendientes (Administracion / Fichaje / Mis proyectos)
+NO tienen el bug v110: los bloques largos bajo `st.button` son ACCIONES que terminan en `st.rerun()`
+(verificado distinguiendo accion de render). Ese patron esta agotado.
+
+## Agente IA al dia + limpieza (v133)
+⚠️ **El agente llevaba ~35 versiones desactualizado.** Auditoria de su SYSTEM_PROMPT contra las
+funciones reales: **desconocia 11** — Corte de buffers (v96), Pre-Start (v97), Maps (v98),
+instrucciones/inducciones (v100), rol conductor (v103), credenciales (v104), gastos y presupuesto
+(v105-106), paquete de obra (v126), plano unico (v128) y la hoja Calculos (v129). Ademas **no
+mencionaba ni una pestaña por su nombre**, asi que tampoco sabia guiar por la interfaz.
+Es un fallo INVISIBLE: el agente no dice "eso no existe", responde con lo que sabe o improvisa, y
+nadie nota que su conocimiento esta congelado. Afecta a los tres roles a diario.
+- Reescrita la seccion "FUNCIONES DE LA APP COPEX" del prompt: las 5 herramientas de calculo (con sus
+  dibujos, ficha de replanteo, plano compartido y guardado en el proyecto), gestion de proyectos
+  (Mi grupo, detalle en 4 pestañas, Mis proyectos, Administracion) y obra/seguridad/costos (Pre-Start,
+  credenciales, gastos, fichaje de 2 relojes, Maps, documentos, alarmas, inducciones).
+- **Navegacion POR ROL**: el prompt indica que ve cada rol, para que el agente diga donde esta cada
+  cosa segun con quien habla, y avise si esa persona no tiene acceso.
+- Intactas: la regla de CONFIDENCIALIDAD y las personas por rol (`_PERSONA`, v91).
+- Se elimino `toolruns.list_group`: escrita en v129 para una vista de grupo que nunca se construyo.
+⚠️ **REGLA:** al anadir un modulo o pestaña, actualizar el SYSTEM_PROMPT del agente en el MISMO lote.
+Un chequeo barato: buscar en `chat_agent.py` las palabras clave de cada funcion nueva.
+
+## Detalle de proyecto: 11 secciones -> 4 pestañas (v132)
+`_detalle_proyecto` eran **314 lineas con 11 secciones apiladas en un scroll unico** — el mismo problema
+que tenia el Survey antes de v114. Misma solucion: sub-navegacion con **`st.radio`** (NUNCA `st.tabs`,
+regla de v56), clave `prj_detalle_sec`.
+- **Cabecera SIEMPRE visible** (nombre, cliente, ubicacion, estado, avance, horas, barra): es el
+  contexto, no una seccion.
+- **📊 Estado**: alarmas · cronograma (curva S real vs plan) · proyeccion EVM/SPI.
+- **✏️ Datos**: instrucciones e inducciones · editar datos · actividades · eliminar.
+- **💰 Costos**: gastos y compras.
+- **📎 Archivos**: paquete de obra · reconstruir en el Survey · calculos de herramientas · documentos.
+`_asig_now`/`_aviso_cambio` se mueven con **Actividades**, que es su unico consumidor (verificado antes
+de mover, no despues).
+### Verificacion del cambio (mecanico, sin tocar comportamiento)
+1. **Particion del cuerpo comprobada ANTES de escribir**: los rangos cubren las 313 lineas sin solapes
+   ni huecos (assert en el propio script; si no cuadra, no escribe nada).
+2. **Cero lineas originales perdidas** (comparacion por multiconjunto ignorando indentacion); las 11
+   anadidas son el selector y sus if/elif.
+3. **Nombres resueltos** dentro de la funcion.
+4. **Sin fugas entre pestañas**: ninguna rama usa un nombre que solo definan otras — el chequeo de la
+   clase de bug de v114/v118, aplicado ahora a las 4 ramas del if/elif.
+
+## Mi grupo: el historial de calculos por fin se ve (v131)
+⚠️ **Cabo suelto de v129/v130 detectado al revisar Mi grupo:** las cuatro herramientas escribian en la
+hoja `Calculos`, pero **NADIE la leia** — `toolruns.list_for()` no se llamaba en ningun sitio. Los datos
+entraban y no habia forma de verlos, asi que "cada uso alimenta la base del proyecto" estaba a medias.
+- **`projects_ui._calculos_section(pid)`**: en el detalle del proyecto, historial de calculos (fecha,
+  herramienta, quien, resumen) con **descarga del PDF archivado** desde Drive. Mismo patron que
+  `_documentos_section`.
+REGLA: al anadir una tabla/hoja nueva, comprobar en el mismo lote que algo la LEE. Escribir sin leer
+pasa los tests (la escritura funciona) y deja la funcionalidad muerta.
+### Medicion del detalle de proyecto (pendiente de decidir)
+`_detalle_proyecto` = **314 lineas con 11 secciones apiladas en un solo scroll** (instrucciones,
+alarmas, cronograma, proyeccion, editar, actividades, paquete de obra, reconstruir, gastos, calculos,
+documentos, eliminar). Es el mismo problema que tenia el Survey antes de v114 (7 pasos en scroll unico)
+y la solucion conocida que funciono fue sub-navegacion con **radio** (NO st.tabs, regla de v56).
+
+## Survey y primeros lotes (v102-v130) — comprimido en v401
+
+⚠️ **Esto eran 29 secciones y 502 líneas de relato.** Se comprimió a lo que sigue VIVO: las reglas
+que nacieron aquí y los contratos que no están documentados en ningún otro sitio. El relato completo
+(quién rompió qué y cómo se cazó) está en `git log` y en el ZIP de cada deploy — **no se ha borrado
+nada, se ha dejado de cargar en cada sesión**. Si una de estas reglas se rompe, el detalle de por qué
+existe está a un `git log -S` de distancia.
+
+### Reglas de Streamlit que nacieron aquí (todas siguen vigentes)
+| | Regla |
+|---|---|
+| **v110** | Un `st.button` **solo COMPUTA** y guarda en `session_state`; el render vive FUERA, o desaparece con cualquier interacción. Los efectos CAROS (IA, correo, escrituras) sí van dentro, para que no se repitan en cada rerun. Era el bug estructural de las 5 herramientas |
+| **v111** | **Nunca** escribir `st.session_state[clave_de_widget]` después de instanciar ese widget → patrón **pendiente + rerun** (aplicar antes de crear ningún widget). Es la regla más citada del documento |
+| **v112** | Todo `st.file_uploader` que dispare efectos necesita **guarda por identidad de archivo** (`f"{name}:{size}"`): el uploader CONSERVA el archivo entre reruns, así que sin guarda el efecto se repite en cada pasada y pisa lo que el usuario escribió |
+| **v117** | Si borras una clave de `session_state`: o la **reinicias** a su valor por defecto, o **todas** sus lecturas pasan a `.get()`. El acceso por atributo (`st.session_state.x`) lanza `AttributeError`; `.get()` no |
+| **v118** | Streamlit **descarta el estado de un widget que no se renderiza** en ese rerun. Si puede dejar de dibujarse (fases, tabs, condicionales) hay que «tocar» su clave (`st[k] = st[k]`) o su valor se pierde |
+| **v108** | Lecturas de **DISPLAY** siempre por lector cacheado; las rutas de **ESCRITURA** (`clock_in/out`, `add/delete`, `save_activities`, `_find_row`, `verify_login`) leen **FRESCO** a propósito |
+
+### Chequeos que nacieron aquí (repetirlos, no reinventarlos)
+- ⚠️ **v120 · `py_compile` no detecta un error semántico.** Un solo error de indentación sacó un bloque
+  fuera de su fase y dejó *tres* síntomas (NameError, pasos en la fase equivocada, matriz invisible) con
+  el fichero compilando perfecto. **Chequeo tras tocar el Survey:** por AST, los nombres que una fase USA
+  y solo la otra ASIGNA — en ambas direcciones debe dar vacío.
+- ⚠️ **v126 · dónde CAE la línea que insertas.** Un bloque metido fuera de `_render_survey_results` usaba
+  locales de esa función → `NameError` seguro, y el chequeo global de nombres NO lo ve (existen en otra
+  parte del árbol). Verificar la función contenedora y que sus locales estén asignadas ANTES de esa línea.
+- ⚠️ **v128 · al insertar tras un import, `end_lineno`, no `lineno`.** Con un import multilínea entre
+  paréntesis, `lineno` mete la línea DENTRO del paréntesis → SyntaxError.
+- ⚠️ **v125 · dos formas de romper una extracción:** copiar el RANGO del primer al último import (arrastra
+  lo que haya en medio — se coló la barrera de login entera, que se habría ejecutado AL IMPORTAR: hay que
+  recoger las líneas de CADA nodo import), y renombrar la llamada sin la definición (`ImportError` que
+  `py_compile` no ve → **importar el módulo de verdad** y resolver cada `from X import Y`).
+- ⚠️ **v127 · validar la FIRMA, no el nombre.** `credentials.status_label(estado)` cuando recibe una
+  FECHA devuelve `"—"` sin fallar: el aviso habría dicho «White Card: —» en vez de «🔴 vencido». Es el
+  primer caso de la que luego se llamaría regla v135.
+- ⚠️ **v121 · medir el SVG, no mirarlo.** En dos revisiones a ojo vi fallos que no existían y no vi el que
+  sí: la cabina salía FUERA del hueco. Se caza midiendo el DOM del SVG, no observándolo.
+
+### Dominio, del Survey y los planos (esto NO es historia, es cómo funciona)
+- ⚠️ **`TL` NO es la profundidad útil de la planta; es `TK`.** `BC_CALC = TS − TKSW − TK/2 − 25`, así que
+  desde la pared frontal TKSW (en obra, FL/FR) llega al **eje de rieles**, y ese eje está a **media
+  profundidad del cuerpo** (TK/2). Usar TL metía la cabina 1.176 mm hacia atrás y no cabía en TS (v121).
+- **OL/OR se miden desde el borde de la cabina** (`LIMIT_OL/OR = BKS/2 + RAIL/2 − BT/2 − FRAME`), así que
+  la apertura se POSICIONA con ellos (`dx0 = cx0 + OL`), no se centra y luego se rotula. Comprobación que
+  cierra: `OL + marco + BT + marco + OR = ancho de cabina` (v121).
+- ⚠️ **v122 · el optimizador va en pasos de 0,5 mm**, así que todo display de RL/FB o de la matriz lleva
+  **al menos 1 decimal**: con `.0f`, RL −6.0 y RL −6.5 daban la MISMA etiqueta y dos soluciones distintas
+  eran indistinguibles en el desplegable. Helper `diagrams._mm(v)` (entero si lo es, 1 decimal si no).
+- ⚠️ **v124 · el log del optimizador es SOLO del propietario** (ni el administrador del grupo cliente lo
+  ve): expone los pasos, los descartes y el porqué — la lógica propietaria que el agente tiene prohibido
+  revelar (v27) y que el informe del cliente excluye a propósito.
+- **v124 · leyenda de color** bajo cada matriz, con las MISMAS palabras que los planos: WR·WL·FR·FL
+  incumplen por DEBAJO del límite, OR·OL por ENCIMA.
+- ⚠️ **v119 · isométrica: planta a escala real pero ALTURA COMPRIMIDA**, y declarado en el subtítulo (18 m
+  contra 1,3 m sin comprimir es una astilla ilegible). El presupuesto reparte el alto entre el rombo de la
+  base y la columna; **no poner un piso mínimo a `kz`**, desborda el lienzo. Y en isométrica con Z arriba
+  solo se dibujan las caras que MIRAN al observador (esquina inferior = `x=max, y=max`).
+- **v119 · escala real con DETALLE ampliado** cuando la holgura mínima del piso baja de 25 mm (×3 a ×40):
+  es la razón de ser de la escala real — lo crítico se amplía en vez de falsear todo el plano. Las cotas
+  con vano <36 px sacan el valor afuera con directriz.
+- ⚠️ **v123 · `bs_check`** — BS del plano contra `SF1+BKS+2·RAIL+SF2`. Si no cuadran, el encaje usa
+  (BSR−BS)/2 y **los plomos quedan mal ubicados EN SILENCIO**. Se avisa en la app y en el dibujo.
+- **v123 · `di + DBP + dd = BSR` es una IDENTIDAD del modelo**, así que su valor no es como chequeo
+  interno sino **como verificación de obra**: el instalador mide di y dd con cinta y comprueba el cierre.
+- ⚠️ **v130 · el signo de `Cut*`** — la leyenda dice «diferencia contra A» en vez de «material a cortar»:
+  describe lo que se sabe sin afirmar una dirección de corte. **Sigue pendiente de decidir (el usuario lo
+  aplazó el 02/09/2026), pero el ANÁLISIS ya está hecho** y no hay que repetirlo:
+
+  | | Fórmula | Qué significa el número |
+  |---|---|---|
+  | **Caso 1** | `A = n2500·2500 + n5000·5000` · `RC = L + LFKK` · `CutRC = RC − A` | **es una DIFERENCIA** contra la pila instalada: negativo = la pila supera lo requerido → **sobra**, se cortan \|x\| mm; positivo = **falta** riel. Coincide con lo que el dibujo pinta desde v177 |
+  | **Caso 2** | `encima: LF − R*` · **`debajo: LF + R*`** | **NO es una diferencia.** En «debajo» es una **SUMA**: nunca sale negativo y CRECE con la medida de obra (`RZ=100 → 3015`, `RZ=3000 → 5915`). El signo ahí no puede significar sobra/falta |
+
+  ⚠️ **Por eso una sola leyenda para los dos casos sería FALSA en uno**, y es probablemente la razón real
+  de que v130 la dejara neutra: intentó cubrir ambos con una frase y no se puede. Lo que hace falta son
+  **dos leyendas separadas**, y la única pregunta abierta es de dominio: en el Caso 2, ¿el número es
+  directamente la longitud a cortar? El corte es irreversible, así que no se rotula sin esa confirmación.
+
+### Piezas que se construyeron en este tramo y siguen en uso
+- **`core/plan_store.py`** (v128) — el plano ÚNICO de la sesión: `guardar()` / `actual()` / `selector()`.
+  Antes había **cinco `file_uploader`** y el técnico subía el mismo PDF cinco veces. `selector` devuelve un
+  `_Plano` (BytesIO **con `.name`**) para que sustituya al UploadedFile sin tocar la lógica de los
+  llamadores, que usan `.name` como guarda de identidad (v112).
+- **`core/survey_calc.py` → `recalcular(params, matriz)`** (v128) — rehace SOLO la parte determinista del
+  cálculo (sin IA, sin correo, sin Streamlit) desde ParamsJSON+MatrizJSON, porque **la solución no se
+  guarda: es derivada**. Verificado dando `best` y `lim_map` idénticos al camino del Survey.
+- **`core/toolruns.py` + `tool_pdf.py` + `tool_save_ui.py`** (v129-v130) — lo que convirtió las 4
+  herramientas de cálculo de islas en algo que alimenta el proyecto: hoja `Calculos`, un solo generador de
+  PDF y un solo bloque de guardado. Drive en best-effort (si falla, la fila igual se guarda).
+- **`plumb_iso_svg` · `plumb_detail_svg` · `plumb_card_svg`** (v123) — la isométrica con los dos hilos
+  cayendo (el replanteo es una operación VERTICAL, que la planta no puede dar), el detalle 3D con caída de
+  hilo real, y la **ficha de replanteo**: en el andamio no hace falta un plano bonito, hacen falta 5
+  números legibles desde el móvil.
+- **`shaft_iso_svg(params, limits, solution, ns, lim_map, proyecto, h_piso)`** (v119) — isométrica 30° del
+  hueco completo, con los niveles con incidencia en rojo (reusa `floors_with_issues`).
+- **`user_report.py` como presentación** (v116) — portada a sangre (`_portada`), pie «X de Y»
+  (`_NumeradoCanvas`, 2 pasadas), **`numero_informe()` → `INF-AAAAMMDD-HHMM`** (único y ordenable, sin
+  estado), veredicto con semáforo, tarjetas KPI, glosario, alcance y bloque de firma.
+- **Solución ACTIVA elegible** (v115, `sol_activa`) — el optimizador propone varias óptimas y antes
+  diagramas/plomado/informe usaban SIEMPRE `best`; al elegir otra se reescribe `best` y se RECALCULA el
+  plomado, para que todo aguas abajo quede consistente. Con ella: `floors_with_issues` (filtro de pisos) y
+  `floor_plans_pdf` (diagramas sueltos, la vía SIN IA que hizo innecesario el paquete de obra en v146).
+- **Aviso de duplicados al crear proyecto** (v126) — un proyecto es un elevador y el survey se repite por
+  elevador; sin aviso era fácil crear el mismo dos veces y repartir horas y gastos entre duplicados.
+- **Survey en 2 fases** (v114) + **extraído a `core/survey_ui.py`** (v125, 1.243 líneas fuera de `app.py`)
+  + **`_cfg_from_state()`**, obligado porque el cómputo usaba locales de una fase que puede no renderizarse.
+
+### Módulos que nacieron en este tramo
+- **`core/credentials.py`** (v104) — hoja `Credenciales`; catálogo AU (White Card, Forklift, Dogging,
+  Rigging, EWP, Working at Heights, First Aid, Driver License + clases). `status(venc)` =
+  vigente / por_vencer (≤30 d) / vencido; `expiring(grupo)`; `notify_expiring` deduplicado por
+  `UltimoAviso` <25 d; `matrix(grupo)` para el cumplimiento del equipo (v107).
+- **`core/expenses.py`** (v105) — hoja `Gastos`. **Costo total = compras + mano de obra**, con
+  `labor_cost` = Σ(horas × tarifa/hora de cada persona) y la tarifa **por usuario** en `Login.TarifaHora`.
+  `Proyectos.Presupuesto` + `project_cost` → {compras, mano_obra, total, presupuesto, pct, over}.
+- ⚠️ **El fichaje se identifica por `Usuario` (login), no por Nombre** (v106): columna `Usuario` en la
+  hoja; las filas ANTIGUAS (sin ella) caen al `Nombre`. Evita mezclar las horas de dos homónimos — el
+  fallo que volvió en v151, v306, v319, v348 y que en v363 obligó a un resolvedor único (`clave_de`).
+- **Dos relojes en el fichaje** (v103): columna `Tipo` = `general` | `proyecto`, `switch_project` (cerrar
+  segmento + abrir otro en un toque) y `group_hours` con `sin_asignar = general − Σproyecto`. Nació con el
+  rol `conductor`, **que se eliminó en v163** al comprobar que era un subconjunto del campo; el modelo de
+  dos relojes se generalizó a todos los roles en v150.
+- **`extract_number_of_stops`** (v102) — el NS se lee del plano; el default de init bajó de 6 a **2**
+  (mínimo neutro), porque un 6 por defecto se quedaba pegado y nadie notaba que no se había leído.
+
+### Símbolos que solo se nombran en este tramo
+Se listan porque al comprimir eran las ÚNICAS menciones del documento; el detalle está en el código.
+- **`diagrams`**: `_hatch` · `_dim_h` · `_dim_v` (achurado y cotas) — ⚠️ `plumb.py` los **importa**, no los
+  duplica, y no hay ciclo porque `diagrams` NO importa `plumb`. Además `_leyenda_matriz()` y
+  `render_floor_plans_html(floors=…)`.
+- **`user_report`**: `_portada` · `_NumeradoCanvas` · `_section` · `_veredicto` · `_kpi_cards` ·
+  `_callout` · `_zebra` · `numero_informe()`.
+- **`plumb`**: `plumb_iso_svg` · `plumb_detail_svg` (caída de hilo `Hh = dbp*0.72`) · `plumb_card_svg` ·
+  `bs_check`.
+- **dibujos de corte**: `rail_cut.rail_cut_svg(res, caso, n2500, n5000)` (Caso 1 = alzado real contra la
+  pila A; Caso 2 = barras, porque ahí no hay pila que dibujar sin inventarla) y `buffer_cut.buffer_cut_svg`.
+- **`survey_ui`**: `_do_calculo()` · `_survey_signature()` · `_cfg_from_state()` · `SURVEY_COLS` ·
+  `USER_ONLY` · `_GRUPOS_PARAM` · `_rebuilt_from` (marca de «reconstruido desde el proyecto»).
+- **caché y helpers nacidos aquí**: `timeclock._cached_records` / `_invalidate_records` ·
+  `auth._group_records` / `_invalidate_groups` · `auth.rate_map` · `timeclock.elapsed_seconds` ·
+  `projects.gaps_by_group` · `projects._gaps_for` → `delays_for` / `aheads_for` · `expenses.over_budget` ·
+  `expenses.CATEGORIAS` · `credentials.list_for` / `credentials.matrix` · `auth_ui.render_my_credentials` ·
+  `projects_ui._dashboard_agrupacion` / `render_group_hours`.
+- ⚠️ **v109 · la hoja `Usuarios` del Sheets ya no se usa y la app NO puede recrearla**: al sustituir el
+  login por PIN con `auth` (v53) se borró su flujo entero (`timeclock.validate_user`, `_get_users_ws`,
+  `USERS_SHEET` / `USERS_HEADERS`). Si algún día reaparece esa pestaña, no la ha creado esta app.
+## HOME del admin: densidad + 3 columnas + fix de los deep-links del resumen (v303)
+El usuario: *"la veo muy vacía; la agenda y los proyectos están arrinconados; el resumen del día
+ocupa mucho espacio; y arriba del buscador hay un espacio en blanco"*. Además dejó dos decisiones
+firmes: **la banda azul es SOLO para el nombre de la empresa cliente** (no se fusiona con nada:
+"es algo importante que respetar y resaltar") y **la interfaz del admin es para PC**.
+### ⚠️ Encoger no arregla "vacío"
+La primera propuesta era bajar la altura de las 3 tarjetas KPI. El usuario la rechazó y tenía
+razón: una caja grande con un número está vacía, y una caja pequeña con un número **también**,
+solo que más pequeña. Lo que llena una tarjeta es INFORMACIÓN. `_kpis()` ya calculaba `total` y
+`riesgo` y los tiraba desde v197 → cada tarjeta gana una 3ª línea de contexto (`los 12 en retraso`
+· `de 12 obras` · `en todo el grupo`) con **cero lecturas nuevas** de Sheets.
+- **`_kpi_pies(k)`** (puro, aparte a propósito) arma los 3 pies; `render_kpis(grupo)` los pinta.
+  Se separó para que el chequeo de ancho llame a la FUNCIÓN REAL y no a una copia de su lógica.
+- **`render_group_header` ya NO pinta KPIs**: quedan banda + resumen. Los KPIs se mudan a la
+  cabecera de la columna del mapa (`home_ui.render_home`) — tres números estirados a 1400 px eran
+  justo el vacío del que se quejaba el usuario.
+- **La tarjeta de 3 líneas es un `st.button`** cuyo label va `etiqueta\n\nvalor\n\ncontexto`.
+  ⚠️ VERIFICADO EN VIVO: `\n\n` da **tres `<p>`** estilables por separado; `  \n` da un `<p>` con
+  `<br>` (inservible) y `\n` simple colapsa. CSS en `theme.py`, espejando `.cpx-kpi .lbl/.val/.sub`,
+  con `:not(...)` para no tocar una tarjeta KPI de una sola línea.
+### ⚠️ El límite del pie es de ANCHO, no de caracteres
+`media de 12 obras` y `los 12 en retraso` tienen **17 caracteres los dos** y miden **94 px y 84 px**.
+El hueco útil dentro de la columna del mapa es de **93 px** (tarjeta 124 − 28 de padding − borde),
+así que el primero saltaba a 2 líneas y esa tarjeta crecía 20 px, descuadrando la fila. Contar
+caracteres daba un OK falso. Dos medidas: el pie se acortó a `de N obras` (59 px) **y** el CSS
+lleva `nowrap`+elipsis, que es lo que GARANTIZA que las 3 tarjetas midan igual pase lo que pase.
+### El resumen del día, sin perder nada
+Estructura fija (v196) y nombres visibles (v200) intactos; solo se comprime el envoltorio:
+el estado sube al **título** del desplegable (`Resumen del día — :red[3 urgentes] · 5 pendientes`,
+se lee aunque esté plegado), el `caption` de la pista pasa al **`help` de cada indicador**
+(⚠️ `st.expander` NO acepta `help` — firma comprobada) y los botones bajan de ~52 a **35 px**.
+### ⚠️ FALLO REAL encontrado de paso: los "→ Ir a" del resumen iban al sitio equivocado
+Las tuplas de los 9 indicadores llevaban **displays** (`":material/bar_chart: Proyectos"`) donde
+va el **ID** de la sub-pestaña. `_seccion_proyectos` compara `sub == "📊 Proyectos"` por igualdad
+literal, así que **7 de los 9 indicadores abrían Agrupaciones** y "Sobre presup." abría Horas;
+"Sin contacto"/"Credenciales" acertaban **por accidente** (Usuarios es el `else`). Corregidos a los
+IDs de `home_ui._SUBSECCIONES`. **Guardián nuevo y permanente** en `verif_v303.py`: recorre por AST
+TODOS los `_ir_a(...)`/`navegar(...)` con destino literal del repo (16 hoy) y falla si alguno apunta
+a una sección o a un ID que no existe.
+### Lo demás
+`padding-top` del contenido 2.4rem → **1rem** (el hueco en blanco; lo que tapa la cabecera oscura es
+la regla `background:transparent` de al lado, no el hueco) · HOME pasa de `[3,2]`+toggle a
+**`[2, 1.5, 1.5]`: mapa | proyectos | agenda**, siempre los tres a la vista → muere
+`home_right_view` (0 restos) y el pin del mapa ya no tiene que cambiar de pestaña.
+
+## ⚠️ El menú lateral salía CENTRADO: CSS de v229 que Streamlit dejó sin efecto (v304)
+El usuario pidió que se distinguiera mejor la cascada del sidebar. Al medirlo, el problema era otro:
+**las reglas de alineación de v229 ya no aplicaban** y todo el menú salía centrado (sangría del texto
+**99 px** en un botón con `padding-left:12px`). Dos causas, las dos de la misma familia:
+1. **Alinear el `<button>` no alinea el texto.** El texto vive en
+   `button > div > span > div[stMarkdownContainer] > p`, y ese `div` (234 px) **y su `span`** son flex
+   con `justify-content:center` → recentran lo que el botón había alineado. Ese `span` lo metió
+   Streamlit DESPUÉS de v229; el CSS se verificó en su día y envejeció en silencio.
+2. **Las propiedades de TEXTO puestas en el botón no llegan al `<p>`.** El `font-size:.85rem` del
+   nivel 2 y el `font-weight:600` de la sección ACTIVA llevaban versiones sin efecto: medido, los dos
+   niveles salían a **16 px** y **peso 400**, activo incluido.
+**Fix:** `justify-content:flex-start` + `width:100%` también en `button>div` y `button>div>span`, y
+todo lo de texto (`font-size`/`font-weight`/`color`) movido al `p`. Cascada pedida: nivel 1 a **8 px
+y peso 600** (activo 700), nivel 2 a **30 px, peso 400 y .85rem** (activo 600) → escalón de **22 px**.
+**LECCIÓN (repetida, ver también las trampas de v289-v299):** un CSS "verificado en vivo" caduca
+cuando Streamlit cambia el interior de sus widgets. Al retocar un estilo viejo, **volver a medir el
+DOM antes de asumir que lo de al lado funciona** — el estilo no falla con un error, falla en silencio.
+### De paso: los huecos del resumen del día
+Medido el bloque entero: **246 px**, de los que solo 105 eran los 9 indicadores (cabecera 38 + IA 40 +
+**46 de huecos**). Los huecos verticales bajan a `.3rem` → **232 px**. ⚠️ La regla va acotada a
+`.st-key-cpxresumen` (el expander recibió `key`): suelta, apretaría TODOS los desplegables de la app.
+
+## Resumen del día: de 3 filas a 2 (v305)
+El usuario, tras v303/v304: *"entiendo que se redujeron de tamaño pero aún siento que ocupan mucho
+espacio"*. El alto del botón ya estaba en su suelo (**35 px**; menos es ilegible), así que la única
+palanca que quedaba era el número de FILAS. Medido en el navegador con las etiquetas reales:
+| Reparto | Ancho de botón | Resultado |
+|---|---|---|
+| 9 en UNA fila | 132 px a 1400 de contenido | cabe **solo** con ≥1180 px; a 1150 se parten 4 etiquetas y la fila crece a 52 px → se pierde lo ganado |
+| **2 filas (5+4)** | 228 px a 1400 · 179 px a 1150 | **nada se parte en ningún ancho probado** ← elegido |
+| 3 filas (v303) | 403 px | lo que había |
+**Bloque: 232 → 192 px** (cabecera 38 + 2 filas 75 + huecos + IA 40). Desde el original: 304 → 192.
+- ⚠️ `st.columns(5)` en las DOS filas a propósito: el `zip` deja la 5ª celda vacía en la segunda y
+  así los 9 botones miden IGUAL (con `columns(4)` la fila corta saldría más ancha).
+- ⚠️ **`zip` TRUNCA en silencio**: si una fila tuviera más elementos que columnas, los sobrantes
+  desaparecerían sin error. Guardián en `verif_v303.py`: por AST, ninguna fila puede superar el
+  número de columnas y las filas deben cubrir los 9 índices sin huecos ni solapes.
+- Se pierde el agrupamiento implícito de v196 (las 3 filas eran Proyectos / Equipo / Obra-$), pero
+  el ORDEN no cambia y no había ningún rótulo que lo hiciera visible.
+
+## Identidad por ID + tipo de proyecto + el ID a la vista (v306)
+Cuatro reglas que fijó el usuario: **internamente todo se relaciona por el ID** (único, irrepetible,
+lo pone el sistema); **el nombre es solo comodidad** para su gestión; hay que **distinguir instalación
+/ delivery / ripout / otros**; y hay que **poder ver el ID de cada proyecto**.
+### Los 3 sitios que aún iban por nombre (auditados a raíz de "¿qué pasa si repito el nombre?")
+`create_project` avisa de duplicados pero **no los impide** (a propósito: dos elevadores de la misma
+torre se llaman igual), así que un `{Nombre: ID}` colapsa homónimos EN SILENCIO. Ya había pasado en
+v147 (documentos) y v150 (fichaje); quedaban tres:
+| Sitio | Qué hacía |
+|---|---|
+| Panel → Asignar (`roster_ui`) | uno de los dos homónimos **desaparecía del desplegable** y no se le podía asignar gente |
+| **Facturas** (`invoices_ui`) | el radio mostraba dos opciones idénticas, el filtro casaba con AMBOS y la línea se enlazaba al proyecto equivocado → **se facturaba mal**, no solo se veía mal |
+| Inventario (`inventory_ui`) | guardaba el **nombre** en `UbicacionRef`: con homónimos no se sabía en qué obra está el activo, y renombrar dejaba el histórico colgando |
+**Fix único:** `projects.etiqueta_proyectos(proys) → {ID: etiqueta}`, con el ID detrás **solo si el
+nombre se repite** (sin colisión la pantalla queda limpia). La usan Panel, Facturas, Inventario y
+también `timeclock_ui`, que tenía su propia copia y solo marcaba el SEGUNDO homónimo (el primero se
+quedaba sin ID, así que seguían sin poder distinguirse).
+- **Inventario** pasa a guardar `PRJ-####` en `UbicacionRef` y a resolverlo al mostrar
+  (`inventory.ubic_ref_label`). Las filas anteriores guardan el nombre y se siguen leyendo tal cual —
+  no hay migración. ⚠️ El **movimiento** (log) guarda el nombre YA RESUELTO: un histórico cuenta lo que
+  pasó, no lo que hay ahora. Y `inventory_ui._ubic_txt` era una COPIA de `ubic_str`: ahora delega
+  (si no, se habría arreglado el backend y la lista seguiría enseñando `PRJ-0007`; patrón de v140).
+- ⚠️ **Guardián permanente** en `verif_v306.py`: por AST, ningún dict-comprehension sobre proyectos
+  puede tener como CLAVE el nombre sin el ID. Se afinó para no gritar en falso con las claves
+  `f"{Nombre} ({ID})"` (marcaba 5 sitios sanos) y **se probó contra el código roto de v305**, que sí
+  detecta — un guardián que no se prueba contra su propio fallo no vale nada.
+### Tipo de proyecto (columna `Tipo`, al final → migra sola)
+`Instalación · Delivery · Ripout · Otro`. Los proyectos anteriores a v306 quedan **vacíos a
+propósito** (no se escribió en la hoja): salen como "sin tipo" hasta que se marquen, en vez de fingir
+que todos eran instalaciones.
+- ⚠️ **No es cosmético:** al crear se llamaba SIEMPRE a `build_schedule(ns, …)`, así que un delivery
+  nacería con las 11 actividades de instalación y una fecha de fin inventada — y ese plan alimenta
+  avance, curva S, SPI y el indicador «En retraso». Ahora solo Instalación lo genera; el resto pide la
+  fecha de fin a mano (campo nuevo, antes no existía porque siempre salía del cronograma).
+- ⚠️ Los demás tipos nacen con **UNA** actividad genérica ("Ejecución"), no con cero: el avance es
+  `Σ(peso·avance)/Σpeso` sobre las actividades, así que sin ninguna el proyecto se quedaría clavado en
+  0% para siempre y el campo no tendría dónde reportar.
+- El selector de tipo va **FUERA** del `st.form` (dentro, los widgets no escriben hasta el submit y el
+  formulario no podría reaccionar) — misma razón que v127 y v189.
+- `create_project` comprueba que la fila y la cabecera tengan el mismo tamaño y devuelve error si no:
+  la fila es POSICIONAL y descuadrarla guarda cada dato en la columna de al lado, en silencio.
+### El ID a la vista
+En la tarjeta de la cartera (monoespaciada, bajo el nombre), como **primera columna** de la vista
+Lista, en la cabecera del detalle, y **buscable** (pegar `PRJ-0007` en el buscador de la cartera lo
+encuentra). La cartera gana filtro por tipo, que solo aparece si hay más de un tipo en el grupo.
+
+## Ruta del día: el mapa llena, la ruta existe y se ve el plan CONTRA lo fichado (v307)
+El usuario: *"se ve muy desaprovechada"*. Media pantalla en blanco a la derecha del mapa.
+### ⚠️ La causa NO era de diseño: `st_folium` dibuja a 500 px FIJOS
+Medido en vivo (mini-app + DOM, entrando al `contentDocument` del iframe): el iframe ocupaba
+**1110 px** y el `.leaflet-container` de dentro **500** → **610 px de aire blanco DENTRO del mapa**.
+`st_folium(..., use_container_width=True)` lo arregla (medido después: 634/634, cero aire). Afectaba
+también al mapa de HOME, corregido en el mismo lote. ⚠️ El defecto de la librería es
+`width=500, use_container_width=False`: cualquier `st_folium` nuevo tiene que pasarlo.
+### Lo que faltaba, y ya estaba escrito
+`ordenar_ruta()` y `gmaps_dir_url()` existen desde v270 y **solo las usaba el campo**: la vista del
+ADMIN —la que se llama «Ruta del día»— no ordenaba las paradas, no dibujaba el recorrido ni ofrecía
+navegación. Ahora sí: paradas numeradas por vecino-más-cercano, polilínea, «Cómo llegar» por sitio y
+«Abrir la ruta completa en Google Maps». Otra vez el patrón "se escribe y nadie lo lee" (v131, v148).
+### De plan a tablero de despacho
+La tabla era Persona/Obra/Dirección: solo decía el PLAN. Ahora lleva **horario** (el roster guarda
+`ini`/`fin` desde v277 y se tiraban) y **estado real** — 🟢 fichado aquí · 🔴 fichó en X · ⚠️ sin
+fichar — con `timeclock.proyectos_por_usuario_dia`, el mismo dato cacheado que usa «Cumplimiento» en
+el Panel. **Cero lecturas nuevas de Sheets.** La pregunta que responde pasa a ser "a las 9, ¿está
+cada uno donde debe?".
+### ⚠️ Bug de camino: la persona sin ubicación DESAPARECÍA
+Si la obra no tenía coordenadas, el bucle hacía `continue` y esa fila **no entraba en la tabla**: el
+KPI decía "1 sin ubicación" y no había forma de ver de quién se trataba. Ahora la fila entra igual
+(solo queda fuera del mapa, que es lo único que necesita coordenadas).
+### Estructura
+Mapa (3) | tarjetas de sitio en orden de recorrido (2), y los 4 KPIs pasan a ser **botones activos**
+con contexto ("2 · de 3 personas", "1 · sdkm") que llevan a Panel o a Proyectos — el «sin plan» era
+un caption muerto al fondo.
+⚠️ Chequeo que falló por mi propio comentario: `'[:18]' not in src` daba FALLO porque el comentario
+que explica que se quitó ese corte contiene `[:18]`. Se rehízo por AST (trampa nº2 de este documento).
+
+## Fichaje: fix del nombre guardado + la semana + dos columnas (v308)
+### ⚠️ FALLO INTRODUCIDO EN v306 (encontrado al auditar esta pantalla)
+`fichar_proyecto(nombre, proyecto, …)` escribe `proyecto` TAL CUAL en la columna `Proyecto` de la
+hoja, y la UI le pasaba `next(k for k, v in idmap.items() if v == _pid)` — o sea, **la etiqueta del
+desplegable**. Desde v306 esa etiqueta lleva el ID cuando hay homónimos, así que el fichaje habría
+guardado `prueba (PRJ-0007)` como nombre del proyecto. No rompía las cuentas (manda el `ProyectoID`
+desde v145) pero el dato quedaba inventado. Ahora hay un `_nom_de = {ID: Nombre}` aparte y la
+etiqueta **solo se muestra**. LECCIÓN: al cambiar lo que muestra un selector, revisar qué se GUARDA
+desde él — la etiqueta y el dato son cosas distintas.
+- Hermano del mismo error, este anterior a v306: **«Cambiar de proyecto» excluía el actual comparando
+  la etiqueta contra el nombre guardado** (`k != prj["proyecto"]`), así que con homónimos te ofrecía
+  cambiar al proyecto en el que YA estabas. Ahora se excluye por `prj["proyecto_id"]` (que
+  `open_sessions` devuelve desde v145 justo para esto), con respaldo al nombre para fichajes viejos.
+### `timeclock.resumen_semana(nombre, grupo, usuario)`
+La pregunta de quien ficha es "¿cuánto llevo esta semana?" y no se podía responder: `resumen_hoy`
+solo cuenta el día. Nueva tarjeta **Esta semana** (lunes→hoy + nº de días con jornada). Sale de
+`_cached_records` → **0 lecturas nuevas**. ⚠️ Semana NATURAL, no `group_hours(days=7)`: esa es una
+ventana móvil (un lunes por la mañana arrastraría el viernes anterior) y además con `days=0` se
+interpretaría como "todo el histórico".
+### Estructura
+El **estado deja de ser una tarjeta KPI** (no es una cifra, y sin fichar la pantalla eran cuatro
+ceros): pasa a una franja de color con el detalle al lado. Jornada y Proyecto van ahora **lado a
+lado** en vez de apilados con un divisor y botones de 1350 px (medido después: 523 px, y los
+anidados 253 sin partir texto). ⚠️ En móvil Streamlit apila las columnas solo, así que el campo
+—que es quien más usa esta pantalla— no pierde nada.
+- ⚠️ La reindentación del bloque de Proyecto bajo su columna se hizo POR SCRIPT midiendo el rango
+  (es la clase de cambio que rompió v120 y v148): 0 líneas perdidas y verificado por AST que cada
+  columna se quedó exactamente con sus widgets (`col_jor`: tc_gen_*; `_prj_ctx`: tc_prj_*/tc_switch*)
+  y que no hay keys duplicadas.
+- ⚠️ Comprobado en vivo que `st.columns` DENTRO de una columna **no revienta** en Streamlit 1.57
+  (ni dos niveles). La nota de v217 sobre "doble anidación de columnas" era cautela, no un límite
+  real; lo que sí es error de Streamlit es el expander dentro de expander (v210).
+
+## ⚠️ DOS `$` EN LA MISMA CADENA = LaTeX (fallo en las 3 pantallas de dinero) — v309
+Encontrado al revisar el P&L, donde se veía `Por pagar (nóminas): ** 0.00** · pagado 1,287`.
+**Streamlit trata lo que hay entre dos `$` de una misma cadena como fórmula.** Barrido del repo
+por AST (no grep: cuenta comentarios) → **5 sitios**, y medido en vivo qué hacía cada uno:
+| Sitio | Qué se veía |
+|---|---|
+| P&L «Por pagar» | los `$` **desaparecen** y los `**` salen literales |
+| **Facturas** — Subtotal/Impuesto/Total (2 sitios) | **KaTeX de verdad**: la línea sale como fórmula ilegible |
+| **Facturas** — `metric(help="Cobrado $X de $Y")` | pierde los símbolos: `3,145 de 3,145` |
+| **Nóminas** — `38 h × $37.75 = base **$1,434.50**` | KaTeX |
+**Fix:** `theme.dinero(valor, dec)` — formatea **y escapa** (`\$`). Vive en el sistema de diseño
+porque el fallo vuelve cada vez que alguien escriba `f"${x:,.2f}"` a mano, y vuelve en las pantallas
+de dinero. Con una sola cifra el escape es inofensivo (verificado), así que se escapa SIEMPRE en vez
+de contar dólares. ⚠️ Verificado que imprime **idéntico** al formato anterior (incluido el redondeo
+al par de Python) — si no, cada cifra de la app habría cambiado en silencio con el deploy.
+**Guardián permanente** en `verif_v309.py`: por AST, ninguna cadena de `st.markdown/metric/caption/
+button/…` puede llevar dos `$` sin escapar.
+## P&L: periodo, desglose y enlaces (v309)
+- **Periodo** (Este mes · Trimestre · Este año · Todo): `finance.pnl(grupo, desde, hasta)`. Qué fecha
+  manda: factura→`Fecha`, nómina→**`PeriodoHasta`** (el coste se devenga en el periodo que cierra,
+  no el día que se paga) y compra→`Fecha`. ⚠️ Una fila **sin fecha legible** entra solo cuando NO hay
+  periodo: con periodo, contarla sería inventarse en qué mes ocurrió.
+- ⚠️ Las compras pasan de `group_expenses` (agregado) a recorrer la hoja Gastos filtrando por los
+  proyectos del grupo — **el mismo conjunto de filas**, para que sin periodo el total sea idéntico.
+  Comprobado en el test, no supuesto.
+- **Desglose honesto:** facturado **por cliente** (barras) y **composición del costo** (torta,
+  nóminas vs compras). ⚠️ NO hay "ganancia por proyecto": las nóminas son por PERSONA y no por obra,
+  así que repartirlas saldría inventado. Se dice en el código para que nadie lo "arregle" luego.
+- «Por cobrar» y «Por pagar» dejan de ser texto: llevan a 🧾 Facturas y 👥 Nóminas.
+
+## ⚠️ UNA sola definición de "gasto del grupo" — los archivados volvían a $0 (v310)
+La pantalla de Gastos se contradecía: **`COSTO ACTUAL $0`** y justo debajo la torta con **$1.500**.
+Auditada la hoja REAL en solo lectura (gspread crudo, sin pasar por los helpers: tras tocar
+`PROJECTS_HEADERS` en v306, una "lectura" por ahí MIGRA la cabecera y escribe — regla v145):
+las 2 compras del grupo son de **PRJ-0001, archivado**. Ni huérfanas ni IDs fantasma.
+**Causa:** `group_expenses` recorría `list_projects(grupo)`, que **oculta los archivados desde
+v149**, mientras `por_categoria` suma por la columna `Grupo`. Archivar un proyecto no des-gasta el
+dinero → ahora las filas se sacan con `incluir_archivados=True` y el total del grupo es
+`compras_grupo` (todas las del grupo). El KPI y la torta por fin dicen lo mismo.
+- **Huérfanas visibles:** una compra sin `ProyectoID` (o de un proyecto borrado) se sigue contando
+  en el costo del grupo y ahora **se avisa** ("$X en N compras sin proyecto"), en vez de sumarla a
+  la torta y no verla en ninguna fila. Invariante que comprueba el test:
+  `total del grupo == Σ compras por proyecto + huérfanas`.
+- **El P&L usa la MISMA definición.** Había llegado a haber **tres** respuestas a la misma pregunta.
+- **Se quitó el bloque de barras «Compras por categoría»**: mostraba exactamente los mismos números
+  que la torta (mismas categorías, mismos $ y %). La torta se queda (la pidió el usuario en v224 y
+  además incluye la mano de obra).
+- **NO se le puso periodo** a esta pantalla, aunque estaba en el plan: «% consumido» y «proyección al
+  terminar» son acumulados contra un presupuesto de toda la obra, y un filtro por mes los haría
+  mentir. El P&L (v309) es el que responde "cómo fue agosto".
+### ⚠️ Dos tests que dieron OK EN FALSO (y cómo se cazaron)
+1. **v309 afirmó "sin periodo el total es idéntico" y era MENTIRA**: el mock de `list_projects`
+   devolvía la misma lista con y sin `incluir_archivados`, así que no podía ver la diferencia. En
+   producción las compras pasaron de $0 a $1.500 y la ganancia de $1.710 a $210 sin que el test se
+   enterara. → **Un mock que ignora el parámetro que estás probando garantiza un OK falso.**
+2. **`group_expenses` está CACHEADA (v108)**: el segundo caso del test devolvía el resultado del
+   primero (1.500 en vez de 1.700). → Limpiar `st.cache_data` entre casos.
+
+## Detalle de proyecto (Estado): se reordena para no dejar media pantalla vacía (v311)
+### ⚠️ El markdown NO se procesa dentro de HTML
+El titular salía literalmente como `Vas **54 puntos por debajo** del plan`: se emitía con
+`**...**` **dentro de un `<div>`** (`unsafe_allow_html=True`), y ahí Streamlit no interpreta
+markdown. Ahora va con `<b>`. Regla: si el texto viaja dentro de HTML, el énfasis va en HTML.
+### Los tres desperdicios, medidos
+1. **Columnas desparejas.** `[3,2]` con el bloque CORTO (titular + 4 tarjetas) enfrente del LARGO
+   (6 alarmas + tabla de horas) → la izquierda quedaba vacía ~800 px. Y abajo otro `columns(2)` con
+   «Tocaba hoy» (una línea) contra «En curso ahora» (10 actividades). **Ahora lo corto va arriba a
+   ancho completo y abajo se enfrentan dos bloques LARGOS** (actividades | alarmas + equipo).
+2. **El cronograma estaba topado a 760 px** (`VW=760` + `max-width` + `margin:0 auto`): centrado en
+   1340 dejaba 290 px de margen a cada lado, y con `ML=214`/`MR=116` las 13 barras vivían en
+   **430 px**. `vw` pasa a ser PARÁMETRO; la app pide 1280 → área útil **950 px**.
+   ⚠️ **El default sigue en 760 a propósito**: este mismo SVG va a los informes PDF, donde svglib lo
+   escala al ancho de página; con lienzo ancho y el mismo alto, las filas se aplastarían. Verificado
+   que `report.py`/`user_report.py` no pasan `vw` y que svglib sigue convirtiendo el SVG.
+3. **«Tocaba hoy» y «En curso ahora»** se fusionan en UNA lista de actividades con su estado.
+### El pie del gráfico se recortaba
+El `components.html` llevaba `height=300 + n*21` puesto a ojo: **18 px menos** que el alto real del
+SVG. Nuevo `schedule.schedule_svg_alto(n)` con la MISMA fórmula que `VH`, así no pueden divergir.
+### ⚠️ Tres chequeos que fallaron por el test, no por el código (en una sola tanda)
+- Buscar los titulares por "texto que contenga 'puntos por'" pillaba **mi propio comentario** → 5 en
+  vez de 3. Igual con «Tocaba hoy»: el único resto era el comentario que explica la fusión →
+  hay que comparar sobre el código **sin comentarios** (`tokenize`).
+- El alto se comparaba con `n` pedido (13, 25) mientras `build_schedule(6)` da **11** actividades:
+  se comparaban dos `n` distintos. Usar el `n` REAL de la rebanada.
+- El cronograma falso escrito a mano no tenía la clave `scurve` y el test petaba por su culpa →
+  usar `build_schedule` de verdad en vez de inventarse la estructura.
+
+## MODELO DE NEGOCIO (fijado por el usuario) y la conciliación de mano de obra (v313)
+El usuario, al preguntársele qué cifra es "la buena":
+> *"Yo pago las horas fichadas sean o no de un proyecto + lo de ley. Las horas fichadas en un
+> proyecto se cargan a ese proyecto, es lo que se le cobra al cliente… más un factor de ganancia."*
+
+**Verificado que el código YA lo implementa**: `timeclock.horas_por_usuario_rango` (base de la
+nómina) usa las horas de **JORNADA**; `expenses.labor_cost(pid)` usa las **imputadas a esa obra**;
+`finance.group_profitability` cobra `MO × (1+margen) + materiales`. No había que elegir entre dos
+definiciones: **son dos preguntas distintas y las dos son correctas**.
+| | Qué responde | Fuente |
+|---|---|---|
+| **Lo que pagas** | cuánto cuesta la empresa | jornada × tarifa **+ aportes de ley** |
+| **Lo que cargas** | cuánto vale lo imputado a esa obra | horas del proyecto × tarifa |
+Lo que faltaba era **el puente**. `finance.conciliacion_mo(grupo, desde, hasta)` (v313):
+```
+  cargado a obras (horas de proyecto × tarifa)
+  − horas cobradas que NO se pagaron  (imputadas sin jornada abierta)
+  + horas pagadas que NO se cargaron  (jornada sin imputar: traslados, espera)
+  = base a pagar
+  + aportes de ley (super)
+  = costo real de la mano de obra
+```
+Con los datos REALES del usuario cierra exacto: `1.645,20 − 358,80 + 0,40 = 1.286,80`;
+`+147,98 (super 11,5%) = 1.434,78`, que es justo el `costo_nomina` del P&L.
+- ⚠️ **`sin_explicar` no se cuadra a la fuerza**: si una nómina se editó a mano la cadena deja de
+  cerrar y **se dice**. Probado con una nómina alterada (delata los 286,80 de diferencia).
+- **Los tres huecos son el margen real** y no se veían en ninguna pantalla: el **super** (lo pagas y
+  no lo cargas), las **horas sin imputar** (traslados/espera: las pagas y no las cobras) y las
+  **horas imputadas sin jornada** (las cobras y no las pagaste — 358,80 en el grupo real, y esas
+  INFLAN el margen). Avisos nuevos para los tres, más "sin tarifa/hora → su trabajo cuenta $0".
+- **Se renombran las cifras** para que no se llamen todas "costo": P&L → «Costos (lo que pagas)»,
+  Gastos → «Costo cargado a obras», Rentabilidad → «Costo cargado» (con `help` explicando que NO
+  incluye ley ni horas sin imputar: eso lo cubre el margen).
+- **Aviso de margen 0%** en Rentabilidad: con margen 0 el "ingreso estimado" es idéntico al costo y
+  la ganancia sale $0 — la pantalla parecía rota y solo faltaba poner el margen.
+### ⚠️ Hallazgo de negocio (con los números del usuario)
+El P&L decía **ganancia $1.710** en «Este mes». Con todo el histórico son **$210,42**
+(`3.145,20 − 1.434,78 − 1.500`): la factura es del **09/08** y las compras del **28/07**, así que un
+P&L por mes natural separa un ingreso de los costos que lo produjeron. No es un bug del filtro; es
+que falta poder ver el resultado **por proyecto/factura** además de por mes.
+
+## Ruta del día: el vacío de la cabecera (v314)
+Tres causas, ninguna estética de fondo:
+1. **Título duplicado.** `home_ui._sub_header` ya pinta «Planificación · Ruta del día» y la función
+   repetía «Ruta del día de la cuadrilla» justo debajo. **Es la tercera vez que aparece este
+   patrón** (v212 con el % de avance, v291 con el Panel): al escribir una vista nueva hay que
+   recordar que la cabecera de sección YA la pone la shell.
+2. **`date_input` a 1340 px** para una fecha. Se acota a ~305 px y a su lado van **saltos de día**
+   (◀ ▶), que es como se usa la pantalla: "hoy, ¿y mañana?". ⚠️ El salto se aplica escribiendo
+   `rutadia_fecha` **antes** de instanciar el widget (regla v111).
+3. **Caption que explicaba el título** → al `help` del selector.
+### ⚠️ Fin de semana: todos salían «sin plan» sin explicación
+`roster.asignaciones_dia` devuelve `[]` en sábado y domingo (la rejilla es Lun–Vie), así que al
+elegir un fin de semana la pantalla decía "N sin plan" y no había forma de saber por qué. Ahora se
+dice y se corta ahí. Al lado del selector se muestra el día de la semana en texto.
+
+## Detalle de proyecto: la CABECERA, densa (v315)
+⚠️ **Esto se prometió en v311 y no se hizo**: se dijo "avance y horas se van dentro de la tarjeta"
+y en aquel deploy solo se tocó la mitad de abajo de la pantalla. Aquí se cumple.
+La cabecera eran: tarjeta del proyecto (con la mitad derecha vacía) + **dos `st.metric` de ~660 px
+para dos números** + una **barra de progreso a ancho completo que repetía el mismo %**. Todo eso
+entra ahora en la tarjeta: barra fina + `0% avance` + `0.0 h trabajadas` en una sola línea, usando
+el hueco que la tarjeta ya tenía. Y fuera el `---` entre «← Volver a la cartera» y la tarjeta.
+**Medido en vivo (mini-app con el tema real): 196 → 104 px, −92 px**, más ~35 del separador.
+Verificado que no queda ningún `st.metric` ni `st.progress` en la cabecera.
+
+## Sub-navegación del proyecto: al segmentado del kit (v316)
+El usuario pidió "algo parecido a la fila del Panel (radar/asignar/trabajos)". ⚠️ **No es lo mismo**:
+esa fila es un **acordeón de herramientas OPCIONALES** (se pueden cerrar todas); Estado/Datos/Costos/
+Archivos son **secciones excluyentes** y siempre hay una abierta. Copiarla dejaría cerrar todo y
+quedarse sin contenido. Para "una de N" el kit ya tiene la pieza: el **segmentado** de v292.
+Medidos los tres candidatos con el tema real:
+| | Ancho del control | Bolitas | Marco | Activo |
+|---|---|---|---|---|
+| `st.radio` de siempre | 430 px | **visibles** | no | no |
+| **segmentado `cpxseg_`** | **412 px** | ocultas | sí | sí (`rgb(232,238,246)`) |
+| fila de botones del Panel | **1120 px** (estirados) | — | — | requiere CSS propio |
+Cambio: la KEY pasa a `cpxseg_prj_sec` / `cpxseg_fld_sec` (el CSS del kit engancha por el prefijo).
+- ⚠️ **Las OPCIONES no se tocan**: siguen siendo los IDs con emoji, que son los que usan el matching
+  y los deep-links (v232/v234). Verificado por AST que las 4 opciones y las ramas siguen igual.
+- Se aplica también a 📋 Mis proyectos del CAMPO: la misma pieza en las dos pantallas.
+- Fuera el `---` que iba debajo: el segmentado ya trae marco.
+
+## Resumen financiero = torre de control (v317)
+Petición del usuario: *"que el resumen de finanzas sea parecido al panel de planificación o al
+home, en interacción y en ver mucha información en poco espacio de forma organizada"*. Se le mostró
+un mockup y lo aprobó. La torta se probó FIJA (v317) y en cuanto la vio prefirió tenerla **como una
+herramienta más** (v318): así la pantalla arranca en la rejilla y cada gráfico se pide al mirarlo.
+Se reutilizan las dos mecánicas que ya funcionan, sin inventar patrones nuevos:
+- **Rejilla FIJA de 8 pendientes clickeables** (patrón del «Resumen del día», v196/v199), en 2 filas
+  de 4 (v305): Vencido · Por cobrar · **Sin facturar** · Por pagar / **Horas sin nómina** · Sin
+  tarifa · Sin margen · Sobre ppto. Cada uno colorea por severidad, y al tocarlo muestra *cuáles* y
+  un «→ Ir a» a la sub-pestaña donde se resuelve. **Cuatro de los ocho no existían en ninguna
+  pantalla** y son los que cuestan dinero: trabajo sin facturar, horas que se cobran sin pagarse,
+  gente sin tarifa y obras a margen 0%.
+- **Fila de 4 herramientas que se abren debajo** (patrón del Panel, v287): Conciliación · Por
+  cliente · Composición · **Por proyecto**.
+### `finance.resultado_por_proyecto(grupo)` — lo que un P&L por mes NO puede decir
+⚠️ **ACUMULADO a propósito: NO acepta fechas.** Con el grupo real, «Este mes» daba ganancia $1.710
+porque la factura es del 09/08 y las compras del 28/07; la obra ENTERA dejó **$0** (se facturó
+exactamente al costo, margen 0%). Una obra se mide de principio a fin, no por meses naturales.
+El costo aquí es el **cargado** (horas imputadas × tarifa + compras), no lo que sale de caja: los
+aportes de ley y las horas sin imputar no son de ninguna obra — los cubre el margen (`conciliacion_mo`).
+- `finance.sin_facturar(grupo)`: obras con trabajo hecho y aún sin facturar. Antes había que entrar
+  a CREAR una factura para enterarse de que había dinero sin pedir.
+- Verificado por AST: 8 slugs sin repetir (una key duplicada revienta la página), las filas cubren
+  los 8 sin huecos y **ninguna supera el nº de columnas** (`zip` trunca en silencio, lección v305),
+  y los 8 destinos «→ Ir a» existen en `home_ui._SUBSECCIONES`.
+
+## Nóminas: lo que la pantalla CALLABA (v319)
+La revisión era de interfaz y lo grave estaba en los datos que la lista dejaba pasar:
+1. **4 de 5 nóminas con base $0.** `asfgjjd` trabajó 8,7 h y su colilla decía **$0** porque esa
+   persona **no tiene tarifa/hora**. ⚠️ `payroll.generar` YA lo detecta (devuelve `sin_tarifa`),
+   pero eso se muestra UNA vez al generar y después la lista deja las colillas a cero como si
+   estuvieran bien. Ahora se avisa en la lista, con nombres y botón a Usuarios.
+2. **Dos filas `fijiofgjei` indistinguibles**: distinto login, mismo nombre, y la tabla solo
+   mostraba `Nombre`. Nuevo **`auth.etiqueta_usuarios(users)`** → añade el login **solo si el
+   nombre se repite**; es la misma regla que `projects.etiqueta_proyectos` (v306) aplicada a las
+   personas, y el mismo fallo que el reporte de Horas ya había tenido en v151.
+3. **Gente con horas y SIN nómina en el periodo** (el hueco de $358,80 que el resumen financiero
+   marca como «Horas sin nómina»): se avisa AQUÍ, que es donde se arregla, usando
+   `timeclock.jornada_y_proyecto` (v313).
+4. **Columna `Tarifa/h`** (vacía = no la tiene puesta) para que «Base $0» tenga explicación, y pie
+   con totales de base y neto.
+5. **Filtro de periodo**: hoy son 5 filas del mismo periodo; en un año son 60.
+⚠️ **NO se bloquea** generar una nómina con tarifa 0: solo se avisa. Cambiar eso altera el
+comportamiento y el usuario no llegó a decidirlo.
+### ⚠️ Título duplicado: CUARTA vez (v212, v291, v314, v319)
+`_sub_header` ya pinta «Finanzas · Nóminas» y la función repetía «Nóminas». Deja de ser anécdota:
+**al escribir cualquier vista nueva, la cabecera de sección ya la pone la shell.**
+
+## Horas del grupo + BARRIDO de títulos duplicados (v320)
+### El barrido que se prometió en v319
+Escaneadas por AST **las 26 vistas** que despacha la shell. ⚠️ Solo son duplicado las que cuelgan de
+una sección **con sub-pestañas** (ahí `_sub_header` pinta «Sección · Sub»); las del campo (Fichaje,
+Mis colillas, Mis credenciales, Mis proyectos) son secciones SIN subs, así que su título es el único
+y **debe quedarse**. Quitados 4: Gastos, Horas, Rentabilidad y Facturas.
+⚠️ **Pre-Start NO se toca**: se despacha en los DOS sitios — sub de Herramientas para el admin (con
+`_sub_header`) y sección propia para el campo (sin él). Quitarle el título dejaría al campo sin
+cabecera. Las 4 herramientas técnicas tampoco: su título añade información («Cálculo de líneas de
+plomada» ≠ «Plomada»).
+### Horas: el KPI «sin asignar» daba una cifra que no era calculable
+`En proyectos` (49,8 h) sale **MAYOR** que `Jornada` (42,1 h) porque alguien fichó a una obra sin
+abrir jornada (comportamiento anterior a v150). La tabla ya marcaba «—» por persona (v151), pero el
+**KPI del grupo seguía mostrando 1,2 h y un 3%** como si el dato fuera bueno. Ahora, si hay alguna
+fila indeterminada, el KPI pone **«—»** y sale un error explicando quién y cuántas horas — que es,
+además, el mismo hueco que el resumen financiero llama «horas sin nómina»: se cargan al cliente y
+no entran en ninguna nómina.
+- **«Costo M.O.» → «M.O. cargada a obras»**: tras v313 la app distingue lo que PAGAS de lo que
+  CARGAS, y esta cifra es la segunda. Llamarla "costo" a secas la hacía indistinguible del «Costos»
+  del P&L, que es otro número.
+- Fuera los proyectos con **0,0 h** del reparto (barra vacía = ruido); se filtra por el valor
+  REDONDEADO, que es el que se ve en pantalla.
+
+## Rentabilidad: el margen se edita AQUÍ + estimado vs facturado (v321)
+### ⚠️ Fallo introducido en v310: el margen del ARCHIVADO se ignoraba
+`group_profitability` recorre `group_expenses`, que **desde v310 SÍ devuelve los archivados**, pero
+construía el mapa de márgenes con `list_projects(grupo)` — que los excluye. `mmap.get(pid, "")` daba
+`""` y esos proyectos caían al **default del grupo** en vez de usar el suyo, en silencio.
+**LECCIÓN: al ampliar una fuente, revisar los mapas que se cruzan con ella** (mismo patrón que el
+`project_hours_bulk` de v145). El test lo caza porque su mock **respeta `incluir_archivados`** — si
+devolviera lo mismo siempre, daría OK en falso (la trampa de v309/v310).
+### La pantalla
+- **El margen se edita en la propia tabla** (`st.data_editor`, solo esa columna). El aviso decía "ve
+  a Datos del proyecto" estando ya en la lista de márgenes. Se guarda solo lo que CAMBIÓ.
+  ⚠️ Es **una escritura por proyecto cambiado**: con 6 obras da igual, con 60 hay que agrupar (429 de v80).
+- **Estimado contra realidad**: columnas y KPIs de **Ya facturado** y **Por facturar**. `por_facturar
+  = ingreso − facturado`, que es la MISMA fórmula de `invoices.pendiente_de_facturar` pero sin
+  llamarla una vez por proyecto (se usa el mapa cacheado `facturado_por_proyecto`).
+- Las obras **sin movimiento** (ni costo ni facturación) se van a un desplegable: eran 5 filas de
+  ceros de 6. ⚠️ Una obra facturada SIN costo registrado NO se aparta (sigue siendo rentabilidad).
+
+## Revisión de código: limpieza + archivar deja de deshacer un edificio (v322)
+Petición del usuario: *"dale una revisión al código, que todo esté bien, que no haya líneas
+muertas o mejoras al código"*.
+### Lo muerto (verificado por AST, no por grep)
+**8 funciones sin una sola referencia en todo el repo** (−124 líneas) y **27 imports sin usar**
+en 20 archivos. Las 8: `projects_ui._agrupaciones_html` (−83, la sustituyó `_cartera_agrupaciones`
+en v214), `home_ui._placeholder`, `roster.asignacion_dia` + `semana_str`, `session_cookie.available`,
+`payroll.costo_empleador`, `plan_data.hay_datos`, `plan_store.hay_plano`.
+⚠️ `grep` cuenta **mis propios comentarios** como uso (ya mordió 4 veces): la referencia solo vale
+si aparece como `Name`/`Attribute` en el AST.
+### ⚠️ EL HALLAZGO: archivar un ascensor DESHACÍA el edificio
+`list_projects` oculta los archivados desde v149 — correcto para una lista, **falso para una
+agrupación**. Las **6** consultas de miembros lo usaban por defecto, así que archivar un ascensor
+de una torre cambiaba **en silencio** el avance consolidado, la fecha de entrega, la curva S y las
+alarmas del conjunto. Es la misma familia que v145 (horas), v310 (dinero) y v321 (márgenes):
+**archivar no des-construye el ascensor**, igual que no des-gasta el dinero.
+### ⚠️ Y la regresión que ese arreglo introdujo (cazada en la verificación)
+Al pasar `set_grouping_members` a leer los miembros CON archivados, el editor de miembros —que
+lista solo activos— dejaba de tener casilla para el archivado, así que al guardar caía en el bucle
+de **bajas y se desagrupaba solo**. Arreglado añadiendo a la lista del editor los miembros
+archivados que faltaban. **Antes del cambio no pasaba** porque los dos lados lo ignoraban por igual:
+ampliar UNA fuente sin mirar quién la cruza es justo el patrón de v145 y v321.
+### ⚠️ Mi guardián solo veía UNA de las dos formas de escribir la consulta
+Lo escribí buscando el kwarg `agrupacion_id=`, y `_cartera_agrupaciones` filtra **a mano**
+(`[p for p in proys_all if p["AgrupacionID"] == aid]`) → se escapó, y la tarjeta contaba menos
+elevadores que el `grouping_progress` de su propio %. El guardián ahora cubre las dos formas
+(kwarg, comprensión inline y comprensión sobre una variable) y **se prueba contra el código ROTO**,
+no solo contra el sano: un guardián que solo aprueba lo que ya funciona no demuestra nada.
+### Falsos positivos de mi propio chequeo de nombres libres
+Salieron **83** y **los 83 eran cierres**: una función anidada usa variables de la que la contiene.
+Con el ámbito exterior en la cuenta quedan **0**. ⚠️ Y hay que subir el ámbito nivel a nivel: con
+`ast.walk` un NIETO se compara contra el ámbito del abuelo y los parámetros del padre salen como
+"sin definir" (pasó con `survey_ui.make_highlighter > _highlight`).
+### Auditado y NO tocado (queda anotado)
+Duplicación de helpers (`_num` en 14 módulos, `_records` en 12, `_ws` en 10, `_next_id` en 9,
+`is_configured` en 15), ~100 `except: pass` silenciosos, y escrituras dentro de bucles (la peor,
+`credentials.notify_expiring`, corre en cada login de admin). Son refactors de riesgo real sobre
+código que funciona; van aparte, no en una limpieza.
+
+## Los helpers duplicados NO eran cosmética: la divergencia ERA el fallo (v323)
+Segunda pasada de la revisión: en v322 dejé anotada la duplicación de helpers como
+"refactor sin beneficio visible". Al medirla, **estaba equivocado**: no eran 14 copias
+del mismo código, eran **5 implementaciones DISTINTAS** de `_num`, 2 de `_parse_date` y
+7 de `_col_letter`, y dos de esas divergencias son fallos de dinero.
+### ⚠️ `_num`: cualquier importe con separador de miles valía $0,00
+Las 5 variantes hacían `float(v)` o `float(str(v).replace(",", "."))`. Con `1,234.56`
+—que es justo como Sheets formatea el dinero en AU/US— las **cinco** revientan y
+devuelven **0.0 en silencio**. Medido: de 9 casos de formato, 13 resultados incorrectos
+repartidos por costos, facturas, nóminas e inventario.
+- **Auditada la hoja REAL en SOLO LECTURA** (gspread crudo con scope `readonly`: los
+  helpers de la app migran cabeceras al acceder, regla v145): **0 casos hoy**. El fallo
+  es LATENTE, no activo — todo lo que hay lo escribió la app (`number_input` → float
+  plano). Por eso era el momento de unificar: **está demostrado que no cambia ningún
+  número existente** (5000 importes en formato de la app, 0 diferencias).
+- Vive en **`core/num.py`** (módulo HOJA, no importa nada de `core` → sin ciclos).
+  Regla: con los dos separadores, el ÚLTIMO es el decimal; solo coma en grupos de 3 →
+  miles; **solo punto → decimal SIEMPRE** (es lo que la app escribe: tarifas, horas).
+### ⚠️ `_parse_date`: una fecha no-ISO desaparecía del P&L
+`invoices`/`inventory` usaban `date.fromisoformat`, que solo acepta ISO. Un
+`16/08/2026` —el formato de texto libre que hubo hasta v149— se leía `None`, y una fila
+sin fecha legible **queda fuera de todo filtro por periodo** (v309): esa factura no
+salía en «Este mes» ni en ningún otro, sin decir nada. `admin_digest` ya aceptaba los
+dos formatos; ahora los tres comparten el mismo, día primero (AU).
+### ⚠️ `_next_id` leía de la caché → podía repetir un ID
+`invoices`, `clientes` e `inventory` lo calculaban sobre `_records()`, que está
+**cacheado 120 s** (TTL subido en v290). Si la caché no se invalidó, el "siguiente" ID
+sale **ya usado** — y aquí *el ID es la identidad*: dos facturas que se pisan, dos
+clientes que confunden sus proyectos, dos activos compartiendo la etiqueta QR física.
+`toolruns._next_id` ya leía fresco y lo documentaba; los otros tres no. ⚠️ Cuesta **1
+lectura extra por creación**, aceptado: crear es una acción humana y rara, y la
+alternativa es corromper la identidad.
+### `notify_expiring`: N escrituras seguidas en cada login de admin
+Era un `update_cell` por credencial DENTRO del bucle, y esta función corre en **cada
+login de administrador** (v187). Con varias credenciales venciendo a la vez eran N
+llamadas seguidas justo al entrar, contra el techo DURO de 60/min. Ahora **1
+`batch_update`** pase lo que pase (el patrón de v80).
+### Los silencios que escondían una escritura fallida
+De los **128** `except: pass` del repo, solo **7** se tragaban una escritura; los otros
+121 son lectura/display/opcional y el silencio ahí es correcto. Los 7 ahora dejan
+rastro (sin cambiar el flujo). El peor con diferencia: **`timeclock.get_sheet`** — si
+la migración de cabecera falla, los módulos siguen escribiendo por el índice CANÓNICO
+de `HEADERS` y **cada dato cae en la columna de al lado**. Se registra como ERROR. Los
+otros: el heartbeat y la liberación de sesión (v75/v289 — el silencio es deliberado,
+pero sin rastro una racha de 429 parece "la sesión se cae sola"), y tres best-effort de
+Drive donde el usuario creía haber guardado una foto o un PDF que no se subió (ahí
+además se avisa en pantalla).
+### Lo que sigo SIN tocar, y por qué
+`_ws` (×10), `_records` (×12), `is_configured` (×15) e `_invalidate` (×11) **parecen**
+duplicados pero cada uno se ata a su hoja, su cabecera y su clave de caché. Unificarlos
+es construir un repositorio genérico de hojas sobre 12 módulos que tocan datos de
+producción: mucho riesgo de regresión, cero cambio para el usuario. Se quedan.
+
+## Revisión EN EL CLOUD: tres fallos que solo se ven con datos reales (v324)
+Primera revisión de la app desplegada, con sesión de administrador real. v322 y v323
+salieron intactas —y v322 resultó tener un caso VIVO, no hipotético— pero mirar las
+pantallas con datos de verdad destapó tres defectos que ningún test local iba a dar.
+### ✅ Lo que se confirmó funcionando
+- **v322 con caso real:** `AGR-0001` («North») tiene **2 miembros y los DOS están
+  archivados**. La tarjeta muestra ahora `2 elev · 21%` donde antes decía **0 elev · 0%**,
+  y el editor de miembros lista `north` y `norte` **marcados** — sin el arreglo no
+  habrían salido y guardar los habría desagrupado. El 21% cuadra solo: (8 + 34,6)/2.
+- **v323 no movió un solo número:** Resumen $3.145 / $1.435 / $1.710 y la conciliación
+  con periodo «Todo» cierra exacta (1.645,20 − 358,80 + 0,40 = 1.286,80), idénticas a
+  lo documentado en v313. Gastos: KPI $3.145 = torta (1.645 + 1.000 + 500).
+- v309/v312 (los `$` sin LaTeX), v311 (titular con negrita real), v315, v316, v321
+  (el aviso de margen 0% incluye los archivados `north`/`norte`), v306 (ID en la lista).
+### ⚠️ 1. El proyecto que peor va recibía el mensaje MÁS TRANQUILO
+En `prueba 3` (0% de avance, 6 días de retraso) el banner decía *«Vas a 0.0 %/día,
+**justo el ritmo que hace falta** (4.3 %/día)»*. Causa:
+```python
+factor = (ritmo_nec / ritmo_real) if (ritmo_real and ritmo_real > 0.01 and ritmo_nec) else None
+```
+Con avance 0, `ritmo_real` es 0 → la guarda contra división por cero deja `factor=None`
+→ `factor and …` es **falsy** en las dos ramas de aviso → cae en el `else`, que es el
+mensaje calmado. Rama nueva explícita para «sin avance», que además es la que más
+alarma debe dar.
+### ⚠️ 2. …y el proyecto pasado de fecha no mostraba NADA (rama inalcanzable)
+La guarda exterior era `if ritmo_real is not None and ritmo_nec is not None:`, pero
+`ritmo_nec` vale `None` **exactamente** cuando `dias_rest <= 0` → el `if dias_rest <= 0`
+de dentro no podía cumplirse **nunca** y su aviso («la fecha de fin ya pasó») era
+**código muerto**. Un proyecto vencido se quedaba sin banner de ritmo, en silencio.
+⚠️ Lo cazó el test, no yo: al replicar el orden REAL de los `if` en vez de suponerlo,
+un caso salió «sin banner» donde yo esperaba el aviso. **Replicar la estructura exacta
+del código en el test es lo que convierte un test en evidencia.** Las 5 ramas se
+comprueban ahora alcanzables.
+### ⚠️ 3. La conciliación gritaba un descuadre que no existe
+Con el periodo por defecto («Este mes») salía **«$1.262,80 sin explicar»**. No es un
+descuadre: los dos lados de la cadena se filtran por fechas **distintas** —las horas por
+el día trabajado, las nóminas por su `PeriodoHasta` (decisión deliberada de v309: el
+costo se devenga en el periodo que cierra)—, así que en una ventana corta la cadena **no
+puede cerrar por construcción**. Con «Todo» cierra al céntimo. Ahora la alarma roja solo
+sale con periodo completo; con periodo acotado se explica por qué no cuadra.
+### Detalle de formato
+La fila restada mostraba `− horas cobradas … $-358.80`: el signo iba en la etiqueta **y**
+en el importe. El signo se queda en la etiqueta (− / + / =, como cualquier estado de
+cuenta) y el importe va en magnitud.
+### Pendiente de ejercitarse en vivo
+El `batch_update` de `notify_expiring` (v323) **aún no ha corrido**: la credencial que
+vence tiene `UltimoAviso = 2026-08-10` y el deduplicado de 25 días lo suprimió
+correctamente. Y `_ids_frescos` solo se estrena al crear una factura/cliente/activo.
+
+## «Sin tarifa» eran DOS cosas distintas en el mismo aviso (v325)
+Salió de la revisión en el Cloud: el aviso de Horas decía *«Sin tarifa/hora, así que su
+costo sale $0: asfgjjd, fijiofgjei (conductor)»* y mandaba a **Usuarios** a arreglarlo.
+Para `asfgjjd` era correcto —le faltaba la tarifa, se le puso 40—. Para `fijiofgjei`
+**no existe fila que arreglar**: es la cuenta `conductor` que se eliminó en v163 al
+quitar ese rol, y sus fichajes históricos quedaron huérfanos. El aviso mandaba a un
+callejón sin salida y el pendiente no se podía cerrar nunca.
+### `auth.claves_conocidas(grupo=None)` — la señal, en un solo sitio
+Devuelve las claves (Usuario **y** Nombre) de quien sigue dado de alta. Sale de
+`list_users`, que está cacheado → **0 llamadas nuevas a Sheets**. Se puso en `auth` y no
+copiada en cada consumidor: es exactamente el patrón que causó los fallos de v323
+(cinco `_num` divergentes), así que aquí se nace con una sola definición.
+- ⚠️ **Sin `grupo` mira TODA la hoja**: alguien movido a otro grupo sigue existiendo y
+  decir que «ya no está» sería falso.
+- ⚠️ **Degrada a “sí existe”** si no se puede leer Login (`conocidas` vacío): un fallo de
+  lectura no puede acusar de baja a nadie. Probado.
+### Los tres consumidores, coherentes
+`timeclock.group_hours` añade **`existe`** por persona; `expenses.labor_breakdown` y
+`finance.conciliacion_mo` parten su `sin_tarifa` en **`sin_tarifa`** (accionable) y
+**`de_baja`** (informativo). En pantalla: Finanzas·Horas y el detalle de Costos sacan dos
+mensajes distintos, y el **indicador «Sin tarifa» del Resumen cuenta SOLO a quien se le
+puede poner** —un pendiente que nadie puede cerrar no es un pendiente— mencionando a los
+de baja en su detalle.
+### Verificado contra la hoja real
+`conductor`/`fijiofgjei` → «ya no está»; `admin1`/`asfgjjd`/`campo1` → de alta. Con los
+datos del grupo: 1 de baja (`fijiofgjei`) y, en la conciliación, `Bobo` como el único
+«falta tarifa» accionable.
+### Dato de producción cambiado
+`admin1` (nombre `asfgjjd`) pasó a **TarifaHora 40** vía `auth.set_rate`. Efecto: M.O.
+cargada a obras del grupo $1.645 → **$1.992**, y el costo de la agrupación *North*
+$0 → **$346**.
+
+## Auditoría de DISEÑO y sus arreglos (v326–v329)
+Auditoría midiendo el DOM en producción (no capturas): escala tipográfica, paleta,
+densidad, áreas de clic, contraste WCAG y motion. Informe:
+`https://claude.ai/code/artifact/a07de4cd-4e28-4454-888e-02e5b4062519`.
+### Lo que se arregló
+| Qué | Antes | Ahora |
+|---|---|---|
+| Contraste de indicadores en reposo | **2.26:1** | **4.62:1** |
+| Ámbar como texto | 3.18:1 | **5.65:1** |
+| Texto de diagramas (`fill=`) | 3.43:1 | **5.57:1** |
+| Subtítulo de la banda de marca | 3.20:1 | **4.58:1** |
+| Valor KPI en ámbar | 2.85:1 | **6.16:1** |
+| Ancho útil por pantalla | 980 px | **1066 px** |
+| Botones por debajo de 36 px | 9 de 17 | **0** |
+| Transiciones propias | **0** | acuse de recibo + hover + atenuado |
+### ⚠️ El hallazgo que no buscaba: el 40 % de los botones no recibía el kit
+Los selectores del sistema de diseño usaban el combinador HIJO
+(`div[data-testid="stButton"] > button`). Cuando un botón lleva `help=`, Streamlit lo
+envuelve en `stTooltipHoverTarget`, así que **deja de ser hijo directo**: medido en
+producción, **10 de 25 botones visibles** se quedaban sin radio, sin peso, sin hover
+—y se habrían quedado sin el acuse de recibo nuevo—, incluido el ← de la barra y todos
+los indicadores. Viene de v283 y nadie lo había visto. Descendiente, no hijo.
+### ⚠️ Un color de ACENTO no es un color de TEXTO
+`_kpi_card(label, valor, color)` teñía con el mismo color el borde y el valor, así que
+pasarle `AMBAR` (#e67e22) daba un importe a **2.85:1**. Nueva `theme.texto_seguro()`:
+el borde conserva el color vivo (no es texto) y el valor usa su equivalente legible.
+Se resuelve en el kit, no en cada llamada — hay ~20 tarjetas y la siguiente que alguien
+escriba tiene que salir bien sin acordarse.
+### ⚠️ Tres falsos positivos de mi propio medidor (lección de método)
+Medir contraste en el navegador tiene tres trampas, y caí en las tres antes de cazarlas:
+1. **Degradados**: `background-image` no aparece en `backgroundColor` → hay que evaluar
+   contra la PEOR parada del degradado.
+2. **Alfa**: un fondo `rgba(28,131,255,.1)` tratado como opaco daba 2.05:1 cuando el
+   valor real, compuesto sobre blanco, es **6.68:1**. Las alertas nativas de Streamlit
+   pasan todas (4.66–7.55).
+3. **Iconos**: los Material Symbols son texto para el DOM pero contenido no textual para
+   WCAG (umbral 3:1, no 4.5).
+Con las tres corregidas: **9 pantallas medidas, 0 fallos reales**.
+### Lo que NO se tocó, a propósito
+`stroke=` de los diagramas (líneas técnicas, no texto), fondos de pista, y `AMBAR` como
+anillo/gráfico. Y el buscador de la barra superior sigue inerte: es decisión de producto
+(conectarlo o quitarlo), no un arreglo de estilo.
+
+## El buscador de la barra superior YA busca (v330-v331)
+Era el hallazgo con más coste de credibilidad de la auditoría de diseño: **641 px del
+control más prominente de cada pantalla de gestión, inertes** desde v190 — un
+`text_input` cuyo valor no se leía en ningún punto del código.
+### `home_ui.buscar(q, grupo)` — el motor
+Busca en **proyectos** (nombre, ID, cliente, ubicación), **personas** (nombre, login,
+email) y **trabajos** del catálogo (nombre, ID, número). Devuelve
+`[{tipo, titulo, pie, id, orden}]`.
+- **0 lecturas nuevas a Sheets**: las tres fuentes (`P.list_projects`, `auth.list_users`,
+  `R.list_trabajos`) ya están cacheadas y se usan en otras pantallas. Con el techo duro
+  de 60/min era condición, no preferencia.
+- **Ranking**: 0 = ID exacto · 1 = empieza por · 2 = contiene; a igualdad, por tipo.
+- `_norm_busq` quita acentos y mayúsculas → «grua» encuentra «grúa».
+- **Mínimo 2 letras**: con una sola, todo coincide y no informa.
+- ⚠️ Solo el catálogo TRB-#### en trabajos: `trabajos_idx` mete los proyectos como
+  entradas sintéticas (v218) y usarlo aquí los DUPLICARÍA con la sección de proyectos.
+- Los **archivados** se encuentran (`incluir_archivados=True`) y se marcan como tales:
+  buscar algo viejo es justo cuando hace falta un buscador.
+### La pantalla y la navegación
+`_pantalla_busqueda` se engancha en **una línea al principio de `render_admin_content`**
+(no en `app.py`) para que ningún llamador cambie. Con término escrito, los resultados
+OCUPAN la pantalla: se ha ido a buscar, no a mirar la sección de debajo. Cada resultado
+reusa los deep-links que YA existían — `_admin_open_proj`, `gp_fichasel`, `navegar()` —
+en vez de inventar caminos nuevos.
+- ⚠️ **Limpiar la caja va por bandera** (`_search_clear`), aplicada en `render_topbar`
+  ANTES de instanciar el `text_input`: quien la pide es el clic, que ocurre más abajo en
+  el MISMO run, y escribir la clave de un widget ya instanciado revienta (regla v111).
+- Al **campo** no se le muestra: su nav es corta y todo lo suyo cuelga de Mis proyectos.
+### ⚠️ v331: el indicador de versión mentía
+Visto al verificar: la app era **v330** y el topbar decía **v324**. `_version()` llevaba
+`@st.cache_data` **sin ttl**, así que se congelaba durante toda la vida del proceso, y
+Streamlit Cloud recarga el código en caliente sin reiniciar siempre. Un indicador de
+versión que miente es peor que no tenerlo — y este se usa a diario para saber qué hay
+desplegado. Sin caché: es leer un fichero local de 5 bytes.
+### Verificado en producción
+Buscar «norte» → el proyecto archivado PRJ-0003, y al tocarlo abre su detalle con la
+caja ya limpia. Buscar «campo1» → la persona, y al tocarla abre **su ficha** en
+Planificación · Usuarios. El guardián de v303 (destinos de `navegar()` existentes) pasa.
+
+## Estado de carga + los selectores del kit dejan de suponer la etiqueta (v332)
+### ⚠️ El atenuado de v326 NUNCA funcionó (y lo di por bueno)
+La regla era `div[data-testid="stMain"]` y **stMain es un `<section>`**, así que no
+casaba con nada. Lo afirmé en el informe de diseño sin medirlo. Es el mismo error que
+el combinador `>` de v327: **un selector supuesto en vez de medido**.
+Al auditar TODOS los selectores del kit contra el DOM real apareció un segundo:
+**`stMetricLabel` es un `<label>`**, así que el estilo de las etiquetas de métrica
+(mayúsculas, peso 600, color secundario) llevaba muerto **desde v283**.
+→ Se quitó el nombre de etiqueta de los **18** selectores del kit: el `data-testid` ya
+es único, la etiqueta no aporta nada y es justo lo que se rompe cuando Streamlit cambia
+su DOM. Verificado: 0 selectores con etiqueta.
+### El estado de carga, por fin visible
+Dos señales, que resuelven cosas distintas:
+- **Barra superior animada** (3 px, degradado azul COPEX, `cpx-cargando` 1.05 s) →
+  «te he oído y estoy trabajando». Aparece en el navegador, sin esperar al servidor.
+- **Contenido atenuado a .55** → «lo que ves ya no es lo definitivo».
+Medido en producción durante un rerun de 520 ms: barra visible con su animación,
+`opacity` del main baja a 0.55, y **en reposo vuelve todo a 1 sin residuo**.
+⚠️ No es un esqueleto literal (Streamlit no permite reservar la altura del contenido
+que aún no existe); es la señal que resuelve el problema real, que era la pantalla
+idéntica y quieta hasta 2,9 s.
+### La lección, que ya va tres veces
+Un selector CSS que no casa **no da error**: la app se ve "casi bien" y nadie lo nota.
+Las tres veces (v326 `>`, v326 `div`/section, v283 `div`/label) se cazaron **midiendo el
+DOM en vivo**, nunca leyendo el código. Comprobación barata que conviene repetir al
+tocar el kit: para cada `tag[data-testid=X]`, comparar cuántos elementos casan con y sin
+la etiqueta.
+
+## Escala tipográfica + el deploy que no llega (v333-v335)
+### La escala: de 31 tamaños a 9
+Había **31 tamaños de fuente distintos para 102 usos**, 24 fuera de cualquier escala
+(11.52, 12.48, 16.32, 17.92, 21.12… los residuos de escribir en `rem`). Eso no es una
+escala: nadie la eligió, así que nadie la puede respetar.
+Nueve pasos — **11 · 12 · 13 · 14 · 16 · 18 · 21 · 26 · 34** — y todo se ajusta al más
+cercano. ⚠️ **Medido ANTES de tocar**: 30 de los 31 valores se mueven ≤1 px y solo
+24→26 se mueve 2 px (3 usos). Por eso se pudo hacer de golpe sin romper maquetación.
+- **Literales en px, no `var(--…)`**, a propósito: parte de este CSS viaja a
+  `email_notify` (los clientes de correo no resuelven variables) y a los SVG que
+  `svglib` pasa a PDF. Un token que no resuelve no avisa, deja el texto por defecto.
+- **NO se tocan los `font-size="7.5"` de los SVG** (137): son atributos sin unidad con
+  la escala del dibujo técnico; meterlos en la de la interfaz rompería las cotas.
+- **Guardián** (`verif_v333.py`): falla si aparece un `font-size:` fuera de la escala.
+  Cazó 6 en `app.py` que mi migración se había saltado por recorrer solo `core/`.
+### ⚠️ EL HALLAZGO OPERATIVO: «desplegado» ≠ «corriendo»
+Verificando v333 medí que la app **anunciaba v333 sirviendo el `theme.py` de v332**.
+Causa: el fichero `VERSION` vive en disco y se actualiza con el deploy, pero Streamlit
+Cloud recarga el script principal **sin re-importar los módulos `core.*`** ya cargados
+en `sys.modules`. Hasta que el proceso reinicia, el código nuevo NO corre.
+- Esto invalidó una verificación mía: la primera comprobación de maquetación de v333
+  corrió contra el CSS de v332, así que **no probaba nada**. Hubo que repetirla.
+- **v334 invierte el arreglo de v331**: la versión se lee **AL IMPORTAR** el módulo, no
+  fresca en cada run. v331 la hizo fresca para que no se quedara vieja, pero eso la
+  volvió más engañosa — anunciaba con confianza una versión cuyo código no se ejecutaba.
+  Leída al importar, cambia exactamente cuando cambia el código. **Si la barra dice
+  v334, se está ejecutando v334.**
+### v335: una etiqueta truncada no informa
+Streamlit recorta la etiqueta de `st.metric` con elipsis (`nowrap`+`overflow:hidden`).
+En ventana estrecha eso deja «Dispon…». Ahora usa dos líneas: 12 px más de alto es mejor
+que media palabra. ⚠️ **Honestidad sobre el hallazgo**: lo medí a 780 px porque
+`preview_start` me había reseteado el viewport, no al tamaño de diseño. A 1440 las
+columnas son de 202 px y **todas las etiquetas caben en una línea**, así que el arreglo
+no cambia nada ahí — solo hace que degrade bien en un portátil o media pantalla.
+### Comprobado en producción (1440×900, 7 pantallas)
+0 desbordes horizontales · **0 tamaños fuera de la escala** · tarjetas KPI idénticas
+entre sí (73 px, `kpiDesigual: 0`) · 0 etiquetas recortadas.
+
+## Movimiento con sentido: la curva se traza, la cifra entra (v336)
+Cierra el plan de la auditoría de diseño. Las dos piezas que quedaban, las dos
+puramente de percepción.
+### La curva S se traza de izquierda a derecha
+`stroke-dasharray`/`stroke-dashoffset` animados 0.9 s. Aquí la animación **ES el dato**:
+la curva avanza en el tiempo, así que el tiempo se lee como tiempo. La real entra 0.18 s
+después de la planificada, que es el orden en que se comparan.
+- ⚠️ **`schedule_svg(..., animar=False)` por defecto.** El MISMO SVG va al PDF por
+  `svglib` (`report.py`, `user_report.py`), y ahí un `<style>` con `@keyframes` es, en
+  el mejor caso, ignorado. Solo los dos call-sites de PANTALLA pasan `animar=True`.
+- **Probado que el PDF no cambia**: quitando el `<style>` y las clases, el SVG de
+  pantalla es **idéntico carácter a carácter** al del PDF, y `svg2rlg` lo sigue
+  convirtiendo (570×412).
+### Las cifras entran al recalcularse
+Al cambiar un filtro, los números nuevos aparecían en el mismo sitio y con la misma
+pinta que los viejos: no había forma de ver QUE habían cambiado. Ahora entran con
+`cpx-entra` (220 ms, 3 px). ⚠️ **NO es un contador animado**: `st.markdown` no ejecuta
+scripts, así que un count-up necesitaría un iframe por tarjeta y rompería la maquetación.
+El gesto de entrada da la misma señal sin tocar el valor.
+### ⚠️ Este navegador pide *reduced motion* — y por eso no se ve animar
+Verificando en el Cloud, las curvas salían con `animation: none` y ya trazadas. No es un
+fallo: `matchMedia('(prefers-reduced-motion: reduce)')` da **true** en el navegador de
+automatización, así que la guarda hizo su trabajo. Comprobado por CSSOM que están los
+`@keyframes`, la regla base, el retardo de la segunda curva y la anulación; y forzando
+la animación a mano, aplica (`cpx-trazar`, 0.9 s). **Si tu Windows tiene activado
+"mostrar animaciones" (lo normal), la verás.**
+
+## Estado en la URL: «mira esta pantalla» (v337-v338)
+Último punto del informe de diseño. La dirección refleja **sección · sub-pestaña ·
+proyecto abierto**, así que se puede copiar y mandar:
+`…/?s=proyectos&t=proyectos&p=PRJ-0003` abre ese detalle directamente.
+### Cómo
+- **`_slug(sub_id)`**: el ID interno lleva emoji porque ES el identificador (v232) y no
+  se toca, pero en una URL sería ilegible. El slug se **deriva**, no se guarda: si mañana
+  cambia el emoji, el enlace viejo sigue funcionando. Verificado: 0 colisiones dentro de
+  una sección y las 18 sub-pestañas hacen ida y vuelta.
+- **`_url_a_estado()`** solo en la PRIMERA pasada (`_url_leida`) y solo si no hay ya un
+  `_admin_nav_pending`: los deep-links internos son más específicos y ganan. Sin esa
+  guarda, cada rerun te devolvería a donde apunta la URL y no podrías moverte.
+- **`_estado_a_url()`** solo escribe **si cambia**, para no actualizar la URL en cada
+  pasada (y con ello arriesgar un bucle). Probado: estable 2,5 s sin tocar nada.
+- **NO toca `activo`**, el deep-link del QR de inventario, que tiene su handler en
+  `app.py` y se limpia solo.
+### ⚠️ La URL NO es una vía para saltarse el rol
+`_url_a_estado` valida la sección contra `_secciones()`, que es **por rol**. Probado:
+un campo con `?s=finanzas` NO llega a Finanzas, y el propietario tampoco a Proyectos.
+Y aunque llegara, el despachador de contenido también es por rol.
+### ⚠️ v338: fallaba en 4 secciones y parecía intermitente
+`sub = st.session_state.get(_subkey().get(seccion) or "")` → en una sección **sin**
+sub-pestañas (Home, Fichaje, Inventario, Contactos) quedaba `get("")`, que lanza; mi
+propio `except` se lo tragaba y la URL no se actualizaba **solo en esas cuatro**.
+Finanzas y Proyectos sí funcionaban, que es lo que despistaba: se veía intermitente,
+no roto. **Un `except` amplio alrededor de código nuevo esconde justo el fallo que
+acabas de introducir** — el mismo patrón que v323 destapó en los silencios de escritura.
+
+## El techo de cuota de Sheets: lector por LOTES (v339)
+Lo que limitaba a cuántos clientes se le puede vender la app.
+### Lo medido ANTES (instrumentando la capa HTTP de gspread, no suponiendo)
+- arranque en frío: **12 llamadas**, 859 ms de media cada una
+- recorrido por todas las secciones: **7 más** → 19 por sesión
+- **15 de las 19 eran `values/{hoja}`: una por hoja.** La app lee 21 hojas con 30
+  lectores cacheados y cada uno pedía la suya por separado.
+- techo: **60 lecturas/min por cuenta de servicio** — y hay UNA para todos los grupos,
+  así que no crece al añadir clientes, se reparte. Daba **~10 usuarios en paralelo**
+  o **5 arranques por minuto** antes del 429.
+### La palanca
+`spreadsheets.values.batchGet` trae **muchos rangos en UNA petición**, y la cuota cuenta
+peticiones. **`core/hojas.py`**: la primera hoja que alguien pida dispara UNA llamada
+que se trae todas; el resto salen de ahí. Los 17 lectores cacheados de los 13 módulos
+delegan en `hojas.registros(titulo, cabeceras)`.
+### Medido DESPUÉS
+| | Antes | Ahora |
+|---|---|---|
+| Arranque en frío | 12 llamadas | **6** |
+| Recorrido por todas las secciones | 7 más | **0** |
+| Total de una sesión | 19 | **6** |
+⚠️ Y el lote es `@st.cache_data`, o sea **compartido por proceso**: mientras esté
+caliente, TODOS los usuarios leen de él. La navegación deja de consumir cuota.
+### Tres trampas que hubo que resolver
+1. **Un rango inexistente tumba el lote ENTERO.** `MovimientosActivo` aún no existe
+   (no hay activos) y `values_batch_get` devolvía 400 para toda la petición. Se piden
+   solo las hojas que existen, según el índice que `timeclock._libro()` ya cachea
+   (coste: 0 llamadas).
+2. **⚠️ `_invalidate()` tenía que tirar TAMBIÉN el lote.** Cada módulo limpiaba su
+   caché, pero el dato venía del lote compartido → tras guardar algo habría seguido
+   saliendo el valor viejo hasta 120 s. «Lo guardé y no sale». Los 12 `_invalidate`
+   llaman ahora a `hojas.invalidar()`.
+3. **Ciclo de imports**: `hojas` importa `timeclock`, así que los lectores lo importan
+   DENTRO de la función, no a nivel de módulo.
+### Lo que NO cambia
+Las rutas de **ESCRITURA siguen leyendo frescas** (`_find_row`, `_next_id`,
+`_ids_frescos`): decidir dónde escribir o qué ID toca con una caché es como se corrompen
+los datos (v323). El lote es solo para lectura de display.
+### Verificado
+`registros()` devuelve **idéntico fila a fila** a `get_all_records(numericise_ignore=
+['all'])` en las **19 hojas** (incluidas las de 0 filas y la de 72), y contra una lectura
+fresca e independiente con gspread crudo: Alarmas 18, Proyectos 6, Sheet1 30, Login 6,
+Gastos 2, Nóminas 5 — todas idénticas. Las 7 pantallas del Cloud renderizan sin errores.
+
+## Subir el techo de cuota: decidido y APLAZADO (16/08/2026)
+v339 dio margen de sobra para los clientes actuales, así que **no se hace nada ahora**.
+Las opciones, para cuando toque:
+| | Qué resuelve | Coste |
+|---|---|---|
+| **A. Una cuenta de servicio por cliente**, mismo libro | Solo la cuota | **BAJO**: el libro se abre en UN solo sitio (`timeclock._cached_ws`, ~L89-93); sería cachear por grupo |
+| **B. Un libro por cliente** (+ su cuenta) | Cuota **y aislamiento** | MEDIO-ALTO. ⚠️ Rompe las vistas del PROPIETARIO, que leen todos los grupos de una vez (`owner_digest`, `list_projects()` sin filtro): pasarían a abrir N libros |
+| **C. Salir de Sheets** (Postgres/Supabase) | Todo | ALTO, pero es el final natural si crece |
+**Disparadores acordados:** A → cuando entre el segundo cliente de verdad. B o C →
+cuando un cliente pregunte por sus datos.
+### ⚠️ El argumento no es la cuota, es el AISLAMIENTO
+Hoy todos los clientes viven en el **mismo archivo**, separados por una columna `Grupo`.
+Un fallo en ese filtro —de los que han salido varios— no muestra un número mal:
+**enseña datos de otro cliente**. Es objeción de venta y es riesgo real.
+### Palanca gratis sin usar
+Subir "Read requests per minute per user" de 60 → 300 en Cloud Console → Sheets API →
+Cuotas. No reduce consumo, da colchón. Se decidió no depender de ella porque Google
+empezará a **facturar el exceso** más adelante en 2026.
+
+## ⚠️ REGLA: si algo se puede archivar, tiene que poder VOLVER (v340)
+Encontrado por el usuario al primer intento: **archivó un cliente y desapareció**.
+`set_activo(cid, False)` marca `Activo=NO` y las 5 llamadas a `list_clientes` usaban el
+default que los oculta — **sin casilla para verlos y sin botón para restaurar**. El dato
+seguía en la hoja; la app no tenía forma de enseñarlo.
+Es **exactamente** el fallo que v149 resolvió para los proyectos, aplicado a una entidad
+que nació después y a la que nadie se lo aplicó. Al buscarlo apareció **el mismo en los
+activos dados de baja** (`dar_de_baja` → `Activo=NO`).
+### Las tres piezas, siempre juntas
+1. La bandera existe en el modelo (`incluir_inactivos` / `incluir_baja` /
+   `incluir_archivados`) — esta parte **ya estaba** en los tres casos.
+2. La **interfaz ofrece verlos** (casilla) + dice **cuántos hay ocultos**.
+3. Hay **botón de volver** (Restaurar / Reactivar) en la ficha.
+Tener solo la (1) es peor que no tener nada: el dato existe pero es inalcanzable.
+### Guardián
+En `verif_v340.py`: por cada entidad con bandera de ocultar, su `_ui` tiene que
+mencionar la bandera **y** una vuelta. Hoy pasan clientes, inventario y proyectos.
+### ⚠️ Lo que esto dice del estado real
+La app tiene **70 funciones públicas que escriben**; a fecha de v340 se ha ejercitado
+**una** (`set_rate`). El usuario probó **una** escritura (crear+archivar un cliente) y
+salió un fallo. No es mala suerte: es que la superficie de escritura está sin recorrer.
+**Antes de decir que un rol "está listo", ejercitar sus escrituras, no solo sus
+pantallas.**
+
+## Los tres huecos del administrador, cerrados (v341-v343)
+Salió de la pregunta del usuario: *«¿estamos ofreciendo las herramientas necesarias
+para un administrador o falta algo?»*. La auditoría dio tres huecos reales — no
+pantallas que faltaran, sino **preguntas que la app no podía responder**.
+
+### v341 · «¿vamos mejor o peor que el mes pasado?»
+El P&L daba una foto del periodo elegido y **nada con qué compararla**: $1.710 de
+ganancia no dice si es bueno hasta saber qué dio el mes anterior. `finance` gana
+`periodo_anterior(desde, hasta)` (ventana del MISMO número de días, pegada justo
+antes), `variacion(actual, previo)` → `{dif, pct, mejor}` y `pnl_comparado`, y
+`_kpi_card` acepta `var=` → ▲/▼ con el % bajo la cifra.
+- **0 llamadas nuevas**: el periodo anterior sale de las mismas filas ya cacheadas.
+- ⚠️ **En un COSTO, subir es PEOR**: `render_pnl` invierte `mejor` para la tarjeta de
+  costos. Sin eso, gastar más saldría en verde.
+- ⚠️ `pct=None` cuando el periodo anterior es ~0: un porcentaje contra cero no
+  significa nada, así que se muestra la diferencia y no un «+∞%». Con «Todo» no hay
+  periodo anterior y no se compara nada.
+- Verificado con datos reales: agosto $1.710,42 contra julio −$1.500 → **+214%**, y la
+  aritmética de ventana cuadra en rangos de 16 días, 31 días y un trimestre.
+
+### v342 · «¿quién puso este margen al 0%?»
+`CreadoPor` decía quién CREÓ una fila; **nada decía quién la cambió**. En una app donde
+el margen, la tarifa, el presupuesto y las fechas deciden lo que se cobra y lo que se
+paga, esa pregunta se hace tarde o temprano y no tenía respuesta.
+`core/auditoria.py` (hoja `Auditoria`): `diff` · `registrar` · `historial`.
+- **Acotado a lo que mueve dinero** (`CAMPOS_CLAVE`). Registrar los 70 puntos de
+  escritura daría una fila por clic y una hoja ilegible; un cambio de nota no entra.
+- **1 escritura por edición y solo si algo cambió de verdad**: toda la edición va en
+  UNA fila (los campos en un JSON) y `diff` compara como texto, así que `40` y `40.0`
+  no generan histórico. Guardar un formulario sin tocar nada no gasta cuota.
+- ⚠️ **La anotación va FUERA del try del guardado y DESPUÉS de invalidar**: el cambio
+  del usuario ya se hizo y no se puede deshacer porque falle el apunte. Verificado por
+  AST en los dos enganches (`projects.update_project`, `auth.set_rate`).
+- ⚠️ **El «antes» se captura ANTES de escribir**, de la caché (0 llamadas).
+- ⚠️ `_records` llama a `hojas.registros(SHEET)` **sin cabeceras**: con ellas cae a
+  `get_sheet`, que **CREA la hoja** — un lector que escribe (regla v145). La hoja la
+  crea la primera anotación.
+- ⚠️ **Fallo que cazó el chequeo de nombres libres**: `projects_ui` importa `theme`
+  **dentro de cada función**, no a nivel de módulo, así que mi bloque nuevo lo usaba
+  sin importarlo → NameError al abrir el desplegable. Mi primera comprobación dijo
+  «importa theme: True» porque recorría el árbol entero con `ast.walk` y encontraba el
+  import LOCAL de otra función. **Comprobar el ámbito, no la presencia.**
+
+### v343 · «¿cuánto llevo comprometido?» — órdenes de compra
+`expenses` responde «cuánto llevas GASTADO»: una compra existe cuando hay recibo. Pero
+el material se encarga semanas antes de la factura, así que entre el pedido y el recibo
+**el proyecto aparece dentro de presupuesto con el dinero ya comprometido**, y el
+sobrecosto se descubre cuando ya no se puede hacer nada — el mismo problema que v144
+resolvió para la mano de obra.
+`core/orders.py` (hoja `Ordenes`, estados pendiente/recibida/cancelada).
+- ⚠️ **UNA sola definición de gasto** (regla v310): una orden **no es** un gasto. Al
+  recibirla se crea su fila en `Gastos`, así que el costo real sigue teniendo una sola
+  fuente y aquí solo vive lo pendiente.
+- ⚠️ **El orden de las dos escrituras importa.** Recibir = marcar + crear el gasto. Si
+  se creara el gasto primero y fallara el marcado, al reintentar habría **dos gastos por
+  la misma compra** y el costo saldría inflado sin que nadie lo vea. Se marca PRIMERO;
+  si falla lo segundo, la orden queda `recibida` **sin GastoID**, `sin_gasto()` lo
+  detecta y la UI ofrece completarlo. **Un hueco visible es mejor que un doble cargo
+  invisible.** Probado simulando la caída de `expenses.add`.
+- ⚠️ **`project_cost.total` NO cambia**: sigue siendo lo gastado, que es lo que leen la
+  conciliación, el P&L, la rentabilidad y las alertas. Lo comprometido va en campos
+  APARTE (`comprometido`, `total_comp`, `over_comp`). Probado contra la fórmula anterior
+  en 6 casos: ni un número existente se mueve.
+- **`over_comp`** es el caso que nadie veía: dentro de presupuesto hoy, pero con lo ya
+  pedido se pasa seguro. No dispara si ya se pasó (manda `over`, sin duplicar el aviso)
+  ni sin presupuesto (no se inventa un porcentaje).
+- `atrasadas(grupo)` = pendientes cuya fecha esperada ya pasó → obra parada esperando
+  material. ⚠️ Una orden **sin** fecha esperada nunca sale atrasada: no se puede afirmar
+  que llega tarde si nadie dijo cuándo llegaba.
+- Las vistas de grupo usan `comprometido_por_proyecto` (UNA pasada) en vez de consultar
+  por proyecto dentro del bucle (patrón `project_hours_bulk`).
+- ⚠️ Las dos hojas nuevas entran en `hojas.HOJAS_LECTURA`: fuera del lote, cada una
+  costaría una llamada suelta por sesión (v339).
+
+## ⚠️ EJERCITAR LAS ESCRITURAS: 4 fallos que ningún test vio (v344)
+El usuario pidió «el ejercicio completo». Se ejercitaron las escrituras **contra la
+hoja real** (código local de v343, datos de producción, con foto del antes y limpieza
+después). Salieron cuatro fallos, y **ninguno lo habría encontrado un test**: los tests
+usaban diccionarios inventados por mí, con MIS nombres de columna y sin caché real.
+
+### ⚠️ 1. La caché de proyectos NO se limpiaba desde v339 — regresión mía, viva 4 versiones
+```python
+def _invalidate():
+    hojas.invalidar()
+    try:
+        fn.clear()        # ⚠️ `fn` NO EXISTE → NameError
+    except Exception:
+        pass              # ⚠️ …y aquí se lo traga
+```
+El original era `for fn in (_records, _fichaje_records): fn.clear()`. Al reescribirlo en
+v339 quité el bucle y dejé `fn.clear()` colgando. Confirmado con `git log -S` (commit
+`70309d5`). **Efecto en producción: tras guardar un proyecto, una actividad o una
+agrupación, la pantalla podía enseñar el valor viejo hasta 120 s** — el «lo guardé y no
+sale» que v339 decía haber evitado. Lo mismo en `roster` (`f.clear()`), o sea el tablero
+de planificación. Barrido por AST de las 17 funciones de invalidación: solo esas dos.
+**Un `except Exception: pass` alrededor de código nuevo esconde justo el fallo que
+acabas de introducir** (misma lección de v323 y v338 — van tres).
+
+### ⚠️ 2. Y las cachés DERIVADAS tampoco
+`group_expenses`, `over_budget`, `gaps_by_group` y `projections_by_group` cachean el
+agregado: limpiar solo `_records` dejaba el total del grupo, la alerta de sobre
+presupuesto y el retraso con el valor viejo hasta 120 s. Probado en vivo: añadir un
+recibo de $77,77 y leer el agregado **inmediatamente** → $1.500 → $1.577,77.
+
+### ⚠️ 3. El margen era el ÚNICO campo que la auditoría NO vigilaba
+`CAMPOS_CLAVE` tenía `MargenPct`; la columna real es **`MargenMO`**. O sea que la
+pregunta para la que se construyó la hoja —«¿quién puso este margen a 0?»— era
+justamente la que no tenía respuesta. (`Pagada` era otro nombre fantasma; `Rol` sí
+existe: mi primer chequeo lo marcó mal porque cogió `GROUPS_HEADERS` en vez de
+`LOGIN_HEADERS` — **validar contra la constante EXACTA, no contra la que encuentre un
+atajo**, regla v135.)
+
+### ⚠️ 4. `update_project` anotaba cambios que nunca escribió
+Una clave que no está en `_PCOL` se descarta **en silencio** y la función devolvía
+igualmente «Proyecto actualizado.». Con la auditoría enganchada, eso además **anotaba un
+cambio que la hoja nunca recibió**, y lo repetía en cada guardado (el «antes» no cambiaba
+nunca porque no se escribía nada). Ahora: se audita `_escritos` (lo filtrado por `_PCOL`),
+las columnas ignoradas se registran en el log, y si NINGUNA es válida se devuelve error
+en vez de un éxito falso.
+
+### Lo que SÍ funcionó a la primera, contra datos reales
+- **Órdenes de compra (v343) enteras**: crear → comprometido $7.500 → el aviso
+  «vas dentro pero con lo pedido te pasas» ($10.500 de $10.000, sin haber gastado un
+  peso) → recibir por un importe distinto ($480 en vez de $500) → gasto creado y
+  enlazado → comprometido baja solo → atrasadas detecta la de 4 días.
+- **`set_grouping_members`** (el arreglo de v322, nunca clicado): los 2 miembros
+  **archivados** sobreviven a un guardado, quitar y volver a poner funciona, y el
+  avance consolidado (21,3%) no se mueve.
+- **`create_project` + `delete_project`**: 11 actividades, fila alineada columna por
+  columna, `datos_asociados` correcto y borrado limpio.
+- La **auditoría** registra también los cambios de agrupación (`AgrupacionID` +
+  `PesoEnAgrupacion`) sin haberlo programado aparte: van por `update_project`.
+
+### Método (repetir tal cual la próxima vez)
+1. Foto del estado **en solo lectura con gspread crudo** (los helpers migran cabeceras
+   = escriben, regla v145). 2. Ejercitar sobre un proyecto de prueba. 3. Verificar
+   leyendo. 4. **Devolver todo a su sitio** y comprobarlo. ⚠️ Mi propia foto del «antes»
+   imprimía el margen por `MargenPct`, así que no probaba nada: lo que permitió afirmar
+   que no toqué PRJ-0006 fue **el propio historial de auditoría**, que lista cada cambio.
+
+## Fichaje y facturas ejercitados: un abono de $1 escondía una deuda vencida (v345)
+Segunda tanda del ejercicio de v344, esta vez sobre las dos rutas que en v344 se
+dejaron a propósito («no fabrico registros financieros por mi cuenta»), con el usuario
+autorizándolo. Método idéntico: foto en solo lectura → ejercitar → verificar leyendo →
+devolver todo a su sitio → segunda foto. **Rastro final: ninguno.**
+
+### ⚠️ EL HALLAZGO: `estado_cobro` comprobaba `parcial` ANTES que `vencida`
+```python
+if cob > 0:            return "parcial"     # ← se comía el caso
+venc = _parse_date(...)
+if venc < hoy:         return "vencida"
+```
+O sea que **un abono de $1 sacaba a la factura de «vencida» para siempre**. Y los tres
+sitios que miden la deuda vencida (`finance.pnl`, `invoices.resumen_cliente`, el
+resumen de Facturas) filtran por `estado_cobro(f) == "vencida"`, así que ese saldo
+**no lo veía nadie**: ni el indicador rojo del resumen financiero, ni el P&L.
+Es el caso más común del mundo real: el cliente paga un anticipo y desaparece.
+**Arreglo:** vencida gana a parcial — estar vencida es el hecho accionable, y los tres
+consumidores ya suman `Total − Cobrado`, o sea el saldo, no el total. Probada la matriz
+de 7 casos; los datos reales no cambian de estado (hoy no hay ninguna parcial vencida).
+
+### Lo que aguantó, contra datos reales
+- **Fichaje**: fichar a un proyecto **abre la jornada solo** (v150) · `switch_project`
+  cierra el segmento y abre otro sin tocar la jornada · `cerrar_jornada` cierra los dos ·
+  el `ProyectoID` se guarda (v145) · **cerrar con hora explícita** (el olvido de v164)
+  da 3,0 h exactas · y el caso «3 h en obra con 0 de jornada» se marca
+  `sin_asignar_indet=True` (v320) en vez de un 0 que parece bueno.
+- **v325 en vivo**: la identidad de prueba no está en Login → sale como **«de baja»**
+  (informativo) y no como «sin tarifa» (accionable). La distinción funciona.
+- **Facturas**: subtotal 1.500 + GST 150 = 1.650 · cobro parcial → `parcial` · **intentar
+  cobrar de más se topa al total** → `cobrada` · `CobrosJSON` acumula el historial · PDF
+  de 1 página con cliente, número e importes · anular la saca de
+  `facturado_por_proyecto` · y `pendiente_de_facturar` baja a 0 (no se cobra dos veces).
+
+### ⚠️ Lo que NO era un hueco (comprobado antes de «arreglarlo»)
+Una factura sin fecha de vencimiento nunca puede estar vencida — pero el formulario
+usa `date_input(value=clock.today())`, así que **desde la app siempre lleva fecha**. El
+hueco solo existía en mi script, que se saltaba la UI. Comprobarlo antes de tocar evitó
+un cambio inútil.
+
+### Método, otra vez: seguí suponiendo formas de retorno
+`mis_fichajes` devuelve `{tipo, proyecto, entrada, salida, horas, abierto}`, no las
+columnas crudas de la hoja; e `invoices._ws()` devuelve **`(worksheet, error)`**, no el
+worksheet suelto (distinto de `orders`/`expenses`). Dos errores míos en una tanda, los
+dos por no mirar. **Regla v135, van cinco veces.**
+
+## Nóminas ejercitadas + la decisión de la tarifa 0 (v346)
+Última ruta de escritura sin recorrer. Método de v344/v345 (foto → ejercitar → verificar
+leyendo → devolver todo → segunda foto). **Rastro final: ninguno**; el P&L vuelve a
+$1.434,78 / $210,42.
+
+### La decisión que llevaba versiones pendiente
+`generar` **detectaba** la falta de tarifa y creaba la nómina **igual, con base $0**. No
+era hipotético: en la hoja real está **`NOM-0002`, 8,69 h de trabajo con colilla de $0**,
+emitida antes de que esa persona tuviera tarifa. Una colilla de $0 por trabajo hecho es
+un documento equivocado y se queda ahí. **Decisión del usuario: saltarlo y avisar.**
+- No se crea la fila; se devuelve el **nombre** (`sin_tarifa` pasa de contador a lista) y
+  la UI dice a quién y dónde arreglarlo.
+- ⚠️ **Es reversible por construcción**: como no dejó fila, el salto de duplicados no la
+  bloquea → al poner la tarifa y regenerar **el mismo periodo**, entra. Probado:
+  `{creadas:0, sin_tarifa:['ZZZ PRUEBA']}` → tarifa 50 → `{creadas:1}`, base 2 h×50=100,
+  retención 15 → neto 85, super 11,5 aparte.
+- Al resto del equipo no le afecta: su nómina se genera igual.
+- El aviso de la LISTA se queda (no se borra al cambiar el comportamiento): las colillas
+  de $0 anteriores siguen en la hoja y hay que poder verlas para anularlas y regenerarlas.
+
+### Lo que aguantó
+Salto de duplicados (`creadas 1` → `omitidas 1`) · **neto = base + devengos − deducciones
+con los APORTES sin descontar** (0+1000+200−180 = 1020, el super de 138 no resta) ·
+marcar pagada con fecha · colilla PDF de 1 página con todos los conceptos · anular la
+saca del resumen y del P&L.
+
+### Dos confirmaciones que salieron de regalo
+- **El reparto por medianoche de v164, en vivo**: mi turno de prueba cruzó las 00:00 y la
+  nómina lo repartió solo — 6,37 h el 17 + 1,63 h el 18 = 8,0 h exactas. Ese arreglo
+  nunca se había visto correr con datos reales.
+- **La retención de impuesto se calculó por primera vez** en esa hoja: las 5 nóminas
+  existentes solo llevaban el concepto de Superannuation.
+
+## ⚠️ Una nómina anulada bloqueaba REEMITIR el periodo (v347) + corrección de NOM-0002
+El usuario pidió arreglar `NOM-0002` (8,69 h de trabajo real emitidas en **$0**, porque
+se generó antes de que esa persona tuviera tarifa). El camino obvio —anular y
+regenerar— **no funcionaba**: `generar` construía el conjunto de duplicados con
+`list_nominas(grupo, incluir_anuladas=True)`, así que **la fila anulada seguía
+bloqueando**. O sea que la app no tenía NINGUNA forma de reemitir el periodo de nadie.
+Es el principio de v340 otra vez: **si se puede deshacer, tiene que poder rehacerse**.
+- Arreglo: el filtro pasa a `list_nominas(grupo)` (que ya excluye anuladas por defecto).
+  La fila anulada se queda como **rastro de la corrección**; ni `resumen` ni el
+  `costo_nomina` del P&L la cuentan, así que no se duplica nada. Probado en vivo:
+  emitir → anular → reemitir el MISMO periodo = `{creadas: 1}`, dos filas (una anulada,
+  una viva), `resumen.n` sin doble conteo.
+
+### ⚠️ La conciliación ya lo estaba señalando y nadie la leyó
+Antes de tocar nada, `conciliacion_mo` decía **«sin explicar $347,60»** — exactamente
+8,69 h × $40, la colilla que faltaba. El puente que se construyó en v313 llevaba desde
+entonces apuntando al fallo. **Cuando un número no cuadra, la app ya lo sabe: hay que
+mirarlo antes de buscar a ciegas.**
+
+### La corrección (datos de producción, autorizada por el usuario)
+`NOM-0002` anulada + `NOM-0006` emitida: 8,69 h × $40 = **$347,60**, super 11,5%
+(= $39,97). El 11,5% no se eligió a ojo: es **el mismo que se aplicó a `NOM-0003` en ese
+mismo lote** (147,98 / 1.286,80). Los otros 4 del periodo se omitieron solos porque su
+nómina sigue viva. Efecto en las cifras del grupo:
+| | antes | después |
+|---|---|---|
+| costo_nomina | $1.434,78 | **$1.822,35** |
+| costo_total | $2.934,78 | **$3.322,35** |
+| ganancia | $210,42 | **−$177,15** |
+| sin explicar (conciliación) | $347,60 | **$0,00** |
+⚠️ **La ganancia pasa a NEGATIVA, y esa es la cifra correcta**: el costo estaba
+subestimado justo en el trabajo que no se pagaba. La obra `prueba1` se facturó al costo
+(margen 0%), así que al contabilizar la mano de obra que faltaba, el resultado es
+pérdida. No es un fallo nuevo: es el fallo viejo dejando de esconderse.
+
+## Limpieza de las colillas de $0 + homónimos en el aviso (v348)
+Anuladas `NOM-0001` (Bobo, 0,01 h), `NOM-0004` y `NOM-0005` (`fijiofgjei`, la cuenta
+eliminada en v163): colillas de $0 de gente a la que no se paga por hora.
+⚠️ **Ninguna cifra se movió** (costo_nomina, ganancia y la conciliación idénticas), y esa
+es justamente la comprobación de que se anuló lo correcto: si mover algo de $0 cambiara
+un total, algo estaría mal. La lista de nóminas pasa de 5 filas a **2 con dinero de
+verdad** (`NOM-0003` pagada $1.286,80 · `NOM-0006` emitida $347,60).
+Y con v346+v347 juntos el ciclo cierra: regenerar ese periodo ahora da `creadas: 0` y
+**nombra** a los tres, en vez de recrear las colillas de $0.
+
+### ⚠️ El aviso no distinguía a dos personas distintas
+Esa misma prueba sacó `sin_tarifa: ['Bobo', 'fijiofgjei', 'fijiofgjei']`: dos cuentas
+distintas con el mismo Nombre, **en el mensaje que justamente te dice a quién ponerle la
+tarifa**. Es la cuarta aparición del patrón (v151 horas, v306 proyectos, v319 nóminas).
+Ahora el login se añade **solo cuando el nombre se repite** → `fijiofgjei (conductor)` y
+`fijiofgjei (fijiofgjei)`, dejando limpio el caso normal.
+
+## ⚠️ El LaTeX volvió: el guardián de v309 no miraba las VARIABLES (v349)
+Verificando en el navegador que v348 corría, la pantalla de **Costos** mostraba
+literalmente `Llevas **0** de 10,000`: los `$` desaparecidos y los `**` en crudo. Es
+exactamente el fallo de v309 —dos `$` en la misma cadena y Streamlit la renderiza como
+LaTeX— **en un sitio que el guardián de entonces no podía ver**.
+- **La ceguera:** `verif_v309.py` inspecciona los argumentos LITERALES de
+  `st.markdown/metric/caption/…`. Aquí la cadena se arma antes en una variable
+  (`_l = f"Llevas **${...}** de ${...}"`) y solo después se pasa a `st.caption(_l + …)`.
+- **Chequeo nuevo, más simple y más amplio:** por AST, **cualquier f-string del repo**
+  con 2+ `$` sin escapar, se use donde se use. Barrido: **4 coincidencias**.
+  - `auth.py:47` → el formato del hash PBKDF2 (`pbkdf2$sha256$…`). **Falso positivo**,
+    no se muestra nunca; queda exento por (fichero, línea). Mirarlo antes de "arreglarlo"
+    evitó romper el login.
+  - Las **otras 3 están todas en la pantalla de Costos**: el titular «costará $X, $Y por
+    encima» (2 ramas) y **el aviso de material comprometido que yo mismo escribí en
+    v343**. Las tres a `theme.dinero` (formatea Y escapa).
+- ⚠️ Las del titular estaban **latentes**: solo salen con un proyecto que tenga costos y
+  presupuesto, y el que abrí no tenía ninguno. Sin el barrido por AST no aparecen.
+
+**La lección de método:** un guardián acota el fallo a la forma en que lo viste. Este se
+escribió mirando llamadas directas, así que la misma cadena movida a una variable pasa
+por delante sin que salte nada. Cuando el mismo fallo reaparece, la pregunta no es solo
+«¿lo arreglo?» sino **«¿por qué mi chequeo no lo vio?»**.
+
+### De paso, verificado en el navegador con v348 ya corriendo
+Las dos versiones coinciden (barra lateral **v348** = `app.py` fresco · topbar **v348** =
+`home_ui._VERSION` congelado al importar) → el proceso reinició de verdad. Nóminas:
+**POR PAGAR $348 · PAGADO $1.287 · 2 colillas**, sin el aviso de $0. El bloque
+**«Órdenes de compra (0 pendientes)»** renderiza en Costos sin romper (primera vez que
+ese código de v343 se dibuja). Y el aviso de v324 para 0% de avance sale correcto:
+*«Sin avance todavía: necesitas 7.1 %/día en los 14 días que quedan»*.
+
+## Inventario, credenciales y pre-start ejercitados (v350)
+Cierre del recorrido de escrituras. Mismo método (foto en solo lectura → ejercitar →
+verificar leyendo → devolver todo → segunda foto). **Rastro final: ninguno.**
+El inventario estaba **completamente virgen**: 0 activos, 0 movimientos, y la hoja
+`MovimientosActivo` ni siquiera existía.
+
+### ⚠️ El traslado guardaba el ID crudo en el historial
+`salida` resuelve el nombre (`ubic_ref_label`) y **`traslado` se quedó con el ID**, así
+que el mismo sitio salía escrito de dos formas en el mismo historial:
+```
+MOV-0002 traslado  → proyecto: PRJ-0005     ← el ID
+MOV-0003 mant.     ← proyecto: prueba2      ← el nombre, del MISMO sitio
+```
+Es media aplicación de la regla de v306: el ACTIVO guarda el ID (relación viva, sobrevive
+a un renombrado) y el **historial guarda el nombre ya resuelto** (cuenta lo que pasó, no
+lo que hay ahora). v306 lo arregló en `salida` y no en `traslado`. Guardián nuevo: en las
+funciones de movimiento, todo f-string que use `hacia_ref` debe pasar por `ubic_ref_label`.
+
+### Lo que aguantó
+- **Inventario**: categoría · alta de activo · **depreciación** ($1.000 comprado hace 2
+  años, vida 5 → $600,27 ✓) · QR PNG · los 4 movimientos (salida → traslado → manten. →
+  entrada), que crearon la hoja `MovimientosActivo` · resumen y reporte de valor por
+  categoría y ubicación · **dar de baja y reactivar** (v340: desaparece de la lista, se ve
+  con la casilla, y el botón lo devuelve).
+- **Credenciales**: alta · los 4 estados del semáforo (⚠️ «vence hoy» cuenta como *por
+  vencer*, no vencida) · renovar la fecha · `expiring` casa con la credencial real
+  (campo1, Driver License, 14 días) · matriz de cumplimiento 4 personas × 2 tipos ·
+  `compliance` marca **falta** el certificado que el proyecto exige y no tiene · borrado.
+- **Pre-start**: `filename_for` (`17082026 XY.pdf`) · PDF de 1 página con proyecto,
+  ubicación y asistentes · fila registrada · `leer()` descompone bien (near miss, **2
+  checks en NO**, asistentes).
+
+### Tres falsas alarmas mías, comprobadas antes de "arreglar"
+1. **La depreciación**: esperaba $800 y salió $600,27 — el activo era de hace **2** años,
+   no 1. El cálculo estaba bien; mi comentario no.
+2. **El QR**: `qr_data` devolvía solo el ID, no una URL... porque falta el secret
+   `APP_URL` en local. **La UI ya avisa** («Configura el secret APP_URL para que el QR
+   abra la app»). ⚠️ Conviene comprobar que ese secret esté puesto en el Cloud, o las
+   etiquetas impresas no abren nada al escanearlas.
+3. **`InvCategorias` con 0 filas** tras la prueba: las 6 categorías salen de `CAT_DEFAULT`
+   (código), la hoja solo guarda las añadidas a mano. Estaba vacía antes y volvió a
+   estarlo — mi «esperado 6» era una suposición.
+
+### Lo que NO se ejercitó, a propósito
+`credentials.notify_expiring` y un pre-start con `near_miss=YES`: los dos **mandan correo
+y Telegram a personas reales**. Y la subida a Drive del PDF del pre-start no corre desde
+local (no hay credenciales `[gdrive]`); en el código es best-effort.
+
+### Standing item que sigue abierto (de v158)
+**Un check en NO no abre alarma**, solo el near-miss. En la prueba salieron 2 checks en NO
+y `alarma: False`. Está documentado como decisión deliberada, no como fallo.
+
+## ⚠️ AISLAMIENTO ENTRE EMPRESAS: el cerrojo que faltaba (v351)
+Petición del usuario: «separar todos los registros por empresa cliente». Al medir la
+arquitectura antes de proponer nada salió algo más urgente que la separación física.
+
+### El hallazgo: el aislamiento NO lo garantizaba el código
+Lo garantizaba que la interfaz **nunca te ofreciera el ID de otra empresa**. Ninguna de
+las vistas de detalle comprobaba el grupo del objeto, y `_detalle_proyecto` incluso lo
+**adoptaba**:
+```python
+prj = P.get_project(pid)                       # busca en TODA la hoja
+grupo = str(prj.get("Grupo", "")) or grupo     # ← adopta el del proyecto
+```
+Con los deep-links de v337 (`?p=PRJ-####`) bastaba **editar la URL** para abrir el
+detalle completo de otro cliente: costos, horas, personal y archivos. El QR del
+inventario (`?activo=ACT-####`) es la misma puerta.
+Cuatro vistas afectadas: **proyecto, factura, nómina y activo** — las que traen el
+objeto por ID GLOBAL. (`_detalle_cliente` y `_dashboard_agrupacion` ya estaban acotadas:
+buscan dentro de una lista ya filtrada por grupo.)
+**Hoy era latente: solo existe un grupo real (`cliente1`, con los 6 proyectos).** Deja
+de serlo con el segundo cliente — que es justo lo que el usuario está preparando.
+
+### `core/tenant.py` — la regla, en un solo sitio
+Módulo HOJA (solo importa streamlit) → sin ciclos. Una sola definición a propósito:
+cinco copias divergentes de un helper es lo que causó los fallos de v323.
+- **propietario**: ve todos los grupos (es su función, no se le bloquea).
+- **administrador / campo**: solo el suyo, comparando sin distinguir mayúsculas.
+- **objeto sin grupo** (histórico): se deja pasar y se registra — bloquear por un campo
+  vacío rompería registros legítimos anteriores a la columna.
+- **sin sesión**: bloqueado.
+- ⚠️ El mensaje **no dice de qué empresa es**: confirmar que un ID existe en otro grupo
+  ya es filtrar información. Responde igual que si no existiera.
+- ⚠️ La comprobación va en la **frontera de render**, NO en la capa de datos:
+  `get_project` y compañía los llaman por dentro flujos que cruzan grupos a propósito
+  (vistas del propietario, `project_hours_bulk`, el digest multi-grupo). Filtrar ahí
+  rompería esos caminos y daría una falsa sensación de blindaje.
+
+Probado con datos reales sobre `PRJ-0005` (grupo `cliente1`): admin de cliente1 **abre**,
+admin de otra empresa **bloqueado**, campo de otra empresa **bloqueado**, propietario
+**abre**. Guardián permanente (`verif_v351.py`): la regla existe en un solo fichero, las
+4 vistas llaman a `tenant.exigir` DESPUÉS de traer el objeto y ANTES de pintarlo, y el
+propietario nunca queda bloqueado.
+
+### La decisión de arquitectura (tomada por el usuario)
+Se le presentaron 4 caminos con su coste real. Eligió **el cerrojo ahora, un libro de
+Google por cliente después, cuando entre el primer cliente real** — migrar un solo
+cliente es media hora; con cinco, no.
+- Coste de infraestructura: opciones sobre Sheets **$0**; salir a Postgres/Supabase
+  **~25 USD/mes** en plan de producción (la capa gratis **pausa** los proyectos
+  inactivos, inservible para una app que se vende). El coste real de esa opción no es el
+  dinero: es reescribir la capa de datos y migrar 23 hojas.
+- A favor de un libro por cliente cuando toque: **el libro se abre en UN solo sitio**
+  (`timeclock.py:90-93`), y una cuenta de servicio por cliente **multiplica** el techo de
+  60 lecturas/min en vez de repartirlo.
+- ⚠️ Lo que romperá ese cambio, ya identificado: las vistas del PROPIETARIO, que hoy leen
+  todos los grupos de una vez (`owner_digest`, `list_projects()` sin filtro) y pasarían a
+  abrir N libros.
+
+## COTIZACIONES — fase 1: el catálogo (v352)
+Funcionalidad nueva pedida por el usuario. La app cubría **obra → costo → factura**; el
+dinero empieza antes, en la cotización. Diseño acordado con él antes de escribir nada.
+
+### Decisiones del usuario (firmes)
+1. **Aceptar una cotización CREA el proyecto** con presupuesto, cliente y margen puestos.
+2. **La mano de obra se cotiza en HORAS estimadas × tarifa**, no a precio cerrado — así
+   se puede contrastar lo cotizado con lo fichado («cotizamos 120 h, llevamos 160»).
+3. **El margen de la cotización manda** y rellena el `MargenMO` del proyecto al ganarla:
+   una sola fuente de verdad, en vez de dos números que digan cosas distintas.
+
+### `core/catalogo.py` + `core/catalogo_ui.py` (hoja `Catalogo`)
+`ID(CAT-#####) · Tipo(producto|servicio) · Nombre · Unidad · Categoria · CostoUnit ·
+HorasEst · TarifaHora · Activo`. El catálogo guarda el **COSTO**; el margen no vive aquí
+—se pone línea a línea al cotizar, porque a un cliente le cobras 20% y a otro 35%.
+- **`costo_de()` es LA fórmula única** (producto = `CostoUnit × cant`; servicio =
+  `HorasEst × TarifaHora × cant`). La cotización, el PDF y la comparación contra lo real
+  la llamarán a ella: cinco copias divergentes es lo que causó los fallos de v323.
+- `horas_de()` → las horas que aporta cada línea, base del «cotizado vs real».
+- **No se puede crear un artículo sin costo**: saldría en $0 y nadie lo notaría hasta ver
+  el total (el fallo de las colillas de $0 de v346). Un servicio exige horas Y tarifa.
+- Desactivar **con vuelta** (v340) y homónimos desempatados por ID (v306/v319/v348).
+- Sub-pestaña **Finanzas · 📚 Catálogo**; hoja añadida al lote (v339) y cerrojo de
+  aislamiento (v351) en la ficha.
+
+### ⚠️ El fallo que cazó la prueba: el precio no se auditaba
+Se cambió un costo de 185,50 a 199,90 y **el histórico quedó vacío**: el enganche a
+`auditoria` estaba, pero `CostoUnit`/`HorasEst`/`TarifaHora` no estaban en
+`CAMPOS_CLAVE`. **Es exactamente el fallo de `MargenPct` en v344** — el nombre del campo,
+otra vez. Y el guardián de v344 no lo vio porque **solo miraba una dirección**: que cada
+CAMPO_CLAVE existiera como columna real, no que los campos de dinero estuvieran en la
+lista. Ahora comprueba las dos. Verificado en vivo: cambiar el precio deja rastro.
+
+**Pendiente:** fase 2 (la cotización: selección, margen por línea, estados, PDF) y fase 3
+(aceptar → crea el proyecto, y el bloque «cotizado vs real»).
+⚠️ El grupo tiene **margen 0% e impuesto 0%** en `Grupos`: hasta ponerlos, toda
+cotización saldrá al costo y sin GST.
+
+## COTIZACIONES — fase 2: armar el precio (v353)
+`core/quotes.py` + `core/quotes_ui.py` + `core/quote_pdf.py`, hoja `Cotizaciones`.
+Estructuralmente hermana de `invoices` (líneas en JSON, totales con impuesto, PDF); lo
+que cambia es que aquí el precio se **construye** (costo del catálogo + margen) en vez de
+teclearse. Sub-pestaña **Finanzas · 📄 Cotizaciones**.
+
+### Las tres reglas del documento
+1. **La línea congela su precio.** Guarda `costo_unit`, `margen_pct` y `precio_total` del
+   momento de cotizar, NO una referencia al catálogo. Probado: se sube el costo del riel
+   de 185,50 a 250 y la cotización enviada no se mueve. `recalcular()` reaplica el margen
+   sobre el costo **ya congelado**, nunca vuelve al catálogo.
+2. **Enviada = documento.** En `borrador` se editan las líneas; a partir de `enviada` no,
+   porque el cliente ya la tiene en la mano — se saca una **versión nueva** y la anterior
+   se conserva.
+3. **`vencida` se DERIVA** de la fecha de validez, no se guarda (igual que
+   `invoices.estado_cobro`): un estado calculado no puede quedarse desactualizado.
+
+### ⚠️ El PDF no filtra tus costos
+El cliente ve concepto, cantidad y precio. **Nunca** el costo ni el margen. Verificado
+extrayendo el texto del PDF: los 5 valores sensibles (costo unitario, los dos márgenes y
+los dos costos de línea) no aparecen; el precio con margen sí.
+
+### ⚠️ El fallo que cazó la prueba: la hoja no estaba en el LOTE
+`crear` devolvió `COT-0001` y acto seguido `get_cotizacion` devolvía `{}`. Causa: olvidé
+`Cotizaciones` en `hojas.HOJAS_LECTURA`. Y como el lector va **sin cabeceras** (para no
+crear la hoja al leer, regla v145), `registros()` devuelve `None` → el módulo lee
+**vacío para siempre, sin ningún error**. Es peor que la llamada suelta que documentaba
+la regla de v339: aquello costaba cuota, esto es un silencio.
+→ **Guardián nuevo**: todo módulo con `SHEET = "X"` que lea con `hojas.registros(SHEET)`
+sin cabeceras debe tener `X` en `HOJAS_LECTURA`. Hoy pasan los 4 que usan ese patrón
+(auditoria, catalogo, orders, quotes).
+
+### Detalles que ya nacen bien
+`resumen()` devuelve `conversion=None` —no 0%— cuando aún no hay cotizaciones decididas
+(la trampa de v320 con «sin asignar»); el margen por defecto del grupo precarga cada
+línea; `_ids_frescos` lee sin caché (v323); el cerrojo de aislamiento (v351) en la ficha;
+y los cambios de estado quedan en `auditoria`.
+
+**Pendiente — fase 3:** aceptar → crea el proyecto con presupuesto, cliente y margen; y
+el bloque **«cotizado vs real»** (las horas ya viajan en cada línea para eso).
+
+### Configuración del grupo puesta en producción (17/08/2026)
+`MargenDefault = 20%` y `ImpuestoDefault = 10%` (GST de Australia; el usuario confirmó).
+⚠️ Efecto colateral querido: los proyectos SIN margen propio pasan a heredar 20%, así que
+Rentabilidad deja de mostrar ganancia estimada $0.
+
+## COTIZACIONES — fase 3: ganarla y medirla (v354). MÓDULO COMPLETO
+Cierra el ciclo: **cotización → obra → costo → factura**, sin teclear lo mismo dos veces.
+
+### `aceptar_y_crear_proyecto(cid, …)`
+Da de alta el proyecto con lo ya pactado: cliente, `ClienteID`, presupuesto, margen,
+tipo y —solo si es Instalación con NS— el cronograma estándar (regla v306).
+- ⚠️ **El presupuesto es el COSTO cotizado, NO el precio de venta.** Verificado en el
+  código: `expenses.project_cost` compara `Presupuesto` contra compras + mano de obra.
+  Con el precio de venta ahí, la alerta de sobre-presupuesto solo saltaría **cuando ya
+  estás perdiendo dinero**; con el costo, salta cuando te estás comiendo el margen —
+  que es cuando aún se puede reaccionar (la lección de v144).
+- ⚠️ **Idempotente**: si la cotización ya generó proyecto, no crea otro. Probado — un
+  segundo intento devuelve «Esta cotización ya generó el proyecto PRJ-0007».
+- El margen efectivo de la cotización se escribe como `MargenMO` (decisión del usuario:
+  una sola fuente de verdad).
+
+### `comparacion(cid)` — cotizado vs real
+Horas cotizadas contra fichadas, costo cotizado contra cargado, e ingreso fijo (lo que
+el cliente aceptó).
+
+### ⚠️ El fallo que cazó la prueba: «ganancia real» a mitad de obra
+Con el proyecto al **0% y $900 de costo**, `ingreso − costo` daba **$3.499 «de ganancia»
+contra $893 cotizados, en verde**. Técnicamente cierto, historia falsa: no has ganado,
+es que **aún no has gastado**. Misma familia que v320 (el «sin asignar» que mentía) y
+v324 (el proyecto al 0% con el mensaje más tranquilo).
+**Arreglo, con el patrón de v144:** se proyecta al ritmo actual
+(`costo × 100 / avance`) y la tarjeta se llama **«Ganancia proyectada»**; solo se llama
+**«real»** cuando el avance llega a 100. Y **None, no 0**, mientras no haya avance ni
+costo: sin base, proyectar es inventar.
+```
+avance   0% · costo     0 → —            (cotizada 893,20)
+avance   0% · costo   900 → —
+avance  25% · costo   900 → proyectada    799,20   ← ya avisa: por debajo de lo cotizado
+avance  50% · costo 2.500 → proyectada   −600,80
+avance 100% · costo 3.800 → real          599,20
+```
+
+### El módulo, de punta a punta (v352-v354)
+Catálogo (costo) → cotización (margen por línea) → PDF sin filtrar costos → aceptada →
+proyecto con presupuesto y margen → cotizado vs real. Todo ejercitado contra la hoja
+real y con producción devuelta a su estado.
+
+## Cotización: se escribe la GANANCIA, el margen % sale solo (v355)
+Petición del usuario: *«el admin pone el valor que desea ganar sobre el costo base y el
+% de margen se calcula de forma automática»*. Es **invertir la entrada**: antes se
+tecleaba el % y salía el precio; ahora se teclea lo que se quiere ganar y sale el %.
+
+- **`quotes.margen_de(costo, ganancia)`** es la única fórmula del %; `linea_de` y
+  `recalcular` aceptan `ganancia=` (que **manda** sobre `margen_pct` si llegan las dos:
+  es el dato que la persona escribió). **`ganancia_de(linea)`** la deriva del precio —
+  no se guarda aparte, para que no pueda desacompasarse (lección de los helpers
+  divergentes de v323).
+- La tabla editable pasa a tener **«Ganancia $»** como única columna tecleable del
+  precio; **Margen % y Precio quedan bloqueados** para que se lea que son consecuencia.
+- `margen_pct` se conserva en la línea: lo consumen la columna Margen de la lista y el
+  `MargenMO` del proyecto al aceptar. Solo cambia por dónde entra el dato.
+
+### ⚠️ Al cambiar la CANTIDAD se conserva la ganancia, no el %
+12 uds → costo 2.226, ganancia 150, margen 6,74%. A 24 uds → costo 4.452, **ganancia
+sigue 150**, margen baja a 3,37%. Es lo correcto: la persona dijo cuánto quiere ganar,
+no qué porcentaje.
+
+### ⚠️ Redondeo: la invariante es `precio = costo + ganancia`, no el %
+Reconstruir el precio desde el margen **redondeado a 2 decimales** da hasta 3 céntimos
+de diferencia (2.376,00 vs 2.376,03). No es un fallo: el `margen_pct` es un número de
+lectura y el precio se calcula siempre por la ganancia. Verificado: 36 combinaciones de
+cantidad × ganancia con **0 desviaciones**, y por AST que **el único camino que aún pasa
+por el margen es el alta de línea nueva** (que arranca con el default del grupo para dar
+un punto de partida). El margen efectivo del total se calcula de las sumas, no de los %
+por línea.
+
+## ⚠️ Los precios de un borrador ya no cambiaban solos… porque SÍ cambiaban (v356)
+Salió verificando v355 con la **cotización real del usuario**: la línea «Instalacion»
+decía costo $960 (12 h × $40 × 2) y el artículo del catálogo hoy vale $40 (1 h). Lo
+había editado después de cotizar. Eso **no era el fallo** —la línea congela su precio a
+propósito (v353)— pero al mirar el editor apareció uno de verdad.
+
+### El fallo: el editor refrescaba en silencio
+`_editor_lineas` reconstruía cada línea desde el catálogo al guardar
+(`Q.linea_de(base, cant, …)`). O sea que **tocar cualquier celda de un borrador adoptaba
+los precios nuevos sin decir nada**: en su cotización, el total habría pasado de
+$1.927,20 a otro número al cambiar una cantidad. Un precio que se mueve a espaldas de
+quien cotiza es peor que un precio viejo.
+
+### El arreglo, en dos piezas
+1. **`quotes.escalar(linea, cantidad, ganancia)`** — cambiar la cantidad escala sobre el
+   **costo unitario congelado**, sin volver al catálogo. Probado: la línea de $960 sigue
+   en $960 al reescribir la cantidad (antes pasaba a $80).
+2. **`desactualizadas(c)` + `actualizar_precios(cid)`** — la pantalla avisa
+   («Instalacion: $960 → hoy $80») y el botón trae los precios nuevos **conservando la
+   ganancia en dinero** (v355); el margen % se reajusta. Probado: 3 uds a $100 con $90
+   de ganancia → sube el catálogo a $130 → tras pulsar, costo $390, **ganancia sigue
+   $90**, margen baja de 30% a 23,08%.
+
+⚠️ **Solo en borrador.** Una cotización enviada no se toca: devuelve «saca una versión
+nueva» y el total no se mueve. ⚠️ Una línea cuyo artículo se borró del catálogo se
+detecta, se dice y **se deja intacta** — no se descarta en silencio.
+
+### Lo que enseña este caso
+El comportamiento «correcto» (congelar el precio) y el fallo (refrescar al guardar)
+convivían en el mismo módulo y se contradecían. Solo se vio **mirando datos reales del
+usuario**: con mis artículos de prueba, catálogo y líneas siempre coincidían.
+
+## Atajo: facturar desde el propio proyecto (v357)
+Petición del usuario. Antes: Finanzas → Facturas → Nueva → elegir cliente → volver a
+buscar el proyecto. Ahora, en 💰 Costos de la obra: **«Pendiente de facturar: $X»** +
+botón **«Facturar esta obra»**, que abre el alta con cliente y proyecto ya elegidos.
+
+⚠️ **Reutiliza el alta que ya existe** (`_fac_nueva` + `fac_cli`, el mismo camino que
+Contactos desde v259). Verificado por AST: **1 formulario de alta y 1 sola llamada a
+`create_factura`** en todo el repo — el atajo delega, no crea. Dos mecanismos para lo
+mismo es lo que hubo que desmontar en v140 y v146.
+
+### ⚠️ No se fija la etiqueta del proyecto desde fuera
+`etiqueta_proyectos` calcula la etiqueta sobre los proyectos DE ESE CLIENTE y añade el
+ID solo si el nombre se repite (v306). Fijar `fac_scope` desde el proyecto obligaría a
+recalcularla con otro conjunto, y una opción que no existe **revienta el radio**. Se
+pasa el **ID** en `_fac_prj_pending` y el formulario resuelve su propia etiqueta,
+aplicándola ANTES de instanciar el widget (regla v111, verificado por AST: L205 < L208).
+
+### ⚠️ El fallo que evitó mirar los datos reales
+`Proyectos.Cliente` es **texto libre**. Preseleccionar el selectbox con un valor que no
+está entre las opciones revienta el widget — y en producción hay dos obras con cliente
+**«vd»** y **«ci»**, que no son fichas de Contactos… y las dos tienen importe pendiente,
+así que el botón les habría salido. Ahora el cliente se resuelve **por `ClienteID`**
+(la relación de verdad) y solo se preselecciona si el nombre existe entre las opciones;
+si no, el formulario **lo explica** y deja elegir a mano.
+
+### Detalle
+El bloque no aparece si no hay nada pendiente ni facturado (no estorbar), el botón es
+primario solo cuando hay algo que cobrar, y es **solo para gestión** (`can_delete`): el
+campo ve sus costos pero no factura.
+⚠️ De paso: al poner `MargenDefault=20%` (v353) el ingreso estimado subió, así que
+`prueba1` pasó a tener **$330,48 pendientes** pese a estar facturada — es correcto, pero
+conviene saber de dónde sale.
+
+## ⚠️ Una obra ARCHIVADA se puede facturar (v358)
+Encontrado verificando v357 **en producción**: el atajo de `prueba1` mostraba «Pendiente
+de facturar $330», llevaba al alta de factura… y **esa obra no estaba entre las opciones
+de alcance**, así que la preselección no hacía nada y el radio se quedaba en «Todo el
+cliente». Causa: `_nueva_factura` arma la lista con `list_projects(grupo)`, que **oculta
+los archivados** (v149), y `prueba1` está archivado.
+
+**Archivar no es no-cobrar**: lo habitual es archivar al terminar y facturar después. Es
+la cuarta vez que el default de v149 muerde donde no debía — v310 (los costos de los
+archivados desaparecían del grupo), v321 (su margen se ignoraba), v322 (se caían de su
+agrupación) y ahora la facturación.
+
+**Arreglo:** si el atajo apunta a una obra que no está en la lista, se añade (validando
+que sea del mismo grupo). Se mira el pendiente ANTES de calcular las etiquetas, para que
+`etiqueta_proyectos` lo incluya y la preselección encuentre su opción. Verificado el
+orden por AST: mirar L194 < etiquetas L203 < escribir `fac_scope` L220 < radio L226.
+
+### ⚠️ Y mi guarda de v357 tenía un hueco MUDO
+Contemplaba «el proyecto es de otro cliente» pero no «el proyecto no está en la lista»:
+en ese caso `_et` era `None` y **no se decía nada**. El usuario acababa en «Todo el
+cliente» sin entender por qué. Ahora ese caso también habla.
+
+### Lo que sigue siendo limitación conocida
+En el alta **manual** de factura (Finanzas → Facturas → Nueva) las obras archivadas
+siguen sin aparecer: solo entran por el atajo. Si hiciera falta facturar una obra
+archivada sin pasar por su ficha, haría falta una casilla «incluir archivadas» — es
+decisión de producto, no se hizo por iniciativa propia.
+
+## UN LIBRO DE GOOGLE POR EMPRESA CLIENTE (v359) — mecanismo
+Decisión del usuario: **dejarlo listo sin migrar nada**, y **una sola cuenta de servicio**
+(resuelve el aislamiento, que es lo que importa; la cuota ya no aprieta tras v339).
+
+### El diseño que evita la migración
+El libro actual sigue siendo **el maestro Y el libro de `cliente1`**. Los clientes nuevos
+nacen con su propio archivo (`Grupos.SheetID`, columna que migra sola). Así **no se mueve
+ninguna de las 21 hojas existentes** —el mayor riesgo desaparece— y el objetivo se cumple:
+el segundo cliente tendrá sus datos en su propio fichero.
+
+**Global, siempre en el maestro:** `Login`, `Grupos`, `Rieles`, `Manuales`. Son el
+registro de la app, y `Login` además se lee ANTES de saber a qué grupo perteneces.
+**Todo lo demás** (21 hojas) va al libro del grupo.
+
+### Cómo se resuelve
+`timeclock.sheet_id_para(title, grupo=None)`: si la hoja es GLOBAL → maestro; si no, el
+libro del grupo **de la sesión** (mismo patrón que `clock.now()` con la zona horaria,
+v173), con override explícito. Ninguna de las 21 llamadas a `get_sheet` cambió de firma.
+- ⚠️ **El orden evita una recursión infinita**: la comprobación de GLOBAL va primero y
+  devuelve sin consultar a `auth` — si no, `auth.group_sheet_id` leería `Grupos`, que es
+  global, y se llamaría a sí misma. Verificado por AST (L99 < L111) y ejecutándolo.
+- `_abrir/_cached_ws/_libro/get_sheet` y **`hojas._lote` se cachean POR LIBRO**. Con una
+  sola entrada, el segundo cliente leería los datos del primero — justo lo contrario.
+- `auth.set_group_sheet_id` acepta la **URL completa** además del ID (es lo que se copia
+  del navegador) y **rechaza** enlazar dos grupos al mismo libro.
+
+### ⚠️ Límite conocido, DICHO en la pantalla
+Las cachés `_records` de cada módulo están indexadas por HOJA, no por libro. Admin y
+campo van bien (siempre tienen grupo en sesión), pero los **resúmenes consolidados del
+propietario** solo contarían el maestro. Hacerlo bien es tocar el `_records` de 13
+módulos y **no se puede verificar sin un segundo libro real**. Se expone
+`auth.grupos_con_libro_propio()` y la pantalla **avisa** de a quién le falta:
+*un consolidado incompleto sin avisar es peor que no tenerlo*. Es la fase 2.
+
+### ✅ AISLAMIENTO DEMOSTRADO CON UN SEGUNDO LIBRO REAL (18/08/2026)
+La cuenta de servicio solo tiene scope `spreadsheets` y **no puede crear archivos** (403,
+buena higiene), así que el libro de prueba lo creó el usuario y lo compartió con
+`fichaje-bot@…`. Con él, la prueba completa:
+- Enlazar **pegando la URL entera** funciona, y **rechaza** poner dos grupos en el mismo
+  libro (*«Ese libro ya es de: zzz-cliente-prueba»*).
+- El admin del cliente nuevo ve **0 proyectos, 0 cotizaciones, 0 artículos**: los de
+  `cliente1` están en otro fichero y no se alcanzan.
+- Lo que escribe cae **en SU libro**: se crearon ahí `Sheet1`, `Proyectos`, `Actividades`
+  y `Catalogo`. El maestro **siguió con sus 6 proyectos**, sin mancharse.
+- `cliente1` siguió viendo lo suyo entero (6 proyectos, 3 artículos, 1 cotización).
+- **El cerrojo de v351 sigue valiendo entre libros**: pedir el ID del otro cliente
+  devuelve 🔒, porque compara por grupo, no por ID.
+- ⚠️ **Consecuencia del diseño**: los IDs son ahora **únicos por cliente, no globales**.
+  Los dos libros tienen su propio `PRJ-0001`. No rompe nada —cada quien lee su libro y
+  el cerrojo compara por grupo— pero hay que saberlo antes de asumir que un `PRJ-####`
+  identifica algo en toda la instalación.
+Limpieza verificada: grupo de prueba borrado, `Grupos` con solo `cliente1` y sin SheetID.
+
+Cuenta con la que hay que compartir cada libro nuevo:
+`fichaje-bot@gen-lang-client-0922870449.iam.gserviceaccount.com` (identificador, no clave).
+
+## LA GANANCIA DEJA DE SER UN % (v360) — importe por rubro
+Cambio de modelo pedido por el usuario: *«la ganancia ya no es un porcentaje sobre el
+proyecto, es un valor sobre cada rubro (servicio, producto y trabajador)»*.
+
+**Decisiones del usuario:** la ganancia del trabajador se mide **por hora**, se define
+**por proyecto**, y los materiales cargados en obra (recibos) se facturan **a costo**.
+
+```
+ingreso  = Σ_persona( horas × (tarifa_costo + ganancia_hora) ) + materiales
+ganancia = Σ_persona( horas × ganancia_hora )
+```
+El **porcentaje deja de ser la entrada** y pasa a ser consecuencia: se sigue calculando
+para mostrarlo, pero ya no se teclea. Es v355 (cotizar por ganancia, no por %) extendido
+al proyecto y a las personas.
+
+### ⚠️ Respaldo: ninguna obra cambia de cifra en silencio
+Las 6 obras tienen `MargenMO` (20-30%) y ninguna tenía ganancia por hora. Cambiar en
+frío les habría desplomado el ingreso estimado —y con él **lo pendiente de facturar**—
+sin que nadie lo pidiera. Así que **sin `GananciaHoraJSON` se sigue usando el modelo
+viejo**, y `project_revenue` devuelve `modelo` (`"rubro"` / `"margen"`) para que la
+pantalla diga cuál aplica. Verificado: las 6 siguen exactamente igual tras el cambio.
+
+### Dónde vive y cómo se pone
+`Proyectos.GananciaHoraJSON` = `{usuario: $/h}` — una columna, sin hoja nueva ni llamada
+extra (misma solución que ParamsJSON/LineasJSON). Se edita en **💰 Costos → «Cuánto ganas
+con cada persona»**, junto a «Mano de obra por persona», que es donde ya se ve quién
+trabajó y cuánto costó. Solo se teclea la **Ganancia/h**; Precio/h y «Ganas» van
+bloqueados porque son consecuencia (igual que en v355).
+
+### Probado con datos reales (PRJ-0001)
+```
+antes  modelo=margen  costo 3.146,40 · ingreso 3.475,68 · ganancia 329,28 · margen 20%
+$15/h  modelo=rubro   costo 3.146,40 · ingreso 3.763,80 · ganancia 617,40 · margen 37,5% (derivado)
+       campo1 32,16 h × $15 = 482,40 · lksdfkldsf 8,97 h × $15 = 134,55 · admin1 0,03 h = 0,45
+```
+- ⚠️ **Quien no tenga ganancia puesta se factura A COSTO**, y se dice (`sin_ganancia`):
+  el patrón de las colillas de $0 de v346 — un cero silencioso no se nota hasta el total.
+- ⚠️ **Reversible**: quitar las ganancias devuelve la obra al modelo viejo y el ingreso
+  vuelve **exactamente** a 3.475,68. Si migras una obra por error, se deshace.
+
+### Pendiente
+`MargenMO` y `Grupos.MargenDefault` quedan como respaldo, no se han retirado. Al aceptar
+una cotización se sigue escribiendo `MargenMO`: la cotización tiene ganancia por LÍNEA
+de servicio, no por persona, y al aceptarla todavía no hay nadie asignado — no hay mapa
+que rellenar. Convertir una en otra (p. ej. ganancia_servicios ÷ horas cotizadas como
+$/h por defecto) queda para cuando se vea con una obra real.
+
+## ⚠️ Rentabilidad tenía su PROPIA fórmula del ingreso (v361)
+Salió al poner 15 $/h a `campo1` en `prueba1` para probar v360: el detalle del proyecto
+decía **ingreso 3.628,80** y la pantalla de Rentabilidad **3.475,68**. Dos cifras de
+dinero para la misma obra, a la vez.
+
+**Causa:** `group_profitability` **no llamaba a `project_revenue`** — reimplementaba la
+fórmula (`ingreso = mo * (1 + m/100) + mat`). Mientras el único modelo era el %, las dos
+coincidían por casualidad; con el modelo por rubro dejaron de coincidir. Es el fallo de
+los cinco `_num` divergentes de v323, esta vez con importes en pantalla.
+
+**Arreglo:** delega en `project_revenue`, que pasa a ser la ÚNICA definición del ingreso.
+No cuesta llamadas nuevas (lee de las mismas cachés que `group_expenses`). La fila gana
+`modelo` y `sin_ganancia` para que la pantalla pueda decir cuál aplica cada obra.
+**Guardián**: por AST, solo `project_revenue` puede aplicar el `%` de margen.
+
+### ⚠️ Y un fallo de método: un parche que no comprueba que se aplicó, miente
+El patch de v360 intentaba añadir `"modelo"` a esa fila con un ancla que **no existía**,
+y estaba envuelto en `if ... not in s:` — así que **no hizo nada y no dijo nada**. El
+síntoma (`modelo=None`) solo se vio al mirar la salida con datos reales. Los parches
+tienen que `assert` que el ancla existe, como los demás de esta tanda.
+
+### Prueba en producción (a petición del usuario)
+`PRJ-0001` con 15 $/h para `campo1`: modelo `rubro`, ingreso **3.628,80**, ganancia
+**482,40**, margen **29,3%** derivado. `lksdfkldsf` y `admin1` siguen sin ganancia → su
+trabajo se factura a costo y la pantalla los nombra. Lo pendiente de facturar sube de
+**330,48 a 483,60**. Las otras 5 obras siguen en el modelo viejo, sin moverse.
+
+## ⚠️ La misma persona salía PARTIDA en dos (v362)
+Salió al poner ganancia a las tres personas de `prueba1`: al mirar quiénes eran,
+`campo1` y `lksdfkldsf` **son la misma** — `campo1` es el usuario y `lksdfkldsf` su
+nombre. En el fichaje hay **2 filas sin la columna `Usuario`** (anteriores a v106,
+cuando el fichaje se identificaba solo por nombre) que caían bajo el NOMBRE, así que
+`labor_breakdown` la partía: 32,16 h como `campo1` y 8,97 h como `lksdfkldsf`.
+
+**Por qué no se había notado nunca:** mientras eso solo se SUMABA, el total salía bien.
+Desde v360 hay que decidir la ganancia **por persona**, y partida significa ponérsela dos
+veces — o, como pasó literalmente un turno antes, **dejarse 8,97 h facturándose a costo**
+sin que nada lo delatara. Un cambio de modelo puede convertir en fallo algo que llevaba
+años siendo inofensivo.
+
+**Arreglo:** cuando la fila no trae `Usuario`, se resuelve por su `Nombre` contra las
+cuentas del grupo. ⚠️ **Solo si ese nombre pertenece a UNA sola cuenta**: con homónimos
+—los hubo, `fijiofgjei` tenía dos— adivinar mezclaría a dos personas, que es peor que
+dejarlas separadas.
+
+**Verificado con datos reales:** `campo1` pasa a 41,13 h en una sola fila y el **total no
+se mueve** ($1.646,40 antes y después) — solo cambia cómo se agrupa. Con los tres a
+$15/h: ganancia $617,40, ingreso $3.763,80, margen 37,5% derivado, nadie sin ganancia.
+Es la misma familia que v145 (fichajes sin `ProyectoID`): filas viejas a las que les
+falta una columna que se añadió después.
+
+## ⚠️ CREAR PROYECTOS LLEVABA 3 VERSIONES MUERTO + el resolvedor único (v363)
+Salió al poblar la app con una empresa simulada (el usuario autorizó simular datos:
+todo lo del grupo `cliente1` es de prueba). Se intentaron crear 9 obras y **fallaron las
+9**.
+
+### El fallo: una fila de 31 valores para una cabecera de 32
+En **v360** añadí `GananciaHoraJSON` a `PROJECTS_HEADERS` y **no añadí su valor** a la
+fila posicional de `create_project`. El guardián de v306 corta con «Error interno» antes
+de escribir, así que desde v360:
+- **«➕ Nuevo proyecto» no creaba nada**
+- **«Aceptar cotización» tampoco** (llama a `create_project`) → el módulo de
+  cotizaciones no podía rematar su ciclo
+⚠️ **Matiz que corrige lo que dije al principio**: 31 valores en 32 columnas **NO
+desplazan los datos** — `append_row` deja vacías las de la cola (así escriben
+`auth.add_user`, 6 de 11, y `add_group`, 4 de 9, a propósito). El daño no era corrupción
+silenciosa: era que la función **no hacía nada**.
+
+### Por qué vivió 3 versiones y el guardián nuevo
+El de v306 es de **EJECUCIÓN**: solo salta cuando alguien pulsa el botón, y nadie creó un
+proyecto entre v360 y v363. El nuevo (`verif_v363.py`) es **ESTÁTICO**: por AST cuenta los
+elementos de **las 25 filas posicionales del repo** y los compara con su cabecera.
+- Resuelve la cabecera de cada función en 5 pasos, y **la auto-validación manda**
+  (`if len(row) != len(X_HEADERS)`): tenerla de último recurso hacía que una fila rota
+  —que ya no casa por longitud— se reportara como «no resuelta» en vez de «esta función
+  está MUERTA». Detectaba, pero diagnosticaba mal.
+- Distingue **fila corta legítima** (cola vacía) de **función muerta** (la que se
+  auto-valida con igualdad estricta).
+- ⚠️ **Primera versión daba «✓ ninguna descuadra» habiendo comprobado 1 de 25** (las
+  otras 24 salían «cabecera ambigua» y se saltaban): el paso en VACÍO de siempre. Ahora
+  lo no resuelto cuenta como FALLO del chequeo, no como aprobado.
+- Probado contra el código ROTO: señala `create_project` y sale con error.
+
+### El resolvedor de identidad, en UN solo sitio
+v362 arregló «la misma persona partida en dos» **solo en `expenses.labor_breakdown`**. El
+patrón estaba copiado en **5 funciones más** y ninguna se tocó → la pantalla de Horas
+seguía mostrando a `campo1` como dos filas (`campo1` 353,7 h y `lksdfkldsf` 9,0 h, con el
+costo repartido), y la conciliación inflaba «horas cobradas sin pagar» con un fantasma.
+⚠️ Y `existe` daba **True** para el fantasma, porque `claves_conocidas` incluye nombres
+además de logins: ni siquiera se marcaba como cuenta de baja.
+**`timeclock.clave_de(fila, por_nombre)` + `mapa_nombres(grupo)`** — una definición, la
+usan las 6 (`group_hours`, `jornada_y_proyecto`, `horas_por_usuario_rango`,
+`proyectos_por_usuario_dia`, `spend_curve`, `labor_breakdown`). Es el patrón de `num.py`
+en v323 aplicado a la identidad.
+- ⚠️ **La verificación obvia era una trampa**: comparar el total de horas antes/después
+  en dos ejecuciones daba 20 h de diferencia… porque había una sesión ABIERTA acumulando
+  contra el reloj (llevaba 33,6 h). Un **FALLO en falso**, gemelo del OK en falso. La
+  comparación válida es vieja lógica vs nueva **sobre las mismas filas y el mismo
+  instante**: diferencia 0,000006 h (0,02 s de ruido de flotantes sobre 3.309 h) y el
+  dinero idéntico ($113.361,71 en las dos).
+- ⚠️ Mi epsilon de `1e-6` hacía FALLAR el test por su propia aritmética. Tolerancia con
+  sentido físico (< 3,6 s sobre 3.300 h).
+- Los homónimos **siguen separados**: `Mei Chen` (`mchen`/`mchen2`) en dos filas, que es
+  lo correcto — adivinar mezclaría a dos personas.
+
+## ⚠️ SE PAGABAN LAS MISMAS HORAS DOS VECES: periodos que solapan (v364)
+Encontrado con la empresa simulada, y de la forma más real posible: **dos personas
+generando nóminas a la vez** (el usuario emitió 21/07→19/08 en la app mientras el
+escenario creaba quincenas 20/07→02/08 y 03/08→16/08).
+
+`generar` construye el salto de duplicados como la **terna EXACTA**
+`(Usuario, PeriodoDesde, PeriodoHasta)`, así que un rango que **solapa** no se detectaba:
+```
+campo1:  22/06→05/07  72,5 h · 06/07→19/07  73,5 h · 11/07→09/08  32,2 h
+         20/07→02/08 113,6 h · 21/07→19/08 198,7 h · 03/08→16/08  76,6 h
+         pagado 567,01 h   ·   trabajó realmente 353,67 h   → 213 h de más
+```
+⚠️ **La conciliación de v313 YA lo estaba gritando** («sin explicar −$36.035,90»), pero
+DESPUÉS de emitir. El error es invisible en la colilla individual —cada una sale bien— y
+solo el total del periodo lo delata.
+
+**Arreglo:** intersección de intervalos cerrados por persona; si cruza, **no se emite** y
+se NOMBRA la nómina que estorba (id + fechas) para poder anularla o mover el rango.
+- El **duplicado exacto** sigue tratándose como antes (`omitidas`), sin cambio.
+- Las **anuladas no bloquean** (principio de v347: si se puede deshacer, se puede rehacer).
+- **Quincenas contiguas SÍ pasan** (03/08 pegada a un 20/07→02/08): si no, el bloqueo
+  sería inservible para el uso normal.
+- ⚠️ **Sin fechas legibles NO se afirma que solapan**: no se bloquea a ciegas.
+- Probado en 7 escenarios con la función REAL y worksheet simulado, y **en vivo contra la
+  hoja**: 14 solapes detectados, **0 filas escritas**; y un periodo limpio (17-18/08)
+  entró con 6 colillas.
+
+### Estado de los datos tras la limpieza
+Anuladas las 7 nóminas solapadas del 21/07→19/08. La conciliación pasa de **−$36.035,90
+a −$1.634,40**, y esa cifra está explicada al céntimo: es el doble pago **histórico** de
+`NOM-0003` + `NOM-0006` (periodo 11/07→09/08, que cruza las quincenas). Verificado
+descomponiendo: $4.387,00 trabajados sin pagar − $1.634,40 pagados dos veces = $2.752,60,
+que era exactamente el `sin_explicar` intermedio.
+
+## ⚠️ 87 MENSAJES QUE NADIE VIO NUNCA: `st.rerun()` tira los deltas (v365-v367)
+Salió de una verificación fallida, no de leer código: al comprobar v364 en el navegador,
+**el mensaje de bloqueo no aparecía**. Pensé que era mi clic (el panel me daba una escala
+de screenshot que no correspondía con las coordenadas CSS). No lo era.
+
+### El mecanismo
+`st.rerun()` **descarta los deltas del run en curso**, así que un `st.success(...)`
+emitido justo antes NUNCA llega a la pantalla. Es el mismo principio que v222 documentó
+para `components.html`, aplicado a los mensajes. Confirmado con `git show`: el
+`st.rerun()` que se comía los mensajes de nóminas **es anterior** a mi cambio, así que
+llevaba versiones tirando:
+- «N nómina(s) creada(s)»
+- el aviso de v346 sobre quien no tiene tarifa — **la razón de ser de esa versión**
+- el bloqueo de solape de v364, recién estrenado
+
+### `core/flash.py` — mecanismo ÚNICO
+Módulo HOJA (solo importa streamlit → sin ciclos, como `num.py` y `tenant.py`). El
+mensaje se ENCOLA y lo pinta la shell (`home_ui.render_admin_content`) y el login
+(`auth_ui.render_login`, porque el bootstrap ocurre antes de la shell). Cola en LISTA:
+generar nóminas deja tres mensajes a la vez.
+⚠️ `st.toast` NO lo necesita: sobrevive al rerun por su cuenta.
+
+### ⚠️ Mi guardián estaba CIEGO dos veces (19 → 87)
+1. **Solo veía `st.success(...)` como atributo directo.** El idioma que más usa este
+   repo es `(st.success if ok else st.error)(msg)`, donde el llamable es un `IfExp`.
+   **El fichaje entero se escapó del barrido por eso.**
+2. **Solo veía el rerun como HERMANO.** En el fichaje está anidado:
+   `(st.success if ok else st.error)(msg)` / `if ok: st.rerun()`.
+Con las dos corregidas: **19 → 87**. Lección de v349 otra vez — un guardián acota el
+fallo a la forma en que lo viste; cuando reaparece, la pregunta es *por qué no lo vio*.
+
+### ⚠️ Dos trampas que me habrían hecho ROMPER cosas
+1. **La rama de ERROR no se convierte.** En `(st.success if ok else st.error)(msg)` con
+   `if ok: st.rerun()`, solo muere el éxito: el error se pinta y se queda porque ahí no
+   hay rerun. Convertir las dos habría hecho **desaparecer los mensajes de error** —
+   peor que el problema original. Queda `(flash.exito if ok else st.error)(msg)`.
+   El guardián también tuvo que aprenderlo: marcaba 68 falsos positivos (todos los
+   `st.error` que SÍ se ven) y me habría empujado a romperlos.
+2. **Las insignias de ESTADO tampoco.** Mi primer parche convirtió esto:
+   ```python
+   st.success("Telegram vinculado.")   # estado, se pinta SIEMPRE
+   if st.button("Desvincular"):
+       st.rerun()                       # solo al pulsar
+   ```
+   Habría borrado el estado y hecho aparecer un mensaje fantasma en otra pantalla. Lo vi
+   revisando el diff, **reverté desde el respaldo** y afiné la regla: un rerun bajo
+   `if st.button(...)` no mata nada, porque el mensaje de arriba se pinta en cada pasada.
+
+### ⚠️ Y el chequeo de ámbito dio un OK EN FALSO — el error de v342, dentro del chequeo
+`auth_ui` ya tenía `from core import flash` **dentro de `render_login`**, así que mi
+patch lo dio por importado y no añadió el de módulo → **4 NameError** esperando en
+producción. Y mi verificador dijo «✓ todos bien» porque su `importa_flash` **descendía
+dentro de los `def`** y encontraba el import local de otra función. Es literalmente el
+fallo que v342 documentó, cometido dentro del chequeo escrito para cazarlo.
+**Comprobar el ÁMBITO, no la presencia** — y no descender a un `def` al mirar el módulo.
+
+### Verificado en vivo
+Nóminas: los tres mensajes en pantalla, incluido el de v346 que llevaba 20 versiones sin
+verse. Fichaje: `✅ Clock IN Jornada (general) a las 21:31:46` y `✅ Clock OUT … Horas
+trabajadas: 0.01` — las dos líneas que se generaban y se tiraban desde v150.
+Guardián probado contra el código roto (revertir un sitio → lo caza).
+
+## El bloqueo de contacto solo debe exigir canales que EXISTAN (v368)
+⚠️ **Esta sección se reescribió: la primera versión exageraba el fallo.** Se dijo que 7
+usuarios estaban «encerrados sin salida» en producción, y **no era cierto** — ver el
+error de método al final, que es la parte que de verdad hay que recordar.
+
+### El defecto (real, pero LATENTE)
+`app.py` exigía email **Y** Telegram a todo usuario de campo (v79) **sin comprobar si el
+canal existe**. En una instalación SIN bot en Secrets eso no tiene salida:
+- la pantalla de bloqueo no puede mostrar el link de Start (ese bloque está condicionado
+  a `telegram_configured()`) → el usuario ve «Pendiente: Telegram» y **nada más**;
+- el admin tampoco tenía botón: su ficha decía «Telegram no configurado» y punto.
+Es el patrón de v325 y v340: **un pendiente que nadie puede cerrar es peor que no
+tenerlo**. Pero es un defecto de diseño para instalaciones sin bot, **no una avería que
+estuviera ocurriendo**.
+
+**Arreglo: solo se exige un canal que EXISTA.**
+```python
+_tg_hay   = notify.telegram_configured() and notify.bot_username()
+_falta_tg = _tg_hay and not _has_tg        # sin bot, no se pide
+```
+Con bot, todo sigue igual. Además la pantalla dice **quién** lo resuelve: el email lo
+carga el administrador y el usuario no puede ponerlo — antes decía «Pendiente: Email» y
+lo dejaba adivinando. Y la ficha del admin ofrece meter el chat_id a mano.
+
+⚠️ Verificado evaluando la condición **leída de `app.py` por AST**, no una copia (el OK
+en falso de v324): 8 escenarios (bot × email × telegram) correctos y **ningún bloqueo sin
+salida**. Probado contra el código roto.
+
+### ⚠️ EL ERROR DE MÉTODO (esto es lo que hay que recordar)
+Comprobé `notify.telegram_configured()` **en local**, salió `False`, y lo presenté como
+el estado de PRODUCCIÓN: «7 usuarios encerrados, sin salida posible». Al entrar en el
+Cloud con uno de ellos, la pantalla mostró *«abre el bot → t.me/**copex_avisos_bot**»*:
+**el bot SÍ está en los Secrets del Cloud**, así que esos usuarios siempre tuvieron su
+camino (pulsar Start + que el admin les vincule). Nunca hubo encierro.
+
+**La regla que ya existía para las hojas vale igual para los SECRETS**: mi
+`secrets.toml` local NO es el del Cloud. Un `is_configured()` / `telegram_configured()` /
+`app_url()` medido en local dice qué tengo yo, no qué tiene producción. Para afirmar algo
+del entorno real hay que mirarlo EN el entorno real — en este caso, la propia pantalla.
+
+⚠️ Y tuvo consecuencia práctica: creyendo que el canal no existía, retiré los chat_id de
+prueba «porque ya no hacían falta» → **volví a bloquear a los 7**, y hubo que reponerlos.
+
+
+## Facturar una obra ARCHIVADA desde el alta manual (v369)
+`list_projects` las oculta desde v149 — correcto para una lista, falso aquí: **archivar
+no es no-cobrar**, lo normal es archivar al terminar y facturar después. v358 lo resolvió
+solo para el atajo desde la ficha del proyecto; desde Finanzas → Facturas → Nueva seguían
+siendo **inalcanzables**. Es la quinta vez que ese default muerde (v310, v321, v322, v358).
+
+Se usa la pieza que la app ya tiene para esto (v149 en la cartera, v340 en Contactos e
+Inventario): **casilla con contador**, desmarcada por defecto.
+- La etiqueta marca **«· archivada»**: si no, en el radio son indistinguibles de las
+  activas y no se entiende por qué aparece una obra que se creía cerrada.
+- ⚠️ **Al desmarcar se suelta el alcance elegido ANTES de instanciar el radio.** Un
+  `st.radio` cuyo valor guardado ya no está entre sus opciones revienta — es el mismo
+  fallo que v358 esquivó por otro lado. Verificado en vivo: elegir «prueba1 · archivada»
+  y desmarcar devuelve la lista a las activas **sin excepción**.
+- El atajo de v357/v358 se conserva: debe seguir funcionando sin obligar a marcar nada.
+
+**El dato que lo justifica**: `cliente 1` tenía **3 obras archivadas con dinero sin
+facturar** — `prueba1` $618,15, `north` $415,20, `norte` $0,48.
+
+## ⚠️ Una obra cotizada vale el PRECIO PACTADO, no costo+margen (v370)
+Salió al mirar el pendiente «7 obras sin horas no admiten ganancia por rubro», que yo
+había clasificado como *«dato, no fallo»*. **Lo era: había un agujero detrás.**
+
+### Los materiales van a costo en LOS DOS modelos
+`ingreso = mo × (1+m) + mat` (viejo) y `Σ(horas × (tarifa+ganancia)) + mat` (v360): el
+margen solo se aplica a la mano de obra. Así que **una obra cuyo valor NO está en las
+horas vale exactamente lo que costó**. Medido:
+| Obra | Costo | La app decía | Realidad |
+|---|---|---|---|
+| Bespoke — Delivery Chullora | $380 | **$380** (ganancia $0) | facturado **$5.200** |
+| Stockland Bankstown — Ripout | $0 | **$0** | cotización aceptada **$2.960** |
+El resultado REAL salía bien (`resultado_por_proyecto` usa la factura); lo que mentía era
+la **estimación**, y de ella cuelgan «ingreso estimado» y «pendiente de facturar». Daño
+concreto: un delivery sin facturar aparecería como **$380 por cobrar** en vez de $5.200.
+
+### El arreglo: usar el número que ya se tiene
+Al aceptar, la cotización guarda su `ProyectoID` (v354) — pero **el enlace era de una sola
+dirección** y `project_revenue` no lo miraba: estimaba el precio desde el costo teniendo
+delante el que el cliente había firmado. Nueva `quotes.cotizacion_de_proyecto(pid)` y, si
+existe, **ingreso = precio pactado** (`modelo: "cotizado"`, cita el ID de la cotización).
+Misma regla que v361: **una sola definición del ingreso**, y un hecho gana a una conjetura.
+
+- ⚠️ **La base es el `Subtotal`, NO el `Total`.** `invoices.facturado_por_proyecto` suma
+  los IMPORTES DE LÍNEA, sin impuesto. Usar el total con GST habría inflado
+  `pendiente_de_facturar` **exactamente en el impuesto** ($296 en el caso real) y nadie lo
+  habría notado hasta cuadrar cuentas.
+- **Sin columna nueva en el proyecto**: se busca sobre las cotizaciones, ya cacheadas
+  (0 llamadas) y sin dos campos que puedan desincronizarse.
+- **`sin_ganancia` se vacía** en este modelo: ese aviso dice «este trabajo se facturaría a
+  costo», y con precio cerrado no puede pasar.
+- **Rentabilidad lo recoge sola** porque delega en `project_revenue` desde v361, y
+  «Sin facturar» pasó a avisar de los $2.960 que antes no existían.
+- ⚠️ Ejercitando el `except` **de verdad** (simulando que las cotizaciones fallan)
+  apareció un `logger` **inexistente en el módulo**: un `NameError` latente escondido justo
+  donde nadie mira. Añadido el logger.
+
+⚠️ **Lo que NO cubre**: una obra creada A MANO cuyo valor no está en las horas (el delivery
+de Bespoke) sigue valiendo su costo. Para eso haría falta una **ganancia fija por obra**
+(un importe a nivel de proyecto), que quedó ofrecida y sin decidir.
+
+## ⚠️ EL AVANCE DEL CAMPO NO MOVÍA EL % DEL PROYECTO (v372)
+Salió ejercitando la ÚNICA escritura del campo (`save_field_progress`, la tabla de
+avance de 📋 Mis proyectos), que era el hueco de verificación que quedaba. Las 6 ramas
+de v162 estaban perfectas; el fallo estaba en las dos líneas del final.
+
+### El orden: recomputar antes de invalidar
+```python
+    aws.batch_update(batch, ...)        # las actividades se escriben BIEN
+    _recompute_project_avance(pid)      # ← lee `list_activities`, CACHEADA 120 s
+    _invalidate()                       # ← la caché se tira DESPUÉS
+```
+`_recompute_project_avance` recalculaba el % **con las actividades viejas**. Y la caché
+está caliente **siempre**, porque la pantalla acaba de pintar esa misma tabla para
+editarla. Medido contra la hoja real:
+```
+actividades escritas en la hoja → el proyecto debería ir al 26,0%
+lo que la app escribió          →                            0,0%   (26 puntos atrás)
+estado escrito: 'Planificado'   (con 26% debería ser 'En progreso')
+```
+**Prueba de causa** (no basta con leer el código): el MISMO guardado con la caché vacía
+escribe 26,1% correctamente. Si con la caché fría cuadra y con la caliente no, la causa
+es el ORDEN.
+- **Es una regresión de v162**: el camino viejo (`update_activity_progress`) lo hacía
+  bien — recomputaba **en memoria** sobre las filas que acababa de leer frescas. Al
+  sustituirlo por el batch, ese recompute pasó a leer de la caché.
+- **Un solo sitio**: los otros tres (`add_activity`, `delete_activity`,
+  `save_activities`) ya invalidaban primero. El arreglo es intercambiar dos líneas.
+- **A qué afectaba**: `Avance` y `Estado` del proyecto alimentan la cartera, la curva S
+  real, el SPI/retraso, el KPI de avance promedio, el radar del admin y el avance
+  consolidado de la agrupación. El campo actualizaba, la actividad cambiaba y **el
+  proyecto se quedaba una pasada por detrás** — y si nadie más escribía, ahí se quedaba.
+
+### Y dos de la tabla: la celda BORRADA
+`int(r["Avance %"])` sobre una celda vaciada (`NaN`) lanza `ValueError` → **el botón
+«Guardar avances» revienta y se pierde TODA la edición**, no solo esa fila. Ahora se
+comprueba `pd.isna` y **vaciar no es poner 0**: la actividad se deja como estaba y se
+dice cuáles. La nota vacía guardaba el texto literal `"nan"`; ahora guarda `""`.
+- ⚠️ **El aviso tenía que ir por `flash`**: mi primera versión lo puso con `st.warning`
+  justo encima de un `st.rerun()` — el fallo de v365, cometido dentro del arreglo. Va
+  por la cola en la rama que recarga y directo en la que no (encolarlo sin rerun lo
+  dejaría de fantasma en otra pantalla).
+
+### ⚠️ Y un FALLO EN FALSO de mi propio test
+La primera pasada dio 5 ✗ en ramas que estaban bien: comparé `"40"` contra lo que hay en
+la hoja, que es `str(float)` → **`"40.0"`**. Los valores impresos eran correctos y el
+veredicto decía lo contrario. **Comparar números como texto es un generador de fallos en
+falso** — gemelo del OK en falso, y ya van dos (v363 fue el otro).
+
+### Guardián
+`verif_v372.py`: por AST, toda función que llame a `_invalidate` y a
+`_recompute_project_avance` tiene que llamar a **invalidar primero** (4 revisadas; menos
+de 4 = el chequeo pasó en vacío y falla), la guarda de `pd.isna` existe, el aviso va por
+`flash` en la rama con rerun y directo en la otra, y `flash` está importado **a nivel de
+módulo** (regla v342/v366: ámbito, no presencia). Probado contra el código roto: señala
+`save_field_progress` **y solo a esa**.
+
+## Un check en NO escala, y la obra sin horas ya puede valer algo (v373)
+Las dos decisiones que quedaban pendientes, resueltas por el usuario.
+
+### Un control en NO abre alarma (cierra el standing item de v158)
+Hasta v372 **solo el near miss** abría alarma: un check en NO se veía con su semáforo
+rojo en la ficha del pre-start y **no salía de ahí** — un control de seguridad sin
+cumplir que solo conocía quien abriera ese registro. El mecanismo para escalarlo existía
+desde v88. Estaba documentado como decisión deliberada; el usuario decidió cambiarlo.
+- ⚠️ **UNA alarma con todos los checks, no una por check**: `report_problem` escribe
+  **y notifica** por Telegram/email, así que N checks serían N avisos por un solo
+  formulario.
+- ⚠️ **Separada de la del near miss**: son dos cosas distintas — un near miss es un
+  suceso, un check en NO es un control que falta poner. Se resuelven por separado.
+- ⚠️ Solo cuenta `NO`: el `N/A` de la sección 3 es una respuesta legítima, y un check
+  sin responder no puede llegar (la UI no deja generar el pre-start hasta que están
+  todos, v158).
+- La pantalla usa `res["checks_no"]`, lo que devuelve `submit`, **no una segunda cuenta**
+  a partir de s1/s3: si divergieran, diría una cosa y la alarma otra.
+- ⚠️ **NO ejercitado contra producción**, por la misma razón que `near_miss=YES` y
+  `notify_expiring`: mandaría correo y Telegram a personas reales. Verificado por AST
+  y con la lógica de conteo sobre datos.
+
+### Ganancia FIJA por obra — el hueco que v370 dejó abierto
+v370 arregló las obras que **nacieron de una cotización**. Una creada A MANO cuyo valor
+no está en las horas seguía valiendo su costo, porque el margen solo se aplica a la mano
+de obra y los materiales van a costo en los dos modelos. Columna nueva `GananciaFija`
+(importe, al final → migra sola) + `ganancia_fija()` / `set_ganancia_fija()`.
+```
+Bespoke — Delivery Chullora   costo $380 · facturado $5.200
+   antes:  ingreso estimado $380      ganancia $0        modelo «margen»
+   ahora:  ingreso estimado $5.200    ganancia $4.820    modelo «margen+fija»
+```
+- **Se SUMA al modelo que aplique** (rubro o margen) porque responde a otra pregunta:
+  «además de lo que gano con las horas, ¿cuánto vale esta obra por sí misma?».
+- ⚠️ **A una obra COTIZADA no se le suma**: la cotización es el precio que el cliente
+  firmó y añadirle algo encima inventaría un ingreso que nadie aceptó. Se devuelve
+  `fija_ignorada` para poder **avisar** de que ese número no se está usando, en vez de
+  ignorarlo en silencio.
+- ⚠️ **`margen_pct` conserva su denominador.** Mi primera versión lo cambió a
+  `ganancia_total / costo`, lo que habría movido el % de **todas** las obras que no usan
+  la fija — justo lo contrario de la regla de v360. El margen del conjunto va en una
+  clave APARTE (`margen_total_pct`). Verificado obra por obra: **las 16 dan la misma
+  cifra que antes**.
+- **La vuelta atrás existe** (regla v340/v346): poner 0 la quita y el ingreso vuelve
+  EXACTAMENTE al valor anterior. Probado en vivo.
+- ⚠️ **La pantalla donde ponerla no se dibujaba** para la obra que la necesita:
+  `_ganancia_section` volvía si nadie había fichado, y un delivery no tiene horas. Ahora
+  la tabla persona×ganancia solo se dibuja si hay gente (con la lista vacía,
+  `disabled=[...]` apuntaría a columnas inexistentes) y la ganancia fija se ofrece
+  siempre.
+- ⚠️ **La fila posicional**: se añadió la columna Y su valor en `create_project` en el
+  mismo cambio. Olvidarlo es exactamente lo que mató a esa función 3 versiones (v363).
+
+### ⚠️ `GananciaHoraJSON` llevaba 13 versiones SIN auditar
+Decide desde v360 lo que se le cobra al cliente por cada hora y **no estaba en
+`CAMPOS_CLAVE`**: es el mismo hueco que `MargenMO` en v344 y `CostoUnit` en v352,
+**tercera vez**. Añadidos los dos. Regla: si un campo mueve dinero, entra en
+`CAMPOS_CLAVE` en el MISMO lote en que se crea.
+
+### ⚠️ Y la regla v135, sexta vez
+Llamé `historial("proyecto", PID)` cuando la firma es `historial(grupo, entidad,
+entidad_id)` → el rastro salió **vacío** y por un momento pareció que la auditoría no
+había registrado nada. Sí lo había hecho: las 3 anotaciones estaban ahí, con el
+`'' → '4820.0'` y su vuelta. **Antes de denunciar un fallo, comprobar la firma.**
+
+## Fichar desde el sidebar + el Pre-Start del día se recuerda solo (v374)
+Petición del usuario: un atajo de Clock IN en la barra izquierda, el Clock OUT a mano
+una vez fichado, y **un aviso al fichar** que recuerde hacer el Pre-Start del día.
+
+### El sidebar deja de ser un mirador
+v202 puso ahí el cronómetro en vivo y lo dejó **solo para mirar** («el fichaje se
+gestiona en la pestaña»), y encima solo aparecía **si ya estabas fichado**: para la
+acción más repetida del día había que ir a la sección. Ahora:
+- **sin fichar** → botón de tu asignación de hoy (1 toque, del tablero) + selector con
+  el resto de obras. Decisión del usuario entre tres opciones.
+- **fichado** → los cronómetros de siempre + «Salir del proyecto» y «Cerrar jornada».
+- **sin obras que imputar** → al menos «Abrir jornada», que es el tiempo pagado.
+- ⚠️ El proyecto SIEMPRE de una lista y sin preselección silenciosa (v139/v150), y el
+  **nombre limpio** aparte de la etiqueta: la etiqueta puede llevar el ID detrás y
+  `fichar_proyecto` lo escribe TAL CUAL en la hoja (el fallo que corrigió v308).
+- ⚠️ Todo mensaje por `flash`: estas acciones acaban en `st.rerun()`, que descarta los
+  deltas de la pasada (v365). Un `st.success` ahí no se vería nunca.
+
+### El aviso del Pre-Start
+`prestart.hecho_hoy(pid, grupo)` — ⚠️ **por OBRA y DÍA, no por persona**: el Pre-Start
+es la charla de seguridad del SITIO (una por obra y día, con sus asistentes), así que si
+el facilitador ya la hizo, al resto de la cuadrilla no se le recuerda nada. Decisión del
+usuario. Sale de registros ya cacheados y `PreStarts` está en el lote de v339 →
+**0 llamadas nuevas** (comprobado en `HOJAS_LECTURA`, no supuesto).
+- **Modal** (`st.dialog`) al fichar a una obra sin Pre-Start + **chip persistente** en el
+  sidebar mientras falte: el modal se puede cerrar y perder; el chip no.
+- ⚠️ Se dispara por **BANDERA**, en la pasada SIGUIENTE al fichaje: abrirlo en la misma
+  pasada no serviría de nada porque el `st.rerun()` la descarta (v365 otra vez).
+- ⚠️ Se llama al **TOP LEVEL** del script (`app.py`), NO dentro del `with st.sidebar:`:
+  en Streamlit manda el contenedor activo.
+- ⚠️ Se PARSEA la fecha en vez de compararla como texto: `submit` la escribe en ISO,
+  pero una fila vieja podría traer `20/08/2026` y una comparación de cadenas diría
+  «no hecho» con el Pre-Start delante (el fallo de v323 en las facturas del P&L).
+- El destino depende del ROL: para el campo es sección propia (`prestart`, v154), para
+  el admin una sub de Herramientas. Guardián: los dos destinos existen (regla v303).
+
+### ⚠️ Verificado EN VIVO antes de construir encima
+`st.dialog` existe en la 1.57, pero «existe en la API» no es «funciona ahí» — el CSS del
+menú (v304) y el `st_folium` de 500 px (v307) ya enseñaron esa lección. Mini-app +
+inspección del DOM, **con la estructura exacta del código final** (el modal abierto desde
+una función de módulo mientras otra pinta el `with st.sidebar:`):
+| Qué | Resultado |
+|---|---|
+| se pinta SOBRE la página disparado desde el sidebar | ✓ 500×254 |
+| SOBREVIVE al `st.rerun()` del fichaje | ✓ |
+| el botón de dentro navega y lo cierra | ✓ |
+| **NO reaparece** en pasadas siguientes | ✓ (6 después, cerrado) |
+| el chip del sidebar sigue tras cerrar el modal | ✓ |
+- ⚠️ **Falsa alarma resuelta midiendo**: el título mostraba `health_and_safety` como
+  texto. No era un fallo — los Material Symbols son **ligaduras de fuente** (trampa nº5),
+  así que `innerText` da el nombre aunque el icono se pinte. Medido: `font-family:
+  "Material Symbols Rounded"`, 24 px de ancho. Un glifo, no una palabra.
+
+### Las dos direcciones de `hecho_hoy`
+⚠️ Comprobar solo que devuelve `False` es el **paso en vacío** (trampa nº1): un
+`return False` fijo lo pasaría, y el recordatorio saldría para siempre aun con el
+Pre-Start hecho. Se movió el DÍA (parcheando `clock.today`) en vez de escribir filas en
+producción: obra con pre-start ese día → **True**; otra obra el mismo día → False (es por
+obra); la misma obra otro día → False.
+
+## ⚠️ LA SONDA ESTABA CIEGA: diagnostiqué un fallo que no existía (v375)
+Verificando v374 en producción, mi comprobación decía que **el pop-up no se pintaba
+nunca** — ni siquiera un instante, según un `MutationObserver`. Diagnostiqué la causa,
+la arreglé y desplegué v375. **Y el fallo no existía.**
+
+### El error: la sonda buscaba un selector de OTRO entorno
+Mi observador y todas mis comprobaciones buscaban **`div[role="dialog"]"`**, que es como
+marca el modal el Streamlit **local** (1.57) donde probé la mini-app. El Streamlit que
+resuelve el **Cloud** lo marca **`[data-testid="stDialog"]`**. Buscando el selector
+equivocado, un modal perfectamente pintado daba «no existe» — y encima con la autoridad
+de un observador que «no vio nada aparecer».
+
+**REGLA NUEVA: una sonda NEGATIVA hay que validarla contra un caso conocido-bueno.**
+Antes de concluir «X no se renderiza», comprobar que la sonda SABE ver X cuando X está.
+Si hubiera buscado el modal con dos selectores, o hubiera mirado la captura antes de
+diagnosticar, me habría ahorrado un despliegue y una alarma falsa al usuario. Es
+familia de la trampa nº5 (las ligaduras de fuente) y de v304 (el CSS que dejó de
+aplicar): **el DOM de Streamlit cambia entre versiones, y el entorno donde pruebo no es
+el que corre.** La misma lección que v368 dio con los `secrets`, ahora con el DOM.
+
+### Qué se queda de v375, y por qué
+El rediseño se conserva **no como arreglo de un fallo probado, sino porque es más
+robusto**: el aviso pasa de EVENTO de un solo uso (`pop`) a **CONDICIÓN de estado**, así
+que cualquier rerun lo repinta en vez de poder matarlo, y gana la salida por la **X**
+(`on_dismiss`), que con `pop` no existía. Verificado en producción: el modal sale con su
+título, el nombre de la obra y los dos botones; «Hacerlo ahora» lleva a `?s=prestart` y
+lo cierra.
+- Se descarta de **tres** formas: «Hacerlo ahora», «Ahora no» y la **X**. ⚠️ Sin lo de
+  la X, un modal por condición reaparecería en cada pasada **para siempre**.
+- Se re-arma al volver a fichar en esa obra, y se calla solo si el Pre-Start ya está.
+- Guardián: 3 pasadas seguidas → se abre 3/3.
+- ⚠️ **NO está demostrado que v374 estuviera roto.** Muy probablemente funcionaba.
+
+### Y un literal a la vista desde v233
+Los cronómetros del sidebar mostraban **`:material/schedule: Jornada`** en crudo: la
+etiqueta va DENTRO de `components.html`, donde `:material/...:` no es un icono sino
+sintaxis de markdown de Streamlit, que ahí no se interpreta. Viene de la migración de
+iconos (v233) y llevaba así desde entonces. **Se vio mirando la pantalla, no leyendo el
+código** — ninguna prueba lo iba a cazar porque el HTML era válido.
+
+### Lo que la verificación en producción SÍ confirmó de v374
+Selector sin preselección (v139) y «Fichar» deshabilitado hasta elegir · el desplegable
+ofrece exactamente las 3 obras de esa persona · el fichaje entra y el flash sobrevive al
+rerun (v365) · el sidebar cambia a los dos cronómetros + «Salir del proyecto» +
+«Cerrar jornada y proyecto» · **el chip persistente del Pre-Start** · y la tabla de
+avance del campo (v372) renderiza con sus columnas.
+
+## LA DEMO SE MUDA A SU PROPIO LIBRO — migración hecha (21/08/2026)
+Decisión del usuario entre tres opciones. Los 838 registros de la empresa simulada
+salen del maestro a un libro propio, y el **maestro queda limpio para el primer cliente
+real**. Bonus buscado: **ensayar la migración con datos que no importan**, que es
+exactamente la operación que habrá que hacer bien cuando el dato sí importe.
+
+**Libro de la demo**: `1WHGCrZndwdmqrR3RehLh7jocOIVkRvjAbigifvfSe1Y`, renombrado de
+«PRUEBA aislamiento — borrar» a **«COPEX — DEMO (cliente1)»**. ⚠️ Lo del nombre no es
+manía: un libro que se llama «borrar» y guarda la demo es un accidente con fecha.
+
+### El orden, que es lo único que importa
+**copiar → verificar → enlazar → verificar → borrar → verificar.** Nunca al revés.
+| Paso | Qué | Salvaguarda |
+|---|---|---|
+| 1 | Respaldo CSV a disco de las 26 hojas | 852 filas en `C:\Users\diego\respaldo_sheets\`. Los ZIP del deploy guardan el CÓDIGO, no los datos |
+| 2 | Copiar las **22 hojas de inquilino** | `value_input_option="RAW"`, como escribe la app entera |
+| 3 | Comparar **celda a celda** | **9.617 celdas idénticas** en 22 hojas |
+| 4 | `Grupos.SheetID` → libro de la demo | el mecanismo de v359, ya probado |
+| 5 | Comprobar el **enrutado** | inquilino→DEMO, global→MAESTRO, sin grupo→MAESTRO |
+| 6 | Vaciar el maestro **desde A2** | puerta previa: la demo tiene los datos AHORA |
+| 7 | Prueba decisiva | maestro a 0 filas y la app sigue dando 16 obras · $101.157,21 |
+
+⚠️ **Hasta el paso 6, ninguna cifra probaba nada**: los dos libros tenían lo mismo, así
+que «la app muestra 16 obras» era compatible con leer del maestro. Solo con el maestro
+VACÍO esa cifra demuestra de dónde sale. Es el paso en vacío (trampa nº1) aplicado a una
+migración: **si el test pasaría igual sin haber hecho el trabajo, no es un test**.
+
+- Se quedan en el maestro las 4 hojas **globales** (`Login`, `Grupos`, `Rieles`,
+  `Manuales`): son el registro de la app, y `Login` se lee ANTES de saber de qué grupo
+  eres. Verificado: 13 cuentas siguen ahí y el login funciona.
+- Las cabeceras se conservan (se limpia desde `A2`), así el maestro queda listo para el
+  primer cliente sin que `get_sheet` tenga que recrear nada.
+
+### Tres errores míos en la propia migración
+1. ⚠️ **Escribí el respaldo DENTRO del repo.** `git status` lo delató (`?? respaldo_sheets/`)
+   y el siguiente deploy lo habría empujado a GitHub **con los hashes de contraseña, los
+   emails y los chat_id de Telegram**. **REGLA: una exportación de datos nunca va dentro
+   del repo** — el script de deploy hace `git add` de todo.
+2. ⚠️ **El verificador reventó con un 429** por pedir `src.worksheet(t)` en cada vuelta
+   (refetchea los metadatos del libro **cada vez**): ~88 llamadas contra el techo de
+   60/min. Es el problema que v339 resolvió DENTRO de la app, cometido en el script que
+   venía a verificarla. Rehecho con `values_batch_get`: **2 llamadas**.
+3. ⚠️ `values_batch_clear(params, body)` — pasarle la lista suelta la mete como `params`
+   y muere dentro de `requests` con «too many values to unpack», que no dice nada. Va en
+   el `body`. Falló limpio: el maestro quedó intacto (comprobado antes de reintentar,
+   porque **un borrado a medias es peor que no haber empezado**).
+
+### ⚠️ CONSECUENCIA VIVA: la fase 2 ya no es teórica
+Medido justo después: el **propietario ve 0 proyectos** (sus vistas leen el maestro, que
+ahora está vacío) mientras el admin de cliente1 ve sus 16. Las **9 funciones** que hay
+que tocar cuando se aborde la fase 2:
+`admin_digest.owner_digest` · `auth_ui._owner_usuarios` · `alerts._admins_and_owners` ·
+`credentials.notify_expiring` · y las cinco que dan «todos los proyectos» al propietario:
+`plan_ui.selector_proyecto` · `prestart_ui._projects_for` · `timeclock_ui._proyectos_para`
+· `tool_save_ui._proyectos_de` · `survey_ui.render_survey_tab`.
+Que la limitación salga AHORA, con datos simulados, es justo lo que se buscaba.
+
+## ⚠️ FUGA DE DATOS ENTRE INQUILINOS EN LA CACHÉ (v378)
+Salió al ir a hacer la fase 2: la capa que había que tocar tenía un agujero peor que
+el problema que veníamos a resolver.
+
+```python
+@st.cache_data(ttl=120)          # ← la clave es SOLO el título de la hoja
+def _records():
+    return hojas.registros(SHEET, HEADERS) or []   # ← el libro sale de la SESIÓN
+```
+`st.cache_data` se comparte **por PROCESO**, no por sesión. El primero que lee deja su
+resultado memoizado y **el siguiente —de otro cliente— recibe datos que no son suyos**.
+Demostrado con los dos libros reales, en los dos sentidos: el propietario leyendo el
+maestro vacío dejaba al admin de cliente1 con 0 proyectos, y al revés el propietario
+recibía las 16 obras del cliente.
+
+⚠️ **El cerrojo de v351 no lo cubre**: aquel comprueba el grupo de un objeto que ya
+trajiste; aquí **la lista entera es del inquilino equivocado**. `hojas._lote` y
+`timeclock._libro` sí van por libro (v359 lo hizo a propósito) — el agujero estaba en
+la caché de ENCIMA, que memoiza el resultado ya derivado.
+
+**Alcance medido**: 22 lectores cacheados; 4 leen hojas globales (sin fuga posible) y
+**18 leen datos de inquilino** en 16 módulos.
+
+**El arreglo**, uniforme y sin tocar ninguno de los ~40 call-sites: la función cacheada
+pasa a `X_cached(libro, …)` y se deja un envoltorio `X()` con el nombre de siempre que
+resuelve el libro y delega.
+
+### ⚠️ TRAMPA 1: el guión bajo hizo el arreglo INERTE
+Llamé al parámetro **`_libro`**. `st.cache_data` trata los argumentos cuyo nombre
+empieza por guión bajo como **no hashables y los deja FUERA de la clave** — es su
+convención para pasar conexiones. Resultado: la firma decía lo correcto, el guardián de
+AST daba ✓… y la fuga seguía **idéntica**.
+Solo lo delató **instrumentar quién se ejecutaba de verdad**: al trazar las llamadas
+reales a `hojas.registros`, la segunda lectura no aparecía — la caché la había servido.
+**REGLA: un parámetro que existe para separar la clave de caché NO puede empezar por
+`_`.** El guardián lo comprueba desde ahora.
+
+### ⚠️ TRAMPA 2: importar un módulo NO ejecuta sus funciones
+`compileall` ✓, los 79 módulos importan ✓, el guardián de AST ✓ … y **tres envoltorios
+tenían un `NameError` dentro**: `roster` usaba `TRABAJOS_SHEET` (la constante es
+`TRAB_SHEET`), `invoices` y `payroll` usaban `SHEET` (son `FACTURAS_SHEET` y
+`NOMINAS_SHEET`). Habrían reventado la primera vez que alguien abriera el tablero, las
+facturas o las nóminas. **Lo único que lo caza es LLAMARLOS**: smoke test que ejecuta
+los 18 envoltorios y las 15 invalidaciones.
+
+### ⚠️ TRAMPA 3: la de v344, otra vez
+Al renombrar la función cacheada, los `X.clear()` de `_invalidate` quedan apuntando al
+**envoltorio** → `AttributeError` → el `except` se lo traga → **la caché deja de
+limpiarse y nadie se entera**. El guardián lo cazó en 2 sitios (`projects`, `roster`),
+donde mi regex había arreglado el primer elemento de la tupla y dejado el segundo.
+
+## FASE 2: el propietario vuelve a ver a todos sus clientes (v379)
+Tras la mudanza de v377 el propietario veía **0 proyectos**: sus vistas leen el maestro
+y los clientes viven en sus libros. Esta es la fase 2 que v359 dejó aplazada.
+
+### El ámbito de grupo, en vez de hilar un parámetro por 40 funciones
+`owner_digest` recorre grupos llamando a `group_digest(g)`, y por dentro eso lee
+proyectos, alarmas, gastos y credenciales — todo con lectores que resuelven el libro
+**desde la sesión**, y la del propietario no tiene grupo. Hilar un `grupo` por todas
+esas firmas habría sido enorme.
+**`tenant.como_grupo(g)`**: dentro del `with`, `sheet_id_para` consulta el grupo activo
+antes que la sesión, así que TODA lectura cae en el libro de `g`. Un cambio, en el
+único punto donde se decide el libro.
+- ⚠️ Vive en `st.session_state`, **no** en un global del módulo: los globales se
+  comparten por proceso y ahí un «grupo activo» se filtraría a otra sesión — la clase
+  de fallo que acababa de cerrar v378.
+- Reentrante y anidable; el guardián comprueba que al salir restaura lo anterior.
+- Aplicado en 4 sitios: `owner_digest`, la ficha de usuario del propietario, el
+  detalle de proyecto y el aviso de credenciales del login.
+- ⚠️ En `_detalle_proyecto` se **re-entra una vez** bajo el ámbito en vez de envolver
+  300 líneas en un `with`: reindentar un bloque así es lo que rompió v120 y v148. La
+  propia condición corta la recursión.
+- `auth.grupos_por_libro()` da UN grupo por LIBRO distinto. ⚠️ Si tres grupos comparten
+  el maestro, leerlo tres veces **triplicaría las filas**: agrupar por libro no es una
+  optimización, es lo que evita duplicar el consolidado. El guardián lo comprueba.
+
+### ⚠️ EL ARGUMENTO NO PUEDE SER UNA LLAVE
+Mi primera versión hacía que un `grupo` explícito seleccionara el libro **siempre**.
+Con eso, un admin de otra empresa que pasara `grupo="cliente1"` **leía el libro de
+cliente1**: convertí «manda la sesión» en «manda el argumento», debilitando justo lo
+que v378 venía a cerrar. Ahora el grupo explícito solo elige libro **si quien pregunta
+puede ver ese grupo** (`tenant.puede_ver`): propietario, o es el suyo.
+
+### ⚠️ Y el test que había dejado de servir
+El test de fuga de v378 comparaba «propietario» contra «admin de cliente1» y daba por
+fuga que el propietario viera 16 obras. Con la fase 2 eso pasó a ser **lo correcto**,
+así que el test ya no distinguía una fuga de la funcionalidad nueva — y falló en falso.
+Reescrito para comparar **dos administradores de grupos distintos**, que es lo que el
+aislamiento tiene que garantizar. **Solo la versión reescrita encontró la fuga real de
+arriba.** REGLA: cuando una funcionalidad cambia lo que es «correcto», el test que lo
+medía hay que rehacerlo, no relajarlo — si no, se queda dando veredictos de otra época.
+
+### ⚠️ La cartera se compone de VARIAS fuentes, y solo probé una (v380)
+Verificando la fase 2 **en pantalla** con la sesión de propietario: los proyectos ya
+salían (12 activos de 16), el resumen por grupo cuadraba al dígito con lo previsto…
+y **todas las tarjetas mostraban `0h`**. El demo tiene 484 fichajes.
+
+Mis tests medían `list_projects`. Pero una tarjeta de la cartera se arma con **cuatro
+fuentes distintas**, y cada una tiene su propio camino al libro:
+| Dato | De dónde sale | Estado tras v379 |
+|---|---|---|
+| proyectos | `list_projects` | ✓ arreglado |
+| **horas** | `project_hours_bulk` → hoja del fichaje | ✗ leía el maestro → **0 h** |
+| **alarmas** | `open_counts_all()` — **no recibe grupo** | ✗ leía el maestro → **0** |
+| costos / retrasos | `group_expenses`, `gaps_by_group` | ✓ ya cuadraban |
+
+Los dos huecos se cierran con el mismo patrón (`_fichajes_visibles`, `_alarmas_visibles`).
+**REGLA: cuando una pantalla se compone de varias fuentes, hay que comparar TODAS
+contra lo que ve quien sí las tiene bien** — arreglar la principal y dar la pantalla
+por buena deja ceros que parecen datos. Guardián nuevo: mide horas, alarmas, gastos y
+retrasos del propietario contra los del admin del mismo grupo, y falla si difieren.
+
+### ⚠️ Y v380 arregló la función EQUIVOCADA (v381)
+Con la pantalla delante otra vez: las alarmas ya salían… y las **12 tarjetas seguían
+marcando `0h`**. El arreglo de v380 fue a `project_hours_bulk` **dando por hecho** que
+era la que alimentaba la cartera. No lo es: `render_owner_projects` llama a
+**`project_hours()` una vez por obra**. El test daba ✓ sobre una función que esa
+pantalla no usa.
+
+**REGLA: antes de arreglar lo que pinta una pantalla, MIRAR qué función llama.** El
+guardián de v381 lo comprueba primero (`project_hours_bulk: False · project_hours():
+True`) y solo después mide — así no puede volver a validar el camino que no es.
+
+De paso salió otro cero peligroso: **`datos_asociados`** —el recuento que se enseña
+ANTES de borrar un proyecto— le daba **0 en todo** al propietario. «No cuelga nada»
+cuando cuelgan 25 fichajes, 3 gastos y 11 actividades es el peor sitio imaginable para
+un cero falso. Ahora se lee bajo el ámbito del grupo del proyecto.
+
+## Firma DIBUJADA en el Pre-Start + el aviso que no se va (v383)
+Tres peticiones del usuario. Decisiones suyas: **firma por asistente** (como el formato
+en papel, donde cada uno firma su línea) y **solo en el PDF**.
+
+### La firma
+`streamlit-drawable-canvas` (dependencia nueva). ⚠️ Es un componente de **2023** y aquí
+corre Streamlit 1.57 — con el historial de v66 (segfaults por ruedas bleeding-edge) eso
+se prueba ANTES de prometerlo: importa, renderiza, **captura el trazo** (el PNG pasa de
+543 B en blanco a 5.245 B firmado) y **reportlab lo acepta**.
+- **Import PEREZOSO**: si el componente falta o falla, el Pre-Start NO se cae — se piden
+  las iniciales tecleadas, como hasta v382. Una charla de seguridad no puede quedarse
+  sin registrar porque una dependencia de terceros no cargue.
+- El bloque de asistentes deja de ser un `st.data_editor` (una tabla no puede llevar un
+  lienzo dentro): pasa a una lista de nombre + recuadro de firma, con botón de añadir.
+- **Quien está en la lista, firma**: el botón de generar se bloquea y dice de quién falta
+  la firma. Mismo criterio que v158 («no se puede firmar sin leer»): si se admiten
+  asistentes sin firma, la firma deja de significar nada.
+
+### ⚠️ Tres trampas, y las tres habrían pasado desapercibidas
+1. **Detectar la firma por el canal ALFA no sirve.** Con fondo opaco, un lienzo VACÍO da
+   alfa=255 en los 58.800 píxeles → **todo el mundo constaría como firmado**. Se compara
+   contra el color de fondo. Lo delató instrumentar la mini-app, no leer el código.
+2. **La firma no puede llegar a la hoja.** `json.dumps` **no serializa `bytes`**, así que
+   sin filtrar, `submit` habría fallado ENTERO; y aunque serializara, seis firmas en
+   base64 rondan los 40.000 caracteres contra un tope de celda de 50.000. La hoja guarda
+   nombre, iniciales y un `firmado: true`; la imagen va al PDF, que es el documento que
+   vale y ya se archiva en Drive.
+3. **La columna de firma medía el 9% del ancho** —dimensionada para dos iniciales— y el
+   propio encabezado se partía como «Signatur / e». Reequilibrada a 16,3%. Lo cazó
+   **extraer el texto del PDF generado**; en el código no se ve.
+- Y un `logger` inexistente en `prestart_pdf` dentro del `except` de la firma: el
+  NameError latente de v370 otra vez. El guardián **ejercita esa rama** (firma corrupta).
+
+### El aviso de arriba
+Banda en la barra superior, visible desde CUALQUIER sección y que **no se puede
+descartar**: solo desaparece cuando el Pre-Start está hecho. El chip del sidebar (v374)
+se pierde de vista —el sidebar se pliega en el móvil— y el modal se cierra y no vuelve.
+0 llamadas nuevas: `open_sessions` y `hecho_hoy` salen de registros ya cacheados.
+
+## ⚠️ LA SUITE ENTERA: 13 rojos que nadie veía (v384-v385)
+El usuario preguntó qué quedaba pendiente. Al auditar en serio salió que **yo venía
+corriendo un subconjunto elegido por mí**: cuando reportaba «13 guardianes en verde»,
+la suite completa tenía **48** y **13 fallaban**. Dos de esos rojos los había
+introducido ese mismo día.
+
+**REGLA: se corre la suite ENTERA, no la lista que uno recuerda.** Un subconjunto
+curado da la sensación de cobertura sin la cobertura, y los rojos se acumulan fuera
+del campo de visión — que es exactamente el modo de fallo que los guardianes existen
+para evitar.
+
+### Los 3 fallos REALES
+| Guardián | Qué era | ¿Del día? |
+|---|---|---|
+| v333 | La banda del Pre-Start con `font-size:15px`, fuera de la escala de 9 pasos | sí, mío |
+| v322 | `import pandas` muerto en `prestart_ui` al sustituir la tabla de asistentes por los lienzos | sí, mío |
+| v323 | **5 `except: pass` se tragaban el apunte de auditoría** sin dejar rastro: `registrar` logea lo suyo, pero si revienta `diff` o el import, el histórico se queda con un hueco que nadie puede explicar | no: venían de v342/v352 |
+
+### Los 9 CADUCADOS — actualizados, no relajados
+Todos fallaban porque el código cambió **a propósito** y su afirmación envejeció:
+- **v296 · v297 · v298** exigían que existieran la nav vieja, `_SHELL_NUEVA` y
+  `render_owner_panel` — **borrados en v299**. Fallaban *por haber ganado*. Invertidos
+  a «sigue borrado», que es lo que hay que proteger a partir de ahora (regla v140/v146).
+- **v295 · v301**: el CSS de la cabecera del tablero, reescrito en v301 y normalizado
+  por la escala de v333.
+- **v306**: exigía que `Tipo` fuera la ÚLTIMA columna; v360 y v373 añadieron dos
+  después — también al final, que es lo que la regla protege de verdad.
+- **v309**: su fixture de gastos no llevaba `Grupo`, y **v310 cambió la definición** de
+  las compras del P&L (de «los proyectos del grupo» a «la columna Grupo»); además
+  buscaba enlaces literales que **v317 convirtió en datos**.
+- **v313**: cuatro patrones viejos — v325 partió `sin_tarifa` en accionable y de-baja,
+  el KPI pasó de `st.metric` a `_kpi_card`, el texto dice «obra(s)» y no «proyecto(s)»,
+  y el `['e']` es el `except … as e` (falso positivo conocido desde v145).
+- **v317**: exigía 3 herramientas; **v318 hizo la composición la cuarta**, a petición
+  del usuario tras verla fija.
+- **v321**: su mock esperaba 1.750 de ingreso, pero **v361 movió el cálculo** a
+  `project_revenue`, que consulta cotización y ganancias. La regla que defiende se
+  comprueba ahora contra **datos reales** (`check_v321_real.py`), que es más fuerte.
+
+⚠️ En cada uno quedó escrito **qué cambió y por qué**: dentro de seis meses, un
+guardián ablandado y uno actualizado se parecen mucho si nadie dejó la razón.
+
+### ⚠️ Y un FALSO POSITIVO que casi rompe código sano
+v323 acusaba a `catalogo` y `orders` de sacar el `_next_id` de la caché —lo que
+repetiría un ID, y **el ID es la identidad**—. Los dos leen FRESCO y su docstring lo
+dice: el guardián buscaba la subcadena `_records` y **`get_all_records` la contiene**.
+Es la trampa nº2 (*grep ≠ uso*) dentro de un guardián. Corregido a AST por nombre de
+llamada. **Antes de «arreglar» lo que un chequeo denuncia, mirar el código acusado.**
+
+## VER EL DÍA de una persona: la celda no cabe, la línea de tiempo sí (v387-v389)
+Petición del usuario: *«cuando alguien tiene más de una asignación por día, al dar clic
+en ese día quiero ver solo ese día, cómo lo tiene organizado, de forma gráfica»*.
+
+### ⚠️ Medir los datos ANTES de diseñar cambió la propuesta
+La idea obvia era una línea de tiempo. Medido primero sobre la hoja real:
+| | |
+|---|---|
+| días-persona con asignación | 34 |
+| …con **más de una** | **1** |
+| asignaciones **con** franja horaria | **3** |
+| asignaciones **sin** hora | **32** |
+Y el único caso real —`campo1`, martes, `PRJ-0005` y `PRJ-0006`— tiene las dos a
+**07:00–15:30**, o sea SOLAPADAS. Con eso, un eje horario puro habría dibujado un
+bloque encima de otro y el resto del eje vacío. El diseño se cambió: **carriles
+paralelos** (el solape se VE) y las asignaciones sin hora como banda «todo el día»,
+sin fingir una franja que nadie puso.
+
+### Cómo se abre (decisión del usuario, entre tres opciones dibujadas)
+La celda ya es un `st.popover` de edición (v217) y no se le pueden dar dos
+significados al mismo clic. El popover gana **«Ver el día»** y el detalle se pinta
+**debajo del tablero, a ancho completo** — a 300 px de popover, los nombres se cortan
+y las horas no caben (medido antes de elegir).
+
+### ⚠️ El resumen MENTÍA, y era mi propio fallo
+Con las dos obras solapadas de 8,5 h, la cabecera decía **«17.0 h»** de una persona
+que trabajó 8,5: el mismo rato contado dos veces — exactamente lo que el aviso de dos
+líneas más abajo denuncia. `_ocupado()` calcula la **UNIÓN** de las franjas; la suma
+solo aparece junto al aviso, como síntoma: *«Suman 17.0 h asignadas sobre 8.5 h de
+día»*. Misma familia que el «sin asignar» de v320.
+
+### Otros dos, cazados por el guardián y por la pantalla
+- **Un turno que acaba cerca de medianoche** dejaba el eje por debajo del mínimo de
+  4 h que la propia función declara: `hi` está topado en las 24:00, así que si no cabe
+  hacia arriba hay que **bajar `lo`**.
+- ⚠️ **El popover NO se cierra con el `st.rerun()`** (medido en producción: el estado
+  de apertura vive en el frontend). Yo había escrito en el código que sí. Queda abierto
+  sobre el tablero hasta que se toque fuera. No se fuerza: la única vía sería remontarlo
+  cambiándole la `key`, y eso arrastra el CSS del color de cada celda a una key variable.
+
+### Verificación
+`_carriles` probado con el caso real, con día partido, con solape parcial de tres y con
+franja mal tecleada; el eje comprobado en 6 rangos (madrugada, hasta las 24:00, 30 min);
+y **ejecutado** en 6 escenarios (importar no ejecuta, v378). En el DOM: bloques a
+9.1%/77.3% en carriles separados, ticks sin recortar, 0 desbordes. En producción con el
+día doble real: «2 asignaciones · 8.5 h del día ocupadas» y los dos bloques en y=990 y
+y=1023, coherente con el KPI «CHOQUES DE TURNO: 1» del propio panel.
+
+## Vista por DÍA de la cuadrilla + sábado y domingo por semana (v390-v395)
+Dos peticiones del usuario: ver el panel **por día** además de por semana, y poder
+**añadir un día** cuando toca trabajar el fin de semana.
+
+### La vista Día: lo único que ninguna pantalla daba
+Ya había tres vistas de un día (Cumplimiento, Ruta del día, Disponibilidad) y ninguna
+responde *a qué hora* está cada uno. La vista Día es la cuadrilla entera sobre un eje
+de horas: una fila por persona, sus bloques a escala, los libres marcados. Reutiliza el
+motor de v387 (`_eje_de`, `_carriles`, `_ticks_html` compartidos, para no tener **dos
+aritméticas del eje** que mantener — la lección de los cinco `_num` de v323).
+- Quien se pisa a sí mismo sale en **sub-carriles al 50%** dentro de su propia fila, así
+  la rejilla sigue siendo una fila por persona.
+- ⚠️ Con 32 de 35 asignaciones sin hora, hoy se llena de bandas «todo el día». Se dice
+  en la propia pantalla; se afinará según se planifique con horario.
+- ⚠️ **Fallo de contraste visto mirando, no midiendo**: el texto blanco sobre la trama
+  de rayas era ilegible. Ahora va en una píldora de color sólido sobre la trama.
+
+### El día extra, SIN configuración nueva (decisión del usuario)
+`+ Sáb` / `+ Dom` añaden la columna **a la semana que se está viendo**, y la columna
+**reaparece sola si hay algo asignado** (`dias_con_datos`). Así no hay ajuste que
+mantener ni migración, y **el dato nunca queda escondido** — por eso mismo, quitar una
+columna con trabajo dentro está bloqueado y dice de quién es (regla v340).
+- ⚠️ `DIAS_TODOS` va en el orden de `weekday()`, así que `fecha_de_dia` sigue siendo
+  `lunes + índice` y **ninguna fecha existente se mueve** (lo primero que comprueba el
+  guardián: si eso se rompe, se desplaza toda la planificación histórica).
+- Se movió con ello todo lo que asumía «la semana es Lun–Vie»: rango del encabezado,
+  atajo «toda la semana», radar de choques y certificados (ahora escanea los 7 días),
+  agenda de Home, Ruta del día, Cumplimiento, Asignar y el board del campo — que ve el
+  fin de semana **solo si hay algo planificado**, que es justo cuando le importa.
+- ⚠️ Los cuatro cortes de `weekday() > 4` ya no cortan por ser sábado: cortan si **no
+  hay nada** ese día. Cortar por el día escondería lo que alguien acaba de planificar.
+
+### Ejercitado contra la hoja REAL (v390)
+Nadie había guardado nunca una asignación en sábado. Método de v344 (foto en solo
+lectura → ejercitar en una semana vacía → verificar leyendo → devolver todo → segunda
+foto): guardar en sábado, leerlo con su franja y su nota, que la columna se abra sola,
+que el campo lo vea ese día (antes devolvía []), y que **`copiar_semana` lo arrastre**
+—que era una afirmación mía sin probar—. Hoja idéntica: 14 filas antes y después.
+
+### v393 · Auto-poblar respeta el fin de semana, pero no lo impone
+Al asignar personal se rellena el planificador entre las fechas del proyecto. Rellenar
+sáb/dom siempre convertiría la excepción en norma; no rellenarlo nunca obliga a añadir
+a mano a cada persona en una semana que la cuadrilla SÍ trabaja. Regla: se rellena el
+día extra **solo si en esa semana ya hay alguien trabajándolo**. La condición sale del
+DATO, no de una preferencia que haya que mantener.
+
+### v391-v394 · La barra del Panel, medida en vez de repartida a ojo
+Con **tres** vistas el segmentado dejó de caber: a 780 px (media pantalla) se partía en
+vertical y «Disponibilidad» salía cortada. Tres intentos, y solo el tercero salió de
+MEDIR la fila en producción (406 px, con 48 comidos por el `gap`):
+| Recorte | Ahorro |
+|---|---|
+| `gap="xxsmall"` (16 → 4 px) | 36 px |
+| rango **sin año** (`rango_label(corto=True)`) | 75 px |
+| menos padding, **acotado a este** segmentado | 36 px |
+Resultado medido en producción: barra de **70 → 40 px**, las tres vistas en una fila,
+rango en una línea, 0 recortes. ⚠️ El rango largo se estaba partiendo en **3 líneas**
+dentro de 56 px — eso era lo que hinchaba la fila, y no se veía hasta medir su altura.
+
+### v393 · ⚠️ La firma del Pre-Start no cabía en un móvil
+`st_canvas` nace con `width=600` y no acepta `use_container_width`: en un viewport de
+375 px el lienzo salía de **600 dentro de un hueco de 343**, así que **la mitad derecha
+quedaba fuera de pantalla y ahí no se podía firmar**. Ahora son 300 px (medido: cabe
+entero, sin scroll). El Pre-Start se llena EN OBRA, así que manda el móvil aunque en
+escritorio el recuadro se vea más pequeño.
+⚠️ **Sigue sin demostrarse** que un DEDO trace una firma completa: mis eventos
+sintéticos dejan tinta pero no completan el trazo, y de eso no se concluye que falle
+(regla v375). Necesita un teléfono real.
+
+### v395 · Las alarmas que no le llegan a nadie
+`report_problem` escribe la alarma **y notifica**. Un destinatario sin email ni Telegram
+la recibe… dentro de la app: solo la ve si entra a mirar. Con el check en NO abriendo
+alarma (v373) eso pasó a importar. Medido en la hoja real: de los **5** destinatarios de
+una alarma de `cliente1`, a **3 no les llega** (`dacox`, `Arcantox`, `admin1`) — aunque
+siempre llega a 2, así que ninguna se pierde del todo.
+- El dato entra en `admin_digest.group_digest` (`avisos_sin_canal`) y se avisa **donde
+  se arregla**: Planificación · Usuarios, encima de la tabla donde se carga el email.
+- ⚠️ **Criterio distinto al del campo, a propósito**: al campo se le exigen los DOS
+  canales (v79, requisito para usar la app); a un gestor le basta UNO. Mezclarlos sería
+  el error de v325 («sin tarifa» eran dos cosas en el mismo aviso).
+- ⚠️ **NO entra en `_PENDING_KEYS`**: la rejilla del resumen del día es de NUEVE
+  indicadores fijos en 2 filas y su reparto tiene guardián (v305).
+- 0 lecturas nuevas: sale de `list_users()`, ya cacheado.
+
+### ⚠️ La regla v135 falló TRES veces en una sola tanda
+`prestart.generate_prestart_pdf` (vive en `prestart_pdf`), `report_problem(pid, grupo,
+tipo, …)` (no tiene `tipo`) y `CHECKS_S1` como lista de cadenas (son **tuplas
+(clave, texto)**). Las tres se cazaron ejecutando, no leyendo. **Antes de escribir una
+llamada nueva, mirar la firma y la FORMA del dato — no el nombre que parece lógico.**
+
+### Y un error de manos
+Sobrescribí `P1/.claude/launch.json` por leer la ruta equivocada antes de escribir
+(`survey_app/.claude/`, que no existe). Restaurado desde git; los cambios locales sin
+commitear que hubiera ahí se perdieron. **Leer el fichero que se va a escribir, no uno
+parecido.**
+
+## Facturar desde la cartera (v397-v398)
+Petición del usuario: *«en la tabla de proyectos vamos a agregar una opción para que se puedan
+generar los invoices de cada proyecto desde la tabla o ficha»*. Decisiones suyas: **botón en la
+tarjeta** y las archivadas **con la casilla de siempre** (v149/v340/v369).
+- **`invoices.pendiente_por_proyecto(grupo, incluir_archivados=True)`** — el mapa, en UN sitio.
+  ⚠️ `finance.sin_facturar` DELEGA en él en vez de repetir el bucle: dos definiciones del mismo
+  dinero es lo que produjo los fallos de v310, v321 y v361.
+- **`_ir_a_facturar(pid, grupo)`** extraída para que el botón de la tarjeta y el de la ficha hagan
+  EXACTAMENTE lo mismo (resolución del cliente por `ClienteID`, y sin preseleccionar un valor que
+  no esté entre las opciones del selectbox — el fallo que v357/v358 ya habían pagado).
+- Tarjeta: insignia con el importe + botón **Facturar** solo si `pendiente > 0` y el rol gestiona;
+  sin pendiente, solo «Abrir →». Lista: columna **Sin facturar** como NÚMERO (ordenable), no texto.
+- ⚠️ **v398: existir no es servir.** La columna se puso la décima de trece y, medido en producción
+  con la tabla a ~520 px, **había que hacer scroll horizontal para encontrarla**. Se movió junto al
+  nombre. Una columna que hay que buscar no cumple la función por la que se añadió.
+- ⚠️ **Falsa alarma resuelta midiendo:** el botón «Facturar» aparecía DOS veces en el DOM. El
+  segundo mide **0×0 en (0,0)** — es el nodo de medida que Streamlit añade a un botón con `help=`.
+  Se pinta uno solo.
+
+## El dinero tenía dos caras en la misma pantalla (v399)
+Visto verificando v398: la celda pintaba **`$27883`** y la tarjeta de al lado **`$27,883`**. El pie
+de esa misma tabla sale de `theme.dinero` (que sí agrupa), así que la contradicción estaba a dos
+centímetros. Causa: `NumberColumn(format="$%.0f")` es printf, y `%f` no agrupa.
+- **No era una columna, eran 39** en 7 módulos (`$%d`×20 · `$%.2f`×14 · `$%.0f`×5): Rentabilidad,
+  Facturas, Nóminas, Inventario, Contactos, Catálogo, Cotizaciones y la cartera. Todas las TABLAS
+  decían `$27883` mientras todos los KPI y pies decían `$27,883`. Arreglar solo una habría dejado
+  esa columna como la única distinta.
+- El printf de Streamlit **sí acepta `,`** (`"$%,d"`). ⚠️ Verificado, no leído: la documentación lo
+  dice, pero lo que decide es lo que PINTA — mini-app + intercepción de `fillText` (trampa nº18).
+- ⚠️ **`%d` no se cambió por `%.0f`**: uno trunca y el otro redondea (trampa nº20).
+- ⚠️ **Las columnas EDITABLES se probaron tecleando** (Cotizaciones, Nóminas, Ganancia/h): el editor
+  se siembra con el valor CRUDO (`1500`, no `$1,500.00`) y al escribir `3456.78` Python recibe
+  `3456.78`. El separador no toca ni la edición ni el valor devuelto.
+- Guardián `verif_v399.py`: por AST (no por texto — un formato en un comentario no es un uso), NINGUNA
+  columna de dinero puede quedarse sin separador, y se comprueba que siguen conviviendo las que
+  truncan y las que redondean. Probado contra el caso roto.
+
+### RESUELTA en v405 — `use_container_width` → `width="stretch"`
+200 sitios convertidos en 21 ficheros. **3 NO se tocaron**, y los tres a propósito: los
+dos `st_folium` (su parámetro es del COMPONENTE — convertirlo rompe el mapa, que es el
+arreglo de v307) y ⚠️ **un COMENTARIO** de `route_ui` que contiene el literal; un
+reemplazo por texto lo habría reescrito y el comentario habría pasado a decir una
+mentira sobre un parámetro que a propósito se conserva. Por eso la migración va por
+**lista blanca de AST**: solo se toca lo que el árbol confirma como argumento real.
+Medido antes de convertir: los 8 elementos implicados aceptan `width` (tipo `Width`,
+que admite `"stretch"`). Guardián `verif_v405.py`: ningún elemento de Streamlit puede
+volver a usarlo; los de terceros sí. Lo de abajo queda como el registro del problema.
+
+### Deuda anotada (resuelta en v405): `use_container_width`
+⚠️ **Corrección (v402):** escribí que era una retirada «sin versión anunciada» y es FALSO. El propio
+runtime lo dice al arrancar: **«`use_container_width` will be removed after 2025-12-31»** — hay fecha,
+y ya pasó. O sea que esto no es «algún día», está en tiempo de descuento y puede desaparecer en
+cualquier versión que Streamlit publique. Lo vi en los logs de una mini-app, no leyendo la doc.
+
+Streamlit 1.57 lo marca deprecado a favor de `width="stretch"` / `width="content"`.
+La app lo usa en **200 sitios de 21 ficheros**. No se migró: es un cambio
+que toca la maqueta de TODAS las pantallas por una retirada sin fecha, y no se puede verificar en
+producción a bajo coste. ⚠️ Y tiene trampa: **`st_folium(..., use_container_width=True)`**
+(`route_ui.py`, `home_ui.py`) es un parámetro DEL COMPONENTE, no de Streamlit — convertirlo lo rompe,
+y es justo el arreglo de v307 que llenó el hueco blanco de la Ruta del día.
+
+## Quien llega después también firma el Pre-Start (v403)
+Duda del usuario: *«cuando alguien realiza el pre start y luego alguien llega y ficha en ese
+proyecto, tiene que firmar también. ¿Esto está funcionando así?»*. **No lo estaba**, y el hueco
+venía de una decisión propia de v374.
+- `hecho_hoy` responde «¿hay que HACER la charla?» — por obra y día, correcto para el recordatorio.
+  Pero el aviso colgaba SOLO de eso, así que en cuanto el facilitador emitía el Pre-Start, quien
+  fichaba después **no recibía nada**: ni modal, ni chip, ni banda. Nunca se le pedía firmar y
+  acababa trabajando en esa obra **sin constar en el documento de seguridad**.
+- Y aunque hubiera querido, no podía: `prestart.py` solo tenía `submit`, sin forma de añadir un
+  asistente a un Pre-Start ya emitido. La única salida era un SEGUNDO Pre-Start del mismo día y la
+  misma obra — dos documentos para una charla, y nada lo impide.
+- **`pendiente_de_firma(pid, grupo, persona)`** es la segunda pregunta: «¿tengo que firmarla YO?».
+  Convive con `hecho_hoy`, no lo sustituye; confundirlas fue justo el fallo.
+- **`firmar(ps_id, grupo, nombre, iniciales, firma_png, usuario)`** añade la firma.
+
+### ⚠️ Por qué se ANEXA una hoja en vez de regenerar el PDF
+Las firmas originales **no se guardan en ninguna parte**: la hoja guarda nombre, iniciales y un
+`firmado: true`, y la imagen vive solo dentro del PDF ya emitido (v383, por el tope de 50.000
+caracteres por celda). Así que regenerar el documento **borraría la firma de quien sí estuvo en la
+charla**. Se compone `original + anexo` con `pypdf` (ya era dependencia), y cada firma tardía queda
+con **su hora** y marcada `tarde: true`. Es además lo correcto de por sí: un documento de seguridad
+firmado no se reescribe, se le añade una hoja — como circula la hoja en papel.
+
+### Detalles que deciden
+- ⚠️ **Orden de escrituras** (lección de v343): se sube el PDF nuevo → se actualiza la fila → y
+  SOLO entonces se borra el viejo de Drive. Al revés, un fallo a mitad dejaría el Pre-Start sin
+  documento; así, en el peor caso sobra un archivo, que se ve y se recupera. Verificado midiendo el
+  orden real: `download → upload → add_document → delete`.
+- ⚠️ **El nombre se compara normalizado** (sin acentos, sin dobles espacios, sin may/min) porque los
+  asistentes se TECLEAN. Si aun así no casa, se pide firmar otra vez: ese es el fallo tolerable; el
+  intolerable es no pedirlo nunca.
+- ⚠️ **Al CAMPO se le corta el formulario** cuando solo le falta firmar: dejarle debajo el Pre-Start
+  completo invitaría a emitir el segundo documento del día. Gestión sí sigue viéndolo, porque a
+  veces hay una segunda charla de verdad (otro turno, otra cuadrilla).
+- ⚠️ `io` **no estaba importado** en `prestart.py` y el `BytesIO` iba dentro de un `try/except`: el
+  PDF se habría dejado de componer **en silencio**. Es el NameError latente de v370, cazado al releer.
+- El aviso no desaparece, **cambia de motivo**: banda, chip y modal pasan de «Falta el Pre-Start» a
+  «Fírmalo», con su propio `st.dialog` (el título va en el decorador, así que hacen falta dos).
+
+## Barrido de las 24 pantallas del admin + lo que destapó (v408)
+Se abrieron **las 24 pantallas del rol administrador** una a una, navegando por los
+botones del sidebar dentro de la MISMA sesión (`st-key-navsec_*` / `navsub_*` con
+`.click()`): la navegación por URL se descartó porque cada `location.replace` dentro del
+iframe lo dejaba en blanco y cada recarga cuesta un arranque. Ninguna dio excepción ni
+desborde de página.
+
+### ⚠️ Un barrido a un viewport que no es el de diseño no prueba lo que parece
+La primera vuelta corrió con el panel a **800×292**, que es lo que había. Sirve para «¿se
+rompe en estrecho?» y **no dice nada del ancho de diseño**, que es donde vive el admin
+(la interfaz del admin es para PC, decisión del usuario en v303). Es el error de v335,
+donde medí a 780 px porque `preview_start` me había reseteado el viewport. Se repitió la
+parte que depende del ancho —las que llevan tabla— a **1440×900**, midiendo el desborde
+**DENTRO de cada tabla** (`scrollWidth` vs `clientWidth` del `.dvn-scroller`), no el de la
+página: una tabla puede desbordar su caja sin que el documento se entere.
+
+### El hallazgo: en `Proyectos · Lista` lo urgente estaba al otro lado del scroll
+Contenido **1339 px** para **1054 visibles**. Moviendo el scroll y releyendo las
+cabeceras (la rejilla VIRTUALIZA: en el DOM solo existen las columnas en vista, así que
+el conjunto que aparece ES el visible), las tres que había que ir a buscar eran
+**`Usuarios`, `Situación` y `Alertas`** — justo las tres señales de «esto necesita
+atención». Y al desplazarte a verlas, **`ID` se salía por la izquierda**: mirabas qué
+obra va mal sin saber cuál es, con el nombre pudiendo repetirse (v306).
+
+### Lo que se probó y se DESCARTÓ, con el número delante
+| Variante | Contenido | Visible | Oculto |
+|---|---|---|---|
+| como estaba | 1335 | 1064 | **271** |
+| solo anchos, 13 columnas | 1164 | 1064 | **100** |
+| anchos + quitar `Tipo` | 1064 | 1064 | **0**… y **9 textos cortados** |
+La tercera «cabía» a costa de comerse 60 px del nombre de obra y 60 del cliente. Ver
+trampas nº21 y nº22: sin medir `measureText` eso pasa por bueno.
+
+### La cura, la de v398: no achicar, priorizar
+`ID` · `Proyecto` (**`pinned`**) · `Sin facturar` · `Avance` · `Ritmo` · `Avisos` ·
+`Estado` · `Equipo` · luego el contexto (`Cliente`, `Tipo`, `Inicio`, `Fin`, `Ppto`).
+Medido tras el cambio: **10 de 13 columnas visibles de entrada** (antes las de atención
+no estaban), **0 textos cortados**, y tras un scroll real de 255 px `ID` y `Proyecto`
+**siguen en su sitio**. Los anchos salen de medir el texto real más largo de cada
+columna, no de elegirlos a ojo.
+
+### Y el aviso del Pre-Start que señalaba al vacío
+El bloqueo de duplicado de v407 decía siempre *«fírmalo ARRIBA»*, pero colgaba de
+`hecho_hoy` (¿hay charla?) mientras el bloque de firma cuelga de `pendiente_de_firma`
+(¿me toca a mí?) — las dos preguntas que **v403 separó a propósito**, remezcladas en el
+texto. A quien ya constaba se le señalaba un bloque que no se estaba pintando. Ahora el
+texto se decide por `_pf`. ⚠️ Con una bandera **`_pf_ok`**: `_pf` también queda vacío si
+la consulta FALLA, y ahí no se puede afirmar «ya constas» — es el fallo de v375 en la
+otra dirección.
+
+### ⚠️ CORRIGE a v334: la barra de versión NO garantiza que TODO el código sea nuevo
+v334 dejó escrito que «si la barra dice v334, se está ejecutando v334». **Es demasiado
+fuerte.** Tras desplegar v408 la barra decía **v408** y `Proyectos · Lista` seguía
+pintando el orden de columnas de v407, con los mismos 285 px ocultos. Comprobado antes
+de culpar a nadie: el commit subido SÍ lleva el cambio (`git show HEAD:…`) y esa tabla
+la pinta una sola función (`cart_tbl` aparece solo en `_cartera_lista`, así que no es el
+error de v381 de mirar la función equivocada). La explicación está en cómo se mide:
+`_VERSION = _leer_version()` corre **al importar `home_ui`**, así que la barra prueba
+que **`home_ui`** se re-importó — no que lo hayan hecho los otros 50 módulos. Streamlit
+Cloud puede recargar unos y conservar otros en `sys.modules`.
+→ **Para afirmar que un cambio está corriendo, hay que ver el CAMBIO, no la versión.**
+La barra sirve para descartar («si dice la vieja, seguro que no»), no para confirmar.
+Y hasta que el proceso reinicie de verdad, lo desplegado no es lo que se ejecuta.
+
+### Verificación
+Guardián `verif_v408.py` sobre el PRINCIPIO y no sobre la forma (v392): toda señal de
+atención antes que todo contexto, `ID`/`Proyecto` pinned, y el texto «fírmalo arriba»
+colgando de `_pf`. ⚠️ Su primera versión daba **FALLO con el código correcto**: contaba
+también el `if _ya_hoy:` exterior, que es el PADRE del `if _pf:` — hay que mirar el `if`
+**más interno** que envuelve el literal. Probado contra el código roto en 3 casos (los
+caza). Suite entera: **58/58** (ver trampa nº23: 4 de los «rojos» eran de la consola).
+
+## Rejilla en el Panel de planificación (v410)
+Petición del usuario: *«ponle grid al panel de planificación para que sea más fácil la
+visualización»*. El board eran celdas-popover **flotando sobre blanco**: con 9 personas
+× 5-7 días, seguir una fila hasta el viernes o bajar por un día obligaba a ir contando
+con el dedo. Ahora las filas llevan línea, los días llevan línea y la cabecera se ancla
+con una más marcada.
+
+### Cómo se implementó sin reindentar nada
+La cabecera y las filas se envuelven en `st.container(key="roshead")` /
+`st.container(key="rosgrid")`, y el CSS cuelga de esas clases. ⚠️ Los contenedores se
+usan como **OBJETO** (`_head.columns(...)` / `_grid.columns(...)`), **no** con `with`:
+así el bucle de filas no hay que reindentarlo, que es exactamente la clase de cambio que
+rompió v120 y v148. Verificado en vivo que esa forma produce el MISMO DOM que el `with`.
+
+### Lo que hubo que medir (y por qué)
+Estructura real, medida antes de escribir una línea de CSS (v304/v332: un selector que
+no casa **no da error**, la app se ve «casi bien» y nadie lo nota):
+`.st-key-rosgrid` (**stVerticalBlock**) > **stLayoutWrapper** > **stHorizontalBlock**
+(la fila) > **stColumn** (el día).
+- ⚠️ **El borde inferior necesita `!important` y el derecho no.** Medido: sin él, la
+  fila salía en `0px rgb(250,250,250)` — ganaba una regla de Streamlit. Que una de las
+  dos reglas aplique no significa que apliquen las dos.
+- ⚠️ **Lo de DENTRO de una celda no es rejilla.** Un popover **cerrado** ya lleva su
+  `st.columns` (la franja horaria) en el DOM dentro de `.st-key-roscel_*`: sin excluirlo,
+  el editor de la celda saldría cuadriculado. Se excluye por el contenedor de la celda y
+  **no** con una cadena de hijos directos, porque el `stLayoutWrapper` intermedio es
+  reciente y esa cadena se rompe en silencio si Streamlit mete otro nivel (fallo de v327).
+  (El popover ABIERTO además se portalea fuera del contenedor, así que hay doble seguro.)
+- El `st.columns(2)` de la franja horaria se queda como `st.columns` **a propósito**: va
+  dentro de la celda y el CSS lo excluye.
+- Las verticales se subieron de `#eef1f5` a `#dfe5ec`: al primer intento eran
+  invisibles. ⚠️ Y para juzgarlo hubo que capturar a **escala 1:1** (viewport = tamaño de
+  la captura) y en **tema claro**: el panel escalaba 1440→800 y se comía las líneas de
+  1 px, y la mini-app arrancaba en tema oscuro, donde estos colores no dicen nada.
+
+### Verificación
+`verif_v410.py`: los contenedores existen con SU key, **todas** las columnas del tablero
+cuelgan de `_head`/`_grid` (y las de dentro del popover se identifican y se excluyen del
+chequeo), y el CSS trae sus reglas. ⚠️ Uno de sus chequeos daba **OK con la exclusión
+BORRADA**, porque miraba dos subcadenas que existen por otros motivos
+(`st-key-roscel_` está en el CSS de densidad y `border: none !important` en el de
+`pnm_`); se cambió por el selector completo. **Lo delató probar el guardián contra el
+código roto** — sin esa prueba habría quedado un chequeo que solo aprueba. Los 5 casos
+rotos se cazan. Suite entera: **59/59**.
+
+### Ofrecido y NO hecho (decisión del usuario)
+Franjas alternas por fila (zebra) y resaltar la columna de HOY. Las dos ayudan a leer un
+tablero largo, pero no se pidieron y la zebra compite con el color del trabajo, que es
+la señal principal del board.
+
+## Franjas alternas + columna de HOY en el Panel (v411)
+Las dos las pidió el usuario tras ver la rejilla de v410, y las dos sirven a lo mismo:
+**no perder el renglón** en un tablero de 8-20 personas × 5-7 días. La rejilla puso las
+líneas; esto ancla la vista.
+
+### La zebra va por KEY de fila, no por `nth-child`
+Lo natural sería `.st-key-rosgrid > [data-testid="stLayoutWrapper"]:nth-child(even)`.
+⚠️ **No se hace así**: ese wrapper es un nivel que Streamlit intercala y es reciente —
+una regla atada a él se rompe **en silencio** si mañana mete otro (es el fallo de v327),
+y una zebra que desaparece sola no da ningún error. Se usa un `st.container(key=
+f"rosrow_{_wk}_{pi}")` por fila y se pinta por su key: el MISMO mecanismo que el módulo
+ya emplea para el color de cada celda, que no depende de la estructura interna.
+
+### «Hoy» solo si cae en la semana que se está viendo
+`_hoy_idx` sale de comparar `R.fecha_de_dia(lunes, d)` con `clock.today(grupo)`. Si no
+aparece, **no se resalta nada**: marcar una columna al navegar a otra semana sería peor
+que no marcar, porque mentiría. Se tiñe la columna en el cuerpo y en la cabecera con
+`nth-child(i+2)` — la 1ª columna es «Persona» —, y ⚠️ eso es fiable porque se midió en
+producción que los hijos de una fila son **todos `stColumn`**, sin divs de separación.
+
+### ⚠️ La celda vacía tenía que dejar de tener fondo
+Con su `#f8fafc` propio tapaba la zebra y la franja de hoy **justo en las celdas
+vacías**, que son la mayoría del tablero — o sea, en el único sitio donde esas dos
+señales tienen espacio para verse. Pasa a `transparent`, conservando su borde punteado.
+
+### ⚠️ «hoy» va en una segunda línea, y eso salió de medir
+A 1440 la columna deja 136 px útiles y «Mié 26/08 · hoy» mide 85: cabría. Pero con la
+ventana estrecha la columna baja a **55 px**, donde ni la fecha sola (53) va holgada. En
+una segunda línea de 11 px no compite por ancho a ningún tamaño.
+⚠️ La primera medición la tomé con el viewport restaurado a «desktop» y concluí que NO
+cabía; repetida al ancho de diseño, cabía de sobra. Es el error de v335 otra vez —
+**medir al ancho equivocado da una decisión equivocada**, en las dos direcciones.
+
+### Dos guardianes que caducaron por este cambio (actualizados, no relajados)
+- **v410** exigía que las columnas colgaran literalmente de `_head`/`_grid`; ahora las
+  filas cuelgan de `_row`. Lo que la regla protege no es el nombre de la variable, sino
+  que **ninguna columna cuelgue de `st` directamente** — si lo hiciera, caería fuera de
+  los contenedores keyed y se irían rejilla, zebra y columna de hoy sin fallar nada.
+- **v301** exigía que el literal `style='{_CAB}'` saliera **2 veces**; con la variante de
+  hoy sale una. Lo que protege es que «Persona» y los días compartan el mismo estilo
+  base (antes Persona iba a la izquierda y los días centrados, y la fila no cuadraba),
+  y eso se comprueba ahora directamente.
+
+### Verificación
+`verif_v411.py`, probado contra el código roto en 4 casos (quitar el contenedor por
+fila, marcar hoy sin comprobar la semana, devolverle el fondo a la celda vacía, colgar
+la zebra del wrapper): los caza los 4. ⚠️ Uno de sus chequeos daba **FALLO con el código
+correcto**: miraba `"stLayoutWrapper" not in ...` y ese nombre aparece en un **comentario
+CSS dentro de la cadena de estilos**, que `tokenize` no quita porque para Python es parte
+de un string. Es la trampa nº2 (grep ≠ uso) en su variante más escurridiza. Suite entera:
+**60/60**.
+
+## La celda del Panel deja de estirar su fila (v412)
+Salió de mirar el tablero tras v411: una fila triplicaba a las demás. **Medido a 1440**
+—el ancho donde vive el admin— antes de tocar nada:
+```
+filas de 36 a 116 px · tablero 546 px
+peor fila = celda de 53 px (2 líneas) + NOTA de 61 px
+```
+⚠️ La primera medición la tomé al ancho del panel (~780) y daba **36–421 px y 1785 de
+tablero**: un problema 7,5× peor que el real. Habría dimensionado el arreglo para un
+caso que a la medida de diseño no existe. **Tercera vez en el día** que medir al ancho
+equivocado cambia la conclusión (v335).
+
+### El culpable no era la celda: era la nota
+61 px la nota contra 53 la celda — **ocupaba más que el trabajo que anota**. Pasa a UNA
+línea con elipsis y el texto completo en el `title` nativo: se acota lo que OCUPA, no lo
+que se puede saber (y sigue entero en el editor de la celda). El label de la celda se
+topa a 2 líneas.
+```
+antes:  108 · 144 · 38 px   (total 290)
+ahora:   63 ·  63 · 38 px   (total 164, −43%)
+```
+
+### ⚠️ El clamp NO se sostiene solo
+`-webkit-line-clamp` necesita las TRES propiedades (`display:-webkit-box`, `box-orient`,
+`overflow`) — con una sola no recorta y no da ningún error. Y aun con las tres, el
+navegador **blockifica** el `display` a `flow-root` porque el `<p>` vive dentro de un
+contenedor flex: medido, la única regla que toca `display` es la nuestra y el computed
+sale `flow-root`. En Chrome el clamp sigue recortando, pero la altura del tablero no
+puede depender de un comportamiento que no controlamos → **`max-height` como respaldo**
+(2 líneas × 1.2 × 12px = 28.8). Cinta y tirantes.
+
+### ⚠️ Lo que había que descartar antes de desplegar
+El selector `[class*="st-key-roscel_"] button p` **también alcanzaría a los botones del
+editor** de la celda, y un `max-height` ahí les cortaría el texto. Verificado en vivo:
+el popover ABIERTO se portalea FUERA de `.st-key-roscel_`, así que su `max-height` sale
+`none` y su texto no se corta. El editor queda intacto.
+
+### ⚠️ Y el `title` es un atributo, no solo texto
+`_esc` escapa `&`, `<` y `>` pero **no las comillas**. Una nota con una comilla no solo
+rompería el atributo: permitiría inyectar otros (`" onmouseover="…`). Se escapa también
+la comilla, y el guardián lo comprueba **leyéndolo del código**.
+
+### Verificación
+`verif_v412.py`, probado contra el código roto en 4 casos: los caza los 4 — pero solo
+tras arreglarlo. ⚠️ Su chequeo del escape **reproducía el `.replace` en el propio test**
+en vez de leerlo del código, así que seguía en verde con el escape BORRADO: un chequeo
+que pasa en vacío respecto a lo que dice auditar. Ahora comprueba por AST que la
+expresión del `title` lleva el reemplazo. Suite entera: **61/61**.
+
+## Homónimos en Planificación: dos personas, dos filas idénticas (v413)
+Salió de una pregunta del usuario —«¿ya está todo cerrado?»— y de mirar el tablero en vez
+de responder que sí. En el Panel había **dos filas «Mei Chen»**, dos personas distintas
+que se veían EXACTAMENTE iguales: al asignar la obra no había forma de saber a cuál se le
+estaba poniendo, en la pantalla cuyo único propósito es repartir el trabajo.
+
+⚠️ **`auth.etiqueta_usuarios` existía desde v319 y solo la usaba Nóminas.** Su propio
+docstring dice que el nombre PUEDE repetirse y que ya había mordido en Horas (v151). La
+Planificación seguía pintando `Nombre or Usuario` en sus **8 vistas**. Sexta aparición del
+patrón (v151 · v306 · v319 · v348): la regla se escribe una vez y no se lleva a las
+pantallas nuevas.
+
+### Hallazgo de propina: no era solo cosmético
+En `_asignacion_inteligente` el nombre es **clave de un diccionario de opciones**
+(`_opts = {f"{estado} {nom}": usr}`). Con dos homónimos del mismo estado la clave
+**colisiona y una persona queda IMPOSIBLE de elegir**, en silencio — el fallo de v147 y
+v150. El desempate no lo maquilla: lo arregla.
+
+### Lo que NO había que tocar (y se vio auditando ANTES de editar)
+- ⚠️ **`_ficha_rapida`** arma un deep-link con `gp_fichasel = f"{nom} ({usuario})"`. Con
+  la etiqueta quedaría «Mei Chen (mchen) (mchen)» y el parseo del destino se rompería.
+  Conserva el nombre CRUDO y pinta con una variable aparte. Es exactamente el fallo de
+  v308: cambiar lo que se MUESTRA y romper lo que se GUARDA.
+- ⚠️ El `nom` de **`_catalogo`** no es una persona: es el nombre de un TRABAJO
+  (`R.add_trabajo(grupo, num, nom, …)`). Un reemplazo por patrón lo habría arrastrado.
+Los dos se auditaron listando, por AST, **cada lectura de `nom` función por función**
+antes de cambiar una línea.
+
+### `_etq(staff, grupo)`
+Delega en `auth.etiqueta_usuarios` (una sola definición de la regla) y ⚠️ **desempata
+sobre TODO el grupo, no sobre la lista visible**: si se hiciera sobre `staff`, la misma
+persona sería «Mei Chen» en una pantalla donde está sola y «Mei Chen (mchen)» en otra —
+y una identidad que cambia de nombre según la pantalla no es una identidad. `list_users`
+está cacheada (v92) → 0 lecturas nuevas; si falla, degrada a lo visible.
+
+### Verificación
+`verif_v413.py`: las 7 vistas de personas desempatan, `_ficha_rapida` conserva el crudo,
+`_catalogo` queda fuera, y el ámbito es el grupo. Probado contra el código roto en 4 casos
+(los caza). ⚠️ Uno de sus chequeos daba **FALLO con el código correcto**: buscaba el
+literal `"{nom} ({usuario})"` y un f-string se descompone en trozos (`" ("`, `")"`) —
+hubo que mirar el árbol, no el texto. Tercera vez en el día. Suite: **62/62**.
+
+## El nombre de obra deja de ir al filo (v414)
+Pendiente que quedó de v408: la columna `Proyecto` medía **248 px** (232 útiles) y el
+nombre más largo del grupo («Stockland Wetherill Park — Instalación») ocupa **224**. Ocho
+píxeles de margen: un nombre 2-3 caracteres más largo se cortaba.
+
+### ⚠️ Y el corte es SILENCIOSO — comprobado, no supuesto
+Antes de decidir el ancho había que responder algo que cambia la respuesta: ¿glide dibuja
+«…» al no caber? Si la pusiera, el corte se notaría y el problema sería menor. Se montó
+una mini-app con un nombre largo en una columna estrecha y **se miró**: pinta
+`…Instalación y puesta en marcha fase` y ahí se acaba, **sin elipsis**. Un nombre a medias
+parece un nombre completo.
+⚠️ En v408 ya lo había afirmado, pero desde una prueba más débil (el hook recibía el texto
+entero, lo que dice qué se le PASA a `fillText`, no qué se ve). Ahora está mirado.
+
+### 272 es el máximo que no cuesta nada
+| ancho | contenido | oculto | columnas en la vista inicial |
+|---|---|---|---|
+| 248 (antes) | 1320 | 256 | **10** |
+| **272** | 1344 | 280 | **10** ← mismas |
+| 300 | 1372 | 308 | 9 (se cae `Tipo`) |
+El margen del nombre pasa de **8 a 32 px** (~5 caracteres) y no se pierde ninguna columna:
+solo hay 24 px más de scroll hacia lo que YA estaba fuera (`Inicio · Fin · Ppto`).
+
+### Lo que de verdad cierra el caso
+Ningún ancho fijo puede garantizar que quepa cualquier nombre. Lo que lo cierra es que al
+**seleccionar la fila**, la tira de acciones (v402) muestra el nombre **completo** — así
+que el nombre siempre es recuperable con un clic, aunque en la tabla salga cortado.
+
+## La nota del Panel: de UNA línea a HASTA dos (v415)
+v412 acotó la nota a una línea y bajó el alto del tablero un 30%. Al ir a cerrar el
+pendiente, **medir en producción cambió mi propia recomendación** (yo había dicho
+«esperar a verlo en uso»):
+```
+3 notas reales · 2 CORTADAS
+«cambia de obra a media mañana»   154 px de texto en 135 de caja  (faltan 19)
+«⚠️ se pisa: dos obras a la vez»  138 px en 135                   (faltan  3)
+«refuerzo de fin de semana»       136 px en 136                   (cabe justo)
+```
+A un **aviso** le faltaban **3 píxeles**. Y las notas de este tablero son avisos: cortarlas
+es cortar justo lo que hay que leer de un vistazo.
+
+### «HASTA dos», no «dos»
+Con `-webkit-line-clamp:2` la nota corta **sigue ocupando una línea** (14 px, medido en la
+mini-app), así que no se deshace lo que ganó v412: el alto extra solo lo pagan las filas
+con nota larga — hoy 2 de 8, no las 8. Es la diferencia entre acotar y estirar.
+⚠️ `max-height` de respaldo otra vez: el navegador **blockifica** el `display:-webkit-box`
+(sale `flow-root`, medido), así que el tope real lo pone él, no el clamp. Misma lección
+que el label de la celda en v412.
+
+### ⚠️ La mini-app NO reproducía el ancho, y se vio a tiempo
+En la mini-app la nota de 154 px cabía en una línea: sin el sidebar de 300 px, sus
+columnas son más anchas que las de producción. Lo que la mini-app SÍ valida es el
+mecanismo (clamp, tope, que la corta no crezca); el ancho sale de la medición en
+producción. **Separar qué prueba cada banco es lo que evita el OK en falso.**
+
+### Guardián caducado (actualizado, no relajado)
+`verif_v412` exigía literalmente `nowrap` + `ellipsis`, o sea UNA línea. Lo que protege no
+es el número de líneas: es que la nota **tenga un tope** y no pueda volver a estirar la
+fila sin control (medía 61 px, más que la celda). Reescrito sobre eso y probado contra el
+código roto: caza que la nota pierda el clamp o el `max-height`.
+
+## Las escrituras de Drive: eran 3, no 4, y ya solo queda 1 (v416)
+Llevaba varias respuestas arrastrando en la lista de pendientes «las 4 escrituras de
+Drive, sin ejercitar». Al ir a cerrarlo, **la foto del estado corrigió mi propia
+afirmación** — que es lo que pasa cuando se repite un pendiente sin volver a comprobarlo:
+
+| Función | Estado REAL |
+|---|---|
+| `expenses.upload_receipt` | **ya estaba ejercitada**: 2 gastos con recibo JPG y DriveID |
+| `credentials.upload_file` | 0 de 6 credenciales con documento → ejercitada AHORA |
+| `manuals.add_manual` | la hoja `Manuales` **ni existía** |
+| `manuals.delete_manual` | idem |
+
+Y Drive en general está más que rodado: **27 documentos con DriveID** (9 pre-start, 7
+planos, 3 informes, 3 fotos, 3 cálculos, 2 matrices).
+
+### Cómo se ejercitó sin poder ejecutarlo en local
+`drive_store.is_available()` da **False en local** (las credenciales `[gdrive]` viven solo
+en los Secrets del Cloud), así que la subida hay que hacerla contra la app desplegada. El
+panel del navegador no tiene herramienta de subida, pero **sí se puede inyectar el archivo
+en el `<input type=file>`** con `DataTransfer` + evento `change`, y Streamlit lo acepta
+igual que una subida humana. Para el `text_input` hace falta el **setter nativo** de
+`HTMLInputElement.prototype.value`: asignar `.value` a secas no lo ve React.
+⚠️ Y la tabla de Usuarios es un grid en canvas, donde los clics sintéticos no llegan (v375
+otra vez). El camino que sí funciona es de BOTONES: Panel → clic en el nombre → ficha
+rápida → «Ver ficha completa».
+
+### Verificado de ida y vuelta, no solo «no dio error»
+- **Subida**: fila `CR-0007` con `DriveID` real, y el archivo EN Drive —
+  `apatel_White_Card_PRUEBA-drive-v416.pdf`, 394 bytes (los mismos que se inyectaron) y
+  Drive leyendo su contenido (`"PRUEBA v416 - credencial"`), o sea PDF íntegro y válido.
+  La app además compone el nombre `{usuario}_{tipo}_{archivo}`.
+- **Borrado**: la hoja vuelve a 6 filas **y el archivo desaparece de Drive** (`Requested
+  entity was not found`). Limpia las dos cosas, sin dejar basura — que era la duda.
+- Producción queda **sin rastro** de la prueba.
+
+### Lo único que queda
+`manuals.add_manual` / `delete_manual`: son del panel **📚 Manuales del PROPIETARIO**
+(`dacox` / `Arcantox`), y la sesión de trabajo entra como administrador. No se puede
+ejercitar sin esa cuenta. Es la parte de menor riesgo: un banco de documentos para el
+asistente, no toca dinero ni planificación.
+
+## Manuales ejercitados: se cierra el inventario de escrituras (v417)
+Última de las 75. `manuals.add_manual` / `delete_manual` son del panel **📚 Manuales del
+PROPIETARIO**, así que hizo falta la sesión de `dacox`. Ciclo completo, verificado en las
+dos puntas:
+- **Alta**: «Manual agregado: **2 fragmentos indexados**» · hoja `Manuales` **creada**
+  (no existía) en el **MAESTRO** —es hoja global (v359)— con
+  `MAN-20260828164513 · 2 frags · dacox` · y en Drive `MAN-20260828164513.json.gz`
+  (653 B, `application/gzip`). ⚠️ Confirma el diseño de v91: a Drive **no va el PDF**,
+  van los FRAGMENTOS troceados y comprimidos.
+- **Borrado**: hoja a **0 filas** y el archivo **fuera de Drive** (`Requested entity was
+  not found`). Y el botón Eliminar estaba **deshabilitado** hasta marcar «Confirmo» — la
+  protección de v139, funcionando.
+- Producción sin rastro.
+
+### ⚠️ Tres obstáculos de método, y lo que enseñan
+1. **Un PDF mal formado habría culpado al código equivocado.** `add_manual` extrae texto
+   con pypdf, así que hacía falta un PDF *de verdad*. Se comprobó ANTES: un PDF construido
+   a mano sin `startxref` **revienta pypdf** (`PdfReadError`). De haberlo inyectado, el
+   fallo habría parecido de `add_manual`.
+2. **El puente de JS corrompe los payloads grandes.** Pasar 3.5 KB de base64 en un solo
+   `javascript_exec` llegó alterado y `atob` falló. El `fetch` a un servidor local tampoco
+   sirve: la app es **https** y el navegador bloquea `http://127.0.0.1` por *mixed
+   content*. Lo que funcionó: **trocear en 6, acumular en `window`, y verificar antes de
+   usar** — longitud del base64 (3580), bytes decodificados (2683) y que empiece por
+   `%PDF` y acabe en `%%EOF`. Sin esa verificación, un trozo corrupto habría subido un PDF
+   roto y el diagnóstico habría ido al sitio equivocado.
+3. **El checkbox de Streamlit no se marca clicando el `<input>`.** Ni el `<label>`: el
+   `input` está oculto (1 px) y quien recibe el clic es el `div` que dibuja la casilla.
+   Hubo que despachar la secuencia `pointerdown/mousedown/pointerup/mouseup/click` sobre
+   ese div. Misma familia que el chevron de v294: **el elemento que se ve no es el que el
+   DOM dice**.
+
+### Falsa sospecha descartada mirando el código
+El nombre que tecleé no se aplicó (quedó el del fichero). No es un fallo: `auth_ui` hace
+`nm = nombre.strip() or up.name.rsplit(".",1)[0]` — cae al nombre del archivo cuando el
+campo va vacío, y mi texto no llegó a enviarse. La app hizo lo correcto.
+
+### Estado del inventario
+**75 de 75 escrituras ejercitadas**, salvo las que mandan avisos a personas reales
+(`notify_expiring`, `near_miss=YES` / check en NO), excluidas a propósito y con la lógica
+cubierta por `verif_alarma_no.py` con el envío interceptado.
+
+## El Pre-Start deja de pedir lo que ya sabe (v418)
+Dos peticiones del usuario sobre el Pre-Start, y una tercera pieza que hace falta para
+que la segunda no rompa nada.
+
+### 1. El proyecto: manda el FICHAJE, no el rol
+*«Si ya estoy fichado en un proyecto, no tengo por qué buscarlo».* La preselección
+**existía desde v170**… detrás de un `if rol == "campo":`, porque aquella versión dio por
+hecho que «admin/propietario no fichan». ⚠️ **Es falso desde v150**, donde el fichaje pasó
+a ser de dos relojes para TODOS los roles — y el administrador ficha a diario (comprobado
+en pantalla: jornada abierta imputada a `prueba2`). Ahora la preselección cuelga de tener
+**fichaje abierto**. Quien no ficha (el propietario) sigue eligiendo de la lista.
+**Lección: una condición de ROL que en realidad quería decir «quien ficha» envejece en
+cuanto cambia quién ficha.**
+
+### 2. Los asistentes: se eligen, no se teclean
+Antes cada asistente era un `text_input`. Ahora salen de la **cuadrilla**: los
+**asignados** al proyecto **+ los que han fichado hoy** en esa obra (decisión del
+usuario: la unión, porque los asignados son el plan y los fichados la realidad), con los
+que han fichado **preseleccionados**. Se conserva la vía de **nombre libre** para quien no
+está de alta —un subcontratista, una visita—: el formato en papel admite a cualquiera.
+⚠️ 0 lecturas nuevas: `list_users` y los fichajes del día ya están cacheados.
+⚠️ **La firma se indexa por PERSONA, no por posición.** Con `ps_firma_{i}`, añadir o
+quitar a alguien recolocaba los índices y la firma ya dibujada pasaba a otro — en el
+documento donde la firma es justo lo que vale.
+
+### 3. ⚠️ Y por eso hay que guardar el LOGIN del asistente
+Los asistentes se casaban **solo por nombre**, y el nombre puede repetirse (dos «Mei
+Chen», v413). Mientras se tecleaban, dos homónimos podían escribirse distinto; **con la
+lista producen entradas idénticas**, así que la mejora 2 habría introducido el fallo:
+firmar una apagaría el aviso de la otra. Se guarda `usuario` junto al nombre y
+`pendiente_de_firma` casa **primero por login**.
+- ⚠️ Se guarda el **nombre limpio + el login aparte**, nunca la etiqueta `Nombre (login)`
+  de v413: esa etiqueta es para ELEGIR en la lista. Meterla como nombre rompería el match
+  — es el fallo de v308.
+- ⚠️ **El respaldo por nombre hubo que ACOTARLO**, y esto lo cazó la prueba, no la
+  lectura: con el respaldo comparando contra todos los asistentes, «Mei Chen» casaba por
+  nombre y **el desempate por login no servía de nada** (el primer intento falló ese
+  caso). Ahora, si quien pregunta tiene login, solo puede casar con asistentes que NO lo
+  tengan (registros anteriores a v418 e invitados a mano).
+- **Compatible**: lo ya registrado no tiene `usuario` y sigue casando por nombre;
+  verificado, junto al caso de no pasar `usuario` en absoluto.
+
+### Verificación
+`verif_v418.py`, probado contra el código roto en **5 casos** (volver a atar la
+preselección al rol, quitar el multiselect, dejar de mirar quién fichó, devolver el
+respaldo por nombre a «todos», y dejar de guardar el login): los caza los 5. Suite:
+**63/63**.
+
+## Una sola ubicación por proyecto: la del mapa (v419)
+El usuario: *«hay una ubicación en el mapa y otra en los datos, y no tiene por qué haber
+2… hay proyectos que se ubican en el mapa pero en los datos no tienen ubicación, y las
+otras partes de la app no ven nada»*. Diagnóstico exacto.
+
+### Por qué el síntoma es tan asimétrico
+El **texto** (`Ubicacion`) es lo que lee casi todo — Home, Ruta del día, Pre-Start,
+notificaciones y el detalle —; las **coordenadas** (`Lat`/`Lng`) solo las usan el mapa de
+Home, la ruta y el propio picker. Así que un proyecto con pin y sin texto **parece no
+estar ubicado** en todas partes menos en el mapa.
+
+### ⚠️ La causa: v272 unificó la MITAD
+v272 ya había resuelto esto al **crear** («la Ubicación se toma de la dirección que
+buscaste en el mapa → ya no se pide dos veces»), y la **edición** se quedó con el
+`text_input("Ubicación")` suelto, desconectado del pin que vive fuera del form. Dos
+entradas para el mismo dato, sin nada que las case: se podía guardar cualquiera sola.
+**Media unificación es justo lo que produce el desajuste.**
+Y el picker ya guardaba la dirección elegida en `{key}_addr` con el comentario *«para
+reusarla como texto de Ubicación»* — escrito y sin leer, el patrón de v131/v148.
+
+### Lo que se hizo (decisión del usuario: el mapa manda)
+El campo pasa a **solo lectura** y sale del pin, como al crear. Más el aviso del caso
+inverso: obra **con dirección y sin pin** (hoy `PRJ-0016`), que no aparece en ningún mapa
+y hasta ahora no lo decía nadie.
+- ⚠️ **NO se geocodifica sola** (decisión del usuario): un pin inventado que nadie ha
+  mirado puede mandar a alguien al sitio equivocado, y esto es una app de obra. Se avisa
+  y se ubica con un botón.
+- ⚠️ **El texto solo se pisa si el pin se TOCA.** Hay direcciones puestas a mano
+  («Gagiope», «259 Cleveland Redfern») que el geocoder reescribiría: cambiarlas en frío
+  al guardar cualquier proyecto es el fallo de v360.
+- ⚠️ **Solo vale `_addr`, nunca `_q`.** `_q` es la caja de búsqueda: si alguien teclea
+  media dirección y no pulsa Buscar, ese texto a medias acabaría siendo la ubicación de
+  la obra. (Al crear sí se usa `_q` de respaldo, porque allí no hay valor previo que
+  conservar — la diferencia es deliberada.)
+
+### Medido antes de tocar
+15 proyectos con las dos cosas · **1 con texto y sin pin** · **0 con pin y sin texto**. O
+sea: el caso que el usuario describe es posible por diseño pero hoy no se da; el que sí
+está pasando es el inverso. Se dijo tal cual en vez de dar por buena la premisa.
+
+### Verificación
+`verif_v419.py`, probado contra el código roto en 3 casos (devolver el campo editable,
+dejar que `_q` pise el texto, quitar el aviso): los caza los 3. Suite: **64/64**.
+
+## Dar de alta un cliente sin salir de la cotización (v420)
+Petición del usuario: *«si estoy haciendo una cotización, que no tenga que salirme porque
+es para un cliente nuevo»*. El selector solo ofrecía fichas existentes y, si NO había
+ninguna, la pantalla hacía **`return`** con un «créalos en Contactos»: el primer
+presupuesto de un cliente nuevo era imposible sin pasar antes por otra sección.
+**Cotizar es lo primero que se hace con un cliente nuevo** — pedir la ficha de antemano
+es el orden al revés.
+
+Ahora el selector trae **➕ Nuevo cliente** con nombre, contacto, teléfono y email, y la
+ficha se crea en Contactos al guardar.
+
+### ⚠️ La ficha se crea ANTES, y si falla no hay cotización
+Aquí no vale el «Otro (escribir uno nuevo)» de los proyectos, que guarda el cliente como
+TEXTO suelto sin ficha (de ahí los clientes `vd`/`ci` que aparecieron en v357). Una
+cotización necesita **`ClienteID`**: es lo que usa `aceptar_y_crear_proyecto` (v354) para
+que la obra nazca con su cliente, y sin él, facturarla después no encuentra la ficha.
+Por eso el orden es: alta → si sale bien, cotización. Nunca al revés.
+
+### ⚠️ Un nombre duplicado no puede dejar al usuario tirado
+`create_cliente` no admite dos fichas con el mismo nombre en un grupo. Fallar ahí dejaría
+al usuario con la cotización entera escrita y sin poder guardarla, así que se **reutiliza
+la ficha existente** y se dice (buscándola también entre las inactivas). Es coherente con
+la regla que la propia función impone: dentro del grupo, ese nombre es UNO.
+
+### ⚠️ Y las keys del formulario se limpian en las DOS salidas
+Sin eso, la siguiente cotización abre con el nombre del cliente anterior ya escrito — y
+enlazarla al cliente equivocado es de las cosas más caras de deshacer.
+
+### Verificación
+`verif_v420.py`, probado contra el código roto en 4 casos: los caza los 4 **tras
+corregirlo**. ⚠️ El chequeo de la limpieza pedía «cada key aparece ≥ 2 veces», y eso lo
+pasaba el código con la limpieza BORRADA de una de las dos salidas (crear el widget +
+limpiar en la otra ya suman 2). Se cambió a comprobar **por bloque**: las dos salidas
+deben limpiar las cuatro keys. Otra vez, lo destapó probar el guardián contra el código
+roto, no leerlo. Suite: **65/65**.
+
+### Ejercitado EN PRODUCCIÓN de punta a punta
+Método de v344 (foto en solo lectura → ejercitar → verificar leyendo → limpiar → segunda foto):
+- **Alta**: cotización `COT-0008` con cliente nuevo → ficha **`CLI-0008`** en Contactos con los
+  cuatro campos, y la cotización enlazada por **`ClienteID = CLI-0008`** — no por texto suelto,
+  que es justo el punto de la versión.
+- **Duplicado**: segunda cotización tecleando `zzz prueba V420` (mismo nombre, distinto may/min) →
+  **una sola ficha** y `COT-0009` apuntando también a `CLI-0008`. La rama que evita dejar al
+  usuario con la cotización escrita y sin poder guardarla funciona con datos reales.
+- Producción **sin rastro**: las 3 filas borradas, `Clientes` y `Cotizaciones` de vuelta a 7.
+
+### ⚠️ Confirma otra vez la corrección de v334, y la afina
+Con v420 desplegado, la **barra lateral decía v420** (la lee `app.py`, que sí se re-ejecuta) y el
+**topbar decía v419** (`home_ui._VERSION`, congelado al importar). O sea: Streamlit Cloud recargó
+unos módulos y conservó otros — y **`quotes_ui` era el nuevo**, como demostró que la opción
+`➕ Nuevo cliente` estuviera ahí. Las dos direcciones fallan: la versión vieja no prueba que el
+cambio no corra, y la nueva no prueba que corra. **Solo se comprueba mirando el CAMBIO.**
+
+### ⚠️ Y una trampa de sonda evitada
+La app se sirve **dentro de un iframe** (`/~/+/`) en la URL pública, así que `document.body` del
+documento superior sale **vacío** y cualquier `querySelector` da 0 — un «no está» en falso, la
+trampa nº12. Se resuelve navegando directamente a `…/~/+/`, que deja la app como documento
+superior. Y las opciones de un `selectbox` **no son `li`**: viven en un
+`div[data-testid="stSelectboxVirtualDropdown"]`, así que buscarlas como `li[role="option"]` daba
+**0 opciones** con el desplegable abierto (`aria-expanded=true`) y ahí estaban las seis.
+
+## LOCALIZACIONES INTERNAS — el cerrojo (v422)
+Petición del usuario: *«no todos los usuarios trabajan en campo, hay usuarios que
+trabajan en la oficina/almacenes que deben poder hacer clock in/out, pre-start y gastos
+asociados a la administración… como un proyecto indefinido, con el seguimiento que ya
+tenemos pero sin curva S ni actividades programadas»*.
+
+El 80% de la fontanería ya existía (fichar a un proyecto, pre-start por proyecto, gastos
+por proyecto). Lo que faltaba no era funcionalidad: era **el cerrojo que impide que una
+localización se cuele en el dinero de obra**. Esta versión es solo eso — sin UI nueva.
+
+### Medido antes de construir, en la hoja real
+| | |
+|---|---|
+| **172 h** de jornada pagadas **sin imputar a ninguna obra** (de 1.739,5 h) | el hueco que se venía a tapar |
+| **0 de 13 gastos sin `ProyectoID`** | no había forma de cargar un gasto administrativo: todo gasto exigía una obra |
+
+### El modelo: una familia dentro de `Tipo`, sin columna nueva
+```
+TIPOS          = Instalación · Delivery · Ripout · Otro      (obra, se factura)
+TIPOS_INTERNOS = Oficina · Almacén · Taller                  (interno, NUNCA se factura)
+es_interno(prj) = Tipo in TIPOS_INTERNOS                     ← UNA sola definición
+```
+Da la subclasificación gratis y ningún selector de obra las ofrece por accidente. Sin
+actividades ni cronograma **declarado**, no por descuido. Y estado propio
+**Abierta/Cerrada**: sin actividades el avance es 0 para siempre y la máquina de estados
+de obra las dejaría eternamente en «Planificado», que no significa nada.
+
+### El cerrojo es el DEFAULT, no 59 parches
+`list_projects(..., incluir_internos=False)` protege los **59 call-sites** de golpe —
+mismo patrón que `incluir_archivados` (v149)— y solo quien las necesita las pide. Los
+call-sites se clasificaron uno a uno, como en v149:
+- ⚠️ **Resoluciones por identidad**, que se romperían EN SILENCIO: `project_hours_bulk`
+  (las horas fichadas al almacén se perderían de la cuenta), `roster.trabajos_idx` (su
+  celda del tablero saldría **muda**, sin nombre ni color), la agenda de HOME, el
+  buscador y `plan_data.del_proyecto`.
+- **Dónde se ficha y se trabaja**: `list_projects_for_field`, fichaje, pre-start, roster
+  e inventario — *el almacén es justo donde están las cosas*.
+- Y **nadie que hable de dinero de cliente, cronograma o cartera**.
+
+⚠️ `get_project` NO pasa por el filtro (va directo a los registros), así que resuelve
+cualquier ID: el cerrojo no puede dejar una localización inalcanzable por su ID.
+
+### ⚠️ Dos decisiones de dinero que NO son obvias
+1. **`group_expenses` SÍ las incluye** (marcando `interno: True`), y `group_profitability`
+   las descarta. Excluirlas del costo del grupo repetiría el fallo de v310 con los
+   archivados — y peor: `_ids` se construye desde esa lista, así que sus compras se
+   habrían contado como **HUÉRFANAS**, avisando de «$X en compras sin proyecto» sobre
+   dinero perfectamente imputado.
+2. **`jornada_y_proyecto` y `group_hours` separan `interno` de `proyecto`.** No es
+   presentación: `conciliacion_mo` llama `cargado` a `proyecto × tarifa` y lo rotula
+   «cargado a obras», que en v313 el usuario definió como *lo que se le cobra al
+   cliente*. Sin separar, el primer fichaje en la oficina habría inflado esa cifra con
+   overhead que nadie factura. La cadena de v313 **sigue cerrando**: lo interno pasa a
+   contarse como jornada no imputada, que es exactamente lo que es.
+
+### Quién puede fichar en una localización (decisión del usuario)
+*«solo perfiles de administración y usuarios que se asignen en momentos particulares
+mediante la planificación»* → dos vías, y **ninguna inventa un rol ni una columna**:
+1. **Perfil de oficina = asignado permanente** (`CampoAsignados`), el mecanismo que ya
+   decide qué ve cada quien. Un almacenero no puede ser rol `administrador` (vería las
+   finanzas).
+2. **Asignado por el roster**: v218 ya permite asignar un PRJ directo en el tablero.
+   Ahora entra también **al selector** del fichaje, no solo como el botón de atajo de
+   v274/v374 — si no, quien pasa la mañana en el almacén tiene que acordarse de pulsarlo.
+⚠️ **Y se cierra un agujero que ya existía**: el fallback de `_proyectos_para` daba
+**todos** los proyectos del grupo a un usuario de campo sin asignaciones. «Solo quien se
+asigne» no se cumplía ni para las obras; ahora al menos lo interno no se regala.
+
+### Verificación
+1. **Ninguna cifra actual se mueve**: foto de 18 agregados (cartera, gastos, P&L,
+   rentabilidad, conciliación, horas por persona, pendiente por proyecto, gaps…) con el
+   código NUEVO contra el VIEJO (`git stash`, no de memoria) → **18/18 idénticas**, con
+   tolerancia FÍSICA porque hay sesiones abiertas corriendo contra el reloj (v363).
+2. ⚠️ **Pero eso solo prueba que con cero localizaciones nada cambia** — un
+   `incluir_internos` que no filtrara daría lo mismo (el paso en vacío, trampa nº1). La
+   prueba positiva es una localización REAL: creada, con un gasto de $500 y 3 h
+   fichadas. No sale en cartera/facturación/SPI/resultado; sí en `list_locations`, roster
+   (con su nombre) y fichaje; su gasto suma al grupo, marcado interno y **sin contarse
+   huérfano**; y las 3 h van a `interno` ($120) dejando «cargado a obras» **intacto**.
+   Producción devuelta a 16 proyectos, 13 gastos y 496 fichajes.
+3. Guardián `verif_v422.py` en las **DOS direcciones** (quién NO puede pedirlas y quién
+   DEBE seguir pidiéndolas), probado contra 6 versiones rotas: las caza las 6. Suite: **66/66**.
+
+### ⚠️ Tres tropiezos de método, los tres míos y los tres ya conocidos
+- **La primera foto salió TODA a cero** y casi la doy por buena: sin `session_state.auth`
+  el cerrojo de aislamiento de v351 bloquea toda lectura, así que comparar dos fotos de
+  ceros no prueba nada. Hay que **simular la sesión**.
+- **El script escribió el JSON DENTRO del repo** (`os.chdir` + ruta relativa). Lo delató
+  `git status`. Es el error de v377: una exportación de datos nunca va ahí, porque el
+  deploy hace `git add` de todo.
+- **Regla v135, dos veces en el mismo script**: `expenses.add` devuelve `(ok, MENSAJE)`,
+  no `(ok, id)` — así que la limpieza borró 0 gastos y **dejó $500 sueltos en
+  producción**; y `timeclock._get_worksheet()` devuelve `(ws, err)`, no el worksheet.
+  Además la limpieza por `ProyectoID` **no alcanza la fila de JORNADA**, que por
+  definición no lo tiene, y dejó 3 h sueltas. Las tres se corrigieron a mano.
+
+### Pendiente (v423 · v424)
+v423: sub-pestaña **🏢 Localizaciones** y su ficha (alta, horas por persona, gastos,
+pre-start, archivos), más `INTERNO_CERRADA` en el selector de estado y decidir qué ve el
+campo en «Mis proyectos» — hoy `render_field_projects` las excluye a propósito, para no
+enseñar una tabla de avance que no aplica. v424: el overhead **visible** («M.O. interna»
+al lado de «cargada a obras», gasto de estructura), que es donde las 172 h dejan de ser
+un hueco anónimo.
+
+## Localizaciones internas: su sección (v423)
+v422 puso el cerrojo de datos. Eso solo las dejaría **inalcanzables** —se podrían crear
+y no habría forma de verlas—, que es media aplicación de la regla v340. Esta es su cara
+visible: sub-pestaña **🏢 Localizaciones** en Proyectos (sección propia, decisión del
+usuario, para que la cartera de obras quede limpia y ninguna vista futura tenga que
+acordarse de excluirlas).
+
+- **Lista**: 4 KPIs (localizaciones abiertas, horas trabajadas «no se cargan a obra»,
+  gasto de estructura «no se factura», personas) + tarjeta-botón por sitio con horas,
+  gasto, asignados y avisos ANTES de abrir (patrón v223).
+- **Alta**: pide MUCHO menos que una obra, y ese es el punto — sin NS, sin fechas, sin
+  presupuesto, sin cliente y sin margen. `create_project` sin `activities` la deja sin
+  cronograma y `derive_estado` la marca «Abierta» por su tipo.
+- **Ficha** con el segmentado del kit (v316): 👥 Equipo (quién ha fichado y cuánto, con
+  su costo rotulado como estructura) · 💰 Gastos (reusa `render_expenses`) · 🦺 Pre-Start ·
+  📎 Archivos (reusa `_archivos_section`) · ✏️ Datos (editar, **Cerrada**, archivar).
+- **El campo** ve su sitio en «Mis proyectos» —con avisos, recibos y archivos— pero **sin
+  la pestaña «Avance»** ni la barra de progreso: no tiene actividades, así que sería una
+  tabla vacía y un 0% permanente. Sus tarjetas muestran Tipo y Responsable en vez de
+  Avance y Cliente.
+
+### ⚠️ Cuatro suposiciones mías rotas, todas por ejecutar en vez de leer (regla v135)
+| Supuse | Es |
+|---|---|
+| `labor_breakdown(...)["personas"]` | **`["items"]`**, y cada fila trae `usuario`, no el nombre |
+| `prestart.list_for(pid)` | **no existe** — es `list_prestarts(pid)`, de un solo argumento |
+| `near_miss == "YES"` | es un **BOOL**. Comparado con `"YES"` daba SIEMPRE False → **habría pintado en verde un pre-start con incidente**, en la única pantalla donde ese semáforo sirve |
+| `E` y `theme` disponibles | en `projects_ui` se importan **DENTRO de cada función** (patrón v342): el bloque nuevo los usaba sin importarlos → **NameError al abrir la pantalla**. Lo cazó el guardián de v322, no yo |
+
+⚠️ Y mi propio chequeo de nombres libres dijo «ninguno» porque recogía los imports de
+CUALQUIER nivel del árbol — el mismo autoengaño de v342/v366. El de v322 lo hace bien
+porque compara el ÁMBITO, no la presencia.
+
+### Verificación
+`verif_v423.py`: la sub-pestaña existe **y el despachador compara contra el ID exacto**
+(un display en vez del ID navega a ninguna parte — el fallo real de v303); la pantalla no
+usa cronograma, SPI, margen ni facturación, y el alta no escribe campos de obra; el
+cerrojo de aislamiento de v351 va **después** de traer el objeto y **antes** de pintar; el
+alta pasa `tipo` y NO `activities`; y al campo se le recorta «Avance» solo si es interna.
+Probado contra **8 versiones rotas**: las caza las 8 — pero dos solo **tras afinarlo**:
+- ⚠️ «al campo se le devuelve la tabla de avance» pasaba, porque yo comprobaba que
+  `es_interno` APARECIERA y la función también lo usa para las tarjetas. Se cambió a
+  estructural: las opciones del menú salen de una **variable** (una lista literal no se
+  puede recortar) y hay un `if es_interno(...)` que la reasigna.
+- ⚠️ Un chequeo daba **FALLO con el código correcto**: pedía `"TIPOS" in _attrs` para
+  luego negarlo, y los atributos son nombres exactos (`TIPOS_INTERNOS` no contiene a
+  `TIPOS`) — el test fallando por su propia aritmética, como en v363/v372.
+Suite: **67/67**.
+
+## ⚠️ Las 4 tarjetas KPI de Localizaciones salían INVISIBLES (v424)
+Verificando v423 en producción: la sección renderizaba, el caption y la lista estaban…
+y de los **4 KPIs no había ni rastro** en el texto de la pantalla.
+
+**Causa:** `_kpi_card` **DEVUELVE** el HTML de la tarjeta, no la pinta. Yo escribí
+`with k[0]: _kpi_card(...)` dentro de `st.columns(4)`, que es código **válido**, no
+lanza, no rompe el layout — y descarta el string. El patrón correcto es el que usa el
+resto del repo: construir la lista y pintarla de una vez con `st.markdown(...,
+unsafe_allow_html=True)`.
+
+⚠️ **Ningún guardián lo vio, y no podían**: no hay error que atrapar. Lo cazó **mirar la
+pantalla**, igual que el `:material/schedule:` en crudo de v375. Es la regla v135 por
+quinta vez en esta tanda — comprobar qué DEVUELVE una función, no solo cómo se llama.
+
+**Guardián nuevo, y general**: por AST, ninguna llamada a `_kpi_card` en TODO el repo
+puede ser una sentencia suelta (`ast.Expr`) que tire su valor. Barrido: 0 casos hoy.
+Probado contra el código roto: lo caza. Suite: **67/67**.
+
+## El overhead deja de ser un hueco anónimo (v425)
+v422 separó el DATO y v423 le dio su sección, pero en Finanzas seguía sin verse: las
+**172 h** de jornada que nadie imputa a una obra caían en «sin asignar» junto a los
+traslados, y el gasto de la oficina se sumaba a un KPI que se llama **«Costo cargado a
+obras»** — o sea, mintiendo, exactamente lo que v422 evitó en las horas.
+
+- **Finanzas · Horas**: KPI **«En estructura»** (horas) + el pie «+ $X interna» bajo
+  «M.O. cargada a obras», columna nueva en la tabla y el caption que reparte la jornada
+  en traslados vs estructura.
+- **Conciliación**: fila de desglose ⚠️ **sangrada y en gris**, porque es el desglose de
+  «pagadas y no cargadas» y **no un sumando nuevo** — añadirla a la cadena la
+  descuadraría, y la cadena de v313 cierra.
+- **Finanzas · Gastos**: KPI **«Gasto de estructura»** aparte, con su desglose
+  (mano de obra + compras) y el aviso de que no entra en el % consumido pero sí en el
+  P&L. La torta parte la mano de obra en «(obras)» y «(estructura)» para seguir sumando
+  el grupo entero — si no, mezclaría dos ámbitos y dejaría de cuadrar con nada, que es
+  el fallo de v310 en versión nueva.
+
+### ⚠️ Todo lo nuevo es CONDICIONAL
+Sin localizaciones, ninguna tarjeta, columna ni fila aparece: las tres pantallas quedan
+**idénticas**. El guardián lo comprueba por AST (que cada elemento cuelgue de un
+`if … > 0`), no de palabra.
+
+### `_partir_gasto(ge)` — la aritmética, en una función pura
+Se extrajo de la vista **para que el guardián ejercite la de verdad en vez de
+reproducirla** (el error de v412, que reprodujo un `.replace` en el propio test y lo
+dejó pasando con el código roto). Verificado con datos reales y simulados:
+- **INVARIANTE**: `total_obra + total_int` es exactamente el costo del grupo de antes de
+  v425 → sin localizaciones no se mueve ni un número (comprobado: $81.657,96).
+- ⚠️ Las compras **HUÉRFANAS se quedan del lado de obra**: no se sabe de quién son, y
+  llamarlas estructura sería afirmar algo que nadie sabe. Por eso `compras_obra` se
+  calcula RESTANDO las internas al total del grupo, no sumando las de obra — así se
+  conserva la invariante de v310 y ninguna compra se pierde.
+
+### Verificación
+`verif_v425.py`, probado contra **9 versiones rotas**: las caza las 9 — pero **tres solo
+tras afinarlo**, y las tres por el mismo motivo (un localizador flojo):
+- buscaba la vista de la conciliación por su **docstring** y no la encontraba (empieza
+  por «El puente entre…») → **rojo que no existía**; ahora va por nombre;
+- comprobaba `"interno"` como **subcadena del fuente** de `group_hours`, y borrando la
+  clave del resultado quedaban otras apariciones (`a["interno"]`, `_ids_internos`) → el
+  chequeo pasaba con la separación ROTA;
+- y al mirar «todos los dicts» de la función seguía pasando, porque el **acumulador**
+  interno también tiene esa clave. Ahora mira el dict que la función ENTREGA.
+
+⚠️ Y el guardián de v322 me cazó **el mismo fallo de v423 por segunda vez**: `theme`
+usado sin importar en `render_group_hours` (en este módulo los imports son locales,
+patrón v342) — NameError que solo aparecería al abrir la pantalla. Suite: **68/68**.
+
+## ⚠️ UNA FACTURA ANULADA CONTABA COMO INGRESO EN EL P&L (v426)
+Encontrado ejercitando el **ciclo de negocio completo** contra la hoja real (cliente →
+cotización → obra → horas → compra → factura → cobro → nómina → P&L). No lo encontró
+leer el código: lo encontró que **una cifra no cuadraba**.
+
+```python
+facs = [f for f in INV.list_facturas(grupo)          # excluye anuladas   ← FALSO
+        if _en_rango(f.get("Fecha"), desde, hasta)]
+```
+El comentario y el docstring afirmaban un filtro que **no existe**: `list_facturas` no
+mira el estado (a diferencia de `list_nominas`, que sí tiene `incluir_anuladas=False`).
+
+### ⚠️ La asimetría es lo que lo hacía peligroso
+Los **costos** anulados sí se excluían (nóminas) y los **ingresos** anulados no, así que
+el error solo iba en la dirección de **parecer más rentable**. Medido en la hoja real:
+una anulada de $1.100 con $400 cobrados inflaba `facturado`, `cobrado`, `por_cobrar` y
+la `ganancia` del grupo. Y anular es justamente **cómo se corrige una factura mal
+emitida**: el mecanismo de corrección no corregía el P&L.
+
+### ⚠️ NO se arregla cambiando el default de `list_facturas`
+La lista de Facturas y el detalle del cliente **necesitan mostrarlas**; ocultarlas de
+raíz sería el fallo de v340 (lo que se puede ocultar tiene que poder verse). Se filtra
+**en `pnl`**, que es donde faltaba. `resumen_cliente`, `facturado_por_proyecto` y los
+totales de la lista ya filtraban a mano — la app era **inconsistente consigo misma**.
+`estado_cobro` sí devuelve `"anulada"`, así que el «vencido» nunca estuvo afectado.
+
+### Verificación
+`verif_v426.py` es de **COMPORTAMIENTO**: parchea `list_facturas` con un conjunto
+conocido (dos vivas de $1.000 + una anulada de $500 con $200 cobrados) y comprueba qué
+cuenta cada función — así no reproduce la lógica que audita (el error de v412).
+⚠️ Y su chequeo de «las anuladas siguen visibles» **pasaba en vacío**: llamaba a
+`list_facturas`, que el propio guardián tiene parcheada, así que romper la función real
+no cambiaba nada. Ahora mira el CÓDIGO de la función por AST. Los dos sentidos se cazan.
+Suite: **69/69**.
+
+## FLUJOS COMPLETOS EJERCITADOS (v426)
+Dos recorridos de punta a punta contra la hoja real, con limpieza verificada.
+
+### Localizaciones — 8 pasos, 27 comprobaciones
+alta → **quién la ve** (las dos vías + quien no tiene ninguna) → fichaje → pre-start →
+gasto → asignación puntual por Planificación → seguimiento → cierre y reapertura.
+Resultado: `apatel` jornada 307 h · obra 276,33 h · **interno 6,0 h**, con costo de obra
+y costo interno separados; el almacén con $640 de compras + $240 de mano de obra.
+- ⚠️ **Cinco «fallos» que eran de la PRUEBA, no del código**: fiché y cerré en 4
+  segundos, así que la fila quedó con **0,0 h** y todo lo que cuelga de las horas salió
+  a cero. Se arregla cerrando con `out_ts` (el arreglo de v164). Y `open_sessions`
+  devuelve las dos claves con `None`, no un dict vacío — lo dice su docstring.
+
+### Ciclo de negocio — 7 pasos, 26 comprobaciones
+`precio = costo + ganancia` por línea (v355) → cotización → aceptar **crea la obra** con
+su `ClienteID` y **presupuesto = COSTO cotizado** (no el precio) → cuadrilla → 10 h →
+compra → avance 17,2% y estado «En progreso» → **pendiente = $4.000, el precio pactado**
+(v370) → factura con GST → cobro parcial → cobrada → nómina → resultado por proyecto y
+rentabilidad, ambos con el ingreso pactado.
+- ⚠️ **La base de la nómina salió $384 y no $400, y es CORRECTO**: la jornada empezó a
+  las 14:24 y `out_ts` cayó a las 00:24 del día siguiente, así que de las 10 h solo
+  **9,6 caen en el periodo** — es el reparto por medianoche de v164 funcionando. Mi
+  expectativa era la equivocada.
+
+### ⚠️ Y el hallazgo que destapó todo: los IDs SE RECICLAN
+`_next_project_id` es `max + 1`, así que **borrar de verdad el último proyecto libera su
+ID**. Habían quedado sin limpiar **9 filas de pruebas del 26/08** (3 facturas, 2
+artículos, 1 trabajo, 1 cliente, 1 alarma, 1 cálculo), y dos de esas facturas apuntaban
+a `PRJ-0017`. Al recrear ese ID en el flujo, **la obra nueva heredó $1.000 de
+facturación ajena** y su pendiente bajó de $4.000 a $3.000. Fue lo que hizo tirar del
+hilo hasta el fallo de las anuladas.
+- Limpiadas las 9 filas tras comprobar que **ninguna tenía dependencias** (catálogo sin
+  cotizaciones que lo usen, trabajo sin roster, cliente sin proyectos/facturas).
+- La hoja **`Auditoria` NO se toca**: es el registro de lo que pasó, y borrarlo sería
+  borrar la evidencia.
+- ⚠️ **Queda como riesgo abierto**: en la app real borrar de verdad es solo del
+  propietario y con confirmación (v149), pero el reciclaje de IDs existe. Pendiente de
+  decidir con el usuario si se evita (no reciclar) o se avisa al crear.
+
+## ⚠️ LOS IDs YA NO SE RECICLAN (v427)
+Cierra el riesgo que destapó v426. **Los 13 generadores de la app** hacen
+`max(los vivos) + 1`, así que borrar la fila con el ID más alto **libera ese número** y
+el siguiente alta lo reutiliza — arrastrando lo que hubiera quedado apuntando ahí.
+
+### Dónde importa de verdad
+Solo donde se BORRA la fila. Casi nada lo hace: proyectos, clientes, activos, facturas,
+nóminas y artículos se **archivan o anulan** (v149/v340), y eso mantiene el ID ocupado.
+Borran de verdad 13 funciones; de ellas, las que además tienen referencias apuntando son
+**proyecto** (la que más: fichajes, gastos, actividades, documentos, pre-starts, alarmas,
+cálculos, órdenes, roster, inventario, cotizaciones y líneas de factura), **cliente**
+(proyectos, cotizaciones, facturas) y **gasto** (`orders.GastoID`). Esas tres se arreglan.
+
+### `hojas.ids_referenciados` + `siguiente_id_libre`
+Al emitir un ID se comprueba si ya aparece **en cualquier otra hoja** y, si sí, se salta
+al siguiente libre.
+- **Por texto, a propósito**: saber en qué columna vive cada referencia obligaría a
+  mantener un mapa de 12 hojas que envejecería a la siguiente que se añada. Además hay
+  referencias dentro de JSON (líneas de factura, `DatosJSON` del roster).
+- ⚠️ **`Auditoria` cuenta**: ahí queda constancia de lo borrado, y eso es justo la señal
+  — ese ID *se usó*, y reutilizarlo mezclaría dos historiales.
+- ⚠️ **La hoja propia se excluye**, o ningún ID vivo podría emitirse.
+- **Lee FRESCO** (1 `batchGet`): decide qué ID se emite, y usar caché para eso es como
+  se corrompen los datos (v323). Medido: **0,44 s en caliente** — los 6,5 s de la
+  primera llamada son autenticar y abrir el libro, que en la app ya está cacheado.
+- **Degrada al comportamiento de siempre** si la lectura falla, con red propia además de
+  la de los tres generadores: un problema de red no puede impedir dar de alta.
+
+Verificado contra la hoja real: detecta que `PRJ-0017` sigue referenciado y emitiría
+**`PRJ-0018`** — sin el arreglo habría reciclado el 0017 y heredado su rastro.
+
+### Verificación
+`verif_v427.py`, probado contra **7 versiones rotas**: las caza las 7 — y **dos solo
+tras corregir el guardián**, las dos por el mismo motivo (chequeos que pasaban en vacío):
+- ⚠️ «excluye la hoja propia» buscaba el NOMBRE `propia_l`, que sigue existiendo aunque
+  se borre la comparación → pasaba con el filtro roto. Ahora se ejercita con un libro
+  simulado.
+- ⚠️ Y ese chequeo funcional dio primero un **FALLO que no existía**: sin `chdir` a
+  `survey_app` los secrets no se encuentran (v19), la resolución del libro lanzaba y el
+  `except` devolvía vacío. Se parchea también `sheet_id_para`: **un guardián no puede
+  depender del directorio desde el que se lance.**
+
+⚠️ Y el propio guardián encontró un hueco real: `siguiente_id_libre` no se protegía a sí
+misma. Estaba cubierta dos veces (por `ids_referenciados` y por los tres generadores),
+pero es la función pública y depender de que el llamador se acuerde es como se cuelan
+los fallos silenciosos. Suite: **70/70**.
+
+## ⚠️ UN GENERADOR DE IDs CONTABA FILAS — y ya colisionaba (v428)
+v427 arregló proyecto/cliente/gasto. Al barrer el resto apareció algo **peor que el
+reciclaje**: `roster._next_id` derivaba el ID del **NÚMERO DE FILAS**
+(`len(get_all_values()) - 1`), no del máximo. Y `delete_trabajo` borra la fila de
+verdad cuando el trabajo no está asignado en ningún roster.
+
+### Estaba roto EN PRODUCCIÓN, medido
+```
+Trabajos: 4 filas · IDs ['TRB-0002','TRB-0003','TRB-0004','TRB-0005']
+contando filas emitiría: TRB-0005   ·   ¿ya existe? True
+```
+El siguiente trabajo que alguien creara habría **machacado a uno existente**. Y como
+`trabajos_idx` indexa por ID, uno de los dos desaparece del índice y **las celdas del
+tablero asignadas a él resuelven al trabajo equivocado** —nombre y color de otro— sin
+ningún error visible. Ahora emite `TRB-0006`.
+
+⚠️ Diferencia con el reciclaje de v427: allí el ID quedaba libre tras borrar el ÚLTIMO;
+aquí basta con borrar **uno del medio** para que el conteo baje y choque con uno vivo.
+
+### Alcance
+El guardián encontró el mismo patrón en **`toolruns._next_id`** (`CAL-`). Ahí no
+colisionaba hoy por casualidad (3 filas con IDs 0001-0003), pero borrar una del medio
+daba el mismo choque. Arreglados los dos, y extendido el salto de v427 a
+**agrupaciones** (`delete_grouping` borra, y los proyectos guardan `AgrupacionID`:
+reutilizar el ID metería en la agrupación nueva los elevadores de la borrada) y a
+**credenciales**. Con esto son **siete** generadores protegidos.
+
+### Verificación
+`verif_v428.py`: por AST, **ningún** `_next_*id*` del repo puede usar `len(hoja)`; los
+siete usan `siguiente_id_libre` con respaldo; y el caso concreto se reproduce con la
+hoja REAL que estaba rota (4 filas, IDs 0002-0005 → `TRB-0006`), más huecos en medio,
+hoja vacía y hoja ilegible. Probado contra 4 versiones rotas: las caza las 4.
+Ejecutado contra producción: `TRB-0006`, `ROS-0036`, `CR-0007`, `CAL-0004`.
+Suite: **71/71**.
+
+## Cierre de pendientes (v428)
+- ⚠️ **v426 demostrado EN VIVO**, que era lo que faltaba: se emitió una factura real de
+  $5.500, se cobraron $1.500 y se anuló. El P&L volvió **exactamente** a
+  `101.157,21 / 31.415,20 / 8.526,60`, mientras la lógica vieja habría dejado
+  **+$5.500 de ingresos y +$1.500 de cobros fantasma**. Y la anulada **sigue viéndose**
+  en la lista con su estado (regla v340).
+- ⚠️ **Una alarma que iba a dar y no era**: la columna «Estado» de Facturas parecía no
+  existir en el DOM. Es la virtualización de `st.dataframe` (trampa nº18) — y medido al
+  ancho de diseño (**1440**), las 8 columnas caben con **0 px ocultos**. El scroll que
+  vi era del panel a 528 px. **Iba a arreglar algo que no está roto**: el error de v335,
+  evitado por medir donde toca.
+
+## La pantalla de Costos deja de hablarle a la localización de cosas que no tiene (v429)
+Petición del usuario: *«quítale lo de costará al terminar a las localizaciones»*, visto
+en pantalla con el rol campo.
+
+Al mirarlo, el mismo defecto estaba en **tres** piezas del mismo bloque, y quitar solo
+una habría dejado las otras dos diciendo lo mismo a medias — el desajuste de
+media-unificación de v419:
+| Pieza | Qué hacía en una localización |
+|---|---|
+| «Costará al terminar» | proyecta con `total × 100 / avance`, y aquí no hay avance → **«—» fijo** |
+| «Presupuesto» | **«—» fijo**: su ficha ni siquiera ofrece el campo (decisión de v423) |
+| El titular | ⚠️ *«no tiene presupuesto asignado… se define en :material/edit: Datos»* — **falso**: ahí ese campo NO existe, así que mandaba a buscar algo que no está |
+
+Las dos tarjetas se ocultan y el titular tiene su propia frase: *«Gasto de estructura:
+no se le carga a ninguna obra ni se le factura a un cliente»*. La barra de presupuesto
+ya estaba protegida (`if pres > 0`, y una localización nunca lo tiene).
+
+Guardián: las tres piezas tienen que colgar de un `if` sobre `es_interno`. Probado
+contra 2 versiones rotas. Suite: **71/71**.
+
+⚠️ Al ampliar `verif_v423.py` rompí el fichero **dos veces** insertando texto con
+`\n` escapado dentro de un heredoc: la primera corrección pareció aplicarse (el assert
+pasó) y el fichero seguía igual. Se arregló escribiendo el bloque a un fichero aparte y
+**concatenando**, sin escapes. Es la lección de v148 —no reescribir por texto lo que
+puedes insertar como líneas— aplicada a un guardián.
+
+## AUSENCIAS: el equipo las pide y la app hace el resto (v430)
+Petición del usuario: *«auto gestión de los usuarios en donde puedan solicitar un día
+off, vacaciones y ausencia por enfermedad. Esta solicitud debe llegar a los
+administradores para ser aprobadas o no. De forma automática se debe registrar en la
+agenda/planificador y **todo lo que esto implica**»*.
+
+Hasta ahora la única forma de que alguien constara ausente era que un administrador le
+pusiera `OFF` o `LEAVE` a mano en el tablero: la persona avisaba por fuera (mensaje,
+llamada) y alguien tenía que acordarse de reflejarlo. Sin rastro de quién pidió qué, sin
+saber si se aprobó y sin saldo.
+
+### Decisiones del usuario (AskUserQuestion)
+Enfermedad = **aviso inmediato, sin esperar aprobación** · el pago **depende del tipo** ·
+**saldo por persona y tipo** · al aprobar, **avisar y sugerir sustituto**.
+
+### Los tres tipos NO comparten flujo, y eso es deliberado
+| | Aprobación | Pagado | Días/año | En el tablero |
+|---|---|---|---|---|
+| Vacaciones | sí | sí | 20 | LEAVE |
+| Baja por enfermedad | **NO** | sí | 10 | LEAVE |
+| Día libre | sí | **no** | — | OFF |
+⚠️ Nadie sabe el lunes que el jueves estará en cama. Meter la enfermedad en un flujo de
+«solicitar → esperar» haría que la app estorbe justo el día que alguien está enfermo, y
+dejaría el tablero mintiendo hasta que un admin entrara a aprobar. Se registra YA y el
+administrador la ve después.
+
+### Lo que NO se inventó
+`estado_roster` reusa los estados que el tablero **ya pinta** (`roster.ESTADOS`), así que
+colores, histórico y `_opciones` siguen funcionando sin tocarlos; el tipo concreto viaja
+en la NOTA del día. Y el **saldo se DERIVA** (asignación anual − días aprobados del año),
+nunca se guarda: un saldo almacenado se desincroniza en cuanto alguien cancela o un admin
+corrige un rango — el mismo criterio que `invoices.estado_cobro` y `quotes` (v353).
+
+### «Todo lo que esto implica» = aprobar ESCRIBE en el planificador
+- **`aplicar_al_roster`** marca los días. ⚠️ **PISA lo que hubiera**, a propósito: si la
+  ausencia está aprobada esa persona no está, y dejar la obra asignada haría que el
+  tablero, la ruta del día y «plan vs real» siguieran contando con ella. ⚠️ `quitar=True`
+  **no restaura** la asignación anterior: un hueco se ve en la cobertura del día; un
+  doble asignado, no. Una escritura por SEMANA, no por día.
+- **`choques`** enseña al admin, ANTES de decidir, las obras que quedarían sin esa
+  persona; **`sustitutos`** dice quién puede cubrirlas, reusando lo que la app ya sabe
+  (`roster` para quién tiene el día libre + `credentials.compliance` para los
+  certificados que la obra exige, v219) en vez de inventar un criterio nuevo.
+- La bandeja además avisa de cuánta gente más está fuera esos días y de si la persona se
+  pasaría de saldo: aprobar a ciegas es justo lo que esto viene a evitar.
+
+### ⚠️ EL FALLO DE DINERO: aprobar vacaciones significaba cobrar $0
+La base de la nómina sale de las horas **FICHADAS**, y quien está de vacaciones no ficha.
+Peor: quien estuvo fuera el periodo ENTERO no aparecía en `horas_por_usuario_rango`, así
+que **no se le generaba nómina en absoluto** — no es que cobrara de menos, es que no
+cobraba. `generar` recorre ahora la **UNIÓN** de fichados y ausentes.
+- ⚠️ La ausencia entra como **DEVENGO con `origen: "ausencia"`, NUNCA sumada a `Base`**.
+  `Base` y la columna `Horas` son «lo trabajado», y es contra eso que `conciliacion_mo`
+  (v313) contrasta la jornada fichada: meterlo dentro haría que **cada vacación aprobada
+  apareciera como un descuadre («sin explicar») que no existe**.
+- ⚠️ Retención y superannuation se calculan sobre **base + ausencia**: un día de
+  vacaciones es salario ordinario, y dejarlo fuera lo pagaría sin impuesto ni super.
+- El P&L lo recoge solo (`costo_nomina = base + devengos + aportes` desde v309). La
+  conciliación gana su fila **como SUMANDO** (a diferencia del desglose de v425, que es
+  informativo) para que la cadena siga cerrando en `costo_real`.
+
+### ⚠️ EL SEGUNDO FALLO, y lo cazó EJERCITAR LA NÓMINA, no leer el código
+A una persona con la baja pedida «incluyendo fines de semana» se le descontaron **12 días
+de saldo y la nómina le pagó 8**: `Dias` los contaba y `horas_pagadas` recontaba el rango
+por su cuenta, con el criterio por defecto. Dos definiciones del mismo rango, la familia
+de los cinco `_num` divergentes de v323.
+→ Columna **`Findes`** (al final, migra sola) y una **invariante que ahora se comprueba**:
+*lo pagado = los días que se descontaron × 8 h*. ⚠️ La columna y su valor en la fila
+posicional se añadieron en el MISMO cambio (lección v363, donde olvidar eso dejó
+`create_project` muerto 3 versiones).
+
+### Verificación
+- Guardián `verif_v430.py`, **69 comprobaciones**, probado contra **15 versiones rotas**:
+  las caza las 15 — pero **dos solo tras corregirlo**, y las dos por chequeos míos que
+  pasaban **en vacío**: buscaban las subcadenas `"st.rerun"` y `"len("` en un `ast.dump`,
+  donde los nodos se escriben `Attribute(attr='rerun')` y `Call(func=Name(id='len'))`, así
+  que ninguna función entraba en el filtro. Sustituí un `flash.exito` por `st.success` y
+  puse `_next_id` a contar filas (el fallo REAL de v428) y **no cazó ninguno de los dos**.
+- Con él entra a la suite el guardián de la **regla v353**, que no existía: todo módulo
+  con `SHEET = "X"` que lea `hojas.registros(SHEET)` **sin cabeceras** necesita `X` en
+  `HOJAS_LECTURA`, o lee **vacío PARA SIEMPRE sin ningún error**. Barrido: 0 casos.
+- **Ejercitado contra la hoja real** (método v344), incluida la nómina: `admin1` con 10,66
+  h fichadas + 3 días de vacaciones → Base $426,40 (solo lo trabajado) + devengo $960 +
+  retención y super sobre los $1.386,40; `campo2` con **0 h fichadas** recibe colilla de
+  **$2.448 neto**; `conciliacion_mo` con `sin_explicar = −0,00`. Cancelar devuelve el
+  saldo y limpia el tablero. Producción devuelta a 38 nóminas, 0 ausencias y el roster
+  restaurado.
+- ⚠️ Un tercer «fallo» era del test: comprobaba que tras cancelar **nadie** constara
+  ausente ese día, y quien seguía de baja era otra persona. El código estaba bien.
+- Suite entera: **72/72**. Se pusieron rojos `verif_v297/v298/v299` por exigir que el
+  campo tuviera **6 secciones exactas** — **caducados, no regresiones**: fallaban por
+  añadirle una a propósito (trampa nº16). Actualizados sobre el PRINCIPIO (no se le pierde
+  nada de su nav; cada rol resuelve la suya, con el número derivado de la constante) y con
+  la razón escrita al lado. Y `verif_v322` sí cazó algo real: un `import auth` sin usar.
+
+### La bandeja del admin, ejercitada EN PANTALLA (no solo leída)
+⚠️ Al abrirla estaba VACÍA, y verificar una bandeja vacía es el paso en vacío
+(trampa nº1): lo que hay que ver es la tarjeta con sus avisos. Se sembró una
+solicitud real eligiendo **a quien más obras tenía asignadas** esos días, se verificó
+en la pantalla del Cloud y se borró después (roster respaldado y restaurado al
+detalle). Lo que pintó, con datos reales:
+- «Javier López — Vacaciones · 3 día(s) · 🟡 pendiente», su motivo y su saldo;
+- ⚠️ *«Ya está asignado esos días a **Meriton Zetland — Torre B**, **prueba2**. Si
+  apruebas, esos días quedan libres en el tablero»* — el aviso que es la razón de ser
+  de la versión;
+- «Quién podría cubrirlo (4 días)» → *nadie libre ese día* en los cuatro. ⚠️ Eso NO
+  se dio por bueno: se comprobó **por fuera de `sustitutos`**, contando el roster
+  crudo, que los 8 de campo estaban ocupados los tres días (trampa nº12).
+- **Aprobar** funcionó de punta a punta: *«Ausencia aprobada. 3 día(s) marcados en el
+  planificador»* —mensaje que **sobrevive al `st.rerun()`**, o sea `flash` (v365/366)
+  haciendo su trabajo—, los indicadores pasando a `PENDIENTES 0 · PRÓXIMOS 7 DÍAS 1`,
+  y el tablero con `LEAVE · Vacaciones · AUS-0001` en los 3 días **pisando** las obras
+  (a propósito) y dejando jueves y viernes intactos.
+- ⚠️ El primer clic en «Aprobar» no hizo nada y el botón estaba **a y=987 con un
+  viewport de 900**: fuera de vista. Medir dónde cae el clic, otra vez.
+
+## ⚠️ `list_users` se COMÍA las columnas nuevas de Login (v434)
+Salió al rellenar las fechas de alta del equipo: se escribieron 10, se verificaron
+leyendo… y un barrido posterior las daba **todas vacías**. La hoja cruda las tenía
+(columna 12, con sus fechas). El fallo era de LECTURA:
+- `get_user` devuelve la fila ENTERA → por eso `auth.fecha_ingreso` sí las veía y la
+  verificación de v433 pasó.
+- **`list_users` proyectaba a 8 campos escritos a mano**, así que `FechaIngreso` —y
+  cualquier columna futura— **desaparecía al leerla**. No lanza, no avisa: la columna
+  simplemente no existe para quien pregunte por ahí.
+→ La proyección se DERIVA ahora de `LOGIN_HEADERS` menos `_CAMPOS_SECRETOS`. ⚠️ La
+proyección **no se puede sustituir por «devuelve la fila entera»**: existe para que el
+hash de la contraseña y el token de sesión no salgan de ahí (v79). Guardián: la lista
+se deriva, los tres secretos siguen fuera, y **se ejecuta** contra la hoja real para
+comprobar que una fila trae todas las columnas no secretas y ninguna secreta.
+
+⚠️ **Es el TERCER sitio en dos versiones** con el mismo patrón: `auth._COL` (v433),
+esta proyección, y antes la fila posicional de `create_project` (v363). Todos son
+**una lista de columnas escrita a mano en paralelo a `*_HEADERS`**. Regla: al añadir
+una columna, buscar TODO lo que enumere columnas de esa hoja — y si se puede derivar,
+derivarlo, que es la única forma de que no vuelva a divergir.
+
+### Verificado EN PANTALLA tras reiniciar (v432-v434)
+⚠️ Primero NO se pudo: sidebar decía **v434** y topbar **v431**, y la ficha de usuario
+no mostraba el campo nuevo — que sí estaba en el commit desplegado (comprobado contra
+`HEAD`). «Desplegado ≠ corriendo» otra vez; hizo falta reiniciar el proceso. Tras el
+reinicio las dos versiones coinciden y se comprobó, con datos reales:
+- **Ficha de usuario**: «Fecha de alta en la empresa» con su valor (2026-06-23) y su
+  botón; sin el aviso de que falta (porque no falta).
+- **Aviso al asignar** (✏️ Datos de PRJ-0011): *«No estarán disponibles esos días:
+  mchen: Vacaciones del 2026-09-14 al 2026-09-18»*, encima del aviso de otras obras.
+  ⚠️ Y **discrimina**: con una obra cuyas fechas NO cruzan la ausencia, no aparece.
+- **Aviso de la nómina**: *«Días con ausencia Y fichaje — se paga una sola jornada por
+  día: asfgjjd el 2026-08-27: fichó 4.68 h, así que su ausencia paga 3.32 h»*,
+  sobreviviendo al `st.rerun()`. La colilla lo confirma al céntimo: **base $187,20
+  (4,68 h) + devengo $132,80 (3,32 h) = $320 = 8 h exactas**.
+- Producción restaurada: 38 nóminas, 0 ausencias, P&L de vuelta en 101.157,21 /
+  8.526,60 — idéntico al de antes de las pruebas.
+- **Mis ausencias (campo)**, con la sesión de campo: las 3 tarjetas de saldo y
+  *«Tu año de vacaciones va del **2026-06-23** al **2027-06-22** (desde que entraste,
+  el 2026-06-23)»* — el aniversario real de esa persona.
+- ⚠️ Y la **otra rama**, que es la que importa de verdad: quitándole la fecha de alta
+  (temporalmente) la pantalla pasa a *«Contamos por año natural (2026-01-01 →
+  2026-12-31) porque no consta tu fecha de alta. Pídele a tu responsable que la
+  cargue…»*. O sea que el saldo estimado **se anuncia como estimado** en vez de
+  parecer exacto (v325). Fecha restaurada después; ninguna cuenta del grupo se queda
+  sin ella.
+
+Con esto, las **4 pantallas de v432-v434 están verificadas en pantalla**, no solo por
+código.
+
+### Datos de la demo rellenados (a petición del usuario)
+`FechaIngreso` de las 13 cuentas — las 10 con fichajes se derivaron de su **primer
+fichaje** (dato real, no inventado); las 3 sin fichajes llevan una fecha de prueba.
+Tarifa a `nsanchez` (38) y `Admin2` (45), que contaban $0. Email a `dacox`,
+`Arcantox` y `admin1` con dominio **`example.com`** — ⚠️ reservado por la RFC 2606
+para pruebas: no existe buzón, así que ningún correo de la demo puede llegarle por
+error a una persona real.
+⚠️ **Telegram NO se rellenó**, y no es un olvido: un `chat_id` es el identificador de
+una conversación REAL, así que inventar un número podría mandar los avisos de la demo
+al teléfono de un desconocido. Solo se puede vincular después de que la persona pulse
+Start en el bot (v77).
+
+⚠️ Y con esto **caducó `verif_v395`**, que exigía «hay 3 conocidos sin canal»: falló
+**por haber ganado**, como los de la nav en v385. Reescrito sobre el comportamiento —
+detecta a quien no tiene canal usando un caso CONSTRUIDO, y no lo menciona cuando no
+hay nadie— en vez de depender de que el pendiente siga abierto en producción.
+
+## El saldo de vacaciones, por ANIVERSARIO de cada persona (v433)
+Salió de una pregunta del usuario sobre una línea de la auditoría de v432 («el saldo
+cuenta por el año en que empieza la ausencia»). Al medirlo, eran dos cosas.
+
+### 1 · Una ausencia se descontaba ENTERA del año en que empezaba
+Vacaciones de Navidad, 28/12 → 08/01, **10 días hábiles: 4 en 2026 y 6 en 2027**:
+| | la app decía | lo correcto |
+|---|---|---|
+| 2026 | usados **10** → quedan 10 | usados 4 → quedan 16 |
+| 2027 | usados **0** → quedan 20 | usados 6 → quedan 14 |
+El total no se perdía (30 días disponibles en los dos casos), pero el REPARTO estaba
+mal: comía 6 días de más al saldo de 2026 y regalaba 6 al de 2027. `dias_usados` pasa
+a contar los **días que caen dentro del periodo**, no las filas cuyo `Desde` cae en el
+año — con la misma regla que el pago (`incluye_findes`), para que saldo y nómina no
+puedan divergir.
+
+### 2 · Y el «año» pasa a ser el de cada persona (decisión del usuario)
+En AU el año de vacaciones va por **aniversario de alta**, no por año natural. Nueva
+columna `Login.FechaIngreso` (al final → migra sola) + `auth.fecha_ingreso` /
+`set_fecha_ingreso`, y `ausencias.periodo_saldo` devuelve el periodo vigente de esa
+persona: quien entró un 15/03 cuenta de 15/03 a 14/03.
+- ⚠️ **Sin fecha de alta NO se inventa un aniversario**: se cae al año natural y se
+  DICE, tanto en la pantalla del campo («no consta tu fecha de alta») como en la ficha
+  del admin. Un saldo que parece exacto y no lo es es peor que uno que avisa (v325).
+- ⚠️ **El 29 de febrero**: quien entró un 29/02 no tiene aniversario los años normales
+  y `date(2027, 2, 29)` lanza. `_mismo_dia_mes` retrocede al 28.
+- `FechaIngreso` entra en `CAMPOS_CLAVE` **en el mismo lote**: mueve el saldo de una
+  persona, así que deja rastro (la regla que v344/v352/v373 aprendieron a golpes).
+
+### ⚠️ EL FALLO QUE SOLO SE VIO EJECUTANDO: `auth._COL` estaba escrito A MANO
+Añadida la columna, la hoja la migró sola… y `set_fecha_ingreso` moría con
+**`Error: 'FechaIngreso'`**: `_COL` era un literal `{"Usuario": 1, …}` en paralelo a
+`LOGIN_HEADERS`, y no conocía la columna nueva. No lo detectan ni los imports, ni
+`compileall`, ni ninguno de los guardianes que había — **solo llamar a la función
+contra la hoja real**. Es la familia de `MargenPct` (v344) y de la fila posicional de
+v363: dos sitios que describen lo mismo y se desincronizan.
+- Ahora se DERIVA (`{h: i + 1 for i, h in enumerate(LOGIN_HEADERS)}`), así no puede
+  volver a divergir. **Barrido del repo**: era el ÚNICO a mano; los otros 12 mapas de
+  columnas ya se derivaban. Guardián nuevo y general: ningún `{columna: n}` literal.
+
+### Verificación
+Guardián de **104 comprobaciones**, probado contra **25 roturas** — todas cazadas,
+pero ⚠️ una solo **tras corregirlo**: el chequeo del reparto miraba que
+`dias_del_rango` apareciera en el código, así que una versión que devolvía siempre 0
+pasaba igual. Ahora **ejecuta** el caso de Navidad y exige 4/6. Ejercitado contra la
+hoja real de punta a punta: escribir la fecha → el periodo pasa a `2026-03-15 →
+2027-03-14` → rastro en la auditoría (`{"FechaIngreso": ["", "2024-03-15"]}`) →
+restaurado. Suite: **72/72**.
+
+⚠️ ~~Pendiente del usuario: nadie tiene `FechaIngreso` cargada~~ → **CERRADO en v434**:
+las 13 cuentas la tienen (auditado en la hoja el 02/09/2026: 0 sin fecha), así que los
+saldos ya se cuentan por aniversario y no por año natural.
+
+⚠️ **Y la lección de seguimiento**: este «PENDIENTE» siguió escrito 18 versiones después
+de resolverse. Un documento que acumula pendientes ya cerrados vuelve la lista inútil —
+al preguntar «¿qué queda?» hay que **auditar contra los datos**, no recitar el documento.
+
+## ⚠️ SE PAGABA DOS VECES EL MISMO DÍA + los dos avisos que faltaban (v432)
+Salió de la pregunta del usuario «¿ya quedó todo cerrado?» — auditando en vez de
+responder que sí.
+
+### El fallo: ausencia pagada + fichaje el MISMO día
+La base de la nómina son las horas FICHADAS y el devengo son los días de ausencia × 8 h.
+**Nada cruzaba las dos cosas.** Medido con datos reales: `campo1` fichó **8,75 h** el
+21/08; con una baja aprobada ese mismo día se le pagaban **8,75 h trabajadas + 8 h de
+baja = $670 por UN día**. Invisible en la colilla —cada línea está bien—, solo el total
+del día delata. Es el fallo de v364 (periodos que solapan) con otra forma.
+- **Decisión del usuario: completar la jornada.** La ausencia paga solo lo que FALTA:
+  fichó 4,68 h → se le añaden 3,32; fichó 8,75 → no se le añade nada. Un día vale una
+  jornada, nunca dos. Verificado en los dos casos contra la hoja real.
+- ⚠️ **El recorte se INFORMA** (`recortes` → aviso en la pantalla de nóminas): un
+  ajuste de dinero que nadie ve es la mitad del problema que se venía a arreglar.
+- ⚠️ Si falla la lectura de fichajes **no se paga a ciegas** la jornada completa: se
+  deja sin recorte y se dice.
+- Nueva `timeclock.horas_por_usuario_dia` — mismo recorrido y mismos segmentos que
+  `horas_por_usuario_rango` (v164), sin agregar: un total por periodo no sirve, hay
+  que saber QUÉ días.
+
+### ⚠️ Y mi primer chequeo de esto PASÓ EN FALSO
+Buscaba la subcadena `"fich"` en el código de `generar` para ver si cruzaba los datos…
+y la encontró **en un comentario mío**, así que dio «sí lo cruza» con el fallo dentro.
+Trampa nº2 (grep ≠ uso) **dentro del auditor**. Solo se vio ejecutándolo con datos
+reales. Lo mismo volvió a pasar DOS veces al ampliar el guardián (buscaba `"recortes"` y
+`"ausencias"`, palabras que también están en los comentarios): las tres veces el arreglo
+es mirar la ESTRUCTURA — la clave en el dict devuelto, el `ImportFrom` real.
+
+### Los dos avisos que faltaban (decisión del usuario: sí a los dos)
+- **Al asignar personal**: `_avisar_asignados` avisaba de otras obras y de certificados
+  (v219) pero no de las ausencias, así que se podía asignar a alguien a una obra justo
+  en su semana de vacaciones sin que nada lo dijera. Ahora se avisa, acotado a las
+  fechas de esa obra cuando se saben (en el detalle sí; en el alta nueva las fechas
+  viven dentro del `st.form` y aún no están escritas, así que allí se avisa de las
+  ausencias que todavía no han terminado).
+- **Al cancelar una APROBADA**: la solicitud le llegaba al admin y la cancelación no,
+  aunque devuelve esos días al tablero y quizá ya había reorganizado la cuadrilla. Solo
+  para las aprobadas: retirar una pendiente no cambia nada que nadie hubiera planificado.
+
+### Lo que la auditoría cerró de paso
+**Rechazar** una solicitud (queda rechazada con su nota, no se puede re-resolver, no
+gasta saldo, no bloquea volver a pedir esas fechas) y **los avisos**, ejercitados con
+`notify.notify_user` INTERCEPTADO (mandan correo y Telegram a gente real, mismo criterio
+que `notify_expiring` en v417): asunto y cuerpo correctos, la baja dice que ya se
+registró en vez de que espera aprobación, y con el correo caído no revienta el registro.
+Con eso, **las 6 rutas de escritura de v430 están ejercitadas**.
+
+### Límites que quedan ANOTADOS (alcance, no fallos)
+- Un día de ausencia vale **8 h para todo el mundo** (`HORAS_DIA`): no hay jornada por
+  persona en el modelo, así que alguien a media jornada cobraría 8 h por día.
+- El saldo cuenta por el año en que **empieza** la ausencia: una a caballo de dos años
+  se descuenta entera del primero.
+- `admin1`, `dacox` y `Arcantox` no tienen email ni Telegram, así que el aviso de una
+  solicitud **no les sale de la app** — el pendiente de v395, del usuario.
+
+## ⚠️ El icono del selector de ausencias salía LITERAL en pantalla (v431)
+Encontrado **mirando la pantalla** en el Cloud, no leyendo código: el desplegable
+«¿Qué necesitas?» mostraba `:material/beach_access: Vacaciones`. Las opciones de un
+`st.selectbox` **no interpretan** `:material/…:`; `st.radio` sí (v234).
+- ⚠️ **No se dio por bueno a la primera** (v375): podía ser una ligadura de fuente
+  (trampa nº5), donde `innerText` da el nombre del icono aunque se pinte el glifo. Se
+  comprobó contra un **caso conocido-bueno** —un botón del menú lateral, que sí pinta
+  icono— y el contraste es limpio: el menú tiene `<span role="img">` con
+  `font-family:"Material Symbols Rounded"`; la opción es texto plano, con los dos
+  puntos y la fuente del cuerpo. Y ⚠️ **mi primera sonda dio `false` también para el
+  caso bueno**, así que no valía: hubo que mirar el marcado real antes de acusar.
+- **Barrido del repo** (lección v349: cuando el fallo aparece, buscar TODOS): 0
+  selectbox afectados aparte de este; los **7** `:material/` restantes son `st.radio`
+  y se quedan. Guardián nuevo y general: ningún `selectbox`/`multiselect` puede
+  llevarlo en sus opciones ni en su `format_func`.
+- Los tipos pasan a un solo campo **`emoji`** (🌴 · 🤒 · 📅) en vez de `icono`: dos
+  campos que puedan divergir es la familia de los cinco `_num` de v323.
+
+### ⚠️ Y el fallo de método que costó media hora: mis clics caían a 4,6× de distancia
+Ni el desplegable ni un checkbox respondían, y llegué a escribir que la pestaña
+oculta (`visibilityState === "hidden"`) lo explicaba. **No era eso**: con la pestaña
+ya visible seguía sin responder. Lo resolvió **instrumentar** en vez de suponer — un
+listener de `pointerdown/click` sobre el documento — y la medida fue inmediata: pedí
+un clic en (235, 318) y a la página llegó en **(1088, 1472)**, un factor de **×4,63**
+que yo no estaba aplicando. Con la transformación medida, el clic entra donde debe.
+→ **REGLA: si un clic «no hace nada», medir DÓNDE aterriza antes de teorizar**, y
+validar la entrada con un control conocido-bueno (si el checkbox tampoco cambia, el
+problema es tuyo, no de la app). Es la nº12 aplicada a la escritura.
+⚠️ Confirmado además que el clic llega al **`<div>`** que dibuja la casilla, no al
+`<input type=checkbox>` (que está oculto): la lección de v417, intacta.
+
+## i18n F1b: el informe del CLIENTE, en inglés (v437)
+
+Sigue a v436 (los cinco PDF comerciales). Este es el documento más visible que sale de
+la empresa, y traducir solo sus encabezados lo habría dejado peor que antes: **cinco de
+sus doce secciones las escribe la IA**, así que el prompt del informe del cliente entra
+en el mismo lote. El prompt del informe ADMIN **no** se toca: es interno, y va en F5.
+
+### ⚠️ EL FALLO QUE HABÍA DETRÁS: el veredicto se deducía del TEXTO de la IA
+```python
+_cortes = "requiere cortes" in str(ia.get("cortes", "")).lower() or "cortar" in ...
+```
+De ahí salía si el veredicto verde dice «con los cortes indicados en la sección 3» o
+«sin valores fuera de límite». Era frágil **ya en español** —basta con que el modelo
+redacte distinto— y con la IA escribiendo en inglés esa frase no casaría **nunca**: el
+informe diría «sin valores fuera de límite» en un hueco que sí hay que cortar.
+→ Nueva **`interpretation.cortes_por_piso(lim, best)`**, la ÚNICA definición de «hay
+cortes» (OR/OL por encima de su límite, por piso). La usan el veredicto **y** el payload
+de la IA, así que no pueden hablar de cortes distintos. Un dato se saca de los datos.
+
+### Lo que NO se traduce, y por qué
+| | |
+|---|---|
+| **Claves de `USER_SCHEMA`** (`resumen`, `cortes`…) | se guardan en `Proyectos.InterpJSON` y las lee `ia.get("resumen")` → traducirlas dejaría las 5 secciones **en blanco** en todos los informes, sin ningún error |
+| **Claves de `schedule_table` / `plumb_table` / `plumb_checks`** | las produce otro módulo; el informe traduce el ENCABEZADO y sigue indexando por la clave |
+| **`INF-AAAAMMDD-HHMM`** | es el número de informe, un identificador opaco; cambiar el prefijo cambiaría la numeración de aquí en adelante |
+
+### ⚠️ Dos fallos MÍOS que solo se vieron GENERANDO el PDF
+1. **`for i, (t, d) in enumerate(_terms)`** en el glosario: la variable del bucle **tapa
+   la función `d()`** del motor de idiomas en TODA la función (Python la marca local en
+   el ámbito entero), así que las 40 etiquetas de arriba reventaban con
+   `UnboundLocalError`. Compilar ✓, importar ✓ — solo lo caza generar el documento.
+   El guardián comprueba ahora que ninguna variable del módulo se llame `d`.
+2. **`cortes_por_piso(limits or {}, …)`** cuando el parámetro se llama `calculated`:
+   NameError **que mi propio `except` se tragaba**, dejando `_cortes = False` para
+   siempre. Es la lección de v323/v338/v344 —un `except` alrededor de código recién
+   escrito esconde justo el fallo que acabas de introducir— y solo se vio **leyendo el
+   log** del módulo mientras se generaba el PDF. El guardián captura ese logger y falla
+   si aparece un solo aviso.
+
+### Verificación
+`verif_v437.py`, **34 comprobaciones**, probado contra **10 roturas**: las caza las 10 —
+pero dos solo tras corregirlo, las dos por chequeos que aprobaban por el motivo
+equivocado:
+- «un título de sección vuelve al español» pasaba porque yo miraba el **ÍNDICE**, no la
+  cabecera. Ahora se comprueba por AST que ningún `_section`/`_callout` reciba un
+  literal, y además los 12 títulos en el PDF.
+- ⚠️ Y ese chequeo nuevo daba **FALLO con el código correcto**: `_section` **parte** el
+  título («05» a un lado, el texto al otro), así que buscar «5. Shaft diagrams» entero
+  no casa nunca — y los otros diez pasaban… **porque el índice contiene esas mismas
+  cadenas**. Se compara el título SIN el número, que es lo que se pinta.
+- Las etiquetas KPI se comparan en mayúsculas: **el estilo las sube**, y compararlas tal
+  cual daba FALLO con el informe perfecto (el test fallando por su propio formato, v372).
+
+### ⚠️ Lo que SIGUE en español dentro de ese PDF (medido, no supuesto)
+**37 líneas**, y ninguna es de F1b: las etiquetas de los diagramas (`diagrams.py`,
+`plumb.py` → **F5**), los nombres de las líneas de plomada (`plumb.LINE_NAMES` → **F4**)
+y los **nombres de las actividades** del cronograma (`schedule.ACTIVIDADES`, que además
+se GUARDAN en la hoja `Actividades` → migración del histórico). El informe del cliente
+no está entero en inglés hasta que caigan esas tres, y conviene saberlo antes de
+enseñárselo a un cliente.
+
+## CORREGIR EL FICHAJE: el campo pone la hora real, el admin la revisa (v461)
+
+Petición del usuario: *«permitir modificar clock in/out en caso de olvido por parte del
+usuario de campo. Admin debe aprobar estas modificaciones… si un usuario inicia a
+trabajar pero se le olvidó hacer clock in y luego se acuerda, que pueda poner la hora en
+la que inició. De igual forma con el clock out»*.
+
+Hasta ahora el técnico que llegaba a las 7:00 y se acordaba de fichar a las 9:00 perdía
+esas dos horas: no había forma de arreglarlo salvo pedirle al administrador que tocara la
+hoja a mano.
+
+### Las tres decisiones del usuario
+| | |
+|---|---|
+| **Cuándo cuenta** | la hora nueva **se aplica YA**; el admin la revisa después y puede revertirla |
+| **Si el periodo ya se pagó** | se permite, pero al admin **se le dice qué nómina lo cubre** |
+| **Plazo** | **el mismo día**… con una excepción, que es lo que se discutió aparte |
+
+### ⚠️ La excepción no es un capricho: una sesión abierta SANGRA horas
+`_row_segmentos` cuenta una fila `ABIERTO` **hasta AHORA** (v164). Medido con la función
+real, una entrada a las 7:00 sin salida da:
+```
+mismo día 10,56 h · al día siguiente 34,56 h · a los 2 días 58,56 h · a los 5 días 130,56 h
+```
+A 40 $/h son **2.342 USD** por una sesión olvidada de dos días, y esas horas entran en la
+nómina y en el costo de la obra. Por eso cerrar una sesión que sigue abierta se puede
+hacer aunque sea de otro día: no es corregir el pasado, es parar una hemorragia. Es lo
+único que se salta la regla del mismo día, y también pasa por la bandeja.
+
+### ⚠️ El punto que decide si esto sirve de algo: RECALCULAR las Horas
+Cambiar solo el timestamp no habría movido nada. `_row_segmentos` **respeta la columna
+`Horas` guardada** para una fila cerrada de un solo día (v164, y es a propósito: así el
+total con `days=None` no cambia). O sea que corregir la entrada de 09:00 a 07:00 habría
+dejado la nómina y el costo de la obra **exactamente igual, sin que nadie lo notara** —
+la corrección se vería en pantalla y no existiría para el dinero. `corregir_fichaje`
+recalcula y escribe `Horas` en el mismo `batch_update`.
+- ⚠️ Una sesión **abierta** no recibe Horas: sus horas se calculan al vuelo contra el
+  reloj, y escribir un 0 la haría parecer una jornada de cero horas (el cero silencioso
+  de v346).
+- La fila se localiza por **usuario + hora actual + tipo**, no por número de fila: las
+  filas se desplazan y una referencia posicional envejece mal.
+
+### ⚠️ El caso que REVERTIR no puede resolver — y que apareció al repasar
+Un cierre de sesión olvidada **no tiene «hora anterior»**: estaba abierta. Así que
+revertirlo la devolvería a abierta, o sea a volver a acumular contra el reloj — el
+problema que se acababa de arreglar. Y dejarla cerrada sin hora de salida es peor.
+→ Ahí el botón no es «revertir» sino **`ajustar`**: el admin fija la hora correcta, que
+es lo que necesita de verdad. ⚠️ Solo cambia la HORA (el DÍA es el del fichaje; moverlo
+lo pasaría a otra jornada, a otra nómina y a otro día de costo) y **reescribe
+`ValorNuevo`**: si no, el histórico diría una hora y la hoja otra — un rastro que miente
+es peor que no tenerlo.
+⚠️ El orden es el de v343 en las dos: **primero el fichaje, después la marca**. Al revés,
+un fallo a mitad deja la corrección marcada como resuelta con el fichaje aún cambiado.
+
+### Lo que NO se inventó
+El vocabulario de estados es el de `ausencias` (v430) — pendiente/aprobada/revertida—
+porque la app ya tiene un flujo de «alguien pide, el admin resuelve», y dos vocabularios
+para lo mismo divergen. La bandeja vive **junto a la de ausencias** en Planificación, no
+en Finanzas, por lo mismo: es la misma clase de cosa y ahí es donde el admin aprueba.
+
+### ⚠️ El guardián dio FALLO con el código CORRECTO, y por la FORMA del dato
+`_SUBSECCIONES[k]` es una tupla `(clave_estado, [(id, display), …])` y yo la leí como si
+fuera la lista, así que el chequeo decía «el ID no está definido en la navegación» con el
+ID perfectamente puesto. Es la regla v135 aplicada a mi propio chequeo: **mirar la forma
+del dato antes de indexarlo**. Y es la advertencia de v459 en su otra cara — un guardián
+rojo de base invalida la tanda de roturas, así que se arregla y se repite.
+
+### ⚠️ Y una rotura SE ESCAPÓ, por comparar por subcadena
+El chequeo de «ajustar reescribe ValorNuevo» buscaba el literal, y **`ValorNuevo`
+aparece dos veces** en esa función (también al LEERLO). Borrando la escritura, la otra
+aparición seguía casando y el guardián pasaba. Es la trampa nº2 otra vez (v449, v452,
+v453). Reescrito como estructural: por AST, `ValorNuevo` tiene que estar entre las
+CLAVES del dict que se le pasa a `_set`.
+
+### Cuatro suposiciones mías rotas por ejecutar en vez de leer (regla v135)
+| Supuse | Es |
+|---|---|
+| `mis_fichajes(..., dias=1)` | el parámetro es **`limite`** → habría sido TypeError |
+| `_dt` disponible en el módulo | solo existe como local de `_aviso_olvido` |
+| `logger` en `timeclock_ui` | **no existía**: NameError esperando en el `except` (v370) |
+| el 4.º de `kpi_row` es texto | es el **ACENTO** (color): `None` acaba como `--cpx-accent:None` |
+
+### Ejercitado contra la hoja REAL (método v344), con limpieza verificada
+foto → fichar con hora retroactiva → cerrar → corregir → registrar → revertir → aprobar →
+ajustar → limpiar → foto. **21 comprobaciones, 0 fallos, 0 filas de rastro.**
+Lo que demuestra el ciclo completo, leyendo de vuelta cada paso:
+- la hoja guarda **07:00**, la hora que dijo la persona, no «ahora»;
+- corregir 07:00 → 09:00 mueve las **Horas de 10,0 a 8,0**;
+- **revertir** devuelve las dos cosas (07:00 y 10,0 h) y la corrección no se puede
+  revisar dos veces;
+- **ajustar** un cierre olvidado a las 15:00 deja **6,0 h** y el rastro con la hora REAL,
+  sin mover el día.
+
+⚠️ **El aviso «ese día ya se pagó» se probó en las DOS direcciones.** La demo está vacía
+de nóminas, así que comprobar solo que devuelve `""` sería el paso en vacío (trampa nº1):
+un `return ""` fijo lo pasaría. Con casos construidos: detecta la nómina que cubre el
+día, y **no** dispara con una de otro periodo ni con la de otra persona.
+
+### Verificación
+`verif_v461.py`, **26 comprobaciones**, probado contra **11 roturas: las caza las 11** —
+una solo tras corregirlo (la de la subcadena), y el guardián se dejó **verde con el
+código bueno antes** de creerse ningún recuento. Incluye un caso de CONTROL (un cambio
+inocuo que debe seguir pasando), porque un guardián que grita con cualquier edición no
+distingue nada.
+
+### ⚠️ La suite destapó SEIS rojos, y cinco eran míos
+Correr la suite entera (regla v385) dio **94 verde · 6 rojo**. Clasificados uno a uno,
+mirando el código acusado antes de tocar nada:
+
+| Guardián | Qué era | Veredicto |
+|---|---|---|
+| **v365** | mis 3 `(st.toast if ok else st.error)` | **REAL**: introduje un segundo mecanismo de mensaje donde la app ya tiene uno — medido, **74 sitios** usan `(flash.exito if ok else st.error)` y solo 3 usaban toast: **los míos**. Es el patrón que v140/v146 desmontan. Convertidos |
+| **v322** | un `import auth` sin usar | **REAL, y peor de lo que decía**: sobraba porque me había dejado a medias la regla de los homónimos — la bandeja mostraba `Nombre` a secas, así que **dos personas homónimas salían idénticas en la pantalla donde se decide sobre sus horas**. Séptima aparición del patrón (v151·v306·v319·v348·v413) |
+| **v442·v443·v449** | la cabecera `'Revisado por'` | **REAL**, y el guardián solo vio **una de cuatro**: `Campo`, `Antes` y `Ahora` tampoco estaban en `tabla.CABECERAS`, así que la tabla habría salido `Person · Campo · Antes · Ahora · Status` — **traducción a medias dentro de la misma tabla**, el peor caso según v450. Se le escapan por ser palabras cortas sin acento (trampa nº28) |
+| **v441** | `'cor_sel'` y dos `'Estado'` | **FALSOS POSITIVOS**, pero el código era el raro: `'cor_sel'` es la **KEY** del widget y **solo mi llamada** de las 21 del repo la pasaba como posicional; y los dos `'Estado'` eran `r.get("Estado")` dentro de `kpi_row` (una LECTURA de columna, el error nº2 del medidor de v450). Se alinea el código con la convención en vez de relajar el guardián |
+
+⚠️ **Y la clave de cabecera se dejó de UNA palabra a propósito**: la red de v442 mira
+cadenas de 2+ palabras, y por eso las ~60 claves españolas del repo (`Cliente`, `Horas`,
+`Costo`…) no disparan — todas son de una palabra. `"Revisado por"` era la única
+excepción del repo entero. Se renombró a `"Revisor"` y se añadió al mapa: **la etiqueta
+sigue siendo traducible** (patrón v450) y no se toca el guardián.
+
+### ⚠️ Y mi propio guardián me cazó con un falso positivo MÍO
+El chequeo de etiquetas marcó `logger.warning(...)` como texto de pantalla: **`logger.warning`
+comparte NOMBRE con `st.warning`**, y yo filtraba por atributo en vez de por RECEPTOR — el
+error que v439 documenta con 92 casos. Peor: con el guardián rojo por eso, **la tanda de
+roturas que corrí a continuación no valía nada** (el control salía «FALLA» porque todo
+fallaba). Es la lección de v459 en la misma versión que la cita: **antes de creerse un
+«11/11 cazadas», comprobar que el guardián está VERDE con el código bueno.** Arreglado,
+repetido: 27 verde de base, 11/11 roturas.
+
+### Dos huecos del extractor de i18n, dichos y no arreglados
+`i18n_tool.piezas` no sabe que el 3.er posicional de `ui.elegir(label, opciones, key)` es
+una key, ni que el argumento de `.get()` es una lectura de columna. Nadie los había
+pisado porque el repo pasa la key por nombre y no hace `.get()` dentro de un `kpi_row`.
+**Se alineó el código y se dejó el extractor intacto**: tocar la herramienta compartida
+—la usan las redes de v440/v441/v449/v452— al cierre de una versión es más riesgo que
+valor, y el hueco queda escrito aquí en vez de fingido cerrado.
+
+## «Engineer in charge» pasa a ser HEAD INSTALLER/S, de una lista (v459)
+
+Petición del usuario: *«cambiar en proyectos el engineer in charge por head installer/s,
+el cual o los cuales deben ser seleccionados de la lista de usuarios»*, con tres
+decisiones suyas: **solo usuarios de campo**, **los nombres separados por coma** al
+mostrarlos, y la regla general — *«lo único que debe ser de texto libre es cuando estamos
+creando algo nuevo; de resto todo debe ser de listas»*.
+
+### Por qué la lista no es cosmética
+Escrito a mano, el responsable de una obra era una cadena que **no casaba con nadie**:
+una errata («Javer López») no da error, deja el proyecto con un responsable que no existe
+en el sistema y que ningún filtro puede cruzar. Es la misma familia que el fichaje antes
+de v145 (el nombre del proyecto tecleado) y que las localizaciones antes de v306.
+
+### Qué se guarda: los LOGIN, unidos por «;»
+Igual que `CampoAsignados`. ⚠️ **El login ES la identidad**: dos personas pueden llamarse
+igual —ya pasó con «Mei Chen» (v413)— y un nombre puede cambiar; el login no. El nombre se
+resuelve solo al MOSTRAR, con `projects.head_installers_label`, que además **desempata
+homónimos** reusando `auth.etiqueta_usuarios` (v319) sobre TODO el grupo, no sobre la lista
+visible — si no, la misma persona cambiaría de nombre según la pantalla (v413).
+- ⚠️ **La columna sigue llamándose `Ingeniero`**. Renombrarla obligaría a tocar los ~10
+  sitios que la leen sin ganar nada, y el nombre de una columna es un identificador
+  interno, no una etiqueta de pantalla: se cambia lo que se MUESTRA, nunca la clave
+  (v232/v442).
+- ⚠️ **Sin migración de histórico**: lo guardado antes es un NOMBRE, no un login, así que
+  `head_installers` lo devuelve tal cual y `head_installers_label` lo muestra crudo. Un
+  responsable viejo no desaparece del informe; simplemente no resuelve a una ficha.
+
+### Quién puede serlo (dos reglas distintas, a propósito)
+| | Quién sale en la lista |
+|---|---|
+| **Head installer/s** de una obra | **solo usuarios de CAMPO** (decisión del usuario): es quien va a obra |
+| **Responsable** de una localización | **cualquiera del grupo**: una oficina o un almacén los suele llevar alguien de administración, así que filtrar por campo dejaría fuera al responsable real |
+
+Por eso hay dos helpers (`_field_users`, `_usuarios_de`) y no uno con parámetro: la
+diferencia es de DOMINIO, y un flag invita a pasarlo mal.
+⚠️ Los dos degradan a lista vacía si falla la lectura, y la pantalla **lo dice** («No field
+users yet: create them in Planning → Users») en vez de mostrar un desplegable vacío sin
+explicación (patrón v325: un pendiente que nadie puede cerrar es peor que no tenerlo).
+
+### ⚠️ El guardián FALLABA con el código correcto — por su propio formato
+El chequeo de «solo campo» no puede ir por subcadena: `== "campo"` aparece en **5 sitios**
+del módulo, así que romper `_campos_de` lo dejaría en verde (la trampa nº2, *grep ≠ uso*,
+dentro del guardián). Al pasarlo a AST cometí el error gemelo: comparé contra
+`'"campo"' in ast.dump(...)` y **`ast.dump` usa `repr`, o sea comillas SIMPLES** → FALLO
+con el código perfecto. Es el `"40"` vs `"40.0"` de v372 y el `sorted()` de v15: **un test
+que formatea distinto que el código genera fallos en falso**.
+- ⚠️ Y lo peor no es el rojo: **invalidó la primera tanda de roturas**. Las 6 salieron
+  «CAZADAS» mientras el guardián estaba rojo de base, así que ninguna probaba nada — un OK
+  en falso invertido. Hubo que arreglarlo y **repetir las 6**. Lección: antes de creerse un
+  «6/6 cazadas», comprobar que el guardián está VERDE con el código bueno.
+- La versión que sí vale recoge los `ast.Constant` del cuerpo de cada función, sin depender
+  del formato del dump.
+
+### ⚠️ «Desplegado ≠ corriendo», con el reparto AL REVÉS que en v452
+Tras desplegar, la barra lateral decía **v459**, el topbar **v458** … y `projects_ui`
+**era el nuevo** (la pantalla ya mostraba «Head installer/s»). O sea que Streamlit
+recargó `app.py` y `projects_ui` y conservó `home_ui` — justo al contrario que en
+v452, donde lo fresco era solo `app.py`.
+→ Refuerza la corrección que v408 le hizo a v334, y la endurece: **la versión no prueba
+nada en NINGUNA de las dos direcciones**. Una versión vieja en la barra no significa
+que tu cambio no esté corriendo, igual que una nueva no significa que sí. Solo se
+comprueba mirando el CAMBIO.
+
+### Verificación
+`verif_v459.py` (22 comprobaciones): ningún `text_input` para el responsable en los cuatro
+caminos (alta y edición de obra, alta y edición de localización), los cuatro guardados unen
+con «;», cada lista ofrece a quien debe (por AST, sobre el CUERPO de cada helper), los
+helpers **EJECUTADOS** (importar no ejecuta, v378) y los dos documentos que salen de la
+empresa —correo de asignación e informe del cliente— diciendo «Head installer/s». Probado
+contra **8 roturas: las caza las 8**.
+
+**Verificado EN PRODUCCIÓN** con las dos listas a la vez, en la misma sesión y el mismo
+grupo — que es lo que demuestra las dos reglas de golpe:
+
+| Campo | Placeholder | Opciones |
+|---|---|---|
+| **Head installer/s** (obra) | `No options to select` | ninguna, con el aviso «No field users yet…» |
+| **Person in charge** (localización) | `Choose options` | **asfgjjd · Bobo · Diego Moreno** |
+
+Los dos son `stMultiSelect` (no `stTextInput`) y muestran **nombres**, no logins
+(`Diego Moreno`, no `dmoreno`): `_etq_us` haciendo su trabajo.
+⚠️ El vacío del primero **no se dio por bueno**: antes se validó la sonda contra un caso
+conocido-bueno de la misma pantalla —el multiselect de certificados, que devolvió sus 9
+opciones—, porque «no hay opciones» puede ser una sonda mal apuntada (v375). Y no se
+escribió nada: los dos formularios se abrieron y se cerraron sin enviarlos.
+
+### ⚠️ Y me dejé el camino gemelo: el informe al cliente iba a decir «campo1;mchen»
+Salió de auditar «¿queda algo pendiente?» **contra el código** en vez de darlo por cerrado.
+`survey_ui` llena `session_state["ingeniero"]` con la columna **CRUDA**, y esa clave es
+justo la que pintan `user_report` (informe del CLIENTE) y `email_notify`. O sea que el
+documento que se le manda al cliente habría mostrado los LOGIN separados por «;» — el
+fallo que esta versión venía a evitar, en el sitio más visible de todos.
+- Es **media unificación** otra vez (v419 con la ubicación, v454 con las actividades): la
+  regla aplicada en `projects_ui` —donde «Reconstruir en el Survey» SÍ resolvía el
+  nombre— y no en su gemelo.
+- ⚠️ **Mi guardián no podía verlo**: comprobaba que los documentos dijeran «Head
+  installer/s», o sea la ETIQUETA, no que el VALOR llegara resuelto. Chequeo nuevo, y
+  general: ningún módulo puede asignar a la clave `ingeniero` algo que salga de leer la
+  columna. Probado contra el código roto.
+
+### ⚠️ Y escribí un helper que YA EXISTÍA: tres copias del mismo filtro
+`_field_users(grupo)` ya estaba en el módulo (v135) y hace exactamente lo que mi
+`_campos_de`, más dos bloques inline idénticos repartidos por el fichero. O sea que dejé
+**tres definiciones** de «los usuarios de campo del grupo» donde antes había dos. Es el
+patrón de los cinco `_num` divergentes de v323 —donde dos de las divergencias eran fallos
+de dinero— y la regla de v140/v146: al añadir un mecanismo hay que comprobar que no existe
+ya. Dos definiciones de lo mismo no fallan hoy; divergen mañana.
+- Se queda `_field_users` (el que ya tenía call-site) y desaparece `_campos_de`; −24 líneas.
+- ⚠️ **`_usuarios_de` NO es una copia y se queda**: es la regla CONTRARIA (todos los del
+  grupo, para el responsable de una localización) y no existía. Un solo helper con un flag
+  habría invitado a pasarlo mal.
+- **Chequeo permanente**: por AST, el filtro `Rol == "campo"` puede aparecer **UNA sola
+  vez** en el módulo. Probado contra el código roto (reintroducir una copia inline).
+
+### ⚠️ Dos chequeos míos que medían otra cosa, en la misma tanda
+1. El del guardián comparaba contra `ast.dump`, que usa `repr` → comillas SIMPLES, así que
+   `'"campo"'` **nunca casa** y daba FALLO con el código correcto. Y eso **invalidó la
+   primera tanda de roturas**: las 6 salieron «CAZADAS» con el guardián rojo de base, o sea
+   que ninguna probaba nada. Antes de creerse un «6/6», comprobar que el guardián está
+   VERDE con el código bueno.
+2. El del script de limpieza imprimía «bloques inline restantes: **0**» contando `'campo'`
+   con comillas **simples**, que no aparece nunca en el fuente (allí es `"campo"`). Con esa
+   cifra habría dado la limpieza por terminada dejando **una copia viva** — la encontró el
+   chequeo nuevo del guardián, no el script que venía a hacer la limpieza.
+
+Los dos son la misma familia que el `"40"` vs `"40.0"` de v372 y el `sorted()` de v15: **un
+chequeo que formatea o mide distinto que el código produce veredictos falsos en las dos
+direcciones**, y el peligroso es el verde.
+
+## Vaciar la demo, y la limpieza de Drive que faltaba (v456)
+
+Petición del usuario: *«eliminar todos los proyectos, usuarios de campo y todo lo
+asociado… con el fin de dejar de ver ruido en las futuras pruebas»*, y después *«borra
+también los archivos de Drive»*.
+
+### Lo que se vació
+**23 hojas, 869 filas** del libro de `cliente1` y **8 usuarios de campo** del `Login`.
+Se conservan: las **5 cuentas de gestión** (2 propietarios + 3 administradores), la hoja
+**`Auditoria`** (decisión del usuario: es el registro de qué pasó) y **todas las
+cabeceras** — sin cabecera, la siguiente escritura cae en la columna de al lado (v323).
+Respaldo previo completo (50 hojas, 987 filas) **fuera del repo**, porque el `Login`
+lleva hashes de contraseña y emails.
+
+⚠️ **Comprobado que la app aguanta en vacío**: 17 funciones de agregado ejecutadas sin
+una sola excepción, y las pantallas explican su estado («No payslips yet…», «No clients
+yet…») en vez de quedarse en blanco.
+
+### ⚠️ EL ERROR DE ORDEN: se vació antes de borrar Drive
+Los 31 archivos de Drive quedaron **inalcanzables desde la app**: el botón de borrar un
+documento vive en la ficha de su proyecto, y los proyectos ya no existían. Hubo que
+recuperar sus `DriveID` **del respaldo** y programar una limpieza nueva.
+→ **Al vaciar un entorno, lo que vive FUERA de la hoja se borra PRIMERO**: la hoja es el
+índice, y sin índice lo de fuera se queda huérfano y sin manija.
+
+### `drive_store.inventario()` / `borrar()` + «Drive maintenance»
+Pantalla en Administración → Manuales (solo PROPIETARIO): escanea, marca qué carpetas
+`PRJ-####` ya no corresponden a ningún proyecto vivo, y borra las huérfanas o todo, con
+**DELETE tecleado** para habilitar el botón.
+- ⚠️ La salvaguarda de fondo no es la confirmación: es el **scope `drive.file`**, que
+  impide a la app ver nada que ella no haya creado. Por eso un borrado masivo aquí no
+  puede tocar un archivo personal.
+- ⚠️ `borrar()` **devuelve los errores** en vez de tragárselos como `delete()`: en una
+  limpieza masiva, «3 de 31 no se pudieron borrar» es justo lo que hay que saber (v323).
+- Y **invalida la caché de carpetas** (10 min): sin eso la app seguiría escribiendo en un
+  id que ya no existe.
+- ⚠️ Se ENGANCHA al final de `_owner_manuales`. Escribir la función y no llamarla es el
+  patrón «se escribe y nadie lo lee» de v131/v148.
+
+### ⚠️ Vaciar la demo dejó 3 guardianes en rojo, y eso NO se arregla relajándolos
+`check_report_smoke`, `verif_sim_f` y `check_f5b_smoke` dependían de que hubiera datos.
+Un guardián sin datos **no debe salir verde** (sería el OK-en-vacío de la trampa nº1) ni
+**rojo** (no hay nada roto). El runner gana una tercera categoría: **código 2 = SIN
+DATOS**, que se cuenta y se lista aparte, con el aviso de que *esas afirmaciones dejaron
+de comprobarse*. Así vaciar el entorno no deja rojos crónicos —lo que hace que una suite
+se acabe ignorando (v385)— pero tampoco disimula la pérdida de cobertura.
+
+⚠️ `check_f5b_smoke` era distinto: su chequeo del mensaje «campo desconocido» necesita un
+proyecto que EXISTA, porque si no `update_project` corta antes con «not found». Ahora
+busca uno cualquiera y, si no hay, lo dice. Ese volvió a verde.
+
+## Se ELIMINA el modelo viejo de ganancia: el % sobre el total (v455)
+
+Petición del usuario: *«quiero que elimines del todo el viejo modelo de ganancia sobre el
+total del proyecto»*. Convivían **dos formas de contestar la misma pregunta** desde v360, y
+esa es exactamente la clase de duplicidad que produjo los fallos de v310, v321 y v361.
+
+### Qué queda, y en este orden
+1. **Cotizada** (v370) → el **precio que el cliente firmó**. Es un hecho, no una
+   estimación: adivinarlo desde el costo sería contradecir un dato que ya se tiene.
+2. **Por rubro** (v360 + v373) → `horas × ganancia/hora` de cada persona, más la ganancia
+   **fija** de la obra.
+3. **Nada de lo anterior** → la obra vale su **COSTO**, y se AVISA de quién trabajaría sin
+   ganancia. No se inventa un margen que nadie ha decidido (patrón v346: un cero
+   silencioso no se nota hasta ver el total).
+
+El `%` pasa a ser **siempre una consecuencia**, nunca una entrada. Con ello desaparecen el
+campo «Margin on labour» del formulario de la obra y el **editor de márgenes de
+Rentabilidad** (v321): editar ahí el % volvería a crear la segunda fuente de verdad.
+
+### ⚠️ Medido ANTES de tocar, porque mueve dinero en pantalla
+10 de 19 obras usaban el modelo viejo, pero **solo 4 cambiaban de cifra** — las demás
+tienen costo 0, así que el % no se aplicaba sobre nada:
+
+| Obra | Ingreso antes | Después | Dif |
+|---|---|---|---|
+| Stockland Wetherill Park | 10.168,83 | 8.857,36 | **−1.311,47** |
+| prueba2 | 983,82 | 819,85 | −163,97 |
+| Steph · prueba 3 | 1,96 | 1,60 | −0,36 |
+| **Grupo** | **118.233,77** | **116.757,97** | **−1.475,80** |
+
+La ejecución posterior dio **exactamente** 116.757,97, que es lo que convierte la
+predicción en verificación. El usuario decidió no migrar esas 4 («son de prueba»).
+
+### ⚠️ La columna NO se quita de la cabecera, aunque el dato sí se borre
+`MargenMO` **sigue en `PROJECTS_HEADERS`**: quitarla desplazaría las 20 columnas
+siguientes y, como la fila de `create_project` es POSICIONAL, **cada dato caería en la de
+al lado** — el fallo que mató esa función durante 3 versiones en v363. Se escribe vacía,
+no la lee nadie, y el guardián comprueba que fila y cabecera siguen casando (33 = 33). Su
+CONTENIDO sí se vació en la hoja (4 valores), con respaldo fuera del repo.
+
+### ⚠️ Y `Grupos.MargenDefault` hacía DOS trabajos, no uno
+El usuario pidió borrarlo también. Al auditarlo antes de tocarlo resultó que alimenta
+**dos cosas distintas**:
+- el modelo viejo de ganancia de la obra → eso se elimina;
+- y el **punto de partida del margen de una línea de cotización** (`quotes_ui`), que es el
+  **precio AL CLIENTE** — otra cosa, y viva.
+
+Vaciarlo habría hecho que cada línea nueva arrancara en **0 %**. Se conservó, se reescribió
+su docstring y su etiqueta para que digan su propósito REAL, y se dejó la decisión al
+usuario con el dato delante. **Una instrucción dada sin conocer un efecto colateral no
+autoriza ese efecto**: lo que corresponde es señalarlo, no ejecutarlo a ciegas ni ignorarlo.
+
+### ⚠️ TRAMPA NUEVA: correr las ROTURAS mientras corre la suite
+
+La suite salió con **7 rojos** y el primero que miré (`verif_v455`) acababa de darme
+`TODO OK` un minuto antes. La causa era mía: lancé `romper_v455.py` **mientras la suite
+estaba corriendo**, y ese script modifica ficheros del repo y los restaura al terminar —
+así que la suite leyó código roto a mitad de camino.
+
+→ **Los scripts de rotura NUNCA se lanzan en paralelo con la suite.** Modifican el árbol
+de trabajo, así que cualquier cosa que lea el código a la vez obtiene basura. Es la
+familia del CWD de v19 y de la consola cp1252 de v23: **el entorno de ejecución
+fabricando rojos que no existen**, que es lo que empuja a «arreglar» código sano.
+
+Y de los 7, tras rehacerlo limpio: **1 era regresión mía de verdad** (al reescribir un
+texto dejé una frase suelta en una concatenación — la cazó el guardián de v453, que es
+exactamente para lo que existe), **5 eran caducados** por el cambio deliberado y se
+actualizaron con su razón escrita, y **1 era el falso rojo del solapamiento**.
+
+⚠️ El caso de `verif_v321` merece nota: era **el guardián del editor de márgenes**, y ese
+editor ya no existe. No se borró — se reescribió sobre lo que sigue vivo: que un proyecto
+ARCHIVADO no desaparezca de la rentabilidad (la regla de fondo que v321 encontró) y que
+la tabla sea ahora de **solo lectura**. Un guardián cuyo objeto desaparece no se tira: se
+reapunta a la regla que defendía.
+
+### Verificación
+`verif_v455.py` (18 comprobaciones) **ejecuta** `project_revenue` sobre las 19 obras reales
+y comprueba que ya no aparece ningún modelo `margen`; busca además la **FORMA** de la
+fórmula vieja (`mo × (1 + x/100)`) en todo el repo, no un nombre — y esa red se valida
+contra un caso construido antes de creerse su cero (trampa nº12). Probado contra **3
+roturas: las caza las 3**, incluida la de quitar la columna de la cabecera.
+
+## ⚠️ UNA OBRA CREADA DESDE COTIZACIÓN NACÍA SIN ACTIVIDADES (v454)
+
+Salió **por accidente**, intentando verificar en pantalla el titular «You are at» de una
+cotización: no se pintaba nunca. La razón no era el titular — era que la única obra creada
+desde una cotización (`PRJ-0016`, un Ripout) había nacido con **CERO actividades**.
+
+El avance es `Σ(peso·avance)/Σpeso` sobre las actividades, así que sin ninguna:
+1. la obra se queda **clavada en 0% para siempre** (estaba así, en producción);
+2. el **campo no tiene dónde reportar** su trabajo;
+3. y el bloque «cotizado vs real» **nunca puede pintar su titular**, porque depende del
+   avance. Ese tercer síntoma fue el que llevó hasta el fallo.
+
+### La causa: media unificación, otra vez
+
+La regla es de **v306** —*«los demás tipos nacen con UNA actividad genérica, no con cero:
+sin ninguna el proyecto se quedaría clavado en 0% para siempre y el campo no tendría dónde
+reportar»*— y estaba aplicada **solo en el alta MANUAL**. El camino que crea la obra al
+**aceptar una cotización** (v354) se quedó sin ella y dejaba `acts = None` para todo lo que
+no fuera Instalación.
+
+⚠️ Es la misma forma que v419 (la ubicación unificada a medias), v358 (archivar y
+facturar) y v322 (archivar y agrupar): **una regla aplicada a un camino y no a su gemelo**.
+Por eso el guardián no mira un sitio, mira LOS DOS — y además exige que usen **el mismo
+nombre** de actividad, porque si divergieran el histórico tendría dos nombres para lo mismo
+según por dónde se creó la obra.
+
+### Lo que enseña sobre verificar
+
+Este fallo llevaba desde v354 y **ningún guardián podía verlo**: el código compila, la
+función devuelve `ok=True` y el proyecto se crea. Solo aparece **al mirar la pantalla y
+preguntarse por qué un texto no sale nunca**. Es el argumento de v452 —recorrer la app— en
+su forma más barata: la frase que no aparece era el síntoma, no el problema.
+
+### Verificación
+
+`verif_v454.py`, probado contra el código ROTO (el que había): lo caza. Y el dato dañado se
+reparó — `PRJ-0016` pasa de 0 actividades a 1. ⚠️ El **35% de avance** que le puse para
+provocar la frase se devolvió a 0: era dato mío. La **actividad se queda**, porque es la
+reparación del fallo, no parte de la prueba.
+
+## CERRAR LOS PENDIENTES: la red 14 y la migración del histórico (v453)
+
+Petición del usuario, en dos tiempos: *«¿entonces qué hay pendiente? ¿y por qué no se ha
+hecho?»* y, tras la respuesta, *«no dejes nada pendiente»*.
+
+### ⚠️ La lista de pendientes del documento estaba MAL, y en las dos direcciones
+
+Al auditar contra los datos —en vez de recitar el documento— salió que:
+- **`FechaIngreso` figuraba como pendiente y llevaba 18 versiones resuelto** (las 13
+  cuentas la tienen). Un documento que acumula pendientes ya cerrados hace la lista
+  inútil.
+- Y al revés: **el signo de `Cut*` llevaba pendiente desde v130** sin que yo lo
+  recordara en ninguna respuesta.
+
+→ **REGLA: cuando alguien pregunta «¿qué falta?», se audita contra los datos.** La
+respuesta de memoria estaba equivocada por los dos lados.
+
+### La DECIMOCUARTA red: la CONCATENACIÓN
+
+`st.info("texto " + var + " más texto")`. El literal **no es el argumento** de la llamada
+sino un operando de un `BinOp`, así que la red de POSICIÓN (v440) no lo ve. Es la red 4
+(la f-string entera) con `+` en vez de interpolación.
+
+⚠️ **Y la medida corrigió mi propia estimación en las dos direcciones.** Dije «~80
+llamadas» a ojo; contadas por AST eran **127**, y clasificadas: **97 CSS/HTML** (no hay
+nada que traducir), **30 frases ya en inglés** y **0 en español**. O sea que la bolsa
+real era de 30, no de 80. Estimar fue peor que no dar número: inflaba el pendiente **y**
+ocultaba que 97 no eran trabajo.
+
+**El arreglo no es envolver cada trozo**: un trozo no es una frase y el orden de las
+palabras cambia entre idiomas. Cada frase pasa a ser UNA clave con marcadores, y quedan
+**0 frases sueltas** en los 23 módulos de interfaz.
+
+⚠️ Eso abre un modo de fallo nuevo y SILENCIOSO: si un marcador no casa con su
+sustitución, el `{x}` **se pinta literal** y no salta nada. De ahí el chequeo 2.
+
+⚠️ Y de paso se descubrió que **el motor ya aceptaba `t("… {x} …", x=valor)`**
+(`i18n.py:88` hace el `.format()`), que es la forma nativa y más limpia que la cadena de
+`.replace()` que usé. Las 27 frases nuevas funcionan igual; queda anotado que la forma
+preferida es la de kwargs.
+
+### La migración del histórico, que era la razón real de no haberlo hecho
+
+Los nombres de actividad **se guardan en la hoja `Actividades`**, así que traducir solo
+el código habría dejado los proyectos viejos en español y los nuevos en inglés **sin
+forma de casarlos**. Por eso v438 puso un guardián que exigía que siguieran en español:
+no era pereza, era que faltaba decidir la migración.
+
+- **0 comparaciones** con nombres de fase en todo el repo (verificado por AST antes de
+  tocar nada): se puede traducir sin dejar ramas muertas.
+- **123 de 123 filas** migradas en **1 `batch_update`**, con respaldo previo **fuera del
+  repo** (v377) y verificadas leyendo: 0 en español.
+- El concepto de nómina `Retención de impuesto (PAYG)` → `Income tax withheld (PAYG)` en
+  **25 filas**. El código ya lo decía en inglés desde v447; lo que faltaba era el dato.
+
+⚠️ **Lo que NO se migró, y es deliberado**: el `tipo` del concepto
+(`aporte`/`deduccion`/`devengo`) y las BANDERAS de `PHASES` (`cortes`, `shaft`). Los dos
+se COMPARAN, así que traducirlos deja la rama muerta sin dar error (v442/v447).
+Comprobado ejecutando que **el neto sale idéntico** con el concepto en español o en
+inglés (850.0 en los dos): el nombre no decide el dinero.
+
+### ⚠️ El guardián se equivocó CUATRO veces, y cada una enseña algo distinto
+
+Ninguna se vio leyéndolo: todas salieron de probarlo contra código roto y contra código
+sano.
+
+| # | Qué hacía | Por qué |
+|---|---|---|
+| 1 | **10 «marcadores sin replace» que no existían** | `ast.walk` visita también los nodos INTERMEDIOS de `t(...).replace(A).replace(B)`, y cada uno ve un solo replace |
+| 2 | **1 falso positivo más, en un ternario** | el `.replace()` que vive DENTRO de una rama no es hijo directo del externo → se procesaba como cadena suelta |
+| 3 | **3 roturas SE ESCAPARON** | comprobaba «el literal está en el fichero» y aparece en VARIOS sitios (la constante *y* la comparación), así que traducir uno seguía pasando — la trampa nº2 dentro del guardián |
+| 4 | **22 falsos positivos** | miraba solo `.replace()` e ignoraba que el motor acepta **kwargs**, que es como lo hacen los 20 módulos de PDF |
+
+**La invariante que sí funciona** para lo que se compara no es «el literal existe», sino
+**COMPARADOS ⊆ ESCRITOS**: si `neto()` compara un valor que nadie escribe, esa rama está
+muerta. ⚠️ Y la dirección importa: `escritos ⊆ comparados` daba **FALLO con el código
+correcto**, porque `aporte` se escribe y `neto()` no lo compara **a propósito** (el
+superannuation no descuenta del neto, v346).
+
+### Verificación
+
+`verif_v453.py` (18 comprobaciones), con cada red **validada contra un caso construido**
+antes de creerse su cero, y probado contra **5 roturas: las caza las 5** — pero solo
+después de las cuatro correcciones de arriba. Y `verif_v438` **caducó a propósito**: su
+afirmación se invirtió (de «siguen en español» a «están en inglés y casan con el
+histórico migrado») con la razón escrita al lado, que es lo que pide la regla v385.
+
+### ⚠️ Y por TERCERA vez, un fichero de trabajo se coló en el repo
+
+Los dos JSON de la migración (`mapa_actividades.json`, `plan_migracion.json`) se
+escribieron con `survey_app` como CWD, y `backup_survey.ps1` hace **`git add` de todo**:
+acabaron empujados a GitHub. No llevaban secretos —el mapeo de nombres y los números de
+fila— y se sacaron en el commit siguiente, pero es el mismo fallo de **v377** (el respaldo
+con hashes y emails, que entonces cazó `git status`) y de **v422** (el JSON de la foto).
+
+⚠️ La regla ya estaba escrita las dos veces y volvió a pasar, así que el problema no es
+saberla: es que **el CWD por defecto de un script lanzado desde el repo ES el repo**. Lo
+que lo evita es escribir siempre a una ruta ABSOLUTA fuera de él —como sí hicieron los
+respaldos de esta misma tanda, que fueron a `C:\Users\diego\respaldo_sheets\`— y mirar
+`git status` **ANTES** de desplegar, no después.
+
+### ⚠️ Los dos guardianes que se pusieron rojos hicieron su trabajo
+
+`verif_v448` y `verif_v449` afirmaban que los nombres de actividad **siguen en español**,
+y `verif_v448` lo decía con todas las letras en su docstring: *«para que traducirlos algún
+día salte y obligue a mirar la migración del histórico»*. Al traducirlos, saltaron. Eso no
+es un guardián caducado por descuido: es **la única forma de que un cambio de código
+obligue a mirar los datos que ese código escribe**. Los tres (con el de v438) se
+invirtieron con la razón escrita al lado, nunca relajados.
+
+⚠️ Y uno de esos rojos, al reproducirlo a mano, salió como `No secrets found`: la
+**trampa nº19** (el guardián lanzado desde el directorio equivocado, que fabrica rojos que
+no existen). El fallo REAL solo apareció al correrlo con `cwd=survey_app`, como hace la
+suite. Diagnosticar desde la ejecución equivocada habría llevado a buscar un problema de
+secrets que no existía.
+
+### ⚠️ Lo que sigue abierto, y por qué NO es «no haberlo hecho»
+
+- ~~**5 cuentas sin Telegram**~~ → ⚠️ **CERRADO, y el pendiente estaba mal enunciado.**
+  Es cierto que esas 5 cuentas no tienen `chat_id` (y sigue sin poder inventarse: un
+  `chat_id` identifica una conversación REAL, así que ponerlo a mano mandaría los avisos
+  al teléfono de un desconocido — se vincula cuando la persona pulsa Start). Pero lo que
+  el pendiente afirmaba —que **a 3 destinatarios no les llega la alarma** (v395)— ya no
+  es verdad: **v434 les cargó el email**, así que los 5 tienen canal. Medido ejecutando,
+  no leyendo: `group_digest(...)["avisos_sin_canal"] == []` y los 5 destinatarios de
+  `_admins_and_owners` con `email=True`. Es el error de v453 —un pendiente ya resuelto
+  que sigue escrito— **repetido en el mismo documento que lo denuncia**.
+- **El signo de `Cut*`** (v130): decisión de dominio, y el corte es irreversible.
+- **La red 12 y el titular de cotización, sin ver en pantalla**: las dos listas son
+  `st.dataframe` en canvas — no se puede seleccionar fila ni leer celdas desde el banco.
+  Límite dicho, no verificación fingida.
+
+
+## RECORRER LA APP: 24 pantallas, y CINCO redes más de i18n (v451-v452)
+
+Petición del usuario: *«vas a entrar en la app y vas a ejercitar cada uno de los
+botones, funcionalidades y acciones para garantizar que todo esté funcionando como
+debería»*, con la demo autorizada para crear, modificar o borrar lo que hiciera falta.
+
+**Resultado del recorrido: las 24 pantallas del administrador, 0 excepciones.** Lo que
+salió no fueron pantallas rotas — salieron **cinco formas nuevas** de texto sin traducir
+que ninguna de las siete redes de v450 podía ver.
+
+### ⚠️ La lección de fondo, otra vez: cada red nueva descubre una bolsa nueva
+
+v449 declaró el i18n «cerrado del todo» y v450 encontró 46 cabeceras. Ahora, mirando la
+app en vez del código, aparecen cinco formas más. **El «0» de una red solo significa
+«0 de lo que esa red sabe ver»**, y por eso la afirmación honesta no es «no queda nada»
+sino «no queda nada *de estas doce formas*».
+
+| # | La forma | Por qué se escapaba | Encontrado |
+|---|---|---|---|
+| **8** | el argumento de display es un **TERNARIO** (`st.info(A if c else B)`) | la red de POSICIÓN mira si el argumento es un `Constant`, y un `IfExp` no lo es | 7 ramas |
+| **9** | valor de dict dentro de un **`format_func`** | el literal no llega a `st.*`: llega al lambda | 12 valores |
+| **10** | widget cuyas opciones son literales y **NO tiene `format_func`** | pinta el dato CRUDO; en esta app la opción casi nunca es una etiqueta | 4 widgets |
+| **11** | cabecera **`<th>` escrita a mano en HTML** | `tabla.cfg()` (v450) solo alcanza a `st.dataframe` | 2 |
+| **12** | **valor de negocio crudo dentro de una CELDA** | la celda no es una llamada a `st.*`: es un valor en el dict que alimenta `pd.DataFrame` | 3 |
+| **13** | **nombre de columna que alimenta un CHART** | esa clave ES la leyenda; `tabla.cfg()` solo alcanza a `st.dataframe` | 3 |
+
+⚠️ Y las cinco comparten algo incómodo: **la mayoría ya estaba en inglés**, así que la
+red de IDIOMA tampoco podía verlas. El daño no era una fuga visible, sino que **no se
+traducirían nunca** cuando se llene el diccionario español — un fallo que no aparece
+hasta que alguien mire la pantalla en el otro idioma.
+
+### El español que SÍ estaba a la vista
+
+Todo era **traducción a medias**, que es el peor caso (v443): en el mismo widget, unas
+etiquetas en inglés y otras en español.
+- **Detalle de proyecto**: `edit Datos` junto a Status/Costs/Files · `62% avance` junto a
+  `116.7 h worked` · el titular `Vas 34 points behind plan`, cuya tercera rama ya decía
+  «You are on plan».
+- **Ficha de usuario**: `Acceso` y `Contacto` junto a `Credentials` y `Their work`.
+- **Mis proyectos (campo)**: `Avance` junto a Alerts / Receipts / Files.
+- **Localizaciones**: las 5 sub-secciones en crudo, porque el `segmented_control` no
+  llevaba `format_func`.
+- **Survey**: los 6 grupos de parámetros (`Hueco`, `Cabina`, `Puerta / umbral`, `Frontal`,
+  `Laterales`, `Contrapeso`) — ⚠️ **invisibles hasta para la red morfológica de v450**:
+  ninguno lleva acento ni terminación marcada.
+- **Facturas · Cotizaciones · Contactos**: la columna Estado con `parcial · cobrada ·
+  vencida · pendiente` en crudo, a dos centímetros de un KPI que ya decía OUTSTANDING.
+- **Panel · Libres**: la cabecera `Persona`, en una tabla HTML.
+- **Ruta del día**: los meses en español dentro de una línea cuyo día ya iba traducido
+  («Tuesday 1 of **septiembre**»).
+
+### ⚠️ EL FALLO QUE INTRODUJE YO, y que COMPILABA
+
+Al arreglar la duodécima red barrí «clave `"Estado"` en un dict» y salieron **cinco**
+sitios. Los traduje los cinco. **Dos de ellos no eran filas de tabla: eran el dict que se
+ESCRIBE en la hoja** (`update_project`). O sea que habría guardado el estado en INGLÉS en
+Google Sheets — el peor fallo posible de esta migración, porque un DATO traducido deja de
+casar **en silencio** y lo comparan 387 sitios.
+
+Y encima el parche dejó `_etq(P.derive_estado(avance, est_man), "" if …)`: el paréntesis
+se comió el tercer argumento, así que `derive_estado` pasó a recibir dos. **Compilaba.**
+
+Lo destapó mirar el dict entero antes de dar el cambio por bueno, no el compilador. Es la
+lección de v444 —clasificar por lo que la cadena HACE, no por cómo se ve— y por eso la
+red 12 solo mira los dicts que están **dentro de un `pd.DataFrame`**, que es lo que
+significa «fila de tabla». El guardián lo comprueba en las dos direcciones: que las tres
+celdas se traduzcan **y** que las dos escrituras sigan crudas.
+
+Del mismo lote: metí `_etq(...)` en dos módulos que **no lo importaban** (`clientes_ui`,
+`invoices_ui`) → NameError al abrir esas pantallas, que `compileall` da por bueno. Es el
+fallo de v423/v425/v443, y ahora lo vigila un chequeo general: todo módulo que use `_etq`
+lo tiene a nivel de módulo.
+
+### Lo que NO se toca, con su razón
+
+- Las **OPCIONES** de todo widget: son el ID que compara `sub ==`, el valor que se guarda
+  en la hoja o la clave que indexa un dict. Traducirlas deja la rama MUERTA sin dar
+  ningún error (v442). Solo cambia el `format_func`.
+- **`_GRUPOS_PARAM`** es constante de MÓDULO: `t()` ahí se congela al importar. El texto
+  va en BASE y `t()` se aplica al PINTAR — el arreglo estándar, que ya lleva **seis**
+  reincidencias.
+- El **tipo de proyecto** del alta desde cotización se muestra con `etiqueta()`, no
+  traduciendo la opción: se escribe en `Proyectos.Tipo`.
+
+### Las acciones ejercitadas EN LA INTERFAZ (no la función de backend)
+
+El inventario de escrituras está al 75/75 desde v417, pero eso ejercita la FUNCIÓN. Entre
+la función y el botón están el formulario, la validación, el `flash` y el rerun.
+- **Fichaje desde el sidebar**: el botón nace `disabled` y se habilita al elegir (v139) ·
+  Clock IN → *«Clock IN Project at 21:57:27. Your workday was opened too»*, o sea el flash
+  SOBREVIVE al rerun (v365) y la jornada se abre sola (v150) · el sidebar cambia a
+  CLOCKED IN con los dos cronómetros (3 iframes) · Clock OUT → 0.03 h. **0 excepciones.**
+- **Tablero de Planificación**: abrir la celda vacía → asignar → ⚠️ **el aviso de
+  certificados de v219 salta EN VIVO dentro del editor** («Does not meet all the
+  certificates: 🟢 White Card · ⚪ Working at Heights») con su franja horaria → guardar →
+  la celda muestra la obra → **deshacer** → vuelve a `＋`. Ciclo completo y sin rastro.
+- **Buscador** (v330): «meriton» → 4 resultados con ID y cliente; al tocar uno abre el
+  detalle y **la caja se limpia sola** (la bandera de v111).
+- **Campana**: 4 avisos de credenciales, con sus días.
+- **Pre-Start**: la preselección por FICHAJE de v418, y el bloqueo de duplicado de v407
+  con el texto afinado de v408 — *«This site already has today's Pre-Start **and you are
+  already on it**»*, que es la rama `_pf` vacío. Nunca se había visto ese caso en vivo.
+- **Las 3 vistas del Panel** (Semana · Día · Libres) y el desempate de homónimos de v413
+  funcionando (`Mei Chen (mchen)` / `Mei Chen (mchen2)`).
+
+### ⚠️ Cuatro falsas alarmas, descartadas MIDIENDO antes de reportarlas
+
+1. **«Resultados e informes» en el Survey.** Parecía español sin traducir. `git show
+   ab68a2d` lo desmiente: **v450 ya lo tradujo** y lo que corría era `survey_ui` STALE.
+   Es «desplegado ≠ corriendo» (v333/v408) enturbiando la lectura de pantalla — por eso
+   se desplegó v451 antes de seguir, para forzar un proceso limpio.
+2. **«Car offset side» dentro del Pre-Start.** Un widget del Survey en medio de otra
+   pantalla habría sido grave. Medido por AST del DOM: **no está** — mi `innerText` cazó
+   un estado intermedio del intercambio de árbol tras navegar. Leer el DOM justo después
+   de una navegación puede capturar el render anterior a medio reemplazar.
+3. **El recordatorio del Pre-Start que no salía** al fichar. No es un fallo: `ps_forzar`
+   estaba en la página, o sea que **esa obra ya tenía su Pre-Start** y yo ya constaba —
+   exactamente cuando v403 dice que no debe salir nada.
+4. **El multiselect «sin opciones».** Mi sonda buscaba `[role="option"]`, que es como los
+   marca el **selectbox**; el multiselect usa `data-testid="stMultiSelectDropdown"` y sus
+   opciones no llevan ese rol. Las 11 estaban ahí. Trampa nº24 otra vez: **el DOM de
+   Streamlit cambia POR WIDGET**, no solo por versión.
+
+### ⚠️ Y la red 8, ENSANCHADA: el ternario ASIMÉTRICO
+
+Abriendo la ficha de una localización apareció `PRJ-0018 · Oficina · abierta`, con
+esto detrás:
+
+```python
+(t(":material/lock: closed") if _cerrada else ":material/check_circle: abierta")
+```
+
+Una rama traducida y la otra en español. **El guardián de la octava red no lo vio**
+porque solo miraba el ternario cuando es el ARGUMENTO de un `st.*`, y este vive dentro
+de una lista que luego se junta con `" · ".join(...)`.
+
+→ La señal que SÍ se puede buscar en todo el repo sin falsos positivos es la
+**ASIMETRÍA**: si una rama pasa por `t()` y la otra es un literal, es traducción a
+medias, esté donde esté. Con esa red aparecieron **3 más**: la columna «Contacto» de
+Usuarios mostrando `yes` y `falta` juntos, la campana (`expires in 8 d` sin `t()`) y el
+historial de Pre-Start. ⚠️ Y hubo que filtrar iconos y separadores: una rama cuyo
+literal es solo `"  ·  :orange[:material/warning:] "` no tiene nada que traducir, y una
+red que grita sobre lo que ya está bien acaba ignorándose entera.
+
+De paso, el **tipo** de la localización (`Oficina`) salía crudo: pasa por `etiqueta()`,
+que ya lo sabe traducir — ⚠️ pero la CLAVE de `TIPO_ICONO` sigue siendo el valor
+crudo, o el icono dejaría de resolverse.
+
+### Más acciones ejercitadas, con producción devuelta a su sitio
+
+- **Alta de cliente** de punta a punta desde el formulario: «Client created.» → abre su
+  ficha con el resumen → **archivar** (la lista vuelve a 5 y el contador pasa a «2
+  archived client(s) hidden») → **la vuelta**: marcar la casilla y la lista pasa a 7.
+  Es la regla v340 completa, funcionando en vivo.
+- **Localizaciones** y **Usuarios** (matriz de credenciales + formulario de alta), sin
+  excepciones.
+- ⚠️ **NO se dio de alta un usuario**: ese formulario exige escribir una contraseña,
+  y eso no lo hago yo aunque sea la demo.
+- **Limpieza verificada con foto antes/después**: `Clientes` 7 → 6 filas y el fichaje
+  504 → 502 (las DOS filas del ejercicio, jornada + proyecto — que de paso vuelve a
+  confirmar que fichar a un proyecto abre la jornada sola). Ninguna de prueba queda.
+
+### Límite del banco de pruebas, dicho como límite y no como fallo
+
+**No puedo seleccionar una fila de un `st.dataframe` desde aquí.** Instrumentado: mi clic
+aterriza donde debe (521, 460 CSS, dentro del `dvn-scroller`) pero llegan solo
+`pointerdown` y `click` — **sin `mousedown`**, que es lo que glide-data-grid necesita; ni
+despachándolo a mano sobre el scroller responde. No es un defecto de la app (esa selección
+se construyó y verificó en producción en v226/v228/v402): es que no puedo generar eventos
+de confianza. Las fichas de detalle se alcanzaron por el buscador y por los botones.
+
+### Dos trampas de método nuevas
+
+- ⚠️ **`compileall` devolvió 0 SIN COMPILAR NADA.** Lancé `python -m compileall -q
+  core/x.py` desde `core/`, así que las rutas no existían: imprimió «Can't list» y **salió
+  con 0**, de modo que mi `&& echo "compilan OK"` dio un OK en falso. Comprobar que algo
+  compila exige que la comprobación haya visto el fichero — se hizo con `ast.parse`, que
+  revienta si no lo encuentra.
+- ⚠️ **Un bloque añadido al final de un guardián queda DESPUÉS del `sys.exit`** y no se
+  ejecuta nunca: un chequeo en vacío escrito por descuido. Se vio porque el guardián
+  seguía dando «TODO OK» sin imprimir las secciones nuevas.
+- Y la **trampa nº26 por cuarta vez**: un `\n` dentro de un heredoc se convirtió en salto
+  real y partió una línea del guardián en dos. Se repara con `chr(10)` o con la
+  herramienta de escritura, nunca por heredoc.
+
+### ⚠️ Y la DECIMOTERCERA: la LEYENDA de un chart
+
+Los nombres de columna del DataFrame que va a `st.line_chart` / `st.bar_chart` **SON la
+leyenda que se pinta**, y ahí no llega `tabla.cfg()` (que es solo para `st.dataframe`) ni
+ninguna de las doce redes anteriores: no es una llamada a `st.*` con un literal, es una
+clave de dict. En el dashboard de agrupación se leía **«Planificado / Real» bajo una curva
+cuyo título ya estaba en inglés**.
+
+⚠️ **El primer barrido dio 19 casos y 16 eran falsos.** Atribuía al chart TODOS los `_df`
+del MÓDULO, así que cualquier DataFrame que compartiera nombre de variable con el del
+gráfico entraba. Es **exactamente el error de ámbito del medidor de v450**, repetido tres
+versiones después: un recuento con el medidor mal es peor que no medir, porque se traduce
+lo que no toca y se deja lo que sí. Acotado a la FUNCIÓN, quedan 3 reales.
+
+### La traducción a medias dentro del MISMO `if/elif`
+
+En el detalle de cotización, una rama decía `t("You are at")` y la de al lado **«Vas»** —
+las dos ramas del mismo bloque, en dos idiomas. Y es el mismo «Vas» que ya se había
+arreglado en `projects_ui`: **se corrigió una copia y no la otra**. Con él, otros dos
+literales españoles del módulo (`":material/folder: Abrir "` y `"Proyecto {x} created from
+this quote."`, que además mezclaba los dos idiomas en una sola frase).
+
+El guardián lo afirma **en POSITIVO** —las DOS ramas tienen que pasar por `t()`—, nunca por
+ausencia de español: un detector de idioma es ciego a las palabras sin acento y ya dejó
+pasar esto mismo dos veces (trampa nº28).
+
+### ⚠️ Lo que NO se cerró, dicho como pendiente y no como hecho
+
+Queda una forma más: el literal de display que vive en una **CONCATENACIÓN**
+(`st.info("texto " + var + " más texto")`). No es el ARGUMENTO de la llamada sino un
+operando de un `BinOp`, así que la red de POSICIÓN no lo ve — es la red 4 (la f-string
+entera) con `+` en vez de interpolación.
+
+⚠️ **Y aquí la medida corrigió mi propia estimación, en las dos direcciones.** Dije «~80
+llamadas» a ojo; contadas por AST son **127 trozos**, y clasificados:
+
+| | | |
+|---|---|---|
+| **97** | CSS y HTML | **no hay nada que traducir**: son estilos, no texto de interfaz |
+| **30** | frases ya en INGLÉS | esto es la bolsa real |
+| **0** | español | por eso hoy no se ve nada raro en pantalla |
+
+O sea que la bolsa que importa es de **30, no de 80**, y el daño es el de siempre: no se
+traducirían nunca cuando se llene el diccionario español. Estimar «~80» era peor que no
+dar número, porque inflaba el trabajo pendiente **y** ocultaba que las 97 restantes no son
+trabajo en absoluto. La lista clasificada queda en `pendiente_concat.txt`.
+
+No se arreglan en esta tanda —30 puntos que hay que decidir uno a uno y meterlos al final
+de una versión que ya tocó 12 ficheros es como se cuelan los fallos silenciosos—, pero
+quedan **dichos y contados**, no fingidos cerrados. La afirmación honesta pasa a ser «no
+queda nada de estas TRECE formas», que es distinto de «no queda nada».
+
+### ⚠️ «Desplegado ≠ corriendo», ahora MEDIDO en tres módulos a la vez
+
+Tras desplegar v452 el commit era correcto (`git show HEAD:…` lo confirma) y la pantalla
+seguía sirviendo el código viejo. Medido en tres sitios independientes, que es lo que
+convierte la sospecha en diagnóstico:
+
+| Módulo | Evidencia en pantalla | |
+|---|---|---|
+| `app.py` | sidebar y título de pestaña dicen **v452** | fresco |
+| `home_ui` | topbar dice **v451** | stale |
+| `projects_ui` | leyenda del chart en «Planificado / Real» | stale |
+| `roster_ui` | cabecera **«Persona»**, con los días ya en inglés | stale |
+
+O sea: Streamlit Cloud **re-ejecutó `app.py` y conservó TODOS los `core.*`** en
+`sys.modules`. No es que un módulo concreto se atasque — es que el proceso no ha
+reiniciado, y hasta que lo haga **lo desplegado no es lo que se ejecuta**.
+
+**Tras el reinicio del proceso (lo hizo el usuario), verificado VIENDO EL CAMBIO** — no la
+versión — en cinco sitios que cubren cinco redes distintas:
+
+| Red | Dónde | Antes | Ahora |
+|---|---|---|---|
+| **13** | curva de la agrupación | `Planificado` · `Real` | **`Planned` · `Actual`** |
+| **11** | Panel · Libres (`<th>` a mano) | `Persona` | **`Person`** |
+| **10** | ficha de localización | los IDs crudos | **`Team · Expenses · Pre-Start · Files · Data`** |
+| **8** | cabecera de localización | `Oficina` · `abierta` | **`Office` · `open`** |
+| **9** | sub-pestañas del proyecto | `edit Datos` junto a Status/Costs | **`Status · Data · Costs · Files`** |
+
+Y la concatenación del avance: **`18% progress`**, que era «18% avance».
+
+⚠️ **La red 12 SÍ se verificó, en v453, y el intento fallido de v452 enseñó por qué.**
+El interceptor de `fillText` devolvía 0 porque **se instalaba DESPUÉS de que glide
+pintara**; instalándolo ANTES y navegando dentro de la SPA (sin recargar) captura 118
+llamadas. Y como la rejilla **virtualiza**, la columna `Status` no existe hasta que entra
+en vista: hubo que mover `scrollLeft` de verdad. Resultado: **20 celdas de estado
+pintadas, todas en inglés (`collected`, `overdue`), 0 en español**.
+
+⚠️ **Lo que sigue sin poder verificarse es el titular `You are at`**, porque exige
+SELECCIONAR una fila. Medido otra vez con un clic real de la herramienta: llegan
+`pointerdown@481,583` y `click@481,583` — **sin `mousedown`**, que es lo que glide
+necesita. Es límite del banco, no defecto de la app. ⚠️ Y por poco lo reporto como
+resuelto: mi sonda decía `abrio_detalle: true` porque el regex casó con el «PDF» del
+sidebar. Mirar la pantalla después lo desmintió.
+
+→ El método que funciona no es mirar la versión (v408 ya corrigió a v334 en eso), sino
+**medir el CAMBIO en dos o tres módulos distintos**: si `app.py` es nuevo y varios `core.*`
+son viejos a la vez, el diagnóstico es el proceso, no el código — y buscar el fallo en el
+código sería perseguir algo que no existe.
+
+⚠️ Y por el camino, dos sondas que iban a mentir: `body.innerText` **no contiene las celdas
+de un `st.dataframe`** (van en canvas, trampa nº18), así que un «0 en español» ahí no
+significa nada; y el interceptor de `fillText` devolvió 0 hasta que **se validó contra un
+caso conocido-bueno** (pintar `SONDA_OK` en un canvas propio) — sin esa validación, el 0
+habría pasado por prueba de que la columna ya estaba traducida.
+
+### Verificación
+
+Dos guardianes nuevos (`verif_v451.py`, `verif_v452.py`) con las cinco redes, **cada una
+validada contra un caso construido antes de creerse su cero** (trampa nº12), y probados
+contra **14 roturas**: las cazan las 14 — ⚠️ pero tres solo **tras corregir el guardián**,
+y las tres por el mismo motivo de siempre, comparar por SUBCADENA: `":material/edit: Data"`
+casa dentro de `":material/edit: Datos"`, así que la rotura pasaba. El chequeo se reescribió
+ESTRUCTURAL (ningún valor de dict de un `format_func` es un literal suelto), que además
+cubre el caso general en vez de un literal adivinado.
+
+⚠️ Y un chequeo mío hubo que **retirarlo**: medía por AUSENCIA de español, que es justo lo
+que la trampa nº28 prohíbe. Los que quedan son POSITIVOS — exigen que el inglés esperado
+ESTÉ.
+
+**`verif_v311` se puso rojo: CADUCADO, no regresión.** Leía los titulares suponiendo que
+eran f-strings, y al pasarlos por `t()` dos se convirtieron en concatenaciones (`BinOp`):
+leía 1 de 3 y daba rojo con el código correcto. Lo que la regla de v311 protege no es la
+forma del literal, sino que el énfasis vaya en `<b>` y nunca en `**` (el markdown no se
+procesa dentro de HTML). Lector ensanchado, con la razón escrita al lado.
+
+Suite entera: **101 guardianes, 0 rojo** (680 s). ⚠️ Escribí «103» dando por hecho que las redes nuevas eran ficheros nuevos: son **chequeos DENTRO** de `verif_v452.py`, así que el recuento de la suite no se mueve. Segunda cifra sin medir en la misma tanda — el número lo dice la suite, no yo. Y de paso, fuera el `SyntaxWarning` que `tabla.py`
+imprimía en cada arranque (la tabla markdown de su docstring lleva `\|`; el docstring pasa
+a raw, el texto no cambia).
+
+
+## ⚠️ LA SEXTA RED: las CABECERAS DE TABLA seguían en español (v450)
+
+El usuario preguntó «¿ya quedó todo en inglés?». La respuesta honesta era **no**, y lo
+que faltaba llevaba desde v449 escondido detrás de un «0» que yo había dado por bueno.
+
+### El hueco: `st.dataframe` pinta la CLAVE del dict
+
+Las filas de esta app se construyen a mano (`{"Cliente": …, "Horas": …}`), así que la
+cabecera que se ve **es la clave**. Y una clave de dict es invisible para las cinco
+redes anteriores, que miran POSICIÓN (el argumento de `st.*`) o IDIOMA (frases,
+etiquetas cortas, f-strings, palabras sueltas) — **ninguna mira claves**, y a propósito:
+v444 las excluyó porque una clave y una etiqueta se ven idénticas en el AST.
+
+Medido: **46 cabeceras en español en 12 tablas**, y lo peor es que estaban **mezcladas
+dentro de la misma tabla** — en Agrupaciones se veía `Alerts` y `Status` en inglés al
+lado de `Elevador`, `Estado` y `Costo`. Eso se nota más que si estuviera todo en español.
+
+### El arreglo es la ETIQUETA, nunca la clave
+
+⚠️ La clave **no se puede renombrar a la ligera**: muchas se leen de vuelta
+(`r["Elevador"]`, `r["Peso"]`, `x["Estado"]`) y varias viajan a `DatosJSON` (v148).
+`column_config` cambia lo que se MUESTRA y deja intacto el nombre que devuelve el
+widget. **No es una suposición**: es lo que la app ya hacía desde v353 —`invoices_ui`
+etiqueta `"Concepto"` como *Item* y luego lee `r.get("Concepto")`—, y se volvió a medir.
+
+Nuevo **`core/tabla.py`** (módulo HOJA: solo `streamlit` + `i18n`): `CABECERAS` (clave
+española → texto BASE inglés) y `cfg(filas=None, extra=None)`, aplicado a las **66
+tablas** de la interfaz. `extra` manda, así que cada tabla conserva sus formatos de
+dinero, anchos y `pinned`.
+
+### Verificado EN VIVO antes de construir encima (4 preguntas, 4 medidas)
+
+⚠️ `st.dataframe` pinta en un `<canvas>`, así que el DOM no responde: hay que
+interceptar `fillText` (trampa nº18) y forzar un repintado REAL.
+
+| Pregunta | Medido |
+|---|---|
+| ¿`Column(label)` cambia la cabecera? | `Cliente · Horas · Costo · Avance %` → **`Client · Hours · Cost · Progress %`** |
+| ¿Cambia cómo se pintan las celdas numéricas? | **NO**: `41.13 · 27882.67 · 46` idénticas con y sin configuración |
+| ¿Qué devuelve el `data_editor`? | **`Cliente \| Horas \| Costo \| Avance %`** — las claves ORIGINALES, así que ninguna lectura se rompe |
+| ¿Tolera claves que la tabla no tiene? | **Sí**, 0 excepciones → el mapa entero se puede pasar a cualquier tabla |
+
+Esa última medida es la que hace el arreglo robusto: **no depende de que mi atribución
+estática de «qué dict alimenta qué tabla» sea correcta**, y ya había fallado dos veces
+mientras medía.
+
+### ⚠️ Cuatro veces se equivocó el propio MEDIDOR, y cada una cambiaba la lista
+
+Esto es lo que hay que recordar, más que el arreglo:
+1. El mapa de dicts iba por NOMBRE de variable en TODO el módulo, así que el `rows` de
+   una función heredaba las cabeceras del `rows` de otra.
+2. Contaba como «valor de celda» el argumento de `p.get("Nombre")`, que es una LECTURA
+   de la hoja y no un texto que se pinte.
+3. Daba por traducida cualquier columna presente en `column_config` — y una entrada
+   **sin etiqueta** (`"Peso": NumberColumn(min_value=0.0)`) sigue pintando «Peso».
+4. **No veía el dict INLINE** (`pd.DataFrame([{…} for r in xs])`, que es la mitad de las
+   tablas) y en cambio atribuía a esa llamada cualquier dict de la función que
+   compartiera nombre con la variable del bucle.
+Con las cuatro corregidas la cuenta pasó de «15» a **90 cabeceras**, de las que 46 eran
+españolas. **Un recuento con el medidor mal es peor que no medir: se traduce lo que no
+es y se deja lo que sí.**
+
+### El tercer mapa espejo del mismo día
+
+`_cumplimiento_equipo` tenía `{"vigente": "vigente", "por_vencer": "por vencer", …}`,
+así que las celdas salían en español **bajo una leyenda ya traducida que además
+describía iconos que la tabla no pinta**: dos textos contándose cosas distintas a dos
+centímetros. Al buscarlo aparecieron **otros dos idénticos** (`auth_ui._ico`,
+`credentials.status_label`), los tres anteriores a `i18n.VALORES` — que ya sabe que
+vigente/por_vencer/vencido son valid/expiring/expired. Cuando el mismo fallo sale tres
+veces el arreglo es **borrar la copia**, no traducirla, y el guardián prohíbe desde
+ahora cualquier dict que mapee un valor de `VALORES` a sí mismo.
+
+### ⚠️ La SÉPTIMA red: español por MORFOLOGÍA, no por lista de palabras
+
+Las seis redes usan un léxico, y un léxico siempre se queda corto: ninguna veía
+«vencida», «devuelto», «mantenimiento» ni «retraso», que estaban **a la vista en la
+campana de avisos**. Es la trampa nº28 por quinta vez. La red nueva marca por la FORMA
+de la palabra (acentos, ñ, y terminaciones que en inglés no existen: -ción, -miento,
+-ado/-ada, -mente, -aje…). Coge más ruido, y ese es el punto: el ruido se descarta
+leyendo, un hueco no se ve.
+⚠️ Hubo que quitarle «no», «si» y «solo» del léxico corto: disparaba sobre
+`'(no name)'` y `'— no client —'`, que están en inglés — **un detector que grita sobre
+lo ya traducido acaba ignorándose entero.**
+
+Con ella salieron **310 literales**, de los que ~180 eran reales. Traducidos: 60
+mensajes de backend que v445-v447 se dejaron (`Error guardando:`, `Factura no
+encontrada.`, `Orden cancelada.`…), los avisos de la campana, los estados del
+inventario, los chips de cotización, los nombres de día del tablero, la paleta de
+colores y los textos sueltos de 20 módulos.
+
+### ⚠️ Y me comí la trampa del `t()` congelado por SEXTA vez
+
+Al traducir los estados del inventario metí `t()` dentro de `_EST_LBL`, que es una
+constante de MÓDULO → se evalúa al importar y la traducción queda congelada. Lo cazó el
+guardián de v445 en la pasada siguiente. **Van seis, todas cometidas después de
+documentar la regla**; por eso el arreglo estándar ya tiene nombre: la constante guarda
+el texto BASE y la traducción se mueve a una función que se llama al PINTAR
+(`_est_lbl()`, `_est_fmt()`).
+
+### Dos NameError latentes, cazados por el chequeo de ámbito
+
+`finance.py` usaba `t()` sin importarlo y `credentials.py` usaba `_etq` sin importarlo:
+los dos habrían reventado la primera vez que alguien abriera esa pantalla, y ni
+`compileall` ni el import los ven (v378). Es el fallo de v423/v425/v443.
+
+### Verificación
+
+`verif_v450.py` (20 comprobaciones) **ejecuta** lo que solo se ve llamando —
+`status_label`, `_est_lbl`, `_est_fmt`, `cfg` — y reusa los guardianes que ya existen en
+vez de reescribirlos. Probado contra **7 roturas**: las caza las 7 — ⚠️ pero **dos solo
+tras corregirlo**, y las dos por el mismo motivo de siempre:
+- el chequeo del `t()` congelado hacía `ast.walk` sobre `tr.body` y **descendía dentro
+  de los `def`** (el autoengaño de v342), así que denunciaba 3.000 llamadas normales;
+- y el de la rama muerta miraba «el literal sigue en el fichero» y **ESCAPABA**, porque
+  sigue estando… en la comparación. Es literalmente el fallo que v449 ya había cometido
+  con los IDs de sub-pestaña. Se reusa el guardián de v442.
+
+⚠️ Y ese guardián de v442 **estaba ciego a su propio arreglo**: las opciones ahora se
+escriben como `list(_PER)` y él solo entendía listas literales, así que dejaba de mirar
+justo el widget recién tocado — **segunda vez que una corrección ciega al chequeo que la
+encontró** (la primera fue en v442 con las constantes). Extendido para resolver
+`list(DICT)`: pasa de vigilar 18 comparaciones a **29**.
+
+### Lo que sigue en español, y por qué
+
+Estados y valores guardados · nombres de actividad (hoja `Actividades`) · IDs de
+sub-pestaña · columnas del libro · la carpeta de Drive `COPEX Activos` · la base de
+conocimiento de `chat_agent` · comentarios y docstrings. **Y el informe ADMIN
+(`report.py`) conserva ~31 líneas que v448 dio por cerradas**: quedan medidas y
+anotadas, no arregladas.
+
+## i18n CERRADO del todo: la navegación y las últimas etiquetas (v449)
+
+Al medir con las tres redes a la vez tras v448 aparecieron **32 etiquetas** que
+seguían en español, casi todas en el sitio más visible de la app: **los displays de
+la navegación**. `_SECCIONES` y `_SUBSECCIONES` estaban a medias — «Projects» al lado
+de «Finanzas», «Rails» al lado de «Plomada».
+
+⚠️ Cada entrada es **(ID, display)** y solo se toca el segundo: el ID lleva emoji
+porque **ES el identificador** — lo compara `sub ==` y lo usan los deep-links
+(`_ir_a`, `_admin_nav_pending`, `owner_sec`). Traducirlo dejaría la rama muerta y la
+navegación rota sin dar ningún error.
+
+### ⚠️ Y el chequeo que faltaba: la RAMA MUERTA de las sub-pestañas
+El guardián de ramas muertas (v442) solo mira opciones de `radio`/`selectbox`; estos
+IDs viven en tuplas de un dict. Chequeo nuevo: **cada ID definido en `_SUBSECCIONES`
+tiene que aparecer en un `sub == "…"`**. Hubo que escribirlo dos veces:
+
+1. La primera versión comprobaba «el ID sigue estando en el fichero» — y con la
+   definición traducida y la comparación intacta, **el ID sigue estando** (aparece dos
+   veces). Pasaba con la rama muerta delante. Lo destapó probarla contra código roto.
+2. La segunda daba **dos ramas muertas que no existen**: asumí que el que se despacha
+   por el `else` es «el último de la lista», y no lo es — en finanzas es `⏱ Horas`
+   (el 5.º de 8) y en proyectos es el **primero**. El invariante correcto es POR
+   SECCIÓN: un `if/elif/else` puede dejar **exactamente uno** sin comparar; dos
+   significa que un ID cambió en un lado y no en el otro.
+
+### El recuento final, con las tres redes
+| | |
+|---|---|
+| **Interfaz** (23 módulos) | **0** etiquetas en español |
+| **Backend** (60 módulos) | **0** mensajes en español |
+
+Y lo que queda en español es, todo, lo que **no se puede** traducir:
+| | Por qué |
+|---|---|
+| Estados, tipos, roles y categorías | son el DATO de Google Sheets; `i18n.etiqueta()` los traduce solo al MOSTRARLOS (v442) |
+| Nombres de actividad (`schedule.PHASES`) | se guardan en la hoja `Actividades`: traducirlos partiría el histórico |
+| IDs de sub-pestaña, claves de dict, columnas del libro | son identificadores; traducirlos deja de casar sin dar error |
+| `"COPEX Activos"` | es una CARPETA de Drive: renombrarla dejaría los activos ya subidos en la vieja |
+| La base de conocimiento de `chat_agent` | 353 líneas de dominio; la regla de estilo ya ordena responder en inglés (v448) |
+| Los comentarios y docstrings del código | son para quien lo mantiene, no para quien lo usa |
+
+### Verificación
+`verif_v449.py` (15 comprobaciones) mide con las tres redes sobre TODO el repo,
+⚠️ **valida cada red contra un caso construido antes de creerse su cero** (trampa
+nº12) y afirma las exclusiones una a una — de modo que traducir mañana un nombre de
+actividad, o renombrar la carpeta de Drive, salta. Probado contra **6 roturas**: las
+caza las 6.
+
+## i18n F5 CERRADO: el informe ADMIN, los correos y los prompts de la IA (v448)
+
+Última pieza de la migración. Con esto **la app no tiene un solo texto en español
+salvo lo que es DATO**, y las tres excepciones que quedan están declaradas, no
+olvidadas.
+
+### El informe ADMIN (101 cadenas)
+Va con **`_d()`** —alias, porque `d` ya es variable en `fstr()`— porque es un
+documento: sale de la empresa y su idioma no puede depender de la pantalla de quien
+lo genera (regla v436). Aplicado **por AST y por posición**, ⚠️ **refusando** toda
+cadena que se use como ÍNDICE en algún módulo: son el contrato con `schedule_table`
+y `plumb_table` (`'Actividad'`, `'Duración (d)'`, `'Línea'`), y traducirlas deja la
+lectura buscando una clave que no existe.
+
+### ⚠️ El barrido del FUENTE se dejó 22 líneas; las encontró GENERAR el PDF
+Tras las 64 primeras cadenas, el fuente daba «0 pendientes» y el PDF renderizado
+seguía con **22 líneas en español**: trozos de f-string y líneas de un diagrama ASCII
+que ninguna red del fuente alcanza. Es exactamente la trampa nº27 (v438) repetida:
+**para afirmar «no queda nada», medir sobre la SALIDA**. Se generó el informe de
+verdad (88 KB, proyecto real de la hoja) y se leyó su texto con `pypdf`.
+⚠️ Y hubo que **capturar el log del módulo** además de mirar el PDF: el veredicto va
+dentro de un `try/except` que registra y sigue, así que un `NameError` ahí no revienta
+nada — fue el fallo real de v437 en el informe hermano.
+
+### ⚠️ El prefijo que se PRODUCE en un sitio y se COMPARA en dos
+`"[Interpretación no disponible"` lo genera `interpretation.py` (×2) y lo comparan
+`report.py` y `user_report.py` para saber si la IA falló. **Los cuatro tenían que
+cambiar a la vez**: traducir solo unos deja la comparación sin casar y el informe
+imprimiría el mensaje de error *como si fuera la interpretación*. El guardián lo fija
+en los tres ficheros.
+
+### Los prompts: el idioma en que ESCRIBE el modelo
+`interpretation.SYSTEM_PROMPT` (el del informe admin) pasa al inglés, igual que v437
+hizo con el del cliente; sus **CLAVES** de schema no se tocan (se guardan en
+`InterpJSON` y traducirlas dejaría las 7 secciones en blanco).
+
+### ⚠️ Una decisión de criterio, dicha en voz alta
+La **base de conocimiento de `chat_agent.SYSTEM_PROMPT` (353 líneas)** se queda en
+español. Lo que decide el idioma de la respuesta es la regla de estilo, que ahora
+dice *«responde SIEMPRE en inglés técnico claro, aunque esta guía esté escrita en
+español»* — y el modelo lee español sin problema. Traducir 353 líneas de geometría
+del hueco, fórmulas y casos 1/2 mete **riesgo de error de traducción en el
+conocimiento del asistente** a cambio de cero beneficio visible. Es una exclusión
+DELIBERADA con su razón, no un olvido; si se prefiere lo contrario, es un cambio
+acotado a ese bloque.
+
+### Las tres exclusiones que quedan, y por qué
+| | |
+|---|---|
+| **`schedule.PHASES`** (10 nombres de actividad) | se GUARDAN en la hoja `Actividades`: traducirlos dejaría los proyectos viejos en español y los nuevos en inglés **sin forma de casarlos**. Es migración de histórico |
+| **La base de conocimiento del asistente** | ver arriba |
+| **Las CLAVES** de schemas, columnas, estados y IDs de sub-pestaña | son el DATO. Traducir un dato no da error: deja de casar |
+
+### Verificación
+`verif_v448.py` (24 comprobaciones) **genera el informe**, lee su texto y comprueba
+que 0 líneas llevan español salvo los nombres de actividad —que además **afirma que
+SIGUEN en español**, para que traducirlos algún día salte y obligue a mirar la
+migración del histórico—. Probado contra **7 roturas**: las caza las 7, incluidas
+«se traduce una clave del schema» y «el comparador del prefijo se desincroniza», que
+son las dos que fallarían en silencio.
+
+## i18n F5c: los 14 módulos de backend que quedaban (v447)
+
+`expenses`, `roster`, `inventory`, `credentials`, `payroll`, `prestart`, `rails`,
+`plan_data`, `invoices`, `manuals`, `toolruns`, `plan_store`, `tenant`, `excel_io`.
+Con esto **el backend de la app queda sin un solo mensaje en español**.
+
+### ⚠️ Aquí lo peligroso no fue traducir: fue RENOMBRAR
+`pre_i18n` marcó **25 funciones** con `t`/`d` como variable. Renombrarlas es DOS
+pasos —la asignación y todos sus usos— y el segundo se me escapó otra vez. El peor,
+en `payroll.neto`:
+
+```python
+_tp = str(c.get("tipo", "")).lower()   # renombrado
+if _tp == "devengo": ...
+elif t == "deduccion":                 # ← se quedó
+```
+
+Con `t` ya importado como la función de idioma, **eso no da error**: la comparación
+sale siempre `False` y **las deducciones dejan de restarse del neto a pagar**. Un
+fallo de dinero, silencioso, en la función que calcula lo que cobra cada persona.
+`compileall` en verde, imports en verde, guardianes en verde. Lo encontró
+**preguntarle al AST por todos los `Name` llamados `t`** después de cada renombrado,
+y por eso el guardián de v447 **ejecuta `neto()`** con un caso conocido.
+
+### ⚠️ Y me tapé a mí mismo dos veces más
+- En `manuals` renombré la variable del bucle a **`_tok`**… que ya era el nombre del
+  **TOKENIZADOR del módulo**. `_index()` reventó con `UnboundLocalError` — el fallo
+  de shadowing cometido *dentro* del arreglo del shadowing. Pasó a `_w`.
+- El **`t()` congelado al importar** salió otras **dos** veces (`plan_data.USA`,
+  `toolruns.HERRAMIENTAS`): son dicts de módulo. Tercera y cuarta vez en tres
+  versiones, y las cuatro las cazó el guardián de v445. Sus valores van en texto
+  BASE, sin envolver; las **claves no se tocan** (se guardan en la hoja `Calculos`).
+
+### La prueba de que no se movió ningún número
+Foto de **261 líneas** con 12 agregados del grupo —`payroll.neto`, `resumen`, P&L,
+conciliación, rentabilidad, gastos, horas por persona, matriz de credenciales,
+valor de inventario— comparada contra el código anterior con **`git stash`** (no de
+memoria, regla v422): **idénticas**. ⚠️ Y el primer intento dio «IDÉNTICAS»
+comparando **dos ficheros vacíos**, porque el script fallaba con el `stderr`
+silenciado: el paso en vacío (trampa nº1) en la propia comprobación. Ahora se exige
+que la foto tenga ≥20 líneas antes de comparar.
+
+### Lo que va en idioma BASE y no lleva `t()` (regla v436)
+Los avisos de vencimiento de `credentials` (correo/Telegram), las dos alarmas del
+`prestart` (llegan por Telegram a los administradores), el concepto de la colilla, los
+títulos del **Excel exportado** y la nota `"Decommissioned"` que se escribe en la hoja.
+Salen de la empresa: su idioma no puede depender de la pantalla de quien los dispara.
+
+### Verificación
+`verif_v447.py` (30 comprobaciones) **EJECUTA** lo que el renombrado pudo romper
+—`payroll.neto`, `conciliacion_mo`, `credentials.matrix`, `manuals.search`,
+`prestart._norm_nombre`, `inventory.ubic_str`, `roster.rango_label`— y comprueba por
+AST que no queda ni un `t` local en los 14. Probado contra **7 roturas**: las caza las
+7 — ⚠️ pero **una solo tras integrar el chequeo de importes**, que vivía en un script
+aparte: *un chequeo que no está en la suite no protege nada*.
+
+### Lo que queda de la migración
+| | |
+|---|---|
+| `report.py` (101) | el **informe ADMIN**: es un documento → `d()`. Es el bloque grande que falta |
+| `interpretation` (17) · `chat_agent` (14) | los **prompts de la IA**, que deciden en qué idioma escribe el modelo |
+| `admin_digest` (18) | los textos del radar del administrador |
+| `email_notify` (10) | correos → idioma base |
+| `schedule.py` (10) | ⚠️ los **nombres de actividad**, que se GUARDAN en la hoja `Actividades`: es migración de histórico, no traducción |
+| `theme.py` (14) | comentarios dentro del CSS (falsos positivos, comprobado) |
+
+## i18n F5b: seis módulos de backend más (v446)
+
+Sigue a v445 con el mismo criterio —se traduce lo que la función **DEVUELVE**, no lo
+que va al `logger` ni lo que se guarda en la hoja— sobre `quotes`, `projects`,
+`ausencias`, `orders`, `catalogo` y `clientes`. **88 mensajes.**
+
+### ⚠️ Aquí el riesgo de traducir un DATO es máximo, y se midió antes
+`projects.derive_estado` **devuelve** `"En progreso"` / `"Planificado"` /
+`"Completado"`, que se ESCRIBEN en la hoja y se comparan en 387 sitios; `quotes`
+devuelve `"proyecto"`; `ausencias.TIPOS` lleva `estado_roster: "LEAVE"/"OFF"`, que
+va al tablero. El filtro de «mensaje» (3+ palabras o puntuación final) ya los deja
+fuera, pero se comprobó **uno a uno con `i18n.VALORES` delante** en vez de confiar en
+el filtro. El guardián lo fija: `derive_estado(50) == "En progreso"`.
+
+### ⚠️ Renombrar ANTES: y el renombrado dejó 16 usos colgando
+`pre_i18n` marcó `t` como variable en 4 funciones de `quotes` (`t = totales(...)`) y
+1 de `projects`. Se renombraron a `_tot`/`_f` **antes** de traducir… y al hacerlo
+quedaron **16 usos de `t["subtotal"]` sin renombrar**, que habrían sido `NameError`
+en cuanto alguien creara o aceptara una cotización. Los encontró preguntarle al AST
+por todos los `Name` llamados `t` —16 antes, 0 después— en vez de fiarme del
+`grep`. **Renombrar es dos pasos, no uno: la asignación y todos sus usos.**
+
+### ⚠️ Y cometí el fallo de v445 VEINTE MINUTOS DESPUÉS de documentarlo
+Metí `t()` dentro de `ausencias.TIPOS`, que se construye a nivel de módulo → las tres
+etiquetas quedaban **congeladas al importar**. Lo cazó el guardián que acababa de
+escribir para eso. Arreglo con el mismo criterio que `auth.SESION_OCUPADA`: la
+constante guarda el texto BASE (que es el dato) y la traducción va a
+**`ausencias.nombre_tipo()`**, que se llama al pintar.
+⚠️ Y en los **correos** el nombre se queda en base a propósito (regla v436): un aviso
+que sale de la empresa no cambia de idioma según cómo tenga la pantalla quien lo
+dispara.
+⚠️ Al mover esas cuatro lecturas escribí `AU.nombre_tipo(k)` y **la variable del
+bucle es `_tp`** — un `NameError` que habría reventado «Mis ausencias» al abrirla.
+Lo vi mirando el bucle antes de dar el cambio por bueno; ni `compileall` ni el import
+lo detectan.
+
+### ⚠️ Cuatro «fallos» del smoke que eran del test — regla v135, otra vez
+`AU.solicitar` es `(grupo, usuario, nombre, tipo, desde, hasta)` y yo pasaba el tipo
+en la posición del nombre; `Q.crear` lleva `cliente_id` **y** `cliente_nombre`;
+`OR.crear` empieza por `pid`, no por `grupo`; y en `clientes` la función se llama
+**`create_cliente`**, no `crear`. Van ya nueve veces en esta migración: **antes de
+afirmar que algo falla, mirar la firma y la FORMA del dato.**
+
+### Verificación
+`verif_v446.py` (25 comprobaciones) **EJECUTA** los siete mensajes contra la hoja
+real por rutas que fallan a propósito (nada se escribe), comprueba que el DATO sigue
+en español y que ningún `t()` se congela. Probado contra **7 roturas**: las caza las
+7, incluida «se traduce el estado que se escribe en la hoja», que es la que de verdad
+importa.
+
+### Estado de F5
+| | |
+|---|---|
+| **hecho** | `auth`, `timeclock` (v445) · `quotes`, `projects`, `ausencias`, `orders`, `catalogo`, `clientes` (v446) |
+| **queda** | `finance` (47), `expenses` (24), `roster` (22), `inventory` (22), `credentials` (16), `payroll` (14), `prestart` (11), `rails` (10), `plan_data` (9), `invoices` (6), `manuals` (7), `alerts` (2), `toolruns`, `rail_cut`, `auditoria` |
+| **aparte** | el informe ADMIN (`report.py`), los correos (`email_notify`) y los **prompts de la IA** (`interpretation.SYSTEM_PROMPT`, `chat_agent`), que deciden en qué idioma escribe el modelo |
+
+## i18n F5a: los mensajes de BACKEND que la interfaz pinta (v445)
+
+Empieza **F5**, la última fase: los módulos internos. Aquí no vale la red de
+POSICIÓN de v440 —no hay llamadas a `st.*`—, así que lo que decide es el **DESTINO**
+de cada cadena:
+
+| | |
+|---|---|
+| **se traduce** | lo que la función **DEVUELVE**: la UI lo pinta con `flash`/`st.error` |
+| **NO se toca** | los mensajes de `logger` (nadie los ve) y los **nombres de columna** que viajan en el MISMO `return` (`"Usuario"`, `"Nombre"`, `"Estado"`): son el DATO del libro, y traducirlos rompe la lectura en silencio |
+
+Se empieza por `auth.py` y `timeclock.py` porque son los que más se ven: **cada login**
+pasa por `verify_login` y **cada jornada** por `clock_in`/`clock_out`. 42 mensajes.
+
+### ⚠️ El orden: renombrar ANTES, no después
+`pre_i18n` marcó `t` como variable en `auth._session_active` y `d` en tres funciones
+de `timeclock`. La local de `auth` se renombró a `_ts` **antes** de traducir; en
+`timeclock` solo entra `t`, porque meter `d` habría tapado la variable en tres
+funciones. Es el fallo de v437/v439/v440, y hacerlo en este orden es lo que lo evita.
+⚠️ Comprobado además que `i18n` solo importa `logging` y `streamlit` —módulo HOJA—,
+así que importarlo desde el backend **no crea ciclo**.
+
+### ⚠️ Correr el mismo parche dos veces duplicó un import
+`from core.i18n import t` acabó **dos veces** en `timeclock`: el ancla seguía
+casando en la segunda pasada. Y en `auth` pasó lo contrario — el ancla del import era
+**ambigua** (`from core import timeclock` aparece dos veces), así que **no se aplicó
+mientras las llamadas `t()` sí**, dejando un `NameError` esperando en cada login.
+Lo cazó el chequeo de importes que v443 había añadido, que es exactamente para esto.
+**Un parche idempotente no es un lujo: es la diferencia entre repetirlo y romperlo.**
+
+### ⚠️ Y TRES «fallos» del smoke que eran del test, no del código
+- `verify_login` devuelve un **dict** `{"ok":…, "error":…}`, no una tupla: al
+  desempaquetarlo obtenía las CLAVES y daba dos fallos con el código perfecto.
+- `_segmentos_dia(ci_str, fin_dt)` recibe un **datetime** como segundo argumento, no
+  una cadena: pasándole texto devolvía `[]` y parecía roto.
+- Y esperaba «required» de `verify_login("","")`, pero esa validación vive en
+  `auth_ui`: el backend responde «User not found.», que es correcto.
+Regla v135, tres veces en un solo script. **Mirar la firma y la FORMA del dato antes
+de afirmar que algo falla.**
+
+### Verificación
+`verif_v445.py` (23 comprobaciones) **EJECUTA** los mensajes (importar no ejecuta,
+v378): login inexistente, rol inválido, grupo sin nombre, clock-out sin fichaje, y
+`_session_active` en sus dos ramas —la función donde vivía la `t` renombrada—.
+Comprueba además que `LOGIN_HEADERS`/`GROUPS_HEADERS` y las constantes
+`TIPO_GENERAL`/`TIPO_PROYECTO` siguen siendo el dato. Probado contra **6 roturas**:
+las caza las 6 — ⚠️ pero **una solo tras corregirlo**: comprobaba `'"Usuario"' in
+fuente` y esa cadena aparece en medio módulo, así que traducir la cabecera REAL
+pasaba igual. Ahora se compara contra la **constante**, no por subcadena.
+
+### ⚠️ Y el hallazgo del rojo de la suite: un `t()` que se CONGELA al importar
+`verif_auth_guards` se puso rojo y, al mirar el código acusado (regla v385), había
+algo peor que un guardián caducado:
+
+```python
+SESION_OCUPADA = t("This account already has an active session on another device.")
+```
+
+Eso se evalúa **al IMPORTAR `auth`**, cuando todavía no hay sesión ni idioma elegido,
+así que la cadena queda **congelada** en el idioma de ese instante. Y esta constante
+no es un texto cualquiera: **se compara** (`auth_ui` hace `tok == auth.SESION_OCUPADA`
+para decidir si ofrece el botón «cerrar la otra sesión e iniciar aquí»). El día que se
+llene el diccionario español, traducir un lado y no el otro **haría desaparecer ese
+botón sin dar ningún error** — que es justo el fallo silencioso que toda esta
+migración intenta evitar, esta vez desde dentro del propio motor.
+
+Arreglo: la constante vuelve a ser un **CENTINELA** (dato interno, se compara) y la
+traducción se mueve a donde se PINTA (`st.error(f"…: {t(tok)}")`). Es la misma
+separación etiqueta/dato del resto del módulo i18n.
+⚠️ Barrido del repo: **`d()` a nivel de módulo SÍ vale** —devuelve siempre el idioma
+base (v436), así que `plumb.LINE_NAMES` está bien—, y **`app.py` no cuenta**: no es un
+módulo importado, es el script que Streamlit re-ejecuta entero en cada rerun, así que
+ahí no se congela nada (incluirlo daba 8 falsos positivos). Con las dos exclusiones,
+0 casos. Guardián permanente, validado en las dos direcciones.
+
+### Lo que queda de F5
+Medido con `medir_f5.py`, que separa RETORNO (lo que la UI pinta) de LOG (no se
+toca): quedan **~460 mensajes de retorno** en los demás módulos internos, más el
+informe ADMIN (`report.py`), los correos (`email_notify`) y los prompts de la IA
+(`interpretation.SYSTEM_PROMPT`, `chat_agent`), que deciden en qué idioma escribe el
+modelo. Los siguientes por visibilidad: `quotes.py` (56), `finance.py` (47),
+`projects.py` (32), `ausencias.py` (31), `expenses.py` (24), `roster.py` (22),
+`inventory.py` (22), `orders.py` (18), `credentials.py` (16), `catalogo.py` (15).
+
+## i18n: las CABECERAS DE TABLA y la QUINTA red (v444)
+
+Cierra las «~30 cabeceras de tabla que son clave de dict» que v441 dejó medidas y
+pendientes, y de paso destapa una quinta forma que ninguna red anterior veía.
+
+### ⚠️ Aquí no se decide por idioma: se mide qué hace cada cadena
+Una clave de dict y una etiqueta **se ven igual en el AST**, así que traducir por
+barrido es justo como se rompe algo en silencio. `riesgo_claves.py` clasifica las 70
+candidatas en cinco cajones, y **cuatro de ellos no se tocan**:
+
+| | Por qué NO | Cuántas |
+|---|---|---|
+| **IDENTIFICADOR** | es opción de un widget o se compara con `==` → traducirla deja la rama **MUERTA** (el fallo de v441 en corte de rieles) | 15 |
+| **COLUMNA DE EDITOR** | el código LEE la tabla editada por ese nombre **y** el `_snapshot` de v148 lo guarda en `DatosJSON` | 10 |
+| **SE LEE** | se indexa por ella desde otro módulo (`Duración (d)` es contrato con los informes) | 17 |
+| **VALOR i18n** | es el DATO en español de la hoja; `etiqueta()` lo traduce al MOSTRARLO (v442) | 4 |
+| **TRADUCIBLE** | solo se pinta | **31** |
+
+Las 31 se aplicaron **por AST y por posición**, tocando únicamente los nodos que el
+árbol confirma como clave de un dict literal. ⚠️ **NO por texto**: `"Credenciales"`
+es también el nombre de una hoja y `"Horas"`/`"Estado"` son columnas reales del
+libro — un `str.replace` sobre el fuente habría roto la lectura de Sheets sin dar
+ningún error. 63 claves reescritas en 9 módulos.
+
+### ⚠️ El clasificador dio por SEGURA una que no lo era
+En su primera versión ponía **`'Riel'`** en TRADUCIBLE, y `'Riel'` es la columna del
+editor de corte de rieles: está en `disabled=["Riel"]`, en `cols_expected` y dentro
+del DataFrame que se persiste en `DatosJSON`. No la vio porque `["Riel"]` dentro de
+una lista **no es un `Subscript`**, que era lo único que miraba. Un falso «se puede»
+es peor que no clasificar: invita a romper justo lo que hay que proteger. Se añadió
+el cajón COLUMNA DE EDITOR y `'Riel'` se movió solo.
+
+### QUINTA red: etiquetas de UNA palabra dentro de tuplas
+Al verificar apareció otra bolsa: `("cred", ":material/badge:", "Credenciales", …)`,
+`("alarmas", …, "Alarmas", …)` y el botón `f"→ Ir a {secn}"`. **Ninguna de las cuatro
+redes anteriores las ve**: la de posición mira el argumento de `st.*` (aquí es la
+TUPLA), la de frases pide 3+ palabras, la de cortas 2, y la de f-strings mira
+f-strings. Van **a mano**, una a una, porque la misma cadena es dato en otro sitio:
+`"Credenciales"`/`"Alarmas"` son nombres de hoja, y `"Proyectos"`/`"Usuarios"`
+conviven con los IDs `"📊 Proyectos"`/`"👷 Usuarios"`, **que no se tocan**. En cada
+tupla del resumen del día se traduce el 3º (etiqueta) y el 8º (nombre visible) y se
+dejan intactos el 6º (clave de sección) y el 7º (ID de sub-pestaña).
+⚠️ Y de paso: mi propia lista de exclusión de nombres de hoja **tapaba dos etiquetas
+reales**, porque la misma palabra es dato en un sitio y rótulo en otro. Una exclusión
+global es cómoda y miente.
+
+### ⚠️ El chequeo de `column_config` se APROBABA A SÍ MISMO
+El modo de fallo de esta tanda es traducir la clave de la FILA y no la del
+`column_config` (o al revés): Streamlit **no da error**, la columna pierde formato,
+ancho y etiqueta, y la tabla se descoloca. El chequeo compara las claves del
+`column_config` contra las de las filas de esa función… y el `column_config` es
+también un dict dentro de la función, así que se contaba a sí mismo y la resta salía
+vacía **siempre**. Con la mitad de la traducción rota delante seguía diciendo
+«0 huérfanas». Lo destapó probarlo contra código roto, no leerlo. Hoy vigila **24
+tablas**.
+
+### Verificación
+`verif_v444.py` (25 comprobaciones) probado contra **7 roturas**: las caza las 7 —
+⚠️ pero **dos solo tras corregirlo**, las dos por comprobar PRESENCIA en vez del
+literal exacto: la del `column_config` (arriba) y la de los chips de ausencias, donde
+«approved» aparece también en otro texto del módulo, así que el chip devuelto al
+español seguía en verde. Es la lección de v439 por tercera vez.
+`verif_v408` caducó otra vez (fijaba `Situación`/`Alertas`/`Usuarios`) y se reescribió
+para **resolver el nombre real** de cada columna en vez de fijarlo: así el chequeo
+sigue midiendo lo que dice medir aunque se traduzca el resto.
+
+### Lo que QUEDA
+- **F5**: `report.py` (11 f-strings + `Dif vs Límite`, `Parámetro`…), `auth.py` (13),
+  `timeclock.py` (9), `prestart.py` (6), `credentials.py` (5), `admin_digest.py` (5),
+  `chat_agent.py` (4), `ausencias.py` (4), `email_notify.py`, `interpretation`.
+- Las **36 claves que NO se pueden traducir solas**, cada una con su cajón y su razón.
+  Sacarlas de ahí es migración de histórico, no traducción.
+- Los **nombres de actividad** de la hoja `Actividades` y los conceptos de nómina.
+
+## i18n: la CUARTA red — la f-string ENTERA, no sus trozos (v443)
+
+Salió al clasificar los 6 rojos de la suite tras v442. Uno de ellos (`verif_v298`)
+señalaba el desglose de alertas del propietario, y al mirarlo estaba **a medias**:
+
+```python
+_p.append(f"{g['retrasos']} behind schedule")   # traducido en v439
+_p.append(f"{g['alarmas']} alarmas")            # ← seguía en español
+_p.append(f"{g['vencidos']} vencidos")          # ← y este
+_p.append(f"{g['cred_venc']} credenciales")     # ← y este
+```
+
+### ⚠️ El hueco: una f-string NO es una cadena, es una lista de trozos
+Las tres redes de v441/v442 miran cadenas **completas**. Un trozo de f-string por
+separado no parece nada, así que se colaron dos formas enteras:
+
+| Forma | Por qué se escapa |
+|---|---|
+| **fragmento de UNA palabra** — `f"{n} alarmas"` | la red de frases pide 3+ palabras y la de cortas 2; y **no se puede envolver en `t()`**, porque es un trozo, no una cadena |
+| **f-string A MEDIO TRADUCIR** — `f"Collected {x} de {y}"` | cada trozo suelto es inocuo; el español solo aparece al **CONCATENARLOS** |
+
+La red buena concatena los trozos literales de cada f-string y mira ESO. Es la
+trampa nº30 otra vez, con su corolario: **cada red nueva descubre una bolsa nueva**.
+Barrido: **141 f-strings** con español en todo `core/`, **48 en módulos de interfaz**
+—fases que yo había declarado cerradas—. Traducidas las 37 reales de interfaz.
+
+### ⚠️ Y la red se validó contra un caso construido — y FALLÓ
+El guardián prueba su propia red con `f"Collected {x} de {x}"` y `f"{x} alarmas"`.
+Vio la primera y **no vio la segunda**: su léxico eran palabras FUNCIONALES (de, la,
+con…) y `alarmas` es un sustantivo sin acento — o sea que **el caso que originó toda
+la versión se le habría escapado**. Es la trampa nº28 por cuarta vez. Con el léxico
+del dominio añadido aparecieron **9 más** que la primera versión no veía
+(«actividades», «pendiente», «adelantado», «d retraso», «% consumido»).
+Sin esa sonda, habría desplegado un «0» que no significaba nada (trampa nº12).
+
+### ⚠️ Lo que NO se traduce, y por qué: `Elevador` es un DATO
+`f"Elevador {i+1}"` es la columna del **EDITOR DE ENTRADA** de rieles y plomada, y el
+`_snapshot` de v148 guarda esos DataFrame **con sus nombres de columna** en
+`DatosJSON`. Medido en la hoja real: **`CAL-0002` ya tiene una con la columna
+`Elevador`**, así que renombrarla rompería «reabrir el cálculo» — y el código la lee
+de vuelta (`in_edit[f"Elevador {i+1}"]`). Se queda, con la razón escrita.
+Sí se tradujeron las tablas de **RESULTADO** (`_filas`), que se construyen y se
+consumen en el sitio **y viajan al PDF que se lleva a obra**, donde todo lo demás ya
+estaba en inglés desde v441.
+
+### ⚠️ Un NameError que habría llegado a producción
+Al traducir metí `d('Works')` en `invoices_ui`, que **solo importa `t`**. No lo ven
+`compileall` ni el import (v378): habría reventado al facturar desde un proyecto. Es
+el fallo de v423 (`theme` sin importar) y lo cazó un chequeo nuevo — que ⚠️ hubo que
+afinar, porque en su primera versión acusaba a `roster_ui` por su **propio**
+`_etq(staff, grupo)` (v413) y por un `from datetime import date as _d` local: dos
+falsos positivos que me habrían llevado a «arreglar» código sano (regla v385).
+
+### Verificación
+`verif_v443.py` (8 comprobaciones) + smoke que **EJECUTA** `_result_matrix`, genera
+el PDF de rieles y comprueba que **no lleva la cabecera vieja**, y llama al desglose
+del propietario. Probado contra **7 roturas**: las caza las 7 — pero ⚠️ **una solo
+tras corregir el guardián**: comprobaba PRESENCIA de la cabecera nueva y hay DOS
+tablas (Caso 1 y Caso 2), así que romper una dejaba la otra casando. Traducir la
+mitad es peor que no traducir nada (lección de v439). Ahora cuenta las dos.
+
+### Los 6 rojos de la suite, clasificados (regla v385)
+Los seis eran **CADUCADOS**, ninguno regresión, y se actualizaron con su razón:
+- **v298** el desglose de alertas · **v397** la columna `Not invoiced` · **v408** la
+  misma en el orden de la Lista · **v420** «New client» · **v425** «On overhead (h)»
+  — los cinco por el cambio de idioma, deliberado.
+- ⚠️ **`verif_sim_f` caducó POR EL CALENDARIO, no por código**: miraba
+  `lunes_de(today())`, así que se ponía rojo **todos los lunes** — los casos sembrados
+  viven en la semana en que se sembraron (2026-08-24). **Un ancla sobre un blanco
+  móvil no es una afirmación.** Lo que ese chequeo quiere decir es «la demo CONTIENE
+  cada caso que la interfaz tiene que saber pintar», así que ahora los busca en TODAS
+  las semanas y dice en cuál está cada uno. ⚠️ Salvo el del sábado: la columna la
+  tiene que abrir **la semana que tiene sábado**, no otra cualquiera.
+
+### Lo que QUEDA, medido
+- **93 f-strings con español fuera de la interfaz**: `report.py` (11), `auth.py` (13),
+  `timeclock.py` (9), `prestart.py` (6), `credentials.py` (5), `admin_digest.py` (5),
+  `chat_agent.py` (4), `ausencias.py` (4)… Son mensajes de backend y del informe
+  admin → **F5**.
+- Las **~30 cabeceras de tabla que son clave de dict** (`Situación`, `Alertas`,
+  `Usuarios`, `Composición`, `Emisión`…). ⚠️ Tres no se pueden tocar solas:
+  `En progreso`/`En pausa` son estados guardados y `Duración (d)` es contrato con los
+  informes.
+- La **migración del histórico**: nombres de actividad en la hoja `Actividades` y los
+  conceptos de nómina.
+
+## i18n: la TERCERA red, los VALORES, y ⚠️ UNA RAMA QUE DEJÉ MUERTA (v442)
+
+Cierra lo que v441 dejó **medido y sin hacer**. Y de paso destapa el fallo más caro de
+toda la migración, que lo había introducido yo mismo un deploy antes.
+
+### ⚠️ EL FALLO: traduje la opción de un radio y no su comparación
+```python
+caso = st.radio(t("Which rail is cut?"),
+                ["Case 1 — first installed (the bottom one)",   # ← traducida en v441
+                 "Case 2 — last installed (the top one)"])
+...
+if caso.startswith("Caso 1"):                                   # ← NO traducida
+```
+`startswith` dejó de casar **para siempre**: la rama del **Caso 1 de corte de rieles**
+no se ejecutaba nunca y la herramienta caía en silencio al Caso 2 — sin error, sin traza,
+sin test rojo, solo un cálculo equivocado. Es exactamente la regla de oro de esta
+migración («traducir un DATO no da error, deja de casar») mordiendo desde el lado del que
+traduce. **Lo vi por casualidad**, leyendo un aviso de cambio de fichero.
+- Arreglo: la opción va a una CONSTANTE y la rama compara contra ella, así no pueden
+  volver a divergir.
+- Guardián nuevo (`verif_ramas_muertas.py`): recoge las opciones LITERALES de cada
+  `radio`/`selectbox` y comprueba que todo `== / in / startswith` sobre esa variable casa
+  con alguna. **29 comparaciones vigiladas.**
+- ⚠️ Y hubo que escribirlo **tres veces**, porque las dos primeras versiones daban **0
+  con la rama muerta delante**:
+  1. contando el TEXTO del fichero → mi propio comentario (`# CASO 1`) hacía creer que el
+     valor existía. La trampa nº2 (grep ≠ uso) dentro del guardián.
+  2. preguntando «¿lo produce alguien en el repo?» → `'Caso 1 · A '`, una etiqueta del
+     PDF, casaba como prefijo. Demasiado laxo.
+  3. ⚠️ Y al probarlo contra código roto, **mi propio arreglo lo cegó**: al pasar las
+     opciones a constantes, un guardián que solo entiende literales deja de mirar ese
+     widget. Ahora resuelve las constantes locales. *Hacer el código más robusto puede
+     apagar el chequeo que encontró el fallo.*
+
+### La TERCERA red: 188 etiquetas cortas
+Ni el invariante de posición (mira el argumento de `st.*`) ni la red de FRASES (pide 3+
+palabras) veían las etiquetas de DOS palabras dentro de listas de tuplas y f-strings:
+`"+ ausencias pagadas (vacaciones, bajas)"`, `"Mano de obra (estructura)"`,
+`"— elige el proyecto —"`, `"Con incidencias"`… Traducidas 188; las que quedan son
+exclusiones con razón (IDs de sub-pestaña, estados guardados, valores de
+`credentials.status`, bloques CSS y el JS del cronómetro).
+
+### ⚠️ `i18n.etiqueta()` existía desde v436 y la interfaz NO la usaba
+`i18n.VALORES` traduce los datos que viven en español en la hoja —estados, tipos, roles,
+categorías, estados de factura/nómina/cotización, tipos de ausencia— **sin tocarlos**:
+solo cambia cómo se MUESTRAN. Medido: **160 lecturas de esos valores en 16 módulos de
+interfaz y CERO usos de `etiqueta()`** — solo la usaban los 3 PDF. O sea que en pantalla
+seguían saliendo «En progreso», «vencida», «campo», «Materiales». Es el patrón «se
+escribe y nadie lo lee» de v131/v148, esta vez con el propio i18n.
+- Enrutados los puntos que se PINTAN: chip de estado de la cartera y del detalle, columna
+  Estado de la Lista, tabla de la agrupación, tabla del propietario, KPIs de una
+  localización, estado de una orden, rol en la ficha y en el aviso de alarmas, categoría
+  de catálogo e inventario, estado de nómina.
+- ⚠️ **NO se tocan** las comparaciones ni los dicts que se ESCRIBEN en la hoja
+  (`"Estado": P.derive_estado(...)` dentro de `update_project`): ahí el valor español ES
+  el dato. Y el selector de estado manual usa **`format_func`**, que cambia lo que se lee
+  sin tocar lo que devuelve.
+
+### ⚠️ Y el fallo de ámbito, POR CUARTA VEZ
+Al enrutar los valores metí `_etq(...)` en `render_nominas`, donde `_etq` **ya era una
+variable local** (el dict de `auth.etiqueta_usuarios`). Python marca el nombre local en el
+ámbito ENTERO, así que la pantalla de Nóminas habría reventado con **«'dict' object is
+not callable»** — el mismo fallo de v437 (glosario), v439 (dos `UnboundLocalError`) y v440
+(`quotes_ui`). Lo cazó un pre-vuelo de ámbito ANTES de desplegar; la variable local pasó a
+`_etu` y el guardián lo vigila desde ahora.
+- Y se comprobó **EJECUTANDO** `render_nominas` con Sheets sustituido (`check_v442_smoke`):
+  *importar no ejecuta* (v378), y ni `compileall` ni el import ven este fallo.
+
+### Verificación
+`verif_v442.py` (14 comprobaciones) + `verif_ramas_muertas.py`, probados contra **6
+roturas**: las cazan las 6 — pero ⚠️ **tres solo tras corregir las roturas o el guardián**,
+y las tres por el mismo motivo, apuntar mal: una apuntaba a un texto que estaba DENTRO de
+`t()` (que la red excluye a propósito), otra a un fichero equivocado, y la tercera reveló
+la ceguera de las constantes. Suite entera al día.
+- ⚠️ Dos falsos positivos MÍOS, corregidos: `background:#eaf3de` aporta la «palabra» «de»
+  y daba por española una cadena de CSS; y `ESTADOS_MANUAL` incluye la cadena VACÍA (la
+  opción «sin override»), que hacía fallar el chequeo con el código correcto.
+
+### Lo que queda
+- **~30 cabeceras de tabla que son clave de dict** (`A (pila instalada)`, `Composición`,
+  `Emisión`, `Situación`…). ⚠️ Tres no se pueden tocar solas: `En progreso`/`En pausa` son
+  estados guardados y `Duración (d)` es contrato con los informes.
+- **F5** (internos): `report.py`, `email_notify.py`, `chat_agent.py`, `admin_digest.py`,
+  `interpretation.SYSTEM_PROMPT`, y las etiquetas de `expenses.spend_svg` — un diagrama
+  que v438 no tocó porque vive en un módulo de datos, no en `diagrams.py`.
+
+## i18n F4 + ⚠️ EL INVARIANTE DABA 0 CON 230 FRASES EN ESPAÑOL DETRÁS (v441)
+
+F4 son las **5 herramientas técnicas** (Survey · Plomada · Rieles · Buffers · Belting):
+sus pantallas (128+53+38+23+22 etiquetas) y —lo que no estaba previsto— **su PDF**. Pero
+lo que define esta versión es lo que se encontró al ir a cerrarla.
+
+### ⚠️ El invariante de v440 estaba en verde y quedaban 230 frases en español
+«0 cadenas sueltas sin `t()` en los 23 módulos» era CIERTO y no significaba lo que yo
+había dicho: ese chequeo mira el **argumento** de la llamada de display, así que
+**un trozo de f-string y una cadena armada antes en una variable** pasan por delante.
+```python
+msg = f":green[…] Guardado como **{res['id']}** en {prj.get('Nombre')}."   # ← invisible
+st.success(msg)                                                             # ← lo que mira
+```
+Es **el mismo agujero del guardián del LaTeX de v309**, que tampoco veía las variables, y
+justo lo que v349 avisó que había que preguntarse. Con eso, **F2 y F3 no estaban
+terminadas** aunque las declaré cerradas.
+- **Cómo se destapó**: buscando un ancla para probar el guardián contra código roto
+  (regla v410). Al mirar `plumb_ui` para elegir la rotura apareció una nota del PDF en
+  español, y tirando del hilo salieron 230.
+- **La red que lo mide**: toda cadena del módulo que no esté ya dentro de `t()`/`d()` y
+  que sea una FRASE (3+ palabras separadas por espacio), cruzada con un detector de
+  español. ⚠️ **Aquí sí vale el detector de idioma** que la trampa nº28 prohíbe en
+  general: su ceguera es con etiquetas CORTAS sin acento ni artículo («Fichar», «Firma»)
+  — y ésas ya las cubre el invariante de posición. Las dos redes cubren lo que cada una
+  se deja; ninguna sola bastaba.
+- ⚠️ Afinar la red costó dos pasadas: contar «palabras» con `[A-Za-z]{2,}` marcaba
+  `sidebar_chat_input` como frase de tres y ahogaba el barrido en **1.375** falsos
+  positivos. Con palabras separadas por ESPACIO quedaron 697, y cruzadas con el español, 230.
+
+### El PDF de las 4 herramientas: no era pantalla, así que no lo miraba NADIE
+`tool_pdf(...)` no es una función de display (el invariante no lo mira) y sus etiquetas
+son de 1-3 palabras (la red de frases tampoco). Estaba **entero en español** — título,
+ficha, cabeceras de tabla y notas — y ese PDF se descarga, se archiva en Drive y **se
+lleva a obra**: la pantalla en inglés y su documento en español es el desajuste de
+media-unificación de v419. Va con **`d()`**, no con `t()`: un documento que sale de la
+empresa se escribe en el idioma BASE, no en el de la pantalla de quien lo genera (v436).
+- ⚠️ **NO se tocan** `herramienta="plomada"|…` (clave de `toolruns.HERRAMIENTAS`, se
+  guarda en la hoja `Calculos`) ni las claves de `datos=` (van a `DatosJSON` y las lee
+  `entradas_de` al reabrir un cálculo, v148). El guardián comprueba que siguen intactas.
+- `tool_pdf.py` en sí **no tenía texto propio** (solo estructura): se comprobó antes de
+  tocarlo, en vez de traducir por si acaso.
+
+### Lo que NO se traduce, y por qué (mirado uno a uno, no por lote)
+| | |
+|---|---|
+| **`'🗺 Ruta del día'`** | es el **ID** de la sub-pestaña: lo compara `sub ==` y lo usan los deep-links (v232). Traducirlo rompe la navegación **sin dar ningún error** |
+| `'En progreso'` · `'En pausa'` | son ESTADOS guardados en la hoja `Proyectos` |
+| `'Duración (d)'` | la LEEN `report.py` y `user_report.py`: contrato entre módulos |
+| los bloques `<style>` | son comentarios CSS míos, no pantalla |
+Y al revés: `'Todo el cliente'` (opción de radio comparada en el mismo módulo) y
+`'En la agrupación'`/`'Ya en otra'` (nombres de columna del editor de miembros) **sí** se
+traducen, pero **todas sus apariciones juntas** — media traducción deja la lectura
+buscando una columna que ya no existe. Se detectaron con un barrido que marca lo que
+aparece en una comparación, como clave de dict o en más de un fichero.
+
+### ⚠️ Medir, no estimar: los pies de los KPI se salían del ancho
+Al traducir, `verif_v303` se puso rojo — y con razón: su tabla de anchos está **medida**,
+y dice que un pie nuevo obliga a ir a medirlo. Medidos: **«nobody clocked in» 98 px** y
+**«across the company» 106**, sobre **93 útiles**. Se cambiaron por «no hours yet» (67) y
+«company-wide» (79).
+- ⚠️ Y antes de fiarme del banco de medida lo **calibré contra los valores que v303 ya
+  había medido** (trampa nº12): mi banco lee **+2 a +6 px** más ancho (60→62, 84→88,
+  59→63), así que sus números no son intercambiables — por eso se eligieron textos con
+  margen, para que ese sesgo no decida. La diferencia queda escrita en la tabla.
+
+### Verificación
+`verif_v441.py`, **26 comprobaciones**, probado contra **9 roturas** (una por chequeo):
+las caza las 9. Incluye ejecutar `tool_pdf` de verdad y comprobar que devuelve un `%PDF`
+— *importar no ejecuta* (v378). Suite entera: **81/81**.
+- **6 guardianes CADUCADOS** por el cambio de idioma, actualizados con la razón al lado
+  (regla v385), NO relajados: v303 (los pies, re-medidos), v390 y v395 (reanclados al
+  PRINCIPIO en vez de a la frase), v423 y v425 (el titular y la fila de estructura, ahora
+  sin distinguir caja) y v430 — que ⚠️ **reventaba con `ValueError: substring not found`**
+  en vez de fallar legible, la misma queja que v385 le hizo a v301.
+- ⚠️ Y un fallo de método repetido: escribir anclas con `\n` **por heredoc** las convierte
+  en saltos reales y no casan nunca (trampa nº26, tercera vez). Se escriben con la
+  herramienta de escritura.
+
+### ⚠️ Lo que QUEDA, medido (no «me parece que falta algo»)
+- **~215 etiquetas CORTAS** (2 palabras) dentro de listas de tuplas y f-strings, que
+  ninguna de las dos redes ve: `"+ ausencias pagadas (vacaciones, bajas)"`,
+  `"Mano de obra (estructura)"`, `"— elige el proyecto —"`, `"Con incidencias"`… Se
+  arreglaron solo las 4 que un guardián señalaba; el resto va en su propia tanda.
+- **~30 claves de dict que son CABECERA de tabla** (`A (pila instalada)`, `Composición`,
+  `Fórmula`, `Emisión`, `Situación`…). ⚠️ De las 49 encontradas, **12 son DATO puro**
+  (`por_tipo`, `en_uso`, `creado_por`…) y tres no se pueden tocar solas: `En progreso` /
+  `En pausa` son estados **guardados en la hoja** y `Duración (d)` es contrato con los
+  informes. Esa parte arrastra migración de histórico.
+- **F5** (internos): `report.py`, `email_notify.py`, `chat_agent.py`, `admin_digest.py`,
+  `interpretation.SYSTEM_PROMPT`. ⚠️ `pre_i18n.py` ya tiene marcados los **`d`/`_d` que
+  son variables** en 7 módulos: hay que renombrarlos ANTES de traducir, no después (es lo
+  que rompió `quotes_ui` en v440).
+
+## i18n F3: TODA la interfaz de gestión, en inglés (v440)
+
+15 módulos, **~1.100 etiquetas**: `projects_ui` (479 únicas), `auth_ui`, `roster_ui`,
+`inventory_ui`, `home_ui`, los cinco de finanzas/CRM (`clientes_ui`, `catalogo_ui`,
+`invoices_ui`, `payroll_ui`, `quotes_ui`) y los pequeños (`location_ui`, `plan_ui`,
+`tool_save_ui`, `ui_common`, `app.py`). **0 cadenas sueltas sin `t()`** en los 15.
+
+### ⚠️ Antes de traducir nada hubo que arreglar TRES huecos del extractor
+Los tres fallan en silencio, y el primero es el que arruinó F2:
+| Hueco | Qué habría pasado |
+|---|---|
+| filtraba por **IDIOMA** | el agujero de v439: medido, era ciego a **13 de 15** («Fichar», «Firma», «Iniciales», «Pendientes», «Sitios»…). Ahora extrae por POSICIÓN y la decisión etiqueta-vs-dato se toma al escribir el diccionario, que es donde se puede mirar |
+| se traía **CLAVES de widget** | `st.form("cli_nuevo")` recibe la key como primer posicional; envolverla en `t()` la haría depender del idioma y **el formulario perdería su estado al cambiarlo**. Igual `ui.confirmar_borrado(key, texto)` |
+| no veía **cabeceras de tabla** ni **tarjetas KPI** | 71 `column_config` en el repo y las etiquetas dentro de `kpi_row([( … )])` —el número grande de cada pantalla— se quedaban en español |
+
+Y al abrir el tercero apareció su reverso: al descender por las listas se colaban
+**claves de dict** (`_tot["margen_pct"]`, `f["a_pagar"]`), que son el índice de un
+`Subscript` en la misma tupla que la etiqueta. Se excluyen, junto con lo que ya está
+dentro de un `t(...)`. ⚠️ Y en `column_config` se traduce la ETIQUETA pero **nunca la
+CLAVE**: es el nombre de la columna que `st.data_editor` DEVUELVE, y el código la lee
+por ese nombre — traducirla deja la lectura buscando una columna que no existe.
+
+### ⚠️ VOLVÍ A ROMPER UN MÓDULO, por hacerlo en el orden equivocado
+Al traducir `quotes_ui` metí llamadas `t(...)` en tres funciones donde **`t` ya era la
+variable de totales**: «Nueva cotización» y el detalle no habrían abierto. Es el fallo de
+v437 y v439 por **tercera vez**, y la causa no es el código: yo comprobaba el ámbito
+DESPUÉS de traducir, cuando el daño ya está escrito en el fichero.
+→ **`pre_i18n.py`**: pre-vuelo que lista, ANTES de tocar un módulo, qué funciones usan
+`t`/`d` como variable. Pasado sobre lo que quedaba: **46 funciones** en 5 módulos. Ese
+chequeo evitó repetir el fallo 46 veces.
+⚠️ Y su primera versión daba **falsos positivos** por descender a ámbitos que son
+propios: un `lambda t:` y un `[t for t, e in …]` **no ligan `t`** en la función que los
+contiene (trampa nº3). Con eso corregido, los `t` reales a renombrar eran 7, no 46.
+
+### ⚠️ Tres fallos de la herramienta que cazó su propio `ast.parse`
+`aplicar.py` se niega a escribir un fichero que no compile, y esa guarda cobró:
+1. Decidía «esto lleva comillas» mirando si el trozo EMPIEZA por comilla — y
+   `'>Persona</div>` (de `f"<div style='{_CAB}'>Persona</div>"`) empieza por un apóstrofo
+   que es **contenido**. Le añadía comillas y dejaba la f-string abierta.
+2. Al arreglar eso rompí el caso MULTILÍNEA: la comilla de cierre está en la última línea
+   y `crudo` es el resto de la PRIMERA, así que los cuatro literales largos se
+   reescribían **sin comillas**.
+3. La forma que funciona no es una heurística de caracteres sino **parsear el trozo**: si
+   es una expresión de cadena válida, es un literal; si no, es texto de dentro de una
+   f-string.
+⚠️ Y hay un TERCER caso que se deja A MANO a propósito: una cadena normal concatenada
+con una f-string (`st.caption("texto " f"**{x}**…")`), donde el span EMPIEZA en la comilla
+de apertura y TERMINA dentro de la f-string. Automatizarlo en un módulo de 5.000 líneas
+es más riesgo que valor: los 35 de `projects_ui` van con ancla, verificables de un vistazo.
+⚠️ Y las anclas son de **UNA LÍNEA**: las multilínea obligan a copiar la indentación de la
+continuación al carácter, y 20 de 27 no casaron al primer intento.
+
+### El guardián
+`verif_v440.py`, 25 comprobaciones, probado contra **6 roturas**: las caza las 6 — pero
+**dos solo tras corregirlo**, y las dos por lo mismo, medir por IDIOMA:
+- afirmaba que `clientes_ui` tenía la clave `"Pendiente"` y **no existe** (ahí es una
+  etiqueta de `st.metric`), así que daba **FALLO con el código correcto**. Se reescribió
+  sobre la REGLA —ninguna clave de `column_config` puede ser un `t(...)`— en vez de sobre
+  una lista adivinada.
+- devolver `t("Net pay")` a `"Neto a pagar"` **no lo veía**: sin acentos ni palabras
+  funcionales. El invariante que sí mide no habla de idioma: **toda cadena SUELTA que
+  llegue a una función de display tiene que estar envuelta en `t()`** (los trozos de
+  f-string no se pueden envolver y se marcan aparte). Hoy son **0**.
+⚠️ Para que ese cero significara algo hubo que arreglar el extractor dos veces más:
+contaba como «sin envolver» lo que ya estaba dentro de `t(...)`, y al aplanar las listas
+perdía la marca de f-string, así que 7 trozos salían como cadenas sueltas.
+
+## i18n F1d + F2: los correos y LA APP DE CAMPO, en inglés (v439)
+
+Cierra F1 (todo lo que SALE de la empresa) y hace F2 entera. **269 reemplazos**: 13 en
+`notify.py` / `alerts.py` (correos de asignación e inducción, alarmas de problema y de
+cambio) y 256 en los cuatro módulos que usa el técnico en obra — `timeclock_ui`,
+`prestart_ui`, `ausencias_ui`, `route_ui`. Los correos van con **`d` (idioma BASE)** y la
+pantalla con `t`: un correo SALE de la app, así que su idioma no puede depender de cómo
+tenga la pantalla quien lo dispara (regla de v436).
+
+### ⚠️ DOS `UnboundLocalError` que introduje yo, y que «compila e importa» NO ve
+Al traducir aparecieron llamadas a `t()` en funciones donde `t` **ya era una variable**:
+```python
+# timeclock_ui._aviso_olvido
+lineas.append(f"- **{etq}** {t('open since')} ...")   # ← línea 402
+t = _dt.strptime(s["clock_in"], timeclock.FMT)        # ← línea 404: la marca LOCAL
+```
+Python marca el nombre local en el **ámbito ENTERO de la función**, así que las llamadas
+de ARRIBA revientan. Es el fallo del glosario de v437, cometido otra vez el mismo día —
+y el segundo es peor: en `render_mis_ausencias` el `for t, cfg in AU.TIPOS.items()` deja
+`t` como una CADENA, así que `t("What do you need?")` daba **`TypeError: 'str' object is
+not callable`** y la pantalla «Mis ausencias» **no abría en absoluto**.
+Mi verificación de F2 fue *«los cuatro compilan e importan»* y eso **no ejercita nada**:
+importar no ejecuta (la lección de v378). Lo cazó el guardián, mirando el ÁMBITO.
+→ En estos módulos `t` se queda como nombre del motor y las variables se renombran
+(`_ci`, `_tp`, `_k`); en los seis de v438, donde `d` era variable en 14 sitios, se hizo
+al revés (alias `_d`). El criterio es cuál de los dos hay menos veces.
+
+### ⚠️ Los cambios de `notify.py` y `alerts.py` NO estaban en el disco
+El guardián los dio por no aplicados y era cierto: el fichero seguía en español pese a
+que el registro de trabajo decía que se habían aplicado. Se reaplicaron y se verificaron
+**generando los mensajes**, no leyendo el código. Sirve de recordatorio de que un paso
+«hecho» sin evidencia comprobable no está hecho.
+
+### ⚠️ DIJE QUE F2 ESTABA TERMINADA Y QUEDABAN 47 ETIQUETAS EN ESPAÑOL
+Mi barrido usaba un **detector de español** (acentos + palabras funcionales) y dio «0
+restantes». Es falso, y de la peor manera: «Fichar», «Firma», «Iniciales», «Pendientes»,
+«Sitios», «Descargar PDF» o el propio título **«Mis ausencias»** no llevan acento ni
+palabra funcional, así que pasaron por delante. Es el mismo agujero que dejó escapar
+«Planificado» en v438 y «Registrados» en el guardián de esta misma versión — **tres veces
+el mismo detector, tres veces el mismo tipo de palabra**.
+Lo destapó el smoke test, que al EJECUTAR `render_mis_ausencias` imprimió lo que la
+pantalla pinta: `'## :material/event_busy: Mis ausencias'`.
+→ El barrido bueno no busca español: busca **posición**. Todo literal que llega a una
+función de display y NO está envuelto en `t()`, revisado luego a mano para separar
+etiqueta de dato. Con él salieron 47, y el guardián lo lleva ahora como chequeo con
+tope MEDIDO (que el número suba significa que alguien metió una etiqueta suelta).
+
+### ⚠️ Y «compilan e importan» no es una verificación
+Los dos `UnboundLocalError` de arriba y las 47 etiquetas convivieron con un
+`compileall` en verde y los cuatro módulos importando sin queja. Lo que encontró las
+dos cosas fue **llamar a las funciones** (`check_v439_smoke.py`, que ejecuta
+`_aviso_olvido` y `render_mis_ausencias` con las dependencias de Sheets sustituidas y
+mira lo que pintan). Importar no ejecuta — la lección de v378, aplicada a mí mismo.
+
+### Lo que NO se traduce
+Las **claves de dato** — `usuario`, `proyecto`, `fecha`, `clock_in`, `tipo`, `Desde`,
+`Hasta`, `Tipo`, `Estado`, `Usuario`, `Ubicacion`, `ProyectoID` — son claves de dict y
+nombres de columna: traducirlas rompe la lectura **sin dar ningún error**. Tampoco los
+mensajes de **log** (⚠️ `logger.warning` comparte NOMBRE con `st.warning`, y el extractor
+los coló 92 veces en la primera pasada: hay que filtrar por RECEPTOR, no por atributo).
+
+### Verificación
+`verif_v439.py`, 24 comprobaciones, con los correos **generados de verdad** y los
+remitentes interceptados (`notify_user` / `_notify` sustituidos: no sale ni un correo ni
+un Telegram). Probado contra **8 roturas** — y **tres solo se cazaron tras corregir el
+guardián**, las tres por chequeos que aprobaban por el motivo equivocado:
+- **Traducir UNA de las seis apariciones de `"clock_in"`** pasaba: yo comprobaba
+  PRESENCIA, y quedaban cinco. Y una traducción PARCIAL es la peor variante (unos sitios
+  leen la clave vieja y otros la nueva). Ahora se pinta el número **MÍNIMO** de
+  apariciones — mínimo y no igualdad, para que añadir usos legítimos no lo ponga rojo.
+- **«Recorded» → «Registrados»** era invisible: el detector de español busca acentos y
+  palabras funcionales, y «Registrados» no tiene ninguna de las dos. Es exactamente el
+  «Planificado» de v438 → chequeos **POSITIVOS**, el inglés esperado tiene que ESTAR.
+- La rotura del logger apuntaba a `route_ui`, que **no tiene ni una llamada a logger**:
+  una rotura sobre código que no existe no prueba nada (el `<marker>` de v438).
+
+### Cuatro guardianes CADUCADOS (actualizados, no relajados)
+`verif_v307` (Ruta del día), `verif_v308` (Fichaje), `verif_v408` (Pre-Start) y
+`verif_v430` (Ausencias) fijaban literales en ESPAÑOL de los módulos que F2 tradujo.
+Se miró el código acusado antes de tocar nada (regla v385): las cuatro conductas siguen
+intactas y lo único que cambió es el idioma, a propósito. La afirmación se reescribe
+sobre el PRINCIPIO —que la tabla marque los tres estados de fichaje, que exista la
+tarjeta de la semana, que el aviso de duplicado remita a firmar, que el saldo diga de
+qué periodo habla y avise cuando lo estima— con la razón escrita al lado, y donde se
+pudo se ancló a la parte estable (el EMOJI del estado, no la palabra).
+
+### ⚠️ Y la corrección de escala que hay que decir en voz alta
+Lo pendiente NO son los ~1.153 literales que cité al planificar: un barrido completo da
+**3.122**. Mi primera cuenta salía de una lista blanca de funciones de Streamlit y veía
+solo una parte. Ese número incluye además DATOS (columnas, formatos, claves), así que
+cada uno necesita el juicio etiqueta-vs-dato — no es un reemplazo mecánico. F3, F4 y F5
+van fase a fase, con guardián y deploy propios.
+
+## i18n F1c: los DIAGRAMAS y las PLOMADAS. **F1 CERRADO** (v438)
+
+Petición del usuario tras v437: *«adelanta los diagramas y las plomadas, cierra F1»* —
+o sea, sacar de F4/F5 lo único que impedía que un documento saliera entero en inglés.
+**80 etiquetas** en seis módulos (`plumb`, `diagrams`, `schedule`, `rail_cut`,
+`buffer_cut`, `belting`), que son las que se pintan dentro del informe del cliente y de
+los cuatro PDF de las herramientas de cálculo.
+
+**Resultado medido en el PDF del cliente: de 37 líneas en español a 0**, salvo los 11
+nombres de actividad, que son DATO.
+
+### ⚠️ El motor se importa con ALIAS `_d`, no como `d`
+En estos seis módulos `d` ya es una variable corriente —días, dicts, deltas— en **14
+sitios**, y Python marca el nombre local en el **ámbito ENTERO** de la función: un
+`d = 0` al final del cuerpo revienta las etiquetas de arriba con `UnboundLocalError`.
+Es exactamente el fallo del glosario de v437, y renombrar 14 variables es más riesgo
+que aliasear el import. El guardián prohíbe importarlo como `d` pelado.
+
+### Lo que NO se traduce, y por qué
+| | |
+|---|---|
+| **Claves** de `schedule_table` / `plumb_table` / `plumb_checks` (11) | las indexan `report.py` y `user_report.py` (`r["Actividad"]`, `r["Línea"]`, `r["Medida"]`) → KeyError o columna vacía |
+| **Nombres de las actividades** (`schedule.PHASES`) | son DATO: se guardan en la hoja `Actividades`. Traducirlos dejaría los proyectos viejos en español y los nuevos en inglés, sin forma de casarlos → van con la migración del histórico |
+| Claves internas (`origen`, `peso`, `izq`, `der`, `cabina`, `contra`) | banderas, no texto |
+⚠️ **Los VALORES sí**: `LINE_NAMES` viaja como valor de la clave `"Línea"`, y ahí sí se
+traduce. Verificado antes de tocarlo que **nadie compara** contra esos nombres.
+
+### ⚠️ El barrido ESTÁTICO se dejó cinco restos; los cazó RENDERIZAR
+El volcado de literales por AST filtraba cadenas de más de 95 caracteres y su regex
+exigía `>texto</text>` **en una sola línea**. Con eso se escaparon cinco etiquetas que
+solo aparecieron al generar los SVG y leer su texto:
+`FICHA DE REPLANTEO` · el título y el subtítulo de **belting** · el subtítulo y la
+leyenda del **Caso 2** de rieles (llevan entidades HTML, `&#183;`). → Un barrido del
+FUENTE mide lo que está escrito; solo el barrido de lo RENDERIZADO mide lo que se ve.
+
+### Verificación
+`verif_v438.py`, **59 comprobaciones**: claves intactas, actividades en español, alias
+`_d` sin tapar, 0 etiquetas en el fuente, y los **11 SVG generados** (planta,
+isométrica, 4 de plomada, cronograma, rieles caso 1 y 2, buffers, belting) sin español,
+con su texto inglés ESPERADO presente y ⚠️ **sin `<defs>`/`<marker>`**, que svglib no
+convierte y haría desaparecer el diagrama del PDF sin ningún error (regla v39).
+Probado contra **12 roturas**: las caza las 12 — pero **cuatro solo tras corregirlo**:
+- «traducir UN nombre de actividad» pasaba: mi chequeo era un `or` sobre varios, así que
+  otro casaba. Y sustituirlo por «cuántos parecen españoles» dio **FALLO con el código
+  correcto** (5 de los 11 no llevan ni acento ni palabra funcional: «Brackets /
+  soportes»). Se exigen **tres nombres concretos, verbatim**.
+- «una etiqueta de plomada vuelve al español» no la veía **nadie**: `LINE_NAMES` no vive
+  dentro de un `<text>` y `plumb_svg` usa `LINE_SHORT`. Se comprueban los VALORES que
+  las tablas entregan.
+- «la leyenda del cronograma vuelve al español» se escapaba porque *Planificado* no
+  lleva acento ni palabra funcional → se añadieron chequeos **POSITIVOS** (el inglés
+  esperado tiene que estar), y fue justo eso lo que destapó el `FICHA DE REPLANTEO`.
+- la rotura del `<marker>` estaba **mal apuntada**: caía en el stub 10×10 px del retorno
+  temprano, un camino que el test no dibuja. Una rotura en código que nadie ejercita no
+  prueba nada.
+
+### ⚠️ La trampa del `\b` en el heredoc, POR SEGUNDA VEZ en la misma tanda
+El chequeo de los valores de plomada se insertó desde un heredoc de bash, y `\b` se
+convirtió en el **carácter 0x08** (backspace). El regex quedó pidiendo un backspace
+literal, así que **no casaba nunca** — y dejó pasar «Plomo riel izquierdo» dando OK.
+Es el mismo fallo de v436, cometido otra vez ese mismo día. Se vio con `cat -A`, no
+leyendo. → **Cualquier `\b`, `\n` o `\w` va por fichero escrito, nunca por heredoc.**
+
+## ⚠️ Un estado NUEVO sale en español aunque la pantalla esté traducida (v462)
+
+Encontrado **mirando una captura** de la verificación en producción de v461: la columna
+`Status` del historial de correcciones decía **«revertida»** en una fila cuyas otras seis
+columnas estaban en inglés — traducción a medias dentro de la MISMA tabla, que v450
+documenta como el peor caso.
+
+### Fallaron DOS cosas a la vez, y arreglar una sola no habría cambiado nada
+1. la celda pintaba `str(r.get("Estado"))` **crudo**, sin pasar por `i18n.etiqueta()`
+   (la red 12 de v452);
+2. y aunque hubiera pasado, **`revertida` no estaba en `i18n.VALORES`**: el vocabulario
+   se tomó de `ausencias` (v430), que trae `pendiente`/`aprobada`/`rechazada` — y
+   `revertida` es el estado PROPIO de v461, así que nació fuera del mapa.
+
+⚠️ **Un valor nuevo no entra solo en el mapa, y no da ningún error**: `etiqueta()`
+devuelve tal cual lo que no conoce, que es lo correcto para un nombre de obra o una nota
+—y exactamente lo que esconde un estado recién inventado—.
+
+### Por qué ningún guardián lo vio
+Las catorce redes de i18n miden el **CÓDIGO** (literales de display sin `t()`), y aquí no
+hay literal: el texto viene de la HOJA. La red 12 sí cubre esta forma, pero su chequeo fija
+las tres celdas CONCRETAS que v452 encontró — el guardián acotado al caso que se vio, otra
+vez (v309, v349, v441).
+
+**Chequeo nuevo y GENERAL** (dentro de `verif_v461.py`, para que no dependa de correr otro):
+todo valor de `correcciones.ESTADOS` tiene que estar en `i18n.VALORES`;
+`etiqueta(REVERTIDA)` tiene que dar «reverted»; ⚠️ el **DATO sigue en español**
+(`REVERTIDA == "revertida"`, `APROBADA == "aprobada"` — traducirlo dejaría de casar en
+silencio, v442); y por AST, la celda del historial tiene que pasar por `etiqueta()`. Así el
+próximo estado que alguien añada a ese módulo no se puede colar.
+
+### Verificación
+`verif_v461.py` pasa de 26 a **31 comprobaciones**, las 11 roturas se siguen cazando y la
+suite entera queda en **100 verde · 0 rojo**.
+
+## El arreglo de v462 estaba ACOTADO: la misma forma vivía en 4 celdas más (v463)
+
+Salió de una pregunta del usuario —*«¿ya está todo cerrado y funcionando?»*— auditada
+contra el CÓDIGO en vez de contestada de memoria. La respuesta era **no**: mi chequeo de
+v462 miraba solo `correcciones`, y generalizarlo destapó el mismo fallo vivo en dos
+pantallas más, con sus **dos mitades**.
+
+| Pantalla | Se veía |
+|---|---|
+| **Catálogo** | `producto` / `servicio` bajo la cabecera *Type*, y la categoría bajo *Category* |
+| **Inventario** | la categoría bajo *Category* y el **estado** bajo *Status* |
+
+Las dos tablas pasan por `tabla.cfg()`, así que **la cabecera estaba en inglés y la celda
+en español** — el contraste exacto que hizo saltar «revertida».
+
+### ⚠️ El inventario se contradecía consigo mismo
+Su ficha usaba `_est_lbl()` y decía **«available»**; su tabla, a dos clics, decía
+**«disponible»**. El mismo activo en dos idiomas, porque el TEXTO del estado vivía en un
+mapa propio del módulo (`_EST_LBL`) y la tabla no lo usaba. Es la segunda definición que
+v450 mandó borrar, sobreviviendo donde nadie la había mirado.
+
+### Y el mapa estaba a medias en dos listas
+`catalogo.CAT_DEFAULT` tiene 7 categorías: **3 se traducían y 4 no** — y las 3 que
+funcionaban lo hacían **por casualidad**, porque coinciden con claves de la lista de
+gastos. En `expenses.CATEGORIAS` faltaba `Otros`, 1 de 7. Es la mitad silenciosa de v462:
+*un valor nuevo no entra solo en el mapa, y `etiqueta()` devuelve tal cual lo que no
+conoce* — correcto para un nombre de obra, y justo lo que esconde una categoría.
+
+### ⚠️ El arreglo OBVIO habría sido un fallo nuevo
+Meter `_est_lbl()` en la tabla parecía lo natural: es la función del módulo para eso. Pero
+devuelve **markdown de color** (`:green[available]`), que `st.markdown` renderiza y una
+celda de `st.dataframe` pinta **literal**. Se vio mirando qué DEVUELVE la función y dónde
+se usaba (regla v135), no leyendo su nombre.
+→ El texto se mueve a `i18n.VALORES` (**una** definición) y `_EST_COLOR` se queda solo con
+el color; `_est_lbl()` los compone. La tabla usa `_etq()` pelado.
+- ⚠️ **La ficha tiene que pintar EXACTAMENTE lo de antes**, y eso se comprueba ejecutando
+  contra el diccionario viejo verbatim: 5 de 5 idénticas. Si un arreglo de la tabla
+  cambiara la ficha, se habría movido algo que ya estaba bien.
+- ⚠️ **El DATO no se toca**: `inventory.py` compara `== "en_uso"` e `inventory_ui`
+  `== "disponible"`. Traducir la constante dejaría esas dos ramas muertas **sin dar
+  ningún error** (v442).
+
+### Dos falsos positivos que NO se tocaron
+Mirar el código acusado antes de editar (regla v385) evitó romper código sano: el `Tipo`
+de una CREDENCIAL (*White Card*, *Forklift* — ya en inglés y fuera del mapa a propósito) y
+un `.get("Tipo")` del catálogo que es una **COMPARACIÓN** (`== SERVICIO`), no un pintado —
+mi red miraba todos los `.get` del valor. Y `roster.ESTADOS` queda fuera del guardián: sus
+claves (`OFF`/`LEAVE`/`FORMACION`) son identificadores y lo que se pinta es su `nombre`,
+que ya está en inglés.
+
+### ⚠️ La lista FIJA del guardián era el mismo fallo que venía a arreglar
+La primera versión comprobaba **8 listas escritas a mano**, o sea un guardián acotado a lo
+que yo había mirado. Se cambió por DESCUBRIMIENTO en ejecución (importar cada módulo de
+`core` y leer sus constantes) y aparecieron **13**: las 5 que faltaban se definen por
+**NOMBRE** —`ESTADOS = (PENDIENTE, APROBADA, …)`— así que ningún barrido de literales las
+ve, y son justo las de `correcciones` (v461), `ausencias` (v430), `quotes` y `orders`.
+→ Y ahí salió **un fallo real más**: `orders.ESTADOS` tenía `recibida` **sin traducir**
+mientras `pendiente` y `cancelada` sí lo estaban, así que una orden recibida salía en
+español entre dos que no. El estado de una orden se pinta con `_etq()`, o sea que se veía.
+
+### ⚠️ Y el CONTROL cazó que mi propio guardián REVENTABA
+Al sustituir el chequeo 3 borré la línea que importaba `inventory`/`catalogo`, y el
+chequeo 4 los usa → **`NameError` en la línea 155**: el guardián moría a media ejecución y
+yo solo miré la parte de arriba de la salida, que decía «ok».
+⚠️ Un guardián que revienta devuelve código ≠ 0 **siempre**, así que **las 8 roturas
+salieron «cazadas» sin probar nada** — la trampa de v459/v461 otra vez, ahora causada por
+mí mismo dentro del arreglo. Lo detectó **únicamente el caso de CONTROL** (un cambio
+inocuo que debe pasar): sin él, la tanda entera habría pasado por verificación. Arreglado
+el import, repetido: **9/9 (8 roturas + control)**.
+
+### ⚠️ La trampa nº26, otra vez (van cinco)
+Escribí una rotura con `<<PY` **sin comillas**, así que bash interpretó los backticks del
+comentario como sustitución de comando (`orders.ESTADOS: command not found`) y el fichero
+quedó con el comentario mutilado. El heredoc va **siempre** entre comillas (`<<'PY'`).
+
+### El guardián, esta vez GENERAL
+`verif_v463.py` (8 comprobaciones) no fija los sitios que vi: recorre **todos** los
+`*_ui.py` y falla si cualquier dict-fila de un `pd.DataFrame` lee una columna de negocio
+sin `etiqueta()`; exige que las **8 listas** de valores estén mapeadas; que el dato siga en
+español; que `_EST_COLOR` guarde colores y no frases; y que `_est_lbl` no aparezca dentro
+de un `DataFrame`. ⚠️ La red se **valida contra un caso construido** (ve la celda cruda y
+no marca la traducida) antes de creerse su cero — trampa nº12. Probado contra **7 roturas
++ 1 CONTROL**: caza las 7 y deja pasar el control.
+
+## Un lote no basta: el mapa estaba a medias en CUATRO listas más (v464)
+
+v463 se desplegó y se verificó en producción — *Catalogue: service · Engineering*,
+*Inventory: Tool · available* —, y **mirar esas mismas capturas destapó cuatro listas
+más** cuyos valores seguían saliendo crudos. No es un fallo nuevo: es que el barrido de
+v463 descubrió las listas **por constante** y estas cuatro se pintan en sitios que su
+red no miraba.
+
+| Lista | Se veía |
+|---|---|
+| `catalogo.UNIDADES` | `unidad` · `juego` · `global` bajo la cabecera *Unit* |
+| `inventory.CONDICIONES` | `bueno` · `regular` · `malo` en la ficha del activo |
+| `inventory.UBIC_TIPOS` | `bodega:` · `usuario:` · `reparacion:` en la ubicación |
+| `inventory.MOV_TIPOS` | `salida` · `entrada` · `traslado` en el historial |
+
+⚠️ **`m`, `m²` y `kg` NO se mapean**: son símbolos, idénticos en los dos idiomas, y un
+mapa espejo (`{"m": "m"}`) es exactamente la segunda definición que v450 mandó borrar.
+
+### ⚠️ El casi-fallo: traducir dentro de `ubic_str` habría metido inglés en la HOJA
+La ubicación se compone en `inventory.ubic_str`, así que lo natural era traducir ahí
+—una sola definición, que es la regla de v306—. Pero **5 de sus 6 llamadas son de
+`_log_mov`**, y ese texto **se ESCRIBE en el historial de movimientos**: traducirlo
+dentro habría guardado `warehouse: X` como DATO, que es el fallo que v452 estuvo a punto
+de cometer con el estado del proyecto. Solución: el traductor entra **por parámetro
+opcional** (`ubic_str(a, etq=None)`), así la composición sigue teniendo una definición y
+solo la pantalla la traduce; las escrituras no lo pasan y siguen en español.
+
+### ⚠️ Y una rotura SE ESCAPÓ: la red solo miraba CUATRO columnas
+El guardián de v463 comprueba que ninguna celda de tabla lea una columna de negocio sin
+`etiqueta()`… pero su lista era `COLS = {"Estado", "Categoria", "Tipo", "Rol"}`. Al
+devolver la celda `Unidad` a crudo, **el guardián devolvió 0 y la rotura pasó** (11
+cazadas · 1 escapada). Es la lección de siempre —**la red ve solo la forma que se le
+enseñó**— dentro del guardián escrito para esa misma lección una versión antes.
+`COLS` pasa a incluir `Unidad`, `Condicion` y `UbicacionTipo`, y queda escrito al lado
+que es una lista **declarada**: una columna de negocio nueva hay que meterla ahí.
+
+⚠️ Y antes de creerse el «12/12» se comprobó que el guardián está **VERDE con el código
+bueno** (10 comprobaciones): la tanda de roturas de v459 y v461 no valía nada
+precisamente por saltarse ese paso.
+
+## Las PESTAÑAS pasan a nombre inglés (v465-v466)
+
+Petición del usuario: *«pon los nombres de las hojas en inglés también, TODO debe ir
+en inglés»*. Antes de tocar nada se midió el alcance, porque aquí hay tres capas con
+riesgos muy distintos:
+
+| Capa | Sitios que la nombran | Qué pasa si falla |
+|---|---|---|
+| **Hojas** (27) | **67** | ← esta versión |
+| Carpetas de Drive (3) | 3 | se buscan **por nombre**: los 27 documentos ya subidos quedan huérfanos |
+| Columnas (160) | **2.573** | `.get("Estado")` sobre una cabecera ya inglesa devuelve `""`: columnas vacías por toda la app |
+| Valores (80) | **727** | cada comparación que deja de casar es una **rama muerta** silenciosa (v442) |
+
+### ⚠️ El fallo que dicta la secuencia no es una excepción: es una hoja VACÍA
+`get_sheet` **crea** la pestaña si no la encuentra. Así que si el código pide
+`Projects` y el libro todavía tiene `Proyectos`, la app **no da ningún error**: se
+fabrica una pestaña vacía y se pone a escribir ahí, con los datos intactos al lado y
+la pantalla en blanco. Por eso va en tres pasos y no de un tirón:
+
+1. **v465** — el código pide el nombre nuevo y **acepta el viejo**
+   (`timeclock.titulo_real`, una sola definición, 0 llamadas extra: sale del índice
+   que `_libro()` ya cachea).
+2. **Renombrar** las 44 pestañas de los dos libros.
+3. **v467** — retirar el respaldo.
+
+⚠️ Y `titulo_real` devuelve el nombre **NUEVO** si el índice no se puede leer: un
+fallo de red no puede acabar escribiendo en otra pestaña.
+
+### El canario, porque «desplegado ≠ corriendo» aquí se paga caro
+Tras desplegar v465 el topbar decía `v464` y el título `v465`, o sea que los `core.*`
+podían seguir viejos. Renombrar con el código viejo corriendo es exactamente el
+desastre de arriba, así que se comprobó con una prueba POSITIVA: renombrar
+`Activos → Assets` y mirar la pantalla. Siguió mostrando **1 activo**; con el código
+viejo habría pedido `Activos`, no lo habría encontrado y habría mostrado **0**
+creando una pestaña vacía.
+⚠️ El primer canario (`InvCategorias`, 0 filas) **no valía**: la ruta de LECTURA no
+crea hojas —solo `get_sheet`—, así que su «no se recreó» no significaba nada hasta
+comprobar que `registros(titulo, CABECERAS)` sí cae a `get_sheet`.
+
+### ⚠️ Y el renombrado destapó una mina de verdad: el índice NO caduca
+Con las 44 renombradas, el **Catálogo pasó a mostrar 0 items** con la hoja llena
+(`Catalogue`: 2 filas; el lector local devolvía 1). `_libro` —el índice de pestañas—
+vive en **`@st.cache_resource`, que no tiene TTL**: el proceso lo construyó cuando
+las hojas eran españolas, así que seguía pidiendo `Catalogo`, el lote entero fallaba
+en cada pasada y **las pantallas salían a cero con los datos intactos**. Solo se
+arreglaba reiniciando a mano.
+
+**v466** lo cierra en el código, que es donde tiene que estar:
+- si el lote falla, **se tira el índice** y se reconstruye (2 llamadas, y solo cuando
+  ya ha fallado);
+- `get_sheet` **refresca el índice y vuelve a mirar ANTES de crear** — que era el
+  camino por el que un índice viejo podía fabricar la pestaña vacía.
+
+### ⚠️ El guardián de v445 me cazó reintroduciendo su propio fallo
+`titulo_real` empezaba con `t = str(title).strip()`, y `timeclock` importa **`t` como
+la función de traducción** desde v445: Python marca ese nombre local en el ámbito
+ENTERO de la función. Es literalmente el shadowing que aquella versión documentó,
+cometido dentro del arreglo. De los otros dos rojos, los dos eran **caducados**:
+`verif_v427` por su libro FALSO (nombraba las hojas en español, así que `_existentes`
+no casaba y el lote salía vacío → un FALLO que no existía) y `verif_v430` por exigir
+el literal `"Ausencias"` — reanclado a **`ausencias.SHEET`**, así el próximo
+renombrado no lo pone en rojo.
+
+### Verificación
+Guardián `verif_v465.py` (6 bloques) probado contra **3 roturas + control**: las caza
+las 3. Suite **102 verde · 0 rojo** antes de cada uno de los dos despliegues. Tras
+renombrar: **0 pestañas con nombre viejo** en los dos libros, **0 recreadas**, los
+lectores devolviendo lo mismo que antes (catálogo 1, activos 1, movimientos 1,
+usuarios 5) y las pantallas de Catálogo, Inventario y Usuarios correctas.
+
+⚠️ **Y la trampa nº19 dos veces en la misma tanda**: guardianes lanzados desde el
+scratchpad en vez de `survey_app` → `No secrets found` → rojos que no existían.
+
+## Las COLUMNAS pasan a nombre inglés (v468) — y lo que costó
+
+Sigue a v465-v467. Es la capa grande: **160 columnas** nombradas en **2.573 sitios**,
+más la cabecera de 51 pestañas.
+
+### El diseño que la hace posible: canonizar al LEER
+`core/columnas.py` (módulo HOJA, **134 entradas, una sola fuente de verdad**) y
+`hojas.registros` traduce la CABECERA una vez por hoja, así que el código ve siempre el
+nombre nuevo tenga el libro el viejo o el nuevo. Las **48 lecturas por clave** que no
+pasan por el lote se envuelven en `canonizar`.
+
+⚠️ **Las escrituras no necesitan nada**: `_COL` se deriva de las cabeceras por POSICIÓN
+y renombrar una columna **no la mueve**. Verificado: 28 cabeceras, misma longitud, sin
+duplicados, ninguna posición desplazada.
+
+⚠️ Y `get_sheet` compara **canonizando**: con las cabeceras en inglés y la hoja en
+español, todas parecerían faltar y su migración reescribiría la fila 1 a ciegas — si el
+orden no coincidiera al 100 %, dejaría datos bajo la cabecera equivocada.
+
+### ⚠️ Tres fallos SILENCIOSOS, y ninguno se encontró leyendo código
+1. **Un VALOR de negocio renombrado.** La categoría de un activo coincide con el nombre
+   de una columna, así que el transformador la cambió: habría descasado con los activos
+   ya guardados. Lo denunció un guardián. Barrido posterior en las dos formas en que
+   puede esconderse: dentro de las 13 listas de negocio (1, ese) y como **objetivo de
+   una comparación** (1, y al mirarlo era correcto). Comparar el *nombre de la columna*
+   es normal; comparar un *valor* renombrado deja la rama muerta.
+2. **11 claves de `column_config`.** Ese dict **no** está dentro de `pd.DataFrame(...)`,
+   así que se renombró mientras las claves de la tabla no: la columna pierde formato,
+   etiqueta y ancho. ⚠️ Y al arreglarlo aparecieron **4 del caso contrario**: tablas
+   cuyo dict de filas se construye con `.append(...)` FUERA de la llamada, donde las
+   claves **sí** se renombraron. No hay regla global: cada `column_config` debe casar
+   con SU tabla.
+3. **`col_offset` del AST es un offset en BYTES, no en caracteres.** Cortando el texto
+   por caracteres, cualquier línea con «·», tilde o emoji antes del literal salía
+   desplazada. La guarda «si no empieza por comilla, salta» **evitó corromper nada**
+   —verificado por AST: 1.965 literales cambiados y **0 sin explicar** en 87 ficheros—
+   pero dejó **78 sitios sin migrar**, que devuelven cadena vacía en silencio.
+   Corregido cortando por bytes; la migración quedó **idempotente** (2ª pasada: 0).
+
+### ⚠️ 33 guardianes en rojo — un tercio de la suite
+Clasificados **antes** de tocarlos: **27 mecánicos** (solo usan columnas en sus datos de
+prueba) y **6 que afirman sobre el NOMBRE**. A esos seis no se les aplicó el renombrado:
+convertir «las cabeceras siguen en español» en «ahora son inglesas» a ciegas es relajar
+la afirmación, no decidirla. Uno se **invirtió con su razón escrita**.
+⚠️ De los mecánicos, 11 no se arreglaron con el renombrado porque la columna aparecía
+**dentro de otra cadena, en un regex o como KWARG**. Y uno señaló un fallo REAL: tras el
+renombrado, un literal servía a la vez de clave de traducción y de objetivo de
+comparación — y esa rama hacía lo mismo que su `else`, así que se eliminó.
+
+### ⚠️ Y el guardián que aprobaba una rotura real
+El chequeo de la migración de cabecera buscaba la palabra `canon` **en cualquier parte**
+de `get_sheet`; la rotura cambiaba solo el `if` y la línea que la calcula seguía ahí.
+Trampa nº2 (*grep ≠ uso*) dentro del guardián. Reescrito sobre la CONDICIÓN del bucle.
+Con eso: **5/5 roturas cazadas**, control verde antes y después.
+
+### ⚠️ El canario de v465 solo probaba UN módulo
+Al renombrar las pestañas se comprobó que el Cloud tenía el código nuevo renombrando una
+hoja con datos y viendo que seguían en pantalla. Eso probaba que **ese** módulo era
+fresco, no los demás. Horas después aparecieron **3 pestañas vacías recreadas**: un
+módulo todavía viejo las pidió por su nombre antiguo y `get_sheet` las creó. Estaban
+completamente vacías (0 celdas con contenido) y se borraron, así que no se perdió nada
+— pero **un canario vale para el módulo que ejercita**, no para el proceso.
+
+### ⚠️ Y un 0 que no significaba lo que parecía
+Repitiendo el canario con las columnas, el catálogo mostró **0 items** y estuve a punto
+de concluir que el renombrado lo rompía. Era la **caché** (TTL 120 s) con el resultado
+de cuando la hoja estaba vacía: con la caché caliente mostraba 1 con las cabeceras ya
+renombradas. **Un canario sobre datos cacheados no prueba nada hasta que la caché
+caduca.**
+
+### Deuda anotada
+Las **claves de display** quedaron inconsistentes: unas tablas en español (dict inline,
+excluido a propósito) y otras en inglés (construido con `.append`). Funciona y está
+verificado, pero quien toque esas tablas se lo encontrará.
+
+## Los VALORES pasan a inglés (v469) — y los DOS fallos que escondía
+
+Última capa de «todo en inglés» (v465 hojas · v467 carpetas de Drive · v468 columnas).
+Aquí el fallo no es una pantalla en blanco ni una columna vacía: **una comparación que
+deja de casar es una rama MUERTA, y no da ningún error**.
+
+### El diseño, igual que en las columnas: canonizar al LEER
+`core/valores.py` (módulo HOJA, **61 pares**) y `hojas.registros` traduce el valor viejo
+al canónico, así que el código ve el nombre nuevo tenga el libro el viejo o el nuevo.
+Eso es lo que permite desplegar ANTES de migrar la hoja.
+⚠️ **Lista blanca por (HOJA, COLUMNA), nunca por nombre de columna suelto**: `proyecto`
+es a la vez el tipo de FICHAJE (`Sheet1.Type`) y un valor de `UBIC_TIPOS`
+(`Assets.LocationType`).
+
+### ⚠️ FALLO 1: `Sheet1.Type` se quedó fuera de la lista blanca
+`TIPO_PROYECTO` pasó a `"project"` y la pareja **no** se añadió, así que las ~500 filas
+del histórico seguían diciendo `proyecto`, se leían sin canonizar y
+`_tipo_of(r) == TIPO_PROYECTO` era **falso para todas**: ni una hora imputada a una obra
+contaba como tal. Eso es la nómina, el costo de obra, la conciliación de v313 y el
+reparto por proyecto, **todo a cero**, en lo que más se usa de la app. Sin un error.
+
+⚠️ **Y el guardián de v469 estaba PROTEGIENDO el fallo.** Su bloque 2 exigía que
+`Sheet1.Type` quedase FUERA — cierto cuando lo escribí, porque entonces la constante
+todavía era `proyecto` y canonizar esa columna sí rompía el fichaje. Al migrar la
+constante la conclusión se invirtió y el guardián no se enteró, así que **hacerle caso
+al rojo sin mirar el código acusado habría reintroducido el fallo**. Es la regla v385
+en su forma más incómoda: *el acusado tenía razón y el acusador no.*
+
+Y los dos barridos que escribí para buscar justo esto **tampoco lo vieron**: el primero
+comparaba por NOMBRE de columna —y `Type` ya estaba en la lista, para `Projects`—, así
+que daba la pareja por cubierta; el segundo, ya por pareja, solo miraba constantes que
+son LISTA, y `TIPO_GENERAL`/`TIPO_PROYECTO` son **sueltas**. **Un chequeo que mide por
+el nombre cuando la unidad es la pareja aprueba justo el caso que busca.**
+
+### ⚠️ FALLO 2: `estado_cobro` devolvía una MEZCLA
+De sus cinco ramas, v469 migró **una**: devolvía `anulada`, `cobrada`, `vencida` y
+`parcial` en español y `pending` en inglés. Como la clave de `invoices_ui._EST_FMT` es
+justo lo que devuelve esa función, `pending` no se encontraba y **la factura salía sin
+icono ni color, con el texto crudo**. Traducción a medias dentro de la misma función: el
+peor caso (v443/v450).
+
+Se **revierte** esa rama en vez de migrar las otras cuatro. Las facturas se quedan en
+español de punta a punta —la columna `Invoices.Status`, las 5 comparaciones
+`== "vencida"` y el mapa de chips—, `(Invoices, Status)` **no** está en la lista blanca,
+y la pantalla ya lo traduce con `_est_fmt()` y `etiqueta()`. Migrar cuatro ramas más al
+cierre de una versión que ya toca 32 ficheros es como se cuelan los fallos silenciosos.
+
+### ⚠️ Y la red que buscaba mezclas era CIEGA a este caso exacto
+La construí sobre `valores.LEGADO` (61 pares, lo que v469 migró) y dio **0 mezclas con
+la mezcla delante**: los cuatro estados españoles de facturas **no están en el mapa de
+migración**, así que el lado «sin migrar» salía vacío. Un valor migrado FUERA de ese
+mapa es justo donde una traducción a medias duele, y una red hecha con el mapa de
+migración no puede verlo. Rehecha sobre **`i18n.VALORES`** (el vocabulario completo, 81
+pares) sí lo ve. **Solo lo destapó validar la sonda contra un caso conocido-bueno**
+(trampa nº12); el guardián la valida él mismo antes de creerse su cero.
+
+### `i18n.VALORES` no queda obsoleto: pasa a ser el LEGADO del display
+Mapeaba español→inglés para MOSTRAR. Con el dato ya en inglés, `etiqueta()` devuelve el
+canónico tal cual **y sigue traduciendo la fila sin migrar** — la misma compatibilidad,
+del otro lado. Verificado que `valores.LEGADO` e `i18n.VALORES` coinciden en los **60
+pares comunes, 0 discrepancias**: si difirieran, una fila migrada y una sin migrar
+acabarían con dos ortografías del mismo estado.
+De paso se añadió `otro → other`, que faltaba: se guarda en `Assets.LocationType`, así
+que una fila anterior a la migración saldría cruda (el fallo de v462/v463 — un valor que
+no está en el mapa se devuelve tal cual, sin error).
+
+### Lo que NO se migra, con su razón
+| | Por qué |
+|---|---|
+| **`payroll.TIPOS`** (`devengo`/`deduccion`/`aporte`) | no viven en una columna sino **dentro de `ConceptsJSON`**: migrarlos obliga a reescribir el JSON de cada nómina del histórico. Es migración de datos, no traducción — la clase de `schedule.PHASES` (v448/v453). ⚠️ Verificado que la constante, las escrituras y las comparaciones siguen **las tres** en español: media traducción aquí dejaría de restar las deducciones del neto, en silencio (v447) |
+| **Facturas y nóminas** (`anulada`, `pagada`, `cobrada`…) | coherentes de punta a punta y fuera de la lista blanca |
+| **`m` · `m²` · `kg`** | son símbolos, iguales en los dos idiomas; un mapa espejo es lo que v450 mandó borrar |
+| **`OFF` · `LEAVE` · `FORMACION`** | claves reservadas del tablero, no texto |
+| **`general`** | ya es palabra inglesa y la pantalla dice «workday» por `t()`; migrarla obligaría a reescribir el `Type` de las ~500 filas del fichaje a cambio de nada |
+
+
+### El despliegue: «desplegado ≠ corriendo», medido con el CAMBIO
+Tras subir v469 el sidebar anunciaba **v469** y la app ejecutaba **v468**. No se
+diagnosticó por la versión —que no prueba nada en ninguna dirección (v334 corregido por
+v408/v452)— sino por el cambio: el formulario del catálogo seguía ofreciendo `Equipos` y
+`unidad`, que son los `CAT_DEFAULT`/`UNIDADES` de v468; los de v469 son `Equipment` y
+`unit`. Y el catálogo estaba vacío, así que no podían venir de la hoja. Tras el reinicio,
+los mismos dos campos dicen **`Engineering` y `unit`**.
+⚠️ **Y por poco lo leo mal**: mi primera sonda devolvió **una sola** opción («Equipos»)
+cuando `CAT_DEFAULT` tiene siete — imposible en las dos versiones. Estaba leyendo el
+valor SELECCIONADO con el desplegable ya cerrado, no las opciones. **Un dato imposible en
+los dos escenarios no concluye nada**: hay que ir a mirar antes de afirmar (trampa nº12).
+
+### Y el orden importaba: la hoja NO se podía migrar antes
+`Login.Role` decide el rol de cada persona, y con el Cloud aún en v468 —que compara
+`== "administrador"`— migrarla habría dejado a las 5 cuentas sin rol reconocido, cayendo
+al default del CAMPO (v297, menor privilegio) sin dar ningún error. Por eso la secuencia
+es desplegar → **ver el cambio** → migrar, y no al revés.
+Migradas después las **5 celdas** (`propietario→owner`, `administrador→administrator`),
+con foto previa **fuera del repo**, verificado leyendo (0 pendientes) y —lo que de verdad
+importa— comprobando que **los 5 roles se reconocen y cada uno conserva su navegación**:
+los dos `owner` con Administración/Pre-Start/Herramientas y los tres `administrator` con
+Home/Fichaje/Planificación/Proyectos/Finanzas. Ninguno cae a la del campo.
+⚠️ Son solo 5 celdas porque la demo se vació en v456; el resto de columnas de la lista
+blanca no tienen datos, así que **esa parte de la migración no está ejercitada con
+volumen** — se dice, en vez de dar por probado lo que no se probó.
+
+### ⚠️ Y migrar la hoja dejó un chequeo midiendo OTRA COSA
+El bloque 7 de `verif_v469` decía «contra la hoja REAL: el rol llega en inglés **con la
+hoja en español**» y medía exactamente eso. Al migrar las 5 celdas, esa afirmación se
+convirtió en la **identidad** —la hoja ya dice `owner`— así que su verde dejó de probar
+la canonización, y nada lo anunció. Es la trampa nº1 en una forma nueva: **un cambio en
+los DATOS puede vaciar un chequeo sin tocar una línea de código.** Partido en las dos
+direcciones: la fila migrada (identidad) y una fila sin migrar (canonización), esta con
+un caso CONSTRUIDO, porque en la hoja ya no queda ninguna.
+
+### Los 8 guardianes que afirmaban «el DATO sigue en español»
+Caducados por un cambio deliberado, **invertidos con la razón escrita al lado**, nunca
+relajados (regla v385). La afirmación cambia de objeto y no de principio: lo guardado y
+lo mostrado no pueden divergir. Cada uno exige ahora tres cosas —el valor que se GUARDA
+es el canónico, la fila SIN migrar sigue casando, y `etiqueta()` no muta un valor que ya
+es canónico— y `verif_v445` lleva **el chequeo que habría cazado el fallo 1**,
+ejercitando `_tipo_of` sobre una fila vieja y una nueva.
+
+### Verificación
+`verif_v463` gana la red de mezclas (que se auto-valida) y un chequeo de ramas muertas.
+⚠️ Ese último dio un **FALLO inexistente** al primer intento: buscaba la comparación por
+TEXTO y encontró **mi propio comentario** —el que explicaba por qué el valor no se
+traducía—, trampa nº2 otra vez. Se quitan comentarios con `tokenize`; y el comentario,
+que ya mentía sobre el código, se actualizó (es el caso del comentario de
+`use_container_width` en v405). Lo mismo con el docstring de `inventory.alertas`.
+⚠️ Un barrido de comentarios que nombran un valor migrado da **400 falsos positivos**
+(claves internas y los propios mapas, que por definición nombran el viejo): se descarta
+—un detector que grita sobre lo que está bien acaba ignorándose (v450)— porque el riesgo
+real ya lo cubre el barrido de `ast.Compare`, que dio **2** y los dos son claves internas
+de un resultado calculado (el buscador y la campana), no datos de hoja.
+Nuevo `check_v469_smoke`: **ejecuta el viaje completo** de un valor (fila vieja →
+canonizar → la comparación REAL del código → lo que se ve), 29 comprobaciones — porque
+«compila e importa» no verifica nada de esto (v378/v439).
+Batería: **9 roturas, 9 cazadas**, con **verde de base comprobado primero** (sin ese paso
+una tanda entera sale «cazada» sin probar nada, v459) y un caso de **CONTROL**.
+⚠️ Y la compatibilidad está demostrada **contra la hoja real**, no simulada:
+`get_user('dacox').Role` llega como `owner` con la hoja diciendo `propietario`.
+
+## Tipo de proyecto «Ripout + Installation» (v470)
+
+Petición del usuario: *«un nuevo tipo de trabajo que va a ser rip out + instalación»* —
+sustituir un ascensor, o sea desmontar el viejo y montar el nuevo.
+
+### El desmontaje es UNA actividad, no una tabla de fases
+Se propusieron ocho fases de strip-out y el usuario lo corrigió: **«en el combinado el
+rip out entra como la primera actividad»**. Eso quita una tabla entera que mantener y
+deja el cronograma en `FASE_RIPOUT + PHASES`. Su duración **escala con las paradas**
+(decisión suya): más plantas son más puertas de rellano que quitar y más riel que
+desmontar — 3 paradas dan 4 días, 12 dan 9, y el proyecto de 6 paradas pasa de 29 a 35.
+⚠️ Duración y peso son solo el punto de partida: la tabla de actividades es **editable
+por proyecto** desde v83. Y el nombre nace en INGLÉS porque se GUARDA en la hoja
+`Activities`: traducirlo después obliga a migrar el histórico (lo que costó v453).
+
+### ⚠️ El cambio de fondo NO es la fase: es que había TRES sitios decidiendo
+«¿este tipo genera cronograma?» se preguntaba en el alta a mano, en la edición y en
+`quotes.aceptar_y_crear_proyecto` — y **este último comparaba contra el LITERAL**
+`"Installation"` en vez de la constante. Añadir un tipo a dos de los tres lo deja
+comportándose como «Other» **sin dar ningún error**: es exactamente el fallo de v454,
+donde una obra creada desde cotización nació con CERO actividades y se quedó clavada en
+0% para siempre, porque el avance es Σ(peso·avance)/Σpeso sobre las actividades.
+→ **`projects.genera_cronograma(tipo)` es ahora la única definición** y los tres
+delegan, más `con_ripout(tipo)` para la fase. El guardián prohíbe volver a comparar el
+literal, así que el tipo SIGUIENTE que se añada tampoco podrá divergir.
+
+### ⚠️ Y `custom_rows` no puede volver a insertarla
+`build_schedule(..., custom_rows=…)` es el camino que se usa al GUARDAR el cronograma
+editado. Si el `ripout=True` antepusiera la fase también ahí, se duplicaría en **cada
+guardado**. Va solo en la rama automática, y el guardián lo comprueba ejecutando un
+ciclo generar → editar → guardar.
+
+### Cambiar el tipo NO regenera el cronograma, y ahora se dice
+Regenerarlo borraría el avance que el campo ya haya reportado — la misma razón por la
+que `attach_survey` no toca las actividades desde v135. Correcto, pero hasta aquí
+pasaba **en silencio**: se marcaba la obra como «Ripout + Installation» y su plan seguía
+sin el desmontaje. Se avisa por **CONDICIÓN, no por evento** (uno que solo saliera al
+cambiar el tipo se perdería en el primer rerun, v375/v383) y **donde se arregla** —junto
+a la tabla de actividades, con el «Add activity» debajo—, no junto al selector (v395).
+⚠️ De paso, los dos `help` decían «Only «Installation»…» y al añadir el tipo pasaron a
+ser **falsos**: es la familia del comentario de `use_container_width` (v405) y del de
+`inventory_ui` (v469) — un texto que miente sobre el código.
+
+### ⚠️ El default que se queda como literal, a propósito
+`quotes.aceptar_y_crear_proyecto(tipo="Installation")` sigue siendo un literal porque
+`projects` se importa DENTRO de esa función, y reestructurar el grafo de imports de un
+módulo de 600 líneas por un valor por defecto es más riesgo que valor (comprobado que no
+hay ciclo, pero no es razón para tocarlo). En su lugar **se afirma la invariante**: si
+alguien renombra la constante, ese default apuntaría a un tipo que ya no existe y el
+proyecto nacería con un tipo desconocido, en silencio. El guardián lo compara por AST.
+
+### Verificación
+`verif_v470`, **23 comprobaciones**, todo EJECUTANDO (importar no ejecuta, v378, y este
+fallo vive dentro de la función). Incluye que **una instalación normal salga exactamente
+igual que antes** —mismas fases y misma duración—, porque si se moviera, v470 habría
+cambiado el plan de todas las obras nuevas sin que nadie lo pidiera.
+Batería: **13 roturas, 13 cazadas** + control verde, con verde de base primero (v459).
+⚠️ Una **SE ESCAPÓ** al primer intento: el chequeo del marcador `{act}` **reproducía la
+cadena en el propio guardián** en vez de leerla del código, así que romper el código no
+cambiaba nada — el fallo de v412. Rehecho leyendo la llamada por AST, y de paso
+generalizado: **ninguna llamada a `t()`/`d()` del repo puede tener un marcador sin su
+kwarg**, que si no se pinta `{x}` literal y nada salta (v453).
+
+## Auditar «¿qué falta?» destapó una pantalla que revienta (v471)
+
+El usuario pidió no dejar nada pendiente. La lista se auditó **contra el código**, no
+contra el documento — porque en v453 ya estuvo mal en las dos direcciones—, y de la
+única deuda que v468 dejó anotada («las claves de display quedaron inconsistentes»)
+salieron **cinco fallos reales**, uno de ellos un crash.
+
+### ⚠️ EL GRAVE: `KeyError` en 💰 Costos
+```python
+_tot = sum(P._num(_ed.iloc[i]["Hours"]) * ...)   # la fila tiene "Horas"
+```
+El bloque «Cuánto ganas con cada persona» **revienta** en cuanto alguien tiene horas
+fichadas en esa obra. Confirmado con `git log -S`: la clave de la fila es de **v360** y
+esa lectura la introdujo **v468** — o sea que la migración de columnas renombró **la
+lectura y no la clave**, y lleva dos versiones así. Invisible solo porque la demo se
+vació en v456. Probado ejecutando: antes `KeyError`, ahora da 616,95.
+
+### Y otros cuatro del mismo renombrado a medias
+| Dónde | Qué pasaba |
+|---|---|
+| `projects_ui` · `disabled` | decía `"Hours"` con la columna en `"Horas"`, así que **las horas quedaban editables** — y vienen del fichaje |
+| `quotes_ui` · `disabled` | decía `"Cost"` con la columna en `"Costo"`: **el costo de una cotización quedaba editable**, y está congelado a propósito desde v355/v356 porque el precio se calcula sobre él |
+| `clientes_ui` · `column_config` | configuraba `"Progress"` y `"Cost"`, la fila tiene `"Avance"` y `"Costo"` → la barra de progreso no se aplicaba y **la columna de dinero perdió su `$%,d`**, o sea que v468 reintrodujo ahí el fallo de v399 |
+| 8 cabeceras | se pintaban con su **clave cruda, en español**, dentro de tablas por lo demás inglesas (`Actividad`, `Inicio real`, `Fin real`, `Riel`, `Avance`, `Ganancia`) |
+
+⚠️ Las claves NO se renombran: `Riel` y `Actividad` las **lee** el código de vuelta y
+`Riel` además viaja a `DatosJSON` (v443), así que reabrir un cálculo dejaría de casar.
+Lo que se cambia es la ETIQUETA, en `tabla.CABECERAS` — una definición para todas.
+
+### ⚠️ `verif_v444` estaba VERDE con dos de esos huérfanos delante
+Y por su propio fallo documentado, entrando por otra puerta. v444 ya excluye su
+`column_config` de las «filas» porque si no **se aprobaba a sí mismo**… pero solo el
+dict INLINE. Cuando llega por VARIABLE (`_colcfg = {...}` → `tabla.cfg(None, _colcfg)`)
+ese dict sigue viviendo en la función, sus claves entraban en `filas` y el chequeo se
+volvía a aprobar solo. Arreglado resolviendo la variable: pasa de mirar 24 tablas a 25,
+y ahora sí caza el huérfano de `clientes_ui`.
+
+### El guardián nuevo mira las DOS formas que v444 no ve
+Una tabla editable tiene tres cosas que se desincronizan igual de calladas —el
+`column_config` (v444), **la LECTURA del resultado** y **el `disabled`**— y v468 las
+rompió en las tres. `verif_v471` cubre las dos que faltaban, más la cabecera cruda.
+⚠️ Y las tres sondas **resuelven variables**: casi ninguna de estas tablas construye su
+DataFrame inline, y mirando solo dentro de la llamada **4 de 5 salían como huérfanas
+sin serlo** — habría «arreglado» código sano. Es el agujero del medidor de v450.
+⚠️ Cada sonda **se valida a sí misma** contra un caso conocido-bueno antes de creerse su
+cero: es literalmente lo que a v444 le faltaba (trampa nº12).
+Batería: **5 roturas, 5 cazadas** + control verde, con verde de base primero.
+
+### Lo demás de la auditoría, medido y CERRADO
+| | |
+|---|---|
+| **Fallbacks de idioma** (`columnas.canon`, `valores.canon`) | **0 lecturas por clave vieja** en todo el repo: nadie depende de ellos en el CÓDIGO. Solo cubren DATOS viejos, y las hojas ya están migradas. Retirarlos es una DECISIÓN, no un pendiente — y se quedan mientras pueda entrar un cliente con histórico |
+| **Red 14 de i18n** (concatenación) | 14 casos, **0 en español**: son fragmentos de markdown con variables. Cerrado |
+| **Display sin `t()`** | 4, y las 4 son **solo iconos** (`:material/...:`): nada que traducir. ⚠️ El primer barrido dio 25 porque contaba `logger.warning` como texto de pantalla — el error de v439/v461, cometido otra vez; se filtra por RECEPTOR |
+| **7 guardianes «SIN DATOS»** | de 108. **No es un fallo pero sí cobertura perdida**, y sigue abierto: mientras la demo esté vacía, esas 7 afirmaciones no se comprueban |
+
+## BIBLIOTECA TECNICA: fotos, manuales y fichas con buscador (v472)
+
+Peticion del usuario: *«vamos a crear una base de datos de fotos y manuales e
+informacion con barra de busqueda; vamos a establecer una taxonomia por marca,
+modelo y seccion del elevador»*. Cinco decisiones suyas, tomadas antes de escribir
+nada — y **tres fueron contra mi recomendacion**, que es como debe ser:
+
+| | |
+|---|---|
+| **Biblioteca aparte**, con su propia subida | no se alimenta etiquetando lo de las obras: es material de REFERENCIA, curado |
+| **Vocabulario propio** de secciones | pensado para BUSCAR documentacion, no para planificar obra — no reusa `schedule.PHASES` |
+| **Catalogo mantenido** por el propietario | como `Rieles`: se elige de una lista, no se teclea |
+| **GLOBAL**, como los manuales | una sola biblioteca en el libro maestro |
+| **Solo el propietario sube** | control de calidad; todos consultan |
+
+`core/library.py` (hojas `Library` + `LibraryModels`, carpeta de Drive
+`COPEX Library`) + `core/library_ui.py`, seccion propia para los tres roles.
+
+### Lo que no se invento: las reglas que ya existian
+Casi nada aqui es nuevo — es aplicar lo que el repo ya aprendio a golpes:
+- **GLOBAL de verdad** (v359): las dos hojas en `SHEETS_GLOBALES`, ⚠️ **en
+  minusculas**, porque la comprobacion es `.lower()`. Sin eso, cada cliente acabaria
+  con su propia biblioteca **VACIA** en su libro — lo contrario de «global», y sin
+  dar ningun error.
+- **En el LOTE** (`hojas.HOJAS_LECTURA`): ⚠️ un modulo que lee con
+  `hojas.registros(SHEET, HEADERS)` y no esta en el lote **lee vacio PARA SIEMPRE**
+  si ademas lee sin cabeceras (v353). Y aqui cuesta **0 llamadas extra**: la
+  biblioteca es global, asi que vive en el maestro, cuyo lote ya viene caliente del
+  `Login` de cada sesion — solo añade dos rangos a un `batchGet` que ya se hacia.
+- **`get_sheet`, nunca `_get_worksheet`** (v404): el segundo resuelve el libro del
+  grupo de la SESION mientras el lector resuelve con `sheet_id_para` → se escribe en
+  un libro y se lee de otro, en silencio. Es el fallo que dejo el catalogo de rieles
+  roto durante nueve versiones.
+- **Descarga perezosa + galeria PAGINADA** (v147): `st.download_button(data=…)`
+  evalua `data` al RENDERIZAR, asi que un boton por fila se baja **todo Drive** en
+  cada pasada. Cada miniatura ES una descarga, de ahi el tope de 6.
+- **Orden de escrituras con Drive** (v343/v456): al filar, el archivo ANTES que la
+  fila; al borrar, el archivo ANTES que la fila. Al reves se pierde el DriveID con la
+  fila y el archivo queda huerfano y sin manija.
+- **IDs que no reciclan ni se cuentan** (v427/v428), **fila posicional** que casa con
+  la cabecera (v363, el fallo que dejo `create_project` muerto 3 versiones), **titulo
+  propio** porque la seccion no tiene sub-pestañas (v320), **mensajes por `flash`**
+  (v365) y las lecturas frescas por `columnas.canonizar` (v468).
+- ⚠️ **La seccion va al FINAL de la nav de cada rol**, no en medio: una seccion nueva
+  no le reordena el menu a quien ya lo usaba (`verif_v297`, y es como entro
+  «ausencias» en v430). La primera version la metia delante de «Mis credenciales».
+
+### ⚠️ EL BUSCADOR DE LA BARRA SUPERIOR NO DEVOLVIA UN TRABAJO NUNCA
+Encontrado de paso, y llevaba **32 versiones** vivo:
+```python
+_num = str(t.get("Number", "")).strip()      # ← `t` es la FUNCION de traduccion
+```
+`t` es la funcion de i18n del modulo y la fila del bucle es `_trb`, asi que eso lanza
+`AttributeError`… **que el `except Exception` del propio bloque se tragaba**. Efecto:
+`buscar()` devolvia proyectos y personas pero **jamas un trabajo**. Datado con
+`git log -S`: lo introdujo **v440** (el renombrado de la variable `t` → `_trb` de la
+migracion i18n) y v468 volvio a tocar la linea sin verlo.
+⚠️ Probado en las DOS direcciones, no leido: arreglado devuelve
+`('trabajo', 'Grua Talavera', 'TRB-0007 · nº 89')`; reinyectando el fallo devuelve
+`[]` mas la linea de log que nadie miraba. Es el shadowing de v437/v439/v440/v442 y
+el `except` que esconde lo que acabas de escribir de v323/v338/v344.
+
+### ⚠️ Y `correcciones` llamaba a `siguiente_id_libre` con los argumentos CAMBIADOS
+```python
+hojas.siguiente_id_libre(SHEET, "COR", n + 1)   # la firma es (prefijo, maximo, propia=…)
+```
+Lanza `ValueError: invalid literal for int() with base 10: 'COR'` — **verificado
+ejecutandolo, no leyendolo** — y el `except` de al lado se lo traga, asi que caia
+siempre al `max+1`: **el salto de IDs de v427 no se aplicaba ahi desde v461**, que es
+justo lo que aquella version vino a arreglar. Tercera vez en la tanda que un `except`
+amplio esconde el fallo recien introducido.
+
+### ⚠️ LO QUE DEFINE ESTA VERSION: comprobaciones que NO PODIAN FALLAR
+El guardian salio verde y la bateria de roturas dijo **13 de 15**. Las dos escapadas
+tenian la misma forma — **el chequeo aprobaba por un motivo que no era el suyo**:
+
+| Escapo | Por que |
+|---|---|
+| «la galeria deja de paginar» | miraba `"_POR_PAGINA" in ast.dump(_galeria)`, y esa constante aparece **CUATRO veces** ahi (el total de paginas y los dos extremos del corte): borrar el corte deja tres y el `in` sigue cierto. La **trampa nº2** (*grep != uso*) dentro del guardian |
+| «un tipo vuelve al español» | miraba `etiqueta(x) == x and canon(x) == x`, y eso es cierto para **cualquier cadena que el vocabulario no conozca** — `foto` incluida. Era una afirmacion que **no podia fallar nunca** |
+
+La segunda es la leccion de v462 mordiendo del otro lado: **`etiqueta()` devuelve TAL
+CUAL lo que no conoce**, asi que esa igualdad no distingue un canonico de un español
+que nadie mapeo. Los arreglos son estructurales: lo que la galeria pinta tiene que
+venir de un **CORTE** (`ast.Subscript` con `Slice`, no la mencion de un nombre), y un
+valor de negocio tiene que ser un **canonico CONOCIDO**.
+
+### ⚠️ Y la misma ceguera estaba en `verif_v463`, que es la regla GENERAL del repo
+O sea que **cualquier lista de negocio podia volver al español sin que saltara nada**,
+mientras la palabra no fuera clave del mapa. Medido antes de proponer (v453: estimar
+es peor que no dar numero): de **78 valores de negocio, solo 11 fuera del vocabulario
+canonico**, y **6 ya exentos con razon** (los simbolos `m`/`m²`/`kg` y los 3 de
+`payroll`, que siguen en español a proposito). O sea que cerrar el hueco costaba
+**3 entradas y 2 exenciones**, no una migracion:
+- `foto → photo` y `diagrama → diagram` (v472);
+- **`Ripout + Instalación → Ripout + Installation`**, que **lo dejo v470**: añadio un
+  tipo de proyecto y no lo mapeo. El hueco de v462 —*un valor nuevo no entra solo en
+  el mapa, y no da ningun error*— repetido dos versiones despues;
+- exentos UNO A UNO y con razon: `manual` se escribe IGUAL en los dos idiomas
+  (mapearlo seria un «mapa espejo», que v450 mando borrar) y a `datasheet` habria que
+  inventarle una clave española que nadie escribe.
+
+**Y con la invariante fuerte, el guardian general cazo mi propio codigo a la primera**:
+la tabla de la biblioteca pintaba `Type` con `t()`. `t()` traduce literales de
+INTERFAZ contra el catalogo; un valor que viene de la HOJA va por `etiqueta()`
+(v442/v463) — con `t()`, una fila heredada que diga `foto` se pintaria `foto` bajo una
+cabecera ya inglesa: traduccion a medias dentro de la misma tabla (v450). Es la mitad
+1 del fallo de v462, en una pantalla recien escrita.
+⚠️ **Y entonces el guardian dio un FALSO POSITIVO sobre el arreglo correcto**: su
+sonda solo reconocia `i18n.etiqueta(...)` y el alias `_etq(...)`, no el nombre pelado
+— la sonda midiendo por la forma en que se escribio la primera vez (v450/v459). Se
+arreglaron las dos cosas: el codigo se alinea con la convencion del repo (`_etq`, como
+los otros cuatro modulos, criterio de v461) **y** la sonda reconoce las tres formas,
+porque un falso positivo no es inofensivo — es lo que hace que un guardian acabe
+ignorandose (v450) y lo que empuja a «arreglar» codigo sano (v385).
+
+### ⚠️ LA SUITE: 8 rojos, y CUATRO eran guardianes anclados a la FORMA
+Correr la suite ENTERA (regla v385) dio **8 rojos**. Clasificados uno a uno mirando el
+codigo acusado ANTES de tocar nada, el reparto es la leccion de la tanda:
+
+| | Guardian | Que pasaba |
+|---|---|---|
+| **REAL** | v322 | un `import parse_date` MUERTO en `library.py`, con un comentario que decia «lo usan los consumidores»: **nadie lo reexporta**. El comentario mentia sobre el codigo (v405/v469) |
+| **REAL** | v297 | su afirmacion «las que se añadan van DESPUES» era CORRECTA y yo meti la seccion en medio de la nav del campo y del admin → se arreglo el CODIGO, no el guardian |
+| forma | **v378** | `GLOBALES_OK` era una lista de funciones **a mano** en paralelo a `SHEETS_GLOBALES` → denunciaba un modulo GLOBAL como fuga entre inquilinos. Ahora se DERIVA |
+| forma | **v469** | la exencion iba por **NUMERO DE LINEA** (661, 761): mis añadidos a `home_ui` los corrieron a 696/801 y los falsos positivos «volvieron». Reanclada a (fichero, funcion, valor) |
+| forma | **v468** | exigia la palabra `canonizar` **en la misma linea** que `get_all_records`: una llamada partida en dos salia denunciada estando bien. Pasado a estructural |
+| forma | **v449** | su heuristica «3+ palabras = mensaje» marco `'Ripout + Instalación'`, que es una **CLAVE del vocabulario heredado** (dato); el `+` cuenta como palabra |
+| caducado | v298 · v465 | igualdad exacta de secciones por rol, y «toda hoja necesita entrada en `LEGADO`» — pero estas dos **nacieron en ingles** y no tienen nombre viejo con el que ser compatible |
+
+⚠️ Un ancla por numero de linea es fragil en las DOS direcciones: cualquier edicion mas
+arriba reabre el falso positivo **y** una comparacion REAL que caiga algun dia en ese
+numero quedaria eximida en silencio. Los cuatro se arreglaron igual: **derivando el
+dato de su fuente** (`SHEETS_GLOBALES`, el propio mapa `VALORES`) o midiendo
+ESTRUCTURA en vez de texto, y **cada sonda quedo validada contra un caso
+conocido-malo** antes de creerse su cero (trampa nº12). La de v378 se probo en las dos
+direcciones: exime la hoja global, **no** exime a `catalogo`/`quotes`, y si la
+biblioteca dejara de ser global volveria a estar denunciada.
+
+⚠️ Y dos veces me tape a mi mismo arreglandolos: un `.replace()` que alcanzo tambien
+la **DEFINICION** del helper (renombrar en un paso lo que son DOS — leccion v446/v447)
+y dejo el guardian **REVENTANDO**, que es el modo de fallo mas engañoso porque
+devuelve codigo != 0 siempre y parece un rojo del codigo auditado (v459/v463); y otro
+`\n` mangullado por heredoc (**trampa nº26, sexta vez**), que solo se vio MIDIENDO —
+las dos variantes contenian un salto REAL — en vez de teorizando.
+
+### Verificacion
+`verif_v472.py`, **28 comprobaciones** (hojas globales afirmadas **por ejecucion**:
+`sheet_id_para('Library') == sheet_id_para('Login')`; 0 `download_button` en bucle con
+la sonda validada contra un caso construido; los dos ordenes de escritura de Drive;
+`_next_id` sin `len()` y con la firma comprobada por `inspect.signature`; fila
+posicional 12 == 12 cabeceras; **ningun modulo usa `t` como variable**, con la sonda
+validada contra el codigo REAL de v440; la seccion en los tres roles con despacho por
+ID exacto; y el buscador EJECUTADO devolviendo la biblioteca y el trabajo).
+Bateria: **15 de 15 roturas cazadas + CONTROL verde**, con el **verde de base
+comprobado ANTES** (sin ese paso una tanda entera sale «cazada» sin probar nada,
+v459/v461/v463). Suite entera: **109 verde · 0 rojo · 0 roto** (776 s), mas los 7
+«SIN DATOS» conocidos de v471 — la demo vacia, que no es un fallo pero tampoco una
+garantia.
+
+## El icono LITERAL de la biblioteca, y v472 verificada contra la hoja real (v473)
+
+### ⚠️ `T.section` emite HTML: ahi `:material/…:` NO se interpreta
+La cabecera de la galeria pintaba **`:material_photo_library: Photos`** en pantalla.
+`theme.section` compone HTML y lo saca con `unsafe_allow_html`, y ahi Streamlit no
+procesa la sintaxis de icono (v443, el markdown tampoco). ⚠️ Y **los dos unicos sitios
+del repo que le pasaban `:material/` a una pieza HTML del kit eran mios**: la
+convencion es texto plano, y la incumpli yo.
+- Lo destapo **MIRAR LA PANTALLA** en produccion. Ningun guardian lo veia, como el
+  `:material/schedule:` en crudo de v375 y los KPI invisibles de v424: no hay error
+  que atrapar, solo algo feo a la vista.
+- Chequeo nuevo y **general** (no acotado a la biblioteca): ninguna llamada a
+  `section`/`chip`/`kpi_row`/`_kpi_card` de TODO el repo puede llevar `:material/`,
+  con la sonda validada contra un caso construido antes de creerse su cero.
+
+### v472 ejercitada CONTRA LA HOJA REAL (lo que faltaba)
+El ciclo entero, con foto del antes y del despues y produccion devuelta a su sitio
+(metodo de v344). Lo que quedo demostrado y no se podia demostrar de otra forma:
+- las dos hojas se crean **en el MAESTRO** con sus 12 y 3 columnas exactas;
+- ⚠️ y son GLOBALES **de verdad**: con una sesion de `cliente1`, `Projects` resuelve al
+  libro de la demo y `Library` al maestro — dos libros DISTINTOS. Comprobarlo con la
+  sesion del propietario no habria probado nada: no tiene grupo, asi que su sesion cae
+  en el maestro de todos modos (el paso en vacio, trampa nº1);
+- alta de catalogo → el mensaje **sobrevive al `st.rerun()`** (v365) y los KPI se
+  actualizan, o sea que la invalidacion de caches tambien corre;
+- archivar con archivo: **LIB-0001 → LIB-0002**, IDs secuenciales, dos DriveID
+  distintos, y la miniatura bajandose de Drive para pintarse;
+- **el BORRADO, que era lo critico**: tras quitar los dos, la hoja queda en 0 filas y
+  el propio inventario de Drive de la app responde **«Drive is already empty»** — o
+  sea que desaparecen **la fila Y el archivo**, que es exactamente lo que protege el
+  orden de escrituras de v456;
+- y el borrado **exige confirmacion**, con el boton deshabilitado hasta marcarla (v139).
+
+### ⚠️ DOS TRAMPAS DE METODO NUEVAS, las dos del banco de pruebas
+**29. El arbol de accesibilidad muestra la etiqueta CRUDA: no dice lo que se ve.**
+`read_page` reporto `:material/archive: Show deactivated ones too` **con los dos
+puntos** y estuve a punto de apuntarlo como un literal en pantalla. Es el `aria-label`.
+Medido en el DOM, el mismo elemento pinta un icono de verdad: `span[role="img"]` con
+`font-family: "Material Symbols Rounded"`, glifo `archive`, y `innerText` **sin** los
+dos puntos. Es el reverso de la trampa nº5 — alli el texto accesible ocultaba un icono,
+aqui enseña marcado que no se pinta. Y la misma fuente engaña con los VALORES: mostraba
+el `placeholder` («Choose an option») de unos desplegables que estaban rellenos.
+→ Para afirmar que algo sale en pantalla: `innerText` y el DOM. `read_page` sirve para
+localizar, no para juzgar lo que se ve.
+
+**30. Un checkbox de Streamlit se marca clicando el TEXTO de la etiqueta, no la caja.**
+Un clic en la casilla (13×13) aterrizaba EXACTO —instrumentado con un listener: pedi el
+marco (329,532) y llego a CSS (348,563), justo encima— y **no la marcaba**; tampoco
+`.click()`, ni la secuencia de eventos de v417, ni foco + espacio. Clicando el TEXTO de
+su `<label>`: marcada a la primera.
+⚠️ Antes de concluir nada probe el metodo contra **otro checkbox distinto de la app**
+(v431: *si el control tampoco cambia, el problema es tuyo*), y tampoco se marcaba — o
+sea que era mio, no de la app. Sin esa comprobacion habria reportado un fallo inexistente
+en la casilla de confirmar el borrado, que es de lo mas delicado que hay en la pantalla.
+⚠️ Y ojo con las coordenadas: el marco de la captura (800×660) NO es el de CSS
+(846×698), factor 0,9456. Un clic por `ref` sobre un blanco de 13 px **falla** por ese
+desfase, y sobre uno grande acierta — por eso «a veces funciona».
+
+### ⚠️ Y una falsa alarma que casi reporto como fallo de la app
+El primer item guardo `Brand` **vacio** habiendo seleccionado la marca. No era la app:
+`form_input` sobre un combobox de **react-aria** cambia el texto visible sin avisar a
+React, asi que el widget se quedo en su valor por defecto. Seleccionando la opcion con
+un **clic real**, `LIB-0002` guardo la marca correctamente. Es la leccion de v431 otra
+vez: **validar la entrada antes de acusar al codigo**.
+
+## Los 7 guardianes que no comprobaban nada, y lo que tapaban (v475)
+
+Peticion del usuario: **«no dejes nada pendiente»**. El unico pendiente real eran los
+**7 guardianes SIN DATOS** desde que v456 vacio la demo — no eran fallos, pero tampoco
+garantia, y llevaban asi desde v471. Decision suya entre tres opciones: **que se apañen
+solos** (construir su caso) en vez de volver a sembrar la demo de ruido.
+
+Suite: **109 verde + 7 sin datos → 116 verde · 0 rojo · 0 roto, y ningun bloque
+«SIN DATOS»**.
+
+### ⚠️ TRES CADUCIDADES REALES que el «SIN DATOS» estaba tapando
+Un guardian que no corre **no envejece a la vista: envejece a oscuras**. Al
+descongelarlos salieron tres cambios deliberados que nadie les habia llevado:
+
+| Qué | Desde |
+|---|---|
+| **43 guardianes simulaban una sesion con un ROL que ya no existe** (`administrador`, `propietario`, `campo`). Medido, no supuesto: `tenant.es_propietario()` devuelve **False** con el rol en español, asi que los caminos de propietario **no se estaban ejercitando** — parte de la suite salia verde bajo una sesion IMPOSIBLE | **v469** |
+| `verif_v374_positivo` listaba los pre-starts por `ProyectoID`/`Fecha` y `hecho_hoy` lee `ProjectID`/`Date`: habria dicho «no hay pre-starts» **aunque los hubiera** | **v468** |
+| `verif_v437` exigia «Engineer in charge» en la firma del informe al CLIENTE, y v459 lo renombro a «Head installer/s» | **v459** |
+
+Las tres son la misma familia que `auth._COL` (v433) y la proyeccion de `list_users`
+(v434): **algo migrado en el codigo y olvidado en lo que lo comprueba**.
+
+### El metodo: caso construido, y cada sonda validada contra su contrario
+Un caso construido sin validar es exactamente el «OK en vacio» que el mecanismo de
+SIN DATOS existia para no fingir (trampa nº1). Asi que cada uno demuestra ademas que
+CAZA lo que dice cazar:
+- `hecho_hoy` con un `return False` fijo **y** con un `return True` fijo — los dos cazados;
+- la agregacion de `pendiente_por_proyecto` indexada por NOMBRE, colando las que no
+  deben nada, o dejandose fuera las archivadas — las tres cazadas;
+- leer una vez por GRUPO en vez de por LIBRO (el fallo REAL de v377), que duplicaria filas;
+- y los detectores del roster, que sobre una semana LIMPIA no pueden inventar ni un caso.
+
+⚠️ Y `fixture_survey` **se auto-comprueba**: si `recalcular` no lo digiere, el guardian
+sale ROJO en vez de dar por generado un informe que nunca se genero. Costo tres intentos
+acertar la geometria, y cada fallo enseño una regla del dominio que no estaba escrita:
+`BS` tiene que cuadrar con `SF1+BKS+2·RAIL+SF2`, `FS − TSW` tiene que caber en
+`BC_CALC`, y ⚠️ **los pisos tienen que DIFERIR entre si** — `apply_offsets` normaliza
+contra la ULTIMA fila, asi que con todos iguales `MAX_OFF_RL` sale ≤ 0, el barrido del
+optimizador queda VACIO y no hay solucion que informar. **Un survey con todos los pisos
+identicos no ejercita nada.**
+
+### ⚠️ TRES SONDAS MIAS que fallaron por su propia FORMA
+Las tres se cazaron midiendo, y las tres habrian dejado el trabajo a medias:
+1. el barrido de roles miraba solo **diccionarios literales**, asi que se dejo los 12
+   que entran por un helper (`como("propietario")`);
+2. el detector de esos helpers dio **0** porque filtraba con `'"auth"'` — comillas
+   DOBLES— sobre `ast.unparse`, que las escribe **simples**. Es el error de v459 con
+   `ast.dump`, cometido otra vez;
+3. la semana construida del roster usaba las claves de SALIDA (`asig`/`ini`/`fin`)
+   cuando lo guardado son las CORTAS (`a`/`i`/`f`): los detectores veian **cero casos**
+   — y lo dijeron, porque la validacion contra el contrario estaba puesta.
+
+⚠️ Y un detalle que se repite: `col_offset` del AST va en **BYTES**, no en caracteres
+(v468), asi que los dos parches de roles cortan sobre los bytes de la linea.
+
+### Y una decision cerrada
+Las **14 secciones** del elevador de la biblioteca se quedan como estan (decision del
+usuario). Renombrarlas era gratis con la biblioteca vacia; a partir de que haya
+material archivado arrastra migracion de la columna `Section`.
+
+## ⚠️ «Invalid role.»: no se podia crear un usuario de campo (v476)
+
+Reportado por el usuario: al dar de alta a alguien de campo desde el panel del admin,
+la app respondia **«Invalid role.»** y no creaba nada.
+
+**v469** paso los roles a ingles —la constante `auth.ROLES`, el dato de la hoja y la
+canonizacion al leer— y **se dejo dos literales en la interfaz**:
+
+| Dónde | Qué pasaba |
+|---|---|
+| `auth_ui:1109` | el admin creando un usuario de campo pasaba `"campo"` → `add_user` valida contra `ROLES` y devolvia «Invalid role.». **Nadie de campo se podia dar de alta** |
+| `auth_ui:275` | el **BOOTSTRAP** (primer propietario con la hoja `Login` vacia) pasaba `"propietario"`. Latente, pero PEOR: una instalacion desde CERO no habria podido crear su primer usuario — la app no arranca |
+
+Es, otra vez, **un valor migrado en un sitio y olvidado en su gemelo**: la misma
+familia que `auth._COL` (v433), la proyeccion de `list_users` (v434) y las tres
+caducidades que destapo v475.
+
+### Se acoto la CLASE antes de tocar, no el caso
+Barrido de literales que canonizan a otra cosa: **101 candidatos → 8 reales → 2 rotos**.
+Los otros 93 son claves internas de dicts (`.get("usuario")`, `.get("proyecto")`) y los
+6 restantes son etiquetas internas cuyo productor y consumidor coinciden. ⚠️ Y eso
+ultimo se COMPROBO, no se supuso: `Alerts.Origin` y `AssetMovements.To` **no estan en
+la lista blanca** de `valores.COLUMNAS`, asi que nunca se canonizan al leer y los dos
+lados siguen de acuerdo; `Login.Role` **si** esta, que es justo lo que hace que una
+fila vieja de la hoja se siga leyendo bien.
+
+### ⚠️ Por que no lo vio ningun guardian
+`verif_v469` barre **`ast.Compare`** —las ramas muertas— y estos dos literales entran
+como **ARGUMENTO**. Un guardian ve solo la forma que se le enseño (v309/v349/v441), y
+esta forma no estaba cubierta. Chequeo nuevo y general en ese mismo fichero: ningun
+literal pasado a `add_user`/`set_role` puede quedar fuera de `auth.ROLES` — **derivado
+de la constante**, no de una lista a mano, y con la sonda validada contra un caso
+conocido-malo antes de creerse su cero.
+
+### ⚠️ Y el shadowing de v440, cometido DENTRO del guardian nuevo
+Escribi `for _f in sorted(os.listdir("core"))` y **`_f` es la LISTA DE FALLOS** de ese
+guardian: al terminar valia `"app.py"`, asi que el veredicto contaba
+`len("app.py") = 6` fallos que no existian. Lo delato que **todas las comprobaciones
+imprimieran «ok» y el contador dijera 6** — un descuadre entre lo que se ve y lo que se
+cuenta. Es exactamente el fallo que este documento lleva versiones describiendo, hecho
+al escribir la red que lo vigila.
+
+## Vincular Telegram fallaba SIN decir por que (v477)
+
+Reportado por el usuario: *«no estoy pudiendo conectar el Telegram con un usuario de
+campo; ya di start y aun no conecta»*.
+
+### ⚠️ Un mensaje para CUATRO causas distintas
+`telegram_find_chat_by_code` devolvia `None` y la pantalla decia siempre lo mismo —«no
+encontre su mensaje»— tanto si no habia bot configurado, como si el bot tenia un
+**webhook** activo, como si no habia llegado ningun mensaje, como si habian llegado
+pero ninguno traia el codigo. Sin distinguirlas no habia forma de avanzar: es el
+patron de v325/v340, un pendiente que nadie puede cerrar.
+
+⚠️ Y una de las cuatro **no dejaba ni traza**: Telegram responde **409** cuando el bot
+tiene un webhook activo, `requests` **no lanza** con un status de error y el codigo
+hacia `.json().get("result", [])` → lista vacia. Ni excepcion, ni log, ni pista — y con
+un webhook puesto, vincular no funcionaria NUNCA, se hiciera lo que se hiciera.
+
+### ⚠️ La causa mas probable no es un fallo del codigo: es como funciona Telegram
+**El payload `/start <codigo>` solo se envia cuando el chat con el bot es NUEVO.** Si
+esa persona ya habia hablado con el bot alguna vez, al abrir el enlace no hay boton
+Start —hay caja de texto— y **no se manda nada**. De ahi el «ya di start y no conecta»:
+el mensaje nunca llego. La salida que SIEMPRE funciona es que escriba el codigo a secas
+como un mensaje normal, y el emparejado ya era por subcadena, asi que casa igual. Ahora
+la pantalla lo dice de entrada, sin esperar a que falle.
+
+### Lo que se hizo
+`notify.telegram_diagnostico(code)` distingue las **cinco** situaciones (`sin_token`,
+`webhook`, `sin_mensajes`, `sin_codigo`, `error`) y devuelve tambien cuantos mensajes
+llegaron; `telegram_find_chat_by_code` **delega** en ella en vez de repetir el recorrido
+(v323). La pantalla explica cada caso y que hacer.
+⚠️ Las cinco ramas se EJERCITARON interceptando `getUpdates`, no se leyeron: el 409 del
+webhook, la lista vacia, el mensaje que no trae el codigo y el que si.
+⚠️ Y se descarto la otra hipotesis mirando el codigo acusado: `auth.set_contact` deriva
+las columnas de `LOGIN_HEADERS` (v433) y escribe en `Email`/`TelegramChatID`, que
+existen — el camino de guardado esta sano, el fallo estaba en la busqueda.
+
+⚠️ **No se pudo diagnosticar contra el bot real**: el `TELEGRAM_BOT_TOKEN` vive en los
+secrets del CLOUD, no en los locales (v368). Por eso el arreglo es que **la app lo diga
+en pantalla** en vez de adivinarlo desde aqui.
+
+### ⚠️ Y la suite cazo un rojo que solo pudo salir por la migracion de roles de v475
+`verif_v381` —el guardian de *lo que se enseña antes de un borrado irreversible*— decia
+que al propietario le saldria `Fichajes: 0` donde el admin ve 1. **No era un fallo**, y
+se comprobo antes de tocar nada: estaba anclado a `PRJ-0007`, que dejo de existir al
+vaciarse la demo, y con un pid inexistente `datos_asociados` no puede resolver el grupo
+y cae a la sesion (el propietario, sin grupo, al maestro vacio). Con un proyecto que SI
+existe, los dos devuelven lo mismo.
+Ese rojo **solo pudo aparecer porque v475 migro los roles**: antes el guardian simulaba
+`"propietario"`, que desde v469 no resuelve, asi que ni siquiera entraba en el camino
+del propietario — estaba verde sin comprobar nada.
+⚠️ Y al reanclarlo se vio que la comprobacion vieja era **mas debil de lo que parecia**:
+comparaba dos recuentos que hoy son **los dos CERO**, y comparar 0 con 0 no distingue
+una lectura buena de una rota. El caso construido trae datos que contar y **exige que
+los haya** antes de comparar.
+
+## La AUTOGESTION del campo, y el movil (v478)
+
+Peticion del usuario: *«vamos a juntar my credentials, my payslips y my absences bajo
+un nivel de autogestion»*, con tres criterios suyos — **los avisos repetidos son
+deliberados** («ayudan a que no se pasen por alto»), **haz los ajustes que requieras**,
+y **la cuenta de campo se piensa para el MOVIL: facil, pero igual de completa**.
+
+La nav del campo pasa de **8 a 6**: *Mis proyectos · Fichaje · Pre-Start · Herramientas
+· **Self-service** · Library*. Dentro, las tres, con **ausencias PRIMERA**: es la unica
+con una accion; las otras dos son consulta.
+
+### ⚠️ Esto REVIERTE una decision de v154/v430, y a sabiendas
+Aquellas dejaron esas pantallas sueltas a proposito: *«enterrarla un nivel le costaria
+un toque cada mañana justo a quien lo usa en el movil»*. Medido en el codigo antes de
+tocar, esa razon **no aplica igual a las tres**: en credenciales el campo **solo mira**
+(`editable=False`, las carga el admin) y en colillas mira y descarga; la unica donde
+ACTUA es ausencias — y ahi la accion urgente (avisar de una baja, que v430 registra al
+instante justo por eso) **recupera su toque con un atajo desde Fichaje**, que es la
+pantalla que esa persona abre esa misma mañana.
+⚠️ El atajo solo sale **si NO ha fichado**: quien ya ficho no va a avisar de una baja, y
+seria ruido en la pantalla mas usada. Y no es una duplicacion accidental: es el criterio
+del usuario —los avisos en varios sitios— aplicado a su accion mas urgente.
+
+### ⚠️ Y una CORRECCION mia, sobre una idea que propuse yo
+Propuse arreglar un «callejon sin salida» en credenciales: el campo ve que le vence una
+y no puede hacer nada. **La premisa era incompleta**: `credentials.notify_expiring` ya
+avisa por email/Telegram **al admin Y al propio dueño**, en cada login de administrador
+y sin repetir dentro de ~25 dias (v104/v187). El aviso sale solo.
+Lo que faltaba era de INFORMACION, no de mecanismo —en su pantalla no habia ni una
+palabra de eso— asi que es **una linea, y solo si tiene algo por vencer**. Construir un
+canal nuevo sobre una premisa equivocada habria sido peor que no tocar nada.
+⚠️ Tres cosas de ese parche estaban MAL y se cazaron mirando las firmas ANTES de
+aplicarlo (regla v135): `list_for` toma UN argumento, la columna es `ExpiryDate`, y
+**`auth_ui` no tiene `logger` de modulo** — habria sido el NameError latente de
+v370/v423, en una pantalla del campo.
+
+### El movil: lo que SI se pudo medir sin sesion
+Barrido de las 7 pantallas del campo buscando la clase de fallo que ya mordio dos veces
+aqui (el lienzo de firma de v393, el mapa de v307): **0 anchos fijos** que se salgan de
+375 px. Pero aparecio otro, medible: **la tabla de credenciales tiene 6 columnas**, y a
+375 px eso deja ~60 px por columna con glide **recortando SIN elipsis** (v408) — o sea
+que el numero que hay que enseñar en obra se ve a medias y nadie avisa.
+Cura, la de v408/v398: **priorizar, no encoger**. Orden *Tipo · Estado · Vence · Number
+· Clase · Fecha de emision*, **sin ocultar ninguna**, y `Tipo` **anclada**: es la
+identidad, y sin anclar se escapa por la izquierda justo cuando alguien se desplaza a
+mirar la fecha.
+⚠️ **Lo dinamico queda PENDIENTE y dicho**: medir el recorrido diario a 375 px exige
+entrar como usuario de campo, y eso pide una contraseña. Lo estatico esta hecho; la
+friccion real no se supone.
+
+### ⚠️ CUATRO guardianes caducaron, y uno defendia la decision contraria
+Todos actualizados con su razon escrita, **ninguno relajado**:
+- **v297 · v298** exigian que credenciales y colillas fueran SECCIONES. Pasan a afirmar
+  lo que de verdad protegian: que el campo **siga LLEGANDO** a todo, sea seccion o
+  sub-seccion — y que lo que sigue siendo seccion **no se reordene**.
+- **v303** validaba los destinos de `navegar()` contra la nav del **ADMIN**, y desde
+  v297 los destinos dependen del ROL: el atajo nuevo apunta a una seccion del campo.
+  Pasa a la union de los tres. ⚠️ Eso ENSANCHA el universo a proposito, y queda escrito:
+  lo que ese chequeo caza es el destino que no existe para NADIE.
+- **v430** es el interesante: **defendia la decision contraria a la que el usuario acaba
+  de tomar** («ausencias va suelta»). No se relajo — se reescribio sobre lo que protegia
+  (que el campo llegue a sus ausencias) **y se le añadio una comprobacion que antes no
+  existia**: que el atajo desde Fichaje exista. Asi la razon original de v430 la protege
+  el guardian, no mi palabra: si alguien quita ese atajo, salta.
+
+### Verificacion
+`verif_v478.py`, **20 comprobaciones**: la nav en 6 con nada perdido y ⚠️ **ninguna de
+las tres suelta ademas** (estar en dos sitios es el patron de v140 que esto evita); el
+despachador comparando el **ID exacto** y no el display (v303); el atajo apuntando a un
+destino que EXISTE y colgando de «no fichado»; el aviso de credenciales **EJECUTADO** en
+sus cuatro casos (importar no ejecuta, v378); la tabla priorizada y anclada; y 0 anchos
+fijos, con la sonda **validada contra un `width=600`** antes de creerse su cero.
+Suite entera: **117 verde · 0 rojo · 0 roto**, sin bloque SIN DATOS.
+
+## La barra superior deja de comerse un cuarto del móvil (v479)
+
+Continuación directa del criterio 3 del usuario en v478 —*«la cuenta de campo se piensa
+para el MÓVIL: fácil, pero igual de completa»*—, y el primer hallazgo que solo aparece
+**midiendo con una sesión de campo abierta a 375×812**, no leyendo el código.
+
+La barra son cuatro columnas —atrás · buscador · versión · campana—. En un móvil
+Streamlit **las apila**: una fila de 44 px se convertía en **112 px en cuatro bandas**, y
+el título de la pantalla empezaba en **y=196**. El **24% del teléfono** gastado en chrome
+antes de ver nada. Con la regla: barra **44 px** y título en **y=128** — **68 px, un 8%
+de la pantalla**, devueltos al contenido. Misma clase que v291 y v394 arreglaron para
+escritorio, en el sitio donde más duele.
+
+### ⚠️ El primer intento ganaba los mismos 68 px y habría desandado v326/v327
+Dejaba los botones en **26 px de ancho**, por debajo del mínimo de 36 que fijó aquella
+auditoría — o sea que habría reintroducido en el móvil justo lo que se arregló para el
+escritorio. **No se vio en la captura: se vio midiendo los botones.** El suelo de 44 px
+lo cierra, y ahora quedan en 44×44 y 44×40.
+
+### ⚠️ Anclado a una KEY, y verificado ANTES de desplegar
+`:first-of-type` depende del ORDEN del documento y se rompe en silencio en cuanto otra
+pantalla pinta una fila antes (v304/v332): **un CSS que no casa no da ningún error**. Va
+anclado a `.st-key-cpxtop`, la técnica de v410.
+Y el ancla nueva **no se dio por buena de palabra**, que es el error que v304 castiga:
+se probó en vivo poniéndole al div la clase que pinta `st.container(key=…)` e inyectando
+**la cadena sacada del fichero por AST**, no una reescrita de memoria. Con **control**:
+quitando la regla la barra vuelve a 112 px y volviendo a ponerla baja a 44.
+⚠️ El control además desactivó una falsa alarma mía: en la lista salía un botón de
+**0×0**. Es un `←` duplicado dentro del envoltorio de tooltip de Streamlit —`rects: 0`,
+no se pinta— y **está igual con y sin la regla**. Sin el control lo habría «arreglado».
+
+### El barrido que se cerró de paso
+v478 dejó dicho que lo dinámico quedaba pendiente por falta de sesión. Con sesión, dos
+cosas más:
+- **Tablas anchas**: de las que el campo ALCANZA de verdad, la única de ≥5 columnas era
+  la de credenciales —ya priorizada en v478—. Las de 6 columnas con dinero
+  (`_editor_ganancia_hora`: Costo/h · Ganancia/h · Precio/h) **no las ve**: cuelgan de
+  `_ganancia_section`, y el campo entra en `render_expenses` con `can_delete=False`.
+  ⚠️ Eso salió de un recorrido sintáctico que decía lo contrario; **mirar el código lo
+  deshizo** (trampa nº2: grep ≠ uso).
+- ⚠️ **Pregunta abierta al usuario, no tocada**: lo que ese mismo recorrido sí confirmó es
+  que las tarjetas de **Costo total · Compras · Mano de obra · Presupuesto · Costo al
+  terminar** y el «llevas gastado X de Y» **no tienen guarda de rol**, así que el campo
+  las ve en 💰 Recibos. El margen está protegido; el costo no. Es una decisión de negocio
+  suya, no un bug que yo deba tapar por mi cuenta.
+
+### Verificación
+El guardián vive en `verif_v478.py` **bloque 7** (misma tanda de trabajo), y afirma lo
+que se midió, no que «haya CSS»: contenedor con key, ancla a `.st-key-cpxtop`, **ausencia
+de `:first-of-type`**, acotado a 640 px y **suelo de 44 px**. `verif_v478` pasa de 20 a
+**25 comprobaciones**. Suite entera: **117 verde · 0 rojo · 0 roto** (807 s).
+
+## El recorrido diario del campo, medido en un móvil (v480)
+
+Cuatro ajustes, y **ninguno salió de leer el código**: salieron de recorrer la app con
+sesión de campo a 375×812. Para poder medir hubo que crear una obra de prueba y
+asignársela a `campo000` — sin datos, la pantalla del campo era un cartel de vacío y
+**la densidad real no se podía juzgar**, que es justo lo que v478 dejó como pendiente.
+
+### 1 · Fichaje: la acción antes del resumen
+Las cuatro tarjetas ocupaban **230 px —el 28% del teléfono— enseñando «0.00 h»** de un
+día que no ha empezado, y empujaban «Workday» a **y=618** y «Project» a **y=759** con la
+pantalla en 812: la acción de **cada mañana**, bajo el pliegue.
+⚠️ Esto **matiza con medida lo que dejó escrito v308 en ese mismo sitio** —*«en móvil
+Streamlit apila las columnas solo, así que no se pierde nada»*—: horizontalmente no se
+pierde nada; **verticalmente se pierde la pantalla entera**.
+No se quita ni una cifra (v408: priorizar, no encoger): el resumen baja a donde están
+las otras cifras del día —barras por proyecto e historial—, y de paso quedan juntas.
+
+### 2 · Una sola obra: se abre sola al consultar, botón explícito al actuar
+Con **una** obra asignada, elegir en un desplegable es un toque para una lista de uno, y
+hasta elegir no se ve nada. Pero **no es el mismo caso en las tres pantallas**, y esa
+distinción ya estaba escrita en el repo:
+- **Mis proyectos** y **Pre-Start** (se CONSULTA): se abre sola. ⚠️ No es «el primero de
+  la lista» que evitó v139: `list_projects_for_field` devuelve **solo las suyas**, así
+  que una significa que no hay nada que elegir — la señal fuerte, mostrada y cambiable,
+  de v138. En Pre-Start se limita **al campo**: a admin y propietario esa lista les da
+  las del GRUPO, donde «una» significaría otra cosa.
+- **Fichar** (se ACTÚA): **no se preselecciona**. v138 pide aquí una acción que diga a
+  qué obra se fichará, así que se usa el mismo patrón del atajo del roster — un botón
+  con el nombre de la obra. Solo si es **suya** (`propios`) y si el roster no puso ya
+  ese botón.
+⚠️ Y una trampa que casi me como: `_hechos` se creaba **dentro** del `try` del roster.
+Con el roster sin configurar no existiría y el bloque nuevo daría `NameError` — el fallo
+latente de v370/v423. Ahora se crea fuera.
+
+### 3 · El contexto, después de la tarea
+El plan de la semana y la ruta, **plegados**, ocupaban ~95 px arriba y empujaban la tabla
+de «update your progress» a **y=676 de 812**: la única tarea de esa pantalla, bajo el
+pliegue. Se bajan detrás del trabajo —la ruta se mira al salir, no mientras se reporta
+avance— y la línea «Hoy:» se queda arriba, que eso sí es lo primero de la mañana.
+⚠️ La función tiene **dos salidas tempranas** (sin obras asignadas, sin obra elegida).
+Moverlos al final sin más los habría hecho **desaparecer justo para quien todavía no
+tiene obra** — el único caso en que el plan y la ruta son lo único que esa pantalla puede
+ofrecer. Van recogidos en `_contexto()` y se llama en las tres salidas.
+
+### 4 · La barra deja de tener 197 px vacíos
+El buscador es solo del admin (v330), así que para el campo la columna del medio no decía
+**nada**: 197 de los 375 px de la fila. Encogerla solo la habría hecho más pequeña; se
+**llena** con su estado de fichaje, y **activo**: un toque lleva a Fichaje desde cualquier
+pantalla.
+⚠️ **Cero lecturas nuevas**: `open_sessions` sale de `_cached_records` (caché de 120 s),
+el mismo dato que ya pinta Fichaje — y la barra se dibuja en TODAS las pantallas, con el
+techo de 60 lecturas/min de una sola cuenta de servicio.
+⚠️ Los tres textos son los **mismos** de la banda de estado (v323: una sola forma de decir
+cada cosa) y **caben medidos**: 71, 150 y 83 px con la fuente real de la app contra 173
+disponibles. Un botón que no cupiera partiría la fila en dos y desharía v479.
+
+### Lo que se descartó mirando el código, no suponiendo
+Un recorrido sintáctico decía que el campo llegaba a `_editor_ganancia_hora`
+(**Costo/h · Ganancia/h · Precio/h**). **Es falso**: cuelga de `_ganancia_section`, y el
+campo entra en `render_expenses` con `can_delete=False`. Mirar el código deshizo la
+alarma (trampa nº2: grep ≠ uso).
+⚠️ Lo que sí es cierto y **queda como pregunta abierta al usuario, sin tocar**: las
+tarjetas de **Costo total · Compras · Mano de obra · Presupuesto · Costo al terminar** y
+el «llevas gastado X de Y» **no tienen guarda de rol**, así que el campo las ve en
+Recibos. El margen sí está protegido; el costo no. Es una decisión de negocio.
+
+### ⚠️ Los tres rojos de la suite, y el fallo de dinero que había detrás
+Ninguno era una regresión de las cuatro mejoras, y **uno no era falsa alarma**:
+
+- **`es_del_proyecto` con el nombre VACÍO devolvía `True`.** El respaldo por nombre
+  comparaba `"" == ""`, así que una obra cuyo `Name` estuviera en blanco se quedaba con
+  **todas las jornadas generales** —las que no llevan proyecto— y con sus horas. Eso
+  entra en `project_hours` y en el **costo de mano de obra** por sus tres llamadas
+  (`projects.py` ×2, `expenses.py`), o sea que era un error de dinero silencioso. Y el
+  `Name` en blanco no es hipotético: **el cliente tiene acceso a su propio libro**.
+  Ahora, sin nombre no hay respaldo posible.
+- **`check_ceros.py` leía `Nombre`/`Grupo`**, en español: **v468 renombró esas
+  columnas**, así que le llegaba el nombre vacío y —por lo anterior— acusaba a obras
+  inocentes de tener fichajes sin contar. ⚠️ Se mantuvo verde doce versiones **solo
+  porque el libro de la demo no tenía obras**: en cuanto hubo una obra y una jornada,
+  mintió. Es exactamente el guardián que habría gritado en cuanto entrara un cliente
+  real.
+- **`verif_v455`** exigía ver **≥3 modelos de ingreso distintos** en cuanto hubiera UNA
+  obra: su salvaguarda solo contemplaba el libro vacío, y con una obra la variedad es
+  imposible por aritmética. Ahora pide que haya **con qué** comprobar.
+
+### ⚠️ Y tres afirmaciones de v308 que caducaron — reancladas, no relajadas
+Las tres protegían de verdad el fallo de v306 (que a la hoja fuera la **etiqueta** del
+desplegable en vez del **nombre**), pero lo hacían por su FORMA: «0 `next(...)` en la
+función», «3 `_nom_de.get`» y una **lista de keys escrita a mano**. El botón nuevo usa
+`next(iter(idmap))` para el TEXTO y saca el nombre de `_nom_de` — cumple la regla y
+rompía el proxy.
+Ahora afirman lo que protegían, **y más fuerte**: que **TODA** llamada a
+`fichar_proyecto` tome su nombre de `_nom_de`, sean una o diez; y que en la columna del
+Proyecto solo haya keys suyas, **derivado** en vez de listado (v433/v434).
+⚠️ Con **control**: la sonda se valida contra el fallo de v306 **reconstruido**, porque
+un cero que no sabe reconocer el fallo que busca no vale nada (trampa nº12).
+
+### Verificación
+`verif_v480.py`, **25 comprobaciones**. Las que valen: el chip **EJECUTADO** en sus tres
+estados con `st.button` interceptado (importar no ejecuta, v378); **cada salida temprana
+comprobada una por una** con la sonda validada contra un caso construido (trampa nº12);
+que no se perdió ninguna tarjeta; que **no hay preselección silenciosa** al fichar; y que
+los textos del chip son los mismos de la banda, atados a ella y no a una lista escrita a
+mano que se quedaría vieja (v433/v434).
+⚠️ Y un fallo **de la sonda, no del código**: `ast.walk` devolvía el `if prj:` de fuera
+porque el texto del hijo está dentro del padre, y el guardián acusaba a un código
+correcto. Se ató al `test`.
+
+Suite entera contra lo DESPLEGADO: **118 verde · 0 rojo · 0 roto** (1125 s).
+⚠️ Se corrió **después** del último commit a propósito: la primera verde se había hecho
+antes de anotar el comentario de v308, y un guardián que no ha visto el código que está
+en producción no dice nada sobre producción.
+
+### Las 6 secciones del campo, medidas en el móvil (no 3)
+v478 dejó pendiente lo dinámico y v480 lo cierra: **Mis proyectos · Fichaje · Pre-Start**
+con los números de arriba, y **Herramientas · Self-service · Biblioteca** comprobadas a
+375 px — **0 desbordes, 0 elementos que se salgan del ancho, 0 objetivos táctiles por
+debajo de 36 px**.
+⚠️ Los «botones de 32×38» que aparecieron en el barrido **no eran un hallazgo**: son la
+flecha del desplegable de Streamlit (el control entero mide 375×38 y se pulsa entero) y
+el icono de ayuda de 16×16. Mirar qué eran deshizo la alarma, igual que con el margen.
+⚠️ Y una lección de método: las tres primeras medidas de esas secciones salieron MAL
+—las tres decían «Sign in»— porque al navegar rápido Streamlit pinta el acceso un
+instante antes de restaurar la sesión de la cookie, y mi espera («que haya texto») se
+conformaba con eso. La espera correcta es **que NO haya formulario de acceso** y que
+aparezca una marca de la sección. Una medida tomada en el instante equivocado miente
+igual que un selector que no casa.
+
+## El campo deja de ver el dinero de la obra (v481)
+
+Decisión del usuario, tomada sobre la pregunta que dejó abierta v480. Y con un dato que
+apareció **al ir a implementarla**: yo había reportado que el campo veía «las tarjetas de
+costo y el presupuesto», y era **incompleto**. Veía también **la mano de obra PERSONA POR
+PERSONA** (`Labour by person`), que es el dato del que se deduce lo que cobra cada
+compañero, además de las órdenes de compra y la curva de gasto acumulado.
+⚠️ Ese error mío venía de una sonda que probaba la línea del **comentario** de cada
+bloque, que va justo ANTES del `if` que lo protege — así que daba «sin guarda» para
+bloques que sí la tenían y viceversa. Se vio porque **se contradecía con lo que ya había
+leído en el código**, no porque la sonda avisara.
+
+### Qué sale y qué se queda
+Sale de 💰 Recibos para el campo: el titular «a este ritmo costará X, Y por encima», las
+tarjetas **Costo total · Compras · Mano de obra · Presupuesto · Costo al terminar ·
+Comprometido**, la barra «llevas gastado X de Y» con su aviso OVER BUDGET, las órdenes
+de compra, el reparto del costo por categoría, **la mano de obra por persona** y la curva
+de gasto.
+Se queda lo suyo: **cargar recibos y ver los recibos de la obra, con su importe** — sin
+eso la pestaña no sirve para nada. Medido después del cambio: en lo que el campo ve queda
+**1** sola cifra de dinero (el importe del recibo); las otras **17** viven ya en la
+función de gestión.
+El admin y el propietario no cambian en nada.
+
+### ⚠️ Cómo se hizo, que importa tanto como el qué
+- **Extraído, no envuelto.** El bloque son ~140 líneas ya a profundidad de cuerpo de
+  función, así que sacarlo a `_costos_section` **no reindenta ni una línea**. Envolverlo
+  en un `if` habría movido las 140 — la clase de cambio que rompió v120 y v148.
+- **El interruptor es `ver_costos`, no `can_delete`.** Reutilizar `can_delete` habría
+  sido gratis y es una trampa: ese permiso dice «puede borrar recibos», y quien mañana
+  quiera dejar al campo borrar los suyos le abriría las finanzas de la obra **sin
+  enterarse**. Un permiso que decide dos cosas distintas acaba decidiendo la que no era.
+- **Por defecto `False`**: un sitio de llamada nuevo que se olvide **no enseña dinero**.
+  Falla cerrado.
+- **Verificado antes de escribir**: el parche comprueba que la función extraída no quede
+  con ningún nombre huérfano — eso no falla al importar, solo cuando alguien ABRE la
+  pantalla (el NameError latente de v370/v423). ⚠️ Y el verificador acusó primero a
+  `_blq_reparto` y `_blq_categorias`, que son **funciones anidadas dentro de la propia
+  región**: era un fallo del verificador, no del código. Se corrigió y se le puso un
+  **control** que le da un huérfano construido para comprobar que sabe verlo.
+
+### Verificación
+`verif_v481.py`, **17 comprobaciones**. La que vale es la última: **EJECUTA**
+`render_expenses` con `_costos_section` interceptada y comprueba que con el campo **no se
+llama** y con gestión **sí** — ⚠️ el caso positivo al lado del negativo a propósito, porque
+si la función reventara antes de llegar también saldría «no se llamó» y parecería que
+protege (trampa nº12). Lo demás: que el interruptor no sea `can_delete`, que el defecto
+sea `False`, que las cinco piezas de dinero estén fuera y las dos de recibos dentro.
+
+## FASE 0 de la ruta: la caché deja de acoplar clientes, y la app se mide (v482)
+
+Primera versión de la ruta que cierra las brechas con los ERP del mercado. La fase 0 no
+añade funciones: quita un acoplamiento y pone un número donde había una intuición.
+
+### 0.1 · Una escritura de un cliente obligaba a releer a TODOS
+`invalidar()` hacía `_lote.clear()` **sin argumento**, que borra la entrada de todos los
+libros. Con N clientes activos, cada guardado costaba hasta N lecturas en vez de una —
+contra el techo de 60/min de la **única** cuenta de servicio.
+⚠️ **Verificado en vivo antes de escribir nada** (no leído en la documentación): con
+Streamlit 1.57, `f.clear("LIBRO_A")` relee A y **deja B en caché**.
+
+⚠️ **Y el argumento tiene que ser el TÍTULO, no el `sheet_id`.** Las hojas GLOBALES
+(`Login`, `Groups`, `Rails`, `Manuals`, `Library`, `LibraryModels`) viven en el MAESTRO,
+no en el libro del grupo: resolver «el libro de la sesión» tras escribir en una de ellas
+habría limpiado **otro** libro y dejado el valor viejo hasta 120 s — el «lo guardé y no
+sale» que v339 vino a evitar. Tres módulos escriben en globales (`auth`, `rails`,
+`library`), así que no era un caso teórico.
+
+⚠️ **Sin título se sigue tirando ENTERO**, a propósito: limpiar de más cuesta una
+lectura, limpiar el libro equivocado enseña datos viejos. Un llamador que se olvide
+degrada al comportamiento de antes, no rompe nada. Las **23 llamadas** de los 21 módulos
+pasan el título de su propia hoja, **derivado** de lo que cada módulo lee (no escrito a
+ojo).
+
+⚠️ De paso se comprobó algo que parecía la fuga de v378 y **no lo era**: el
+`sheet_id = sheet_id or …` que hay DENTRO de `_lote` sí sería un desastre… si alguien la
+llamara sin argumento. `registros()` resuelve el libro FUERA y lo pasa como clave, así
+que el diseño de v359 aguanta. Mirar el llamador antes de acusar.
+
+### 0.2 · La app mide su propio consumo de la API
+Decidir entre «más cuentas de servicio» y «salir de Sheets» es la decisión más cara de la
+ruta y se habría tomado a ojo. `core/metrics.py` (módulo HOJA, solo stdlib) cuenta lo que
+ya se hace: **no cuesta ni una llamada**.
+- **El enganche va en `timeclock._ConReintento.request`**, que es NUESTRA subclase del
+  cliente HTTP (nació en v290 para el reintento): el único punto por el que pasa todo el
+  tráfico de gspread, sin instrumentar 90 módulos ni tocar las tripas de una librería.
+- ⚠️ **Se apunta cada INTENTO, no cada llamada lógica**: un 429 reintentado son dos
+  llamadas contra la cuota, y contar solo la lógica subestimaría justo la ráfaga que se
+  quiere medir.
+- ⚠️ **Lectura y escritura se clasifican por ENDPOINT, no por método HTTP**: tienen
+  cuotas SEPARADAS (60/min cada una) y `values:batchGet` —la llamada que más usa la app
+  desde v339— es un GET, mientras `values:append` es un POST igual que otras lecturas por
+  lote.
+- ⚠️ **El pico se busca con ventana DESLIZANTE**, no partiendo el tiempo en minutos de
+  reloj: la ráfaga real es de 06:59:40 a 07:00:20 —cuando ficha la cuadrilla— y en cubos
+  de reloj se repartiría entre dos minutos sin aparecer en ninguno.
+- ⚠️ **Vive en memoria del proceso, no en una hoja**: escribir las métricas en Sheets
+  gastaría justo la cuota que se quiere medir. Streamlit Cloud corre un proceso para
+  todos, así que el contador mide exactamente lo que el techo limita.
+- Pantalla en **Administración → 📈 Cuota** (propietario), con el veredicto en palabras
+  además de en números: **manda el pico, no la media** — la media siempre tranquiliza.
+
+### ⚠️ Tres fallos de MÉTODO, los tres míos y los tres ya documentados
+Ninguno se vio leyendo; los tres los destapó la batería de roturas.
+1. **Mi chequeo de «una lectura real incrementa el contador» medía CERO llamadas.**
+   Llamaba a `auth.list_groups()` tras `hojas.invalidar()`, y esa función sale de la
+   caché PROPIA de `auth`, que el lote no toca. O sea que no hubo ninguna llamada que
+   contar y parecía que el enganche no funcionaba: **un cero medido sobre nada**, el paso
+   en vacío de la trampa nº1, dentro del chequeo escrito para probar el enganche.
+2. **Un chequeo INTERMITENTE**, que es el peor: el caso del pico anclaba sus eventos en
+   `ahora − 300`, así que **pasaba o fallaba según el segundo en que se lanzara** (si ese
+   instante caía al principio de un minuto, los dos grupos quedaban en el mismo). Es la
+   familia del guardián que se ponía rojo todos los lunes (v443). Anclado al segundo :40
+   de un minuto de reloj: cuatro corridas seguidas, cuatro verdes.
+3. **La batería se provocó un 429 a sí misma.** Once corridas seguidas del guardián, cada
+   una con una lectura real, y el CONTROL salió rojo — en solitario pasaba. Es la trampa
+   nº19 («amontonarlos es provocarse un 429 y leer un rojo falso») cometida en el script
+   que venía a verificar. Ahora van espaciadas.
+
+Y la **trampa nº26 por séptima vez**: un heredoc convirtió los `\n` de una rotura en
+saltos reales y dejó el banco de pruebas roto. Se reescribe con la herramienta de
+escritura o componiendo con `chr(10)`, nunca por heredoc.
+
+### Verificación
+`verif_v482.py`, **37 comprobaciones**. Las que valen: ⚠️ **primero se comprueba que los
+dos libros son DISTINTOS** —con el mismo libro, «limpia solo el suyo» pasaría sin
+significar nada—; después se EJECUTA `invalidar()` sobre la función REAL (sustituyendo
+solo el lote, para no gastar cuota) y se exige que escribir en el grupo **no toque el
+maestro** y al revés; el medidor clasificando sus seis casos; el pico viendo las 80
+llamadas juntas; una lectura REAL de Sheets incrementando el contador; la pantalla del
+propietario **ejecutada** en sus dos estados; y que el despacho del propietario deje
+**exactamente una** sub-sección al `else` (la lección de v449).
+Batería: **11 roturas, 11 cazadas + CONTROL verde**, con el verde de base comprobado
+antes (sin ese paso una tanda entera sale «cazada» sin probar nada, v459).
+
+### Y `NEGOCIO.md`, que llevaba 400 versiones desfasado
+Decía «estado actual: **v75**» y colocaba en *fase futura* la nómina, el costeo por
+proyecto y la gestión documental — **las tres llevaban meses desplegadas**. Puesto al día
+el estado de hecho (funciones reales, lo que NO existe dicho sin adornos, y las fases 2-3
+del roadmap marcadas), ⚠️ **sin tocar ni una decisión estratégica**: pricing, ICP, mercado
+y diferenciación son del chat estratégico. Donde la realidad contradice una decisión, se
+señala en vez de reescribirla.
+
+## FASE 2 de la ruta: identidad fiscal y exportación contable (v483)
+
+Fases **2.0** y **2.1**: que el contable deje de frenar la venta. No integra con nadie
+todavía —eso es 2.3, OAuth y tokens—: produce el fichero.
+
+### ⚠️ EL HALLAZGO: se emitían documentos fiscales INCOMPLETOS
+`invoice_pdf` imprime **«TAX INVOICE»** en cada factura que sale al cliente. En Australia
+un documento con ese título por **82,50 $ o más** tiene que llevar el **ABN** y el nombre
+legal del emisor, y `grep -ri "abn"` daba **cero** en todo el repositorio: la marca era el
+nombre INTERNO del grupo (`cliente1`). O sea que las facturas ya emitidas iban
+incompletas, y nada lo señalaba.
+
+Salió de auditar el código de dinero antes de proponer la fase, no de una revisión de
+pantallas. Cuatro columnas nuevas en `Groups` —`ABN`, `LegalName`, `PaymentTermsDays`,
+`AccountingJSON`— ⚠️ **al final, que es lo que las hace migrar solas**: una columna en
+medio desplaza a todas las siguientes y las filas se escriben por POSICIÓN (el fallo que
+mató `create_project` durante tres versiones, v363).
+
+⚠️ Y el PDF **degrada en las tres direcciones**: sin ABN se emite igual (sin esa línea),
+sin razón social cae a la marca del grupo, y si la lectura de la identidad **falla** se
+emite lo mismo. Un problema de red no puede impedir facturar. Las tres se ejercitan.
+
+### El vencimiento nacía HOY
+`date_input(value=clock.today())`, así que **toda factura entraba vencida el mismo día**:
+el indicador «vencido» del resumen financiero y el estado de la lista saltaban al
+instante, y exportada llegaba en mora sin haberse enviado. Ahora sale del **plazo de pago
+del grupo** (14 días por defecto).
+
+### 2.1 · El CSV, con tres reglas que no son negociables
+1. ⚠️ **Los importes salen SIEMPRE sin impuesto**, con el impuesto en su columna. Xero
+   pregunta al importar si el fichero viene «tax inclusive» o «exclusive»: si el criterio
+   cambiara según el caso, esa pregunta se contestaría mal tarde o temprano y el GST del
+   cliente saldría torcido. Un solo criterio, y dicho en pantalla.
+2. ⚠️ **El impuesto se REPARTE de forma que sume exactamente el de la factura.**
+   Redondear línea a línea da diferencias de centavos contra un documento ya emitido y
+   cobrado, y una factura que no cuadra al centavo la rebota el contable. Ejercitado
+   contra la hoja real con el caso que lo motiva: tres líneas de `33,33 · 33,33 · 33,34`
+   al 10 % → línea a línea da **9,99** y el reparto da **3,33 · 3,33 · 3,34 = 10,00**.
+3. ⚠️ **El mapa de cuentas es POR PERFIL, no compartido**: en Xero las ventas son `200` y
+   en MYOB `4-1000`. Un solo mapa habría exportado a MYOB códigos que no existen en su
+   archivo — y MYOB **rechaza la fila entera**, no la avisa.
+
+Lo que se enseña ANTES de descargar es lo que va a fallar al importar: cuentas sin poner,
+**un proveedor escrito de dos formas** (los dos casan por nombre exacto, así que el gasto
+del año se parte en dos fichas sin que nada avise) y la lista de trabajos que hay que
+crear primero. Un importador rechaza la fila y no siempre dice por qué.
+
+### Lo que se verificó EN LA FUENTE, no de memoria
+- **Nombres de impuesto de Xero** (tabla de Australia de su documentación de la API):
+  `OUTPUT` = *GST on Income*, `INPUT` = *GST on Expenses*, `EXEMPTOUTPUT` = *GST Free
+  Income*, `EXEMPTEXPENSES` = *GST Free Expenses*. ⚠️ La **API usa el código** y el **CSV
+  el nombre**: se guardan los dos, porque 2.3 necesitará el código.
+- **Campos de importación de MYOB**: `Co./Last Name` (tiene que casar con una ficha
+  EXISTENTE), `Invoice #`, `Date` en DD/MM/YYYY, `Description` ≤255, `Account #`
+  (obligatorio y válido), `Amount`, `Inc-Tax Amount`, `Job`, `Tax Code` (`GST`/`FRE`/`N-T`).
+- **La opción de seguimiento de Xero se corta en 50 caracteres**, así que una etiqueta
+  larga **cae al ID**: recortarla podría dar la MISMA opción a dos obras distintas y el
+  costo de una se cargaría a la otra.
+
+### ⚠️ Un error de semántica MÍO, cazado volcando el CSV
+La 4ª columna de MYOB es **«Customer PO» / «Supplier Invoice #»**: el número de pedido
+DEL CLIENTE o la factura DEL PROVEEDOR. Yo le estaba metiendo el nombre del proyecto, que
+sí es legítimo en el `Reference` de Xero (texto libre) pero ahí no: el contable lo leería
+como el número del proveedor. Va vacía; el proyecto viaja en `Job`, que es su sitio.
+**No se vio leyendo el código: se vio imprimiendo la fila generada.**
+
+### ⚠️ Y una ROTURA SE ESCAPÓ: el guardián afirmaba la CONSTANTE, no lo que sale
+La rotura intercambiaba el desempaquetado (`nombre, cod = …`), lo que escribe **`OUTPUT`**
+en el fichero en vez de `GST on Income` — y Xero rechaza fila a fila. El guardián pasaba
+en verde porque comprobaba `IMPUESTOS_XERO["venta_con"][1] == "GST on Income"`, o sea la
+constante, que seguía perfecta.
+→ Ahora se afirma **lo que el CSV PRODUCE**, en las dos ramas (con GST y sin GST), con la
+sonda validada contra su contrario: si no supiera distinguirlas, los dos casos darían lo
+mismo y el verde no significaría nada (trampa nº12). Es la familia de v309/v349/v441 —
+*un guardián acota el fallo a la forma en que lo viste*— y solo lo destapó la batería.
+
+### ⚠️ Un `NameError` que habría reventado la pantalla, cazado por el chequeo de ámbito
+Escribí `_num(...)` en el editor de identidad de `auth_ui`, y **ese módulo no tiene `_num`
+a nivel de módulo**: `compileall` y los imports lo dan por bueno, y habría fallado la
+primera vez que alguien abriera el desplegable. Es el fallo de v423/v425/v443, cazado por
+el barrido de ámbito ANTES de desplegar. ⚠️ Y al añadir el import se comprobó primero que
+nadie use `_num` como VARIABLE en ese módulo: tapar un nombre lo marca local en el ámbito
+ENTERO de la función (v445/v447).
+
+### Ejercitado contra la hoja REAL (método v344), sin dejar rastro
+foto → escribir las 4 columnas nuevas → factura con el redondeo que no cuadra → exportar y
+leer el CSV → generar el PDF y **extraer su texto** → borrar la fila → restaurar la
+identidad → segunda foto. **21 comprobaciones, 0 fallos**, y `cliente1` vuelve a 0 facturas
+con el ABN vacío. El PDF llevaba `12 345 678 901` y `ZZZ Prueba v483 Pty Ltd`, y **ya no el
+nombre interno del grupo**.
+
+### Verificación
+`verif_v483.py`, **80 comprobaciones**, todo EJECUTANDO donde importa (importar no ejecuta,
+v378): el reparto en 7 casos —incluido uno que el redondeo ingenuo NO resuelve, o no
+probaría nada—, el mapa fusionando sin borrar el otro perfil, un `AccountingJSON` ilegible
+degradando a los de fábrica, el criterio único de impuesto comprobado sobre el gasto REAL,
+el PDF en sus tres estados, y que el despacho deje **exactamente una** sub-sección al
+`else` (la lección de v449). Batería: **15 roturas, 15 cazadas + CONTROL verde**, con el
+verde de base confirmado ANTES (sin ese paso una tanda entera sale «cazada» sin probar
+nada, v459/v461/v463).
+
+### Verificado EN PRODUCCIÓN con sesión de administrador (14/09/2026)
+Viendo el CAMBIO, no el cartel de versión (v334 corregido por v408/v452 — aquí las dos
+coincidían en v483, o sea proceso reiniciado):
+- **Finanzas → Accounting** es la **novena y última** sub-sección, despachada por su ID;
+- los dos avisos con datos reales (`EXPENSES 1 · 1 rows · TRACKING OPTIONS 1`) y el
+  nombre EXACTO del trabajo que hay que crear antes de importar;
+- ⚠️ **el mapa por perfil, visible**: con Xero la tabla da `Sales 200 · Materials 300 ·
+  Subcontractor 310 · Rental 469`, y al cambiar a MYOB **los mismos rubros dan
+  `5-1000 / 6-1000`** — más el aviso cambiando de «crea la categoría de seguimiento» a
+  «los trabajos ya tienen que existir en el archivo»;
+- y el vencimiento: **`Date 2026-09-14` · `Due date 2026-09-28`**, hoy + 14. Antes de
+  v483 las dos decían lo mismo.
+
+⚠️ **Dos trampas por el camino, y las dos ya conocidas.** (1) El formulario de factura
+decía *«Create a client first»* porque **la demo tiene 0 clientes** desde v456: hubo que
+crear uno de prueba (borrado después, junto a la factura; nunca se envió el formulario).
+(2) Y tras crearlo **la app siguió diciendo lo mismo**: lo creé desde OTRO proceso, así
+que el `_invalidate()` corrió en el mío y la caché de 120 s del proceso de la app seguía
+con la lista vacía — la semántica de `st.cache_data` de v378/v482, en vivo. ⚠️ Antes de
+culpar al formulario se **validó la sonda**: al reintentar encontró los dos campos y la
+frase había desaparecido, así que el cero anterior era estado de la app y no un selector
+mal apuntado (trampa nº12).
+
+⚠️ **Lo que esta sesión NO pudo ver**: el editor de identidad fiscal vive en
+`_owner_grupos`, o sea en el panel del **PROPIETARIO**, y la sesión era de
+administrador. Su camino de escritura sí está ejercitado contra la hoja real (se
+escribieron y se leyeron las tres columnas, y el PDF las mostró), pero la pantalla no.
+📌 **Y eso deja una pregunta de producto abierta**: el ABN lo configura el propietario
+—coherente con `DefaultTax`, `DefaultSuper` y `DefaultWithholding`, que también son
+suyos— así que COPEX tendría que teclear el ABN de cada cliente. Si se prefiere que lo
+ponga el administrador de cada empresa, es mover el bloque de panel.
+
+### Lo que NO está probado, dicho como límite
+**Que Xero y MYOB acepten el fichero no está demostrado**: hace falta importarlo en una
+cuenta demo, y crear una cuenta no es algo que yo haga. Lo que sí está comprobado es que
+las columnas obligatorias van completas, que la aritmética cuadra al centavo y que los
+nombres de impuesto son los de su documentación. Los perfiles son **datos, no código**
+(una lista de columnas y un constructor de fila), así que si el importador pide un ajuste
+es una línea, no una reescritura.
+
+## FASE 2.2-A: el parte de horas para la nómina (v484)
+
+El usuario eligió «Xero Payroll» y **lo primero fue descubrir que ese destino no
+existe**: Xero Payroll AU **no importa partes de horas por CSV**. Tres ángulos
+independientes, el primero con la sonda validada contra un caso conocido-bueno:
+
+| Evidencia | Qué dice |
+|---|---|
+| El artículo «Add or edit an employee's timesheet» de Xero Central | **0 menciones** de import/CSV/template. ⚠️ Y la sonda VALE: el de importar facturas, con el mismo cascarón de 1.635 caracteres, da `csv: 2 · template: 2`, porque los títulos de paso sí están en el cascarón |
+| **Product Ideas de Xero** | petición **abierta y popular**: *«AU Payroll \| Timesheets — Ability to Import Timesheet templates from excel»*. Si existiera, no se pediría |
+| Sus foros | importar partes por CSV «no está en sus planes a corto plazo», y el camino sería **por API** — que es lo que hacen TimeDock y Upsheets |
+
+Y su documentación lo confirma desde el otro lado: un parte se crea con
+**`EmployeeID`, `EarningsRateID` y `TrackingItemID` — GUIDs** que solo se obtienen ya
+conectado, y **`NumberOfUnits` es un array con una entrada por día del periodo**.
+
+Así que se construyó **lo que sí sirve en cualquier rama** (decisión del usuario: «A y
+luego B»): el parte propio, que un responsable de nómina teclea y que alimenta a
+cualquier proveedor. ⚠️ Y de leer esa API salió el diseño: **el formato es ANCHO, una
+columna por día y EN ORDEN**, porque así es el array — cuando exista OAuth, 2.3 es un
+mapeo y no una reescritura.
+
+### ⚠️ UNA definición de «qué día de ausencia se paga»
+El parte necesita la ausencia día a día y `horas_pagadas_grupo` solo daba el agregado.
+Reimplementar el criterio en el exportador habría creado **una segunda definición de lo
+que se paga**, y eso no lo delata ninguna línea de la colilla: solo el total del día.
+El criterio baja a **`ausencias.horas_pagadas_dia`** y el agregado **DELEGA**.
+- ⚠️ **La semántica se preserva EXACTA**, incluido lo que parece raro: `por_tipo` y
+  `dias` cuentan TODOS los días del rango, también los que pagan 0 porque la persona
+  trabajó la jornada entera — son días CONCEDIDOS, que es lo que descuenta del saldo.
+- ⚠️ Y **no se le puso tope por día** aunque dos ausencias sobre el mismo día pagarían
+  dos veces: `solicitar` **ya impide** los solapes, así que sería arreglar un caso que
+  la app no permite (lección v369) y cambiaría el agregado que la nómina ya usa.
+- **Demostrado, no supuesto**: la demo tiene 0 ausencias, así que compararlo contra la
+  hoja real habría sido el paso en vacío. Se sacó la implementación ANTERIOR del commit
+  con `git show`, se ejecutó en el espacio de nombres del módulo y se comparó sobre las
+  MISMAS filas: **13 casos idénticos**, incluida la rama del `except`.
+
+### Lo que el parte exporta, y lo que NO
+**Jornada fichada + ausencias pagadas**, que es lo que se PAGA — la misma base que
+`payroll.generar`. ⚠️ Las horas de OBRA no entran: son lo que se le COBRA al cliente y
+pueden ser más que la jornada (la app ya lo mide desde v320/v422), así que sumarlas
+pagaría de más. El desvío **se avisa** en vez de sumarse.
+
+Y el recorte de v432 viaja entero: en un día con ausencia **y** fichaje salen
+`Ordinary Hours 4.68` + `Annual Leave 3.32` = **8.00**. Un día paga una jornada.
+⚠️ Un día sin horas va **VACÍO, no en 0**: un 0 afirma «ese día trabajó cero».
+
+### `PayrollID`, y el pendiente que casi dejo sin cerrar
+Nuestra identidad es el login (v306/v413) y el proveedor no lo conoce: casa por nombre,
+y el nombre **puede repetirse**. Columna nueva al final de `Login` (migra sola),
+opcional, con respaldo al nombre — y el aviso salta **solo cuando el nombre se repite**,
+porque un aviso que grita sobre lo que está bien acaba ignorándose entero (v450).
+- ⚠️ `_COL` (v433) y la proyección de `list_users` (v434) **la recogieron solas**: las
+  dos derivaciones que se hicieron a golpes pagando su precio.
+- ⚠️ **Y se me quedaba sin editor.** La columna existía y no había dónde ponerla: el
+  «pendiente que nadie puede cerrar» de v325/v340, con el parte avisando de un homónimo
+  ambiguo sin ofrecer forma de resolverlo. Está en la ficha → 🔑 Acceso, y el guardián
+  lo exige.
+- Entra en `CAMPOS_CLAVE` **en el mismo lote**: no es un importe, pero equivocarlo paga
+  a otra persona (la regla que v344, v352 y v373 aprendieron a golpes).
+
+### ⚠️ Tres roturas se escaparon, y solo UNA era un fallo del guardián… de dos formas
+| Escapó | Qué era |
+|---|---|
+| el aviso de homónimos salta con nombre ÚNICO | **hueco mío**: en mi fixture la persona de nombre único **no tenía horas**, así que sin horas no entra en el parte y ese caso no se ejercitaba NUNCA |
+| `PayrollID` se mete en MEDIO de la cabecera | **hueco mío**: comprobaba solo el ÚLTIMO elemento, y la rotura insertaba otro nombre antes. Lo que protege la regla es que **nada se cuele delante de las históricas** (v363: las filas se escriben por POSICIÓN), así que ahora se fija el PREFIJO |
+| los días se RECUENTAN en vez de venir del detalle | **NO es un fallo**: medido, **nadie lee `dias`** del agregado —`payroll.generar` usa `recortados`, `nombre`, `horas` y `por_tipo`— así que la rotura no corresponde a ningún defecto. Salió de la batería con la razón escrita, en vez de inventar un caso inalcanzable para justificarla |
+
+### ⚠️ Y la batería dejó código ROTO en el árbol de trabajo
+El `finally` que restaura reventó con **`OSError 22`** al reabrir el fichero, y la tanda
+murió dejando `ausencias.py` **con el doble pago de v432 vivo**. Causa: el patrón
+`io.open(...).write(...)` deja el descriptor a merced del recolector, y en Windows la
+reapertura del mismo fichero en el bucle falla.
+→ Ahora la batería (a) escribe con `with`, (b) hace **copia en disco ANTES** de tocar
+nada, (c) **verifica** el restore leyendo el fichero y reintenta, y (d) **aborta la
+tanda** si no puede, porque seguir con código roto en el árbol es peor que no haber
+probado nada. **Un `finally` que puede fallar no es una garantía.**
+
+### Y la trampa de v455, cometida
+Toqué `auth_ui.py` **con la suite corriendo**, así que esa corrida quedó nula y hubo que
+pararla y repetirla. La regla ya estaba escrita: *los scripts que modifican el árbol
+nunca se solapan con nada que lea el código*.
+
+### Verificación
+`verif_v484.py`, **72 comprobaciones**, todo ejecutando donde importa: el oráculo del
+agregado ⚠️ **escrito aquí y no sacado de `git show HEAD:`** (en cuanto se commitea,
+HEAD tendría el código nuevo y el chequeo se quedaría vacío — un chequeo que caduca
+solo), los conceptos derivados de `ausencias.TIPOS`, el criterio de v432 llegando al
+CSV, el orden de las columnas, el día vacío, las dos guardas del setter genérico, el
+editor del `PayrollID` y **la pantalla entera EJECUTADA**. Batería: **17 roturas, 17
+cazadas + CONTROL verde**, con el verde de base comprobado antes.
+
+### Lo que NO está hecho, dicho como límite
+**B (la API) no está empezada.** Necesita una app en `developer.xero.com` y una
+organización demo, que son del usuario. Lo que este parte deja resuelto es la forma: la
+fila de aquí es la línea de allí y el orden de las columnas es el del array.
+
+## ⚠️ La tabla del parte pintaba «None», y la red que lo vigila estaba CIEGA (v485)
+
+Encontrado **mirando la pantalla** de v484 en producción, no leyendo código: las celdas
+de los días de la tabla del parte salían con el literal **`None`**. El CSV estaba bien
+—ahí emito `""` explícitamente— pero la tabla que lee el responsable de nómina decía
+`None` en cada día sin horas.
+
+Causa: `f["horas"].get(d)` devuelve `None` para los días que faltan y, **con la columna
+entera vacía, pandas la deja en `object` y Streamlit imprime el texto**. Es literalmente
+el fallo que documentó v467, repetido. ⚠️ **El arreglo de esta versión —`float("nan")`—
+era FALSO y se corrigió en v486: el NaN se pinta «None» igual. Lo único que vacía la
+celda es una CADENA en una columna sin tipar (`tabla.celda`).**
+
+### ⚠️ Lo grave no era el `None`: era que su red diera «0»
+`verif_v467` tiene una red para exactamente esto, y decía **0 celdas con None** con el
+fallo delante. Tenía **tres** cegueras, y se descubrieron una a una **probándola contra
+el fallo reintroducido**, no leyéndola:
+
+| Ceguera | Por qué se escapaba |
+|---|---|
+| solo veía el ternario `A if c else None` y el `None` literal | lo mío es un **`.get(k)` sin defecto**, que devuelve None *implícitamente* |
+| solo miraba DENTRO de la llamada a `pd.DataFrame(...)` | mi dict se construye fuera y a `DataFrame` le llega una **variable** — el mismo agujero que v471 tuvo que cerrar |
+| solo miraba `ast.Dict` | el mío es un **`ast.DictComp`**, que tiene `.key`/`.value` y no `.keys`/`.values` |
+
+Con las tres, su «0» no significaba nada para esa tabla. **Un «0» vale solo para la
+forma que la red sabe ver** (v450), y esta red llevaba desde v467 sin saber ver ninguna
+de las tres.
+
+### ⚠️ Y ensancharla de golpe la volvió inservible: dos pasadas de falsos positivos
+1. Marcando **todo** `.get()` de un argumento salieron **12 sitios sanos**: una fila de
+   hoja se lee con el nombre LITERAL de su cabecera y `hojas.registros` **siempre las
+   trae todas**, así que `r.get("Type")` nunca da None — da `""`, que sí sale vacío. El
+   discriminador de verdad es la **clave VARIABLE**: lo que puede faltar es la clave
+   calculada.
+2. Recorriendo la **función entera** salieron **5 dicts sanos** que no alimentan ninguna
+   tabla. Se arregló resolviendo la variable que recibe `pd.DataFrame`, que es la sonda
+   de v471.
+
+Las dos veces la tentación era relajar el chequeo o «arreglar» código sano. ⚠️ **Un
+detector que grita sobre lo que está bien acaba ignorándose entero**, así que el criterio
+es: precisión primero, y validar en LAS DOS direcciones — 0 con el código bueno, y caza
+exactamente un sitio con el fallo dentro. Es lo que se hizo.
+
+### Verificación
+La red, validada en las dos direcciones tras cada iteración (tres, hasta que dejó de
+tener falsos positivos y empezó a cazar el caso real), y suite entera.
+
+## ⚠️ NaN TAMPOCO vacía la celda: v485 arregló un fallo con la cura equivocada (v486)
+
+v485 cambió el `None` de la tabla del parte por `float("nan")`, lo desplegó, y **en
+producción seguía pintando «None»**. Lo que corrige v486 no es un olvido: es una
+afirmación que llevaba desde v467 escrita como **medida** y era falsa.
+
+### ⚠️ Mi error de medición: leí el AGREGADO y lo atribuí a la columna que esperaba
+La sonda local de v485 pintaba dos columnas a la vez —una de `None` y una de `NaN`— e
+interceptaba `fillText`. Devolvió `«None»: 8` y **se lo asigné entero a la columna de
+`None`**. Eran 2 columnas × 2 filas × 2 repintados: **la de NaN pintaba «None»
+también**. Con las coordenadas se ve de un golpe — la cabecera `NANCOL` en x=172 y
+`NONECOL` en x=351, y los «None» en **x=335 (borde derecho de NANCOL) y x=352** —, pero
+yo solo miré el recuento.
+→ **Un agregado no dice nada hasta saber QUÉ está contando.** Es la trampa nº12 en su
+forma más barata de evitar: la misma sonda, mirando `x`.
+
+### El cuadro, medido con una tabla por caso y control incluido
+Una tabla por candidato con **una sola columna de datos**, para que ningún «None» pueda
+atribuirse a otra cosa:
+
+| valor de la celda | `column_config` de esa columna | se pinta |
+|---|---|---|
+| `nan` · `None` · `pd.NA` | ninguno · `{}` · `Column()` · `NumberColumn` · `+format` · `TextColumn` | **«None»** |
+| `nan` + `Styler(na_rep="")` | — | **«None»** |
+| **`""`** | **ninguno o `Column()`** | **vacío** |
+| `""` | `NumberColumn` (con o sin formato) | **«None»** |
+
+Ese «None» es el **placeholder de valor ausente** de Streamlit, y el control lo
+confirma: con `column_config` **ninguno** también sale (`_F`), así que `tabla.cfg()`
+queda exculpado. Y la última fila es la que decide el arreglo: **una columna TIPADA
+convierte incluso la cadena vacía en nulo**, así que las dos piezas —cadena + columna
+sin tipar— van juntas o ninguna sirve.
+
+⚠️ `st.column_config.Column(label, alignment="right")` conserva los números a la
+derecha, así que no se pierde la lectura de una columna de dinero. Pero `alignment` es
+reciente y `requirements.txt` admite desde 1.39: `tabla.derecha()` **degrada** a la
+columna genérica en vez de tumbar la tabla entera.
+
+### No era una tabla: eran CUATRO
+La frase «con `NaN` sale vacía — **medido**» está en CLAUDE.md desde v467 y se aplicó en
+cuatro sitios, todos vivos:
+
+| Dónde | Qué se veía |
+|---|---|
+| `contable_ui` · el parte de horas | «None» en cada día sin horas (v485) |
+| `payroll_ui` · `Rate/h` | ⚠️ y el pie de esa misma tabla **PROMETE** *«an empty Rate/h means that person has no rate set»* |
+| `inventory_ui` · `Costo` del historial | «None» en el movimiento sin costo |
+| `catalogo_ui` · `Horas` | «None» en cada producto |
+
+**Una afirmación equivocada documentada como medida no se queda quieta: se copia.**
+
+### `tabla.celda` + `tabla.derecha`: una definición, no cuatro comentarios
+El importe se formatea en Python y la columna se declara sin tipar. Verificado
+**ejecutando** que el formato pinta IDÉNTICO al `NumberColumn` que sustituye —19 valores
+× 2 formatos, 0 diferencias—, porque son columnas de dinero y un cambio de formato
+habría movido cada cifra de esas pantallas en silencio. ⚠️ Y `%d` **trunca** mientras
+`.0f` **redondea** (trampa nº20), así que se compara contra el camino viejo COMPLETO: el
+`round()` que hacía el código + el printf de Streamlit.
+
+⚠️ **No usa `theme.dinero`, a propósito**: ese escapa el `$` como `\$` porque Streamlit
+lee LaTeX en markdown (v309), y una celda de `st.dataframe` no es markdown — ahí el
+escape se ve literal. Dos destinos, dos funciones.
+
+### ⚠️ Y REINTRODUJE el fallo de v323 dentro del arreglo
+`celda` hacía `float(valor)`. Con `"1,234.56"` —que es **como Sheets formatea el dinero
+en AU/US**— eso revienta, así que devolvía **vacío**. Es exactamente el fallo que v323
+documentó con cinco implementaciones divergentes de `_num`… y aquí era **peor**: allí
+salía `$0` y aquí sale «no hay dato». Consideré importar `core/num.py`, comprobé que era
+módulo hoja, y luego no lo usé.
+→ Ahora usa `num(valor, None)` —`default=None` para poder distinguir un cero legítimo de
+algo ilegible— y el guardián lo fija por AST, así que nadie puede volver a `float()`.
+**Lo cazó comparar el formato contra el anterior**, no leer el código: 14 de 15 casos
+idénticos y el que difería era ese.
+
+### ⚠️ La red de v467 daba «0» con el fallo delante, otra vez
+v485 la rehizo bien (le quitó tres cegueras) pero su **afirmación** seguía siendo falsa:
+`ok("0 celdas con None (se usa NaN)")`. O sea que «arreglar» un None poniendo NaN
+**pasaba el chequeo y seguía pintando «None»** — que es literalmente lo que hizo v485.
+Ensanchada al NaN en sus tres escrituras (`float("nan")`, `np.nan`, `pd.NA`) y corregida
+la nota, que decía lo contrario de lo medido.
+
+⚠️ **Y una rotura SE ESCAPÓ: enumerar posiciones falló por tercera vez.** Cubría el valor
+directo y la rama `else` de un ternario, y no vio `f["horas"].get(d, float("nan"))` — el
+nulo metido en el **DEFECTO del `.get`**, que es EXACTAMENTE la forma que tenía v485 en
+producción. Se cambió por recorrer el **subárbol** del valor: más ancho, y medido **0
+falsos positivos** en el repo. Validada después en las dos direcciones: 5/5 roturas
+cazadas (las tres escrituras × las tres posiciones) y el CONTROL verde.
+
+⚠️ Y el mismo error en mi guardián nuevo: el chequeo de «`tabla.py` sigue siendo módulo
+hoja» miraba el `module` de un `ImportFrom`, y **`from core import projects` tiene
+`module == "core"`**, que no empieza por `"core."` — la rotura pasaba. Hay que mirar los
+NOMBRES, no solo el módulo.
+
+### Higiene: 3 `.pyc` estaban RASTREADOS en git
+`survey_app/__pycache__/app.cpython-314.pyc` y dos de `extractors/`, pese al
+`.gitignore` — que **no destrackea lo ya añadido**. Bytecode de Python 3.14 viajando al
+Cloud, que corre 3.12 (v66). Destrackeados sin borrarlos del disco.
+
+### Verificación
+`verif_v486.py` (24 comprobaciones, todo EJECUTANDO donde decide: importar no ejecuta,
+v378) probado contra **9 roturas + CONTROL**, con el **verde de base confirmado ANTES**
+(sin ese paso una tanda entera sale «cazada» sin probar nada, v459/v461/v463). Las
+cuatro tablas **vistas en pantalla** con el código real y datos inyectados por la
+función de LECTURA de cada módulo, no replicando la expresión — que es justo el error
+que me hizo dar v485 por bueno.
+
+## ⚠️ Lo que v469 dejó escrito en español, y los desplegables que SOBRESCRIBÍAN (v487)
+
+Salió de la pregunta del usuario *«¿ya quedó todo terminado?»*, **auditada contra el
+código** en vez de contestada de memoria (la regla de v453). La respuesta era no.
+
+### v486, verificado en producción con datos reales (antes de esta versión)
+Tras el reinicio del proceso se vio el parte de horas con los días vacíos y las cifras
+de control (0.09 / 0.04). Las otras tres tablas no tenían filas en la demo, así que se
+sembraron en `cliente1` —2 artículos, 2 nóminas, 1 activo con 2 movimientos, todos
+«ZZ PRUEBA v486»—, se miraron en pantalla (Hours del producto vacío junto a `6.50`,
+Rate/h vacío junto a `$42.50`, Cost vacío junto a `$128`) y se **borraron** con doble
+guarda (ID sembrado **y** marca en la fila). Foto antes/después en solo lectura:
+**idéntica** en filas, IDs y cabeceras.
+⚠️ Dos cosas de la prueba que NO eran fallos de la app, comprobadas antes de reportarlas:
+«To pay» contaba la nómina marcada `paid` porque las nóminas guardan el estado en
+**español** (`pagada`, a propósito desde v469) y la fila cruda la escribí yo en inglés;
+y la categoría `Tools` salía como `Consumable` porque la canónica es `Tool` — pero eso
+destapó lo de abajo.
+
+### ⚠️ 1. Las KPIs de inventario marcaban 0 SIEMPRE desde v469
+```python
+c[1].metric(t("Available"), est.get("disponible", 0))
+c[2].metric(t("In use"), est.get("en_uso", 0))
+```
+`resumen()` cuenta por el estado **ya canonizado** (`available`, `in use`), así que esas
+dos claves no existían nunca. **Ejecutado**: con 2 disponibles y 1 en uso, las dos
+tarjetas daban 0. ⚠️ **El guardián de v469 no podía verlo**: barre `ast.Compare` y aquí
+el valor viejo es la **clave de una búsqueda**. Es v309/v349/v441 otra vez: *la red ve
+solo la forma que se le enseñó*.
+
+### ⚠️ 2. Y se seguía ESCRIBIENDO en español
+Barrido en todas las formas (valor de dict, `x["Col"] = …`, defecto por `or`, fila
+posicional de un `append_row`): **12 sitios**. Los que importan:
+| Dónde | Efecto |
+|---|---|
+| `inventory.create_activo` · `mantenimiento` | `disponible`/`bueno`/`bodega`/`mantenimiento` en la hoja: se canoniza al leer, pero la hoja queda **mezclada** |
+| `expenses` ×2 · `or "Otros"` | una compra sin categoría caía en «Otros» **al lado** de «Other»: la torta partía la misma categoría en **dos trozos, los dos rotulados «Other»** |
+| `orders` · `or "Materiales"` | la categoría del gasto que nace al recibir una orden |
+| `projects_ui` · `or "otro"` | pintaba **«otro»** en la lista de archivos |
+| `auth_ui` · `or "campo"` | ver abajo: el peor |
+Ahora con constantes con nombre (`INV.DISPONIBLE`, `expenses.SIN_CATEGORIA`…).
+
+### ⚠️ 3. `L.index(v) if v in L else 0` SOBRESCRIBE EN SILENCIO
+Delante de un desplegable que EDITA: si el valor guardado no está en la lista —una
+categoría que se borró con `del_categoria`, un rol mal tecleado en la hoja, un color que
+no es de la paleta— se muestra la **primera** opción y «Guardar» la escribe encima, sin
+que nadie la eligiera. **12 sitios en 6 pantallas**: inventario ×4, catálogo ×2, tipo y
+estado manual del proyecto (⚠️ el estado manual podía **des-archivar** una obra), estado
+de una localización, rol y empresa de un usuario, y color de un trabajo.
+⚠️ **El de Usuarios era el peor**: `_rcur = u.get("Role") or "campo"` — y `"campo"` es
+español desde v469, así que **no está en `ROLES`**: un usuario sin rol salía con
+**owner preseleccionado**, y un «Apply role» distraído lo convertía en propietario.
+
+`ui_common.opciones_con_actual(opciones, actual)` es la definición única: el valor actual
+se **antepone** y queda seleccionado, así que guardar sin tocar ese campo conserva lo que
+había. Un vacío no se antepone (no hay dato que proteger). ⚠️ **No muta la lista**: son
+constantes de módulo, y anteponerles un valor las cambiaría para toda la app hasta
+reiniciar el proceso.
+⚠️ En el color hacía falta además tocar el **guardado**: hacía `_colmap[_cn]`, y con un
+color que no es un nombre de la paleta eso lanza `KeyError` y el formulario no guardaría.
+
+### Tres fallos de método míos, los tres cazados por las propias redes
+1. **El primer barrido de búsquedas dio 173 sitios y 171 eran sanos**: `usuario`,
+   `proyecto`, `entrada`, `pendiente`… son valores viejos **y** claves internas de
+   diccionarios que la propia app construye. El discriminador que sí funciona: la clave
+   buscada **no la mete a mano nadie**, así que solo puede venir de los DATOS, que llegan
+   canonizados. Validado contra el fallo construido **y** contra una clave interna sana.
+2. **Los nombres de las 5 funciones exentas los supuse, y 4 no existían.** Lo cazó la
+   comprobación de «exentos que siguen existiendo» del propio guardián — sin ella, una
+   lista de exenciones mal escrita no exime nada y nadie se entera (v135 otra vez).
+3. **Un `AttributeError` al ejecutar la pantalla parecía de la app** y era de mi
+   `st.dataframe` sustituido, que devuelve `None`. Se comprobó re-ejecutando sin el
+   sustituto antes de concluir nada.
+
+### Verificación
+`verif_v469` gana el bloque 10 (búsquedas y escrituras, con la red validada contra el
+caso construido); `verif_v487` el patrón en todo el repo con **exentos por (fichero,
+FUNCIÓN)** y razón escrita (idioma de sesión, días del tablero, posiciones de
+cabecera); `check_v487_smoke` **ejecuta** las KPIs y las dos fichas con valores fuera de
+la lista, con un CONTROL de que un valor de la lista no se duplica. Batería contra los
+**tres a la vez**: 10/10 roturas + CONTROL, con el verde de base primero.
+
+⚠️ La suite dio **1 rojo, caducado y no regresión**: `verif_v442` exigía el TEXTO literal `P.ESTADOS_MANUAL, format_func=_etq,` y ahora las opciones llegan por `_ems`. Reanclado al principio (el desplegable que guarda muestra la etiqueta con `format_func` y no traduce las opciones) — y ⚠️ **su primera versión dejaba pasar la rotura** porque miraba el NOMBRE `_ems` y no lo que se le asigna: hubo que resolver la variable, que es exactamente la lección de v471. Validado con 2 roturas + CONTROL.
+
+## FASE 2.3-A: conexión con Xero por API — conectar y mandar facturas (v488)
+
+El usuario creó su cuenta de Xero y decidió tres cosas: **tokens cifrados en el libro
+maestro**, **facturas primero**, y **los permisos de nómina desde la primera conexión**
+(así el parte de horas de 2.3-B no obliga a volver a autorizar).
+
+### Lo verificado en la documentación de Xero, no de memoria
+| | |
+|---|---|
+| OAuth | autorizar en `login.xero.com/identity/connect/authorize`, canjear en `identity.xero.com/connect/token` (Basic auth), y `GET api.xero.com/Connections?authEventId=` para saber QUÉ organización se autorizó |
+| ⚠️ Scopes | una app creada desde marzo de 2026 **solo** tiene los GRANULARES: facturas = `accounting.invoices`, **no** `accounting.transactions` — que la especificación OpenAPI de GitHub todavía lista. Se comprobó en su changelog antes de fijarlo |
+| Tokens | acceso 30 min; refresco **rota en cada uso** y caduca a los 60 días sin usarse |
+| Facturas | `PUT /Invoices` crea (no actualiza), acepta `Idempotency-Key`, `summarizeErrors=false` da un resultado por factura |
+| Enlace | `go.xero.com/app/{ShortCode}/invoicing/view/{InvoiceID}` — el formato del servidor MCP **oficial** de Xero; necesita el `ShortCode` de `GET /Organisation` |
+
+### Dónde viven los tokens: pestaña PROPIA en el maestro, no columnas de `Groups`
+`XeroConnections` (global en `SHEETS_GLOBALES`), con el paquete del token cifrado con
+**Fernet** (`XERO_TOKEN_KEY`). ⚠️ No en `Groups`, aunque era lo planeado: esa hoja se lee
+en CADA pantalla y se cachea para todos (v339), y el token rota cada media hora de uso —
+cada rotación invalidaría la caché de medio mundo— además de meter un token en una caché
+compartida. Esta pestaña se lee **fresca y solo cuando se usa Xero**, y la caché de
+pantalla (`_estados_cached`) **no lleva el token**.
+⚠️ Un lector de PANTALLA no crea la pestaña (`_ws(crear=False)`): la crea la primera
+conexión. Si la creara el estado de la pantalla, sería un «lector que escribe» (v145).
+
+### Las cinco cosas que fallarían en silencio, y cómo se cierran
+1. ⚠️ **El `state` va FIRMADO (HMAC)**, no guardado: la vuelta desde Xero llega en una
+   pestaña NUEVA, o sea en otra sesión de Streamlit, así que `session_state` no sirve para
+   comprobarlo. Lleva empresa + usuario + hora; una autorización de otro usuario o de otra
+   empresa no se canjea, y **no llega a llamar a Xero**.
+2. ⚠️ **El token de refresco ROTA**: dos sesiones refrescando a la vez perderían una
+   rotación. Cerrojo por empresa + token vigente en memoria del proceso (sin él, cada
+   llamada a la API releería la hoja). Probado con 4 hilos: **un solo refresco**. Y si
+   falla GUARDAR el token ya rotado, se queda en memoria y se persiste en la siguiente
+   llamada, en vez de perder la conexión.
+3. ⚠️ **No duplicar en Xero**: antes de crear, `GET /Invoices?InvoiceNumbers=`. Si el
+   número ya existe (venta viva; una BORRADA o una de PROVEEDOR no cuenta) se **enlaza**
+   en vez de crear otra. Y si esa comprobación **falla, no se envía nada**: crear a ciegas
+   es como aparecen dos facturas con el mismo número en la contabilidad del cliente.
+4. ⚠️ **Lo que llega a Xero suma al centavo lo mismo que la factura emitida**: importes
+   `Exclusive` y el impuesto de cada línea el REPARTIDO de v483 (`TaxAmount`), no el que
+   Xero recalcularía línea a línea (3,33 · 3,33 · 3,34 = 10,00, no 9,99).
+5. ⚠️ **Una definición de «factura repartida en líneas»**: `contable.documento_venta` la
+   usan el CSV Y la API. Si cada uno repartiera el impuesto o eligiera el contacto a su
+   manera, la misma factura llegaría con dos importes según por dónde entrara.
+   El CSV se comprobó **idéntico byte a byte** contra la versión anterior en 32
+   combinaciones (perfil × seguimiento × ABN × periodo × cuentas), con la prueba validada
+   contra una rotura (32/32 detectadas).
+
+### Lo que NO hace, a propósito
+- **No crea la CATEGORÍA de seguimiento** en Xero: admite solo dos activas y ocupar una
+  en la contabilidad del cliente no es cosa de COPEX. Crea las **opciones** que falten; si
+  la categoría no existe, las líneas van sin seguimiento y se dice.
+- **No manda una factura con un GST que no sea 10 %**: el código `OUTPUT` es «GST on
+  Income» al 10 %, y un `TaxAmount` de otro porcentaje es contabilidad torcida.
+- **No manda los cobros** (fase siguiente) ni el correo del contacto: Xero casa el
+  contacto por NOMBRE, y enviar el email a un contacto existente podría sobrescribirlo.
+- Borrador o aprobada lo decide la empresa (`AccountingJSON.xero_estado`), **borrador por
+  defecto**: que el contable apruebe en Xero lo que llega.
+
+### ⚠️ Un fallo real que cazó el propio guardián
+El payload mandaba la categoría de seguimiento con el nombre de COPEX («Project») aunque
+en la organización se llamara «project». Las opciones ya usaban el nombre exacto de Xero y
+la categoría no. Ahora `_seguimiento` devuelve también el nombre real.
+
+### Verificación
+`verif_v488.py`, **99 comprobaciones**, todo **ejecutando** con la red sustituida (nunca
+sale nada a Internet) y hojas falsas: el oráculo del CSV **escrito en el guardián** (huellas
+de la versión anterior; sacarlo de `git show HEAD` dejaría el chequeo vacío tras el commit,
+v484), state y cifrado, conectar, refresco/rotación/cerrojo, 401, envío completo con
+enlace/errores/429, `marcar_xero` con **1 lectura y 1 escritura** y sin escribir en una hoja
+vieja sin las columnas, desconectar **primero en Xero**, la caché sin token, las tres
+pantallas y la vuelta, y que **ni el client secret, ni los tokens, ni la clave aparecen en
+el log** (con la sonda comprobando que el log sí registra). Batería: **16/16 roturas +
+CONTROL**, con el verde de base confirmado antes.
+
+### Los dos rojos de la suite: CADUCADOS por la pestaña global nueva
+`verif_v465` exigía respaldo en `LEGADO` a toda hoja, y `XeroConnections` **nació en
+inglés** (el caso de `Library` en v472); `verif_v482` fija el conjunto EXACTO de globales
+para cazar que alguien **saque** una. Actualizados con la razón escrita — ⚠️ el segundo
+conserva la IGUALDAD y no pasa a «contiene», para que la próxima global también obligue a
+decidirlo — y **validados en las dos direcciones** tras reanclarlos: quitar `library` de
+las globales y dar a `xero.SHEET` un nombre viejo los siguen poniendo rojos. Suite:
+**126 verde · 0 rojo**.
+
+### Lo que falta para usarla (del usuario)
+Crear la app en `developer.xero.com` (tipo Web app) con la redirect URI **exacta** que
+enseña la pantalla, y poner en los Secrets del Cloud `XERO_CLIENT_ID`, `XERO_CLIENT_SECRET`,
+`XERO_TOKEN_KEY` (generada en local con `Fernet.generate_key()`, nunca pegada en el chat) y
+`XERO_REDIRECT_URI`. Conectar exige iniciar sesión en Xero, y eso lo hace el usuario.
+
+## Xero probado EN PRODUCCIÓN contra la Demo Company, y dos arreglos de pantalla (v489)
+
+### La prueba de punta a punta (15/09/2026)
+El usuario creó la app en `developer.xero.com`, puso los cuatro secretos y conectó. Antes de
+que pulsara nada se comprobó, **sin iniciar sesión**, que Xero aceptaba la configuración:
+el enlace de autorización mostraba «Log in to Xero **to continue to COPEX**» (con un client
+ID o una redirect URI mal, Xero da error antes del login).
+- ⚠️ **La primera conexión fue a la organización «COPEX»**, no a la Demo Company: es la que
+  nació con la cuenta. Se detectó **leyendo la fila guardada** antes de mandar nada, y el
+  usuario eligió reconectar a la Demo para no crear datos de prueba en una organización suya.
+- Conexión guardada verificada en SOLO LECTURA (gspread con scope `readonly`, nunca los
+  helpers de la app): pestaña en el MAESTRO, token en formato Fernet de 2.084 caracteres,
+  **sin ningún JWT en claro**, `ShortCode` recibido.
+- **Envío**: factura `0001` de 33,33 + 33,33 + 33,34 al 10 % → «1 invoice(s) sent to Xero»,
+  `XeroInvoiceID` y `XeroSentAt` guardados, y la hoja `Invoices` migró sola a 21 columnas.
+- ⚠️ **Sin duplicados, probado de verdad**: se borró la marca en COPEX y se reenvió → «already
+  in Xero with the same number and were linked», con **el MISMO InvoiceID** que el primer
+  envío. Es la protección que más importa y solo podía probarse contra un Xero real.
+- **El lado de Xero lo verificó el usuario** (yo no inicio sesión): borrador, contacto,
+  número, las tres líneas, cuenta 200, GST on Income, **GST 10,00 y total 110,00** — no el
+  9,99 que daría recalcular línea a línea. Y **el enlace directo** (`go.xero.com/app/
+  {ShortCode}/invoicing/view/{id}`) abrió la factura, que era lo único no verificable antes.
+- Limpieza con doble guarda (ID **y** marca «ZZ PRUEBA»): `cliente1` vuelve a 0 facturas y 0
+  clientes. `Auditoria` no se toca. El borrador de Xero lo borra el usuario (la Demo además
+  se reinicia cada 28 días).
+- ⚠️ **Queda SIN ejercitar en producción el refresco del token** (dura 30 min y la prueba
+  entera cupo dentro): ocurrirá en el primer envío pasado ese tiempo. Está cubierto por el
+  guardián con la red sustituida, pero no contra Xero.
+
+### ⚠️ 1. «Desconectar no desconecta» — y el botón funcionaba
+Era un desplegable **titulado «Disconnect Xero»** con una casilla y el botón dentro: el
+título parece el botón y solo abre el desplegable. El usuario lo pulsó y no pasaba nada.
+Antes de tocar código se comprobó en la hoja que **no se había escrito nada** (o sea, que no
+era un fallo a medias) y se reprodujo hasta el botón: funcionaba. Ahora es un **botón de
+verdad que pregunta** («Disconnect «X»?» con Yes, disconnect / Cancel). ⚠️ En el guardián,
+`c1.button(...)` es un método del CONTENEDOR y no pasa por `st.button`: sin simular también
+`st.columns`, el chequeo del «Yes, disconnect» habría pasado en vacío.
+
+### ⚠️ 2. «Ya están todas en Xero» a quien no tenía NINGUNA
+`_pendientes` devolvía solo la lista vacía, y un periodo sin facturas y uno con todas ya
+mandadas daban lo mismo. Visto en producción con `cliente1` vacío. Ahora cuenta también
+las enviables. ⚠️ La sonda del guardián dio primero un **rojo que no existía**: buscaba
+«already in Xero» y esa frase también está en el aviso de desconectar — se compara la frase
+ENTERA.
+
+### ⚠️ El rojo de la suite era un FALSO POSITIVO del guardián de v365
+Marcaba la pregunta «Disconnect X?» como un mensaje que muere en el `st.rerun()`. No muere:
+se pinta en cada pasada mientras la pregunta está abierta, y el rerun cuelga de un BOTÓN
+—justo la excepción que v367 le enseñó—. Pero `_test_es_widget` exigía que el receptor se
+llamara `st`, y el botón es `c1.button(...)`, de una columna. Se amplió el RECEPTOR (nunca
+la lista de widgets) y se validó en las dos direcciones: con un `st.success(msg)` metido
+antes de ese mismo rerun **lo sigue cazando**, y el código real pasa.
+
+### Verificación
+`verif_v488` pasa a **105 comprobaciones**, con los chequeos nuevos validados contra el
+comportamiento viejo (el texto engañoso vuelve a ponerlo rojo). Suite: **126 verde · 0 rojo**.
+
+## FASE 2.3-B: el parte de horas y las ausencias pagadas, a Xero Payroll AU (v490)
+
+Decisiones del usuario: **horas Y permisos** (las ausencias pagadas que COPEX ya aprueba
+van también), el parte llega en **borrador**, cada usuario se **empareja solo y se confirma**
+una vez, y un parte que ya existe se **actualiza solo si sigue en borrador**.
+`core/xero_nomina.py` + `xero_ui.render_partes_xero`, dentro de «Timesheet for payroll».
+
+### ⚠️ Lo que la especificación de Xero obligó a cambiar respecto al parte de v484
+Leída la especificación OpenAPI oficial de Payroll AU antes de escribir nada:
+1. **Las ausencias NO van en el parte.** Una línea de parte solo admite un *EarningsRate*;
+   vacaciones y bajas son *LeaveTypes* y se registran como *LeaveApplications*, que creadas
+   por la API quedan **programadas** (aprobadas para pagarse). El CSV de v484 las ponía como
+   líneas — el diseño «cada fila es una línea de allí» era verdad solo para las horas.
+2. **El periodo no es libre**: las fechas del parte tienen que ser EXACTAMENTE un periodo del
+   calendario de nómina del empleado, o Xero lo rechaza. El periodo sale de `PayrollCalendars`
+   (su `StartDate` es el inicio del PRÓXIMO periodo; los anteriores se cuentan hacia atrás) y
+   se valida antes de llamar a nada. Un tipo que no se sabe calcular devuelve [] en vez de
+   inventar fechas.
+3. **Un empleado de Xero AU no tiene número**, solo nombre y email. El emparejado se guarda en
+   `AccountingJSON.xero_empleados` **atado a la ORGANIZACIÓN** (`tenant`): si se reconecta a
+   otra, deja de valer solo en vez de pagar a quien no es.
+
+### Las reglas que fallarían en silencio
+- **Una definición de «qué se paga»**: las horas salen de `contable.partes`, la misma función
+  del CSV (jornada fichada + `ausencias.horas_pagadas_dia`, el criterio de v432).
+- La hora ordinaria usa el **`OrdinaryEarningsRateID` de cada empleado**, no un nombre.
+- `NumberOfUnits` = **una entrada por día del periodo y en orden**, con 0 donde no hay horas.
+- Fechas en `/Date(ms+0000)/` a **medianoche UTC**: con la hora local el día se correría.
+- Los permisos llevan las **horas explícitas** (`LeavePeriods`): sin ellas Xero usa la jornada
+  tipo del empleado, y COPEX ya recortó lo que se paga en un día con fichaje (v432). Van en
+  **tramos de días seguidos**: un permiso de viernes a lunes contaría el fin de semana.
+- **Emparejado**: primero por email, luego por nombre, y **solo parejas únicas** (homónimos o
+  email repetido: no se propone nada — adivinar paga las horas de otro). Guardar se bloquea si
+  dos personas apuntan al mismo empleado. El valor guardado se **antepone** si el empleado ya
+  no está activo (`ui.opciones_con_actual`, v487), en vez de pisarlo en silencio.
+- **No duplicar**: se buscan los partes del empleado **recorriendo TODAS las páginas** (con
+  más de 100 partes, el del periodo puede estar en la segunda); borrador → se actualiza con su
+  `TimesheetID`; aprobado o procesado → no se toca y se dice; y **si no se puede comprobar, no
+  se crea**. Un permiso que se solapa con uno igual ya en Xero no se reenvía.
+- Se manda solo a quien está emparejado, activo y **en ese calendario**; los demás se nombran.
+
+### Tres cosas en `xero.py` que también sirven a las facturas
+- **Ritmo**: `_espera_cupo` no deja pasar de 55 llamadas/min por organización. El parte de un
+  equipo son ~4 llamadas por persona: con 15 personas Xero respondía 429 a mitad del envío,
+  dejando a unos con parte y a otros sin él.
+- Un **429 con espera corta** (≤ 20 s) se reintenta una vez; uno largo se devuelve.
+- `mensajes_error` lee los errores **dentro de cada objeto** (`Timesheets[i].ValidationErrors`),
+  que es donde los pone Payroll AU; sin eso el aviso decía solo «A validation exception occurred».
+
+### Verificación
+`verif_v490.py`, **56 comprobaciones**, todo ejecutando con Xero sustituido: fechas (incluido
+el ejemplo oficial de la especificación), los seis tipos de calendario, el emparejado, el
+parte y los permisos, **el envío en todas sus ramas** (crear, actualizar borrador, no tocar
+aprobado, no crear sin comprobar, página 2, otro calendario, sin emparejar, empleado de baja,
+permiso ya existente, error de validación, tipo de permiso inexistente), ritmo, 429 y la
+pantalla. ⚠️ Una sonda dio un **rojo que no existía**: buscaba «Earnings rate names» como
+texto y lo encontraba en el comentario que explica el cambio — pasada a AST. Batería:
+**15/15 roturas + CONTROL**, con el verde de base primero.
+
+### ⚠️ El único rojo de la suite era un FALSO POSITIVO del guardián de v433
+`verif_v430` (bloque 14) marcaba `xero_nomina._DIAS_TIPO = {"WEEKLY": 7, ...}` como un mapa
+de columnas escrito a mano: su criterio era «dict de 3+ textos → enteros», y los días de un
+periodo de nómina tienen esa forma sin ser columnas. Se miró el código acusado antes de tocar
+nada (regla v385) y el guardián se afinó, no se relajó: un mapa de columnas es uno cuyas
+CLAVES son CABECERAS, y el conjunto se **deriva** de todos los `*_HEADERS` del repo más los
+nombres viejos y nuevos de `columnas.LEGADO`. Validado en las dos direcciones: caza el `_COL`
+de v433 construido **y** una rotura real metida en el árbol, y no marca los días de nómina.
+Suite: **126 verde** + ese rojo corregido y re-verificado.
+
+## El parte de horas a Xero Payroll, probado EN PRODUCCIÓN contra la Demo Company (v491)
+
+Solo documentación: v490 verificada de punta a punta el 16/09/2026, con el usuario
+confirmando antes de mandar nada y verificando él mismo el lado de Xero.
+
+### Lo que se vio en producción
+- El bloque «Send to Xero Payroll» **lee en vivo** la Demo Company: 6 empleados (con su
+  email) y los calendarios de nómina, con el periodo quincenal **15–28 sep 2026** propuesto.
+- Datos de prueba en `cliente1`: una jornada de 8 h de «helper 2» el martes 15/09 y unas
+  vacaciones aprobadas el jueves 17/09 (`AUS-0001`). Emparejado a mano con **Oliver Gray**.
+- La vista previa dijo `8.00 h · Annual Leave 8 h · will be sent` — ⚠️ y ese «will be sent»
+  **comprueba el calendario del empleado** (`PayrollCalendarID`), así que ya decía que
+  Oliver Gray está en el quincenal antes de enviar.
+- **1.er envío**: «1 timesheet(s) created, 0 updated, 1 leave application(s) created».
+- ⚠️ **2.º envío, lo mismo otra vez**: «0 created, **1 updated**, 0 leave» + «Annual Leave
+  17/09–17/09 was already in Xero». Las dos protecciones contra duplicados —actualizar el
+  borrador y no repetir el permiso— solo podían probarse contra un Xero real.
+- **El usuario lo verificó en Xero**: un solo parte en borrador, las 8 h en el día correcto
+  y el permiso de 8 h.
+
+### ⚠️ La guarda de la limpieza saltó, y con razón
+`Groups.AccountingJSON` de `cliente1` estaba **vacío** antes de la prueba y después traía
+la configuración contable ENTERA: `guardar_emparejado` escribe `contable.mapa()` —los valores
+de fábrica fusionados— más el emparejado. Antes de devolverlo a vacío se comprobó que todo lo
+demás era **exactamente** lo de fábrica (si hubiera algo configurado por alguien, borrarlo lo
+perdería). ⚠️ Consecuencia anotada, no corregida: guardar el emparejado **congela** los valores
+de fábrica en ese grupo, así que un cambio futuro de un valor por defecto en el código no le
+llegaría. Es el mismo comportamiento que ya tenía el editor del plan de cuentas (v483).
+
+### Limpieza
+Con doble guarda (usuario + horas exactas; ID + marca «ZZ PRUEBA») y foto antes/después en
+SOLO LECTURA: la jornada, `AUS-0001` y el emparejado fuera — **las 9 comprobaciones idénticas**.
+`Auditoria` no se toca. El parte y el permiso de Xero los borra el usuario (la Demo se reinicia).
+
+### ⚠️ Una trampa de método, otra vez
+Un clic sobre un `ref` viejo (`ref_292`) cayó en otro sitio tras un rerun. No cambió nada —se
+comprobó leyendo el valor de TODOS los desplegables antes de seguir—, pero es la regla de
+v431: tras un rerun los `ref` y las coordenadas caducan; se vuelven a buscar.
+
+## Los ajustes contables se guardan por CLAVES, no volcando `mapa()` entero (v492)
+
+Pedido por el usuario tras verlo en la limpieza de v491: «que guarde solo el emparejado».
+
+### El fallo
+`contable.mapa(grupo)` devuelve lo guardado **ya FUSIONADO con los valores de fábrica**, y
+los cuatro escritores del ajuste (`xero_nomina.guardar_emparejado`, el radio de estado de
+envío de `xero_ui`, y los editores de cuentas y de nombres de nómina de `contable_ui`) lo
+modificaban y lo escribían ENTERO con `guardar_mapa`. Así, guardar un emparejado con Xero
+**congelaba en el grupo todos los valores por defecto** —cuentas, nombres de nómina, moneda,
+categoría de seguimiento—, y un cambio futuro de un valor de fábrica en el código ya no le
+llegaba, sin avisar. En producción: `AccountingJSON` de `cliente1` estaba vacío y salió lleno.
+
+### El arreglo: `contable.guardar_claves(grupo, cambios)`
+- Escribe **solo las claves que se tocan** y conserva todo lo demás guardado.
+- Una clave cuyo valor es un dict se **fusiona UN nivel**: guardar las cuentas de Xero no
+  borra las de MYOB. Un nivel y no más, a propósito: el `map` del emparejado se SUSTITUYE,
+  así que quitar a una persona la quita de verdad en vez de acumularse.
+- ⚠️ Lee lo guardado **FRESCO** (`auth.group_text_setting_fresco`), no de la caché: decide
+  qué se escribe, y fusionar sobre algo de hace 120 s perdería lo que otra sesión acaba de
+  guardar (v323).
+- ⚠️ Si **no puede leer**, NO escribe y lo dice. Tratar un fallo de lectura como «vacío» y
+  escribir solo lo nuevo borraría todo lo que había — es el caso que la lectura fresca
+  **lanza** en vez de devolver el valor por defecto.
+- Un JSON ilegible (que ya nadie podía leer) se reemplaza, dejando rastro en el log.
+- `guardar_mapa` **se elimina**: con cuatro escritores volcando el mismo diccionario, el
+  quinto habría vuelto a hacerlo.
+- `auth._grupo_fresco` es la **única** búsqueda de la fila del grupo, compartida por quien lee
+  para escribir y por `set_group_setting`: si divergieran, se leería una fila y se escribiría
+  en otra.
+
+### Verificación
+`verif_v492.py`, **28 comprobaciones**, ejecutando `guardar_claves` contra una hoja falsa
+(desde vacío, conservar MYOB, quitar un emparejado, no leer de la caché, no escribir si falla
+la lectura, JSON ilegible) + estático (nadie vuelca `mapa()`, solo `contable.py` escribe
+`AccountingJSON`, con la sonda validada contra un volcado construido). Batería: **8/8 roturas
++ CONTROL**, ⚠️ y esta vez **leyendo qué comprobación falla en cada una**: un guardián que
+revienta también «caza» todas las roturas (v459/v463), así que el 8/8 solo vale con el
+motivo a la vista. **Contra la hoja real**: guardar el emparejado dejó en `AccountingJSON`
+solo `xero_empleados`, otra clave lo conservó, y se devolvió exactamente a vacío.
+Suite: **128 verde · 0 rojo · 0 roto**.
+
+## v492 verificado EN PRODUCCIÓN — tras reiniciar el proceso (v493)
+
+Solo documentación. La primera comprobación en producción **falló, y con razón**: con la
+pestaña y la barra lateral diciendo **v492**, «Save matches» volvió a escribir la configuración
+contable ENTERA — el comportamiento de v490. El commit desplegado era el bueno (verificado);
+lo que corría no: Streamlit Cloud recargó `app.py` y conservó los `core.*` viejos, y el
+topbar (`home_ui._VERSION`, congelado al importar) seguía en **v489**. Es «desplegado ≠
+corriendo» (v334 → v408 → v452 → v459) por quinta vez, y otra vez lo delató **mirar el CAMBIO**
+—leer la hoja en solo lectura tras pulsar el botón—, no el número de versión.
+Tras el **Reboot app** (lo hizo el usuario): topbar v492 y el mismo clic dejó en
+`AccountingJSON` **solo** `{"xero_empleados": {...}}`. Las dos escrituras de prueba se devolvieron
+a vacío con guarda (la primera comprobando que el volcado era exactamente lo de fábrica).
+⚠️ Regla práctica que sale de aquí: **tras un deploy que toca `core/`, si el topbar no
+muestra la versión nueva, el código nuevo NO está corriendo** — la barra no confirma nada,
+pero una versión vieja en ella sí descarta; entonces hace falta reiniciar antes de verificar.
+
+## El refresco del token de Xero, por fin ejercitado contra Xero (v494)
+
+Solo documentación, y cierra un pendiente que arrastraban v488, v489 y v491: el token de
+acceso dura 30 minutos y la prueba de v489 cupo dentro, así que la rotación del refresco
+—cerrojo por empresa, token rotado que se persiste, y si falla guardarlo se conserva en
+memoria— estaba cubierta solo por el guardián con la red sustituida.
+**Evidencia, leída en SOLO LECTURA de `XeroConnections`** (sin tocar la columna del token):
+`ConnectedAt 2026-09-15 17:56:50` · `RefreshedAt 2026-09-16 05:49:25`, o sea **12 horas
+después** — el envío del parte de hoy pidió un token nuevo a Xero, lo consiguió y **persistió
+la rotación**. Con eso, si la rotación no se hubiera guardado, el envío siguiente habría
+fallado con 401: no falló. `Status` sigue `connected` y el token guardado sigue en formato
+Fernet (2.084 caracteres, ningún JWT en claro).
+
+## FASE 2.3-C: lo cobrado en Xero entra en COPEX (v495)
+
+Decisiones del usuario: **el cobro lo registra el contable EN XERO**, se trae con un
+**botón**, las facturas **siguen saliendo en borrador** (y se avisa de las que por eso no
+pueden recibir un pago), y si el importe no cuadra **manda Xero** y se avisa.
+`xero.traer_cobros` + `invoices.sincronizar_cobros` + el botón en Finanzas → Accounting.
+
+### El problema que cierra
+Las facturas salían a Xero desde v488, pero el **cobro** no viajaba: si el contable
+conciliaba el banco en Xero, COPEX seguía diciendo que la factura estaba por cobrar. Dos
+pantallas del mismo dinero diciendo cosas distintas, y la que se usa para perseguir a un
+cliente es la de COPEX.
+
+### ⚠️ Lo que la especificación decidió del diseño
+Leída antes de escribir nada (`Invoice` de la Accounting API):
+1. **`AmountPaid` es la cifra**, no `GET /Payments`: el resumen de la lista de facturas ya
+   la trae, así que un lote de 40 IDs cuesta UNA llamada, y es lo que Xero mantiene al
+   conciliar. (`Payments` solo viene al pedir una factura suelta.)
+2. **`AmountCredited` NO se suma.** Son notas de crédito, anticipos y sobrepagos: reducen
+   lo que se debe, pero **no son dinero recibido**. Sumarlo diría «cobrado» de algo que
+   nadie pagó, así que se AVISA aparte.
+3. **Los estados son seis** (`DRAFT · SUBMITTED · DELETED · AUTHORISED · PAID · VOIDED`),
+   y ahí está el fallo que habría sido silencioso: **una factura en borrador tiene
+   `AmountPaid = 0`**, así que sincronizar desde ella **pondría a cero un cobro real
+   apuntado en COPEX**. Solo se lee de `AUTHORISED` y `PAID`; del borrador se avisa
+   («así no va a llegar ningún cobro: tu contable las aprueba en Xero») y de una
+   `VOIDED`/`DELETED` no se toca nada aquí.
+
+### Las otras reglas que fallarían en silencio
+- **Idempotente**: se FIJA el valor, no se suma, así que pulsar el botón dos veces no
+  cobra dos veces; y si no cambia nada, no se apunta línea en el historial ni se escribe.
+- El historial guarda el **movimiento** con su **origen** (`xero`), y puede ser
+  **negativo** si en Xero se deshizo un pago: así se distingue de lo apuntado a mano.
+- ⚠️ **Un fallo de red no acusa a nadie**: si la llamada falla, las facturas NO se marcan
+  como «no encontradas en Xero» (que se lee como «las borraron allí») y no se escribe nada.
+- **Una lectura fresca y UNA escritura** para todo el lote (`_find_row` por factura serían
+  N lecturas contra el techo de 60/min, v339), y la columna se busca por su NOMBRE.
+- **Una sola definición del parser de fechas de Xero**: `de_ms` vivía en `xero_nomina`
+  (v490) y ahora la necesita también el cobrado, así que sube a `xero.de_fecha` y la de
+  nómina DELEGA. Dos parsers de la misma fecha es como empiezan las divergencias de v323.
+
+### Verificación
+`verif_v495.py`, **33 comprobaciones**, todo ejecutando con Xero y la hoja sustituidos:
+el caso normal, la segunda pasada, borrador y enviada-para-aprobar, anulada en Xero, nota
+de crédito, el descuadre en contra (Xero manda y el historial guarda el negativo), lo que
+NO se consulta, el fallo de red, el troceado en 2 llamadas para 45 facturas, las guardas de
+`sincronizar_cobros` y la pantalla EJECUTADA con sus siete casos. Batería: **11/11 roturas
++ CONTROL**, con el motivo de cada una a la vista.
+⚠️ **Tres roturas se escaparon en la primera tanda**, y solo una era un agujero del código:
+(1) quitar el `continue` del borrador lo frenaba la guarda siguiente —el código tiene doble
+defensa, así que **la rotura no era un fallo** y se reescribió al fallo REAL (que el
+borrador cuente como cobrable); (2) mi hoja falsa **excluía las anuladas**, o sea que hacía
+el trabajo que el código debe hacer y su guarda quedaba sin probar (v309/v310: un mock que
+hace lo que auditas garantiza un OK falso); y (3) la delegación del parser se comprobaba
+buscando «de_fecha» **como texto**, y eso aparece en el comentario de la función — pasada a
+la LLAMADA por AST (trampa nº2, otra vez dentro de un guardián).
+Suite entera: **129 verde · 0 rojo · 0 roto**.
+
+## Los cobros de Xero, probados EN PRODUCCIÓN contra la Demo Company (v496)
+
+Solo documentación. Prueba de punta a punta del 16/09/2026, con el usuario aprobando y
+pagando en Xero (yo no entro en su contabilidad) y confirmando cada paso.
+
+| Momento | Xero | COPEX tras pulsar el botón |
+|---|---|---|
+| aprobada, sin pagos | 0 | por cobrar 110 |
+| pago de **40** | 40 | **parcial**, cobrado 40 |
+| pago de **70** | 110 · *Amount due 0* | **cobrada**, cobrado 110 |
+
+El historial guardó los **dos movimientos por separado** (40 y 70) con `origen: xero`, el
+estado de cuenta del cliente quedó en pendiente 0 y el P&L en cobrado 110 · por cobrar 0.
+Pulsar sin novedades responde «ya cuadraba» y **no escribe** nada.
+- ⚠️ Al mandar la factura, la protección de duplicados de v488 la **enlazó** con la `0001`
+  que la prueba de v489 había dejado en la Demo (mismo número y mismo total). Es la
+  protección funcionando; para la prueba se renumeró a `V495-0001` y se reenvió.
+- ⚠️ **«Desplegado ≠ corriendo» por sexta vez**: tras el deploy el botón no aparecía (los
+  `core.*` viejos seguían en memoria) y hubo que reiniciar el proceso.
+
+### ⚠️ EL ERROR DE MÉTODO: leí el MENSAJE en vez del DATO
+Tras el pago de 70 la pantalla decía «1 invoice(s) already matched Xero», así que **afirmé
+que Xero había devuelto 40** y le pedí al usuario que revisara su contabilidad — cuando el
+trabajo ya estaba hecho: la hoja tenía **110 y las dos líneas del historial**. Lo que leí
+era el mensaje de la pasada anterior (el `flash` se pinta en el rerun siguiente, v365), y
+lo di por evidencia sin mirar la hoja, que estaba a un comando de distancia.
+**REGLA: el mensaje en pantalla NO es el dato.** Para afirmar qué pasó con un registro se
+lee el registro; el texto de la interfaz sirve para ver qué se le dice al usuario, no para
+saber qué se guardó. Es la familia de la sonda mal apuntada de v375, pero al revés: aquí la
+sonda leía bien… otra cosa.
+
+### Limpieza
+Factura y cliente de prueba borrados con doble guarda (ID **y** marca «ZZ PRUEBA v495» **y**
+número): `Invoices` y `Clients` vuelven a 0 filas. En Xero quedan la factura pagada, la de
+v489 y el parte y permiso de v491: los borra el usuario o se van con el reinicio de la Demo.
+
+## El emparejado con Xero dice POR QUÉ, y se aplica de una vez (v497)
+
+El usuario preguntó cómo automatizar el emparejado de personas con empleados de Xero.
+⚠️ **Al mirar el código, la mitad de lo que pedía YA estaba**: `propuesta` empareja sola
+(por correo y, si no, por nombre, solo parejas únicas) y cada desplegable **viene
+preseleccionado** con ella, así que basta con «Save matches». Decirlo y no construir un
+botón que repite lo que ya hace la app es parte del trabajo (v146: dos mecanismos para lo
+mismo envejecen mal). Lo que de verdad faltaba era otra cosa:
+
+1. **Por qué alguien se queda sin pareja.** Un «— not in Xero —» mudo manda a buscar el
+   problema a Xero, y **casi siempre lo que falta está en COPEX**: el correo de esa
+   persona. `propuesta_detallada` devuelve, por cada uno, la pareja **y su motivo**:
+   `sin_email` · `no_esta` · `email_repetido` · `nombre_repetido` · `mismo_empleado`.
+   La pantalla los cuenta («2 by email · 1 by name») y lista los que no, con su motivo.
+2. **Volver a aplicar las propuestas** («Fill in the N proposed matches»), que es lo único
+   que el valor por defecto no puede hacer: recuperar las filas que alguien dejó a mano en
+   «— not in Xero —».
+
+### Las reglas que fallarían en silencio
+- ⚠️ El relleno escribe **claves de widget**, así que va por BANDERA y ocurre en la pasada
+  siguiente (regla v111): hacerlo al pulsar revienta.
+- **No pisa** lo que el administrador eligió, y **no pone al mismo empleado en dos
+  personas** — eso paga las horas de una a otra. La protección que manda sigue siendo la de
+  v490: si dos filas acaban en el mismo empleado, se avisa y **Guardar queda deshabilitado**.
+- `propuesta` **DELEGA** en `propuesta_detallada`: una sola definición de cómo se empareja
+  (v323), y el guardián comprueba que no vuelva a tener lógica propia.
+- ⚠️ **Con el correo repetido se intenta el NOMBRE**, y si ese es único la pareja vale: la
+  regla es «solo parejas únicas», no «solo por correo». Costó una comprobación mal escrita
+  darse cuenta de que el código tenía razón y la prueba no.
+
+### Verificación
+`verif_v497.py`, **24 comprobaciones**, con la pantalla EJECUTADA (Streamlit sustituido):
+los cinco motivos, el recuento, el botón, el relleno en la pasada siguiente, que no pisa ni
+duplica, y por AST que la bandera se lee ANTES del primer desplegable. Batería: **8/8
+roturas + CONTROL**.
+⚠️ **Una rotura se escapó y enseñó algo**: desactivé el relleno entero y el guardián siguió
+verde, porque **el desplegable ya trae la propuesta por defecto** y mi caso lo medía así. El
+único caso que el botón resuelve —y el único que lo demuestra— es una fila que alguien dejó
+en «— not in Xero —». Es la lección de siempre: una comprobación que puede pasar por otro
+camino no comprueba lo que dice.
+Suite entera: **130 verde · 0 rojo · 0 roto**.
+
+## ⚠️ EL TIPO DE CREDENCIAL SE GUARDABA COMO LA FUNCIÓN DE TRADUCCIÓN (v498)
+
+Lo reportó el usuario: «en los tipos de credenciales sale un texto que no corresponde».
+En la hoja, las dos credenciales cargadas tenían como tipo **`<function t at 0x…>`**.
+
+```python
+ok, msg = C.add(usuario, grupo, t, num, clase, ...)   # ← `t` es la FUNCIÓN de i18n
+_tp = tipo_otro.strip() if (_es_otro and tipo_otro.strip()) else tipo   # ← esto es el tipo
+```
+
+### Por qué vivió tanto, y por qué mis pruebas no lo vieron
+- `git log -S` lo data en **v104**, cuando la variable del tipo se llamaba `t` y la llamada
+  era correcta. **v189** la renombró a `tipo` (y añadió `_tp`), y la llamada se quedó con
+  `t`; entonces `t` no existía en `auth_ui`, así que habría sido `NameError`. Cuando
+  **v445** metió `from core.i18n import t`, ese nombre volvió a resolver — pero a la
+  FUNCIÓN. Desde ahí, guardar una credencial escribe la función como tipo, en silencio.
+- ⚠️ **En v350 ejercité `credentials.add` y pasó**, porque el fallo no está en la función
+  sino en **lo que la pantalla le pasa**. Es la lección de v452 con un caso caro: el
+  inventario de «75 de 75 escrituras ejercitadas» medía las FUNCIONES; el formulario es
+  otra cosa. Por eso el guardián de v498 **ejecuta el formulario** y mira qué recibe `add`.
+- Y `str(tipo)` de una función **no está vacío**, así que la guarda del backend
+  («el tipo es obligatorio») la dejaba pasar tan campante.
+
+### Lo arreglado
+1. El formulario manda `_tp` — el tipo elegido, o lo escrito en «Specify the type».
+2. `credentials.add` exige que el tipo sea **TEXTO** (`isinstance(tipo, str)`), y lo
+   comprueba **antes de abrir la hoja**: un dato inválido no merece una llamada a Sheets.
+3. ⚠️ Chequeo nuevo y GENERAL: **ninguna llamada del repo puede pasar `t` como argumento
+   de datos**. Barrido: 5 candidatos, 3 legítimos (`format_func=t`) y 2 que eran variables
+   de comprensión — ⚠️ la comprensión tiene ÁMBITO PROPIO (trampa nº3), así que la sonda
+   lo contempla; aun así esas dos se renombraron a `_c`, porque usar el nombre `t` para
+   otra cosa es pedir el accidente de v447 (donde tapó `t` y **dejó de restar las
+   deducciones del neto**).
+4. De paso: el aviso de certificados al asignar pintaba «falta» y «vencido» **en español**
+   dentro de una f-string. Ahora se traducen al pintar; ⚠️ el literal `'falta'` SIGUE en la
+   comparación, porque ahí es el DATO (v442).
+
+### Verificación
+`verif_v498.py`, **14 comprobaciones**: el formulario EJECUTADO (tipo normal, «Other» con
+texto y «Other» sin texto), la guarda del backend en cuatro formas (función, None, número,
+espacios), el barrido del repo **con la sonda validada contra el fallo real reconstruido**
+(trampa nº12) y el aviso de certificados. Batería: **4/4 roturas + CONTROL**, incluida la
+rotura que reintroduce el fallo exacto del usuario. Suite entera: **131 verde · 0 rojo**.
+
+⚠️ **Las dos credenciales ya guardadas no se tocan por mi cuenta**: el tipo correcto lo sabe
+el usuario, y escribir uno inventado en un registro de seguridad es peor que dejarlo roto a
+la vista. Se le preguntó cuál era cada una.
+
+## PLAN CON DEPENDENCIAS: las actividades se encadenan (v499)
+
+Petición del usuario: *«vamos a trabajar en la Gestión de instalación, que me dices que
+estamos atrás en profundidad y en integraciones»*. Decisiones suyas: **plan con
+dependencias**, **con desfase en días** y **el fin previsto se recalcula de la cadena**.
+
+Hasta v498 el cronograma era una **CADENA RÍGIDA**: `build_schedule` acumulaba `cur += dur`,
+así que cada actividad empezaba justo cuando terminaba la anterior. Eso no es un plan de
+obra — las puertas de rellano y el cableado se solapan, y el atraso de los rieles no
+arrastraba nada porque no había nada que arrastrar.
+
+### `core/plan.py`: el cálculo, y SOLO el cálculo
+Funciones puras, sin Streamlit ni Sheets, para poder ejercitarlo entero (v378: importar no
+ejecuta). Columna `Predecessors` de cada actividad:
+
+| | |
+|---|---|
+| **vacío** | detrás de la ANTERIOR — ⚠️ es lo que hacía la app hasta v498, así que **una obra que ya existe se comporta EXACTAMENTE igual** hasta que alguien la edite |
+| **`-`** | sin predecesora: empieza el día 0, en paralelo |
+| **`3` · `3+2` · `3-1`** | detrás de la nº 3; `+2` espera dos días, `-1` la solapa uno |
+| **`3;5-2`** | detrás de varias: manda la que la deje empezar MÁS TARDE |
+
+Y la **ruta crítica** sale sola (las que no tienen holgura): el Gantt les pinta el borde
+rojo, que es la información que el cronograma nunca daba — atrasar ESAS atrasa la entrega.
+
+⚠️ **Un plan mal encadenado tiene que seguir dibujándose**, que es lo que permite verlo para
+arreglarlo: un **ciclo** (A detrás de B y B detrás de A) colgaría el cálculo, así que se
+detecta, esa actividad pasa a ir detrás de la anterior y se avisa; una **predecesora que no
+existe** (se borró) se ignora con aviso, en vez de dar por bueno un plan que empieza el día 0.
+
+### ⚠️ Lo que rompe en silencio: reordenar
+Las predecesoras se refieren al **número de orden**, que es como la hoja identifica cada fila
+(ProjectID + Order). Así que reordenar el cronograma haría que «detrás de la 3» pasara a
+apuntar a **otra actividad sin que nada avise** — la peor forma de equivocar un plan.
+`plan.remapear` reescribe las referencias con el mapa viejo→nuevo, y `limpiar_predecesoras`
+las suelta al borrar una actividad.
+
+### ⚠️ EL FALLO QUE CAZÓ EL GUARDIÁN: el mapa salía de los `edits`
+```python
+mapa = {int(e["orden0"]): int(e["Order"]) for e in edits}   # ← solo lo que el llamador manda
+```
+Hoy el único llamador manda **la tabla completa**, así que el mapa está completo y el fallo
+es LATENTE. Pero un guardado **parcial** —que es el patrón de `save_field_progress` (v162) y
+lo natural para ahorrar cuota— dejaría fuera del mapa a las filas no tocadas y `remapear` las
+**tiraría de la lista**: el plan entero reescrito, sin ningún error. Ahora el mapa se
+construye con **TODAS las actividades de la obra** y los `edits` solo SOBRESCRIBEN, así que
+una lista parcial ya no puede borrar nada. Es el criterio de v487 (`opciones_con_actual`) y
+v492 (`guardar_claves`): **lo que no se toca, se conserva** — la función no puede depender de
+que el llamador se acuerde.
+
+### ⚠️ Y DOS KeyError VIVOS desde v468, encontrados al extender la sonda de v471
+`verif_v471` comprueba que una tabla editable se lea por la CLAVE del cuadro y no por la
+etiqueta. Extendida para seguir **un nivel de alias** (`r = _ed.iloc[i]`) aparecieron dos que
+no veía:
+
+| Dónde | Qué pasaba |
+|---|---|
+| **«Save activity table»** (admin) | `r["Weight"]` y `r["Order"]` con la fila en `"Peso"`/`"Orden"` |
+| **«Save progress»** (campo) | `r["Note"]` con la fila en `"Nota"` |
+
+Los dos **revientan el guardado entero**, y el segundo es la escritura más usada de la app.
+`git log -S` los data en **v468**: la migración de columnas a inglés renombró **la LECTURA y
+no la clave del cuadro** — exactamente la familia que v471 documentó y arregló en 5 sitios,
+con estos dos escapándosele por el hueco del alias.
+
+### ⚠️ Mi oráculo escrito DE MEMORIA dio dos rojos que no existían
+El guardián comprueba que un cronograma **sin dependencias** salga como hasta v498 (si se
+moviera, cambiarían las fechas de todas las obras existentes sin que nadie lo pidiera). Escribí
+los números de memoria y dos estaban mal (NS=1 son **19** días, no 20; NS=12 con ripout son
+**50**, no 48), así que el guardián acusaba a un código correcto — y con un rojo de base, la
+tanda de roturas no habría probado nada (v459). El oráculo se sacó del **módulo de v498**
+(`git show HEAD:…/schedule.py`, ejecutado aparte) y se escribió LITERAL en el guardián:
+comparar la salida del código nuevo consigo misma no probaría nada (trampa nº1) y sacarlo de
+git DENTRO del guardián lo dejaría vacío en cuanto se hiciera el commit (v484).
+Resultado: **14 cronogramas (7 NS × ripout) idénticos**, y no solo en el total —dos
+cronogramas distintos pueden durar lo mismo— sino **actividad por actividad**: mismo nombre,
+mismo inicio, misma duración y mismo peso, **0 diferencias**.
+
+### ⚠️ El aviso que podría no salir NUNCA
+La pantalla saca los avisos con `project_schedule(pid)["sched"]["avisos_plan"]`. Si la FORMA
+del dato fuera otra, **no saldrían nunca y nada lo diría** — no hay error que atrapar, solo
+silencio (regla v135). El guardián compara la cadena de claves que usa la pantalla contra lo
+que la función DEVUELVE de verdad, por AST y **sin leer la hoja** (el techo son 60
+lecturas/min, v339), incluida la guarda del `None` de una obra recién creada.
+
+### Verificación
+`verif_v499.py`, **39 comprobaciones**, todo EJECUTANDO: el encadenado (desfase, solape,
+paralelo, ciclo, referencia rota, remapeo), el oráculo de los 14 cronogramas, la fila
+posicional contra su cabecera (v363), `save_activities` y `limpiar_predecesoras` con una hoja
+simulada —incluido el **guardado parcial**— y las dos tablas editables leídas por su clave.
+Batería: **13 roturas, 13 cazadas + CONTROL verde**, con el **verde de base confirmado antes**
+(v459) y **el motivo de cada rotura a la vista** (v492: un guardián que revienta también
+«caza» todo). ⚠️ En la primera pasada **2 de las 13 no probaron nada**: escribí anclas que no
+existían en `schedule.py`, y el propio informe lo dijo («ANCLA no única (0)») en vez de
+contarlas como cazadas.
+
+### ⚠️ Y la SUITE dio 2 rojos: uno mío y REAL, otro del guardián
+Correrla entera (v385) es lo que los destapó, y **ninguno era caducado**:
+- **`verif_v323` tenía razón**: `plan.py` definía un **`_num` LOCAL**. Hoy delegaba en
+  `core.num`, pero es la sexta copia local del concepto que v323 eliminó — y aquella tanda
+  encontró que **dos de las cinco divergencias eran fallos de dinero** (un importe con
+  separador de miles leído como $0). Se quita: `core.num` es módulo HOJA, así que importarlo
+  arriba no crea ningún ciclo con `schedule`. La regla no es «hoy da lo mismo», es que mañana
+  alguien le añade un default y vuelve la divergencia.
+- **`verif_v469` era un FALSO POSITIVO**, y del tipo que empuja a romper código sano: su sonda
+  comparaba **TEXTO por línea** (`"valores.canonizar" not in linea`), así que una llamada
+  **partida en dos líneas** —la de `limpiar_predecesoras`, que canoniza perfectamente— salía
+  denunciada. Es exactamente el fallo que **v472 ya corrigió en `verif_v468`**, en otro
+  guardián. Reescrita por AST sobre la SENTENCIA (`ast.unparse` normaliza la línea lógica
+  entera) y ⚠️ **auto-validada en las dos direcciones** antes de creerse su cero: tiene que
+  cazar la lectura cruda **y** no marcar la partida en dos líneas (trampa nº12).
+
+### Lo que NO entra, y por qué
+El **fin previsto y el retraso de toda la app** (cartera, KPIs, radar, curva S) siguen
+saliendo del ritmo/SPI, no de la cadena. Es lo que el usuario pidió («recalcular la cadena»)
+y toca cartera, agrupaciones y el radar del admin: va en su propia versión, con su guardián y
+su despliegue, en vez de colarlo al cierre de una que ya toca cuatro módulos.
+
+## EL FIN PREVISTO SALE DE LA CADENA, NO DEL RITMO (v500)
+
+Segunda mitad de lo que el usuario pidió en v499 («recalcular el fin previsto desde la
+cadena»), elegida por él tras una auditoría de los cuatro huecos que quedaban en gestión
+de instalación. v499 puso el encadenado; aquí es donde sirve para algo.
+
+Hasta ahora el fin previsto era **una regla de tres sobre el % de avance**
+(`fecha = inicio + total/SPI`), así que repartía el retraso entre todas las actividades
+por igual. Medido antes de tocar nada (v360), con casos construidos porque la demo tiene
+UNA obra y medir solo esa habría sido un paso en vacío:
+
+| Situación | El SPI decía | La CADENA dice |
+|---|---|---|
+| **50% de avance, pero la actividad que bloquea a las demás sin empezar** | **+0 d, «en plazo»** | **+10 d** |
+| todo al 25%, nada terminado | +20 d | +5 d |
+| día 15 de 20, solo la primera terminada | +40 d | +10 d |
+| **la obra REAL (`PRJ-0001`)** | **«—»: no podía calcularlo** | **04/10, +9 d, y qué actividades mandan** |
+
+O sea que el SPI o **no decía nada** (con avance 0 es una división por cero, justo cuando
+más importa saber que la obra no arranca), o **exageraba**, o —lo peor— **tranquilizaba
+cuando no debía**.
+
+### `plan.pronostico(acts, hoy)`: las tres reglas, que es donde está el dominio
+`calcular` responde «cuándo debería»; `pronostico` responde «cuándo va a ser».
+- **terminada** → su fecha es la REAL: ya no se mueve ni la mueve nadie;
+- **en curso** → le queda `duración × (1 − avance)`, y eso corre **desde HOY**;
+- **sin empezar** → arranca cuando sus predecesoras la dejen, ⚠️ **nunca antes de HOY**:
+  lo que tocaba el martes y no se hizo no se puede hacer el martes.
+
+Por eso el retraso **se propaga por la cadena** en vez de diluirse en un promedio — y por
+eso la obra también puede **adelantarse** si una actividad termina antes (probado: la
+cadena entera se recoge). Además dice **qué actividades mandan** en esa fecha, que es lo
+accionable: son las que hay que empujar para recuperar.
+
+### ⚠️ UNA sola respuesta a «cuándo termina»
+`fecha_proj`/`proj_dias` (las del SPI) **se eliminan**, no se dejan al lado: dos
+definiciones del mismo número es exactamente lo que hizo que Rentabilidad y el detalle
+dieran dos ingresos distintos para la misma obra (v361) — mientras coinciden nadie lo
+nota, y el día que discrepan ya está en pantalla. El **SPI se conserva** porque responde
+otra pregunta (a qué ritmo se avanza), pero ya no produce una fecha.
+Y `_preparar` se extrae para que el plan y el pronóstico resuelvan las dependencias
+**igual**: si cada uno lo hiciera por su cuenta podrían discrepar sobre quién va detrás de
+quién, y eso no da ningún error — solo dos fechas que no cuadran (v323).
+
+### ⚠️ El consumidor que se me escapó, y que el guardián cazó
+Barrí los consumidores de `fecha_proj` **excluyendo `core/schedule.py`**, dando por hecho
+que ahí solo estaba la definición. No: **`schedule_svg` dibuja con ella la proyección del
+Gantt**, así que al retirar la clave la línea de proyección habría **desaparecido del
+gráfico sin dar ningún error**. Lo destapó el barrido del guardián —que sí mira el módulo
+entero—, no leer el código. El chequeo quedó: la proyección se dibuja, y con la fecha de
+la cadena.
+
+### ⚠️ Y TRES roturas se escaparon la primera vez: por culpa del GUARDIÁN
+- **Dos ESCAPARON** porque comprobaba *presencia* de `dias_cadena` en la función… y la
+  encontraba **en el docstring que yo mismo había escrito ahí**, con el código leyendo ya
+  la clave vieja. Es la trampa nº2 (*grep ≠ uso*) dentro del guardián, la misma de v461 y
+  v472. Ahora mira el **cuerpo SIN docstring** y afirma en las **dos direcciones**: que
+  lea la clave nueva **y** que no quede leyendo la del ritmo.
+- **Una REVENTABA**, y un guardián roto «caza» todo sin probar nada (v463); con el chequeo
+  estructural falla limpio.
+Con eso: **10 de 10 roturas cazadas + CONTROL verde**, y el verde de base confirmado
+ANTES (v459).
+
+### ⚠️ Un chequeo mío que acusó a un código sano
+El de «el Gantt sigue dibujando la proyección» daba FALLO con el código correcto: la
+proyección solo se dibuja **si hay curva real**, y yo no se la pasaba — el test fallando
+por su propia construcción (v363/v372). Se construye con `real_scurve`, la función de
+verdad, en vez de inventarse la forma del dato (v135).
+
+### Verificación
+`verif_v500.py`, **30 comprobaciones**, todo EJECUTANDO: las tres reglas y sus casos
+límite (adelanto, obra terminada que no se mueve aunque hoy sea muy posterior, actividad
+en paralelo que manda, desfase, obra sin actividades), que no queda ninguna lectura de la
+fecha del SPI en TODO el repo, que los **cuatro** consumidores —cartera, agrupaciones,
+radar y detalle— leen la misma, que el Gantt la dibuja, que el **plan de v499 no se movió**
+con el refactor, y la mejora medida sobre la obra REAL.
+
+## LA LÍNEA BASE: el plan que se ACORDÓ, congelado (v501)
+
+Tercero de los cuatro huecos que la auditoría de gestión de instalación dejó medidos, y
+el que el usuario eligió seguir («la idea es cerrar esta brecha competitiva»).
+
+Hasta aquí el cronograma se **recalculaba siempre** desde las duraciones vigentes, así que
+alargar una actividad de 4 a 8 días **no dejaba rastro**: el plan nuevo pasaba a ser «el
+plan», la curva S comparaba contra un blanco móvil y la obra seguía pareciendo que iba
+bien. Eso es justo lo que hace falta para defender por qué se retrasó una entrega.
+
+Ahora la app distingue **tres fechas** que antes eran una sola:
+| | |
+|---|---|
+| **línea base** | lo que se ACORDÓ (v501) |
+| **plan vigente** | lo que dicen hoy las duraciones y dependencias (v499) |
+| **pronóstico** | cuándo va a terminar de verdad (v500) |
+
+### Decisiones del usuario
+- **Se fija con un BOTÓN**, cuando el plan está pactado — no al crear la obra, que nace de
+  una plantilla y casi siempre se ajusta después: congelar eso sería congelar un plan que
+  nadie llegó a acordar.
+- **La ORIGINAL nunca se pierde**: se puede re-fijar cuando el cliente aprueba un plan
+  nuevo, y la app conserva la original, cuenta **cuántas veces se replanificó** y guarda
+  cuánto movió la entrega cada vez.
+
+### Dónde vive, y por qué así
+Columna `BaselineJSON` en `Proyectos` (⚠️ **al final**, v363, y opcional: una obra sin
+línea base se comporta exactamente como hasta v500). Es un **snapshot**, no columnas por
+actividad: si alguien reordena o borra una actividad, la foto conserva lo que se acordó
+—que es el punto— en vez de desincronizarse fila a fila. El historial guarda solo el
+resumen de cada replanificación (fecha, quién, cuánto movió), no el plan entero: así no
+crece sin control dentro de una celda.
+
+### ⚠️ Las tres cosas que fallarían en silencio
+1. **Re-fijar no puede reescribir el pasado.** La ORIGINAL solo se escribe la primera vez;
+   lo que cambia es la vigente. Sin eso, la línea base no sirve para discutir nada.
+2. **Un fallo de LECTURA no puede borrarla.** `fijar_baseline` lee el JSON actual
+   **FRESCO** (aquí se decide qué se escribe, y fusionar sobre algo de hace 120 s perdería
+   la replanificación que otra sesión acaba de registrar) y ⚠️ **si no puede leer, NO
+   escribe**: tratar el fallo como «no había línea base» borraría la original, que es
+   exactamente lo que esta versión existe para proteger (el criterio de v492).
+3. **La comparación casa por ORDEN, no por posición.** Dos listas comparadas por posición
+   dan basura en cuanto alguien reordena o borra una actividad; las que no estaban se
+   marcan «nueva» y las que ya no están, «eliminada».
+
+### Qué se ve
+En 📊 Estado, junto a los KPIs: **entrega acordada**, **cuánto se ha movido respecto a
+ella** y **cuántas veces se replanificó**, más dos desplegables — qué actividades
+cambiaron (con sus días antes/ahora y cuánto se desplazó cada una) y el historial de
+replanificaciones. El botón vive en ✏️ Datos, junto a la tabla de actividades, que es
+donde se acuerda el plan. ⚠️ **El campo no fija líneas base** ni ve esa pantalla.
+
+### Ejercitado contra la HOJA REAL (método v344)
+La columna se creó sola (33 → 34). Fijada la línea base con entrega **25/09**, se alargó
+la actividad 2 de 5 a 9 días: la app pasó a decir **25/09 → 29/09 (+4 d)** e identificó
+que la 2 cambió de duración y que **la 3, la 4 y la 5 se movieron +4 d sin cambiar ellas**
+— el rastro que antes no existía. Al re-fijar, la original siguió intacta, el historial
+registró «+4 d» y la comparación siguió midiendo contra lo acordado. Producción devuelta a
+su estado (`BaselineJSON` vacío y las duraciones originales).
+
+### Verificación
+`verif_v501.py`, **24 comprobaciones**, todo EJECUTANDO. Batería: **11 roturas, 11 cazadas
++ CONTROL verde**, con el verde de base confirmado antes (v459).
+⚠️ **Dos escaparon en la primera pasada, y las dos por culpa del guardián** —casos que no
+podían distinguir la rotura—:
+- el de «casa por posición» usaba órdenes **1, 2, 3**, donde posición y orden coinciden:
+  las dos formas dan lo mismo y el chequeo aprobaba con el fallo dentro. Ahora usa una obra
+  con órdenes **1, 5 y 9**;
+- el de «obra sin cronograma» comprobaba solo que devolviera `False`… y con la guarda rota
+  **también** devuelve `False`, pero por otro motivo (ese pid no existe en la hoja). Ahora
+  se comprueba el MOTIVO, no el booleano.
+Es la lección de v472 otra vez: **una comprobación que puede pasar por otro camino no
+comprueba lo que dice**.
+
+
+---
+
+## Versiones desplegadas (v501 = actual)
+⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
+atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
+tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
+detalle exacto de una versión no listada: `git log`.
+
+| Ver | Cambio principal |
+|---|---|
+| v501 | **Línea base: el plan que se ACORDÓ, congelado.** Hasta aquí el cronograma se recalculaba siempre, así que alargar una actividad de 4 a 8 días **no dejaba rastro** —el plan nuevo pasaba a ser «el plan» y la curva S comparaba contra un blanco móvil—, que es justo lo que hace falta para defender por qué se retrasó una entrega. Se fija **con un botón** cuando el plan está pactado (decisión del usuario) y ⚠️ **la ORIGINAL nunca se pierde**: re-fijar conserva la acordada, cuenta las replanificaciones y guarda cuánto movió la entrega cada vez. ⚠️ Si no se puede LEER, **no se escribe** (tratar el fallo como «no había» borraría la original, criterio v492), y la comparación casa por **ORDEN**, no por posición. Ejercitado contra la hoja real: alargar una actividad pasó a decir **25/09 → 29/09 (+4 d)** identificando que la 2 cambió y que **la 3, 4 y 5 se movieron sin cambiar ellas**. 24 comprobaciones · **11/11 roturas + control** ⚠️ (2 escaparon primero por casos míos que no podían distinguir la rotura: órdenes 1-2-3 donde posición y orden coinciden, y un `False` que llegaba por otro motivo) |
+| v500 | **El fin previsto sale de la CADENA, no del ritmo** (2.ª mitad de lo que el usuario pidió en v499). El SPI era una regla de tres sobre el % de avance: medido, una obra con el **50% hecho y la actividad que bloquea a las demás sin empezar** salía **«+0 d, en plazo»** y la cadena dice **+10 d**; y con avance 0 el SPI **no daba NINGUNA fecha** (división por cero) mientras la cadena da una y dice **qué actividades mandan**. La obra real pasó de «—» a **04/10 (+9 d)**. Tres reglas: lo terminado no se mueve · lo en curso cuenta su resto **desde hoy** · lo que no empezó **no puede arrancar en el pasado** — así el retraso se PROPAGA (y la obra también puede adelantarse). ⚠️ `fecha_proj`/`proj_dias` **se eliminan**: dos respuestas a «cuándo termina» es el fallo de v361; el SPI se conserva como ritmo. ⚠️ El guardián cazó un consumidor que se me escapó (**el Gantt**, que habría dejado de dibujar la proyección en silencio) y ⚠️ **3 roturas escaparon por culpa del guardián**: comprobaba presencia de la clave y la encontraba **en su propio docstring**. 30 comprobaciones · **10/10 roturas + control** |
+| v499 | **Plan con dependencias**: las actividades se encadenan («detrás de la 3», con **desfase** `3+2` y **solape** `3-1`, y varias con `3;5-2`), sale la **ruta crítica** (borde rojo en el Gantt) y un plan mal encadenado —ciclo o predecesora borrada— se avisa y **se sigue dibujando**. ⚠️ Vacío = «detrás de la anterior», así que **una obra que ya existe no se mueve**: verificado contra el módulo de v498, **14 cronogramas idénticos actividad por actividad** (0 diferencias en fechas, duraciones y pesos). ⚠️ **El guardián cazó un fallo real**: el mapa de remapeo salía de los `edits`, así que un guardado PARCIAL habría tirado las predecesoras de las filas no tocadas —el plan entero reescrito sin ningún error—; ahora sale de TODAS las actividades y los edits solo sobrescriben. ⚠️ Y al extender la sonda de v471 a los ALIAS aparecieron **dos KeyError vivos desde v468** que reventaban el guardado de la tabla de actividades y **el del avance del campo** (la escritura más usada): la migración de columnas renombró la LECTURA y no la clave del cuadro. ⚠️ Mi oráculo escrito **de memoria** dio 2 rojos inexistentes → se sacó del módulo de v498. ⚠️ Y la SUITE dio 2 rojos, ninguno caducado: `verif_v323` **tenía razón** (`plan.py` definía un `_num` LOCAL, la sexta copia del concepto que v323 eliminó, donde 2 de 5 divergencias eran fallos de dinero) y `verif_v469` era un **falso positivo** que denunciaba código correcto — comparaba TEXTO por línea, así que una llamada partida en dos la marcaba; reescrita por AST y **auto-validada en las dos direcciones** (es el fallo que v472 ya corrigió en otro guardián). 39 comprobaciones · **13/13 roturas + control** (⚠️ 2 anclas no existían y no probaron nada en la 1ª pasada) |
+| v498 | ⚠️ **El TIPO de credencial se guardaba como la FUNCIÓN de traducción** (lo reportó el usuario: en la hoja ponía «<function t at 0x…>»). El formulario pasaba `t` donde va el tipo: nació correcto en v104 (la variable se llamaba `t`), v189 la renombró y v445 hizo que ese nombre volviera a resolver… a la función de i18n. ⚠️ **Mis pruebas de v350 no lo vieron porque ejercitaron `add`, no el FORMULARIO** — el fallo estaba en lo que la pantalla le pasa. Arreglado + `add` exige que el tipo sea TEXTO (antes de abrir la hoja) + chequeo general: nadie puede pasar `t` como dato (la comprensión tiene ámbito propio, trampa nº3) + «falta»/«vencido» del aviso de certificados, traducidos. 14 comprobaciones · **4/4 roturas + control** · suite 131 verde |
+| v497 | **El emparejado con Xero dice POR QUÉ y se aplica de una vez** (a raíz de «¿cómo automatizamos el emparejado?»). ⚠️ Auditar antes de construir: la propuesta automática YA existía y el desplegable ya venía preseleccionado — lo que faltaba era el motivo de cada fila sin pareja (`sin_email` · `no_esta` · `email_repetido` · `nombre_repetido` · `mismo_empleado`; casi siempre lo que falta está en COPEX, no en Xero) y un botón para recuperar las propuestas en las filas dejadas en «not in Xero». Relleno por BANDERA (v111), sin pisar lo elegido ni duplicar empleado, y `propuesta` DELEGA en la detallada. 24 comprobaciones · **8/8 roturas + control** ⚠️ una se escapó porque el valor por defecto ya hacía pasar el caso · suite 130 verde |
+| v496 | Documentación: **los cobros de Xero probados EN PRODUCCIÓN**. Pago parcial de 40 → COPEX «parcial»; los 70 restantes → «cobrada», con los dos movimientos en el historial marcados `origen: xero`, el estado de cuenta a 0 y el P&L cuadrado; sin novedades no escribe. ⚠️ La protección de duplicados enlazó con la factura de v489 (mismo número y total) y hubo que renumerar. ⚠️ **Error de método propio**: leí el MENSAJE de pantalla en vez del dato, afirmé que Xero devolvía 40 y mandé al usuario a revisar su contabilidad — la hoja ya decía 110. El mensaje no es el dato |
+| v495 | **FASE 2.3-C: lo cobrado en Xero entra en COPEX** (decisiones del usuario: lo registra el contable en Xero, con botón, facturas en borrador avisando, y si no cuadra manda Xero). ⚠️ La especificación decidió tres cosas: el cobrado es `AmountPaid` (una llamada por lote de 40), **`AmountCredited` NO se suma** (nota de crédito no es dinero recibido) y **una factura en borrador tiene AmountPaid 0**, así que sincronizar desde ella pondría a CERO un cobro real — solo se lee de aprobada/pagada. Idempotente (fija, no suma), historial con origen y movimiento negativo, un fallo de red no acusa de borradas, 1 lectura + 1 escritura por lote, y el parser de fechas de Xero pasa a tener UNA definición. 33 comprobaciones · **11/11 roturas + control** ⚠️ tres se escaparon primero: una rotura que no era fallo, un mock que hacía el trabajo del código, y un chequeo que casaba con un comentario · suite 129 verde |
+| v494 | Documentación: **el refresco del token de Xero ya está ejercitado contra Xero** (pendiente desde v488). `ConnectedAt 15/09 17:56` vs `RefreshedAt 16/09 05:49`: el envío del parte pidió token nuevo, lo obtuvo y persistió la rotación — si no se hubiera guardado, el envío siguiente habría dado 401. Leído en solo lectura, sin tocar la columna del token |
+| v493 | Documentación: **v492 verificado en producción tras reiniciar el proceso**. La primera comprobación falló con razón: pestaña en v492 pero `core.*` viejos en memoria (topbar en v489), y «Save matches» seguía volcando la configuración entera — «desplegado ≠ corriendo» por quinta vez, cazado leyendo la hoja y no la versión. Tras el Reboot, el mismo clic escribe **solo** el emparejado. Escrituras de prueba devueltas a vacío con guarda |
+| v492 | **Los ajustes contables se guardan por CLAVES** (pedido por el usuario). Los cuatro escritores volcaban `mapa()` —lo guardado YA fusionado con los valores de fábrica—, así que guardar un emparejado con Xero **congelaba todos los valores por defecto** en el grupo y un cambio futuro en el código dejaba de llegarle. Nueva `contable.guardar_claves`: solo lo tocado, fusión de un nivel (MYOB sobrevive a guardar Xero), ⚠️ lectura FRESCA y **si no puede leer, no escribe** (escribir solo lo nuevo borraría lo guardado). `guardar_mapa` eliminada; una sola búsqueda de la fila del grupo. 28 comprobaciones · **8/8 roturas + control** con el motivo de cada una a la vista · ejercitado contra la hoja real y devuelto a vacío · suite 128 verde |
+| v491 | Documentación: **el parte de horas a Xero Payroll probado EN PRODUCCIÓN** contra la Demo Company. Lectura en vivo de empleados y calendarios; 1.er envío crea parte en borrador + permiso; ⚠️ **reenviar lo mismo ACTUALIZA el borrador y no repite el permiso** (solo probable contra un Xero real). El usuario lo verificó en Xero. ⚠️ La guarda de la limpieza destapó que guardar el emparejado **congela los valores de fábrica** en `AccountingJSON` (comprobado idéntico a fábrica antes de vaciarlo; anotado). Foto antes/después idéntica |
+| v490 | **FASE 2.3-B: parte de horas y ausencias pagadas a Xero Payroll AU** (decisiones del usuario: horas y permisos, borrador, emparejado automático + confirmar, actualizar solo borradores). ⚠️ Leer la especificación cambió el diseño de v484 en tres puntos: las ausencias **no van en el parte** (son LeaveApplications), el periodo **tiene que ser uno del calendario** de Xero o lo rechaza, y el empleado no tiene número (emparejado atado a la organización). Una definición de lo que se paga (`contable.partes`), tipo ordinario de CADA empleado, una entrada por día en orden, permisos con las horas explícitas y en tramos seguidos, y sin duplicar (todas las páginas; si no se puede comprobar, no se crea). + ritmo de 55 llamadas/min y reintento corto ante 429, que también sirven a las facturas. 56 comprobaciones · **15/15 roturas + control** |
+| v489 | **Xero probado EN PRODUCCIÓN contra la Demo Company** + dos arreglos de pantalla. Envío real verificado (factura en borrador, GST 10,00 y total 110,00 — no 9,99 —, comprobado por el usuario en Xero, y el **enlace directo abre la factura**), y ⚠️ **sin duplicados probado de verdad**: borrada la marca en COPEX y reenviada, se ENLAZÓ con el mismo InvoiceID. ⚠️ La primera conexión fue a la organización «COPEX» del usuario, detectado leyendo la fila antes de mandar nada. **(1)** «Desconectar no desconecta»: el título del desplegable parecía el botón — ahora es un botón que pregunta. **(2)** «Ya están todas en Xero» a quien no tenía ninguna. Refresco del token aún sin ejercitar contra Xero (la prueba cupo en 30 min). 105 comprobaciones |
+| v488 | **FASE 2.3-A: conexión con Xero por API** (decisiones del usuario: tokens cifrados en el maestro, facturas primero, permisos de nómina desde el principio). OAuth con `state` **firmado** (la vuelta llega en otra sesión, así que no se puede guardar), token Fernet en una pestaña **propia** del maestro —⚠️ no en `Groups`, que se cachea para todos y rotaría cada media hora—, refresco con **cerrojo** (4 hilos → 1 refresco) y token rotado que no se pierde si falla guardarlo. Envío por lotes: comprueba el número en Xero y **enlaza** en vez de duplicar, y si no puede comprobar **no envía**; importes sin impuesto con el impuesto REPARTIDO de v483. ⚠️ Una sola definición (`documento_venta`) para CSV y API, con el CSV **idéntico byte a byte** en 32 combinaciones. ⚠️ Scopes GRANULARES verificados (la especificación OpenAPI aún lista los viejos). ⚠️ El guardián cazó un fallo real: la categoría de seguimiento iba con el nombre de COPEX y no el de Xero. 99 comprobaciones · **16/16 roturas + control** |
+| v487 | ⚠️ **Lo que v469 dejó escrito en español y los desplegables que SOBRESCRIBÍAN**, salido de auditar «¿ya quedó todo?» contra el código. **(1)** Las KPIs «Available»/«In use» de inventario marcaban **0 SIEMPRE**: buscaban `"disponible"`/`"en_uso"` y el estado llega canonizado — ejecutado, 2 disponibles daban 0; ⚠️ el guardián de v469 solo barría comparaciones y aquí el valor viejo era una **clave de búsqueda**. **(2)** 12 sitios seguían **escribiendo** en español (la torta partía «Other» en dos trozos, «otro» en pantalla). **(3)** `L.index(v) if v in L else 0` delante de un formulario que edita **sobrescribía en silencio** en 12 sitios de 6 pantallas —⚠️ podía des-archivar una obra, y en Usuarios el defecto `"campo"` (español) dejaba un usuario sin rol con **owner preseleccionado**—: `ui.opciones_con_actual` conserva el valor guardado. ⚠️ El primer barrido dio 173 búsquedas y **171 eran claves internas sanas** (el discriminador: nadie mete esa clave a mano); y **4 de mis 5 exentos tenían nombres inventados**, cazado por el propio guardián. + v486 **verificado en producción** sembrando y borrando datos (antes/después idéntico). 10/10 roturas contra 3 guardianes a la vez |
+| v486 | ⚠️ **NaN TAMPOCO vacía la celda: v485 arregló el fallo con la cura equivocada** y en producción seguía pintando «None». ⚠️ Mi error: la sonda devolvió `«None»: 8` y **se lo atribuí entero a la columna que esperaba** — eran 2 columnas × 2 filas × 2 repintados, o sea que **la de NaN pintaba «None» también**; con las coordenadas se veía de un golpe (x=335 es el borde derecho de la columna de NaN). *Un agregado no dice nada hasta saber QUÉ cuenta.* Medido con una tabla por caso y control: `nan`/`None`/`pd.NA` pintan «None» con cualquier config —y hasta con `Styler(na_rep="")`—, y lo ÚNICO que vacía la celda es una **CADENA en una columna SIN tipar**, porque una columna tipada convierte incluso `""` en nulo. **No era una tabla: eran CUATRO** (parte, `Rate/h` —cuyo pie PROMETE que vacío = sin tarifa—, Costo de inventario y Horas de catálogo), porque la frase «con NaN sale vacía, medido» está en CLAUDE.md desde v467: *una afirmación equivocada documentada como medida se copia*. Nuevas `tabla.celda`/`derecha` (una definición), con el formato verificado **idéntico** al `NumberColumn` que sustituye (19 valores × 2 formatos, 0 diferencias — son columnas de dinero, y `%d` trunca mientras `.0f` redondea). ⚠️ **Y reintroduje el fallo de v323 dentro del arreglo**: `float()` en vez de `num()` hacía que «1,234.56» —como Sheets formatea el dinero en AU— saliera **VACÍO**, o sea «no hay dato», peor que el `$0` de v323; lo cazó comparar el formato contra el anterior, no leer el código. ⚠️ La red de v467 seguía afirmando «0 celdas con None (se usa NaN)», así que poner NaN **pasaba el chequeo**: ensanchada, y **una rotura se escapó** porque enumeraba posiciones y no vio el nulo en el **DEFECTO de un `.get()`** — la forma exacta de v485; ahora recorre el subárbol (0 falsos positivos). + **3 `.pyc` estaban RASTREADOS** en git pese al `.gitignore`, que no destrackea lo ya añadido | 
+| v485 | ⚠️ **La tabla del parte pintaba «None»** en cada día sin horas — visto MIRANDO la pantalla de v484 en producción, no leyendo. Con la columna entera vacía pandas la deja en `object` y Streamlit imprime el texto: es el fallo de v467 repetido (el CSV sí estaba bien). Arreglado con `NaN`. ⚠️ **Y lo grave era que su red diera «0» con el fallo delante**: tenía TRES cegueras —solo veía el ternario y el `None` literal (lo mío es un `.get()` **sin defecto**), solo miraba DENTRO de `pd.DataFrame(...)` (mi dict llega por **variable**, el agujero de v471) y solo `ast.Dict` (el mío es un **DictComp**)—, así que su cero no significaba nada para esa tabla. ⚠️ Ensancharla de golpe dio **12 falsos positivos** (una fila de hoja se lee por nombre LITERAL y `registros` siempre trae todas las cabeceras → nunca da None) y luego **5 más** al recorrer la función entera. El discriminador real es la **clave VARIABLE**, y la sonda resuelve la variable. Validada en las DOS direcciones tras cada iteración |
+| v484 | **FASE 2.2-A: el parte de horas.** ⚠️ El usuario eligió Xero Payroll y lo primero fue descubrir que **ese destino no existe**: Xero Payroll AU no importa partes por CSV — su artículo no tiene paso de import (⚠️ con la sonda validada: el de facturas, con el mismo cascarón, sí lo tiene), su Product Ideas lo pide y sus foros dicen que iría por API. Así que se construyó lo que sirve en cualquier rama, y ⚠️ **de leer su API salió el diseño**: formato **ANCHO, una columna por día y en ORDEN**, porque `NumberOfUnits` es un array por día → 2.3 será un mapeo. + ⚠️ **una sola definición de «qué día de ausencia se paga»**: el criterio de v432 baja a `horas_pagadas_dia` y el agregado DELEGA —dos implementaciones pagarían días distintos y solo lo delata el total—, **demostrado idéntico en 13 casos** contra la implementación anterior sacada del commit (la demo tiene 0 ausencias, así que la hoja real no probaba nada). + `PayrollID` (el login no lo conoce el proveedor, y el nombre se repite), que ⚠️ **casi dejo sin editor** — el «pendiente que nadie puede cerrar» de v325/v340. ⚠️ **Tres roturas escaparon y solo dos eran huecos míos**: la tercera cambiaba un campo que **nadie lee**, así que salió de la batería en vez de inventar un caso inalcanzable. ⚠️ Y la batería **dejó el doble pago de v432 VIVO en el árbol** al fallar su `finally` con OSError: ahora copia en disco, verifica el restore y **aborta** si no puede. 72 comprobaciones · **17/17 roturas + control** |
+| v483 | **FASE 2 de la ruta: identidad fiscal + exportación contable.** ⚠️ El hallazgo: `invoice_pdf` imprime «TAX INVOICE» en cada factura y **no había ABN en todo el repositorio** —la marca era el nombre INTERNO del grupo—, así que las ya emitidas iban incompletas ante la ATO sin que nada lo dijera. + el vencimiento nacía **HOY**, o sea que toda factura entraba vencida el mismo día. Cuatro columnas nuevas en `Groups` ⚠️ **al final, que es lo que las hace migrar solas** (v363), y el PDF **degrada en tres direcciones**: sin ABN, sin razón social y con la lectura fallando se emite igual. + **CSV para Xero y MYOB** con tres reglas: importes **siempre sin impuesto** (o la casilla «inclusive/exclusive» se contesta mal y el GST sale torcido), el impuesto **REPARTIDO** para que sume exacto —ejercitado contra la hoja real: línea a línea da **9,99** y el reparto **10,00**— y el mapa de cuentas **por PERFIL** (200 de Xero no existe en MYOB, que rechaza la fila entera). Nombres de impuesto y campos de MYOB **verificados en su documentación**. ⚠️ Un error mío de semántica cazado **volcando el CSV**, no leyendo: la 4ª de MYOB es el PO del CLIENTE, no el proyecto. ⚠️ Y una **rotura SE ESCAPÓ** porque el guardián afirmaba la CONSTANTE y no lo que el CSV produce: intercambiar el desempaquetado escribe `OUTPUT` en el fichero con la constante perfecta. ⚠️ + un `NameError` (`_num` sin importar en `auth_ui`) cazado por el chequeo de ámbito antes de desplegar. 80 comprobaciones · **15/15 roturas + control** · 21 contra la hoja real sin rastro |
+| v482 | **FASE 0 de la ruta ERP.** ⚠️ `invalidar()` hacía `_lote.clear()` **sin argumento**, que borra la caché de TODOS los libros: una escritura de un cliente obligaba a releer a los demás contra el techo de 60/min de la única cuenta de servicio. Ahora recibe el **TÍTULO** de la hoja — ⚠️ no el `sheet_id`, porque las GLOBALES viven en el maestro y resolver «el libro de la sesión» limpiaría otro—, y **sin título sigue tirando entero**: un llamador que se olvide degrada, no rompe. + **la app mide su propio consumo** (`core/metrics.py`, enganchado a NUESTRA subclase del cliente HTTP): cada INTENTO (un 429 reintentado son dos llamadas), lectura/escritura por **endpoint** y no por método, y el pico con **ventana deslizante** porque la ráfaga real va de 06:59:40 a 07:00:20. Pantalla en Administración → 📈 Cuota. ⚠️ Tres fallos de método MÍOS, los tres cazados por la batería y no leyendo: un chequeo que medía **cero llamadas** sobre una caché que no había tocado, uno **intermitente según el segundo** en que se lanzara (v443), y la batería **provocándose un 429** (trampa nº19 en el script que venía a verificar). 37 comprobaciones · **11/11 roturas + control** · + `NEGOCIO.md` puesto al día tras **400 versiones** desfasado |
+| v481 | **El campo deja de ver el dinero de la obra** (decisión del usuario sobre la pregunta abierta en v480). ⚠️ Al implementarla apareció que mi reporte era **incompleto**: veía también **la mano de obra PERSONA POR PERSONA**, las órdenes de compra y la curva de gasto — el error venía de una sonda que probaba la línea del **comentario**, no la del `if`. Se queda con lo suyo: cargar y ver recibos con su importe (**1** cifra de dinero frente a **17** que pasan a gestión). ⚠️ **Extraído a `_costos_section`, no envuelto en un `if`**: 140 líneas ya a profundidad de función, así que no se reindenta ni una (v120/v148). ⚠️ Interruptor **`ver_costos`, NO `can_delete`** —ese dice «puede borrar recibos», y reutilizarlo abriría las finanzas a quien mañana pueda borrar las suyas— y **por defecto False**: falla cerrado. 17 comprobaciones, la última **ejecutando** ambos casos |
+| v480 | **El recorrido diario del campo, medido en un móvil** (375×812, con una obra de prueba asignada — sin datos no se podía juzgar la densidad, el pendiente que dejó v478). **(1) Fichaje**: las 4 tarjetas gastaban **230 px enseñando 0.00 h** y empujaban la acción de cada mañana a **y=618/759 de 812** — ahora las acciones van antes y no se pierde ni una cifra (v408). ⚠️ Matiza con medida lo que decía v308 ahí mismo. **(2) Una sola obra**: se abre sola donde se CONSULTA, y donde se ACTÚA es un **botón explícito** — v138 prohíbe preseleccionar al fichar. **(3)** El plan y la ruta bajan detrás de la tarea (la tabla de avance estaba en y=676), ⚠️ con `_contexto()` en **las dos salidas tempranas**, que si no desaparecía para quien aún no tiene obra. **(4)** La barra tenía **197 px vacíos** para el campo: ahora lleva su estado de fichaje, activo, con **0 lecturas nuevas** y textos que **caben medidos**. + se ⚠️ **un fallo de dinero** salido de un rojo que parecía falsa alarma: `es_del_proyecto` con el nombre vacío se quedaba con **todas las jornadas generales** (entra en horas y costo de mano de obra). + se descartó una alarma propia (el campo **no** ve el margen) y queda **una pregunta abierta**: sí ve las tarjetas de costo y presupuesto. 25 comprobaciones · suite **118 verde** · las **6** secciones del campo medidas a 375 px |
+| v479 | **La barra superior deja de comerse un cuarto del móvil.** Medido con sesión de campo a 375×812: sus cuatro columnas se **apilaban en 112 px** y el título empezaba en y=196 — el **24% del teléfono** en chrome. Ahora **44 px** y título en y=128: **68 px devueltos al contenido**. ⚠️ El primer intento ganaba lo mismo pero dejaba los botones en **26 px**, bajo el mínimo de 36 de v326/v327 — **se vio midiendo, no mirando la captura**. ⚠️ Anclado a una `key` y no a `:first-of-type` (que se rompe en silencio, v304/v332), y **verificado en vivo antes de desplegar** con la cadena sacada del fichero por AST y **un control** que además desactivó una falsa alarma (un botón 0×0 que es del tooltip de Streamlit y está igual con y sin la regla). + auditoría de tablas del campo: el **margen NO** lo ve (`can_delete=False`), pero las tarjetas de **costo y presupuesto sí** — queda como pregunta al usuario, sin tocar. 25 comprobaciones · suite **117 verde** |
+| v478 | **La autogestión del campo** (petición del usuario): *My credentials · My payslips · My absences* pasan a sub-pestañas de **Self-service** y su nav baja de **8 a 6** — importa porque esa cuenta se usa en el MÓVIL. ⚠️ Revierte a sabiendas la decisión de v154/v430 (*«enterrarla un nivel cuesta un toque cada mañana»*): medido, eso solo aplica a **ausencias**, la única donde el campo ACTÚA, y su acción urgente —avisar de una baja— **recupera el toque con un atajo desde Fichaje**, visible solo si no ha fichado. ⚠️ **Corrección mía**: propuse arreglar un «callejón sin salida» en credenciales y la premisa era incompleta — `notify_expiring` ya avisa al admin Y al dueño (v104/v187), así que el arreglo es **una línea**, no un canal nuevo; y tres errores del parche se cazaron mirando las firmas antes de aplicarlo (v135), incluido un `logger` inexistente. + **móvil**: 0 anchos fijos hostiles en las 7 pantallas, y la tabla de credenciales reordenada con el criterio de v408 (**priorizar, no encoger**) con `Tipo` anclada. ⚠️ Cuatro guardianes caducaron y **uno defendía la decisión contraria** (v430, «ausencias va suelta»): se reescribió sobre lo que protegía **y gana la comprobación de que el atajo exista**. 20 comprobaciones · suite **117 verde** |
+| v477 | **Vincular Telegram fallaba sin decir por qué** (lo reportó el usuario): un solo mensaje para CUATRO causas. ⚠️ Una de ellas **no dejaba ni traza** — con un *webhook* activo Telegram responde **409**, `requests` no lanza y el código se quedaba con la lista vacía, así que vincular no funcionaría NUNCA. ⚠️ Y la causa más probable no es del código: **el `/start <código>` solo se envía si el chat es NUEVO**, así que quien ya había hablado con el bot no manda nada al abrir el enlace — la salida que siempre funciona (escribir el código como mensaje normal) ahora sale en pantalla de entrada. `telegram_diagnostico` distingue las cinco situaciones y `find` delega en ella (v323); las cinco ramas **ejercitadas** interceptando `getUpdates`. ⚠️ El token vive solo en los secrets del Cloud (v368), así que el arreglo es que **la app lo diga**, no adivinarlo. + la suite cazó un rojo que **solo pudo salir por la migración de roles de v475**: `verif_v381` anclado a un proyecto que ya no existe — y su comparación vieja eran **dos ceros** |
+| v476 | ⚠️ **«Invalid role.»: no se podia crear un usuario de campo** (lo reporto el usuario). **v469** migro los roles a ingles y se dejo DOS literales en la interfaz: el alta de campo (`"campo"`) y —peor, aunque latente— el **BOOTSTRAP** del primer propietario (`"propietario"`), o sea que una instalacion desde cero no habria arrancado. Se acoto la CLASE antes de tocar (101 candidatos → 8 reales → 2 rotos; los demas son claves internas o etiquetas que **no se canonizan al leer**, comprobado contra `valores.COLUMNAS`). ⚠️ No lo vio ningun guardian porque `verif_v469` barre **comparaciones** y esto entra como **argumento**: chequeo nuevo derivado de `auth.ROLES` y validado contra un caso conocido-malo. ⚠️ Y escribiendolo cometi el **shadowing de v440 dentro del propio guardian** (`_f`, que es su lista de fallos, como variable de bucle → `len("app.py")` = 6 fallos inexistentes); lo delato que todo saliera «ok» y el contador dijera 6. Suite **116 verde** |
+| v475 | **«No dejes nada pendiente»**: los **7 guardianes SIN DATOS** desde que v456 vació la demo pasan a construir su propio caso (decisión del usuario, en vez de volver a sembrar ruido) → suite **116 verde · 0 rojo · 0 roto y sin bloque SIN DATOS**. ⚠️ Descongelarlos destapó **tres caducidades reales** que tapaban: **43 guardianes simulaban una sesión con un ROL que ya no existe** desde v469 —medido: `es_propietario()` es **False** con el rol en español, así que los caminos de propietario no se ejercitaban—, uno listaba pre-starts por columnas que **v468 renombró**, y otro exigía «Engineer in charge» cuando **v459** lo pasó a «Head installer/s». *Un guardián que no corre no envejece a la vista: envejece a oscuras.* Cada caso construido se valida contra su contrario (un `return False` fijo, una agregación por NOMBRE, leer por GRUPO en vez de por LIBRO…) y el fixture del survey **se auto-comprueba**. ⚠️ Y tres sondas MÍAS fallaron por su forma: mirar solo dicts literales, filtrar `ast.unparse` con comillas dobles (las escribe simples) y usar las claves de SALIDA del roster en vez de las cortas |
+| v474 | Documentación de v473 en CLAUDE.md: el icono LITERAL de la cabecera (`T.section` emite HTML), v472 ejercitada contra la hoja real de punta a punta —incluido el borrado, que deja la hoja en 0 filas y Drive vacío— y las dos trampas de método nuevas (el árbol de accesibilidad muestra la etiqueta CRUDA; un checkbox de Streamlit se marca clicando el TEXTO de la etiqueta, no la caja) |
+| v473 | ⚠️ **El icono salia LITERAL** en la cabecera de la biblioteca: `T.section` emite HTML y ahi `:material/…:` no se interpreta (v443) — y los dos unicos sitios del repo que se lo pasaban a una pieza HTML del kit eran mios. Lo destapo **mirar la pantalla**, no un guardian (como v375/v424); chequeo nuevo y general. + **v472 ejercitada contra la hoja REAL**: las hojas se crean en el maestro, son GLOBALES ⚠️ *probado con una sesion de inquilino* (con la del propietario no habria probado nada), IDs secuenciales, Drive subiendo y descargando, y **el borrado deja la hoja en 0 filas y Drive vacio** — la fila Y el archivo, que es lo que protege v456. Produccion devuelta a su sitio. ⚠️ Dos trampas de metodo nuevas: **el arbol de accesibilidad muestra la etiqueta CRUDA** (`read_page` daba `:material/…:` y placeholders de campos que estaban rellenos — el reverso de la nº5) y **un checkbox de Streamlit se marca clicando el TEXTO de la etiqueta, no la caja** (el clic aterrizaba exacto y no marcaba; validado contra otro checkbox de la app, asi que era mio). Y una falsa alarma descartada a tiempo: el `Brand` vacio era `form_input` sobre un combobox react-aria, no la app |
+| v472 | **Biblioteca tecnica** (peticion del usuario): fotos, manuales y fichas con buscador y taxonomia marca/modelo/seccion, GLOBAL y curada por el propietario — cinco decisiones suyas, tres contra mi recomendacion. Aplica lo ya aprendido: hojas globales en minusculas (v359), en el LOTE con **0 llamadas extra** (v339/v353), `get_sheet` y no `_get_worksheet` (v404), galeria paginada porque cada miniatura ES una descarga (v147) y el archivo ANTES que la fila en las dos direcciones (v343/v456). ⚠️ **De paso, dos fallos reales**: el buscador de la barra superior **no devolvia un trabajo NUNCA** desde **v440** —`t.get(...)` con `t` siendo la funcion de i18n, `AttributeError` que el `except` se tragaba, 32 versiones— y `correcciones` llamaba a `siguiente_id_libre` con los argumentos CAMBIADOS desde v461, asi que **el salto de IDs de v427 no se aplicaba ahi**. ⚠️ Pero lo que define la version son **comprobaciones que NO PODIAN FALLAR**: dos roturas se escaparon por `"_POR_PAGINA" in dump` (la constante aparece 4 veces, borrar el corte deja 3) y por `etiqueta(x) == x` (cierto para CUALQUIER cadena que el vocabulario no conozca — v462 del otro lado). **La misma ceguera estaba en `verif_v463`, la regla GENERAL**: medido, cerrarla costaba **3 entradas y 2 exenciones** —una **de v470**, que añadio un tipo y no lo mapeo—, no una migracion. Con la invariante fuerte el guardian **cazo mi propio codigo** (`Type` con `t()` en vez de `etiqueta()`) y luego dio un **falso positivo sobre el arreglo correcto**. ⚠️ Y la suite dio **8 rojos de los que CUATRO eran guardianes anclados a la FORMA** (una lista a mano, **numeros de linea**, texto en la misma linea, «3+ palabras = mensaje»), no fallos del codigo: se arreglaron derivando el dato de su fuente o midiendo estructura. 28 comprobaciones · **15/15 roturas** + control · suite **109 verde** |
+| v471 | **Auditar «¿que falta?» destapo una pantalla que REVIENTA.** De la unica deuda que v468 dejo anotada salieron **cinco fallos reales**: ⚠️ el gordo, `_ed.iloc[i]["Hours"]` con la fila en `"Horas"` → **KeyError** en 💰 Costos en cuanto alguien tiene horas fichadas; `git log -S` confirma que v468 renombro **la lectura y no la clave**, y llevaba dos versiones asi, invisible solo porque la demo esta vacia. + dos `disabled` apuntando a columnas inexistentes (**las HORAS y el COSTO de una cotizacion quedaban EDITABLES**, y el costo esta congelado a proposito desde v355) + un `column_config` huerfano que le costo a una columna de dinero su `$%,d` (**v468 reintrodujo ahi el fallo de v399**) + 8 cabeceras pintandose con su clave CRUDA en español. ⚠️ Y **`verif_v444` estaba VERDE con dos de esos huerfanos delante**, por su propio fallo documentado entrando por otra puerta: excluye su `column_config` de las «filas» solo si es INLINE, y por variable volvia a aprobarse a si mismo. Arreglado (24→25 tablas miradas) + `verif_v471` con las dos formas que v444 no ve (la LECTURA del resultado y el `disabled`). ⚠️ Las sondas **resuelven variables** —sin eso 4 de 5 salian huerfanas sin serlo y habria «arreglado» codigo sano— y **se validan a si mismas** contra un caso conocido-bueno. 5/5 roturas |
+| v470 | **Tipo de proyecto «Ripout + Installation»** (peticion del usuario): sustituir un ascensor. El desmontaje entra como **UNA actividad, la primera** —no una tabla de fases, lo corrigio el usuario— y su duracion **escala con las paradas** (3 paradas: 4 d · 12: 9 d; el proyecto de 6 pasa de 29 a 35 d). ⚠️ El cambio de fondo NO es la fase: habia **TRES** sitios preguntando «¿este tipo genera cronograma?» (alta, edicion y aceptar cotizacion) y uno comparaba el **LITERAL** en vez de la constante — anadir un tipo a dos de los tres lo deja comportandose como «Other» sin dar ningun error, que es el fallo de v454 (una obra nacida con CERO actividades, clavada en 0% para siempre). Ahora `projects.genera_cronograma()` es la unica definicion y los tres delegan. ⚠️ `custom_rows` NO reinserta la fase, o se duplicaria en cada guardado del cronograma. Cambiar el tipo sigue sin regenerar el plan (regenerarlo borraria el avance ya reportado, v135) pero **ya se avisa**, por CONDICION y donde se arregla; y los dos `help` que decian «Only Installation» pasaron a mentir y se corrigieron. 23 comprobaciones ejecutando + **13/13 roturas cazadas** — ⚠️ una **SE ESCAPO** porque el chequeo del marcador reproducia la cadena en el guardian en vez de leerla del codigo (el fallo de v412); rehecho por AST y generalizado a todo `t()`/`d()` del repo |
+| v469 | **Los VALORES pasan a INGLES** (61 pares), ultima capa de «todo en ingles». Mismo diseno que las columnas: `core/valores.py` canoniza al LEER, asi que el codigo aguanta las dos formas y se puede desplegar ANTES de migrar la hoja. ⚠️ **Lista blanca por (HOJA, COLUMNA)**, nunca por nombre suelto. **Dos fallos silenciosos**: **(1)** `Sheet1.Type` se quedo FUERA de esa lista mientras `TIPO_PROYECTO` pasaba a `"project"`, asi que las ~500 filas del historico se leian crudas y **ni una hora imputada a una obra contaba como tal** — nomina, costo de obra, conciliacion y reparto por proyecto, todo a cero. ⚠️ Y **el guardian de v469 estaba PROTEGIENDO el fallo** (exigia que quedase fuera, cierto cuando la constante aun era `proyecto`): hacerle caso al rojo sin mirar el codigo acusado lo habria reintroducido — regla v385 con el acusado teniendo razon y el acusador no. Los dos barridos que lo buscaban tampoco lo vieron: uno comparaba por NOMBRE de columna (y `Type` ya estaba, para otra hoja) y el otro solo miraba constantes que son LISTA, y estas son sueltas. **(2)** `estado_cobro` devolvia una MEZCLA (cuatro ramas en espanol y una migrada), asi que el chip de la factura perdia icono y color y salia el texto crudo; se revierte esa rama y las facturas se quedan en espanol de punta a punta. ⚠️ **Y la red que buscaba mezclas era CIEGA a ese caso**: hecha sobre el mapa de MIGRACION, daba 0 con la mezcla delante — un valor migrado fuera de ese mapa es justo donde duele; rehecha sobre el vocabulario completo si lo ve, y solo lo destapo validarla contra un caso conocido-bueno. Los 8 guardianes de «el DATO sigue en espanol» **invertidos con su razon**, no relajados. 9/9 roturas cazadas + control; smoke que ejecuta el viaje completo de un valor (29); y la compatibilidad demostrada **contra la hoja real** (`Role` llega `owner` con la hoja diciendo `propietario`) |
+| v468 | **Las 160 COLUMNAS pasan a nombre INGLES** (2.573 sitios). Lo hace posible canonizar al LEER: `core/columnas.py` (una sola fuente) y el lector traduce la CABECERA, asi que el codigo ve el nombre nuevo tenga el libro el viejo o el nuevo; las **escrituras no necesitan nada** porque van por POSICION y renombrar no mueve la columna. **Tres fallos silenciosos**: un **VALOR de negocio renombrado** por coincidir con una columna (habria descasado con los activos guardados); **11 claves de `column_config`** descolocadas (ese dict no esta dentro de `pd.DataFrame`) mas **4 del caso contrario** (filas construidas FUERA de la llamada); y **`col_offset` del AST es un offset en BYTES**, asi que cortando por caracteres el reemplazo salia desplazado en toda linea con acento — la guarda impidio corromper nada (0 cambios sin explicar en 87 ficheros) pero dejo **78 sitios sin migrar**, que devuelven cadena vacia en silencio. **33 guardianes en rojo**: 27 mecanicos, 6 que AFIRMAN sobre el nombre (invertidos con su razon, no relajados) y uno que señalo un fallo real de codigo. Y **mi guardian aprobaba una rotura real** por buscar la palabra en toda la funcion en vez de en la CONDICION. Suite 104 verde |
+| v467 | **El historial del inventario deja de estar en español** (`ubic_texto` traduce el texto YA COMPUESTO al pintar: pantalla en ingles, hoja en español — arregla tambien el historico **sin migracion**), **ninguna columna pinta el literal «None»** (con TODA la columna vacia pandas la deja en `object` y Streamlit imprime el texto; ⚠️ **el «con `NaN` sale vacia — medido» que decia aqui era FALSO, corregido en v486**) y las **carpetas de Drive** pasan a ingles con **auto-renombrado**: se buscan POR NOMBRE, asi que cambiar solo la constante dejaria los 27 documentos ya subidos en la carpeta vieja; renombrar en Drive conserva el contenido, crear es lo que los deja huerfanos. 4/4 roturas |
+| v466 | ⚠️ **El indice de pestañas NO caduca, y renombrar dejaba las pantallas a CERO.** Tras renombrar las 44, el Catalogo mostraba **0 items** con la hoja llena: `_libro` vive en **`@st.cache_resource`, sin TTL**, asi que el proceso seguia pidiendo `Catalogo` —una hoja que ya no existe—, el lote entero fallaba en cada pasada y **los datos seguian intactos en el libro**. Solo se arreglaba reiniciando a mano, asi que se cierra en el codigo: si el lote falla **se tira el indice**, y `get_sheet` **lo refresca y vuelve a mirar ANTES de crear** — que era el camino por el que un indice viejo podia fabricar una pestaña vacia y ponerse a escribir en ella |
+| v465 | **Las 27 pestañas pasan a nombre INGLES** (peticion del usuario), con **capa de compatibilidad**: `titulo_real` pide el nombre nuevo y acepta el viejo, porque ⚠️ `get_sheet` **crea** la hoja si no la encuentra — codigo y libro desincronizados no dan error, fabrican una pestaña vacia donde escribir. Tres pasos: codigo que acepta los dos → renombrar → retirar el respaldo (v467). ⚠️ Antes de renombrar se comprobo que el Cloud tuviera el codigo nuevo con un **canario POSITIVO** (renombrar `Activos`→`Assets` y ver que sigue mostrando 1 activo): el primero, sobre una hoja vacia, **no valia** porque la ruta de lectura no crea hojas. 26 literales traducidos por AST (solo donde el literal ES una hoja) + `HOJAS_LECTURA` + el lote re-keyeado al nombre canonico. ⚠️ El guardian de **v445 me cazo reintroduciendo su propio fallo**: `t = str(title)` tapa la funcion de traduccion en el ambito entero. Los otros 2 rojos, caducados (el libro FALSO de v427 nombraba las hojas en español; v430 exigia el literal «Ausencias», reanclado a la constante). 44 pestañas renombradas en los 2 libros, **0 con nombre viejo, 0 recreadas** |
+| v464 | **Un lote no basta: el mapa estaba a medias en CUATRO listas mas.** v463 se desplego y se verifico en produccion, y **mirar esas mismas capturas** destapo `catalogo.UNIDADES`, `inventory.CONDICIONES`, `UBIC_TIPOS` y `MOV_TIPOS` saliendo crudas — `unidad`/`juego` bajo la cabecera *Unit*, `bueno`/`regular` en la ficha, `bodega:` en la ubicacion y `salida`/`traslado` en el historial. 12 entradas mas al mapa; ⚠️ **`m`, `m²` y `kg` NO se mapean**: son simbolos iguales en los dos idiomas y un mapa espejo es la segunda definicion que v450 mando borrar. ⚠️ **El casi-fallo**: lo natural era traducir dentro de `ubic_str` (una sola definicion, v306), pero **5 de sus 6 llamadas son de `_log_mov`** y ese texto **se ESCRIBE en el historial** — habria guardado `warehouse: X` como DATO, el fallo que v452 estuvo a punto de cometer; el traductor entra por **parametro opcional**, asi la pantalla traduce y la escritura sigue en espanol. ⚠️ **Y una rotura SE ESCAPO**: la red del guardian miraba `COLS = {Estado, Categoria, Tipo, Rol}` y **`Unidad` no estaba**, asi que devolver esa celda a crudo daba 0 (11 cazadas · 1 escapada) — la red ve solo la forma que se le enseño, dentro del guardian escrito para esa misma leccion una version antes. Con `COLS` ampliada y **verde de base** (el paso que v459/v461 se saltaron): **12/12 · 0 escapadas** |
+| v463 | **El arreglo de v462 estaba ACOTADO: la misma forma vivia en 4 celdas mas.** Salio de auditar «¿ya esta todo cerrado?» contra el CODIGO en vez de contestarlo de memoria. En **Catalogo** e **Inventario** la cabecera iba en ingles (pasan por `tabla.cfg()`) y la celda en espanol — el contraste exacto de «revertida». ⚠️ Y el inventario **se contradecia consigo mismo**: su ficha decia *available* y su tabla *disponible*, porque el TEXTO del estado vivia en un mapa propio del modulo — la segunda definicion que v450 mando borrar, viva donde nadie miro. + el mapa a medias en dos listas: de las 7 categorias del catalogo **3 se traducian por CASUALIDAD** (coinciden con claves de gastos) y 4 no. ⚠️ **El arreglo obvio habria sido un fallo nuevo**: meter `_est_lbl()` en la tabla, que devuelve markdown de color (`:green[available]`) y una celda de `st.dataframe` pinta LITERAL — se vio mirando que DEVUELVE la funcion (v135). El texto se mueve a `i18n.VALORES` (una definicion), el color se queda en `_EST_COLOR`, y ⚠️ **la ficha pinta exactamente lo de antes** (5/5 verificadas contra el diccionario viejo verbatim) y **el DATO no se toca** (`== "en_uso"` quedaria muerto sin dar error). 2 falsos positivos NO tocados por mirar el codigo acusado (el Tipo de credencial, ya en ingles; y un `.get("Tipo")` que es una COMPARACION). Guardian **general**, no fijado a los sitios que vi: recorre todos los `*_ui.py`, valida su red contra un caso construido antes de creerse su cero (trampa n12), y caza **8 roturas + 1 CONTROL**. ⚠️ Su primera version comprobaba una lista FIJA de 8 —el mismo fallo que venia a arreglar—: por DESCUBRIMIENTO salen **13**, porque 5 se definen por NOMBRE y ningun barrido de literales las ve; ahi aparecio otro fallo real, `orders.ESTADOS` con **`recibida` sin traducir** entre `pendiente` y `cancelada`, que si lo estaban. ⚠️ Y el **CONTROL cazo que mi propio guardian REVENTABA** (borre un import al parchearlo): un guardian que revienta devuelve codigo ≠ 0 siempre, asi que las 8 roturas salian «cazadas» **sin probar nada** — v459 otra vez, y solo el control lo vio |
+| v462 | ⚠️ **Un estado NUEVO sale en espanol aunque la pantalla este traducida.** Visto **mirando una captura** de la verificacion de v461: la columna `Status` del historial decia **«revertida»** en una fila cuyas otras seis columnas iban en ingles — traduccion a medias dentro de la MISMA tabla (v450). Fallaban DOS cosas a la vez y arreglar una sola no cambiaba nada: la celda pintaba el valor CRUDO sin `etiqueta()`, y **`revertida` no estaba en `i18n.VALORES`** — el vocabulario se tomo de `ausencias` (pendiente/aprobada/rechazada) y ese estado es PROPIO de v461, asi que nacio fuera del mapa. ⚠️ Un valor nuevo no entra solo, y **no da ningun error**: `etiqueta()` devuelve tal cual lo que no conoce —correcto para un nombre de obra, y justo lo que esconde un estado recien inventado—. ⚠️ Y ningun guardian podia verlo: las 14 redes de i18n miden el CODIGO y aqui el texto viene de la HOJA; la red 12 cubre la forma pero su chequeo fija las tres celdas concretas de v452 (el guardian acotado al caso que se vio, v309/v349/v441). Chequeo nuevo y GENERAL: todo valor de `ESTADOS` en `VALORES`, la etiqueta traducida, ⚠️ el **DATO sigue en espanol** (traducirlo dejaria de casar en silencio) y la celda por `etiqueta()`. 31 comprobaciones, 11/11 roturas, suite **100 verde · 0 rojo** |
+| v461 | **Corregir el fichaje: el campo pone la hora real y el admin la revisa** (petición del usuario; decisiones suyas: se aplica YA, se avisa si el periodo ya se pagó, y solo el mismo día). ⚠️ **Lo que decide si sirve de algo es recalcular las `Horas`**: `_row_segmentos` respeta la columna guardada para una fila cerrada del mismo día (v164), así que cambiar solo el timestamp habría dejado la nómina y el costo de la obra **idénticos, sin que nadie lo notara**. ⚠️ La excepción del «mismo día» está MEDIDA: una sesión abierta acumula contra el reloj —10,6 h el mismo día, **130,6 h a los cinco**, 2.342 USD a 40 $/h—, así que cerrarla no es corregir el pasado, es parar una hemorragia. ⚠️ Y al repasar apareció el caso que **revertir no puede resolver**: un cierre olvidado no tiene «hora anterior», así que revertirlo la devolvería a abierta → el admin **ajusta** la hora, sin mover el DÍA (otro día es otra nómina). ⚠️ **La suite destapó 6 rojos y 5 eran míos**: metí `st.toast` donde la app usa `flash` en 74 sitios; el `import auth` que sobraba delataba que me dejé a medias la regla de HOMÓNIMOS (séptima vez); y de las 4 cabeceras sin traducir el guardián **solo vio una** —las otras tres son palabras cortas sin acento, la trampa nº28—. ⚠️ Y mi propio guardián dio **FALLO con el código correcto** dos veces: leyendo `_SUBSECCIONES` como si fuera una lista (es una tupla, regla v135) y tomando `logger.warning` por texto de pantalla (filtrar por RECEPTOR, v439) — con él rojo de base, **una tanda de 11 roturas «cazadas» no probaba nada** (v459). Ejercitado contra la hoja real de punta a punta sin rastro; 27 comprobaciones, 11/11 roturas, suite **100 verde · 0 rojo** |
+| v459 | **«Engineer in charge» pasa a ser HEAD INSTALLER/S, elegidos de una LISTA** (petición del usuario; decisiones suyas: solo usuarios de CAMPO, y los nombres separados por coma). Escrito a mano, el responsable era una cadena que **no casaba con nadie**: una errata no da error, deja la obra con un responsable que no existe y que ningún filtro puede cruzar. Se guardan los **LOGIN** unidos por «;» (el login ES la identidad: dos personas pueden llamarse igual —«Mei Chen», v413— y un nombre puede cambiar) y el nombre se resuelve al MOSTRAR, desempatando homónimos. ⚠️ La columna sigue llamándose `Ingeniero`: se cambia lo que se MUESTRA, nunca la clave (v232/v442). Los cuatro caminos pasan a multiselect — obra (solo campo) y localización (**todos** los del grupo: una oficina la suele llevar administración, y filtrar por campo dejaría fuera al responsable real). ⚠️ **Y escribí un helper que YA EXISTÍA**: `_field_users` hace exactamente lo mismo, así que dejé **tres** definiciones del filtro «rol == campo» en el módulo — el patrón de los cinco `_num` divergentes de v323; unificadas, con chequeo permanente. ⚠️ **Dos chequeos míos midiendo otra cosa**: el guardián comparaba contra `ast.dump` (que usa `repr`, comillas SIMPLES) → **FALLO con el código correcto**, y eso **invalidó la primera tanda de roturas** (6/6 «cazadas» con el guardián rojo de base, o sea ninguna probaba nada); y el script de limpieza decía «0 copias restantes» contando `'campo'` en comillas simples, que no aparece nunca en el fuente — con esa cifra habría dado la limpieza por buena **dejando una copia viva**. 7/7 roturas |
+| v456 | **Se vacía la demo** (23 hojas, 869 filas; 8 usuarios de campo) conservando las 5 cuentas de gestion, la hoja `Auditoria` y **todas las cabeceras**; respaldo completo fuera del repo. Comprobado que la app **aguanta en vacio**: 17 agregados sin una excepcion y cada pantalla explica su estado. ⚠️ **ERROR DE ORDEN**: se vacio ANTES de borrar Drive, y los 31 archivos quedaron **inalcanzables desde la app** (el boton de borrar vive en la ficha del proyecto, que ya no existe) → hubo que sacar sus IDs del respaldo. **Lo que vive FUERA de la hoja se borra PRIMERO.** + `drive_store.inventario()/borrar()` y la pantalla **Drive maintenance** (solo propietario, con DELETE tecleado): ⚠️ la salvaguarda real es el **scope `drive.file`**, que impide ver nada que la app no haya creado. ⚠️ Y vaciar dejo **3 guardianes en rojo**: se resuelve con una tercera categoria en el runner —**codigo 2 = SIN DATOS**, ni verde (seria un OK que no comprobo nada) ni rojo (no hay nada roto)—, listada aparte con el aviso de que esas afirmaciones dejaron de comprobarse |
+| v455 | **Se elimina el modelo viejo de ganancia** (% sobre la mano de obra), a peticion del usuario: convivian DOS formas de contestar «cuanto gano con esta obra» desde v360. Queda: precio pactado si vino de cotizacion → ganancia por rubro (por hora + fija) → **la obra vale su COSTO** y se avisa de quien trabajaria sin ganancia. El `%` pasa a ser siempre CONSECUENCIA, nunca entrada, asi que desaparecen el campo «Margin on labour» y el **editor de margenes de Rentabilidad** (v321). ⚠️ **Medido antes de tocar** porque mueve dinero: 10 de 19 obras lo usaban pero **solo 4 cambiaban de cifra** (las demas tienen costo 0) → ingreso del grupo **118.233,77 → 116.757,97**, y la ejecucion posterior dio EXACTAMENTE ese numero. ⚠️ La columna `MargenMO` **NO se quita de la cabecera** (desplazaria 20 columnas y la fila es POSICIONAL — el fallo de v363); se vacia su contenido. ⚠️ Y `MargenDefault` hacia **DOS trabajos**: el modelo viejo Y el punto de partida del margen de una linea de COTIZACION (el precio al cliente). Borrarlo, como se pidio, habria dejado cada linea nueva en 0% — se conservo y se señalo, porque **una instruccion dada sin conocer un efecto colateral no autoriza ese efecto**. 3/3 roturas cazadas |
+| v454 | ⚠️ **Una obra creada desde COTIZACION nacia SIN actividades** — encontrado por accidente al verificar en pantalla el titular «You are at», que no se pintaba NUNCA. La causa no era el titular: `PRJ-0016` (un Ripout) tenia **cero actividades**, y el avance se calcula sobre ellas, asi que la obra estaba **clavada en 0% para siempre**, el campo **no tenia donde reportar** y el bloque «cotizado vs real» no podia pintar nada. La regla es de **v306** y estaba aplicada **solo en el alta manual**: el camino de aceptar una cotizacion (v354) dejaba `acts = None`. Misma forma que v419/v358/v322 — **una regla aplicada a un camino y no a su gemelo**, por eso el guardian mira LOS DOS y exige que usen el MISMO nombre. ⚠️ Llevaba desde v354 y **ningun guardian podia verlo**: compila, devuelve ok y crea el proyecto — solo aparece mirando la pantalla y preguntandose por que un texto no sale nunca. Dato reparado (0 → 1 actividad); el 35% de avance que puse para provocar la frase se devolvio a 0 |
+| v453 | **Se cierran los pendientes que eran míos** (petición: «no dejes nada pendiente»). ⚠️ Al auditar contra los DATOS en vez del documento, la lista de pendientes estaba mal **en las dos direcciones**: `FechaIngreso` figuraba abierta y llevaba **18 versiones resuelta**, y el signo de `Cut*` llevaba pendiente desde v130 sin que yo lo recordara. + **red 14, la CONCATENACION** (`st.info("a " + v + " b")`): el literal no es el argumento sino un operando de un `BinOp`, invisible para la red de POSICION. ⚠️ Y la medida corrigio mi estimacion en las dos direcciones — dije «~80» y eran **127**, de los que **97 son CSS/HTML** (nada que traducir), **30 frases inglesas** y **0 en espanol**: estimar inflaba el pendiente Y ocultaba que 97 no eran trabajo. 27 frases reconstruidas como clave con marcadores → **0 sueltas**. + **MIGRACION DEL HISTORICO**, que era la razon real de no haberlo hecho: los nombres de actividad se GUARDAN en la hoja, asi que traducir solo el codigo dejaba los proyectos viejos en espanol **sin forma de casarlos** — **123/123 filas migradas en 1 batch** (respaldo fuera del repo, verificadas leyendo) + 25 conceptos de nomina. ⚠️ NO se migra lo que se COMPARA (el `tipo` del concepto y las banderas de `PHASES`), y se comprobo ejecutando que **el neto sale identico** con el nombre en espanol o en ingles. ⚠️ El guardian se equivoco **cuatro veces**, ninguna visible leyendolo: 10 falsos positivos por visitar los nodos INTERMEDIOS de una cadena `.replace()`, 1 mas por el ternario, **3 roturas ESCAPADAS** por comprobar presencia de subcadena cuando el literal esta en varios sitios, y **22 falsos positivos** por ignorar que el motor acepta `t("…{x}…", x=v)` — la forma NATIVA que usan los 20 modulos de PDF. La invariante que si sirve es **COMPARADOS ⊆ ESCRITOS** (al reves daba FALLO con el codigo correcto: `aporte` se escribe y `neto()` no lo compara a proposito, v346). 5/5 roturas cazadas; `verif_v438` **invertido** con su razon |
+| v452 | **Recorrido de las 24 pantallas del admin: 0 excepciones** — y **SEIS redes más** de i18n que ninguna de las siete de v450 veía: el **ternario** de display (`st.info(A if c else B)`, que no es un `Constant`), el **valor de dict en un `format_func`**, el **widget SIN `format_func`** (pinta el dato crudo), la **cabecera `<th>` escrita a mano** (a la que `tabla.cfg()` no llega) y el **valor de negocio dentro de una CELDA** (que no es una llamada a `st.*`). En pantalla salía todo a MEDIAS: `edit Datos` junto a Status/Costs, `62% avance` junto a `h worked`, `Vas 34 points behind plan` cuya tercera rama ya decía «You are», las 5 sub-secciones de Localizaciones en crudo y la columna Estado con `parcial · cobrada · vencida`. ⚠️ **Y el fallo que introduje yo, compilando**: al barrer «clave Estado en un dict» traduje CINCO sitios y **dos eran el dict que se ESCRIBE en la hoja** → habría guardado el estado en INGLÉS en Sheets, el peor fallo posible (un dato traducido deja de casar en silencio, y lo comparan 387 sitios); además el paréntesis se comió un argumento de `derive_estado`. Por eso la red 12 solo mira dicts dentro de un `pd.DataFrame`. + `_etq` metido en 2 módulos que no lo importaban (NameError que `compileall` aprueba). **Acciones ejercitadas en la INTERFAZ**: fichaje de punta a punta desde el sidebar, el editor de celda del tablero con el aviso de certificados de v219 EN VIVO (asignar → guardar → deshacer), buscador, campana y las 3 vistas del Panel. ⚠️ **Cuatro falsas alarmas descartadas midiendo** (survey_ui stale, un residuo de render a medio intercambiar, un recordatorio que no salía porque no debía, y el multiselect «sin opciones» porque usé el selector del selectbox). ⚠️ Y dos trampas nuevas: **`compileall` devolvió 0 sin compilar nada** (rutas inexistentes → OK en falso) y un bloque añadido **después del `sys.exit`** de un guardián, que no se ejecuta nunca. 16 roturas probadas, 3 cazadas solo tras dejar de comparar por subcadena. ⚠️ Y la red 8 hubo que ENSANCHARLA: solo miraba el ternario cuando era el ARGUMENTO de un `st.*`, asi que se le escapo `t("closed") if _cerrada else ":material/check_circle: abierta"` (vive dentro de una lista que se junta). La senal buscable en todo el repo es la **ASIMETRIA** — una rama por `t()` y la otra literal —, y con ella salieron 3 mas: la columna Contacto con `yes` y `falta` juntos, la campana y el historial de Pre-Start. + la **red 13**: el nombre de columna que alimenta un `line_chart`/`bar_chart` **ES la leyenda**, y ahi no llega `tabla.cfg()` — se leia «Planificado / Real» bajo una curva ya titulada en ingles; ⚠️ mi primer barrido dio **19 casos y 16 eran falsos** por atribuir al grafico todos los `_df` del MODULO, el error de ambito del medidor de v450 repetido. + las **DOS ramas del mismo if/elif** de la cotizacion, una con `t("You are at")` y la otra con «Vas» — el mismo «Vas» que ya se arreglo en `projects_ui`, o sea que se corrigio una copia y no la otra. ⚠️ **Queda ABIERTO, MEDIDO y dicho**: el literal de display dentro de una CONCATENACION no lo ve la red de POSICION (es un operando de un `BinOp`, no el argumento). Estime «~80» a ojo y contados son **127 trozos**: **97 son CSS/HTML** (nada que traducir), **30 frases ya en ingles** —la bolsa real— y **0 en espanol**, por eso hoy no se ve nada raro. Estimar era peor que no dar numero: inflaba el pendiente y ocultaba que 97 no son trabajo |
+| v451 | La **OCTAVA red** (los 7 ternarios de display) + los **6 grupos de parámetros del Survey** (`Hueco`, `Cabina`, `Puerta / umbral`, `Frontal`, `Laterales`, `Contrapeso`) — ⚠️ invisibles hasta para la red morfológica de v450, porque ninguno lleva acento ni terminación marcada — y las 7 etiquetas del recorrido de pantallas (rol del sidebar por `etiqueta()`, «hoy» del tablero, los MESES de la Ruta del día que salían mezclados con el día ya traducido, persona/personas, el toggle Cards/List y «never invoiced»). ⚠️ `_GRUPOS_PARAM` es constante de MÓDULO: el texto va en BASE y `t()` se aplica al PINTAR, o se congelaría al importar (van seis). 5 roturas |
+| v450 | **La SEXTA red: las CABECERAS DE TABLA seguían en español.** El usuario preguntó «¿ya quedó todo en inglés?» y la respuesta era **no**: `st.dataframe` pinta la CLAVE del dict, y las filas de esta app se construyen a mano, así que la cabecera es invisible para las cinco redes anteriores —que miran POSICIÓN o IDIOMA, nunca claves—. Medido: **46 cabeceras en 12 tablas**, y **mezcladas dentro de la misma tabla** (`Alerts` y `Status` en inglés al lado de `Elevador` y `Costo`), que se nota más que si estuviera todo en español. ⚠️ El arreglo es la ETIQUETA, nunca la clave: muchas se leen de vuelta (`r["Elevador"]`, `r["Peso"]`) y varias viajan a `DatosJSON`. Nuevo `core/tabla.py` aplicado a las **66 tablas**. ⚠️ **Verificado en vivo interceptando `fillText`** (el DOM no sirve, v399): `Column(label)` cambia la cabecera, deja las celdas numéricas **idénticas**, el `data_editor` devuelve las claves ORIGINALES y tolera claves que la tabla no tiene —esto último es lo que hace el arreglo robusto, porque deja de depender de mi atribución estática, que falló DOS veces mientras medía—. ⚠️ Y el propio MEDIDOR se equivocó **cuatro** veces (ámbito de módulo en vez de función; el argumento de `.get()` contado como celda; dar por traducida una columna con `column_config` **sin etiqueta**; y no ver el dict INLINE, que es la mitad de las tablas): la cuenta pasó de «15» a **90**. + **SÉPTIMA red** por MORFOLOGÍA en vez de por léxico —ninguna veía «vencida», «devuelto» ni «mantenimiento», a la vista en la campana— con la que se tradujeron **~180** textos más: 60 mensajes de backend que v445-v447 se dejaron, los avisos, los estados de inventario, los chips de cotización, los días del tablero, el correo interno y **las 31 líneas del informe ADMIN que v448 dio por cerradas**. ⚠️ Tres mapas espejo el mismo día (`{"vigente": "vigente"}`) y el **`t()` congelado por SEXTA vez**. 7 roturas |
+| v449 | **i18n CERRADO del todo: la navegación y las últimas etiquetas.** Al medir con las tres redes tras v448 aparecieron **32** que seguían en español, casi todas en lo más visible: los displays de `_SECCIONES`/`_SUBSECCIONES`, a medias («Projects» al lado de «Finanzas»). ⚠️ Cada entrada es **(ID, display)** y solo se toca el segundo: el ID lleva emoji porque **ES el identificador** que compara `sub ==` y usan los deep-links. ⚠️ Y faltaba el chequeo de **RAMA MUERTA para las sub-pestañas** (el de v442 solo mira opciones de widget); hubo que escribirlo **dos veces**: la primera comprobaba «el ID sigue en el fichero» y **pasaba con la rama muerta delante** (aparece dos veces: definición y comparación), y la segunda daba **dos ramas muertas inexistentes** por asumir que el del `else` es «el último de la lista» — en finanzas es el 5.º de 8 y en proyectos el PRIMERO. El invariante correcto es por SECCIÓN: un `if/elif/else` deja **exactamente uno** sin comparar. **Recuento final: 0 en interfaz y 0 en backend**; lo que queda en español es solo lo que no se puede traducir (datos, IDs, nombres de actividad, la carpeta de Drive `COPEX Activos` y la base de conocimiento del asistente), cada uno afirmado por el guardián. 6 roturas |
+| v448 | **F5 CERRADO: el informe ADMIN, los correos y los prompts de la IA** — la app ya no tiene un solo texto en español salvo lo que es DATO. El informe admin (101 cadenas) va con `_d()` aplicado **por AST y por posición**, ⚠️ refusando toda cadena que se use como ÍNDICE (`'Duración (d)'`, `'Línea'`: son contrato con `schedule_table`/`plumb_table`). ⚠️ **El barrido del FUENTE se dejó 22 líneas** y las encontró **generar el PDF y leer su texto** — la trampa nº27 otra vez —, capturando además el log del módulo, porque el veredicto va dentro de un `try/except` que registra y sigue (el fallo real de v437). ⚠️ Y el prefijo `"[Interpretación no disponible"` se **produce** en `interpretation` y se **compara** en `report` y `user_report`: los cuatro a la vez, o el informe imprimiría el mensaje de error como si fuera la interpretación. ⚠️ **Decisión de criterio dicha en voz alta**: la base de conocimiento de `chat_agent` (353 líneas) se queda en español y solo se traduce la REGLA DE ESTILO, que ahora ordena responder en inglés — el modelo lee español, y traducir contenido técnico denso mete riesgo de error en el conocimiento del asistente a cambio de nada. Quedan tres exclusiones declaradas: los nombres de actividad (dato de la hoja `Actividades`), esa base de conocimiento, y las CLAVES de schemas y columnas. 7 roturas probadas |
+| v447 | **F5c: los 14 módulos de backend que quedaban** — con esto el backend no tiene un solo mensaje en español. ⚠️ Aquí lo peligroso no fue traducir sino **RENOMBRAR**: `pre_i18n` marcó 25 funciones con `t`/`d` como variable, y renombrar es DOS pasos. El que se me escapó, en `payroll.neto`, era `elif t == "deduccion"` — con `t` ya importado como la función de idioma **no da error**: la comparación sale siempre False y **las deducciones dejan de restarse del neto a pagar**. Un fallo de dinero, silencioso, con `compileall` e imports en verde; lo encontró preguntarle al AST por todos los `Name` llamados `t` tras cada renombrado. ⚠️ Y me tapé a mí mismo dos veces más: en `manuals` renombré la variable del bucle a `_tok`, **que ya era el TOKENIZADOR del módulo** (shadowing dentro del arreglo del shadowing), y el **`t()` congelado al importar** salió otras dos veces (`plan_data.USA`, `toolruns.HERRAMIENTAS`) — cuatro en tres versiones, las cuatro cazadas por el guardián de v445. ⚠️ Y la foto de 261 líneas que prueba que **ningún número se movió** dio primero «IDÉNTICAS» comparando **dos ficheros vacíos** (el script fallaba con el stderr silenciado): el paso en vacío dentro de la propia comprobación. 7 roturas probadas — una solo tras integrar el chequeo de importes, que vivía aparte: *un chequeo que no está en la suite no protege nada* |
+| v446 | **F5b: seis módulos de backend más** (`quotes`, `projects`, `ausencias`, `orders`, `catalogo`, `clientes`; 88 mensajes). ⚠️ Aquí el riesgo de traducir un DATO es máximo y se midió antes: `projects.derive_estado` **devuelve** `"En progreso"`/`"Planificado"`, que se escriben en la hoja y se comparan en 387 sitios. ⚠️ **Renombrar es dos pasos**: al pasar los `t = totales(...)` de `quotes` a `_tot` quedaron **16 usos de `t["subtotal"]` colgando** —`NameError` en cuanto alguien creara una cotización—, encontrados preguntando al AST por todos los `Name` llamados `t` (16 antes, 0 después). ⚠️ Y **cometí el fallo de v445 veinte minutos después de documentarlo**: metí `t()` dentro de `ausencias.TIPOS`, que se construye a nivel de módulo, así que las etiquetas quedaban congeladas al importar — lo cazó el guardián recién escrito; la constante guarda el texto BASE y `nombre_tipo()` traduce al pintar (en los correos se queda en base, regla v436). ⚠️ Al mover esas lecturas escribí `nombre_tipo(k)` cuando **la variable del bucle es `_tp`**: otro `NameError` que habría reventado «Mis ausencias» y que ni `compileall` ni el import ven. ⚠️ Y **cuatro «fallos» del smoke eran del test** (firmas de `solicitar`, `crear` ×2 y `create_cliente`) — regla v135, novena vez. 7 roturas probadas |
+| v445 | **F5a: los mensajes de BACKEND que la interfaz pinta** — empieza la última fase. Aquí no vale la red de POSICIÓN (no hay llamadas a `st.*`): decide el **DESTINO** de la cadena — se traduce lo que la función **DEVUELVE** (la UI lo pinta con `flash`), y ⚠️ **NO** los mensajes de `logger` ni los **nombres de columna que viajan en el mismo `return`** (`"Usuario"`, `"Nombre"`), que son el DATO del libro. Se empieza por `auth.py` y `timeclock.py` (42 mensajes) porque son los que más se ven: cada login y cada jornada pasan por ahí. ⚠️ **El orden**: la local `t` de `auth._session_active` se renombró ANTES de traducir (pre_i18n), y en `timeclock` solo entra `t` porque `d` ya es variable en tres funciones. ⚠️ **Correr el mismo parche dos veces duplicó un import** en `timeclock`, y en `auth` el ancla era ambigua, así que **el import no se aplicó mientras las llamadas `t()` sí** — un `NameError` esperando en cada login, cazado por el chequeo de importes de v443. ⚠️ Y **tres «fallos» del smoke eran del test**: `verify_login` devuelve un dict y no una tupla, `_segmentos_dia` recibe un datetime y no una cadena, y la validación de campos obligatorios vive en `auth_ui` — regla v135 tres veces en un script. 6 roturas probadas; una solo tras corregir el guardián, que miraba `'"Usuario"' in fuente` cuando esa cadena aparece en medio módulo |
+| v444 | **Las CABECERAS DE TABLA que son clave de dict, y la QUINTA red.** ⚠️ Aquí no se decide por idioma: una clave de dict y una etiqueta **se ven igual en el AST**, así que `riesgo_claves.py` clasifica las 70 candidatas por lo que HACEN — 15 son IDENTIFICADOR (opción de widget o comparada con `==`: traducirla deja la rama MUERTA), 10 son COLUMNA DE EDITOR (el `_snapshot` de v148 las guarda en `DatosJSON`), 17 SE LEEN desde otro módulo y 4 son VALOR de `i18n`. Las **31 traducibles** se aplicaron **por AST y por posición**, nunca por texto: `"Credenciales"` es también el nombre de una hoja y `"Horas"`/`"Estado"` son columnas reales del libro. ⚠️ **El clasificador dio por SEGURA una que no lo era**: `'Riel'` es columna del editor persistido y no la vio porque `["Riel"]` dentro de una lista no es un `Subscript` — un falso «se puede» invita a romper justo lo que hay que proteger. + **QUINTA red**: etiquetas de UNA palabra dentro de TUPLAS (`("cred", …, "Credenciales", …)`, `f"→ Ir a {secn}"`), invisibles para las cuatro redes anteriores y que van a mano porque la misma cadena es dato en otro sitio; ⚠️ mi propia exclusión de nombres de hoja **tapaba dos etiquetas reales**. ⚠️ Y el chequeo de `column_config` **se aprobaba a sí mismo** (contaba sus propias claves como si fueran de la fila) y decía «0 huérfanas» con media traducción rota delante. 7 roturas probadas — dos solo tras corregir el guardián, las dos por comprobar PRESENCIA en vez del literal exacto |
+| v443 | **La CUARTA red del i18n: la f-string ENTERA, no sus trozos.** Salió clasificando los 6 rojos de la suite: el desglose de alertas del propietario estaba **a medias** (`f"{n} behind schedule"` traducido y `f"{n} alarmas"` no). ⚠️ Una f-string **no es una cadena, es una lista de trozos**, así que las tres redes anteriores —que miran cadenas COMPLETAS— no ven ni un **fragmento de UNA palabra** (`f"{n} alarmas"`, que además NO se puede envolver en `t()`) ni una **f-string a medio traducir** (`f"Collected {x} de {y}"`, cuyo español solo aparece al CONCATENAR los trozos). Barrido: **141 en `core/`, 48 en interfaz** — fases que yo había declarado cerradas. ⚠️ **Y la red se validó contra un caso construido y FALLÓ**: veía «de» pero **no «alarmas»** —su léxico eran palabras funcionales y ésa es un sustantivo sin acento—, o sea que el caso que originó la versión se le escapaba (trampa nº28, cuarta vez); con el léxico del dominio aparecieron **9 más**. ⚠️ **`Elevador` NO se traduce**: es la columna del editor de entrada que el `_snapshot` de v148 guarda en `DatosJSON` —`CAL-0002` ya tiene una— y renombrarla rompería «reabrir el cálculo»; sí las tablas de RESULTADO, que viajan al PDF de obra. ⚠️ Y un **NameError camino de producción**: `d('Works')` en un módulo que solo importa `t` (el fallo de v423), invisible para `compileall` y para el import. 7 roturas probadas — una solo tras corregir el guardián, que comprobaba PRESENCIA y con DOS tablas dejaba pasar romper una. Los 6 rojos eran CADUCADOS, ⚠️ uno **por el CALENDARIO** (miraba la semana actual, así que se ponía rojo todos los lunes) |
+| v442 | **La TERCERA red del i18n, los VALORES en pantalla y ⚠️ una RAMA que dejé MUERTA.** En v441 traduje la opción del radio de corte de rieles y NO su comparación (`caso.startswith("Caso 1")`): **la rama del Caso 1 no se ejecutaba nunca** y la herramienta caía en silencio al Caso 2 — sin error ni test rojo. Lo vi por casualidad. Arreglado con una CONSTANTE compartida + guardián que comprueba que toda comparación casa con las opciones de su widget (29 vigiladas); ⚠️ hubo que escribirlo **tres veces** porque las dos primeras daban 0 con la rama muerta delante (un comentario mío la «producía»; luego una etiqueta del PDF casaba como prefijo) y **mi propio arreglo lo cegó** al pasar las opciones a constantes. + **188 etiquetas cortas** (2 palabras dentro de tuplas y f-strings) que ninguna de las dos redes anteriores veía. + ⚠️ **`i18n.etiqueta()` existía desde v436 y la interfaz NO la usaba**: 160 lecturas de estados/tipos/roles/categorías en 16 módulos, todas pintando el español crudo (solo la usaban los 3 PDF) — el patrón «se escribe y nadie lo lee». Enrutados los puntos que se PINTAN, sin tocar las comparaciones ni los dicts que se escriben en la hoja; el selector de estado usa `format_func`. ⚠️ Y el fallo de ámbito por CUARTA vez: `_etq` ya era variable local en `render_nominas` → «'dict' object is not callable», cazado por pre-vuelo y comprobado EJECUTANDO la pantalla. 6 roturas probadas |
+| v441 | **i18n F4: las 5 herramientas técnicas + su PDF** — y, al ir a cerrarla, el hallazgo: ⚠️ **el invariante de v440 daba «0 cadenas sueltas» con 230 FRASES en español detrás.** Mide el ARGUMENTO de la llamada de display, así que un trozo de f-string y una cadena armada antes en una variable (`msg = f"…"; st.success(msg)`) pasan por delante — **el mismo agujero del guardián del LaTeX de v309**, o sea que F2 y F3 NO estaban terminadas. Red nueva: toda cadena sin envolver que sea una FRASE (3+ palabras) cruzada con el detector de español — ⚠️ aquí sí vale, porque su ceguera son las etiquetas CORTAS y ésas las cubre el invariante de posición. + **el PDF de las 4 herramientas estaba entero en español** y no lo miraba nadie (`tool_pdf` no es display y sus etiquetas son de 1-3 palabras), aunque **se lleva a obra**: va con `d()` (idioma BASE, v436), sin tocar `herramienta=` ni las claves de `datos=`, que son DATO. ⚠️ `verif_v303` se puso rojo con razón: los pies KPI ingleses medían **98 y 106 px sobre 93 útiles** — y el banco de medida se **calibró** antes de fiarse (lee +2..+6 px que el de v303). 9 roturas probadas, 6 guardianes caducados actualizados con su razón (v430 **reventaba** en vez de fallar legible), suite 81/81. ⚠️ **Queda medido**: ~215 etiquetas cortas y ~30 cabeceras que son clave de dict, tres de ellas atadas a datos guardados |
+| v440 | **i18n F3: TODA la interfaz de gestión en inglés** — 15 módulos, ~1.100 etiquetas, **0 cadenas sueltas sin `t()`**. ⚠️ Antes hubo que tapar tres huecos del extractor, los tres silenciosos: filtraba por **idioma** (ciego a 13 de 15 palabras probadas), se traía **claves de widget** (`st.form(key)` → la clave dependería del idioma y el formulario perdería su estado) y no veía **cabeceras de tabla ni tarjetas KPI** (71 `column_config` + las etiquetas dentro de `kpi_row`). En `column_config` se traduce la etiqueta y **nunca la clave**, que es la columna que `st.data_editor` devuelve. ⚠️ **Volví a romper `quotes_ui`** metiendo `t(...)` donde `t` ya era variable — tercera vez (v437, v439): la causa era comprobar el ámbito DESPUÉS de traducir, así que ahora hay **pre-vuelo** (`pre_i18n.py`), que señaló 46 funciones. ⚠️ Su primera versión daba falsos positivos: un `lambda t:` y un `[t for t, e in …]` **no ligan `t`** (trampa nº3) — los reales eran 7. Guardián probado contra 6 roturas; **dos solo se cazaron tras corregirlo**, las dos por medir por idioma: una afirmaba una clave que no existe (**FALLO con el código correcto**) y la otra no veía «Neto a pagar». El invariante que sí mide: **toda cadena suelta de display envuelta en `t()`** |
+| v439 | **i18n F1d + F2: los correos y LA APP DE CAMPO, en inglés** — cierra F1 y hace F2 entera (235 reemplazos: 13 en `notify`/`alerts`, 222 en los 4 módulos de obra). Los correos van con **`d` (idioma BASE)** y la pantalla con `t`. ⚠️ **Dos `UnboundLocalError` que introduje yo**: al traducir aparecieron llamadas a `t()` en funciones donde `t` YA era variable, y Python la marca local en el ámbito ENTERO — el peor dejaba **«Mis ausencias» sin abrir** (`'str' object is not callable`). Mi verificación fue «compilan e importan», que **no ejercita nada**. ⚠️ Y los cambios de `notify`/`alerts` **no estaban en el disco** pese a figurar como hechos: se reaplicaron y se verificaron GENERANDO los mensajes. ⚠️ **Y dije que F2 estaba terminada con 47 etiquetas aún en español**: mi detector busca acentos y palabras funcionales, y «Fichar», «Firma», «Pendientes» o «Mis ausencias» no tienen ninguna de las dos (tercera vez del mismo agujero: v438, el guardián de v439 y esto). Lo destapó el smoke test al EJECUTAR la pantalla; el barrido pasa a ser por POSICIÓN (literal de display sin `t()`), no por idioma. Guardián probado contra 8 roturas — **tres solo se cazaron tras corregirlo**: comprobar PRESENCIA dejaba pasar traducir 1 de 6 apariciones de una clave, «Registrados» es invisible para el detector de español (→ chequeos POSITIVOS, el «Planificado» de v438) y una rotura apuntaba a un módulo **sin ningún logger**. ⚠️ Corrección de escala: lo pendiente son **3.122 literales**, no los 1.153 que cité — mi lista blanca veía solo una parte, y el número incluye datos |
+| v438 | **i18n F1c: los DIAGRAMAS y las PLOMADAS — F1 CERRADO** (pedido por el usuario: «adelanta los diagramas y las plomadas»). 80 etiquetas en 6 módulos; el informe del cliente pasa de **37 líneas en español a 0**, salvo los 11 nombres de actividad, que son DATO de la hoja `Actividades`. ⚠️ El motor se importa con **alias `_d`**: en estos módulos `d` ya es variable en 14 sitios y taparía la función en el ámbito entero (el fallo de v437). ⚠️ NO se tocan las 11 CLAVES de `schedule_table`/`plumb_table`/`plumb_checks` (las indexan los informes) — pero sus VALORES sí, tras comprobar que nadie compara contra ellos. ⚠️ **El barrido estático se dejó CINCO restos** (filtraba cadenas largas y exigía el `<text>` en una línea): los cazó **renderizar los SVG y leer su texto**. Guardián de 59 comprobaciones sobre los **11 SVG generados** (incluido que sigan sin `<defs>`/`<marker>`, o svglib los tira del PDF), probado contra **12 roturas** — cuatro solo se cazaron tras corregirlo: un `or` que dejaba traducir un nombre, un umbral que daba **FALLO con el código correcto**, «Planificado» invisible para el detector de español (→ chequeos POSITIVOS, que de paso destaparon un `FICHA DE REPLANTEO`), y una rotura apuntada a un stub que nadie dibuja. ⚠️ Y **la trampa del `\b` del heredoc por SEGUNDA vez** (v436): 0x08 en el regex → no casa nunca y aprueba en verde |
+| v437 | **i18n F1b: el informe del CLIENTE en inglés**, con el prompt de la IA incluido — traducir solo los encabezados habría dejado **5 de las 12 secciones en español**, porque las escribe el modelo. ⚠️ **Y detrás había un fallo**: el veredicto se deducía del TEXTO de la IA (`"requiere cortes" in ia["cortes"]`), frágil ya en español e **imposible en inglés** — habría dicho «sin valores fuera de límite» en un hueco que sí hay que cortar. Nueva `interpretation.cortes_por_piso`, única definición, compartida con el payload de la IA. ⚠️ **NO se traducen las claves** de `USER_SCHEMA` (se guardan en `InterpJSON`: traducirlas dejaría las 5 secciones EN BLANCO) ni las de las tablas de cronograma y plomado. ⚠️ **Dos fallos míos que solo se vieron GENERANDO el PDF**: la variable del bucle del glosario se llamaba `d` y **tapaba la función del motor** en toda la función (UnboundLocalError; compilar e importar no lo ven), y `cortes_por_piso(limits…)` con el parámetro llamado `calculated` → NameError **que mi propio `except` se tragaba** dejando `_cortes=False` (v323/v338/v344 otra vez), visto solo al leer el log. Guardián probado contra **10 roturas**; dos solo se cazaron tras corregirlo — uno miraba el ÍNDICE en vez de la cabecera, y su sustituto daba **FALLO con el código correcto** porque `_section` PARTE el título |
+| v434 | ⚠️ **`list_users` se COMÍA las columnas nuevas de Login**: las fechas de alta se escribieron y se verificaron bien (`get_user` devuelve la fila entera), pero un barrido posterior las daba todas vacías — la proyección de `list_users` eran **8 campos escritos a mano**, así que `FechaIngreso` desaparecía al leerla, sin lanzar ni avisar. Ahora se deriva de `LOGIN_HEADERS` menos los secretos ⚠️ (la proyección NO se puede quitar: existe para que el hash y el token no salgan de ahí, v79). **Tercer sitio en dos versiones** con el mismo patrón — una lista de columnas a mano en paralelo a `*_HEADERS` (v363 la fila posicional, v433 `auth._COL`). + **datos de la demo rellenados**: fecha de alta de las 13 cuentas (las 10 con fichajes, derivadas de su PRIMER fichaje), tarifa a quien contaba $0, y email `@example.com` (RFC 2606: no entregable, no puede llegarle a nadie real). ⚠️ **Telegram NO**: un `chat_id` inventado mandaría los avisos al teléfono de un desconocido. Caducó `verif_v395` (exigía que siguiera habiendo 3 sin canal): reescrito sobre el comportamiento con un caso construido |
+| v433 | **El saldo de vacaciones pasa a ir por ANIVERSARIO de cada persona** (decisión del usuario; en AU no va por año natural) + se arregla el reparto al cambiar de año: unas vacaciones 28/12→08/01 descontaban **10 días a 2026 y 0 a 2027** cuando son **4 y 6** — el total salía bien y el reparto no. `dias_usados` cuenta ahora los DÍAS dentro del periodo, con la misma regla que el pago. Nueva columna `Login.FechaIngreso`; ⚠️ **sin ella no se inventa un aniversario**: cae al año natural y lo DICE en las dos pantallas (v325). ⚠️ El **29 de febrero** retrocede al 28 en vez de lanzar. ⚠️ **Y el fallo que solo se vio EJECUTANDO**: `auth._COL` era un literal en paralelo a `LOGIN_HEADERS`, así que la columna se migró en la hoja y la escritura moría con `Error: 'FechaIngreso'` — ni los imports ni ningún guardián lo ven. Ahora se DERIVA, y el barrido confirma que era el ÚNICO a mano de los 13 del repo. Guardián: 104 comprobaciones, **25 roturas probadas** — ⚠️ una solo se cazó tras corregirlo (miraba el código en vez del RESULTADO, y una versión que devolvía siempre 0 pasaba) |
+| v432 | ⚠️ **Se pagaba DOS VECES el mismo día**: si alguien tenía una ausencia pagada aprobada y además FICHÓ ese día, la nómina sumaba las dos cosas — medido, 8,75 h trabajadas + 8 h de baja = **$670 por un día**, invisible en la colilla (cada línea está bien; solo el total del día delata). Es v364 con otra forma. **Decisión del usuario: completar la jornada** — la ausencia paga solo lo que falta (fichó 4,68 → se añaden 3,32; fichó 8,75 → nada), y el recorte **se informa** en vez de aplicarse en silencio. ⚠️ **Mi primer chequeo pasó EN FALSO**: buscaba `"fich"` en el código y lo encontró **en un comentario mío**; lo mismo volvió a pasar dos veces al ampliar el guardián — las tres se arreglan mirando la ESTRUCTURA (la clave del dict devuelto, el `ImportFrom` real), no una subcadena. + los dos avisos que faltaban (al **asignar** personal con ausencias en esas fechas, y al **cancelar** una ya aprobada) + **rechazar** y **los avisos** ejercitados con el envío interceptado → las 6 rutas de escritura de v430 cerradas. Guardián: 82 comprobaciones, **20 roturas probadas** |
+| v431 | ⚠️ **El icono del selector de ausencias salía LITERAL** (`:material/beach_access: Vacaciones`): las opciones de un `selectbox` **no interpretan** `:material/…:` — `st.radio` sí (v234), así que la regla es POR WIDGET. Visto **mirando la pantalla**, no leyendo código. ⚠️ No se dio por bueno a la primera: podía ser una **ligadura de fuente** (trampa nº5), y mi sonda dio `false` también para el caso conocido-bueno — hubo que mirar el marcado real antes de acusar (un icono de verdad es `<span role="img">` con la fuente Material). Barrido del repo: 0 selectbox más afectados; los 7 `:material/` restantes son radios y se quedan. Guardián general nuevo. ⚠️ **Y el fallo de método**: ni el desplegable ni un checkbox respondían y llegué a atribuirlo a la pestaña oculta; **no era eso** — instrumentar los eventos midió que un clic pedido en (235, 318) aterrizaba en **(1088, 1472)**, ×4,63. Medir dónde cae el clic antes de teorizar |
+| v430 | **Autogestión de ausencias**: el equipo pide vacaciones o día libre y avisa de una baja, el admin aprueba, y al aprobar **se escribe en el planificador** con el aviso de las obras que quedan sin esa persona y quién puede cubrirlas. Saldo por persona y tipo, DERIVADO (nunca guardado). ⚠️ La enfermedad **no espera aprobación**: nadie sabe el lunes que el jueves estará en cama, y esperar dejaría el tablero mintiendo. ⚠️ **EL FALLO DE DINERO**: la base de la nómina sale de las horas FICHADAS, así que aprobar unas vacaciones significaba cobrar $0 — y quien estuvo fuera el periodo ENTERO **no recibía colilla en absoluto**, porque no aparecía en las horas; `generar` recorre ahora la UNIÓN de fichados y ausentes. La ausencia va como **DEVENGO con `origen`, nunca sumada a `Base`**: dentro haría que cada vacación apareciera como un descuadre inexistente en la conciliación de v313. ⚠️ **El segundo fallo lo cazó ejercitar la nómina de verdad**: a quien pidió el rango «con fin de semana» se le quitaban **12 días de saldo pagándole 8**, porque cada lado recontaba el rango con su criterio → columna `Findes` y la invariante *lo pagado = lo descontado*. Guardián probado contra **15 roturas** — ⚠️ dos solo se cazaron tras corregirlo, las dos por chequeos míos que corrían **en vacío** (buscaban `"st.rerun"` y `"len("` como subcadenas de un `ast.dump`, donde esos nodos no se escriben así). Entra además el guardián de la **regla v353**, que no existía en la suite |
+| v429 | **La pantalla de Costos deja de hablarle a la localización de lo que no tiene** (pedido por el usuario tras verlo con el rol campo). Eran **tres** piezas, no una: «Costará al terminar» («—» fijo, no hay avance que proyectar), «Presupuesto» («—» fijo, su ficha ni lo ofrece) y ⚠️ el titular *«se define en Datos»*, que era **falso** — ahí ese campo no existe, así que mandaba a buscar algo que no está. Quitar solo la primera habría dejado las otras a medias (v419). Titular propio: «Gasto de estructura: no se le carga a ninguna obra ni se le factura a un cliente». + **verificado en pantalla con el rol campo** todo v423: tarjetas Estado/Tipo/Responsable en vez de Avance/Cliente, sin barra de progreso, y menú de 3 (Avisos·Recibos·Archivos) sin «Avance». ⚠️ La localización no aparecía en su selector y estuve a punto de diagnosticar un fallo: era la **caché de 120 s** |
+| v428 | ⚠️ **Un generador de IDs contaba FILAS, y ya COLISIONABA en producción.** `roster._next_id` hacía `len(hoja)-1+1`, y `delete_trabajo` borra la fila cuando el trabajo no está asignado: medido, 4 filas con IDs `TRB-0002..0005` → el siguiente alta emitía **TRB-0005, que ya existía**. Como `trabajos_idx` indexa por ID, uno de los dos desaparece y **las celdas del tablero resuelven al trabajo equivocado** (nombre y color de otro) sin ningún error. Peor que el reciclaje de v427: ahí hacía falta borrar el ÚLTIMO, aquí basta con **uno del medio**. Mismo patrón encontrado por el guardián en `toolruns` (`CAL-`), que no chocaba hoy por casualidad. Arreglados los dos + salto extendido a **agrupaciones** (borrarlas y recrearlas metería los elevadores de la vieja en la nueva) y **credenciales** → **siete** generadores protegidos. + ⚠️ **v426 demostrado EN VIVO**: factura real de $5.500 con $1.500 cobrados, anulada → el P&L vuelve exactamente a su sitio, mientras la lógica vieja habría dejado **+$5.500 de ingresos fantasma**. + ⚠️ Una alarma descartada por medir: la columna «Estado» de Facturas «no existía» en el DOM — era la virtualización de `st.dataframe`, y a **1440 px caben las 8 columnas con 0 ocultas**; iba a arreglar algo que no está roto (el error de v335) |
+| v427 | ⚠️ **Los IDs ya no se reciclan.** Los 13 generadores hacen `max(los vivos)+1`, así que borrar la fila con el ID más alto **libera el número** y el siguiente alta lo reutiliza, heredando los huérfanos del anterior (medido en v426: $1.000 de facturación ajena). Nuevas `hojas.ids_referenciados` / `siguiente_id_libre`: al emitir, se salta el ID que aparezca **en cualquier otra hoja** — por texto (hay referencias dentro de JSON), incluyendo **`Auditoria`** (donde queda constancia de lo borrado) y excluyendo la hoja propia. Lee FRESCO porque decide qué ID se emite (v323); medido **0,44 s en caliente**. Degrada al comportamiento de siempre si falla. Aplicado a las tres entidades que se borran Y se referencian: proyecto, cliente y gasto. Verificado contra la hoja real: emitiría `PRJ-0018` en vez de reciclar el 0017. Guardián probado contra 7 casos rotos; ⚠️ **dos solo se cazaron tras corregirlo**: uno buscaba el NOMBRE `propia_l` (que sobrevive al borrar la comparación) y su versión funcional dio un **FALLO inexistente** por el CWD de los secrets (v19) — un guardián no puede depender del directorio desde el que se lance |
+| v426 | ⚠️ **Una factura ANULADA contaba como INGRESO en el P&L.** El comentario decía `# excluye anuladas` y el docstring también, pero `list_facturas` **no filtra por estado** (a diferencia de `list_nominas`). ⚠️ La asimetría es lo grave: los **costos** anulados sí se excluían, así que el error solo iba en la dirección de **parecer más rentable** — y anular es justamente cómo se corrige una factura mal emitida. Medido: una anulada de $1.100 con $400 cobrados inflaba facturado, cobrado, por-cobrar y ganancia. NO se arregla cambiando el default (la lista y el detalle del cliente **necesitan mostrarlas**: sería el fallo de v340), sino filtrando en `pnl`, que era el único de los cinco consumidores que no lo hacía. **Lo encontró ejercitar el ciclo de negocio completo, no leer código.** Guardián de COMPORTAMIENTO (parchea `list_facturas` con un conjunto conocido) — ⚠️ y su chequeo de «siguen visibles» **pasaba en vacío** porque llamaba a la función parcheada; ahora mira el código por AST. + **dos flujos completos ejercitados** (localizaciones y negocio, 53 comprobaciones) y **9 filas de pruebas del 26/08 sin limpiar**, que por el **reciclaje de IDs** (`max+1`) hicieron que una obra nueva heredara $1.000 de facturación ajena |
+| v425 | **El overhead deja de ser un hueco anónimo.** Las 172 h que nadie imputa a obra caían en «sin asignar» junto a los traslados, y el gasto de la oficina se sumaba a un KPI llamado **«Costo cargado a obras»** — mintiendo, igual que las horas antes de v422. Ahora: «En estructura» (h) y «+ $X interna» en Finanzas·Horas; **«Gasto de estructura»** aparte en Gastos, con la torta partiendo la mano de obra en «(obras)»/«(estructura)» para seguir sumando el grupo; y en la conciliación una fila **de desglose sangrada**, ⚠️ NO un sumando — añadirla descuadraría la cadena de v313. Todo **condicional**: sin localizaciones las tres pantallas quedan idénticas (comprobado por AST). La aritmética se extrajo a `_partir_gasto` **para que el guardián ejercite la función real y no una copia** (el error de v412): invariante `total_obra + total_int` = el costo del grupo de antes ($81.657,96 sin moverse), y ⚠️ las compras **huérfanas se quedan en obra** porque no se sabe de quién son. Guardián probado contra 9 casos rotos; **tres solo se cazaron tras afinarlo**, los tres por localizadores flojos (buscar la vista por docstring → rojo inexistente; buscar `"interno"` como subcadena del fuente → pasaba con la separación rota; mirar todos los dicts en vez del que se ENTREGA → el acumulador lo tapaba). ⚠️ Y el guardián de v322 cazó el fallo de v423 **por segunda vez**: `theme` sin importar (imports locales, v342) |
+| v424 | ⚠️ **Las 4 tarjetas KPI de Localizaciones salían INVISIBLES.** `_kpi_card` **devuelve** el HTML y no lo pinta; `with k[0]: _kpi_card(...)` es código válido que no lanza y descarta el string. **Ningún guardián podía verlo** —no hay error que atrapar—: lo cazó mirar la pantalla en producción, como el `:material/` literal de v375. Regla v135 por quinta vez en la tanda. Guardián nuevo y GENERAL: ninguna llamada a `_kpi_card` en todo el repo puede ser una sentencia suelta que tire su valor |
+| v423 | **Localizaciones internas: su SECCIÓN.** v422 las ocultó de todo; sin esto quedarían inalcanzables (media regla v340). Sub-pestaña **🏢 Localizaciones** en Proyectos: KPIs (horas «no se cargan a obra», gasto de estructura «no se factura»), tarjeta-botón por sitio, alta que pide mucho menos que una obra (sin NS, fechas, presupuesto, cliente ni margen) y ficha con Equipo · Gastos · Pre-Start · Archivos · Datos (incluye **Cerrada**). El **campo** ve su sitio en «Mis proyectos» con avisos, recibos y archivos, pero **sin «Avance»** ni barra de progreso — no tiene actividades. ⚠️ Cuatro suposiciones mías rotas por ejecutar en vez de leer (v135): `labor_breakdown` usa `items` y no `personas`; `prestart.list_for` **no existe**; **`near_miss` es un BOOL** y compararlo con `"YES"` habría pintado en **verde un pre-start con incidente**; y `E`/`theme` se importan DENTRO de cada función en `projects_ui` (v342) → mi bloque daba **NameError al abrir la pantalla**, cazado por el guardián de v322 porque mi propio chequeo de nombres libres se autoengañaba mirando imports de cualquier nivel. Guardián probado contra 8 casos rotos; dos solo se cazaron **tras afinarlo** (uno pasaba porque `es_interno` aparecía por otro motivo; otro **fallaba con el código correcto** por su propia aritmética) |
+| v422 | **Localizaciones internas (oficina/almacén/taller): el CERROJO** (pedido por el usuario; sin UI todavía). Se modelan como proyecto para reusar fichaje, pre-start, gastos, roster y documentos, pero **no se le facturan a nadie**: su costo es estructura. Familia nueva dentro de `Tipo` (sin columna nueva), `es_interno()` como ÚNICA definición, estado propio **Abierta/Cerrada** (sin actividades el avance es 0 y quedarían «Planificadas» para siempre). El cerrojo es el **DEFAULT de `list_projects`**, que protege los **59 call-sites** de golpe; se clasificaron uno a uno como en v149. ⚠️ Dos decisiones no obvias: `group_expenses` **SÍ** las incluye (si no, sus compras salían como **HUÉRFANAS**, avisando de dinero perfectamente imputado) y `group_hours`/`jornada_y_proyecto` separan `interno` de `proyecto`, o el primer fichaje en la oficina habría inflado «cargado a obras» — la cifra que v313 definió como *lo que se le cobra al cliente*. Quién ficha ahí: asignado permanente (= «perfil de oficina», sin rol ni columna nuevos) o puesto por el roster, que ahora entra al selector y no solo al botón; ⚠️ y se cierra el fallback que regalaba **todos** los proyectos a un usuario de campo sin asignaciones. Verificado: **18/18 cifras idénticas** contra el código viejo (`git stash`) — ⚠️ pero eso solo prueba que con cero localizaciones nada cambia, así que la prueba positiva fue una localización REAL con gasto y horas. Guardián en las DOS direcciones, 6 casos rotos cazados |
+| v420 | **Dar de alta un cliente sin salir de la cotización** (pedido por el usuario). Antes había que irse a Contactos y volver a empezar, y **sin ningún cliente la pantalla hacía `return`**: el primer presupuesto de un cliente nuevo era imposible sin pasar por otra sección. Ahora el selector trae **➕ Nuevo cliente**. ⚠️ Aquí NO vale el «Otro» de los proyectos, que guarda el cliente como TEXTO sin ficha (de ahí los `vd`/`ci` de v357): una cotización necesita **`ClienteID`**, que es lo que usa `aceptar_y_crear_proyecto` (v354) para que la obra nazca con su cliente. Por eso **la ficha se crea ANTES y, si falla, no hay cotización**. ⚠️ Un nombre duplicado **reutiliza** la ficha existente en vez de dejar al usuario con la cotización escrita y sin poder guardarla. ⚠️ Las keys se limpian en **las dos** salidas (cancelar y guardar) o la siguiente cotización hereda el cliente anterior. Guardián: su chequeo de la limpieza era demasiado laxo (`≥2 apariciones`) y pasaba con la limpieza borrada de una salida — se cambió a comprobar **por bloque**; lo destapó probarlo contra el código roto. **Ejercitado en producción**: `COT-0008` creó la ficha `CLI-0008` y quedó enlazada por `ClienteID`; repetir el nombre con otro may/min reutilizó esa misma ficha (`COT-0009` → `CLI-0008`, **una sola ficha**). Producción sin rastro. ⚠️ De paso: la barra lateral decía **v420** y el topbar **v419** a la vez — Cloud recargó unos módulos y conservó otros, y `quotes_ui` era el nuevo; **la versión no prueba nada en ninguna de las dos direcciones, solo el CAMBIO** |
+| v419 | **Una sola ubicación por proyecto: la del mapa** (pedido por el usuario: «hay una en el mapa y otra en los datos, y no tiene por qué haber 2»). ⚠️ La causa: **v272 unificó solo la mitad** — al CREAR la ubicación ya salía del mapa, y la EDICIÓN se quedó con el `text_input` suelto, desconectado del pin. Como el TEXTO es lo que leen Home, Ruta del día, Pre-Start y los avisos (las coordenadas solo el mapa y la ruta), un proyecto con pin y sin texto **parecía no estar ubicado en todas partes menos en el mapa**. El campo pasa a solo lectura y sale del pin; + aviso del caso inverso (dirección sin pin, hoy `PRJ-0016`), que no sale en ningún mapa y nadie lo decía. ⚠️ **No se geocodifica sola**: un pin inventado que nadie ha mirado manda a alguien al sitio equivocado. ⚠️ El texto **solo se pisa si el pin se toca** (hay direcciones a mano que el geocoder reescribiría — fallo de v360) y **solo desde `_addr`, nunca `_q`** (media búsqueda sin confirmar acabaría siendo la dirección). Medido antes: 15 con ambas, 1 con texto sin pin, **0 con pin sin texto** — el caso descrito es posible pero hoy no se da, y se dijo |
+| v418 | **El Pre-Start deja de pedir lo que ya sabe** (dos peticiones del usuario). **(1)** El proyecto se preselecciona por tener **FICHAJE ABIERTO**, no por el rol: existía desde v170 pero detrás de `if rol == "campo"`, porque aquella versión asumió que «admin/propietario no fichan» — ⚠️ falso desde **v150**, y el admin ficha a diario. **(2)** Los asistentes se **eligen de la cuadrilla** (asignados + fichados hoy, estos preseleccionados) en vez de teclearse, conservando el **nombre libre** para subcontratistas o visitas; ⚠️ la firma se indexa **por persona, no por posición** (con índices, añadir a alguien pasaba la firma dibujada a otro). **(3)** ⚠️ Y por eso se guarda el **LOGIN** del asistente: con la lista, dos homónimos generan entradas IDÉNTICAS y firmar una apagaría el aviso de la otra. Se guarda el nombre limpio + el login aparte (nunca la etiqueta de v413 — fallo de v308), y ⚠️ **el respaldo por nombre hubo que acotarlo a los asistentes SIN login**, porque comparándolo contra todos anulaba el desempate: **lo cazó la prueba, no leer el código**. Compatible con lo ya registrado |
+| v417 | **Manuales ejercitados: se cierra el inventario de escrituras** (solo documentación). Con la sesión de PROPIETARIO: alta → «2 fragmentos indexados», hoja `Manuales` **creada** en el maestro (es global, v359) y `MAN-….json.gz` en Drive — ⚠️ confirma que a Drive **no va el PDF** sino los fragmentos troceados (v91); borrado → hoja a 0 filas **y archivo fuera de Drive**, con el botón bloqueado hasta confirmar (v139). ⚠️ **Tres obstáculos de método**: un PDF hecho a mano **revienta pypdf** (sin `startxref`) y habría hecho culpar a `add_manual`; el puente de JS **corrompe** 3.5 KB de base64 y el `fetch` a localhost está bloqueado por *mixed content* (https), así que hubo que **trocear y verificar** (3580 chars → 2683 bytes → `%PDF`…`%%EOF`); y el checkbox de Streamlit **no se marca clicando el `<input>`** (está oculto: recibe el clic el `div` de la casilla, como el chevron de v294). Falsa sospecha descartada leyendo el código: el nombre cae al del fichero por diseño (`nombre.strip() or up.name`). **Quedan solo las rutas que avisan a personas reales**, excluidas a propósito |
+| v416 | **Ejercitadas las escrituras de Drive** (solo documentación: no cambia código). ⚠️ La foto del estado **corrigió lo que yo venía repitiendo**: no eran 4 pendientes sino 3 — `expenses.upload_receipt` ya estaba ejercitada (2 recibos reales con DriveID) — y Drive está rodado (**27 documentos** con DriveID). `credentials.upload_file` ejercitada ahora de ida y vuelta: fila `CR-0007` + archivo real en Drive (394 bytes, contenido legible), y al borrar **desaparecen las dos cosas**, sin basura. Producción sin rastro. ⚠️ En local no se puede (`is_available()` = False), así que se hizo contra el Cloud **inyectando el archivo en el `<input type=file>` con `DataTransfer`** — con el setter NATIVO para el `text_input`, porque asignar `.value` a secas no lo ve React, y llegando a la ficha **por botones**, ya que la tabla de Usuarios es canvas y no acepta clics sintéticos. Queda solo `manuals.add/delete_manual`, que exigen la cuenta de **propietario** |
+| v415 | **La nota del Panel pasa de UNA línea a HASTA dos.** Medir cambió mi propia recomendación (yo dije «esperar a verlo en uso»): de las **3 notas reales, 2 se cortaban**, y a un aviso —«⚠️ se pisa: dos obras a la vez»— le faltaban **3 px** de 135. Las notas de este tablero son avisos: cortarlas es cortar lo que hay que leer de un vistazo. ⚠️ **«Hasta» dos, no dos**: con `-webkit-line-clamp` la nota corta sigue en una línea (14 px), así que el alto extra lo pagan las 2 filas que lo necesitan, no las 8 — no se deshace lo que ganó v412. ⚠️ `max-height` de respaldo, porque el navegador **blockifica** el `display:-webkit-box`. ⚠️ Y la mini-app **no reproducía el ancho** (sin sidebar, sus columnas son más anchas y la nota cabía): valida el MECANISMO, mientras que el ancho sale de medir producción. Guardián de v412 **caducado y reescrito** sobre lo que protege de verdad (que la nota tenga tope, no que tenga una línea) |
+| v414 | **El nombre de obra deja de ir al filo** en `Proyectos · Lista` (pendiente de v408): la columna medía 248 px (232 útiles) y el nombre más largo ocupa **224** — ocho píxeles de margen. ⚠️ Y el corte es **SILENCIOSO**: comprobado MIRÁNDOLO en una mini-app, glide **no dibuja «…»**, recorta en seco, así que un nombre a medias parece completo (en v408 lo afirmé desde una prueba más débil: que el hook recibiera el texto entero dice qué se le PASA a `fillText`, no qué se ve). Medido el coste: a **272** entran las **mismas 10 columnas** que a 248 y el margen sube de 8 a **32 px**; a 300 se cae `Tipo`. ⚠️ Ningún ancho fijo garantiza que quepa cualquier nombre — lo que cierra el caso es que al seleccionar la fila la tira de acciones (v402) muestra el nombre **completo** |
+| v413 | **Homónimos en Planificación**: en el Panel había **dos filas «Mei Chen»** —dos personas distintas idénticas en pantalla—, así que al asignar la obra no se sabía a cuál. ⚠️ `auth.etiqueta_usuarios` existía **desde v319 y solo la usaba Nóminas**; las 8 vistas de Planificación seguían pintando `Nombre or Usuario` (sexta aparición del patrón: v151·v306·v319·v348). Nuevo `_etq`, que delega en esa función y ⚠️ desempata sobre **todo el grupo**, no sobre la lista visible (si no, la misma persona cambiaría de nombre según la pantalla). **De propina**: en `_asignacion_inteligente` el nombre es CLAVE de un dict de opciones, así que dos homónimos del mismo estado **colisionaban y una era imposible de elegir** (v147/v150) — el desempate lo arregla, no lo maquilla. ⚠️ NO se tocaron dos sitios, vistos auditando por AST cada lectura de `nom` ANTES de editar: `_ficha_rapida` (su `nom` alimenta el deep-link `gp_fichasel`; con la etiqueta quedaría «Mei Chen (mchen) (mchen)» — el fallo de v308) y `_catalogo` (su `nom` es el nombre de un TRABAJO, no de una persona) |
+| v412 | **La celda del Panel deja de estirar su fila**: una sola celda con dos asignaciones y franja horaria triplicaba su fila. Medido a 1440: filas de **36 a 116 px**, y el culpable no era la celda (53) sino **la NOTA (61)**, que ocupaba más que el trabajo que anota. La nota pasa a una línea con elipsis + texto completo en el `title`, y el label se topa a 2 líneas → filas de **108/144/38 a 63/63/38** (−43% de alto). ⚠️ La primera medición, tomada al ancho del PANEL, daba 36–421 px: habría dimensionado el arreglo para un problema 7,5× peor que el real — **tercera vez en el día** que medir al ancho equivocado cambia la conclusión (v335). ⚠️ El clamp necesita **tres** propiedades y aun así el navegador **blockifica** el `display` (el `<p>` está en un flex), así que el tope real lo garantiza un `max-height` de respaldo. ⚠️ Verificado que el selector NO alcanza a los botones del editor (el popover abierto se portalea fuera). ⚠️ El `title` escapa también las COMILLAS: `_esc` no las toca y una comilla permitiría inyectar atributos |
+| v411 | **Franjas alternas + columna de HOY en el Panel** (pedidas por el usuario tras ver la rejilla): filas pares con fondo tenue y el día de hoy teñido en cuerpo y cabecera, con subrayado azul y la palabra «hoy». ⚠️ La zebra va por **key de fila** (`st.container(key="rosrow_…")`), NO con `nth-child` sobre el `stLayoutWrapper` que Streamlit intercala: atarla a ese wrapper la rompería **en silencio** si mañana mete otro nivel (v327). ⚠️ «Hoy» solo se marca si **cae en la semana visible** — al navegar a otra semana no se resalta nada, porque marcar un día cualquiera como hoy mentiría. ⚠️ La celda vacía pasa a **transparente**: su `#f8fafc` tapaba las dos señales justo en las celdas vacías, que son la mayoría del tablero. ⚠️ «hoy» va en **segunda línea** porque con la ventana estrecha la columna baja a 55 px y ni la fecha sola cabe holgada — y la primera medición, tomada al ancho equivocado, decía lo contrario (error de v335). Caducaron y se actualizaron los guardianes de **v410** y **v301**, con la razón escrita al lado |
+| v410 | **Rejilla en el Panel de planificación** (pedida por el usuario): las celdas dejan de flotar sobre blanco — línea por fila, línea por día y cabecera anclada con una más marcada, para poder seguir una persona hasta el viernes o un día hacia abajo sin ir contando. Cabecera y filas envueltas en `st.container(key=…)`, usados como **objeto** (`_grid.columns(...)`) y no con `with`, para **no reindentar** el bucle (la clase de cambio que rompió v120/v148). ⚠️ Medido antes de escribir el CSS: el borde inferior necesita `!important` (sin él ganaba una regla de Streamlit y salía `0px`) y el derecho no; y **un popover CERRADO ya lleva su `st.columns` dentro de `.st-key-roscel_*`**, así que sin excluirlo el editor de la celda saldría cuadriculado. ⚠️ Para juzgar el resultado hubo que capturar a **1:1** y en **tema claro**: el panel escalaba 1440→800 y se comía las líneas de 1 px. Guardián `verif_v410.py` — ⚠️ uno de sus chequeos daba **OK con la exclusión borrada** (miraba subcadenas que existen por otros motivos); lo delató probarlo contra el código roto |
+| v409 | Documentación de v408 en CLAUDE.md: el barrido de las 24 pantallas, las trampas 21-23 (el recorte por *clip* sin elipsis, «encoger cambia un problema visible por uno invisible», y los rojos de la suite que venían de la consola) y la **corrección de v334** sobre qué prueba la barra de versión |
+| v408 | **Barrido de las 24 pantallas del admin.** ⚠️ La primera vuelta corrió a **800×292** y a ese ancho no prueba lo que parece (el error de v335): repetida a **1440×900** midiendo el desborde DENTRO de cada tabla, `Proyectos · Lista` ocupaba **1339 px en 1054**, así que `Usuarios`, `Situación` y `Alertas` —las tres señales de «esto necesita atención»— quedaban al otro lado del scroll, y al ir a buscarlas **se perdía el `ID`** por la izquierda. ⚠️ NO se arregló encogiendo: se probó y con 13 columnas y nombres de obra reales no cabe sin **CORTAR** texto — y el corte es INVISIBLE, porque glide recorta por *clip* sin elipsis (hubo que medir `measureText` del canvas: se comía 60 px del nombre de obra y 60 del cliente). La cura es la de v398: no achicar, **priorizar** — las de atención suben junto al nombre, el contexto baja a la derecha, y `ID`/`Proyecto` van **`pinned`** (verificado con un scroll real de 255 px: siguen en su sitio; 10 de 13 columnas visibles de entrada, 0 textos cortados). + el aviso de duplicado del Pre-Start decía siempre *«fírmalo arriba»* colgando de `hecho_hoy`, cuando el bloque de firma cuelga de `pendiente_de_firma`: a quien ya constaba se le señalaba algo que no estaba en pantalla (las dos preguntas que v403 separó, remezcladas en el texto). Con bandera `_pf_ok` para no afirmar «ya constas» tras un fallo de lectura |
+| v407 | **Se bloquea el segundo Pre-Start del mismo día y la misma obra.** Hasta ahora nada lo impedía y era fácil emitir dos documentos para una sola charla — me pasó a mí sembrando datos. ⚠️ **Bloqueo con salida explícita, no bloqueo duro**: hay un caso legítimo (otro turno, otra cuadrilla) y negarse en redondo dejaría **sin registrar una charla que ocurrió**, que es peor que el duplicado; hay que marcar una casilla, igual que el aviso de proyectos duplicados de v126. El guardián va en `submit`, no en la UI, para que ningún camino lo esquive; el aviso sale **antes** del formulario, no después de rellenarlo |
+| v406 | ⚠️ **`pendiente_de_firma` solo miraba la PRIMERA charla del día.** Nada impide dos Pre-Starts de la misma obra el mismo día (dos turnos, dos cuadrillas, o un duplicado), y con dos, **quien firmaba la segunda seguía viendo «te falta firmar» por la primera, para siempre**. Ahora se miran TODAS las del día: si firmó alguna, no se insiste; si no firmó ninguna se le ofrece **la más reciente** y se le DICE que hay más de una, porque cuál le tocaba no lo sabe la app y elegir en silencio sería peor. Salió de un error mío sembrando datos: metí sin querer un segundo Pre-Start en una obra que ya tenía el suyo, y la app lo aceptó |
+| v405 | **`use_container_width` → `width="stretch"`**, 200 sitios en 21 ficheros. El runtime anunciaba la retirada **«after 2025-12-31»** — fecha ya pasada, así que podía desaparecer en cualquier versión. ⚠️ **3 no se tocaron**: los dos `st_folium` (parámetro del COMPONENTE; convertirlo rompe el mapa de v307) y **un comentario** que contiene el literal — por eso la migración va por lista blanca de AST y no por texto, o el comentario habría acabado mintiendo. Medido antes: los 8 elementos aceptan `width` |
+| v404 | ⚠️ **El catálogo de rieles escribía en un libro y leía de otro** desde v359. `Rieles` es hoja GLOBAL (vive en el maestro), pero `rails._ws()` la abría con `timeclock._get_worksheet()`, que devuelve el libro **del grupo de la sesión** — mientras el lector va por `hojas.registros`, que resuelve con `sheet_id_para`. Medido en la demo: **2 rieles en el maestro, 0 en el libro donde escribía**. Efecto: un riel nuevo **no se encontraba nunca** → al cargar un plano **RAIL se quedaba en 0**, el síntoma que v157 dio por cerrado; y editar o borrar un riel real respondía «Referencia no encontrada». Ahora usa `get_sheet`, el mismo resolutor que el lector. + `_invalidate` tira **las dos** cachés (la del módulo y el LOTE de v339, o el riel nuevo no se ve en 120 s). ⚠️ Lo encontró el banco de pruebas nuevo en su primera vuelta completa — no una revisión de código |
+| v403 | **Quien llega después firma el Pre-Start**: hasta ahora, en cuanto alguien registraba la charla, el que fichaba más tarde en esa obra **no recibía ningún aviso** y trabajaba sin constar en el documento de seguridad — hueco de una decisión propia de v374, que ató el recordatorio a «¿hay charla?» olvidando «¿consto yo en ella?». Nuevas `pendiente_de_firma` y `firmar`; el aviso no desaparece, cambia de motivo. ⚠️ **Se ANEXA una hoja, no se regenera el PDF**: las firmas originales solo viven dentro del documento emitido (v383), así que rehacerlo borraría la de quien sí estuvo en la charla — se compone `original + anexo` con `pypdf` y cada firma tardía lleva su hora. ⚠️ Orden de escrituras de v343 (subir el nuevo → actualizar la fila → borrar el viejo), verificado midiendo el orden real. ⚠️ `io` no estaba importado en `prestart.py` y el `BytesIO` iba dentro de un `try`: el PDF se habría dejado de componer en silencio (el NameError latente de v370) |
+| v402 | **Facturar desde la LISTA**: el usuario avisó de que «desde la tabla de proyectos no puedo hacer los invoices, solo ver si ya está facturado o no» — y era una decisión mía de v397. Ahora elegir una fila **ya no abre el proyecto**: muestra las dos acciones explícitas («Abrir →» y «Facturar»), como Finanzas·Gastos (v215) y Usuarios (v226). Decisión suya sabiendo el coste: abrir pasa de 1 a 2 clics. ⚠️ **NO se hizo enlazando la celda**, que era la idea de partida, y eso se decidió MIDIENDO: un `LinkColumn` **ordena por la URL, no por el importe** (`$980 · $5,200 · $27,883 · $2,960` = el alfabético de los PRJ-####), y en el bundle que distribuye Streamlit su clic hace `window.open(url,"_blank")` + `preventDefault()` → no recarga la pestaña, pero **abre una pestaña nueva = sesión nueva**, o sea el login si no está tildada la cookie de v221. ⚠️ El guardián de v397 afirmaba «la lista NO factura»: **caducado**, reescrito sobre el principio que sigue vivo (ninguna acción puede colgar de la selección, todas bajo un botón) y probado contra el código roto |
+| v401 | **Narrativa v102-v130 comprimida**: 29 secciones y 502 líneas → 137, conservando las 6 REGLAS, los avisos ⚠️, el dominio de los planos y un índice de los símbolos que solo se nombraban ahí. ⚠️ Se comprimió **solo** eso: de las 889 líneas «antiguas», más de la mitad son el CONTRATO de un módulo (`plumb.py`, `auth.py`, `timeclock.py`, `projects.py`…) y llevan versión en el título sin ser narrativa. ⚠️ El chequeo no fue «parece bien»: se extrajo cada span de código del texto viejo y se comprobó que siguiera existiendo en el documento — y hubo que **afinar la sonda**, porque comparar el span literal daba 128 falsos perdidos (`_do_calculo()` no casa con `_do_calculo`) y empujaba a inflar el texto nuevo sin motivo. Documento: 6.498 → 6.133 líneas (549 → 519 KB) |
+| v400 | Documentación de v396-v399 en CLAUDE.md |
+| v399 | **El dinero tenía dos caras en la misma pantalla**: la celda pintaba `$27883` y la tarjeta de al lado `$27,883` (y el pie de esa MISMA tabla también, porque sale de `theme.dinero`). No era una columna: eran **39 en 7 módulos** — todas las TABLAS de dinero de la app sin separador de miles frente a todos los KPI con él. ⚠️ El veredicto no se puede leer en el DOM: `st.dataframe` pinta en canvas y su nodo accesible lleva el valor CRUDO, así que se midió **interceptando `fillText`** (trampa nº18). ⚠️ `%d` NO se cambió por `%.0f`: uno trunca y el otro redondea, y unificarlos habría movido cifras (trampa nº20). ⚠️ Las columnas EDITABLES probadas tecleando: el editor se siembra con `1500`, no con `$1,500.00`, y devuelve el número intacto. Guardián `verif_v399.py` + suite **53/53** |
+| v398 | **Existir no es servir**: la columna «Sin facturar» era la décima de trece y, medido en producción con la tabla a ~520 px, **había que hacer scroll horizontal para encontrarla** — no cumplía la función por la que se añadió. Se movió junto al nombre |
+| v397 | **Facturar desde la cartera**: insignia con el importe + botón «Facturar» en la tarjeta (solo donde hay pendiente y solo para gestión), columna «Sin facturar» ORDENABLE en la lista, y el atajo en la cabecera de la ficha. `pendiente_por_proyecto` es la ÚNICA definición del mapa (`finance.sin_facturar` delega) y `_ir_a_facturar` la única de la navegación. ⚠️ Falsa alarma resuelta midiendo: el botón salía dos veces en el DOM y el segundo mide 0×0 — es el nodo del tooltip de `help=` |
+| v396 | Documentación de v387-v395 en CLAUDE.md |
+| v395 | **Se avisa de las alarmas que no le llegan a nadie**: un destinatario sin email ni Telegram recibe la alarma *dentro* de la app y solo la ve si entra a mirar — y desde v373 un control de seguridad en NO abre alarma. Medido en la hoja real: de los 5 destinatarios de `cliente1`, a **3 no les llega** (`dacox`, `Arcantox`, `admin1`), aunque siempre llega a 2. El aviso va **donde se arregla** (Planificación · Usuarios, sobre la tabla del email). ⚠️ Criterio distinto al del campo a propósito (a un gestor le basta UN canal; al campo se le exigen los dos, v79 — mezclarlos sería el error de v325) y ⚠️ **no entra en `_PENDING_KEYS`**: la rejilla del resumen es de nueve indicadores fijos con guardián (v305). 0 lecturas nuevas |
+| v394 | La barra del Panel **cabe en una fila a media pantalla**, esta vez MIDIENDO: la fila da 406 px y el `gap` por defecto se comía 48. ⚠️ Y el rango largo se partía en **3 líneas** dentro de 56 px — eso era lo que hinchaba la fila, invisible hasta medir su altura. Tres recortes: `gap="xxsmall"` (−36), rango sin año (−75) y menos padding **acotado a este** segmentado (−36). Medido en producción: barra de 70 → **40 px**, las tres vistas en una fila, 0 recortes |
+| v393 | ⚠️ **La firma del Pre-Start no cabía en un móvil**: `st_canvas` nace con `width=600` y no acepta `use_container_width`, así que en un viewport de 375 px el lienzo salía de 600 dentro de un hueco de 343 y **la mitad derecha quedaba fuera de pantalla** — el `st_folium` de 500 px de v307 otra vez. Ahora 300 px (medido: cabe entero). ⚠️ Sigue sin demostrarse que un DEDO complete el trazo: necesita un teléfono real. + **auto-poblar** rellena el fin de semana **solo si en esa semana ya hay alguien trabajándolo** (la condición sale del dato, no de una preferencia: ni impone sábados ni obliga a añadir a mano en una semana que la cuadrilla sí trabaja) |
+| v392 | La barra del Panel pasa de 5 a 4 columnas («Copiar semana anterior» baja a la fila de la cobertura) para dar ancho al segmentado. ⚠️ Rompió el guardián de v291, que exigía literalmente la columna `b5`: **caducado, no regresión** — lo que aquella regla defiende es que el chrome no vuelva a ser cuatro bandas, y siguen siendo dos. Actualizado para DERIVAR el número de columnas del propio código |
+| v391 | Etiquetas cortas en el segmentado (**Semana · Día · Libres**) porque «Disponibilidad» se recortaba con tres opciones. Solo el display: los valores son el estado guardado y no se tocan (v232) |
+| v390 | **Vista por DÍA de la cuadrilla** (una fila por persona sobre un eje de horas — lo único que ninguna de las tres vistas de un día ya existentes daba) + **sábado y domingo por semana** con `+ Sáb`/`+ Dom`, sin configuración nueva: la columna reaparece sola si hay algo asignado, y quitarla con trabajo dentro está bloqueado (v340). ⚠️ `DIAS_TODOS` va en el orden de `weekday()`, así que **ninguna fecha existente se mueve**. Se movió con ello todo lo que asumía Lun–Vie (rango, atajo de semana, radar de 7 días, agenda de Home, Ruta del día, Cumplimiento, Asignar, board del campo). Los cortes de `weekday() > 4` ya no cortan por ser sábado, sino si NO hay nada. Ejercitado contra la hoja real (incluido que `copiar_semana` arrastra el sábado, que era una afirmación mía sin probar) |
+| v389 | ⚠️ El popover **no** se cierra con el `st.rerun()` (medido en producción: su estado vive en el frontend). El comentario del código decía lo contrario — corregido, no el comportamiento: forzarlo exigiría remontarlo por `key` y eso arrastra el CSS del color de cada celda |
+| v388 | ⚠️ **El resumen de la vista del día mentía, y era mi propio fallo**: con dos obras solapadas de 8,5 h decía «17.0 h» — el mismo rato contado dos veces, justo lo que el aviso de al lado denuncia. Las horas pasan a ser la **UNIÓN** de las franjas y la suma solo aparece junto al aviso, como síntoma. + plural («asignación»/«asignaciones» pierde la tilde) y keys con la misma tripleta |
+| v387 | **Ver el día de una persona**: la celda solo cabe «primero +N» (v295), así que un día con varias obras esconde a qué hora es cada una y si se pisan. Línea de tiempo a escala **con carriles** (el solape se VE) bajo el tablero. ⚠️ **Medir los datos antes de diseñar cambió la propuesta**: 32 de 35 asignaciones no tienen hora y el único día doble real tiene las dos a la MISMA franja — un eje puro habría dibujado un bloque sobre otro con el resto vacío. Las que no tienen hora salen como «todo el día», sin fingir una franja. ⚠️ Un turno que acaba cerca de medianoche dejaba el eje bajo su propio mínimo (`hi` topado en 24:00 → hay que bajar `lo`) |
+| v386 | Documentación de v383-v385 en CLAUDE.md |
+| v385 | **Auditoría de la suite ENTERA**: venía corriendo un subconjunto elegido por mí, así que «13 en verde» ocultaba que de **48 guardianes fallaban 13** — dos introducidos ese mismo día. **3 fallos reales**: el `font-size:15px` de la banda nueva (fuera de la escala de v333), un `import pandas` muerto en `prestart_ui`, y **5 `except: pass` que se tragaban el apunte de auditoría** sin dejar rastro (de v342/v352). **9 caducados**, actualizados con la razón escrita al lado, no relajados: los tres de la nav exigían código que **v299 borró** (fallaban por haber ganado), y el resto miraba CSS, columnas, fixtures y enlaces que v301/v310/v313/v317/v318/v325/v333/v361 cambiaron a propósito. **Y un falso positivo del propio guardián**: acusaba a `catalogo` y `orders` de leer el `_next_id` de la caché porque buscaba la subcadena `_records`… y **`get_all_records` la contiene** (la trampa nº2, *grep ≠ uso*, dentro de un chequeo). REGLA: se corre la suite entera, no la lista que uno recuerda |
+| v384 | Fix: la banda del Pre-Start usaba `font-size:15px`, fuera de la escala tipográfica de v333 |
+| v383 | **Firma DIBUJADA en el Pre-Start** (una por asistente, solo en el PDF) + **banda de aviso en la barra superior** que no se puede descartar hasta que el Pre-Start esté hecho. La dependencia (`streamlit-drawable-canvas`, de 2023) se probó ANTES contra el Streamlit 1.57 que corre aquí: captura el trazo (543 B en blanco → 5.245 B firmado) y reportlab lo acepta; import perezoso, así que si falla se cae a las iniciales en vez de dejar sin registrar la charla. ⚠️ **Tres trampas**: detectar la firma por el canal ALFA daba **58.800 píxeles de trazo en un lienzo VACÍO** (todos «firmados»); `json.dumps` **no serializa bytes**, así que sin filtrar la firma el registro habría fallado entero (y en base64 seis firmas rozan el tope de 50.000 caracteres por celda); y la columna de firma medía el **9%** del ancho —dimensionada para dos iniciales— y partía el encabezado como «Signatur / e», lo que solo se vio extrayendo el texto del PDF generado. + `logger` inexistente en el `except` de la firma (el NameError latente de v370), con el guardián ejercitando esa rama |
+| v381 | ⚠️ **v380 arregló la función equivocada.** Con la pantalla delante, las alarmas ya salían y las 12 tarjetas **seguían en `0h`**: el arreglo fue a `project_hours_bulk` dando por hecho que era la de la cartera, y `render_owner_projects` llama a **`project_hours()` una vez por obra**. El test daba ✓ sobre una función que esa pantalla no usa. **REGLA: antes de arreglar lo que pinta una pantalla, mirar QUÉ función llama** — el guardián lo comprueba primero y solo después mide. + otro cero peligroso: **`datos_asociados`**, el recuento que se enseña ANTES de borrar un proyecto, le daba **0 en todo** al propietario («no cuelga nada» con 25 fichajes, 3 gastos y 11 actividades colgando) |
+| v380 | ⚠️ **La fase 2 se dejó dos huecos, y solo se vieron EN PANTALLA**: con la sesión de propietario los proyectos salían pero **todas las tarjetas marcaban `0h`** (el demo tiene 484 fichajes) y **0 alarmas** (el admin veía 19). Mis tests medían `list_projects`, pero una tarjeta se arma con **cuatro fuentes** y cada una tiene su propio camino al libro: las horas van por la hoja del fichaje y `open_counts_all()` **ni siquiera recibe grupo**. Cerrados con el mismo patrón. **REGLA: cuando una pantalla se compone de varias fuentes, compararlas TODAS contra quien las tiene bien** — arreglar la principal y dar la pantalla por buena deja ceros con pinta de dato. Guardián nuevo que compara horas, alarmas, gastos y retrasos del propietario contra los del admin |
+| v379 | **FASE 2: el propietario vuelve a ver a todos sus clientes** (veía 0 desde la mudanza de v377). En vez de hilar un `grupo` por ~40 funciones, **`tenant.como_grupo(g)`**: dentro del `with`, `sheet_id_para` consulta el grupo activo antes que la sesión, así que toda lectura cae en el libro de ese cliente. Un cambio, en el único punto donde se decide el libro; aplicado en 4 sitios. ⚠️ Vive en `session_state`, no en un global (un global se comparte por proceso — el fallo que acababa de cerrar v378). ⚠️ `grupos_por_libro()` lee una vez por LIBRO, no por grupo: si tres comparten el maestro, leerlo tres veces **triplicaría** el consolidado. ⚠️ **Y una fuga que introduje yo**: hacer que el `grupo` explícito eligiera libro SIEMPRE convertía el argumento en una llave (un admin ajeno pasando `grupo="cliente1"` leía su libro) — ahora solo elige si `tenant.puede_ver`. La cazó el test de dos inquilinos, y **solo tras reescribirlo**: el de v378 comparaba propietario contra admin y con la fase 2 había dejado de distinguir una fuga de la funcionalidad nueva |
+| v378 | ⚠️ **Fuga de datos ENTRE INQUILINOS en la caché.** `st.cache_data` se comparte por PROCESO y la clave era solo el título de la hoja, así que el segundo cliente recibía lo que memoizó el primero — demostrado con los dos libros reales en los dos sentidos. El cerrojo de v351 no lo cubre: comprueba el grupo de un objeto ya traído, y aquí **la lista entera es del inquilino equivocado**. 18 lectores de inquilino en 16 módulos: la función cacheada pasa a `X_cached(libro, …)` + envoltorio con el nombre de siempre, **sin tocar ninguno de los ~40 call-sites**. ⚠️ **Tres trampas**: (1) llamar al parámetro `_libro` dejó el arreglo **INERTE** — Streamlit excluye de la clave los argumentos que empiezan por guión bajo, y solo lo delató instrumentar qué se ejecutaba de verdad; (2) `compileall`, los imports y el guardián de AST daban ✓ con **3 `NameError` dentro de los envoltorios** (`TRABAJOS_SHEET`, `SHEET`×2) — **importar no ejecuta**, hubo que llamarlos uno a uno; (3) los `.clear()` de `_invalidate` apuntando al envoltorio, la regresión de v344 por tercera vez |
+| v377 | **La demo se muda a su propio libro** (`COPEX — DEMO (cliente1)`) y el maestro queda limpio para el primer cliente real: 22 hojas de inquilino copiadas, **9.617 celdas verificadas una a una**, y solo entonces vaciado el maestro. Las 4 globales (`Login`, `Grupos`, `Rieles`, `Manuales`) se quedan. Orden sagrado: **copiar → verificar → enlazar → verificar → borrar → verificar**. ⚠️ Hasta vaciar el maestro ninguna cifra probaba nada (los dos libros tenían lo mismo) — el paso en vacío aplicado a una migración. **Tres errores míos por el camino**: el respaldo escrito DENTRO del repo (el deploy lo habría subido a GitHub con hashes y emails — lo cazó `git status`), el verificador reventando con un **429** por pedir hoja por hoja en vez de por lotes (el problema de v339 cometido en el script que venía a verificarlo), y `values_batch_clear` recibiendo la lista como `params` en vez de `body`. ⚠️ **La fase 2 dejó de ser teórica**: el propietario ve ahora 0 proyectos; quedan identificadas las 9 funciones que hay que tocar |
+| v376 | Corrección del registro de v375 (documentación) |
+| v375 | ⚠️ **Diagnostiqué un fallo que no existía: la sonda estaba ciega.** Verificando v374 en producción concluí que el pop-up «no se pintaba nunca» — mi `MutationObserver` y mis comprobaciones buscaban **`div[role="dialog"]`**, que es como lo marca el Streamlit LOCAL; el del **Cloud** usa **`[data-testid="stDialog"]`**. El modal estaba ahí, perfectamente pintado. **REGLA: una sonda NEGATIVA hay que validarla contra un caso conocido-bueno** — antes de decir «X no se renderiza», comprobar que la sonda sabe ver X cuando está. Familia de la trampa nº5 y de v304: el DOM de Streamlit cambia entre versiones y mi entorno no es el que corre. El rediseño se conserva por ROBUSTO, no como arreglo: el aviso pasa de evento de un solo uso (`pop`) a **condición de estado**, así que ningún rerun puede matarlo, y gana la salida por la **X** (`on_dismiss`) que antes no existía. ⚠️ NO está demostrado que v374 estuviera roto. + **el fallo que SÍ era real**: los cronómetros del sidebar enseñaban **`:material/schedule:` en crudo** desde v233 — la etiqueta va dentro de `components.html`, donde eso no es un icono sino markdown de Streamlit. Visto mirando la pantalla, no el código |
+| v374 | **Fichar desde el sidebar** (v202 lo dejó de mirador y solo visible si YA estabas fichado): sin fichar, botón de tu asignación de hoy + selector del resto; fichado, los cronómetros + salir del proyecto / cerrar jornada. + **el Pre-Start del día se recuerda solo**: `prestart.hecho_hoy` — ⚠️ por OBRA y DÍA, no por persona (si el facilitador ya la hizo, al resto no se le recuerda; decisión del usuario) — con **modal al fichar** y **chip persistente** mientras falte (el modal se cierra y se pierde; el chip no). ⚠️ El modal va por BANDERA en la pasada siguiente y llamado al TOP LEVEL, no dentro del `with st.sidebar:` (v365 + el contenedor activo manda). ⚠️ **Verificado en vivo con la estructura exacta del código final** antes de construir: se pinta sobre la página, sobrevive al rerun, no reaparece. Falsa alarma resuelta midiendo: el icono del título parecía texto y era una **ligadura de fuente** (trampa nº5). ⚠️ Y las DOS direcciones de `hecho_hoy` probadas moviendo el día — comprobar solo el `False` es el paso en vacío |
+| v373 | Las dos decisiones pendientes, resueltas por el usuario. **(a) Un check en NO abre alarma** (cierra el standing item de v158): hasta ahora solo lo hacía el near miss, así que un control de seguridad sin cumplir solo lo sabía quien abriera esa ficha. ⚠️ UNA alarma con todos los checks (no una por check: `report_problem` también notifica) y separada de la del near miss (un suceso vs un control que falta). NO ejercitada contra producción: mandaría correo y Telegram a personas reales. **(b) Ganancia FIJA por obra** (`GananciaFija`), el hueco que v370 dejó abierto: una obra creada a mano cuyo valor no está en las horas valía su costo — el delivery de Bespoke pasa de **$380 estimados a $5.200**, que es lo que se facturó. Se suma al modelo que aplique; ⚠️ a una obra COTIZADA **no**, porque ese precio lo firmó el cliente (se avisa de que el número no se usa). ⚠️ Mi primera versión cambiaba el denominador de `margen_pct` y habría movido el % de **todas** las obras sin fija: revertido, el margen del conjunto va en clave aparte y las 16 obras dan la misma cifra que antes. Vuelta atrás probada (0 la quita y el ingreso vuelve exacto). ⚠️ `GananciaHoraJSON` llevaba **13 versiones sin auditar** — el hueco de v344/v352 por tercera vez |
+| v372 | ⚠️ **El avance que carga el campo no movía el % del proyecto.** `save_field_progress` recomputaba **antes** de invalidar, y `_recompute_project_avance` lee `list_activities`, que está cacheada 120 s — con la caché caliente (siempre lo está: la pantalla acaba de pintar esa tabla para editarla) recalculaba con las actividades VIEJAS. Medido en la hoja real: actividades al **26,0%** y el proyecto escrito en **0,0%**, estado «Planificado» en vez de «En progreso». Prueba de causa: el mismo guardado con la caché fría cuadra. Regresión de **v162** (el camino viejo recomputaba en memoria sobre filas frescas); un solo sitio, los otros 3 ya estaban bien. + la celda de avance **borrada** (`NaN`) reventaba el guardado ENTERO y la nota vacía guardaba el texto `"nan"` — ahora vaciar deja la actividad como estaba y se dice cuáles. ⚠️ Ese aviso tuve que pasarlo a `flash`: lo puse con `st.warning` sobre un `st.rerun()`, el fallo de v365 **dentro del arreglo**. ⚠️ Y mi test dio 5 ✗ EN FALSO por comparar `"40"` con `"40.0"` (la hoja guarda `str(float)`) |
+| v371 | Documentación de v369 y v370 en CLAUDE.md (sin cambios de código) |
+| v370 | ⚠️ **Una obra cotizada valía su COSTO, no el precio pactado.** Los materiales van a costo en los DOS modelos de ganancia, así que una obra cuyo valor no está en las horas (un delivery, un suministro) salía con ganancia $0: *Bespoke — Delivery* daba **$380 estimados habiendo facturado $5.200**, y una obra con cotización aceptada de $2.960 valía **$0**. El resultado REAL salía bien (usa la factura); lo que mentía era la estimación, y de ella cuelgan «ingreso estimado» y **«pendiente de facturar»**. La app **ya tenía** el número bueno —la cotización guarda su `ProyectoID` desde v354— pero el enlace era de una sola dirección: nueva `quotes.cotizacion_de_proyecto` y `project_revenue` usa el precio pactado (`modelo: "cotizado"`). ⚠️ La base es el **`Subtotal`**, no el Total: `facturado_por_proyecto` suma importes de línea sin impuesto, y el GST habría inflado lo pendiente **exactamente en el impuesto** ($296). Rentabilidad lo recoge sola (delega desde v361). ⚠️ Ejercitar el `except` de verdad destapó un `logger` **inexistente en el módulo** — NameError latente. Sigue sin cubrir la obra creada a mano sin cotización |
+| v369 | **Facturar una obra ARCHIVADA desde el alta manual.** v358 lo resolvió solo para el atajo desde la ficha; desde Finanzas → Facturas → Nueva seguían inalcanzables — **quinta vez que el default de v149 muerde** (v310, v321, v322, v358). Archivar no es no-cobrar: lo normal es archivar al terminar y facturar después. Casilla con contador (la pieza de v149/v340), etiqueta «· archivada» para distinguirlas en el radio, y ⚠️ **al desmarcar se suelta el alcance elegido ANTES de instanciar el radio** (un `st.radio` con un valor guardado que ya no está entre sus opciones revienta). El dato que lo justifica: `cliente 1` tenía **3 obras archivadas con dinero sin facturar** ($618,15 · $415,20 · $0,48). Verificado en vivo, incluido elegir una archivada y desmarcar sin excepción |
+| v368 | El bloqueo de contacto del campo exigía email **y** Telegram **sin comprobar si el canal existe**: en una instalación sin bot en Secrets eso no tiene salida (la pantalla no puede mostrar el link de Start ni el admin tiene botón). Ahora **solo se exige un canal que EXISTA**; con bot, todo igual. La pantalla además dice QUIÉN lo resuelve (el email lo carga el admin). Verificado por AST sobre la condición real de `app.py` en los 8 escenarios, 0 bloqueos sin salida, probado contra el código roto. ⚠️ **Y el error de método que importa más que el arreglo**: medí `telegram_configured()` en LOCAL y lo presenté como producción («7 encerrados sin salida») — en el Cloud el bot SÍ está, así que siempre tuvieron camino. El `secrets.toml` local NO es el del Cloud; afirmar algo del entorno real exige mirarlo EN el entorno real |
+| v367 | Los **68 mensajes restantes** (el barrido de v366 decía 19 y estaba ciego dos veces: no veía `(st.success if ok else st.error)(...)` ni los `rerun` anidados — por eso el fichaje entero se escapó). ⚠️ Dos trampas evitadas: la rama de **error** NO se convierte (ahí no hay rerun, se ve; convertirla la haría desaparecer) y las **insignias de estado** tampoco (`st.success` + `if st.button(): st.rerun()` se pinta en cada pasada). La primera versión del parche rompió una insignia y hubo que revertir desde el respaldo |
+| v366 | `core/flash.py` — mecanismo ÚNICO para los mensajes, pintado por la shell y por el login. 19 sitios convertidos. ⚠️ El chequeo de ámbito dio un **OK en falso**: `auth_ui` tenía el import DENTRO de `render_login`, mi patch lo dio por importado y dejó **4 NameError**; y mi verificador no lo vio porque descendía dentro de los `def` — el error exacto de v342, cometido dentro del chequeo escrito para cazarlo |
+| v365 | ⚠️ **Ningún mensaje de generar nóminas se había visto NUNCA**: el `st.rerun()` que cierra el formulario descarta los deltas del run (mismo principio que v222 con `components.html`). Se perdían «N creadas», el aviso de v346 sobre quien no tiene tarifa —la razón de ser de esa versión— y el bloqueo de solape de v364 recién hecho. Confirmado con `git show` que el rerun era anterior a mi cambio |
+| v364 | ⚠️ **Se pagaban las mismas horas DOS VECES**: el salto de duplicados de la nómina compara la terna EXACTA `(Usuario, Desde, Hasta)`, así que un periodo que **solapa** con otro ya emitido pasaba sin decir nada — a `campo1` se le pagaron 567 h habiendo trabajado 354. Salió de la forma más real: dos personas generando nóminas a la vez. Ahora se comprueba la intersección por persona, **no se emite** y se NOMBRA la nómina que estorba. El duplicado exacto y las anuladas siguen igual; las quincenas contiguas SÍ pasan; sin fechas legibles no se bloquea a ciegas. ⚠️ La conciliación de v313 ya lo gritaba, pero DESPUÉS de emitir — cada colilla suelta sale bien y solo el total delata |
+| v363 | ⚠️ **Crear proyectos llevaba 3 versiones MUERTO** (y con ello aceptar una cotización): en v360 añadí `GananciaHoraJSON` a la cabecera y no su valor a la fila, así que el guardián de v306 cortaba con «Error interno» en cada intento. ⚠️ Matiz: una fila corta **no desplaza** datos (`append_row` deja la cola vacía, como hacen `add_user` y `add_group` a propósito) — el daño era que la función no hacía nada. Guardián nuevo **estático** sobre las 25 filas posicionales del repo (el de v306 solo salta al pulsar el botón, por eso vivió 3 versiones); la auto-validación manda al resolver, y lo no resuelto cuenta como fallo. + **el resolvedor de identidad, único**: v362 arregló «la misma persona partida en dos» solo en `labor_breakdown` y el patrón estaba en 5 funciones más — `timeclock.clave_de` lo unifica. ⚠️ Verificar comparando totales entre dos ejecuciones daba 20 h de diferencia por una sesión ABIERTA acumulando contra el reloj: **fallo en falso**; la comparación válida es sobre las mismas filas y el mismo instante (diferencia 0,02 s, dinero idéntico) |
+| v362 | ⚠️ **La misma persona salía partida en dos**: `campo1` (usuario) y `lksdfkldsf` (su nombre) eran dos filas en el desglose de mano de obra, porque 2 fichajes anteriores a v106 no tienen columna `Usuario`. Inofensivo mientras solo se sumaba —el total era correcto— pero desde v360 hay que decidir la ganancia **por persona**, y partida significa **dejarse 8,97 h facturándose a costo** sin aviso (pasó un turno antes). Ahora se resuelve por nombre contra las cuentas, ⚠️ solo si ese nombre es de UNA sola cuenta (con homónimos, mezclar es peor). El total no se mueve: $1.646,40 antes y después |
+| v361 | ⚠️ **Rentabilidad reimplementaba la fórmula del ingreso** y, con el modelo por rubro de v360, empezó a dar una cifra distinta que el detalle del proyecto (3.475,68 vs 3.628,80) — dos números de dinero para la misma obra. Ahora delega en `project_revenue`, la única definición, con guardián por AST. ⚠️ De paso, un fallo de método: el parche de v360 tenía un ancla inexistente envuelta en un `if not in`, así que **no aplicó y no avisó**; solo se vio mirando la salida con datos reales |
+| v360 | **La ganancia deja de ser un % y pasa a ser un importe por rubro** — y el trabajador es un rubro: cada persona lleva su **ganancia por hora** en esa obra (`Proyectos.GananciaHoraJSON`), los materiales van a costo, y el % pasa a ser consecuencia en vez de entrada. ⚠️ **Respaldo**: sin ganancias puestas, la obra sigue con el modelo viejo, porque cambiar en frío habría desplomado el ingreso estimado de las 6 obras sin que nadie lo pidiera. ⚠️ Quien no tenga ganancia se factura **a costo** y se avisa (patrón v346), y quitar las ganancias devuelve **exactamente** a la cifra anterior |
+| v359 | **Un libro de Google por empresa cliente** (mecanismo). El libro actual queda como maestro Y libro de `cliente1`, así que **no se migra ninguna hoja**; los clientes nuevos nacen con su archivo (`Grupos.SheetID`). `Login/Grupos/Rieles/Manuales` siempre en el maestro; el resto en el libro del grupo, resuelto desde la sesión como `clock.now()` (v173) — ninguna de las 21 llamadas a `get_sheet` cambió de firma. ⚠️ El orden GLOBAL-antes-que-auth evita una recursión infinita, y el lote se cachea **por libro** (si no, el 2º cliente leería los datos del 1º). ⚠️ Límite dicho en pantalla: los consolidados del propietario aún solo cuentan el maestro (fase 2). ⚠️ La cuenta de servicio no puede crear archivos (solo scope `spreadsheets`), así que el aislamiento de punta a punta queda pendiente de un libro real |
+| v358 | ⚠️ **Una obra archivada no se podía facturar**: el atajo de v357 llevaba al alta y la obra no estaba entre las opciones (el formulario usa `list_projects`, que oculta archivados desde v149) → la preselección no hacía nada, **en silencio**. Archivar no es no-cobrar: lo normal es archivar al terminar y facturar después. Cuarta vez que ese default muerde (v310, v321, v322). + la guarda de v357 tenía un caso mudo, que ahora habla. Encontrado **verificando en producción**, no en tests |
+| v357 | **Atajo: facturar desde el propio proyecto** — «Pendiente de facturar $X» + botón en 💰 Costos que abre el alta con cliente y proyecto ya elegidos. Reutiliza el alta existente (verificado: 1 formulario y 1 sola llamada a `create_factura`). ⚠️ No fija la etiqueta desde fuera —la resuelve el formulario, antes de instanciar el radio (v111/v306)— y ⚠️ mirar los datos reales evitó un crash: `Proyectos.Cliente` es texto libre y dos obras tienen «vd» y «ci», que no son fichas; preseleccionar eso reventaría el selectbox. Ahora resuelve por `ClienteID` y, si no hay ficha, lo explica |
+| v356 | ⚠️ **El editor de borradores refrescaba los precios en silencio**: reconstruía cada línea desde el catálogo al guardar, así que tocar una celda habría cambiado el total de la cotización real del usuario de $1.927,20 a otro número sin avisar. Ahora la cantidad **escala sobre el costo unitario congelado** y adoptar precios nuevos es un **botón explícito**, que conserva la ganancia en dinero y recalcula el margen. Con aviso de qué cambió («$960 → hoy $80»), solo en borrador, y las líneas cuyo artículo se borró se dicen en vez de descartarse. Encontrado mirando **datos reales**: con artículos de prueba, catálogo y líneas siempre coinciden |
+| v355 | **Se cotiza por GANANCIA, no por porcentaje**: el admin escribe cuánto quiere ganar en cada rubro y el margen % y el precio se calculan solos (Margen y Precio quedan bloqueados en la tabla). Nueva `margen_de()` como única fórmula y `ganancia_de()` derivada del precio, para que no puedan desacompasarse. ⚠️ Al cambiar la cantidad se conserva la **ganancia**, no el %, que es lo que la persona dijo. La invariante `precio = costo + ganancia` verificada exacta en 36 combinaciones; el margen redondeado es solo de lectura |
+| v354 | **Cotizaciones, fase 3 — módulo COMPLETO**: aceptar la cotización **crea el proyecto** con cliente, presupuesto, margen y cronograma, y aparece el bloque **cotizado vs real** (horas, costo, ganancia). ⚠️ El presupuesto del proyecto es el **COSTO** cotizado, no el precio: `project_cost` compara contra compras+mano de obra, así que con el precio la alerta solo saltaría cuando ya pierdes dinero. Idempotente (un doble clic no duplica la obra). ⚠️ La prueba cazó que «ganancia real» a mitad de obra daba $3.499 contra $893 cotizados **en verde** —no has ganado, es que no has gastado—: ahora se **proyecta** al ritmo actual (patrón v144) y solo se llama «real» al 100% |
+| v353 | **Cotizaciones, fase 2**: armar el precio desde el catálogo con **margen por línea**, estados (borrador→enviada→aceptada/rechazada, con `vencida` derivada de la validez), versiones y **PDF formal**. La línea congela su precio (subir el catálogo no mueve lo ya enviado) y una cotización enviada no se edita: se saca versión nueva. ⚠️ Verificado que el PDF **no filtra costos ni márgenes**. ⚠️ La prueba cazó que olvidé la hoja en `hojas.HOJAS_LECTURA`: como el lector va sin cabeceras, el módulo leía **vacío para siempre sin ningún error** — guardián nuevo para ese patrón. + margen 20% y GST 10% configurados en el grupo |
+| v352 | **Cotizaciones, fase 1: el catálogo.** `core/catalogo.py` + pantalla en Finanzas · 📚 Catálogo: productos (costo × cantidad) y servicios (**horas × tarifa**, para poder comparar luego contra lo fichado). `costo_de()` es la fórmula única que usarán cotización, PDF y la comparación. No deja crear artículos sin costo (fallo de las colillas de $0 de v346), desactivar con vuelta (v340), homónimos por ID (v306). ⚠️ La prueba cazó que **el precio no se auditaba**: `CostoUnit` no estaba en `CAMPOS_CLAVE` — el mismo fallo que `MargenPct` en v344, y el guardián no lo vio porque solo miraba una dirección; ahora mira las dos |
+| v351 | ⚠️ **Aislamiento entre empresas cliente.** El aislamiento no lo garantizaba el código sino que la interfaz nunca te ofreciera el ID de otro: **ninguna vista de detalle comprobaba el grupo**, y `_detalle_proyecto` lo ADOPTABA del proyecto → con los deep-links de v337 bastaba editar `?p=` para abrir el detalle completo de otro cliente (costos, horas, personal, archivos). Latente hoy porque solo hay un grupo real. Nuevo `core/tenant.py` (una sola definición, módulo hoja) aplicado a las 4 vistas por ID global: proyecto, factura, nómina y activo. El propietario sigue viendo todo; el mensaje no revela de qué empresa es el ID. Decisión del usuario: **cerrojo ahora, un libro por cliente cuando entre el primer cliente real** |
+| v350 | **Inventario, credenciales y pre-start ejercitados** — el inventario estaba virgen (0 activos, la hoja `MovimientosActivo` ni existía). ⚠️ Un fallo: **`traslado` guardaba el ID crudo en el historial** mientras `salida` guardaba el nombre resuelto, así que el mismo sitio aparecía como «proyecto: PRJ-0005» al llegar y «proyecto: prueba2» al salir (v306 se aplicó a una función y no a la otra). Aguantaron depreciación, QR, los 4 movimientos, baja+reactivación, los 4 estados de credencial, `compliance`, y el pre-start con su PDF. Tres falsas alarmas mías comprobadas antes de tocar (depreciación de 2 años, `APP_URL` que la UI ya avisa, y las categorías que viven en el código). NO ejercitados a propósito: `notify_expiring` y `near_miss=YES`, que escriben a personas reales |
+| v349 | ⚠️ **El LaTeX de v309 volvió en la pantalla de Costos** (`Llevas **0** de 10,000`, con los `$` comidos y los `**` literales). El guardián de v309 solo miraba los argumentos LITERALES de `st.*`, y aquí la cadena se arma antes en una variable → **ciego**. Chequeo nuevo por AST: cualquier f-string del repo con 2+ `$` sin escapar. Salieron 4 — una es el hash PBKDF2 (falso positivo, exento) y **las otras 3 están en Costos**, incluida la que yo escribí en v343. Dos de ellas estaban latentes (solo salen con costos y presupuesto). Lección: cuando el mismo fallo reaparece, preguntar por qué el chequeo no lo vio |
+| v348 | Anuladas las 3 colillas de $0 que quedaban (`NOM-0001`, `NOM-0004`, `NOM-0005`): la lista de nóminas pasa de 5 filas a **2 con dinero real**. ⚠️ Ninguna cifra se movió — la comprobación de que se anuló lo correcto. + el aviso de tarifa faltante **distingue homónimos** (`fijiofgjei (conductor)` vs `fijiofgjei (fijiofgjei)`): salía dos veces el mismo nombre para dos personas distintas, justo en el mensaje que dice a quién arreglar. Cuarta aparición del patrón (v151/v306/v319) |
+| v347 | ⚠️ **Una nómina anulada bloqueaba reemitir el periodo**: `generar` contaba las anuladas como duplicados, así que anular y regenerar no creaba nada y **la app no podía reemitir la nómina de nadie** (principio de v340: si se puede deshacer, tiene que poder rehacerse). Con eso arreglado se corrigió **`NOM-0002`** —8,69 h de trabajo real emitidas en $0— reemitiéndola a $347,60 + super 11,5% (el mismo del lote). ⚠️ La ganancia del grupo pasa de $210,42 a **−$177,15**, y esa es la cifra CORRECTA: el costo estaba subestimado en el trabajo que no se pagaba. Y la conciliación de v313 ya decía «sin explicar $347,60» — el dato llevaba ahí señalando el fallo |
+| v346 | **Nóminas ejercitadas** (última ruta sin recorrer) y **decisión del usuario sobre la tarifa 0**: quien no tiene tarifa ya NO recibe una colilla de $0 — se salta, se le nombra y se dice dónde arreglarlo. ⚠️ Reversible por construcción: como no deja fila, al poner la tarifa y regenerar el mismo periodo entra sin duplicar (probado). Motivo con evidencia: en la hoja real está `NOM-0002`, 8,69 h de trabajo emitidas en $0. Aguantaron el salto de duplicados, el neto (aportes que no descuentan), marcar pagada, la colilla PDF y anular. De regalo, dos confirmaciones en vivo: el **reparto por medianoche de v164** (6,37 + 1,63 = 8,0 h) y la **retención de impuesto**, que nunca se había calculado en esa hoja |
+| v345 | **Ejercitado el fichaje y las facturas** (lo que v344 dejó aparte). ⚠️ Hallazgo: `estado_cobro` miraba `parcial` ANTES que `vencida`, así que **un abono de $1 sacaba a la factura de «vencida» para siempre** — y el indicador rojo del resumen, el P&L y el estado de cuenta del cliente solo cuentan las `vencida`, o sea que ese saldo no lo veía nadie (el caso clásico: el cliente paga un anticipo y desaparece). Ahora vencida gana a parcial; los tres consumidores ya sumaban `Total − Cobrado`. Lo demás aguantó contra datos reales: jornada que se abre sola, cambio de proyecto, cierre con hora explícita (3,0 h), `sin_asignar_indet`, GST, cobro parcial, tope al cobrar de más, PDF y anulación. ⚠️ Y un falso hueco descartado a tiempo: la factura sin vencimiento solo era posible saltándose la UI |
+| v344 | **Ejercitar las escrituras contra la hoja real destapó 4 fallos que ningún test vio.** ⚠️ El peor es mío y llevaba 4 versiones vivo: `projects._invalidate` llamaba a `fn.clear()` con `fn` inexistente (al reescribirlo en v339 quité el bucle y dejé el cuerpo), el `except Exception: pass` se tragaba el NameError y **la caché no se limpiaba nunca** → tras guardar un proyecto la pantalla enseñaba el valor viejo hasta 120 s. Igual en `roster`. + las cachés DERIVADAS (`group_expenses`, `over_budget`, `gaps_by_group`, `projections_by_group`) tampoco se limpiaban. ⚠️ Y la auditoría de v342 vigilaba `MargenPct`, que **no existe** —la columna es `MargenMO`—, así que el margen era el único campo sin rastro; encima `update_project` anotaba cambios que descartaba en silencio y devolvía «Proyecto actualizado.» igual. Guardián nuevo: ningún CAMPO_CLAVE sin columna real, ninguna invalidación con nombres libres, probado contra el código roto |
+| v343 | **Órdenes de compra: el dinero COMPROMETIDO deja de ser invisible.** Entre que se pide el material y llega la factura, el proyecto salía dentro de presupuesto con el dinero ya comprometido — el sobrecosto se descubría cuando ya no se podía hacer nada. Nuevo `core/orders.py` (hoja `Ordenes`): al recibir una orden se crea sola su fila en `Gastos`, así que **el costo real sigue teniendo UNA fuente** (v310). ⚠️ `project_cost.total` NO se mueve (probado contra la fórmula anterior en 6 casos); lo comprometido va aparte, con el aviso **«vas dentro, pero con lo pedido te pasas»**. ⚠️ Se marca recibida ANTES de crear el gasto: al revés, un fallo a mitad daría **dos gastos por la misma compra**; así queda un hueco VISIBLE (`sin_gasto`) con botón para completarlo. + órdenes atrasadas (obra parada esperando material) |
+| v342 | **Rastro de cambios**: `CreadoPor` decía quién creó una fila y **nada decía quién la cambió** — «¿quién puso este margen al 0%?» no tenía respuesta. Nuevo `core/auditoria.py`, acotado a lo que mueve dinero (margen, tarifa, presupuesto, fechas, avance, personal): **1 escritura por edición y solo si algo cambió de verdad** (`40` y `40.0` no generan histórico), con el historial en el detalle del proyecto. ⚠️ La anotación va FUERA del try del guardado: el cambio del usuario no se pierde porque falle el apunte. ⚠️ Leer el historial NO crea la hoja (regla v145). ⚠️ El chequeo de nombres libres cazó un NameError real: `projects_ui` importa `theme` **dentro de cada función**, y mi primera comprobación dio un OK falso porque `ast.walk` encontraba el import local de OTRA función |
+| v341 | **Comparación con el periodo anterior en el P&L**: $1.710 de ganancia no dice nada hasta saber qué dio el mes pasado. `finance.periodo_anterior/variacion/pnl_comparado` + `_kpi_card(var=)` → ▲/▼ con el % bajo cada cifra, con **0 llamadas nuevas**. ⚠️ En un COSTO subir es PEOR (se invierte el sentido, si no gastar más salía en verde) y ⚠️ sin base no se muestra un «+∞%». Verificado con datos reales: agosto $1.710,42 vs julio −$1.500 → +214% |
+| v340 | ⚠️ **Archivar era un viaje sin vuelta.** El usuario archivó un cliente y desapareció: `Activo=NO` + las 5 llamadas usando el default que los oculta, sin casilla para verlos ni botón para restaurar. El dato seguía en la hoja, pero la app no podía enseñarlo. Es el fallo que v149 resolvió para proyectos y que nunca se aplicó a las entidades nacidas después — al buscarlo apareció **el mismo en los activos dados de baja**. Los dos con casilla «Ver también…», contador de ocultos y botón Restaurar/Reactivar |
+| v339 | **El techo de cuota de Sheets.** Medido: 15 de las 19 llamadas de una sesión eran `values/{hoja}`, una por hoja. Nuevo `core/hojas.py` las trae todas en UNA `values.batchGet` → sesión de **19 a 6 llamadas** y el recorrido por todas las secciones cuesta **0**; el lote es `cache_data`, o sea compartido por proceso. ⚠️ Tres trampas: un rango inexistente tumba el lote entero (se piden solo las hojas que existen), cada `_invalidate` debe tirar TAMBIÉN el lote (si no, «lo guardé y no sale») e import perezoso para no ciclar con `timeclock`. Las escrituras siguen leyendo frescas. Verificado idéntico fila a fila en las 19 hojas contra lectura fresca |
+| v338 | Fix de v337: la URL no se actualizaba en las 4 secciones **sin** sub-pestañas (Home, Fichaje, Inventario, Contactos), por un `session_state.get("")` que lanzaba y que mi propio `except` se tragaba. Parecía intermitente porque Finanzas y Proyectos sí funcionaban |
+| v337 | **Estado en la URL**: la dirección refleja sección · sub-pestaña · proyecto abierto, así que se puede mandar «mira esta pantalla». El slug se deriva del ID (que lleva emoji y no se toca), solo se lee en la primera pasada, solo se escribe si cambia, y no pisa el `?activo=` del QR. ⚠️ Valida contra las secciones **del rol**: una URL de otra sección no da acceso |
+| v336 | **Cierra el plan de diseño**: la curva S se traza de izquierda a derecha al entrar (aquí la animación ES el dato: el tiempo se lee como tiempo) y las cifras KPI entran al recalcularse, que era la señal que faltaba al cambiar un filtro. ⚠️ `animar=False` por defecto porque el MISMO SVG va al PDF por svglib — probado que, quitando estilo y clases, el de pantalla es **idéntico carácter a carácter** al del PDF. ⚠️ El navegador de automatización pide *reduced motion*, así que ahí no se ve animar: verificado por CSSOM que el mecanismo está entero |
+| v335 | Las etiquetas de `st.metric` dejan de truncarse con elipsis y usan dos líneas — «Dispon…» no informa de nada. ⚠️ Solo actúa en ventana estrecha: a 1440 px todas caben en una línea |
+| v334 | ⚠️ **Invierte v331**: la versión del topbar se lee **AL IMPORTAR** el módulo. Leerla fresca la volvía más engañosa, porque el fichero VERSION se actualiza con el deploy pero los módulos `core.*` ya importados siguen en memoria — medido: la app anunciaba v333 sirviendo el `theme.py` de v332. Ahora, si la barra dice v334, se está ejecutando v334 |
+| v333 | **Escala tipográfica**: de **31 tamaños distintos para 102 usos** (24 fuera de escala, residuos de escribir en `rem`) a **9 pasos elegidos**. Medido antes de tocar: 30 de 31 valores se mueven ≤1 px. Literales en px, no variables CSS (parte del CSS va a correo y a PDF). Los 137 `font-size=` de los SVG no se tocan: son la escala del dibujo técnico. + guardián que bloquea cualquier tamaño fuera de la escala |
+| v332 | **Estado de carga visible**: barra superior animada + contenido atenuado mientras Streamlit re-ejecuta (medido: 520 ms de rerun, opacity 0.55, sin residuo en reposo). ⚠️ Y el hallazgo: **el atenuado de v326 nunca funcionó** — la regla decía `div[data-testid="stMain"]` y stMain es un `<section>`. Auditados TODOS los selectores del kit contra el DOM real apareció un segundo muerto **desde v283**: `stMetricLabel` es un `<label>`, así que el estilo de las etiquetas de métrica jamás aplicó. Los 18 selectores dejan de depender del nombre de etiqueta |
+| v331 | El indicador de versión del topbar **mentía tras un deploy**: `@st.cache_data` sin ttl lo congelaba durante la vida del proceso y Streamlit Cloud recarga en caliente sin reiniciar. Visto en vivo: app v330, barra v324 |
+| v330 | **El buscador ya busca.** Era el fallo con más coste de credibilidad de la auditoría: 641 px del control más prominente, inertes desde v190. Busca proyectos (nombre/ID/cliente/ubicación), personas (nombre/login/email) y trabajos, con ranking (ID exacto → empieza por → contiene), sin acentos ni mayúsculas, mínimo 2 letras, y los archivados marcados. **0 lecturas nuevas a Sheets** (las 3 fuentes ya estaban cacheadas). Cada resultado reusa los deep-links existentes; la caja se limpia por bandera aplicada antes de instanciar el widget (regla v111) |
+| v329 | `theme.texto_seguro()`: un color de ACENTO deja de usarse como color de TEXTO. `_kpi_card` teñía borde y valor con el mismo color, así que el ámbar daba un importe a **2.85:1** («Por facturar»). El borde conserva el color vivo; el valor usa su equivalente legible (6.16:1). En el kit, no en cada una de las ~20 llamadas |
+| v328 | Subtítulo de la banda de marca **3.2 → 4.58:1**. Solo el de pantalla: los otros 5 usos de ese tono van sobre el azul oscuro (PDF, email, cajetín), donde da 9.1:1 |
+| v327 | ⚠️ **El 40 % de los botones nunca recibió el estilo del kit**: los selectores usaban combinador HIJO y un botón con `help=` va envuelto en `stTooltipHoverTarget`. Medido: 10 de 25. Viene de v283. + indicadores del resumen a 38 px (su `min-height:0` anulaba la altura del kit) |
+| v326 | **Arreglos de la auditoría de diseño**: contraste WCAG en indicadores (2.26→4.62), ámbar de texto (3.18→5.65) y texto de diagramas (3.43→5.57); **96 px de ancho recuperados** en todas las pantallas (el relleno lateral heredaba los 5rem de Streamlit y nunca se había decidido); botones a 38 px; y las primeras transiciones propias de la app — acuse de recibo al pulsar, que ataca los 2,9 s de silencio tras un clic, con `prefers-reduced-motion` |
+| v325 | El aviso «sin tarifa» mezclaba **dos cosas distintas**: a quien le falta la tarifa (se arregla en Usuarios) y a quien **ya no está dado de alta** (cuenta eliminada — no hay fila donde ponerla, y el aviso mandaba a un callejón sin salida). Nueva `auth.claves_conocidas()` —una sola definición, 0 lecturas nuevas, y degrada a «sí existe» si falla la lectura para no acusar de baja a nadie— consumida por `group_hours` (`existe`), `labor_breakdown` y `conciliacion_mo` (`sin_tarifa` / `de_baja`). El **indicador del Resumen cuenta solo lo accionable**. Caso real: `fijiofgjei` es la cuenta `conductor` borrada en v163 con fichajes huérfanos |
+| v324 | **Revisión en el Cloud con datos reales.** ⚠️ El proyecto con **0% de avance y 6 días de retraso** mostraba el mensaje **más tranquilo** de los tres (*«justo el ritmo que hace falta»*): con `ritmo_real = 0` la guarda anti-división-por-cero deja `factor = None`, que es *falsy*, y las dos ramas de aviso se saltaban. ⚠️ Y el proyecto **pasado de fecha no mostraba NADA**: su aviso era **código muerto** porque la guarda exigía `ritmo_nec is not None`, que es `None` justo cuando la fecha ya pasó (lo cazó el test al replicar el orden real de los `if`). ⚠️ La **conciliación gritaba «$1.262,80 sin explicar»** con el periodo por defecto, y no era un descuadre: horas y nóminas se filtran por fechas distintas (v309), así que en una ventana corta no cierra por construcción — con «Todo» cierra al céntimo. + el importe restado ya no lleva el signo duplicado. **Confirmado en vivo**: v322 tenía un caso REAL (AGR-0001, 2 miembros archivados: `0 elev · 0%` → `2 elev · 21%`) y v323 no movió ningún número |
+| v323 | Los helpers duplicados **no eran cosmética**: eran 5 implementaciones DISTINTAS de `_num`, 2 de `_parse_date` y 7 de `_col_letter`, y la divergencia era el fallo. ⚠️ **Cualquier importe con separador de miles (`1,234.56`, como Sheets formatea el dinero en AU) se leía como $0,00 en silencio** en las cinco variantes — costos, facturas, nóminas e inventario. Auditada la hoja real en SOLO LECTURA: 0 casos hoy (latente), así que unificar está probado que no cambia ningún número existente (5000 importes, 0 diferencias). Todo a `core/num.py`. + Una fecha no-ISO (`16/08/2026`) se leía `None` y esa factura **desaparecía del P&L**. + `_next_id` de facturas/clientes/inventario leía de la caché de 120 s y **podía repetir un ID** (y el ID es la identidad). + `notify_expiring` hacía N escrituras seguidas en CADA login de admin → 1 `batch_update`. + de los 128 `except: pass`, los 7 que se tragaban una escritura ya dejan rastro — el peor, `timeclock.get_sheet`: si la cabecera no migra, cada dato se guarda **en la columna de al lado** |
+| v322 | **Revisión de código**: 8 funciones muertas (−124 líneas, 0 referencias en todo el repo, verificado por AST porque grep cuenta mis propios comentarios) + 27 imports sin usar en 20 archivos. ⚠️ Y el hallazgo de fondo: **archivar un ascensor cambiaba en silencio el avance consolidado, la fecha de entrega y la curva S de todo el edificio** — las 6 consultas de miembros de una agrupación heredaban el "ocultar archivados" de v149, que es correcto para una lista y falso para un conjunto (misma familia que v145/v310/v321: archivar no des-construye el ascensor). ⚠️ Ese arreglo introdujo una regresión que cazó la verificación: el editor de miembros no mostraba al archivado y al guardar lo **desagrupaba solo**; y mi guardián solo veía una de las dos formas de escribir la consulta, así que la tarjeta de agrupación contaba menos elevadores que su propio % |
+| v321 | Rentabilidad: **el margen se edita en la propia tabla** (antes te mandaba a Datos de cada proyecto estando ya en la lista de márgenes) + columnas **Ya facturado / Por facturar** para contrastar el estimado con la realidad + las obras sin movimiento a un desplegable. ⚠️ Fix de un fallo de v310: el margen propio de un proyecto **archivado** se ignoraba y usaba el default del grupo, porque `group_expenses` pasó a incluir archivados y el mapa de márgenes no |
+| v320 | **Barrido de títulos duplicados** por AST sobre las 26 vistas de la shell: quitados 4 (Gastos, Horas, Rentabilidad, Facturas). ⚠️ Las vistas del campo y Pre-Start NO se tocan: cuelgan de secciones SIN sub-pestañas, así que su título es el único. + Horas: el KPI «sin asignar» mostraba 1,2 h y un 3% cuando el dato **no era calculable** (hay más horas en obras que de jornada) — ahora pone «—» y explica quién fichó a proyecto sin abrir jornada; «Costo M.O.» pasa a «M.O. cargada a obras» (v313) y fuera los proyectos con 0,0 h |
+| v319 | Nóminas: la lista dejaba pasar **4 colillas de $0** (esas personas no tienen tarifa/hora — `generar` lo detecta y solo se veía al generar), **dos filas homónimas indistinguibles** (nuevo `auth.etiqueta_usuarios`, la regla del ID aplicada a personas) y **gente con horas sin nómina**. Ahora las tres se avisan, con botón a Usuarios. + columna Tarifa/h, totales, filtro de periodo y KPIs con contexto. ⚠️ 4º título duplicado encontrado (v212/v291/v314) |
+| v318 | La torta de composición del costo pasa de fija a **herramienta** (4ª): el usuario la vio fija en v317 y prefirió pedirla al mirarla. La pantalla arranca en la rejilla de pendientes |
+| v317 | **Resumen financiero como torre de control**: rejilla fija de 8 pendientes clickeables (patrón del Resumen del día) + 3 herramientas que se abren debajo (patrón del Panel) + los 3 KPI con línea de contexto; la torta se queda fija. Cuatro indicadores NUEVOS que no estaban en ninguna pantalla: sin facturar, horas sin nómina, sin tarifa, sin margen. Y `resultado_por_proyecto` — ⚠️ acumulado a propósito — que revela que prueba1 se facturó **al costo** (margen 0%), no los $1.710 que sugería el mes natural |
+| v316 | Estado/Datos/Costos/Archivos pasan del radio con bolitas al **segmentado del kit** (`cpxseg_`, la pieza de v292): 412 px, con marco y el activo resaltado. Igual en 📋 Mis proyectos del campo. ⚠️ NO se copió la fila de botones del Panel: aquella es un acordeón de herramientas opcionales (se pueden cerrar todas) y estas son secciones excluyentes; medida, además, salía a 1120 px estirados. Los IDs con emoji y el matching, intactos |
+| v315 | Cabecera del detalle de proyecto: avance y horas se meten DENTRO de la tarjeta (barra fina + las dos cifras en una línea), fuera los dos `st.metric` de 660 px, la barra de progreso duplicada y el separador. **Medido: 196→104 px**. ⚠️ Era lo prometido en v311 y no entregado entonces |
+| v314 | Ruta del día, cabecera: fuera el **título duplicado** (`_sub_header` ya lo pinta — 3ª vez que pasa, ver v212/v291), el selector de fecha deja de ocupar 1340 px y gana **saltos de día ◀ ▶** (aplicados antes de instanciar el widget, regla v111), y la caption se va al `help`. ⚠️ Además: en **fin de semana** todos salían «sin plan» sin explicación, porque la rejilla del roster es Lun–Vie; ahora se dice |
+| v313 | **Conciliación de mano de obra**: nuevo `finance.conciliacion_mo` con la cadena `cargado a obras → −horas cobradas sin pagar → +horas pagadas sin cargar → base → +aportes de ley → costo real`, que cierra exacto con los datos reales. Las cinco pantallas dejan de llamar "costo" a cosas distintas («lo que pagas» vs «lo que cargas a obras») + avisos de horas imputadas sin jornada, gente sin tarifa y proyectos con margen 0%. ⚠️ Se verificó que el modelo del usuario (paga la jornada + ley; carga a la obra lo imputado; cobra eso × margen) ya estaba bien implementado: faltaba el puente entre las dos cifras |
+| v312 | Fix de v310: las tarjetas KPI mostraban la barra del escape (`COSTO ACTUAL \$3,145`). `theme.dinero` escapa el `$` para MARKDOWN, pero `_kpi_card` emite HTML crudo. Ahora `theme._esc` deshace ese escape, así que cualquier pieza HTML del kit lo arregla sola y no puede repetirse |
+| v311 | Detalle de proyecto (Estado) reordenado: lo corto (titular + KPIs) va arriba a ancho completo y abajo se enfrentan dos bloques largos (actividades \| alarmas), en vez de dejar la columna izquierda vacía ~800 px. El **cronograma pasa de 760 a 1280 px de lienzo** (área de barras 430→950) — ⚠️ `vw` es parámetro y el default sigue en 760 para NO cambiar los informes PDF. «Tocaba hoy» + «En curso ahora» se fusionan. ⚠️ Fix: el titular mostraba `**` literales porque el markdown no se procesa dentro de HTML; y el iframe del gráfico era 18 px más corto que el SVG, así que recortaba el pie |
+| v310 | ⚠️ **Gastos decía `COSTO ACTUAL $0` con $1.500 en la torta**: `group_expenses` ocultaba los proyectos ARCHIVADOS (v149) y esas compras no contaban en ningún costo, presupuesto ni alerta. Auditada la hoja real (solo lectura): los $1.500 eran de PRJ-0001, archivado. Ahora hay UNA definición (todas las compras del grupo), el P&L usa la misma, las compras sin proyecto se avisan en vez de perderse, y se quitó el gráfico de barras que duplicaba la torta. Sin periodo a propósito (rompería «% consumido»). ⚠️ De paso: el test de v309 daba OK en falso porque el mock ignoraba `incluir_archivados` |
+| v309 | ⚠️ **Fallo en las 3 pantallas de dinero**: dos `$` en la misma cadena hacen que Streamlit la renderice como **LaTeX** — en Facturas la línea de Subtotal/Impuesto/Total salía como fórmula ilegible, en Nóminas igual, en el P&L desaparecían los `$` y el `metric` de Facturas perdía el símbolo. Nuevo `theme.dinero()` (formatea + escapa, idéntico al formato anterior) en los 5 sitios + guardián AST. Y el **P&L gana periodo** (mes/trimestre/año/todo), desglose por cliente, composición del costo y enlaces a Facturas/Nóminas |
+| v308 | Fichaje: ⚠️ **fix de un fallo introducido en v306** — se guardaba la ETIQUETA del desplegable (`prueba (PRJ-0007)`) como nombre del proyecto en la hoja; ahora va el nombre real. Y «Cambiar de proyecto» excluye el actual por ID (antes te ofrecía el que ya tenías abierto). + tarjeta **Esta semana** (lunes→hoy, sin lecturas nuevas) + el estado pasa de tarjeta KPI a franja + Jornada y Proyecto lado a lado (botones de 1350→523 px) |
+| v307 | Ruta del día aprovechada: ⚠️ el hueco blanco era `st_folium` dibujando a **500 px FIJOS** dentro de un bloque de 1110 (medido dentro del iframe) → `use_container_width=True` (también en HOME). Mapa + tarjetas de sitio en orden de recorrido, con «Cómo llegar» y la ruta completa a Google Maps (`ordenar_ruta`/`gmaps_dir_url` existían desde v270 y solo las usaba el campo). La tabla gana **horario** y **estado real** (🟢 fichado aquí / 🔴 fichó en X / ⚠️ sin fichar) sin lecturas nuevas. KPIs activos con contexto. Bug de camino: la persona cuya obra no tenía ubicación **desaparecía de la tabla** |
+| v306 | **Identidad por ID.** Los 3 sitios que aún casaban proyectos por NOMBRE pasan a ID vía `projects.etiqueta_proyectos` (Panel→Asignar hacía desaparecer un homónimo del desplegable; **Facturas enlazaba el importe al proyecto equivocado**; Inventario guardaba el nombre y ahora guarda `PRJ-####`). + **Tipo de proyecto** (Instalación/Delivery/Ripout/Otro): ⚠️ solo Instalación genera el cronograma estándar — antes un delivery nacía con 11 actividades falsas que ensuciaban avance, SPI y el radar. + **El ID a la vista** en tarjeta, lista (1ª columna), detalle y buscador. Guardián AST permanente contra volver a indexar proyectos por nombre |
+| v305 | Resumen del día: los 9 indicadores pasan de 3 filas a **2 (5+4)** → bloque 232→192 px (del original 304). El alto del botón ya estaba en su suelo (35 px), así que la palanca era el nº de filas. Medido: en UNA fila solo caben con ≥1180 px de contenido y por debajo se parten 4 etiquetas. Guardián nuevo: `zip` trunca en silencio si una fila tuviera más elementos que columnas |
+| v304 | Menú lateral: la cascada por fin se ve — nivel 1 pegado a la izquierda (8 px) y en seminegrita, nivel 2 a 30 px, más pequeño y más fino. ⚠️ El menú salía **centrado**: el CSS de v229 había dejado de aplicar porque Streamlit metió un `span` flex centrado dentro del botón, y porque `font-size`/`font-weight` puestos en el botón nunca llegan al `<p>` (los dos niveles salían a 16 px/peso 400, activo incluido). Además, los huecos del resumen del día bajan de 10 a 5 px (bloque 246→232), con la regla acotada al expander por `key` |
+| v303 | HOME del admin: las 3 tarjetas KPI ganan una línea de contexto (con datos que `_kpis` ya calculaba → 0 lecturas nuevas) y se mudan a la cabecera de la columna del mapa; el resumen del día se comprime sin perder estructura ni nombres (estado al título, pista al `help`, indicadores 52→35 px); el fondo pasa a 3 columnas mapa \| proyectos \| agenda (muere el toggle); y el hueco sobre el buscador baja a 1rem. ⚠️ De paso se arregla un fallo real: los "→ Ir a" del resumen llevaban displays en vez de IDs → 7 de 9 abrían **Agrupaciones** y "Sobre presup." abría **Horas**. La banda azul del cliente NO se toca (decisión del usuario) |
+| v302 | Panel: vuelve el atajo "Toda la semana (Lun–Vie)" como check que manda sobre el selector de días y lo deshabilita; sin `st.rerun` para no cerrar el popover |
+| v301 | Panel: cabeceras de días y "Persona" más grandes y centradas; se puede planificar VARIOS días de una (multiselect de días en el popover); y un trabajo ya asignado se puede eliminar sin perder el historial (se marca ELIMINADO y `trabajos_idx` lo sigue resolviendo) |
+| v300 | Trazabilidad: CLAUDE.md (navegación por rol, árbol de módulos, tabla de versiones, bloque de trampas de verificación), prompt del agente y memoria puestos al día tras la migración v296-v299 |
+| v299 | **Fase 3 de la migración: se BORRA la navegación vieja.** Fuera de `app.py` la cabecera COPEX, los `_L_*`, `_HERR`, la cadena `_nav`, `_NAV_DISPLAY`, el radio `main_nav`, su if/elif de enrutado y `_nav_pending` (421→284 líneas), más `auth_ui.render_owner_panel`. ⚠️ ANTES se convirtieron sus 2 flujos VIVOS a `_admin_nav_pending` («Abrir proyecto» tras el survey y «Reabrir cálculo en su herramienta»; `_CALC_NAV` pasa a apuntar a las sub-pestañas reales) — borrar solo el lector los habría dejado sin efecto en silencio (patrón v140). La shell deja de ser condicional y un rol desconocido cae a la nav del CAMPO (menor privilegio) |
+| v298 | Fase 2: el PROPIETARIO a la shell. Sus 6 pestañas de Administración pasan a sub-secciones con la MISMA clave `owner_sec` (el deep-link de `survey_ui` sigue vivo); el despacho se extrae a `auth_ui.render_owner_seccion` para que las dos shells lo compartan sin duplicar; su campana AGREGA alertas de todos sus grupos vía `owner_digest` |
+| v297 | Fase 1: el CAMPO a la shell. `home_ui` gana secciones POR ROL (`_SECCIONES_ROL`), el rol se resuelve dentro (`_rol()`) para no cambiar ninguna firma. El campo gana el botón ← Atrás y la trampa del gesto de retroceso en móvil (que solo tenía el admin). Su campana pasa a mostrar SOLO sus credenciales (antes: las de todo el grupo). La versión va al topbar |
+| v296 | Limpieza: se borra la shell VIEJA del admin («🛠 Mi grupo»), inalcanzable desde v190 — `render_group_panel` + `_L_GRUPO` + su rama de nav + los `_gruposec_pending`. ⚠️ NO se borró la nav vieja entera: propietario y campo aún dependían de ella (verificado que sus navs quedaban idénticas) |
+| v295 | Panel: celda con varios trabajos legible (la hora SOLO si difiere del turno estándar; con 3+ → primero y contador), días de la semana centrados y con aire, y el catálogo permite EDITAR y ELIMINAR trabajos. ⚠️ El borrado se NIEGA si el trabajo está asignado en algún roster (rompería el histórico: el tablero resuelve nombre/color por ID) → criterio de v149 |
+| v294 | Panel: la celda con choque Y certificado enseña los DOS anillos (v292 daba prioridad al rojo y eso ESCONDÍA el cert); fuera el chevron de las celdas vacías (⚠️ NO es un `<svg>`: es `span[data-testid=stIconMaterial]`, Material Symbol de fuente); muestra de color como cuadradito; cabecera "Persona" alineada |
+| v293 | Panel: «En vivo» y «Plan vs real» se unen en UNA herramienta **Cumplimiento** (5→4 en la fila). Lo vivo va en CADA FILA (plan + real + cronómetro en una línea). ⚠️ Se rescató el caso «fichado en jornada pero SIN imputar obra», que solo existía en «En vivo» porque `proyectos_por_usuario_dia` descarta los fichajes sin proyecto |
+| v292 | Panel: el tablero MARCA dónde está el conflicto (anillo rojo = choque de turno, ámbar = certificado que bloquea; `_radar_scan` devuelve además `marcas` por celda) y el toggle Tablero/Disponibilidad pasa a segmentado del kit (`cpxseg_`, con `@supports selector(:has())` para degradar) |
+| v291 | Panel: quitado el título duplicado (`_sub_header` ya pinta "Planificación · Panel") y las 4 bandas de chrome (nav de semana, cobertura, toggle, caption) se unifican en UNA barra; el hint pasa al `help` del toggle |
+| v290 | **Cuota de Sheets**: arranque frío de 30 → 12 lecturas (índice del libro en 2 llamadas —`worksheets()` + `values_batch_get` de las cabeceras— en vez de 2 por hoja), TTL de caché 30→120 s y reintento acotado ante 429/5xx. ⚠️ NO se usó `gspread.BackOffHTTPClient`: la librería lo marca "not production ready" y encadena hasta 254 s de sleep |
+| v289 | Fix: un hipo de la API de Sheets tumbaba la app entera. `heartbeat` estaba blindado en el `_get_login_ws` y en el `update_cell`, pero NO en la lectura del medio → el 429 subía hasta `app.py`. Guardas en `heartbeat`/`validate_session`/`start_session`; el bloqueo por sesión ocupada se distingue del fallo de API (`auth.SESION_OCUPADA`) |
+| v240 | Estética (fase 3g): las 5 herramientas técnicas (Plomada/Rieles/Buffers/Belting/Pre-Start) — header principal, botón Calcular/Generar, subtítulos de diagramas/resultados y descargas de PDF a iconos Material. Quedan sueltos el "¿No tiene plano?"/"Plano cargado" (secundarios) y survey_ui |
+| v239 | Estética (fase 3f): cabeceras internas del detalle de proyecto a iconos Material — Datos del plano, Fotos, Archivos, Cumplimiento de certificados, Quién ha trabajado aquí, Tocaba hoy, En curso ahora, Próximo hito (caption), Avance del conjunto. Solo display |
+| v238 | Estética (fase 3e): auth_ui — panel del propietario (radio owner_sec y del group panel grupo_sec vía format_func, IDs/deep-links intactos), headers (Administración, Manuales, Rieles), expanders/botones (zona horaria, subir/quitar manual, agregar/editar riel, eliminar grupo). Con esto auth_ui queda migrado |
+| v237 | Estética (fase 3d): auth_ui — ficha 360° de Usuarios (radio Acceso/Contacto/Credenciales/Su trabajo/🗑 vía format_func, IDs intactos), expanders (Agregar/Editar credencial, Crear usuario, Matriz), botón Vincular Telegram, headers. Los botones Activar/Desactivar 🟢🔴 se dejan (usan color de estado a propósito) |
+| v236 | Estética (fase 3c): botones de projects_ui a iconos Material (Guardar→save, Borrar→delete, Reabrir→replay, Crear proyecto→add_circle, Cargar en Survey→sync, Descargar/Exportar→download). Labels de botón/form_submit/download_button — display puro. Verificado que las 3 variantes renderizan Material |
+| v235 | Estética (fase 3b): expanders y checkboxes de la sección Proyectos a iconos Material — "Nuevo proyecto"/"Nueva agrupación"/"Cargar recibo"/"Subir documento"/"Agregar-eliminar actividad" (icon= param), "Ver archivados" (admin+owner), y headers "Plano del elevador"/"Ubicación en el mapa". Solo display |
+| v234 | Estética (fase 3a): los radios de sub-navegación del detalle de proyecto y de Mis proyectos (campo) muestran iconos Material vía format_func (las opciones siguen siendo el ID con emoji → sin romper matching); headers de Gastos/Horas del grupo a iconos |
+| v233 | Estética (fase 2): el chrome del admin a iconos Material — campana (🔔→notifications), barra de usuario (rol 👑/🛠/🔧, grupo 🏢, cerrar sesión 🚪) y se quitó el 🔎 del buscador. Monocromo |
+| v232 | Estética (fase 1): la NAVEGACIÓN del admin cambia los emoji por iconos Material profesionales en azul COPEX (sidebar: secciones + sub-pestañas + hub). Sub-pestañas decopladas en (id interno con emoji / display con icono) para no tocar los deep-links. Los estados 🟢🔴🟡 se dejan por ahora |
+| v231 | Herramientas: página de entrada (hub) — nueva sub-pestaña "🧰 Inicio" (default) con una tarjeta por herramienta (qué hace + Abrir). Punto de partida claro al entrar a Herramientas. Versión simple (sin el chequeo del plano, que queda para después) |
+| v230 | Nav: desplegar ≠ navegar — tocar una sección con sub-pestañas ahora SOLO despliega sus hijas en el sidebar (no carga la 1ª sub-pestaña de una); la carga ocurre solo al tocar una hija. Estado `_admin_expanded` separado del activo |
+| v229 | Navegación del admin: el sidebar pasa a 2 niveles (acordeón) — bajo la sección activa se despliegan sus sub-pestañas indentadas y clickeables, para ir directo a una de nivel 2 desde la barra izquierda. El nivel 1 pasa de radio a botones-menú (CSS st-key, verificado). Se quitó el radio horizontal de sub-pestañas del contenido |
+| v228 | Cartera de Proyectos: toggle de vista "🃏 Tarjetas \| 📋 Lista". La Lista es la tabla clásica (proyecto por fila; columnas estado/avance con barra/cliente/fechas/% presupuesto/usuarios/situación/alertas) y es clickeable (seleccionar fila abre el proyecto). Las tarjetas siguen como default |
+| v227 | Ficha de usuario (sub-pestañas): 📊 Su trabajo pasa a ACTIVA — los proyectos asignados son botones que abren el proyecto + "horas por proyecto" de esa persona; 🔑 Acceso peinada a doble columna (contraseña\|tarifa). Contacto y Credenciales ya estaban sólidas, no se tocaron |
+| v226 | 👷 Usuarios: panorama activo — fila de salud del equipo (personas/activos/sin contacto/credenciales por vencer o vencidas) + tabla CLICKEABLE (Usuario·Nombre·Activo·Contacto·Credenciales·Tarifa) que al tocar una fila abre la ficha 360° de esa persona (antes: tabla pasiva + desplegable aparte). Deep-links de HOME/Finanzas Horas manejados. La ficha no cambió |
+| v225 | Torta de gasto por rubro CENTRADA: antes la leyenda (flex:1) se estiraba a todo el ancho y el monto/% se iban al borde ("todo separado"); ahora torta+leyenda se agrupan con justify-content:center y la leyenda se acota a 300px (márgenes iguales, verificado) |
+| v224 | Finanzas → Gastos: diagrama de TORTA del gasto por rubro (Mano de obra + cada categoría de compra), debajo de los dos bloques de barras. Hecho con CSS conic-gradient (sin dependencias nuevas) + leyenda color·rubro·$·%. Verificado en vivo que st.markdown no lo recorta |
+| v223 | Cartera de proyectos (📊 Proyectos): cada tarjeta ahora muestra ANTES de abrir — nombre, estado + % avance (barra real), cliente, fechas inicio→fin, % presupuesto ejecutado (⚠️ si se pasó), nº de usuarios y alertas; se abre con botón «Abrir». Borde izq por salud. % presupuesto de group_expenses (1 lectura cacheada); se quitaron las horas. Opción A elegida por el usuario tras ver un mockup |
+| v222 | Fix: al tildar "mantener la sesión" y CERRAR/REABRIR la app (PWA) pedía login otra vez — la cookie se guardaba como "de sesión". Ahora se escribe persistente con max-age vía window.parent.document.cookie desde render_user_bar (no en _do_login, que hace rerun y la descartaría). Verificado en vivo: CookieStore confirma persistent + expira a 7 días |
+| v221 | Login: "Mantener la sesión iniciada en este dispositivo" ahora es un check OPCIONAL (por defecto SIN tildar). Antes la cookie de 7 días se guardaba siempre; ahora solo si se tilda → si lo activas, no reescribes usuario/contraseña en tu dispositivo; sin tildar, la sesión dura solo la pestaña |
+| v220 | Asignar personal (deploy 2/2): al asignar campo a un proyecto, aparecen AUTOMÁTICAMENTE en el planificador, en ese proyecto, Lun–Vie entre FechaInicio y FechaFinEst (todo el rango, solo celdas vacías — no pisa OFF ni otro proyecto). Al desasignar se limpian sus días de ese proyecto. Escritor eficiente (1 batch_update + 1 append_rows) para no disparar el rate limit |
+| v219 | Asignar personal más inteligente (deploy 1/2): al asignar campo a un proyecto se avisa si el usuario YA está en otro proyecto (y hasta cuándo), y se pueden tildar los certificados que EXIGE el proyecto (campo CertsReq) → aviso + marca 🔴 quien no cumple / 🟡 por vencer, con tabla viva de cumplimiento del equipo en Estado. (Falta feature 2: auto-poblar el planificador entre fechas del proyecto) |
+| v218 | Planificación: un PROYECTO se asigna DIRECTO en el tablero (aparece 🏗 en el desplegable) — ya no hay que crear un "trabajo" que lo enlace (todo proyecto es un trabajo en sí mismo). El catálogo queda solo para lo NO-proyecto (entregas/cursos/traslados) y pierde el campo "enlace a proyecto". Color de proyecto automático y estable (hashlib). Histórico compatible |
+| v217 | Planificación: el tablero pasa a ser EDITABLE EN SITIO — cada celda es un popover coloreado donde asignas/editas ahí mismo (asignación + nota + "aplicar a toda la semana" + abrir proyecto); una celda vacía (＋) también asigna. Se quitó el editor por-persona de abajo. + línea de "cobertura del día" (en obra / sin asignar / OFF) sobre el tablero. Popover+color verificado en vivo (st.popover acepta key en 1.57) |
+| v216 | Horas por usuario × proyecto (el dato ya existía, solo faltaba mostrarlo): matriz "persona × proyecto" al final de ⏱ Horas (usa el por_proyecto de group_hours), y bloque "👷 Quién ha trabajado aquí" (persona·horas) en 📊 Estado del proyecto, junto a las alarmas (labor_breakdown sin el costo) |
+| v215 | Finanzas: Gastos con "Reparto" y "Compras por categoría" en doble columna + tabla de proyectos clickeable (→ abre el proyecto); Horas con tabla de personas clickeable (→ abre la ficha) |
+| v214 | Agrupaciones clickeables (mismo patrón que Proyectos): tocar una tarjeta abre su tablero directo; se quitaron los selectores "Abrir" y "Eliminar" (Eliminar movido dentro). Cuidando no anidar expanders |
+| v213 | Costos: "Reparto del costo" y "Compras por categoría" en doble columna; recibos clickeables que muestran la foto inline (antes: tabla redundante + solo descarga) |
+| v212 | Fix: el % de avance salía 2 veces en el detalle (cabecera + KPI "Avance real"); se quitó la KPI redundante de la pestaña Estado |
+| v211 | Detalle de proyecto (📊 Estado) en doble columna: "cómo va" (titular + KPIs) a la izquierda, alarmas a la derecha; ritmo, desglose y cronograma a ancho completo abajo |
+| v210 | Fix: "➕ Nuevo proyecto" estaba doblemente anidado (yo lo envolví en un expander cuando ya tenía el suyo) + tenía el de ubicación anidado dentro. Ahora un solo expander, ubicación inline |
+| v209 | Proyectos: filtro rápido arriba de la cartera (búsqueda por nombre/cliente + chips Todos/Retraso/Adelanto/En pausa), en doble columna |
+| v208 | Estética de la cartera de proyectos: rejilla de 2 columnas (más densa, menos vacía) + texto alineado a la izquierda + nombre en negrita |
+| v207 | Proyectos: la cartera ahora es clickeable (tarjetas-botón con avance/salud, mismo lenguaje que HOME) → tocar abre el detalle directo; se quitó el selector "Abrir proyecto" y el form Nuevo proyecto quedó plegado |
+| v206 | El pin del mapa (y la lista de Proyectos en HOME) ahora abren un RESUMEN del proyecto en la columna derecha, sin salir de HOME; desde ahí un botón "→ Ver proyecto completo" |
+| v205 | Fix móvil: el gesto de retroceso ya no cierra la app; se redirige al botón "← Atrás" interno (JS que atrapa el back con history.pushState + popstate → click en el botón). Validar en el teléfono |
+| v204 | Botón "← Atrás" arriba-izquierda de la barra superior del admin: vuelve a la sección anterior (historial multi-nivel), se desactiva cuando no hay a dónde volver |
+| v203 | HOME: la columna derecha ahora se comparte entre Agenda y Proyectos con un toggle arriba (cambio rápido sin salir de HOME). Vista Proyectos = lista compacta clickeable con avance (barra en el fondo del botón), retraso/adelanto y alarmas, ordenada por urgencia |
+| v202 | Cronómetro(s) de fichaje EN VIVO en el sidebar (jornada + proyecto), visibles desde cualquier sección, solo cuando estás fichado. Admin y campo. Nuevo timeclock_ui.render_sidebar_chrono |
+| v201 | Estética: logo del login ~40% más pequeño ([2,1,2]); quitada la zona negra superior en la vista del admin (cabecera de Streamlit transparente + menos padding arriba, sin ocultar el botón de desplegar el sidebar) |
+| v200 | Más elementos activos: indicadores del resumen con NOMBRE visible; PINES del mapa clickeables (abren el proyecto); filas de la AGENDA clickeables (abren la ficha de la persona). Reusa _prjsel_pending y gp_fichasel para el deep-link |
+| v199 | Resumen y métricas ACTIVOS: los 9 indicadores y las 3 métricas son botones clickeables → al tocar un indicador muestra el detalle ("cuáles") + botón "→ Ir a [sección]" que navega a resolverlo. Mecanismo de navegación programática en la nav del admin (home_ui.navegar/_aplicar_nav_pending) |
+| v197 | Fusión KPIs + resumen: quitadas las tarjetas "En riesgo" y "Alarmas" de arriba (estaban duplicadas con la rejilla de indicadores del resumen); arriba quedan solo las métricas del portafolio (Activos·Avance·Horas). Un solo bloque coherente |
+| v196 | Resumen del día con estructura FIJA: línea de estado + rejilla de 9 indicadores siempre igual (3 columnas, número 0 incluido) + detalle desplegable + la lectura de IA en su propio desplegable colapsado y bajo demanda (ya no se genera automático). Antes los chips aparecían/desaparecían según los datos |
+| v195 | Fix: el mapa de HOME no mostraba proyectos recién creados (filtraba solo "En progreso"; un proyecto nuevo es "Planificado"). Ahora muestra los activos (Planificado + En progreso) → "Proyectos activos" |
+| v194 | El pin de ubicación también al CREAR el proyecto ("➕ Nuevo proyecto"): nace con coordenadas. create_project acepta lat/lng. (El Survey ya no crea proyectos desde v135, así que era el único flujo). Completa v193 |
+| v193 | Ubicación de proyecto con búsqueda de dirección + pin en mapa (folium/streamlit-folium, sin API key): guarda Lat/Lng por proyecto (columnas nuevas), se fija editando el proyecto → 🗺 Ubicación; HOME lee las coordenadas guardadas (respaldo: geocode del texto). Nuevo core/location_ui.py |
+| v192 | Centro de control del grupo (KPIs + resumen del día) reubicado en HOME, arriba del mapa y la agenda (era lo único que había quedado sin reubicar al reorganizar la nav del admin) |
+| v191 | Integrado TODO el contenido existente en la nueva nav del admin: Fichaje, Planificación (Tablero+Usuarios), Proyectos (Proyectos+Agrupaciones), Finanzas (Gastos+Horas), Herramientas (5 técnicas+Pre-Start). Inventario y Contactos quedan placeholders. Reconexión de funciones ya probadas |
+| v190 | Nueva navegación del ADMIN (primer pase): menú lateral de iconos (Home/Fichaje/Planificación/Proyectos/Finanzas/Inventario/Herramientas/Contactos) + barra superior (buscador + campana de alertas) + HOME real (mapa de proyectos en ejecución + agenda de hoy del roster). Los 6 apartados restantes son placeholders. Solo rol admin; nuevo core/home_ui.py |
+| v189 | Formulario de credenciales sin clutter: "Especifica" solo si Tipo=Otro, "Clase" solo para licencia de conducir (Tipo movido fuera del st.form para poder condicionar). Cierra la revisión de acceso+credenciales |
+| v188 | Fix login persistente: refrescar (F5) ya no desloguea. El componente de cookies se creaba nuevo cada rerun y el login bloqueaba con sleeps que impedían procesar el mensaje del navegador con la cookie. Ahora CookieManager único por sesión + sin bloqueos (deja que el componente dispare su rerun) + no re-restaurar tras logout |
+| v187 | Avisos de vencimiento de credenciales desacoplados del panel: antes solo se disparaban al abrir 🔧 Usuarios de campo (frágil); ahora corren al login de cualquier admin/propietario (app.py), 1×/día/grupo, deduplicado. No había scheduler; se eligió la opción pragmática sin infra (job programado queda anotado como futuro) |
+| v186 | Credenciales: fila de KPIs (total · vigentes · por vencer · vencidas) arriba de la tabla + botones de descarga agrupados en un expander "Documentos" |
+| v185 | Fechas de credenciales con calendario (`st.date_input`) en vez de texto libre: guarda siempre ISO, así un typo ya no desactiva en silencio la alerta de vencimiento. Precarga datos viejos; form de Editar ahora refresca los campos al cambiar de credencial (key con ID) |
+| v184 | Panel del propietario (👑 Administración → Usuarios) unificado a la ficha 360°: se gestiona cada persona desde un solo lugar (Acceso/Contacto/Credenciales/Su trabajo) en vez de 3 desplegables sueltos, igual que el administrador. La ficha gana modo `owner` con Rol+Grupo. Borrado código muerto (`_field_contact_ui`, `_USER_COLS`) |
+| v183 | Belting (revisión + diagrama replanteado): proyecto al diagrama/PDF + tarjetas KPI (HQ·HGP·nº) + el diagrama ahora respeta el SIGNO del DSTS (cabina por encima/debajo del FFL de referencia, a escala ampliada) en vez de ponerla siempre debajo en posición fija. Cierra las 5 técnicas |
+| v182 | Corte de buffers: diagrama replanteado. HKP/HKPR son HOLGURAS (sticker↔buffer), no alturas. Ahora dibuja el sticker (arriba) + línea HKP de diseño + rebanada roja = lo que se corta del borde del buffer para pasar de HKPR a HKP. Casos corte/sin-corte/revisar |
+| v181 | Corte de buffers (revisión, igual que rieles): el nombre del proyecto va al diagrama y al PDF (estaba disponible y no se usaba) + tarjetas KPI (HKP · nº buffers · nº a revisar) en vez del st.success plano. Ya era por buffer |
+| v180 | Corte de rieles (revisión): el nombre del proyecto va ahora al diagrama y al PDF (estaba disponible y no se usaba, mismo fallo que plomado) + tarjetas KPI en vez de st.success planos. Ya era por elevador y los diagramas se rehicieron en v177/v178 |
+| v179 | Plomadas por elevador (la plantilla DBP/d1/d2 es una sola del shaft; el BSR se mide por elevador y define el encaje/verificación) + arreglo de integración (el nombre del proyecto estaba hardcodeado vacío, ahora va a los diagramas y al PDF) + estética (tarjetas KPI, el encaje como acción no como muro de números) |
+| v178 | Corte de rieles: Caso 1 deja de inventar el orden de los rieles (la app solo tiene conteos, no secuencia) — la pila A se dibuja como UN bloque; y el Caso 2 se rehace como esquema de rieles (cabina RZ/RO + contrapeso RF/RB, corte marcado arriba, alturas ilustrativas) en vez de las barras comparativas |
+| v177 | Corte de rieles Caso 1: el corte se dibujaba arriba pero se corta el PRIMER riel (el de abajo); ahora se marca al pie de la columna (rojo recorta / verde añade) con una línea de piso. Solo el dibujo; los números no cambian |
+| v176 | Guardar un cálculo de herramienta: el campo ya no elige el proyecto de una lista — se guarda AUTOMÁTICO en el proyecto donde fichó (ID primero, nombre de respaldo), con un expander "¿otro proyecto?" de emergencia; sin fichar o admin/propietario, la lista. Mismo criterio que plano/Mis proyectos/Pre-Start |
+| v175 | El plano se muestra POR HERRAMIENTA (las 5 por igual): antes el mensaje lideraba con "17 parametros" del survey y el resto salia suelto. La extraccion ya leia todo (NS/riel/HQ/HGP/HKP/LFKK/LFGK, verificado en 2 planos reales); ahora plan_data.por_herramienta + una tabla muestran que le da el plano a cada herramienta (Survey/Plomadas/Rieles/Buffers/Belting) con ✓ o ⚠️ falta |
+| v174 | Fix: refrescar la pagina deslogueaba. El componente de cookies (extra-streamlit-components) no entrega las cookies en el primer run tras el refresco, y render_login se rendia al primer intento (_cookie_tried); ahora reintenta unos reruns antes de mostrar el login, asi el login persistente de v107 por fin sobrevive al refresco |
+| v173 | Zona horaria POR GRUPO (core/clock.py): Streamlit Cloud corre en UTC, asi que los registros salian ~10 h corridos. Ahora cada grupo tiene su zona (Grupos.Zona, la fija el propietario; default Australia/Sydney) y todos los datetime.now()/date.today() (~40 sitios) pasan por clock.now()/today() que resuelve la zona del grupo con zoneinfo (per-sesion, sirve multi-país). +tzdata |
+| v172 | PDF del Pre-Start reescrito para calcar el template CI Liftworx: formulario blanco y negro con bordes, bandas grises por seccion, recuadros de notas, la respuesta marcada resaltada en negro, los 4 checks reubicados a la sub-tabla "Circle one" de la Seccion 3, y asistentes en 3 pares. Marca = grupo, textos en español |
+| v171 | Pre-Start seccion 2 (Issues/hazard/near miss): el campo de texto libre pasa a estar SIEMPRE visible (antes solo aparecia al marcar YES), para describir un issue/hazard aunque no sea un near miss formal; si marca YES sin describir, se avisa |
+| v170 | Pre-Start del campo: preselecciona el proyecto donde fichó (lo primero que hace el campo es fichar; señal fuerte y mostrada, sigue cambiable — no el "primero de la lista" que evitó v139), "Time" pasa de texto libre a st.time_input, y la inicial del asistente se autocompleta del nombre |
+| v169 | Planificacion: la celda del tablero pasa a ser un BOTON nativo (st.button coloreado por la clase st-key-<key>, Streamlit>=1.39, verificado en vivo) que abre el proyecto en la MISMA sesion, sin recarga. Reemplaza el enlace HTML de v168 (que podia recargar). El board del campo sigue siendo HTML de solo lectura |
+| v168 | (reemplazado en v169) Planificacion: celda como enlace `<a href="?abrir_prj=">` + handler de query param en app.py |
+| v167 | (revertido en v168) Planificacion (roster): boton por cada proyecto enlazado en la semana (el board es HTML, no clicable como st.dataframe); navega con _prjsel_pending + un _gruposec_pending nuevo que cambia la seccion del grupo a Proyectos antes de instanciar el radio |
+| v166 | Archivos: la descarga pasa a la propia tabla — se selecciona la fila (st.dataframe on_select, lazy: solo se baja la elegida) y aparecen descargar/reabrir/borrar; ademas un boton de descarga bajo cada foto que reutiliza los bytes ya bajados para la miniatura. Se quita el selector aparte de v165 |
+| v165 | Archivos: una sola lista buscable (busqueda por nombre + filtro por tipo con contadores + orden) en vez de dos sub-secciones planas (Documentos y Calculos) con tres selectores; unifica documentos + PDF de calculos + plano casando cada calculo con su toolrun por DriveID (sin duplicar), y reduce a la vez galeria, tabla y descargador |
+| v164 | Fichaje del campo: las horas se reparten por dia natural (medianoche) — antes una sesion que cruzaba medianoche se contaba entera en el dia de entrada, falseando "Jornada de hoy" y el reporte "Hoy"/"Semana" del admin (evidencia: 3/16 fichajes reales cruzan medianoche). El olvido de clock-out se cierra a la hora que el usuario indica (no "ahora", que registraba las horas fantasma de la noche). group_hours(Todo) queda identico |
+| v163 | Se elimina el rol conductor: tras el fichaje unificado (v150) era un subconjunto del campo; se borra el rol, su vista de proyectos y todas sus ramas (nav, creacion de usuario, prompt del agente), y se elimina el unico usuario conductor de prueba. Quedan 3 roles: propietario/administrador/campo |
+| v5 | Extractor: CRLF fix, caso D valor-antes-label, sin pdfplumber |
+| v6 | BC_CALC + FB_MAX_BACK constraint en optimizer |
+| v7 | BC eliminado de inputs usuario, calculado automáticamente |
+| v8 | Diagramas ASCII en reporte PDF (secciones 2, 3, 7) |
+| v9 | Caso 2: OR/OL naranja cuando requieren corte, sin rojo por debajo límite |
+| v10 | Extractor: visitor_text con posiciones XY evita concatenación anotaciones CAD; TKS rango (5,150) |
+| v11 | Extractor: two-pass (visitor + plain text) para recuperar BKF1/BKF2 caso-D |
+| v12 | Optimizer: 4-step flow, FB extra wall, fb_applied tracking, MAX_OFF_RL = max(DIF_WR,DIF_WL) |
+| v22 | Fix MAX_OFF_RL: incluye max(0,DIF_OR) y max(0,DIF_OL) para barrido correcto cuando OR/OL exceden límite |
+| v23 | Fix wall limiting: FB extra evade el muro → quita SKIP duro y excluye OR/OL del nivel evadido del conteo |
+| v24 | Refactor mayor: highlighting compartido (core/highlighting.py), excel guarda/restaura config completa, validate_inputs, max_by_col en optimizer, bs_logic refactorizado, diagramas ASCII corregidos, fix MAX_OFF_RL display, tiebreaker consistente |
+| v25 | Optimizer: Paso 2b — cuando fb_extra_applied y \|RL\| > FRAME → SKIP (apertura cabina tapada por pared limitante) |
+| v13-14 | Wall limiting: DIF OR/OL con MAX, fb_applied en soluciones y log |
+| v16 | Fix OR/OL: fuera de límite = v > LIMIT, DIF = MAX − LIMIT, CUT = v − LIMIT |
+| v17 | Fix OR/OL highlight Caso 1: v > LIMIT en ambos casos; rojo en Caso 1, naranja en Caso 2 |
+| v18 | Fix optimizer _apply: OR -= rl, OL += rl (signos correctos) |
+| v19 | Fix wall limiting: todas las comparaciones OR/OL corregidas a v > LIMIT |
+| v20 | Estado inicial: sección 6.2 en reporte + "Niveles incumplidos" en app y reporte |
+| v21 | Sección 1.3 en reporte: condiciones y configuración del proyecto (NS, pared, ctrl, omega) |
+| v25 | Optimizer Paso 2b: SKIP frame_opening cuando fb_extra y \|RL\| > FRAME |
+| v26 | Asistente IA experto (chat_agent.py) en pestaña/sidebar, con contexto del survey |
+| v27 | Chat: reglas de confidencialidad (no revela lógica interna/propietaria) |
+| v28 | Fix FB extra: posición absoluta FS−TSW (no fb+extra); corrige sub/sobre-aplicación |
+| v29 | Fix FB extra preciso: extra = max(0, FS−TSW − excess_FR/FL_piso_limitante); 3 casos |
+| v30 | Interpretación IA integrada en el PDF admin (7 secciones por Claude) |
+| v31 | UI: branding COPEX, versión visible, chat en sidebar desplegable |
+| v32 | chat_agent: system prompt con conocimiento físico completo |
+| v33 | Notificación email al calcular (proyecto, ingeniero, resumen) vía Gmail SMTP |
+| v34 | Email adjunta plano PDF del usuario + matriz survey CSV |
+| v35 | Archivo VERSION: la versión se actualiza sola en cada deploy (la lee app.py) |
+| v36 | Diagrama físico SVG (transversal + longitudinal) con datos de la solución |
+| v37 | Fix diagramas: components.html en app + embebidos en PDF con svglib (sin markers) |
+| v38 | Interpretación obligatoria: bloquea el PDF si falla (avisa configurar API key) |
+| v39 | Diagrama planta por piso (vista superior) con matriz solución; fix color invertido |
+| v40 | Pestaña Líneas de plomada (plumb.py + plumb_ui.py): tabla + diagrama SVG |
+| v41 | Pestaña Fichaje (clock in/out) con Google Sheets: nombre+PIN, proyecto, horas |
+| v42 | Fix fichaje: PIN como texto (RAW + numericise_ignore) conserva ceros a la izq. |
+| v43 | Fichaje: autenticación real por PIN contra hoja Usuarios (rechaza no autorizados) |
+| v44 | Fix fichaje intermitente: cachear conexión; is_configured solo revisa secrets |
+| v45 | Fichaje: quitar registro visible en la app (privacidad); usuarios solo fichan |
+| v46 | DOS informes: usuario (cliente, descargable) + admin (completo, auto-email) |
+| v47 | Fase 1 móvil: CSS responsive (columnas se apilan), meta-tags PWA, fix BOM en VERSION |
+| v48 | Robustez: anthropic import diferido (no tumba la app si la librería falla) |
+| v49 | PWA completo: manifest + íconos COPEX + static serving (enableStaticServing) |
+| v50 | Favicon COPEX como page_icon (imagen, lado servidor) |
+| v51 | Gestión de proyecto: cronograma Gantt + curva S (auto por NS + cortes/shaft), editable, en app + informes |
+| v52 | Pestaña Corte de rieles: lee LFKK/LFGK del PDF; Caso 1 y Caso 2 (encima/debajo) |
+| v53 | Login con roles (propietario/administrador/campo); PBKDF2; primer-uso crea propietario |
+| v54 | Multi-empresa: grupos aislados; paneles propietario/admin; fichaje por login+grupo (sin PIN); logo COPEX en login |
+| v55 | Fix mezcla de pestañas: quitar st.tabs anidados en paneles (radio) |
+| v56 | Fix DEFINITIVO mezcla: navegación con radio (solo renderiza sección activa) en vez de st.tabs |
+| v57 | Plomadas: carga de PDF autocompleta BKS/TKSW/SF1/SF2/BS/SG/TG del plano |
+| v58 | Plomadas: renombrar V1-V6 por nombres propios (plomos de riel, paredes teóricas/reales) |
+| v59 | Plomadas: inputs inician en 0 (sin valores residuales de ejemplo) |
+| v60 | Consolidar conocimiento (CLAUDE.md v47-v59) + agente IA con nuevas funciones |
+| v61 | Plomadas ENCAJE: paredes reales V4/V6 fijas + conjunto rígido se centra (BSR>BS) o sacrifica Z→Omega (BSR<BS) |
+| v62 | Plomadas: eje CERO = pared real izquierda (V4=0); shaft real de 0 a BSR |
+| v63 | Integrar plomado al survey (input LengthTemplate; plomado definitivo con rl/fb del survey, en app + ambos informes); pestaña manual intacta |
+| v64 | Plomadas: distancias de verificación en campo (plomo↔pared real) como cotas + tabla, en app y ambos informes |
+| v65 | Gestión de proyectos: projects.py/projects_ui.py (Sheets), panel admin, "Guardar como proyecto" en survey, "Mis proyectos" para campo, agrupaciones con peso |
+| v66 | Fix segfault: requirements pineado a majors estables + Python 3.12 en Streamlit Cloud |
+| v67 | Fichaje: el proyecto se elige de desplegable de proyectos asignados (horas atadas al proyecto) |
+| v68 | Limpieza (revisión completa): borrar carpetas muertas, imports sin usar, except:/f-strings, print→logging, projects append_rows batch |
+| v69 | Fix rate-limit Sheets (APIError 429): cachear lecturas de proyectos con st.cache_data(ttl=20) + invalidar al escribir |
+| v70 | Proyectos: curva S real vs planificada + línea HOY en el detalle del admin (real_scurve, project_schedule) |
+| v71 | Proyectos: curva real se corta en HOY (upto_day) + barras del Gantt se llenan por %avance |
+| v72 | Proyectos: proyección avance-vs-fecha (earned value: desvío hoy, días adelanto/retraso, fin proyectado por SPI) |
+| v73 | Propietario ve todos los proyectos de todos los grupos (👑 Administración → 📁 Proyectos) |
+| v74 | Documentos por proyecto en Google Drive (drive_store.py, hoja Documentos, permisos por rol, auto-archivo plano+matriz+informe) |
+| v75 | Sesión única por cuenta (licencias, "primero gana"): token+heartbeat en Login; 2do login bloqueado; opción forzar |
+| v76 | Fix curva S real: llega al avance real total en HOY (reparte sobre ventana real, no la planificada) |
+| v77 | Notificaciones email + Telegram al asignar proyecto a usuario de campo (notify.py, contacto en Login) |
+| v78 | Notificaciones: sección en la barra lateral (luego revertida en v79) |
+| v79 | Contacto (email+Telegram) OBLIGATORIO para campo y gestionado SOLO por el admin; bloqueo duro; tabla usuarios sin hash |
+| v80 | Fix: guardar proyecto borraba las actividades (rate limit por ~16 update_cell) → update_project usa batch_update (1 llamada) |
+| v81 | Fix: list_users no devolvía Email/TelegramChatID → el admin veía "contacto falta" con datos ya cargados |
+| v82 | Admin agrega/elimina actividades del cronograma con recálculo automático del % y de la curva S |
+| v83 | Tabla de actividades totalmente editable (data_editor): nombre/días/peso + reordenar; guardado en 1 batch |
+| v84 | Catálogo de rieles (hoja Rieles, gestión propietario); lee código CAR GUIDE RAIL del plano → autocompleta RAIL |
+| v85 | Fix: RAIL = altura del diente desde la espalda (no el ancho) |
+| v86 | Nueva pestaña Belting: DSTS = HGPR − HGP − HQ/1000 por elevador; HQ del plano, HGP/HGPR manual; diagrama |
+| v87 | Belting: HGP también se autocompleta del plano (2º valor de la fila HKP/HGP) |
+| v88 | Sistema de alarmas por proyecto: campo reporta problema→admin, admin cambia→campo; in-app + Telegram, resolver/apagar, badges |
+| v89 | Respaldo: CLAUDE.md (estructura + módulos nuevos) + agente IA al día (belting, rieles, proyectos, docs, alarmas, sesión única) |
+| v90 | Banco de manuales para el agente (BM25 en Python puro); pre-cargados KONE Monospace + S5500; cita manual/sección/página |
+| v91 | Panel propietario 📚 Manuales (subir/quitar self-service en Drive + hoja Manuales, PDF/ZIP) + agente separado por rol (campo/gestión) |
+| v92 | Reducción de llamadas a Sheets: handle de worksheet cacheado (get_sheet) + auth list_users/get_user cacheados + ttl 20→30 (menos APIError 429) |
+| v93 | UI: sidebar sin "Valores del PDF" ni leyenda de colores; orden de pestañas por rol (panel del rol primero; propietario sin Fichaje) |
+| v94 | UI "Mi grupo" como centro de control: banda de marca + KPIs (activos/avance/en riesgo/alarmas/horas) + cartera de tarjetas + nav única de 3 |
+| v95 | Drive: `drive_store.is_available()` (chequeo OAuth cacheado) → un solo aviso limpio al archivar si Drive está desconectado (en vez de 3 errores crudos) |
+| v96 | Nueva herramienta 🛡 Corte de buffers: lee HKP del plano (1er valor de HKP/HGP), N buffers + HKPR real, CutBuffer = HKP − HKPR |
+| v97 | Nueva pestaña 🦺 Pre-Start diario (Daily Pre-Start CI Liftworx digitalizado): checks + asistentes → PDF (marca=grupo) archivado en Drive+hoja PreStarts; near miss=YES abre alarma |
+| v98 | Ubicaciones enlazadas a Google Maps (maps.py, URL de búsqueda sin API key): detalle de proyecto, Mis proyectos, PDF+input del Pre-Start, notificación de asignación |
+| v99 | Vista de lista: ubicación (Maps) en tarjetas del admin + tabla del propietario (LinkColumn); tarjetas marcan retraso (borde rojo + badge ⏰ días) vía `_delays` |
+| v100 | Proyecto: campos Instrucciones particulares + Inducciones (links) al crear/editar; links enviados por Telegram/email a los campo asignados; visibles dentro del proyecto |
+| v101 | Agente admin con radar del grupo (admin_digest): "Resumen del día" al ingresar (pendientes: retrasos/alarmas/vencimientos/near miss/sin asignar/sin contacto) + agente responde portafolio, recomienda, recuerda vencimientos, redacta |
+| v102 | Fix: NS se lee del plano (NUMBER OF STOPS) al cargar el PDF; default de init 6→2 (ya no queda pegado en 6) |
+| v103 | Rol conductor (2 relojes: jornada general + segmentos por proyecto, columna Tipo) + cronómetro en vivo para todos + reporte admin de horas del grupo (Mi grupo → ⏱ Horas) |
+| v104 | Credenciales/tickets por usuario (White Card, Forklift, Dogging/Rigging, licencia…): vencimiento+estado, foto/documento a Drive, radar en Resumen del día, avisos email/Telegram a admin+usuario; usuario ve las suyas (🎫 Mis credenciales) |
+| v162 | Mis proyectos (campo): sub-pestañas (Avance/Avisos/Recibos/Archivos como el admin) + el avance en UNA tabla editable con guardado en batch, y las fechas reales de inicio/fin se registran solas (inicio al pasar de 0, fin al llegar a 100) en vez de texto libre |
+| v161 | Tablero de cuadrilla — plan vs real: el admin ve por dia lo asignado contra lo fichado (🟢 donde tocaba / 🔴 en otro sitio / ⚠️ sin fichar), solo para trabajos enlazados a un proyecto. Feature completa (v159 base + v160 campo + v161 plan-vs-real) |
+| v160 | Tablero de cuadrilla: el campo ve el board completo (su fila resaltada) en 📋 Mis proyectos con su asignacion de hoy destacada, y en el fichaje un atajo «fichar a tu asignacion de hoy» cuando enlaza a un proyecto |
+| v159 | Tablero semanal de cuadrilla (base): catalogo de Trabajos (numero/nombre/color/enlace opcional a PRJ) + seccion 📅 Planificacion del admin con rejilla coloreada como el board, editar semana persona a persona y copiar semana anterior |
+| v158 | Pre-Start: el contenido que se capturaba (checks, asistentes, notas) por fin se ve en el historial con semaforo por check; y ya no se puede firmar sin leer (los checks arrancan sin respuesta, hay que responder cada uno) |
+| v157 | RAIL sale en 0 al cargar el plano desde el proyecto: el plano da el CODIGO del riel y faltaba resolverlo a su altura por el catalogo; extraer_todo ahora guarda rail_altura y los mapas de survey/plomada lo vuelcan a RAIL |
+| v156 | Cargar el plano en un proyecto ya creado (📐 Datos del plano): subir el PDF por Documentos no extraia a PlanoJSON, asi que las herramientas no lo veian; ahora hay un control que sube Y extrae, y «plano» sale del uploader generico |
+| v155 | El Survey ya no pide proyecto/cliente/ubicacion/ingeniero a mano: eran entrada duplicada (el proyecto que alimenta ya los trae); se toman del proyecto elegido y alimentan el informe igual |
+| v154 | El Survey es una herramienta tecnica mas (las 5: survey, plomado, rieles, buffers, belting); el Pre-Start se separa de ellas en el nav por ser seguridad de obra, no una herramienta |
+| v153 | Usuarios de campo: ficha 360 por persona (acceso, contacto, credenciales y su trabajo —proyectos, horas, recibos— en un solo sitio) en vez de elegir al usuario en 3 desplegables distintos; se adapta al rol |
+| v152 | Gastos del grupo: presupuesto y proyeccion al terminar (existia desde v144 y no se usaba), KPIs, alerta de los que se saldran al ritmo actual, y separar proyectos con/sin presupuesto; barras en vez de bar_chart grises |
+| v151 | Horas del grupo: costo de mano de obra por persona (horas x tarifa), KPIs del grupo, reparto por proyecto en barras, y el «sin asignar» deja de mostrar ceros falsos (marca «—» cuando el dato es indeterminado por fichar sin jornada) |
+| v150 | Fichaje unificado: dos relojes (jornada + proyecto) para todos los roles, el proyecto siempre de una lista (el texto libre dejaba las horas sin atribuir), fuera Ubicacion (nadie la leia), resumen del dia, historial propio y clock_out en 1 llamada |
+| v149 | Datos: archivar sustituye a borrar (borrar dejaba huerfanos documentos, pre-starts, alarmas y fichajes, y sin confirmacion), fechas con calendario (el texto libre falseaba el cronograma en silencio) y aviso de credenciales al asignar campo |
+| v148 | Reabrir un calculo guardado en su herramienta: DatosJSON no tenia lector y ademas solo guardaba los resultados; ahora guarda tambien las entradas y se puede retomar un calculo |
+| v147 | Archivos: datos del plano visibles en el proyecto, fotos de obra en galeria, quien subio cada documento y cuando, y la descarga deja de bajarse TODO Drive en cada render |
+| v146 | Se elimina el paquete de obra (~225 lineas): no aportaba ni un dibujo que no estuviera ya en el informe del cliente, que ademas se archiva solo. Residuo de v126 vaciado por v129/v130/v134 |
+| v145 | El fichaje guarda el ProyectoID: las horas y el costo de mano de obra dejan de perderse al renombrar un proyecto (regla unica ID-primero-nombre-de-respaldo); project_hours_bulk pasa a indexarse por ID en sus 8 call-sites |
+| v144 | Pestaña Costos: proyeccion de cuanto costara AL TERMINAR (la barra solo avisaba al pasarse), mano de obra por persona, gasto por categoria (se calculaba desde v105 y se tiraba), curva de gasto acumulado apilada vs presupuesto y aviso de tarifas en 0 |
+| v143 | Pestaña Estado: la brecha plan-vs-real se RELLENA (antes habia que deducirla comparando dos lineas), HOY cruza el Gantt, barras que marcan lo que tocaba y no arranco, proyeccion al ritmo actual + diagnostico (ritmo real vs necesario, que tocaba hoy vs que se hace, proximo hito) |
+| v142 | Agrupaciones con cartera de tarjetas (entrega del conjunto, elevador critico, retraso, alarmas, horas y costo sin entrar) + creacion plegada + projections_by_group cacheado |
+| v141 | Agrupaciones al reves (se crean los proyectos y luego se eligen al armar la agrupacion) + dashboard con fecha de entrega del conjunto, elevador critico, curva S consolidada, comparativa y alarmas |
+| v140 | Se quita el doble selector de plano: el uploader de PDF pasa a expander plegado (plan B) y los textos describen el flujo real; era residuo de v137 |
+| v139 | Auditoria de los 38 desplegables: los 4 que BORRAN pasan a sin-preseleccion + confirmacion, y los 6 que escriben en un proyecto tampoco preseleccionan; los de configuracion se dejan igual |
+| v138 | Los selectores de proyecto ya no abren uno arbitrario al entrar (8 lecturas que nadie pidio); al campo se le preselecciona el proyecto en el que ficho |
+| v137 | El plano se lee UNA vez al crear el proyecto (columna PlanoJSON) y alimenta las 5 herramientas: el campo ya no sube el PDF — su proyecto sale del clock-in, el admin lo elige en la herramienta |
+| v136 | Extraccion del plano 2.9x mas rapida (230s -> 79s): los 6 extractores comparten una sola lectura cacheada del PDF; resultados verificados identicos |
+| v135 | ARQUITECTURA: el survey deja de crear proyectos y pasa a alimentarlos como una herramienta mas; el proyecto se crea en Mi grupo/Administracion y genera su cronograma del NS |
+| v134 | Fix de 36 versiones: los PDF de Pre-Start (v97) y de calculos (v129) eran INVISIBLES en Documentos para todos los roles + el campo ya puede bajar el paquete de obra y ver los calculos |
+| v133 | Agente IA al dia: desconocia 11 funciones (todo desde v96) y no sabia guiar por la interfaz; ahora tambien navega por rol. Quitada toolruns.list_group (huerfana) |
+| v132 | Detalle de proyecto reorganizado: 11 secciones en scroll unico -> 4 pestañas (Estado/Datos/Costos/Archivos) con cabecera fija |
+| v131 | Mi grupo: historial de calculos de herramientas en el detalle del proyecto (la hoja Calculos se escribia desde v129 pero nadie la leia) |
+| v130 | Herramientas 2/2: Plomadas, Rieles y Belting con resultados persistentes (fix v110), diagrama nuevo de corte de rieles, PDF y guardado en el proyecto |
+| v129 | Herramientas 1/2: hoja Calculos (cada uso alimenta el proyecto) + PDF y guardado comunes + fix del bug v110 en las 4 + Corte de buffers completo con diagrama nuevo |
+| v128 | Plano UNICO de la sesion (se subia el mismo PDF en 5 herramientas) + paquete de obra descargable desde el detalle del proyecto (survey_calc.recalcular) |
+| v127 | Survey: aviso de credenciales vencidas y contacto faltante al asignar campo (fuera del form) + notificacion deja de fallar en silencio + numeracion 1-7 eliminada |
+| v126 | Survey lote 3: paquete de obra en 1 PDF (field_pack.py) + boton que abre el proyecto recien creado (navegacion real) + aviso de proyecto duplicado |
+| v125 | Survey lote 2: extraido de app.py a core/survey_ui.py (1243 lineas, cuerpo identico); app.py 1650->321 lineas; imports huerfanos podados |
+| v124 | Survey lote 1: el log del optimizador pasa a ser solo del propietario (era visible para campo) + leyenda de color en las tablas (faltaba desde v93) |
+| v123 | Plomado con tratamiento CAD: planta a escala real (antes vertical 1.7x distorsionada) + isometrica con los hilos cayendo + detalle 3D + ficha de replanteo + cierre di+DBP+dd=BSR + aviso de BS incoherente |
+| v122 | Fix: los displays redondeaban a entero valores que el optimizador da en pasos de 0.5 mm (dos soluciones distintas daban la misma etiqueta); cotas con formato adaptativo `_mm` |
+| v121 | Fix CRITICO geometria de los planos: FL/FR van al eje de rieles (cuerpo TK centrado), la cabina ya no se sale del hueco; apertura posicionada con OL/OR reales + marcos |
+| v120 | Fix CRITICO: indentacion de v118 rompia las 2 fases del Survey (NameError sc2, matriz invisible, import de Excel inalcanzable) |
+| v119 | Dibujos del survey rehechos: planta a escala real con cotas/achurado/cajetin + detalle ampliado automatico + ambos desplazamientos + vista isometrica del hueco |
+| v118 | Fix: al cambiar de fase se perdian parametros/NS/config (Streamlit descarta widgets no renderizados) + el Excel ya no pisa los valores del PDF salvo que lo pidas |
+| v117 | Fix: crash (AttributeError) tras 'Empezar un survey nuevo' — el reset borraba claves leidas por atributo |
+| v116 | Informe del cliente rediseñado como presentacion: portada a sangre, pie con paginacion, nº de informe, veredicto, KPIs, glosario, alcance, conclusiones+firma |
+| v115 | Survey pro: solucion activa elegible, resumen ejecutivo, checklist, filtro de pisos, validacion temprana, duplicar, comparar soluciones, exportar diagramas |
+| v114 | Survey en 2 fases (Datos / Resultados) con salto automatico al calcular; config leida de session_state |
+| v113 | Survey: marca de origen PDF/manual por campo + parametros agrupados + boton nuevo survey + aviso al reconstruir |
+| v112 | Fix CRITICO: el import de Excel se repetia en cada rerun y pisaba los valores del PDF (faltaba guarda por archivo) |
+| v111 | Fix: importar la matriz desde Excel fallaba (escribia claves de widgets ya instanciados) |
+| v110 | Survey: los resultados dejan de borrarse al interactuar (render fuera del boton + aviso de calculo obsoleto) |
+| v109 | Limpieza de codigo muerto (flujo PIN viejo + 6 funciones sin uso); sin imports muertos |
+| v108 | Auditoria de llamadas #2: cachear open_sessions/group_hours (fichaje) + list_groups + group_expenses; escrituras siguen leyendo fresco |
+| v107 | Lote 2: matriz de compliance + tarjetas y resumen multi-grupo del propietario + dashboard de agrupacion + reconstruir proyecto + briefing por Telegram/email + login con cookies + ronda de optimizacion |
+| v106 | Fichaje identificado por USUARIO (no por nombre) + adelantos marcados + presupuesto al crear + graficas de costos + reenvio de inducciones al editar |
+| v105 | Control de costos por proyecto: recibos (foto/PDF+valor+categoría, los cargan admin/campo/conductor) + mano de obra (tarifa/hora POR USUARIO) + presupuesto+alerta; reporte de gastos del grupo (💰 Gastos) con CSV; radar sobre-presupuesto |
