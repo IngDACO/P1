@@ -27,9 +27,33 @@ Se partió el 20/09/2026: 1,07 MB → ~80 KB._
 ## Deploy (siempre hacer esto al terminar cambios)
 ```powershell
 Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
-& "C:\Users\diego\backup_survey.ps1" -Version N -Mensaje "descripcion"
+& "C:\Users\diego\P1\backup_survey.ps1" -Version N -Mensaje "descripcion"
 ```
 Hace: git push → ZIP → rclone Drive. Streamlit redeploy es automático.
+
+⚠️ **El script vive DENTRO del repo desde el 20/09/2026** (antes suelto en el home, sin historial:
+se arregló un fallo suyo y el arreglo no dejaba rastro en ningún sitio). El `$repo` sale
+de `$PSScriptRoot`, así que no puede apuntar a otro árbol. Y **si el `git commit` falla,
+aborta**: antes cantaba «GitHub OK» igual y el ZIP y el Drive salían sin haber subido
+nada — pasó en v504. Ahora el OK lleva el SHA al lado.
+
+⚠️ **Streamlit no siempre recarga los módulos al desplegar.** Si el chip del topbar sigue
+diciendo la versión vieja mientras la cabecera dice la nueva, el proceso está sirviendo
+los `core.*` de antes: **Settings → Reboot app**. El chip lee la versión AL IMPORTAR
+justo para delatar esto (ver la nota en `home_ui._VERSION`).
+
+## Guardianes: la suite de verificación (`guardianes/`)
+`verif_*.py` (afirmaciones) · `romper_*.py` (baterías de roturas) · `run_suite.py` (la
+suite ENTERA, regla v385) · `doc_v*.py` (documentar una versión) · `ejercitar_*_real.py`
+(contra la hoja real, método v344). Los de un solo uso, en `guardianes/sueltos/`.
+
+```powershell
+cd C:\Users\diego\P1\guardianes ; $env:PYTHONIOENCODING="utf-8" ; python run_suite.py
+```
+⚠️ Se corren con `cwd=survey_app` (lo hace el runner) y **espaciados**: 16 leen la hoja
+real y el techo son 60 lecturas/min. ⚠️ **Nunca en paralelo con una batería** (v455): las
+baterías modifican el árbol y lo restauran. Lo que generan al correr está en `.gitignore`
+— en especial las fotos de la hoja, que son **datos reales**.
 
 ### ⚠️ Entorno de Streamlit Cloud (NO romper) — v66
 - **Python 3.12** en Streamlit Cloud (Settings → Python version). **NO usar 3.14**: solo tiene ruedas

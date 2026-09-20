@@ -45,3 +45,13 @@ dist/
 *.png
 # ...pero SÍ versionar los íconos PWA
 !survey_app/static/*.png
+
+# Guardianes: el codigo SI se versiona, lo que generan al correr NO.
+# ⚠️ Las baterias escriben respaldos dentro de su propia carpeta y el deploy hace
+# `git add -A`: sin esto, cada tanda metia copias del fuente en el repo. Y las fotos
+# de la hoja son DATOS REALES (usuarios, nombres): nunca dentro del repo.
+guardianes/_respaldo_*/
+guardianes/_bak_*/
+guardianes/foto_*.json
+guardianes/suite_*.txt
+guardianes/*.bak*
