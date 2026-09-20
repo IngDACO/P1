@@ -10,6 +10,96 @@ ventana de contexto. Contenido: 258 secciones detalladas + el índice de 440 ver
 
 ---
 
+## EL EXPEDIENTE DE ENTREGA: qué tiene la obra y qué le falta (v506)
+
+Primera de las tres oportunidades que el estudio de mercado del 20/09/2026 marcó como
+imposibles de copiar. La app reúne lo que la empresa tiene que conservar **cinco años** y
+dice, con nombre, **qué falta para poder entregar**.
+
+### ⚠️ Lo que NO es, y está escrito en el código y en la pantalla
+**No certifica nada.** No sustituye al certificado del certificador, al eléctrico ni al
+*Safe-to-Operate*: esos los emite un tercero y la app no puede fabricarlos. Prometer
+cumplimiento en la interfaz metería al cliente en un problema, así que hay un guardián
+que lo vigila (ver «Verificación»).
+
+### La lista es REAL, no inventada
+Los trece ítems (a–m) salen del estándar técnico de lifts del **Departamento de Educación
+de NSW** —un cliente de verdad del mercado de arranque— sección «Lift Documentation and
+Support», lo que el instalador entrega en *practical completion*. Un expediente con una
+lista inventada no sirve para lo único que tiene que servir.
+
+De los trece, la app **evidencia cinco** con datos que ya guardaba:
+
+| Ítem | De dónde sale |
+|---|---|
+| (a) Project specification check sheets | La solución de posicionamiento y los cortes del survey |
+| (c) Commissioning records | Fechas reales de inicio y fin por actividad |
+| (f) As-built dimensional | Matriz del survey, posicionamiento y verificación de plomada |
+| (j) Hazard and risk assessment | Los pre-starts firmados de la obra |
+| (l) Installer's statutory certificates | Credenciales de quien trabajó, **vigentes el día que trabajó** |
+
+Los otros ocho son de terceros. ⚠️ **Nunca pasan por cálculo**: solo si alguien adjunta el
+documento. Con la obra perfecta, los ocho siguen faltando — decir lo contrario sería que
+la app afirmara algo que no sabe.
+
+### Lo que lo hace imposible de copiar no es juntar PDFs
+Es **cruzar** el registro técnico con el de personas y el de fechas, que solo puede hacer
+quien hace el cálculo. En la primera ejecución contra la hoja real, sin que nadie lo
+provocara, salió esto:
+
+> *Hours were booked to this job by people not assigned to it: admin1*
+
+Y el cruce que motivó la función: *«Ana firmó el pre-start del 15/08, pero su ticket venció
+el 12/08»*. Un competidor puede juntar los mismos archivos; no puede sacar esa frase.
+
+Los cuatro cruces: certificado vencido el día que firmó · obra cerrada sin verificación de
+plomada · fichó gente no asignada · actividad cerrada antes de empezar.
+
+### Dónde vive
+`core/handover.py` es **módulo HOJA**: no importa nada de `core`, no toca Sheets, recibe
+un contexto y devuelve el estado — así se puede ejercitar de verdad. `core/handover_ui.py`
+reúne los hechos y pinta, **cada fuente en su propio `try`**: el expediente es justo la
+pantalla que se abre cuando algo va mal, así que una hoja caída le resta un dato, no la
+tumba. Columna `HandoverItem` al final de `Documentos` (v363), opcional.
+
+Decisión del usuario: **índice y huecos primero, el expediente completo embebido después**,
+y **avisa sin bloquear** — en obra real siempre falta algo de un tercero, y un botón que
+nadie puede pulsar no sirve.
+
+### ⚠️ Y un fallo que no era de esta versión: 14 guardianes en rojo
+La suite dio **14 rojos** que parecían una regresión grande y no lo eran. Al traer la suite
+al repo esa misma mañana, los ficheros se clasificaron **por su nombre** (`verif_`,
+`check_`…) y ocho módulos auxiliares —`i18n_tool`, los `barre_*`, `fixture_survey`,
+`riesgo_claves`— no encajaban en ningún patrón y se fueron a `sueltos/`. No eran scripts de
+un solo uso: son **librerías que la suite importa**, hasta seis guardianes cada una.
+`ModuleNotFoundError`, catorce veces.
+
+**Un guardián que no puede ni importarse no dice nada de lo que vigila, y se disfraza de
+código roto.** Red nueva `check_suite_integra.py`: ningún guardián puede importar algo que
+no esté. Mira solo lo resoluble estáticamente —importar ejecuta— y se valida contra un
+caso conocido-malo.
+
+⚠️ La lección de método: al mover la suite se dijo «verificado que funciona desde su
+ubicación nueva» habiendo corrido **tres guardianes y el enumerador**. La suite entera
+desde ahí no se corrió hasta el despliegue siguiente. Un subconjunto no vale (v385), y eso
+incluye el subconjunto que uno usa para comprobar una mudanza.
+
+### Verificación
+`verif_v506.py`, **36 comprobaciones**, ejecutando la lógica de verdad. Batería:
+**12 roturas, 12 cazadas + CONTROL** ⚠️ (dos escaparon primero: el guardián **volvió a
+morir en vez de denunciar** —cuarta vez en el día— y una rotura no rompía nada porque la
+guarda del invitado **funcionaba por accidente**: nadie tiene credenciales bajo la clave
+vacía, y una sola fila con el usuario en blanco habría acusado a todo el mundo; ahora la
+guarda es explícita). Suite completa: **138 verde · 0 rojo · 0 roto**.
+
+⚠️ Uno de los chequeos falló por su propia construcción: buscar «compliance certificate»
+en la pantalla caza el **descargo honesto** («this is **not** a compliance certificate»).
+Ahora la red exige que la frase esté AFIRMADA, y se valida en las dos direcciones.
+
+**Ejercitado contra la HOJA REAL** (método v344): la columna se creó sola (**6 → 7**, al
+final), el recolector leyó la obra real sin lanzar, el ítem de tercero pasó a OK **solo**
+al adjuntar el documento, ningún otro se contagió, y la hoja quedó como estaba.
+
 ## EL MATERIAL QUE BLOQUEA UNA ACTIVIDAD: el retraso con causa (v505)
 
 Quinto y **último** hueco de los que dejó medidos la auditoría de gestión de instalación.
@@ -10986,7 +11076,7 @@ comprueba lo que dice**.
 
 ---
 
-## Versiones desplegadas (v505 = actual)
+## Versiones desplegadas (v506 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -10994,6 +11084,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v506 | **El expediente de entrega: qué tiene la obra y qué le falta.** Primera de las tres oportunidades del estudio de mercado. Trece ítems sacados del estándar REAL de lifts del Depto. de Educación de NSW (a–m, *practical completion*), no inventados: la app **evidencia cinco** con lo que ya guardaba y los ocho de terceros ⚠️ **nunca pasan por cálculo** —solo si alguien adjunta el documento—. ⚠️ **No certifica nada** y lo dice en el código y en pantalla; hay un guardián que vigila que la interfaz no prometa cumplimiento. Lo imposible de copiar no es juntar PDFs sino **cruzar** el registro técnico con el de personas y fechas: en su primera ejecución contra la hoja real salió solo «*hours were booked to this job by people not assigned to it*». ⚠️ Y la suite dio **14 rojos que no eran de esta versión**: al traer la suite al repo, ocho módulos auxiliares se clasificaron por su nombre y acabaron en `sueltos/` — un guardián que no puede importarse se disfraza de código roto. Red nueva `check_suite_integra`. 36 comprobaciones · **12/12 roturas + control** · suite 138 verde |
 | v505 | **El material que bloquea una actividad: el retraso con causa.** Cierra el ÚLTIMO hueco de gestión de instalación (v499 qué · v500 cuánto · v501 contra qué · v502 de quién · v505 **por qué**). Una orden de compra dice a qué actividad espera y la actividad lo cuenta donde se mira el retraso; el campo lo ve en solo lectura, como aviso y no como columna (en móvil una séptima corta nombres, v408). ⚠️ Solo bloquea lo **pendiente**, ⚠️ sin fecha esperada bloquea pero **no se dice atrasada** (criterio de v343) y ⚠️ una orden sin actividad **no bloquea a nadie**. Las órdenes siguen siendo opcionales: sin hoja o con la hoja caída, la pantalla de estado sigue en pie. ⚠️ **El guardián cazó un fallo real antes de desplegar**: `_num('tres')` degrada a 0.0 sin lanzar, así que la basura se colgaba de una actividad FANTASMA nº 0. ⚠️ Y mi ejercicio contra la hoja **pasó en vacío** la primera vez (leía `Orders`, se llama `PurchaseOrders`, y un except se lo tragaba: comparaba -1 con -1). 26 comprobaciones · **12/12 roturas + control** · suite 136 verde |
 | v504 | **La palabra «None» en cada celda sin responsable.** Un `SelectboxColumn` cuya opción de vacío es la cadena vacía la pinta literal; «After», opcional también, queda en blanco por ser `TextColumn`. ⚠️ **No se ve compilando ni en el DOM**: `st.data_editor` pinta en canvas, así que se cazó interceptando `fillText` en producción y midiendo las posiciones (**«None» × 20 en x≈332-360**, justo la columna Owner@355) — y forzando un repintado REAL, porque un `resize` sintético no dispara nada. La sonda se validó antes contra un caso conocido-bueno (nº12). Arreglado con una opción con TEXTO; la vuelta a login sigue dando «» sola. 29 comprobaciones · **15/15 roturas + control** · suite 135 verde. ⚠️ v502-v503-v504 son la misma lección tres veces: lo que solo existe al EJECUTAR la pantalla no lo ve ninguna red local |
 | v503 | ⚠️ **v502 tumbó la pantalla de detalle de proyecto, y se vio al verificar en producción.** `_etq_us` ya era la función de módulo y `_detalle_proyecto` la llama en la L2428; v502 le puso ese nombre a una variable en la L2566 y Python la marca local en el ámbito ENTERO → `UnboundLocalError` en la llamada anterior. Es la trampa nº29 literal (los dos fallos de v439). ⚠️ **No lo vio nadie**: `compileall`, los 98 imports, 25 comprobaciones, la batería 13/13, los 135 guardianes y el ejercicio contra la hoja real — ninguna de esas redes EJECUTA esa función, y **importar no ejecuta** (v378). Lo vio la pantalla. Arreglado usando `_etq_us`, que ya hacía eso y desempata homónimos sobre TODO el grupo (v413), o sea que v502 había duplicado lógica existente. Red nueva sobre todo `core/`: nadie liga un nombre que ya es función de módulo y que llama ANTES — mira el ORDEN (un `def` anidado antes de su llamada es legítimo, como `roster_ui._hm`) y se autovalida contra un caso conocido-malo. 27 comprobaciones · **14/14 roturas + control** |

@@ -2845,6 +2845,14 @@ def _detalle_proyecto(pid: str, grupo: str = None):
                     st.success(t(":material/check_circle: Loaded. Go to **:material/architecture: Survey** and press **Calculate** to regenerate everything."))
         # ── Archivos del proyecto (buscable) ──
         _archivos_section(pid)
+        # ── v506: el expediente de entrega, justo debajo de los archivos ──
+        # Va aquí y no en Estado porque responde «¿puedo entregar esto?», que se
+        # pregunta mirando documentos, no avance. Import local (patrón v342).
+        try:
+            from core import handover_ui as _HO
+            _HO.render(pid, grupo, prj, editable=True)
+        except Exception as _e:                      # nunca tumba el detalle de la obra
+            logger.warning("handover_ui.render: %s", _e)
 
 
 # ── Panel de agrupaciones ────────────────────────────────────────

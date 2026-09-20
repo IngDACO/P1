@@ -174,7 +174,13 @@ ACTIVITIES_HEADERS = [
 ]
 GROUPINGS_HEADERS = ["ID", "Group", "Name", "Description"]
 DOCUMENTS_SHEET   = "Documents"
-DOCUMENTS_HEADERS = ["ProjectID", "Name", "Type", "DriveID", "UploadedBy", "Date"]
+DOCUMENTS_HEADERS = ["ProjectID", "Name", "Type", "DriveID", "UploadedBy", "Date",
+                     # v506: contra qué ítem del expediente de entrega vale este
+                     # documento (`handover.CLAVES`). ⚠️ AL FINAL (v363) y opcional:
+                     # un documento sin ítem se comporta exactamente como hasta v505.
+                     # Va aquí y no en `Type` porque son dos preguntas distintas: qué
+                     # ES el fichero (foto, plano) y QUÉ ACREDITA en la entrega.
+                     "HandoverItem"]
 
 _PCOL = {h: i + 1 for i, h in enumerate(PROJECTS_HEADERS)}
 _ACOL = {h: i + 1 for i, h in enumerate(ACTIVITIES_HEADERS)}
@@ -1409,12 +1415,14 @@ def list_documents(pid: str) -> list:
             if str(r.get("ProjectID", "")) == str(pid)]
 
 
-def add_document(pid, nombre, tipo, drive_id, subido_por="") -> tuple:
+def add_document(pid, nombre, tipo, drive_id, subido_por="", handover_item="") -> tuple:
     dws, err = _documents_ws()
     if err:
         return False, err
     dws.append_row([pid, nombre, tipo, drive_id, subido_por,
-                    clock.now().strftime("%Y-%m-%d %H:%M:%S")], value_input_option="RAW")
+                    clock.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    str(handover_item or "")],     # v506: qué acredita en la entrega
+                   value_input_option="RAW")
     _invalidate()
     return True, t("Document recorded.")
 
