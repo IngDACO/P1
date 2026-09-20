@@ -59,6 +59,11 @@ HOJAS_LECTURA = (
     # ⚠️ v472: misma regla — `library` lee con `hojas.registros(SHEET, HEADERS)`,
     # asi que fuera del lote costaria una llamada suelta por sesion (v339).
     "Library", "LibraryModels",
+    # ⚠️ v507: MISMA regla que la nota de v461, y volvió a morder. `claims` lee con
+    # `registros(SHEET)` sin cabeceras: fuera del lote devuelve None y el cobro de obra
+    # leería VACÍO PARA SIEMPRE sin un solo error — la fila estaba escrita en la hoja y
+    # la app no la veía. Lo cazó el ejercicio contra la hoja real, no la suite.
+    "Variations", "Claims",
 )
 
 

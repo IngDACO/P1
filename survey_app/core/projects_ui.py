@@ -3979,6 +3979,15 @@ def _costos_section(pid, grupo, gastos, can_delete, key_prefix):
 
     # ── Órdenes de compra: el dinero comprometido (v343) ──
     _ordenes_section(pid, grupo, editable=can_delete, key_prefix=key_prefix)
+    # ── v507: el cobro de obra, junto a las órdenes ──
+    # Va en Costos y no en Finanzas porque la pregunta es de OBRA («¿cuánto puedo
+    # reclamar de ésta?»), no de cartera. Import local (patrón v342).
+    try:
+        from core import claims_ui as _CLU
+        _CLU.render(pid, grupo, P.get_project(pid) or {}, editable=can_delete,
+                    key_prefix=key_prefix)
+    except Exception as _e:                      # nunca tumba la pestaña de costos
+        logger.warning("claims_ui.render: %s", _e)
 
     # ── Reparto del costo | Compras por categoría (doble columna, v213) ──
     _rep = cp["total"] > 0

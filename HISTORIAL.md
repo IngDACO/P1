@@ -10,6 +10,86 @@ ventana de contexto. Contenido: 258 secciones detalladas + el índice de 440 ver
 
 ---
 
+## COBRO DE OBRA: variaciones y reclamaciones de avance (v507)
+
+Cierra la **brecha 2** del estudio de mercado del 20/09/2026. Hasta aquí se podía
+facturar, pero no **reclamar**: sin variaciones, sin *progress claims* y sin retenciones,
+la reclamación mensual se seguía armando en Excel — que es justo donde el contratista
+pelea su dinero, y donde FIELDBOSS ya estaba con *change orders*, *retainage* y AIA
+billing.
+
+### La aritmética, que es la de siempre en obra
+```
+valor          = contrato + variaciones APROBADAS
+trabajo_hecho  = valor × avance%                     (acumulado, desde el principio)
+bruto          = trabajo_hecho − lo reclamado antes   (lo nuevo de este periodo)
+retención      = bruto × retención%                   (5% por defecto, editable)
+neto           = bruto − retención
+```
+
+### Decisión del usuario: el contrato sale de la cotización ACEPTADA
+Ya está enlazada a la obra (`aceptar_y_crear_proyecto`) y es el precio que el cliente
+firmó: una sola fuente de verdad, sin un dato nuevo que pueda contradecirla. Una obra sin
+cotización aceptada no puede emitir reclamaciones, **y se dice en pantalla antes de
+enseñar ninguna cifra**.
+
+⚠️ Se usa el **Subtotal**, no el Total: es la misma base que `finance.project_revenue` e
+`invoices.facturado_por_proyecto`, que suman importes de línea. Mezclar bases con y sin
+impuesto haría que los totales comparasen peras con manzanas (la nota de v370).
+
+### ⚠️ Las cuatro cosas que fallarían en silencio
+1. **Una reclamación CONGELA sus números.** Contrato, variaciones, avance y retención se
+   guardan al emitir. Si mañana se aprueba otra variación, la reclamación que ya mandaste
+   sigue diciendo lo mismo. Mismo principio que las líneas de cotización (v353), la
+   nómina y la línea base (v501).
+2. **Si el avance BAJA, el bruto es cero, no una devolución.** Devolver dinero ya cobrado
+   es una nota de crédito: otro documento, otras consecuencias. No se hace en silencio.
+3. **Lo acumulado se lleva en `WorkDone`, no sumando netos.** La retención se descuenta
+   del PAGO, no del trabajo hecho; sumando netos la obra no llegaría nunca al 100%.
+4. **Una variación PROPUESTA no es dinero.** Solo la aprobada mueve el contrato — y una
+   reducción de alcance (importe negativo) lo resta, porque en obra existe.
+
+Además: una variación ya decidida no se re-decide (movería el valor por debajo de
+reclamaciones ya emitidas con él), y solo se puede anular la **última** reclamación (las
+siguientes se emitieron restando el acumulado de ésta).
+
+### ⚠️ El fallo de fondo: dos hojas fuera del lote de lectura
+`hojas.registros(SHEET)` **sin cabeceras devuelve `None`** cuando esa hoja no está en
+`HOJAS_LECTURA`. `Variations` y `Claims` no estaban: las filas se escribían en el libro y
+la app **leía VACÍO PARA SIEMPRE, sin un solo error**.
+
+⚠️ Y el código ya lo advertía. La nota de v461 sobre `TimeCorrections` dice exactamente
+esto, palabra por palabra. Se leyó **después** de que mordiera.
+
+**Un comentario no es una red.** Nueva: `check_hojas_en_lote.py` — ninguna hoja leída por
+lote puede estar fuera del lote. Validada en tres direcciones: caso malo, caso bueno, y la
+lectura CON cabeceras, que cae a `get_sheet` y es otro camino que no debe denunciarse.
+
+⚠️ La suite no podía ver esto: solo aparece leyendo el libro de verdad. Lo cazó el
+ejercicio contra la hoja real.
+
+### ⚠️ Y dos chequeos míos que no comprobaban lo que decían
+- **La batería** destapó uno que buscaba la palabra `_ultima` **en el fuente** para
+  comprobar que solo se anula la última. La rotura quitó el `if` y dejó la asignación:
+  pasó tan campante (grep ≠ uso, trampa nº2). Ahora se EJECUTA `anular` y se exige que
+  rechace, y que acepte el caso bueno.
+- **En el ejercicio**, «una variación propuesta no mueve el contrato» pasaba igual cuando
+  la variación **no se había leído** — que es justo lo que ocultaba el bug de arriba. Un
+  chequeo que aprueba por ausencia de datos no comprueba nada (trampa nº1). Ahora se
+  comprueba primero que se lea de vuelta.
+
+### Verificación
+`verif_v507.py`, **25 comprobaciones**, ejecutando la aritmética de verdad. Batería:
+**12 roturas, 12 cazadas + CONTROL**. Suite completa: **140 verde · 0 rojo · 0 roto**.
+
+**Ejercitado contra la HOJA REAL** (método v344), el ciclo entero: se le creó a la obra
+una cotización de prueba para darle contrato (se borra al final) → variación propuesta,
+leída de vuelta, que **no** mueve el contrato → aprobada, que **sí** lo mueve → claim al
+30% (**neto 29.925** sobre 105.000 con 5% de retención) → claim al 50% que reclama **solo
+la diferencia** → anular la primera se rechaza, la última no → anulada, deja de contar.
+Las dos hojas se crean solas; la obra queda sin variaciones ni reclamaciones y el contrato
+vuelve a su estado de partida.
+
 ## EL EXPEDIENTE DE ENTREGA: qué tiene la obra y qué le falta (v506)
 
 Primera de las tres oportunidades que el estudio de mercado del 20/09/2026 marcó como
@@ -11076,7 +11156,7 @@ comprueba lo que dice**.
 
 ---
 
-## Versiones desplegadas (v506 = actual)
+## Versiones desplegadas (v507 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -11084,6 +11164,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v507 | **Cobro de obra: variaciones y reclamaciones de avance.** Cierra la brecha 2 del estudio: hasta aquí se podía facturar pero no **reclamar**. `valor = contrato + variaciones aprobadas`, `bruto = valor × avance − lo ya reclamado`, `neto = bruto − retención`. El contrato sale del **Subtotal** de la cotización aceptada (decisión del usuario; misma base que `finance` e `invoices`). ⚠️ Una reclamación **congela** sus números; ⚠️ si el avance BAJA el bruto es **cero**, no una devolución; ⚠️ lo acumulado va en `WorkDone`, no sumando netos; ⚠️ una variación **propuesta no es dinero**. ⚠️ **El fallo de fondo**: `Variations` y `Claims` estaban fuera de `HOJAS_LECTURA`, así que `registros()` devolvía None y la app leía **VACÍO PARA SIEMPRE sin un solo error** — el código ya lo advertía en la nota de v461 y se leyó después de que mordiera. Red nueva `check_hojas_en_lote`. Lo cazó el ejercicio contra la hoja, no la suite. 25 comprobaciones · **12/12 roturas + control** · suite 140 verde |
 | v506 | **El expediente de entrega: qué tiene la obra y qué le falta.** Primera de las tres oportunidades del estudio de mercado. Trece ítems sacados del estándar REAL de lifts del Depto. de Educación de NSW (a–m, *practical completion*), no inventados: la app **evidencia cinco** con lo que ya guardaba y los ocho de terceros ⚠️ **nunca pasan por cálculo** —solo si alguien adjunta el documento—. ⚠️ **No certifica nada** y lo dice en el código y en pantalla; hay un guardián que vigila que la interfaz no prometa cumplimiento. Lo imposible de copiar no es juntar PDFs sino **cruzar** el registro técnico con el de personas y fechas: en su primera ejecución contra la hoja real salió solo «*hours were booked to this job by people not assigned to it*». ⚠️ Y la suite dio **14 rojos que no eran de esta versión**: al traer la suite al repo, ocho módulos auxiliares se clasificaron por su nombre y acabaron en `sueltos/` — un guardián que no puede importarse se disfraza de código roto. Red nueva `check_suite_integra`. 36 comprobaciones · **12/12 roturas + control** · suite 138 verde |
 | v505 | **El material que bloquea una actividad: el retraso con causa.** Cierra el ÚLTIMO hueco de gestión de instalación (v499 qué · v500 cuánto · v501 contra qué · v502 de quién · v505 **por qué**). Una orden de compra dice a qué actividad espera y la actividad lo cuenta donde se mira el retraso; el campo lo ve en solo lectura, como aviso y no como columna (en móvil una séptima corta nombres, v408). ⚠️ Solo bloquea lo **pendiente**, ⚠️ sin fecha esperada bloquea pero **no se dice atrasada** (criterio de v343) y ⚠️ una orden sin actividad **no bloquea a nadie**. Las órdenes siguen siendo opcionales: sin hoja o con la hoja caída, la pantalla de estado sigue en pie. ⚠️ **El guardián cazó un fallo real antes de desplegar**: `_num('tres')` degrada a 0.0 sin lanzar, así que la basura se colgaba de una actividad FANTASMA nº 0. ⚠️ Y mi ejercicio contra la hoja **pasó en vacío** la primera vez (leía `Orders`, se llama `PurchaseOrders`, y un except se lo tragaba: comparaba -1 con -1). 26 comprobaciones · **12/12 roturas + control** · suite 136 verde |
 | v504 | **La palabra «None» en cada celda sin responsable.** Un `SelectboxColumn` cuya opción de vacío es la cadena vacía la pinta literal; «After», opcional también, queda en blanco por ser `TextColumn`. ⚠️ **No se ve compilando ni en el DOM**: `st.data_editor` pinta en canvas, así que se cazó interceptando `fillText` en producción y midiendo las posiciones (**«None» × 20 en x≈332-360**, justo la columna Owner@355) — y forzando un repintado REAL, porque un `resize` sintético no dispara nada. La sonda se validó antes contra un caso conocido-bueno (nº12). Arreglado con una opción con TEXTO; la vuelta a login sigue dando «» sola. 29 comprobaciones · **15/15 roturas + control** · suite 135 verde. ⚠️ v502-v503-v504 son la misma lección tres veces: lo que solo existe al EJECUTAR la pantalla no lo ve ninguna red local |
