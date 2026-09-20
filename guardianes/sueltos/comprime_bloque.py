@@ -1,3 +1,13 @@
+# =====================================================================
+# HISTORICO - NO SE PUEDE EJECUTAR (marcado el 20/09/2026)
+#
+# Apunta al scratchpad temporal de la sesion 1734b676..., que ya no existe,
+# y ademas opera sobre ficheros intermedios de aquella tanda que tampoco
+# existen: era una transformacion de un solo uso, ya aplicada.
+#
+# Se conserva como RASTRO de como se hizo aquel cambio, no como herramienta.
+# Arreglarle la ruta no lo haria funcionar: lo que leia ya no esta.
+# =====================================================================
 """Sustituye el bloque v102-v130 de CLAUDE.md por su version comprimida.
 
 ⚠️ Por defecto va EN SECO: dice que se perderia y no escribe. Con --apply escribe

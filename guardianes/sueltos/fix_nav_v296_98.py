@@ -1,3 +1,13 @@
+# =====================================================================
+# HISTORICO - NO SE PUEDE EJECUTAR (marcado el 20/09/2026)
+#
+# Apunta al scratchpad temporal de la sesion 1734b676..., que ya no existe,
+# y ademas opera sobre ficheros intermedios de aquella tanda que tampoco
+# existen: era una transformacion de un solo uso, ya aplicada.
+#
+# Se conserva como RASTRO de como se hizo aquel cambio, no como herramienta.
+# Arreglarle la ruta no lo haria funcionar: lo que leia ya no esta.
+# =====================================================================
 """Los tres guardianes de la migración de nav, actualizados a lo que queda vivo.
 
 v296/v297/v298 vigilaban una MIGRACIÓN (la nav vieja de `app.py` → la shell única).

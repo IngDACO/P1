@@ -1,4 +1,14 @@
 # -*- coding: utf-8 -*-
+# =====================================================================
+# HISTORICO - NO SE PUEDE EJECUTAR (marcado el 20/09/2026)
+#
+# Apunta al scratchpad temporal de la sesion 1734b676..., que ya no existe,
+# y ademas opera sobre ficheros intermedios de aquella tanda que tampoco
+# existen: era una transformacion de un solo uso, ya aplicada.
+#
+# Se conserva como RASTRO de como se hizo aquel cambio, no como herramienta.
+# Arreglarle la ruta no lo haria funcionar: lo que leia ya no esta.
+# =====================================================================
 """Inserta la sección y la fila de v449 en CLAUDE.md (por fichero, no por shell)."""
 import io
 import re
