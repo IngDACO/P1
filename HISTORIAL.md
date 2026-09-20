@@ -10,6 +10,78 @@ ventana de contexto. Contenido: 258 secciones detalladas + el índice de 440 ver
 
 ---
 
+## EL MATERIAL QUE BLOQUEA UNA ACTIVIDAD: el retraso con causa (v505)
+
+Quinto y **último** hueco de los que dejó medidos la auditoría de gestión de instalación.
+Con lo anterior la app ya sabía **qué** va tarde (v499, dependencias y ruta crítica),
+**cuánto** (v500, pronóstico desde la cadena), contra **qué** se mide (v501, línea base)
+y **de quién es** (v502, responsable). Faltaba **por qué**.
+
+Ahora una orden de compra puede decir a qué actividad está esperando, y esa actividad
+lo cuenta donde se mira el retraso: *«no arrancó · esperando Riel T75 (late since 18/09)»*.
+
+### Decisiones del usuario
+- **Una actividad por orden**: columna al final de `PurchaseOrders` con el **nº de Orden**
+  de la actividad. Mismo criterio que las predecesoras de v499, y `save_activities` ya
+  remapea los órdenes al reordenar. Se guarda el ORDEN y no el nombre: el nombre se edita.
+- **Se ve en el diagnóstico de retraso**, junto a la parada y la arrastrada — la causa al
+  lado del síntoma, no en una pantalla aparte.
+- **El campo lo VE, en solo lectura.** Saber que el material no ha llegado es justo lo que
+  evita el viaje en balde. Va como aviso ANTES de la tabla y no como columna: ya son seis
+  y el campo entra por el móvil, donde una séptima corta los nombres (medido en v408).
+
+### ⚠️ Las tres cosas que fallarían en silencio
+1. **Solo bloquea lo PENDIENTE.** Una orden recibida ya no bloquea nada y una cancelada
+   tampoco; si no, la obra se quedaría «esperando» material que ya está en el sitio.
+2. **Sin fecha esperada, bloquea pero NO se dice atrasada.** Es el mismo criterio de
+   `atrasadas` (v343): no se puede afirmar que algo llega tarde si nadie dijo cuándo
+   llegaba.
+3. **Una orden sin actividad no bloquea a nadie.** Se pidió material para la obra, no
+   para un paso concreto; decir que bloquea «la 3» sería inventárselo.
+
+Y las órdenes siguen siendo **opcionales**: sin la hoja, o con la hoja caída, la pantalla
+de estado —la que se mira justo cuando algo va mal— sigue en pie.
+
+### ⚠️ El guardián cazó un fallo REAL antes de desplegar
+Con una celda de basura (`"tres"` en vez de un número) la orden quedaba colgada de una
+actividad **fantasma nº 0**: `_num()` degrada a `0.0` **sin lanzar**, así que el
+`try/except` no se disparaba nunca. Y si una obra llegara a tener un Orden 0, la
+bloquearía sin motivo. `_num` es la herramienta equivocada aquí: hace falta saber si el
+texto **es** un número, no obtener un número a toda costa.
+
+### ⚠️ Y dos lecciones de método, las dos mías
+- **Una rotura que no rompe nada no prueba nada.** Quitar la guarda de «orden sin
+  actividad» no cambiaba el comportamiento, porque el parseo estricto también tira la
+  cadena vacía — dos redes sobre lo mismo. La rotura de verdad es la que **inventa** a
+  quién bloquea: una orden sin actividad colgándose de la 1.
+- **Mi ejercicio contra la hoja real pasó EN VACÍO la primera vez.** La foto leía una
+  hoja llamada `Orders` —se llama `PurchaseOrders`— y un `except` se tragaba el fallo, así
+  que devolvía vacío: el chequeo de «la columna va al final» comparaba `-1` con
+  `len([])-1 = -1` y **aprobaba sin mirar nada**. Es la trampa nº1 dentro de la propia
+  verificación. Ahora el nombre sale del módulo y una foto que no se puede tomar **aborta**
+  en vez de devolver una foto falsa.
+
+### Verificación
+`verif_v505.py`, **26 comprobaciones**, ejecutando `bloqueos` de verdad. Batería:
+**12 roturas, 12 cazadas + CONTROL** ⚠️ (dos escaparon en la primera pasada: una rotura
+que no rompía nada, y otra que hacía **reventar** al guardián en vez de ser denunciada —
+tercera vez en el día con ese patrón, ya corregido en los tres). Suite completa:
+**136 verde · 0 rojo · 0 roto**.
+
+**Ejercitado contra la HOJA REAL** (método v344): la columna se creó sola (**15 → 16**,
+`ActivityOrder` en el índice 15). Una orden ligada a la actividad 2 bloqueó **la 2 y no la
+1**, con su descripción y sin declararse atrasada (fecha futura); al dejar de estar
+pendiente, dejó de bloquear. Las órdenes de prueba se borraron de la hoja y la cabecera
+quedó intacta. ⚠️ La rama RECIBIDA se prueba en el guardián y no contra la hoja: recibir
+**crea una fila en `Gastos`** que la app no sabe borrar, y no se ensucia la contabilidad
+de la obra para probar un invariante que ya está cubierto.
+
+---
+
+Con esto **se cierra la auditoría de gestión de instalación**: v499 · v500 · v501 · v502 ·
+v505. La app pasó de decir «vas al 40%» a decir «la 3 lleva 4 días parada, es de Ana, y
+espera un riel que llegaba el 18».
+
 ## LA PALABRA «None» EN CADA CELDA VACÍA (v504)
 
 La columna Responsable de v502 funcionaba, pero **toda actividad sin dueño mostraba
@@ -10914,7 +10986,7 @@ comprueba lo que dice**.
 
 ---
 
-## Versiones desplegadas (v504 = actual)
+## Versiones desplegadas (v505 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -10922,6 +10994,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v505 | **El material que bloquea una actividad: el retraso con causa.** Cierra el ÚLTIMO hueco de gestión de instalación (v499 qué · v500 cuánto · v501 contra qué · v502 de quién · v505 **por qué**). Una orden de compra dice a qué actividad espera y la actividad lo cuenta donde se mira el retraso; el campo lo ve en solo lectura, como aviso y no como columna (en móvil una séptima corta nombres, v408). ⚠️ Solo bloquea lo **pendiente**, ⚠️ sin fecha esperada bloquea pero **no se dice atrasada** (criterio de v343) y ⚠️ una orden sin actividad **no bloquea a nadie**. Las órdenes siguen siendo opcionales: sin hoja o con la hoja caída, la pantalla de estado sigue en pie. ⚠️ **El guardián cazó un fallo real antes de desplegar**: `_num('tres')` degrada a 0.0 sin lanzar, así que la basura se colgaba de una actividad FANTASMA nº 0. ⚠️ Y mi ejercicio contra la hoja **pasó en vacío** la primera vez (leía `Orders`, se llama `PurchaseOrders`, y un except se lo tragaba: comparaba -1 con -1). 26 comprobaciones · **12/12 roturas + control** · suite 136 verde |
 | v504 | **La palabra «None» en cada celda sin responsable.** Un `SelectboxColumn` cuya opción de vacío es la cadena vacía la pinta literal; «After», opcional también, queda en blanco por ser `TextColumn`. ⚠️ **No se ve compilando ni en el DOM**: `st.data_editor` pinta en canvas, así que se cazó interceptando `fillText` en producción y midiendo las posiciones (**«None» × 20 en x≈332-360**, justo la columna Owner@355) — y forzando un repintado REAL, porque un `resize` sintético no dispara nada. La sonda se validó antes contra un caso conocido-bueno (nº12). Arreglado con una opción con TEXTO; la vuelta a login sigue dando «» sola. 29 comprobaciones · **15/15 roturas + control** · suite 135 verde. ⚠️ v502-v503-v504 son la misma lección tres veces: lo que solo existe al EJECUTAR la pantalla no lo ve ninguna red local |
 | v503 | ⚠️ **v502 tumbó la pantalla de detalle de proyecto, y se vio al verificar en producción.** `_etq_us` ya era la función de módulo y `_detalle_proyecto` la llama en la L2428; v502 le puso ese nombre a una variable en la L2566 y Python la marca local en el ámbito ENTERO → `UnboundLocalError` en la llamada anterior. Es la trampa nº29 literal (los dos fallos de v439). ⚠️ **No lo vio nadie**: `compileall`, los 98 imports, 25 comprobaciones, la batería 13/13, los 135 guardianes y el ejercicio contra la hoja real — ninguna de esas redes EJECUTA esa función, y **importar no ejecuta** (v378). Lo vio la pantalla. Arreglado usando `_etq_us`, que ya hacía eso y desempata homónimos sobre TODO el grupo (v413), o sea que v502 había duplicado lógica existente. Red nueva sobre todo `core/`: nadie liga un nombre que ya es función de módulo y que llama ANTES — mira el ORDEN (un `def` anidado antes de su llamada es legítimo, como `roster_ui._hm`) y se autovalida contra un caso conocido-malo. 27 comprobaciones · **14/14 roturas + control** |
 | v502 | **El responsable de cada actividad: que el retraso tenga dueño.** Cerrado el cuarto hueco de gestión de instalación: con v499-v501 la app ya sabía qué va tarde, cuánto y por qué, pero no **de quién es** — y sin eso no puede recomendar a quién mover. Columna Responsable en la tabla de actividades (se elige de la gente asignada a la obra) y el nombre al lado de lo que va tarde: la parada y la arrastrada, no todas las filas. ⚠️ Se guarda el **LOGIN** y se muestra el nombre (el nombre se repite, v306/v413), y el guardián exige que las etiquetas sean únicas o el mapa inverso guardaría a otro. ⚠️ Un guardado PARCIAL **no borra** responsables (el fallo de v499 con las predecesoras, y el campo guarda así, v162), y ⚠️ un dueño cuya persona ya no está asignada **sigue en la lista**: si no, su fila se pintaría vacía y el primer guardado lo borraría sin que nadie lo pidiera. 25 comprobaciones · **13/13 roturas + control** ⚠️ (la batería cazó DOS fallos míos en el propio guardián: uno que pasaba en vacío mirando la función equivocada, y otro que fallaba por su propia construcción contando el `def` como una llamada) |

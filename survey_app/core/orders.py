@@ -41,7 +41,13 @@ logger = logging.getLogger(__name__)
 SHEET = "PurchaseOrders"
 HEADERS = ["ID", "Group", "ProjectID", "Supplier", "Description", "Category",
            "Amount", "Date", "ExpectedDate", "Status", "ExpenseID", "ReceivedDate",
-           "Note", "CreatedBy", "Created"]
+           "Note", "CreatedBy", "Created",
+           # v505: QUE actividad espera este material, por su nº de Orden dentro de la
+           # obra. ⚠️ AL FINAL (v363) y opcional: una orden sin actividad se comporta
+           # exactamente como hasta v504. Se guarda el ORDEN, no el nombre: el nombre
+           # se edita y se repite, y `save_activities` ya remapea los órdenes al
+           # reordenar (v499), que es el mismo criterio que las predecesoras.
+           "ActivityOrder"]
 
 PENDIENTE, RECIBIDA, CANCELADA = "pending", "received", "cancelled"
 ESTADOS = (PENDIENTE, RECIBIDA, CANCELADA)
@@ -151,6 +157,41 @@ def atrasadas(grupo) -> list:
     return sorted(out, key=lambda x: -x["dias"])
 
 
+def bloqueos(pid, grupo=None) -> dict:
+    """`{nº de Orden de la actividad: [órdenes que la están bloqueando]}` (v505).
+
+    Solo cuentan las **PENDIENTES**: una recibida ya no bloquea nada y una cancelada
+    tampoco. Una orden sin actividad no bloquea a nadie — se pidió material para la obra,
+    no para un paso concreto, y afirmar que bloquea «la 3» sería inventárselo.
+
+    ⚠️ `esperada` puede ser None: igual que en `atrasadas`, **no se puede decir que algo
+    llega tarde si nadie dijo cuándo llegaba**. Sin fecha, bloquea pero no está atrasada.
+    """
+    hoy, out = clock.today(grupo), {}
+    for r in list_for(pid, PENDIENTE):
+        _a = str(r.get("ActivityOrder", "") or "").strip()
+        if not _a:
+            continue
+        # ⚠️ NO se usa `_num` aquí: degrada a 0.0 sin lanzar, así que una celda con
+        # basura («tres», un pegote) quedaba ligada a una actividad **fantasma nº 0**
+        # —y si alguna obra tuviera un Orden 0, la bloquearía sin motivo—. Aquí hace
+        # falta saber si el texto ES un número, no un número a toda costa. Lo cazó el
+        # guardián antes de desplegar.
+        try:
+            k = int(float(_a.replace(",", ".")))
+        except (TypeError, ValueError):
+            continue
+        if k <= 0:
+            continue                      # los Ordenes empiezan en 1 (list_activities)
+        f = _parse_date(r.get("ExpectedDate"))
+        out.setdefault(k, []).append({
+            "id": str(r.get("ID", "")), "proveedor": str(r.get("Supplier", "")),
+            "descripcion": str(r.get("Description", "")), "esperada": f,
+            "tarde": bool(f and f < hoy),
+        })
+    return out
+
+
 def sin_gasto(grupo) -> list:
     """Recibidas a las que les falta su fila en `Gastos` (ver la nota de arriba):
     su costo NO está contado en ningún sitio hasta que se complete."""
@@ -180,7 +221,7 @@ def _next_id() -> str:
 
 
 def crear(pid, grupo, proveedor, valor, descripcion="", categoria="Materials",
-          fecha_esperada="", nota="", creado_por="") -> tuple:
+          fecha_esperada="", nota="", creado_por="", actividad="") -> tuple:
     w = _ws()
     if w is None:
         return False, t("Google Sheets is not configured.")
@@ -194,7 +235,8 @@ def crear(pid, grupo, proveedor, valor, descripcion="", categoria="Materials",
                       str(descripcion), str(categoria), str(_num(valor)),
                       clock.now(grupo).strftime("%Y-%m-%d"), str(fecha_esperada or ""),
                       PENDIENTE, "", "", str(nota), str(creado_por),
-                      clock.now(grupo).strftime("%Y-%m-%d %H:%M")],
+                      clock.now(grupo).strftime("%Y-%m-%d %H:%M"),
+                      str(actividad or "")],          # v505: actividad que la espera
                      value_input_option="RAW")
     except Exception as e:
         return False, f"{t('Error saving the order')}: {e}"

@@ -67,6 +67,22 @@ def _etq_us(logins) -> dict:
         return {u: u for u in logins}
 
 
+def _bloqueos_de(pid, grupo=None) -> dict:
+    """`{nº de Orden: [órdenes que bloquean esa actividad]}` (v505), o `{}`.
+
+    ⚠️ Envuelve a `orders.bloqueos` porque las órdenes de compra son OPCIONALES: un
+    grupo sin Sheets de órdenes, o la hoja aún sin crear, no puede tumbar la pantalla
+    de estado — que es la que se mira cuando algo va mal.
+    """
+    try:
+        from core import orders as _Ord
+        if not _Ord.is_configured():
+            return {}
+        return _Ord.bloqueos(pid, grupo)
+    except Exception:
+        return {}
+
+
 def _alerts_section(pid, grupo, project_name="", allow_report=False):
     """Alarmas abiertas del proyecto + resolver; si allow_report, el campo puede reportar."""
     if not alerts.is_configured():
@@ -1889,11 +1905,15 @@ def _diagnostico(ps: dict) -> dict:
         # `inicio < hoy` (estricto): el dia en que se abre la ventana aun no
         # cuenta como retraso — si no, un proyecto recien creado nace en rojo.
         _ow = str(ow[i]) if i < len(ow) else ""      # v502: LOGIN, se traduce al pintar
+        # v505: el nº de Orden viaja para poder casar con las ordenes de compra que
+        # esperan a esta actividad. Por ORDEN y no por nombre: el nombre se edita.
+        _or = a.get("orden")
         if a["inicio"] < hoy <= fin and pct < 100:
             tocaban.append({"nombre": a["nombre"], "avance": pct, "owner": _ow,
-                            "desde": f_i, "dur": a["duracion"]})
+                            "orden": _or, "desde": f_i, "dur": a["duracion"]})
         if 0 < pct < 100:
             en_curso.append({"nombre": a["nombre"], "avance": pct, "owner": _ow,
+                             "orden": _or,
                              "tarde": hoy > fin})     # arrastrada: ya paso su ventana
         if proximo is None and a["inicio"] > hoy:
             proximo = {"nombre": a["nombre"], "fecha": f_i,
@@ -2137,12 +2157,34 @@ def _estado_section(pid: str, grupo: str, prj: dict):
             _u = str(x.get("owner", "") or "").strip()
             return (" · :material/person: " + _dw.get(_u, _u)) if _u else ""
 
+        # v505: la CAUSA material al lado del sintoma. «La 3 lleva 4 días sin arrancar»
+        # con un dueño ya es accionable; con «espera el riel, llega el 25» es una
+        # decisión. ⚠️ Una orden sin fecha esperada bloquea pero NO se dice atrasada:
+        # no se puede afirmar que llega tarde si nadie dijo cuándo llegaba (v504/orders).
+        _blq = _bloqueos_de(pid, grupo)
+
+        def _espera(x):
+            _o = _blq.get(x.get("orden")) if x.get("orden") is not None else None
+            if not _o:
+                return ""
+            _b = _o[0]
+            _qué = _b["descripcion"] or _b["proveedor"] or t("material")
+            if _b["esperada"]:
+                _cu = _b["esperada"].strftime("%d/%m")
+                _txt = (t("late since {f}", f=_cu) if _b["tarde"]
+                        else t("due {f}", f=_cu))
+            else:
+                _txt = t("no date given")
+            _mas = t(" +{n} more", n=len(_o) - 1) if len(_o) > 1 else ""
+            _col = "red" if _b["tarde"] else "orange"
+            return f" · :{_col}[:material/inventory_2: {_qué} ({_txt}){_mas}]"
+
         _vistas = set()
         for x in d["paradas"]:
             _vistas.add(x["nombre"])
             st.markdown(f":red[:material/cancel:] **{x['nombre']}** — not started, "
                         f"it was due on {x['desde'].strftime('%d/%m')} ({x['dur']:.0f} d)"
-                        + _dueno(x))
+                        + _dueno(x) + _espera(x))
         for x in d["tocaban"]:
             if x["nombre"] in _vistas or x["avance"] <= 0:
                 continue
@@ -2155,7 +2197,8 @@ def _estado_section(pid: str, grupo: str, prj: dict):
             st.markdown((":orange[:material/hourglass_top:] " if x["tarde"]
                          else ":blue[:material/play_arrow:] ")
                         + f"{x['nombre']} — {x['avance']:.0f}%"
-                        + (t(" _(carried over)_") + _dueno(x) if x["tarde"] else ""))
+                        + (t(" _(carried over)_") + _dueno(x) + _espera(x)
+                           if x["tarde"] else ""))
         if not _vistas and not d["en_curso"]:
             st.caption(t("No open or overdue activity."))
         if d["proximo"]:
@@ -3200,6 +3243,23 @@ def _field_activities(pid):
     if not acts:
         st.caption(t("This project has no activities recorded."))
         return
+    # v505: el campo ve POR QUÉ no puede arrancar algo, sin poder tocarlo. Va ANTES de la
+    # tabla y NO como columna: ya son seis y el campo entra por el móvil, donde una
+    # séptima corta los nombres (medido en v408, interceptando `fillText`). Evitar el
+    # viaje en balde a una obra cuyo material no ha llegado es justo para lo que sirve.
+    _blq = _bloqueos_de(pid, st.session_state.get("auth", {}).get("grupo", ""))
+    if _blq:
+        _nom_de = {int(P._num(a.get("Order"))): a.get("Name") for a in acts}
+        for _k in sorted(_blq):
+            _b = _blq[_k][0]
+            _que = _b["descripcion"] or _b["proveedor"] or t("material")
+            if _b["esperada"]:
+                _cu = (t("late since {f}", f=_b["esperada"].strftime("%d/%m")) if _b["tarde"]
+                       else t("due {f}", f=_b["esperada"].strftime("%d/%m")))
+            else:
+                _cu = t("no date given")
+            st.warning(t(":material/inventory_2: **{a}** is waiting for {q} ({c}).",
+                         a=_nom_de.get(_k, _k), q=_que, c=_cu))
     _df = pd.DataFrame([{
         "N": int(P._num(a.get("Order"))),
         "Actividad": a.get("Name"),
@@ -3561,13 +3621,27 @@ def _ordenes_section(pid, grupo, editable=True, key_prefix="ord"):
                 _c3, _c4 = st.columns(2)
                 _desc = _c3.text_input(t("Description"), placeholder=t("e.g. T75-3/B rails ×12"))
                 _cat  = _c4.selectbox(t("Category"), E.CATEGORIAS)
-                _fe   = st.date_input(t("Expected delivery date"), value=None,
-                                      help=t("Optional. Without it the order is never flagged as late — you cannot say it is late if nobody said when it was due."))
+                _c5, _c6 = st.columns(2)
+                _fe   = _c5.date_input(t("Expected delivery date"), value=None,
+                                       help=t("Optional. Without it the order is never flagged as late — you cannot say it is late if nobody said when it was due."))
+                # v505: a qué actividad está esperando este material. ⚠️ La opción de
+                # «ninguna» lleva TEXTO: un selector cuyo vacío es "" pinta «None» y
+                # además aquí confundiría —«None» parece un valor, no una ausencia—
+                # (medido en v504 en el canvas). Se guarda el nº de ORDEN, no el nombre.
+                _SIN_ACT = t("— not tied to an activity —")
+                _acts_o = P.list_activities(pid) or []
+                _op_act = [_SIN_ACT] + ["%d · %s" % (int(P._num(a.get("Order"))),
+                                                     a.get("Name", "")) for a in _acts_o]
+                _act = _c6.selectbox(
+                    t("Activity waiting for it"), _op_act,
+                    help=t("Optional. If you set it, the activity says what it is waiting "
+                           "for and until when, both in Status and to the field team."))
                 if st.form_submit_button(t(":material/add_circle: Record order"),
                                          width="stretch"):
                     ok, msg = O.crear(
                         pid, grupo, _prov, _val, descripcion=_desc, categoria=_cat,
                         fecha_esperada=_fe.strftime("%Y-%m-%d") if _fe else "",
+                        actividad=("" if _act == _SIN_ACT else _act.split(" · ", 1)[0]),
                         creado_por=st.session_state.get("auth", {}).get("usuario", ""))
                     (flash.exito if ok else st.error)(msg)
                     if ok:
