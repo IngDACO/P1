@@ -67,6 +67,54 @@ for p in sorted(BASE.rglob("*.py")):
 check(f"se recorrieron {n_arch} ficheros", n_arch > 40, True)
 check("0 cadenas con dos '$' sin escapar", hits, [])
 
+# ⚠️ AMPLIADA el 21/09/2026 (v507). La red de arriba mira `$` LITERALES en el fuente, y
+# ahí tenía un agujero: `claims_ui` metía los importes por PARÁMETRO
+# (`t("... {h} ... {a} ...")` con un formateador propio), así que la cadena literal no
+# tenía ni un `$` y el fallo se fue a producción igual — el texto entre dos importes
+# acabó dentro de un bloque LaTeX. Es la trampa nº30: un invariante mide una FORMA, y
+# su «0» solo cubre esa forma.
+# La red nueva ataca la CAUSA en vez del síntoma: nadie fabrica su propio formateador de
+# dinero. El formato de importes vive en UN sitio (`theme.dinero`), que es exactamente lo
+# que su docstring pide.
+# ⚠️ La red ANCHA no sirve: buscar cualquier `$` pegado a un número denuncia 68 sitios
+# que funcionan (una sola cifra en la cadena es inofensiva, lo dice el propio docstring).
+# Una red que acusa código sano se acaba relajando, y entonces no protege nada.
+# Se estrecha a la CAUSA: una FUNCIÓN de formateo de dinero propia, que es lo que hace
+# que la cadena se componga fuera del sitio único y el escape se pierda.
+def _formateador_propio(ruta):
+    """`def _dinero/_money/_fmt_money(...)` que devuelve un `$` sin delegar en theme."""
+    try:
+        a = ast.parse(ruta.read_text(encoding="utf-8", errors="replace"))
+    except Exception:
+        return False
+    for n in ast.walk(a):
+        if not (isinstance(n, ast.FunctionDef)
+                and n.name.lower().lstrip("_") in ("dinero", "money", "fmt_money", "importe")):
+            continue
+        cuerpo = ast.unparse(n)
+        if "theme.dinero" in cuerpo or "T.dinero" in cuerpo:
+            continue                      # delega: correcto
+        if "$" in cuerpo:
+            return True
+    return False
+
+
+_propios = [p.name for p in sorted(BASE.rglob("*_ui.py")) if _formateador_propio(p)]
+check("⚠️ ningun *_ui fabrica su propio formateador de dinero (usar theme.dinero)",
+      _propios, [])
+
+# ⚠️ Y la red se valida contra los dos casos (nº12): un «0» no vale hasta demostrar que
+# sabe ver uno malo, y que no denuncia al que delega.
+import tempfile                                                    # noqa: E402
+with tempfile.TemporaryDirectory() as _td:
+    _m = pathlib.Path(_td) / "malo_ui.py"
+    _m.write_text('def _dinero(v):\n    return f"${v:,.2f}"\n', encoding="utf-8")
+    check("la red SABE ver un formateador propio", _formateador_propio(_m), True)
+    _b = pathlib.Path(_td) / "bueno_ui.py"
+    _b.write_text("def _dinero(v):\n    from core import theme\n"
+                  "    return theme.dinero(v)\n", encoding="utf-8")
+    check("...y NO denuncia al que delega", _formateador_propio(_b), False)
+
 print("\n== 2) theme.dinero ==")
 from core import theme as T
 check("escapa el simbolo", T.dinero(1234.5), "\\$1,234.50")

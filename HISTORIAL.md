@@ -10,6 +10,56 @@ ventana de contexto. Contenido: 258 secciones detalladas + el índice de 440 ver
 
 ---
 
+## EL `$` QUE STREAMLIT LEYÓ COMO LaTeX EN EL COBRO DE OBRA (v508)
+
+La v507 funcionaba, pero la línea que resume la reclamación salía rota en pantalla:
+
+```
+work done <code class="language-math">0.00 · already claimed </code>31,500.00 · **this claim 0.00**
+```
+
+Streamlit trata lo que hay entre dos `$` de una misma cadena como **LaTeX**. Con dos
+importes en la frase, el texto de en medio acabó dentro de un bloque matemático y los
+`**` salieron literales.
+
+### ⚠️ El código ya lo había escrito, palabra por palabra
+`theme.dinero` existe desde **v309** justo para esto, y su docstring describe el síntoma
+exacto —*«los `$` desaparecen y los `**` salen literales»*— y avisa:
+
+> *«cada vez que alguien escriba `f"${x:,.2f}"` a mano el fallo vuelve, y vuelve en las
+> pantallas de dinero»*
+
+`claims_ui` traía su propio formateador. Volvió. **Tercera vez en el día que el propio
+repositorio avisaba antes** (la nota de v461 sobre las hojas del lote fue la otra).
+
+### Por qué el guardián de v309 no lo cazó
+Su red busca `$` **literales** en el fuente. Los de v507 entraban por PARÁMETRO en
+tiempo de ejecución (`t("… {h} … {a} …")`), así que la cadena literal no tenía ni un
+`$`. Es la **trampa nº30**: un invariante mide una FORMA, y su «0» solo vale para esa
+forma.
+
+### ⚠️ Y el primer intento de tapar el agujero fue peor que el agujero
+Una red ancha —cualquier `$` pegado a un número en un `*_ui`— denunció **68 sitios que
+funcionan**: con una sola cifra en la cadena el problema no existe, lo dice el propio
+docstring. Una red que acusa código sano acaba relajándose, y entonces no protege nada
+(la lección de v385 al revés).
+
+Se estrechó a la **causa**: ningún `*_ui` puede DEFINIR su propio formateador de dinero
+en vez de delegar en `theme.dinero`. Validada en las dos direcciones — ve el caso malo y
+no denuncia al que delega.
+
+### ⚠️ Y un rojo que era basura mía
+La suite dio `verif_v370` en rojo. No era regresión: los datos de prueba con los que se
+verificó la pantalla de v507 dejaron una cotización aceptada colgada de `PRJ-0001`, y ese
+guardián comprueba justamente que una obra sin cotización no cambie de modelo de ingreso.
+**El guardián tenía razón**; la lección es que los datos de una verificación manual se
+limpian ANTES de correr la suite, porque 16 guardianes leen la hoja real.
+
+### Verificación
+`verif_v309` ampliado (red nueva + sus dos validaciones), `verif_v507` en **29
+comprobaciones** (los chequeos de `anular` y `decidir_variacion` pasaron a EJECUTARSE).
+Suite completa: **140 verde · 0 rojo** tras limpiar los datos de prueba.
+
 ## COBRO DE OBRA: variaciones y reclamaciones de avance (v507)
 
 Cierra la **brecha 2** del estudio de mercado del 20/09/2026. Hasta aquí se podía
@@ -11156,7 +11206,7 @@ comprueba lo que dice**.
 
 ---
 
-## Versiones desplegadas (v507 = actual)
+## Versiones desplegadas (v508 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -11164,6 +11214,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v508 | ⚠️ **El `$` que Streamlit leyó como LaTeX.** La línea que resume la reclamación salía rota: dos importes en una cadena y el texto de en medio acaba dentro de un bloque matemático, con los `**` literales. `theme.dinero` existe desde v309 para esto y su docstring **predice el fallo palabra por palabra** («cada vez que alguien escriba `f"${x:,.2f}"` a mano el fallo vuelve»); `claims_ui` traía formateador propio. ⚠️ El guardián de v309 no lo vio porque busca `$` **literales** y los míos entraban por parámetro — trampa nº30: un invariante mide una FORMA. ⚠️ Y la primera red nueva fue peor que el agujero: denunciaba **68 sitios sanos**, así que se estrechó a la causa (ningún `*_ui` define su propio formateador). Además, un rojo de la suite que era **basura de mis datos de prueba** en la hoja real: el guardián tenía razón |
 | v507 | **Cobro de obra: variaciones y reclamaciones de avance.** Cierra la brecha 2 del estudio: hasta aquí se podía facturar pero no **reclamar**. `valor = contrato + variaciones aprobadas`, `bruto = valor × avance − lo ya reclamado`, `neto = bruto − retención`. El contrato sale del **Subtotal** de la cotización aceptada (decisión del usuario; misma base que `finance` e `invoices`). ⚠️ Una reclamación **congela** sus números; ⚠️ si el avance BAJA el bruto es **cero**, no una devolución; ⚠️ lo acumulado va en `WorkDone`, no sumando netos; ⚠️ una variación **propuesta no es dinero**. ⚠️ **El fallo de fondo**: `Variations` y `Claims` estaban fuera de `HOJAS_LECTURA`, así que `registros()` devolvía None y la app leía **VACÍO PARA SIEMPRE sin un solo error** — el código ya lo advertía en la nota de v461 y se leyó después de que mordiera. Red nueva `check_hojas_en_lote`. Lo cazó el ejercicio contra la hoja, no la suite. 25 comprobaciones · **12/12 roturas + control** · suite 140 verde |
 | v506 | **El expediente de entrega: qué tiene la obra y qué le falta.** Primera de las tres oportunidades del estudio de mercado. Trece ítems sacados del estándar REAL de lifts del Depto. de Educación de NSW (a–m, *practical completion*), no inventados: la app **evidencia cinco** con lo que ya guardaba y los ocho de terceros ⚠️ **nunca pasan por cálculo** —solo si alguien adjunta el documento—. ⚠️ **No certifica nada** y lo dice en el código y en pantalla; hay un guardián que vigila que la interfaz no prometa cumplimiento. Lo imposible de copiar no es juntar PDFs sino **cruzar** el registro técnico con el de personas y fechas: en su primera ejecución contra la hoja real salió solo «*hours were booked to this job by people not assigned to it*». ⚠️ Y la suite dio **14 rojos que no eran de esta versión**: al traer la suite al repo, ocho módulos auxiliares se clasificaron por su nombre y acabaron en `sueltos/` — un guardián que no puede importarse se disfraza de código roto. Red nueva `check_suite_integra`. 36 comprobaciones · **12/12 roturas + control** · suite 138 verde |
 | v505 | **El material que bloquea una actividad: el retraso con causa.** Cierra el ÚLTIMO hueco de gestión de instalación (v499 qué · v500 cuánto · v501 contra qué · v502 de quién · v505 **por qué**). Una orden de compra dice a qué actividad espera y la actividad lo cuenta donde se mira el retraso; el campo lo ve en solo lectura, como aviso y no como columna (en móvil una séptima corta nombres, v408). ⚠️ Solo bloquea lo **pendiente**, ⚠️ sin fecha esperada bloquea pero **no se dice atrasada** (criterio de v343) y ⚠️ una orden sin actividad **no bloquea a nadie**. Las órdenes siguen siendo opcionales: sin hoja o con la hoja caída, la pantalla de estado sigue en pie. ⚠️ **El guardián cazó un fallo real antes de desplegar**: `_num('tres')` degrada a 0.0 sin lanzar, así que la basura se colgaba de una actividad FANTASMA nº 0. ⚠️ Y mi ejercicio contra la hoja **pasó en vacío** la primera vez (leía `Orders`, se llama `PurchaseOrders`, y un except se lo tragaba: comparaba -1 con -1). 26 comprobaciones · **12/12 roturas + control** · suite 136 verde |

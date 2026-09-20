@@ -14,7 +14,17 @@ from core.num import num as _num
 
 
 def _dinero(v) -> str:
-    return "%s%s" % ("-$" if _num(v) < 0 else "$", format(abs(_num(v)), ",.2f"))
+    """⚠️ Delega en `theme.dinero`, que ESCAPA el `$` como `\\$` (v309).
+
+    Aquí había un formateador propio y salió caro: Streamlit lee lo que hay entre dos
+    `$` de una misma cadena como **LaTeX**, así que «work done $0.00 · already claimed
+    $31,500.00» se renderizaba con el texto de en medio metido en un bloque matemático
+    y los `**` literales. El docstring de `theme.dinero` describe ese síntoma palabra
+    por palabra y avisa de que «cada vez que alguien escriba `f"${x:,.2f}"` a mano el
+    fallo vuelve». Volvió. El formato de importes vive en UN sitio.
+    """
+    from core import theme
+    return theme.dinero(_num(v))
 
 
 def render(pid, grupo, prj, editable=True, key_prefix="clm"):
