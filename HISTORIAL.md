@@ -10,6 +10,63 @@ ventana de contexto. Contenido: 258 secciones detalladas + el índice de 440 ver
 
 ---
 
+## ⚠️ LIGAR UN NOMBRE QUE YA ERA UNA FUNCIÓN: la pantalla caída de v502 (v503)
+
+v502 se desplegó y **tumbó la pantalla de detalle de proyecto entera**. Se vio al ir a
+verificar el cambio en producción: donde tenía que estar la tabla había un traceback.
+
+```
+projects_ui.py:2425 in _detalle_proyecto
+    ing = e1.multiselect(
+projects_ui.py:2428 in <lambda>
+    format_func=lambda u: _etq_us(_cmp_ed).get(u, u),
+```
+
+`_etq_us` es la **función de módulo** de `projects_ui` (L54), y `_detalle_proyecto` la
+llama en la L2428. v502 escribió `_etq_us = auth.etiqueta_usuarios(...)` en la L2566 de
+esa misma función. Python marca el nombre **local en el ámbito ENTERO**, así que la
+llamada de la L2428 —que se ejecuta *antes*— revienta con `UnboundLocalError`.
+
+Es la **trampa nº29** palabra por palabra: «si al traducir aparece una llamada `t(...)`
+en una función donde `t` ya era una variable, Python la marca local en el ámbito ENTERO y
+revienta — y nada de lo anterior lo ve». Los dos fallos de v439, otra vez.
+
+### ⚠️ Lo que no lo vio, y por qué
+`compileall` en verde · los 98 módulos importando sin queja · las 25 comprobaciones de
+`verif_v502` · la batería **13/13** · los **135 guardianes** de la suite · y el ejercicio
+contra la **hoja real**. Ninguna de esas redes ejecuta `_detalle_proyecto`, y
+**importar no ejecuta** (v378). Lo vio la PANTALLA.
+
+Es el argumento de v459 llevado hasta el final: el verde de seis redes distintas no dice
+nada de una función que ninguna de las seis llama. Y es la razón de la regla de mirar
+**el cambio** en producción y no el banner de versión — aquí el banner decía v502 y era
+verdad; lo que no funcionaba era la pantalla.
+
+### El arreglo: la función ya existía
+`_etq_us(logins)` hacía exactamente lo que v502 reimplementó, y mejor: desempata
+homónimos sobre **TODO el grupo**, no sobre la lista visible, «porque una identidad que
+cambia de nombre según la pantalla no es una identidad» (v413). v502 había duplicado
+lógica que ya estaba (es el concepto de v323: una sola definición). Ahora son dos líneas
+menos, en el detalle y en `_estado_section`.
+
+### La red nueva
+Barrido estático sobre **todo `core/`** (en `verif_v502.py`, que es lo que protege):
+ninguna función puede ligar un nombre que ya es función de módulo **y que ella misma
+llama ANTES** de ligarlo.
+
+⚠️ Mira el **ORDEN**, y eso importa: un `def` anidado antes de su única llamada es
+legítimo. El primer barrido, sin orden, denunciaba `roster_ui._cumplimiento` (define
+`_hm` en la L954 y lo llama en la L964) donde no hay ningún fallo. Con el orden dentro:
+**0 casos** en todo `core/`.
+
+Y la red **se autovalida contra un caso conocido-malo** antes de afirmar su cero, que es
+la nº12: una sonda que «no ve nada» no prueba nada hasta demostrar que sabe ver.
+
+### Verificación
+`verif_v502.py`, **27 comprobaciones**. Batería: **14 roturas, 14 cazadas + CONTROL**,
+con una rotura nueva que **recrea este fallo exacto**. Suite completa: **135 verde ·
+0 rojo · 0 roto**. Verificado en producción abriendo la pantalla que estaba caída.
+
 ## EL RESPONSABLE de cada actividad: que el retraso tenga dueño (v502)
 
 Cuarto de los huecos que la auditoría de gestión de instalación dejó medidos. v499 puso
@@ -10821,7 +10878,7 @@ comprueba lo que dice**.
 
 ---
 
-## Versiones desplegadas (v502 = actual)
+## Versiones desplegadas (v503 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -10829,6 +10886,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v503 | ⚠️ **v502 tumbó la pantalla de detalle de proyecto, y se vio al verificar en producción.** `_etq_us` ya era la función de módulo y `_detalle_proyecto` la llama en la L2428; v502 le puso ese nombre a una variable en la L2566 y Python la marca local en el ámbito ENTERO → `UnboundLocalError` en la llamada anterior. Es la trampa nº29 literal (los dos fallos de v439). ⚠️ **No lo vio nadie**: `compileall`, los 98 imports, 25 comprobaciones, la batería 13/13, los 135 guardianes y el ejercicio contra la hoja real — ninguna de esas redes EJECUTA esa función, y **importar no ejecuta** (v378). Lo vio la pantalla. Arreglado usando `_etq_us`, que ya hacía eso y desempata homónimos sobre TODO el grupo (v413), o sea que v502 había duplicado lógica existente. Red nueva sobre todo `core/`: nadie liga un nombre que ya es función de módulo y que llama ANTES — mira el ORDEN (un `def` anidado antes de su llamada es legítimo, como `roster_ui._hm`) y se autovalida contra un caso conocido-malo. 27 comprobaciones · **14/14 roturas + control** |
 | v502 | **El responsable de cada actividad: que el retraso tenga dueño.** Cerrado el cuarto hueco de gestión de instalación: con v499-v501 la app ya sabía qué va tarde, cuánto y por qué, pero no **de quién es** — y sin eso no puede recomendar a quién mover. Columna Responsable en la tabla de actividades (se elige de la gente asignada a la obra) y el nombre al lado de lo que va tarde: la parada y la arrastrada, no todas las filas. ⚠️ Se guarda el **LOGIN** y se muestra el nombre (el nombre se repite, v306/v413), y el guardián exige que las etiquetas sean únicas o el mapa inverso guardaría a otro. ⚠️ Un guardado PARCIAL **no borra** responsables (el fallo de v499 con las predecesoras, y el campo guarda así, v162), y ⚠️ un dueño cuya persona ya no está asignada **sigue en la lista**: si no, su fila se pintaría vacía y el primer guardado lo borraría sin que nadie lo pidiera. 25 comprobaciones · **13/13 roturas + control** ⚠️ (la batería cazó DOS fallos míos en el propio guardián: uno que pasaba en vacío mirando la función equivocada, y otro que fallaba por su propia construcción contando el `def` como una llamada) |
 | v501 | **Línea base: el plan que se ACORDÓ, congelado.** Hasta aquí el cronograma se recalculaba siempre, así que alargar una actividad de 4 a 8 días **no dejaba rastro** —el plan nuevo pasaba a ser «el plan» y la curva S comparaba contra un blanco móvil—, que es justo lo que hace falta para defender por qué se retrasó una entrega. Se fija **con un botón** cuando el plan está pactado (decisión del usuario) y ⚠️ **la ORIGINAL nunca se pierde**: re-fijar conserva la acordada, cuenta las replanificaciones y guarda cuánto movió la entrega cada vez. ⚠️ Si no se puede LEER, **no se escribe** (tratar el fallo como «no había» borraría la original, criterio v492), y la comparación casa por **ORDEN**, no por posición. Ejercitado contra la hoja real: alargar una actividad pasó a decir **25/09 → 29/09 (+4 d)** identificando que la 2 cambió y que **la 3, 4 y 5 se movieron sin cambiar ellas**. 24 comprobaciones · **11/11 roturas + control** ⚠️ (2 escaparon primero por casos míos que no podían distinguir la rotura: órdenes 1-2-3 donde posición y orden coinciden, y un `False` que llegaba por otro motivo) |
 | v500 | **El fin previsto sale de la CADENA, no del ritmo** (2.ª mitad de lo que el usuario pidió en v499). El SPI era una regla de tres sobre el % de avance: medido, una obra con el **50% hecho y la actividad que bloquea a las demás sin empezar** salía **«+0 d, en plazo»** y la cadena dice **+10 d**; y con avance 0 el SPI **no daba NINGUNA fecha** (división por cero) mientras la cadena da una y dice **qué actividades mandan**. La obra real pasó de «—» a **04/10 (+9 d)**. Tres reglas: lo terminado no se mueve · lo en curso cuenta su resto **desde hoy** · lo que no empezó **no puede arrancar en el pasado** — así el retraso se PROPAGA (y la obra también puede adelantarse). ⚠️ `fecha_proj`/`proj_dias` **se eliminan**: dos respuestas a «cuándo termina» es el fallo de v361; el SPI se conserva como ritmo. ⚠️ El guardián cazó un consumidor que se me escapó (**el Gantt**, que habría dejado de dibujar la proyección en silencio) y ⚠️ **3 roturas escaparon por culpa del guardián**: comprobaba presencia de la clave y la encontraba **en su propio docstring**. 30 comprobaciones · **10/10 roturas + control** |

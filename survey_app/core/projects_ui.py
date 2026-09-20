@@ -2130,11 +2130,12 @@ def _estado_section(pid: str, grupo: str, prj: dict):
         # v502: el retraso con NOMBRE. Solo en lo que va tarde (parada o arrastrada):
         # ponerlo en TODAS las filas es ruido, y lo accionable es justo esto —
         # «la 3 lleva 4 días sin arrancar» no se puede resolver hasta saber de quién es.
-        _etq_d = auth.etiqueta_usuarios(auth.list_users(grupo) or [])
+        _dw = _etq_us([str(x.get("owner", "") or "").strip()
+                       for x in (d["paradas"] + d["en_curso"]) if x.get("owner")])
 
         def _dueno(x):
             _u = str(x.get("owner", "") or "").strip()
-            return (" · :material/person: " + (_etq_d.get(_u) or _u)) if _u else ""
+            return (" · :material/person: " + _dw.get(_u, _u)) if _u else ""
 
         _vistas = set()
         for x in d["paradas"]:
@@ -2563,8 +2564,12 @@ def _detalle_proyecto(pid: str, grupo: str = None):
             _due0 = [str(a.get("Owner", "") or "").strip() for a in acts]
             _op_us = list(dict.fromkeys([u for u in _asig_now if u]
                                         + [o for o in _due0 if o]))
-            _etq_us = auth.etiqueta_usuarios(auth.list_users(grupo) or [])
-            _lbl_de = {u: (_etq_us.get(u) or u) for u in _op_us}
+            # ⚠️ `_etq_us` es la funcion de modulo (L54) y esta funcion YA la llama mas
+            # arriba. Asignarle aqui una variable con ese nombre la volvia LOCAL en todo
+            # el ambito y reventaba la llamada anterior con UnboundLocalError — la
+            # trampa nº29, los dos fallos de v439. Ademas hace el desempate sobre TODO
+            # el grupo (v413), que es mejor que lo que yo habia reimplementado.
+            _lbl_de = _etq_us(_op_us)
             _login_de = {v: k for k, v in _lbl_de.items()}
             _op_lbl = [""] + [_lbl_de[u] for u in _op_us]
             _adf = pd.DataFrame([{
