@@ -1866,6 +1866,7 @@ def _diagnostico(ps: dict) -> dict:
     sched = ps["sched"]
     acts  = sched["activities"]
     av    = ps.get("avances") or []
+    ow    = ps.get("owners") or []          # v502, paralela a `av` (misma regla de indice)
     proj  = ps.get("proj") or {}
     hoy   = ps["today_day"]
     total = max(1, sched["total_dias"])
@@ -1887,11 +1888,12 @@ def _diagnostico(ps: dict) -> dict:
         f_i  = ini + timedelta(days=int(a["inicio"]))
         # `inicio < hoy` (estricto): el dia en que se abre la ventana aun no
         # cuenta como retraso — si no, un proyecto recien creado nace en rojo.
+        _ow = str(ow[i]) if i < len(ow) else ""      # v502: LOGIN, se traduce al pintar
         if a["inicio"] < hoy <= fin and pct < 100:
-            tocaban.append({"nombre": a["nombre"], "avance": pct,
+            tocaban.append({"nombre": a["nombre"], "avance": pct, "owner": _ow,
                             "desde": f_i, "dur": a["duracion"]})
         if 0 < pct < 100:
-            en_curso.append({"nombre": a["nombre"], "avance": pct,
+            en_curso.append({"nombre": a["nombre"], "avance": pct, "owner": _ow,
                              "tarde": hoy > fin})     # arrastrada: ya paso su ventana
         if proximo is None and a["inicio"] > hoy:
             proximo = {"nombre": a["nombre"], "fecha": f_i,
@@ -2125,11 +2127,21 @@ def _estado_section(pid: str, grupo: str, prj: dict):
         # y otra con diez → media pantalla vacía. Se fusionan en UNA lista con el
         # estado de cada actividad, que además es como se lee el Gantt de al lado.
         st.markdown(t("**:material/checklist: Activities**"))
+        # v502: el retraso con NOMBRE. Solo en lo que va tarde (parada o arrastrada):
+        # ponerlo en TODAS las filas es ruido, y lo accionable es justo esto —
+        # «la 3 lleva 4 días sin arrancar» no se puede resolver hasta saber de quién es.
+        _etq_d = auth.etiqueta_usuarios(auth.list_users(grupo) or [])
+
+        def _dueno(x):
+            _u = str(x.get("owner", "") or "").strip()
+            return (" · :material/person: " + (_etq_d.get(_u) or _u)) if _u else ""
+
         _vistas = set()
         for x in d["paradas"]:
             _vistas.add(x["nombre"])
             st.markdown(f":red[:material/cancel:] **{x['nombre']}** — not started, "
-                        f"it was due on {x['desde'].strftime('%d/%m')} ({x['dur']:.0f} d)")
+                        f"it was due on {x['desde'].strftime('%d/%m')} ({x['dur']:.0f} d)"
+                        + _dueno(x))
         for x in d["tocaban"]:
             if x["nombre"] in _vistas or x["avance"] <= 0:
                 continue
@@ -2142,7 +2154,7 @@ def _estado_section(pid: str, grupo: str, prj: dict):
             st.markdown((":orange[:material/hourglass_top:] " if x["tarde"]
                          else ":blue[:material/play_arrow:] ")
                         + f"{x['nombre']} — {x['avance']:.0f}%"
-                        + (t(" _(carried over)_") if x["tarde"] else ""))
+                        + (t(" _(carried over)_") + _dueno(x) if x["tarde"] else ""))
         if not _vistas and not d["en_curso"]:
             st.caption(t("No open or overdue activity."))
         if d["proximo"]:
@@ -2540,9 +2552,25 @@ def _detalle_proyecto(pid: str, grupo: str = None):
         st.markdown(t("**Schedule activities** — editable table · progress is set by the field team"))
         acts = P.list_activities(pid)
         if acts:
+            # ── v502: quien responde de cada actividad ──────────────────────
+            # Se GUARDA el login y se MUESTRA el nombre: el login es la identidad y el
+            # nombre se repite (v306/v413/v459). Las opciones son la gente asignada a la
+            # obra, que es `_asig_now`, ya calculado arriba.
+            # ⚠️ Los responsables YA guardados entran en la lista aunque esa persona ya
+            # no esté asignada. Si no, su fila se pintaría vacía y el primer guardado
+            # borraría el responsable sin que nadie lo pidiera — es el fallo de v499 con
+            # las predecesoras: un guardado PARCIAL tirando datos en silencio.
+            _due0 = [str(a.get("Owner", "") or "").strip() for a in acts]
+            _op_us = list(dict.fromkeys([u for u in _asig_now if u]
+                                        + [o for o in _due0 if o]))
+            _etq_us = auth.etiqueta_usuarios(auth.list_users(grupo) or [])
+            _lbl_de = {u: (_etq_us.get(u) or u) for u in _op_us}
+            _login_de = {v: k for k, v in _lbl_de.items()}
+            _op_lbl = [""] + [_lbl_de[u] for u in _op_us]
             _adf = pd.DataFrame([{
                 "Orden": int(P._num(a.get("Order"))),
                 "Actividad": a.get("Name"),
+                "Responsable": _lbl_de.get(str(a.get("Owner", "") or "").strip(), ""),
                 "Días": int(P._num(a.get("DurationDays")) or 1),
                 # v499: detrás de qué va. Vacío = detrás de la anterior (lo de siempre).
                 "Detras": str(a.get("Predecessors", "") or ""),
@@ -2563,6 +2591,12 @@ def _detalle_proyecto(pid: str, grupo: str = None):
                         help=t("Which activity it goes after, by its Order number. Empty = right "
                                "after the previous one. «-» = starts on day one. «3» = after nº 3; "
                                "«3+2» waits 2 days; «3-1» overlaps it by a day; «3;5» after both.")),
+                    # v502: se elige de la gente asignada a la obra. Empty = sin dueño,
+                    # que es como se comportaba hasta v501.
+                    "Responsable": st.column_config.SelectboxColumn(
+                        t("Owner"), options=_op_lbl,
+                        help=t("Who answers for this activity. The list is the people "
+                               "assigned to this job. Empty = nobody in particular.")),
                 }))
             st.caption(t("Edit name, days, weight, order and what each activity goes after; "
                          "the progress % is read-only (the field team updates it)."))
@@ -2590,7 +2624,11 @@ def _detalle_proyecto(pid: str, grupo: str = None):
                                   "DurationDays": int(r["Días"]),
                                   "Weight": float(r["Peso"]),
                                   "Order": int(r["Orden"]),
-                                  "Predecessors": str(r["Detras"] or "").strip()})
+                                  "Predecessors": str(r["Detras"] or "").strip(),
+                                  # v502: de vuelta a LOGIN. Una etiqueta que no
+                                  # reconozcamos no se inventa: vuelve vacía.
+                                  "Owner": _login_de.get(
+                                      str(r["Responsable"] or "").strip(), "")})
                 ok, msg = P.save_activities(pid, edits)
                 (flash.exito if ok else st.error)(msg)
                 if ok:

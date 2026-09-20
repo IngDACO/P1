@@ -167,6 +167,10 @@ ACTIVITIES_HEADERS = [
     # escriben por POSICIÓN y colar una columna en medio guarda cada dato en la de al
     # lado (v363). Vacío = detrás de la anterior, que es lo que la app hacía hasta v498.
     "Predecessors",
+    # v502: QUIÉN responde de esta actividad (el LOGIN, no el nombre: el nombre se
+    # repite y el login es la identidad, v459). ⚠️ AL FINAL (v363) y opcional: una
+    # actividad sin responsable se comporta como hasta v501.
+    "Owner",
 ]
 GROUPINGS_HEADERS = ["ID", "Group", "Name", "Description"]
 DOCUMENTS_SHEET   = "Documents"
@@ -501,6 +505,7 @@ def create_project(grupo, nombre, cliente="", ubicacion="", modelo="", ns=0,
         str(a.get("duracion", a.get("DurationDays", 0))),
         str(a.get("peso", a.get("Weight", 0))),
         "0", "", "", "", str(a.get("pred", a.get("Predecessors", ""))),
+        str(a.get("owner", a.get("Owner", ""))),          # v502: responsable
     ] for i, a in enumerate(activities or [])]
     if act_rows:
         aws.append_rows(act_rows, value_input_option="RAW")
@@ -989,7 +994,8 @@ def add_activity(pid, nombre, duracion=1, peso=0) -> tuple:
     acts  = list_activities(pid)
     orden = int(max([_num(a.get("Order")) for a in acts], default=0) + 1)
     aws.append_row([pid, str(orden), str(nombre), str(int(_num(duracion) or 1)),
-                    str(_num(peso)), "0", "", "", "", ""], value_input_option="RAW")
+                    str(_num(peso)), "0", "", "", "", "", ""],
+                   value_input_option="RAW")
     _invalidate()
     _recompute_project_avance(pid)
     return True, t("Activity added.")
@@ -1145,7 +1151,9 @@ def save_activities(pid, edits) -> tuple:
                            and str(r.get("Order", "")) == str(e.get("orden0"))), "")
             batch.append({"range": f"{_col_letter(_ACOL['Predecessors'])}{row}",
                           "values": [[plan.remapear(_p, mapa)]]})
-        for field in ("Name", "DurationDays", "Weight", "Order"):
+        # v502: «Owner» entra en el bucle simple — solo se escribe si el edit lo trae,
+        # así que un guardado PARCIAL no borra el responsable de las filas que no viajan.
+        for field in ("Name", "DurationDays", "Weight", "Order", "Owner"):
             if field in e and field in _ACOL:
                 batch.append({"range": f"{_col_letter(_ACOL[field])}{row}",
                               "values": [[str(e[field])]]})
@@ -1383,8 +1391,12 @@ def project_schedule(pid: str):
 
     real = real_scurve(sched, avances, upto_day=today_day, windows=windows)  # se corta en HOY
     proj = schedule_projection(sched, avances, today_day, windows)
+    # v502: los responsables viajan como lista PARALELA, igual que `avances` y
+    # `windows`. El motor de plan (`schedule.py`/`plan.py`) es puro y no tiene por qué
+    # saber de personas: quien responde de una actividad no cambia ni una fecha.
+    owners = [str(a.get("Owner", "") or "").strip() for a in acts]
     return {"sched": sched, "real": real, "today_day": today_day,
-            "avances": avances, "proj": proj}
+            "avances": avances, "proj": proj, "owners": owners}
 
 
 # ── Documentos del proyecto (metadatos; los archivos viven en Drive) ──

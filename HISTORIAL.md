@@ -10,6 +10,69 @@ ventana de contexto. Contenido: 258 secciones detalladas + el índice de 440 ver
 
 ---
 
+## EL RESPONSABLE de cada actividad: que el retraso tenga dueño (v502)
+
+Cuarto de los huecos que la auditoría de gestión de instalación dejó medidos. v499 puso
+las dependencias, v500 el pronóstico desde la cadena y v501 la línea base: a estas alturas
+la app sabe **qué** va tarde, **cuánto** y **por qué**. Lo que no sabía es **de quién es**.
+
+Y sin eso no se puede dar el peldaño siguiente de la escalera —recomendar—: para proponer
+a quién mover, primero hay que saber quién responde de qué.
+
+### Cómo funciona
+Una columna **Responsable** en la tabla editable de actividades (✏️ Datos), que se elige de
+la gente asignada a la obra. En 📊 Estado, las actividades que van tarde —la **parada** (no
+arrancó y ya tocaba) y la **arrastrada** (se pasó de su ventana)— salen con el nombre al
+lado. En el resto no: ponerlo en todas las filas es ruido, y lo accionable es justo eso.
+
+### ⚠️ Las tres cosas que fallarían en silencio
+1. **Se guarda el LOGIN, se muestra el NOMBRE.** El login es la identidad y el nombre se
+   repite (v306/v413/v459): en el grupo real hay dos `lksdfkldsf` y dos `fijiofgjei`.
+   `auth.etiqueta_usuarios` pone el login detrás solo cuando hace falta, y el guardián
+   comprueba que las etiquetas son ÚNICAS — si dos coincidieran, el mapa inverso guardaría
+   el responsable equivocado sin que nadie lo viera.
+2. **Un guardado PARCIAL no puede borrar responsables.** `Owner` entra en el bucle
+   guardado (`if field in e`), así que una fila que no viaja en el `edits` no se toca. Es
+   exactamente el fallo que v499 tuvo con las predecesoras —el plan entero reescrito sin
+   ningún error— y el campo guarda justo con ese patrón (v162).
+3. **Un responsable cuya persona ya no está asignada NO desaparece de la lista.** Las
+   opciones son la gente asignada **más** los dueños ya guardados. Sin eso: sacas a alguien
+   de la obra, su fila se pinta vacía, y el primer guardado de la tabla le borra el
+   responsable a esa actividad sin que nadie lo haya pedido.
+
+### Dónde vive
+Columna `Owner` en `Actividades` (⚠️ **al final**, v363, y opcional: una actividad sin
+responsable se comporta exactamente como hasta v501). Viaja a la pantalla como **lista
+paralela** `owners` en `project_schedule`, igual que `avances` y `windows`: el motor de
+plan (`schedule.py`/`plan.py`) es puro y no tiene por qué saber de personas — quién
+responde de una actividad no mueve ni una fecha.
+
+### Verificación
+`verif_v502.py`, **25 comprobaciones**, ejecutando donde se puede (importar no
+ejecuta, v378; compilar no verifica nada, v439). Batería: **13 roturas, 13 cazadas +
+CONTROL verde**, con el verde de base confirmado antes (v459) y el motivo de cada una a la
+vista (v492). Suite completa: **135 verde · 0 rojo · 0 roto** (923 s).
+
+⚠️ **Dos fallos del guardián, cazados por la propia batería:**
+- el chequeo de «el campo no edita responsables» miraba `render_field_projects`, que no
+  contiene ninguna tabla: la editable del campo está en `_field_activities`. Era un **OK en
+  vacío** (trampa nº1) — no había nada ahí que pudiera traer la columna;
+- el de «pinta el dueño en las dos» contaba subcadenas y salía **3 donde esperaba 2**,
+  porque `ast.unparse` incluye el `def _dueno(x):`. El chequeo fallaba por su propia
+  construcción (el error de v500). Ahora cuenta las LLAMADAS por AST.
+Y una rotura no fue cazada sino que hizo **reventar** al guardián (`_ps["owners"]` →
+KeyError al quitar la clave): un guardián que muere no denuncia, y la batería lo contaba
+como «no cuenta». Se lee con `.get(...) or []` para que DENUNCIE.
+
+### Ejercitado contra la HOJA REAL (método v344)
+La columna se creó sola en la hoja de `cliente1` (**10 → 11**, «Owner» al
+final, sin descuadrar las cinco actividades que ya estaban). Puesto `admin1` como
+responsable de la actividad 1, se releyó **de la hoja** y la app lo devolvió igual.
+⚠️ Después, un guardado **PARCIAL** —solo el nombre, sin la clave `Owner`— cambió el
+nombre y **dejó el responsable intacto**: ésa es la prueba que ningún test con datos
+inventados puede dar, y es justo el patrón con el que guarda el campo (v162). Producción
+devuelta a su estado: las cinco actividades idénticas a la foto inicial.
+
 ## Planificación: la celda es un BOTÓN nativo que abre el proyecto (v169)
 El enfoque de v168 (celda = `<a href="?abrir_prj=…">`) tenía el riesgo de recargar la página. El usuario
 pidió el plan B: **la celda como botón nativo**, que navega en la MISMA sesión, sin recarga ni riesgo de
@@ -10758,7 +10821,7 @@ comprueba lo que dice**.
 
 ---
 
-## Versiones desplegadas (v501 = actual)
+## Versiones desplegadas (v502 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -10766,6 +10829,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v502 | **El responsable de cada actividad: que el retraso tenga dueño.** Cerrado el cuarto hueco de gestión de instalación: con v499-v501 la app ya sabía qué va tarde, cuánto y por qué, pero no **de quién es** — y sin eso no puede recomendar a quién mover. Columna Responsable en la tabla de actividades (se elige de la gente asignada a la obra) y el nombre al lado de lo que va tarde: la parada y la arrastrada, no todas las filas. ⚠️ Se guarda el **LOGIN** y se muestra el nombre (el nombre se repite, v306/v413), y el guardián exige que las etiquetas sean únicas o el mapa inverso guardaría a otro. ⚠️ Un guardado PARCIAL **no borra** responsables (el fallo de v499 con las predecesoras, y el campo guarda así, v162), y ⚠️ un dueño cuya persona ya no está asignada **sigue en la lista**: si no, su fila se pintaría vacía y el primer guardado lo borraría sin que nadie lo pidiera. 25 comprobaciones · **13/13 roturas + control** ⚠️ (la batería cazó DOS fallos míos en el propio guardián: uno que pasaba en vacío mirando la función equivocada, y otro que fallaba por su propia construcción contando el `def` como una llamada) |
 | v501 | **Línea base: el plan que se ACORDÓ, congelado.** Hasta aquí el cronograma se recalculaba siempre, así que alargar una actividad de 4 a 8 días **no dejaba rastro** —el plan nuevo pasaba a ser «el plan» y la curva S comparaba contra un blanco móvil—, que es justo lo que hace falta para defender por qué se retrasó una entrega. Se fija **con un botón** cuando el plan está pactado (decisión del usuario) y ⚠️ **la ORIGINAL nunca se pierde**: re-fijar conserva la acordada, cuenta las replanificaciones y guarda cuánto movió la entrega cada vez. ⚠️ Si no se puede LEER, **no se escribe** (tratar el fallo como «no había» borraría la original, criterio v492), y la comparación casa por **ORDEN**, no por posición. Ejercitado contra la hoja real: alargar una actividad pasó a decir **25/09 → 29/09 (+4 d)** identificando que la 2 cambió y que **la 3, 4 y 5 se movieron sin cambiar ellas**. 24 comprobaciones · **11/11 roturas + control** ⚠️ (2 escaparon primero por casos míos que no podían distinguir la rotura: órdenes 1-2-3 donde posición y orden coinciden, y un `False` que llegaba por otro motivo) |
 | v500 | **El fin previsto sale de la CADENA, no del ritmo** (2.ª mitad de lo que el usuario pidió en v499). El SPI era una regla de tres sobre el % de avance: medido, una obra con el **50% hecho y la actividad que bloquea a las demás sin empezar** salía **«+0 d, en plazo»** y la cadena dice **+10 d**; y con avance 0 el SPI **no daba NINGUNA fecha** (división por cero) mientras la cadena da una y dice **qué actividades mandan**. La obra real pasó de «—» a **04/10 (+9 d)**. Tres reglas: lo terminado no se mueve · lo en curso cuenta su resto **desde hoy** · lo que no empezó **no puede arrancar en el pasado** — así el retraso se PROPAGA (y la obra también puede adelantarse). ⚠️ `fecha_proj`/`proj_dias` **se eliminan**: dos respuestas a «cuándo termina» es el fallo de v361; el SPI se conserva como ritmo. ⚠️ El guardián cazó un consumidor que se me escapó (**el Gantt**, que habría dejado de dibujar la proyección en silencio) y ⚠️ **3 roturas escaparon por culpa del guardián**: comprobaba presencia de la clave y la encontraba **en su propio docstring**. 30 comprobaciones · **10/10 roturas + control** |
 | v499 | **Plan con dependencias**: las actividades se encadenan («detrás de la 3», con **desfase** `3+2` y **solape** `3-1`, y varias con `3;5-2`), sale la **ruta crítica** (borde rojo en el Gantt) y un plan mal encadenado —ciclo o predecesora borrada— se avisa y **se sigue dibujando**. ⚠️ Vacío = «detrás de la anterior», así que **una obra que ya existe no se mueve**: verificado contra el módulo de v498, **14 cronogramas idénticos actividad por actividad** (0 diferencias en fechas, duraciones y pesos). ⚠️ **El guardián cazó un fallo real**: el mapa de remapeo salía de los `edits`, así que un guardado PARCIAL habría tirado las predecesoras de las filas no tocadas —el plan entero reescrito sin ningún error—; ahora sale de TODAS las actividades y los edits solo sobrescriben. ⚠️ Y al extender la sonda de v471 a los ALIAS aparecieron **dos KeyError vivos desde v468** que reventaban el guardado de la tabla de actividades y **el del avance del campo** (la escritura más usada): la migración de columnas renombró la LECTURA y no la clave del cuadro. ⚠️ Mi oráculo escrito **de memoria** dio 2 rojos inexistentes → se sacó del módulo de v498. ⚠️ Y la SUITE dio 2 rojos, ninguno caducado: `verif_v323` **tenía razón** (`plan.py` definía un `_num` LOCAL, la sexta copia del concepto que v323 eliminó, donde 2 de 5 divergencias eran fallos de dinero) y `verif_v469` era un **falso positivo** que denunciaba código correcto — comparaba TEXTO por línea, así que una llamada partida en dos la marcaba; reescrita por AST y **auto-validada en las dos direcciones** (es el fallo que v472 ya corrigió en otro guardián). 39 comprobaciones · **13/13 roturas + control** (⚠️ 2 anclas no existían y no probaron nada en la 1ª pasada) |

@@ -75,6 +75,9 @@ CABECERAS = {
     "Actividad": "Activity",
     # v501 · la línea base: lo acordado contra lo de hoy
     "Desfase": "Shift",
+    # v502 · quien responde de la actividad. La clave es la del CUADRO (se lee de
+    # vuelta en el guardado, v471); la etiqueta es lo unico que se traduce.
+    "Responsable": "Owner",
     "Avance": "Progress",
     "Inicio real": "Actual start",
     "Fin real": "Actual finish",
