@@ -2571,11 +2571,18 @@ def _detalle_proyecto(pid: str, grupo: str = None):
             # el grupo (v413), que es mejor que lo que yo habia reimplementado.
             _lbl_de = _etq_us(_op_us)
             _login_de = {v: k for k, v in _lbl_de.items()}
-            _op_lbl = [""] + [_lbl_de[u] for u in _op_us]
+            # ⚠️ El «sin responsable» es una opcion con TEXTO, no la cadena vacia: medido
+            # en produccion interceptando `fillText` (v398/nº18), un `SelectboxColumn` con
+            # "" pinta la palabra **None** en cada celda vacia — 20 veces en la columna
+            # Owner con las 5 actividades sin dueño. «After», que tambien es opcional,
+            # queda en blanco porque es TextColumn. No se ve en el DOM: hay que leer el
+            # canvas. `_login_de` no tiene esta clave, asi que la vuelta da "" sola.
+            _SIN = t("— nobody —")
+            _op_lbl = [_SIN] + [_lbl_de[u] for u in _op_us]
             _adf = pd.DataFrame([{
                 "Orden": int(P._num(a.get("Order"))),
                 "Actividad": a.get("Name"),
-                "Responsable": _lbl_de.get(str(a.get("Owner", "") or "").strip(), ""),
+                "Responsable": _lbl_de.get(str(a.get("Owner", "") or "").strip(), _SIN),
                 "Días": int(P._num(a.get("DurationDays")) or 1),
                 # v499: detrás de qué va. Vacío = detrás de la anterior (lo de siempre).
                 "Detras": str(a.get("Predecessors", "") or ""),

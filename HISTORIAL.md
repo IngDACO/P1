@@ -10,6 +10,42 @@ ventana de contexto. Contenido: 258 secciones detalladas + el índice de 440 ver
 
 ---
 
+## LA PALABRA «None» EN CADA CELDA VACÍA (v504)
+
+La columna Responsable de v502 funcionaba, pero **toda actividad sin dueño mostraba
+literalmente la palabra `None`**. Un `st.column_config.SelectboxColumn` cuya opción de
+«vacío» es la cadena vacía pinta `None` en la celda; «After», que también es opcional,
+queda en blanco porque es `TextColumn`.
+
+### ⚠️ Cómo se vio, y por qué no se podía ver de otra forma
+No aparece compilando, ni en los 135 guardianes, ni en el DOM: `st.data_editor` pinta en
+un **canvas** (v398/nº18). Se vio **interceptando `CanvasRenderingContext2D.fillText`** en
+producción y mirando las posiciones:
+
+```
+Order@32 · Activity@147 · Owner@355 · Days@475 · After@585 · Weight@694 · Progress %@792
+«None» × 20  en  x≈332-360   → la columna Owner
+```
+
+⚠️ Y hubo que forzar un repintado **REAL** (`resize_window`): un `new Event('resize')`
+sintético no dispara nada, glide observa su contenedor. La sonda se validó antes contra
+un caso conocido-bueno —pintar uno mismo y comprobar que el hook lo registra— porque un
+«0 pintado» no significa nada hasta demostrar que la sonda sabe ver (nº12).
+
+### El arreglo
+La opción de «sin responsable» pasa a llevar TEXTO (`— nobody —`). La vuelta a login
+sigue dando `""` sola, porque el mapa inverso se construye de `_lbl_de` y esa clave no
+está ahí — no hay caso especial que mantener.
+
+### Verificación
+`verif_v502.py`, **29 comprobaciones** (red nueva: la opción vacía lleva texto y la fila
+sin dueño la usa). Batería: **15 roturas, 15 cazadas + CONTROL**. Suite: **135 verde ·
+0 rojo · 0 roto**. Verificado en producción leyendo otra vez el canvas.
+
+_Nota de método: v502, v503 y v504 son la misma lección tres veces. Las redes locales
+—compilar, importar, 135 guardianes, batería, hoja real— no ven lo que solo existe
+cuando la pantalla se EJECUTA. Las tres las cazó abrir la pantalla en producción._
+
 ## ⚠️ LIGAR UN NOMBRE QUE YA ERA UNA FUNCIÓN: la pantalla caída de v502 (v503)
 
 v502 se desplegó y **tumbó la pantalla de detalle de proyecto entera**. Se vio al ir a
@@ -10878,7 +10914,7 @@ comprueba lo que dice**.
 
 ---
 
-## Versiones desplegadas (v503 = actual)
+## Versiones desplegadas (v504 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -10886,6 +10922,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v504 | **La palabra «None» en cada celda sin responsable.** Un `SelectboxColumn` cuya opción de vacío es la cadena vacía la pinta literal; «After», opcional también, queda en blanco por ser `TextColumn`. ⚠️ **No se ve compilando ni en el DOM**: `st.data_editor` pinta en canvas, así que se cazó interceptando `fillText` en producción y midiendo las posiciones (**«None» × 20 en x≈332-360**, justo la columna Owner@355) — y forzando un repintado REAL, porque un `resize` sintético no dispara nada. La sonda se validó antes contra un caso conocido-bueno (nº12). Arreglado con una opción con TEXTO; la vuelta a login sigue dando «» sola. 29 comprobaciones · **15/15 roturas + control** · suite 135 verde. ⚠️ v502-v503-v504 son la misma lección tres veces: lo que solo existe al EJECUTAR la pantalla no lo ve ninguna red local |
 | v503 | ⚠️ **v502 tumbó la pantalla de detalle de proyecto, y se vio al verificar en producción.** `_etq_us` ya era la función de módulo y `_detalle_proyecto` la llama en la L2428; v502 le puso ese nombre a una variable en la L2566 y Python la marca local en el ámbito ENTERO → `UnboundLocalError` en la llamada anterior. Es la trampa nº29 literal (los dos fallos de v439). ⚠️ **No lo vio nadie**: `compileall`, los 98 imports, 25 comprobaciones, la batería 13/13, los 135 guardianes y el ejercicio contra la hoja real — ninguna de esas redes EJECUTA esa función, y **importar no ejecuta** (v378). Lo vio la pantalla. Arreglado usando `_etq_us`, que ya hacía eso y desempata homónimos sobre TODO el grupo (v413), o sea que v502 había duplicado lógica existente. Red nueva sobre todo `core/`: nadie liga un nombre que ya es función de módulo y que llama ANTES — mira el ORDEN (un `def` anidado antes de su llamada es legítimo, como `roster_ui._hm`) y se autovalida contra un caso conocido-malo. 27 comprobaciones · **14/14 roturas + control** |
 | v502 | **El responsable de cada actividad: que el retraso tenga dueño.** Cerrado el cuarto hueco de gestión de instalación: con v499-v501 la app ya sabía qué va tarde, cuánto y por qué, pero no **de quién es** — y sin eso no puede recomendar a quién mover. Columna Responsable en la tabla de actividades (se elige de la gente asignada a la obra) y el nombre al lado de lo que va tarde: la parada y la arrastrada, no todas las filas. ⚠️ Se guarda el **LOGIN** y se muestra el nombre (el nombre se repite, v306/v413), y el guardián exige que las etiquetas sean únicas o el mapa inverso guardaría a otro. ⚠️ Un guardado PARCIAL **no borra** responsables (el fallo de v499 con las predecesoras, y el campo guarda así, v162), y ⚠️ un dueño cuya persona ya no está asignada **sigue en la lista**: si no, su fila se pintaría vacía y el primer guardado lo borraría sin que nadie lo pidiera. 25 comprobaciones · **13/13 roturas + control** ⚠️ (la batería cazó DOS fallos míos en el propio guardián: uno que pasaba en vacío mirando la función equivocada, y otro que fallaba por su propia construcción contando el `def` como una llamada) |
 | v501 | **Línea base: el plan que se ACORDÓ, congelado.** Hasta aquí el cronograma se recalculaba siempre, así que alargar una actividad de 4 a 8 días **no dejaba rastro** —el plan nuevo pasaba a ser «el plan» y la curva S comparaba contra un blanco móvil—, que es justo lo que hace falta para defender por qué se retrasó una entrega. Se fija **con un botón** cuando el plan está pactado (decisión del usuario) y ⚠️ **la ORIGINAL nunca se pierde**: re-fijar conserva la acordada, cuenta las replanificaciones y guarda cuánto movió la entrega cada vez. ⚠️ Si no se puede LEER, **no se escribe** (tratar el fallo como «no había» borraría la original, criterio v492), y la comparación casa por **ORDEN**, no por posición. Ejercitado contra la hoja real: alargar una actividad pasó a decir **25/09 → 29/09 (+4 d)** identificando que la 2 cambió y que **la 3, 4 y 5 se movieron sin cambiar ellas**. 24 comprobaciones · **11/11 roturas + control** ⚠️ (2 escaparon primero por casos míos que no podían distinguir la rotura: órdenes 1-2-3 donde posición y orden coinciden, y un `False` que llegaba por otro motivo) |
