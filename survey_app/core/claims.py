@@ -63,7 +63,14 @@ RECLAMACIONES = "Claims"
 C_HEADERS = ["ID", "Group", "ProjectID", "Number", "Date", "PeriodTo", "PctComplete",
              "ContractValue", "VariationsValue", "WorkDone", "PreviouslyClaimed",
              "RetentionPct", "Retention", "ThisClaim", "Status", "Note",
-             "CreatedBy", "Created"]
+             "CreatedBy", "Created",
+             # v510: qué CLASE de documento es esta fila. ⚠️ AL FINAL (v363) y opcional:
+             # vacío = reclamación de avance, que es lo que son todas las anteriores.
+             "Type"]
+
+# Clase de documento. Las dos piden dinero y por eso viven en la MISMA hoja: separarlas
+# obligaría a numerarlas en dos series y el cliente recibiría dos «nº 3» distintos.
+PROGRESO, LIBERACION = "", "retention_release"
 
 # Variación: propuesta → aprobada | rechazada. Solo la APROBADA es dinero.
 PROPUESTA, APROBADA, RECHAZADA = "proposed", "approved", "rejected"
@@ -142,6 +149,32 @@ def reclamaciones(pid, incluir_anuladas=False) -> list:
     return sorted(out, key=lambda r: _num(r.get("Number")))
 
 
+def es_liberacion(r) -> bool:
+    """¿Esta fila es una liberación de retención y no una reclamación de avance?"""
+    return str((r or {}).get("Type", "")) == LIBERACION
+
+
+def retenido(pid) -> dict:
+    """Cuánto se ha retenido, cuánto se ha devuelto y cuánto sigue en manos del cliente.
+
+    ⚠️ Es el ÚNICO sitio donde se decide qué queda retenido. La pantalla, el PDF y la
+    comprobación de si se puede liberar preguntan aquí, porque dos fórmulas para el
+    mismo número es como se acaba mostrando un saldo y cobrando otro (regla v361).
+
+    ⚠️ Una liberación **no retiene nada**: su `Retention` es 0 y lo que devuelve va en
+    `ThisClaim`. Así `neto = ThisClaim − Retention` sigue valiendo para las dos clases
+    de documento, sin un solo `if` en la pantalla.
+    """
+    _rs = reclamaciones(pid)
+    _ret = round(sum(_num(r.get("Retention")) for r in _rs if not es_liberacion(r)), 2)
+    _lib = round(sum(_num(r.get("ThisClaim")) for r in _rs if es_liberacion(r)), 2)
+    # ⚠️ Nunca negativo: si por lo que sea se liberó de más, el pendiente es CERO y no
+    # una deuda al revés. Un número negativo aquí se presentaría como «te deben» en la
+    # pantalla, que es exactamente lo contrario de lo que pasa.
+    return {"retenido": _ret, "liberado": _lib,
+            "pendiente": round(max(0.0, _ret - _lib), 2)}
+
+
 def valor_variaciones(pid) -> float:
     """⚠️ Solo las APROBADAS. Una variación propuesta no es dinero: meterla en el valor
     de contrato sería reclamar trabajo que el cliente todavía no ha aceptado."""
@@ -202,13 +235,18 @@ def calcular(pid, grupo, pct=None, prj=None) -> dict:
     _bruto = round(max(0.0, _hecho - _antes), 2)
     _ret_pct = retencion_pct(grupo)
     _ret = round(_bruto * _ret_pct / 100.0, 2)
+    _r = retenido(pid)
     return {
         "contrato": _c, "cotizacion": _cid, "variaciones": _var, "valor": _valor,
         "pct": round(pct, 2), "hecho": _hecho, "antes": _antes, "bruto": _bruto,
         "retencion_pct": _ret_pct, "retencion": _ret, "neto": round(_bruto - _ret, 2),
         "hay_contrato": bool(_cid),
-        "retenido_acumulado": round(sum(_num(r.get("Retention"))
-                                        for r in reclamaciones(pid)), 2),
+        # v510: «retenido» es lo que se retuvo en total y NO cambia de significado —
+        # el resto del módulo lo venía usando así. Lo que hacía falta era distinguirlo
+        # de lo que SIGUE retenido, que es lo que se puede pedir de vuelta.
+        "retenido_acumulado": _r["retenido"],
+        "retenido_liberado": _r["liberado"],
+        "retenido_pendiente": _r["pendiente"],
     }
 
 
@@ -294,12 +332,87 @@ def crear_reclamacion(pid, grupo, pct=None, periodo_hasta="", nota="",
                       str(d["pct"]), str(d["contrato"]), str(d["variaciones"]),
                       str(d["hecho"]), str(d["antes"]), str(d["retencion_pct"]),
                       str(d["retencion"]), str(d["bruto"]), EMITIDA, str(nota),
-                      str(creado_por), clock.now(grupo).strftime("%Y-%m-%d %H:%M")],
+                      str(creado_por), clock.now(grupo).strftime("%Y-%m-%d %H:%M"),
+                      PROGRESO],                  # v510: clase de documento
                      value_input_option="RAW")
     except Exception as e:
         return False, f"{t('Error saving the claim')}: {e}"
     _invalidate()
     return True, "%s %d: %s %.2f" % (t("Claim"), n, t("net payable"), d["neto"])
+
+
+def puede_liberar(pid, prj=None) -> tuple:
+    """`(se_puede, motivo)` — por qué SÍ o por qué NO se puede pedir la retención.
+
+    ⚠️ Devuelve el motivo siempre, también cuando se puede: la pantalla enseña el botón
+    deshabilitado **con la razón al lado** en vez de esconderlo. Un botón que no está no
+    se distingue de una función que no existe, y el usuario acaba preguntando por algo
+    que sí tiene (la misma decisión que en v505 con las órdenes que no bloquean).
+    """
+    _p = retenido(pid)["pendiente"]
+    if _p <= 0:
+        return False, t("There is no retention left to release on this job.")
+    # ⚠️ El 100% se mira sobre el avance REAL, no sobre el estado: el estado admite
+    # override manual (pausada, archivada) y una obra archivada al 90% no está acabada.
+    try:
+        from core import projects as P
+        _av = _num((prj or P.get_project(pid) or {}).get("Progress"))
+    except Exception as e:
+        # No poder leer el avance no es «está terminada»: ante la duda, NO se libera.
+        logger.warning("claims.puede_liberar(%s): %s", pid, e)
+        return False, t("The job progress could not be read, so the release is on hold.")
+    if _av < 100:
+        return False, t("Retention is released once the job is complete; this one is "
+                        "at {pct}%.", pct=round(_av, 1))
+    return True, t("{amount} of retention is still held.", amount="%.2f" % _p)
+
+
+def crear_liberacion(pid, grupo, importe=None, nota="", creado_por="", prj=None) -> tuple:
+    """Pide de vuelta la retención: un documento más, en la misma serie que las demás.
+
+    `importe` vacío = todo lo pendiente. ⚠️ Se admite PARCIAL a propósito: en obra
+    australiana la retención se suele devolver en dos mitades —una en *practical
+    completion* y otra al acabar el periodo de defectos, meses después—, así que un
+    «todo o nada» no serviría para el caso normal.
+    """
+    w = _ws(RECLAMACIONES, C_HEADERS)
+    if w is None:
+        return False, t("Google Sheets is not configured.")
+    _ok, _motivo = puede_liberar(pid, prj)
+    if not _ok:
+        return False, _motivo
+    _pend = retenido(pid)["pendiente"]
+    _imp = _pend if importe in (None, "") else round(_num(importe), 2)
+    if _imp <= 0:
+        return False, t("The amount to release must be greater than 0.")
+    # ⚠️ Nunca más de lo retenido: pedir de vuelta dinero que nunca se retuvo no es una
+    # liberación, es una factura — otro documento, con otro impuesto y otras consecuencias.
+    if _imp > _pend:
+        return False, t("You cannot release {amount} when only {held} is being held.",
+                        amount="%.2f" % _imp, held="%.2f" % _pend)
+    # El último documento manda sus cifras de obra: una liberación NO añade trabajo
+    # ejecutado, así que repite las de la última reclamación en vez de inventar un 0
+    # que luego se leería como si la obra hubiese retrocedido.
+    _ult = [r for r in reclamaciones(pid) if not es_liberacion(r)]
+    _prev = _ult[-1] if _ult else {}
+    n = _siguiente(RECLAMACIONES, C_HEADERS, pid)
+    try:
+        w.append_row([f"CLM-{pid}-{n:03d}", str(grupo), str(pid), str(n),
+                      clock.now(grupo).strftime("%Y-%m-%d"), "",
+                      str(_num(_prev.get("PctComplete")) or 100.0),
+                      str(_num(_prev.get("ContractValue"))),
+                      str(_num(_prev.get("VariationsValue"))),
+                      str(_num(_prev.get("WorkDone"))),
+                      str(_num(_prev.get("WorkDone"))),
+                      "0", "0",                   # una liberación no retiene nada
+                      str(_imp), EMITIDA, str(nota),
+                      str(creado_por), clock.now(grupo).strftime("%Y-%m-%d %H:%M"),
+                      LIBERACION],
+                     value_input_option="RAW")
+    except Exception as e:
+        return False, f"{t('Error saving the release')}: {e}"
+    _invalidate()
+    return True, "%s %d: %s %.2f" % (t("Retention release"), n, t("net payable"), _imp)
 
 
 def _fila(w, hoja, oid):

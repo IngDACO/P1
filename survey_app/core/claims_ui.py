@@ -27,6 +27,73 @@ def _dinero(v) -> str:
     return theme.dinero(_num(v))
 
 
+def _descarga(pid, grupo, r, vars_, prj, d, key_prefix):
+    """El botón que baja el PDF de ESTE documento (v510).
+
+    ⚠️ Se genera en línea, sin caché: medido, son **4,7 ms** por documento (56 ms para
+    doce), así que cachearlo solo añadiría una clave que hay que acordarse de meter el
+    libro (v378) para que un inquilino no se descargue el papel de otro. Costaba menos
+    medirlo que arriesgarlo.
+    ⚠️ Envuelto: que el PDF falle no puede tumbar la lista de reclamaciones.
+    """
+    try:
+        from core import claim_pdf
+        _cli = {}
+        try:
+            from core import clientes
+            _cid = str((prj or {}).get("ClientID", ""))
+            _cli = clientes.get_cliente(_cid) if _cid else {}
+        except Exception:
+            _cli = {}
+        _bytes = claim_pdf.generate_claim_pdf(
+            r, vars_, _cli, grupo, prj,
+            {"retenido": d["retenido_acumulado"], "liberado": d["retenido_liberado"],
+             "pendiente": d["retenido_pendiente"]})
+        _es_lib = CL.es_liberacion(r)
+        st.download_button(
+            t(":material/download: Download PDF"), data=_bytes,
+            file_name="%s_%s_%s.pdf" % ("RetentionRelease" if _es_lib else "ProgressClaim",
+                                        pid, r.get("Number", "")),
+            mime="application/pdf", key=f"{key_prefix}_pdf_{r.get('ID')}")
+    except Exception as e:
+        st.caption(t(":material/warning: The PDF could not be generated ({e}).", e=e))
+
+
+def _retencion(pid, grupo, prj, d, key_prefix):
+    """Pedir de vuelta la retención cuando la obra está terminada (v510).
+
+    ⚠️ Cuando NO se puede, el bloque sigue apareciendo **con el motivo**. Esconderlo
+    haría que una función que existe pareciera no existir, y el usuario preguntaría por
+    algo que ya tiene (misma decisión que en v505).
+    """
+    if d["retenido_acumulado"] <= 0:
+        return
+    st.markdown(t("**:material/lock_open: Retention**"))
+    _puede, _motivo = CL.puede_liberar(pid, prj)
+    st.caption("%s · %s" % (t("{x} held", x=_dinero(d["retenido_pendiente"])), _motivo))
+    if not _puede:
+        return
+    with st.form(f"{key_prefix}_ret_{pid}"):
+        r1, r2 = st.columns([1, 2])
+        _imp = r1.number_input(
+            t("Amount to release"), min_value=0.0,
+            max_value=float(d["retenido_pendiente"]),
+            value=float(d["retenido_pendiente"]), step=100.0,
+            help=t("Defaults to everything still held. Release part of it if the "
+                   "contract splits it between practical completion and the end of "
+                   "the defects period."))
+        _nota = r2.text_input(t("Note"), placeholder=t("Optional"),
+                              key=f"{key_prefix}_retnote_{pid}")
+        if st.form_submit_button(t(":material/lock_open: Release retention"),
+                                 width="stretch"):
+            ok, msg = CL.crear_liberacion(
+                pid, grupo, _imp, _nota,
+                st.session_state.get("auth", {}).get("usuario", ""), prj)
+            (flash.exito if ok else st.error)(msg)
+            if ok:
+                st.rerun()
+
+
 def render(pid, grupo, prj, editable=True, key_prefix="clm"):
     if not CL.is_configured():
         return
@@ -56,7 +123,12 @@ def render(pid, grupo, prj, editable=True, key_prefix="clm"):
         c1.metric(t("Contract"), _dinero(d["contrato"]))
         c2.metric(t("Approved variations"), _dinero(d["variaciones"]))
         c3.metric(t("Contract value"), _dinero(d["valor"]))
-        c4.metric(t("Retention held"), _dinero(d["retenido_acumulado"]))
+        # ⚠️ v510: lo que se ENSEÑA es lo que sigue retenido, no lo retenido histórico.
+        # Con liberaciones de por medio son dos números distintos, y el que le importa a
+        # quien mira es cuánto puede pedir de vuelta todavía.
+        c4.metric(t("Retention held"), _dinero(d["retenido_pendiente"]),
+                  help=(t("{x} released so far.", x=_dinero(d["retenido_liberado"]))
+                        if d["retenido_liberado"] else None))
 
         # ── Lo que se puede reclamar hoy ──
         st.markdown(t("**:material/calculate: What can be claimed now**"))
@@ -92,10 +164,20 @@ def render(pid, grupo, prj, editable=True, key_prefix="clm"):
                 _ic = (":green[:material/paid:]" if _est == CL.PAGADA
                        else ":blue[:material/schedule:]")
                 _neto = _num(r.get("ThisClaim")) - _num(r.get("Retention"))
-                st.markdown("%s **#%s** %s · %s%% · %s %s — %s %s"
-                            % (_ic, r.get("Number", "?"), r.get("Date", ""),
-                               r.get("PctComplete", "0"), t("net"), _dinero(_neto),
-                               t("retention"), _dinero(r.get("Retention"))))
+                # ⚠️ Una liberación se lee distinta o se confunde con una reclamación de
+                # avance del mismo importe: no lleva % ni retención, y el porqué del
+                # dinero es otro.
+                if CL.es_liberacion(r):
+                    st.markdown("%s **#%s** %s · %s — %s"
+                                % (":violet[:material/lock_open:]", r.get("Number", "?"),
+                                   r.get("Date", ""), t("retention release"),
+                                   _dinero(r.get("ThisClaim"))))
+                else:
+                    st.markdown("%s **#%s** %s · %s%% · %s %s — %s %s"
+                                % (_ic, r.get("Number", "?"), r.get("Date", ""),
+                                   r.get("PctComplete", "0"), t("net"), _dinero(_neto),
+                                   t("retention"), _dinero(r.get("Retention"))))
+                _descarga(pid, grupo, r, vars_, prj, d, key_prefix)
                 if editable and _est == CL.EMITIDA:
                     b1, b2 = st.columns(2)
                     if b1.button(t("Mark paid"), key=f"{key_prefix}_pay_{r.get('ID')}"):
@@ -108,6 +190,10 @@ def render(pid, grupo, prj, editable=True, key_prefix="clm"):
                         (flash.exito if ok else st.error)(msg)
                         if ok:
                             st.rerun()
+
+        # ── Retención: pedirla de vuelta al terminar (v510) ──
+        if editable:
+            _retencion(pid, grupo, prj, d, key_prefix)
 
         # ── Variaciones ──
         st.markdown(t("**:material/edit_note: Variations**"))

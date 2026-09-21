@@ -75,8 +75,8 @@ plano**, y además ordena la **gestión del proyecto** (cronograma, avance, docu
 > eso había estado en **v75**. Van dos veces que este documento se queda atrás, así que la pregunta
 > ya no es «¿se actualizó?» sino si la regla de actualizarlo a mano es realista.
 
-Desplegado en Streamlit Cloud, funcional y en uso con datos reales. **v509**: 103 módulos, ~44.650
-líneas, 30 hojas de datos y **143 guardianes automáticos en verde** que se corren enteros antes de
+Desplegado en Streamlit Cloud, funcional y en uso con datos reales. **v510**: 104 módulos, ~45.080
+líneas, 30 hojas de datos y **144 guardianes automáticos en verde** que se corren enteros antes de
 cada despliegue. Backend en Google Sheets + Drive.
 
 ⚠️ **La suite y el script de despliegue viven ahora DENTRO del repo** (`guardianes/`,
@@ -97,7 +97,7 @@ Google por cliente, zona horaria por grupo y la app entera en inglés.
 | **Contabilidad** | ⚠️ **Parcial desde v483 (08/09/2026)**: hay **exportación a CSV** para Xero y MYOB (facturas y gastos, con el proyecto como categoría de seguimiento). **Desde v488 (15/09/2026) las facturas van a Xero por API**, y desde v495-v496 **los cobros vuelven de Xero a COPEX**, probado EN PRODUCCIÓN con un pago parcial. Falta: llevar por API los **gastos** y el **parte de horas**; MYOB sigue solo por CSV |
 | **Nómina** | ⚠️ Sigue sin **STP ni interpretación de awards**, así que como nómina certificada no se puede vender. Lo que v484 añade es el puente: **parte de horas exportable** (jornada + ausencias pagadas, persona × día) para que lo procese un proveedor certificado. ⚠️ Y ese trabajo **no se tira decida lo que se decida** — conectar con un proveedor y renombrar el módulo a «costeo de mano de obra» necesitan los dos lo mismo primero |
 | **Sin señal** | No funciona offline, y el campo trabaja en fosos y sótanos. ⚠️ Tras el estudio del 20/09/2026 este es **el hueco que define la arquitectura**: es el único de la lista que no se resuelve añadiendo una pantalla, porque Streamlit ejecuta en el servidor y una app que no arranca sin red no se arregla con un caché. Decidirlo (¿app nativa de captura? ¿solo pre-start y avance?) es una decisión de producto, no una tarea |
-| ~~**Cobro de obra**~~ | ✅ **CERRADO en v507-v508 (20/09/2026)**: variaciones, *progress claims* y retención. `valor = contrato + variaciones aprobadas`; `bruto = valor × avance − lo ya reclamado`; `neto = bruto − retención`. Una reclamación **congela** sus números y una variación *propuesta* no es dinero. ⚠️ Falta lo de al lado: **el PDF de la reclamación** y **la liberación de la retención** al terminar la obra |
+| ~~**Cobro de obra**~~ | ✅ **CERRADO en v507-v508 (20/09/2026)**: variaciones, *progress claims* y retención. `valor = contrato + variaciones aprobadas`; `bruto = valor × avance − lo ya reclamado`; `neto = bruto − retención`. Una reclamación **congela** sus números y una variación *propuesta* no es dinero. **Completado en v510 (21/09/2026)**: el **PDF que se le manda al cliente** —con las variaciones aprobadas detalladas una a una— y la **liberación de la retención**, parcial, porque en AU va en dos mitades (*practical completion* y fin del periodo de defectos). ⚠️ El documento **no invoca ninguna ley**: el texto de *Security of Payment* cambia por estado y declararlo mal tiene efectos legales, así que lo pone quien sepa, en la nota |
 | **Portal del cliente** | El constructor o la administración del edificio no puede ver nada |
 | **Mantenimiento/AMC** | No existe, y **es deliberado**: es un mercado adyacente bien atendido |
 
@@ -291,8 +291,7 @@ ya captura, no se construye todo en paralelo):
   opciones a evaluar en el chat técnico: app nativa de captura solo para lo de terreno (pre-start,
   avance, fotos) que sincroniza al recuperar señal, o asumir que el offline no es requisito y decirlo
   en la venta. Lo que no es opción es seguir construyendo pantallas de campo sin haberlo decidido.
-- **Cerrar el flanco del cobro de obra**: el **PDF de la reclamación** (hoy los números están, el
-  documento que se le manda al cliente no) y la **liberación de la retención** al terminar la obra.
+- ~~**Cerrar el flanco del cobro de obra**~~ → ✅ **hecho en v510 (21/09/2026)**.
 
 ## Cómo trabajan los dos chats
 - **Estratégico** (este brief): negocio, precios, mercado, roadmap comercial.
@@ -334,4 +333,4 @@ Esa tabla sigue siendo responsabilidad de quien cierra la versión. El guardián
 borra o se le cambia el formato, el resultado es ROJO —no verde—, a propósito: sin ella no se puede
 saber a qué versión corresponde este documento.
 
-*Última puesta al día del estado de hecho: 21/09/2026 (v485-v509).*
+*Última puesta al día del estado de hecho: 21/09/2026 (v485-v510).*
