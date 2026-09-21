@@ -379,7 +379,7 @@ def crear(grupo, cliente_id, cliente_nombre, lineas, impuesto_pct=0.0,
           validez=None, nota="", creado_por="", origen="") -> tuple:
     w = _ws()
     if w is None:
-        return False, t("Google Sheets is not configured.")
+        return False, timeclock.motivo_sin_hoja()   # v510: no mientas, puede ser un 429
     if not lineas:
         return False, t("Add at least one line to the quote.")
     if not str(cliente_nombre or "").strip():
@@ -432,7 +432,7 @@ def guardar_lineas(cid, lineas, impuesto_pct=None) -> tuple:
     """Reemplaza las líneas y recalcula los totales. Solo en BORRADOR."""
     w = _ws()
     if w is None:
-        return False, t("Google Sheets is not configured.")
+        return False, timeclock.motivo_sin_hoja()   # v510: no mientas, puede ser un 429
     row, c = _fila(w, cid)
     if row is None:
         return False, t("Quote not found.")
@@ -459,7 +459,7 @@ def set_estado(cid, estado) -> tuple:
         return False, f"{t('Invalid status')}: {estado}."
     w = _ws()
     if w is None:
-        return False, t("Google Sheets is not configured.")
+        return False, timeclock.motivo_sin_hoja()   # v510: no mientas, puede ser un 429
     row, c = _fila(w, cid)
     if row is None:
         return False, t("Quote not found.")

@@ -108,6 +108,11 @@ def _ws(hoja, headers):
         return None
 
 
+def _motivo_sin_hoja() -> str:
+    """Delega en `timeclock.motivo_sin_hoja` — UNA definición (v361, v510)."""
+    return timeclock.motivo_sin_hoja()
+
+
 @st.cache_data(ttl=120, show_spinner=False)
 def _records_cached(libro: str, hoja: str) -> list:
     """⚠️ SIN cabeceras: `registros(t, cabeceras)` cae a `get_sheet`, que CREA la hoja
@@ -273,7 +278,7 @@ def _siguiente(hoja, headers, pid) -> int:
 def crear_variacion(pid, grupo, descripcion, importe, nota="", creado_por="") -> tuple:
     w = _ws(VARIACIONES, V_HEADERS)
     if w is None:
-        return False, t("Google Sheets is not configured.")
+        return False, _motivo_sin_hoja()
     if not str(descripcion).strip():
         return False, t("Describe the variation.")
     # ⚠️ Un importe de 0 se admite (una variación puede no cambiar el precio y sí el
@@ -296,7 +301,7 @@ def decidir_variacion(vid, aprobada: bool, quien="", grupo=None) -> tuple:
     valor de contrato por debajo de reclamaciones que ya se emitieron con él."""
     w = _ws(VARIACIONES, V_HEADERS)
     if w is None:
-        return False, t("Google Sheets is not configured.")
+        return False, _motivo_sin_hoja()
     fila, r = _fila(w, VARIACIONES, vid)
     if fila is None:
         return False, t("Variation not found.")
@@ -317,7 +322,7 @@ def crear_reclamacion(pid, grupo, pct=None, periodo_hasta="", nota="",
     """Emite la reclamación CONGELANDO los números de hoy."""
     w = _ws(RECLAMACIONES, C_HEADERS)
     if w is None:
-        return False, t("Google Sheets is not configured.")
+        return False, _motivo_sin_hoja()
     d = calcular(pid, grupo, pct, prj)
     if not d["hay_contrato"]:
         return False, t("This job has no accepted quote, so there is no contract value "
@@ -377,7 +382,7 @@ def crear_liberacion(pid, grupo, importe=None, nota="", creado_por="", prj=None)
     """
     w = _ws(RECLAMACIONES, C_HEADERS)
     if w is None:
-        return False, t("Google Sheets is not configured.")
+        return False, _motivo_sin_hoja()
     _ok, _motivo = puede_liberar(pid, prj)
     if not _ok:
         return False, _motivo
@@ -447,7 +452,7 @@ def _set(w, col, fila, campos: dict) -> tuple:
 def marcar_pagada(cid) -> tuple:
     w = _ws(RECLAMACIONES, C_HEADERS)
     if w is None:
-        return False, t("Google Sheets is not configured.")
+        return False, _motivo_sin_hoja()
     fila, r = _fila(w, RECLAMACIONES, cid)
     if fila is None:
         return False, t("Claim not found.")
@@ -463,7 +468,7 @@ def anular(cid) -> tuple:
     `WorkDone` de ésta, así que anular una del medio dejaría un hueco en lo acumulado."""
     w = _ws(RECLAMACIONES, C_HEADERS)
     if w is None:
-        return False, t("Google Sheets is not configured.")
+        return False, _motivo_sin_hoja()
     fila, r = _fila(w, RECLAMACIONES, cid)
     if fila is None:
         return False, t("Claim not found.")

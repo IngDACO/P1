@@ -205,7 +205,7 @@ def crear(grupo, nombre, tipo=PRODUCTO, costo_unit="", horas_est="", tarifa_hora
           qty_rule="") -> tuple:
     w = _ws()
     if w is None:
-        return False, t("Google Sheets is not configured.")
+        return False, timeclock.motivo_sin_hoja()   # v510: no mientas, puede ser un 429
     if not str(nombre).strip():
         return False, t("Give the item a name.")
     if tipo not in TIPOS:
@@ -248,7 +248,7 @@ def _fila(w, cid):
 def actualizar(cid, fields: dict) -> tuple:
     w = _ws()
     if w is None:
-        return False, t("Google Sheets is not configured.")
+        return False, timeclock.motivo_sin_hoja()   # v510: no mientas, puede ser un 429
     row, antes = _fila(w, cid)
     if row is None:
         return False, t("Item not found.")

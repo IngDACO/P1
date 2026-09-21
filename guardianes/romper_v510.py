@@ -16,7 +16,8 @@ GUARD = os.path.join(AQUI, "verif_v510.py")
 COPIAS = os.path.join(AQUI, "_respaldo_v510")
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
-FICHEROS = ["core/claims.py", "core/claim_pdf.py", "core/claims_ui.py"]
+FICHEROS = ["core/claims.py", "core/claim_pdf.py", "core/claims_ui.py",
+            "core/catalogo.py", "core/timeclock.py"]
 
 N = chr(10)
 ROTURAS = [
@@ -64,6 +65,18 @@ ROTURAS = [
      "core/claim_pdf.py",
      '    _titulo = d("RETENTION RELEASE") if _lib else d("PROGRESS CLAIM")',
      '    _titulo = d("PROGRESS CLAIM")'),
+
+    # ── el mensaje que mentia sobre la causa (lo encontro la cadena, no un test) ──
+    ('⚠️ un 429 vuelve a culpar a la configuracion', "core/catalogo.py",
+     '        return False, timeclock.motivo_sin_hoja()   # v510: no mientas, puede ser un 429'
+     + N + '    if not str(nombre).strip():',
+     '        return False, t("Google Sheets is not configured.")'
+     + N + '    if not str(nombre).strip():'),
+    ('⚠️ los dos motivos dan el MISMO mensaje (el arreglo no hace nada)',
+     "core/timeclock.py",
+     '    return t("The sheet could not be opened right now — this is usually a temporary "'
+     + N + '             "limit. Try again in a minute.")',
+     '    return t("Google Sheets is not configured.")'),
 ]
 
 # El CONTROL comprueba lo contrario: que un cambio que NO rompe nada deje el guardián

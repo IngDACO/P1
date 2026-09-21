@@ -348,6 +348,48 @@ ck("...y a _retencion", "_retencion" in _llamadas, True)
 ck("el formateador de dinero sigue delegando en theme (v508)",
    "theme.dinero" in _ui, True)
 
+# ═════ 6 · el mensaje no puede mentir sobre la causa ═════════════════════════
+# ⚠️ Lo encontro la CADENA de punta a punta, no un test: al comerse la cuota (429), la
+# app contestaba «Google Sheets is not configured» — falso, y manda a revisar unos
+# secrets perfectos. En una reclamacion es peor: el usuario puede concluir que la obra
+# no tiene contrato. Paso en claims.py y, otra corrida despues, en catalogo.py.
+print("\n[6] por que no hay hoja")
+from core import timeclock as TC                                  # noqa: E402
+
+_orig_sp = TC._secrets_present
+try:
+    TC._secrets_present = lambda: False
+    _sin_secrets = TC.motivo_sin_hoja()
+    TC._secrets_present = lambda: True
+    _con_secrets = TC.motivo_sin_hoja()
+finally:
+    TC._secrets_present = _orig_sp
+ck("sin secrets dice que falta configurar",
+   "not configured" in _sin_secrets, True)
+ck("⚠️ CON secrets NO dice que falte configurar",
+   "not configured" in _con_secrets, False)
+ck("...dice que es pasajero y que se reintente",
+   "Try again" in _con_secrets, True)
+ck("⚠️ y son mensajes DISTINTOS (si no, el arreglo no hace nada)",
+   _sin_secrets != _con_secrets, True)
+
+# ⚠️ Y que los modulos de la cadena del dinero no hayan vuelto al literal. Se mira por
+# AST el cuerpo de `if w is None:`, no por grep: el literal aparece legitimamente en
+# otros sitios (cuando SI se ha comprobado que faltan los secrets).
+for _mod in ("claims.py", "catalogo.py", "quotes.py"):
+    _t = ast.parse(_fuente("core/" + _mod))
+    _malos = []
+    for _n in ast.walk(_t):
+        if not isinstance(_n, ast.If):
+            continue
+        _test = ast.unparse(_n.test)
+        if "is None" not in _test:
+            continue
+        for _s in _n.body:
+            if "Google Sheets is not configured" in ast.unparse(_s):
+                _malos.append(_test)
+    ck("%s no culpa a la configuracion cuando la hoja no abre" % _mod, _malos, [])
+
 print("\n" + "=" * 70)
 CL.reclamaciones = _orig_rec
 print(f"{n_ok + len(fallos)} comprobaciones — " + ("TODO OK" if not fallos else "HAY FALLOS"))

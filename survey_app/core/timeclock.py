@@ -55,6 +55,28 @@ def _secrets_present() -> bool:
         return False
 
 
+def motivo_sin_hoja() -> str:
+    """Por qué no hay hoja: faltan los secrets, o no se pudo abrir AHORA MISMO (v510).
+
+    ⚠️ Son dos cosas distintas y el mensaje no puede decir lo mismo. Todos los módulos
+    tienen un `_ws()` que devuelve `None` por los dos motivos, así que al chocar con un
+    **429** —el techo de 60 lecturas/min de la cuenta de servicio— la app contestaba
+    «Google Sheets is not configured». Eso es falso: manda a revisar una configuración
+    que está perfecta, por un problema que se va solo en un minuto. En una reclamación
+    es peor todavía, porque el usuario puede concluir que la obra no tiene contrato.
+
+    ⚠️ Vive AQUÍ y no copiado en cada módulo (regla v361: UNA definición). `timeclock`
+    es quien sabe si hay secrets, así que es quien puede decir por qué no hay hoja.
+
+    Lo encontró la cadena del dinero de punta a punta, no un test: hace falta apretar
+    de verdad contra la hoja real para que aparezca un 429.
+    """
+    if not _secrets_present():
+        return t("Google Sheets is not configured.")
+    return t("The sheet could not be opened right now — this is usually a temporary "
+             "limit. Try again in a minute.")
+
+
 # ── Reintento acotado ante 429 / 5xx (v290) ──────────────────
 # gspread NO reintenta: un pico de cuota sube como APIError y rompía el render.
 # El límite de Google es 60 lecturas/min por usuario y toda la app va con UNA

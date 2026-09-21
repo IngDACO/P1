@@ -75,9 +75,16 @@ plano**, y además ordena la **gestión del proyecto** (cronograma, avance, docu
 > eso había estado en **v75**. Van dos veces que este documento se queda atrás, así que la pregunta
 > ya no es «¿se actualizó?» sino si la regla de actualizarlo a mano es realista.
 
-Desplegado en Streamlit Cloud, funcional y en uso con datos reales. **v510**: 104 módulos, ~45.080
+Desplegado en Streamlit Cloud, funcional y en uso con datos reales. **v511**: 104 módulos, ~45.110
 líneas, 30 hojas de datos y **144 guardianes automáticos en verde** que se corren enteros antes de
 cada despliegue. Backend en Google Sheets + Drive.
+
+✅ **La cadena del dinero está recorrida de punta a punta con datos reales (v511, 21/09/2026)**:
+catálogo → cotización → obra → avance → reclamación → PDF → variación → retención → liberación, más
+la propuesta desde el plano y el expediente de entrega. Hasta aquí cada módulo estaba verificado por
+separado pero la cadena entera nunca se había probado, porque el catálogo del cliente de prueba
+estaba vacío. ⚠️ Destapó un fallo que ningún test podía encontrar: al agotar la cuota de Google, la
+app culpaba a la configuración («*Google Sheets is not configured*») de un problema pasajero.
 
 ⚠️ **La suite y el script de despliegue viven ahora DENTRO del repo** (`guardianes/`,
 `backup_survey.ps1`, 20/09/2026). Antes estaban en una carpeta temporal y en el home: se arregló un
@@ -333,4 +340,4 @@ Esa tabla sigue siendo responsabilidad de quien cierra la versión. El guardián
 borra o se le cambia el formato, el resultado es ROJO —no verde—, a propósito: sin ella no se puede
 saber a qué versión corresponde este documento.
 
-*Última puesta al día del estado de hecho: 21/09/2026 (v485-v510).*
+*Última puesta al día del estado de hecho: 21/09/2026 (v485-v511).*

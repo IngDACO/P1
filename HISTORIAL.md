@@ -10,6 +10,89 @@ ventana de contexto. Contenido: 258 secciones detalladas + el índice de 440 ver
 
 ---
 
+## LA CADENA DEL DINERO, DE PUNTA A PUNTA (v511)
+
+v506, v507-v508, v509 y v510 se verificaron **cada una por su lado**, y las cuatro en
+verde. Lo que nunca se había hecho es recorrer la cadena entera con datos reales:
+
+    catálogo → cotización → aceptar → OBRA → avance → reclamación → PDF
+                                        ├→ variación → mueve el contrato
+                                        ├→ 100% → liberación de retención → PDF
+                                        ├→ cotizar leyendo el plano (v509)
+                                        └→ expediente de entrega (v506)
+
+No se podía: **el catálogo del cliente de prueba estaba vacío**, así que no había
+contrato contra el que reclamar, ni precios que proponer, ni expediente que cruzar. Cada
+eslabón verde no dice nada del eslabón siguiente.
+
+`ejercitar_e2e_dinero.py` monta la cadena de verdad y la recorre: **44 comprobaciones**.
+Contrato 29.725 → avance real 52,6% → reclamación neta **14.853,58** → variación aprobada
+llevando el contrato a **37.125** → obra al 100% → retención **1.856,25** → liberación
+parcial de **928,12** → los dos PDF generados desde filas de Sheets. Y el expediente
+denunciando, sin que nadie se lo pidiera: *«every activity is closed, but there is no
+plumb verification on record»*.
+
+⚠️ **Verificado también EN PRODUCCIÓN por el usuario**, que es lo único que cubre el
+hueco de v502: la sección se pinta con sus cuatro indicadores, los tres documentos, el
+botón de descarga y el bloque de retención. Ninguna red local ve eso.
+
+### ⚠️ El fallo que encontró la cadena y que ningún test podía encontrar
+Al agotar la cuota —el techo de **60 lecturas/min** de la cuenta de servicio—, emitir una
+reclamación contestaba:
+
+> «Google Sheets is not configured.»
+
+**Es falso.** Los secrets estaban perfectos: era un 429 pasajero. Ese mensaje manda a
+revisar una configuración que está bien, por algo que se va solo en un minuto; y en una
+reclamación es peor todavía, porque el usuario puede concluir que la obra no tiene
+contrato. Apareció **dos veces, en dos módulos distintos** (`claims` y, una corrida
+después, `catalogo`), que es lo que lo delató como patrón y no como descuido.
+
+La causa es estructural: **`_ws()` devuelve `None` por dos motivos que no son el mismo**
+—faltan los secrets, o la hoja no se pudo abrir ahora— y el llamante no puede
+distinguirlos, así que siempre culpa a la configuración. Hay **41 sitios en 20 módulos**
+con ese literal.
+
+Arreglado en `timeclock.motivo_sin_hoja()`, **una sola definición** (regla v361):
+`timeclock` es quien sabe si hay secrets, así que es quien puede decir por qué no hay
+hoja. `claims`, `catalogo` y `quotes` delegan ahí. ⚠️ **`projects` ya lo hacía bien**
+—dice «Could not open sheet X: …»— y no se tocó: es el modelo, no el problema.
+
+⚠️ Los **16 módulos restantes** siguen con el mensaje ambiguo. Se deja dicho en vez de
+arreglado a medias: es una versión propia, y decidirlo es del usuario.
+
+### ⚠️ Tres errores MÍOS que la cadena sacó a la luz
+1. **Acusé a código sano.** La comprobación del presupuesto preguntaba por `Presupuesto`
+   y la migración a inglés lo renombró a **`Budget`**: daba 0.0 y parecía un fallo del
+   producto. Mirar el código acusado antes de «arreglarlo» (v385) evitó parchear algo que
+   funcionaba. Ahora la clave se **deriva de la cabecera real**, así que no puede
+   desfasarse otra vez.
+2. **Seguí con la precondición rota.** Una corrida creó 3 de 5 artículos (429) y continuó,
+   escupiendo cuatro rojos más —«hay 5 líneas», «propone las 3 reglas», «la puerta va NS
+   veces»— que no eran fallos distintos: eran el MISMO repetido aguas abajo. Ahora el
+   guion **aborta**: el ruido tapa la señal.
+3. **La limpieza se rendía ante un 429**, dejando basura en la hoja de un cliente — y la
+   corrida siguiente la confundió con duplicados propios (ocho artículos donde debía
+   haber cinco). Ahora **reintenta**, y si aun así no puede, el guion para antes de crear
+   nada encima. El borrado es lo último que puede fallar en silencio.
+
+### ⚠️ Y la lección de método
+**La cuota es un actor del sistema, no una molestia del entorno.** Cada 429 se disfrazó
+de otra cosa: una obra «al 0%», una reclamación «sin configurar», un catálogo con ocho
+artículos. Ninguno era un fallo del producto — pero **uno destapó uno real**. Si no se
+aprieta hasta romper la cuota, ese mensaje seguiría ahí esperando al primer cliente con
+varios usuarios a la vez. Es la razón de ejercitar contra lo real y no contra un mock.
+
+### Verificación
+`verif_v510.py` pasa de **56 a 63 comprobaciones** (las 7 nuevas sobre el mensaje, por
+AST: se mira el cuerpo de `if w is None:`, no un grep — el literal aparece
+legítimamente donde SÍ se comprobó que faltan los secrets). Batería: **14 roturas, 14
+cazadas + CONTROL**, con dos nuevas. ⚠️ Una de ellas comprueba que el arreglo **hace
+algo**: dejar los dos mensajes idénticos tenía que ponerse rojo, y se pone.
+
+Hoja devuelta a la línea base y comprobado **releyendo**: catálogo 0, cotizaciones 0,
+reclamaciones 0, y las 2 obras y 17 actividades del usuario intactas.
+
 ## EL PDF DE LA RECLAMACIÓN Y LA LIBERACIÓN DE LA RETENCIÓN (v510)
 
 Cierra el flanco que quedó abierto en v507-v508. Aquello dejó los **números** —contrato,
@@ -11387,7 +11470,7 @@ comprueba lo que dice**.
 
 ---
 
-## Versiones desplegadas (v510 = actual)
+## Versiones desplegadas (v511 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -11395,6 +11478,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v511 | **La cadena del dinero, de punta a punta.** v506, v507-v508, v509 y v510 estaban verdes cada una por su lado, pero la cadena entera nunca se había recorrido con datos reales: el catálogo del cliente de prueba estaba vacío, así que no había contrato contra el que reclamar. 44 comprobaciones desde el catálogo hasta el PDF, **y verificada en PRODUCCIÓN por el usuario** — el hueco de v502, que ninguna red local ve. ⚠️ **Destapó un fallo que ningún test podía encontrar**: al agotar la cuota (60 lecturas/min), emitir una reclamación decía «Google Sheets is not configured» —falso, y en una reclamación el usuario puede concluir que la obra no tiene contrato—. Apareció en DOS módulos, que es lo que lo delató como patrón: `_ws()` devuelve None por dos motivos distintos y el llamante siempre culpa a la configuración (**41 sitios en 20 módulos**). Arreglado en `timeclock.motivo_sin_hoja()`, UNA definición (v361); `projects` ya lo hacía bien y no se tocó. ⚠️ Y tres errores MÍOS: acusar a código sano por un nombre de columna que la migración a inglés renombró, seguir con la precondición rota encadenando rojos que eran el mismo fallo, y una limpieza que se rendía ante un 429 dejando basura. 63 comprobaciones · **14/14 + control** |
 | v510 | **El PDF de la reclamación y la liberación de la retención.** v507-v508 dejó los números pero no el papel que se le manda al cliente, así que la reclamación mensual se seguía armando en Excel — el dolor que el estudio identificó como el que aparece cuando el cliente ya está dentro. Un generador para dos documentos, con las **variaciones aprobadas detalladas una a una** (un total que el cliente no puede comprobar no es discutible) y ⚠️ **sin recalcular nada**: las cifras salen de la fila congelada. ⚠️ **No invoca ninguna ley** —el texto de *Security of Payment* cambia por estado y declararlo mal tiene efectos legales—: lo pone quien sepa, en la nota (criterio v506). Retención: columna `Type` al final (v363), liberación **parcial** porque en AU va en dos mitades, ⚠️ nunca más de lo retenido, ni con la obra a medias, ni con el avance ilegible. ⚠️ **La batería dejó escapar 5 de 12 a la primera**, todas en el camino de ESCRITURA que el guardián no ejercitaba —y una porque mi objeto de prueba era un dict vacío, *falsy*, que el código descartaba antes de llegar al `except`—; y el extractor del PDF devolvía cero con el texto puesto, así que las afirmaciones negativas pasaban por partida doble. 38 → **56 comprobaciones** · **12/12 + control** · suite 144 verde |
 | v509 | **Cotizar leyendo el plano.** Tercera oportunidad del estudio: nadie puede presupuestar una instalación desde el PDF porque hay que extraerlo primero, y eso ya se hace desde v137. Del plano salen NS, modelo y riel; un ítem del catálogo dice si su cantidad es fija, por parada o por parada−1. ⚠️ **Si el plano no lo dice, la línea entra con cantidad CERO y marcada** — nunca omitida (abarataría en silencio y se descubre al facturar) ni con un 1 inventado (esconde el error en un número que parece calculado); y la regla por defecto es **manual**, o sea NO proponer. El módulo **no calcula ningún importe**: se los pide a `quotes.linea_de` (v361). La pantalla AÑADE, no reemplaza. ⚠️ Red nueva `check_nombres_libres` sobre los 100 módulos —la familia `NameError` mordió DOS veces hoy—, que costó **tres intentos**: los dos primeros denunciaban código sano (comprensiones anidadas, y `ast.walk` aplanando la anidación). 36 comprobaciones · **12/12 roturas + control** · suite 142 verde |
 | v508 | ⚠️ **El `$` que Streamlit leyó como LaTeX.** La línea que resume la reclamación salía rota: dos importes en una cadena y el texto de en medio acaba dentro de un bloque matemático, con los `**` literales. `theme.dinero` existe desde v309 para esto y su docstring **predice el fallo palabra por palabra** («cada vez que alguien escriba `f"${x:,.2f}"` a mano el fallo vuelve»); `claims_ui` traía formateador propio. ⚠️ El guardián de v309 no lo vio porque busca `$` **literales** y los míos entraban por parámetro — trampa nº30: un invariante mide una FORMA. ⚠️ Y la primera red nueva fue peor que el agujero: denunciaba **68 sitios sanos**, así que se estrechó a la causa (ningún `*_ui` define su propio formateador). Además, un rojo de la suite que era **basura de mis datos de prueba** en la hoja real: el guardián tenía razón |
