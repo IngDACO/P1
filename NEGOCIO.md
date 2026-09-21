@@ -76,7 +76,7 @@ plano**, y además ordena la **gestión del proyecto** (cronograma, avance, docu
 > ya no es «¿se actualizó?» sino si la regla de actualizarlo a mano es realista.
 
 Desplegado en Streamlit Cloud, funcional y en uso con datos reales. **v509**: 103 módulos, ~44.650
-líneas, 30 hojas de datos y **142 guardianes automáticos en verde** que se corren enteros antes de
+líneas, 30 hojas de datos y **143 guardianes automáticos en verde** que se corren enteros antes de
 cada despliegue. Backend en Google Sheets + Drive.
 
 ⚠️ **La suite y el script de despliegue viven ahora DENTRO del repo** (`guardianes/`,
@@ -314,9 +314,24 @@ el repositorio, no contra la memoria de este fichero.
 
 ⚠️ **Y volvió a pasar**: entre el 14 y el 20/09/2026 se cerraron seis huecos de gestión de
 instalación, el cobro de obra entero y dos oportunidades del estudio, y este documento seguía
-diciendo v484. La regla de «actualizarlo en el mismo lote» **no se cumplió**, así que la conclusión
-honesta es que depender de la memoria no funciona: al cerrar una versión que toque algo de esta
-lista, el guardián `doc_vNNN.py` que ya escribe en `CLAUDE.md` e `HISTORIAL.md` debería avisar de
-que hay que pasar por aquí.
+diciendo v484. La regla de «actualizarlo en el mismo lote» **no se cumplió** — ni esta vez ni la
+anterior. La conclusión honesta es que una regla que depende de que alguien se acuerde no es un
+mecanismo.
+
+✅ **Desde el 21/09/2026 hay un guardián: `guardianes/check_negocio_al_dia.py`.** Compara la
+versión que declara la línea de abajo con `survey_app/VERSION` y **se pone rojo** cuando la
+distancia pasa del número de versiones que `CLAUDE.md` mantiene a la vista (hoy 15, derivado del
+propio fichero y no fijado a mano). Corre dentro de la suite, así que se ejecuta antes de cada
+despliegue y no se puede ignorar.
+
+⚠️ **Su límite, escrito para que el verde no tranquilice:** mide una FORMA — que el número
+coincida—, no el fondo. Un verde significa «la versión está al día», **no** «el brief es cierto»:
+no detecta que una fila de «lo que NO existe todavía» siga diciendo que falta algo construido ayer.
+Esa tabla sigue siendo responsabilidad de quien cierra la versión. El guardián caza el desfase de
+25 o de 400 versiones, que es el fallo que de verdad ocurrió dos veces.
+
+⚠️ **Y por eso la línea de abajo es carga estructural, no decoración**: el guardián la lee. Si se
+borra o se le cambia el formato, el resultado es ROJO —no verde—, a propósito: sin ella no se puede
+saber a qué versión corresponde este documento.
 
 *Última puesta al día del estado de hecho: 21/09/2026 (v485-v509).*
