@@ -173,6 +173,72 @@ def _editor_lineas(grupo, key: str, lineas: list) -> list:
     return nuevas
 
 
+def _desde_plano(grupo):
+    """Sembrar las líneas de la cotización leyendo el PDF del plano (v509).
+
+    ⚠️ AÑADE, nunca reemplaza (decisión del usuario): lo que ya se escribió a mano se
+    queda. Pulsar dos veces duplica líneas, y eso se ve; perder lo escrito, no.
+    """
+    from core import catalogo as _CAT
+    from core import plan_data as _PD
+    from core import quote_from_plan as _QP
+
+    with st.expander(t(":material/architecture: Price it from the drawing"), expanded=False):
+        st.caption(t("Reads the PDF and proposes the lines whose quantity comes from the "
+                     "drawing. You review them before saving — this is a starting point, "
+                     "not a price."))
+        _pdf = st.file_uploader(t("Drawing (PDF)"), type=["pdf"], key="cot_plano_pdf")
+        if not _pdf:
+            return
+        if not st.button(t(":material/auto_awesome: Propose lines"), key="cot_plano_go",
+                         width="stretch"):
+            return
+
+        _barra = st.progress(0.0, text=t("Reading the drawing…"))
+        try:
+            _plano = _PD.extraer_todo(
+                _pdf, lambda f, txt: _barra.progress(min(1.0, f), text=txt))
+        except Exception as e:
+            _barra.empty()
+            st.error("%s: %s" % (t("The drawing could not be read"), e))
+            return
+        _barra.empty()
+
+        _items = _CAT.list_items(grupo) or []
+        _r = _QP.proponer(_plano, _items)
+
+        _p = _r["plano"]
+        st.markdown(t("**The drawing says:** stops {n} · model {m} · rail {r}",
+                      n=_p["ns"] or "—", m=_p["modelo"] or "—", r=_p["rail"] or "—"))
+
+        if not _r["lineas"]:
+            st.warning(t(":material/info: No catalogue item takes its quantity from the "
+                         "drawing yet. Set the rule on the items in Catalogue."))
+            return
+
+        # ⚠️ Lo que NO se pudo calcular va ARRIBA y en rojo. Dejarlo abajo, o peor,
+        # omitir esas líneas, haría la cotización más barata sin que nadie lo note —
+        # y sub-cotizar en silencio se descubre al facturar, cuando ya se firmó.
+        for _i in _r["incompletas"]:
+            st.error(":material/priority_high: **%s** — %s. %s"
+                     % (_i["nombre"], _i["motivo"], t("Set the quantity by hand.")))
+
+        for _l in _r["lineas"]:
+            st.markdown("· %s × **%s** = %s%s"
+                        % (_l.get("descripcion", ""), _l.get("cantidad", 0),
+                           T.dinero(_l.get("precio_total")),
+                           (" :red[← %s]" % t("decide this one")) if _l.get("_falta") else ""))
+        if _r["saltadas"]:
+            st.caption(t("Not proposed (their quantity does not come from the drawing): {l}",
+                         l=", ".join(_r["saltadas"][:8])))
+
+        _st = st.session_state
+        _st["new_lineas"] = list(_st.get("new_lineas") or []) + _QP.limpiar(_r["lineas"])
+        flash.exito(t("{n} line(s) added. Review them before saving.",
+                      n=len(_r["lineas"])))
+        st.rerun()
+
+
 def _nueva(grupo):
     from core import auth
     if st.button(t(":material/arrow_back: Cancel"), key="cot_new_back"):
@@ -205,6 +271,8 @@ def _nueva(grupo):
                                                    key="cot_new_cli_cto")
             _nuevo_cli["telefono"] = n1.text_input(t("Phone"), key="cot_new_cli_tel")
             _nuevo_cli["email"] = n2.text_input(t("Email"), key="cot_new_cli_mail")
+
+    _desde_plano(grupo)                         # v509: sembrar líneas leyendo el PDF
 
     lineas = st.session_state.get("new_lineas", [])
     lineas = _editor_lineas(grupo, "new", lineas)

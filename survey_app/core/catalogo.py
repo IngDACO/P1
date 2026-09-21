@@ -42,7 +42,11 @@ logger = logging.getLogger(__name__)
 
 SHEET = "Catalogue"
 HEADERS = ["ID", "Group", "Type", "Name", "Description", "Unit", "Category",
-           "UnitCost", "EstHours", "HourlyRate", "Active", "Note", "CreatedBy", "Created"]
+           "UnitCost", "EstHours", "HourlyRate", "Active", "Note", "CreatedBy", "Created",
+           # v509: de dónde sale la CANTIDAD de este ítem cuando se cotiza leyendo el
+           # plano (`quote_from_plan.REGLAS`). ⚠️ AL FINAL (v363) y opcional: sin valor
+           # vale `manual`, que es NO proponerlo — un ítem sin regla no se adivina.
+           "QtyRule"]
 
 PRODUCTO, SERVICIO = "product", "service"
 TIPOS = (PRODUCTO, SERVICIO)
@@ -197,7 +201,8 @@ def _next_id() -> str:
 
 
 def crear(grupo, nombre, tipo=PRODUCTO, costo_unit="", horas_est="", tarifa_hora="",
-          unidad="unit", categoria="", descripcion="", nota="", creado_por="") -> tuple:
+          unidad="unit", categoria="", descripcion="", nota="", creado_por="",
+          qty_rule="") -> tuple:
     w = _ws()
     if w is None:
         return False, t("Google Sheets is not configured.")
@@ -217,7 +222,8 @@ def crear(grupo, nombre, tipo=PRODUCTO, costo_unit="", horas_est="", tarifa_hora
         w.append_row([cid, str(grupo), str(tipo), str(nombre).strip(), str(descripcion),
                       str(unidad), str(categoria), str(_num(costo_unit)),
                       str(_num(horas_est)), str(_num(tarifa_hora)), "SI", str(nota),
-                      str(creado_por), clock.now(grupo).strftime("%Y-%m-%d %H:%M")],
+                      str(creado_por), clock.now(grupo).strftime("%Y-%m-%d %H:%M"),
+                      str(qty_rule or "")],    # v509: de dónde sale su cantidad
                      value_input_option="RAW")
     except Exception as e:
         return False, f"{t('Error saving')}: {e}"
