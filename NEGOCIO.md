@@ -71,11 +71,17 @@ plano**, y además ordena la **gestión del proyecto** (cronograma, avance, docu
 
 ## Estado actual
 
-> Puesto al día por el chat técnico el **08/09/2026**. Lo que había aquí era de **v75**.
+> Puesto al día por el chat técnico el **21/09/2026**. Lo que había aquí era de **v484**; antes de
+> eso había estado en **v75**. Van dos veces que este documento se queda atrás, así que la pregunta
+> ya no es «¿se actualizó?» sino si la regla de actualizarlo a mano es realista.
 
-Desplegado en Streamlit Cloud, funcional y en uso con datos reales. **v481**: 90 módulos, ~39.000
-líneas, 29 hojas de datos y **119 guardianes automáticos en verde** que se corren enteros antes de
+Desplegado en Streamlit Cloud, funcional y en uso con datos reales. **v509**: 103 módulos, ~44.650
+líneas, 30 hojas de datos y **142 guardianes automáticos en verde** que se corren enteros antes de
 cada despliegue. Backend en Google Sheets + Drive.
+
+⚠️ **La suite y el script de despliegue viven ahora DENTRO del repo** (`guardianes/`,
+`backup_survey.ps1`, 20/09/2026). Antes estaban en una carpeta temporal y en el home: se arregló un
+fallo del script y ese arreglo no dejaba rastro en ningún sitio.
 
 **Lo que ya está resuelto** (y en v75 no lo estaba): login persistente por cookie, sesión única por
 cuenta, aislamiento entre empresas con cerrojo en el código (no solo en la interfaz), un libro de
@@ -88,12 +94,33 @@ Google por cliente, zona horaria por grupo y la app entera en inglés.
 | **Planes y asientos** | La hoja `Groups` no tiene ni una columna de plan o de tope. El modelo de precios por asiento **no se puede hacer cumplir hoy** |
 | **Cobro** | No hay pasarela ni estado de suscripción |
 | ~~**Identidad fiscal**~~ | ✅ **CERRADO en v483**: hasta entonces el PDF decía «TAX INVOICE» **sin ABN ni razón social**, o sea que los clientes emitían documentos incompletos ante la ATO. Ya se configuran por empresa, junto al plazo de pago |
-| **Contabilidad** | ⚠️ **Parcial desde v483 (08/09/2026)**: hay **exportación a CSV** para Xero y MYOB (facturas y gastos, con el proyecto como categoría de seguimiento). **Desde v488 (15/09/2026) las facturas van a Xero por API** (conectar la organización y enviarlas, sin duplicar). Falta: activarla (app de Xero + secrets), probarla contra la Demo Company, y llevar por API los cobros, los gastos y el parte de horas; MYOB sigue solo por CSV |
+| **Contabilidad** | ⚠️ **Parcial desde v483 (08/09/2026)**: hay **exportación a CSV** para Xero y MYOB (facturas y gastos, con el proyecto como categoría de seguimiento). **Desde v488 (15/09/2026) las facturas van a Xero por API**, y desde v495-v496 **los cobros vuelven de Xero a COPEX**, probado EN PRODUCCIÓN con un pago parcial. Falta: llevar por API los **gastos** y el **parte de horas**; MYOB sigue solo por CSV |
 | **Nómina** | ⚠️ Sigue sin **STP ni interpretación de awards**, así que como nómina certificada no se puede vender. Lo que v484 añade es el puente: **parte de horas exportable** (jornada + ausencias pagadas, persona × día) para que lo procese un proveedor certificado. ⚠️ Y ese trabajo **no se tira decida lo que se decida** — conectar con un proveedor y renombrar el módulo a «costeo de mano de obra» necesitan los dos lo mismo primero |
-| **Sin señal** | No funciona offline, y el campo trabaja en fosos y sótanos |
-| **Cobro de obra** | Sin variaciones, sin *progress claims* y sin retenciones (el marco de *Security of Payment*) |
+| **Sin señal** | No funciona offline, y el campo trabaja en fosos y sótanos. ⚠️ Tras el estudio del 20/09/2026 este es **el hueco que define la arquitectura**: es el único de la lista que no se resuelve añadiendo una pantalla, porque Streamlit ejecuta en el servidor y una app que no arranca sin red no se arregla con un caché. Decidirlo (¿app nativa de captura? ¿solo pre-start y avance?) es una decisión de producto, no una tarea |
+| ~~**Cobro de obra**~~ | ✅ **CERRADO en v507-v508 (20/09/2026)**: variaciones, *progress claims* y retención. `valor = contrato + variaciones aprobadas`; `bruto = valor × avance − lo ya reclamado`; `neto = bruto − retención`. Una reclamación **congela** sus números y una variación *propuesta* no es dinero. ⚠️ Falta lo de al lado: **el PDF de la reclamación** y **la liberación de la retención** al terminar la obra |
 | **Portal del cliente** | El constructor o la administración del edificio no puede ver nada |
 | **Mantenimiento/AMC** | No existe, y **es deliberado**: es un mercado adyacente bien atendido |
+
+**Lo construido entre v485 y v509** (15-20/09/2026), que es lo que mueve el argumento de venta:
+
+- **Gestión de instalación, los cinco huecos cerrados** (v499-v505): el plan encadena actividades con
+  **predecesoras y ruta crítica**; la fecha de fin sale de la **cadena** y no de una regla de tres
+  (una obra con el 50% hecho y la actividad que bloquea sin empezar salía «en plazo» y son **+10 d**);
+  hay **línea base** congelada para defender por qué se retrasó una entrega; cada actividad tiene
+  **responsable**; y una **orden de compra bloquea** la actividad que espera ese material. Juntos
+  responden qué va tarde, cuánto, contra qué plan, de quién es y por qué.
+- **Expediente de entrega AS1735 / NSW DoE** (v506): trece ítems del estándar REAL de *practical
+  completion*, cinco evidenciados con lo que la app ya guardaba y ocho de terceros que ⚠️ **nunca
+  pasan por cálculo**. No certifica nada, y lo dice. Lo difícil de copiar no es juntar PDFs: es
+  **cruzar** el registro técnico con el de personas y fechas.
+- **Cotizar leyendo el plano** (v509): del PDF salen paradas, modelo y riel, y el catálogo dice qué
+  ítem depende de cuál. ⚠️ Si el plano no lo dice, la línea entra en **cero y marcada** — nunca
+  omitida, porque sub-cotizar en silencio se descubre al facturar, cuando ya se firmó.
+
+⚠️ **Lo que bloquea a tres módulos a la vez, y no es código:** el catálogo de la empresa de prueba
+está **vacío**. Sin artículos con su costo no hay cotización, ni propuesta desde el plano, ni base de
+contrato para las reclamaciones. Es trabajo de datos del cliente, no de desarrollo, y conviene pedirlo
+en la primera conversación de cada piloto.
 
 **La cuota de Google Sheets ya no es el cuello de botella que se creía.** Desde v339 todas las hojas
 de un libro se traen en **una sola llamada** cacheada y compartida; medido, el consumo sostenido está
@@ -127,6 +154,23 @@ atados en bloques fijos — cada uno tiene su propia curva de volumen):
   gestión de fotos/documentos por proyecto, y acceso técnico en terreno (plomadas/cortes/avance).
 - **⚠️ Estos números son una hipótesis de valor, NO validados con clientes reales todavía.** Antes de
   publicarlos, probar en las conversaciones de los primeros pilotos (ver punto 4).
+
+**⚠️ Lo que encontró el estudio del 20/09/2026 (brecha 3): el problema está en el asiento de CAMPO,
+no en el de admin.** Está **1,5× a 2,5× por encima del mercado generalista**. Un contratista del ICP
+—2 admin y 20 técnicos— pagaría del orden de **A$1.500/mes solo en asientos de campo**, antes del
+primer admin; **AroFlo son ~A$960** por esos mismos 20, y en ServiceM8 esa cantidad de técnicos
+directamente no entra en el precio. El asiento de admin, en cambio, se defiende solo: es donde está
+el motor técnico que nadie más tiene.
+
+- Salida recomendada: **campo incluido por tramos** — el asiento de admin trae N técnicos y se cobra
+  el exceso. Alinea el precio con el TAMAÑO de la empresa en vez de castigar la adopción, que es lo
+  que hace hoy cobrar por cada técnico que entra.
+- Lo accionable ya, sin tocar un número: **separar el discurso de precio** entre los dos asientos
+  antes de las conversaciones de piloto. Presentarlos juntos invita a comparar el total con una app
+  de fichaje.
+- ⚠️ **Y el límite de ese hallazgo:** los precios de la competencia salen de reseñas y comparadores,
+  **no de propuestas reales** (Simpro ni publica tarifas), y **no se entrevistó a ningún cliente**.
+  Compara precios de lista, no disposición a pagar.
 
 ### 2. Cliente ideal (ICP)
 - **Perfil objetivo:** contratista con **2+ admin y 10+ técnicos de campo**, varios proyectos
@@ -171,6 +215,33 @@ Investigación de mercado (2026-07-13) confirma un hueco real:
   técnico + la integración, nunca en el Gantt aislado. Y si el modelo se valida, Schindler u otro grande
   podría copiarlo — la ventaja real es velocidad para conseguir clientes y datos antes que ellos.
 
+**Segundo estudio (20/09/2026) — el hueco sigue siendo real, y aparecieron tres brechas.** Estudio
+completo en el documento [Estudio de mercado COPEX · septiembre
+2026](https://claude.ai/code/artifact/06d37e72-4d84-4b3a-9db3-e6dc5c2c3083). Lo que cambió respecto
+de julio:
+
+1. **Sin señal** — la que ordena a las demás, porque **condiciona la arquitectura**: lo que se
+   construya para campo antes de decidirlo puede haber que rehacerlo. Y es el argumento con el que se
+   **pierde una demo de campo**. ⚠️ FIELDBOSS lo vende con nuestro mismo vocabulario y **no es
+   folleto**: corre sobre Dynamics 365 con motor Resco, verificado en Microsoft Marketplace. El
+   offline en campo es además **estándar de categoría** (ServiceTitan, Fieldwire, crewOS,
+   Synchroteam), y los comparadores usan «sótanos sin señal» como el caso de manual — justo el
+   nuestro.
+2. **Cobro de obra** — ✅ **cerrada el mismo día (v507-v508)**. Se pierde más tarde que el offline,
+   cuando el contratista ya está dentro y descubre que su reclamación mensual la sigue armando en
+   Excel: duele después, pero duele.
+3. **El precio** — ver el punto 1 de este documento: el asiento de campo, no el de admin.
+
+**Y tres cosas que hoy no puede hacer NADIE del sector, ya construidas** (20/09/2026): el
+**expediente de entrega** cruzando el registro técnico con el de personas y fechas (v506), el **cobro
+de obra** ligado al avance real de las actividades (v507-v508) y **cotizar leyendo el plano** (v509).
+Las tres nacen del mismo activo que nadie más tiene: la app ya extrae el PDF técnico y ya sabe quién
+trabajó, cuándo y en qué. Son el argumento de venta, no funciones sueltas.
+
+⚠️ **Lo que el estudio NO puede decir:** si un contratista de Sydney pagaría A$300 por un asiento de
+admin, ni cuánto pesa de verdad el offline en una decisión de compra — o si es una objeción que se
+resuelve con «el móvil funciona fuera del foso». Eso solo sale de las conversaciones de piloto.
+
 ### 5. Roadmap comercial de largo plazo (north star, no para los próximos 12 meses)
 Visión: ir invadiendo más actividades del contratista para aumentar dependencia del servicio
 (volverse el sistema de registro central) y usar la data acumulada para modelos cada vez más precisos
@@ -204,10 +275,24 @@ ya captura, no se construye todo en paralelo):
 4. **Fase 4 (requiere escala):** modelos predictivos de proyección de instalación con la data histórica
    acumulada — no vender esto antes de tener volumen real de proyectos. Posible feature premium futuro:
    benchmarking entre clientes (con anonimización, cuidando privacidad de datos).
+   > ⏸ **APLAZADA a propósito (20/09/2026).** Se especificó el «escalón agentico» —que la app no solo
+   > muestre el retraso sino que **recomiende qué hacer**: a quién mover, qué actividad adelantar, qué
+   > pedir primero— y sería **reglas deterministas sobre los datos, no un modelo entrenado**. Se
+   > frenó por una razón concreta, no por tiempo: **no hay obras terminadas sobre las que recomendar**.
+   > Una recomendación sacada de un histórico vacío no es una recomendación, es una opinión con
+   > interfaz. Se retoma cuando los pilotos hayan cerrado obras reales.
 
 ### 6. Pendiente para el chat técnico
 - **Límites técnicos de los tramos de asientos** (cómo se implementan los planes/tramos de volumen y
   el enforcement de licencias) → se define en el chat técnico (CLAUDE.md) cuando se lleve esto a código.
+- ⚠️ **Decidir el offline, y decidirlo PRIMERO** (brecha 1 del estudio del 20/09/2026). No es una
+  tarea que se pueda encargar: es una decisión de producto con consecuencias de arquitectura —
+  Streamlit ejecuta en el servidor, así que «que funcione sin red» no se arregla con un caché. Las
+  opciones a evaluar en el chat técnico: app nativa de captura solo para lo de terreno (pre-start,
+  avance, fotos) que sincroniza al recuperar señal, o asumir que el offline no es requisito y decirlo
+  en la venta. Lo que no es opción es seguir construyendo pantallas de campo sin haberlo decidido.
+- **Cerrar el flanco del cobro de obra**: el **PDF de la reclamación** (hoy los números están, el
+  documento que se le manda al cliente no) y la **liberación de la retención** al terminar la obra.
 
 ## Cómo trabajan los dos chats
 - **Estratégico** (este brief): negocio, precios, mercado, roadmap comercial.
@@ -227,4 +312,11 @@ Cuando el chat técnico cierre algo que este documento da por pendiente, lo actu
 mismo lote**, con la fecha. Y cuando alguien pregunte «¿qué falta?», la respuesta se audita contra
 el repositorio, no contra la memoria de este fichero.
 
-*Última puesta al día del estado de hecho: 14/09/2026 (v481-v484).*
+⚠️ **Y volvió a pasar**: entre el 14 y el 20/09/2026 se cerraron seis huecos de gestión de
+instalación, el cobro de obra entero y dos oportunidades del estudio, y este documento seguía
+diciendo v484. La regla de «actualizarlo en el mismo lote» **no se cumplió**, así que la conclusión
+honesta es que depender de la memoria no funciona: al cerrar una versión que toque algo de esta
+lista, el guardián `doc_vNNN.py` que ya escribe en `CLAUDE.md` e `HISTORIAL.md` debería avisar de
+que hay que pasar por aquí.
+
+*Última puesta al día del estado de hecho: 21/09/2026 (v485-v509).*
