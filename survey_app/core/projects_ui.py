@@ -51,6 +51,50 @@ def _usuarios_de(grupo: str) -> list:
         return []
 
 
+def _clave_cond(key) -> str:
+    """Dónde vive la respuesta de tracción/hidráulico en esta pantalla de alta."""
+    return f"np_demol_{key}"
+
+
+def _pregunta_etapas(tipo, key):
+    """Pinta lo que hay que DECIDIR antes de armar el plan de una obra (v512).
+
+    Hoy es una sola pregunta —tracción o hidráulico— y solo aparece si el tipo lleva
+    desmontaje. ⚠️ Sin responderla, la demolición (el 25% o el 15% del R3) se queda
+    fuera del plan y la obra mediría su avance sobre un denominador al que le falta el
+    trabajo más grande del desmontaje. Por eso se pregunta al crear y no después.
+
+    ⚠️ Nace SIN preselección (regla v139): elegir «tracción» por defecto porque es lo
+    común escondería un dato que falta dentro de un número que parece calculado — el
+    «1 inventado» que v509 prohibió.
+    """
+    from core import stages as _S
+    pendientes = _S.falta_por_decidir(tipo, _cond_elegidas(key))
+    for g in pendientes:
+        _etiq = {o: o.replace("Rip out mechanical components - ", "").title()
+                 for o in g["opciones"]}
+        st.radio(t(g["pregunta"]), g["opciones"], index=None, horizontal=True,
+                 format_func=lambda o: _etiq.get(o, o), key=_clave_cond(key))
+    return pendientes
+
+
+def _cond_elegidas(key) -> tuple:
+    """Las condicionales que la pantalla de alta tiene elegidas ahora mismo."""
+    v = st.session_state.get(_clave_cond(key))
+    return (v,) if v else ()
+
+
+def _filas_etapas(tipo, ns, key) -> list:
+    """Las filas de cronograma de esta obra, desde el catálogo de etapas (v512)."""
+    # ⚠️ `num` se importa AQUÍ: este módulo no lo tiene a nivel de fichero, y usarlo sin
+    # más dejaba un `NameError` que solo habría saltado al abrir el alta de una obra.
+    # Lo cazó `check_nombres_libres` antes de desplegar — es la familia exacta de v502,
+    # que sí llegó a producción.
+    from core.num import num as _n
+    from core.schedule import filas_de_etapas
+    return filas_de_etapas(tipo, int(_n(ns) or 1), _cond_elegidas(key))
+
+
 def _etq_us(logins) -> dict:
     """`{login: etiqueta}` para pintar una persona en un selector.
 
@@ -972,10 +1016,14 @@ def _nuevo_proyecto_form(grupo: str, key: str = "nuevo"):
         # de credencial.)
         _tipo = st.selectbox(t(":material/category: Project type"), P.TIPOS,
                              key=f"np_tipo_{key}",
-                             help=t("«Installation» and «Ripout + Installation» generate the standard job schedule (activities that scale with the number of stops); the combined type adds the strip-out of the existing lift as the first activity."))
+                             help=t("«Installation», «Ripout» and the combined type generate the job schedule from the stage catalogue; the combined one runs both tracks as a single 100%."))
         # ⚠️ Por el helper, NUNCA comparando el tipo aquí: los tres caminos que
         # generan cronograma tienen que decidir con la MISMA regla (v470).
         _es_inst = P.genera_cronograma(_tipo)
+        # v512 · lo que hay que decidir ANTES de armar el plan. Va aquí, fuera del form,
+        # por la misma razón que el tipo: dentro no escribiría hasta el submit y la
+        # fecha de fin estimada de abajo se calcularía sobre un plan incompleto.
+        _pendientes = _pregunta_etapas(_tipo, key)
 
         # NS lo controla session_state (prellenado del plano arriba); la Ubicación se toma de
         # la dirección que buscaste en el mapa → ya no se pide dos veces (v272).
@@ -1009,7 +1057,7 @@ def _nuevo_proyecto_form(grupo: str, key: str = "nuevo"):
                 # instalación (`build_schedule`), cuyas duraciones escalan con el NS. Preview:
                 try:
                     _sch_prev = build_schedule(int(ns), f_ini, {},
-                                              ripout=P.con_ripout(_tipo))
+                                              custom_rows=_filas_etapas(_tipo, ns, key))
                     c1.caption(":material/event_available: Estimated finish: "
                                f"**{_sch_prev['fecha_fin'].strftime('%d/%m/%Y')}** "
                                f"({_sch_prev['total_dias']} days) — from the NS and the standard activities.")
@@ -1070,8 +1118,16 @@ def _nuevo_proyecto_form(grupo: str, key: str = "nuevo"):
             # instalación siempre, así que un delivery nacía con 11 actividades falsas —
             # y ese plan alimenta avance, curva S, SPI y el indicador «En retraso».
             if _es_inst:
+                # ⚠️ v512: sin responder qué clase de desmontaje es, la demolición se
+                # queda FUERA del plan y la obra nacería midiendo su avance sobre un
+                # denominador al que le falta el trabajo más grande del rip-out. Se
+                # para aquí en vez de elegir una opción por su cuenta.
+                if _pendientes:
+                    st.error(t("Answer this first: {q}",
+                               q=" · ".join(p["pregunta"] for p in _pendientes)))
+                    st.stop()
                 sched = build_schedule(int(ns), f_ini, {},
-                                       ripout=P.con_ripout(_tipo))
+                                       custom_rows=_filas_etapas(_tipo, ns, key))
                 _fin = (sched["fecha_fin"].strftime("%Y-%m-%d")
                         if sched.get("fecha_fin") else "")
                 _acts = sched.get("activities", [])
@@ -1093,7 +1149,12 @@ def _nuevo_proyecto_form(grupo: str, key: str = "nuevo"):
                 instrucciones=instr, induccion_links=inds, presupuesto=pres,
                 lat=("" if _nplat is None else _nplat),
                 lng=("" if _nplng is None else _nplng),
-                certs_req=";".join(_certs))
+                certs_req=";".join(_certs),
+                # v512: el plan de etapas se SELLA con la obra (versión de pesos +
+                # condicionales), para que recalibrar el catálogo mañana no mueva el
+                # avance de las obras que ya están reclamando.
+                stage_plan=(P.plan_nuevo(_tipo, _cond_elegidas(key))
+                            if _es_inst else ""))
             if not ok:
                 st.error(f"It could not be created: {res}")
                 return

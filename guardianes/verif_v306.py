@@ -60,9 +60,21 @@ check("...y siguen juntas y en ese orden",
 # ahora sobre el PRINCIPIO, y el numero se DERIVA del propio codigo.
 check("los tipos de v306 siguen todos ahi",
       [t for t in ("Installation", "Delivery", "Ripout", "Other") if t not in P.TIPOS], [])
-check("y el tipo sigue DECIDIENDO el cronograma (la razon de ser de v306)",
-      [P.genera_cronograma(t) for t in ("Installation", "Delivery", "Ripout", "Other")],
-      [True, False, False, False])
+# ⚠️ v512: la afirmacion se reescribe sobre el PRINCIPIO y el valor se DERIVA, en vez de
+# fijar [True, False, False, False]. La razon de ser de v306 es que el tipo DECIDA el
+# cronograma, no cuales tipos lo tienen: «Ripout» paso a tener cronograma propio cuando
+# el catalogo le dio sus 4 etapas (decision del usuario, 22/09/2026), y una lista fija
+# ponia esto rojo sin que nada estuviera mal (trampa nº16).
+# El principio exacto: un tipo genera cronograma **si y solo si el catalogo le da
+# etapas**. Asi, añadir o quitar una pista al catalogo y olvidarse de `genera_cronograma`
+# —o al reves— sale rojo solo.
+from core import stages as _S                                     # noqa: E402
+
+check("el tipo sigue DECIDIENDO el cronograma (la razon de ser de v306)",
+      [(t, P.genera_cronograma(t)) for t in P.TIPOS
+       if P.genera_cronograma(t) != bool(_S.pistas_de_tipo(t))], [])
+check("...y sigue habiendo tipos SIN cronograma (si no, v306 no protege nada)",
+      any(not P.genera_cronograma(t) for t in P.TIPOS), True)
 
 print("\n== 2) NADIE indexa proyectos por NOMBRE (el fallo de v147/v150) ==")
 # Un dict/comprehension cuya CLAVE sea `...get("Nombre")` sobre proyectos.

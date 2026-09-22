@@ -116,7 +116,14 @@ ck("con órdenes NO consecutivos, la que cambió se identifica por su ORDEN",
 
 # ═════ 2 · la hoja: fila y cabecera casan (v363) ═════════════════════════════
 print("\n[2] la columna nueva no descuadra la fila")
-ck("«BaselineJSON» va AL FINAL", P.PROJECTS_HEADERS[-1], "BaselineJSON")
+# ⚠️ v512: era «va AL FINAL», y dejo de ser cierto en cuanto `StagePlanJSON` se añadio
+# detras — sin que nada estuviera mal (trampa nº16: atado a una FORMA que cambia a
+# proposito). Lo que v363 protege de verdad no es que esta columna sea la ultima, sino
+# que **una columna existente NO se mueva de sitio**: colar una en medio guarda cada
+# dato en la de al lado, en silencio. Eso es lo que se afirma ahora.
+ck("«BaselineJSON» sigue en la cabecera", "BaselineJSON" in P.PROJECTS_HEADERS, True)
+ck("...y NO se ha movido de su columna (las nuevas van detras, v363)",
+   P.PROJECTS_HEADERS.index("BaselineJSON"), 33)
 _tr = ast.parse(_fuente("core/projects.py"))
 _cp = next(n for n in ast.walk(_tr) if isinstance(n, ast.FunctionDef) and n.name == "create_project")
 _fila = next((len(n.elts) for n in ast.walk(_cp)

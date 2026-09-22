@@ -75,9 +75,16 @@ plano**, y además ordena la **gestión del proyecto** (cronograma, avance, docu
 > eso había estado en **v75**. Van dos veces que este documento se queda atrás, así que la pregunta
 > ya no es «¿se actualizó?» sino si la regla de actualizarlo a mano es realista.
 
-Desplegado en Streamlit Cloud, funcional y en uso con datos reales. **v511**: 104 módulos, ~45.110
-líneas, 30 hojas de datos y **144 guardianes automáticos en verde** que se corren enteros antes de
+Desplegado en Streamlit Cloud, funcional y en uso con datos reales. **v512**: 105 módulos, ~45.820
+líneas, 30 hojas de datos y **145 guardianes automáticos en verde** que se corren enteros antes de
 cada despliegue. Backend en Google Sheets + Drive.
+
+🔨 **En curso (v512, 22/09/2026): el modelo de avance cambia de raíz.** Hasta aquí una obra medía
+contra 11 fases de una secuencia ideal; ahora mide contra un **catálogo ponderado de 18 etapas y 173
+actividades** sacado del conocimiento de campo de COPEX, pensado para que el avance se acredite en
+el orden real en que se trabaja. Es el cimiento de lo que viene: que el técnico escriba en texto
+libre lo que hizo y eso cargue el cronograma solo. ⚠️ Los pesos son provisionales y se sellan con
+cada obra, porque recalibrarlos movería el avance de obras que ya están reclamando dinero.
 
 ✅ **La cadena del dinero está recorrida de punta a punta con datos reales (v511, 21/09/2026)**:
 catálogo → cotización → obra → avance → reclamación → PDF → variación → retención → liberación, más
@@ -340,4 +347,4 @@ Esa tabla sigue siendo responsabilidad de quien cierra la versión. El guardián
 borra o se le cambia el formato, el resultado es ROJO —no verde—, a propósito: sin ella no se puede
 saber a qué versión corresponde este documento.
 
-*Última puesta al día del estado de hecho: 21/09/2026 (v485-v511).*
+*Última puesta al día del estado de hecho: 22/09/2026 (v485-v512).*

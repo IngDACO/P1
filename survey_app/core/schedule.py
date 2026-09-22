@@ -14,6 +14,7 @@ from core.i18n import d as _d
 from datetime import date, timedelta
 
 from core import plan
+from core.num import num as _num          # v512/v323: UNA definición de num()
 
 # ⚠️ v470 · El desmontaje del ascensor existente NO es una tabla de fases aparte:
 # es UNA actividad, la primera del cronograma (decisión del usuario). Su duración
@@ -64,6 +65,70 @@ def detect_flags(calc_results: dict) -> dict:
     if bs.get("needed"):
         flags["shaft"] = True
     return flags
+
+
+# ── v512: el cronograma sale del CATÁLOGO de etapas ──────────────────────────
+# (días de base, días por parada) de cada pista. ⚠️ El catálogo de `stages` es de PESO,
+# no de tiempo: tus documentos ponderan esfuerzo y no dicen cuánto dura nada. Estos dos
+# números salen de lo que esta misma función venía suponiendo — `PHASES` sumaba 17 días
+# de base y 2,0 por parada, y `FASE_RIPOUT` 3 y 0,5 —, así que una obra de 8 paradas
+# sigue dando los ~33 días de instalación de siempre. Son un ARRANQUE, como los pesos.
+DIAS_POR_PISTA = {"install": (17.0, 2.0), "ripout": (3.0, 0.5)}
+
+
+def filas_de_etapas(tipo, ns: int, condicionales=(), pct_ripout=None) -> list:
+    """Las etapas de esta obra como filas de cronograma: `{nombre, duracion, peso}`.
+
+    Sustituye a `PHASES` (v512). La diferencia de fondo no es la lista: es que el
+    **avance de cada etapa ya no se teclea**, se calcula desde sus actividades. Aquí
+    solo se arma el esqueleto temporal.
+
+    ⚠️ El peso viene YA renormalizado por `stages.plan_de`, que descuenta las
+    condicionales que esta obra no lleva. `build_schedule` vuelve a normalizar a 100 por
+    su cuenta, lo cual es inofensivo —normalizar algo que ya suma 100 no lo mueve— y se
+    deja así para no tocar un camino que usan los cronogramas editados a mano.
+
+    ⚠️ La duración se reparte por peso DENTRO de su pista, no sobre el total: si no, en
+    una obra combinada el desmontaje heredaría días de la instalación y al revés.
+    """
+    from core import stages as _S
+    plan_obra = _S.plan_de(tipo, condicionales, pct_ripout)
+    if not plan_obra:
+        return []
+    n = max(1, int(_num(ns) or 1))
+    # Peso de cada etapa DENTRO de su pista (el del plan es sobre la obra entera).
+    por_pista = {}
+    for e in plan_obra:
+        por_pista[e["pista"]] = por_pista.get(e["pista"], 0.0) + float(e["peso"])
+    # ⚠️ Los días se reparten por RESTO MAYOR, no redondeando cada etapa por su cuenta.
+    # Redondeando una a una, catorce etapas no suman los mismos días que las once fases
+    # del modelo viejo y la fecha de entrega se movía **hasta 3 días** — medido: de 30
+    # números de paradas, solo 7 daban la misma fecha. Con el reparto del resto, el
+    # total es exactamente `base + por_parada × NS`, que es la misma fórmula de antes, y
+    # la entrega no se mueve para NINGÚN número de paradas.
+    filas = []
+    for pista in por_pista:
+        idx = [i for i, e in enumerate(plan_obra) if e["pista"] == pista]
+        base, por_parada = DIAS_POR_PISTA.get(pista, (1.0, 0.0))
+        objetivo = max(len(idx), int(round(base + por_parada * n)))
+        exactos = [objetivo * float(plan_obra[i]["peso"]) / por_pista[pista] for i in idx]
+        # Suelo de UN día: una etapa de medio día saldría en 0 y la red de v499 la
+        # trataría como instantánea, arrastrando mal todo lo que va detrás.
+        dias = [max(1, int(x)) for x in exactos]
+        resto = objetivo - sum(dias)
+        if resto > 0:
+            # Los días que faltan van a las etapas que más perdieron al truncar.
+            for j in sorted(range(len(idx)), key=lambda k: -(exactos[k] - int(exactos[k])))[:resto]:
+                dias[j] += 1
+        for k, i in enumerate(idx):
+            filas.append({
+                "nombre": plan_obra[i]["nombre"],
+                "duracion": float(dias[k]),
+                "peso": float(plan_obra[i]["peso"]),
+                "orden": i + 1,
+                "pred": "",      # vacío = detrás de la anterior (v499): no mueve nada
+            })
+    return sorted(filas, key=lambda f: f["orden"])
 
 
 def build_schedule(ns: int, start_date: date, flags: dict,

@@ -507,7 +507,8 @@ def nueva_version(cid, creado_por="") -> tuple:
 
 # ── Fase 3: ganarla y comparar contra lo real (v354) ─────────────
 def aceptar_y_crear_proyecto(cid, nombre="", tipo="Installation", fecha_inicio=None,
-                             ns=0, ubicacion="", creado_por="") -> tuple:
+                             ns=0, ubicacion="", creado_por="",
+                             condicionales=()) -> tuple:
     """Acepta la cotización y da de alta el proyecto con lo que ya se pactó.
 
     ⚠️ **El presupuesto del proyecto es el COSTO cotizado, no el precio de venta.**
@@ -534,15 +535,20 @@ def aceptar_y_crear_proyecto(cid, nombre="", tipo="Installation", fecha_inicio=N
     from core import projects as P
     from core import schedule as S
     ini = fecha_inicio or clock.today(c.get("Group"))
-    acts, fin = None, ""
+    acts, fin, plan_json = None, "", ""
     # Solo la instalación tiene cronograma estándar (regla v306): a un delivery o un
     # ripout se le inventarían 11 actividades y ensuciarían avance, SPI y el radar.
     # ⚠️ Antes comparaba el LITERAL "Installation" en vez de la constante: dos
     # definiciones de la misma regla, y por ahí es por donde v454 se quedó sin
     # cronograma. Ahora delega en `projects.genera_cronograma`, igual que el alta.
     if P.genera_cronograma(tipo) and _num(ns) > 0:
-        sch = S.build_schedule(int(_num(ns)), ini, {}, ripout=P.con_ripout(tipo))
+        # v512: el cronograma sale del CATÁLOGO de etapas, no de `PHASES`. Son las
+        # 14 etapas (18 con desmontaje) y su avance ya no se teclea: se calcula desde
+        # las actividades de abajo.
+        _filas = S.filas_de_etapas(tipo, int(_num(ns)), condicionales)
+        sch = S.build_schedule(int(_num(ns)), ini, {}, custom_rows=_filas)
         acts, fin = sch["activities"], sch["fecha_fin"].isoformat()
+        plan_json = P.plan_nuevo(tipo, condicionales)
     else:
         # ⚠️ …pero NO con CERO actividades. El avance es Σ(peso·avance)/Σpeso sobre las
         # actividades, así que sin ninguna la obra se queda clavada en 0% para siempre,
@@ -563,7 +569,7 @@ def aceptar_y_crear_proyecto(cid, nombre="", tipo="Installation", fecha_inicio=N
         # cotizada es el PRECIO PACTADO (v370), que `project_revenue` lee de la propia
         # cotización. Guardar además un % sería un segundo número diciendo lo mismo, y de
         # los dos saldría una cifra distinta en cuanto uno se editara.
-        tipo=str(tipo), creado_por=creado_por)
+        tipo=str(tipo), creado_por=creado_por, stage_plan=plan_json)
     if not ok:
         return False, f"{t('Could not create the project')}: {res}"
 

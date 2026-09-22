@@ -52,8 +52,11 @@ ok_tipo = P.TIPO_RIPOUT_INST in P.TIPOS
 
 # ── 2 ────────────────────────────────────────────────────────────────────────
 sec("2. UNA sola definicion de «este tipo genera cronograma»")
+# ⚠️ «Ripout» paso a True el 22/09/2026: el catalogo le dio sus propias etapas (ver la
+# nota larga del apartado 5). Lo que v470 protege es que haya UNA sola definicion, no
+# cual es la respuesta para cada tipo.
 _casos = {P.TIPO_INSTALACION: True, P.TIPO_RIPOUT_INST: True,
-          "Ripout": False, "Delivery": False, "Other": False, "": False}
+          "Ripout": True, "Delivery": False, "Other": False, "": False}
 _mal = [t for t, e in _casos.items() if P.genera_cronograma(t) is not e]
 (ok if not _mal else fallo)("genera_cronograma acierta en los %d tipos" % len(_casos),
                             "fallan: %s" % _mal)
@@ -130,11 +133,19 @@ _src_q = io.open("core/quotes.py", encoding="utf-8").read()
     "el alta a mano delega en el helper")
 (ok if "P.genera_cronograma(tipo)" in _src_q else fallo)(
     "aceptar una cotizacion delega en el helper")
-(ok if _src_ui.count("ripout=P.con_ripout(_tipo)") >= 2 else fallo)(
-    "el alta pasa `ripout` al cronograma Y a su vista previa",
-    _src_ui.count("ripout=P.con_ripout(_tipo)"))
-(ok if "ripout=P.con_ripout(tipo)" in _src_q else fallo)(
-    "la cotizacion tambien lo pasa")
+# ⚠️ v512: antes se exigia `ripout=P.con_ripout(...)`, que es como se le pedia la fase
+# de desmontaje al modelo de `PHASES`. Ese modelo ya no se usa en las altas: el
+# cronograma sale del catalogo de etapas y el desmontaje son sus 4 etapas propias. Lo
+# que v470 protege NO es esa palabra, es que **los dos caminos de alta armen el plan
+# igual, y que la vista previa arme lo MISMO que la creacion** — que es por donde se
+# perdio v454. Eso se afirma ahora, con el mecanismo de hoy.
+(ok if _src_ui.count("_filas_etapas(_tipo, ns, key)") >= 2 else fallo)(
+    "el alta arma el plan igual en la creacion Y en su vista previa",
+    _src_ui.count("_filas_etapas(_tipo, ns, key)"))
+(ok if "filas_de_etapas(" in _src_q else fallo)(
+    "aceptar una cotizacion arma el plan con el mismo catalogo")
+(ok if "ripout=P.con_ripout" not in _src_ui and "ripout=P.con_ripout" not in _src_q
+ else fallo)("...y ningun alta quedo colgada del modelo viejo")
 
 # ── 5 ────────────────────────────────────────────────────────────────────────
 sec("5. Lo que NO cambia")
@@ -145,9 +156,24 @@ _ins = S.build_schedule(6, date(2026, 1, 5), {})
  else fallo)("una instalacion normal conserva sus fases exactas")
 (ok if _ins["total_dias"] == _n6["total_dias"] else fallo)(
     "...y su duracion (ripout=False es el defecto)")
+# ⚠️ DECISION CAMBIADA, y conviene que se lea: en v470 el usuario decidio que «Ripout»
+# a secas NO tuviera cronograma. El motivo era concreto — no existian actividades de
+# desmontaje, asi que lo unico que se le podia dar eran las 11 fases de INSTALACION, y
+# eso habria ensuciado avance, SPI y el radar con trabajo que esa obra no hace.
+# El 22/09/2026 el usuario decidio lo contrario, y el motivo de antes ya no aplica: el
+# catalogo le da sus 4 etapas y ~20 actividades PROPIAS. No es la misma pregunta
+# contestada al reves; es otra pregunta.
 _ripout_solo = P.genera_cronograma("Ripout")
-(ok if _ripout_solo is False else fallo)(
-    "el «Ripout» a secas sigue SIN cronograma estandar (decision del usuario)")
+(ok if _ripout_solo is True else fallo)(
+    "el «Ripout» a secas YA tiene cronograma, y es el suyo (v512)")
+from core import stages as _S                                     # noqa: E402
+
+(ok if [e[2] for e in _S.etapas(_S.PISTA_RIPOUT)] ==
+ [a["nombre"] for a in S.build_schedule(
+     6, date(2026, 1, 5), {},
+     custom_rows=S.filas_de_etapas("Ripout", 6, (_S.EXCLUYENTES["demolicion"]["opciones"][0],)),
+ )["activities"]] else fallo)(
+    "...con SUS etapas de desmontaje, no con las de instalacion")
 
 # ── 6 ────────────────────────────────────────────────────────────────────────
 sec("6. Lo que se le DICE al usuario")

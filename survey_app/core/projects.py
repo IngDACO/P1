@@ -75,16 +75,29 @@ PROJECTS_HEADERS = [
     # filas se escriben por POSICIÓN) y OPCIONAL: una obra sin línea base se comporta
     # exactamente como hasta v500, así que ninguna existente cambia de comportamiento.
     "BaselineJSON",
+    # v512: con qué plan de etapas nació esta obra —versión del juego de pesos, qué
+    # condicionales lleva y cómo reparte desmontaje/instalación—.
+    # ⚠️ Se SELLA al crearla y no se recalcula. Los pesos del catálogo son
+    # provisionales y van a recalibrarse; si la obra los leyera siempre del catálogo
+    # vivo, recalibrar movería el avance de obras ya en curso, y el avance es lo que se
+    # reclama en dinero (v507/v510). Misma razón por la que la línea base se congela
+    # (v501) y por la que una reclamación guarda sus propios números.
+    "StagePlanJSON",
 ]
 
-# Tipos de proyecto (v306). `TIPO_INSTALACION` es el único que genera el cronograma
-# estándar de obra; los demás nacen con UNA actividad genérica (ver `create_project`).
+# Tipos de proyecto (v306). Los que tienen etapas en el catálogo nacen con su
+# cronograma; los demás, con UNA actividad genérica (ver `create_project`).
 TIPO_INSTALACION = "Installation"
 # v470 · sustituir un ascensor: primero se desmonta el viejo y luego se instala el
-# nuevo. Genera el MISMO cronograma que una instalación con la actividad de
-# desmontaje delante (`schedule.FASE_RIPOUT`).
+# nuevo. ⚠️ v512: es UNA obra con todas las actividades juntas —un solo 100%—, no dos
+# barras en paralelo (decisión del usuario, 22/09/2026). El reparto entre desmontaje e
+# instalación se guarda en `StagePlanJSON`.
 TIPO_RIPOUT_INST = "Ripout + Installation"
-TIPOS = [TIPO_INSTALACION, TIPO_RIPOUT_INST, "Delivery", "Ripout", "Other"]
+# ⚠️ v512: estaba como LITERAL dentro de `TIPOS` y sin constante, que es exactamente lo
+# que el docstring de `genera_cronograma` reprocha unas líneas más abajo. Al pasar a
+# generar cronograma hacía falta nombrarlo en dos sitios más, así que se define aquí.
+TIPO_RIPOUT = "Ripout"
+TIPOS = [TIPO_INSTALACION, TIPO_RIPOUT_INST, "Delivery", TIPO_RIPOUT, "Other"]
 
 
 def genera_cronograma(tipo) -> bool:
@@ -97,13 +110,59 @@ def genera_cronograma(tipo) -> bool:
     error**: es el fallo de v454, donde una obra creada desde cotización nació con
     CERO actividades y se quedó clavada en 0% para siempre, porque el avance es
     Σ(peso·avance)/Σpeso sobre las actividades.
+
+    ⚠️ v512: **«Ripout» a secas también genera cronograma.** Antes no, y era correcto:
+    no existían actividades de desmontaje, así que inventarle las 11 fases de
+    instalación habría ensuciado avance, SPI y el radar. Ahora el catálogo le da sus 4
+    etapas y ~20 actividades propias, así que dejarlo fuera lo condenaría a la única
+    actividad «Execution» —el mismo 0% eterno que describe el párrafo de arriba, pero
+    al revés: no por falta de actividades, sino por no dárselas teniéndolas.
     """
-    return str(tipo) in (TIPO_INSTALACION, TIPO_RIPOUT_INST)
+    return str(tipo) in (TIPO_INSTALACION, TIPO_RIPOUT_INST, TIPO_RIPOUT)
 
 
 def con_ripout(tipo) -> bool:
     """¿Lleva por delante la actividad de desmontaje?"""
     return str(tipo) == TIPO_RIPOUT_INST
+
+
+# ── v512: el plan de etapas con el que nace una obra ─────────────────────────
+def plan_nuevo(tipo, condicionales=(), pct_ripout=None) -> str:
+    """El JSON que se sella en `StagePlanJSON` al crear la obra.
+
+    ⚠️ Guarda la VERSIÓN del juego de pesos, no los pesos. Si guardara los pesos, cada
+    obra llevaría 173 números copiados y recalibrar el catálogo no serviría de nada ni
+    siquiera para las obras nuevas. Con la versión basta: el catálogo conserva los
+    juegos antiguos y cada obra sabe cuál es el suyo.
+    """
+    from core import stages as _S
+    return json.dumps({
+        "version": _S.VERSION,
+        "tipo": str(tipo or ""),
+        "condicionales": sorted(str(c) for c in (condicionales or ())),
+        "pct_ripout": (_S.PCT_RIPOUT_DEFECTO if pct_ripout is None else _num(pct_ripout)),
+    }, ensure_ascii=False)
+
+
+def plan_etapas(prj) -> dict:
+    """El plan sellado de esa obra, o `{}` si no tiene.
+
+    ⚠️ `{}` significa **obra del modelo anterior**, no error: las obras creadas antes de
+    v512 no tienen plan y tienen que seguir funcionando exactamente igual. Tratar la
+    ausencia como un fallo habría roto toda la cartera existente el día del despliegue.
+    """
+    crudo = str((prj or {}).get("StagePlanJSON", "") or "").strip()
+    if not crudo:
+        return {}
+    try:
+        d = json.loads(crudo)
+        return d if isinstance(d, dict) else {}
+    except Exception as e:
+        # Se dice, no se traga: un plan ilegible explica por qué el avance de esa obra
+        # no cuadra, y sin log nadie lo encontraría nunca.
+        logger.warning("projects.plan_etapas(%s): plan ilegible: %s",
+                       (prj or {}).get("ID", "?"), e)
+        return {}
 
 # ── v422: LOCALIZACIONES INTERNAS (oficina, almacén, taller) ──────────────────
 # No todo el mundo trabaja en obra: hay gente de oficina y de almacén que también
@@ -448,7 +507,7 @@ def create_project(grupo, nombre, cliente="", ubicacion="", modelo="", ns=0,
                    creado_por="", agrupacion_id="", peso_agrupacion=0,
                    instrucciones="", induccion_links="", presupuesto="",
                    lat="", lng="", certs_req="", cliente_id="",
-                   tipo="") -> tuple:
+                   tipo="", stage_plan="") -> tuple:
     """Crea un proyecto (fila en Proyectos + filas en Actividades). Devuelve (ok, id|error)."""
     pws, err = _projects_ws()
     if err:
@@ -496,6 +555,10 @@ def create_project(grupo, nombre, cliente="", ubicacion="", modelo="", ns=0,
         "",                                 # v501: BaselineJSON — la obra nace SIN línea
         #                                     base; se fija con el botón cuando el plan
         #                                     está acordado (decisión del usuario).
+        str(stage_plan or ""),              # v512: el plan de etapas con el que nace.
+        #                                     ⚠️ Vacío = obra del modelo anterior; se lee
+        #                                     con `plan_etapas()`, que devuelve {} y deja
+        #                                     que todo siga funcionando como antes.
     ]
     # ⚠️ La fila es POSICIONAL: si no cuadra con la cabecera, cada dato se guarda en la
     # columna de al lado (silencioso y difícil de ver). Se comprueba aquí, no en un test.
