@@ -10,6 +10,92 @@ ventana de contexto. Contenido: 258 secciones detalladas + el índice de 440 ver
 
 ---
 
+## EL AVANCE POR ACTIVIDAD (v514)
+
+Segunda mitad de F0, y la que hace que el catálogo de v512 deje de ser una estructura y
+empiece a medir. Hasta aquí las obras nacían con sus 14-18 etapas pero el avance se
+seguía **tecleando**: el campo movía un porcentaje a ojo. Ahora marca **qué hizo** y el
+número sale ponderado por lo que pesa cada cosa.
+
+    avance de la etapa = Σ(peso de la actividad × su %) / Σ(peso de sus actividades)
+
+### ⚠️ La hoja es DISPERSA, y es lo que lo hace viable
+`StageProgress` solo tiene fila para lo que se ha acreditado. Una instalación tiene
+**143 actividades**: crearlas todas al dar de alta serían 143 escrituras por obra y
+miles de filas vacías. La lista completa ya vive en el catálogo, que no cuesta nada; la
+hoja lleva solo lo que pasó.
+
+### ⚠️ El número sigue viviendo en `Activities.Progress`
+Lo tentador era calcular el % de la etapa al vuelo y no guardarlo. Sería un segundo
+número diciendo lo mismo que la rejilla (regla v361) y, peor, **todo lo de abajo lee esa
+columna**: `compute_avance`, la curva S real, el SPI, la cadena de v500, la línea base de
+v501 y al final la reclamación que se cobra (v507/v510).
+
+Lo que cambia no es dónde está el dato: es **quién lo escribe**. Y la escritura se delega
+en `projects.save_field_progress`, que ya hace el lote en una llamada y pone solas las
+fechas reales (v162) — reusarla es también no duplicar esa lógica.
+
+### ⚠️ Casillas, no porcentajes
+Casi todas las actividades son binarias: el bedplate está instalado o no. Pedir un % de
+cada una en un móvil con 143 sería peor que la rejilla que se viene a quitar. Lo parcial
+—«8 puertas de 10»— llega con el parte diario, donde el número está en la frase.
+
+Regla escrita mientras tanto: **media actividad cuenta como no hecha**. Quedarse corto
+solo retrasa una reclamación; inflar el avance la mueve.
+
+### ⚠️ Un hueco que v512 dejó abierto y aquí se cierra
+El plan sella la **versión** del catálogo, pero el catálogo vive en el código y solo hay
+una versión: nada impedía añadir una etapa mañana y que una obra creada ayer se midiera
+contra un menú distinto. Los órdenes se desplazan, el crédito se cuelga de **otra
+etapa** y el avance sale mal **sin un solo error**. Ahora se detecta y **se niega a
+escribir**, dejando la obra en solo lectura con el aviso. Leer sí: esconderla sería peor.
+
+### ⚠️ Toda obra anterior a v512 sigue igual
+Sin `StagePlanJSON` no hay contra qué acreditar, así que la pantalla del campo **cae a
+la rejilla de siempre**. El día del despliegue la cartera existente no se entera de nada.
+
+### Dos fallos que encontró el método, no la lectura del código
+**1. Recalcular releyendo la hoja.** El guardián dio un rojo que en producción habría
+funcionado —`acreditar` escribe, invalida y relee—, así que era tentador descartarlo
+como artefacto del test. Mirándolo, el diseño era peor: una lectura extra por cada
+acreditación (con el techo de 60/min que ya mordió en v511) y la corrección atada a que
+la invalidación hubiera funcionado. Lo que se acaba de escribir ya se sabe: ahora se
+calcula en memoria y no se le pregunta a Google.
+
+**2. `delete_project` dejaba créditos huérfanos.** Viven en otra hoja, así que borrar una
+obra los dejaba apuntando a algo inexistente: no da error, ensucia el libro para siempre.
+⚠️ Y lo peor es que **el propio ejercicio lo estaba tapando** — los limpiaba a mano para
+que la foto final cuadrara. Se quitó ese apaño: ahora el ejercicio **comprueba** que el
+código los borra. Un test que arregla lo que debería verificar no verifica nada.
+
+### ⚠️ Dos agujeros en el guardián, cazados por la batería
+Uno **reventaba** al guardián con `ZeroDivisionError` en vez de ser denunciado —sexta vez
+con ese patrón en este proyecto— y la primera corrección envolvió solo UNA de las dos
+llamadas que dividían, así que el reventón seguía saliendo de la de al lado. El otro
+**pasaba por el motivo equivocado**: sin plan, la lista de actividades válidas queda
+vacía, así que el rechazo llegaba igual pero por «no está en el plan»; comprobar solo
+`False` no protegía lo que decía proteger.
+
+⚠️ Y el CONTROL de la batería nació **vacío**: ponía el mismo texto a los dos lados, o
+sea que no cambiaba nada y pasaba sin probar nada. Un control vacío es peor que no
+tenerlo, porque parece cobertura.
+
+### Verificación
+`verif_v514.py`, **52 comprobaciones**, con la hoja sustituida por una de mentira que se
+queda con lo escrito (sin ejercitar la ESCRITURA, las roturas que importan se escapan —
+la lección de v510). Batería: **15 roturas, 15 cazadas + CONTROL**. Suite: **146 verde**.
+
+⚠️ `verif_v465` se puso rojo y tenía razón: toda hoja necesita respaldo de nombre, o un
+libro con el nombre viejo haría que la app se fabricara una pestaña VACÍA. `StageProgress`
+nació en inglés y nunca tuvo nombre español, así que va a la lista de excepciones
+**declaradas** junto a `Library` (v472) y `XeroConnections` (v488), con su razón escrita.
+
+**Ejercitado contra la HOJA REAL** (método v344): la hoja se creó sola, tres actividades
+acreditadas dieron **42%** en la etapa 6 (17+13+12, los pesos exactos), el número llegó a
+`Activities.Progress` **con la fecha real puesta sola**, el avance de la obra subió al
+**5,5%** (la etapa 6 pesa 13 de 100), desmarcar una lo bajó a **29%** dejando el rastro a
+0, y `delete_project` se llevó los créditos. Cartera devuelta a sus 2 obras.
+
 ## LOS PESOS QUE SE GUARDAN (v513)
 
 Arreglo de v512, encontrado **ejercitando contra la hoja real** inmediatamente después
@@ -11647,7 +11733,7 @@ comprueba lo que dice**.
 
 ---
 
-## Versiones desplegadas (v513 = actual)
+## Versiones desplegadas (v514 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -11655,6 +11741,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v514 | **El avance por actividad: el campo marca QUÉ hizo.** Segunda mitad de F0 — el catálogo de v512 deja de ser una estructura y empieza a medir. Hasta aquí el avance se TECLEABA a ojo; ahora se marcan actividades reales y el % sale ponderado por lo que pesa cada una. ⚠️ La hoja es **dispersa** (solo lo acreditado): con 143 actividades por obra, crearlas todas serían miles de filas vacías. ⚠️ El número **sigue viviendo en `Activities.Progress`**, que es lo que leen la curva S, el SPI, la cadena de v500 y la reclamación que se cobra — lo que cambia es **quién lo escribe**. ⚠️ Cierra un hueco de v512: si el catálogo cambia, el crédito se colgaría de otra etapa, así que se detecta y se niega a escribir. ⚠️ Dos fallos que encontró el método: recalcular releyendo la hoja (peor diseño, no bug) y `delete_project` dejando créditos huérfanos — **que mi propio ejercicio estaba tapando** limpiándolos a mano. ⚠️ Y dos agujeros del guardián: uno lo REVENTABA en vez de denunciar y otro acertaba por el motivo equivocado. 52 comprobaciones · **15/15 + control** · suite 146 verde |
 | v513 | **Los pesos que se guardan vuelven a sumar 100.** Arreglo de v512 encontrado ejercitando contra la hoja REAL justo después de desplegarla: los pesos escritos en `Activities` sumaban **99,8** con 14 actividades. El avance nunca estuvo mal —`compute_avance` divide por Σpeso y es escala-invariante— pero **la columna que mira el usuario mentía**, y un plan que no suma 100 invita a buscar un error que no existe. ⚠️ El fallo vivía **en la frontera entre dos capas**: el guardián comprobaba los pesos de `filas_de_etapas` (exactos) y el desvío nacía en lo que `build_schedule` escribe. Cada capa bien por separado y el resultado mal — por eso lo encontró la hoja real y no la suite. ⚠️ Y `verif_v438` cazó otro fallo mío de paso: una comprensión usaba `_d`, que es la función de display de i18n (no se filtra en una comprensión, pero es el patrón de v439/v503). Tres fallos propios cazados por guardianes viejos en esta tanda. 88 comprobaciones · **22/22 + control** · suite 145 verde |
 | v512 | **El catálogo de etapas sustituye al plan de 11 fases.** Primera mitad de lo que pidió el usuario —que el campo escriba en texto y eso cargue el cronograma—: antes de la IA hace falta contra qué mapear. **18 etapas · 173 actividades · 11 condicionales**, de los documentos de campo de COPEX. El modelo viejo describía una secuencia IDEAL y una obra real salta; este es un menú donde cada cosa hecha suma su peso en el orden que sea. ⚠️ El documento traía **dos fallos de aritmética** (la Stage 2 sumaba 106% y su encabezado contradecía la tabla) — recalibrada proporcionalmente y con validador. ⚠️ Los condicionales **no entran en el denominador**: tracción e hidráulico son excluyentes y contar la que no aplica dejaría un desmontaje clavado en el 85% para siempre. ⚠️ El plan se **sella** con la obra (`StagePlanJSON`) porque recalibrar pesos movería el avance de obras que ya reclaman. ⚠️ **«Ripout» a secas pasa a tener cronograma** — decisión cambiada respecto de v470, y el motivo de entonces ya no aplica. ⚠️ Medir la entrega destapó que **el que redondeaba mal era el modelo VIEJO**. 5 rojos en la suite, ninguno una regresión: dos fallos míos de idioma y tres guardianes atados a una forma que cambió a propósito. 86 comprobaciones · **21/21 + control** · suite 145 verde |
 | v511 | **La cadena del dinero, de punta a punta.** v506, v507-v508, v509 y v510 estaban verdes cada una por su lado, pero la cadena entera nunca se había recorrido con datos reales: el catálogo del cliente de prueba estaba vacío, así que no había contrato contra el que reclamar. 44 comprobaciones desde el catálogo hasta el PDF, **y verificada en PRODUCCIÓN por el usuario** — el hueco de v502, que ninguna red local ve. ⚠️ **Destapó un fallo que ningún test podía encontrar**: al agotar la cuota (60 lecturas/min), emitir una reclamación decía «Google Sheets is not configured» —falso, y en una reclamación el usuario puede concluir que la obra no tiene contrato—. Apareció en DOS módulos, que es lo que lo delató como patrón: `_ws()` devuelve None por dos motivos distintos y el llamante siempre culpa a la configuración (**41 sitios en 20 módulos**). Arreglado en `timeclock.motivo_sin_hoja()`, UNA definición (v361); `projects` ya lo hacía bien y no se tocó. ⚠️ Y tres errores MÍOS: acusar a código sano por un nombre de columna que la migración a inglés renombró, seguir con la precondición rota encadenando rojos que eran el mismo fallo, y una limpieza que se rendía ante un 429 dejando basura. 63 comprobaciones · **14/14 + control** |

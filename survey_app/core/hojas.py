@@ -64,6 +64,12 @@ HOJAS_LECTURA = (
     # leería VACÍO PARA SIEMPRE sin un solo error — la fila estaba escrita en la hoja y
     # la app no la veía. Lo cazó el ejercicio contra la hoja real, no la suite.
     "Variations", "Claims",
+    # ⚠️ v514: y otra vez la misma regla. `stage_progress` lee con `registros(SHEET)`
+    # sin cabeceras, así que fuera del lote devolvería None y el avance por actividad
+    # se acreditaría en la hoja sin que la app volviera a verlo NUNCA — exactamente el
+    # fallo de v507. Van tres veces (v461, v507, y esta sería la tercera si faltara):
+    # por eso existe `check_hojas_en_lote`.
+    "StageProgress",
 )
 
 

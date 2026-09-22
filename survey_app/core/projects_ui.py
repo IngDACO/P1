@@ -3525,7 +3525,12 @@ def render_field_projects(usuario: str, grupo: str):
                     horizontal=True, key="cpxseg_fld_sec", label_visibility="collapsed")
     if _sec == "🏗 Avance":
         _induccion_section(pid, prj, grupo, allow_send=False)
-        _field_activities(pid)
+        # v514: si la obra tiene plan de etapas, el campo marca QUÉ hizo y el % sale
+        # solo. ⚠️ Si no lo tiene —toda obra anterior a v512— se pinta la rejilla de
+        # siempre: el día del despliegue la cartera existente tiene que seguir igual.
+        from core import stage_progress_ui as _SPU
+        if not _SPU.render(pid, grupo, prj, key_prefix="fld"):
+            _field_activities(pid)
     elif _sec == "🚨 Avisos":
         _alerts_section(pid, grupo, prj.get("Name", ""), allow_report=True)
     elif _sec == "💰 Recibos":

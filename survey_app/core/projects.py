@@ -990,6 +990,26 @@ def delete_project(pid: str) -> tuple:
         for i in range(len(recs) - 1, -1, -1):
             if str(recs[i].get("ProjectID", "")) == str(pid):
                 aws.delete_rows(i + 2)
+    # v514: y sus créditos por actividad, que viven en OTRA hoja.
+    # ⚠️ Sin esto quedaban filas huérfanas apuntando a una obra que ya no existe: no
+    # dan error, pero ensucian el libro para siempre y reaparecerían pegadas a una obra
+    # nueva si algún día se reutilizara un ID. Lo destapó el ejercicio contra la hoja
+    # real, donde hubo que borrarlas a mano para que la foto final cuadrara.
+    try:
+        from core import stage_progress as _SP
+        _spw = _SP._ws()
+        if _spw is not None:
+            _cr = valores.canonizar(columnas.canonizar(
+                _spw.get_all_records(numericise_ignore=["all"])), _SP.SHEET)
+            for i in range(len(_cr) - 1, -1, -1):
+                if str(_cr[i].get("ProjectID", "")) == str(pid):
+                    _spw.delete_rows(i + 2)
+            _SP._invalidate()
+    except Exception as e:
+        # No impide borrar la obra: dejar un proyecto a medio borrar sería peor que
+        # dejar unos créditos sueltos. Pero se dice, que si no nadie los encuentra.
+        logger.warning("projects.delete_project(%s): no se pudieron borrar los "
+                       "creditos de etapa: %s", pid, e)
     _invalidate()
     return True, t("Project deleted.")
 

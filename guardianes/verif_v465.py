@@ -54,8 +54,13 @@ else:
 # ⚠️ v488 · `XeroConnections`, por la MISMA razon que la biblioteca: nacio en ingles
 # despues del renombrado. CADUCADO por un cambio deliberado, no relajado: la regla
 # sigue exigiendo respaldo a cualquier hoja que SI haya tenido nombre español.
+# ⚠️ v514 · `StageProgress`, por la MISMA razon que las dos anteriores: nacio en ingles
+# el 22/09/2026, mucho despues del renombrado, asi que nunca tuvo nombre español y no
+# hay nada con lo que ser compatible. Que `get_sheet` la cree la primera vez es lo
+# CORRECTO. No es relajar la regla: sigue exigiendo respaldo a toda hoja que SI haya
+# tenido nombre español, y cualquier hoja futura tendra que justificarse aqui igual.
 _YA = {"login", "prestarts", "roster", "sheet1", "library", "librarymodels",
-       "xeroconnections"}
+       "xeroconnections", "stageprogress"}
 huerfanas = [k for k, v in consts.items()
              if v.lower() not in LEGADO and v.lower() not in _YA]
 if huerfanas:
