@@ -106,6 +106,8 @@ ROTURAS = [
     ('el alta a mano deja de preguntar lo que falta decidir', "core/projects_ui.py",
      '        _pendientes = _pregunta_etapas(_tipo, key)',
      '        _pendientes = []'),
+    ('⚠️ los pesos guardados vuelven a sumar 99,8', "core/schedule.py",
+     '    if _pn and abs(_resto) >= 0.05:', '    if False:'),
 ]
 
 # ⚠️ El CONTROL comprueba lo contrario: que un cambio inocuo NO ponga rojo al guardián.

@@ -10,6 +10,61 @@ ventana de contexto. Contenido: 258 secciones detalladas + el índice de 440 ver
 
 ---
 
+## LOS PESOS QUE SE GUARDAN (v513)
+
+Arreglo de v512, encontrado **ejercitando contra la hoja real** inmediatamente después
+de desplegarla — no por el guardián.
+
+Al crear una obra, los pesos que quedaban escritos en `Activities` sumaban **99,8**
+(instalación, 14 filas) o **99,9** (combinada, 18 filas), no 100. `build_schedule`
+normalizaba y redondeaba **cada peso a un decimal por su cuenta**, y con catorce o
+dieciocho actividades los redondeos no se compensan.
+
+### Por qué importaba aunque el avance estuviera bien
+`compute_avance` es Σ(peso·avance)/Σpeso, o sea **escala-invariante**: con pesos que
+suman 99,8 el porcentaje sale exactamente igual. El avance nunca estuvo mal.
+
+Lo que estaba mal es **la columna que mira el usuario**. Un plan cuyos pesos no suman
+100 invita a buscar un error que no existe, y en la pantalla donde se reparte el
+esfuerzo de una obra eso no es un detalle cosmético: es minar la confianza en el número
+que luego se reclama.
+
+### ⚠️ Dónde vivía: en la frontera entre dos capas
+`verif_v512` comprobaba que los pesos sumaran 100 — pero los de **`filas_de_etapas`**,
+que son exactos. El desvío aparecía en lo que **`build_schedule` escribe**, una capa más
+abajo. Comprobar una capa y dar por buena la siguiente es la misma familia que el paso
+en vacío: cada una estaba bien por separado y el resultado no.
+
+Por eso lo encontró el ejercicio contra la hoja real y no la suite. Es, otra vez, la
+lección de v511: **hay fallos que solo aparecen tocando lo real**.
+
+Arreglado repartiendo el resto (misma técnica que las duraciones de v512), verificado en
+los tres tipos × seis números de paradas, y con rotura propia en la batería: **22/22**.
+⚠️ De paso cuadra también el camino viejo de `PHASES`, que arrastraba el mismo desvío y
+alimenta el informe del survey.
+
+### ⚠️ Y un guardián viejo cazó otro fallo mío
+`verif_v438` denunció que la comprensión nueva usaba `_d` como variable descartable, y
+`_d` es la función de display de i18n a nivel de módulo. En una comprensión **no se
+filtra** (tiene ámbito propio), así que no era un fallo real — pero es exactamente el
+patrón que tumbó v439 y v503 donde sí se filtra. Renombrado, con la razón escrita.
+
+Van **tres fallos propios cazados por guardianes viejos** en esta tanda:
+`check_nombres_libres` con un `_num` que no existía en `projects_ui`, `verif_v448/v449`
+con dos mensajes en español, y este. Ninguno se habría visto leyendo el código.
+
+### Verificación
+`verif_v512.py` pasa de 86 a **88 comprobaciones** (las dos nuevas miran los pesos
+GUARDADOS, en la capa donde estaba el fallo). Batería: **22 roturas, 22 cazadas +
+CONTROL**. Suite: **145 verde · 0 rojo · 0 roto**.
+
+**Ejercitado contra la HOJA REAL** (método v344, `ejercitar_v512_real.py`): se crea una
+obra de cada tipo y se lee de vuelta. Instalación **14 etapas** (fin 03/11, la misma
+fecha que daba el modelo viejo), combinada **18** con el desmontaje delante, rip-out
+solo **4**, y ⚠️ un *Delivery* sigue naciendo con **UNA** actividad y sin plan — el
+cambio no se derramó a donde no debía. Las cuatro obras borradas y la hoja devuelta a
+sus 2 obras y 17 actividades.
+
 ## EL CATÁLOGO DE ETAPAS (v512)
 
 Primera mitad del trabajo que pidió el usuario: que el campo pueda escribir en texto
@@ -11592,7 +11647,7 @@ comprueba lo que dice**.
 
 ---
 
-## Versiones desplegadas (v512 = actual)
+## Versiones desplegadas (v513 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -11600,6 +11655,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v513 | **Los pesos que se guardan vuelven a sumar 100.** Arreglo de v512 encontrado ejercitando contra la hoja REAL justo después de desplegarla: los pesos escritos en `Activities` sumaban **99,8** con 14 actividades. El avance nunca estuvo mal —`compute_avance` divide por Σpeso y es escala-invariante— pero **la columna que mira el usuario mentía**, y un plan que no suma 100 invita a buscar un error que no existe. ⚠️ El fallo vivía **en la frontera entre dos capas**: el guardián comprobaba los pesos de `filas_de_etapas` (exactos) y el desvío nacía en lo que `build_schedule` escribe. Cada capa bien por separado y el resultado mal — por eso lo encontró la hoja real y no la suite. ⚠️ Y `verif_v438` cazó otro fallo mío de paso: una comprensión usaba `_d`, que es la función de display de i18n (no se filtra en una comprensión, pero es el patrón de v439/v503). Tres fallos propios cazados por guardianes viejos en esta tanda. 88 comprobaciones · **22/22 + control** · suite 145 verde |
 | v512 | **El catálogo de etapas sustituye al plan de 11 fases.** Primera mitad de lo que pidió el usuario —que el campo escriba en texto y eso cargue el cronograma—: antes de la IA hace falta contra qué mapear. **18 etapas · 173 actividades · 11 condicionales**, de los documentos de campo de COPEX. El modelo viejo describía una secuencia IDEAL y una obra real salta; este es un menú donde cada cosa hecha suma su peso en el orden que sea. ⚠️ El documento traía **dos fallos de aritmética** (la Stage 2 sumaba 106% y su encabezado contradecía la tabla) — recalibrada proporcionalmente y con validador. ⚠️ Los condicionales **no entran en el denominador**: tracción e hidráulico son excluyentes y contar la que no aplica dejaría un desmontaje clavado en el 85% para siempre. ⚠️ El plan se **sella** con la obra (`StagePlanJSON`) porque recalibrar pesos movería el avance de obras que ya reclaman. ⚠️ **«Ripout» a secas pasa a tener cronograma** — decisión cambiada respecto de v470, y el motivo de entonces ya no aplica. ⚠️ Medir la entrega destapó que **el que redondeaba mal era el modelo VIEJO**. 5 rojos en la suite, ninguno una regresión: dos fallos míos de idioma y tres guardianes atados a una forma que cambió a propósito. 86 comprobaciones · **21/21 + control** · suite 145 verde |
 | v511 | **La cadena del dinero, de punta a punta.** v506, v507-v508, v509 y v510 estaban verdes cada una por su lado, pero la cadena entera nunca se había recorrido con datos reales: el catálogo del cliente de prueba estaba vacío, así que no había contrato contra el que reclamar. 44 comprobaciones desde el catálogo hasta el PDF, **y verificada en PRODUCCIÓN por el usuario** — el hueco de v502, que ninguna red local ve. ⚠️ **Destapó un fallo que ningún test podía encontrar**: al agotar la cuota (60 lecturas/min), emitir una reclamación decía «Google Sheets is not configured» —falso, y en una reclamación el usuario puede concluir que la obra no tiene contrato—. Apareció en DOS módulos, que es lo que lo delató como patrón: `_ws()` devuelve None por dos motivos distintos y el llamante siempre culpa a la configuración (**41 sitios en 20 módulos**). Arreglado en `timeclock.motivo_sin_hoja()`, UNA definición (v361); `projects` ya lo hacía bien y no se tocó. ⚠️ Y tres errores MÍOS: acusar a código sano por un nombre de columna que la migración a inglés renombró, seguir con la precondición rota encadenando rojos que eran el mismo fallo, y una limpieza que se rendía ante un 429 dejando basura. 63 comprobaciones · **14/14 + control** |
 | v510 | **El PDF de la reclamación y la liberación de la retención.** v507-v508 dejó los números pero no el papel que se le manda al cliente, así que la reclamación mensual se seguía armando en Excel — el dolor que el estudio identificó como el que aparece cuando el cliente ya está dentro. Un generador para dos documentos, con las **variaciones aprobadas detalladas una a una** (un total que el cliente no puede comprobar no es discutible) y ⚠️ **sin recalcular nada**: las cifras salen de la fila congelada. ⚠️ **No invoca ninguna ley** —el texto de *Security of Payment* cambia por estado y declararlo mal tiene efectos legales—: lo pone quien sepa, en la nota (criterio v506). Retención: columna `Type` al final (v363), liberación **parcial** porque en AU va en dos mitades, ⚠️ nunca más de lo retenido, ni con la obra a medias, ni con el avance ilegible. ⚠️ **La batería dejó escapar 5 de 12 a la primera**, todas en el camino de ESCRITURA que el guardián no ejercitaba —y una porque mi objeto de prueba era un dict vacío, *falsy*, que el código descartaba antes de llegar al `except`—; y el extractor del PDF devolvía cero con el texto puesto, así que las afirmaciones negativas pasaban por partida doble. 38 → **56 comprobaciones** · **12/12 + control** · suite 144 verde |

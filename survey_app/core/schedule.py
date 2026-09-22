@@ -168,9 +168,28 @@ def build_schedule(ns: int, start_date: date, flags: dict,
     calc = plan.calcular(red)
     avisos_plan = calc["avisos"]
 
+    # ⚠️ v512: los pesos normalizados se reparten por RESTO MAYOR. Redondeando cada uno
+    # a un decimal por su cuenta, catorce o dieciocho actividades sumaban **99,8** en la
+    # hoja en vez de 100. El avance no se veía afectado —`compute_avance` divide por
+    # Σpeso, así que es escala-invariante— pero la columna que mira el usuario mentía, y
+    # un plan cuyos pesos no suman 100 invita a buscar un error que no existe.
+    # Lo encontró el ejercicio contra la hoja REAL, no el guardián: este comprobaba los
+    # pesos que salen de `filas_de_etapas` (exactos) y no los que escribe esta función.
+    # El fallo vivía justo en la frontera entre las dos capas.
+    # ⚠️ `_du`, no `_d`: `_d` es la funcion de display de i18n a nivel de modulo.
+    # Aqui no se filtraria (una comprension tiene ambito propio), pero es el patron
+    # que tumbo v439 y v503 en sitios donde SI se filtra, y `verif_v438` lo caza.
+    _pn = [round(p * 100.0 / total_peso, 1) for _n, _du, p in base]
+    _resto = round(100.0 - sum(_pn), 1)
+    if _pn and abs(_resto) >= 0.05:
+        # La décima que falta (o sobra) va a la actividad más grande: es donde menos se
+        # nota en proporción, y así no aparece en una etapa pequeña como un pico raro.
+        _pn[max(range(len(_pn)), key=lambda k: _pn[k])] = round(
+            _pn[max(range(len(_pn)), key=lambda k: _pn[k])] + _resto, 1)
+
     acts = []
     for i, (nombre, dur, peso) in enumerate(base):
-        peso_n = round(peso * 100.0 / total_peso, 1)
+        peso_n = _pn[i]
         _r = calc["por_orden"].get(int(red[i]["orden"]), {"inicio": 0.0, "fin": dur, "critica": False})
         acts.append({
             "nombre":       nombre,

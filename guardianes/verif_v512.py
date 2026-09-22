@@ -269,6 +269,26 @@ ck("⚠️ ninguna etapa dura menos de un dia, en ningun NS", _ceros[:3], [])
 
 _f8 = SC.filas_de_etapas("Ripout + Installation", 8, (TRAC,))
 cerca("los pesos siguen sumando 100", sum(f["peso"] for f in _f8), 100.0)
+# ⚠️ Y sobre todo: los pesos QUE SE GUARDAN. Los de arriba salen de `filas_de_etapas` y
+# son exactos; `build_schedule` los renormaliza y redondea a un decimal, y ahí catorce
+# actividades sumaban **99,8** en la hoja. Comprobar solo la capa de arriba dejaba el
+# fallo justo en la frontera entre las dos — lo encontró el ejercicio contra la hoja
+# real, no este guardián. Se barren los tres tipos y varios NS porque el desvío depende
+# de cuántas actividades haya y de cómo caigan los decimales.
+_desv = []
+for _t, _c in (("Installation", ()), ("Ripout + Installation", (TRAC,)),
+               ("Ripout", (TRAC,))):
+    for _ns in (1, 4, 8, 13, 20, 33):
+        _s = SC.build_schedule(_ns, date(2026, 10, 1), {},
+                               custom_rows=SC.filas_de_etapas(_t, _ns, _c))
+        _tot = round(sum(a["peso"] for a in _s["activities"]), 1)
+        if abs(_tot - 100.0) > 0.001:
+            _desv.append((_t, _ns, _tot))
+ck("⚠️ los pesos GUARDADOS suman 100 exacto", _desv[:3], [])
+# El modelo viejo comparte la misma normalizacion, asi que tambien tiene que cuadrar.
+_vd = [(_ns, round(sum(a["peso"] for a in SC.build_schedule(
+    _ns, date(2026, 10, 1), {})["activities"]), 1)) for _ns in (6, 8, 20)]
+ck("...tambien por el camino del survey", [x for x in _vd if abs(x[1] - 100.0) > 0.001], [])
 ck("el orden va de 1 a N sin huecos",
    [f["orden"] for f in _f8], list(range(1, len(_f8) + 1)))
 # ⚠️ Predecesora vacia = «detras de la anterior» (v499). Poner algo aqui cambiaria la

@@ -75,7 +75,7 @@ plano**, y además ordena la **gestión del proyecto** (cronograma, avance, docu
 > eso había estado en **v75**. Van dos veces que este documento se queda atrás, así que la pregunta
 > ya no es «¿se actualizó?» sino si la regla de actualizarlo a mano es realista.
 
-Desplegado en Streamlit Cloud, funcional y en uso con datos reales. **v512**: 105 módulos, ~45.820
+Desplegado en Streamlit Cloud, funcional y en uso con datos reales. **v513**: 105 módulos, ~45.840
 líneas, 30 hojas de datos y **145 guardianes automáticos en verde** que se corren enteros antes de
 cada despliegue. Backend en Google Sheets + Drive.
 
@@ -347,4 +347,4 @@ Esa tabla sigue siendo responsabilidad de quien cierra la versión. El guardián
 borra o se le cambia el formato, el resultado es ROJO —no verde—, a propósito: sin ella no se puede
 saber a qué versión corresponde este documento.
 
-*Última puesta al día del estado de hecho: 22/09/2026 (v485-v512).*
+*Última puesta al día del estado de hecho: 22/09/2026 (v485-v513).*
