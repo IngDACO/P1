@@ -22,8 +22,13 @@ ROTURAS = [
     ("core/projects_ui.py", '(t("Purchases / materials"), d["compras"])',
      '("Compras / materiales", d["compras"])',
      "una etiqueta del P&L vuelve al espanol"),
-    ("core/schedule.py", '"Montaje de rieles (guías)"', '"Rail mounting (guides)"',
-     "se traduce un nombre de ACTIVIDAD (dato de la hoja)"),
+    # ⚠️ v515: el ancla decia '"Montaje de rieles (guías)"' y apuntaba a
+    # `schedule.py`. Llevaba muerta desde v453, que es cuando esos nombres se migraron
+    # al ingles: la rotura pretendia TRADUCIR un nombre espanol que ya no existia. Ahora
+    # los nombres viven en el catalogo y la rotura va al reves, que es el riesgo de hoy.
+    ("core/stages.py", '(PISTA_INSTALL, 6, "Shaft Climb & Bedplates", 13)',
+     '(PISTA_INSTALL, 6, "Montaje de rieles (guías)", 13)',
+     "se traduce un nombre de ETAPA (es dato de la hoja)"),
     ("core/inventory_ui.py", '"COPEX Activos"', '"COPEX Assets"',
      "se renombra la carpeta de Drive (dejaria los activos en la vieja)"),
     ("core/chat_agent.py", "Responde SIEMPRE en inglés técnico claro",

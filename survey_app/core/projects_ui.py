@@ -2782,13 +2782,23 @@ def _detalle_proyecto(pid: str, grupo: str = None):
         # el desmontaje, sin que nada lo dijera. Se avisa por CONDICIÓN, no por evento
         # (un aviso que solo sale al cambiar el tipo se pierde en el primer rerun,
         # v375/v383), y aquí —donde está el botón que lo arregla—, no junto al selector.
+        # ⚠️ v515 · El desmontaje ya no es UNA actividad con un nombre fijo
+        # (`schedule.FASE_RIPOUT`, borrada): son las etapas de la pista `ripout` del
+        # catálogo. El aviso se conserva porque el PRINCIPIO no cambió —el tipo dice que
+        # hay desmontaje y el plan no lo tiene—, pero los nombres se DERIVAN del catálogo
+        # en vez de escribirse aquí (trampa nº16). ⚠️ El nombre viejo se sigue aceptando:
+        # está GUARDADO en la hoja `Activities` de las obras anteriores a v512, así que
+        # rechazarlo les sacaría un aviso falso a obras que sí llevan su desmontaje.
         if P.con_ripout(prj.get("Type", "")) and acts:
-            from core.schedule import FASE_RIPOUT as _FR
-            if not any(str(a.get("Name", "")).strip() == _FR[0] for a in acts):
+            from core import stages as _S
+            _nom = {str(a.get("Name", "")).strip() for a in acts}
+            _rip = [e[2] for e in _S.etapas(_S.PISTA_RIPOUT)]
+            if not (_nom & set(_rip)) and "Ripout of existing lift" not in _nom:
                 st.warning(t("This job is a rip-out plus installation, but its schedule "
-                             "has no strip-out activity. Changing the type does not "
+                             "has no strip-out stages. Changing the type does not "
                              "rebuild the schedule (that would wipe the progress already "
-                             "reported), so add it below: «{act}».", act=_FR[0]))
+                             "reported), so add them below: «{act}».",
+                             act="», «".join(_rip)))
 
         with st.expander(t("Add / delete activity (the % is recalculated automatically)"),
                          icon=":material/playlist_add:"):

@@ -137,14 +137,17 @@ _ES = {"de", "la", "el", "los", "las", "del", "por", "para", "con", "sin", "que"
        "una", "unos", "unas", "segun", "cada", "sobre", "entre", "hasta", "desde",
        "limite", "limites", "matriz", "calculo", "parametros", "pisos", "paso",
        "pasos", "valores", "hueco", "cabina", "pared", "riel", "rieles"}
-# ⚠️ EXCLUSIÓN DELIBERADA: los nombres de ACTIVIDAD del cronograma
-# (`schedule.PHASES`) son DATO — se guardan en la hoja `Actividades`, así que
-# traducirlos dejaría los proyectos viejos en español y los nuevos en inglés, sin
-# forma de casarlos. Van con la migración del histórico, no con la traducción (v438).
-from core import schedule as _SCH2                                 # noqa: E402
-_ACTIV = {_sin(str(x)) for x in
-          (getattr(_SCH2, "PHASES", None) or getattr(_SCH2, "ACTIVIDADES", []) or [])
-          if isinstance(x, str)}
+# ⚠️ EXCLUSIÓN DELIBERADA: los nombres de ACTIVIDAD del cronograma son DATO — se
+# guardan en la hoja `Activities`, así que traducirlos dejaría los proyectos viejos en
+# español y los nuevos en inglés, sin forma de casarlos. Van con la migración del
+# histórico, no con la traducción (v438).
+# ⚠️ v515: salían de `schedule.PHASES`, que se BORRÓ. Ahora del CATÁLOGO, que es donde
+# viven. Con el `getattr(..., [])` de antes este conjunto habría quedado VACÍO y las
+# actividades del informe habrían empezado a contarse como texto sin traducir: un rojo
+# en falso, que es la otra cara de la trampa nº30.
+from core import stages as _ST2                                    # noqa: E402
+_ACTIV = {_sin(e[2]) for e in _ST2.ETAPAS}
+_ACTIV |= {_sin(a[0]) for _v in _ST2.ACTIVIDADES.values() for a in _v}
 _ACTIV |= {_sin(str(a.get("nombre", ""))) for a in _sch.get("activities", [])}
 
 _malas = []
@@ -156,7 +159,12 @@ for _ln in _txt.splitlines():
         _malas.append(_ln.strip()[:72])
 chk("0 líneas con español en el PDF RENDERIZADO (salvo nombres de actividad)",
     not _malas, f"{len(_malas)}: {_malas[:4]}")
-chk("...y las actividades SÍ siguen en español (son el dato de la hoja)",
+# ⚠️ La exclusión se AFIRMA, no se da por hecha: si ningún nombre de actividad apareciera
+# en el PDF, la lista de arriba no estaría excluyendo nada y el «0 líneas» de antes sería
+# un paso en vacío (trampa nº1). La etiqueta decía «siguen en español» desde antes de la
+# migración de v453; se corrige aquí porque un rótulo que miente sobre lo que mide invita
+# a leer verde donde no lo hay.
+chk("...y los nombres de actividad SÍ llegan al PDF (o la exclusión no excluiría nada)",
     bool(_ACTIV) and any(_sin(l.strip()) in _ACTIV for l in _txt.splitlines()),
     f"{len(_ACTIV)} nombres")
 # ⚠️ Un «0» no vale si la sonda no ve el caso malo (trampa nº12).

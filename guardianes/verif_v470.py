@@ -93,19 +93,36 @@ for _n in ast.walk(ast.parse(io.open("core/quotes.py", encoding="utf-8").read())
     "el default de aceptar_y_crear_proyecto sigue casando con la constante", _def)
 
 # ── 3 ────────────────────────────────────────────────────────────────────────
-sec("3. El cronograma: el desmontaje es la PRIMERA actividad y escala con NS")
+sec("3. El cronograma: el desmontaje va DELANTE y escala con NS")
+# ⚠️ v515 · CADUCADO Y ACTUALIZADO, no relajado (regla v385). Esta seccion afirmaba
+# «es UNA actividad llamada FASE_RIPOUT», y `FASE_RIPOUT` se BORRO: el desmontaje pasa a
+# ser las etapas de la pista `ripout` del catalogo. Lo que v470 protege sigue vivo —que
+# `ripout=True` meta el desmontaje DELANTE, que crezca con las paradas, que alargue la
+# obra y que guardar el cronograma editado no lo duplique—, asi que se afirma el
+# PRINCIPIO y los numeros se DERIVAN del catalogo (trampa nº16).
+from core import stages as _SR                                     # noqa: E402
+_NOM_RIP = [e[2] for e in _SR.etapas(_SR.PISTA_RIPOUT)]
 _s6 = S.build_schedule(6, date(2026, 1, 5), {}, ripout=True)
 _n6 = S.build_schedule(6, date(2026, 1, 5), {}, ripout=False)
 _acts = _s6["activities"]
-(ok if _acts and _acts[0]["nombre"] == S.FASE_RIPOUT[0] else fallo)(
-    "la primera actividad es %r" % S.FASE_RIPOUT[0],
+(ok if _NOM_RIP and _acts and _acts[0]["nombre"] in _NOM_RIP else fallo)(
+    "la primera actividad es del desmontaje (%s)" % (_NOM_RIP[0] if _NOM_RIP else "?"),
     _acts[0]["nombre"] if _acts else "(sin actividades)")
-(ok if len(_acts) == len(_n6["activities"]) + 1 else fallo)(
-    "aporta exactamente UNA actividad (%d vs %d)"
-    % (len(_acts), len(_n6["activities"])))
-# escala con las paradas
-_d3 = S.build_schedule(3, date(2026, 1, 5), {}, ripout=True)["activities"][0]["duracion"]
-_d12 = S.build_schedule(12, date(2026, 1, 5), {}, ripout=True)["activities"][0]["duracion"]
+(ok if len(_acts) == len(_n6["activities"]) + len(_NOM_RIP) else fallo)(
+    "aporta exactamente sus %d etapas (%d vs %d)"
+    % (len(_NOM_RIP), len(_acts), len(_n6["activities"])))
+
+
+def _dias_rip(ns):
+    """Los dias del DESMONTAJE, no los de su primera fila: el catalogo reparte los
+    dias de la pista entre sus etapas, asi que mirar solo la primera puede quedarse
+    plana por el suelo de un dia mientras el desmontaje entero si crece."""
+    return sum(a["duracion"] for a in S.build_schedule(
+        ns, date(2026, 1, 5), {}, ripout=True)["activities"]
+        if a["nombre"] in _NOM_RIP)
+
+
+_d3, _d12 = _dias_rip(3), _dias_rip(12)
 (ok if _d12 > _d3 else fallo)(
     "su duracion crece con el NS (3 paradas: %s d · 12 paradas: %s d)" % (_d3, _d12))
 # ⚠️ y el proyecto ENTERO dura mas, no solo esa fila
@@ -121,9 +138,10 @@ _tot = round(sum(a["peso"] for a in _acts), 1)
 _rows = [{"nombre": a["nombre"], "duracion": a["duracion"], "peso": a["peso"]}
          for a in _acts]
 _re = S.build_schedule(6, date(2026, 1, 5), {}, custom_rows=_rows, ripout=True)
-_cuenta = sum(1 for a in _re["activities"] if a["nombre"] == S.FASE_RIPOUT[0])
-(ok if _cuenta == 1 else fallo)(
-    "guardar el cronograma editado no duplica el desmontaje (%d veces)" % _cuenta)
+_cuenta = sum(1 for a in _re["activities"] if a["nombre"] in _NOM_RIP)
+(ok if _cuenta == len(_NOM_RIP) else fallo)(
+    "guardar el cronograma editado no duplica el desmontaje (%d de %d etapas)"
+    % (_cuenta, len(_NOM_RIP)))
 
 # ── 4 ────────────────────────────────────────────────────────────────────────
 sec("4. Los TRES caminos deciden igual (el fallo de v454)")
@@ -144,16 +162,34 @@ _src_q = io.open("core/quotes.py", encoding="utf-8").read()
     _src_ui.count("_filas_etapas(_tipo, ns, key)"))
 (ok if "filas_de_etapas(" in _src_q else fallo)(
     "aceptar una cotizacion arma el plan con el mismo catalogo")
+# ⚠️ v515 · ESCAPE CAZADO POR LA BATERIA: lo de arriba mira el TEXTO, y quitarle
+# `custom_rows=_filas` a la llamada dejaba la linea que calcula `_filas` intacta — o sea
+# verde con el cronograma saliendo del DEFECTO. Para una instalacion da lo mismo, pero
+# una obra combinada naceria con 14 etapas en vez de 18 y sin sus condicionales, en
+# silencio. Se afirma sobre la LLAMADA: los dos caminos que CREAN obra le pasan sus
+# filas. (El survey no: el suyo es un documento y toma el defecto a proposito, v515.)
+_sin_filas = []
+for _f, _s in (("core/quotes.py", _src_q), ("core/projects_ui.py", _src_ui)):
+    for _n in ast.walk(ast.parse(_s)):
+        if (isinstance(_n, ast.Call)
+                and getattr(_n.func, "attr", getattr(_n.func, "id", "")) == "build_schedule"
+                and not any(k.arg == "custom_rows" for k in _n.keywords)):
+            _sin_filas.append("%s:%d" % (_f, _n.lineno))
+(ok if not _sin_filas else fallo)(
+    "ninguna de las dos altas llama a build_schedule sin sus filas", _sin_filas)
 (ok if "ripout=P.con_ripout" not in _src_ui and "ripout=P.con_ripout" not in _src_q
  else fallo)("...y ningun alta quedo colgada del modelo viejo")
 
 # ── 5 ────────────────────────────────────────────────────────────────────────
 sec("5. Lo que NO cambia")
-# ⚠️ Una instalacion normal tiene que salir EXACTAMENTE igual que antes de v470: si
-# se moviera, v470 habria cambiado el plan de todas las obras nuevas sin pedirlo.
+# ⚠️ Una instalacion normal tiene que salir EXACTAMENTE igual que sin `ripout`: si se
+# moviera, este parametro estaria cambiando el plan de obras que no llevan desmontaje.
+# ⚠️ v515: se comparaba contra `PHASES`, borrada. El patron se conserva —la lista
+# COMPLETA, no su longitud— pero contra el catalogo, que es de donde salen hoy.
 _ins = S.build_schedule(6, date(2026, 1, 5), {})
-(ok if [a["nombre"] for a in _ins["activities"]] == [p[0] for p in S.PHASES if not p[4]]
- else fallo)("una instalacion normal conserva sus fases exactas")
+(ok if [a["nombre"] for a in _ins["activities"]] ==
+ [e[2] for e in _SR.etapas(_SR.PISTA_INSTALL)] else fallo)(
+    "una instalacion normal son EXACTAMENTE las etapas de instalacion del catalogo")
 (ok if _ins["total_dias"] == _n6["total_dias"] else fallo)(
     "...y su duracion (ripout=False es el defecto)")
 # ⚠️ DECISION CAMBIADA, y conviene que se lea: en v470 el usuario decidio que «Ripout»
@@ -187,13 +223,17 @@ sec("6. Lo que se le DICE al usuario")
 # reportado, v135). Eso es correcto, pero hasta v470 pasaba en SILENCIO: la obra
 # quedaba marcada como ripout y su plan sin el desmontaje. El aviso va por CONDICION
 # —un evento se perderia en el primer rerun (v375/v383)— y DONDE se arregla (v395).
-_av = "has no strip-out activity" in _src_ui
+# ⚠️ v515: el aviso dice «stages», no «activity»: el desmontaje dejo de ser UNA
+# actividad. El literal se declara UNA vez para que las dos afirmaciones de abajo no
+# puedan quedarse desparejadas (una verde y la otra vigilando un texto que ya no esta).
+_TXT_AV = "has no strip-out stages"
+_av = _TXT_AV in _src_ui
 (ok if _av else fallo)("se avisa si el tipo pide desmontaje y el plan no lo tiene")
 _bajo_cond = False
 for _n in ast.walk(ast.parse(_src_ui)):
     if isinstance(_n, ast.If):
         _seg = ast.get_source_segment(_src_ui, _n) or ""
-        if "has no strip-out activity" in _seg and "con_ripout" in _seg:
+        if _TXT_AV in _seg and "con_ripout" in _seg:
             _bajo_cond = True
 (ok if _bajo_cond else fallo)("...y cuelga de `con_ripout`, no de un evento")
 

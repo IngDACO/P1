@@ -218,11 +218,37 @@ chk(_roto == ["b"], f"…y un marcador huerfano SI se caza ({_roto})")
 print("\n== 3. Los nombres de actividad, migrados en las DOS puntas ==")
 from core import schedule as S  # noqa: E402
 import datetime as _dt  # noqa: E402
+from core import stages as _ST53  # noqa: E402
 _nom = [a["nombre"] for a in S.build_schedule(6, _dt.date(2026, 9, 1), {})["activities"]]
 chk(len(_nom) >= 8, f"…y el chequeo ve actividades de verdad ({len(_nom)})")
 chk(not [x for x in _nom if any(c in x for c in "áéíóúñ")],
     "el CÓDIGO genera los nombres en inglés")
-for esperado in ("Guide rail installation", "Landing doors", "Certification and handover"):
+# ⚠️ v515 · EL ACENTO NO BASTA, y lo demostró la batería: «Puertas de rellano» no lleva
+# ni uno, así que traducir una etapa se ESCAPABA de este chequeo con las dos puntas
+# cambiando a la vez. Es la trampa nº28 (un detector por idioma no ve las palabras sin
+# acento) dentro del guardián que existe precisamente para el idioma. Se añade la red de
+# palabras funcionales, y se valida contra un caso conocido-malo (nº12).
+_ES53 = {"de", "del", "la", "el", "los", "las", "y", "con", "sin", "por", "para",
+         "puertas", "rellano", "cabina", "hueco", "montaje", "desmontaje", "guias",
+         "instalacion", "ajuste", "pruebas", "entrega", "contrapeso"}
+
+
+def _es53(n):
+    return bool({w for w in re.findall(r"[a-záéíóúñ]+", n.lower())} & _ES53)
+
+
+chk(not [x for x in _nom if _es53(x)],
+    f"…y tampoco en español SIN acento ({[x for x in _nom if _es53(x)][:2]})")
+chk(_es53("Puertas de rellano") and not _es53("Shaft Climb & Bedplates"),
+    "…y la sonda SÍ caza un nombre traducido sin acento")
+# ⚠️ v515 · Los tres nombres esperados eran de `PHASES`, borrada. Se DERIVAN del
+# catálogo en vez de teclearse (trampa nº16): así el chequeo sigue siendo positivo —que
+# los nombres esperados ESTÉN, no que el español no esté (trampa nº28)— sin caducar cada
+# vez que el catálogo cambie. Y se compara la lista ENTERA, no tres muestras.
+_esp53 = [e[2] for e in _ST53.etapas(_ST53.PISTA_INSTALL)]
+chk(bool(_esp53), f"el catálogo aporta los nombres esperados ({len(_esp53)})")
+chk(_nom == _esp53, "el cronograma son EXACTAMENTE las etapas del catálogo")
+for esperado in _esp53[:3]:
     chk(esperado in _nom, f"…incluido {esperado!r}")
 
 print("\n== 4. ⚠️ Lo que se ESCRIBE es lo mismo que se COMPARA ==")
@@ -230,21 +256,23 @@ print("\n== 4. ⚠️ Lo que se ESCRIBE es lo mismo que se COMPARA ==")
 # (la constante Y la comparación), así que traducir UNO seguía pasando — tres roturas
 # se escaparon por eso. La invariante real es que los valores PRODUCIDOS y los
 # COMPARADOS sean el MISMO conjunto: si divergen, la rama queda muerta sin dar error.
-_a_sch = ast.parse((CORE / "schedule.py").read_text(encoding="utf-8"))
-_ph = next((n.value for n in ast.walk(_a_sch)
-            if isinstance(n, ast.Assign)
-            and any(getattr(t_, "id", None) == "PHASES" for t_ in n.targets)), None)
-chk(_ph is not None, "se localiza la constante PHASES")
-_producidas = {e.elts[4].value for e in getattr(_ph, "elts", [])
-               if isinstance(e, ast.Tuple) and len(e.elts) > 4
-               and isinstance(e.elts[4], ast.Constant) and e.elts[4].value is not None}
-_df = next((n for n in ast.walk(_a_sch)
-            if isinstance(n, ast.FunctionDef) and n.name == "detect_flags"), None)
-_comparadas = {c.value for c in ast.walk(_df)
-               if isinstance(c, ast.Constant) and isinstance(c.value, str)} if _df else set()
-chk(bool(_producidas), f"PHASES produce banderas ({sorted(_producidas)})")
-chk(_producidas <= _comparadas,
-    f"toda bandera de PHASES la reconoce detect_flags (huérfanas: {sorted(_producidas - _comparadas)})")
+# ⚠️ v515 · MISMO INVARIANTE, OTRO PAR. Vigilaba las banderas de `PHASES` contra
+# `detect_flags`; las dos se BORRARON. El fallo que describe sigue existiendo, solo que
+# ahora entre `ACTIVIDADES` (donde se ESCRIBE el nombre de una condicional) y
+# `EXCLUYENTES` (donde se COMPARA para preguntar por ella): `plan_de` casa por nombre
+# exacto, así que traducir o renombrar UNO deja la opción sin casar NUNCA — la actividad
+# no entra en el plan, nadie puede elegirla y **no salta ningún error**. Es exactamente
+# la rama muerta que v453 vino a impedir, y en el sitio que más pesa (el 25% del R3).
+_op53 = {o for g in _ST53.EXCLUYENTES.values() for o in g["opciones"]}
+_act53 = {a[0] for _v in _ST53.ACTIVIDADES.values() for a in _v}
+chk(bool(_op53), f"los grupos excluyentes ofrecen opciones ({sorted(_op53)})")
+chk(_op53 <= _act53,
+    f"toda opción excluyente existe como actividad (huérfanas: {sorted(_op53 - _act53)})")
+# ⚠️ Y en la otra punta: una opción que exista pero NO esté marcada como condicional se
+# crearía siempre, así que preguntar por ella no cambiaría nada.
+_cond53 = {a[0] for _v in _ST53.ACTIVIDADES.values() for a in _v if a[2]}
+chk(_op53 <= _cond53,
+    f"…y está marcada como condicional (no lo son: {sorted(_op53 - _cond53)})")
 
 _a_pay = ast.parse((CORE / "payroll.py").read_text(encoding="utf-8"))
 _esc = {v.value for n in ast.walk(_a_pay) if isinstance(n, ast.Dict)

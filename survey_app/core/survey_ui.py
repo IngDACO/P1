@@ -32,7 +32,7 @@ from core.email_notify    import send_usage_notification
 from core.user_report     import generate_user_report
 from core.diagrams        import (render_floor_plans_html, floors_with_issues,
                                   floor_plans_pdf, shaft_iso_svg)
-from core.schedule        import build_schedule, detect_flags, schedule_svg
+from core.schedule        import build_schedule, schedule_svg
 from core.plumb           import (compute_plumb, plumb_svg, plumb_table, plumb_checks,
                                   plumb_iso_svg, plumb_detail_svg, plumb_card_svg)
 from core                 import projects as projects_data
@@ -764,8 +764,14 @@ def render_survey_tab(_ROL, _GRUPO):
         st.session_state.pop("diag_pisos", None)
 
         # ── Cronograma automático según el proyecto ───────────
-        _flags = detect_flags(st.session_state.calc_results)
-        _auto  = build_schedule(_c["ns"], clock.today(), _flags)
+        # ⚠️ v515: sale del CATÁLOGO, como la cotización y el alta. Hasta aquí este era
+        # el último sitio que le pedía las 11 fases viejas a `PHASES`, así que el informe
+        # que se le entrega al cliente —y que se archiva en la carpeta de la obra— llevaba
+        # un calendario del que NI UNA actividad existía en la obra real (0 de 11 nombres
+        # en común, medido). El survey mide un hueco para instalar, así que el tipo es
+        # `Installation`: si además hay desmontaje se decide al COTIZAR, que es donde vive
+        # esa pregunta desde v512 y donde el catálogo sabe preguntarla.
+        _auto = build_schedule(_c["ns"], clock.today())
         st.session_state.calc_results["schedule"] = _auto
         st.session_state["sched_rows"] = [
             {"Actividad": a["nombre"], "Duración (d)": int(a["duracion"]), "Peso (%)": a["peso"]}

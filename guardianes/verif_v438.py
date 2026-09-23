@@ -94,8 +94,13 @@ _txt_act = " ".join(str(x) for x in _nom)
 # migracion del historico (123 filas en 1 batch, verificadas leyendo), asi que la
 # afirmacion se INVIERTE: ahora lo que hay que proteger es que NO vuelvan al
 # espanol y que el codigo y la hoja digan lo MISMO.
-_FIJOS = ["Plumb lines and reference lines", "Guide rail installation",
-          "Electrical wiring"]
+# ⚠️ v515 · Los tres nombres eran de `PHASES`, borrada. Se DERIVAN del catálogo, que es
+# de donde salen hoy (trampa nº16). No es tautológico: lo que se compara es el
+# cronograma RENDERIZADO contra el catálogo, o sea que la tubería entera —`plan_de`,
+# `filas_de_etapas`, `build_schedule`— conserva los nombres. Y se exigen TODOS, no tres:
+# con la lista entera, traducir UNO ya no se cuela por detrás de otro que casa.
+from core import stages as _ST438                                   # noqa: E402
+_FIJOS = [e[2] for e in _ST438.etapas(_ST438.PISTA_INSTALL)]
 _faltan_act = [x for x in _FIJOS if x not in _nom]
 chk("están en inglés y casan con el histórico ya migrado (v453)",
     not _faltan_act, str(_faltan_act))

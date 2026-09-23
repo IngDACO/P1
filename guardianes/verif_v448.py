@@ -219,9 +219,40 @@ for f in sorted((RAIZ / "core").glob("*.py")):
 chk("0 mensajes en español fuera de las exclusiones", not _pend, str(_pend))
 # ⚠️ Y las exclusiones se AFIRMAN, no se dan por hechas: si mañana alguien traduce
 # los nombres de actividad, esto salta y obliga a mirar la migración del histórico.
-chk("los nombres de ACTIVIDAD estan en INGLES y casan con el historico migrado (v453)",
-    any("Guide rail installation" in str(x) for x in
-        (getattr(SCH, "PHASES", None) or getattr(SCH, "ACTIVIDADES", []))))
+# ⚠️ v515 · ANCLA CAMBIADA, no relajada. Esto miraba `schedule.PHASES` con un literal
+# («Guide rail installation»), y `PHASES` se BORRO: los nombres de actividad viven ahora
+# en el catalogo (`core/stages.py`). Dejarlo como estaba habria sido peor que quitarlo —
+# el `getattr(..., [])` lo habria puesto VERDE revisando una lista VACIA (trampa n30) y
+# la regla habria dejado de vigilar los 191 nombres reales sin que nadie se enterara.
+# Y se afirma primero que HAY nombres, o el chequeo de abajo pasaria en vacio (trampa n1).
+from core import stages as _ST                                      # noqa: E402
+_NOM_CAT = ([e[2] for e in _ST.ETAPAS]
+            + [a[0] for _v in _ST.ACTIVIDADES.values() for a in _v])
+_ES_NOM = _ES | {"y", "montaje", "desmontaje", "puertas", "instalacion", "ajuste",
+                 "pruebas", "entrega", "certificacion", "contrapeso"}
+
+
+def _suena_espanol(n):
+    """Acento, o una palabra funcional española: los dos modos de volver al español.
+
+    ⚠️ Contra `n.lower()`, no contra `n`: `_sin` baja a minúsculas de paso, así que
+    comparar con el original marcaría «Set Up» como acentuado y el chequeo denunciaría
+    los 191 nombres sanos. Validado abajo con un caso conocido-malo (trampa nº12).
+    """
+    return _sin(n) != n.lower() or bool(
+        {w for w in re.findall(r"[a-z]+", n.lower())} & _ES_NOM)
+
+
+chk("el catalogo trae sus nombres de etapa y actividad",
+    len(_NOM_CAT) > 150, "%d nombres" % len(_NOM_CAT))
+chk("los nombres de ETAPA y ACTIVIDAD estan en INGLES y casan con el historico (v453)",
+    not [n for n in _NOM_CAT if _suena_espanol(n)],
+    str([n for n in _NOM_CAT if _suena_espanol(n)][:3]))
+# ⚠️ La sonda se valida contra casos conocidos: un «0 en español» no vale nada si la
+# sonda no sabe ver el español cuando lo hay (trampa nº12).
+chk("...y la sonda SI caza un nombre traducido (acento y palabra funcional)",
+    _suena_espanol("Instalación de guías") and _suena_espanol("Puertas de rellano")
+    and not _suena_espanol("Shaft Climb & Bedplates"))
 # ⚠️ CADUCADO Y ACTUALIZADO en v453 (regla v385). Este chequeo EXIGIA que siguieran en
 # espanol, y era correcto: los nombres se guardan en la hoja `Actividades`, asi que
 # traducir solo el codigo habria dejado los proyectos viejos en espanol y los nuevos en

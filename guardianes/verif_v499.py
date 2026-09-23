@@ -51,6 +51,10 @@ def _fuente(f):
 
 from core import plan, projects as P                              # noqa: E402
 from core.schedule import build_schedule, schedule_svg            # noqa: E402
+from core import schedule as S499                                 # noqa: E402
+import importlib.util                                             # noqa: E402
+from pathlib import Path as _P499                                 # noqa: E402
+AQUI = _P499(__file__).parent
 
 A = lambda o, d, p="": {"orden": o, "duracion": d, "pred": p}     # noqa: E731
 
@@ -93,15 +97,45 @@ print("\n[2] sin dependencias, el cronograma sale como hasta v498")
 # ⚠️ Oráculo SACADO DEL MÓDULO DE v498 (`oraculo_v499.py`) y escrito aquí LITERAL:
 # compararlo con la salida del código actual no probaría nada (trampa nº1), y sacarlo
 # de git dentro del guardián lo dejaría vacío en cuanto se hiciera el commit (v484).
-ESPERADO = {(1, False): (19, 11), (1, True): (23, 12), (2, False): (21, 11),
-            (2, True): (25, 12), (3, False): (23, 11), (3, True): (27, 12),
-            (6, False): (29, 11), (6, True): (35, 12), (8, False): (33, 11),
-            (8, True): (40, 12), (12, False): (41, 11), (12, True): (50, 12),
-            (20, False): (57, 11), (20, True): (70, 12)}
-_mal = [(ns, rip) for (ns, rip), esp in ESPERADO.items()
-        if (lambda s: (s["total_dias"], len(s["activities"])))(
-            build_schedule(ns, dt.date(2026, 9, 1), {}, ripout=rip)) != esp]
-ck(f"los {len(ESPERADO)} cronogramas salen como en v498", _mal, [])
+# ⚠️ v515 · CADUCADO Y ACTUALIZADO, y el cambio lo hace MÁS fuerte, no más débil.
+# La tabla congelada guardaba (días, nº de actividades) de las 11 fases de `PHASES`, que
+# se BORRÓ: comparar contra ella era comparar contra un modelo que ya no existe, y el
+# rojo no decía nada de la RED, que es lo único que v499 introdujo.
+#
+# Lo que v499 protege es «meter predecesoras no mueve un cronograma que ya existía». Eso
+# se aísla dándole a las DOS implementaciones —la de v498 y la de hoy— las MISMAS filas,
+# y comparando actividad por actividad en vez de dos totales: dos cronogramas distintos
+# pueden durar lo mismo. 14 casos × 14-18 actividades, contra 14 pares de números.
+#
+# ⚠️ El PESO se compara aparte y se espera que DIFIERA: v513 cambió el redondeo a resto
+# mayor a propósito, porque los pesos guardados sumaban 99,8. Meterlo en la misma
+# afirmación la pondría roja por un cambio querido y acabaría relajándose entera.
+_sp499 = importlib.util.spec_from_file_location(
+    "old_sched_499", str(AQUI / "sueltos" / "schedule_v498.py"))
+_old499 = importlib.util.module_from_spec(_sp499)
+_sp499.loader.exec_module(_old499)
+_CASOS = [(ns, rip) for ns in (1, 2, 3, 6, 8, 12, 20) for rip in (False, True)]
+_mal, _n_act, _dif_peso = [], 0, 0
+for _ns, _rip in _CASOS:
+    _filas = S499.filas_de_etapas(
+        "Ripout + Installation" if _rip else "Installation", _ns, ())
+    _o = _old499.build_schedule(_ns, dt.date(2026, 9, 1), {}, custom_rows=_filas)
+    _n = build_schedule(_ns, dt.date(2026, 9, 1), {}, custom_rows=_filas)
+    if _o["total_dias"] != _n["total_dias"] or len(_o["activities"]) != len(_n["activities"]):
+        _mal.append((_ns, _rip, "total"))
+        continue
+    for _x, _y in zip(_o["activities"], _n["activities"]):
+        _n_act += 1
+        if (_x["nombre"], _x["inicio"], _x["duracion"]) != \
+           (_y["nombre"], _y["inicio"], _y["duracion"]):
+            _mal.append((_ns, _rip, _x["nombre"]))
+        _dif_peso += (_x["peso"] != _y["peso"])
+# ⚠️ Antes de creerse el «0 diferencias» hay que afirmar que se comparó algo (trampa nº1).
+ck(f"el oráculo de v498 y el de hoy comparan {len(_CASOS)} cronogramas de verdad",
+   len(_CASOS) == 14 and _n_act > 150, True)
+ck(f"...y la RED sale igual en las {_n_act} actividades", _mal, [])
+ck("...y lo único que se movió son los pesos, que v513 cambió a propósito",
+   _dif_peso > 0, True)
 s = build_schedule(6, dt.date(2026, 9, 1), {})
 ck("...y siguen encadenadas una detrás de otra",
    all(abs(s["activities"][i + 1]["inicio"] - (s["activities"][i]["inicio"] + s["activities"][i]["duracion"])) < 1e-6

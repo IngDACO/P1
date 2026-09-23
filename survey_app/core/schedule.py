@@ -16,55 +16,25 @@ from datetime import date, timedelta
 from core import plan
 from core.num import num as _num          # v512/v323: UNA definición de num()
 
-# ⚠️ v470 · El desmontaje del ascensor existente NO es una tabla de fases aparte:
-# es UNA actividad, la primera del cronograma (decisión del usuario). Su duración
-# escala con las paradas como el resto —más plantas son más puertas de rellano que
-# quitar y más riel que desmontar—, y el peso la deja a la altura de «Car and
-# counterweight», que es un trabajo comparable.
+# ⚠️ v515 · `PHASES`, `FASE_RIPOUT` y `detect_flags` SE BORRARON. Eran las 11 fases
+# ideales que este módulo inventaba cuando nadie le pasaba filas, más la de desmontaje
+# (v470) y las dos banderas que el survey calculaba (`cortes`, `shaft`).
 #
-# ⚠️ El nombre se GUARDA en la hoja `Activities`, así que nace en inglés: traducirlo
-# después obliga a migrar el histórico, que es lo que costó v453. Y duración y peso
-# son solo el punto de partida — la tabla de actividades es editable por proyecto
-# desde v83, así que en obra se ajusta sin tocar código.
-FASE_RIPOUT = ("Ripout of existing lift", 3, 0.5, 15, None)
-
-# (nombre, dur_base_dias, dias_por_parada, peso, condicion)
-PHASES = [
-    ("Survey and setting out",                    1, 0.0,  3, None),
-    ("Plumb lines and reference lines",       1, 0.2,  5, None),
-    ("Brackets / supports",                   1, 0.4,  8, None),
-    ("Guide rail installation",             2, 0.6, 18, None),
-    ("Shaft adjustment / cuts",              1, 0.2,  5, "cortes"),
-    ("Shaft adjustment (BSR < BS)",            1, 0.0,  4, "shaft"),
-    ("Car and counterweight",                   3, 0.0, 15, None),
-    ("Landing doors",                    1, 0.5, 14, None),
-    ("Machine and controller",                 2, 0.0, 10, None),
-    ("Electrical wiring",                    1, 0.3,  9, None),
-    ("Levelling and adjustments",                  2, 0.0,  5, None),
-    ("Testing (load, speed, safety)", 2, 0.0,  4, None),
-    ("Certification and handover",               1, 0.0,  2, None),
-]
-
-
-def detect_flags(calc_results: dict) -> dict:
-    """Determina qué actividades condicionales aplican, a partir del cálculo."""
-    flags = {"cortes": False, "shaft": False}
-    if not calc_results:
-        return flags
-    opt = calc_results.get("optimizer_result", {}) or {}
-    best = opt.get("best")
-    lim  = calc_results.get("limits", {}) or {}
-    lim_or = float(lim.get("LIMIT_OR", 1e9))
-    lim_ol = float(lim.get("LIMIT_OL", 1e9))
-    if best and best.get("matrix"):
-        for row in best["matrix"]:
-            if float(row.get("OR", 0)) > lim_or or float(row.get("OL", 0)) > lim_ol:
-                flags["cortes"] = True
-                break
-    bs = calc_results.get("bs_result", {}) or {}
-    if bs.get("needed"):
-        flags["shaft"] = True
-    return flags
+# No se adaptaron: el usuario decidió que las actividades con las que se trabaja son
+# las del CATÁLOGO (`core/stages.py`, v512) y las anteriores ya no van. v512 cambió los
+# dos caminos que crean obras —cotización aceptada y alta manual— y el survey se quedó
+# atrás: su informe le enseñaba al cliente once actividades de las que **ni una** existía
+# en la obra que salía de esa misma cotización. Medido: 0 nombres en común de 11.
+#
+# ⚠️ Lo que se pierde con las banderas NO es información, es una duplicación peor. Los
+# cortes por OR/OL siguen en el veredicto de portada del informe del cliente y en su
+# sección 3, **piso por piso**, que es lo que se usa en obra; el BS/BSR sigue en su
+# sección. Lo que desaparece es una barra de Gantt que decía lo mismo con menos detalle.
+#
+# ⚠️ Y el desmontaje ya no es UNA actividad: son las cuatro etapas de la pista `ripout`
+# del catálogo, con sus 30 actividades. `ripout=True` sigue significando lo mismo para
+# quien llama —«esta obra incluye desmontaje»—, pero ahora se traduce a un TIPO de
+# proyecto, que es donde vive esa decisión desde v512.
 
 
 # ── v512: el cronograma sale del CATÁLOGO de etapas ──────────────────────────
@@ -131,16 +101,27 @@ def filas_de_etapas(tipo, ns: int, condicionales=(), pct_ripout=None) -> list:
     return sorted(filas, key=lambda f: f["orden"])
 
 
-def build_schedule(ns: int, start_date: date, flags: dict,
+def build_schedule(ns: int, start_date: date, condicionales=None,
                    custom_rows: list = None, ripout: bool = False) -> dict:
     """
     Genera el cronograma. Si `custom_rows` viene (edición del usuario),
     usa sus duraciones/pesos en lugar de los automáticos.
     custom_rows: lista de dicts {nombre, duracion, peso}
 
-    `ripout=True` antepone la actividad de desmontaje (v470, tipo
-    «Ripout + Installation»). ⚠️ NO aplica sobre `custom_rows`: ahí las filas son las
-    que el usuario ya editó, y volver a insertarla las duplicaría en cada guardado.
+    Sin `custom_rows`, las filas salen del CATÁLOGO (v515). Antes salían de `PHASES`,
+    que ya no existe: quien no traiga filas propias recibe las MISMAS etapas que la
+    obra real, no una lista paralela que se queda vieja sola.
+
+    `ripout=True` = esta obra incluye el desmontaje del ascensor existente. ⚠️ Desde
+    v515 eso no es UNA actividad antepuesta (v470) sino un TIPO de proyecto: son las
+    cuatro etapas de la pista `ripout`, con sus 30 actividades, y van con el resto en un
+    solo 100%. ⚠️ NO aplica sobre `custom_rows`: ahí las filas son las que el usuario ya
+    editó y el tipo quedó sellado en el plan de la obra (`StagePlanJSON`).
+
+    ⚠️ `condicionales` sustituye al `flags` de antes, que era un dict de banderas del
+    survey (`cortes`, `shaft`). Ahora son los NOMBRES de las actividades condicionales
+    del catálogo que esta obra lleva. Se acepta un dict —lo que pasaban los llamantes
+    viejos— y se leen sus claves verdaderas, así que `{}` sigue queriendo decir «ninguna».
     """
     ns = max(1, int(ns or 1))
 
@@ -150,12 +131,13 @@ def build_schedule(ns: int, start_date: date, flags: dict,
         red = [{"orden": r.get("orden", i + 1), "duracion": float(r["duracion"]),
                 "pred": r.get("pred", "")} for i, r in enumerate(custom_rows)]
     else:
-        base = []
-        for nombre, db, dpp, peso, cond in ([FASE_RIPOUT] + PHASES if ripout else PHASES):
-            if cond and not flags.get(cond):
-                continue
-            dur = max(1, round(db + dpp * ns))
-            base.append((nombre, float(dur), float(peso)))
+        if isinstance(condicionales, dict):
+            _cond = [k for k, v in condicionales.items() if v]
+        else:
+            _cond = list(condicionales or ())
+        _tipo = "Ripout + Installation" if ripout else "Installation"
+        base = [(r["nombre"], float(r["duracion"]), float(r["peso"]))
+                for r in filas_de_etapas(_tipo, ns, _cond)]
 
     # Normalizar pesos a 100
     total_peso = sum(p for _, _, p in base) or 1.0

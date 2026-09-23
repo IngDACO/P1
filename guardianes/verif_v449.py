@@ -178,9 +178,36 @@ chk("...y una fila SIN migrar sigue casando",
     _VAL3.canon("En progreso") == "In progress" and _VAL3.canon("En pausa") == "On hold")
 chk("...y `etiqueta()` no muta un estado que ya es canonico",
     all(i18n.etiqueta(e) == e for e in P.ESTADOS_MANUAL if e))
-chk("los nombres de ACTIVIDAD estan en INGLES y casan con el historico migrado (v453)",
-    any("Guide rail installation" in str(x) for x in
-        (getattr(SCH, "PHASES", None) or getattr(SCH, "ACTIVIDADES", []))))
+# ⚠️ v515 · ANCLA CAMBIADA, no relajada (mismo motivo que en `verif_v448`). Miraba
+# `schedule.PHASES` por un literal y `PHASES` se BORRO: los nombres viven en el catalogo.
+# Con el `getattr(..., [])` que tenia, esto habria pasado a VERDE revisando una lista
+# VACIA — la trampa n30 en su forma mas cara, porque la regla parece seguir viva.
+import unicodedata as _u449                                        # noqa: E402
+from core import stages as _ST449                                  # noqa: E402
+_NOM449 = ([e[2] for e in _ST449.ETAPAS]
+           + [a[0] for _v in _ST449.ACTIVIDADES.values() for a in _v])
+_ES449 = {"de", "del", "la", "el", "los", "las", "y", "con", "sin", "por", "para",
+          "montaje", "desmontaje", "puertas", "cabina", "hueco", "instalacion",
+          "ajuste", "pruebas", "entrega", "certificacion", "contrapeso", "riel",
+          "rieles", "pared"}
+
+
+def _suena_es449(n):
+    """⚠️ Contra `n.lower()`: la normalizacion baja a minusculas, asi que comparar
+    con el original marcaria «Set Up» como acentuado y denunciaria los 191 sanos."""
+    _pl = "".join(c for c in _u449.normalize("NFD", n.lower())
+                  if _u449.category(c) != "Mn")
+    return _pl != n.lower() or bool({w for w in re.findall(r"[a-z]+", n.lower())} & _ES449)
+
+
+chk("el catalogo trae sus nombres de etapa y actividad",
+    len(_NOM449) > 150, "%d nombres" % len(_NOM449))
+chk("los nombres de ETAPA y ACTIVIDAD estan en INGLES y casan con el historico (v453)",
+    not [n for n in _NOM449 if _suena_es449(n)],
+    str([n for n in _NOM449 if _suena_es449(n)][:3]))
+chk("...y la sonda SI caza un nombre traducido (trampa nº12)",
+    _suena_es449("Instalación de guías") and _suena_es449("Puertas de rellano")
+    and not _suena_es449("Shaft Climb & Bedplates"))
 # ⚠️ CADUCADO Y ACTUALIZADO en v453 (regla v385). Este chequeo EXIGIA que siguieran en
 # espanol, y era correcto: los nombres se guardan en la hoja `Actividades`, asi que
 # traducir solo el codigo habria dejado los proyectos viejos en espanol y los nuevos en
