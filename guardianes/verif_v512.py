@@ -163,7 +163,11 @@ cerca("...y sigue valiendo 30 con la variante hidraulica",
 cerca("...y con TODOS los condicionales de desmontaje",
       _rip("Ripout + Installation", (TRAC, HID, "Build working deck(s)",
                                      "Retain/preserve components for reuse"), 30), 30.0)
-cerca("sin pct, se usa el arranque de 14", _rip("Ripout + Installation", (TRAC,), None),
+# ⚠️ v519: la etiqueta decía «el arranque de 14» y el reparto pasó a 50/50 por decisión
+# del usuario. El número ya se derivaba de la constante (por eso no se puso rojo); lo
+# que mentía era el rótulo, y un rótulo que miente invita a leer verde donde no lo hay.
+cerca("sin pct, se usa el reparto por defecto (%.0f)" % S.PCT_RIPOUT_DEFECTO,
+      _rip("Ripout + Installation", (TRAC,), None),
       S.PCT_RIPOUT_DEFECTO)
 ck("una obra de una sola pista no reparte nada",
    _rip("Installation", (), 30), 0.0)

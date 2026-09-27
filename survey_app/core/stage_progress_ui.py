@@ -82,6 +82,19 @@ def render(pid, grupo, prj, editable=True, key_prefix="sp"):
                 _marcas[a["nombre"]] = st.checkbox(
                     "%s  ·  %.1f%%" % (a["nombre"], _num(a["peso_en_etapa"])),
                     value=_num(a["pct"]) >= 100, key=_k, disabled=not editable)
+            # ⚠️ v519 · Las INFORMATIVAS: se marcan, no cuentan (decisión del usuario).
+            # Van DEBAJO y SIN porcentaje, con el aviso dicho: una casilla sin peso al
+            # lado de las que pesan, sin decir nada, haría creer que marcarla sube la
+            # etapa — y quien la marca esperando que suba acaba desconfiando del número.
+            _info = e.get("informativas") or []
+            if _info:
+                st.caption(t(":material/info: For the record only — ticking these does "
+                             "not change the progress."))
+                for j, a in enumerate(_info):
+                    _k = "%s_%s_%d_i%d" % (key_prefix, pid, e["orden"], j)
+                    _marcas[a["nombre"]] = st.checkbox(
+                        a["nombre"], value=_num(a["pct"]) >= 100, key=_k,
+                        disabled=not editable)
             if not editable:
                 continue
             if st.button(t(":material/save: Save stage {n}", n=e["orden"]),
@@ -92,7 +105,7 @@ def render(pid, grupo, prj, editable=True, key_prefix="sp"):
                 # marcar (el criterio del guardado parcial de v499/v502).
                 _cambios = [{"etapa": e["orden"], "actividad": a["nombre"],
                              "pct": 100.0 if _marcas[a["nombre"]] else 0.0}
-                            for a in e["actividades"]
+                            for a in list(e["actividades"]) + list(_info)
                             if (_num(a["pct"]) >= 100) != _marcas[a["nombre"]]]
                 if not _cambios:
                     st.info(t("Nothing changed in this stage."))

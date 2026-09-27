@@ -63,9 +63,16 @@ PISTAS = (PISTA_RIPOUT, PISTA_INSTALL)
 # El documento de origen trata las dos pistas como 100% SEPARADOS y no da este número;
 # hace falta porque el usuario decidió (22/09/2026) que el tipo combinado es UNA obra
 # con todas las actividades juntas, o sea un solo 100%.
-# 14.0 es lo que la app venía diciendo sin decirlo: `schedule.FASE_RIPOUT` pesaba 15
-# contra 93 del resto de fases = 13,9%. Es un ARRANQUE, no un dato de campo.
-PCT_RIPOUT_DEFECTO = 14.0
+# ⚠️ 50/50 por decisión del usuario el 27/09/2026 («de momento 50 50»). Hasta entonces
+# era 14.0, heredado del modelo viejo (`schedule.FASE_RIPOUT` pesaba 15 contra 93 del
+# resto de fases) — o sea un número que nadie había decidido.
+# ⚠️ Cambiarlo NO mueve ninguna obra existente: `projects.plan_nuevo` SELLA este valor
+# en el `StagePlanJSON` de cada obra al crearla, y `plan_de_obra` lee el sellado. Solo
+# las obras combinadas NUEVAS nacen con 50. Comprobado antes de tocarlo: el reparto
+# mueve el avance, y el avance es lo que se reclama.
+# ⚠️ Es PESO, no tiempo: los días siguen saliendo de `schedule.DIAS_POR_PISTA`. Que el
+# desmontaje valga la mitad del avance no lo hace durar la mitad de la obra.
+PCT_RIPOUT_DEFECTO = 50.0
 
 # ── Etapas: (pista, nº, nombre, peso dentro de su pista) ─────────────────────
 ETAPAS = [
@@ -331,6 +338,40 @@ def actividades(pista, numero) -> list:
     return list(ACTIVIDADES.get((pista, numero), []))
 
 
+# ═════════════════════════════════════════════════════════════════
+# Actividades INFORMATIVAS (v519)
+# ═════════════════════════════════════════════════════════════════
+# ⚠️ Decisión del usuario, 27/09/2026: «entran, pero a modo informativo». Son cuatro
+# actividades que están en `docs/Lift_Install_Task_Breakdown.md` y NO en el documento de
+# etapas del que salió este catálogo — los dos documentos derivaron. Es trabajo real que
+# el campo hace y escribe en sus partes, pero no lleva peso.
+#
+# ⚠️ Van en una tabla APARTE, no en `ACTIVIDADES` con peso cero, y por dos razones:
+#   1. `validar()` rechaza a propósito todo peso <= 0: la regla existe para cazar un
+#      cero que debería ser un número, y colarlas ahí sería desactivar esa red.
+#   2. Así es IMPOSIBLE que muevan el avance: `plan_de`, la renormalización, `avance_de`
+#      y la reclamación que se cobra no las reciben NUNCA. No es que valgan cero — es que
+#      las cuentas no las ven. Eso es más fuerte que un cero, que alguien puede cambiar.
+#
+# ⚠️ Por eso NO sube `VERSION`: la versión identifica el JUEGO DE PESOS (ver arriba), y
+# esto no añade ni cambia ninguno. Subirla bloquearía en solo lectura obras cuyo avance
+# no ha cambiado en nada.
+#
+# Cada una en la etapa donde el propio desglose de tareas la pone.
+INFORMATIVAS = {
+    (PISTA_RIPOUT, 2): ["Lighten cabin if too heavy for intended tirak ratio"],
+    (PISTA_INSTALL, 7): ["Bridge landing door circuit (temporary)",
+                         "Cut/expand concrete door openings (chaser job)"],
+    (PISTA_INSTALL, 14): ["Program controller parameters"],
+}
+
+
+def informativas(pista, numero) -> list:
+    """Las actividades informativas de esa etapa: se marcan, no cuentan. Lista vacía si
+    no tiene ninguna."""
+    return list(INFORMATIVAS.get((pista, numero), []))
+
+
 def pistas_de_tipo(tipo) -> list:
     """Qué pistas lleva un tipo de proyecto (decisión del usuario, 22/09/2026).
 
@@ -517,4 +558,19 @@ def validar() -> list:
     _sobra = [k for k in ACTIVIDADES if k not in {(e[0], e[1]) for e in ETAPAS}]
     if _sobra:
         problemas.append("activities of stages that do not exist: %s" % _sobra)
+    # ⚠️ v519 · Las informativas no pueden llamarse como una actividad CON peso: los
+    # créditos se guardan por (etapa, nombre), así que un nombre compartido haría que
+    # marcar la informativa acreditara la que cuenta — avance inflado sin un solo error.
+    _con_peso = {a[0] for _v in ACTIVIDADES.values() for a in _v}
+    _info = [n for _v in INFORMATIVAS.values() for n in _v]
+    _choque = sorted(set(_info) & _con_peso)
+    if _choque:
+        problemas.append("informative activities share a name with weighted ones: %s"
+                         % _choque)
+    if len(set(_info)) != len(_info):
+        problemas.append("duplicate informative activities")
+    _sin_etapa = [k for k in INFORMATIVAS if k not in {(e[0], e[1]) for e in ETAPAS}]
+    if _sin_etapa:
+        problemas.append("informative activities in stages that do not exist: %s"
+                         % _sin_etapa)
     return problemas

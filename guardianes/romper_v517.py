@@ -132,13 +132,14 @@ ROTURAS = [
      '                 "climb has progressed.",',
      '        "regla": "",'),
 
-    # ⚠️ ESCAPADA la primera vez por el MISMO motivo («roping_» se normaliza a «roping»).
-    # Y ademas nada vigilaba la contradiccion: ahora `verif_v517` exige que salga marcada
-    # y sin proponer. Con «roping zz» el termino deja de casar de verdad.
-    ("«roping» deja de marcarse: la contradiccion del documento se ignora en silencio",
+    # ⚠️ v519 · Caducada por DECISION del usuario, no por descuido: «roping» era una
+    # contradiccion MARCADA y ahora es sinonimo de belting (su opcion A). La rotura pasa a
+    # ser que la decision se pierda. «roping zz» y no «roping_»: el guion bajo se
+    # normaliza a espacio y la rotura no rompia nada (la leccion de v518).
+    ("«roping» deja de proponer belting: la decision del usuario se pierde",
      "core/vocabulario.py",
-     '    "roping": {\n',
-     '    "roping zz": {\n'),
+     '    "roping": ["Install belts (motor, CW, cabin)"],',
+     '    "roping zz": ["Install belts (motor, CW, cabin)"],'),
 
     # ── (e) lo que no es avance ───────────────────────────────────────────────
     ("la induccion deja de reconocerse (un dia de solo induccion se leeria como ilegible)",
@@ -153,11 +154,23 @@ ROTURAS = [
      '    return {"candidatos": dentro, "ambiguos": amb, "no_avance": nop or [\n'
      '        {"termino": k, "motivo": v} for k, v in NO_AVANCE.items()],'),
 
-    # ── (f) lo que no tiene actividad ─────────────────────────────────────────
-    ("un termino sin actividad se cuelga de la mas parecida (inventaria trabajo)",
+    # ── (f) lo informativo (v519) ─────────────────────────────────────────────
+    # ⚠️ Caducadas por DECISION: el «chaser job» ya no esta «sin actividad», entra como
+    # INFORMATIVA. Lo que hay que romper ahora es lo que la hace segura: que diga que NO
+    # cuenta, y que no salga «fuera del plan» cuando su etapa si es de la obra.
+    # ⚠️ Con el «"fuente": tipo,» delante: el ancla sola aparecia DOS veces (tambien en la
+    # fila de «por defecto»), la bateria la salto con «??» y anuncio 27 de 27 contando
+    # solo las que aplico. `check_anclas_roturas` no lo vio: su regla es «aparece al menos
+    # una vez», y aparecia dos.
+    ("una informativa se propone como si CONTARA (un chaser job subiria la etapa)",
      "core/vocabulario.py",
-     '    "chaser job": "Cutting/expanding a door opening that came in too small",',
-     '    "chaser job_": "Cutting/expanding a door opening that came in too small",'),
+     '"fuente": tipo,\n                        "cuenta": a not in _info}',
+     '"fuente": tipo,\n                        "cuenta": True}'),
+
+    ("las informativas salen «fuera del plan» aunque su etapa sea de la obra",
+     "core/vocabulario.py",
+     "        en_plan |= {n for e in plan for n in S.informativas(e.get(\"pista\"), e.get(\"numero\"))}",
+     "        pass"),
 
     # ── (g) el orden de los terminos ──────────────────────────────────────────
     ("el termino CORTO gana al largo (la luz generica tapa a «work lighting»)",
@@ -210,10 +223,18 @@ print("   verde")
 print("")
 print("1. Roturas (cada una debe ponerse ROJA)")
 cazadas = total = 0
+# ⚠️ Una rotura que NO se puede aplicar ya no desaparece del recuento: pone la
+# bateria en ROJO. Antes se contaba solo lo aplicado, asi que un ancla muerta o
+# repetida salia como «??» y el total anunciaba «27 de 27» sin haberla probado — paso
+# en v517 con un ancla que aparecia DOS veces, y `check_anclas_roturas` no la veia
+# porque su regla es «aparece al menos una vez». Lo dije en v516 («una bateria no
+# avisa de sus anclas muertas, solo las salta») y lo deje asi: ahora avisa.
+saltadas = []
 for desc, rel, viejo, nuevo in ROTURAS:
     _ok, bak, p, n = aplica(rel, viejo, nuevo)
     if _ok is None:
         print("  ??      ancla %s -> %s" % ("ausente" if n == 0 else "x%d" % n, desc))
+        saltadas.append(desc)
         continue
     total += 1
     try:
@@ -238,4 +259,7 @@ else:
 
 print("")
 print("=== %d de %d roturas cazadas ===" % (cazadas, total))
-sys.exit(0 if cazadas == total else 1)
+if saltadas:
+    print("⚠️ %d rotura(s) NO se pudieron aplicar: la bateria no las ha probado"
+          % len(saltadas))
+sys.exit(0 if cazadas == total and not saltadas else 1)

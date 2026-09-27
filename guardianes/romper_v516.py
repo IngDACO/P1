@@ -149,10 +149,14 @@ print("   verde")
 print("")
 print("1. Roturas (cada una debe ponerse ROJA)")
 cazadas = total = 0
+# ⚠️ v519 · Una rotura que NO se puede aplicar pone la bateria en ROJO (ver romper_v519):
+# antes desaparecia del recuento y el total anunciaba «N de N» sin haberla probado.
+saltadas = []
 for desc, rel, viejo, nuevo in ROTURAS:
     _ok, bak, p, n = aplica(rel, viejo, nuevo)
     if _ok is None:
         print("  ??      ancla %s en %s -> %s" % ("ausente" if n == 0 else "x%d" % n, rel, desc))
+        saltadas.append(desc)
         continue
     total += 1
     try:
@@ -177,4 +181,7 @@ else:
 
 print("")
 print("=== %d de %d roturas cazadas ===" % (cazadas, total))
-sys.exit(0 if cazadas == total else 1)
+if saltadas:
+    print("⚠️ %d rotura(s) NO se pudieron aplicar: la bateria no las ha probado"
+          % len(saltadas))
+sys.exit(0 if cazadas == total and not saltadas else 1)

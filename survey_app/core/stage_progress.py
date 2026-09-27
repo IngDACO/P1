@@ -169,11 +169,19 @@ def _sobre(plan, mapa) -> list:
     mismo cruce. Dos maneras de mezclar catálogo y créditos acabarían enseñando un
     porcentaje y guardando otro (regla v361).
     """
+    from core import stages as S
     out = []
     for i, e in enumerate(plan or [], start=1):
         _acts = [{**a, "pct": (mapa or {}).get((i, a["nombre"]), 0.0)}
                  for a in e["actividades"]]
-        out.append({**e, "orden": i, "actividades": _acts, "pct": avance_de(_acts)})
+        # ⚠️ v519 · Las INFORMATIVAS van en su PROPIA clave, nunca dentro de
+        # `actividades`. Esa es toda la garantía de que no mueven el avance: `avance_de`
+        # recibe `_acts` y nada más, así que aunque estén marcadas no llegan a la fórmula
+        # — ni a la curva S, ni al SPI, ni a la reclamación, que leen lo que de aquí sale.
+        _info = [{"nombre": n, "pct": (mapa or {}).get((i, n), 0.0)}
+                 for n in S.informativas(e.get("pista"), e.get("numero"))]
+        out.append({**e, "orden": i, "actividades": _acts, "informativas": _info,
+                    "pct": avance_de(_acts)})
     return out
 
 
@@ -250,8 +258,14 @@ def acreditar(pid, grupo, prj, creditos_nuevos, quien="", origen=MANUAL) -> tupl
     # cuenta para ningún denominador, o sea un número que no se puede explicar.
     _validas = {(i, a["nombre"]) for i, e in enumerate(_plan, start=1)
                 for a in e["actividades"]}
+    # ⚠️ v519 · Las INFORMATIVAS de esta obra también se pueden marcar —«entran», decidió
+    # el usuario—, pero van en su propio conjunto: ver abajo por qué importa separarlas.
+    from core import stages as S
+    _info = {(i, n) for i, e in enumerate(_plan, start=1)
+             for n in S.informativas(e.get("pista"), e.get("numero"))}
     _malos = [c for c in (creditos_nuevos or [])
-              if (int(_num(c.get("etapa"))), str(c.get("actividad", ""))) not in _validas]
+              if (int(_num(c.get("etapa"))), str(c.get("actividad", "")))
+              not in (_validas | _info)]
     if _malos:
         return False, t("Not in this job's plan: {x}",
                         x=", ".join(str(c.get("actividad", "?")) for c in _malos[:3]))
@@ -269,7 +283,12 @@ def acreditar(pid, grupo, prj, creditos_nuevos, quien="", origen=MANUAL) -> tupl
         _et = int(_num(c.get("etapa")))
         _ac = str(c.get("actividad", ""))
         _pc = max(0.0, min(100.0, _num(c.get("pct"))))
-        _tocadas.add(_et)
+        # ⚠️ Solo una actividad CON PESO toca su etapa. Marcar una informativa guarda el
+        # hecho y nada más: sin esto, su etapa se recalculaba y se reescribía en
+        # `Activities.Progress` con el MISMO número — una escritura inútil contra la
+        # cuota y, peor, una que haría creer que la informativa movió algo.
+        if (_et, _ac) in _validas:
+            _tocadas.add(_et)
         _despues[(_et, _ac)] = _pc
         row, _ant = _fila(w, pid, _et, _ac)
         if row is None:

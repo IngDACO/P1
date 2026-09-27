@@ -152,15 +152,25 @@ CASOS = [
     ("ripped out top 3 rings", RIP, "act", {"Rip out mechanical components - traction"},
      set(), "«e.g. top 3 rings being ripped out — folded into the traction line»"),
     ("Picked up rip-out kit", RIP, "act", {"Rip-out kit delivery"}, set(), "R0"),
+    # ── v519 · decisiones del usuario del 27/09/2026 ─────────────────────────────
+    ("roping all day", INST, "act", {"Install belts (motor, CW, cabin)"}, set(),
+     "USER DECISION (option A): «roping means the lift was being belted that day»"),
+    ("Chaser job on level 3", INST, "act",
+     {"Cut/expand concrete door openings (chaser job)"}, set(),
+     "«occasionally an opening is undersized … needs a chaser job» — informative"),
+    ("programming with Danilo", INST, "act", {"Program controller parameters"}, set(),
+     "«confirmed real-world activity, e.g. programming with [name] in logs»"),
+    ("make lift as light as possible", RIP, "act",
+     {"Lighten cabin if too heavy for intended tirak ratio"}, set(),
+     "«Strip components to reduce weight (make lift as light as possible)»"),
 ]
 
 # Casos que el documento resuelve de DOS maneras incompatibles. No se puntúan: se
 # informan. Elegir una en silencio sería decidir por el usuario.
-CONTRADICCIONES = [
-    ("roping", "Glosario: «roping specifically means the lift was being belted that day "
-               "(Stage 13, Install belts)». Ambiguos: «Roping is a generic verb spanning "
-               "multiple rope tasks … Don't default it to one fixed stage» (Danilo, Sep 2026)."),
-]
+# ⚠️ VACÍA desde v519: la única que había —«roping»— la resolvió el usuario el
+# 27/09/2026 (opción A, belting) y ahora es un caso puntuado más arriba. La lista se
+# queda: la próxima contradicción del documento tiene que tener dónde informarse.
+CONTRADICCIONES = []
 
 
 def evalua(frase, plan, tipo, esperado, descartado):
@@ -220,8 +230,9 @@ def _informe():
                   % sorted({c["actividad"] for c in r["fuera_del_plan"]}))
         print("     documento:      %s" % porque)
 
-    print("")
-    print("SIN PUNTUAR — el documento se contradice:")
+    if CONTRADICCIONES:
+        print("")
+        print("SIN PUNTUAR — el documento se contradice:")
     for term, txt in CONTRADICCIONES:
         r = V.buscar(term, INST)
         print("  «%s» -> hoy propone %s"

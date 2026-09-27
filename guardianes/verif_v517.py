@@ -60,7 +60,10 @@ def sec(x):
 from core import stages as S                                      # noqa: E402
 from core import vocabulario as V                                 # noqa: E402
 
-CAT = {a[0] for _v in S.ACTIVIDADES.values() for a in _v}
+# ⚠️ v519: con las INFORMATIVAS. Son actividades del catálogo aunque no pesen, así que un
+# sinónimo que apunte a una de ellas apunta a algo real.
+CAT = ({a[0] for _v in S.ACTIVIDADES.values() for a in _v}
+       | {n for _v in S.INFORMATIVAS.values() for n in _v})
 
 # ═════════════════════════════════════════════════════════════════
 sec("1. ⚠️ Toda actividad nombrada EXISTE en el catálogo")
@@ -195,15 +198,17 @@ chk("«Cleaned all of the rails» encuentra «Clean rails» (el relleno no gasta
     any(c["actividad"] == "Clean rails"
         for c in V.buscar("Cleaned all of the rails", _inst)["candidatos"]))
 
-sec("3f. ⚠️ La contradicción del documento («roping») NO se resuelve sola")
-# Mientras el usuario no diga cuál de sus dos lecturas vale, no acredita nada — y se
-# MARCA, para que no se ignore en silencio. Las dos cosas; con una sola no basta.
+sec("3f. «Roping» = belting, por decisión del usuario (27/09/2026)")
+# ⚠️ CADUCADO POR DECISIÓN, no relajado (regla v385). En v518 esto exigía que «roping»
+# NO acreditara nada y saliera marcado, porque el documento del usuario lo resolvía de
+# dos maneras incompatibles. El usuario eligió la A —«belting ese día»—, así que la
+# contradicción ya no existe y la afirmación se INVIERTE: ahora propone Install belts, y
+# NO puede seguir saliendo ambiguo (eso sería no haber aplicado la decisión).
 _r = V.buscar("roping all day", _inst)
-chk("«roping» no propone ninguna actividad", not _r["candidatos"],
+chk("«roping» propone Install belts",
+    [c["actividad"] for c in _r["candidatos"]] == ["Install belts (motor, CW, cabin)"],
     [c["actividad"] for c in _r["candidatos"]])
-chk("...pero sale MARCADO, con la contradicción en su regla",
-    any(a["termino"] == "roping" and "CONTRADICTORY" in a["regla"] for a in _r["ambiguos"]),
-    [a["termino"] for a in _r["ambiguos"]])
+chk("...y ya NO sale como ambiguo", not _r["ambiguos"], [a["termino"] for a in _r["ambiguos"]])
 
 # ═════════════════════════════════════════════════════════════════
 sec("4. ⚠️ Lo ambiguo sale MARCADO, no resuelto")
@@ -241,18 +246,27 @@ chk("un texto sin nada reconocible NO se disfraza de no-avance",
     not _vacio["no_avance"] and not _vacio["candidatos"])
 
 # ═════════════════════════════════════════════════════════════════
-sec("6. Los términos sin actividad en el catálogo se DECLARAN")
+sec("6. Lo que estaba «sin actividad» ahora es INFORMATIVO (v519)")
+# ⚠️ CADUCADO POR DECISIÓN (regla v385). Aquí se exigía que «chaser job» saliera como
+# término SIN actividad. El 27/09/2026 el usuario decidió que las cuatro actividades del
+# desglose de tareas «entran, pero a modo informativo», así que tiene casa: se propone,
+# y lo que hay que vigilar ahora es que diga que NO CUENTA.
 _r = V.buscar("Chaser job on level 3 today.", _inst)
-chk("«chaser job» se reconoce y se dice que no tiene actividad",
-    [s["termino"] for s in _r["sin_actividad"]] == ["chaser job"],
-    _r["sin_actividad"])
-chk("...y NO se cuelga de la actividad más parecida", not _r["candidatos"],
+_c = [c for c in _r["candidatos"]
+      if c["actividad"] == "Cut/expand concrete door openings (chaser job)"]
+chk("«chaser job» propone su actividad informativa", bool(_c),
     [c["actividad"] for c in _r["candidatos"]])
-chk("...cada uno explica qué trabajo es",
-    all(len(v) > 15 for v in V.SIN_ACTIVIDAD.values()))
-# ⚠️ Y que no se solapen con el catálogo: si una de estas apareciera como actividad,
-# la declaración estaría caducada y habría que quitarla de aquí.
-chk("...y ninguna es ya una actividad del catálogo",
+chk("...marcada como que NO cuenta (`cuenta=False`)",
+    bool(_c) and all(c["cuenta"] is False for c in _c), [c.get("cuenta") for c in _c])
+chk("...y no sale «fuera del plan»: la etapa 7 SÍ es de esta obra",
+    not _r["fuera_del_plan"], [c["actividad"] for c in _r["fuera_del_plan"]])
+# ⚠️ Y lo que SÍ pesa tiene que decir que cuenta, o el marcador no distingue nada.
+chk("una actividad con peso sale con `cuenta=True`",
+    all(c["cuenta"] is True
+        for c in V.buscar("Installed/levelled MBB", _inst)["candidatos"]))
+# ⚠️ SIN_ACTIVIDAD queda VACÍO a propósito, pero el mecanismo se queda. Si algún día
+# vuelve a tener algo, no puede solaparse con el catálogo ni con las informativas.
+chk("SIN_ACTIVIDAD no se solapa con ninguna actividad, con o sin peso",
     not [k for k in V.SIN_ACTIVIDAD if k in {c.lower() for c in CAT}])
 
 # ═════════════════════════════════════════════════════════════════
@@ -309,7 +323,9 @@ sec("9. ⚠️ El corpus de frases REALES, dentro de la suite")
 # ⚠️ Y el número es un TECHO, no una estimación: el vocabulario salió de los MISMOS
 # documentos, así que mide si se transcribió bien, no si generaliza. Está dicho en el
 # propio corpus.
-SUELO_ACIERTOS = 45
+# ⚠️ 45 → 49 en v519: cuatro casos NUEVOS (roping resuelto por el usuario y tres
+# informativas), no un suelo relajado. Subido a la vez que los casos, con la razón.
+SUELO_ACIERTOS = 49
 sys.path.insert(0, os.path.join("C:" + os.sep, "Users", "diego", "P1", "guardianes"))
 import ejercitar_v517_corpus as _C                                # noqa: E402
 _cu, _ma, _ms = _C.resultados()

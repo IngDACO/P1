@@ -198,21 +198,31 @@ SINONIMOS = {
     # mismo recado es «Receive lift delivery». El plan de la obra elige cuál vale.
     "picked up delivery": ["Other deliveries", "Receive lift delivery"],
     "ripped out rings": ["Rip out mechanical components - traction"],  # «top 3 rings»
+    # ── v519 · decisiones del usuario del 27/09/2026 ──────────────────
+    # «Roping» = BELTING ese día (su opción A). El documento decía dos cosas y estuvo
+    # marcado sin acreditar hasta que el usuario eligió; ahora la contradicción no existe.
+    "roping": ["Install belts (motor, CW, cabin)"],
+    # Las que estaban «sin actividad» ya tienen casa: entran como INFORMATIVAS
+    # (`stages.INFORMATIVAS`) — se reconocen y se pueden marcar, no cuentan.
+    "lighten cabin": ["Lighten cabin if too heavy for intended tirak ratio"],
+    "make lift as light as possible": ["Lighten cabin if too heavy for intended tirak ratio"],
+    "bridging": ["Bridge landing door circuit (temporary)"],
+    "bridge landing door": ["Bridge landing door circuit (temporary)"],
+    "chaser job": ["Cut/expand concrete door openings (chaser job)"],
+    "programming": ["Program controller parameters"],     # «programming with [name]»
+    "program controller": ["Program controller parameters"],
 }
 
 # ⚠️ Términos que el documento reconoce como REALES pero que NO tienen actividad en el
-# catálogo, porque están en el desglose de tareas y no en el documento de etapas del que
-# salió `stages.py` — los dos documentos han derivado. No se mapean a la actividad más
-# parecida: eso sería inventar trabajo donde no lo hay, y con peso ajeno. Se reconocen y
-# se dicen, para que el usuario decida si entran al catálogo y cuánto pesan.
-# ⚠️ En INGLÉS, como todo lo que puede llegar a pantalla (v441-v452). Nacieron en
-# español y `verif_v448` los cazó: son descripciones de trabajo, o sea texto que alguien
-# acabará leyendo, no comentarios de código.
-SIN_ACTIVIDAD = {
-    "lighten cabin": "Lightening the cabin for the tirak ratio (R2 in the breakdown)",
-    "bridging": "Temporary bridge on the landing door circuit",
-    "chaser job": "Cutting/expanding a door opening that came in too small",
-}
+# catálogo. No se mapean a la actividad más parecida: eso sería inventar trabajo donde no
+# lo hay, y con peso ajeno. Se reconocen y se dicen, para que el usuario decida.
+# ⚠️ VACÍO desde v519, y a propósito: las tres que había (lighten cabin, bridging,
+# chaser job) el usuario decidió que ENTRAN como informativas, así que ya tienen casa en
+# `stages.INFORMATIVAS` y se mapean arriba como sinónimos. El mecanismo se queda: el
+# desglose de tareas «se irá haciendo más granular», dice su propia cabecera, y lo
+# próximo que no case tiene que tener dónde declararse en vez de colgarse de otra cosa.
+# ⚠️ En INGLÉS, como todo lo que puede llegar a pantalla (v441-v452).
+SIN_ACTIVIDAD = {}
 
 # ⚠️ Frases que el documento marca como GENUINAMENTE ambiguas: no se resuelven con
 # vocabulario porque dependen de por dónde va la obra. Cada una trae la regla TAL COMO
@@ -260,20 +270,8 @@ AMBIGUOS = {
         "regla": "Vague, with no further detail: defaults to the mechanical landing-door "
                  "install rather than being left unscoreable.",
     },
-    # ⚠️ El DOCUMENTO SE CONTRADICE aquí, y no se resuelve en silencio. El glosario dice
-    # «roping specifically means the lift was being belted that day (Stage 13)»; la
-    # sección de ambiguos, con confirmación (Danilo, Sep 2026), dice «Roping is a generic
-    # verb … Don't default it to one fixed stage». Estaba como sinónimo de Install belts
-    # —la primera lectura— y el corpus lo destapó. Mientras el usuario no diga cuál vale,
-    # queda MARCADO: no acredita nada, que es lo único que no puede salir mal.
-    "roping": {
-        "alternativas": ["Install belts (motor, CW, cabin)",
-                         "Attach speed governor rope to cabin"],
-        "regla": "CONTRADICTORY in the source doc. Glossary: roping means the lift was "
-                 "being belted that day (Stage 13). Ambiguous-entries section: roping is "
-                 "a generic verb across several rope tasks, don't fix it to one stage. "
-                 "Pending the user's call.",
-    },
+    # (v518 tuvo aquí «roping», marcado por contradicción del documento. El 27/09/2026 el
+    # usuario eligió «belting ese día»: ahora está en SINONIMOS y no es ambiguo.)
     # «joined flex with Belden»: «flex» a secas es el cable sin zona (Belden es la marca).
     "flex": {
         "alternativas": ["Traveller/flat/flex cables (under cabin)", "Flex cables (top of cabin)"],
@@ -537,6 +535,14 @@ def _terminos() -> dict:
             _base = re.sub(r"\s*\(.*?\)\s*", " ", a[0]).strip()
             if _base and _base != a[0]:
                 _pon(_base, "nombre", [a[0]])
+    # 1b. v519 · Las INFORMATIVAS, por su nombre: se reconocen igual que las que pesan.
+    # Que no cuenten lo dice el candidato (`cuenta=False`), no el buscador.
+    for _v in S.INFORMATIVAS.values():
+        for n in _v:
+            _pon(n, "nombre", [n])
+            _base = re.sub(r"\s*\(.*?\)\s*", " ", n).strip()
+            if _base and _base != n:
+                _pon(_base, "nombre", [n])
     # 2. Sus tareas.
     for act, tareas in TAREAS.items():
         for t in tareas:
@@ -560,10 +566,16 @@ def buscar(texto, plan=None) -> dict:
     # ⚠️ `plan_de` devuelve ETAPAS con sus actividades DENTRO —comprobado ejecutándolo,
     # no supuesto (v385)—, así que hay que aplanarlas. Leerlo mal dejaría `en_plan`
     # vacío, y un filtro vacío no filtra: pasaría en verde sin proteger nada (nº1).
+    from core import stages as S
     en_plan = None
     if plan:
         en_plan = {str(a.get("nombre") if isinstance(a, dict) else a)
                    for e in plan for a in (e.get("actividades") or [])}
+        # ⚠️ v519 · Y las informativas de las etapas QUE ESTA OBRA TIENE: sin esto, un
+        # «chaser job» en una instalación salía como «fuera del plan», que es falso — la
+        # etapa 7 sí está en el plan; lo que pasa es que esa actividad no pesa.
+        en_plan |= {n for e in plan for n in S.informativas(e.get("pista"), e.get("numero"))}
+    _info = {n for _v in S.INFORMATIVAS.values() for n in _v}
 
     # ⚠️ UNA sola pasada para los cuatro tipos, del término más largo al más corto, con
     # una sola máscara. Antes los candidatos iban primero y lo ambiguo después, cada uno
@@ -607,7 +619,11 @@ def buscar(texto, plan=None) -> dict:
                 if (a, term) in vistos:
                     continue
                 vistos.add((a, term))
-                fila = {"actividad": a, "termino": term, "fuente": tipo}
+                # ⚠️ `cuenta` dice si mover esta casilla mueve el avance. Lo necesita quien
+                # venga detrás (F2b, la pantalla): proponer una informativa como si fuera
+                # avance haría creer que un «chaser job» subió la etapa.
+                fila = {"actividad": a, "termino": term, "fuente": tipo,
+                        "cuenta": a not in _info}
                 (fuera if en_plan is not None and a not in en_plan else dentro).append(fila)
         elif clase == "amb":
             amb.append(dato)
@@ -619,7 +635,8 @@ def buscar(texto, plan=None) -> dict:
                 a = dato["alternativas"][0]
                 if (a, dato["termino"]) not in vistos:
                     vistos.add((a, dato["termino"]))
-                    fila = {"actividad": a, "termino": dato["termino"], "fuente": "defecto"}
+                    fila = {"actividad": a, "termino": dato["termino"], "fuente": "defecto",
+                            "cuenta": a not in _info}
                     (fuera if en_plan is not None and a not in en_plan
                      else dentro).append(fila)
         elif clase == "noav":

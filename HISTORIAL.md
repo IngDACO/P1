@@ -10,6 +10,74 @@ ventana de contexto. Contenido: 258 secciones detalladas + el índice de 440 ver
 
 ---
 
+## LAS DECISIONES DEL USUARIO DEL 27/09/2026 (v519)
+
+Cuatro preguntas que v518 dejó abiertas, contestadas por el usuario en una línea cada una:
+
+| | Pregunta | Decisión |
+|---|---|---|
+| 1 | «Roping»: su documento lo resolvía de dos maneras | **A** — es *belting* ese día |
+| 2 | Cuatro actividades del desglose de tareas que no estaban en el catálogo | **Entran, a modo informativo** |
+| 3 | Cuánto pesa el desmontaje en una obra combinada (heredado: 14%) | **50/50, de momento** |
+| 4 | ¿El parte diario trabaja sin conexión? | **No, de momento** — no hay código |
+
+### 1 · Roping
+Vuelve a ser sinónimo de *Install belts*. En v518 estaba MARCADO y sin acreditar nada
+porque el documento se contradecía; con la decisión, la contradicción ya no existe y los
+guardianes que vigilaban «no acreditar» se INVIERTEN — caducados por decisión, no relajados.
+
+### 2 · Las informativas: se marcan, NO cuentan
+*Lighten cabin* (R2), *Bridge landing door circuit* y *Cut/expand concrete door openings /
+chaser job* (etapa 7), *Program controller parameters* (etapa 14) — cada una en la etapa
+donde la pone el propio desglose de tareas.
+
+⚠️ **Van en una tabla APARTE (`stages.INFORMATIVAS`), no en la de pesos con peso cero.**
+Dos razones: `validar()` rechaza a propósito todo peso ≤ 0 —la regla caza un cero que
+debería ser un número—, y así es **imposible** que muevan el avance: `plan_de`, la
+renormalización y `avance_de` no las reciben NUNCA. No es que valgan cero; es que las
+cuentas no las ven. Eso es más fuerte que un cero, que alguien puede cambiar.
+
+⚠️ `_sobre` las pone en su PROPIA clave de cada etapa, y `acreditar` las acepta pero
+**solo una actividad con peso toca su etapa**: marcar una informativa guardaba antes el
+hecho y reescribía `Activities.Progress` con el MISMO número — una escritura inútil contra
+la cuota y una que haría creer que movió algo. En el móvil salen debajo, **sin porcentaje**
+y con el aviso *«For the record only — ticking these does not change the progress»*.
+
+⚠️ **Por eso NO sube `VERSION`.** La versión identifica el JUEGO DE PESOS, y esto no añade
+ninguno. Subirla habría bloqueado en solo lectura obras cuyo avance no cambió.
+
+### 3 · El 50/50 solo afecta a obras NUEVAS
+Comprobado ANTES de tocarlo, porque el reparto mueve el avance y el avance se reclama:
+`projects.plan_nuevo` **sella** el porcentaje en el `StagePlanJSON` de cada obra, y
+`plan_de_obra` lee el sellado. Una obra combinada creada con 14 se sigue midiendo con 14.
+⚠️ Es PESO, no tiempo: los días siguen saliendo de `schedule.DIAS_POR_PISTA`.
+
+### ⚠️ La huella de los pesos: el contrato de v514 deja de ser disciplina
+La obra sella la versión del juego de pesos y `version_desfasada` la deja en solo lectura si
+el catálogo cambió — pero eso solo funciona si quien cambia un peso SUBE la versión, y hasta
+hoy lo sostenía la disciplina. `verif_v519` guarda una **huella (sha256) de los pesos por
+versión**: cambiar UNA décima sin subir `VERSION` es un rojo. Las informativas no entran en
+la huella. Comprobado contra el HEAD anterior: huella idéntica (`7240bebb83ccab8f`).
+
+### ⚠️ Las baterías dejan de saltarse roturas en silencio
+En v516 escribí «una batería no avisa de sus anclas muertas, solo las salta» y lo dejé así.
+En esta tanda volvió a pasar: un ancla aparecía **dos veces**, la batería la saltó con «??»
+y anunció «27 de 27» contando solo lo aplicado — y `check_anclas_roturas` no lo vio, porque
+su regla es «aparece al menos una vez». Endurecer esa regla marcaría como muertas **diez
+tuplas sanas** de baterías viejas que sustituyen la primera aparición a propósito (medido).
+El arreglo va en las baterías: en v516, v517 y v519 una rotura no aplicable pone la batería
+en **ROJO**. Validado con una sonda: una batería con un ancla muerta decía «0 de 0 roturas
+cazadas» y salía **en verde**; ahora sale en rojo. Y la de v516 destapó que anunciaba 19 de
+19 teniendo 20.
+
+### Verificación
+`verif_v519`, **28 comprobaciones** — con la etapa **a medias** (31%): la primera prueba que
+hice fue con la etapa vacía y dio «0,0% → 0,0%», que no demuestra nada. Batería **13/13 +
+control**. `verif_v517` 62 · corpus **49/49**, 0 errores (roping y tres informativas como
+casos nuevos, suelo del trinquete 45 → 49 con la razón). **Hoja real 22/22**: etapa 7 a
+**31,0% → 31,0%** y obra **3,50% → 3,50%** tras marcar las informativas, leído de la hoja;
+combinada nueva sella 50, la que selló 14 sigue en 14. Limpia por dos caminos.
+
 ## EL VOCABULARIO, PUESTO A PRUEBA CONTRA FRASES REALES (v518)
 
 El usuario pidió «testea si funciona, ponlo a prueba». El problema de base: no hay partes
@@ -12046,7 +12114,7 @@ comprueba lo que dice**.
 
 ---
 
-## Versiones desplegadas (v518 = actual)
+## Versiones desplegadas (v519 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -12054,6 +12122,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v519 | **Las decisiones del usuario del 27/09.** (1) «Roping» = belting: la contradicción de su documento, resuelta. (2) Cuatro actividades **entran a modo informativo**: se marcan y NO cuentan — ⚠️ en una tabla APARTE, no con peso cero (`validar` lo rechaza a propósito), así que `avance_de` no las recibe nunca; ⚠️ marcarlas no toca `Activities.Progress`. (3) **50/50** en obras combinadas — ⚠️ solo NUEVAS: el reparto va sellado en cada obra, comprobado antes de tocarlo. (4) Sin offline, de momento. ⚠️ **La huella de los pesos**: cambiar una décima sin subir `VERSION` ya es rojo — el contrato de v514 deja de depender de la disciplina. ⚠️ Las baterías **dejan de saltarse roturas en silencio**: una que anunciaba «0 de 0» salía en verde, y la de v516 decía 19 de 19 teniendo 20. Hoja real: etapa **31,0 → 31,0%** y obra **3,50 → 3,50%** tras marcar las informativas. 28 comprobaciones · **13/13 + control** · corpus 49/49 · hoja real 22/22 · suite 150 verde |
 | v518 | **El vocabulario, puesto a prueba contra frases REALES.** Sin partes en bruto, una frase que invento yo acierta siempre; así que el corpus son **45 frases que el usuario CITA** de partes de verdad, con la respuesta que da su documento al lado, y 5 negativas de su sección de bloqueos. ⚠️ **Primera pasada: 55%.** El peor fallo: `install` no casaba con `installed` — el verbo más frecuente de los partes — y **el guardián lo tenía blindado** afirmando la forma en vez del principio (nº16). Además: cantidades en medio («Cleaned 4 car rails»), el paréntesis del nombre, vocabulario sin transcribir y lo «por defecto» sin puntuar. ⚠️ Tolerar palabras en medio abrió un riesgo que el negativo **midió**: «cleaned the pit, rails arriving» acreditaba Clean rails — ahora el hueco no cruza una coma. ⚠️ **El documento se contradice** con «roping»: marcado y sin acreditar hasta que el usuario decida. ⚠️ El 100% es un **techo**, no una estimación: mide la transcripción, no la generalización. Hoja real 29/29, limpia por dos caminos. **45/45 · 0 errores · 27/27 + control** · suite 149 verde |
 | v517 | **El vocabulario de obra: 339 términos que apuntan a actividades reales.** F2a — la mitad DETERMINISTA de interpretar el parte, sin modelo ni API. Sale del documento de conocimiento del usuario, que no es documentación sino el poso CORREGIDO de pasar un intérprete sobre partes reales (**58 anotaciones «(Danilo, Sep 2026)»**). ⚠️ Esos documentos solo existían dentro de un transcript de 19 MB tras dos compactaciones: rescatados a `docs/`. ⚠️ Sirve de **barandilla**: solo se puede proponer una actividad del plan SELLADO de esa obra, así que el modelo no podrá inventarse un nombre (regla v509). Un parte de instalación que diga «tirak» recibe **0 candidatos**. ⚠️ Lo ambiguo sale MARCADO con su regla, nunca resuelto: el documento dice que «under the cabin work» depende de la CRONOLOGÍA, que es el dato que `stage_progress` guarda desde v514. ⚠️ Tres actividades existen en un documento y no en el otro — declaradas, no colgadas de la más parecida. ⚠️ **Mi comentario decía algo que el código no hacía**: ordenaba por longitud y nunca usaba el orden; el `sorted` era decorativo y lo destapó la batería. 41 comprobaciones · **18/18 + control** · suite 149 verde |
 | v516 | **El parte diario en texto libre: el campo cuenta el día en sus palabras.** F1 de lo que pidió el usuario, y **solo la primera mitad**: texto con obra, fecha y autor, sin IA. ⚠️ El texto va ANTES que el intérprete porque probarlo con frases que yo me invente **acierta siempre** (trampa nº1): desplegado esto, el corpus crece con el vocabulario REAL de los instaladores. ⚠️ La caja **solo se vacía si la hoja confirmó** — quien escribe 200 palabras en un sótano y las ve desaparecer no vuelve. ⚠️ Se **añade, no se edita**: borrar solo lo propio y del día, porque el valor es que sea *lo que alguien dijo que hizo ese día*. ⚠️ Va FUERA de Avance: ahí se marcan casillas del catálogo, aquí cabe lo que el catálogo no recoge (esperas, accesos, material). ⚠️ **El fallo lo encontró la hoja REAL**: dos partes del mismo MINUTO empataban en `Created` y salían al revés — y mi reloj de mentira devolvía una cadena fija, así que **el guardián medía al stub**. ⚠️ Cuatro rojos en la suite: dos fallos míos cazados por guardianes viejos (un icono que se habría pintado literal, tres lecturas sin canonizar), uno del guardián acusando código sano (`except ... as e` no es un `ast.Name`) y uno de `check_anclas_roturas` **cazando un ancla muerta en mi propia batería el día que nació**. 58 comprobaciones · **19/19 + control** · 17/17 hoja real · suite 148 verde |
