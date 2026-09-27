@@ -107,18 +107,77 @@ chk("...y entonces no hay nada «fuera del plan»", not _r3["fuera_del_plan"])
 
 # ═════════════════════════════════════════════════════════════════
 sec("3. La raíz une formas de una palabra y NO junta palabras distintas")
-for _a, _b in (("tune", "tun"), ("tuned", "tun"), ("tuning", "tun"),
-               ("prepped", "prep"), ("doors", "door"), ("fitted", "fit"),
-               ("install", "install"), ("off", "off"), ("ceiling", "ceil")):
+# ⚠️ CADUCADO Y CORREGIDO (regla v385), y conviene que se lea por qué. Esta sección
+# afirmaba «install → install», o sea la FORMA de la raíz. El corpus de frases reales
+# demostró que esa forma era la EQUIVOCADA: con ella «installed» e «installing» daban
+# «instal» y ninguna casaba con el «Install …» del catálogo — el verbo más frecuente de
+# los partes, roto, y este guardián lo tenía BLINDADO. Trampa nº16 en un guardián
+# escrito el mismo día. Lo que se afirma ahora es el PRINCIPIO: las formas de un verbo
+# caen en la misma raíz. Cuál sea esa raíz da igual; que sea la misma, no.
+for _verbo in (("tune", "tuned", "tuning"), ("install", "installed", "installing"),
+               ("prep", "prepped", "prepping"), ("fit", "fitted", "fitting"),
+               ("clean", "cleaned", "cleaning"), ("wire", "wired", "wiring")):
+    chk("las formas de «%s» coinciden" % _verbo[0],
+        len({V._raiz(w) for w in _verbo}) == 1, [V._raiz(w) for w in _verbo])
+for _a, _b in (("doors", "door"), ("ceiling", "ceil"), ("off", "off")):
     chk("«%s» → «%s»" % (_a, _b), V._raiz(_a) == _b, V._raiz(_a))
-# ⚠️ Las tres formas del verbo tienen que caer en la MISMA raíz, que es el punto.
-chk("...las tres formas de «tune» coinciden",
-    V._raiz("tune") == V._raiz("tuned") == V._raiz("tuning"))
 # ⚠️ Y el caso conocido-malo: palabras distintas NO pueden colapsar en la misma.
 _distintas = [("motor", "mount"), ("rail", "ring"), ("door", "deck"), ("pit", "pack")]
 chk("...y palabras distintas siguen siendo distintas",
     all(V._raiz(a) != V._raiz(b) for a, b in _distintas),
     [(a, b) for a, b in _distintas if V._raiz(a) == V._raiz(b)])
+
+sec("3a. El hueco: tolera la cantidad en medio, NO cruza una oración, NO se estira")
+# ⚠️ Los instaladores meten cantidad y sitio en medio de la frase del catálogo.
+chk("«Cleaned 4 car rails» encuentra «Clean rails» (2 palabras en medio)",
+    any(c["actividad"] == "Clean rails"
+        for c in V.buscar("Cleaned 4 car rails", _inst)["candidatos"]))
+# ⚠️ El negativo que lo destapó: la coma separa dos oraciones y los rieles NI HABÍAN
+# LLEGADO. Sacado de los bloqueos del documento, no inventado.
+chk("...pero NO cruza una coma («cleaned the pit, rails arriving tomorrow»)",
+    not any(c["actividad"] == "Clean rails"
+            for c in V.buscar("cleaned the pit, rails arriving tomorrow",
+                              _inst)["candidatos"]))
+chk("...y NO se estira más de %d palabras" % V.HUECO,
+    not any(c["actividad"] == "Clean rails"
+            for c in V.buscar("cleaned old dusty spare car rails", _inst)["candidatos"]))
+# ⚠️ La raya entre espacios corta; dentro de una palabra, no («3-phase», «rip-out»).
+chk("una raya DENTRO de una palabra no corta la frase («3-phase outlet for orange box»)",
+    any("orange box" in c["termino"] or "mains power" in c["actividad"].lower()
+        for c in V.buscar("Wired 3-phase outlet for orange box", _rip)["candidatos"]))
+
+sec("3c. Una sola pasada: gana el término más largo, sea del tipo que sea")
+# ⚠️ Con el sitio nombrado va al sitio, y NO se marca además como ambiguo.
+_r = V.buscar("fixed ladder contact", _inst)
+chk("«ladder contact» va a Ladder contact",
+    any(c["actividad"] == "Ladder contact" for c in _r["candidatos"]))
+chk("...y NO sale además «contacts» ambiguo (el sitio ya lo resolvió)",
+    not _r["ambiguos"], [a["termino"] for a in _r["ambiguos"]])
+# ⚠️ Sin zona, flex es AMBIGUO aunque exista una actividad llamada «Flex cables».
+_r = V.buscar("joined flex cable with Belden", _inst)
+chk("«flex cable» sin zona sale AMBIGUO",
+    any(a["termino"] in ("flex cable", "flex") for a in _r["ambiguos"]))
+chk("...y no se cuela como «Flex cables (top of cabin)» a secas",
+    not any(c["actividad"] == "Flex cables (top of cabin)" for c in _r["candidatos"]))
+_r = V.buscar("ran the flex cables on top of the cabin", _inst)
+chk("...pero CON la zona escrita, va a la suya",
+    any(c["actividad"] == "Flex cables (top of cabin)" for c in _r["candidatos"]),
+    [c["actividad"] for c in _r["candidatos"]])
+
+sec("3d. Lo que el documento manda «por defecto» se propone, con su origen")
+_r = V.buscar("Pit doors", _inst)
+_d = [c for c in _r["candidatos"] if c["actividad"] == "Install door panels"]
+chk("«Pit doors» propone Install door panels", bool(_d))
+chk("...marcado como «defecto», no como si lo hubiera leído",
+    all(c["fuente"] == "defecto" for c in _d), [c["fuente"] for c in _d])
+# ⚠️ Una BIFURCACIÓN no se propone nunca: eso sería elegir por el usuario.
+chk("una bifurcación («under the cabin work») sigue sin proponer nada",
+    not V.buscar("Under the cabin work", _inst)["candidatos"])
+
+sec("3e. El nombre SIN su paréntesis también es término")
+chk("«installed belts» encuentra «Install belts (motor, CW, cabin)»",
+    any(c["actividad"] == "Install belts (motor, CW, cabin)"
+        for c in V.buscar("installed belts", _inst)["candidatos"]))
 
 sec("3b. Las palabras de relleno no rompen una frase en prosa")
 chk("«Tuned the doors» encuentra «Tune doors»",
@@ -127,6 +186,24 @@ chk("«Tuned the doors» encuentra «Tune doors»",
 chk("«Cleaning rails all morning» encuentra «Clean rails»",
     any(c["actividad"] == "Clean rails"
         for c in V.buscar("Cleaning rails all morning.", _inst)["candidatos"]))
+# ⚠️ ESCAPE CAZADO POR LA BATERÍA: con el hueco de dos palabras, «Tuned THE doors» casa
+# aunque no se quite el artículo — «the» cabe en el hueco —, así que lo de arriba ya no
+# distinguía si el relleno funciona. Hace falta un caso donde el relleno GASTE el hueco:
+# «all of the» son tres palabras, más de las que el hueco tolera. Sin quitarlas, esta
+# frase —de lo más normal en un parte— se perdería entera.
+chk("«Cleaned all of the rails» encuentra «Clean rails» (el relleno no gasta el hueco)",
+    any(c["actividad"] == "Clean rails"
+        for c in V.buscar("Cleaned all of the rails", _inst)["candidatos"]))
+
+sec("3f. ⚠️ La contradicción del documento («roping») NO se resuelve sola")
+# Mientras el usuario no diga cuál de sus dos lecturas vale, no acredita nada — y se
+# MARCA, para que no se ignore en silencio. Las dos cosas; con una sola no basta.
+_r = V.buscar("roping all day", _inst)
+chk("«roping» no propone ninguna actividad", not _r["candidatos"],
+    [c["actividad"] for c in _r["candidatos"]])
+chk("...pero sale MARCADO, con la contradicción en su regla",
+    any(a["termino"] == "roping" and "CONTRADICTORY" in a["regla"] for a in _r["ambiguos"]),
+    [a["termino"] for a in _r["ambiguos"]])
 
 # ═════════════════════════════════════════════════════════════════
 sec("4. ⚠️ Lo ambiguo sale MARCADO, no resuelto")
@@ -221,6 +298,31 @@ _escribe = [n.func.attr for n in ast.walk(_a)
             and getattr(n.func, "attr", "") in ("acreditar", "crear", "append_row",
                                                 "save_field_progress", "update")]
 chk("y no escribe en ningún sitio", not _escribe, _escribe)
+
+# ═════════════════════════════════════════════════════════════════
+sec("9. ⚠️ El corpus de frases REALES, dentro de la suite")
+# Lo que se corre a mano se pudre (las baterías de v515). El corpus son frases que el
+# usuario CITA de partes de verdad, con la respuesta que da su documento.
+# ⚠️ TRINQUETE, como `check_anclas_roturas`: 0 errores SIEMPRE, y los aciertos no pueden
+# BAJAR del suelo registrado. Si alguien añade partes reales difíciles y el número cae a
+# propósito, baja este suelo con la razón escrita — pero nunca por accidente.
+# ⚠️ Y el número es un TECHO, no una estimación: el vocabulario salió de los MISMOS
+# documentos, así que mide si se transcribió bien, no si generaliza. Está dicho en el
+# propio corpus.
+SUELO_ACIERTOS = 45
+sys.path.insert(0, os.path.join("C:" + os.sep, "Users", "diego", "P1", "guardianes"))
+import ejercitar_v517_corpus as _C                                # noqa: E402
+_cu, _ma, _ms = _C.resultados()
+chk("el corpus trae frases de verdad (%d)" % len(_C.CASOS), len(_C.CASOS) >= 40)
+chk("...0 ERRORES: nunca propone lo que el documento descarta",
+    _cu["ERROR"] == 0, [(m[1], sorted(m[4])) for m in _ma if m[0] == "ERROR"])
+chk("...y los aciertos no bajan del suelo (%d de %d, suelo %d)"
+    % (_cu["ACIERTO"], len(_C.CASOS), SUELO_ACIERTOS),
+    _cu["ACIERTO"] >= SUELO_ACIERTOS, [m[1] for m in _ma])
+chk("...incluidos los NEGATIVOS: los bloqueos del documento no proponen nada",
+    not [m for m in _ma if m[2] == "nada"], [m[1] for m in _ma if m[2] == "nada"])
+chk("...en menos de 50 ms por parte (%.1f)" % (_ms / max(1, len(_C.CASOS))),
+    _ms / max(1, len(_C.CASOS)) < 50)
 
 print("")
 print("=" * 70)

@@ -10,6 +10,93 @@ ventana de contexto. Contenido: 258 secciones detalladas + el índice de 440 ver
 
 ---
 
+## EL VOCABULARIO, PUESTO A PRUEBA CONTRA FRASES REALES (v518)
+
+El usuario pidió «testea si funciona, ponlo a prueba». El problema de base: no hay partes
+reales, y una frase que invento yo **acierta siempre** — la escribo sabiendo cómo la va a
+leer. Eso es un espejo, no una medida (trampa nº1 en su forma más cara).
+
+### ⚠️ El corpus: frases que el USUARIO cita, con la respuesta que da SU documento
+`docs/` cita literalmente trozos de partes de instaladores para explicar cada corrección
+—«Cleaned 4 car rails», «Installed 2 door blades — Lift 3», «yemny wheel»…— y en la misma
+línea dice qué significan. Ese es el corpus (`ejercitar_v517_corpus.py`): **45 frases**, la
+respuesta correcta tomada del documento con su cita al lado, y **5 negativas** sacadas de
+su sección de BLOQUEOS reales (Kemset, tornillería, una sierra encerrada) — líneas que un
+parte trae y que NO son avance.
+
+⚠️ **Cómo leer el número, dicho antes de darlo:** el vocabulario salió de los MISMOS
+documentos, así que un acierto dice «transcribí bien el conocimiento y el buscador lo
+encuentra en prosa», **no** «generaliza a partes que nunca vio». Es un TECHO, no una
+estimación. Para lo segundo hacen falta los partes en bruto.
+
+### Primera pasada: 55% — y ningún test lo había visto
+| Fallo | Frase real |
+|---|---|
+| ⚠️ **El verbo más frecuente no casaba consigo mismo** | «install» ≠ «installed» |
+| Cantidad y sitio EN MEDIO de la frase del catálogo | «Cleaned **4 car** rails» |
+| El paréntesis del nombre, que nadie escribe | «installed belts» ≠ «Install belts (motor, CW, cabin)» |
+| Vocabulario que el documento DA y no transcribí | yemny wheel · plumb lasers · combo bracket |
+| Lo que va «por defecto» quedaba sin puntuar | «Pit doors» |
+
+⚠️ **El primero es el que más duele.** `install` → `install` pero `installed` e
+`installing` → `instal`: la consonante doblada solo se recortaba si se había cortado una
+terminación, condición que puse YO para que «install» no saliera «instal». Y el guardián
+de v517 lo tenía **blindado**: afirmaba la FORMA de la raíz («install → install») en vez
+del principio (las formas de un verbo coinciden). La trampa nº16 en un guardián escrito ese
+mismo día. Ahora afirma el principio sobre seis verbos.
+
+### El arreglo que abrió un riesgo, y cómo se midió
+Tolerar palabras metidas en medio (`HUECO = 2`) arregla «Cleaned 4 car rails»… y el
+negativo lo cazó enseguida: **«cleaned the pit, rails arriving tomorrow» acreditaba Clean
+rails** — y los rieles ni siquiera habían llegado. Arreglo: el hueco **no cruza una
+frontera de oración** (coma, punto, raya entre espacios). ⚠️ La raya DENTRO de una palabra
+no corta: «3-phase» y «rip-out» son una palabra.
+
+### ⚠️ Una sola pasada para los cuatro tipos
+Antes los candidatos iban primero y lo ambiguo después, y eso daba dos respuestas que el
+documento contradice: «fixed LADDER CONTACT» salía como Ladder contact **y además** como
+«contacts» ambiguo (el documento: con el sitio nombrado, va al sitio), y «joined FLEX
+cable» sin zona salía como «Flex cables (top of cabin)» (el documento: sin zona, LAS DOS).
+Compitiendo juntos por longitud se resuelven solas. En empate gana lo marcado.
+
+### ⚠️ El documento del usuario se contradice
+«Roping»: el glosario dice que es belting ese día; la sección de ambiguos, con
+confirmación, dice que es genérico y «don't default it to one fixed stage». Estaba como
+sinónimo de Install belts —la primera lectura—. Ahora queda **MARCADO y sin acreditar
+nada** hasta que el usuario decida, y hay un guardián que lo vigila.
+
+### Contra la HOJA REAL (método v344)
+`ejercitar_v517_real.py`, **29 comprobaciones**: dos obras con plan SELLADO (una
+instalación y una combinada), partes escritos en la hoja, **releídos por el lote** como
+los lee la app, e interpretados contra el plan **releído de la obra**. La raya «—»
+sobrevive al viaje por Sheets byte a byte (la frontera de oración depende de ella). El
+mismo parte de «orange box» **no propone nada en la instalación y sí en la combinada**, y
+ninguna propuesta de ningún parte se sale del plan de su obra. `delete_project` se llevó
+los partes sin limpiarlos a mano.
+
+⚠️ **Y mi ejercicio tenía un hueco**: su foto contaba Projects y DailyLogs pero no las **32
+filas de actividades** que crear dos obras escribe por debajo. Si `delete_project` dejara
+de borrarlas, el ejercicio habría dado verde. Lo vio la verificación por un **segundo
+camino** (10 hojas, 0 restos), no el ejercicio; ahora la foto las cuenta.
+
+### Cinco fallos MÍOS en el propio proceso de probar
+- **Dos roturas que no rompían nada**: renombraba «yemny wheel» a «yemny_wheel», y la
+  normalización convierte el guion bajo en espacio — el término seguía siendo el mismo. Como
+  el CONTROL que nació vacío en v514.
+- **Un punto ciego de `check_anclas_roturas`** (v515): no distingue un ancla viva de una
+  rotura cuyo texto de REEMPLAZO se convirtió en el código bueno. Lo cazó correr la batería.
+- **Un `raise ImportError`** para cortar un script al importarlo, que habría hecho FALLAR
+  la importación.
+- **Un comentario falso** escrito mientras arreglaba otra cosa (que una variable la usaba
+  la regla de la «e» muda; no la usaba, y quedaba muerta).
+- **La trampa nº26 cuatro veces**: heredocs que rompieron `\n`, rutas de Windows y «».
+
+### Verificación
+`verif_v517`: 41 → **61 comprobaciones**, con el corpus DENTRO como trinquete (0 errores
+siempre; los aciertos no bajan del suelo de 45) — lo que se corre a mano se pudre, como las
+baterías de v515. Batería: **27/27 + control**. Corpus: **45/45, 0 errores**. Hoja real:
+**29/29**. Suite: **149 verde**.
+
 ## EL VOCABULARIO DE OBRA (v517)
 
 F2a: la mitad **determinista** de interpretar el parte diario. Sin modelo y sin API — una
@@ -11959,7 +12046,7 @@ comprueba lo que dice**.
 
 ---
 
-## Versiones desplegadas (v517 = actual)
+## Versiones desplegadas (v518 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -11967,6 +12054,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v518 | **El vocabulario, puesto a prueba contra frases REALES.** Sin partes en bruto, una frase que invento yo acierta siempre; así que el corpus son **45 frases que el usuario CITA** de partes de verdad, con la respuesta que da su documento al lado, y 5 negativas de su sección de bloqueos. ⚠️ **Primera pasada: 55%.** El peor fallo: `install` no casaba con `installed` — el verbo más frecuente de los partes — y **el guardián lo tenía blindado** afirmando la forma en vez del principio (nº16). Además: cantidades en medio («Cleaned 4 car rails»), el paréntesis del nombre, vocabulario sin transcribir y lo «por defecto» sin puntuar. ⚠️ Tolerar palabras en medio abrió un riesgo que el negativo **midió**: «cleaned the pit, rails arriving» acreditaba Clean rails — ahora el hueco no cruza una coma. ⚠️ **El documento se contradice** con «roping»: marcado y sin acreditar hasta que el usuario decida. ⚠️ El 100% es un **techo**, no una estimación: mide la transcripción, no la generalización. Hoja real 29/29, limpia por dos caminos. **45/45 · 0 errores · 27/27 + control** · suite 149 verde |
 | v517 | **El vocabulario de obra: 339 términos que apuntan a actividades reales.** F2a — la mitad DETERMINISTA de interpretar el parte, sin modelo ni API. Sale del documento de conocimiento del usuario, que no es documentación sino el poso CORREGIDO de pasar un intérprete sobre partes reales (**58 anotaciones «(Danilo, Sep 2026)»**). ⚠️ Esos documentos solo existían dentro de un transcript de 19 MB tras dos compactaciones: rescatados a `docs/`. ⚠️ Sirve de **barandilla**: solo se puede proponer una actividad del plan SELLADO de esa obra, así que el modelo no podrá inventarse un nombre (regla v509). Un parte de instalación que diga «tirak» recibe **0 candidatos**. ⚠️ Lo ambiguo sale MARCADO con su regla, nunca resuelto: el documento dice que «under the cabin work» depende de la CRONOLOGÍA, que es el dato que `stage_progress` guarda desde v514. ⚠️ Tres actividades existen en un documento y no en el otro — declaradas, no colgadas de la más parecida. ⚠️ **Mi comentario decía algo que el código no hacía**: ordenaba por longitud y nunca usaba el orden; el `sorted` era decorativo y lo destapó la batería. 41 comprobaciones · **18/18 + control** · suite 149 verde |
 | v516 | **El parte diario en texto libre: el campo cuenta el día en sus palabras.** F1 de lo que pidió el usuario, y **solo la primera mitad**: texto con obra, fecha y autor, sin IA. ⚠️ El texto va ANTES que el intérprete porque probarlo con frases que yo me invente **acierta siempre** (trampa nº1): desplegado esto, el corpus crece con el vocabulario REAL de los instaladores. ⚠️ La caja **solo se vacía si la hoja confirmó** — quien escribe 200 palabras en un sótano y las ve desaparecer no vuelve. ⚠️ Se **añade, no se edita**: borrar solo lo propio y del día, porque el valor es que sea *lo que alguien dijo que hizo ese día*. ⚠️ Va FUERA de Avance: ahí se marcan casillas del catálogo, aquí cabe lo que el catálogo no recoge (esperas, accesos, material). ⚠️ **El fallo lo encontró la hoja REAL**: dos partes del mismo MINUTO empataban en `Created` y salían al revés — y mi reloj de mentira devolvía una cadena fija, así que **el guardián medía al stub**. ⚠️ Cuatro rojos en la suite: dos fallos míos cazados por guardianes viejos (un icono que se habría pintado literal, tres lecturas sin canonizar), uno del guardián acusando código sano (`except ... as e` no es un `ast.Name`) y uno de `check_anclas_roturas` **cazando un ancla muerta en mi propia batería el día que nació**. 58 comprobaciones · **19/19 + control** · 17/17 hoja real · suite 148 verde |
 | v515 | **El survey pasa al catálogo y `PHASES` se borra.** Era el ÚLTIMO sitio que pedía las 11 fases viejas, y de ahí salía la sección 6 del **informe del cliente** — un PDF que se sube a Drive y se archiva en la carpeta de la obra. O sea que el proyecto guardaba un calendario **con 0 de 11 nombres en común** con el suyo. ⚠️ Ningún número estaba mal (avance, curva S, SPI y reclamaciones salen del catálogo desde v512): era el **papel que se entrega**. Decisión del usuario: las actividades son las del catálogo y las anteriores ya no van. ⚠️ Reventar sin `custom_rows` habría tumbado **39 llamadas** de los guardianes que la usan de fixture, así que el camino por defecto sale del catálogo y el 3.er parámetro recupera sentido (banderas → condicionales). ⚠️ `verif_v448/v449` habrían pasado a **verde vigilando una lista VACÍA** (`getattr(..., [])`) — trampa nº30; re-apuntados, vigilan 191 nombres. ⚠️ **Hallazgo de fondo**: `romper_v470` llevaba desde v512 en «5 de 13», porque las baterías **no están en la suite** (modifican el árbol). Nace `check_anclas_roturas`, estático, sobre las **52 baterías y sus 367 anclas** — y su primera versión acusó a 60 sanas por adivinar el ancla por su posición. 13/13 y 5/5 · suite 147 verde |

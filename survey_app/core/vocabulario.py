@@ -169,7 +169,6 @@ SINONIMOS = {
     "anti-twists": ["Install belts (motor, CW, cabin)"],
     "twist plates": ["Install belts (motor, CW, cabin)"],
     "belt twist": ["Install belts (motor, CW, cabin)"],
-    "roping": ["Install belts (motor, CW, cabin)"],
     "change over mains": ["Change over mains on lift"],
     "compensation chain": ["Install compensation chain"],
     "flap disc": ["File rail joins"],
@@ -177,6 +176,28 @@ SINONIMOS = {
     "stack gates": ["Pack up"],
     # ── Certificación ─────────────────────────────────────────────
     "ccew": ["Certification inspection/paperwork"],
+    # ── v517 · lo que el corpus de frases reales encontró sin transcribir ──
+    # ⚠️ Cada uno está DICHO en `docs/`, con su cita en `ejercitar_v517_corpus.py`. Lo que
+    # NO se hace: añadir un término porque una frase de la prueba falle sin que el
+    # documento lo respalde — eso sería ajustar el examen a sus respuestas.
+    "yemny wheel": ["Install governor tension device"],   # «was a mishearing/typo»
+    "plumb laser": ["Throw plumblines, attach weights, let settle"],   # «plumb laser(s)»
+    "controller wiring": ["Wire all boxes"],           # «belongs here (Stage 9)»
+    "combo bracket": ["Install first 2 rings"],        # «omega bracket = combo bracket»
+    "combination bracket": ["Install first 2 rings"],
+    "omega bracket": ["Install first 2 rings"],
+    "door blades": ["Install door panels"],            # «panels/blades»
+    "rooftop pieces": ["Install cabin ceiling (roof)"],    # «rigged up bit by bit»
+    "rip out kit": ["Rip-out kit delivery"],
+    "speed governor on cabin": ["Attach speed governor rope to cabin"],
+    "test lift": ["Final functional test/run"],        # «test lift 1 … valid evidence»
+    "level the car": ["Level/adjust car position"],    # «helped level the car»
+    "hoardings": ["Compound/Hoardings", "Hoardings & protection"],   # el plan elige
+    # ⚠️ A las DOS: «Other deliveries» solo existe en el desmontaje (R0), así que en una
+    # instalación apuntaba fuera del plan y el parte no proponía nada. En instalación el
+    # mismo recado es «Receive lift delivery». El plan de la obra elige cuál vale.
+    "picked up delivery": ["Other deliveries", "Receive lift delivery"],
+    "ripped out rings": ["Rip out mechanical components - traction"],  # «top 3 rings»
 }
 
 # ⚠️ Términos que el documento reconoce como REALES pero que NO tienen actividad en el
@@ -238,6 +259,26 @@ AMBIGUOS = {
         "alternativas": ["Install door panels"],
         "regla": "Vague, with no further detail: defaults to the mechanical landing-door "
                  "install rather than being left unscoreable.",
+    },
+    # ⚠️ El DOCUMENTO SE CONTRADICE aquí, y no se resuelve en silencio. El glosario dice
+    # «roping specifically means the lift was being belted that day (Stage 13)»; la
+    # sección de ambiguos, con confirmación (Danilo, Sep 2026), dice «Roping is a generic
+    # verb … Don't default it to one fixed stage». Estaba como sinónimo de Install belts
+    # —la primera lectura— y el corpus lo destapó. Mientras el usuario no diga cuál vale,
+    # queda MARCADO: no acredita nada, que es lo único que no puede salir mal.
+    "roping": {
+        "alternativas": ["Install belts (motor, CW, cabin)",
+                         "Attach speed governor rope to cabin"],
+        "regla": "CONTRADICTORY in the source doc. Glossary: roping means the lift was "
+                 "being belted that day (Stage 13). Ambiguous-entries section: roping is "
+                 "a generic verb across several rope tasks, don't fix it to one stage. "
+                 "Pending the user's call.",
+    },
+    # «joined flex with Belden»: «flex» a secas es el cable sin zona (Belden es la marca).
+    "flex": {
+        "alternativas": ["Traveller/flat/flex cables (under cabin)", "Flex cables (top of cabin)"],
+        "regla": "Flex on its own is the flex cable with no zone given: treat BOTH the "
+                 "under-cabin and top-of-cabin flex cable tasks as done, not just one.",
     },
     "ducting": {
         "alternativas": ["Install cable tray", "Wire all boxes"],
@@ -414,17 +455,20 @@ def _raiz(p) -> str:
     """
     if len(p) <= 3:
         return p
-    cortado = False
     for suf in ("ing", "ed", "es", "s"):
         if p.endswith(suf) and len(p) - len(suf) >= 3:
             p = p[:-len(suf)]
-            cortado = True
             break
     # «prepp» → «prep», «fitt» → «fit»: el inglés dobla la consonante antes de -ed/-ing.
-    # ⚠️ SOLO si se cortó una terminación. Sin esa condición mordía palabras que ya la
-    # traen de suyo: «install» salía «instal», «off» salía «of». Consistente a las dos
-    # puntas, sí, pero una raíz que recorta lo que no debe acaba juntando lo que no es.
-    if cortado and len(p) > 3 and p[-1] == p[-2] and p[-1] not in "aeiou":
+    # ⚠️ SIEMPRE, no «solo si se cortó una terminación». Esa condición la puse yo para que
+    # «install» no saliera «instal», y rompió justo el verbo MÁS FRECUENTE de los partes:
+    # «install» se quedaba en «install» mientras «installed» e «installing» daban
+    # «instal», así que ninguna de las dos formas conjugadas casaba con el infinitivo del
+    # catálogo. Lo destapó el corpus de frases reales («installed belts» no encontraba
+    # «Install belts»). Y el guardián lo había BLINDADO afirmando la FORMA («install →
+    # install») en vez del principio (las formas de un verbo coinciden) — la trampa nº16.
+    # Lo que importa no es que la raíz sea bonita: es que sea la MISMA a las dos puntas.
+    if len(p) > 3 and p[-1] == p[-2] and p[-1] not in "aeiou":
         p = p[:-1]
     # ⚠️ Y la «e» muda, SIEMPRE: «tune» pierde la e al conjugar, así que «tuned» daba
     # «tun» y «tune» se quedaba en «tune» — las dos formas de la misma palabra no
@@ -481,9 +525,18 @@ def _terminos() -> dict:
             out[k] = (tipo, list(acts))
 
     # 1. El nombre de la actividad, tal cual. Es el término más fiable que hay.
+    # ⚠️ Y TAMBIÉN sin su paréntesis. Lo destapó el corpus de frases reales: «installed
+    # belts» no casaba con «Install belts (motor, CW, cabin)» porque el paréntesis
+    # formaba parte de la frase a buscar, y nadie escribe eso en un parte. Igual
+    # «Surveyed shaft» contra «Survey (verify vs. existing shaft)». Dos actividades cuya
+    # base coincide («Speaker (under cabin)» y «Speaker (top of cabin)») quedan en el
+    # MISMO término y se proponen las dos: sin la zona, no hay forma honesta de elegir.
     for _v in S.ACTIVIDADES.values():
         for a in _v:
             _pon(a[0], "nombre", [a[0]])
+            _base = re.sub(r"\s*\(.*?\)\s*", " ", a[0]).strip()
+            if _base and _base != a[0]:
+                _pon(_base, "nombre", [a[0]])
     # 2. Sus tareas.
     for act, tareas in TAREAS.items():
         for t in tareas:
@@ -503,7 +556,7 @@ def buscar(texto, plan=None) -> dict:
 
     Devuelve `{candidatos, ambiguos, no_avance, sin_actividad, fuera_del_plan}`.
     """
-    t = normaliza(texto)
+    toks = _tokens(texto)
     # ⚠️ `plan_de` devuelve ETAPAS con sus actividades DENTRO —comprobado ejecutándolo,
     # no supuesto (v385)—, así que hay que aplanarlas. Leerlo mal dejaría `en_plan`
     # vacío, y un filtro vacío no filtra: pasaría en verde sin proteger nada (nº1).
@@ -512,47 +565,126 @@ def buscar(texto, plan=None) -> dict:
         en_plan = {str(a.get("nombre") if isinstance(a, dict) else a)
                    for e in plan for a in (e.get("actividades") or [])}
 
-    dentro, fuera = [], []
-    vistos = set()
-    # ⚠️ De más largo a más corto, y TAPANDO lo ya casado. El orden por sí solo no hacía
-    # nada —recorrer todos los términos encuentra los mismos con cualquier orden— y el
-    # comentario decía que sí: lo delató la batería, con la rotura que invertía el orden
-    # y no ponía nada rojo. Lo que hace falta es marcar el trozo de texto consumido, para
-    # que «doors» no vuelva a casar dentro de lo que «landing doors» ya explicó.
-    # ⚠️ Por TRAMO, no por término: «motor bedplate y single bedplate» son dos tramos
-    # distintos y los dos tienen que casar.
-    tapado = [False] * len(t)
-    for term, (tipo, acts) in sorted(_terminos().items(), key=lambda kv: -len(kv[0])):
-        _pat = " " + term + " "
-        _i = t.find(_pat)
-        # ⚠️ Se tapa el TÉRMINO, no sus espacios: el espacio que cierra uno es el que
-        # abre el siguiente, así que marcarlo bloqueaba al de al lado. Con los bordes
-        # incluidos, «motor bedplate y single bedplate» solo reconocía el primero y
-        # «tuned the doors and cleaned the rails» perdía uno de los dos.
-        while _i >= 0 and any(tapado[_i + 1:_i + len(_pat) - 1]):
-            _i = t.find(_pat, _i + 1)
-        if _i < 0:
-            continue
-        for _j in range(_i + 1, min(len(t), _i + len(_pat) - 1)):
-            tapado[_j] = True
-        for a in acts:
-            if (a, term) in vistos:
-                continue
-            vistos.add((a, term))
-            fila = {"actividad": a, "termino": term, "fuente": tipo}
-            if en_plan is not None and a not in en_plan:
-                fuera.append(fila)
-            else:
-                dentro.append(fila)
+    # ⚠️ UNA sola pasada para los cuatro tipos, del término más largo al más corto, con
+    # una sola máscara. Antes los candidatos iban primero y lo ambiguo después, cada uno
+    # por su lado, y eso daba dos respuestas equivocadas que el documento contradice:
+    #   · «fixed LADDER CONTACT» salía como Ladder contact Y ADEMÁS como «contacts»
+    #     ambiguo — y el documento dice que con el sitio nombrado va al sitio;
+    #   · «joined FLEX CABLE», sin zona, salía como «Flex cables (top of cabin)» — y el
+    #     documento dice que sin zona son LAS DOS, o sea ambiguo.
+    # Compitiendo juntos por longitud se resuelven solas: «ladder contact» (2 palabras)
+    # tapa a «contact» (1), y «flex cable top cabin» (4) gana a «flex cable» (2) solo
+    # cuando la zona SÍ está escrita. En empate gana lo marcado, que es lo que el
+    # documento señala expresamente.
+    PRIO = {"amb": 0, "noav": 0, "sin": 0, "act": 1}
+    pats = []
+    for term, (tipo, acts) in _terminos().items():
+        pats.append((term.split(), "act", (tipo, acts, term)))
+    for k, v in AMBIGUOS.items():
+        pats.append((normaliza(k).split(), "amb", {"termino": k, **v}))
+    for k, v in NO_AVANCE.items():
+        pats.append((normaliza(k).split(), "noav", {"termino": k, "motivo": v}))
+    for k, v in SIN_ACTIVIDAD.items():
+        pats.append((normaliza(k).split(), "sin", {"termino": k, "que_es": v}))
+    pats.sort(key=lambda p: (-len(p[0]), -sum(len(w) for w in p[0]), PRIO[p[1]]))
 
-    amb = [{"termino": k, **v} for k, v in AMBIGUOS.items()
-           if (" " + normaliza(k).strip() + " ") in t]
-    nop = [{"termino": k, "motivo": v} for k, v in NO_AVANCE.items()
-           if (" " + normaliza(k).strip() + " ") in t]
-    sin = [{"termino": k, "que_es": v} for k, v in SIN_ACTIVIDAD.items()
-           if (" " + normaliza(k).strip() + " ") in t]
+    tapado = [False] * len(toks)
+    dentro, fuera, amb, nop, sin = [], [], [], [], []
+    vistos = set()
+    for palabras, clase, dato in pats:
+        if not palabras:
+            continue
+        pos = _casa(toks, palabras, tapado)
+        if pos is None:
+            continue
+        # ⚠️ Se tapan las palabras DEL TÉRMINO, no las intrusas de en medio: en «cleaned
+        # 4 car rails» el «4» y el «car» quedan libres por si otro término los necesita.
+        for _j in pos:
+            tapado[_j] = True
+        if clase == "act":
+            tipo, acts, term = dato
+            for a in acts:
+                if (a, term) in vistos:
+                    continue
+                vistos.add((a, term))
+                fila = {"actividad": a, "termino": term, "fuente": tipo}
+                (fuera if en_plan is not None and a not in en_plan else dentro).append(fila)
+        elif clase == "amb":
+            amb.append(dato)
+            # ⚠️ Lo que el documento resuelve «por defecto» NO es una bifurcación: dice a
+            # dónde va. «Pit doors» —«defaults to mechanical installation rather than being
+            # left unscoreable»— quedaba marcado y sin proponer nada, que es justo lo que
+            # el documento dice que no se haga. Se propone, con su origen a la vista.
+            if len(dato["alternativas"]) == 1 and "default" in dato["regla"].lower():
+                a = dato["alternativas"][0]
+                if (a, dato["termino"]) not in vistos:
+                    vistos.add((a, dato["termino"]))
+                    fila = {"actividad": a, "termino": dato["termino"], "fuente": "defecto"}
+                    (fuera if en_plan is not None and a not in en_plan
+                     else dentro).append(fila)
+        elif clase == "noav":
+            nop.append(dato)
+        else:
+            sin.append(dato)
     return {"candidatos": dentro, "ambiguos": amb, "no_avance": nop,
             "sin_actividad": sin, "fuera_del_plan": fuera}
+
+
+# ⚠️ Cuántas palabras se toleran METIDAS entre dos de un término. Los instaladores
+# escriben «Cleaned 4 CAR rails», «Installed 2 door blades», «ripped out TOP 3 rings»:
+# la cantidad y el sitio van en medio de la frase del catálogo, y con la búsqueda
+# contigua de antes todas esas líneas se perdían — lo destapó el corpus de frases reales.
+# Dos, y no más: con un hueco grande, «clean the shaft, rail delivery» acabaría
+# acreditando «Clean rails». El corpus lleva casos NEGATIVOS para medir ese riesgo.
+HUECO = 2
+
+# ⚠️ Y el hueco NO cruza una frontera de oración. El corpus lo midió con un negativo
+# sacado de los bloqueos del documento: «cleaned the pit, rails arriving tomorrow»
+# acreditaba «Clean rails» — «clean» en una oración, «rails» en la siguiente, y los
+# rieles ni siquiera habían llegado. Las palabras de un término viven en UNA oración, así
+# que las comas, puntos y rayas cortan la búsqueda. ⚠️ La raya solo cuando va entre
+# espacios: «3-phase» o «rip-out» son UNA palabra y no pueden partirse.
+SEP = "|"
+_LIMITE = re.compile(r"[,.;:!?()\n]|\s[-—–]\s|\s[—–]|[—–]\s")
+
+
+def _tokens(texto) -> list:
+    """Las palabras del parte, ya en raíz, con `SEP` donde acaba una oración."""
+    out = []
+    for trozo in _LIMITE.split(str(texto or "")):
+        t = normaliza(trozo).split()
+        if t:
+            if out:
+                out.append(SEP)
+            out.extend(t)
+    return out
+
+
+def _casa(toks, palabras, tapado):
+    """Posiciones donde aparecen las `palabras` EN ORDEN, con como mucho `HUECO`
+    intrusas entre cada dos, sin pisar ninguna ya tapada ni cruzar un `SEP`.
+    `None` si no aparecen."""
+    n = len(toks)
+    for i0 in range(n):
+        if tapado[i0] or toks[i0] != palabras[0]:
+            continue
+        pos = [i0]
+        for w in palabras[1:]:
+            j, lim = pos[-1] + 1, min(n, pos[-1] + 2 + HUECO)
+            while j < lim:
+                if toks[j] == SEP:          # fin de oración: aquí no sigue el término
+                    j = lim
+                    break
+                if not tapado[j] and toks[j] == w:
+                    break
+                j += 1
+            if j >= lim:
+                pos = None
+                break
+            pos.append(j)
+        if pos is not None:
+            return pos
+    return None
 
 
 def cuantos_terminos() -> int:
