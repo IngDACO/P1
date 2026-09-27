@@ -10,6 +10,70 @@ ventana de contexto. Contenido: 258 secciones detalladas + el índice de 440 ver
 
 ---
 
+## EL VOCABULARIO DE OBRA (v517)
+
+F2a: la mitad **determinista** de interpretar el parte diario. Sin modelo y sin API — una
+tabla de **339 términos** y una función que busca.
+
+### ⚠️ De dónde sale, y por qué eso importa
+De `docs/Process_Knowledge_Reference.md`, que **no es documentación escrita de una vez**:
+es el resultado corregido de pasar un intérprete sobre partes REALES de instaladores. Las
+**58 anotaciones «(Danilo, Sep 2026)»** de los tres documentos no explican diseño,
+corrigen respuestas concretas. Eso no se reconstruye leyendo el catálogo.
+
+⚠️ Y esos documentos **estuvieron a punto de perderse**: llegaron como adjuntos el
+22/09/2026 y, tras dos compactaciones, solo existían dentro de un transcript de 19 MB. Se
+rescataron de ahí y viven ahora en `docs/`, versionados y en el ZIP de cada despliegue.
+
+### Para qué sirve si de todos modos va a haber un modelo detrás
+1. **Barandilla.** Un modelo puede devolver «Landing Door Install», que suena bien y no
+   existe. Aquí solo se propone una actividad del plan SELLADO de esa obra (regla v509).
+2. **Suelo medible**, sin coste ni API, contra el que leer lo que aporta el modelo.
+3. **Es lo único verificable hoy.** Una tabla se prueba; una interpretación solo se puede
+   juzgar contra partes reales, y de esos todavía no hay.
+
+### Las cuatro cosas que el documento pedía
+| Parte | Qué sale |
+|---|---|
+| «Fitted the motor bedplate and the single bedplate» | las dos actividades, cada una con el término que la disparó |
+| «Mounted the tirak» **en una instalación** | **0 candidatos** — 3 apartados por no estar en el plan |
+| «Induction, then pre-start» | reconocido y marcado **no es avance** |
+| «Under the cabin work» | **ambiguo**, con su regla: mecánico si los rieles no han subido, eléctrico si ya subieron |
+
+⚠️ La última es la que más importa: el documento es explícito en que esas frases **no se
+resuelven con vocabulario** sino con la cronología de la obra — justo el dato que
+`stage_progress` guarda desde v514. Elegir una aquí sería inventar.
+
+### ⚠️ Tres actividades existen en UN documento y no en el otro
+`Lighten cabin`, `Bridging` y el `chaser job` están en el desglose de tareas y no en el de
+etapas, que es de donde salió el catálogo **con sus pesos**. Los dos documentos han
+derivado. No se cuelgan de la actividad más parecida —sería inventar trabajo con peso
+ajeno—: se reconocen y se **declaran**, para que el usuario decida si entran y con cuánto.
+
+### ⚠️ Mi comentario decía algo que el código NO hacía
+Escribí que el término largo gana al corto, ordené por longitud… y nunca usé el orden:
+recorrer todos los términos encuentra los mismos con cualquier orden. El `sorted` era
+**decorativo** y el comentario mentía. Lo destapó la batería, con la rotura que invertía
+el orden y no ponía nada rojo. Ahora se tapa el tramo ya explicado — ⚠️ y tapando **solo
+el término, no sus espacios**: el espacio que cierra uno abre el siguiente, y con los
+bordes incluidos «motor bedplate y single bedplate» solo reconocía el primero.
+
+### Lo que NO alcanza, escrito en el módulo
+**Verbos irregulares**: la raíz lleva «hanging» a «hang» pero no «hung» — una frase de
+prueba con el irregular puso el guardián rojo acusando a código sano. **Y el sentido**:
+«no pude hacer las puertas porque no llegaron los marcos» menciona las puertas y sale como
+candidato. Una tabla no distingue lo hecho de lo impedido. Las dos son la razón de que
+esto sea la MITAD y no la solución.
+
+### Verificación
+`verif_v517`, **41 comprobaciones**. Batería: **18 roturas, 18 cazadas + CONTROL** — tres
+escaparon primero, y las tres eran huecos reales: una pasaba por el motivo equivocado
+(comprobaba que ALGUNA ambigua tuviera dos alternativas, no la que rompí), otra cambiaba
+una de dos claves sinónimas y no rompía nada, y la tercera destapó el `sorted` decorativo.
+⚠️ Y `check_anclas_roturas` volvió a cazar un ancla muerta en **mi propia batería**, por
+segunda versión seguida: traduje un texto al inglés (lo exigió `verif_v448`) y el ancla se
+quedó apuntando al español. Suite: **149 verde**.
+
 ## EL PARTE DIARIO EN TEXTO LIBRE (v516)
 
 F1 de lo que pidió el usuario: que el campo escriba lo que hizo y un agente lo cargue en
@@ -11895,7 +11959,7 @@ comprueba lo que dice**.
 
 ---
 
-## Versiones desplegadas (v516 = actual)
+## Versiones desplegadas (v517 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -11903,6 +11967,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v517 | **El vocabulario de obra: 339 términos que apuntan a actividades reales.** F2a — la mitad DETERMINISTA de interpretar el parte, sin modelo ni API. Sale del documento de conocimiento del usuario, que no es documentación sino el poso CORREGIDO de pasar un intérprete sobre partes reales (**58 anotaciones «(Danilo, Sep 2026)»**). ⚠️ Esos documentos solo existían dentro de un transcript de 19 MB tras dos compactaciones: rescatados a `docs/`. ⚠️ Sirve de **barandilla**: solo se puede proponer una actividad del plan SELLADO de esa obra, así que el modelo no podrá inventarse un nombre (regla v509). Un parte de instalación que diga «tirak» recibe **0 candidatos**. ⚠️ Lo ambiguo sale MARCADO con su regla, nunca resuelto: el documento dice que «under the cabin work» depende de la CRONOLOGÍA, que es el dato que `stage_progress` guarda desde v514. ⚠️ Tres actividades existen en un documento y no en el otro — declaradas, no colgadas de la más parecida. ⚠️ **Mi comentario decía algo que el código no hacía**: ordenaba por longitud y nunca usaba el orden; el `sorted` era decorativo y lo destapó la batería. 41 comprobaciones · **18/18 + control** · suite 149 verde |
 | v516 | **El parte diario en texto libre: el campo cuenta el día en sus palabras.** F1 de lo que pidió el usuario, y **solo la primera mitad**: texto con obra, fecha y autor, sin IA. ⚠️ El texto va ANTES que el intérprete porque probarlo con frases que yo me invente **acierta siempre** (trampa nº1): desplegado esto, el corpus crece con el vocabulario REAL de los instaladores. ⚠️ La caja **solo se vacía si la hoja confirmó** — quien escribe 200 palabras en un sótano y las ve desaparecer no vuelve. ⚠️ Se **añade, no se edita**: borrar solo lo propio y del día, porque el valor es que sea *lo que alguien dijo que hizo ese día*. ⚠️ Va FUERA de Avance: ahí se marcan casillas del catálogo, aquí cabe lo que el catálogo no recoge (esperas, accesos, material). ⚠️ **El fallo lo encontró la hoja REAL**: dos partes del mismo MINUTO empataban en `Created` y salían al revés — y mi reloj de mentira devolvía una cadena fija, así que **el guardián medía al stub**. ⚠️ Cuatro rojos en la suite: dos fallos míos cazados por guardianes viejos (un icono que se habría pintado literal, tres lecturas sin canonizar), uno del guardián acusando código sano (`except ... as e` no es un `ast.Name`) y uno de `check_anclas_roturas` **cazando un ancla muerta en mi propia batería el día que nació**. 58 comprobaciones · **19/19 + control** · 17/17 hoja real · suite 148 verde |
 | v515 | **El survey pasa al catálogo y `PHASES` se borra.** Era el ÚLTIMO sitio que pedía las 11 fases viejas, y de ahí salía la sección 6 del **informe del cliente** — un PDF que se sube a Drive y se archiva en la carpeta de la obra. O sea que el proyecto guardaba un calendario **con 0 de 11 nombres en común** con el suyo. ⚠️ Ningún número estaba mal (avance, curva S, SPI y reclamaciones salen del catálogo desde v512): era el **papel que se entrega**. Decisión del usuario: las actividades son las del catálogo y las anteriores ya no van. ⚠️ Reventar sin `custom_rows` habría tumbado **39 llamadas** de los guardianes que la usan de fixture, así que el camino por defecto sale del catálogo y el 3.er parámetro recupera sentido (banderas → condicionales). ⚠️ `verif_v448/v449` habrían pasado a **verde vigilando una lista VACÍA** (`getattr(..., [])`) — trampa nº30; re-apuntados, vigilan 191 nombres. ⚠️ **Hallazgo de fondo**: `romper_v470` llevaba desde v512 en «5 de 13», porque las baterías **no están en la suite** (modifican el árbol). Nace `check_anclas_roturas`, estático, sobre las **52 baterías y sus 367 anclas** — y su primera versión acusó a 60 sanas por adivinar el ancla por su posición. 13/13 y 5/5 · suite 147 verde |
 | v514 | **El avance por actividad: el campo marca QUÉ hizo.** Segunda mitad de F0 — el catálogo de v512 deja de ser una estructura y empieza a medir. Hasta aquí el avance se TECLEABA a ojo; ahora se marcan actividades reales y el % sale ponderado por lo que pesa cada una. ⚠️ La hoja es **dispersa** (solo lo acreditado): con 143 actividades por obra, crearlas todas serían miles de filas vacías. ⚠️ El número **sigue viviendo en `Activities.Progress`**, que es lo que leen la curva S, el SPI, la cadena de v500 y la reclamación que se cobra — lo que cambia es **quién lo escribe**. ⚠️ Cierra un hueco de v512: si el catálogo cambia, el crédito se colgaría de otra etapa, así que se detecta y se niega a escribir. ⚠️ Dos fallos que encontró el método: recalcular releyendo la hoja (peor diseño, no bug) y `delete_project` dejando créditos huérfanos — **que mi propio ejercicio estaba tapando** limpiándolos a mano. ⚠️ Y dos agujeros del guardián: uno lo REVENTABA en vez de denunciar y otro acertaba por el motivo equivocado. 52 comprobaciones · **15/15 + control** · suite 146 verde |
