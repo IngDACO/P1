@@ -2291,6 +2291,18 @@ def _estado_section(pid: str, grupo: str, prj: dict):
     )
     st.caption(t("The **coloured band** between the two curves is the gap against the plan (red if you are behind, green if ahead). ● red = the activity should already have started."))
 
+    # v516 · Los partes del campo, al final del Estado. Van DEBAJO de la curva y no
+    # arriba a propósito: la curva contesta «¿cómo va?» de un vistazo y el texto
+    # contesta «¿por qué?», que es la pregunta que viene después. Solo lectura — el
+    # parte es de quien lo escribió (ver `daily_log_ui.render_admin`).
+    try:
+        from core import daily_log_ui as _DLU
+        _DLU.render_admin(pid, grupo, key_prefix="adm")
+    except Exception as e:
+        # ⚠️ No tumba la pantalla de Estado: los partes son un añadido, y la curva, el
+        # SPI y las alarmas tienen que seguir en pie aunque su hoja esté caída.
+        logger.warning("projects_ui: no se pudieron pintar los partes de %s: %s", pid, e)
+
 
 def _detalle_proyecto(pid: str, grupo: str = None):
     prj = P.get_project(pid)
@@ -3521,11 +3533,17 @@ def render_field_projects(usuario: str, grupo: str):
     # ⚠️ v423: una localización interna NO tiene actividades, así que «Avance» sería una
     # tabla vacía y un 0% permanente. Se le quita esa pestaña y se queda con lo que sí
     # usa quien trabaja en la oficina o el almacén: avisos, recibos y archivos.
-    _opts = ["🏗 Avance", "🚨 Avisos", "💰 Recibos", "📎 Archivos"]
+    # v516 · «Parte» va DETRÁS de «Avance» y no dentro: son dos actos distintos. En
+    # Avance se marca lo hecho contra el catálogo; aquí se cuenta el día en palabras,
+    # incluido lo que el catálogo no tiene casilla para recoger (esperas, un acceso
+    # cerrado, material que no llegó). Meterlo dentro de Avance habría hecho que el
+    # texto pareciera opcional al lado de las casillas.
+    _opts = ["🏗 Avance", "📝 Parte", "🚨 Avisos", "💰 Recibos", "📎 Archivos"]
     if P.es_interno(prj):
         _opts = _opts[1:]
     _sec = st.radio(t("Section"), _opts,
                     format_func=lambda o: {"🏗 Avance": t(":material/trending_up: Progress"),
+                                           "📝 Parte": t(":material/edit_note: Daily log"),
                                            "🚨 Avisos": t(":material/report: Alerts"),
                                            "💰 Recibos": t(":material/receipt: Receipts"),
                                            "📎 Archivos": t(":material/folder: Files")}.get(o, o),
@@ -3541,6 +3559,11 @@ def render_field_projects(usuario: str, grupo: str):
         from core import stage_progress_ui as _SPU
         if not _SPU.render(pid, grupo, prj, key_prefix="fld"):
             _field_activities(pid)
+    elif _sec == "📝 Parte":
+        from core import daily_log_ui as _DLU
+        _DLU.render_campo(pid, grupo,
+                          (st.session_state.get("auth") or {}).get("usuario", ""),
+                          key_prefix="fld")
     elif _sec == "🚨 Avisos":
         _alerts_section(pid, grupo, prj.get("Name", ""), allow_report=True)
     elif _sec == "💰 Recibos":

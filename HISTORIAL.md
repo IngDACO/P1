@@ -10,6 +10,79 @@ ventana de contexto. Contenido: 258 secciones detalladas + el índice de 440 ver
 
 ---
 
+## EL PARTE DIARIO EN TEXTO LIBRE (v516)
+
+F1 de lo que pidió el usuario: que el campo escriba lo que hizo y un agente lo cargue en
+el cronograma. Esto es **la primera mitad y solo la primera**: texto con obra, fecha y
+autor. No interpreta, no mueve el avance, no toca ninguna actividad.
+
+### ⚠️ Por qué el texto va ANTES que la IA
+Empezar por la interpretación obliga a probarla con frases que me invente yo, y una frase
+inventada por quien escribe el intérprete **acierta siempre**. Es la trampa nº1 en su
+forma más cara: un corpus de mentira da una precisión de mentira. Con esto desplegado, el
+corpus crece cada día **con el vocabulario real de los instaladores** — las abreviaturas,
+el orden en que cuentan las cosas, qué dan por supuesto.
+
+⚠️ Y vale por sí solo aunque la IA no llegara nunca: hoy ese parte se da por WhatsApp o no
+se da, y no queda en la obra.
+
+### Tres decisiones
+**El borrador no se pierde si falla el guardado.** La caja **solo** se vacía cuando la
+hoja confirma. Alguien que escribe doscientas palabras en un sótano y las ve desaparecer
+no las reescribe: deja de usar la pantalla. Y el error dice la verdad
+(`timeclock.motivo_sin_hoja`, v511), no «no está configurado» cuando es la cuota.
+
+**Se AÑADE, no se edita.** Cada guardado es una entrada nueva; se puede borrar **la
+propia y del día**, no la de la semana pasada. Lo único que hace valioso a esto es que
+sea *lo que alguien dijo que hizo ese día*.
+
+**El parte va FUERA de Avance.** En Avance se marca lo hecho contra el catálogo; aquí se
+cuenta el día, incluido lo que el catálogo **no tiene casilla para recoger**: una espera,
+un acceso cerrado, material que no llegó. Dentro, el texto habría parecido opcional al
+lado de las casillas.
+
+### ⚠️ El fallo que solo salió contra la hoja REAL
+Los dos partes de prueba se escribieron **en el mismo minuto**. `Created` guardaba
+`hh:mm`, así que empataban; `sorted` es estable y el empate dejaba **el más viejo
+arriba**. El guardián no lo vio porque **yo le di horas distintas a mano** — el test con
+datos que me invento, otra vez.
+
+⚠️ Y había una segunda capa: mi reloj de mentira devolvía una cadena fija en vez de
+formatear, así que el código podía pedir segundos y el guardián nunca se enteraba. **Un
+stub que miente sobre su contrato hace que el guardián mida al stub.** Arreglado en las
+dos mitades (segundos en `Created` **y** el ID de desempate), con una rotura para cada
+una: arreglar solo una dejaba el fallo vivo la mitad de las veces.
+
+### Cuatro rojos en la suite, y ninguno era lo mismo
+**Dos eran fallos míos, cazados por guardianes viejos antes de desplegar.** `verif_v472`:
+`theme.section` **escapa** su texto, así que mis cabeceras habrían pintado
+`:material/edit_note: Daily log` **literal** en pantalla — no es una etiqueta de widget,
+es HTML. `verif_v468`: tres lecturas crudas sin canonizar, que es la regla que hace que un
+libro con cabeceras viejas siga casando.
+
+**Uno era el guardián acusando a código sano.** `verif_v311` da por libre todo nombre que
+no sea un `ast.Name`, y `except Exception as e` liga `e` como **atributo del handler**.
+Los otros once `except ... as e` del módulo estaban fuera de esa función, así que nunca
+había mordido. Es la misma familia que la nota de v502 escrita tres líneas más arriba **en
+el mismo guardián**, y la trampa nº3.
+
+**Y uno fue `check_anclas_roturas` cazándome a mí**, el mismo día en que nació: un ancla
+muerta en **mi propia batería de v516**, porque el arreglo del empate cambió el formato y
+el ancla seguía diciendo `%H:%M`. La batería la contaba como «??» mientras anunciaba **19
+de 19** — una batería no avisa de sus anclas muertas, solo las salta.
+
+### Verificación
+`verif_v516`, **58 comprobaciones**, con la hoja sustituida por una que se queda con lo
+escrito. Batería: **19 roturas, 19 cazadas + CONTROL** — dos escaparon primero, una porque
+no ejercitaba la rama de «no hay hoja» y otra porque medía el literal en el FICHERO y el
+mismo texto sobrevive en el `format_func` de al lado (trampa nº2 y nº30 a la vez).
+
+**Ejercitado contra la HOJA REAL** (método v344): la hoja se creó sola, el parte se leyó
+de vuelta **por el lote** (que es como lee la app, no como escribe el guion), dos partes
+del mismo día quedaron como dos entradas y **un día** de corpus, borrar el propio del día
+funcionó y el de otro no, y `delete_project` se llevó los partes sin dejar huérfanos.
+Cartera devuelta a sus 2 obras. Suite: **148 verde**.
+
 ## EL SURVEY PASA AL CATÁLOGO, Y `PHASES` SE BORRA (v515)
 
 v512 cambió los dos caminos que crean obras —cotización aceptada y alta manual— y el
@@ -11822,7 +11895,7 @@ comprueba lo que dice**.
 
 ---
 
-## Versiones desplegadas (v515 = actual)
+## Versiones desplegadas (v516 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -11830,6 +11903,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v516 | **El parte diario en texto libre: el campo cuenta el día en sus palabras.** F1 de lo que pidió el usuario, y **solo la primera mitad**: texto con obra, fecha y autor, sin IA. ⚠️ El texto va ANTES que el intérprete porque probarlo con frases que yo me invente **acierta siempre** (trampa nº1): desplegado esto, el corpus crece con el vocabulario REAL de los instaladores. ⚠️ La caja **solo se vacía si la hoja confirmó** — quien escribe 200 palabras en un sótano y las ve desaparecer no vuelve. ⚠️ Se **añade, no se edita**: borrar solo lo propio y del día, porque el valor es que sea *lo que alguien dijo que hizo ese día*. ⚠️ Va FUERA de Avance: ahí se marcan casillas del catálogo, aquí cabe lo que el catálogo no recoge (esperas, accesos, material). ⚠️ **El fallo lo encontró la hoja REAL**: dos partes del mismo MINUTO empataban en `Created` y salían al revés — y mi reloj de mentira devolvía una cadena fija, así que **el guardián medía al stub**. ⚠️ Cuatro rojos en la suite: dos fallos míos cazados por guardianes viejos (un icono que se habría pintado literal, tres lecturas sin canonizar), uno del guardián acusando código sano (`except ... as e` no es un `ast.Name`) y uno de `check_anclas_roturas` **cazando un ancla muerta en mi propia batería el día que nació**. 58 comprobaciones · **19/19 + control** · 17/17 hoja real · suite 148 verde |
 | v515 | **El survey pasa al catálogo y `PHASES` se borra.** Era el ÚLTIMO sitio que pedía las 11 fases viejas, y de ahí salía la sección 6 del **informe del cliente** — un PDF que se sube a Drive y se archiva en la carpeta de la obra. O sea que el proyecto guardaba un calendario **con 0 de 11 nombres en común** con el suyo. ⚠️ Ningún número estaba mal (avance, curva S, SPI y reclamaciones salen del catálogo desde v512): era el **papel que se entrega**. Decisión del usuario: las actividades son las del catálogo y las anteriores ya no van. ⚠️ Reventar sin `custom_rows` habría tumbado **39 llamadas** de los guardianes que la usan de fixture, así que el camino por defecto sale del catálogo y el 3.er parámetro recupera sentido (banderas → condicionales). ⚠️ `verif_v448/v449` habrían pasado a **verde vigilando una lista VACÍA** (`getattr(..., [])`) — trampa nº30; re-apuntados, vigilan 191 nombres. ⚠️ **Hallazgo de fondo**: `romper_v470` llevaba desde v512 en «5 de 13», porque las baterías **no están en la suite** (modifican el árbol). Nace `check_anclas_roturas`, estático, sobre las **52 baterías y sus 367 anclas** — y su primera versión acusó a 60 sanas por adivinar el ancla por su posición. 13/13 y 5/5 · suite 147 verde |
 | v514 | **El avance por actividad: el campo marca QUÉ hizo.** Segunda mitad de F0 — el catálogo de v512 deja de ser una estructura y empieza a medir. Hasta aquí el avance se TECLEABA a ojo; ahora se marcan actividades reales y el % sale ponderado por lo que pesa cada una. ⚠️ La hoja es **dispersa** (solo lo acreditado): con 143 actividades por obra, crearlas todas serían miles de filas vacías. ⚠️ El número **sigue viviendo en `Activities.Progress`**, que es lo que leen la curva S, el SPI, la cadena de v500 y la reclamación que se cobra — lo que cambia es **quién lo escribe**. ⚠️ Cierra un hueco de v512: si el catálogo cambia, el crédito se colgaría de otra etapa, así que se detecta y se niega a escribir. ⚠️ Dos fallos que encontró el método: recalcular releyendo la hoja (peor diseño, no bug) y `delete_project` dejando créditos huérfanos — **que mi propio ejercicio estaba tapando** limpiándolos a mano. ⚠️ Y dos agujeros del guardián: uno lo REVENTABA en vez de denunciar y otro acertaba por el motivo equivocado. 52 comprobaciones · **15/15 + control** · suite 146 verde |
 | v513 | **Los pesos que se guardan vuelven a sumar 100.** Arreglo de v512 encontrado ejercitando contra la hoja REAL justo después de desplegarla: los pesos escritos en `Activities` sumaban **99,8** con 14 actividades. El avance nunca estuvo mal —`compute_avance` divide por Σpeso y es escala-invariante— pero **la columna que mira el usuario mentía**, y un plan que no suma 100 invita a buscar un error que no existe. ⚠️ El fallo vivía **en la frontera entre dos capas**: el guardián comprobaba los pesos de `filas_de_etapas` (exactos) y el desvío nacía en lo que `build_schedule` escribe. Cada capa bien por separado y el resultado mal — por eso lo encontró la hoja real y no la suite. ⚠️ Y `verif_v438` cazó otro fallo mío de paso: una comprensión usaba `_d`, que es la función de display de i18n (no se filtra en una comprensión, pero es el patrón de v439/v503). Tres fallos propios cazados por guardianes viejos en esta tanda. 88 comprobaciones · **22/22 + control** · suite 145 verde |

@@ -188,6 +188,16 @@ for n in ast.walk(_fn):
         asign.add(getattr(n, "name", ""))
         for x in getattr(n.args, "args", []):
             asign.add(x.arg)
+    elif isinstance(n, ast.ExceptHandler) and n.name:
+        # ⚠️ 23/09/2026 (v516): `except Exception as e` liga `e`, pero NO como un
+        # `ast.Name` con ctx Store — es un atributo de texto del propio handler. Así que
+        # usar `e` dentro del bloque salía denunciado como «nombre libre» y este guardián
+        # acusaba a código perfectamente sano. Es exactamente la misma familia que la
+        # nota de v502 de aquí arriba, y que la trampa nº3 (lambdas, morsa, `__file__`):
+        # este barrido se autoengaña con toda ligadura que no sea un `Name`. Salió al
+        # añadir el primer `except ... as e` de `_estado_section`; los otros once del
+        # módulo estaban fuera de esta función y por eso nunca había mordido.
+        asign.add(n.name)
 check("_estado_section sin nombres libres",
       sorted({u for u in usados if u not in asign}), [])
 

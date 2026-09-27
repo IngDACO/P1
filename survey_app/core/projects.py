@@ -1010,6 +1010,14 @@ def delete_project(pid: str) -> tuple:
         # dejar unos créditos sueltos. Pero se dice, que si no nadie los encuentra.
         logger.warning("projects.delete_project(%s): no se pudieron borrar los "
                        "creditos de etapa: %s", pid, e)
+    # v516: y sus partes diarios, que viven en OTRA hoja. Mismo fallo que el de arriba,
+    # escrito de antemano esta vez en vez de encontrarlo contra la hoja real.
+    try:
+        from core import daily_log as _DL
+        _DL.borrar_de_obra(pid)
+    except Exception as e:
+        logger.warning("projects.delete_project(%s): no se pudieron borrar los "
+                       "partes diarios: %s", pid, e)
     _invalidate()
     return True, t("Project deleted.")
 

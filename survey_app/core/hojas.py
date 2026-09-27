@@ -70,6 +70,11 @@ HOJAS_LECTURA = (
     # fallo de v507. Van tres veces (v461, v507, y esta sería la tercera si faltara):
     # por eso existe `check_hojas_en_lote`.
     "StageProgress",
+    # ⚠️ v516: `daily_log` lee con `registros(SHEET)` sin cabeceras, igual que las tres
+    # anteriores. Fuera del lote, un parte diario se escribiría en la hoja y la app no
+    # volvería a verlo NUNCA — y aquí duele el doble, porque el valor de esto es
+    # justamente que el texto se acumule.
+    "DailyLogs",
 )
 
 

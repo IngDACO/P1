@@ -59,8 +59,11 @@ else:
 # hay nada con lo que ser compatible. Que `get_sheet` la cree la primera vez es lo
 # CORRECTO. No es relajar la regla: sigue exigiendo respaldo a toda hoja que SI haya
 # tenido nombre español, y cualquier hoja futura tendra que justificarse aqui igual.
+# ⚠️ v516 · `DailyLogs`, por la MISMA razon que las anteriores: nace en ingles el
+# 23/09/2026, mucho despues del renombrado, asi que nunca tuvo nombre español y no hay
+# nada con lo que ser compatible. Que `get_sheet` la cree la primera vez es lo CORRECTO.
 _YA = {"login", "prestarts", "roster", "sheet1", "library", "librarymodels",
-       "xeroconnections", "stageprogress"}
+       "xeroconnections", "stageprogress", "dailylogs"}
 huerfanas = [k for k, v in consts.items()
              if v.lower() not in LEGADO and v.lower() not in _YA]
 if huerfanas:
