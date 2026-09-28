@@ -57,7 +57,12 @@ SHEET = "DailyLogs"
 # ⚠️ Regla v363: columnas NUEVAS siempre al FINAL. Lo que traiga F2 —la propuesta del
 # intérprete, si se aceptó, contra qué actividades— se añade detrás de `Created`, nunca
 # en medio, o toda fila escrita hasta entonces se desplaza una posición.
-HEADERS = ["ID", "Group", "ProjectID", "Date", "Author", "Text", "Source", "Created"]
+# ⚠️ v523 · `Reviewed`/`ReviewedBy` AL FINAL (v363): cuándo y quién revisó las PROPUESTAS
+# que la app sacó del parte — confirmando lo que era, o diciendo que nada. Sin esta marca
+# la pantalla volvería a preguntar lo mismo cada vez que se abre; y qué se acreditó NO se
+# guarda aquí: vive en StageProgress con el ID del parte en la nota (una sola verdad).
+HEADERS = ["ID", "Group", "ProjectID", "Date", "Author", "Text", "Source", "Created",
+           "Reviewed", "ReviewedBy"]
 
 # De dónde salió el parte. Hoy solo escrito a mano; cuando el intérprete proponga y
 # alguien acepte, poder distinguirlos es lo que permitirá medir si acierta.
@@ -208,8 +213,10 @@ def crear(pid, grupo, texto, autor, dia=None) -> tuple:
         # escritos en el mismo minuto empataban y salían en el orden equivocado. Es una
         # hoja nueva, así que no hay histórico que migrar por cambiar el formato — en
         # cualquier otra columna de fecha esto no sería gratis.
+        # ⚠️ La fila es POSICIONAL: `Reviewed` y `ReviewedBy` nacen vacías, pero tienen que
+        # ir, o la fila queda más corta que la cabecera (el fallo de v363).
         w.append_row([lid, str(grupo), str(pid), _dia, str(autor), _txt, MANUAL,
-                      _hoy.strftime("%Y-%m-%d %H:%M:%S")],
+                      _hoy.strftime("%Y-%m-%d %H:%M:%S"), "", ""],
                      value_input_option="RAW")
     except Exception as e:
         logger.warning("daily_log.crear(%s): %s", pid, e)
@@ -252,6 +259,48 @@ def borrar(log_id, quien) -> tuple:
             return False, timeclock.motivo_sin_hoja()
         _invalidate()
         return True, t("Daily log deleted.")
+    return False, t("Daily log not found.")
+
+
+def revisado(r) -> bool:
+    """¿Ya revisó su autor las propuestas de este parte?"""
+    return bool(str((r or {}).get("Reviewed", "") or "").strip())
+
+
+def marcar_revisado(log_id, quien) -> tuple:
+    """El autor revisó las propuestas de su parte (confirmó lo que era, o que nada).
+
+    ⚠️ Solo el AUTOR: el parte es de quien lo escribió (v516), y las propuestas salen de
+    SUS palabras — quien no estuvo no sabe si «installed headers» fue en este ascensor.
+    ⚠️ La fila se busca leyendo FRESCO: decidir dónde escribir con una caché es como se
+    corrompen los datos (v323).
+    """
+    w = _ws()
+    if w is None:
+        return False, timeclock.motivo_sin_hoja()
+    try:
+        recs = columnas.canonizar(w.get_all_records(numericise_ignore=["all"]))
+    except Exception as e:
+        logger.warning("daily_log.marcar_revisado(%s): %s", log_id, e)
+        return False, timeclock.motivo_sin_hoja()
+    for i, r in enumerate(recs):
+        if str(r.get("ID", "")) != str(log_id):
+            continue
+        if str(r.get("Author", "")) != str(quien):
+            return False, t("Only the person who wrote it can review its proposals.")
+        from core.num import col_letter
+        _ahora = clock.now(r.get("Group")).strftime("%Y-%m-%d %H:%M:%S")
+        try:
+            w.batch_update([
+                {"range": "%s%d" % (col_letter(_COL["Reviewed"]), i + 2), "values": [[_ahora]]},
+                {"range": "%s%d" % (col_letter(_COL["ReviewedBy"]), i + 2),
+                 "values": [[str(quien)]]},
+            ], value_input_option="RAW")
+        except Exception as e:
+            logger.warning("daily_log.marcar_revisado(%s): %s", log_id, e)
+            return False, timeclock.motivo_sin_hoja()
+        _invalidate()
+        return True, t("Reviewed.")
     return False, t("Daily log not found.")
 
 

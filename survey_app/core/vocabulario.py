@@ -1166,14 +1166,23 @@ _ASC_EXPLICITO = re.compile(
 _ASC_DUDOSO = re.compile(r"\b(?:L|M|SL)\s?\d{1,2}\b|\bL[Il]\b")
 
 
-def ascensores(texto) -> dict:
+def ascensores(texto, tambien=()) -> dict:
     """Qué ascensores nombra la nota y qué líneas van con cada uno.
 
     `{ascensores, dudosos, por_ascensor, separar}`. `separar` = nombra 2 o más ascensores
     de forma explícita: es una PROPUESTA de partir la nota, no una decisión.
     Una línea que es solo «Lift 3» abre sección: las siguientes van con ese ascensor.
+
+    `tambien` = nombres dudosos («L3», «M2») que el USUARIO confirmó que son ascensores
+    (v523). Cuentan como «lift N» con su propio nombre como clave; los que no confirmó
+    siguen en `dudosos`. ⚠️ Sin su respuesta no se agrupa nada por ellos: sería decidir.
     """
+    _conf = {str(x).strip() for x in (tambien or ()) if str(x).strip()}
     por, explicitos, dudosos = {}, [], []
+    # ⚠️ v523 · Y las líneas EN ORDEN con su destino: `por_ascensor` agrupa y pierde el
+    # orden entre grupos, y quien reparte la nota necesita saber qué iba DESPUÉS de una
+    # cabecera «Pendings» — separar sin eso convertiría lo pendiente en propuesta.
+    orden = []
     actual = ""
     for linea in str(texto or "").splitlines():
         l = linea.strip()
@@ -1182,11 +1191,16 @@ def ascensores(texto) -> dict:
         nums = []
         for m in _ASC_EXPLICITO.finditer(l):
             nums += re.findall(r"\d{1,2}", m.group(0))
-        nums = list(dict.fromkeys(nums))
+        _resto = _ASC_EXPLICITO.sub(" ", l)
         for m in _ASC_DUDOSO.finditer(l):
-            if m.group(0) not in dudosos:
+            if m.group(0) in _conf:
+                nums.append(m.group(0))
+            elif m.group(0) not in dudosos:
                 dudosos.append(m.group(0))
-        if len(nums) == 1 and not normaliza(_ASC_EXPLICITO.sub(" ", l)).split():
+        if _conf:
+            _resto = _ASC_DUDOSO.sub(lambda m: " " if m.group(0) in _conf else m.group(0), _resto)
+        nums = list(dict.fromkeys(nums))
+        if len(nums) == 1 and not normaliza(_resto).split():
             actual = nums[0]                     # la línea ES la cabecera «Lift 3»
             if actual not in explicitos:
                 explicitos.append(actual)
@@ -1196,8 +1210,9 @@ def ascensores(texto) -> dict:
                 explicitos.append(n)
         for d in (nums or [actual]):
             por.setdefault(d, []).append(l)
+        orden.append((l, list(nums or [actual])))
     return {"ascensores": explicitos, "dudosos": dudosos, "por_ascensor": por,
-            "separar": len(explicitos) >= 2}
+            "lineas": orden, "separar": len(explicitos) >= 2}
 
 
 # ⚠️ Cuántas palabras se toleran METIDAS entre dos de un término. Los instaladores

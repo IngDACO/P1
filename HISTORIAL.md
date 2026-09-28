@@ -10,6 +10,88 @@ ventana de contexto. Contenido: 258 secciones detalladas + el índice de 440 ver
 
 ---
 
+## LA PANTALLA DONDE SE CONFIRMA LO QUE LA APP LEYÓ EN EL PARTE (v523)
+
+La regla del usuario (28/09/2026) hecha interfaz: «**la app no asume nada sin consultar**;
+más autonomía, cuando la IA interprete mejor». Debajo de cada parte PROPIO y sin revisar, el
+de campo ve una tarjeta «What the app read in your log»:
+
+- las **actividades** que nombra, cada una con la LÍNEA del parte que la respalda y sus
+  avisos («dice que no está terminado», «dice que fue otro día», «informativa: no cuenta»);
+- la **etapa como lista** cuando solo nombró la etapa («shaft wiring» → sus 8 actividades);
+- las **preguntas** («lights» puede ser cinco cosas) con la regla del documento;
+- lo **pendiente** y lo **retirado**, enseñado pero sin casilla.
+
+⚠️ **Todo empieza DESMARCADO** y nada se acredita hasta «Confirm the N ticked», que llama a
+`stage_progress.acreditar` con **origen `log` y el ID del parte en la nota** — la marca que
+permitirá medir si la interpretación acierta, y con eso decidir cuánta autonomía darle.
+«Nothing to credit» cierra la tarjeta sin tocar el avance. `DailyLogs` gana
+`Reviewed`/`ReviewedBy` **al final** (v363); qué se acreditó NO se guarda ahí, vive en
+StageProgress (una sola verdad). Solo el AUTOR revisa; el admin ve el estado, no confirma.
+Si `acreditar` falla, el parte NO queda revisado y la tarjeta sigue.
+
+### Varios ascensores (decisión 2 del usuario)
+Un selector de obra por ascensor, con las obras SUYAS y **sin nada elegido**; lo que no
+asigne no se propone en ningún sitio, y al confirmar se vuelve a comprobar que el destino es
+suyo. `parte_propuestas.reparto` parte la nota y **repite la cabecera «Pending»** en cada
+trozo: separar sin ella convertía lo pendiente en propuesta. «L2» se pregunta (ascensor o
+piso) y ⚠️ **hasta que conteste, lo que va con él no va a ninguna obra**. Un solo ascensor
+nombrado («lift 3 installed headers») NO parte la nota: la decisión del usuario fue separar
+cuando hay VARIOS.
+
+### La hoja real
+`DailyLogs` pasó de 8 a 10 columnas y `Reviewed`/`ReviewedBy` quedaron en I y J — leído por
+un SEGUNDO camino (gspread de solo lectura), que es donde `marcar_revisado` las calcula. Dos
+obras de prueba, un parte de dos ascensores: cada crédito en SU obra, con origen `log` y el
+ID del parte, `Activities.Progress` de la etapa 0 → 11; otro usuario no puede revisar; borrar
+las obras no deja ni parte ni crédito huérfano, y la hoja queda idéntica. ⚠️ `DailyLogs` y
+`StageProgress` estaban VACÍAS: nadie verá de golpe tarjetas de partes viejos.
+
+### ⚠️ Lo que salió MIRANDO la pantalla a ancho de móvil, no de los tests
+1. **«L2 call button» se proponía para la obra del parte** antes de contestar — o sea
+   tratando «L2» como piso, que es justo lo que se estaba preguntando. Asumir por omisión.
+2. **El parte se pintaba en UN párrafo** (Markdown se come el salto simple, desde v516), y la
+   tarjeta cita LÍNEAS como prueba: no había dónde encontrarlas.
+3. **«Confirm the 3 ticked» para 2 créditos**: la misma actividad sale en la lista de su
+   etapa y en una pregunta; marcada en las dos, contaba doble.
+4. La «×» de borrar salía sobre «— choose the job —» (era una opción `None`, no un
+   placeholder); un único destino que NO era la obra del parte salía sin su nombre; y «tu
+   parte habla de más de un ascensor» con un solo «L3».
+
+### ⚠️ Y lo que salió RELEYENDO el diff antes de desplegar (trampa nº9)
+- **«L2» de CABECERA.** Retener solo la línea que nombra «L2» no bastaba: con «L2» solo en
+  su línea, lo de debajo depende de la respuesta igual, y se proponía en la obra del parte.
+  `parte_propuestas.lineas_de` da lo que colgaría de él si fuera ascensor, y eso se retiene.
+- **Preguntas que no cambian nada.** Se preguntaba por «L2 waiting on the scaffold» y se
+  pedía obra para «lift 2 was in use by the builders». Ahora solo se pregunta si lo que
+  cuelga de ahí PROPONE algo (`propone_algo`): una pregunta que no importa enseña a
+  contestar sin leer.
+- **Lo hecho en ESTA obra escondía el trabajo de otro ascensor.** La vista previa miraba lo
+  acreditado aquí: «lift 3 installed sills» con los sills de lift 1 ya hechos → sin tarjeta,
+  y el trabajo de lift 3 se perdía. Si la nota se reparte, lo hecho depende del DESTINO.
+
+### ⚠️ Los guardianes, y dos pasos en vacío míos
+`verif_v523` EJECUTA: la lógica contra el catálogo real, la escritura REAL de `acreditar`
+con la hoja sustituida (no una copia de su validación) y la tarjeta con **`AppTest`** —
+marcar, confirmar, fallar, vista admin—. ⚠️ Escribiendo el ejercicio real apareció que
+«lo pendiente no pasa a propuesta» se probaba con «lift 3 sills», que **no casa con nada**:
+pasaba sin probar nada (trampa nº1). Cambiada a «installed sills» y, de paso, cada «NO
+aparece X» lleva ahora su control «X SÍ aparece cuando debe». Y un umbral que clavé a ojo
+(«≥ 15 casillas») pasa a **derivarse** de `propuestas` (trampa nº16): la tarjeta ofrece
+exactamente lo que la lógica saca. ⚠️ `check_anclas_roturas` cazó **3 anclas muertas en
+`romper_v516`** por mis cambios (la fila lleva dos columnas más; el admin pasa `extra=`):
+actualizadas con la razón escrita, deuda en 15 exactas.
+
+### Lo que NO hace todavía
+- El crédito lleva la fecha de CONFIRMAR, no la del parte (igual que marcar a mano). Un
+  parte de ayer confirmado hoy cuenta hoy para la curva S.
+- En una nota de varios ascensores, las líneas que no nombran ninguno van a la obra del
+  parte (se ven bajo su nombre y pueden quedar sin marcar, pero no moverse a otra).
+- No se guarda lo que se RECHAZÓ: se sabe qué se acreditó desde un parte, no qué se propuso
+  y se dejó sin marcar. Para medir el acierto hará falta.
+
+111 comprobaciones · **30/30 + control** · romper_v516 20/20 sobre el código nuevo · hoja real 27/27 · suite 154 verde
+
 ## EL VOCABULARIO CONTRA 1070 PARTES REALES: PROPONER, NO ASUMIR (v522)
 
 El usuario compartió desde Drive los partes de **Simpro** de 11 obras (capturas del móvil,
@@ -12266,7 +12348,7 @@ comprueba lo que dice**.
 
 ---
 
-## Versiones desplegadas (v522 = actual)
+## Versiones desplegadas (v523 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -12274,6 +12356,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v523 | **La pantalla donde se confirma lo que la app leyó en el parte.** La regla del usuario hecha interfaz: debajo de cada parte propio y sin revisar, actividades con la LÍNEA que las respalda, la etapa como lista, las preguntas y lo pendiente sin casilla. ⚠️ **Todo desmarcado**; solo lo marcado se acredita, con origen `log` y el ID del parte (lo que permitirá medir el acierto). Varios ascensores: obra por ascensor, sin nada elegido; «L2» se pregunta y ⚠️ lo que va con él (también debajo, si es cabecera) no va a ninguna obra hasta contestar; y no se pregunta lo que no cambia nada. ⚠️ Mirar la pantalla a ancho de móvil destapó 4 fallos que los tests no veían (el «L2» asumido como piso, el parte en un párrafo, «3 marcadas» para 2 créditos, destinos sin nombre) y releer el diff, 3 más. `verif_v523` ejecuta la tarjeta con AppTest; ⚠️ dos pasos en vacío míos arreglados. 111 comprobaciones · **30/30 + control** · romper_v516 20/20 sobre el código nuevo · hoja real 27/27 · suite 154 verde |
 | v522 | **El vocabulario contra 1070 partes REALES de Simpro: proponer, no asumir.** Regla del usuario: la app no asume — propone y él confirma. La oración manda: lo de «Issues/Pendings» se aparta (**25 → 0** propuestas), lo que se lleva no se monta, y un verbo de QUITAR nunca acredita montar (**0 de 227** oraciones). Frase de etapa → la etapa entera (decisión 1); varios ascensores → proponer separar, «L3» se pregunta (decisión 2). ⚠️ Medido con 30 notas **reservadas y etiquetadas antes** de tocar nada: **8 → 22 de 40**, errores seguros **3 → 1**; corpus entero 28,3% → 39,2%. ⚠️ Dos métricas salieron peor y eran del MÉTODO (línea a línea). OCR de Windows validado 0,997; los partes, fuera del repo. 62 comprobaciones · 17/17 + control · romper_v517 28/28 sobre el código nuevo · suite 153 verde (152 + check_anclas_roturas re-corrido tras actualizar romper_v517) |
 | v521 | **La tarjeta «Models» cuenta modelos, no filas del catálogo.** Tras cargar la biblioteca decía «Models 2» con CERO modelos: el catálogo tenía «Schindler» y «Sematic» sin modelo —un estado legítimo— y `resumen()` contaba filas. ⚠️ Se contradecía con el desplegable, que ya descartaba el vacío; ahora cuentan con el MISMO criterio (sin repetidos ni desactivados) y no pueden volver a discrepar. Hoja real: **2 → 0**. 11 comprobaciones · **4/4 + control** · suite 152 verde |
 | v520 | **La biblioteca se llena: las 750 fotos de obra del usuario.** Clasificadas MIRÁNDOLAS (67 hojas de contacto), no por la carpeta: *Cabin* traía puertas, paracaídas y ~180 páginas de manual. Títulos en inglés y **las anotaciones a mano transcritas** en las notas, que es lo que encuentra el buscador. Decisiones del usuario: **dos secciones nuevas** (`Setting out`, `Installation equipment`), **entra todo** (avisado de caras y planos) y **Schindler salvo lo ajeno**. ⚠️ Las secciones **solo se añaden**: viven como texto en cada fila, renombrar una la saca de todo filtro sin error — las 14 de siempre, escritas a mano en el guardián. ⚠️ Carga en lote que valida como `add_item`, comprueba la cabecera real y es idempotente; ⚠️ el secrets LOCAL no trae `[gdrive]` (nº11) y tiene que ser la misma credencial: con `drive.file` otro cliente dejaría los archivos invisibles para la app. Copias **sin EXIF** (70 con GPS). Hoja real por segundo camino: **750/750, 0 discrepancias**, 25/25 archivos identicos en Drive, 0 EXIF. 26 comprobaciones · **12/12 + control** · suite 151 verde |

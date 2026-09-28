@@ -45,8 +45,12 @@ ROTURAS = [
     # empate le puso segundos, asi que la bateria la contaba como «??» mientras anunciaba
     # «19 de 19». No lo vi yo — lo cazo `check_anclas_roturas`, escrito ese mismo dia
     # para esto. Una bateria no avisa de sus propias anclas muertas: solo las salta.
+    # ⚠️ v523 · Y murio OTRA vez, igual que las dos de abajo: la fila lleva ahora
+    # `Reviewed`/`ReviewedBy` vacias al final, y el admin le pasa `extra=` a `_linea`. La
+    # rotura es la MISMA; cambia solo el texto donde se ancla (lo cazo check_anclas_roturas).
     ("se guarda solo el DIA, sin la hora (dos partes del mismo dia dejan de ordenarse)",
-     "core/daily_log.py", '_hoy.strftime("%Y-%m-%d %H:%M:%S")]', '_hoy.strftime("%Y-%m-%d")]'),
+     "core/daily_log.py", '_hoy.strftime("%Y-%m-%d %H:%M:%S"), "", ""]',
+     '_hoy.strftime("%Y-%m-%d"), "", ""]'),
 
     ("un fallo de la hoja se cuenta como EXITO (el texto se perderia al vaciarse la caja)",
      "core/daily_log.py",
@@ -96,7 +100,8 @@ ROTURAS = [
     # desempate vuelve a mandar el orden de la hoja (`sorted` es estable). Arreglar una
     # sola dejaba el fallo vivo la mitad de las veces.
     ("`Created` vuelve a guardarse sin SEGUNDOS (dos partes del mismo minuto empatan)",
-     "core/daily_log.py", '_hoy.strftime("%Y-%m-%d %H:%M:%S")]', '_hoy.strftime("%Y-%m-%d %H:%M")]'),
+     "core/daily_log.py", '_hoy.strftime("%Y-%m-%d %H:%M:%S"), "", ""]',
+     '_hoy.strftime("%Y-%m-%d %H:%M"), "", ""]'),
 
     ("se cae el ID de desempate (el mismo segundo vuelve a salir al reves)",
      "core/daily_log.py",
@@ -115,8 +120,10 @@ ROTURAS = [
      "        ok, msg = DL.crear(pid, grupo, txt, usuario, dia=dia)\n        if ok:"),
 
     ("el admin pasa a poder BORRAR partes ajenos",
-     "core/daily_log_ui.py", "        _linea(r, False, key_prefix)",
-     "        _linea(r, True, key_prefix)\n        DL.borrar(r.get('ID'), 'admin') if False else None"),
+     "core/daily_log_ui.py",
+     "        _linea(r, False, key_prefix, extra=lambda r=r: _estado_revision(r, pid))",
+     "        _linea(r, True, key_prefix, extra=lambda r=r: _estado_revision(r, pid))\n"
+     "        DL.borrar(r.get('ID'), 'admin') if False else None"),
 
     ("el campo pierde su seccion (la pantalla deja de existir)",
      "core/projects_ui.py", '"🏗 Avance", "📝 Parte", "🚨 Avisos"',

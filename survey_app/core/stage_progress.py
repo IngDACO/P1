@@ -56,6 +56,22 @@ HEADERS = ["ID", "Group", "ProjectID", "StageOrder", "Activity", "Pct",
 # De dónde salió el crédito. Por ahora solo a mano; el parte diario en texto añadirá
 # el suyo, y entonces poder distinguirlos es lo que permite medir si acierta.
 MANUAL = "manual"
+# v523 · Confirmado por el usuario desde las propuestas de un parte (la nota lleva el ID
+# del parte). ⚠️ El mismo texto que `parte_propuestas.ORIGEN`: lo vigila `verif_v523`.
+PARTE = "log"
+
+
+def acreditado(pid) -> dict:
+    """`{(orden, actividad): pct}` de lo acreditado en la obra — para quien tenga que
+    cruzar propuestas con lo ya hecho (`parte_propuestas`) sin volver a pedirlo."""
+    return _mapa(pid)
+
+
+def de_parte(pid, log_id) -> list:
+    """Lo que se acreditó desde ESE parte (y sigue acreditado)."""
+    return [r for r in creditos(pid)
+            if str(r.get("Source", "")) == PARTE and str(r.get("Note", "")) == str(log_id)
+            and _num(r.get("Pct")) > 0]
 
 _COL = {h: i + 1 for i, h in enumerate(HEADERS)}
 
