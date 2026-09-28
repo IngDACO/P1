@@ -370,6 +370,18 @@ def buscar(q, marca="", modelo="", seccion="", tipo="") -> list:
     return out
 
 
+def _num_modelos() -> int:
+    """Modelos DE VERDAD: pares marca·modelo con el modelo escrito.
+
+    ⚠️ No `len(list_modelos())`: eso cuenta FILAS del catálogo, y una fila con marca y
+    sin modelo es un estado legítimo (una marca sin modelo concreto, ver SIN_MODELO).
+    Con la biblioteca cargada en v520 el catálogo tenía «Schindler» y «Sematic» sin
+    modelo y la tarjeta decía «Models 2» con CERO modelos — mientras el desplegable,
+    que usa `modelos_de`, no ofrecía ninguno. Se cuenta con el MISMO criterio que el
+    desplegable, para que los dos no se contradigan."""
+    return sum(len(modelos_de(b)) for b in marcas())
+
+
 def resumen() -> dict:
     """Cuántas piezas hay y cómo se reparten (para los KPI de la pantalla)."""
     items = list_items()
@@ -379,4 +391,4 @@ def resumen() -> dict:
         s = str(r.get("Section", ""))
         por_seccion[s] = por_seccion.get(s, 0) + 1
     return {"total": len(items), "por_tipo": por_tipo, "por_seccion": por_seccion,
-            "marcas": len(marcas()), "modelos": len(list_modelos())}
+            "marcas": len(marcas()), "modelos": _num_modelos()}

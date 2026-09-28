@@ -10,6 +10,23 @@ ventana de contexto. Contenido: 258 secciones detalladas + el índice de 440 ver
 
 ---
 
+## LA TARJETA «MODELS» CUENTA MODELOS, NO FILAS DEL CATÁLOGO (v521)
+
+Encontrado al mirar la biblioteca en producción después de cargarla (v520): la cabecera
+decía **«Models 2»** y no hay ningún modelo. El catálogo tenía dos filas —«Schindler» y
+«Sematic», las dos SIN modelo— y `resumen()` contaba `len(list_modelos())`, o sea FILAS.
+
+Una marca sin modelo es un estado **legítimo** (`SIN_MODELO`: hay material de una marca
+sin modelo concreto), así que el fallo no era del dato sino de la cuenta. Y se
+contradecía con la propia pantalla: el desplegable de modelos usa `modelos_de`, que
+descarta el vacío, y no ofrecía ninguno. Ahora `_num_modelos()` cuenta con el MISMO
+criterio que el desplegable —pares marca·modelo con modelo escrito, sin repetidos y sin
+desactivados—, así que la tarjeta y el desplegable ya no pueden decir cosas distintas.
+Decisión del usuario: «dale, arregla el contador».
+
+Hoja real: **modelos 2 → 0**, marcas 2, 750 piezas. 11 comprobaciones · **4/4 roturas +
+control** · suite 152 verde
+
 ## LA BIBLIOTECA SE LLENA: 750 FOTOS DE OBRA Y DOS SECCIONES NUEVAS (v520)
 
 El usuario pasó su carpeta `D:\CopeX\Library` —750 fotos ordenadas en nueve carpetas
@@ -12171,7 +12188,7 @@ comprueba lo que dice**.
 
 ---
 
-## Versiones desplegadas (v520 = actual)
+## Versiones desplegadas (v521 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -12179,6 +12196,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v521 | **La tarjeta «Models» cuenta modelos, no filas del catálogo.** Tras cargar la biblioteca decía «Models 2» con CERO modelos: el catálogo tenía «Schindler» y «Sematic» sin modelo —un estado legítimo— y `resumen()` contaba filas. ⚠️ Se contradecía con el desplegable, que ya descartaba el vacío; ahora cuentan con el MISMO criterio (sin repetidos ni desactivados) y no pueden volver a discrepar. Hoja real: **2 → 0**. 11 comprobaciones · **4/4 + control** · suite 152 verde |
 | v520 | **La biblioteca se llena: las 750 fotos de obra del usuario.** Clasificadas MIRÁNDOLAS (67 hojas de contacto), no por la carpeta: *Cabin* traía puertas, paracaídas y ~180 páginas de manual. Títulos en inglés y **las anotaciones a mano transcritas** en las notas, que es lo que encuentra el buscador. Decisiones del usuario: **dos secciones nuevas** (`Setting out`, `Installation equipment`), **entra todo** (avisado de caras y planos) y **Schindler salvo lo ajeno**. ⚠️ Las secciones **solo se añaden**: viven como texto en cada fila, renombrar una la saca de todo filtro sin error — las 14 de siempre, escritas a mano en el guardián. ⚠️ Carga en lote que valida como `add_item`, comprueba la cabecera real y es idempotente; ⚠️ el secrets LOCAL no trae `[gdrive]` (nº11) y tiene que ser la misma credencial: con `drive.file` otro cliente dejaría los archivos invisibles para la app. Copias **sin EXIF** (70 con GPS). Hoja real por segundo camino: **750/750, 0 discrepancias**, 25/25 archivos identicos en Drive, 0 EXIF. 26 comprobaciones · **12/12 + control** · suite 151 verde |
 | v519 | **Las decisiones del usuario del 27/09.** (1) «Roping» = belting: la contradicción de su documento, resuelta. (2) Cuatro actividades **entran a modo informativo**: se marcan y NO cuentan — ⚠️ en una tabla APARTE, no con peso cero (`validar` lo rechaza a propósito), así que `avance_de` no las recibe nunca; ⚠️ marcarlas no toca `Activities.Progress`. (3) **50/50** en obras combinadas — ⚠️ solo NUEVAS: el reparto va sellado en cada obra, comprobado antes de tocarlo. (4) Sin offline, de momento. ⚠️ **La huella de los pesos**: cambiar una décima sin subir `VERSION` ya es rojo — el contrato de v514 deja de depender de la disciplina. ⚠️ Las baterías **dejan de saltarse roturas en silencio**: una que anunciaba «0 de 0» salía en verde, y la de v516 decía 19 de 19 teniendo 20. Hoja real: etapa **31,0 → 31,0%** y obra **3,50 → 3,50%** tras marcar las informativas. 28 comprobaciones · **13/13 + control** · corpus 49/49 · hoja real 22/22 · suite 150 verde |
 | v518 | **El vocabulario, puesto a prueba contra frases REALES.** Sin partes en bruto, una frase que invento yo acierta siempre; así que el corpus son **45 frases que el usuario CITA** de partes de verdad, con la respuesta que da su documento al lado, y 5 negativas de su sección de bloqueos. ⚠️ **Primera pasada: 55%.** El peor fallo: `install` no casaba con `installed` — el verbo más frecuente de los partes — y **el guardián lo tenía blindado** afirmando la forma en vez del principio (nº16). Además: cantidades en medio («Cleaned 4 car rails»), el paréntesis del nombre, vocabulario sin transcribir y lo «por defecto» sin puntuar. ⚠️ Tolerar palabras en medio abrió un riesgo que el negativo **midió**: «cleaned the pit, rails arriving» acreditaba Clean rails — ahora el hueco no cruza una coma. ⚠️ **El documento se contradice** con «roping»: marcado y sin acreditar hasta que el usuario decida. ⚠️ El 100% es un **techo**, no una estimación: mide la transcripción, no la generalización. Hoja real 29/29, limpia por dos caminos. **45/45 · 0 errores · 27/27 + control** · suite 149 verde |
