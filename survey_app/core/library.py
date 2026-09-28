@@ -53,10 +53,17 @@ FOLDER_NAME = "COPEX Library"
 # cronograma: aquí se busca documentación, no se planifica obra. Y nace en INGLÉS
 # porque se GUARDA en la hoja — traducirlo después obliga a migrar el histórico, que
 # es lo que costó v453.
+# ⚠️ Solo se AÑADE, nunca se renombra: la sección vive como texto en cada fila, así que
+# cambiar una dejaría sus piezas fuera de todo filtro sin dar ningún error. El orden sí
+# es libre (solo decide cómo sale el desplegable).
+# v520: «Setting out» e «Installation equipment», decisión del usuario al cargar su
+# biblioteca de obra: la plomada y el equipo de montaje (false car, tirak, Blocstop,
+# eslingas) no son piezas del ascensor y no cabían en ninguna de las catorce.
 SECCIONES = [
     "Machine & traction",
     "Controller",
     "Shaft",
+    "Setting out",
     "Pit",
     "Car",
     "Car door",
@@ -67,6 +74,7 @@ SECCIONES = [
     "Safety gear",
     "Electrical & wiring",
     "Signalling",
+    "Installation equipment",
     "Documentation",
 ]
 

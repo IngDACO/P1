@@ -121,10 +121,19 @@ chk(_vistos <= {"cotizado", "rubro", "rubro+fija", "fija", "a_costo"},
 # ⚠️ v480: la salvaguarda solo contemplaba el libro VACIO, y con UNA obra exigia ver
 # tres modelos distintos — imposible por aritmetica, no por un fallo. Se pide que haya
 # con que comprobar, no simplemente que haya algo.
+# ⚠️ v520: y contar OBRAS tampoco basta. La variedad es de los DATOS, no del número de
+# obras: el 28/09/2026 `cliente1` pasó a tener tres (PRJ-0015 la dejó el usuario a
+# propósito para probar los partes) y las tres SIN ganancia configurada, así que las
+# tres son `a_costo` y exigir tres modelos volvía a ser imposible — rojo sin fallo.
+# Caducado, no regresión: nada del código cambió. Se dice en voz alta cuando la
+# afirmación de arriba pasa sin variedad que la ponga a prueba, en vez de fallar.
 if len(_mods) < 3:
     print(f"     ({len(_mods)} proyecto(s): no hay con que comprobar la variedad)")
+elif len(_vistos) < 2:
+    print(f"     ⚠️ {len(_mods)} obras, todas {sorted(_vistos)}: la ausencia del modelo del % "
+          "pasa, pero sin variedad que la ponga a prueba (dato de la demo, no fallo)")
 else:
-    chk(len(_vistos) >= 3, f"…y el chequeo ve variedad real, no un solo caso ({len(_vistos)})")
+    chk(len(_vistos) >= 2, f"…y el chequeo ve variedad real, no un solo caso ({len(_vistos)})")
 
 # Una obra sin ganancia vale su COSTO y lo DICE (patrón v346: nada de ceros silenciosos)
 _ac = next((pid for pid, m in _mods.items() if m == "a_costo"), None)

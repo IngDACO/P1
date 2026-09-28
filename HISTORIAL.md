@@ -10,6 +10,63 @@ ventana de contexto. Contenido: 258 secciones detalladas + el índice de 440 ver
 
 ---
 
+## LA BIBLIOTECA SE LLENA: 750 FOTOS DE OBRA Y DOS SECCIONES NUEVAS (v520)
+
+El usuario pasó su carpeta `D:\CopeX\Library` —750 fotos ordenadas en nueve carpetas
+(CW & Compo, Cabin, Controller, Docs, Doors, False Cabin, Pit, Plumbing, Top & Elec)— para
+la biblioteca que ven TODOS los clientes, con una regla: «ponlas en el lugar que
+corresponde; si no sabes dónde, pregunta».
+
+### Lo que decidió el usuario
+
+| Pregunta | Decisión |
+|---|---|
+| Fotos de pantalla de manuales Schindler | **Entran** |
+| 87 fotos de equipo de montaje (false car, tirak, Blocstop, eslingas, grúa) que no caben en ninguna sección | **Sección nueva `Installation equipment`** |
+| 38 fotos de plomada (plantilla, hilos, cálculos TKSW/BKS) | **Sección nueva `Setting out`** |
+| 10 fotos con caras de trabajadores, 4 planos de una obra concreta, 3 formularios rellenados | **Entra todo** (se le avisó de que las ve cualquier cliente) |
+| Marca de las fotos de obra | **Todo Schindler salvo lo ajeno** (cuadro chino, false car y herramientas sin marca; puerta de rellano Sematic) |
+
+### Cómo se clasificó
+Mirando las 750, no por el nombre de la carpeta: 67 hojas de contacto numeradas (12 por
+hoja) y ampliaciones de las dudosas. La carpeta del usuario era una PISTA, no la
+respuesta: *Cabin* traía operadores de puerta, paracaídas, cable viajero y ~180 páginas de
+manual; *Docs* traía páginas de panelería de cabina y la nota de las medidas del belting.
+Cada foto lleva título en inglés (se guarda y se busca) y, si estaba ANOTADA a mano, las
+notas transcritas: «3 shims behind the header of the cabin each side», «bolts coming with
+the lift are too long, DO NOT use», el cálculo de la plantilla (1490 + 40 = 1530…). Eso es
+lo que hace que el buscador las encuentre.
+
+Antes de subir, `preparar_biblioteca.py` hizo COPIAS a 1600 px **sin metadatos** —70 fotos
+llevaban el GPS de la obra— y marcó las casi repetidas (dHash) sin borrar nada.
+
+### ⚠️ Las secciones solo se AÑADEN
+La sección vive como TEXTO en cada fila de `Library`. Renombrar una deja sus piezas fuera
+de todo filtro **sin dar ningún error**, así que las catorce de siempre están escritas A
+MANO en `verif_v520` (derivarlas de `SECCIONES` haría que el guardián aceptara cualquier
+cambio). El orden sí es libre: solo decide cómo sale el desplegable.
+
+### La carga en lote (`guardianes/sueltos/importar_biblioteca.py`)
+⚠️ **No llama a `add_item` 750 veces**: cada alta lee la hoja entera para el ID (fresco, a
+propósito), y 750 lecturas contra 60/min son 13 minutos de 429. Lee una vez, asigna IDs en
+memoria saltando los referenciados (v427) y escribe con `append_rows` en tandas de 100.
+⚠️ Pero valida **lo mismo que el alta** y comprueba la **cabecera REAL** antes de escribir
+filas posicionales (v363). ⚠️ **Idempotente**: la llave es `FileName` = «L####.jpg», y lo
+ya subido a Drive queda en `_subida_estado.json` — si se corta entre Drive y la hoja, la
+siguiente pasada no duplica archivos. ⚠️ Primero el archivo, después la ficha (v343).
+
+⚠️ **El `secrets.toml` LOCAL no trae `[gdrive]`** —el del Cloud sí; trampa nº11 otra vez—
+y la primera prueba murió ahí. Se le pasa `--gdrive <toml>` con la MISMA credencial OAuth
+de la app, leída en memoria y sin copiarla a ningún sitio. Tiene que ser la misma: con el
+alcance `drive.file`, un archivo subido con otro cliente sería **invisible para la app**.
+La corrida fallida alcanzó a dar de alta la marca Schindler en el catálogo antes de caer
+en Drive — era un alta que había que hacer igual, y el orden (catálogo antes que archivos)
+no deja fichas a medias.
+
+### Verificado
+Contra la hoja real, por un SEGUNDO camino (gspread de solo lectura, no las funciones de la app): **750 filas, 750 IDs y 750 nombres unicos, 0 que no casen con la clasificacion**; 25 archivos al azar bajados de Drive **identicos byte a byte** (y la sonda distingue dos distintos: validada, trampa nº12), **0 con EXIF**. Volver a correr la carga: «por subir: 0». Drive: 747 subidas en 42 min sin un reintento.
+26 comprobaciones · **12/12 roturas + control** · suite 149 verde + 2 rojos que NO eran de esta version: `check_anclas_roturas` (el control de mi bateria anclaba en «TIPOS = [», 9 caracteres, por debajo del minimo de 10 del chequeo — el mismo falso positivo que arrastra v472; ancla alargada y la deuda sigue en 15 exactos) y `verif_v455` (caducado por los DATOS: con 3 obras exigia 3 modelos de ganancia, y `cliente1` tiene hoy 3, las tres a costo, porque PRJ-0015 se quedo a proposito; ahora lo dice en vez de fallar). Re-corridos en verde → **151**.
+
 ## LAS DECISIONES DEL USUARIO DEL 27/09/2026 (v519)
 
 Cuatro preguntas que v518 dejó abiertas, contestadas por el usuario en una línea cada una:
@@ -12114,7 +12171,7 @@ comprueba lo que dice**.
 
 ---
 
-## Versiones desplegadas (v519 = actual)
+## Versiones desplegadas (v520 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -12122,6 +12179,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v520 | **La biblioteca se llena: las 750 fotos de obra del usuario.** Clasificadas MIRÁNDOLAS (67 hojas de contacto), no por la carpeta: *Cabin* traía puertas, paracaídas y ~180 páginas de manual. Títulos en inglés y **las anotaciones a mano transcritas** en las notas, que es lo que encuentra el buscador. Decisiones del usuario: **dos secciones nuevas** (`Setting out`, `Installation equipment`), **entra todo** (avisado de caras y planos) y **Schindler salvo lo ajeno**. ⚠️ Las secciones **solo se añaden**: viven como texto en cada fila, renombrar una la saca de todo filtro sin error — las 14 de siempre, escritas a mano en el guardián. ⚠️ Carga en lote que valida como `add_item`, comprueba la cabecera real y es idempotente; ⚠️ el secrets LOCAL no trae `[gdrive]` (nº11) y tiene que ser la misma credencial: con `drive.file` otro cliente dejaría los archivos invisibles para la app. Copias **sin EXIF** (70 con GPS). Hoja real por segundo camino: **750/750, 0 discrepancias**, 25/25 archivos identicos en Drive, 0 EXIF. 26 comprobaciones · **12/12 + control** · suite 151 verde |
 | v519 | **Las decisiones del usuario del 27/09.** (1) «Roping» = belting: la contradicción de su documento, resuelta. (2) Cuatro actividades **entran a modo informativo**: se marcan y NO cuentan — ⚠️ en una tabla APARTE, no con peso cero (`validar` lo rechaza a propósito), así que `avance_de` no las recibe nunca; ⚠️ marcarlas no toca `Activities.Progress`. (3) **50/50** en obras combinadas — ⚠️ solo NUEVAS: el reparto va sellado en cada obra, comprobado antes de tocarlo. (4) Sin offline, de momento. ⚠️ **La huella de los pesos**: cambiar una décima sin subir `VERSION` ya es rojo — el contrato de v514 deja de depender de la disciplina. ⚠️ Las baterías **dejan de saltarse roturas en silencio**: una que anunciaba «0 de 0» salía en verde, y la de v516 decía 19 de 19 teniendo 20. Hoja real: etapa **31,0 → 31,0%** y obra **3,50 → 3,50%** tras marcar las informativas. 28 comprobaciones · **13/13 + control** · corpus 49/49 · hoja real 22/22 · suite 150 verde |
 | v518 | **El vocabulario, puesto a prueba contra frases REALES.** Sin partes en bruto, una frase que invento yo acierta siempre; así que el corpus son **45 frases que el usuario CITA** de partes de verdad, con la respuesta que da su documento al lado, y 5 negativas de su sección de bloqueos. ⚠️ **Primera pasada: 55%.** El peor fallo: `install` no casaba con `installed` — el verbo más frecuente de los partes — y **el guardián lo tenía blindado** afirmando la forma en vez del principio (nº16). Además: cantidades en medio («Cleaned 4 car rails»), el paréntesis del nombre, vocabulario sin transcribir y lo «por defecto» sin puntuar. ⚠️ Tolerar palabras en medio abrió un riesgo que el negativo **midió**: «cleaned the pit, rails arriving» acreditaba Clean rails — ahora el hueco no cruza una coma. ⚠️ **El documento se contradice** con «roping»: marcado y sin acreditar hasta que el usuario decida. ⚠️ El 100% es un **techo**, no una estimación: mide la transcripción, no la generalización. Hoja real 29/29, limpia por dos caminos. **45/45 · 0 errores · 27/27 + control** · suite 149 verde |
 | v517 | **El vocabulario de obra: 339 términos que apuntan a actividades reales.** F2a — la mitad DETERMINISTA de interpretar el parte, sin modelo ni API. Sale del documento de conocimiento del usuario, que no es documentación sino el poso CORREGIDO de pasar un intérprete sobre partes reales (**58 anotaciones «(Danilo, Sep 2026)»**). ⚠️ Esos documentos solo existían dentro de un transcript de 19 MB tras dos compactaciones: rescatados a `docs/`. ⚠️ Sirve de **barandilla**: solo se puede proponer una actividad del plan SELLADO de esa obra, así que el modelo no podrá inventarse un nombre (regla v509). Un parte de instalación que diga «tirak» recibe **0 candidatos**. ⚠️ Lo ambiguo sale MARCADO con su regla, nunca resuelto: el documento dice que «under the cabin work» depende de la CRONOLOGÍA, que es el dato que `stage_progress` guarda desde v514. ⚠️ Tres actividades existen en un documento y no en el otro — declaradas, no colgadas de la más parecida. ⚠️ **Mi comentario decía algo que el código no hacía**: ordenaba por longitud y nunca usaba el orden; el `sorted` era decorativo y lo destapó la batería. 41 comprobaciones · **18/18 + control** · suite 149 verde |
