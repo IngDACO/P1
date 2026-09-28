@@ -46,10 +46,14 @@ ROTURAS = [
      '"alternativas": ["Install pit ladder", "Stop button box"],'),
 
     # ── (b) la barandilla ─────────────────────────────────────────────────────
+    # ⚠️ CADUCADAS POR v522 (no relajadas): `buscar` se reescribio para leer el contexto de
+    # cada oracion, y el filtro por plan, el «cuenta» y lo «por defecto» se mudaron a
+    # `_propone`/`_anota`. Es la MISMA rotura sobre el codigo nuevo — cambia la sangria y
+    # la linea, no lo que se rompe. Lo destapo `check_anclas_roturas`.
     ("se cae el filtro por PLAN: una instalacion recibiria propuestas de desmontaje",
      "core/vocabulario.py",
-     "                (fuera if en_plan is not None and a not in en_plan else dentro).append(fila)",
-     "                dentro.append(fila)"),
+     "        (fuera if en_plan is not None and a not in en_plan else dentro).append(fila)",
+     "        dentro.append(fila)"),
 
     ("el plan se lee en la clave equivocada y el filtro queda VACIO (no filtra nada)",
      "core/vocabulario.py",
@@ -60,8 +64,8 @@ ROTURAS = [
 
     ("lo que queda fuera del plan se TIRA en silencio en vez de decirse",
      "core/vocabulario.py",
-     "                (fuera if en_plan is not None and a not in en_plan else dentro).append(fila)",
-     "                if not (en_plan is not None and a not in en_plan): dentro.append(fila)"),
+     "        (fuera if en_plan is not None and a not in en_plan else dentro).append(fila)",
+     "        if not (en_plan is not None and a not in en_plan): dentro.append(fila)"),
 
     # ── (c) la raiz ───────────────────────────────────────────────────────────
     ("la raiz deja de unir las formas del verbo (los partes van en prosa)",
@@ -82,8 +86,8 @@ ROTURAS = [
      '    if False:\n        p = p[:-1]'),
 
     ("las palabras de relleno dejan de quitarse: el articulo rompe la frase",
-     "core/vocabulario.py", "    _p = [_raiz(p) for p in s.split() if p not in RELLENO]",
-     "    _p = [_raiz(p) for p in s.split()]"),
+     "core/vocabulario.py", "    _p = [_raiz(p) for p in _w if p not in RELLENO]",
+     "    _p = [_raiz(p) for p in _w]"),
 
     # ── (c2) el hueco y las oraciones ─────────────────────────────────────────
     ("el hueco CRUZA una coma: «cleaned the pit, rails arriving» acredita Clean rails",
@@ -115,8 +119,8 @@ ROTURAS = [
 
     ("lo que el documento manda «por defecto» deja de proponerse (Pit doors sin puntuar)",
      "core/vocabulario.py",
-     '            if len(dato["alternativas"]) == 1 and "default" in dato["regla"].lower():',
-     "            if False:"),
+     '        if len(dato["alternativas"]) == 1 and "default" in dato["regla"].lower():',
+     "        if False:"),
 
     # ── (d) lo ambiguo ────────────────────────────────────────────────────────
     ("lo ambiguo se RESUELVE a dedo en vez de marcarse",
@@ -164,8 +168,8 @@ ROTURAS = [
     # una vez», y aparecia dos.
     ("una informativa se propone como si CONTARA (un chaser job subiria la etapa)",
      "core/vocabulario.py",
-     '"fuente": tipo,\n                        "cuenta": a not in _info}',
-     '"fuente": tipo,\n                        "cuenta": True}'),
+     '"cuenta": a not in _info,',
+     '"cuenta": True,'),
 
     ("las informativas salen «fuera del plan» aunque su etapa sea de la obra",
      "core/vocabulario.py",
