@@ -11,6 +11,7 @@ import logging
 import hashlib
 import hmac
 import os
+import threading
 import time
 import uuid
 
@@ -521,6 +522,11 @@ def start_session(usuario: str) -> tuple:
 def heartbeat(usuario: str, token: str) -> bool:
     """Marca vida si el token sigue vigente. False si fue desplazado (o expiró y lo tomó otro)."""
     lws, err = _get_login_ws()
+    return _heartbeat_con(lws, err, usuario, token)
+
+
+def _heartbeat_con(lws, err, usuario: str, token: str) -> bool:
+    """El cuerpo de `heartbeat` con la hoja ya abierta (v528): lo que corre en el hilo."""
     if err:
         return True   # error transitorio de la API → no expulsar
     try:
@@ -543,6 +549,55 @@ def heartbeat(usuario: str, token: str) -> bool:
         # todo tampoco: sin rastro, una racha de 429 parece "la sesión se cae sola".
         logger.warning("auth: heartbeat de %s no pudo escribir: %s", usuario, e)
     return True
+
+
+# ── El heartbeat en SEGUNDO PLANO (v528) ─────────────────────────────────────
+# ⚠️ Cada 50 s el heartbeat lee `Login` ENTERO y escribe una celda: medido en producción,
+# ~1,9 s de clic parado cada vez que tocaba, sin que el usuario hubiera pedido nada. Ahora
+# corre en un hilo y la página NO lo espera. Lo que cambia es CUÁNDO se expulsa: con el
+# resultado de ese hilo, en la primera pasada después de que termine (segundos más tarde),
+# no en la misma. La regla no cambia: solo expulsa un token DESPLAZADO; un fallo de
+# Google nunca (el propio `heartbeat` devuelve True ante un error).
+# ⚠️ El hilo NO toca Streamlit: el handle de `Login` se resuelve ANTES, en la pasada, y
+# ahí dentro solo hay gspread. Así no hace falta contexto de script ni se llena el log de
+# «missing ScriptRunContext».
+_HB_LOCK = threading.Lock()
+_HB = {}            # (usuario, token) → {"hilo": Thread|None, "ok": bool|None, "t": epoch}
+_HB_VIDA = 15 * 60  # un resultado que nadie mira en 15 min es de una sesión que ya no está
+
+
+def _hb_hilo(clave, lws, usuario, token):
+    try:
+        ok = bool(_heartbeat_con(lws, None, usuario, token))
+    except Exception as e:                       # un hilo que muere no puede expulsar a nadie
+        logger.warning("auth: heartbeat en segundo plano de %s falló: %s", usuario, e)
+        ok = True
+    with _HB_LOCK:
+        _HB[clave] = {"hilo": None, "ok": ok, "t": time.time()}
+
+
+def heartbeat_en_fondo(usuario: str, token: str) -> None:
+    """Lanza un heartbeat en un hilo (si no hay ya uno en marcha para esta sesión)."""
+    lws, err = _get_login_ws()
+    if err or lws is None:
+        return                                    # sin hoja no se expulsa (como `heartbeat`)
+    clave = (str(usuario), str(token))
+    ahora = time.time()
+    with _HB_LOCK:
+        for k in [k for k, v in _HB.items() if v["hilo"] is None and ahora - v["t"] > _HB_VIDA]:
+            _HB.pop(k, None)
+        if (_HB.get(clave) or {}).get("hilo") is not None:
+            return
+        h = threading.Thread(target=_hb_hilo, args=(clave, lws, usuario, token),
+                             name="heartbeat", daemon=True)
+        _HB[clave] = {"hilo": h, "ok": (_HB.get(clave) or {}).get("ok"), "t": ahora}
+    h.start()
+
+
+def heartbeat_resultado(usuario: str, token: str):
+    """Lo que dijo el ÚLTIMO heartbeat que terminó: True, False (desplazado) o None."""
+    with _HB_LOCK:
+        return (_HB.get((str(usuario), str(token))) or {}).get("ok")
 
 
 def validate_session(usuario: str, token: str) -> dict:

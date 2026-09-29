@@ -333,32 +333,37 @@ def _propuestas(r, pid, grupo, usuario, key_prefix) -> None:
                      type="primary", disabled=(n == 0), width="stretch"):
             _mias = _asignables(usuario, grupo, pid)
             errores = []
-            for d, res in por_destino.items():
-                ticks = res["marcadas"]
-                if not ticks:
-                    continue
-                # ⚠️ Se vuelve a comprobar al escribir: solo a obras SUYAS.
-                if d not in _mias:
-                    errores.append(t("{x} is not one of your jobs.", x=d))
-                    continue
-                # ⚠️ v525 · Con la fecha del PARTE: el trabajo se hizo el día que dice el
-                # parte, no el día en que se confirma (la 1A del usuario).
-                ok, msg = SP.acreditar(d, grupo, prjs[d], PP.creditos(ticks, lid),
-                                       quien=usuario, origen=SP.PARTE,
-                                       fecha=str(r.get("Date", "") or ""))
-                if not ok:
-                    errores.append(msg)
+            # ⚠️ v528 · Se VE que está guardando (unos segundos con la pantalla quieta
+            # hacían creer que el clic no había entrado).
+            with st.spinner(t("Saving…")):
+                for d, res in por_destino.items():
+                    ticks = res["marcadas"]
+                    if not ticks:
+                        continue
+                    # ⚠️ Se vuelve a comprobar al escribir: solo a obras SUYAS.
+                    if d not in _mias:
+                        errores.append(t("{x} is not one of your jobs.", x=d))
+                        continue
+                    # ⚠️ v525 · Con la fecha del PARTE: el trabajo se hizo el día que dice
+                    # el parte, no el día en que se confirma (la 1A del usuario).
+                    ok, msg = SP.acreditar(d, grupo, prjs[d], PP.creditos(ticks, lid),
+                                           quien=usuario, origen=SP.PARTE,
+                                           fecha=str(r.get("Date", "") or ""))
+                    if not ok:
+                        errores.append(msg)
+                if not errores:
+                    ok, msg = DL.marcar_revisado(lid, usuario, propuestas=_registro(False))
             if errores:
                 # ⚠️ No se marca revisado: si algo falló, la tarjeta tiene que seguir ahí.
                 st.error(" · ".join(str(e) for e in errores))
             else:
-                ok, msg = DL.marcar_revisado(lid, usuario, propuestas=_registro(False))
                 (flash.exito if ok else flash.error)(
                     t("Credited {n} activities from your log.", n=n) if ok else msg)
                 st.rerun()
         if c2.button(t("Nothing to credit"), key="%s_no" % kp, type="tertiary",
                      width="stretch"):
-            ok, msg = DL.marcar_revisado(lid, usuario, propuestas=_registro(True))
+            with st.spinner(t("Saving…")):
+                ok, msg = DL.marcar_revisado(lid, usuario, propuestas=_registro(True))
             (flash.exito if ok else flash.error)(msg)
             st.rerun()
 
@@ -401,7 +406,8 @@ def render_campo(pid, grupo, usuario, key_prefix="fld") -> None:
                             key=_kf, format="DD/MM/YYYY")
     if st.button(t(":material/save: Save the daily log"), key=f"{key_prefix}_dl_save_{pid}",
                  type="primary", width="stretch"):
-        ok, msg = DL.crear(pid, grupo, txt, usuario, dia=dia)
+        with st.spinner(t("Saving…")):
+            ok, msg = DL.crear(pid, grupo, txt, usuario, dia=dia)
         if ok:
             # ⚠️ La caja SOLO se vacía cuando la hoja confirmó. Si falla, el texto sigue
             # ahí: quien acaba de escribir doscientas palabras en un sótano no las

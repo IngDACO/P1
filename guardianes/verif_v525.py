@@ -8,8 +8,9 @@ la etapa salen de TODOS sus créditos: el inicio, el primero; el fin, el último
 (2B) En una nota de varios ascensores, lo que no nombra ninguno iba a la obra del parte —
 decidir por él. Ahora lleva su propio selector, sin nada elegido.
 
-Lo que protege, EJECUTANDO la cadena real (`acreditar` → `save_field_progress`) con las dos
-hojas sustituidas, y la tarjeta con AppTest:
+Lo que protege, EJECUTANDO la cadena real (`acreditar` → las reglas de fechas de
+`Activities`; hasta v527 pasaba por `save_field_progress`) con el libro sustituido
+(`fixture_guardado`, v528), y la tarjeta con AppTest:
   (a) ⚠️ un parte de ANTES fecha la etapa en su día — y adelanta un inicio posterior, pero
       nunca atrasa uno anterior;
   (b) ⚠️ el fin es el ÚLTIMO día de trabajo de la etapa, no el del crédito que la cierra;
@@ -100,34 +101,16 @@ chk("un crédito de ANTES de v525 cuenta con su día de registro",
     and SP._fecha_de({}) == "")
 
 # ═════════════════════════════════════════════════════════════════
-sec("2. ⚠️ La cadena REAL: acreditar → save_field_progress, con las hojas sustituidas")
+sec("2. ⚠️ La cadena REAL: acreditar → las reglas de Activities, con el libro sustituido")
 
 
-class _WSsp:
-    def __init__(self, filas):
-        self.filas = [dict(f) for f in filas]
-        self.nuevas, self.lotes = [], []
-
-    def get_all_records(self, numericise_ignore=None):
-        return [{h: str(f.get(h, "")) for h in SP.HEADERS} for f in self.filas]
-
-    def append_rows(self, filas, value_input_option=None):
-        self.nuevas += [list(x) for x in filas]
-
-    def batch_update(self, datos, value_input_option=None):
-        self.lotes.append(datos)
-
-
-class _WSact:
-    def __init__(self, filas):
-        self.filas = filas
-        self.lotes = []
-
-    def get_all_records(self, numericise_ignore=None):
-        return [{h: str(f.get(h, "")) for h in P.ACTIVITIES_HEADERS} for f in self.filas]
-
-    def batch_update(self, datos, value_input_option=None):
-        self.lotes.append(datos)
+# ⚠️ v528 · Con el LIBRO de mentira compartido (`fixture_guardado`): desde v528 `acreditar`
+# lee `StageProgress`, `Activities` y `Projects` en UNA llamada y escribe en OTRA, y ya no
+# pasa por `save_field_progress`. Las hojas propias de este guardián se leían una a una,
+# así que habrían probado un camino que producción ya no usa. Lo que se mira no cambia:
+# lo que llega ESCRITO a `Activities` y a `StageProgress`.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import fixture_guardado as FG                                     # noqa: E402
 
 
 def _o_de(nombre):
@@ -139,45 +122,30 @@ O7 = _o_de("Install headers")
 # La etapa con MENOS actividades con peso: la que se puede completar entera en una prueba.
 OC = min(range(1, len(PLAN) + 1), key=lambda i: len(PLAN[i - 1]["actividades"]))
 ACTS_C = [a["nombre"] for a in PLAN[OC - 1]["actividades"]]
-_orig_sp = {k: getattr(SP, k) for k in ("_ws", "_records", "_invalidate", "plan_de_obra",
-                                        "version_desfasada", "clock")}
-_orig_p = {k: getattr(P, k) for k in ("_activities_ws", "_invalidate",
-                                      "_recompute_project_avance", "clock")}
+_orig_sp = {k: getattr(SP, k) for k in ("plan_de_obra", "version_desfasada", "clock")}
+_orig_p = {k: getattr(P, k) for k in ("_lote_avance", "clock")}
 _llegan = []
-_orig_sfp = P.save_field_progress
 
 
 def escenario(previos, act, creditos, fecha):
     """Corre `acreditar` de verdad. `previos` = créditos ya en StageProgress; `act` = la
     fila de Activities de cada etapa ({orden: {ActualStartDate, ActualEndDate, Progress}}).
-    Devuelve (ok, {orden: {columna: valor escrito}}, filas nuevas de StageProgress)."""
-    wsp = _WSsp([dict(p, ProjectID="PRJ-T", Group="cliente1") for p in previos])
-    wact = _WSact([dict({"ProjectID": "PRJ-T", "Order": str(o), "Progress": "0"}, **v)
-                   for o, v in act.items()])
-    SP._ws = lambda: wsp
-    SP._records = lambda: wsp.get_all_records()
-    SP._invalidate = lambda: None
+    Devuelve (ok, {orden: {columna: valor escrito}}, filas nuevas de StageProgress,
+    lotes escritos en StageProgress)."""
     SP.plan_de_obra = lambda prj: PLAN
     SP.version_desfasada = lambda prj: ""
     SP.clock = _Reloj()
-    P._activities_ws = lambda: (wact, None)
-    P._invalidate = lambda: None
-    P._recompute_project_avance = lambda pid: None
     P.clock = _Reloj()
+    m = FG.montar(SP, P, {"ID": "PRJ-T"},
+                  creditos=[dict(x, Group="cliente1") for x in previos],
+                  actividades=act, plan=PLAN)
     _llegan.clear()
-    _ok, _m = SP.acreditar("PRJ-T", "cliente1", {"ID": "PRJ-T"}, creditos, quien="u",
-                           origen=SP.PARTE if fecha else SP.MANUAL, fecha=fecha)
-    escrito = {}
-    col = {i + 1: h for i, h in enumerate(P.ACTIVITIES_HEADERS)}
-    from core.num import col_letter
-    letra = {col_letter(i): h for i, h in col.items()}
-    fila_de = {i + 2: int(f["Order"]) for i, f in enumerate(wact.filas)}
-    for lote in wact.lotes:
-        for x in lote:
-            _l = "".join(ch for ch in x["range"] if ch.isalpha())
-            _n = int("".join(ch for ch in x["range"] if ch.isdigit()))
-            escrito.setdefault(fila_de.get(_n), {})[letra.get(_l)] = x["values"][0][0]
-    return _ok, escrito, [dict(zip(SP.HEADERS, f)) for f in wsp.nuevas], wsp.lotes
+    try:
+        _ok, _m = SP.acreditar("PRJ-T", "cliente1", {"ID": "PRJ-T"}, creditos, quien="u",
+                               origen=SP.PARTE if fecha else SP.MANUAL, fecha=fecha)
+        return _ok, m.actividades_escritas(), m.nuevas_sp(), m.lotes_sp()
+    finally:
+        m.restaurar()
 
 
 def _cred(o, a, **k):
@@ -185,8 +153,11 @@ def _cred(o, a, **k):
 
 
 try:
-    P.save_field_progress = lambda pid, cambios: (_llegan.append([dict(c) for c in cambios])
-                                                  or _orig_sfp(pid, cambios))
+    # Lo que `acreditar` pide a las reglas de fechas de `Activities` (la única copia,
+    # `projects._lote_avance`, v528), y se deja pasar para que escriban de verdad.
+    _la = _orig_p["_lote_avance"]
+    P._lote_avance = lambda recs, pid, cambios, hoy: (
+        _llegan.append([dict(c) for c in cambios]) or _la(recs, pid, cambios, hoy))
     # (a) primer crédito de la etapa, desde un parte del 29 confirmado el 2
     _ok, e, nuevas, _ = escenario([], {O7: {}}, [{"etapa": O7, "actividad": "Install headers",
                                                   "pct": 100, "nota": "LOG-1"}], "2026-09-29")
@@ -263,7 +234,6 @@ finally:
         setattr(SP, k, v)
     for k, v in _orig_p.items():
         setattr(P, k, v)
-    P.save_field_progress = _orig_sfp
 
 # ═════════════════════════════════════════════════════════════════
 sec("3. `lineas_de` con las líneas SIN ascensor")

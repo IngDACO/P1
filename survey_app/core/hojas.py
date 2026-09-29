@@ -231,6 +231,88 @@ def registros(titulo: str, cabeceras=None, grupo: str = None):
     return valores.canonizar(out, titulo)
 
 
+# ── Leer y escribir VARIAS hojas en una llamada, para GUARDAR (v528) ──────────
+# ⚠️ Para escribir hay que leer FRESCO (decidir dónde escribir con una caché es como se
+# corrompen los datos, v323), y eso costaba una lectura POR HOJA. Guardar una etapa
+# leía y escribía tres hojas por separado: ~9 llamadas, 7-8 s en producción, donde cada
+# llamada tarda ~1 s. Las tres viven en el MISMO libro, así que se piden juntas.
+def _mismo_libro(hojas_ws):
+    """El Spreadsheet común a todas, o `None` si no lo comparten (o no se sabe)."""
+    ss = None
+    for w in hojas_ws:
+        s = getattr(w, "spreadsheet", None)
+        if s is None or not hasattr(s, "values_batch_get") or not getattr(s, "id", ""):
+            return None
+        if ss is not None and s.id != ss.id:
+            return None
+        ss = s
+    return ss
+
+
+def _a_registros(datos, titulo):
+    """Filas crudas → registros, **idéntico a `get_all_records(numericise_ignore=['all'])`**
+    canonizado: el registro `i` es la fila `i + 2` de la hoja (las filas vacías de en
+    medio vienen como `[]` y cuentan, igual que ahí)."""
+    if not datos:
+        return []
+    cab = [columnas.canon(str(c)) for c in datos[0]]
+    n = len(cab)
+    out = [dict(zip(cab, [str(v) for v in f[:n]] + [""] * max(0, n - len(f))))
+           for f in datos[1:]]
+    return valores.canonizar(out, titulo)
+
+
+def frescas(hojas_ws: dict) -> dict:
+    """`{titulo: worksheet}` → `{titulo: [registros]}` leídos AHORA, en UNA llamada.
+
+    `titulo` es el nombre CANÓNICO de la hoja (el que decide qué valores se canonizan);
+    el que se pide a Google es el de la worksheet, que ya es el que existe en el libro.
+
+    ⚠️ Si alguna no comparte libro con las demás, se lee cada una por su lado: más
+    lento, igual de correcto. Y si Google falla, **lanza**: quien guarda no puede
+    decidir filas sobre una lectura que no llegó.
+    """
+    # ⚠️ La variable es `tit`, nunca `t`: `t` es la función de traducción (v439/v498).
+    ws = [w for w in hojas_ws.values() if w is not None]
+    ss = _mismo_libro(ws)
+    if ss is None:
+        return {tit: valores.canonizar(columnas.canonizar(
+                    w.get_all_records(numericise_ignore=["all"])), tit)
+                for tit, w in hojas_ws.items() if w is not None}
+    from gspread.utils import absolute_range_name
+    claves = [tit for tit, w in hojas_ws.items() if w is not None]
+    r = ss.values_batch_get([absolute_range_name(hojas_ws[tit].title) for tit in claves])
+    tramos = r.get("valueRanges") or []
+    if len(tramos) != len(claves):
+        # ⚠️ En inglés: puede llegar a la pantalla dentro de «Error saving: …» (v448).
+        raise RuntimeError("Google returned %d of the %d sheets requested"
+                           % (len(tramos), len(claves)))
+    # ⚠️ Google devuelve los rangos en el MISMO orden en que se pidieron.
+    return {tit: _a_registros(tr.get("values") or [], tit) for tit, tr in zip(claves, tramos)}
+
+
+def escribir(partes) -> None:
+    """`[(worksheet, [{"range": "G5", "values": [[...]]}, ...]), ...]` en UNA llamada.
+
+    ⚠️ RAW, como todas las escrituras de la app (conserva ceros a la izquierda, v42).
+    Si las hojas no comparten libro, una llamada por hoja, en el orden dado. Lanza si
+    Google falla: quien llama decide qué decirle al usuario.
+    """
+    partes = [(w, lote) for w, lote in (partes or []) if w is not None and lote]
+    if not partes:
+        return
+    ss = _mismo_libro([w for w, _l in partes])
+    if ss is None or not hasattr(ss, "values_batch_update"):
+        for w, lote in partes:
+            w.batch_update([dict(x) for x in lote], value_input_option="RAW")
+        return
+    from gspread.utils import absolute_range_name
+    ss.values_batch_update({
+        "valueInputOption": "RAW",
+        "data": [{"range": absolute_range_name(w.title, x["range"]), "values": x["values"]}
+                 for w, lote in partes for x in lote]})
+
+
 # ── IDs que NO se reciclan (v427) ────────────────────────────────────────────
 _RE_ID = None
 

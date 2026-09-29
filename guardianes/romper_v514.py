@@ -41,14 +41,15 @@ ROTURAS = [
      '    acc = sum(_num(a.get("pct")) for a in actividades)'),
 
     # ── ⚠️ el numero que lee todo lo demas ──
+    # ⚠️ v528 · `acreditar` ya no llama a `save_field_progress`: lee sus tres hojas en una
+    # llamada y escribe en OTRA (`hojas.escribir`). Mismas dos roturas, sobre el código
+    # nuevo: que `Activities` se caiga de la escritura, y que un fallo se dé por bueno.
     ('⚠️ el avance de la etapa NO llega a Activities', "core/stage_progress.py",
-     '    ok, msg = P.save_field_progress(pid, _cambios)',
-     '    ok, msg = True, ""'),
+     '        hojas.escribir([(w, _lote_sp), (aws, _lote_act), (pws, _lote_prj)])',
+     '        hojas.escribir([(w, _lote_sp), (pws, _lote_prj)])'),
     ('⚠️ un fallo al escribir el avance se da por bueno', "core/stage_progress.py",
-     '    if not ok:' + N
-     + '        # ⚠️ Se dice, no se traga: el crédito quedó guardado pero la etapa no se movió,',
-     '    if False:' + N
-     + '        # ⚠️ Se dice, no se traga: el crédito quedó guardado pero la etapa no se movió,'),
+     '            return False, "%s (%s)" % (t("The activity was saved but the stage progress "',
+     '            return True, "%s (%s)" % (t("The activity was saved but the stage progress "'),
     # ⚠️ v525 · La lista por comprension paso a ser un bucle (cada cambio lleva ahora sus
     # fechas de trabajo). Misma rotura: recorrer TODAS las etapas en vez de las tocadas.
     ('se recalculan TODAS las etapas, no solo las tocadas',

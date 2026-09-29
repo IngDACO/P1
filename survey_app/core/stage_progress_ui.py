@@ -110,7 +110,10 @@ def render(pid, grupo, prj, editable=True, key_prefix="sp"):
                 if not _cambios:
                     st.info(t("Nothing changed in this stage."))
                 else:
-                    ok, msg = SP.acreditar(pid, grupo, prj, _cambios, quien=_quien)
+                    # ⚠️ v528 · Se VE que está guardando: medido en producción, unos segundos
+                    # con la pantalla quieta hacían creer que el clic no había entrado.
+                    with st.spinner(t("Saving stage {n}…", n=e["orden"])):
+                        ok, msg = SP.acreditar(pid, grupo, prj, _cambios, quien=_quien)
                     (flash.exito if ok else st.error)(msg)
                     if ok:
                         st.rerun()

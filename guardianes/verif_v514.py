@@ -67,19 +67,6 @@ PRJ = {"ID": "PRJ-T", "Type": "Installation", "Name": "test",
        "StagePlanJSON": P.plan_nuevo("Installation", ())}
 
 
-class _WS:
-    """Hoja de mentira que se queda con lo que se le escribe."""
-
-    def __init__(self):
-        self.filas, self.parches = [], []
-
-    def append_rows(self, filas, value_input_option=None):
-        self.filas += [list(f) for f in filas]
-
-    def batch_update(self, lote, value_input_option=None):
-        self.parches += list(lote)
-
-
 class _Reloj:
     class _T:
         def strftime(self, f):
@@ -89,32 +76,38 @@ class _Reloj:
         return self._T()
 
 
-def _con(filas_credito, save_ok=True, fila_existente=None):
-    """Sustituye hoja, caché y escritor. Devuelve (hoja_falsa, llamadas_a_save).
+# ⚠️ v528 · La hoja de mentira es ahora el LIBRO compartido (`fixture_guardado`). Desde v528
+# `acreditar` lee `StageProgress`, `Activities` y `Projects` en UNA llamada y escribe en
+# OTRA; ya no pasa por `save_field_progress`, así que sustituir esa función —lo que hacía
+# este guardián— dejaba de probar nada. Lo que se mira ahora es lo que llega ESCRITO a
+# `Activities.Progress`, que es lo que de verdad lee la curva S (y por eso es más fuerte:
+# antes bastaba con que se LLAMARA a la función).
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import fixture_guardado as FG                                     # noqa: E402
+
+_M = [None]
+
+
+def _con(filas_credito, save_ok=True):
+    """Sustituye el libro y la caché de la pantalla. Devuelve (hoja_StageProgress, montaje).
 
     ⚠️ Sin ejercitar el camino de ESCRITURA, las roturas que importan se escapan: fue
     exactamente lo que pasó en v510, donde cinco de doce pasaron por delante porque el
     guardián solo miraba la aritmética de lectura.
     """
-    _hoja = _WS()
-    _llamadas = []
-
-    def _save(pid, cambios):
-        _llamadas.append((pid, list(cambios)))
-        return (save_ok, "ok" if save_ok else "la hoja no responde")
-
-    SP._ws = lambda: _hoja
+    if _M[0] is not None:
+        _M[0].restaurar()
     SP.creditos = lambda pid, etapa=None: [
         r for r in filas_credito
         if etapa is None or int(float(r.get("StageOrder", 0))) == int(etapa)]
-    SP._fila = lambda w, pid, et, ac: (fila_existente or (None, None))
-    SP._invalidate = lambda: None
     SP.clock = _Reloj()
-    P.save_field_progress = _save
-    return _hoja, _llamadas
+    _m = FG.montar(SP, P, PRJ, creditos=filas_credito)
+    _m.libro.falla_escritura = not save_ok
+    _M[0] = _m
+    return _m.sp, _m
 
 
-_orig = (SP._ws, SP.creditos, SP._fila, SP._invalidate, SP.clock, P.save_field_progress)
+_orig = (SP.creditos, SP.clock)
 
 
 # ═════ 1 · la hoja esta en el lote ═══════════════════════════════════════════
@@ -206,13 +199,14 @@ ck("⚠️ una version distinta SI se marca",
 
 # ═════ 5 · ⚠️ lo que de verdad se ESCRIBE ════════════════════════════════════
 print("\n[5] acreditar")
-_hoja, _llam = _con([])
+_hoja, _m = _con([])
 _ok, _msg = SP.acreditar("PRJ-T", "cliente1", PRJ,
                          [{"etapa": 6, "actividad": "Install motor bedplate",
                            "pct": 100}], quien="Bobo")
+_llam = _m.escrituras_avance()
 ck("se acredita", _ok, True)
-ck("...escribiendo UNA fila", len(_hoja.filas), 1)
-_f = _hoja.filas[0] if _hoja.filas else []
+ck("...escribiendo UNA fila", len(_hoja.nuevas), 1)
+_f = _hoja.nuevas[0] if _hoja.nuevas else []
 ck("...con todas las columnas", len(_f), len(SP.HEADERS))
 ck("...la obra correcta", _f[SP.HEADERS.index("ProjectID")] if _f else "?", "PRJ-T")
 ck("...la etapa correcta", _f[SP.HEADERS.index("StageOrder")] if _f else "?", "6")
@@ -221,22 +215,23 @@ ck("...y quien lo marco", _f[SP.HEADERS.index("UpdatedBy")] if _f else "?", "Bob
 # ⚠️ LO QUE MAS IMPORTA: que el numero llegue a `Activities.Progress`. Si no, todo lo
 # de abajo —curva S, SPI, cadena, reclamacion— seguiria viendo la obra parada.
 ck("⚠️ se escribe el avance de la etapa en Activities", len(_llam), 1)
-_cam = _llam[0][1] if _llam else []
+_cam = _llam[0] if _llam else []
 ck("...solo la etapa TOCADA", [c["orden"] for c in _cam], [6])
 cerca("...con el % calculado, no con el de la casilla",
       _cam[0]["avance"] if _cam else -1, 17.0)
 
 # Solo las tocadas: acreditar en la 6 no puede reescribir las otras trece.
-_hoja, _llam = _con([])
+_hoja, _m = _con([])
 SP.acreditar("PRJ-T", "cliente1", PRJ,
              [{"etapa": 1, "actividad": "Receive toolbox", "pct": 100},
               {"etapa": 1, "actividad": "Receive Inex kit", "pct": 100}], quien="Bobo")
+_llam = _m.escrituras_avance()
 ck("dos creditos de la misma etapa = UNA sola escritura de avance",
-   [c["orden"] for c in (_llam[0][1] if _llam else [])], [1])
+   [c["orden"] for c in (_llam[0] if _llam else [])], [1])
 
 # ⚠️ Si la escritura del avance falla, se DICE. El credito quedo guardado y la etapa
 # quieta: sin aviso, el usuario veria su trabajo registrado y el avance sin moverse.
-_hoja, _llam = _con([], save_ok=False)
+_hoja, _m = _con([], save_ok=False)
 _ok2, _msg2 = SP.acreditar("PRJ-T", "cliente1", PRJ,
                            [{"etapa": 6, "actividad": "Install motor bedplate",
                              "pct": 100}], quien="Bobo")
@@ -246,16 +241,16 @@ ck("...y el mensaje lo explica", "could not be updated" in str(_msg2), True)
 
 # ═════ 6 · lo que NO se puede acreditar ══════════════════════════════════════
 print("\n[6] lo que se rechaza")
-_hoja, _llam = _con([])
+_hoja, _m = _con([])
 _ok3, _m3 = SP.acreditar("PRJ-T", "cliente1", PRJ,
                          [{"etapa": 4, "actividad": "Install mirror", "pct": 100}])
 ck("⚠️ algo que no esta en el plan de ESTA obra se rechaza", _ok3, False)
-ck("...y no se escribe nada", len(_hoja.filas), 0)
+ck("...y no se escribe nada", len(_hoja.nuevas), 0)
 _ok4, _m4 = SP.acreditar("PRJ-T", "cliente1", PRJ,
                          [{"etapa": 99, "actividad": "Lo que sea", "pct": 100}])
 ck("una etapa que no existe tampoco", _ok4, False)
 
-_hoja, _llam = _con([])
+_hoja, _m = _con([])
 _ok5, _m5 = SP.acreditar("PRJ-VIEJA", "cliente1", {"ID": "PRJ-VIEJA"},
                          [{"etapa": 1, "actividad": "x", "pct": 100}])
 ck("⚠️ una obra sin plan no se acredita", _ok5, False)
@@ -265,26 +260,26 @@ ck("⚠️ una obra sin plan no se acredita", _ok5, False)
 # el motivo equivocado no protege lo que dice proteger, y la rotura se escapó.
 ck("...y el mensaje dice que es por NO TENER plan",
    "no stage plan" in str(_m5), True)
-ck("...sin escribir nada", len(_hoja.filas), 0)
+ck("...sin escribir nada", len(_hoja.nuevas), 0)
 
 # ⚠️ Catalogo distinto del que la obra sello: los ordenes se desplazan y el trabajo se
 # colgaria de otra etapa. Se niega a escribir.
-_hoja, _llam = _con([])
+_hoja, _m = _con([])
 _ok6, _m6 = SP.acreditar("PRJ-V", "cliente1",
                          {"ID": "PRJ-V", "Type": "Installation",
                           "StagePlanJSON": '{"version":"2020-01-01","tipo":"Installation"}'},
                          [{"etapa": 1, "actividad": "Receive toolbox", "pct": 100}])
 ck("⚠️ con el catalogo desfasado NO se acredita", _ok6, False)
-ck("...y no se escribe nada", len(_hoja.filas), 0)
+ck("...y no se escribe nada", len(_hoja.nuevas), 0)
 ck("...y el mensaje nombra las dos versiones",
    "2020-01-01" in str(_m6) and S.VERSION in str(_m6), True)
 
 # Los porcentajes absurdos se recortan, no se guardan tal cual.
-_hoja, _llam = _con([])
+_hoja, _m = _con([])
 SP.acreditar("PRJ-T", "cliente1", PRJ,
              [{"etapa": 6, "actividad": "Install motor bedplate", "pct": 500}])
 ck("un pct de 500 se recorta a 100",
-   _hoja.filas[0][SP.HEADERS.index("Pct")] if _hoja.filas else "?", "100.0")
+   _hoja.nuevas[0][SP.HEADERS.index("Pct")] if _hoja.nuevas else "?", "100.0")
 
 
 # ═════ 7 · la pantalla ═══════════════════════════════════════════════════════
@@ -323,6 +318,8 @@ ck("...sin impedir el borrado si eso falla (try/except)",
    any(isinstance(n, ast.Try) for n in ast.walk(_dp)), True)
 
 print("\n" + "=" * 70)
-(SP._ws, SP.creditos, SP._fila, SP._invalidate, SP.clock, P.save_field_progress) = _orig
+if _M[0] is not None:
+    _M[0].restaurar()
+(SP.creditos, SP.clock) = _orig
 print(f"{n_ok + len(fallos)} comprobaciones — " + ("TODO OK" if not fallos else "HAY FALLOS"))
 sys.exit(1 if fallos else 0)

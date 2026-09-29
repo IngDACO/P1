@@ -236,33 +236,23 @@ chk("nada marcado → nada", PP.creditos([], "LOG-1") == [] and PP.creditos(None
 # es su validación, no una copia que el guardián lleve aparte.
 
 
-class _WSsp:
-    def __init__(self):
-        self.nuevas = []
+# ⚠️ v528 · Con el LIBRO de mentira compartido (`fixture_guardado`): desde v528 `acreditar`
+# lee y escribe sus tres hojas en lote y ya no llama a `save_field_progress`, así que
+# sustituir esa función no probaba nada. «El avance se recalcula» se mira ahora en lo que
+# llega ESCRITO a `Activities.Progress`.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import fixture_guardado as FG                                     # noqa: E402
 
-    def get_all_records(self, numericise_ignore=None):
-        return []
-
-    def append_rows(self, filas, value_input_option=None):
-        self.nuevas += [list(f) for f in filas]
-
-    def batch_update(self, *a, **k):
-        raise AssertionError("no debería actualizar: no había filas")
-
-
-_orig = {k: getattr(SP, k) for k in ("_ws", "_records", "_invalidate", "plan_de_obra",
-                                     "version_desfasada", "clock")}
-_orig_sfp = P.save_field_progress
-_w = _WSsp()
-_sfp = []
+_orig = {k: getattr(SP, k) for k in ("_records", "plan_de_obra", "version_desfasada",
+                                     "clock")}
+_m = None
 try:
-    SP._ws = lambda: _w
     SP._records = lambda: []
-    SP._invalidate = lambda: None
     SP.plan_de_obra = lambda prj: PLAN
     SP.version_desfasada = lambda prj: ""
     SP.clock = _Reloj()
-    P.save_field_progress = lambda pid, cambios: (_sfp.append((pid, cambios)) or (True, "ok"))
+    _m = FG.montar(SP, P, {"ID": "PRJ-9001"}, plan=PLAN)
+    _w = _m.sp
     _todo = sorted(_ofrecidas)
     _ok, _msg = SP.acreditar("PRJ-9001", "cliente1", {"ID": "PRJ-9001"},
                              PP.creditos(_todo, "LOG-0042"), quien="campo000", origen=SP.PARTE)
@@ -273,12 +263,14 @@ try:
         (len(_r), len(_todo)))
     chk("...con origen «log»", {x["Source"] for x in _r} == {"log"}, {x["Source"] for x in _r})
     chk("...y el ID del parte en la nota", {x["Note"] for x in _r} == {"LOG-0042"})
-    chk("...y el avance de las etapas con peso se recalcula",
-        len(_sfp) == 1 and len(_sfp[0][1]) >= 3, _sfp[:1])
+    _av = _m.escrituras_avance()
+    chk("...y el avance de las etapas con peso se recalcula (una escritura)",
+        len(_av) == 1 and len(_av[0]) >= 3, _av[:1])
 finally:
     for k, v in _orig.items():
         setattr(SP, k, v)
-    P.save_field_progress = _orig_sfp
+    if _m is not None:
+        _m.restaurar()
 
 # ═════════════════════════════════════════════════════════════════
 sec("4. Varios ascensores: se reparte SOLO lo que el usuario asignó")

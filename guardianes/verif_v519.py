@@ -124,17 +124,6 @@ chk("...y sí se ven, para poder marcarlas (3 en una instalación)",
 sec("3. ⚠️ `acreditar` las acepta SIN tocar el avance guardado")
 
 
-class _WS:
-    def __init__(self):
-        self.filas = []
-
-    def append_rows(self, filas, value_input_option=None):
-        self.filas += [list(f) for f in filas]
-
-    def batch_update(self, lote, value_input_option=None):
-        pass
-
-
 class _Reloj:
     class _T:
         def strftime(self, f):
@@ -146,39 +135,45 @@ class _Reloj:
 
 _PRJ = {"ID": "PRJ-T", "Type": "Installation",
         "StagePlanJSON": P.plan_nuevo("Installation", ())}
-_llamadas = []
+# ⚠️ v528 · Con el LIBRO de mentira compartido (`fixture_guardado`): desde v528 `acreditar`
+# lee y escribe sus tres hojas en lote y ya no llama a `save_field_progress`, así que
+# sustituir esa función no probaba nada. «No se toca el avance» se mira ahora en lo que
+# llega ESCRITO a `Activities.Progress`.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import fixture_guardado as FG                                     # noqa: E402
+
+_M = [None]
+_oclock = SP.clock
 
 
 def _stub():
-    _h = _WS()
-    SP._ws = lambda: _h
-    SP._mapa = lambda pid: {}
-    SP._fila = lambda w, pid, et, ac: (None, None)
-    SP._invalidate = lambda: None
+    if _M[0] is not None:
+        _M[0].restaurar()
     SP.clock = _Reloj()
-    P.save_field_progress = lambda pid, cambios: (_llamadas.append(list(cambios)) or
-                                                  (True, "ok"))
-    return _h
+    _M[0] = FG.montar(SP, P, _PRJ)
+    return _M[0].sp
 
 
 _h = _stub()
 _ok, _msg = SP.acreditar("PRJ-T", "cliente1", _PRJ,
                          [{"etapa": _o7, "actividad": n, "pct": 100.0}
                           for n in S.informativas("install", 7)], quien="Bobo")
+_llamadas = _M[0].escrituras_avance()
 chk("acredita las dos informativas de la etapa 7", _ok, _msg)
-chk("...y quedan GUARDADAS (el hecho se registra)", len(_h.filas) == 2, len(_h.filas))
+chk("...y quedan GUARDADAS (el hecho se registra)", len(_h.nuevas) == 2, len(_h.nuevas))
 # ⚠️ Lo que importa: sin actividad con peso no hay etapa tocada, así que NO se escribe
 # `Activities.Progress`. Antes del arreglo se reescribía con el mismo número.
-chk("...SIN llamar a `save_field_progress` (el avance no se toca)", not _llamadas,
+chk("...SIN escribir `Activities.Progress` (el avance no se toca)", not _llamadas,
     _llamadas)
+chk("...ni el avance de la obra", not _M[0].obra_escrita(), _M[0].obra_escrita())
 
-_llamadas.clear()
 _h = _stub()
 _peso = _e7["actividades"][0]["nombre"]
 _ok, _msg = SP.acreditar("PRJ-T", "cliente1", _PRJ,
                          [{"etapa": _o7, "actividad": _peso, "pct": 100.0},
                           {"etapa": _o7, "actividad": S.informativas("install", 7)[0],
                            "pct": 100.0}], quien="Bobo")
+_llamadas = _M[0].escrituras_avance()
 _solo = next(e for e in SP._sobre(INST, {(_o7, _peso): 100.0}) if e["orden"] == _o7)["pct"]
 chk("con una MEZCLA, se toca solo la etapa de la que pesa", _ok and len(_llamadas) == 1,
     _llamadas)
@@ -189,13 +184,14 @@ chk("...y el número escrito es el de la que pesa SOLA (%.1f%%)" % _solo,
     bool(_llamadas) and [{"orden": c["orden"], "avance": c["avance"]} for c in _llamadas[0]]
     == [{"orden": _o7, "avance": _solo}], _llamadas)
 
-_llamadas.clear()
 _stub()
 _ok, _msg = SP.acreditar("PRJ-T", "cliente1", _PRJ,
                          [{"etapa": _o7, "actividad": "Program controller parameters",
                            "pct": 100.0}], quien="Bobo")
 chk("una informativa en la etapa EQUIVOCADA se rechaza (es de la 14, no de la 7)",
     not _ok, _msg)
+_M[0].restaurar()
+SP.clock = _oclock
 
 # ═════════════════════════════════════════════════════════════════
 sec("4. ⚠️ El 50/50 solo afecta a obras NUEVAS")

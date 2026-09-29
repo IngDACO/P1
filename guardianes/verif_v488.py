@@ -857,7 +857,10 @@ print("\n[11] enganches")
 _app = _fuente("app.py")
 _i_login = _app.find("if not render_login():")
 _i_xero = _app.find("_xui.procesar_retorno(_ROL, _GRUPO)")
-_i_hb = _app.find("if not heartbeat(")
+# ⚠️ v528 · El heartbeat corre en segundo plano y lo que puede EXPULSAR (y cortar la pasada
+# con `st.stop`) es la lectura de su resultado: el ancla es esa, no la vieja
+# `if not heartbeat(`, que ya no existe — con ella `find` daba -1 y esto salía rojo.
+_i_hb = _app.find("heartbeat_resultado(")
 ck("app.py procesa la vuelta DESPUÉS del login y ANTES del heartbeat",
    0 < _i_login < _i_xero < _i_hb, True)
 _arb_cu = ast.parse(_fuente("core/contable_ui.py"))

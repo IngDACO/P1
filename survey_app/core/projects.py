@@ -1159,6 +1159,72 @@ def _dia_iso(v) -> str:
     return s if _ISO_DIA.match(s) else ""
 
 
+def _lote_avance(recs, pid, cambios, hoy) -> tuple:
+    """Lo que hay que escribir en `Activities` para esos cambios, SIN escribirlo (v528).
+
+    `recs` = la hoja `Activities` leída FRESCA (el registro `i` es la fila `i + 2`).
+    Devuelve `(lote, actividades_de_la_obra_despues)`: el lote para un `batch_update` y
+    las actividades con su avance nuevo, para recalcular la obra sin volver a leer.
+
+    ⚠️ Es la ÚNICA definición de las reglas de fechas reales: la usan la rejilla vieja
+    (`save_field_progress`) y el guardado por etapas (`stage_progress.acreditar`), que
+    desde v528 lee y escribe sus tres hojas en una llamada y ya no pasa por aquella. Dos
+    copias de estas reglas acabarían fechando distinto la misma etapa según la pantalla.
+    """
+    rowmap = {str(r.get("Order", "")): (i + 2, r)
+              for i, r in enumerate(recs or []) if str(r.get("ProjectID", "")) == str(pid)}
+    batch, nuevos = [], {}
+    for c in (cambios or []):
+        hit = rowmap.get(str(c.get("orden")))
+        if hit is None:
+            continue
+        row, r = hit
+        av = max(0.0, min(100.0, _num(c.get("avance"))))
+        nuevos[row] = av
+        fi = str(r.get("ActualStartDate", "")).strip()
+        ff = str(r.get("ActualEndDate", "")).strip()
+        fi_n, ff_n = _dia_iso(c.get("inicio")), _dia_iso(c.get("fin"))   # v525
+        batch.append({"range": f"{_col_letter(_ACOL['Progress'])}{row}", "values": [[str(av)]]})
+        if av > 0 and not fi:                        # arranca → inicio real = hoy
+            batch.append({"range": f"{_col_letter(_ACOL['ActualStartDate'])}{row}",
+                          "values": [[fi_n or hoy]]})
+        elif av > 0 and fi_n and _dia_iso(fi) and fi_n < fi:   # su trabajo empezó ANTES
+            batch.append({"range": f"{_col_letter(_ACOL['ActualStartDate'])}{row}",
+                          "values": [[fi_n]]})
+        if av >= 100 and not ff:                     # completa → fin real = hoy
+            batch.append({"range": f"{_col_letter(_ACOL['ActualEndDate'])}{row}",
+                          "values": [[ff_n or hoy]]})
+        elif av < 100 and ff:                        # reabierta → borrar fin real
+            batch.append({"range": f"{_col_letter(_ACOL['ActualEndDate'])}{row}",
+                          "values": [[""]]})
+        if "nota" in c:
+            batch.append({"range": f"{_col_letter(_ACOL['Note'])}{row}",
+                          "values": [[str(c.get("nota", ""))]]})
+    # ⚠️ TODAS las filas de la obra, como `list_activities` —la que leía el recálculo—, y
+    # el avance nuevo solo en la fila que de verdad se escribe.
+    acts = [dict(r, Progress=nuevos.get(i + 2, r.get("Progress", "")))
+            for i, r in enumerate(recs or []) if str(r.get("ProjectID", "")) == str(pid)]
+    return batch, acts
+
+
+def _lote_obra(prj_recs, pid, acts) -> tuple:
+    """El avance y el estado de la obra a partir de sus actividades, SIN escribirlos (v528).
+
+    Devuelve `(lote, antes, escritos)`, o `(None, {}, {})` si la obra no está en la hoja.
+    Es `_recompute_project_avance` + `update_project` sin sus dos lecturas: la fila, el
+    estado manual y el tipo salen de la lectura FRESCA que ya se hizo para guardar.
+    """
+    for i, r in enumerate(prj_recs or []):
+        if str(r.get("ID", "")) == str(pid):
+            nuevo = compute_avance(acts)
+            escritos = {"Progress": nuevo,
+                        "Status": derive_estado(nuevo, str(r.get("ManualStatus", "")),
+                                                str(r.get("Type", "")))}
+            return ([{"range": f"{_col_letter(_PCOL[k])}{i + 2}", "values": [[str(v)]]}
+                     for k, v in escritos.items()], dict(r), escritos)
+    return None, {}, {}
+
+
 def save_field_progress(pid, cambios) -> tuple:
     """El campo actualiza el avance de VARIAS actividades en UNA escritura (batch).
 
@@ -1180,34 +1246,7 @@ def save_field_progress(pid, cambios) -> tuple:
         return False, err
     hoy = clock.today().isoformat()
     recs = valores.canonizar(columnas.canonizar(aws.get_all_records(numericise_ignore=["all"])), PROJECTS_SHEET)
-    rowmap = {str(r.get("Order", "")): (i + 2, r)
-              for i, r in enumerate(recs) if str(r.get("ProjectID", "")) == str(pid)}
-    batch = []
-    for c in (cambios or []):
-        hit = rowmap.get(str(c.get("orden")))
-        if hit is None:
-            continue
-        row, r = hit
-        av = max(0.0, min(100.0, _num(c.get("avance"))))
-        fi = str(r.get("ActualStartDate", "")).strip()
-        ff = str(r.get("ActualEndDate", "")).strip()
-        fi_n, ff_n = _dia_iso(c.get("inicio")), _dia_iso(c.get("fin"))   # v525
-        batch.append({"range": f"{_col_letter(_ACOL['Progress'])}{row}", "values": [[str(av)]]})
-        if av > 0 and not fi:                        # arranca → inicio real = hoy
-            batch.append({"range": f"{_col_letter(_ACOL['ActualStartDate'])}{row}",
-                          "values": [[fi_n or hoy]]})
-        elif av > 0 and fi_n and _dia_iso(fi) and fi_n < fi:   # su trabajo empezó ANTES
-            batch.append({"range": f"{_col_letter(_ACOL['ActualStartDate'])}{row}",
-                          "values": [[fi_n]]})
-        if av >= 100 and not ff:                     # completa → fin real = hoy
-            batch.append({"range": f"{_col_letter(_ACOL['ActualEndDate'])}{row}",
-                          "values": [[ff_n or hoy]]})
-        elif av < 100 and ff:                        # reabierta → borrar fin real
-            batch.append({"range": f"{_col_letter(_ACOL['ActualEndDate'])}{row}",
-                          "values": [[""]]})
-        if "nota" in c:
-            batch.append({"range": f"{_col_letter(_ACOL['Note'])}{row}",
-                          "values": [[str(c.get("nota", ""))]]})
+    batch, _acts = _lote_avance(recs, pid, cambios, hoy)
     if not batch:
         return True, t("No changes to save.")
     try:

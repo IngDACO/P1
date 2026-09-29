@@ -112,7 +112,7 @@ init_state()
 # LOGIN — barrera de acceso
 # ══════════════════════════════════════════════════════
 from core.auth_ui import render_login, render_user_bar
-from core.auth import heartbeat, get_user
+from core.auth import heartbeat_en_fondo, heartbeat_resultado, get_user
 
 if not render_login():
     st.stop()
@@ -152,14 +152,19 @@ if _xero_vuelta:
     _xui.procesar_retorno(_ROL, _GRUPO)
 
 # ── Sesión única: heartbeat (throttled) + expulsión si otro toma la cuenta ──
+# ⚠️ v528 · En SEGUNDO PLANO: la página ya no espera a que Google conteste (~1,9 s de clic
+# parado cada 50 s, medido en producción). Se expulsa con lo que dijo el ÚLTIMO heartbeat
+# que terminó, mirado en CADA pasada (cuesta un dict, 0 llamadas): así el aviso llega en
+# la primera pasada después de que el hilo lo descubra, no 50 s más tarde.
 import time as _time
+_a = st.session_state.auth
+if heartbeat_resultado(_a.get("usuario", ""), _a.get("token", "")) is False:
+    st.session_state.pop("auth", None)
+    st.warning(t(":material/lock: Your session was closed: this account was opened on another device (or it expired through inactivity). Sign in again."))
+    st.stop()
 if _time.time() - st.session_state.get("_hb_last", 0) > 50:
     st.session_state["_hb_last"] = _time.time()
-    _a = st.session_state.auth
-    if not heartbeat(_a.get("usuario", ""), _a.get("token", "")):
-        st.session_state.pop("auth", None)
-        st.warning(t(":material/lock: Your session was closed: this account was opened on another device (or it expired through inactivity). Sign in again."))
-        st.stop()
+    heartbeat_en_fondo(_a.get("usuario", ""), _a.get("token", ""))
 
 # ── Avisos de vencimiento de credenciales (v187): al entrar, 1×/día/grupo ──
 # Antes solo se disparaba al abrir el panel de usuarios de campo (frágil: si nadie

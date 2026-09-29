@@ -33,15 +33,17 @@ def corre(g=G):
 
 ROTURAS = [
     # ── (1A) la fecha del trabajo ────────────────────────────────────────────
+    # ⚠️ v528 · Cuatro espacios más: la llamada vive ahora dentro del `with st.spinner`.
     ("la pantalla deja de pasar la fecha del parte (todo se fecha al confirmar)",
-     UI, 'origen=SP.PARTE,\n                                       fecha=str(r.get("Date", "") or ""))',
+     UI, 'origen=SP.PARTE,\n                                           fecha=str(r.get("Date", "") or ""))',
      "origen=SP.PARTE)"),
 
     ("los creditos NUEVOS no guardan su dia de trabajo",
      SPR, 'str(origen), str(quien), _ahora, _dia])', "str(origen), str(quien), _ahora])"),
 
+    # ⚠️ v528 · Sin la coma final: la lista va ahora dentro de un `_lote_sp += [...]`.
     ("al re-acreditar una fila, su dia de trabajo se queda el viejo",
-     SPR, '("Updated", _ahora), ("WorkDate", _dia))],', '("Updated", _ahora))],'),
+     SPR, '("Updated", _ahora), ("WorkDate", _dia))]', '("Updated", _ahora))]'),
 
     ("el credito de AHORA no cuenta para las fechas de la etapa",
      SPR, "        _fechas[(_et, _ac)] = _dia\n", ""),

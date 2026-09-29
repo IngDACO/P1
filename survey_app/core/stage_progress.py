@@ -28,9 +28,11 @@ en cuanto alguien tocara una (regla v361). Peor: **todo lo de abajo lee
 la línea base de v501 y, al final del todo, la reclamación que se cobra (v507/v510).
 
 Así que al acreditar una actividad se **recalcula su etapa y se escribe ahí**. Lo que
-cambia no es dónde está el dato: es **quién lo escribe**. Y la escritura se delega en
-`projects.save_field_progress`, que ya hace el lote en una sola llamada y pone solas las
-fechas reales de inicio y fin (v162) — reusarla es también no duplicar esa lógica.
+cambia no es dónde está el dato: es **quién lo escribe**. Las reglas de esa escritura
+—las fechas reales de inicio y fin que se ponen solas (v162)— son las de
+`projects._lote_avance`, las mismas de la rejilla vieja: no se duplican. ⚠️ v528 · Lo que
+ya no se reusa es el camino de `save_field_progress`, que leía y escribía cada hoja por
+separado; ver `acreditar`.
 
 ## ⚠️ Solo para obras con plan sellado
 
@@ -265,22 +267,26 @@ def avance_de(actividades) -> float:
 # ═════════════════════════════════════════════════════════════════
 # Escritura
 # ═════════════════════════════════════════════════════════════════
-def _fila(w, pid, etapa, actividad):
-    """(nº de fila, registro) leyendo FRESCO: decidir DÓNDE escribir con una caché es
-    como se corrompen los datos (v323)."""
-    try:
-        from core import columnas, valores
-        recs = valores.canonizar(
-            columnas.canonizar(w.get_all_records(numericise_ignore=["all"])), SHEET)
-    except Exception as e:
-        logger.warning("stage_progress._fila: %s", e)
-        return None, None
-    for i, r in enumerate(recs):
-        if (str(r.get("ProjectID", "")) == str(pid)
-                and int(_num(r.get("StageOrder"))) == int(_num(etapa))
-                and str(r.get("Activity", "")) == str(actividad)):
-            return i + 2, r
-    return None, None
+def _indice(recs, pid) -> tuple:
+    """De la hoja leída FRESCA: `({clave: fila}, {clave: pct}, {clave: día de trabajo})`
+    de lo acreditado en la obra, con `clave = (orden, actividad)`.
+
+    ⚠️ Decidir DÓNDE escribir con una caché es como se corrompen los datos (v323). Y el
+    avance que se recalcula sale de aquí también, no de la caché de la pantalla: con dos
+    personas acreditando la misma obra en menos de 120 s, la caché no vería lo del otro y
+    la etapa se reescribiría con un % MENOR del que tiene.
+    ⚠️ Con filas repetidas —no debería haberlas—, la fila es la PRIMERA (donde escribía
+    `_fila` hasta v527) y el % y el día, la ÚLTIMA (lo que enseña `_mapa`).
+    """
+    filas, pct, dias = {}, {}, {}
+    for i, r in enumerate(recs or []):
+        if str(r.get("ProjectID", "")) != str(pid):
+            continue
+        k = (int(_num(r.get("StageOrder"))), str(r.get("Activity", "")))
+        filas.setdefault(k, i + 2)
+        pct[k] = max(0.0, min(100.0, _num(r.get("Pct"))))
+        dias[k] = _fecha_de(r)
+    return filas, pct, dias
 
 
 def acreditar(pid, grupo, prj, creditos_nuevos, quien="", origen=MANUAL, fecha=None) -> tuple:
@@ -292,6 +298,14 @@ def acreditar(pid, grupo, prj, creditos_nuevos, quien="", origen=MANUAL, fecha=N
     ⚠️ Solo toca las etapas mencionadas. Recalcular todas escribiría de nuevo filas que
     nadie movió, y cada reescritura es una oportunidad de pisar algo (el criterio del
     guardado parcial de v499/v502).
+
+    ## ⚠️ v528 · Tres hojas, una lectura y una escritura
+    Guardar tocaba `StageProgress`, `Activities` y `Projects` por separado: ~9 llamadas a
+    Google y 7-8 s en producción (~1 s cada una desde el Cloud). Las tres viven en el
+    mismo libro, así que se leen FRESCAS en UNA llamada y se escribe todo en OTRA; solo
+    las filas NUEVAS van aparte, con `append_rows`, porque es lo único que hace sitio al
+    final de la hoja sin pisar a nadie. Las reglas de fechas de `Activities` siguen
+    siendo UNA sola (`projects._lote_avance`, la misma que usa la rejilla vieja).
     """
     w = _ws()
     if w is None:
@@ -323,7 +337,20 @@ def acreditar(pid, grupo, prj, creditos_nuevos, quien="", origen=MANUAL, fecha=N
         return False, t("Not in this job's plan: {x}",
                         x=", ".join(str(c.get("actividad", "?")) for c in _malos[:3]))
 
+    from core import hojas
+    from core import projects as P
+    aws, _e_act = P._activities_ws()
+    pws, _e_prj = P._projects_ws()
+    if _e_act or _e_prj:
+        return False, _e_act or _e_prj
+    try:
+        _leido = hojas.frescas({SHEET: w, P.ACTIVITIES_SHEET: aws, P.PROJECTS_SHEET: pws})
+    except Exception as e:
+        # Sin lectura no se sabe dónde escribir: no se escribe NADA.
+        return False, "%s: %s" % (t("Error saving"), e)
+
     _ahora = clock.now(grupo).strftime("%Y-%m-%d %H:%M")
+    _hoy = clock.now(grupo).strftime("%Y-%m-%d")[:10]
     _dia = _fecha_trabajo(fecha, grupo)
     # ⚠️ El mapa NUEVO se arma en memoria, no releyendo la hoja después de escribir.
     # Releer costaba una lectura extra por acreditación —con el techo de 60/min que ya
@@ -331,12 +358,10 @@ def acreditar(pid, grupo, prj, creditos_nuevos, quien="", origen=MANUAL, fecha=N
     # funcionado. Lo que se acaba de escribir ya se sabe: no hay que preguntárselo a
     # Google. Lo destapó el guardián, que con la hoja sustituida veía el 0 que la
     # relectura tapaba.
-    # ⚠️ v525 · Y por lo mismo las fechas de trabajo de lo YA acreditado se toman AHORA,
-    # antes de escribir: después, `_invalidate()` obligaría a releer la hoja.
-    _fechas = {(int(_num(r0.get("StageOrder"))), str(r0.get("Activity", ""))): _fecha_de(r0)
-               for r0 in creditos(pid)}
-    _despues = dict(_mapa(pid))
-    _tocadas, _nuevas = set(), []
+    # ⚠️ v525 · Y por lo mismo las fechas de trabajo de lo YA acreditado se toman de la
+    # lectura de ANTES de escribir. v528 · Esa lectura es la fresca, no la caché.
+    _filas, _despues, _fechas = _indice(_leido.get(SHEET), pid)
+    _tocadas, _nuevas, _lote_sp = set(), [], []
     for c in (creditos_nuevos or []):
         _et = int(_num(c.get("etapa")))
         _ac = str(c.get("actividad", ""))
@@ -349,27 +374,16 @@ def acreditar(pid, grupo, prj, creditos_nuevos, quien="", origen=MANUAL, fecha=N
             _tocadas.add(_et)
         _despues[(_et, _ac)] = _pc
         _fechas[(_et, _ac)] = _dia
-        row, _ant = _fila(w, pid, _et, _ac)
+        row = _filas.get((_et, _ac))
         if row is None:
             _nuevas.append(["SP-%s-%d-%d" % (pid, _et, len(_nuevas)), str(grupo),
                             str(pid), str(_et), _ac, str(_pc),
                             str(c.get("nota", "")), str(origen), str(quien), _ahora, _dia])
         else:
-            try:
-                w.batch_update([{"range": "%s%d" % (_col_letter(_COL[k]), row),
-                                 "values": [[str(v)]]}
-                                for k, v in (("Pct", _pc), ("Note", c.get("nota", "")),
-                                             ("Source", origen), ("UpdatedBy", quien),
-                                             ("Updated", _ahora), ("WorkDate", _dia))],
-                               value_input_option="RAW")
-            except Exception as e:
-                return False, "%s: %s" % (t("Error saving"), e)
-    if _nuevas:
-        try:
-            w.append_rows(_nuevas, value_input_option="RAW")
-        except Exception as e:
-            return False, "%s: %s" % (t("Error saving"), e)
-    _invalidate()
+            _lote_sp += [{"range": "%s%d" % (_col_letter(_COL[k]), row), "values": [[str(v)]]}
+                         for k, v in (("Pct", _pc), ("Note", c.get("nota", "")),
+                                      ("Source", origen), ("UpdatedBy", quien),
+                                      ("Updated", _ahora), ("WorkDate", _dia))]
 
     # ── y ahora el número que lee todo lo demás ──────────────────────────────
     _det = {e["orden"]: e for e in _sobre(_plan, _despues)}
@@ -385,15 +399,48 @@ def acreditar(pid, grupo, prj, creditos_nuevos, quien="", origen=MANUAL, fecha=N
         _cambios.append({"orden": o, "avance": _det[o]["pct"],
                          "inicio": _ds[0] if _ds else "",
                          "fin": _ds[-1] if (_ds and _det[o]["pct"] >= 100) else ""})
+    _lote_act, _acts = P._lote_avance(_leido.get(P.ACTIVITIES_SHEET), pid, _cambios, _hoy)
+    _lote_prj, _antes, _escritos = [], {}, {}
+    if _lote_act:
+        # ⚠️ Es el `_recompute_project_avance` de siempre, sin sus dos lecturas: la obra se
+        # recalcula con las actividades que se van a escribir, no releyéndolas después.
+        _lote_prj, _antes, _escritos = P._lote_obra(_leido.get(P.PROJECTS_SHEET), pid, _acts)
+        if _lote_prj is None:
+            # ⚠️ ANTES de escribir nada: hasta v527 los créditos quedaban guardados y la
+            # obra sin recalcular, porque el fallo de `update_project` no se miraba.
+            return False, t("Project not found.")
+
+    if _nuevas:
+        try:
+            w.append_rows(_nuevas, value_input_option="RAW")
+        except Exception as e:
+            return False, "%s: %s" % (t("Error saving"), e)
+    try:
+        hojas.escribir([(w, _lote_sp), (aws, _lote_act), (pws, _lote_prj)])
+    except Exception as e:
+        _invalidate()
+        P._invalidate()
+        if _nuevas and _cambios:
+            # ⚠️ Se dice, no se traga: el crédito nuevo quedó guardado pero la etapa no se
+            # movió, y sin aviso el usuario vería su trabajo registrado y el avance quieto.
+            return False, "%s (%s)" % (t("The activity was saved but the stage progress "
+                                         "could not be updated"), e)
+        # Sin filas nuevas, lo que falló era TODO lo que había que escribir.
+        return False, "%s: %s" % (t("Error saving"), e)
+    _invalidate()
     if not _cambios:
         return True, t("Saved.")
-    from core import projects as P
-    ok, msg = P.save_field_progress(pid, _cambios)
-    if not ok:
-        # ⚠️ Se dice, no se traga: el crédito quedó guardado pero la etapa no se movió,
-        # y sin aviso el usuario vería su trabajo registrado y el avance quieto.
-        return False, "%s (%s)" % (t("The activity was saved but the stage progress "
-                                     "could not be updated"), msg)
+    P._invalidate()
+    if _escritos:
+        # ⚠️ El rastro de cambios del avance y el estado, como hacía `update_project`,
+        # con el «antes» de la lectura fresca en vez del de la caché. Fuera del guardado:
+        # si la anotación falla, el cambio del usuario ya está hecho (v342).
+        try:
+            from core import auditoria
+            auditoria.registrar("proyecto", pid, auditoria.diff(_antes, _escritos),
+                                grupo=str(_antes.get("Group", "")))
+        except Exception as e:
+            logger.warning("stage_progress: no se pudo auditar %s: %s", pid, e)
     return True, "%s: %s" % (t("Stages updated"),
                              ", ".join("#%d %.1f%%" % (c["orden"], c["avance"])
                                        for c in _cambios))
