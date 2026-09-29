@@ -122,7 +122,11 @@ print("\n[1] la hoja")
 # ⚠️ Esto ha mordido DOS veces (v461 y v507): una hoja fuera del lote se escribe bien y
 # se lee vacia para siempre, sin error. Es el primer chequeo a proposito.
 ck("⚠️ «StageProgress» esta en HOJAS_LECTURA", SP.SHEET in H.HOJAS_LECTURA, True)
-ck("la cabecera tiene las 10 columnas", len(SP.HEADERS), 10)
+# ⚠️ v525 · 10 → 11: `WorkDate` AL FINAL (el día del trabajo, verif_v525). Lo que importa
+# aquí es que las 10 de v514 sigan en su sitio y la nueva vaya DETRÁS (v363), no el número.
+ck("las 10 columnas de v514 siguen en su sitio, y lo nuevo va detrás", SP.HEADERS[:10],
+   ["ID", "Group", "ProjectID", "StageOrder", "Activity", "Pct", "Note", "Source",
+    "UpdatedBy", "Updated"])
 # La fila posicional que se escribe tiene que cuadrar con la cabecera (v363).
 _t = ast.parse(_fuente("core/stage_progress.py"))
 _ac = next(n for n in ast.walk(_t) if isinstance(n, ast.FunctionDef)

@@ -265,7 +265,8 @@ def registro(por_destino, respuestas=None, ascensores=None, app="", nada=False) 
     "marcadas": [(orden, actividad)], "hechas": [(orden, actividad)]}}` — lo que anota
     `daily_log_ui._pintar` al pintar cada casilla. `tipo`: «a» actividad propuesta suelta,
     «e» opción de la lista de una etapa, «q» opción de una pregunta.
-    `respuestas` = `{«L2»: "lift" | "level" | None}`; `ascensores` = `{«3»: obra | None}`.
+    `respuestas` = `{«L2»: "lift" | "level" | None}`; `ascensores` = `{«3»: obra | None}`,
+    y desde v525 `{"": obra | None}` = las líneas que no nombran ningún ascensor.
     `nada=True` = pulsó «Nothing to credit»: lo que tuviera marcado NO se acreditó, así que
     no se registra como aceptado.
     """

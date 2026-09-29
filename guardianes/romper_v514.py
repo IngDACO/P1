@@ -22,8 +22,12 @@ FICHEROS = ["core/stage_progress.py", "core/stage_progress_ui.py", "core/hojas.p
 N = chr(10)
 ROTURAS = [
     # ── ⚠️ el fallo que ya mordió DOS veces (v461, v507) ──
+    # ⚠️ v525 · Esta ancla llevaba MUERTA desde v516: se anclaba en «"StageProgress",»
+    # seguido del cierre `)` de la tupla, y v516 añadio "DailyLogs" detras. La bateria no
+    # se volvio a correr hasta v525, y check_anclas_roturas no leia `+ N +` (N = chr(10)).
+    # Ahora se ancla en la linea sola: sigue siendo unica y no depende de lo que venga detras.
     ('⚠️ la hoja se cae del lote (leeria vacio para siempre, sin error)',
-     "core/hojas.py", '    "StageProgress",' + N + ')', ')'),
+     "core/hojas.py", '    "StageProgress",' + N, ''),
 
     # ── la aritmetica ──
     ('⚠️ el % cuenta ACTIVIDADES en vez de ponderar por peso',
@@ -45,11 +49,12 @@ ROTURAS = [
      + '        # ⚠️ Se dice, no se traga: el crédito quedó guardado pero la etapa no se movió,',
      '    if False:' + N
      + '        # ⚠️ Se dice, no se traga: el crédito quedó guardado pero la etapa no se movió,'),
+    # ⚠️ v525 · La lista por comprension paso a ser un bucle (cada cambio lleva ahora sus
+    # fechas de trabajo). Misma rotura: recorrer TODAS las etapas en vez de las tocadas.
     ('se recalculan TODAS las etapas, no solo las tocadas',
      "core/stage_progress.py",
-     '    _cambios = [{"orden": o, "avance": _det[o]["pct"]} for o in sorted(_tocadas)' + N
-     + '                if o in _det]',
-     '    _cambios = [{"orden": o, "avance": _det[o]["pct"]} for o in sorted(_det)]'),
+     '    for o in sorted(_tocadas):' + N + '        if o not in _det:',
+     '    for o in sorted(_det):' + N + '        if o not in _det:'),
     ('⚠️ el recalculo vuelve a depender de releer la hoja', "core/stage_progress.py",
      '        _despues[(_et, _ac)] = _pc', '        pass'),
 

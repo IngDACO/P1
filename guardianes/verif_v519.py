@@ -182,8 +182,12 @@ _ok, _msg = SP.acreditar("PRJ-T", "cliente1", _PRJ,
 _solo = next(e for e in SP._sobre(INST, {(_o7, _peso): 100.0}) if e["orden"] == _o7)["pct"]
 chk("con una MEZCLA, se toca solo la etapa de la que pesa", _ok and len(_llamadas) == 1,
     _llamadas)
+# ⚠️ v525 · Se comparan orden y avance, no el diccionario entero: desde v525 cada cambio
+# lleva también `inicio`/`fin` (las fechas del trabajo, verif_v525). Lo que vigila esto es
+# el NÚMERO — que la informativa no lo mueva —, no la forma del diccionario.
 chk("...y el número escrito es el de la que pesa SOLA (%.1f%%)" % _solo,
-    bool(_llamadas) and _llamadas[0] == [{"orden": _o7, "avance": _solo}], _llamadas)
+    bool(_llamadas) and [{"orden": c["orden"], "avance": c["avance"]} for c in _llamadas[0]]
+    == [{"orden": _o7, "avance": _solo}], _llamadas)
 
 _llamadas.clear()
 _stub()

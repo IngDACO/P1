@@ -242,13 +242,32 @@ def _propuestas(r, pid, grupo, usuario, key_prefix) -> None:
             # no asignado no se propone — con esas líneas, no había nada que proponer.
             _rel = [a for a in asc2["ascensores"]
                     if PP.propone_algo(PP.lineas_de(texto, a, tambien), plan0)]
-            if _rel:
-                st.caption(t(":material/call_split: Your log talks about more than one lift. "
-                             "Choose the job for each one — what you leave unchosen is not "
-                             "proposed anywhere.") if len(asc2["ascensores"]) > 1 else
-                           t(":material/call_split: Choose the job for {x} — until you do, "
-                             "it is not proposed anywhere.",
-                             x=", ".join("«%s»" % a for a in _rel)))
+            # ⚠️ v525 · Y las líneas que NO nombran ascensor. Con la nota repartida, mandarlas
+            # a la obra del parte era decidir por él (la 2B del usuario): «cleaned the pit»
+            # puede ser de cualquiera de los dos. Selector propio, sin nada elegido, y solo
+            # si PROPONEN algo — se miran juntas y en orden, para que una cabecera
+            # «Pendings» siga mandando sobre lo que va debajo.
+            _sin_rel, _sin_ev = False, []
+            if asc2["separar"] or tambien:
+                _p_sin = PP.propuestas("\n".join(PP.lineas_de(texto, "", tambien)), plan0, {})
+                _sin_rel = _p_sin["hay_algo"]
+                for x in _p_sin["actividades"] + _p_sin["etapas"] + _p_sin["preguntas"]:
+                    for l in x.get("pruebas") or []:
+                        if l not in _sin_ev:
+                            _sin_ev.append(l)
+            if _rel or _sin_rel:
+                if len(asc2["ascensores"]) > 1:
+                    st.caption(t(":material/call_split: Your log talks about more than one "
+                                 "lift. Choose the job for each one — what you leave "
+                                 "unchosen is not proposed anywhere."))
+                elif not _sin_rel:
+                    st.caption(t(":material/call_split: Choose the job for {x} — until you "
+                                 "do, it is not proposed anywhere.",
+                                 x=", ".join("«%s»" % a for a in _rel)))
+                else:
+                    st.caption(t(":material/call_split: Choose the job for each part of "
+                                 "your log — what you leave unchosen is not proposed "
+                                 "anywhere."))
                 # ⚠️ `index=None` + placeholder, no una opción `None` en la lista: con la
                 # opción, Streamlit ponía la «×» de borrar sobre «— choose the job —», como
                 # si ya hubiera algo elegido.
@@ -261,6 +280,16 @@ def _propuestas(r, pid, grupo, usuario, key_prefix) -> None:
                         format_func=lambda o: (t("Not one of my jobs") if o == _OTRA
                                                else ops.get(o, o)))
                     elegidas[a] = asignacion[a]
+                if _sin_rel:
+                    asignacion[""] = st.selectbox(
+                        t("Lines that don't name a lift"), _opts, index=None,
+                        key="%s_dest__sin" % kp, placeholder=t("— choose the job —"),
+                        format_func=lambda o: (t("Not one of my jobs") if o == _OTRA
+                                               else ops.get(o, o)))
+                    if _sin_ev:
+                        st.caption("  ·  ".join("“%s”" % l for l in _sin_ev[:3])
+                                   + ("  …" if len(_sin_ev) > 3 else ""))
+                    elegidas[""] = asignacion[""]
             if asc2["separar"] or tambien or sin_resp:
                 destinos = PP.reparto(texto, {k: v for k, v in asignacion.items()
                                               if v and v != _OTRA},
@@ -275,13 +304,18 @@ def _propuestas(r, pid, grupo, usuario, key_prefix) -> None:
                 st.caption(t(":material/block: {x} has no stage plan to credit against.",
                              x=(ops or {}).get(d, d)))
                 continue
+            _p = PP.propuestas(txt, plan, SP.acreditado(d))
+            # ⚠️ v525 · Un trozo sin NADA que enseñar no se pinta: «Install day 12» suelto,
+            # repartido a la obra del parte, dejaba un «→ obra» sin nada debajo.
+            if not any(_p[k] for k in ("actividades", "etapas", "preguntas", "pendientes",
+                                       "retiradas", "fuera")):
+                continue
             # ⚠️ El destino se nombra también cuando es UNO solo pero no es esta obra:
             # «Install headers» a secas, debajo del parte de Lift 1, se leería como de Lift 1.
             _cab = len(destinos) > 1 or d != str(pid)
             if _cab:
                 st.markdown("**→ %s**" % (ops or {}).get(d, d))
-            por_destino[d] = _pintar(PP.propuestas(txt, plan, SP.acreditado(d)),
-                                     "%s_%s" % (kp, d), titulo=not _cab)
+            por_destino[d] = _pintar(_p, "%s_%s" % (kp, d), titulo=not _cab)
 
         n = sum(len(v["marcadas"]) for v in por_destino.values())
 
@@ -305,8 +339,11 @@ def _propuestas(r, pid, grupo, usuario, key_prefix) -> None:
                 if d not in _mias:
                     errores.append(t("{x} is not one of your jobs.", x=d))
                     continue
+                # ⚠️ v525 · Con la fecha del PARTE: el trabajo se hizo el día que dice el
+                # parte, no el día en que se confirma (la 1A del usuario).
                 ok, msg = SP.acreditar(d, grupo, prjs[d], PP.creditos(ticks, lid),
-                                       quien=usuario, origen=SP.PARTE)
+                                       quien=usuario, origen=SP.PARTE,
+                                       fecha=str(r.get("Date", "") or ""))
                 if not ok:
                     errores.append(msg)
             if errores:

@@ -10,6 +10,55 @@ ventana de contexto. Contenido: 258 secciones detalladas + el índice de 440 ver
 
 ---
 
+## LA FECHA DEL PARTE Y LAS LÍNEAS SIN ASCENSOR (v525)
+
+Las otras dos decisiones del usuario (29/09/2026) sobre lo que v523 dejó sin hacer: **1A**
+(fechar con el día del parte) y **2B** (selector propio para las líneas sin ascensor).
+
+### 1A · El día del TRABAJO, no el de confirmar
+Hasta aquí lo confirmado desde un parte se fechaba al confirmar: un parte del lunes
+confirmado el jueves decía que la etapa empezó el jueves. `StageProgress` gana `WorkDate`
+**al final** (v363) y `acreditar(…, fecha=)` recibe el día del parte (a mano: hoy; ilegible
+o del FUTURO: hoy — una fecha real posterior a hoy dibujaría avance que no ha pasado).
+⚠️ Las fechas reales de la etapa salen de **TODOS** sus créditos con peso, no del de ahora:
+el inicio es el primer día de trabajo y el fin el último — el parte que CIERRA una etapa no
+la fecha si otra de sus actividades se hizo después. `save_field_progress` acepta esas
+fechas: adelanta un inicio posterior, nunca atrasa uno anterior, y sin ellas se comporta
+como siempre (la rejilla a mano no cambia). Los créditos de antes de v525 cuentan con su día
+de registro. ⚠️ **Qué cambia y qué no:** el historial (la curva S real, las fechas de inicio
+y fin); NO el %, ni el SPI, ni el importe de una reclamación (cobra el acumulado al emitirla).
+
+### 2B · Las líneas que no nombran ascensor
+En una nota de varios ascensores, lo que no nombra ninguno («cleaned the pit») iba a la obra
+del parte: decidir por él. Ahora, si esas líneas PROPONEN algo —miradas juntas y en orden,
+para que una cabecera «Pendings» siga mandando—, llevan **su propio selector, sin nada
+elegido**, con las líneas a la vista; sin elegir, no se proponen en ninguna obra. El
+registro de v524 guarda la elección bajo la clave `""`. Y un trozo sin nada que enseñar ya
+no deja un «→ obra» vacío.
+
+### ⚠️ Lo que salió por el camino
+- **`romper_v514` tenía un ancla MUERTA desde v516**: «la hoja se cae del lote» se anclaba en
+  `"StageProgress",` + el `)` de cierre, y v516 añadió `"DailyLogs"` detrás. Nadie volvió a
+  correr esa batería, y `check_anclas_roturas` no la veía: la tupla usa `+ N +` con
+  `N = chr(10)`, una LLAMADA, y quedaba entre las 128 «ilegibles» declaradas en v524.
+  Enseñarle `chr()` hizo legibles **42 tuplas de 10 baterías** (128 → 86) y la destapó.
+- **Y mi cambio mató otra de `romper_v514`** («se recalculan TODAS las etapas»): la lista de
+  `_cambios` pasó a ser un bucle. ⚠️ **La leí mal a la primera**: filtraba la salida de las
+  baterías por el formato `=== N de N ===`, y `romper_v514` imprime `13/15` — dos escapes que
+  no vi hasta que el chequeo estático los señaló. Re-anclada: **15/15**. Lección: el resumen
+  de CADA batería se lee entero; no todas lo escriben igual.
+- **Esta vez el chequeo avisó en el acto**: el ancla «como si fuera MANUAL» de `romper_v523`
+  murió al añadir `fecha=` a la llamada, y `check_anclas_roturas` —arreglado en v524 para
+  leer constantes— lo dijo en la misma pasada.
+- `_fecha_trabajo` toma «hoy» del MISMO `clock.now(grupo).strftime` que el sello `Updated`:
+  la primera versión usaba `clock.today` y rompía los relojes falsos de `verif_v514/v519`,
+  que solo ofrecen `strftime`. En vez de tocarlos, un solo reloj para las dos cosas.
+- Guardianes viejos actualizados con su razón escrita: `verif_v514` (el número de columnas
+  → el principio), `verif_v519` (compara orden y avance, no el diccionario entero),
+  `verif_v523/v524` (sus stubs aceptan `fecha`).
+
+26 comprobaciones · **16/16 + control** · re-corridas sobre el código nuevo: romper_v514 15/15, v519 13/13, v523 30/30, v524 19/19 · hoja real 14/14 · suite 156 verde
+
 ## GUARDAR LO QUE SE PROPUSO Y SE DEJÓ SIN MARCAR (v524)
 
 Decisión del usuario (29/09/2026), de las tres cosas que v523 dejó sin hacer: **primero
@@ -12401,7 +12450,7 @@ comprueba lo que dice**.
 
 ---
 
-## Versiones desplegadas (v524 = actual)
+## Versiones desplegadas (v525 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -12409,6 +12458,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v525 | **La fecha del parte (1A) y las líneas sin ascensor (2B)**, decisiones del usuario. Cada crédito guarda el día del TRABAJO (`StageProgress.WorkDate`, al final) y las fechas reales de la etapa salen de TODOS sus créditos: inicio el primero, fin el último — un parte del lunes confirmado el jueves fecha el lunes; ⚠️ cambia el historial (curva S real), no el %, ni el SPI, ni lo que se cobra. En notas de varios ascensores, las líneas sin ascensor que proponen algo llevan su propio selector, sin nada elegido. ⚠️ Destapó un ancla de `romper_v514` MUERTA desde v516, escondida entre las ilegibles (`N = chr(10)`): el chequeo lee ahora `chr()` → 42 tuplas más vigiladas (128 → 86 ilegibles). 26 comprobaciones · **16/16 + control** · re-corridas sobre el código nuevo: romper_v514 15/15, v519 13/13, v523 30/30, v524 19/19 · hoja real 14/14 · suite 156 verde |
 | v524 | **Guardar lo que se propuso y se dejó sin marcar.** Decisión del usuario: primero esto, porque cada parte revisado sin registro es un dato perdido para siempre (no se puede reconstruir). `DailyLogs.Proposals` al final: lo OFRECIDO (tipo, etapa, actividad y el término que lo trajo), lo MARCADO, lo hecho, las respuestas de «L2», las obras elegidas y la versión — en la MISMA escritura que la revisión. «Nothing to credit» = nada aceptado. `acierto` cuenta por TIPO (una opción de lista sin marcar no es un error). ⚠️ Destapó que `check_anclas_roturas` saltaba EN SILENCIO las roturas con el fichero en una constante: 4 anclas muertas de romper_v523 sin aviso; ahora lee 500 (antes 442) y declara las 128 ilegibles. 41 comprobaciones · **19/19 + control** · romper_v523 30/30 y romper_v516 20/20 re-corridas · hoja real 13/13 · suite 155 verde |
 | v523 | **La pantalla donde se confirma lo que la app leyó en el parte.** La regla del usuario hecha interfaz: debajo de cada parte propio y sin revisar, actividades con la LÍNEA que las respalda, la etapa como lista, las preguntas y lo pendiente sin casilla. ⚠️ **Todo desmarcado**; solo lo marcado se acredita, con origen `log` y el ID del parte (lo que permitirá medir el acierto). Varios ascensores: obra por ascensor, sin nada elegido; «L2» se pregunta y ⚠️ lo que va con él (también debajo, si es cabecera) no va a ninguna obra hasta contestar; y no se pregunta lo que no cambia nada. ⚠️ Mirar la pantalla a ancho de móvil destapó 4 fallos que los tests no veían (el «L2» asumido como piso, el parte en un párrafo, «3 marcadas» para 2 créditos, destinos sin nombre) y releer el diff, 3 más. `verif_v523` ejecuta la tarjeta con AppTest; ⚠️ dos pasos en vacío míos arreglados. 111 comprobaciones · **30/30 + control** · romper_v516 20/20 sobre el código nuevo · hoja real 27/27 · suite 154 verde |
 | v522 | **El vocabulario contra 1070 partes REALES de Simpro: proponer, no asumir.** Regla del usuario: la app no asume — propone y él confirma. La oración manda: lo de «Issues/Pendings» se aparta (**25 → 0** propuestas), lo que se lleva no se monta, y un verbo de QUITAR nunca acredita montar (**0 de 227** oraciones). Frase de etapa → la etapa entera (decisión 1); varios ascensores → proponer separar, «L3» se pregunta (decisión 2). ⚠️ Medido con 30 notas **reservadas y etiquetadas antes** de tocar nada: **8 → 22 de 40**, errores seguros **3 → 1**; corpus entero 28,3% → 39,2%. ⚠️ Dos métricas salieron peor y eran del MÉTODO (línea a línea). OCR de Windows validado 0,997; los partes, fuera del repo. 62 comprobaciones · 17/17 + control · romper_v517 28/28 sobre el código nuevo · suite 153 verde (152 + check_anclas_roturas re-corrido tras actualizar romper_v517) |

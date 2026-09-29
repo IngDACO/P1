@@ -83,6 +83,13 @@ def _valor(nodo, consts):
         a, b = _valor(nodo.left, consts), _valor(nodo.right, consts)
         if isinstance(a, str) and isinstance(b, str):
             return a + b
+    # ⚠️ v525 · `N = chr(10)` (romper_v514 lo usa para el salto de linea): sin esto, cada
+    # tupla con `+ N +` era ilegible — y una de ellas llevaba MUERTA desde v516 sin que
+    # nada lo dijera, escondida entre las 128 declaradas.
+    if isinstance(nodo, ast.Call) and getattr(nodo.func, "id", "") == "chr" \
+            and len(nodo.args) == 1 and isinstance(nodo.args[0], ast.Constant) \
+            and isinstance(nodo.args[0].value, int):
+        return chr(nodo.args[0].value)
     return _NO_SE
 
 
@@ -181,13 +188,14 @@ for b in _bats:
 # subindices, y leerlas exigiria ejecutarlas. Hasta hoy se saltaban CALLADAS; ahora se
 # cuentan en cada pasada, y una bateria NUEVA escrita asi pone esto en rojo — que es lo
 # que habria cazado a romper_v523 el dia que nacio.
+# ⚠️ v525 · 128 → 86: leer `chr(10)` hizo legibles 42 tuplas de 10 baterias, y entre ellas
+# aparecio una muerta desde v516 (romper_v514, el lote) y otra muerta por v525 — las dos
+# reparadas. Lo que queda arma el ancla con `%`, `.join()`, listas o subindices.
 ILEGIBLES = {
     "romper_v430_reanclado.py": 3, "romper_v437.py": 10, "romper_v438.py": 12,
-    "romper_v447.py": 1, "romper_v448.py": 1, "romper_v459.py": 1, "romper_v482.py": 9,
-    "romper_v483.py": 11, "romper_v484.py": 6, "romper_v486.py": 5, "romper_v487.py": 1,
-    "romper_v488.py": 17, "romper_v490.py": 16, "romper_v501.py": 3, "romper_v502.py": 6,
-    "romper_v505.py": 5, "romper_v506.py": 3, "romper_v509.py": 3, "romper_v510.py": 3,
-    "romper_v512.py": 7, "romper_v514.py": 5,
+    "romper_v448.py": 1, "romper_v482.py": 9,
+    "romper_v483.py": 11, "romper_v484.py": 6, "romper_v486.py": 1,
+    "romper_v488.py": 17, "romper_v490.py": 16,
 }
 _il = {}
 for s in _ilegibles:

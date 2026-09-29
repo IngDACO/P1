@@ -13,6 +13,7 @@ Escrituras RAW + lecturas con numericise_ignore=['all'] (conserva textos/JSON/ce
 """
 import json
 import logging
+import re
 from datetime import date
 
 import streamlit as st
@@ -1149,15 +1150,28 @@ def delete_activity(pid, orden) -> tuple:
     return True, t("Activity deleted.")
 
 
+_ISO_DIA = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+
+def _dia_iso(v) -> str:
+    """`YYYY-MM-DD` si lo es; si no, vacío (y entonces manda «hoy»)."""
+    s = str(v or "").strip()[:10]
+    return s if _ISO_DIA.match(s) else ""
+
+
 def save_field_progress(pid, cambios) -> tuple:
     """El campo actualiza el avance de VARIAS actividades en UNA escritura (batch).
 
-    `cambios` = [{'orden', 'avance', 'nota'(opc)}]. Fechas reales AUTOMATICAS
-    (decision del usuario, v162): el campo no teclea fechas.
+    `cambios` = [{'orden', 'avance', 'nota'(opc), 'inicio'(opc), 'fin'(opc)}]. Fechas
+    reales AUTOMATICAS (decision del usuario, v162): el campo no teclea fechas.
       - FechaInicioReal: el primer dia que el avance pasa de 0 (si estaba vacia).
       - FechaFinReal: el dia que llega a 100 (si estaba vacia).
       - Si una actividad al 100% se REABRE (baja de 100), se borra la fin real
         (dejaria "terminada" una fecha que ya no es cierta).
+    ⚠️ v525 · `inicio`/`fin` los trae `stage_progress.acreditar`: el día en que se HIZO el
+    trabajo (la fecha del parte), no el de guardar. Sin ellos, «hoy», como siempre — así
+    escribe la rejilla a mano. Y un inicio que llega ANTERIOR al guardado lo adelanta: un
+    parte del lunes confirmado cuando la etapa ya tenía inicio el miércoles.
     ⚠️ Reemplaza el `update_activity_progress` por-actividad (hasta 5 update_cell
     cada uno) — el escenario de 429 que v80/v150 ya arreglaron en otros sitios.
     """
@@ -1177,13 +1191,17 @@ def save_field_progress(pid, cambios) -> tuple:
         av = max(0.0, min(100.0, _num(c.get("avance"))))
         fi = str(r.get("ActualStartDate", "")).strip()
         ff = str(r.get("ActualEndDate", "")).strip()
+        fi_n, ff_n = _dia_iso(c.get("inicio")), _dia_iso(c.get("fin"))   # v525
         batch.append({"range": f"{_col_letter(_ACOL['Progress'])}{row}", "values": [[str(av)]]})
         if av > 0 and not fi:                        # arranca → inicio real = hoy
             batch.append({"range": f"{_col_letter(_ACOL['ActualStartDate'])}{row}",
-                          "values": [[hoy]]})
+                          "values": [[fi_n or hoy]]})
+        elif av > 0 and fi_n and _dia_iso(fi) and fi_n < fi:   # su trabajo empezó ANTES
+            batch.append({"range": f"{_col_letter(_ACOL['ActualStartDate'])}{row}",
+                          "values": [[fi_n]]})
         if av >= 100 and not ff:                     # completa → fin real = hoy
             batch.append({"range": f"{_col_letter(_ACOL['ActualEndDate'])}{row}",
-                          "values": [[hoy]]})
+                          "values": [[ff_n or hoy]]})
         elif av < 100 and ff:                        # reabierta → borrar fin real
             batch.append({"range": f"{_col_letter(_ACOL['ActualEndDate'])}{row}",
                           "values": [[""]]})

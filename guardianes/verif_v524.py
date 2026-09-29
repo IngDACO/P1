@@ -261,8 +261,10 @@ def _partes(pid, autor=None, dia=None):
     return out
 
 
-def _acreditar(pid, grupo, prj, creditos, quien="", origen=SP.MANUAL):
-    ss["_cred"].append({"pid": pid, "origen": origen, "creditos": [dict(c) for c in creditos]})
+def _acreditar(pid, grupo, prj, creditos, quien="", origen=SP.MANUAL, fecha=None):
+    # v525 · la pantalla pasa también la fecha del parte (la vigila verif_v525).
+    ss["_cred"].append({"pid": pid, "origen": origen, "fecha": fecha,
+                        "creditos": [dict(c) for c in creditos]})
     if ss["_falla"]:
         return False, "boom"
     return True, "ok"

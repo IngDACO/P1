@@ -38,7 +38,9 @@ Una obra anterior a v512 no tiene `StagePlanJSON`, así que no hay contra qué c
 acreditar. Se dice y no se hace, en vez de inventar un plan por su tipo: adivinarlo
 reescribiría el cronograma de una obra en curso sin que nadie lo pidiera.
 """
+import datetime as _dt
 import logging
+import re
 
 import streamlit as st
 
@@ -50,8 +52,12 @@ from core.i18n import t
 logger = logging.getLogger(__name__)
 
 SHEET = "StageProgress"
+# ⚠️ v525 · `WorkDate` AL FINAL (v363): el DÍA en que se hizo el trabajo, que no es el día
+# en que se registró (`Updated`). Un parte del lunes confirmado el jueves se hizo el lunes,
+# y de aquí salen las fechas reales de la etapa — la curva S real y el historial.
 HEADERS = ["ID", "Group", "ProjectID", "StageOrder", "Activity", "Pct",
-           "Note", "Source", "UpdatedBy", "Updated"]
+           "Note", "Source", "UpdatedBy", "Updated", "WorkDate"]
+_ISO = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 # De dónde salió el crédito. Por ahora solo a mano; el parte diario en texto añadirá
 # el suyo, y entonces poder distinguirlos es lo que permite medir si acierta.
@@ -59,6 +65,36 @@ MANUAL = "manual"
 # v523 · Confirmado por el usuario desde las propuestas de un parte (la nota lleva el ID
 # del parte). ⚠️ El mismo texto que `parte_propuestas.ORIGEN`: lo vigila `verif_v523`.
 PARTE = "log"
+
+
+def _fecha_trabajo(fecha, grupo) -> str:
+    """El DÍA en que se hizo el trabajo, `YYYY-MM-DD` (v525): el del parte, o hoy.
+
+    ⚠️ Una fecha que no se entiende cae en HOY, y una del FUTURO también: una fecha real
+    posterior a hoy dibujaría en la curva avance que todavía no ha pasado.
+    ⚠️ «Hoy» sale del MISMO `clock.now(grupo).strftime` que el sello `Updated` de
+    `acreditar`: dos relojes distintos podrían discrepar justo a medianoche.
+    """
+    hoy = _dt.date.fromisoformat(clock.now(grupo).strftime("%Y-%m-%d")[:10])
+    try:
+        if fecha is None or str(fecha).strip() == "":
+            return hoy.isoformat()
+        s = (fecha.isoformat() if hasattr(fecha, "isoformat") else str(fecha)).strip()[:10]
+        if not _ISO.match(s):
+            return hoy.isoformat()
+        return min(_dt.date.fromisoformat(s), hoy).isoformat()
+    except (TypeError, ValueError):
+        return hoy.isoformat()
+
+
+def _fecha_de(r) -> str:
+    """El día de trabajo de un crédito GUARDADO: su `WorkDate`; si es anterior a v525 y no
+    lo tiene, el día en que se registró (`Updated`) — que es lo que valía entonces."""
+    for k in ("WorkDate", "Updated"):
+        s = str((r or {}).get(k, "") or "").strip()[:10]
+        if _ISO.match(s):
+            return s
+    return ""
 
 
 def acreditado(pid) -> dict:
@@ -247,10 +283,11 @@ def _fila(w, pid, etapa, actividad):
     return None, None
 
 
-def acreditar(pid, grupo, prj, creditos_nuevos, quien="", origen=MANUAL) -> tuple:
+def acreditar(pid, grupo, prj, creditos_nuevos, quien="", origen=MANUAL, fecha=None) -> tuple:
     """Acredita actividades y **recalcula las etapas que tocan**.
 
     `creditos_nuevos` = `[{'etapa': orden, 'actividad': nombre, 'pct': 0-100, 'nota': ''}]`
+    `fecha` (v525) = el día en que se HIZO el trabajo (el del parte); sin ella, hoy.
 
     ⚠️ Solo toca las etapas mencionadas. Recalcular todas escribiría de nuevo filas que
     nadie movió, y cada reescritura es una oportunidad de pisar algo (el criterio del
@@ -287,12 +324,17 @@ def acreditar(pid, grupo, prj, creditos_nuevos, quien="", origen=MANUAL) -> tupl
                         x=", ".join(str(c.get("actividad", "?")) for c in _malos[:3]))
 
     _ahora = clock.now(grupo).strftime("%Y-%m-%d %H:%M")
+    _dia = _fecha_trabajo(fecha, grupo)
     # ⚠️ El mapa NUEVO se arma en memoria, no releyendo la hoja después de escribir.
     # Releer costaba una lectura extra por acreditación —con el techo de 60/min que ya
     # nos mordió en v511— y ataba la corrección a que la invalidación de caché hubiera
     # funcionado. Lo que se acaba de escribir ya se sabe: no hay que preguntárselo a
     # Google. Lo destapó el guardián, que con la hoja sustituida veía el 0 que la
     # relectura tapaba.
+    # ⚠️ v525 · Y por lo mismo las fechas de trabajo de lo YA acreditado se toman AHORA,
+    # antes de escribir: después, `_invalidate()` obligaría a releer la hoja.
+    _fechas = {(int(_num(r0.get("StageOrder"))), str(r0.get("Activity", ""))): _fecha_de(r0)
+               for r0 in creditos(pid)}
     _despues = dict(_mapa(pid))
     _tocadas, _nuevas = set(), []
     for c in (creditos_nuevos or []):
@@ -306,18 +348,19 @@ def acreditar(pid, grupo, prj, creditos_nuevos, quien="", origen=MANUAL) -> tupl
         if (_et, _ac) in _validas:
             _tocadas.add(_et)
         _despues[(_et, _ac)] = _pc
+        _fechas[(_et, _ac)] = _dia
         row, _ant = _fila(w, pid, _et, _ac)
         if row is None:
             _nuevas.append(["SP-%s-%d-%d" % (pid, _et, len(_nuevas)), str(grupo),
                             str(pid), str(_et), _ac, str(_pc),
-                            str(c.get("nota", "")), str(origen), str(quien), _ahora])
+                            str(c.get("nota", "")), str(origen), str(quien), _ahora, _dia])
         else:
             try:
                 w.batch_update([{"range": "%s%d" % (_col_letter(_COL[k]), row),
                                  "values": [[str(v)]]}
                                 for k, v in (("Pct", _pc), ("Note", c.get("nota", "")),
                                              ("Source", origen), ("UpdatedBy", quien),
-                                             ("Updated", _ahora))],
+                                             ("Updated", _ahora), ("WorkDate", _dia))],
                                value_input_option="RAW")
             except Exception as e:
                 return False, "%s: %s" % (t("Error saving"), e)
@@ -330,8 +373,18 @@ def acreditar(pid, grupo, prj, creditos_nuevos, quien="", origen=MANUAL) -> tupl
 
     # ── y ahora el número que lee todo lo demás ──────────────────────────────
     _det = {e["orden"]: e for e in _sobre(_plan, _despues)}
-    _cambios = [{"orden": o, "avance": _det[o]["pct"]} for o in sorted(_tocadas)
-                if o in _det]
+    _cambios = []
+    for o in sorted(_tocadas):
+        if o not in _det:
+            continue
+        # ⚠️ v525 · Las fechas REALES de la etapa salen de TODOS sus créditos con peso, no
+        # del de ahora: el inicio es el primer día en que se hizo algo de ella y el fin el
+        # último. Un parte del lunes confirmado el jueves no fecha la etapa el jueves.
+        _ds = sorted(f for f in (_fechas.get((o, a["nombre"])) for a in _det[o]["actividades"]
+                                 if _despues.get((o, a["nombre"]), 0) > 0) if f)
+        _cambios.append({"orden": o, "avance": _det[o]["pct"],
+                         "inicio": _ds[0] if _ds else "",
+                         "fin": _ds[-1] if (_ds and _det[o]["pct"] >= 100) else ""})
     if not _cambios:
         return True, t("Saved.")
     from core import projects as P

@@ -70,8 +70,10 @@ ROTURAS = [
      'out.setdefault(n, (i, e.get("nombre", ""), True))'),
 
     # ── (b) la marca de origen, que es lo que permitira medir el acierto ────
+    # ⚠️ v525 · la llamada lleva ahora `fecha=` detras del origen: murio el ancla y, esta
+    # vez SI, lo dijo check_anclas_roturas en el acto (arreglado en v524 para leer constantes).
     ("se acredita como si fuera MANUAL (se pierde de donde salio)",
-     UI, "quien=usuario, origen=SP.PARTE)", "quien=usuario)"),
+     UI, "quien=usuario, origen=SP.PARTE,", "quien=usuario,"),
 
     ("la nota ya no lleva el ID del parte",
      PPR, '"pct": 100.0, "nota": str(log_id)})', '"pct": 100.0, "nota": ""})'),
