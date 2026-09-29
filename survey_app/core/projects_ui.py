@@ -3475,8 +3475,11 @@ def render_field_projects(usuario: str, grupo: str):
     # «In progress», la etiqueta guardada deja de existir y Streamlit tira la selección
     # — el trabajador confirmaba su parte y volvía a «— choose a project —». Lo vio la
     # prueba en producción; el ID no cambia nunca (regla «el ID es la identidad»).
-    idmap = {str(p.get("ID")): f"{p.get('Name')} ({p.get('ID')}) — {p.get('Status')}"
-             for p in proys}
+    # ⚠️ v527 · Y la etiqueta YA NO lleva el estado. Con el ID guardado la selección se
+    # conservaba, pero el desplegable CERRADO no repinta su texto mientras no cambie la
+    # obra elegida: decía «— In progress» con la tarjeta de debajo en «Planned» (visto en
+    # producción; AppTest no lo ve, es del navegador). El estado ya está en esa tarjeta.
+    idmap = {str(p.get("ID")): f"{p.get('Name')} ({p.get('ID')})" for p in proys}
     _prev = st.session_state.get("fieldproj_sel")
     if _prev is not None and _prev != _VACIO and _prev not in idmap:
         # Una etiqueta de antes de v526, o una obra que ya no es suya: se rescata el ID

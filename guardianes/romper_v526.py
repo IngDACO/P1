@@ -35,8 +35,8 @@ def corre(g=G):
 ROTURAS = [
     ("⚠️ el selector vuelve al codigo de v525 (guarda la ETIQUETA: el fallo de produccion)",
      PUI, [
-         ('    idmap = {str(p.get("ID")): f"{p.get(\'Name\')} ({p.get(\'ID\')}) — {p.get(\'Status\')}"\n'
-          '             for p in proys}',
+         # ⚠️ v527 · el ancla es la linea nueva (sin estado); el reemplazo, la de v525 EXACTA.
+         ('    idmap = {str(p.get("ID")): f"{p.get(\'Name\')} ({p.get(\'ID\')})" for p in proys}',
           '    idmap = {f"{p.get(\'Name\')} ({p.get(\'ID\')}) — {p.get(\'Status\')}": p.get("ID")\n'
           '             for p in proys}'),
          ("    if _prev is not None and _prev != _VACIO and _prev not in idmap:",
@@ -46,6 +46,10 @@ ROTURAS = [
          ("format_func=lambda i: idmap.get(i, i))", "format_func=lambda i: i)"),
          ("    pid = sel\n", "    pid = idmap[sel]\n"),
      ]),
+
+    ("v527 · el ESTADO vuelve a la etiqueta (el desplegable cerrado se queda con el viejo)",
+     PUI, [('f"{p.get(\'Name\')} ({p.get(\'ID\')})" for p in proys}',
+            'f"{p.get(\'Name\')} ({p.get(\'ID\')}) — {p.get(\'Status\')}" for p in proys}')]),
 
     ("un valor viejo ya no se rescata: se queda FANTASMA en el desplegable",
      PUI, [("    if _prev is not None and _prev != _VACIO and _prev not in idmap:",

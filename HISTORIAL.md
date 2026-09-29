@@ -10,6 +10,34 @@ ventana de contexto. Contenido: 258 secciones detalladas + el índice de 440 ver
 
 ---
 
+## EL SELECTOR DE OBRA, SIN EL ESTADO EN EL TEXTO (v527)
+
+La v526 se probó EN PRODUCCIÓN con la sesión de campo (`campo000`, PRJ-0015), tras el
+Reboot que pedía el chip (`v525` con la cabecera en `v526`): se desmarcaron en «Progress»
+las dos actividades acreditadas desde el parte, la obra volvió de «In progress» a
+«Planned» y **siguió elegida** — el caso exacto que antes la perdía. La hoja real quedó con
+la obra a 0% (créditos a 0, el parte revisado con su registro).
+
+### ⚠️ Lo que quedaba, y que ningún test podía ver
+Con el ID guardado la selección se conservaba, pero el desplegable CERRADO no repinta su
+texto mientras no cambie la obra elegida: decía «PRJ-0015 — In progress» con la tarjeta
+de debajo en «Planned». Abierto, la lista sí decía «— Planned». Es del componente del
+navegador (el `react-aria` de Streamlit), así que AppTest —que no pinta nada— no lo ve.
+Decisión del usuario: **quitar el estado de la etiqueta** («Nombre (PRJ-0015)»); el estado
+ya está en la tarjeta de justo debajo. Un valor guardado con la etiqueta vieja se sigue
+rescatando por su ID.
+
+`verif_v526` actualizado con la razón escrita: afirma el principio —el texto del
+desplegable no depende del estado, y es el MISMO antes y después de cambiarlo—, no la
+forma. `romper_v526` gana la rotura «el estado vuelve a la etiqueta», y la que devuelve el
+código exacto de v525 se re-ancló en la línea nueva.
+
+### Anotado, sin tocar
+Al desmarcar todo, las etapas 7 y 11 conservan su «inicio real 26/09» con 0%: la app nunca
+ha borrado la fecha de inicio al volver a 0 (tampoco antes de v525), y no mueve la curva.
+
+15 comprobaciones · romper_v526 **9/9 + control** (la de v525 re-anclada y una nueva) · suite 157 verde
+
 ## EL SELECTOR DE OBRA DEL CAMPO GUARDA EL ID (v526)
 
 El usuario pidió probar v523-v525 y **la prueba se hizo EN PRODUCCIÓN**, con la sesión de
@@ -12487,7 +12515,7 @@ comprueba lo que dice**.
 
 ---
 
-## Versiones desplegadas (v526 = actual)
+## Versiones desplegadas (v527 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -12495,6 +12523,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v527 | **El selector de obra, sin el estado en el texto.** La v526 probada EN PRODUCCIÓN: desmarcar lo acreditado devolvió la obra a «Planned» y **siguió elegida**. ⚠️ Quedaba que el desplegable CERRADO no repinta su texto mientras no cambie la obra: decía «— In progress» con la tarjeta en «Planned» — del navegador, invisible para AppTest. Decisión del usuario: la etiqueta pasa a «Nombre (PRJ-…)»; el estado ya está en la tarjeta. `verif_v526` afirma el principio (el texto no depende del estado). 15 comprobaciones · romper_v526 **9/9 + control** (la de v525 re-anclada y una nueva) · suite 157 verde |
 | v526 | **El selector de obra del campo guarda el ID.** Probado v523-v525 EN PRODUCCIÓN (sesión de campo, PRJ-0015): parte del 26 escrito el 29 → créditos con `WorkDate` 26 y etapas con inicio el 26/09; todo funcionó. ⚠️ Salió un fallo: al confirmar, el desplegable volvía a «choose a project» porque guardaba la ETIQUETA, que lleva el estado, y la obra pasaba a «In progress». Ahora guarda el ID y enseña la etiqueta. Y dos detalles: segundos en la hora de un parte de otro día, y «Escribe tu pregunta…» en español sin `t()`. `romper_v526` devuelve el código EXACTO de v525 y se caza; el trinquete de v524 paró la batería nueva por ilegible → el chequeo lee listas (621 anclas). 15 comprobaciones · **8/8 + control** (la primera, el código EXACTO de v525) · suite 157 verde |
 | v525 | **La fecha del parte (1A) y las líneas sin ascensor (2B)**, decisiones del usuario. Cada crédito guarda el día del TRABAJO (`StageProgress.WorkDate`, al final) y las fechas reales de la etapa salen de TODOS sus créditos: inicio el primero, fin el último — un parte del lunes confirmado el jueves fecha el lunes; ⚠️ cambia el historial (curva S real), no el %, ni el SPI, ni lo que se cobra. En notas de varios ascensores, las líneas sin ascensor que proponen algo llevan su propio selector, sin nada elegido. ⚠️ Destapó un ancla de `romper_v514` MUERTA desde v516, escondida entre las ilegibles (`N = chr(10)`): el chequeo lee ahora `chr()` → 42 tuplas más vigiladas (128 → 86 ilegibles). 26 comprobaciones · **16/16 + control** · re-corridas sobre el código nuevo: romper_v514 15/15, v519 13/13, v523 30/30, v524 19/19 · hoja real 14/14 · suite 156 verde |
 | v524 | **Guardar lo que se propuso y se dejó sin marcar.** Decisión del usuario: primero esto, porque cada parte revisado sin registro es un dato perdido para siempre (no se puede reconstruir). `DailyLogs.Proposals` al final: lo OFRECIDO (tipo, etapa, actividad y el término que lo trajo), lo MARCADO, lo hecho, las respuestas de «L2», las obras elegidas y la versión — en la MISMA escritura que la revisión. «Nothing to credit» = nada aceptado. `acierto` cuenta por TIPO (una opción de lista sin marcar no es un error). ⚠️ Destapó que `check_anclas_roturas` saltaba EN SILENCIO las roturas con el fichero en una constante: 4 anclas muertas de romper_v523 sin aviso; ahora lee 500 (antes 442) y declara las 128 ilegibles. 41 comprobaciones · **19/19 + control** · romper_v523 30/30 y romper_v516 20/20 re-corridas · hoja real 13/13 · suite 155 verde |

@@ -107,8 +107,15 @@ s = _sel(at)
 chk("dos obras: nada elegido de entrada",
     s is not None and s.value == "— choose a project —" and _abierta(at) == [],
     None if s is None else s.value)
-chk("las opciones se VEN con su nombre, ID y estado",
-    s is not None and "Job B (PRJ-2) — Planned" in s.options, None if s is None else s.options)
+# ⚠️ v527 · Sin el ESTADO en la etiqueta, a propósito: el desplegable cerrado no repintaba
+# su texto al cambiar el estado de la obra elegida («— In progress» con la tarjeta en
+# «Planned», visto en producción). Se afirma el principio —el texto no depende del estado—.
+_ESTADOS = ("Planned", "In progress", "Completed")
+chk("las opciones se VEN con su nombre e ID, y SIN estado (v527)",
+    s is not None and "Job B (PRJ-2)" in s.options
+    and not [o for o in s.options if any(e in o for e in _ESTADOS)],
+    None if s is None else s.options)
+_antes = list(s.options) if s is not None else []
 if s is not None:
     s.set_value("PRJ-2")
     at.run()
@@ -119,8 +126,9 @@ s = _sel(at)
 chk("⚠️ pasa a «In progress» (lo primero acreditado) y SIGUE elegida",
     s is not None and s.value == "PRJ-2" and _abierta(at) == ["AVANCE DE PRJ-2"],
     (None if s is None else s.value, _abierta(at)))
-chk("...y la etiqueta ya dice el estado nuevo",
-    s is not None and "Job B (PRJ-2) — In progress" in s.options, None if s is None else s.options)
+chk("...y el texto del desplegable es EL MISMO que antes del cambio (nada que repintar)",
+    s is not None and len(_antes) == 3 and list(s.options) == _antes,
+    (_antes, None if s is None else s.options))
 at.session_state["_estado"] = {"PRJ-1": "Planned", "PRJ-2": "Completed"}
 at.run()
 chk("...y al COMPLETARSE, también", _abierta(at) == ["AVANCE DE PRJ-2"], _abierta(at))
