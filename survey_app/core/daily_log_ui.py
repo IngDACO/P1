@@ -388,7 +388,18 @@ def render_campo(pid, grupo, usuario, key_prefix="fld") -> None:
 
     _k = f"{key_prefix}_dl_txt_{pid}"
     _kf = f"{key_prefix}_dl_dia_{pid}"
+    _kv = f"{key_prefix}_dl_vaciar_{pid}"
     _hoy = clock.today(grupo)
+
+    # ⚠️ v529 · La caja se VACÍA asignando "" ANTES de pintarla, en la pasada que sigue a un
+    # guardado que la hoja confirmó. Hasta v528 se hacía `pop` de su clave: el servidor
+    # quedaba en "" pero el NAVEGADOR seguía enseñando el texto, porque Streamlit solo le
+    # manda el valor nuevo (`set_value`) cuando el código lo ASIGNA. Visto en producción el
+    # 29/09: el parte guardado y el texto todavía en la caja, invitando a guardarlo otra
+    # vez. AppTest no lo veía porque lee el valor del SERVIDOR; `verif_v529` mira el
+    # `set_value`, que es lo que recibe el navegador.
+    if st.session_state.pop(_kv, False):
+        st.session_state[_k] = ""
 
     txt = st.text_area(
         t("What did you do today?"), key=_k, height=140,
@@ -412,7 +423,9 @@ def render_campo(pid, grupo, usuario, key_prefix="fld") -> None:
             # ⚠️ La caja SOLO se vacía cuando la hoja confirmó. Si falla, el texto sigue
             # ahí: quien acaba de escribir doscientas palabras en un sótano no las
             # vuelve a escribir, deja de usar la pantalla (ver la nota de `daily_log`).
-            st.session_state.pop(_k, None)
+            # v529 · Se vacía en la pasada siguiente, ANTES de pintarla (ver arriba):
+            # asignar la clave de un widget ya pintado en esta pasada revienta.
+            st.session_state[_kv] = True
             flash.exito(t("Daily log saved."))
             st.rerun()
         else:

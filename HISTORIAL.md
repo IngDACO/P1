@@ -10,6 +10,40 @@ ventana de contexto. Contenido: 258 secciones detalladas + el índice de 440 ver
 
 ---
 
+## LA CAJA DEL PARTE SE VACÍA DE VERDAD AL GUARDAR (v529)
+
+Probando la v528 EN PRODUCCIÓN (sesión de campo, PRJ-0015): escribir un parte, confirmar lo
+propuesto y deshacerlo funcionó —guardar el parte 2,3 s, confirmar 2,2 s—, pero **el texto
+se quedaba en la caja** después de «Daily log saved.», con el parte ya en la lista. Invita a
+guardarlo otra vez, o a retocarlo y crear un duplicado.
+
+### ⚠️ Por qué ningún test lo veía
+Desde v516 la caja se vaciaba con `st.session_state.pop(clave)` y `st.rerun()`. El SERVIDOR
+quedaba en «» y AppTest —que lee el valor del servidor— lo daba por bueno. Pero Streamlit
+solo le manda al NAVEGADOR el valor nuevo (`set_value` en el proto) cuando el código lo
+**asigna**; borrar la clave no se lo manda, y el navegador conserva lo suyo. Es la familia
+del desplegable de v527: lo que pinta el navegador no es lo que dice el servidor.
+
+### El arreglo
+El guardado confirmado enciende una marca, y la pasada siguiente asigna «» a la caja ANTES
+de pintarla (asignar la clave de un widget ya pintado revienta). Si la hoja falla, no se
+enciende nada y el texto se queda — también en la pasada siguiente.
+
+`verif_v529` ejecuta la pantalla con AppTest y mira el **`set_value`**, el contrato con el
+navegador, no solo el valor; y valida su sonda con el patrón viejo (da «vacía» en el
+servidor y `set_value` False). `verif_v516` actualizado con la razón escrita (afirmaba el
+`pop`, ahora el principio: solo se vacía si la hoja confirmó); `romper_v516`, su rotura
+sobre el mecanismo nuevo.
+
+### Anotado, sin tocar
+Buscando el mismo patrón en toda la app aparecen otros sitios que sueltan con `pop` la clave
+de un widget. `invoices_ui` y `location_ui` lo hacen porque las opciones cambian (para que el
+widget no reviente, no para vaciar nada a la vista). `survey_ui` reinicia la solución activa
+y los pisos del diagrama tras un cálculo nuevo: si las opciones salieran idénticas, podría
+pasar lo mismo que aquí — pendiente de revisar con el usuario.
+
+14 comprobaciones · romper_v529 5/5 + control · romper_v516 20/20 · suite 159 verde
+
 ## GUARDAR MÁS RÁPIDO: UNA LECTURA, UNA ESCRITURA Y EL HEARTBEAT EN SEGUNDO PLANO (v528)
 
 Medido en PRODUCCIÓN (v527, sesión de campo, PRJ-0015) con una sonda en el navegador y,
@@ -12571,7 +12605,7 @@ comprueba lo que dice**.
 
 ---
 
-## Versiones desplegadas (v528 = actual)
+## Versiones desplegadas (v529 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -12579,6 +12613,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v529 | **La caja del parte se vacía de verdad al guardar.** Probando la v528 EN PRODUCCIÓN (parte 2,3 s, confirmar 2,2 s): el parte se guardaba y **el texto seguía en la caja**, invitando a guardarlo otra vez. ⚠️ Desde v516 se vaciaba con `pop` de su clave: el servidor quedaba vacío —y AppTest lo daba por bueno— pero el navegador no se enteraba, porque Streamlit solo le manda el valor (`set_value`) cuando el código lo ASIGNA. Ahora el éxito enciende una marca y la pasada siguiente asigna «» antes de pintarla; si la hoja falla, el texto se queda. `verif_v529` mira el `set_value`, no solo el valor. 14 comprobaciones · romper_v529 5/5 + control · romper_v516 20/20 · suite 159 verde |
 | v528 | **Guardar más rápido.** Medido en producción: guardar una etapa tardaba ~9,5 s en ~9 llamadas a Google, y el heartbeat paraba un clic ~1,9 s cada 50 s. Ahora `StageProgress`, `Activities` y `Projects` se leen FRESCAS en UNA llamada y se escriben en OTRA (las filas nuevas, con `append`): **1+1+1** en vez de ~9. ⚠️ Se decide con la lectura fresca, no con la caché (dos personas en la misma obra bajaban el %); si la obra no está, no se escribe nada; las reglas de fechas siguen siendo UNA (`_lote_avance`) y el rastro de cambios se mantiene. Heartbeat en un hilo: la página no espera y un fallo de Google no expulsa. «Saving…» en cada guardado del campo. `fixture_guardado` sustituye la auditoría (ninguna prueba escribe en el AuditTrail real). ⚠️ La suite cazó dos fallos míos (un error en español, `t` como variable). hoja real 20/20 (guardar: 1 lectura + 1 escritura en lote + 2 append, 1,7 s en local) · romper_v528 19/19 + control · suite 158 verde |
 | v527 | **El selector de obra, sin el estado en el texto.** La v526 probada EN PRODUCCIÓN: desmarcar lo acreditado devolvió la obra a «Planned» y **siguió elegida**. ⚠️ Quedaba que el desplegable CERRADO no repinta su texto mientras no cambie la obra: decía «— In progress» con la tarjeta en «Planned» — del navegador, invisible para AppTest. Decisión del usuario: la etiqueta pasa a «Nombre (PRJ-…)»; el estado ya está en la tarjeta. `verif_v526` afirma el principio (el texto no depende del estado). 15 comprobaciones · romper_v526 **9/9 + control** (la de v525 re-anclada y una nueva) · suite 157 verde |
 | v526 | **El selector de obra del campo guarda el ID.** Probado v523-v525 EN PRODUCCIÓN (sesión de campo, PRJ-0015): parte del 26 escrito el 29 → créditos con `WorkDate` 26 y etapas con inicio el 26/09; todo funcionó. ⚠️ Salió un fallo: al confirmar, el desplegable volvía a «choose a project» porque guardaba la ETIQUETA, que lleva el estado, y la obra pasaba a «In progress». Ahora guarda el ID y enseña la etiqueta. Y dos detalles: segundos en la hora de un parte de otro día, y «Escribe tu pregunta…» en español sin `t()`. `romper_v526` devuelve el código EXACTO de v525 y se caza; el trinquete de v524 paró la batería nueva por ilegible → el chequeo lee listas (621 anclas). 15 comprobaciones · **8/8 + control** (la primera, el código EXACTO de v525) · suite 157 verde |

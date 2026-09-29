@@ -187,20 +187,34 @@ chk("sin hoja, `borrar_de_obra` no dice que borró nada",
     DL.borrar_de_obra("PRJ-1") == 0)
 
 # ⚠️ Y la pantalla tiene que RESPETARLO: la caja solo se vacía en la rama del éxito.
+# ⚠️ v529 · Actualizado con la razón: hasta v528 se vaciaba con `pop(_k)` dentro de `if ok`,
+# y eso dejaba el texto en el NAVEGADOR (visto en producción; ver `verif_v529`). Ahora el
+# éxito ENCIENDE una marca (`_kv`) y la pasada siguiente asigna "" antes de pintar la caja.
+# El principio no cambia: la marca solo se enciende dentro de `if ok`, y lo único que
+# vacía la caja es esa marca.
 _ui = io.open("core/daily_log_ui.py", encoding="utf-8").read()
 _au = ast.parse(_ui)
 _pops = [n for n in ast.walk(_au)
          if isinstance(n, ast.Call) and getattr(n.func, "attr", "") == "pop"
          and any(getattr(a, "id", "") == "_k" for a in n.args)]
-_dentro = False
+_marcas, _marcas_ok, _vacia, _vacia_por_marca = 0, 0, 0, 0
 for _n in ast.walk(_au):
     if isinstance(_n, ast.If):
         _seg = ast.get_source_segment(_ui, _n) or ""
-        if "session_state.pop(_k" in _seg and _seg.lstrip().startswith("if ok"):
-            _dentro = True
+        _cuerpo = "\n".join(ast.unparse(b) for b in _n.body)
+        if "session_state[_kv] = True" in _cuerpo and _seg.lstrip().startswith("if ok"):
+            _marcas_ok += 1
+        if "session_state[_k] = ''" in _cuerpo and "pop(_kv" in ast.unparse(_n.test):
+            _vacia_por_marca += 1
+for _n in ast.walk(_au):
+    if isinstance(_n, ast.Assign):
+        _s = ast.unparse(_n)
+        _marcas += _s.startswith("st.session_state[_kv] = True")
+        _vacia += _s.startswith("st.session_state[_k] = ")
 chk("la caja de texto SOLO se vacía si la hoja confirmó",
-    len(_pops) == 1 and _dentro,
-    "pops=%d dentro_de_if_ok=%s" % (len(_pops), _dentro))
+    not _pops and _marcas == 1 and _marcas_ok == 1 and _vacia == 1 and _vacia_por_marca == 1,
+    "pop(_k)=%d marcas=%d en_if_ok=%d vaciados=%d por_marca=%d"
+    % (len(_pops), _marcas, _marcas_ok, _vacia, _vacia_por_marca))
 
 # ═════════════════════════════════════════════════════════════════
 sec("4. Lo que NO es un parte se rechaza ANTES de tocar la hoja")

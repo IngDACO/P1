@@ -115,11 +115,13 @@ ROTURAS = [
      'return len({str(r.get("Date", "")) for r in partes(pid) if r.get("Date")})',
      "return len(partes(pid))"),
 
+    # ⚠️ v529 · La caja ya no se vacía con `pop(_k)` (dejaba el texto en el navegador): el
+    # éxito enciende una marca y la pasada siguiente la vacía. Misma rotura, sobre eso.
     ("la caja de texto se vacia ANTES de saber si se guardo (se pierde lo escrito)",
      "core/daily_log_ui.py",
-     "        ok, msg = DL.crear(pid, grupo, txt, usuario, dia=dia)\n        if ok:",
-     "        st.session_state.pop(_k, None)\n"
-     "        ok, msg = DL.crear(pid, grupo, txt, usuario, dia=dia)\n        if ok:"),
+     "            ok, msg = DL.crear(pid, grupo, txt, usuario, dia=dia)\n        if ok:",
+     "            st.session_state[_kv] = True\n"
+     "            ok, msg = DL.crear(pid, grupo, txt, usuario, dia=dia)\n        if ok:"),
 
     ("el admin pasa a poder BORRAR partes ajenos",
      "core/daily_log_ui.py",
