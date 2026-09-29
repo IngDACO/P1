@@ -52,6 +52,40 @@ def _resuelve(p):
     return None
 
 
+# ⚠️ v524 · Lo que un elemento de la tupla VALE sin ejecutar nada. Hasta aqui solo se leian
+# LITERALES, y una tupla con el fichero en una constante (`UI = "core/daily_log_ui.py"`,
+# como escriben romper_v522 y romper_v523) salia con None y se saltaba como «rotura
+# desactivada a proposito» — en SILENCIO. Las 30 de romper_v523 no se vigilaron nunca, y
+# cuatro llevaban muertas desde el cambio siguiente. Es la trampa nº30: el «0 muertas» valia
+# solo para la forma que este chequeo sabia leer.
+_NO_SE = object()
+
+
+def _consts(arbol):
+    """Las constantes de TEXTO de nivel de modulo de una bateria."""
+    out = {}
+    for n in arbol.body:
+        if isinstance(n, ast.Assign) and len(n.targets) == 1 \
+                and isinstance(n.targets[0], ast.Name):
+            v = _valor(n.value, out)
+            if isinstance(v, str):
+                out[n.targets[0].id] = v
+    return out
+
+
+def _valor(nodo, consts):
+    """Literal, constante del modulo o suma de textos; si no, `_NO_SE`."""
+    if isinstance(nodo, ast.Constant):
+        return nodo.value
+    if isinstance(nodo, ast.Name) and nodo.id in consts:
+        return consts[nodo.id]
+    if isinstance(nodo, ast.BinOp) and isinstance(nodo.op, ast.Add):
+        a, b = _valor(nodo.left, consts), _valor(nodo.right, consts)
+        if isinstance(a, str) and isinstance(b, str):
+            return a + b
+    return _NO_SE
+
+
 def _tuplas(arbol):
     """Las tuplas literales asignadas a ROTURAS/CONTROL (o dentro de esa lista).
 
@@ -79,17 +113,23 @@ def _tuplas(arbol):
 print("1. Cada ancla de cada bateria existe todavia en el fichero que nombra")
 _bats = sorted(AQUI.glob("romper_*.py"))
 _rev = _vivas = 0
-_muertas, _sin_leer = [], []
+_muertas, _sin_leer, _ilegibles = [], [], []
+_rev_por_bat = {}
 for b in _bats:
     try:
         arbol = ast.parse(io.open(b, encoding="utf-8").read())
     except SyntaxError as e:
         fallo("%s no compila: %s" % (b.name, e))
         continue
+    _c = _consts(arbol)
     for tup in _tuplas(arbol):
-        vals = [c.value if isinstance(c, ast.Constant) else None for c in tup.elts]
-        # ⚠️ Un None en la tupla = rotura desactivada a proposito (las baterias las
-        # saltan mirando su descripcion). No se cuenta ni como viva ni como muerta.
+        vals = [_valor(c, _c) for c in tup.elts]
+        # ⚠️ Lo que no se puede saber sin ejecutar se CUENTA y se dice, no se salta callado.
+        if any(v is _NO_SE for v in vals):
+            _ilegibles.append("%s:%d" % (b.name, tup.lineno))
+            continue
+        # ⚠️ Un None LITERAL en la tupla = rotura desactivada a proposito (las baterias
+        # las saltan mirando su descripcion). No se cuenta ni como viva ni como muerta.
         if any(v is None for v in vals) or not all(isinstance(v, str) for v in vals):
             continue
         # ⚠️ NO se adivina cual de las cadenas es el ancla por su POSICION. Las 52
@@ -111,6 +151,7 @@ for b in _bats:
             _sin_leer.append("%s:%d" % (b.name, tup.lineno))
             continue
         _rev += 1
+        _rev_por_bat[b.name] = _rev_por_bat.get(b.name, 0) + 1
         _textos = [v for v in vals if not v.endswith(".py") and len(v) >= 10]
         _hay = False
         for _v, _d in _prod:
@@ -130,6 +171,37 @@ for b in _bats:
 # parser que no encontrara ninguna tupla, esto saldria verde sin revisar nada (trampa nº1).
 (ok if len(_bats) >= 40 else fallo)("se encontraron las baterias (%d)" % len(_bats))
 (ok if _rev >= 300 else fallo)("...y se leyeron sus anclas (%d revisadas)" % _rev)
+# ⚠️ v524 · La sonda SABE leer una bateria escrita con constantes (trampa nº12): si no,
+# el arreglo de arriba podria no estar haciendo nada y esto seguiria en verde.
+(ok if _rev_por_bat.get("romper_v523.py", 0) >= 25 else fallo)(
+    "...incluidas las que nombran el fichero con una CONSTANTE (romper_v523: %d)"
+    % _rev_por_bat.get("romper_v523.py", 0))
+# ⚠️ v524 · Lo que sigue sin poder leerse se DECLARA, con el mismo trinquete que las
+# muertas: 128 tuplas de 21 baterias viejas arman el ancla con `%`, `.join()`, listas o
+# subindices, y leerlas exigiria ejecutarlas. Hasta hoy se saltaban CALLADAS; ahora se
+# cuentan en cada pasada, y una bateria NUEVA escrita asi pone esto en rojo — que es lo
+# que habria cazado a romper_v523 el dia que nacio.
+ILEGIBLES = {
+    "romper_v430_reanclado.py": 3, "romper_v437.py": 10, "romper_v438.py": 12,
+    "romper_v447.py": 1, "romper_v448.py": 1, "romper_v459.py": 1, "romper_v482.py": 9,
+    "romper_v483.py": 11, "romper_v484.py": 6, "romper_v486.py": 5, "romper_v487.py": 1,
+    "romper_v488.py": 17, "romper_v490.py": 16, "romper_v501.py": 3, "romper_v502.py": 6,
+    "romper_v505.py": 5, "romper_v506.py": 3, "romper_v509.py": 3, "romper_v510.py": 3,
+    "romper_v512.py": 7, "romper_v514.py": 5,
+}
+_il = {}
+for s in _ilegibles:
+    _il[s.split(":")[0]] = _il.get(s.split(":")[0], 0) + 1
+_il_mas = {b: n for b, n in _il.items() if n > ILEGIBLES.get(b, 0)}
+_il_menos = {b: ILEGIBLES[b] - _il.get(b, 0) for b in ILEGIBLES if _il.get(b, 0) < ILEGIBLES[b]}
+(ok if not _il_mas else fallo)(
+    "ninguna bateria NUEVA se escribe en una forma que no se sabe leer (%d ilegibles, "
+    "%d declaradas)" % (len(_ilegibles), sum(ILEGIBLES.values())))
+for b, n in sorted(_il_mas.items()):
+    print("        %s: %d ilegibles, %d declaradas" % (b, n, ILEGIBLES.get(b, 0)))
+(ok if not _il_menos else fallo)("...y lo declarado sigue exacto (nada leido sin bajarlo)")
+for b, n in sorted(_il_menos.items()):
+    print("        %s: %d menos — bajar ILEGIBLES a %d" % (b, n, _il.get(b, 0)))
 
 # ⚠️ DEUDA DECLARADA, no exceptuada. Al nacer este chequeo (v515) habia 15 anclas
 # muertas repartidas en 11 baterias, TODAS colaterales de la migracion al ingles

@@ -92,6 +92,17 @@ def _asignables(usuario, grupo, pid) -> dict:
     return out
 
 
+def _version_app() -> str:
+    """La versión del CÓDIGO que hizo las propuestas, para el registro de la revisión: el
+    vocabulario cambia de una versión a otra, y un acierto medido sin saber con cuál no
+    dice nada. Import perezoso (`home_ui` es la shell); si falla, vacío — nunca tumba."""
+    try:
+        from core import home_ui
+        return home_ui._version()
+    except Exception:
+        return ""
+
+
 def _prueba(item) -> None:
     """La línea del parte que respalda la propuesta, y sus avisos."""
     _txt = "  ·  ".join("“%s”" % p for p in (item.get("pruebas") or [])[:2])
@@ -104,21 +115,33 @@ def _prueba(item) -> None:
         st.caption("  \n".join([x for x in [_txt] + _extra if x]))
 
 
-def _pintar(p, k, titulo=True) -> list:
-    """Las propuestas de UN destino. Devuelve los `(orden, actividad)` MARCADOS.
+def _pintar(p, k, titulo=True) -> dict:
+    """Las propuestas de UN destino. Devuelve lo MARCADO y, desde v524, lo que se ENSEÑÓ:
+    `{"marcadas": [(orden, actividad)], "ofrecidas": [[tipo, orden, actividad, termino]],
+    "hechas": [(orden, actividad)]}` — el registro que mide el acierto.
+    ⚠️ Se anota AL PINTAR cada casilla, no se deduce después de `p`: lo que se guarda tiene
+    que ser exactamente lo que vio quien confirmó, y dos listas armadas por separado
+    acabarían diciendo cosas distintas (regla v361).
     `titulo=False` cuando encima ya va «→ obra»: repetir el rótulo en cada trozo es ruido."""
-    tick = []
+    tick, ofr, hechas = [], [], []
+
+    def _ya(o):
+        st.markdown(":green[:material/check_circle:] %s · %s"
+                    % (o["actividad"], t("already credited")))
+        hechas.append((o["orden"], o["actividad"]))
+
     if p["actividades"]:
         if titulo:
             st.markdown(t("**Activities your log mentions**"))
         for f in p["actividades"]:
             _et = "#%d · %s" % (f["orden"], f["etapa"])
             if f["hecha"]:
-                st.markdown(":green[:material/check_circle:] %s · %s"
-                            % (f["actividad"], t("already credited")))
-            elif st.checkbox(f["actividad"], key="%s_a_%d_%s" % (k, f["orden"], f["actividad"]),
-                             help=_et):
-                tick.append((f["orden"], f["actividad"]))
+                _ya(f)
+            else:
+                ofr.append(["a", f["orden"], f["actividad"], f.get("termino", "")])
+                if st.checkbox(f["actividad"], key="%s_a_%d_%s" % (k, f["orden"], f["actividad"]),
+                               help=_et):
+                    tick.append((f["orden"], f["actividad"]))
             _prueba(f)
     for e in p["etapas"]:
         with st.expander(t(":material/checklist: Your log names «{e}» — which of these did "
@@ -126,10 +149,11 @@ def _pintar(p, k, titulo=True) -> list:
             _prueba(e)
             for o in e["opciones"]:
                 if o["hecha"]:
-                    st.markdown(":green[:material/check_circle:] %s · %s"
-                                % (o["actividad"], t("already credited")))
-                elif st.checkbox(o["actividad"],
-                                 key="%s_e_%d_%s" % (k, o["orden"], o["actividad"])):
+                    _ya(o)
+                    continue
+                ofr.append(["e", o["orden"], o["actividad"], e["termino"]])
+                if st.checkbox(o["actividad"],
+                               key="%s_e_%d_%s" % (k, o["orden"], o["actividad"])):
                     tick.append((o["orden"], o["actividad"]))
     for q in p["preguntas"]:
         st.markdown(t("**«{x}» can mean several things — which one was it?**", x=q["termino"]))
@@ -137,10 +161,11 @@ def _pintar(p, k, titulo=True) -> list:
         _prueba(q)
         for o in q["opciones"]:
             if o["hecha"]:
-                st.markdown(":green[:material/check_circle:] %s · %s"
-                            % (o["actividad"], t("already credited")))
-            elif st.checkbox("%s  ·  #%d %s" % (o["actividad"], o["orden"], o["etapa"]),
-                             key="%s_q_%s_%d_%s" % (k, q["termino"], o["orden"], o["actividad"])):
+                _ya(o)
+                continue
+            ofr.append(["q", o["orden"], o["actividad"], q["termino"]])
+            if st.checkbox("%s  ·  #%d %s" % (o["actividad"], o["orden"], o["etapa"]),
+                           key="%s_q_%s_%d_%s" % (k, q["termino"], o["orden"], o["actividad"])):
                 tick.append((o["orden"], o["actividad"]))
     if p["pendientes"]:
         with st.expander(t(":material/pending: Pending in your log — not credited ({n})",
@@ -155,7 +180,8 @@ def _pintar(p, k, titulo=True) -> list:
                      x=", ".join(sorted({f["actividad"] for f in p["fuera"]}))))
     # ⚠️ Sin repetidos: la misma actividad puede salir en una etapa Y en una pregunta
     # («Lights»), y marcada en las dos el botón decía «3 marcadas» para 2 créditos.
-    return list(dict.fromkeys(tick))
+    return {"marcadas": list(dict.fromkeys(tick)), "ofrecidas": ofr,
+            "hechas": list(dict.fromkeys(hechas))}
 
 
 def _propuestas(r, pid, grupo, usuario, key_prefix) -> None:
@@ -191,12 +217,15 @@ def _propuestas(r, pid, grupo, usuario, key_prefix) -> None:
         st.markdown(t("##### :material/auto_awesome: What the app read in your log"))
         st.caption(t("Tick only what is true. Nothing is credited until you confirm."))
         destinos = {str(pid): texto}
+        # v524 · Lo que contestó y eligió, para el registro de la revisión.
+        respuestas, elegidas = {}, {}
         if ops is not None:
             sin_resp = []
             for d in dudosos:
                 _r = st.radio(t("In your log, «{x}» is…", x=d), ["lift", "level"],
                               format_func=lambda o: t("a lift") if o == "lift" else t("a level/floor"),
                               index=None, horizontal=True, key="%s_dud_%s" % (kp, d))
+                respuestas[d] = _r
                 if _r == "lift":
                     tambien.append(d)
                 elif _r is None:
@@ -231,6 +260,7 @@ def _propuestas(r, pid, grupo, usuario, key_prefix) -> None:
                         placeholder=t("— choose the job —"),
                         format_func=lambda o: (t("Not one of my jobs") if o == _OTRA
                                                else ops.get(o, o)))
+                    elegidas[a] = asignacion[a]
             if asc2["separar"] or tambien or sin_resp:
                 destinos = PP.reparto(texto, {k: v for k, v in asignacion.items()
                                               if v and v != _OTRA},
@@ -253,14 +283,22 @@ def _propuestas(r, pid, grupo, usuario, key_prefix) -> None:
             por_destino[d] = _pintar(PP.propuestas(txt, plan, SP.acreditado(d)),
                                      "%s_%s" % (kp, d), titulo=not _cab)
 
-        n = sum(len(v) for v in por_destino.values())
+        n = sum(len(v["marcadas"]) for v in por_destino.values())
+
+        def _registro(nada):
+            # ⚠️ Lo que se ENSEÑÓ y lo que se marcó, en la misma escritura que la revisión:
+            # sin esto solo quedaba lo aceptado, y el acierto no se puede medir (v524).
+            return PP.registro(por_destino, respuestas, elegidas, app=_version_app(),
+                               nada=nada)
+
         c1, c2 = st.columns([3, 2])
         if c1.button(t(":material/done_all: Confirm the {n} ticked", n=n) if n
                      else t(":material/done_all: Confirm"), key="%s_ok" % kp,
                      type="primary", disabled=(n == 0), width="stretch"):
             _mias = _asignables(usuario, grupo, pid)
             errores = []
-            for d, ticks in por_destino.items():
+            for d, res in por_destino.items():
+                ticks = res["marcadas"]
                 if not ticks:
                     continue
                 # ⚠️ Se vuelve a comprobar al escribir: solo a obras SUYAS.
@@ -275,13 +313,13 @@ def _propuestas(r, pid, grupo, usuario, key_prefix) -> None:
                 # ⚠️ No se marca revisado: si algo falló, la tarjeta tiene que seguir ahí.
                 st.error(" · ".join(str(e) for e in errores))
             else:
-                ok, msg = DL.marcar_revisado(lid, usuario)
+                ok, msg = DL.marcar_revisado(lid, usuario, propuestas=_registro(False))
                 (flash.exito if ok else flash.error)(
                     t("Credited {n} activities from your log.", n=n) if ok else msg)
                 st.rerun()
         if c2.button(t("Nothing to credit"), key="%s_no" % kp, type="tertiary",
                      width="stretch"):
-            ok, msg = DL.marcar_revisado(lid, usuario)
+            ok, msg = DL.marcar_revisado(lid, usuario, propuestas=_registro(True))
             (flash.exito if ok else flash.error)(msg)
             st.rerun()
 

@@ -107,7 +107,9 @@ chk("...y no se confunde con lo marcado a mano", SP.PARTE != SP.MANUAL)
 _V516 = ["ID", "Group", "ProjectID", "Date", "Author", "Text", "Source", "Created"]
 chk("las 8 columnas de v516 siguen en su sitio (v363)", DL.HEADERS[:8] == _V516,
     DL.HEADERS[:8])
-chk("...y las dos nuevas van al FINAL", DL.HEADERS[8:] == ["Reviewed", "ReviewedBy"],
+# ⚠️ v524 · `[8:10]` y no `[8:]`: `Proposals` va DETRÁS (la vigila verif_v524). Lo que
+# importa aquí es el principio —las de v523 van tras las de v516—, no que sean las últimas.
+chk("...y las dos nuevas van detrás", DL.HEADERS[8:10] == ["Reviewed", "ReviewedBy"],
     DL.HEADERS[8:])
 # ⚠️ El nombre de la actividad basta para saber su etapa SOLO si no se repite en el plan.
 for _tipo in P.TIPOS:
@@ -365,7 +367,7 @@ try:
     chk("`crear` escribe una fila tan larga como la cabecera (v363)",
         _ok and len(h.filas[-1]) == len(DL.HEADERS), (len(h.filas[-1]), len(DL.HEADERS)))
     chk("...con la revisión VACÍA (un parte nuevo está sin revisar)",
-        h.filas[-1][8:] == ["", ""], h.filas[-1][8:])
+        h.filas[-1][8:10] == ["", ""], h.filas[-1][8:])
     chk("`revisado` dice que no", DL.revisado(dict(zip(DL.HEADERS, h.filas[-1]))) is False)
 
     _ok, _m = DL.marcar_revisado("LOG-0002", "juan")
@@ -374,11 +376,13 @@ try:
     chk("su autor sí", _ok, _m)
     _l = h.lotes[-1] if h.lotes else []
     _rng = [x["range"] for x in _l]
+    # ⚠️ v524 · `[:2]`: la misma escritura lleva ahora también el registro (`Proposals`,
+    # vigilado en verif_v524). Aquí se mira lo de v523: fecha y autor, en su sitio.
     chk("...escribe `Reviewed` y `ReviewedBy` en SUS columnas y en SU fila",
-        _rng == ["%s3" % col_letter(DL.HEADERS.index("Reviewed") + 1),
-                 "%s3" % col_letter(DL.HEADERS.index("ReviewedBy") + 1)], _rng)
+        _rng[:2] == ["%s3" % col_letter(DL.HEADERS.index("Reviewed") + 1),
+                     "%s3" % col_letter(DL.HEADERS.index("ReviewedBy") + 1)], _rng)
     chk("...con la hora en segundos y quién",
-        [x["values"] for x in _l] == [[["2026-09-29 17:05:09"]], [["ana"]]],
+        [x["values"] for x in _l][:2] == [[["2026-09-29 17:05:09"]], [["ana"]]],
         [x["values"] for x in _l])
     chk("`revisado` lo reconoce", DL.revisado({"Reviewed": "2026-09-29 17:05:09"}) is True)
     _ok, _m = DL.marcar_revisado("LOG-9999", "ana")
@@ -511,8 +515,10 @@ def _acreditar(pid, grupo, prj, creditos, quien="", origen=SP.MANUAL):
     return True, "ok"
 
 
-def _revisar(lid, quien):
+def _revisar(lid, quien, propuestas=""):
+    # v524 · la pantalla pasa también el registro de lo ofrecido y lo marcado.
     ss["_rev"][lid] = quien
+    ss.setdefault("_reg", {})[lid] = propuestas
     return True, "Reviewed."
 
 

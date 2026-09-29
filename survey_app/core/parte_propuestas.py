@@ -26,12 +26,28 @@ Decisión del usuario: se PROPONE separar. `reparto` parte la nota por ascensor 
 que el usuario haya asignado; lo que no asignó no se propone en ningún sitio. ⚠️ Y
 conserva la cabecera «Pendings»: separar sin ella convertiría lo pendiente en propuesta.
 
+## Lo que se enseñó y lo que se marcó (v524)
+
+`registro` guarda, al revisar el parte, lo que la pantalla OFRECIÓ y lo que el usuario
+MARCÓ; `acierto` lo cuenta. ⚠️ Sin esto solo se sabía lo aceptado (StageProgress con origen
+`log`): la mitad de la cuenta. Y no se puede reconstruir después — el vocabulario cambia y
+lo ya acreditado también —, así que cada parte revisado sin registro es un dato perdido.
+
 Módulo HOJA: solo `vocabulario` y `stages`, sin Streamlit ni Sheets.
 """
+import json
+
 from core import vocabulario as V
 
 # El `Source` en StageProgress de lo acreditado desde un parte (lo manual es «manual»).
 ORIGEN = "log"
+
+# v524 · Formato del registro de revisión (columna `Proposals` de DailyLogs). Si cambia su
+# forma, se sube: `acierto` tiene que poder leer los viejos.
+REGISTRO_V = 1
+# ⚠️ Una celda de Sheets aguanta 50.000 caracteres: por encima, la escritura FALLA y el parte
+# se quedaría sin revisar. Se recorta antes, y el recorte queda dicho en el propio registro.
+_TOPE_REGISTRO = 45000
 
 
 def _indice(plan) -> dict:
@@ -92,9 +108,12 @@ def propuestas(texto, plan, mapa=None) -> dict:
             _f["aviso"] = _f["aviso"] or c.get("aviso", "")
             continue
         o, et, cuenta = idx[n]
+        # `termino` (v524): qué palabra del vocabulario la trajo — lo que el registro guarda
+        # para saber QUÉ término falla cuando una propuesta se rechaza.
         fila = {"orden": o, "etapa": et, "actividad": n, "cuenta": cuenta,
                 "hecha": _hecha(o, n), "pruebas": _pruebas(ls),
-                "aviso": c.get("aviso", ""), "fuente": c.get("fuente", "")}
+                "aviso": c.get("aviso", ""), "fuente": c.get("fuente", ""),
+                "termino": c.get("termino", "")}
         por_nombre[n] = fila
         acts.append(fila)
     _ya = set(por_nombre)
@@ -234,3 +253,85 @@ def reparto(texto, asignacion, tambien=(), sin_responder=()) -> dict:
             if l not in out.setdefault(d, []):
                 out[d].append(l)
     return {d: "\n".join(ls) for d, ls in out.items()}
+
+
+# ═════════════════════════════════════════════════════════════════
+# v524 · El registro de la revisión: lo ofrecido y lo marcado
+# ═════════════════════════════════════════════════════════════════
+def registro(por_destino, respuestas=None, ascensores=None, app="", nada=False) -> str:
+    """Lo que la pantalla ENSEÑÓ y lo que el usuario MARCÓ al revisar un parte, en JSON.
+
+    `por_destino` = `{obra: {"ofrecidas": [[tipo, orden, actividad, termino]],
+    "marcadas": [(orden, actividad)], "hechas": [(orden, actividad)]}}` — lo que anota
+    `daily_log_ui._pintar` al pintar cada casilla. `tipo`: «a» actividad propuesta suelta,
+    «e» opción de la lista de una etapa, «q» opción de una pregunta.
+    `respuestas` = `{«L2»: "lift" | "level" | None}`; `ascensores` = `{«3»: obra | None}`.
+    `nada=True` = pulsó «Nothing to credit»: lo que tuviera marcado NO se acreditó, así que
+    no se registra como aceptado.
+    """
+    dest = {}
+    for d, x in (por_destino or {}).items():
+        x = x or {}
+        dest[str(d)] = {
+            "ofrecidas": [list(o) for o in x.get("ofrecidas") or []],
+            "marcadas": [] if nada else [[int(o), str(a)] for o, a in x.get("marcadas") or []],
+            "hechas": [[int(o), str(a)] for o, a in x.get("hechas") or []],
+        }
+    out = {"v": REGISTRO_V, "app": str(app or ""), "nada": bool(nada), "destinos": dest,
+           "dudosos": dict(respuestas or {}), "ascensores": dict(ascensores or {})}
+
+    def _js(o):
+        return json.dumps(o, ensure_ascii=False, separators=(",", ":"))
+
+    s = _js(out)
+    if len(s) > _TOPE_REGISTRO:
+        # Primero sin los términos, que es lo más largo; lo que se ofreció y lo que se
+        # marcó sigue entero, que es lo que mide `acierto`.
+        for x in dest.values():
+            x["ofrecidas"] = [o[:3] for o in x["ofrecidas"]]
+        out["recortado"] = "terminos"
+        s = _js(out)
+    if len(s) > _TOPE_REGISTRO:
+        out["destinos"] = {d: {k: len(v) for k, v in x.items()} for d, x in dest.items()}
+        out["recortado"] = "cuentas"
+        s = _js(out)
+    return s
+
+
+def leer_registro(s) -> dict:
+    """El registro de una revisión, o `{}` si no hay o no se entiende (una celda editada a
+    mano no puede tumbar a quien mide)."""
+    try:
+        d = json.loads(s) if isinstance(s, str) and s.strip() else {}
+    except ValueError:
+        return {}
+    return d if isinstance(d, dict) else {}
+
+
+def acierto(registros) -> dict:
+    """Cuánto se acepta de lo que se propone, sobre registros de partes revisados.
+
+    `{"partes", "nada", "a": {"ofrecidas", "marcadas"}, "e": {...}, "q": {...}}`. ⚠️ Los
+    tres tipos se cuentan APARTE porque no significan lo mismo: una actividad propuesta
+    suelta («a») es una afirmación de la app, y rechazarla es un error suyo; en la lista de
+    una etapa («e») o en las opciones de una pregunta («q») casi todo queda sin marcar POR
+    DISEÑO, y juntarlos hundiría la cifra sin que la app hubiera fallado en nada.
+    """
+    out = {t: {"ofrecidas": 0, "marcadas": 0} for t in ("a", "e", "q")}
+    out["partes"] = out["nada"] = 0
+    for r in registros or []:
+        d = r if isinstance(r, dict) else leer_registro(r)
+        if not d:
+            continue
+        out["partes"] += 1
+        out["nada"] += bool(d.get("nada"))
+        for x in (d.get("destinos") or {}).values():
+            if not isinstance(x, dict) or not isinstance(x.get("ofrecidas"), list):
+                continue                          # recortado a cuentas: no se puede cruzar
+            marc = {(int(o), str(a)) for o, a in x.get("marcadas") or []}
+            for of in x["ofrecidas"]:
+                if not isinstance(of, list) or len(of) < 3 or of[0] not in ("a", "e", "q"):
+                    continue
+                out[of[0]]["ofrecidas"] += 1
+                out[of[0]]["marcadas"] += (int(of[1]), str(of[2])) in marc
+    return out

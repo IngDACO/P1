@@ -48,9 +48,11 @@ ROTURAS = [
     # ⚠️ v523 · Y murio OTRA vez, igual que las dos de abajo: la fila lleva ahora
     # `Reviewed`/`ReviewedBy` vacias al final, y el admin le pasa `extra=` a `_linea`. La
     # rotura es la MISMA; cambia solo el texto donde se ancla (lo cazo check_anclas_roturas).
+    # ⚠️ v524 · Y una TERCERA (`Proposals`). Ahora se ancla en `Created` seguido de la
+    # PRIMERA celda vacia: no depende de cuantas columnas vengan detras, y no vuelve a morir.
     ("se guarda solo el DIA, sin la hora (dos partes del mismo dia dejan de ordenarse)",
-     "core/daily_log.py", '_hoy.strftime("%Y-%m-%d %H:%M:%S"), "", ""]',
-     '_hoy.strftime("%Y-%m-%d"), "", ""]'),
+     "core/daily_log.py", '_hoy.strftime("%Y-%m-%d %H:%M:%S"), ""',
+     '_hoy.strftime("%Y-%m-%d"), ""'),
 
     ("un fallo de la hoja se cuenta como EXITO (el texto se perderia al vaciarse la caja)",
      "core/daily_log.py",
@@ -100,8 +102,8 @@ ROTURAS = [
     # desempate vuelve a mandar el orden de la hoja (`sorted` es estable). Arreglar una
     # sola dejaba el fallo vivo la mitad de las veces.
     ("`Created` vuelve a guardarse sin SEGUNDOS (dos partes del mismo minuto empatan)",
-     "core/daily_log.py", '_hoy.strftime("%Y-%m-%d %H:%M:%S"), "", ""]',
-     '_hoy.strftime("%Y-%m-%d %H:%M"), "", ""]'),
+     "core/daily_log.py", '_hoy.strftime("%Y-%m-%d %H:%M:%S"), ""',
+     '_hoy.strftime("%Y-%m-%d %H:%M"), ""'),
 
     ("se cae el ID de desempate (el mismo segundo vuelve a salir al reves)",
      "core/daily_log.py",

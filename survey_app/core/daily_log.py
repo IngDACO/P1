@@ -61,8 +61,11 @@ SHEET = "DailyLogs"
 # que la app sacó del parte — confirmando lo que era, o diciendo que nada. Sin esta marca
 # la pantalla volvería a preguntar lo mismo cada vez que se abre; y qué se acreditó NO se
 # guarda aquí: vive en StageProgress con el ID del parte en la nota (una sola verdad).
+# ⚠️ v524 · `Proposals` AL FINAL: lo que la pantalla OFRECIÓ y lo que se MARCÓ al revisar
+# (`parte_propuestas.registro`, JSON). Lo aceptado ya estaba en StageProgress; lo que se
+# dejó sin marcar no estaba en ningún sitio, y sin eso no se puede medir el acierto.
 HEADERS = ["ID", "Group", "ProjectID", "Date", "Author", "Text", "Source", "Created",
-           "Reviewed", "ReviewedBy"]
+           "Reviewed", "ReviewedBy", "Proposals"]
 
 # De dónde salió el parte. Hoy solo escrito a mano; cuando el intérprete proponga y
 # alguien acepte, poder distinguirlos es lo que permitirá medir si acierta.
@@ -213,10 +216,11 @@ def crear(pid, grupo, texto, autor, dia=None) -> tuple:
         # escritos en el mismo minuto empataban y salían en el orden equivocado. Es una
         # hoja nueva, así que no hay histórico que migrar por cambiar el formato — en
         # cualquier otra columna de fecha esto no sería gratis.
-        # ⚠️ La fila es POSICIONAL: `Reviewed` y `ReviewedBy` nacen vacías, pero tienen que
-        # ir, o la fila queda más corta que la cabecera (el fallo de v363).
+        # ⚠️ La fila es POSICIONAL y va ENTERA: `Reviewed`, `ReviewedBy` y `Proposals` nacen
+        # vacías. (Una fila corta no desplazaría nada —`append_row` deja la cola vacía—,
+        # pero entera se comprueba contra la cabecera igual que las demás, v363.)
         w.append_row([lid, str(grupo), str(pid), _dia, str(autor), _txt, MANUAL,
-                      _hoy.strftime("%Y-%m-%d %H:%M:%S"), "", ""],
+                      _hoy.strftime("%Y-%m-%d %H:%M:%S"), "", "", ""],
                      value_input_option="RAW")
     except Exception as e:
         logger.warning("daily_log.crear(%s): %s", pid, e)
@@ -267,9 +271,12 @@ def revisado(r) -> bool:
     return bool(str((r or {}).get("Reviewed", "") or "").strip())
 
 
-def marcar_revisado(log_id, quien) -> tuple:
+def marcar_revisado(log_id, quien, propuestas="") -> tuple:
     """El autor revisó las propuestas de su parte (confirmó lo que era, o que nada).
 
+    `propuestas` (v524) = el registro de lo ofrecido y lo marcado
+    (`parte_propuestas.registro`). Va en la MISMA escritura que la revisión: ni una
+    llamada más contra la cuota, y no puede quedar un parte revisado sin su registro.
     ⚠️ Solo el AUTOR: el parte es de quien lo escribió (v516), y las propuestas salen de
     SUS palabras — quien no estuvo no sabe si «installed headers» fue en este ascensor.
     ⚠️ La fila se busca leyendo FRESCO: decidir dónde escribir con una caché es como se
@@ -295,6 +302,8 @@ def marcar_revisado(log_id, quien) -> tuple:
                 {"range": "%s%d" % (col_letter(_COL["Reviewed"]), i + 2), "values": [[_ahora]]},
                 {"range": "%s%d" % (col_letter(_COL["ReviewedBy"]), i + 2),
                  "values": [[str(quien)]]},
+                {"range": "%s%d" % (col_letter(_COL["Proposals"]), i + 2),
+                 "values": [[str(propuestas or "")]]},
             ], value_input_option="RAW")
         except Exception as e:
             logger.warning("daily_log.marcar_revisado(%s): %s", log_id, e)

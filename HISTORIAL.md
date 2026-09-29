@@ -10,6 +10,59 @@ ventana de contexto. Contenido: 258 secciones detalladas + el índice de 440 ver
 
 ---
 
+## GUARDAR LO QUE SE PROPUSO Y SE DEJÓ SIN MARCAR (v524)
+
+Decisión del usuario (29/09/2026), de las tres cosas que v523 dejó sin hacer: **primero
+esta** («Dale con 3 y luego 1A, 2B»). Hasta v523 solo quedaba lo ACEPTADO (StageProgress
+con origen `log`); lo que la app ofreció y el trabajador dejó sin marcar no estaba en ningún
+sitio. Sin eso, «de cada 10 cosas que propone, confirman X» —el número con el que el usuario
+decidirá cuándo darle más autonomía— no se puede calcular. ⚠️ Y **no se puede reconstruir
+después**: el vocabulario cambia y lo ya acreditado también. `DailyLogs` estaba vacía, así
+que se captura desde el primer parte real.
+
+### Qué se guarda
+`DailyLogs` gana `Proposals` **al final** (v363). Al revisar —«Confirm» o «Nothing to
+credit»— y **en la MISMA escritura** que la revisión (ni una llamada más contra la cuota, y
+ningún parte revisado sin registro), `parte_propuestas.registro` guarda en JSON: cada
+casilla OFRECIDA con su tipo (`a` propuesta suelta, `e` opción de la lista de una etapa, `q`
+opción de una pregunta), su etapa, la actividad y **el término del vocabulario que la
+trajo**; lo MARCADO; lo que ya estaba hecho; lo que contestó de «L2»; la obra elegida para
+cada ascensor; y la **versión del código** que propuso. ⚠️ «Nothing to credit» se guarda
+como NADA aceptado aunque hubiera casillas marcadas: no se acreditaron.
+
+⚠️ `_pintar` anota cada casilla **AL PINTARLA**, no se deduce después: lo guardado tiene
+que ser exactamente lo que vio quien confirmó (regla v361). `verif_v524` lo comprueba
+ejecutando la tarjeta con AppTest y comparando el registro con las casillas pintadas.
+
+### `acierto`, por TIPO
+Una propuesta suelta rechazada es un error de la app; una opción de la lista de una etapa o
+de una pregunta queda sin marcar POR DISEÑO. Juntarlas hundiría la cifra sin que la app
+hubiera fallado, así que se cuentan aparte. Tope de la celda (50.000 caracteres): primero
+se quitan los términos, después solo cuentas, y el recorte queda dicho en el registro.
+
+### ⚠️ El hueco que destapó: `check_anclas_roturas` no leía las constantes
+Al cambiar `_pintar` murieron 4 anclas de `romper_v523` — y **nadie avisó**. El chequeo
+leía solo LITERALES: una tupla con el fichero en una constante (`UI = "core/…"`, como
+escriben `romper_v522` y `romper_v523`) salía con `None` y se saltaba como «rotura
+desactivada a propósito», **en silencio**. Trampa nº30: su «0 muertas» valía solo para la
+forma que sabía leer. Ahora resuelve las constantes del módulo y las sumas de textos (**442
+→ 500** anclas leídas), y lo que sigue sin poder leerse —128 tuplas de 21 baterías viejas
+que arman el ancla con `%`, `.join()` o listas— se **declara** con el mismo trinquete que las
+muertas: se ve en cada pasada, y una batería NUEVA escrita así pone el chequeo en rojo.
+Las anclas de `romper_v516` pasan a una forma que no muere con cada columna nueva (tercera
+vez que morían por lo mismo).
+
+### ⚠️ Y un paso en vacío mío
+El «registro enorme» de la prueba era tan grande que saltaba directo a «solo cuentas»: el
+primer recorte (quitar términos) no se ejercitaba nunca. Redimensionado, con un control de
+que sin recortar no cabría.
+
+### Lo que NO hace todavía
+No hay pantalla que enseñe el acierto: los datos empiezan a acumularse ahora, y con pocos
+partes la cifra no diría nada.
+
+41 comprobaciones · **19/19 + control** · romper_v523 30/30 y romper_v516 20/20 re-corridas · hoja real 13/13 · suite 155 verde
+
 ## LA PANTALLA DONDE SE CONFIRMA LO QUE LA APP LEYÓ EN EL PARTE (v523)
 
 La regla del usuario (28/09/2026) hecha interfaz: «**la app no asume nada sin consultar**;
@@ -12348,7 +12401,7 @@ comprueba lo que dice**.
 
 ---
 
-## Versiones desplegadas (v523 = actual)
+## Versiones desplegadas (v524 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -12356,6 +12409,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v524 | **Guardar lo que se propuso y se dejó sin marcar.** Decisión del usuario: primero esto, porque cada parte revisado sin registro es un dato perdido para siempre (no se puede reconstruir). `DailyLogs.Proposals` al final: lo OFRECIDO (tipo, etapa, actividad y el término que lo trajo), lo MARCADO, lo hecho, las respuestas de «L2», las obras elegidas y la versión — en la MISMA escritura que la revisión. «Nothing to credit» = nada aceptado. `acierto` cuenta por TIPO (una opción de lista sin marcar no es un error). ⚠️ Destapó que `check_anclas_roturas` saltaba EN SILENCIO las roturas con el fichero en una constante: 4 anclas muertas de romper_v523 sin aviso; ahora lee 500 (antes 442) y declara las 128 ilegibles. 41 comprobaciones · **19/19 + control** · romper_v523 30/30 y romper_v516 20/20 re-corridas · hoja real 13/13 · suite 155 verde |
 | v523 | **La pantalla donde se confirma lo que la app leyó en el parte.** La regla del usuario hecha interfaz: debajo de cada parte propio y sin revisar, actividades con la LÍNEA que las respalda, la etapa como lista, las preguntas y lo pendiente sin casilla. ⚠️ **Todo desmarcado**; solo lo marcado se acredita, con origen `log` y el ID del parte (lo que permitirá medir el acierto). Varios ascensores: obra por ascensor, sin nada elegido; «L2» se pregunta y ⚠️ lo que va con él (también debajo, si es cabecera) no va a ninguna obra hasta contestar; y no se pregunta lo que no cambia nada. ⚠️ Mirar la pantalla a ancho de móvil destapó 4 fallos que los tests no veían (el «L2» asumido como piso, el parte en un párrafo, «3 marcadas» para 2 créditos, destinos sin nombre) y releer el diff, 3 más. `verif_v523` ejecuta la tarjeta con AppTest; ⚠️ dos pasos en vacío míos arreglados. 111 comprobaciones · **30/30 + control** · romper_v516 20/20 sobre el código nuevo · hoja real 27/27 · suite 154 verde |
 | v522 | **El vocabulario contra 1070 partes REALES de Simpro: proponer, no asumir.** Regla del usuario: la app no asume — propone y él confirma. La oración manda: lo de «Issues/Pendings» se aparta (**25 → 0** propuestas), lo que se lleva no se monta, y un verbo de QUITAR nunca acredita montar (**0 de 227** oraciones). Frase de etapa → la etapa entera (decisión 1); varios ascensores → proponer separar, «L3» se pregunta (decisión 2). ⚠️ Medido con 30 notas **reservadas y etiquetadas antes** de tocar nada: **8 → 22 de 40**, errores seguros **3 → 1**; corpus entero 28,3% → 39,2%. ⚠️ Dos métricas salieron peor y eran del MÉTODO (línea a línea). OCR de Windows validado 0,997; los partes, fuera del repo. 62 comprobaciones · 17/17 + control · romper_v517 28/28 sobre el código nuevo · suite 153 verde (152 + check_anclas_roturas re-corrido tras actualizar romper_v517) |
 | v521 | **La tarjeta «Models» cuenta modelos, no filas del catálogo.** Tras cargar la biblioteca decía «Models 2» con CERO modelos: el catálogo tenía «Schindler» y «Sematic» sin modelo —un estado legítimo— y `resumen()` contaba filas. ⚠️ Se contradecía con el desplegable, que ya descartaba el vacío; ahora cuentan con el MISMO criterio (sin repetidos ni desactivados) y no pueden volver a discrepar. Hoja real: **2 → 0**. 11 comprobaciones · **4/4 + control** · suite 152 verde |

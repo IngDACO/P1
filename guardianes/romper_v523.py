@@ -38,13 +38,17 @@ def corre(g=G):
 
 ROTURAS = [
     # ── (a) nada se acredita sin que el usuario lo marque ────────────────────
+    # ⚠️ v524 · `_pintar` anota ahora cada casilla AL PINTARLA (el registro de lo ofrecido),
+    # asi que `elif st.checkbox` paso a `if st.checkbox` en un bloque propio. Mismas roturas;
+    # sus anclas murieron y NADIE avisaba: check_anclas_roturas no leia las tuplas con el
+    # fichero en una constante (UI, PPR...). Arreglado alli tambien.
     ("las casillas nacen MARCADAS (confirmar de un toque acreditaria todo lo leido)",
-     UI, 'elif st.checkbox(f["actividad"], key=',
-     'elif st.checkbox(f["actividad"], value=True, key='),
+     UI, 'if st.checkbox(f["actividad"], key=',
+     'if st.checkbox(f["actividad"], value=True, key='),
 
     ("se acredita lo NO marcado de la lista de una etapa (la casilla al reves)",
-     UI, '                elif st.checkbox(o["actividad"],\n',
-     '                elif not st.checkbox(o["actividad"],\n'),
+     UI, '                if st.checkbox(o["actividad"],\n',
+     '                if not st.checkbox(o["actividad"],\n'),
 
     ("«Confirmar» se puede pulsar sin nada marcado",
      UI, 'type="primary", disabled=(n == 0), width="stretch"):',
@@ -80,7 +84,7 @@ ROTURAS = [
      'if str(r.get("Note", "")) == str(log_id)'),
 
     ("el contador cuenta dos veces lo marcado en dos sitios («3 marcadas» para 2)",
-     UI, "    return list(dict.fromkeys(tick))", "    return tick"),
+     UI, 'return {"marcadas": list(dict.fromkeys(tick)),', 'return {"marcadas": tick,'),
 
     # ── (c) varios ascensores: solo lo que el usuario asigno ─────────────────
     # ⚠️ Esta ancla murio el mismo dia: `reparto` paso de mirar solo la linea que NOMBRA
@@ -148,7 +152,9 @@ ROTURAS = [
      DLG, 'return bool(str((r or {}).get("Reviewed", "") or "").strip())', "return False"),
 
     ("la fila nueva vuelve a salir mas CORTA que la cabecera (v363)",
-     DLG, '_hoy.strftime("%Y-%m-%d %H:%M:%S"), "", ""]', '_hoy.strftime("%Y-%m-%d %H:%M:%S")]'),
+     # ⚠️ Esta SÍ tiene que cambiar con cada columna: la rotura ES la fila una más corta.
+     DLG, '_hoy.strftime("%Y-%m-%d %H:%M:%S"), "", "", ""]',
+     '_hoy.strftime("%Y-%m-%d %H:%M:%S"), "", ""]'),
 
     ("la tarjeta sale tambien en los partes AJENOS (confirmar por quien no estuvo)",
      UI, "if (_mio and not DL.revisado(r)) else", "if (not DL.revisado(r)) else"),
