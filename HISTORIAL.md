@@ -10,6 +10,43 @@ ventana de contexto. Contenido: 258 secciones detalladas + el índice de 440 ver
 
 ---
 
+## EL SELECTOR DE OBRA DEL CAMPO GUARDA EL ID (v526)
+
+El usuario pidió probar v523-v525 y **la prueba se hizo EN PRODUCCIÓN**, con la sesión de
+campo que dejó abierta (`campo000`, PRJ-0015): un parte con fecha del 26 escrito el 29, la
+tarjeta, tres marcas de dos actividades («Confirm the 2 ticked») y confirmar. En la hoja
+real, leído por el camino de solo lectura: créditos con origen `log`, `WorkDate` del 26,
+etapas 7 y 11 con inicio el **26/09** (no el 29), registro de lo ofrecido (14) y lo
+marcado (2), obra de 0% a 2,1%. Todo lo de v523-v525 funcionó.
+
+### ⚠️ El fallo que salió: al confirmar, el trabajador perdía la obra
+El desplegable «Assigned project» guardaba la ETIQUETA —`«Nombre (PRJ-0015) — Planned»`—, y
+la etiqueta lleva el ESTADO. Al acreditar lo primero la obra pasa a «In progress», la
+etiqueta guardada deja de existir y Streamlit tira la selección: se volvía a «— choose a
+project —». Pasaba igual al marcar a mano en «Progress» y al completar una obra; no era de
+v523-v525, pero confirmar un parte lo hacía pasar en CADA primera confirmación. Ahora el
+desplegable guarda el **ID** (que no cambia nunca, regla «el ID es la identidad») y enseña la
+etiqueta con `format_func`. Un valor viejo (la etiqueta) se rescata por su ID; una obra que
+ya no es suya vuelve a «elegir» en vez de quedar fantasma. Solo un sitio escribía esa clave.
+
+### Y dos detalles vistos en la misma prueba
+- Un parte de OTRO día enseñaba cuándo se escribió con segundos («2026-09-29 16:35:28").
+- La caja del asistente del campo decía **«Escribe tu pregunta…»**: en español y sin `t()`.
+  Ningún barrido de i18n miraba `st.chat_input` — la trampa nº30 otra vez. Buscados sus
+  gemelos (`chat_input`/`placeholder=` con literal): solo quedan dos URLs de ejemplo.
+
+### Los guardianes
+`verif_v526` EJECUTA la pantalla del campo con AppTest y reproduce el fallo: elige una obra,
+le cambia el estado a «In progress» y luego a «Completed», y la obra tiene que seguir
+elegida. ⚠️ `romper_v526` devuelve el selector al código **EXACTO** de v525 (cuatro trozos a
+la vez) y el guardián lo caza: prueba de que ve el fallo real, no una variante.
+⚠️ Y el trinquete de v524 hizo su trabajo: la batería nueva nació con cada rotura como LISTA
+de cambios, `check_anclas_roturas` no sabía leerla y **se puso en rojo** en vez de callarse.
+Ahora lee listas: **621** anclas revisadas (579 antes), y las 33 de `romper_v488/v490`
+pasan a vigilarse (ilegibles 86 → 53, ninguna muerta escondida esta vez).
+
+15 comprobaciones · **8/8 + control** (la primera, el código EXACTO de v525) · suite 157 verde
+
 ## LA FECHA DEL PARTE Y LAS LÍNEAS SIN ASCENSOR (v525)
 
 Las otras dos decisiones del usuario (29/09/2026) sobre lo que v523 dejó sin hacer: **1A**
@@ -12450,7 +12487,7 @@ comprueba lo que dice**.
 
 ---
 
-## Versiones desplegadas (v525 = actual)
+## Versiones desplegadas (v526 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -12458,6 +12495,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v526 | **El selector de obra del campo guarda el ID.** Probado v523-v525 EN PRODUCCIÓN (sesión de campo, PRJ-0015): parte del 26 escrito el 29 → créditos con `WorkDate` 26 y etapas con inicio el 26/09; todo funcionó. ⚠️ Salió un fallo: al confirmar, el desplegable volvía a «choose a project» porque guardaba la ETIQUETA, que lleva el estado, y la obra pasaba a «In progress». Ahora guarda el ID y enseña la etiqueta. Y dos detalles: segundos en la hora de un parte de otro día, y «Escribe tu pregunta…» en español sin `t()`. `romper_v526` devuelve el código EXACTO de v525 y se caza; el trinquete de v524 paró la batería nueva por ilegible → el chequeo lee listas (621 anclas). 15 comprobaciones · **8/8 + control** (la primera, el código EXACTO de v525) · suite 157 verde |
 | v525 | **La fecha del parte (1A) y las líneas sin ascensor (2B)**, decisiones del usuario. Cada crédito guarda el día del TRABAJO (`StageProgress.WorkDate`, al final) y las fechas reales de la etapa salen de TODOS sus créditos: inicio el primero, fin el último — un parte del lunes confirmado el jueves fecha el lunes; ⚠️ cambia el historial (curva S real), no el %, ni el SPI, ni lo que se cobra. En notas de varios ascensores, las líneas sin ascensor que proponen algo llevan su propio selector, sin nada elegido. ⚠️ Destapó un ancla de `romper_v514` MUERTA desde v516, escondida entre las ilegibles (`N = chr(10)`): el chequeo lee ahora `chr()` → 42 tuplas más vigiladas (128 → 86 ilegibles). 26 comprobaciones · **16/16 + control** · re-corridas sobre el código nuevo: romper_v514 15/15, v519 13/13, v523 30/30, v524 19/19 · hoja real 14/14 · suite 156 verde |
 | v524 | **Guardar lo que se propuso y se dejó sin marcar.** Decisión del usuario: primero esto, porque cada parte revisado sin registro es un dato perdido para siempre (no se puede reconstruir). `DailyLogs.Proposals` al final: lo OFRECIDO (tipo, etapa, actividad y el término que lo trajo), lo MARCADO, lo hecho, las respuestas de «L2», las obras elegidas y la versión — en la MISMA escritura que la revisión. «Nothing to credit» = nada aceptado. `acierto` cuenta por TIPO (una opción de lista sin marcar no es un error). ⚠️ Destapó que `check_anclas_roturas` saltaba EN SILENCIO las roturas con el fichero en una constante: 4 anclas muertas de romper_v523 sin aviso; ahora lee 500 (antes 442) y declara las 128 ilegibles. 41 comprobaciones · **19/19 + control** · romper_v523 30/30 y romper_v516 20/20 re-corridas · hoja real 13/13 · suite 155 verde |
 | v523 | **La pantalla donde se confirma lo que la app leyó en el parte.** La regla del usuario hecha interfaz: debajo de cada parte propio y sin revisar, actividades con la LÍNEA que las respalda, la etapa como lista, las preguntas y lo pendiente sin casilla. ⚠️ **Todo desmarcado**; solo lo marcado se acredita, con origen `log` y el ID del parte (lo que permitirá medir el acierto). Varios ascensores: obra por ascensor, sin nada elegido; «L2» se pregunta y ⚠️ lo que va con él (también debajo, si es cabecera) no va a ninguna obra hasta contestar; y no se pregunta lo que no cambia nada. ⚠️ Mirar la pantalla a ancho de móvil destapó 4 fallos que los tests no veían (el «L2» asumido como piso, el parte en un párrafo, «3 marcadas» para 2 créditos, destinos sin nombre) y releer el diff, 3 más. `verif_v523` ejecuta la tarjeta con AppTest; ⚠️ dos pasos en vacío míos arreglados. 111 comprobaciones · **30/30 + control** · romper_v516 20/20 sobre el código nuevo · hoja real 27/27 · suite 154 verde |

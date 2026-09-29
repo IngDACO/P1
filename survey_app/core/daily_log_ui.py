@@ -30,7 +30,9 @@ def _linea(r, puede_borrar, key_prefix, extra=None) -> None:
     # repetir la fecha dos veces en una línea de móvil solo gasta ancho.
     # ⚠️ Recortada a `hh:mm`: `Created` guarda SEGUNDOS para poder ordenar dos partes del
     # mismo minuto (ver `daily_log.partes`), pero a quien lee no le dicen nada.
-    _hora = _creado[11:16] if _creado[:10] == _dia and len(_creado) >= 16 else _creado
+    # ⚠️ v526 · Y cuando el parte es de OTRO día, la fecha de escritura va entera pero
+    # sin segundos: salía «2026-09-29 16:35:28» (visto en producción).
+    _hora = _creado[11:16] if _creado[:10] == _dia and len(_creado) >= 16 else _creado[:16]
     st.markdown(
         theme.chip(f"{_dia} · {_autor}" + (f" · {_hora}" if _hora else ""),
                    color=theme.GRIS_TXT),

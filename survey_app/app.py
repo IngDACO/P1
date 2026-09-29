@@ -284,7 +284,9 @@ with st.sidebar:
                 st.markdown(msg["content"])
 
         # Input
-        if prompt := st.chat_input("Escribe tu pregunta…", key="sidebar_chat_input"):
+        # v526 · Estaba en español y sin `t()` (visto en producción): el idioma base es el
+        # inglés, y ningún barrido de i18n miraba `st.chat_input` (trampa nº30).
+        if prompt := st.chat_input(t("Ask your question…"), key="sidebar_chat_input"):
             st.session_state.chat_history.append({"role": "user", "content": prompt})
             with st.chat_message("user", avatar="🧑‍🔧"):
                 st.markdown(prompt)

@@ -90,7 +90,20 @@ def _valor(nodo, consts):
             and len(nodo.args) == 1 and isinstance(nodo.args[0], ast.Constant) \
             and isinstance(nodo.args[0].value, int):
         return chr(nodo.args[0].value)
+    # ⚠️ v526 · Una LISTA de cambios (romper_v526 aplica varios a la vez para devolver el
+    # codigo EXACTO de una version vieja): se lee elemento a elemento. La primera version
+    # de esa bateria salio «ilegible» y el trinquete la paro — que es para lo que esta.
+    if isinstance(nodo, (ast.List, ast.Tuple)):
+        vs = [_valor(e, consts) for e in nodo.elts]
+        return _NO_SE if any(v is _NO_SE for v in vs) else vs
     return _NO_SE
+
+
+def _planos(v):
+    """Los textos de un valor, aplanando listas y tuplas anidadas."""
+    if isinstance(v, (list, tuple)):
+        return [s for x in v for s in _planos(x)]
+    return [v]
 
 
 def _tuplas(arbol):
@@ -135,6 +148,7 @@ for b in _bats:
         if any(v is _NO_SE for v in vals):
             _ilegibles.append("%s:%d" % (b.name, tup.lineno))
             continue
+        vals = _planos(vals)
         # ⚠️ Un None LITERAL en la tupla = rotura desactivada a proposito (las baterias
         # las saltan mirando su descripcion). No se cuenta ni como viva ni como muerta.
         if any(v is None for v in vals) or not all(isinstance(v, str) for v in vals):
@@ -195,8 +209,9 @@ ILEGIBLES = {
     "romper_v430_reanclado.py": 3, "romper_v437.py": 10, "romper_v438.py": 12,
     "romper_v448.py": 1, "romper_v482.py": 9,
     "romper_v483.py": 11, "romper_v484.py": 6, "romper_v486.py": 1,
-    "romper_v488.py": 17, "romper_v490.py": 16,
 }
+# ⚠️ v526 · 86 → 53: leer LISTAS hizo legibles las 33 de romper_v488/v490 (sin ninguna
+# muerta escondida esta vez).
 _il = {}
 for s in _ilegibles:
     _il[s.split(":")[0]] = _il.get(s.split(":")[0], 0) + 1

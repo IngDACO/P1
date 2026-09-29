@@ -3470,8 +3470,19 @@ def render_field_projects(usuario: str, grupo: str):
         _contexto()                      # v480: sin obra, esto es lo unico que hay
         return
 
-    idmap = {f"{p.get('Name')} ({p.get('ID')}) — {p.get('Status')}": p.get("ID")
+    # ⚠️ v526 · `{ID: etiqueta}` y el desplegable guarda el ID. Hasta v525 guardaba la
+    # ETIQUETA, que lleva el estado («— Planned»): al acreditar lo primero la obra pasa a
+    # «In progress», la etiqueta guardada deja de existir y Streamlit tira la selección
+    # — el trabajador confirmaba su parte y volvía a «— choose a project —». Lo vio la
+    # prueba en producción; el ID no cambia nunca (regla «el ID es la identidad»).
+    idmap = {str(p.get("ID")): f"{p.get('Name')} ({p.get('ID')}) — {p.get('Status')}"
              for p in proys}
+    _prev = st.session_state.get("fieldproj_sel")
+    if _prev is not None and _prev != _VACIO and _prev not in idmap:
+        # Una etiqueta de antes de v526, o una obra que ya no es suya: se rescata el ID
+        # si está dentro; si no, se vuelve a «elegir» — nunca una selección fantasma.
+        st.session_state["fieldproj_sel"] = next(
+            (i for i in idmap if f"({i})" in str(_prev)), _VACIO)
     # Si el usuario tiene fichaje abierto, se abre ESE proyecto: es donde está
     # trabajando ahora (mismo criterio que usan las herramientas desde v137).
     _opts = [_VACIO] + list(idmap.keys())
@@ -3486,7 +3497,7 @@ def render_field_projects(usuario: str, grupo: str):
         except Exception:
             pass
         if _fich:
-            _m = next((k for k in idmap if k.startswith(_fich + " (")), None)
+            _m = next((i for i, lab in idmap.items() if lab.startswith(_fich + " (")), None)
             if _m:
                 st.session_state["fieldproj_sel"] = _m
         # v480 · Si solo tiene UNA obra asignada, se abre sola. MEDIDO en el movil: el
@@ -3496,12 +3507,13 @@ def render_field_projects(usuario: str, grupo: str):
         # hay nada que elegir. Se MUESTRA en el desplegable y se puede cambiar (v138).
         if "fieldproj_sel" not in st.session_state and len(idmap) == 1:
             st.session_state["fieldproj_sel"] = next(iter(idmap))
-    sel = st.selectbox(t("Assigned project"), _opts, key="fieldproj_sel")
+    sel = st.selectbox(t("Assigned project"), _opts, key="fieldproj_sel",
+                       format_func=lambda i: idmap.get(i, i))
     if not sel or sel == _VACIO:
         st.caption(t("Choose the project you are working on. If you clock in at :material/schedule: Time clock, it opens on its own."))
         _contexto()                      # v480
         return
-    pid = idmap[sel]
+    pid = sel
     prj = P.get_project(pid)
     if not prj:
         st.error(t("Project not found."))
