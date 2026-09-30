@@ -201,16 +201,20 @@ def rail_cut_svg(res: dict, caso: int = 1, n2500: int = 0, n5000: int = 0,
             p.append(f'<text x="{cx+42:.1f}" y="{base+43:.1f}" text-anchor="middle" '
                      f'font-size="7.5" fill="#5b6472">L {_mm(e["L"])}</text>')
 
-        p.append(f'<rect x="18" y="{VH-26}" width="9" height="9" fill="#fcebeb" '
+        # ⚠️ v534 · La leyenda en DOS líneas: en una sola, con 1 ascensor (470 de ancho),
+        # la frase se salía del dibujo y perdía el final (visto en producción).
+        _yl = VH - 34
+        p.append(f'<rect x="18" y="{_yl}" width="9" height="9" fill="#fcebeb" '
                  f'stroke="#c0392b" stroke-width="0.7"/>')
-        p.append(f'<rect x="150" y="{VH-26}" width="9" height="9" fill="#e8f5e9" '
+        p.append(f'<rect x="150" y="{_yl}" width="9" height="9" fill="#e8f5e9" '
                  f'stroke="#1e8449" stroke-width="0.7"/>')
         # El corte va SIEMPRE en el 1er riel (el de abajo, primero instalado): la
         # leyenda lo dice y el color distingue recortar (rojo) de añadir (verde).
-        p.append(f'<text x="32" y="{VH-18}" font-size="8" fill="#5b6472">'
+        p.append(f'<text x="32" y="{_yl+8}" font-size="8" fill="#5b6472">'
                  f'{_d("trims the 1st rail")}</text>')
-        p.append(f'<text x="164" y="{VH-18}" font-size="8" fill="#5b6472">'
-                 f'{_d("adds to the 1st rail")} &#183; '
+        p.append(f'<text x="164" y="{_yl+8}" font-size="8" fill="#5b6472">'
+                 f'{_d("adds to the 1st rail")}</text>')
+        p.append(f'<text x="18" y="{VH-10}" font-size="8" fill="#5b6472">'
                  f'{_d("the cut goes on the BOTTOM rail")} '
                  f'({_d("same signed value as the table")})</text>')
         p.append("</svg>")

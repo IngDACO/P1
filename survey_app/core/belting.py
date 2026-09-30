@@ -56,7 +56,11 @@ def belting_svg(results: list, proyecto: str = "") -> str:
 
     colw = 150
     ML = 24
-    VW = ML * 2 + n * colw
+    # ⚠️ v534 · El dibujo no puede ser más estrecho que su TÍTULO. Con 1 ascensor medía
+    # 198 de ancho y el título pide ~350: salía cortado por la derecha (visto en
+    # producción; con 2 también). Con menos de 3 ascensores las columnas se centran.
+    VW = max(470, ML * 2 + n * colw)
+    X0 = (VW - n * colw) / 2.0          # margen izquierdo de la primera columna
     VH = 300
     y_ffl = 134            # línea FFL común (referencia)
     BAND = 66              # px del mayor |DSTS|
@@ -77,7 +81,9 @@ def belting_svg(results: list, proyecto: str = "") -> str:
          f'{_d("DSTS = how far the car goes down (+, below) or up (-, above)")} · '
          f'{_d("position at enlarged scale")}</text>']
     if proyecto:
-        p.append(f'<text x="{VW-18}" y="22" text-anchor="end" font-size="9" '
+        # v534 · El nombre de la obra va en SU línea: a la derecha del título se pisaba
+        # con él hasta con 3 ascensores (el título ocupa 350 de los 498).
+        p.append(f'<text x="{VW-18}" y="50" text-anchor="end" font-size="9" '
                  f'fill="#1f2937" font-weight="bold">{_esc(proyecto)}</text>')
 
     # ── FFL: línea de referencia común a todos los elevadores ──
@@ -87,7 +93,7 @@ def belting_svg(results: list, proyecto: str = "") -> str:
              f'font-weight="bold">FFL {_d("top floor")}</text>')
 
     for i, r in enumerate(results):
-        x0 = ML + i * colw
+        x0 = X0 + i * colw
         w = colw - 34
         cx = x0 + w / 2
         dsts = float(r["dsts"])

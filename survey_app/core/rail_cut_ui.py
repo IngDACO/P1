@@ -117,7 +117,9 @@ def render_rail_cut_tab():
         st.markdown(t("**L for each lift** (FFL of the top floor → bottom of the shaft):"))
         base = st.session_state.get("rc_L_df")
         if base is None or len(base) != n:
-            base = pd.DataFrame({"Elevador": [f"Elevador {i+1}" for i in range(n)],
+            # v534 · El rótulo de cada fila salía en español («Elevador 1») en una pantalla
+            # en inglés. Es solo lo que se LEE: la columna sigue llamándose igual.
+            base = pd.DataFrame({"Elevador": [t("Lift {n}", n=i + 1) for i in range(n)],
                                  "L (mm)": [0.0] * n})
         L_edit = st.data_editor(base, width="stretch", hide_index=True,
                                 num_rows="fixed", disabled=["Elevador"], key="rc_L_editor", column_config=tabla.cfg())
@@ -189,8 +191,13 @@ def render_rail_cut_tab():
         if base is None or list(base.columns) != cols_expected:
             base = pd.DataFrame({"Riel": rieles,
                                  **{f"Elevador {i+1}": [0.0] * 4 for i in range(n)}})
+        # v534 · «Elevador N» es la CLAVE de la columna (se lee de vuelta al calcular y
+        # vive en la sesión): se le cambia la etiqueta, no el nombre (v450).
         in_edit = st.data_editor(base, width="stretch", hide_index=True,
-                                 num_rows="fixed", disabled=["Riel"], key="rc_in_editor", column_config=tabla.cfg())
+                                 num_rows="fixed", disabled=["Riel"], key="rc_in_editor",
+                                 column_config=tabla.cfg(extra={
+                                     f"Elevador {i+1}": st.column_config.Column(t("Lift {n}", n=i + 1))
+                                     for i in range(n)}))
         st.session_state["rc_in_df"] = in_edit
 
         if st.button(t(":material/content_cut: Calculate cuts (Case 2)"), type="primary",

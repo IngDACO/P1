@@ -123,6 +123,16 @@ h4 {{ font-size:16px !important; font-weight: 650; color: {AZUL_OSC}; }}
   text-overflow: clip !important; line-height: 1.25;
 }}
 [data-testid="stMetricValue"] {{ font-size:26px; font-weight: 700; color: {AZUL_OSC}; }}
+/* ⚠️ v534: lo mismo que la etiqueta (v335), pero con el VALOR, que es peor: en cuatro
+   columnas a 471 px (tableta, o PC con el menú abierto) el desplazamiento del Survey se
+   leía «+0.0…» —76 px para los 99 que pide «+0.0 mm»— y una fecha, «30/09/2…». Un número
+   cortado en obra es un número que alguien completa de memoria. Medido en producción: el
+   recorte lo pone el contenedor de markdown DENTRO del valor. Que parta en dos líneas. */
+[data-testid="stMetricValue"] [data-testid="stMarkdownContainer"],
+[data-testid="stMetricValue"] [data-testid="stMarkdownContainer"] p {{
+  white-space: normal !important; overflow: visible !important;
+  text-overflow: clip !important; line-height: 1.2; overflow-wrap: anywhere;
+}}
 
 /* ── Contenedores con borde: tarjetas de verdad ── */
 [data-testid="stVerticalBlockBorderWrapper"] {{

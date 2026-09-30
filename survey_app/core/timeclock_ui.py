@@ -40,10 +40,16 @@ _AZUL, _VERDE, _GRIS, _ROJO = "#1a3a5c", "#1e8449", "#6b7280", "#c0392b"
 def _chronometer(clock_in_str, label="In progress", color=_VERDE, key="chrono"):
     """Cronómetro en vivo (client-side): cuenta desde el Clock In, sin recargar."""
     e0 = timeclock.elapsed_seconds(clock_in_str)
-    incrustar.dibujo('<div style="display:flex;align-items:baseline;gap:10px;'
-        'font-family:Arial,Helvetica,sans-serif;">'
-        f'<span style="font-size:12px;color:#6b7280;">{label}</span>'
-        f'<span id="{key}" style="font-size:34px;font-weight:800;'
+    # ⚠️ v534 · `flex-wrap`: en una columna estrecha (204 px: tableta, o PC con el menú
+    # abierto) rótulo + reloj piden 259 px en una línea y el reloj salía CORTADO por la
+    # derecha, sin los segundos (visto en producción). Ahora, si no caben, el reloj baja a
+    # su propia línea. Sin márgenes del documento (8 px por lado), las dos líneas —13 + 37—
+    # caben en los mismos 52 px; con sitio, se ve igual que antes.
+    incrustar.dibujo('<body style="margin:0">'
+        '<div style="display:flex;flex-wrap:wrap;align-items:baseline;column-gap:10px;'
+        'row-gap:0;line-height:1.1;font-family:Arial,Helvetica,sans-serif;">'
+        f'<span style="font-size:12px;color:#6b7280;white-space:nowrap;">{label}</span>'
+        f'<span id="{key}" style="font-size:34px;font-weight:800;white-space:nowrap;'
         f'font-family:\'Courier New\',monospace;color:{color};letter-spacing:1px;">'
         '00:00:00</span></div>'
         "<script>"

@@ -120,6 +120,15 @@ if not render_login():
 _ROL   = st.session_state.auth["rol"]
 _GRUPO = st.session_state.auth.get("grupo", "")
 
+# v534 · Lo tecleado en las herramientas sobrevive a cambiar de sección. Va en CADA pasada
+# y antes de pintar nada: Streamlit borra el valor de un widget en cuanto una pasada no lo
+# pinta (visto en producción: salir del Survey y volver dejaba los 23 parámetros a cero).
+# ⚠️ Después del login, a propósito: en la pantalla de entrada no se conserva nada.
+# ⚠️ Lo conservado es de UNA obra: si la herramienta vuelve con otra, se olvida (lo decide
+# `plan_ui.selector_proyecto`, que es donde se sabe la obra).
+from core import estado_vivo as _estado_vivo
+_estado_vivo.pasada()
+
 
 # Deep-link del QR del inventario: escanear `…?activo=ACT-####` abre esa ficha.
 # Debe correr ANTES del sidebar (sidebar_menu aplica `_admin_nav_pending`). Solo

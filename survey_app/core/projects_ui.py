@@ -2904,6 +2904,10 @@ def _detalle_proyecto(pid: str, grupo: str = None):
                 if not params:
                     st.error(t("This project has no saved parameters."))
                 else:
+                    # v534 · Se carga A PROPÓSITO: el Survey no lo olvida al pintarse aunque
+                    # la última vez estuviera con otra obra.
+                    from core import estado_vivo as _ev
+                    _ev.respetar("sv")
                     for k, v in params.items():
                         try:
                             st.session_state[f"inp_{k}"] = float(v)

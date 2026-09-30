@@ -111,7 +111,8 @@ def render_plumb_tab():
                             step=1, value=int(st.session_state.get("plb_n", 1)), key="plb_n"))
     base = st.session_state.get("plb_bsr_df")
     if base is None or len(base) != n:
-        base = pd.DataFrame({"Elevador": [f"Elevador {i+1}" for i in range(n)],
+        # v534 · «Elevador 1» salía en español; solo cambia lo que se lee (ver rail_cut_ui).
+        base = pd.DataFrame({"Elevador": [t("Lift {n}", n=i + 1) for i in range(n)],
                              "BSR (mm)": [0.0] * n})
     bsr_edit = st.data_editor(base, width="stretch", hide_index=True,
                               num_rows="fixed", disabled=["Elevador"], key="plb_bsr_editor", column_config=tabla.cfg())

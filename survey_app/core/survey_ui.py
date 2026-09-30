@@ -43,6 +43,7 @@ from core.auth import can_reports
 from core import clock
 from core import tabla
 from core import incrustar
+from core import estado_vivo
 
 logger = logging.getLogger(__name__)
 
@@ -126,10 +127,11 @@ def init_state():
     st.session_state["initialized"]    = True
 
 def render_survey_tab(_ROL, _GRUPO):
-    for _k in [k for k in list(st.session_state.keys())
-               if k.startswith("inp_") or k.startswith("cfg_")
-               or k in ("ns", "proyecto", "cliente", "ubicacion", "ingeniero")]:
-        st.session_state[_k] = st.session_state[_k]
+    # v534 · Las entradas se conservan desde `app.py` en CADA pasada (`estado_vivo.pasada`):
+    # hacerlo solo aquí las salvaba al pasar de «Survey data» a «Results», pero no al salir
+    # del Survey — en esas pasadas esta función no corre. Se repite aquí por si alguien la
+    # pinta sin pasar por `app.py`; es la MISMA lista, no una copia.
+    estado_vivo.mantener()
 
     # ── Empezar de cero (se procesa ANTES de crear los widgets) ──
     if st.session_state.pop("_reset_survey", False):
@@ -327,7 +329,9 @@ def render_survey_tab(_ROL, _GRUPO):
             , column_config=tabla.cfg())
 
         st.subheader(t("Adjusted SURVEY matrix"))
-        st.dataframe(survey_adj_df.style.apply(highlight, axis=None),
+        # v534 · Sin `format`, un Styler manda cada número con SEIS decimales («76.000000»): la
+        # matriz no cabía y había que desplazarla de lado para leer un milímetro.
+        st.dataframe(survey_adj_df.style.apply(highlight, axis=None).format(precision=1),
                      width="stretch", column_config=tabla.cfg())
         _leyenda_matriz()
 
@@ -402,8 +406,10 @@ def render_survey_tab(_ROL, _GRUPO):
                 # ⚠️ .1f obligatorio: el optimizador barre en pasos de 0.5 mm, así que
                 # RL/FB pueden ser x.5. Con .0f, RL −6.0 y RL −6.5 daban la MISMA
                 # etiqueta y las soluciones no se podían distinguir en el desplegable.
+                # v534 · «fuera» salía en español en el desplegable (un trozo de f-string,
+                # invisible para las redes de i18n). Con placeholder, como pide `t()`.
                 _lbl = [f"RL {s['rl']:+.1f} · FB {s.get('fb_applied', s['fb']):+.1f} · "
-                        f"{s['total_off']} fuera" for s in sorted_solutions]
+                        + t("{n} out of limit", n=s["total_off"]) for s in sorted_solutions]
                 _sel = st.selectbox(
                     t(":material/star: Active solution — used in diagrams, plumb setting and reports"),
                     range(len(_lbl)), index=_idx_act, format_func=lambda k: _lbl[k],
@@ -461,7 +467,7 @@ def render_survey_tab(_ROL, _GRUPO):
                         sol_df.insert(7, "CUT OL", cut_ol_vals)
                     sol_highlighter = make_highlighter(lim_map, sol_min, sol_max, cut_cols,
                                                        ctrl_in_frame_, ctrl_side_)
-                    st.dataframe(sol_df.style.apply(sol_highlighter, axis=None),
+                    st.dataframe(sol_df.style.apply(sol_highlighter, axis=None).format(precision=1),
                                  width="stretch", column_config=tabla.cfg())
                     _leyenda_matriz()
                     if not wall_limiting_:
@@ -537,7 +543,7 @@ def render_survey_tab(_ROL, _GRUPO):
                             if row["Status"] == "OPTIMAL":
                                 return ["background-color:#1a3a2a;color:#a8e6cf"] * len(row)
                             return [""] * len(row)
-                        st.dataframe(df_log.style.apply(_hl, axis=1),
+                        st.dataframe(df_log.style.apply(_hl, axis=1).format(precision=1),
                                      width="stretch", hide_index=True, column_config=tabla.cfg())
         else:
             st.error(t("No valid combination was found."))
@@ -571,7 +577,7 @@ def render_survey_tab(_ROL, _GRUPO):
                 _floors = st.multiselect(
                     t("Floors"), list(range(n_floors)),
                     default=_prob[:1] or [0], key=f"diag_pisos_{_n_calc}",
-                    format_func=lambda i: f"Piso {i + 1}",
+                    format_func=lambda i: t("Floor {n}", n=i + 1),
                 )
             if _floors:
                 incrustar.dibujo(
@@ -1136,7 +1142,7 @@ def render_survey_tab(_ROL, _GRUPO):
             (":green[:material/check_circle:] Drawing loaded" if _ex else ":gray[:material/radio_button_unchecked:] No drawing (parameters by hand)"),
             (":green[:material/check_circle:] Parameters complete" if (_ex and not _falt)
              else (f":orange[:material/warning:] {len(_falt)} parameter(s) not read" if _falt else ":material/edit: Manual parameters")),
-            f":green[:material/check_circle:] Matriz: {_nsv} niveles",
+            t(":green[:material/check_circle:] Matrix: {n} levels", n=_nsv),
         ]
         st.markdown("  ·  ".join(_chips))
 

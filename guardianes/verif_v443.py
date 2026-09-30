@@ -140,8 +140,12 @@ _pl = (RAIZ / "core/plumb_ui.py").read_text(encoding="utf-8")
 chk("rieles: la matriz de entrada sigue con la columna `Elevador`",
     'in_edit[f"Elevador {i+1}"]' in _rc
     and 'cols_expected = ["Riel"] + [f"Elevador {i+1}"' in _rc)
+# ⚠️ v534 · Actualizada con su razón (v385): exigía también el literal de los VALORES de
+# esa columna (`f"Elevador {i+1}"`), que es un rótulo de fila y pasó a inglés a propósito
+# («Lift 1»). El principio sigue siendo el mismo y es lo que se afirma: la CLAVE de la
+# columna —la que bloquea `disabled=` — no se ha renombrado.
 chk("plomada: el editor de BSR sigue con la columna `Elevador`",
-    '"Elevador": [f"Elevador {i+1}"' in _pl and 'disabled=["Elevador"]' in _pl)
+    'pd.DataFrame({"Elevador": [' in _pl and 'disabled=["Elevador"]' in _pl)
 # y la tabla de RESULTADO sí se tradujo (esa va al PDF que se lleva a obra)
 # ⚠️ Se cuentan las DOS (Caso 1 y Caso 2) y se exige que no quede ninguna en
 # español. Comprobar PRESENCIA dejaba pasar romper una sola —la otra seguía

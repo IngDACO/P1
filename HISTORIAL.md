@@ -10,6 +10,46 @@ ventana de contexto. Contenido: 258 secciones detalladas + el índice de 440 ver
 
 ---
 
+## LO QUE DESTAPÓ CERRAR LOS PENDIENTES EN PRODUCCIÓN (v533)
+
+El usuario pidió no dejar nada pendiente. Lo que quedaba por ver EN PRODUCCIÓN se probó, y
+probarlo encontró un fallo que la hoja de mentira no podía enseñar.
+
+### ✅ La expulsión de la sesión única, probada en producción (pendiente desde v528)
+Sin contraseñas: se cambió el `SessionToken` de la cuenta de prueba en `Login` —lo que deja
+en la hoja otro dispositivo al tomar la cuenta—, con el token original guardado aparte y sin
+imprimirlo. Control primero: con el token bueno, dos pasadas y sigue dentro (y en la hoja, el
+heartbeat en segundo plano marcó vida 13 s antes). Con el token desplazado: primer clic, sigue
+dentro (el heartbeat corre en su hilo); segundo clic, «Your session was closed…» y la app se
+corta. Exactamente el diseño de v528.
+
+### ⚠️ El fallo: el veredicto se quedaba guardado
+Al reponer el token y recargar, la cookie restauró la sesión… y la app la expulsó otra vez AL
+INSTANTE. El veredicto vive en el proceso con la clave (usuario, token), y el `False` seguía
+ahí: la expulsión corta la pasada antes de lanzar otro heartbeat, así que nunca se volvía a
+preguntar a la hoja. En la vida real un token desplazado no vuelve a valer — pero una lectura
+de `Login` que una vez no trajera la fila dejaría a alguien fuera con su cookie buena hasta
+teclear la contraseña, y antes de v528 una recarga lo arreglaba sola.
+→ `auth.heartbeat_olvidar`: se olvida al EXPULSAR y al RESTAURAR desde la cookie (se acaba de
+validar contra la hoja: lo guardado es más viejo). Y un hilo que termina después de olvidar
+no vuelve a meter su veredicto.
+
+### Los dos «anotados, sin tocar»
+- **La leyenda del dibujo de Buffers** se pisaba con 1-3 buffers (la nota de escala, anclada
+  a la derecha en un dibujo de 460 de ancho): va en su propia línea. Medido con un detector
+  de textos pisados —validado contra el código viejo: 143 y 49 px de solape, 0 con 5— que de
+  paso dejó limpios Belting y Rieles.
+- **Una etapa que vuelve a 0% ya no conserva su «inicio real»** (anotado en v527): es la
+  gemela de «reabierta → borrar fin real». No mueve la curva S —al 0% no hay avance que
+  repartir— y al volver a marcar el inicio sale otra vez del primer día de trabajo.
+
+### Lo que NO se pudo cerrar, y por qué
+- **Python 3.12 en local** (el Cloud usa 3.12; aquí solo hay 3.14): exige instalar software en
+  la máquina del usuario. Queda a su decisión.
+- **Los logs del Cloud de v529 en adelante**: solo los puede descargar el usuario.
+
+PRODUCCIÓN: expulsa al segundo clic; tras desplegar, la sesión restaurada por cookie ya no sale expulsada; PRJ-0015 sin inicios reales colgados tras marcar y desmarcar; Survey real (5 soluciones): elegir la 3ª = UNA pasada y el orden no cambia, «Recalculate» vuelve a la recomendada (v530); los 9 recuadros del Survey, Rieles, Belting y los 4 cronómetros sin barra (v532) · 21 comprobaciones · romper_v533 7/7 + control · romper_v525 16/16 y romper_v528 19/19 re-corridas · suite 162 verde
+
 ## LOS 22 USOS DE `st.components.v1.html` PASAN A `st.iframe` (v532)
 
 Decisión del usuario: hacer los 22 ya (tras explicarle que hoy no se gana nada visible: lo que
@@ -12708,7 +12748,7 @@ comprueba lo que dice**.
 
 ---
 
-## Versiones desplegadas (v532 = actual)
+## Versiones desplegadas (v533 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -12716,6 +12756,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v533 | **Lo que destapó cerrar los pendientes en producción.** La expulsión de la sesión única, probada EN PRODUCCIÓN sin contraseñas (token de la cuenta de prueba cambiado en `Login`): expulsa al segundo clic, como se diseñó. ⚠️ Pero al reponer el token, la cookie restauraba la sesión y la app la expulsaba AL INSTANTE: el veredicto del heartbeat se quedaba guardado en el proceso. Ahora se olvida al expulsar y al restaurar. Además: la leyenda de Buffers ya no se pisa y una etapa que vuelve a 0% pierde su «inicio real». PRODUCCIÓN: expulsa al segundo clic; tras desplegar, la sesión restaurada por cookie ya no sale expulsada; PRJ-0015 sin inicios reales colgados tras marcar y desmarcar; Survey real (5 soluciones): elegir la 3ª = UNA pasada y el orden no cambia, «Recalculate» vuelve a la recomendada (v530); los 9 recuadros del Survey, Rieles, Belting y los 4 cronómetros sin barra (v532) · romper_v533 7/7 + control · romper_v525 16/16 y romper_v528 19/19 re-corridas · suite 162 verde |
 | v532 | **Los 22 usos de `st.components.v1.html` pasan a `st.iframe`**, por `core/incrustar` (decisión del usuario). ⚠️ En 1.64 los dos generan el MISMO elemento; `st.iframe` solo cambia que siempre permite scroll (se neutraliza con `overflow:hidden` dentro del <body>, sin romper el DOCTYPE) y que no admite altura 0 (los 3 scripts van a 1 px). Los scripts NO van a `st.html`: sin recuadro, `window.parent` sería otro documento. PRODUCCIÓN: los 3 scripts funcionan en st.iframe (cookie escrita y una pestaña nueva entra sola; trampa del «atrás» activa; manifest añadido; los tres a 1 px) y el dibujo de Buffers sale a 330 px sin barra · romper_v532 7/7 + control · suite 161 verde |
 | v531 | **Streamlit fijo a la versión del Cloud (1.64.0), y el local igualado.** Los logs del Cloud (10 h con la v528): ni un error ni un «missing ScriptRunContext» del heartbeat en segundo plano. Pero Streamlit avisa que `st.components.v1.html` —22 usos: diagramas, plomado, rieles…— «will be removed after 2026-06-01», y cada reinicio reinstalaba la ÚLTIMA versión (`>=1.39,<2`): un reinicio cualquiera podía romper esas pantallas. ⚠️ El local estaba en 1.57 (trampa nº11): la suite probaba otra versión que producción. Migrar a `st.iframe`, aparte. suite 159 verde con Streamlit 1.64 + check_negocio_al_dia re-corrido tras poner al día NEGOCIO.md |
 | v530 | **Elegir otra solución activa ya no deja el survey en un bucle.** Desde el 19/07, elegir cualquier solución que no fuera la recomendada dejaba la página en un bucle de pasadas SIN FIN (medido con el survey real: >25 pasadas), con diagramas, plomado e informe cambiando de solución en cada una: la lista se ordenaba con la ACTIVA primero y la POSICIÓN guardada pasaba a señalar otra. Ahora el orden sale de la RECOMENDADA y la activa se busca por identidad. ⚠️ Tras «Recalculate», la solución y los pisos llevan una clave POR CÁLCULO (con `pop` el navegador devolvía la vieja; asignar antes de pintar, como en v529, no alcanzaba porque el `st.rerun()` corta la pasada antes). 29 comprobaciones · romper_v530 7/7 + control · suite 160 verde |

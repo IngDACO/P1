@@ -17,6 +17,7 @@ import streamlit as st
 from core.i18n import t
 
 from core import projects as P
+from core import estado_vivo
 from core import plan_data
 from core import timeclock
 
@@ -42,7 +43,20 @@ def _proyecto_fichado(auth: dict):
 
 
 def selector_proyecto(key: str, ayuda: str = "") -> tuple:
-    """(proyecto, datos_del_plano). Ambos pueden ser None/{}."""
+    """(proyecto, datos_del_plano). Ambos pueden ser None/{}.
+
+    ⚠️ v534 · Aquí se sabe con qué OBRA se pinta la herramienta, y por eso aquí se decide si
+    lo que quedó tecleado sigue valiendo: si la herramienta VUELVE a pintarse y la obra es
+    otra, sus entradas se olvidan (`estado_vivo.al_pintar`) para que el plano de la obra
+    nueva las rellene. Va antes de que la herramienta cree sus widgets — las cinco llaman a
+    esta función lo primero.
+    """
+    prj, datos = _selector_proyecto(key, ayuda)
+    estado_vivo.al_pintar(key, (prj or {}).get("ID", ""))
+    return prj, datos
+
+
+def _selector_proyecto(key: str, ayuda: str = "") -> tuple:
     if not P.is_configured():
         return None, {}
     auth = st.session_state.get("auth", {}) or {}

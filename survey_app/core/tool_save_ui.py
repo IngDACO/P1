@@ -11,6 +11,7 @@ import streamlit as st
 
 from core.i18n import t
 
+from core import estado_vivo
 from core import projects as P
 from core import toolruns
 
@@ -34,6 +35,20 @@ def _proyectos_de(rol, usuario, grupo):
     return P.list_projects_for_field(usuario, grupo=grupo)
 
 
+def _restaurable(clave) -> bool:
+    """¿Se puede guardar y volver a poner esta clave? Solo las ENTRADAS y las tablas (`*_df`).
+
+    ⚠️ v534 · Antes se guardaba todo lo que empezara por el prefijo y fuera un valor
+    simple — incluido el BOTÓN de calcular (`rc_calc1`, que vale True/False). Al reabrir
+    el cálculo se le asignaba ese valor y Streamlit tumbaba la pantalla: «Values for the
+    widget with key 'rc_calc1' cannot be set using st.session_state». Reabrir un cálculo
+    no funcionaba en ninguna de las cuatro herramientas. El filtro va también al
+    RESTAURAR, porque los cálculos ya guardados traen el botón dentro.
+    """
+    k = str(clave)
+    return estado_vivo.es_entrada(k) or k.endswith("_df")
+
+
 def _snapshot(herramienta: str) -> dict:
     """Entradas actuales de la herramienta, en algo serializable a JSON.
 
@@ -48,7 +63,7 @@ def _snapshot(herramienta: str) -> dict:
         return {}
     out = {}
     for k, v in st.session_state.items():
-        if not str(k).startswith(pref) or str(k).endswith("_editor"):
+        if not str(k).startswith(pref) or not _restaurable(k):
             continue
         if v is None or isinstance(v, (int, float, str, bool)):
             out[k] = v
@@ -71,7 +86,12 @@ def aplicar_restauracion(herramienta: str) -> str:
         return ""
     st.session_state.pop(_PENDIENTE, None)
     import pandas as _pd
+    # v534 · Estos valores se cargan A PROPÓSITO: que la herramienta no los olvide al
+    # pintarse aunque la última vez estuviera con otra obra.
+    estado_vivo.respetar(_PREFIJO.get(herramienta, "").rstrip("_"))
     for k, v in (pend.get("valores") or {}).items():
+        if not _restaurable(k):
+            continue
         try:
             if isinstance(v, dict) and "__df__" in v:
                 st.session_state[k] = _pd.DataFrame(v["__df__"])
