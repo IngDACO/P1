@@ -30,6 +30,9 @@ plano**, y además ordena la **gestión del proyecto** (cronograma, avance, docu
 - **Planificación de cuadrilla**: tablero semanal editable en sitio, vista por día con horarios,
   disponibilidad, cobertura, choques de turno y **plan vs real** contra lo fichado.
 - **Ruta del día**: las obras en el mapa, ordenadas para ir a terreno, con navegación.
+- **Avance por actividades y parte diario** (v512-v525): el técnico marca qué hizo contra un
+  catálogo ponderado, o lo cuenta en texto y la app le **propone** qué acreditar; solo cuenta lo que
+  él confirma.
 - **Localizaciones internas** (oficina, almacén, taller): se fichan y se les cargan gastos, pero
   **nunca** se facturan — su costo es estructura.
 
@@ -71,13 +74,34 @@ plano**, y además ordena la **gestión del proyecto** (cronograma, avance, docu
 
 ## Estado actual
 
-> Puesto al día por el chat técnico el **21/09/2026**. Lo que había aquí era de **v484**; antes de
-> eso había estado en **v75**. Van dos veces que este documento se queda atrás, así que la pregunta
-> ya no es «¿se actualizó?» sino si la regla de actualizarlo a mano es realista.
+> Puesto al día por el chat técnico el **30/09/2026 (v531)**, auditado contra `HISTORIAL.md`. La
+> vez anterior fue el 22/09 (v514). El guardián `check_negocio_al_dia` lo pidió al pasar de 15
+> versiones: el mecanismo funcionó la primera vez que hizo falta.
 
-Desplegado en Streamlit Cloud, funcional y en uso con datos reales. **v514**: 107 módulos, ~46.300
-líneas, 31 hojas de datos y **146 guardianes automáticos en verde** que se corren enteros antes de
+Desplegado en Streamlit Cloud, funcional y en uso con datos reales. **v531**: 114 módulos, ~50.000
+líneas, 32 hojas de datos y **160 guardianes automáticos en verde** que se corren enteros antes de
 cada despliegue. Backend en Google Sheets + Drive.
+
+✅ **El técnico cuenta el día con sus palabras, y la app propone el avance (v516-v525, 25-29/09).**
+Escribe un parte en texto libre («Installed headers on L3, waiting on door frames»); la app lo lee
+con un **vocabulario de obra de 339 términos** —sin IA, determinista— y propone qué actividades del
+catálogo acreditar, citando la línea que lo respalda. **Nada se acredita solo**: todo sale
+desmarcado y solo cuenta lo que el autor confirma (regla del usuario: *la app propone, no asume*).
+El trabajo se fecha el día del parte, no el de confirmarlo, y se guarda lo propuesto y lo
+rechazado para poder medir cuánto acierta antes de darle más autonomía. Medido contra **1.070
+partes reales** de 11 obras: con 30 notas reservadas y etiquetadas antes de tocar nada, pasó de
+acertar 8 a **22 de 40**, con un solo error seguro. Es la base de la capa con IA, que aún no existe.
+
+✅ **Probado en producción (28-30/09):** guardar el avance de una etapa bajó de **~9,5 s a 2,9 s** y
+confirmar un parte tarda 2,2 s (v528). Tres fallos que ningún test veía se encontraron usando la app
+de verdad y están arreglados: el selector de obra que se perdía (v526-v527), la caja del parte que no
+se vaciaba al guardar (v529) y, en el Survey, **elegir otra solución activa dejaba la página en un
+bucle sin fin desde el 19/07** (v530).
+
+⚠️ **Riesgo técnico vigilado (v531):** Streamlit anuncia que quitará una función que la app usa en
+22 sitios (diagramas del survey, plomado, rieles…). Se fijó la versión exacta que corre en el Cloud
+para que un reinicio no la actualice sola; migrar esos 22 usos queda pendiente, sin urgencia de
+cliente pero sin olvidarlo.
 
 ✅ **El modelo de avance cambió de raíz (v512-v514, 22/09/2026).** Hasta aquí una obra medía contra
 11 fases de una secuencia ideal y el técnico **estimaba** cuánto llevaba de cada una. Ahora mide
@@ -112,7 +136,7 @@ Google por cliente, zona horaria por grupo y la app entera en inglés.
 | ~~**Identidad fiscal**~~ | ✅ **CERRADO en v483**: hasta entonces el PDF decía «TAX INVOICE» **sin ABN ni razón social**, o sea que los clientes emitían documentos incompletos ante la ATO. Ya se configuran por empresa, junto al plazo de pago |
 | **Contabilidad** | ⚠️ **Parcial desde v483 (08/09/2026)**: hay **exportación a CSV** para Xero y MYOB (facturas y gastos, con el proyecto como categoría de seguimiento). **Desde v488 (15/09/2026) las facturas van a Xero por API**, y desde v495-v496 **los cobros vuelven de Xero a COPEX**, probado EN PRODUCCIÓN con un pago parcial. Falta: llevar por API los **gastos** y el **parte de horas**; MYOB sigue solo por CSV |
 | **Nómina** | ⚠️ Sigue sin **STP ni interpretación de awards**, así que como nómina certificada no se puede vender. Lo que v484 añade es el puente: **parte de horas exportable** (jornada + ausencias pagadas, persona × día) para que lo procese un proveedor certificado. ⚠️ Y ese trabajo **no se tira decida lo que se decida** — conectar con un proveedor y renombrar el módulo a «costeo de mano de obra» necesitan los dos lo mismo primero |
-| **Sin señal** | No funciona offline, y el campo trabaja en fosos y sótanos. ⚠️ Tras el estudio del 20/09/2026 este es **el hueco que define la arquitectura**: es el único de la lista que no se resuelve añadiendo una pantalla, porque Streamlit ejecuta en el servidor y una app que no arranca sin red no se arregla con un caché. Decidirlo (¿app nativa de captura? ¿solo pre-start y avance?) es una decisión de producto, no una tarea |
+| **Sin señal** | No funciona offline, y el campo trabaja en fosos y sótanos. ⚠️ Tras el estudio del 20/09/2026 este es **el hueco que define la arquitectura**: es el único de la lista que no se resuelve añadiendo una pantalla, porque Streamlit ejecuta en el servidor y una app que no arranca sin red no se arregla con un caché. Decidirlo (¿app nativa de captura? ¿solo pre-start y avance?) es una decisión de producto, no una tarea. **El 27/09/2026 el usuario decidió que el parte diario no trabaja sin conexión, de momento** (v519): la decisión de fondo sigue abierta |
 | ~~**Cobro de obra**~~ | ✅ **CERRADO en v507-v508 (20/09/2026)**: variaciones, *progress claims* y retención. `valor = contrato + variaciones aprobadas`; `bruto = valor × avance − lo ya reclamado`; `neto = bruto − retención`. Una reclamación **congela** sus números y una variación *propuesta* no es dinero. **Completado en v510 (21/09/2026)**: el **PDF que se le manda al cliente** —con las variaciones aprobadas detalladas una a una— y la **liberación de la retención**, parcial, porque en AU va en dos mitades (*practical completion* y fin del periodo de defectos). ⚠️ El documento **no invoca ninguna ley**: el texto de *Security of Payment* cambia por estado y declararlo mal tiene efectos legales, así que lo pone quien sepa, en la nota |
 | **Portal del cliente** | El constructor o la administración del edificio no puede ver nada |
 | **Mantenimiento/AMC** | No existe, y **es deliberado**: es un mercado adyacente bien atendido |
@@ -307,7 +331,11 @@ ya captura, no se construye todo en paralelo):
   opciones a evaluar en el chat técnico: app nativa de captura solo para lo de terreno (pre-start,
   avance, fotos) que sincroniza al recuperar señal, o asumir que el offline no es requisito y decirlo
   en la venta. Lo que no es opción es seguir construyendo pantallas de campo sin haberlo decidido.
+  El 27/09/2026 se decidió una parte: **el parte diario, de momento, sin conexión no** (v519).
 - ~~**Cerrar el flanco del cobro de obra**~~ → ✅ **hecho en v510 (21/09/2026)**.
+- **Migrar los 22 usos de `st.components.v1.html`** que Streamlit anuncia que quitará (v531): la
+  versión va fijada, así que no hay prisa; pero antes de subir de Streamlit hay que migrarlos o
+  comprobar que la versión nueva todavía la trae.
 
 ## Cómo trabajan los dos chats
 - **Estratégico** (este brief): negocio, precios, mercado, roadmap comercial.
@@ -349,4 +377,4 @@ Esa tabla sigue siendo responsabilidad de quien cierra la versión. El guardián
 borra o se le cambia el formato, el resultado es ROJO —no verde—, a propósito: sin ella no se puede
 saber a qué versión corresponde este documento.
 
-*Última puesta al día del estado de hecho: 22/09/2026 (v485-v514).*
+*Última puesta al día del estado de hecho: 30/09/2026 (v515-v531).*

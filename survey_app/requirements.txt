@@ -1,7 +1,13 @@
 # Versiones fijadas a majors ESTABLES para evitar segfaults por ruedas nativas
 # bleeding-edge. Pensado para Python 3.12 (fíjalo en Streamlit Cloud → Settings →
 # Python version). En Python 3.14 solo hay ruedas de las últimas versiones (inestables).
-streamlit>=1.39,<2   # >=1.39: clase CSS st-key-<key> por widget (colorea el tablero del roster, v169)
+# ⚠️ v531 · Streamlit va FIJO a la versión que corre en el Cloud (vista en sus logs el
+# 29/09/2026). Con `>=1.39,<2` cada reinicio reinstalaba la ÚLTIMA, y Streamlit ya avisa
+# que `st.components.v1.html` —22 usos en la app: diagramas, plomado, rieles…— «will be
+# removed after 2026-06-01»: un reinicio cualquiera podía romper esas pantallas sin tocar
+# nada nuestro. Subirla es una decisión: se prueba la suite con la nueva y se cambia aquí.
+# (>=1.39 hacía falta por la clase CSS st-key-<key> por widget, v169: 1.64 la tiene.)
+streamlit==1.64.0
 pypdf>=4.0.0,<7
 pandas>=2.0.0,<2.3
 numpy>=1.26.0,<2

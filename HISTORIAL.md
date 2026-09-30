@@ -10,6 +10,45 @@ ventana de contexto. Contenido: 258 secciones detalladas + el índice de 440 ver
 
 ---
 
+## STREAMLIT FIJO A LA VERSIÓN DEL CLOUD, Y EL LOCAL IGUALADO (v531)
+
+El usuario pasó los logs del Cloud (29/09 20:11 → 30/09 05:59, hora de Sydney: la v528 en
+marcha y la subida de la v529). **Ni un error ni una traza** en casi 10 horas, y ni un
+«missing ScriptRunContext»: el heartbeat en segundo plano de v528 no toca Streamlit, como se
+diseñó. Lo que sí se repetía decenas de veces:
+
+> `st.components.v1.html` will be removed after 2026-06-01.
+
+La fecha ya pasó, y la app lo usa en **22 sitios de 10 ficheros** (los diagramas del survey,
+el plomado, rieles, buffers, belting, el fichaje, la cookie de sesión, la portada y `app.py`).
+Y los logs enseñan que **cada reinicio reinstala las dependencias**: con `streamlit>=1.39,<2`,
+el día que salga una versión sin esa función, un reinicio cualquiera la instala y esas
+pantallas se rompen sin haber cambiado nada nuestro.
+
+### Lo hecho
+- `requirements.txt`: **`streamlit==1.64.0`**, la versión que corre en el Cloud (se lee en
+  los logs). Subirla pasa a ser una decisión: se prueba la suite con la nueva y se cambia ahí.
+- ⚠️ **El local estaba en 1.57.0** (y Python 3.14; el Cloud, 3.12): la suite probaba contra
+  una versión 7 menores más vieja que producción — la trampa nº11. Igualado a 1.64.0 (solo
+  cambia Streamlit; el resto de dependencias ya cumplía). Repetidas en 1.64 las mediciones de
+  v529/v530: el `pop` sigue sin mandar `set_value`, asignar sí, y el `selectbox` se sigue
+  identificando solo por su clave.
+
+### ✅ `NEGOCIO.md`, puesto al día por su guardián
+La suite con Streamlit 1.64 salió 159 verde y **1 rojo: `check_negocio_al_dia`** — nada de la
+versión: el brief declaraba v514 y la app iba por v530, una más que el tope de 15. Es la primera
+vez que el guardián de v485 salta de verdad, y funcionó como se diseñó. Puesto al día contra
+`HISTORIAL.md` (no de memoria): el parte diario y las propuestas (v516-v525), lo medido en
+producción (v528-v530), el riesgo de `components.v1.html`, la decisión del usuario del 27/09
+(«el parte diario, sin conexión no, de momento») en su fila de «lo que NO existe» y las cifras
+(114 módulos, ~50.000 líneas, 32 hojas, 160 guardianes).
+
+### Pendiente, en una versión aparte
+Migrar los 22 usos a `st.iframe` probándolos uno a uno: varios inyectan JavaScript y pueden
+comportarse distinto.
+
+suite 159 verde con Streamlit 1.64 + check_negocio_al_dia re-corrido tras poner al día NEGOCIO.md
+
 ## ELEGIR OTRA SOLUCIÓN ACTIVA YA NO DEJA EL SURVEY EN UN BUCLE (v530)
 
 Buscando el patrón de v529 (vaciar un widget con `pop`) en el resto de la app, apareció en
@@ -12639,7 +12678,7 @@ comprueba lo que dice**.
 
 ---
 
-## Versiones desplegadas (v530 = actual)
+## Versiones desplegadas (v531 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -12647,6 +12686,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v531 | **Streamlit fijo a la versión del Cloud (1.64.0), y el local igualado.** Los logs del Cloud (10 h con la v528): ni un error ni un «missing ScriptRunContext» del heartbeat en segundo plano. Pero Streamlit avisa que `st.components.v1.html` —22 usos: diagramas, plomado, rieles…— «will be removed after 2026-06-01», y cada reinicio reinstalaba la ÚLTIMA versión (`>=1.39,<2`): un reinicio cualquiera podía romper esas pantallas. ⚠️ El local estaba en 1.57 (trampa nº11): la suite probaba otra versión que producción. Migrar a `st.iframe`, aparte. suite 159 verde con Streamlit 1.64 + check_negocio_al_dia re-corrido tras poner al día NEGOCIO.md |
 | v530 | **Elegir otra solución activa ya no deja el survey en un bucle.** Desde el 19/07, elegir cualquier solución que no fuera la recomendada dejaba la página en un bucle de pasadas SIN FIN (medido con el survey real: >25 pasadas), con diagramas, plomado e informe cambiando de solución en cada una: la lista se ordenaba con la ACTIVA primero y la POSICIÓN guardada pasaba a señalar otra. Ahora el orden sale de la RECOMENDADA y la activa se busca por identidad. ⚠️ Tras «Recalculate», la solución y los pisos llevan una clave POR CÁLCULO (con `pop` el navegador devolvía la vieja; asignar antes de pintar, como en v529, no alcanzaba porque el `st.rerun()` corta la pasada antes). 29 comprobaciones · romper_v530 7/7 + control · suite 160 verde |
 | v529 | **La caja del parte se vacía de verdad al guardar.** Probando la v528 EN PRODUCCIÓN (parte 2,3 s, confirmar 2,2 s): el parte se guardaba y **el texto seguía en la caja**, invitando a guardarlo otra vez. ⚠️ Desde v516 se vaciaba con `pop` de su clave: el servidor quedaba vacío —y AppTest lo daba por bueno— pero el navegador no se enteraba, porque Streamlit solo le manda el valor (`set_value`) cuando el código lo ASIGNA. Ahora el éxito enciende una marca y la pasada siguiente asigna «» antes de pintarla; si la hoja falla, el texto se queda. `verif_v529` mira el `set_value`, no solo el valor. 14 comprobaciones · romper_v529 5/5 + control · romper_v516 20/20 · suite 159 verde |
 | v528 | **Guardar más rápido.** Medido en producción: guardar una etapa tardaba ~9,5 s en ~9 llamadas a Google, y el heartbeat paraba un clic ~1,9 s cada 50 s. Ahora `StageProgress`, `Activities` y `Projects` se leen FRESCAS en UNA llamada y se escriben en OTRA (las filas nuevas, con `append`): **1+1+1** en vez de ~9. ⚠️ Se decide con la lectura fresca, no con la caché (dos personas en la misma obra bajaban el %); si la obra no está, no se escribe nada; las reglas de fechas siguen siendo UNA (`_lote_avance`) y el rastro de cambios se mantiene. Heartbeat en un hilo: la página no espera y un fallo de Google no expulsa. «Saving…» en cada guardado del campo. `fixture_guardado` sustituye la auditoría (ninguna prueba escribe en el AuditTrail real). ⚠️ La suite cazó dos fallos míos (un error en español, `t` como variable). hoja real 20/20 (guardar: 1 lectura + 1 escritura en lote + 2 append, 1,7 s en local) · romper_v528 19/19 + control · suite 158 verde |
