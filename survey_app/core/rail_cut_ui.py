@@ -8,13 +8,13 @@ import pandas as pd
 
 from core.rail_cut import (extract_lf, compute_case1, compute_case2,
                            rail_cut_svg)
-import streamlit.components.v1 as components
 from core.tool_pdf import tool_pdf
 from core.tool_save_ui import render_guardar
 from core import tool_save_ui
 from core import plan_store
 from core import plan_ui
 from core import tabla
+from core import incrustar
 
 
 def _result_matrix(labels, per_elev_values, n):
@@ -148,9 +148,8 @@ def render_rail_cut_tab():
 
             svg = rail_cut_svg(res, caso=1, n2500=_e["n2500"], n5000=_e["n5000"], proyecto=_pr)
             st.subheader(t(":material/architecture: Cutting diagram"))
-            components.html(
-                '<!DOCTYPE html><html><body style="margin:0;background:transparent">'
-                + svg + '</body></html>', height=390, scrolling=False)
+            incrustar.dibujo('<!DOCTYPE html><html><body style="margin:0;background:transparent">'
+                + svg + '</body></html>', 390)
 
             _filas = [{d("Lift"): i + 1, "L (mm)": round(x["L"], 1),
                        "RC (mm)": round(x["RC"], 1), "CutRC (mm)": round(x["CutRC"], 1),
@@ -219,9 +218,8 @@ def render_rail_cut_tab():
 
             svg = rail_cut_svg({"elevadores": res}, caso=2, proyecto=_pr)
             st.subheader(t(":material/architecture: Cutting diagram"))
-            components.html(
-                '<!DOCTYPE html><html><body style="margin:0;background:transparent">'
-                + svg + '</body></html>', height=330, scrolling=False)
+            incrustar.dibujo('<!DOCTYPE html><html><body style="margin:0;background:transparent">'
+                + svg + '</body></html>', 330)
 
             _filas = [{d("Lift"): i + 1,
                        **{k: round(float(x.get(k) or 0), 1)

@@ -5,7 +5,6 @@ Herramienta independiente del survey.
 import streamlit as st
 
 from core.i18n import t, d
-import streamlit.components.v1 as components
 import pandas as pd
 
 from core.plumb import compute_plumb, plumb_table, plumb_svg, plumb_iso_svg, plumb_detail_svg, plumb_card_svg
@@ -15,6 +14,7 @@ from core.tool_pdf import tool_pdf
 from core.tool_save_ui import render_guardar
 from core import tool_save_ui
 from core import tabla
+from core import incrustar
 
 
 def _kpi(label, value, color=None):
@@ -187,18 +187,18 @@ def render_plumb_tab():
     else:
         st.success(f"Lift {sel}: BSR = BS → no shift.")
 
-    components.html('<!DOCTYPE html><html><body style="margin:0;background:transparent">'
-                    + plumb_svg(r, proyecto=_pr) + '</body></html>', height=500, scrolling=False)
+    incrustar.dibujo('<!DOCTYPE html><html><body style="margin:0;background:transparent">'
+                    + plumb_svg(r, proyecto=_pr) + '</body></html>', 500)
     _v3d, _vfi = st.columns(2)
     with _v3d.expander(t("3D views of the setting out"), icon=":material/view_in_ar:", expanded=False):
-        components.html('<!DOCTYPE html><html><body style="margin:0;background:transparent">'
-                        + plumb_iso_svg(r, proyecto=_pr) + '</body></html>', height=650, scrolling=False)
-        components.html('<!DOCTYPE html><html><body style="margin:0;background:transparent">'
-                        + plumb_detail_svg(r, proyecto=_pr) + '</body></html>', height=500, scrolling=False)
+        incrustar.dibujo('<!DOCTYPE html><html><body style="margin:0;background:transparent">'
+                        + plumb_iso_svg(r, proyecto=_pr) + '</body></html>', 650)
+        incrustar.dibujo('<!DOCTYPE html><html><body style="margin:0;background:transparent">'
+                        + plumb_detail_svg(r, proyecto=_pr) + '</body></html>', 500)
     with _vfi.expander(t("Setting-out card (for site)"), icon=":material/assignment:", expanded=False):
         st.caption(t("The numbers to measure with a tape. Print it or open it on your phone."))
-        components.html('<!DOCTYPE html><html><body style="margin:0;background:transparent">'
-                        + plumb_card_svg(r, proyecto=_pr) + '</body></html>', height=430, scrolling=False)
+        incrustar.dibujo('<!DOCTYPE html><html><body style="margin:0;background:transparent">'
+                        + plumb_card_svg(r, proyecto=_pr) + '</body></html>', 430)
 
     # ── PDF (con el nombre del proyecto) + guardar contra el proyecto ──
     _svgs = []

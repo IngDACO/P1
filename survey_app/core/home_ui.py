@@ -16,6 +16,7 @@ import logging
 
 from core.i18n import t, etiqueta as _etq
 import streamlit as st
+from core import incrustar
 import pandas as pd
 
 logger = logging.getLogger(__name__)
@@ -484,14 +485,11 @@ def _mobile_back_trap():
     página) y lo redirige al botón '← Atrás' interno (v205). Corre en el iframe del
     componente pero toca `window.parent` (mismo origen: sandbox con allow-same-origin).
     Mantiene una entrada de historial 'trampa' para que el back nunca salga de la app."""
-    import streamlit.components.v1 as components
-    components.html(
-        "<script>(function(){try{var P=window.parent;if(P.__copexBack)return;"
+    incrustar.script("<script>(function(){try{var P=window.parent;if(P.__copexBack)return;"
         "P.__copexBack=true;P.history.pushState({c:1},'');"
         "P.addEventListener('popstate',function(){P.history.pushState({c:1},'');"
         "var b=P.document.querySelector('.st-key-nav_back_btn button');"
-        "if(b&&!b.disabled){b.click();}});}catch(e){}})();</script>",
-        height=0)
+        "if(b&&!b.disabled){b.click();}});}catch(e){}})();</script>")
 
 
 def render_topbar(grupo):

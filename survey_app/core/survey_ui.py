@@ -18,7 +18,6 @@ from core.i18n import t
 import streamlit as st
 
 from core import flash
-import streamlit.components.v1 as components
 import pandas as pd
 from extractors.schindler import extract_from_pdf, PARAMS as PDF_PARAMS, PARAM_DESCRIPTIONS
 from core.calculations import calculate_limits, apply_offsets, analyze_matrix, validate_inputs
@@ -43,6 +42,7 @@ from core                 import plan_store
 from core.auth import can_reports
 from core import clock
 from core import tabla
+from core import incrustar
 
 logger = logging.getLogger(__name__)
 
@@ -550,11 +550,8 @@ def render_survey_tab(_ROL, _GRUPO):
             _prob = floors_with_issues(best, lim_map)
 
             with st.expander(t("Isometric view of the shaft"), icon=":material/view_in_ar:", expanded=False):
-                components.html(
-                    shaft_iso_svg(all_params, limits, best, n_floors, lim_map,
-                                  proyecto=str(st.session_state.get("proyecto", ""))),
-                    height=730, scrolling=False,
-                )
+                incrustar.dibujo(shaft_iso_svg(all_params, limits, best, n_floors, lim_map,
+                                  proyecto=str(st.session_state.get("proyecto", ""))), 730)
 
             # ⚠️ Se comparan abajo → se traduce el display, no la opción.
             _MODO = {"With issues": "With issues", "Todos": "All", "Elegir": "Choose"}
@@ -577,12 +574,10 @@ def render_survey_tab(_ROL, _GRUPO):
                     format_func=lambda i: f"Piso {i + 1}",
                 )
             if _floors:
-                components.html(
+                incrustar.dibujo(
                     render_floor_plans_html(all_params, limits, best, lim_map,
                                             ctrl_in_frame_, ctrl_side_, floors=_floors),
-                    height=min(500 * len(_floors) + 20, 8000),
-                    scrolling=True,
-                )
+                    min(500 * len(_floors) + 20, 8000), scroll=True)
                 # Exportar los diagramas sueltos (para mandar a obra sin el informe)
                 if st.button(t(":material/picture_as_pdf: Prepare a PDF of these diagrams"), key="btn_diag_pdf"):
                     with st.spinner("Generating the diagrams PDF..."):
@@ -632,30 +627,18 @@ def render_survey_tab(_ROL, _GRUPO):
                     f"(diff {_bs['dif']:+.0f} mm). The fit uses (BSR−BS)/2, so with this "
                     f"mismatch the plumb points end up in the wrong place. Check BS, SF1, SF2, BKS or RAIL."
                 )
-            components.html(
-                '<!DOCTYPE html><html><body style="margin:0;background:transparent">'
-                + plumb_svg(plumb_res, proyecto=_pr_) + '</body></html>',
-                height=500, scrolling=False,
-            )
+            incrustar.dibujo('<!DOCTYPE html><html><body style="margin:0;background:transparent">'
+                + plumb_svg(plumb_res, proyecto=_pr_) + '</body></html>', 500)
             _v3d, _vfi = st.columns(2)
             with _v3d.expander(t("3D views of the setting out"), icon=":material/view_in_ar:", expanded=False):
-                components.html(
-                    '<!DOCTYPE html><html><body style="margin:0;background:transparent">'
-                    + plumb_iso_svg(plumb_res, proyecto=_pr_) + '</body></html>',
-                    height=650, scrolling=False,
-                )
-                components.html(
-                    '<!DOCTYPE html><html><body style="margin:0;background:transparent">'
-                    + plumb_detail_svg(plumb_res, proyecto=_pr_) + '</body></html>',
-                    height=500, scrolling=False,
-                )
+                incrustar.dibujo('<!DOCTYPE html><html><body style="margin:0;background:transparent">'
+                    + plumb_iso_svg(plumb_res, proyecto=_pr_) + '</body></html>', 650)
+                incrustar.dibujo('<!DOCTYPE html><html><body style="margin:0;background:transparent">'
+                    + plumb_detail_svg(plumb_res, proyecto=_pr_) + '</body></html>', 500)
             with _vfi.expander(t("Setting-out card (for site)"), icon=":material/assignment:", expanded=False):
                 st.caption(t("The numbers to measure with a tape. Print it or open it on your phone."))
-                components.html(
-                    '<!DOCTYPE html><html><body style="margin:0;background:transparent">'
-                    + plumb_card_svg(plumb_res, proyecto=_pr_) + '</body></html>',
-                    height=430, scrolling=False,
-                )
+                incrustar.dibujo('<!DOCTYPE html><html><body style="margin:0;background:transparent">'
+                    + plumb_card_svg(plumb_res, proyecto=_pr_) + '</body></html>', 430)
             st.markdown(t("**:material/straighten: On-site check — plumb ↔ real wall distances**"))
             st.dataframe(pd.DataFrame(plumb_checks(plumb_res)),
                          width="stretch", hide_index=True, column_config=tabla.cfg())
@@ -1238,13 +1221,9 @@ def render_survey_tab(_ROL, _GRUPO):
                 m2.metric(t("Start"),       sched["start_date"].strftime("%d/%m/%Y"))
                 m3.metric(t("Estimated finish"), sched["fecha_fin"].strftime("%d/%m/%Y"))
 
-                components.html(
-                    '<!DOCTYPE html><html><body style="margin:0;background:transparent">'
+                incrustar.dibujo('<!DOCTYPE html><html><body style="margin:0;background:transparent">'
                     + schedule_svg(sched, animar=True)      # v336: pantalla
-                    + '</body></html>',
-                    height=140 + len(sched["activities"]) * 22 + 200,
-                    scrolling=False,
-                )
+                    + '</body></html>', 140 + len(sched["activities"]) * 22 + 200)
         else:
             st.info(t("Do the calculation first to generate the schedule."))
 

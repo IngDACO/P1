@@ -3,9 +3,9 @@ Survey Analyzer — UI Streamlit.
 Solo presentación: toda la lógica de cálculo vive en core/.
 """
 import streamlit as st
+from core import incrustar
 
 from core.i18n import t
-import streamlit.components.v1 as components
 import sys, os
 sys.path.insert(0, os.path.dirname(__file__))
 
@@ -76,7 +76,7 @@ div[data-testid="stTextInput"] input { min-height: 40px; }
 """, unsafe_allow_html=True)
 
 # ── PWA: manifest + íconos + meta-tags (instalable con ícono COPEX) ──
-components.html("""
+incrustar.script("""
 <script>
 try {
   var d = window.parent.document, h = d.head;
@@ -94,7 +94,7 @@ try {
   }
 } catch(e) {}
 </script>
-""", height=0)
+""")
 
 
 

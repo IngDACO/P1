@@ -18,7 +18,6 @@ import pandas as pd
 import streamlit as st
 
 from core import flash
-import streamlit.components.v1 as components
 
 import logging
 
@@ -33,6 +32,7 @@ logger = logging.getLogger(__name__)
 # `timeclock`/`clock`/`num`, nunca esta UI.
 from core import prestart
 from core import tabla
+from core import incrustar
 
 _AZUL, _VERDE, _GRIS, _ROJO = "#1a3a5c", "#1e8449", "#6b7280", "#c0392b"
 
@@ -40,8 +40,7 @@ _AZUL, _VERDE, _GRIS, _ROJO = "#1a3a5c", "#1e8449", "#6b7280", "#c0392b"
 def _chronometer(clock_in_str, label="In progress", color=_VERDE, key="chrono"):
     """Cronómetro en vivo (client-side): cuenta desde el Clock In, sin recargar."""
     e0 = timeclock.elapsed_seconds(clock_in_str)
-    components.html(
-        '<div style="display:flex;align-items:baseline;gap:10px;'
+    incrustar.dibujo('<div style="display:flex;align-items:baseline;gap:10px;'
         'font-family:Arial,Helvetica,sans-serif;">'
         f'<span style="font-size:12px;color:#6b7280;">{label}</span>'
         f'<span id="{key}" style="font-size:34px;font-weight:800;'
@@ -54,16 +53,13 @@ def _chronometer(clock_in_str, label="In progress", color=_VERDE, key="chrono"):
         "+String(x).padStart(2,'0');}"
         f"var el=document.getElementById('{key}');el.textContent=f(e);"
         "setInterval(function(){e++;el.textContent=f(e);},1000);"
-        "</script>",
-        height=52,
-    )
+        "</script>", 52)
 
 
 def _chrono_mini(clock_in_str, label, color, key):
     """Cronómetro compacto para el sidebar (misma técnica JS que _chronometer)."""
     e0 = timeclock.elapsed_seconds(clock_in_str)
-    components.html(
-        '<div style="font-family:Arial,Helvetica,sans-serif;line-height:1.1;">'
+    incrustar.dibujo('<div style="font-family:Arial,Helvetica,sans-serif;line-height:1.1;">'
         f'<div style="font-size:11px;color:#6b7280;white-space:nowrap;overflow:hidden;'
         f'text-overflow:ellipsis;">{label}</div>'
         f'<span id="{key}" style="font-size:21px;font-weight:800;'
@@ -76,9 +72,7 @@ def _chrono_mini(clock_in_str, label, color, key):
         "+String(x).padStart(2,'0');}"
         f"var el=document.getElementById('{key}');el.textContent=f(e);"
         "setInterval(function(){e++;el.textContent=f(e);},1000);"
-        "</script>",
-        height=44,
-    )
+        "</script>", 44)
 
 
 def _ir_a_prestart():

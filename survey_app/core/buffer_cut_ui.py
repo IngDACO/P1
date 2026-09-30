@@ -10,7 +10,6 @@ Ahora el botón solo CALCULA y guarda en session_state; el render vive fuera.
 import streamlit as st
 
 from core.i18n import t, d
-import streamlit.components.v1 as components
 import pandas as pd
 
 from core.buffer_cut import compute_buffer_cut, buffer_cut_svg
@@ -21,6 +20,7 @@ from core.tool_pdf import tool_pdf
 from core.tool_save_ui import render_guardar
 from core import tool_save_ui
 from core import tabla
+from core import incrustar
 
 _K = "bc_res"
 
@@ -125,9 +125,8 @@ def render_buffer_cut_tab():
 
     svg = buffer_cut_svg(res, proyecto=_pr)
     st.subheader(t(":material/architecture: Cutting diagram"))
-    components.html(
-        '<!DOCTYPE html><html><body style="margin:0;background:transparent">'
-        + svg + '</body></html>', height=330, scrolling=False)
+    incrustar.dibujo('<!DOCTYPE html><html><body style="margin:0;background:transparent">'
+        + svg + '</body></html>', 330)
 
     if any(b["warn"] for b in res["buffers"]):
         st.warning(t(":material/warning: A negative cut means the actual HKPR is greater than the HKP on the drawing: there is nothing to cut off that buffer, check it on site."))

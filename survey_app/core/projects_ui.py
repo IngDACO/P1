@@ -11,7 +11,6 @@ import pandas as pd
 import streamlit as st
 
 from core import flash
-import streamlit.components.v1 as components
 
 from core import tenant
 from core import projects as P
@@ -34,6 +33,7 @@ from core import ui_common as ui
 from core import clock
 from core import tabla
 from core import baseline as _BL          # v501: la línea base (módulo HOJA)
+from core import incrustar
 
 logger = logging.getLogger(__name__)
 
@@ -2278,17 +2278,14 @@ def _estado_section(pid: str, grupo: str, prj: dict):
     st.markdown(t("**:material/calendar_month: Schedule and progress**"))
     n = len(ps["sched"]["activities"])
     _VW = 1280          # el ancho del contenido; el SVG escala a 100% hasta ahí
-    components.html(
-        '<!DOCTYPE html><html><body style="margin:0;background:transparent">'
+    # ⚠️ el alto sale de la MISMA formula que el SVG (antes era `300 + n*21`,
+    # 18 px de menos, y el pie del grafico se recortaba).
+    incrustar.dibujo('<!DOCTYPE html><html><body style="margin:0;background:transparent">'
         + schedule_svg(ps["sched"], real_curve=ps["real"], today_day=ps["today_day"],
                        avances=ps.get("avances"), proj=proj,
                        titulo=prj.get("Name", ""), vw=_VW,
                        animar=True)      # v336: pantalla sí, PDF no
-        + '</body></html>',
-        # ⚠️ el alto sale de la MISMA formula que el SVG (antes era `300 + n*21`,
-        # 18 px de menos, y el pie del grafico se recortaba).
-        height=schedule_svg_alto(n), scrolling=False,
-    )
+        + '</body></html>', schedule_svg_alto(n))
     st.caption(t("The **coloured band** between the two curves is the gap against the plan (red if you are behind, green if ahead). ● red = the activity should already have started."))
 
     # v516 · Los partes del campo, al final del Estado. Van DEBAJO de la curva y no
@@ -4146,9 +4143,8 @@ def _costos_section(pid, grupo, gastos, can_delete, key_prefix):
     _curva = E.spend_curve(pid, grupo)
     _svg   = E.spend_svg(_curva, proy, str(P.get_project(pid).get("Name", ""))) if _curva else ""
     if _svg:
-        components.html(
-            '<!DOCTYPE html><html><body style="margin:0;background:transparent">'
-            + _svg + '</body></html>', height=320, scrolling=False)
+        incrustar.dibujo('<!DOCTYPE html><html><body style="margin:0;background:transparent">'
+            + _svg + '</body></html>', 320)
         st.caption(t("Cumulative cost day by day. The dashed grey line is the budget; the coloured one is where you end up at the current rate."))
     elif _curva:
         st.caption(t("More than one movement is needed to draw the spend curve."))

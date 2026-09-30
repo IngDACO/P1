@@ -17,6 +17,7 @@ navegador entrega la cookie.
 """
 import json
 import streamlit as st
+from core import incrustar
 
 _COOKIE  = "copex_session"
 _DIAS    = 7
@@ -72,13 +73,12 @@ def save(usuario: str, token: str):
     if not usuario or not token:
         return
     try:
-        import streamlit.components.v1 as components
         secs = _DIAS * 24 * 3600
         cookie_str = f"{_COOKIE}={usuario}|{token}; max-age={secs}; path=/; SameSite=Lax"
-        components.html(
-            "<script>try{window.parent.document.cookie="
-            + json.dumps(cookie_str) + ";}catch(e){}</script>",
-            height=0, width=0)
+        # v532 · `incrustar.script` en vez de `components.html` (que Streamlit va a quitar):
+        # el mismo recuadro, así que `window.parent` sigue siendo la página de la app.
+        incrustar.script("<script>try{window.parent.document.cookie="
+                         + json.dumps(cookie_str) + ";}catch(e){}</script>")
     except Exception:
         pass
 

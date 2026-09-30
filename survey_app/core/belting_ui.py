@@ -11,7 +11,6 @@ import pandas as pd
 
 from core.i18n import t, d
 import streamlit as st
-import streamlit.components.v1 as components
 
 from core.belting import compute_belting, belting_svg
 from core import plan_store
@@ -20,6 +19,7 @@ from core.tool_pdf import tool_pdf
 from core.tool_save_ui import render_guardar
 from core import tool_save_ui
 from core import tabla
+from core import incrustar
 
 _K = "belt_res"
 
@@ -135,9 +135,8 @@ def render_belting_tab():
 
     svg = belting_svg(results, proyecto=_pr)
     st.subheader(t(":material/architecture: Diagram"))
-    components.html(
-        '<!DOCTYPE html><html><body style="margin:0;background:transparent">'
-        + svg + '</body></html>', height=330, scrolling=False)
+    incrustar.dibujo('<!DOCTYPE html><html><body style="margin:0;background:transparent">'
+        + svg + '</body></html>', 330)
 
     # ── PDF + guardar contra el proyecto ────────────────────
     _resumen = ", ".join(f"E{r['elevador']}: DSTS {r['dsts']}" for r in results)
