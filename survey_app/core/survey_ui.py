@@ -147,8 +147,9 @@ def render_survey_tab(_ROL, _GRUPO):
         st.session_state["calc_results"]  = None
         for _k in ("proyecto", "cliente", "ubicacion", "ingeniero"):
             st.session_state[_k] = ""
+        # v530: la solución activa y los pisos ya no tienen clave fija (una por cálculo).
         for _k in ("last_excel_id", "_calc_sig", "ns_msg", "rail_ref_msg", "sched_rows",
-                   "sched_start", "_rebuilt_from", "_diag_pdf", "sol_activa", "diag_pisos"):
+                   "sched_start", "_rebuilt_from", "_diag_pdf"):
             st.session_state.pop(_k, None)
 
     # ── Duplicar para el siguiente elevador (conserva parámetros, limpia la matriz) ──
@@ -275,6 +276,14 @@ def render_survey_tab(_ROL, _GRUPO):
         analysis   = r["analysis"]
         lim_map    = r["lim_map"]
         opt_result = r.get("optimizer_result") or {}
+        # ⚠️ v530 · La solución activa y los pisos del diagrama llevan una clave POR CÁLCULO
+        # (`_n`, ver `_do_calculo`). Tras un cálculo nuevo nacen como widgets NUEVOS y el
+        # navegador no tiene nada guardado para ellos, así que enseña lo que se usa. Hasta
+        # v529 se borraban con `pop`: el servidor volvía a los de por defecto y el navegador
+        # seguía enseñando —y DEVOLVIENDO en el siguiente clic— la selección anterior. Ni
+        # asignar antes de pintar basta: «Recalculate» corta la pasada con `st.rerun()` antes
+        # de pintarlos, y los pisos ni siquiera están en pantalla en la pasada siguiente.
+        _n_calc = r.get("_n", 0)
         bs_result  = r.get("bs_result") or {}
         plumb_res  = r.get("plumb")
         interpretation = r.get("interpretation") or {}
@@ -367,18 +376,28 @@ def render_survey_tab(_ROL, _GRUPO):
                 f":green[:material/check_circle:] Found **{len(all_solutions)} optimal solution(s)** with "
                 f"**{best['total_off']} value(s) out of limit**"
             )
-            best_pair = (best["rl"], best["fb"])
+            # ⚠️ v530 · El ORDEN sale de la RECOMENDADA del cálculo, que no cambia, y no de la
+            # ACTIVA. Hasta v529 se ordenaba con la activa primero: al elegir otra, la lista se
+            # reordenaba y la POSICIÓN guardada en el desplegable pasaba a señalar OTRA
+            # solución, que el código tomaba como una elección nueva, y vuelta a empezar — un
+            # bucle de pasadas sin fin desde el 19/07. Medido con el survey real: más de 25
+            # pasadas seguidas eligiendo la 2.ª o la 3.ª (`verif_v530`).
+            _reco = opt_result.setdefault("recomendada", best)
+            reco_pair = (_reco["rl"], _reco["fb"])
             sorted_solutions = sorted(
                 all_solutions,
                 key=lambda s: (
-                    0 if (s["rl"], s["fb"]) == best_pair else 1,
+                    0 if (s["rl"], s["fb"]) == reco_pair else 1,
                     abs(s["rl"]) + abs(s.get("fb_applied", s["fb"]))
                 )
             )
 
             # ── Solución ACTIVA: el optimizador propone, pero decide el ingeniero ──
-            _idx_act = next((k for k, s in enumerate(sorted_solutions)
-                             if (s["rl"], s["fb"]) == best_pair), 0)
+            # La activa se busca por IDENTIDAD (es el mismo dict que se eligió) y solo si no
+            # aparece, por su par RL/FB: dos soluciones con el mismo par no pueden confundirse.
+            _idx_act = next((k for k, s in enumerate(sorted_solutions) if s is best),
+                            next((k for k, s in enumerate(sorted_solutions)
+                                  if (s["rl"], s["fb"]) == (best["rl"], best["fb"])), 0))
             if len(sorted_solutions) > 1:
                 # ⚠️ .1f obligatorio: el optimizador barre en pasos de 0.5 mm, así que
                 # RL/FB pueden ser x.5. Con .0f, RL −6.0 y RL −6.5 daban la MISMA
@@ -388,7 +407,7 @@ def render_survey_tab(_ROL, _GRUPO):
                 _sel = st.selectbox(
                     t(":material/star: Active solution — used in diagrams, plumb setting and reports"),
                     range(len(_lbl)), index=_idx_act, format_func=lambda k: _lbl[k],
-                    key="sol_activa",
+                    key=f"sol_activa_{_n_calc}",
                 )
                 if _sel != _idx_act:
                     _nueva = sorted_solutions[_sel]
@@ -418,11 +437,13 @@ def render_survey_tab(_ROL, _GRUPO):
                         })
                     st.dataframe(pd.DataFrame(_comp), hide_index=True, width="stretch", column_config=tabla.cfg())
             for idx_sol, sol in enumerate(sorted_solutions):
-                is_best   = (sol["rl"], sol["fb"]) == best_pair
+                # ⚠️ v530 · La estrella y el desplegado van con la ACTIVA, como siempre; hasta
+                # v529 la activa iba primera, ahora el orden es fijo y puede estar en cualquiera.
+                is_best   = idx_sol == _idx_act
                 fb_ap     = sol.get("fb_applied", sol["fb"])
                 fb_suffix = f"  |  FB aplic. = {fb_ap:.1f} mm" if abs(fb_ap - sol["fb"]) > 0.01 else ""
                 sol_label = f"{':material/star: ' if is_best else ''}{t('Solution')} {idx_sol+1} — RL = {sol['rl']:+.1f} mm  |  FB = {sol['fb']:+.1f} mm{fb_suffix}"
-                with st.expander(sol_label, expanded=(idx_sol == 0)):
+                with st.expander(sol_label, expanded=is_best):
                     sol_df  = pd.DataFrame(sol["matrix"])
                     sol_min = {f"MIN_{c}": min(sol_df[c]) for c in SURVEY_COLS}
                     sol_max = {f"MAX_{c}": max(sol_df[c]) for c in SURVEY_COLS}
@@ -549,9 +570,10 @@ def render_survey_tab(_ROL, _GRUPO):
             elif _modo == "Todos":
                 _floors = list(range(n_floors))
             else:
+                # ⚠️ v530 · Clave por cálculo, como la solución activa (ver arriba).
                 _floors = st.multiselect(
                     t("Floors"), list(range(n_floors)),
-                    default=_prob[:1] or [0], key="diag_pisos",
+                    default=_prob[:1] or [0], key=f"diag_pisos_{_n_calc}",
                     format_func=lambda i: f"Piso {i + 1}",
                 )
             if _floors:
@@ -707,6 +729,9 @@ def render_survey_tab(_ROL, _GRUPO):
         if not best_sol:
             opt_result = {"best": None, "all_solutions": [],
                           "step_log": opt_result.get("step_log", [])}
+        # ⚠️ v530 · La que propone el optimizador, aparte de la ACTIVA (`best`, que cambia si
+        # el ingeniero elige otra): de ella sale el orden fijo del desplegable.
+        opt_result["recomendada"] = best_sol
 
         # ── BSR vs BS ─────────────────────────────────────────
         bs_result = find_bs_step(
@@ -758,10 +783,13 @@ def render_survey_tab(_ROL, _GRUPO):
         }
         st.session_state["_calc_sig"] = _survey_signature()
         st.session_state.pop("_rebuilt_from", None)
-        # El nº de soluciones y los diagramas cambian: descartar lo derivado del cálculo previo
-        st.session_state.pop("sol_activa", None)
+        # El nº de soluciones y los diagramas cambian: descartar lo derivado del cálculo previo.
+        # ⚠️ v530 · La solución activa y los pisos NO se borran con `pop`: el navegador seguía
+        # enseñando —y devolviendo— la selección anterior (el fallo de la caja del parte,
+        # v529). Cada cálculo lleva su número (`_n`) y sus widgets, una clave nueva.
+        st.session_state["_calc_n"] = int(st.session_state.get("_calc_n", 0) or 0) + 1
+        st.session_state.calc_results["_n"] = st.session_state["_calc_n"]
         st.session_state.pop("_diag_pdf", None)
-        st.session_state.pop("diag_pisos", None)
 
         # ── Cronograma automático según el proyecto ───────────
         # ⚠️ v515: sale del CATÁLOGO, como la cotización y el alta. Hasta aquí este era

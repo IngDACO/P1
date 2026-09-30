@@ -10,6 +10,40 @@ ventana de contexto. Contenido: 258 secciones detalladas + el índice de 440 ver
 
 ---
 
+## ELEGIR OTRA SOLUCIÓN ACTIVA YA NO DEJA EL SURVEY EN UN BUCLE (v530)
+
+Buscando el patrón de v529 (vaciar un widget con `pop`) en el resto de la app, apareció en
+`survey_ui` algo más grave. Desde el 19/07 —la «solución activa elegible»—, **elegir en el
+desplegable cualquier solución que no fuera la recomendada dejaba la página en un bucle de
+pasadas sin fin**. La lista se ordenaba con la ACTIVA primero; al elegir otra se reordenaba,
+y la POSICIÓN guardada en el desplegable pasaba a señalar OTRA solución, que el código
+tomaba como una elección nueva, y vuelta a empezar. Medido con el survey REAL (AppTest, el
+caso de `fixture_survey`, sin IA, sin correo y con las escrituras prohibidas): **más de 25
+pasadas seguidas** eligiendo la 2.ª o la 3.ª, y la solución que usan diagramas, plomado e
+informe cambiando en cada una. En la app, la página se queda en «Running» sin parar.
+
+### El arreglo
+- El ORDEN sale de la RECOMENDADA del cálculo (`optimizer_result.recomendada`, que no cambia),
+  no de la activa; la activa se busca por IDENTIDAD. Elegir cuesta una pasada más y se queda.
+- La estrella y el desplegado de «Solution N» siguen a la ACTIVA, como antes (antes la activa
+  iba siempre primera; ahora puede estar en cualquier posición).
+- Tras «Recalculate», la solución activa y los pisos ya no se borran con `pop` —el navegador
+  seguía enseñando la selección vieja y la DEVOLVÍA en el siguiente clic—: cada cálculo lleva
+  su número y esos widgets, **una clave nueva**, así que nacen como widgets nuevos.
+
+### ⚠️ Por qué no bastaba el arreglo de v529
+Asignar el valor antes de pintar (lo de la caja del parte) no alcanza aquí: «Recalculate»
+corta la pasada con `st.rerun()` ANTES de pintar esos widgets, Streamlit tira el estado de lo
+que no se pintó —el modo de pisos vuelve a «With issues»— y en la pasada siguiente el
+selector de pisos ni siquiera está en pantalla. Lo destapó el guardián en su primera
+versión. La clave por cálculo es la forma que tiene Streamlit de reiniciar un widget.
+
+No se probó en producción: calcular manda el correo interno y llama a la IA. Aquí AppTest es
+fiable, porque el bucle ocurre en el SERVIDOR. `verif_v530` ejecuta el survey real y simula al
+navegador devolviendo el valor de la clave vieja tras recalcular.
+
+29 comprobaciones · romper_v530 7/7 + control · suite 160 verde
+
 ## LA CAJA DEL PARTE SE VACÍA DE VERDAD AL GUARDAR (v529)
 
 Probando la v528 EN PRODUCCIÓN (sesión de campo, PRJ-0015): escribir un parte, confirmar lo
@@ -12605,7 +12639,7 @@ comprueba lo que dice**.
 
 ---
 
-## Versiones desplegadas (v529 = actual)
+## Versiones desplegadas (v530 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -12613,6 +12647,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v530 | **Elegir otra solución activa ya no deja el survey en un bucle.** Desde el 19/07, elegir cualquier solución que no fuera la recomendada dejaba la página en un bucle de pasadas SIN FIN (medido con el survey real: >25 pasadas), con diagramas, plomado e informe cambiando de solución en cada una: la lista se ordenaba con la ACTIVA primero y la POSICIÓN guardada pasaba a señalar otra. Ahora el orden sale de la RECOMENDADA y la activa se busca por identidad. ⚠️ Tras «Recalculate», la solución y los pisos llevan una clave POR CÁLCULO (con `pop` el navegador devolvía la vieja; asignar antes de pintar, como en v529, no alcanzaba porque el `st.rerun()` corta la pasada antes). 29 comprobaciones · romper_v530 7/7 + control · suite 160 verde |
 | v529 | **La caja del parte se vacía de verdad al guardar.** Probando la v528 EN PRODUCCIÓN (parte 2,3 s, confirmar 2,2 s): el parte se guardaba y **el texto seguía en la caja**, invitando a guardarlo otra vez. ⚠️ Desde v516 se vaciaba con `pop` de su clave: el servidor quedaba vacío —y AppTest lo daba por bueno— pero el navegador no se enteraba, porque Streamlit solo le manda el valor (`set_value`) cuando el código lo ASIGNA. Ahora el éxito enciende una marca y la pasada siguiente asigna «» antes de pintarla; si la hoja falla, el texto se queda. `verif_v529` mira el `set_value`, no solo el valor. 14 comprobaciones · romper_v529 5/5 + control · romper_v516 20/20 · suite 159 verde |
 | v528 | **Guardar más rápido.** Medido en producción: guardar una etapa tardaba ~9,5 s en ~9 llamadas a Google, y el heartbeat paraba un clic ~1,9 s cada 50 s. Ahora `StageProgress`, `Activities` y `Projects` se leen FRESCAS en UNA llamada y se escriben en OTRA (las filas nuevas, con `append`): **1+1+1** en vez de ~9. ⚠️ Se decide con la lectura fresca, no con la caché (dos personas en la misma obra bajaban el %); si la obra no está, no se escribe nada; las reglas de fechas siguen siendo UNA (`_lote_avance`) y el rastro de cambios se mantiene. Heartbeat en un hilo: la página no espera y un fallo de Google no expulsa. «Saving…» en cada guardado del campo. `fixture_guardado` sustituye la auditoría (ninguna prueba escribe en el AuditTrail real). ⚠️ La suite cazó dos fallos míos (un error en español, `t` como variable). hoja real 20/20 (guardar: 1 lectura + 1 escritura en lote + 2 append, 1,7 s en local) · romper_v528 19/19 + control · suite 158 verde |
 | v527 | **El selector de obra, sin el estado en el texto.** La v526 probada EN PRODUCCIÓN: desmarcar lo acreditado devolvió la obra a «Planned» y **siguió elegida**. ⚠️ Quedaba que el desplegable CERRADO no repinta su texto mientras no cambie la obra: decía «— In progress» con la tarjeta en «Planned» — del navegador, invisible para AppTest. Decisión del usuario: la etiqueta pasa a «Nombre (PRJ-…)»; el estado ya está en la tarjeta. `verif_v526` afirma el principio (el texto no depende del estado). 15 comprobaciones · romper_v526 **9/9 + control** (la de v525 re-anclada y una nueva) · suite 157 verde |
