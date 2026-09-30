@@ -100,8 +100,8 @@ bucle sin fin desde el 19/07** (v530).
 
 ⚠️ **Riesgo técnico vigilado (v531):** Streamlit anuncia que quitará una función que la app usa en
 22 sitios (diagramas del survey, plomado, rieles…). Se fijó la versión exacta que corre en el Cloud
-para que un reinicio no la actualice sola; migrar esos 22 usos queda pendiente, sin urgencia de
-cliente pero sin olvidarlo.
+para que un reinicio no la actualice sola; y en v532 (30/09) se migraron los 22
+usos, así que la app ya no depende de esa función.
 
 ✅ **El modelo de avance cambió de raíz (v512-v514, 22/09/2026).** Hasta aquí una obra medía contra
 11 fases de una secuencia ideal y el técnico **estimaba** cuánto llevaba de cada una. Ahora mide
@@ -333,9 +333,7 @@ ya captura, no se construye todo en paralelo):
   en la venta. Lo que no es opción es seguir construyendo pantallas de campo sin haberlo decidido.
   El 27/09/2026 se decidió una parte: **el parte diario, de momento, sin conexión no** (v519).
 - ~~**Cerrar el flanco del cobro de obra**~~ → ✅ **hecho en v510 (21/09/2026)**.
-- **Migrar los 22 usos de `st.components.v1.html`** que Streamlit anuncia que quitará (v531): la
-  versión va fijada, así que no hay prisa; pero antes de subir de Streamlit hay que migrarlos o
-  comprobar que la versión nueva todavía la trae.
+- ~~**Migrar los 22 usos de `st.components.v1.html`**~~ → ✅ **hecho en v532 (30/09/2026)**.
 
 ## Cómo trabajan los dos chats
 - **Estratégico** (este brief): negocio, precios, mercado, roadmap comercial.
@@ -377,4 +375,4 @@ Esa tabla sigue siendo responsabilidad de quien cierra la versión. El guardián
 borra o se le cambia el formato, el resultado es ROJO —no verde—, a propósito: sin ella no se puede
 saber a qué versión corresponde este documento.
 
-*Última puesta al día del estado de hecho: 30/09/2026 (v515-v531).*
+*Última puesta al día del estado de hecho: 30/09/2026 (v515-v532).*

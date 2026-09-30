@@ -10,6 +10,36 @@ ventana de contexto. Contenido: 258 secciones detalladas + el índice de 440 ver
 
 ---
 
+## LOS 22 USOS DE `st.components.v1.html` PASAN A `st.iframe` (v532)
+
+Decisión del usuario: hacer los 22 ya (tras explicarle que hoy no se gana nada visible: lo que
+se gana es poder volver a subir de Streamlit). Nace **`core/incrustar.py`** y todo HTML
+incrustado pasa por ahí: `dibujo(html, alto, scroll=False)` y `script(js)`.
+
+### ⚠️ Lo que se midió antes de tocar nada
+En Streamlit 1.64 `components.v1.html` y `st.iframe` generan el **mismo elemento** (un iframe
+con el HTML en `srcdoc`, el mismo sandbox, el mismo acceso a la página): el riesgo que se le
+había descrito al usuario para los scripts era MAYOR que el real. Pero `st.iframe` cambia dos
+cosas, y `incrustar` las neutraliza en un solo sitio:
+- **Siempre permite scroll** (`scrolling="auto"`, leído en el componente del navegador). Los
+  dibujos iban con `scrolling=False`: lo que se salía se recortaba sin barra. `dibujo()` inyecta
+  `overflow:hidden` DENTRO del `<body>` (delante de un `<!DOCTYPE>` lo anularía y el documento
+  pasaría a modo quirks), así que se ven igual. La planta por pisos del survey ya tenía scroll y
+  lo conserva (`scroll=True`).
+- **No admite altura 0**, y los tres scripts iban a 0. `script()` usa 1 px transparente: con
+  «content» el recuadro vale 150 px hasta la primera medida (un salto al cargar).
+
+⚠️ Los scripts NO van a `st.html`: sin recuadro, `window.parent` sería la página que envuelve
+el Cloud y escribirían —la cookie del login, la cabecera de la PWA, la trampa del «atrás»— en
+el documento equivocado.
+
+Las alturas no cambian (los SVG miden como mucho su tamaño de diseño, `max-width`); lo que
+llega al navegador es el mismo HTML más ese estilo. `verif_v532` lo comprueba anotando lo que
+recibe `st.iframe` y EJECUTANDO los cronómetros, la trampa del «atrás», la cookie y el survey
+real.
+
+PRODUCCIÓN: los 3 scripts funcionan en st.iframe (cookie escrita y una pestaña nueva entra sola; trampa del «atrás» activa; manifest añadido; los tres a 1 px) y el dibujo de Buffers sale a 330 px sin barra · 26 comprobaciones · romper_v532 7/7 + control · suite 161 verde
+
 ## STREAMLIT FIJO A LA VERSIÓN DEL CLOUD, Y EL LOCAL IGUALADO (v531)
 
 El usuario pasó los logs del Cloud (29/09 20:11 → 30/09 05:59, hora de Sydney: la v528 en
@@ -12678,7 +12708,7 @@ comprueba lo que dice**.
 
 ---
 
-## Versiones desplegadas (v531 = actual)
+## Versiones desplegadas (v532 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -12686,6 +12716,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v532 | **Los 22 usos de `st.components.v1.html` pasan a `st.iframe`**, por `core/incrustar` (decisión del usuario). ⚠️ En 1.64 los dos generan el MISMO elemento; `st.iframe` solo cambia que siempre permite scroll (se neutraliza con `overflow:hidden` dentro del <body>, sin romper el DOCTYPE) y que no admite altura 0 (los 3 scripts van a 1 px). Los scripts NO van a `st.html`: sin recuadro, `window.parent` sería otro documento. PRODUCCIÓN: los 3 scripts funcionan en st.iframe (cookie escrita y una pestaña nueva entra sola; trampa del «atrás» activa; manifest añadido; los tres a 1 px) y el dibujo de Buffers sale a 330 px sin barra · romper_v532 7/7 + control · suite 161 verde |
 | v531 | **Streamlit fijo a la versión del Cloud (1.64.0), y el local igualado.** Los logs del Cloud (10 h con la v528): ni un error ni un «missing ScriptRunContext» del heartbeat en segundo plano. Pero Streamlit avisa que `st.components.v1.html` —22 usos: diagramas, plomado, rieles…— «will be removed after 2026-06-01», y cada reinicio reinstalaba la ÚLTIMA versión (`>=1.39,<2`): un reinicio cualquiera podía romper esas pantallas. ⚠️ El local estaba en 1.57 (trampa nº11): la suite probaba otra versión que producción. Migrar a `st.iframe`, aparte. suite 159 verde con Streamlit 1.64 + check_negocio_al_dia re-corrido tras poner al día NEGOCIO.md |
 | v530 | **Elegir otra solución activa ya no deja el survey en un bucle.** Desde el 19/07, elegir cualquier solución que no fuera la recomendada dejaba la página en un bucle de pasadas SIN FIN (medido con el survey real: >25 pasadas), con diagramas, plomado e informe cambiando de solución en cada una: la lista se ordenaba con la ACTIVA primero y la POSICIÓN guardada pasaba a señalar otra. Ahora el orden sale de la RECOMENDADA y la activa se busca por identidad. ⚠️ Tras «Recalculate», la solución y los pisos llevan una clave POR CÁLCULO (con `pop` el navegador devolvía la vieja; asignar antes de pintar, como en v529, no alcanzaba porque el `st.rerun()` corta la pasada antes). 29 comprobaciones · romper_v530 7/7 + control · suite 160 verde |
 | v529 | **La caja del parte se vacía de verdad al guardar.** Probando la v528 EN PRODUCCIÓN (parte 2,3 s, confirmar 2,2 s): el parte se guardaba y **el texto seguía en la caja**, invitando a guardarlo otra vez. ⚠️ Desde v516 se vaciaba con `pop` de su clave: el servidor quedaba vacío —y AppTest lo daba por bueno— pero el navegador no se enteraba, porque Streamlit solo le manda el valor (`set_value`) cuando el código lo ASIGNA. Ahora el éxito enciende una marca y la pasada siguiente asigna «» antes de pintarla; si la hoja falla, el texto se queda. `verif_v529` mira el `set_value`, no solo el valor. 14 comprobaciones · romper_v529 5/5 + control · romper_v516 20/20 · suite 159 verde |
