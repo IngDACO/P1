@@ -1191,6 +1191,14 @@ def _lote_avance(recs, pid, cambios, hoy) -> tuple:
         elif av > 0 and fi_n and _dia_iso(fi) and fi_n < fi:   # su trabajo empezó ANTES
             batch.append({"range": f"{_col_letter(_ACOL['ActualStartDate'])}{row}",
                           "values": [[fi_n]]})
+        elif av <= 0 and fi:                         # vuelve a 0 → no hay inicio real
+            # ⚠️ v533 · La gemela de «reabierta → borrar fin real»: una actividad al 0% no
+            # ha empezado. Hasta v532 se quedaba con su inicio (PRJ-0015 enseñaba «inicio
+            # real 26/09» en dos etapas al 0%, anotado en v527). No mueve la curva S real
+            # —al 0% no hay avance que repartir—; al volver a marcar, el inicio sale otra
+            # vez del primer día de trabajo.
+            batch.append({"range": f"{_col_letter(_ACOL['ActualStartDate'])}{row}",
+                          "values": [[""]]})
         if av >= 100 and not ff:                     # completa → fin real = hoy
             batch.append({"range": f"{_col_letter(_ACOL['ActualEndDate'])}{row}",
                           "values": [[ff_n or hoy]]})

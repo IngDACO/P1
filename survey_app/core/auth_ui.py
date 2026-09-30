@@ -276,6 +276,9 @@ def render_login() -> bool:
             except Exception:
                 _a = None
             if _a:
+                # v533 · La sesión se acaba de validar contra la hoja: un veredicto del
+                # heartbeat guardado de antes es más viejo y no puede expulsarla.
+                auth.heartbeat_olvidar(_a.get("usuario", ""), _a.get("token", ""))
                 st.session_state["auth"] = _a
                 st.session_state["_hb_last"] = time.time()
                 st.session_state["_remember_session"] = True   # v222: había cookie → recordar

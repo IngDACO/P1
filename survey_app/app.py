@@ -112,7 +112,7 @@ init_state()
 # LOGIN — barrera de acceso
 # ══════════════════════════════════════════════════════
 from core.auth_ui import render_login, render_user_bar
-from core.auth import heartbeat_en_fondo, heartbeat_resultado, get_user
+from core.auth import heartbeat_en_fondo, heartbeat_olvidar, heartbeat_resultado, get_user
 
 if not render_login():
     st.stop()
@@ -159,6 +159,9 @@ if _xero_vuelta:
 import time as _time
 _a = st.session_state.auth
 if heartbeat_resultado(_a.get("usuario", ""), _a.get("token", "")) is False:
+    # v533 · El veredicto se usa UNA vez: si se quedara guardado, una sesión restaurada
+    # después con la misma cookie saldría expulsada sin volver a preguntar a la hoja.
+    heartbeat_olvidar(_a.get("usuario", ""), _a.get("token", ""))
     st.session_state.pop("auth", None)
     st.warning(t(":material/lock: Your session was closed: this account was opened on another device (or it expired through inactivity). Sign in again."))
     st.stop()

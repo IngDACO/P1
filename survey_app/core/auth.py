@@ -573,7 +573,10 @@ def _hb_hilo(clave, lws, usuario, token):
         logger.warning("auth: heartbeat en segundo plano de %s falló: %s", usuario, e)
         ok = True
     with _HB_LOCK:
-        _HB[clave] = {"hilo": None, "ok": ok, "t": time.time()}
+        # ⚠️ v533 · Solo se apunta si la entrada sigue siendo de ESTE hilo: si entre tanto se
+        # olvidó (`heartbeat_olvidar`), un veredicto calculado antes no puede volver a entrar.
+        if (_HB.get(clave) or {}).get("hilo") is threading.current_thread():
+            _HB[clave] = {"hilo": None, "ok": ok, "t": time.time()}
 
 
 def heartbeat_en_fondo(usuario: str, token: str) -> None:
@@ -598,6 +601,24 @@ def heartbeat_resultado(usuario: str, token: str):
     """Lo que dijo el ÚLTIMO heartbeat que terminó: True, False (desplazado) o None."""
     with _HB_LOCK:
         return (_HB.get((str(usuario), str(token))) or {}).get("ok")
+
+
+def heartbeat_olvidar(usuario: str, token: str) -> None:
+    """Tira el veredicto guardado de esa sesión (v533).
+
+    ⚠️ El veredicto vive en el PROCESO, con la clave (usuario, token), y un `False` se quedaba
+    ahí. Visto en producción el 30/09: se simuló que otro dispositivo tomaba la cuenta, la
+    sesión salió expulsada —bien—, se repuso el token y, al recargar, la cookie restauró la
+    sesión… y la app la volvió a expulsar AL INSTANTE con el veredicto viejo, sin volver a
+    preguntar a la hoja (la expulsión corta la pasada antes de lanzar otro heartbeat). En la
+    vida real un token desplazado no vuelve a valer, pero una lectura de `Login` que una vez
+    no traiga la fila dejaría a alguien expulsado con su cookie buena hasta teclear la
+    contraseña — y antes de v528 una recarga lo arreglaba sola.
+    Se olvida en dos sitios: al EXPULSAR (el veredicto ya se usó) y al RESTAURAR una sesión
+    desde la cookie (se acaba de validar contra la hoja: lo guardado es más viejo).
+    """
+    with _HB_LOCK:
+        _HB.pop((str(usuario), str(token)), None)
 
 
 def validate_session(usuario: str, token: str) -> dict:

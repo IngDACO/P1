@@ -195,15 +195,19 @@ def buffer_cut_svg(res: dict, proyecto: str = "") -> str:
                  f'{_d("cut")} {_mm(corte)}</text>')
 
     # ── Leyenda ──
-    p.append(f'<rect x="18" y="{VH-24}" width="9" height="9" fill="{REDBG}" '
+    # ⚠️ v533 · La nota de escala va en SU línea, debajo. Iba en la misma que los dos rótulos,
+    # anclada a la derecha: con 1-3 buffers el dibujo mide 460 de ancho y caía encima del
+    # segundo («clearance already greater…»). Visto en producción al migrar a `st.iframe`.
+    _yl = VH - 30
+    p.append(f'<rect x="18" y="{_yl-8}" width="9" height="9" fill="{REDBG}" '
              f'stroke="{RED}" stroke-width="0.7"/>')
-    p.append(f'<text x="31" y="{VH-16}" font-size="7.5" fill="{MUT}">{_d("material to cut")} '
+    p.append(f'<text x="31" y="{_yl}" font-size="7.5" fill="{MUT}">{_d("material to cut")} '
              f'({_d("lowers the buffer down to HKP")})</text>')
-    p.append(f'<rect x="230" y="{VH-24}" width="9" height="9" fill="{AMBERBG}" '
+    p.append(f'<rect x="230" y="{_yl-8}" width="9" height="9" fill="{AMBERBG}" '
              f'stroke="{AMBER}" stroke-width="0.7" stroke-dasharray="2,1.5"/>')
-    p.append(f'<text x="243" y="{VH-16}" font-size="7.5" fill="{MUT}">{_d("clearance already greater")} '
+    p.append(f'<text x="243" y="{_yl}" font-size="7.5" fill="{MUT}">{_d("clearance already greater")} '
              f'{_d("than HKP → review")}</text>')
-    p.append(f'<text x="{VW-18}" y="{VH-16}" text-anchor="end" font-size="7" fill="{MUT}">'
+    p.append(f'<text x="18" y="{VH-12}" font-size="7" fill="{MUT}">'
              f'{_d("clearance ≈ not to scale · cut at enlarged scale")}</text>')
     p.append("</svg>")
     return "".join(p)
