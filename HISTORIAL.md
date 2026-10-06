@@ -10,6 +10,44 @@ ventana de contexto. Contenido: 258 secciones detalladas + el índice de 440 ver
 
 ---
 
+## LO QUE ENSEÑARON LOS LOGS DEL CLOUD (v537)
+
+El usuario bajó los logs del Cloud del 06/10/2026 (04:53-06:49 UTC). ⚠️ Solo traen el
+proceso ACTUAL: el de antes de que la app se durmiera se perdió, así que los días v529-v533
+ya no se pueden revisar ahí — lo verificado entonces fue en la propia app.
+
+### ⚠️ 1. El Pre-Start entero caído (dependencia que subió sola)
+Al despertar la app, el Cloud reinstaló todo y `streamlit-drawable-canvas` subió a 0.13.0:
+el requirements decía `>=0.9.3,<1`. La 0.13 quita `display_toolbar` y ya no devuelve la
+imagen salvo que se le pida, así que `st_canvas(...)` reventaba con `TypeError` y **el
+Pre-Start —la charla de seguridad diaria del campo— no abría**.
+⚠️ La suite no lo vio aunque ya corría con el Python del Cloud: en local, sin servidor, la
+0.13 ni siquiera importaba y el Pre-Start caía a su plan B (iniciales) sin dar error — un
+verde que no había tocado el lienzo (trampa nº1). Y el resto de paquetes del 3.12 local
+coincidía con el Cloud: la única deriva era esta.
+→ versión FIJA (`==0.9.3`, la probada en v383; subirla es una decisión, como Streamlit), y
+`_canvas_disponible` comprueba que la función ACEPTA `_LIENZO` antes de usarla: si no,
+iniciales. Las dos firmas usan los mismos parámetros. El guardián exige además que en el
+Python de la suite el lienzo CARGUE (no el plan B).
+
+### 2. Una traza de error en cada cálculo del Survey
+La tabla de parámetros calculados mezclaba números y letras («L», el lado Z) y no pasaba a
+Arrow; Streamlit la arreglaba solo y dejaba la traza. Ahora es texto (y las columnas CUT
+OR/OL, que mezclaban «» y números).
+
+### 3. Una traza de 30 líneas por «valor por defecto + Session State»
+Las herramientas fijan sus entradas por `st.session_state` (plano, reabrir, `estado_vivo`) y
+algunas además pasan `value=`: es a propósito. `global.disableWidgetStateDuplicationWarning`
+en `config.toml` apaga solo ese aviso.
+
+### Lo que confirmaron los logs
+- **La caída de v535**: `AttributeError ... de_la_cuenta` tres veces, entre el despliegue de
+  v535 y el de v536.
+- **v536 la levantó SIN reiniciar**: después de su despliegue ya no hay `AttributeError`, y no
+  hay ningún «Starting up» entre medias (un reinicio manual lo habría dejado).
+
+PRODUCCIÓN (06/10/2026, cuenta de campo): el Pre-Start vuelve a abrir, el lienzo de firma (streamlit_drawable_canvas 0.9.3) se pinta con su barra y un trazo de prueba queda «✓ signed» — sin enviar la charla · 13 comprobaciones · romper_v537 8/8 + control (con py -3.12) · suite 165 verde + 1 rojo de mi guardián nuevo (un import de reserva de un paquete no instalado), arreglado y re-corrido junto con check_suite_integra (11/11) · Python 3.12.10
+
 ## UN DESPLIEGUE YA NO PUEDE CORRER CON LOS MÓDULOS VIEJOS (v536)
 
 ### ⚠️ Lo que pasó al desplegar v535 (06/10/2026)
@@ -12938,7 +12976,7 @@ comprueba lo que dice**.
 
 ---
 
-## Versiones desplegadas (v536 = actual)
+## Versiones desplegadas (v537 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -12946,6 +12984,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v537 | **Lo que enseñaron los logs del Cloud.** ⚠️ El Pre-Start entero estaba CAÍDO: al despertar la app, el Cloud reinstaló y `streamlit-drawable-canvas` subió a 0.13 (el requirements decía `<1`), que quita `display_toolbar` — `TypeError` al abrirlo. La suite no lo vio: en local la 0.13 ni importaba y el Pre-Start caía a su plan B sin error. Versión fija, y si el lienzo no acepta los parámetros, iniciales en vez de caerse. Además: dos trazas de los logs fuera (la tabla de parámetros a Arrow; el aviso de Session State). Los logs confirman que v536 levantó la caída de v535 sin reiniciar. PRODUCCIÓN (06/10/2026, cuenta de campo): el Pre-Start vuelve a abrir, el lienzo de firma (streamlit_drawable_canvas 0.9.3) se pinta con su barra y un trazo de prueba queda «✓ signed» — sin enviar la charla · romper_v537 8/8 + control (con py -3.12) · suite 165 verde + 1 rojo de mi guardián nuevo (un import de reserva de un paquete no instalado), arreglado y re-corrido junto con check_suite_integra (11/11) · Python 3.12.10 |
 | v536 | **Un despliegue ya no puede correr con los módulos viejos en memoria.** ⚠️ Al desplegar v535 la app entera CAYÓ (`AttributeError` en `app.py`): el `app.py` nuevo llamó a una función nueva de `estado_vivo` con el módulo de v534 aún cargado — lo que CLAUDE.md anotaba como «Reboot app si el chip sigue viejo», esta vez con la app caída. Ahora `app.py`, antes de importar nada, compara la versión del disco con la de los módulos cargados y, si no coinciden, los descarta y reimporta. PRODUCCIÓN: la app caída por el despliegue de v535 volvió tras desplegar v536 — chip v536 (los módulos se volvieron a importar) y la sesión de campo siguió abierta; no consta si además se reinició a mano · romper_v536 6/6 + control (con py -3.12) · suite 165 verde con Python 3.12.10 |
 | v535 | **Lo que quedaba pendiente de v534** («no dejes nada pendiente»). ⚠️ Cambiar de obra SIN salir de la herramienta (el campo ficha en otra desde el menú lateral; el admin cambia el selector) dejaba el LFKK de la obra anterior bajo el nombre de la nueva: ahora manda el plano de la nueva y lo tecleado se olvida (en el Survey solo manda el plano; lo medido se queda, por «Duplicate»). ⚠️ Los datos de trabajo son de UNA cuenta: otra cuenta en la misma pestaña ya no ve los resultados ni el chat de la anterior. Los dibujos miden su contenido (sin hueco en blanco en pantalla estrecha). ⚠️ El guardián destapó que el NS del plano no se aplicaba nunca (el 2 neutro no es «vacío»; funcionaba por accidente con el borrado que v534 quitó). Y la suite corre ya con el Python del Cloud (3.12, instalado con permiso del usuario). PRODUCCIÓN (06/10/2026, cuenta de campo, servida ya por v536): dibujo de Rieles 366 px de recuadro para 366 de dibujo (antes 390 fijos), Belting a 375 px de ancho 226 para 225 (antes 330), Plomada 336/336 y las vistas 3D dentro de un desplegable cerrado se miden al abrirlo (257 y 164 para 256 y 163); lo tecleado en Belting se queda al salir de la obra sin dejar la herramienta y se olvida al volver con otra obra (HGPR 120 → 0). Sin comprobar en producción (sin las cuentas): el cambio de cuenta y el selector de obra del admin — los cubren el guardián y la batería · romper_v535 19/19 + control (con py -3.12) · romper_v534 37/37 (la 38ª mudada a v535) y romper_v532 7/7 re-corridas · suite 164 verde con Python 3.12.10 + Streamlit 1.64.0 |
 | v534 | **Lo tecleado ya no se pierde al salir de una herramienta.** Survey real EN PRODUCCIÓN (23 parámetros y 3 pisos a mano): un clic en «Rails» y otro de vuelta, y los parámetros estaban a cero y la matriz cortada a 2 filas. Streamlit borra el valor de un widget que una pasada no pinta, y `survey_ui` los reasignaba DENTRO de su pantalla. Ahora `core/estado_vivo` lo hace desde `app.py` en cada pasada, para las 5 herramientas y con lista cerrada (a un botón no se le puede asignar la clave). ⚠️ Releyendo el arreglo con la suite ya en verde: ese borrado era también lo único que impedía que el plano de la obra A se quedara bajo el nombre de la B (`aplicar` solo rellena lo vacío) — lo conservado es de UNA obra, y al volver con otra se olvida. ⚠️ Y «reabrir un cálculo» tumbaba la pantalla: la foto de las entradas guardaba el BOTÓN. Además: el título de Belting y la leyenda de Rieles ya no se cortan (⚠️ el detector mide ahora con la fuente REAL y da el mismo corte que producción); el cronómetro no se corta en columna estrecha; el valor de las métricas parte en dos líneas en vez de «+0.0…»; cuatro restos en español; y la matriz del Survey con un decimal, no seis. PRODUCCIÓN (06/10/2026, cuenta de campo): Survey con 23 parámetros, 3 paradas y la matriz tecleados → Rieles → de vuelta: TODO sigue; Rieles conserva LFKK/LFGK tras el Survey; al fichar en PRJ-0015 (otra obra) se olvidan, y con la misma obra tras pasar por Fichaje se conservan; el cálculo: 10 métricas enteras (0 con «…»), «1 out of limit», «Matrix: 3 levels» y la matriz con un decimal sin desplazar; dibujo de Rieles con 1 ascensor y de Belting con 1 ascensor y nombre de obra: 0 textos fuera ni pisados, «Lift 1»; cronómetros a 204 px en dos líneas (reloj 171 de 204, 51 de 52); y el cálculo de plomada que el usuario guardó el 01/10 ya no lleva el botón dentro · romper_v534 38/38 + control · romper_v530 7/7, romper_v533 7/7 y romper_v443 7/7 re-corridas · suite 163 verde (re-corrida con el código final) |
