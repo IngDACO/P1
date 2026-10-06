@@ -13,7 +13,8 @@ pandas>=2.0.0,<2.3
 numpy>=1.26.0,<2
 openpyxl>=3.1.0,<4
 reportlab>=4.0.0,<5
-anthropic>=0.25.0
+# v538 · con tope de major, como el resto: sin él, un 2.0 entraría solo al reinstalar.
+anthropic>=0.25.0,<2
 svglib>=1.5.0,<2
 gspread>=6.0.0,<7
 google-auth>=2.28.0,<3
@@ -21,13 +22,19 @@ lxml>=5.0,<6
 pillow>=10.0,<12
 pyarrow>=14.0,<18
 # Login persistente (cookies). Import perezoso: si falla, la app sigue sin persistencia.
-extra-streamlit-components>=0.1.60,<0.2
+# ⚠️ v538 · FIJO (==): es un COMPONENTE (lleva su JavaScript) y la cookie de «Keep me signed in»
+# depende de él. Lo que tumbó el Pre-Start en v537 —el Cloud reinstala todo al despertar la
+# app y `streamlit-drawable-canvas` subió de 0.9 a 0.13 dentro de su rango— le puede pasar
+# igual. 0.1.81 = lo que corre en el Cloud (logs del 06/10/2026).
+extra-streamlit-components==0.1.81
 # Base de datos de zonas horarias para zoneinfo (core/clock.py, hora local por grupo, v173).
 tzdata
 # Mapa interactivo para fijar la ubicación de un proyecto con un pin (v193). Sin API key
 # (usa OpenStreetMap). Import perezoso + fallback a coordenadas manuales si no está.
 folium>=0.15,<1
-streamlit-folium>=0.20,<1
+# ⚠️ v538 · FIJO (==), por lo mismo: componente (mapa de la ubicación y de la ruta del día).
+# 0.27.4 = lo que corre en el Cloud (logs del 06/10/2026).
+streamlit-folium==0.27.4
 # Códigos QR para el inventario de activos (v263). Pure-python, sin ruedas nativas → seguro en el Cloud.
 segno>=1.6,<2
 # Firma DIBUJADA a mano en el Pre-Start (v383). Es un componente de 2023, así que se
