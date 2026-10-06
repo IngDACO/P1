@@ -59,7 +59,7 @@ def _chronometer(clock_in_str, label="In progress", color=_VERDE, key="chrono"):
         "+String(x).padStart(2,'0');}"
         f"var el=document.getElementById('{key}');el.textContent=f(e);"
         "setInterval(function(){e++;el.textContent=f(e);},1000);"
-        "</script>", 52)
+        "</script>", 52, ajustar=False)
 
 
 def _chrono_mini(clock_in_str, label, color, key):
@@ -78,7 +78,7 @@ def _chrono_mini(clock_in_str, label, color, key):
         "+String(x).padStart(2,'0');}"
         f"var el=document.getElementById('{key}');el.textContent=f(e);"
         "setInterval(function(){e++;el.textContent=f(e);},1000);"
-        "</script>", 44)
+        "</script>", 44, ajustar=False)
 
 
 def _ir_a_prestart():

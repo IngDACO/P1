@@ -322,10 +322,17 @@ chk("⚠️ al volver con OTRA obra manda el plano de la nueva (2222, no el 1111
 at.number_input(key="rc_n2500").set_value(4).run()
 at.session_state["obra"] = "PRJ-A"
 at.run()
-chk("cambiar de obra SIN salir de la herramienta no borra nada (como antes: «Duplicate for "
-    "the next lift» cuenta con ello)", _v(at) == "V=(2222.0, 4)", _v(at))
-chk("...ni salir y volver después, con esa misma obra", _fuera_y_vuelve(at) == "V=(2222.0, 4)",
-    _v(at))
+# ⚠️ v535 · Actualizada con su razón (v385): v534 afirmaba que cambiar de obra SIN salir
+# no borraba nada — y así Rieles seguía con el LFKK de la obra anterior bajo el nombre de la
+# nueva (el campo cambia de obra con el fichaje del menú lateral sin dejar la herramienta).
+# Desde v535 manda el plano de la obra nueva y lo tecleado para la vieja se olvida; solo el
+# Survey conserva lo medido a mano («Duplicate for the next lift»), lo comprueba verif_v535.
+chk("cambiar de obra SIN salir de la herramienta: manda el plano de la nueva (1111, no el "
+    "2222 de la anterior) y lo tecleado para la anterior se olvida (v535)",
+    _v(at) == "V=(1111.0, 0)", _v(at))
+at.number_input(key="rc_n2500").set_value(6).run()
+chk("...y lo que se teclea después se conserva al salir y volver con esa misma obra",
+    _fuera_y_vuelve(at) == "V=(1111.0, 6)", _v(at))
 
 at = AppTest.from_string(GUION_O, default_timeout=90)
 at.session_state["obra"] = "PRJ-A"

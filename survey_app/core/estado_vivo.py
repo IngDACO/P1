@@ -131,20 +131,67 @@ def respetar(herramienta) -> None:
     st.session_state.pop(_OBRA + str(herramienta), None)
 
 
+# ── De quién son los datos de trabajo (v535) ─────────────────────────────────
+# ⚠️ Al cerrar sesión solo se quitaba la identidad (`auth`): los resultados del Survey, el
+# historial del asistente y lo tecleado se quedaban en la pestaña, y OTRA cuenta que
+# entrara en ella sin recargar —otra empresa cliente, incluso— los veía. Ahora los datos
+# de trabajo son de UNA cuenta: si entra otra, la sesión empieza limpia. La misma cuenta
+# que vuelve (tras salir, o tras una expulsión de la sesión única) encuentra lo suyo.
+_CUENTA = "_ev_cuenta"
+# Lo que NO es trabajo de nadie y hay que conservar: la identidad recién puesta por el
+# login, el idioma, el gestor de la cookie (único por sesión, v188) y sus componentes, y
+# los mensajes pendientes de pintar (`flash`).
+_INFRA = frozenset({"auth", "_hb_last", "_remember_session", "_no_cookie_restore",
+                    "_lang", "_cookie_mgr", "_flash_cola", _CUENTA})
+_INFRA_PREF = ("copex_cookie",)
+
+
+def de_la_cuenta(usuario) -> bool:
+    """Marca de quién son los datos de la sesión. Si entra OTRA cuenta, los borra todos
+    (menos la infraestructura) y devuelve True. Va justo después del login y antes de
+    pintar nada: quien llama vuelve a inicializar el estado base (`init_state`)."""
+    u = str(usuario or "")
+    antes = st.session_state.get(_CUENTA)
+    st.session_state[_CUENTA] = u
+    if antes is None or antes == u:
+        return False
+    for k in list(st.session_state.keys()):
+        if k in _INFRA or str(k).startswith(_INFRA_PREF):
+            continue
+        del st.session_state[k]
+    return True
+
+
 def al_pintar(herramienta, obra) -> bool:
     """La herramienta se está pintando con `obra` (su ID, o "" si no hay).
 
-    Si VUELVE (no se pintó en la pasada anterior) y la obra es OTRA, olvida sus entradas y
-    devuelve True. Va ANTES de crear los widgets de la herramienta.
+    Devuelve True si lo que tenía era de OTRA obra — y entonces el plano de la obra actual
+    tiene que MANDAR sobre lo que haya (`plan_ui.aplicar` lo pisa en esa pasada). Va ANTES
+    de crear los widgets de la herramienta. Dos casos:
+
+    1. **Vuelve** (no se pintó en la pasada anterior) y la obra es otra, también «ninguna»:
+       se olvidan sus entradas — lo que hacía Streamlit antes de v534 (paridad).
+    2. ⚠️ v535 · **Sin salir**, pasa de una obra X a otra Y (también X → ninguna → Y): el
+       campo cambia de obra con el fichaje del menú lateral sin dejar la herramienta, y el
+       admin con el selector de obra. Hasta v535 no se olvidaba nada y el plano de Y no
+       pisaba los campos ya rellenos: Rieles seguía con el LFKK de X bajo el nombre de Y.
+       Ahora se olvida lo de X — salvo en el Survey, donde «Duplicate for the next lift»
+       conserva A PROPÓSITO los parámetros para el siguiente ascensor: ahí solo manda el
+       plano de Y sobre lo que el plano trae, y lo medido a mano se queda.
     """
     h, obra = str(herramienta), str(obra or "")
     n = int(st.session_state.get(_PASADA, 0) or 0)
     antes = st.session_state.get(_VISTA + h)
-    st.session_state[_VISTA + h] = (n, obra)
+    ult_real = (antes[2] if antes and len(antes) > 2 else "") if antes else ""
+    st.session_state[_VISTA + h] = (n, obra, obra or ult_real)
     if st.session_state.pop(_RESPETAR + h, False) or not antes:
         return False
-    ult_pasada, ult_obra = antes
-    if ult_pasada >= n - 1 or ult_obra == obra:
-        return False
-    olvidar(h)
-    return True
+    ult_pasada, ult_obra = antes[0], antes[1]
+    if ult_pasada < n - 1 and ult_obra != obra:         # 1. vuelve con otra obra
+        olvidar(h)
+        return True
+    if obra and ult_real and ult_real != obra:          # 2. de X a Y sin salir
+        if h != "sv":
+            olvidar(h)
+        return True
+    return False

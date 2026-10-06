@@ -127,6 +127,11 @@ _GRUPO = st.session_state.auth.get("grupo", "")
 # ⚠️ Lo conservado es de UNA obra: si la herramienta vuelve con otra, se olvida (lo decide
 # `plan_ui.selector_proyecto`, que es donde se sabe la obra).
 from core import estado_vivo as _estado_vivo
+# v535 · Los datos de trabajo son de UNA cuenta: si en esta pestaña entra otra, empieza
+# limpia (antes, cerrar sesión solo quitaba la identidad y la siguiente cuenta veía los
+# resultados y el historial del asistente de la anterior).
+if _estado_vivo.de_la_cuenta(st.session_state.auth.get("usuario", "")):
+    init_state()
 _estado_vivo.pasada()
 
 

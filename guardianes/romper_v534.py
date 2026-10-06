@@ -76,23 +76,25 @@ ROTURAS = [
 
     # ── Lo conservado es de UNA obra ──
     ("⚠️ al volver con OTRA obra no se olvida nada (el plano de la vieja bajo el nombre de la nueva)",
-     EV, [("    olvidar(h)\n    return True", "    return True")]),
+     EV, [("        olvidar(h)\n        return True\n    if obra and ult_real", "        return True\n    if obra and ult_real")]),
 
     ("`olvidar` recorre las entradas de la herramienta pero no borra ninguna",
      EV, [("            del st.session_state[k]\n", "            pass\n")]),
 
     ("⚠️ `selector_proyecto` deja de avisar con que obra se pinta la herramienta",
-     PLA, [('    estado_vivo.al_pintar(key, (prj or {}).get("ID", ""))\n', "")]),
+     PLA, [('    st.session_state[_FORZAR] = bool(estado_vivo.al_pintar(key, (prj or {}).get("ID", "")))', "    st.session_state[_FORZAR] = False")]),
 
-    ("la pasada no se cuenta (nunca se sabe si la herramienta vuelve)",
-     EV, [("    st.session_state[_PASADA] = int(st.session_state.get(_PASADA, 0) or 0) + 1",
-           "    st.session_state[_PASADA] = int(st.session_state.get(_PASADA, 0) or 0)")]),
+    # v535 · «la pasada no se cuenta» se MUDÓ a romper_v535: desde v535 el cambio entre dos
+    # obras reales se detecta también sin el contador, así que este guardián ya no la ve;
+    # la ve el de v535 (de «sin obra» a una obra, al volver).
 
     ("⚠️ se olvida tambien al volver con la MISMA obra (el arreglo no arregla nada)",
-     EV, [("    if ult_pasada >= n - 1 or ult_obra == obra:", "    if ult_pasada >= n - 1:")]),
+     EV, [("    if ult_pasada < n - 1 and ult_obra != obra:", "    if ult_pasada < n - 1:")]),
 
-    ("se olvida tambien al cambiar de obra SIN salir («Duplicate for the next lift» pierde lo suyo)",
-     EV, [("    if ult_pasada >= n - 1 or ult_obra == obra:", "    if ult_obra == obra:")]),
+    # v535 · re-anclada: v534 afirmaba lo contrario (sin salir no se olvidaba); el principio
+    # que vigila ahora es el de v535 — sin salir, de X a Y, manda el plano de Y.
+    ("sin salir, de una obra X a otra Y, no se olvida nada (el LFKK de X bajo el nombre de Y)",
+     EV, [("    if obra and ult_real and ult_real != obra:", "    if False:")]),
 
     ("la obra elegida en la herramienta no se conserva (al volver siempre es «otra»)",
      EV, [(" + (_OBRA,)", "")]),

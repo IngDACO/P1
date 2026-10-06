@@ -24,10 +24,39 @@ PAUSA = 2.5
 # el fallo está en la consola, no en el código auditado. Pasó con 4 a la vez. Es la
 # misma familia que el CWD de v19: el entorno de ejecución fabricando falsos rojos.
 ENTORNO = {**os.environ, "PYTHONIOENCODING": "utf-8"}
+
+
+def _python_del_cloud():
+    """⚠️ v535 · El intérprete del Cloud (3.12), si está instalado.
+
+    Hasta v535 la suite corría con el 3.14 local y el Cloud usa 3.12 (trampa nº11: lo local
+    no es lo que corre). El 06/10/2026 se instaló el 3.12 con las librerías de
+    `requirements.txt`, así que la suite lo usa aunque se lance con otro Python. Si no
+    está, sigue con el que la lanzó y LO DICE en la primera y en la última línea.
+    """
+    if sys.version_info[:2] == (3, 12):
+        return sys.executable
+    try:
+        r = subprocess.run(["py", "-3.12", "-c", "import sys, streamlit; print(sys.executable)"],
+                           capture_output=True, text=True, timeout=120)
+        if r.returncode == 0 and r.stdout.strip():
+            return r.stdout.strip().splitlines()[-1]
+    except Exception:                                        # noqa: BLE001
+        pass
+    return None
+
+
+PY = _python_del_cloud()
+AVISO_PY = ("" if PY else "  ⚠️ SIN el Python del Cloud (3.12): la suite prueba otro intérprete")
+PY = PY or sys.executable
+_ver = subprocess.run([PY, "-c", "import sys, streamlit; print('Python %d.%d.%d' % "
+                       "sys.version_info[:3], '· Streamlit', streamlit.__version__)"],
+                      capture_output=True, text=True, encoding="utf-8", errors="replace",
+                      env=ENTORNO).stdout.strip()
 guardianes = sorted(p for p in AQUI.glob("*.py")
                     if p.name.startswith(("verif_", "check_")))
 
-print(f"{len(guardianes)} guardianes\n")
+print(f"{len(guardianes)} guardianes · {_ver}{AVISO_PY}\n")
 # ⚠️ Un guardián que necesita datos y no los tiene NO debe salir verde (sería el paso
 # en vacío de la trampa nº1: un OK que no comprobó nada) ni rojo (no hay nada roto).
 # Sale con código 2 = SIN DATOS y se cuenta aparte: así vaciar la demo no deja rojos
@@ -38,7 +67,7 @@ verde, rojo, roto, sindatos = [], [], [], []
 t0 = time.time()
 for p in guardianes:
     try:
-        r = subprocess.run([sys.executable, str(p)], capture_output=True, cwd=CWD, env=ENTORNO,
+        r = subprocess.run([PY, str(p)], capture_output=True, cwd=CWD, env=ENTORNO,
                            text=True, encoding="utf-8", errors="replace", timeout=240)
         time.sleep(PAUSA)
         cola = [l for l in (r.stdout or "").splitlines() if l.strip()][-1:] or [""]
@@ -59,7 +88,7 @@ for p in guardianes:
         print(f"  ROTO  {p.name}   {e!r:.90}")
 
 print(f"\n=== {len(verde)} verde · {len(rojo)} rojo · {len(roto)} roto "
-      f"· {time.time() - t0:.0f} s ===")
+      f"· {time.time() - t0:.0f} s · {_ver} ==={AVISO_PY}")
 for n, c in rojo + roto:
     print(f"  {n}: {c}")
 if sindatos:

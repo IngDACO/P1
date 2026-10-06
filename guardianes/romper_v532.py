@@ -50,8 +50,11 @@ ROTURAS = [
     ("el estilo va DELANTE del DOCTYPE (el documento pasa a modo quirks)",
      INC, [('        _i = h.lower().find("<body")', "        _i = -1")]),
 
-    ("la altura deja de respetarse (el recuadro mediria su contenido)",
-     INC, [("    return st.iframe(h, height=max(1, int(alto)))", "    return st.iframe(h)")]),
+    # v535 · re-anclada: desde v535 los dibujos SÍ miden su contenido a propósito; lo que
+    # vigila ahora es que un alto FIJO (cronómetros, plantas con scroll) se siga respetando.
+    ("un alto fijo deja de respetarse (los cronometros y las plantas medirian su contenido)",
+     INC, [('    return st.iframe(h, height="content" if ajustar else max(1, int(alto)))',
+            '    return st.iframe(h, height="content")')]),
 
     ("`scroll=True` tambien recorta (la planta por pisos perderia su scroll)",
      INC, [("    if not scroll:\n", "    if True:\n")]),

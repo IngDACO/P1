@@ -30,12 +30,23 @@ import streamlit as st
 _SIN_SCROLL = "<style>html,body{overflow:hidden}</style>"
 
 
-def dibujo(html, alto, scroll=False):
-    """Un dibujo (SVG/HTML) en un recuadro de `alto` px, como `components.html` lo pintaba.
+def dibujo(html, alto, scroll=False, ajustar=None):
+    """Un dibujo (SVG/HTML) en su recuadro.
 
     Sin `scroll`, lo que se salga de la caja se recorta sin barra (el comportamiento de
     `scrolling=False`); con `scroll=True`, barra solo si hace falta.
+
+    ⚠️ v535 · `ajustar` (por defecto, sin `scroll`): el recuadro MIDE lo que mide el dibujo
+    (`height="content"` de `st.iframe`). Con alto fijo, en una pantalla estrecha el SVG
+    encogía con el ancho y debajo quedaba un hueco en blanco —medido en producción: 379 px
+    de cronograma en un recuadro de 648, 256 de isométrica en 650—. Streamlit le añade al
+    documento un script que mide el cuerpo y avisa a la página (al cargar, al cambiar el
+    DOM y al cambiar de ancho), así que el dibujo de un desplegable cerrado se mide al
+    abrirlo. `alto` solo cuenta con `ajustar=False`: los cronómetros (alto exacto del menú
+    y de la columna, v534) y las plantas apiladas con `scroll` (hasta 8000 px).
     """
+    if ajustar is None:
+        ajustar = not scroll
     h = str(html or "")
     if not scroll:
         # ⚠️ El estilo va DENTRO del <body> si lo hay: delante de un `<!DOCTYPE>` lo
@@ -47,7 +58,7 @@ def dibujo(html, alto, scroll=False):
             h = h[:_j + 1] + _SIN_SCROLL + h[_j + 1:] if _j >= 0 else _SIN_SCROLL + h
         else:
             h = _SIN_SCROLL + h
-    return st.iframe(h, height=max(1, int(alto)))
+    return st.iframe(h, height="content" if ajustar else max(1, int(alto)))
 
 
 def script(js):

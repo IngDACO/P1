@@ -22,6 +22,10 @@ from core import plan_data
 from core import timeclock
 
 
+# v535 · Aviso de `selector_proyecto` a `aplicar`: la obra acaba de cambiar.
+_FORZAR = "_pl_forzar"
+
+
 def _proyecto_fichado(auth: dict):
     """Proyecto del clock-in abierto del usuario de campo."""
     try:
@@ -52,7 +56,11 @@ def selector_proyecto(key: str, ayuda: str = "") -> tuple:
     esta función lo primero.
     """
     prj, datos = _selector_proyecto(key, ayuda)
-    estado_vivo.al_pintar(key, (prj or {}).get("ID", ""))
+    # v535 · Si lo que tenía la herramienta era de OTRA obra, el plano de esta tiene que
+    # MANDAR en el `aplicar` que viene justo después (si no, solo rellena lo vacío y se
+    # quedaría el dato de la obra anterior). Se escribe SIEMPRE, para que un aviso viejo
+    # no lo herede otra herramienta.
+    st.session_state[_FORZAR] = bool(estado_vivo.al_pintar(key, (prj or {}).get("ID", "")))
     return prj, datos
 
 
@@ -104,12 +112,22 @@ def _cabecera(prj: dict, datos: dict, fichado: bool):
                    ":material/attach_file: Files) or upload the PDF below.")
 
 
-def aplicar(datos: dict, mapa: dict) -> int:
+def aplicar(datos: dict, mapa: dict, neutros: dict = None) -> int:
     """Vuelca valores del plano en session_state. `mapa` = {clave_plano: clave_widget}.
 
     Solo escribe si el widget está vacío/en cero, para no pisar algo que el
     usuario ya ajustó a mano. Devuelve cuántos aplicó.
+
+    ⚠️ v535 · Salvo justo después de un cambio de OBRA (lo avisa `selector_proyecto`):
+    entonces lo que hay es de la obra anterior y el plano de esta lo pisa — solo en lo que
+    el plano trae; lo que no trae se queda como está.
+
+    `neutros` = {clave_widget: valor} que cuenta como VACÍO: el nº de paradas del Survey
+    nace en 2 («mínimo neutro; el NS real sale del plano») y el 2 no es cero, así que el
+    NS del plano no se aplicaba nunca — solo funcionaba por accidente cuando Streamlit
+    había borrado el campo al salir de la herramienta, que v534 dejó de hacer.
     """
+    forzar = bool(st.session_state.pop(_FORZAR, False))
     n = 0
     for origen, destino in (mapa or {}).items():
         val = (datos or {}).get(origen)
@@ -122,9 +140,14 @@ def aplicar(datos: dict, mapa: dict) -> int:
             vacio = actual in (None, "", 0, 0.0) or float(actual) == 0.0
         except Exception:
             vacio = not actual
-        if vacio:
+        if destino in (neutros or {}) and actual == (neutros or {})[destino]:
+            vacio = True
+        if vacio or forzar:
             try:
-                st.session_state[destino] = float(val)
+                # Un entero se queda entero (el nº de paradas): con `forzar` se escribe
+                # también donde ya había un valor, y ese valor dice el tipo del widget.
+                st.session_state[destino] = (int(round(float(val))) if isinstance(actual, int)
+                                             and not isinstance(actual, bool) else float(val))
             except (TypeError, ValueError):
                 st.session_state[destino] = val
             n += 1

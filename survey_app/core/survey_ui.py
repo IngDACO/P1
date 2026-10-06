@@ -151,7 +151,7 @@ def render_survey_tab(_ROL, _GRUPO):
             st.session_state[_k] = ""
         # v530: la solución activa y los pisos ya no tienen clave fija (una por cálculo).
         for _k in ("last_excel_id", "_calc_sig", "ns_msg", "rail_ref_msg", "sched_rows",
-                   "sched_start", "_rebuilt_from", "_diag_pdf"):
+                   "sched_start", "_rebuilt_from", "_diag_pdf", "_sv_ns_obra"):
             st.session_state.pop(_k, None)
 
     # ── Duplicar para el siguiente elevador (conserva parámetros, limpia la matriz) ──
@@ -876,7 +876,14 @@ def render_survey_tab(_ROL, _GRUPO):
             _mapa_sv = {f"params.{_p}": f"inp_{_p}" for _p in PDF_PARAMS}
             _mapa_sv["ns"] = "ns"
             _mapa_sv["rail_altura"] = "inp_RAIL"   # altura del diente, del catálogo
-            _n_sv = plan_ui.aplicar(_plano_sv, _mapa_sv)
+            # v535 · El NS del plano manda sobre el 2 neutro, pero UNA vez por obra: si el
+            # 2 contara siempre como vacío, quien pusiera 2 a mano lo vería volver al del
+            # plano en cada pasada.
+            _pid_sv = str((_prj_sv or {}).get("ID", ""))
+            _neutro_sv = ({"ns": 2} if st.session_state.get("_sv_ns_obra") != _pid_sv
+                          else None)
+            _n_sv = plan_ui.aplicar(_plano_sv, _mapa_sv, neutros=_neutro_sv)
+            st.session_state["_sv_ns_obra"] = _pid_sv
             if _n_sv:
                 st.caption(f":green[:material/check_circle:] {_n_sv} value(s) taken from the project drawing. "
                            "Check them and fill in the ones measured on site.")

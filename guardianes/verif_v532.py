@@ -119,7 +119,7 @@ DOC = '<!DOCTYPE html><html><body style="margin:0;background:transparent"><svg><
 incrustar.dibujo(DOC, 330)
 incrustar.dibujo('<svg viewBox="0 0 10 10"></svg>', 500)
 incrustar.dibujo(DOC, 800, scroll=True)
-incrustar.dibujo(DOC, 0)
+incrustar.dibujo(DOC, 0, ajustar=False)
 incrustar.script("<script>window.parent.x=1;</script>")
 ''' % RAIZ
 import streamlit as st                                             # noqa: E402
@@ -146,12 +146,17 @@ if len(_LLAM) == 5 and len(_ifr) == 5:
         d1.startswith("<!DOCTYPE html>") and
         '<body style="margin:0;background:transparent"><style>html,body{overflow:hidden}</style>'
         in d1, d1[:140])
-    chk("...y la MISMA altura (330)", h1 == 330, h1)
+    # ⚠️ v535 · Actualizada con su razón (v385): exigía la altura FIJA de siempre. Desde
+    # v535 un dibujo mide lo que mide su contenido (`height="content"`): con alto fijo, en
+    # pantalla estrecha quedaba un hueco en blanco debajo (medido en producción). El
+    # principio que se afirma ahora: el dibujo NO lleva una altura inventada.
+    chk("...y el recuadro mide lo que mide el dibujo (v535: `content`, no una altura fija)",
+        h1 == "content", h1)
     chk("fragmento sin <body>: el estilo va delante (ya se pintaba sin doctype)",
         d2.startswith("<style>html,body{overflow:hidden}</style><svg"), d2[:80])
     chk("`scroll=True` deja el HTML intacto (la planta por pisos ya tenía scroll)",
         "overflow:hidden" not in d3 and h3 == 800, (d3[:60], h3))
-    chk("una altura 0 no revienta: sale a 1 (st.iframe no admite 0)", h4 == 1, h4)
+    chk("una altura 0 (con alto fijo) no revienta: sale a 1 (st.iframe no admite 0)", h4 == 1, h4)
     chk("⚠️ el script: 1 px, sin márgenes y con el JS intacto",
         h5 == 1 and d5 == '<html><body style="margin:0"><script>window.parent.x=1;</script>'
                           '</body></html>', (h5, d5))
@@ -255,7 +260,11 @@ chk("...todos recortados sin barra, salvo la planta por pisos (que ya tenía scr
     all("overflow:hidden" in d for d, h in _svg if "Piso" not in d and "floor" not in d.lower())
     and len([1 for d, h in _svg if "overflow:hidden" in d]) >= 2,
     [("overflow:hidden" in d, h) for d, h in _svg])
-chk("la vista isométrica, con su altura de siempre (730)", any(h == 730 for _d, h in _svg),
+# ⚠️ v535 · Actualizada con su razón: era «con su altura de siempre (730)»; ahora todos los
+# dibujos sin `scroll` miden su contenido, y la planta por pisos (con `scroll`) sigue fija.
+chk("los dibujos del survey miden su contenido; solo la planta por pisos (con scroll) va fija",
+    any(h == "content" for _d, h in _svg)
+    and all(h == "content" for d, h in _svg if "overflow:hidden" in d),
     [h for _d, h in _svg])
 
 print("\n" + "=" * 70)
