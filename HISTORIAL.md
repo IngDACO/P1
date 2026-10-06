@@ -10,6 +10,111 @@ ventana de contexto. Contenido: 258 secciones detalladas + el índice de 440 ver
 
 ---
 
+## LO TECLEADO YA NO SE PIERDE AL SALIR DE UNA HERRAMIENTA (v534)
+
+Quedaba por probar EN PRODUCCIÓN el Survey de punta a punta (v530 y los dibujos de v532). Se
+hizo con la sesión de campo y el caso del fixture, tecleado a mano: 23 parámetros y una
+matriz de 3 pisos. v530 y v532 salieron bien (ver la fila de v533). Pero recorrer la pantalla
+de verdad enseñó seis cosas que ningún test miraba.
+
+### ⚠️ 1. Lo tecleado se perdía al salir de la herramienta
+Con el survey calculado, un clic en «Rails» y otro de vuelta en «Survey»: **los 23 parámetros
+a 0,00, las paradas a 2 y la matriz cortada a 2 filas**. Los resultados seguían en pantalla
+con el aviso «You changed data since the last calculation», y «Recalculate» habría calculado
+con ceros. Un técnico que teclea 12 pisos en obra y pulsa «Timeclock» para fichar lo perdía
+todo.
+
+Streamlit borra el valor de un widget en cuanto una pasada no lo pinta. `survey_ui` lo sabía
+y reasignaba sus claves… DENTRO de su pantalla, que en las pasadas de otra sección no corre.
+Las otras cuatro herramientas no lo hacían en ningún sitio.
+
+→ `core/estado_vivo.pasada()`, llamado desde `app.py` en CADA pasada, después del login:
+reasigna las entradas de las cinco herramientas. ⚠️ Con **lista cerrada**: a un botón, una
+tabla editable o una subida no se les puede asignar la clave (Streamlit lanza una excepción),
+así que no se va por prefijos amplios. El guardián exige las dos cosas leyendo el código:
+que toda entrada de las herramientas esté en la lista y que ningún botón lo esté.
+
+#### ⚠️ Lo que ese borrado protegía sin querer (visto releyendo el arreglo, antes de desplegar)
+La suite estaba en verde (163) y el arreglo listo. Releyendo el diff: `plan_ui.aplicar` solo
+rellena un campo **si está vacío**. El técnico que calcula Rieles en la obra A, ficha en la B
+y vuelve, encontraba los campos vacíos —Streamlit los había borrado— y se rellenaban con el
+plano de B. Conservándolos sin más se habría quedado **el LFKK de A bajo el nombre de B**, en
+un corte que no se deshace. El borrado era un fallo y, a la vez, la única protección.
+
+→ Lo conservado es **de una obra**. `plan_ui.selector_proyecto` —las cinco herramientas lo
+llaman lo primero— avisa de con qué obra se pinta cada una; si la herramienta VUELVE (no se
+pintó en la pasada anterior) y la obra es otra, sus entradas se olvidan y manda el plano
+nuevo: exactamente lo que pasaba antes. Misma obra, o ninguna las dos veces → se conservan.
+Cambiar de obra sin salir de la herramienta no borraba antes y no borra ahora («Duplicate
+for the next lift» cuenta con ello). Lo que otra pantalla carga a propósito —reabrir un
+cálculo, reconstruir un survey— se respeta. La obra elegida por el admin en cada herramienta
+también se conserva (si no, al volver siempre sería «otra»); la fase del Survey no: al volver
+se abre en «Survey data», que es donde se mira la obra.
+
+#### ⚠️ Y de paso: «reabrir un cálculo» tumbaba la pantalla
+Al leer cómo se restauran las entradas: la foto que se guarda con cada cálculo cogía todo lo
+que empezara por el prefijo de la herramienta, **incluido el botón de calcular**
+(`rc_calc1: false`). Al reabrirlo se le asignaba ese valor y Streamlit lanza «Values for the
+widget with key 'rc_calc1' cannot be set using st.session_state». Ejecutado con la pantalla
+real de Rieles: excepción. Ahora solo se guardan y se restauran entradas y tablas — el filtro
+va también al restaurar, porque los cálculos ya guardados traen el botón dentro (leído en
+la hoja real: los 4 cálculos guardados de `cliente1` lo traen).
+
+#### ⚠️ La batería cazó un paso en vacío del propio guardián
+Dos roturas escaparon: quitar el «respeto» a lo reabierto no ponía nada rojo. Los guiones de
+AppTest corren en el MISMO proceso y comparten los módulos: el guion que anulaba `al_pintar`
+para enseñar el peligro lo dejaba anulado para el siguiente, así que «lo reabierto se
+respeta» pasaba porque ya no se olvidaba NADA. Ahora cada guion repone lo que sustituye, y
+el test lleva su control: en la misma situación, sin reabrir, sí se olvida.
+
+### 2. Dibujos con el texto cortado por el borde
+- **Belting** con 1 o 2 ascensores: el dibujo medía 198/348 de ancho y su título pide ~350.
+  Ahora mide 470 como mínimo, con las columnas centradas, y el nombre de la obra va en su
+  propia línea (a la derecha del título se pisaba con él hasta con 3).
+- **Rieles, Caso 1** con 1 ascensor: la leyenda perdía el «)» final. Va en dos líneas.
+⚠️ El detector de v533 estimaba el ancho (0,52 × tamaño por carácter) y daba por cortado lo
+que cabía. Ahora mide con la fuente REAL (Arial, con PIL) y da exactamente lo que se vio en
+producción: la leyenda se salía 3 px. 91 dibujos medidos, con y sin nombre de obra.
+
+### 3. El cronómetro del fichaje, cortado en una columna estrecha
+En una columna de 204 px (tableta, o PC con el menú abierto) rótulo y reloj pedían 225 y el
+reloj salía sin los segundos. Ahora, si no caben, el reloj baja a su línea — y sin los
+márgenes del documento las dos líneas caben en los mismos 52 px. Medido en el navegador de
+producción con el HTML viejo y el nuevo: 225 → 171 de 204; con sitio, se ve igual que antes.
+
+### 4. El VALOR de las métricas se cortaba con «…»
+«+0.0…» por «+0.0 mm» en el resumen del Survey, «30/09/2…» en el cronograma: cinco en una
+pantalla. La etiqueta ya se había arreglado en v335; el valor es peor, porque un número
+cortado en obra alguien lo completa de memoria. El recorte lo pone el contenedor de markdown
+de DENTRO del valor (medido en producción antes de escribir el CSS): ahora parte en dos
+líneas.
+
+### 5. Restos en español en una pantalla en inglés
+«1 fuera» (desplegable de soluciones), «Matriz: 3 niveles», «Piso 1», y «Elevador 1» en las
+tablas de Rieles y Plomada. Tres eran trozos de f-string, invisibles para las redes de i18n.
+⚠️ En la tabla del Caso 2 de Rieles «Elevador N» es la CLAVE de la columna: se le cambia la
+etiqueta, no el nombre (v450) — y la batería incluye el arreglo tentador de renombrarla.
+
+### 6. La matriz del Survey, con seis decimales
+Un Styler sin `format` manda cada número como «76.000000»: la matriz ajustada no cabía y
+había que desplazarla de lado para leer un milímetro. Las tres tablas coloreadas fijan un
+decimal.
+
+### Anotado, sin tocar (decisiones del usuario)
+- **Pasar de «sin obra» a una obra cuenta como cambio**: quien teclea un survey sin fichar,
+  ficha y vuelve, lo pierde — igual que antes de esta versión. Conservarlo ahí es cómodo,
+  pero deja datos de un cálculo suelto bajo el nombre de una obra.
+- **Cambiar de obra DENTRO de una herramienta no recarga el plano** (viene de v137): los
+  campos ya rellenos se quedan con los de la obra anterior. Arreglarlo choca con «Duplicate
+  for the next lift», que cuenta con que se queden.
+- **Al cerrar sesión solo se borra la identidad**: los resultados de las herramientas se
+  quedan en la pestaña, y otra cuenta que entre en esa misma pestaña sin recargar los ve.
+- **Los dibujos tienen alto fijo**: en una pantalla estrecha el dibujo encoge y debajo queda
+  un hueco en blanco (hasta ~390 px en el cronograma). `st.iframe` sabe medir el contenido,
+  pero cambia los 19 dibujos y no se puede probar en la app de Android desde aquí.
+
+PRODUCCIÓN (06/10/2026, cuenta de campo): Survey con 23 parámetros, 3 paradas y la matriz tecleados → Rieles → de vuelta: TODO sigue; Rieles conserva LFKK/LFGK tras el Survey; al fichar en PRJ-0015 (otra obra) se olvidan, y con la misma obra tras pasar por Fichaje se conservan; el cálculo: 10 métricas enteras (0 con «…»), «1 out of limit», «Matrix: 3 levels» y la matriz con un decimal sin desplazar; dibujo de Rieles con 1 ascensor y de Belting con 1 ascensor y nombre de obra: 0 textos fuera ni pisados, «Lift 1»; cronómetros a 204 px en dos líneas (reloj 171 de 204, 51 de 52); y el cálculo de plomada que el usuario guardó el 01/10 ya no lleva el botón dentro · 61 comprobaciones · romper_v534 38/38 + control · romper_v530 7/7, romper_v533 7/7 y romper_v443 7/7 re-corridas · suite 163 verde (re-corrida con el código final)
+
 ## LO QUE DESTAPÓ CERRAR LOS PENDIENTES EN PRODUCCIÓN (v533)
 
 El usuario pidió no dejar nada pendiente. Lo que quedaba por ver EN PRODUCCIÓN se probó, y
@@ -12748,7 +12853,7 @@ comprueba lo que dice**.
 
 ---
 
-## Versiones desplegadas (v533 = actual)
+## Versiones desplegadas (v534 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -12756,6 +12861,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v534 | **Lo tecleado ya no se pierde al salir de una herramienta.** Survey real EN PRODUCCIÓN (23 parámetros y 3 pisos a mano): un clic en «Rails» y otro de vuelta, y los parámetros estaban a cero y la matriz cortada a 2 filas. Streamlit borra el valor de un widget que una pasada no pinta, y `survey_ui` los reasignaba DENTRO de su pantalla. Ahora `core/estado_vivo` lo hace desde `app.py` en cada pasada, para las 5 herramientas y con lista cerrada (a un botón no se le puede asignar la clave). ⚠️ Releyendo el arreglo con la suite ya en verde: ese borrado era también lo único que impedía que el plano de la obra A se quedara bajo el nombre de la B (`aplicar` solo rellena lo vacío) — lo conservado es de UNA obra, y al volver con otra se olvida. ⚠️ Y «reabrir un cálculo» tumbaba la pantalla: la foto de las entradas guardaba el BOTÓN. Además: el título de Belting y la leyenda de Rieles ya no se cortan (⚠️ el detector mide ahora con la fuente REAL y da el mismo corte que producción); el cronómetro no se corta en columna estrecha; el valor de las métricas parte en dos líneas en vez de «+0.0…»; cuatro restos en español; y la matriz del Survey con un decimal, no seis. PRODUCCIÓN (06/10/2026, cuenta de campo): Survey con 23 parámetros, 3 paradas y la matriz tecleados → Rieles → de vuelta: TODO sigue; Rieles conserva LFKK/LFGK tras el Survey; al fichar en PRJ-0015 (otra obra) se olvidan, y con la misma obra tras pasar por Fichaje se conservan; el cálculo: 10 métricas enteras (0 con «…»), «1 out of limit», «Matrix: 3 levels» y la matriz con un decimal sin desplazar; dibujo de Rieles con 1 ascensor y de Belting con 1 ascensor y nombre de obra: 0 textos fuera ni pisados, «Lift 1»; cronómetros a 204 px en dos líneas (reloj 171 de 204, 51 de 52); y el cálculo de plomada que el usuario guardó el 01/10 ya no lleva el botón dentro · romper_v534 38/38 + control · romper_v530 7/7, romper_v533 7/7 y romper_v443 7/7 re-corridas · suite 163 verde (re-corrida con el código final) |
 | v533 | **Lo que destapó cerrar los pendientes en producción.** La expulsión de la sesión única, probada EN PRODUCCIÓN sin contraseñas (token de la cuenta de prueba cambiado en `Login`): expulsa al segundo clic, como se diseñó. ⚠️ Pero al reponer el token, la cookie restauraba la sesión y la app la expulsaba AL INSTANTE: el veredicto del heartbeat se quedaba guardado en el proceso. Ahora se olvida al expulsar y al restaurar. Además: la leyenda de Buffers ya no se pisa y una etapa que vuelve a 0% pierde su «inicio real». PRODUCCIÓN: expulsa al segundo clic; tras desplegar, la sesión restaurada por cookie ya no sale expulsada; PRJ-0015 sin inicios reales colgados tras marcar y desmarcar; Survey real (5 soluciones): elegir la 3ª = UNA pasada y el orden no cambia, «Recalculate» vuelve a la recomendada (v530); los 9 recuadros del Survey, Rieles, Belting y los 4 cronómetros sin barra (v532) · romper_v533 7/7 + control · romper_v525 16/16 y romper_v528 19/19 re-corridas · suite 162 verde |
 | v532 | **Los 22 usos de `st.components.v1.html` pasan a `st.iframe`**, por `core/incrustar` (decisión del usuario). ⚠️ En 1.64 los dos generan el MISMO elemento; `st.iframe` solo cambia que siempre permite scroll (se neutraliza con `overflow:hidden` dentro del <body>, sin romper el DOCTYPE) y que no admite altura 0 (los 3 scripts van a 1 px). Los scripts NO van a `st.html`: sin recuadro, `window.parent` sería otro documento. PRODUCCIÓN: los 3 scripts funcionan en st.iframe (cookie escrita y una pestaña nueva entra sola; trampa del «atrás» activa; manifest añadido; los tres a 1 px) y el dibujo de Buffers sale a 330 px sin barra · romper_v532 7/7 + control · suite 161 verde |
 | v531 | **Streamlit fijo a la versión del Cloud (1.64.0), y el local igualado.** Los logs del Cloud (10 h con la v528): ni un error ni un «missing ScriptRunContext» del heartbeat en segundo plano. Pero Streamlit avisa que `st.components.v1.html` —22 usos: diagramas, plomado, rieles…— «will be removed after 2026-06-01», y cada reinicio reinstalaba la ÚLTIMA versión (`>=1.39,<2`): un reinicio cualquiera podía romper esas pantallas. ⚠️ El local estaba en 1.57 (trampa nº11): la suite probaba otra versión que producción. Migrar a `st.iframe`, aparte. suite 159 verde con Streamlit 1.64 + check_negocio_al_dia re-corrido tras poner al día NEGOCIO.md |
