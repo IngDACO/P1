@@ -10,6 +10,21 @@ ventana de contexto. Contenido: 258 secciones detalladas + el índice de 440 ver
 
 ---
 
+## NINGÚN COMPONENTE PUEDE SUBIR DE VERSIÓN SOLO (v538)
+
+Auditando «¿ya está todo cerrado?» tras v537: lo que tumbó el Pre-Start —el Cloud reinstala
+TODAS las dependencias cada vez que la app despierta, y un componente subió de versión dentro
+de su rango— podía repetirse con los otros dos componentes de la app:
+`extra-streamlit-components` (la cookie de «Keep me signed in») y `streamlit-folium` (los mapas
+de la ubicación y de la ruta del día). Y `anthropic` (la IA) no tenía tope.
+
+→ Los dos, fijos a lo que corre en el Cloud (0.1.81 y 0.27.4, de los logs del 06/10/2026), y
+`anthropic<2`. El guardián detecta los componentes por lo que INSTALAN (un frontend con su
+`index.html`), no por una lista escrita a mano, así que uno nuevo que se añada sin fijar sale
+rojo; y exige tope en todo lo demás salvo `tzdata`.
+
+PRODUCCIÓN (06/10/2026, cuenta de campo): chip v538 y la sesión de campo siguió abierta; una pestaña nueva entra sola por la cookie (extra-streamlit-components), «My route» pinta el mapa con su pin (streamlit-folium) y el asistente de campo responde (anthropic). Las versiones fijadas son las que ya corrían: prueba que la app arranca con el requirements nuevo, no un cambio de comportamiento · 7 comprobaciones · romper_v538 6/6 + control (con py -3.12) · suite 167 verde con Python 3.12.10
+
 ## LO QUE ENSEÑARON LOS LOGS DEL CLOUD (v537)
 
 El usuario bajó los logs del Cloud del 06/10/2026 (04:53-06:49 UTC). ⚠️ Solo traen el
@@ -12976,7 +12991,7 @@ comprueba lo que dice**.
 
 ---
 
-## Versiones desplegadas (v537 = actual)
+## Versiones desplegadas (v538 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -12984,6 +12999,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v538 | **Ningún componente puede subir de versión solo.** Lo que tumbó el Pre-Start (v537) podía repetirse con la cookie de «Keep me signed in» (`extra-streamlit-components`) y los mapas (`streamlit-folium`): fijos a lo que corre en el Cloud, y `anthropic<2`. El guardián detecta los componentes por lo que instalan, no por una lista. PRODUCCIÓN (06/10/2026, cuenta de campo): chip v538 y la sesión de campo siguió abierta; una pestaña nueva entra sola por la cookie (extra-streamlit-components), «My route» pinta el mapa con su pin (streamlit-folium) y el asistente de campo responde (anthropic). Las versiones fijadas son las que ya corrían: prueba que la app arranca con el requirements nuevo, no un cambio de comportamiento · romper_v538 6/6 + control (con py -3.12) · suite 167 verde con Python 3.12.10 |
 | v537 | **Lo que enseñaron los logs del Cloud.** ⚠️ El Pre-Start entero estaba CAÍDO: al despertar la app, el Cloud reinstaló y `streamlit-drawable-canvas` subió a 0.13 (el requirements decía `<1`), que quita `display_toolbar` — `TypeError` al abrirlo. La suite no lo vio: en local la 0.13 ni importaba y el Pre-Start caía a su plan B sin error. Versión fija, y si el lienzo no acepta los parámetros, iniciales en vez de caerse. Además: dos trazas de los logs fuera (la tabla de parámetros a Arrow; el aviso de Session State). Los logs confirman que v536 levantó la caída de v535 sin reiniciar. PRODUCCIÓN (06/10/2026, cuenta de campo): el Pre-Start vuelve a abrir, el lienzo de firma (streamlit_drawable_canvas 0.9.3) se pinta con su barra y un trazo de prueba queda «✓ signed» — sin enviar la charla · romper_v537 8/8 + control (con py -3.12) · suite 165 verde + 1 rojo de mi guardián nuevo (un import de reserva de un paquete no instalado), arreglado y re-corrido junto con check_suite_integra (11/11) · Python 3.12.10 |
 | v536 | **Un despliegue ya no puede correr con los módulos viejos en memoria.** ⚠️ Al desplegar v535 la app entera CAYÓ (`AttributeError` en `app.py`): el `app.py` nuevo llamó a una función nueva de `estado_vivo` con el módulo de v534 aún cargado — lo que CLAUDE.md anotaba como «Reboot app si el chip sigue viejo», esta vez con la app caída. Ahora `app.py`, antes de importar nada, compara la versión del disco con la de los módulos cargados y, si no coinciden, los descarta y reimporta. PRODUCCIÓN: la app caída por el despliegue de v535 volvió tras desplegar v536 — chip v536 (los módulos se volvieron a importar) y la sesión de campo siguió abierta; no consta si además se reinició a mano · romper_v536 6/6 + control (con py -3.12) · suite 165 verde con Python 3.12.10 |
 | v535 | **Lo que quedaba pendiente de v534** («no dejes nada pendiente»). ⚠️ Cambiar de obra SIN salir de la herramienta (el campo ficha en otra desde el menú lateral; el admin cambia el selector) dejaba el LFKK de la obra anterior bajo el nombre de la nueva: ahora manda el plano de la nueva y lo tecleado se olvida (en el Survey solo manda el plano; lo medido se queda, por «Duplicate»). ⚠️ Los datos de trabajo son de UNA cuenta: otra cuenta en la misma pestaña ya no ve los resultados ni el chat de la anterior. Los dibujos miden su contenido (sin hueco en blanco en pantalla estrecha). ⚠️ El guardián destapó que el NS del plano no se aplicaba nunca (el 2 neutro no es «vacío»; funcionaba por accidente con el borrado que v534 quitó). Y la suite corre ya con el Python del Cloud (3.12, instalado con permiso del usuario). PRODUCCIÓN (06/10/2026, cuenta de campo, servida ya por v536): dibujo de Rieles 366 px de recuadro para 366 de dibujo (antes 390 fijos), Belting a 375 px de ancho 226 para 225 (antes 330), Plomada 336/336 y las vistas 3D dentro de un desplegable cerrado se miden al abrirlo (257 y 164 para 256 y 163); lo tecleado en Belting se queda al salir de la obra sin dejar la herramienta y se olvida al volver con otra obra (HGPR 120 → 0). Sin comprobar en producción (sin las cuentas): el cambio de cuenta y el selector de obra del admin — los cubren el guardián y la batería · romper_v535 19/19 + control (con py -3.12) · romper_v534 37/37 (la 38ª mudada a v535) y romper_v532 7/7 re-corridas · suite 164 verde con Python 3.12.10 + Streamlit 1.64.0 |
