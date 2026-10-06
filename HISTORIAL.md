@@ -10,6 +10,91 @@ ventana de contexto. Contenido: 258 secciones detalladas + el índice de 440 ver
 
 ---
 
+## UN DESPLIEGUE YA NO PUEDE CORRER CON LOS MÓDULOS VIEJOS (v536)
+
+### ⚠️ Lo que pasó al desplegar v535 (06/10/2026)
+La app entera cayó en producción: `AttributeError` en `app.py` línea 133, para cualquiera con
+sesión. El Cloud vuelve a ejecutar `app.py` en cada pasada, pero los `core.*` ya importados
+se quedan en memoria: el `app.py` de v535 llamó a `estado_vivo.de_la_cuenta` —nueva— sobre el
+`estado_vivo` de v534. CLAUDE.md lo tenía anotado desde hace tiempo como «si el chip sigue
+diciendo la versión vieja: Settings → Reboot app»; mientras los cambios cabían en módulos
+viejos, solo se veía un chip desfasado. Esta vez `app.py` dependía de una función nueva y
+la app no arrancaba.
+
+### La cura
+`app.py`, antes de importar nada de la app: si la versión del DISCO (`VERSION`) no es
+aquella con la que se importaron los módulos (`core._VERSION_CARGADA`), descarta TODOS los
+`core.*` y `extractors.*` de `sys.modules` y los vuelve a importar en esa misma pasada.
+Misma versión → no se toca nada. Un proceso sin marca (el de v535, el que estaba caído)
+cuenta como «distinta», así que el propio despliegue de v536 lo levantó sin reiniciar.
+
+⚠️ Lo que NO arregla: las sesiones que estén A MITAD de una pasada siguen con los módulos que
+tenían hasta su pasada siguiente (no hay forma limpia de cambiarles el código en vuelo).
+
+PRODUCCIÓN: la app caída por el despliegue de v535 volvió tras desplegar v536 — chip v536 (los módulos se volvieron a importar) y la sesión de campo siguió abierta; no consta si además se reinició a mano · 7 comprobaciones · romper_v536 6/6 + control (con py -3.12) · suite 165 verde con Python 3.12.10
+
+## LO QUE QUEDABA PENDIENTE DE v534 (v535)
+
+Al cerrar v534 quedaron cuatro cosas anotadas «para el usuario». Su respuesta fue «no dejes
+nada pendiente».
+
+### ⚠️ 1. Cambiar de obra SIN salir de la herramienta
+v534 hizo que lo conservado fuera de UNA obra, pero solo al VOLVER a la herramienta. Sin
+salir de ella también se cambia de obra: el campo ficha en otra desde el menú lateral sin
+dejar Rieles, y el admin cambia el selector de obra. Ahí no se olvidaba nada y
+`plan_ui.aplicar` solo rellena lo vacío: **el LFKK de la obra X seguía bajo el nombre de la
+Y**. Venía de v137; v534 no lo empeoró, pero era el mismo peligro por otra puerta.
+→ `estado_vivo.al_pintar` recuerda la última obra REAL de cada herramienta (también si en
+medio hubo «ninguna»): de X a Y, lo tecleado para X se olvida y `aplicar` deja que el plano
+de Y PISE lo que haya (aviso `_pl_forzar`, que `selector_proyecto` escribe siempre y
+`aplicar` consume). ⚠️ Salvo el Survey: «Duplicate for the next lift» conserva a propósito
+lo medido para el siguiente ascensor, así que ahí solo manda el plano en lo que el plano
+trae (BS, NS…) y lo medido a mano (BSR…) se queda.
+
+### ⚠️ 2. Los datos de trabajo son de UNA cuenta
+Cerrar sesión solo quitaba `auth`: resultados, lo tecleado y el historial del asistente se
+quedaban en la pestaña, y otra cuenta que entrara en ella sin recargar —otra empresa
+cliente— los veía. → `estado_vivo.de_la_cuenta`, en `app.py` tras el login: si entra OTRA
+cuenta, se borra todo menos la infraestructura (identidad, idioma, gestor de la cookie y sus
+componentes, mensajes pendientes) y se vuelve a poner el estado base. La MISMA cuenta que
+vuelve —tras salir o tras una expulsión de la sesión única— encuentra lo suyo. Se eligió
+esto y no «borrar al salir» porque cubre también la expulsión, y no hace perder lo tecleado
+a quien solo volvía a entrar.
+
+### 3. Los dibujos miden lo que mide su contenido
+Con alto fijo, en pantalla estrecha el SVG encogía y debajo quedaba un hueco en blanco
+(medido en producción: 379 px de cronograma en un recuadro de 648; 256 de isométrica en
+650). `incrustar.dibujo` usa ahora `st.iframe(height="content")`: Streamlit añade al
+documento un script que mide el cuerpo y avisa a la página al cargar, al cambiar el DOM y
+al cambiar de ancho. Siguen fijos los dos cronómetros (alto exacto, v534) y la planta por
+pisos con scroll. ⚠️ Lo que NO hace: si la ventana se ESTRECHA después de pintar, el
+recuadro no encoge (la medida usa también el alto de la ventana del recuadro) — igual que
+antes, sin empeorar.
+
+### ⚠️ 4. Lo que destapó el guardián: el nº de paradas del plano no se aplicaba
+El Survey nace con NS = 2 («mínimo neutro; el NS real sale del plano»), y `aplicar` solo
+rellena lo vacío: el 2 no es vacío, así que el NS del plano **no se aplicaba nunca** al
+elegir obra. Funcionaba por ACCIDENTE: Streamlit borraba el campo al salir de la
+herramienta y al volver estaba vacío — justo lo que v534 dejó de hacer. → `aplicar(...,
+neutros={"ns": 2})`, UNA vez por obra (si el 2 contara siempre como vacío, quien pusiera 2 a
+mano lo vería volver al del plano en cada pasada); «Start a new survey» lo rearma.
+
+### 5. La suite corre con el Python del Cloud (3.12)
+Con permiso del usuario (06/10/2026) se instaló Python 3.12.10 (`winget`, instalador de
+python.org, por usuario) con las librerías de `requirements.txt`: Streamlit 1.64.0, pandas
+2.2.3, numpy 1.26.4, pyarrow 17, Pillow 11.3 — lo que resuelve el Cloud con esos topes.
+`run_suite.py` lanza ahora cada guardián con `py -3.12` aunque se arranque con el 3.14, y lo
+dice en la primera y en la última línea; si el 3.12 faltara, lo avisa en vez de callarlo.
+Era la trampa nº11 (lo local no es lo que corre) aplicada al intérprete.
+
+### Decidido (era una pregunta abierta)
+**Pasar de «sin obra» a una obra AL VOLVER cuenta como cambio**, como siempre: guardar un
+cálculo de una herramienta no exige fichar (el campo elige la obra al guardar), así que no
+se pierde nada por fichar; y conservarlo dejaría datos de un cálculo suelto bajo el nombre
+de una obra.
+
+PRODUCCIÓN (06/10/2026, cuenta de campo, servida ya por v536): dibujo de Rieles 366 px de recuadro para 366 de dibujo (antes 390 fijos), Belting a 375 px de ancho 226 para 225 (antes 330), Plomada 336/336 y las vistas 3D dentro de un desplegable cerrado se miden al abrirlo (257 y 164 para 256 y 163); lo tecleado en Belting se queda al salir de la obra sin dejar la herramienta y se olvida al volver con otra obra (HGPR 120 → 0). Sin comprobar en producción (sin las cuentas): el cambio de cuenta y el selector de obra del admin — los cubren el guardián y la batería · 26 comprobaciones · romper_v535 19/19 + control (con py -3.12) · romper_v534 37/37 (la 38ª mudada a v535) y romper_v532 7/7 re-corridas · suite 164 verde con Python 3.12.10 + Streamlit 1.64.0
+
 ## LO TECLEADO YA NO SE PIERDE AL SALIR DE UNA HERRAMIENTA (v534)
 
 Quedaba por probar EN PRODUCCIÓN el Survey de punta a punta (v530 y los dibujos de v532). Se
@@ -12853,7 +12938,7 @@ comprueba lo que dice**.
 
 ---
 
-## Versiones desplegadas (v534 = actual)
+## Versiones desplegadas (v536 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -12861,6 +12946,8 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v536 | **Un despliegue ya no puede correr con los módulos viejos en memoria.** ⚠️ Al desplegar v535 la app entera CAYÓ (`AttributeError` en `app.py`): el `app.py` nuevo llamó a una función nueva de `estado_vivo` con el módulo de v534 aún cargado — lo que CLAUDE.md anotaba como «Reboot app si el chip sigue viejo», esta vez con la app caída. Ahora `app.py`, antes de importar nada, compara la versión del disco con la de los módulos cargados y, si no coinciden, los descarta y reimporta. PRODUCCIÓN: la app caída por el despliegue de v535 volvió tras desplegar v536 — chip v536 (los módulos se volvieron a importar) y la sesión de campo siguió abierta; no consta si además se reinició a mano · romper_v536 6/6 + control (con py -3.12) · suite 165 verde con Python 3.12.10 |
+| v535 | **Lo que quedaba pendiente de v534** («no dejes nada pendiente»). ⚠️ Cambiar de obra SIN salir de la herramienta (el campo ficha en otra desde el menú lateral; el admin cambia el selector) dejaba el LFKK de la obra anterior bajo el nombre de la nueva: ahora manda el plano de la nueva y lo tecleado se olvida (en el Survey solo manda el plano; lo medido se queda, por «Duplicate»). ⚠️ Los datos de trabajo son de UNA cuenta: otra cuenta en la misma pestaña ya no ve los resultados ni el chat de la anterior. Los dibujos miden su contenido (sin hueco en blanco en pantalla estrecha). ⚠️ El guardián destapó que el NS del plano no se aplicaba nunca (el 2 neutro no es «vacío»; funcionaba por accidente con el borrado que v534 quitó). Y la suite corre ya con el Python del Cloud (3.12, instalado con permiso del usuario). PRODUCCIÓN (06/10/2026, cuenta de campo, servida ya por v536): dibujo de Rieles 366 px de recuadro para 366 de dibujo (antes 390 fijos), Belting a 375 px de ancho 226 para 225 (antes 330), Plomada 336/336 y las vistas 3D dentro de un desplegable cerrado se miden al abrirlo (257 y 164 para 256 y 163); lo tecleado en Belting se queda al salir de la obra sin dejar la herramienta y se olvida al volver con otra obra (HGPR 120 → 0). Sin comprobar en producción (sin las cuentas): el cambio de cuenta y el selector de obra del admin — los cubren el guardián y la batería · romper_v535 19/19 + control (con py -3.12) · romper_v534 37/37 (la 38ª mudada a v535) y romper_v532 7/7 re-corridas · suite 164 verde con Python 3.12.10 + Streamlit 1.64.0 |
 | v534 | **Lo tecleado ya no se pierde al salir de una herramienta.** Survey real EN PRODUCCIÓN (23 parámetros y 3 pisos a mano): un clic en «Rails» y otro de vuelta, y los parámetros estaban a cero y la matriz cortada a 2 filas. Streamlit borra el valor de un widget que una pasada no pinta, y `survey_ui` los reasignaba DENTRO de su pantalla. Ahora `core/estado_vivo` lo hace desde `app.py` en cada pasada, para las 5 herramientas y con lista cerrada (a un botón no se le puede asignar la clave). ⚠️ Releyendo el arreglo con la suite ya en verde: ese borrado era también lo único que impedía que el plano de la obra A se quedara bajo el nombre de la B (`aplicar` solo rellena lo vacío) — lo conservado es de UNA obra, y al volver con otra se olvida. ⚠️ Y «reabrir un cálculo» tumbaba la pantalla: la foto de las entradas guardaba el BOTÓN. Además: el título de Belting y la leyenda de Rieles ya no se cortan (⚠️ el detector mide ahora con la fuente REAL y da el mismo corte que producción); el cronómetro no se corta en columna estrecha; el valor de las métricas parte en dos líneas en vez de «+0.0…»; cuatro restos en español; y la matriz del Survey con un decimal, no seis. PRODUCCIÓN (06/10/2026, cuenta de campo): Survey con 23 parámetros, 3 paradas y la matriz tecleados → Rieles → de vuelta: TODO sigue; Rieles conserva LFKK/LFGK tras el Survey; al fichar en PRJ-0015 (otra obra) se olvidan, y con la misma obra tras pasar por Fichaje se conservan; el cálculo: 10 métricas enteras (0 con «…»), «1 out of limit», «Matrix: 3 levels» y la matriz con un decimal sin desplazar; dibujo de Rieles con 1 ascensor y de Belting con 1 ascensor y nombre de obra: 0 textos fuera ni pisados, «Lift 1»; cronómetros a 204 px en dos líneas (reloj 171 de 204, 51 de 52); y el cálculo de plomada que el usuario guardó el 01/10 ya no lleva el botón dentro · romper_v534 38/38 + control · romper_v530 7/7, romper_v533 7/7 y romper_v443 7/7 re-corridas · suite 163 verde (re-corrida con el código final) |
 | v533 | **Lo que destapó cerrar los pendientes en producción.** La expulsión de la sesión única, probada EN PRODUCCIÓN sin contraseñas (token de la cuenta de prueba cambiado en `Login`): expulsa al segundo clic, como se diseñó. ⚠️ Pero al reponer el token, la cookie restauraba la sesión y la app la expulsaba AL INSTANTE: el veredicto del heartbeat se quedaba guardado en el proceso. Ahora se olvida al expulsar y al restaurar. Además: la leyenda de Buffers ya no se pisa y una etapa que vuelve a 0% pierde su «inicio real». PRODUCCIÓN: expulsa al segundo clic; tras desplegar, la sesión restaurada por cookie ya no sale expulsada; PRJ-0015 sin inicios reales colgados tras marcar y desmarcar; Survey real (5 soluciones): elegir la 3ª = UNA pasada y el orden no cambia, «Recalculate» vuelve a la recomendada (v530); los 9 recuadros del Survey, Rieles, Belting y los 4 cronómetros sin barra (v532) · romper_v533 7/7 + control · romper_v525 16/16 y romper_v528 19/19 re-corridas · suite 162 verde |
 | v532 | **Los 22 usos de `st.components.v1.html` pasan a `st.iframe`**, por `core/incrustar` (decisión del usuario). ⚠️ En 1.64 los dos generan el MISMO elemento; `st.iframe` solo cambia que siempre permite scroll (se neutraliza con `overflow:hidden` dentro del <body>, sin romper el DOCTYPE) y que no admite altura 0 (los 3 scripts van a 1 px). Los scripts NO van a `st.html`: sin recuadro, `window.parent` sería otro documento. PRODUCCIÓN: los 3 scripts funcionan en st.iframe (cookie escrita y una pestaña nueva entra sola; trampa del «atrás» activa; manifest añadido; los tres a 1 px) y el dibujo de Buffers sale a 330 px sin barra · romper_v532 7/7 + control · suite 161 verde |
