@@ -3,11 +3,31 @@ Survey Analyzer — UI Streamlit.
 Solo presentación: toda la lógica de cálculo vive en core/.
 """
 import streamlit as st
-from core import incrustar
-
-from core.i18n import t
 import sys, os
 sys.path.insert(0, os.path.dirname(__file__))
+
+# ⚠️ v536 · Un despliegue nuevo SIN los módulos viejos en memoria. El Cloud vuelve a
+# ejecutar este `app.py` en cada pasada, pero los `core.*` ya importados se quedan como
+# estaban: al desplegar v535, este archivo llamó a `estado_vivo.de_la_cuenta` —nueva— sobre
+# el `estado_vivo` de v534 que seguía en memoria, y la app entera dio `AttributeError` hasta
+# que se reinició a mano (CLAUDE.md lo avisaba como «Settings → Reboot app»; esta vez la
+# dejó caída). Ahora: si la versión del disco no es con la que se importaron los módulos,
+# se descartan TODOS los de la app y se vuelven a importar en esta misma pasada.
+try:
+    _V_DISCO = open(os.path.join(os.path.dirname(__file__), "VERSION"),
+                    encoding="utf-8-sig").read().strip()
+except Exception:
+    _V_DISCO = "v?"
+if "core" in sys.modules and getattr(sys.modules["core"], "_VERSION_CARGADA", None) != _V_DISCO:
+    for _m in [m for m in list(sys.modules)
+               if m in ("core", "extractors") or m.startswith(("core.", "extractors."))]:
+        sys.modules.pop(_m, None)
+import core as _core_pkg                                  # noqa: E402
+_core_pkg._VERSION_CARGADA = _V_DISCO
+
+from core import incrustar                                # noqa: E402
+
+from core.i18n import t                                   # noqa: E402
 
 from core.chat_agent      import get_chat_response
 from core                 import notify
