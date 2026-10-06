@@ -28,19 +28,38 @@ def _initials(nombre: str) -> str:
     return "".join(w[0].upper() for w in parts[:3])
 
 
+# Cómo se pinta el lienzo de firma. ⚠️ `width` 300 y no los 600 por defecto: en un móvil de
+# 375 px el lienzo se salía de la pantalla y no se podía firmar (v393).
+_LIENZO = dict(stroke_width=2, stroke_color="#111111", background_color="#ffffff",
+               height=90, width=300, drawing_mode="freedraw", display_toolbar=True)
+
+
 def _canvas_disponible():
     """El componente de dibujo, o None. Import PEREZOSO a propósito.
 
     ⚠️ Si el componente falta o falla, el Pre-Start NO se cae: se pide la firma
     tecleando las iniciales, como hasta v382. Una charla de seguridad no se puede
     quedar sin registrar porque una dependencia de terceros no cargue.
+
+    ⚠️ v537 · «Falla» incluye que la versión instalada NO ACEPTE lo que le pasamos. El
+    06/10/2026, al despertar la app, el Cloud instaló `streamlit-drawable-canvas` 0.13.0
+    (el requirements solo decía `<1`): ya no tiene `display_toolbar` y tampoco devuelve la
+    imagen salvo que se le pida. El import iba bien y la llamada reventaba con `TypeError`:
+    **el Pre-Start entero caído** en producción. Ahora la versión va fijada y, además, se
+    comprueba que la función acepta `_LIENZO` antes de usarla; si no, iniciales.
     """
     try:
         from streamlit_drawable_canvas import st_canvas
-        return st_canvas
     except Exception as e:
         logger.warning("prestart: sin lienzo de firma (%s)", e)
         return None
+    try:
+        import inspect
+        inspect.signature(st_canvas).bind(key="prueba", **_LIENZO)
+    except TypeError as e:
+        logger.warning("prestart: el lienzo instalado no acepta los parámetros (%s)", e)
+        return None
+    return st_canvas
 
 
 def _firma_png(res, fondo="#ffffff"):
@@ -197,10 +216,7 @@ def _asistentes_con_firma(yo: str, yo_usuario: str, cuadrilla: list) -> list:
                 # 300 px caben en el teléfono más estrecho de uso real y siguen
                 # sobrando para una firma; el Pre-Start se llena EN OBRA, así que
                 # manda el móvil aunque en escritorio el recuadro se vea más pequeño.
-                res = st_canvas(stroke_width=2, stroke_color="#111111",
-                                background_color="#ffffff", height=90, width=300,
-                                drawing_mode="freedraw", key=f"ps_firma_{_k}",
-                                display_toolbar=True)
+                res = st_canvas(key=f"ps_firma_{_k}", **_LIENZO)
                 firma = _firma_png(res)
                 st.caption(t(":green[✓ signed]") if firma else t(":orange[signature missing]"))
             else:
@@ -256,10 +272,7 @@ def _bloque_firmar(info: dict, grupo: str, nombre: str, usuario: str):
                 st.caption(t("Sign here"))
                 # ⚠️ 300 px, no los 600 por defecto del componente: en un móvil de
                 # 375 el lienzo se salía de la pantalla y no se podía firmar (v393).
-                res = st_canvas(stroke_width=2, stroke_color="#111111",
-                                background_color="#ffffff", height=90, width=300,
-                                drawing_mode="freedraw", key="ps_firma_tarde",
-                                display_toolbar=True)
+                res = st_canvas(key="ps_firma_tarde", **_LIENZO)
                 firma = _firma_png(res)
             else:
                 st.caption(t("No canvas available: the typed initials are recorded instead."))

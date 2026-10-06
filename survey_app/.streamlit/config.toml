@@ -1,6 +1,13 @@
 [server]
 enableStaticServing = true
 
+# v537 · Las herramientas fijan sus entradas por `st.session_state` (plano del proyecto,
+# reabrir un cálculo, conservarlas al cambiar de sección: `core/estado_vivo`) y algunas
+# además pasan `value=`. Es a propósito, y Streamlit dejaba en los logs del Cloud una traza
+# de 30 líneas por ello. Solo apaga ese aviso: no cambia ningún valor.
+[global]
+disableWidgetStateDuplicationWarning = true
+
 # Tema COPEX (v283) — API OFICIAL de Streamlit, estable entre versiones.
 # Es la BASE del look: color de marca, superficies y tipografía. El CSS a medida
 # (core/theme.py) solo cubre lo que el tema no alcanza — así el diseño no se rompe

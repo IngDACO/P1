@@ -322,7 +322,11 @@ def render_survey_tab(_ROL, _GRUPO):
         with st.expander(t("Calculated parameters"), icon=":material/calculate:", expanded=False):
             st.dataframe(
                 pd.DataFrame([
-                    {"Parameter": k, "Valor": round(v, 3) if isinstance(v, (int, float)) else v}
+                    # v537 · TODO texto: con números y letras mezclados («L») la tabla no
+                    # pasaba a Arrow, Streamlit la arreglaba sola y dejaba una traza de error
+                    # en los logs en cada cálculo (vista en los del Cloud).
+                    {"Parameter": k, "Valor": str(round(v, 3)) if isinstance(v, (int, float))
+                     else str(v)}
                     for k, v in limits.items()
                 ]),
                 width="stretch", hide_index=True
@@ -461,8 +465,9 @@ def render_survey_tab(_ROL, _GRUPO):
                         for i, (or_v, ol_v) in enumerate(zip(sol_df["OR"], sol_df["OL"])):
                             or_lim = lor_v - 70 if (ctrl_in_frame_ and ctrl_side_ == "R" and i == last_sol_idx) else lor_v
                             ol_lim = lol_v - 70 if (ctrl_in_frame_ and ctrl_side_ == "L" and i == last_sol_idx) else lol_v
-                            cut_or_vals.append(round(or_v - or_lim, 1) if or_v - or_lim > 0 else "")
-                            cut_ol_vals.append(round(ol_v - ol_lim, 1) if ol_v - ol_lim > 0 else "")
+                            # v537 · en texto, por lo mismo: «» y números mezclados.
+                            cut_or_vals.append(f"{or_v - or_lim:.1f}" if or_v - or_lim > 0 else "")
+                            cut_ol_vals.append(f"{ol_v - ol_lim:.1f}" if ol_v - ol_lim > 0 else "")
                         sol_df.insert(3, "CUT OR", cut_or_vals)
                         sol_df.insert(7, "CUT OL", cut_ol_vals)
                     sol_highlighter = make_highlighter(lim_map, sol_min, sol_max, cut_cols,

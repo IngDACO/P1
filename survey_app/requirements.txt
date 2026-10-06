@@ -35,7 +35,10 @@ segno>=1.6,<2
 # trazo (el PNG pasa de 543 B en blanco a 5.245 B firmado) y reportlab lo acepta.
 # Import PEREZOSO en `prestart_ui`: si el componente no está, el Pre-Start sigue
 # funcionando con nombre e iniciales en vez de romperse.
-streamlit-drawable-canvas>=0.9.3,<1
+# ⚠️ v537 · FIJA a 0.9.3: el 06/10/2026 el Cloud instaló la 0.13.0 al despertar la app
+# (`<1` lo permitía) y el Pre-Start entero dejó de abrir: la 0.13 quita `display_toolbar`
+# y ya no devuelve la imagen salvo que se le pida. Subirla es una decisión, como Streamlit.
+streamlit-drawable-canvas==0.9.3
 # Cifrado de los tokens de Xero (v488). Ya llega como dependencia de google-auth; se
 # fija aqui para que no dependa de que esa libreria la siga arrastrando. Ruedas abi3
 # estables para Python 3.12.
