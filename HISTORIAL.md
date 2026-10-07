@@ -10,6 +10,35 @@ ventana de contexto. Contenido: 258 secciones detalladas + el índice de 440 ver
 
 ---
 
+## SIN OBRA NO SE OLVIDA NUNCA — UNA REGLA, NO DOS (v541)
+
+⚠️ Visto EN PRODUCCIÓN con la cuenta de campo (07/10/2026), cerrando el pendiente «el campo
+cambia de obra con el fichaje del menú lateral»: en Rieles con PRUEBA MOVIL, LFKK 1234 y 3
+rieles de 2500 tecleados; «Close workday and project» en el menú lateral → todo a 0, SIN haber
+cambiado de obra (y volver a fichar en la misma obra, p. ej. tras comer, lo habría perdido
+igual). Los botones del fichaje terminan en `st.rerun()`, que corta la pasada ANTES de pintar
+la herramienta: en la siguiente, `al_pintar` creía que la herramienta «volvía» de otra
+pantalla, y volver olvidaba también al pasar a «sin obra». Venía de v535; hasta v540 no se
+notaba porque el borrado no llegaba al navegador.
+
+→ Una regla: lo tecleado es de la última obra REAL; se olvida al pintarse con OTRA obra real
+(también la primera tras usarla sin obra: manda su plano, la decisión de v535); **sin obra,
+nunca**. Lo cargado sin obra conocida (`respetar` sin obra) lo adopta la primera obra real. El
+Survey sigue igual que antes: sin salir solo manda el plano; al volver con otra obra real,
+olvida (el contador de pasadas ya solo decide eso).
+
+⚠️ El guardián destapó de paso un fallo latente desde v535: al volver al Survey con otra obra,
+`olvidar` BORRABA el nº de paradas y el plano lo ponía como 5.0 (decimal): `aplicar` solo lo
+deja entero si lo que había era entero. Ahora `ns` tiene su valor por defecto (el 2 de
+`init_state`) y se ASIGNA.
+
+Logs del Cloud (05:53-07:09 UTC): el Cloud reinició el contenedor a las 05:53 (por eso la
+pestaña de campo apareció recargada y como admin: la cookie); las versiones fijadas se cumplen
+(extra-streamlit-components 0.1.81, streamlit-folium 0.27.4, drawable-canvas 0.9.3, Streamlit
+1.64.0; anthropic 1.11.0 dentro de `<2`); cero errores y cero trazas.
+
+PRODUCCIÓN (07/10/2026): chip v541 y la cookie restaura la sesión de campo; el recorrido en el navegador (cerrar la jornada dentro de Rieles y volver a fichar en la misma obra) queda PENDIENTE: el panel del navegador quedó oculto. Lo cubren verif_v541 (la pasada cortada por st.rerun, como los botones del fichaje) y la batería · 20 comprobaciones · romper_v541 8/8 + control · romper_v539 6/6, romper_v535 18/18 (una mudada a v541) y romper_v540 11/11 · romper_v534 37/37 (36 en la tanda: la del «respeto» escapaba porque su prueba reabría SIN obra; ahora con la obra del cálculo, y se caza) · suite 170 verde con Python 3.12.10 (y verif_v534 re-corrido 61/61 tras endurecerlo)
+
 ## OLVIDAR TAMBIÉN EN EL NAVEGADOR — Y LAS TABLAS DE LO MEDIDO SON DE SU OBRA (v540)
 
 ⚠️ Visto EN PRODUCCIÓN con la cuenta del admin, probando v539: en Belting, de 88 walker a otra
@@ -13054,7 +13083,7 @@ comprueba lo que dice**.
 
 ---
 
-## Versiones desplegadas (v540 = actual)
+## Versiones desplegadas (v541 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -13062,6 +13091,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v541 | **Sin obra no se olvida nunca (una regla, no dos).** ⚠️ Visto en producción con la cuenta de campo: cerrar la jornada desde el menú lateral DENTRO de Rieles borraba lo tecleado sin cambiar de obra — los botones del fichaje cortan la pasada con `st.rerun()` y la herramienta creía «volver». Ahora se olvida solo al pintarse con OTRA obra real; sin obra, nunca; el Survey, como antes. ⚠️ Y el nº de paradas volvía como 5.0 al volver al Survey con otra obra (latente desde v535): `ns` con valor por defecto. Logs del Cloud limpios (reinicio a las 05:53). PRODUCCIÓN (07/10/2026): chip v541 y la cookie restaura la sesión de campo; el recorrido en el navegador (cerrar la jornada dentro de Rieles y volver a fichar en la misma obra) queda PENDIENTE: el panel del navegador quedó oculto. Lo cubren verif_v541 (la pasada cortada por st.rerun, como los botones del fichaje) y la batería · romper_v541 8/8 + control · romper_v539 6/6, romper_v535 18/18 (una mudada a v541) y romper_v540 11/11 · romper_v534 37/37 (36 en la tanda: la del «respeto» escapaba porque su prueba reabría SIN obra; ahora con la obra del cálculo, y se caza) · suite 170 verde con Python 3.12.10 (y verif_v534 re-corrido 61/61 tras endurecerlo) |
 | v540 | **Olvidar también en el navegador; las tablas de lo medido son de su obra.** ⚠️ Visto en producción con el admin: de 88 walker a otra obra sin salir de Belting, la pantalla seguía con HQ/HGP/HGPR de 88 walker y «Calculate» los usó — v535 BORRABA en el servidor y el navegador (que solo se entera de lo ASIGNADO, trampa de v529) los devolvía. `olvidar` asigna el valor por defecto (`DEFECTOS`, comprobado contra el widget real); las tablas de lo medido (HKPR, BSR, L, matriz del caso 2), que no se olvidaban nunca, se vacían con una tabla editable NUEVA (`clave_tabla`). Y «Descargar» → «Download». PRODUCCIÓN (07/10/2026, cuenta admin): Belting, de PRJ-0015 a 88 walker sin salir: el HGPR 1785 que venía de la otra obra pasa a 0 en pantalla y HQ/HGP salen del plano; con HGPR 1785 tecleado y de vuelta a PRJ-0015: HQ, HGP y HGPR a 0 en pantalla y «Calculate» con HQ 0 y HGP 0 (antes, 14045 y 85). Buffers: HKPR 1500 tecleado en la tabla con 88 walker y a PRJ-0015: tabla nueva a 0 y el cálculo con HKPR 0 (corte 0, OK) · romper_v540 11/11 + control · romper_v539 6/6, romper_v535 19/19 y romper_v534 37/37 (una re-anclada: su ancla caía en el del que solo usa el Survey y escapaba; re-anclada se caza) · suite 169 verde con Python 3.12.10 |
 | v539 | **Lo reabierto es de la obra del cálculo.** ⚠️ Fallo de v535, encontrado ensayando en local las pantallas del admin con los datos REALES de 88 walker (leídos en solo lectura): con la herramienta usada antes en otra obra, reabrir un cálculo y elegir su obra en el selector borraba lo medido sin aviso (HGPR 1547 → 0, 2 buffers → 1, plantilla 770 → 0); «Rebuild the project in the Survey», igual. `respetar(h, obra)`: elegir esa obra ya no es un cambio, otra sí. Ensayo real 33/33 (antes 28/33). PRODUCCIÓN (07/10/2026): chip v539 en la sesión de campo abierta, sin recargar y sin excepciones; el historial del asistente sigue (misma cuenta). Después, con el admin (07/10/2026): CAL-0004 reabierto en Belting y elegida 88 walker en el selector, el HGPR 1785 se queda · romper_v539 6/6 + control (la 1ª pasada, 5/6, destapó el hueco del guardián) · romper_v534 37/37 re-anclada · suite 168 verde con Python 3.12.10 |
 | v538 | **Ningún componente puede subir de versión solo.** Lo que tumbó el Pre-Start (v537) podía repetirse con la cookie de «Keep me signed in» (`extra-streamlit-components`) y los mapas (`streamlit-folium`): fijos a lo que corre en el Cloud, y `anthropic<2`. El guardián detecta los componentes por lo que instalan, no por una lista. PRODUCCIÓN (06/10/2026, cuenta de campo): chip v538 y la sesión de campo siguió abierta; una pestaña nueva entra sola por la cookie (extra-streamlit-components), «My route» pinta el mapa con su pin (streamlit-folium) y el asistente de campo responde (anthropic). Las versiones fijadas son las que ya corrían: prueba que la app arranca con el requirements nuevo, no un cambio de comportamiento · romper_v538 6/6 + control (con py -3.12) · suite 167 verde con Python 3.12.10 |
