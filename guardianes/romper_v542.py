@@ -70,9 +70,9 @@ ROTURAS = [
      EV, [("        elif ult_real:                                  # de una obra real a otra",
            "        else:")]),
 
-    ("el aviso de «empezó de cero» vuelve a `st.info` (se pierde con el `st.rerun()`)",
-     SV, [("            flash.info(t(\":material/cleaning_services: Different project",
-           "            st.info(t(\":material/cleaning_services: Different project")]),
+    # v543 · RETIRADA «el aviso vuelve a `st.info`»: por `flash` llegaba una pasada tarde;
+    # desde v543 va por una marca que dura hasta pasar el corte de la matriz — lo vigila
+    # romper_v543.
 
     ("⚠️ Duplicate no deja lo suyo para la siguiente obra (al elegirla, se borra)",
      SV, [('        estado_vivo.adoptar_siguiente("sv")\n', "")]),

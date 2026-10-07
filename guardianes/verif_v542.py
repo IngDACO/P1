@@ -264,10 +264,13 @@ chk("...también en el navegador: BSR y Omega le llegan (`set_value`) y la matri
     at.number_input(key="inp_BSR").proto.set_value is True
     and at.radio(key="cfg_omega_side").proto.set_value is True and matriz(at).proto.id != id0)
 chk("...el nº de paradas sigue siendo un ENTERO", type(at.number_input(key="ns").value) is int)
-_cola = at.session_state["_flash_cola"] if "_flash_cola" in at.session_state else []
-chk("...y se avisa de que empezó de cero, por `flash` (con otro nº de paradas la pasada se "
-    "corta con `st.rerun()` y un `st.info` se perdía — lo cazó este guardián)",
-    any("started from zero" in str(x[1]) for x in _cola), _cola)
+# v543 · Actualizada con su razón (v385): por `flash` el aviso llegaba una pasada TARDE en
+# producción (la shell pinta la cola antes de que el Survey encole). Ahora se pinta en la
+# misma pasada mientras dure una marca que solo se quita tras el punto en que la matriz
+# puede cortar la pasada; lo vigila verif_v543.
+chk("...y se avisa de que empezó de cero EN ESTA pasada (aunque la matriz la haya cortado "
+    "para cambiar de tamaño)",
+    any("started from zero" in i.value for i in at.info), [i.value[:50] for i in at.info])
 
 at = b_nuevo("PRJ-A", 3, sin_cambio=True)
 boton(at, "fichar B")

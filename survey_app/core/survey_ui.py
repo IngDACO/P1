@@ -94,6 +94,10 @@ USER_ONLY = {
     "LengthTemplate": "Plumb template length (mm) — for the plumb layout",
 }
 
+# v543 · Marca del aviso «el survey empezó de cero» (cambio de obra): dura hasta que la
+# pasada pasa del punto en que la matriz puede cortarla con `st.rerun()`.
+_AVISO_CERO = "_sv_aviso_cero"
+
 # Los valores con que nace la configuración (los usan `init_state` y «empezar de cero»).
 _CFG_INICIAL = {"cfg_omega_side": "R", "cfg_wall_yn": "N", "cfg_offset_side": "R",
                 "cfg_wall_stop": 1, "cfg_wall_side": "R", "cfg_ctrl_yn": "N",
@@ -910,10 +914,15 @@ def render_survey_tab(_ROL, _GRUPO):
         # una obra no: lo tecleado no viene de ningún proyecto. Y un duplicado lo adopta.
         if estado_vivo.cambio_de_obra("sv"):
             _limpiar_survey()
-            # Por `flash`: con otro nº de paradas la matriz se redimensiona con `st.rerun()`,
-            # que se llevaría un `st.info` de esta pasada (lo cazó el guardián).
-            flash.info(t(":material/cleaning_services: Different project: the survey started "
-                         "from zero — nothing from the previous project is carried over."))
+            st.session_state[_AVISO_CERO] = True
+        # v543 · El aviso, AQUÍ y en esta misma pasada, mientras dure la marca: con otro nº de
+        # paradas la matriz se redimensiona con `st.rerun()` y se llevaría lo pintado, así que
+        # la marca se quita solo DESPUÉS de ese punto (más abajo) y, si la pasada se corta, el
+        # aviso sale en la siguiente. Por `flash` llegaba una pasada TARDE (visto en
+        # producción): la shell pinta la cola antes de que el Survey encole.
+        if st.session_state.get(_AVISO_CERO):
+            st.info(t(":material/cleaning_services: Different project: the survey started "
+                      "from zero — nothing from the previous project is carried over."))
         # Identidad del informe TOMADA del proyecto elegido (ya no se teclea).
         # Seguro escribir estas claves: dejaron de ser widgets al quitar los
         # text_input de arriba (habría sido el error de v111 si aún lo fueran).
@@ -1127,6 +1136,8 @@ def render_survey_tab(_ROL, _GRUPO):
             new_df.iloc[:rows_keep] = old_df.iloc[:rows_keep].values
             st.session_state.survey_df = new_df
             st.rerun()
+        # La pasada ya no se corta por el tamaño: el aviso de «empezó de cero» se ha visto.
+        st.session_state.pop(_AVISO_CERO, None)
 
         # Cargar Excel
         uploaded_excel = sc2.file_uploader(t(":material/folder_open: Load matrix (.xlsx)"), type=["xlsx"], key="excel_uploader")
