@@ -65,6 +65,33 @@ HERRAMIENTAS = {
     "belt": {"prefijos": ("belt_hgpr_",), "claves": ("belt_hq", "belt_hgp", "belt_ns")},
 }
 
+# ⚠️ v540 · El valor por DEFECTO de cada entrada de las cuatro herramientas de cálculo, el
+# mismo con que nace su widget (lo comprueba `verif_v540` pintándolas). Para olvidar una
+# entrada que está EN PANTALLA no basta con borrarla: Streamlit identifica estos widgets
+# solo por su clave, y el navegador se queda con el valor viejo y lo devuelve en el clic
+# siguiente — solo se entera de un valor cuando el código lo ASIGNA (la trampa de v529).
+# Visto en producción con el admin: de 88 walker a otra obra sin salir de Belting, el
+# servidor borraba y el cálculo salía con el HQ, el HGP y el HGPR de 88 walker.
+DEFECTOS = {
+    "plb_bks": 0.0, "plb_rail": 0.0, "plb_tksw": 0.0, "plb_lt": 0.0, "plb_sf1": 0.0,
+    "plb_sf2": 0.0, "plb_bs": 0.0, "plb_sg": 0.0, "plb_tg": 0.0, "plb_omega": "R",
+    "plb_n": 1,
+    "rc_lfkk": 0.0, "rc_lfgk": 0.0, "rc_n": 1,
+    "rc_caso": "Case 1 — first installed (the bottom one)",
+    "rc_n2500": 0, "rc_n5000": 0, "rc_sub": "Above the FFL (subtract)",
+    "bc_hkp": 0.0, "bc_n": 1,
+    "belt_hq": 0.0, "belt_hgp": 0.0, "belt_ns": 1,
+}
+_DEFECTO_PREFIJO = (("belt_hgpr_", 0.0),)
+# v540 · Las TABLAS de lo medido también son de una obra (HKPR de cada buffer, BSR de cada
+# ascensor, L de cada ascensor y la matriz del caso 2): hasta v540 no se olvidaban nunca.
+# Su contenido vive en estas claves; la tabla editable lleva una clave con GENERACIÓN
+# (`clave_tabla`), porque Streamlit conserva sus ediciones mientras la forma de los datos
+# no cambie — ponerla a ceros no bastaría: el navegador volvería a aplicar lo tecleado.
+TABLAS = {"plb": ("plb_bsr_df",), "rc": ("rc_L_df", "rc_in_df"), "bc": ("bc_df",)}
+_GEN = "_ev_gen_"
+_SIN = object()
+
 # La obra elegida en cada herramienta (admin y propietario). Sin esto, al volver el
 # selector estaría en «no project», la obra habría «cambiado» y se olvidaría todo.
 _OBRA = "pl_prj_"
@@ -113,13 +140,41 @@ def pasada() -> int:
     return mantener()
 
 
+def _defecto(clave):
+    k = str(clave)
+    if k in DEFECTOS:
+        return DEFECTOS[k]
+    for pref, val in _DEFECTO_PREFIJO:
+        if k.startswith(pref):
+            return val
+    return _SIN
+
+
+def clave_tabla(herramienta, nombre) -> str:
+    """La clave de la tabla editable `nombre` de una herramienta: cambia cada vez que la
+    herramienta olvida lo suyo, y así el navegador la estrena vacía (v540)."""
+    return "%s_%d" % (nombre, int(st.session_state.get(_GEN + str(herramienta), 0) or 0))
+
+
 def olvidar(herramienta) -> int:
-    """Borra las entradas de UNA herramienta: lo que Streamlit hacía solo al salir de ella."""
+    """Olvida las entradas de UNA herramienta: lo que Streamlit hacía solo al salir de ella.
+
+    ⚠️ v540 · Las que tienen valor por defecto se ASIGNAN a él en vez de borrarse, para que
+    el navegador lo reciba aunque la herramienta siga en pantalla (ver `DEFECTOS`). Y sus
+    tablas de lo medido se vacían con una tabla editable nueva."""
+    h = str(herramienta)
     n = 0
     for k in list(st.session_state.keys()):
-        if de_herramienta(herramienta, k):
-            del st.session_state[k]
+        if de_herramienta(h, k):
+            d = _defecto(k)
+            if d is _SIN:
+                del st.session_state[k]
+            else:
+                st.session_state[k] = d
             n += 1
+    for k in TABLAS.get(h, ()):
+        st.session_state.pop(k, None)
+    st.session_state[_GEN + h] = int(st.session_state.get(_GEN + h, 0) or 0) + 1
     return n
 
 

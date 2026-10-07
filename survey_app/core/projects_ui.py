@@ -879,7 +879,10 @@ def _acciones_archivo(pid, e, puede_borrar):
 
     if did:
         try:
-            st.download_button(":material/download: Descargar " + (e["nombre"] or "archivo"),
+            # v540 · Salía «Descargar …» en español en una pantalla en inglés (visto en
+            # producción con el admin): un literal concatenado, la forma que las redes de
+            # i18n no ven (trampa nº30).
+            st.download_button(t(":material/download: Download {x}", x=e["nombre"] or t("file")),
                                data=drive_store.download(did),
                                file_name=e["nombre"] or f"{did}.pdf",
                                key=f"arch_dl_{pid}_{did}", width="stretch")

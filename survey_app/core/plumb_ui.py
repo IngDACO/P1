@@ -10,6 +10,7 @@ import pandas as pd
 from core.plumb import compute_plumb, plumb_table, plumb_svg, plumb_iso_svg, plumb_detail_svg, plumb_card_svg
 from core import plan_store
 from core import plan_ui
+from core import estado_vivo
 from core.tool_pdf import tool_pdf
 from core.tool_save_ui import render_guardar
 from core import tool_save_ui
@@ -115,7 +116,10 @@ def render_plumb_tab():
         base = pd.DataFrame({"Elevador": [t("Lift {n}", n=i + 1) for i in range(n)],
                              "BSR (mm)": [0.0] * n})
     bsr_edit = st.data_editor(base, width="stretch", hide_index=True,
-                              num_rows="fixed", disabled=["Elevador"], key="plb_bsr_editor", column_config=tabla.cfg())
+                              num_rows="fixed", disabled=["Elevador"],
+                              # v540 · Clave con generación: al cambiar de obra, tabla nueva.
+                              key=estado_vivo.clave_tabla("plb", "plb_bsr_editor"),
+                              column_config=tabla.cfg())
     st.session_state["plb_bsr_df"] = bsr_edit
 
     if st.button(t(":material/straighten: Calculate plumb lines"), type="primary", width="stretch", key="plb_calc"):

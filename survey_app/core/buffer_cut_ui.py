@@ -16,6 +16,7 @@ from core.buffer_cut import compute_buffer_cut, buffer_cut_svg
 from extractors.schindler import extract_hkp
 from core import plan_store
 from core import plan_ui
+from core import estado_vivo
 from core.tool_pdf import tool_pdf
 from core.tool_save_ui import render_guardar
 from core import tool_save_ui
@@ -93,7 +94,9 @@ def render_buffer_cut_tab():
         base = pd.DataFrame({"Buffer": [f"Buffer {i+1}" for i in range(n)],
                              "HKPR (mm)": [0.0] * n})
     edit = st.data_editor(base, width="stretch", hide_index=True,
-                          num_rows="fixed", disabled=["Buffer"], key="bc_editor", column_config=tabla.cfg())
+                          num_rows="fixed", disabled=["Buffer"],
+                          # v540 · Clave con generación: al cambiar de obra, tabla nueva.
+                          key=estado_vivo.clave_tabla("bc", "bc_editor"), column_config=tabla.cfg())
     st.session_state["bc_df"] = edit
 
     # ── 4. Calcular (solo computa; el render va fuera) ──────

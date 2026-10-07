@@ -13,6 +13,7 @@ from core.tool_save_ui import render_guardar
 from core import tool_save_ui
 from core import plan_store
 from core import plan_ui
+from core import estado_vivo
 from core import tabla
 from core import incrustar
 
@@ -122,7 +123,10 @@ def render_rail_cut_tab():
             base = pd.DataFrame({"Elevador": [t("Lift {n}", n=i + 1) for i in range(n)],
                                  "L (mm)": [0.0] * n})
         L_edit = st.data_editor(base, width="stretch", hide_index=True,
-                                num_rows="fixed", disabled=["Elevador"], key="rc_L_editor", column_config=tabla.cfg())
+                                num_rows="fixed", disabled=["Elevador"],
+                                # v540 · Clave con generación: al cambiar de obra, tabla nueva.
+                                key=estado_vivo.clave_tabla("rc", "rc_L_editor"),
+                                column_config=tabla.cfg())
         st.session_state["rc_L_df"] = L_edit
 
         # El boton SOLO computa: antes todo el resultado colgaba de aqui y se
@@ -194,7 +198,8 @@ def render_rail_cut_tab():
         # v534 · «Elevador N» es la CLAVE de la columna (se lee de vuelta al calcular y
         # vive en la sesión): se le cambia la etiqueta, no el nombre (v450).
         in_edit = st.data_editor(base, width="stretch", hide_index=True,
-                                 num_rows="fixed", disabled=["Riel"], key="rc_in_editor",
+                                 num_rows="fixed", disabled=["Riel"],
+                                 key=estado_vivo.clave_tabla("rc", "rc_in_editor"),
                                  column_config=tabla.cfg(extra={
                                      f"Elevador {i+1}": st.column_config.Column(t("Lift {n}", n=i + 1))
                                      for i in range(n)}))

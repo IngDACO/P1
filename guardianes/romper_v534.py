@@ -79,7 +79,12 @@ ROTURAS = [
      EV, [("        olvidar(h)\n        return True\n    if obra and ult_real", "        return True\n    if obra and ult_real")]),
 
     ("`olvidar` recorre las entradas de la herramienta pero no borra ninguna",
-     EV, [("            del st.session_state[k]\n", "            pass\n")]),
+     # v540 · re-anclada: `olvidar` ya no solo borra, ASIGNA el valor por defecto; el ancla
+     # vieja casaba con el `del` que solo usa el Survey y la rotura escapaba sin probar nada.
+     EV, [("            d = _defecto(k)\n            if d is _SIN:\n"
+           "                del st.session_state[k]\n            else:\n"
+           "                st.session_state[k] = d\n",
+           "            pass\n")]),
 
     ("⚠️ `selector_proyecto` deja de avisar con que obra se pinta la herramienta",
      PLA, [('    st.session_state[_FORZAR] = bool(estado_vivo.al_pintar(key, (prj or {}).get("ID", "")))', "    st.session_state[_FORZAR] = False")]),
