@@ -10,6 +10,38 @@ ventana de contexto. Contenido: 258 secciones detalladas + el índice de 440 ver
 
 ---
 
+## EL SURVEY SE LIMPIA DE VERDAD Y NO MEZCLA PROYECTOS (v542)
+
+Al revisar la matriz del Survey (decisión pendiente «¿es de su obra?») salió primero un fallo:
+
+**A. ⚠️ Lo que REEMPLAZA no limpiaba.** El `data_editor` de la matriz tenía clave fija y filas
+fijas, y Streamlit 1.64 lo identifica por la clave y la FORMA de los datos «para que las
+ediciones sobrevivan a cambios de valores» (comentario en su código): «Duplicate survey»,
+«Clear everything and start over», «Load matrix (.xlsx)» y «Rebuild the project in the
+Survey» ponían la matriz nueva en el servidor y las celdas tecleadas volvían encima. Y «Clear
+everything» BORRABA los parámetros y la configuración con los campos en pantalla: el servidor
+a cero, el navegador con lo viejo, que devolvía en el clic siguiente (trampa nº31).
+→ La matriz lleva una clave con generación y quien la reemplaza llama a
+`estado_vivo.tabla_nueva("sv")`; «empezar de cero» (`survey_ui._limpiar_survey`) ASIGNA los
+valores de partida (los mismos de `init_state`, `_CFG_INICIAL`).
+
+**B. Decisión del usuario: «no se deben mezclar informaciones de proyectos».**
+- Al **guardar el survey en su proyecto**, el survey EMPIEZA DE CERO, el selector del admin
+  vuelve a «sin proyecto» y el aviso con «Open project ➜» pasa arriba (sobrevive).
+- De una **obra real a otra** (sin salir o volviendo), el survey EMPIEZA DE CERO y manda el
+  plano de la nueva (`estado_vivo.cambio_de_obra`). Se acaba la excepción de v535 que dejaba
+  lo medido a mano.
+- **Duplicate for the next lift** se queda (decisión del usuario): lo duplicado lo ADOPTA la
+  siguiente obra DISTINTA (`estado_vivo.adoptar_siguiente`) y su plano manda.
+- **Sin obra → obra** (teclear antes de fichar) conserva: no viene de ningún proyecto.
+- Cerrar la jornada y volver a la misma obra conserva (v541).
+- El contador de pasadas ya no decide nada (trampa nº32).
+
+⚠️ El guardián cazó que el aviso «empezó de cero» se perdía: con otro nº de paradas la
+matriz se redimensiona con `st.rerun()`. Va por `flash`, como los avisos del guardado.
+
+PRODUCCIÓN (07/10/2026, cuenta de campo): WR 150 tecleado en la matriz → «Duplicate survey» → 0 en pantalla y sigue a 0 tras una pasada nueva (antes reaparecía); BSR 1330 y Omega L → «Clear everything» → 0 y R, también tras otra pasada; PRUEBA MOVIL con BSR 1330 → cerrar la jornada (sigue) → fichar en ZZ PRUEBA → BSR 0 (empezó de cero). El aviso «empezó de cero» sale una pasada tarde (los avisos de flash se pintan antes de que el Survey lo encole): pendiente. Guardar el survey en un proyecto, sin comprobar en producción (pide cuenta admin y un cálculo, que manda correo): lo cubre el guardián · 25 comprobaciones · romper_v542 16/16 + control · romper_v541 6/6 (dos retiradas: el contador de pasadas ya no decide nada), v540 11/11, v539 6/6, v535 18/18 y v534 37/37 (re-ancladas) · suite 171 verde con Python 3.12.10
+
 ## SIN OBRA NO SE OLVIDA NUNCA — UNA REGLA, NO DOS (v541)
 
 ⚠️ Visto EN PRODUCCIÓN con la cuenta de campo (07/10/2026), cerrando el pendiente «el campo
@@ -13083,7 +13115,7 @@ comprueba lo que dice**.
 
 ---
 
-## Versiones desplegadas (v541 = actual)
+## Versiones desplegadas (v542 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -13091,6 +13123,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v542 | **El Survey se limpia de verdad y no mezcla proyectos.** ⚠️ «Duplicate», «Clear everything», importar un Excel y «Rebuild» dejaban las celdas tecleadas ENCIMA de la matriz nueva (el `data_editor` con clave y filas fijas re-aplica las ediciones), y «Clear everything» borraba los campos sin que el navegador se enterara: matriz con clave por generación y «empezar de cero» que ASIGNA. Decisión del usuario: guardar el survey en su proyecto lo limpia, y de una obra a otra empieza de cero; «Duplicate» se queda (lo adopta la siguiente obra) y teclear antes de fichar se conserva. PRODUCCIÓN (07/10/2026, cuenta de campo): WR 150 tecleado en la matriz → «Duplicate survey» → 0 en pantalla y sigue a 0 tras una pasada nueva (antes reaparecía); BSR 1330 y Omega L → «Clear everything» → 0 y R, también tras otra pasada; PRUEBA MOVIL con BSR 1330 → cerrar la jornada (sigue) → fichar en ZZ PRUEBA → BSR 0 (empezó de cero). El aviso «empezó de cero» sale una pasada tarde (los avisos de flash se pintan antes de que el Survey lo encole): pendiente. Guardar el survey en un proyecto, sin comprobar en producción (pide cuenta admin y un cálculo, que manda correo): lo cubre el guardián · romper_v542 16/16 + control · romper_v541 6/6 (dos retiradas: el contador de pasadas ya no decide nada), v540 11/11, v539 6/6, v535 18/18 y v534 37/37 (re-ancladas) · suite 171 verde con Python 3.12.10 |
 | v541 | **Sin obra no se olvida nunca (una regla, no dos).** ⚠️ Visto en producción con la cuenta de campo: cerrar la jornada desde el menú lateral DENTRO de Rieles borraba lo tecleado sin cambiar de obra — los botones del fichaje cortan la pasada con `st.rerun()` y la herramienta creía «volver». Ahora se olvida solo al pintarse con OTRA obra real; sin obra, nunca; el Survey, como antes. ⚠️ Y el nº de paradas volvía como 5.0 al volver al Survey con otra obra (latente desde v535): `ns` con valor por defecto. Logs del Cloud limpios (reinicio a las 05:53). PRODUCCIÓN (07/10/2026): chip v541 y la cookie restaura la sesión de campo; con la cuenta de campo, en Rieles y fichando desde el menú lateral: PRUEBA MOVIL con LFKK 1234 y 3 rieles → «Close workday and project» → siguen (con v540 pasaban a 0) → fichar otra vez en PRUEBA MOVIL → siguen → cerrar y fichar en ZZ PRUEBA → a 0. Tres jornadas de prueba de ~1 min, cerradas (0 fichajes abiertos) · romper_v541 8/8 + control · romper_v539 6/6, romper_v535 18/18 (una mudada a v541) y romper_v540 11/11 · romper_v534 37/37 (36 en la tanda: la del «respeto» escapaba porque su prueba reabría SIN obra; ahora con la obra del cálculo, y se caza) · suite 170 verde con Python 3.12.10 (y verif_v534 re-corrido 61/61 tras endurecerlo) |
 | v540 | **Olvidar también en el navegador; las tablas de lo medido son de su obra.** ⚠️ Visto en producción con el admin: de 88 walker a otra obra sin salir de Belting, la pantalla seguía con HQ/HGP/HGPR de 88 walker y «Calculate» los usó — v535 BORRABA en el servidor y el navegador (que solo se entera de lo ASIGNADO, trampa de v529) los devolvía. `olvidar` asigna el valor por defecto (`DEFECTOS`, comprobado contra el widget real); las tablas de lo medido (HKPR, BSR, L, matriz del caso 2), que no se olvidaban nunca, se vacían con una tabla editable NUEVA (`clave_tabla`). Y «Descargar» → «Download». PRODUCCIÓN (07/10/2026, cuenta admin): Belting, de PRJ-0015 a 88 walker sin salir: el HGPR 1785 que venía de la otra obra pasa a 0 en pantalla y HQ/HGP salen del plano; con HGPR 1785 tecleado y de vuelta a PRJ-0015: HQ, HGP y HGPR a 0 en pantalla y «Calculate» con HQ 0 y HGP 0 (antes, 14045 y 85). Buffers: HKPR 1500 tecleado en la tabla con 88 walker y a PRJ-0015: tabla nueva a 0 y el cálculo con HKPR 0 (corte 0, OK) · romper_v540 11/11 + control · romper_v539 6/6, romper_v535 19/19 y romper_v534 37/37 (una re-anclada: su ancla caía en el del que solo usa el Survey y escapaba; re-anclada se caza) · suite 169 verde con Python 3.12.10 |
 | v539 | **Lo reabierto es de la obra del cálculo.** ⚠️ Fallo de v535, encontrado ensayando en local las pantallas del admin con los datos REALES de 88 walker (leídos en solo lectura): con la herramienta usada antes en otra obra, reabrir un cálculo y elegir su obra en el selector borraba lo medido sin aviso (HGPR 1547 → 0, 2 buffers → 1, plantilla 770 → 0); «Rebuild the project in the Survey», igual. `respetar(h, obra)`: elegir esa obra ya no es un cambio, otra sí. Ensayo real 33/33 (antes 28/33). PRODUCCIÓN (07/10/2026): chip v539 en la sesión de campo abierta, sin recargar y sin excepciones; el historial del asistente sigue (misma cuenta). Después, con el admin (07/10/2026): CAL-0004 reabierto en Belting y elegida 88 walker en el selector, el HGPR 1785 se queda · romper_v539 6/6 + control (la 1ª pasada, 5/6, destapó el hueco del guardián) · romper_v534 37/37 re-anclada · suite 168 verde con Python 3.12.10 |
