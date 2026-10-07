@@ -123,11 +123,19 @@ def olvidar(herramienta) -> int:
     return n
 
 
-def respetar(herramienta) -> None:
+def respetar(herramienta, obra="") -> None:
     """Otra pantalla acaba de CARGAR valores en esta herramienta (reabrir un cálculo,
     reconstruir un survey): la próxima vez que se pinte, no se olvidan aunque la obra sea
-    otra. Y el selector de obra vuelve a «no project», como ocurría antes al llegar."""
-    st.session_state[_RESPETAR + str(herramienta)] = True
+    otra. Y el selector de obra vuelve a «no project», como ocurría antes al llegar.
+
+    ⚠️ v539 · `obra` = el ID de la obra de la que SON esos valores (el cálculo reabierto
+    lleva su ProjectID; el survey reconstruido, su proyecto). Sin ella, la herramienta
+    seguía creyendo que lo suyo era de la última obra con que se usó: el admin usaba
+    Belting con la obra A, reabría un cálculo de B, elegía B en el selector —lo natural
+    para volver a guardarlo— y v535 lo tomaba por «de A a B sin salir» y borraba lo
+    medido (HGPR 1547 → 0 con los cálculos reales de 88 walker). Elegir después ESA obra
+    ya no es un cambio; elegir otra sí."""
+    st.session_state[_RESPETAR + str(herramienta)] = str(obra or "") or True
     st.session_state.pop(_OBRA + str(herramienta), None)
 
 
@@ -178,13 +186,21 @@ def al_pintar(herramienta, obra) -> bool:
        Ahora se olvida lo de X — salvo en el Survey, donde «Duplicate for the next lift»
        conserva A PROPÓSITO los parámetros para el siguiente ascensor: ahí solo manda el
        plano de Y sobre lo que el plano trae, y lo medido a mano se queda.
+
+    Lo cargado a propósito (`respetar`) no se olvida al pintarse, y desde v539 pasa a ser
+    de la obra que dijo quien lo cargó (o de ninguna conocida, si no lo dijo).
     """
     h, obra = str(herramienta), str(obra or "")
     n = int(st.session_state.get(_PASADA, 0) or 0)
     antes = st.session_state.get(_VISTA + h)
     ult_real = (antes[2] if antes and len(antes) > 2 else "") if antes else ""
+    resp = st.session_state.pop(_RESPETAR + h, False)
+    if resp:
+        # v539 · La última obra REAL de la herramienta es ahora la de lo cargado, no la
+        # de antes de cargarlo (ver `respetar`).
+        ult_real = resp if isinstance(resp, str) else ""
     st.session_state[_VISTA + h] = (n, obra, obra or ult_real)
-    if st.session_state.pop(_RESPETAR + h, False) or not antes:
+    if resp or not antes:
         return False
     ult_pasada, ult_obra = antes[0], antes[1]
     if ult_pasada < n - 1 and ult_obra != obra:         # 1. vuelve con otra obra

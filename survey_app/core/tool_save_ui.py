@@ -87,8 +87,9 @@ def aplicar_restauracion(herramienta: str) -> str:
     st.session_state.pop(_PENDIENTE, None)
     import pandas as _pd
     # v534 · Estos valores se cargan A PROPÓSITO: que la herramienta no los olvide al
-    # pintarse aunque la última vez estuviera con otra obra.
-    estado_vivo.respetar(_PREFIJO.get(herramienta, "").rstrip("_"))
+    # pintarse aunque la última vez estuviera con otra obra. ⚠️ v539 · Y son de la obra
+    # del cálculo: elegirla luego en el selector ya no los borra.
+    estado_vivo.respetar(_PREFIJO.get(herramienta, "").rstrip("_"), pend.get("obra", ""))
     for k, v in (pend.get("valores") or {}).items():
         if not _restaurable(k):
             continue
@@ -114,7 +115,8 @@ def pedir_reapertura(fila, herramienta: str, sub_herramienta: str) -> bool:
     if not vals:
         return False
     st.session_state[_PENDIENTE] = {"herramienta": herramienta, "valores": vals,
-                                    "id": str(fila.get("ID", ""))}
+                                    "id": str(fila.get("ID", "")),
+                                    "obra": str(fila.get("ProjectID", "") or "")}
     st.session_state["_admin_nav_pending"] = ("herramientas", sub_herramienta)
     return True
 

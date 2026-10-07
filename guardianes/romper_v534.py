@@ -103,10 +103,13 @@ ROTURAS = [
      EV, [('"claves": ("ns",)}', '"claves": ("ns", "survey_fase")}')]),
 
     ("⚠️ lo cargado a proposito no se respeta (reabrir un calculo con otra obra lo borra)",
-     EV, [("    if st.session_state.pop(_RESPETAR + h, False) or not antes:", "    if not antes:")]),
+     # v539 · re-anclada: el pop pasó a la variable `resp` (lleva la obra de lo cargado).
+     EV, [("    if resp or not antes:", "    if not antes:")]),
 
     ("reabrir un calculo no avisa de que lo suyo se respete",
-     TSU, [('    estado_vivo.respetar(_PREFIJO.get(herramienta, "").rstrip("_"))\n', "")]),
+     # v539 · re-anclada: la llamada lleva ahora la obra del cálculo.
+     TSU, [('    estado_vivo.respetar(_PREFIJO.get(herramienta, "").rstrip("_"), pend.get("obra", ""))\n',
+            "")]),
 
     ("⚠️ reabrir vuelve a asignar el BOTON guardado (codigo de v533: la pantalla revienta)",
      TSU, [("        if not _restaurable(k):\n            continue\n        try:", "        try:")]),
@@ -116,7 +119,8 @@ ROTURAS = [
             '        if not str(k).startswith(pref) or str(k).endswith("_editor"):')]),
 
     ("«Rebuild the project in the Survey» no marca lo que carga",
-     PRU, [('                    _ev.respetar("sv")\n', "")]),
+     # v539 · re-anclada: la llamada lleva ahora el proyecto (`pid`).
+     PRU, [('                    _ev.respetar("sv", pid)\n', "")]),
 
     ("⚠️ Belting vuelve a medir lo que sus columnas (198 con 1 ascensor: titulo cortado)",
      BEL, [("    VW = max(470, ML * 2 + n * colw)", "    VW = ML * 2 + n * colw")]),

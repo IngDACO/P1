@@ -405,8 +405,10 @@ _fsel = next(n for n in _tpl.body if isinstance(n, ast.FunctionDef)
 chk("`selector_proyecto` avisa de la obra en TODOS sus caminos (un solo `return`, tras "
     "`al_pintar`)", sum(isinstance(n, ast.Return) for n in ast.walk(_fsel)) == 1
     and "estado_vivo.al_pintar(key" in ast.unparse(_fsel))
+# v539 · la llamada lleva además la obra de lo cargado (`_ev.respetar('sv', pid)`): aquí se
+# afirma que se respeta; de qué obra es lo vigila verif_v539.
 chk("«Rebuild the project in the Survey» marca lo que carga para que se respete",
-    "_ev.respetar('sv')" in ast.unparse(ast.parse(_fuente("core/projects_ui.py"))))
+    "_ev.respetar('sv'" in ast.unparse(ast.parse(_fuente("core/projects_ui.py"))))
 
 # ═════════════════════════════════════════════════════════════════
 sec("2. Los dibujos: ningún texto fuera del borde ni pisando a otro (fuente real)")
