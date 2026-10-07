@@ -10,6 +10,35 @@ ventana de contexto. Contenido: 258 secciones detalladas + el índice de 440 ver
 
 ---
 
+## OLVIDAR TAMBIÉN EN EL NAVEGADOR — Y LAS TABLAS DE LO MEDIDO SON DE SU OBRA (v540)
+
+⚠️ Visto EN PRODUCCIÓN con la cuenta del admin, probando v539: en Belting, de 88 walker a otra
+obra (sin plano) SIN salir de la herramienta, la pantalla seguía con HQ 14045, HGP 85 y HGPR
+1785, y «Calculate» calculó con ellos bajo el nombre de la otra obra. La regla de v535 («de X
+a Y sin salir, se olvida») BORRABA las entradas en el servidor; pero Streamlit 1.64 identifica
+`number_input` y `radio` SOLO por su clave, y el navegador solo se entera de un valor cuando
+el código lo ASIGNA (la trampa de v529, otra vez): se quedaba con el viejo y lo devolvía en el
+clic siguiente. AppTest lee el SERVIDOR, así que los guardianes de v535 lo daban por bueno.
+Solo funcionaba lo que el plano de la obra nueva ASIGNA.
+
+→ `estado_vivo.olvidar` ASIGNA el valor por defecto de cada entrada (`DEFECTOS`, comprobado
+contra el widget real pintando las cuatro herramientas; el HGPR por prefijo).
+
+Y las tablas de lo medido —HKPR de cada buffer, BSR de cada ascensor, L de cada ascensor, la
+matriz del caso 2— no se olvidaban NUNCA (ni al volver con otra obra): ahora son de su obra
+(`TABLAS`). Ponerlas a ceros no basta: un `data_editor` con clave y filas fijas se identifica
+por la clave y la FORMA de los datos «para conservar las ediciones» (código de Streamlit), así
+que el navegador volvería a aplicar lo tecleado. Su clave lleva una generación
+(`clave_tabla`) que sube al olvidar: tabla nueva para el navegador.
+
+De paso: «Descargar belting.pdf» en Files salía en español (un literal concatenado, la forma
+que las redes de i18n no ven — trampa nº30).
+
+El guardián mira `proto.set_value` (lo que recibe el navegador), con la sonda validada contra
+el `olvidar` de v539.
+
+PRODUCCIÓN (07/10/2026, cuenta admin): Belting, de PRJ-0015 a 88 walker sin salir: el HGPR 1785 que venía de la otra obra pasa a 0 en pantalla y HQ/HGP salen del plano; con HGPR 1785 tecleado y de vuelta a PRJ-0015: HQ, HGP y HGPR a 0 en pantalla y «Calculate» con HQ 0 y HGP 0 (antes, 14045 y 85). Buffers: HKPR 1500 tecleado en la tabla con 88 walker y a PRJ-0015: tabla nueva a 0 y el cálculo con HKPR 0 (corte 0, OK) · 23 comprobaciones · romper_v540 11/11 + control · romper_v539 6/6, romper_v535 19/19 y romper_v534 37/37 (una re-anclada: su ancla caía en el del que solo usa el Survey y escapaba; re-anclada se caza) · suite 169 verde con Python 3.12.10
+
 ## LO REABIERTO ES DE LA OBRA DEL CÁLCULO (v539)
 
 ⚠️ Fallo introducido en v535, encontrado sin la cuenta del admin: con los datos REALES de
@@ -13020,7 +13049,7 @@ comprueba lo que dice**.
 
 ---
 
-## Versiones desplegadas (v539 = actual)
+## Versiones desplegadas (v540 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -13028,6 +13057,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v540 | **Olvidar también en el navegador; las tablas de lo medido son de su obra.** ⚠️ Visto en producción con el admin: de 88 walker a otra obra sin salir de Belting, la pantalla seguía con HQ/HGP/HGPR de 88 walker y «Calculate» los usó — v535 BORRABA en el servidor y el navegador (que solo se entera de lo ASIGNADO, trampa de v529) los devolvía. `olvidar` asigna el valor por defecto (`DEFECTOS`, comprobado contra el widget real); las tablas de lo medido (HKPR, BSR, L, matriz del caso 2), que no se olvidaban nunca, se vacían con una tabla editable NUEVA (`clave_tabla`). Y «Descargar» → «Download». PRODUCCIÓN (07/10/2026, cuenta admin): Belting, de PRJ-0015 a 88 walker sin salir: el HGPR 1785 que venía de la otra obra pasa a 0 en pantalla y HQ/HGP salen del plano; con HGPR 1785 tecleado y de vuelta a PRJ-0015: HQ, HGP y HGPR a 0 en pantalla y «Calculate» con HQ 0 y HGP 0 (antes, 14045 y 85). Buffers: HKPR 1500 tecleado en la tabla con 88 walker y a PRJ-0015: tabla nueva a 0 y el cálculo con HKPR 0 (corte 0, OK) · romper_v540 11/11 + control · romper_v539 6/6, romper_v535 19/19 y romper_v534 37/37 (una re-anclada: su ancla caía en el del que solo usa el Survey y escapaba; re-anclada se caza) · suite 169 verde con Python 3.12.10 |
 | v539 | **Lo reabierto es de la obra del cálculo.** ⚠️ Fallo de v535, encontrado ensayando en local las pantallas del admin con los datos REALES de 88 walker (leídos en solo lectura): con la herramienta usada antes en otra obra, reabrir un cálculo y elegir su obra en el selector borraba lo medido sin aviso (HGPR 1547 → 0, 2 buffers → 1, plantilla 770 → 0); «Rebuild the project in the Survey», igual. `respetar(h, obra)`: elegir esa obra ya no es un cambio, otra sí. Ensayo real 33/33 (antes 28/33). PRODUCCIÓN (07/10/2026): chip v539 en la sesión de campo abierta, sin recargar y sin excepciones; el historial del asistente sigue (misma cuenta). Reabrir con el selector del admin, pendiente de entrar como admin: lo cubren el ensayo con los datos reales (33/33) y el guardián · romper_v539 6/6 + control (la 1ª pasada, 5/6, destapó el hueco del guardián) · romper_v534 37/37 re-anclada · suite 168 verde con Python 3.12.10 |
 | v538 | **Ningún componente puede subir de versión solo.** Lo que tumbó el Pre-Start (v537) podía repetirse con la cookie de «Keep me signed in» (`extra-streamlit-components`) y los mapas (`streamlit-folium`): fijos a lo que corre en el Cloud, y `anthropic<2`. El guardián detecta los componentes por lo que instalan, no por una lista. PRODUCCIÓN (06/10/2026, cuenta de campo): chip v538 y la sesión de campo siguió abierta; una pestaña nueva entra sola por la cookie (extra-streamlit-components), «My route» pinta el mapa con su pin (streamlit-folium) y el asistente de campo responde (anthropic). Las versiones fijadas son las que ya corrían: prueba que la app arranca con el requirements nuevo, no un cambio de comportamiento · romper_v538 6/6 + control (con py -3.12) · suite 167 verde con Python 3.12.10 |
 | v537 | **Lo que enseñaron los logs del Cloud.** ⚠️ El Pre-Start entero estaba CAÍDO: al despertar la app, el Cloud reinstaló y `streamlit-drawable-canvas` subió a 0.13 (el requirements decía `<1`), que quita `display_toolbar` — `TypeError` al abrirlo. La suite no lo vio: en local la 0.13 ni importaba y el Pre-Start caía a su plan B sin error. Versión fija, y si el lienzo no acepta los parámetros, iniciales en vez de caerse. Además: dos trazas de los logs fuera (la tabla de parámetros a Arrow; el aviso de Session State). Los logs confirman que v536 levantó la caída de v535 sin reiniciar. PRODUCCIÓN (06/10/2026, cuenta de campo): el Pre-Start vuelve a abrir, el lienzo de firma (streamlit_drawable_canvas 0.9.3) se pinta con su barra y un trazo de prueba queda «✓ signed» — sin enviar la charla · romper_v537 8/8 + control (con py -3.12) · suite 165 verde + 1 rojo de mi guardián nuevo (un import de reserva de un paquete no instalado), arreglado y re-corrido junto con check_suite_integra (11/11) · Python 3.12.10 |
