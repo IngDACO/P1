@@ -24,6 +24,9 @@ from core import timeclock
 
 # v535 · Aviso de `selector_proyecto` a `aplicar`: la obra acaba de cambiar.
 _FORZAR = "_pl_forzar"
+# La opción «sin proyecto» del selector del admin (v542: el Survey la ASIGNA al duplicar y
+# al guardarse en un proyecto, para que el siguiente se elija a propósito).
+SIN_PROYECTO = "— no project (load the drawing by hand) —"
 
 
 def _proyecto_fichado(auth: dict):
@@ -86,7 +89,7 @@ def _selector_proyecto(key: str, ayuda: str = "") -> tuple:
     if not proys:
         return None, {}
     idmap = {f"{p.get('Name')} ({p.get('ID')})": p for p in proys}
-    opciones = ["— no project (load the drawing by hand) —"] + list(idmap.keys())
+    opciones = [SIN_PROYECTO] + list(idmap.keys())
     sel = st.selectbox(t("Project"), opciones, key=f"pl_prj_{key}",
                        help=ayuda or "It uses the drawing data stored on the project.")
     if sel == opciones[0]:

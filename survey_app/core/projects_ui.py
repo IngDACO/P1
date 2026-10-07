@@ -2925,6 +2925,9 @@ def _detalle_proyecto(pid: str, grupo: str = None):
                     if matriz:
                         try:
                             st.session_state["survey_df"] = pd.DataFrame(matriz)
+                            # v542 · Matriz nueva para el navegador: si no, las celdas
+                            # tecleadas en el survey anterior quedaban ENCIMA de la de la obra.
+                            _ev.tabla_nueva("sv")
                         except Exception:
                             pass
                     st.session_state["proyecto"]  = str(prj.get("Name", ""))

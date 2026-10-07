@@ -227,11 +227,16 @@ chk("se reconstruye la B (BS corregido 1600, BSR 1330, 4 paradas) y llega entero
     v == [1600.0, 1330.0, 4], v)
 chk("⚠️ elige B en el selector: el plano de B NO pisa lo reconstruido (v538: BS 1500 y 5 "
     "paradas)", elige(at, "sv", "PRJ-B") == [1600.0, 1330.0, 4], V(at))
-chk("...elegir OTRA obra (C) sí manda su plano, y lo medido a mano se queda (Duplicate)",
-    elige(at, "sv", "PRJ-C") == [1700.0, 1330.0, 7], V(at))
+# ⚠️ v542 · Actualizadas con su razón (v385): hasta v541 el Survey conservaba lo medido a
+# mano al cambiar de obra (por «Duplicate»). Decisión del usuario en v542: no se mezcla
+# información de proyectos — de una obra real a otra, el Survey EMPIEZA DE CERO (BSR a 0) y
+# manda el plano de la nueva; lo vigila verif_v542. «Duplicate» sigue, pero lo duplicado lo
+# adopta la siguiente obra a propósito.
+chk("...elegir OTRA obra (C) sí es un cambio: manda su plano y el survey empieza de cero (v542)",
+    elige(at, "sv", "PRJ-C") == [1700.0, 0.0, 7], V(at))
 at, v0, v = survey()
-chk("⚠️ elegir C JUSTO después de reconstruir B también manda el plano de C",
-    v == [1600.0, 1330.0, 4] and elige(at, "sv", "PRJ-C") == [1700.0, 1330.0, 7], V(at))
+chk("⚠️ elegir C JUSTO después de reconstruir B también es un cambio: plano de C, de cero",
+    v == [1600.0, 1330.0, 4] and elige(at, "sv", "PRJ-C") == [1700.0, 0.0, 7], V(at))
 at, v0, v = survey(v538=True)
 _v538 = elige(at, "sv", "PRJ-B")
 chk("la sonda VE el fallo: con el `al_pintar` de v538 el plano de B pisa lo reconstruido",

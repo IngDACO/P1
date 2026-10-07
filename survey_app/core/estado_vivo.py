@@ -111,6 +111,7 @@ CLAVES = frozenset(k for h in HERRAMIENTAS.values() for k in h["claves"]) | froz
 _PASADA = "_ev_pasada"          # nº de pasada (lo cuenta `pasada`, desde app.py)
 _VISTA = "_ev_vista_"           # + herramienta → (pasada, obra) de la última vez que se pintó
 _RESPETAR = "_ev_respetar_"     # + herramienta → la próxima vez que se pinte, no olvidar
+_CAMBIO = "_ev_cambio_"         # + herramienta → pasó de una obra REAL a otra (v542)
 
 
 def es_entrada(clave) -> bool:
@@ -163,6 +164,15 @@ def clave_tabla(herramienta, nombre) -> str:
     return "%s_%d" % (nombre, int(st.session_state.get(_GEN + str(herramienta), 0) or 0))
 
 
+def tabla_nueva(herramienta) -> None:
+    """⚠️ v542 · Quien REEMPLAZA el contenido de una tabla editable (vaciarla, duplicar,
+    importar un Excel, reconstruir un survey) tiene que llamar a esto: si no, Streamlit
+    vuelve a aplicar encima lo que se tecleó en la tabla anterior mientras no cambie el nº
+    de filas — la matriz «vaciada» reaparecía con las celdas viejas."""
+    h = str(herramienta)
+    st.session_state[_GEN + h] = int(st.session_state.get(_GEN + h, 0) or 0) + 1
+
+
 def olvidar(herramienta) -> int:
     """Olvida las entradas de UNA herramienta: lo que Streamlit hacía solo al salir de ella.
 
@@ -181,7 +191,7 @@ def olvidar(herramienta) -> int:
             n += 1
     for k in TABLAS.get(h, ()):
         st.session_state.pop(k, None)
-    st.session_state[_GEN + h] = int(st.session_state.get(_GEN + h, 0) or 0) + 1
+    tabla_nueva(h)
     return n
 
 
@@ -199,6 +209,25 @@ def respetar(herramienta, obra="") -> None:
     ya no es un cambio; elegir otra sí."""
     st.session_state[_RESPETAR + str(herramienta)] = str(obra or "") or True
     st.session_state.pop(_OBRA + str(herramienta), None)
+
+
+def adoptar_siguiente(herramienta) -> None:
+    """⚠️ v542 · «Duplicate for the next lift»: lo que tiene la herramienta lo ADOPTA la
+    siguiente obra real DISTINTA de la actual (el siguiente ascensor del mismo hueco) en vez
+    de empezar de cero, y el plano de esa obra manda en lo que trae. No es mezclar obras: es
+    la decisión explícita del usuario al pulsar el botón."""
+    h = str(herramienta)
+    antes = st.session_state.get(_VISTA + h)
+    actual = str((antes[2] if antes and len(antes) > 2 else "") or "") if antes else ""
+    if actual.startswith(_ADOPTAR):
+        actual = actual[len(_ADOPTAR) + 1:]
+    st.session_state[_RESPETAR + h] = _ADOPTAR + "|" + actual
+
+
+def cambio_de_obra(herramienta) -> bool:
+    """¿La herramienta acaba de pasar de una obra REAL a OTRA (no a «sin obra», no por un
+    duplicado)? Se consume al leerla. El Survey la usa para empezar de cero (v542)."""
+    return bool(st.session_state.pop(_CAMBIO + str(herramienta), False))
 
 
 # ── De quién son los datos de trabajo (v535) ─────────────────────────────────
@@ -250,15 +279,19 @@ def al_pintar(herramienta, obra) -> bool:
     al cerrar la jornada; y al volver a fichar en la MISMA obra, perdido). Hasta v540 no
     se notaba porque el borrado no llegaba al navegador.
 
-    ⚠️ v535 · El Survey, sin salir, NO olvida: «Duplicate for the next lift» conserva A
-    PROPÓSITO lo medido para el siguiente ascensor; ahí solo manda el plano de la obra nueva
-    sobre lo que el plano trae. Al VOLVER a él con otra obra real sí se olvida (lo de antes).
+    ⚠️ v542 · El Survey no olvida aquí: de una obra REAL a otra, EMPIEZA DE CERO entero
+    (parámetros, matriz y resultados: «no se mezcla información de proyectos», decisión del
+    usuario) — lo hace `survey_ui` al leer `cambio_de_obra`. De «sin obra» a una obra
+    conserva lo tecleado (no viene de ningún proyecto) y solo manda el plano.
 
     Lo cargado a propósito (`respetar`) no se olvida al pintarse y es de la obra que dijo
-    quien lo cargó (v539); si no lo dijo, es de la primera obra real con que se pinte.
+    quien lo cargó (v539); si no lo dijo, es de la primera obra real con que se pinte. Lo
+    duplicado («Duplicate for the next lift», `adoptar_siguiente`) lo adopta la primera
+    obra real DISTINTA de la de partida, y su plano manda.
     """
     h, obra = str(herramienta), str(obra or "")
     n = int(st.session_state.get(_PASADA, 0) or 0)
+    st.session_state.pop(_CAMBIO + h, None)
     antes = st.session_state.get(_VISTA + h)
     ult_real = (antes[2] if antes and len(antes) > 2 else "") if antes else ""
     resp = st.session_state.pop(_RESPETAR + h, False)
@@ -266,14 +299,24 @@ def al_pintar(herramienta, obra) -> bool:
         # v539 · La última obra REAL de la herramienta es ahora la de lo cargado, no la
         # de antes de cargarlo (ver `respetar`). Sin obra conocida: la adopta la primera.
         ult_real = resp if isinstance(resp, str) else _ADOPTAR
-    if obra and ult_real == _ADOPTAR:
-        ult_real = obra
+    adopta = False
+    if isinstance(ult_real, str) and ult_real.startswith(_ADOPTAR):
+        salvo = ult_real[len(_ADOPTAR) + 1:]            # un duplicado: salvo su obra de partida
+        if obra and obra != salvo:
+            adopta = "|" in ult_real                    # el duplicado: su plano manda
+            ult_real = obra
+        else:                                           # sigue pendiente de adoptar
+            st.session_state[_VISTA + h] = (n, obra, ult_real)
+            return False
     st.session_state[_VISTA + h] = (n, obra, obra or ult_real)
+    if adopta:
+        return True
     if resp or not antes:
         return False
     if obra and ult_real != obra:                       # llega a OTRA obra real
-        volvio = antes[0] < n - 1                       # no se pintó en la pasada anterior
-        if h != "sv" or volvio:
+        if h != "sv":
             olvidar(h)
+        elif ult_real:                                  # de una obra real a otra
+            st.session_state[_CAMBIO + h] = True
         return True
     return False

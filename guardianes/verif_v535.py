@@ -179,8 +179,10 @@ at.run()
 at.number_input(key="inp_BSR").set_value(1330.0).run()
 chk("de partida: obra A, BS de su plano (1326), NS del plano (3) y BSR medido (1330)",
     _v(at) == "V=(1326.0, 1330.0, 3)", _v(at))
-chk("⚠️ el Survey pasa a la obra B sin salir: BS y NS vienen del plano de B (1500, 5) y el "
-    "BSR medido a mano SE QUEDA («Duplicate for the next lift»)",
+# v542 · Este guion mira `estado_vivo` + `plan_ui` solos: el Survey no OLVIDA aquí. Desde
+# v542 la pantalla real empieza de cero al cambiar de obra (`cambio_de_obra`, verif_v542).
+chk("⚠️ el Survey pasa a la obra B sin salir: BS y NS vienen del plano de B (1500, 5) y "
+    "`estado_vivo` no borra el BSR (empezar de cero lo hace la pantalla, v542)",
     _obra(at, "PRJ-B") == "V=(1500.0, 1330.0, 5)", _v(at))
 chk("el nº de paradas sigue siendo un entero (el widget no cambia de tipo)",
     isinstance(at.number_input(key="ns").value, int), type(at.number_input(key="ns").value))
@@ -205,8 +207,12 @@ chk("el Survey cuenta el NS neutro (2) como vacío UNA vez por obra (si no, quie
     "_neutro_sv = {'ns': 2} if st.session_state.get('_sv_ns_obra') != _pid_sv else None" in _tsv
     and "plan_ui.aplicar(_plano_sv, _mapa_sv, neutros=_neutro_sv)" in _tsv
     and "st.session_state['_sv_ns_obra'] = _pid_sv" in _tsv)
+# v542 · «Empezar de cero» se mudó a `_limpiar_survey` (la usan el botón, el cambio de obra y
+# el guardado en un proyecto): se mira ahí.
+_flimp = next((ast.unparse(n) for n in ast.parse(_fuente("core/survey_ui.py")).body
+               if isinstance(n, ast.FunctionDef) and n.name == "_limpiar_survey"), "")
 chk("...y «Start a new survey» vuelve a dejar que el NS del plano mande",
-    "'_sv_ns_obra'" in _tsv.split("_reset_survey")[1].split("_dup_survey")[0])
+    "'_sv_ns_obra'" in _flimp, _flimp[-300:])
 chk("...y `aplicar` lo CONSUME (pop) al empezar",
     "st.session_state.pop(_FORZAR, False)" in ast.unparse(_fapl.body[1]), ast.unparse(_fapl.body[1]))
 

@@ -78,7 +78,8 @@ ROTURAS = [
     ("⚠️ al volver con OTRA obra no se olvida nada (el plano de la vieja bajo el nombre de la nueva)",
      # v541 · re-anclada: ya no hay dos casos en `al_pintar`, hay una regla; «volver» solo
      # decide en el Survey. La rotura equivalente: al volver, no olvidar.
-     EV, [('        if h != "sv" or volvio:', '        if h != "sv" and not volvio:')]),
+     # v542 · re-anclada otra vez: ya no hay «volver» en `al_pintar`; no olvidar nunca.
+     EV, [('        if h != "sv":\n            olvidar(h)\n', "        if False:\n            olvidar(h)\n")]),
 
     ("`olvidar` recorre las entradas de la herramienta pero no borra ninguna",
      # v540 · re-anclada: `olvidar` ya no solo borra, ASIGNA el valor por defecto; el ancla
@@ -103,7 +104,8 @@ ROTURAS = [
     # que vigila ahora es el de v535 — sin salir, de X a Y, manda el plano de Y.
     ("sin salir, de una obra X a otra Y, no se olvida nada (el LFKK de X bajo el nombre de Y)",
      # v541 · re-anclada: lo de v535 sin salir, sobre la regla única — olvidar solo al volver.
-     EV, [('        if h != "sv" or volvio:', "        if volvio:")]),
+     # v542 · re-anclada otra vez (sin «volver»): la condición de olvidar, anulada.
+     EV, [('        if h != "sv":\n', "        if False:\n")]),
 
     ("la obra elegida en la herramienta no se conserva (al volver siempre es «otra»)",
      EV, [(" + (_OBRA,)", "")]),

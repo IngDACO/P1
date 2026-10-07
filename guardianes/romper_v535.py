@@ -37,14 +37,17 @@ def corre(g=G):
 ROTURAS = [
     # v541 · re-ancladas las tres sobre la regla única de `al_pintar` (ya no hay «caso 1» y
     # «caso 2»: el contador de pasadas solo decide en el Survey, al volver).
+    # v542 · re-ancladas otra vez: `al_pintar` ya no mira si la herramienta «vuelve»; el
+    # Survey no olvida aquí (empieza de cero en su pantalla, `cambio_de_obra`).
     ("⚠️ vuelve el codigo de v534: sin salir, de una obra a otra, no se olvida nada",
-     EV, [('        if h != "sv" or volvio:', "        if volvio:")]),
+     EV, [('        if h != "sv":\n            olvidar(h)\n', "        if False:\n            olvidar(h)\n")]),
 
-    ("⚠️ el Survey tambien olvida lo medido al cambiar de obra («Duplicate» pierde lo suyo)",
-     EV, [('        if h != "sv" or volvio:\n            olvidar(h)\n', "        olvidar(h)\n")]),
+    ("⚠️ el Survey tambien olvida lo medido al cambiar de obra (en `estado_vivo`)",
+     EV, [('        if h != "sv":\n            olvidar(h)\n',
+           "        olvidar(h)\n        if False:\n            pass\n")]),
 
     ("las herramientas no olvidan lo tecleado para la obra anterior (solo manda el plano)",
-     EV, [('        if h != "sv" or volvio:\n', "        if False:\n")]),
+     EV, [('        if h != "sv":\n', "        if False:\n")]),
 
     # v541 · «la pasada no se cuenta» se MUDÓ a romper_v541: desde v541 de «sin obra» a una
     # obra se olvida sin mirar el contador; el contador solo decide si el Survey VUELVE, y eso

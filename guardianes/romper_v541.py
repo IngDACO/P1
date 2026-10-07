@@ -40,19 +40,20 @@ ROTURAS = [
      EV, [("    if obra and ult_real != obra:", "    if obra and ult_real and ult_real != obra:")]),
 
     ("lo cargado sin obra conocida no lo adopta nadie (fichar en una obra lo borra)",
-     EV, [("    if obra and ult_real == _ADOPTAR:\n        ult_real = obra\n", "")]),
+     # v542 · re-anclada: la adopción vive ahora en el bloque de `_ADOPTAR` (también la de
+     # «Duplicate»); la rotura equivalente es no adoptar la obra.
+     EV, [('            adopta = "|" in ult_real                    # el duplicado: su plano manda\n'
+           "            ult_real = obra\n",
+           '            adopta = "|" in ult_real                    # el duplicado: su plano manda\n')]),
 
     ("`respetar` sin obra vuelve a ser «de ninguna» (no se adopta)",
      EV, [("        ult_real = resp if isinstance(resp, str) else _ADOPTAR\n",
            '        ult_real = resp if isinstance(resp, str) else ""\n')]),
 
-    # Mudada de romper_v535 (v541): el contador solo decide ya si el Survey VUELVE.
-    ("la pasada no se cuenta: el Survey deja de olvidar al volver con otra obra",
-     EV, [("    st.session_state[_PASADA] = int(st.session_state.get(_PASADA, 0) or 0) + 1",
-           "    st.session_state[_PASADA] = int(st.session_state.get(_PASADA, 0) or 0)")]),
-
-    ("el Survey no sabe si vuelve (nunca olvida lo de la otra obra)",
-     EV, [("        volvio = antes[0] < n - 1", "        volvio = False")]),
+    # v542 · RETIRADAS «la pasada no se cuenta» y «el Survey no sabe si vuelve»: desde v542
+    # el Survey empieza de cero al pasar de una obra real a otra sin mirar si «vuelve», así
+    # que el contador de pasadas ya no decide nada (trampa nº32). Lo nuevo lo vigila
+    # romper_v542.
 
     ("⚠️ el nº de paradas sin valor por defecto (vuelve como 5.0 al cambiar de obra)",
      EV, [('    "ns": 2,\n', "")]),
@@ -62,8 +63,8 @@ ROTURAS = [
 ]
 
 CONTROL = ("CONTROL: un comentario inocuo no puede poner nada rojo",
-           EV, [("    if obra and ult_real == _ADOPTAR:\n",
-                 "    # comentario inocuo del control\n    if obra and ult_real == _ADOPTAR:\n")])
+           EV, [("    adopta = False\n",
+                 "    # comentario inocuo del control\n    adopta = False\n")])
 
 
 def aplica(rel, cambios):

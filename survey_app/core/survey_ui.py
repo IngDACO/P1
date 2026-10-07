@@ -94,6 +94,12 @@ USER_ONLY = {
     "LengthTemplate": "Plumb template length (mm) — for the plumb layout",
 }
 
+# Los valores con que nace la configuración (los usan `init_state` y «empezar de cero»).
+_CFG_INICIAL = {"cfg_omega_side": "R", "cfg_wall_yn": "N", "cfg_offset_side": "R",
+                "cfg_wall_stop": 1, "cfg_wall_side": "R", "cfg_ctrl_yn": "N",
+                "cfg_ctrl_side": "R"}
+
+
 def init_state():
     if "initialized" in st.session_state:
         return
@@ -104,13 +110,8 @@ def init_state():
     for p in USER_ONLY:
         st.session_state[f"inp_{p}"] = 0.0
     # Config defaults (con keys para que radios lean de session_state)
-    st.session_state["cfg_omega_side"]   = "R"
-    st.session_state["cfg_wall_yn"]      = "N"
-    st.session_state["cfg_offset_side"]  = "R"
-    st.session_state["cfg_wall_stop"]    = 1
-    st.session_state["cfg_wall_side"]    = "R"
-    st.session_state["cfg_ctrl_yn"]      = "N"
-    st.session_state["cfg_ctrl_side"]    = "R"
+    for _k, _v in _CFG_INICIAL.items():
+        st.session_state[_k] = _v
     # Otros
     st.session_state["pdf_extracted"]  = {}
     st.session_state["last_pdf_name"]  = None
@@ -126,6 +127,45 @@ def init_state():
     st.session_state["ingeniero"]      = ""
     st.session_state["initialized"]    = True
 
+def _limpiar_survey():
+    """Empezar de cero: parámetros, configuración, matriz, resultados e identidad.
+
+    v542 · Lo usan el botón «Clear everything and start over», el cambio de una obra a OTRA
+    («no se mezcla información de proyectos», decisión del usuario) y el guardado del survey
+    en un proyecto. Va ANTES de crear los widgets que toca.
+
+    ⚠️ Los inp_*/cfg_* se ASIGNAN a su valor de partida, no se borran: el botón está en la
+    misma pantalla que los campos, y Streamlit solo le manda un valor al navegador cuando el
+    código lo asigna (trampa nº31). Borrados, el servidor quedaba a cero pero la pantalla
+    seguía con los parámetros viejos y los devolvía en el clic siguiente.
+    """
+    _inicial = {f"inp_{p}": 0.0 for p in list(PDF_PARAMS) + list(USER_ONLY)}
+    _inicial.update(_CFG_INICIAL)
+    for _k in [k for k in list(st.session_state.keys())
+               if k.startswith("inp_") or k.startswith("cfg_")]:
+        if _k in _inicial:
+            st.session_state[_k] = _inicial[_k]
+        else:
+            st.session_state.pop(_k, None)
+    for _k, _v in _inicial.items():
+        st.session_state.setdefault(_k, _v)
+    estado_vivo.tabla_nueva("sv")       # la matriz, nueva también para el navegador
+    # ⚠️ El RESTO se REINICIA a su valor por defecto, NO se borra: hay lecturas por
+    # atributo (st.session_state.last_pdf_name…) que lanzan AttributeError si falta la clave.
+    st.session_state["pdf_extracted"] = {}
+    st.session_state["last_pdf_name"] = None
+    st.session_state["pdf_bytes"]     = None
+    st.session_state["ns"]            = 2
+    st.session_state["survey_df"]     = pd.DataFrame({c: [0.0] * 2 for c in SURVEY_COLS})
+    st.session_state["calc_results"]  = None
+    for _k in ("proyecto", "cliente", "ubicacion", "ingeniero"):
+        st.session_state[_k] = ""
+    # v530: la solución activa y los pisos ya no tienen clave fija (una por cálculo).
+    for _k in ("last_excel_id", "_calc_sig", "ns_msg", "rail_ref_msg", "sched_rows",
+               "sched_start", "_rebuilt_from", "_diag_pdf", "_sv_ns_obra"):
+        st.session_state.pop(_k, None)
+
+
 def render_survey_tab(_ROL, _GRUPO):
     # v534 · Las entradas se conservan desde `app.py` en CADA pasada (`estado_vivo.pasada`):
     # hacerlo solo aquí las salvaba al pasar de «Survey data» a «Results», pero no al salir
@@ -135,32 +175,22 @@ def render_survey_tab(_ROL, _GRUPO):
 
     # ── Empezar de cero (se procesa ANTES de crear los widgets) ──
     if st.session_state.pop("_reset_survey", False):
-        # Los inp_*/cfg_* sí se borran (los widgets los recrean con su valor por defecto).
-        for _k in [k for k in list(st.session_state.keys())
-                   if k.startswith("inp_") or k.startswith("cfg_")]:
-            st.session_state.pop(_k, None)
-        # ⚠️ El RESTO se REINICIA a su valor por defecto, NO se borra: hay lecturas por
-        # atributo (st.session_state.last_pdf_name…) que lanzan AttributeError si falta la clave.
-        st.session_state["pdf_extracted"] = {}
-        st.session_state["last_pdf_name"] = None
-        st.session_state["pdf_bytes"]     = None
-        st.session_state["ns"]            = 2
-        st.session_state["survey_df"]     = pd.DataFrame({c: [0.0] * 2 for c in SURVEY_COLS})
-        st.session_state["calc_results"]  = None
-        for _k in ("proyecto", "cliente", "ubicacion", "ingeniero"):
-            st.session_state[_k] = ""
-        # v530: la solución activa y los pisos ya no tienen clave fija (una por cálculo).
-        for _k in ("last_excel_id", "_calc_sig", "ns_msg", "rail_ref_msg", "sched_rows",
-                   "sched_start", "_rebuilt_from", "_diag_pdf", "_sv_ns_obra"):
-            st.session_state.pop(_k, None)
+        _limpiar_survey()
 
     # ── Duplicar para el siguiente elevador (conserva parámetros, limpia la matriz) ──
     if st.session_state.pop("_dup_survey", False):
         _nsd = int(st.session_state.get("ns", 2))
         st.session_state["survey_df"]    = pd.DataFrame({c: [0.0] * _nsd for c in SURVEY_COLS})
+        estado_vivo.tabla_nueva("sv")       # v542 · si no, las celdas tecleadas reaparecen
         st.session_state["calc_results"] = None
         for _k in ("_calc_sig", "sched_rows", "sched_start", "_diag_pdf", "_rebuilt_from"):
             st.session_state.pop(_k, None)
+        # v542 · Lo duplicado es para el SIGUIENTE ascensor: lo adopta la siguiente obra
+        # (no empieza de cero al elegirla) y su plano manda. El selector del admin vuelve a
+        # «sin proyecto» (asignado, para que el navegador lo vea) y se elige a propósito.
+        estado_vivo.adoptar_siguiente("sv")
+        if "pl_prj_sv" in st.session_state:
+            st.session_state["pl_prj_sv"] = plan_ui.SIN_PROYECTO
         st.session_state["_dup_msg"] = True
         st.session_state["_fase_pending"] = "📝 Survey data"
 
@@ -168,6 +198,7 @@ def render_survey_tab(_ROL, _GRUPO):
     if _pend:
         if _pend.get("df") is not None:
             st.session_state["survey_df"] = _pend["df"]
+            estado_vivo.tabla_nueva("sv")   # v542 · si no, lo tecleado pisa lo importado
         if _pend.get("ns"):
             st.session_state["ns"] = int(_pend["ns"])
         for _k, _v in (_pend.get("params") or {}).items():
@@ -185,6 +216,27 @@ def render_survey_tab(_ROL, _GRUPO):
     if st.session_state.get("_rebuilt_from"):
         st.info(f":material/download: You loaded project **{st.session_state['_rebuilt_from']}**. "
                 "Press **:material/play_arrow: Calculate** to regenerate diagrams and reports.")
+
+    # ── Cerrar el ciclo: llevar al proyecto ──
+    # v542 · Arriba, y no junto al botón de guardar: al guardarse en un proyecto el survey
+    # empieza de cero, y el botón para ir al proyecto tiene que seguir a mano.
+    _pc = st.session_state.get("_prj_creado")
+    if _pc:
+        _c1, _c2 = st.columns([3, 1])
+        _c1.info(t("Project **{x}** updated with the survey. This survey was cleared so the "
+                   "next one starts from zero.", x=f"{_pc['id']} · {_pc['nombre']}"))
+        if _c2.button(t("Open project ➜"), width="stretch",
+                      key="ir_al_proyecto"):
+            st.session_state["_prjsel_pending"] = _pc["id"]
+            # v299: la nav vieja (`_nav_pending` + el radio `main_nav`) se
+            # borró; el salto va por el mecanismo de la shell. Cada rol
+            # tiene su sección de proyectos: el propietario dentro de
+            # Administración, el administrador en la suya.
+            st.session_state["_admin_nav_pending"] = (
+                ("administracion", "📁 Proyectos") if _ROL == "owner"
+                else ("proyectos", "📊 Proyectos"))
+            st.session_state.pop("_prj_creado", None)
+            st.rerun()
 
     # ── Identificación del proyecto ───────────────────────
     # NO se teclea: el survey alimenta un proyecto que YA existe (v135) y ese
@@ -852,6 +904,16 @@ def render_survey_tab(_ROL, _GRUPO):
         # vuelcan sus valores: el técnico no tiene que volver a subir el PDF ni
         # esperar la extracción (que cuesta ~80 s).
         _prj_sv, _plano_sv = plan_ui.selector_proyecto("sv")
+        # ⚠️ v542 · De una obra REAL a otra (sin salir o volviendo): el survey empieza de cero
+        # y manda el plano de la nueva — no se mezcla información de proyectos (decisión del
+        # usuario). Va ANTES de que el plano rellene y de crear los campos. De «sin obra» a
+        # una obra no: lo tecleado no viene de ningún proyecto. Y un duplicado lo adopta.
+        if estado_vivo.cambio_de_obra("sv"):
+            _limpiar_survey()
+            # Por `flash`: con otro nº de paradas la matriz se redimensiona con `st.rerun()`,
+            # que se llevaría un `st.info` de esta pasada (lo cazó el guardián).
+            flash.info(t(":material/cleaning_services: Different project: the survey started "
+                         "from zero — nothing from the previous project is carried over."))
         # Identidad del informe TOMADA del proyecto elegido (ya no se teclea).
         # Seguro escribir estas claves: dejaron de ser widgets al quitar los
         # text_input de arriba (habría sido el error de v111 si aún lo fueran).
@@ -1117,7 +1179,9 @@ def render_survey_tab(_ROL, _GRUPO):
             st.session_state.survey_df,
             width="stretch",
             num_rows="fixed",
-            key="survey_editor"
+            # ⚠️ v542 · Clave con generación (`tabla_nueva`): con clave fija y filas fijas,
+            # Streamlit re-aplica lo tecleado sobre la matriz que ponga el código.
+            key=estado_vivo.clave_tabla("sv", "survey_editor")
         , column_config=tabla.cfg())
         st.session_state.survey_df = edited_df.copy()
 
@@ -1417,31 +1481,23 @@ def render_survey_tab(_ROL, _GRUPO):
                                                                        "informe_cliente", fid, _usr)
                                     except Exception:
                                         _fallos.append("client report")
+                                # v542 · Por `flash`: el guardado termina en `st.rerun()`
+                                # (el survey empieza de cero) y un caption se perdería.
                                 if _fallos:
-                                    st.caption(":material/attach_file: " + t("Documents filed, except") + ": "
-                                               + ", ".join(_fallos) + ".")
+                                    flash.aviso(":material/attach_file: " + t("Documents filed, except") + ": "
+                                                + ", ".join(_fallos) + ".")
                                 else:
-                                    st.caption(t(":material/attach_file: Documents filed in Drive."))
+                                    flash.info(t(":material/attach_file: Documents filed in Drive."))
                             elif drive_store.is_configured():
-                                st.caption(t(":material/attach_file: Documents not filed: Drive is not connected."))
+                                flash.aviso(t(":material/attach_file: Documents not filed: Drive is not connected."))
 
-                            st.success(f":material/check_circle: Survey saved to **{_prj.get('Name')}**.")
-
-                # ── Cerrar el ciclo: llevar al proyecto ──
-                _pc = st.session_state.get("_prj_creado")
-                if _pc:
-                    _c1, _c2 = st.columns([3, 1])
-                    _c1.info(f"Project **{_pc['id']} · {_pc['nombre']}** updated with "
-                             "this survey.")
-                    if _c2.button(t("Open project ➜"), width="stretch",
-                                  key="ir_al_proyecto"):
-                        st.session_state["_prjsel_pending"] = _pc["id"]
-                        # v299: la nav vieja (`_nav_pending` + el radio `main_nav`) se
-                        # borró; el salto va por el mecanismo de la shell. Cada rol
-                        # tiene su sección de proyectos: el propietario dentro de
-                        # Administración, el administrador en la suya.
-                        st.session_state["_admin_nav_pending"] = (
-                            ("administracion", "📁 Proyectos") if _ROL == "owner"
-                            else ("proyectos", "📊 Proyectos"))
-                        st.session_state.pop("_prj_creado", None)
-                        st.rerun()
+                            flash.exito(t(":material/check_circle: Survey saved to **{x}**.",
+                                          x=_prj.get("Name")))
+                            # ⚠️ v542 · Guardado en su proyecto, el survey EMPIEZA DE CERO
+                            # (decisión del usuario: no se mezcla información de proyectos):
+                            # el siguiente no puede arrastrar nada de este. El selector del
+                            # admin vuelve a «sin proyecto» (asignado) y se vuelve a los datos.
+                            st.session_state["_reset_survey"] = True
+                            st.session_state["pl_prj_sv"] = plan_ui.SIN_PROYECTO
+                            st.session_state["_fase_pending"] = _FASE_DATOS
+                            st.rerun()
