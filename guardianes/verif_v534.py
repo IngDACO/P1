@@ -283,8 +283,11 @@ if not hasattr(estado_vivo, "_al_pintar_real"):
 estado_vivo.al_pintar = ((lambda h, o: False) if st.session_state.get("sin_olvido")
                          else estado_vivo._al_pintar_real)
 if st.session_state.pop("reabrir", None):
+    # v541 · El pendiente lleva la obra del cálculo (v539), y es OTRA que la del fichaje: sin
+    # ella, desde v541 lo cargado lo adopta la obra actual y el «respeto» dejaba de verse —
+    # la batería lo cazó (la rotura «no se respeta» escapaba sin probar nada).
     st.session_state[tool_save_ui._PENDIENTE] = {
-        "herramienta": "rieles", "id": "CAL-7",
+        "herramienta": "rieles", "id": "CAL-7", "obra": "PRJ-C",
         "valores": {"rc_lfkk": 1200.0, "rc_n2500": 5, "rc_calc1": False, "rc_pdf_name": None,
                     "rc_L_df": {"__df__": [{"Elevador": "Lift 1", "L (mm)": 21000.0}]}}}
 estado_vivo.pasada()

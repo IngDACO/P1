@@ -35,18 +35,20 @@ def corre(g=G):
 
 
 ROTURAS = [
+    # v541 · re-ancladas las tres sobre la regla única de `al_pintar` (ya no hay «caso 1» y
+    # «caso 2»: el contador de pasadas solo decide en el Survey, al volver).
     ("⚠️ vuelve el codigo de v534: sin salir, de una obra a otra, no se olvida nada",
-     EV, [("    if obra and ult_real and ult_real != obra:", "    if False:")]),
+     EV, [('        if h != "sv" or volvio:', "        if volvio:")]),
 
     ("⚠️ el Survey tambien olvida lo medido al cambiar de obra («Duplicate» pierde lo suyo)",
-     EV, [('        if h != "sv":\n            olvidar(h)\n', "        olvidar(h)\n")]),
+     EV, [('        if h != "sv" or volvio:\n            olvidar(h)\n', "        olvidar(h)\n")]),
 
     ("las herramientas no olvidan lo tecleado para la obra anterior (solo manda el plano)",
-     EV, [('        if h != "sv":\n', "        if False:\n")]),
+     EV, [('        if h != "sv" or volvio:\n', "        if False:\n")]),
 
-    ("la pasada no se cuenta: «sin obra» -> obra al volver deja de olvidar (mudada de v534)",
-     EV, [("    st.session_state[_PASADA] = int(st.session_state.get(_PASADA, 0) or 0) + 1",
-           "    st.session_state[_PASADA] = int(st.session_state.get(_PASADA, 0) or 0)")]),
+    # v541 · «la pasada no se cuenta» se MUDÓ a romper_v541: desde v541 de «sin obra» a una
+    # obra se olvida sin mirar el contador; el contador solo decide si el Survey VUELVE, y eso
+    # lo vigila verif_v541.
 
     ("B -> ninguna -> A deja de contar como cambio (la ultima obra real no se recuerda)",
      EV, [("    st.session_state[_VISTA + h] = (n, obra, obra or ult_real)",
@@ -101,8 +103,8 @@ ROTURAS = [
 ]
 
 CONTROL = ("CONTROL: un comentario inocuo no puede poner nada rojo",
-           EV, [("    if obra and ult_real and ult_real != obra:",
-                 "    # comentario inocuo del control\n    if obra and ult_real and ult_real != obra:")])
+           EV, [("    if obra and ult_real != obra:",
+                 "    # comentario inocuo del control\n    if obra and ult_real != obra:")])
 
 
 def aplica(rel, cambios):

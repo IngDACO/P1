@@ -154,9 +154,12 @@ def nuevo(pg, **flags):
 # ═════════════════════════════════════════════════════════════════
 sec("1. Cada valor por defecto es EL del widget (las cuatro pantallas, recién abiertas)")
 _cubiertas = {k for h in ("plb", "rc", "bc", "belt") for k in EV.HERRAMIENTAS[h]["claves"]}
+# v541 · `DEFECTOS` lleva también el nº de paradas del Survey (`ns`): lo comprueba verif_v541
+# contra `survey_ui.init_state`; aquí se miran las cuatro herramientas de cálculo.
+_DEF4 = {k: v for k, v in EV.DEFECTOS.items() if k != "ns"}
 chk("toda entrada de la lista cerrada de las cuatro herramientas tiene su valor por defecto "
-    "(y el HGPR por prefijo)", _cubiertas == set(EV.DEFECTOS)
-    and EV._defecto("belt_hgpr_7") == 0.0, _cubiertas ^ set(EV.DEFECTOS))
+    "(y el HGPR por prefijo)", _cubiertas == set(_DEF4)
+    and EV._defecto("belt_hgpr_7") == 0.0, _cubiertas ^ set(_DEF4))
 _vistos, _distintos = set(), {}
 for pg, extra in (("rieles", {}), ("rieles", {"rc_caso": "Case 2 — last installed (the top one)"}),
                   ("buffers", {}), ("belting", {}), ("plomada", {})):
@@ -164,7 +167,7 @@ for pg, extra in (("rieles", {}), ("rieles", {"rc_caso": "Case 2 — last instal
     for k, v in extra.items():
         at.radio(key=k).set_value(v)
         corre(at)
-    for k, d in EV.DEFECTOS.items():
+    for k, d in _DEF4.items():
         w = widget(at, k)
         if w is None or k in extra:
             continue
@@ -177,7 +180,7 @@ for pg, extra in (("rieles", {}), ("rieles", {"rc_caso": "Case 2 — last instal
             if not (type(w.value) is float and w.value == 0.0):
                 _distintos[w.key] = w.value
 chk("se pintaron TODAS las entradas con valor por defecto (no es un paso en vacío)",
-    _vistos >= set(EV.DEFECTOS) | {"belt_hgpr_"}, set(EV.DEFECTOS) - _vistos)
+    _vistos >= set(_DEF4) | {"belt_hgpr_"}, set(_DEF4) - _vistos)
 chk("⚠️ cada valor por defecto coincide en VALOR y TIPO con el de su widget (un 1.0 donde va "
     "un 1 cambiaría el tipo del widget; un valor bajo su mínimo lo tumbaría)", not _distintos,
     _distintos)

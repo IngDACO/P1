@@ -1,10 +1,9 @@
 # -*- coding: utf-8 -*-
-"""Bateria de roturas de v539. ⚠️ Verde de BASE primero (v459) y NO en paralelo con la
+"""Bateria de roturas de v541. ⚠️ Verde de BASE primero (v459) y NO en paralelo con la
 suite (v455). Con TOPE de tiempo (v522). Cada rotura es una LISTA de cambios (v526).
 
-⚠️ La primera rotura devuelve el comportamiento de v538: al pintarse, lo reabierto sigue
-siendo «de» la ultima obra con que se uso la herramienta, y elegir la obra del calculo en
-el selector lo borra.
+⚠️ La primera rotura devuelve el «volver» de v540: los botones del fichaje cortan la pasada
+con `st.rerun()` y cerrar la jornada dentro de una herramienta borraba lo tecleado.
 """
 import io
 import os
@@ -15,10 +14,8 @@ sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 SCRW = os.path.dirname(os.path.abspath(__file__))
 RAIZ = r"C:\Users\diego\P1\survey_app"
 ENV = dict(os.environ, PYTHONIOENCODING="utf-8")
-G = "verif_v539"
+G = "verif_v541"
 EV = "core/estado_vivo.py"
-TSU = "core/tool_save_ui.py"
-PRU = "core/projects_ui.py"
 TOPE_S = 420
 
 
@@ -33,37 +30,40 @@ def corre(g=G):
 
 
 ROTURAS = [
-    # v541 · re-ancladas: lo cargado sin obra conocida ya no es «de ninguna» sino que lo
-    # ADOPTA la primera obra real (`_ADOPTAR`).
-    ("⚠️ vuelve v538: lo reabierto sigue siendo de la ultima obra de la herramienta (elegir "
-     "la del calculo lo borra)",
-     EV, [('        ult_real = resp if isinstance(resp, str) else _ADOPTAR\n', "        pass\n")]),
+    ("⚠️ vuelve el «volver» de v540: tambien olvida al pasar a «sin obra» (cerrar la jornada "
+     "borra lo tecleado)",
+     EV, [("    if obra and ult_real != obra:",
+           "    if antes[0] < n - 1 and antes[1] != obra:\n        olvidar(h)\n"
+           "        return True\n    if obra and ult_real != obra:")]),
 
-    ("`respetar` no guarda la obra: tras reabrir, elegir OTRA obra ya no olvida",
-     EV, [('    st.session_state[_RESPETAR + str(herramienta)] = str(obra or "") or True',
-           "    st.session_state[_RESPETAR + str(herramienta)] = True")]),
+    ("de «sin obra» a una obra ya no olvida (lo tecleado sin obra se queda bajo la obra)",
+     EV, [("    if obra and ult_real != obra:", "    if obra and ult_real and ult_real != obra:")]),
 
-    ("un `respetar` sin obra conserva la obra de antes (un reabrir pedido antes del despliegue "
-     "borraria lo suyo)",
-     EV, [('        ult_real = resp if isinstance(resp, str) else _ADOPTAR\n',
-           "        ult_real = resp if isinstance(resp, str) else ult_real\n")]),
+    ("lo cargado sin obra conocida no lo adopta nadie (fichar en una obra lo borra)",
+     EV, [("    if obra and ult_real == _ADOPTAR:\n        ult_real = obra\n", "")]),
 
-    ("«reabrir» no guarda la obra del calculo",
-     TSU, [(',\n                                    "obra": str(fila.get("ProjectID", "") or "")}',
-            "}")]),
+    ("`respetar` sin obra vuelve a ser «de ninguna» (no se adopta)",
+     EV, [("        ult_real = resp if isinstance(resp, str) else _ADOPTAR\n",
+           '        ult_real = resp if isinstance(resp, str) else ""\n')]),
 
-    ("al cargar lo reabierto no se le pasa la obra a `respetar`",
-     TSU, [('.rstrip("_"), pend.get("obra", ""))', '.rstrip("_"))')]),
+    # Mudada de romper_v535 (v541): el contador solo decide ya si el Survey VUELVE.
+    ("la pasada no se cuenta: el Survey deja de olvidar al volver con otra obra",
+     EV, [("    st.session_state[_PASADA] = int(st.session_state.get(_PASADA, 0) or 0) + 1",
+           "    st.session_state[_PASADA] = int(st.session_state.get(_PASADA, 0) or 0)")]),
 
-    ("«Rebuild the project in the Survey» no dice de que proyecto es lo cargado",
-     PRU, [('                    _ev.respetar("sv", pid)\n',
-            '                    _ev.respetar("sv")\n')]),
+    ("el Survey no sabe si vuelve (nunca olvida lo de la otra obra)",
+     EV, [("        volvio = antes[0] < n - 1", "        volvio = False")]),
+
+    ("⚠️ el nº de paradas sin valor por defecto (vuelve como 5.0 al cambiar de obra)",
+     EV, [('    "ns": 2,\n', "")]),
+
+    ("el nº de paradas con un valor por defecto DECIMAL",
+     EV, [('    "ns": 2,', '    "ns": 2.0,')]),
 ]
 
 CONTROL = ("CONTROL: un comentario inocuo no puede poner nada rojo",
-           EV, [('        ult_real = resp if isinstance(resp, str) else _ADOPTAR\n',
-                 '        # comentario inocuo del control\n'
-                 '        ult_real = resp if isinstance(resp, str) else _ADOPTAR\n')])
+           EV, [("    if obra and ult_real == _ADOPTAR:\n",
+                 "    # comentario inocuo del control\n    if obra and ult_real == _ADOPTAR:\n")])
 
 
 def aplica(rel, cambios):

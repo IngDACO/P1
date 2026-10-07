@@ -43,9 +43,10 @@ Así que lo conservado es **de una obra**: al volver a una herramienta se mira c
 se pintó la última vez (`al_pintar`), y si ahora es OTRA, sus entradas se olvidan — que es
 exactamente lo que pasaba antes. Misma obra (o ninguna las dos veces) → se conservan.
 
-⚠️ Solo al VOLVER. Cambiar de obra sin salir de la herramienta no borraba nada antes y no
-borra nada ahora: «Duplicate for the next lift» cuenta con eso. Y lo que otra pantalla
-carga A PROPÓSITO (reabrir un cálculo, reconstruir un survey) se respeta (`respetar`).
+Desde v535 también sin salir de la herramienta (salvo el Survey, por «Duplicate for the
+next lift»), y desde v541 con UNA regla: se olvida al pintarse con otra obra REAL; sin obra,
+nunca (ver `al_pintar`). Lo que otra pantalla carga A PROPÓSITO (reabrir un cálculo,
+reconstruir un survey) se respeta (`respetar`).
 
 Módulo HOJA: solo importa `streamlit`.
 """
@@ -81,6 +82,10 @@ DEFECTOS = {
     "rc_n2500": 0, "rc_n5000": 0, "rc_sub": "Above the FFL (subtract)",
     "bc_hkp": 0.0, "bc_n": 1,
     "belt_hq": 0.0, "belt_hgp": 0.0, "belt_ns": 1,
+    # v541 · El nº de paradas del Survey (el 2 neutro de `survey_ui.init_state`). Sin él,
+    # volver al Survey con otra obra BORRABA `ns` y el plano lo ponía como 5.0: `aplicar`
+    # solo lo deja entero si lo que había era entero, y no había nada.
+    "ns": 2,
 }
 _DEFECTO_PREFIJO = (("belt_hgpr_", 0.0),)
 # v540 · Las TABLAS de lo medido también son de una obra (HKPR de cada buffer, BSR de cada
@@ -91,6 +96,8 @@ _DEFECTO_PREFIJO = (("belt_hgpr_", 0.0),)
 TABLAS = {"plb": ("plb_bsr_df",), "rc": ("rc_L_df", "rc_in_df"), "bc": ("bc_df",)}
 _GEN = "_ev_gen_"
 _SIN = object()
+# v541 · Lo cargado sin obra conocida (`respetar` sin obra): lo adopta la primera obra real.
+_ADOPTAR = "\x00adoptar"
 
 # La obra elegida en cada herramienta (admin y propietario). Sin esto, al volver el
 # selector estaría en «no project», la obra habría «cambiado» y se olvidaría todo.
@@ -230,20 +237,25 @@ def al_pintar(herramienta, obra) -> bool:
 
     Devuelve True si lo que tenía era de OTRA obra — y entonces el plano de la obra actual
     tiene que MANDAR sobre lo que haya (`plan_ui.aplicar` lo pisa en esa pasada). Va ANTES
-    de crear los widgets de la herramienta. Dos casos:
+    de crear los widgets de la herramienta.
 
-    1. **Vuelve** (no se pintó en la pasada anterior) y la obra es otra, también «ninguna»:
-       se olvidan sus entradas — lo que hacía Streamlit antes de v534 (paridad).
-    2. ⚠️ v535 · **Sin salir**, pasa de una obra X a otra Y (también X → ninguna → Y): el
-       campo cambia de obra con el fichaje del menú lateral sin dejar la herramienta, y el
-       admin con el selector de obra. Hasta v535 no se olvidaba nada y el plano de Y no
-       pisaba los campos ya rellenos: Rieles seguía con el LFKK de X bajo el nombre de Y.
-       Ahora se olvida lo de X — salvo en el Survey, donde «Duplicate for the next lift»
-       conserva A PROPÓSITO los parámetros para el siguiente ascensor: ahí solo manda el
-       plano de Y sobre lo que el plano trae, y lo medido a mano se queda.
+    ⚠️ v541 · UNA regla: lo tecleado es de la última obra REAL con que se pintó la
+    herramienta, y se olvida solo cuando se pinta con OTRA obra real (también la primera
+    tras usarla sin obra: manda el plano de esa obra). **Sin obra no se olvida nunca.**
+    Hasta v541 había dos casos según la herramienta se hubiera pintado o no en la pasada
+    anterior, y «volver» olvidaba también al pasar a «sin obra». Pero los botones del
+    fichaje del menú lateral terminan en `st.rerun()`, que corta la pasada ANTES de pintar
+    la herramienta: cerrar la jornada desde Rieles contaba como «volver» y borraba lo
+    tecleado sin cambiar de obra (visto en producción con la cuenta de campo: LFKK 1234 → 0
+    al cerrar la jornada; y al volver a fichar en la MISMA obra, perdido). Hasta v540 no
+    se notaba porque el borrado no llegaba al navegador.
 
-    Lo cargado a propósito (`respetar`) no se olvida al pintarse, y desde v539 pasa a ser
-    de la obra que dijo quien lo cargó (o de ninguna conocida, si no lo dijo).
+    ⚠️ v535 · El Survey, sin salir, NO olvida: «Duplicate for the next lift» conserva A
+    PROPÓSITO lo medido para el siguiente ascensor; ahí solo manda el plano de la obra nueva
+    sobre lo que el plano trae. Al VOLVER a él con otra obra real sí se olvida (lo de antes).
+
+    Lo cargado a propósito (`respetar`) no se olvida al pintarse y es de la obra que dijo
+    quien lo cargó (v539); si no lo dijo, es de la primera obra real con que se pinte.
     """
     h, obra = str(herramienta), str(obra or "")
     n = int(st.session_state.get(_PASADA, 0) or 0)
@@ -252,17 +264,16 @@ def al_pintar(herramienta, obra) -> bool:
     resp = st.session_state.pop(_RESPETAR + h, False)
     if resp:
         # v539 · La última obra REAL de la herramienta es ahora la de lo cargado, no la
-        # de antes de cargarlo (ver `respetar`).
-        ult_real = resp if isinstance(resp, str) else ""
+        # de antes de cargarlo (ver `respetar`). Sin obra conocida: la adopta la primera.
+        ult_real = resp if isinstance(resp, str) else _ADOPTAR
+    if obra and ult_real == _ADOPTAR:
+        ult_real = obra
     st.session_state[_VISTA + h] = (n, obra, obra or ult_real)
     if resp or not antes:
         return False
-    ult_pasada, ult_obra = antes[0], antes[1]
-    if ult_pasada < n - 1 and ult_obra != obra:         # 1. vuelve con otra obra
-        olvidar(h)
-        return True
-    if obra and ult_real and ult_real != obra:          # 2. de X a Y sin salir
-        if h != "sv":
+    if obra and ult_real != obra:                       # llega a OTRA obra real
+        volvio = antes[0] < n - 1                       # no se pintó en la pasada anterior
+        if h != "sv" or volvio:
             olvidar(h)
         return True
     return False
