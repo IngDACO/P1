@@ -463,6 +463,13 @@ Estas cinco mordieron en una sola tanda:
     siempre (v544: pin → «Back» → mismo pin = nada). → Para «otra vez el mismo», la clave del
     componente lleva generación y el recuerdo se borra cuando el componente vuelve sin clic.
 
+35. ⚠️ **Un `st.expander` SIN clave se cierra solo cuando cambia lo que tiene encima.**
+    Cada acción deja un aviso por `flash`, que se pinta una pasada y se va: al aparecer o
+    irse, Streamlit crea de nuevo el desplegable de debajo y nace CERRADO. Con controles
+    dentro, el usuario pone la hora y el botón desaparece (v546, el panel «Did you forget…»
+    de Fichaje, 3 veces; y la lectura de la IA del Home). Comprobado en una mini-app 1.64:
+    CON clave sigue abierto. → Un desplegable con controles dentro lleva `key=`.
+
 **Y la regla de siempre, que volvió a aplicar:** antes de borrar el LECTOR de un mecanismo, buscar
 sus ESCRITORES y convertirlos. En v299 `_nav_pending` tenía dos vivos («Abrir proyecto» tras el
 survey y «Reabrir cálculo»); borrar solo el lector los habría dejado como botones que no hacen
