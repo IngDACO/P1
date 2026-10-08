@@ -69,8 +69,10 @@ TRAMPAS = """33. ⚠️ **Streamlit 1.64 pinta en UNA línea la etiqueta de un b
     El contenedor del markdown lleva `white-space:nowrap` + elipsis y los `<p>` salen `inline`;
     el texto entero se va a un `title`. Un botón de varias líneas (`a\\n\\nb\\n\\nc`) se queda en
     «AC…». Fuera de columnas (los resultados del buscador) no pasa. Lo destapó el recorrido del
-    Home (v544): las tarjetas KPI llevaban así desde la subida a 1.64 sin que nada fallara. →
-    Un botón de varias líneas en columnas necesita su CSS (`theme.py`, `cpxkpi_`).
+    Home (v544): las tarjetas KPI llevaban así desde la subida a 1.64 sin que nada fallara. Es
+    el parámetro `wrap` de `st.button`/`st.popover` (1.64): `None` = «decide Streamlit» = en una
+    columna, recortar. → Un botón de varias líneas en columnas necesita `wrap=True` o su CSS
+    (las tarjetas `cpxkpi_` lo llevan en `theme.py`, medido en producción).
 
 34. ⚠️ **`st_folium` devuelve el ÚLTIMO clic en CADA pasada, no solo en la del clic.** Por eso
     el Home filtra los repetidos — y un filtro que no se reinicia deja ese pin muerto para

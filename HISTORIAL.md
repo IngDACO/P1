@@ -10,6 +10,49 @@ ventana de contexto. Contenido: 258 secciones detalladas + el índice de 440 ver
 
 ---
 
+## EL HOME DEL ADMIN, PROBADO ACCIÓN POR ACCIÓN EN PRODUCCIÓN (v544)
+
+Primera pantalla del recorrido «pantalla por pantalla» que guía el usuario (08/10/2026), con la
+cuenta admin de cliente1. Funcionaban: los 9 indicadores del resumen y sus «Go to», las tarjetas
+Active/Progress, lista de obras → resumen → «Back»/«See the full project», el enlace a Maps, la
+agenda (abre la ficha de la persona), el pin del mapa, el buscador (obra, persona, sin
+resultados, Clear), «←», el menú lateral, la lectura de la IA (cuadra con los datos) y «Send it
+to me» (la app confirma «Summary sent.»), el fichaje del lateral con su modal y su banda del Pre-Start, y el chat (respuesta
+correcta con los datos reales). Lo que no:
+
+1. **Las tarjetas KPI no se leían.** Streamlit 1.64 pinta la etiqueta de un botón EN COLUMNAS en
+   una sola línea (`nowrap` + elipsis, los `<p>` en línea, el texto entero a un `title`): se leía
+   «AC…», «PR…», «HO…» sin el número, y a 1366 px «ACTIVE 3 all 3 b…». Las 7 tarjetas `cpxkpi_`
+   de la app (también las 4 de Day route). → CSS en `theme.py` que devuelve el salto de bloque;
+   medido en producción a 846 y 1366 px antes de escribirlo.
+2. **El mismo pin del mapa no se podía volver a abrir** (pin → «Back to the list» → mismo pin =
+   nada; uno distinto sí). `st_folium` devuelve el ÚLTIMO clic en cada pasada y el filtro de
+   repetidos no se reiniciaba nunca. → La clave del mapa lleva generación, que sube al cerrar el
+   resumen; y un mapa sin clic olvida el último pin (volver al Home desde otra pantalla).
+3. **«Hours · 4 h» abría Horas en «Today»** («No time entries»): la tarjeta suma todo el
+   histórico. → Abre en «All» (marca pendiente aplicada antes de crear el radio, regla v111).
+4. **La campana decía «No alerts» con 4 urgentes en el resumen** de la misma pantalla. Decisión
+   del usuario: que entren. → Al admin le entran retrasos, vencidos y alarmas (una línea por
+   motivo: el número de la campana es el «N urgent» del resumen), de `group_digest` (cacheado,
+   0 lecturas nuevas). Y cada alerta es un botón que lleva a donde se resuelve (obra, ficha de la
+   persona, Inventario, «My credentials» para el campo). `_alertas` sigue dando los textos.
+5. **Textos:** «6 paradas» y «alarma(s)» en la pantalla inglesa → «6 stops», «1 alarm»; «13
+   pendings» → «13 pending»; «18.0 d» → «18 d»; fechas ISO → dd/mm/aaaa como en Proyectos;
+   logins → nombres en «No contact details» y en la cuadrilla del resumen de obra.
+
+**Visto y NO arreglado aquí (anotado):** el mapa de pantallas del prompt del asistente está en
+español y desfasado (manda a «Planificación → Usuarios»; va con el glosario); «Refresh» de la
+lectura de la IA no genera otra, solo borra; tres primeras acciones se perdieron una vez sin
+causa encontrada (el primer «Generate», el primer «Not now» y la primera pregunta del chat; al
+repetir, bien); el mensaje de salida del fichaje no sale si se cierra desde la pantalla del
+Pre-Start (en el Home sí); «Todos» en español en Proyectos; «Behind → Go to Projects» abre el
+filtro «All»; «See the full project» no pone `&p=` en la URL.
+
+Datos de prueba: dos fichajes del admin en PRJ-0015 (0,01 h cada uno, cerrados; 0 abiertos), la
+lectura de la IA enviada al correo del admin y dos preguntas al chat.
+
+PRODUCCIÓN (08/10/2026, cuenta admin): tarjetas KPI en 3 líneas (3 · 0% · 4 h a 846 px), «13 pending», resumen de 88 walker «18 d behind · 20/09/2026 → 25/10/2026 · 6 stops» con nombres, lista «31d/18d/10d», el MISMO pin reabre 88 walker dos veces seguidas, «Hours» abre Horas en «All», la campana marca 4 con 4 botones y «overdue since 02/10/2026» abre PRJ-0001 (con &p= en la URL), «Overdue (02/10/2026)» y «No contact details» con nombres; ⚠️ la campana se quedaba ABIERTA tras navegar y su «4» se recortaba a 846 px → v545 · 44 comprobaciones · romper_v544 22/22 + control (21 en la tanda + la de los <p> en línea, re-anclada y corrida aparte) · suite 173 verde con Python 3.12.10
+
 ## EL AVISO «EL SURVEY EMPEZÓ DE CERO» SALE EN EL MOMENTO (v543)
 
 Visto en producción probando v542 con la cuenta de campo: al fichar en otra obra el Survey
@@ -13133,7 +13176,7 @@ comprueba lo que dice**.
 
 ---
 
-## Versiones desplegadas (v543 = actual)
+## Versiones desplegadas (v544 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -13141,6 +13184,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v544 | **El Home del admin, probado acción por acción en producción.** Funcionaban indicadores, «Go to», lista → resumen, agenda, pin, buscador, «←», menú, IA, fichaje y chat. Arreglado: las tarjetas KPI en UNA línea («AC…» sin número: Streamlit 1.64 recorta los botones en columnas → CSS); el MISMO pin no se reabría (`st_folium` repite el último clic → clave con generación); «Hours» abría en «Today»; la campana muda con 4 urgentes (ahora entran, y cada alerta lleva a su sitio); «paradas», «alarma(s)», «pendings», «18.0 d», fechas ISO y logins. PRODUCCIÓN (08/10/2026, cuenta admin): tarjetas KPI en 3 líneas (3 · 0% · 4 h a 846 px), «13 pending», resumen de 88 walker «18 d behind · 20/09/2026 → 25/10/2026 · 6 stops» con nombres, lista «31d/18d/10d», el MISMO pin reabre 88 walker dos veces seguidas, «Hours» abre Horas en «All», la campana marca 4 con 4 botones y «overdue since 02/10/2026» abre PRJ-0001 (con &p= en la URL), «Overdue (02/10/2026)» y «No contact details» con nombres; ⚠️ la campana se quedaba ABIERTA tras navegar y su «4» se recortaba a 846 px → v545 · romper_v544 22/22 + control (21 en la tanda + la de los <p> en línea, re-anclada y corrida aparte) · suite 173 verde con Python 3.12.10 |
 | v543 | **El aviso «el survey empezó de cero» sale en el momento.** Visto en producción con v542: al fichar en otra obra el aviso salía una pasada tarde — iba por `flash`, que la shell pinta ANTES de que el Survey encole. Ahora una marca que dura hasta pasar el corte de la matriz (`st.rerun()` al cambiar de tamaño): el aviso está en la pasada que se ve y no se queda colgado. PRODUCCIÓN (07/10/2026, cuenta de campo): fichar en PRUEBA MOVIL viniendo de ZZ PRUEBA → el Survey empieza de cero (BSR 0) y el aviso está EN ESA pasada (con v542, en el clic siguiente); en la pasada siguiente ya no está. Una jornada de prueba de ~1 min, cerrada (0 fichajes abiertos) · romper_v543 4/4 + control · romper_v542 15/15 (una retirada: el aviso ya no va por flash) · suite 172 verde con Python 3.12.10 |
 | v542 | **El Survey se limpia de verdad y no mezcla proyectos.** ⚠️ «Duplicate», «Clear everything», importar un Excel y «Rebuild» dejaban las celdas tecleadas ENCIMA de la matriz nueva (el `data_editor` con clave y filas fijas re-aplica las ediciones), y «Clear everything» borraba los campos sin que el navegador se enterara: matriz con clave por generación y «empezar de cero» que ASIGNA. Decisión del usuario: guardar el survey en su proyecto lo limpia, y de una obra a otra empieza de cero; «Duplicate» se queda (lo adopta la siguiente obra) y teclear antes de fichar se conserva. PRODUCCIÓN (07/10/2026, cuenta de campo): WR 150 tecleado en la matriz → «Duplicate survey» → 0 en pantalla y sigue a 0 tras una pasada nueva (antes reaparecía); BSR 1330 y Omega L → «Clear everything» → 0 y R, también tras otra pasada; PRUEBA MOVIL con BSR 1330 → cerrar la jornada (sigue) → fichar en ZZ PRUEBA → BSR 0 (empezó de cero). El aviso «empezó de cero» salía una pasada tarde (los avisos de flash se pintan antes de que el Survey lo encole): arreglado en v543. Después, con el admin (08/10/2026): el survey guardado de 88 walker cargado con «Rebuild», calculado y guardado en PRJ-0015 → el Survey vuelve a los datos VACÍO (BS/BSR/FS 0, NS 2, matriz a ceros, selector en «sin proyecto») con «Survey saved…», «Documents filed in Drive» y «Project PRJ-0015 … updated» con «Open project ➜»; en la hoja (solo lectura), PRJ-0015 con sus 92 parámetros, la matriz de 6 filas, CAL-0007 y los 2 documentos · romper_v542 16/16 + control · romper_v541 6/6 (dos retiradas: el contador de pasadas ya no decide nada), v540 11/11, v539 6/6, v535 18/18 y v534 37/37 (re-ancladas) · suite 171 verde con Python 3.12.10 |
 | v541 | **Sin obra no se olvida nunca (una regla, no dos).** ⚠️ Visto en producción con la cuenta de campo: cerrar la jornada desde el menú lateral DENTRO de Rieles borraba lo tecleado sin cambiar de obra — los botones del fichaje cortan la pasada con `st.rerun()` y la herramienta creía «volver». Ahora se olvida solo al pintarse con OTRA obra real; sin obra, nunca; el Survey, como antes. ⚠️ Y el nº de paradas volvía como 5.0 al volver al Survey con otra obra (latente desde v535): `ns` con valor por defecto. Logs del Cloud limpios (reinicio a las 05:53). PRODUCCIÓN (07/10/2026): chip v541 y la cookie restaura la sesión de campo; con la cuenta de campo, en Rieles y fichando desde el menú lateral: PRUEBA MOVIL con LFKK 1234 y 3 rieles → «Close workday and project» → siguen (con v540 pasaban a 0) → fichar otra vez en PRUEBA MOVIL → siguen → cerrar y fichar en ZZ PRUEBA → a 0. Tres jornadas de prueba de ~1 min, cerradas (0 fichajes abiertos) · romper_v541 8/8 + control · romper_v539 6/6, romper_v535 18/18 (una mudada a v541) y romper_v540 11/11 · romper_v534 37/37 (36 en la tanda: la del «respeto» escapaba porque su prueba reabría SIN obra; ahora con la obra del cálculo, y se caza) · suite 170 verde con Python 3.12.10 (y verif_v534 re-corrido 61/61 tras endurecerlo) |
