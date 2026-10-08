@@ -10,6 +10,21 @@ ventana de contexto. Contenido: 258 secciones detalladas + el índice de 440 ver
 
 ---
 
+## LA CAMPANA SE CIERRA AL LLEVARTE A UNA ALERTA, Y SU NÚMERO SE LEE (v545)
+
+Visto en producción verificando v544 con el admin:
+
+1. Tocar una alerta de la campana llevaba a la obra con el popover **abierto encima** de la
+   pantalla de destino (su estado abierto vive en el navegador). → La clave del popover lleva
+   generación y la sube cada alerta tocada: el popover nuevo nace cerrado (lo mismo que el mapa
+   en v544, trampa 34).
+2. A 846 px la columna de la campana da 62 px y Streamlit 1.64 recorta su etiqueta en una línea
+   (trampa 33): «🔔 4» pedía 27 px de los 23 que dejaban 12+12 de relleno → se leía «🔔‥». → 6+6
+   de relleno solo en ese botón (`.st-key-cpxtop [data-testid='stPopoverButton']`), medido en
+   producción con un estilo temporal antes de escribirlo.
+
+PRODUCCIÓN (08/10/2026, cuenta admin, 846 px): la campana se lee «🔔 4» (6+6 px, el texto cabe: 24 de 24); tocar «88 walker st — 18 d behind schedule» abre PRJ-0002 y la campana queda CERRADA (clave cpxbell_1); vuelve a abrirse con sus 4 alertas · 7 comprobaciones · romper_v545 3/3 + control · suite 174 verde con Python 3.12.10
+
 ## EL HOME DEL ADMIN, PROBADO ACCIÓN POR ACCIÓN EN PRODUCCIÓN (v544)
 
 Primera pantalla del recorrido «pantalla por pantalla» que guía el usuario (08/10/2026), con la
@@ -13176,7 +13191,7 @@ comprueba lo que dice**.
 
 ---
 
-## Versiones desplegadas (v544 = actual)
+## Versiones desplegadas (v545 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -13184,6 +13199,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v545 | **La campana se cierra al llevarte a una alerta, y su número se lee.** Vistos verificando v544: tocar una alerta llevaba a la obra con el popover ABIERTO encima (su estado vive en el navegador → clave con generación, como el mapa) y a 846 px se leía «🔔‥» (la columna recorta la etiqueta → 6+6 px de relleno, medido). PRODUCCIÓN (08/10/2026, cuenta admin, 846 px): la campana se lee «🔔 4» (6+6 px, el texto cabe: 24 de 24); tocar «88 walker st — 18 d behind schedule» abre PRJ-0002 y la campana queda CERRADA (clave cpxbell_1); vuelve a abrirse con sus 4 alertas · romper_v545 3/3 + control · suite 174 verde con Python 3.12.10 |
 | v544 | **El Home del admin, probado acción por acción en producción.** Funcionaban indicadores, «Go to», lista → resumen, agenda, pin, buscador, «←», menú, IA, fichaje y chat. Arreglado: las tarjetas KPI en UNA línea («AC…» sin número: Streamlit 1.64 recorta los botones en columnas → CSS); el MISMO pin no se reabría (`st_folium` repite el último clic → clave con generación); «Hours» abría en «Today»; la campana muda con 4 urgentes (ahora entran, y cada alerta lleva a su sitio); «paradas», «alarma(s)», «pendings», «18.0 d», fechas ISO y logins. PRODUCCIÓN (08/10/2026, cuenta admin): tarjetas KPI en 3 líneas (3 · 0% · 4 h a 846 px), «13 pending», resumen de 88 walker «18 d behind · 20/09/2026 → 25/10/2026 · 6 stops» con nombres, lista «31d/18d/10d», el MISMO pin reabre 88 walker dos veces seguidas, «Hours» abre Horas en «All», la campana marca 4 con 4 botones y «overdue since 02/10/2026» abre PRJ-0001 (con &p= en la URL), «Overdue (02/10/2026)» y «No contact details» con nombres; ⚠️ la campana se quedaba ABIERTA tras navegar y su «4» se recortaba a 846 px → v545 · romper_v544 22/22 + control (21 en la tanda + la de los <p> en línea, re-anclada y corrida aparte) · suite 173 verde con Python 3.12.10 |
 | v543 | **El aviso «el survey empezó de cero» sale en el momento.** Visto en producción con v542: al fichar en otra obra el aviso salía una pasada tarde — iba por `flash`, que la shell pinta ANTES de que el Survey encole. Ahora una marca que dura hasta pasar el corte de la matriz (`st.rerun()` al cambiar de tamaño): el aviso está en la pasada que se ve y no se queda colgado. PRODUCCIÓN (07/10/2026, cuenta de campo): fichar en PRUEBA MOVIL viniendo de ZZ PRUEBA → el Survey empieza de cero (BSR 0) y el aviso está EN ESA pasada (con v542, en el clic siguiente); en la pasada siguiente ya no está. Una jornada de prueba de ~1 min, cerrada (0 fichajes abiertos) · romper_v543 4/4 + control · romper_v542 15/15 (una retirada: el aviso ya no va por flash) · suite 172 verde con Python 3.12.10 |
 | v542 | **El Survey se limpia de verdad y no mezcla proyectos.** ⚠️ «Duplicate», «Clear everything», importar un Excel y «Rebuild» dejaban las celdas tecleadas ENCIMA de la matriz nueva (el `data_editor` con clave y filas fijas re-aplica las ediciones), y «Clear everything» borraba los campos sin que el navegador se enterara: matriz con clave por generación y «empezar de cero» que ASIGNA. Decisión del usuario: guardar el survey en su proyecto lo limpia, y de una obra a otra empieza de cero; «Duplicate» se queda (lo adopta la siguiente obra) y teclear antes de fichar se conserva. PRODUCCIÓN (07/10/2026, cuenta de campo): WR 150 tecleado en la matriz → «Duplicate survey» → 0 en pantalla y sigue a 0 tras una pasada nueva (antes reaparecía); BSR 1330 y Omega L → «Clear everything» → 0 y R, también tras otra pasada; PRUEBA MOVIL con BSR 1330 → cerrar la jornada (sigue) → fichar en ZZ PRUEBA → BSR 0 (empezó de cero). El aviso «empezó de cero» salía una pasada tarde (los avisos de flash se pintan antes de que el Survey lo encole): arreglado en v543. Después, con el admin (08/10/2026): el survey guardado de 88 walker cargado con «Rebuild», calculado y guardado en PRJ-0015 → el Survey vuelve a los datos VACÍO (BS/BSR/FS 0, NS 2, matriz a ceros, selector en «sin proyecto») con «Survey saved…», «Documents filed in Drive» y «Project PRJ-0015 … updated» con «Open project ➜»; en la hoja (solo lectura), PRJ-0015 con sus 92 parámetros, la matriz de 6 filas, CAL-0007 y los 2 documentos · romper_v542 16/16 + control · romper_v541 6/6 (dos retiradas: el contador de pasadas ya no decide nada), v540 11/11, v539 6/6, v535 18/18 y v534 37/37 (re-ancladas) · suite 171 verde con Python 3.12.10 |
