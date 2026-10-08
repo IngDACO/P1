@@ -59,7 +59,13 @@ ok &= _get
 print(f"   {'✓' if _get else '‼️'} `aviso_prestart_pendiente` LEE la bandera (no la consume): "
       "así cualquier rerun vuelve a pintar el modal")
 _fichar = ast.unparse(fns["_fichar"])
-_deja = "_ps_aviso" in _fichar and "st.rerun()" in _fichar
+# ⚠️ Reanclado en v546: dejar la bandera pasó a `_armar_aviso_prestart`, que usan
+# `_fichar` y el «Switch» de la pantalla (fichar avisa igual venga de donde venga,
+# decisión del usuario). La regla es la misma: la bandera se DEJA y se recarga.
+_armar = ast.unparse(fns["_armar_aviso_prestart"]) if "_armar_aviso_prestart" in fns else ""
+_deja = (("_ps_aviso" in _fichar
+          or ("_armar_aviso_prestart(" in _fichar and "_ps_aviso" in _armar))
+         and "st.rerun()" in _fichar)
 ok &= _deja
 print(f"   {'✓' if _deja else '‼️'} `_fichar` la DEJA y recarga (no abre el modal en su "
       "propia pasada, que se descartaría)")

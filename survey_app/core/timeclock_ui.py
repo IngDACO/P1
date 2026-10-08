@@ -358,6 +358,18 @@ def _fichar(nombre, nom_obra, grupo, usuario, pid):
         st.error(msg)
         return
     flash.exito(msg + (t("  :material/schedule: Your workday was opened too.") if auto else ""))
+    _armar_aviso_prestart(pid, nom_obra, grupo)
+    st.rerun()
+
+
+def _armar_aviso_prestart(pid, nom_obra, grupo):
+    """Deja pendiente el modal «falta el Pre-Start» de la obra a la que se acaba de fichar.
+
+    ⚠️ v546 · Fichar es UNA acción y se avisa igual venga de donde venga (decisión del
+    usuario): hasta aquí solo el menú lateral (v374) dejaba la bandera; fichar desde la
+    pantalla de Fichaje —el selector, la obra única, el atajo del roster o «Switch»— no
+    sacaba el modal (visto en producción).
+    """
     try:
         if not prestart.hecho_hoy(pid, grupo):
             st.session_state["_ps_aviso"] = {"pid": pid, "nombre": nom_obra, "grupo": grupo}
@@ -365,7 +377,6 @@ def _fichar(nombre, nom_obra, grupo, usuario, pid):
             st.session_state.pop(f"_ps_visto_{pid}", None)
     except Exception:
         pass                          # sin pre-starts configurados: no se estorba
-    st.rerun()
 
 
 def _tarjeta(titulo, valor, pie="", color=None, activo=False):
@@ -469,8 +480,12 @@ def _corregir_horas(nombre, grupo, usuario, sess):
     _hoy = _sesiones_de_hoy(nombre, grupo, usuario)
     _gen = sess.get(timeclock.TIPO_GENERAL)
     _prj = sess.get(timeclock.TIPO_PROYECTO)
+    # ⚠️ v546 · CON clave. Sin ella, cuando el aviso verde de arriba aparece o se va
+    # (cada acción deja uno, por `flash`), Streamlit crea el desplegable de nuevo y nace
+    # CERRADO: tras poner la hora había que reabrirlo para llegar al botón (visto 3 veces
+    # en producción; comprobado en una mini-app 1.64 que con clave sigue abierto).
     with st.expander(t("Did you forget to clock in or out?"),
-                     icon=":material/schedule_send:"):
+                     icon=":material/schedule_send:", key="tc_corregir"):
         st.caption(t("Put the time you actually started or finished. It applies "
                      "right away and your supervisor reviews it. Today only."))
         # ── (a) Empecé antes de fichar y AÚN NO he fichado ──
@@ -776,8 +791,9 @@ def render_timeclock_tab():
                       if (v != _pid_actual if _pid_actual else k != prj["proyecto"])}
             if _otros:
                 with c2:
+                    # v546 · decía «— cambiar a… —», en español y sin `t()`
                     _nuevo = ui.elegir(t("Switch project"), _otros, key="tc_switch",
-                                       vacio="— cambiar a… —")
+                                       vacio=t("— switch to… —"))
                     if st.button(t(":material/sync: Switch"), width="stretch", key="tc_switch_btn",
                                  disabled=(_nuevo is None)):
                         _nom = _nom_de.get(_nuevo, "")
@@ -785,6 +801,7 @@ def render_timeclock_tab():
                                                            usuario=usuario, new_pid=_nuevo)
                         (flash.exito if ok else st.error)(msg)
                         if ok:
+                            _armar_aviso_prestart(_nuevo, _nom, grupo)   # otra obra: su charla
                             st.rerun()
         elif not idmap:
             st.info(t("No projects available to clock in to. Ask your administrator to assign you one."))
@@ -810,13 +827,7 @@ def render_timeclock_tab():
                         if st.button(f"{t(':material/check_circle: Clock in to')} {_a['etiqueta']} {t('(your assignment for today)')}",
                                      width="stretch", type="primary",
                                      key=f"tc_roster_in_{_rpid}"):
-                            ok, msg, auto = timeclock.fichar_proyecto(
-                                nombre, _rnom, grupo, usuario, _rpid)
-                            if ok:
-                                flash.exito(msg + (t("  :material/schedule: Your workday was opened too.") if auto else ""))
-                                st.rerun()
-                            else:
-                                st.error(msg)
+                            _fichar(nombre, _rnom, grupo, usuario, _rpid)   # v546: = lateral
                     if _hechos:
                         st.caption(t("Or pick another project below."))
             except Exception:
@@ -833,25 +844,14 @@ def render_timeclock_tab():
                 _pid1 = idmap[_lbl1]
                 if st.button(f"{t(':material/check_circle: Clock in to')} {_lbl1}",
                              width="stretch", type="primary", key="tc_prj_solo"):
-                    _nom = _nom_de.get(_pid1, "")
-                    ok, msg, auto = timeclock.fichar_proyecto(nombre, _nom, grupo, usuario, _pid1)
-                    if ok:
-                        flash.exito(msg + (t("  :material/schedule: Your workday was opened too.") if auto else ""))
-                        st.rerun()
-                    else:
-                        st.error(msg)
+                    _fichar(nombre, _nom_de.get(_pid1, ""), grupo, usuario, _pid1)   # v546
             else:
                 _pid = ui.elegir(t("Which project are you working on?"), idmap, key="tc_prj_sel",
                                  vacio=t("— pick the project —"))
                 if st.button(t(":material/check_circle: Clock in to the project"), width="stretch", type="primary",
                              key="tc_prj_in", disabled=(_pid is None)):
-                    _nom = _nom_de.get(_pid, "")           # v308: el nombre, no la etiqueta
-                    ok, msg, auto = timeclock.fichar_proyecto(nombre, _nom, grupo, usuario, _pid)
-                    if ok:
-                        flash.exito(msg + (t("  :material/schedule: Your workday was opened too.") if auto else ""))
-                        st.rerun()
-                    else:
-                        st.error(msg)
+                    # v308: el nombre, no la etiqueta · v546: la MISMA acción que el lateral
+                    _fichar(nombre, _nom_de.get(_pid, ""), grupo, usuario, _pid)
 
     # ⚠️ v480 · MEDIDO a 375x812 con sesion de campo: estas cuatro tarjetas ocupaban
     # 230 px —el 28% del telefono— enseñando "0.00 h" de un dia que aun no ha empezado, y
@@ -904,7 +904,8 @@ def render_timeclock_tab():
             st.dataframe(pd.DataFrame([{
                 "": t("Workday") if f["tipo"] == timeclock.TIPO_GENERAL else t("Project"),
                 t("Project"): f["proyecto"] or "—",
-                t("In"): f["entrada"][5:16].replace("-", "/"),
+                # v546 · día/mes: `[5:16]` daba «10/08 16:20» (mes/día) por el 8 de octubre
+                t("In"): f"{f['entrada'][8:10]}/{f['entrada'][5:7]} {f['entrada'][11:16]}",
                 t("Out"): (f["salida"][11:16] if f["salida"] else t("in progress")),
                 t("Hours"): f["horas"],
             } for f in _mios]), hide_index=True, width="stretch", column_config=tabla.cfg())

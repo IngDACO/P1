@@ -505,7 +505,9 @@ def _resumen_del_dia(grupo: str):
                 st.caption(t("Nothing pending here. :green[:material/check_circle:]"))
 
         # 4) lectura del asistente (IA) — su propio desplegable, bajo demanda
-        with st.expander(t(":material/forum: The assistant's read (AI)")):
+        # v546 · con clave: sin ella se cerraba solo cuando cambiaba lo de encima (un
+        # aviso que aparece o se va), y tras «Generate» había que reabrirlo para leer.
+        with st.expander(t(":material/forum: The assistant's read (AI)"), key="cpx_lectura_ia"):
             key = f"_brief_{grupo}"
             if key in st.session_state:
                 st.markdown(st.session_state[key])

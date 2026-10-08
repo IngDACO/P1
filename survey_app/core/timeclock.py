@@ -510,6 +510,41 @@ def _matches(r, usuario: str, nombre: str, grupo: str) -> bool:
     return str(r.get("Name", "")).strip() == (nombre or "").strip()
 
 
+def _choca(registros, usuario, nombre, grupo, tipo, ini, fin=None, excluir=None):
+    """La primera entrada del MISMO tipo de esta persona que se solapa con [ini, fin)
+    — `fin` None = sigue abierta, hasta ahora —, o None si no choca con ninguna.
+
+    ⚠️ v546 · Visto en producción: «abrir la jornada a las 18:00» con una jornada ya
+    cerrada de 18:24 a 18:26 se aceptaba, y esos minutos contaban DOS veces como tiempo
+    pagado. Solo el mismo tipo: un tramo de obra DENTRO de la jornada es lo normal; dos
+    jornadas (o dos obras) a la vez, no. `excluir` es el índice de la fila que se está
+    corrigiendo, que no puede chocar consigo misma.
+    """
+    ahora = datetime.strptime(_now(), FMT)
+    _fin = fin or ahora
+    for i, r in enumerate(registros):
+        if i == excluir or not _matches(r, usuario, nombre, grupo) or _tipo_of(r) != tipo:
+            continue
+        try:
+            r0 = datetime.strptime(str(r.get("Clock In", "")).strip(), FMT)
+            _co = str(r.get("Clock Out", "")).strip()
+            r1 = datetime.strptime(_co, FMT) if _co else ahora
+        except ValueError:
+            continue                    # una hora ilegible no se puede comparar
+        if ini < r1 and r0 < _fin:
+            return r
+    return None
+
+
+def _msg_choque(r, tipo) -> str:
+    etq = t("workday") if tipo == TIPO_GENERAL else t("project")
+    _a = str(r.get("Clock In", ""))[11:16]
+    _b = str(r.get("Clock Out", ""))[11:16] or t("open")
+    return (t("That time overlaps your {what} entry from {a} to {b}: those minutes would "
+              "count twice. Pick a time outside it.")
+            .replace("{what}", etq).replace("{a}", _a).replace("{b}", _b))
+
+
 def clock_in(nombre: str, proyecto: str, ubicacion: str, grupo: str = "",
              tipo: str = TIPO_PROYECTO, usuario: str = "",
              proyecto_id: str = "", in_ts=None) -> tuple:
@@ -548,10 +583,15 @@ def clock_in(nombre: str, proyecto: str, ubicacion: str, grupo: str = "",
     # valor va a la columna «Clock In», que es la que todo lo demás parsea.
     if in_ts is None:
         in_ts = _now()
-    elif hasattr(in_ts, "strftime"):
-        in_ts = in_ts.strftime(FMT)
     else:
-        in_ts = str(in_ts)
+        in_ts = in_ts.strftime(FMT) if hasattr(in_ts, "strftime") else str(in_ts)
+        # Solo una hora PASADA puede pisar otra entrada: «ahora» va siempre después.
+        try:
+            _r = _choca(records, usuario, nombre, grupo, tipo, datetime.strptime(in_ts, FMT))
+        except ValueError:
+            _r = None
+        if _r:
+            return False, _msg_choque(_r, tipo)
     try:
         ws.append_row([nombre, "", proyecto or "", ubicacion or "",
                        in_ts, "", "", "ABIERTO", grupo, tipo, usuario or "",
@@ -681,6 +721,15 @@ def corregir_fichaje(grupo, usuario, nombre, tipo, campo,
             horas = round((_t1 - _t0).total_seconds() / 3600.0, 2)
         except Exception:
             horas = ""
+    # v546 · la hora corregida tampoco puede pisar otra entrada del mismo tipo
+    try:
+        _r = _choca(registros, usuario, nombre, grupo, _tipo_of(actual),
+                    datetime.strptime(_ci, FMT),
+                    datetime.strptime(_co, FMT) if _co else None, excluir=fila - 2)
+    except ValueError:
+        _r = None
+    if _r:
+        return False, _msg_choque(_r, _tipo_of(actual))
 
     col = "E" if campo == "Clock In" else "F"
     try:

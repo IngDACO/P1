@@ -45,12 +45,25 @@ _vars_nom = {t.id for n in ast.walk(_fn) if isinstance(n, ast.Assign)
              if isinstance(n.value, ast.Call)
              and getattr(n.value.func, "attr", "") == "get"
              and getattr(getattr(n.value.func, "value", None), "id", "") == "_nom_de"}
+# ⚠️ Reanclado en v546: la pantalla ya no llama a `fichar_proyecto` directamente sino a
+# `_fichar` (la MISMA acción que el menú lateral, para que el modal del Pre-Start salga
+# igual), con el nombre como 2º argumento. Cuentan las dos formas, y el nombre puede
+# llegar en una variable de `_nom_de.get` o como esa llamada directamente.
 _fichadas = [n for n in ast.walk(_fn) if isinstance(n, ast.Call)
-             and getattr(n.func, "attr", "") == "fichar_proyecto"]
+             and (getattr(n.func, "attr", "") == "fichar_proyecto"
+                  or getattr(n.func, "id", "") == "_fichar")]
 check("hay al menos un sitio donde se ficha", len(_fichadas) >= 1, True)
+
+
+def _nombre_de_nom_de(a):
+    if isinstance(a, ast.Name):
+        return a.id in _vars_nom
+    return (isinstance(a, ast.Call) and getattr(a.func, "attr", "") == "get"
+            and getattr(getattr(a.func, "value", None), "id", "") == "_nom_de")
+
+
 _mal = [n.lineno for n in _fichadas
-        if not (len(n.args) >= 2 and isinstance(n.args[1], ast.Name)
-                and n.args[1].id in _vars_nom)]
+        if not (len(n.args) >= 2 and _nombre_de_nom_de(n.args[1]))]
 check("TODA llamada a fichar_proyecto toma el nombre de `_nom_de`", _mal, [])
 # ⚠️ Sonda validada contra el fallo de v306 reconstruido: si no ve ESE caso, su cero
 # no vale nada (trampa nº12).
