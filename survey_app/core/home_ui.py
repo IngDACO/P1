@@ -503,6 +503,11 @@ def render_topbar(grupo):
     st.markdown(
         "<style>header[data-testid='stHeader']{background:transparent;}"
         "div.block-container{padding-top:1rem !important;}"
+        # ⚠️ v544 · La campana va EN UNA COLUMNA, donde Streamlit 1.64 recorta la etiqueta
+        # en una línea: a 846 px la columna da 62 px y «🔔 4» pedía 27 de los 23 que le
+        # dejaban 12+12 de relleno → se leía «🔔‥». Con 6+6 cabe (medido en producción).
+        ".st-key-cpxtop [data-testid='stPopoverButton']{padding-left:6px !important;"
+        "padding-right:6px !important;}"
         # ⚠️ v478 · En un MOVIL, Streamlit apila las columnas: esta barra pasaba de una
         # fila de 44 px a TRES bandas de 112, y el titulo de la pantalla empezaba en
         # y=196 — el 24% del telefono en chrome. Medido con sesion de campo a 375x812.
@@ -919,6 +924,9 @@ def _alertas_items(grupo) -> list:
 
 def _ir_alerta(destino, grupo):
     """Lleva a donde se resuelve una alerta de la campana (v544: nada pasivo)."""
+    # ⚠️ El popover se quedaba ABIERTO encima de la pantalla de destino (visto en
+    # producción): su estado abierto vive en el navegador. Con otra clave nace cerrado.
+    st.session_state["_bell_gen"] = st.session_state.get("_bell_gen", 0) + 1
     if destino[0] == "obra":
         st.session_state["_admin_open_proj"] = str(destino[1])
         navegar("proyectos", "📊 Proyectos")
@@ -943,7 +951,7 @@ def _campana(grupo):
         alerts = []
     label = (f":material/notifications: {len(alerts)}" if alerts
              else ":material/notifications:")
-    with st.popover(label, width="stretch"):
+    with st.popover(label, width="stretch", key=f"cpxbell_{st.session_state.get('_bell_gen', 0)}"):
         st.markdown(t(":material/notifications: **Alerts**"))
         if not alerts:
             st.caption(t("No alerts for now."))
