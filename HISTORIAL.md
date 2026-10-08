@@ -10,6 +10,40 @@ ventana de contexto. Contenido: 258 secciones detalladas + el índice de 440 ver
 
 ---
 
+## LA PANTALLA DE FICHAJE, PROBADA ACCIÓN POR ACCIÓN EN PRODUCCIÓN (v546)
+
+Segunda pantalla del recorrido guiado por el usuario, con la cuenta admin. Funcionaban:
+tarjetas y «Charged today» (cuadran con la hoja), abrir/cerrar la jornada, fichar en una obra,
+«Switch project» (cierra una y abre otra en el mismo segundo), «Leave the project» (la jornada
+sigue), y «Did you forget…» (abrir a una hora pasada y corregir una hora quedan como
+correcciones pendientes, COR-0001 y COR-0002). Lo que no:
+
+1. **⚠️ Jornadas solapadas: tiempo pagado contado dos veces.** «Abrir la jornada a las 18:00»
+   con una ya cerrada de 18:24 a 18:26 se aceptaba (la tarjeta subió a 0,51 h), y «Fix the
+   time» solo comparaba la entrada con su propia salida. → `timeclock._choca`: una hora pasada
+   que pisa otra entrada del MISMO tipo de esa persona se rechaza en `clock_in` y en
+   `corregir_fichaje`, diciendo con cuál choca. Un tramo de obra dentro de la jornada no es
+   choque (otro tipo); fichar «ahora» no se comprueba (va siempre después).
+2. **El panel «Did you forget…» se cerraba solo** tras cada paso (3 veces): sin clave, Streamlit
+   lo crea de nuevo cuando el aviso verde de arriba aparece o se va, y nace cerrado. Comprobado
+   ANTES en una mini-app 1.64: con clave sigue abierto. → clave; y la lectura de la IA del Home
+   (visto en v544), igual.
+3. **Fichar desde la pantalla no sacaba el modal del Pre-Start** (el lateral sí, v374). Decisión
+   del usuario: «deben comportarse igual». → la pantalla ficha por `_fichar` (selector, obra
+   única y atajo del roster), y «Switch» también avisa de la obra nueva
+   (`_armar_aviso_prestart`).
+4. El historial ponía la fecha como mes/día («10/08» por el 8 de octubre) → día/mes.
+5. «— cambiar a… —» en español en «Switch project» → «— switch to… —».
+
+Reanclados con su motivo: `verif_v308` (la pantalla ficha por `_fichar`; el nombre sigue
+saliendo de `_nom_de`) y `verif_v374` (la bandera vive en `_armar_aviso_prestart`). Los dos se
+comprobaron rompiendo su regla a mano: los dos se ponen rojos.
+
+Sin probar (no se puede con esta cuenta): el aviso de sesión olvidada de otro día y los botones
+del campo (baja, atajo del roster, obra única).
+
+PRODUCCIÓN (09/10/2026, cuenta admin): fichar desde el selector de la pantalla saca el modal del Pre-Start (ZZ PRUEBA) y «Switch» el de la obra nueva (PRUEBA MOVIL); el selector dice «— switch to… —»; historial «08/10 18:27»; con una jornada cerrada 05:43-05:44, abrir «a las 05:40» se RECHAZA («That time overlaps your workday entry from 05:43 to 05:44…») y corregir otra jornada a 05:43 también; a las 05:45 se acepta (COR-0003); el panel «Did you forget…» siguió abierto al irse y al llegar el aviso verde; en la hoja, 0 fichajes abiertos y ni rastro de los dos intentos rechazados · 21 comprobaciones · romper_v546 12/12 + control · verif_v308 y verif_v374 reanclados y comprobados rompiendo su regla a mano (rojos los dos) · suite 175 verde con Python 3.12.10
+
 ## LA CAMPANA SE CIERRA AL LLEVARTE A UNA ALERTA, Y SU NÚMERO SE LEE (v545)
 
 Visto en producción verificando v544 con el admin:
@@ -13191,7 +13225,7 @@ comprueba lo que dice**.
 
 ---
 
-## Versiones desplegadas (v545 = actual)
+## Versiones desplegadas (v546 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -13199,6 +13233,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v546 | **La pantalla de Fichaje, probada acción por acción en producción.** ⚠️ Abrir la jornada «a las 18:00» con otra ya cerrada de 18:24 a 18:26 se aceptaba y esos minutos se pagaban dos veces → `timeclock` rechaza una hora que pise otra entrada del mismo tipo (abrir y corregir). El panel «Did you forget…» se cerraba solo tras cada paso → clave (y la IA del Home). Fichar desde la pantalla no sacaba el modal del Pre-Start → igual que el lateral, también «Switch». Historial en día/mes y «— switch to… —». PRODUCCIÓN (09/10/2026, cuenta admin): fichar desde el selector de la pantalla saca el modal del Pre-Start (ZZ PRUEBA) y «Switch» el de la obra nueva (PRUEBA MOVIL); el selector dice «— switch to… —»; historial «08/10 18:27»; con una jornada cerrada 05:43-05:44, abrir «a las 05:40» se RECHAZA («That time overlaps your workday entry from 05:43 to 05:44…») y corregir otra jornada a 05:43 también; a las 05:45 se acepta (COR-0003); el panel «Did you forget…» siguió abierto al irse y al llegar el aviso verde; en la hoja, 0 fichajes abiertos y ni rastro de los dos intentos rechazados · romper_v546 12/12 + control · verif_v308 y verif_v374 reanclados y comprobados rompiendo su regla a mano (rojos los dos) · suite 175 verde con Python 3.12.10 |
 | v545 | **La campana se cierra al llevarte a una alerta, y su número se lee.** Vistos verificando v544: tocar una alerta llevaba a la obra con el popover ABIERTO encima (su estado vive en el navegador → clave con generación, como el mapa) y a 846 px se leía «🔔‥» (la columna recorta la etiqueta → 6+6 px de relleno, medido). PRODUCCIÓN (08/10/2026, cuenta admin, 846 px): la campana se lee «🔔 4» (6+6 px, el texto cabe: 24 de 24); tocar «88 walker st — 18 d behind schedule» abre PRJ-0002 y la campana queda CERRADA (clave cpxbell_1); vuelve a abrirse con sus 4 alertas · romper_v545 3/3 + control · suite 174 verde con Python 3.12.10 |
 | v544 | **El Home del admin, probado acción por acción en producción.** Funcionaban indicadores, «Go to», lista → resumen, agenda, pin, buscador, «←», menú, IA, fichaje y chat. Arreglado: las tarjetas KPI en UNA línea («AC…» sin número: Streamlit 1.64 recorta los botones en columnas → CSS); el MISMO pin no se reabría (`st_folium` repite el último clic → clave con generación); «Hours» abría en «Today»; la campana muda con 4 urgentes (ahora entran, y cada alerta lleva a su sitio); «paradas», «alarma(s)», «pendings», «18.0 d», fechas ISO y logins. PRODUCCIÓN (08/10/2026, cuenta admin): tarjetas KPI en 3 líneas (3 · 0% · 4 h a 846 px), «13 pending», resumen de 88 walker «18 d behind · 20/09/2026 → 25/10/2026 · 6 stops» con nombres, lista «31d/18d/10d», el MISMO pin reabre 88 walker dos veces seguidas, «Hours» abre Horas en «All», la campana marca 4 con 4 botones y «overdue since 02/10/2026» abre PRJ-0001 (con &p= en la URL), «Overdue (02/10/2026)» y «No contact details» con nombres; ⚠️ la campana se quedaba ABIERTA tras navegar y su «4» se recortaba a 846 px → v545 · romper_v544 22/22 + control (21 en la tanda + la de los <p> en línea, re-anclada y corrida aparte) · suite 173 verde con Python 3.12.10 |
 | v543 | **El aviso «el survey empezó de cero» sale en el momento.** Visto en producción con v542: al fichar en otra obra el aviso salía una pasada tarde — iba por `flash`, que la shell pinta ANTES de que el Survey encole. Ahora una marca que dura hasta pasar el corte de la matriz (`st.rerun()` al cambiar de tamaño): el aviso está en la pasada que se ve y no se queda colgado. PRODUCCIÓN (07/10/2026, cuenta de campo): fichar en PRUEBA MOVIL viniendo de ZZ PRUEBA → el Survey empieza de cero (BSR 0) y el aviso está EN ESA pasada (con v542, en el clic siguiente); en la pasada siguiente ya no está. Una jornada de prueba de ~1 min, cerrada (0 fichajes abiertos) · romper_v543 4/4 + control · romper_v542 15/15 (una retirada: el aviso ya no va por flash) · suite 172 verde con Python 3.12.10 |
