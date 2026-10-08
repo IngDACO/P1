@@ -300,6 +300,12 @@ body:has([data-testid="stStatusWidget"])::before {{
 [class*="st-key-cpxkpi_"] button p:nth-child(2):not(:last-child) {{
   font-size:26px !important; font-weight: 700 !important; color: {AZUL_OSC} !important;
   line-height: 1.15 !important; margin: 0 !important;
+  /* ⚠️ v550 · El NÚMERO no se parte nunca. Desde v549 los botones parten su texto
+     (`wrap=True`) con `break-word`, y en una tarjeta estrecha (62 px: pantalla de 1024 con
+     el menú abierto) «0%» salía «0» / «%» y «4 h», «4» / «h» — medido en producción. La
+     etiqueta y el pie ya se recortan con «…»; la cifra tiene que leerse entera. */
+  white-space: nowrap !important; word-break: keep-all !important;
+  overflow-wrap: normal !important;
 }}
 /* ⚠️ `nowrap` + elipsis NO es cosmético: es lo que garantiza que las 3 tarjetas de
    una fila midan LO MISMO. Sin él, un pie de 94 px en los 93 px útiles que hay
