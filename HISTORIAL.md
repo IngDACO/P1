@@ -10,6 +10,28 @@ ventana de contexto. Contenido: 258 secciones detalladas + el índice de 440 ver
 
 ---
 
+## SEGUNDA TANDA DEL BARRIDO: CONTROLES DENTRO DE FUNCIONES AUXILIARES (v548)
+
+Recorriendo la app en producción tras v547, «Create field user» (Planning · Users) seguía sin
+clave: sus controles están en `_crear_usuario_form`, y el barrido —y su guardián— solo miraban
+las llamadas DIRECTAS del cuerpo del desplegable. Siguiendo las funciones a las que llama
+(también las de otros módulos, por nombre) salieron **11**: los dos «Create field user» (ramas
+excluyentes, claves distintas), el «Upload drawing» de las 4 herramientas (`selector`), dos de
+Contabilidad, la ubicación de la obra y su ganancia (se abren solas según los datos: la
+condición va en la clave) y el plan semanal del campo.
+
+- `verif_v547` ampliado: sigue las funciones auxiliares hasta un punto fijo, con un caso
+  construido (local y de otro módulo) que la versión anterior no veía. Ahora cuenta 79
+  desplegables con controles (68 directos + 11).
+- «Progress claims» y la entrega compartían el esquema `{key_prefix}_exp_{pid}`; hoy no
+  chocaban (prefijos y pestañas distintos), pero se hacen distintos por construcción
+  (`_exp_claims_` / `_exp_ho_`).
+
+⚠️ Lección (otra vez la nº30): un «0» de un barrido solo vale para la FORMA que su sonda mira.
+Aquí la sonda miraba llamadas directas; los controles detrás de una función no existían para ella.
+
+PRODUCCIÓN (09/10/2026, cuenta admin): «Create field user» ya con su clave (exp_campo_nuevo) y sin errores; en el Survey, con «Drawing parameters» plegado, elegir PRJ-0015 pinta encima «has no drawing data loaded…» y el desplegable SIGUE plegado (sin clave se recreaba abierto); el Survey, la ficha de una persona y el resto, sin un error · 15 comprobaciones · romper_v548 4/4 + control · romper_v547 sigue 6/6 con el guardián ampliado · suite 177 verde con Python 3.12.10
+
 ## BARRIDO: TODO DESPLEGABLE CON CONTROLES DENTRO LLEVA CLAVE (v547)
 
 Lo destapó Fichaje en v546 (trampa nº35): un `st.expander` SIN clave se cierra solo cuando
@@ -13253,7 +13275,7 @@ comprueba lo que dice**.
 
 ---
 
-## Versiones desplegadas (v547 = actual)
+## Versiones desplegadas (v548 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -13261,6 +13283,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v548 | **Segunda tanda del barrido: controles dentro de funciones auxiliares.** Tras v547, «Create field user» seguía sin clave (controles en `_crear_usuario_form`): el barrido y su guardián solo miraban llamadas directas. Siguiendo las funciones, 11 más (las 4 herramientas, Contabilidad, ubicación y ganancia de la obra…), y `verif_v547` ampliado para seguirlas. PRODUCCIÓN (09/10/2026, cuenta admin): «Create field user» ya con su clave (exp_campo_nuevo) y sin errores; en el Survey, con «Drawing parameters» plegado, elegir PRJ-0015 pinta encima «has no drawing data loaded…» y el desplegable SIGUE plegado (sin clave se recreaba abierto); el Survey, la ficha de una persona y el resto, sin un error · romper_v548 4/4 + control · romper_v547 sigue 6/6 con el guardián ampliado · suite 177 verde con Python 3.12.10 |
 | v547 | **Barrido: todo desplegable con controles dentro lleva clave (trampa 35).** 65 en la app se cerraban solos cuando el aviso de arriba aparecía o se iba. La clave sigue el esquema de sus controles (key_prefix / ID), en bucles lleva el elemento y, si se abría solo según los datos, la condición. Guardián AST de las 4 reglas + CSS. PRODUCCIÓN (09/10/2026, cuenta admin): sin un error al abrir Home (chat del lateral con su clave), la ficha de PRJ-0015 en sus 4 pestañas (exp_act/exp_arch, adm_exp_ord/adm_exp_upgasto/claims, exp_planoup/exp_rebuild/exp_updoc/ho_exp), Inventario, Contactos, Biblioteca y la ficha de una persona; ⚠️ ahí «Create field user» seguía SIN clave: sus controles van en una función auxiliar y el barrido solo miraba llamadas directas → 11 más, v548 · romper_v547 6/6 + control · suite 176 verde con Python 3.12.10 |
 | v546 | **La pantalla de Fichaje, probada acción por acción en producción.** ⚠️ Abrir la jornada «a las 18:00» con otra ya cerrada de 18:24 a 18:26 se aceptaba y esos minutos se pagaban dos veces → `timeclock` rechaza una hora que pise otra entrada del mismo tipo (abrir y corregir). El panel «Did you forget…» se cerraba solo tras cada paso → clave (y la IA del Home). Fichar desde la pantalla no sacaba el modal del Pre-Start → igual que el lateral, también «Switch». Historial en día/mes y «— switch to… —». PRODUCCIÓN (09/10/2026, cuenta admin): fichar desde el selector de la pantalla saca el modal del Pre-Start (ZZ PRUEBA) y «Switch» el de la obra nueva (PRUEBA MOVIL); el selector dice «— switch to… —»; historial «08/10 18:27»; con una jornada cerrada 05:43-05:44, abrir «a las 05:40» se RECHAZA («That time overlaps your workday entry from 05:43 to 05:44…») y corregir otra jornada a 05:43 también; a las 05:45 se acepta (COR-0003); el panel «Did you forget…» siguió abierto al irse y al llegar el aviso verde; en la hoja, 0 fichajes abiertos y ni rastro de los dos intentos rechazados · romper_v546 12/12 + control · verif_v308 y verif_v374 reanclados y comprobados rompiendo su regla a mano (rojos los dos) · suite 175 verde con Python 3.12.10 |
 | v545 | **La campana se cierra al llevarte a una alerta, y su número se lee.** Vistos verificando v544: tocar una alerta llevaba a la obra con el popover ABIERTO encima (su estado vive en el navegador → clave con generación, como el mapa) y a 846 px se leía «🔔‥» (la columna recorta la etiqueta → 6+6 px de relleno, medido). PRODUCCIÓN (08/10/2026, cuenta admin, 846 px): la campana se lee «🔔 4» (6+6 px, el texto cabe: 24 de 24); tocar «88 walker st — 18 d behind schedule» abre PRJ-0002 y la campana queda CERRADA (clave cpxbell_1); vuelve a abrirse con sus 4 alertas · romper_v545 3/3 + control · suite 174 verde con Python 3.12.10 |
