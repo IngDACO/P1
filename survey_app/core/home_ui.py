@@ -13,6 +13,7 @@ El mapa geocodifica la `Ubicacion` de texto con OpenStreetMap/Nominatim (sin API
 cacheado). Cuando se valide el look, se decide Google Maps y/o un campo de coordenadas.
 """
 import logging
+import zlib
 
 from core.i18n import t, etiqueta as _etq
 import streamlit as st
@@ -811,12 +812,25 @@ def _pantalla_busqueda(q: str, grupo) -> bool:
 
 
 def _alertas(grupo) -> list:
-    """Alertas para la campana. De momento: credenciales por vencer/vencidas del grupo.
-    (Más fuentes —retrasos de proyecto, sobrepresupuesto— se sumarán después.)
+    """Los TEXTOS de la campana (lo que leen los guardianes de v297/v298/v443).
+    La campana se pinta desde `_alertas_items`, que además sabe a dónde lleva cada una."""
+    return [a["texto"] for a in _alertas_items(grupo)]
+
+
+def _alertas_items(grupo) -> list:
+    """Alertas de la campana: [{texto, destino}]. `destino` es a dónde lleva al tocarla
+    (`("obra", pid)`, `("ficha", login)` o `("ir", sección, sub_id)`), o None si no lleva a nada.
 
     ⚠️ Para el CAMPO solo salen las SUYAS (v297): la lista del grupo son las
     credenciales de todos sus compañeros — dato de gestión, no suyo. Y el
     inventario (activos sin devolver, mantenimientos) es cosa del admin.
+
+    ⚠️ v544 · Al ADMIN le entran también los URGENTES del resumen del día (retrasos,
+    vencidos y alarmas: los mismos tres que suma su «N urgent»). Hasta aquí la campana
+    decía «No alerts for now» con el resumen de la misma pantalla marcando 4 urgentes
+    (visto en producción). Una línea por motivo, no por obra, para que el número de la
+    campana sea el del resumen. Sale de `group_digest`, cacheado 120 s y armado con
+    lecturas que ya viajan en el lote → 0 llamadas nuevas a Sheets.
     """
     out = []
     _es_campo = (_rol() == "field")
@@ -845,10 +859,33 @@ def _alertas(grupo) -> list:
                 if g["sobre_presupuesto"]:
                     _p.append(f"{g['sobre_presupuesto']} over budget")
                 if _p:
-                    out.append(f":material/business: **{g['grupo']}** — " + " · ".join(_p))
+                    out.append({"texto": f":material/business: **{g['grupo']}** — "
+                                         + " · ".join(_p), "destino": None})
         except Exception:
             pass
         return out
+    if _rol() == "administrator":
+        try:
+            from core import admin_digest
+            from core.projects_ui import _fmt_fecha
+            d = admin_digest.group_digest(grupo)
+            for r in d.get("retrasos", []):
+                out.append({"texto": t(":red[:material/error:] **{p}** — {n} d behind schedule")
+                            .replace("{n}", str(r["dias"])).replace("{p}", str(r["nombre"])),
+                            "destino": ("obra", r["id"])})
+            for v in d.get("vencidos", []):
+                out.append({"texto": t(":red[:material/block:] **{p}** — overdue since {f}")
+                            .replace("{f}", _fmt_fecha(v["fin"])).replace("{p}", str(v["nombre"])),
+                            "destino": ("obra", v["id"])})
+            for a in d.get("alarmas", []):
+                _txt = (t(":red[:material/notifications:] **{p}** — 1 open alarm")
+                        .replace("{p}", str(a["nombre"]))
+                        if a["n"] == 1 else
+                        t(":red[:material/notifications:] **{p}** — {n} open alarms")
+                        .replace("{n}", str(a["n"])).replace("{p}", str(a["nombre"])))
+                out.append({"texto": _txt, "destino": ("obra", a["id"])})
+        except Exception as e:
+            logger.warning("campana: no se pudieron leer los urgentes: %s", e)
     try:
         from core import credentials as C
         if C.is_configured():
@@ -858,7 +895,9 @@ def _alertas(grupo) -> list:
                 est = (t(":red[:material/cancel:] expired") if e["dias"] < 0
                        else t(":orange[:material/schedule:] expires in {n} d")
                             .replace("{n}", str(e["dias"])))
-                out.append(f":material/badge: {e['tipo']} · {e['usuario']} — {est}")
+                out.append({"texto": f":material/badge: {e['tipo']} · {e['usuario']} — {est}",
+                            "destino": (("ir", "autogestion", "🎫 Credenciales")
+                                        if _es_campo else ("ficha", e.get("usuario", "")))})
     except Exception:
         pass
     try:
@@ -866,20 +905,40 @@ def _alertas(grupo) -> list:
         if INV.is_configured() and not _es_campo:
             for e in INV.alertas(grupo)[:10]:
                 if e["tipo"] == "mantenimiento":
-                    out.append(f":material/build: {e['activo']} — "
-                               f":red[{t('maintenance overdue by')} {e['dias']} d]")
+                    _txt = (f":material/build: {e['activo']} — "
+                            f":red[{t('maintenance overdue by')} {e['dias']} d]")
                 else:
-                    out.append(f":material/inventory_2: {e['activo']} — "
-                               f":red[{t('not returned for')} {e['dias']} d]"
-                               + (f" ({e['usuario']})" if e.get("usuario") else ""))
+                    _txt = (f":material/inventory_2: {e['activo']} — "
+                            f":red[{t('not returned for')} {e['dias']} d]"
+                            + (f" ({e['usuario']})" if e.get("usuario") else ""))
+                out.append({"texto": _txt, "destino": ("ir", "inventario", None)})
     except Exception:
         pass
     return out
 
 
+def _ir_alerta(destino, grupo):
+    """Lleva a donde se resuelve una alerta de la campana (v544: nada pasivo)."""
+    if destino[0] == "obra":
+        st.session_state["_admin_open_proj"] = str(destino[1])
+        navegar("proyectos", "📊 Proyectos")
+    elif destino[0] == "ficha":
+        _u = str(destino[1])
+        try:
+            from core import auth as A
+            _nom = next((str(x.get("Name") or _u) for x in A.list_users(grupo)
+                         if str(x.get("User", "")) == _u), _u)
+        except Exception:
+            _nom = _u
+        st.session_state["gp_fichasel"] = f"{_nom} ({_u})"     # pre-selecciona la persona
+        navegar("planificacion", "👷 Usuarios")
+    else:
+        navegar(destino[1], destino[2])
+
+
 def _campana(grupo):
     try:
-        alerts = _alertas(grupo)
+        alerts = _alertas_items(grupo)
     except Exception:
         alerts = []
     label = (f":material/notifications: {len(alerts)}" if alerts
@@ -888,8 +947,27 @@ def _campana(grupo):
         st.markdown(t(":material/notifications: **Alerts**"))
         if not alerts:
             st.caption(t("No alerts for now."))
+            return
+        # ⚠️ El texto del botón vive en `button > div > span > div[stMarkdownContainer]`,
+        # flex centrado (lo mismo que tuvo el menú lateral en v304): sin esto se centra.
+        st.markdown('<style>[class*="st-key-bell_"] button,[class*="st-key-bell_"] button>div,'
+                    '[class*="st-key-bell_"] button>div>span{justify-content:flex-start!important;}'
+                    '[class*="st-key-bell_"] button p{text-align:left!important;}</style>',
+                    unsafe_allow_html=True)
+        _vistas = set()
         for a in alerts:
-            st.markdown(f"- {a}")
+            if not a.get("destino"):
+                st.markdown(f"- {a['texto']}")
+                continue
+            # La clave sale del TEXTO, no de la posición: si la lista cambia entre que se
+            # pinta y se toca (la caché es de 120 s), el clic sigue yendo a la alerta tocada.
+            # Dos alertas con el mismo texto (dos taladros iguales) se distinguen por orden.
+            _k = "bell_%08x" % (zlib.crc32(a["texto"].encode("utf-8")) & 0xffffffff)
+            while _k in _vistas:
+                _k += "_"
+            _vistas.add(_k)
+            if st.button(a["texto"], key=_k, width="stretch"):
+                _ir_alerta(a["destino"], grupo)
 
 
 # ── Router de contenido ──────────────────────────────────────────
@@ -1175,12 +1253,22 @@ def _mapa_proyectos(grupo):
                               icon=folium.Icon(color="red")).add_to(m)
             # v307: `use_container_width` — el defecto de st_folium es `width=500`
             # FIJO, así que el mapa no llenaba su columna (medido en vivo).
-            _out = st_folium(m, key="home_map", height=380,
-                             use_container_width=True,
+            # ⚠️ v544 · La clave lleva GENERACIÓN. `st_folium` devuelve el ÚLTIMO clic en
+            # cada pasada, así que `_home_map_click` lo descarta cuando se repite — y con
+            # eso el MISMO pin no se podía volver a abrir: pin → «Back to the list» → mismo
+            # pin = nada (visto en producción; un pin distinto sí abría). Al cerrar el
+            # resumen sube la generación: el mapa nace sin clic y el recuerdo se borra.
+            _out = st_folium(m, key=f"home_map_{st.session_state.get('_home_map_gen', 0)}",
+                             height=380, use_container_width=True,
                              returned_objects=["last_object_clicked"])
             st.caption(t(":material/place: Tap a pin to open the project."))
             # v199: pin ACTIVO → abre ese proyecto (reusa _prjsel_pending del panel)
             _clk = (_out or {}).get("last_object_clicked")
+            if not _clk:
+                # El mapa vuelve sin clic (generación nueva, o se volvió al Home desde otra
+                # pantalla y Streamlit soltó su estado): el último clic ya no está en
+                # pantalla, así que tocar ese pin otra vez es un clic NUEVO.
+                st.session_state.pop("_home_map_click", None)
             if _clk:
                 _cc = (round(float(_clk["lat"]), 6), round(float(_clk["lng"]), 6))
                 if st.session_state.get("_home_map_click") != _cc:
@@ -1205,14 +1293,24 @@ def _mapa_proyectos(grupo):
         st.caption(":orange[:material/warning:] No location on the map: " + ", ".join(sin_ubic))
 
 
+def _mapa_sin_clic():
+    """Al cerrar el resumen de una obra, el mapa vuelve a nacer sin clic (v544): sube la
+    generación de su clave y olvida el último pin, para que ese pin se pueda volver a abrir."""
+    st.session_state["_home_map_gen"] = st.session_state.get("_home_map_gen", 0) + 1
+    st.session_state.pop("_home_map_click", None)
+
+
 # ── Proyectos (vista compacta de HOME) ───────────────────────────
 def _resumen_proyecto_home(grupo, pid):
     """Resumen de UN proyecto en la columna derecha de HOME (v206): datos clave + botón
     para ir al proyecto completo. Se abre al tocar un pin del mapa o un proyecto de la lista."""
     from core import projects as P
     from core import alerts
+    from core import auth
+    from core.projects_ui import _fmt_fecha
     if st.button(t("← Back to the list"), key="hpr_back"):
         st.session_state.pop("_home_proj_sel", None)
+        _mapa_sin_clic()
         st.rerun()
     # v422: resolución por ID — mapa de identidad, no lista de obras.
     prj = next((p for p in P.list_projects(grupo, incluir_archivados=True,
@@ -1242,19 +1340,35 @@ def _resumen_proyecto_home(grupo, pid):
     bits = [f":material/bar_chart: **{av}%**", f"{_sem} {_e(_etq(str(prj.get('Status', ''))))}"]
     if prj.get("Client"):
         bits.append(f":material/business: {_e(prj.get('Client'))}")
+    # ⚠️ v544 · Los días llegan como float (`delays_of_group`) y se pintaban «18.0 d»;
+    # el resumen del día ya decía «18d». Y «paradas»/«alarma(s)» salían en español en
+    # la pantalla inglesa (vistos en producción).
     if dl:
-        bits.append(f":red[:material/schedule:] {dl} d behind")
+        bits.append(t(":red[:material/schedule:] {n} d behind").replace("{n}", str(int(round(dl)))))
     elif ah:
-        bits.append(f":green[:material/schedule:] {ah} d ahead")
+        bits.append(t(":green[:material/schedule:] {n} d ahead").replace("{n}", str(int(round(ah)))))
     if al:
-        bits.append(f":material/notifications: {al} alarma(s)")
+        bits.append(t(":material/notifications: 1 alarm") if al == 1 else
+                    t(":material/notifications: {n} alarms").replace("{n}", str(al)))
     st.markdown("  ·  ".join(bits))
-    _fi = str(prj.get("StartDate", "") or "—")
-    _ff = str(prj.get("EndDateEst", "") or "—")
-    st.caption(f":material/calendar_month: {_fi} → {_ff}" + (f"  ·  :material/elevator: {_e(prj.get('NS'))} paradas" if prj.get("NS") else ""))
+    # Fechas como en Proyectos (dd/mm/aaaa), no en ISO.
+    _fi = _fmt_fecha(prj.get("StartDate")) or "—"
+    _ff = _fmt_fecha(prj.get("EndDateEst")) or "—"
+    _ns = int(P._num(prj.get("NS")))
+    _stops = ""
+    if _ns:
+        _stops = "  ·  " + (t(":material/elevator: 1 stop") if _ns == 1 else
+                            t(":material/elevator: {n} stops").replace("{n}", str(_ns)))
+    st.caption(f":material/calendar_month: {_fi} → {_ff}" + _stops)
+    # `FieldAssigned` guarda LOGINS (la identidad); en pantalla va el nombre.
     _asg = [x.strip() for x in str(prj.get("FieldAssigned", "")).split(";") if x.strip()]
     if _asg:
-        st.caption(f":material/engineering: {', '.join(_asg[:6])}")
+        try:
+            _nom = {str(u.get("User", "")): str(u.get("Name") or u.get("User", ""))
+                    for u in auth.list_users(grupo)}
+        except Exception:
+            _nom = {}
+        st.caption(f":material/engineering: {', '.join(_nom.get(x, x) for x in _asg[:6])}")
     _ub = str(prj.get("Location", "") or "")
     if _ub:
         try:
@@ -1266,6 +1380,7 @@ def _resumen_proyecto_home(grupo, pid):
     if st.button(t("→ See the full project"), key="hpr_full", type="primary",
                  width="stretch"):
         st.session_state.pop("_home_proj_sel", None)
+        _mapa_sin_clic()
         st.session_state["_prjsel_pending"] = str(pid)
         navegar("proyectos", "📊 Proyectos")
 
@@ -1320,10 +1435,11 @@ def _proyectos_home(grupo):
         _av = max(0, min(100, int(P._num(p.get("Progress")))))
         _dl, _ah, _al = delays.get(_pid, 0), aheads.get(_pid, 0), alarmas.get(_pid, 0)
         _extra = ""
+        # v544 · enteros: llegan como float y se leía «18.0d» (el resumen dice «18d»)
         if _dl:
-            _extra += f" · :material/schedule: {_dl}d"
+            _extra += f" · :material/schedule: {int(round(_dl))}d"
         elif _ah:
-            _extra += f" · :material/schedule: {_ah}d"
+            _extra += f" · :material/schedule: {int(round(_ah))}d"
         if _al:
             _extra += f" · :material/notifications: {_al}"
         _lbl = f"{p.get('Name', '')} · {_av}%{_extra}"

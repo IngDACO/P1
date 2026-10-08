@@ -271,6 +271,19 @@ body:has([data-testid="stStatusWidget"])::before {{
   text-align: left !important; width: 100%;
   font-size:16px !important; font-weight: 700 !important; color: {AZUL_OSC};
 }}
+/* ⚠️ v544 · Streamlit 1.64 pinta la etiqueta de un botón EN COLUMNAS en UNA línea: el
+   contenedor del markdown lleva `white-space:nowrap`+elipsis y los <p> salen `inline`
+   (el texto entero se va a un `title`). Las 3 líneas de la tarjeta se ponían una detrás
+   de otra y se recortaban: en el Home se leía «AC…», «PR…», «HO…», sin el número.
+   Medido en producción a 846 px y a 1366 px. El botón de los resultados del buscador
+   (fuera de columnas) no lo sufre: es el modo «recortar» de Streamlit, no la tarjeta.
+   Se devuelve el salto de bloque; la elipsis de cada línea la ponen las reglas de abajo. */
+[class*="st-key-cpxkpi_"] button [data-testid="stMarkdownContainer"] {{
+  white-space: normal !important; width: 100%;
+}}
+[class*="st-key-cpxkpi_"] button [data-testid="stMarkdownContainer"] p {{
+  display: block !important;
+}}
 /* Tarjeta KPI de TRES líneas (v303): el label del botón va como
    `etiqueta\n\nvalor\n\ncontexto` y Streamlit lo renderiza como TRES <p>.
    ⚠️ VERIFICADO EN VIVO antes de escribir esto (mini-app + medición del DOM):

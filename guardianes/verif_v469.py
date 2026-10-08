@@ -71,8 +71,11 @@ print("1. Ninguna comparacion queda contra un valor VIEJO")
 # volvieron. Peor: una comparacion REAL que cayera en ese numero quedaria
 # eximida en silencio. Ahora va por (fichero, funcion, valor), que sobrevive a
 # las ediciones de al lado y dice QUE se exime.
+# ⚠️ Reanclado en v544: la campana se construye ahora en `_alertas_items` (cada alerta
+# lleva a dónde se resuelve) y `_alertas` solo saca sus textos. La comparación con
+# «mantenimiento» se mudó con ella; es el mismo literal interno de `inventory.alertas`.
 SALTAR = {("home_ui.py", "_abrir_resultado", "proyecto"),
-          ("home_ui.py", "_alertas", "mantenimiento"),
+          ("home_ui.py", "_alertas_items", "mantenimiento"),
           ("survey_ui.py", "render_survey_tab", "proyecto")}
 quedan = []
 for p in sorted(list(Path("core").glob("*.py")) + [Path("app.py")]):

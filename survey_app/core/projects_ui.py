@@ -217,6 +217,18 @@ def _fmt_fecha(iso: str) -> str:
         return str(iso or "")
 
 
+def _nombres_de(usuarios, grupo) -> list:
+    """Logins → nombres, para MOSTRAR (v544). Las listas del radar guardan el login porque
+    es la identidad; en pantalla se leía «appretince» donde la ficha dice «apprentice 1».
+    `list_users` ya está cacheado: 0 lecturas nuevas. Sin nombre, se queda el login."""
+    try:
+        _m = {str(u.get("User", "")): str(u.get("Name") or u.get("User", ""))
+              for u in auth.list_users(grupo)}
+    except Exception:
+        _m = {}
+    return [_m.get(str(x), str(x)) for x in usuarios]
+
+
 def _kpi_card(label, value, color=None, pie=None, var=None):
     """Tarjeta KPI — delega en el SISTEMA DE DISEÑO (`core/theme.py`, v283) para que
     las ~20 tarjetas repartidas por la app hablen el mismo idioma visual.
@@ -347,6 +359,10 @@ def render_kpis(grupo: str):
         _ir_a("proyectos", "📊 Proyectos")
     if m3.button(f":material/schedule: Hours\n\n{_hor} h\n\n{_sub_hor}",
                  key="cpxkpi_horas", width="stretch"):
+        # ⚠️ v544 · El número de la tarjeta suma TODO el histórico, y Horas abría en
+        # «Today»: se tocaba «4 h» y salía «No time entries in the period» (visto en
+        # producción). Se abre en «All» para que se vea el mismo número que se tocó.
+        st.session_state["_gh_per_pending"] = "Todo"
         _ir_a("finanzas", "⏱ Horas")
 
 
@@ -383,7 +399,7 @@ def _resumen_del_dia(grupo: str):
          lambda: ", ".join(f"{r['nombre']} ({r['dias']}d)" for r in d["retrasos"][:15])),
         ("vencidos", ":material/block:", "Overdue", True, len(d["vencidos"]),
          "proyectos", "📊 Proyectos", "Projects",
-         lambda: ", ".join(f"{v['nombre']} ({v['fin']})" for v in d["vencidos"][:15])),
+         lambda: ", ".join(f"{v['nombre']} ({_fmt_fecha(v['fin'])})" for v in d["vencidos"][:15])),
         ("porvencer", ":material/event:", "Due soon", False, len(d["por_vencer"]),
          "proyectos", "📊 Proyectos", "Projects",
          lambda: ", ".join(f"{v['nombre']} ({v['dias']}d)" for v in d["por_vencer"][:15])),
@@ -392,7 +408,7 @@ def _resumen_del_dia(grupo: str):
          lambda: ", ".join(s["nombre"] for s in d["sin_asignar"][:15])),
         ("sincont", ":material/contact_page:", "No contact details", False, len(d["campo_sin_contacto"]),
          "planificacion", "👷 Usuarios", "Users",
-         lambda: ", ".join(d["campo_sin_contacto"][:15])),
+         lambda: ", ".join(_nombres_de(d["campo_sin_contacto"][:15], grupo))),
         ("cred", ":material/badge:", "Credentials", False, len(d.get("cred_venc", [])),
          "planificacion", "👷 Usuarios", "Users",
          lambda: ", ".join(f"{c['tipo']}·{c['usuario']} ({c['dias']}d)"
@@ -402,7 +418,7 @@ def _resumen_del_dia(grupo: str):
          lambda: ", ".join(f"{a['nombre']} ({a['n']})" for a in d["alarmas"][:15])),
         ("near", ":material/health_and_safety:", "Near miss", False, len(d["near_miss"]),
          "proyectos", "📊 Proyectos", "Projects",
-         lambda: ", ".join(f"{n['proyecto']} ({n['fecha']})" for n in d["near_miss"][:15])),
+         lambda: ", ".join(f"{n['proyecto']} ({_fmt_fecha(n['fecha'])})" for n in d["near_miss"][:15])),
         ("sobrep", ":material/payments:", "Over budget", False, len(d.get("sobre_presupuesto", [])),
          "finanzas", "💰 Gastos", "Expenses",
          lambda: f"{len(d.get('sobre_presupuesto', []))} project(s) over budget"),
@@ -415,15 +431,15 @@ def _resumen_del_dia(grupo: str):
     # sigue leyendo aunque el resumen esté plegado.
     # ⚠️ Verificado en vivo que el markdown de color SÍ se aplica en el label de un
     # expander (`:red[...]` → rgb(255,108,108) en el <summary>).
-    _p = "" if _tot == 1 else "s"
+    # ⚠️ v544 · «pending» no lleva plural en inglés: decía «13 pendings» (visto en producción).
     if _tot == 0:
         _titulo = ":material/notifications: Today's summary — :green[all in order]"
     elif _urg:
         _titulo = (f":material/notifications: Today's summary — "
-                   f":red[{_urg} urgent] · {_tot} pending{_p}")
+                   f":red[{_urg} urgent] · {_tot} pending")
     else:
         _titulo = (f":material/notifications: Today's summary — "
-                   f":orange[{_tot} pending{_p}]")
+                   f":orange[{_tot} pending]")
 
     with st.expander(_titulo, expanded=True, key="cpxresumen"):
         # colorear cada botón-indicador por severidad (clase st-key-<key>, v169)
@@ -4871,6 +4887,11 @@ def render_group_hours(grupo: str):
     # ⚠️ `per` se compara abajo y además indexa `{"Semana": 7, …}` → la opción no se
     # toca; se traduce el display.
     _PERH = {"Hoy": "Today", "Week": "Week", "Mes": "Month", "Todo": "All"}
+    # v544 · Si se llega desde la tarjeta «Hours» del Home, abrir en el periodo que esa
+    # tarjeta cuenta. Se escribe la clave ANTES de crear el radio (regla v111).
+    _per_pend = st.session_state.pop("_gh_per_pending", None)
+    if _per_pend in _PERH:
+        st.session_state["gh_per"] = _per_pend
     per = st.radio(t("Period"), list(_PERH), format_func=lambda o: t(_PERH[o]),
                    horizontal=True, key="gh_per", label_visibility="collapsed")
     now = clock.now()
