@@ -10,6 +10,20 @@ ventana de contexto. Contenido: 258 secciones detalladas + el índice de 440 ver
 
 ---
 
+## LA CIFRA DE UNA TARJETA KPI NO SE PARTE NUNCA (v550)
+
+Verificando v549 en producción (1024 px con el menú abierto): desde que los botones parten su
+texto (`wrap=True`, con `overflow-wrap: break-word`), en una tarjeta KPI de 62 px (31 útiles)
+«0%» salía «0» / «%» y «4 h», «4» / «h». La etiqueta y el pie ya se recortan con «…» a
+propósito (v303); la cifra tiene que leerse entera. → `nowrap` + `keep-all` en la línea de la
+cifra (`theme.py`). Probado ANTES en producción con un estilo temporal: las tres cifras en una
+línea y la tarjeta de vuelta a 96 px.
+
+Trampa nº33 puesta al día: la app parte el texto de los botones por defecto desde v549; una
+cifra dentro de un botón que parte líneas necesita `nowrap`.
+
+PRODUCCIÓN (09/10/2026, cuenta admin, 1024 px con el menú abierto): en la tarjeta de 62 px, «3», «0%» y «4 h» en UNA línea (30 px) y la tarjeta de vuelta a 96 px · 5 comprobaciones · romper_v550 2/2 + control · suite 179 verde con Python 3.12.10
+
 ## LOS BOTONES PARTEN SU TEXTO EN VEZ DE RECORTARLO CON «…» (v549)
 
 Streamlit 1.64 añadió `wrap` a los botones, y su defecto (`None`, «decide Streamlit») recorta
@@ -13302,7 +13316,7 @@ comprueba lo que dice**.
 
 ---
 
-## Versiones desplegadas (v549 = actual)
+## Versiones desplegadas (v550 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -13310,6 +13324,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v550 | **La cifra de una tarjeta KPI no se parte nunca.** Verificando v549 a 1024 px con el menú abierto: en la tarjeta de 62 px, «0%» salía «0» / «%» (el modo wrap parte con `break-word`). `nowrap` en la línea de la cifra, probado antes con un estilo temporal en producción. Trampa 33 al día. PRODUCCIÓN (09/10/2026, cuenta admin, 1024 px con el menú abierto): en la tarjeta de 62 px, «3», «0%» y «4 h» en UNA línea (30 px) y la tarjeta de vuelta a 96 px · romper_v550 2/2 + control · suite 179 verde con Python 3.12.10 |
 | v549 | **Los botones parten su texto en vez de recortarlo con «…».** Streamlit 1.64 recorta en una línea los botones en columnas (`wrap=None`): «AC…», «No contact det…», «Open workda…». ~123 en la app → `wrap=True` por DEFECTO (`core/botones`, instalado en app.py; re-liga `st.button`), con `wrap=False` explícito si se quiere una línea. PRODUCCIÓN (09/10/2026, cuenta admin, 1024 px con el menú abierto): en el Home, 27 botones en columnas y 0 recortados («No contact details · 9», «installer leader CI · 88 walker st» y la lista de obras, enteros en 2 líneas); en Fichaje, «Open workday at that time» entero (antes «Open workda…»); ⚠️ en tarjetas KPI de 62 px el NÚMERO se partía («0» / «%») → v550 · romper_v549 6/6 + control · suite 178 verde con Python 3.12.10 (la primera vuelta dio 1 rojo: verif_v463 tomó la lista TIPOS de botones por un valor de negocio → renombrada METODOS) |
 | v548 | **Segunda tanda del barrido: controles dentro de funciones auxiliares.** Tras v547, «Create field user» seguía sin clave (controles en `_crear_usuario_form`): el barrido y su guardián solo miraban llamadas directas. Siguiendo las funciones, 11 más (las 4 herramientas, Contabilidad, ubicación y ganancia de la obra…), y `verif_v547` ampliado para seguirlas. PRODUCCIÓN (09/10/2026, cuenta admin): «Create field user» ya con su clave (exp_campo_nuevo) y sin errores; en el Survey, con «Drawing parameters» plegado, elegir PRJ-0015 pinta encima «has no drawing data loaded…» y el desplegable SIGUE plegado (sin clave se recreaba abierto); el Survey, la ficha de una persona y el resto, sin un error · romper_v548 4/4 + control · romper_v547 sigue 6/6 con el guardián ampliado · suite 177 verde con Python 3.12.10 |
 | v547 | **Barrido: todo desplegable con controles dentro lleva clave (trampa 35).** 65 en la app se cerraban solos cuando el aviso de arriba aparecía o se iba. La clave sigue el esquema de sus controles (key_prefix / ID), en bucles lleva el elemento y, si se abría solo según los datos, la condición. Guardián AST de las 4 reglas + CSS. PRODUCCIÓN (09/10/2026, cuenta admin): sin un error al abrir Home (chat del lateral con su clave), la ficha de PRJ-0015 en sus 4 pestañas (exp_act/exp_arch, adm_exp_ord/adm_exp_upgasto/claims, exp_planoup/exp_rebuild/exp_updoc/ho_exp), Inventario, Contactos, Biblioteca y la ficha de una persona; ⚠️ ahí «Create field user» seguía SIN clave: sus controles van en una función auxiliar y el barrido solo miraba llamadas directas → 11 más, v548 · romper_v547 6/6 + control · suite 176 verde con Python 3.12.10 |
