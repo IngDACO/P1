@@ -65,7 +65,7 @@ def render_plumb_tab():
         if _n:
             st.caption(f":green[:material/check_circle:] {_n} value(s) taken from the project drawing.")
 
-    with st.expander(t("Does the project have no drawing? Upload it here"), icon=":material/description:"):
+    with st.expander(t("Does the project have no drawing? Upload it here"), icon=":material/description:", key="exp_plb_plano"):
         st.caption(t("BKS, TKSW, SF1, SF2, BS, SG and TG will be read from this PDF."))
         pdf = plan_store.selector(":material/description: Drawing PDF (fills in from the drawing)", "plb_pdf")
         if pdf is not None and pdf.name != st.session_state.get("plb_pdf_name"):

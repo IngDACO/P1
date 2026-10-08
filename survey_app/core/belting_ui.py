@@ -66,7 +66,7 @@ def render_belting_tab():
     # Plan B, plegado: desde v137 el plano vive en el PROYECTO y sus valores
     # se rellenan arriba. Esto sigue haciendo falta para un proyecto creado
     # sin plano, o para calcular sin proyecto asignado.
-    with st.expander(t("Does the project have no drawing? Upload it here"), icon=":material/description:"):
+    with st.expander(t("Does the project have no drawing? Upload it here"), icon=":material/description:", key="exp_blt_plano"):
         st.caption(t("HQ and HGP will be read from this PDF. Normally they already come from the project drawing."))
         pdf = plan_store.selector(":material/description: Drawing PDF (fills in HQ)", "belt_pdf")
         if pdf is not None and pdf.name != st.session_state.get("belt_pdf_name"):

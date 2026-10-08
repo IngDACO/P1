@@ -121,7 +121,7 @@ def render(pid, grupo, prj, editable=True, key_prefix="ho"):
     malos = H.incoherencias(ctx)
 
     _tit = t("Handover file — {ok} of {n} items on file", ok=res["ok"], n=res["total"])
-    with st.expander(f":material/inventory: {_tit}", expanded=False, key=f"{key_prefix}_exp_{pid}"):
+    with st.expander(f":material/inventory: {_tit}", expanded=False, key=f"{key_prefix}_exp_ho_{pid}"):
         st.caption(t("What this company has to keep for five years, gathered here with the "
                      "gaps flagged. ⚠️ This is **not** a compliance certificate: the "
                      "certifier's, the electrical and the Safe-to-Operate certificates are "

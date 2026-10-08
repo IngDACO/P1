@@ -49,8 +49,54 @@ CTRL = {"button", "text_input", "number_input", "selectbox", "radio", "time_inpu
         "segmented_control", "pills", "color_picker", "camera_input", "chat_input"}
 
 
-def desplegables(src, nombre="?"):
+def _llamadas(nodo):
+    out = set()
+    for x in ast.walk(nodo):
+        if isinstance(x, ast.Call):
+            if isinstance(x.func, ast.Name):
+                out.add(("N", x.func.id))
+            elif isinstance(x.func, ast.Attribute):
+                out.add(("A", x.func.attr))
+    return out
+
+
+def con_controles(fuentes):
+    """{(módulo, función): ¿pinta controles?}, SIGUIENDO las funciones a las que llama.
+
+    ⚠️ v548 · Ampliado tras una escapada: la primera versión solo miraba las llamadas
+    DIRECTAS del cuerpo, y 11 desplegables tenían los controles dentro de una función
+    auxiliar («Create field user» → `_crear_usuario_form`, los «Upload drawing» de las 4
+    herramientas → `selector`…). Se vio en producción, recorriendo la app tras v547.
+    Una llamada `mod.f()` se resuelve por NOMBRE en cualquier módulo: si alguna `f` pinta
+    controles, cuenta (conservador: pedir clave de más no rompe nada; de menos, sí).
+    """
+    funcs = {}
+    for m, src in fuentes.items():
+        for n in ast.walk(ast.parse(src)):
+            if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                funcs.setdefault((m, n.name), n)
+    tiene = {k: any(isinstance(x, ast.Call) and getattr(x.func, "attr", None) in CTRL
+                    for x in ast.walk(v)) for k, v in funcs.items()}
+    por_nombre = {}
+    for k in funcs:
+        por_nombre.setdefault(k[1], []).append(k)
+    cambio = True
+    while cambio:
+        cambio = False
+        for k, v in funcs.items():
+            if tiene[k]:
+                continue
+            for tipo, nom in _llamadas(v):
+                cands = [(k[0], nom)] if tipo == "N" else por_nombre.get(nom, [])
+                if any(tiene.get(c) for c in cands):
+                    tiene[k] = cambio = True
+                    break
+    return tiene, por_nombre
+
+
+def desplegables(src, nombre="?", tiene=None, por_nombre=None):
     """[(línea, call, with, en_bucle, nombres_del_bucle, con_controles)] de un fuente."""
+    tiene, por_nombre = tiene or {}, por_nombre or {}
     arbol = ast.parse(src)
     padres = {}
     for n in ast.walk(arbol):
@@ -66,6 +112,13 @@ def desplegables(src, nombre="?"):
                 continue
             ctrl = any(isinstance(x, ast.Call) and getattr(x.func, "attr", "") in CTRL
                        for b in n.body for x in ast.walk(b))
+            if not ctrl:                      # …o dentro de una función a la que llama
+                _ll = set()
+                for b in n.body:
+                    _ll |= _llamadas(b)
+                ctrl = any(tiene.get((nombre, nom)) if tipo == "N"
+                           else any(tiene.get(k) for k in por_nombre.get(nom, []))
+                           for tipo, nom in _ll)
             q, bucle, vars_bucle = n, False, set()
             while q in padres:
                 q = padres[q]
@@ -89,8 +142,9 @@ def problemas(fuentes):
     bucle_fijo, expanded_suelto)."""
     sin, conv, bucle_fijo, exp_suelto = [], [], [], []
     fijas = {}
+    tiene, por_nombre = con_controles(fuentes)
     for nom, src in fuentes.items():
-        for ln, c, _w, bucle, vb, ctrl in desplegables(src, nom):
+        for ln, c, _w, bucle, vb, ctrl in desplegables(src, nom, tiene, por_nombre):
             kw = next((k.value for k in c.keywords if k.arg == "key"), None)
             if kw is None:
                 if ctrl:
@@ -126,9 +180,19 @@ _MALO = {
             "with st.expander('w', expanded=bool(x), key='exp_w'):\n    st.button('e')\n",
     "e.py": "import streamlit as st\n"
             "with st.expander('v', key='raro'):\n    st.button('f')\n",
+    # v548 · los controles, dentro de una función auxiliar (local y de otro módulo)
+    "g.py": "import streamlit as st\nimport h\n"
+            "def _form():\n    st.text_input('n')\n"
+            "with st.expander('s'):\n    _form()\n"
+            "with st.expander('r'):\n    h.selector()\n",
+    "h.py": "import streamlit as st\n"
+            "def selector():\n    st.selectbox('o', [1])\n",
 }
 _s, _r, _c, _b, _e = problemas(_MALO)
-chk("ve el desplegable con controles SIN clave", _s == ["a.py:2"], _s)
+chk("ve el desplegable con controles SIN clave", "a.py:2" in _s, _s)
+chk("⚠️ v548 · ve los controles dentro de una función AUXILIAR (local y de otro módulo)",
+    "g.py:5" in _s and "g.py:7" in _s, _s)
+chk("...y no marca más de la cuenta", sorted(_s) == ["a.py:2", "g.py:5", "g.py:7"], _s)
 chk("ve la clave fija REPETIDA", "exp_dup" in _r, _r)
 chk("ve la clave FIJA dentro de un bucle", any("c.py" in x for x in _b), _b)
 chk("ve el `expanded` que depende de datos y no va en la clave", any("d.py" in x for x in _e), _e)
@@ -147,9 +211,10 @@ _F = {}
 for p in sorted(list((RAIZ / "core").glob("*.py")) + [RAIZ / "app.py"]):
     _F[p.name] = p.read_text(encoding="utf-8")
 _tot = sum(1 for s in _F.values() for _ in desplegables(s))
-_ctl = sum(1 for s in _F.values() for d in desplegables(s) if d[5])
+_ti, _pn = con_controles(_F)
+_ctl = sum(1 for _m, s in _F.items() for d in desplegables(s, _m, _ti, _pn) if d[5])
 print("         (%d desplegables en la app, %d con controles dentro)" % (_tot, _ctl))
-chk("se encontraron desplegables (no es un paso en vacío)", _ctl >= 60, _ctl)
+chk("se encontraron desplegables (no es un paso en vacío)", _ctl >= 75, _ctl)
 _s, _r, _c, _b, _e = problemas(_F)
 chk("⚠️ TODO desplegable con controles dentro lleva clave", _s == [], _s)
 chk("ninguna clave fija se repite en la app", _r == {}, _r)

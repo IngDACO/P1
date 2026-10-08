@@ -108,7 +108,7 @@ def render(pid, grupo, prj, editable=True, key_prefix="clm"):
     _pend = [r for r in recs if str(r.get("Status", "")) == CL.EMITIDA]
     _tit = t("Progress claims ({n} issued · {m} claimable now)",
              n=len(_pend), m=_dinero(d["neto"]))
-    with st.expander(f":material/request_quote: {_tit}", expanded=False, key=f"{key_prefix}_exp_{pid}"):
+    with st.expander(f":material/request_quote: {_tit}", expanded=False, key=f"{key_prefix}_exp_claims_{pid}"):
 
         # ⚠️ Sin cotización aceptada no hay contra qué reclamar, y se dice ANTES de
         # enseñar ninguna cifra: un «valor» compuesto solo de variaciones induce a creer

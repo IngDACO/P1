@@ -192,7 +192,7 @@ def _partes_section(grupo):
 
     # ⚠️ «Payroll names»: desde v490 aquí hay tipos de ganancia Y tipos de permiso, así
     # que llamarlo «Earnings rate names» mentiría para vacaciones y bajas.
-    with st.expander(t("Payroll names"), icon=":material/badge:"):
+    with st.expander(t("Payroll names"), icon=":material/badge:", key="exp_cont_nombres"):
         _editor_conceptos(grupo, contable.mapa(grupo))
 
 
@@ -261,7 +261,7 @@ def render_contable(grupo):
             st.caption(t("Create them with these exact names, then import."))
             st.code("\n".join(opciones), language=None)
 
-    with st.expander(t("Chart of accounts and tax"), icon=":material/account_tree:"):
+    with st.expander(t("Chart of accounts and tax"), icon=":material/account_tree:", key="exp_cont_cuentas"):
         _editor_cuentas(grupo, perfil, cfg)
 
     # ⚠️ El parte NO cuelga del selector de formato de arriba: es de nómina, no de

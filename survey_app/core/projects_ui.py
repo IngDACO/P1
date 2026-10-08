@@ -2482,7 +2482,7 @@ def _detalle_proyecto(pid: str, grupo: str = None):
                        "appear on the Home map or in the Day route. Open it below and "
                        "press **Search** to place it.")
         with st.expander(t("Location on the map (project pin)"), icon=":material/map:",
-                         expanded=not location_ui.to_float(prj.get("Lat"))):
+                         expanded=not location_ui.to_float(prj.get("Lat")), key=f"exp_ubic_{pid}_{not location_ui.to_float(prj.get('Lat'))}"):
             _plat, _plng = location_ui.location_picker(
                 f"edloc_{pid}",
                 lat=location_ui.to_float(prj.get("Lat")),
@@ -3475,7 +3475,7 @@ def render_field_projects(usuario: str, grupo: str):
         try:
             from core import roster, roster_ui
             if roster.is_configured():
-                with st.expander(t(":material/calendar_month: See the week's plan (the whole crew)")):
+                with st.expander(t(":material/calendar_month: See the week's plan (the whole crew)"), key="exp_plan_semana"):
                     roster_ui.render_board_readonly(grupo, resaltar_usuario=usuario)
         except Exception:
             pass
@@ -3821,7 +3821,7 @@ def _ganancia_section(pid, grupo):
     _a_costo = P._num(rev.get("ganancia")) <= 0
 
     with st.expander(t(":material/savings: How much you make on this job"),
-                     expanded=bool(rev.get("sin_ganancia")) or _a_costo):
+                     expanded=bool(rev.get("sin_ganancia")) or _a_costo, key=f"exp_ganancia_{pid}_{bool(rev.get('sin_ganancia')) or _a_costo}"):
         if _modelo == "cotizado":
             st.success(t(":material/check_circle: This job's revenue is the **agreed price** on "
                          "quote **{q}**. The {m}% follows from that price.")

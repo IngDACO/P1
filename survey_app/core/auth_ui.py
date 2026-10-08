@@ -1329,7 +1329,7 @@ def _grupo_usuarios(grupo):
 
     if not gente:
         st.info(t("You have no field users yet. Create the first one here."))
-        with st.expander(t("Create field user"), icon=":material/person_add:", expanded=True):
+        with st.expander(t("Create field user"), icon=":material/person_add:", expanded=True, key="exp_campo_nuevo_primero"):
             _crear_usuario_form(grupo)
         return
 
@@ -1438,7 +1438,7 @@ def _grupo_usuarios(grupo):
                     st.dataframe(pd.DataFrame(filas), hide_index=True, width="stretch", column_config=tabla.cfg())
         except Exception:
             pass
-    with st.expander(t("Create field user"), icon=":material/person_add:"):
+    with st.expander(t("Create field user"), icon=":material/person_add:", key="exp_campo_nuevo"):
         _crear_usuario_form(grupo)
 
 
