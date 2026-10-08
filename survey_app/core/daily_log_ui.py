@@ -145,9 +145,9 @@ def _pintar(p, k, titulo=True) -> dict:
                                help=_et):
                     tick.append((f["orden"], f["actividad"]))
             _prueba(f)
-    for e in p["etapas"]:
+    for _ie, e in enumerate(p["etapas"]):
         with st.expander(t(":material/checklist: Your log names «{e}» — which of these did "
-                           "you finish?", e=e["termino"]), expanded=True):
+                           "you finish?", e=e["termino"]), expanded=True, key="%s_exp_%d" % (k, _ie)):
             _prueba(e)
             for o in e["opciones"]:
                 if o["hecha"]:
@@ -412,7 +412,7 @@ def render_campo(pid, grupo, usuario, key_prefix="fld") -> None:
     if len(txt or "") > DL.MAX_TEXTO * 0.8:
         st.caption(t("{n} of {max} characters.", n=len(txt), max=DL.MAX_TEXTO))
 
-    with st.expander(t("It is not for today"), icon=":material/event:"):
+    with st.expander(t("It is not for today"), icon=":material/event:", key=f"{key_prefix}_exp_otrodia_{pid}"):
         dia = st.date_input(t("Day being reported"), value=_hoy, max_value=_hoy,
                             key=_kf, format="DD/MM/YYYY")
     if st.button(t(":material/save: Save the daily log"), key=f"{key_prefix}_dl_save_{pid}",

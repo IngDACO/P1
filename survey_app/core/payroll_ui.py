@@ -320,7 +320,7 @@ def _detalle(grupo, nid):
                     if ok:
                         st.rerun()
         if est != "anulada":
-            with st.expander(t(":material/block: Void payslip")):
+            with st.expander(t(":material/block: Void payslip"), key=f"exp_nom_anul_{nid}"):
                 if st.button(t("Void this payslip"), key=f"nom_anul_{nid}"):
                     payroll.anular(nid)
                     st.session_state.pop("_nom_open", None)

@@ -89,7 +89,7 @@ def render_mis_ausencias():
 
     # ── Pedir ──────────────────────────────────────────────────────
     with st.expander(t("Request a day off or annual leave, or report sick leave"),
-                     icon=":material/add_circle:", expanded=True):
+                     icon=":material/add_circle:", expanded=True, key="exp_aus_pedir"):
         # ⚠️ El tipo va FUERA del form: el formulario tiene que poder reaccionar a él
         # (la enfermedad no se «pide», se avisa) y dentro de un form los widgets no
         # escriben hasta el submit — la razón de v127, v189 y v306.

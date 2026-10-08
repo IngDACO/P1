@@ -74,7 +74,7 @@ def render(pid, grupo, prj, editable=True, key_prefix="sp"):
             _color(_pct) + "[:material/" +
             ("check_circle" if _pct >= 100 else "radio_button_unchecked") + ":]",
             e["orden"], e["nombre"], _pct, _n_ok, len(e["actividades"]))
-        with st.expander(_tit, expanded=False):
+        with st.expander(_tit, expanded=False, key="%s_exp_%s_%d" % (key_prefix, pid, e["orden"])):
             st.progress(min(1.0, _pct / 100.0))
             _marcas = {}
             for i, a in enumerate(e["actividades"]):

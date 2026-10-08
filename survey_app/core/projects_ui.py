@@ -148,7 +148,7 @@ def _alerts_section(pid, grupo, project_name="", allow_report=False):
     else:
         st.caption(t("No open alerts."))
     if allow_report:
-        with st.expander(t(":material/report: Report a problem to the administrator")):
+        with st.expander(t(":material/report: Report a problem to the administrator"), key=f"exp_rep_{pid}"):
             msg = st.text_area(t("Describe the problem or issue on site"), key=f"rep_{pid}")
             if st.button(t("Send alert"), key=f"repb_{pid}"):
                 if not msg.strip():
@@ -613,7 +613,7 @@ def _cargar_plano(pid: str):
     herramientas. Así que el plano quedaba invisible para ellas. Aquí se hace lo
     mismo que al crear el proyecto: subir + extraer + guardar.
     """
-    with st.expander(t(":material/upload: Upload / update the project drawing")):
+    with st.expander(t(":material/upload: Upload / update the project drawing"), key=f"exp_planoup_{pid}"):
         st.caption(t("Upload the PDF and its data is extracted so the tools can use it without asking for the drawing again. It takes about 1 min."))
         _pdf = st.file_uploader(t("Drawing PDF"), type=["pdf"], key=f"planoup_{pid}")
         _idk = f"planoup_id_{pid}"
@@ -926,7 +926,7 @@ def _acciones_archivo(pid, e, puede_borrar):
 
 def _subir_documento(pid, es_campo, sube_tipos, usuario):
     """Subir un documento (el campo solo puede subir fotos)."""
-    with st.expander(t("Upload document"), icon=":material/upload_file:"):
+    with st.expander(t("Upload document"), icon=":material/upload_file:", key=f"exp_updoc_{pid}"):
         if es_campo:
             st.caption(t("As a field user you can only upload **photos**."))
         up   = st.file_uploader(t("File"), key=f"updoc_{pid}")
@@ -959,7 +959,7 @@ def _nuevo_proyecto_form(grupo: str, key: str = "nuevo"):
     import datetime as _dt
     from core.schedule import build_schedule
 
-    with st.expander(t("New project"), icon=":material/add_circle:"):
+    with st.expander(t("New project"), icon=":material/add_circle:", key=f"exp_np_{key}"):
         campos = _field_users(grupo)
 
         # ── Plano del elevador (fuera del form, para poder prellenar) ──
@@ -1930,7 +1930,7 @@ def _induccion_section(pid, prj, grupo=None, allow_send=False):
     links = P.parse_links(prj.get("InductionLinks", ""))
     if not instr and not links:
         return
-    with st.expander(t(":material/push_pin: Project instructions and inductions"), expanded=bool(links)):
+    with st.expander(t(":material/push_pin: Project instructions and inductions"), expanded=bool(links), key=f"exp_ind_{pid}_{bool(links)}"):
         if instr:
             st.markdown(t("**Specific instructions**"))
             st.markdown(instr)
@@ -2831,7 +2831,7 @@ def _detalle_proyecto(pid: str, grupo: str = None):
                              act="», «".join(_rip)))
 
         with st.expander(t("Add / delete activity (the % is recalculated automatically)"),
-                         icon=":material/playlist_add:"):
+                         icon=":material/playlist_add:", key=f"exp_act_{pid}"):
             with st.form(f"addact_{pid}", clear_on_submit=True):
                 st.markdown(t("**:material/add: Add activity**"))
                 an = st.text_input(t("Name"))
@@ -2876,7 +2876,7 @@ def _detalle_proyecto(pid: str, grupo: str = None):
                 if ok:
                     st.rerun()
         else:
-            with st.expander(t(":material/inventory_2: Archive project")):
+            with st.expander(t(":material/inventory_2: Archive project"), key=f"exp_arch_{pid}"):
                 st.caption(t("It disappears from lists and reports, but is kept in full and can be restored whenever you want. This is what is recommended when a job closes."))
                 if st.button(t(":material/inventory_2: Archive"), key=f"arch_{pid}", width="stretch"):
                     ok, msg = P.set_archivado(pid, True)
@@ -2889,7 +2889,7 @@ def _detalle_proyecto(pid: str, grupo: str = None):
         # Drive), gastos, calculos, pre-starts, alarmas y fichajes — por eso se
         # enseña el inventario antes y se exige teclear el nombre.
         if st.session_state.get("auth", {}).get("rol") == "owner":
-            with st.expander(t(":material/delete_forever: Delete permanently (irreversible)")):
+            with st.expander(t(":material/delete_forever: Delete permanently (irreversible)"), key=f"exp_del_{pid}"):
                 _aso = P.datos_asociados(pid)
                 _hay = {k: v for k, v in _aso.items() if v}
                 st.warning(t("The project and its activities will be deleted. **This cannot be undone.** Almost always what you want is to archive it."))
@@ -2917,7 +2917,7 @@ def _detalle_proyecto(pid: str, grupo: str = None):
         st.markdown("---")
 
         # ── Reconstruir el survey guardado ──
-        with st.expander(t(":material/sync: Rebuild the project in the Survey (regenerate reports)")):
+        with st.expander(t(":material/sync: Rebuild the project in the Survey (regenerate reports)"), key=f"exp_rebuild_{pid}"):
             st.caption(t("Loads the saved parameters and matrix into the :material/architecture: Survey tab. Then press **Calculate** there to regenerate diagrams and reports."))
             if st.button(t(":material/sync: Load this project into the Survey"), key=f"rebuild_{pid}"):
                 full = P.get_project_full(pid)
@@ -3208,7 +3208,7 @@ def _panel_agrupaciones(grupo: str):
             return
         _dashboard_agrupacion(_ag, grupo)      # sin expanders internos → seguro
         st.markdown("---")
-        with st.expander(t(":material/build: Projects in this group")):
+        with st.expander(t(":material/build: Projects in this group"), key=f"exp_agmem_{_ag['ID']}"):
             st.caption(t("Tick the lifts that belong to it. Unticking one **ungroups** it, it is not deleted."))
             _act = {str(p.get("ID")): P._num(p.get("WeightInGrouping")) or 1.0
                     for p in P.list_projects(grupo=grupo, agrupacion_id=_ag["ID"], incluir_archivados=True)}
@@ -3230,7 +3230,7 @@ def _panel_agrupaciones(grupo: str):
                 (flash.exito if ok else st.error)(msg)
                 if ok:
                     st.rerun()
-        with st.expander(t(":material/delete: Delete group")):
+        with st.expander(t(":material/delete: Delete group"), key=f"exp_agr_del_{_ag['ID']}"):
             st.caption(t("The projects are not deleted; they are only ungrouped."))
             _ok_del = ui.confirmar_borrado("del_agr_ok", t("I confirm I want to delete this group"))
             if st.button(t("Delete group"), disabled=not _ok_del, key="del_agr_btn"):
@@ -3250,7 +3250,7 @@ def _panel_agrupaciones(grupo: str):
         st.info(t("No groups yet. Create one below and choose which lifts belong to it."))
 
     # ── Crear: la agrupación se arma CON sus proyectos (v141), plegada ──
-    with st.expander(t("New group of lifts"), icon=":material/create_new_folder:"):
+    with st.expander(t("New group of lifts"), icon=":material/create_new_folder:", key="exp_agr_new"):
         st.caption(t("Projects are created first; here you choose which ones belong."))
         nom = st.text_input(t("Group name"), key="nueva_agr_nom")
         des = st.text_input(t("Description (optional)"), key="nueva_agr_des")
@@ -3705,7 +3705,7 @@ def _ordenes_section(pid, grupo, editable=True, key_prefix="ord"):
     _pend = [o for o in ords if str(o.get("Status", "")) == O.PENDIENTE]
     _tit = f"Purchase orders ({len(_pend)} pending)"
 
-    with st.expander(f":material/shopping_cart: {_tit}", expanded=False):
+    with st.expander(f":material/shopping_cart: {_tit}", expanded=False, key=f"{key_prefix}_exp_ord"):
         st.caption(t("What has already been ordered from the supplier and has not arrived yet. When it is marked **received** it is charged to the project cost on its own."))
 
         if ords:
@@ -4200,7 +4200,7 @@ def render_expenses(pid, grupo, can_delete=False, key_prefix="ex",
         _costos_section(pid, grupo, gastos, can_delete, key_prefix)
 
     # ── Cargar recibo ──
-    with st.expander(t("Upload receipt"), icon=":material/receipt:"):
+    with st.expander(t("Upload receipt"), icon=":material/receipt:", key=f"{key_prefix}_exp_upgasto"):
         with st.form(f"{key_prefix}_add_{pid}", clear_on_submit=True):
             c1, c2 = st.columns(2)
             cat = c1.selectbox(t("Category"), E.CATEGORIAS, key=f"{key_prefix}_cat")
@@ -4229,7 +4229,7 @@ def render_expenses(pid, grupo, can_delete=False, key_prefix="ex",
     if items:
         # v213: recibos ACTIVOS — tocar uno muestra su foto inline (antes: tabla
         # redundante + botones de solo-descarga).
-        with st.expander(f":material/receipt_long: Receipts ({len(items)})"):
+        with st.expander(f":material/receipt_long: Receipts ({len(items)})", key=f"{key_prefix}_exp_recibos"):
             st.caption(t("Tap a receipt to see the photo."))
             for r in items:
                 _rid = str(r.get("ID", ""))
@@ -5160,7 +5160,7 @@ def _nueva_localizacion_form(grupo: str):
     presupuesto, sin cliente y sin margen. `create_project` con `activities=None` la
     deja sin cronograma, y `derive_estado` la marca «Abierta» por su tipo (v422).
     """
-    with st.expander(t("New location"), icon=":material/add_circle:"):
+    with st.expander(t("New location"), icon=":material/add_circle:", key="exp_loc_new"):
         campos = _field_users(grupo)
 
         # ⚠️ FUERA del form (el mapa necesita reruns) e INLINE, sin expander propio:

@@ -181,7 +181,7 @@ def _detalle_factura(grupo, fid):
             for cb in _cobros:
                 st.markdown(f"- {cb.get('fecha', '')}: **${_num(cb.get('monto')):,.2f}**")
         if str(f.get("Status", "")).lower() != "anulada":
-            with st.expander(t(":material/block: Void invoice")):
+            with st.expander(t(":material/block: Void invoice"), key=f"exp_fac_anul_{fid}"):
                 st.caption(t("It is taken out of accounts receivable. This cannot be undone."))
                 if st.button(t("Void this invoice"), key=f"fac_anul_{fid}"):
                     I.anular(fid)

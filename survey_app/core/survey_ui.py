@@ -247,7 +247,7 @@ def render_survey_tab(_ROL, _GRUPO):
     # proyecto trae proyecto/cliente/ubicación/ingeniero. Se toman de él al
     # elegirlo (en el selector del plano, más abajo) y se usan en el informe.
     # En modo «sin proyecto» el informe va sin ellos.
-    with st.expander(t(":material/cleaning_services: Start a new survey")):
+    with st.expander(t(":material/cleaning_services: Start a new survey"), key="exp_sv_nuevo"):
         st.caption(t("Clears the parameters, matrix, configuration and results of this session. It does not affect projects already saved."))
         if st.button(t(":material/cleaning_services: Clear everything and start over"), key="btn_reset_survey"):
             st.session_state["_reset_survey"] = True
@@ -1055,7 +1055,7 @@ def render_survey_tab(_ROL, _GRUPO):
             else:
                 _r2.success(t(":green[:material/check_circle:] The drawing supplied every parameter."))
 
-        with st.expander(t("Drawing parameters (editable)"), icon=":material/description:", expanded=True):
+        with st.expander(t("Drawing parameters (editable)"), icon=":material/description:", expanded=True, key="exp_sv_plano"):
             _pendientes = list(PDF_PARAMS)
             for _titulo, _lista in _GRUPOS_PARAM:
                 _ps = [p for p in _lista if p in _pendientes]
@@ -1080,7 +1080,7 @@ def render_survey_tab(_ROL, _GRUPO):
                         help  = PARAM_DESCRIPTIONS.get(p, ""), key = f"inp_{p}",
                     )
 
-        with st.expander(t("Parameters measured on site"), icon=":material/straighten:", expanded=True):
+        with st.expander(t("Parameters measured on site"), icon=":material/straighten:", expanded=True, key="exp_sv_medidos"):
             cols = st.columns(len(USER_ONLY))
             for j, (p, desc) in enumerate(USER_ONLY.items()):
                 cols[j].number_input(
@@ -1259,7 +1259,7 @@ def render_survey_tab(_ROL, _GRUPO):
             st.session_state["_fase_pending"] = _FASE_RES
             st.rerun()
 
-        with st.expander(t(":material/summarize: Duplicate for the next lift")):
+        with st.expander(t(":material/summarize: Duplicate for the next lift"), key="exp_sv_dup"):
             st.caption(t("Keeps this survey's parameters and configuration and clears the matrix and the results. Useful when there are several lifts in the same shaft."))
             if st.button(t(":material/summarize: Duplicate survey"), key="btn_dup_survey"):
                 st.session_state["_dup_survey"] = True

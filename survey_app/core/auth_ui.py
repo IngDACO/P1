@@ -39,7 +39,7 @@ def _contacto_uno(sel, key_prefix="cc"):
         # bloqueo de `app.py` solo pide los canales que existen) y se ofrece la salida
         # manual, por si el chat_id se consiguió por otra vía.
         st.caption(t(":material/info: Telegram is not configured on this installation (the bot is missing from Secrets), so it is **not required** to sign in. Email is enough."))
-        with st.expander(t("Enter the chat_id by hand"), icon=":material/edit:"):
+        with st.expander(t("Enter the chat_id by hand"), icon=":material/edit:", key=f"{key_prefix}_exp_tgman"):
             _man = st.text_input(t("Telegram chat ID"), value=tg, key=f"{key_prefix}_tgman",
                                  help=t("Only if you already have it another way. With no bot configured the app cannot send them anything."))
             if st.button(t("Save chat_id"), key=f"{key_prefix}_tgmanb"):
@@ -138,7 +138,7 @@ def render_credenciales(usuario, grupo, editable=False, key_prefix="cr"):
         # Documentos adjuntos agrupados (antes: botones sueltos apilados bajo la tabla)
         _docs = [r for r in creds if str(r.get("DriveID", "")).strip()]
         if _docs:
-            with st.expander(f":material/download: Documents ({len(_docs)})"):
+            with st.expander(f":material/download: Documents ({len(_docs)})", key=f"{key_prefix}_exp_docs"):
                 from core import drive_store
                 for r in _docs:
                     try:
@@ -155,7 +155,7 @@ def render_credenciales(usuario, grupo, editable=False, key_prefix="cr"):
         return
     admin_usr = st.session_state.get("auth", {}).get("usuario", "")
 
-    with st.expander(t("Add credential"), icon=":material/add_circle:"):
+    with st.expander(t("Add credential"), icon=":material/add_circle:", key=f"{key_prefix}_exp_addcred"):
         # 'Tipo' va FUERA del form (v189): así, al cambiarlo, la app se re-renderiza
         # y podemos mostrar solo los campos que aplican — "especifica" para 'Otro' y
         # "Clase" solo para licencia de conducir. Dentro de un form no hay rerun hasta
@@ -199,7 +199,7 @@ def render_credenciales(usuario, grupo, editable=False, key_prefix="cr"):
                     st.rerun()
 
     if creds:
-        with st.expander(t("Edit / delete credential"), icon=":material/edit:"):
+        with st.expander(t("Edit / delete credential"), icon=":material/edit:", key=f"{key_prefix}_exp_editcred"):
             idmap = {f"{r.get('Type')} · {r.get('Number') or 's/n'} ({r.get('ID')})": r for r in creds}
             sel = st.selectbox(t("Credential"), list(idmap.keys()), key=f"{key_prefix}_esel")
             r = idmap[sel]
@@ -456,7 +456,7 @@ def _owner_grupos():
     # Aislamiento de datos: cada empresa puede vivir en su propio fichero, en vez de
     # compartirlo separada solo por una columna `Grupo`.
     if grupos:
-        with st.expander(t("Each client's data workbook"), icon=":material/menu_book:"):
+        with st.expander(t("Each client's data workbook"), icon=":material/menu_book:", key="exp_own_gsheet"):
             st.caption(t("Each client company can have its **own Google Sheets file**, so its data does not share a file with anyone else's. Empty = it uses the master workbook."))
             _gl = ui.elegir(t("Company"), [g["Group"] for g in grupos], key="gsheet_sel",
                             vacio="— elige un grupo —")
@@ -494,7 +494,7 @@ def _owner_grupos():
     # Define en qué hora LOCAL se graban los registros de cada grupo (cada empresa
     # puede estar en otro país). Sin fijar → clock.DEFAULT_TZ.
     if grupos:
-        with st.expander(t("Each company's time zone"), icon=":material/schedule:"):
+        with st.expander(t("Each company's time zone"), icon=":material/schedule:", key="exp_own_tz"):
             st.caption(t("The local time in which that company's records are written "
                          "(time clock, pre-start, alerts…). Not set = ")
                        + f"{clock.DEFAULT_TZ}.")
@@ -525,7 +525,7 @@ def _owner_grupos():
 
     # ── Margen de facturación por defecto por grupo (v257) ──
     if grupos:
-        with st.expander(t("Starting margin for quote lines"), icon=":material/trending_up:"):
+        with st.expander(t("Starting margin for quote lines"), icon=":material/trending_up:", key="exp_own_margin"):
             # ⚠️ Ya NO es «el margen de las obras»: el % sobre el total se eliminó. La
             # ganancia va por RUBRO, y esto es solo el punto de partida de una línea.
             st.caption(t("Only the starting point when you add a catalogue item to a quote — the "
@@ -557,7 +557,7 @@ def _owner_grupos():
 
     # ── Impuesto de facturación por defecto (GST/IVA) por grupo (v258) ──
     if grupos:
-        with st.expander(t("Default invoicing tax (GST/VAT)"), icon=":material/receipt_long:"):
+        with st.expander(t("Default invoicing tax (GST/VAT)"), icon=":material/receipt_long:", key="exp_own_tax"):
             st.caption(t("Applied by default to new invoices; editable per invoice. Australia = 10 (GST)."))
             gtsel = ui.elegir(t("Company"), [g["Group"] for g in grupos], key="tx_g_sel",
                               vacio="— elige un grupo —")
@@ -578,7 +578,7 @@ def _owner_grupos():
 
     # ── Nómina: super y retención por defecto por grupo (v260) ──
     if grupos:
-        with st.expander(t("Payroll: default super and withholding"), icon=":material/payments:"):
+        with st.expander(t("Payroll: default super and withholding"), icon=":material/payments:", key="exp_own_payroll"):
             st.caption(t("These are preloaded when payroll is generated; editable per payslip. Australia: super ~11.5%. This is not a certified tax calculation."))
             gnsel = ui.elegir(t("Company"), [g["Group"] for g in grupos], key="nomcfg_g_sel",
                               vacio="— elige un grupo —")
@@ -611,7 +611,7 @@ def _owner_grupos():
     # quien ya la usa (el principio de v297 aplicado aquí).
     if grupos:
         with st.expander(t("Tax identity and payment terms"),
-                         icon=":material/receipt_long:"):
+                         icon=":material/receipt_long:", key="exp_own_fiscal"):
             st.caption(t("These appear on the invoice PDF. In Australia a document titled "
                          "«TAX INVOICE» for $82.50 or more must show the seller's ABN."))
             gfsel = ui.elegir(t("Company"), [g["Group"] for g in grupos], key="fisc_g_sel",
@@ -687,7 +687,7 @@ def _owner_usuarios():
 
     # ── Crear usuario (rol + grupo) ──
     grupo_opts = [""] + [g["Group"] for g in auth.list_groups()]
-    with st.expander(t("Create user"), icon=":material/person_add:"):
+    with st.expander(t("Create user"), icon=":material/person_add:", key="exp_own_newuser"):
         with st.form("form_user", clear_on_submit=True):
             u  = st.text_input(t("Username"))
             nm = st.text_input(t("Name"))
@@ -884,7 +884,7 @@ def _owner_manuales():
             "Fecha": r.get("Date"),
             "By": r.get("UploadedBy"),
         } for r in ups]), hide_index=True, width="stretch", column_config=tabla.cfg())
-        with st.expander(t("Remove a manual"), icon=":material/delete:"):
+        with st.expander(t("Remove a manual"), icon=":material/delete:", key="exp_own_delman"):
             opciones = {f"{r.get('Name')}  ·  {r.get('Date')}": r.get("ID") for r in ups}
             _mid = ui.elegir(t("Manual"), opciones, key="man_del_sel",
                              vacio=t("— no manual —"))
@@ -900,7 +900,7 @@ def _owner_manuales():
     else:
         st.info(t("You have not uploaded any manuals yet. Add the first one below."))
 
-    with st.expander(t("Upload manual"), icon=":material/upload_file:", expanded=not ups):
+    with st.expander(t("Upload manual"), icon=":material/upload_file:", expanded=not ups, key=f"exp_own_upman_{not ups}"):
         st.caption(t("It accepts a PDF with text (not scanned) or a ZIP with several PDFs. Avoid huge PDFs (>50 MB): they are processed in the browser."))
         up = st.file_uploader(t("File (PDF or ZIP)"), type=["pdf", "zip"], key="man_up_file")
         nombre = st.text_input(t("Manual name (e.g. 'KONE MonoSpace')"), key="man_up_name")
@@ -940,7 +940,7 @@ def _owner_drive_limpieza():
     from core import projects as P
 
     st.markdown("---")
-    with st.expander(t(":material/cleaning_services: Drive maintenance"), expanded=False):
+    with st.expander(t(":material/cleaning_services: Drive maintenance"), expanded=False, key="exp_own_drive"):
         st.caption(t("What this app has stored in Drive. Only what the app itself created "
                      "is visible here — your personal files are out of reach."))
         if not DS.is_available():
@@ -1055,7 +1055,7 @@ def _owner_rieles():
     else:
         st.info(t("The catalogue is empty. Add the first rail below."))
 
-    with st.expander(t("Add rail"), icon=":material/add_circle:", expanded=not data):
+    with st.expander(t("Add rail"), icon=":material/add_circle:", expanded=not data, key=f"exp_own_addrail_{not data}"):
         with st.form("form_riel", clear_on_submit=True):
             ref = st.text_input(t("Reference (e.g. T75-3/B)"))
             rc1, rc2 = st.columns(2)
@@ -1072,7 +1072,7 @@ def _owner_rieles():
                         st.rerun()
 
     if data:
-        with st.expander(t("Edit / delete rail"), icon=":material/edit:"):
+        with st.expander(t("Edit / delete rail"), icon=":material/edit:", key="exp_own_editrail"):
             refs = [r.get("Reference") for r in data]
             sel  = st.selectbox(t("Reference"), refs, key="riel_sel")
             _cur = rails.get_rail(sel) or {}

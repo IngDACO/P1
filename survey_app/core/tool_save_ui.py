@@ -197,7 +197,7 @@ def render_guardar(herramienta: str, titulo_pdf: str, pdf_bytes: bytes,
             if st.button(t(":material/save: Save to the project"), width="stretch",
                          key=f"save_{key}"):
                 _guardar(_fich)
-            with st.expander(t("Is it for a different project?")):
+            with st.expander(t("Is it for a different project?"), key=f"exp_otraobra_{key}"):
                 sel = st.selectbox(t("Project"), [_VACIO] + list(idmap.keys()),
                                    key=f"prj_{key}", label_visibility="collapsed")
                 if st.button(t("Save to the chosen one"), key=f"save2_{key}",

@@ -312,7 +312,7 @@ with st.sidebar:
     # ASISTENTE IA — desplegable en sidebar
     # ══════════════════════════════════════════════════
     _agente_lbl = "Field assistant" if _ROL == "field" else "Management assistant"
-    with st.expander(f":material/smart_toy: {_agente_lbl} COPEX", expanded=False):
+    with st.expander(f":material/smart_toy: {_agente_lbl} COPEX", expanded=False, key="exp_chat_lateral"):
         ctx_label = ":material/link: With the current calculation as context." if st.session_state.get("calc_results") else "No active calculation."
         _foco = ("Focused on installing on site and using the app in the field."
                  if _ROL == "field"

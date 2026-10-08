@@ -237,7 +237,7 @@ def _detalle_cliente(grupo, key):
                     if ok:
                         st.rerun()
             else:
-                with st.expander(t(":material/archive: Archive client")):
+                with st.expander(t(":material/archive: Archive client"), key=f"exp_cli_arch_{cid}"):
                     st.caption(t("It stops being listed; its projects are untouched. To see it again, tick «Show archived ones too» in the list."))
                     if st.button(t("Archive this record"), key=f"cli_arch_{cid}"):
                         C.set_activo(cid, False)
@@ -262,7 +262,7 @@ def _detalle_cliente(grupo, key):
     if cid:
         otros = [p for p in P.list_projects(grupo=grupo) if not C.es_del_cliente(p, cid, key)]
         if otros:
-            with st.expander(t(":material/link: Link other projects to this client")):
+            with st.expander(t(":material/link: Link other projects to this client"), key=f"exp_cli_link_{cid}"):
                 st.caption(t("Useful if the project has different text in «Client» or was left unlinked."))
                 _opts = {f"{p.get('Name', '')} ({p.get('ID', '')})": str(p.get("ID", ""))
                          for p in otros}
@@ -319,7 +319,7 @@ def _detalle_cliente(grupo, key):
 
 # ── Alta de cliente ──────────────────────────────────────────────
 def _nuevo_cliente_form(grupo):
-    with st.expander(t(":material/add_circle: New client")):
+    with st.expander(t(":material/add_circle: New client"), key="exp_cli_new"):
         with st.form("cli_nuevo"):
             _nom = st.text_input(t("Client name *"))
             cc = st.columns(2)

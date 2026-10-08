@@ -175,7 +175,7 @@ def _asistentes_con_firma(yo: str, yo_usuario: str, cuadrilla: list) -> list:
         st.caption(t(":material/info: This site has nobody assigned or clocked in today; add below whoever attends."))
 
     st.session_state.setdefault("ps_invitados", [])
-    with st.expander(t(":material/person_add: Is someone missing who is not on the list?")):
+    with st.expander(t(":material/person_add: Is someone missing who is not on the list?"), key="exp_ps_invitado"):
         c1, c2 = st.columns([3, 1])
         _nuevo = c1.text_input(t("First and last name"), key="ps_invit_nom",
                                placeholder=t("Subcontractor, visitor…"))
@@ -549,7 +549,7 @@ def _historial(pid):
                                             .replace("{n}", str(d["n_no"])))
         _tit = (f"{_flag}  {d['fecha']} · {d['facilitador'] or '—'}"
                 + (f"  ·  :orange[:material/warning:] {', '.join(_res)}" if _res else t("  ·  all OK")))
-        with st.expander(_tit):
+        with st.expander(_tit, key=f"exp_ps_hist_{d['id']}"):
             if d["asistentes"]:
                 st.markdown(f"**:material/engineering: {t('Attendees')}:** " + " · ".join(d["asistentes"]))
             st.markdown(t("**Checks:**"))

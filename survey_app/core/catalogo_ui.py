@@ -101,7 +101,7 @@ def render_catalogo(grupo):
 
 
 def _alta(grupo):
-    with st.expander(t(":material/add_circle: New item")):
+    with st.expander(t(":material/add_circle: New item"), key="exp_cat_new"):
         # ⚠️ El tipo va FUERA del form: dentro, los widgets no escriben hasta el submit
         # y no se podrían mostrar solo los campos que aplican (misma razón que v189/v306).
         tipo = st.radio(t("Type"), list(CAT.TIPOS), horizontal=True, key="cat_new_tipo",
@@ -190,7 +190,7 @@ def _detalle(grupo, cid):
 
     # ⚠️ v340: desactivar SIEMPRE con vuelta, y en el mismo sitio.
     if activo:
-        with st.expander(t(":material/archive: Deactivate item")):
+        with st.expander(t(":material/archive: Deactivate item"), key=f"exp_cat_off_{cid}"):
             st.caption(t("It stops being offered when quoting, but is not deleted: quotes already using it keep showing it."))
             if st.button(t(":material/archive: Deactivate"), key=f"cat_off_{cid}",
                          width="stretch"):

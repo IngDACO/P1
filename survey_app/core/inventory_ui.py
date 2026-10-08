@@ -264,7 +264,7 @@ def _detalle(grupo, aid):
         st.markdown(t("#### :material/swap_horiz: Actions"))
         ac = st.columns(2)
         if _est == "available":
-            with ac[0].expander(t(":material/logout: Check out / hand over")):
+            with ac[0].expander(t(":material/logout: Check out / hand over"), key=f"exp_inv_sal_{aid}"):
                 _dt = st.selectbox(t("Destination"), ["project", "user", "other"],
                                    format_func=lambda o: t({"project": "a project",
                                                             "user": "a person",
@@ -291,7 +291,7 @@ def _detalle(grupo, aid):
                     if ok:
                         st.rerun()
         else:
-            with ac[0].expander(t(":material/login: Check in / return"), expanded=True):
+            with ac[0].expander(t(":material/login: Check in / return"), expanded=True, key=f"exp_inv_ent_{aid}"):
                 _bod = st.text_input(t("Store / return location"), value=t("Store"), key=f"inv_ebod_{aid}")
                 _n = st.text_input(t("Note"), key=f"inv_enota_{aid}")
                 if st.button(t(":material/check: Record check-in"), type="primary", key=f"inv_ebtn_{aid}"):
@@ -299,7 +299,7 @@ def _detalle(grupo, aid):
                     (flash.exito if ok else st.error)(msg)
                     if ok:
                         st.rerun()
-        with ac[1].expander(t(":material/move_up: Transfer")):
+        with ac[1].expander(t(":material/move_up: Transfer"), key=f"exp_inv_tr_{aid}"):
             _tt = st.selectbox(t("New location (type)"), INV.UBIC_TIPOS, key=f"inv_ttt_{aid}")
             _tr = st.text_input(t("Detail"), key=f"inv_ttr_{aid}")
             _n = st.text_input(t("Note"), key=f"inv_tnota_{aid}")
@@ -308,7 +308,7 @@ def _detalle(grupo, aid):
                 (flash.exito if ok else st.error)(msg)
                 if ok:
                     st.rerun()
-        with ac[1].expander(t(":material/build: Service")):
+        with ac[1].expander(t(":material/build: Service"), key=f"exp_inv_mt_{aid}"):
             _costo = st.number_input(t("Cost"), min_value=0.0, step=10.0, key=f"inv_mcosto_{aid}")
             _prox = _fecha_input(t("Next maintenance"), a.get("NextService"), f"inv_mprox_{aid}")
             _enm = st.checkbox(t("Leave the asset IN service"), key=f"inv_menm_{aid}")
@@ -386,7 +386,7 @@ def _detalle(grupo, aid):
                 st.rerun()
 
     if str(a.get("Status", "")).lower() != "written off":
-        with st.expander(t(":material/block: Write off")):
+        with st.expander(t(":material/block: Write off"), key=f"exp_inv_baja_{aid}"):
             st.caption(t("Takes the asset out of the inventory (it stays in the history). To see it again, tick «Show written-off ones too»."))
             _mot = st.text_input(t("Reason"), key=f"inv_baja_mot_{aid}")
             if st.button(t("Write off this asset"), key=f"inv_baja_{aid}"):
@@ -489,7 +489,7 @@ def _reportes(grupo):
 
 
 def _categorias_expander(grupo):
-    with st.expander(t(":material/category: Categories")):
+    with st.expander(t(":material/category: Categories"), key="exp_inv_cats"):
         st.caption(t("The default ones are always there; here you add/remove your own."))
         st.write(" · ".join(INV.categorias(grupo)))
         cc = st.columns([3, 1])

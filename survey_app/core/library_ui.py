@@ -245,7 +245,7 @@ def _detalle(lid):
         st.caption(t("This entry has no attached file — it is a note."))
 
     if _puede_subir():
-        with st.expander(t(":material/delete: Remove from the library")):
+        with st.expander(t(":material/delete: Remove from the library"), key=f"exp_lib_del_{lid}"):
             _ok = st.checkbox(t("I confirm I want to remove it"), key="lib_del_ok")
             if st.button(t(":material/delete: Remove"), key="lib_del",
                          disabled=not _ok, type="primary"):
@@ -268,7 +268,7 @@ def _detalle(lid):
 
 # ── gestión (solo propietario) ───────────────────────────────────────────────
 def _alta():
-    with st.expander(t(":material/add_circle: File new material")):
+    with st.expander(t(":material/add_circle: File new material"), key="exp_lib_alta"):
         _marcas = LIB.marcas()
         if not _marcas:
             st.info(t(":material/info: There are no brands yet. Add one in the "
@@ -339,7 +339,7 @@ def _catalogo():
     """Marcas y modelos. ⚠️ Se mantiene como el catálogo de rieles (decisión del
     usuario): se ELIGEN de una lista, no se teclean — una marca escrita a mano se
     escribe de tres formas distintas y deja de agrupar nada."""
-    with st.expander(t(":material/sell: Brands and models")):
+    with st.expander(t(":material/sell: Brands and models"), key="exp_lib_cat"):
         _ver_inact = st.checkbox(t(":material/archive: Show deactivated ones too"),
                                  key="lib_cat_inact",
                                  help=t("Deactivating hides a model from the pickers; "

@@ -183,7 +183,7 @@ def _desde_plano(grupo):
     from core import plan_data as _PD
     from core import quote_from_plan as _QP
 
-    with st.expander(t(":material/architecture: Price it from the drawing"), expanded=False):
+    with st.expander(t(":material/architecture: Price it from the drawing"), expanded=False, key="exp_cot_plano"):
         st.caption(t("Reads the PDF and proposes the lines whose quantity comes from the "
                      "drawing. You review them before saving — this is a starting point, "
                      "not a price."))

@@ -331,7 +331,7 @@ def render_partes_xero(grupo):
     base = [""] + [e["EmployeeID"] for e in d["empleados"]]
     sin_confirmar = [u for u in usuarios if str(u.get("User", "")) not in guardado]
     with st.expander(t("Who is who in Xero ({n} to confirm)", n=len(sin_confirmar)),
-                     icon=":material/group:", expanded=bool(sin_confirmar)):
+                     icon=":material/group:", expanded=bool(sin_confirmar), key=f"exp_xero_quien_{bool(sin_confirmar)}"):
         st.caption(t("Proposed by email, then by name. Check them and save once; people "
                      "not in Xero Payroll stay «not in Xero»."))
         _n_email = sum(1 for lg, v in detalle.items() if v["por"] == "email" and lg not in guardado)
