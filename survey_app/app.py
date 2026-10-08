@@ -27,6 +27,11 @@ _core_pkg._VERSION_CARGADA = _V_DISCO
 
 from core import incrustar                                # noqa: E402
 
+# v549 · Los botones parten su texto en vez de recortarlo con «…» (trampa nº33): `wrap=True`
+# por defecto en TODA la app. Antes de cualquier botón (el login incluido).
+from core import botones as _botones                      # noqa: E402
+_botones.instalar()
+
 from core.i18n import t                                   # noqa: E402
 
 from core.chat_agent      import get_chat_response
