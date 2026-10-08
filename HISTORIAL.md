@@ -10,6 +10,34 @@ ventana de contexto. Contenido: 258 secciones detalladas + el índice de 440 ver
 
 ---
 
+## BARRIDO: TODO DESPLEGABLE CON CONTROLES DENTRO LLEVA CLAVE (v547)
+
+Lo destapó Fichaje en v546 (trampa nº35): un `st.expander` SIN clave se cierra solo cuando
+cambia lo que tiene encima, y cada acción deja encima un aviso por `flash` que aparece una
+pasada y se va. Con controles dentro, el usuario pierde el botón a mitad de la tarea. Había
+**65** así en la app (16 en usuarios/propietario, 16 en Proyectos, 6 en Inventario, 4 en el
+Survey, el chat del lateral…). Decisión del usuario: barrido de una vez, con guardián.
+
+- La clave sigue el esquema de las claves de los controles de dentro: con `key_prefix` o con
+  el ID de la entidad (obra, activo, factura, nómina, cliente…), para que lo abierto en una no
+  se arrastre a otra y para que dos copias no choquen.
+- En bucles (parte diario, historial del Pre-Start, avance por etapas) lleva el elemento.
+- Los 4 que se abren solos según los datos («Upload manual» sin manuales, «Add rail» sin
+  rieles, las instrucciones de obra con enlaces, Xero con pendientes) llevan esa condición en
+  la clave: con clave, Streamlit solo respeta `expanded` la primera vez.
+- Prefijo `exp_`, comprobado contra los selectores CSS por subcadena (`[class*=st-key-…]`).
+- ⚠️ El script del barrido se paró a mitad: `end_col_offset` del AST va en BYTES UTF-8 y una
+  línea con «—» desplazaba la columna. Revisadas las 38 primeras a mano en el diff (bien) y
+  corregido el cálculo para las 27 restantes; `pyflakes` sin nombres sin definir.
+
+Guardián `verif_v547` (AST sobre el código real, con sondas validadas contra casos
+construidos): todo desplegable con controles lleva clave; ninguna clave fija se repite; en
+bucles usa la variable del bucle; si `expanded` depende de datos, la condición va en la clave;
+ningún CSS atrapa `exp_`. Exentas por nombre (anteriores): `cpxresumen`, `cpx_lectura_ia`,
+`tc_corregir`.
+
+PRODUCCIÓN (09/10/2026, cuenta admin): sin un error al abrir Home (chat del lateral con su clave), la ficha de PRJ-0015 en sus 4 pestañas (exp_act/exp_arch, adm_exp_ord/adm_exp_upgasto/claims, exp_planoup/exp_rebuild/exp_updoc/ho_exp), Inventario, Contactos, Biblioteca y la ficha de una persona; ⚠️ ahí «Create field user» seguía SIN clave: sus controles van en una función auxiliar y el barrido solo miraba llamadas directas → 11 más, v548 · 17 comprobaciones · romper_v547 6/6 + control · suite 176 verde con Python 3.12.10
+
 ## LA PANTALLA DE FICHAJE, PROBADA ACCIÓN POR ACCIÓN EN PRODUCCIÓN (v546)
 
 Segunda pantalla del recorrido guiado por el usuario, con la cuenta admin. Funcionaban:
@@ -13225,7 +13253,7 @@ comprueba lo que dice**.
 
 ---
 
-## Versiones desplegadas (v546 = actual)
+## Versiones desplegadas (v547 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -13233,6 +13261,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v547 | **Barrido: todo desplegable con controles dentro lleva clave (trampa 35).** 65 en la app se cerraban solos cuando el aviso de arriba aparecía o se iba. La clave sigue el esquema de sus controles (key_prefix / ID), en bucles lleva el elemento y, si se abría solo según los datos, la condición. Guardián AST de las 4 reglas + CSS. PRODUCCIÓN (09/10/2026, cuenta admin): sin un error al abrir Home (chat del lateral con su clave), la ficha de PRJ-0015 en sus 4 pestañas (exp_act/exp_arch, adm_exp_ord/adm_exp_upgasto/claims, exp_planoup/exp_rebuild/exp_updoc/ho_exp), Inventario, Contactos, Biblioteca y la ficha de una persona; ⚠️ ahí «Create field user» seguía SIN clave: sus controles van en una función auxiliar y el barrido solo miraba llamadas directas → 11 más, v548 · romper_v547 6/6 + control · suite 176 verde con Python 3.12.10 |
 | v546 | **La pantalla de Fichaje, probada acción por acción en producción.** ⚠️ Abrir la jornada «a las 18:00» con otra ya cerrada de 18:24 a 18:26 se aceptaba y esos minutos se pagaban dos veces → `timeclock` rechaza una hora que pise otra entrada del mismo tipo (abrir y corregir). El panel «Did you forget…» se cerraba solo tras cada paso → clave (y la IA del Home). Fichar desde la pantalla no sacaba el modal del Pre-Start → igual que el lateral, también «Switch». Historial en día/mes y «— switch to… —». PRODUCCIÓN (09/10/2026, cuenta admin): fichar desde el selector de la pantalla saca el modal del Pre-Start (ZZ PRUEBA) y «Switch» el de la obra nueva (PRUEBA MOVIL); el selector dice «— switch to… —»; historial «08/10 18:27»; con una jornada cerrada 05:43-05:44, abrir «a las 05:40» se RECHAZA («That time overlaps your workday entry from 05:43 to 05:44…») y corregir otra jornada a 05:43 también; a las 05:45 se acepta (COR-0003); el panel «Did you forget…» siguió abierto al irse y al llegar el aviso verde; en la hoja, 0 fichajes abiertos y ni rastro de los dos intentos rechazados · romper_v546 12/12 + control · verif_v308 y verif_v374 reanclados y comprobados rompiendo su regla a mano (rojos los dos) · suite 175 verde con Python 3.12.10 |
 | v545 | **La campana se cierra al llevarte a una alerta, y su número se lee.** Vistos verificando v544: tocar una alerta llevaba a la obra con el popover ABIERTO encima (su estado vive en el navegador → clave con generación, como el mapa) y a 846 px se leía «🔔‥» (la columna recorta la etiqueta → 6+6 px de relleno, medido). PRODUCCIÓN (08/10/2026, cuenta admin, 846 px): la campana se lee «🔔 4» (6+6 px, el texto cabe: 24 de 24); tocar «88 walker st — 18 d behind schedule» abre PRJ-0002 y la campana queda CERRADA (clave cpxbell_1); vuelve a abrirse con sus 4 alertas · romper_v545 3/3 + control · suite 174 verde con Python 3.12.10 |
 | v544 | **El Home del admin, probado acción por acción en producción.** Funcionaban indicadores, «Go to», lista → resumen, agenda, pin, buscador, «←», menú, IA, fichaje y chat. Arreglado: las tarjetas KPI en UNA línea («AC…» sin número: Streamlit 1.64 recorta los botones en columnas → CSS); el MISMO pin no se reabría (`st_folium` repite el último clic → clave con generación); «Hours» abría en «Today»; la campana muda con 4 urgentes (ahora entran, y cada alerta lleva a su sitio); «paradas», «alarma(s)», «pendings», «18.0 d», fechas ISO y logins. PRODUCCIÓN (08/10/2026, cuenta admin): tarjetas KPI en 3 líneas (3 · 0% · 4 h a 846 px), «13 pending», resumen de 88 walker «18 d behind · 20/09/2026 → 25/10/2026 · 6 stops» con nombres, lista «31d/18d/10d», el MISMO pin reabre 88 walker dos veces seguidas, «Hours» abre Horas en «All», la campana marca 4 con 4 botones y «overdue since 02/10/2026» abre PRJ-0001 (con &p= en la URL), «Overdue (02/10/2026)» y «No contact details» con nombres; ⚠️ la campana se quedaba ABIERTA tras navegar y su «4» se recortaba a 846 px → v545 · romper_v544 22/22 + control (21 en la tanda + la de los <p> en línea, re-anclada y corrida aparte) · suite 173 verde con Python 3.12.10 |
