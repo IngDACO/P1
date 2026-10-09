@@ -693,8 +693,14 @@ def _radar_personal(grupo, lunes, staff, tidx, scan=None):
         # pasivo): ahí están sus certificados y «See full record». El 4º elemento del
         # escaneo dice de quién es cada línea (se indexa, como pedía v292).
         _q = _sc[3] if len(_sc) > 3 else {"choques": [], "certs": []}
-        st.markdown('<style>[class*="st-key-radar_"] button{justify-content:flex-start!important;'
-                    'text-align:left!important;}</style>', unsafe_allow_html=True)
+        # ⚠️ v553 · En 1.64 el texto lo centran el `div` y el `span` INTERIORES del botón
+        # (`justify-content:center`), no el botón: con solo la regla del botón salía
+        # centrado (84-99 px del borde). Probado en vivo: con los dos, a 13 px.
+        st.markdown('<style>[class*="st-key-radar_"] button,'
+                    '[class*="st-key-radar_"] button > div,'
+                    '[class*="st-key-radar_"] button > div > span{'
+                    'justify-content:flex-start!important;text-align:left!important;}'
+                    '</style>', unsafe_allow_html=True)
         for _tit, _lst, _usrs, _pre in (
                 (t("**:orange[:material/warning:] Shift clashes:**"), choques, _q["choques"], "ch"),
                 (t("**:red[:material/block:] Blocking certificates:**"), sin_cumplir,
@@ -712,6 +718,7 @@ def _radar_personal(grupo, lunes, staff, tidx, scan=None):
                     else:
                         st.session_state["_panel_ficha"] = _u
                         st.session_state["_panel_ficha_en"] = _kl
+                        st.session_state["_fp_ir"] = True          # v553 · llevar la vista
                     st.rerun()
                 # ⚠️ La línea Y la persona: si la lista cambió entre pasadas (se editó el
                 # tablero), la misma key puede ser ya de otra persona.
@@ -729,7 +736,36 @@ def _ficha_rapida(grupo, usuario):
     u = auth.get_user(usuario) or {}
     nom = u.get("Name") or usuario          # ⚠️ CRUDO: lo consume el deep-link de abajo
     _nom_v = _etq([u], grupo).get(usuario) or nom      # el que se pinta
-    with st.container(border=True):
+    # v553 · con clave: el script de abajo la busca por `.st-key-fp_card`
+    with st.container(border=True, key="fp_card"):
+        # ⚠️ v553 · Recién abierta, la página baja LO JUSTO para que se vea entera
+        # (`block: nearest`: si ya se ve, no se mueve). Desde el fondo del Radar quedaba
+        # cortada 114 px por debajo (medido en producción, v552). UNA sola vez por
+        # apertura (`_fp_ir`): si fuera en cada pasada, cualquier clic devolvería la
+        # vista a la ficha. El recuadro del script va FUERA del flujo (`position:
+        # absolute`): uno de 1 px en el flujo deja 1 px + el hueco entre elementos.
+        if st.session_state.pop("_fp_ir", False):
+            # ⚠️ En 1.64 el contenedor va dentro de un `stLayoutWrapper` de 0 px que SIGUE
+            # en el flujo: el hueco de la ficha (9,6 px) se le aplicaba igual (223 px con
+            # el script, 213 sin él; medido en una mini-app 1.64). Se saca también a él.
+            with st.container(key="fp_ir"):        # el estilo va DENTRO: tampoco ocupa
+                st.markdown("<style>.st-key-fp_ir,[data-testid=\"stLayoutWrapper\"]:has(> "
+                            ".st-key-fp_ir){position:absolute!important;width:1px;"
+                            "height:1px;overflow:hidden;opacity:0;pointer-events:none;}"
+                            "</style>", unsafe_allow_html=True)
+                from core import incrustar
+                # Espera a que la pasada TERMINE (`data-test-script-state`): el script
+                # puede arrancar con la ficha aún a medio pintar, y «nearest» se mediría
+                # con una altura que no es la final. Tope: 4 s.
+                incrustar.script(
+                    "<script>(function(){try{var D=window.parent.document,n=0;"
+                    "function ir(){var c=D.querySelector('.st-key-fp_card'),"
+                    "a=D.querySelector('[data-testid=\"stApp\"]'),"
+                    "s=a?a.getAttribute('data-test-script-state'):'notRunning';"
+                    "if(c&&s!=='running'){c.scrollIntoView({behavior:'smooth',"
+                    "block:'nearest'});return;}"
+                    "if(++n<40)setTimeout(ir,100);}setTimeout(ir,150);}catch(e){}})();"
+                    "</script>")
         cA, cB = st.columns([5, 1])
         cA.markdown(f"**{_esc(_nom_v)}**"
                     + (f" · {_esc(u.get('Role', ''))}" if u.get("Role") else ""))
@@ -1494,6 +1530,7 @@ def _tablero_editable(grupo, lunes, staff, datos, tidx, marcas=None, dias=None):
                           help=t("Quick view of this person")):
             st.session_state["_panel_ficha"] = usuario
             st.session_state.pop("_panel_ficha_en", None)   # v552 · del tablero: arriba
+            st.session_state["_fp_ir"] = True               # v553 · llevar la vista
             st.rerun()
         for di, d in enumerate(dias):
             idx = pi * len(dias) + di

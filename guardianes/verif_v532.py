@@ -96,8 +96,13 @@ chk("la sonda SÍ encuentra una llamada y un import cuando los hay (trampa nº12
                 "components.html('<p>x</p>', height=10)\n")) == 2)
 chk("los 19 dibujos y cronómetros van por `incrustar.dibujo`",
     sum(_dib.values()) == 19, _dib)
-chk("⚠️ los 3 scripts de página van por `incrustar.script` (cabecera PWA, «atrás», cookie)",
-    _scr == {"app.py": 1, "core/home_ui.py": 1, "core/session_cookie.py": 1}, _scr)
+# v553 · un 4º, a propósito: llevar la vista a la ficha rápida recién abierta en el Panel
+# (`roster_ui._ficha_rapida`, una vez por apertura). El inventario sigue siendo EXACTO: un
+# script nuevo tiene que entrar aquí con su razón, no colarse.
+chk("⚠️ los 4 scripts de página van por `incrustar.script` (cabecera PWA, «atrás», cookie, "
+    "ir a la ficha del Panel)",
+    _scr == {"app.py": 1, "core/home_ui.py": 1, "core/session_cookie.py": 1,
+             "core/roster_ui.py": 1}, _scr)
 for f in _scr:
     _s = io.open(os.path.join(RAIZ, f), encoding="utf-8").read()
     _args = [ast.unparse(n.args[0]) for n in ast.walk(ast.parse(_s)) if isinstance(n, ast.Call)
