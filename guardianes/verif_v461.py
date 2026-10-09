@@ -283,7 +283,11 @@ else:
 
 # ── 8 · El acento del KPI no puede ser None ──────────────────────
 print("8. theme.kpi_row: el 4º elemento es el ACENTO, nunca None")
-_src_b = ast.get_source_segment(fuente("correcciones_ui"), func("correcciones_ui", "render_bandeja"))
+# ⚠️ v556 · las tarjetas pasaron de `theme.kpi_row` (HTML) a botones activos en su propia
+# función, `_kpis`: el principio es el mismo —el acento, un color real y nunca None—,
+# solo cambió dónde vive. Se busca ahí (y en `render_bandeja`, por si vuelve).
+_src_b = "".join(ast.get_source_segment(fuente("correcciones_ui"), func("correcciones_ui", _f)) or ""
+                 for _f in ("render_bandeja", "_kpis") if func("correcciones_ui", _f) is not None)
 if "theme.AMBAR if pend else theme.AZUL" in _src_b:
     ok("acento resuelto siempre a un color real")
 else:

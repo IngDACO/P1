@@ -54,7 +54,10 @@ _COL = {h: i + 1 for i, h in enumerate(HEADERS)}
 # ⚠️ Se reusa el vocabulario de `ausencias` (v430) en vez de inventar otro: la app ya
 # tiene un flujo de aprobación y dos vocabularios distintos para lo mismo divergen.
 PENDIENTE, APROBADA, REVERTIDA = "pending", "approved", "reverted"
-ESTADOS = (PENDIENTE, APROBADA, REVERTIDA)
+# v556 · una corrección que OTRA posterior cambió de nuevo (mismo fichaje): ni se puede
+# revertir (la hora que dejó ya no está) ni aprobar sin mentir. Se cierra como tal.
+SUSTITUIDA = "superseded"
+ESTADOS = (PENDIENTE, APROBADA, REVERTIDA, SUSTITUIDA)
 
 # Qué campo del fichaje se corrigió.
 CAMPO_IN, CAMPO_OUT = "Clock In", "Clock Out"
@@ -235,6 +238,42 @@ def _set(cid, campos: dict) -> tuple:
         return False, f"{t('Error writing')}: {e}"
     _invalidate()
     return True, cid
+
+
+def sustituida_por(r, todas=None) -> str:
+    """ID de una corrección POSTERIOR que volvió a cambiar el mismo fichaje (v556).
+
+    ⚠️ Visto en producción: COR-0001 pasó una entrada de 18:27 a 18:00 y COR-0002 la
+    devolvió a 18:27. «Revert» en COR-0001 buscaba un fichaje a las 18:00 que ya no
+    existía («no longer exists»), y «Approve» habría confirmado un «now 18:00» falso.
+    Mismo fichaje = misma persona, tipo y campo, y la posterior PARTE de la hora que
+    dejó esta (`OldValue` de la otra == `NewValue` de esta). '' si no hay ninguna.
+    """
+    todas = todas if todas is not None else list_group(r.get("Group"))
+    _clave = (str(r.get("User", "")).strip(), str(r.get("Type", "")).strip(),
+              str(r.get("Field", "")).strip())
+    for o in sorted(todas, key=lambda x: str(x.get("Created", ""))):
+        if (str(o.get("ID", "")) != str(r.get("ID", ""))
+                and str(o.get("Created", "")) > str(r.get("Created", ""))
+                and (str(o.get("User", "")).strip(), str(o.get("Type", "")).strip(),
+                     str(o.get("Field", "")).strip()) == _clave
+                and str(o.get("OldValue", "")).strip() == str(r.get("NewValue", "")).strip()):
+            return str(o.get("ID", ""))
+    return ""
+
+
+def cerrar_sustituida(cid, revisor, por) -> tuple:
+    """Cierra una corrección que otra posterior sustituyó (v556). El fichaje NO se toca:
+    la hora buena es la de la posterior, que se revisa en su propia tarjeta."""
+    r = get(cid)
+    if not r:
+        return False, t("Correction not found.")
+    if str(r.get("Status", "")).strip().lower() != PENDIENTE:
+        return False, t("This correction was already reviewed.")
+    ok, msg = _set(cid, {"Status": SUSTITUIDA, "ReviewedBy": str(revisor or ""),
+                         "ReviewedDate": clock.now(r.get("Group")).strftime(timeclock.FMT),
+                         "AdminNote": f"superseded by {por}"})
+    return (True, t("Closed: superseded by {x}.", x=por)) if ok else (False, msg)
 
 
 def aprobar(cid, revisor, nota="") -> tuple:

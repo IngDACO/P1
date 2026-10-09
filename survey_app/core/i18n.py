@@ -161,6 +161,8 @@ VALORES = {
     # la tabla del historial mostraba «revertida» en una fila por lo demas en
     # ingles — traduccion a medias, el peor caso (v443/v450).
     "revertida": "reverted",
+    # v556 · corrección que otra posterior volvió a cambiar (mismo fichaje)
+    "sustituida": "superseded",
     "cancelada": "cancelled",
     # v463 · estado de una ORDEN de compra (orders.ESTADOS). `pendiente` y
     # `cancelada` ya estaban, asi que una orden recibida salia en español

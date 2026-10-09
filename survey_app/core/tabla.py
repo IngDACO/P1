@@ -118,6 +118,9 @@ CABECERAS = {
     "Antes": "Before",
     "Ahora": "Now",
     "Revisor": "Reviewed by",
+    # v556 · el DÍA del fichaje corregido: sin él, «Before 05:46 / Now 05:45» no decía
+    # de qué jornada se hablaba
+    "Día": "Day",
     "Nota": "Note",
     "Valor": "Value",
     "Numero": "Number",

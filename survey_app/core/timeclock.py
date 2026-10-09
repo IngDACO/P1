@@ -540,7 +540,9 @@ def _msg_choque(r, tipo) -> str:
     etq = t("workday") if tipo == TIPO_GENERAL else t("project")
     _a = str(r.get("Clock In", ""))[11:16]
     _b = str(r.get("Clock Out", ""))[11:16] or t("open")
-    return (t("That time overlaps your {what} entry from {a} to {b}: those minutes would "
+    # v556 · «the», no «your»: el mismo aviso lo lee el ADMIN al revisar la corrección
+    # de otra persona en Time fixes, y ahí «your workday» era falso.
+    return (t("That time overlaps the {what} entry from {a} to {b}: those minutes would "
               "count twice. Pick a time outside it.")
             .replace("{what}", etq).replace("{a}", _a).replace("{b}", _b))
 
