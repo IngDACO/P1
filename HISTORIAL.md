@@ -10,6 +10,21 @@ ventana de contexto. Contenido: 258 secciones detalladas + el índice de 440 ver
 
 ---
 
+## LA FICHA ABIERTA DESDE EL RADAR SE VE DONDE SE TOCÓ (v552)
+
+Verificando v551 en producción: tocar una línea del Radar abría la ficha rápida ARRIBA del
+Panel. El Radar está debajo del tablero, así que con la vista donde se toca la ficha quedaba
+373 px por encima de la pantalla y el clic parecía no hacer nada (decisión del usuario: «Dale»).
+
+Ahora la ficha abierta desde una línea se pinta DEBAJO de esa línea (`_panel_ficha_en` guarda
+su key); la misma línea otra vez la cierra. Si la lista cambió entre pasadas y esa key ya es
+de otra persona, o ya no existe, o el Radar se quedó vacío, la ficha va al final del Radar —
+nunca a ninguna parte. Con el Radar cerrado, o tocando un nombre del tablero, sale arriba
+como siempre. La posición se comprueba recorriendo el árbol de AppTest en orden, con la ficha
+REAL (su ✕ también olvida de dónde venía).
+
+PRODUCCIÓN (09/10/2026, cuenta admin, 1024 px): con la vista bajada hasta el Radar, tocar «installer leader CI → 88 walker st…» pinta su ficha JUSTO debajo de la línea (línea hasta y=656, ficha 666–882; antes salía en y=−373), una sola ficha y sin errores; la misma línea otra vez la cierra. La ficha queda en parte por debajo del borde si la línea está al fondo de la página (hay que desplazarse 114 px). El texto de las líneas sale CENTRADO (el div y el span interiores del botón centran): probado en vivo con un estilo temporal, a la izquierda queda a 13 px (antes 84–99) sin mover las tarjetas KPI — pendiente de decidir. El despliegue reinició el proceso del Cloud: la pestaña del panel dio «Error during DNS resolution», se recargó y la cookie restauró la sesión sin contraseña · 21 comprobaciones · romper_v552 8/8 + control · romper_v551 sigue 21/21 · suite 180 verde + 1 rojo: verif_v488 fallaba POR AZAR (buscaba «R1» dentro de un cifrado aleatorio: medido, 11,9 % de 5.000 cifrados lo contienen) → valor fuera del alfabeto base64url, 6/6 en verde y roto a mano (con el token en claro se pone rojo) · check_suite_integra 11/11 · Python 3.12.10
+
 ## EL PANEL DE PLANIFICACIÓN, PROBADO ACCIÓN POR ACCIÓN (v551)
 
 Recorrido «pantalla por pantalla» guiado por el usuario: Planning → Panel. Decisión del usuario:
@@ -13353,7 +13368,7 @@ comprueba lo que dice**.
 
 ---
 
-## Versiones desplegadas (v551 = actual)
+## Versiones desplegadas (v552 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -13361,6 +13376,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v552 | **La ficha abierta desde el Radar se ve donde se tocó.** Visto verificando v551: tocar una línea del Radar abría la ficha arriba del Panel, 373 px por encima de la vista (el clic parecía no hacer nada). Ahora se pinta bajo esa línea, la misma línea la cierra, y si la línea cambió o desapareció va al final del Radar. PRODUCCIÓN (09/10/2026, cuenta admin, 1024 px): con la vista bajada hasta el Radar, tocar «installer leader CI → 88 walker st…» pinta su ficha JUSTO debajo de la línea (línea hasta y=656, ficha 666–882; antes salía en y=−373), una sola ficha y sin errores; la misma línea otra vez la cierra. La ficha queda en parte por debajo del borde si la línea está al fondo de la página (hay que desplazarse 114 px). El texto de las líneas sale CENTRADO (el div y el span interiores del botón centran): probado en vivo con un estilo temporal, a la izquierda queda a 13 px (antes 84–99) sin mover las tarjetas KPI — pendiente de decidir. El despliegue reinició el proceso del Cloud: la pestaña del panel dio «Error during DNS resolution», se recargó y la cookie restauró la sesión sin contraseña · romper_v552 8/8 + control · romper_v551 sigue 21/21 · suite 180 verde + 1 rojo: verif_v488 fallaba POR AZAR (buscaba «R1» dentro de un cifrado aleatorio: medido, 11,9 % de 5.000 cifrados lo contienen) → valor fuera del alfabeto base64url, 6/6 en verde y roto a mano (con el token en claro se pone rojo) · check_suite_integra 11/11 · Python 3.12.10 |
 | v551 | **El Panel de Planificación, probado acción por acción.** ⚠️ «Copy previous week» pisaba semanas enteras sin preguntar → confirmación con a quién reemplaza. El selector segmentado salía con bolitas (DOM del radio de 1.64) → CSS por `data-selected`. Tarjetas KPI y líneas del Radar ACTIVAS; «Free»/«Assign» abren en hoy; Compliance sin «yet» en días pasados; el editor de celda se cierra tras «Save»/«View the day» y sin «Select all»; «←» recuerda la sub-pestaña (Users → Panel); textos en inglés. PRODUCCIÓN (09/10/2026, cuenta admin, 1024 px; v551 cargado sin recargar la sesión): el selector segmentado sin bolitas y la opción elegida en azul y negrita; las 4 tarjetas KPI son botones de 96 px; «Blocking certs» abre el Radar con 2 líneas-botón y tocar «installer CI 1 → 88 walker st…» abre su ficha (⚠️ desde la altura del Radar la ficha se abre FUERA de la vista, top −373 px: pendiente); «Clocked in now» abre Compliance en hoy (vie 09/10, «not clocked in yet») y el jueves 08/10 dice «no time charged to it»; «Free today» abre la vista Free en el viernes; «Copy previous week» pide confirmación («2 person(s)… Nobody's plan for this week will be replaced», cierto: en la hoja, leída en solo lectura, las dos semanas son idénticas) y Cancel cierra sin escribir; el editor de celda ya no ofrece «Select all», «View the day» lo cierra (generación 0 → 1) con las celdas conservando su color, y «Save» de la celda vacía de la persona de prueba también (1 → 2) sin crear ninguna fila; «←» desde Users vuelve al Panel (t=usuarios → t=panel). «Assign» con una obra elegida NO se vio en producción (su desplegable no se deja manejar desde el panel): lo cubre verif_v551 · romper_v551 21/21 + control · verif_marcas y verif_v487 reanclados con su razón · suite 180 verde con Python 3.12.10 |
 | v550 | **La cifra de una tarjeta KPI no se parte nunca.** Verificando v549 a 1024 px con el menú abierto: en la tarjeta de 62 px, «0%» salía «0» / «%» (el modo wrap parte con `break-word`). `nowrap` en la línea de la cifra, probado antes con un estilo temporal en producción. Trampa 33 al día. PRODUCCIÓN (09/10/2026, cuenta admin, 1024 px con el menú abierto): en la tarjeta de 62 px, «3», «0%» y «4 h» en UNA línea (30 px) y la tarjeta de vuelta a 96 px · romper_v550 2/2 + control · suite 179 verde con Python 3.12.10 |
 | v549 | **Los botones parten su texto en vez de recortarlo con «…».** Streamlit 1.64 recorta en una línea los botones en columnas (`wrap=None`): «AC…», «No contact det…», «Open workda…». ~123 en la app → `wrap=True` por DEFECTO (`core/botones`, instalado en app.py; re-liga `st.button`), con `wrap=False` explícito si se quiere una línea. PRODUCCIÓN (09/10/2026, cuenta admin, 1024 px con el menú abierto): en el Home, 27 botones en columnas y 0 recortados («No contact details · 9», «installer leader CI · 88 walker st» y la lista de obras, enteros en 2 líneas); en Fichaje, «Open workday at that time» entero (antes «Open workda…»); ⚠️ en tarjetas KPI de 62 px el NÚMERO se partía («0» / «%») → v550 · romper_v549 6/6 + control · suite 178 verde con Python 3.12.10 (la primera vuelta dio 1 rojo: verif_v463 tomó la lista TIPOS de botones por un valor de negocio → renombrada METODOS) |
