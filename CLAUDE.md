@@ -471,6 +471,12 @@ Estas cinco mordieron en una sola tanda:
     de Fichaje, 3 veces; y la lectura de la IA del Home). Comprobado en una mini-app 1.64:
     CON clave sigue abierto. → Un desplegable con controles dentro lleva `key=`.
 
+36. ⚠️ **«X no aparece» dentro de datos ALEATORIOS falla por azar.** `verif_v488` buscaba el
+    refresh token de prueba «R1» dentro del token cifrado (Fernet = base64url con IV al azar):
+    medido, el 11,9 % de los cifrados lo contienen, y la suite de v552 dio un rojo sin tocar
+    `xero.py`. → La aguja tiene que ser IMPOSIBLE por azar (caracteres fuera del alfabeto:
+    `|`, espacios) y larga; y antes de «arreglar» un rojo intermitente, medir su tasa.
+
 **Y la regla de siempre, que volvió a aplicar:** antes de borrar el LECTOR de un mecanismo, buscar
 sus ESCRITORES y convertirlos. En v299 `_nav_pending` tenía dos vivos («Abrir proyecto» tras el
 survey y «Reabrir cálculo»); borrar solo el lector los habría dejado como botones que no hacen
