@@ -25,11 +25,23 @@ def _contacto_uno(sel, key_prefix="cc"):
     from core import notify
     rec = auth.get_user(sel)
     em  = st.text_input(t(":material/mail: Email"), value=str(rec.get("Email", "")), key=f"{key_prefix}_em")
+    # ⚠️ v557 · lo que NO es un correo se dice al momento (también el que ya estaba
+    # guardado: «driver 1»), y una probable errata se pregunta antes de guardarla.
+    _rv = auth.revisar_email(em)
+    _forzar = False
+    if not _rv["ok"]:
+        st.error(":material/error: " + _rv["motivo"])
+    elif _rv["sugerencia"]:
+        st.warning(t(":material/help: Did you mean **{x}**?", x=_rv["sugerencia"]))
+        _forzar = st.checkbox(t("The address is correct as written"), key=f"{key_prefix}_emok")
     if st.button(t("Save email"), key=f"{key_prefix}_emb"):
-        ok, msg = auth.set_contact(sel, email=em)
-        (flash.exito if ok else st.error)(msg)
-        if ok:
-            st.rerun()
+        if _rv["sugerencia"] and not _forzar:
+            st.error(t("Check the address, or tick «The address is correct as written»."))
+        else:
+            ok, msg = auth.set_contact(sel, email=em)
+            (flash.exito if ok else st.error)(msg)
+            if ok:
+                st.rerun()
     st.markdown(t("**:material/send: Telegram**"))
     tg = str(rec.get("TelegramChatID", "")).strip()
     if not notify.telegram_configured() or not notify.bot_username():
@@ -102,7 +114,7 @@ def _fecha_input(col, label, valor_actual="", *, key):
     ini = C._parse(valor_actual) if valor_actual else None
     if ini and not (lo <= ini <= hi):
         ini = None
-    d = col.date_input(label, value=ini, key=key, format="YYYY-MM-DD",
+    d = col.date_input(label, value=ini, key=key, format="DD/MM/YYYY",   # v557
                        min_value=lo, max_value=hi)
     return d.isoformat() if d else ""
 
@@ -166,20 +178,24 @@ def render_credenciales(usuario, grupo, editable=False, key_prefix="cr"):
         _es_lic  = (tipo == "Driver License")
         tipo_otro = (st.text_input(t("Specify the type"), key=f"{key_prefix}_tipootro")
                      if _es_otro else "")
-        with st.form(f"{key_prefix}_add_{usuario}", clear_on_submit=True):
+        # ⚠️ v557 · como el alta de usuarios: `clear_on_submit=True` borraba lo escrito
+        # también cuando `C.add` fallaba. Se conserva, y se vacía solo al guardar
+        # (formulario por generación).
+        _cg = st.session_state.get(f"_crgen_{key_prefix}", 0)
+        with st.form(f"{key_prefix}_add_{usuario}_{_cg}", clear_on_submit=False):
             if _es_lic:
                 c1, c2 = st.columns(2)
-                num   = c1.text_input(t("Number"))
+                num   = c1.text_input(t("Number"), key=f"{key_prefix}_num_{_cg}")
                 clase = c2.selectbox(t("Class (licence)"), C.CLASES_LICENCIA, key=f"{key_prefix}_clase")
             else:
-                num   = st.text_input(t("Number"))
+                num   = st.text_input(t("Number"), key=f"{key_prefix}_num_{_cg}")
                 clase = ""
             c3, c4 = st.columns(2)
-            emi = _fecha_input(c3, t("Issued"), key=f"{key_prefix}_emi")
-            ven = _fecha_input(c4, "Expiry (blank if it does not expire)", key=f"{key_prefix}_ven")
+            emi = _fecha_input(c3, t("Issued"), key=f"{key_prefix}_emi_{_cg}")
+            ven = _fecha_input(c4, "Expiry (blank if it does not expire)", key=f"{key_prefix}_ven_{_cg}")
             arch = st.file_uploader(t("Photo or document (optional)"),
-                                    type=["pdf", "png", "jpg", "jpeg"], key=f"{key_prefix}_file")
-            nota = st.text_input(t("Note"))
+                                    type=["pdf", "png", "jpg", "jpeg"], key=f"{key_prefix}_file_{_cg}")
+            nota = st.text_input(t("Note"), key=f"{key_prefix}_nota_{_cg}")
             if st.form_submit_button(t("Add")):
                 _tp = tipo_otro.strip() if (_es_otro and tipo_otro.strip()) else tipo
                 did, fname = "", ""
@@ -196,6 +212,7 @@ def render_credenciales(usuario, grupo, editable=False, key_prefix="cr"):
                                 nota, admin_usr)
                 (flash.exito if ok else st.error)(msg)
                 if ok:
+                    st.session_state[f"_crgen_{key_prefix}"] = _cg + 1
                     st.rerun()
 
     if creds:
@@ -319,7 +336,8 @@ def render_login() -> bool:
             st.info(t(":material/shield_person: **Initial setup** — create the owner account."))
             u  = st.text_input(t("Username"), key="setup_u")
             nm = st.text_input(t("Name"), key="setup_n")
-            p1 = st.text_input(t("Password"), type="password", key="setup_p1")
+            p1 = st.text_input(t("Password"), type="password", key="setup_p1",
+                               help=t("At least {n} characters.", n=auth.MIN_PW))   # v557
             p2 = st.text_input(t("Repeat password"), type="password", key="setup_p2")
             if st.button(t("Create owner"), type="primary", width="stretch"):
                 if not u or not p1:
@@ -675,7 +693,7 @@ def _owner_usuarios():
             _rows.append({"User": u.get("User", ""), "Name": u.get("Name", ""),
                           "Role": u.get("Role", ""), "Group": u.get("Group", "") or "—",
                           "Active": u.get("Active", "SI"),
-                          "Email": u.get("Email", "") or "—", "ContactName": _cont})
+                          "Email": u.get("Email", "") or "—", "Contacto": _cont})   # v557: salía «ContactName»
         st.dataframe(pd.DataFrame(_rows), hide_index=True, width="stretch", column_config=tabla.cfg())
         _faltan = [u["User"] for u in users
                    if str(u.get("Role", "")).lower() == "field"
@@ -688,23 +706,35 @@ def _owner_usuarios():
     # ── Crear usuario (rol + grupo) ──
     grupo_opts = [""] + [g["Group"] for g in auth.list_groups()]
     with st.expander(t("Create user"), icon=":material/person_add:", key="exp_own_newuser"):
-        with st.form("form_user", clear_on_submit=True):
-            u  = st.text_input(t("Username"))
-            nm = st.text_input(t("Name"))
-            rl = st.selectbox(t("Role"), auth.ROLES)
-            gr = st.selectbox(t("Company"), grupo_opts,
+        # ⚠️ v557 · `clear_on_submit=True` borraba TODO al dar un error (el correo que
+        # faltaba se llevaba también usuario, nombre y contraseña). Ahora se conserva y
+        # solo se vacía al crear, con un formulario nuevo (`_fo_gen`).
+        _g = st.session_state.get("_fo_gen", 0)
+        with st.form(f"form_user_{_g}", clear_on_submit=False):
+            u  = st.text_input(t("Username"), key=f"fo_u_{_g}")
+            nm = st.text_input(t("Name"), key=f"fo_n_{_g}")
+            rl = st.selectbox(t("Role"), auth.ROLES, key=f"fo_r_{_g}")
+            gr = st.selectbox(t("Company"), grupo_opts, key=f"fo_g_{_g}",
                               help=t("An owner can have no company; admin and field users need one."))
-            pw = st.text_input(t("Password"), type="password")
-            em = st.text_input(t(":material/mail: Email (required for field users)"))
+            pw = st.text_input(t("Password"), type="password", key=f"fo_p_{_g}",
+                               help=t("At least {n} characters.", n=auth.MIN_PW))
+            em = st.text_input(t(":material/mail: Email (required for field users)"), key=f"fo_e_{_g}")
+            em_ok = st.checkbox(t("The email is correct as written (skip the typo check)"),
+                                key=f"fo_eok_{_g}")
             if st.form_submit_button(t("Create user")):
-                if rl == "field" and not em.strip():
-                    st.error(t("Email is required for field users."))
+                _err = _error_email_alta(em, em_ok, obligatorio=(rl == "field"))
+                if _err:
+                    st.error(_err)
                 else:
                     ok, msg = auth.add_user(u, pw, rl, nm, gr)
                     if ok and em.strip():
                         auth.set_contact(u, email=em)
-                    (flash.exito if ok else st.error)(msg)
-                    if ok: st.rerun()
+                    if ok:
+                        st.session_state["_fo_gen"] = _g + 1
+                        flash.exito(msg)
+                        st.rerun()
+                    else:
+                        st.error(msg)
 
     # ── Gestionar un usuario: ficha 360° (una sola selección) ──
     if users:
@@ -1122,11 +1152,16 @@ def _ficha_usuario(u, grupo, owner=False, sel_key="gp_fichasel"):
         fichando = bool(_ses.get(T.TIPO_GENERAL) or _ses.get(T.TIPO_PROYECTO))
     except Exception:
         fichando = False
+    # v557 · el correo que NO es un correo (o parece una errata) se dice aquí también
+    _ce = _estado_contacto(u)
     chips = [(":green[:material/check_circle:] " + t("Active") if activo
               else ":red[:material/cancel:] " + t("Inactive")),
              (":material/schedule: " + t("Clocked in now") if fichando else ""),
-             ((":green[:material/contact_page:] " + t("Contact OK") if contacto_ok else ":orange[:material/warning:] No contact details")
-              if es_campo else "")]
+             ((":green[:material/contact_page:] " + t("Contact OK") if contacto_ok
+               else ":orange[:material/warning:] " + t("No contact details"))
+              if es_campo else ""),
+             (":red[:material/error:] " + t("Invalid email") if _ce == "invalido" else
+              ":orange[:material/help:] " + t("Check the email") if _ce == "errata" else "")]
     st.markdown(f"**{u.get('Name') or sel}**  ·  _{_etq(str(u['Role']))}_  ·  "
                 + "  ·  ".join(c for c in chips if c))
 
@@ -1139,17 +1174,33 @@ def _ficha_usuario(u, grupo, owner=False, sel_key="gp_fichasel"):
                                            "🎫 Credenciales": t(":material/badge: Credentials"),
                                            "📊 Su trabajo": t(":material/work: Their work"),
                                            "🗑": ":material/delete:"}.get(o, o),
-                    horizontal=True, key=f"{k}_sec", label_visibility="collapsed")
+                    # v557 · `cpxseg_`: el control segmentado de la app (salía con bolitas)
+                    horizontal=True, key=f"cpxseg_{k}_sec", label_visibility="collapsed")
 
     if _sec == "🔑 Acceso":
         _a1, _a2 = st.columns(2)      # v227: contraseña | tarifa lado a lado
         with _a1:
-            np_ = st.text_input(t("New password"), type="password", key=f"{k}_np")
+            # ⚠️ v557 · se REPITE (una errata dejaba a la persona sin poder entrar) y, al
+            # guardar, los campos se vacían con una generación (`{k}_pwgen`): la nueva
+            # contraseña se quedaba escrita en pantalla.
+            _pg = st.session_state.get(f"{k}_pwgen", 0)
+            np_ = st.text_input(t("New password"), type="password", key=f"{k}_np_{_pg}",
+                                help=t("At least {n} characters.", n=auth.MIN_PW))
+            np2 = st.text_input(t("Repeat the new password"), type="password",
+                                key=f"{k}_np2_{_pg}")
             if st.button(t("Change password"), key=f"{k}_chp", width="stretch"):
-                if np_:
-                    ok, msg = auth.set_password(sel, np_); (st.success if ok else st.error)(msg)
-                else:
+                if not np_:
                     st.error(t("Type the new password."))
+                elif np_ != np2:
+                    st.error(t("The passwords do not match."))
+                else:
+                    ok, msg = auth.set_password(sel, np_)
+                    if ok:
+                        st.session_state[f"{k}_pwgen"] = _pg + 1
+                        flash.exito(msg)
+                        st.rerun()
+                    else:
+                        st.error(msg)
         with _a2:
             tar = st.number_input(t(":material/payments: Hourly rate"), min_value=0.0, step=1.0,
                                   value=float(str(u.get("HourlyRate", "") or 0).replace(",", ".") or 0),
@@ -1165,7 +1216,7 @@ def _ficha_usuario(u, grupo, owner=False, sel_key="gp_fichasel"):
         with _f1:
             _fi = auth.fecha_ingreso(sel)
             _nf = st.date_input(t(":material/event_available: Start date at the company"),
-                                value=_fi, key=f"{k}_fing", format="YYYY-MM-DD",
+                                value=_fi, key=f"{k}_fing", format="DD/MM/YYYY",   # v557
                                 min_value=date(1990, 1, 1), max_value=date(2100, 12, 31),
                                 help=t("Their leave year is counted from here."))
         with _f2:
@@ -1296,26 +1347,72 @@ def _ficha_usuario(u, grupo, owner=False, sel_key="gp_fichasel"):
                     st.rerun()
 
 
+def _error_email_alta(em, confirmado, obligatorio=True) -> str:
+    """El error del correo al dar de ALTA, o '' (v557). Se mira ANTES de crear al
+    usuario: con el correo después, una dirección rechazada dejaba la cuenta creada
+    y sin correo."""
+    if not str(em or "").strip():
+        return t("Email is required for field users.") if obligatorio else ""
+    _rv = auth.revisar_email(em)
+    if not _rv["ok"]:
+        return _rv["motivo"]
+    if _rv["sugerencia"] and not confirmado:
+        return t("Did you mean **{x}**? If the address is right, tick «The email is correct "
+                 "as written» and press the button again.", x=_rv["sugerencia"])
+    return ""
+
+
+def _estado_contacto(u) -> str:
+    """El CORREO de una persona (v557): 'invalido' (no es un correo: «driver 1»),
+    'errata' (parece «hotmai.com»), 'falta' (vacío) u 'ok'. La regla de «contacto
+    completo» (correo + Telegram) es otra y no cambia."""
+    _e = str(u.get("Email", "") or "").strip()
+    if not _e:
+        return "falta"
+    _rv = auth.revisar_email(_e)
+    if not _rv["ok"]:
+        return "invalido"
+    return "errata" if _rv["sugerencia"] else "ok"
+
+
 def _crear_usuario_form(grupo):
-    """Alta de un usuario de campo (email obligatorio; el Telegram se vincula luego)."""
-    with st.form("form_campo", clear_on_submit=True):
-        u  = st.text_input(t("Username"))
-        nm = st.text_input(t("Name"))
-        pw = st.text_input(t("Password"), type="password")
-        em = st.text_input(t(":material/mail: Email (REQUIRED for field users)"))
+    """Alta de un usuario de campo (email obligatorio; el Telegram se vincula luego).
+
+    ⚠️ v557 · `clear_on_submit=True` borraba TODO al dar un error (visto en producción:
+    sin correo, se iban también usuario, nombre y contraseña). Ahora se conserva lo
+    escrito y solo se vacía al crear, con un formulario nuevo (`_fc_gen`)."""
+    _g = st.session_state.get("_fc_gen", 0)
+    with st.form(f"form_campo_{_g}", clear_on_submit=False):
+        u  = st.text_input(t("Username"), key=f"fc_u_{_g}")
+        nm = st.text_input(t("Name"), key=f"fc_n_{_g}")
+        pw = st.text_input(t("Password"), type="password", key=f"fc_p_{_g}",
+                           help=t("At least {n} characters.", n=auth.MIN_PW))
+        em = st.text_input(t(":material/mail: Email (REQUIRED for field users)"), key=f"fc_e_{_g}")
+        em_ok = st.checkbox(t("The email is correct as written (skip the typo check)"),
+                            key=f"fc_eok_{_g}")
         st.caption(t("Telegram is linked from their record once created."))
         if st.form_submit_button(t("Create")):
-            if not em.strip():
-                st.error(t("Email is required for field users."))
+            _err = _error_email_alta(em, em_ok)
+            if _err:
+                st.error(_err)
             else:
                 # ⚠️ Canonico (v469): con "campo" salia «Invalid role.» y no se
                 # podia dar de alta a NADIE de campo — el fallo que se reporto.
                 ok, msg = auth.add_user(u, pw, "field", nm, grupo)
-                if ok and em.strip():
-                    auth.set_contact(u, email=em)
-                (flash.exito if ok else st.error)(msg)
                 if ok:
+                    auth.set_contact(u, email=em)
+                    st.session_state["_fc_gen"] = _g + 1
+                    flash.exito(msg)
                     st.rerun()
+                else:
+                    st.error(msg)
+
+
+def _soltar_tablas_usuarios():
+    """Suelta la selección de la tabla de usuarios, en TODOS sus filtros (v557: hay una
+    clave por filtro, `gu_tbl_<filtro>`)."""
+    for _k in [k for k in st.session_state.keys() if str(k).startswith("gu_tbl")]:
+        st.session_state.pop(_k, None)
 
 
 def _grupo_usuarios(grupo):
@@ -1342,11 +1439,11 @@ def _grupo_usuarios(grupo):
         _du = (_deep.rsplit("(", 1)[-1].rstrip(")").strip()
                if "(" in str(_deep) else str(_deep).strip())
         st.session_state["_gu_open"] = _du
-        st.session_state.pop("gu_tbl", None)      # descarta cualquier selección previa
+        _soltar_tablas_usuarios()                  # descarta cualquier selección previa
     _op = st.session_state.get("_gu_open")
     if _op and not any(u["User"] == _op for u in gente):   # p.ej. tras eliminarlo
         st.session_state.pop("_gu_open", None)
-        st.session_state.pop("gu_tbl", None)
+        _soltar_tablas_usuarios()
 
     # ── Salud de credenciales por usuario (1 lectura CACHEADA) ──
     _peor = {}          # {usuario_lower: 'vencido'|'por_vencer'|'vigente'}
@@ -1369,19 +1466,33 @@ def _grupo_usuarios(grupo):
         return bool(str(u.get("Email", "")).strip()
                     and str(u.get("TelegramChatID", "")).strip())
 
-    # ── Fila de SALUD del equipo (de un vistazo) ──
+    # ── Fila de SALUD del equipo: ACTIVA (v557) ──
+    # ⚠️ Era una línea de texto: «9 with no contact details» no llevaba a nadie. Ahora
+    # cada problema es un filtro y la tabla enseña SOLO esas personas.
     _nact = sum(1 for u in gente if _activo(u))
-    _nsc = sum(1 for u in gente if not _cont_ok(u))
-    _npv = sum(1 for u in gente if _peor.get(u["User"].strip().lower()) == "por_vencer")
-    _nvc = sum(1 for u in gente if _peor.get(u["User"].strip().lower()) == "vencido")
-    _linea = f":material/group: **{len(gente)}** people · :green[:material/check_circle:] **{_nact}** active"
-    if _nsc:
-        _linea += f" · :orange[:material/warning:] **{_nsc}** with no contact details"
-    if _npv:
-        _linea += f" · :orange[:material/schedule:] **{_npv}** {t('cred. expiring')}"
-    if _nvc:
-        _linea += f" · :red[:material/cancel:] **{_nvc}** {t('expired credential(s)')}"
-    st.markdown(_linea)
+    _f = {
+        "sin_contacto": (":material/warning:", t("with no contact details"),
+                         [u for u in gente if not _cont_ok(u)]),
+        "correo": (":material/unsubscribe:", t("invalid or suspicious email"),
+                   [u for u in gente if _estado_contacto(u) in ("invalido", "errata")]),
+        "por_vencer": (":material/schedule:", t("cred. expiring"),
+                       [u for u in gente if _peor.get(u["User"].strip().lower()) == "por_vencer"]),
+        "vencidas": (":material/cancel:", t("expired credential(s)"),
+                     [u for u in gente if _peor.get(u["User"].strip().lower()) == "vencido"]),
+        "inactivos": (":material/block:", t("inactive"), [u for u in gente if not _activo(u)]),
+    }
+    _ops = [k for k, v in _f.items() if v[2]]
+    st.markdown(f":material/group: **{len(gente)}** {t('people')} · "
+                f":green[:material/check_circle:] **{_nact}** {t('active')}")
+    # ⚠️ Un filtro que ya no tiene a nadie (se arregló) no puede quedarse elegido: se
+    # suelta ANTES de crear el control (regla v111).
+    if st.session_state.get("gu_filtro") not in _ops:
+        st.session_state["gu_filtro"] = None
+    _filtro = (st.pills(t("Show only"), _ops, selection_mode="single", key="gu_filtro",
+                        format_func=lambda k: f"{_f[k][0]} {len(_f[k][2])} {_f[k][1]}",
+                        label_visibility="collapsed")
+               if _ops else None)
+    vista = _f[_filtro][2] if _filtro else gente
 
     # ⚠️ Quién RECIBE las alarmas del grupo y no tiene por dónde recibirlas. La
     # alarma se escribe igual, pero no sale de la app: solo la ve quien entre a
@@ -1403,22 +1514,45 @@ def _grupo_usuarios(grupo):
             .replace("{x}", ", ".join(f"**{x['usuario']}** ({_etq(str(x['rol']))})" for x in _sc)))
 
     # ── Tabla CLICKEABLE → abre la ficha de esa persona ──
+    def _contacto_txt(u):
+        # v557 · «ContactName» salía en bruto (ahora «Contacto» → «Contact») y el
+        # correo que no es un correo se señala en vez de pasar por «missing»
+        _ce = _estado_contacto(u)
+        if _ce == "invalido":
+            return t("invalid email")
+        if _ce == "errata":
+            return t("check email")
+        return t("yes") if _cont_ok(u) else t("missing")
+
+    def _tarifa(v):
+        # v557 · «55» → «$55»
+        try:
+            x = float(str(v).replace(",", "."))
+        except (TypeError, ValueError):
+            return "—"
+        if not x:
+            return "—"
+        return f"${x:,.0f}" if x.is_integer() else f"${x:,.2f}"
+
     _rows = [{
         "User": u["User"], "Name": u["Name"] or u["User"],
         "Active": t("yes") if _activo(u) else t("no"),
-        "ContactName": t("yes") if _cont_ok(u) else t("missing"),
+        "Contacto": _contacto_txt(u),
         "Credentials": _ico.get(_peor.get(u["User"].strip().lower()), "—"),
-        "Rate/h": u.get("HourlyRate", "") or "—",
-    } for u in gente]
+        "Rate/h": _tarifa(u.get("HourlyRate", "")),
+    } for u in vista]
+    # ⚠️ La clave lleva el FILTRO: la selección es un número de fila, y la fila 3 de
+    # «sin contacto» no es la fila 3 de todos — sin esto se abriría otra ficha.
     _ev = st.dataframe(pd.DataFrame(_rows), hide_index=True, width="stretch",
-                       on_select="rerun", selection_mode="single-row", key="gu_tbl", column_config=tabla.cfg())
+                       on_select="rerun", selection_mode="single-row",
+                       key=f"gu_tbl_{_filtro or 'todos'}", column_config=tabla.cfg())
     st.caption(t(":material/touch_app: Tap a row to open and manage that person's record.  Credentials: valid / expiring / expired / — not recorded."))
     try:
         _sr = list(_ev.selection.rows)
     except Exception:
         _sr = []
-    if _sr and _sr[0] < len(gente):
-        st.session_state["_gu_open"] = gente[_sr[0]]["User"]
+    if _sr and _sr[0] < len(vista):
+        st.session_state["_gu_open"] = vista[_sr[0]]["User"]
     _op = st.session_state.get("_gu_open")
     _oi = next((i for i, u in enumerate(gente) if u["User"] == _op), None) if _op else None
     if _oi is not None:

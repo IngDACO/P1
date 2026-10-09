@@ -11,6 +11,7 @@ import logging
 import hashlib
 import hmac
 import os
+import re
 import threading
 import time
 import uuid
@@ -55,6 +56,43 @@ GROUPS_HEADERS = ["Group", "Description", "Active", "TimeZone", "DefaultMargin",
                   "ABN", "LegalName", "PaymentTermsDays", "AccountingJSON"]
 ROLES         = ["owner", "administrator", "field"]
 _ACTIVE_OK    = ("", "SI", "SÍ", "YES", "Y", "TRUE", "1", "X")
+
+# ── v557 · Contraseña mínima y correos que de verdad lo son ──────────
+# ⚠️ Hasta v556 una contraseña de UN carácter valía (solo se exigía que no estuviera
+# vacía), al crear y al cambiar. Las que ya existen NO se tocan: el mínimo vale para
+# las nuevas y los cambios, que es donde se decide.
+MIN_PW = 8
+# Proveedores frecuentes, para sospechar de una errata («hotmai.com», «gmial.com»).
+# ⚠️ Umbral medido sobre los datos reales: las erratas daban 0,80-0,95 y dominios de
+# empresa como «schindler.com» o «cairn.com.au», ≤ 0,70 — por eso 0,78.
+PROVEEDORES_EMAIL = ("gmail.com", "hotmail.com", "outlook.com", "live.com", "yahoo.com",
+                     "icloud.com", "me.com", "bigpond.com", "optusnet.com.au",
+                     "outlook.com.au", "hotmail.com.au", "live.com.au", "yahoo.com.au",
+                     "protonmail.com")
+_EMAIL_RE = re.compile(r"^[A-Za-z0-9._%+'\-]+@[A-Za-z0-9\-]+(\.[A-Za-z0-9\-]+)*\.[A-Za-z]{2,}$")
+
+
+def revisar_email(email) -> dict:
+    """`{ok, motivo, sugerencia}` de un correo (v557).
+
+    `ok` False = NO es un correo («driver 1»): no se guarda. `sugerencia` = parece una
+    errata de un proveedor frecuente («x@hotmai.com» → «x@hotmail.com»): se guarda solo
+    si quien lo escribe confirma que está bien así. Vacío es `ok` (no tener correo lo
+    decide otra regla, la de los usuarios de campo).
+    """
+    e = str(email or "").strip()
+    if not e:
+        return {"ok": True, "motivo": "", "sugerencia": ""}
+    if not _EMAIL_RE.match(e):
+        return {"ok": False, "motivo": t("«{x}» is not an email address.", x=e),
+                "sugerencia": ""}
+    local, dom = e.rsplit("@", 1)
+    if dom.lower() in PROVEEDORES_EMAIL:
+        return {"ok": True, "motivo": "", "sugerencia": ""}
+    import difflib
+    m = difflib.get_close_matches(dom.lower(), PROVEEDORES_EMAIL, n=1, cutoff=0.78)
+    return {"ok": True, "motivo": "", "sugerencia": f"{local}@{m[0]}" if m else ""}
+
 # Columnas (1-based) en la hoja Login
 # ⚠️ DERIVADO de LOGIN_HEADERS, nunca escrito a mano. Estaba a mano —un literal en
 # paralelo a la lista de cabeceras— y al añadir `FechaIngreso` en v433 la columna se
@@ -664,6 +702,12 @@ def set_contact(usuario: str, email: str = None, telegram: str = None) -> tuple:
     row, _ = _find_row(lws, usuario)
     if row is None:
         return False, t("User not found.")
+    # ⚠️ v557 · se validaba NADA: había guardados «driver 1» y «x@hotmai.commomo», y
+    # con ellos los avisos no llegan a nadie sin que la pantalla lo diga. Vacío vale
+    # (borrar el correo); lo que NO es un correo, no. La sospecha de errata no se
+    # impone aquí: la decide quien lo escribe, en la pantalla.
+    if email is not None and str(email).strip() and not revisar_email(email)["ok"]:
+        return False, revisar_email(email)["motivo"]
     try:
         if email is not None:
             lws.update_cell(row, _COL["Email"], str(email).strip())
@@ -908,6 +952,8 @@ def add_user(usuario: str, pw: str, rol: str, nombre: str = "",
         return False, t("Invalid role.")
     if rol in ("administrator", "field") and not (grupo or "").strip():
         return False, t("Administrator and field users must belong to a group.")
+    if len(str(pw)) < MIN_PW:                 # v557 · tras rol y grupo
+        return False, t("The password must have at least {n} characters.", n=MIN_PW)
     row, _ = _find_row(lws, usuario)
     if row is not None:
         return False, f"{t('User')} '{usuario}' {t('already exists.')}"
@@ -942,6 +988,8 @@ def set_password(usuario: str, pw: str) -> tuple:
         return False, err
     if not pw:
         return False, t("The password cannot be empty.")
+    if len(str(pw)) < MIN_PW:                 # v557
+        return False, t("The password must have at least {n} characters.", n=MIN_PW)
     row, _ = _find_row(lws, usuario)
     if row is None:
         return False, t("User not found.")
