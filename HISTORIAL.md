@@ -10,6 +10,43 @@ ventana de contexto. Contenido: 258 secciones detalladas + el índice de 440 ver
 
 ---
 
+## EL PANEL DE PLANIFICACIÓN, PROBADO ACCIÓN POR ACCIÓN (v551)
+
+Recorrido «pantalla por pantalla» guiado por el usuario: Planning → Panel. Decisión del usuario:
+«Dale 2-9 / 1 confirmacion».
+
+- ⚠️ **«Copy previous week» pisaba semanas enteras sin preguntar.** `copiar_semana` reescribe la
+  semana COMPLETA de cada persona que tenía algo la semana anterior. Ahora pide confirmación y
+  dice a quién le reemplaza lo que ya tiene esta semana (también si solo tenía notas).
+- **El selector segmentado (Week/Day/Free…) salía con bolitas y sin resaltado.** En 1.64 el
+  radio es react-aria: cada opción va en su propio `div` y las reglas `> label` de v292 dejaron
+  de casar. CSS reescrito sobre `data-testid="stRadioOption"` y `data-selected`, probado antes
+  en producción con un estilo temporal.
+- **Las 4 tarjetas KPI eran HTML pasivo** → botones (`cpxkpi_`): fichados → Compliance, libres
+  → la vista «Free» en HOY, choques y certificados → el Radar.
+- **Las líneas del Radar eran texto** → botones que abren la ficha rápida de esa persona
+  (`_radar_scan` devuelve un 4º elemento: de quién es cada línea). Y « y » / «se solapan»,
+  en inglés.
+- «Free» y el día de «Assign» abrían en el lunes (un día pasado) → `_idx_hoy`, la misma regla
+  que «Day».
+- Compliance decía «not clocked in yet» de un día PASADO → «no time charged to it» (en un día
+  pasado no se distingue «no fichó» de «fichó sin imputar»).
+- El editor de la celda se quedaba ABIERTO tras «Save» y «View the day» → generación en la
+  clave (`_ros_pop_gen`), en la del popover Y en la de su CSS de color, que tienen que casar.
+- El editor ofrecía «Select all» (nuevo en 1.64): asignaba todas las obras y estados a la
+  vez → `select_all=False`.
+- **«←» desde Users no volvía al Panel**: el historial apilaba solo SECCIONES. Ahora
+  (sección, sub-pestaña), normalizado como `_sub_header` (sin estado = la primera) y leyendo
+  las entradas viejas de una sesión abierta antes del despliegue.
+- Textos en español (Activar/Desactivar/inactivo, libre, Exige, Asignar, «Add suningo» en la
+  ayuda del domingo) y el botón de asignar con el NOMBRE de la obra. «Free today» leía el
+  nombre con `u.get(t("Name"))`, que en español habría buscado la clave «Nombre».
+
+Guardianes reanclados con su razón: `verif_marcas` (el escaneo del radar se indexa: devuelve
+4 elementos) y `verif_v487` (el patrón exento se mudó de `render_planificacion` a `_idx_hoy`).
+
+PRODUCCIÓN (09/10/2026, cuenta admin, 1024 px; v551 cargado sin recargar la sesión): el selector segmentado sin bolitas y la opción elegida en azul y negrita; las 4 tarjetas KPI son botones de 96 px; «Blocking certs» abre el Radar con 2 líneas-botón y tocar «installer CI 1 → 88 walker st…» abre su ficha (⚠️ desde la altura del Radar la ficha se abre FUERA de la vista, top −373 px: pendiente); «Clocked in now» abre Compliance en hoy (vie 09/10, «not clocked in yet») y el jueves 08/10 dice «no time charged to it»; «Free today» abre la vista Free en el viernes; «Copy previous week» pide confirmación («2 person(s)… Nobody's plan for this week will be replaced», cierto: en la hoja, leída en solo lectura, las dos semanas son idénticas) y Cancel cierra sin escribir; el editor de celda ya no ofrece «Select all», «View the day» lo cierra (generación 0 → 1) con las celdas conservando su color, y «Save» de la celda vacía de la persona de prueba también (1 → 2) sin crear ninguna fila; «←» desde Users vuelve al Panel (t=usuarios → t=panel). «Assign» con una obra elegida NO se vio en producción (su desplegable no se deja manejar desde el panel): lo cubre verif_v551 · 64 comprobaciones · romper_v551 21/21 + control · verif_marcas y verif_v487 reanclados con su razón · suite 180 verde con Python 3.12.10
+
 ## LA CIFRA DE UNA TARJETA KPI NO SE PARTE NUNCA (v550)
 
 Verificando v549 en producción (1024 px con el menú abierto): desde que los botones parten su
@@ -13316,7 +13353,7 @@ comprueba lo que dice**.
 
 ---
 
-## Versiones desplegadas (v550 = actual)
+## Versiones desplegadas (v551 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -13324,6 +13361,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v551 | **El Panel de Planificación, probado acción por acción.** ⚠️ «Copy previous week» pisaba semanas enteras sin preguntar → confirmación con a quién reemplaza. El selector segmentado salía con bolitas (DOM del radio de 1.64) → CSS por `data-selected`. Tarjetas KPI y líneas del Radar ACTIVAS; «Free»/«Assign» abren en hoy; Compliance sin «yet» en días pasados; el editor de celda se cierra tras «Save»/«View the day» y sin «Select all»; «←» recuerda la sub-pestaña (Users → Panel); textos en inglés. PRODUCCIÓN (09/10/2026, cuenta admin, 1024 px; v551 cargado sin recargar la sesión): el selector segmentado sin bolitas y la opción elegida en azul y negrita; las 4 tarjetas KPI son botones de 96 px; «Blocking certs» abre el Radar con 2 líneas-botón y tocar «installer CI 1 → 88 walker st…» abre su ficha (⚠️ desde la altura del Radar la ficha se abre FUERA de la vista, top −373 px: pendiente); «Clocked in now» abre Compliance en hoy (vie 09/10, «not clocked in yet») y el jueves 08/10 dice «no time charged to it»; «Free today» abre la vista Free en el viernes; «Copy previous week» pide confirmación («2 person(s)… Nobody's plan for this week will be replaced», cierto: en la hoja, leída en solo lectura, las dos semanas son idénticas) y Cancel cierra sin escribir; el editor de celda ya no ofrece «Select all», «View the day» lo cierra (generación 0 → 1) con las celdas conservando su color, y «Save» de la celda vacía de la persona de prueba también (1 → 2) sin crear ninguna fila; «←» desde Users vuelve al Panel (t=usuarios → t=panel). «Assign» con una obra elegida NO se vio en producción (su desplegable no se deja manejar desde el panel): lo cubre verif_v551 · romper_v551 21/21 + control · verif_marcas y verif_v487 reanclados con su razón · suite 180 verde con Python 3.12.10 |
 | v550 | **La cifra de una tarjeta KPI no se parte nunca.** Verificando v549 a 1024 px con el menú abierto: en la tarjeta de 62 px, «0%» salía «0» / «%» (el modo wrap parte con `break-word`). `nowrap` en la línea de la cifra, probado antes con un estilo temporal en producción. Trampa 33 al día. PRODUCCIÓN (09/10/2026, cuenta admin, 1024 px con el menú abierto): en la tarjeta de 62 px, «3», «0%» y «4 h» en UNA línea (30 px) y la tarjeta de vuelta a 96 px · romper_v550 2/2 + control · suite 179 verde con Python 3.12.10 |
 | v549 | **Los botones parten su texto en vez de recortarlo con «…».** Streamlit 1.64 recorta en una línea los botones en columnas (`wrap=None`): «AC…», «No contact det…», «Open workda…». ~123 en la app → `wrap=True` por DEFECTO (`core/botones`, instalado en app.py; re-liga `st.button`), con `wrap=False` explícito si se quiere una línea. PRODUCCIÓN (09/10/2026, cuenta admin, 1024 px con el menú abierto): en el Home, 27 botones en columnas y 0 recortados («No contact details · 9», «installer leader CI · 88 walker st» y la lista de obras, enteros en 2 líneas); en Fichaje, «Open workday at that time» entero (antes «Open workda…»); ⚠️ en tarjetas KPI de 62 px el NÚMERO se partía («0» / «%») → v550 · romper_v549 6/6 + control · suite 178 verde con Python 3.12.10 (la primera vuelta dio 1 rojo: verif_v463 tomó la lista TIPOS de botones por un valor de negocio → renombrada METODOS) |
 | v548 | **Segunda tanda del barrido: controles dentro de funciones auxiliares.** Tras v547, «Create field user» seguía sin clave (controles en `_crear_usuario_form`): el barrido y su guardián solo miraban llamadas directas. Siguiendo las funciones, 11 más (las 4 herramientas, Contabilidad, ubicación y ganancia de la obra…), y `verif_v547` ampliado para seguirlas. PRODUCCIÓN (09/10/2026, cuenta admin): «Create field user» ya con su clave (exp_campo_nuevo) y sin errores; en el Survey, con «Drawing parameters» plegado, elegir PRJ-0015 pinta encima «has no drawing data loaded…» y el desplegable SIGUE plegado (sin clave se recreaba abierto); el Survey, la ficha de una persona y el resto, sin un error · romper_v548 4/4 + control · romper_v547 sigue 6/6 con el guardián ampliado · suite 177 verde con Python 3.12.10 |
