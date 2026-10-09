@@ -10,6 +10,41 @@ ventana de contexto. Contenido: 258 secciones detalladas + el índice de 440 ver
 
 ---
 
+## ABSENCES (BANDEJA DEL ADMIN), PROBADA ACCIÓN POR ACCIÓN (v555)
+
+Recorrido en producción (Planning → Absences, decisión del usuario: «Dale»), con tres
+solicitudes de prueba (AUS-0001..0003). Funcionaban el saldo, el aviso de choque con su
+obra, «Who could cover it» (con el control de certificados) y aprobar (hoja + tablero:
+ROS-0013 con LEAVE). Arreglado:
+
+- ⚠️ **La tarjeta FANTASMA.** Tras «Reject», la tarjeta seguía en pantalla —atenuada, con
+  su nota y sus botones— con Pending ya en 0 y el histórico diciendo «rejected». Streamlit
+  1.64 deja en el navegador un bloque CON CLAVE (contenedor o desplegable) que una pasada
+  ya no pinta, cuando la acción que lo quita es LENTA (hoja + aviso, 3-5 s), corre DENTRO
+  de la tarjeta y la que ocupa su sitio tiene otra forma. Reproducido en una mini-app
+  1.64: el servidor tenía solo C y en pantalla había cuatro «A». El envoltorio con clave
+  por contenido NO lo cura; quitar la clave sí, pero las claves hacen falta (trampa 35).
+  → **ACCIÓN DIFERIDA**: el botón solo apunta (`_aus_accion`) y relanza; la acción se
+  ejecuta al principio (`_accion_pendiente`), ANTES de pintar la lista. Probado en la
+  mini-app con contenedores y desplegables con clave: ningún fantasma. Trampa 37.
+- ⚠️ La baja por enfermedad nace aprobada y «el admin la confirma después», pero la
+  bandeja solo enseñaba lo pendiente → sección «Sick leave recorded» (14 días y próximas).
+- ⚠️ El admin no podía deshacer nada aprobado (el error decía «cancélala» y el botón solo
+  existía en la pantalla del campo) → «Cancel» con confirmación en lo aprobado: libera el
+  tablero y avisa a la persona.
+- El aviso a la persona decía «Absence aprobada» / «has been rechazada» → inglés.
+- Lo pendiente, de lo más próximo a lo más lejano; fechas dd/mm/aaaa (con
+  `projects_ui._fmt_fecha`) y un solo día sin «→»; las 3 tarjetas activas (abren su
+  lista); el saldo dice cómo queda TRAS la solicitud, y «se pasa del saldo» mira eso
+  (antes miraba el de antes: una de 5 días con 3 libres no avisaba).
+- Aislamiento: la acción busca la ausencia SOLO en el grupo (`_de_grupo`; `AU.get` es
+  global — lo exigió `verif_v430`).
+- La cifra ámbar de las tarjetas (aquí y en el Panel de v551) en `AMBAR_TXT` (v328).
+
+Datos de prueba: AUS-0001 y AUS-0003 canceladas, AUS-0002 rechazada; ROS-0013 vacía.
+
+PRODUCCIÓN (09/10/2026, cuenta admin, 1024 px; v555 cargado con «r»): con tres solicitudes de prueba de campo000 (AUS-0004..0006) — lo pendiente sale en orden (12/10 antes que 13/10), con fechas «12/10/2026» y «13/10/2026 → 14/10/2026» y el saldo «20 of 20 … → 18 after this request»; ⚠️ «Reject» en la PRIMERA tarjeta, con la de otra forma ocupando su sitio (el caso del fantasma): queda SOLO AUS-0005, «Request rejected.», Pending 1, y sigue así tras otra pasada; «Approve» de AUS-0005: «Absence approved. 2 day(s) marked in the planner.» (ROS-0014: LEAVE 13 y 14/10), «No pending requests.», ningún fantasma; «Next 7 days» = 1 y abre AUS-0005; la baja AUS-0006 sale en «Sick leave recorded» con «Cancel», que PREGUNTA («Cancel this absence? Its days are freed on the board and hjg,ujgjg is told.») y «Keep it» la deja; el histórico ofrece «Cancel» en las dos aprobadas. «Yes, cancel it» no se pulsó en producción (avisaría a campo000): lo cubre verif_v555. Pruebas canceladas o rechazadas desde el motor; ROS-0014 limpia · 42 comprobaciones · romper_v555 14/14 + control · suite 184 verde con Python 3.12.10
+
 ## DAY ROUTE, PROBADA ACCIÓN POR ACCIÓN (v554)
 
 Recorrido en producción (Planning → Day route, decisión del usuario: «Dale»). Funcionaban
@@ -13421,7 +13456,7 @@ comprueba lo que dice**.
 
 ---
 
-## Versiones desplegadas (v554 = actual)
+## Versiones desplegadas (v555 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -13429,6 +13464,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v555 | **Absences, probada acción por acción.** ⚠️ Tras «Reject» la tarjeta quedaba FANTASMA (Streamlit 1.64 + bloque con clave + acción lenta dentro) → acción DIFERIDA, trampa 37. ⚠️ La baja por enfermedad no llegaba al admin y nada aprobado se podía deshacer → sección de bajas y «Cancel» con confirmación. Aviso en inglés, urgente primero, dd/mm/aaaa, tarjetas activas, saldo tras la solicitud. PRODUCCIÓN (09/10/2026, cuenta admin, 1024 px; v555 cargado con «r»): con tres solicitudes de prueba de campo000 (AUS-0004..0006) — lo pendiente sale en orden (12/10 antes que 13/10), con fechas «12/10/2026» y «13/10/2026 → 14/10/2026» y el saldo «20 of 20 … → 18 after this request»; ⚠️ «Reject» en la PRIMERA tarjeta, con la de otra forma ocupando su sitio (el caso del fantasma): queda SOLO AUS-0005, «Request rejected.», Pending 1, y sigue así tras otra pasada; «Approve» de AUS-0005: «Absence approved. 2 day(s) marked in the planner.» (ROS-0014: LEAVE 13 y 14/10), «No pending requests.», ningún fantasma; «Next 7 days» = 1 y abre AUS-0005; la baja AUS-0006 sale en «Sick leave recorded» con «Cancel», que PREGUNTA («Cancel this absence? Its days are freed on the board and hjg,ujgjg is told.») y «Keep it» la deja; el histórico ofrece «Cancel» en las dos aprobadas. «Yes, cancel it» no se pulsó en producción (avisaría a campo000): lo cubre verif_v555. Pruebas canceladas o rechazadas desde el motor; ROS-0014 limpia · romper_v555 14/14 + control · suite 184 verde con Python 3.12.10 |
 | v554 | **Day route, probada acción por acción.** ⚠️ Un día FUTURO salía «not clocked in» para todos → «planned» (hoy «yet», pasado sin él); «Today's» solo hoy; «On site» contaba asignaciones → «Planned» cuenta personas; los KPI al Panel en la semana del día; «←» recuerda el día; el nombre de cada obra la abre; «9 October» sin «of». PRODUCCIÓN (09/10/2026, cuenta admin, 1024 px; v554 cargado en la sesión abierta, sin recargar): hoy «Friday 9 October», «Planned 2 of 10 people», «with people today», «Today's sites» y los dos «⚠️ not clocked in yet»; el sábado «Nothing is planned for this Saturday.»; el martes 13 los dos «🗓️ planned», «with people that day» y «Sites on Tuesday 13 October»; «No plan» abre el Panel en la semana del 12/10 (Mon 12/10 … Fri 16/10) y «←» vuelve a Day route EN el martes 13; tocar «1. 88 walker st» en su tarjeta abre la ficha de PRJ-0002 y «←» vuelve al martes 13. La pantalla se dejó en hoy · romper_v554 14/14 + control (la 1ª pasada 13/14: el chequeo del date_input sin value cortaba en el «)» de t("Day") y no veía los argumentos → por AST, y cazada) · suite 183 verde con Python 3.12.10 |
 | v553 | **La página va a la ficha recién abierta; el Radar se lee a la izquierda.** Vistos verificando v552: la ficha abierta desde el fondo del Radar quedaba cortada (o entera por debajo) y desde un nombre del tablero, por ENCIMA de la pantalla (-472 px). Al abrirla, un script de una sola vez la trae con `block:'nearest'`; el recuadro y su envoltorio fuera del flujo. Texto del Radar a 13 px del borde (antes centrado). PRODUCCIÓN (09/10/2026, cuenta admin, 1024 px; v553 cargado en la sesión abierta, sin recargar): con la vista al fondo, tocar la línea del Radar de installer CI 1 pinta su ficha en 714–930 (cortada) y la vista baja sola 562 → 725: ficha entera en 551–768, bajo su línea; con un nombre del tablero (fieldvic) la ficha se pintaba en −433..−220 (invisible) y la vista sube 562 → 350: entera en 0–213; en la pasada siguiente la vista no se mueve (se queda en 300) y la ficha mide 216 px con el script y sin él; el texto de las líneas del Radar, a 13 px del borde · romper_v553 9/9 + control · romper_v552 sigue 8/8 · suite 181 verde + 1 rojo CADUCADO: verif_v532 fija el inventario EXACTO de scripts de página (3) y este es el 4º, a propósito → actualizado con su razón y re-corrido (27/27) · check_suite_integra 11/11 · Python 3.12.10 |
 | v552 | **La ficha abierta desde el Radar se ve donde se tocó.** Visto verificando v551: tocar una línea del Radar abría la ficha arriba del Panel, 373 px por encima de la vista (el clic parecía no hacer nada). Ahora se pinta bajo esa línea, la misma línea la cierra, y si la línea cambió o desapareció va al final del Radar. PRODUCCIÓN (09/10/2026, cuenta admin, 1024 px): con la vista bajada hasta el Radar, tocar «installer leader CI → 88 walker st…» pinta su ficha JUSTO debajo de la línea (línea hasta y=656, ficha 666–882; antes salía en y=−373), una sola ficha y sin errores; la misma línea otra vez la cierra. La ficha queda en parte por debajo del borde si la línea está al fondo de la página (hay que desplazarse 114 px). El texto de las líneas sale CENTRADO (el div y el span interiores del botón centran): probado en vivo con un estilo temporal, a la izquierda queda a 13 px (antes 84–99) sin mover las tarjetas KPI — pendiente de decidir. El despliegue reinició el proceso del Cloud: la pestaña del panel dio «Error during DNS resolution», se recargó y la cookie restauró la sesión sin contraseña · romper_v552 8/8 + control · romper_v551 sigue 21/21 · suite 180 verde + 1 rojo: verif_v488 fallaba POR AZAR (buscaba «R1» dentro de un cifrado aleatorio: medido, 11,9 % de 5.000 cifrados lo contienen) → valor fuera del alfabeto base64url, 6/6 en verde y roto a mano (con el token en claro se pone rojo) · check_suite_integra 11/11 · Python 3.12.10 |
