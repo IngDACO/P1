@@ -10,6 +10,34 @@ ventana de contexto. Contenido: 258 secciones detalladas + el índice de 440 ver
 
 ---
 
+## DAY ROUTE, PROBADA ACCIÓN POR ACCIÓN (v554)
+
+Recorrido en producción (Planning → Day route, decisión del usuario: «Dale»). Funcionaban
+la carga (1,7 s; el mapa 1,3 s después), los saltos de día (~1,5 s), el fin de semana, el
+mapa, «Directions» y la tabla. Arreglado:
+
+- ⚠️ **Un día FUTURO salía «⚠️ not clocked in» para todos** (el martes 13): ahora
+  «🗓️ planned»; hoy, «not clocked in yet» (como Compliance, v551); pasado, «not clocked in».
+- «Today's sites» / «with people today» en cualquier día → el día que se mira.
+- **«On site» contaba ASIGNACIONES**: una persona en dos obras contaba dos («2 of 2 people»
+  con otra sin plan, sumando 3 de 2). Ahora «Planned» (un día futuro nadie está en obra) y
+  cuenta personas; «No location» cuenta obras sin pin, no filas persona→obra.
+- «Planned» y «No plan» llevaban al Panel en OTRA semana (desde el 13/10, la del 05/10) →
+  la semana del día que se mira (`ros_lunes`).
+- «←» devolvía la pantalla a HOY: Streamlit purga el widget no pintado → el día se recuerda
+  en `_rd_dia`, y el `date_input` va sin `value` (con `value` y el estado a la vez,
+  Streamlit lo apunta en el log, v537).
+- Las obras no se podían tocar → el nombre en su tarjeta abre la obra; «Sites» y
+  «No location» con UNA obra la abren (`_abrir_obra`, la vía `_prjsel_pending`).
+- «Friday 9 of October» (calco del español) → «Friday 9 October» por plantilla; el aviso de
+  fin de semana por `t()` y sin minúscula; las etiquetas de las tarjetas por `t()`.
+
+Descartado al verificar: las cabeceras de «Who goes where» SÍ salen en inglés
+(`tabla.cfg()` traduce «Persona»/«Horario»); y la lentitud de los saltos de día era de la
+sonda (clics encolados por una llamada cortada), no de la app.
+
+PRODUCCIÓN (09/10/2026, cuenta admin, 1024 px; v554 cargado en la sesión abierta, sin recargar): hoy «Friday 9 October», «Planned 2 of 10 people», «with people today», «Today's sites» y los dos «⚠️ not clocked in yet»; el sábado «Nothing is planned for this Saturday.»; el martes 13 los dos «🗓️ planned», «with people that day» y «Sites on Tuesday 13 October»; «No plan» abre el Panel en la semana del 12/10 (Mon 12/10 … Fri 16/10) y «←» vuelve a Day route EN el martes 13; tocar «1. 88 walker st» en su tarjeta abre la ficha de PRJ-0002 y «←» vuelve al martes 13. La pantalla se dejó en hoy · 29 comprobaciones · romper_v554 14/14 + control (la 1ª pasada 13/14: el chequeo del date_input sin value cortaba en el «)» de t("Day") y no veía los argumentos → por AST, y cazada) · suite 183 verde con Python 3.12.10
+
 ## LA PÁGINA VA A LA FICHA RECIÉN ABIERTA; EL RADAR SE LEE A LA IZQUIERDA (v553)
 
 Dos cosas vistas verificando v552 en producción (decisión del usuario: «arreglalos»):
@@ -13393,7 +13421,7 @@ comprueba lo que dice**.
 
 ---
 
-## Versiones desplegadas (v553 = actual)
+## Versiones desplegadas (v554 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -13401,6 +13429,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v554 | **Day route, probada acción por acción.** ⚠️ Un día FUTURO salía «not clocked in» para todos → «planned» (hoy «yet», pasado sin él); «Today's» solo hoy; «On site» contaba asignaciones → «Planned» cuenta personas; los KPI al Panel en la semana del día; «←» recuerda el día; el nombre de cada obra la abre; «9 October» sin «of». PRODUCCIÓN (09/10/2026, cuenta admin, 1024 px; v554 cargado en la sesión abierta, sin recargar): hoy «Friday 9 October», «Planned 2 of 10 people», «with people today», «Today's sites» y los dos «⚠️ not clocked in yet»; el sábado «Nothing is planned for this Saturday.»; el martes 13 los dos «🗓️ planned», «with people that day» y «Sites on Tuesday 13 October»; «No plan» abre el Panel en la semana del 12/10 (Mon 12/10 … Fri 16/10) y «←» vuelve a Day route EN el martes 13; tocar «1. 88 walker st» en su tarjeta abre la ficha de PRJ-0002 y «←» vuelve al martes 13. La pantalla se dejó en hoy · romper_v554 14/14 + control (la 1ª pasada 13/14: el chequeo del date_input sin value cortaba en el «)» de t("Day") y no veía los argumentos → por AST, y cazada) · suite 183 verde con Python 3.12.10 |
 | v553 | **La página va a la ficha recién abierta; el Radar se lee a la izquierda.** Vistos verificando v552: la ficha abierta desde el fondo del Radar quedaba cortada (o entera por debajo) y desde un nombre del tablero, por ENCIMA de la pantalla (-472 px). Al abrirla, un script de una sola vez la trae con `block:'nearest'`; el recuadro y su envoltorio fuera del flujo. Texto del Radar a 13 px del borde (antes centrado). PRODUCCIÓN (09/10/2026, cuenta admin, 1024 px; v553 cargado en la sesión abierta, sin recargar): con la vista al fondo, tocar la línea del Radar de installer CI 1 pinta su ficha en 714–930 (cortada) y la vista baja sola 562 → 725: ficha entera en 551–768, bajo su línea; con un nombre del tablero (fieldvic) la ficha se pintaba en −433..−220 (invisible) y la vista sube 562 → 350: entera en 0–213; en la pasada siguiente la vista no se mueve (se queda en 300) y la ficha mide 216 px con el script y sin él; el texto de las líneas del Radar, a 13 px del borde · romper_v553 9/9 + control · romper_v552 sigue 8/8 · suite 181 verde + 1 rojo CADUCADO: verif_v532 fija el inventario EXACTO de scripts de página (3) y este es el 4º, a propósito → actualizado con su razón y re-corrido (27/27) · check_suite_integra 11/11 · Python 3.12.10 |
 | v552 | **La ficha abierta desde el Radar se ve donde se tocó.** Visto verificando v551: tocar una línea del Radar abría la ficha arriba del Panel, 373 px por encima de la vista (el clic parecía no hacer nada). Ahora se pinta bajo esa línea, la misma línea la cierra, y si la línea cambió o desapareció va al final del Radar. PRODUCCIÓN (09/10/2026, cuenta admin, 1024 px): con la vista bajada hasta el Radar, tocar «installer leader CI → 88 walker st…» pinta su ficha JUSTO debajo de la línea (línea hasta y=656, ficha 666–882; antes salía en y=−373), una sola ficha y sin errores; la misma línea otra vez la cierra. La ficha queda en parte por debajo del borde si la línea está al fondo de la página (hay que desplazarse 114 px). El texto de las líneas sale CENTRADO (el div y el span interiores del botón centran): probado en vivo con un estilo temporal, a la izquierda queda a 13 px (antes 84–99) sin mover las tarjetas KPI — pendiente de decidir. El despliegue reinició el proceso del Cloud: la pestaña del panel dio «Error during DNS resolution», se recargó y la cookie restauró la sesión sin contraseña · romper_v552 8/8 + control · romper_v551 sigue 21/21 · suite 180 verde + 1 rojo: verif_v488 fallaba POR AZAR (buscaba «R1» dentro de un cifrado aleatorio: medido, 11,9 % de 5.000 cifrados lo contienen) → valor fuera del alfabeto base64url, 6/6 en verde y roto a mano (con el token en claro se pone rojo) · check_suite_integra 11/11 · Python 3.12.10 |
 | v551 | **El Panel de Planificación, probado acción por acción.** ⚠️ «Copy previous week» pisaba semanas enteras sin preguntar → confirmación con a quién reemplaza. El selector segmentado salía con bolitas (DOM del radio de 1.64) → CSS por `data-selected`. Tarjetas KPI y líneas del Radar ACTIVAS; «Free»/«Assign» abren en hoy; Compliance sin «yet» en días pasados; el editor de celda se cierra tras «Save»/«View the day» y sin «Select all»; «←» recuerda la sub-pestaña (Users → Panel); textos en inglés. PRODUCCIÓN (09/10/2026, cuenta admin, 1024 px; v551 cargado sin recargar la sesión): el selector segmentado sin bolitas y la opción elegida en azul y negrita; las 4 tarjetas KPI son botones de 96 px; «Blocking certs» abre el Radar con 2 líneas-botón y tocar «installer CI 1 → 88 walker st…» abre su ficha (⚠️ desde la altura del Radar la ficha se abre FUERA de la vista, top −373 px: pendiente); «Clocked in now» abre Compliance en hoy (vie 09/10, «not clocked in yet») y el jueves 08/10 dice «no time charged to it»; «Free today» abre la vista Free en el viernes; «Copy previous week» pide confirmación («2 person(s)… Nobody's plan for this week will be replaced», cierto: en la hoja, leída en solo lectura, las dos semanas son idénticas) y Cancel cierra sin escribir; el editor de celda ya no ofrece «Select all», «View the day» lo cierra (generación 0 → 1) con las celdas conservando su color, y «Save» de la celda vacía de la persona de prueba también (1 → 2) sin crear ninguna fila; «←» desde Users vuelve al Panel (t=usuarios → t=panel). «Assign» con una obra elegida NO se vio en producción (su desplegable no se deja manejar desde el panel): lo cubre verif_v551 · romper_v551 21/21 + control · verif_marcas y verif_v487 reanclados con su razón · suite 180 verde con Python 3.12.10 |
