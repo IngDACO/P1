@@ -49,7 +49,10 @@ def _func_de(arb, ln):
 # comprobacion de «exentos que siguen existiendo» de abajo (v135 otra vez).
 EXENTOS = {
     ("i18n.py", "selector"): "idioma de la SESION: preferencia, no un dato que se guarde",
-    ("roster_ui.py", "render_planificacion"): "elige el DIA que se mira (radio): navegacion",
+    # v551 · el patrón de `render_planificacion` se MUDÓ a `_idx_hoy`, la regla de «hoy»
+    # que ahora comparten «Day», «Free» y el día de «Assign»: sigue eligiendo el día
+    # que se MIRA (o en el que se propone), no un valor guardado que se sobrescriba.
+    ("roster_ui.py", "_idx_hoy"): "elige el DIA que se mira (radio/selector): navegacion",
     ("roster_ui.py", "_cumplimiento"): "elige el DIA que se mira (radio): navegacion",
     ("library.py", "set_modelo_activo"): "POSICION de una cabecera, con el orden de HEADERS por defecto",
     ("library.py", "delete_item"): "POSICION de la cabecera ID, con el orden de HEADERS por defecto",

@@ -321,29 +321,36 @@ body:has([data-testid="stStatusWidget"])::before {{
    como un control segmentado, no como dos bolitas sueltas (v292).
    ⚠️ Verificado EN VIVO antes de escribirlo (mini-app + medición del DOM):
    la bolita queda `display:none`, el elegido sale `rgb(232,238,246)` y el otro
-   transparente. El bloque va dentro de `@supports selector(:has())` A PROPÓSITO:
-   sin `:has()` no se podría resaltar el elegido y, con la bolita oculta, no
-   habría NINGUNA marca de cuál está activo — así degrada al radio de siempre. */
+   transparente. (v292 lo resaltaba con `:has(input:checked)` dentro de `@supports`;
+   desde v551 lo hace `data-selected`, que el DOM de 1.64 trae de serie.) */
 [class*="st-key-cpxseg_"] div[role="radiogroup"] {{
   gap: 0 !important; display: inline-flex !important; background: #fff;
   border: 1px solid {BORDE}; border-radius: 9px; overflow: hidden;
 }}
-[class*="st-key-cpxseg_"] div[role="radiogroup"] > label {{
+/* ⚠️ v551 · Reescrito para Streamlit 1.64. El radio pasó a react-aria y su DOM es
+   `radiogroup > div > label[data-testid=stRadioOption] > span(input oculto) + div(bolita
+   16×16 + texto)`: cada opción va en su PROPIO div y el `label` ya no es hijo directo del
+   grupo, así que todas las reglas `> label` de v292 dejaron de aplicarse — salían las
+   bolitas y ningún resaltado (visto en el Panel y en las pestañas de la obra). Ahora se
+   ancla en `data-testid` y en `data-selected`, que marca la elegida sin necesitar
+   `:has()`. Probado antes en producción con un estilo temporal. */
+[class*="st-key-cpxseg_"] div[role="radiogroup"] > div {{ margin: 0 !important; }}
+[class*="st-key-cpxseg_"] [data-testid="stRadioOption"] {{
   margin: 0 !important; padding: 6px 14px !important; border-radius: 0 !important;
   border-right: 1px solid {BORDE};
 }}
-[class*="st-key-cpxseg_"] div[role="radiogroup"] > label:last-child {{ border-right: none; }}
-[class*="st-key-cpxseg_"] div[role="radiogroup"] > label:hover {{ background: {FONDO_SUAVE}; }}
-@supports selector(label:has(input:checked)) {{
-  [class*="st-key-cpxseg_"] div[role="radiogroup"] > label > div:first-child {{
-    display: none !important;
-  }}
-  [class*="st-key-cpxseg_"] div[role="radiogroup"] > label:has(input:checked) {{
-    background: #e8eef6 !important;
-  }}
-  [class*="st-key-cpxseg_"] div[role="radiogroup"] > label:has(input:checked) p {{
-    color: {AZUL_OSC} !important; font-weight: 700 !important;
-  }}
+[class*="st-key-cpxseg_"] div[role="radiogroup"] > div:last-child [data-testid="stRadioOption"] {{
+  border-right: none;
+}}
+[class*="st-key-cpxseg_"] [data-testid="stRadioOption"] > div > div:first-child:not([data-testid]) {{
+  display: none !important;
+}}
+[class*="st-key-cpxseg_"] [data-testid="stRadioOption"]:hover {{ background: {FONDO_SUAVE}; }}
+[class*="st-key-cpxseg_"] [data-testid="stRadioOption"][data-selected="true"] {{
+  background: #e8eef6 !important;
+}}
+[class*="st-key-cpxseg_"] [data-testid="stRadioOption"][data-selected="true"] p {{
+  color: {AZUL_OSC} !important; font-weight: 700 !important;
 }}
 
 .cpx-sec {{

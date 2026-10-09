@@ -360,11 +360,34 @@ def _estado_a_url(seccion: str):
         logger.warning("home_ui: no se pudo reflejar el estado en la URL: %s", e)
 
 
+def _donde(cur):
+    """Dónde estás: (sección, sub-pestaña). v551 · El Atrás apilaba solo la SECCIÓN, así
+    que dentro de una misma sección no había historia: Planning → Panel → Users y «←»
+    no volvía al Panel (visto en el recorrido del Panel). La sub-pestaña es el ID
+    interno (el mismo que usa `navegar`), y `None` en una sección sin sub-pestañas.
+    ⚠️ Se normaliza COMO `_sub_header`: sin estado (o con uno que no existe) es la
+    PRIMERA. Sin eso, la primera visita sería «None» y la siguiente pasada «Panel»: un
+    falso cambio apilado, y «←» llevaría al mismo sitio (un Atrás que no hace nada)."""
+    _par = (_subsecciones() or {}).get(cur)
+    if not _par:
+        return (cur, None)
+    _sk, _subs = _par
+    _ids = [_i for _i, _d in _subs]
+    sub = st.session_state.get(_sk)
+    return (cur, sub if sub in _ids else (_ids[0] if _ids else None))
+
+
 def _track_history(cur):
-    """Apila la sección de la que venimos, para el botón Atrás (v204). NO apila cuando
-    el cambio fue un 'atrás' (para no rebotar). Tope de 20."""
+    """Apila (sección, sub-pestaña) de la que venimos, para el botón Atrás (v204; con la
+    sub-pestaña desde v551). NO apila cuando el cambio fue un 'atrás' (para no rebotar).
+    Tope de 20."""
+    cur = _donde(cur)
     prev = st.session_state.get("_nav_cur")
-    if prev is not None and prev != cur:
+    if isinstance(prev, str):
+        # ⚠️ Una sesión abierta ANTES de v551 guarda solo la sección: se lee como «esa
+        # sección, en la sub-pestaña de ahora» para no apilar un falso cambio al desplegar.
+        prev = (prev, cur[1] if prev == cur[0] else None)
+    if prev is not None and tuple(prev) != cur:
         if st.session_state.pop("_nav_back", False):
             pass                                   # venimos de un 'atrás'
         else:
@@ -382,7 +405,10 @@ def ir_atras():
     hist = st.session_state.get("_nav_hist") or []
     if hist:
         st.session_state["_nav_back"] = True       # que _track_history no lo re-apile
-        navegar(hist.pop())
+        _e = hist.pop()
+        # v551 · (sección, sub-pestaña); una entrada de antes de v551 es solo la sección
+        _sec, _sub = (_e[0], _e[1]) if isinstance(_e, (tuple, list)) else (_e, None)
+        navegar(_sec, _sub)
 
 
 def sidebar_menu() -> str:

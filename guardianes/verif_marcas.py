@@ -32,7 +32,11 @@ _LLAMADAS_COMP = []
 C.compliance = lambda usr, certs: (_LLAMADAS_COMP.append((usr, tuple(certs))),
                                    {"cumple": False, "por_tipo": {"White Card": "vencido"}})[1]
 
-choques, sin_cumplir, marcas = RU._radar_scan("g", LUNES, STAFF, {})
+# ⚠️ v551 · `_radar_scan` devuelve 4 elementos (el 4º dice de QUIÉN es cada línea, para que
+# el Radar las abra). Se indexa, como hace el propio código desde v292, en vez de
+# desempaquetar: desempaquetando, este guardián se rompía al añadir el 4º.
+_SC = RU._radar_scan("g", LUNES, STAFF, {})
+choques, sin_cumplir, marcas = _SC[0], _SC[1], _SC[2]
 
 ok = True
 
@@ -74,6 +78,18 @@ check("nº de avisos de cert (dedupe por persona×proyecto)", len(sin_cumplir), 
 print(f"         choques: {choques}")
 print(f"         certs:   {sin_cumplir}")
 
+print("\n== v551 · de QUIÉN es cada línea (el Radar abre esa ficha) ==")
+_Q = _SC[3] if len(_SC) > 3 else {}
+_NOM = {u["User"]: u["Name"] for u in STAFF}
+check("hay un dueño por cada choque", len(_Q.get("choques", [])), len(choques))
+check("hay un dueño por cada aviso de cert", len(_Q.get("certs", [])), len(sin_cumplir))
+check("cada choque es de la persona que nombra",
+      all(c.startswith(_NOM.get(u, "?")) for c, u in zip(choques, _Q.get("choques", []))), True)
+check("cada aviso de cert es de la persona que nombra",
+      all(c.startswith(_NOM.get(u, "?")) for c, u in zip(sin_cumplir, _Q.get("certs", []))), True)
+check("los choques salen en inglés («and» / «overlap»)",
+      bool(choques) and all(" and " in c and c.endswith("overlap") for c in choques), True)
+
 print("\n== coste: no se re-consulta el mismo proyecto ==")
 check("get_project llamado 1 vez por (persona,proyecto)",
       len(_LLAMADAS_PRJ), len(set(zip([x for x in _LLAMADAS_PRJ]))) and len(_LLAMADAS_PRJ))
@@ -92,8 +108,10 @@ try:
     st.container = lambda *a, **k: _C()
     RU._radar_personal("g", LUNES, STAFF, {}, scan=(choques, sin_cumplir, marcas))
     check("acepta scan de 3 elementos", True, True)
+    RU._radar_personal("g", LUNES, STAFF, {}, scan=_SC)          # v551 · y el de 4
+    check("acepta scan de 4 elementos", True, True)
 except Exception as e:
-    check("acepta scan de 3 elementos", f"EXC {type(e).__name__}: {e}", True)
+    check("acepta scan de 3 y 4 elementos", f"EXC {type(e).__name__}: {e}", True)
 
 print("\n" + ("TODO OK" if ok else "HAY FALLOS"))
 sys.exit(0 if ok else 1)
