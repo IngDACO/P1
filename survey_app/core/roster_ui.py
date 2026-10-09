@@ -676,9 +676,18 @@ def _radar_personal(grupo, lunes, staff, tidx, scan=None):
     _sc = scan if scan is not None else _radar_scan(grupo, lunes, staff, tidx)
     choques, sin_cumplir = _sc[0], _sc[1]
     n = len(choques) + len(sin_cumplir)
+    # ⚠️ v552 · La ficha que se abrió desde una línea se pinta DEBAJO de esa línea, no
+    # arriba del Panel: desde la altura del Radar quedaba 373 px por encima de la vista y
+    # el clic parecía no hacer nada (medido en producción). `_panel_ficha_en` = la key
+    # de la línea; `render_planificacion` no la pinta arriba mientras el Radar está abierto.
+    _fic = st.session_state.get("_panel_ficha")
+    _en = str(st.session_state.get("_panel_ficha_en") or "")
+    _pintada = False
     with st.container():   # v287: vive en la fila de herramientas del Panel
         if not n:
             st.success(t("No shift clashes and no blocking certificates this week."))
+            if _fic and _en.startswith("radar_"):
+                _ficha_rapida(grupo, _fic)     # su línea ya no está: aquí, no en ninguna parte
             return
         # ⚠️ v551 · Cada línea es un BOTÓN que abre la ficha rápida de esa persona (nada
         # pasivo): ahí están sus certificados y «See full record». El 4º elemento del
@@ -695,10 +704,22 @@ def _radar_personal(grupo, lunes, staff, tidx, scan=None):
             st.markdown(_tit)
             for _i, c in enumerate(_lst):
                 _u = _usrs[_i] if _i < len(_usrs) else ""
-                if st.button(_esc(c), key=f"radar_{_pre}_{_i}", width="stretch",
-                             disabled=not _u):
-                    st.session_state["_panel_ficha"] = _u
+                _kl = f"radar_{_pre}_{_i}"
+                if st.button(_esc(c), key=_kl, width="stretch", disabled=not _u):
+                    if _en == _kl and _fic == _u:          # la misma línea otra vez: cerrar
+                        st.session_state.pop("_panel_ficha", None)
+                        st.session_state.pop("_panel_ficha_en", None)
+                    else:
+                        st.session_state["_panel_ficha"] = _u
+                        st.session_state["_panel_ficha_en"] = _kl
                     st.rerun()
+                # ⚠️ La línea Y la persona: si la lista cambió entre pasadas (se editó el
+                # tablero), la misma key puede ser ya de otra persona.
+                if _fic and _en == _kl and _fic == _u and not _pintada:
+                    _ficha_rapida(grupo, _fic)
+                    _pintada = True
+        if _fic and _en.startswith("radar_") and not _pintada:
+            _ficha_rapida(grupo, _fic)         # su línea se movió o desapareció: al final
 
 
 def _ficha_rapida(grupo, usuario):
@@ -714,6 +735,7 @@ def _ficha_rapida(grupo, usuario):
                     + (f" · {_esc(u.get('Role', ''))}" if u.get("Role") else ""))
         if cB.button("✕", key="fp_close"):
             st.session_state.pop("_panel_ficha", None)
+            st.session_state.pop("_panel_ficha_en", None)      # v552
             st.rerun()
         _cont = []
         if str(u.get("Email", "")).strip():
@@ -866,7 +888,11 @@ def render_planificacion(grupo):
     _panel_kpis(grupo, lunes, staff, datos, _scan[0], _scan[1], dias=dias)
 
     # ── Ficha rápida (aparece al tocar un nombre en el tablero) ──
-    if st.session_state.get("_panel_ficha"):
+    # ⚠️ v552 · La abierta desde una línea del Radar se pinta DENTRO del Radar, bajo su
+    # línea; aquí solo si el Radar ya no está abierto (si no, no se vería en ningún sitio).
+    if st.session_state.get("_panel_ficha") and not (
+            st.session_state.get("_panel_ficha_en")
+            and st.session_state.get("_panel_tool") == "radar"):
         _ficha_rapida(grupo, st.session_state["_panel_ficha"])
 
     # ── BARRA: semana + vista + copiar, en UNA fila (v291) ──────────────────
@@ -1467,6 +1493,7 @@ def _tablero_editable(grupo, lunes, staff, datos, tidx, marcas=None, dias=None):
         if cols[0].button(nom, key=f"pnm_{_wk}_{pi}", width="stretch",
                           help=t("Quick view of this person")):
             st.session_state["_panel_ficha"] = usuario
+            st.session_state.pop("_panel_ficha_en", None)   # v552 · del tablero: arriba
             st.rerun()
         for di, d in enumerate(dias):
             idx = pi * len(dias) + di

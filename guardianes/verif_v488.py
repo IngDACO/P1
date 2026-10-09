@@ -343,8 +343,14 @@ def _token_ok(access, refresh, **extra):
 
 
 ACC1 = jwt({"authentication_event_id": "evt-1", "sub": "u"})
+# ⚠️ v552 · El refresh token de prueba era «R1», y el chequeo de abajo lo busca DENTRO del
+# token cifrado — que es base64url ALEATORIO (Fernet, IV al azar). Dos caracteres salen ahí
+# por azar: medido, el 11,9 % de 5.000 cifrados contenían «R1», y la suite de v552 dio un
+# rojo así sin ningún cambio en xero.py. Con «|» y espacios (fuera del alfabeto base64url)
+# encontrarlo solo puede significar que se guardó EN CLARO, que es lo que se quiere cazar.
+REF1 = "R1 | refresh token"
 _reset([
-    ("POST", "identity.xero.com/connect/token", _token_ok(ACC1, "R1")),
+    ("POST", "identity.xero.com/connect/token", _token_ok(ACC1, REF1)),
     ("GET", "api.xero.com/Connections", lambda kw: Resp(200, [
         {"id": "con-1", "tenantId": "ten-1", "tenantType": "ORGANISATION",
          "tenantName": "Demo Company (AU)", "updatedDateUtc": "2026-09-15T01:00:00"}])),
@@ -367,9 +373,9 @@ ck("se guarda organización, código corto, conexión y estado",
    (_f2["Group"], _f2["TenantID"], _f2["TenantName"], _f2["ShortCode"], _f2["ConnectionID"],
     _f2["Status"], _f2["ConnectedBy"]),
    (G, "ten-1", "Demo Company (AU)", "!abc1", "con-1", X.CONECTADA, "admin"))
-ck("el token se guarda CIFRADO", ACC1 not in _f2["TokenEnc"] and "R1" not in _f2["TokenEnc"]
-   and X._descifra(_f2["TokenEnc"])["r"] == "R1", True)
-_reset([("POST", "connect/token", _token_ok(ACC1, "R1"))])
+ck("el token se guarda CIFRADO", ACC1 not in _f2["TokenEnc"] and REF1 not in _f2["TokenEnc"]
+   and X._descifra(_f2["TokenEnc"])["r"] == REF1, True)
+_reset([("POST", "connect/token", _token_ok(ACC1, REF1))])
 okx, msgx, _a = X.completar_conexion(G, "admin", "CODIGO-2", X.firma_state(G, "otro-usuario"))
 ck("un state de OTRO usuario no se canjea… y no llama a Xero", (okx, len(LLAMADAS)), (False, 0))
 okx, msgx, _a = X.completar_conexion(G, "admin", "CODIGO-2", X.firma_state("otra-empresa", "admin"))
