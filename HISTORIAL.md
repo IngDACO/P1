@@ -10,6 +10,37 @@ ventana de contexto. Contenido: 258 secciones detalladas + el índice de 440 ver
 
 ---
 
+## USERS (PLANIFICACIÓN), PROBADA ACCIÓN POR ACCIÓN (v557)
+
+Recorrido en producción (Planning → Users, decisión del usuario: «Arregla todo»), sin
+crear, cambiar ni borrar a nadie. Funcionaban la lista, la ficha y sus 5 pestañas, y el
+alta sin correo se rechazaba. Arreglado:
+
+- ⚠️ **Correos que no lo son.** Había guardados «driver 1», «…@hotmai.com» y
+  «…@hotmai.commomo»: ni el alta ni la ficha validaban nada, y con ellos los avisos no
+  llegan a nadie sin que la pantalla lo diga. `auth.revisar_email`: lo que no es un
+  correo NO se guarda (también `set_contact`, el motor); una probable errata de un
+  proveedor frecuente se pregunta («Did you mean …?», umbral 0,78 medido sobre los datos
+  reales) y solo se guarda confirmándola. La tabla («invalid email» / «check email») y la
+  ficha los señalan; el correo se mira ANTES de crear la cuenta.
+- ⚠️ **El alta borraba todo al dar un error** (`clear_on_submit=True`: sin correo se iban
+  también usuario, nombre y contraseña). Conserva lo escrito y se vacía solo al crear
+  (formulario por generación). También el del propietario y el de añadir credencial.
+- ⚠️ **Contraseñas de 1 carácter valían.** Mínimo 8 (`auth.MIN_PW`) en altas y cambios;
+  las existentes no se tocan. El cambio pide repetirla y vacía los campos al guardar. En
+  `add_user` el mínimo se mira DESPUÉS del rol y el grupo (los mensajes de antes siguen).
+- La línea de salud, ACTIVA: cada problema (sin contacto, correo, credenciales,
+  inactivos) filtra la tabla — con una clave por filtro, porque la selección es un número
+  de fila y se cruzaría entre filtros.
+- «ContactName» en bruto → «Contact» (aquí y en el panel del propietario); la tarifa con
+  «$»; el selector de secciones de la ficha, segmentado; fechas de alta y de credenciales
+  en DD/MM/YYYY.
+
+Pendiente para cuando se recorran las pantallas del propietario: los formularios de
+grupos y de rieles tienen el mismo `clear_on_submit=True`.
+
+PRODUCCIÓN (10/10/2026, cuenta admin, 1024 px; v557): la línea de salud ofrece «9 with no contact details» y «4 invalid or suspicious email»; esta deja SOLO a helper 1, helper 2 y electritian 1 («check email») y driver 1 («invalid email»), con cabecera «Contact» y la tabla con su clave (gu_tbl_correo); la fila 4 de la tabla FILTRADA abre a driver 1 (no se cruza): «No contact details · Invalid email», selector de secciones segmentado (sin bolitas) y en Contact ««driver 1» is not an email address.»; helper 1 (…@hotmai.com): «Check the email» y «Did you mean …@hotmail.com?» con la casilla «The address is correct as written»; el alta sin correo da «Email is required…» y CONSERVA usuario, nombre y contraseña — siguen siendo 10 personas: no se creó, cambió ni borró a nadie · 46 comprobaciones · romper_v557 17/17 + control · suite 186 verde con Python 3.12.10
+
 ## TIME FIXES (BANDEJA DEL ADMIN), PROBADA ACCIÓN POR ACCIÓN (v556)
 
 Recorrido en producción (Planning → Time fixes, decisión del usuario: «Dale») sobre las
@@ -13484,7 +13515,7 @@ comprueba lo que dice**.
 
 ---
 
-## Versiones desplegadas (v556 = actual)
+## Versiones desplegadas (v557 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -13492,6 +13523,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v557 | **Users, probada acción por acción.** ⚠️ Correos que no lo son («driver 1», «hotmai.com») se guardaban → validación (motor y pantalla) y «Did you mean…?». ⚠️ El alta borraba todo al dar error → conserva lo escrito. ⚠️ Contraseñas de 1 carácter → mínimo 8, repetirla al cambiar. Salud que filtra la tabla, «Contact», «$», selector segmentado, DD/MM/YYYY. PRODUCCIÓN (10/10/2026, cuenta admin, 1024 px; v557): la línea de salud ofrece «9 with no contact details» y «4 invalid or suspicious email»; esta deja SOLO a helper 1, helper 2 y electritian 1 («check email») y driver 1 («invalid email»), con cabecera «Contact» y la tabla con su clave (gu_tbl_correo); la fila 4 de la tabla FILTRADA abre a driver 1 (no se cruza): «No contact details · Invalid email», selector de secciones segmentado (sin bolitas) y en Contact ««driver 1» is not an email address.»; helper 1 (…@hotmai.com): «Check the email» y «Did you mean …@hotmail.com?» con la casilla «The address is correct as written»; el alta sin correo da «Email is required…» y CONSERVA usuario, nombre y contraseña — siguen siendo 10 personas: no se creó, cambió ni borró a nadie · romper_v557 17/17 + control · suite 186 verde con Python 3.12.10 |
 | v556 | **Time fixes, probada acción por acción.** ⚠️ Dos correcciones sobre el mismo fichaje dejaban la vieja sin salida («no longer exists») → «superseded». ⚠️ Revertir que choca no tenía salida → «Set the right time» en todas y aviso de solape neutro. ⚠️ La persona no se enteraba → aviso al revertir o fijar. Día del fichaje, dd/mm, antiguo primero, tarjetas activas, acción diferida. PRODUCCIÓN (09/10/2026, cuenta admin, 1024 px; v556 cargado con «r»): COR-0001 sale primero, con «Thu 08/10/2026 · workday», «Asked on 08/10/2026 18:27» y «Superseded by COR-0002…», solo con «Close as superseded»; «Revert» en COR-0002 se rechaza con «Bobo · Thu 08/10/2026: … overlaps the workday entry from 18:24 to 18:26…» (neutro); ⚠️ cerrar la PRIMERA (COR-0001) con la de otra forma ocupando su sitio (el caso del fantasma): queda SOLO COR-0002, «Closed: superseded by COR-0002.», y sigue así tras otra pasada; «Set the right time» (18:27) en COR-0002: «Time set to 18:27.», bandeja vacía, Approved 2 (y el aviso «Time correction adjusted: 08/10/2026» a la persona, Admin2); «Approved» abre su lista con el día de cada una; el histórico, con «Fri 09/10/2026» / «Thu 08/10/2026» y «Reviewed by: Bobo» (antes «Admin2») · romper_v556 14/14 + control · suite 185 verde con Python 3.12.10 |
 | v555 | **Absences, probada acción por acción.** ⚠️ Tras «Reject» la tarjeta quedaba FANTASMA (Streamlit 1.64 + bloque con clave + acción lenta dentro) → acción DIFERIDA, trampa 37. ⚠️ La baja por enfermedad no llegaba al admin y nada aprobado se podía deshacer → sección de bajas y «Cancel» con confirmación. Aviso en inglés, urgente primero, dd/mm/aaaa, tarjetas activas, saldo tras la solicitud. PRODUCCIÓN (09/10/2026, cuenta admin, 1024 px; v555 cargado con «r»): con tres solicitudes de prueba de campo000 (AUS-0004..0006) — lo pendiente sale en orden (12/10 antes que 13/10), con fechas «12/10/2026» y «13/10/2026 → 14/10/2026» y el saldo «20 of 20 … → 18 after this request»; ⚠️ «Reject» en la PRIMERA tarjeta, con la de otra forma ocupando su sitio (el caso del fantasma): queda SOLO AUS-0005, «Request rejected.», Pending 1, y sigue así tras otra pasada; «Approve» de AUS-0005: «Absence approved. 2 day(s) marked in the planner.» (ROS-0014: LEAVE 13 y 14/10), «No pending requests.», ningún fantasma; «Next 7 days» = 1 y abre AUS-0005; la baja AUS-0006 sale en «Sick leave recorded» con «Cancel», que PREGUNTA («Cancel this absence? Its days are freed on the board and hjg,ujgjg is told.») y «Keep it» la deja; el histórico ofrece «Cancel» en las dos aprobadas. «Yes, cancel it» no se pulsó en producción (avisaría a campo000): lo cubre verif_v555. Pruebas canceladas o rechazadas desde el motor; ROS-0014 limpia · romper_v555 14/14 + control · suite 184 verde con Python 3.12.10 |
 | v554 | **Day route, probada acción por acción.** ⚠️ Un día FUTURO salía «not clocked in» para todos → «planned» (hoy «yet», pasado sin él); «Today's» solo hoy; «On site» contaba asignaciones → «Planned» cuenta personas; los KPI al Panel en la semana del día; «←» recuerda el día; el nombre de cada obra la abre; «9 October» sin «of». PRODUCCIÓN (09/10/2026, cuenta admin, 1024 px; v554 cargado en la sesión abierta, sin recargar): hoy «Friday 9 October», «Planned 2 of 10 people», «with people today», «Today's sites» y los dos «⚠️ not clocked in yet»; el sábado «Nothing is planned for this Saturday.»; el martes 13 los dos «🗓️ planned», «with people that day» y «Sites on Tuesday 13 October»; «No plan» abre el Panel en la semana del 12/10 (Mon 12/10 … Fri 16/10) y «←» vuelve a Day route EN el martes 13; tocar «1. 88 walker st» en su tarjeta abre la ficha de PRJ-0002 y «←» vuelve al martes 13. La pantalla se dejó en hoy · romper_v554 14/14 + control (la 1ª pasada 13/14: el chequeo del date_input sin value cortaba en el «)» de t("Day") y no veía los argumentos → por AST, y cazada) · suite 183 verde con Python 3.12.10 |
