@@ -10,6 +10,34 @@ ventana de contexto. Contenido: 258 secciones detalladas + el índice de 440 ver
 
 ---
 
+## TIME FIXES (BANDEJA DEL ADMIN), PROBADA ACCIÓN POR ACCIÓN (v556)
+
+Recorrido en producción (Planning → Time fixes, decisión del usuario: «Dale») sobre las
+tres correcciones de prueba del propio admin (COR-0001..0003, de v546). Aprobar
+funcionaba, y revertir respetaba la regla anti-solapes de v546. Arreglado:
+
+- ⚠️ **Dos correcciones sobre el MISMO fichaje.** COR-0001 pasó una entrada de 18:27 a
+  18:00 y COR-0002 la devolvió a 18:27: «Revert» en COR-0001 daba «That time entry no
+  longer exists», y «Approve» habría confirmado un «now 18:00» falso. Ahora
+  `correcciones.sustituida_por` la detecta (misma persona, tipo y campo, y la posterior
+  parte de la hora que dejó esta) y la tarjeta solo ofrece «Close as superseded»
+  (estado nuevo `superseded`, `cerrar_sustituida`, sin tocar el fichaje).
+- ⚠️ **Sin salida cuando revertir choca.** Revertir COR-0002 lo rechazaba la regla de
+  v546 («overlaps your workday entry… Pick a time outside it») y no había dónde elegir
+  otra hora: «Set the right time» solo existía en los cierres olvidados. Ahora en TODAS,
+  y el aviso de solape, neutro («the workday entry»): lo lee también el admin.
+- ⚠️ **La persona no se enteraba** de que su hora cambiaba (y con ella lo que cobra) →
+  aviso al revertir o fijar la hora, en inglés; aprobar no avisa (no cambia nada).
+- El DÍA del fichaje en la tarjeta y en el historial (columna «Día» → «Day» en
+  `tabla`); «Asked on» y la fecha de revisión en dd/mm/aaaa; el tipo legible («workday»
+  / «project»); el revisor por su NOMBRE; lo más antiguo primero; tarjetas activas.
+- Acción DIFERIDA (trampa 37) y aislamiento por grupo (`_de_grupo`).
+
+Guardianes reanclados con su razón: `verif_v461` (las tarjetas se movieron a `_kpis`).
+`superseded` entra en `i18n.VALORES` («sustituida»), lo exigió `verif_v463`.
+
+PRODUCCIÓN (09/10/2026, cuenta admin, 1024 px; v556 cargado con «r»): COR-0001 sale primero, con «Thu 08/10/2026 · workday», «Asked on 08/10/2026 18:27» y «Superseded by COR-0002…», solo con «Close as superseded»; «Revert» en COR-0002 se rechaza con «Bobo · Thu 08/10/2026: … overlaps the workday entry from 18:24 to 18:26…» (neutro); ⚠️ cerrar la PRIMERA (COR-0001) con la de otra forma ocupando su sitio (el caso del fantasma): queda SOLO COR-0002, «Closed: superseded by COR-0002.», y sigue así tras otra pasada; «Set the right time» (18:27) en COR-0002: «Time set to 18:27.», bandeja vacía, Approved 2 (y el aviso «Time correction adjusted: 08/10/2026» a la persona, Admin2); «Approved» abre su lista con el día de cada una; el histórico, con «Fri 09/10/2026» / «Thu 08/10/2026» y «Reviewed by: Bobo» (antes «Admin2») · 36 comprobaciones · romper_v556 14/14 + control · suite 185 verde con Python 3.12.10
+
 ## ABSENCES (BANDEJA DEL ADMIN), PROBADA ACCIÓN POR ACCIÓN (v555)
 
 Recorrido en producción (Planning → Absences, decisión del usuario: «Dale»), con tres
@@ -13456,7 +13484,7 @@ comprueba lo que dice**.
 
 ---
 
-## Versiones desplegadas (v555 = actual)
+## Versiones desplegadas (v556 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -13464,6 +13492,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v556 | **Time fixes, probada acción por acción.** ⚠️ Dos correcciones sobre el mismo fichaje dejaban la vieja sin salida («no longer exists») → «superseded». ⚠️ Revertir que choca no tenía salida → «Set the right time» en todas y aviso de solape neutro. ⚠️ La persona no se enteraba → aviso al revertir o fijar. Día del fichaje, dd/mm, antiguo primero, tarjetas activas, acción diferida. PRODUCCIÓN (09/10/2026, cuenta admin, 1024 px; v556 cargado con «r»): COR-0001 sale primero, con «Thu 08/10/2026 · workday», «Asked on 08/10/2026 18:27» y «Superseded by COR-0002…», solo con «Close as superseded»; «Revert» en COR-0002 se rechaza con «Bobo · Thu 08/10/2026: … overlaps the workday entry from 18:24 to 18:26…» (neutro); ⚠️ cerrar la PRIMERA (COR-0001) con la de otra forma ocupando su sitio (el caso del fantasma): queda SOLO COR-0002, «Closed: superseded by COR-0002.», y sigue así tras otra pasada; «Set the right time» (18:27) en COR-0002: «Time set to 18:27.», bandeja vacía, Approved 2 (y el aviso «Time correction adjusted: 08/10/2026» a la persona, Admin2); «Approved» abre su lista con el día de cada una; el histórico, con «Fri 09/10/2026» / «Thu 08/10/2026» y «Reviewed by: Bobo» (antes «Admin2») · romper_v556 14/14 + control · suite 185 verde con Python 3.12.10 |
 | v555 | **Absences, probada acción por acción.** ⚠️ Tras «Reject» la tarjeta quedaba FANTASMA (Streamlit 1.64 + bloque con clave + acción lenta dentro) → acción DIFERIDA, trampa 37. ⚠️ La baja por enfermedad no llegaba al admin y nada aprobado se podía deshacer → sección de bajas y «Cancel» con confirmación. Aviso en inglés, urgente primero, dd/mm/aaaa, tarjetas activas, saldo tras la solicitud. PRODUCCIÓN (09/10/2026, cuenta admin, 1024 px; v555 cargado con «r»): con tres solicitudes de prueba de campo000 (AUS-0004..0006) — lo pendiente sale en orden (12/10 antes que 13/10), con fechas «12/10/2026» y «13/10/2026 → 14/10/2026» y el saldo «20 of 20 … → 18 after this request»; ⚠️ «Reject» en la PRIMERA tarjeta, con la de otra forma ocupando su sitio (el caso del fantasma): queda SOLO AUS-0005, «Request rejected.», Pending 1, y sigue así tras otra pasada; «Approve» de AUS-0005: «Absence approved. 2 day(s) marked in the planner.» (ROS-0014: LEAVE 13 y 14/10), «No pending requests.», ningún fantasma; «Next 7 days» = 1 y abre AUS-0005; la baja AUS-0006 sale en «Sick leave recorded» con «Cancel», que PREGUNTA («Cancel this absence? Its days are freed on the board and hjg,ujgjg is told.») y «Keep it» la deja; el histórico ofrece «Cancel» en las dos aprobadas. «Yes, cancel it» no se pulsó en producción (avisaría a campo000): lo cubre verif_v555. Pruebas canceladas o rechazadas desde el motor; ROS-0014 limpia · romper_v555 14/14 + control · suite 184 verde con Python 3.12.10 |
 | v554 | **Day route, probada acción por acción.** ⚠️ Un día FUTURO salía «not clocked in» para todos → «planned» (hoy «yet», pasado sin él); «Today's» solo hoy; «On site» contaba asignaciones → «Planned» cuenta personas; los KPI al Panel en la semana del día; «←» recuerda el día; el nombre de cada obra la abre; «9 October» sin «of». PRODUCCIÓN (09/10/2026, cuenta admin, 1024 px; v554 cargado en la sesión abierta, sin recargar): hoy «Friday 9 October», «Planned 2 of 10 people», «with people today», «Today's sites» y los dos «⚠️ not clocked in yet»; el sábado «Nothing is planned for this Saturday.»; el martes 13 los dos «🗓️ planned», «with people that day» y «Sites on Tuesday 13 October»; «No plan» abre el Panel en la semana del 12/10 (Mon 12/10 … Fri 16/10) y «←» vuelve a Day route EN el martes 13; tocar «1. 88 walker st» en su tarjeta abre la ficha de PRJ-0002 y «←» vuelve al martes 13. La pantalla se dejó en hoy · romper_v554 14/14 + control (la 1ª pasada 13/14: el chequeo del date_input sin value cortaba en el «)» de t("Day") y no veía los argumentos → por AST, y cazada) · suite 183 verde con Python 3.12.10 |
 | v553 | **La página va a la ficha recién abierta; el Radar se lee a la izquierda.** Vistos verificando v552: la ficha abierta desde el fondo del Radar quedaba cortada (o entera por debajo) y desde un nombre del tablero, por ENCIMA de la pantalla (-472 px). Al abrirla, un script de una sola vez la trae con `block:'nearest'`; el recuadro y su envoltorio fuera del flujo. Texto del Radar a 13 px del borde (antes centrado). PRODUCCIÓN (09/10/2026, cuenta admin, 1024 px; v553 cargado en la sesión abierta, sin recargar): con la vista al fondo, tocar la línea del Radar de installer CI 1 pinta su ficha en 714–930 (cortada) y la vista baja sola 562 → 725: ficha entera en 551–768, bajo su línea; con un nombre del tablero (fieldvic) la ficha se pintaba en −433..−220 (invisible) y la vista sube 562 → 350: entera en 0–213; en la pasada siguiente la vista no se mueve (se queda en 300) y la ficha mide 216 px con el script y sin él; el texto de las líneas del Radar, a 13 px del borde · romper_v553 9/9 + control · romper_v552 sigue 8/8 · suite 181 verde + 1 rojo CADUCADO: verif_v532 fija el inventario EXACTO de scripts de página (3) y este es el 4º, a propósito → actualizado con su razón y re-corrido (27/27) · check_suite_integra 11/11 · Python 3.12.10 |
