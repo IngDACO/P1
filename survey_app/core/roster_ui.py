@@ -842,7 +842,9 @@ def _panel_kpis(grupo, lunes, staff, datos, choques, sin_cumplir, dias=None):
             {"tool": "radar"})]
     st.markdown("<style>" + "".join(
         f".st-key-cpxkpi_{k} button{{border-left-color:{col}!important;}}"
-        f".st-key-cpxkpi_{k} button p:nth-child(2){{color:{col}!important;}}"
+        # v555 · la CIFRA es texto: el ámbar, en su versión legible (v328)
+        f".st-key-cpxkpi_{k} button p:nth-child(2)"
+        f"{{color:{ {theme.AMBAR: theme.AMBAR_TXT}.get(col, col)}!important;}}"
         for k, _i, _l, _v, _p, col, _a in _kp) + "</style>", unsafe_allow_html=True)
     for _col, (k, ico, lbl, val, pie, _c, accion) in zip(st.columns(len(_kp)), _kp):
         if _col.button(f"{ico} {lbl}\n\n{val}\n\n{pie}", key=f"cpxkpi_{k}", width="stretch"):
