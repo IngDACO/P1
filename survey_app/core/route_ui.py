@@ -208,19 +208,27 @@ def render_ruta_dia(grupo):
     # gastaba una línea entera para decir lo que el título ya dice.
     from datetime import timedelta as _td
 
+    _hoy = clock.today(grupo)
+    # ⚠️ v554 · El día que se miraba se RECUERDA (`_rd_dia`, que no es de ningún widget).
+    # Streamlit borra el valor de un widget que una pasada no pinta, así que ir al Panel
+    # desde un KPI y volver con «←» devolvía la pantalla a HOY (visto en producción: del
+    # martes 13 a viernes 9). Se escribe ANTES de crear el `date_input` (regla v111) y
+    # el widget va SIN `value`: con los dos, Streamlit apunta en el log «created with a
+    # default value but also had its value set via the Session State API» (v537).
+    if "rutadia_fecha" not in st.session_state:
+        st.session_state["rutadia_fecha"] = st.session_state.get("_rd_dia") or _hoy
     # Salto de día pendiente: se aplica ANTES de instanciar el date_input, porque
     # escribir la clave de un widget YA creado es un error (regla v111).
     _salto = st.session_state.pop("_rd_salto", 0)
     if _salto:
-        _b = st.session_state.get("rutadia_fecha") or clock.today(grupo)
-        st.session_state["rutadia_fecha"] = _b + _td(days=_salto)
+        st.session_state["rutadia_fecha"] = st.session_state["rutadia_fecha"] + _td(days=_salto)
 
     # El `date_input` ocupaba los 1340 px de ancho para una fecha. Se acota y a su
     # lado van los saltos de día (esta pantalla se mira "hoy, y mañana qué").
     cf, cp, cn, cd = st.columns([1.6, 0.7, 0.7, 4])
-    fecha = cf.date_input(t("Day"), value=clock.today(grupo), key="rutadia_fecha",
-                          format="DD/MM/YYYY",
+    fecha = cf.date_input(t("Day"), key="rutadia_fecha", format="DD/MM/YYYY",
                           help=t("Where each field member is going according to the plan."))
+    st.session_state["_rd_dia"] = fecha
     cp.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
     cn.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
     if cp.button(":material/chevron_left:", key="rd_prev", width="stretch",
@@ -239,10 +247,13 @@ def render_ruta_dia(grupo):
     _MES_L = ["", t("January"), t("February"), t("March"), t("April"), t("May"),
               t("June"), t("July"), t("August"), t("September"), t("October"),
               t("November"), t("December")]
+    # v554 · «Friday 9 of October» era el «9 de octubre» calcado: en inglés, «Friday 9
+    # October». Va por plantilla para que el español pueda poner su «de».
+    _fecha_txt = (t("{weekday} {day} {month}").replace("{weekday}", _DIAS_L[fecha.weekday()])
+                  .replace("{day}", str(fecha.day)).replace("{month}", _MES_L[fecha.month]))
     with cd:
         st.markdown("<div style='height:30px'></div>", unsafe_allow_html=True)
-        st.markdown(f":gray[{_DIAS_L[fecha.weekday()]} {fecha.day} of "
-                    f"{_MES_L[fecha.month]}]")
+        st.markdown(f":gray[{_fecha_txt}]")
     # ⚠️ v390: el fin de semana ya se puede planificar, así que aquí solo se corta
     # si REALMENTE no hay nada ese día — antes se cortaba por ser sábado y eso
     # ocultaría una ruta que alguien acaba de planificar. (El corte sigue haciendo
@@ -256,9 +267,10 @@ def render_ruta_dia(grupo):
         except Exception:
             _hay = []
         if not _hay:
-            st.info(":material/weekend: Nothing is planned for this "
-                    f"{_DIAS_L[fecha.weekday()].lower()}. The normal week is Monday to "
-                    "Friday; the weekend is added from the Panel.")
+            # v554 · por `t()`, y sin el `.lower()` del español («this saturday»)
+            st.info(t(":material/weekend: Nothing is planned for this {d}. The normal week "
+                      "is Monday to Friday; the weekend is added from the Panel.")
+                    .replace("{d}", _DIAS_L[fecha.weekday()]))
             return
 
     try:
@@ -281,9 +293,12 @@ def render_ruta_dia(grupo):
     except Exception:
         real = {}
 
-    sitios = {}        # pid -> {nombre, lat, lon, personas:[], dir}
+    sitios = {}        # pid -> {nombre, lat, lon, personas:[], dir, pid}
     en_obra = []       # filas de la tabla
     sin_coord, sin_prj, sin_plan = [], [], []
+    # v554 · PERSONAS con obra ese día (el KPI contaba filas: una persona en dos obras
+    # contaba dos — «2 of 2 people» con otra sin plan) y las obras SIN pin, por ID.
+    con_obra, pids_sin_coord = set(), []
     for u in campos:
         usr = str(u.get("User", ""))
         nom = str(u.get("Name", "") or usr)
@@ -308,19 +323,28 @@ def render_ruta_dia(grupo):
                 sin_prj.append(f"{nom} — ({t('site not found')})")
                 continue
             obra = str(prj.get("Name", ""))
-            # Plan vs real, con las MISMAS tres lecturas que el Panel:
-            if pid in _fich_pids:
+            con_obra.add(usr)
+            # Plan vs real, con las MISMAS lecturas que el Panel. ⚠️ v554 · un día FUTURO
+            # salía «⚠️ not clocked in» para todos (visto en producción el martes 13): ahí
+            # nadie ha podido fichar todavía. Y HOY es «yet», como Compliance (v551).
+            if fecha > _hoy:
+                _estado = t("🗓️ planned")
+            elif pid in _fich_pids:
                 _estado = t("🟢 clocked in here")
             elif _fich_noms:
                 _estado = t("🔴 clocked in at") + " " + ", ".join(_fich_noms[:2])
+            elif fecha == _hoy:
+                _estado = t("⚠️ not clocked in yet")
             else:
                 _estado = t("⚠️ not clocked in")
             c = _coords_de(prj)
             if not c:
                 sin_coord.append(f"{nom} → {obra}")
+                if pid not in pids_sin_coord:
+                    pids_sin_coord.append(pid)
             else:
                 s = sitios.setdefault(pid, {"nombre": obra, "lat": c[0], "lon": c[1],
-                                            "personas": [],
+                                            "personas": [], "pid": pid,
                                             "dir": str(prj.get("Location", ""))})
                 s["personas"].append(nom)
             # ⚠️ La fila entra AUNQUE la obra no tenga ubicación: antes se hacía
@@ -333,28 +357,47 @@ def render_ruta_dia(grupo):
 
     # ── KPIs ACTIVOS, con contexto (mismo criterio que HOME en v303) ──
     _n_pers = len(campos)
-    _nav = _KPI_NAV
+    _es_hoy = fecha == _hoy
+
+    def _al_panel():
+        # v554 · el Panel, en la SEMANA del día que se mira (abría en la que tuviera
+        # guardada: desde el martes 13, la del 05/10). `ros_lunes` no es de un widget.
+        st.session_state["ros_lunes"] = roster.lunes_de(fecha).isoformat()
+        _KPI_NAV("planificacion", "🎛 Panel")
+
     k1, k2, k3, k4 = st.columns(4)
-    if k1.button(f":material/engineering: On site\n\n{len(en_obra)}\n\n"
+    # v554 · «Planned» y no «On site»: es lo PLANIFICADO (un día futuro nadie está en
+    # obra), y cuenta PERSONAS, no asignaciones.
+    if k1.button(t(":material/engineering: Planned") + f"\n\n{len(con_obra)}\n\n"
                  f"{t('of')} {_n_pers} {t('person') if _n_pers == 1 else t('people')}",
                  key="cpxkpi_rd_obra", width="stretch"):
-        _nav("planificacion", "🎛 Panel")
-    if k2.button(f"{t(':material/location_on: Sites')}\n\n{len(sitios)}\n\n"
-                 + (t("with people today") if sitios else t("none today")),
+        _al_panel()
+    _pie_sitios = ((t("with people today") if _es_hoy else t("with people that day"))
+                   if sitios else (t("none today") if _es_hoy else t("none that day")))
+    if k2.button(f"{t(':material/location_on: Sites')}\n\n{len(sitios)}\n\n" + _pie_sitios,
                  key="cpxkpi_rd_sitios", width="stretch"):
-        _nav("proyectos", "📊 Proyectos")
-    if k3.button(f":material/wrong_location: No location\n\n{len(sin_coord)}\n\n"
-                 + (t("set the pin") if sin_coord else t("all located")),
+        # v554 · con UNA obra, a esa obra; con varias, la cartera
+        if len(sitios) == 1:
+            _abrir_obra(next(iter(sitios)))
+        else:
+            _KPI_NAV("proyectos", "📊 Proyectos")
+    # v554 · cuenta OBRAS sin pin (antes, filas persona→obra) y, con una, la abre:
+    # el pie dice «set the pin» y el pin se pone en la obra, no en la cartera
+    if k3.button(t(":material/wrong_location: No location") + f"\n\n{len(pids_sin_coord)}\n\n"
+                 + (t("set the pin") if pids_sin_coord else t("all located")),
                  key="cpxkpi_rd_sinubic", width="stretch"):
-        _nav("proyectos", "📊 Proyectos")
+        if len(pids_sin_coord) == 1:
+            _abrir_obra(pids_sin_coord[0])
+        else:
+            _KPI_NAV("proyectos", "📊 Proyectos")
     # ⚠️ El pie NO se corta a lo bruto: `", ".join(nombres)[:18]` partía un nombre por
     # la mitad. Con una persona se dice quién es; con varias, cuántas.
     _sub_plan = (t("all planned") if not sin_plan
                  else (sin_plan[0] if len(sin_plan) == 1
                        else f"{len(sin_plan)} {t('people')}"))
-    if k4.button(f":material/help: No plan\n\n{len(sin_plan)}\n\n{_sub_plan}",
+    if k4.button(t(":material/help: No plan") + f"\n\n{len(sin_plan)}\n\n{_sub_plan}",
                  key="cpxkpi_rd_sinplan", width="stretch"):
-        _nav("planificacion", "🎛 Panel")
+        _al_panel()
 
     if not sitios:
         st.info(t("Nobody has a site with a location assigned for that day."))
@@ -375,12 +418,18 @@ def render_ruta_dia(grupo):
                                numerado=True, key="rutadia_map", height=420):
                 _mapa_respaldo(marcs)
         with col_side:
-            st.markdown(t("**Today's sites** — in travel order"))
+            # v554 · «Today's» solo si ES hoy (el 13/10 decía «Today's sites»)
+            st.markdown(t("**Today's sites** — in travel order") if _es_hoy else
+                        t("**Sites on {d}** — in travel order").replace("{d}", _fecha_txt))
             for i, s in enumerate(ruta, 1):
                 with st.container(border=True, key=f"rdsitio_{i}"):
                     _n = len(s["personas"])
+                    # v554 · el nombre de la obra la ABRE (nada pasivo)
+                    if st.button(f"**{i}. {s['nombre']}**", key=f"rd_prj_{i}",
+                                 type="tertiary", icon=":material/open_in_new:",
+                                 help=t("Open the project")):
+                        _abrir_obra(s["pid"])
                     st.markdown(
-                        f"**{i}. {s['nombre']}**  \n"
                         f":gray[{s['dir'] or t('no address')}]  \n"
                         f":material/group: {_n} "
                         + (t("person") if _n == 1 else t("people")) + " · "
@@ -414,3 +463,10 @@ def _KPI_NAV(seccion, sub):
     así que a nivel de módulo sería circular."""
     from core import home_ui
     home_ui.navegar(seccion, sub)
+
+
+def _abrir_obra(pid):
+    """Abre la ficha de esa obra en Proyectos (v554), por la misma vía que el Home y
+    Contactos: `_prjsel_pending` lo recoge `projects_ui._panel_proyectos`."""
+    st.session_state["_prjsel_pending"] = str(pid)
+    _KPI_NAV("proyectos", "📊 Proyectos")
