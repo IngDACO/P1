@@ -10,6 +10,31 @@ ventana de contexto. Contenido: 258 secciones detalladas + el índice de 440 ver
 
 ---
 
+## LA PÁGINA VA A LA FICHA RECIÉN ABIERTA; EL RADAR SE LEE A LA IZQUIERDA (v553)
+
+Dos cosas vistas verificando v552 en producción (decisión del usuario: «arreglalos»):
+
+- **La ficha recién abierta podía quedar fuera de la vista.** Con la línea del Radar al fondo
+  de la página, salía bajo ella pero cortada (114 px); en una mini-app 1.64 con 10 personas,
+  ENTERA por debajo (777-1000 con 768 de alto). Y con un NOMBRE del tablero, el mismo fallo
+  hacia arriba: se pintaba en -472..-259, invisible. Ahora, al abrirla (Radar o tablero), se
+  encola UNA vez (`_fp_ir`) un script que espera a que acabe la pasada y la trae con
+  `scrollIntoView({block:'nearest'})`: lo justo, y nada si ya se ve. Medido: 381 → 603 desde
+  el Radar y 667 → 195 desde el tablero, la ficha entera; en la pasada siguiente no se mueve.
+  El recuadro del script va FUERA del flujo, él y su `stLayoutWrapper`: con solo el
+  contenedor fuera, la ficha medía 223 px en vez de 213 (el envoltorio de 0 px seguía
+  recibiendo el hueco de 9,6 px).
+- **El texto de las líneas del Radar salía centrado**: en 1.64 lo centran el `div` y el
+  `span` interiores del botón, no el botón. Con `flex-start` en los dos: a 13 px del borde
+  (antes 84-99), las tarjetas KPI intactas.
+
+Todo medido en una mini-app local con el Panel REAL (roster_ui) y datos inventados: el
+panel del navegador había perdido la cookie y en producción no se puede entrar sin
+contraseña. AppTest no ejecuta JavaScript: el guardián comprueba que el script ESTÁ cuando
+debe (y solo entonces) y qué hace.
+
+PRODUCCIÓN (09/10/2026, cuenta admin, 1024 px; v553 cargado en la sesión abierta, sin recargar): con la vista al fondo, tocar la línea del Radar de installer CI 1 pinta su ficha en 714–930 (cortada) y la vista baja sola 562 → 725: ficha entera en 551–768, bajo su línea; con un nombre del tablero (fieldvic) la ficha se pintaba en −433..−220 (invisible) y la vista sube 562 → 350: entera en 0–213; en la pasada siguiente la vista no se mueve (se queda en 300) y la ficha mide 216 px con el script y sin él; el texto de las líneas del Radar, a 13 px del borde · 21 comprobaciones · romper_v553 9/9 + control · romper_v552 sigue 8/8 · suite 181 verde + 1 rojo CADUCADO: verif_v532 fija el inventario EXACTO de scripts de página (3) y este es el 4º, a propósito → actualizado con su razón y re-corrido (27/27) · check_suite_integra 11/11 · Python 3.12.10
+
 ## LA FICHA ABIERTA DESDE EL RADAR SE VE DONDE SE TOCÓ (v552)
 
 Verificando v551 en producción: tocar una línea del Radar abría la ficha rápida ARRIBA del
@@ -13368,7 +13393,7 @@ comprueba lo que dice**.
 
 ---
 
-## Versiones desplegadas (v552 = actual)
+## Versiones desplegadas (v553 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -13376,6 +13401,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v553 | **La página va a la ficha recién abierta; el Radar se lee a la izquierda.** Vistos verificando v552: la ficha abierta desde el fondo del Radar quedaba cortada (o entera por debajo) y desde un nombre del tablero, por ENCIMA de la pantalla (-472 px). Al abrirla, un script de una sola vez la trae con `block:'nearest'`; el recuadro y su envoltorio fuera del flujo. Texto del Radar a 13 px del borde (antes centrado). PRODUCCIÓN (09/10/2026, cuenta admin, 1024 px; v553 cargado en la sesión abierta, sin recargar): con la vista al fondo, tocar la línea del Radar de installer CI 1 pinta su ficha en 714–930 (cortada) y la vista baja sola 562 → 725: ficha entera en 551–768, bajo su línea; con un nombre del tablero (fieldvic) la ficha se pintaba en −433..−220 (invisible) y la vista sube 562 → 350: entera en 0–213; en la pasada siguiente la vista no se mueve (se queda en 300) y la ficha mide 216 px con el script y sin él; el texto de las líneas del Radar, a 13 px del borde · romper_v553 9/9 + control · romper_v552 sigue 8/8 · suite 181 verde + 1 rojo CADUCADO: verif_v532 fija el inventario EXACTO de scripts de página (3) y este es el 4º, a propósito → actualizado con su razón y re-corrido (27/27) · check_suite_integra 11/11 · Python 3.12.10 |
 | v552 | **La ficha abierta desde el Radar se ve donde se tocó.** Visto verificando v551: tocar una línea del Radar abría la ficha arriba del Panel, 373 px por encima de la vista (el clic parecía no hacer nada). Ahora se pinta bajo esa línea, la misma línea la cierra, y si la línea cambió o desapareció va al final del Radar. PRODUCCIÓN (09/10/2026, cuenta admin, 1024 px): con la vista bajada hasta el Radar, tocar «installer leader CI → 88 walker st…» pinta su ficha JUSTO debajo de la línea (línea hasta y=656, ficha 666–882; antes salía en y=−373), una sola ficha y sin errores; la misma línea otra vez la cierra. La ficha queda en parte por debajo del borde si la línea está al fondo de la página (hay que desplazarse 114 px). El texto de las líneas sale CENTRADO (el div y el span interiores del botón centran): probado en vivo con un estilo temporal, a la izquierda queda a 13 px (antes 84–99) sin mover las tarjetas KPI — pendiente de decidir. El despliegue reinició el proceso del Cloud: la pestaña del panel dio «Error during DNS resolution», se recargó y la cookie restauró la sesión sin contraseña · romper_v552 8/8 + control · romper_v551 sigue 21/21 · suite 180 verde + 1 rojo: verif_v488 fallaba POR AZAR (buscaba «R1» dentro de un cifrado aleatorio: medido, 11,9 % de 5.000 cifrados lo contienen) → valor fuera del alfabeto base64url, 6/6 en verde y roto a mano (con el token en claro se pone rojo) · check_suite_integra 11/11 · Python 3.12.10 |
 | v551 | **El Panel de Planificación, probado acción por acción.** ⚠️ «Copy previous week» pisaba semanas enteras sin preguntar → confirmación con a quién reemplaza. El selector segmentado salía con bolitas (DOM del radio de 1.64) → CSS por `data-selected`. Tarjetas KPI y líneas del Radar ACTIVAS; «Free»/«Assign» abren en hoy; Compliance sin «yet» en días pasados; el editor de celda se cierra tras «Save»/«View the day» y sin «Select all»; «←» recuerda la sub-pestaña (Users → Panel); textos en inglés. PRODUCCIÓN (09/10/2026, cuenta admin, 1024 px; v551 cargado sin recargar la sesión): el selector segmentado sin bolitas y la opción elegida en azul y negrita; las 4 tarjetas KPI son botones de 96 px; «Blocking certs» abre el Radar con 2 líneas-botón y tocar «installer CI 1 → 88 walker st…» abre su ficha (⚠️ desde la altura del Radar la ficha se abre FUERA de la vista, top −373 px: pendiente); «Clocked in now» abre Compliance en hoy (vie 09/10, «not clocked in yet») y el jueves 08/10 dice «no time charged to it»; «Free today» abre la vista Free en el viernes; «Copy previous week» pide confirmación («2 person(s)… Nobody's plan for this week will be replaced», cierto: en la hoja, leída en solo lectura, las dos semanas son idénticas) y Cancel cierra sin escribir; el editor de celda ya no ofrece «Select all», «View the day» lo cierra (generación 0 → 1) con las celdas conservando su color, y «Save» de la celda vacía de la persona de prueba también (1 → 2) sin crear ninguna fila; «←» desde Users vuelve al Panel (t=usuarios → t=panel). «Assign» con una obra elegida NO se vio en producción (su desplegable no se deja manejar desde el panel): lo cubre verif_v551 · romper_v551 21/21 + control · verif_marcas y verif_v487 reanclados con su razón · suite 180 verde con Python 3.12.10 |
 | v550 | **La cifra de una tarjeta KPI no se parte nunca.** Verificando v549 a 1024 px con el menú abierto: en la tarjeta de 62 px, «0%» salía «0» / «%» (el modo wrap parte con `break-word`). `nowrap` en la línea de la cifra, probado antes con un estilo temporal en producción. Trampa 33 al día. PRODUCCIÓN (09/10/2026, cuenta admin, 1024 px con el menú abierto): en la tarjeta de 62 px, «3», «0%» y «4 h» en UNA línea (30 px) y la tarjeta de vuelta a 96 px · romper_v550 2/2 + control · suite 179 verde con Python 3.12.10 |
