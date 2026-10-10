@@ -11,6 +11,7 @@ FUERA de cualquier `st.form` (igual que el multiselect de asignados en el detall
 """
 import streamlit as st
 
+from core import flash
 from core.i18n import t
 
 _SYDNEY = (-33.8688, 151.2093)   # centro por defecto si aún no hay pin
@@ -136,15 +137,19 @@ def location_picker(key, lat=None, lng=None, direccion=""):
     else:
         st.caption(t("≈ Approximate accuracy (OpenStreetMap). The Google API key is missing, so the exact street number cannot be located."))
     c1, c2 = st.columns([4, 1])
+    # ⚠️ v558 · el icono por `icon=`: un `placeholder` NO interpreta `:material/…:` y
+    # salía literal («:material/search: Search address…», visto en producción).
     q = c1.text_input(t("Search address"), value=direccion, key=f"{key}_q",
-                      label_visibility="collapsed", placeholder=t(":material/search: Search address…"))
+                      label_visibility="collapsed", icon=":material/search:",
+                      placeholder=t("Search address…"))
     if c2.button(t("Search"), key=f"{key}_btn", width="stretch"):
         _cands = geocode_candidates(q)
         st.session_state[f"{key}_cands"] = _cands
         st.session_state.pop(f"{key}_applied", None)     # reaplicar el mejor de esta búsqueda
         st.session_state.pop(f"{key}_candsel", None)
         if not _cands:
-            st.warning(t("I could not find that address. Add city/state/country, or click on the map."))
+            # v558 · por flash: un `st.warning` justo antes del `st.rerun()` no se veía.
+            flash.aviso(t("I could not find that address. Add city/state/country, or click on the map."))
         st.rerun()
 
     # Resultados de la última búsqueda: SIEMPRE se muestran como opciones (aunque sea uno,
@@ -177,7 +182,10 @@ def location_picker(key, lat=None, lng=None, direccion=""):
     if slat is not None:
         folium.Marker(center, tooltip="Project location",
                       icon=folium.Icon(color="red")).add_to(m)
-    out = st_folium(m, key=f"{key}_map", height=360,
+    # ⚠️ v558 · `use_container_width`: sin él `st_folium` mide 500 px FIJOS (su valor por
+    # defecto) y en un móvil se sale de la pantalla (trampa 17). El Home y Day route ya lo
+    # llevaban.
+    out = st_folium(m, key=f"{key}_map", height=360, use_container_width=True,
                     returned_objects=["last_clicked"])
 
     clicked = (out or {}).get("last_clicked")

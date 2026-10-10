@@ -96,8 +96,12 @@ def _col(*nombres):
     return nombres[0]
 
 
+# ⚠️ CADUCADO por v558: el ritmo se llamaba «Status» desde v444 —IGUAL que el estado de
+# la obra— y en el dict de la fila la segunda clave pisaba a la primera: la columna del
+# ritmo NO salía (este guardián la daba por presente porque «Status» seguía en la lista
+# de claves… la del estado). Ahora es «Pace», su propia clave.
 ATENCION = [_col("Not invoiced", "Sin facturar"),
-            _col("Status", "Situación"),
+            _col("Pace", "Situación"),
             _col("Alerts", "Alertas")]
 CONTEXTO = ["Client", "Type", "Inicio", "Fin", "Ppto"]
 chk("las 3 de atención están todas", all(c in claves for c in ATENCION))

@@ -500,6 +500,18 @@ def _resumen_del_dia(grupo: str):
             if cnt:
                 st.caption(fn())
                 if st.button(f"→ {t('Go to')} {secn}", key=f"go_{slug}", type="primary"):
+                    # ⚠️ v558 · la cartera se abre con LO QUE SE TOCÓ: antes «Behind
+                    # schedule → Go to Projects» la abría en «All» (visto en v544). Retraso
+                    # es un filtro de la cartera; el resto, la lista de esas obras.
+                    _solo_ids = {"vencidos": d["vencidos"], "porvencer": d["por_vencer"],
+                                 "sinasig": d["sin_asignar"], "alarmas": d["alarmas"]}.get(slug)
+                    if slug == "retrasos":
+                        st.session_state["_cart_pending"] = {"filtro": "🔴 Retraso"}
+                    elif _solo_ids:
+                        st.session_state["_cart_pending"] = {"solo": {
+                            "motivo": lbl, "ids": [str(x.get("id", "")) for x in _solo_ids]}}
+                    if sec == "proyectos" and (slug == "retrasos" or _solo_ids):
+                        st.session_state.pop("_admin_open_proj", None)   # la cartera, no una obra
                     _ir_a(sec, sub)
             else:
                 st.caption(t("Nothing pending here. :green[:material/check_circle:]"))
@@ -957,9 +969,19 @@ def _nuevo_proyecto_form(grupo: str, key: str = "nuevo"):
     lo único que necesita `build_schedule` — no hace falta el survey.
     """
     import datetime as _dt
+    import zlib
     from core.schedule import build_schedule
 
-    with st.expander(t("New project"), icon=":material/add_circle:", key=f"exp_np_{key}"):
+    # ⚠️ v558 · GENERACIÓN: al crear, el alta entera vuelve a nacer vacía (formulario,
+    # plano, mapa, cliente…) porque TODAS sus claves cambian. Antes se quedaba con todo
+    # lo escrito. Con la generación 0 las claves son las de siempre.
+    _base = key
+    _kgen = f"_np_gen_{_base}"
+    _gen = st.session_state.get(_kgen, 0)
+    if _gen:
+        key = f"{_base}{_gen}"
+
+    with st.expander(t("New project"), icon=":material/add_circle:", key=f"exp_np_{_base}"):
         campos = _field_users(grupo)
 
         # ── Plano del elevador (fuera del form, para poder prellenar) ──
@@ -979,7 +1001,8 @@ def _nuevo_proyecto_form(grupo: str, key: str = "nuevo"):
                 st.session_state[f"{_kd}_bytes"] = _pdf.getvalue()
             except Exception as e:
                 st.session_state[_kd] = None
-                st.error(f"The drawing could not be read: {e}")
+                # v558 · por flash: un `st.error` justo antes del `st.rerun()` no se veía.
+                flash.error(f"The drawing could not be read: {e}")
             # v272: prellenar NS desde el plano AQUÍ (session_state), no con `value=` en el
             # form. El widget NS ya se instanció antes de subir el plano y Streamlit ignora
             # `value=` si la key ya existe → el prellenado no tomaba (NS se quedaba en 2).
@@ -1046,16 +1069,71 @@ def _nuevo_proyecto_form(grupo: str, key: str = "nuevo"):
         # fecha de fin estimada de abajo se calcularía sobre un plan incompleto.
         _pendientes = _pregunta_etapas(_tipo, key)
 
-        # NS lo controla session_state (prellenado del plano arriba); la Ubicación se toma de
-        # la dirección que buscaste en el mapa → ya no se pide dos veces (v272).
+        # ── Fechas y paradas: FUERA del form (v558) ──
+        # ⚠️ Dentro, la «Estimated finish» no se movía al cambiar el NS o el inicio (el
+        # form no relanza hasta el envío): visto en producción, NS 2 → 4 y seguía
+        # «31/10/2026 (21 days)»; solo al pulsar Create pasó a «04/11/2026 (25 days)». Se
+        # enseñaba una fecha que NO era la que se iba a guardar.
+        # NS lo controla session_state (prellenado del plano arriba).
         st.session_state.setdefault(f"np_ns_{key}", 2)
+        f1, f2 = st.columns(2)
+        f_ini = f1.date_input(t("Start date"), value=clock.today(), key=f"np_ini_{key}",
+                              format="DD/MM/YYYY")
+        f_fin_manual = None
+        _sch_prev = None
+        if _es_inst:
+            ns = f2.number_input(t("Number of stops (NS) *"), min_value=2, max_value=50,
+                                 step=1, key=f"np_ns_{key}",
+                                 help=(t("Read from the drawing.") if (_plano or {}).get("ns")
+                                       else t("It sets how long the activities take.")))
+            # La fecha de FIN no se teclea: sale del NS + las actividades estándar de
+            # instalación (`build_schedule`), cuyas duraciones escalan con el NS. Preview:
+            try:
+                _sch_prev = build_schedule(int(ns), f_ini, {},
+                                           custom_rows=_filas_etapas(_tipo, ns, key))
+                st.caption(t(":material/event_available: Estimated finish: **{f}** ({n} days) — from the NS and the standard activities.",
+                             f=_sch_prev["fecha_fin"].strftime("%d/%m/%Y"),
+                             n=_sch_prev["total_dias"]))
+            except Exception:
+                _sch_prev = None
+        else:
+            # v306: un delivery/ripout no tiene paradas ni el plan de 11 actividades,
+            # así que la fecha de fin SÍ se teclea (para instalación sigue saliendo sola).
+            ns = 2                      # mínimo válido; no se usa para nada aquí
+            f_fin_manual = f2.date_input(t("Estimated finish date"), value=clock.today(),
+                                         key=f"np_fin_{key}", format="DD/MM/YYYY",
+                                         help=t("This project type has no standard schedule, so you set the date yourself."))
+
+        # La Ubicación se toma de la dirección que buscaste en el mapa → ya no se pide
+        # dos veces (v272).
         _ubi_auto = (st.session_state.get(f"nploc_{key}_addr")
                      or st.session_state.get(f"nploc_{key}_q") or "").strip()
         if _ubi_auto:
             st.caption(f":material/place: Location that will be saved: **{_ubi_auto}**")
 
+        # ⚠️ v558 · el nombre repetido. La casilla vivía FUERA del form y solo en la pasada
+        # del envío: al marcarla la pantalla relanzaba, la casilla dejaba de pintarse y
+        # Streamlit borraba su valor → el siguiente «Create» volvía a avisar. Una obra
+        # homónima NO se podía crear nunca (visto en producción y en AppTest), y el
+        # nombre PUEDE repetirse: la identidad es el ID. Ahora el aviso y la casilla van
+        # DENTRO del form mientras el nombre avisado sea el mismo, y la clave de la
+        # casilla lleva el nombre: marcarla para uno no vale para otro.
+        def _nnorm(s):
+            return " ".join(str(s or "").lower().split())
+
+        def _k_dup(n):
+            return f"np_dup_{key}_{zlib.crc32(n.encode('utf-8'))}"
+
+        _dupde = st.session_state.get(f"_np_dupde_{key}") or {}
+
         with st.form(f"np_form_{key}"):
             nom = st.text_input(t("Project name *"), key=f"np_nom_{key}")
+            if _dupde:
+                st.warning(t(":material/warning: A project with that name already exists: {x}. "
+                             "If it is a different lift, tick the box and create it again.")
+                           .replace("{x}", str(_dupde.get("dups", ""))))
+                st.checkbox(t("Create even though the name is repeated"),
+                            key=_k_dup(_dupde.get("nombre", "")))
             c1, c2 = st.columns(2)
             # ⚠️ De LISTA, no texto libre (decisión del usuario): el head installer es
             # una persona del equipo, y escribir su nombre a mano permitía erratas que
@@ -1066,31 +1144,6 @@ def _nuevo_proyecto_form(grupo: str, key: str = "nuevo"):
                 key=f"np_ing_{key}",
                 help=(t("Field users of this company.") if campos else
                       t("No field users yet: create them in Planning → Users.")))
-            f_ini = c1.date_input(t("Start date"), value=clock.today(),
-                                  key=f"np_ini_{key}")
-            f_fin_manual = None
-            if _es_inst:
-                ns = c2.number_input(t("Number of stops (NS) *"), min_value=2, max_value=50,
-                                     step=1, key=f"np_ns_{key}",
-                                     help=(t("Read from the drawing.") if (_plano or {}).get("ns")
-                                           else t("It sets how long the activities take.")))
-                # La fecha de FIN no se teclea: sale del NS + las actividades estándar de
-                # instalación (`build_schedule`), cuyas duraciones escalan con el NS. Preview:
-                try:
-                    _sch_prev = build_schedule(int(ns), f_ini, {},
-                                              custom_rows=_filas_etapas(_tipo, ns, key))
-                    c1.caption(":material/event_available: Estimated finish: "
-                               f"**{_sch_prev['fecha_fin'].strftime('%d/%m/%Y')}** "
-                               f"({_sch_prev['total_dias']} days) — from the NS and the standard activities.")
-                except Exception:
-                    pass
-            else:
-                # v306: un delivery/ripout no tiene paradas ni el plan de 11 actividades,
-                # así que la fecha de fin SÍ se teclea (para instalación sigue saliendo sola).
-                ns = 2                      # mínimo válido; no se usa para nada aquí
-                f_fin_manual = c2.date_input(t("Estimated finish date"), value=clock.today(),
-                                             key=f"np_fin_{key}",
-                                             help=t("This project type has no standard schedule, so you set the date yourself."))
             pres = c2.number_input(t(":material/payments: Budget (0 = no budget)"), min_value=0.0,
                                    step=100.0, key=f"np_pres_{key}")
             mod = st.text_input(t("Lift model"), key=f"np_mod_{key}",
@@ -1113,16 +1166,17 @@ def _nuevo_proyecto_form(grupo: str, key: str = "nuevo"):
                    or st.session_state.get(f"nploc_{key}_q") or "").strip()
             # Incluye archivados: crear un homonimo de uno archivado tambien confunde.
             # v422: y las internas — llamar a una obra igual que el almacén confunde igual.
+            _nn = _nnorm(nom)
             dups = [f"{p.get('ID')} · {p.get('Name')}"
                     for p in P.list_projects(grupo, incluir_archivados=True,
                                              incluir_internos=True)
-                    if " ".join(str(p.get("Name") or "").lower().split())
-                    == " ".join(nom.lower().split())]
-            if dups and not st.session_state.get(f"np_dup_{key}"):
-                st.warning(t(":material/warning: A project with that name already exists: {x}. "
-                             "If it is a different lift, tick the box and create it again.")
-                           .replace("{x}", ", ".join(dups)))
-                st.checkbox(t("Create even though the name is repeated"), key=f"np_dup_{key}")
+                    if _nnorm(p.get("Name")) == _nn]
+            if dups and not st.session_state.get(_k_dup(_nn)):
+                _ya = _dupde.get("nombre") == _nn
+                st.session_state[f"_np_dupde_{key}"] = {"nombre": _nn, "dups": ", ".join(dups)}
+                if not _ya:
+                    st.rerun()          # para que el aviso y la casilla salgan DENTRO del form
+                st.warning(t("Tick «Create even though the name is repeated» to create it anyway."))
                 return
 
             # Cliente elegido/escrito → texto + ClienteID (v255)
@@ -1146,20 +1200,26 @@ def _nuevo_proyecto_form(grupo: str, key: str = "nuevo"):
                 if _pendientes:
                     st.error(t("Answer this first: {q}",
                                q=" · ".join(p["pregunta"] for p in _pendientes)))
-                    st.stop()
+                    # v558 · `return`, no `st.stop()`: este corta solo el alta, aquél
+                    # cortaba también todo lo que la pantalla pinta después.
+                    return
                 sched = build_schedule(int(ns), f_ini, {},
                                        custom_rows=_filas_etapas(_tipo, ns, key))
-                _fin = (sched["fecha_fin"].strftime("%Y-%m-%d")
-                        if sched.get("fecha_fin") else "")
+                _fin_d = sched.get("fecha_fin")
                 _acts = sched.get("activities", [])
             else:
-                _fin = f_fin_manual.strftime("%Y-%m-%d") if f_fin_manual else ""
+                _fin_d = f_fin_manual
                 # ⚠️ UNA actividad genérica, no CERO: el avance del proyecto es
                 # Σ(peso·avance)/Σpeso sobre sus actividades, así que sin ninguna el
                 # proyecto se quedaría clavado en 0% para siempre y el campo no tendría
                 # dónde reportar. Con una sola, avanza 0→100 sin fingir un plan de obra.
                 _dias = max(1, ((f_fin_manual - f_ini).days + 1) if f_fin_manual else 1)
                 _acts = [{"nombre": "Execution", "duracion": _dias, "peso": 1}]
+            # ⚠️ v558 · la fecha de fin, UNA para los dos caminos. Antes lo de después
+            # leía `sched`, que solo existe para instalación: crear un Delivery u Other
+            # ESCRIBÍA la obra y luego reventaba («cannot access local variable 'sched'»),
+            # sin avisar a los asignados ni llenar el planificador.
+            _fin = _fin_d.strftime("%Y-%m-%d") if _fin_d else ""
             ok, res = P.create_project(
                 grupo=grupo, nombre=nom.strip(), cliente=cli, cliente_id=_cli_id, ubicacion=ubi,
                 modelo=mod, ns=int(ns), ingeniero=";".join(ing), campo_asignados=asg, tipo=_tipo,
@@ -1180,13 +1240,15 @@ def _nuevo_proyecto_form(grupo: str, key: str = "nuevo"):
                 st.error(f"It could not be created: {res}")
                 return
 
+            # ⚠️ v558 · de aquí en adelante TODO va por flash: al final se abre la obra
+            # nueva con un `st.rerun()`, y lo pintado ahora no llegaría a verse.
             # Datos del plano + PDF, para que ninguna herramienta vuelva a pedirlo
             if _plano:
                 try:
                     plan_data.guardar(res, _plano)
                 except Exception as e:
-                    st.warning(f"The project was created, but the drawing data was "
-                               f"not saved: {e}")
+                    flash.aviso(f"The project was created, but the drawing data was "
+                                f"not saved: {e}")
                 _pb = st.session_state.get(f"{_kd}_bytes")
                 if _pb and drive_store.is_configured() and drive_store.is_available():
                     try:
@@ -1194,29 +1256,41 @@ def _nuevo_proyecto_form(grupo: str, key: str = "nuevo"):
                         P.add_document(res, "plano.pdf", "plano", fid,
                                        st.session_state.get("auth", {}).get("usuario", ""))
                     except Exception:
-                        st.caption(t(":material/attach_file: The drawing could not be filed in Drive."))
+                        flash.info(t(":material/attach_file: The drawing could not be filed in Drive."))
                 for _k in (_kd, f"{_kd}_bytes", f"{_kd}_id"):
                     st.session_state.pop(_k, None)
 
-            st.success((t(":material/check_circle: Project **{p}** created with {n} activities "
-                          "and the drawing data loaded.") if _plano else
-                        t(":material/check_circle: Project **{p}** created with {n} activities."))
-                       .replace("{p}", str(res))
-                       .replace("{n}", str(len(sched.get("activities", []))))
-                       + " " + t("The survey and the other tools can now feed it."))
+            flash.exito((t(":material/check_circle: Project **{p}** created with {n} activities "
+                           "and the drawing data loaded.") if _plano else
+                         t(":material/check_circle: Project **{p}** created with {n} activities."))
+                        .replace("{p}", str(res))
+                        .replace("{n}", str(len(_acts)))
+                        + " " + t("The survey and the other tools can now feed it."))
             if asg:
                 _notificar_asignados(asg, {
                     "Name": nom.strip(), "Client": cli, "Location": ubi,
                     "StartDate": f_ini.strftime("%Y-%m-%d"),
-                    "EndDateEst": (sched["fecha_fin"].strftime("%Y-%m-%d")
-                                    if sched.get("fecha_fin") else ""),
-                    "InductionLinks": inds})
+                    "EndDateEst": _fin,
+                    "InductionLinks": inds}, al_flash=True)
                 # v219: auto-poblar el planificador con el proyecto entre sus fechas.
-                _autoagenda(grupo, res, asg, [], f_ini,
-                            sched.get("fecha_fin") if sched.get("fecha_fin") else None)
+                _autoagenda(grupo, res, asg, [], f_ini, _fin_d or None, al_flash=True)
+
+            # v558 · el alta vuelve a nacer vacía (otra generación) y se ABRE lo creado.
+            # Lo que no es un control (el mapa, el aviso del nombre) se suelta a mano.
+            for _k in [k for k in list(st.session_state.keys())
+                       if str(k).startswith(f"nploc_{key}_")] + [f"_np_dupde_{key}"]:
+                st.session_state.pop(_k, None)
+            st.session_state[_kgen] = _gen + 1
+            if _base == "adm":
+                st.session_state["_admin_open_proj"] = str(res)
+            elif _base == "own":
+                # El panel del propietario abre por su selector, que se pinta DESPUÉS del
+                # alta: se puede asignar sin que reviente (aún no está instanciado).
+                st.session_state["ownerproj_sel"] = f"{grupo} · {res} · {nom.strip()}"
+            st.rerun()
 
 
-def _autoagenda(grupo, pid, nuevos, quitados, fecha_ini, fecha_fin):
+def _autoagenda(grupo, pid, nuevos, quitados, fecha_ini, fecha_fin, al_flash=False):
     """Sincroniza el planificador con la asignación del proyecto (v219): pone a los
     NUEVOS asignados en el proyecto entre sus fechas (Lun–Vie, solo celdas vacías) y
     quita del planificador a los DESASIGNADOS. Best-effort; informa el resultado."""
@@ -1243,8 +1317,10 @@ def _autoagenda(grupo, pid, nuevos, quitados, fecha_ini, fecha_fin):
                 msgs.append(f":material/cleaning_services: Planner: {n} day(s) cleared for those unassigned.")
     except Exception:
         pass
+    # v558 · `al_flash`: cuando lo que sigue es un `st.rerun()` (el alta abre la obra
+    # nueva), un `st.caption` no llegaría a verse.
     for m in msgs:
-        st.caption(m)
+        (flash.info if al_flash else st.caption)(m)
 
 
 def _avisar_asignados(usuarios, grupo=None, exclude_pid=None, certs_req=None,
@@ -1397,10 +1473,14 @@ def _cumplimiento_equipo(pid, grupo, prj):
                  "«—» means the person does not hold that certificate."))
 
 
-def _notificar_asignados(usuarios, info_prj):
-    """Envía la asignación e informa SIEMPRE del resultado (no falla en silencio)."""
+def _notificar_asignados(usuarios, info_prj, al_flash=False):
+    """Envía la asignación e informa SIEMPRE del resultado (no falla en silencio).
+
+    v558 · `al_flash`: el resultado por flash, para cuando lo que sigue es un rerun."""
+    _info = flash.info if al_flash else st.caption
+    _aviso = flash.aviso if al_flash else st.warning
     if not notify.any_channel_configured():
-        st.caption(t(":material/mail: No notification channels configured (Gmail / Telegram)."))
+        _info(t(":material/mail: No notification channels configured (Gmail / Telegram)."))
         return
     n = 0
     for u in usuarios:
@@ -1411,11 +1491,11 @@ def _notificar_asignados(usuarios, info_prj):
         except Exception:
             pass
     if n == len(usuarios):
-        st.caption(f":material/mail: {n} field user(s) notified.")
+        _info(f":material/mail: {n} field user(s) notified.")
     elif n:
-        st.warning(f":material/mail: Notified {n} of {len(usuarios)}. The rest have no contact details.")
+        _aviso(f":material/mail: Notified {n} of {len(usuarios)}. The rest have no contact details.")
     else:
-        st.warning(t(":material/warning: Nobody could be notified: check email and Telegram in :material/build: My company → Users."))
+        _aviso(t(":material/warning: Nobody could be notified: check email and Telegram in :material/build: My company → Users."))
 
 
 def _field_users(grupo):
@@ -1497,24 +1577,30 @@ def _cartera_clickeable(proys, alarmas, delays, aheads, costos,
             _pbg, _pfg = _pill.get(_est, ("#eceff3", "#5f5e5a"))
             _users = len([x for x in str(p.get("FieldAssigned", "")).split(";") if x.strip()])
             _c = costos.get(_pid) or {}
+            # v558 · «ppto» / «s/ppto» eran español en una tarjeta inglesa (visto en producción).
             if P._num(_c.get("presupuesto")) > 0:
-                _ppto = f"{int(round(P._num(_c.get('pct'))))}% ppto" + (" " + _MI("warning", "#e0a021") if _c.get("over") else "")
+                _ppto = (t("{n}% of budget", n=int(round(P._num(_c.get("pct")))))
+                         + (" " + _MI("warning", "#e0a021") if _c.get("over") else ""))
             else:
-                _ppto = "s/ppto"
+                _ppto = t("no budget")
             _chips = f"{_MI('payments')} {_ppto} · {_MI('engineering')} {_users}"
+            # v558 · días ENTEROS: salía «33.0d» (el retraso llega en float), como el
+            # «18.0 d» que v544 quitó del Home.
             if _dl:
-                _chips += f" · {_MI('cancel','#d64541')} {_dl}d"
+                _chips += f" · {_MI('cancel','#d64541')} {int(round(_dl))} d"
             elif _ah:
-                _chips += f" · {_MI('check_circle','#1e9e57')} {_ah}d"
+                _chips += f" · {_MI('check_circle','#1e9e57')} {int(round(_ah))} d"
             if _al:
                 _chips += f" · {_MI('notifications')} {_al}"
             # v397: dinero hecho y aún no pedido. Va en la tarjeta porque hoy hay
             # $36.552 repartidos en 9 obras y no se veía en ninguna parte hasta
             # entrar obra por obra. `pend` llega ya calculado en UN mapa (regla v142).
             _pf = pendientes.get(_pid, 0.0)
+            # ⚠️ v558 · `dinero_html`, no `dinero`: esto va DENTRO de un bloque HTML, donde el
+            # markdown no procesa escapes y el `\$` salía con la barra («🧾 \$133»).
             if _pf > 0:
                 _chips += (f" · <b style='color:#8a5a0b;'>{_MI('receipt', '#8a5a0b')} "
-                           f"{theme.dinero(_pf, 0)}</b>")
+                           f"{theme.dinero_html(_pf, 0)}</b>")
             _html = (
                 "<div style='display:flex;justify-content:space-between;align-items:center;"
                 "gap:8px;margin-bottom:6px;'>"
@@ -1611,7 +1697,8 @@ def _cartera_lista(proys, alarmas, delays, aheads, costos, pendientes=None,
         _ppto = (f"{int(round(P._num(_c.get('pct'))))}%" + (" over" if _c.get("over") else "")
                  if P._num(_c.get("presupuesto")) > 0 else "—")
         _users = len([x for x in str(p.get("FieldAssigned", "")).split(";") if x.strip()])
-        _sit = (f"{_dl} d behind" if _dl else (f"{_ah} d ahead" if _ah else "—"))
+        _sit = (f"{int(round(_dl))} d behind" if _dl
+                else (f"{int(round(_ah))} d ahead" if _ah else "—"))
         _rows.append({
             # v306: el ID primero. Es la identidad real (el nombre puede repetirse), y
             # tenerlo en la tabla permite dictarlo, buscarlo y cruzarlo con la hoja.
@@ -1637,7 +1724,11 @@ def _cartera_lista(proys, alarmas, delays, aheads, costos, pendientes=None,
             # visible (hay que desplazarse) por uno invisible (lees un nombre a medias).
             # La cura es la de v398: no achicar, PRIORIZAR lo que se ve primero.
             "Progress": max(0, min(100, int(P._num(p.get("Progress"))))),
-            "Status": _sit,
+            # ⚠️ v558 · «Pace», su propia clave. La migración al inglés (v444) dejó
+            # «Situación» y «Estado» las dos como «Status»: en un dict la segunda PISA a
+            # la primera, así que el ritmo no salía nunca (visto en producción: 12
+            # columnas y ninguna «Pace», con las 3 obras en retraso).
+            "Pace": _sit,
             "Alerts": str(_al) if _al else "",
             "Status": _etq(str(p.get("Status", ""))) or "—",
             "Users": _users,
@@ -1689,7 +1780,7 @@ def _cartera_lista(proys, alarmas, delays, aheads, costos, pendientes=None,
             "Project":  st.column_config.TextColumn(t("Project"), width=272, pinned=True),
             # Anchos medidos contra el texto REAL más largo de cada columna (peor caso),
             # no elegidos a ojo: con estos, 0 textos cortados.
-            "Status": st.column_config.TextColumn(
+            "Pace": st.column_config.TextColumn(
                 t("Pace"), width=100,
                 help=t("Days behind or ahead of the plan.")),
             "Alerts":   st.column_config.TextColumn(
@@ -1755,7 +1846,29 @@ def _panel_proyectos(grupo: str):
         return
 
     # ── Cartera (tarjetas clickeables → abren el detalle) ──
+    # v558 · lo que pide el Home («Go to Projects» de un indicador): se empieza LIMPIO y
+    # con la vista que se tocó. Se aplica ANTES de instanciar los controles (regla v111).
+    _ph = st.session_state.pop("_cart_pending", None)
+    if _ph is not None:
+        st.session_state["cart_q"] = ""
+        st.session_state["cpxseg_cart_filt"] = _ph.get("filtro") or "Todos"
+        st.session_state["cart_tipo"] = "Todos"
+        if _ph.get("solo"):
+            st.session_state["_cart_solo"] = _ph["solo"]
+        else:
+            st.session_state.pop("_cart_solo", None)
+    _fp = st.session_state.pop("_cart_filt_pending", None)     # el contador de la cabecera
+    if _fp:
+        st.session_state["cpxseg_cart_filt"] = _fp
+    # ⚠️ v558 · `persist_state="session"` en los cinco controles: sin él, salir de la cartera
+    # (p. ej. «Invoice» y volver con «←») la devolvía a Lista y sin filtros — Streamlit
+    # borra el valor de un control que deja de pintarse. Visto en producción.
+    # ⚠️ «session», no «page»: medido en AppTest, «page» marca el control para SOLTARLO
+    # en cuanto deja de pintarse (como si se cambiara de página) y al volver nace en su
+    # valor por defecto; «session» lo devuelve tras varias pasadas fuera. La app es UNA
+    # página, así que para ella son lo mismo.
     _ver_arch = st.checkbox(t(":material/archive: Show archived ones too"), key="ver_arch_admin",
+                            persist_state="session",
                             help=t("Archived ones do not appear in lists or reports; open them from here to restore them."))
     proys = P.list_projects(grupo=grupo, incluir_archivados=_ver_arch)
     if not _ver_arch:
@@ -1784,33 +1897,53 @@ def _panel_proyectos(grupo: str):
     aheads = P.aheads_of_group(grupo)     # {pid: días de adelanto} (cacheado)
 
     # ── Filtro rápido (v209): búsqueda + chips, en doble columna ──
+    # v558 · claves `cpxseg_*`: el selector segmentado de la app (v551) en vez de bolitas.
     _fc1, _fc2 = st.columns([2, 3])
     _q = _fc1.text_input(t("Search"), key="cart_q", label_visibility="collapsed",
+                         persist_state="session",
                          placeholder=t("Search project or client…"))
     _filt = _fc2.radio(t("Filter"), ["Todos", "🔴 Retraso", "🟢 Adelanto", "⏸ En pausa"],
                        format_func=lambda o: {"Todos": t("All"),
                                               "🔴 Retraso": ":red[:material/trending_down:] " + t("Behind"),
                                               "🟢 Adelanto": ":green[:material/trending_up:] " + t("Ahead"),
                                               "⏸ En pausa": ":material/pause: " + t("On hold")}.get(o, o),
-                       horizontal=True, key="cart_filt", label_visibility="collapsed")
+                       horizontal=True, key="cpxseg_cart_filt", label_visibility="collapsed",
+                       persist_state="session")
     # v306: filtro por TIPO. Solo aparece si el grupo tiene proyectos de más de un tipo
     # (o alguno sin marcar): con todo igual sería un desplegable que no filtra nada.
     _SIN_T = "— no type —"
     _tipos_pres = sorted({str(p.get("Type", "")).strip() or _SIN_T for p in proys})
     _tsel = "Todos"
     if len(_tipos_pres) > 1:
+        # ⚠️ Lo recordado puede ser un tipo que ya no está (se archivó su única obra):
+        # se ASIGNA «Todos» antes de instanciar — un valor fuera de las opciones no vale.
+        if st.session_state.get("cart_tipo", "Todos") not in ["Todos"] + _tipos_pres:
+            st.session_state["cart_tipo"] = "Todos"
+        # v558 · «Todos» es el ID interno; en pantalla decía «Todos» (visto en producción).
         _tsel = st.selectbox(t("Type"), ["Todos"] + _tipos_pres, key="cart_tipo",
-                             label_visibility="collapsed")
+                             format_func=lambda o: t("All types") if o == "Todos" else o,
+                             label_visibility="collapsed", persist_state="session")
     _ql = (_q or "").strip().lower()
+    # v558 · lo que llegó del Home (un indicador): solo esas obras, hasta quitarlo.
+    _solo = st.session_state.get("_cart_solo") or None
+    _ids_solo = {str(x) for x in (_solo or {}).get("ids", [])}
 
-    def _pasa(p):
+    def _pasa_sin_ritmo(p):
         _pid = str(p.get("ID", ""))
+        if _solo and _pid not in _ids_solo:
+            return False
         # El ID entra en la búsqueda: es la identidad del proyecto y ahora se ve, así
         # que tiene que poder buscarse por él (pegar "PRJ-0007" y que salga).
         if _ql and _ql not in (f"{p.get('Name', '')} {p.get('Client', '')} "
                                f"{_pid}").lower():
             return False
         if _tsel != "Todos" and (str(p.get("Type", "")).strip() or _SIN_T) != _tsel:
+            return False
+        return True
+
+    def _pasa(p):
+        _pid = str(p.get("ID", ""))
+        if not _pasa_sin_ritmo(p):
             return False
         if _filt == "🔴 Retraso":
             return bool(delays.get(_pid))
@@ -1819,18 +1952,45 @@ def _panel_proyectos(grupo: str):
         if _filt == "⏸ En pausa":
             return str(p.get("Status", "")) == "On hold"
         return True
-    _proys_f = [p for p in proys if _pasa(p)]
+    _base_f = [p for p in proys if _pasa_sin_ritmo(p)]
+    _proys_f = [p for p in _base_f if _pasa(p)]
 
-    _nr, _na = len(delays), len(aheads)
-    _hc1, _hc2 = st.columns([3, 2])
-    _hc1.markdown(f"**{t('Portfolio')} — {len(_proys_f)} of {len(proys)}**"
-                  + (f"  ·  :red[:material/cancel:] {_nr} behind schedule" if _nr else "")
-                  + (f"  ·  :green[:material/check_circle:] {_na} ahead" if _na else ""))
+    if _solo:
+        with st.container(horizontal=True, vertical_alignment="center", gap="small"):
+            st.markdown(t(":material/filter_alt: From Home: only **{m}** ({n})",
+                          m=t(str(_solo.get("motivo", ""))), n=len(_ids_solo)),
+                        width="content")
+            if st.button(t(":material/close: Show all"), key="cart_solo_x", type="tertiary",
+                         width="content"):
+                st.session_state.pop("_cart_solo", None)
+                st.rerun()
+
+    # ⚠️ v558 · los contadores cuentan LO QUE SE VE (búsqueda, tipo, Home) y son ACTIVOS:
+    # antes «3 behind schedule» contaba el grupo entero aunque el filtro dejara 1 obra
+    # («1 of 3 · 3 behind», visto en producción) y no hacía nada al tocarlo.
+    _nr = sum(1 for p in _base_f if delays.get(str(p.get("ID", ""))))
+    _na = sum(1 for p in _base_f if aheads.get(str(p.get("ID", ""))))
+    _hc1, _hc2 = st.columns([3, 2], vertical_alignment="center")
+    with _hc1.container(horizontal=True, vertical_alignment="center", gap="small"):
+        st.markdown(f"**{t('Portfolio')} — {len(_proys_f)} of {len(proys)}**", width="content")
+        for _cnt, _val, _etq_c, _kc in (
+                (_nr, "🔴 Retraso", ":red[:material/cancel:] " + t("{n} behind schedule", n=_nr),
+                 "cart_cnt_retraso"),
+                (_na, "🟢 Adelanto", ":green[:material/check_circle:] " + t("{n} ahead", n=_na),
+                 "cart_cnt_adelanto")):
+            if not _cnt:
+                continue
+            _activo = _filt == _val
+            if st.button(_etq_c, key=_kc, type="tertiary", width="content",
+                         help=(t("Show all again") if _activo else t("Show only these"))):
+                st.session_state["_cart_filt_pending"] = "Todos" if _activo else _val
+                st.rerun()
     # v228: toggle de vista — tarjetas (resumen visual) o lista (tabla clásica).
     _view = _hc2.radio(t("View"), ["📋 Lista", "🃏 Tarjetas"], horizontal=True,
                        format_func=lambda o: {"🃏 Tarjetas": t(":material/grid_view: Cards"),
                                               "📋 Lista": t(":material/list: List")}.get(o, o),
-                       key="cart_view", label_visibility="collapsed")
+                       key="cpxseg_cart_view", label_visibility="collapsed",
+                       persist_state="session")
     # Pendiente de facturar de TODO el grupo, en UNA pasada (v397). Medido: ~32 ms y
     # 0 llamadas nuevas a Sheets en un rerun normal — por eso puede ir en la lista
     # (regla v142: medir antes de poner un dato derivado en cada fila).
@@ -1840,7 +2000,13 @@ def _panel_proyectos(grupo: str):
     except Exception:
         _pend = {}
     if not _proys_f:
-        st.caption(t("No project matches the filter."))
+        # v558 · con los filtros recordados, «nada coincide» necesita una salida a mano.
+        with st.container(horizontal=True, vertical_alignment="center", gap="small"):
+            st.caption(t("No project matches the filter."), width="content")
+            if st.button(t(":material/filter_alt_off: Clear filters"), key="cart_limpiar",
+                         type="tertiary", width="content"):
+                st.session_state["_cart_pending"] = {}
+                st.rerun()
     elif _view == "📋 Lista":
         _cartera_lista(_proys_f, alarmas, delays, aheads, costos, pendientes=_pend,
                        grupo=grupo, puede_facturar=True)
@@ -3064,7 +3230,8 @@ def _dashboard_agrupacion(ag, grupo):
             "Avance %": P._num(p.get("Progress")),
             "Weight": P._num(p.get("WeightInGrouping")),
             "Entrega prev.": _pf.strftime("%d/%m") if _pf else "—",
-            "Status": (f"{delays[pid]:.0f} d behind" if pid in delays
+            # ⚠️ v558 · era otra «Status» (v444) y pisaba el estado del ascensor.
+            "Pace": (f"{delays[pid]:.0f} d behind" if pid in delays
                      else (f"{aheads[pid]:.0f} d ahead" if pid in aheads else "on time")),
             "Hours": _hs[i], "vs media h": _dev(_hs[i], _hm),
             "Cost": _cs[i], "vs media $": _dev(_cs[i], _cm),

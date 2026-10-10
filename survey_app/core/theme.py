@@ -414,6 +414,17 @@ def dinero(valor, dec: int = 2, simbolo: str = "$") -> str:
     return f"\\{simbolo}{v:,.{dec}f}"
 
 
+def dinero_html(valor, dec: int = 2, simbolo: str = "$") -> str:
+    """El mismo importe que `dinero`, SIN el escape: para meterlo DENTRO de HTML (v558).
+
+    ⚠️ Dentro de un bloque HTML de `st.markdown(..., unsafe_allow_html=True)` el markdown
+    no procesa los escapes, así que el `\\$` de `dinero` salía con la barra a la vista
+    (visto en producción en las tarjetas de la cartera: «🧾 \\$133»). Ahí tampoco hace
+    falta: el bloque HTML va crudo y no abre LaTeX. Fuera de HTML, `dinero`.
+    """
+    return dinero(valor, dec, simbolo)[1:]
+
+
 def kpi_row(items):
     """Fila de tarjetas KPI. `items` = [(label, valor)] o [(label, valor, sub)] o
     [(label, valor, sub, color_acento)]. Una sola fila responsive."""

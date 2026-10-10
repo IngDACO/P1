@@ -192,13 +192,44 @@ def _detalle_factura(grupo, fid):
 def _nueva_factura(grupo):
     if st.button(t(":material/arrow_back: Cancel"), key="fac_new_back"):
         st.session_state.pop("_fac_nueva", None)
+        st.session_state.pop("_fac_cli_sin_ficha", None)      # v558
         st.rerun()
     st.markdown(t("## :material/add_circle: New invoice"))
 
     fichas = C.list_clientes(grupo)
     if not fichas:
-        st.info(t(":material/info: Create a client first in 👥 Contacts."))
+        # ⚠️ v558 · era un callejón: «Invoice» desde la tarjeta de una obra cuyo cliente es
+        # TEXTO («Cliente de prueba», sin ficha) llegaba aquí con un «Create a client
+        # first» sin botón ni nombre (visto en producción). Y el atajo dejaba colgados
+        # su aviso y su obra, que salían más tarde en otra factura.
+        # ⚠️ El nombre se GUARDA mientras se está aquí: el clic del botón es otra pasada,
+        # y en ella el aviso del atajo ya se habría consumido (lo cazó verif_v558).
+        _av0 = st.session_state.pop("_fac_aviso_cli", None)
+        if _av0:
+            st.session_state["_fac_cli_sin_ficha"] = _av0
+        _cli_obra = st.session_state.get("_fac_cli_sin_ficha")
+        st.session_state.pop("_fac_prj_pending", None)
+        if _cli_obra and _cli_obra != "—":
+            st.info(t(":material/info: Invoices need a client record, and this company has none yet. This job's client, **{c}**, only exists as text on the job: create its record and come back — the job is matched by name.",
+                      c=_cli_obra))
+            if st.button(t(":material/contacts: Create the record for {c}", c=_cli_obra),
+                         key="fac_ir_cli", type="primary"):
+                # El detalle de Contacts de un cliente SIN ficha ya sabe crearla (v255):
+                # se abre por su nombre normalizado.
+                st.session_state["_cli_open"] = C._norm(_cli_obra)
+                st.session_state.pop("_fac_nueva", None)
+                st.session_state.pop("_fac_cli_sin_ficha", None)
+                st.session_state["_admin_nav_pending"] = ("contactos", None)
+                st.rerun()
+        else:
+            st.info(t(":material/info: Invoices need a client record, and this company has none yet."))
+            if st.button(t(":material/contacts: Go to Contacts"), key="fac_ir_cli", type="primary"):
+                st.session_state.pop("_fac_nueva", None)
+                st.session_state.pop("_fac_cli_sin_ficha", None)
+                st.session_state["_admin_nav_pending"] = ("contactos", None)
+                st.rerun()
         return
+    st.session_state.pop("_fac_cli_sin_ficha", None)          # ya hay fichas: no aplica
     _by_name = {c.get("Name", ""): c for c in fichas}
     cli_sel = st.selectbox(t(":material/contacts: Client"), list(_by_name.keys()), key="fac_cli")
     cli = _by_name.get(cli_sel, {})

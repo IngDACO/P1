@@ -12,7 +12,8 @@ RAIZ = Path(r"C:\Users\diego\P1\survey_app")
 
 ROTURAS = [
     # media traducción: la fila vuelve al español y la column_config se queda
-    ("core/projects_ui.py", '"Status": _sit', '"Situación": _sit',
+    # ⚠️ ancla CADUCADA por v558: el ritmo pasó de «Status» (repetida, pisada) a «Pace».
+    ("core/projects_ui.py", '"Pace": _sit', '"Situación": _sit',
      "una cabecera queda A MEDIAS (fila vs column_config)"),
     # el DATO: la columna del editor persistido en DatosJSON
     ("core/rail_cut_ui.py", 'disabled=["Riel"]', 'disabled=["Rail"]',
