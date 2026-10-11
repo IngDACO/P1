@@ -1340,7 +1340,8 @@ def render_survey_tab(_ROL, _GRUPO):
                         f"Reason: {interp_usr.get('_error', interp.get('_error', 'not available'))}.\n\n"
                         "Configure `ANTHROPIC_API_KEY` in the Streamlit Cloud Secrets and calculate again."
                     )
-                elif st.button(t(":material/description: Generate the client report"), width="stretch"):
+                elif st.button(t(":material/description: Generate the client report"), width="stretch",
+                               key="sv_gen_informe_cliente"):
                     with st.spinner("Generating the client report..."):
                         user_pdf = generate_user_report(
                             project_params      = r["all_params"],

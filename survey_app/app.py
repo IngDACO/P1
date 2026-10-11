@@ -277,7 +277,7 @@ if _ROL == "field" and not st.session_state.get("_contact_ok"):
             st.markdown(f"**Your step:** open the bot and press **Start** → "
                         f"[t.me/{_bot}](https://t.me/{_bot}?start={_code})")
             st.caption(t("Your administrator then links you from your record."))
-        if st.button(t(":material/sync: It is done — check again")):
+        if st.button(t(":material/sync: It is done — check again"), key="contacto_listo"):
             st.rerun()
         st.stop()
 
@@ -378,5 +378,8 @@ if _ROL in ("administrator", "field"):
 # El default NO puede ser "home" fijo: campo y propietario no tienen esa sección;
 # `render_admin_content` cae a la primera del rol (v297).
 _home.render_admin_content(st.session_state.get("_admin_sec", ""), _GRUPO)
+# v562 · la pasada llegó al final: las notas de clic que no usó ningún botón se tiran
+# (`core/botones`: un clic nunca dispara un botón más tarde, en otra pantalla).
+_botones.fin_de_pasada()
 
 # ══════════════════════════════════════════════════════

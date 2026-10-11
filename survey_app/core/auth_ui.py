@@ -339,7 +339,7 @@ def render_login() -> bool:
             p1 = st.text_input(t("Password"), type="password", key="setup_p1",
                                help=t("At least {n} characters.", n=auth.MIN_PW))   # v557
             p2 = st.text_input(t("Repeat password"), type="password", key="setup_p2")
-            if st.button(t("Create owner"), type="primary", width="stretch"):
+            if st.button(t("Create owner"), type="primary", width="stretch", key="setup_crear"):
                 if not u or not p1:
                     st.error(t("Fill in username and password."))
                 elif p1 != p2:
@@ -403,13 +403,13 @@ def render_login() -> bool:
                     st.session_state.get("login_remember", False))
                 st.rerun()
 
-            if st.button(t("Sign in"), type="primary", width="stretch"):
+            if st.button(t("Sign in"), type="primary", width="stretch", key="login_entrar"):
                 _do_login(force=False)
 
             if st.session_state.get("_blocked_user"):
                 st.caption(t("If this is **you** and you left the session open on another device, you can close it and sign in here."))
                 if st.button(t(":material/lock_open: Close the other session and sign in here"),
-                             width="stretch"):
+                             width="stretch", key="login_forzar"):
                     _do_login(force=True)
     return False
 
