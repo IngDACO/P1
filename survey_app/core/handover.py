@@ -49,6 +49,12 @@ FALTA = "missing"          # no está
 PARCIAL = "partial"        # está a medias, y se dice en qué
 
 
+def _nom(ctx, u) -> str:
+    """El NOMBRE de una persona para los textos (v559): salía el login. La pantalla lo pasa
+    en `ctx["nombres"]` ({login: nombre}); sin él, el login de siempre."""
+    return str((ctx.get("nombres") or {}).get(u, u))
+
+
 def _f(v):
     """Una fecha desde texto ISO, o None. No lanza: una celda a mano trae de todo."""
     if isinstance(v, date):
@@ -162,9 +168,10 @@ def _ev_installer_certs(ctx):
     if sin or vencidos:
         _p = []
         if sin:
-            _p.append("no certificate: %s" % ", ".join(sorted(sin)))
+            _p.append("no certificate: %s" % ", ".join(sorted(_nom(ctx, u) for u in sin)))
         if vencidos:
-            _p.append("expired before their last day: %s" % ", ".join(sorted(vencidos)))
+            _p.append("expired before their last day: %s"
+                      % ", ".join(sorted(_nom(ctx, u) for u in vencidos)))
         return (FALTA if sin else PARCIAL), " · ".join(_p)
     return OK, "%d worker%s with a valid certificate" % (
         len(trabajaron), "" if len(trabajaron) == 1 else "s")
@@ -245,7 +252,7 @@ def incoherencias(ctx) -> list:
             if _d and _v and max(_v) < _d:
                 out.append({"tipo": "cert_vencido",
                             "texto": "%s signed the pre-start of %s, but their certificate "
-                                     "expired on %s" % (u, _d.strftime("%d/%m/%Y"),
+                                     "expired on %s" % (_nom(ctx, u), _d.strftime("%d/%m/%Y"),
                                                         max(_v).strftime("%d/%m/%Y"))})
 
     # 2) obra cerrada sin verificación de plomada
@@ -262,7 +269,7 @@ def incoherencias(ctx) -> list:
         if _extra:
             out.append({"tipo": "no_asignado",
                         "texto": "Hours were booked to this job by people not assigned to "
-                                 "it: %s" % ", ".join(_extra)})
+                                 "it: %s" % ", ".join(_nom(ctx, u) for u in _extra)})
 
     # 4) actividad cerrada antes de empezar
     for a in acts:

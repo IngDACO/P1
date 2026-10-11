@@ -452,6 +452,10 @@ st.session_state.setdefault("auth", {"usuario": "campo000", "nombre": "Field Tes
                                      "rol": "field", "grupo": "cliente1"})
 from core import clock, daily_log as DL, daily_log_ui as DLU
 from core import projects as P, stage_progress as SP, stages as S
+# v559 · los partes enseñan al autor y a quien revisó por su NOMBRE (`daily_log_ui._nombre`
+# lee `auth.list_users`): se sustituye para no depender de la hoja real.
+from core import auth as _A
+_A.list_users = lambda *a, **k: [{"User": "campo000", "Name": "Field Test"}]
 
 PLAN = S.plan_de("Installation", ())
 HOY = "2026-09-29"
@@ -589,8 +593,9 @@ chk("«Confirmar» desactivado mientras no haya nada marcado",
     _b is not None and _b.proto.disabled is True)
 chk("el parte se enseña con sus SALTOS de línea",
     any("Installed header  \nShaft wiring done" in x for x in _txt(at)))
+# ⚠️ CADUCADO por v559: quien revisó sale por su NOMBRE (antes el login «campo000»).
 chk("el parte revisado enseña su estado, no la tarjeta",
-    any("Proposals reviewed by campo000" in x for x in _txt(at)))
+    any("Proposals reviewed by Field Test" in x for x in _txt(at)))
 chk("«L2» sin contestar: «Call button wiring» no se propone en su tarjeta",
     not [c for c in _cb(at, "fld_pp_LOG-9003_") if c.key.endswith("Call button wiring")],
     [c.key for c in _cb(at, "fld_pp_LOG-9003_")])
@@ -703,8 +708,9 @@ at3 = _app(_vista="admin", _rev={"LOG-9002": "campo000"})
 chk("admin: ninguna casilla ni botón de propuestas",
     not [w for w in list(at3.checkbox) + list(at3.button) if "_pp_" in (w.key or "")],
     [w.key for w in list(at3.checkbox) + list(at3.button) if "_pp_" in (w.key or "")])
+# ⚠️ CADUCADO por v559: por su NOMBRE, no el login.
 chk("...pero sí ve quién revisó",
-    any("Proposals reviewed by campo000" in c.value for c in at3.caption))
+    any("Proposals reviewed by Field Test" in c.value for c in at3.caption))
 
 print("")
 print("=" * 70)

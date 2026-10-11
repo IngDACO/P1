@@ -98,6 +98,15 @@ def contexto(pid, grupo, prj) -> dict:
     except Exception:
         pass
 
+    # v559 · los NOMBRES de la gente, para los textos («no certificate: Admin2» salía con el
+    # login). `handover` es módulo HOJA y no busca nada: se le pasan aquí.
+    nombres = {}
+    try:
+        from core import auth as _A
+        nombres = _A.etiqueta_usuarios(_A.list_users())
+    except Exception:
+        pass
+
     return {
         "params": _p, "matrix": _mx,
         # La plomada se calcula del survey: si hay `LengthTemplate`, se midió.
@@ -105,6 +114,7 @@ def contexto(pid, grupo, prj) -> dict:
         "acts": acts, "prestarts": prestarts,
         "trabajaron": trabajaron, "credenciales": creds, "docs": docs,
         "asignados": [x.strip() for x in str(prj.get("FieldAssigned", "")).split(";") if x.strip()],
+        "nombres": nombres,
     }
 
 

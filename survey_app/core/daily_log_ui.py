@@ -20,6 +20,32 @@ from core.i18n import t
 logger = logging.getLogger(__name__)
 
 
+def _nombre(login) -> str:
+    """El NOMBRE de una persona para mostrar (v559): salía el login («campo000»). El login
+    sigue siendo la identidad para todo lo demás. Sin nombre, el login."""
+    _u = str(login or "")
+    try:
+        from core import auth
+        return auth.etiqueta_usuarios(auth.list_users()).get(_u, _u)
+    except Exception:
+        return _u
+
+
+def _dmy(iso) -> str:
+    """«2026-09-26» → «26/09/2026» (v559: los partes enseñaban la fecha en ISO)."""
+    s = str(iso or "")
+    if len(s) >= 10 and s[4] == "-" and s[7] == "-":
+        return f"{s[8:10]}/{s[5:7]}/{s[:4]}"
+    return s
+
+
+def _cuantos(n, d) -> str:
+    """«1 log · 1 day covered» / «3 logs · 2 days covered» (v559: salía «1 logs»)."""
+    _a = t("1 log") if n == 1 else t("{n} logs", n=n)
+    _b = t("1 day covered") if d == 1 else t("{d} days covered", d=d)
+    return f"{_a} · {_b}"
+
+
 def _linea(r, puede_borrar, key_prefix, extra=None) -> None:
     """Un parte ya guardado: quién, cuándo y qué escribió. `extra` (v523) pinta debajo lo
     que la app leyó en él, antes del separador."""
@@ -32,9 +58,13 @@ def _linea(r, puede_borrar, key_prefix, extra=None) -> None:
     # mismo minuto (ver `daily_log.partes`), pero a quien lee no le dicen nada.
     # ⚠️ v526 · Y cuando el parte es de OTRO día, la fecha de escritura va entera pero
     # sin segundos: salía «2026-09-29 16:35:28» (visto en producción).
-    _hora = _creado[11:16] if _creado[:10] == _dia and len(_creado) >= 16 else _creado[:16]
+    # ⚠️ v559 · las fechas en DD/MM/YYYY y el autor por su NOMBRE (salía
+    # «2026-09-26 · campo000 · 2026-09-29 16:35»).
+    _hora = (_creado[11:16] if _creado[:10] == _dia and len(_creado) >= 16
+             else (f"{_dmy(_creado[:10])} {_creado[11:16]}".strip() if _creado else ""))
     st.markdown(
-        theme.chip(f"{_dia} · {_autor}" + (f" · {_hora}" if _hora else ""),
+        theme.chip(f"{_dmy(_dia)} · {_nombre(_autor) if _autor != '—' else _autor}"
+                   + (f" · {_hora}" if _hora else ""),
                    color=theme.GRIS_TXT),
         unsafe_allow_html=True)
     # ⚠️ v523 · Con sus saltos de línea: en Markdown un salto simple se come y el parte
@@ -377,8 +407,9 @@ def _estado_revision(r, pid) -> None:
         n = len(SP.de_parte(pid, r.get("ID")))
     except Exception:
         n = 0
+    _q = str(r.get("ReviewedBy", "") or "")
     st.caption(t(":material/task_alt: Proposals reviewed by {q} · {n} activities credited "
-                 "from this log", q=str(r.get("ReviewedBy", "") or "—"), n=n))
+                 "from this log", q=_nombre(_q) if _q else "—", n=n))
 
 
 def render_campo(pid, grupo, usuario, key_prefix="fld") -> None:
@@ -436,8 +467,7 @@ def render_campo(pid, grupo, usuario, key_prefix="fld") -> None:
         st.caption(t("No daily logs yet for this job."))
         return
     st.markdown("")
-    st.caption(t("{n} logs · {d} days covered", n=len(_mios),
-                 d=DL.dias_cubiertos(pid)))
+    st.caption(_cuantos(len(_mios), DL.dias_cubiertos(pid)))
     _hoy_txt = _hoy.strftime("%Y-%m-%d")
     for r in _mios[:10]:
         # Borrar solo lo PROPIO y solo lo de hoy — el módulo lo vuelve a comprobar;
@@ -463,7 +493,7 @@ def render_admin(pid, grupo, key_prefix="adm") -> None:
     if not _p:
         st.caption(t("The crew has not written any daily log for this job yet."))
         return
-    st.caption(t("{n} logs · {d} days covered", n=len(_p), d=DL.dias_cubiertos(pid)))
+    st.caption(_cuantos(len(_p), DL.dias_cubiertos(pid)))
     for r in _p[:25]:
         # v523 · El admin ve si el autor revisó las propuestas y cuánto acreditó desde el
         # parte. No confirma por él: quien no escribió el parte no sabe si fue así.

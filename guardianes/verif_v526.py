@@ -169,6 +169,11 @@ import streamlit as st
 st.session_state.setdefault("auth", {"usuario": "otro", "nombre": "x", "rol": "field",
                                      "grupo": "cliente1"})
 from core import clock, daily_log as DL, daily_log_ui as DLU
+# v559 · el autor sale por su NOMBRE (`daily_log_ui._nombre` lee `auth.list_users`): se
+# sustituye para no depender de la hoja real, y se repone al final del guion (v534).
+from core import auth as _A
+_LU0 = _A.list_users
+_A.list_users = lambda *a, **k: [{"User": "campo000", "Name": "Field Test"}]
 LOGS = [{"ID": "LOG-1", "ProjectID": "P", "Date": "2026-09-26", "Author": "campo000",
          "Created": "2026-09-29 16:35:28", "Text": "Installed header"},
         {"ID": "LOG-2", "ProjectID": "P", "Date": "2026-09-29", "Author": "campo000",
@@ -177,12 +182,15 @@ DL.partes = lambda pid, autor=None, dia=None: [dict(r) for r in LOGS]
 DL.dias_cubiertos = lambda pid: 2
 clock.today = lambda grupo=None: _dt.date(2026, 9, 29)
 DLU.render_admin("P", "cliente1")
+_A.list_users = _LU0
 '''
 at = AppTest.from_string(APP_DL, default_timeout=90).run()
 _md = " | ".join(m.value for m in at.markdown)
-chk("de otro día: «2026-09-29 16:35», sin «:28»",
-    "2026-09-26 · campo000 · 2026-09-29 16:35" in _md and "16:35:28" not in _md, _md[:300])
-chk("del mismo día: solo la hora", "2026-09-29 · campo000 · 17:02" in _md
+# ⚠️ CADUCADO por v559: las fechas en DD/MM/YYYY y el autor por su NOMBRE (antes ISO y
+# el login). El principio de v526 no cambia: sin segundos, y del mismo día solo la hora.
+chk("de otro día: «29/09/2026 16:35», sin «:28»",
+    "26/09/2026 · Field Test · 29/09/2026 16:35" in _md and "16:35:28" not in _md, _md[:300])
+chk("del mismo día: solo la hora", "29/09/2026 · Field Test · 17:02" in _md
     and "17:02:11" not in _md, _md[:300])
 
 # ═════════════════════════════════════════════════════════════════

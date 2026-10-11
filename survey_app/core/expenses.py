@@ -519,14 +519,33 @@ def _esc(s) -> str:
     return (str(s).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;"))
 
 
-def _money(v) -> str:
-    """$1.2k / $340 — etiquetas cortas para que quepan en los ejes."""
+def _money(v, dec=0) -> str:
+    """$1.2k / $340 — etiquetas cortas para que quepan en los ejes.
+
+    `dec` (v559) son los decimales por debajo de $1.000: el eje los pide cuando sus
+    marcas están a menos de $1 unas de otras (si no, salían «$0 $1 $1 $2 $2 $2»)."""
     v = float(v or 0)
     if abs(v) >= 1_000_000:
         return f"${v/1_000_000:.1f}M"
     if abs(v) >= 1_000:
         return f"${v/1_000:.1f}k"
-    return f"${v:.0f}"
+    return f"${v:.{dec}f}"
+
+
+def _dmy(iso) -> str:
+    """«2026-09-30» → «30/09/2026» (v559). Lo que no se pueda leer, tal cual."""
+    s = str(iso or "")
+    if len(s) >= 10 and s[4] == "-" and s[7] == "-":
+        return f"{s[8:10]}/{s[5:7]}/{s[:4]}"
+    return s
+
+
+def _dec_eje(paso) -> int:
+    """Decimales para que dos marcas seguidas del eje no se lean iguales (v559)."""
+    paso = abs(float(paso or 0))
+    if paso >= 1 or paso <= 0:
+        return 0
+    return 1 if paso >= 0.1 else 2
 
 
 def spend_svg(curva: dict, proyectado=None, titulo: str = "") -> str:
@@ -560,18 +579,20 @@ def spend_svg(curva: dict, proyectado=None, titulo: str = "") -> str:
          f'<rect x="0" y="0" width="{VW}" height="{VH}" fill="#ffffff"/>',
          f'<text x="18" y="24" font-size="13" fill="#1a3a5c" font-weight="bold">'
          f'CUMULATIVE SPEND</text>',
+         # v559 · las fechas en DD/MM/YYYY (salían en ISO) y «1 entry» en singular.
          f'<text x="18" y="38" font-size="8.5" fill="#5b6472">'
-         f'{_esc(titulo) + " · " if titulo else ""}{fechas[0]} → {fechas[-1]}'
-         f' · {n} entries</text>']
+         f'{_esc(titulo) + " · " if titulo else ""}{_dmy(fechas[0])} → {_dmy(fechas[-1])}'
+         f' · {n} {"entry" if n == 1 else "entries"}</text>']
 
     # rejilla horizontal
+    _dec = _dec_eje(techo / 4.0)
     for k in range(5):
         v  = techo * k / 4.0
         yy = sy(v)
         p.append(f'<line x1="{ML}" y1="{yy:.1f}" x2="{VW-MR}" y2="{yy:.1f}" '
                  f'stroke="{"#c3ccd8" if k == 0 else "#f0f2f6"}" stroke-width="1"/>')
         p.append(f'<text x="{ML-6}" y="{yy+3:.1f}" text-anchor="end" font-size="8" '
-                 f'fill="#667080">{_money(v)}</text>')
+                 f'fill="#667080">{_money(v, _dec)}</text>')
 
     base = sy(0)
     # mano de obra (abajo) y compras encima: se ve el reparto, no solo el total
@@ -595,8 +616,9 @@ def spend_svg(curva: dict, proyectado=None, titulo: str = "") -> str:
         yy = sy(pres)
         p.append(f'<line x1="{ML}" y1="{yy:.1f}" x2="{VW-MR}" y2="{yy:.1f}" '
                  f'stroke="{C_PRES}" stroke-width="1.4" stroke-dasharray="6,4"/>')
+        # v559 · «Presup.» y «Fin» seguían en español dentro del dibujo.
         p.append(f'<text x="{VW-MR+5}" y="{yy+3:.1f}" font-size="8.5" fill="{C_PRES}" '
-                 f'font-weight="bold">Presup. {_money(pres)}</text>')
+                 f'font-weight="bold">{t("Budget")} {_money(pres)}</text>')
 
     # a este ritmo terminas aqui
     if proyectado:
@@ -608,7 +630,7 @@ def spend_svg(curva: dict, proyectado=None, titulo: str = "") -> str:
                  f'stroke-dasharray="6,4" stroke-opacity="0.85"/>')
         p.append(f'<circle cx="{VW-MR:.1f}" cy="{yy:.1f}" r="3.5" fill="{col}"/>')
         p.append(f'<text x="{VW-MR+5}" y="{yy+3:.1f}" font-size="8.5" fill="{col}" '
-                 f'font-weight="bold">Fin {_money(proyectado)}</text>')
+                 f'font-weight="bold">{t("Finish")} {_money(proyectado)}</text>')
 
     # eje de fechas (como mucho 6 etiquetas)
     paso = max(1, n // 6)

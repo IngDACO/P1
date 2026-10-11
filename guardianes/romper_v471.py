@@ -22,9 +22,11 @@ def corre(g):
 ROTURAS = [
     ("la LECTURA vuelve a 'Hours' (KeyError: la pantalla revienta)",
      "core/projects_ui.py", '_ed.iloc[i]["Horas"]', '_ed.iloc[i]["Hours"]', "verif_v471"),
+    # ⚠️ ancla CADUCADA por v559: la lista `disabled` empieza ahora por «Usuario» (el login
+    # oculto con el que se guarda la ganancia). Lo que se rompe es lo mismo: «Horas».
     ("las HORAS vuelven a quedar editables",
-     "core/projects_ui.py", 'disabled=["Persona", "Horas", "Costo/h"',
-     'disabled=["Persona", "Hours", "Costo/h"', "verif_v471"),
+     "core/projects_ui.py", 'disabled=["Usuario", "Persona", "Horas", "Costo/h"',
+     'disabled=["Usuario", "Persona", "Hours", "Costo/h"', "verif_v471"),
     ("el COSTO de la cotizacion vuelve a quedar editable",
      "core/quotes_ui.py", 'disabled=["Concepto", "Costo"', 'disabled=["Concepto", "Cost"',
      "verif_v471"),

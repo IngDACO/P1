@@ -69,8 +69,11 @@ ROTURAS = [
      PUI, [('if "fieldproj_sel" not in st.session_state and len(idmap) == 1:',
             'if "fieldproj_sel" not in st.session_state and len(idmap) == 0:')]),
 
+    # ⚠️ ancla CADUCADA por v559: la fecha del parte sale en DD/MM/YYYY
+    # (`_dmy(_creado[:10])` + la hora): lo que se rompe es lo mismo, enseñar los segundos.
     ("un parte de otro dia vuelve a ensenar los SEGUNDOS",
-     DUI, [("and len(_creado) >= 16 else _creado[:16]", "and len(_creado) >= 16 else _creado")]),
+     DUI, [('else (f"{_dmy(_creado[:10])} {_creado[11:16]}".strip() if _creado else ""))',
+            'else (f"{_dmy(_creado[:10])} {_creado[11:]}".strip() if _creado else ""))')]),
 
     ("la caja del asistente vuelve al espanol y sin `t()`",
      APPF, [('st.chat_input(t("Ask your question…"), key=',

@@ -23,10 +23,11 @@ ROTURAS = [
     ("el backend acepta cualquier cosa como tipo", "core/credentials.py",
      "    if not isinstance(tipo, str) or not tipo.strip():",
      "    if not str(tipo).strip():"),
+    # ⚠️ ancla CADUCADA por v559: la persona sale por su NOMBRE (`_nm.get(u, u)`).
     ("el aviso vuelve a escribir «falta» a mano", "core/projects_ui.py",
-     '''                    no_cumplen.append(f"**{u}**: " + ", ".join(
+     '''                    no_cumplen.append(f"**{_nm.get(u, u)}**: " + ", ".join(
                         f"{_c} ({_etq(comp['por_tipo'][_c])})" for _c in faltan))''',
-     '''                    no_cumplen.append(f"**{u}**: " + ", ".join(
+     '''                    no_cumplen.append(f"**{_nm.get(u, u)}**: " + ", ".join(
                         f"{_c} (falta)" for _c in faltan))'''),
 ]
 CONTROL = ("CONTROL: comentario inocuo", "core/credentials.py",

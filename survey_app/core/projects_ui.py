@@ -244,6 +244,15 @@ def _kpi_card(label, value, color=None, pie=None, var=None):
     # importe salía a 2.85:1 sobre blanco.
     _seg = theme.texto_seguro(color)
     _val = f"color:{_seg};" if color else ""
+    # ⚠️ v559 · Una cifra LARGA a 26 px no cabe en la tarjeta y el navegador la parte por
+    # dentro: «09/11/202» / «6» en «Projected finish» (visto en producción a 1024 px con el
+    # menú abierto: 126 px para la cifra). Más pequeña cuanto más larga.
+    # ⚠️ Tamaños de la ESCALA del tema (verif_v333: 11·12·13·14·16·18·21·26·34).
+    _lv = len(str(value))
+    if _lv >= 11:
+        _val += "font-size:18px;"
+    elif _lv >= 7:
+        _val += "font-size:21px;"
     _sub = ""
     if var and var.get("pct") is not None:
         # ⚠️ El color lo decide `mejor`, que NO siempre es "subió": en un costo,
@@ -568,8 +577,9 @@ _CAMPO_VER  = {"plano", "informe_cliente", "matriz_survey", "foto",
                "prestart", "calculo"}
 _CAMPO_SUBE = ["foto"]                                                # campo solo sube fotos
 # Etiquetas legibles para el filtro de tipo del buscador (v165).
+# v559 · «Informe admin» y «Matriz survey» seguían en español (visto en producción).
 _TIPO_LABEL = {"plano": "Drawing", "informe_cliente": "Client report",
-               "informe_admin": "Informe admin", "matriz_survey": "Matriz survey",
+               "informe_admin": "Admin report", "matriz_survey": "Survey matrix",
                "foto": "Photos", "certificado": "Certificates",
                "prestart": "Pre-Start", "calculo": "Calculations", "otro": "Others"}
 _TIPO_ORDER = ["plano", "informe_cliente", "informe_admin", "matriz_survey",
@@ -742,8 +752,10 @@ def _galeria_fotos(fotos, pid, por_pagina=6):
                 except Exception:
                     st.caption(t(":material/broken_image: not available"))
                 pie = str(d.get("Name", ""))
+                # v559 · quién la subió por su NOMBRE: salía el login.
+                _por = str(d.get("UploadedBy") or "")
                 st.caption(f"{pie[:26]}\n\n{_fecha_corta(d.get('Date'))}"
-                           + (f" · {d.get('UploadedBy')}" if d.get("UploadedBy") else ""))
+                           + (f" · {_etq_us([_por]).get(_por, _por)}" if _por else ""))
                 # Reutiliza los bytes ya bajados para la miniatura: descarga directa
                 # de la foto sin una segunda llamada a Drive.
                 if _b is not None:
@@ -774,6 +786,25 @@ def _archivos_section(pid: str):
     if not drive_store.is_configured():
         st.caption(t(":material/lock: Drive storage is not configured (the `[gdrive]` secrets are missing)."))
         return
+    # ⚠️ v559 · El borrado CONFIRMADO se ejecuta aquí, ANTES de pintar la lista (acción
+    # diferida, trampa 37): el botón solo apunta y relanza. Y la tabla nace con otra
+    # clave: la selección es un NÚMERO de fila y, con un archivo menos, apuntaría al de
+    # al lado (trampa 31: soltar la clave no le llega al navegador).
+    _kb = f"_arch_borrar_{pid}"
+    _pend = st.session_state.pop(_kb, None)
+    if _pend:
+        try:
+            if _pend.get("did"):
+                drive_store.delete(_pend["did"])
+            _ok, _msg = P.delete_document_record(pid, _pend.get("did"))
+            if _ok:
+                flash.exito(t("«{x}» deleted.", x=_pend.get("nombre") or t("file")))
+            else:
+                flash.error(_msg)
+        except Exception as ex:
+            flash.error(t("It could not be deleted: {e}", e=ex))
+        st.session_state[f"_arch_gen_{pid}"] = st.session_state.get(f"_arch_gen_{pid}", 0) + 1
+        st.rerun()
     a = st.session_state.get("auth", {})
     rol, usuario = a.get("rol", ""), a.get("usuario", "")
     es_campo     = rol == "field"
@@ -819,6 +850,10 @@ def _archivos_section(pid: str):
                 "fecha": str(r.get("Date", "")), "por": str(r.get("User", "")),
                 "did": did, "resumen": str(r.get("Summary", "")),
                 "doc": None, "run": r})
+    # v559 · quién lo subió, por su NOMBRE (el login se queda para buscar por él).
+    _nom_por = _etq_us(sorted({e["por"] for e in entries if e["por"]}))
+    for e in entries:
+        e["por_n"] = _nom_por.get(e["por"], e["por"])
 
     if not entries:
         st.caption(t("No files yet."))
@@ -853,7 +888,8 @@ def _archivos_section(pid: str):
         vis = [e for e in vis if e["tipo"] == tsel]
     if q:
         vis = [e for e in vis
-               if q in f"{e['nombre']} {e['label']} {e['resumen']} {e['por']}".lower()]
+               if q in f"{e['nombre']} {e['label']} {e['resumen']} {e['por']} "
+                       f"{e['por_n']}".lower()]
     if orden == "Más reciente":
         vis = sorted(vis, key=lambda e: e["fecha"], reverse=True)
     elif orden == "Más antiguo":
@@ -880,9 +916,11 @@ def _archivos_section(pid: str):
     if resto:
         _ev = st.dataframe(pd.DataFrame([{
             "Archivo": e["nombre"], "Tipo": e["label"],
-            "Uploaded by": e["por"], "Fecha": _fecha_corta(e["fecha"]),
+            "Uploaded by": e["por_n"], "Fecha": _fecha_corta(e["fecha"]),
         } for e in resto]), hide_index=True, width="stretch",
-            on_select="rerun", selection_mode="single-row", key=f"arch_tbl_{pid}", column_config=tabla.cfg())
+            on_select="rerun", selection_mode="single-row",
+            key=f"arch_tbl_{pid}_{st.session_state.get(f'_arch_gen_{pid}', 0)}",
+            column_config=tabla.cfg())
         st.caption(t(":material/touch_app: Tap a row to download or reopen that file."))
         try:
             _rows = list(_ev.selection.rows)
@@ -926,12 +964,28 @@ def _acciones_archivo(pid, e, puede_borrar):
             else:
                 st.warning(t("This calculation did not save its inputs (it predates v148)."))
     if puede_borrar and es_doc:
-        if st.button(t(":material/delete: Delete"), key=f"arch_del_{pid}_{did or e['nombre']}",
-                     width="stretch"):
-            if did:
-                drive_store.delete(did)
-            P.delete_document_record(pid, did)
-            st.rerun()
+        # ⚠️ v559 · Borraba el archivo de DRIVE con un solo clic, sin preguntar ni decir
+        # nada después, al lado de «Download» (visto en producción). Ahora pregunta, y el
+        # borrado se hace arriba, antes de pintar la lista (`_archivos_section`).
+        _id = did or e["nombre"]
+        _kc = f"_arch_conf_{pid}"
+        if st.session_state.get(_kc) != _id:
+            if st.button(t(":material/delete: Delete"), key=f"arch_del_{pid}_{_id}",
+                         width="stretch"):
+                st.session_state[_kc] = _id
+                st.rerun()
+        else:
+            st.warning(t("Delete «{x}»? It is removed from Drive too and cannot be "
+                         "recovered.", x=e["nombre"] or t("this file")))
+            _ca, _cb = st.columns(2)
+            if _ca.button(t(":material/delete: Yes, delete it"), key=f"arch_delok_{pid}_{_id}",
+                          type="primary", width="stretch"):
+                st.session_state.pop(_kc, None)
+                st.session_state[f"_arch_borrar_{pid}"] = {"did": did, "nombre": e["nombre"]}
+                st.rerun()
+            if _cb.button(t("Keep it"), key=f"arch_delno_{pid}_{_id}", width="stretch"):
+                st.session_state.pop(_kc, None)
+                st.rerun()
     if not did and not reabrible:
         st.caption(t("This calculation has no filed PDF and no inputs to reopen."))
 
@@ -941,7 +995,11 @@ def _subir_documento(pid, es_campo, sube_tipos, usuario):
     with st.expander(t("Upload document"), icon=":material/upload_file:", key=f"exp_updoc_{pid}"):
         if es_campo:
             st.caption(t("As a field user you can only upload **photos**."))
-        up   = st.file_uploader(t("File"), key=f"updoc_{pid}")
+        # ⚠️ v559 · generación: tras subirlo, el selector conservaba el archivo y otro clic
+        # en «Upload» lo subía DOS veces. Un `file_uploader` no se vacía asignando: se
+        # vacía con otra clave. Con la generación 0 la clave es la de siempre.
+        _ug = st.session_state.get(f"_updoc_gen_{pid}", 0)
+        up   = st.file_uploader(t("File"), key=f"updoc_{pid}" + (f"_{_ug}" if _ug else ""))
         tipo = st.selectbox(t("Type"), sube_tipos, key=f"uptipo_{pid}")
         if st.button(t("Upload"), key=f"upbtn_{pid}"):
             if up is None:
@@ -952,6 +1010,7 @@ def _subir_documento(pid, es_campo, sube_tipos, usuario):
                                              up.type or "application/octet-stream")
                     P.add_document(pid, up.name, tipo, fid, usuario)
                     flash.exito(t("Document uploaded."))
+                    st.session_state[f"_updoc_gen_{pid}"] = _ug + 1
                     st.rerun()
                 except Exception as ex:
                     st.error(f"It could not be uploaded: {ex}")
@@ -1144,7 +1203,7 @@ def _nuevo_proyecto_form(grupo: str, key: str = "nuevo"):
                 key=f"np_ing_{key}",
                 help=(t("Field users of this company.") if campos else
                       t("No field users yet: create them in Planning → Users.")))
-            pres = c2.number_input(t(":material/payments: Budget (0 = no budget)"), min_value=0.0,
+            pres = c2.number_input(t(":material/payments: Budget ($) — 0 = no budget"), min_value=0.0,
                                    step=100.0, key=f"np_pres_{key}")
             mod = st.text_input(t("Lift model"), key=f"np_mod_{key}",
                                 placeholder=t("optional"),
@@ -1260,11 +1319,14 @@ def _nuevo_proyecto_form(grupo: str, key: str = "nuevo"):
                 for _k in (_kd, f"{_kd}_bytes", f"{_kd}_id"):
                     st.session_state.pop(_k, None)
 
-            flash.exito((t(":material/check_circle: Project **{p}** created with {n} activities "
+            # v559 · «created with 1 activities» (visto en producción con un Delivery).
+            _n_act = (t("1 activity") if len(_acts) == 1
+                      else t("{n} activities", n=len(_acts)))
+            flash.exito((t(":material/check_circle: Project **{p}** created with {n} "
                            "and the drawing data loaded.") if _plano else
-                         t(":material/check_circle: Project **{p}** created with {n} activities."))
+                         t(":material/check_circle: Project **{p}** created with {n}."))
                         .replace("{p}", str(res))
-                        .replace("{n}", str(len(_acts)))
+                        .replace("{n}", _n_act)
                         + " " + t("The survey and the other tools can now feed it."))
             if asg:
                 _notificar_asignados(asg, {
@@ -1307,7 +1369,7 @@ def _autoagenda(grupo, pid, nuevos, quitados, fecha_ini, fecha_fin, al_flash=Fal
             elif r["ocupadas"]:
                 msgs.append(":material/calendar_month: Planner: the days in the range were already taken; nothing was overwritten.")
         elif nuevos and not fecha_fin:
-            msgs.append(":material/calendar_month: The project has no **end date**, so nothing was auto-planned. Set one in :material/edit: Details, or plan by hand in :material/calendar_month: Planning.")
+            msgs.append(":material/calendar_month: The project has no **end date**, so nothing was auto-planned. Set one in :material/edit: Data, or plan by hand in :material/calendar_month: Planning.")
     except Exception:
         pass
     try:
@@ -1351,12 +1413,15 @@ def _avisar_asignados(usuarios, grupo=None, exclude_pid=None, certs_req=None,
             pass
 
     ocupados = []
+    # v559 · las personas por su NOMBRE en todos los avisos (salía «campo000»); el login
+    # sigue siendo la identidad con la que se busca todo lo de abajo.
+    _nm = _etq_us(list(usuarios))
     for u in usuarios:
         try:
             info = auth.get_user(u) or {}
             if not (str(info.get("Email", "")).strip()
                     and str(info.get("TelegramChatID", "")).strip()):
-                sin_contacto.append(u)
+                sin_contacto.append(_nm.get(u, u))
         except Exception:
             pass
         try:
@@ -1365,14 +1430,14 @@ def _avisar_asignados(usuarios, grupo=None, exclude_pid=None, certs_req=None,
                 if certs_req and str(c.get("Type", "")).strip() in certs_req:
                     continue
                 if credentials.status(c.get("ExpiryDate")) in ("vencido", "por_vencer"):
-                    cred_mal.append(f"{u} — {c.get('Type', 'credencial')}: "
+                    cred_mal.append(f"{_nm.get(u, u)} — {c.get('Type', 'credencial')}: "
                                     f"{credentials.status_label(c.get('ExpiryDate'))}")
         except Exception:
             pass
         for p in otros.get(u, []):
             _fin = str(p.get("EndDateEst", "")).strip()
-            ocupados.append(f"**{u}** → :material/apartment: {p.get('Name', '')}"
-                            + (f" ({t('until')} {_fin})" if _fin else ""))
+            ocupados.append(f"**{_nm.get(u, u)}** → :material/apartment: {p.get('Name', '')}"
+                            + (f" ({t('until')} {_fmt_fecha(_fin)})" if _fin else ""))
         if certs_req:
             try:
                 comp = credentials.compliance(u, certs_req)
@@ -1384,10 +1449,10 @@ def _avisar_asignados(usuarios, grupo=None, exclude_pid=None, certs_req=None,
                 pv = [_c for _c in certs_req if comp["por_tipo"].get(_c) == "por_vencer"]
                 if faltan:
                     # ⚠️ El valor es el DATO en español; se traduce al PINTAR (v442).
-                    no_cumplen.append(f"**{u}**: " + ", ".join(
+                    no_cumplen.append(f"**{_nm.get(u, u)}**: " + ", ".join(
                         f"{_c} ({_etq(comp['por_tipo'][_c])})" for _c in faltan))
                 if pv:
-                    cert_pv.append(f"**{u}**: " + ", ".join(f"{t}" for t in pv))
+                    cert_pv.append(f"**{_nm.get(u, u)}**: " + ", ".join(f"{t}" for t in pv))
             except Exception:
                 pass
 
@@ -1416,8 +1481,8 @@ def _avisar_asignados(usuarios, grupo=None, exclude_pid=None, certs_req=None,
                     elif _d1 < _hoy:
                         continue              # sin fechas de obra: solo lo que no pasó
                     _t = _AU.TIPOS.get(str(a.get("Type", "")), {})
-                    fuera.append(f"**{u}**: {_t.get('nombre', a.get('Type'))} "
-                                 f"from {a.get('From')} to {a.get('To')}"
+                    fuera.append(f"**{_nm.get(u, u)}**: {_t.get('nombre', a.get('Type'))} "
+                                 f"from {_fmt_fecha(a.get('From'))} to {_fmt_fecha(a.get('To'))}"
                                  + ("" if str(a.get("Status")) == _AU.APROBADA
                                     else " (not approved yet)"))
         except Exception as e:
@@ -2189,7 +2254,10 @@ def _equipo_proyecto(pid, grupo):
     if not _lb["items"]:
         st.caption(t("Nobody has clocked hours to this project yet."))
         return
-    st.dataframe(pd.DataFrame([{"Persona": x["usuario"], "Horas": x["horas"]}
+    # v559 · por su NOMBRE: salían «Admin2» y «campo000» (Admin2 es «Bobo»).
+    _nm = _etq_us([x["usuario"] for x in _lb["items"]])
+    st.dataframe(pd.DataFrame([{"Persona": _nm.get(x["usuario"], x["usuario"]),
+                                "Horas": x["horas"]}
                                for x in _lb["items"]]),
                  hide_index=True, width="stretch", column_config=tabla.cfg())
     st.caption(f"Total: **{_lb['horas']:.1f} h**")
@@ -2220,16 +2288,40 @@ def _historial_section(pid: str):
         return
     if not filas:
         return
+    # v559 · quién por su NOMBRE, la fecha en DD/MM/YYYY y la plantilla también con
+    # nombres (salía «campo000 → campo000;helper leader» y «2026-10-09 10:52:39»).
+    _logins = {str(r.get("User", "") or "") for r in filas}
+    for r in filas:
+        for campo, (antes, despues) in (r.get("cambios") or {}).items():
+            if campo == "FieldAssigned":
+                for v in (antes, despues):
+                    _logins |= {x.strip() for x in str(v or "").split(";") if x.strip()}
+    _nm = _etq_us(sorted(x for x in _logins if x))
+
+    def _valor(campo, v):
+        # ⚠️ Un 0 es un VALOR, no un vacío: `str(v or "")` lo pintaba «(empty)» y el
+        # avance que volvía a 0 parecía borrado («Progress (%): 2.0 → (empty)»).
+        if v is None or str(v).strip() == "":
+            return t("(empty)")
+        if campo == "FieldAssigned":
+            return ", ".join(_nm.get(x.strip(), x.strip())
+                             for x in str(v).split(";") if x.strip()) or t("(empty)")
+        if campo in ("StartDate", "EndDateEst"):
+            return _fmt_fecha(v)
+        return str(v).strip()
+
     with st.expander(f":material/history: Change history ({len(filas)})"):
         st.caption(t("Changes that move money or the job's status are recorded (profit per hour, "
                  "fixed profit, budget, dates, progress, client, staff)."))
         for r in filas:
-            _quien = str(r.get("User", "") or "—")
-            st.markdown(f"**{r.get('Date','')}** · {_quien}")
+            _u = str(r.get("User", "") or "")
+            _quien = _nm.get(_u, _u) or "—"
+            _f = str(r.get("Date", "") or "")
+            st.markdown(f"**{_fmt_fecha(_f)} {_f[11:16]}** · {_quien}")
             for campo, (antes, despues) in (r.get("cambios") or {}).items():
                 _lbl = _CAMPO_LEGIBLE.get(campo, campo)
-                _a = str(antes or "").strip() or t("(empty)")
-                _d = str(despues or "").strip() or t("(empty)")
+                _a = _valor(campo, antes)
+                _d = _valor(campo, despues)
                 st.markdown(
                     f"&nbsp;&nbsp;&nbsp;&nbsp;{_lbl}: "
                     f"<span style='color:{theme.GRIS_SUAVE}'>{_a}</span> → <b>{_d}</b>",
@@ -2450,9 +2542,11 @@ def _estado_section(pid: str, grupo: str, prj: dict):
         if not _vistas and not d["en_curso"]:
             st.caption(t("No open or overdue activity."))
         if d["proximo"]:
+            _fl = round(d["proximo"]["faltan"])
             st.caption(f":material/flag: Next milestone: **{d['proximo']['nombre']}** starts on "
                        f"{d['proximo']['fecha'].strftime('%d/%m/%Y')} "
-                       f"(in {d['proximo']['faltan']:.0f} days).")
+                       + ("(today)." if _fl <= 0 else
+                          "(tomorrow)." if _fl == 1 else f"(in {_fl:.0f} days)."))
     with _der:
         _alerts_section(pid, grupo, prj.get("Name", ""), allow_report=False)
         st.markdown("")
@@ -2464,14 +2558,24 @@ def _estado_section(pid: str, grupo: str, prj: dict):
     # ── La grafica, a ANCHO COMPLETO y con lienzo ancho ──
     st.markdown(t("**:material/calendar_month: Schedule and progress**"))
     n = len(ps["sched"]["activities"])
-    _VW = 1280          # el ancho del contenido; el SVG escala a 100% hasta ahí
-    # ⚠️ el alto sale de la MISMA formula que el SVG (antes era `300 + n*21`,
-    # 18 px de menos, y el pie del grafico se recortaba).
+    # ⚠️ v559 · TRES lienzos y el recuadro elige. El SVG se dibujaba a 1280 de ancho y se
+    # ENCOGÍA al hueco: a 1024 px con el menú abierto el hueco mide 650, así que el texto de
+    # 8,5 px quedaba en ~4 px (visto en producción: ilegible). Los márgenes del dibujo son
+    # fijos (214 + 116), así que con un lienzo más estrecho las letras encogen menos. El
+    # recuadro mide lo que su hueco, y una media query DENTRO de él enseña el lienzo cuyo
+    # ancho más se parece al hueco; cada uno, como mucho, a su tamaño natural.
+    _lienzos = ((700, "(max-width:819px)"), (1000, "(min-width:820px) and (max-width:1159px)"),
+                (1280, "(min-width:1160px)"))
+    _css = "".join(f".cpx-l{w}{{display:none}}@media {q}{{.cpx-l{w}{{display:block}}}}"
+                   for w, q in _lienzos)
     incrustar.dibujo('<!DOCTYPE html><html><body style="margin:0;background:transparent">'
-        + schedule_svg(ps["sched"], real_curve=ps["real"], today_day=ps["today_day"],
-                       avances=ps.get("avances"), proj=proj,
-                       titulo=prj.get("Name", ""), vw=_VW,
-                       animar=True)      # v336: pantalla sí, PDF no
+        + f"<style>{_css}</style>"
+        + "".join(f'<div class="cpx-l{w}">'
+                  + schedule_svg(ps["sched"], real_curve=ps["real"], today_day=ps["today_day"],
+                                 avances=ps.get("avances"), proj=proj,
+                                 titulo=prj.get("Name", ""), vw=w,
+                                 animar=True)      # v336: pantalla sí, PDF no
+                  + "</div>" for w, _q in _lienzos)
         + '</body></html>', schedule_svg_alto(n))
     st.caption(t("The **coloured band** between the two curves is the gap against the plan (red if you are behind, green if ahead). ● red = the activity should already have started."))
 
@@ -2582,6 +2686,11 @@ def _detalle_proyecto(pid: str, grupo: str = None):
     # problema que tenia el Survey antes de v114. Radio, NO st.tabs (v56).
     # v234: format_func muestra iconos Material; las OPCIONES siguen siendo el ID (con
     # emoji) → el match de abajo y cualquier deep-link no cambian.
+    # v559 · un botón de OTRA pestaña puede pedir esta (Costs → «Set the budget in Data»):
+    # se aplica ANTES de instanciar el selector (regla v111).
+    _psp = st.session_state.pop("_prj_sec_pending", None)
+    if _psp:
+        st.session_state["cpxseg_prj_sec"] = _psp
     _sec = st.radio(t("Project section"),
                     ["📊 Estado", "✏️ Datos", "💰 Costos", "📎 Archivos"],
                     format_func=lambda o: {"📊 Estado": t(":material/insights: Status"),
@@ -2619,13 +2728,26 @@ def _detalle_proyecto(pid: str, grupo: str = None):
         _actuales = [x.strip() for x in str(prj.get("FieldAssigned", "")).split(";")
                      if x.strip()]
         _opts = sorted(set(_campos_disp) | set(_actuales))
+        # v559 · por su NOMBRE (salían los logins); se guarda el login, como siempre.
+        _nm_asig = _etq_us(_opts)
         asignados = st.multiselect(t(":material/engineering: Field users assigned"), _opts,
-                                   default=_actuales, key=f"asig_{pid}")
+                                   default=_actuales, key=f"asig_{pid}",
+                                   format_func=lambda u: _nm_asig.get(u, u))
+        _certs_act = [x.strip() for x in str(prj.get("RequiredCerts", "")).split(";")
+                      if x.strip()]
         _ecerts = st.multiselect(
             t(":material/badge: Certificates the project requires"), credentials.CATALOGO,
-            default=[x.strip() for x in str(prj.get("RequiredCerts", "")).split(";") if x.strip()],
+            default=_certs_act,
             key=f"certs_{pid}",
             help=t("When staff are assigned, anyone who does not meet them is flagged."))
+        # ⚠️ v559 · Estos dos van FUERA del formulario (los avisos de debajo tienen que
+        # reaccionar al momento), pero se GUARDAN con «Save changes», mucho más abajo — y
+        # nada lo decía: se podía cambiar la gente e irse creyendo que estaba guardado.
+        if set(asignados) != set(_actuales) or set(_ecerts) != set(_certs_act):
+            st.warning(t(":material/edit_note: **Not saved yet.** Staff and certificates are "
+                         "saved with **Save changes**, at the end of the project data below."))
+        else:
+            st.caption(t("Staff and certificates are saved with **Save changes**, below."))
         # feature 1 (ya en otro proyecto) + feature 3 (cumplimiento vs certs requeridos)
         # + v432: las ausencias que cruzan las fechas DE ESTA obra (aquí sí se saben;
         # en el alta nueva las fechas viven dentro del form y aún no están escritas,
@@ -2731,10 +2853,12 @@ def _detalle_proyecto(pid: str, grupo: str = None):
                       t("No field users yet: create them in Planning → Users.")))
             # Calendario, no texto libre: ver `_a_fecha`. El valor se guarda
             # siempre en ISO, que es lo unico que `project_schedule` sabe leer.
-            f_ini    = e2.date_input(t("Start date"), value=_a_fecha(prj.get("StartDate")),
-                                     format="YYYY-MM-DD")
-            f_fin    = e1.date_input(t("Estimated finish date"), value=_a_fecha(prj.get("EndDateEst")),
-                                     format="YYYY-MM-DD")
+            # ⚠️ v559 · el inicio a la IZQUIERDA (salía el fin primero) y en DD/MM/YYYY
+            # como el resto de la app: `format` es solo cómo se ve, se guarda en ISO igual.
+            f_ini    = e1.date_input(t("Start date"), value=_a_fecha(prj.get("StartDate")),
+                                     format="DD/MM/YYYY")
+            f_fin    = e2.date_input(t("Estimated finish date"), value=_a_fecha(prj.get("EndDateEst")),
+                                     format="DD/MM/YYYY")
             instr    = st.text_area(t(":material/push_pin: Specific instructions"), value=prj.get("Instructions", ""))
             ind      = st.text_area(t(":material/description: Inductions (one link per line)"),
                                     value=prj.get("InductionLinks", ""),
@@ -2756,9 +2880,12 @@ def _detalle_proyecto(pid: str, grupo: str = None):
             # ⚠️ v487: un override que no este en la lista se CONSERVA. Antes caia en «»
             # y al guardar se borraba — que podia des-archivar un proyecto sin querer.
             _ems, _emi = ui.opciones_con_actual(P.ESTADOS_MANUAL, prj.get("ManualStatus", ""))
+            # v559 · sin estado manual salía «Choose an option» (la etiqueta vacía hace que
+            # Streamlit pinte su marcador): ahí el estado lo decide el avance.
             est_man = st.selectbox(t("Manual status (override)"), _ems,
-                                   format_func=_etq, index=_emi)
-            presup  = st.number_input(t(":material/payments: Project budget (0 = no budget)"),
+                                   format_func=lambda v: _etq(v) if str(v or "").strip()
+                                   else t("— automatic (from the progress) —"), index=_emi)
+            presup  = st.number_input(t(":material/payments: Project budget ($) — 0 = no budget"),
                                       min_value=0.0, step=100.0, value=P._num(prj.get("Budget")))
 
             if st.form_submit_button(t(":material/save: Save changes"), width="stretch"):
@@ -3886,11 +4013,12 @@ def _ordenes_section(pid, grupo, editable=True, key_prefix="ord"):
                         f"{theme.dinero(_n(o.get('Amount')))} · "
                         f"{o.get('Description','') or '—'}")
                 if _fesp:
-                    _lin += f" · llega {_fesp.strftime('%d/%m')}"
+                    # v559 · «llega» seguía en español.
+                    _lin += f" · due {_fesp.strftime('%d/%m')}"
                 if _tarde:
                     _lin += f"  :red[**{(_hoy - _fesp).days} d late**]"
                 st.markdown(_lin)
-                st.caption(f"{_oid} · {_etq(_est)} · ordered {o.get('Date','')}")
+                st.caption(f"{_oid} · {_etq(_est)} · ordered {_fmt_fecha(o.get('Date', ''))}")
 
                 if _est == O.RECIBIDA and not str(o.get("ExpenseID", "")).strip():
                     # ⚠️ Se marcó recibida pero su gasto no llegó a escribirse: ese
@@ -3938,6 +4066,7 @@ def _ordenes_section(pid, grupo, editable=True, key_prefix="ord"):
                 _cat  = _c4.selectbox(t("Category"), E.CATEGORIAS)
                 _c5, _c6 = st.columns(2)
                 _fe   = _c5.date_input(t("Expected delivery date"), value=None,
+                                       format="DD/MM/YYYY",       # v559 · salía «yyyy/mm/dd»
                                        help=t("Optional. Without it the order is never flagged as late — you cannot say it is late if nobody said when it was due."))
                 # v505: a qué actividad está esperando este material. ⚠️ La opción de
                 # «ninguna» lleva TEXTO: un selector cuyo vacío es "" pinta «None» y
@@ -4010,9 +4139,11 @@ def _ganancia_section(pid, grupo):
                          "{m}% margin follows from it; it is not something you typed.")
                        .replace("{m}", f"{rev['margen_pct']:g}"))
         if rev.get("sin_ganancia"):
+            # v559 · por su NOMBRE (salía «Admin2, campo000»).
+            _nm_sg = _etq_us(list(rev["sin_ganancia"]))
             st.warning(t(":material/person_alert: With no profit set, their work would be "
                          "invoiced **at cost**: **{x}**.")
-                       .replace("{x}", ", ".join(rev["sin_ganancia"])))
+                       .replace("{x}", ", ".join(_nm_sg.get(u, u) for u in rev["sin_ganancia"])))
 
         # ⚠️ El editor solo si hay gente: con la lista vacía, `disabled=[...]` y
         #    `column_config` apuntarían a columnas que no existen.
@@ -4026,9 +4157,14 @@ def _ganancia_section(pid, grupo):
 def _editor_ganancia_hora(pid, _items, _gh, _T):
     """La tabla persona × ganancia/h (v360). Extraída de `_ganancia_section` en v373
     para poder no dibujarla cuando la obra no tiene horas fichadas."""
+    # ⚠️ v559 · «Persona» enseña el NOMBRE; la ganancia se guarda por LOGIN, que va en una
+    # columna OCULTA (`Usuario`: None en el column_config) y es la que se lee al guardar.
+    # Leer el nombre para guardar sería indexar por algo que puede repetirse (v306).
+    _nm = _etq_us([str(x.get("usuario", "")) for x in _items])
     _ed = st.data_editor(
             pd.DataFrame([{
-                "Persona": x.get("usuario", ""),
+                "Usuario": str(x.get("usuario", "")),
+                "Persona": _nm.get(str(x.get("usuario", "")), str(x.get("usuario", ""))),
                 "Horas": round(P._num(x.get("horas")), 2),
                 "Costo/h": round(P._num(x.get("tarifa")), 2),
                 "Ganancia/h": round(P._num(_gh.get(str(x.get("usuario", "")), 0)), 2),
@@ -4040,8 +4176,9 @@ def _editor_ganancia_hora(pid, _items, _gh, _T):
             hide_index=True, width="stretch", key=f"gh_ed_{pid}",
             # ⚠️ Solo se teclea la GANANCIA. Precio/h y «Ganas» son consecuencia y van
             # bloqueados, igual que en la cotización (v355).
-            disabled=["Persona", "Horas", "Costo/h", "Precio/h", "Ganas"],
+            disabled=["Usuario", "Persona", "Horas", "Costo/h", "Precio/h", "Ganas"],
             column_config=tabla.cfg(None, {
+                "Usuario": None,
                 "Costo/h": st.column_config.NumberColumn(t("Cost/h"), format="$%,.2f",
                                                          help=t("Their rate. What it costs you.")),
                 "Ganancia/h": st.column_config.NumberColumn(
@@ -4052,7 +4189,7 @@ def _editor_ganancia_hora(pid, _items, _gh, _T):
                 "Ganas": st.column_config.NumberColumn(t("You make"), format="$%,.2f",
                                                        help=t("Hours × profit/h."))}))
 
-    _nuevo = {str(_ed.iloc[i]["Persona"]): P._num(_ed.iloc[i]["Ganancia/h"])
+    _nuevo = {str(_ed.iloc[i]["Usuario"]): P._num(_ed.iloc[i]["Ganancia/h"])
               for i in range(len(_ed)) if P._num(_ed.iloc[i]["Ganancia/h"]) > 0}
     # ⚠️ La clave de la fila es "Horas" (v360). v468 renombro ESTA LECTURA a
     # "Hours" y no la clave, asi que `_ed.iloc[i]["Hours"]` lanzaba KeyError y el
@@ -4060,8 +4197,9 @@ def _editor_ganancia_hora(pid, _items, _gh, _T):
     # dos versiones asi, invisible solo porque la demo esta vacia.
     _tot = sum(P._num(_ed.iloc[i]["Horas"]) * P._num(_ed.iloc[i]["Ganancia/h"])
                for i in range(len(_ed)))
+    # v559 · sin «(decision from v360)»: una referencia interna a la vista del cliente.
     st.caption(t("With these values you would make **{x}** on the labour clocked so far. "
-                 "Materials are invoiced at cost (decision from v360).")
+                 "Materials are invoiced at cost.")
                .replace("{x}", _T.dinero(_tot)))
     _c1, _c2 = st.columns([2, 1])
     if _c1.button(t(":material/save: Save profits"), key=f"gh_save_{pid}",
@@ -4163,21 +4301,14 @@ def _facturar_atajo(pid, grupo, prj_nombre=""):
         return
     if pend <= 0 and facturado <= 0:
         return                          # nada que facturar y nada facturado: no estorbar
-    _c1, _c2 = st.columns([3, 2])
-    with _c1:
-        if pend > 0:
-            st.markdown(":material/receipt: **Left to invoice: "
-                        + _T.dinero(pend, 0) + "**")
-            st.caption(t("The project's estimated revenue minus what has already been invoiced."))
-        else:
-            st.markdown(t(":material/check_circle: **Everything invoiced**") + " ("
-                        + _T.dinero(facturado, 0) + ")")
-    with _c2:
-        if st.button(t(":material/receipt_long: Invoice this job"), key="fac_atajo_" + str(pid),
-                     width="stretch", type="primary" if pend > 0 else "secondary",
-                     help=t("Opens the new invoice with this client and this project already chosen.")):
-            _ir_a_facturar(pid, grupo)
-            st.rerun()
+    # ⚠️ v559 · Con algo pendiente, lo dice la CABECERA de la ficha («Not invoiced» +
+    # «Invoice», v397), que se ve en las cuatro pestañas: aquí salía repetido, con otro
+    # botón de facturar (visto en producción). Aquí solo queda lo que la cabecera no
+    # dice: que ya está todo facturado. Sin botón: no queda nada que pedir.
+    if pend > 0:
+        return
+    st.markdown(t(":material/check_circle: **Everything invoiced**") + " ("
+                + _T.dinero(facturado, 0) + ")")
 
 
 def _costos_section(pid, grupo, gastos, can_delete, key_prefix):
@@ -4230,7 +4361,8 @@ def _costos_section(pid, grupo, gastos, can_delete, key_prefix):
               f"the budget of {_T.dinero(pres, 0)}")
         _c, _fn = "#1e8449", st.success
     elif cp["total"] > 0 and pres <= 0:
-        _t = ("This project **has no budget set**, so there is nothing to compare the spend against. Set it in :material/edit: Details.")
+        # v559 · decía «Set it in ✏ Details» y la pestaña se llama Data: ahora lleva allí.
+        _t = ("This project **has no budget set**, so there is nothing to compare the spend against. Set it in :material/edit: Data.")
         _c, _fn = "#6b7280", st.info
     else:
         _t, _c, _fn = ("No costs have been recorded on this project yet.",
@@ -4249,9 +4381,17 @@ def _costos_section(pid, grupo, gastos, can_delete, key_prefix):
         from core import theme as _th
         tarj.insert(3, _kpi_card(t("Committed"), f"${cp['comprometido']:,.0f}",
                                  _th.AMBAR, pie="ordered, not received yet"))
-    st.markdown('<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px">'
-                + "".join(tarj) + "</div>", unsafe_allow_html=True)
+    # v559 · base de 110 px: con la de 150 del tema, a 1024 px con el menú abierto la
+    # quinta («Cost at completion») caía sola a otra fila, a todo el ancho.
+    st.markdown('<style>.cpx-kpis-cst .cpx-kpi{flex:1 1 110px}</style>'
+                '<div class="cpx-kpis-cst" style="display:flex;gap:10px;flex-wrap:wrap;'
+                'margin-bottom:10px">' + "".join(tarj) + "</div>", unsafe_allow_html=True)
     _fn(_t)
+    if cp["total"] > 0 and pres <= 0 and not _loc and can_delete:
+        if st.button(t(":material/edit: Set the budget in Data"), key=f"cst_ir_datos_{pid}",
+                     type="tertiary"):
+            st.session_state["_prj_sec_pending"] = "✏️ Datos"
+            st.rerun()
 
     if pres > 0:
         st.progress(min(1.0, (cp["pct"] or 0) / 100.0))
@@ -4325,13 +4465,24 @@ def _costos_section(pid, grupo, gastos, can_delete, key_prefix):
     # ── Mano de obra por persona: labor_cost solo daba el total ──
     if lb["items"]:
         st.markdown(t("**Labour by person**"))
+        # v559 · por su NOMBRE, y la tarifa y el coste con «$» (salían «45» y «1.8»).
+        _nm = _etq_us([x["usuario"] for x in lb["items"]] + list(lb["sin_tarifa"]))
         st.dataframe(pd.DataFrame([{
-            "Usuario": x["usuario"], "Horas": x["horas"],
+            "Persona": _nm.get(x["usuario"], x["usuario"]), "Horas": x["horas"],
             "Rate/h": x["tarifa"], "Costo": x["costo"],
-        } for x in lb["items"]]), hide_index=True, width="stretch", column_config=tabla.cfg())
+        } for x in lb["items"]]), hide_index=True, width="stretch",
+            column_config=tabla.cfg(None, {
+                "Rate/h": st.column_config.NumberColumn(t("Rate/h"), format="$%,.2f"),
+                "Costo": st.column_config.NumberColumn(t("Cost"), format="$%,.2f")}))
         if lb["sin_tarifa"]:
-            st.warning(":material/warning: With no hourly rate, their hours add **$0** to the cost: **"
-                       + ", ".join(lb["sin_tarifa"]) + "**. It is set in :material/build: Users.")
+            st.warning(t(":material/warning: With no hourly rate, their hours add **$0** to the "
+                         "cost: **{x}**. The rate is set in each person's record, in "
+                         "Planning → Users.",
+                         x=", ".join(_nm.get(u, u) for u in lb["sin_tarifa"])))
+            # v559 · decía «It is set in 🔧 Users» y Users vive en Planning: ahora lleva allí.
+            if can_delete and st.button(t(":material/group: Go to Users"),
+                                        key=f"cst_ir_users_{pid}", type="tertiary"):
+                _ir_a("planificacion", "👷 Usuarios")
         if lb.get("de_baja"):          # v325: cuenta eliminada ≠ tarifa sin poner
             st.info(":material/person_off: **" + ", ".join(lb["de_baja"]) + "**: hours from someone **no longer on the books**, so they add $0 and there is nowhere to set a rate.")
 
@@ -4341,7 +4492,14 @@ def _costos_section(pid, grupo, gastos, can_delete, key_prefix):
     if _svg:
         incrustar.dibujo('<!DOCTYPE html><html><body style="margin:0;background:transparent">'
             + _svg + '</body></html>', 320)
-        st.caption(t("Cumulative cost day by day. The dashed grey line is the budget; the coloured one is where you end up at the current rate."))
+        # v559 · la leyenda solo nombra lo que se dibuja: hablaba de la línea del
+        # presupuesto y de la proyección en obras que no tienen ni una ni otra.
+        _ley = [t("Cumulative cost day by day.")]
+        if pres > 0:
+            _ley.append(t("The dashed grey line is the budget."))
+        if proy:
+            _ley.append(t("The dashed coloured one is where you end up at the current rate."))
+        st.caption(" ".join(_ley))
     elif _curva:
         st.caption(t("More than one movement is needed to draw the spend curve."))
 
@@ -5186,8 +5344,10 @@ def render_group_hours(grupo: str):
     _baja = [_etiqueta(d) for d in data
              if d["proyecto"] > 0 and not d["tarifa"] and not d.get("existe", True)]
     if _sin_tar:
-        st.warning(":material/warning: With no **hourly rate**, their cost comes out at $0: **"
-                   + ", ".join(_sin_tar) + "**. It is set in :material/build: Users.")
+        # v559 · «It is set in 🔧 Users», y Users vive en Planning (el mismo texto de Costs).
+        st.warning(t(":material/warning: With no **hourly rate**, their cost comes out at $0: "
+                     "**{x}**. The rate is set in each person's record, in Planning → Users "
+                     "(tap them in the table above).", x=", ".join(_sin_tar)))
     if _baja:
         st.info(":material/person_off: **" + ", ".join(_baja) + "**: hours from someone **no longer on the books** (account deleted). Their hours still count, but **there is nowhere to set a rate**, so they add $0. To cost them you would have to recreate that account.")
 
