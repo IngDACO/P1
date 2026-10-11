@@ -10,6 +10,47 @@ ventana de contexto. Contenido: 258 secciones detalladas + el índice de 440 ver
 
 ---
 
+## PROJECTS: LA CARTERA Y EL ALTA, PROBADAS ACCIÓN POR ACCIÓN (v558)
+
+Recorrido en producción (Projects → Projects, decisión del usuario: «Dale»), sin crear
+nada en la hoja: lo que escribiría se reprodujo en AppTest con la escritura sustituida.
+Funcionaban la búsqueda (también por ID), los filtros, el tipo, los archivados, Lista y
+Tarjetas, «Open →» y «← Back to the portfolio». Arreglado:
+
+- ⚠️ **La columna «Pace» no salía nunca.** La migración al inglés (v444) dejó
+  «Situación» y «Estado» las dos como `"Status"`, y en un dict literal la segunda clave
+  PISA a la primera sin avisar. Igual en la comparativa de Agrupaciones (el estado de
+  cada ascensor lo pisaba el ritmo). `verif_v558` barre TODA la app: ningún dict literal
+  con una clave repetida (1683 dicts, había 3).
+- ⚠️ **Una obra con nombre repetido no se podía crear NUNCA.** La casilla «Create even
+  though the name is repeated» vivía fuera del form y solo en la pasada del envío: al
+  marcarla, la pantalla relanzaba, la casilla dejaba de pintarse y Streamlit borraba su
+  valor. Ahora aviso y casilla van DENTRO del form, y la clave lleva el nombre.
+- ⚠️ **Crear un Delivery u Other escribía la obra y reventaba** (`sched` solo existe para
+  instalación): sin avisar a los asignados ni llenar el planificador. Una fecha de fin
+  para los dos caminos.
+- ⚠️ **«Estimated finish» enseñaba una fecha que no era la que se guardaba**: estaba
+  dentro del form (NS 2 → 4 y seguía «31/10/2026 (21 days)»). NS y fechas, fuera.
+- Tras crear: se ABRE la obra nueva, los avisos van por flash y el alta vuelve a nacer
+  vacía (generación de claves); el propietario la ve elegida en su selector.
+- Tarjetas: «\\$133» con la barra (el escape de `theme.dinero` dentro de HTML → nuevo
+  `theme.dinero_html`), «33.0d», «ppto»/«s/ppto».
+- ⚠️ «Invoice» desde una obra cuyo cliente es solo texto acababa en «Create a client
+  first» sin botón: ahora dice qué cliente y abre su ficha en Contacts para crearla.
+- Mapa del alta: el icono del buscador salía literal (un `placeholder` no interpreta
+  `:material/`; barrido de la app), 500 px fijos (sin `use_container_width`, trampa 17)
+  y «I could not find that address» se perdía en el rerun.
+- Selectores segmentados, «All types», contadores ACTIVOS que cuentan lo que se ve
+  («1 of 3 · 3 behind» → «1 behind», y tocarlo filtra), «Clear filters», y la vista y
+  los filtros se RECUERDAN al volver: `persist_state="session"` (Streamlit 1.64).
+  ⚠️ «page» no sirve: medido en AppTest, suelta el valor en cuanto el control deja de
+  pintarse.
+- Home: «Go to Projects» de un indicador abre la cartera con lo tocado (Behind → el
+  filtro; Overdue/Due soon/Unassigned/Alarms → solo esas obras, con «Show all»).
+- Fechas del alta en DD/MM/YYYY; `return` en vez de `st.stop()`.
+
+PRODUCCIÓN (10-11/10/2026, cuenta admin; v558): la Lista con «Pace» («33 d behind», «20 d behind», «12 d behind»), selectores segmentados, «All types» y «3 behind schedule» como botón que aplica Behind; Tarjetas con «$133», «33 d», «0% of budget» / «no budget»; «Invoice» de PRUEBA MOVIL dice «This job's client, Cliente de prueba, only exists as text…» y su botón abre esa ficha en Contacts (no se guardó); al volver a Projects por el menú tras Finance y Contacts sigue en Tarjetas y Behind; alta: icono del buscador por icon=, mapa 616 de 616 px, fechas 11/10/2026, NS 2 → 3 mueve la estimada a «02/11/2026 (23 days)» sin enviar; ⚠️ un Delivery con el nombre de PRJ-0015: aviso y casilla DENTRO del form, marcada sigue marcada, «Create» crea PRJ-0021 sin error y la abre (&p=PRJ-0021) con «Project PRJ-0021 created with 1 activities»; el alta vuelve vacía; PRJ-0021 borrada desde el motor (era de prueba); Home «Overdue · 1 → Go to Projects» abre «From Home: only Overdue (1)» y «Show all» vuelve a 3 of 3 · 72 comprobaciones · romper_v558 26/26 + control (la 1ª vuelta 25/26: la rotura de la fecha estimada no rompía nada —la duración sale de las filas de etapas con el NS— → rehecha y cazada) · romper_v444 7/7 con su ancla al día · verif_v408 reanclado con su razón · suite 187 verde con Python 3.12.10
+
 ## USERS (PLANIFICACIÓN), PROBADA ACCIÓN POR ACCIÓN (v557)
 
 Recorrido en producción (Planning → Users, decisión del usuario: «Arregla todo»), sin
@@ -13515,7 +13556,7 @@ comprueba lo que dice**.
 
 ---
 
-## Versiones desplegadas (v557 = actual)
+## Versiones desplegadas (v558 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -13523,6 +13564,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v558 | **Projects: la cartera y el alta, probadas acción por acción.** ⚠️ «Pace» no salía (dos claves «Status» desde v444; barrido de dicts con clave repetida). ⚠️ Una obra homónima no se podía crear nunca. ⚠️ Un Delivery reventaba tras escribirse. ⚠️ La fecha estimada no seguía al NS. Crear abre la obra; tarjetas sin «\\$» ni «33.0d»; «Invoice» sin fichas lleva a Contacts; mapa a lo ancho; contadores activos; vista y filtros recordados; Home → cartera filtrada. PRODUCCIÓN (10-11/10/2026, cuenta admin; v558): la Lista con «Pace» («33 d behind», «20 d behind», «12 d behind»), selectores segmentados, «All types» y «3 behind schedule» como botón que aplica Behind; Tarjetas con «$133», «33 d», «0% of budget» / «no budget»; «Invoice» de PRUEBA MOVIL dice «This job's client, Cliente de prueba, only exists as text…» y su botón abre esa ficha en Contacts (no se guardó); al volver a Projects por el menú tras Finance y Contacts sigue en Tarjetas y Behind; alta: icono del buscador por icon=, mapa 616 de 616 px, fechas 11/10/2026, NS 2 → 3 mueve la estimada a «02/11/2026 (23 days)» sin enviar; ⚠️ un Delivery con el nombre de PRJ-0015: aviso y casilla DENTRO del form, marcada sigue marcada, «Create» crea PRJ-0021 sin error y la abre (&p=PRJ-0021) con «Project PRJ-0021 created with 1 activities»; el alta vuelve vacía; PRJ-0021 borrada desde el motor (era de prueba); Home «Overdue · 1 → Go to Projects» abre «From Home: only Overdue (1)» y «Show all» vuelve a 3 of 3 · romper_v558 26/26 + control (la 1ª vuelta 25/26: la rotura de la fecha estimada no rompía nada —la duración sale de las filas de etapas con el NS— → rehecha y cazada) · romper_v444 7/7 con su ancla al día · verif_v408 reanclado con su razón · suite 187 verde con Python 3.12.10 |
 | v557 | **Users, probada acción por acción.** ⚠️ Correos que no lo son («driver 1», «hotmai.com») se guardaban → validación (motor y pantalla) y «Did you mean…?». ⚠️ El alta borraba todo al dar error → conserva lo escrito. ⚠️ Contraseñas de 1 carácter → mínimo 8, repetirla al cambiar. Salud que filtra la tabla, «Contact», «$», selector segmentado, DD/MM/YYYY. PRODUCCIÓN (10/10/2026, cuenta admin, 1024 px; v557): la línea de salud ofrece «9 with no contact details» y «4 invalid or suspicious email»; esta deja SOLO a helper 1, helper 2 y electritian 1 («check email») y driver 1 («invalid email»), con cabecera «Contact» y la tabla con su clave (gu_tbl_correo); la fila 4 de la tabla FILTRADA abre a driver 1 (no se cruza): «No contact details · Invalid email», selector de secciones segmentado (sin bolitas) y en Contact ««driver 1» is not an email address.»; helper 1 (…@hotmai.com): «Check the email» y «Did you mean …@hotmail.com?» con la casilla «The address is correct as written»; el alta sin correo da «Email is required…» y CONSERVA usuario, nombre y contraseña — siguen siendo 10 personas: no se creó, cambió ni borró a nadie · romper_v557 17/17 + control · suite 186 verde con Python 3.12.10 |
 | v556 | **Time fixes, probada acción por acción.** ⚠️ Dos correcciones sobre el mismo fichaje dejaban la vieja sin salida («no longer exists») → «superseded». ⚠️ Revertir que choca no tenía salida → «Set the right time» en todas y aviso de solape neutro. ⚠️ La persona no se enteraba → aviso al revertir o fijar. Día del fichaje, dd/mm, antiguo primero, tarjetas activas, acción diferida. PRODUCCIÓN (09/10/2026, cuenta admin, 1024 px; v556 cargado con «r»): COR-0001 sale primero, con «Thu 08/10/2026 · workday», «Asked on 08/10/2026 18:27» y «Superseded by COR-0002…», solo con «Close as superseded»; «Revert» en COR-0002 se rechaza con «Bobo · Thu 08/10/2026: … overlaps the workday entry from 18:24 to 18:26…» (neutro); ⚠️ cerrar la PRIMERA (COR-0001) con la de otra forma ocupando su sitio (el caso del fantasma): queda SOLO COR-0002, «Closed: superseded by COR-0002.», y sigue así tras otra pasada; «Set the right time» (18:27) en COR-0002: «Time set to 18:27.», bandeja vacía, Approved 2 (y el aviso «Time correction adjusted: 08/10/2026» a la persona, Admin2); «Approved» abre su lista con el día de cada una; el histórico, con «Fri 09/10/2026» / «Thu 08/10/2026» y «Reviewed by: Bobo» (antes «Admin2») · romper_v556 14/14 + control · suite 185 verde con Python 3.12.10 |
 | v555 | **Absences, probada acción por acción.** ⚠️ Tras «Reject» la tarjeta quedaba FANTASMA (Streamlit 1.64 + bloque con clave + acción lenta dentro) → acción DIFERIDA, trampa 37. ⚠️ La baja por enfermedad no llegaba al admin y nada aprobado se podía deshacer → sección de bajas y «Cancel» con confirmación. Aviso en inglés, urgente primero, dd/mm/aaaa, tarjetas activas, saldo tras la solicitud. PRODUCCIÓN (09/10/2026, cuenta admin, 1024 px; v555 cargado con «r»): con tres solicitudes de prueba de campo000 (AUS-0004..0006) — lo pendiente sale en orden (12/10 antes que 13/10), con fechas «12/10/2026» y «13/10/2026 → 14/10/2026» y el saldo «20 of 20 … → 18 after this request»; ⚠️ «Reject» en la PRIMERA tarjeta, con la de otra forma ocupando su sitio (el caso del fantasma): queda SOLO AUS-0005, «Request rejected.», Pending 1, y sigue así tras otra pasada; «Approve» de AUS-0005: «Absence approved. 2 day(s) marked in the planner.» (ROS-0014: LEAVE 13 y 14/10), «No pending requests.», ningún fantasma; «Next 7 days» = 1 y abre AUS-0005; la baja AUS-0006 sale en «Sick leave recorded» con «Cancel», que PREGUNTA («Cancel this absence? Its days are freed on the board and hjg,ujgjg is told.») y «Keep it» la deja; el histórico ofrece «Cancel» en las dos aprobadas. «Yes, cancel it» no se pulsó en producción (avisaría a campo000): lo cubre verif_v555. Pruebas canceladas o rechazadas desde el motor; ROS-0014 limpia · romper_v555 14/14 + control · suite 184 verde con Python 3.12.10 |
