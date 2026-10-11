@@ -156,17 +156,57 @@ def has_pending(d) -> bool:
     return any(d.get(k) for k in _PENDING_KEYS)
 
 
+def _dmy(iso) -> str:
+    """«2026-10-02» → «02/10/2026» para lo que se LEE (v561). Los datos del radar guardan
+    ISO (se ordenan y comparan así); lo ilegible se deja tal cual, no vacío."""
+    try:
+        y, m, dd = str(iso)[:10].split("-")
+        return f"{int(dd):02d}/{int(m):02d}/{y}"
+    except Exception:
+        return str(iso or "")
+
+
+def nombres_usuarios() -> dict:
+    """Login → nombre (v561), para MOSTRAR. El radar guarda el login porque es la
+    identidad; la IA y el texto de respaldo escribían «appretince» donde la ficha dice
+    «apprentice 1». `list_users` ya está cacheado: 0 lecturas nuevas."""
+    try:
+        return {str(u.get("User", "")): str(u.get("Name") or u.get("User", ""))
+                for u in auth.list_users()}
+    except Exception:
+        return {}
+
+
+def plazo_credencial(dias) -> str:
+    """«expired 3 d ago» / «expires today» / «in 5 d» (v561). Salía «VENCIDA» / «en 5 d»
+    (español) en el texto de la IA y «(-3d)» en el Home."""
+    try:
+        n = int(dias)
+    except Exception:
+        return str(dias)
+    if n < 0:
+        return t("expired {n} d ago").replace("{n}", str(-n))
+    if n == 0:
+        return t("expires today")
+    return t("in {n} d").replace("{n}", str(n))
+
+
 def digest_text(d) -> str:
-    """Hechos en texto (para el prompt del agente y como fallback sin IA)."""
+    """Hechos en texto (para el prompt del agente y como fallback sin IA).
+
+    ⚠️ v561 · Lo LEE una persona (la lectura de la IA lo copia, y sin IA sale tal cual):
+    fechas DD/MM/YYYY (salía «due 2026-10-02»), nombres en vez de logins y todo en inglés
+    (quedaban «VENCIDA», «en N d» y «s/d»)."""
+    _nom = nombres_usuarios()
     L = [f"{t('Group')} {d['grupo']}: {d['n_activos']} "
          + t("active project(s) of") + f" {d['n_total']}, "
          + t("average progress") + f" {d['avance_prom']}%, {d['horas']} "
          + t("hours recorded.")]
     if d["vencidos"]:
-        L.append(t("OVERDUE:") + " " + "; ".join(f"{x['nombre']} ({abs(x['dias'])} d {t('ago')}, {t('end')} {x['fin']})"
+        L.append(t("OVERDUE:") + " " + "; ".join(f"{x['nombre']} ({abs(x['dias'])} d {t('ago')}, {t('end')} {_dmy(x['fin'])})"
                                           for x in d["vencidos"]))
     if d["por_vencer"]:
-        L.append(t("Due soon (≤7 d):") + " " + "; ".join(f"{x['nombre']} ({t('in')} {x['dias']} d, {x['fin']})"
+        L.append(t("Due soon (≤7 d):") + " " + "; ".join(f"{x['nombre']} ({t('in')} {x['dias']} d, {_dmy(x['fin'])})"
                                                     for x in d["por_vencer"]))
     if d["retrasos"]:
         L.append(t("Behind schedule (SPI):") + " " + "; ".join(f"{x['nombre']} ({x['dias']} d)" for x in d["retrasos"]))
@@ -174,22 +214,23 @@ def digest_text(d) -> str:
         L.append(t("Open alarms:") + " " + "; ".join(f"{x['nombre']} ({x['n']})" for x in d["alarmas"]))
     if d["near_miss"]:
         L.append(t("Recent near misses (≤7 d):") + " "
-                 + "; ".join(f"{x['proyecto']} ({x['fecha']}: {x['desc'] or 's/d'})" for x in d["near_miss"]))
+                 + "; ".join(f"{x['proyecto']} ({_dmy(x['fecha'])}: {x['desc'] or t('no description')})"
+                             for x in d["near_miss"]))
     if d["sin_asignar"]:
         L.append(t("No field staff assigned:") + " " + "; ".join(x["nombre"] for x in d["sin_asignar"]))
     if d["campo_sin_contacto"]:
         L.append(t("Field staff without full contact details "
                    "(they cannot be notified):") + " "
-                 + ", ".join(d["campo_sin_contacto"]))
+                 + ", ".join(_nom.get(str(u), str(u)) for u in d["campo_sin_contacto"]))
     if d.get("avisos_sin_canal"):
         L.append(t("They receive the alarms but have NO email or Telegram (the "
                    "alarm stays in the app and never reaches them):") + " "
-                 + ", ".join(f"{x['usuario']} ({x['rol']})"
+                 + ", ".join(f"{_nom.get(x['usuario'], x['usuario'])} ({x['rol']})"
                              for x in d["avisos_sin_canal"]))
     if d.get("cred_venc"):
         L.append(t("Credentials expiring/expired:") + " "
-                 + "; ".join(f"{c['usuario']} · {c['tipo']} "
-                             f"({'VENCIDA' if c['dias'] < 0 else f'en {c['dias']} d'})"
+                 + "; ".join(f"{_nom.get(str(c['usuario']), str(c['usuario']))} · {c['tipo']} "
+                             f"({plazo_credencial(c['dias'])})"
                              for c in d["cred_venc"]))
     if d.get("sobre_presupuesto"):
         L.append(t("Over budget:") + " "

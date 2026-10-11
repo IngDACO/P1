@@ -1247,19 +1247,45 @@ def render_home(grupo):
     # de ahí venía lo de "arrinconados", y el ancho sobrante de ahí venía lo de
     # "vacía". La interfaz del admin es de PC (decisión del usuario), así que el
     # único contra —que en móvil las 3 columnas se apilan— no aplica aquí.
+    # ⚠️ v561 · …pero «PC» también es 1024 o 1280 px CON el menú abierto, y ahí las tres
+    # columnas no caben: medido en producción, a 840 px las tarjetas KPI medían 37 px
+    # (etiquetas cortadas), la lista de obras partía palabras y la agenda iba palabra por
+    # línea; a 1280, el pie de las tarjetas aún se recortaba («no progress yet» 78 de 65).
+    # Las tres columnas piden una fila de ~1140 px (tarjetas de 124, v303). Por debajo,
+    # KPI + mapa a todo el ancho y Projects | agenda debajo, a medias; por debajo de 520,
+    # una columna. Va por el ancho de la FILA (`@container`), no de la ventana: el menú
+    # abierto o cerrado cambia 300 px. `st.html` con solo estilo no ocupa sitio.
+    st.html("<style>"
+            ".st-key-cpx_home_fila{container-type:inline-size;}"
+            "@container (max-width:1140px){"
+            ".st-key-cpx_home_fila [data-testid='stHorizontalBlock']"
+            ":not([data-testid='stColumn'] *){column-gap:2rem !important;"
+            "row-gap:1.5rem !important;}"
+            ".st-key-cpx_home_fila [data-testid='stHorizontalBlock']"
+            ":not([data-testid='stColumn'] *)>[data-testid='stColumn']:nth-child(1)"
+            "{flex:1 1 100% !important;}"
+            ".st-key-cpx_home_fila [data-testid='stHorizontalBlock']"
+            ":not([data-testid='stColumn'] *)>[data-testid='stColumn']:nth-child(n+2)"
+            "{flex:1 1 calc(50% - 1rem) !important;}}"
+            "@container (max-width:520px){"
+            ".st-key-cpx_home_fila [data-testid='stHorizontalBlock']"
+            ":not([data-testid='stColumn'] *)>[data-testid='stColumn']"
+            "{flex:1 1 100% !important;}}"
+            "</style>")
     from core import projects_ui as PU
     PU.render_group_header(grupo)
-    col_map, col_pro, col_ag = st.columns([2, 1.5, 1.5], gap="large")
-    with col_map:
-        PU.render_kpis(grupo)          # los 3 KPIs son la cabecera de esta columna
-        st.markdown(t("#### :material/map: Active projects"))
-        _mapa_proyectos(grupo)
-    with col_pro:
-        st.markdown(t("#### :material/folder: Projects"))
-        _proyectos_home(grupo)
-    with col_ag:
-        st.markdown(t("#### :material/list: Today's schedule"))
-        _agenda_hoy(grupo)
+    with st.container(key="cpx_home_fila"):
+        col_map, col_pro, col_ag = st.columns([2, 1.5, 1.5], gap="large")
+        with col_map:
+            PU.render_kpis(grupo)          # los 3 KPIs son la cabecera de esta columna
+            st.markdown(t("#### :material/map: Active projects"))
+            _mapa_proyectos(grupo)
+        with col_pro:
+            st.markdown(t("#### :material/folder: Projects"))
+            _proyectos_home(grupo)
+        with col_ag:
+            st.markdown(t("#### :material/list: Today's schedule"))
+            _agenda_hoy(grupo)
 
 
 # ── Mapa de proyectos ────────────────────────────────────────────

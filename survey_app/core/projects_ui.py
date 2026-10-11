@@ -420,8 +420,11 @@ def _resumen_del_dia(grupo: str):
          lambda: ", ".join(_nombres_de(d["campo_sin_contacto"][:15], grupo))),
         ("cred", ":material/badge:", "Credentials", False, len(d.get("cred_venc", [])),
          "planificacion", "👷 Usuarios", "Users",
-         lambda: ", ".join(f"{c['tipo']}·{c['usuario']} ({c['dias']}d)"
-                           for c in d.get("cred_venc", [])[:15])),
+         # ⚠️ v561 · salía «tipo·login (-3d)»: el login y los días en negativo.
+         lambda: ", ".join(f"{c['tipo']} · {_n} ({admin_digest.plazo_credencial(c['dias'])})"
+                           for c, _n in zip(d.get("cred_venc", [])[:15],
+                                            _nombres_de([c["usuario"] for c in
+                                                         d.get("cred_venc", [])[:15]], grupo)))),
         ("alarmas", ":material/notifications:", "Alarms", True, _al_n,
          "proyectos", "📊 Proyectos", "Projects",
          lambda: ", ".join(f"{a['nombre']} ({a['n']})" for a in d["alarmas"][:15])),
@@ -464,7 +467,16 @@ def _resumen_del_dia(grupo: str):
                 # (44 px). Son los que llevan a resolver cada pendiente.
                 '[class*="st-key-resind_"] button{min-height:38px !important;'
                 'padding:4px 8px !important;}',
-                '.st-key-cpxresumen [data-testid="stVerticalBlock"]{gap:.3rem !important;}']
+                '.st-key-cpxresumen [data-testid="stVerticalBlock"]{gap:.3rem !important;}',
+                # ⚠️ v561 · con el menú abierto a 840 px cada indicador medía 85 px y
+                # «Credentials» / «Unassigned» se partían A MITAD de palabra («Credenti
+                # als»). Por debajo de 560 px de resumen, 3 por fila (133 px; medido en
+                # producción con un estilo temporal, 0 palabras partidas a 840 y a 1024).
+                '.st-key-cpxresumen [data-testid="stExpanderDetails"]'
+                '{container-type:inline-size;}',
+                '@container (max-width:560px){.st-key-cpxresumen '
+                '[data-testid="stHorizontalBlock"]:has([class*="st-key-resind_"])'
+                '>[data-testid="stColumn"]{flex:1 1 calc(33.3% - 1rem) !important;}}']
         for _slug, _i, _l, _urgb, _cnt, *_r in inds:
             # ⚠️ v326: el estado EN REPOSO (contador a 0) usaba #9aa7b8 sobre
             # #f4f6f9 = **2.26:1**, la mitad del mínimo WCAG. Y es el estado que

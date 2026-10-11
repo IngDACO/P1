@@ -424,13 +424,15 @@ def schedule_svg(sched: dict, real_curve: list = None, today_day: float = None,
           '@media (prefers-reduced-motion:reduce){'
           '.cpx-traza{animation:none;stroke-dashoffset:0}}'
           '</style>') if animar else "",
-         # ⚠️ v560 · título y subtítulo 2 y 4 unidades más ARRIBA, y la etiqueta «TODAY»
-         # (abajo) junto a su banda: compartían la franja y=33..41, y en el lienzo
-         # estrecho (700, v559) «TODAY» caía ENCIMA del final del subtítulo (visto en
-         # producción). Ahora el subtítulo acaba en y=35 y «TODAY» empieza en ~37.
-         f'<text x="18" y="22" font-size="13" fill="#1a3a5c" font-weight="bold">'
+         # ⚠️ v560 · título y subtítulo más ARRIBA, y la etiqueta «TODAY» (abajo) junto a
+         # su banda: compartían la franja y=33..41, y en el lienzo estrecho (700, v559)
+         # «TODAY» caía ENCIMA del final del subtítulo (visto en producción).
+         # ⚠️ v561 · con y=35 ya no se pisaban pero quedaban PEGADOS: a 472 px, menos de
+         # 1 px entre «14 activities» y «TODAY» (medido en producción). Subtítulo en
+         # y=31: su tinta acaba en ~33 y la de «TODAY» (base 44) empieza en ~38.
+         f'<text x="18" y="19" font-size="13" fill="#1a3a5c" font-weight="bold">'
          f'{_d("SCHEDULE AND PROGRESS")}</text>',
-         f'<text x="18" y="35" font-size="8.5" fill="#5b6472">'
+         f'<text x="18" y="31" font-size="8.5" fill="#5b6472">'
          f'{_esc(titulo) + " · " if titulo else ""}'
          f'{start.strftime("%d/%m/%Y")} → {sched["fecha_fin"].strftime("%d/%m/%Y")} · '
          f'{total} {_d("days")} · {n} {_d("activities")}</text>']
