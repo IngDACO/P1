@@ -462,13 +462,21 @@ def _owner_grupos():
         st.dataframe(pd.DataFrame(grupos), hide_index=True, width="stretch", column_config=tabla.cfg())
     else:
         st.info(t("No companies yet. Create the first one below."))
-    with st.form("form_grupo", clear_on_submit=True):
-        gn = st.text_input(t("Company name (client company)"))
-        gd = st.text_input(t("Description (optional)"))
+    # ⚠️ v560 · como el alta de usuarios (v557): `clear_on_submit=True` borraba lo escrito
+    # también al dar un error. Conserva lo tecleado y se VACÍA solo al crear, con otra
+    # generación de claves (un control no se vacía soltando su clave, trampa 31).
+    _fg = st.session_state.get("_form_grupo_gen", 0)
+    with st.form(f"form_grupo_{_fg}", clear_on_submit=False):
+        gn = st.text_input(t("Company name (client company)"), key=f"fg_n_{_fg}")
+        gd = st.text_input(t("Description (optional)"), key=f"fg_d_{_fg}")
         if st.form_submit_button(t(":material/add: Create company")):
             ok, msg = auth.add_group(gn, gd)
-            (flash.exito if ok else st.error)(msg)
-            if ok: st.rerun()
+            if ok:
+                flash.exito(msg)
+                st.session_state["_form_grupo_gen"] = _fg + 1
+                st.rerun()
+            else:
+                st.error(msg)
 
     # ── Libro de Google propio de cada cliente (v359) ──
     # Aislamiento de datos: cada empresa puede vivir en su propio fichero, en vez de
@@ -1086,20 +1094,26 @@ def _owner_rieles():
         st.info(t("The catalogue is empty. Add the first rail below."))
 
     with st.expander(t("Add rail"), icon=":material/add_circle:", expanded=not data, key=f"exp_own_addrail_{not data}"):
-        with st.form("form_riel", clear_on_submit=True):
-            ref = st.text_input(t("Reference (e.g. T75-3/B)"))
+        # ⚠️ v560 · conserva lo escrito al dar un error; se vacía al añadir (generación).
+        _fr = st.session_state.get("_form_riel_gen", 0)
+        with st.form(f"form_riel_{_fr}", clear_on_submit=False):
+            ref = st.text_input(t("Reference (e.g. T75-3/B)"), key=f"fr_ref_{_fr}")
             rc1, rc2 = st.columns(2)
             alt = rc1.number_input(t("Tooth height from the back (RAIL) mm"),
-                                   min_value=0.0, step=0.5)
-            anc = rc2.number_input(t("Tooth width (mm)"), min_value=0.0, step=0.5)
+                                   min_value=0.0, step=0.5, key=f"fr_alt_{_fr}")
+            anc = rc2.number_input(t("Tooth width (mm)"), min_value=0.0, step=0.5,
+                                   key=f"fr_anc_{_fr}")
             if st.form_submit_button(t("Add")):
                 if not ref.strip():
                     st.error(t("The reference is required."))
                 else:
                     ok, msg = rails.add_riel(ref.strip(), anc, alt)
-                    (flash.exito if ok else st.error)(msg)
                     if ok:
+                        flash.exito(msg)
+                        st.session_state["_form_riel_gen"] = _fr + 1
                         st.rerun()
+                    else:
+                        st.error(msg)
 
     if data:
         with st.expander(t("Edit / delete rail"), icon=":material/edit:", key="exp_own_editrail"):

@@ -79,8 +79,10 @@ ROTURAS = [
      [('key="cpxseg_cart_view", label_visibility="collapsed",\n'
        '                       persist_state="session")',
        'key="cpxseg_cart_view", label_visibility="collapsed")')]),
+    # ⚠️ ancla CADUCADA por v560: el tipo pasó a la columna de la búsqueda (`_fc2.selectbox`),
+    # con otra sangría. Lo que se rompe es lo mismo: el «All types».
     ("el tipo vuelve a decir «Todos»", PU,
-     [('                             format_func=lambda o: t("All types") if o == "Todos" else o,\n',
+     [('                               format_func=lambda o: t("All types") if o == "Todos" else o,\n',
        '')]),
     ("⚠️ el contador vuelve a contar el grupo entero", PU,
      [('    _nr = sum(1 for p in _base_f if delays.get(str(p.get("ID", ""))))\n',

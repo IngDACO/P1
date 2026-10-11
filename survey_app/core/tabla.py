@@ -62,6 +62,7 @@ CABECERAS = {
     "Grupo": "Company",
     "Contacto": "Contact",
     "Activo": "Active",
+    "Ficha": "Record",          # v560 · Contacts: salía «Ficha» en una tabla inglesa
     # proyectos
     "Proyecto": "Project",
     "Cliente": "Client",

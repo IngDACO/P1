@@ -27,10 +27,15 @@ y cualquier módulo puede usarlo (es lo mismo que se hizo con `num.py` y `tenant
 ⚠️ `st.toast` NO necesita esto: es una notificación flotante del navegador y sobrevive
 al rerun por su cuenta.
 """
+import time
+
 import streamlit as st
 
 _CLAVE = "_flash_cola"
 _TIPOS = ("success", "warning", "error", "info")
+# v560 · lo ya pintado se REPITE en las pasadas que lleguen enseguida (ver `mostrar`).
+_VISTOS = "_flash_vistos"
+_GRACIA_S = 2.5
 
 
 def poner(tipo: str, texto: str) -> None:
@@ -66,8 +71,24 @@ def mostrar() -> int:
 
     ⚠️ Se vacía siempre, aunque falle el pintado: una cola que no se limpia dejaría el
     mensaje pegado en todas las pantallas siguientes.
+
+    ⚠️ v560 · y lo recién pintado se REPITE en las pasadas que lleguen en los
+    `_GRACIA_S` segundos siguientes, si no hay mensajes nuevos. Un componente que se
+    monta (la firma `st_canvas` del Pre-Start, un mapa) manda su valor y RELANZA la
+    página ~100 ms después: esa pasada encontraba la cola vacía y el aviso desaparecía
+    sin que se llegara a leer (visto en producción: cerrar la jornada estando en
+    Pre-Start enseñaba «Clock OUT…» un instante). Pasado el margen, se olvida.
     """
     cola = st.session_state.pop(_CLAVE, None) or []
+    ahora = time.monotonic()
+    if cola:
+        st.session_state[_VISTOS] = (list(cola), ahora)
+    else:
+        _prev = st.session_state.get(_VISTOS)
+        if _prev and ahora - _prev[1] <= _GRACIA_S:
+            cola = list(_prev[0])
+        else:
+            st.session_state.pop(_VISTOS, None)
     for tipo, texto in cola:
         getattr(st, tipo, st.info)(texto)
     return len(cola)

@@ -533,8 +533,17 @@ def _resumen_del_dia(grupo: str):
             if key in st.session_state:
                 st.markdown(st.session_state[key])
                 b1, b2 = st.columns(2)
+                # ⚠️ v560 · «Refresh» GENERA otra lectura con los datos de ahora. Antes solo
+                # borraba la que había y dejaba el botón «Generate» (visto en el recorrido
+                # del Home): dos clics para lo que el nombre promete en uno.
                 if b1.button(t(":material/refresh: Refresh"), key=f"brief_ref_{grupo}"):
-                    st.session_state.pop(key, None)
+                    with st.spinner(t("Preparing…")):
+                        from core import admin_digest, chat_agent
+                        try:
+                            admin_digest.group_digest.clear()     # los hechos, de ahora
+                        except Exception:
+                            pass
+                        st.session_state[key] = chat_agent.admin_briefing(grupo)
                     st.rerun()
                 if b2.button(t(":material/send: Send it to me"), key=f"brief_send_{grupo}"):
                     from core import notify
@@ -1961,33 +1970,39 @@ def _panel_proyectos(grupo: str):
     delays = P.delays_of_group(grupo)     # {pid: días de retraso} (cacheado)
     aheads = P.aheads_of_group(grupo)     # {pid: días de adelanto} (cacheado)
 
-    # ── Filtro rápido (v209): búsqueda + chips, en doble columna ──
-    # v558 · claves `cpxseg_*`: el selector segmentado de la app (v551) en vez de bolitas.
-    _fc1, _fc2 = st.columns([2, 3])
-    _q = _fc1.text_input(t("Search"), key="cart_q", label_visibility="collapsed",
-                         persist_state="session",
-                         placeholder=t("Search project or client…"))
-    _filt = _fc2.radio(t("Filter"), ["Todos", "🔴 Retraso", "🟢 Adelanto", "⏸ En pausa"],
-                       format_func=lambda o: {"Todos": t("All"),
-                                              "🔴 Retraso": ":red[:material/trending_down:] " + t("Behind"),
-                                              "🟢 Adelanto": ":green[:material/trending_up:] " + t("Ahead"),
-                                              "⏸ En pausa": ":material/pause: " + t("On hold")}.get(o, o),
-                       horizontal=True, key="cpxseg_cart_filt", label_visibility="collapsed",
-                       persist_state="session")
+    # ── Filtro rápido (v209): búsqueda + tipo arriba, el ritmo en su propia fila ──
+    # ⚠️ v560 · el ritmo iba en la columna derecha de un [2, 3] junto a la búsqueda: a
+    # 846 px con el menú abierto le tocaban 275 px y pedía ~315, así que «On hold» caía
+    # a una SEGUNDA línea (medido en producción). En su fila tiene todo el ancho.
     # v306: filtro por TIPO. Solo aparece si el grupo tiene proyectos de más de un tipo
     # (o alguno sin marcar): con todo igual sería un desplegable que no filtra nada.
     _SIN_T = "— no type —"
     _tipos_pres = sorted({str(p.get("Type", "")).strip() or _SIN_T for p in proys})
     _tsel = "Todos"
     if len(_tipos_pres) > 1:
+        _fc1, _fc2 = st.columns([3, 2])
+    else:
+        _fc1, _fc2 = st.container(), None
+    _q = _fc1.text_input(t("Search"), key="cart_q", label_visibility="collapsed",
+                         persist_state="session",
+                         placeholder=t("Search project or client…"))
+    if _fc2 is not None:
         # ⚠️ Lo recordado puede ser un tipo que ya no está (se archivó su única obra):
         # se ASIGNA «Todos» antes de instanciar — un valor fuera de las opciones no vale.
         if st.session_state.get("cart_tipo", "Todos") not in ["Todos"] + _tipos_pres:
             st.session_state["cart_tipo"] = "Todos"
         # v558 · «Todos» es el ID interno; en pantalla decía «Todos» (visto en producción).
-        _tsel = st.selectbox(t("Type"), ["Todos"] + _tipos_pres, key="cart_tipo",
-                             format_func=lambda o: t("All types") if o == "Todos" else o,
-                             label_visibility="collapsed", persist_state="session")
+        _tsel = _fc2.selectbox(t("Type"), ["Todos"] + _tipos_pres, key="cart_tipo",
+                               format_func=lambda o: t("All types") if o == "Todos" else o,
+                               label_visibility="collapsed", persist_state="session")
+    # v558 · clave `cpxseg_*`: el selector segmentado de la app (v551) en vez de bolitas.
+    _filt = st.radio(t("Filter"), ["Todos", "🔴 Retraso", "🟢 Adelanto", "⏸ En pausa"],
+                     format_func=lambda o: {"Todos": t("All"),
+                                            "🔴 Retraso": ":red[:material/trending_down:] " + t("Behind"),
+                                            "🟢 Adelanto": ":green[:material/trending_up:] " + t("Ahead"),
+                                            "⏸ En pausa": ":material/pause: " + t("On hold")}.get(o, o),
+                     horizontal=True, key="cpxseg_cart_filt", label_visibility="collapsed",
+                     persist_state="session")
     _ql = (_q or "").strip().lower()
     # v558 · lo que llegó del Home (un indicador): solo esas obras, hasta quitarlo.
     _solo = st.session_state.get("_cart_solo") or None
@@ -3125,7 +3140,10 @@ def _detalle_proyecto(pid: str, grupo: str = None):
 
         with st.expander(t("Add / delete activity (the % is recalculated automatically)"),
                          icon=":material/playlist_add:", key=f"exp_act_{pid}"):
-            with st.form(f"addact_{pid}", clear_on_submit=True):
+            # ⚠️ v560 · conserva días y peso si falta el nombre (antes los devolvía a 2 y
+            # 10); se vacía al añadir, con otra generación del formulario.
+            _ag = st.session_state.get(f"_addact_gen_{pid}", 0)
+            with st.form(f"addact_{pid}" + (f"_{_ag}" if _ag else ""), clear_on_submit=False):
                 st.markdown(t("**:material/add: Add activity**"))
                 an = st.text_input(t("Name"))
                 ac1, ac2 = st.columns(2)
@@ -3139,6 +3157,7 @@ def _detalle_proyecto(pid: str, grupo: str = None):
                         (flash.exito if ok else st.error)(msg)
                         if ok:
                             _aviso_cambio(f"Activity added: {an.strip()}.")
+                            st.session_state[f"_addact_gen_{pid}"] = _ag + 1
                             st.rerun()
             if acts:
                 st.markdown(t("**:material/delete: Delete activity**"))
@@ -4526,15 +4545,21 @@ def render_expenses(pid, grupo, can_delete=False, key_prefix="ex",
 
     # ── Cargar recibo ──
     with st.expander(t("Upload receipt"), icon=":material/receipt:", key=f"{key_prefix}_exp_upgasto"):
-        with st.form(f"{key_prefix}_add_{pid}", clear_on_submit=True):
+        # ⚠️ v560 · `clear_on_submit=True` borraba proveedor, descripción y la FOTO del
+        # recibo si faltaba el importe (visto en el recorrido de la ficha): se conserva lo
+        # escrito y se vacía solo al guardar, con otra generación de claves (trampa 31).
+        # Con la generación 0 las claves son las de siempre.
+        _rg = st.session_state.get(f"_rec_gen_{key_prefix}_{pid}", 0)
+        _sf = f"_{_rg}" if _rg else ""
+        with st.form(f"{key_prefix}_add_{pid}{_sf}", clear_on_submit=False):
             c1, c2 = st.columns(2)
-            cat = c1.selectbox(t("Category"), E.CATEGORIAS, key=f"{key_prefix}_cat")
+            cat = c1.selectbox(t("Category"), E.CATEGORIAS, key=f"{key_prefix}_cat{_sf}")
             val = c2.number_input(t("Total value of the receipt"), min_value=0.0, step=1.0,
-                                  key=f"{key_prefix}_val")
-            prov = c1.text_input(t("Supplier"), key=f"{key_prefix}_prov")
-            desc = c2.text_input(t("Description"), key=f"{key_prefix}_desc")
+                                  key=f"{key_prefix}_val{_sf}")
+            prov = c1.text_input(t("Supplier"), key=f"{key_prefix}_prov{_sf}")
+            desc = c2.text_input(t("Description"), key=f"{key_prefix}_desc{_sf}")
             f = st.file_uploader(t("Photo / PDF of the receipt"), type=["pdf", "png", "jpg", "jpeg"],
-                                 key=f"{key_prefix}_file")
+                                 key=f"{key_prefix}_file{_sf}")
             if st.form_submit_button(t("Save receipt")):
                 if val <= 0:
                     st.error(t("Enter the value of the receipt."))
@@ -4548,6 +4573,7 @@ def render_expenses(pid, grupo, can_delete=False, key_prefix="ex",
                                     st.session_state.get("auth", {}).get("usuario", ""))
                     (flash.exito if ok else st.error)(msg)
                     if ok:
+                        st.session_state[f"_rec_gen_{key_prefix}_{pid}"] = _rg + 1
                         st.rerun()
 
     items = gastos["items"]

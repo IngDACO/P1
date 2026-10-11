@@ -424,9 +424,13 @@ def schedule_svg(sched: dict, real_curve: list = None, today_day: float = None,
           '@media (prefers-reduced-motion:reduce){'
           '.cpx-traza{animation:none;stroke-dashoffset:0}}'
           '</style>') if animar else "",
-         f'<text x="18" y="24" font-size="13" fill="#1a3a5c" font-weight="bold">'
+         # ⚠️ v560 · título y subtítulo 2 y 4 unidades más ARRIBA, y la etiqueta «TODAY»
+         # (abajo) junto a su banda: compartían la franja y=33..41, y en el lienzo
+         # estrecho (700, v559) «TODAY» caía ENCIMA del final del subtítulo (visto en
+         # producción). Ahora el subtítulo acaba en y=35 y «TODAY» empieza en ~37.
+         f'<text x="18" y="22" font-size="13" fill="#1a3a5c" font-weight="bold">'
          f'{_d("SCHEDULE AND PROGRESS")}</text>',
-         f'<text x="18" y="39" font-size="8.5" fill="#5b6472">'
+         f'<text x="18" y="35" font-size="8.5" fill="#5b6472">'
          f'{_esc(titulo) + " · " if titulo else ""}'
          f'{start.strftime("%d/%m/%Y")} → {sched["fecha_fin"].strftime("%d/%m/%Y")} · '
          f'{total} {_d("days")} · {n} {_d("activities")}</text>']
@@ -448,7 +452,7 @@ def schedule_svg(sched: dict, real_curve: list = None, today_day: float = None,
         p.append(f'<line x1="{hx:.1f}" y1="{gantt_top-6:.1f}" x2="{hx:.1f}" '
                  f'y2="{sc_top+sc_h:.1f}" stroke="{C_HOY}" stroke-width="1.1" '
                  f'stroke-dasharray="5,3"/>')
-        p.append(f'<text x="{hx:.1f}" y="{gantt_top-11:.1f}" text-anchor="middle" '
+        p.append(f'<text x="{hx:.1f}" y="{gantt_top-8:.1f}" text-anchor="middle" '
                  f'font-size="8.5" fill="{C_HOY}" font-weight="bold">{_d("TODAY")}</text>')
 
     # ── Gantt con jerarquia ─────────────────────────────────

@@ -29,6 +29,19 @@ import streamlit as st
 
 _SIN_SCROLL = "<style>html,body{overflow:hidden}</style>"
 
+# ⚠️ v560 · Con `height="content"` el recuadro vale 150 px hasta que su script de medida
+# avisa a la página. Una vez (cambiando el ancho de la ventana en plena carga) ese aviso
+# se perdió y el cronograma se quedó en 150 de 581 px, CORTADO, hasta el siguiente
+# resize; y el script solo vuelve a avisar si el tamaño CAMBIA. Esto lo provoca: tras
+# cargar, mete y quita un píxel (2 veces), así que hay dos avisos más y el último deja
+# la medida buena. Sin efecto visible.
+_REMEDIR = ("<script>(function(){function p(){try{var d=document.createElement('div');"
+            "d.style.height='1px';document.body.appendChild(d);"
+            "setTimeout(function(){d.remove();},60);}catch(e){}}"
+            "function a(){setTimeout(p,400);setTimeout(p,1800);}"
+            "if(document.readyState==='complete'){a();}"
+            "else{window.addEventListener('load',a);}})();</script>")
+
 
 def dibujo(html, alto, scroll=False, ajustar=None):
     """Un dibujo (SVG/HTML) en su recuadro.
@@ -58,6 +71,9 @@ def dibujo(html, alto, scroll=False, ajustar=None):
             h = h[:_j + 1] + _SIN_SCROLL + h[_j + 1:] if _j >= 0 else _SIN_SCROLL + h
         else:
             h = _SIN_SCROLL + h
+    if ajustar:
+        _f = h.lower().rfind("</body>")
+        h = (h[:_f] + _REMEDIR + h[_f:]) if _f >= 0 else (h + _REMEDIR)
     return st.iframe(h, height="content" if ajustar else max(1, int(alto)))
 
 

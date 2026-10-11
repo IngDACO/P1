@@ -603,7 +603,22 @@ def clock_in(nombre: str, proyecto: str, ubicacion: str, grupo: str = "",
         return False, f"{t('Error writing the timeclock entry')}: {e}"
     _invalidate_records()
     etq = t("Workday (general)") if tipo == TIPO_GENERAL else t("Project")
-    return True, f"✅ Clock IN {etq} {t('at')} {in_ts}."
+    return True, f"✅ Clock IN {etq} {t('at')} {_ts_legible(in_ts)}."
+
+
+def _ts_legible(ts) -> str:
+    """La hora de un fichaje para un AVISO (v560): «16:36» si es de hoy y «10/10/2026
+    16:36» si no. Salía tal cual se guarda: «Clock IN Project at 2026-10-11 16:36:14».
+    La hoja sigue guardando `FMT`; esto es solo cómo se dice."""
+    try:
+        d = datetime.strptime(str(ts), FMT)
+    except Exception:
+        return str(ts)
+    try:
+        hoy = datetime.strptime(_now(), FMT).date()
+    except Exception:
+        hoy = None
+    return d.strftime("%H:%M") if d.date() == hoy else d.strftime("%d/%m/%Y %H:%M")
 
 
 def clock_out(nombre: str, grupo: str = "", tipo: str = TIPO_PROYECTO,
@@ -667,7 +682,7 @@ def clock_out(nombre: str, grupo: str = "", tipo: str = TIPO_PROYECTO,
         return False, f"{t('Error updating the timeclock entry')}: {e}"
 
     _invalidate_records()
-    return True, (f"✅ Clock OUT {t('at')} {out_ts}. "
+    return True, (f"✅ Clock OUT {t('at')} {_ts_legible(out_ts)}. "
                   f"{t('Hours worked')}: {horas}.")
 
 

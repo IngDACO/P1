@@ -346,7 +346,11 @@ def _estado_a_url(seccion: str):
         quiero = {"s": seccion}
         if sub:
             quiero["t"] = _slug(sub)
-        prj = st.session_state.get("_admin_open_proj")
+        # ⚠️ v560 · también la obra PEDIDA (`_prjsel_pending`): «See the full project» del
+        # Home y el nombre de obra de Day route la piden así, y la sección la convierte en
+        # `_admin_open_proj` DESPUÉS de esto → la URL se quedaba sin `&p=` (visto en v544).
+        prj = (st.session_state.get("_prjsel_pending")
+               or st.session_state.get("_admin_open_proj"))
         if prj and seccion == "proyectos":
             quiero["p"] = str(prj)
         if {k: qp.get(k) for k in ("s", "t", "p") if qp.get(k)} == quiero:
@@ -534,6 +538,18 @@ def render_topbar(grupo):
         # dejaban 12+12 de relleno → se leía «🔔‥». Con 6+6 cabe (medido en producción).
         ".st-key-cpxtop [data-testid='stPopoverButton']{padding-left:6px !important;"
         "padding-right:6px !important;}"
+        # ⚠️ v560 · …pero a 846 px CON EL MENÚ ABIERTO la columna daba 33 px y el «4»
+        # tenía 7 de los 27 que pide (medido en producción). La campana lleva un ancho
+        # FIJO de 64 px (y «←» 44, el mínimo táctil), sin saltar de línea: cede el
+        # buscador. Probado en vivo con un estilo temporal: una fila, «🔔 4» entero.
+        "@media (min-width:641px){"
+        ".st-key-cpxtop [data-testid='stHorizontalBlock']{flex-wrap:nowrap !important;}"
+        ".st-key-cpxtop [data-testid='stColumn']{min-width:0 !important;}"
+        ".st-key-cpxtop [data-testid='stColumn']:nth-child(1){flex:0 0 44px !important;"
+        "min-width:44px !important;}"
+        ".st-key-cpxtop [data-testid='stColumn']:nth-child(4){flex:0 0 64px !important;"
+        "min-width:64px !important;}"
+        "}"
         # ⚠️ v478 · En un MOVIL, Streamlit apila las columnas: esta barra pasaba de una
         # fila de 44 px a TRES bandas de 112, y el titulo de la pantalla empezaba en
         # y=196 — el 24% del telefono en chrome. Medido con sesion de campo a 375x812.
@@ -547,6 +563,9 @@ def render_topbar(grupo):
         "min-width:44px !important;}"
         ".st-key-cpxtop [data-testid='stColumn']:nth-child(2){flex:1 1 auto !important;"
         "min-width:0 !important;}"
+        # v560 · en el móvil la campana tampoco cabía en 44 px («🔔·»): 64.
+        ".st-key-cpxtop [data-testid='stColumn']:nth-child(4){flex:0 0 64px !important;"
+        "min-width:64px !important;}"
         ".st-key-cpxtop button{width:100% !important;min-width:44px !important;}"
         "}</style>", unsafe_allow_html=True)
     # ⚠️ El contenedor se usa como OBJETO (`_top.columns`), no con `with`: asi los

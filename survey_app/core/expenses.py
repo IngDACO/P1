@@ -569,7 +569,19 @@ def spend_svg(curva: dict, proyectado=None, titulo: str = "") -> str:
     techo = max(tot[-1], pres, float(proyectado or 0)) * 1.12 or 1.0
     n = len(fechas)
 
-    def sx(i):   return ML + (i / max(1, n - 1)) * pw
+    # ⚠️ v560 · el eje X va por TIEMPO, no por posición: con el índice, del 30/09 al 06/10
+    # (6 días sin gasto) había la misma distancia que del 06/10 al 07/10, y la curva
+    # parecía subir de golpe donde en realidad había una semana parada. Si alguna fecha
+    # no se pudiera leer, se vuelve al índice (mejor un eje regular que ninguno).
+    from datetime import date as _date
+    try:
+        _ds = [_date(int(f[:4]), int(f[5:7]), int(f[8:10])) for f in fechas]
+        _dia = [(d - _ds[0]).days for d in _ds]
+        _span = max(1, _dia[-1])
+    except Exception:
+        _dia, _span = list(range(n)), max(1, n - 1)
+
+    def sx(i):   return ML + (_dia[i] / _span) * pw
     def sy(v):   return MT + ph - (float(v) / techo) * ph
 
     C_MO, C_CO, C_PRES, C_ROJO = "#2e6da4", "#BA7517", "#6b7280", "#c0392b"
@@ -632,9 +644,19 @@ def spend_svg(curva: dict, proyectado=None, titulo: str = "") -> str:
         p.append(f'<text x="{VW-MR+5}" y="{yy+3:.1f}" font-size="8.5" fill="{col}" '
                  f'font-weight="bold">{t("Finish")} {_money(proyectado)}</text>')
 
-    # eje de fechas (como mucho 6 etiquetas)
-    paso = max(1, n // 6)
-    for i in range(0, n, paso):
+    # eje de fechas · v560: con el eje por TIEMPO los puntos pueden juntarse, así que las
+    # etiquetas van por DISTANCIA (≥ 36 unidades entre una y otra, «dd/mm» mide ~25), con
+    # la última siempre: es la fecha que más importa.
+    _MIN = 36.0
+    _et = []
+    for i in range(n):
+        if not _et or sx(i) - sx(_et[-1]) >= _MIN:
+            _et.append(i)
+    if _et[-1] != n - 1:
+        if sx(n - 1) - sx(_et[-1]) < _MIN and len(_et) > 1:
+            _et.pop()
+        _et.append(n - 1)
+    for i in _et:
         p.append(f'<line x1="{sx(i):.1f}" y1="{base:.1f}" x2="{sx(i):.1f}" '
                  f'y2="{base+4:.1f}" stroke="#9aa7b8" stroke-width="1"/>')
         p.append(f'<text x="{sx(i):.1f}" y="{base+15:.1f}" text-anchor="middle" '
