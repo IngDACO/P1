@@ -5595,8 +5595,11 @@ def _loc_archivada(p) -> bool:
 
 
 def _horas_txt(h) -> str:
-    """Horas para LEER (v564): un decimal por debajo de 10 h (0,45 h no es «0 h»)."""
+    """Horas para LEER (v564): un decimal por debajo de 10 h (0,45 h no es «0 h»).
+    v565 · y CERO es «0 h», no «0.0 h» (visto verificando v564)."""
     h = float(h or 0)
+    if h == 0:
+        return "0 h"
     return f"{h:.1f} h" if h < 10 else f"{h:,.0f} h"
 
 
@@ -5732,6 +5735,9 @@ def _nueva_localizacion_form(grupo: str, abierto: bool = False):
                 _notificar_asignados(asg, {"ID": _res, "Name": nom.strip(),
                                            "Location": _ubi, "Group": grupo})
             st.session_state["_loc_new_gen"] = _ng + 1
+            # v565 · una recién creada se abre en Team, no en la sección que se recordaba de
+            # la anterior (salía en Pre-Start). Se ASIGNA: el selector no está en esta pasada.
+            st.session_state["cpxseg_loc_sec"] = "👥 Equipo"
             flash.exito(t("Location created: {id} · {n}").replace("{id}", str(_res))
                         .replace("{n}", nom.strip()))
             st.session_state["_loc_open"] = _res
@@ -5780,13 +5786,19 @@ def _loc_equipo(pid, grupo):
                    .replace("{x}", ", ".join(_et.get(str(u), str(u)) for u in filas["sin_tarifa"])))
 
 
-def _loc_prestarts(pid):
+def _loc_prestarts(pid, prj=None):
     """Historial de pre-starts de la localización (un almacén también tiene riesgos)."""
     st.markdown(t("#### :material/health_and_safety: Pre-Start"))
+    # ⚠️ v565 · ARCHIVADA, el Pre-Start no la lista (`list_projects` oculta las archivadas):
+    # el botón llevaba a una página sin ella elegida (visto verificando v564). Se dice por
+    # qué y dónde se arregla, en vez de un botón que no cumple.
+    if prj is not None and _loc_archivada(prj):
+        st.caption(t(":material/inventory_2: Archived: it does not appear in the Pre-Start. "
+                     "Reopen it in Data to use it."))
     # ⚠️ v564 · ACTIVO: decía «se hacen desde la sección Pre-Start, eligiendo esta
     # localización» sin llevar a ningún sitio. Lleva allí con ella ya elegida.
-    if st.button(t(":material/health_and_safety: Do today's Pre-Start here →"),
-                 key=f"loc_ir_ps_{pid}", type="tertiary"):
+    elif st.button(t(":material/health_and_safety: Do today's Pre-Start here →"),
+                   key=f"loc_ir_ps_{pid}", type="tertiary"):
         st.session_state["_ps_proy_pending"] = str(pid)
         _ir_a("herramientas", "🦺 Pre-Start")
     from core import prestart
@@ -5882,7 +5894,7 @@ def _detalle_localizacion(pid: str, grupo: str):
     elif _sec == "💰 Gastos":
         render_expenses(pid, grupo, can_delete=True, key_prefix="loc", ver_costos=True)
     elif _sec == "🦺 Pre-Start":
-        _loc_prestarts(pid)
+        _loc_prestarts(pid, prj)
     elif _sec == "📎 Archivos":
         _archivos_section(pid)
     else:
@@ -5991,9 +6003,12 @@ def _loc_kpis(vis, horas, costos):
     k1, k2, k3 = st.columns(3)
     _sel = st.session_state.get("_loc_kpi")
     for _col, slug, lbl, val, pie in (
-            (k1, "horas", t("Hours worked"), _horas_txt(_h), t("not charged to any job")),
+            # v565 · pies que CABEN (medidos en producción, Source Sans 12 px): «assigned on a
+            # regular basis» medía 136 px en un hueco de 115 y salía «…»; «not charged to any
+            # job», 113 en 113.
+            (k1, "horas", t("Hours worked"), _horas_txt(_h), t("not charged to jobs")),
             (k2, "gasto", t("Overhead spend"), theme.dinero(_g, 0), t("never invoiced")),
-            (k3, "gente", t("People"), str(_n), t("assigned on a regular basis"))):
+            (k3, "gente", t("People"), str(_n), t("assigned here"))):
         if _col.button(f"{lbl}\n\n{val}\n\n{pie}", key=f"cpxkpi_loc_{slug}", width="stretch"):
             st.session_state["_loc_kpi"] = None if _sel == slug else slug
             st.rerun()
@@ -6054,6 +6069,9 @@ def render_localizaciones(grupo: str):
     _cab = t("**Locations — {n}** · {a} open").replace("{n}", str(len(_vis))).replace("{a}", str(_abiertas))
     if _cerradas:
         _cab += " · " + t("{c} closed").replace("{c}", str(_cerradas))
+    # v565 · con «Show archived», la cabecera las cuenta: decía «0 · 0 open» enseñando una
+    if _ver_arch and _arch:
+        _cab += " · " + t("{n} archived").replace("{n}", str(len(_arch)))
     st.markdown(_cab)
     _cartera_localizaciones(_vis + (_arch if _ver_arch else []), grupo, horas, costos, alarmas)
     _nueva_localizacion_form(grupo)

@@ -332,6 +332,21 @@ def render_prestart_tab():
         _k_pend = next((k for k in idmap if k.endswith(f"({_ps_pend})")), None)
         if _k_pend:
             st.session_state["ps_proy"] = _k_pend
+        else:
+            # v565 · la pedida no está en la lista (archivada, o de otra cuenta): decirlo, en
+            # vez de dejar «pick the project» como si no se hubiera pedido nada.
+            # ⚠️ El nombre solo si es de esta empresa (cerrojo v351): el pedido nace en la
+            # propia ficha, pero el aviso no debe poder enseñar el de otra.
+            _pn = str(_ps_pend)
+            try:
+                from core import tenant
+                _pp = P.get_project(_ps_pend) or {}
+                if _pp and tenant.puede_ver(_pp.get("Group", "")):
+                    _pn = str(_pp.get("Name") or _ps_pend)
+            except Exception:
+                pass
+            st.info(t(":material/info: «{x}» is not available for a pre-start (it may be "
+                      "archived). Pick the project below.").replace("{x}", _pn))
     _fich_key = None
     try:
         from core import timeclock
