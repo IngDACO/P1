@@ -322,6 +322,10 @@ def _url_a_estado():
         st.session_state["_admin_nav_pending"] = (sec, sub)
         if qp.get("p"):
             st.session_state["_admin_open_proj"] = str(qp.get("p"))
+        # v563 · la agrupación abierta (su panel la busca entre las del grupo: un ID de
+        # otra empresa da «Group not found», no la abre).
+        if qp.get("g"):
+            st.session_state["_admin_open_agr"] = str(qp.get("g"))
     except Exception as e:
         logger.warning("home_ui: no se pudo leer el estado de la URL: %s", e)
 
@@ -351,11 +355,17 @@ def _estado_a_url(seccion: str):
         # `_admin_open_proj` DESPUÉS de esto → la URL se quedaba sin `&p=` (visto en v544).
         prj = (st.session_state.get("_prjsel_pending")
                or st.session_state.get("_admin_open_proj"))
-        if prj and seccion == "proyectos":
+        # v563 · `&p=` solo en la lista de obras (en Groupings una obra abierta antes no
+        # pinta nada) y `&g=` para la agrupación abierta: recargar o mandar el enlace la
+        # perdía (visto en el recorrido de Groupings).
+        if prj and seccion == "proyectos" and sub in (None, "📊 Proyectos"):
             quiero["p"] = str(prj)
-        if {k: qp.get(k) for k in ("s", "t", "p") if qp.get(k)} == quiero:
+        agr = st.session_state.get("_admin_open_agr")
+        if agr and seccion == "proyectos" and sub == "🗂 Agrupaciones":
+            quiero["g"] = str(agr)
+        if {k: qp.get(k) for k in ("s", "t", "p", "g") if qp.get(k)} == quiero:
             return
-        for k in ("s", "t", "p"):
+        for k in ("s", "t", "p", "g"):
             if k in quiero:
                 qp[k] = quiero[k]
             elif qp.get(k) is not None:
@@ -399,6 +409,12 @@ def _track_history(cur):
             hist.append(prev)
             del hist[:-20]
     st.session_state["_nav_cur"] = cur
+
+
+# v563 · lo que una sub-pestaña tiene «abierto» encima de su lista: tocarla en el menú
+# estando ya en ella lo cierra (vuelve a la lista).
+_ABIERTO_EN_SUB = {("proyectos", "📊 Proyectos"): "_admin_open_proj",
+                   ("proyectos", "🗂 Agrupaciones"): "_admin_open_agr"}
 
 
 def puede_atras() -> bool:
@@ -504,6 +520,13 @@ def sidebar_menu() -> str:
             for _i, (_sid, _sdisp) in enumerate(_subs):
                 if st.button(_sdisp, key=f"navsub_{_k}_{_i}", width="stretch"):
                     st.session_state["_admin_expanded"] = _k
+                    # v563 · tocar la sub-pestaña en la que YA estás vuelve a su lista: con
+                    # una obra o una agrupación abierta, el menú no hacía nada y solo se
+                    # salía por «← Back» (decisión del usuario, recorrido de Groupings).
+                    if _k == _cur and _sid == (st.session_state.get(_sk) or _subs[0][0]):
+                        _abierto = _ABIERTO_EN_SUB.get((_k, _sid))
+                        if _abierto:
+                            st.session_state.pop(_abierto, None)
                     navegar(_k, _sid)          # navega con el ID interno (deep-links intactos)
     _track_history(_cur)
     _estado_a_url(_cur)     # v337: la URL refleja dónde estás → el enlace se puede mandar

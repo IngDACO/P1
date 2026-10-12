@@ -3289,6 +3289,47 @@ def _detalle_proyecto(pid: str, grupo: str = None):
 
 
 # ── Panel de agrupaciones ────────────────────────────────────────
+def _curva_agrupacion(cur):
+    """Curva S del conjunto (v563) con el MISMO lenguaje que la de la ficha de una obra
+    (`schedule.schedule_svg`): plan naranja discontinuo, real verde, HOY en rojo, eje en
+    DD/MM y el % a la vista.
+
+    ⚠️ Era un `st.line_chart` genérico: dos azules casi iguales, sin HOY ni «%», y el eje
+    mezclaba «Mon 07», «Sep 27» y «October» (visto en el recorrido de Groupings).
+    """
+    import altair as alt
+    _pl, _re = t("Planned"), t("Actual")
+    filas = []
+    for f, pl, rl in zip(cur["fechas"], cur["plan"], cur["real"]):
+        filas.append({"Fecha": pd.Timestamp(f), "Serie": _pl, "Pct": pl})
+        if rl is not None:
+            filas.append({"Fecha": pd.Timestamp(f), "Serie": _re, "Pct": rl})
+    df = pd.DataFrame(filas)
+    lineas = alt.Chart(df).mark_line(strokeWidth=2.5).encode(
+        x=alt.X("Fecha:T", title=None, axis=alt.Axis(format="%d/%m", labelAngle=0)),
+        y=alt.Y("Pct:Q", title=None, scale=alt.Scale(domain=[0, 100]),
+                axis=alt.Axis(labelExpr="datum.value + '%'")),
+        color=alt.Color("Serie:N", scale=alt.Scale(domain=[_pl, _re],
+                                                   range=["#BA7517", "#1e8449"]),
+                        legend=alt.Legend(orient="bottom", title=None)),
+        strokeDash=alt.StrokeDash("Serie:N", scale=alt.Scale(domain=[_pl, _re],
+                                                             range=[[6, 4], [1, 0]]),
+                                  legend=None),
+        tooltip=[alt.Tooltip("Fecha:T", title=t("Date"), format="%d/%m/%Y"),
+                 alt.Tooltip("Serie:N", title=" "),
+                 alt.Tooltip("Pct:Q", title="%", format=".1f")])
+    capas = [lineas]
+    if cur.get("hoy"):
+        _h = pd.DataFrame({"Fecha": [pd.Timestamp(cur["hoy"])]})
+        capas.append(alt.Chart(_h).mark_rule(color="#c0392b", strokeDash=[5, 3])
+                     .encode(x="Fecha:T"))
+        capas.append(alt.Chart(_h).mark_text(text=t("TODAY"), color="#c0392b", fontSize=11,
+                                             fontWeight="bold", align="left", dx=4,
+                                             baseline="top")
+                     .encode(x="Fecha:T", y=alt.value(2)))
+    return alt.layer(*capas).properties(height=240)
+
+
 def _dashboard_agrupacion(ag, grupo):
     """Vista consolidada de una agrupación (un edificio con varios elevadores).
 
@@ -3297,6 +3338,7 @@ def _dashboard_agrupacion(ag, grupo):
     promedio. De ahí la fecha de entrega del conjunto y el elevador crítico.
     """
     from core import expenses as E
+    from core import theme
     aid = ag["ID"]
     proys = P.list_projects(grupo=grupo, agrupacion_id=aid, incluir_archivados=True)
     if not proys:
@@ -3320,16 +3362,23 @@ def _dashboard_agrupacion(ag, grupo):
     # ── Tarjetas KPI (mismo lenguaje que la cartera de proyectos) ──
     _fecha = (proj["fecha"].strftime("%d/%m/%Y") if proj.get("fecha") else "—")
     _col_f = "#c0392b" if n_retras else "#1e8449"
+    # ⚠️ v563 · «HOURS 0» con 0,45 h cargadas (redondeaba a entero): un decimal por
+    # debajo de 10 h, como en el resto de la app.
+    _h = f"{tot_h:.1f} h" if tot_h < 10 else f"{tot_h:.0f} h"
     tarjetas = [
         _kpi_card(t("Consolidated progress"), f"{pr['avance']:.0f}%"),
         _kpi_card(t("Lifts"), pr["n_proyectos"]),
         _kpi_card(t("Delivery of the whole group"), _fecha, _col_f),
         _kpi_card(t("Behind schedule"), n_retras, "#c0392b" if n_retras else None),
         _kpi_card(t("Alerts"), n_alarm, "#c0392b" if n_alarm else None),
-        _kpi_card(t("Hours"), f"{tot_h:.0f}"),
-        _kpi_card(t("Total cost"), f"${tot_c:,.0f}"),
+        _kpi_card(t("Hours"), _h),
+        _kpi_card(t("Total cost"), theme.dinero_html(tot_c, 0)),
     ]
-    st.markdown('<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px">'
+    # ⚠️ v563 · REJILLA, no flex: con `flex:1 1 150px` la última fila se ESTIRABA (5 + 2
+    # a 1280 px; a 846 px, 3 + 3 + 1 con «Total cost» de 472 px). Con `auto-fill` cada
+    # tarjeta conserva su ancho y las 7 caben en una fila cuando hay sitio.
+    st.markdown('<div style="display:grid;grid-template-columns:repeat(auto-fill,'
+                'minmax(150px,1fr));gap:10px;margin-bottom:10px">'
                 + "".join(tarjetas) + "</div>", unsafe_allow_html=True)
     st.progress(min(1.0, pr["avance"] / 100.0))
 
@@ -3343,13 +3392,14 @@ def _dashboard_agrupacion(ag, grupo):
             .replace("{c}", str(proj["critico"])).replace("{f}", str(_fecha))
             + "  " + t("That is where reinforcing pays off most."))
     if proj.get("sin_datos"):
-        st.caption("No schedule to project from: " + ", ".join(proj["sin_datos"]))
+        st.caption(t("No schedule to project from: {x}").replace("{x}", ", ".join(proj["sin_datos"])))
 
     if tot_pres > 0:
         _p = round(100 * tot_c / tot_pres)
         (st.error if tot_c > tot_pres else st.caption)(
-            f"Grouping budget ${tot_pres:,.0f} · {_p}% used"
-            + (" :red[:material/block:] OVER BUDGET" if tot_c > tot_pres else ""))
+            t("Grouping budget {b} · {p}% used").replace("{b}", theme.dinero(tot_pres, 0))
+            .replace("{p}", str(_p))
+            + (" :red[:material/block:] " + t("OVER BUDGET") if tot_c > tot_pres else ""))
 
     # ── Curva S CONSOLIDADA (plan vs real de todo el conjunto) ──
     try:
@@ -3358,9 +3408,7 @@ def _dashboard_agrupacion(ag, grupo):
         cur = {}
     if cur and cur.get("fechas"):
         st.markdown(t("**:material/trending_up: Progress of the whole group — plan vs actual**"))
-        _df = pd.DataFrame({t("Planned"): cur["plan"], t("Actual"): cur["real"]},
-                           index=pd.to_datetime(cur["fechas"]))
-        st.line_chart(_df, height=240)
+        st.altair_chart(_curva_agrupacion(cur), width="stretch")
         st.caption(t("Weighted by each lift's weight. The actual curve stops at TODAY."))
 
     # ── Comparativa entre elevadores ──
@@ -3383,28 +3431,41 @@ def _dashboard_agrupacion(ag, grupo):
         pid = str(p.get("ID", ""))
         _na = alarmas.get(pid, 0)
         _pf = next((x["fecha"] for x in proj.get("detalle", []) if x["id"] == pid), None)
+        # ⚠️ v563 · el ORDEN es la prioridad (trampa 22): lo que se mira primero va
+        # delante y el ascensor queda fijado; antes, a 846 px, las 11 columnas no cabían en
+        # 472 px y el nombre se iba al desplazar.
         rows.append({
-            "Elevador": p.get("Name"), "Status": _etq(str(p.get("Status", ""))),
+            "Elevador": p.get("Name"),
             "Avance %": P._num(p.get("Progress")),
-            "Weight": P._num(p.get("WeightInGrouping")),
-            "Entrega prev.": _pf.strftime("%d/%m") if _pf else "—",
             # ⚠️ v558 · era otra «Status» (v444) y pisaba el estado del ascensor.
             "Pace": (f"{delays[pid]:.0f} d behind" if pid in delays
                      else (f"{aheads[pid]:.0f} d ahead" if pid in aheads else "on time")),
+            # v563 · con año (salía «29/10»)
+            "Entrega prev.": _pf.strftime("%d/%m/%Y") if _pf else "—",
+            "Status": _etq(str(p.get("Status", ""))),
             "Hours": _hs[i], "vs media h": _dev(_hs[i], _hm),
             "Cost": _cs[i], "vs media $": _dev(_cs[i], _cm),
             "Alerts": _na or "",
+            "Weight": P._num(p.get("WeightInGrouping")),
         })
-    st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch", column_config=tabla.cfg())
+    # v563 · el avance, como BARRA dentro de la tabla. Había además un `st.bar_chart` que
+    # repetía esta columna y, con todo al 0 %, era una caja vacía de 230 px con una marca
+    # «0.000000» y los nombres girados y cortados.
+    st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch", column_config=tabla.cfg(None, {
+        "Elevador": st.column_config.Column(t("Lift"), pinned=True),
+        "Avance %": st.column_config.ProgressColumn(t("Progress"), min_value=0, max_value=100,
+                                                    format="%d%%", width="small"),
+        "Hours": st.column_config.NumberColumn(t("Hours"), format="%.2f", width="small"),
+        "Cost": st.column_config.NumberColumn(t("Cost"), format="$%,.2f", width="small"),
+        "Alerts": st.column_config.Column(t("Alerts"), width="small"),
+        "Weight": st.column_config.NumberColumn(t("Weight"), format="%g", width="small"),
+    }))
     st.caption(t("«vs avg» compares each lift with the group average; it is only flagged if it differs by 15% or more."))
 
     _out = [r["Elevador"] for r in rows if r["vs media h"].startswith("+")]
     if _out:
         st.info(t(":material/warning: They use noticeably more hours than their twins: **{x}**. "
                   "Worth looking into why.").replace("{x}", ", ".join(_out)))
-
-    st.bar_chart(pd.DataFrame({t("Progress %"): [r["Avance %"] for r in rows]},
-                              index=[r["Elevador"] for r in rows]))
 
 
 def _miembros_editor(ags_proys, todos, key, pesos_actuales=None):
@@ -3434,13 +3495,15 @@ def _miembros_editor(ags_proys, todos, key, pesos_actuales=None):
         pd.DataFrame(filas), hide_index=True, width="stretch",
         num_rows="fixed", key=key,
         disabled=["Project", "Avance %", "Already in another"],
+        # ⚠️ v563 · las cabeceras de una tabla NO interpretan `:material/…:` (salía el
+        # código literal) y «In the grouping» se cortaba en «In the grou…».
         column_config=tabla.cfg(None, {
-            "In the grouping": st.column_config.CheckboxColumn(width="small"),
+            "In the grouping": st.column_config.CheckboxColumn(t("In group"), width="small"),
             "Weight": st.column_config.NumberColumn(
-                min_value=0.0, step=0.5,
+                t("Weight"), min_value=0.0, step=0.5,
                 help=t("How much this lift weighs in the consolidated progress.")),
             "Already in another": st.column_config.TextColumn(
-                t(":material/warning: Already in another"), help=t("Ticking it here MOVES it to this group.")),
+                t("Already in another group"), help=t("Ticking it here MOVES it to this group.")),
         }))
     out = {}
     for _, r in ed.iterrows():
@@ -3489,30 +3552,43 @@ def _cartera_agrupaciones(ags, grupo):
             "justify-content:flex-start!important;padding-left:12px!important;}"
             f".st-key-agrc_{_i} button>div{{justify-content:flex-start!important;width:100%!important;}}"
             f".st-key-agrc_{_i} button p{{text-align:left!important;width:100%!important;}}")
+    # ⚠️ v563 · si no caben dos tarjetas por fila (a 846 px con el menú abierto medían 233
+    # px y partían líneas), una por fila: por el ancho de la LISTA, como el Home (v561).
+    _css.append(".st-key-cpx_agr_cartas{container-type:inline-size;}"
+                "@container (max-width:620px){.st-key-cpx_agr_cartas "
+                "[data-testid='stHorizontalBlock']>[data-testid='stColumn']"
+                "{flex:1 1 100% !important;}}")
     _css.append("</style>")
     st.markdown("".join(_css), unsafe_allow_html=True)
 
-    for _r0 in range(0, len(rows), 2):
-        _cols = st.columns(2)
-        for _j in range(2):
-            _idx = _r0 + _j
-            if _idx >= len(rows):
-                break
-            r = rows[_idx]
-            _av = max(0, min(100, int(r["av"])))
-            _extra = ""
-            if r["gap"] > 0.5:
-                _extra += f" · :material/alarm: {r['gap']:.0f}d"
-            elif r["gap"] < -0.5:
-                _extra += f" · :material/trending_up: {abs(r['gap']):.0f}d"
-            if r["n_al"]:
-                _extra += f" · :material/notifications: {r['n_al']}"
-            if r["fecha"]:
-                _extra += f" · :material/event: {r['fecha'].strftime('%d/%m')}"
-            _lbl = f"**:material/account_tree: {r['a'].get('Name', '')}** · {r['n']} elev · {_av}%{_extra}"
-            if _cols[_j].button(_lbl, key=f"agrc_{_idx}", width="stretch"):
-                st.session_state["_admin_open_agr"] = r["aid"]
-                st.rerun()
+    # v563 · con UNA sola agrupación, a todo el ancho (ocupaba media fila y la otra mitad
+    # quedaba vacía).
+    _por_fila = 1 if len(rows) == 1 else 2
+    with st.container(key="cpx_agr_cartas"):
+        for _r0 in range(0, len(rows), _por_fila):
+            _cols = st.columns(_por_fila)
+            for _j in range(_por_fila):
+                _idx = _r0 + _j
+                if _idx >= len(rows):
+                    break
+                r = rows[_idx]
+                _av = max(0, min(100, int(r["av"])))
+                _extra = ""
+                if r["gap"] > 0.5:
+                    _extra += f" · :material/alarm: {r['gap']:.0f} d"
+                elif r["gap"] < -0.5:
+                    _extra += f" · :material/trending_up: {abs(r['gap']):.0f} d"
+                if r["n_al"]:
+                    _extra += f" · :material/notifications: {r['n_al']}"
+                if r["fecha"]:
+                    # v563 · con año (salía «09/11»)
+                    _extra += f" · :material/event: {r['fecha'].strftime('%d/%m/%Y')}"
+                # v563 · «2 elev» → «2 lifts» (la abreviatura venía de «elevadores»)
+                _nl = (t("1 lift") if r["n"] == 1 else t("{n} lifts").replace("{n}", str(r["n"])))
+                _lbl = f"**:material/account_tree: {r['a'].get('Name', '')}** · {_nl} · {_av}%{_extra}"
+                if _cols[_j].button(_lbl, key=f"agrc_{_idx}", width="stretch"):
+                    st.session_state["_admin_open_agr"] = r["aid"]
+                    st.rerun()
 
 
 def _panel_agrupaciones(grupo: str):
@@ -3546,10 +3622,16 @@ def _panel_agrupaciones(grupo: str):
                       and str(p.get("ID")) not in {str(q.get("ID")) for q in todos}]
             _sel = _miembros_editor(nom_ags, todos + _falta, f"agmem_{_ag['ID']}", _act)
             if len(_sel) > 12:
-                st.warning(f"{len(_sel)} projects: each change is a write "
-                           "to the sheet; it may take a few seconds.")
+                st.warning(t("{n} projects: each change is a write to the sheet; it may "
+                             "take a few seconds.").replace("{n}", str(len(_sel))))
             if st.button(t(":material/save: Save the group's projects"),
                          key=f"agmemsave_{_ag['ID']}", width="stretch"):
+                # v563 · sin cambios no es un éxito (salía en verde): aviso neutro, y sin
+                # tocar la hoja.
+                if set(_sel) == set(_act) and all(abs(float(_sel[k]) - float(_act[k])) < 1e-9
+                                                  for k in _sel):
+                    flash.info(t("No changes to save."))
+                    st.rerun()
                 with st.spinner(t("Saving…")):
                     ok, msg = P.set_grouping_members(_ag["ID"], _sel, grupo)
                 (flash.exito if ok else st.error)(msg)
@@ -3559,7 +3641,8 @@ def _panel_agrupaciones(grupo: str):
             st.caption(t("The projects are not deleted; they are only ungrouped."))
             _ok_del = ui.confirmar_borrado("del_agr_ok", t("I confirm I want to delete this group"))
             if st.button(t("Delete group"), disabled=not _ok_del, key="del_agr_btn"):
-                ok, msg = P.delete_grouping(_ag["ID"])
+                # v563 · con el grupo: el motor DESAGRUPA sus ascensores antes de borrarla
+                ok, msg = P.delete_grouping(_ag["ID"], grupo)
                 (flash.exito if ok else st.error)(msg)
                 if ok:
                     st.session_state.pop("_admin_open_agr", None)
@@ -3568,18 +3651,27 @@ def _panel_agrupaciones(grupo: str):
 
     # ── Lista de agrupaciones CLICKEABLES ──
     if ags:
-        st.markdown(f"**Groups of lifts — {len(ags)}**")
+        st.markdown(t("**Groups of lifts — {n}**").replace("{n}", str(len(ags))))
         st.caption(t("Tap a group to open its dashboard."))
         _cartera_agrupaciones(ags, grupo)
     else:
         st.info(t("No groups yet. Create one below and choose which lifts belong to it."))
 
     # ── Crear: la agrupación se arma CON sus proyectos (v141), plegada ──
-    with st.expander(t("New group of lifts"), icon=":material/create_new_folder:", key="exp_agr_new"):
+    # v563 · sin ninguna agrupación nace ABIERTO (es lo único que se puede hacer aquí); la
+    # condición va en la clave, que si no el desplegable conservaría su estado (v547).
+    with st.expander(t("New group of lifts"), icon=":material/create_new_folder:",
+                     expanded=not ags, key=f"exp_agr_new_{not ags}"):
         st.caption(t("Projects are created first; here you choose which ones belong."))
-        nom = st.text_input(t("Group name"), key="nueva_agr_nom")
-        des = st.text_input(t("Description (optional)"), key="nueva_agr_des")
-        _nuevos = _miembros_editor(nom_ags, todos, "agmem_nueva")
+        # ⚠️ v563 · tras crear, el formulario se quedaba con el nombre y las obras
+        # MARCADAS (con «Already in another: <la nueva>»): un segundo «Create» daba «ya
+        # existe» o MOVÍA esas obras a otra agrupación. Se vacía al crear con otra
+        # generación de claves (trampa 31); con la generación 0, las de siempre.
+        _ng = st.session_state.get("_agr_new_gen", 0)
+        _sf = f"_{_ng}" if _ng else ""
+        nom = st.text_input(t("Group name"), key=f"nueva_agr_nom{_sf}")
+        des = st.text_input(t("Description (optional)"), key=f"nueva_agr_des{_sf}")
+        _nuevos = _miembros_editor(nom_ags, todos, f"agmem_nueva{_sf}")
         if st.button(t("Create group"), key="nueva_agr_btn", width="stretch"):
             if not nom.strip():
                 st.error(t("The name is required."))
@@ -3590,14 +3682,16 @@ def _panel_agrupaciones(grupo: str):
                 else:
                     _n = 0
                     if _nuevos:
-                        with st.spinner("Assigning projects..."):
+                        with st.spinner(t("Assigning projects…")):
                             ok2, msg2 = P.set_grouping_members(res, _nuevos, grupo)
                         _n = len(_nuevos)
                         if not ok2:
-                            st.warning(f"Group created, but: {msg2}")
-                    flash.exito(f"{t('Grouping created')} ({res})"
-                               + (f" with {_n} lift(s)." if _n else
-                                  ". Add lifts to it from its panel."))
+                            flash.aviso(t("Group created, but: {m}").replace("{m}", str(msg2)))
+                    flash.exito(
+                        (t("Grouping created ({id}) with {n} lift(s).").replace("{n}", str(_n))
+                         if _n else t("Grouping created ({id}). Add lifts to it from its panel."))
+                        .replace("{id}", str(res)))
+                    st.session_state["_agr_new_gen"] = _ng + 1
                     st.rerun()
 
 

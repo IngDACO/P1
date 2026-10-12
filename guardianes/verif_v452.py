@@ -229,7 +229,10 @@ for _h in sorted(set(_ley)):
 chk(not _ley, f"ninguna leyenda de chart es un literal suelto ({len(set(_ley))})")
 
 # Y la afirmacion POSITIVA: el ingles esperado tiene que ESTAR (v438/v439).
-chk('{t("Planned"): cur["plan"], t("Actual"): cur["real"]}' in _pu,
+# ⚠️ v563 · CADUCADA a propósito: la curva consolidada dejó el `st.line_chart` (cuya leyenda
+# eran las claves del DataFrame) y pasó a Altair (`_curva_agrupacion`), con la leyenda en
+# `_pl, _re`. Lo que se protege es lo mismo: Planned/Actual, por `t()`.
+chk('_pl, _re = t("Planned"), t("Actual")' in _pu,
     "la curva consolidada se rotula Planned/Actual")
 
 # ======================================================================

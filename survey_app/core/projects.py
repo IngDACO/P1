@@ -489,16 +489,28 @@ def create_grouping(grupo: str, nombre: str, descripcion: str = "") -> tuple:
     return True, gid
 
 
-def delete_grouping(gid: str) -> tuple:
+def delete_grouping(gid: str, grupo: str = None) -> tuple:
+    """Borra una agrupación y DESAGRUPA sus ascensores (no se borran).
+
+    ⚠️ v563 · Antes solo borraba su fila: los ascensores se quedaban con el `GroupingID`
+    de una agrupación que ya no existía (visto en la hoja tras borrar AGR-0001), aunque la
+    pantalla prometía «they are only ungrouped». Primero se desagrupan; si alguno falla,
+    la agrupación NO se borra (se puede reintentar sin dejar huérfanos).
+    """
     gws, err = _groupings_ws()
     if err:
         return False, err
     row = _find_row(gws, "ID", gid)
     if row is None:
         return False, t("Grouping not found.")
+    n = len(list_projects(grupo=grupo, agrupacion_id=gid, incluir_archivados=True))
+    if n:
+        ok, msg = set_grouping_members(gid, {}, grupo)
+        if not ok:
+            return False, msg
     gws.delete_rows(row)
     _invalidate()
-    return True, t("Grouping deleted.")
+    return True, t("Grouping deleted; {n} lift(s) ungrouped.").replace("{n}", str(n))
 
 
 # ── Proyectos ────────────────────────────────────────────────────

@@ -26,12 +26,11 @@ ROTURAS = [
      "un ternario ASIMETRICO: una rama traducida y la otra en espanol"),
     ("auth_ui.py", 'else t("missing")))', 'else "falta"))',
      "la columna Contacto vuelve a mezclar `yes` y `falta`"),
-    ("projects_ui.py", '{t("Planned"): cur["plan"], t("Actual"): cur["real"]}',
-     '{"Planificado": cur["plan"], "Real": cur["real"]}',
-     "la leyenda del chart consolidado vuelve a ser un literal espanol"),
-    ("projects_ui.py", '{t("Progress %"): [r["Avance %"] for r in rows]}',
-     '{"Avance %": [r["Avance %"] for r in rows]}',
-     "la leyenda del bar_chart de avance vuelve a literal"),
+    # ⚠️ v563 · RETIRADAS dos roturas, no muertas por descuido: protegían la leyenda del
+    # `st.line_chart` consolidado de Groupings y la del `st.bar_chart` de avance, y v563
+    # quitó los dos (la curva pasó a Altair con el lenguaje de la ficha; el avance, a una
+    # barra DENTRO de la tabla). La leyenda en inglés de la curva nueva la vigila verif_v563
+    # (y romper_v563 la rompe).
     ("quotes_ui.py", 'st.success(":material/check_circle: " + t("You are at") + " **"',
      'st.success(":material/check_circle: Vas **"',
      "vuelve el «Vas» espanol en la rama hermana de `You are at`"),
