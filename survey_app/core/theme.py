@@ -407,11 +407,21 @@ def dinero(valor, dec: int = 2, simbolo: str = "$") -> str:
     Por eso el formato de importes vive en UN sitio: cada vez que alguien escriba
     `f"${x:,.2f}"` a mano el fallo vuelve, y vuelve en las pantallas de dinero.
     """
+    return _importe(valor, dec, simbolo, True)
+
+
+def _importe(valor, dec: int, simbolo: str, escapar: bool) -> str:
+    """⚠️ v566 · el SIGNO va delante del símbolo: «-$128», no «$-128» (visto en el Resumen
+    de Finanzas: «Profit $-128»). Un importe que redondea a cero no lleva signo (-0,004 →
+    «$0.00», no «-$0.00»). El guion es el ASCII: se copia y pega bien y existe en todas
+    las fuentes."""
     try:
         v = float(valor or 0)
     except (TypeError, ValueError):
         v = 0.0
-    return f"\\{simbolo}{v:,.{dec}f}"
+    _cifra = f"{abs(v):,.{dec}f}"
+    _neg = v < 0 and _cifra.strip("0.,") != ""
+    return ("-" if _neg else "") + ("\\" if escapar else "") + simbolo + _cifra
 
 
 def dinero_html(valor, dec: int = 2, simbolo: str = "$") -> str:
@@ -422,7 +432,9 @@ def dinero_html(valor, dec: int = 2, simbolo: str = "$") -> str:
     (visto en producción en las tarjetas de la cartera: «🧾 \\$133»). Ahí tampoco hace
     falta: el bloque HTML va crudo y no abre LaTeX. Fuera de HTML, `dinero`.
     """
-    return dinero(valor, dec, simbolo)[1:]
+    # v566 · ya no es `dinero(...)[1:]`: con el signo delante, quitar el primer carácter
+    # quitaba el «-» y dejaba la barra.
+    return _importe(valor, dec, simbolo, False)
 
 
 def kpi_row(items):

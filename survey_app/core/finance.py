@@ -232,6 +232,35 @@ def periodo_anterior(desde, hasta):
     return desde - timedelta(days=dias), desde - timedelta(days=1)
 
 
+def _restar_meses(d, n: int):
+    """`d` con `n` meses menos; el día se ajusta al último del mes si no existe (31/03 →
+    28/02). v566 · para comparar un tramo con el MISMO tramo del periodo anterior."""
+    import calendar
+    m, y = d.month - n, d.year
+    while m < 1:
+        m += 12
+        y -= 1
+    return d.replace(year=y, month=m, day=min(d.day, calendar.monthrange(y, m)[1]))
+
+
+def periodo_comparable(desde, hasta, modo=None):
+    """El tramo con el que tiene SENTIDO comparar (v566).
+
+    ⚠️ `periodo_anterior` desplaza la ventana su propia duración, y para un periodo «en
+    curso» eso compara con algo que nadie pregunta: «This year» (01/01 → 13/10/2026)
+    salía comparado con 21/03/2025 → 31/12/2025 (visto en el recorrido de Summary), y
+    «This month» (01/10 → 13/10) con 18/09 → 30/09. Lo que se pregunta es «¿voy mejor que
+    el año pasado a estas alturas?»: el MISMO tramo del mes, trimestre o año anterior.
+    Sin `modo` (un rango cualquiera), lo de siempre.
+    """
+    if not desde or not hasta:
+        return None, None
+    _n = {"mes": 1, "trimestre": 3, "anio": 12}.get(modo)
+    if _n:
+        return _restar_meses(desde, _n), _restar_meses(hasta, _n)
+    return periodo_anterior(desde, hasta)
+
+
 def variacion(actual, previo) -> dict:
     """{dif, pct, mejor} entre dos cifras. `pct` es None si no hay base con la que
     comparar (dividir por cero no es «infinito por ciento», es «no se puede decir»)."""
@@ -241,7 +270,7 @@ def variacion(actual, previo) -> dict:
     return {"dif": dif, "pct": pct, "mejor": dif > 0}
 
 
-def pnl_comparado(grupo: str, desde=None, hasta=None) -> dict:
+def pnl_comparado(grupo: str, desde=None, hasta=None, modo=None) -> dict:
     """El P&L del periodo + el del anterior + la variación de cada cifra (v341).
 
     ⚠️ Cuesta 0 llamadas nuevas a Sheets: `pnl` lee de los mismos lectores cacheados
@@ -249,7 +278,7 @@ def pnl_comparado(grupo: str, desde=None, hasta=None) -> dict:
     en memoria lo que ya está descargado.
     """
     act = pnl(grupo, desde, hasta)
-    d0, h0 = periodo_anterior(desde, hasta)
+    d0, h0 = periodo_comparable(desde, hasta, modo)          # v566
     if d0 is None:
         return {"actual": act, "previo": None, "var": {}, "rango_previo": None}
     prev = pnl(grupo, d0, h0)
@@ -370,6 +399,7 @@ def conciliacion_mo(grupo: str, desde=None, hasta=None) -> dict:
     conocidas = auth.claves_conocidas()
     cargado = cobrado_no_pagado = pagado_no_cargado = interno = 0.0
     sin_tarifa, de_baja = [], []
+    sin_tarifa_claves = {}          # v566 · {nombre: login} para abrir su ficha en Users
     for clave, h in hp.items():
         _tar = _num(rates.get(clave, 0))
         cargado += h["proyecto"] * _tar
@@ -387,6 +417,8 @@ def conciliacion_mo(grupo: str, desde=None, hasta=None) -> dict:
             _vivo = (not conocidas or clave in conocidas
                      or str(h.get("nombre", "")) in conocidas)
             (sin_tarifa if _vivo else de_baja).append(h["nombre"])
+            if _vivo:
+                sin_tarifa_claves[h["nombre"]] = clave
 
     # Lo REALMENTE liquidado en nóminas del periodo (por `PeriodoHasta`, como el P&L)
     base_nom = aportes = ausencias = 0.0
@@ -420,6 +452,7 @@ def conciliacion_mo(grupo: str, desde=None, hasta=None) -> dict:
         # lo que la cadena no explica: nóminas editadas a mano, o trabajo aún sin nómina
         "sin_explicar":       round(base_teorica - base_nom, 2),
         "sin_tarifa":         sorted(set(sin_tarifa)),
+        "sin_tarifa_claves":  sin_tarifa_claves,
         "de_baja":            sorted(set(de_baja)),
     }
 
@@ -463,6 +496,12 @@ def sin_facturar(grupo: str) -> list:
     Es dinero ganado que no se ha pedido. No estaba en ninguna pantalla: había que
     entrar a crear una factura para enterarse.
     """
+    return [(n, v) for _pid, n, v in sin_facturar_ids(grupo)]
+
+
+def sin_facturar_ids(grupo: str) -> list:
+    """`[(id, nombre, importe)]` — lo mismo con el ID (v566): el Resumen lleva a facturar
+    CADA obra (antes «→ Ir a Facturas» dejaba en «No invoices yet» sin decir qué)."""
     # ⚠️ v397: delega en `invoices.pendiente_por_proyecto`, que es LA definición del
     # pendiente por obra. Antes repetía el bucle aquí y la cartera habría sido una
     # tercera copia — el patrón que causó los cinco `_num` divergentes de v323.
@@ -470,8 +509,8 @@ def sin_facturar(grupo: str) -> list:
     _pend = INV.pendiente_por_proyecto(grupo)
     _nom = {str(p.get("ID", "")): str(p.get("Name", ""))
             for p in P.list_projects(grupo=grupo, incluir_archivados=True)}
-    out = [(_nom.get(pid, pid), v) for pid, v in _pend.items()]
-    return sorted(out, key=lambda x: -x[1])
+    out = [(pid, _nom.get(pid, pid), v) for pid, v in _pend.items()]
+    return sorted(out, key=lambda x: -x[2])
 
 
 def _por_cliente(facs) -> list:

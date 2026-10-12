@@ -121,14 +121,19 @@ check("escapa el simbolo", T.dinero(1234.5), "\\$1,234.50")
 # ⚠️ Lo que importa NO es el redondeo que a mi me parezca: es que `dinero` imprima
 # EXACTAMENTE lo mismo que el `f"${x:,.Nf}"` que habia antes. Si cambiara, cada
 # cifra de las pantallas de dinero cambiaria en silencio con este deploy.
+# ⚠️ v566 · CADUCADO a propósito para los NEGATIVOS: el signo va delante del símbolo
+# («-$80.20», no «$-80.20» — visto en el Resumen de Finanzas: «Profit $-128»). Los
+# positivos siguen imprimiendo exactamente lo mismo, que es lo que esto protege.
 _iguales = all(T.dinero(v, n) == f"\\${v:,.{n}f}"
-               for v in (0, 1, 1234.5, 1234.4, 0.005, 99999.999, -80.2, 1287.0)
+               for v in (0, 1, 1234.5, 1234.4, 0.005, 99999.999, 1287.0)
                for n in (0, 2))
 check("imprime IGUAL que el formato anterior (incl. redondeo al par de Python)",
       _iguales)
 check("None no rompe", T.dinero(None), "\\$0.00")
 check("texto basura no rompe", T.dinero("x"), "\\$0.00")
-check("negativo", T.dinero(-80.2), "\\$-80.20")
+check("negativo: el signo DELANTE (v566)", T.dinero(-80.2), "-\\$80.20")
+check("…también sin escape, en HTML (v566)", T.dinero_html(-80.2), "-$80.20")
+check("lo que redondea a cero no lleva signo (v566)", T.dinero(-0.004), "\\$0.00")
 
 print("\n== 3) el P&L SIN periodo da EXACTAMENTE lo de antes ==")
 from core import finance as F

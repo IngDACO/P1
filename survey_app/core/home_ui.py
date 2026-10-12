@@ -1239,7 +1239,7 @@ def _hub_herramientas():
             _id, _dispv = _herr[_i]
             with _cols[_j].container(border=True):
                 st.markdown(f"#### {_dispv}")
-                st.caption(_desc.get(_id, ""))
+                st.caption(t(_desc.get(_id, "")))          # v566 · con `t()`
                 if st.button(t("Open →"), key=f"hubherr_{_i}", width="stretch"):
                     navegar("herramientas", _id)
 

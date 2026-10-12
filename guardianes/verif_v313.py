@@ -112,8 +112,11 @@ TC.jornada_y_proyecto, A.rate_map, PR.list_nominas, PR.conceptos_de = _o
 print("\n== 4) las pantallas nombran la cifra por lo que es ==")
 _src = (BASE / "core" / "projects_ui.py").read_text(encoding="utf-8")
 # ⚠️ CADUCADO por v440 (i18n F3): el texto pasó al inglés a propósito.
+# ⚠️ v566 · la tarjeta pasó a BOTÓN (activa) y su etiqueta es UNA línea con «…»: «Costs
+# (what you pay)» no cabía. El principio de v313 sigue: la cifra se llama por lo que es.
 check("P&L: «Costos (lo que pagas)»",
-      "Costos (lo que pagas)" in _src or "Costs (what you pay)" in _src)
+      "Costos (lo que pagas)" in _src or "Costs (what you pay)" in _src
+      or 't("What you pay")' in _src)
 check("Gastos: «Costo cargado a obras»",
       "Costo cargado a obras" in _src or "Cost charged to jobs" in _src)
 # v384: dejó de ser un `st.metric` y se pinta con `_kpi_card`. El nombre —que es

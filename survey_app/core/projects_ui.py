@@ -260,7 +260,9 @@ def _kpi_card(label, value, color=None, pie=None, var=None):
         _c = theme.VERDE if var.get("mejor") else theme.ROJO
         _f = "▲" if var["dif"] > 0 else ("▼" if var["dif"] < 0 else "=")
         _sub = (f'<div class="sub" style="color:{theme.texto_seguro(_c)}">'
-                f'{_f} {abs(var["pct"]):.0f}% vs. periodo anterior</div>')
+                # v566 · en inglés (decía «vs. periodo anterior»)
+                + t("{f} {p}% vs previous").replace("{f}", _f)
+                .replace("{p}", f'{abs(var["pct"]):.0f}') + '</div>')
     elif pie:
         _sub = f'<div class="sub">{theme._esc(pie)}</div>'
     return (
@@ -4756,6 +4758,12 @@ def render_pnl(grupo: str):
     clickeables** del «Resumen del dia» de HOME (v196/v199) y la **fila de herramientas
     que se abren debajo** del Panel de planificacion (v287). Todo sale de lectores
     cacheados -> 0 lecturas nuevas de Sheets.
+
+    ⚠️ v566 · LO PENDIENTE (por cobrar, vencido, por pagar, sin facturar, sin tarifa…) es
+    un SALDO A HOY, no lo emitido en el periodo: con «This month», una factura de
+    septiembre sin cobrar no salía como pendiente. El periodo manda en ingresos, costes,
+    beneficio, la conciliación y los desgloses. Y un periodo SIN movimiento ya no deja la
+    pantalla en blanco: lo pendiente sigue ahí (visto en el recorrido de Summary).
     """
     from core import finance as F
     from core import theme as T
@@ -4768,8 +4776,17 @@ def render_pnl(grupo: str):
     # ⚠️ Los valores se comparan justo debajo → se traduce el display, no la opción.
     _PER = {"Este mes": "This month", "Trimestre": "Quarter",
             "Este año": "This year", "Todo": "All"}
+    # v566 · «See All» (más abajo) pide el periodo así: se ASIGNA antes de instanciar
+    # el selector (regla v111; trampa 31).
+    _pp = st.session_state.pop("_pnl_per_pending", None)
+    if _pp in _PER:
+        st.session_state["cpxseg_pnl_per"] = _pp
+    # ⚠️ v566 · `persist_state="session"`: al ir a Invoices y volver con «←», el periodo
+    # volvía a «This month» — que suele estar vacío (visto en el recorrido de Summary).
     _per = st.radio(t("Period"), list(_PER), format_func=lambda o: t(_PER[o]),
-                    horizontal=True, key="cpxseg_pnl_per", label_visibility="collapsed")
+                    horizontal=True, key="cpxseg_pnl_per", label_visibility="collapsed",
+                    persist_state="session")
+    _modo = {"Este mes": "mes", "Trimestre": "trimestre", "Este año": "anio"}.get(_per)
     if _per == "Este mes":
         _desde, _hasta = _hoy.replace(day=1), _hoy
     elif _per == "Trimestre":
@@ -4781,46 +4798,18 @@ def render_pnl(grupo: str):
         _desde = _hasta = None
 
     d = F.pnl(grupo, _desde, _hasta)
-    if d["facturado"] == 0 and d["costo_total"] == 0:
+    _dt = d if _desde is None else F.pnl(grupo)          # v566 · saldos a hoy
+    _vacio = d["facturado"] == 0 and d["costo_total"] == 0
+    if _vacio:
         st.info(t(":material/info: There are no invoices or costs (payroll/purchases) in this period.")
                 if _desde else
                 t(":material/info: No invoices or costs (payroll/purchases) have been recorded yet."))
-        return
-    if _desde:
-        st.caption(f":material/date_range: {_desde.strftime('%d/%m/%Y')} → "
-                   f"{_hasta.strftime('%d/%m/%Y')}")
-
-    # ── Las 3 cifras, con linea de contexto (como los KPI de HOME, v303) ──
-    _nfac = len(d.get("por_cliente") or [])
-    _mrg = (100 * d["ganancia"] / d["facturado"]) if d["facturado"] > 0 else None
-    # v341: la comparación con el periodo ANTERIOR. Cuesta 0 llamadas nuevas — `pnl`
-    # lee de los mismos lectores cacheados, así que el periodo previo es solo volver
-    # a filtrar en memoria. ⚠️ En «Todo» no hay anterior: `var` sale vacío y las
-    # tarjetas caen a su pie de siempre.
-    try:
-        _cmp = F.pnl_comparado(grupo, _desde, _hasta)
-        _v = _cmp.get("var") or {}
-    except Exception:
-        _cmp, _v = {}, {}
-    # ⚠️ En un COSTO, subir es peor: se invierte el sentido de `mejor`.
-    _vc = dict(_v.get("costo_total") or {})
-    if _vc:
-        _vc["mejor"] = not _vc.get("mejor")
-    st.markdown('<div style="display:flex;gap:10px;flex-wrap:wrap;margin:2px 0 6px">'
-                + _kpi_card(t("Income (invoiced)"), T.dinero(d["facturado"], 0),
-                            var=_v.get("facturado"))
-                + _kpi_card(t("Costs (what you pay)"), T.dinero(d["costo_total"], 0),
-                            var=_vc or None)
-                + _kpi_card(t("Profit"), T.dinero(d["ganancia"], 0),
-                            T.VERDE if d["ganancia"] >= 0 else T.ROJO,
-                            var=_v.get("ganancia"))
-                + "</div>", unsafe_allow_html=True)
-    _pie = (f"{_nfac} client(s) invoiced  ·  costs = payroll + purchases"
-            + (f"  ·  {t('margin')} {_mrg:.0f}%" if _mrg is not None else ""))
-    if _cmp.get("rango_previo"):
-        _d0, _h0 = _cmp["rango_previo"]
-        _pie += (f"  ·  compared with {_d0.strftime('%d/%m')}–{_h0.strftime('%d/%m')}")
-    st.caption(_pie)
+        if _desde and st.button(t(":material/date_range: See All"), key="pnl_ver_todo",
+                                type="tertiary"):
+            st.session_state["_pnl_per_pending"] = "Todo"
+            st.rerun()
+    else:
+        _pnl_kpis(grupo, d, _desde, _hasta, _modo, F, T)
 
     # ── Rejilla FIJA de pendientes, clickeables (patron del Resumen del dia) ──
     # ⚠️ Estructura fija (v196): siempre los mismos 8 y en el mismo orden, con su 0
@@ -4831,59 +4820,155 @@ def render_pnl(grupo: str):
         _cc = F.conciliacion_mo(grupo, _desde, _hasta) or {}
     except Exception:
         pass
+    # v566 · los pendientes de personas (sin tarifa, cargado sin jornada) son de HOY: a
+    # quien trabajó en septiembre sin tarifa hay que ponérsela igual aunque se mire octubre.
+    _ccp = _cc
+    if _desde is not None:
+        try:
+            _ccp = F.conciliacion_mo(grupo) or {}
+        except Exception:
+            _ccp = {}
     try:
-        _sf = F.sin_facturar(grupo)
+        _sf = F.sin_facturar_ids(grupo)
     except Exception:
         _sf = []
     try:
-        _sinmar = [r["nombre"] for r in F.group_profitability(grupo)["rows"]
+        _sinmar = [(str(r["id"]), r["nombre"]) for r in F.group_profitability(grupo)["rows"]
                    if P._num(r.get("margen")) <= 0]
     except Exception:
         _sinmar = []
     try:
         from core import expenses as _E
-        _over = [r["nombre"] for r in _E.over_budget(grupo)]
+        _over = [(str(r["id"]), r["nombre"]) for r in _E.over_budget(grupo)]
     except Exception:
         _over = []
 
+    def _n_obras(n):
+        return t("1 job") if n == 1 else t("{n} jobs").replace("{n}", str(n))
+
+    def _ir_obra(pid, sec=None):
+        """Abre la obra (en la sección `sec`) — el mismo camino que «See the full project»
+        del Home (`_prjsel_pending`)."""
+        st.session_state["_prjsel_pending"] = str(pid)
+        if sec:
+            st.session_state["_prj_sec_pending"] = sec
+        _ir_a("proyectos", "📊 Proyectos")
+
+    def _obras_botones(lista, pref, sec):
+        for _pid, _nom in lista[:8]:
+            if st.button(f":material/open_in_new: {_nom}", key=f"{pref}_{_pid}", type="tertiary"):
+                _ir_obra(_pid, sec)
+
+    def _det_venc():
+        st.caption(t("{x} in invoices past their due date.").replace("{x}", T.dinero(_dt["vencido"])))
+
+    def _det_cobrar():
+        st.caption(t("{x} invoiced and not yet collected.").replace("{x}", T.dinero(_dt["por_cobrar"])))
+
+    def _det_sinfac():
+        # v566 · ACTIVO: cada obra abre SU factura ya preparada (el atajo de la cartera,
+        # `_ir_a_facturar`). Antes «→ Ir a Facturas» dejaba en «No invoices yet».
+        if not _sf:
+            st.caption(t("Everything worked has been invoiced."))
+            return
+        st.caption(t("Work done and not invoiced yet. Tap a job to prepare its invoice:"))
+        for _pid, _nom, _v in _sf[:8]:
+            if st.button(f":material/receipt: {_nom} · {T.dinero(_v, 0)}", key=f"pnlfac_{_pid}",
+                         type="tertiary"):
+                _ir_a_facturar(_pid, grupo)
+                st.rerun()
+
+    def _det_pagar():
+        st.caption(t("{x} in payslips issued and not marked paid.").replace("{x}", T.dinero(_dt["por_pagar"])))
+
+    def _det_sinnom():
+        st.caption(t("Hours charged to a job with NO workday open: they are billed to the client "
+                     "but do not enter any payslip, so they inflate the margin. Find them in "
+                     "Hours and open the workday in Timeclock."))
+
+    def _det_sintar():
+        # v566 · cada persona abre SU ficha en Users (donde se pone la tarifa).
+        _cl = _ccp.get("sin_tarifa_claves") or {}
+        if _ccp.get("sin_tarifa"):
+            st.caption(t("Their work counts as $0. Tap a person to set their rate:"))
+            for _i, _nom in enumerate(_ccp.get("sin_tarifa") or []):
+                if _cl.get(_nom):
+                    if st.button(f":material/person: {_nom}", key=f"pnlrate_{_i}", type="tertiary"):
+                        st.session_state["gp_fichasel"] = f"{_nom} ({_cl[_nom]})"
+                        _ir_a("planificacion", "👷 Usuarios")
+                else:
+                    st.caption(f"· {_nom}")
+        if _ccp.get("de_baja"):
+            st.caption(t("With hours but NO account any more (no rate can be set for them): {x}")
+                       .replace("{x}", ", ".join(_ccp.get("de_baja") or [])))
+
+    def _det_sinmar():
+        if not _sinmar:
+            st.caption(t("Every job has its profit set."))
+            return
+        st.caption(t("No profit set: they would be invoiced at cost (estimated profit $0). "
+                     "Tap a job to set it in its Costs:"))
+        _obras_botones(_sinmar, "pnlmar", "💰 Costos")
+
+    def _det_over():
+        if not _over:
+            st.caption(t("No job is over budget."))
+            return
+        _obras_botones(_over, "pnlover", "💰 Costos")
+
+    _nst = len(_ccp.get("sin_tarifa") or [])
     # slug, icono, etiqueta, valor, urgente, hay_algo, seccion, sub, detalle()
     _IND = [
-        ("venc", ":material/warning:", t("Overdue"), T.dinero(d["vencido"], 0), True,
-         d["vencido"] > 0, "finanzas", "🧾 Facturas",
-         lambda: f"{T.dinero(d['vencido'])} in invoices past their due date."),
-        ("cobrar", ":material/receipt:", "To collect", T.dinero(d["por_cobrar"], 0), False,
-         d["por_cobrar"] > 0, "finanzas", "🧾 Facturas",
-         lambda: f"{T.dinero(d['por_cobrar'])} invoiced and not yet collected."),
-        ("sinfac", ":material/request_quote:", "Not invoiced",
-         T.dinero(sum(v for _n, v in _sf), 0), True, bool(_sf), "finanzas", "🧾 Facturas",
-         lambda: " · ".join(f"{n}: {T.dinero(v, 0)}" for n, v in _sf[:8])
-                 or "Everything worked has been invoiced."),
-        ("pagar", ":material/payments:", "To pay", T.dinero(d["por_pagar"], 0), False,
-         d["por_pagar"] > 0, "finanzas", "👥 Nóminas",
-         lambda: f"{T.dinero(d['por_pagar'])} in payslips issued and not marked paid."),
-        ("sinnom", ":material/schedule:", "Hours with no payslip",
-         T.dinero(_cc.get("cobrado_no_pagado", 0), 0), True,
-         _cc.get("cobrado_no_pagado", 0) >= 1, "finanzas", "👥 Nóminas",
-         lambda: "Hours charged to a job with NO workday open: they are billed to the client but do not enter any payslip, so they inflate the margin."),
+        ("venc", ":material/warning:", t("Overdue"), T.dinero(_dt["vencido"], 0), True,
+         _dt["vencido"] > 0, "finanzas", "🧾 Facturas", _det_venc),
+        ("cobrar", ":material/receipt:", t("To collect"), T.dinero(_dt["por_cobrar"], 0), False,
+         _dt["por_cobrar"] > 0, "finanzas", "🧾 Facturas", _det_cobrar),
+        ("sinfac", ":material/request_quote:", t("Not invoiced"),
+         T.dinero(sum(v for _p, _n, v in _sf), 0), True, bool(_sf), "finanzas", "🧾 Facturas",
+         _det_sinfac),
+        ("pagar", ":material/payments:", t("To pay"), T.dinero(_dt["por_pagar"], 0), False,
+         _dt["por_pagar"] > 0, "finanzas", "👥 Nóminas", _det_pagar),
+        # v566 · se llamaba «Hours with no payslip» y mide otra cosa: horas CARGADAS a una
+        # obra sin jornada abierta (la conciliación hablaba de $145 sin nómina y esto
+        # decía $0). Y va a Hours, donde se ven — no a Payroll, donde no se arregla.
+        ("sinnom", ":material/schedule:", t("Charged with no workday"),
+         T.dinero(_ccp.get("cobrado_no_pagado", 0), 0), True,
+         _ccp.get("cobrado_no_pagado", 0) >= 1, "finanzas", "⏱ Horas", _det_sinnom),
         # ⚠️ v325: el indicador cuenta SOLO a quien se le puede poner tarifa. Quien
         # ya no está dado de alta no es un pendiente accionable —no hay fila donde
         # ponerla— y sumarlo aquí mandaba a Usuarios a no hacer nada; se menciona
         # en el detalle, que es donde informa sin fingir que hay una tarea.
-        ("sintar", ":material/person_off:", "No rate",
-         f"{len(_cc.get('sin_tarifa') or [])} pers.", False,
-         bool(_cc.get("sin_tarifa")), "planificacion", "👷 Usuarios",
-         lambda: "Their work counts as $0: " + ", ".join(_cc.get("sin_tarifa") or [])
-                 + (("  ·  Plus, with hours but NO account any more (no rate can be set for them): " + ", ".join(_cc.get("de_baja") or []))
-                    if _cc.get("de_baja") else "")),
-        ("sinmar", ":material/percent:", "No margin", f"{len(_sinmar)} jobs", False,
-         bool(_sinmar), "finanzas", "📈 Rentabilidad",
-         lambda: "Invoiced at cost (estimated profit $0): " + ", ".join(_sinmar[:8])),
-        ("over", ":material/trending_down:", "Sobre ppto.", f"{len(_over)}", True,
-         bool(_over), "finanzas", "💰 Gastos",
-         lambda: ", ".join(_over[:8]) or "No job is over budget."),
+        ("sintar", ":material/person_off:", t("No rate"),
+         t("1 person") if _nst == 1 else t("{n} people").replace("{n}", str(_nst)), False,
+         bool(_ccp.get("sin_tarifa")), "planificacion", "👷 Usuarios", _det_sintar),
+        ("sinmar", ":material/percent:", t("No margin"), _n_obras(len(_sinmar)), False,
+         bool(_sinmar), "finanzas", "📈 Rentabilidad", _det_sinmar),
+        ("over", ":material/trending_down:", t("Over budget"), _n_obras(len(_over)), True,
+         bool(_over), "finanzas", "💰 Gastos", _det_over),
     ]
     st.markdown(t("**:material/notifications: Pending**"))
-    _css = ["<style>"]
+    # ⚠️ v566 · etiqueta ARRIBA y cifra DEBAJO (dos <p>): en una línea, el valor caía suelto
+    # («Not / invoiced · $270», «Sobre ppto. / · 0»). Y 2 por fila si la rejilla mide menos
+    # de 760 px (`@container`, como el Home en v561): a 846 px con el menú, «Reconciliation»
+    # se partía en «Reconciliatio / n», y en un móvil eran 12 botones apilados. Medido en
+    # producción con un estilo temporal: 228 px (846 con menú) y 181 px (390), sin cortes.
+    _css = ["<style>",
+            ".st-key-cpx_pnl_ind,.st-key-cpx_pnl_tools{container-type:inline-size}",
+            "[class*='st-key-pnlind_'] button [data-testid='stMarkdownContainer']"
+            "{white-space:normal!important;width:100%}",
+            "[class*='st-key-pnlind_'] button [data-testid='stMarkdownContainer'] p"
+            "{display:block!important;margin:0!important;text-align:center}",
+            "[class*='st-key-pnlind_'] button p:first-child:not(:last-child)"
+            "{font-size:12px!important;line-height:1.3!important}",
+            "[class*='st-key-pnlind_'] button p:last-child:not(:first-child)"
+            "{font-size:16px!important;font-weight:700!important;white-space:nowrap!important}",
+            "@container (max-width:760px){"
+            ".st-key-cpx_pnl_ind [data-testid='stHorizontalBlock'],"
+            ".st-key-cpx_pnl_tools [data-testid='stHorizontalBlock']{flex-wrap:wrap!important}"
+            ".st-key-cpx_pnl_ind [data-testid='stHorizontalBlock']>[data-testid='stColumn'],"
+            ".st-key-cpx_pnl_tools [data-testid='stHorizontalBlock']>[data-testid='stColumn']"
+            "{flex:1 1 calc(50% - 0.5rem)!important;min-width:calc(50% - 0.5rem)!important;"
+            "width:calc(50% - 0.5rem)!important}}"]
     for _s, _i, _l, _v, _u, _hay, _sec, _sub, _fn in _IND:
         # ⚠️ v326: mismo caso que en el resumen del día — el reposo era 2.26:1.
         _bg, _fg = (("#fdecec", "#c0392b") if _u else ("#fff4e0", "#8a5600")) \
@@ -4896,20 +4981,24 @@ def render_pnl(grupo: str):
     _css.append("</style>")
     st.markdown("".join(_css), unsafe_allow_html=True)
     # 2 filas de 4 (v305: 3 filas era mas alto y una sola no cabe sin partir etiquetas)
-    for _fila in (_IND[:4], _IND[4:]):
-        for _col, _x in zip(st.columns(4), _fila):
-            if _col.button(f"{_x[1]} {_x[2]} · {_x[3]}", key=f"pnlind_{_x[0]}",
-                           width="stretch",
-                           help=t("See the detail and go and sort it out")):
-                _cur0 = st.session_state.get("_pnl_ind")
-                st.session_state["_pnl_ind"] = None if _cur0 == _x[0] else _x[0]
-                st.rerun()
+    with st.container(key="cpx_pnl_ind"):
+        for _fila in (_IND[:4], _IND[4:]):
+            for _col, _x in zip(st.columns(4), _fila):
+                if _col.button(f"{_x[1]} {_x[2]}\n\n{_x[3]}", key=f"pnlind_{_x[0]}",
+                               width="stretch",
+                               help=t("See the detail and go and sort it out")):
+                    _cur0 = st.session_state.get("_pnl_ind")
+                    st.session_state["_pnl_ind"] = None if _cur0 == _x[0] else _x[0]
+                    st.rerun()
     _sel = st.session_state.get("_pnl_ind")
     _it = next((x for x in _IND if x[0] == _sel), None) if _sel else None
     if _it:
         st.markdown(f"**{_it[1]} {_it[2]} — {_it[3]}**")
-        st.caption(_it[8]())
-        if st.button(f"→ Ir a {_it[7].split(chr(32), 1)[-1]}", key=f"pnlgo_{_it[0]}",
+        _it[8]()
+        # v566 · «→ Go to Invoices», no «→ Ir a Facturas» (salía el ID interno, en español)
+        from core import home_ui as _H
+        _dsub = dict((_H._SUBSECCIONES.get(_it[6]) or ("", []))[1]).get(_it[7], _it[7])
+        if st.button(t("→ Go to {x}").replace("{x}", t(_dsub)), key=f"pnlgo_{_it[0]}",
                      type="primary"):
             _ir_a(_it[6], _it[7])
 
@@ -4918,15 +5007,16 @@ def render_pnl(grupo: str):
     # prefirio tenerla bajo demanda): asi la pantalla arranca en la rejilla y cada
     # grafico se pide cuando se quiere mirar.
     _TOOLS = [("conc", t(":material/compare_arrows: Reconciliation")),
-              ("cli", ":material/groups: By client"),
+              ("cli", t(":material/groups: By client")),
               ("comp", t(":material/pie_chart: Breakdown")),
-              ("prj", ":material/apartment: By project")]
-    _tc = st.columns(len(_TOOLS))
+              ("prj", t(":material/apartment: By project"))]
     _cur = st.session_state.get("_pnl_tool", "")
-    for _i2, (_k, _lbl) in enumerate(_TOOLS):
-        if _tc[_i2].button(_lbl, key=f"pnltool_{_k}", width="stretch"):
-            st.session_state["_pnl_tool"] = "" if _cur == _k else _k
-            st.rerun()
+    with st.container(key="cpx_pnl_tools"):
+        _tc = st.columns(len(_TOOLS))
+        for _i2, (_k, _lbl) in enumerate(_TOOLS):
+            if _tc[_i2].button(_lbl, key=f"pnltool_{_k}", width="stretch"):
+                st.session_state["_pnl_tool"] = "" if _cur == _k else _k
+                st.rerun()
     if _cur:
         with st.container(border=True):
             if _cur == "conc":
@@ -4939,19 +5029,88 @@ def render_pnl(grupo: str):
                 else:
                     st.caption(t("No invoices in this period."))
             elif _cur == "comp":
-                _comp = [(x, y) for x, y in (("Payroll", d["costo_nomina"]),
+                _comp = [(x, y) for x, y in ((t("Payroll"), d["costo_nomina"]),
                                              (t("Purchases / materials"), d["compras"]))
                          if y > 0]
                 if len(_comp) > 1:
                     st.markdown(t("**Cost breakdown**"))
                     st.markdown(_torta_html(_comp, d["costo_total"]), unsafe_allow_html=True)
                 elif _comp:
-                    st.caption(f"All the cost in the period is **{_comp[0][0]}** "
-                               f"({T.dinero(_comp[0][1], 0)}): there is nothing to split.")
+                    st.caption(t("All the cost in the period is **{x}** ({v}): there is nothing "
+                                 "to split.").replace("{x}", _comp[0][0])
+                               .replace("{v}", T.dinero(_comp[0][1], 0)))
                 else:
                     st.caption(t("No costs in this period."))
             else:
                 _pnl_por_proyecto(grupo, T)
+
+
+def _pnl_kpis(grupo, d, desde, hasta, modo, F, T):
+    """Las 3 cifras del periodo, ACTIVAS (v566, «elementos activos»): Income lleva a
+    Invoices, Costs abre su desglose y Profit el resultado por obra. Eran tarjetas HTML
+    que solo se miraban.
+
+    ⚠️ La comparación es con el MISMO tramo del periodo anterior (`periodo_comparable`), y
+    su texto en inglés: decía «vs. periodo anterior».
+    """
+    try:
+        _cmp = F.pnl_comparado(grupo, desde, hasta, modo)
+        _v = _cmp.get("var") or {}
+    except Exception:
+        _cmp, _v = {}, {}
+    # ⚠️ En un COSTO, subir es peor: se invierte el sentido de `mejor`.
+    _vc = dict(_v.get("costo_total") or {})
+    if _vc:
+        _vc["mejor"] = not _vc.get("mejor")
+
+    def _sub(var, pie):
+        """(texto del pie, color o None)."""
+        if var and var.get("pct") is not None:
+            _f = "▲" if var["dif"] > 0 else ("▼" if var["dif"] < 0 else "=")
+            return (t("{f} {p}% vs previous").replace("{f}", _f)
+                    .replace("{p}", f"{abs(var['pct']):.0f}"),
+                    T.VERDE if var.get("mejor") else T.ROJO)
+        return pie, None
+
+    _gcol = T.VERDE if d["ganancia"] >= 0 else T.ROJO
+    _K = [("ing", t("Income"), T.dinero(d["facturado"], 0),
+           _sub(_v.get("facturado"), t("invoiced")), T.AZUL, None),
+          # ⚠️ «What you pay», no «Costs» a secas: el P&L nombra la cifra por lo que es
+          # (v313: «costo» eran tres cosas). «Costs (what you pay)» no cabe en la línea
+          # única de la tarjeta-botón (se recorta con «…»).
+          ("cos", t("What you pay"), T.dinero(d["costo_total"], 0),
+           _sub(_vc or None, t("payroll + purchases")), T.AZUL, None),
+          ("gan", t("Profit"), T.dinero(d["ganancia"], 0),
+           _sub(_v.get("ganancia"), t("income − costs")), _gcol, _gcol)]
+    _css = ["<style>"]
+    for _s, _l, _val, (_pie, _pc), _acc, _vcol in _K:
+        _css.append(f".st-key-cpxkpi_pnl_{_s} button{{border-left-color:{_acc}!important}}")
+        if _vcol:
+            _css.append(f".st-key-cpxkpi_pnl_{_s} button p:nth-child(2):not(:last-child)"
+                        f"{{color:{T.texto_seguro(_vcol)}!important}}")
+        if _pc:
+            _css.append(f".st-key-cpxkpi_pnl_{_s} button p:last-child:not(:first-child)"
+                        f"{{color:{T.texto_seguro(_pc)}!important}}")
+    _css.append("</style>")
+    st.markdown("".join(_css), unsafe_allow_html=True)
+    for _col, (_s, _l, _val, (_pie, _pc), _acc, _vcol) in zip(st.columns(3), _K):
+        if _col.button(f"{_l}\n\n{_val}\n\n{_pie}", key=f"cpxkpi_pnl_{_s}", width="stretch"):
+            if _s == "ing":
+                _ir_a("finanzas", "🧾 Facturas")
+            st.session_state["_pnl_tool"] = "comp" if _s == "cos" else "prj"
+            st.rerun()
+    _nfac = len(d.get("por_cliente") or [])
+    _mrg = (100 * d["ganancia"] / d["facturado"]) if d["facturado"] > 0 else None
+    _pie = [t("{n} client(s) invoiced").replace("{n}", str(_nfac)) if _nfac
+            else t("nothing invoiced")]
+    if _mrg is not None:
+        _pie.append(t("margin {m}%").replace("{m}", f"{_mrg:.0f}"))
+    if _cmp.get("rango_previo"):
+        _d0, _h0 = _cmp["rango_previo"]
+        # v566 · con el AÑO: «21/03–31/12» era de 2025 y no se sabía
+        _pie.append(t("compared with {a} → {b}").replace("{a}", _d0.strftime("%d/%m/%Y"))
+                    .replace("{b}", _h0.strftime("%d/%m/%Y")))
+    st.caption("  ·  ".join(_pie))
 
 
 def _pnl_conciliacion(cc: dict, T, periodo_completo: bool = True):
@@ -4970,28 +5129,29 @@ def _pnl_conciliacion(cc: dict, T, periodo_completo: bool = True):
     # ⚠️ v324: el signo va en la ETIQUETA (− / + / =), como en cualquier estado de
     # cuenta; el importe va en magnitud. Antes la fila restada llevaba el signo en
     # los dos sitios y se leía «− horas cobradas … $-358.80», que parece un error.
-    _fil = [("Charged to jobs (hours booked × rate)", cc["cargado"], ""),
-            ("− hours billed that you did NOT pay (charged with no workday)",
+    # v566 · las etiquetas con `t()`.
+    _fil = [(t("Charged to jobs (hours booked × rate)"), cc["cargado"], ""),
+            (t("− hours billed that you did NOT pay (charged with no workday)"),
              cc["cobrado_no_pagado"], "#c0392b"),
-            ("+ hours paid that you did NOT charge (travel, waiting)",
+            (t("+ hours paid that you did NOT charge (travel, waiting)"),
              cc["pagado_no_cargado"], "#c77700")]
     # ⚠️ v425: DESGLOSE de la fila de arriba, no un sumando nuevo — lo interno ya está
     # dentro de «pagadas y no cargadas», y añadirlo como fila propia descuadraría la
     # cadena. Va pegado a lo que desglosa y solo si hay algo: hasta ahora ese renglón
     # era un residuo anónimo donde cabía igual un traslado que una jornada de almacén.
     if cc.get("interno", 0.0) > 0:
-        _fil.append(("· of which, overhead work (office, store)",
+        _fil.append((t("· of which, overhead work (office, store)"),
                      cc["interno"], "sub"))
-    _fil += [("= base pay you should be paying", cc["base_teorica"], "bold"),
-             ("Base pay actually entered in payslips", cc["base_nomina"], "")]
+    _fil += [(t("= base pay you should be paying"), cc["base_teorica"], "bold"),
+             (t("Base pay actually entered in payslips"), cc["base_nomina"], "")]
     # ⚠️ v430: este SÍ es un sumando (a diferencia del desglose de arriba). Vacaciones
     # y bajas pagadas no son horas fichadas, así que no están en la base ni pueden
     # estarlo —la base es lo que se contrasta contra la jornada—, pero salen de caja.
     if cc.get("ausencias", 0.0) > 0:
-        _fil.append(("+ paid absences (holiday, sick leave)",
+        _fil.append((t("+ paid absences (holiday, sick leave)"),
                      cc["ausencias"], "#c77700"))
-    _fil += [("+ statutory contributions (super)", cc["aportes"], "#c77700"),
-             ("= real cost of labour", cc["costo_real"], "bold")]
+    _fil += [(t("+ statutory contributions (super)"), cc["aportes"], "#c77700"),
+             (t("= real cost of labour"), cc["costo_real"], "bold")]
     _h = ['<table style="width:100%;border-collapse:collapse;font-size:13px">']
     for _lb, _v, _st in _fil:
         _b = "font-weight:700;border-top:1px solid #e6e9ef;" if _st == "bold" else ""
@@ -5006,15 +5166,15 @@ def _pnl_conciliacion(cc: dict, T, periodo_completo: bool = True):
     st.markdown("".join(_h), unsafe_allow_html=True)
     if abs(cc["sin_explicar"]) >= 1:
         if periodo_completo:
-            st.warning(f":material/warning: **{T.dinero(abs(cc['sin_explicar']))} unexplained** "
-                       "between what you should be paying and what is in the payslips: work "
-                       "not yet paid, or payslips edited by hand.")
+            st.warning(t(":material/warning: **{x} unexplained** between what you should be "
+                         "paying and what is in the payslips: work not yet paid, or payslips "
+                         "edited by hand.").replace("{x}", T.dinero(abs(cc['sin_explicar']))))
         else:
-            st.info(f":material/info: With a narrow period the chain **cannot balance by "
-                    f"construction**: hours count by the day worked and payslips by the "
-                    f"period they close, so they fall in different months. "
-                    f"The {T.dinero(abs(cc['sin_explicar']))} of difference is not a "
-                    f"discrepancy — to reconcile properly, look at the **All** period.")
+            st.info(t(":material/info: With a narrow period the chain **cannot balance by "
+                      "construction**: hours count by the day worked and payslips by the "
+                      "period they close, so they fall in different months. The {x} of "
+                      "difference is not a discrepancy — to reconcile properly, look at the "
+                      "**All** period.").replace("{x}", T.dinero(abs(cc['sin_explicar']))))
     st.caption(t("Your margin has to cover the statutory contributions and the hours you pay for without being able to charge them to any job."))
 
 
@@ -5023,34 +5183,50 @@ def _pnl_por_proyecto(grupo: str, T):
 
     ⚠️ ACUMULADO, ignora el selector de periodo — es justo lo que un P&L por mes
     natural no puede responder: la factura y sus costos caen en meses distintos.
+    v566 · la obra FIJADA y el resultado y el margen delante (quedaban fuera de la vista a
+    846 px), cabeceras con etiqueta (salían «Facturado»/«Resultado»/«Margen %»: una
+    `NumberColumn` sin etiqueta pisa la traducción), y tocar una fila abre esa obra.
     """
     from core import finance as F
     try:
         rows = F.resultado_por_proyecto(grupo)
     except Exception as e:
-        st.caption(f"It could not be worked out: {e}")
+        st.caption(t("It could not be worked out: {e}").replace("{e}", str(e)))
         return
     if not rows:
         st.caption(t("No job has any invoicing or cost yet."))
         return
     st.caption(t(":material/info: **From start to finish of each job**, with no period filter: it is what a monthly summary cannot tell you, because the invoice and its costs fall in different months."))
-    st.dataframe(pd.DataFrame([{
+    # ⚠️ La selección de una fila sobrevive en el widget: al volver, la tabla la traería
+    # marcada y volvería a saltar. Otra generación de clave tras usarla (trampa 31).
+    _gen = st.session_state.get("_pnl_prj_gen", 0)
+    # ⚠️ «dollar» y no «$%,.0f»: el formato printf pone el signo DENTRO («$-270»).
+    _ev = st.dataframe(pd.DataFrame([{
         "Proyecto": r["nombre"],
+        "Resultado": r["resultado"],
+        "Margen %": r["margen"],
         "Facturado": r["facturado"],
         "Labour": r["mo"],
         "Purchases": r["compras"],
-        "Resultado": r["resultado"],
-        "Margen %": r["margen"],
-    } for r in rows]), hide_index=True, width="stretch",
+    } for r in rows]), hide_index=True, width="stretch", on_select="rerun",
+        selection_mode="single-row", key=f"pnl_prj_tbl_{_gen}",
         column_config=tabla.cfg(None, {
-            "Facturado":    st.column_config.NumberColumn(format="$%,.0f"),
-            "Labour": st.column_config.NumberColumn(format="$%,.0f"),
-            "Purchases":      st.column_config.NumberColumn(format="$%,.0f"),
-            "Resultado":    st.column_config.NumberColumn(format="$%,.0f"),
-            "Margen %":     st.column_config.NumberColumn(format="%.1f%%"),
+            "Proyecto":  st.column_config.TextColumn(t("Project"), pinned=True),
+            "Resultado": st.column_config.NumberColumn(t("Result"), format="dollar"),
+            "Margen %":  st.column_config.NumberColumn(t("Margin %"), format="%.1f%%"),
+            "Facturado": st.column_config.NumberColumn(t("Invoiced"), format="dollar"),
+            "Labour":    st.column_config.NumberColumn(t("Labour"), format="dollar"),
+            "Purchases": st.column_config.NumberColumn(t("Purchases"), format="dollar"),
         }))
+    _filas = list(getattr(getattr(_ev, "selection", None), "rows", None) or [])
+    if _filas and 0 <= _filas[0] < len(rows):
+        st.session_state["_pnl_prj_gen"] = _gen + 1
+        st.session_state["_prjsel_pending"] = str(rows[_filas[0]]["id"])
+        st.session_state["_prj_sec_pending"] = "💰 Costos"
+        _ir_a("proyectos", "📊 Proyectos")
+    st.caption(t("Tap a row to open that job in its Costs."))
     _t = sum(r["resultado"] for r in rows)
-    st.markdown(f"Cumulative result across jobs: **{T.dinero(_t, 0)}**")
+    st.markdown(t("Cumulative result across jobs: **{x}**").replace("{x}", T.dinero(_t, 0)))
     st.caption(t("Cost = what is CHARGED to the job (hours charged × rate + purchases). Statutory contributions and unallocated hours do not belong to any one job: the margin covers them (see Reconciliation)."))
 
 
