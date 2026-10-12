@@ -326,6 +326,10 @@ def _url_a_estado():
         # otra empresa da «Group not found», no la abre).
         if qp.get("g"):
             st.session_state["_admin_open_agr"] = str(qp.get("g"))
+        # v564 · la localización abierta (su detalle pasa el cerrojo de `tenant`: una de
+        # otra empresa no se abre).
+        if qp.get("l"):
+            st.session_state["_loc_open"] = str(qp.get("l"))
     except Exception as e:
         logger.warning("home_ui: no se pudo leer el estado de la URL: %s", e)
 
@@ -363,9 +367,13 @@ def _estado_a_url(seccion: str):
         agr = st.session_state.get("_admin_open_agr")
         if agr and seccion == "proyectos" and sub == "🗂 Agrupaciones":
             quiero["g"] = str(agr)
-        if {k: qp.get(k) for k in ("s", "t", "p", "g") if qp.get(k)} == quiero:
+        # v564 · `&l=` para la localización abierta (lo mismo que `&g=` en v563)
+        loc = st.session_state.get("_loc_open")
+        if loc and seccion == "proyectos" and sub == "🏢 Localizaciones":
+            quiero["l"] = str(loc)
+        if {k: qp.get(k) for k in ("s", "t", "p", "g", "l") if qp.get(k)} == quiero:
             return
-        for k in ("s", "t", "p", "g"):
+        for k in ("s", "t", "p", "g", "l"):
             if k in quiero:
                 qp[k] = quiero[k]
             elif qp.get(k) is not None:
@@ -414,7 +422,8 @@ def _track_history(cur):
 # v563 · lo que una sub-pestaña tiene «abierto» encima de su lista: tocarla en el menú
 # estando ya en ella lo cierra (vuelve a la lista).
 _ABIERTO_EN_SUB = {("proyectos", "📊 Proyectos"): "_admin_open_proj",
-                   ("proyectos", "🗂 Agrupaciones"): "_admin_open_agr"}
+                   ("proyectos", "🗂 Agrupaciones"): "_admin_open_agr",
+                   ("proyectos", "🏢 Localizaciones"): "_loc_open"}      # v564
 
 
 def puede_atras() -> bool:

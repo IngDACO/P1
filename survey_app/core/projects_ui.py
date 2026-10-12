@@ -1104,8 +1104,11 @@ def _nuevo_proyecto_form(grupo: str, key: str = "nuevo"):
             st.success(t(":material/check_circle: Drawing read — it feeds your **5 technical tools**:"))
             st.markdown(_plano_herramientas_html(_plano), unsafe_allow_html=True)
 
+        # v564 · por su NOMBRE (salían los logins) y sin «Select all»: un clic asignaba a
+        # todo el campo y le mandaba el aviso a cada uno (barrido de selectores de personas).
         asg = st.multiselect(t(":material/engineering: Field users assigned"), campos,
-                             key=f"np_asg_{key}")
+                             format_func=lambda u: _etq_us(campos).get(u, u),
+                             key=f"np_asg_{key}", select_all=False)
         _certs = st.multiselect(t(":material/badge: Certificates the project requires"), credentials.CATALOGO,
                                 key=f"np_certs_{key}",
                                 help=t("When staff are assigned, anyone who does not meet them is flagged."))
@@ -1221,7 +1224,7 @@ def _nuevo_proyecto_form(grupo: str, key: str = "nuevo"):
             ing = c1.multiselect(
                 t("Head installer/s"), campos,
                 format_func=lambda u: _etq_us(campos).get(u, u),
-                key=f"np_ing_{key}",
+                key=f"np_ing_{key}", select_all=False,
                 help=(t("Field users of this company.") if campos else
                       t("No field users yet: create them in Planning → Users.")))
             pres = c2.number_input(t(":material/payments: Budget ($) — 0 = no budget"), min_value=0.0,
@@ -2759,7 +2762,8 @@ def _detalle_proyecto(pid: str, grupo: str = None):
         _nm_asig = _etq_us(_opts)
         asignados = st.multiselect(t(":material/engineering: Field users assigned"), _opts,
                                    default=_actuales, key=f"asig_{pid}",
-                                   format_func=lambda u: _nm_asig.get(u, u))
+                                   format_func=lambda u: _nm_asig.get(u, u),
+                                   select_all=False)            # v564 · avisaría a todos
         _certs_act = [x.strip() for x in str(prj.get("RequiredCerts", "")).split(";")
                       if x.strip()]
         _ecerts = st.multiselect(
@@ -2875,7 +2879,7 @@ def _detalle_proyecto(pid: str, grupo: str = None):
             ing = e1.multiselect(
                 t("Head installer/s"), _cmp_ed,
                 default=[u for u in P.head_installers(prj) if u in _cmp_ed],
-                format_func=lambda u: _etq_us(_cmp_ed).get(u, u),
+                format_func=lambda u: _etq_us(_cmp_ed).get(u, u), select_all=False,
                 help=(t("Field users of this company.") if _cmp_ed else
                       t("No field users yet: create them in Planning → Users.")))
             # Calendario, no texto libre: ver `_a_fecha`. El valor se guarda
@@ -4473,24 +4477,25 @@ def _costos_section(pid, grupo, gastos, can_delete, key_prefix):
     # `$` sueltos en la misma cadena, Streamlit la renderiza como LaTeX (regla v309).
     from core import theme as _T
     if _loc:
-        _t = ("**Overhead** spend: it is not charged to any job and not invoiced to a client."
+        _t = (t("**Overhead** spend: it is not charged to any job and not invoiced to a client.")
               if cp["total"] > 0 else
-              "No spend has been recorded at this location yet.")
+              t("No spend has been recorded at this location yet."))
         _c, _fn = "#6b7280", st.info
     elif proy and pres > 0 and proy > pres * 1.02:
-        _t = (f"At this rate the project will cost **{_T.dinero(proy, 0)}**, "
-              f"**{_T.dinero(proy - pres, 0)} over** budget")
+        # v564 · los titulares con `t()` (iban por una variable: la trampa 30)
+        _t = (t("At this rate the project will cost **{p}**, **{o} over** budget")
+              .replace("{p}", _T.dinero(proy, 0)).replace("{o}", _T.dinero(proy - pres, 0)))
         _c, _fn = "#c0392b", st.error
     elif proy and pres > 0:
-        _t = (f"At this rate the project will cost **{_T.dinero(proy, 0)}**, within "
-              f"the budget of {_T.dinero(pres, 0)}")
+        _t = (t("At this rate the project will cost **{p}**, within the budget of {b}")
+              .replace("{p}", _T.dinero(proy, 0)).replace("{b}", _T.dinero(pres, 0)))
         _c, _fn = "#1e8449", st.success
     elif cp["total"] > 0 and pres <= 0:
         # v559 · decía «Set it in ✏ Details» y la pestaña se llama Data: ahora lleva allí.
-        _t = ("This project **has no budget set**, so there is nothing to compare the spend against. Set it in :material/edit: Data.")
+        _t = t("This project **has no budget set**, so there is nothing to compare the spend against. Set it in :material/edit: Data.")
         _c, _fn = "#6b7280", st.info
     else:
-        _t, _c, _fn = ("No costs have been recorded on this project yet.",
+        _t, _c, _fn = (t("No costs have been recorded on this project yet."),
                        "#6b7280", st.info)
 
     # ── Tarjetas KPI ──
@@ -4505,7 +4510,7 @@ def _costos_section(pid, grupo, gastos, can_delete, key_prefix):
     if cp.get("comprometido"):
         from core import theme as _th
         tarj.insert(3, _kpi_card(t("Committed"), f"${cp['comprometido']:,.0f}",
-                                 _th.AMBAR, pie="ordered, not received yet"))
+                                 _th.AMBAR, pie=t("ordered, not received yet")))
     # v559 · base de 110 px: con la de 150 del tema, a 1024 px con el menú abierto la
     # quinta («Cost at completion») caía sola a otra fila, a todo el ancho.
     st.markdown('<style>.cpx-kpis-cst .cpx-kpi{flex:1 1 110px}</style>'
@@ -4524,42 +4529,52 @@ def _costos_section(pid, grupo, gastos, can_delete, key_prefix):
         # producción como «Llevas **0** de 10,000»: los `$` desaparecían y los `**`
         # salían literales. `theme.dinero` formatea Y escapa.
         from core import theme as _T
-        _l = (f"You have spent **{_T.dinero(cp['total'], 0)}** of {_T.dinero(pres, 0)}"
-              f" · **{cp['pct']}% used**")
+        # v564 · con `t()` y marcadores (salía en inglés con la app en español)
+        _l = (t("You have spent **{g}** of {p} · **{pct}% used**")
+              .replace("{g}", _T.dinero(cp['total'], 0)).replace("{p}", _T.dinero(pres, 0))
+              .replace("{pct}", str(cp['pct'])))
         if cp["avance"] > 0:
-            _l += f" with **{cp['avance']:.0f}% progress**"
+            _l += " " + t("with **{a}% progress**").replace("{a}", f"{cp['avance']:.0f}")
             if cp["por_punto"]:
-                _l += f" ({_T.dinero(cp['por_punto'], 0)} per point)"
-        st.caption(_l + ("  :red[:material/block:] OVER BUDGET" if cp["over"] else ""))
+                _l += " " + t("({x} per point)").replace("{x}", _T.dinero(cp['por_punto'], 0))
+        st.caption(_l + (("  :red[:material/block:] " + t("OVER BUDGET")) if cp["over"] else ""))
         # ⚠️ v343: el caso que nadie veía — todavía dentro de presupuesto, pero con
         # lo ya PEDIDO se pasa seguro. Antes esto solo se sabía al llegar la factura.
         if cp.get("over_comp"):
             st.warning(
-                ":material/shopping_cart: You are within budget, but with the "
-                f"**{_T.dinero(cp['comprometido'], 0)} already ordered** the project reaches "
-                f"**{_T.dinero(cp['total_comp'], 0)}**, "
-                f"**{_T.dinero(cp['total_comp'] - pres, 0)} over** the "
-                f"{_T.dinero(pres, 0)} budgeted.")
+                t(":material/shopping_cart: You are within budget, but with the **{c} already "
+                  "ordered** the project reaches **{tc}**, **{o} over** the {p} budgeted.")
+                .replace("{c}", _T.dinero(cp['comprometido'], 0))
+                .replace("{tc}", _T.dinero(cp['total_comp'], 0))
+                .replace("{o}", _T.dinero(cp['total_comp'] - pres, 0))
+                .replace("{p}", _T.dinero(pres, 0)))
 
+    # ⚠️ v564 · Lo que una LOCALIZACIÓN no tiene, porque nunca se le factura a nadie: ni
+    # beneficio por hora ni fijo, ni atajo de facturar, ni reclamaciones de obra. Se le
+    # pintaban (visto en el recorrido de Locations: «would be invoiced at cost», «Fixed
+    # profit», «Progress claims»), aunque su propia pantalla dice «never invoiced» — y
+    # v423 ya lo prohibía en sus funciones, pero llegaba por aquí.
     # ── Cuánto ganas con cada persona (v360) ─────────────────────
-    if can_delete:
+    if can_delete and not _loc:
         _ganancia_section(pid, grupo)
 
     # ── Facturar esta obra (atajo, v357) ─────────────────────────
-    if can_delete:                      # solo gestión: el campo no factura
+    if can_delete and not _loc:         # solo gestión: el campo no factura
         _facturar_atajo(pid, grupo, prj_nombre=str(P.get_project(pid).get("Name", "")))
 
     # ── Órdenes de compra: el dinero comprometido (v343) ──
+    # (sí en una localización: comprar para la oficina o el almacén también compromete)
     _ordenes_section(pid, grupo, editable=can_delete, key_prefix=key_prefix)
     # ── v507: el cobro de obra, junto a las órdenes ──
     # Va en Costos y no en Finanzas porque la pregunta es de OBRA («¿cuánto puedo
     # reclamar de ésta?»), no de cartera. Import local (patrón v342).
-    try:
-        from core import claims_ui as _CLU
-        _CLU.render(pid, grupo, P.get_project(pid) or {}, editable=can_delete,
-                    key_prefix=key_prefix)
-    except Exception as _e:                      # nunca tumba la pestaña de costos
-        logger.warning("claims_ui.render: %s", _e)
+    if not _loc:
+        try:
+            from core import claims_ui as _CLU
+            _CLU.render(pid, grupo, P.get_project(pid) or {}, editable=can_delete,
+                        key_prefix=key_prefix)
+        except Exception as _e:                      # nunca tumba la pestaña de costos
+            logger.warning("claims_ui.render: %s", _e)
 
     # ── Reparto del costo | Compras por categoría (doble columna, v213) ──
     _rep = cp["total"] > 0
@@ -4609,7 +4624,8 @@ def _costos_section(pid, grupo, gastos, can_delete, key_prefix):
                                         key=f"cst_ir_users_{pid}", type="tertiary"):
                 _ir_a("planificacion", "👷 Usuarios")
         if lb.get("de_baja"):          # v325: cuenta eliminada ≠ tarifa sin poner
-            st.info(":material/person_off: **" + ", ".join(lb["de_baja"]) + "**: hours from someone **no longer on the books**, so they add $0 and there is nowhere to set a rate.")
+            st.info(t(":material/person_off: **{x}**: hours from someone **no longer on the books**, so they add $0 and there is nowhere to set a rate.")
+                    .replace("{x}", ", ".join(lb["de_baja"])))
 
     # ── Curva de gasto acumulado ──
     _curva = E.spend_curve(pid, grupo)
@@ -4686,7 +4702,8 @@ def render_expenses(pid, grupo, can_delete=False, key_prefix="ex",
     if items:
         # v213: recibos ACTIVOS — tocar uno muestra su foto inline (antes: tabla
         # redundante + botones de solo-descarga).
-        with st.expander(f":material/receipt_long: Receipts ({len(items)})", key=f"{key_prefix}_exp_recibos"):
+        with st.expander(t(":material/receipt_long: Receipts ({n})").replace("{n}", str(len(items))),
+                         key=f"{key_prefix}_exp_recibos"):
             st.caption(t("Tap a receipt to see the photo."))
             for r in items:
                 _rid = str(r.get("ID", ""))
@@ -4723,7 +4740,8 @@ def render_expenses(pid, grupo, can_delete=False, key_prefix="ex",
                     if _arch.lower().endswith((".png", ".jpg", ".jpeg")):
                         st.image(_data, caption=_arch, width="stretch")
                     else:
-                        st.info(f":material/description: {_arch} — it is a PDF; download it to view it.")
+                        st.info(t(":material/description: {a} — it is a PDF; download it to view it.")
+                                .replace("{a}", _arch))
                     st.download_button(t(":material/download: Download receipt"), data=_data, file_name=_arch,
                                        key=f"{key_prefix}_dlrcb_{_sel}")
                 except Exception:
@@ -5570,88 +5588,130 @@ def _loc_personas(prj) -> list:
     return [x.strip() for x in str(prj.get("FieldAssigned", "")).split(";") if x.strip()]
 
 
+def _loc_archivada(p) -> bool:
+    """v564 · Archivada ≠ cerrada: las dos salían «closed» y la archivada seguía en la lista
+    aunque la ayuda del estado prometía que desaparecía (visto en el recorrido)."""
+    return str(p.get("Status", "")) == P.ARCHIVADO or str(p.get("ManualStatus", "")) == P.ARCHIVADO
+
+
+def _horas_txt(h) -> str:
+    """Horas para LEER (v564): un decimal por debajo de 10 h (0,45 h no es «0 h»)."""
+    h = float(h or 0)
+    return f"{h:.1f} h" if h < 10 else f"{h:,.0f} h"
+
+
+def _loc_estado_lbl(p) -> str:
+    if _loc_archivada(p):
+        return t(":material/inventory_2: archived")
+    if str(p.get("Status")) != P.INTERNO_ABIERTA:
+        return t(":material/lock: closed")
+    return t(":material/check_circle: open")
+
+
 def _cartera_localizaciones(locs, grupo, horas, costos, alarmas):
     """Tarjeta-botón por localización (patrón v223): toda la info ANTES de abrir."""
     from core import theme
     if not locs:
-        st.info(t(":material/info: No locations yet. Create the office or the store below so the team can clock in, do their pre-start and charge costs to it."))
         return
-    # Abiertas primero, y dentro de cada grupo por gasto (donde más se va el dinero).
-    _ord = sorted(locs, key=lambda p: (str(p.get("Status")) != P.INTERNO_ABIERTA,
+    # Abiertas primero, y dentro de cada grupo por gasto (donde más se va el dinero);
+    # las archivadas (si se piden) al final.
+    _ord = sorted(locs, key=lambda p: (_loc_archivada(p),
+                                       str(p.get("Status")) != P.INTERNO_ABIERTA,
                                        -float((costos.get(str(p.get("ID")), {}) or {})
                                               .get("total", 0) or 0)))
-    for _i in range(0, len(_ord), 2):
-        _cols = st.columns(2, gap="medium")
-        for _j, p in enumerate(_ord[_i:_i + 2]):
-            pid = str(p.get("ID", ""))
-            _c = costos.get(pid, {}) or {}
-            _h = float(horas.get(pid, 0.0) or 0.0)
-            _al = int(alarmas.get(pid, 0) or 0)
-            _cerrada = str(p.get("Status")) != P.INTERNO_ABIERTA
-            _tipo = str(p.get("Type", "")) or "Interno"
-            _ico = P.TIPO_ICONO.get(_tipo, ":material/business:")
-            with _cols[_j].container(border=True, key=f"loccard_{pid}"):
-                st.markdown(f"**{_ico} {p.get('Name') or "(no name)"}**")
-                _pie = [f"`{pid}`", _tipo]
-                if _cerrada:
-                    _pie.append(t(":material/lock: closed"))
-                st.caption(" · ".join(_pie))
-                m1, m2, m3 = st.columns(3)
-                m1.markdown(f"**{_h:,.0f} h**  \n<small>worked</small>",
-                            unsafe_allow_html=True)
-                m2.markdown(f"**{theme.dinero(_c.get('total', 0), 0)}**  \n"
-                            "<small>spent</small>", unsafe_allow_html=True)
-                m3.markdown(f"**{len(_loc_personas(p))}**  \n<small>assigned</small>",
-                            unsafe_allow_html=True)
-                if str(p.get("Location", "")).strip():
-                    st.caption(f":material/place: {p.get('Location')}")
-                if _al:
-                    st.markdown(f":red[:material/notifications_active: {_al} open alert(s)]")
-                if st.button(t("Open →"), key=f"locopen_{pid}", width="stretch"):
-                    st.session_state["_loc_open"] = pid
-                    st.rerun()
+    # ⚠️ v564 · con UNA sola, a todo el ancho (ocupaba media fila, como en Groupings v563),
+    # y una por fila si no caben dos (por el ancho de la LISTA, `@container`).
+    st.html("<style>.st-key-cpx_loc_cartas{container-type:inline-size;}"
+            "@container (max-width:620px){.st-key-cpx_loc_cartas "
+            "[data-testid='stHorizontalBlock']:not([data-testid='stColumn'] *)"
+            ">[data-testid='stColumn']{flex:1 1 100% !important;}}</style>")
+    _por_fila = 1 if len(_ord) == 1 else 2
+    with st.container(key="cpx_loc_cartas"):
+        for _i in range(0, len(_ord), _por_fila):
+            _cols = st.columns(_por_fila, gap="medium")
+            for _j, p in enumerate(_ord[_i:_i + _por_fila]):
+                pid = str(p.get("ID", ""))
+                _c = costos.get(pid, {}) or {}
+                _h = float(horas.get(pid, 0.0) or 0.0)
+                _al = int(alarmas.get(pid, 0) or 0)
+                _tipo = str(p.get("Type", "")) or t("Internal")
+                _ico = P.TIPO_ICONO.get(_tipo, ":material/business:")
+                with _cols[_j].container(border=True, key=f"loccard_{pid}"):
+                    st.markdown(f"**{_ico} {p.get('Name') or t('(no name)')}**")
+                    _pie = [f"`{pid}`", _etq(_tipo)]
+                    if str(p.get("Status")) != P.INTERNO_ABIERTA or _loc_archivada(p):
+                        _pie.append(_loc_estado_lbl(p))
+                    st.caption(" · ".join(_pie))
+                    m1, m2, m3 = st.columns(3)
+                    m1.markdown(f"**{_horas_txt(_h)}**  \n<small>{t('worked')}</small>",
+                                unsafe_allow_html=True)
+                    m2.markdown(f"**{theme.dinero(_c.get('total', 0), 0)}**  \n"
+                                f"<small>{t('spent')}</small>", unsafe_allow_html=True)
+                    m3.markdown(f"**{len(_loc_personas(p))}**  \n<small>{t('assigned')}</small>",
+                                unsafe_allow_html=True)
+                    if str(p.get("Location", "")).strip():
+                        st.caption(f":material/place: {p.get('Location')}")
+                    if _al:
+                        st.markdown(":red[:material/notifications_active: "
+                                    + t("{n} open alert(s)").replace("{n}", str(_al)) + "]")
+                    if st.button(t("Open →"), key=f"locopen_{pid}", width="stretch"):
+                        st.session_state["_loc_open"] = pid
+                        st.rerun()
 
 
-def _nueva_localizacion_form(grupo: str):
+def _nueva_localizacion_form(grupo: str, abierto: bool = False):
     """Alta de una localización interna.
 
     ⚠️ Pide MUCHO menos que una obra, y eso es el punto: sin NS, sin fechas, sin
     presupuesto, sin cliente y sin margen. `create_project` con `activities=None` la
     deja sin cronograma, y `derive_estado` la marca «Abierta» por su tipo (v422).
+    ⚠️ v564 · `abierto`: sin ninguna localización nace ABIERTO (es lo único que se puede
+    hacer); la condición va en la clave, que si no conservaría su estado (v547).
     """
-    with st.expander(t("New location"), icon=":material/add_circle:", key="exp_loc_new"):
+    with st.expander(t("New location"), icon=":material/add_circle:", expanded=abierto,
+                     key=f"exp_loc_new_{abierto}"):
         campos = _field_users(grupo)
+        # ⚠️ v564 · el alta se VACÍA al crear con otra generación de claves (trampa 31):
+        # antes se borraban sus claves a mano —que no llega al navegador— y la dirección
+        # buscada (`nlocloc_*`) ni se tocaba. Con la generación 0, las claves de siempre.
+        _ng = st.session_state.get("_loc_new_gen", 0)
+        _sf = f"_{_ng}" if _ng else ""
 
         # ⚠️ FUERA del form (el mapa necesita reruns) e INLINE, sin expander propio:
         # esto ya vive dentro de un expander y Streamlit no permite anidarlos (v210).
         from core import location_ui
         st.markdown(t("**:material/map: Where it is** — optional, drops the pin"))
-        _lat, _lng = location_ui.location_picker("nlocloc")
-        _ubi = (st.session_state.get("nlocloc_addr")
-                or st.session_state.get("nlocloc_q") or "").strip()
+        _kl = f"nlocloc{_sf}"
+        _lat, _lng = location_ui.location_picker(_kl)
+        _ubi = (st.session_state.get(f"{_kl}_addr")
+                or st.session_state.get(f"{_kl}_q") or "").strip()
         if _ubi:
-            st.caption(f":material/place: It will be saved as: **{_ubi}**")
+            st.caption(t(":material/place: It will be saved as: **{x}**").replace("{x}", _ubi))
 
         # Los asignados aquí son el «perfil de oficina» (v422): quien esté asignado de
         # forma permanente puede ficharla siempre. Fuera del form para poder avisar en
         # vivo de credenciales y contacto (misma razón que v127).
+        # ⚠️ v564 · por su NOMBRE (salían los logins) y SIN «Select all»: un clic asignaba a
+        # todo el campo y le mandaba el aviso a cada uno.
         asg = st.multiselect(t(":material/engineering: Who normally works here"),
-                             campos, key="nloc_asg",
+                             campos, key=f"nloc_asg{_sf}", select_all=False,
+                             format_func=lambda u: _etq_us(campos).get(u, u),
                              help=t("Being assigned here is what gives permanent access to clock in. Anyone coming for a single day is assigned from Planning, without touching this list."))
         if asg:
             _avisar_asignados(asg, grupo)
 
-        with st.form("nloc_form"):
-            nom = st.text_input(t("Name *"), key="nloc_nom",
+        with st.form(f"nloc_form{_sf}"):
+            nom = st.text_input(t("Name *"), key=f"nloc_nom{_sf}",
                                 placeholder=t("Sydney office, Chullora store…"))
             c1, c2 = st.columns(2)
-            tipo = c1.selectbox(t("Type *"), P.TIPOS_INTERNOS, key="nloc_tipo")
+            tipo = c1.selectbox(t("Type *"), P.TIPOS_INTERNOS, key=f"nloc_tipo{_sf}",
+                                format_func=_etq)
             # ⚠️ El NOMBRE de la localización sí es texto libre (es la cosa nueva que se
             # está creando); el responsable NO, porque es una persona que ya existe.
             resp = c2.multiselect(t("Person in charge"), _usuarios_de(grupo),
                                   format_func=lambda u: _etq_us(_usuarios_de(grupo)).get(u, u),
-                                  key="nloc_resp")
-            instr = st.text_area(t(":material/push_pin: Instructions / notes"), key="nloc_ins",
+                                  key=f"nloc_resp{_sf}", select_all=False)
+            instr = st.text_area(t(":material/push_pin: Instructions / notes"), key=f"nloc_ins{_sf}",
                                  placeholder=t("Hours, access, site rules…"))
             _guardar = st.form_submit_button(t(":material/save: Create location"),
                                              type="primary", width="stretch")
@@ -5666,14 +5726,14 @@ def _nueva_localizacion_form(grupo: str):
                 lng="" if _lng is None else _lng,
                 creado_por=st.session_state.get("auth", {}).get("usuario", ""))
             if not _ok:
-                st.error(f"It could not be created: {_res}")
+                st.error(t("It could not be created: {e}").replace("{e}", str(_res)))
                 return
             if asg:
                 _notificar_asignados(asg, {"ID": _res, "Name": nom.strip(),
                                            "Location": _ubi, "Group": grupo})
-            for k in ("nloc_nom", "nloc_resp", "nloc_ins", "nloc_asg"):
-                st.session_state.pop(k, None)
-            flash.exito(f"Location created: {_res} · {nom.strip()}")
+            st.session_state["_loc_new_gen"] = _ng + 1
+            flash.exito(t("Location created: {id} · {n}").replace("{id}", str(_res))
+                        .replace("{n}", nom.strip()))
             st.session_state["_loc_open"] = _res
             st.rerun()
 
@@ -5685,7 +5745,7 @@ def _loc_equipo(pid, grupo):
     try:
         filas = E.labor_breakdown(pid, grupo) if E.is_configured() else {}
     except Exception as e:
-        st.caption(f"The hours could not be read: {e}")
+        st.caption(t("The hours could not be read: {e}").replace("{e}", str(e)))
         return
     # ⚠️ La clave es `items` (no `personas`) y cada fila trae `usuario`, no el nombre:
     # comprobado ejecutándolo, no leyendo el nombre que parecía lógico (regla v135).
@@ -5704,29 +5764,40 @@ def _loc_equipo(pid, grupo):
                          "Horas": round(float(r.get("horas", 0)), 2),
                          "Rate/h": float(r.get("tarifa", 0)),
                          "Costo": float(r.get("costo", 0))} for r in _p])
+    # ⚠️ v564 · CON etiqueta: una `NumberColumn` sin ella pisa la traducción de
+    # `tabla.cfg` y la cabecera salía con la clave en español («Horas», «Costo»).
     st.dataframe(_df, width="stretch", hide_index=True,
-                 column_config=tabla.cfg(None, {"Horas": st.column_config.NumberColumn(format="%.2f"),
-                                "Rate/h": st.column_config.NumberColumn(format="$%,.2f"),
-                                "Costo": st.column_config.NumberColumn(format="$%,.2f")}))
-    st.caption(f"**{float(filas.get('horas', 0)):,.1f} h** · "
-               f"{theme.dinero(filas.get('total', 0))} — ⚠️ this is "
-               "**overhead**: it is not charged to any job and not invoiced to anyone.")
+                 column_config=tabla.cfg(None, {
+                     "Horas": st.column_config.NumberColumn(t("Hours"), format="%.2f"),
+                     "Rate/h": st.column_config.NumberColumn(t("Rate/h"), format="$%,.2f"),
+                     "Costo": st.column_config.NumberColumn(t("Cost"), format="$%,.2f")}))
+    st.caption(t("**{h}** · {c} — ⚠️ this is **overhead**: it is not charged to any job and "
+                 "not invoiced to anyone.").replace("{h}", _horas_txt(filas.get("horas", 0)))
+               .replace("{c}", theme.dinero(filas.get("total", 0))))
     if filas.get("sin_tarifa"):
-        st.warning(":material/warning: With no hourly rate, their work here counts as $0: " + ", ".join(filas["sin_tarifa"]))
+        # v564 · por su nombre (salían los logins)
+        st.warning(t(":material/warning: With no hourly rate, their work here counts as $0: {x}")
+                   .replace("{x}", ", ".join(_et.get(str(u), str(u)) for u in filas["sin_tarifa"])))
 
 
 def _loc_prestarts(pid):
     """Historial de pre-starts de la localización (un almacén también tiene riesgos)."""
     st.markdown(t("#### :material/health_and_safety: Pre-Start"))
+    # ⚠️ v564 · ACTIVO: decía «se hacen desde la sección Pre-Start, eligiendo esta
+    # localización» sin llevar a ningún sitio. Lleva allí con ella ya elegida.
+    if st.button(t(":material/health_and_safety: Do today's Pre-Start here →"),
+                 key=f"loc_ir_ps_{pid}", type="tertiary"):
+        st.session_state["_ps_proy_pending"] = str(pid)
+        _ir_a("herramientas", "🦺 Pre-Start")
     from core import prestart
     try:
         # ⚠️ `list_prestarts(pid)` — un solo argumento. `list_for` no existe.
         regs = prestart.list_prestarts(pid) if prestart.is_configured() else []
     except Exception as e:
-        st.caption(f"The history could not be read: {e}")
+        st.caption(t("The history could not be read: {e}").replace("{e}", str(e)))
         return
     if not regs:
-        st.caption(t("No pre-starts recorded at this location. They are done from the Pre-Start section, choosing this location."))
+        st.caption(t("No pre-starts recorded at this location yet."))
         return
     for r in regs[:10]:
         d = prestart.leer(r)
@@ -5734,16 +5805,17 @@ def _loc_prestarts(pid):
         # SIEMPRE False y habría pintado en verde un pre-start con incidente — en la
         # única pantalla donde ese semáforo sirve para algo.
         _mal = bool(d.get("near_miss")) or int(d.get("n_no", 0) or 0) > 0
+        # v564 · «asistente(s)» en español → inglés, y la fecha en DD/MM/YYYY
         _pie = [str(d.get("facilitador", "")) or "—",
-                f"{len(d.get('asistentes', []))} asistente(s)"]
+                t("{n} attendee(s)").replace("{n}", str(len(d.get("asistentes", []))))]
         if int(d.get("n_no", 0) or 0):
-            _pie.append(f":red[{d['n_no']} control(s) answered NO]")
+            _pie.append(":red[" + t("{n} control(s) answered NO").replace("{n}", str(d["n_no"])) + "]")
         if d.get("near_miss"):
-            _pie.append(":red[near miss]")
-        st.markdown(f"{'🔴' if _mal else '🟢'} **{d.get('fecha', '')}** "
+            _pie.append(":red[" + t("near miss") + "]")
+        st.markdown(f"{'🔴' if _mal else '🟢'} **{_fmt_fecha(d.get('fecha', ''))}** "
                     f"{d.get('hora', '')} · " + " · ".join(_pie))
     if len(regs) > 10:
-        st.caption(f"… and {len(regs) - 10} more.")
+        st.caption(t("… and {n} more.").replace("{n}", str(len(regs) - 10)))
 
 
 def _detalle_localizacion(pid: str, grupo: str):
@@ -5766,22 +5838,21 @@ def _detalle_localizacion(pid: str, grupo: str):
         st.session_state.pop("_loc_open", None)
         st.rerun()
 
-    _tipo = str(prj.get("Type", "")) or "Interno"
-    _cerrada = str(prj.get("Status")) != P.INTERNO_ABIERTA
+    _tipo = str(prj.get("Type", "")) or t("Internal")
     with st.container(border=True):
         st.markdown(f"### {P.TIPO_ICONO.get(_tipo, ':material/business:')} "
-                    f"{prj.get('Name') or "(no name)"}")
-        _c = [f"`{pid}`", _etq(_tipo),
-              (t(":material/lock: closed") if _cerrada
-               else t(":material/check_circle: open"))]
+                    f"{prj.get('Name') or t('(no name)')}")
+        # v564 · «archived» distinto de «closed», y «Person in charge» en vez de «resp.»
+        _c = [f"`{pid}`", _etq(_tipo), _loc_estado_lbl(prj)]
         if str(prj.get("HeadInstallers", "")).strip():
-            _c.append(f"resp. {P.head_installers_label(prj, grupo)}")
+            _c.append(t("Person in charge: {x}").replace("{x}", P.head_installers_label(prj, grupo)))
         st.caption(" · ".join(_c))
         if str(prj.get("Location", "")).strip():
             st.markdown(maps.maps_link_md(prj.get("Location")))
     if str(prj.get("Instructions", "")).strip():
         st.info(prj.get("Instructions"))
 
+    # v564 · la sección se RECUERDA (al volver a abrirla empezaba siempre en Team)
     _sec = st.segmented_control(
         t("Section"), ["👥 Equipo", "💰 Gastos", "🦺 Pre-Start", "📎 Archivos", "✏️ Datos"],
         format_func=lambda o: {"👥 Equipo": t(":material/groups: Team"),
@@ -5789,7 +5860,8 @@ def _detalle_localizacion(pid: str, grupo: str):
                                "🦺 Pre-Start": t(":material/health_and_safety: Pre-Start"),
                                "📎 Archivos": t(":material/folder: Files"),
                                "✏️ Datos": t(":material/edit: Data")}.get(o, o),
-        default="👥 Equipo", key="cpxseg_loc_sec", label_visibility="collapsed")
+        default="👥 Equipo", key="cpxseg_loc_sec", label_visibility="collapsed",
+        persist_state="session")
     _sec = _sec or "👥 Equipo"
 
     if _sec == "👥 Equipo":
@@ -5800,8 +5872,9 @@ def _detalle_localizacion(pid: str, grupo: str):
             st.markdown(t("#### :material/badge: Permanently assigned"))
             _ppl = _loc_personas(prj)
             if _ppl:
+                _nm = _etq_us(_ppl)                       # v564 · nombres, no logins
                 for u in _ppl:
-                    st.markdown(f"· {u}")
+                    st.markdown(f"· {_nm.get(u, u)}")
                 st.caption(t("They can always clock in here. For a single day, assign it from Planning."))
             else:
                 st.caption(t("Nobody permanently assigned. Only those who have it set for today in Planning will be able to clock in."))
@@ -5820,12 +5893,30 @@ def _editar_localizacion(pid, grupo, prj):
     campos = _field_users(grupo)
     _actuales = _loc_personas(prj)
     # Fuera del form: para avisar en vivo de contacto/credenciales al asignar (v149).
+    # ⚠️ v564 · por su NOMBRE y sin «Select all» (asignaría y avisaría a todo el campo)
+    _opc = sorted(set(campos) | set(_actuales))
+    _nm_opc = _etq_us(_opc)
     _asg = st.multiselect(t(":material/engineering: Who normally works here"),
-                          sorted(set(campos) | set(_actuales)), default=_actuales,
-                          key=f"eloc_asg_{pid}")
+                          _opc, default=_actuales, key=f"eloc_asg_{pid}",
+                          format_func=lambda u: _nm_opc.get(u, u), select_all=False)
     _nuevos = [u for u in _asg if u not in _actuales]
     if _nuevos:
         _avisar_asignados(_nuevos, grupo, exclude_pid=pid)
+
+    # ⚠️ v564 · la dirección y el pin se podían poner SOLO al crearla: Data no los
+    # ofrecía. Mismo buscador que la ficha de una obra (fuera del form: necesita reruns).
+    from core import location_ui
+    # Abierto si aún no tiene pin; la condición va en la clave (v547: con clave, Streamlit
+    # solo respeta `expanded` la primera vez).
+    _sin_pin = location_ui.to_float(prj.get("Lat")) is None
+    with st.expander(t("Where it is (map pin)"), icon=":material/map:",
+                     expanded=_sin_pin, key=f"exp_eloc_ubic_{pid}_{_sin_pin}"):
+        _plat, _plng = location_ui.location_picker(
+            f"elocloc_{pid}", lat=location_ui.to_float(prj.get("Lat")),
+            lng=location_ui.to_float(prj.get("Lng")), direccion=str(prj.get("Location", "")))
+    # Solo la dirección CONFIRMADA por el buscador (`_addr`), nunca la caja a medias (v419).
+    _ubic = (str(st.session_state.get(f"elocloc_{pid}_addr") or "").strip()
+             or str(prj.get("Location", "") or ""))
 
     with st.form(f"eloc_form_{pid}"):
         nom = st.text_input(t("Name *"), value=str(prj.get("Name", "")),
@@ -5837,26 +5928,28 @@ def _editar_localizacion(pid, grupo, prj):
         # así solo hay un sitio donde cambiar qué cuenta como interno.
         tipo = c1.selectbox(t("Type *"), P.TIPOS_INTERNOS,
                             index=P.TIPOS_INTERNOS.index(_tp) if P.es_interno(_tp) else 0,
-                            key=f"eloc_tipo_{pid}")
+                            key=f"eloc_tipo_{pid}", format_func=_etq)
         # ⚠️ De LISTA como todo lo demás. Aquí NO se filtra por «campo»: una oficina
         # o un almacén los suele llevar alguien de administración.
         _us_loc = _usuarios_de(grupo)
         resp = c2.multiselect(t("Person in charge"), _us_loc,
                               default=[u for u in P.head_installers(prj) if u in _us_loc],
                               format_func=lambda u: _etq_us(_us_loc).get(u, u),
-                              key=f"eloc_resp_{pid}")
+                              key=f"eloc_resp_{pid}", select_all=False)
         # ⚠️ «Cerrada» es el estado propio de una localización (v422): no tiene avance,
         # así que «En pausa»/«Completado» no significan nada aquí.
         _est_act = str(prj.get("ManualStatus", "")) or ""
         _opts = ["", P.INTERNO_CERRADA, P.ARCHIVADO]
         _opts, _est_i = ui.opciones_con_actual(_opts, _est_act)    # v487: se conserva
+        # v564 · la ayuda dice lo que pasa DE VERDAD (antes prometía que la archivada
+        # desaparecía de la lista, y no desaparecía)
         est = st.selectbox(t("Status"), _opts,
                            index=_est_i,
                            format_func=lambda v: {"": t("Open"),
                                                   P.INTERNO_CERRADA: t("Closed"),
                                                   P.ARCHIVADO: t("Archived")}.get(v, v),
                            key=f"eloc_est_{pid}",
-                           help=t("Closed = no longer used, but its history is kept. Archived = it also disappears from the list."))
+                           help=t("Closed = no longer used, but it stays in the list with its history. Archived = it leaves the list; «Show archived» brings it back."))
         instr = st.text_area(t(":material/push_pin: Instructions / notes"),
                              value=str(prj.get("Instructions", "")),
                              key=f"eloc_ins_{pid}")
@@ -5872,16 +5965,58 @@ def _editar_localizacion(pid, grupo, prj):
             "FieldAssigned": ";".join(_asg),
             "ManualStatus": est,
             "Status": P.derive_estado(0, est, tipo),
+            "Location": _ubic,
+            "Lat": "" if _plat is None else _plat,
+            "Lng": "" if _plng is None else _plng,
         })
         if not _ok:
             st.error(_msg)
             return
         if _nuevos:
             _notificar_asignados(_nuevos, {"ID": pid, "Name": nom.strip(),
-                                           "Location": prj.get("Location", ""),
-                                           "Group": grupo})
+                                           "Location": _ubic, "Group": grupo})
         flash.exito(t("Location updated."))
         st.rerun()
+
+
+def _loc_kpis(vis, horas, costos):
+    """Las 3 tarjetas de la lista, ACTIVAS (v564, «elementos activos»): tocar una enseña
+    su desglose por localización, con datos que ya están calculados (0 lecturas nuevas).
+    Antes eran 4 tarjetas pasivas, y la de «Locations» decía «0 · of 1»: el recuento va
+    ahora en la cabecera de la lista."""
+    from core import theme
+    _h = sum(float(horas.get(str(p.get("ID")), 0) or 0) for p in vis)
+    _g = sum(float((costos.get(str(p.get("ID")), {}) or {}).get("total", 0) or 0) for p in vis)
+    _n = len({u for p in vis for u in _loc_personas(p)})
+    k1, k2, k3 = st.columns(3)
+    _sel = st.session_state.get("_loc_kpi")
+    for _col, slug, lbl, val, pie in (
+            (k1, "horas", t("Hours worked"), _horas_txt(_h), t("not charged to any job")),
+            (k2, "gasto", t("Overhead spend"), theme.dinero(_g, 0), t("never invoiced")),
+            (k3, "gente", t("People"), str(_n), t("assigned on a regular basis"))):
+        if _col.button(f"{lbl}\n\n{val}\n\n{pie}", key=f"cpxkpi_loc_{slug}", width="stretch"):
+            st.session_state["_loc_kpi"] = None if _sel == slug else slug
+            st.rerun()
+    if _sel not in ("horas", "gasto", "gente"):
+        return
+    _filas = []
+    for p in vis:
+        pid = str(p.get("ID", ""))
+        nom = str(p.get("Name") or pid)
+        if _sel == "horas":
+            _v = float(horas.get(pid, 0) or 0)
+            _filas.append((_v, f"{nom}: **{_horas_txt(_v)}**"))
+        elif _sel == "gasto":
+            _v = float((costos.get(pid, {}) or {}).get("total", 0) or 0)
+            _filas.append((_v, f"{nom}: **{theme.dinero(_v, 0)}**"))
+        else:
+            _ppl = _loc_personas(p)
+            _nm = _etq_us(_ppl)
+            _filas.append((len(_ppl), f"{nom}: " + (", ".join(_nm.get(u, u) for u in _ppl)
+                                                     or t("nobody"))))
+    with st.container(border=True, key="loc_kpi_detalle"):
+        for _v, txt in sorted(_filas, key=lambda x: -x[0]):
+            st.markdown(f"· {txt}")
 
 
 def render_localizaciones(grupo: str):
@@ -5895,29 +6030,30 @@ def render_localizaciones(grupo: str):
         _detalle_localizacion(str(_abierta), grupo)
         return
 
-    from core import theme
     locs, horas, costos, alarmas = _loc_datos(grupo)
-    _abiertas = [p for p in locs if str(p.get("Status")) == P.INTERNO_ABIERTA]
-    _h = sum(float(horas.get(str(p.get("ID")), 0) or 0) for p in locs)
-    _g = sum(float((costos.get(str(p.get("ID")), {}) or {}).get("total", 0) or 0)
-             for p in locs)
-    _n = len({u for p in locs for u in _loc_personas(p)})
+    # ⚠️ v564 · la ARCHIVADA sale de la lista (la ayuda del estado lo prometía y no
+    # pasaba) y vuelve con «Show archived»: sin eso no habría forma de recuperarla.
+    _arch = [p for p in locs if _loc_archivada(p)]
+    _vis = [p for p in locs if not _loc_archivada(p)]
+    _ver_arch = False
+    if _arch:
+        _ver_arch = st.toggle(t("Show archived ({n})").replace("{n}", str(len(_arch))),
+                              key="loc_ver_arch")
 
-    # ⚠️ `_kpi_card` DEVUELVE el HTML, no lo pinta. Mi primera versión hacía
-    # `with k[0]: _kpi_card(...)` dentro de columnas y las cuatro tarjetas salían
-    # INVISIBLES — código válido que no lanza, así que ningún guardián lo vio: lo cazó
-    # mirar la pantalla en producción (como el `:material/` literal de v375). El patrón
-    # correcto es el del resto del repo: construir la lista y pintarla de una vez.
-    _tarj = [
-        _kpi_card(t("Locations"), str(len(_abiertas)),
-                  pie=f"of {len(locs)}" if len(locs) != len(_abiertas) else t("open")),
-        _kpi_card(t("Hours worked"), f"{_h:,.0f}", pie="not charged to any job"),
-        _kpi_card(t("Overhead spend"), theme.dinero(_g, 0), pie=t("never invoiced")),
-        _kpi_card(t("People"), str(_n), pie="assigned on a regular basis"),
-    ]
-    st.markdown('<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:8px">'
-                + "".join(_tarj) + "</div>", unsafe_allow_html=True)
+    # v564 · sin ninguna: ni 4 tarjetas a 0 que no dicen nada, ni el alta plegada
+    if not _vis and not _ver_arch:
+        st.info(t(":material/info: No locations yet. Create the office or the store below so the team can clock in, do their pre-start and charge costs to it."))
+        _nueva_localizacion_form(grupo, abierto=True)
+        return
 
+    if _vis:
+        _loc_kpis(_vis, horas, costos)
     st.caption(t("Offices, stores and workshops: this is where people clock in, do the pre-start and charge admin costs. **They have no schedule and no progress, and their cost is never charged to a job or invoiced to a client.**"))
-    _cartera_localizaciones(locs, grupo, horas, costos, alarmas)
+    _abiertas = sum(1 for p in _vis if str(p.get("Status")) == P.INTERNO_ABIERTA)
+    _cerradas = len(_vis) - _abiertas
+    _cab = t("**Locations — {n}** · {a} open").replace("{n}", str(len(_vis))).replace("{a}", str(_abiertas))
+    if _cerradas:
+        _cab += " · " + t("{c} closed").replace("{c}", str(_cerradas))
+    st.markdown(_cab)
+    _cartera_localizaciones(_vis + (_arch if _ver_arch else []), grupo, horas, costos, alarmas)
     _nueva_localizacion_form(grupo)

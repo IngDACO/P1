@@ -48,8 +48,9 @@ ROTURAS = [
      [("        if set(asignados) != set(_actuales) or set(_ecerts) != set(_certs_act):\n",
        "        if False:\n")]),
     ("Data: los asignados vuelven a salir por login", PU,
-     [("                                   format_func=lambda u: _nm_asig.get(u, u))",
-       "                                   format_func=lambda u: u)")]),
+     # v564 · la llamada sigue con `select_all=False` en la línea siguiente: sin el «)»
+     [("                                   format_func=lambda u: _nm_asig.get(u, u),",
+       "                                   format_func=lambda u: u,")]),
     ("Data: la fecha de inicio vuelve al ISO", PU,
      [('            f_ini    = e1.date_input(t("Start date"), value=_a_fecha(prj.get("StartDate")),\n'
        '                                     format="DD/MM/YYYY")',

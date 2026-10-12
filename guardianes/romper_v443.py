@@ -23,8 +23,10 @@ ROTURAS = [
      'help=f"Collected {_T.dinero(cob)} of {_T.dinero(total)}")',
      'help=f"Collected {_T.dinero(cob)} de {_T.dinero(total)}")',
      "una f-string queda a medio traducir"),
+    # v564 · el titular pasó a `t()` con marcadores: la rotura es la misma de siempre
+    # (vuelve a ser una f-string en español), anclada a la forma nueva.
     ("core/projects_ui.py",
-     '_l = (f"You have spent **{_T.dinero(cp[\'total\'], 0)}** of {_T.dinero(pres, 0)}"',
+     '_l = (t("You have spent **{g}** of {p} · **{pct}% used**")',
      '_l = (f"Llevas **{_T.dinero(cp[\'total\'], 0)}** de {_T.dinero(pres, 0)}"',
      "el titular de costos vuelve al español"),
     # ── el import que falta (NameError en producción) ──

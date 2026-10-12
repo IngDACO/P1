@@ -324,6 +324,14 @@ def render_prestart_tab():
     # que volver a buscarla en el desplegable. Ahora manda el dato (¿dónde estás
     # fichado?) y no la etiqueta del rol. Quien no tenga fichaje abierto —el
     # propietario, que no ficha— sigue eligiendo de la lista, sin cambio.
+    # v564 · «Do today's Pre-Start here» de una localización llega con ella YA elegida
+    # (antes el texto mandaba a buscarla en el desplegable). Se ASIGNA (trampa 31) y
+    # gana a la preselección por fichaje: es lo que se acaba de pedir.
+    _ps_pend = st.session_state.pop("_ps_proy_pending", None)
+    if _ps_pend:
+        _k_pend = next((k for k in idmap if k.endswith(f"({_ps_pend})")), None)
+        if _k_pend:
+            st.session_state["ps_proy"] = _k_pend
     _fich_key = None
     try:
         from core import timeclock

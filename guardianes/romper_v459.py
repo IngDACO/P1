@@ -10,31 +10,35 @@ AQUI = pathlib.Path(__file__).parent
 ENV = {**os.environ, "PYTHONIOENCODING": "utf-8"}
 
 ROTURAS = [
+    # v564 · las dos primeras, con los nombres de AHORA («User»/«Role»/«field»): desde la
+    # migración al inglés sus anclas ya no casaban (deuda declarada en check_anclas_roturas).
     ("projects_ui.py",
-     '''        return [u["Usuario"] for u in auth.list_users(grupo)
-                if str(u.get("Rol", "")) == "campo"]
+     '''        return [u["User"] for u in auth.list_users(grupo)
+                if str(u.get("Role", "")) == "field"]
     except Exception:
         return []''',
-     '''        return [u["Usuario"] for u in auth.list_users(grupo)]
+     '''        return [u["User"] for u in auth.list_users(grupo)]
     except Exception:
         return []''',
      "⚠️ head installer deja de filtrar por campo (ofreceria administradores)"),
 
     ("projects_ui.py",
-     '''        return [str(u["Usuario"]) for u in auth.list_users(grupo)]
+     '''        return [str(u["User"]) for u in auth.list_users(grupo)]
     except Exception as e:
         logger.warning("_usuarios_de: no se pudo leer''',
-     '''        return [str(u["Usuario"]) for u in auth.list_users(grupo)
-                if str(u.get("Rol", "")) == "campo"]
+     '''        return [str(u["User"]) for u in auth.list_users(grupo)
+                if str(u.get("Role", "")) == "field"]
     except Exception as e:
         logger.warning("_usuarios_de: no se pudo leer''',
      "⚠️ el responsable de localizacion se limita al campo (deja fuera a administracion)"),
 
+    # v564 · el ancla lleva ahora `select_all=False` (barrido de «Select all»): la rotura
+    # es la misma de siempre.
     ("projects_ui.py",
      '''            ing = c1.multiselect(
                 t("Head installer/s"), campos,
                 format_func=lambda u: _etq_us(campos).get(u, u),
-                key=f"np_ing_{key}",
+                key=f"np_ing_{key}", select_all=False,
                 help=(t("Field users of this company.") if campos else
                       t("No field users yet: create them in Planning → Users.")))''',
      '''            ing = [c1.text_input(t("Engineer in charge"), key=f"np_ing_{key}")]''',
@@ -55,9 +59,12 @@ ROTURAS = [
     ("projects_ui.py",
      ("def _editar_localizacion(pid, grupo, prj):" + chr(10)
       + "    campos = _field_users(grupo)"),
+     # v564 · con los nombres de AHORA («User»/«Role»/«field»): la copia vieja insertaba
+     # «Usuario»/«Rol»/«campo» (de antes de la migración al inglés) y el guardián, que
+     # busca el valor «field», no la veía — la rotura «se escapaba» sin probar nada.
      ("def _editar_localizacion(pid, grupo, prj):" + chr(10)
-      + '    campos = [u["Usuario"] for u in auth.list_users(grupo)' + chr(10)
-      + '              if str(u.get("Rol", "")) == "campo"]'),
+      + '    campos = [u["User"] for u in auth.list_users(grupo)' + chr(10)
+      + '              if str(u.get("Role", "")) == "field"]'),
      "⚠️ vuelve una copia inline del filtro «rol == campo»"),
 
     # ⚠️ El informe del CLIENTE volveria a decir «campo1;mchen» en vez de los nombres.

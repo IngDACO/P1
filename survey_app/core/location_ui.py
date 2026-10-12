@@ -158,7 +158,9 @@ def location_picker(key, lat=None, lng=None, direccion=""):
     _cands = st.session_state.get(f"{key}_cands") or []
     if _cands:
         _labels = [c["label"] for c in _cands]
-        _sel = st.selectbox(f":material/place: Result ({len(_cands)}) — confirm it or choose another:",
+        # v564 · con `t()` (salía en inglés con la app en español)
+        _sel = st.selectbox(t(":material/place: Result ({n}) — confirm it or choose another:")
+                            .replace("{n}", str(len(_cands))),
                             _labels, key=f"{key}_candsel")
         _c = _cands[_labels.index(_sel)]
         if st.session_state.get(f"{key}_applied") != _sel:
@@ -180,7 +182,7 @@ def location_picker(key, lat=None, lng=None, direccion=""):
     center = [slat, slng] if slat is not None else list(_SYDNEY)
     m = folium.Map(location=center, zoom_start=17 if slat is not None else 11)
     if slat is not None:
-        folium.Marker(center, tooltip="Project location",
+        folium.Marker(center, tooltip=t("Project location"),
                       icon=folium.Icon(color="red")).add_to(m)
     # ⚠️ v558 · `use_container_width`: sin él `st_folium` mide 500 px FIJOS (su valor por
     # defecto) y en un móvil se sale de la pantalla (trampa 17). El Home y Day route ya lo
@@ -198,7 +200,7 @@ def location_picker(key, lat=None, lng=None, direccion=""):
 
     slat, slng = st.session_state.get(klat), st.session_state.get(klng)
     if slat is not None:
-        st.caption(f"Coordinates set: **{slat:.5f}, {slng:.5f}**")
+        st.caption(t("Coordinates set: **{c}**").replace("{c}", f"{slat:.5f}, {slng:.5f}"))
     else:
         st.caption(t("_No location set yet._"))
     return slat, slng

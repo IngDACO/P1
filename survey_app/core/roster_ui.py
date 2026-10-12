@@ -568,10 +568,11 @@ def _asignacion_inteligente(grupo, lunes, staff, tidx, dias=None):
         if not libres:
             st.warning(f":material/warning: Nobody free on {R.DIAS_LABEL[_dsel]} at {ini}–{fin}.")
         else:
-            _opts = {f"{f['estado']} {f['nom']}" + ("" if f["cumple"] else " — not compliant"): f["usr"]
-                     for f in libres}
+            _opts = {f"{f['estado']} {f['nom']}" + ("" if f["cumple"] else " — " + t("not compliant")): f["usr"]
+                     for f in libres}                  # v564 · «not compliant» con `t()`
+            # v564 · sin «Select all»: asignaría a TODA la gente libre de un clic
             _pick = st.multiselect(t("Suggested (free) — choose who to assign:"),
-                                   list(_opts), key="ai_pick")
+                                   list(_opts), key="ai_pick", select_all=False)
             # v551 · decía «Assign N a «PRJ-0015»»: «a» en español y el ID en vez del nombre
             _nom_prj = str((prj or {}).get("Name") or pid)
             if st.button(t(":material/check: Assign {n} to «{p}»").replace("{n}", str(len(_pick)))

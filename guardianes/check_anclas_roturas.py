@@ -238,10 +238,12 @@ for b, n in sorted(_il_menos.items()):
 # quedo vieja). Lo segundo es lo que impide que esta lista se convierta en el mismo
 # problema que viene a denunciar: en cuanto alguien repare una, el chequeo obliga a
 # bajar el numero aqui. Y las 15 se imprimen en cada pasada, o sea que la deuda se ve.
+# v564 · −4: romper_v452 (2) y romper_v459 (2), puestas al día con los nombres de ahora
+# al tocar Locations (y re-corridas: 7/7 y 8/8).
 DEUDA = {
     "romper_v440.py": 1, "romper_v441.py": 1, "romper_v446.py": 1,
-    "romper_v450.py": 1, "romper_v452.py": 2,
-    "romper_v455.py": 1, "romper_v459.py": 2, "romper_v461.py": 3,
+    "romper_v450.py": 1,
+    "romper_v455.py": 1, "romper_v461.py": 3,
     "romper_v472.py": 2, "romper_v502.py": 1,
 }
 _por_bat = {}
