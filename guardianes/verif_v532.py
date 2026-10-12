@@ -99,10 +99,13 @@ chk("los 19 dibujos y cronómetros van por `incrustar.dibujo`",
 # v553 · un 4º, a propósito: llevar la vista a la ficha rápida recién abierta en el Panel
 # (`roster_ui._ficha_rapida`, una vez por apertura). El inventario sigue siendo EXACTO: un
 # script nuevo tiene que entrar aquí con su razón, no colarse.
-chk("⚠️ los 4 scripts de página van por `incrustar.script` (cabecera PWA, «atrás», cookie, "
-    "ir a la ficha del Panel)",
+# v567 · un 5º, a propósito: llevar la vista a la herramienta del Resumen de Finanzas
+# abierta desde una tarjeta (`projects_ui.render_pnl`, una vez por apertura; quedaba en
+# y=1168 con 698 de alto). El mismo patrón que el de v553.
+chk("⚠️ los 5 scripts de página van por `incrustar.script` (cabecera PWA, «atrás», cookie, "
+    "ir a la ficha del Panel, ir a la herramienta del Resumen)",
     _scr == {"app.py": 1, "core/home_ui.py": 1, "core/session_cookie.py": 1,
-             "core/roster_ui.py": 1}, _scr)
+             "core/roster_ui.py": 1, "core/projects_ui.py": 1}, _scr)
 for f in _scr:
     _s = io.open(os.path.join(RAIZ, f), encoding="utf-8").read()
     _args = [ast.unparse(n.args[0]) for n in ast.walk(ast.parse(_s)) if isinstance(n, ast.Call)

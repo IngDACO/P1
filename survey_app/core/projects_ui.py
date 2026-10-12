@@ -5018,7 +5018,26 @@ def render_pnl(grupo: str):
                 st.session_state["_pnl_tool"] = "" if _cur == _k else _k
                 st.rerun()
     if _cur:
-        with st.container(border=True):
+        with st.container(border=True, key="cpx_pnl_panel"):
+            # ⚠️ v567 · abierta desde una TARJETA, la vista baja a ella UNA vez (el patrón de
+            # la ficha del Panel, v553): `nearest` no mueve nada si ya se ve, y en cada
+            # pasada devolvería la vista aquí tras cualquier clic. El recuadro del script,
+            # fuera del flujo para no dejar hueco.
+            if st.session_state.pop("_pnl_tool_ir", False):
+                with st.container(key="pnl_ir"):
+                    st.markdown("<style>.st-key-pnl_ir,[data-testid=\"stLayoutWrapper\"]:has(> "
+                                ".st-key-pnl_ir){position:absolute!important;width:1px;"
+                                "height:1px;overflow:hidden;opacity:0;pointer-events:none;}"
+                                "</style>", unsafe_allow_html=True)
+                    incrustar.script(
+                        "<script>(function(){try{var D=window.parent.document,n=0;"
+                        "function ir(){var c=D.querySelector('.st-key-cpx_pnl_panel'),"
+                        "a=D.querySelector('[data-testid=\"stApp\"]'),"
+                        "s=a?a.getAttribute('data-test-script-state'):'notRunning';"
+                        "if(c&&s!=='running'){c.scrollIntoView({behavior:'smooth',"
+                        "block:'nearest'});return;}"
+                        "if(++n<40)setTimeout(ir,100);}setTimeout(ir,150);}catch(e){}})();"
+                        "</script>")
             if _cur == "conc":
                 _pnl_conciliacion(_cc, T, periodo_completo=(_desde is None))
             elif _cur == "cli":
@@ -5098,6 +5117,9 @@ def _pnl_kpis(grupo, d, desde, hasta, modo, F, T):
             if _s == "ing":
                 _ir_a("finanzas", "🧾 Facturas")
             st.session_state["_pnl_tool"] = "comp" if _s == "cos" else "prj"
+            # v567 · la herramienta se pinta debajo de la rejilla: desde la tarjeta quedaba
+            # FUERA de la vista (y=1168 con 698 de alto) y el toque parecía no hacer nada.
+            st.session_state["_pnl_tool_ir"] = True
             st.rerun()
     _nfac = len(d.get("por_cliente") or [])
     _mrg = (100 * d["ganancia"] / d["facturado"]) if d["facturado"] > 0 else None
@@ -5201,30 +5223,37 @@ def _pnl_por_proyecto(grupo: str, T):
     # marcada y volvería a saltar. Otra generación de clave tras usarla (trampa 31).
     _gen = st.session_state.get("_pnl_prj_gen", 0)
     # ⚠️ «dollar» y no «$%,.0f»: el formato printf pone el signo DENTRO («$-270»).
+    # ⚠️ v567 · el margen va como TEXTO alineado a la derecha: una obra sin facturar no tiene
+    # margen y la tabla pintaba «None» (medido en una mini-app 1.64: `None` y `NaN` salen
+    # los dos «None»; «—» a la derecha se lee como una cifra más).
     _ev = st.dataframe(pd.DataFrame([{
         "Proyecto": r["nombre"],
         "Resultado": r["resultado"],
-        "Margen %": r["margen"],
+        "Margen %": (f"{r['margen']:.1f}%" if r["margen"] is not None else "—"),
         "Facturado": r["facturado"],
         "Labour": r["mo"],
         "Purchases": r["compras"],
     } for r in rows]), hide_index=True, width="stretch", on_select="rerun",
-        selection_mode="single-row", key=f"pnl_prj_tbl_{_gen}",
+        # ⚠️ v567 · «single-cell»: con «single-row» la fila solo se elegía con su casilla y
+        # tocar la celda solo la enmarcaba (visto en producción). Con celda, un toque en
+        # cualquier sitio de la fila la abre (medido en una mini-app 1.64: `cells=[(0, col)]`).
+        selection_mode="single-cell", key=f"pnl_prj_tbl_{_gen}",
         column_config=tabla.cfg(None, {
             "Proyecto":  st.column_config.TextColumn(t("Project"), pinned=True),
             "Resultado": st.column_config.NumberColumn(t("Result"), format="dollar"),
-            "Margen %":  st.column_config.NumberColumn(t("Margin %"), format="%.1f%%"),
+            "Margen %":  st.column_config.TextColumn(t("Margin %"), alignment="right"),
             "Facturado": st.column_config.NumberColumn(t("Invoiced"), format="dollar"),
             "Labour":    st.column_config.NumberColumn(t("Labour"), format="dollar"),
             "Purchases": st.column_config.NumberColumn(t("Purchases"), format="dollar"),
         }))
-    _filas = list(getattr(getattr(_ev, "selection", None), "rows", None) or [])
+    _sel = getattr(_ev, "selection", None)
+    _filas = [c[0] for c in (getattr(_sel, "cells", None) or [])]         or list(getattr(_sel, "rows", None) or [])
     if _filas and 0 <= _filas[0] < len(rows):
         st.session_state["_pnl_prj_gen"] = _gen + 1
         st.session_state["_prjsel_pending"] = str(rows[_filas[0]]["id"])
         st.session_state["_prj_sec_pending"] = "💰 Costos"
         _ir_a("proyectos", "📊 Proyectos")
-    st.caption(t("Tap a row to open that job in its Costs."))
+    st.caption(t("Tap a job to open it in its Costs."))
     _t = sum(r["resultado"] for r in rows)
     st.markdown(t("Cumulative result across jobs: **{x}**").replace("{x}", T.dinero(_t, 0)))
     st.caption(t("Cost = what is CHARGED to the job (hours charged × rate + purchases). Statutory contributions and unallocated hours do not belong to any one job: the margin covers them (see Reconciliation)."))

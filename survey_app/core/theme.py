@@ -284,6 +284,17 @@ body:has([data-testid="stStatusWidget"])::before {{
 [class*="st-key-cpxkpi_"] button [data-testid="stMarkdownContainer"] p {{
   display: block !important;
 }}
+/* ⚠️ v567 · Dentro del botón, un `<span>` flex CENTRADO encoge al ancho del texto: con un
+   texto corto («INCOME / $0») la tarjeta salía CENTRADA (43 px de texto en un botón de
+   146; medido en el Resumen de Finanzas, 846 px). Se estira a todo el ancho y a la
+   izquierda — probado en vivo con un estilo temporal antes de escribirlo: las tres líneas
+   arrancan a 16 px del borde y usan los 115 px. */
+[class*="st-key-cpxkpi_"] button > div {{
+  width: 100%; justify-content: flex-start !important;
+}}
+[class*="st-key-cpxkpi_"] button > div > span {{
+  flex: 1 1 auto; width: 100%; justify-content: flex-start !important;
+}}
 /* Tarjeta KPI de TRES líneas (v303): el label del botón va como
    `etiqueta\n\nvalor\n\ncontexto` y Streamlit lo renderiza como TRES <p>.
    ⚠️ VERIFICADO EN VIVO antes de escribir esto (mini-app + medición del DOM):

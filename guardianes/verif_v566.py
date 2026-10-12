@@ -270,8 +270,10 @@ chk("el acumulado «-\\$134»", any("Cumulative result across jobs: **-\\$134**"
 _pp = _fn("_pnl_por_proyecto")
 _dfc = [n for n in ast.walk(_pp) if isinstance(n, ast.Call) and ast.unparse(n.func) == "st.dataframe"][0]
 _kw = {k.arg: ast.unparse(k.value) for k in _dfc.keywords}
+# v567 · «single-cell» a propósito: con «single-row» la fila solo se elegía con su casilla
+# (visto en producción); lo vigila verif_v567.
 chk("⚠️ tocar una fila abre la obra (`on_select` + clave con generación)",
-    _kw.get("on_select") == "'rerun'" and _kw.get("selection_mode") == "'single-row'"
+    _kw.get("on_select") == "'rerun'" and _kw.get("selection_mode") in ("'single-row'", "'single-cell'")
     and "_gen" in _kw.get("key", ""), _kw)
 
 # ══════════════════════════════════════════════════════════════════════════════
