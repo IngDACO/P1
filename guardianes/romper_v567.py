@@ -42,8 +42,10 @@ ROTURAS = [
      [('[class*="st-key-cpxkpi_"] button > div > span {{\n  flex: 1 1 auto; width: 100%; justify-content: flex-start !important;\n}}\n', "")]),
     ("⚠️ la tarjeta deja de llevar la vista a la herramienta", PU,
      [('            st.session_state["_pnl_tool_ir"] = True\n', "")]),
+    # v568 · el script se mudó a `_bajar_a` (una definición para Resumen y Gastos): la
+    # rotura es la misma, anclada al ayudante.
     ("⚠️ la vista se movería en CADA pasada", PU,
-     [('            if st.session_state.pop("_pnl_tool_ir", False):\n', "            if True:\n")]),
+     [('    if not st.session_state.pop(marca, False):\n        return\n', "    if False:\n        return\n")]),
     ("el recuadro pierde la clave que busca el script", PU,
      [('with st.container(border=True, key="cpx_pnl_panel"):', "with st.container(border=True):")]),
     ("⚠️ vuelve el «None» del margen", PU,

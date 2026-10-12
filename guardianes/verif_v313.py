@@ -162,10 +162,16 @@ for _nm in ("render_pnl", "render_group_profitability", "render_group_expenses")
         elif isinstance(n, (ast.FunctionDef, ast.Lambda)):
             for x in getattr(n.args, "args", []):
                 asign.add(x.arg)
+            # v568 · una función ANIDADA define su nombre (falso positivo: `_estado`)
+            if isinstance(n, ast.FunctionDef):
+                asign.add(n.name)
     # v384: se excluye el `e` de `except ... as e` — falso positivo conocido de este
-# chequeo desde v145 (su ámbito no sigue el orden textual).
-check(f"{_nm} sin nombres libres",
-      sorted({u for u in usados if u not in asign and u != "e"}), [])
+    # chequeo desde v145 (su ámbito no sigue el orden textual).
+    # ⚠️ v568 · DENTRO del bucle: estaba fuera por la sangría y solo se comprobaba la
+    # ÚLTIMA función de la lista — `render_pnl` y `render_group_profitability` pasaban
+    # sin mirarse (trampa 1, el paso en vacío).
+    check(f"{_nm} sin nombres libres",
+          sorted({u for u in usados if u not in asign and u != "e"}), [])
 
 _fc = ast.parse((BASE / "core" / "finance.py").read_text(encoding="utf-8"))
 _cm = next(n for n in ast.walk(_fc) if isinstance(n, ast.FunctionDef)

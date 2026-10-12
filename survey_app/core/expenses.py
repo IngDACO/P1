@@ -32,6 +32,7 @@ CATEGORIAS = ["Materials", "Tools", "Transport", "Fuel",
 # como el canonico es "Other" la torta partia la misma categoria en DOS trozos,
 # los dos rotulados «Other».
 SIN_CATEGORIA = "Other"
+_ECOL = {h: i + 1 for i, h in enumerate(HEADERS)}      # v568 · columna por cabecera
 _FOLDER = "COPEX Recibos"
 
 
@@ -486,7 +487,64 @@ def add(pid, grupo, valor, categoria="Materials", proveedor="", descripcion="",
     except Exception as e:
         return False, f"{t('Error saving')}: {e}"
     _invalidate()
-    return True, f"Recibo agregado ({_num(valor):.2f})."
+    # v568 · en inglés: «Recibo agregado» salía en español al guardar un recibo en Costs
+    return True, t("Receipt added ({x}).").replace("{x}", f"{_num(valor):,.2f}")
+
+
+def huerfanos(grupo) -> list:
+    """Las compras del grupo que NO cuelgan de ninguna obra suya (v568): sin `ProjectID`
+    o de una obra borrada (`delete_project` no se lleva sus compras).
+
+    ⚠️ El MISMO conjunto de obras que `group_expenses` (archivadas e internas incluidas):
+    si no, una compra de la oficina saldría aquí como «sin obra» — el aviso falso que
+    v422 ya evitó en el recuento. Las más recientes primero.
+    """
+    from core import projects as P
+    _ids = {str(p.get("ID", "")) for p in P.list_projects(grupo=grupo, incluir_archivados=True,
+                                                          incluir_internos=True)}
+    out = [dict(r) for r in _records()
+           if str(r.get("Group", "")) == str(grupo) and str(r.get("ProjectID", "")) not in _ids]
+    return sorted(out, key=lambda r: str(r.get("Date", "")), reverse=True)
+
+
+def asignar_proyecto(gid, pid, grupo) -> tuple:
+    """Pone una compra SIN obra en una obra del grupo (v568).
+
+    El aviso de Gastos decía «assign them from the receipt» y no había forma de hacerlo:
+    esas compras ni siquiera se veían (los recibos solo salen en la ficha de su obra).
+
+    ⚠️ Solo HUÉRFANAS: mover un recibo que ya es de una obra a otra cambiaría el coste de
+    las dos, y eso no es lo que esta pantalla ofrece. ⚠️ Y solo a una obra del MISMO grupo
+    (cerrojo de aislamiento, v351): el ID llega de la pantalla, pero se comprueba aquí.
+    """
+    from core import projects as P
+    w = _ws()
+    if w is None:
+        return False, t("Google Sheets is not configured.")
+    prj = P.get_project(pid) or {}
+    if not prj or str(prj.get("Group", "")) != str(grupo):
+        return False, t("That job is not in this company.")
+    _ids = {str(p.get("ID", "")) for p in P.list_projects(grupo=grupo, incluir_archivados=True,
+                                                          incluir_internos=True)}
+    try:
+        recs = valores.canonizar(columnas.canonizar(w.get_all_records(numericise_ignore=["all"])), SHEET)
+    except Exception as e:
+        return False, t("Error reading: {e}").replace("{e}", str(e))
+    for i, r in enumerate(recs):
+        if str(r.get("ID", "")) != str(gid):
+            continue
+        if str(r.get("Group", "")) != str(grupo):
+            return False, t("Receipt not found.")
+        if str(r.get("ProjectID", "")) in _ids:
+            return False, t("That purchase already belongs to a job.")
+        try:
+            w.update_cell(i + 2, _ECOL["ProjectID"], str(pid))
+        except Exception as e:
+            return False, t("Error saving") + f": {e}"
+        _invalidate()
+        return True, (t("Purchase {g} assigned to {p}.").replace("{g}", str(gid))
+                      .replace("{p}", str(prj.get("Name") or pid)))
+    return False, t("Receipt not found.")
 
 
 def delete(gid) -> tuple:

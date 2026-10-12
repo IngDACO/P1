@@ -5020,24 +5020,9 @@ def render_pnl(grupo: str):
     if _cur:
         with st.container(border=True, key="cpx_pnl_panel"):
             # ⚠️ v567 · abierta desde una TARJETA, la vista baja a ella UNA vez (el patrón de
-            # la ficha del Panel, v553): `nearest` no mueve nada si ya se ve, y en cada
-            # pasada devolvería la vista aquí tras cualquier clic. El recuadro del script,
-            # fuera del flujo para no dejar hueco.
-            if st.session_state.pop("_pnl_tool_ir", False):
-                with st.container(key="pnl_ir"):
-                    st.markdown("<style>.st-key-pnl_ir,[data-testid=\"stLayoutWrapper\"]:has(> "
-                                ".st-key-pnl_ir){position:absolute!important;width:1px;"
-                                "height:1px;overflow:hidden;opacity:0;pointer-events:none;}"
-                                "</style>", unsafe_allow_html=True)
-                    incrustar.script(
-                        "<script>(function(){try{var D=window.parent.document,n=0;"
-                        "function ir(){var c=D.querySelector('.st-key-cpx_pnl_panel'),"
-                        "a=D.querySelector('[data-testid=\"stApp\"]'),"
-                        "s=a?a.getAttribute('data-test-script-state'):'notRunning';"
-                        "if(c&&s!=='running'){c.scrollIntoView({behavior:'smooth',"
-                        "block:'nearest'});return;}"
-                        "if(++n<40)setTimeout(ir,100);}setTimeout(ir,150);}catch(e){}})();"
-                        "</script>")
+            # la ficha del Panel, v553). v568 · con `_bajar_a`, la definición que comparte
+            # con Gastos (una sola copia del script).
+            _bajar_a("cpx_pnl_panel", "_pnl_tool_ir")
             if _cur == "conc":
                 _pnl_conciliacion(_cc, T, periodo_completo=(_desde is None))
             elif _cur == "cli":
@@ -5394,14 +5379,74 @@ def _partir_gasto(ge: dict) -> dict:
     }
 
 
+def _bajar_a(clave: str, marca: str):
+    """La vista baja UNA vez al bloque con clave `clave`, si alguien lo pidió poniendo
+    `marca` en la sesión (v567 en el Resumen; v568 una sola definición para él y Gastos).
+
+    ⚠️ Una vez por petición (`pop`): en cada pasada devolvería la vista aquí tras
+    cualquier clic. `nearest` no mueve nada si ya se ve. Espera a que la pasada TERMINE
+    (`data-test-script-state`) para medir con la altura final (el patrón de v553). El
+    recuadro del script, fuera del flujo para no dejar hueco.
+    """
+    if not st.session_state.pop(marca, False):
+        return
+    with st.container(key=f"ir_{clave}"):
+        st.markdown("<style>.st-key-ir_" + clave + ",[data-testid=\"stLayoutWrapper\"]:has(> "
+                    ".st-key-ir_" + clave + "){position:absolute!important;width:1px;"
+                    "height:1px;overflow:hidden;opacity:0;pointer-events:none;}"
+                    "</style>", unsafe_allow_html=True)
+        incrustar.script(
+            "<script>(function(){try{var D=window.parent.document,n=0;"
+            "function ir(){var c=D.querySelector('.st-key-" + clave + "'),"
+            "a=D.querySelector('[data-testid=\"stApp\"]'),"
+            "s=a?a.getAttribute('data-test-script-state'):'notRunning';"
+            "if(c&&s!=='running'){c.scrollIntoView({behavior:'smooth',"
+            "block:'nearest'});return;}"
+            "if(++n<40)setTimeout(ir,100);}setTimeout(ir,150);}catch(e){}})();"
+            "</script>")
+
+
+def _botones_obras(items, pref: str, sec: str = "💰 Costos"):
+    """Un botón por obra que la abre en `sec` (v568, «elementos activos»): los avisos de
+    Gastos nombraban las obras como texto. `items` = [(id, etiqueta)]; hasta 8."""
+    for _i, (_pid, _lbl) in enumerate(items[:8]):
+        if st.button(f":material/open_in_new: {_lbl}", key=f"{pref}_{_i}_{_pid}", type="tertiary"):
+            st.session_state["_prjsel_pending"] = str(_pid)
+            if sec:
+                st.session_state["_prj_sec_pending"] = sec
+            _ir_a("proyectos", "📊 Proyectos")
+    if len(items) > 8:
+        st.caption(t("… and {n} more.").replace("{n}", str(len(items) - 8)))
+
+
+def _tabla_abre_obra(ev, filas, clave_gen: str, sec: str):
+    """Tocar una CELDA de la tabla abre esa obra en `sec` (v568, como By project en v567).
+    ⚠️ La selección sobrevive en el widget: otra generación de clave tras usarla."""
+    _s = getattr(ev, "selection", None)
+    _f = [c[0] for c in (getattr(_s, "cells", None) or [])] or list(getattr(_s, "rows", None) or [])
+    if _f and 0 <= _f[0] < len(filas):
+        st.session_state[clave_gen] = st.session_state.get(clave_gen, 0) + 1
+        st.session_state["_prjsel_pending"] = str(filas[_f[0]].get("id", ""))
+        st.session_state["_prj_sec_pending"] = sec
+        _ir_a("proyectos", "📊 Proyectos")
+
+
 def render_group_expenses(grupo: str):
+    """💰 Gastos del grupo (v568, probada acción por acción).
+
+    ⚠️ SIN cabecera propia: `home_ui._sub_header` ya pinta «Finanzas · X» encima.
+    """
     from core import expenses as E
     from core import theme as T          # v309: `T.dinero` escapa el `$` (LaTeX)
-    # ⚠️ SIN cabecera propia: `home_ui._sub_header` ya pinta «Finanzas · X» encima.
-    # Era el 5º título duplicado de la app (v212, v291, v314, v319 y este barrido).
     if not E.is_configured():
         st.warning(t("Costs need Google Sheets configured."))
         return
+    # ⚠️ v568 · ACCIÓN DIFERIDA (trampa 37): asignar una compra sin obra escribe en la
+    # hoja; el botón solo apunta y relanza, y se hace aquí, antes de pintar nada.
+    _pend = st.session_state.pop("_ge_asignar", None)
+    if _pend:
+        _ok, _msg = E.asignar_proyecto(_pend[0], _pend[1], grupo)
+        (flash.exito if _ok else flash.error)(_msg)
     ge = E.group_expenses(grupo)
     filas = ge["proyectos"]
     if not filas:
@@ -5417,58 +5462,144 @@ def render_group_expenses(grupo: str):
     _mo, tot = _p["mo_obra"], _p["total_obra"]
     _huer = _p["huerfanos"]
     tot_pres = sum(f["presupuesto"] for f in filas)
-    tot_proj = sum((f["proyectado"] or f["total"]) for f in filas)
     con_pres = [f for f in filas if f["presupuesto"] > 0]
     sin_pres = [f for f in filas if f["presupuesto"] <= 0]
     n_over   = sum(1 for f in filas if f["over"])
     n_over_p = sum(1 for f in filas if f["over_proj"] and not f["over"])
-    pct_grupo = round(100 * tot / tot_pres) if tot_pres > 0 else None
-
-    # ── KPIs del grupo ──
-    tarj = [_kpi_card(t("Cost charged to jobs"), T.dinero(tot, 0)),
-            _kpi_card(t("Budget"), T.dinero(tot_pres, 0) if tot_pres else "—"),
-            _kpi_card(t("% used"), f"{pct_grupo}%" if pct_grupo is not None else "—",
-                      "#c0392b" if (pct_grupo or 0) > 100 else None),
-            _kpi_card(t("Projected at completion"), T.dinero(tot_proj, 0),
-                      "#c0392b" if (tot_pres and tot_proj > tot_pres) else None),
-            _kpi_card(t("Over budget"), n_over, "#c0392b" if n_over else None)]
-    # v343: lo COMPROMETIDO (pedido y sin recibir) solo si hay algo pedido.
+    pct_grupo = (100.0 * tot / tot_pres) if tot_pres > 0 else None
+    # ⚠️ v568 · la PREVISIÓN solo de las obras que la tienen (necesita avance). Antes se
+    # sumaba el coste de HOY de las que no la tienen: con las dos obras al 0 %, «Projected
+    # at completion $270» para $87,000 de presupuesto (visto en el recorrido de Expenses).
+    _con_prev = [f for f in filas if f["proyectado"] is not None]
+    _sin_prev = [f for f in filas if f["proyectado"] is None and f["total"] > 0]
+    tot_proj = round(sum(f["proyectado"] for f in _con_prev), 2)
+    _pres_prev = sum(f["presupuesto"] for f in _con_prev)
     _comp_tot = round(sum(f.get("comprometido", 0.0) for f in filas), 2)
+
+    def _pct_txt(p):
+        # v568 · un decimal bajo el 10 % (0,3 % salía «0%»)
+        return "—" if p is None else (f"{p:.1f}%" if p < 10 else f"{p:.0f}%")
+
+    # ── Tarjetas, ACTIVAS (v568) ──
+    # slug, etiqueta, valor, pie, color del acento (o None)
+    _rojo = "#c0392b"
+    _K = [("cost", t("Cost charged to jobs"), T.dinero(tot, 0), t("labour + purchases"), None),
+          ("pres", t("Budget"), T.dinero(tot_pres, 0) if tot_pres else "—",
+           t("{n} job(s) with a budget").replace("{n}", str(len(con_pres))), None),
+          ("pct", t("% used"), _pct_txt(pct_grupo), t("of the budget"),
+           _rojo if (pct_grupo or 0) > 100 else None),
+          ("prev", t("Forecast"), T.dinero(tot_proj, 0) if _con_prev else "—",
+           (t("{n} job(s) with no forecast yet").replace("{n}", str(len(_sin_prev)))
+            if _sin_prev else t("cost at completion")) if _con_prev else t("no progress yet"),
+           _rojo if (_pres_prev and tot_proj > _pres_prev) else None),
+          # ⚠️ el identificador NO es una palabra que también se traduzca (verif_v436):
+          # «over» coincidía con la etiqueta `t("over")` del estado de la tabla.
+          ("sobrep", t("Over budget"), str(n_over),
+           t("1 job") if n_over == 1 else t("{n} jobs").replace("{n}", str(n_over)),
+           _rojo if n_over else None)]
+    # v343: lo COMPROMETIDO (pedido y sin recibir) solo si hay algo pedido.
     if _comp_tot:
-        tarj.insert(1, _kpi_card(t("Committed"), T.dinero(_comp_tot, 0), T.AMBAR,
-                                 pie="ordered, not received yet"))
+        _K.insert(1, ("comp", t("Committed"), T.dinero(_comp_tot, 0),
+                      t("ordered, not received yet"), T.AMBAR))
     # v425: la estructura, con su nombre. Solo si existe: sin localizaciones la
     # pantalla queda EXACTAMENTE como estaba.
     if tot_int > 0:
-        tarj.append(_kpi_card(t("Overhead spend"), T.dinero(tot_int, 0),
-                              pie="office and store"))
-    st.markdown('<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:8px">'
-                + "".join(tarj) + "</div>", unsafe_allow_html=True)
+        _K.append(("int", t("Overhead spend"), T.dinero(tot_int, 0), t("office and store"), None))
+    # ⚠️ v568 · filas FIJAS de 4 columnas (la última conserva el hueco de las vacías: con
+    # flex, «Over budget» se quedaba sola a 650 px, medido a 714) y 2 por fila bajo 700 px
+    # (`@container`), ocultando las vacías. Medido en una mini-app con la función real:
+    # con 7 tarjetas en una fila de 1014 px salían de 122 px y se cortaba hasta la cifra.
+    _css = ["<style>.st-key-cpx_ge_kpis{container-type:inline-size}",
+            "@container (max-width:700px){.st-key-cpx_ge_kpis [data-testid='stHorizontalBlock']"
+            "{flex-wrap:wrap!important}.st-key-cpx_ge_kpis [data-testid='stHorizontalBlock']"
+            ">[data-testid='stColumn']{flex:0 1 calc(50% - 0.5rem)!important;"
+            "min-width:calc(50% - 0.5rem)!important;width:calc(50% - 0.5rem)!important}"
+            ".st-key-cpx_ge_kpis [data-testid='stColumn']:not(:has([data-testid='stButton']))"
+            "{display:none!important}}"]
+    for _s, _l, _v, _pie, _acc in _K:
+        if _acc:
+            _css.append(f".st-key-cpxkpi_ge_{_s} button{{border-left-color:{_acc}!important}}"
+                        f".st-key-cpxkpi_ge_{_s} button p:nth-child(2):not(:last-child)"
+                        f"{{color:{T.texto_seguro(_acc)}!important}}")
+    _css.append("</style>")
+    st.markdown("".join(_css), unsafe_allow_html=True)
+    _sel = st.session_state.get("_ge_kpi")
+    with st.container(key="cpx_ge_kpis"):
+        for _col, (_s, _l, _v, _pie, _acc) in [
+                (c, k) for _i0 in range(0, len(_K), 4)
+                for c, k in zip(st.columns(4), _K[_i0:_i0 + 4])]:
+            if _col.button(f"{_l}\n\n{_v}\n\n{_pie}", key=f"cpxkpi_ge_{_s}", width="stretch"):
+                if _s == "int":
+                    _ir_a("proyectos", "🏢 Localizaciones")
+                if _s in ("sobrep", "comp"):
+                    st.session_state["_ge_kpi"] = None if _sel == _s else _s
+                else:
+                    # Cost, Budget, % used y Forecast están en la tabla: la vista baja a ella
+                    st.session_state["_ge_ir_tabla"] = True
+                st.rerun()
+    if _sel == "sobrep":
+        _ov = [(f["id"], f["nombre"]) for f in filas if f["over"]]
+        st.caption(t("Jobs already over budget — tap one to open its Costs:") if _ov
+                   else t("No job is over budget."))
+        _botones_obras(_ov, "geover")
+    elif _sel == "comp":
+        _cm = [(f["id"], f"{f['nombre']} · {T.dinero(f.get('comprometido', 0.0), 0)}")
+               for f in sorted(filas, key=lambda x: -x.get("comprometido", 0.0))
+               if f.get("comprometido", 0.0) > 0]
+        st.caption(t("Material ordered and not received yet, by job — tap one to see its orders:"))
+        _botones_obras(_cm, "gecomp")
     if tot_int > 0:
-        st.caption(f":material/business: **{T.dinero(tot_int, 0)}** of overhead "
-                   f"({T.dinero(_mo_int, 0)} of labour + {T.dinero(_cmp_int, 0)} "
-                   "of purchases) across "
-                   f"{len(_int_filas)} location(s). **It is not charged to any job "
-                   "and does not count towards % used**, but it is a company cost and "
-                   "does count in the P&L.")
+        st.caption(t(":material/business: **{x}** of overhead ({m} of labour + {c} of purchases) "
+                     "across {n} location(s). **It is not charged to any job and does not count "
+                     "towards % used**, but it is a company cost and does count in the P&L.")
+                   .replace("{x}", T.dinero(tot_int, 0)).replace("{m}", T.dinero(_mo_int, 0))
+                   .replace("{c}", T.dinero(_cmp_int, 0)).replace("{n}", str(len(_int_filas))))
 
     # Dinero registrado que no cuelga de ningún proyecto: se DICE, no se descarta.
+    # ⚠️ v568 · y se puede ARREGLAR: el aviso decía «assign them from the receipt» y no
+    # había forma (ni de verlas). Se listan y cada una se asigna a su obra.
     if _huer["n"]:
-        st.warning(f":material/help: **{T.dinero(_huer['total'], 0)} across {_huer['n']} purchase(s) "
-                   "with no project** (or from a deleted project). They count towards the company "
-                   "cost, but not towards any job budget — assign them from the receipt.")
+        st.warning(t(":material/help: **{x} across {n} purchase(s) with no job** (or from a "
+                     "deleted job). They count towards the company cost, but not towards any "
+                     "job budget — assign each one to its job below.")
+                   .replace("{x}", T.dinero(_huer["total"], 0)).replace("{n}", str(_huer["n"])))
+        try:
+            _orf = E.huerfanos(grupo)
+        except Exception:
+            _orf = []
+        with st.expander(t("Purchases with no job ({n})").replace("{n}", str(len(_orf))),
+                         icon=":material/help:", key="exp_ge_huerf"):
+            _opc = P.list_projects(grupo=grupo, incluir_archivados=True, incluir_internos=True)
+            _et = P.etiqueta_proyectos(_opc)
+            _ids = [str(x.get("ID", "")) for x in _opc]
+            for r in _orf[:30]:
+                _gid = str(r.get("ID", ""))
+                c1, c2, c3 = st.columns([3, 3, 1])
+                c1.markdown(f"**{T.dinero(r.get('Amount'))}** · {_fmt_fecha(r.get('Date'))}  \n"
+                            f"{r.get('Supplier') or '—'} · {r.get('Category') or '—'}"
+                            + (f" · {r.get('Description')}" if r.get("Description") else ""))
+                _dest = c2.selectbox(t("Job"), [""] + _ids, key=f"ge_huerf_sel_{_gid}",
+                                     format_func=lambda i: _et.get(i, i) if i else t("— choose the job —"),
+                                     label_visibility="collapsed")
+                if c3.button(t("Assign"), key=f"ge_huerf_asg_{_gid}", disabled=not _dest):
+                    st.session_state["_ge_asignar"] = (_gid, _dest)
+                    st.rerun()
+            if len(_orf) > 30:
+                st.caption(t("… and {n} more.").replace("{n}", str(len(_orf) - 30)))
     if n_over:
-        st.error(f":material/block: **{n_over} project(s) already over budget:** "
-                 + ", ".join(f["nombre"] for f in filas if f["over"]))
+        st.error(t(":material/block: **{n} project(s) already over budget:**").replace("{n}", str(n_over)))
+        _botones_obras([(f["id"], f["nombre"]) for f in filas if f["over"]], "geerr")
     if n_over_p:
-        st.warning(f":material/warning: **{n_over_p} more will go over at the current rate** (still within budget today): "
-                   + ", ".join(f["nombre"] for f in filas if f["over_proj"] and not f["over"]))
+        st.warning(t(":material/warning: **{n} more will go over at the current rate** (still within budget today):")
+                   .replace("{n}", str(n_over_p)))
+        _botones_obras([(f["id"], f["nombre"]) for f in filas if f["over_proj"] and not f["over"]], "gerisk")
     # ⚠️ v343: dentro de presupuesto HOY, pero con lo ya pedido se pasa seguro. Antes
     # esto solo se sabía cuando llegaba la factura, o sea cuando ya no se podía hacer nada.
-    _oc = [f["nombre"] for f in filas if f.get("over_comp")]
+    _oc = [(f["id"], f["nombre"]) for f in filas if f.get("over_comp")]
     if _oc:
-        st.warning(f":material/shopping_cart: **{len(_oc)} will go over with the material "
-                   "already ordered** (not received yet): " + ", ".join(_oc))
+        st.warning(t(":material/shopping_cart: **{n} will go over with the material already "
+                     "ordered** (not received yet):").replace("{n}", str(len(_oc))))
+        _botones_obras(_oc, "geoc")
     # Órdenes que debían haber llegado: obra parada esperando material.
     try:
         from core import orders as _O
@@ -5476,23 +5607,19 @@ def render_group_expenses(grupo: str):
     except Exception:
         _atr = []
     if _atr:
-        st.warning(":material/local_shipping: **" + str(len(_atr)) + " purchase order(s) that did not arrive on the promised date:** "
-                   + " · ".join(f"{o.get('Supplier','')} ({o['dias']} d)" for o in _atr[:6]))
+        st.warning(t(":material/local_shipping: **{n} purchase order(s) that did not arrive on "
+                     "the promised date:**").replace("{n}", str(len(_atr))))
+        _botones_obras([(o.get("ProjectID", ""), f"{o.get('Supplier', '') or '—'} · "
+                         + t("{d} d late").replace("{d}", str(o["dias"]))) for o in _atr], "geatr")
 
     # ── Gasto por rubro (mano de obra + cada categoría de compra) ─────────
-    # ⚠️ v310: se quitó el bloque de barras «Compras por categoría». Mostraba
-    # EXACTAMENTE los mismos números que la torta (mismas categorías, mismos $ y
-    # mismos %): dos gráficos para el mismo dato. La torta se queda porque es la
-    # que el usuario pidió (v224) y además incluye la mano de obra.
-    # ⚠️ v425: la torta es el gasto de TODO el grupo, y `por_categoria` incluye las
-    # compras de estructura. Si la mano de obra fuera solo la de obra, la torta
-    # mezclaría dos ámbitos y dejaría de cuadrar con nada — el fallo de v310 en versión
-    # nueva. Se parte la mano de obra en dos rubros y la torta sigue sumando el grupo
-    # entero. Sin localizaciones, `_mo_int` es 0 y el rubro ni aparece: idéntico a antes.
+    # ⚠️ v310: se quitó el bloque de barras «Compras por categoría»: eran los mismos
+    # números que la torta. ⚠️ v425: la torta es el gasto de TODO el grupo; la mano de
+    # obra se parte en obra y estructura para que siga sumando el grupo entero.
     _catg = ge["por_categoria"]
-    _rubros = [("Labour" + (" (jobs)" if _mo_int > 0 else ""), _mo)]
+    _rubros = [(t("Labour (jobs)") if _mo_int > 0 else t("Labour"), _mo)]
     if _mo_int > 0:
-        _rubros.append(("Labour (overhead)", _mo_int))
+        _rubros.append((t("Labour (overhead)"), _mo_int))
     _rubros += sorted(_catg.items(), key=lambda x: -x[1])
     _rubros = [(k, v) for k, v in _rubros if v and v > 0]
     if _rubros:
@@ -5502,54 +5629,82 @@ def render_group_expenses(grupo: str):
         if tot_int > 0:
             st.caption(t("Overhead included: this chart is the **company's** spend, not only what is charged to jobs."))
 
-
-    # ── Proyectos CON presupuesto (tabla CLICKEABLE → abre el proyecto, v215) ──
+    # ── Proyectos CON presupuesto: tocar una celda abre la obra en Costs (v568) ──
     if con_pres:
         st.markdown(t("**Projects with a budget**"))
-        _gev = st.dataframe(pd.DataFrame([{
-            "Proyecto": f["nombre"], "Costo": f["total"],
-            # v343: la columna solo aparece si el grupo tiene algo pedido
-            **({"Comprometido": f.get("comprometido", 0.0)} if _comp_tot else {}),
-            "Presupuesto": f["presupuesto"],
-            "% used": f["pct"], "Avance %": f["avance"],
-            "Forecast": f["proyectado"] if f["proyectado"] is not None else "—",
-            "": ("sobre" if f["over"] else
-                 ("pedido" if f.get("over_comp") else
-                  ("riesgo" if f["over_proj"] else "ok"))),
-        } for f in con_pres]), hide_index=True, width="stretch",
-            on_select="rerun", selection_mode="single-row", key="ge_tbl", column_config=tabla.cfg())
-        st.caption(t(":material/touch_app: Tap a row and «Open» to go to that project. **Projected** = cost at completion at the current rate. over = already over · ordered = will go over with the material already on order · at risk = will go over at the current rate · ok = within budget."))
-        try:
-            _grows = list(_gev.selection.rows)
-        except Exception:
-            _grows = []
-        if _grows and _grows[0] < len(con_pres):
-            _gf = con_pres[_grows[0]]
-            if st.button(f"→ Open {_gf['nombre']}", key="ge_open", type="primary"):
-                st.session_state["_prjsel_pending"] = str(_gf.get("id", ""))
-                _ir_a("proyectos", "📊 Proyectos")
 
-    # ── Proyectos SIN presupuesto: solo costo, y aviso ──
+        def _estado(f):
+            if f["over"]:
+                return "🔴 " + t("over")
+            if f.get("over_comp"):
+                return "🟠 " + t("ordered")
+            return ("🟡 " + t("at risk")) if f["over_proj"] else ("🟢 " + t("ok"))
+
+        _gen = st.session_state.get("_ge_tbl_gen", 0)
+        with st.container(key="cpx_ge_tabla"):
+            _bajar_a("cpx_ge_tabla", "_ge_ir_tabla")
+            # ⚠️ v568 · el estado CON cabecera y en inglés (salía sin título y «sobre /
+            # pedido / riesgo» mientras el pie decía «over / ordered / at risk»), el dinero
+            # con $ y miles (salía «42000»), y la previsión como texto a la derecha: una obra
+            # sin avance no tiene, y `None` se pinta «None» (medido en v567).
+            _gev = st.dataframe(pd.DataFrame([{
+                "Proyecto": f["nombre"],
+                "Status": _estado(f),
+                "Costo": f["total"],
+                # v343: la columna solo aparece si el grupo tiene algo pedido
+                **({"Comprometido": f.get("comprometido", 0.0)} if _comp_tot else {}),
+                "Presupuesto": f["presupuesto"],
+                "% used": round(100.0 * f["total"] / f["presupuesto"], 1),
+                "Forecast": (T.dinero_html(f["proyectado"], 0) if f["proyectado"] is not None
+                             else "—"),
+                "Avance %": f["avance"],
+            } for f in con_pres]), hide_index=True, width="stretch", on_select="rerun",
+                selection_mode="single-cell", key=f"ge_tbl_{_gen}",
+                column_config=tabla.cfg(None, {
+                    "Proyecto":     st.column_config.TextColumn(t("Project"), pinned=True),
+                    "Status":       st.column_config.TextColumn(t("Status")),
+                    "Costo":        st.column_config.NumberColumn(t("Cost"), format="$%,.2f"),
+                    "Comprometido": st.column_config.NumberColumn(t("Committed"), format="$%,.2f"),
+                    "Presupuesto":  st.column_config.NumberColumn(t("Budget"), format="$%,.0f"),
+                    "% used":       st.column_config.NumberColumn(t("% used"), format="%.1f%%"),
+                    "Forecast":     st.column_config.TextColumn(t("Forecast"), alignment="right"),
+                    "Avance %":     st.column_config.NumberColumn(t("Progress %"), format="%.0f%%"),
+                }))
+            _tabla_abre_obra(_gev, con_pres, "_ge_tbl_gen", "💰 Costos")
+        st.caption(t(":material/touch_app: Tap a job to open it in its Costs. **Forecast** = cost "
+                     "at completion at the current rate (it needs some progress). 🔴 over = "
+                     "already over budget · 🟠 ordered = will go over with the material already "
+                     "ordered · 🟡 at risk = will go over at the current rate · 🟢 ok = within "
+                     "budget."))
+
+    # ── Proyectos SIN presupuesto: tocar una celda abre la obra en Data (v568) ──
     if sin_pres:
         st.markdown(t("**Projects with no budget set**"))
-        st.dataframe(pd.DataFrame([{
+        _gen2 = st.session_state.get("_ge_sin_gen", 0)
+        _ev2 = st.dataframe(pd.DataFrame([{
             "Proyecto": f["nombre"], "Purchases": f["compras"],
             "Labour": f["mano_obra"], "Total cost": f["total"],
-        } for f in sin_pres]), hide_index=True, width="stretch", column_config=tabla.cfg())
-        st.caption(f"{len(sin_pres)} project(s) with no budget: there is nothing to compare "
-                   "their spend against. It is set in the project detail → :material/edit: Data.")
+        } for f in sin_pres]), hide_index=True, width="stretch", on_select="rerun",
+            selection_mode="single-cell", key=f"ge_sin_{_gen2}",
+            column_config=tabla.cfg(None, {
+                "Proyecto":   st.column_config.TextColumn(t("Project"), pinned=True),
+                "Purchases":  st.column_config.NumberColumn(t("Purchases"), format="$%,.2f"),
+                "Labour":     st.column_config.NumberColumn(t("Labour"), format="$%,.2f"),
+                "Total cost": st.column_config.NumberColumn(t("Total cost"), format="$%,.2f"),
+            }))
+        _tabla_abre_obra(_ev2, sin_pres, "_ge_sin_gen", "✏️ Datos")
+        st.caption(t("{n} job(s) with no budget: there is nothing to compare their spend "
+                     "against. Tap a job to set it in its Data.").replace("{n}", str(len(sin_pres))))
 
-    # (Compras por categoría se muestra arriba, en doble columna con el reparto — v215.)
-
-    # ── Export para contabilidad ──
+    # ── Export para contabilidad (v568 · cabeceras y nombre en inglés) ──
     _csv = pd.DataFrame([{
-        "Proyecto": f["nombre"], "Purchases": f["compras"], "Labour": f["mano_obra"],
-        "Total cost": f["total"], "Presupuesto": f["presupuesto"],
-        "% used": f["pct"], "Avance %": f["avance"], "Proyeccion": f["proyectado"],
+        "Project": f["nombre"], "Purchases": f["compras"], "Labour": f["mano_obra"],
+        "Total cost": f["total"], "Budget": f["presupuesto"],
+        "% used": f["pct"], "Progress %": f["avance"], "Forecast": f["proyectado"],
     } for f in filas])
     st.download_button(t(":material/download: Export CSV (accounting)"),
                        data=_csv.to_csv(index=False).encode("utf-8"),
-                       file_name=f"gastos_{grupo}.csv", mime="text/csv", key="ge_csv")
+                       file_name=f"expenses_{grupo}.csv", mime="text/csv", key="ge_csv")
 
 
 # ── Reporte del ADMIN: horas de TODOS los usuarios del grupo ──

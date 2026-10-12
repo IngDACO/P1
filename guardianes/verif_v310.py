@@ -171,6 +171,9 @@ for n in ast.walk(_fn):
     elif isinstance(n, (ast.FunctionDef, ast.Lambda)):
         for x in getattr(n.args, "args", []):
             asign.add(x.arg)
+        # v568 · una función ANIDADA define su nombre (falso positivo: `_estado`)
+        if isinstance(n, ast.FunctionDef):
+            asign.add(n.name)
 check("render_group_expenses sin nombres libres",
       sorted({u for u in usados if u not in asign}), [])
 
