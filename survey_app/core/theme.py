@@ -461,6 +461,20 @@ def dos_por_fila(clave: str) -> str:
             "min-width:calc(50% - 0.5rem)!important;width:calc(50% - 0.5rem)!important}}</style>")
 
 
+def por_fila(clave: str, n: int) -> str:
+    """<style> para UNA fila de `st.columns` dentro del contenedor `clave`: `n` por fila,
+    partiendo a la siguiente sin huecos (y sin estirar la última), y 2 por fila bajo 700 px
+    (`dos_por_fila`). v577: con filas FIJAS de 3, a ≤700 px cada fila se partía por su
+    cuenta (2 + 1, 2 + 1) y cinco cifras salían 2 / 1 / 2 con un hueco (visto en Horas
+    con la pantalla a 1024 px). ⚠️ La regla de 700 va DETRÁS: misma especificidad, gana."""
+    _c = f".st-key-{clave}"
+    _w = f"calc({100 / n:.4f}% - {(n - 1) / n:.4f}rem)"
+    return (f"<style>{_c} [data-testid='stHorizontalBlock']{{flex-wrap:wrap!important}}"
+            f"{_c} [data-testid='stHorizontalBlock']>[data-testid='stColumn']"
+            f"{{flex:0 1 {_w}!important;min-width:{_w}!important;width:{_w}!important}}</style>"
+            + dos_por_fila(clave))
+
+
 def kpi_row(items):
     """Fila de tarjetas KPI. `items` = [(label, valor)] o [(label, valor, sub)] o
     [(label, valor, sub, color_acento)]. Una sola fila responsive."""

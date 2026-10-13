@@ -12,6 +12,10 @@
      el nombre entero, y un toque abre la obra (o la localización).
   7. «Hours by person and project»: un toque en una celda abre esa obra; en la persona, su ficha.
   8. Horas tiene su rama en el menú de Finanzas y lo desconocido da un error VISIBLE.
+  Y lo visto verificando en producción: las cifras 2 / 1 / 2 a 1024 px (→ una fila que parte
+  sola, `theme.por_fila`); «Person» de ~57 px cortando «hjg,ujgjg» (→ ancho del nombre); la
+  matriz alineada cada columna a su aire (→ texto a la derecha); y tocar a un ADMINISTRADOR
+  llevaba a Users sin abrir nada (→ Users dice por qué; y su falta de tarifa, al propietario).
 
 AppTest y el motor con sus fuentes sustituidas: ninguna hoja se toca.
 """
@@ -124,6 +128,9 @@ if _MODO == "lleno":
           _p("bob", "Bob", 5.0, 3.5, 0.0, 0.0, {"PRJ-1": ("Torre", 1.0), "~Viejo": ("Viejo", 2.5)})]
 elif _MODO == "sin_estructura":
     _D = [_p("ana", "Ana", 10.0, 6.0, 0.0, 40.0, {"PRJ-1": ("Torre", 6.0)})]
+elif _MODO == "tarifas":                # sin tarifa: un administrador y uno de campo
+    _D = [_p("bob", "Bob", 5.0, 3.5, 0.0, 0.0, {"PRJ-1": ("Torre", 3.5)}),
+          _p("dee", "Dee Largo Apellido", 4.0, 2.0, 0.0, 0.0, {"PRJ-1": ("Torre", 2.0)})]
 elif _MODO == "dudoso":
     _D = [_p("ana", "Ana", 2.0, 6.0, 0.0, 40.0, {"PRJ-1": ("Torre", 6.0)}, indet=True)]
 else:
@@ -137,6 +144,9 @@ def _gh(g, days=None):
 
 timeclock.is_configured = lambda: True
 timeclock.group_hours = _gh
+from core import auth as _AU
+_AU.list_users = lambda grupo=None, **k: [{"User": u, "Role": r} for u, r in (
+    ("ana", "field"), ("cal", "field"), ("bob", "administrator"), ("dee", "field"))]
 P.list_locations = lambda g=None, incluir_cerradas=False: [{"ID": "LOC-1", "Group": "G"}]
 if "_INI" not in st.session_state:
     st.session_state["_INI"] = 1
@@ -240,6 +250,15 @@ chk("las 6 cifras son botones, en orden (con estructura)",
      "cpxkpi_gh_cost"], [k for k in _b if str(k).startswith("cpxkpi_gh_")])
 chk("2 por fila en estrecho (`theme.dos_por_fila` sobre su contenedor, v576)",
     ".st-key-cpx_gh_kpis{container-type:inline-size}" in _textos(at), "")
+chk("⚠️ las cifras en UNA fila que parte sola, 3 por fila (con filas fijas de 3 salían 2 / 1 / 2 "
+    "a 1024 px de pantalla, visto en producción)",
+    "flex:0 1 calc(33.3333% - 0.6667rem)" in _textos(at)
+    and any(isinstance(n, ast.Call) and ast.unparse(n) == "st.columns(len(_K))" for n in ast.walk(_rgh))
+    and not any(isinstance(n, ast.Call) and ast.unparse(n) == "st.columns(3)" for n in ast.walk(_rgh)), "")
+from core import theme as _TH                                                # noqa: E402
+_pf = _TH.por_fila("x", 3)
+chk("…y en estrecho manda la de 2 por fila: va DETRÁS (misma especificidad, gana la última)",
+    "@container" in _pf and _pf.index("@container") > _pf.index("calc(33.3333%"), _pf[:80])
 chk("«People» cuenta a quien tiene horas (3)", _b.get("cpxkpi_gh_pers", "").startswith("People\n\n3\n\n"),
     _b.get("cpxkpi_gh_pers"))
 chk("⚠️ el pie del coste en inglés: «+ $60 on overhead» (decía «+ $X interna»)",
@@ -295,6 +314,12 @@ chk("⚠️ la tarifa con $ y céntimos («$40.00»; salía «40.0») y «—» 
 _c = _cols(_df) if _df is not None else {}
 chk("el coste con $ y céntimos (`$%,.2f`)", "$%,.2f" in json.dumps(_c), "")
 chk("la persona FIJADA a la izquierda", '"pinned": true' in json.dumps(_c).lower(), "")
+chk("⚠️ …y con ancho: el mínimo (90 px) para nombres cortos (en producción salía de ~57 px y "
+    "«hjg,ujgjg» se cortaba)", (_c.get("User") or {}).get("width") == 90, _c.get("User"))
+_at_t = _app("tarifas")
+_ct = _cols(_at_t.dataframe[0]) if _at_t.dataframe else {}
+chk("…que CRECE con el nombre más largo («Dee Largo Apellido», 18 letras → 168 px)",
+    (_ct.get("User") or {}).get("width") == 168, _ct.get("User"))
 _dfs = [n for n in ast.walk(_rgh) if isinstance(n, ast.Call) and ast.unparse(n.func) == "st.dataframe"]
 chk("⚠️ las TRES tablas con `single-cell` (un toque abre)",
     len(_dfs) == 3 and all(any(k.arg == "selection_mode" and ast.unparse(k.value) == "'single-cell'"
@@ -333,6 +358,16 @@ _dm = at.dataframe[2] if len(at.dataframe) > 2 else None
 chk("solo las personas con horas en obras (Cal no)",
     _dm is not None and list(_dm.value["Persona"]) == ["Ana", "Bob"],
     list(_dm.value["Persona"]) if _dm is not None else None)
+_cm = _cols(_dm) if _dm is not None else {}
+chk("⚠️ las celdas, con 2 decimales y vacías donde no hay horas",
+    _dm is not None and list(_dm.value.iloc[0]) == ["Ana", "4.00", "", "2.00", "1.50"],
+    list(_dm.value.iloc[0]) if _dm is not None else None)
+chk("⚠️ …y TODAS las obras a la derecha (en producción cada columna iba a su aire: la que tenía "
+    "huecos, texto a la izquierda; la que no, número a la derecha)",
+    all("right" in json.dumps(_cm.get(c) or {}) for c in ("Torre (PRJ-1)", "Viejo", "Torre (PRJ-2)", "Oficina")),
+    {c: _cm.get(c) for c in ("Torre (PRJ-1)", "Viejo")})
+chk("la persona de la matriz, con el mismo ancho", (_cm.get("Persona") or {}).get("width") == 90,
+    _cm.get("Persona"))
 chk("…y las obras por ID (las dos Torre, en columnas distintas)",
     _dm is not None and "Torre (PRJ-1)" in _dm.value.columns and "Torre (PRJ-2)" in _dm.value.columns,
     list(_dm.value.columns) if _dm is not None else None)
@@ -346,6 +381,55 @@ chk("⚠️ tocar el NOMBRE abre la ficha de esa persona (la 2ª fila de la matr
     and _ss(at, "_admin_nav_pending") == ("planificacion", "👷 Usuarios"), _ss(at, "gp_fichasel"))
 
 # ══════════════════════════════════════════════════════════════════════════════
+print("\n9. Sin tarifa: cada uno, dónde se arregla")
+_w = [str(x.value) for x in _at_t.warning]
+_wc = [x for x in _w if "Dee Largo Apellido" in x]
+_wa = [x for x in _w if "They are administrators" in x]
+chk("el de campo, a Planning → Users", _wc and "Planning → Users" in _wc[0] and "Bob" not in _wc[0], _w)
+chk("⚠️ el ADMINISTRADOR, al propietario (su tarifa no está en Planning → Users)",
+    _wa and "Bob" in _wa[0] and "Administration → Users" in _wa[0] and "Dee" not in _wa[0], _w)
+
+print("\n10. Users: quien no tiene ficha ahí ya no se pierde en silencio")
+CAB_U = r'''
+import sys
+sys.path.insert(0, r"%s")
+import streamlit as st
+from core import auth_ui as AU, auth, credentials as C
+st.session_state["auth"] = {"rol": "administrator", "usuario": "adm", "nombre": "Adm", "grupo": "G"}
+auth.list_users = lambda grupo=None, **k: [
+    {"User": "ana", "Role": "field", "Name": "Ana", "Active": "TRUE", "Group": "G",
+     "Email": "ana@empresa.com.au", "TelegramChatID": "", "HourlyRate": "40"},
+    {"User": "bob", "Role": "administrator", "Name": "Bob", "Active": "TRUE", "Group": "G",
+     "Email": "", "TelegramChatID": "", "HourlyRate": ""}]
+C.is_configured = lambda: False
+if "_INI" not in st.session_state:
+    st.session_state["_INI"] = 1
+    st.session_state["gp_fichasel"] = st.session_state.get("_PEDIDA")
+AU._grupo_usuarios("G")
+''' % RAIZ
+
+
+def _users(pedida):
+    a = AppTest.from_string(CAB_U, default_timeout=90)
+    a.session_state["_PEDIDA"] = pedida
+    a.run()
+    return a
+
+
+_u1 = _users("Bob (bob)")
+chk("se pinta sin excepción", not _u1.exception, [e.value for e in _u1.exception][:1])
+chk("⚠️ un ADMINISTRADOR pedido: lo dice y dice dónde está su ficha",
+    any("**Bob** is not a field user (administrator)" in str(i.value)
+        and "Administration → Users" in str(i.value) for i in _u1.info), [str(i.value)[:90] for i in _u1.info])
+_u2 = _users("Zed (zed)")
+chk("⚠️ alguien sin cuenta: lo dice (no hay ficha que abrir)",
+    any("**Zed** has no account in this company any more" in str(i.value) for i in _u2.info),
+    [str(i.value)[:90] for i in _u2.info])
+_u3 = _users("Ana (ana)")
+chk("una de campo no saca ninguno de los dos avisos (abre su ficha, como siempre)",
+    not any("is not a field user" in str(i.value) or "has no account" in str(i.value) for i in _u3.info)
+    and _ss(_u3, "_gu_open") == "ana", _ss(_u3, "_gu_open"))
+
 print("\n8. El menú de Finanzas")
 _fin = _func("core/home_ui.py", "_seccion_finanzas")
 _ifs = [n for n in ast.walk(_fin) if isinstance(n, ast.If) and isinstance(n.test, ast.Compare)

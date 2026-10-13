@@ -5771,6 +5771,11 @@ def render_group_hours(grupo: str):
         nom = d.get("nombre") or d["usuario"]
         return f"{nom} ({d['usuario']})" if _nombres[nom] > 1 else nom
 
+    # ⚠️ v577 · la columna de la persona, con el ancho del nombre más largo: sin ancho,
+    # la tabla la dejaba en ~57 px y «hjg,ujgjg» (51 px de texto + relleno) salía cortado
+    # (medido en producción). ~8 px por carácter + el relleno, entre 90 y 220.
+    _w_pers = int(min(220, max(90, 24 + 8 * max((len(_etiqueta(d)) for d in data), default=0))))
+
     # ── Totales del grupo ──
     tot_jorn = sum(d["general"] for d in data)
     tot_proy = sum(d["proyecto"] for d in data)
@@ -5803,14 +5808,15 @@ def render_group_hours(grupo: str):
         st.markdown("<style>.st-key-cpxkpi_gh_sina button{border-left-color:#c0392b!important}"
                     ".st-key-cpxkpi_gh_sina button p:nth-child(2):not(:last-child)"
                     "{color:#c0392b!important}</style>", unsafe_allow_html=True)
-    st.markdown(theme.dos_por_fila("cpx_gh_kpis"), unsafe_allow_html=True)
+    # ⚠️ v577 · UNA fila que parte sola, 3 por fila (2 en estrecho): con filas fijas de 3,
+    # a ≤700 px cada una se partía por su cuenta y cinco cifras salían 2 / 1 / 2.
+    st.markdown(theme.por_fila("cpx_gh_kpis", 3), unsafe_allow_html=True)
     with st.container(key="cpx_gh_kpis"):
-        for _i in range(0, len(_K), 3):
-            for _col, (_s, _l, _v, _pie, _ir) in zip(st.columns(3), _K[_i:_i + 3]):
-                if _col.button(f"{_l}\n\n{_v}\n\n{_pie}", key=f"cpxkpi_gh_{_s}", width="stretch"):
-                    st.session_state["_gh_orden"] = _ir
-                    st.session_state["_gh_bajar_proy" if _ir == "obras" else "_gh_bajar_tabla"] = True
-                    st.rerun()
+        for _col, (_s, _l, _v, _pie, _ir) in zip(st.columns(len(_K)), _K):
+            if _col.button(f"{_l}\n\n{_v}\n\n{_pie}", key=f"cpxkpi_gh_{_s}", width="stretch"):
+                st.session_state["_gh_orden"] = _ir
+                st.session_state["_gh_bajar_proy" if _ir == "obras" else "_gh_bajar_tabla"] = True
+                st.rerun()
 
     if not data:
         # ⚠️ v577 · un periodo sin fichajes dejaba la pantalla EN BLANCO (sin cifras ni
@@ -5864,7 +5870,7 @@ def render_group_hours(grupo: str):
             filas.append(_f)
         _gen = st.session_state.get("_gh_tbl_gen", 0)
         _cc = {
-            "User": st.column_config.TextColumn(t("Person"), pinned=True),
+            "User": st.column_config.TextColumn(t("Person"), pinned=True, width=_w_pers),
             "Shift (h)": st.column_config.NumberColumn(t("Shift (h)"), format="%.2f"),
             "On jobs (h)": st.column_config.NumberColumn(t("On jobs (h)"), format="%.2f"),
             "Unassigned (h)": tabla.derecha(t("Unassigned (h)")),
@@ -5898,8 +5904,20 @@ def render_group_hours(grupo: str):
         st.caption(t("«—» under *unallocated*: that person charged more hours to projects than their workday, so the figure is not reliable (they clocked in to the project without opening their workday). Fixed from v150 onwards; earlier history stays as it is."))
     # ⚠️ v325: dos causas MUY distintas daban el mismo aviso. «Falta ponerle la tarifa» se
     # arregla en Usuarios; «esta persona ya no está dada de alta» NO.
-    _sin_tar = [_etiqueta(d) for d in data
-                if d["proyecto"] > 0 and not d["tarifa"] and d.get("existe", True)]
+    # ⚠️ v577 · la tarifa de un ADMINISTRADOR no se pone en Planning → Users (ahí solo
+    # está el campo): la lleva el propietario. Decirle a cada uno dónde se arregla.
+    try:
+        from core import auth as _A
+        _rol_de = {str(u.get("User", "")): str(u.get("Role", "")).lower()
+                   for u in _A.list_users(grupo=grupo)}
+    except Exception:
+        _rol_de = {}
+    _sin_tar_todos = [d for d in data
+                      if d["proyecto"] > 0 and not d["tarifa"] and d.get("existe", True)]
+    _sin_tar = [_etiqueta(d) for d in _sin_tar_todos
+                if _rol_de.get(d["usuario"]) not in ("administrator", "owner")]
+    _sin_tar_adm = [_etiqueta(d) for d in _sin_tar_todos
+                    if _rol_de.get(d["usuario"]) in ("administrator", "owner")]
     _baja = [_etiqueta(d) for d in data
              if d["proyecto"] > 0 and not d["tarifa"] and not d.get("existe", True)]
     if _sin_tar:
@@ -5907,6 +5925,10 @@ def render_group_hours(grupo: str):
         st.warning(t(":material/warning: With no **hourly rate**, their cost comes out at $0: "
                      "**{x}**. The rate is set in each person's record, in Planning → Users "
                      "(tap them in the table above).", x=", ".join(_sin_tar)))
+    if _sin_tar_adm:
+        st.warning(t(":material/warning: With no **hourly rate**, their cost comes out at $0: "
+                     "**{x}**. They are administrators: the owner sets their rate, in "
+                     "Administration → Users.", x=", ".join(_sin_tar_adm)))
     if _baja:
         st.info(t(":material/person_off: **{x}**: hours from someone **no longer on the books** "
                   "(account deleted). Their hours still count, but **there is nowhere to set a "
@@ -5971,7 +5993,10 @@ def render_group_hours(grupo: str):
                 continue
             _fila = {"Persona": _etiqueta(d)}
             for k in _cols:
-                _fila[_rot(k)] = round(_pp.get(k, 0.0), 2) if _pp.get(k) else ""
+                # ⚠️ v577 · TEXTO ya formateado y a la derecha: una columna con celdas
+                # vacías se volvía texto (a la izquierda) y la de al lado, sin huecos,
+                # número (a la derecha) — en producción, alineadas cada una a su aire.
+                _fila[_rot(k)] = tabla.celda(_pp.get(k), 2) if _pp.get(k) else ""
             _mat.append(_fila)
             _filas_m.append(d)
         if _mat:
@@ -5979,7 +6004,9 @@ def render_group_hours(grupo: str):
             _mev = st.dataframe(pd.DataFrame(_mat), width="stretch", hide_index=True,
                                 on_select="rerun", selection_mode="single-cell", key=f"gh_mtbl_{_mg}",
                                 column_config=tabla.cfg(None, {
-                                    "Persona": st.column_config.TextColumn(t("Person"), pinned=True)}))
+                                    "Persona": st.column_config.TextColumn(t("Person"), pinned=True,
+                                                                           width=_w_pers),
+                                    **{_rot(k): tabla.derecha(_rot(k)) for k in _cols}}))
             st.caption(t("Each cell: hours that person charged to that project in the period. "
                          "Tap a cell to open that project, or a name to open that person."))
             _ms = getattr(_mev, "selection", None)

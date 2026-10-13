@@ -1152,7 +1152,6 @@ def _ficha_usuario(u, grupo, owner=False, sel_key="gp_fichasel"):
     owner=True (v184): además de contraseña/tarifa/estado, la pestaña Acceso deja
     reasignar Rol y Grupo (lo que antes solo tenía el panel disperso del propietario).
     sel_key: clave del selector externo, para limpiarla al eliminar al usuario."""
-    from core import credentials as C
     from core import projects as P
     from core import timeclock as T
     from core import expenses as E
@@ -1457,6 +1456,19 @@ def _grupo_usuarios(grupo):
                if "(" in str(_deep) else str(_deep).strip())
         st.session_state["_gu_open"] = _du
         _soltar_tablas_usuarios()                  # descarta cualquier selección previa
+        # ⚠️ v577 · aquí solo hay fichas del CAMPO: quien llegaba pidiendo a un
+        # administrador (tocarlo en Horas, en el «No rate» del resumen, en el buscador…)
+        # o a alguien de baja se quedaba en la lista sin abrir nada y sin saber por qué.
+        if not any(u["User"] == _du for u in gente):
+            _nom = (str(_deep).rsplit("(", 1)[0].strip() if "(" in str(_deep) else "") or _du
+            _otro = next((u for u in users if u["User"] == _du), None)
+            if _otro is not None:
+                st.info(t(":material/info: **{n}** is not a field user ({r}): their record and "
+                          "hourly rate are kept by the owner, in Administration → Users.",
+                          n=_nom, r=_etq(str(_otro.get("Role", "")))))
+            else:
+                st.info(t(":material/person_off: **{n}** has no account in this company any "
+                          "more: there is no record to open.", n=_nom))
     _op = st.session_state.get("_gu_open")
     if _op and not any(u["User"] == _op for u in gente):   # p.ej. tras eliminarlo
         st.session_state.pop("_gu_open", None)
