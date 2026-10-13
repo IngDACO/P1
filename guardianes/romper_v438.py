@@ -9,7 +9,9 @@ sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 RAIZ = Path(r"C:\Users\diego\P1\survey_app")
 VERIF = Path(__file__).with_name("verif_v438.py")
 F = {n: RAIZ / "core" / f"{n}.py"
-     for n in ("plumb", "diagrams", "schedule", "rail_cut", "buffer_cut", "belting")}
+     for n in ("plumb", "diagrams", "schedule", "rail_cut", "buffer_cut", "belting",
+               "stages")}   # v575 · `stages` entra: la rotura de los nombres vive ahí y la
+                           # batería solo RESPALDA lo que está en F (sin él no restauraba)
 
 ROTURAS = [
     ("una CLAVE de plumb_table se traduce (rompe el informe)",
@@ -19,7 +21,10 @@ ROTURAS = [
     ("una CLAVE de plumb_checks se traduce",
      F["plumb"], '"Medida":', '"Measurement":'),
     ("los NOMBRES de actividad se traducen (son dato del histórico)",
-     F["schedule"], '"Plomadas y líneas de referencia"', '"Plumb lines and reference lines"'),
+     # v575 · el nombre vive en el catálogo (`stages`) y en inglés desde v453: la rotura
+     # es la de su nombre —un nombre de actividad (DATO) se traduce—, al español.
+     F["stages"], '(PISTA_INSTALL, 3, "Plumbing & Survey", 5)',
+     '(PISTA_INSTALL, 3, "Plomadas y líneas de referencia", 5)'),
     ("el motor se importa como `d` pelado (taparía con las variables locales)",
      F["schedule"], "from core.i18n import d as _d", "from core.i18n import d"),
     ("una etiqueta del plano vuelve al español",

@@ -74,6 +74,17 @@ chk("projects.derive_estado devuelve el estado CANONICO",
     P.derive_estado(50, "", "") == "In progress"
     and P.derive_estado(0, "", "") == "Planned",
     f"{P.derive_estado(50, '', '')} - {P.derive_estado(0, '', '')}")
+# ⚠️ v575 · Y por el CÓDIGO, no solo por el resultado: con el idioma BASE en inglés,
+# `t("In progress")` devuelve «In progress» y la comparación de arriba pasa aunque el
+# estado se TRADUZCA (romper_v446 lo vio escapar al re-anclarla). En español, ese `t()`
+# escribiría «En progreso» en la hoja y dejaría de casar en 387 sitios.
+_de = next(n for n in ast.walk(ast.parse((RAIZ / "core" / "projects.py").read_text(encoding="utf-8")))
+           if isinstance(n, ast.FunctionDef) and n.name == "derive_estado")
+_ret_t = [ast.unparse(r.value) for r in ast.walk(_de) if isinstance(r, ast.Return) and r.value is not None
+          and any(isinstance(c, ast.Call) and getattr(c.func, "id", "") in ("t", "d", "_etq", "etiqueta")
+                  for c in ast.walk(r.value))]
+chk("...y ningún `return` de derive_estado pasa por t()/etiqueta (sería traducir el DATO)",
+    not _ret_t, _ret_t)
 chk("ausencias: las CLAVES de TIPOS son el dato",
     set(AU.TIPOS) == {"vacaciones", "enfermedad", "libre"}, str(set(AU.TIPOS)))
 chk("...y `estado_roster` va al tablero, no a la pantalla",

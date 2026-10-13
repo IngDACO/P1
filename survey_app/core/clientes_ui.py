@@ -39,6 +39,12 @@ def _agregados(proys, horas, alarmas, costos):
     return len(activos), av, hrs, cost, al
 
 
+# Filtro de la lista de clientes (v575): ID interno → rótulo. ⚠️ Sin `t()` aquí: se
+# construye al IMPORTAR (quedaría congelado, v445); se traduce al pintar.
+_FILTROS_CLI = {"Todos": "All", "ConFicha": "With record", "SinFicha": "No record",
+                "ConObras": "With jobs"}
+
+
 def _horas(h) -> str:
     """«0 h» y no «0.0» (como las tarjetas de Locations, v565)."""
     return "0 h" if round(h, 1) == 0 else f"{h:,.1f} h"
@@ -196,13 +202,30 @@ def render_contactos(grupo):
                      "av": av, "hrs": hrs, "cost": cost, "al": al})
     rows.sort(key=lambda r: (-r["activos"], -r["total"], r["disp"].lower()))
 
-    # Fila de salud
+    # Fila de salud · ⚠️ v575 · ACTIVA (eran `st.metric` que no se podían tocar): cada cifra
+    # aplica su filtro a la lista, con el mismo selector recordado que Invoices y Payroll.
     _con_ficha = sum(1 for r in rows if r["ficha"])
-    c = st.columns(4)
-    c[0].metric(t("Clients"), len(rows))
-    c[1].metric(t("With record"), _con_ficha)
-    c[2].metric(t("No record"), len(rows) - _con_ficha)
-    c[3].metric(t("Projects"), sum(r["total"] for r in rows))
+    _K = [("tot", t("Clients"), len(rows), t("in the list"), "Todos"),
+          ("con", t("With record"), _con_ficha, t("contact details saved"), "ConFicha"),
+          ("sin", t("No record"), len(rows) - _con_ficha, t("only from their jobs"), "SinFicha"),
+          ("prj", t("Projects"), sum(r["total"] for r in rows), t("linked to clients"), "ConObras")]
+    with st.container(key="cpx_clis_kpis"):
+        for _col, (_s, _l, _v, _pie, _fl) in zip(st.columns(4), _K):
+            if _col.button(f"{_l}\n\n{_v}\n\n{_pie}", key=f"cpxkpi_clis_{_s}", width="stretch"):
+                st.session_state["_clis_filt_pending"] = _fl
+                st.rerun()
+    _pp = st.session_state.pop("_clis_filt_pending", None)
+    if _pp in _FILTROS_CLI:
+        st.session_state["cpxseg_clis_filt"] = _pp
+    _filt = st.radio(t("Filter"), list(_FILTROS_CLI), format_func=lambda o: t(_FILTROS_CLI[o]),
+                     horizontal=True, key="cpxseg_clis_filt", label_visibility="collapsed",
+                     persist_state="session")
+    if _filt == "ConFicha":
+        rows = [r for r in rows if r["ficha"]]
+    elif _filt == "SinFicha":
+        rows = [r for r in rows if not r["ficha"]]
+    elif _filt == "ConObras":
+        rows = [r for r in rows if r["total"]]
 
     # Buscador
     _q = st.text_input(t(":material/search: Search client, contact, phone or email"),
@@ -214,7 +237,7 @@ def render_contactos(grupo):
                  n=len(rows)))
 
     if not rows:
-        st.info(t(":material/search_off: No client matches the search."))
+        st.info(t(":material/search_off: No client matches the search or the filter."))
         _nuevo_cliente_form(grupo)
         return
 
@@ -242,15 +265,20 @@ def render_contactos(grupo):
         # v571 · con céntimos, como el resto de tablas de dinero (Expenses, Invoices): salía
         # en dólares enteros (`round(…, 0)` + `$%,d`).
         _colcfg["Costo"] = st.column_config.NumberColumn(t("Cost"), format="$%,.2f")
+    # ⚠️ v575 · un toque en cualquier celda abre la ficha (era la casilla), y la clave lleva
+    # GENERACIÓN: soltar el estado del widget (`pop`) no llega al navegador (trampa 31).
+    _colcfg["Cliente"] = st.column_config.TextColumn(t("Client"), pinned=True)
+    _gen = st.session_state.get("_cli_tbl_gen", 0)
     _ev = st.dataframe(
         df, width="stretch", hide_index=True,
-        on_select="rerun", selection_mode="single-row", key="cli_tbl",
+        on_select="rerun", selection_mode="single-cell", key=f"cli_tbl_{_gen}",
         column_config=tabla.cfg(None, _colcfg),
     )
-    _sr = list(_ev.selection.rows)
-    if _sr:
+    _s = getattr(_ev, "selection", None)
+    _sr = [c[0] for c in (getattr(_s, "cells", None) or [])] or list(getattr(_s, "rows", None) or [])
+    if _sr and 0 <= _sr[0] < len(rows):
+        st.session_state["_cli_tbl_gen"] = _gen + 1
         st.session_state["_cli_open"] = rows[_sr[0]]["key"]
-        st.session_state.pop("cli_tbl", None)   # evita re-abrir al volver
         st.rerun()
 
     _nuevo_cliente_form(grupo)

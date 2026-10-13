@@ -7,7 +7,8 @@ GUARD = Path(__file__).with_name("verif_v436.py")
 
 CASOS = [
     # v574 · CADUCADA (el `elif` pasó a `if key is None:`): no casaba y la rotura no
-    # probaba nada — check_anclas_roturas la tenía por «ilegible». La misma rotura.
+    # probaba nada — y check_anclas_roturas ni la miraba: la lista se llama CASOS y solo
+    # leía ROTURAS/CONTROL (v575: la lectura fuerte las lee todas). La misma rotura.
     ("vuelve la comparación por TEXTO traducido (el fallo de la etiqueta QR)",
      "core/asset_label_pdf.py", "        if key is None:", '        if lbl == "Make/Model":'),
     ("la factura pasa a usar t() (saldría en español si traduces la pantalla)",

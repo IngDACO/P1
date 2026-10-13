@@ -20,8 +20,10 @@ ROTURAS = [
     ("core/credentials.py", 'return _etq(_e) if _e else "—"',
      'return _e or "—"',
      "status_label devuelve el DATO crudo → «vencido» en pantalla"),
-    ("core/inventory_ui.py", '_EST_LBL = {"disponible": ":green[available]"',
-     '_EST_LBL = {"disponible": t(":green[available]")',
+    # v575 · `_EST_LBL` ya no existe (v487: `_EST_COLOR` + `etiqueta`); la rotura es la
+    # misma: un t() en una constante de MÓDULO, que se congela al importar.
+    ("core/inventory_ui.py", '_EST_COLOR = {"available": "green",',
+     '_EST_COLOR = {"available": t("green"),',
      "t() dentro de una constante de módulo → se congela al importar"),
     ("core/projects_ui.py", '_PER = {"Este mes": "This month"',
      '_PER = {"This month": "This month"',

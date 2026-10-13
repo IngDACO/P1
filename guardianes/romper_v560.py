@@ -40,7 +40,8 @@ def corre(g=G):
 ROTURAS = [
     ("⚠️ «TODAY» vuelve a pisar el subtítulo", SC,
      [('y="{gantt_top-8:.1f}" text-anchor="middle" ', 'y="{gantt_top-11:.1f}" text-anchor="middle" '),
-      ("f'<text x=\"18\" y=\"35\" font-size=\"8.5\" fill=\"#5b6472\">'",
+      # v575 · v561 subió el subtítulo a y=31: la misma rotura (lo baja hasta pisarse)
+      ("f'<text x=\"18\" y=\"31\" font-size=\"8.5\" fill=\"#5b6472\">'",
        "f'<text x=\"18\" y=\"39\" font-size=\"8.5\" fill=\"#5b6472\">'")]),
     ("⚠️ el recibo vuelve a borrar lo escrito al dar error", PU,
      [('        with st.form(f"{key_prefix}_add_{pid}{_sf}", clear_on_submit=False):\n',

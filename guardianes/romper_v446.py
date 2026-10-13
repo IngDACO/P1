@@ -13,7 +13,7 @@ RAIZ = Path(r"C:\Users\diego\P1\survey_app")
 ROTURAS = [
     ("core/quotes.py", 't("Quote not found.")', '"Cotización no encontrada."',
      "un mensaje de cotizaciones vuelve al español"),
-    ("core/projects.py", 'return "En progreso"', 'return t("In progress")',
+    ("core/projects.py", 'return "In progress"', 'return t("In progress")',  # v575 · re-anclada (la forma vieja ya no existía: no probaba nada)
      "se traduce el ESTADO que se escribe en la hoja"),
     ("core/ausencias.py", '{"nombre": "Annual leave"', '{"nombre": t("Annual leave")',
      "vuelve el `t()` congelado dentro de TIPOS"),

@@ -23,7 +23,7 @@ def corre(g):
 
 ROTURAS = [
     ("las hojas dejan de ser GLOBALES (una biblioteca vacia por cliente)",
-     "core/timeclock.py", '"library", "librarymodels"}', '"librarymodels"}'),
+     "core/timeclock.py", '"library", "librarymodels",', '"librarymodels",'),  # v575 · re-anclada (la forma vieja ya no existía: no probaba nada)
 
     ("`Library` sale del LOTE (se leeria vacio PARA SIEMPRE, sin error)",
      "core/hojas.py", '    "Library", "LibraryModels",\n', '    "LibraryModels",\n'),

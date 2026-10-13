@@ -19,7 +19,7 @@ from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, Tabl
 from core import quotes as Q
 from core import i18n
 from core.i18n import d
-from core.num import num as _num
+from core.num import num as _num, dmy
 
 C_BRAND = colors.HexColor("#1a3a5c")
 C_LIGHT = colors.HexColor("#e8f1fb")
@@ -45,8 +45,20 @@ def generate_quote_pdf(cot: dict, cliente: dict = None, grupo_nombre: str = "") 
                             title=d("Quote {n}", n=num))
     story = []
 
-    marca = grupo_nombre or str(cot.get("Group", ""))
-    head = Table([[Paragraph(str(marca), mk), Paragraph(d("QUOTE"), ti)]],
+    # ⚠️ v575 · el emisor con su nombre LEGAL y su ABN, como la factura (v483) y la colilla
+    # (v574): la cabecera decía «cliente1», el identificador INTERNO del grupo. Un fallo
+    # leyendo la identidad no impide la cotización.
+    _grp = str(cot.get("Group", "")) or grupo_nombre
+    try:
+        from core import contable
+        _ident = contable.identidad(_grp)
+    except Exception:
+        _ident = {}
+    marca = str(_ident.get("legal") or "").strip() or grupo_nombre or _grp
+    _emisor = [Paragraph(str(marca), mk)]
+    if str(_ident.get("abn") or "").strip():
+        _emisor.append(Paragraph(f"{d('ABN')} {_ident['abn']}", sm))
+    head = Table([[_emisor, Paragraph(d("QUOTE"), ti)]],
                  colWidths=[90 * mm, 88 * mm])
     head.setStyle(TableStyle([("ALIGN", (1, 0), (1, 0), "RIGHT"),
                               ("VALIGN", (0, 0), (-1, -1), "TOP")]))
@@ -55,8 +67,9 @@ def generate_quote_pdf(cot: dict, cliente: dict = None, grupo_nombre: str = "") 
     _ver = int(_num(cot.get("Version"), 1))
     meta = Table([
         [Paragraph(d("Quote no."), sm), Paragraph(num + (f"  ·  v{_ver}" if _ver > 1 else ""), Hb)],
-        [Paragraph(d("Date"), sm), Paragraph(str(cot.get("Date", "")), H)],
-        [Paragraph(d("Valid until"), sm), Paragraph(str(cot.get("ValidUntil", "") or "—"), Hb)],
+        # v575 · DD/MM/YYYY (iban en ISO)
+        [Paragraph(d("Date"), sm), Paragraph(dmy(cot.get("Date")), H)],
+        [Paragraph(d("Valid until"), sm), Paragraph(dmy(cot.get("ValidUntil")), Hb)],
         [Paragraph(d("Status"), sm), Paragraph(i18n.etiqueta(Q.estado_de(cot)), H)],
     ], colWidths=[26 * mm, 34 * mm])
     meta.setStyle(TableStyle([("TOPPADDING", (0, 0), (-1, -1), 1),
@@ -117,7 +130,7 @@ def generate_quote_pdf(cot: dict, cliente: dict = None, grupo_nombre: str = "") 
         story += [Paragraph(f"<b>{d('Notes')}</b>", Hb), Paragraph(nota, H), Spacer(1, 8)]
     story += [Paragraph(
         d("This quote is valid until {v}. Prices are subject to written "
-          "confirmation after that date.", v=cot.get("ValidUntil", "") or "—"), sm)]
+          "confirmation after that date.", v=dmy(cot.get("ValidUntil"))), sm)]
 
     doc.build(story)
     return buf.getvalue()

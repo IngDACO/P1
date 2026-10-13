@@ -485,7 +485,7 @@ def _owner_grupos():
         with st.expander(t("Each client's data workbook"), icon=":material/menu_book:", key="exp_own_gsheet"):
             st.caption(t("Each client company can have its **own Google Sheets file**, so its data does not share a file with anyone else's. Empty = it uses the master workbook."))
             _gl = ui.elegir(t("Company"), [g["Group"] for g in grupos], key="gsheet_sel",
-                            vacio="— elige un grupo —")
+                            vacio=t("— choose a company —"))
             if _gl:
                 _sid_now = auth.group_sheet_id(_gl)
                 st.markdown(t(":material/info: Create a blank spreadsheet, **share it as editor** with the app's service account, and paste its link or its ID here."))
@@ -525,7 +525,7 @@ def _owner_grupos():
                          "(time clock, pre-start, alerts…). Not set = ")
                        + f"{clock.DEFAULT_TZ}.")
             _gz = {g["Group"]: (g.get("TimeZone") or "") for g in grupos}
-            gzsel = ui.elegir(t("Company"), list(_gz.keys()), key="tz_g_sel", vacio="— elige un grupo —")
+            gzsel = ui.elegir(t("Company"), list(_gz.keys()), key="tz_g_sel", vacio=t("— choose a company —"))
             if gzsel:
                 _cur = _gz.get(gzsel) or clock.DEFAULT_TZ
                 _opts = ["Australia/Sydney", "Australia/Brisbane", "Australia/Adelaide",
@@ -558,7 +558,7 @@ def _owner_grupos():
                          "profit is set line by line, on each item charged to the client. What a "
                          "job earns is set on the job itself: per hour, or a fixed amount."))
             gmsel = ui.elegir(t("Company"), [g["Group"] for g in grupos], key="mg_g_sel",
-                              vacio="— elige un grupo —")
+                              vacio=t("— choose a company —"))
             if gmsel:
                 def _f_mg(v):
                     try:
@@ -586,7 +586,7 @@ def _owner_grupos():
         with st.expander(t("Default invoicing tax (GST/VAT)"), icon=":material/receipt_long:", key="exp_own_tax"):
             st.caption(t("Applied by default to new invoices; editable per invoice. Australia = 10 (GST)."))
             gtsel = ui.elegir(t("Company"), [g["Group"] for g in grupos], key="tx_g_sel",
-                              vacio="— elige un grupo —")
+                              vacio=t("— choose a company —"))
             if gtsel:
                 def _f_tx(v):
                     try:
@@ -607,7 +607,7 @@ def _owner_grupos():
         with st.expander(t("Payroll: default super and withholding"), icon=":material/payments:", key="exp_own_payroll"):
             st.caption(t("These are preloaded when payroll is generated; editable per payslip. Australia: super ~11.5%. This is not a certified tax calculation."))
             gnsel = ui.elegir(t("Company"), [g["Group"] for g in grupos], key="nomcfg_g_sel",
-                              vacio="— elige un grupo —")
+                              vacio=t("— choose a company —"))
             if gnsel:
                 def _f_n(v, dflt):
                     s = str(v).strip()
@@ -638,10 +638,13 @@ def _owner_grupos():
     if grupos:
         with st.expander(t("Tax identity and payment terms"),
                          icon=":material/receipt_long:", key="exp_own_fiscal"):
-            st.caption(t("These appear on the invoice PDF. In Australia a document titled "
-                         "«TAX INVOICE» for $82.50 or more must show the seller's ABN."))
+            # v575 · también salen en la COLILLA (v574) y en la COTIZACIÓN: el texto solo
+            # hablaba de la factura. Y el marcador vacío iba en español y sin `t()`.
+            st.caption(t("These appear on the invoice, quote and payslip PDFs. In Australia a "
+                         "document titled «TAX INVOICE» for $82.50 or more must show the seller's "
+                         "ABN, and a payslip must show the employer's name and ABN."))
             gfsel = ui.elegir(t("Company"), [g["Group"] for g in grupos], key="fisc_g_sel",
-                              vacio="— elige un grupo —")
+                              vacio=t("— choose a company —"))
             if gfsel:
                 _gf = next((g for g in grupos if g["Group"] == gfsel), {})
                 _abn_now = str(_gf.get("ABN", "") or "").strip()
@@ -748,11 +751,11 @@ def _owner_usuarios():
     if users:
         st.markdown(t("#### :material/manage_accounts: Manage a user"))
         _gf = ui.elegir(t("Filter by company"), [g["Group"] for g in auth.list_groups()],
-                        key="ow_ficha_gfil", vacio="— all companies —")
+                        key="ow_ficha_gfil", vacio=t("— all companies —"))
         _cands = [u for u in users if (not _gf or str(u.get("Group", "")) == _gf)]
         _map = {f"{u['Name'] or u['User']} ({u['User']}) · {u.get('Group') or "no company"}": u
                 for u in _cands}
-        _elegido = ui.elegir(t("Username"), _map, key="ow_fichasel", vacio="— choose a user —")
+        _elegido = ui.elegir(t("Username"), _map, key="ow_fichasel", vacio=t("— choose a user —"))
         if _elegido:
             st.markdown("---")
             # ⚠️ v379: la ficha muestra el TRABAJO de esa persona (horas, recibos,

@@ -18,7 +18,9 @@ ROTURAS = [
     ("core/auth.py", '        _ts = int(float(rec.get("SessionTime", 0)))',
      '        t = int(float(rec.get("SessionTime", 0)))',
      "alguien vuelve a usar `t` como variable (taparía la función)"),
-    ("core/auth.py", '"Usuario", "Password", "Rol"', '"User", "Password", "Role"',
+    # v575 · las columnas del libro están en inglés desde v468: la rotura es la misma
+    # (un nombre de COLUMNA se traduce), ahora hacia el español.
+    ("core/auth.py", '"User", "Password", "Role"', '"Usuario", "Password", "Rol"',
      "se traduce un nombre de COLUMNA del libro"),
     ("core/timeclock.py", 'TIPO_GENERAL  = "general"', 'TIPO_GENERAL  = "workday"',
      "se traduce una constante que se guarda en la hoja"),

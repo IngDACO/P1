@@ -16,7 +16,7 @@ GUARDIAN = os.path.join(os.path.dirname(os.path.abspath(__file__)),
 os.chdir(RAIZ)   # los ficheros que se rompen viven en el repo
 
 ROTURAS = [
-    ("core/hojas.py", '    "CorreccionesFichaje",', "",
+    ("core/hojas.py", '    "TimeCorrections",', "",  # v575 · re-anclada (la forma vieja ya no existía: no probaba nada)
      "la hoja sale del lote: leería vacía en silencio (v353)"),
     ("core/correcciones.py", "            PENDIENTE, clock.now(grupo).strftime(timeclock.FMT), \"\", \"\", \"\",",
      "            PENDIENTE, clock.now(grupo).strftime(timeclock.FMT), \"\", \"\",",
@@ -25,10 +25,10 @@ ROTURAS = [
      "        if False:",
      "corregir_fichaje deja de escribir Horas"),
     ("core/correcciones.py",
-     '    ok2, msg2 = _set(cid, {"Estado": REVERTIDA, "RevisadoPor": str(revisor or ""),',
-     '    ok2, msg2 = _set(cid, {"Estado": REVERTIDA, "RevisadoPor": str(revisor or "") or timeclock.corregir_fichaje.__name__,',
+     '    ok2, msg2 = _set(cid, {"Status": REVERTIDA, "ReviewedBy": str(revisor or ""),',  # v575 · re-anclada (la forma vieja ya no existía: no probaba nada)
+     '    ok2, msg2 = _set(cid, {"Status": REVERTIDA, "ReviewedBy": str(revisor or "") or timeclock.corregir_fichaje.__name__,',
      "(control: cambio inocuo que NO debe romper nada)"),
-    ("core/correcciones.py", '    ok2, msg2 = _set(cid, {"ValorNuevo": nuevo.strftime(timeclock.FMT),',
+    ("core/correcciones.py", '    ok2, msg2 = _set(cid, {"NewValue": nuevo.strftime(timeclock.FMT),',  # v575 · re-anclada (la forma vieja ya no existía: no probaba nada)
      "    ok2, msg2 = _set(cid, {",
      "ajustar deja de reescribir ValorNuevo: el rastro mentiría"),
     ("core/timeclock_ui.py", "logger = logging.getLogger(__name__)", "",
@@ -39,7 +39,7 @@ ROTURAS = [
     ("core/correcciones_ui.py", "         theme.AMBAR if pend else theme.AZUL),",
      "         None),",
      "el acento del KPI vuelve a poder ser None"),
-    ("core/correcciones.py", '        return hojas.siguiente_id_libre(SHEET, "COR", n + 1)',
+    ("core/correcciones.py", '        return hojas.siguiente_id_libre("COR-", n, propia=SHEET)',  # v575 · re-anclada (la forma vieja ya no existía: no probaba nada)
      '        return "COR-%04d" % len(usados)',
      "el ID se deriva del NÚMERO de filas (el fallo real de v428)"),
     ("core/correcciones_ui.py", '        _nota = st.text_input(t("Note (optional)"), key=f"cor_nota_{_id}")',

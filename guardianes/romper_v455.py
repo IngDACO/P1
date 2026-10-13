@@ -18,7 +18,7 @@ ROTURAS = [
      "vuelve la formula del % sobre la mano de obra"),
 
     ("projects.py",
-     '''    "MargenMO",''',
+     '''    "LabourMargin",''',  # v575 · re-anclada (la forma vieja ya no existía: no probaba nada)
      '''''',
      "⚠️ se quita MargenMO de HEADERS y la fila POSICIONAL descuadra"),
 

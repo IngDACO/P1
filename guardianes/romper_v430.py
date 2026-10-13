@@ -12,10 +12,15 @@ sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 RAIZ = Path(r"C:\Users\diego\P1\survey_app")
 GUARD = Path(__file__).with_name("verif_v430.py")
 
+# ⚠️ v575 · OCHO de estas anclas llevaban MUERTAS desde la migración de columnas y textos
+# al inglés (la hoja «Absences», «From»/«To», «StartedOn», «My absences», el `_k` del
+# selector, la fila y el aviso traducidos): esta lista se llama CASOS y check_anclas_roturas
+# solo miraba ROTURAS/CONTROL, así que nadie lo vio. Re-ancladas a la forma de hoy, con la
+# MISMA rotura; las marca «v575 ·».
 CASOS = [
     ("la hoja sale del LOTE (leería vacío para siempre)",
      "core/hojas.py",
-     '"MovimientosActivo", "Ausencias",', '"MovimientosActivo",'),
+     '"AssetMovements", "Absences",', '"AssetMovements",'),                      # v575 ·
 
     ("la enfermedad pasa a exigir aprobación previa",
      "core/ausencias.py",
@@ -54,18 +59,18 @@ CASOS = [
 
     ("la vista de la conciliación deja de pintar la fila",
      "core/projects_ui.py",
-     '_fil.append(("+ ausencias pagadas (vacaciones, bajas)",',
-     '_fil.append(("+ nada",'),
+     '_fil.append((t("+ paid absences (holiday, sick leave)"),',                  # v575 ·
+     '_fil.append((t("+ nothing"),'),
 
     ("lo pagado se recuenta por su cuenta (12 días de saldo, 8 pagados)",
      "core/ausencias.py",
-     "        _d = [d for d in dias_del_rango(r.get(\"Desde\"), r.get(\"Hasta\"),\n"
+     "        _d = [d for d in dias_del_rango(r.get(\"From\"), r.get(\"To\"),\n"   # v575 ·
      "                                        incluye_findes(r))",
-     "        _d = [d for d in dias_del_rango(r.get(\"Desde\"), r.get(\"Hasta\"))"),
+     "        _d = [d for d in dias_del_rango(r.get(\"From\"), r.get(\"To\"))"),
 
     ("el selectbox vuelve a pintar `:material/` (saldria literal en pantalla)",
      "core/ausencias_ui.py",
-     "AU.TIPOS[t]['emoji']", "':material/sick:'"),
+     "AU.TIPOS[_k]['emoji']", "':material/sick:'"),                              # v575 ·
 
     ("v432: la ausencia vuelve a pagar la jornada entera aunque se fichara ese dia",
      "core/ausencias.py",
@@ -88,8 +93,8 @@ CASOS = [
 
     ("v433: dias_usados vuelve a contar la ausencia entera en su anio de inicio",
      "core/ausencias.py",
-     "        tot += sum(1 for d in dias_del_rango(r.get(\"Desde\"), r.get(\"Hasta\"),",
-     "        tot += 0 * sum(1 for d in dias_del_rango(r.get(\"Desde\"), r.get(\"Hasta\"),"),
+     "        tot += sum(1 for d in dias_del_rango(r.get(\"From\"), r.get(\"To\"),",     # v575 ·
+     "        tot += 0 * sum(1 for d in dias_del_rango(r.get(\"From\"), r.get(\"To\"),"),
 
     ("v433: el saldo deja de ir por aniversario",
      "core/ausencias.py",
@@ -97,11 +102,11 @@ CASOS = [
 
     ("v433: la pantalla deja de decir de que periodo habla",
      "core/ausencias_ui.py",
-     "Tu año de vacaciones va del ", "Saldo "),
+     "t(':material/event_available: Your leave year runs from')", "t('Balance')"),  # v575 ·
 
     ("v433: mover la fecha de alta deja de auditarse",
      "core/auditoria.py",
-     '"Activo", "FechaIngreso",', '"Activo",'),
+     '"Active", "StartedOn",', '"Active",'),                                      # v575 ·
 
     ("v433: `auth._COL` vuelve a escribirse a mano (la escritura moriria con KeyError)",
      "core/auth.py",
@@ -127,7 +132,7 @@ CASOS = [
 
     ("el campo pierde su sección de ausencias",
      "core/home_ui.py",
-     '    ("ausencias",    ":material/event_busy: Mis ausencias"),', "    "),
+     '        ("🌴 Ausencias", ":material/event_busy: My absences"),\n', ""),         # v575 ·
 
     ("la bandeja del admin se descablea del despachador",
      "core/home_ui.py",

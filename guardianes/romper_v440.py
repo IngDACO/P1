@@ -23,8 +23,8 @@ ROTURAS = [
 
     # ⚠️ el fallo de v437/v439/quotes_ui: `t` local rompe la función entera
     ("una función vuelve a tapar `t`", "core/quotes_ui.py",
-     "    _tot = Q.totales(lineas, _num(c.get(\"ImpuestoPct\")))",
-     "    t = Q.totales(lineas, _num(c.get(\"ImpuestoPct\")))"),
+     "    _tot = Q.totales(lineas, _num(c.get(\"TaxPct\")))",  # v575 · re-anclada (la forma vieja ya no existía: no probaba nada)
+     "    t = Q.totales(lineas, _num(c.get(\"TaxPct\")))"),
 
     # ⚠️ «Guardar» no lleva acento ni palabra funcional: lo tiene que cazar el barrido
     #    por POSICIÓN, no el detector de español

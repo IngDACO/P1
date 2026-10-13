@@ -37,8 +37,11 @@ ROTURAS = [
      TH, [("  white-space: normal !important; width: 100%;\n", "  width: 100%;\n")]),
 
     ("los <p> de la tarjeta vuelven a ser inline",
-     TH, [("  display: block !important;\n}}\n/* Tarjeta KPI de TRES",
-           "}}\n/* Tarjeta KPI de TRES")]),
+     # v575 · v567 metió un bloque entre esta regla y el comentario siguiente: se ancla
+     # a la regla ENTERA. La misma rotura (los <p> pierden `display:block`).
+     TH, [('[class*="st-key-cpxkpi_"] button [data-testid="stMarkdownContainer"] p {{\n'
+           '  display: block !important;\n}}',
+           '[class*="st-key-cpxkpi_"] button [data-testid="stMarkdownContainer"] p {{\n}}')]),
 
     ("⚠️ el mapa sin generación en la clave (el mismo pin no se reabre)",
      HU, [("key=f\"home_map_{st.session_state.get('_home_map_gen', 0)}\"",
