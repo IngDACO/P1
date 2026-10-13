@@ -194,14 +194,16 @@ corre(at)
 chk("la tarjeta lleva a Finanzas · Horas", ss(at, "_admin_nav_pending") == ("finanzas", "⏱ Horas"))
 at.session_state["_en_horas"] = True
 corre(at)
+# ⚠️ CADUCADO por v577: el periodo pasó al segmentado del kit (`cpxseg_gh_per`, recordado);
+# lo que se protege —abrir en el periodo que cuenta la tarjeta— no cambia.
 chk("⚠️ ...y Horas abre en «All» (el número de la tarjeta es de TODO el histórico)",
-    at.radio(key="gh_per").value == "Todo", at.radio(key="gh_per").value)
+    at.radio(key="cpxseg_gh_per").value == "Todo", at.radio(key="cpxseg_gh_per").value)
 chk("...la marca se consume (no se queda pegada)", ss(at, "_gh_per_pending") is None)
 at = AppTest.from_string(GUION_HORAS, default_timeout=120)
 at.session_state["_en_horas"] = True
 corre(at)
-chk("entrar a Horas por el menú sigue abriendo en «Today»", at.radio(key="gh_per").value == "Hoy",
-    at.radio(key="gh_per").value)
+chk("entrar a Horas por el menú sigue abriendo en «Today»", at.radio(key="cpxseg_gh_per").value == "Hoy",
+    at.radio(key="cpxseg_gh_per").value)
 
 # ─────────────────────────────────────────────────────────────────────────────
 sec("4. La campana: entran los urgentes del resumen y cada alerta lleva a su sitio")

@@ -308,9 +308,11 @@ _cmp = [ast.literal_eval(n.comparators[0]) for n in ast.walk(_fin)
         if isinstance(n, ast.Compare) and isinstance(n.left, ast.Name)
         and n.left.id == "sub" and isinstance(n.comparators[0], ast.Constant)]
 ck("se despacha por el ID EXACTO (no por el display)", "📤 Contable" in _cmp, True)
-# ⚠️ Exactamente UNA puede quedarse sin comparar (la del `else`): dos significan que
-# un ID cambió en un lado y no en el otro, y esa rama queda muerta (v449).
-ck("exactamente una sub-sección cae al else", len([i for i in _ids if i not in _cmp]), 1)
+# ⚠️ Ninguna puede quedarse sin comparar: una que no case significa que un ID cambió
+# en un lado y no en el otro, y esa rama queda muerta (v449).
+# ⚠️ CADUCADO por v577: antes UNA caía al `else` (Horas, la última); desde v577 Horas
+# tiene su rama y el `else` es un error VISIBLE para lo desconocido → cero.
+ck("ninguna sub-sección cae al else", len([i for i in _ids if i not in _cmp]), 0)
 
 # ═════ 9 · nada de alcanzar el interior de otro módulo ══════════════════════
 print("\n[9] higiene")

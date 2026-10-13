@@ -1212,8 +1212,13 @@ def _seccion_finanzas(grupo):
     elif sub == "📤 Contable":
         from core.contable_ui import render_contable
         render_contable(grupo)
-    else:
+    elif sub == "⏱ Horas":
         PU.render_group_hours(grupo)
+    else:
+        # ⚠️ v577 · Horas era el «si no, lo que sea» de Finanzas: un ID mal escrito en un
+        # deep-link o en el menú enseñaba Horas sin avisar. Ahora tiene su rama y lo
+        # desconocido se DICE.
+        st.error(t(":material/error: This Finance section does not exist: {s}", s=sub))
 
 
 def _hub_herramientas():

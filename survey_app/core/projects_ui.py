@@ -5717,43 +5717,53 @@ def render_group_expenses(grupo: str):
 
 
 # ── Reporte del ADMIN: horas de TODOS los usuarios del grupo ──
+def _gh_abrir_obra(pid: str, internos: set):
+    """Abre la obra (o la localización) de un tramo de horas (v577). Una localización no
+    vive en la cartera: va a su sección, con `_loc_open` (el mismo camino que `&l=`)."""
+    if pid in internos:
+        st.session_state["_loc_open"] = pid
+        _ir_a("proyectos", "🏢 Localizaciones")
+    else:
+        st.session_state["_prjsel_pending"] = pid
+        _ir_a("proyectos", "📊 Proyectos")
+
+
 def render_group_hours(grupo: str):
+    """⏱ Horas del grupo (v577, probada acción por acción).
+
+    ⚠️ SIN cabecera propia: `home_ui._sub_header` ya pinta «Finanzas · X» encima."""
     from core import timeclock
-    # ⚠️ import LOCAL, como el resto del módulo (patrón v342). Se me olvidó por SEGUNDA
-    # vez en esta tanda —la primera fue en `render_localizaciones`— y lo cazó el
-    # guardián de v322, no yo: aquí `theme` no está a nivel de módulo, así que usarlo
-    # sin importar es un NameError que solo aparece al abrir la pantalla.
+    # ⚠️ import LOCAL, como el resto del módulo (patrón v342): `theme` no está a nivel de
+    # módulo, y usarlo sin importar es un NameError que solo aparece al abrir la pantalla.
     from core import theme
-    # ⚠️ SIN cabecera propia: `home_ui._sub_header` ya pinta «Finanzas · X» encima.
-    # Era el 5º título duplicado de la app (v212, v291, v314, v319 y este barrido).
     if not timeclock.is_configured():
         st.warning(t("The time clock needs Google Sheets configured."))
         return
 
-    # ⚠️ `per` se compara abajo y además indexa `{"Semana": 7, …}` → la opción no se
-    # toca; se traduce el display.
-    _PERH = {"Hoy": "Today", "Week": "Week", "Mes": "Month", "Todo": "All"}
+    # ⚠️ `per` se compara abajo → la opción no se toca; se traduce el display. v577: el
+    # SEGMENTADO del kit (`cpxseg_`), RECORDADO, y los rótulos dicen lo que cuentan.
+    _PERH = {"Hoy": "Today", "Week": "Last 7 days", "Mes": "Last 30 days", "Todo": "All"}
     # v544 · Si se llega desde la tarjeta «Hours» del Home, abrir en el periodo que esa
     # tarjeta cuenta. Se escribe la clave ANTES de crear el radio (regla v111).
     _per_pend = st.session_state.pop("_gh_per_pending", None)
     if _per_pend in _PERH:
-        st.session_state["gh_per"] = _per_pend
+        st.session_state["cpxseg_gh_per"] = _per_pend
     per = st.radio(t("Period"), list(_PERH), format_func=lambda o: t(_PERH[o]),
-                   horizontal=True, key="gh_per", label_visibility="collapsed")
+                   horizontal=True, key="cpxseg_gh_per", label_visibility="collapsed",
+                   persist_state="session")
     now = clock.now()
     if per == "Hoy":
-        days = (now - now.replace(hour=0, minute=0, second=0, microsecond=0)).total_seconds() / 86400.0
+        # lo que va de hoy (y nunca 0: `group_hours` lee 0 como «todo»)
+        days = max((now - now.replace(hour=0, minute=0, second=0, microsecond=0)).total_seconds()
+                   / 86400.0, 1e-6)
     else:
-        days = {"Week": 7, "Mes": 30, "Todo": None}[per]
-
+        # ⚠️ v577 · `group_hours` cuenta desde (hoy − days) INCLUIDO: con 7 eran OCHO días
+        # naturales y con 30, treinta y uno. 6 y 29 son los 7 y 30 que dice el rótulo.
+        days = {"Week": 6, "Mes": 29, "Todo": None}[per]
     data = timeclock.group_hours(grupo, days=days)
-    if not data:
-        st.info(t("No time entries in the period."))
-        return
 
-    # ⚠️ Dos logins distintos pueden compartir Nombre (hay dos `lksdfkldsf` y dos
-    # `fijiofgjei`): sin el login se vuelven indistinguibles. Se añade SOLO a los que
-    # colisionan. Se define AQUÍ arriba porque lo usan el aviso y la tabla.
+    # ⚠️ Dos logins distintos pueden compartir Nombre: sin el login se vuelven
+    # indistinguibles. Se añade SOLO a los que colisionan.
     from collections import Counter as _Counter
     _nombres = _Counter((d.get("nombre") or d["usuario"]) for d in data)
 
@@ -5761,103 +5771,133 @@ def render_group_hours(grupo: str):
         nom = d.get("nombre") or d["usuario"]
         return f"{nom} ({d['usuario']})" if _nombres[nom] > 1 else nom
 
-    # ── Totales del grupo (KPIs) ──
+    # ── Totales del grupo ──
     tot_jorn = sum(d["general"] for d in data)
     tot_proy = sum(d["proyecto"] for d in data)
     tot_sina = sum(d["sin_asignar"] for d in data)
     tot_cost = sum(d["costo"] for d in data)
-    # v425: el trabajo en oficina/almacén, que hasta ahora era un residuo anónimo
-    # dentro de «sin asignar». Se paga y no se le carga a ningún cliente.
+    # v425: el trabajo en oficina/almacén, que se paga y no se le carga a ningún cliente.
     tot_intn = sum(d.get("interno", 0.0) for d in data)
     tot_cint = sum(d.get("costo_interno", 0.0) for d in data)
     activos  = sum(1 for d in data if d["general"] or d["proyecto"] or d.get("interno"))
     pct_sina = (100 * tot_sina / tot_jorn) if tot_jorn > 0 else 0
     _dudoso  = [d for d in data if d["sin_asignar_indet"]]
 
-    # ⚠️ v320: «Costo M.O.» pasa a llamarse por lo que ES. Tras v313 la app distingue
-    # lo que PAGAS (jornada × tarifa + aportes de ley) de lo que CARGAS a las obras
-    # (horas imputadas × tarifa). Esta cifra es la SEGUNDA, y llamarla "costo" a secas
-    # la hacía indistinguible del «Costos» del P&L, que es otro número.
-    tarj = [_kpi_card(t("People"), activos),
-            _kpi_card(t("Workday"), f"{tot_jorn:.1f} h"),
-            _kpi_card(t("On projects"), f"{tot_proy:.1f} h")]
-    # v425: la tarjeta de estructura solo aparece si hay algo que contar. Sin
-    # localizaciones sería un 0 permanente ocupando sitio, y la pantalla queda
-    # EXACTAMENTE como estaba.
+    # ── Las cifras, ACTIVAS (v577; eran HTML): cada una lleva a lo que cuenta ──
+    # ⚠️ v320: «Labour charged to jobs» es lo que se CARGA a las obras (horas imputadas ×
+    # tarifa), no lo que se paga: llamarla «costo» a secas la confundía con el P&L.
+    _K = [("pers", t("People"), str(activos), t("with hours in the period"), "tabla"),
+          ("jorn", t("Workday"), f"{tot_jorn:.1f} h", t("clocked shifts"), "general"),
+          ("proy", t("On projects"), f"{tot_proy:.1f} h", t("charged to jobs"), "obras")]
+    # v425: la tarjeta de estructura solo aparece si hay algo que contar.
     if tot_intn > 0:
-        tarj.append(_kpi_card(t("On overhead"), f"{tot_intn:.1f} h",
-                              pie=t("office, warehouse")))
-    tarj += [_kpi_card(t("Unallocated"), "—" if _dudoso else f"{tot_sina:.1f} h",
-                       "#c0392b" if (_dudoso or pct_sina > 25) else None),
-             _kpi_card(t("Labour charged to jobs"), f"${tot_cost:,.0f}",
-                       pie=(f"+ {theme.dinero(tot_cint, 0)} interna"
-                            if tot_cint > 0 else None))]
-    st.markdown('<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:6px">'
-                + "".join(tarj) + "</div>", unsafe_allow_html=True)
+        _K.append(("intn", t("On overhead"), f"{tot_intn:.1f} h", t("office, warehouse"), "interno"))
+    _K += [("sina", t("Unallocated"), "—" if _dudoso else f"{tot_sina:.1f} h",
+            t("cannot be worked out") if _dudoso else t("{p}% of the workday", p=f"{pct_sina:.0f}"),
+            "sin_asignar"),
+           ("cost", t("Labour charged to jobs"), theme.dinero(tot_cost, 0),
+            # v577 · el pie decía «+ $X interna», en español y sin `t()`
+            t("+ {x} on overhead", x=theme.dinero(tot_cint, 0)) if tot_cint > 0
+            else t("hours × each rate"), "costo")]
+    if _dudoso or pct_sina > 25:
+        st.markdown("<style>.st-key-cpxkpi_gh_sina button{border-left-color:#c0392b!important}"
+                    ".st-key-cpxkpi_gh_sina button p:nth-child(2):not(:last-child)"
+                    "{color:#c0392b!important}</style>", unsafe_allow_html=True)
+    st.markdown(theme.dos_por_fila("cpx_gh_kpis"), unsafe_allow_html=True)
+    with st.container(key="cpx_gh_kpis"):
+        for _i in range(0, len(_K), 3):
+            for _col, (_s, _l, _v, _pie, _ir) in zip(st.columns(3), _K[_i:_i + 3]):
+                if _col.button(f"{_l}\n\n{_v}\n\n{_pie}", key=f"cpxkpi_gh_{_s}", width="stretch"):
+                    st.session_state["_gh_orden"] = _ir
+                    st.session_state["_gh_bajar_proy" if _ir == "obras" else "_gh_bajar_tabla"] = True
+                    st.rerun()
 
-    # ⚠️ «En proyectos» puede salir MAYOR que «Jornada»: alguien fichó a una obra sin
-    # abrir jornada (comportamiento anterior a v150). Eso hace que el total de «sin
-    # asignar» NO sea fiable —la app ya lo marcaba con «—» por persona, pero el KPI del
-    # grupo seguía dando una cifra y un % como si nada— y además es el mismo hueco que
+    if not data:
+        # ⚠️ v577 · un periodo sin fichajes dejaba la pantalla EN BLANCO (sin cifras ni
+        # salida): las cifras se quedan a 0 y se ofrece el periodo más amplio.
+        st.info(t(":material/event_busy: No time entries in this period."))
+        _ofrece = [o for o in ("Week", "Todo") if list(_PERH).index(o) > list(_PERH).index(per)]
+        for _c, _o in zip(st.columns(max(len(_ofrece), 1)), _ofrece):
+            if _c.button(t("See {p}", p=t(_PERH[_o]).lower()), key=f"gh_ver_{_o}"):
+                st.session_state["_gh_per_pending"] = _o
+                st.rerun()
+        return
+
+    # ⚠️ «En proyectos» puede salir MAYOR que «Jornada»: alguien fichó a una obra sin abrir
+    # jornada (anterior a v150). Eso hace que «sin asignar» no sea fiable y es el hueco que
     # el resumen financiero llama «horas sin nómina»: se cobran y no se pagan.
     if _dudoso:
-        _n = ", ".join(_etiqueta(d) for d in _dudoso)
-        st.error(f":material/error: **{tot_proy - tot_jorn:+.1f} h**: some people charged "
-                 f"MORE hours to jobs than their workday ({_n}). They clocked in without "
-                 "opening their workday, so those hours **are charged to the client and appear "
-                 "in no payslip**. That is why «unallocated» shows «—»: it cannot be worked out.")
+        st.error(t(":material/error: **{d} h**: some people charged MORE hours to jobs than their "
+                   "workday ({n}). They clocked in without opening their workday, so those hours "
+                   "**are charged to the client and appear in no payslip**. That is why "
+                   "«unallocated» shows «—»: it cannot be worked out.",
+                   d=f"{tot_proy - tot_jorn:+.1f}", n=", ".join(_etiqueta(d) for d in _dudoso)))
     elif tot_jorn > 0:
-        # v425: con estructura, «sin asignar» ya no la incluye — así que el % dice de
-        # verdad lo que no se sabe, y lo que sí se sabe se nombra aparte.
-        _extra = (f" Another **{100 * tot_intn / tot_jorn:.0f}%** was **overhead** work "
-                  f"(office/store): it is paid and not charged to "
-                  "any job." if tot_intn > 0 else "")
-        st.caption(f"**{pct_sina:.0f}%** of the company workday was travel and waiting "
-                   f"(unallocated).{_extra} Labour charged = hours charged × each "
-                   "person rate; it does not include statutory contributions (see Summary → "
-                   "Reconciliation).")
+        # v425: con estructura, «sin asignar» ya no la incluye: el % dice lo que no se sabe.
+        st.caption(t("**{p}%** of the company workday was travel and waiting (unallocated).",
+                     p=f"{pct_sina:.0f}")
+                   + ((" " + t("Another **{o}%** was **overhead** work (office/store): it is paid "
+                               "and not charged to any job.", o=f"{100 * tot_intn / tot_jorn:.0f}"))
+                      if tot_intn > 0 else "")
+                   + " " + t("Labour charged = hours charged × each person rate; it does not "
+                             "include statutory contributions (see Summary → Reconciliation)."))
 
-    # ── Tabla por persona (con costo; sin el Login técnico) ──
-    # (`_etiqueta` y `_nombres` se definen arriba: los usa también el aviso)
-
-    filas = []
-    for d in data:
-        _sa = ("—" if d["sin_asignar_indet"] else f"{d['sin_asignar']:.2f}")
-        _f = {
-            "User": _etiqueta(d),
-            "Shift (h)": d["general"],
-            "On jobs (h)": d["proyecto"],
+    # ── Tabla por persona ── (v577 · ordenada por la cifra tocada; un toque abre la ficha)
+    _campo = st.session_state.get("_gh_orden")
+    if _campo not in ("general", "sin_asignar", "costo", "interno"):
+        _campo = None                   # «tabla» y «obras» no ordenan
+    datos = sorted(data, key=lambda d: -(d.get(_campo) or 0)) if _campo else list(data)
+    with st.container(key="cpx_gh_tabla"):
+        _bajar_a("cpx_gh_tabla", "_gh_bajar_tabla")
+        filas = []
+        for d in datos:
+            _f = {"User": _etiqueta(d), "Shift (h)": d["general"], "On jobs (h)": d["proyecto"]}
+            # v425: la columna solo existe si el grupo tiene estructura.
+            if tot_intn > 0:
+                _f["On overhead (h)"] = d.get("interno", 0.0)
+            _f.update({
+                "Unassigned (h)": "—" if d["sin_asignar_indet"] else f"{d['sin_asignar']:.2f}",
+                # v577 · con $ y céntimos (salía «40.0»), «—» si no tiene tarifa
+                "Rate/h": tabla.celda(d["tarifa"], 2, "$") if d["tarifa"] else "—",
+                "Labour cost": d["costo"] or 0,
+            })
+            filas.append(_f)
+        _gen = st.session_state.get("_gh_tbl_gen", 0)
+        _cc = {
+            "User": st.column_config.TextColumn(t("Person"), pinned=True),
+            "Shift (h)": st.column_config.NumberColumn(t("Shift (h)"), format="%.2f"),
+            "On jobs (h)": st.column_config.NumberColumn(t("On jobs (h)"), format="%.2f"),
+            "Unassigned (h)": tabla.derecha(t("Unassigned (h)")),
+            "Rate/h": tabla.derecha(t("Rate/h")),
+            "Labour cost": st.column_config.NumberColumn(t("Labour cost"), format="$%,.2f"),
         }
-        # v425: la columna solo existe si el grupo tiene estructura. Añadir una de
-        # ceros a todo el mundo es ruido, y la tabla ya tiene 6 columnas.
+        # ⚠️ la columna solo existe con estructura (v425): su formato, solo entonces
+        # (check_colcfg: ninguna configuración sin una fila que la respalde)
         if tot_intn > 0:
-            _f["On overhead (h)"] = d.get("interno", 0.0)
-        _f.update({
-            "Unassigned (h)": _sa,
-            "Rate/h": d["tarifa"] or "—",
-            "Labour cost": d["costo"] or 0,
-        })
-        filas.append(_f)
-    # v215: tabla CLICKEABLE → abre la ficha de la persona (Planificación · Usuarios).
-    _hev = st.dataframe(pd.DataFrame(filas), width="stretch", hide_index=True,
-                        on_select="rerun", selection_mode="single-row", key="gh_tbl", column_config=tabla.cfg())
-    st.caption(t(":material/touch_app: Tap a person and «Open record» to manage them."))
-    try:
-        _hrows = list(_hev.selection.rows)
-    except Exception:
-        _hrows = []
-    if _hrows and _hrows[0] < len(data):
-        _hd = data[_hrows[0]]
-        _hn = _hd.get("nombre") or _hd["usuario"]
-        if st.button(f"→ Open record for {_hn}", key="gh_open", type="primary"):
-            st.session_state["gp_fichasel"] = f"{_hn} ({_hd['usuario']})"
-            _ir_a("planificacion", "👷 Usuarios")
+            _cc["On overhead (h)"] = st.column_config.NumberColumn(t("On overhead (h)"), format="%.2f")
+        _hev = st.dataframe(
+            pd.DataFrame(filas), width="stretch", hide_index=True,
+            # v577 · un toque abre la ficha (antes: casilla + un botón aparte, sin `t()`)
+            on_select="rerun", selection_mode="single-cell", key=f"gh_tbl_{_gen}",
+            column_config=tabla.cfg(None, _cc))
+        _ord_rot = {"general": t("Workday"), "sin_asignar": t("Unallocated"),
+                    "costo": t("Labour charged to jobs"), "interno": t("On overhead")}.get(_campo)
+        st.caption((t("Sorted by «{c}», highest first.", c=_ord_rot) + " " if _ord_rot else "")
+                   + t(":material/touch_app: Tap a person to open their record (rate, hours, payslips)."))
+    _s = getattr(_hev, "selection", None)
+    _hr = [c[0] for c in (getattr(_s, "cells", None) or [])] or list(getattr(_s, "rows", None) or [])
+    if _hr and 0 <= _hr[0] < len(datos):
+        # ⚠️ Otra generación de clave: soltar el estado del widget no llega al navegador
+        # (trampa 31) y al volver la tabla reabriría la misma persona.
+        st.session_state["_gh_tbl_gen"] = _gen + 1
+        _hd = datos[_hr[0]]
+        st.session_state["gp_fichasel"] = f"{_hd.get('nombre') or _hd['usuario']} ({_hd['usuario']})"
+        _ir_a("planificacion", "👷 Usuarios")
 
     if _dudoso:
         st.caption(t("«—» under *unallocated*: that person charged more hours to projects than their workday, so the figure is not reliable (they clocked in to the project without opening their workday). Fixed from v150 onwards; earlier history stays as it is."))
-    # ⚠️ v325: dos causas MUY distintas daban el mismo aviso. «Falta ponerle la
-    # tarifa» se arregla en Usuarios; «esta persona ya no está dada de alta» NO —
-    # no hay fila donde ponerla, así que mandar ahí era mandar a un callejón.
+    # ⚠️ v325: dos causas MUY distintas daban el mismo aviso. «Falta ponerle la tarifa» se
+    # arregla en Usuarios; «esta persona ya no está dada de alta» NO.
     _sin_tar = [_etiqueta(d) for d in data
                 if d["proyecto"] > 0 and not d["tarifa"] and d.get("existe", True)]
     _baja = [_etiqueta(d) for d in data
@@ -5868,52 +5908,93 @@ def render_group_hours(grupo: str):
                      "**{x}**. The rate is set in each person's record, in Planning → Users "
                      "(tap them in the table above).", x=", ".join(_sin_tar)))
     if _baja:
-        st.info(":material/person_off: **" + ", ".join(_baja) + "**: hours from someone **no longer on the books** (account deleted). Their hours still count, but **there is nowhere to set a rate**, so they add $0. To cost them you would have to recreate that account.")
+        st.info(t(":material/person_off: **{x}**: hours from someone **no longer on the books** "
+                  "(account deleted). Their hours still count, but **there is nowhere to set a "
+                  "rate**, so they add $0. To cost them you would have to recreate that account.",
+                  x=", ".join(_baja)))
 
-    # ── Reparto por proyecto (a qué elevador va el tiempo del grupo) ──
-    por_proy = {}
+    # ── Reparto por OBRA ── (v577 · por ID: el ID es la identidad; un toque abre la obra)
+    por, _nom_id = {}, {}
     for d in data:
-        for nom, h in d["por_proyecto"].items():
-            por_proy[nom] = por_proy.get(nom, 0.0) + h
-    # ⚠️ Fuera los proyectos con 0.0 h: salían con la barra vacía y solo hacían ruido
-    # (un fichaje de segundos redondea a 0.0). Se filtra por el valor REDONDEADO, que
-    # es el que se muestra: si en pantalla pone «0.0 h», la fila no aporta nada.
-    por_proy = {n: h for n, h in por_proy.items() if round(h, 1) > 0}
-    if por_proy:
-        st.markdown(t("**Company hours by project**"))
-        _tot = sum(por_proy.values()) or 1
-        for nom, h in sorted(por_proy.items(), key=lambda x: -x[1]):
-            st.markdown(
-                '<div style="display:flex;align-items:center;gap:10px;margin-bottom:5px;">'
-                f'<div style="width:190px;flex:none;font-size:13px;color:#374151;'
-                f'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{nom}</div>'
-                '<div style="flex:1;height:9px;background:#eef1f5;border-radius:20px;">'
-                f'<div style="height:9px;width:{100*h/_tot:.0f}%;background:#2e6da4;'
-                'border-radius:20px;"></div></div>'
-                f'<div style="width:64px;flex:none;text-align:right;font-size:13px;'
-                f'font-weight:600;color:#1f2937;">{h:.1f} h</div></div>',
-                unsafe_allow_html=True)
+        for _k, _h in (d.get("por_proyecto_id") or {}).items():
+            por[_k] = por.get(_k, 0.0) + _h
+            _nom_id[_k] = (d.get("nombres_proyecto") or {}).get(_k, _k)
+    # ⚠️ Fuera las de 0.0 h: un fichaje de segundos redondea a 0.0 y solo hacía ruido.
+    por = {k: h for k, h in por.items() if round(h, 1) > 0}
+    _rep = _Counter(_nom_id[k] for k in por)
 
-    # ── Horas por PERSONA y PROYECTO (v216) ──────────────────────────────────
-    # Responde "¿cuántas horas gastó cada usuario en cada proyecto?". El dato ya
-    # lo trae group_hours en por_proyecto; aquí se muestra como matriz.
-    _proys = sorted({p for d in data for p in d["por_proyecto"]})
-    if _proys:
+    def _rot(k):
+        """El nombre; con el ID detrás si otra obra se llama igual."""
+        return f"{_nom_id[k]} ({k})" if _rep[_nom_id[k]] > 1 and not k.startswith("~") else _nom_id[k]
+
+    _internos = set()
+    if por:
+        try:
+            _internos = {str(x.get("ID", "")) for x in P.list_locations(grupo, incluir_cerradas=True)}
+        except Exception:
+            _internos = set()
+        _fp = sorted(por.items(), key=lambda x: -x[1])
+        _tot = sum(por.values()) or 1
+        with st.container(key="cpx_gh_proy"):
+            _bajar_a("cpx_gh_proy", "_gh_bajar_proy")
+            st.markdown(t("**Company hours by project**"))
+            _pg = st.session_state.get("_gh_ptbl_gen", 0)
+            # v577 · una tabla (el nombre ENTERO, salía cortado a 190 px) y un toque abre la obra
+            _pev = st.dataframe(pd.DataFrame([{
+                "Proyecto": _rot(k), "Share": round(100 * h / _tot), "Horas": round(h, 1)}
+                for k, h in _fp]), width="stretch", hide_index=True,
+                on_select="rerun", selection_mode="single-cell", key=f"gh_ptbl_{_pg}",
+                column_config=tabla.cfg(None, {
+                    "Proyecto": st.column_config.TextColumn(t("Project"), pinned=True),
+                    "Share": st.column_config.ProgressColumn(t("Share of the hours"), min_value=0,
+                                                             max_value=100, format="%d%%"),
+                    "Horas": st.column_config.NumberColumn(t("Hours"), format="%.1f h")}))
+            st.caption(t("Tap a project to open it."))
+        _ps = getattr(_pev, "selection", None)
+        _pr = [c[0] for c in (getattr(_ps, "cells", None) or [])] or list(getattr(_ps, "rows", None) or [])
+        if _pr and 0 <= _pr[0] < len(_fp):
+            _k = _fp[_pr[0]][0]
+            st.session_state["_gh_ptbl_gen"] = _pg + 1
+            if not _k.startswith("~"):
+                _gh_abrir_obra(_k, _internos)
+
+    # ── Horas por PERSONA y OBRA (v216) ── v577 · un toque: la obra de esa columna, o la
+    # ficha de la persona si se toca su nombre.
+    _cols = [k for k, _ in sorted(por.items(), key=lambda x: -x[1])]
+    if _cols:
         st.divider()
         st.markdown(t("**:material/search: Hours by person and project**"))
-        _mat = []
-        for d in data:
-            _pp = d["por_proyecto"]
-            if not _pp:
+        _filas_m, _mat = [], []
+        for d in datos:
+            _pp = d.get("por_proyecto_id") or {}
+            if not any(_pp.get(k) for k in _cols):
                 continue
             _fila = {"Persona": _etiqueta(d)}
-            for _p in _proys:
-                _h = _pp.get(_p, 0.0)
-                _fila[_p] = round(_h, 2) if _h else ""
+            for k in _cols:
+                _fila[_rot(k)] = round(_pp.get(k, 0.0), 2) if _pp.get(k) else ""
             _mat.append(_fila)
+            _filas_m.append(d)
         if _mat:
-            st.dataframe(pd.DataFrame(_mat), width="stretch", hide_index=True, column_config=tabla.cfg())
-            st.caption(t("Each cell: hours that person charged to that project in the period. The columns are the projects."))
+            _mg = st.session_state.get("_gh_mtbl_gen", 0)
+            _mev = st.dataframe(pd.DataFrame(_mat), width="stretch", hide_index=True,
+                                on_select="rerun", selection_mode="single-cell", key=f"gh_mtbl_{_mg}",
+                                column_config=tabla.cfg(None, {
+                                    "Persona": st.column_config.TextColumn(t("Person"), pinned=True)}))
+            st.caption(t("Each cell: hours that person charged to that project in the period. "
+                         "Tap a cell to open that project, or a name to open that person."))
+            _ms = getattr(_mev, "selection", None)
+            _mc = list(getattr(_ms, "cells", None) or [])
+            if _mc and 0 <= _mc[0][0] < len(_filas_m):
+                st.session_state["_gh_mtbl_gen"] = _mg + 1
+                _fila_d, _col = _filas_m[_mc[0][0]], _mc[0][1]
+                if _col == "Persona":
+                    st.session_state["gp_fichasel"] = (
+                        f"{_fila_d.get('nombre') or _fila_d['usuario']} ({_fila_d['usuario']})")
+                    _ir_a("planificacion", "👷 Usuarios")
+                else:
+                    _k = next((k for k in _cols if _rot(k) == _col), "")
+                    if _k and not _k.startswith("~"):
+                        _gh_abrir_obra(_k, _internos)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

@@ -1241,6 +1241,13 @@ def group_hours(grupo: str, days=None) -> list:
             # sus horas viejas ya no salen bajo dos etiquetas distintas.
             pn = _nombre_actual(pid_of(r), r.get("Project", "")) or t("(no project)")
             a["por"][pn] = a["por"].get(pn, 0.0) + h
+            # v577 · y por ID (el ID es la identidad): dos obras con el mismo nombre ya
+            # no se suman en una, y la pantalla puede ABRIR la obra. Las filas viejas sin
+            # ID se quedan por nombre («~nombre»), sin obra que abrir.
+            _pid = str(pid_of(r) or "").strip()
+            _k = _pid or ("~" + pn)
+            a.setdefault("por_id", {})[_k] = a.setdefault("por_id", {}).get(_k, 0.0) + h
+            a.setdefault("nom_id", {})[_k] = pn
     # Tarifa/hora por usuario, para el costo de mano de obra (misma fuente que
     # expenses.labor_cost). Import perezoso: auth no depende de timeclock.
     try:
@@ -1284,6 +1291,9 @@ def group_hours(grupo: str, days=None) -> list:
             "costo": round(pro * tarifa, 2),      # costo = horas imputadas A OBRA × tarifa
             "costo_interno": round(itn * tarifa, 2),   # v422: estructura, no se factura
             "por_proyecto": {k: round(v, 2) for k, v in a["por"].items()},
+            # v577 · el mismo reparto por ID de obra, con su nombre actual al lado
+            "por_proyecto_id": {k: round(v, 2) for k, v in a.get("por_id", {}).items()},
+            "nombres_proyecto": dict(a.get("nom_id", {})),
         })
     out.sort(key=lambda x: -(x["general"] or x["proyecto"]))
     return out
