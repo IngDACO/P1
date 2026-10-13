@@ -112,6 +112,7 @@ def render_nominas(grupo):
         st.markdown("<style>.st-key-cpxkpi_nom_apag button{border-left-color:#c0392b!important}"
                     ".st-key-cpxkpi_nom_apag button p:nth-child(2):not(:last-child)"
                     "{color:#c0392b!important}</style>", unsafe_allow_html=True)
+    st.markdown(T.dos_por_fila("cpx_nom_kpis"), unsafe_allow_html=True)   # v576 · 2 por fila en estrecho
     with st.container(key="cpx_nom_kpis"):
         for _col, (_s, _l, _v, _pie, _fl) in zip(st.columns(3), _K):
             if _col.button(f"{_l}\n\n{_v}\n\n{_pie}", key=f"cpxkpi_nom_{_s}", width="stretch"):

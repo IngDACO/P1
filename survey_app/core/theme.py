@@ -448,6 +448,19 @@ def dinero_html(valor, dec: int = 2, simbolo: str = "$") -> str:
     return _importe(valor, dec, simbolo, False)
 
 
+def dos_por_fila(clave: str) -> str:
+    """<style> para que las columnas del contenedor con clave `clave` vayan 2 POR FILA
+    cuando ese contenedor mide ≤700 px (`@container`). v576: sin esto, a ≤640 px Streamlit
+    apila las columnas y cada tarjeta ocupa el ancho entero (las 4 cifras de Contacts, 400
+    px de alto a 640). Es la regla medida en Gastos (v568) e Invoices (v569), ya en un sitio."""
+    _c = f".st-key-{clave}"
+    return (f"<style>{_c}{{container-type:inline-size}}"
+            f"@container (max-width:700px){{{_c} [data-testid='stHorizontalBlock']"
+            f"{{flex-wrap:wrap!important}}{_c} [data-testid='stHorizontalBlock']"
+            ">[data-testid='stColumn']{flex:0 1 calc(50% - 0.5rem)!important;"
+            "min-width:calc(50% - 0.5rem)!important;width:calc(50% - 0.5rem)!important}}</style>")
+
+
 def kpi_row(items):
     """Fila de tarjetas KPI. `items` = [(label, valor)] o [(label, valor, sub)] o
     [(label, valor, sub, color_acento)]. Una sola fila responsive."""

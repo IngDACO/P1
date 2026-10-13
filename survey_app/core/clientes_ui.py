@@ -76,8 +76,11 @@ def _cifras_cliente(key, n, activos, av, hrs, cost, al, con_coste, con_alertas):
                     ".st-key-cpxkpi_cls_al button p:nth-child(2):not(:last-child)"
                     "{color:#c0392b!important}</style>", unsafe_allow_html=True)
     _cur = _vista_cli(key)
+    # v576 · 2 por fila también en estrecho (a ≤640 px Streamlit apilaba las columnas)
+    st.markdown(_T.dos_por_fila("cpx_cls_kpis"), unsafe_allow_html=True)
+    _box = st.container(key="cpx_cls_kpis")
     for _i in range(0, len(_K), 2):
-        for _col, (_s, _l, _v, _pie) in zip(st.columns(2), _K[_i:_i + 2]):
+        for _col, (_s, _l, _v, _pie) in zip(_box.columns(2), _K[_i:_i + 2]):
             if _col.button(f"{_l}\n\n{_v}\n\n{_pie}", key=f"cpxkpi_cls_{_s}", width="stretch"):
                 st.session_state[f"_cls_vista::{key}"] = "" if _cur == _s else _s
                 st.session_state["_cls_bajar"] = _cur != _s
@@ -209,6 +212,8 @@ def render_contactos(grupo):
           ("con", t("With record"), _con_ficha, t("contact details saved"), "ConFicha"),
           ("sin", t("No record"), len(rows) - _con_ficha, t("only from their jobs"), "SinFicha"),
           ("prj", t("Projects"), sum(r["total"] for r in rows), t("linked to clients"), "ConObras")]
+    from core import theme as _T
+    st.markdown(_T.dos_por_fila("cpx_clis_kpis"), unsafe_allow_html=True)   # v576 · 2 por fila en estrecho
     with st.container(key="cpx_clis_kpis"):
         for _col, (_s, _l, _v, _pie, _fl) in zip(st.columns(4), _K):
             if _col.button(f"{_l}\n\n{_v}\n\n{_pie}", key=f"cpxkpi_clis_{_s}", width="stretch"):
