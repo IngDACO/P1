@@ -10,6 +10,28 @@ ventana de contexto. Contenido: 258 secciones detalladas + el índice de 440 ver
 
 ---
 
+## LA SUITE NO TOCA EL CÓDIGO DE LA APP (v573)
+
+Visto tras las suites de v569-v572: `quotes_ui.py` salía «modificado» después de cada una
+(solo fines de línea). Era `verif_v471`, que para validar sus sondas rompía `quotes_ui.py` y
+`tabla.py` EN DISCO y los restauraba (al reescribirlos, CRLF→LF). Buscando más: `verif_v463`
+hacía lo mismo con `core/invoices.py` y `verif_v498` creaba un fichero dentro de `core/`. La
+regla «la suite no toca el árbol; las baterías sí» era falsa.
+
+- Los tres validan sus sondas EN MEMORIA (`_SUPLE`; la de cabeceras de v471 lee `CABECERAS`
+  del texto por AST, comprobado igual al del módulo: 72 claves). Validado que sin la versión
+  en memoria sus validaciones FALLAN (no pasan en vacío), y `core/` sale con el mismo md5.
+- Dos redes. `run_suite.py` toma la huella (md5) del código de la app antes y después de
+  CADA guardián y pone en ROJO al que la cambie («TOCÓ el código de la app: …»): validada
+  con un guardián falso que reescribía quotes_ui.py. `verif_v573` (estática) mira que ningún
+  guardián contenga una escritura dirigida a la app, validada con cuatro formas malas y con
+  las versiones VIEJAS de los tres (las ve todas; la 1ª versión no veía la de v471, cuya ruta
+  era una variable de BUCLE).
+- `run_suite.py verif_v57` filtra por nombre (para validar una red sin esperar media hora);
+  antes de desplegar, la suite ENTERA.
+
+Sin cambios en la app (solo guardianes y el runner): en producción solo cambia el número de versión · 4 comprobaciones · romper_v573 4/4 + control (rompe los GUARDIANES, no la app; restaurados byte a byte, mismo md5) · la red del runner validada con un guardián falso («ROJO … TOCÓ el código de la app: core\quotes_ui.py») y la estática con las versiones viejas de v463/v471/v498 · suite 202 verde con Python 3.12.10 (1557 s, a la primera), y ningún «TOCÓ el código de la app»: por primera vez tras una suite, quotes_ui.py sin modificar
+
 ## LOS PIES DE LAS CIFRAS DEL CLIENTE (v572)
 
 Visto verificando v571 en producción (800 px con el menú): cada tarjeta del resumen del
@@ -13947,7 +13969,7 @@ comprueba lo que dice**.
 
 ---
 
-## Versiones desplegadas (v572 = actual)
+## Versiones desplegadas (v573 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -13955,6 +13977,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v573 | **La suite no toca el código de la app.** `verif_v471`, `v463` y `v498` escribían en `core/` para validar sus sondas (el «ruido» de quotes_ui tras cada suite) → en memoria; `run_suite.py` pone en rojo a quien cambie un byte de la app y `verif_v573` lo vigila estático. Sin cambios en la app (solo guardianes y el runner): en producción solo cambia el número de versión · romper_v573 4/4 + control (rompe los GUARDIANES, no la app; restaurados byte a byte, mismo md5) · la red del runner validada con un guardián falso («ROJO … TOCÓ el código de la app: core\quotes_ui.py») y la estática con las versiones viejas de v463/v471/v498 · suite 202 verde con Python 3.12.10 (1557 s, a la primera), y ningún «TOCÓ el código de la app»: por primera vez tras una suite, quotes_ui.py sin modificar |
 | v572 | **Lo visto verificando v571.** Los pies de las seis cifras del cliente se cortaban con «…» a 800 px (87 px de pie, medido con la fuente real) → pies cortos que caben. PRODUCCIÓN (13/10/2026, cuenta admin, 1024 px; v572 cargado con «r» en la sesión abierta): en la ficha de «Cliente de prueba», los seis pies («of this client», «not completed», «across its jobs», «clocked on jobs», «charged to jobs», «on its jobs») con ancho de texto = ancho visible = 87 px (ninguno recortado); la sonda, validada poniendo un momento en el DOM el pie de antes: «linked to this client» da 97 en 87 (lo ve recortado). Datos: nada escrito · romper_v572 2/2 + control · suite 201 verde con Python 3.12.10 (1554 s, a la primera) |
 | v571 | **La ficha del cliente (lo visto verificando v570).** Resumen ACTIVO: seis tarjetas que abren debajo el desglose por obra con su filtro u orden (y un toque abre la obra); textos con `t()` y el estado con `etiqueta`; el coste de la lista con céntimos. PRODUCCIÓN (13/10/2026, cuenta admin, 800 px con el menú; el panel del navegador se había cerrado y se reabrió en la URL: la cookie restauró la sesión sin contraseña, ya en v571): la lista de clientes con «Cost» $135.70 y $134.40 (antes $136 y $134) y el pie «… (2 client(s))»; la ficha de «Cliente de prueba» (la de las obras de prueba): ningún `st.metric`, seis tarjetas «PROJECTS 2 · ACTIVE 2 · AVG. PROGRESS 0% · HOURS 0.4 h · TOTAL COST $136 · OPEN ALERTS 0» y los botones de sus obras «… · Planned · 0%»; «Total cost» abre «Cost by project» a todo el ancho (649 px) con la más cara primero (PRUEBA MOVIL $132.55, ZZ PRUEBA $3.15) y la vista baja sola (de 0 a 279; el recuadro, 553–767 de 768); tocar la fila de PRUEBA MOVIL la abre en Costs (`&p=PRJ-0001`); «←» vuelve a la ficha con el desglose abierto y sin reabrir la obra (13 s mirando); «Active» abre «Its active projects (not completed)» y un segundo toque lo cierra. La ficha de «Cairn Schindler» no se abrió (es la de 88 walker, datos reales): que otra ficha nazca cerrada lo cubre verif_v571. ⚠️ Visto verificando (arreglado en v572): a 800 px cada tarjeta deja 87 px de pie y cuatro pies se cortaban («linked to this c…», «across its proj…», «clocked on its j…», «charged to its j…»). Datos: nada escrito · romper_v571 15/15 + control (la 1ª vuelta 14/15: escapó «“… project(s) linked.” vuelve a un f-string» — la sonda de textos pedía «palabra ESPACIO palabra» y entre «project» y «linked» hay un «(s)»: hueco REAL → cuenta palabras sin mirar el separador, validada con ese caso, y cazada) · suite 200 verde con Python 3.12.10 (1549 s, a la primera) |
 | v570 | **Lo visto verificando v569.** ⚠️ El aviso de anular (y el de asignar compras, v568) salía un clic tarde: la shell pinta los avisos antes de la sección y la acción diferida no relanzaba → relanza; barrido de toda la app y guiones en el orden de la shell (trampa 41). ⚠️ La anulada «debía» en la tabla → $0. La ficha del cliente, con las cifras, el filtro y la tabla de Invoices. PRODUCCIÓN (13/10/2026, cuenta admin, 724 px de contenido; v570 cargado con «r» en la sesión abierta): datos de PRUEBA en cliente1 (ficha «ZZ Cliente prueba v569»; facturas 0001 $110 pendiente, 0002 $44 y 0003 $22 vencidas; compra G-00002 $1.23 sin obra); ⚠️ anular la 0002 desde su detalle: «Void invoice No. 0002? It cannot be undone.» y, con «Yes, void it», «Invoice voided.» a los 2 s EN EL DETALLE, sin otro clic (en v569 salió en el clic siguiente, ya en la lista), y al volver a la lista no reaparece; la tabla: la anulada «⚫ voided · $0.00» (decía $44.00), cifras $132 · $0 · $132 · $22; la ficha del cliente (desde el botón del cliente de la 0003): las 4 cifras son botones de 316 px, 2 por fila, con el selector All · Outstanding · Overdue · Collected · Voided y la tabla «No. · Status · Outstanding · Due · Total · Collected · Date» en DD/MM/YYYY, con céntimos, sin casillas y la anulada a $0.00 (antes «2026-09-23», «Nº» y `$%,d`); «Overdue» deja solo la 0003 (clave `cpxseg_clf_filt_CLI-0001`); tocar su celda «Due» abre la 0003 en Invoices, y al volver a la ficha el filtro sigue en Overdue y la tabla no la reabre; ⚠️ Expenses: «Purchases with no job (1)», elegida ZZ PRUEBA v519 con el teclado (comprobado antes con el motor y en la opción resaltada que no era 88 walker) y «Assign»: «Purchase G-00002 assigned to ZZ PRUEBA v519 - pantalla del campo.» a los 2 s y el aviso de compras sin obra desaparece; en la hoja, G-00002 con PRJ-0015. El aviso de campos vacíos de My projects (rama de error del campo) no se puede provocar desde la pantalla: lo cubren verif_v570 y su rotura. Datos: todos los de prueba, borrados desde el motor · romper_v570 15/15 + control (la 1ª vuelta 12/14: escaparon «anular vuelve a NO relanzar» y «un aviso de un BOTÓN sin relanzar» — la sonda daba por bueno el `if _sel: st.rerun()` de MÁS ABAJO, y `_sel` lo devuelve la tabla que se pinta DESPUÉS del aviso: hueco REAL → solo cuenta un `if` cuya condición no se asigna ENTRE el aviso y él (la forma «toda la función» dio 61 en falso por los `ok` de otras ramas); la sonda afinada encontró un caso real más, el aviso de campos vacíos de My projects —encolado antes de guardar: si fallaba, salía un clic tarde—, arreglado y con su rotura) · romper_v569 18/18 y romper_v452 7/7 re-ancladas · romper_v502 15/15: su ancla de la arrastrada llevaba muerta desde v505 (deuda declarada), reparada → anclas muertas 11 → 10 · suite 199 verde con Python 3.12.10 (1535 s, a la primera) |
