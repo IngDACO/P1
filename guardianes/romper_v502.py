@@ -52,9 +52,11 @@ ROTURAS = [
     ('_diagnostico deja de pasar el dueño a las paradas', "core/projects_ui.py",
      'tocaban.append({"nombre": a["nombre"], "avance": pct, "owner": _ow,',
      'tocaban.append({"nombre": a["nombre"], "avance": pct,'),
+    # v570 · CADUCADA desde v505 (la línea ganó `+ _espera(x)`): el ancla no casaba y la
+    # rotura no probaba nada (era deuda declarada en check_anclas_roturas). La misma rotura.
     ('la pantalla deja de pintar el dueño en la ARRASTRADA', "core/projects_ui.py",
-     't(" _(carried over)_") + _dueno(x) if x["tarde"] else ""',
-     't(" _(carried over)_") if x["tarde"] else ""'),
+     't(" _(carried over)_") + _dueno(x) + _espera(x)',
+     't(" _(carried over)_") + _espera(x)'),
 
     # ── la identidad: login dentro, nombre fuera (v306/v413) ──
     ('la relectura guarda la ETIQUETA en vez del login', "core/projects_ui.py",

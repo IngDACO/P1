@@ -192,9 +192,10 @@ chk("la regla de una por fila si no caben dos (`@container`)",
 
 G_ALTA = CAB + r'''
 P.list_groupings = lambda grupo=None: []
-PU._panel_agrupaciones("G")
+# v570 · los avisos ANTES de la sección, como la shell (ver verif_v569/v570)
 from core import flash
 flash.mostrar()
+PU._panel_agrupaciones("G")
 '''
 at = AppTest.from_string(G_ALTA, default_timeout=90)
 at.run()
@@ -219,9 +220,10 @@ P.list_groupings = lambda grupo=None: [{"ID": "AGR-9", "Name": "Test", "Group": 
 if "_INI" not in st.session_state:
     st.session_state["_INI"] = 1
     st.session_state["_admin_open_agr"] = "AGR-9"
-PU._panel_agrupaciones("G")
+# v570 · los avisos ANTES de la sección, como la shell (ver verif_v569/v570)
 from core import flash
 flash.mostrar()
+PU._panel_agrupaciones("G")
 '''
 at = AppTest.from_string(G_ABIERTA, default_timeout=90)
 at.run()

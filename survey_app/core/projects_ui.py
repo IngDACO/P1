@@ -3848,12 +3848,18 @@ def _field_activities(pid):
         else:
             # ⚠️ El rerun de abajo descarta los deltas de esta pasada (v365), así
             #    que este aviso tiene que ir por la cola para llegar a la pantalla.
-            if _msg_vac:
-                flash.aviso(_msg_vac)
+            # ⚠️ v570 · pero SOLO si hay rerun: encolado antes de guardar, si el guardado
+            #    fallaba se quedaba en la cola y salía un clic tarde (barrido de verif_v570).
             ok, msg = P.save_field_progress(pid, cambios)
-            (flash.exito if ok else st.error)(msg)
             if ok:
+                if _msg_vac:
+                    flash.aviso(_msg_vac)
+                flash.exito(msg)
                 st.rerun()
+            else:
+                st.error(msg)
+                if _msg_vac:
+                    st.warning(_msg_vac)
 
 
 def render_field_projects(usuario: str, grupo: str):
@@ -5447,6 +5453,9 @@ def render_group_expenses(grupo: str):
     if _pend:
         _ok, _msg = E.asignar_proyecto(_pend[0], _pend[1], grupo)
         (flash.exito if _ok else flash.error)(_msg)
+        # ⚠️ v570 · y RELANZA: la shell pinta los avisos ANTES de la sección, y sin esto
+        # el aviso salía en el clic siguiente (en producción, en v568, «no se llegó a leer»).
+        st.rerun()
     ge = E.group_expenses(grupo)
     filas = ge["proyectos"]
     if not filas:

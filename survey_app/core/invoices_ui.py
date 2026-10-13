@@ -90,6 +90,10 @@ def render_facturas(grupo):
     if _anu:
         _ok, _msg = I.anular(_anu)
         (flash.exito if _ok else flash.error)(_msg)
+        # ⚠️ v570 · y RELANZA: la shell pinta los avisos (`flash.mostrar`) ANTES de la
+        # sección, así que lo encolado aquí salía en el clic SIGUIENTE, ya en la lista
+        # (visto en producción). Es lo que hacen Absences y Time fixes.
+        st.rerun()
     if st.session_state.get("_fac_nueva"):
         _nueva_factura(grupo)
         return
@@ -97,38 +101,8 @@ def render_facturas(grupo):
         _detalle_factura(grupo, st.session_state["_fac_open"])
         return
 
-    from core import theme as _T
     facturas = I.list_facturas(grupo)
-    # Totales del grupo (cuentas por cobrar)
-    _fac = sum(_num(f.get("Total")) for f in facturas if str(f.get("Status", "")).lower() != "anulada")
-    _cob = sum(_num(f.get("Collected")) for f in facturas if str(f.get("Status", "")).lower() != "anulada")
-    _venc = sum(_num(f.get("Total")) - _num(f.get("Collected"))
-                for f in facturas if I.estado_cobro(f) == "vencida")
-
-    # ── Las 4 cifras, ACTIVAS (v569): cada una aplica su filtro a la lista ──
-    _pp = st.session_state.pop("_fac_filt_pending", None)
-    if _pp in _FILTROS:
-        st.session_state["cpxseg_fac_filt"] = _pp
-    _K = [("fac", t("Invoiced"), _T.dinero(_fac, 0), t("all invoices"), "Todas"),
-          ("cob", t("Collected"), _T.dinero(_cob, 0), t("received so far"), "Cobradas"),
-          ("pen", t("Outstanding"), _T.dinero(_fac - _cob, 0), t("still to collect"), "Pendientes"),
-          ("ven", t("Overdue"), _T.dinero(_venc, 0), t("past the due date"), "Vencidas")]
-    # 2 por fila bajo 700 px (`@container`, el mismo reparto medido en Gastos, v568)
-    _css = ("<style>.st-key-cpx_fac_kpis{container-type:inline-size}"
-            "@container (max-width:700px){.st-key-cpx_fac_kpis [data-testid='stHorizontalBlock']"
-            "{flex-wrap:wrap!important}.st-key-cpx_fac_kpis [data-testid='stHorizontalBlock']"
-            ">[data-testid='stColumn']{flex:0 1 calc(50% - 0.5rem)!important;"
-            "min-width:calc(50% - 0.5rem)!important;width:calc(50% - 0.5rem)!important}}")
-    if _venc > 0:
-        _css += (".st-key-cpxkpi_fac_ven button{border-left-color:#c0392b!important}"
-                 ".st-key-cpxkpi_fac_ven button p:nth-child(2):not(:last-child)"
-                 "{color:#c0392b!important}")
-    st.markdown(_css + "</style>", unsafe_allow_html=True)
-    with st.container(key="cpx_fac_kpis"):
-        for _col, (_s, _l, _v, _pie, _fl) in zip(st.columns(4), _K):
-            if _col.button(f"{_l}\n\n{_v}\n\n{_pie}", key=f"cpxkpi_fac_{_s}", width="stretch"):
-                st.session_state["_fac_filt_pending"] = _fl
-                st.rerun()
+    cifras_cobro(facturas, "fac")
 
     if st.button(t(":material/add_circle: New invoice"), type="primary", key="fac_new_btn"):
         st.session_state["_fac_nueva"] = True
@@ -138,33 +112,99 @@ def render_facturas(grupo):
         st.caption(t("No invoices yet. Create the first one with «New invoice»."))
         return
 
-    _filt = st.radio(t("Filter"), list(_FILTROS), format_func=lambda o: t(_FILTROS[o][1]),
-                     horizontal=True, key="cpxseg_fac_filt", label_visibility="collapsed",
-                     persist_state="session")
-    _entran = _FILTROS.get(_filt or "Todas", (None, ""))[0]
-    _rows = sorted([f for f in facturas if _entran is None or I.estado_cobro(f) in _entran],
-                   key=lambda f: str(f.get("Created", "")), reverse=True)
+    _rows = filtrar(facturas, "fac", "cpxseg_fac_filt")
     if not _rows:
         st.caption(t("No invoices in this filter."))
         return
     st.caption(t("Tap an invoice to see the detail and record payments."))
+    _sel = tabla_facturas(_rows, "fac_tbl")
+    if _sel:
+        st.session_state["_fac_open"] = str(_sel.get("ID", ""))
+        st.rerun()
+
+
+# ── Lo COMÚN a Invoices y a la ficha del cliente (v570) ──────────
+# ⚠️ La tabla de facturas de la ficha del cliente era una COPIA de esta y se quedó atrás
+# (ISO, «Nº» sin traducir, casillas, dólares truncados, sin vencimiento ni saldo): visto
+# verificando v569. Ahora las dos pantallas pintan con estas tres funciones.
+def _saldo(f) -> float:
+    """Lo que falta por cobrar. ⚠️ v570 · una ANULADA no debe nada: la tabla le ponía
+    «Outstanding $44.00» (el detalle y el PDF ya decían 0)."""
+    if I.estado_cobro(f) == "anulada":
+        return 0.0
+    return round(_num(f.get("Total")) - _num(f.get("Collected")), 2)
+
+
+def cifras_cobro(facturas, pref):
+    """Las 4 cifras de cobro como tarjetas-BOTÓN (v569): cada una aplica su filtro a la
+    lista de abajo (`filtrar` con el mismo `pref`). Las anuladas no cuentan."""
+    from core import theme as _T
+    _fac = sum(_num(f.get("Total")) for f in facturas if str(f.get("Status", "")).lower() != "anulada")
+    _cob = sum(_num(f.get("Collected")) for f in facturas if str(f.get("Status", "")).lower() != "anulada")
+    _venc = sum(_num(f.get("Total")) - _num(f.get("Collected"))
+                for f in facturas if I.estado_cobro(f) == "vencida")
+    _K = [("fac", t("Invoiced"), _T.dinero(_fac, 0), t("all invoices"), "Todas"),
+          ("cob", t("Collected"), _T.dinero(_cob, 0), t("received so far"), "Cobradas"),
+          ("pen", t("Outstanding"), _T.dinero(_fac - _cob, 0), t("still to collect"), "Pendientes"),
+          ("ven", t("Overdue"), _T.dinero(_venc, 0), t("past the due date"), "Vencidas")]
+    # 2 por fila bajo 700 px (`@container`, el mismo reparto medido en Gastos, v568)
+    _c = f".st-key-cpx_{pref}_kpis"
+    _css = (f"<style>{_c}{{container-type:inline-size}}"
+            f"@container (max-width:700px){{{_c} [data-testid='stHorizontalBlock']"
+            f"{{flex-wrap:wrap!important}}{_c} [data-testid='stHorizontalBlock']"
+            ">[data-testid='stColumn']{flex:0 1 calc(50% - 0.5rem)!important;"
+            "min-width:calc(50% - 0.5rem)!important;width:calc(50% - 0.5rem)!important}}")
+    if _venc > 0:
+        _css += (f".st-key-cpxkpi_{pref}_ven button{{border-left-color:#c0392b!important}}"
+                 f".st-key-cpxkpi_{pref}_ven button p:nth-child(2):not(:last-child)"
+                 "{color:#c0392b!important}")
+    st.markdown(_css + "</style>", unsafe_allow_html=True)
+    with st.container(key=f"cpx_{pref}_kpis"):
+        for _col, (_s, _l, _v, _pie, _fl) in zip(st.columns(4), _K):
+            if _col.button(f"{_l}\n\n{_v}\n\n{_pie}", key=f"cpxkpi_{pref}_{_s}", width="stretch"):
+                st.session_state[f"_{pref}_filt_pending"] = _fl
+                st.rerun()
+
+
+def filtrar(facturas, pref, clave):
+    """All / Outstanding / Overdue / Collected / Voided, RECORDADO (`persist_state`), y
+    las facturas que entran. La cifra pulsada (`cifras_cobro`) se aplica aquí, antes
+    de crear el selector."""
+    _pp = st.session_state.pop(f"_{pref}_filt_pending", None)
+    if _pp in _FILTROS:
+        st.session_state[clave] = _pp
+    _filt = st.radio(t("Filter"), list(_FILTROS), format_func=lambda o: t(_FILTROS[o][1]),
+                     horizontal=True, key=clave, label_visibility="collapsed",
+                     persist_state="session")
+    _entran = _FILTROS.get(_filt or "Todas", (None, ""))[0]
+    return [f for f in facturas if _entran is None or I.estado_cobro(f) in _entran]
+
+
+def tabla_facturas(facturas, clave, con_cliente=True):
+    """La tabla de facturas; devuelve la TOCADA (o None) y quien llama decide adónde ir.
+    `clave` lleva generación: soltar el estado del widget no llega al navegador
+    (trampa 31) y al volver la tabla reabriría la misma factura."""
+    _rows = sorted(facturas, key=lambda f: str(f.get("Created", "")), reverse=True)
     # ⚠️ v569 · lo que se mira primero, delante (la columna de estado salía cortada a 800
     # px con el menú), el Nº FIJADO, fechas DD/MM/YYYY y el estado con su punto de color.
     df = pd.DataFrame([{
         "Nº":        str(f.get("Number", "")),
         "Cliente":   str(f.get("ClientName", "") or "—"),
         "Estado":    _est_celda(f),
-        "Outstanding": round(_num(f.get("Total")) - _num(f.get("Collected")), 2),
+        "Outstanding": _saldo(f),
         "Vence":     _dmy(f.get("ExpiryDate")),
         "Total":     round(_num(f.get("Total")), 2),
         "Cobrado":   round(_num(f.get("Collected")), 2),
         "Fecha":     _dmy(f.get("Date")),
     } for f in _rows])
-    _gen = st.session_state.get("_fac_tbl_gen", 0)
+    if not con_cliente:
+        df = df.drop(columns=["Cliente"])
+    _gk = f"_{clave}_gen"
+    _gen = st.session_state.get(_gk, 0)
     _ev = st.dataframe(
         df, width="stretch", hide_index=True,
         # v569 · un toque en cualquier celda abre la factura (antes, solo la casilla)
-        on_select="rerun", selection_mode="single-cell", key=f"fac_tbl_{_gen}",
+        on_select="rerun", selection_mode="single-cell", key=f"{clave}_{_gen}",
         column_config=tabla.cfg(None, {
             "Nº":        st.column_config.TextColumn(t("No."), pinned=True),
             "Estado":    st.column_config.TextColumn(t("Status")),
@@ -177,11 +217,9 @@ def render_facturas(grupo):
     _s = getattr(_ev, "selection", None)
     _sr = [c[0] for c in (getattr(_s, "cells", None) or [])] or list(getattr(_s, "rows", None) or [])
     if _sr and 0 <= _sr[0] < len(_rows):
-        # ⚠️ Otra generación de clave: soltar el estado del widget no llega al navegador
-        # (trampa 31) y al volver la tabla reabriría la misma factura.
-        st.session_state["_fac_tbl_gen"] = _gen + 1
-        st.session_state["_fac_open"] = str(_rows[_sr[0]].get("ID", ""))
-        st.rerun()
+        st.session_state[_gk] = _gen + 1
+        return _rows[_sr[0]]
+    return None
 
 
 # ── Detalle de una factura ───────────────────────────────────────

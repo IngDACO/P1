@@ -182,9 +182,10 @@ def _crea(g, nom, **k):
 P.create_project = _crea
 _L["L9"] = dict(_L["L1"], ID="L9", Name="Nueva oficina")
 st.session_state["_IDS"] = []
-PU.render_localizaciones("G")
+# v570 · los avisos ANTES de la sección, como la shell (ver verif_v569/v570)
 from core import flash
 flash.mostrar()
+PU.render_localizaciones("G")
 '''
 at = AppTest.from_string(G_ALTA, default_timeout=90)
 at.run()

@@ -149,9 +149,12 @@ if "_INI" not in st.session_state:
     st.session_state["_INI"] = 1
     for _k, _v in (st.session_state.get("_PRE") or {}).items():
         st.session_state[_k] = _v
-PU.render_group_expenses("G")
+# ⚠️ v570 · los avisos se pintan ANTES de la sección, como la shell
+# (`home_ui.render_admin_content`). Este guion los pintaba DESPUÉS, y así un aviso
+# encolado sin `st.rerun()` salía aquí y en producción no (un clic tarde).
 from core import flash
 flash.mostrar()
+PU.render_group_expenses("G")
 '''
 
 

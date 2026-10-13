@@ -81,9 +81,12 @@ if "_INI" not in st.session_state:
     st.session_state["_INI"] = 1
     for _k, _v in (st.session_state.get("_PRE") or {}).items():
         st.session_state[_k] = _v
-IU.render_facturas("G")
+# ⚠️ v570 · los avisos se pintan ANTES de la sección, como la shell
+# (`home_ui.render_admin_content`). Este guion los pintaba DESPUÉS, y así un aviso
+# encolado sin `st.rerun()` salía aquí y en producción no (un clic tarde).
 from core import flash
 flash.mostrar()
+IU.render_facturas("G")
 '''
 
 
@@ -140,7 +143,8 @@ def _fn(n):
     return next(x for x in ast.walk(_arb) if isinstance(x, ast.FunctionDef) and x.name == n)
 
 
-_rad = [n for n in ast.walk(_fn("render_facturas")) if isinstance(n, ast.Call) and ast.unparse(n.func) == "st.radio"]
+# v570 · el selector se mudó a `filtrar` (el mismo para Invoices y la ficha del cliente)
+_rad = [n for n in ast.walk(_fn("filtrar")) if isinstance(n, ast.Call) and ast.unparse(n.func) == "st.radio"]
 chk("⚠️ el filtro se RECUERDA (`persist_state`)",
     _rad and any(k.arg == "persist_state" and ast.unparse(k.value) == "'session'" for k in _rad[0].keywords))
 at = _app(pre={"fac_tbl_0": {"selection": {"rows": [], "columns": [], "cells": [(1, "Cliente")]}}})
@@ -240,7 +244,9 @@ from core import invoices_ui as _IU                                          # n
 chk("⚠️ el detalle usa las palabras de `etiqueta` (pending/collected, no outstanding/paid)",
     _IU._EST_FMT["pendiente"][1] == "pending" and _IU._EST_FMT["cobrada"][1] == "collected")
 _lit = []
-for fn in ("render_facturas", "_detalle_factura", "_nueva_factura"):
+# v570 · y las tres funciones comunes de la lista
+for fn in ("render_facturas", "_detalle_factura", "_nueva_factura", "cifras_cobro", "filtrar",
+           "tabla_facturas"):
     for n in ast.walk(_fn(fn)):
         if (isinstance(n, ast.Call) and not ast.unparse(n.func).startswith("logger")
                 and ast.unparse(n.func).split(".")[-1] in ("caption", "warning", "info", "error",

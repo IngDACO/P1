@@ -106,9 +106,15 @@ chk("_etq(P.derive_estado" not in _pu,
 
 print("\n== 4. Las 3 celdas que SÍ son display, traducidas ==")
 for fn, frag in [("invoices_ui.py", "_etq(I.estado_cobro(f))"),
-                 ("clientes_ui.py", "_etq(INV.estado_cobro(x))"),
                  ("quotes_ui.py", "_etq(Q.estado_de(c))")]:
     chk(frag in (CORE / fn).read_text(encoding="utf-8"), f"{fn}: {frag}")
+# v570 · CADUCADA la de `clientes_ui` («_etq(INV.estado_cobro(x))»): la tabla de facturas
+# de la ficha del cliente era una COPIA que se quedó atrás, y ahora es LA de Invoices
+# (`invoices_ui.tabla_facturas`, cuya celda vigila la entrada de arriba). El principio
+# sigue: esa celda no puede pintar el estado en crudo → que no tenga tabla propia.
+_cu = (CORE / "clientes_ui.py").read_text(encoding="utf-8")
+chk("IU.tabla_facturas(" in _cu and "estado_cobro(" not in _cu,
+    "clientes_ui.py: la tabla de facturas es la de Invoices (sin celda de estado propia)")
 
 print("\n== 5. `_etq` importado donde se usa (ámbito, no presencia) ==")
 # ⚠️ Al traducir metí `_etq(...)` en dos módulos que NO lo importaban: NameError

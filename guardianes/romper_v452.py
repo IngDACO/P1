@@ -24,7 +24,10 @@ ROTURAS = [
      "⚠️ se traduce el estado que se ESCRIBE en la hoja (guardaria ingles en Sheets)"),
     ("quotes_ui.py", '"Estado": _etq(Q.estado_de(c))', '"Estado": Q.estado_de(c)',
      "la celda de Cotizaciones vuelve al crudo"),
-    ("clientes_ui.py", "from core.i18n import t, etiqueta as _etq",
+    # v570 · re-anclada: `clientes_ui` ya no usa `_etq` (su tabla de facturas es la de
+    # Invoices) y quitarle el import no rompería nada. La misma rotura, en un módulo que
+    # SÍ lo usa (dos veces).
+    ("payroll_ui.py", "from core.i18n import t, etiqueta as _etq",
      "from core.i18n import t",
      "un modulo usa _etq sin importarlo (NameError al abrir la pantalla)"),
     # v564 · el ternario de la cabecera de la localización ya NO es un ternario (pasó a

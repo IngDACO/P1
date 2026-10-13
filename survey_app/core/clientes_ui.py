@@ -7,7 +7,7 @@ abren el proyecto en la sección Proyectos). El enlace cliente↔proyecto usa
 """
 import pandas as pd
 
-from core.i18n import t, etiqueta as _etq
+from core.i18n import t
 import streamlit as st
 
 from core import flash
@@ -280,34 +280,23 @@ def _detalle_cliente(grupo, key):
     # ── Estado de cuenta: facturas del cliente (v259) ──
     from core import invoices as INV
     if cid and INV.is_configured():
+        # ⚠️ v570 · las cifras, el filtro y la tabla son los de Invoices (`invoices_ui`):
+        # esta era una COPIA que se quedó atrás — fecha ISO, «Nº» sin traducir, casillas,
+        # dólares truncados (`%,d`), sin vencimiento ni saldo, y cifras que no se tocaban.
+        from core import invoices_ui as IU
         st.markdown(t("#### :material/receipt: Invoicing"))
-        rc = INV.resumen_cliente(grupo, cid)
-        fc = st.columns(4)
-        fc[0].metric(t("Invoiced"), f"${rc['facturado']:,.0f}")
-        fc[1].metric(t("Collected"), f"${rc['cobrado']:,.0f}")
-        fc[2].metric(t("Outstanding"), f"${rc['pendiente']:,.0f}")
-        fc[3].metric(t("Overdue"), f"${rc['vencido']:,.0f}")
         _facs = INV.list_facturas(grupo, cid)
+        IU.cifras_cobro(_facs, "clf")
         if _facs:
-            _fr = sorted(_facs, key=lambda x: str(x.get("Created", "")), reverse=True)
-            _fdf = pd.DataFrame([{
-                "Nº":      str(x.get("Number", "")),
-                "Fecha":   str(x.get("Date", "")),
-                "Total":   round(_num(x.get("Total")), 0),
-                "Cobrado": round(_num(x.get("Collected")), 0),
-                "Estado":  _etq(INV.estado_cobro(x)),
-            } for x in _fr])
-            _fev = st.dataframe(
-                _fdf, width="stretch", hide_index=True,
-                on_select="rerun", selection_mode="single-row", key=f"cli_facs_{cid}",
-                column_config=tabla.cfg(None, {"Total": st.column_config.NumberColumn(t("Total"), format="$%,d"),
-                               "Cobrado": st.column_config.NumberColumn(t("Collected"), format="$%,d")}))
-            _fs = list(_fev.selection.rows)
-            if _fs:
-                st.session_state["_fac_open"] = str(_fr[_fs[0]].get("ID", ""))
-                st.session_state["_admin_nav_pending"] = ("finanzas", "🧾 Facturas")
-                st.session_state.pop(f"cli_facs_{cid}", None)
-                st.rerun()
+            _fr = IU.filtrar(_facs, "clf", f"cpxseg_clf_filt_{cid}")
+            if not _fr:
+                st.caption(t("No invoices in this filter."))
+            else:
+                _fsel = IU.tabla_facturas(_fr, f"cli_facs_{cid}", con_cliente=False)
+                if _fsel:
+                    st.session_state["_fac_open"] = str(_fsel.get("ID", ""))
+                    st.session_state["_admin_nav_pending"] = ("finanzas", "🧾 Facturas")
+                    st.rerun()
         else:
             st.caption(t("No invoices yet."))
         if st.button(t(":material/add_circle: New invoice for this client"), key=f"cli_newfac_{cid}"):

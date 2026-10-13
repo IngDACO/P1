@@ -244,8 +244,9 @@ DEUDA = {
     "romper_v440.py": 1, "romper_v441.py": 1, "romper_v446.py": 1,
     "romper_v450.py": 1,
     "romper_v455.py": 1, "romper_v461.py": 3,
-    "romper_v472.py": 2, "romper_v502.py": 1,
+    "romper_v472.py": 2,
 }
+# v570 · −1: romper_v502 (la arrastrada, muerta desde v505), puesta al día y re-corrida.
 _por_bat = {}
 for m in _muertas:
     _por_bat[m.split(":")[0]] = _por_bat.get(m.split(":")[0], 0) + 1

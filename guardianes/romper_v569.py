@@ -75,15 +75,17 @@ ROTURAS = [
     ("el PDF vuelve a «Factura_…»", IU,
      [("file_name=f\"Invoice_{f.get('Number', '')}.pdf\"", "file_name=f\"Factura_{f.get('Number', '')}.pdf\"")]),
     # ── activos y lista ──
+    # v570 · estas tres se mudaron a `cifras_cobro` / `filtrar` / `tabla_facturas` (las
+    # comparte la ficha del cliente): la misma rotura, anclada a la forma nueva.
     ("⚠️ las cifras dejan de filtrar la lista", IU,
-     [('                st.session_state["_fac_filt_pending"] = _fl\n', "")]),
+     [('                st.session_state[f"_{pref}_filt_pending"] = _fl\n', "")]),
     ("el filtro deja de recordarse", IU,
-     [('horizontal=True, key="cpxseg_fac_filt", label_visibility="collapsed",\n'
+     [('horizontal=True, key=clave, label_visibility="collapsed",\n'
        '                     persist_state="session")',
-       'horizontal=True, key="cpxseg_fac_filt", label_visibility="collapsed")')]),
+       'horizontal=True, key=clave, label_visibility="collapsed")')]),
     ("⚠️ abrir una factura vuelve a pedir la casilla", IU,
-     [('on_select="rerun", selection_mode="single-cell", key=f"fac_tbl_{_gen}",',
-       'on_select="rerun", selection_mode="single-row", key=f"fac_tbl_{_gen}",')]),
+     [('on_select="rerun", selection_mode="single-cell", key=f"{clave}_{_gen}",',
+       'on_select="rerun", selection_mode="single-row", key=f"{clave}_{_gen}",')]),
     ("el cliente deja de llevar a su ficha", IU,
      [('        st.session_state["_cli_open"] = C._norm(_cn)\n', "")]),
     ("el Nº deja de ir fijado", IU,
