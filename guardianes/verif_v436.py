@@ -106,19 +106,34 @@ try:
     def texto(b):
         return " ".join(p.extract_text() or "" for p in PdfReader(io.BytesIO(b)).pages)
 
-    _f = next((x for x in I.list_facturas(G) if str(x.get("Status")) != "anulada"), None)
+    # ⚠️ v574 · con la demo VACÍA estos chequeos se saltaban en silencio (el paso en vacío
+    # de la trampa 1): sin facturas ni colillas en cliente1, romper_v436 vio escapar «la
+    # colilla vuelve a mostrar el tipo interno». Si no hay una real, se usa una CONSTRUIDA.
+    _f = next((x for x in I.list_facturas(G) if str(x.get("Status")) != "anulada"), None) or {
+        "ID": "F-MUESTRA", "Group": G, "Number": "0001", "Date": "2026-10-13",
+        "ExpiryDate": "2026-10-27", "Total": "110", "Subtotal": "100", "Tax": "10",
+        "TaxPct": "10", "Collected": "0", "Status": "emitida", "ClientName": "Muestra",
+        "LinesJSON": '[{"concepto": "Linea", "importe": 100}]', "CollectionsJSON": "[]"}
     if _f:
         _t = texto(invoice_pdf.generate_invoice_pdf(_f, None, "COPEX"))
         chk("la FACTURA sale en inglés",
             all(k in _t for k in ("TAX INVOICE", "Bill to", "Description", "Balance due")))
         chk("...y no quedan etiquetas en español",
             not any(k in _t for k in ("Facturar a", "Concepto", "Por cobrar", "Importe")))
-    _c = next(iter(Q.list_cotizaciones(G)), None)
+    _c = next(iter(Q.list_cotizaciones(G)), None) or {
+        "ID": "Q-MUESTRA", "Group": G, "Number": "Q-0001", "Date": "2026-10-13",
+        "ValidUntil": "2026-11-12", "Subtotal": "100", "Tax": "10", "TaxPct": "10",
+        "Total": "110", "ClientName": "Muestra", "LinesJSON": "[]"}
     if _c:
         _t = texto(quote_pdf.generate_quote_pdf(_c, None, "COPEX"))
         chk("la COTIZACIÓN sale en inglés",
             all(k in _t for k in ("QUOTE", "Valid until", "Description")))
-    _n = next(iter(PR.list_nominas(G)), None)
+    _n = next(iter(PR.list_nominas(G)), None) or {
+        "ID": "N-MUESTRA", "Group": G, "User": "u", "Name": "Muestra", "PeriodFrom": "2026-09-01",
+        "PeriodTo": "2026-09-07", "Hours": "10", "HourlyRate": "30", "Base": "300", "Net": "270",
+        "Status": "emitida", "PaymentDate": "",
+        "ConceptsJSON": '[{"concepto": "Tax", "tipo": "deduccion", "monto": 30},'
+                        ' {"concepto": "Super", "tipo": "aporte", "monto": 34.5}]'}
     if _n:
         _t = texto(payslip_pdf.generate_payslip_pdf(_n, "COPEX"))
         chk("la COLILLA sale en inglés",

@@ -29,9 +29,12 @@ ROTURAS = [
     ("verif_v442.py", "core/payroll_ui.py",
      "            _etu = auth.etiqueta_usuarios", "            _etq = auth.etiqueta_usuarios",
      "alguien vuelve a usar `_etq` como variable"),
+    # v574 · CADUCADA desde v559 (el selector pasó a `ui.opciones_con_actual` y a un
+    # `format_func` con lambda): no casaba. La misma rotura: se queda sin `format_func`.
     ("verif_v442.py", "core/projects_ui.py",
-     "P.ESTADOS_MANUAL,\n                                   format_func=_etq,",
-     "P.ESTADOS_MANUAL,",
+     'format_func=lambda v: _etq(v) if str(v or "").strip()\n'
+     '                                   else t("— automatic (from the progress) —"), index=_emi)',
+     "index=_emi)",
      "el selector de estado pierde el format_func"),
     # ── verif_ramas_muertas ──
     ("verif_ramas_muertas.py", "core/rail_cut_ui.py",

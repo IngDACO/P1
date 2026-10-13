@@ -14,7 +14,7 @@ from reportlab.lib.units import mm
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 from core import i18n
 from core.i18n import d
-from core.num import num as _num
+from core.num import num as _num, dmy
 
 C_BRAND = colors.HexColor("#1a3a5c")
 C_LIGHT = colors.HexColor("#e8f1fb")
@@ -43,23 +43,40 @@ def generate_payslip_pdf(nomina: dict, grupo_nombre: str = "") -> bytes:
     buf = _io.BytesIO()
     doc = SimpleDocTemplate(buf, pagesize=A4, leftMargin=16 * mm, rightMargin=16 * mm,
                             topMargin=16 * mm, bottomMargin=16 * mm,
-                            title=f"Colilla {nomina.get('Name', '')}")
+                            title=d("Payslip {n}", n=nomina.get("Name", "")))
     story = []
 
-    marca = grupo_nombre or str(nomina.get("Group", ""))
-    head = Table([[Paragraph(str(marca), mk), Paragraph(d("PAYSLIP"), ti)]],
+    # ⚠️ v574 · el EMPLEADOR con su nombre legal y su ABN (lo que ya lleva la factura,
+    # v483): la cabecera decía «cliente1», el identificador INTERNO del grupo. Se lee del
+    # grupo de la propia colilla; un fallo leyendo la identidad no impide la colilla.
+    _grp = str(nomina.get("Group", "")) or grupo_nombre
+    _ident = {}
+    try:
+        from core import contable
+        _ident = contable.identidad(_grp)
+    except Exception:
+        _ident = {}
+    marca = str(_ident.get("legal") or "").strip() or grupo_nombre or _grp
+    _emisor = [Paragraph(str(marca), mk)]
+    if str(_ident.get("abn") or "").strip():
+        _emisor.append(Paragraph(f"{d('ABN')} {_ident['abn']}", sm))
+    head = Table([[_emisor, Paragraph(d("PAYSLIP"), ti)]],
                  colWidths=[90 * mm, 88 * mm])
     head.setStyle(TableStyle([("ALIGN", (1, 0), (1, 0), "RIGHT"), ("VALIGN", (0, 0), (-1, -1), "TOP")]))
     story += [head, Spacer(1, 10)]
 
+    # ⚠️ v574 · el estado TRADUCIDO también cuando está pagada: se armaba «pagada (fecha)» y
+    # `etiqueta` no reconoce esa cadena compuesta, así que el PDF decía «pagada (2026-10-13)».
     est = str(nomina.get("Status", "emitida"))
+    _est_txt = i18n.etiqueta(est)
     if est == "pagada" and str(nomina.get("PaymentDate", "")).strip():
-        est = f"pagada ({nomina.get('PaymentDate')})"
+        _est_txt += f" ({dmy(nomina.get('PaymentDate'))})"
     emp = Table([
         [Paragraph(d("Employee"), sm), Paragraph(str(nomina.get("Name", "")), Hb),
-         Paragraph(d("Period"), sm), Paragraph(f"{nomina.get('PeriodFrom', '')} → {nomina.get('PeriodTo', '')}", H)],
+         Paragraph(d("Period"), sm),
+         Paragraph(f"{dmy(nomina.get('PeriodFrom'))} → {dmy(nomina.get('PeriodTo'))}", H)],
         [Paragraph(d("Hours"), sm), Paragraph(f"{_num(nomina.get('Hours')):.2f} h", H),
-         Paragraph(d("Status"), sm), Paragraph(i18n.etiqueta(est), H)],
+         Paragraph(d("Status"), sm), Paragraph(_est_txt, H)],
     ], colWidths=[22 * mm, 67 * mm, 22 * mm, 67 * mm])
     emp.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP"),
                              ("TOPPADDING", (0, 0), (-1, -1), 2), ("BOTTOMPADDING", (0, 0), (-1, -1), 2)]))

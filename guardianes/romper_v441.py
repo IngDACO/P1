@@ -32,9 +32,12 @@ ROTURAS = [
     ("core/buffer_cut_ui.py", "from core.i18n import t, d", "from core.i18n import d",
      "4 · el módulo deja de importar `t`"),
     # ── chequeo 5: LA RED NUEVA (frases sin envolver) ──
-    ("core/payroll_ui.py", '"All periods"', '"Todos los periodos"',
+    # v574 · las dos frases están hoy DENTRO de `t()` (Payroll en v574, la conciliación en
+    # v566): ponerlas en español dentro de `t()` ya no es «sin envolver» y se escapaban. La
+    # rotura de esta red es la de su nombre: la frase sale de `t()` y en español.
+    ("core/payroll_ui.py", 't("All periods")', '"Todos los periodos"',
      "5 · una frase vuelve al español SIN envolver"),
-    ("core/projects_ui.py", '"= real cost of labour"', '"= costo real de la mano de obra"',
+    ("core/projects_ui.py", 't("= real cost of labour")', '"= costo real de la mano de obra"',
      "5 · una frase de la conciliación vuelve al español"),
     # ── chequeo 6: el PDF de las herramientas ──
     ("core/plumb_ui.py", 'd("Plumb setting-out")', '"Replanteo de plomadas"',

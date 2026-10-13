@@ -361,6 +361,25 @@ def marcar_pagada(nid: str, fecha="") -> tuple:
     return True, t("Payslip marked as paid.")
 
 
+def deshacer_pago(nid: str) -> tuple:
+    """v574 · «Mark as paid» por error no tenía vuelta atrás: vuelve a EMITIDA y sin fecha."""
+    w, err = _ws()
+    if err:
+        return False, err
+    row = _find_row(w, nid)
+    if row is None:
+        return False, t("Payslip not found.")
+    try:
+        w.batch_update([
+            {"range": f"{_col_letter(_NCOL['Status'])}{row}", "values": [["emitida"]]},
+            {"range": f"{_col_letter(_NCOL['PaymentDate'])}{row}", "values": [[""]]},
+        ], value_input_option="RAW")
+    except Exception as e:
+        return False, str(e)
+    _invalidate()
+    return True, t("Payment undone: the payslip is unpaid again.")
+
+
 def anular(nid: str) -> tuple:
     w, err = _ws()
     if err:
@@ -368,6 +387,10 @@ def anular(nid: str) -> tuple:
     row = _find_row(w, nid)
     if row is None:
         return False, t("Payslip not found.")
+    # ⚠️ v574 · una PAGADA no se anula: el dinero ya salió, y anularla la sacaría de lo
+    # pagado sin que nadie lo note. Primero se deshace el pago (la pantalla lo dice).
+    if str((get_nomina(nid) or {}).get("Status", "")).lower() == "pagada":
+        return False, t("A paid payslip cannot be voided: undo the payment first.")
     try:
         w.update_cell(row, _NCOL["Status"], "anulada")
     except Exception as e:

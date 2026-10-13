@@ -86,6 +86,15 @@ def parse_date(v):
     return None
 
 
+def dmy(v) -> str:
+    """Fecha de celda → «13/10/2026» (DD/MM/YYYY, la convención de AU). v574: Payroll —la
+    pantalla y la colilla— iba en ISO. Lo que no se lee como fecha sale tal cual (o «—»)."""
+    d = parse_date(v)
+    if d:
+        return d.strftime("%d/%m/%Y")
+    return str(v or "").strip() or "—"
+
+
 def col_letter(n: int) -> str:
     """Índice de columna 1-based → letra(s) A1 (1→A, 26→Z, 27→AA)."""
     s = ""

@@ -6,8 +6,10 @@ RAIZ = Path(r"C:\Users\diego\P1\survey_app")
 GUARD = Path(__file__).with_name("verif_v436.py")
 
 CASOS = [
+    # v574 · CADUCADA (el `elif` pasó a `if key is None:`): no casaba y la rotura no
+    # probaba nada — check_anclas_roturas la tenía por «ilegible». La misma rotura.
     ("vuelve la comparación por TEXTO traducido (el fallo de la etiqueta QR)",
-     "core/asset_label_pdf.py", "        elif key is None:", '        elif lbl == "Make/Model":'),
+     "core/asset_label_pdf.py", "        if key is None:", '        if lbl == "Make/Model":'),
     ("la factura pasa a usar t() (saldría en español si traduces la pantalla)",
      "core/invoice_pdf.py", 'Paragraph(d("TAX INVOICE"), ti)', 'Paragraph(t("TAX INVOICE"), ti)'),
     ("d() deja de ignorar el idioma de la interfaz",
