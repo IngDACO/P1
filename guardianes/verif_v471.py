@@ -64,13 +64,19 @@ def _claves(nodo):
     return out
 
 
+# v573 · la fuente EN MEMORIA con la que se valida cada sonda (sección 4). Antes se
+# escribía la rotura en el DISCO y se restauraba: la SUITE modificaba el árbol (y al
+# reescribirlo dejaba `quotes_ui.py` en LF — el «ruido» que salía tras cada suite).
+_SUPLE = {}
+
+
 def _tablas():
     """(fichero, linea, res, filas, disabled, etiquetas_locales) de cada tabla."""
     out = []
     for f in sorted(os.listdir("core")):
         if not f.endswith("_ui.py"):
             continue
-        src = io.open("core/" + f, encoding="utf-8").read()
+        src = _SUPLE.get("core/" + f) or io.open("core/" + f, encoding="utf-8").read()
         a = ast.parse(src)
         for fn in [x for x in ast.walk(a) if isinstance(x, ast.FunctionDef)]:
             var = {}
@@ -193,7 +199,24 @@ _c = cabeceras_crudas()
 # ── 4 ─────────────────────────────────────────────────────────────────────────
 sec("4. Las tres sondas VEN un caso conocido-bueno (si no, su cero no vale)")
 # ⚠️ Sin esto, un cero no significa nada: `verif_v444` daba 0 con dos huerfanas
-# delante (trampa nº12). Se rompe a proposito y se restaura.
+# delante (trampa nº12). Se rompe a proposito —v573: EN MEMORIA, nada se escribe—.
+
+
+def _cabeceras_de(src):
+    """Las claves de `CABECERAS` leídas del TEXTO de tabla.py (sin importarlo)."""
+    for n in ast.parse(src).body:
+        if isinstance(n, ast.Assign) and getattr(n.targets[0], "id", "") == "CABECERAS" \
+                and isinstance(n.value, ast.Dict):
+            return {k.value for k in n.value.keys if isinstance(k, ast.Constant)}
+    return set()
+
+
+# La lectura por AST tiene que dar EXACTAMENTE lo que da el módulo: si no, la sonda de
+# cabecera se validaría contra otra cosa.
+_cab_txt = _cabeceras_de(io.open("core/tabla.py", encoding="utf-8").read())
+(ok if _cab_txt and _cab_txt == GLOBAL else fallo)(
+    "CABECERAS leído del texto = el del módulo (%d claves)" % len(GLOBAL),
+    sorted(_cab_txt ^ GLOBAL)[:5])
 PRUEBAS = [
     ("lectura", "core/quotes_ui.py", 'ed.iloc[i]["Cant."]', 'ed.iloc[i]["Qty"]',
      lecturas_rotas),
@@ -206,20 +229,17 @@ for etq, fich, viejo, nuevo, sonda in PRUEBAS:
     if orig.count(viejo) != 1:
         fallo("la sonda de %s no se pudo validar: ancla ausente" % etq)
         continue
+    roto = orig.replace(viejo, nuevo, 1)
+    _glob0 = GLOBAL
     try:
-        io.open(fich, "w", encoding="utf-8", newline="").write(orig.replace(viejo, nuevo, 1))
-        # ⚠️ `tabla` se relee del disco para la sonda de cabecera
         if etq == "cabecera":
-            import importlib
-            importlib.reload(tabla)
-            GLOBAL = set(tabla.CABECERAS)
+            GLOBAL = _cabeceras_de(roto)
+        else:
+            _SUPLE[fich] = roto
         visto = sonda()
     finally:
-        io.open(fich, "w", encoding="utf-8", newline="").write(orig)
-        if etq == "cabecera":
-            import importlib
-            importlib.reload(tabla)
-            GLOBAL = set(tabla.CABECERAS)
+        _SUPLE.clear()
+        GLOBAL = _glob0
     (ok if visto else fallo)("la sonda de %s ve el caso conocido-bueno" % etq,
                              "no lo ve: su cero no significaria nada")
 

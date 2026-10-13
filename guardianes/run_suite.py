@@ -3,6 +3,7 @@
 Un subconjunto curado da la sensacion de cobertura sin la cobertura: cuando
 reportaba "13 en verde", la suite completa tenia 48 y 13 estaban en rojo.
 """
+import hashlib
 import os
 import pathlib
 import subprocess
@@ -55,6 +56,21 @@ _ver = subprocess.run([PY, "-c", "import sys, streamlit; print('Python %d.%d.%d'
                       env=ENTORNO).stdout.strip()
 guardianes = sorted(p for p in AQUI.glob("*.py")
                     if p.name.startswith(("verif_", "check_")))
+# v573 · un argumento suelto filtra por nombre (`run_suite.py verif_v57`): para validar
+# esta misma red sin esperar media hora. ⚠️ Antes de desplegar, SIEMPRE la suite entera.
+_filtro = [a for a in sys.argv[1:] if not a.startswith("-")]
+if _filtro:
+    guardianes = [p for p in guardianes if any(f in p.name for f in _filtro)]
+APP = AQUI.parent / "survey_app"
+
+
+def _huella():
+    """{fichero: md5} del CÓDIGO de la app. ⚠️ v573 · la suite NO debe tocarlo: tres
+    guardianes (v463, v471, v498) escribían en `core/` para validar sus sondas —rompían y
+    restauraban, o creaban un fichero allí— y `quotes_ui.py` salía «modificado» (CRLF→LF)
+    tras cada suite. Un guardián que lo toque sale en ROJO aunque sus afirmaciones pasen."""
+    return {str(f.relative_to(APP)): hashlib.md5(f.read_bytes()).hexdigest()
+            for f in APP.rglob("*.py") if "__pycache__" not in f.parts}
 
 print(f"{len(guardianes)} guardianes · {_ver}{AVISO_PY}\n")
 # ⚠️ Un guardián que necesita datos y no los tiene NO debe salir verde (sería el paso
@@ -67,11 +83,17 @@ verde, rojo, roto, sindatos = [], [], [], []
 t0 = time.time()
 for p in guardianes:
     try:
+        _h0 = _huella()
         r = subprocess.run([PY, str(p)], capture_output=True, cwd=CWD, env=ENTORNO,
                            text=True, encoding="utf-8", errors="replace", timeout=240)
         time.sleep(PAUSA)
         cola = [l for l in (r.stdout or "").splitlines() if l.strip()][-1:] or [""]
-        if r.returncode == 0:
+        _h1 = _huella()
+        _tocados = sorted(k for k in set(_h0) | set(_h1) if _h0.get(k) != _h1.get(k))
+        if _tocados:
+            rojo.append((p.name, "TOCÓ el código de la app: %s" % ", ".join(_tocados)[:70]))
+            print(f"  ROJO  {p.name}   TOCÓ el código de la app: {', '.join(_tocados)[:70]}")
+        elif r.returncode == 0:
             verde.append(p.name)
             print(f"  ok    {p.name}")
         elif r.returncode == SIN_DATOS:

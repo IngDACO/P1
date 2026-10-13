@@ -49,7 +49,14 @@ def ck(que, real, esperado):
     ok(que) if real == esperado else fallo(que, f"{real!r} != {esperado!r}")
 
 
+# v573 · fuentes EN MEMORIA para validar la sonda: antes se creaba un fichero dentro de
+# `core/` en plena suite (la suite no debe tocar el árbol de la app).
+_SUPLE = {}
+
+
 def _fuente(f):
+    if f in _SUPLE:
+        return _SUPLE[f]
     return io.open(os.path.join(RAIZ, f), encoding="utf-8").read()
 
 
@@ -160,7 +167,8 @@ print("\n[3] en todo el repo: la función `t` no se pasa como argumento de datos
 def _sospechosos():
     out = []
     _vistos_comp = set()          # llamadas dentro de una comprensión que liga `t`
-    for f in sorted(os.listdir(os.path.join(RAIZ, "core"))) + ["app.py"]:
+    _extra = sorted(os.path.basename(k) for k in _SUPLE if os.path.dirname(k) == "core")
+    for f in sorted(os.listdir(os.path.join(RAIZ, "core"))) + ["app.py"] + _extra:
         rel = os.path.join("core", f) if f != "app.py" else "app.py"
         if not rel.endswith(".py"):
             continue
@@ -203,14 +211,13 @@ def _sospechosos():
 
 ck("ninguna llamada pasa `t` como dato", _sospechosos(), [])
 # ⚠️ la sonda, validada contra el caso conocido-malo (trampa nº12)
-_tmp = os.path.join(RAIZ, "core", "_zz_sonda_v498.py")
+_SUPLE[os.path.join("core", "_zz_sonda_v498.py")] = (
+    "from core.i18n import t\n\n\ndef f(u, g):\n    return C.add(u, g, t, 1)\n")
 try:
-    io.open(_tmp, "w", encoding="utf-8").write(
-        "from core.i18n import t\n\n\ndef f(u, g):\n    return C.add(u, g, t, 1)\n")
     ck("...y la sonda CAZA el fallo real reconstruido",
        any("_zz_sonda_v498" in s for s in _sospechosos()), True)
 finally:
-    os.remove(_tmp)
+    _SUPLE.clear()
 
 # ═════ 4 · el aviso de certificados, sin español suelto ══════════════════════
 print("\n[4] el aviso de certificados al asignar, traducido")

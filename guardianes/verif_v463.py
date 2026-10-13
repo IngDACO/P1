@@ -355,12 +355,15 @@ _NUEVO = set(i18n.VALORES.values())
 _AMBOS = _VIEJO & _NUEVO           # neutros (Delivery, Ripout...): no informan
 
 
+_SUPLE = {}      # v573 · fuente en memoria para validar la sonda (abajo)
+
+
 def _mezclas():
     _out = []
     for _f in sorted(os.listdir("core")):
         if not _f.endswith(".py"):
             continue
-        _a = ast.parse(io.open("core/" + _f, encoding="utf-8").read())
+        _a = ast.parse(_SUPLE.get("core/" + _f) or io.open("core/" + _f, encoding="utf-8").read())
         for _n in ast.walk(_a):
             if isinstance(_n, ast.FunctionDef):
                 _r = {_x.value.value for _x in ast.walk(_n)
@@ -383,14 +386,15 @@ def _mezclas():
 
 # ⚠️ Validar la sonda ANTES de creerse su cero: se reintroduce la mezcla REAL de v469
 # y tiene que verla. Sin este paso, un "0 mezclas" no significa nada (trampa nº12).
+# v573 · EN MEMORIA (`_SUPLE`): antes se escribía la rotura en core/invoices.py en plena
+# suite y se restauraba (la suite no debe tocar el árbol de la app).
 _pinv = "core/invoices.py"
 _orig = io.open(_pinv, encoding="utf-8").read()
 try:
-    io.open(_pinv, "w", encoding="utf-8", newline="").write(
-        _orig.replace('    return "pendiente"', '    return "pending"', 1))
+    _SUPLE[_pinv] = _orig.replace('    return "pendiente"', '    return "pending"', 1)
     _ve = [m for m in _mezclas() if "invoices.py" in m]
 finally:
-    io.open(_pinv, "w", encoding="utf-8", newline="").write(_orig)
+    _SUPLE.clear()
 if _ve:
     ok("la sonda ve el caso conocido-bueno (%s)" % _ve[0][:60])
 else:
