@@ -54,12 +54,15 @@ def _cifras_cliente(key, n, activos, av, hrs, cost, al, con_coste, con_alertas):
     cada cifra abre debajo el desglose por obra con su filtro u orden (`_desglose_obras`);
     la misma otra vez lo cierra. Las alertas, que eran una línea suelta, son una cifra más."""
     from core import theme as _T
-    _K = [("prj", t("Projects"), str(n), t("linked to this client")),
+    # ⚠️ Pies CORTOS (el kit los recorta con «…» para que la fila mida igual): medido en
+    # producción, a 800 px con el menú cada tarjeta deja 87 px de pie y «linked to this
+    # client» (97) salía «linked to this c…». Todos ≤ 80 px con la fuente real.
+    _K = [("prj", t("Projects"), str(n), t("of this client")),
           ("act", t("Active"), str(activos), t("not completed")),
-          ("av", t("Avg. progress"), f"{av:.0f}%", t("across its projects")),
-          ("hrs", t("Hours"), _horas(hrs), t("clocked on its jobs"))]
+          ("av", t("Avg. progress"), f"{av:.0f}%", t("across its jobs")),
+          ("hrs", t("Hours"), _horas(hrs), t("clocked on jobs"))]
     if con_coste:
-        _K.append(("cost", t("Total cost"), _T.dinero(cost, 0), t("charged to its jobs")))
+        _K.append(("cost", t("Total cost"), _T.dinero(cost, 0), t("charged to jobs")))
     if con_alertas:
         _K.append(("al", t("Open alerts"), str(al), t("on its jobs")))
     if al:
