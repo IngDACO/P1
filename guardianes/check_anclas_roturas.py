@@ -208,7 +208,7 @@ for b in _bats:
 ILEGIBLES = {
     "romper_v430_reanclado.py": 3, "romper_v437.py": 10, "romper_v438.py": 12,
     "romper_v448.py": 1, "romper_v482.py": 9,
-    "romper_v483.py": 11, "romper_v484.py": 6, "romper_v486.py": 1,
+    "romper_v483.py": 10, "romper_v484.py": 6, "romper_v486.py": 1,
 }
 # ⚠️ v526 · 86 → 53: leer LISTAS hizo legibles las 33 de romper_v488/v490 (sin ninguna
 # muerta escondida esta vez).

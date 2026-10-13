@@ -37,6 +37,16 @@ def _money(v) -> str:
     return f"${_num(v):,.2f}"
 
 
+def _dmy(iso) -> str:
+    """«2026-10-13» → «13/10/2026» (v569: el documento que recibe el cliente iba en ISO)."""
+    s = str(iso or "").strip()[:10]
+    try:
+        y, m, dd = s.split("-")
+        return f"{int(dd):02d}/{int(m):02d}/{y}"
+    except Exception:
+        return s or "—"
+
+
 def generate_invoice_pdf(factura: dict, cliente: dict = None, grupo_nombre: str = "") -> bytes:
     ss = getSampleStyleSheet()
     H  = ParagraphStyle("H",  parent=ss["Normal"], fontSize=9, leading=12)
@@ -77,8 +87,8 @@ def generate_invoice_pdf(factura: dict, cliente: dict = None, grupo_nombre: str 
     est = I.estado_cobro(factura)
     meta = Table([
         [Paragraph(d("Invoice no."), sm), Paragraph(str(factura.get("Number", "")), Hb)],
-        [Paragraph(d("Date"), sm), Paragraph(str(factura.get("Date", "")), H)],
-        [Paragraph(d("Due"), sm), Paragraph(str(factura.get("ExpiryDate", "") or "—"), H)],
+        [Paragraph(d("Date"), sm), Paragraph(_dmy(factura.get("Date", "")), H)],
+        [Paragraph(d("Due"), sm), Paragraph(_dmy(factura.get("ExpiryDate", "")), H)],
         [Paragraph(d("Status"), sm), Paragraph(i18n.etiqueta(est), H)],
     ], colWidths=[24 * mm, 34 * mm])
     meta.setStyle(TableStyle([("TOPPADDING", (0, 0), (-1, -1), 1), ("BOTTOMPADDING", (0, 0), (-1, -1), 1)]))
@@ -110,6 +120,15 @@ def generate_invoice_pdf(factura: dict, cliente: dict = None, grupo_nombre: str 
 
     imp_pct = _num(factura.get("TaxPct"))
     por_cobrar = _num(factura.get("Total")) - _num(factura.get("Collected"))
+    # ⚠️ v569 · una ANULADA no debe nada: el PDF decía «Status voided» y a la vez
+    # «Balance due $44.00». Saldo 0 y un sello «VOID» que no se pueda pasar por alto.
+    if est == "anulada":
+        por_cobrar = 0.0
+        story += [Paragraph(d("VOID — this invoice has been cancelled and is not payable."),
+                            ParagraphStyle("vd", parent=ss["Normal"], fontSize=16, leading=20,
+                                           fontName="Helvetica-Bold",
+                                           textColor=colors.HexColor("#c0392b"))),
+                  Spacer(1, 8)]
     tot = Table([
         [d("Subtotal"), _money(factura.get("Subtotal"))],
         [d("Tax ({pct}%)", pct=f"{imp_pct:.0f}"), _money(factura.get("Tax"))],

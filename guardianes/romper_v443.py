@@ -19,9 +19,11 @@ ROTURAS = [
     ("core/home_ui.py", 'f"{g[\'alarmas\']} alarms"', 'f"{g[\'alarmas\']} alarmas"',
      "un fragmento de UNA palabra vuelve al español"),
     # ── red 4: f-string a medio traducir ──
+    # v569 · la ayuda pasó a `t()` con marcadores: la rotura es la misma (vuelve a ser una
+    # f-string a medio traducir), anclada a la forma nueva.
     ("core/invoices_ui.py",
-     'help=f"Collected {_T.dinero(cob)} of {_T.dinero(total)}")',
-     'help=f"Collected {_T.dinero(cob)} de {_T.dinero(total)}")',
+     'help=t("Collected {c} of {t}").replace("{c}", _T.dinero(cob))',
+     'help=f"Collected {_T.dinero(cob)} de {_T.dinero(total)}"',
      "una f-string queda a medio traducir"),
     # v564 · el titular pasó a `t()` con marcadores: la rotura es la misma de siempre
     # (vuelve a ser una f-string en español), anclada a la forma nueva.

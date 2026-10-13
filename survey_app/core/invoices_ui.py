@@ -32,13 +32,26 @@ def _creado_por() -> str:
 # sesión, así que la traducción quedaría CONGELADA en el idioma de ese instante (el
 # fallo de `auth.SESION_OCUPADA`, v445 — y van cinco). Las CLAVES son además el DATO
 # que devuelve `invoices.estado_cobro`. La traducción va en `_est_fmt()`, al pintar.
+# ⚠️ v569 · las PALABRAS son las de `i18n.etiqueta` (pending · partial · collected ·
+# overdue · voided), las mismas de la tabla, de Contacts y del PDF: el detalle decía
+# «outstanding» / «paid» y la lista «pending» / «collected» (visto en el recorrido).
 _EST_FMT = {
-    "pendiente": (":gray[:material/schedule:]", "outstanding"),
+    "pendiente": (":gray[:material/schedule:]", "pending"),
     "parcial":   (":orange[:material/payments:]", "partial"),
-    "cobrada":   (":green[:material/check_circle:]", "paid"),
+    "cobrada":   (":green[:material/check_circle:]", "collected"),
     "vencida":   (":red[:material/warning:]", "overdue"),
     "anulada":   (":gray[:material/block:]", "voided"),
 }
+# v569 · en una TABLA no se pintan `:color[...]` ni `:material/…:` (salen literales): ahí
+# el estado lleva un punto de color.
+_EST_PUNTO = {"pendiente": "⚪", "parcial": "🟠", "cobrada": "🟢", "vencida": "🔴",
+              "anulada": "⚫"}
+# Filtro de la lista: ID interno → (estados que entran, rótulo)
+_FILTROS = {"Todas": (None, "All"),
+            "Pendientes": (("pendiente", "parcial", "vencida"), "Outstanding"),
+            "Vencidas": (("vencida",), "Overdue"),
+            "Cobradas": (("cobrada",), "Collected"),
+            "Anuladas": (("anulada",), "Voided")}
 
 
 def _est_fmt(est: str) -> str:
@@ -47,12 +60,36 @@ def _est_fmt(est: str) -> str:
     return f"{_ic} {t(_tx)}".strip()
 
 
+def _est_celda(f) -> str:
+    """El estado en una CELDA de tabla: punto de color + la etiqueta traducida (v569).
+    ⚠️ Fuera del dict de la fila: verif_v452 mira que ninguna celda llame en crudo a lo
+    que devuelve un DATO de la hoja."""
+    return f"{_EST_PUNTO.get(I.estado_cobro(f), '')} " + _etq(I.estado_cobro(f))
+
+
+def _dmy(iso) -> str:
+    """«2026-10-13» → «13/10/2026» (v569: la lista, los cobros y el PDF iban en ISO)."""
+    s = str(iso or "").strip()[:10]
+    try:
+        y, m, dd = s.split("-")
+        return f"{int(dd):02d}/{int(m):02d}/{y}"
+    except Exception:
+        return s or "—"
+
+
 def render_facturas(grupo):
     # ⚠️ SIN cabecera propia: `home_ui._sub_header` ya pinta «Finanzas · X» encima.
     # Era el 5º título duplicado de la app (v212, v291, v314, v319 y este barrido).
     if not I.is_configured():
         st.info(t(":material/info: Configure Google Sheets to manage invoices."))
         return
+    # ⚠️ v569 · ACCIÓN DIFERIDA (trampa 37): anular escribe en la hoja; el botón solo
+    # apunta y relanza, y se hace aquí, antes de pintar nada. Y se AVISA: antes la
+    # factura se anulaba sin ningún mensaje.
+    _anu = st.session_state.pop("_fac_anular", None)
+    if _anu:
+        _ok, _msg = I.anular(_anu)
+        (flash.exito if _ok else flash.error)(_msg)
     if st.session_state.get("_fac_nueva"):
         _nueva_factura(grupo)
         return
@@ -60,17 +97,38 @@ def render_facturas(grupo):
         _detalle_factura(grupo, st.session_state["_fac_open"])
         return
 
+    from core import theme as _T
     facturas = I.list_facturas(grupo)
     # Totales del grupo (cuentas por cobrar)
     _fac = sum(_num(f.get("Total")) for f in facturas if str(f.get("Status", "")).lower() != "anulada")
     _cob = sum(_num(f.get("Collected")) for f in facturas if str(f.get("Status", "")).lower() != "anulada")
     _venc = sum(_num(f.get("Total")) - _num(f.get("Collected"))
                 for f in facturas if I.estado_cobro(f) == "vencida")
-    c = st.columns(4)
-    c[0].metric(t("Invoiced"), f"${_fac:,.0f}")
-    c[1].metric(t("Collected"), f"${_cob:,.0f}")
-    c[2].metric(t("Outstanding"), f"${_fac - _cob:,.0f}")
-    c[3].metric(t("Overdue"), f"${_venc:,.0f}")
+
+    # ── Las 4 cifras, ACTIVAS (v569): cada una aplica su filtro a la lista ──
+    _pp = st.session_state.pop("_fac_filt_pending", None)
+    if _pp in _FILTROS:
+        st.session_state["cpxseg_fac_filt"] = _pp
+    _K = [("fac", t("Invoiced"), _T.dinero(_fac, 0), t("all invoices"), "Todas"),
+          ("cob", t("Collected"), _T.dinero(_cob, 0), t("received so far"), "Cobradas"),
+          ("pen", t("Outstanding"), _T.dinero(_fac - _cob, 0), t("still to collect"), "Pendientes"),
+          ("ven", t("Overdue"), _T.dinero(_venc, 0), t("past the due date"), "Vencidas")]
+    # 2 por fila bajo 700 px (`@container`, el mismo reparto medido en Gastos, v568)
+    _css = ("<style>.st-key-cpx_fac_kpis{container-type:inline-size}"
+            "@container (max-width:700px){.st-key-cpx_fac_kpis [data-testid='stHorizontalBlock']"
+            "{flex-wrap:wrap!important}.st-key-cpx_fac_kpis [data-testid='stHorizontalBlock']"
+            ">[data-testid='stColumn']{flex:0 1 calc(50% - 0.5rem)!important;"
+            "min-width:calc(50% - 0.5rem)!important;width:calc(50% - 0.5rem)!important}}")
+    if _venc > 0:
+        _css += (".st-key-cpxkpi_fac_ven button{border-left-color:#c0392b!important}"
+                 ".st-key-cpxkpi_fac_ven button p:nth-child(2):not(:last-child)"
+                 "{color:#c0392b!important}")
+    st.markdown(_css + "</style>", unsafe_allow_html=True)
+    with st.container(key="cpx_fac_kpis"):
+        for _col, (_s, _l, _v, _pie, _fl) in zip(st.columns(4), _K):
+            if _col.button(f"{_l}\n\n{_v}\n\n{_pie}", key=f"cpxkpi_fac_{_s}", width="stretch"):
+                st.session_state["_fac_filt_pending"] = _fl
+                st.rerun()
 
     if st.button(t(":material/add_circle: New invoice"), type="primary", key="fac_new_btn"):
         st.session_state["_fac_nueva"] = True
@@ -80,30 +138,49 @@ def render_facturas(grupo):
         st.caption(t("No invoices yet. Create the first one with «New invoice»."))
         return
 
+    _filt = st.radio(t("Filter"), list(_FILTROS), format_func=lambda o: t(_FILTROS[o][1]),
+                     horizontal=True, key="cpxseg_fac_filt", label_visibility="collapsed",
+                     persist_state="session")
+    _entran = _FILTROS.get(_filt or "Todas", (None, ""))[0]
+    _rows = sorted([f for f in facturas if _entran is None or I.estado_cobro(f) in _entran],
+                   key=lambda f: str(f.get("Created", "")), reverse=True)
+    if not _rows:
+        st.caption(t("No invoices in this filter."))
+        return
     st.caption(t("Tap an invoice to see the detail and record payments."))
-    _rows = sorted(facturas, key=lambda f: str(f.get("Created", "")), reverse=True)
+    # ⚠️ v569 · lo que se mira primero, delante (la columna de estado salía cortada a 800
+    # px con el menú), el Nº FIJADO, fechas DD/MM/YYYY y el estado con su punto de color.
     df = pd.DataFrame([{
         "Nº":        str(f.get("Number", "")),
         "Cliente":   str(f.get("ClientName", "") or "—"),
-        "Fecha":     str(f.get("Date", "")),
-        "Vence":     str(f.get("ExpiryDate", "") or "—"),
-        "Total":     round(_num(f.get("Total")), 0),
-        "Cobrado":   round(_num(f.get("Collected")), 0),
-        "Outstanding": round(_num(f.get("Total")) - _num(f.get("Collected")), 0),
-        "Estado":    _etq(I.estado_cobro(f)),
+        "Estado":    _est_celda(f),
+        "Outstanding": round(_num(f.get("Total")) - _num(f.get("Collected")), 2),
+        "Vence":     _dmy(f.get("ExpiryDate")),
+        "Total":     round(_num(f.get("Total")), 2),
+        "Cobrado":   round(_num(f.get("Collected")), 2),
+        "Fecha":     _dmy(f.get("Date")),
     } for f in _rows])
+    _gen = st.session_state.get("_fac_tbl_gen", 0)
     _ev = st.dataframe(
         df, width="stretch", hide_index=True,
-        on_select="rerun", selection_mode="single-row", key="fac_tbl",
+        # v569 · un toque en cualquier celda abre la factura (antes, solo la casilla)
+        on_select="rerun", selection_mode="single-cell", key=f"fac_tbl_{_gen}",
         column_config=tabla.cfg(None, {
-            "Total":     st.column_config.NumberColumn(t("Total"), format="$%,d"),
-            "Cobrado":   st.column_config.NumberColumn(t("Collected"), format="$%,d"),
-            "Outstanding": st.column_config.NumberColumn(t("Outstanding"), format="$%,d"),
+            "Nº":        st.column_config.TextColumn(t("No."), pinned=True),
+            "Estado":    st.column_config.TextColumn(t("Status")),
+            "Vence":     st.column_config.TextColumn(t("Due")),
+            "Fecha":     st.column_config.TextColumn(t("Date")),
+            "Total":     st.column_config.NumberColumn(t("Total"), format="$%,.2f"),
+            "Cobrado":   st.column_config.NumberColumn(t("Collected"), format="$%,.2f"),
+            "Outstanding": st.column_config.NumberColumn(t("Outstanding"), format="$%,.2f"),
         }))
-    _sr = list(_ev.selection.rows)
-    if _sr:
+    _s = getattr(_ev, "selection", None)
+    _sr = [c[0] for c in (getattr(_s, "cells", None) or [])] or list(getattr(_s, "rows", None) or [])
+    if _sr and 0 <= _sr[0] < len(_rows):
+        # ⚠️ Otra generación de clave: soltar el estado del widget no llega al navegador
+        # (trampa 31) y al volver la tabla reabriría la misma factura.
+        st.session_state["_fac_tbl_gen"] = _gen + 1
         st.session_state["_fac_open"] = str(_rows[_sr[0]].get("ID", ""))
-        st.session_state.pop("fac_tbl", None)
         st.rerun()
 
 
@@ -111,6 +188,7 @@ def render_facturas(grupo):
 def _detalle_factura(grupo, fid):
     if st.button(t(":material/arrow_back: Back to invoices"), key="fac_back"):
         st.session_state.pop("_fac_open", None)
+        st.session_state.pop("_fac_anular_conf", None)
         st.rerun()
     f = I.get_factura(fid)
     if not f:
@@ -122,10 +200,31 @@ def _detalle_factura(grupo, fid):
         st.session_state.pop("_fac_open", None)
         return
 
+    from core import theme as _T                          # v309: escapa el `$` (LaTeX)
     total, cob = _num(f.get("Total")), _num(f.get("Collected"))
     est = I.estado_cobro(f)
-    st.markdown(f"## :material/receipt_long: Invoice No. {f.get('Number', '')}")
-    st.markdown(f"**{f.get('ClientName', '') or '—'}**  ·  {_est_fmt(est)}")
+    _anulada = est == "anulada"
+    st.markdown(t("## :material/receipt_long: Invoice No. {n}").replace("{n}", str(f.get("Number", ""))))
+    # v569 · el cliente LLEVA a su ficha de Contacts (era texto)
+    _cn = str(f.get("ClientName", "") or "")
+    _c1, _c2 = st.columns([3, 2])
+    if _cn and _c1.button(f":material/contacts: **{_cn}**", key=f"fac_cli_{fid}", type="tertiary"):
+        st.session_state["_cli_open"] = C._norm(_cn)
+        st.session_state.pop("_fac_open", None)
+        st.session_state["_admin_nav_pending"] = ("contactos", None)
+        st.rerun()
+    _c2.markdown(_est_fmt(est))
+    # ⚠️ v569 · CUÁNDO se emitió y CUÁNDO vence (no salía en ningún sitio: «overdue» sin
+    # decir desde cuándo).
+    _fecha = [t("Issued {f}").replace("{f}", _dmy(f.get("Date"))),
+              t("due {v}").replace("{v}", _dmy(f.get("ExpiryDate")))]
+    if est == "vencida":
+        try:
+            _dias = (clock.today(grupo) - pd.Timestamp(str(f.get("ExpiryDate"))[:10]).date()).days
+            _fecha.append(":red[" + t("{n} days overdue").replace("{n}", str(_dias)) + "]")
+        except Exception:
+            pass
+    st.caption(" · ".join(_fecha))
 
     izq, der = st.columns([3, 2])
     with izq:
@@ -138,36 +237,42 @@ def _detalle_factura(grupo, fid):
             } for x in _ln]), width="stretch", hide_index=True,
                 column_config=tabla.cfg(None, {"Importe": st.column_config.NumberColumn(t("Amount"), format="$%,.2f")}))
         _imp_pct = _num(f.get("TaxPct"))
-        from core import theme as _T                      # v309: escapa el `$` (LaTeX)
-        st.markdown(f"Subtotal: **{_T.dinero(_num(f.get('Subtotal')))}**  ·  "
-                    f"Tax ({_imp_pct:.0f}%): **{_T.dinero(_num(f.get('Tax')))}**  ·  "
-                    f"Total: **{_T.dinero(total)}**")
+        st.markdown(t("Subtotal: **{s}**  ·  Tax ({p}%): **{i}**  ·  Total: **{t}**")
+                    .replace("{s}", _T.dinero(_num(f.get("Subtotal"))))
+                    .replace("{p}", f"{_imp_pct:.0f}").replace("{i}", _T.dinero(_num(f.get("Tax"))))
+                    .replace("{t}", _T.dinero(total)))
         if str(f.get("Note", "")).strip():
-            st.caption(f"Note: {f.get('Note')}")
+            st.caption(t("Note: {x}").replace("{x}", str(f.get("Note"))))
         try:
             from core import invoice_pdf
             _cli = C.get_cliente(str(f.get("ClientID", ""))) if f.get("ClientID") else {}
             _pdf = invoice_pdf.generate_invoice_pdf(f, _cli, grupo)
+            # v569 · «Invoice_», no «Factura_» (el archivo lo recibe el cliente)
             st.download_button(t(":material/download: Download invoice (PDF)"), data=_pdf,
-                               file_name=f"Factura_{f.get('Number', '')}.pdf",
+                               file_name=f"Invoice_{f.get('Number', '')}.pdf",
                                mime="application/pdf", key=f"fac_pdf_{fid}")
         except Exception as e:
-            st.caption(f":material/warning: The PDF could not be generated: {e}")
+            st.caption(t(":material/warning: The PDF could not be generated: {e}").replace("{e}", str(e)))
         # v488: la factura en Xero (o el botón para mandarla).
         from core import xero_ui
         xero_ui.boton_factura(grupo, f)
 
     with der:
         st.markdown(t("#### :material/payments: Payments received"))
-        # v309: el `help` llevaba DOS importes → perdía los símbolos de moneda.
-        st.metric(t("Outstanding"), _T.dinero(total - cob),
-                  help=f"Collected {_T.dinero(cob)} of {_T.dinero(total)}")
-        if est != "anulada" and cob < total:
+        if _anulada:
+            # ⚠️ v569 · una anulada NO debe nada: decía «OUTSTANDING $44.00»
+            st.info(t(":material/block: Voided: there is nothing to collect."))
+        else:
+            # v309: el `help` llevaba DOS importes → perdía los símbolos de moneda.
+            st.metric(t("Outstanding"), _T.dinero(total - cob),
+                      help=t("Collected {c} of {t}").replace("{c}", _T.dinero(cob))
+                      .replace("{t}", _T.dinero(total)))
+        if not _anulada and cob < total:
             with st.form(f"cob_{fid}"):
                 _m = st.number_input(t("Record payment ($)"), min_value=0.0,
                                      max_value=float(round(total - cob, 2)),
                                      value=float(round(total - cob, 2)), step=50.0)
-                _fch = st.date_input(t("Payment date"), value=clock.today())
+                _fch = st.date_input(t("Payment date"), value=clock.today(), format="DD/MM/YYYY")
                 if st.form_submit_button(t(":material/check: Record payment"), type="primary"):
                     ok, msg = I.registrar_cobro(fid, _m, _fch.isoformat())
                     (flash.exito if ok else st.error)(msg)
@@ -179,12 +284,26 @@ def _detalle_factura(grupo, fid):
         if _cobros:
             st.caption(t("Payments recorded:"))
             for cb in _cobros:
-                st.markdown(f"- {cb.get('fecha', '')}: **${_num(cb.get('monto')):,.2f}**")
-        if str(f.get("Status", "")).lower() != "anulada":
+                st.markdown(f"- {_dmy(cb.get('fecha', ''))}: **{_T.dinero(_num(cb.get('monto')))}**")
+        if not _anulada:
             with st.expander(t(":material/block: Void invoice"), key=f"exp_fac_anul_{fid}"):
                 st.caption(t("It is taken out of accounts receivable. This cannot be undone."))
-                if st.button(t("Void this invoice"), key=f"fac_anul_{fid}"):
-                    I.anular(fid)
+                # ⚠️ v569 · PREGUNTA antes (un clic anulaba, sin vuelta atrás) y la acción
+                # va diferida a `render_facturas` (trampa 37).
+                if st.session_state.get("_fac_anular_conf") == fid:
+                    st.warning(t("Void invoice No. {n}? It cannot be undone.")
+                               .replace("{n}", str(f.get("Number", ""))))
+                    _y, _k = st.columns(2)
+                    if _y.button(t(":material/block: Yes, void it"), key=f"fac_anul_si_{fid}",
+                                 type="primary"):
+                        st.session_state.pop("_fac_anular_conf", None)
+                        st.session_state["_fac_anular"] = fid
+                        st.rerun()
+                    if _k.button(t("Keep it"), key=f"fac_anul_no_{fid}"):
+                        st.session_state.pop("_fac_anular_conf", None)
+                        st.rerun()
+                elif st.button(t("Void this invoice"), key=f"fac_anul_{fid}"):
+                    st.session_state["_fac_anular_conf"] = fid
                     st.rerun()
 
 
@@ -230,6 +349,8 @@ def _nueva_factura(grupo):
                 st.rerun()
         return
     st.session_state.pop("_fac_cli_sin_ficha", None)          # ya hay fichas: no aplica
+    # (Por NOMBRE es seguro aquí: `create_cliente` no deja dos clientes con el mismo
+    # nombre en un grupo.)
     _by_name = {c.get("Name", ""): c for c in fichas}
     cli_sel = st.selectbox(t(":material/contacts: Client"), list(_by_name.keys()), key="fac_cli")
     cli = _by_name.get(cli_sel, {})
@@ -247,7 +368,7 @@ def _nueva_factura(grupo):
              if C.es_del_cliente(p, cid, cnorm)
              and str(p.get("ID", "")) not in {str(x.get("ID", "")) for x in prjs}]
     if _arch:
-        if st.checkbox(f":material/archive: Include archived sites ({len(_arch)})",
+        if st.checkbox(t(":material/archive: Include archived sites ({n})").replace("{n}", str(len(_arch))),
                        key="fac_ver_arch",
                        help=t("Archiving is not the same as not charging: the usual thing is to archive when the job ends and invoice afterwards.")):
             prjs = prjs + _arch
@@ -276,7 +397,9 @@ def _nueva_factura(grupo):
     # ⚠️ Al DESMARCAR la casilla, la opción elegida puede desaparecer. Un `st.radio` cuyo
     # valor guardado ya no está entre las opciones revienta (es el fallo que v358 evitó al
     # no preseleccionar una etiqueta inexistente). Se suelta ANTES de instanciarlo.
-    if st.session_state.get("fac_scope") not in ["The whole client"] + prj_names:
+    # v569 · la opción «todo el cliente» es un ID interno: se TRADUCE al pintarla, y
+    # comparar con un texto traducido es lo que verif_v436 prohíbe.
+    if st.session_state.get("fac_scope") not in ["__todo__"] + prj_names:
         st.session_state.pop("fac_scope", None)
 
     # v357: atajo desde el proyecto. Llega el ID y AQUÍ se resuelve su etiqueta, que es
@@ -284,8 +407,9 @@ def _nueva_factura(grupo):
     # instanciar el radio: escribir la clave de un widget ya creado revienta (v111).
     _av = st.session_state.pop("_fac_aviso_cli", None)
     if _av:
-        st.warning(":material/contacts: That project has the client **" + str(_av)
-                   + "**, which is not a :material/contacts: Contacts record. Choose the client by hand, or link the project to its record so the shortcut works next time.")
+        st.warning(t(":material/contacts: That project has the client **{c}**, which is not a "
+                     ":material/contacts: Contacts record. Choose the client by hand, or link the "
+                     "project to its record so the shortcut works next time.").replace("{c}", str(_av)))
     _pend_pid = st.session_state.pop("_fac_prj_pending", None)
     if _pend_pid:
         _et = _lbl.get(str(_pend_pid))
@@ -295,8 +419,15 @@ def _nueva_factura(grupo):
             # ⚠️ Antes, si el proyecto no estaba en la lista, `_et` era None y NO se
             # decía nada: el usuario acababa en «Todo el cliente» sin saber por qué.
             st.info(t(":material/info: That project could not be preselected for this client (check which client it is linked to). Choose the scope by hand."))
-    _scope = st.radio(t("Scope"), ["The whole client"] + prj_names, horizontal=True, key="fac_scope")
-    _scope_prjs = (prjs if _scope == "The whole client"
+    # ⚠️ v569 · sin obras, un «Scope» de UNA sola opción no deja elegir nada: se dice en
+    # una línea. El radio sigue aquí (detrás de la casilla y del reset, regla v111).
+    if prj_names:
+        _scope = st.radio(t("Scope"), ["__todo__"] + prj_names, horizontal=True, key="fac_scope",
+                          format_func=lambda o: t("The whole client") if o == "__todo__" else o)
+    else:
+        _scope = "__todo__"
+        st.caption(t(":material/info: This client has no jobs: the invoice lines are free text."))
+    _scope_prjs = (prjs if _scope == "__todo__"
                    else [p for p in prjs if _lbl.get(str(p.get("ID", ""))) == _scope])
 
     # Precarga: una línea por proyecto con lo pendiente de facturar
@@ -326,14 +457,14 @@ def _nueva_factura(grupo):
         _plazo = 14                       # sin plazo configurado, el estándar de la casa
 
     c1, c2, c3 = st.columns(3)
-    _fecha = c1.date_input(t("Date"), value=clock.today(), key="fac_fecha")
+    _fecha = c1.date_input(t("Date"), value=clock.today(), key="fac_fecha", format="DD/MM/YYYY")
     # ⚠️ v483 — el vencimiento nacía HOY, o sea que toda factura entraba VENCIDA el
     # mismo día: el «vencido» del resumen financiero y el estado de la lista se
     # disparaban al instante, y al exportarla a la contabilidad llegaba en mora sin
     # haberla mandado. Ahora sale del plazo de pago del grupo (14 días por defecto).
     _venc = c2.date_input(t("Due date"),
                           value=clock.today() + _timedelta(days=_plazo),
-                          key="fac_venc")
+                          key="fac_venc", format="DD/MM/YYYY")
     _imp = c3.number_input(t("Tax % (GST/VAT)"), min_value=0.0, max_value=100.0, step=1.0,
                            value=float(auth.group_tax_default(grupo)), key="fac_imp")
     _nota = st.text_input(t("Note (optional)"), key="fac_nota")
@@ -353,8 +484,9 @@ def _nueva_factura(grupo):
     # ⚠️ `theme.dinero` escapa el `$`: con dos importes en la misma línea Streamlit
     # renderizaba esto como una FÓRMULA LaTeX ilegible (v309).
     from core import theme as _T
-    st.markdown(f"Subtotal **{_T.dinero(_sub)}**  ·  Tax **{_T.dinero(_impv)}**  ·  "
-                f"Total **{_T.dinero(_sub + _impv)}**")
+    st.markdown(t("Subtotal **{s}**  ·  Tax **{i}**  ·  Total **{t}**")
+                .replace("{s}", _T.dinero(_sub)).replace("{i}", _T.dinero(_impv))
+                .replace("{t}", _T.dinero(_sub + _impv)))
 
     if st.button(t(":material/receipt_long: Issue invoice"), type="primary", key="fac_emit"):
         if not _lineas:

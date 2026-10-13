@@ -29,14 +29,20 @@ ROTURAS = [
     ("core/stages.py", '(PISTA_INSTALL, 6, "Shaft Climb & Bedplates", 13)',
      '(PISTA_INSTALL, 6, "Montaje de rieles (guías)", 13)',
      "se traduce un nombre de ETAPA (es dato de la hoja)"),
-    ("core/inventory_ui.py", '"COPEX Activos"', '"COPEX Assets"',
-     "se renombra la carpeta de Drive (dejaria los activos en la vieja)"),
+    # v569 · CADUCADA desde v467 (la carpeta ya se llama «COPEX Assets» y la vieja se
+    # RENOMBRA en Drive): su ancla «"COPEX Activos"» no casaba y la rotura no probaba nada
+    # (era «ilegible» para check_anclas_roturas, así que nadie lo vio). Lo que protege hoy:
+    # que no vuelva el nombre español de la carpeta.
+    ("core/inventory_ui.py", 'drive_store.folder("COPEX Assets")', 'drive_store.folder("COPEX Activos")',
+     "la carpeta de Drive vuelve al nombre español (dejaria los activos en otra)"),
     ("core/chat_agent.py", "Responde SIEMPRE en inglés técnico claro",
      "Responde siempre en español técnico claro",
      "el asistente vuelve a responder en espanol"),
     # ATENCION: el t() a nivel de modulo por QUINTA vez. Se congela al importar.
-    ("core/invoices_ui.py", '"pendiente": (":gray[:material/schedule:]", "outstanding")',
-     '"pendiente": ":gray[:material/schedule:] " + t("outstanding")',
+    # v569 · la palabra pasó a «pending» (la de `etiqueta`, la de la tabla y el PDF): la
+    # rotura es la misma, anclada a la forma nueva.
+    ("core/invoices_ui.py", '"pendiente": (":gray[:material/schedule:]", "pending")',
+     '"pendiente": ":gray[:material/schedule:] " + t("pending")',
      "vuelve un t() congelado en el dict de estados de factura"),
 ]
 

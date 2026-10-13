@@ -48,9 +48,12 @@ ROTURAS = [
      '"*InvoiceDate", "*DueDate",',
      '"*InvoiceDate",'),
 
+    # v569 · CADUCADA: la línea pasó a `IMPUESTOS_XERO[doc["clave_impuesto"]][1]` y el
+    # ancla vieja no casaba (no probaba nada; check_anclas la tenía por «ilegible»).
+    # La misma rotura: el CÓDIGO (`[0]`) en vez del NOMBRE (`[1]`).
     ("contable.py", "el impuesto de venta pasa al CODIGO en vez del nombre",
-     'cod, nombre = IMPUESTOS_XERO["venta_con" if pct else "venta_sin"]',
-     _NL.join(['nombre, cod = IMPUESTOS_XERO["venta_con" if pct else "venta_sin"]'])),
+     '"impuesto_nombre": IMPUESTOS_XERO[doc["clave_impuesto"]][1],',
+     '"impuesto_nombre": IMPUESTOS_XERO[doc["clave_impuesto"]][0],'),
 
     ("contable.py", "la opcion de seguimiento RECORTA en vez de usar el ID",
      _NL.join(["    if not etq or len(etq) > _MAX_OPCION:",
@@ -73,11 +76,12 @@ ROTURAS = [
                "        _emisor.append(Paragraph(f\"{d('ABN')} {_ident['abn']}\", sm))"]),
      '    if False:' + _NL + "        pass"),
 
+    # v569 · la llamada lleva ahora `format="DD/MM/YYYY"`: la rotura es la misma
     ("invoices_ui.py", "el vencimiento vuelve a ser HOY",
      _NL.join(['    _venc = c2.date_input(t("Due date"),',
                "                          value=clock.today() + _timedelta(days=_plazo),",
-               '                          key="fac_venc")']),
-     '    _venc = c2.date_input(t("Due date"), value=clock.today(), key="fac_venc")'),
+               '                          key="fac_venc", format="DD/MM/YYYY")']),
+     '    _venc = c2.date_input(t("Due date"), value=clock.today(), key="fac_venc", format="DD/MM/YYYY")'),
 
     ("home_ui.py", "la sub-seccion nueva se cuela la PRIMERA",
      _NL.join(['        ("📊 Resumen", ":material/insights: Summary"),']),

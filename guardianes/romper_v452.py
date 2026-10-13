@@ -12,7 +12,10 @@ AQUI = pathlib.Path(__file__).parent
 ENV = {**os.environ, "PYTHONIOENCODING": "utf-8"}
 
 ROTURAS = [
-    ("invoices_ui.py", '"Estado":    _etq(I.estado_cobro(f))', '"Estado":    I.estado_cobro(f)',
+    # v569 · la celda lleva ahora un punto de color delante: la rotura es la misma (el
+    # estado vuelve a salir en crudo), anclada a la forma nueva.
+    ("invoices_ui.py", "'')} \" + _etq(I.estado_cobro(f))",
+     "'')} \" + I.estado_cobro(f)",
      "la celda de Facturas vuelve a mostrar el estado en crudo"),
     # v564 · al día con la columna de AHORA («Status»; desde la migración al inglés el
     # ancla «Estado» no casaba y era deuda declarada). La misma rotura.
