@@ -4839,8 +4839,11 @@ def render_pnl(grupo: str):
     except Exception:
         _sf = []
     try:
+        # ⚠️ v579 · la obra que NO tiene ganancia (`a_costo`), la misma regla que
+        # Profitability: por el % de mano de obra contaba también la de ganancia FIJA
+        # (en producción, «No margin · 3 jobs» con una de ellas a $50 de ganancia)
         _sinmar = [(str(r["id"]), r["nombre"]) for r in F.group_profitability(grupo)["rows"]
-                   if P._num(r.get("margen")) <= 0]
+                   if r.get("a_costo")]
     except Exception:
         _sinmar = []
     try:
@@ -5253,8 +5256,14 @@ def _pnl_por_proyecto(grupo: str, T):
 def render_group_profitability(grupo: str):
     """Rentabilidad del grupo: lo estimado CONTRA lo realmente facturado (v321).
 
+    v579 · probada acción por acción: «sin ganancia» es la obra que no tiene NINGUNA (salía
+    la de ganancia fija), el margen es sobre el ingreso (el del Resumen), se dice quién se
+    cobra a costo en una obra con ganancia por hora, cabeceras en inglés y con céntimos, y
+    todo ACTIVO: las cifras ordenan o abren lo pendiente, los avisos y la tabla abren la obra.
+
     ⚠️ SIN cabecera propia: `home_ui._sub_header` ya pinta «Finanzas · Rentabilidad».
     """
+    from collections import Counter
     from core import finance as F
     from core import invoices as INV
     from core import theme as T
@@ -5265,6 +5274,9 @@ def render_group_profitability(grupo: str):
     data = F.group_profitability(grupo)
     if not data["rows"]:
         st.info(t(":material/info: No projects with recorded cost yet (hours or purchases)."))
+        # v579 · con salida: el costo sale de las horas fichadas y las compras de cada obra
+        if st.button(t(":material/folder: Go to Projects"), key="rent_ir_proy"):
+            _ir_a("proyectos", "📊 Proyectos")
         return
 
     # Lo REALMENTE facturado por obra (1 lectura cacheada). «Por facturar» se calcula
@@ -5283,66 +5295,150 @@ def render_group_profitability(grupo: str):
     _tot = data["totales"]
     _t_fac = round(sum(r["facturado"] for r in rows), 2)
     _t_pdt = round(sum(r["por_facturar"] for r in rows), 2)
+    _rep = Counter(r["nombre"] for r in rows)
+
+    def _rot(r):
+        """El nombre; con el ID detrás si otra obra se llama igual (el ID es la identidad)."""
+        return f"{r['nombre']} ({r['id']})" if _rep[r["nombre"]] > 1 else r["nombre"]
 
     # ⚠️ v313: sin ganancia definida el "ingreso estimado" es IGUAL al costo, así que la
     # ganancia sale 0 y la pantalla parece rota. No lo está: es que nadie ha dicho cuánto
-    # quiere ganar. Se avisa con nombres y se manda a la obra, que es donde se pone —
-    # ya no se teclea aquí, porque el % dejó de ser una entrada.
-    _m0 = [r["nombre"] for r in rows if P._num(r.get("margen")) <= 0]
+    # quiere ganar. v579 · cada obra, un botón a sus Costs (donde se pone); y la regla es
+    # el MODELO (`a_costo`), no el % de mano de obra, que vale 0 con una ganancia fija.
+    _m0 = [r for r in rows if r.get("a_costo")]
     if _m0:
         st.warning(t(":material/percent: **{n} job(s) with no profit set**, so their estimated "
-                     "revenue is exactly their cost and the profit comes out at $0: {x}. "
-                     "Set it on each job, per hour or as a fixed amount.")
-                   .replace("{n}", str(len(_m0)))
-                   .replace("{x}", ", ".join(_m0[:6]) + ("…" if len(_m0) > 6 else "")))
+                     "revenue is exactly their cost and the profit comes out at $0. Set it on "
+                     "each job, per hour or as a fixed amount — tap a job to open its Costs:",
+                     n=len(_m0)))
+        _botones_obras([(r["id"], _rot(r)) for r in _m0], "rentmar", "💰 Costos")
+    # v579 · con ganancia por hora, quien tiene horas y no la suya se factura a COSTO
+    _parc = [r for r in rows if r.get("a_costo_personas")]
+    if _parc:
+        try:
+            from core import auth as _A
+            _nom = {str(u.get("User", "")): str(u.get("Name") or u.get("User", ""))
+                    for u in _A.list_users(grupo=grupo)}
+        except Exception:
+            _nom = {}
+        st.warning(t(":material/warning: **Hours invoiced at cost**: on these jobs some people "
+                     "have no profit per hour, so their hours are charged at cost. Tap a job to "
+                     "set it in its Costs:"))
+        _botones_obras([(r["id"], _rot(r) + " · "
+                         + ", ".join(_nom.get(u, u) for u in r["a_costo_personas"]))
+                        for r in _parc], "rentpar", "💰 Costos")
 
-    st.markdown('<div style="display:flex;gap:10px;flex-wrap:wrap;margin:2px 0 6px">'
-                + _kpi_card(t("Cost charged"), T.dinero(_tot["costo"], 0))
-                + _kpi_card(t("Estimated revenue"), T.dinero(_tot["ingreso"], 0))
-                + _kpi_card(t("Estimated profit"), T.dinero(_tot["ganancia"], 0),
-                            T.VERDE if _tot["ganancia"] > 0 else None)
-                + _kpi_card(t("Already invoiced"), T.dinero(_t_fac, 0))
-                + _kpi_card(t("To invoice"), T.dinero(_t_pdt, 0),
-                            T.AMBAR if _t_pdt > 0 else None)
-                + "</div>", unsafe_allow_html=True)
+    # ── Las cifras, ACTIVAS (v579; eran HTML): ordenan la tabla, o abren lo pendiente ──
+    _pct = (100.0 * _tot["ganancia"] / _tot["ingreso"]) if _tot["ingreso"] > 0 else None
+    _npdt = sum(1 for r in rows if r["por_facturar"] > 0)
+    _K = [("cost", t("Cost charged"), T.dinero(_tot["costo"], 0), t("hours × rate + materials"),
+           "costo"),
+          ("ing", t("Estimated revenue"), T.dinero(_tot["ingreso"], 0), t("what you would charge"),
+           "ingreso"),
+          ("gan", t("Estimated profit"), T.dinero(_tot["ganancia"], 0),
+           t("{p}% of revenue", p=f"{_pct:.1f}") if _pct is not None else t("no revenue yet"),
+           "ganancia"),
+          ("fac", t("Already invoiced"), T.dinero(_t_fac, 0), t("invoices issued"), "facturado"),
+          ("pdt", t("To invoice"), T.dinero(_t_pdt, 0), t("{n} job(s) pending", n=_npdt), "pdt")]
+    _css = []
+    if _tot["ganancia"] != 0:
+        _cg = T.ROJO if _tot["ganancia"] < 0 else T.VERDE
+        _css.append(f".st-key-cpxkpi_rent_gan button{{border-left-color:{_cg}!important}}"
+                    f".st-key-cpxkpi_rent_gan button p:nth-child(2):not(:last-child)"
+                    f"{{color:{_cg}!important}}")
+    if _t_pdt > 0:
+        _css.append(f".st-key-cpxkpi_rent_pdt button{{border-left-color:{T.AMBAR}!important}}"
+                    f".st-key-cpxkpi_rent_pdt button p:nth-child(2):not(:last-child)"
+                    f"{{color:{T.AMBAR_TXT}!important}}")
+    if _css:
+        st.markdown("<style>" + "".join(_css) + "</style>", unsafe_allow_html=True)
+    # una fila que parte sola: 3 por fila, 2 en estrecho (v578)
+    st.markdown(T.por_fila("cpx_rent_kpis", 3), unsafe_allow_html=True)
+    with st.container(key="cpx_rent_kpis"):
+        for _col, (_s, _l, _v, _pie, _ir) in zip(st.columns(len(_K)), _K):
+            if _col.button(f"{_l}\n\n{_v}\n\n{_pie}", key=f"cpxkpi_rent_{_s}", width="stretch"):
+                if _ir == "pdt":
+                    # un segundo toque lo cierra
+                    _abre = st.session_state.get("_rent_vista") != "pdt"
+                    st.session_state["_rent_vista"] = "pdt" if _abre else None
+                    st.session_state["_rent_bajar_pdt"] = _abre
+                else:
+                    st.session_state["_rent_orden"] = _ir
+                    st.session_state["_rent_bajar_tabla"] = True
+                st.rerun()
     st.caption(t("«Cost charged» = hours charged × rate + materials; it does NOT include statutory contributions or unallocated hours — the margin covers those (Summary → Reconciliation)."))
 
-    # ── Tabla con el MARGEN EDITABLE ─────────────────────────────
-    # El aviso de arriba decía "ve a Datos del proyecto" estando ya en la lista de
-    # márgenes: se editan aquí (principio de elementos activos, v199).
+    # ── Lo que falta por facturar: cada obra prepara SU factura (como el Resumen) ──
+    if st.session_state.get("_rent_vista") == "pdt":
+        with st.container(key="cpx_rent_pdt", border=True):
+            _bajar_a("cpx_rent_pdt", "_rent_bajar_pdt")
+            _pend = sorted([r for r in rows if r["por_facturar"] > 0], key=lambda x: -x["por_facturar"])
+            if not _pend:
+                st.caption(t("Everything estimated has been invoiced."))
+            else:
+                st.caption(t("Estimated and not invoiced yet. Tap a job to prepare its invoice:"))
+                for r in _pend[:12]:
+                    if st.button(f":material/receipt: {_rot(r)} · {T.dinero(r['por_facturar'], 0)}",
+                                 key=f"rentfac_{r['id']}", type="tertiary"):
+                        _ir_a_facturar(r["id"], grupo)
+                        st.rerun()
+                if len(_pend) > 12:
+                    st.caption(t("… and {n} more.", n=len(_pend) - 12))
+
+    # ── La tabla, de SOLO LECTURA (v455: la ganancia se pone en la obra, no aquí) ──
+    # v579 · un toque abre la obra en Costs; cabeceras en inglés (una `NumberColumn` sin
+    # etiqueta las dejaba en español), céntimos con el signo delante («dollar»), el
+    # proyecto fijado y con su ID si el nombre se repite.
     _con = [r for r in rows if r["costo"] > 0 or r["facturado"] > 0]
     _sin = [r for r in rows if not (r["costo"] > 0 or r["facturado"] > 0)]
-    _orden = sorted(_con, key=lambda x: -x["ganancia"])
-    _df = pd.DataFrame([{
-        "Proyecto":         r["nombre"],
-        "Costo":            round(r["costo"], 0),
-        "Margen %":         float(round(r["margen"], 1)),
-        "Ingreso estimado": round(r["ingreso"], 0),
-        "Ganancia":         round(r["ganancia"], 0),
-        "Facturado":        round(r["facturado"], 0),
-        "To invoice":     round(r["por_facturar"], 0),
-    } for r in _orden])
-    # ⚠️ Antes esto era un `data_editor` para teclear el margen % de cada obra (v321).
-    # Se retira con el modelo viejo: el `%` ya no es una ENTRADA sino la consecuencia de
-    # la ganancia por rubro, así que editarlo aquí volvería a crear dos formas de
-    # contestar «cuánto gano» — que es justo lo que este cambio elimina. La ganancia se
-    # pone en la obra (por hora o fija) y el % se deriva.
-    st.dataframe(
-        _df, width="stretch", hide_index=True,
-        column_config=tabla.cfg(None, {
-            "Costo":            st.column_config.NumberColumn(format="$%,d"),
-            "Margen %":         st.column_config.NumberColumn(t("Margin %"), format="%.1f%%"),
-            "Ingreso estimado": st.column_config.NumberColumn(format="$%,d"),
-            "Ganancia":         st.column_config.NumberColumn(format="$%,d"),
-            "Facturado":        st.column_config.NumberColumn(format="$%,d"),
-            "To invoice":     st.column_config.NumberColumn(format="$%,d"),
-        }))
+    _campo = st.session_state.get("_rent_orden")
+    if _campo not in ("costo", "ingreso", "ganancia", "facturado"):
+        _campo = "ganancia"
+    _orden = sorted(_con, key=lambda x: (-(x.get(_campo) or 0), -x["costo"]))
+    _ord_rot = {"costo": t("Cost charged"), "ingreso": t("Estimated revenue"),
+                "ganancia": t("Estimated profit"), "facturado": t("Already invoiced")}[_campo]
+    if _orden:
+        with st.container(key="cpx_rent_tabla"):
+            _bajar_a("cpx_rent_tabla", "_rent_bajar_tabla")
+            _gen = st.session_state.get("_rent_tbl_gen", 0)
+            _ev = st.dataframe(pd.DataFrame([{
+                "Proyecto":   _rot(r),
+                "Cost":       r["costo"],
+                "Revenue":    r["ingreso"],
+                "Profit":     r["ganancia"],
+                # texto a la derecha: sin ingreso no hay margen («None» en 1.64, v567)
+                "Margin":     (f"{r['margen_ing']:.1f}%" if r.get("margen_ing") is not None else "—"),
+                "Invoiced":   r["facturado"],
+                "To invoice": r["por_facturar"],
+            } for r in _orden]), width="stretch", hide_index=True, on_select="rerun",
+                selection_mode="single-cell", key=f"rent_tbl_{_gen}",
+                column_config=tabla.cfg(None, {
+                    "Proyecto":   st.column_config.TextColumn(t("Project"), pinned=True),
+                    "Cost":       st.column_config.NumberColumn(t("Cost"), format="dollar"),
+                    "Revenue":    st.column_config.NumberColumn(t("Est. revenue"), format="dollar"),
+                    "Profit":     st.column_config.NumberColumn(t("Est. profit"), format="dollar"),
+                    "Margin":     tabla.derecha(t("Margin %")),
+                    "Invoiced":   st.column_config.NumberColumn(t("Invoiced"), format="dollar"),
+                    "To invoice": st.column_config.NumberColumn(t("To invoice"), format="dollar"),
+                }))
+            st.caption(t("Sorted by «{c}», highest first.", c=_ord_rot) + " "
+                       + t("Tap a job to open it in its Costs, where its profit is set. Margin % = "
+                           "estimated profit ÷ estimated revenue, as in Summary."))
+        _s = getattr(_ev, "selection", None)
+        _fs = [c[0] for c in (getattr(_s, "cells", None) or [])] or list(getattr(_s, "rows", None) or [])
+        if _fs and 0 <= _fs[0] < len(_orden):
+            # ⚠️ otra generación de clave: soltar la selección no llega al navegador (trampa
+            # 31) y al volver la tabla reabriría la misma obra
+            st.session_state["_rent_tbl_gen"] = _gen + 1
+            st.session_state["_prjsel_pending"] = str(_orden[_fs[0]]["id"])
+            st.session_state["_prj_sec_pending"] = "💰 Costos"
+            _ir_a("proyectos", "📊 Proyectos")
 
     if _sin:
-        with st.expander(f":material/visibility_off: {len(_sin)} job(s) with no movement "
-                         "(no cost and no invoicing)"):
-            st.caption(t("{x}. They add nothing to profitability yet.")
-                       .replace("{x}", ", ".join(r["nombre"] for r in _sin)))
+        with st.expander(t(":material/visibility_off: {n} job(s) with no movement (no cost and "
+                           "no invoicing)", n=len(_sin)), key="exp_rent_sin"):
+            st.caption(t("They add nothing to profitability yet. Tap one to open it:"))
+            _botones_obras([(r["id"], _rot(r)) for r in _sin], "rentsin", None)
 
 
 def _partir_gasto(ge: dict) -> dict:

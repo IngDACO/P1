@@ -192,7 +192,16 @@ def cfg(filas=None, extra=None):
             # cambiaría.
             out[c] = st.column_config.Column(t(base))
     if extra:
-        out.update(extra)
+        for _k, _v in extra.items():
+            # ⚠️ v579 · una configuración propia SIN etiqueta (solo el formato, una ayuda…)
+            # se llevaba por delante la traducida: `NumberColumn(format=…)` trae
+            # `label=None` y la cabecera salía con la CLAVE — «Costo», «Ganancia»,
+            # «Facturado» en Profitability y «Avance %», «Nota» en la tabla de avance del
+            # campo (visto en producción). Manda `extra`, salvo en lo que no dice.
+            _b = CABECERAS.get(_k)
+            if _b and isinstance(_v, dict) and _v.get("label") is None:
+                _v = {**_v, "label": t(_b)}
+            out[_k] = _v
     return out
 
 

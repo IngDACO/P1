@@ -108,8 +108,13 @@ def _conc(grupo, desde=None, hasta=None):
     return dict(_CC, sin_tarifa=[], sin_tarifa_claves={})
 F.conciliacion_mo = _conc
 F.sin_facturar_ids = lambda g: [("PRJ-1", "88 walker", 134.0), ("PRJ-2", "Movil", 133.0)]
-F.group_profitability = lambda g: {"rows": [{"id": "PRJ-1", "nombre": "88 walker", "margen": 0},
-                                            {"id": "PRJ-3", "nombre": "Con margen", "margen": 20}]}
+# ⚠️ CADUCADO por v579: «sin ganancia» ya no se decide por `margen` (el % de mano de obra,
+# que vale 0 con una ganancia FIJA: contaba obras que sí tienen ganancia) sino por el
+# modelo (`a_costo`). La regla protegida no cambia: «No margin» cuenta las obras sin ganancia.
+F.group_profitability = lambda g: {"rows": [{"id": "PRJ-1", "nombre": "88 walker", "margen": 0,
+                                             "a_costo": True},
+                                            {"id": "PRJ-3", "nombre": "Con margen", "margen": 20,
+                                             "a_costo": False}]}
 E.over_budget = lambda g: []
 F.resultado_por_proyecto = lambda g: [{"id": "PRJ-1", "nombre": "88 walker", "facturado": 0.0,
                                        "mo": 134.0, "compras": 0.0, "costo": 134.0,

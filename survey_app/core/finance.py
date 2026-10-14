@@ -170,14 +170,30 @@ def group_profitability(grupo: str) -> dict:
         pid = str(r["id"])
         rev = project_revenue(pid, grupo, prjs.get(pid))
         costo, ingreso = rev["costo"], rev["ingreso"]
+        _mod = rev.get("modelo", "margen")
         rows.append({"id": pid, "nombre": r["nombre"], "costo": costo,
                      "margen": rev["margen_pct"], "ingreso": ingreso,
                      "ganancia": rev["ganancia"],
                      # v360: qué modelo aplica («rubro» = importe por trabajador;
                      # «margen» = el % viejo). La pantalla lo dice para que un margen
                      # que ya no se teclea no parezca editable.
-                     "modelo": rev.get("modelo", "margen"),
-                     "sin_ganancia": rev.get("sin_ganancia", [])})
+                     "modelo": _mod,
+                     "sin_ganancia": rev.get("sin_ganancia", []),
+                     # ⚠️ v579 · «sin ganancia» es la obra que NO TIENE NINGUNA (ni por
+                     # hora, ni fija, ni precio pactado). Antes se decidía por `margen`
+                     # (ganancia de MANO DE OBRA sobre la mano de obra), que vale 0 con
+                     # una ganancia FIJA: en producción, «ESTIMATED PROFIT $50» y debajo
+                     # la misma obra «with no profit set… $0».
+                     "a_costo": _mod == "a_costo",
+                     # el margen del CONJUNTO sobre el ingreso: la misma definición que
+                     # el «Margin %» del Resumen (resultado / facturado), no otra
+                     "margen_ing": (round(100.0 * rev["ganancia"] / ingreso, 1)
+                                    if ingreso > 0 else None),
+                     # ⚠️ v579 · con ganancia por hora, quien tiene horas y NO tiene la
+                     # suya se factura A COSTO, y la pantalla del grupo no lo decía (en
+                     # una obra «a costo» o con solo la fija es lo esperado: no se avisa)
+                     "a_costo_personas": (list(rev.get("sin_ganancia", []))
+                                          if str(_mod).startswith("rubro") else [])})
         t_costo += costo
         t_ing += ingreso
     return {"rows": rows,

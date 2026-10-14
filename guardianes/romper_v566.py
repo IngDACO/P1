@@ -85,9 +85,12 @@ ROTURAS = [
        '_col.button(f"{_x[1]} {_x[2]} · {_x[3]}", key=f"pnlind_{_x[0]}",')]),
     ("desaparecen los 2 por fila en estrecho", PU,
      [('"@container (max-width:760px){"', '"@container (max-width:1px){"')]),
-    ("una cabecera de By project vuelve a la clave en español", PU,
-     [('"Facturado": st.column_config.NumberColumn(t("Invoiced"), format="dollar"),',
-       '"Facturado": st.column_config.NumberColumn(format="dollar"),')]),
+    # ⚠️ RETIRADA en v579 («una cabecera de By project vuelve a la clave en español»):
+    # quitarle la etiqueta a «Facturado» ya NO la deja en español — desde v579 `tabla.cfg`
+    # conserva la traducción cuando la configuración propia no trae etiqueta, así que la
+    # rotura no rompe nada (escapó en la re-corrida de v579, y con razón). La causa se
+    # arregló en la raíz y la vigila romper_v579 («`tabla.cfg` vuelve a pisar la etiqueta
+    # traducida»), más el barrido de verif_v579 sobre TODA la app.
     ("el resultado vuelve al formato con el signo dentro", PU,
      [('"Resultado": st.column_config.NumberColumn(t("Result"), format="dollar"),',
        '"Resultado": st.column_config.NumberColumn(t("Result"), format="$%,.0f"),')]),
