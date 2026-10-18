@@ -108,7 +108,10 @@ sec("2. Las CLAVES de widget NO se tradujeron")
 # `st.form(key)` y `ui.confirmar_borrado(key, texto)` — verbatim, medidas en el código
 KEYS = {
     "core/clientes_ui.py": ['st.form("cli_nuevo")'],
-    "core/catalogo_ui.py": ['st.form("cat_new")'],
+    # v582 · la clave lleva una GENERACIÓN: tras crear, otra (el formulario se quedaba lleno y
+    # un segundo toque creaba un artículo idéntico). Lo que esto protege —que la clave NO se
+    # traduzca— sigue igual: «cat_new_» es el literal.
+    "core/catalogo_ui.py": ['st.form(f"cat_new_{_g}")'],
     "core/auth_ui.py": ['confirmar_borrado("del_g_ok"', 'confirmar_borrado("man_del_ok"',
                         '_delok"'],
 }

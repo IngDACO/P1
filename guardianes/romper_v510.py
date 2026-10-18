@@ -68,10 +68,11 @@ ROTURAS = [
 
     # ── el mensaje que mentia sobre la causa (lo encontro la cadena, no un test) ──
     ('⚠️ un 429 vuelve a culpar a la configuracion', "core/catalogo.py",
+     # v582 · re-anclada: detrás va ahora la validación ÚNICA del alta y la edición
      '        return False, timeclock.motivo_sin_hoja()   # v510: no mientas, puede ser un 429'
-     + N + '    if not str(nombre).strip():',
+     + N + '    _err = _valida(tipo, nombre, costo_unit, horas_est, tarifa_hora)',
      '        return False, t("Google Sheets is not configured.")'
-     + N + '    if not str(nombre).strip():'),
+     + N + '    _err = _valida(tipo, nombre, costo_unit, horas_est, tarifa_hora)'),
     ('⚠️ los dos motivos dan el MISMO mensaje (el arreglo no hace nada)',
      "core/timeclock.py",
      '    return t("The sheet could not be opened right now — this is usually a temporary "'

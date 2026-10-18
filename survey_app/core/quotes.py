@@ -270,6 +270,16 @@ def totales(lineas: list, impuesto_pct=0.0) -> dict:
             "horas": horas}
 
 
+def con_item(grupo, item_id) -> list:
+    """Las cotizaciones del grupo con alguna línea de ese artículo, la más nueva primero
+    (v582: la ficha del artículo dice dónde se usa). Cada línea guarda `catalogo_id`."""
+    out = []
+    for c in list_cotizaciones(grupo):
+        if any(str(l.get("catalogo_id", "")) == str(item_id) for l in lineas_de(c)):
+            out.append(c)
+    return out
+
+
 def lineas_de(c: dict) -> list:
     try:
         return json.loads(c.get("LinesJSON", "") or "[]")

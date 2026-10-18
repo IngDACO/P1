@@ -218,6 +218,22 @@ body:has([data-testid="stStatusWidget"])::before {{
 /* ── Cabecera de Streamlit transparente (evita la franja oscura arriba) ── */
 [data-testid="stHeader"] {{ background: transparent; }}
 
+/* ⚠️ v582 · FANTASMAS (trampa 37). Streamlit 1.64 deja en el navegador copias viejas
+   —atenuadas, que no responden— de un bloque CON CLAVE cuando lo que ocupa su sitio en la
+   pasada siguiente tiene otra forma: crear el primer artículo del catálogo dejó CUATRO
+   formularios de alta muertos donde iba la tabla (y 57 desplegables con clave de la app
+   hacen un envío + `st.rerun()`). Con la pasada TERMINADA no debe quedar nada «viejo»: lo
+   que sigue marcado es un fantasma. Durante la pasada se ve atenuado, como siempre.
+   Medido en producción con un estilo temporal: la pantalla queda con su único formulario.
+   El bloque fantasma no lleva la marca (la llevan sus elementos): se oculta el que solo
+   tiene contenido viejo. */
+[data-testid="stApp"][data-test-script-state="notRunning"] [data-stale="true"] {{
+  display: none !important;
+}}
+[data-testid="stApp"][data-test-script-state="notRunning"] [data-testid="stLayoutWrapper"]:has([data-stale="true"]):not(:has([data-stale="false"])) {{
+  display: none !important;
+}}
+
 /* ── Piezas del kit (kpi_row / chip / section) ── */
 /* ⚠️ v581 · REJILLA de columnas iguales, no flex. Con `flex: 1 1 150px` la tarjeta que
    caía sola a la última fila se estiraba a TODO el ancho: medido en producción a 846 px

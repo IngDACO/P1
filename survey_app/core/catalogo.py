@@ -170,6 +170,34 @@ def etiqueta_items(items: list) -> dict:
             for it in items}
 
 
+def categoria_defecto(tipo) -> str:
+    """La categoría con la que nace un alta (v582). Era la PRIMERA por orden alfabético,
+    «Engineering», así que un riel se guardaba como ingeniería si nadie la cambiaba."""
+    return "Installation" if tipo == SERVICIO else "Materials"
+
+
+def homonimos(grupo, nombre, excluir="") -> list:
+    """Los artículos del grupo (también los desactivados) que ya se llaman así (v582).
+
+    Se AVISA, no se prohíbe: el nombre puede repetirse a propósito, la identidad es el
+    ID (regla del usuario). Lo que no puede pasar es repetirlo SIN enterarse — un doble
+    toque en «Save item» creaba dos idénticos (visto en producción: CAT-00001 y 00002).
+    """
+    n = " ".join(str(nombre or "").casefold().split())
+    if not n:
+        return []
+    return [i for i in list_items(grupo, incluir_inactivos=True)
+            if " ".join(str(i.get("Name", "")).casefold().split()) == n
+            and str(i.get("ID", "")) != str(excluir or "")]
+
+
+def regla_de(item: dict) -> str:
+    """De dónde sale su cantidad al cotizar leyendo el plano (`quote_from_plan`)."""
+    from core import quote_from_plan as QP          # perezoso: QP importa quotes
+    r = str(item.get("QtyRule", "") or QP.REGLA_DEFECTO)
+    return r if r in QP.REGLAS else QP.REGLA_DEFECTO
+
+
 def resumen(grupo) -> dict:
     items = list_items(grupo, incluir_inactivos=True)
     act = [i for i in items if str(i.get("Active", "SI")).upper() != "NO"]
@@ -218,23 +246,40 @@ def _next_id() -> str:
         return f"CAT-{mx + 1:05d}"
 
 
+def _valida(tipo, nombre, costo_unit, horas_est, tarifa_hora) -> str:
+    """Lo que un artículo necesita para poder COTIZARSE, o «» si lo tiene.
+
+    ⚠️ v582 · UNA regla para el alta y la edición. Solo el alta la tenía: editar el costo
+    a 0 decía «Item updated.» (visto en producción) y el artículo salía GRATIS en la
+    cotización siguiente — el fallo de las colillas de $0 de v346 por la puerta de atrás.
+    """
+    if not str(nombre).strip():
+        return t("Give the item a name.")
+    if tipo not in TIPOS:
+        return f"{t('Invalid type')}: {tipo}."
+    # ⚠️ Sin costo el artículo no sirve para cotizar: saldría en $0 y nadie lo notaría
+    # hasta ver el total (el mismo fallo de las colillas de $0 que arreglamos en v346).
+    if tipo == SERVICIO:
+        if _num(horas_est) <= 0 or _num(tarifa_hora) <= 0:
+            return t("A service needs estimated hours and an hourly rate greater than 0.")
+    elif _num(costo_unit) <= 0:
+        return t("The unit cost must be greater than 0.")
+    return ""
+
+
 def crear(grupo, nombre, tipo=PRODUCTO, costo_unit="", horas_est="", tarifa_hora="",
           unidad="unit", categoria="", descripcion="", nota="", creado_por="",
           qty_rule="") -> tuple:
     w = _ws()
     if w is None:
         return False, timeclock.motivo_sin_hoja()   # v510: no mientas, puede ser un 429
-    if not str(nombre).strip():
-        return False, t("Give the item a name.")
-    if tipo not in TIPOS:
-        return False, f"{t('Invalid type')}: {tipo}."
-    # ⚠️ Sin costo el artículo no sirve para cotizar: saldría en $0 y nadie lo notaría
-    # hasta ver el total (el mismo fallo de las colillas de $0 que arreglamos en v346).
+    _err = _valida(tipo, nombre, costo_unit, horas_est, tarifa_hora)
+    if _err:
+        return False, _err
+    # v582 · un servicio NO tiene unidad: cuesta horas × tarifa × cantidad, y la pantalla
+    # le ponía «hora» (en español, y llegaba así al PDF: «1 hora» por un montaje de 8 h)
     if tipo == SERVICIO:
-        if _num(horas_est) <= 0 or _num(tarifa_hora) <= 0:
-            return False, t("A service needs estimated hours and an hourly rate greater than 0.")
-    elif _num(costo_unit) <= 0:
-        return False, t("The unit cost must be greater than 0.")
+        unidad = ""
     cid = _next_id()
     try:
         w.append_row([cid, str(grupo), str(tipo), str(nombre).strip(), str(descripcion),
@@ -277,6 +322,14 @@ def actualizar(cid, fields: dict) -> tuple:
         logger.warning("catalogo.actualizar(%s): columnas desconocidas: %s", cid, ignorados)
     if fields and not escritos:
         return False, t("No recognised field") + ": " + ", ".join(ignorados)
+    # ⚠️ v582 · la MISMA validación que el alta, sobre cómo QUEDARÍA el artículo (lo que
+    # hay más lo que cambia). Activar o desactivar no la pasa: no toca el precio.
+    if any(k in escritos for k in ("Name", "Type", "UnitCost", "EstHours", "HourlyRate")):
+        _q = dict(antes or {}, **escritos)
+        _err = _valida(str(_q.get("Type", "")), _q.get("Name", ""), _q.get("UnitCost"),
+                       _q.get("EstHours"), _q.get("HourlyRate"))
+        if _err:
+            return False, _err
     lote = [{"range": f"{_col_letter(_COL[k])}{row}", "values": [[str(v)]]}
             for k, v in escritos.items()]
     try:
@@ -300,4 +353,8 @@ def actualizar(cid, fields: dict) -> tuple:
 def set_activo(cid, activo: bool) -> tuple:
     """Desactivar NO borra: las cotizaciones viejas deben seguir resolviendo su nombre
     (regla v340 — y siempre con vuelta)."""
-    return actualizar(cid, {"Active": "SI" if activo else "NO"})
+    ok, msg = actualizar(cid, {"Active": "SI" if activo else "NO"})
+    # v582 · decía «Item updated.» para las dos cosas
+    if ok:
+        msg = t("Item reactivated.") if activo else t("Item deactivated.")
+    return ok, msg

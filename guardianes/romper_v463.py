@@ -11,8 +11,10 @@ ROTURAS = [
     # «v575 ·» estaban MUERTAS. La misma rotura, sobre los nombres de hoy.
     ("inventory_ui.py", '"Category":   _etq(str(a.get("Category", ""))) or "—"',
      '"Category":   a.get("Category", "") or "—"', "celda de inventario cruda", True),  # v575 ·
-    ("catalogo_ui.py", '"Tipo": _etq(str(i.get("Type", "")))',
-     '"Tipo": str(i.get("Type", ""))', "celda de catalogo cruda", True),  # v575 ·
+    # v582 · re-anclada: la celda pasa por `_tipo_txt` («Product»/«Service»); la rotura la
+    # vuelve a poner CRUDA en la línea de la tabla, que es lo que el guardián mira
+    ("catalogo_ui.py", '"Tipo": _tipo_txt(i),',
+     '"Tipo": str(i.get("Type", "")),', "celda de catalogo cruda", True),  # v582 ·
     # v575 · RETIRADA (no muerta: se ESCAPABA). Protegía que la categoría vieja «Otros»
     # se pintara traducida; desde v469 la columna (Expenses, Category) se CANONIZA al leer
     # (`valores.LEGADO`: «Otros» → «Other»), así que la entrada de `i18n.VALORES` ya no
@@ -37,8 +39,9 @@ ROTURAS = [
     ("inventory.py", "def ubic_str(a: dict, etq=None) -> str:",
      "def ubic_str(a: dict, etq=__import__('core.i18n', fromlist=['x']).etiqueta) -> str:",
      "ubic_str traduce por defecto (metería ingles en la HOJA)", True),
-    ("catalogo_ui.py", '"Unidad": _etq(str(i.get("Unit", ""))) or "—",',
-     '"Unidad": i.get("Unit", "") or "—",', "unidad cruda", True),  # v575 ·
+    # v582 · re-anclada: la celda pasa por `_uni_txt` (el servicio sin unidad)
+    ("catalogo_ui.py", '"Unidad": _uni_txt(i),',
+     '"Unidad": i.get("Unit", "") or "—",', "unidad cruda", True),  # v582 ·
     # CONTROL: cambio inocuo -> el guardian NO debe saltar
     ("inventory_ui.py", "def _est_lbl(estado) -> str:",
      "def _est_lbl(estado) -> str:  # comentario inocuo", "CONTROL (debe pasar)", False),

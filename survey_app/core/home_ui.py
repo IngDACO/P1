@@ -425,7 +425,9 @@ _ABIERTO_EN_SUB = {("proyectos", "📊 Proyectos"): "_admin_open_proj",
                    ("proyectos", "🗂 Agrupaciones"): "_admin_open_agr",
                    ("proyectos", "🏢 Localizaciones"): "_loc_open",      # v564
                    # v580 · una cotización abierta, o el alta de una nueva
-                   ("finanzas", "📄 Cotizaciones"): ("_cot_open", "_cot_nueva")}
+                   ("finanzas", "📄 Cotizaciones"): ("_cot_open", "_cot_nueva"),
+                   # v582 · con un artículo abierto, «Catalogue» se quedaba en él
+                   ("finanzas", "📚 Catálogo"): "_cat_open"}
 
 
 def puede_atras() -> bool:

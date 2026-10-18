@@ -280,6 +280,16 @@ def _desde_plano(grupo):
         st.caption(t("Reads the PDF and proposes the lines whose quantity comes from the "
                      "drawing. You review them before saving — this is a starting point, "
                      "not a price."))
+        # ⚠️ v582 · ANTES de leer el plano y con su botón: el aviso de abajo decía «Set the
+        # rule on the items in Catalogue» y ese campo no existía; ahora existe, y se avisa
+        # aquí, siempre pintado (un botón que solo sale tras «Propose lines» pierde el toque)
+        if not any(_CAT.regla_de(i) != _QP.MANUAL for i in (_CAT.list_items(grupo) or [])):
+            st.warning(t(":material/info: No catalogue item takes its quantity from the "
+                         "drawing yet: each item says it in «Quantity from the drawing»."))
+            if st.button(t(":material/sell: Set it in Catalogue"), key="cot_plano_cat",
+                         type="tertiary"):
+                from core import projects_ui as _PU
+                _PU._ir_a("finanzas", "📚 Catálogo")
         _pdf = st.file_uploader(t("Drawing (PDF)"), type=["pdf"], key="cot_plano_pdf")
         if not _pdf:
             return

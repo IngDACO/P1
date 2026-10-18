@@ -107,7 +107,8 @@ ROTURAS = [
      [("""file_name=f"Quote_{_num_txt(c).replace(' ', '_')}.pdf",""",
        """file_name=f"Cotizacion_{c.get('Number','')}.pdf",""")]),
     ("⚠️ «Quotes» en el menú ya no cierra la cotización abierta", HU,
-     [('                   ("finanzas", "📄 Cotizaciones"): ("_cot_open", "_cot_nueva")}\n', "                   }\n")]),
+     # v582 · re-anclada: detrás va ahora la entrada del catálogo
+     [('                   ("finanzas", "📄 Cotizaciones"): ("_cot_open", "_cot_nueva"),\n', "")]),
     ("…o el menú no sabe cerrar una tupla", HU,
      [("                        for _ab in (_abierto if isinstance(_abierto, tuple) else (_abierto,)):\n",
        "                        for _ab in (_abierto,):\n")]),

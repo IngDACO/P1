@@ -95,6 +95,10 @@ def generate_quote_pdf(cot: dict, cliente: dict = None, grupo_nombre: str = "") 
         celda = [Paragraph(txt, H)] + ([Paragraph(desc, sm)] if desc else [])
         cant = _num(l.get("cantidad"))
         uni = str(l.get("unidad", "") or "")
+        # v582 · un SERVICIO no lleva unidad (cuesta horas × tarifa × cantidad): las líneas
+        # viejas traían «hora», en español, y salía «1 hora» por un montaje de 8 h
+        if str(l.get("tipo", "")) == "service":
+            uni = ""
         cant_txt = f"{cant:g}" + (f" {uni}" if uni and uni != "unit" else "")
         filas.append([celda, Paragraph(cant_txt, H),
                       Paragraph(_money(l.get("precio_total")), H)])

@@ -124,4 +124,12 @@ for fich, que, viejo, nuevo in ROTURAS:
 
 print("")
 print("%d mal" % mal)
+# v582 · las copias de seguridad se QUITAN si todo quedó restaurado (cada `_restaurar` ya
+# comprobó su fichero), como romper_v486 desde v574: se quedaban en guardianes/ sin ignorar
+# y el despliegue, que hace `git add` de todo, las habría subido al repo.
+for _c in _COPIA.values():
+    try:
+        os.remove(_c)
+    except OSError:
+        pass
 sys.exit(0 if mal == 0 else 1)
