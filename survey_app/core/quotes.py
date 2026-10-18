@@ -40,7 +40,7 @@ from core.num import col_letter as _col_letter
 from core.num import num as _num
 from core.num import parse_date as _parse_date
 
-from core.i18n import t
+from core.i18n import t, etiqueta as _etq
 logger = logging.getLogger(__name__)
 
 SHEET = "Quotes"
@@ -298,7 +298,10 @@ def list_cotizaciones(grupo=None, cliente_id=None, incluir_rechazadas=True) -> l
         out = [c for c in out if str(c.get("ClientID", "")) == str(cliente_id)]
     if not incluir_rechazadas:
         out = [c for c in out if estado_de(c) != RECHAZADA]
-    return sorted(out, key=lambda c: str(c.get("Date", "")), reverse=True)
+    # v580 · con la misma fecha, la de número (y versión) más alto primero: ordenar solo
+    # por fecha dejaba la más NUEVA la última (visto con cuatro del mismo día)
+    return sorted(out, key=lambda c: (str(c.get("Date", "")), _num(c.get("Number")),
+                                      _num(c.get("Version"), 1)), reverse=True)
 
 
 def get_cotizacion(cid) -> dict:
@@ -376,7 +379,8 @@ def _ids_frescos() -> tuple:
 
 
 def crear(grupo, cliente_id, cliente_nombre, lineas, impuesto_pct=0.0,
-          validez=None, nota="", creado_por="", origen="") -> tuple:
+          validez=None, nota="", creado_por="", origen="", numero=None,
+          version=1) -> tuple:
     w = _ws()
     if w is None:
         return False, timeclock.motivo_sin_hoja()   # v510: no mientas, puede ser un 429
@@ -386,14 +390,18 @@ def crear(grupo, cliente_id, cliente_nombre, lineas, impuesto_pct=0.0,
         return False, t("Choose who the quote is for.")
     _tot = totales(lineas, impuesto_pct)
     mx_id, mx_num = _ids_frescos()
-    cid, num = f"COT-{mx_id + 1:04d}", f"{mx_num + 1:04d}"
+    cid = f"COT-{mx_id + 1:04d}"
+    # v580 · una VERSIÓN nueva conserva el número de la cotización (la «0003 v2»); antes
+    # sacaba otro y la v2 de la 0003 salía como «0005 v2»
+    num = str(numero) if numero else f"{mx_num + 1:04d}"
     hoy = clock.today(grupo)
     val = validez or (hoy + timedelta(days=VALIDEZ_DIAS))
     try:
         w.append_row([cid, str(grupo), str(cliente_id), str(cliente_nombre), num,
                       hoy.isoformat(), str(val), json.dumps(lineas, ensure_ascii=False),
                       str(_tot["subtotal"]), str(_num(impuesto_pct)), str(_tot["impuesto"]),
-                      str(_tot["total"]), str(_tot["margen_pct"]), BORRADOR, "", "1",
+                      str(_tot["total"]), str(_tot["margen_pct"]), BORRADOR, "",
+                      str(int(_num(version, 1)) or 1),
                       str(origen), str(nota), str(creado_por),
                       clock.now(grupo).strftime("%Y-%m-%d %H:%M")],
                      value_input_option="RAW")
@@ -428,7 +436,7 @@ def _set(w, row, campos: dict) -> tuple:
     return True, ""
 
 
-def guardar_lineas(cid, lineas, impuesto_pct=None) -> tuple:
+def guardar_lineas(cid, lineas, impuesto_pct=None, nota=None) -> tuple:
     """Reemplaza las líneas y recalcula los totales. Solo en BORRADOR."""
     w = _ws()
     if w is None:
@@ -444,10 +452,14 @@ def guardar_lineas(cid, lineas, impuesto_pct=None) -> tuple:
                         "to change it.")
     imp = _num(c.get("TaxPct")) if impuesto_pct is None else _num(impuesto_pct)
     _tot = totales(lineas, imp)
-    ok, err = _set(w, row, {
+    _campos = {
         "LinesJSON": json.dumps(lineas, ensure_ascii=False),
         "Subtotal": _tot["subtotal"], "TaxPct": imp, "Tax": _tot["impuesto"],
-        "Total": _tot["total"], "MarginPct": _tot["margen_pct"]})
+        "Total": _tot["total"], "MarginPct": _tot["margen_pct"]}
+    # v580 · la nota para el cliente se cambia en el borrador (iba al PDF sin poder verse)
+    if nota is not None:
+        _campos["Note"] = str(nota)
+    ok, err = _set(w, row, _campos)
     if not ok:
         return False, err
     _invalidate()
@@ -479,7 +491,7 @@ def set_estado(cid, estado) -> tuple:
                             grupo=str(c.get("Group", "")))
     except Exception as e:
         logger.warning("quotes: no se pudo auditar el estado de %s: %s", cid, e)
-    return True, f"{t('Quote marked as')} {estado}."
+    return True, t("Quote marked as {e}.", e=_etq(estado))
 
 
 def nueva_version(cid, creado_por="") -> tuple:
@@ -494,15 +506,64 @@ def nueva_version(cid, creado_por="") -> tuple:
     ok, nuevo = crear(c.get("Group"), c.get("ClientID"), c.get("ClientName"),
                       lineas_de(c), _num(c.get("TaxPct")),
                       nota=str(c.get("Note", "")), creado_por=creado_por,
-                      origen=str(c.get("ID", "")))
+                      origen=str(c.get("ID", "")), numero=str(c.get("Number", "")) or None,
+                      version=_version_siguiente(c.get("Group"), c.get("Number")))
     if not ok:
         return False, nuevo
-    w = _ws()
-    row, _r = _fila(w, nuevo)
-    if row is not None:
-        _set(w, row, {"Version": int(_num(c.get("Version"), 1)) + 1})
-        _invalidate()
     return True, nuevo
+
+
+def _version_siguiente(grupo, numero) -> int:
+    """La versión que le toca a una cotización nueva de ese NÚMERO (v580): la más alta que
+    exista + 1, leída FRESCA — sacar la v2 dos veces de la v1 daría dos «v2»."""
+    w = _ws()
+    mx = 1
+    if w is None or not str(numero or "").strip():
+        return mx + 1
+    try:
+        recs = valores.canonizar(columnas.canonizar(w.get_all_records(numericise_ignore=["all"])), SHEET)
+    except Exception as e:
+        logger.warning("quotes._version_siguiente: %s", e)
+        return mx + 1
+    for r in recs:
+        if str(r.get("Group", "")) == str(grupo) and str(r.get("Number", "")) == str(numero):
+            mx = max(mx, int(_num(r.get("Version"), 1)))
+    return mx + 1
+
+
+def proyecto_perdido(c: dict) -> bool:
+    """¿La cotización apunta a una obra que YA NO EXISTE? (v580) Pasa si se borra la obra
+    que nació de ella: la cotización se quedaba «aceptada», atada a nada y sin poder
+    cambiar de estado (`set_estado` lo impide mientras haya obra)."""
+    pid = str(c.get("ProjectID", "") or "").strip()
+    if not pid:
+        return False
+    from core import projects as P
+    return not P.get_project(pid)
+
+
+def desvincular_proyecto(cid) -> tuple:
+    """Suelta la obra de una cotización, SOLO si esa obra ya no existe (v580)."""
+    w = _ws()
+    if w is None:
+        return False, timeclock.motivo_sin_hoja()
+    row, c = _fila(w, cid)
+    if row is None:
+        return False, t("Quote not found.")
+    if not proyecto_perdido(c):
+        return False, t("That project still exists: it cannot be unlinked.")
+    antes = str(c.get("ProjectID", ""))
+    ok, err = _set(w, row, {"ProjectID": ""})
+    if not ok:
+        return False, err
+    _invalidate()
+    try:
+        from core import auditoria
+        auditoria.registrar("cotizacion", cid, {"ProjectID": [antes, ""]},
+                            grupo=str(c.get("Group", "")))
+    except Exception as e:
+        logger.warning("quotes: no se pudo auditar la desvinculación de %s: %s", cid, e)
+    return True, t("Project {p} unlinked from the quote.", p=antes)
 
 
 # ── Fase 3: ganarla y comparar contra lo real (v354) ─────────────
@@ -534,6 +595,11 @@ def aceptar_y_crear_proyecto(cid, nombre="", tipo="Installation", fecha_inicio=N
 
     from core import projects as P
     from core import schedule as S
+    # ⚠️ v580 · el tipo, CANÓNICO: el formulario mandaba «Instalación» (el valor viejo) y
+    # `genera_cronograma` solo conoce «Installation» — una instalación nacida de una
+    # cotización salía SIN cronograma (una actividad «Execution»; PRJ-0024 en producción,
+    # el fallo de v454 por otro camino).
+    tipo = valores.canon(tipo)
     ini = fecha_inicio or clock.today(c.get("Group"))
     acts, fin, plan_json = None, "", ""
     # Solo la instalación tiene cronograma estándar (regla v306): a un delivery o un
@@ -560,7 +626,7 @@ def aceptar_y_crear_proyecto(cid, nombre="", tipo="Installation", fecha_inicio=N
         acts = [{"nombre": "Execution", "duracion": 1, "peso": 1}]
 
     ok, res = P.create_project(
-        c.get("Group"), str(nombre).strip() or f"{c.get('ClientName','')} — Nº{c.get('Number','')}",
+        c.get("Group"), str(nombre).strip() or f"{c.get('ClientName','')} — No. {c.get('Number','')}",
         cliente=str(c.get("ClientName", "")), cliente_id=str(c.get("ClientID", "")),
         ubicacion=str(ubicacion), ns=int(_num(ns)), fecha_inicio=ini.isoformat(),
         fecha_fin_est=fin, activities=acts,

@@ -97,23 +97,27 @@ chk("las keys del cliente nuevo existen", len(_limpia), 4)
 # del formulario —cancelar y guardar— y las dos tienen que limpiar: si solo lo hace una,
 # por el otro camino el nombre del cliente anterior sigue ahí. Lo destapó probar el
 # guardián contra el código roto.
-_bloques = []
-for n in ast.walk(fn):
-    if not isinstance(n, ast.For):
-        continue
-    _pops = [x for x in ast.walk(n)
-             if isinstance(x, ast.Call) and isinstance(x.func, ast.Attribute)
-             and x.func.attr == "pop"]
-    if not _pops:
-        continue
-    _en = {c.value for c in ast.walk(n.iter)
-           if isinstance(c, ast.Constant) and isinstance(c.value, str)}
-    _bloques.append(_en)
-chk("hay DOS salidas del formulario que limpian (cancelar y guardar)",
-    len(_bloques), 2)
+# ⚠️ CADUCADO por v580: las dos salidas ya no llevan cada una su bucle de `pop`: las dos
+# llaman a `_limpiar_nueva()`, que limpia `_CLAVES_NUEVA` (una lista, no dos copias que
+# divergen). El principio sigue: cancelar Y guardar limpian TODAS las keys del cliente
+# nuevo — se mira que la lista las tenga, que el helper la recorra con `pop`, y que haya
+# DOS llamadas en `_nueva` (una por salida).
+_mod = arb
+_lista = next((n for n in _mod.body if isinstance(n, ast.Assign)
+               and any(getattr(t_, "id", "") == "_CLAVES_NUEVA" for t_ in n.targets)), None)
+_en_lista = ({c.value for c in ast.walk(_lista) if isinstance(c, ast.Constant)}
+             if _lista is not None else set())
+_lim = next((n for n in ast.walk(_mod) if isinstance(n, ast.FunctionDef)
+             and n.name == "_limpiar_nueva"), None)
+_recorre = _lim is not None and any(
+    isinstance(x, ast.For) and ast.unparse(x.iter) == "_CLAVES_NUEVA"
+    and any(isinstance(y, ast.Call) and getattr(y.func, "attr", "") == "pop" for y in ast.walk(x))
+    for x in ast.walk(_lim))
+_llamadas = [n for n in ast.walk(fn) if isinstance(n, ast.Call)
+             and getattr(n.func, "id", "") == "_limpiar_nueva"]
+chk("hay DOS salidas del formulario que limpian (cancelar y guardar)", len(_llamadas), 2)
 chk("...y las dos limpian TODAS las keys del cliente nuevo",
-    all(set(_keys) <= b for b in _bloques), True)
-print(f"         keys por bloque: {[len(set(_keys) & b) for b in _bloques]} de 4")
+    set(_keys) <= _en_lista and _recorre, True)
 
 # ── Comportamiento ─────────────────────────────────────────────────────────
 print("\n== y la regla funciona ==")

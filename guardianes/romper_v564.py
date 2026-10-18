@@ -88,9 +88,11 @@ ROTURAS = [
      [('expanded=_sin_pin, key=f"exp_eloc_ubic_{pid}_{_sin_pin}"):',
        'expanded=_sin_pin, key=f"exp_eloc_ubic_{pid}"):')], "verif_v547"),
     # ── 6. Team ──
-    ("⚠️ la cabecera «Hours» vuelve a la clave en español", PU,
-     [('                     "Horas": st.column_config.NumberColumn(t("Hours"), format="%.2f"),\n',
-       '                     "Horas": st.column_config.NumberColumn(format="%.2f"),\n')]),
+    # ⚠️ RETIRADA en v580 («la cabecera «Hours» vuelve a la clave en español»): quitarle la
+    # etiqueta a «Horas» ya NO la deja en español — desde v579 `tabla.cfg` conserva la
+    # traducción cuando la configuración propia no trae etiqueta (escapó en la re-corrida, y
+    # con razón; la misma que romper_v566 retiró en v579). La causa la vigilan romper_v579 y
+    # el barrido de verif_v579 sobre toda la app.
     ("el aviso «sin tarifa» vuelve a los logins", PU,
      [('", ".join(_et.get(str(u), str(u)) for u in filas["sin_tarifa"])',
        '", ".join(str(u) for u in filas["sin_tarifa"])')]),
@@ -130,9 +132,8 @@ ROTURAS = [
     ("un enlace con `&l=` deja de abrirla", HU,
      [('            st.session_state["_loc_open"] = str(qp.get("l"))\n', "            pass\n")]),
     ("⚠️ el menú deja de volver a la lista de Locations", HU,
-     [('                   ("proyectos", "🗂 Agrupaciones"): "_admin_open_agr",\n'
-       '                   ("proyectos", "🏢 Localizaciones"): "_loc_open"}      # v564\n',
-       '                   ("proyectos", "🗂 Agrupaciones"): "_admin_open_agr"}\n')]),
+     # v580 · re-anclada: detrás de Locations va ahora la entrada de Quotes
+     [('                   ("proyectos", "🏢 Localizaciones"): "_loc_open",      # v564\n', "")]),
     ("⚠️ la sección vuelve a empezar siempre en Team", PU,
      [('default="👥 Equipo", key="cpxseg_loc_sec", label_visibility="collapsed",\n'
        '        persist_state="session")',

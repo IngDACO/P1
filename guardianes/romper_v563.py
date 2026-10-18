@@ -92,8 +92,9 @@ ROTURAS = [
     ("un enlace con `&g=` deja de abrirla", HU,
      [('            st.session_state["_admin_open_agr"] = str(qp.get("g"))\n', '            pass\n')]),
     ("⚠️ el menú vuelve a no cerrar lo abierto", HU,
-     [('                            st.session_state.pop(_abierto, None)\n',
-       '                            pass\n')]),
+     # v580 · re-anclada: ahora cierra una o varias claves (`for _ab in …`)
+     [('                                st.session_state.pop(_ab, None)\n',
+       '                                pass\n')]),
 ]
 
 CONTROL = ("CONTROL: un comentario inocuo no puede poner nada rojo",

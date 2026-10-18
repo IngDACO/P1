@@ -7,7 +7,9 @@ import os
 import subprocess
 import sys
 
-SCRW = os.environ["SCRW"]
+# v580 · por defecto, la carpeta de esta batería (los guardianes viven en `P1/guardianes`;
+# `SCRW` era la del scratchpad, y sin la variable la batería ni arrancaba)
+SCRW = os.environ.get("SCRW") or os.path.dirname(os.path.abspath(__file__))
 RAIZ = r"C:\Users\diego\P1\survey_app"
 ENV = dict(os.environ, PYTHONIOENCODING="utf-8")
 G = "verif_v470"

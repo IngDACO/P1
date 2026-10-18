@@ -105,9 +105,16 @@ chk("_etq(P.derive_estado" not in _pu,
     "⚠️ NINGUNA escritura de estado pasa por etiqueta() (guardaría inglés en Sheets)")
 
 print("\n== 4. Las 3 celdas que SÍ son display, traducidas ==")
+# ⚠️ CADUCADA en v580 la de `quotes_ui` («_etq(Q.estado_de(c))»): la celda pasa por
+# `_est_celda` → `_est_txt`, que traduce con `etiqueta` salvo la VENCIDA, que en una
+# cotización es «expired» (`etiqueta` la daba como «overdue», el de las facturas). El
+# principio sigue: la celda NO pinta el estado crudo de la hoja.
 for fn, frag in [("invoices_ui.py", "_etq(I.estado_cobro(f))"),
-                 ("quotes_ui.py", "_etq(Q.estado_de(c))")]:
+                 ("quotes_ui.py", "_etq(str(est))")]:
     chk(frag in (CORE / fn).read_text(encoding="utf-8"), f"{fn}: {frag}")
+_qcel = (CORE / "quotes_ui.py").read_text(encoding="utf-8")
+chk('"Estado":  _est_celda(c),' in _qcel and "_est_txt(_e)" in _qcel,
+    "quotes_ui.py: la celda de estado pasa por `_est_celda` → `_est_txt`")
 # v570 · CADUCADA la de `clientes_ui` («_etq(INV.estado_cobro(x))»): la tabla de facturas
 # de la ficha del cliente era una COPIA que se quedó atrás, y ahora es LA de Invoices
 # (`invoices_ui.tabla_facturas`, cuya celda vigila la entrada de arriba). El principio

@@ -423,7 +423,9 @@ def _track_history(cur):
 # estando ya en ella lo cierra (vuelve a la lista).
 _ABIERTO_EN_SUB = {("proyectos", "📊 Proyectos"): "_admin_open_proj",
                    ("proyectos", "🗂 Agrupaciones"): "_admin_open_agr",
-                   ("proyectos", "🏢 Localizaciones"): "_loc_open"}      # v564
+                   ("proyectos", "🏢 Localizaciones"): "_loc_open",      # v564
+                   # v580 · una cotización abierta, o el alta de una nueva
+                   ("finanzas", "📄 Cotizaciones"): ("_cot_open", "_cot_nueva")}
 
 
 def puede_atras() -> bool:
@@ -534,8 +536,10 @@ def sidebar_menu() -> str:
                     # salía por «← Back» (decisión del usuario, recorrido de Groupings).
                     if _k == _cur and _sid == (st.session_state.get(_sk) or _subs[0][0]):
                         _abierto = _ABIERTO_EN_SUB.get((_k, _sid))
-                        if _abierto:
-                            st.session_state.pop(_abierto, None)
+                        # v580 · una sub-pestaña puede tener MÁS de una cosa abierta
+                        for _ab in (_abierto if isinstance(_abierto, tuple) else (_abierto,)):
+                            if _ab:
+                                st.session_state.pop(_ab, None)
                     navegar(_k, _sid)          # navega con el ID interno (deep-links intactos)
     _track_history(_cur)
     _estado_a_url(_cur)     # v337: la URL refleja dónde estás → el enlace se puede mandar

@@ -219,8 +219,14 @@ chk('["👥 Equipo", "💰 Gastos", "🦺 Pre-Start", "📎 Archivos", "✏️ D
 chk('_sec == "👥 Equipo"' in _pu and '_sec == "✏️ Datos"' in _pu,
     "las comparaciones siguen casando (si no, la rama queda MUERTA)")
 _qu = (CORE / "quotes_ui.py").read_text(encoding="utf-8")
-chk('["Instalación", "Delivery", "Ripout", "Otro"]' in _qu,
-    "⚠️ el tipo de proyecto NO se traduce: se GUARDA en `Proyectos.Tipo`")
+# ⚠️ CADUCADO por v580: esta entrada exigía LITERALMENTE la lista vieja
+# `["Instalación", "Delivery", "Ripout", "Otro"]` — y era el fallo: `genera_cronograma`
+# no conoce «Instalación», así que una instalación nacida de una cotización salía SIN
+# cronograma (PRJ-0024 en producción). El principio sigue: las OPCIONES son los valores
+# que se guardan (sin traducir) y la etiqueta va en `format_func` — ahora los de la app.
+chk('.selectbox(t("Type"), list(P.TIPOS), format_func=_etq)' in _qu
+    and '"Instalación"' not in _qu,
+    "⚠️ el tipo de proyecto NO se traduce: se GUARDA en `Proyectos.Tipo` (los de la app)")
 chk("format_func=_etq" in _qu,
     "…y se muestra con `etiqueta()`, que es quien sabe traducir un valor de negocio")
 

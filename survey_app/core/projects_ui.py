@@ -2683,7 +2683,8 @@ def _detalle_proyecto(pid: str, grupo: str = None):
         f'<span style="font-size:13px;color:#374151;white-space:nowrap;">'
         f'<b>{_av}%</b> ' + t('progress') + '</span>'
         f'<span style="font-size:13px;color:#6b7280;white-space:nowrap;">'
-        f'<b style="color:#374151">{_horas:.1f} h</b> {t("worked")}</span>'
+        # v580 · «0 h», no «0.0 h» (el helper de v565, que ya usaban las localizaciones)
+        f'<b style="color:#374151">{_horas_txt(_horas)}</b> {t("worked")}</span>'
         '</div></div>',
         unsafe_allow_html=True,
     )
