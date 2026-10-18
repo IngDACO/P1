@@ -219,7 +219,18 @@ body:has([data-testid="stStatusWidget"])::before {{
 [data-testid="stHeader"] {{ background: transparent; }}
 
 /* ── Piezas del kit (kpi_row / chip / section) ── */
-.cpx-kpis {{ display: flex; gap: 10px; flex-wrap: wrap; margin: 2px 0 12px; }}
+/* ⚠️ v581 · REJILLA de columnas iguales, no flex. Con `flex: 1 1 150px` la tarjeta que
+   caía sola a la última fila se estiraba a TODO el ancho: medido en producción a 846 px
+   con el menú abierto, Status, Timeclock y Library salían «3 + 1 de 472 px» y Costs
+   «4 + 1». En rejilla conserva el ancho de su columna (151 px).
+   `--cpx-min` = la BASE de la tarjeta, NO su min-width: con los 104 px de `_kpi_card`
+   salían 4 de 111 px y «16/11/2026» se partía en dos líneas (el fallo de v559).
+   `min(100%, …)`: en un móvil, una columna sola nunca desborda. Las filas que pintan
+   tarjetas propias usan esta MISMA clase (una definición) con su `--cpx-min`. */
+.cpx-kpis {{
+  display: grid; gap: 10px; margin: 2px 0 12px;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--cpx-min, 150px)), 1fr));
+}}
 .cpx-kpi {{
   flex: 1 1 150px; background: #fff; border: 1px solid {BORDE};
   border-left: 3px solid var(--cpx-accent, {AZUL}); border-radius: 12px;

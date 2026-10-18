@@ -80,6 +80,17 @@ for m in _r["ilegibles"]:
     % len(_r["sin_forma"]))
 for m in _r["sin_forma"]:
     print("        %s" % m)
+# ⚠️ v581 · Un ancla que casa DOS veces en una batería que exige una sola («?? ancla x2»)
+# es una rotura que se SALTA: romper_v559 llevaba una desde v577 (la tabla de Hours repetía
+# la línea de Costs con más sangría) y aquí contaba como «viva». Las baterías viejas de
+# `replace(..., 1)` rompen la PRIMERA a propósito («traducir UNA aparición»): se cuentan,
+# no se exigen (las 13 de hoy se revisaron una a una en v581).
+(ok if not _r["repetidas_unica"] else fallo)(
+    "...ni un ancla REPETIDA en una batería que exige una sola (%d)" % len(_r["repetidas_unica"]))
+for m in _r["repetidas_unica"]:
+    print("        %s" % m)
+print("        (repetidas en baterías de «la primera», a propósito: %d)"
+      % len(_r["repetidas_primera"]))
 
 print("")
 print("2. La sonda SABE ver un ancla muerta (trampa nº12), en las formas que se le escapaban")

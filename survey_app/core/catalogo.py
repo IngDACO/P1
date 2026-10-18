@@ -197,7 +197,25 @@ def _next_id() -> str:
                     pass
     except Exception as e:
         logger.warning("catalogo._next_id: %s", e)
-    return f"CAT-{mx + 1:05d}"
+        # ⚠️ v581 · a la CACHÉ, no a la lista vacía: vacía es «no hay ninguno», el
+        # siguiente salía 0001 y el alta pisaba un ID que EXISTE. La caché puede ir
+        # atrasada, pero en un solo proceso se tira en cada escritura.
+        for r in _records():
+            i = str(r.get("ID", ""))
+            if i.startswith("CAT-"):
+                try:
+                    mx = max(mx, int(i.split("-")[1]))
+                except Exception:
+                    pass
+    # ⚠️ v581 · saltando los IDs que otra hoja aún referencia (la auditoría incluida),
+    # igual que los otros generadores desde v427: borrar la fila del ID más alto lo
+    # liberaba y el alta siguiente heredaba el historial ajeno.
+    try:
+        from core import hojas
+        return hojas.siguiente_id_libre("CAT-", mx, propia=SHEET, ancho=5)
+    except Exception as e:
+        logger.warning("catalogo: no se pudo comprobar IDs referenciados: %s", e)
+        return f"CAT-{mx + 1:05d}"
 
 
 def crear(grupo, nombre, tipo=PRODUCTO, costo_unit="", horas_est="", tarifa_hora="",

@@ -560,7 +560,7 @@ def _historial(pid):
             _kpi(t("With near miss"), n_nm, "#c0392b" if n_nm else None),
             _kpi(t("With NO checks"), n_fail, "#c0392b" if n_fail else None),
             _kpi(t("Latest"), prev[0]["fecha"] or "—")]
-    st.markdown('<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:8px">'
+    st.markdown('<div class="cpx-kpis" style="--cpx-min:110px;margin:0 0 8px">'  # v581
                 + "".join(tarj) + "</div>", unsafe_allow_html=True)
 
     # ── Ficha desplegable por pre-start ──

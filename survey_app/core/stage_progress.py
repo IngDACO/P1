@@ -362,6 +362,17 @@ def acreditar(pid, grupo, prj, creditos_nuevos, quien="", origen=MANUAL, fecha=N
     # lectura de ANTES de escribir. v528 · Esa lectura es la fresca, no la caché.
     _filas, _despues, _fechas = _indice(_leido.get(SHEET), pid)
     _tocadas, _nuevas, _lote_sp = set(), [], []
+    # ⚠️ v581 · el sufijo del ID sigue al MAYOR de la obra. Era la posición dentro de ESTE
+    # lote, así que dos confirmaciones de la misma etapa en días distintos emitían las
+    # dos `SP-<obra>-<etapa>-0`: el ID es la identidad, aunque hoy nadie lo lea.
+    _sp_n = 0
+    for _r in (_leido.get(SHEET) or []):
+        _sid = str(_r.get("ID", ""))
+        if _sid.startswith("SP-%s-" % pid):
+            try:
+                _sp_n = max(_sp_n, int(_sid.rsplit("-", 1)[1]) + 1)
+            except Exception:
+                pass
     for c in (creditos_nuevos or []):
         _et = int(_num(c.get("etapa")))
         _ac = str(c.get("actividad", ""))
@@ -376,7 +387,7 @@ def acreditar(pid, grupo, prj, creditos_nuevos, quien="", origen=MANUAL, fecha=N
         _fechas[(_et, _ac)] = _dia
         row = _filas.get((_et, _ac))
         if row is None:
-            _nuevas.append(["SP-%s-%d-%d" % (pid, _et, len(_nuevas)), str(grupo),
+            _nuevas.append(["SP-%s-%d-%d" % (pid, _et, _sp_n + len(_nuevas)), str(grupo),
                             str(pid), str(_et), _ac, str(_pc),
                             str(c.get("nota", "")), str(origen), str(quien), _ahora, _dia])
         else:

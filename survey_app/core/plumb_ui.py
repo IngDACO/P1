@@ -138,7 +138,7 @@ def render_plumb_tab():
 
     # ── La plantilla (compartida, UNA vez) ──
     st.markdown(t("#### :material/architecture: The template (the same for every lift)"))
-    st.markdown('<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:8px">'
+    st.markdown('<div class="cpx-kpis" style="--cpx-min:92px;margin:0 0 8px">'   # v581
                 + "".join([_kpi(t("DBP"), f"{r0['dbp']:.1f}"), _kpi(t("DBPW"), f"{r0['dbpw']:.1f}"),
                            _kpi("RW", f"{r0['rw']:.1f}"), _kpi("d1", f"{r0['d1']:.2f}"),
                            _kpi("d2", f"{r0['d2']:.2f}")]) + "</div>",

@@ -362,7 +362,10 @@ def _ids_frescos() -> tuple:
         recs = valores.canonizar(columnas.canonizar(w.get_all_records(numericise_ignore=["all"])), SHEET)
     except Exception as e:
         logger.warning("quotes._ids_frescos: %s", e)
-        return 0, 0
+        # ⚠️ v581 · a la CACHÉ, no a la lista vacía: vacía es «no hay ninguno», el
+        # siguiente salía 0001 (ID y número) y el alta pisaba un ID que EXISTE. La caché puede ir
+        # atrasada, pero en un solo proceso se tira en cada escritura.
+        recs = _records()
     mx_id = mx_num = 0
     for r in recs:
         i = str(r.get("ID", ""))
@@ -378,6 +381,21 @@ def _ids_frescos() -> tuple:
     return mx_id, mx_num
 
 
+def _id_libre(mx_id: int) -> str:
+    """El COT- siguiente que nadie referencia (v581).
+
+    ⚠️ Visto en cliente1: la auditoría guarda COT-0001…0003 de cotizaciones de prueba
+    ya borradas, y con `max + 1` la primera cotización REAL habría sido otra vez la
+    COT-0001 — con el historial de cambios de aquellas pegado.
+    """
+    try:
+        from core import hojas
+        return hojas.siguiente_id_libre("COT-", mx_id, propia=SHEET)
+    except Exception as e:
+        logger.warning("quotes: no se pudo comprobar IDs referenciados: %s", e)
+        return f"COT-{mx_id + 1:04d}"
+
+
 def crear(grupo, cliente_id, cliente_nombre, lineas, impuesto_pct=0.0,
           validez=None, nota="", creado_por="", origen="", numero=None,
           version=1) -> tuple:
@@ -390,7 +408,7 @@ def crear(grupo, cliente_id, cliente_nombre, lineas, impuesto_pct=0.0,
         return False, t("Choose who the quote is for.")
     _tot = totales(lineas, impuesto_pct)
     mx_id, mx_num = _ids_frescos()
-    cid = f"COT-{mx_id + 1:04d}"
+    cid = _id_libre(mx_id)
     # v580 · una VERSIÓN nueva conserva el número de la cotización (la «0003 v2»); antes
     # sacaba otro y la v2 de la 0003 salía como «0005 v2»
     num = str(numero) if numero else f"{mx_num + 1:04d}"

@@ -147,7 +147,10 @@ def analiza(ruta, fuente=None):
     ruta = Path(ruta)
     arbol = ast.parse(fuente if fuente is not None else ruta.read_text(encoding="utf-8"))
     env = entorno(arbol, ruta)
-    out = {"vivas": 0, "muertas": [], "ilegibles": [], "sin_forma": []}
+    out = {"vivas": 0, "muertas": [], "ilegibles": [], "sin_forma": [], "repetidas": [],
+           # v581 · ¿esta batería se SALTA un ancla que casa más de una vez? (las que piden
+           # `count(...) != 1`); las de `replace(..., 1)` rompen la primera, a propósito
+           "unica": "!= 1" in (fuente if fuente is not None else ruta.read_text(encoding="utf-8"))}
     listas = [n.targets[0].id for n in arbol.body if isinstance(n, ast.Assign)
               and isinstance(n.targets[0], ast.Name) and isinstance(n.value, ast.List)
               and n.targets[0].id not in ("FICHEROS", "GUARDIANES", "PRUEBAS")]
@@ -203,18 +206,23 @@ def _tuplas(ruta, L, f, val, env, out):
                 out["ilegibles"].append("%s:%s[%d] ancla no es texto" % (ruta.name, L, k))
             elif src.count(a.replace("\r\n", "\n")) >= 1:
                 out["vivas"] += 1
+                if src.count(a.replace("\r\n", "\n")) >= 2:
+                    out["repetidas"].append("%s:%s[%d] %s x%d <- %r" % (
+                        ruta.name, L, k, rel, src.count(a.replace("\r\n", "\n")), a[:70]))
             else:
                 out["muertas"].append("%s:%s[%d] %s <- %r" % (ruta.name, L, k, rel, a[:70]))
 
 
 def todas():
-    tot = {"vivas": 0, "muertas": [], "ilegibles": [], "sin_forma": [], "baterias": 0}
+    tot = {"vivas": 0, "muertas": [], "ilegibles": [], "sin_forma": [], "baterias": 0,
+           "repetidas_unica": [], "repetidas_primera": []}
     for p in sorted(GUAR.glob("romper_*.py")):
         r = analiza(p)
         tot["baterias"] += 1
         tot["vivas"] += r["vivas"]
         for k in ("muertas", "ilegibles", "sin_forma"):
             tot[k] += r[k]
+        tot["repetidas_unica" if r["unica"] else "repetidas_primera"] += r["repetidas"]
     return tot
 
 

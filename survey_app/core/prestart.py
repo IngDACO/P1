@@ -381,7 +381,15 @@ def _next_id(recs) -> str:
                 mx = max(mx, int(i.split("-")[1]))
             except Exception:
                 pass
-    return f"PS-{mx + 1:04d}"
+    # ⚠️ v581 · saltando los IDs que otra hoja aún referencia (la auditoría incluida),
+    # igual que los otros generadores desde v427: borrar la fila del ID más alto lo
+    # liberaba y el alta siguiente heredaba el historial ajeno.
+    try:
+        from core import hojas
+        return hojas.siguiente_id_libre("PS-", mx, propia=SHEET)
+    except Exception as e:
+        logger.warning("prestart: no se pudo comprobar IDs referenciados: %s", e)
+        return f"PS-{mx + 1:04d}"
 
 
 def _asistentes_para_hoja(attendees) -> list:

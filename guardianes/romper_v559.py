@@ -92,7 +92,9 @@ ROTURAS = [
     ("⚠️ Costs: vuelve el «Everything invoiced» con algo pendiente", PU,
      [("    if pend > 0:\n        return\n", "    if False:\n        return\n")]),
     ("Costs: la 5ª tarjeta vuelve a caer sola", PU,
-     [("<style>.cpx-kpis-cst .cpx-kpi{flex:1 1 110px}</style>", "")]),
+     # v581 · re-anclada: la base de 110 px es ahora el `--cpx-min` de la rejilla
+     [("'<div class=\"cpx-kpis\" style=\"--cpx-min:110px;margin:0 0 10px\">'",
+       "'<div class=\"cpx-kpis\" style=\"margin:0 0 10px\">'")]),
     ("Costs: «Set the budget in Data» deja de llevar a Data", PU,
      [('            st.session_state["_prj_sec_pending"] = "✏️ Datos"\n', '            pass\n')]),
     ("la ficha deja de atender el cambio de pestaña pedido", PU,
@@ -103,7 +105,11 @@ ROTURAS = [
        '                                        key=f"cst_ir_users_{pid}", type="tertiary"):\n'
        '                pass\n')]),
     ("Costs: la tarifa vuelve sin «$»", PU,
-     [('                "Rate/h": st.column_config.NumberColumn(t("Rate/h"), format="$%,.2f"),\n', '')]),
+     # v581 · re-anclada con la línea de ANTES: sola casaba DOS veces (la tabla de Hours de v577
+     # la contiene con más sangría) y la rotura se saltaba con «??», sin probar nada
+     [('            column_config=tabla.cfg(None, {\n'
+       '                "Rate/h": st.column_config.NumberColumn(t("Rate/h"), format="$%,.2f"),\n',
+       '            column_config=tabla.cfg(None, {\n')]),
     ("pedidos: vuelve «llega»", PU,
      [("_lin += f\" · due {_fesp.strftime('%d/%m')}\"", "_lin += f\" · llega {_fesp.strftime('%d/%m')}\"")]),
     ("Files: vuelve «Matriz survey»", PU,

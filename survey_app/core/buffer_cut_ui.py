@@ -35,7 +35,8 @@ def _kpi(label, value, color=None):
 
 
 def _kpi_row(cards):
-    return ('<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:8px">'
+    # v581 · la rejilla del tema (la última tarjeta ya no se estira), con la base de 96 px
+    return ('<div class="cpx-kpis" style="--cpx-min:96px;margin:0 0 8px">'
             + "".join(cards) + "</div>")
 
 

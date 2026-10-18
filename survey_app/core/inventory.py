@@ -186,7 +186,10 @@ def _ids_frescos(title: str, col: str = "ID") -> list:
         vals = w.get_all_values()
     except Exception as e:
         logger.warning("inventory: lectura fresca de IDs de %s falló: %s", title, e)
-        return []
+        # ⚠️ v581 · a la CACHÉ, no a la lista vacía: vacía es «no hay ninguno», el
+        # siguiente salía 0001 y el alta pisaba un ID que EXISTE. La caché puede ir
+        # atrasada, pero en un solo proceso se tira en cada escritura.
+        return [str(r.get(col, "")) for r in _records(title)]
     if not vals:
         return []
     try:
@@ -205,7 +208,15 @@ def _next_id() -> str:
                 mx = max(mx, int(aid.split("-")[1]))
             except Exception:
                 pass
-    return f"ACT-{mx + 1:04d}"
+    # ⚠️ v581 · saltando los IDs que otra hoja aún referencia (la auditoría incluida),
+    # igual que los otros generadores desde v427: borrar la fila del ID más alto lo
+    # liberaba y el alta siguiente heredaba el historial ajeno.
+    try:
+        from core import hojas
+        return hojas.siguiente_id_libre("ACT-", mx, propia=ACTIVOS_SHEET)
+    except Exception as e:
+        logger.warning("inventory: no se pudo comprobar IDs referenciados: %s", e)
+        return f"ACT-{mx + 1:04d}"
 
 
 def create_activo(grupo, nombre, categoria="", marca="", modelo="", serie="",
@@ -395,15 +406,25 @@ def list_movimientos(grupo: str = None, activo_id: str = None) -> list:
 
 
 def _next_mov_id() -> str:
+    # ⚠️ v581 · FRESCO, como `_next_id`: leía de `_records` (la caché de 120 s), y una
+    # salida y su entrada se registran seguidas — el ID es la identidad (v323).
     mx = 0
-    for r in _records(MOV_SHEET):
-        mid = str(r.get("ID", ""))
+    for mid in _ids_frescos(MOV_SHEET):
+        mid = str(mid)
         if mid.startswith("MOV-"):
             try:
                 mx = max(mx, int(mid.split("-")[1]))
             except Exception:
                 pass
-    return f"MOV-{mx + 1:04d}"
+    # ⚠️ v581 · saltando los IDs que otra hoja aún referencia (la auditoría incluida),
+    # igual que los otros generadores desde v427: borrar la fila del ID más alto lo
+    # liberaba y el alta siguiente heredaba el historial ajeno.
+    try:
+        from core import hojas
+        return hojas.siguiente_id_libre("MOV-", mx, propia=MOV_SHEET)
+    except Exception as e:
+        logger.warning("inventory: no se pudo comprobar IDs referenciados: %s", e)
+        return f"MOV-{mx + 1:04d}"
 
 
 def _log_mov(grupo, aid, tipo, desde="", hacia="", usuario="", costo="", nota="",

@@ -217,7 +217,25 @@ def _next_id() -> str:
                     pass
     except Exception as e:
         logger.warning("orders._next_id: %s", e)
-    return f"ORD-{mx + 1:05d}"
+        # ⚠️ v581 · a la CACHÉ, no a la lista vacía: vacía es «no hay ninguno», el
+        # siguiente salía 0001 y el alta pisaba un ID que EXISTE. La caché puede ir
+        # atrasada, pero en un solo proceso se tira en cada escritura.
+        for r in _records():
+            i = str(r.get("ID", ""))
+            if i.startswith("ORD-"):
+                try:
+                    mx = max(mx, int(i.split("-")[1]))
+                except Exception:
+                    pass
+    # ⚠️ v581 · saltando los IDs que otra hoja aún referencia (la auditoría incluida),
+    # igual que los otros generadores desde v427: borrar la fila del ID más alto lo
+    # liberaba y el alta siguiente heredaba el historial ajeno.
+    try:
+        from core import hojas
+        return hojas.siguiente_id_libre("ORD-", mx, propia=SHEET, ancho=5)
+    except Exception as e:
+        logger.warning("orders: no se pudo comprobar IDs referenciados: %s", e)
+        return f"ORD-{mx + 1:05d}"
 
 
 def crear(pid, grupo, proveedor, valor, descripcion="", categoria="Materials",

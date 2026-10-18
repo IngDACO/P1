@@ -138,7 +138,15 @@ def _next_id(recs) -> str:
                 mx = max(mx, int(i.split("-")[1]))
             except Exception:
                 pass
-    return f"ALR-{mx + 1:04d}"
+    # ⚠️ v581 · saltando los IDs que otra hoja aún referencia (la auditoría incluida),
+    # igual que los otros generadores desde v427: borrar la fila del ID más alto lo
+    # liberaba y el alta siguiente heredaba el historial ajeno.
+    try:
+        from core import hojas
+        return hojas.siguiente_id_libre("ALR-", mx, propia=ALERTS_SHEET)
+    except Exception as e:
+        logger.warning("alerts: no se pudo comprobar IDs referenciados: %s", e)
+        return f"ALR-{mx + 1:04d}"
 
 
 def create_alert(pid, grupo, origen, tipo, mensaje, creado_por) -> tuple:

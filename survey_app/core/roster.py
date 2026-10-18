@@ -679,7 +679,17 @@ def autopoblar_proyecto(grupo, pid, usuarios, fecha_ini, fecha_fin,
 
     llenadas = ocupadas = 0
     updates, nuevas = [], []
-    next_n = len(vals)                    # id incremental para filas nuevas
+    # ⚠️ v581 · el MAYOR ID en uso, no el número de filas: con `len(vals)`, dos filas
+    # borradas (o dos IDs saltados por `_next_id`) hacían que el siguiente ROS- cayera
+    # sobre uno que EXISTE. Los IDs se ponen abajo, todos de una vez.
+    next_n = 0
+    for _r in vals[1:]:
+        _rid = str(_r[0] if _r else "")
+        if _rid.startswith("ROS-"):
+            try:
+                next_n = max(next_n, int(_rid.split("-")[1]))
+            except Exception:
+                pass
     for lu in semanas:
         sem = lu.isoformat()
         # ⚠️ Los días extra (sáb/dom) NO se rellenan por defecto: la semana normal es
@@ -714,9 +724,18 @@ def autopoblar_proyecto(grupo, pid, usuarios, fecha_ini, fecha_fin,
             if idx0 is not None:
                 updates.append({"range": _a1(idx0 + 1, 5), "values": [[payload]]})
             else:
-                next_n += 1
-                nuevas.append([f"ROS-{next_n:04d}", str(grupo), sem, str(u), payload])
+                nuevas.append(["", str(grupo), sem, str(u), payload])
 
+    if nuevas:
+        try:
+            from core import hojas
+            _ids = hojas.siguientes_ids_libres("ROS-", next_n, len(nuevas),
+                                               propia=ROSTER_SHEET)
+        except Exception as e:
+            logger.warning("roster: no se pudo comprobar IDs referenciados: %s", e)
+            _ids = [f"ROS-{next_n + k:04d}" for k in range(1, len(nuevas) + 1)]
+        for _f, _rid in zip(nuevas, _ids):
+            _f[0] = _rid
     try:
         if updates:
             w.batch_update(updates, value_input_option="RAW")

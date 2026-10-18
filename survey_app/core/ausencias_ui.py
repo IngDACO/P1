@@ -82,7 +82,7 @@ def render_mis_ausencias():
             tarj.append(_kpi(AU.nombre_tipo(_tp), f"{s['restantes']:.0f}",
                              pie=f"{t('of')} {s['asignados']:.0f} · {t('used')} {s['usados']:.0f}",
                              color=_col))
-    st.markdown('<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:8px">'
+    st.markdown('<div class="cpx-kpis" style="margin:0 0 8px">'       # v581 · rejilla
                 + "".join(tarj) + "</div>", unsafe_allow_html=True)
     # ⚠️ v433: DE QUÉ periodo habla el saldo. Sin esto, «te quedan 14» no dice hasta
     # cuándo, y con el año por aniversario cada persona tiene el suyo. Y si falta la

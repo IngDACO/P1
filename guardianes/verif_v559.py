@@ -100,8 +100,11 @@ _eg = ast.unparse(FN["_editor_ganancia_hora"])
 chk("ganancia: se GUARDA por el login (columna «Usuario»), no por el nombre",
     "_ed.iloc[i]['Usuario']" in _eg and "str(_ed.iloc[i]['Persona'])" not in _eg)
 _cs = ast.unparse(FN["_costos_section"])
+# ⚠️ v581 · era la clase propia `cpx-kpis-cst` con `flex:1 1 110px`: ahora es la rejilla
+# del tema (`cpx-kpis`) con esa misma base en `--cpx-min` — a 846 px el flex seguía
+# dejando la quinta sola a todo el ancho.
 chk("Costs: las tarjetas con base de 110 px (las 5 en una fila)",
-    "cpx-kpis-cst" in _cs and "110px" in _cs)
+    "cpx-kpis" in _cs and "--cpx-min:110px" in _cs)
 chk("Status: «(tomorrow)» y «(today)» para el próximo hito",
     "(tomorrow)." in _es_src if (_es_src := ast.unparse(FN["_estado_section"])) else False)
 chk("alta: «created with 1 activity» (no «1 activities»)",

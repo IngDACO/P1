@@ -241,7 +241,10 @@ def _ids_frescos(col: str = "ID") -> list:
         vals = w.get_all_values()
     except Exception as e:
         logger.warning("invoices: lectura fresca de IDs falló: %s", e)
-        return []
+        # ⚠️ v581 · a la CACHÉ, no a la lista vacía: vacía es «no hay ninguno», el
+        # siguiente salía 0001 y el alta pisaba un ID que EXISTE. La caché puede ir
+        # atrasada, pero en un solo proceso se tira en cada escritura.
+        return [str(r.get(col, "")) for r in _records()]
     if not vals:
         return []
     try:
@@ -260,12 +263,32 @@ def _next_id() -> str:
                 mx = max(mx, int(fid.split("-")[1]))
             except Exception:
                 pass
-    return f"FAC-{mx + 1:04d}"
+    # ⚠️ v581 · saltando los IDs que otra hoja aún referencia (la auditoría incluida),
+    # igual que los otros generadores desde v427: borrar la fila del ID más alto lo
+    # liberaba y el alta siguiente heredaba el historial ajeno.
+    try:
+        from core import hojas
+        return hojas.siguiente_id_libre("FAC-", mx, propia=FACTURAS_SHEET)
+    except Exception as e:
+        logger.warning("invoices: no se pudo comprobar IDs referenciados: %s", e)
+        return f"FAC-{mx + 1:04d}"
 
 
 def _next_numero(grupo: str) -> int:
+    """El número de factura siguiente del grupo, leído FRESCO (v581).
+
+    ⚠️ Salía de `_records()` (la caché de 120 s), así que con la caché atrasada dos
+    facturas podían salir con el MISMO número — el que va impreso y el que se manda a
+    Xero, que rechaza los repetidos. A la caché solo si la lectura fresca falla (v323).
+    """
+    w, _err = _ws()
+    try:
+        recs = columnas.canonizar(w.get_all_records(numericise_ignore=["all"]))
+    except Exception as e:
+        logger.warning("invoices._next_numero: lectura fresca falló: %s", e)
+        recs = _records()
     mx = 0
-    for r in _records():
+    for r in recs:
         if str(r.get("Group", "")) == str(grupo):
             try:
                 mx = max(mx, int(_num(r.get("Number"))))

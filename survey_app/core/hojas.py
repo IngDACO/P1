@@ -317,12 +317,27 @@ def escribir(partes) -> None:
 _RE_ID = None
 
 
+def _titulos(sheet_id: str = "") -> list:
+    """Títulos REALES (con su caja) de todas las hojas del libro (v581).
+
+    Sale del índice que `timeclock._libro()` ya construye y cachea (v290): **0
+    llamadas**. Hace falta el título tal cual, no en minúsculas como `_existentes`,
+    porque es lo que se pide en `values_batch_get`.
+    """
+    try:
+        hojas, _cab = timeclock._libro(sheet_id or timeclock.sheet_id_para("Sheet1"))
+        return [str(w.title) for w in (hojas or {}).values()]
+    except Exception as e:
+        logger.warning("hojas: no se pudo leer el índice del libro: %s", e)
+        return []
+
+
 def ids_referenciados(prefijo: str, propia: str = "", sheet_id: str = "") -> set:
     """IDs con ese `prefijo` que aparecen en CUALQUIER hoja menos la suya.
 
     ## Por qué existe
 
-    Los 13 generadores de la app hacen `max(los que existen) + 1`, así que **borrar
+    Los generadores de la app hacen `max(los que existen) + 1`, así que **borrar
     la fila con el ID más alto libera ese número** y el siguiente alta lo reutiliza.
     Todo lo que hubiera quedado apuntando al ID viejo —una factura, un gasto, un
     fichaje— **se pega a la entidad nueva**.
@@ -343,6 +358,13 @@ def ids_referenciados(prefijo: str, propia: str = "", sheet_id: str = "") -> set
     ⚠️ **La hoja `Auditoria` cuenta también.** Ahí quedan registrados cambios de
     objetos que ya no existen, y eso es justo la señal que interesa: ese ID *se usó*.
     Reutilizarlo mezclaría dos historiales en el mismo identificador.
+
+    ⚠️ v581 · **TODAS las hojas del libro, no una lista.** Hasta aquí se miraban las del
+    lote (`HOJAS_LECTURA`) más la auditoría, y la lista envejeció exactamente como avisa
+    el párrafo de arriba: `PreStarts` no está en el lote (su lector va aparte) y apunta
+    a obras (PS-0002 → PRJ-0015 en cliente1). Borrada la obra, el ID se habría
+    reutilizado y la obra nueva habría heredado el Pre-Start de otra. Los títulos salen
+    del índice del libro (0 llamadas), así que la hoja que se añada mañana entra sola.
 
     ⚠️ **La hoja propia se EXCLUYE**: ahí el ID vive legítimamente, y contarla haría
     que ningún ID vivo pudiera existir.
@@ -368,14 +390,20 @@ def ids_referenciados(prefijo: str, propia: str = "", sheet_id: str = "") -> set
         lib = _libro(sheet_id)
         if lib is None:
             return set()
-        hay = _existentes(sheet_id)
-        # Todas las del lote MÁS `Auditoria`, que no está en HOJAS_LECTURA (su lector
-        # va aparte) y es justamente donde queda constancia de lo borrado.
-        titulos = [h for h in tuple(HOJAS_LECTURA) + ("Auditoria",)
-                   if h.strip().lower() in hay and h.strip().lower() != propia_l]
+        # ⚠️ La propia se excluye por su título REAL: en un libro que aún conserve el
+        # nombre viejo (`Cotizaciones`), comparar con el nuevo no la excluiría.
+        if propia_l:
+            propia_l = timeclock.titulo_real(str(propia).strip(), sheet_id).strip().lower()
+        # v581 · Todas las hojas que EXISTEN (la auditoría incluida, que es donde queda
+        # constancia de lo borrado), no las de una lista que hay que acordarse de ampliar.
+        titulos = [h for h in _titulos(sheet_id) if h.strip().lower() != propia_l]
         if not titulos:
             return set()
-        r = lib.values_batch_get([f"'{h}'" for h in titulos])
+        # ⚠️ v581 · `absolute_range_name` (como `frescas`): ahora entran títulos que pone
+        # cualquiera, y con un apóstrofo («Rick's») el `'{h}'` a mano tumbaba el lote ENTERO
+        # → vacío → la comprobación apagada sin avisar.
+        from gspread.utils import absolute_range_name
+        r = lib.values_batch_get([absolute_range_name(h) for h in titulos])
         out = set()
         for tramo in (r.get("valueRanges") or []):
             for fila in (tramo.get("values") or []):
@@ -399,6 +427,19 @@ def siguiente_id_libre(prefijo: str, maximo: int, propia: str = "",
     el siguiente sin más en vez de colgarse. Fallar hacia el comportamiento de
     siempre es mejor que no poder crear nada.
     """
+    return siguientes_ids_libres(prefijo, maximo, 1, propia=propia, ancho=ancho,
+                                 tope=tope)[0]
+
+
+def siguientes_ids_libres(prefijo: str, maximo: int, cuantos: int = 1, propia: str = "",
+                          ancho: int = 4, tope: int = 200) -> list:
+    """Los `cuantos` IDs siguientes que nadie referencia, con UNA sola lectura (v581).
+
+    Para los altas EN LOTE (las nóminas de un periodo, las semanas nuevas del roster):
+    pedir `siguiente_id_libre` fila a fila costaría una lectura del libro entero por
+    fila contra el techo de 60/min, y numerar `max + 1, + 2…` a mano se saltaba la
+    comprobación entera — así se colaban esos dos.
+    """
     # ⚠️ Con su propia red, no solo con la de `ids_referenciados`: esta es la función
     # PÚBLICA, y un fallo de lectura NO puede impedir dar de alta. Hoy los tres
     # generadores además la envuelven en su try, pero depender de que el llamador se
@@ -410,13 +451,16 @@ def siguiente_id_libre(prefijo: str, maximo: int, propia: str = "",
                        prefijo, e)
         usados = set()
     n = int(maximo) + 1
-    saltados = []
-    for _ in range(tope):
-        if f"{prefijo}{n:0{ancho}d}" not in usados:
-            break
-        saltados.append(n)
+    saltados, out = [], []
+    for _k in range(max(1, int(cuantos or 1))):
+        for _ in range(tope):
+            if f"{prefijo}{n:0{ancho}d}" not in usados:
+                break
+            saltados.append(n)
+            n += 1
+        out.append(f"{prefijo}{n:0{ancho}d}")
         n += 1
     if saltados:
         logger.info("hojas: %s salta %s (referenciados en otras hojas)",
                     prefijo, saltados)
-    return f"{prefijo}{n:0{ancho}d}"
+    return out

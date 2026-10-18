@@ -877,7 +877,8 @@ def render_timeclock_tab():
                      _ROJO if hoy["sin_asignar"] > 2 else None),
             _tarjeta(t("This week"), f"{sem['general']:.2f} h",
                      f"{t('Monday to today')} · {sem['dias']} {t('day(s)')}", _AZUL)]
-    st.markdown('<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px">'
+    # v581 · rejilla: a 846 px con el menú la 4ª tarjeta caía sola a 472 px de ancho
+    st.markdown('<div class="cpx-kpis" style="--cpx-min:132px;margin:0 0 12px">'
                 + "".join(tarj) + "</div>", unsafe_allow_html=True)
 
     # ── Lo de hoy, por proyecto ──

@@ -13,7 +13,7 @@ Lo que se protege:
       emiten su ID saltando los que otra hoja usa;
   (b) la comprobación mira todas las hojas MENOS la propia (si no, ningún ID vivo
       podría emitirse) e INCLUYE `Auditoria`, que es donde queda constancia de lo
-      borrado;
+      borrado (v581: TODAS las del libro, no una lista — ver la nota en (b));
   (c) degrada al comportamiento de siempre si la lectura falla: un problema de red
       no puede impedir dar de alta;
   (d) el barrido tiene tope: nada de colgarse buscando un hueco.
@@ -78,7 +78,14 @@ _ir = fn(_h, "ids_referenciados")
 chk("existe `ids_referenciados`", _ir is not None)
 _lits = {c.value for c in ast.walk(_ir) if isinstance(c, ast.Constant)
          and isinstance(c.value, str)}
-chk("incluye `Auditoria` (donde queda lo borrado)", "Auditoria" in _lits)
+# ⚠️ v581 · Esto exigía el literal `"Auditoria"` en una LISTA de hojas, y la lista era
+# el fallo: envejeció y dejó fuera `PreStarts` (no va en el lote y apunta a obras). Ahora
+# se miran todas las hojas del libro (`_titulos`, del índice), así que no queda literal
+# que exigir: que la auditoría y una hoja fuera del lote CUENTAN se ejercita abajo con
+# el libro falso, que es lo que de verdad prueba algo.
+_nombres = {n.id for n in ast.walk(_ir) if isinstance(n, ast.Name)}
+chk("mira TODAS las hojas del libro (`_titulos`), no una lista",
+    "_titulos" in _nombres and "HOJAS_LECTURA" not in _nombres)
 
 # ⚠️ Que la EXCLUSIÓN de la hoja propia funcione NO se puede comprobar buscando el
 # nombre `propia_l`: sigue existiendo (se asigna arriba) aunque se borre la
@@ -98,7 +105,10 @@ class _LibroFalso:
     """
     DATOS = {"Projects": [["ID"], ["PRJ-0500"], ["PRJ-0501"]],
              "Invoices": [["ID", "LineasJSON"],
-                          ["FAC-1", '[{"proyecto_id":"PRJ-0500"}]']]}
+                          ["FAC-1", '[{"proyecto_id":"PRJ-0500"}]']],
+             # v581 · la auditoría (lo borrado) y una hoja que NO va en el lote
+             "AuditTrail": [["ID", "EntityID"], ["AUD-1", "PRJ-0502"]],
+             "PreStarts": [["ID", "ProjectID"], ["PS-0001", "PRJ-0503"]]}
 
     def values_batch_get(self, rangos):
         out = []
@@ -113,9 +123,10 @@ class _LibroFalso:
 # `survey_app` lanzaba, el `except` devolvía vacío y el chequeo daba un FALLO que no
 # existía. Un guardián no puede depender del directorio desde el que se lance.
 from core import timeclock as _TC                                   # noqa: E402
-_ol, _oe, _os = _H._libro, _H._existentes, _TC.sheet_id_para
+_ol, _oe, _os = _H._libro, _H._titulos, _TC.sheet_id_para
 _H._libro = lambda sheet_id="": _LibroFalso()
-_H._existentes = lambda sheet_id="": {"projects", "invoices"}
+# v581 · los títulos salen del índice del libro (`_titulos`), no de `_existentes`
+_H._titulos = lambda sheet_id="": list(_LibroFalso.DATOS)
 # ⚠️ `titulo_real` consultaria el indice del libro REAL (y sin secrets lanzaria):
 # aqui el libro falso ya usa los nombres nuevos, asi que es la identidad.
 _otr = _TC.titulo_real
@@ -123,13 +134,14 @@ _TC.titulo_real = lambda title="", sheet_id="": title
 _TC.sheet_id_para = lambda title="", grupo=None: "libro-falso"
 try:
     _sin = _H.ids_referenciados("PRJ-", propia="Projects")
-    chk("excluye la hoja propia: solo ve el ID que OTRA hoja referencia",
-        sorted(_sin), ["PRJ-0500"])
+    chk("excluye la hoja propia: solo ve los IDs que OTRA hoja referencia "
+        "(también la auditoría y PreStarts, que no va en el lote)",
+        sorted(_sin), ["PRJ-0500", "PRJ-0502", "PRJ-0503"])
     _con = _H.ids_referenciados("PRJ-", propia="")
     chk("...y sin excluirla vería también el que solo vive ahí",
-        sorted(_con), ["PRJ-0500", "PRJ-0501"])
+        sorted(_con), ["PRJ-0500", "PRJ-0501", "PRJ-0502", "PRJ-0503"])
 finally:
-    _H._libro, _H._existentes, _TC.sheet_id_para = _ol, _oe, _os
+    _H._libro, _H._titulos, _TC.sheet_id_para = _ol, _oe, _os
     _TC.titulo_real = _otr
 _sl = fn(_h, "siguiente_id_libre")
 chk("existe `siguiente_id_libre`", _sl is not None)

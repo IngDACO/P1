@@ -2420,7 +2420,8 @@ def _estado_section(pid: str, grupo: str, prj: dict):
     st.markdown(f"<span style='font-size:16px'>{_tit_html}</span>"
                 f"<span style='color:#6b7280;font-size:14px'> · {_dia_txt}</span>",
                 unsafe_allow_html=True)
-    st.markdown('<div style="display:flex;gap:10px;flex-wrap:wrap;margin:8px 0 10px">'
+    # v581 · rejilla: a 846 px con el menú «Projected finish» caía sola a 472 px
+    st.markdown('<div class="cpx-kpis" style="margin:8px 0 10px">'
                 + "".join(tarj) + "</div>", unsafe_allow_html=True)
 
     # ── v501: contra el plan ACORDADO (la línea base) ────────────
@@ -2432,7 +2433,7 @@ def _estado_section(pid: str, grupo: str, prj: dict):
         _mv = _cmp["movio"]
         _c_bl = "#c0392b" if _mv > 0.5 else ("#1e8449" if _mv < -0.5 else None)
         _n_re = _cmp["replanificaciones"]
-        st.markdown('<div style="display:flex;gap:10px;flex-wrap:wrap;margin:0 0 10px">'
+        st.markdown('<div class="cpx-kpis" style="margin:0 0 10px">'           # v581
                     + _kpi_card(t("Agreed delivery"), _fmt_fecha(_cmp["entrega_base"]),
                                 pie=t("baseline set on {f}", f=_cmp["fijada"][:10]))
                     + _kpi_card(t("Vs the agreed plan"),
@@ -3995,7 +3996,7 @@ def render_field_projects(usuario: str, grupo: str):
         tarj = [_kpi_card(t("Status"), est),
                 _kpi_card(t("Project progress"), f"{avance:.0f}%"),
                 _kpi_card(t("Client"), prj.get("Client") or "—")]
-    st.markdown('<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:8px">'
+    st.markdown('<div class="cpx-kpis" style="margin:0 0 8px">'             # v581
                 + "".join(tarj) + "</div>", unsafe_allow_html=True)
     if not P.es_interno(prj):
         st.progress(min(1.0, avance / 100.0))
@@ -4522,9 +4523,10 @@ def _costos_section(pid, grupo, gastos, can_delete, key_prefix):
                                  _th.AMBAR, pie=t("ordered, not received yet")))
     # v559 · base de 110 px: con la de 150 del tema, a 1024 px con el menú abierto la
     # quinta («Cost at completion») caía sola a otra fila, a todo el ancho.
-    st.markdown('<style>.cpx-kpis-cst .cpx-kpi{flex:1 1 110px}</style>'
-                '<div class="cpx-kpis-cst" style="display:flex;gap:10px;flex-wrap:wrap;'
-                'margin-bottom:10px">' + "".join(tarj) + "</div>", unsafe_allow_html=True)
+    # ⚠️ v581 · y a 846 px seguía cayendo sola (4 + 1 de 472 px): ahora es la rejilla del
+    # tema con esa base, y la que cae a otra fila conserva su ancho de columna.
+    st.markdown('<div class="cpx-kpis" style="--cpx-min:110px;margin:0 0 10px">'
+                + "".join(tarj) + "</div>", unsafe_allow_html=True)
     _fn(_t)
     if cp["total"] > 0 and pres <= 0 and not _loc and can_delete:
         if st.button(t(":material/edit: Set the budget in Data"), key=f"cst_ir_datos_{pid}",

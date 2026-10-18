@@ -117,11 +117,34 @@ print(f"   sin importar: {len(falta)} {falta}")
 OK &= not falta
 
 print("\n== 8) _next_id NUNCA lee de la caché (repetiría un ID) ==")
-cache = []
+# ⚠️ v581 · Salvo como RESPALDO de una lectura fresca que FALLÓ: dentro del `except` de un
+# `try` que lee la hoja. Antes, ese respaldo era contar desde CERO (ORD-00001 aunque
+# existiera), que repite SEGURO; la caché solo si otro proceso creó algo en 120 s. Y mira
+# también los generadores con otro nombre (`_next_mov_id` leía de la caché sin que esto lo
+# viera) y los lectores de IDs (`_max_num`, `_ids_frescos`).
+_FRESCA = ("get_all_records", "get_all_values", "col_values")
+
+
+def _en_respaldo(c, padre):
+    x = c
+    while x in padre:
+        x = padre[x]
+        if isinstance(x, ast.ExceptHandler):
+            t = padre.get(x)
+            return isinstance(t, ast.Try) and any(
+                isinstance(k, ast.Call) and getattr(k.func, "attr", None) in _FRESCA
+                for b in t.body for k in ast.walk(b))
+    return False
+
+
+cache, _vistos8 = [], []
 for p in _fuentes():
     a = ast.parse(p.read_text(encoding="utf-8"))
     for n in a.body:
-        if isinstance(n, ast.FunctionDef) and n.name == "_next_id":
+        if isinstance(n, ast.FunctionDef) and (n.name.startswith("_next_")
+                                               or n.name in ("_max_num", "_ids_frescos")):
+            _vistos8.append("%s:%s" % (p.name, n.name))
+            _padre = {h: m for m in ast.walk(n) for h in ast.iter_child_nodes(m)}
             # ⚠️ Por AST y por NOMBRE EXACTO de la llamada. Buscar la subcadena
             # `_records(` marcaba `w.get_all_records(...)` —que es justo la lectura
             # FRESCA que se quiere— y acusaba a `catalogo` y `orders` de un fallo
@@ -130,11 +153,13 @@ for p in _fuentes():
                 isinstance(c, ast.Call)
                 and (getattr(c.func, "id", None) in ("_records", "_fichaje_records")
                      or getattr(c.func, "attr", None) in ("_records", "_fichaje_records"))
+                and not _en_respaldo(c, _padre)
                 for c in ast.walk(n))
             if llama_cache:
-                cache.append(p.name)
-print(f"   usan _records(): {len(cache)} {cache}")
-OK &= not cache
+                cache.append("%s:%s" % (p.name, n.name))
+print(f"   generadores y lectores de IDs mirados: {len(_vistos8)}")
+print(f"   usan _records() fuera del respaldo: {len(cache)} {cache}")
+OK &= not cache and len(_vistos8) >= 20
 
 print("\n== 9) ningún `except` mudo se traga una ESCRITURA ==")
 ESCR = {"update_cell", "append_row", "append_rows", "batch_update", "delete_rows",

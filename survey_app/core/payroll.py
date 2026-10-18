@@ -146,15 +146,34 @@ def resumen(grupo: str) -> dict:
 
 # ── Escrituras ───────────────────────────────────────────────────
 def _max_num() -> int:
+    """El mayor NOM- en uso, leído FRESCO (v581): es ruta de ESCRITURA, y un número
+    sacado de la caché de 120 s puede salir repetido — el ID es la identidad (v323)."""
+    w, _err = _ws()
+    try:
+        ids = w.col_values(1)[1:]               # sin hoja (`w` None) también cae abajo
+    except Exception as e:
+        # ⚠️ a la caché solo si la lectura FRESCA falla: contar desde cero repetiría seguro
+        logger.warning("payroll._max_num: lectura fresca falló: %s", e)
+        ids = [r.get("ID", "") for r in _records()]
     mx = 0
-    for r in _records():
-        nid = str(r.get("ID", ""))
+    for nid in ids:
+        nid = str(nid)
         if nid.startswith("NOM-"):
             try:
                 mx = max(mx, int(nid.split("-")[1]))
             except Exception:
                 pass
     return mx
+
+
+def _ids_nuevos(mx: int, n: int) -> list:
+    """`n` IDs NOM- libres a partir de `mx`, con una sola lectura (v581)."""
+    try:
+        from core import hojas
+        return hojas.siguientes_ids_libres("NOM-", mx, n, propia=NOMINAS_SHEET)
+    except Exception as e:
+        logger.warning("payroll: no se pudo comprobar IDs referenciados: %s", e)
+        return [f"NOM-{mx + k:04d}" for k in range(1, n + 1)]
 
 
 def generar(grupo, desde, hasta, super_pct=0.0, ret_pct=0.0, creado_por="") -> dict:
@@ -288,9 +307,8 @@ def generar(grupo, desde, hasta, super_pct=0.0, ret_pct=0.0, creado_por="") -> d
             conceptos.append({"concepto": "Superannuation",
                               "tipo": "aporte", "monto": round(bruto * super_pct / 100.0, 2)})
         nt = neto(base, conceptos)
-        base_num += 1
         rows.append([
-            f"NOM-{base_num:04d}", grupo, clave, str(info["nombre"]), d_iso, h_iso,
+            "", grupo, clave, str(info["nombre"]), d_iso, h_iso,   # el ID, abajo (v581)
             str(info["horas"]), str(tarifa), str(base),
             json.dumps(conceptos, ensure_ascii=False), str(nt),
             "", "emitida", "", str(creado_por or ""),
@@ -298,6 +316,10 @@ def generar(grupo, desde, hasta, super_pct=0.0, ret_pct=0.0, creado_por="") -> d
         ])
         creadas += 1
     if rows:
+        # ⚠️ v581 · los IDs, TODOS de una vez y saltando los que otra hoja referencia:
+        # numerar `base + 1, + 2…` fila a fila se saltaba la comprobación de v427.
+        for _f, _nid in zip(rows, _ids_nuevos(base_num, len(rows))):
+            _f[0] = _nid
         w.append_rows(rows, value_input_option="RAW")
         _invalidate()
     # ⚠️ v348: desempatar HOMÓNIMOS. En producción salió `['Bobo', 'fijiofgjei',
