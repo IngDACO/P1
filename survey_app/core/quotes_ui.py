@@ -679,7 +679,7 @@ def _crear_proyecto(grupo, c, _tot):
         # «Instalación», «Otro», y una instalación nacía SIN cronograma (PRJ-0024)
         tipo = c2.selectbox(t("Type"), list(P.TIPOS), format_func=_etq)
         c3, c4 = st.columns(2)
-        ini = c3.date_input(t("Start date"), value=clock.today(grupo))
+        ini = c3.date_input(t("Start date"), value=clock.today(grupo), format="DD/MM/YYYY")
         ns = c4.number_input(t("Stops (NS)"), min_value=0, step=1, value=0,
                              help=t("Only an installation generates the standard schedule; with NS 0 the project starts with no activities."))
         ubic = st.text_input(t("Location (optional)"))

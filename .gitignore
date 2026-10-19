@@ -52,6 +52,10 @@ dist/
 # de la hoja son DATOS REALES (usuarios, nombres): nunca dentro del repo.
 guardianes/_respaldo_*/
 guardianes/_bak_*/
+# v584 · y las copias SUELTAS de fichero (`_orig_*`, `_v487r_*`, `_romper492_*`, `_r495_*`…):
+# una docena de baterías las escriben y varias no las borraban (en v582 y v584 se quedaron
+# en la carpeta). Ningún fichero de la suite empieza por «_», así que esto no tapa nada suyo.
+guardianes/_*.py
 guardianes/foto_*.json
 guardianes/suite_*.txt
 guardianes/*.bak*

@@ -1290,7 +1290,7 @@ def render_survey_tab(_ROL, _GRUPO):
                 st.session_state["sched_start"] = clock.today()
 
             gc1, gc2 = st.columns([1, 2])
-            start = gc1.date_input(t("Project start date"), key="sched_start")
+            start = gc1.date_input(t("Project start date"), key="sched_start", format="DD/MM/YYYY")
 
             # Editor de actividades (nombre bloqueado; duración y peso editables)
             sched_rows = st.session_state.get("sched_rows", [])

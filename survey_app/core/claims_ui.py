@@ -146,7 +146,7 @@ def render(pid, grupo, prj, editable=True, key_prefix="clm"):
                                        max_value=100.0, value=float(d["pct"]), step=1.0,
                                        help=t("Defaults to the job's real progress. Lower "
                                               "it to claim less than what is done."))
-                _hasta = k2.date_input(t("Period to"), value=None)
+                _hasta = k2.date_input(t("Period to"), value=None, format="DD/MM/YYYY")
                 _nota = st.text_input(t("Note"), placeholder=t("Optional"))
                 if st.form_submit_button(t(":material/send: Issue claim"), width="stretch"):
                     ok, msg = CL.crear_reclamacion(

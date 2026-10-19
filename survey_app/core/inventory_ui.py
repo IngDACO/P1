@@ -68,7 +68,7 @@ def _fecha_input(label, valor, key):
         d0 = date.fromisoformat(str(valor)[:10]) if str(valor).strip() else None
     except Exception:
         d0 = None
-    v = st.date_input(label, value=d0, key=key, format="YYYY-MM-DD")
+    v = st.date_input(label, value=d0, key=key, format="DD/MM/YYYY")
     return v.isoformat() if v else ""
 
 

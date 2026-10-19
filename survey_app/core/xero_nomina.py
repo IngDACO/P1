@@ -276,8 +276,18 @@ def datos(grupo: str) -> dict:
         st_, js, _h = X._api(grupo, "GET", "/Employees", base=X.PAYROLL_URL,
                              params={"page": pagina})
         if st_ != 200:
-            out["error"] = t("Xero Payroll could not be read ({e}). The organisation needs "
-                             "Payroll AU set up.", e=_msg(js, st_))
+            _e = _msg(js, st_)
+            # ⚠️ v584 · decía una sola causa («needs Payroll AU set up»). Xero contesta igual
+            # —401 / AuthenticationUnsuccessful— cuando quien conectó no tiene permiso de
+            # NÓMINA en Xero, y eso no se arregla montando Payroll: se dicen las dos.
+            if st_ in (401, 403) or "authentication" in _e.lower():
+                out["error"] = t("Xero did not let COPEX into Payroll. Either this organisation "
+                                 "has no Payroll AU, or whoever connected Xero has no payroll "
+                                 "access there. Fix it in Xero, then disconnect and connect "
+                                 "again. (Xero said: {e})", e=_e)
+            else:
+                out["error"] = t("Xero Payroll could not be read ({e}). Try «Read again from "
+                                 "Xero» in a minute.", e=_e)
             return out
         lote = (js or {}).get("Employees") or []
         empleados += lote

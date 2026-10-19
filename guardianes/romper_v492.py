@@ -34,8 +34,9 @@ ROTURAS = [
      "        raise RuntimeError(err)",
      "        return default"),
     ("el estado de envío vuelve a guardar_mapa", "core/xero_ui.py",
-     "        ok, msg = contable.guardar_claves(\n            grupo,",
-     "        ok, msg = contable.guardar_mapa(\n            grupo,"),
+     # v584 · re-anclada: el guardado va en UNA línea (el aviso dice ahora lo que cambia)
+     '        ok, msg = contable.guardar_claves(grupo, {"xero_estado": _nuevo})',
+     '        ok, msg = contable.guardar_mapa(grupo, {"xero_estado": _nuevo})'),
 ]
 CONTROL = ("CONTROL: comentario inocuo", "core/contable.py",
            "def guardar_claves(grupo: str, cambios: dict) -> tuple:",
@@ -51,10 +52,14 @@ def correr():
     return r.returncode
 
 
+_COPIAS = set()
+
+
 def probar(nombre, fich, old, new):
     p = os.path.join(RAIZ, fich)
     copia = os.path.join(AQUI, "_romper492_" + os.path.basename(fich))
     shutil.copyfile(p, copia)
+    _COPIAS.add(copia)
     with io.open(p, encoding="utf-8") as fh:
         s = fh.read()
     if s.count(old) != 1:
@@ -92,3 +97,11 @@ for r in ROTURAS:
 rc = probar(*CONTROL)
 print(f"  {'PASA' if rc == 0 else 'FALLA'}     {CONTROL[0]}")
 print(f"\n{len(ROTURAS) - escapes}/{len(ROTURAS)} roturas cazadas · control {'verde' if rc == 0 else 'ROJO'}")
+# v584 · las copias de seguridad se QUITAN al acabar (cada restauración ya comprobó
+# su fichero), como romper_v486 (v574) y v487 (v582): se quedaban en guardianes/ sin
+# ignorar y el despliegue, que hace `git add` de todo, las habría subido al repo.
+for _c in _COPIAS:
+    try:
+        os.remove(_c)
+    except OSError:
+        pass

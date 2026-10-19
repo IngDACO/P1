@@ -127,8 +127,8 @@ def render_mis_ausencias():
         with st.form("aus_form"):
             c1, c2 = st.columns(2)
             hoy = clock.today(grupo)
-            desde = c1.date_input(t("From"), value=hoy, key="aus_desde")
-            hasta = c2.date_input(t("To"), value=hoy, key="aus_hasta")
+            desde = c1.date_input(t("From"), value=hoy, key="aus_desde", format="DD/MM/YYYY")
+            hasta = c2.date_input(t("To"), value=hoy, key="aus_hasta", format="DD/MM/YYYY")
             findes = st.checkbox(t("Include weekends"), key="aus_findes",
                                  help=t("Tick this only if those days are worked. Otherwise they are not taken off your balance."))
             motivo = st.text_input(t("Reason (optional)"), key="aus_motivo",

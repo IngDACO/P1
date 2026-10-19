@@ -404,7 +404,7 @@ def render_prestart_tab():
 
     # ── Encabezado ──
     c1, c2, c3 = st.columns(3)
-    f_fecha = c1.date_input(t("Date"), value=clock.today(), key="ps_fecha")
+    f_fecha = c1.date_input(t("Date"), value=clock.today(), key="ps_fecha", format="DD/MM/YYYY")
     f_hora_t = c2.time_input(t("Time"), value=clock.now().time().replace(second=0, microsecond=0),
                              key="ps_hora")
     f_hora   = f_hora_t.strftime("%H:%M") if f_hora_t else ""

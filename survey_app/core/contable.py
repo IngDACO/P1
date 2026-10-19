@@ -405,8 +405,12 @@ def csv_ventas(grupo: str, perfil: str, desde=None, hasta=None) -> dict:
 
     avisos, filas, docs, opciones = [], [], 0, set()
     if not ident["abn"]:
-        avisos.append(t("This company has no ABN: its invoices already say «TAX INVOICE» "
-                        "without one, which Australia requires above $82.50."))
+        # ⚠️ v584 · UN aviso (la pantalla sacaba otro, con una ruta que no existe:
+        # «Administration → Companies») y con el sitio REAL. Solo el propietario lo ve: el
+        # administrador, que es quien está en esta pantalla, no puede ponerlo.
+        avisos.append(t("This company has no ABN: its invoices say «TAX INVOICE» without one, "
+                        "and Australia requires it above $82.50. The account owner sets it "
+                        "in Administration → Groups → «Tax identity and payment terms»."))
 
     facturas = [f for f in invoices.list_facturas(grupo)
                 if _rango(f.get("Date"), desde, hasta)]
@@ -524,12 +528,18 @@ def _avisos_comunes(perfil, cuentas, claves, cfg, seg, opciones) -> list:
                         "account; Xero leaves it unallocated.",
                         c=", ".join(legibles)))
     if seg and opciones and perfil == "xero":
-        avisos.append(t("In Xero, create the tracking category «{c}» with these {n} "
+        # v584 · el plural (salía «with these 1 options»)
+        _c = cfg.get("categoria_seguimiento", "Project")
+        avisos.append(t("In Xero, create the tracking category «{c}» with this option "
+                        "BEFORE importing, or the file is rejected.", c=_c)
+                      if len(opciones) == 1 else
+                      t("In Xero, create the tracking category «{c}» with these {n} "
                         "options BEFORE importing, or the file is rejected.",
-                        c=cfg.get("categoria_seguimiento", "Project"),
-                        n=len(opciones)))
+                        c=_c, n=len(opciones)))
     if seg and opciones and perfil == "myob":
-        avisos.append(t("In MYOB, the {n} jobs must already exist in the file.",
+        avisos.append(t("In MYOB, the job must already exist in the file.")
+                      if len(opciones) == 1 else
+                      t("In MYOB, the {n} jobs must already exist in the file.",
                         n=len(opciones)))
     return avisos
 

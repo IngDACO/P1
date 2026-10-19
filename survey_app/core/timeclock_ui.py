@@ -431,7 +431,7 @@ def _aviso_olvido(nombre, grupo, usuario, sess):
                    "otherwise the overnight hours would count as worked."))
     sugerido = min(ci_min + _td(hours=8), clock.now()) if ci_min else clock.now()
     c1, c2 = st.columns(2)
-    d_fin = c1.date_input(t("Day you finished"), value=sugerido.date(), key="olv_d")
+    d_fin = c1.date_input(t("Day you finished"), value=sugerido.date(), key="olv_d", format="DD/MM/YYYY")
     t_fin = c2.time_input(t("Time"), value=sugerido.time().replace(second=0, microsecond=0),
                           key="olv_t")
     fin = datetime.combine(d_fin, t_fin)

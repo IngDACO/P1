@@ -175,9 +175,12 @@ def render_conexion(grupo, desde=None, hasta=None):
     actual = X.estado_envio(grupo)
 
     def _guardar_estado():
-        ok, msg = contable.guardar_claves(
-            grupo, {"xero_estado": st.session_state.get("cpxseg_xero_estado", actual)})
-        (flash.exito if ok else flash.error)(t("Saved.") if ok else msg)
+        _nuevo = st.session_state.get("cpxseg_xero_estado", actual)
+        ok, msg = contable.guardar_claves(grupo, {"xero_estado": _nuevo})
+        # v584 · lo que cambia, no «Saved.»
+        (flash.exito if ok else flash.error)(
+            (t("Invoices will now arrive in Xero as drafts.") if _nuevo == X.BORRADOR
+             else t("Invoices will now arrive in Xero approved.")) if ok else msg)
 
     st.radio(t("Invoices arrive in Xero as"), list(X.ESTADOS_ENVIO),
              index=list(X.ESTADOS_ENVIO).index(actual),
@@ -208,7 +211,14 @@ def render_conexion(grupo, desde=None, hasta=None):
     st.markdown(t("**Payments**"))
     st.caption(t("Your accountant reconciles the bank in Xero; this brings what is "
                  "collected there into COPEX, so «to collect» here is not left stale."))
-    if st.button(t(":material/download: Bring payments from Xero"), key="xero_traer_cobros"):
+    # ⚠️ v584 · sin ninguna factura enviada el botón solo contestaba «no hay nada»: se dice
+    # sin hacer pulsar (las facturas salen de un lector ya cacheado, 0 lecturas nuevas)
+    from core import invoices as _INV
+    if not any(str(f.get("XeroInvoiceID", "") or "").strip()
+               for f in _INV.list_facturas(grupo)):
+        st.caption(t(":material/info: No invoice has been sent to Xero yet: once one is, "
+                     "this brings what is collected there."))
+    elif st.button(t(":material/download: Bring payments from Xero"), key="xero_traer_cobros"):
         with st.spinner(t("Reading Xero…")):
             res = X.traer_cobros(grupo)
         if not any(res[k] for k in res):

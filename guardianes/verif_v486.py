@@ -52,7 +52,9 @@ from core.num import num as _num                             # noqa: E402
 
 # los cuatro sitios: (fichero, funcion, columna, decimales, simbolo)
 SITIOS = [
-    ("core/contable_ui.py", "_partes_section", None, 2, ""),
+    # v584 · la tabla del parte se MUDÓ a `_parte_csv` (unas fechas al revés se saltan solo
+    # el parte, no lo de Xero Payroll de debajo): mismo sitio, otra función
+    ("core/contable_ui.py", "_parte_csv", None, 2, ""),
     ("core/payroll_ui.py", "render_nominas", "Rate/h", 2, "$"),
     ("core/catalogo_ui.py", "render_catalogo", "Horas", 2, ""),
     ("core/inventory_ui.py", "_detalle", "Costo", 0, "$"),

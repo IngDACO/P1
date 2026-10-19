@@ -87,7 +87,8 @@ ROTURAS = [
 
     # ── la pantalla ──
     ("contable_ui.py", "el parte pierde su propio periodo (usa el contable)",
-     '    desde = c1.date_input(t("From"), value=hoy - _timedelta(days=13), key="cont_p_d")',
+     # v584 · re-anclada: la fecha lleva ahora su formato DD/MM/YYYY
+     '    desde = c1.date_input(t("From"), value=hoy - _timedelta(days=13), key="cont_p_d", format="DD/MM/YYYY")',
      "    desde = hoy - _timedelta(days=13)"),
 
     ("contable_ui.py", "render_contable deja de pintar el parte",
@@ -186,4 +187,12 @@ for fich, que, viejo, nuevo in ROTURAS:
 
 print("")
 print("%d correctas · %d mal" % (cazadas, escapadas))
+# v584 · las copias de seguridad se QUITAN al acabar (cada restauración ya comprobó
+# su fichero), como romper_v486 (v574) y v487 (v582): se quedaban en guardianes/ sin
+# ignorar y el despliegue, que hace `git add` de todo, las habría subido al repo.
+for _c in _COPIA.values():
+    try:
+        os.remove(_c)
+    except OSError:
+        pass
 sys.exit(0 if escapadas == 0 else 1)
