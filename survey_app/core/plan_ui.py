@@ -89,15 +89,31 @@ def _selector_proyecto(key: str, ayuda: str = "") -> tuple:
     if not proys:
         return None, {}
     idmap = {f"{p.get('Name')} ({p.get('ID')})": p for p in proys}
-    opciones = [SIN_PROYECTO] + list(idmap.keys())
+    # ⚠️ v589 · solo las obras donde estas herramientas tienen sentido (un hueco que medir):
+    # el selector ofrecía Deliveries, una reparación, una cancelada y un desmontaje ya
+    # completado. La que ya estuviera elegida se queda, aunque hoy no entre.
+    _ya = st.session_state.get(f"pl_prj_{key}")
+    opciones = [SIN_PROYECTO] + [k for k, p in idmap.items() if es_de_herramientas(p) or k == _ya]
     sel = st.selectbox(t("Project"), opciones, key=f"pl_prj_{key}",
-                       help=ayuda or "It uses the drawing data stored on the project.")
+                       help=ayuda or t("Installation jobs still open. The tool uses the drawing "
+                                       "data stored on the project."))
     if sel == opciones[0]:
         return None, {}
     prj = idmap[sel]
     datos = plan_data.del_proyecto(str(prj.get("ID", "")))
     _cabecera(prj, datos, fichado=False)
     return prj, datos
+
+
+def es_de_herramientas(prj: dict) -> bool:
+    """v589 · ¿Tiene sentido medir esta obra con las herramientas técnicas (survey, plomada,
+    rieles, buffers, belting)? Una instalación —sola o tras un desmontaje— que no esté
+    terminada ni cancelada. Sin tipo (obras viejas) sí: no se sabe, y esconderla sería peor."""
+    from core import valores
+    tipo = valores.canon(str((prj or {}).get("Type", "") or ""))
+    if tipo and tipo not in (P.TIPO_INSTALACION, P.TIPO_RIPOUT_INST):
+        return False
+    return str((prj or {}).get("Status", "")) not in ("Completed", "Cancelled")
 
 
 def _cabecera(prj: dict, datos: dict, fichado: bool):
@@ -110,9 +126,22 @@ def _cabecera(prj: dict, datos: dict, fichado: bool):
                        .replace("{x}", ", ".join(datos["faltan"][:8])
                                 + ("…" if len(datos["faltan"]) > 8 else "")))
     else:
-        st.warning(f"**{prj.get('Name')}** has no drawing data loaded. "
-                   "Load it on the project (:material/build: My company → open the project → "
-                   ":material/attach_file: Files) or upload the PDF below.")
+        # ⚠️ v589 · mandaba a «My company → open the project → Files», un menú que ya no
+        # existe. El plano se carga en la obra → Files; el administrador, con un botón.
+        rol = (st.session_state.get("auth") or {}).get("rol", "")
+        if rol == "field":
+            st.warning(t("**{n}** has no drawing data loaded. Ask the office to load it on the "
+                         "project, or upload the PDF below.", n=prj.get("Name")))
+            return
+        st.warning(t("**{n}** has no drawing data loaded. Load it once in the project's "
+                     ":material/attach_file: Files and every tool will use it — or upload the PDF "
+                     "below.", n=prj.get("Name")))
+        if rol == "administrator" and st.button(t(":material/attach_file: Open the project's Files"),
+                                                key=f"pl_ir_archivos_{prj.get('ID')}", type="tertiary"):
+            st.session_state["_prjsel_pending"] = str(prj.get("ID", ""))
+            st.session_state["_prj_sec_pending"] = "📎 Archivos"
+            st.session_state["_admin_nav_pending"] = ("proyectos", "📊 Proyectos")
+            st.rerun()
 
 
 def aplicar(datos: dict, mapa: dict, neutros: dict = None) -> int:

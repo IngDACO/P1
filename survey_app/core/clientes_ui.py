@@ -334,7 +334,7 @@ def _detalle_cliente(grupo, key):
             else:
                 st.error(msg)
         if f.get("Address"):
-            st.markdown(maps.maps_link_md(f.get("Address"), t("See the address on the map")))
+            st.markdown(":material/place: " + maps.maps_link_md(f.get("Address"), t("See the address on the map")))
 
     # Resumen
     with der:

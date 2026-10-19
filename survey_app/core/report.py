@@ -1105,7 +1105,8 @@ def generate_report(project_params, calculated, survey_original,
         # Distancias de verificación en campo (plomo ↔ pared real)
         story += [Paragraph(f"<b>{_d('Field check — plumb line ↔ real wall distances')}</b>",
                             styles["Normal2"]), sp(2)]
-        chead = [Paragraph(f"<b>{h}</b>", styles["Normal2"]) for h in ["Medida", "Distancia (mm)"]]
+        # v589 · la cabecera en el idioma del documento (salía «Medida» / «Distancia (mm)»)
+        chead = [Paragraph(f"<b>{h}</b>", styles["Normal2"]) for h in [_d("Measurement"), _d("Distance (mm)")]]
         ctrows = [chead]
         for r in plumb_checks(plumb):
             ctrows.append([Paragraph(str(r["Medida"]), styles["Normal2"]),

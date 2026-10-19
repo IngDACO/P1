@@ -12,19 +12,24 @@ def validate_inputs(p: dict) -> list:
     Devuelve una lista de strings con problemas encontrados en los parámetros.
     Lista vacía = todo bien.  El llamador decide si avisar o detener.
     """
+    # ⚠️ v589 · En el idioma BASE y por `t()`: salían en ESPAÑOL en producción («BKS debe
+    # ser > 0 (actual: 0.0)», siete así y uno en inglés). Un f-string fuera de `t()` no lo ve
+    # ninguna red de traducción (trampa 30): se arma DENTRO, con sus huecos.
+    from core.i18n import t
     issues = []
     required_positive = ["BKS", "TKSW", "TS", "TK", "SF1", "SF2", "RAIL"]
     for k in required_positive:
         v = p.get(k)
         if v is None or float(v) <= 0:
-            issues.append(f"{k} debe ser > 0 (actual: {v})")
+            issues.append(t("{k} must be greater than 0 (now {v}).", k=k, v=v))
     # BSR debería estar definido (puede igualar BS)
     if p.get("BSR") is None or float(p.get("BSR", 0)) <= 0:
-        issues.append("BSR must be defined and > 0")
+        issues.append(t("BSR (the shaft width measured on site) must be greater than 0."))
     # FS debería ser ≥ TSW para que tenga sentido la lógica de pared
     fs, tsw = p.get("FS"), p.get("TSW")
     if fs is not None and tsw is not None and float(fs) < float(tsw):
-        issues.append(f"FS ({fs}) < TSW ({tsw}): no front safety clearance")
+        issues.append(t("FS ({fs}) is smaller than TSW ({tsw}): there is no front safety clearance.",
+                        fs=fs, tsw=tsw))
     return issues
 
 

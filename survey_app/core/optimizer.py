@@ -16,6 +16,8 @@ Flujo en cada paso (rl, fb):
 """
 import numpy as np
 
+from core.i18n import t
+
 
 def optimize(survey_adjusted: list, limits: dict, params: dict) -> dict:
     # ── Parámetros de pared ────────────────────────────────────
@@ -163,8 +165,9 @@ def optimize(survey_adjusted: list, limits: dict, params: dict) -> dict:
                     "fb_applied":       float(fb_applied),
                     "fb_extra_applied": True,
                     "status":           "SKIP",
-                    "reason":           (f"Apertura tapada: |RL|={abs(rl):.1f} > "
-                                        f"FRAME={frame:.1f}"),
+                    # v589 · en el idioma base (decía «Apertura tapada»)
+                    "reason":           t("Opening covered: |RL|={rl} > FRAME={f}",
+                                          rl="%.1f" % abs(rl), f="%.1f" % frame),
                     "skip_type":        "frame_opening",
                     "total_off":        None,
                     "off_by_col":       {},
@@ -223,12 +226,12 @@ def optimize(survey_adjusted: list, limits: dict, params: dict) -> dict:
                 stop_row = modified[wall_stop_idx]
                 if wall_side == "R" and stop_row["OR"] > full_lim_map["OR"]:
                     wall_fail   = True
-                    wall_reason = (f"Pared: OR parada {wall_stop}="
-                                   f"{stop_row['OR']:.1f} > LIMIT OR={full_lim_map['OR']:.1f}")
+                    wall_reason = t("Wall: OR at stop {s} = {v} > LIMIT OR = {l}", s=wall_stop,
+                                    v="%.1f" % stop_row["OR"], l="%.1f" % full_lim_map["OR"])
                 if wall_side == "L" and stop_row["OL"] > full_lim_map["OL"]:
                     wall_fail   = True
-                    wall_reason = (f"Pared: OL parada {wall_stop}="
-                                   f"{stop_row['OL']:.1f} > LIMIT OL={full_lim_map['OL']:.1f}")
+                    wall_reason = t("Wall: OL at stop {s} = {v} > LIMIT OL = {l}", s=wall_stop,
+                                    v="%.1f" % stop_row["OL"], l="%.1f" % full_lim_map["OL"])
 
             log_entry = {
                 "rl":               float(rl),

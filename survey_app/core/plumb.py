@@ -334,9 +334,9 @@ def plumb_svg(res: dict, proyecto: str = "") -> str:
         p.append(f'<text x="{cx+6}" y="{yb+30}" font-size="7.5" fill="#1f2937">'
                  f'{_d("drawing")} {_n(bsc.get("bs_plano"))} vs</text>')
         p.append(f'<text x="{cx+6}" y="{yb+42}" font-size="7.5" fill="#1f2937">'
-                 f'componentes {_n(bsc.get("bs_componentes"))}</text>')
+                 f'{_d("components {x}", x=_n(bsc.get("bs_componentes")))}</text>')
         p.append(f'<text x="{cx+6}" y="{yb+54}" font-size="7.5" fill="#c0392b">'
-                 f'dif {_n(bsc.get("dif"))} mm — revisar</text>')
+                 f'{_d("diff {x} mm — check", x=_n(bsc.get("dif")))}</text>')
         yb += 70
 
     # Sacrificio Z/Omega (solo modo independiente con BSR &lt; BS)
@@ -350,11 +350,11 @@ def plumb_svg(res: dict, proyecto: str = "") -> str:
         p.append(f'<text x="{cx+6}" y="{yb+15}" font-size="8" fill="#1a3a5c" '
                  f'font-weight="bold">{_d("BSR &lt; BS ADJUSTMENT")}</text>')
         p.append(f'<text x="{cx+6}" y="{yb+30}" font-size="7.5" fill="#1f2937">'
-                 f'sobra {_n(disp.get("dif_bs"))} mm</text>')
+                 f'{_d("to absorb: {x} mm", x=_n(disp.get("dif_bs")))}</text>')
         p.append(f'<text x="{cx+6}" y="{yb+44}" font-size="7.5" fill="#1f2937">'
-                 f'lado Z ({disp.get("z_side","")}): {_n(disp.get("z_sacrificio"))}</text>')
+                 f'{_d("Z side ({s}): {x}", s=disp.get("z_side", ""), x=_n(disp.get("z_sacrificio")))}</text>')
         p.append(f'<text x="{cx+6}" y="{yb+58}" font-size="7.5" fill="#1f2937">'
-                 f'lado Omega: {_n(disp.get("omega_sacrificio"))}</text>')
+                 f'{_d("Omega side: {x}", x=_n(disp.get("omega_sacrificio")))}</text>')
         if fuera:
             p.append(f'<text x="{cx+6}" y="{yb+71}" font-size="7.5" fill="#c0392b" '
                      f'font-weight="bold">{_d("DOES NOT FIT — review")}</text>')

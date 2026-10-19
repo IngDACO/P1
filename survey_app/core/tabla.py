@@ -147,6 +147,15 @@ CABECERAS = {
     "Máximo (mm)": "Maximum (mm)",
     "FB aplic.": "FB applied",
     "Fuera": "Out",
+    # v589 · plomada y cronograma del survey: salían con su CLAVE, en español
+    "Línea": "Line",
+    "X inicial (mm)": "X start (mm)",
+    "X final (mm)": "X end (mm)",
+    "Desplazada": "Shifted",
+    "Medida": "Measurement",
+    "Distancia (mm)": "Distance (mm)",
+    "Duración (d)": "Duration (d)",
+    "Peso (%)": "Weight (%)",
 }
 
 

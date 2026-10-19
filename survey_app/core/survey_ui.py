@@ -943,7 +943,7 @@ def render_survey_tab(_ROL, _GRUPO):
                        + (f": {_rep}." if _rep else "."))
             if str(_prj_sv.get("Location", "")).strip():
                 from core import maps as _maps
-                st.caption(_maps.maps_link_md(_prj_sv.get("Location"), ":material/place: see on Maps"))
+                st.caption(":material/place: " + _maps.maps_link_md(_prj_sv.get("Location"), t("see on Maps")))
         else:
             # Sin proyecto: cálculo suelto, el informe va sin identidad.
             for _kid in ("proyecto", "cliente", "ubicacion", "ingeniero"):
@@ -1081,9 +1081,12 @@ def render_survey_tab(_ROL, _GRUPO):
                     )
 
         with st.expander(t("Parameters measured on site"), icon=":material/straighten:", expanded=True, key="exp_sv_medidos"):
-            cols = st.columns(len(USER_ONLY))
+            # ⚠️ v589 · de 3 en 3, como los del plano van de 4 en 4: en una sola fila de seis
+            # (89 px a 1024) «FRAME», «OFFSET_CABIN» y «LengthTemplate» partían el rótulo en dos
+            # líneas y sus casillas quedaban 20 px más abajo que las otras (medido).
+            cols = st.columns(3)
             for j, (p, desc) in enumerate(USER_ONLY.items()):
-                cols[j].number_input(
+                cols[j % 3].number_input(
                     label = f"{p} (mm)",
                     step  = 0.5,
                     help  = desc,
@@ -1122,7 +1125,9 @@ def render_survey_tab(_ROL, _GRUPO):
 
         sc1, sc2, sc3 = st.columns([1, 2, 2])
 
-        sc1.number_input(t("Number of stops (NS)"), min_value=2, max_value=50, step=1, key="ns")
+        # v589 · «Stops (NS)» (como en la cotización): «Number of stops (NS)» partía en dos líneas
+        sc1.number_input(t("Stops (NS)"), min_value=2, max_value=50, step=1, key="ns",
+                         help=t("Number of stops: one row of the matrix per stop."))
         if st.session_state.get("ns_msg"):
             sc1.caption(st.session_state["ns_msg"])
 
@@ -1143,9 +1148,12 @@ def render_survey_tab(_ROL, _GRUPO):
         uploaded_excel = sc2.file_uploader(t(":material/folder_open: Load matrix (.xlsx)"), type=["xlsx"], key="excel_uploader")
         # Por defecto solo se importa la MATRIZ: si ya cargaste el plano, los parámetros del
         # PDF mandan y no deben ser pisados por los que venían guardados en el Excel.
-        _imp_todo = sc2.checkbox(t("Also restore parameters and configuration from the Excel file"),
+        # v589 · corto: «Also restore parameters and con…» se cortaba con «…»
+        _imp_todo = sc2.checkbox(t("Also load its parameters"),
                                  value=False, key="excel_imp_todo",
-                                 help=t("Unticked: only the measurement matrix is imported."))
+                                 help=t("Ticked, the Excel file's drawing parameters and configuration "
+                                        "replace the ones on screen. Unticked, only the measurement "
+                                        "matrix is imported."))
         if st.session_state.get("last_excel_id") and sc2.button(t(":material/refresh: Import the Excel again"),
                                                                 key="btn_reimport_xls"):
             st.session_state.pop("last_excel_id", None)
@@ -1249,7 +1257,10 @@ def render_survey_tab(_ROL, _GRUPO):
         except Exception:
             _iss0 = []
         if _iss0:
-            with st.expander(f":material/warning: {len(_iss0)} warning(s) in the parameters", expanded=False):
+            # v589 · con su plural (decía «8 warning(s)»)
+            with st.expander(t(":material/warning: 1 warning in the parameters") if len(_iss0) == 1 else
+                             t(":material/warning: {n} warnings in the parameters", n=len(_iss0)),
+                             expanded=False):
                 for _x in _iss0:
                     st.warning(_x)
 
@@ -1270,7 +1281,15 @@ def render_survey_tab(_ROL, _GRUPO):
 
         st.header(t(":material/insights: Results"))
         if not st.session_state.calc_results:
-            st.info(t("No calculation yet. Go to **:material/edit: Survey data**, fill in the information and press **:material/play_arrow: Calculate and see the results**."))
+            # ⚠️ v589 · UN aviso y un botón: antes, cuatro cabeceras (Results, Schedule, Client
+            # report, Save to the project) cada una con su «do the calculation first».
+            st.info(t("No calculation yet. Fill in the survey data and press **:material/play_arrow: "
+                      "Calculate and see the results**: the solutions, the schedule, the client "
+                      "report and saving to the project appear here."))
+            if st.button(t(":material/edit: Go to Survey data"), key="btn_sv_ir_datos"):
+                st.session_state["_fase_pending"] = _FASE_DATOS
+                st.rerun()
+            return
         else:
             if st.session_state.get("_calc_sig") and st.session_state["_calc_sig"] != _survey_signature():
                 st.warning(t(":material/warning: You changed data since the last calculation. What is below belongs to the previous one — recalculate to update it."))

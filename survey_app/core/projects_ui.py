@@ -6459,7 +6459,7 @@ def _detalle_localizacion(pid: str, grupo: str):
             _c.append(t("Person in charge: {x}").replace("{x}", P.head_installers_label(prj, grupo)))
         st.caption(" · ".join(_c))
         if str(prj.get("Location", "")).strip():
-            st.markdown(maps.maps_link_md(prj.get("Location")))
+            st.markdown(":material/place: " + maps.maps_link_md(prj.get("Location")))
     if str(prj.get("Instructions", "")).strip():
         st.info(prj.get("Instructions"))
 

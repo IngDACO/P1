@@ -19,12 +19,16 @@ def maps_url(location) -> str:
 
 
 def maps_link_md(location, label=None) -> str:
-    """Markdown '[📍 label](url)' para st.markdown/st.caption; '' si vacío."""
+    """Markdown '[label](url)' para st.markdown/st.caption; '' si vacío.
+
+    ⚠️ v589 · SIN el «📍» delante: tres sitios le ponían además `:material/place:` y salían
+    dos iconos juntos (Survey, Home, la obra del campo). El icono lo pone quien lo pinta,
+    el de Material como el resto de la app."""
     url = maps_url(location)
     if not url:
         return ""
     lbl = str(label if label is not None else location).strip()
-    return f"[📍 {lbl}]({url})"
+    return f"[{lbl}]({url})"
 
 
 def maps_link_html(location, label=None, color="#2e6da4") -> str:
