@@ -10,6 +10,32 @@ ventana de contexto. Contenido: 258 secciones detalladas + el índice de 440 ver
 
 ---
 
+## TOOLS → HOME, PROBADA (v588)
+
+Empieza el recorrido de Tools (petición del usuario: «continuemos con la tools, iniciemos con
+la primera»). Decisión: «Dale con todo».
+
+1. ⚠️ **Tarjetas apretadas y descuadradas en PC.** A 846 px con el menú, tres por fila de
+   136 px partían «Plumb line» y «Pre- / Start», y cada tarjeta medía distinto (228 · 225 ·
+   183 px) con su «Open →» a otra altura; en el móvil, una por fila y 1.259 px de página. →
+   por ANCHO (`T.por_fila`): tres por fila, dos cuando la rejilla mide ≤700 px, y la fila
+   iguala alturas (`height:100%` en la cadena de la columna). CSS medido ANTES de desplegar en
+   una mini-app local (rejilla de 446, 343 y 1236 px).
+2. **Tarjeta ENTERA tocable** (`cpxtool_*`: título · para qué sirve · último uso); antes solo
+   respondía un «Open →» pequeño.
+3. **Llenar**: el último uso de cada herramienta en el grupo («Last used DD/MM/YYYY · obra»,
+   `toolruns.ultimos_por_herramienta`) y en la del Pre-Start los de hoy (`prestart.de_hoy`).
+   Un fallo del registro no tumba la portada.
+4. El Pre-Start con su rama. ⚠️ Corrección a mi informe: dije que un enlace mal escrito
+   enseñaba el Pre-Start; NO podía pasar (`_sub_header` ya manda lo desconocido a Home). Lo
+   que sí podía: una herramienta nueva en el menú SIN su rama salía como Pre-Start.
+
+Guardianes: verif_v566 al día (la descripción va en la tarjeta, con `t()`), romper_v566
+re-anclada; ⚠️ la suite cazó un ancla REPETIDA — una línea del CSS nuevo copiaba la que
+romper_v544 usa de ancla única (orden propio en la mía).
+
+PRODUCCIÓN (19/10/2026, cuenta admin, v588 en la etiqueta): a 846 px con el menú, 2 por fila de 228 × 140 px, todas iguales, títulos en una línea y nada recortado; «Not used yet» (las obras de prueba aún no tienen cálculos) y en Pre-Start «None done today»; tocar la DESCRIPCIÓN de Buffers lleva a Tools · Buffers; en el móvil (375), 2 por fila de 168 px, filas iguales (155 · 137 · 137) y las seis en una pantalla (antes 1.259 px) · 17 comprobaciones · romper_v588 12/12 + control · verif_v588 17/17 (una comprobación del CSS era un «or» que pasaba siempre: afinada, trampa 1) · re-corridas: romper_v566 25/25 (re-anclada), v544 22/22 · check_anclas_roturas: 1670 vivas, 0 muertas, 0 repetidas · suite 215 verde con Python 3.12.10 (1702 s; la vuelta anterior dio 1 rojo de VERDAD, check_anclas_roturas: un ancla repetida por el CSS nuevo — arreglado y la suite repetida)
+
 ## LAS OBRAS CON DESMONTAJE NO SE PODÍAN CREAR (v587)
 
 Lo destapó poblar la app de material de prueba (petición del usuario: obras por TODOS los
@@ -14455,7 +14481,7 @@ comprueba lo que dice**.
 
 ---
 
-## Versiones desplegadas (v587 = actual)
+## Versiones desplegadas (v588 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -14463,6 +14489,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v588 | **Tools → Home, probada.** Tarjetas apretadas a 846 px (136 px, títulos partidos, alturas 228/225/183) → por ancho, fila igualada; la tarjeta ENTERA tocable con su último uso («Last used DD/MM/YYYY · obra»; Pre-Start, los de hoy); Pre-Start con su rama. CSS medido antes en una mini-app. PRODUCCIÓN (19/10/2026, cuenta admin, v588 en la etiqueta): a 846 px con el menú, 2 por fila de 228 × 140 px, todas iguales, títulos en una línea y nada recortado; «Not used yet» (las obras de prueba aún no tienen cálculos) y en Pre-Start «None done today»; tocar la DESCRIPCIÓN de Buffers lleva a Tools · Buffers; en el móvil (375), 2 por fila de 168 px, filas iguales (155 · 137 · 137) y las seis en una pantalla (antes 1.259 px) · romper_v588 12/12 + control · verif_v588 17/17 (una comprobación del CSS era un «or» que pasaba siempre: afinada, trampa 1) · re-corridas: romper_v566 25/25 (re-anclada), v544 22/22 · check_anclas_roturas: 1670 vivas, 0 muertas, 0 repetidas · suite 215 verde con Python 3.12.10 (1702 s; la vuelta anterior dio 1 rojo de VERDAD, check_anclas_roturas: un ancla repetida por el CSS nuevo — arreglado y la suite repetida) |
 | v587 | **Las obras con desmontaje no se podían crear.** ⚠️ «New project» borraba la respuesta tracción/hidráulico (la pregunta dejaba de pintarse) y «Create project» decía «Answer this first» siempre → se queda pintada. ⚠️ Desde cotización: pregunta tracción/hidráulico, NS ≥ 2 y fecha de fin, en pantalla y motor. Lo destapó poblar la app (10 obras por los 3 caminos, en estados distintos, los 10 de campo asignados). PRODUCCIÓN (19/10/2026, cuenta admin, v587 en la etiqueta): «New project» → Ripout + Installation → «Is the lift being removed traction or hydraulic?» → «Traction» SE QUEDA marcada tras cambiar NS a 10 (fin estimado recalculado a 45 días), la fecha (14/09/2026), el cliente y la dirección (Google: «1 Parramatta Sq, Parramatta NSW 2150, Australia») → «Create project» → «Project PRJ-0034 created with 18 activities.» y el diagrama con «Set Up (rip-out)», «Take Possession», «Tirak Installation», «Full Rip-Out»; en la hoja, el plan con «Rip out mechanical components - traction». La cotización 0003 aceptada: «Turn it into a project» con el tipo fuera del form, «Stops (NS) *» con mínimo 2; Ripout + Installation pregunta tracción/hidráulico; Delivery enseña «Estimated finish date» y no NS; «Undo — back to sent» la devolvió («Quote marked as sent.»), sin crear nada. Chatswood (Ripout hidráulico) creada por el mismo formulario (AppTest), con su plan hidráulico · romper_v587 9/9 + control · verif_v587 22/22 (la 1ª vuelta, 3 rojos del ANDAMIO: el guion de la sección 3 dejaba `aceptar_y_crear_proyecto` sustituido — AppTest comparte proceso, la lección de v574) · re-corridas: romper_v470 13/13, v580 36/36, v451 5/5 · check_anclas_roturas: 1657 vivas, 0 muertas · suite 214 verde con Python 3.12.10 (1718 s, a la primera) |
 | v586 | **Los partes que no movían la curva.** Obras sin plan (anteriores a v512) y la tarjeta callada: el usuario borró todas las obras (95 filas + 51 del roster, copia en D:). ⚠️ Una obra sin plan lo DICE (campo, con botón a Progress, y admin); un parte sin nada que confirmar lo dice; vocabulario de entregas y caja de herramientas medido contra el corpus (39,2 → 40,2 %); al quitar, la contrapartida antes que la logística; Expenses vacío con «New project». verif_v559 sobre la FOTO del libro (`libro_foto`). PRODUCCIÓN (19/10/2026, cuenta admin, v586 en la etiqueta): Finance → Expenses sin obras: «There are no projects in this company yet. Costs are recorded against a project: create one first.» y «New project» lleva a Projects; una obra de PRUEBA «ZZ Prueba v586» (PRJ-0026, Delivery, sin plan, sin asignados) enseña en Status → Daily logs «This job has no stage plan, so the crew's daily logs cannot suggest progress: it is marked by hand in «Progress».» — borrada después, 0 filas en ninguna pestaña. La pantalla del CAMPO (aviso + botón) no se ve con esta cuenta: la cubre verif_v586 con AppTest · romper_v586 15/15 + control (la 1ª tanda 13/14: escapó «la logística tapa la contrapartida» con razón — «Removed the inex kit» llega por su sinónimo; la sonda nueva pasa por la contrapartida) · verif_v586 51/51 · re-corridas: romper_v517 28/28, v522 17/17, v523 30/30 (re-anclada), v483 15/15, v559 35/35 sobre la foto · ejercitar_v517_corpus 0 errores · check_anclas_roturas: 1647 vivas, 0 muertas · suite 213 verde con Python 3.12.10 (1702 s; la vuelta anterior dio 2 rojos por los DATOS borrados — verif_v483 y v559 —, curados con la compra construida y la foto) |
 | v585 | **Lo visto verificando v584: la vista baja a lo que se abre.** ⚠️ «Tracking options» y «Lines» abrían lo suyo y la vista se quedaba en un bloque VACÍO delante → el bloque envuelve la lista y la tabla, como en Quotes. verif_v585 barre la app: ninguna marca de bajar en un bloque vacío o ajeno. PRODUCCIÓN (19/10/2026, cuenta admin, v585 en la etiqueta, 846×646): con el periodo en «All», «Tracking options · 1 · 1 job involved» → la vista baja de 0 a 876 px y «Jobs that must exist first (1)» queda ENTERA en pantalla (488–646 de 646; en v584, a 459 con 450 de vista), con «PRUEBA MOVIL - Bondi Junction Lift 1»; con la tabla del parte FUERA de la vista (734–849) «Lines» la baja de 1322 a 1524 y queda entera (531–638 de 646: cabecera, «Bobo» y «hjg,ujgjg»; en v584 solo asomaba la cabecera). Sin datos de prueba · romper_v585 5/5 + control (las dos de Accounting, la marca de Quotes sola en su bloque, la de Hours en un bloque ajeno y bajar en CADA pasada) · verif_v585 15/15 a la primera · re-corrida romper_v584 18/18 (sus anclas del parte, dentro del bloque ahora) · check_anclas_roturas: 1631 vivas, 0 muertas · suite 213 verde con Python 3.12.10 (1693 s, a la primera) |
