@@ -5492,6 +5492,10 @@ def _bajar_a(clave: str, marca: str):
     cualquier clic. `nearest` no mueve nada si ya se ve. Espera a que la pasada TERMINE
     (`data-test-script-state`) para medir con la altura final (el patrón de v553). El
     recuadro del script, fuera del flujo para no dejar hueco.
+
+    ⚠️ Se llama DENTRO de `with st.container(key=clave)`, y ese bloque ENVUELVE lo que se
+    quiere ver: vacío y delante (Accounting, v584), la vista se para en él y lo que se abre
+    queda debajo del borde. Lo vigila verif_v585 en toda la app.
     """
     if not st.session_state.pop(marca, False):
         return

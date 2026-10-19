@@ -174,34 +174,37 @@ def _parte_csv(grupo, desde, hasta):
 
     if r["filas"]:
         from core import projects_ui as _PU
+        # ⚠️ v585 · el bloque que baja ENVUELVE la tabla (como Quotes): en v584 iba vacío
+        # DELANTE, así que la vista bajaba hasta él y de la tabla solo asomaba la cabecera
+        # (medido en producción: a 417 px con 450 de vista).
         with st.container(key="cpx_cont_ptabla"):
             _PU._bajar_a("cpx_cont_ptabla", "_cont_bajar_p")
-        det = contable.partes(grupo, desde, hasta)
-        # Una sola definición de la etiqueta del día: la usan las filas Y la
-        # configuración de columnas, así que no hay dos listas en paralelo que
-        # puedan desincronizarse (v433/v434).
-        _etq_dia = {d: d.strftime("%a %d/%m") for d in det["dias"]}
-        _filas = [dict({t("Employee"): f["nombre"], t("Payroll ID"): f["payroll_id"],
-                        t("Earnings rate"): f["etiqueta"]},
-                       # ⚠️ Cadena, NO un nulo: `st.dataframe` pinta cualquier nulo
-                       # como el literal «None» en gris y no hay configuración que lo
-                       # evite — el cuadro de lo medido está en `tabla.celda`. Con NaN
-                       # (v485) se seguía viendo «None» en producción. El día sin
-                       # horas sale vacío, igual que en el CSV.
-                       **{_etq_dia[d]: tabla.celda(f["horas"].get(d), 2)
-                          for d in det["dias"]},
-                       **{t("Total"): tabla.celda(f["total"], 2)})
-                  for f in det["filas"]]
-        _df = pd.DataFrame(_filas)
-        # v584 · «Payroll ID» en pantalla solo si alguien lo tiene (era una columna vacía;
-        # es opcional: solo hace falta con dos nombres iguales). El CSV la conserva: el
-        # importador la espera.
-        if not any(str(f["payroll_id"] or "").strip() for f in det["filas"]):
-            _df = _df.drop(columns=[t("Payroll ID")])
-        st.dataframe(_df, hide_index=True, width="stretch",
-                     column_config=tabla.cfg(None, dict(
-                         {c: tabla.derecha(c) for c in _etq_dia.values()},
-                         **{t("Total"): tabla.derecha(t("Total"))})))
+            det = contable.partes(grupo, desde, hasta)
+            # Una sola definición de la etiqueta del día: la usan las filas Y la
+            # configuración de columnas, así que no hay dos listas en paralelo que
+            # puedan desincronizarse (v433/v434).
+            _etq_dia = {d: d.strftime("%a %d/%m") for d in det["dias"]}
+            _filas = [dict({t("Employee"): f["nombre"], t("Payroll ID"): f["payroll_id"],
+                            t("Earnings rate"): f["etiqueta"]},
+                           # ⚠️ Cadena, NO un nulo: `st.dataframe` pinta cualquier nulo
+                           # como el literal «None» en gris y no hay configuración que lo
+                           # evite — el cuadro de lo medido está en `tabla.celda`. Con NaN
+                           # (v485) se seguía viendo «None» en producción. El día sin
+                           # horas sale vacío, igual que en el CSV.
+                           **{_etq_dia[d]: tabla.celda(f["horas"].get(d), 2)
+                              for d in det["dias"]},
+                           **{t("Total"): tabla.celda(f["total"], 2)})
+                      for f in det["filas"]]
+            _df = pd.DataFrame(_filas)
+            # v584 · «Payroll ID» en pantalla solo si alguien lo tiene (era una columna vacía;
+            # es opcional: solo hace falta con dos nombres iguales). El CSV la conserva: el
+            # importador la espera.
+            if not any(str(f["payroll_id"] or "").strip() for f in det["filas"]):
+                _df = _df.drop(columns=[t("Payroll ID")])
+            st.dataframe(_df, hide_index=True, width="stretch",
+                         column_config=tabla.cfg(None, dict(
+                             {c: tabla.derecha(c) for c in _etq_dia.values()},
+                             **{t("Total"): tabla.derecha(t("Total"))})))
 
 
 def _partes_section(grupo):
@@ -312,13 +315,15 @@ def render_contable(grupo):
         # su estado y la cifra no lo abriría. Se queda abierto hasta volver a tocarla.
         _ver = bool(st.session_state.get("_cont_ver_jobs"))
         from core import projects_ui as _PU
+        # ⚠️ v585 · el bloque que baja ENVUELVE el desplegable: vacío y delante (v584), la
+        # vista se paraba en él y la lista abierta quedaba debajo del borde (459 px con 450).
         with st.container(key="cpx_cont_jobs"):
             _PU._bajar_a("cpx_cont_jobs", "_cont_bajar_jobs")
-        with st.expander(t("Jobs that must exist first ({n})", n=len(opciones)),
-                         icon=":material/checklist:", expanded=_ver,
-                         key=f"exp_cont_jobs_{_ver}"):
-            st.caption(t("Create them with these exact names, then import."))
-            st.code("\n".join(opciones), language=None)
+            with st.expander(t("Jobs that must exist first ({n})", n=len(opciones)),
+                             icon=":material/checklist:", expanded=_ver,
+                             key=f"exp_cont_jobs_{_ver}"):
+                st.caption(t("Create them with these exact names, then import."))
+                st.code("\n".join(opciones), language=None)
 
     with st.expander(t("Chart of accounts and tax"), icon=":material/account_tree:", key="exp_cont_cuentas"):
         _editor_cuentas(grupo, perfil, cfg)
