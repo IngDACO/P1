@@ -23,8 +23,9 @@ ROTURAS = [
     ("⚠️ el motor deja de canonizar el tipo (una instalación sin cronograma)", QS,
      [("    tipo = valores.canon(tipo)\n", "")]),
     ("⚠️ el formulario vuelve a los tipos viejos («Instalación», «Otro»)", QU,
-     [('        tipo = c2.selectbox(t("Type"), list(P.TIPOS), format_func=_etq)\n',
-       '        tipo = c2.selectbox(t("Type"), ["Instalación", "Delivery", "Ripout", "Otro"], format_func=_etq)\n')]),
+     # v587 · re-anclada: el tipo salió del form (para preguntar tracción/hidráulico)
+     [('    tipo = st.selectbox(t("Type"), list(P.TIPOS), format_func=_etq, key=f"cot_prj_tipo_{_k}")\n',
+       '    tipo = st.selectbox(t("Type"), ["Instalación", "Delivery", "Ripout", "Otro"], format_func=_etq, key=f"cot_prj_tipo_{_k}")\n')]),
     ("el nombre por defecto del motor vuelve a «Nº»", QS,
      [("""f"{c.get('ClientName','')} — No. {c.get('Number','')}",""",
        """f"{c.get('ClientName','')} — Nº{c.get('Number','')}",""")]),

@@ -669,19 +669,36 @@ def _crear_proyecto(grupo, c, _tot):
     st.markdown("---")
     st.markdown(t("### :material/construction: Turn it into a project"))
     st.caption(t("It starts with the client, the budget and the margin you have just quoted. From there the usual flow follows: costs, hours and invoice."))
-    with st.form("cot_prj_" + str(c.get("ID"))):
-        c1, c2 = st.columns(2)
+    from core import projects_ui as _PU
+    _k = str(c.get("ID"))
+    # ⚠️ v580 · los tipos de la APP (los del alta normal): aquí iban los valores viejos
+    # «Instalación», «Otro», y una instalación nacía SIN cronograma (PRJ-0024)
+    # ⚠️ v587 · El TIPO y la pregunta de desmontaje FUERA del form, como en el alta normal
+    # (v306): dentro no escriben hasta el envío, así que no se podía preguntar tracción o
+    # hidráulico ni cambiar NS por la fecha de fin según el tipo.
+    tipo = st.selectbox(t("Type"), list(P.TIPOS), format_func=_etq, key=f"cot_prj_tipo_{_k}")
+    _kalta = f"cot_{_k}"
+    _pend = _PU._pregunta_etapas(tipo, _kalta)
+    _con_plan = P.genera_cronograma(tipo)
+    with st.form("cot_prj_" + _k):
         # v580 · «No.», no «Nº»: el nombre se GUARDA en la obra
-        nombre = c1.text_input(t("Project name"),
+        nombre = st.text_input(t("Project name"),
                                value=str(c.get("ClientName", "")) + " — No. "
                                      + str(c.get("Number", "")))
-        # ⚠️ v580 · los tipos de la APP (los del alta normal): aquí iban los valores viejos
-        # «Instalación», «Otro», y una instalación nacía SIN cronograma (PRJ-0024)
-        tipo = c2.selectbox(t("Type"), list(P.TIPOS), format_func=_etq)
         c3, c4 = st.columns(2)
         ini = c3.date_input(t("Start date"), value=clock.today(grupo), format="DD/MM/YYYY")
-        ns = c4.number_input(t("Stops (NS)"), min_value=0, step=1, value=0,
-                             help=t("Only an installation generates the standard schedule; with NS 0 the project starts with no activities."))
+        # ⚠️ v587 · NS ≥ 2 en los tipos con plan (con 0 nacían SIN plan y la ayuda decía
+        # «no activities» cuando nacían con una); los demás, su fecha de fin (Manly nació
+        # sin ella).
+        if _con_plan:
+            ns = c4.number_input(t("Stops (NS) *"), min_value=2, max_value=50, step=1, value=2,
+                                 help=t("It sets the schedule: which activities and how long they take."))
+            fin = None
+        else:
+            ns = 0
+            fin = c4.date_input(t("Estimated finish date"), value=clock.today(grupo),
+                                format="DD/MM/YYYY",
+                                help=t("This project type has no standard schedule, so you set the date yourself."))
         ubic = st.text_input(t("Location (optional)"))
         st.info(t(":material/savings: Project budget: **{a}** — that is your quoted **cost**, "
                   "not the price to the client ({b}). That way the over-budget alert fires when "
@@ -690,9 +707,15 @@ def _crear_proyecto(grupo, c, _tot):
                 .replace("{b}", T.dinero(_tot["subtotal"], 0)))
         if st.form_submit_button(t(":material/add_circle: Create the project"),
                                  type="primary", width="stretch"):
+            # v587 · sin la respuesta, no: la demolición se quedaría fuera del plan
+            if _pend:
+                st.error(t("Answer this first: {q}",
+                           q=" · ".join(t(p["pregunta"]) for p in _pend)))
+                return
             ok, msg = Q.aceptar_y_crear_proyecto(
                 c.get("ID"), nombre=nombre, tipo=tipo, fecha_inicio=ini,
-                ns=ns, ubicacion=ubic, creado_por=_creado_por())
+                ns=ns, ubicacion=ubic, creado_por=_creado_por(),
+                condicionales=_PU._cond_elegidas(_kalta), fecha_fin=fin)
             if ok:
                 flash.exito(t("Project") + " " + str(msg) + " " + t("created from this quote."))
                 st.rerun()

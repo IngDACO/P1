@@ -27,9 +27,11 @@ ROTURAS = [
      'TIPOS = [TIPO_INSTALACION,'),
     ("se queda sin icono (se veria como una localizacion interna)",
      "core/projects.py", '              TIPO_RIPOUT_INST: ":material/autorenew:",\n', ""),
+    # v587 · re-anclada: el NS ya no va en esta condición (se exige antes, con su error) y
+    # hay DOS `if P.genera_cronograma(tipo):` — se ancla la del cronograma por su comentario.
     ("quotes vuelve a comparar el LITERAL (el fallo de v454)",
-     "core/quotes.py", "if P.genera_cronograma(tipo) and _num(ns) > 0:",
-     'if str(tipo) == "Installation" and _num(ns) > 0:'),
+     "core/quotes.py", "igual que el alta.\n    if P.genera_cronograma(tipo):",
+     'igual que el alta.\n    if str(tipo) == "Installation":'),
     # ⚠️ v515 · OCHO anclas de esta bateria apuntaban a texto que ya no existe, y la
     # bateria las contaba como «??» mientras anunciaba «5 de 13 cazadas». CINCO llevaban
     # muertas desde v512 (comprobado contra el HEAD anterior): el modelo viejo se cambio

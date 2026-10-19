@@ -597,7 +597,7 @@ def desvincular_proyecto(cid) -> tuple:
 # ── Fase 3: ganarla y comparar contra lo real (v354) ─────────────
 def aceptar_y_crear_proyecto(cid, nombre="", tipo="Installation", fecha_inicio=None,
                              ns=0, ubicacion="", creado_por="",
-                             condicionales=()) -> tuple:
+                             condicionales=(), fecha_fin=None) -> tuple:
     """Acepta la cotización y da de alta el proyecto con lo que ya se pactó.
 
     ⚠️ **El presupuesto del proyecto es el COSTO cotizado, no el precio de venta.**
@@ -609,6 +609,11 @@ def aceptar_y_crear_proyecto(cid, nombre="", tipo="Installation", fecha_inicio=N
 
     ⚠️ **Idempotente**: si la cotización ya generó un proyecto, no crea otro. Un doble
     clic no puede duplicar una obra.
+
+    ⚠️ v587 · Las MISMAS reglas que el alta normal: un tipo con plan necesita NS (≥ 2) y
+    la respuesta tracción/hidráulico si lleva desmontaje; uno sin plan, su `fecha_fin`.
+    Antes una instalación con NS 0 nacía SIN plan (sus partes no se leen) y un desmontaje
+    sin la demolición en el plan. Se comprueba aquí y no solo en la pantalla.
     """
     c = get_cotizacion(cid)
     if not c:
@@ -629,13 +634,23 @@ def aceptar_y_crear_proyecto(cid, nombre="", tipo="Installation", fecha_inicio=N
     # el fallo de v454 por otro camino).
     tipo = valores.canon(tipo)
     ini = fecha_inicio or clock.today(c.get("Group"))
+    if P.genera_cronograma(tipo):
+        if _num(ns) < 2:
+            return False, t("The number of stops (NS) is needed: it sets the schedule.")
+        from core import stages as _ST
+        _faltan = _ST.falta_por_decidir(tipo, condicionales)
+        if _faltan:
+            return False, t("Answer this first: {q}",
+                            q=" · ".join(t(p["pregunta"]) for p in _faltan))
+    elif fecha_fin is not None and fecha_fin < ini:
+        return False, t("The finish date is before the start date.")
     acts, fin, plan_json = None, "", ""
     # Solo la instalación tiene cronograma estándar (regla v306): a un delivery o un
     # ripout se le inventarían 11 actividades y ensuciarían avance, SPI y el radar.
     # ⚠️ Antes comparaba el LITERAL "Installation" en vez de la constante: dos
     # definiciones de la misma regla, y por ahí es por donde v454 se quedó sin
     # cronograma. Ahora delega en `projects.genera_cronograma`, igual que el alta.
-    if P.genera_cronograma(tipo) and _num(ns) > 0:
+    if P.genera_cronograma(tipo):
         # v512: el cronograma sale del CATÁLOGO de etapas, no de `PHASES`. Son las
         # 14 etapas (18 con desmontaje) y su avance ya no se teclea: se calcula desde
         # las actividades de abajo.
@@ -651,7 +666,10 @@ def aceptar_y_crear_proyecto(cid, nombre="", tipo="Installation", fecha_inicio=N
         # La regla es de v306 y el alta MANUAL sí la aplicaba; este camino se quedó sin
         # ella — media unificación, el patrón de v419. Con UNA actividad la obra avanza
         # 0→100 sin fingir un plan de obra que nadie ha hecho.
-        acts = [{"nombre": "Execution", "duracion": 1, "peso": 1}]
+        # v587 · con su fecha de fin, como el alta normal (salía sin ella: PRJ-0033).
+        _ff = fecha_fin or ini
+        acts = [{"nombre": "Execution", "duracion": max(1, (_ff - ini).days + 1), "peso": 1}]
+        fin = _ff.isoformat()
 
     ok, res = P.create_project(
         c.get("Group"), str(nombre).strip() or f"{c.get('ClientName','')} — No. {c.get('Number','')}",

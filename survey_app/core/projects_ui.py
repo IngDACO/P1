@@ -69,13 +69,18 @@ def _pregunta_etapas(tipo, key):
     «1 inventado» que v509 prohibió.
     """
     from core import stages as _S
-    pendientes = _S.falta_por_decidir(tipo, _cond_elegidas(key))
-    for g in pendientes:
+    # ⚠️ v587 · TODAS las preguntas del tipo, contestadas o no. Hasta v586 solo se pintaban
+    # las PENDIENTES: al contestar, la pregunta dejaba de pintarse, Streamlit borra el valor
+    # de un control que no se pinta, y en la pasada siguiente volvía vacía — «Create
+    # project» decía «Answer this first» SIEMPRE. No se podía crear ninguna obra con
+    # desmontaje (visto el 19/10 poblando la app; reproducido en AppTest).
+    # `falta_por_decidir` sin nada elegido = todas las del tipo.
+    for g in _S.falta_por_decidir(tipo, ()):
         _etiq = {o: o.replace("Rip out mechanical components - ", "").title()
                  for o in g["opciones"]}
         st.radio(t(g["pregunta"]), g["opciones"], index=None, horizontal=True,
                  format_func=lambda o: _etiq.get(o, o), key=_clave_cond(key))
-    return pendientes
+    return _S.falta_por_decidir(tipo, _cond_elegidas(key))
 
 
 def _cond_elegidas(key) -> tuple:
@@ -1050,7 +1055,6 @@ def _nuevo_proyecto_form(grupo: str, key: str = "nuevo"):
     El cronograma se genera de las actividades estándar a partir del NS, que es
     lo único que necesita `build_schedule` — no hace falta el survey.
     """
-    import datetime as _dt
     import zlib
     from core.schedule import build_schedule
 
