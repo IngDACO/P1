@@ -10,6 +10,46 @@ ventana de contexto. Contenido: 258 secciones detalladas + el índice de 440 ver
 
 ---
 
+## FINANCE → ACCOUNTING, PROBADA ACCIÓN POR ACCIÓN (v584)
+
+Decisión del usuario: «ok dale» a los once puntos del recorrido de Contabilidad. Los CSV, generados
+en local con los datos reales (solo lectura; nada se descarga de producción), salían BIEN para
+Xero y MYOB: lo que fallaba estaba alrededor.
+
+1. ⚠️ **Dos avisos de ABN, y uno mandaba a un sitio que no existe**: «Administration →
+   Companies». Es «Administration → Groups → «Tax identity and payment terms»», y solo lo tiene
+   el PROPIETARIO, que ni siquiera tiene Finanzas: quien ve esta pantalla es el administrador. →
+   UNO, el del motor (`contable.csv_ventas`), con el sitio de verdad y quién lo pone.
+2. ⚠️ **El error de Xero Payroll daba una sola causa** («needs Payroll AU set up»): Xero
+   contesta lo mismo (401 · AuthenticationUnsuccessful) cuando quien conectó no tiene permiso de
+   nómina allí → las dos causas y qué hacer («fix it in Xero, then disconnect and connect
+   again»), con lo que dijo Xero entre paréntesis; otro error no culpa a los permisos.
+3. Con «All» los ficheros se llamaban `xero_bills_todo_todo.csv` → `…_all.csv`.
+4. «From» después de «To» en el parte salía vacío sin decir nada → aviso, y el envío a Xero
+   Payroll y los nombres de nómina de debajo SIGUEN (el CSV del parte pasó a `_parte_csv`).
+5. Las seis cifras, ACTIVAS: Invoices → Facturas, Expenses → Gastos, Tracking options abre la
+   lista de obras; People y Paid hours → Hours, Lines → la tabla.
+6. Plurales: «1 row», «1 job involved», «with this option», «the job must already exist».
+7. Periodo y formato (Xero/MYOB) recordados (`persist_state`).
+8. «Saved.» al cambiar cómo llegan las facturas → «Invoices will now arrive in Xero as drafts /
+   approved.».
+9. «Bring payments from Xero» sin ninguna factura enviada solo contestaba «no hay nada» → se dice
+   en una línea, sin botón.
+10. «Payroll ID» en pantalla solo si alguien lo tiene (el CSV la conserva: el importador la espera).
+11. ⚠️ **TODO `st.date_input` de la app en DD/MM/YYYY**: eran 10 sin él (en el informe dije 17: el
+    `grep` no veía la `format=` en otra línea; contado por AST). Guardián en verif_v584.
+
+⚠️ De paso: romper_v484 y romper_v492 dejaban sus copias (`_orig_*`, `_romper492_*`) en
+guardianes/ → las borran, y `.gitignore` tapa `guardianes/_*.py` (una docena de baterías escriben
+copias así; ninguna de la suite empieza por «_»). Guardianes al día con su razón: verif_v486 (la
+tabla del parte se mudó a `_parte_csv`), romper_v484 y v492 re-anclados.
+
+No probado en producción, con su razón: «Disconnect Xero» (el clasificador de seguridad bloqueó el
+toque; el código pregunta antes, v489), enviar a Xero (regla acordada) y guardar el plan de
+cuentas / los nombres de nómina (se vio que cargan los códigos de fábrica).
+
+PRODUCCIÓN (19/10/2026, cuenta admin, v584 en la etiqueta): UN aviso de ABN, «…The account owner sets it in Administration → Groups → «Tax identity and payment terms».»; las seis cifras son botones; con «All»: «1 row», «1 job involved» y «with this option»; «Tracking options» abre «Jobs that must exist first (1)» con su obra; «Expenses» lleva a Finance → Expenses y, de vuelta por el menú, el periodo sigue en «All»; «Approved» → «Invoices will now arrive in Xero approved.» y de vuelta «…as drafts.» (dejado en Draft); «Bring payments» → «No invoice has been sent to Xero yet…» sin botón; las fechas del parte «06 / 10 / 2026»; la tabla del parte SIN «Payroll ID»; Xero Payroll: «Xero did not let COPEX into Payroll. Either … or whoever connected Xero has no payroll access there…». ⚠️ Visto: «Tracking options» y «Lines» NO bajan la vista a lo que abren (la marca de bajar va en un bloque vacío ANTES, no envolviéndolo: la lista quedó a 459 px con 450 de vista y la tabla a 417) — propuesto para v585. Sin datos de prueba · 32 comprobaciones · romper_v584 18/18 + control · verif_v584 32/32 (la 1ª vuelta, 4 rojos del ANDAMIO: un expander con icono AppTest lo llama «Status», la última tabla era el editor de nombres, mi comentario citaba la ruta vieja y la prueba de la pantalla dejaba `render_conexion` sustituida para la siguiente — AppTest comparte proceso) · re-corridas: romper_v484 17/17, v492 8/8, v486 «0 mal» · check_anclas_roturas: 0 muertas · suite 212 verde con Python 3.12.10 (1653 s, a la primera)
+
 ## LO VISTO VERIFICANDO v582: EL ALTA DELANTE DE LA COTIZACIÓN Y SU BORRADOR (v583)
 
 Decisión del usuario: «ok dale».
@@ -14320,7 +14360,7 @@ comprueba lo que dice**.
 
 ---
 
-## Versiones desplegadas (v583 = actual)
+## Versiones desplegadas (v584 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -14328,6 +14368,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v584 | **Finance → Accounting, probada acción por acción.** ⚠️ Dos avisos de ABN y uno a «Administration → Companies», que no existe → uno, con el sitio real. ⚠️ El error de Xero Payroll con sus dos causas. Cifras activas, plurales, periodo y formato recordados, «…_all.csv», «From» después de «To» avisa, «Payroll ID» solo si alguien lo tiene, avisos de Xero que dicen lo que cambia. ⚠️ TODO `date_input` en DD/MM/YYYY (10). Las baterías borran sus copias y `.gitignore` las tapa. PRODUCCIÓN (19/10/2026, cuenta admin, v584 en la etiqueta): UN aviso de ABN, «…The account owner sets it in Administration → Groups → «Tax identity and payment terms».»; las seis cifras son botones; con «All»: «1 row», «1 job involved» y «with this option»; «Tracking options» abre «Jobs that must exist first (1)» con su obra; «Expenses» lleva a Finance → Expenses y, de vuelta por el menú, el periodo sigue en «All»; «Approved» → «Invoices will now arrive in Xero approved.» y de vuelta «…as drafts.» (dejado en Draft); «Bring payments» → «No invoice has been sent to Xero yet…» sin botón; las fechas del parte «06 / 10 / 2026»; la tabla del parte SIN «Payroll ID»; Xero Payroll: «Xero did not let COPEX into Payroll. Either … or whoever connected Xero has no payroll access there…». ⚠️ Visto: «Tracking options» y «Lines» NO bajan la vista a lo que abren (la marca de bajar va en un bloque vacío ANTES, no envolviéndolo: la lista quedó a 459 px con 450 de vista y la tabla a 417) — propuesto para v585. Sin datos de prueba · romper_v584 18/18 + control · verif_v584 32/32 (la 1ª vuelta, 4 rojos del ANDAMIO: un expander con icono AppTest lo llama «Status», la última tabla era el editor de nombres, mi comentario citaba la ruta vieja y la prueba de la pantalla dejaba `render_conexion` sustituida para la siguiente — AppTest comparte proceso) · re-corridas: romper_v484 17/17, v492 8/8, v486 «0 mal» · check_anclas_roturas: 0 muertas · suite 212 verde con Python 3.12.10 (1653 s, a la primera) |
 | v583 | **Lo visto verificando v582.** ⚠️ «Used in N quotes» abría Quotes con el ALTA a medias delante de la cotización pedida → el botón cierra el alta. ⚠️ El borrador del alta perdía el cliente y la nota al salir de Quotes (Streamlit borra los widgets no pintados) → `_cot_borrador`. PRODUCCIÓN (19/10/2026, cuenta admin, v583 en la etiqueta), con un servicio, una ficha y una cotización de PRUEBA (el servicio nació CAT-00002: la auditoría nombra CAT-00001 y 00003 de las ediciones de v582, la regla de v581 con datos reales): «New quote» → «➕ New client», «ZZ Borrador v583», «0400 583 583» y una nota → «Price it from the drawing» → «Set it in Catalogue» → el servicio → «Used in 1 quote» → abre «Quote No. 0001» (en v582, el alta delante) → «Back to quotes» → «New quote»: vuelven el cliente nuevo, el nombre, el teléfono y la nota, sin aviso de Streamlit. Datos: borrados (COT-0004, CLI-0001, CAT-00002) · romper_v583 6/6 + control (una 7ª rotura, «Cancel deja la nota», se escapaba y tenía razón: retirada con su razón y la línea quitada) · verif_v583 11/11 con su sonda (salir de Quotes SÍ borra los widgets) · re-corridas romper_v582 30/30 y v580 36/36 · check_anclas_roturas: 0 muertas · suite 211 verde con Python 3.12.10 (1625 s; repetida tras quitar la línea redundante) |
 | v582 | **Finance → Catalogue, probada acción por acción.** ⚠️ Formularios FANTASMA (trampa 37) ocultos en TODA la app con una regla del tema. ⚠️ Un doble toque creaba dos artículos → alta que se vacía y avisa del nombre repetido. ⚠️ La edición aceptaba costo $0 → una validación. ⚠️ La regla de cantidad del plano no se podía poner → «Quantity from the drawing». Tabla con toque y costo delante, cifras que filtran, servicio sin unidad (salía «hora»), dónde se usa, tipo editable. PRODUCCIÓN (19/10/2026, cuenta admin, v582 en la etiqueta), con artículos de PRUEBA «ZZ Prueba v582…»: en una cotización nueva, «Price it from the drawing» avisa antes de subir el plano y «Set it in Catalogue» lleva al catálogo; la tabla «Item · Cost · Type · Category · Unit · Hours» sin casillas, el servicio con unidad «—» y «Service»/«Product»; un toque en la CELDA abre el artículo; «Services» filtra («1 item»); una búsqueda sin nada dice «Nothing matches this search or filter.» y «Show all» lo devuelve («3 items»); el riel a $0 guardado tal cual → «The unit cost must be greater than 0.» y con 50 → «Item updated.»; pasarlo a servicio sin horas → «A service needs estimated hours and an hourly rate greater than 0.» y con 2 h × 40 → «Service · cost $80.00»; la regla «One per stop» guardada (en la hoja: per_stop); «Item deactivated.» con el aviso nuevo y «Item reactivated.» — ⚠️ y ese cambio de forma dejó 6 fantasmas en la página, 0 visibles; el menú con un artículo abierto vuelve a la lista; el alta nace con «Materials», «zz prueba v582 riel» avisa de CAT-00001 y CAT-00002 y no crea, con la casilla crea («Item «zz prueba v582 riel» created.») y el formulario queda VACÍO; con una cotización de prueba (COT-0004) el montaje dice «Used in 1 quote» y su botón la abre; en el móvil el costo se ve junto al nombre. ⚠️ Visto: el botón abrió Quotes con el ALTA delante (seguía abierta desde «Set it in Catalogue») — propuesto para v583. Datos: todo borrado (COT-0004, CLI-0001, CAT-00001…00004) · romper_v582 30/30 + control · verif_v582 70/70 · re-corridas: romper_v463 11/11, v510 14/14, v580 36/36, v487 y v486 «0 mal», v440 ok · check_anclas_roturas: 1568 vivas, 0 muertas · suite 210 verde con Python 3.12.10 (1653 s, a la primera) |
 | v581 | **«No dejes nada pendiente»: IDs que no se reciclan y la rejilla de cifras.** ⚠️ Ocho generadores (ALR, CAT, ACT, MOV, FAC, ORD, PS, COT) y las nóminas reciclaban el ID borrado (la primera cotización real habría heredado el historial de COT-0001) → `siguiente_id_libre`. ⚠️ `ids_referenciados` mira TODAS las hojas (se le escapaba PreStarts). ⚠️ El roster en lote numeraba por número de filas; lectura fallida = desde cero → a la caché; SP- repetidos; el NÚMERO de factura salía de la caché. ⚠️ La tarjeta huérfana se estiraba a todo el ancho → rejilla. Anclas repetidas vigiladas. PRODUCCIÓN (18/10/2026, cuenta admin, v581 en la etiqueta): a 846 px con el menú abierto, Status de PRJ-0015 «151+151+151 / 151» (antes la cuarta a 472 px), Costs «111×4 / 111» (antes la quinta a 472) y Timeclock «151×3 / 151»; en el móvil Costs «3 + 2» de 111 sin scroll horizontal; ninguna cifra partida. Con la ficha y el artículo de PRUEBA «ZZ … v581»: «New quote» → las cifras «151×3 / 151» («YOUR PROFIT» ya no a todo el ancho) → «Quote No. 0001 created.» y en la hoja real el ID es **COT-0004** (la auditoría guarda COT-0001…0003: saltadas). Antes, solo lectura con el código nuevo: `ids_referenciados` ve COT-0001…0003 y las 32 pestañas, PreStarts incluida. Datos: borrados COT-0004, CLI-0001 y CAT-00001 · romper_v581 29/29 + control (la 1ª tanda 27/27 antes de añadir el apóstrofo y el número de factura) · verif_v581 46/46 · romper_v559 35/35 (34 + la rotura que se saltaba) · check_anclas_roturas: 1567 vivas, 0 muertas, 0 repetidas donde se exige una · verif_v323 probado contra dos roturas · ⚠️ un parche por heredoc falló otra vez (trampa 26): a fichero · suite 209 verde con Python 3.12.10 (1607 s; la 1ª vuelta dio 1 rojo de VERDAD, verif_v323, arreglado) |
