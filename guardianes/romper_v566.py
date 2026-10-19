@@ -106,8 +106,9 @@ ROTURAS = [
     ("una etiqueta de la conciliación pierde su `t()` (va por una tupla)", PU,
      [('(t("Charged to jobs (hours booked × rate)"), cc["cargado"], ""),',
        '("Charged to jobs (hours booked × rate)", cc["cargado"], ""),')]),
+    # v588 · re-anclada: la descripción va dentro de la tarjeta-botón, no en un `st.caption`
     ("las descripciones de Tools pierden su `t()`", HU,
-     [('st.caption(t(_desc.get(_id, "")))', 'st.caption(_desc.get(_id, ""))')]),
+     [('t(_desc.get(_id, "")),', '_desc.get(_id, ""),')]),
 ]
 
 CONTROL = ("CONTROL: un comentario inocuo no puede poner nada rojo",

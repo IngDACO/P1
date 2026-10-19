@@ -355,6 +355,51 @@ body:has([data-testid="stStatusWidget"])::before {{
   margin-top: 1px !important;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }}
+/* ── TARJETA DE HERRAMIENTA (v588): un botón con key `cpxtool_*` es una tarjeta entera
+   (título · para qué sirve · último uso), toda tocable. Mismo arreglo de 1.64 que la KPI:
+   el markdown del botón vuelve a partir en bloques y se estira a la izquierda. La fila
+   iguala las alturas (`height:100%` en la cadena de la columna): con alturas distintas, los
+   botones de una fila no se alineaban (medido en v587: 228 · 225 · 183 px). */
+.st-key-cpx_herr_hub [data-testid="stColumn"] > [data-testid="stVerticalBlock"],
+.st-key-cpx_herr_hub [data-testid="stColumn"] [data-testid="stElementContainer"],
+.st-key-cpx_herr_hub [data-testid="stColumn"] [data-testid="stButton"] {{ height: 100%; }}
+[class*="st-key-cpxtool_"] button {{
+  background: #fff !important; border: 1px solid {BORDE} !important;
+  border-top: 3px solid {AZUL} !important; border-radius: 12px !important;
+  padding: 14px 16px !important; min-height: 140px; height: 100%;
+  box-shadow: 0 1px 2px rgba(16,24,40,.04);
+  justify-content: flex-start !important; align-items: flex-start !important;
+}}
+[class*="st-key-cpxtool_"] button:hover {{
+  border-color: {AZUL} !important; box-shadow: 0 2px 8px rgba(46,109,164,.13);
+}}
+[class*="st-key-cpxtool_"] button > div {{
+  width: 100%; justify-content: flex-start !important; align-items: flex-start !important;
+}}
+[class*="st-key-cpxtool_"] button > div > span {{
+  flex: 1 1 auto; width: 100%; justify-content: flex-start !important;
+}}
+[class*="st-key-cpxtool_"] button [data-testid="stMarkdownContainer"] {{
+  width: 100%; white-space: normal !important;   /* (orden propio: la línea de la KPI es ancla de romper_v544) */
+}}
+[class*="st-key-cpxtool_"] button [data-testid="stMarkdownContainer"] p {{
+  display: block !important; text-align: left !important;
+}}
+[class*="st-key-cpxtool_"] button p:first-child {{
+  font-size: 16px !important; font-weight: 700 !important; color: {AZUL_OSC} !important;
+  margin: 0 0 4px !important; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}}
+[class*="st-key-cpxtool_"] button p:nth-child(2) {{
+  font-size: 13px !important; font-weight: 400 !important; color: {TXT} !important;
+  line-height: 1.35 !important; margin: 0 0 8px !important;
+}}
+/* El último uso en DOS líneas si hace falta (medido en una mini-app a 446 px de rejilla:
+   «Last used 12/10/2026 · Bondi Junction Tower — Lift 1» se recortaba con «…» y perdía la
+   obra; en dos líneas cabe y la fila sigue igualada — 140 px, 168 en el móvil). */
+[class*="st-key-cpxtool_"] button p:nth-child(3) {{
+  font-size: 12px !important; font-weight: 500 !important; color: {GRIS_TXT} !important;
+  margin: 0 !important; line-height: 1.3 !important;
+}}
 /* ── TOGGLE SEGMENTADO: un `st.radio(horizontal=True)` con key `cpxseg_*` se ve
    como un control segmentado, no como dos bolitas sueltas (v292).
    ⚠️ Verificado EN VIVO antes de escribirlo (mini-app + medición del DOM):

@@ -311,7 +311,9 @@ for fn in ("render_pnl", "_pnl_kpis", "_pnl_conciliacion", "_pnl_por_proyecto"):
 chk("⚠️ el Resumen sin frases sueltas (ni en tuplas)", not _lit, _lit)
 chk("sin «Ir a», «Sobre ppto.» ni «pers.»", not re.search(r'Ir a |Sobre ppto|pers\.', ast.unparse(_rp)))
 HUS = io.open(os.path.join(RAIZ, "core", "home_ui.py"), encoding="utf-8").read()
-chk("de paso: las descripciones de Tools con `t()`", "st.caption(t(_desc.get(_id, '')))" in
+# v588 · la descripción va DENTRO de la tarjeta-botón (`cpxtool_*`), ya no en un `st.caption`:
+# lo que se vigila es lo mismo, que pase por `t()`.
+chk("de paso: las descripciones de Tools con `t()`", "t(_desc.get(_id, ''))" in
     ast.unparse(next(n for n in ast.walk(ast.parse(HUS)) if isinstance(n, ast.FunctionDef)
                      and n.name == "_hub_herramientas")))
 

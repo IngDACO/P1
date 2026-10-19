@@ -110,6 +110,18 @@ def entradas_de(fila) -> dict:
     return d.get("entradas") or {} if isinstance(d, dict) else {}
 
 
+def ultimos_por_herramienta(grupo) -> dict:
+    """v588 · El cálculo MÁS RECIENTE de cada herramienta en el grupo: `{clave: fila}`
+    (la clave es la de `HERRAMIENTAS`). Para que la portada de Tools diga cuándo y en qué
+    obra se usó cada una, en vez de solo describirla."""
+    g = str(grupo or "").strip().lower()
+    out = {}
+    for r in sorted(_records(), key=lambda r: str(r.get("Date", ""))):
+        if str(r.get("Group", "")).strip().lower() == g:
+            out[str(r.get("Tool", ""))] = r
+    return out
+
+
 def list_for(pid: str) -> list:
     """Historial de cálculos de un proyecto, del más reciente al más antiguo."""
     out = [r for r in _records() if str(r.get("ProjectID", "")) == str(pid)]

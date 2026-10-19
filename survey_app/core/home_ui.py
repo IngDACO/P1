@@ -1227,9 +1227,48 @@ def _seccion_finanzas(grupo):
         st.error(t(":material/error: This Finance section does not exist: {s}", s=sub))
 
 
-def _hub_herramientas():
-    """Hub/entrada de Herramientas (v231): una tarjeta por herramienta (qué hace + Abrir).
-    «Abrir» navega a la sub-pestaña de esa herramienta."""
+# v588 · la clave de cada herramienta: la de su tarjeta (`cpxtool_*`) y la que guarda
+# `toolruns` en la hoja (`HERRAMIENTAS`).
+_CLAVE_HERR = {"📐 Survey": "survey", "🔩 Plomada": "plomada", "✂️ Rieles": "rieles",
+               "🛡 Buffers": "buffers", "🎗 Belting": "belting", "🦺 Pre-Start": "prestart"}
+
+
+def _ultimos_usos(grupo, ids) -> dict:
+    """v588 · El pie de cada tarjeta: «Last used DD/MM/YYYY · obra» (su cálculo más reciente
+    en el grupo) y, en el Pre-Start, cuántos se han hecho HOY. Lo que falle no tumba la
+    portada: esa tarjeta sale sin pie de uso."""
+    out = {}
+    try:
+        from core import toolruns as TR, projects as P
+        from core.num import dmy
+        ult = TR.ultimos_por_herramienta(grupo)
+        for _id in ids:
+            r = ult.get(_CLAVE_HERR.get(_id, ""))
+            if r:
+                _p = (P.get_project(str(r.get("ProjectID", ""))) or {}).get("Name") or r.get("ProjectID", "")
+                out[_id] = t("Last used {d} · {p}", d=dmy(str(r.get("Date", ""))[:10]), p=_p)
+    except Exception as e:
+        logger.warning("home_ui: último uso de las herramientas: %s", e)
+    if "🦺 Pre-Start" in ids:
+        try:
+            from core import prestart as PS
+            n = len(PS.de_hoy(grupo))
+            out["🦺 Pre-Start"] = (t("None done today") if not n else
+                                   t("1 done today") if n == 1 else t("{n} done today", n=n))
+        except Exception as e:
+            logger.warning("home_ui: pre-start de hoy: %s", e)
+    return out
+
+
+def _hub_herramientas(grupo=""):
+    """Hub/entrada de Herramientas (v231): una tarjeta por herramienta.
+
+    v588 · La tarjeta ENTERA es el botón (antes solo un «Open →» pequeño), dice su último
+    uso, y van por ANCHO (`T.por_fila`): tres por fila, dos cuando el contenedor mide ≤700
+    px. Medido en producción a 846 px con el menú: tres de 136 px partían «Plumb line» y
+    «Pre-Start» («Pre- / Start») y cada tarjeta medía distinto (228 · 225 · 183), con los
+    «Open →» a alturas distintas; en el móvil, una por fila y 1.259 px de página."""
+    from core import theme as T
     st.caption(t("Choose a tool:"))
     _desc = {
         "📐 Survey": "Shaft positioning and solution matrix; generates the client and site reports.",
@@ -1241,25 +1280,22 @@ def _hub_herramientas():
     }
     # display (icono) desde _SUBSECCIONES (consistente con el sidebar); navega con el ID.
     _herr = [(_id, _d) for _id, _d in _subsecciones()["herramientas"][1] if _id != "🧰 Inicio"]
-    for _r in range(0, len(_herr), 3):
-        _cols = st.columns(3, gap="medium")
-        for _j in range(3):
-            _i = _r + _j
-            if _i >= len(_herr):
-                break
-            _id, _dispv = _herr[_i]
-            with _cols[_j].container(border=True):
-                st.markdown(f"#### {_dispv}")
-                st.caption(t(_desc.get(_id, "")))          # v566 · con `t()`
-                if st.button(t("Open →"), key=f"hubherr_{_i}", width="stretch"):
-                    navegar("herramientas", _id)
+    _uso = _ultimos_usos(grupo, [i for i, _ in _herr])
+    st.markdown(T.por_fila("cpx_herr_hub", 3), unsafe_allow_html=True)
+    with st.container(key="cpx_herr_hub"):
+        for _col, (_id, _dispv) in zip(st.columns(len(_herr), gap="small"), _herr):
+            # título · para qué sirve (v566 · con `t()`) · su último uso
+            _lbl = "%s\n\n%s\n\n%s" % (t(_dispv), t(_desc.get(_id, "")),
+                                         _uso.get(_id) or t("Not used yet"))
+            if _col.button(_lbl, key=f"cpxtool_{_CLAVE_HERR.get(_id, _id)}", width="stretch"):
+                navegar("herramientas", _id)
 
 
 def _seccion_herramientas(grupo):
     rol = st.session_state.get("auth", {}).get("rol", "administrador")
     sub = _sub_header("herramientas")
     if sub == "🧰 Inicio":
-        _hub_herramientas()
+        _hub_herramientas(grupo)
     elif sub == "📐 Survey":
         from core.survey_ui import render_survey_tab
         render_survey_tab(rol, grupo)
@@ -1275,9 +1311,13 @@ def _seccion_herramientas(grupo):
     elif sub == "🎗 Belting":
         from core.belting_ui import render_belting_tab
         render_belting_tab()
-    else:
+    elif sub == "🦺 Pre-Start":
         from core.prestart_ui import render_prestart_tab
         render_prestart_tab()
+    else:
+        # ⚠️ v588 · el Pre-Start era el «si no, lo que sea» de Tools (el fallo que Finance
+        # tuvo con Horas hasta v577): una sub-sección desconocida lo enseñaba sin avisar.
+        st.error(t(":material/error: This Tools section does not exist: {s}", s=sub))
 
 
 # ── HOME ─────────────────────────────────────────────────────────

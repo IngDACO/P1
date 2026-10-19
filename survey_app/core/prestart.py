@@ -162,6 +162,16 @@ def leer(r) -> dict:
     }
 
 
+def de_hoy(grupo) -> list:
+    """v588 · Los pre-start de HOY del grupo (el día local del grupo, `clock`): la portada
+    de Tools los cuenta en su tarjeta."""
+    from core import clock
+    hoy = clock.today(grupo).isoformat()
+    g = str(grupo or "").strip().lower()
+    return [r for r in _records() if str(r.get("Group", "")).strip().lower() == g
+            and str(r.get("Date", ""))[:10] == hoy]
+
+
 def list_prestarts(pid) -> list:
     """Pre-starts de un proyecto, más recientes primero."""
     out = [r for r in _records() if str(r.get("ProjectID", "")) == str(pid)]
