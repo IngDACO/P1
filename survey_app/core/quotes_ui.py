@@ -344,7 +344,14 @@ def _desde_plano(grupo):
 
 
 _CLAVES_NUEVA = ("_cot_nueva", "new_lineas", "cot_new_cli", "cot_new_cli_nom", "cot_new_cli_cto",
-                 "cot_new_cli_tel", "cot_new_cli_mail")
+                 "cot_new_cli_tel", "cot_new_cli_mail", "_cot_borrador")
+# ⚠️ v583 · el BORRADOR del alta sobrevive a salir de Quotes (a «Set it in Catalogue», al
+# menú): Streamlit borra un widget en cuanto una pasada no lo pinta, y volvías con las
+# líneas (`new_lineas` no es un widget) pero sin cliente ni nota. Solo los campos SIN valor
+# por defecto propio: el impuesto lleva `value=` (el de la empresa) y reasignarlo saca el
+# aviso de Streamlit o lo reinicia — ese vuelve al de la empresa.
+_BORRADOR = ("cot_new_cli_nom", "cot_new_cli_cto", "cot_new_cli_tel", "cot_new_cli_mail",
+             "cot_new_nota")
 
 
 def _limpiar_nueva():
@@ -360,6 +367,11 @@ def _nueva(grupo):
         _limpiar_nueva()
         st.rerun()
     st.markdown(t("## :material/request_quote: New quote"))
+    # v583 · lo que Streamlit borró al salir, de vuelta (ANTES de crear los widgets)
+    _borr = st.session_state.get("_cot_borrador") or {}
+    for _k in _BORRADOR:
+        if _k in _borr and _k not in st.session_state:
+            st.session_state[_k] = _borr[_k]
 
     # ⚠️ v420: el cliente se puede crear AQUÍ. Antes, si era nuevo, había que salir a
     # Contactos, darlo de alta y volver a empezar la cotización — y si no había NINGÚN
@@ -370,6 +382,10 @@ def _nueva(grupo):
     fichas = C.list_clientes(grupo)
     _NUEVO = t("➕ New client")
     _map = {f"{f.get('Name','')}": f for f in fichas}
+    # v583 · el cliente elegido, de vuelta solo si sigue siendo una opción (una ficha
+    # borrada entretanto no se fuerza)
+    if "cot_new_cli" not in st.session_state and _borr.get("cot_new_cli") in list(_map) + [_NUEVO]:
+        st.session_state["cot_new_cli"] = _borr["cot_new_cli"]
     _cli = st.selectbox(t("Client"), list(_map) + [_NUEVO], key="cot_new_cli",
                         index=len(_map) if not fichas else 0)
     _nuevo_cli = {}
@@ -395,6 +411,9 @@ def _nueva(grupo):
                           help=t("Taken from the company default."))
     nota = st.text_area(t("Notes for the client (optional)"), key="cot_new_nota",
                         help=t("They appear on the quote PDF."))
+    # v583 · el borrador, en una clave que NO es de widget (esa no la borra nadie)
+    st.session_state["_cot_borrador"] = {
+        k: st.session_state[k] for k in ("cot_new_cli",) + _BORRADOR if k in st.session_state}
 
     if lineas:
         _tot = Q.totales(lineas, imp)

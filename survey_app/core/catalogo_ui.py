@@ -278,6 +278,11 @@ def _usos(grupo, cid):
                      f"{c.get('ClientName', '') or '—'} · {QU._est_txt(Q.estado_de(c))} · "
                      f"{T.dinero(c.get('Total'), 0)}",
                      key=f"cat_uso_{c.get('ID')}", type="tertiary"):
+            # ⚠️ v583 · el ALTA de cotización, si seguía abierta (p. ej. tras «Set it in
+            # Catalogue»), va DELANTE de la cotización pedida: visto en producción, el botón
+            # abría «New quote». Se cierra el alta; su borrador se conserva (`_cot_borrador`,
+            # `new_lineas`) y vuelve con «New quote».
+            st.session_state.pop("_cot_nueva", None)
             st.session_state["_cot_open"] = str(c.get("ID", ""))
             from core import projects_ui as _PU
             _PU._ir_a("finanzas", "📄 Cotizaciones")
