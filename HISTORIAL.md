@@ -10,6 +10,38 @@ ventana de contexto. Contenido: 258 secciones detalladas + el índice de 440 ver
 
 ---
 
+## LAS OBRAS CON DESMONTAJE NO SE PODÍAN CREAR (v587)
+
+Lo destapó poblar la app de material de prueba (petición del usuario: obras por TODOS los
+caminos de alta, en estados distintos, repartidas entre los 10 usuarios de campo). Las obras
+se crearon con el código REAL de cada pantalla (AppTest contra la hoja; los avisos de
+asignación sustituidos: varios emails pueden ser de personas reales) y dos fallaron.
+
+1. ⚠️ **«New project» no podía crear NINGUNA obra Ripout ni Ripout + Installation.** Al
+   contestar tracción/hidráulico la pregunta dejaba de pintarse (`_pregunta_etapas` solo
+   pintaba las PENDIENTES), Streamlit borraba el valor del control no pintado, y en la pasada
+   siguiente volvía vacía: «Create project» decía «Answer this first» SIEMPRE. → se pintan
+   todas las preguntas del tipo, contestadas o no.
+2. ⚠️ **«Turn it into a project» (cotización aceptada)** no preguntaba tracción/hidráulico (el
+   desmontaje nacía SIN la demolición en el plan), dejaba NS 0 (una instalación nacía SIN plan
+   y la ayuda decía «no activities» cuando nacía con una) y a un Delivery/Other no le pedía
+   fecha de fin (PRJ-0033 nació sin ella). → el tipo y la pregunta FUERA del form, NS ≥ 2 en
+   los tipos con plan, fecha de fin en los demás; y el MOTOR (`aceptar_y_crear_proyecto`) se
+   niega igual (NS, respuesta, fin antes del inicio) y sin fecha de fin pone el mismo día.
+
+De paso: un `import datetime` sin usar en el alta (pyflakes). Guardianes al día con su razón:
+verif_v451 (el selector lleva `key=`), romper_v470 y v580 re-anclados.
+
+**El material de prueba (cliente1)**, todo por la app: 5 clientes, 7 artículos, 3 cotizaciones
+(2 aceptadas con su obra, 1 enviada) y 10 obras — Bondi Lift 1 (Installation, en curso al
+día), Bondi Lift 2 (atrasada ~36 d; las dos en la agrupación «Bondi Junction Tower»), Mascot
+(Delivery, completada), Newtown (Other, en pausa), Penrith (cancelada), Alexandria Warehouse
+(localización), Ryde y Manly (desde cotización, planificadas), Parramatta (Ripout +
+Installation tracción, 55 %) y Chatswood (Ripout hidráulico, completada). Los 10 de campo
+asignados; avance acreditado día a día (curvas con forma).
+
+PRODUCCIÓN (19/10/2026, cuenta admin, v587 en la etiqueta): «New project» → Ripout + Installation → «Is the lift being removed traction or hydraulic?» → «Traction» SE QUEDA marcada tras cambiar NS a 10 (fin estimado recalculado a 45 días), la fecha (14/09/2026), el cliente y la dirección (Google: «1 Parramatta Sq, Parramatta NSW 2150, Australia») → «Create project» → «Project PRJ-0034 created with 18 activities.» y el diagrama con «Set Up (rip-out)», «Take Possession», «Tirak Installation», «Full Rip-Out»; en la hoja, el plan con «Rip out mechanical components - traction». La cotización 0003 aceptada: «Turn it into a project» con el tipo fuera del form, «Stops (NS) *» con mínimo 2; Ripout + Installation pregunta tracción/hidráulico; Delivery enseña «Estimated finish date» y no NS; «Undo — back to sent» la devolvió («Quote marked as sent.»), sin crear nada. Chatswood (Ripout hidráulico) creada por el mismo formulario (AppTest), con su plan hidráulico · 22 comprobaciones · romper_v587 9/9 + control · verif_v587 22/22 (la 1ª vuelta, 3 rojos del ANDAMIO: el guion de la sección 3 dejaba `aceptar_y_crear_proyecto` sustituido — AppTest comparte proceso, la lección de v574) · re-corridas: romper_v470 13/13, v580 36/36, v451 5/5 · check_anclas_roturas: 1657 vivas, 0 muertas · suite 214 verde con Python 3.12.10 (1718 s, a la primera)
+
 ## LOS PARTES QUE NO MOVÍAN LA CURVA (v586)
 
 Lo trajo el usuario: «cargué un log de prueba para ver cómo se actualizaba la curva y no
@@ -14423,7 +14455,7 @@ comprueba lo que dice**.
 
 ---
 
-## Versiones desplegadas (v586 = actual)
+## Versiones desplegadas (v587 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -14431,6 +14463,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v587 | **Las obras con desmontaje no se podían crear.** ⚠️ «New project» borraba la respuesta tracción/hidráulico (la pregunta dejaba de pintarse) y «Create project» decía «Answer this first» siempre → se queda pintada. ⚠️ Desde cotización: pregunta tracción/hidráulico, NS ≥ 2 y fecha de fin, en pantalla y motor. Lo destapó poblar la app (10 obras por los 3 caminos, en estados distintos, los 10 de campo asignados). PRODUCCIÓN (19/10/2026, cuenta admin, v587 en la etiqueta): «New project» → Ripout + Installation → «Is the lift being removed traction or hydraulic?» → «Traction» SE QUEDA marcada tras cambiar NS a 10 (fin estimado recalculado a 45 días), la fecha (14/09/2026), el cliente y la dirección (Google: «1 Parramatta Sq, Parramatta NSW 2150, Australia») → «Create project» → «Project PRJ-0034 created with 18 activities.» y el diagrama con «Set Up (rip-out)», «Take Possession», «Tirak Installation», «Full Rip-Out»; en la hoja, el plan con «Rip out mechanical components - traction». La cotización 0003 aceptada: «Turn it into a project» con el tipo fuera del form, «Stops (NS) *» con mínimo 2; Ripout + Installation pregunta tracción/hidráulico; Delivery enseña «Estimated finish date» y no NS; «Undo — back to sent» la devolvió («Quote marked as sent.»), sin crear nada. Chatswood (Ripout hidráulico) creada por el mismo formulario (AppTest), con su plan hidráulico · romper_v587 9/9 + control · verif_v587 22/22 (la 1ª vuelta, 3 rojos del ANDAMIO: el guion de la sección 3 dejaba `aceptar_y_crear_proyecto` sustituido — AppTest comparte proceso, la lección de v574) · re-corridas: romper_v470 13/13, v580 36/36, v451 5/5 · check_anclas_roturas: 1657 vivas, 0 muertas · suite 214 verde con Python 3.12.10 (1718 s, a la primera) |
 | v586 | **Los partes que no movían la curva.** Obras sin plan (anteriores a v512) y la tarjeta callada: el usuario borró todas las obras (95 filas + 51 del roster, copia en D:). ⚠️ Una obra sin plan lo DICE (campo, con botón a Progress, y admin); un parte sin nada que confirmar lo dice; vocabulario de entregas y caja de herramientas medido contra el corpus (39,2 → 40,2 %); al quitar, la contrapartida antes que la logística; Expenses vacío con «New project». verif_v559 sobre la FOTO del libro (`libro_foto`). PRODUCCIÓN (19/10/2026, cuenta admin, v586 en la etiqueta): Finance → Expenses sin obras: «There are no projects in this company yet. Costs are recorded against a project: create one first.» y «New project» lleva a Projects; una obra de PRUEBA «ZZ Prueba v586» (PRJ-0026, Delivery, sin plan, sin asignados) enseña en Status → Daily logs «This job has no stage plan, so the crew's daily logs cannot suggest progress: it is marked by hand in «Progress».» — borrada después, 0 filas en ninguna pestaña. La pantalla del CAMPO (aviso + botón) no se ve con esta cuenta: la cubre verif_v586 con AppTest · romper_v586 15/15 + control (la 1ª tanda 13/14: escapó «la logística tapa la contrapartida» con razón — «Removed the inex kit» llega por su sinónimo; la sonda nueva pasa por la contrapartida) · verif_v586 51/51 · re-corridas: romper_v517 28/28, v522 17/17, v523 30/30 (re-anclada), v483 15/15, v559 35/35 sobre la foto · ejercitar_v517_corpus 0 errores · check_anclas_roturas: 1647 vivas, 0 muertas · suite 213 verde con Python 3.12.10 (1702 s; la vuelta anterior dio 2 rojos por los DATOS borrados — verif_v483 y v559 —, curados con la compra construida y la foto) |
 | v585 | **Lo visto verificando v584: la vista baja a lo que se abre.** ⚠️ «Tracking options» y «Lines» abrían lo suyo y la vista se quedaba en un bloque VACÍO delante → el bloque envuelve la lista y la tabla, como en Quotes. verif_v585 barre la app: ninguna marca de bajar en un bloque vacío o ajeno. PRODUCCIÓN (19/10/2026, cuenta admin, v585 en la etiqueta, 846×646): con el periodo en «All», «Tracking options · 1 · 1 job involved» → la vista baja de 0 a 876 px y «Jobs that must exist first (1)» queda ENTERA en pantalla (488–646 de 646; en v584, a 459 con 450 de vista), con «PRUEBA MOVIL - Bondi Junction Lift 1»; con la tabla del parte FUERA de la vista (734–849) «Lines» la baja de 1322 a 1524 y queda entera (531–638 de 646: cabecera, «Bobo» y «hjg,ujgjg»; en v584 solo asomaba la cabecera). Sin datos de prueba · romper_v585 5/5 + control (las dos de Accounting, la marca de Quotes sola en su bloque, la de Hours en un bloque ajeno y bajar en CADA pasada) · verif_v585 15/15 a la primera · re-corrida romper_v584 18/18 (sus anclas del parte, dentro del bloque ahora) · check_anclas_roturas: 1631 vivas, 0 muertas · suite 213 verde con Python 3.12.10 (1693 s, a la primera) |
 | v584 | **Finance → Accounting, probada acción por acción.** ⚠️ Dos avisos de ABN y uno a «Administration → Companies», que no existe → uno, con el sitio real. ⚠️ El error de Xero Payroll con sus dos causas. Cifras activas, plurales, periodo y formato recordados, «…_all.csv», «From» después de «To» avisa, «Payroll ID» solo si alguien lo tiene, avisos de Xero que dicen lo que cambia. ⚠️ TODO `date_input` en DD/MM/YYYY (10). Las baterías borran sus copias y `.gitignore` las tapa. PRODUCCIÓN (19/10/2026, cuenta admin, v584 en la etiqueta): UN aviso de ABN, «…The account owner sets it in Administration → Groups → «Tax identity and payment terms».»; las seis cifras son botones; con «All»: «1 row», «1 job involved» y «with this option»; «Tracking options» abre «Jobs that must exist first (1)» con su obra; «Expenses» lleva a Finance → Expenses y, de vuelta por el menú, el periodo sigue en «All»; «Approved» → «Invoices will now arrive in Xero approved.» y de vuelta «…as drafts.» (dejado en Draft); «Bring payments» → «No invoice has been sent to Xero yet…» sin botón; las fechas del parte «06 / 10 / 2026»; la tabla del parte SIN «Payroll ID»; Xero Payroll: «Xero did not let COPEX into Payroll. Either … or whoever connected Xero has no payroll access there…». ⚠️ Visto: «Tracking options» y «Lines» NO bajan la vista a lo que abren (la marca de bajar va en un bloque vacío ANTES, no envolviéndolo: la lista quedó a 459 px con 450 de vista y la tabla a 417) — propuesto para v585. Sin datos de prueba · romper_v584 18/18 + control · verif_v584 32/32 (la 1ª vuelta, 4 rojos del ANDAMIO: un expander con icono AppTest lo llama «Status», la última tabla era el editor de nombres, mi comentario citaba la ruta vieja y la prueba de la pantalla dejaba `render_conexion` sustituida para la siguiente — AppTest comparte proceso) · re-corridas: romper_v484 17/17, v492 8/8, v486 «0 mal» · check_anclas_roturas: 0 muertas · suite 212 verde con Python 3.12.10 (1653 s, a la primera) |
