@@ -118,8 +118,10 @@ ROTURAS = [
      '            _rel = list(asc2["ascensores"])'),
 
     ("lo hecho en ESTA obra esconde el trabajo de otro ascensor (la tarjeta no sale)",
-     UI, 'if not PP.propuestas(texto, plan0, {} if partir else SP.acreditado(pid))["hay_algo"]:',
-     'if not PP.propuestas(texto, plan0, SP.acreditado(pid))["hay_algo"]:'),
+     # v586 · re-anclada: la vista previa se guarda en `_prev` para decir qué pasa cuando no
+     # hay nada que confirmar (antes era la condición de un `if` y nada más).
+     UI, '_prev = PP.propuestas(texto, plan0, {} if partir else SP.acreditado(pid))',
+     '_prev = PP.propuestas(texto, plan0, SP.acreditado(pid))'),
 
     ("«L2» nace contestado como ascensor",
      UI, 'index=None, horizontal=True, key="%s_dud_%s" % (kp, d))',

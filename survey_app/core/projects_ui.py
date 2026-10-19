@@ -3864,6 +3864,12 @@ def _field_activities(pid):
                     st.warning(_msg_vac)
 
 
+def _ir_avance_campo():
+    """v586 · Del parte a «Progress» (la sub-sección de la obra del campo). Va en
+    `on_click`: corre antes de pintar el selector, así que se puede ASIGNAR."""
+    st.session_state["cpxseg_fld_sec"] = "🏗 Avance"
+
+
 def render_field_projects(usuario: str, grupo: str):
     st.markdown(t("### :material/assignment: My projects"))
     if not P.is_configured():
@@ -4037,7 +4043,9 @@ def render_field_projects(usuario: str, grupo: str):
         from core import daily_log_ui as _DLU
         _DLU.render_campo(pid, grupo,
                           (st.session_state.get("auth") or {}).get("usuario", ""),
-                          key_prefix="fld")
+                          key_prefix="fld",
+                          # v586 · en una obra sin plan, el parte lleva a «Progress»
+                          ir_avance=_ir_avance_campo)
     elif _sec == "🚨 Avisos":
         _alerts_section(pid, grupo, prj.get("Name", ""), allow_report=True)
     elif _sec == "💰 Recibos":
@@ -5562,7 +5570,14 @@ def render_group_expenses(grupo: str):
     ge = E.group_expenses(grupo)
     filas = ge["proyectos"]
     if not filas:
-        st.info(t("There are no projects in this company."))
+        # v586 · «Llenar, no encoger»: con la empresa vacía la pantalla se quedaba en una
+        # línea, sin decir por dónde seguir (visto en producción el 19/10, tras borrar las
+        # obras de prueba). Los costes se apuntan a una obra: el botón lleva a crearla.
+        st.info(t("There are no projects in this company yet. Costs are recorded against a "
+                  "project: create one first."))
+        if st.button(t(":material/add_circle: New project"), key="ge_vacio_nueva",
+                     type="primary"):
+            _ir_a("proyectos", "📊 Proyectos")
         return
 
     # ⚠️ v310: UNA sola definición de gasto del grupo. `filas` ya incluye los

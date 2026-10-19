@@ -169,11 +169,27 @@ ck("impuesto de venta sin GST", contable.IMPUESTOS_XERO["venta_sin"][1], "GST Fr
 ck("impuesto de compra con GST", contable.IMPUESTOS_XERO["compra_con"][1], "GST on Expenses")
 ck("y el código para la API de 2.3", contable.IMPUESTOS_XERO["venta_con"][0], "OUTPUT")
 
-# ⚠️ UN SOLO CRITERIO: el importe siempre sin impuesto. Se comprueba EJECUTANDO sobre
-# el gasto real del grupo, no leyendo el código.
+# ⚠️ UN SOLO CRITERIO: el importe siempre sin impuesto. Se comprueba EJECUTANDO
+# `csv_compras`, no leyendo el código.
+# ⚠️ v586 · Sobre una compra CONSTRUIDA, no la de la hoja: el 19/10/2026 el usuario borró las
+# obras de prueba y con ellas el único gasto de cliente1, y este bloque se quedó sin datos
+# (lo decía: «sin datos, este bloque no afirma nada»). La compra tiene la forma exacta de la
+# que había (G-00001: 128.5, «Materials»); el impuesto del grupo sigue siendo el real.
 import csv as _csv                                                 # noqa: E402
-_r = contable.csv_compras("cliente1", "xero", None, None)
-_f = list(_csv.DictReader(io.StringIO(_r["csv"])))
+from core import expenses as _EXP                                  # noqa: E402
+_lg = _EXP.list_group
+_EXP.list_group = lambda g: [{"ID": "G-99999", "ProjectID": "PRJ-9999", "Group": "cliente1",
+                              "Date": "2026-09-08", "Category": "Materials", "Supplier": "ZZZ",
+                              "Description": "ZZZ compra construida", "Amount": "128.5",
+                              "DriveID": "", "File": "", "CreatedBy": "zzz",
+                              "Created": "2026-09-08 17:13"}]
+try:
+    _r = contable.csv_compras("cliente1", "xero", None, None)
+    _f = list(_csv.DictReader(io.StringIO(_r["csv"])))
+    _rm = list(_csv.DictReader(io.StringIO(
+        contable.csv_compras("cliente1", "myob", None, None)["csv"])))
+finally:
+    _EXP.list_group = _lg
 if not _f:
     fallo("no hay ningún gasto con el que comprobar el criterio de impuesto",
           "sin datos, este bloque no afirma nada")
@@ -182,8 +198,7 @@ else:
     _neto, _imp = float(_f[0]["*UnitAmount"]), float(_f[0]["TaxAmount"])
     ck("neto + impuesto reconstruye el bruto del recibo",
        round(_neto * (1 + _pct / 100.0) - (_neto + _imp), 2), 0.0)
-    _rm = list(_csv.DictReader(io.StringIO(
-        contable.csv_compras("cliente1", "myob", None, None)["csv"])))
+    ck("…y el bruto es el de la compra (128.5)", round(_neto + _imp, 2), 128.5)
     ck("MYOB da las dos columnas y son coherentes",
        round(float(_rm[0]["Inc-Tax Amount"]) - float(_rm[0]["Amount"]), 2),
        round(_imp, 2))
@@ -195,7 +210,7 @@ ck("un perfil desconocido no revienta",
 # (`nombre, cod = …`) deja la constante perfecta y escribe **el código** en el fichero,
 # que Xero rechaza fila a fila. Lo destapó la batería de roturas, no leerlo. Así que se
 # comprueba lo que el CSV PRODUCE, y en las dos ramas (con GST y sin GST).
-ck("[compras reales] el impuesto exportado es el NOMBRE, no el código",
+ck("[compras construidas] el impuesto exportado es el NOMBRE, no el código",
    _f[0]["*TaxType"] if _f else "", contable.IMPUESTOS_XERO["compra_con"][1])
 
 _lf = invoices.list_facturas

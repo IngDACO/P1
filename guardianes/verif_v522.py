@@ -291,7 +291,13 @@ else:
             for c in V._clausulas(l):
                 if QUITAR.search(c["texto"]):
                     n_q += 1
+                    # ⚠️ v586 · Sin la LOGÍSTICA: recibir una entrega no es montar, y `_retira` la
+                    # deja pasar a propósito desde v522. Con «delivery» como término salieron 2
+                    # («Took delivery of items … and remove cables», que es correcto), y la
+                    # medida las contaba como «quitar que acredita montar». Lo que vigila esto
+                    # —que «remove» no acredite lo contrario— sigue igual.
                     contra += any(PISTA.get(x["actividad"]) == "install" and not x["actividad"].startswith(OKR)
+                                  and x["actividad"] not in V.LOGISTICAS
                                   for x in V.buscar(c["texto"], PLAN)["candidatos"])
     chk("hay oraciones de quitar que mirar (%d)" % n_q, n_q > 100)
     chk("NINGUNA acredita montar en la MISMA oración (%d)" % contra, contra == 0)

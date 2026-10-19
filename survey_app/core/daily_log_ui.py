@@ -216,6 +216,43 @@ def _pintar(p, k, titulo=True) -> dict:
             "hechas": list(dict.fromkeys(hechas))}
 
 
+def _sin_plan(pid) -> str:
+    """v586 · Por qué los partes de esta obra NO van a proponer avance: `"sin"`, la versión
+    del plan si es de un catálogo anterior, o `""` si sí pueden.
+
+    ⚠️ Hasta v585 la tarjeta se callaba (`return`) y el parte se guardaba sin más: el
+    usuario escribió dos partes el 15/10 en obras sin plan y esperó a ver moverse la curva.
+    Una localización interna no tiene avance: ahí no se dice nada.
+    """
+    from core import projects as P
+    from core import stage_progress as SP
+    prj = P.get_project(pid) or {}
+    if P.es_interno(prj):
+        return ""
+    return SP.version_desfasada(prj) or ("" if SP.plan_de_obra(prj) else "sin")
+
+
+def _nada_que_confirmar(p) -> None:
+    """v586 · Un parte sin nada que CONFIRMAR lo dice: antes no salía nada debajo y no se
+    sabía si la app lo había leído. `p` = `parte_propuestas.propuestas`."""
+    if p["actividades"] or p["etapas"] or p["preguntas"]:
+        st.caption(t(":material/task_alt: Everything this log mentions is already credited."))
+        return
+    if p["fuera"]:
+        st.caption(t(":material/block: Mentioned, but not in this job's plan: {x}",
+                     x=", ".join(sorted({f["actividad"] for f in p["fuera"]}))))
+    if p["pendientes"]:
+        st.caption(t(":material/pending: What your log lists as still to do is not credited ({n}).",
+                     n=len(p["pendientes"])))
+    for x in p["retiradas"]:
+        st.caption(":material/help: %s" % t(x["motivo"]))
+    for x in p["no_avance"]:
+        st.caption(":material/info: %s" % t(x["motivo"]))
+    if not (p["fuera"] or p["pendientes"] or p["retiradas"] or p["no_avance"]):
+        st.caption(t(":material/search_off: The app did not recognise any activity of this job "
+                     "in this log. If something advanced, mark it in «Progress»."))
+
+
 def _propuestas(r, pid, grupo, usuario, key_prefix) -> None:
     """La tarjeta de UN parte propio y sin revisar."""
     from core import parte_propuestas as PP
@@ -228,6 +265,7 @@ def _propuestas(r, pid, grupo, usuario, key_prefix) -> None:
     prj = P.get_project(pid) or {}
     # ⚠️ Sin plan sellado (obra anterior a v512) o con el catálogo desfasado no hay contra
     # qué acreditar: no se propone nada que después `acreditar` rechazaría.
+    # v586 · Lo DICE una vez, arriba del todo (`_sin_plan`), no debajo de cada parte.
     if not SP.plan_de_obra(prj) or SP.version_desfasada(prj):
         return
 
@@ -242,7 +280,9 @@ def _propuestas(r, pid, grupo, usuario, key_prefix) -> None:
     # Vista previa: ¿hay algo que confirmar? Si no, no se pinta tarjeta. ⚠️ Si la nota se
     # va a repartir, sin lo acreditado: lo hecho depende de la obra de DESTINO, y con lo
     # de esta, un ascensor ya terminado aquí escondería el trabajo de otro.
-    if not PP.propuestas(texto, plan0, {} if partir else SP.acreditado(pid))["hay_algo"]:
+    _prev = PP.propuestas(texto, plan0, {} if partir else SP.acreditado(pid))
+    if not _prev["hay_algo"]:
+        _nada_que_confirmar(_prev)      # v586 · antes, nada debajo
         return
 
     with st.container(border=True):
@@ -412,10 +452,22 @@ def _estado_revision(r, pid) -> None:
                  "from this log", q=_nombre(_q) if _q else "—", n=n))
 
 
-def render_campo(pid, grupo, usuario, key_prefix="fld") -> None:
-    """Lo que ve y usa quien está en la obra."""
+def render_campo(pid, grupo, usuario, key_prefix="fld", ir_avance=None) -> None:
+    """Lo que ve y usa quien está en la obra. `ir_avance` (v586): lo que hace el botón que
+    lleva a «Progress» cuando la obra no tiene plan (sin él, no hay botón)."""
     theme.section(t("Daily log"),
                   t("Write what you did today, in your own words."))
+    _sp = _sin_plan(pid)
+    if _sp:
+        st.caption(t(":material/info: This job has no stage plan, so the app cannot suggest "
+                     "progress from your logs. They are kept; mark what advanced in «Progress».")
+                   if _sp == "sin" else
+                   t(":material/info: This job's stage plan is from an older catalogue ({v}), so "
+                     "the app does not suggest progress from your logs. Mark it in «Progress».",
+                     v=_sp))
+        if ir_avance is not None:
+            st.button(t(":material/trending_up: Go to Progress"), key=f"{key_prefix}_dl_ir_av_{pid}",
+                      type="tertiary", on_click=ir_avance)
 
     _k = f"{key_prefix}_dl_txt_{pid}"
     _kf = f"{key_prefix}_dl_dia_{pid}"
@@ -490,6 +542,13 @@ def render_admin(pid, grupo, key_prefix="adm") -> None:
     _p = DL.partes(pid)
     theme.section(t("Daily logs"),
                   t("What the crew reported, in their own words."))
+    _sp = _sin_plan(pid)
+    if _sp:
+        st.caption(t(":material/info: This job has no stage plan, so the crew's daily logs "
+                     "cannot suggest progress: it is marked by hand in «Progress».")
+                   if _sp == "sin" else
+                   t(":material/info: This job's stage plan is from an older catalogue ({v}), so "
+                     "the crew's daily logs do not suggest progress.", v=_sp))
     if not _p:
         st.caption(t("The crew has not written any daily log for this job yet."))
         return

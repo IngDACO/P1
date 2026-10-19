@@ -273,6 +273,25 @@ SINONIMOS = {
     "remove inex": ["Remove Inex kit components"],        # «Remove inex gear (not all yet)»
     "remove template": ["Remove plumb template/frame"],   # «Remove plumbline template»
     "remove rubbish": ["Final clear-out / site prepared for new install"],   # desmontaje
+    # ── v586 · las entregas y la caja de herramientas (partes del usuario del 15/10) ──
+    # ⚠️ «got», «up» y «out» son RELLENO: «got delivery» se busca como «delivery» y «set up
+    # toolbox» como «set toolbox». Respaldo en el corpus entero: «Delivery» (×6 sola en su
+    # línea), «Get/Got delivery» (×3), «Took/take delivery» (×3), «Delivery of the lift»,
+    # «tool box delivery», «Set up toolbox», «picked up my toolbox»; el documento: Set Up es
+    # «receive toolbox, receive Inex kit, take delivery of the lift itself». Medido contra
+    # el corpus (v586): cobertura 39,2 % → 40,6 %, la muestra reservada igual (23/40, 1
+    # error), 0 desde «Pendings» y 0 «quitar» que acredite montar.
+    # ⚠️ A las DOS, como «picked up delivery»: el plan de la obra elige cuál vale.
+    "delivery": ["Receive lift delivery", "Other deliveries"],
+    "delivery of tools": ["Toolbox/gear delivery for installer", "Receive toolbox"],
+    "tool box delivery": ["Toolbox/gear delivery for installer", "Receive toolbox"],
+    "toolbox delivery": ["Toolbox/gear delivery for installer", "Receive toolbox"],
+    # ⚠️ «toolbox» a secas NO: el documento descarta «bandsaw locked in a colleague's
+    # toolbox on another job» (un bloqueo, no avance) y `ejercitar_v517_corpus` lo cazó.
+    # Solo con el verbo que dice que llegó o se montó; «got/get toolbox», por el alias de
+    # `_ALIAS_FRASES` («got» es relleno).
+    "set up toolbox": ["Receive toolbox", "Toolbox/gear delivery for installer"],
+    "picked up toolbox": ["Receive toolbox", "Toolbox/gear delivery for installer"],
 }
 
 # ⚠️ Términos que el documento reconoce como REALES pero que NO tienen actividad en el
@@ -467,6 +486,16 @@ ETAPAS_TERMINOS = {
     "plumbing": [("install", 3)],
     "commissioning": [("install", 14)],
     "testing": [("install", 14)],               # «test and items» (×4), «all the testing»
+    # v586 · preparar: «Set tools up» (parte del usuario), «Set tools» en el corpus. Las dos
+    # Set Up; el plan de la obra deja la suya. «Set up for rip out» (×4 con sus variantes):
+    # la R0 del desmontaje («toolbox/gear delivery… hoardings… general preparation»).
+    # ⚠️ «started rip out» NO entra: al normalizar casa con «Started ripping out doors» y
+    # proponía el corte de luz inicial (medido). No dice QUÉ se hizo.
+    "set up tools": [("install", 1), ("ripout", 0)],
+    "set up for rip out": [("ripout", 0)],
+    "set up for ripout": [("ripout", 0)],
+    "setup for rip out": [("ripout", 0)],
+    "setup for ripout": [("ripout", 0)],
 }
 
 # ═════════════════════════════════════════════════════════════════
@@ -488,7 +517,9 @@ _PENDIENTE = re.compile(
     r"|to\s+be\s+(?:done|installed|fitted|fixed|finished|completed)"
     r"|can'?t|cannot|couldn'?t|could\s+not|didn'?t|did\s+not|unable\s+to|wasn'?t\s+able"
     r"|waiting\s+(?:for|on)|missing|tomorrow|next\s+(?:week|day)|will\s+(?:be|need|have|do)"
-    r"|arriving)\b", re.I)
+    r"|arriving"
+    # v586 · «Delivery got pushed back», «First delivery got delayed…» (corpus): no llegó.
+    r"|delayed|pushed\s+back|postponed)\b", re.I)
 # ⚠️ Lo que se LLEVA no es lo que se instala: «Loaded 3 sets of hoardings onto the hilux»
 # acreditaba *Hoardings*. Excepción: las actividades que SON logística (recibir, entregar,
 # recoger) — sin ella «Picked up delivery» dejaría de proponer la entrega.
@@ -538,6 +569,9 @@ CONTRAPARTIDA = {
     "Mount plumbline frame + template": ["Remove plumb template/frame"],
     "Throw plumblines, attach weights, let settle": ["Remove plumb template/frame"],
     "Receive Inex kit": ["Remove Inex kit components"],
+    # v586 · «Removed 3x Kits and 1 toolbox» es recoger al cerrar, no recibirla.
+    "Receive toolbox": ["Pack up"],
+    "Toolbox/gear delivery for installer": ["Pack up"],
     # «Cages … get stacked/packed at Closeout once no longer needed (Stage 13 Pack Up)».
     "Hoardings & protection": ["Pack up"],
     "Compound/Hoardings": ["Pack up"],
@@ -754,6 +788,10 @@ _ALIAS_FRASES = (
     (re.compile(r"\bbed\s*-?\s*plates?\b", re.I), " bedplate "),
     (re.compile(r"\bguide\s*-?\s*rails?\b", re.I), " rail "),
     (re.compile(r"\blight\s*-?\s*rays?\b|\blight\s+curtains?\b", re.I), " lightrays "),
+    # v586 · «got toolbox» (parte del usuario): «got» es RELLENO y sin esto quedaba
+    # «toolbox» a secas, que también es «locked in a colleague's toolbox» (un bloqueo).
+    (re.compile(r"\b(?:got|get|gets|getting)\s+(?:(?:the|a|my|our|his|her|their)\s+)?"
+                r"tool\s*-?\s*box(?:es|s)?\b(?!\s*talks?\b)", re.I), " receive toolbox "),
 )
 _ALIAS = {
     "cwt": "cw", "car": "cabin", "cars": "cabin",
@@ -941,10 +979,15 @@ def buscar(texto, plan=None) -> dict:
         """Qué se propone cuando la oración QUITA algo. `(propuestas, sin_casa)`."""
         prop, sin_casa = [], []
         for a in acts:
-            if a.startswith(_ES_RETIRADA) or a in _info or a in LOGISTICAS:
+            if a.startswith(_ES_RETIRADA) or a in _info:
                 prop.append(a)
+            # ⚠️ v586 · La contrapartida ANTES que la logística: «Receive Inex kit» y la caja
+            # de herramientas son logística, y con el orden de antes «Removed … toolbox»
+            # proponía RECIBIRLA — la contrapartida del kit Inex no se usaba nunca.
             elif a in CONTRAPARTIDA:
                 prop.extend(CONTRAPARTIDA[a])
+            elif a in LOGISTICAS:
+                prop.append(a)
             elif con_desmontaje and a in _pista:
                 _p, _n = _pista[a]
                 prop.extend(_RIP_ELEC if (_p == "install" and 9 <= _n <= 12) else _RIP_MEC)

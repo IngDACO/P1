@@ -175,7 +175,17 @@ def b(at, k):
 # el MISMO proceso y lo sustituido se queda sustituido (lección de v534, repetida en
 # v558 y aquí en la 1ª vuelta: `E.labor_breakdown` falso tumbó Costs con KeyError).
 # ══════════════════════════════════════════════════════════════════════════════
-print("\n2. Ensayo SOLO LECTURA con la ficha real de PRJ-0015")
+print("\n2. Ensayo SOLO LECTURA con la ficha real de PRJ-0015 (la FOTO de antes de borrar)")
+# ⚠️ v586 · El 19/10/2026 el usuario borró todas las obras de prueba de cliente1, PRJ-0015
+# incluida, y este ensayo pasó a rojo por falta de datos, no por el código. Se ensaya sobre
+# la FOTO del libro tomada justo antes de borrar (`libro_foto`: solo lectura de verdad; el
+# libro maestro —Login, Groups— sigue siendo el real). Sin la foto, FALLA (trampa nº1).
+FOTO = r"D:\CopeX\respaldos\cliente1_antes_de_borrar_obras_2026-10-19_160320.json"
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import libro_foto                                                           # noqa: E402
+if not os.path.isfile(FOTO):
+    chk("está la foto del libro (%s)" % FOTO, False)
+_LIBRO = libro_foto.instalar(FOTO) if os.path.isfile(FOTO) else None
 GUION_REAL = r'''
 import streamlit as st
 from core import projects_ui as PU
@@ -262,6 +272,10 @@ _mdf = " | ".join(m.value for m in at.markdown)
 chk("Files: el expediente con NOMBRES («no certificate:» sin «Admin2»)",
     "no certificate:" in _mdf and "Admin2" not in _mdf.split("no certificate:")[1][:120],
     _mdf.split("no certificate:")[1][:120] if "no certificate:" in _mdf else "")
+
+if _LIBRO is not None:
+    chk("⚠️ el ensayo no intentó ESCRIBIR nada en el libro", _LIBRO.intentos == [], _LIBRO.intentos)
+    libro_foto.quitar()
 
 # ══════════════════════════════════════════════════════════════════════════════
 print("\n3. Files: borrar pregunta, y borra una vez confirmado")
