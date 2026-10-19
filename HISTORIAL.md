@@ -10,6 +10,49 @@ ventana de contexto. Contenido: 258 secciones detalladas + el índice de 440 ver
 
 ---
 
+## LOS PARTES QUE NO MOVÍAN LA CURVA (v586)
+
+Lo trajo el usuario: «cargué un log de prueba para ver cómo se actualizaba la curva y no
+pasó». En la hoja (solo lectura): LOG-0002 y LOG-0003, del 15/10, en PRJ-0001 y PRJ-0002,
+sin revisar y sin ningún crédito. **Causa:** las dos obras eran anteriores a v512 y no tenían
+`StagePlanJSON`; sin plan la tarjeta de propuestas hacía `return` CALLADA. Y aun con plan, la
+app reconocía 1 línea de 4 en un parte y 1 de 7 en el otro.
+
+**El usuario decidió borrar todas las obras** («Sí, borrar las tres» + «Borrarlo también»,
+88 walker st incluida, que dijo que era de prueba): 95 filas en una llamada (Projects,
+Activities, StageProgress, DailyLogs, fichajes, Documents, PreStarts, Expenses, ToolRuns,
+PurchaseOrders) + 51 asignaciones del Roster, con copia antes en `D:\CopeX\respaldos`. ⚠️ El
+primer inventario buscaba la celda EXACTA y no vio el roster (guarda `{"a": "PRJ-0002"}` dentro
+de un JSON): lo delató el Home («installer leader CI · ?»). Se queda AuditTrail y Drive.
+Recorridas 18 pantallas sin obras, sin un error.
+
+Decisión del usuario: «Dale» a v586.
+
+1. ⚠️ **Una obra sin plan lo DICE** arriba de los partes: en el campo, con un botón «Go to
+   Progress»; en el Estado del admin; y el plan de un catálogo anterior, con su versión. Una
+   localización interna no dice nada (no tiene avance).
+2. ⚠️ **Un parte sin nada que confirmar lo dice**: ya acreditado, fuera del plan, pendiente,
+   no es avance, o «no reconocí ninguna actividad… márcalo en «Progress»».
+3. **Vocabulario**, medido contra los 1070 partes reales: «delivery» (got/get/took delivery),
+   «delivery of tools» / «tool box delivery», «set up toolbox», «picked up toolbox», el alias
+   «got/get toolbox» → «receive toolbox» («got» es relleno); «set up tools» y «set up for rip
+   out» como etapa; «delayed / pushed back / postponed» = pendiente. Cobertura 39,2 % →
+   40,2 %; la muestra reservada igual (23/40, 1 error); 0 desde «Pendings»; 0 «quitar» que
+   acredite montar. ⚠️ «toolbox» a secas NO (el documento: «locked in a colleague's toolbox»
+   es un bloqueo — lo cazó `ejercitar_v517_corpus`); «started rip out» NO (casaría con
+   «started ripping out» y proponía el corte de luz); «Set lift up», sin respaldo: se pregunta.
+4. ⚠️ **La contrapartida ANTES que la logística** al quitar: «Removed … toolbox» proponía
+   RECIBIRLA, y la contrapartida del kit Inex no se usaba nunca. Quitar la caja = «Pack up».
+5. **Finance → Expenses sin obras**: dice que los costes van a una obra y ofrece «New project».
+
+Guardianes al día con su razón: verif_v522 (la logística no cuenta como «montar»),
+romper_v523 re-anclada, verif_v483 (la compra CONSTRUIDA: se borró la única real) y
+⚠️ verif_v559, que ensayaba la ficha real de PRJ-0015: ahora sobre la FOTO del libro con
+`guardianes/libro_foto.py` — un libro de SOLO LECTURA servido desde la copia (todo libro de
+cliente se abre por `timeclock._abrir`), que apunta y rechaza cualquier escritura.
+
+PRODUCCIÓN (19/10/2026, cuenta admin, v586 en la etiqueta): Finance → Expenses sin obras: «There are no projects in this company yet. Costs are recorded against a project: create one first.» y «New project» lleva a Projects; una obra de PRUEBA «ZZ Prueba v586» (PRJ-0026, Delivery, sin plan, sin asignados) enseña en Status → Daily logs «This job has no stage plan, so the crew's daily logs cannot suggest progress: it is marked by hand in «Progress».» — borrada después, 0 filas en ninguna pestaña. La pantalla del CAMPO (aviso + botón) no se ve con esta cuenta: la cubre verif_v586 con AppTest · 51 comprobaciones · romper_v586 15/15 + control (la 1ª tanda 13/14: escapó «la logística tapa la contrapartida» con razón — «Removed the inex kit» llega por su sinónimo; la sonda nueva pasa por la contrapartida) · verif_v586 51/51 · re-corridas: romper_v517 28/28, v522 17/17, v523 30/30 (re-anclada), v483 15/15, v559 35/35 sobre la foto · ejercitar_v517_corpus 0 errores · check_anclas_roturas: 1647 vivas, 0 muertas · suite 213 verde con Python 3.12.10 (1702 s; la vuelta anterior dio 2 rojos por los DATOS borrados — verif_v483 y v559 —, curados con la compra construida y la foto)
+
 ## LO VISTO VERIFICANDO v584: LA VISTA BAJA A LO QUE SE ABRE (v585)
 
 Decisión del usuario: «ok dale» a lo propuesto al verificar v584 en producción.
@@ -14380,7 +14423,7 @@ comprueba lo que dice**.
 
 ---
 
-## Versiones desplegadas (v585 = actual)
+## Versiones desplegadas (v586 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -14388,6 +14431,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v586 | **Los partes que no movían la curva.** Obras sin plan (anteriores a v512) y la tarjeta callada: el usuario borró todas las obras (95 filas + 51 del roster, copia en D:). ⚠️ Una obra sin plan lo DICE (campo, con botón a Progress, y admin); un parte sin nada que confirmar lo dice; vocabulario de entregas y caja de herramientas medido contra el corpus (39,2 → 40,2 %); al quitar, la contrapartida antes que la logística; Expenses vacío con «New project». verif_v559 sobre la FOTO del libro (`libro_foto`). PRODUCCIÓN (19/10/2026, cuenta admin, v586 en la etiqueta): Finance → Expenses sin obras: «There are no projects in this company yet. Costs are recorded against a project: create one first.» y «New project» lleva a Projects; una obra de PRUEBA «ZZ Prueba v586» (PRJ-0026, Delivery, sin plan, sin asignados) enseña en Status → Daily logs «This job has no stage plan, so the crew's daily logs cannot suggest progress: it is marked by hand in «Progress».» — borrada después, 0 filas en ninguna pestaña. La pantalla del CAMPO (aviso + botón) no se ve con esta cuenta: la cubre verif_v586 con AppTest · romper_v586 15/15 + control (la 1ª tanda 13/14: escapó «la logística tapa la contrapartida» con razón — «Removed the inex kit» llega por su sinónimo; la sonda nueva pasa por la contrapartida) · verif_v586 51/51 · re-corridas: romper_v517 28/28, v522 17/17, v523 30/30 (re-anclada), v483 15/15, v559 35/35 sobre la foto · ejercitar_v517_corpus 0 errores · check_anclas_roturas: 1647 vivas, 0 muertas · suite 213 verde con Python 3.12.10 (1702 s; la vuelta anterior dio 2 rojos por los DATOS borrados — verif_v483 y v559 —, curados con la compra construida y la foto) |
 | v585 | **Lo visto verificando v584: la vista baja a lo que se abre.** ⚠️ «Tracking options» y «Lines» abrían lo suyo y la vista se quedaba en un bloque VACÍO delante → el bloque envuelve la lista y la tabla, como en Quotes. verif_v585 barre la app: ninguna marca de bajar en un bloque vacío o ajeno. PRODUCCIÓN (19/10/2026, cuenta admin, v585 en la etiqueta, 846×646): con el periodo en «All», «Tracking options · 1 · 1 job involved» → la vista baja de 0 a 876 px y «Jobs that must exist first (1)» queda ENTERA en pantalla (488–646 de 646; en v584, a 459 con 450 de vista), con «PRUEBA MOVIL - Bondi Junction Lift 1»; con la tabla del parte FUERA de la vista (734–849) «Lines» la baja de 1322 a 1524 y queda entera (531–638 de 646: cabecera, «Bobo» y «hjg,ujgjg»; en v584 solo asomaba la cabecera). Sin datos de prueba · romper_v585 5/5 + control (las dos de Accounting, la marca de Quotes sola en su bloque, la de Hours en un bloque ajeno y bajar en CADA pasada) · verif_v585 15/15 a la primera · re-corrida romper_v584 18/18 (sus anclas del parte, dentro del bloque ahora) · check_anclas_roturas: 1631 vivas, 0 muertas · suite 213 verde con Python 3.12.10 (1693 s, a la primera) |
 | v584 | **Finance → Accounting, probada acción por acción.** ⚠️ Dos avisos de ABN y uno a «Administration → Companies», que no existe → uno, con el sitio real. ⚠️ El error de Xero Payroll con sus dos causas. Cifras activas, plurales, periodo y formato recordados, «…_all.csv», «From» después de «To» avisa, «Payroll ID» solo si alguien lo tiene, avisos de Xero que dicen lo que cambia. ⚠️ TODO `date_input` en DD/MM/YYYY (10). Las baterías borran sus copias y `.gitignore` las tapa. PRODUCCIÓN (19/10/2026, cuenta admin, v584 en la etiqueta): UN aviso de ABN, «…The account owner sets it in Administration → Groups → «Tax identity and payment terms».»; las seis cifras son botones; con «All»: «1 row», «1 job involved» y «with this option»; «Tracking options» abre «Jobs that must exist first (1)» con su obra; «Expenses» lleva a Finance → Expenses y, de vuelta por el menú, el periodo sigue en «All»; «Approved» → «Invoices will now arrive in Xero approved.» y de vuelta «…as drafts.» (dejado en Draft); «Bring payments» → «No invoice has been sent to Xero yet…» sin botón; las fechas del parte «06 / 10 / 2026»; la tabla del parte SIN «Payroll ID»; Xero Payroll: «Xero did not let COPEX into Payroll. Either … or whoever connected Xero has no payroll access there…». ⚠️ Visto: «Tracking options» y «Lines» NO bajan la vista a lo que abren (la marca de bajar va en un bloque vacío ANTES, no envolviéndolo: la lista quedó a 459 px con 450 de vista y la tabla a 417) — propuesto para v585. Sin datos de prueba · romper_v584 18/18 + control · verif_v584 32/32 (la 1ª vuelta, 4 rojos del ANDAMIO: un expander con icono AppTest lo llama «Status», la última tabla era el editor de nombres, mi comentario citaba la ruta vieja y la prueba de la pantalla dejaba `render_conexion` sustituida para la siguiente — AppTest comparte proceso) · re-corridas: romper_v484 17/17, v492 8/8, v486 «0 mal» · check_anclas_roturas: 0 muertas · suite 212 verde con Python 3.12.10 (1653 s, a la primera) |
 | v583 | **Lo visto verificando v582.** ⚠️ «Used in N quotes» abría Quotes con el ALTA a medias delante de la cotización pedida → el botón cierra el alta. ⚠️ El borrador del alta perdía el cliente y la nota al salir de Quotes (Streamlit borra los widgets no pintados) → `_cot_borrador`. PRODUCCIÓN (19/10/2026, cuenta admin, v583 en la etiqueta), con un servicio, una ficha y una cotización de PRUEBA (el servicio nació CAT-00002: la auditoría nombra CAT-00001 y 00003 de las ediciones de v582, la regla de v581 con datos reales): «New quote» → «➕ New client», «ZZ Borrador v583», «0400 583 583» y una nota → «Price it from the drawing» → «Set it in Catalogue» → el servicio → «Used in 1 quote» → abre «Quote No. 0001» (en v582, el alta delante) → «Back to quotes» → «New quote»: vuelven el cliente nuevo, el nombre, el teléfono y la nota, sin aviso de Streamlit. Datos: borrados (COT-0004, CLI-0001, CAT-00002) · romper_v583 6/6 + control (una 7ª rotura, «Cancel deja la nota», se escapaba y tenía razón: retirada con su razón y la línea quitada) · verif_v583 11/11 con su sonda (salir de Quotes SÍ borra los widgets) · re-corridas romper_v582 30/30 y v580 36/36 · check_anclas_roturas: 0 muertas · suite 211 verde con Python 3.12.10 (1625 s; repetida tras quitar la línea redundante) |
