@@ -946,12 +946,15 @@ def _archivos_section(pid: str):
             "Archivo": e["nombre"], "Tipo": e["label"],
             "Uploaded by": e["por_n"], "Fecha": _fecha_corta(e["fecha"]),
         } for e in resto]), hide_index=True, width="stretch",
-            on_select="rerun", selection_mode="single-row",
+            # ⚠️ v592 · `single-cell`: con `single-row` tocar el nombre solo ENMARCABA la celda
+            # y no salía nada (visto en producción); había que dar con la casilla de la izquierda.
+            on_select="rerun", selection_mode="single-cell",
             key=f"arch_tbl_{pid}_{st.session_state.get(f'_arch_gen_{pid}', 0)}",
             column_config=tabla.cfg())
         st.caption(t(":material/touch_app: Tap a row to download or reopen that file."))
         try:
-            _rows = list(_ev.selection.rows)
+            _s = _ev.selection
+            _rows = [c[0] for c in (getattr(_s, "cells", None) or [])] or list(getattr(_s, "rows", None) or [])
         except Exception:
             _rows = []
         # Clamp: si cambiaste el filtro con una fila elegida, el índice podría

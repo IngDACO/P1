@@ -175,7 +175,8 @@ def render_rail_cut_tab():
                            resumen=("Caso 1 · A " + f"{res['A']:.0f} · "
                                     + ", ".join(f"E{i+1}: {x['CutRC']:.0f}/{x['CutRCW']:.0f}"
                                                 for i, x in enumerate(res["elevadores"]))),
-                           datos=res, nombre_archivo="corte_rieles_caso1.pdf", key="rc1")
+                           datos=res, nombre_archivo="corte_rieles_caso1.pdf", key="rc1",
+                           obra_id=str((_prj or {}).get("ID", "")))   # v592
 
     # ════════════════════════════════════════════════════════
     # CASO 2
@@ -248,4 +249,5 @@ def render_rail_cut_tab():
                            pdf_bytes=_pdf,
                            resumen=f"Case 2 ({_e['subcaso']}) · {len(res)} lift(s)",
                            datos={"subcaso": _e["subcaso"], "elevadores": res},
-                           nombre_archivo="corte_rieles_caso2.pdf", key="rc2")
+                           nombre_archivo="corte_rieles_caso2.pdf", key="rc2",
+                           obra_id=str((_prj or {}).get("ID", "")))   # v592

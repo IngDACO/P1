@@ -146,4 +146,5 @@ def render_buffer_cut_tab():
         notas=["Cut = HKP − HKPR. A negative value means the actual buffer is longer than the drawing says: there is nothing to cut, check on site."])
     render_guardar(herramienta="buffers", titulo_pdf=d("buffer cutting"),
                    pdf_bytes=pdf_bytes, resumen=f"HKP {res['HKP']:.0f} · {_cortes}",
-                   datos=res, nombre_archivo="corte_buffers.pdf", key="bc")
+                   datos=res, nombre_archivo="corte_buffers.pdf", key="bc",
+                   obra_id=str((_prj or {}).get("ID", "")))   # v592

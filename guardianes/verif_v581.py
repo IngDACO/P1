@@ -403,12 +403,20 @@ for _f in sorted(os.listdir(os.path.join(RAIZ, "core"))):
 chk("⚠️ ninguna fila de tarjetas con su propio flex (eran once)", not _flex, _flex)
 # La base de cada fila propia = la de SUS tarjetas (no su min-width: con 104 px «16/11/2026»
 # se partía en dos líneas — medido en producción).
+# ⚠️ v592 · Al día con su razón (v385): la plomada ya no tiene fila HTML — sus cinco cifras
+# son BOTONES activos (`cpxkpi_plb_*`) en un contenedor con `T.por_fila`, la rejilla del tema.
+# El principio (ninguna fila con su propio flex, la base la de sus tarjetas) se mantiene: para
+# la plomada se afirma la rejilla del tema.
 for _f, _base in (("belting_ui.py", 96), ("buffer_cut_ui.py", 96), ("rail_cut_ui.py", 96),
-                  ("plumb_ui.py", 92), ("prestart_ui.py", 110), ("timeclock_ui.py", 132)):
+                  ("prestart_ui.py", 110), ("timeclock_ui.py", 132)):
     _s = _src("core/" + _f)
     chk("%s: la fila es `cpx-kpis` con la base de sus tarjetas (%d px)" % (_f, _base),
         'class="cpx-kpis" style="--cpx-min:%dpx;' % _base in _s
         and "min-width:%dpx" % _base in _s)
+_spl = _src("core/plumb_ui.py")
+chk("plumb_ui.py: sus cifras son botones en la rejilla del tema (`T.por_fila`), sin flex propio",
+    'T.por_fila("cpx_plb_kpis", 5)' in _spl and 'key="cpx_plb_kpis"' in _spl
+    and "display:flex" not in _spl)
 _pu = _src("core/projects_ui.py")
 chk("projects_ui: Status, el plan acordado y el resumen con la base del tema (150)",
     _pu.count('<div class="cpx-kpis" style="margin:') == 3)

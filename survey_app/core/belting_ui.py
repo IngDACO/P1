@@ -152,4 +152,5 @@ def render_belting_tab():
     render_guardar(herramienta="belting", titulo_pdf="belting",
                    pdf_bytes=pdf_bytes, resumen=_resumen,
                    datos={"hgp": _hgp, "hq": _hq, "results": results},
-                   nombre_archivo="belting.pdf", key="belt")
+                   nombre_archivo="belting.pdf", key="belt",
+                   obra_id=str((_prj or {}).get("ID", "")))   # v592
