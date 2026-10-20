@@ -409,8 +409,8 @@ chk("⚠️ ninguna fila de tarjetas con su propio flex (eran once)", not _flex,
 # la plomada se afirma la rejilla del tema.
 # ⚠️ v593 · Ídem para Rails: sus cifras también son botones (`cpxkpi_rc_*` / `cpxkpi_rc2_*`).
 # ⚠️ v594 · Y para Buffers (`cpxkpi_bc_*`).
-for _f, _base in (("belting_ui.py", 96),
-                  ("prestart_ui.py", 110), ("timeclock_ui.py", 132)):
+# ⚠️ v595 · Y para Belting (`cpxkpi_belt_*`): su fila HTML de base 96 px ya no existe.
+for _f, _base in (("prestart_ui.py", 110), ("timeclock_ui.py", 132)):
     _s = _src("core/" + _f)
     chk("%s: la fila es `cpx-kpis` con la base de sus tarjetas (%d px)" % (_f, _base),
         'class="cpx-kpis" style="--cpx-min:%dpx;' % _base in _s
@@ -427,6 +427,10 @@ _src_bc = _src("core/buffer_cut_ui.py")
 chk("buffer_cut_ui.py: sus cifras son botones en la rejilla del tema (`T.por_fila`), sin flex propio",
     'T.por_fila("cpx_bc_kpis", 3)' in _src_bc and 'key="cpx_bc_kpis"' in _src_bc
     and "display:flex" not in _src_bc and "min-width:96px" not in _src_bc)
+_src_bt = _src("core/belting_ui.py")
+chk("belting_ui.py: sus cifras son botones en la rejilla del tema (`T.por_fila`), sin flex propio",
+    'T.por_fila("cpx_belt_kpis", 3)' in _src_bt and 'key="cpx_belt_kpis"' in _src_bt
+    and "display:flex" not in _src_bt and "min-width:96px" not in _src_bt)
 _pu = _src("core/projects_ui.py")
 chk("projects_ui: Status, el plan acordado y el resumen con la base del tema (150)",
     _pu.count('<div class="cpx-kpis" style="margin:') == 3)

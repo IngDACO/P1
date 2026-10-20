@@ -97,7 +97,7 @@ def render_rail_cut_tab():
     # sin plano, o para calcular sin proyecto asignado.
     with st.expander(t("Does the project have no drawing? Upload it here"), icon=":material/description:", key="exp_rail_plano"):
         st.caption(t("LFKK and LFGK will be read from this PDF. Normally they already come from the project drawing."))
-        pdf = plan_store.selector("Drawing PDF (for LFKK / LFGK)", "rc_pdf")
+        pdf = plan_store.selector(t("Drawing PDF (for LFKK / LFGK)"), "rc_pdf")   # v595 · por `t()`
         if pdf is not None and pdf.name != st.session_state.get("rc_pdf_name"):
             with st.spinner(t("Reading LFKK / LFGK from the PDF...")):
                 lf = extract_lf(pdf)

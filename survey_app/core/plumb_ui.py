@@ -109,7 +109,8 @@ def render_plumb_tab():
 
     with st.expander(t("Does the project have no drawing? Upload it here"), icon=":material/description:", key="exp_plb_plano"):
         st.caption(t("BKS, TKSW, SF1, SF2, BS, SG and TG will be read from this PDF."))
-        pdf = plan_store.selector(":material/description: Drawing PDF (fills in from the drawing)", "plb_pdf")
+        pdf = plan_store.selector(t(":material/description: Drawing PDF (fills in from the drawing)"),
+                                  "plb_pdf")   # v595 · por `t()`
         if pdf is not None and pdf.name != st.session_state.get("plb_pdf_name"):
             from extractors.schindler import extract_from_pdf
             with st.spinner(t("Reading the drawing...")):

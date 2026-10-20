@@ -140,7 +140,13 @@ _rest = []
 for m in MODS:
     for i, l in enumerate((RAIZ / m).read_text(encoding="utf-8").splitlines(), 1):
         for c in _pat.findall(l):
-            c2 = re.sub(r"\{[^}]*\}", "", c).strip()
+            # ⚠️ v595 · Las llaves se quitan de DENTRO afuera: `{_d("Lift {n}", n=r["elevador"])}`
+            # dejaba `", n=r["elevador"])}` (cortaba en la primera «}») y la CLAVE del dato
+            # («elevador») salía como etiqueta en español — un rojo de la sonda, no del código.
+            c2 = c
+            while re.search(r"\{[^{}]*\}", c2):
+                c2 = re.sub(r"\{[^{}]*\}", "", c2)
+            c2 = c2.strip()
             if c2 and _ES.search(c2):
                 _rest.append(f"{Path(m).name}:{i} {c2[:40]!r}")
 chk("0 etiquetas SVG en español", not _rest, str(_rest[:6]))

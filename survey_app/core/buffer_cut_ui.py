@@ -65,7 +65,7 @@ def render_buffer_cut_tab():
     # sin plano, o para calcular sin proyecto asignado.
     with st.expander(t("Does the project have no drawing? Upload it here"), icon=":material/description:", key="exp_buf_plano"):
         st.caption(t("HKP will be read from this PDF. Normally it already comes from the project drawing."))
-        pdf = plan_store.selector("Drawing PDF (for HKP)", "bc_pdf")
+        pdf = plan_store.selector(t("Drawing PDF (for HKP)"), "bc_pdf")   # v595 · por `t()`
         if pdf is not None and pdf.name != st.session_state.get("bc_pdf_name"):
             with st.spinner(t("Reading HKP from the PDF...")):
                 ex = extract_hkp(pdf)

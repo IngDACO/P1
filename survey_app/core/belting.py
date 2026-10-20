@@ -13,6 +13,7 @@ Cálculo (todo en mm; HGP/HGPR/HQ/DSTS en mm):
 """
 
 from core.i18n import d as _d
+from core import texto_svg
 
 
 def compute_dsts(hgp, hq, hgpr) -> float:
@@ -34,10 +35,6 @@ def _mm(v) -> str:
     except Exception:
         return str(v)
     return f"{v:.0f}" if abs(v - round(v)) < 0.05 else f"{v:.1f}"
-
-
-def _esc(s) -> str:
-    return str(s or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
 def belting_svg(results: list, proyecto: str = "") -> str:
@@ -83,8 +80,9 @@ def belting_svg(results: list, proyecto: str = "") -> str:
     if proyecto:
         # v534 · El nombre de la obra va en SU línea: a la derecha del título se pisaba
         # con él hasta con 3 ascensores (el título ocupa 350 de los 498).
+        # v595 · MEDIDO: un nombre largo se salía por la izquierda del dibujo (como v590-v594).
         p.append(f'<text x="{VW-18}" y="50" text-anchor="end" font-size="9" '
-                 f'fill="#1f2937" font-weight="bold">{_esc(proyecto)}</text>')
+                 f'fill="#1f2937" font-weight="bold">{texto_svg.cabe(proyecto, VW - 36, 9, True)}</text>')
 
     # ── FFL: línea de referencia común a todos los elevadores ──
     p.append(f'<line x1="{ML}" y1="{y_ffl}" x2="{VW-ML}" y2="{y_ffl}" '
@@ -131,7 +129,7 @@ def belting_svg(results: list, proyecto: str = "") -> str:
         else:
             _dir, _dc = _d("at FFL"), MUT
         p.append(f'<text x="{cx:.1f}" y="266" text-anchor="middle" font-size="9.5" '
-                 f'fill="{INK}" font-weight="bold">{_d("Elevator")} {r["elevador"]}</text>')
+                 f'fill="{INK}" font-weight="bold">{_d("Lift {n}", n=r["elevador"])}</text>')   # v595 · era «Elevator»
         p.append(f'<text x="{cx:.1f}" y="279" text-anchor="middle" font-size="9" '
                  f'fill="{_dc}" font-weight="bold">DSTS {_mm(dsts)} mm</text>')
         p.append(f'<text x="{cx:.1f}" y="290" text-anchor="middle" font-size="7.5" '

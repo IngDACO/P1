@@ -174,14 +174,26 @@ ck("con avance 0 el SPI no puede decir nada...", _p2["spi"], None)
 ck("...y la cadena sí da fecha y retraso",
    (_p2["fecha_cadena"] is not None, _p2["dias_cadena"]), (True, 6.0))
 
-_r3 = P.project_schedule("PRJ-0001")
+# ⚠️ v595 · La obra real se ELIGE, no se nombra: era «PRJ-0001», borrada el 19/10/2026 con las
+# obras viejas, y desde entonces esta sección no comprobaba nada (la suite lo avisaba). Ahora,
+# la primera obra EN CURSO del grupo con plan. Y sin obra, el `exit(2)` ya no tapa un rojo
+# de las secciones de arriba (salía 2 aunque hubiera fallos).
+_r3, _pid3 = None, ""
+for _o in sorted(P.list_projects(grupo="cliente1"), key=lambda o: str(o.get("ID", ""))):
+    if str(_o.get("Status", "")) != "In progress":
+        continue
+    _r3, _pid3 = P.project_schedule(str(_o.get("ID", ""))), str(_o.get("ID", ""))
+    if _r3 and _r3.get("proj"):
+        break
+    _r3 = None
 if _r3 and _r3.get("proj"):
     _pr = _r3["proj"]
+    print("  (obra real: %s)" % _pid3)
     ck("obra REAL: la cadena da fin previsto", _pr.get("fecha_cadena") is not None, True)
     ck("...y dice QUÉ actividades mandan", bool(_pr.get("criticas_cadena")), True)
 else:
     print("  --   sin obra real que medir (no es un fallo, pero tampoco una garantía)")
-    sys.exit(2)
+    sys.exit(1 if fallos else 2)
 
 print("\n" + "=" * 70)
 print(f"{n_ok + len(fallos)} comprobaciones — " + ("TODO OK" if not fallos else "HAY FALLOS"))

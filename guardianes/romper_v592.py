@@ -69,8 +69,10 @@ ROTURAS = [
     ("⚠️ reabrir vuelve a perder la obra", TS,
      [('                st.session_state["pl_prj_" + _PREFIJO.get(herramienta, "").rstrip("_")] = (\n',
        "                _nada = (\n")]),
+    # v595 · re-anclada: la llamada de Belting lleva ahora `vigente=` detrás (resultados viejos).
     ("una herramienta deja de pasar su obra al bloque de guardar", "core/belting_ui.py",
-     [('                   obra_id=str((_prj or {}).get("ID", "")))   # v592\n', "                   )\n")]),
+     [('                   key="belt", obra_id=str((_prj or {}).get("ID", "")),   # v592\n',
+       '                   key="belt",\n')]),
     ("Files vuelve a `single-row` (un toque solo enmarca)", "core/projects_ui.py",
      [('            on_select="rerun", selection_mode="single-cell",\n            key=f"arch_tbl_{pid}_',
        '            on_select="rerun", selection_mode="single-row",\n            key=f"arch_tbl_{pid}_')]),

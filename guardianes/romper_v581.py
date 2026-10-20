@@ -94,9 +94,12 @@ ROTURAS = [
     ("⚠️ Timeclock vuelve a su flex propio", "core/timeclock_ui.py",
      [("""    st.markdown('<div class="cpx-kpis" style="--cpx-min:132px;margin:0 0 12px">'\n""",
        """    st.markdown('<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px">'\n""")]),
-    ("…o Belting con la base equivocada", "core/belting_ui.py",
-     [("""    return ('<div class="cpx-kpis" style="--cpx-min:96px;margin:0 0 8px">'\n""",
-       """    return ('<div class="cpx-kpis" style="margin:0 0 8px">'\n""")]),
+    # ⚠️ v595 · Re-anclada con su razón: la fila HTML de Belting (`_kpi_row`, base 96 px) ya no
+    # existe — sus tres cifras son BOTONES activos en la rejilla del tema (`T.por_fila`), como
+    # la plomada, Rails y Buffers desde v592-v594. La rotura rompe lo que ahora la sostiene.
+    ("…o Belting fuera de la rejilla del tema", "core/belting_ui.py",
+     [("""    st.markdown(T.por_fila("cpx_belt_kpis", 3), unsafe_allow_html=True)\n""",
+       """    st.markdown('<div style="display:flex;gap:10px;flex-wrap:wrap">', unsafe_allow_html=True)\n""")]),
     ("…o Status de la obra con su flex propio", "core/projects_ui.py",
      [("""    st.markdown('<div class="cpx-kpis" style="margin:8px 0 10px">'\n""",
        """    st.markdown('<div style="display:flex;gap:10px;flex-wrap:wrap;margin:8px 0 10px">'\n""")]),
