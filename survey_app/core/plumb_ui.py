@@ -59,6 +59,22 @@ def _firma(*vals) -> tuple:
     return tuple(out)
 
 
+def _se_puede(bks, rail, tksw, lt, bs, bsr_list) -> bool:
+    """⚠️ v594 · Sin datos no se calcula: con un BSR en 0 (un ascensor sin medir) la plomada
+    calculaba igual y daba un replanteo sin sentido — como Rails (v593) y Buffers (v594). Si
+    falta algo, lo dice, quita el resultado anterior y devuelve False."""
+    _faltan = [x for x, v in (("BKS", bks), ("RAIL", rail), ("TKSW", tksw),
+                              ("LengthTemplate", lt), ("BS", bs)) if float(v or 0) <= 0]
+    _sin = [str(i + 1) for i, x in enumerate(bsr_list) if float(x or 0) <= 0]
+    if _sin:
+        _faltan.append(t("the BSR measured on lift {x}", x=", ".join(_sin)))
+    if not _faltan:
+        return True
+    st.session_state.pop("plb_res_multi", None)
+    st.warning(t(":material/edit: Fill in before calculating: {x}.", x=", ".join(_faltan)))
+    return False
+
+
 def render_plumb_tab():
     st.markdown(t("### :material/straighten: Plumb line calculation"))
     st.caption(t("One **template** for the shaft; the **BSR is measured per lift**. The values from the drawing fill themselves in; RAIL comes from the catalogue."))
@@ -160,7 +176,8 @@ def render_plumb_tab():
     bsr_list = [float(x or 0) for x in bsr_edit["BSR (mm)"].tolist()]
     _ahora = _firma(bks, rail, tksw, lt, sf1, sf2, bs, sg, tg, omega, n, bsr_list)
 
-    if st.button(t(":material/straighten: Calculate plumb lines"), type="primary", width="stretch", key="plb_calc"):
+    if st.button(t(":material/straighten: Calculate plumb lines"), type="primary", width="stretch",
+                 key="plb_calc") and _se_puede(bks, rail, tksw, lt, bs, bsr_list):
         st.session_state["plb_res_multi"] = {"n": n, "firma": _ahora, "results": [compute_plumb({
             "BKS": bks, "RAIL": rail, "TKSW": tksw, "LengthTemplate": lt,
             "SF1": sf1, "SF2": sf2, "BSR": b, "BS": bs,

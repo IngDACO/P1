@@ -12,6 +12,7 @@ debajo del teórico → revisar en obra), se marca como aviso.
 """
 
 from core.i18n import d as _d
+from core import texto_svg
 
 
 def compute_buffer_cut(hkp: float, hkpr_list: list) -> dict:
@@ -36,10 +37,6 @@ def _mm(v) -> str:
     except Exception:
         return str(v)
     return f"{v:.0f}" if abs(v - round(v)) < 0.05 else f"{v:.1f}"
-
-
-def _esc(s) -> str:
-    return str(s or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
 def buffer_cut_svg(res: dict, proyecto: str = "") -> str:
@@ -100,8 +97,10 @@ def buffer_cut_svg(res: dict, proyecto: str = "") -> str:
          f'{_d("buffer clearance up to")} HKP = {_mm(hkp)} mm · '
          f'{_d("cut")} = HKP − HKPR</text>']
     if proyecto:
+        # v594 · MEDIDO para que no pise el título (iba sin medir, como en Rails hasta v593)
+        _libre = VW - 36 - texto_svg.ancho(_d("BUFFER CUTTING"), 11, True) - 16
         p.append(f'<text x="{VW-18}" y="24" text-anchor="end" font-size="9" '
-                 f'fill="{INK}" font-weight="bold">{_esc(proyecto)}</text>')
+                 f'fill="{INK}" font-weight="bold">{texto_svg.cabe(proyecto, _libre, 9, True)}</text>')
 
     # ── Sticker de cabina (barra fija, referencia común) ──
     p.append(f'<rect x="{x0}" y="{y_stick-STICK_H}" width="{x1-x0}" height="{STICK_H}" '
