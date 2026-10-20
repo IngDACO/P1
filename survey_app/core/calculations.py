@@ -16,11 +16,19 @@ def validate_inputs(p: dict) -> list:
     # ser > 0 (actual: 0.0)», siete así y uno en inglés). Un f-string fuera de `t()` no lo ve
     # ninguna red de traducción (trampa 30): se arma DENTRO, con sus huecos.
     from core.i18n import t
+
+    def _mm(x):
+        # v590 · «(now 0)» y «FS (120)», no «0.0» / «120.0»: son milímetros enteros casi siempre.
+        try:
+            return f"{float(x):g}"
+        except (TypeError, ValueError):
+            return "—"
     issues = []
     required_positive = ["BKS", "TKSW", "TS", "TK", "SF1", "SF2", "RAIL"]
     for k in required_positive:
         v = p.get(k)
         if v is None or float(v) <= 0:
+            v = _mm(v)
             issues.append(t("{k} must be greater than 0 (now {v}).", k=k, v=v))
     # BSR debería estar definido (puede igualar BS)
     if p.get("BSR") is None or float(p.get("BSR", 0)) <= 0:
@@ -28,6 +36,7 @@ def validate_inputs(p: dict) -> list:
     # FS debería ser ≥ TSW para que tenga sentido la lógica de pared
     fs, tsw = p.get("FS"), p.get("TSW")
     if fs is not None and tsw is not None and float(fs) < float(tsw):
+        fs, tsw = _mm(fs), _mm(tsw)
         issues.append(t("FS ({fs}) is smaller than TSW ({tsw}): there is no front safety clearance.",
                         fs=fs, tsw=tsw))
     return issues

@@ -102,3 +102,17 @@ def col_letter(n: int) -> str:
         n, r = divmod(n - 1, 26)
         s = chr(65 + r) + s
     return s
+
+
+_NO_ARCHIVO = re.compile(r"[^A-Za-z0-9._-]+")
+
+
+def nombre_archivo(texto, defecto: str = "survey") -> str:
+    """`texto` como trozo de NOMBRE DE ARCHIVO: solo letras, cifras, «.», «_» y «-» (v590).
+
+    ⚠️ Antes se hacía `.replace(" ", "_")` y nada más: «Bondi Junction Tower — Lift 1»
+    salía «Bondi_Junction_Tower_—_Lift_1», con la raya larga dentro del nombre del PDF que
+    se le manda al cliente (y una barra o dos puntos lo romperían en Windows).
+    """
+    s = _NO_ARCHIVO.sub("_", str(texto or "").strip()).strip("._-")
+    return re.sub(r"_+", "_", s) or defecto

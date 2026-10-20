@@ -22,6 +22,7 @@ ReportLab (svglib.svg2rlg).
 """
 
 from core.i18n import d as _d
+from core import texto_svg
 
 
 
@@ -251,8 +252,9 @@ def floor_plan_svg(params: dict, limits: dict, row: dict, floor_idx: int,
         p.append(f'<line x1="{eje_ap:.1f}" y1="{cy1-30:.1f}" x2="{eje_ap:.1f}" y2="{y1+mur+6:.1f}" '
                  f'stroke="#2e6da4" stroke-width="0.7" stroke-dasharray="9,3,2,3"/>')
         _lado = "R" if d_ejes > 0 else "L"
+        # v590 · «EJES» salía en español en pantalla y en los dos PDF (sin `_d`).
         p.append(_dim_h(min(eje_cab, eje_ap), max(eje_cab, eje_ap), cy1 - 22,
-                        f"EJES {_mm(abs(d_ejes))}→{_lado}",
+                        _d("AXIS OFFSET {x}→{s}", x=_mm(abs(d_ejes)), s=_lado),
                         color="#2e6da4", tcolor="#2e6da4"))
 
     # ── Cotas (rojo si incumple) ───────────────────
@@ -335,8 +337,9 @@ def floor_plan_svg(params: dict, limits: dict, row: dict, floor_idx: int,
              f'font-weight="bold">{_d("FLOOR")} {floor_idx+1}{_tot}</text>')
     p.append(f'<text x="{tx+6}" y="{ty+38}" font-size="7.5" fill="#5f6b7a">'
              f'{_d("Real proportion · dimensions in mm")}</text>')
+    # v590 · medido y escapado (`texto_svg`): `[:24]` dejaba «Bondi Junction Tower — L».
     p.append(f'<text x="{tx+6}" y="{ty+59}" font-size="7.5" fill="#5f6b7a">'
-             f'{(proyecto or "COPEX")[:24]}</text>')
+             f'{texto_svg.cabe(proyecto or "COPEX", tw - 12, 7.5)}</text>')
     p.append(f'<text x="{tx+6}" y="{ty+79}" font-size="7" fill="#5b6472">'
              f'{_d("Plan · top view")}</text>')
 
@@ -570,9 +573,11 @@ def shaft_iso_svg(params: dict, limits: dict, solution: dict, ns: int,
     # Cajetín
     p.append(f'<text x="18" y="26" font-size="11" fill="#1f2937" font-weight="bold">'
              f'{_d("SHAFT ISOMETRIC VIEW")}</text>')
+    _cola = (f' · {ns} {_d("stops")} · '
+             f'{_d("plan to scale, compressed height (not to scale)")}')
     p.append(f'<text x="18" y="40" font-size="8" fill="#5b6472">'
-             f'{(proyecto or "COPEX")[:40]} · {ns} {_d("stops")} · '
-             f'{_d("plan to scale, compressed height (not to scale)")}</text>')
+             f'{texto_svg.cabe(proyecto or "COPEX", VW - 36 - texto_svg.ancho(_cola, 8), 8)}'
+             f'{_cola}</text>')
     if malos:
         p.append(f'<rect x="18" y="{VH-24}" width="9" height="9" fill="#fbe9e7" '
                  f'stroke="#c0392b" stroke-width="0.7"/>')

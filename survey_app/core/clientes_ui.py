@@ -297,7 +297,6 @@ def _detalle_cliente(grupo, key):
 
     fichas = C.list_clientes(grupo)
     fichas_by_norm = {_norm(f.get("Name")): f for f in fichas}
-    fichas_by_id   = {str(f.get("ID", "")): f for f in fichas}
     f = fichas_by_norm.get(key, {})
     cid = str(f.get("ID", ""))
     proys = [p for p in P.list_projects(grupo=grupo) if C.es_del_cliente(p, cid, key)]

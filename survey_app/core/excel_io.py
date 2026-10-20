@@ -64,7 +64,9 @@ def export_survey_excel(df: pd.DataFrame, project_info: dict = None,
     ws["A1"].alignment = _CENTER
 
     # Encabezados
-    headers = ["Parada"] + SURVEY_COLS
+    # v590 · «Stop», «Parameter», «Value» (salían en español en el Excel que se descarga).
+    # La importación lee POR POSICIÓN, así que los Excel viejos con «Parada» siguen entrando.
+    headers = ["Stop"] + SURVEY_COLS
     for col_idx, h in enumerate(headers, start=1):
         _write_styled_header(ws, 2, col_idx, h)
 
@@ -106,8 +108,8 @@ def _write_info_sheet(wb, sheet_name: str, title: str, data: dict) -> None:
     ws["A1"].fill      = _HEADER_FILL
     ws["A1"].alignment = _CENTER
 
-    _write_styled_header(ws, 2, 1, "Parámetro", fill=PatternFill("solid", fgColor="2E6DA4"))
-    _write_styled_header(ws, 2, 2, "Valor",     fill=PatternFill("solid", fgColor="2E6DA4"))
+    _write_styled_header(ws, 2, 1, "Parameter", fill=PatternFill("solid", fgColor="2E6DA4"))
+    _write_styled_header(ws, 2, 2, "Value",     fill=PatternFill("solid", fgColor="2E6DA4"))
 
     row_idx = 3
     for k, v in data.items():
@@ -161,11 +163,11 @@ def import_survey_excel(file) -> dict:
     except Exception as e:
         raise ValueError(f"Could not read the SURVEY sheet: {e}")
 
-    expected_cols = ["Parada"] + SURVEY_COLS
+    expected_cols = ["Stop"] + SURVEY_COLS
     if len(df.columns) != len(expected_cols):
         raise ValueError(f"The SURVEY sheet must have {len(expected_cols)} columns (found: {len(df.columns)})")
     df.columns = expected_cols
-    df = df.drop(columns=["Parada"])
+    df = df.drop(columns=["Stop"])
     df = df.apply(pd.to_numeric, errors="coerce").fillna(0.0)
     result["df"] = df
 

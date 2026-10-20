@@ -1336,13 +1336,14 @@ def _nuevo_proyecto_form(grupo: str, key: str = "nuevo"):
                 try:
                     plan_data.guardar(res, _plano)
                 except Exception as e:
-                    flash.aviso(f"The project was created, but the drawing data was "
-                                f"not saved: {e}")
+                    flash.aviso(t("The project was created, but the drawing data was "
+                                  "not saved: {e}", e=e))
                 _pb = st.session_state.get(f"{_kd}_bytes")
                 if _pb and drive_store.is_configured() and drive_store.is_available():
                     try:
-                        fid = drive_store.upload(res, "plano.pdf", _pb, "application/pdf")
-                        P.add_document(res, "plano.pdf", "plano", fid,
+                        # v590 · «drawing.pdf» (el tipo «plano» es la CLAVE y no cambia)
+                        fid = drive_store.upload(res, "drawing.pdf", _pb, "application/pdf")
+                        P.add_document(res, "drawing.pdf", "plano", fid,
                                        st.session_state.get("auth", {}).get("usuario", ""))
                     except Exception:
                         flash.info(t(":material/attach_file: The drawing could not be filed in Drive."))
@@ -3230,12 +3231,24 @@ def _detalle_proyecto(pid: str, grupo: str = None):
                 _hay = {k: v for k, v in _aso.items() if v}
                 st.warning(t("The project and its activities will be deleted. **This cannot be undone.** Almost always what you want is to archive it."))
                 if _hay:
-                    st.markdown("It will be left with no project: "
-                                + " · ".join(f"**{v}** {k.lower()}"
+                    # v590 · las claves son de la app («Expenses»…); se pinta su nombre con
+                    # su plural (antes salían «documentos», «gastos» en la pantalla en inglés).
+                    _ETQ_ASO = {
+                        "Documents":    (t("document"), t("documents")),
+                        "Expenses":     (t("expense"), t("expenses")),
+                        "Calculations": (t("calculation"), t("calculations")),
+                        "Pre-Starts":   (t("pre-start"), t("pre-starts")),
+                        "Alerts":       (t("alert"), t("alerts")),
+                        "Activities":   (t("activity"), t("activities")),
+                        "Time entries": (t("time entry"), t("time entries")),
+                    }
+                    st.markdown(t("It will be left with no project:") + " "
+                                + " · ".join(f"**{v}** "
+                                             + _ETQ_ASO.get(k, (k, k))[0 if v == 1 else 1]
                                              for k, v in _hay.items()))
                     st.caption(t("Those rows and their files in Drive are NOT deleted: they end up pointing at a project that no longer exists."))
                 _tecleado = st.text_input(
-                    f"Type «{prj.get('Name','')}» to confirm", key=f"delnom_{pid}")
+                    t("Type «{x}» to confirm", x=prj.get('Name', '')), key=f"delnom_{pid}")
                 if st.button(t("Delete permanently"), key=f"del_{pid}",
                              width="stretch",
                              disabled=(_tecleado.strip() != str(prj.get("Name", "")).strip())):
@@ -5496,7 +5509,7 @@ def _partir_gasto(ge: dict) -> dict:
     }
 
 
-def _bajar_a(clave: str, marca: str):
+def _bajar_a(clave: str, marca: str, bloque: str = "nearest"):
     """La vista baja UNA vez al bloque con clave `clave`, si alguien lo pidió poniendo
     `marca` en la sesión (v567 en el Resumen; v568 una sola definición para él y Gastos).
 
@@ -5508,9 +5521,14 @@ def _bajar_a(clave: str, marca: str):
     ⚠️ Se llama DENTRO de `with st.container(key=clave)`, y ese bloque ENVUELVE lo que se
     quiere ver: vacío y delante (Accounting, v584), la vista se para en él y lo que se abre
     queda debajo del borde. Lo vigila verif_v585 en toda la app.
+
+    v590 · `bloque="start"` para ir al COMIENZO de una sección larga (las cifras de los
+    resultados del Survey): con `nearest`, una sección más alta que la vista se quedaba con
+    su final abajo y su título fuera de la pantalla. El bloque envuelve el TÍTULO.
     """
     if not st.session_state.pop(marca, False):
         return
+    bloque = bloque if bloque in ("nearest", "start", "center") else "nearest"
     with st.container(key=f"ir_{clave}"):
         st.markdown("<style>.st-key-ir_" + clave + ",[data-testid=\"stLayoutWrapper\"]:has(> "
                     ".st-key-ir_" + clave + "){position:absolute!important;width:1px;"
@@ -5522,7 +5540,7 @@ def _bajar_a(clave: str, marca: str):
             "a=D.querySelector('[data-testid=\"stApp\"]'),"
             "s=a?a.getAttribute('data-test-script-state'):'notRunning';"
             "if(c&&s!=='running'){c.scrollIntoView({behavior:'smooth',"
-            "block:'nearest'});return;}"
+            "block:'" + bloque + "'});return;}"
             "if(++n<40)setTimeout(ir,100);}setTimeout(ir,150);}catch(e){}})();"
             "</script>")
 

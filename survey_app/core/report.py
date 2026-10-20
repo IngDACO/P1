@@ -727,7 +727,10 @@ def generate_report(project_params, calculated, survey_original,
             subst_text   = f"{lim:.2f} - {min_v:.2f}"
         story += [_calc_block(f"DIF {col}",
             formula_text, subst_text,
-            f"DIF {col} = {dif_v:.2f} mm  |  {off_c} value(s) out of limit",
+            # v590 · con su plural (decía «1 value(s)»)
+            f"DIF {col} = {dif_v:.2f} mm  |  "
+            + (_d("1 value out of limit") if off_c == 1
+               else _d("{n} values out of limit", n=off_c)),
             styles, ok=(dif_v <= 0)), sp(3)]
 
     max_rl = analysis["MAX_OFF_RL"]; max_fb = analysis["MAX_OFF_FB"]
@@ -812,8 +815,8 @@ def generate_report(project_params, calculated, survey_original,
             styles["SubHead2"]
         ),
         Paragraph(
-            f"Showing {len(min_off_steps)} of {len(valid_steps)} valid iterations "
-            f"(only those reaching the minimum of {best_total} value(s) out of limit).",
+            _d("Showing {a} of {b} valid iterations (only those reaching the minimum of "
+               "{n} out of limit).", a=len(min_off_steps), b=len(valid_steps), n=best_total),
             styles["Note"]
         ),
         sp(2)

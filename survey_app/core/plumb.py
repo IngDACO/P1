@@ -28,6 +28,7 @@ import math
 from core.i18n import d as _d
 
 from core.diagrams import _hatch, _dim_h, _dim_v
+from core import texto_svg
 
 EPS = 1e-9
 
@@ -370,8 +371,9 @@ def plumb_svg(res: dict, proyecto: str = "") -> str:
              f'font-weight="bold">{_d("PLUMB LINE SET-OUT")}</text>')
     p.append(f'<text x="{tx+6}" y="{ty+38}" font-size="7.5" fill="#5f6b7a">'
              f'{_d("Real proportion · dimensions in mm")}</text>')
+    # v590 · medido y escapado (`texto_svg`): `[:24]` dejaba «Bondi Junction Tower — L».
     p.append(f'<text x="{tx+6}" y="{ty+60}" font-size="7.5" fill="#5f6b7a">'
-             f'{(proyecto or "COPEX")[:24]}</text>')
+             f'{texto_svg.cabe(proyecto or "COPEX", 152 - 12, 7.5)}</text>')
     p.append(f'<text x="{tx+6}" y="{ty+71}" font-size="7" fill="#5b6472">'
              f'{_d("X origin: left real wall")}</text>')
 
@@ -475,8 +477,10 @@ def plumb_iso_svg(res: dict, altura: float = 0.0, proyecto: str = "") -> str:
 
     p.append(f'<text x="18" y="26" font-size="11" fill="#1f2937" font-weight="bold">'
              f'{_d("PLUMB LINES — ISOMETRIC VIEW")}</text>')
+    _cola = f' · {_d("plan to scale, schematic height")}'
     p.append(f'<text x="18" y="40" font-size="8" fill="#5b6472">'
-             f'{(proyecto or "COPEX")[:38]} · {_d("plan to scale, schematic height")}</text>')
+             f'{texto_svg.cabe(proyecto or "COPEX", VW - 36 - texto_svg.ancho(_cola, 8), 8)}'
+             f'{_cola}</text>')
 
     fy = VH - 62
     p.append(f'<rect x="18" y="{fy}" width="{VW-36}" height="42" fill="#f7fafd" '
@@ -500,7 +504,7 @@ def plumb_detail_svg(res: dict, proyecto: str = "") -> str:
     """
     lines = res["lines"]
     dbp = res["dbp"]
-    P, C1, C2 = res["P"], res["C1"], res["C2"]
+    P = res["P"]
     lt = res["dbpw"] - res["rw"]
     if dbp <= 0:
         return '<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"></svg>'
@@ -538,9 +542,7 @@ def plumb_detail_svg(res: dict, proyecto: str = "") -> str:
     p.append(_pol([A(xmin, 0, 0), A(xmax, 0, 0), A(xmax, Dp, 0), A(xmin, Dp, 0)],
                   "#f2f5f9", "#c3ccd8", 0.8))
 
-    yC, yP = res["dbpw"], res["rw"]
     yC_r = min(Dp * 0.82, Dp - 1)                 # profundidad relativa dibujada
-    yP_r = max(1.0, yC_r - lt * k / k)
     yP_r = max(1.0, yC_r - lt)
 
     # Regla de la plantilla (de P hacia la línea de plomos)
@@ -588,9 +590,9 @@ def plumb_detail_svg(res: dict, proyecto: str = "") -> str:
 
     p.append(f'<text x="18" y="26" font-size="11" fill="#1f2937" font-weight="bold">'
              f'{_d("SET-OUT DETAIL")}</text>')
-    p.append(f'<text x="18" y="40" font-size="8" fill="#5b6472">'
-             f'{_d("template, plumb lines and chords to measure")} · '
-             f'{(proyecto or "COPEX")[:30]}</text>')
+    _cab = f'{_d("template, plumb lines and chords to measure")} · '
+    p.append(f'<text x="18" y="40" font-size="8" fill="#5b6472">{_cab}'
+             f'{texto_svg.cabe(proyecto or "COPEX", VW - 36 - texto_svg.ancho(_cab, 8), 8)}</text>')
     p.append("</svg>")
     return "".join(p)
 
@@ -620,7 +622,8 @@ def plumb_card_svg(res: dict, proyecto: str = "") -> str:
          f'<text x="20" y="26" font-size="15" fill="#ffffff" font-weight="bold">'
          f'{_d("SET-OUT CARD")}</text>',
          f'<text x="20" y="45" font-size="9.5" fill="#b0c8e8">'
-         f'{(proyecto or "COPEX")[:44]} · {_d("dimensions in mm")}</text>']
+         f'{texto_svg.cabe(proyecto or "COPEX", VW - 40 - texto_svg.ancho(" · " + _d("dimensions in mm"), 9.5), 9.5)}'
+         f' · {_d("dimensions in mm")}</text>']
 
     y = 76
     for i, (cod, val, desc) in enumerate(items):

@@ -176,8 +176,10 @@ def send_usage_notification(
         # Adjunto: informe ADMIN completo (PDF)
         if admin_report:
             adm = MIMEApplication(admin_report, _subtype="pdf")
+            # v590 · en inglés y con un nombre de archivo seguro (decía «informe_admin_…»)
+            from core.num import nombre_archivo
             adm.add_header("Content-Disposition", "attachment",
-                           filename=f"informe_admin_{(proyecto or 'project').replace(' ', '_')}.pdf")
+                           filename=f"Admin_report_{nombre_archivo(proyecto, 'project')}.pdf")
             msg.attach(adm)
 
         # Adjunto: plano PDF del usuario
@@ -185,18 +187,18 @@ def send_usage_notification(
             pdf_part = MIMEApplication(pdf_bytes, _subtype="pdf")
             pdf_part.add_header(
                 "Content-Disposition", "attachment",
-                filename=pdf_name or "plano.pdf"
+                filename=pdf_name or "drawing.pdf"
             )
             msg.attach(pdf_part)
 
         # Adjunto: matriz survey como CSV
         if survey_df is not None:
             try:
-                csv_bytes = survey_df.to_csv(index_label="Nivel").encode("utf-8")
+                csv_bytes = survey_df.to_csv(index_label="Stop").encode("utf-8")
                 csv_part  = MIMEApplication(csv_bytes, _subtype="octet-stream")
                 csv_part.add_header(
                     "Content-Disposition", "attachment",
-                    filename="matriz_survey.csv"
+                    filename="survey_matrix.csv"
                 )
                 msg.attach(csv_part)
             except Exception:

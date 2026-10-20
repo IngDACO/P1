@@ -325,7 +325,10 @@ _HEADERS_BY_TITLE = {
 def _records_cached(libro: str, title):
     """Registros de una hoja (cacheados). Solo lecturas de DISPLAY."""
     from core import hojas          # perezoso: evita el ciclo con timeclock
-    return hojas.registros(title, _HEADERS_BY_TITLE.get(title, [])) or []
+    # ⚠️ v590 · Sin cabecera conocida, `None` y no `[]`: con `[]`, `hojas.registros` CREABA
+    # la pestaña si no existía — una LECTURA fabricaba pestañas vacías (así nacieron
+    # «Gastos», «Calculos» y «Alarmas» en el libro de cliente1). Con `None`, «no hay».
+    return hojas.registros(title, _HEADERS_BY_TITLE.get(title)) or []
 
 
 
@@ -855,25 +858,31 @@ def datos_asociados(pid: str) -> dict:
     _g = str(_prj.get("Group", "")) or None
     out = {}
     from core import tenant
+    # ⚠️ v590 · Las pestañas por su NOMBRE DE HOY, el de cada módulo. Hasta v589 se pedían
+    # «Gastos», «Calculos» y «Alarmas» (nombres de antes del renombrado a inglés): no existen,
+    # así que el recuento salía SIEMPRE 0 —«no cuelga nada» justo antes de un borrado
+    # irreversible— y, al no encontrarlas, la lectura las CREABA vacías (las tres que había
+    # en el libro de cliente1). Medido en PRJ-0026: «0 cálculos» con CAL-0001 en ToolRuns.
+    from core import expenses as _EX, toolruns as _TR, prestart as _PS, alerts as _AL
     with tenant.como_grupo(_g or tenant.grupo_sesion()):
         try:
-            out["Documentos"] = len(list_documents(pid))
+            out["Documents"] = len(list_documents(pid))
         except Exception:
-            out["Documentos"] = 0
-        for etiqueta, hoja, col in (("Gastos", "Gastos", "ProjectID"),
-                                    ("Cálculos", "Calculos", "ProjectID"),
-                                    ("Pre-Starts", "PreStarts", "ProjectID"),
-                                    ("Alarmas", "Alarmas", "ProjectID")):
+            out["Documents"] = 0
+        for etiqueta, hoja, col in (("Expenses", _EX.SHEET, "ProjectID"),
+                                    ("Calculations", _TR.SHEET, "ProjectID"),
+                                    ("Pre-Starts", _PS.SHEET, "ProjectID"),
+                                    ("Alerts", _AL.ALERTS_SHEET, "ProjectID")):
             try:
                 out[etiqueta] = sum(1 for r in _records(hoja)
                                     if str(r.get(col, "")) == str(pid))
             except Exception:
                 out[etiqueta] = 0
         try:
-            out["Actividades"] = len(list_activities(pid))
+            out["Activities"] = len(list_activities(pid))
             nom = str(_prj.get("Name", ""))
-            out["Fichajes"] = sum(1 for r in _fichaje_records()
-                                  if timeclock.es_del_proyecto(r, pid, nom))
+            out["Time entries"] = sum(1 for r in _fichaje_records()
+                                      if timeclock.es_del_proyecto(r, pid, nom))
         except Exception:
             pass
     return out

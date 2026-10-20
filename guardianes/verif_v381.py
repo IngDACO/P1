@@ -74,8 +74,12 @@ _FILA_Z = [{"ID": "PRJ-Z1", "Group": "cliente1", "Name": "Obra Z", "Status": "En
 _GASTOS_Z = [{"ProjectID": "PRJ-Z1"}, {"ProjectID": "PRJ-Z1"}, {"ProjectID": "OTRO"}]
 _FICH_Z = [{"ProjectID": "PRJ-Z1", "Project": "Obra Z"}]
 _rec_z, _fic_z = P._records, P._fichaje_records
+# ⚠️ v590 · «Expenses», el nombre de HOY. Hasta v589 este sustituto contestaba a «Gastos»: así
+# EXIGÍA el nombre viejo, que en el libro real no existe — el recuento de verdad salía 0 (y la
+# lectura creaba la pestaña vacía) mientras aquí se veían 2. El guardián protegía el fallo.
+from core import expenses as _EXZ
 P._records = lambda t=None: (_FILA_Z if t == P.PROJECTS_SHEET
-                             else _GASTOS_Z if t == "Gastos" else [])
+                             else _GASTOS_Z if t == _EXZ.SHEET else [])
 P._fichaje_records = lambda: _FICH_Z
 try:
     como("administrator", "cliente1")

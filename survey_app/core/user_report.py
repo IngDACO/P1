@@ -311,8 +311,11 @@ def generate_user_report(project_params, calculated, optimizer_result,
                else d(", with no values out of limit."))
     else:
         _col, _tit = C_ORANGE, d("Suitable with observations")
-        _det = d("The solution leaves {n} value(s) out of limit that need attention "
-                 "before or during installation.", n=_off)
+        # v590 · con su plural: este PDF es el que se le entrega al CLIENTE
+        _det = (d("The solution leaves 1 value out of limit that needs attention "
+                  "before or during installation.") if _off == 1 else
+                d("The solution leaves {n} values out of limit that need attention "
+                  "before or during installation.", n=_off))
     story += [_veredicto(_tit, _det, _col, styles), _sp(10)]
 
     # ── Ficha del proyecto (datos ampliados) ────────────────
@@ -614,7 +617,9 @@ def generate_user_report(project_params, calculated, optimizer_result,
             d("The floor plans show, level by level, how the car fits in the shaft."),
         ]
         if _off:
-            _concl.append(d("{n} value(s) remain out of limit: review the cells marked in the "
+            _concl.append(d("1 value remains out of limit: review the cell marked in the "
+                            "matrix before fixing the brackets.") if _off == 1 else
+                          d("{n} values remain out of limit: review the cells marked in the "
                             "matrix before fixing the brackets.", n=_off))
         else:
             _concl.append(d("No values remain out of limit with the solution adopted."))

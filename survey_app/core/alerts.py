@@ -74,7 +74,7 @@ def _records():
     comparte por PROCESO— servía al segundo cliente lo que dejó memoizado el
     primero: una fuga de datos entre inquilinos, no un problema de rendimiento.
     """
-    return _records_cached(_libro_de("Alarmas"))
+    return _records_cached(_libro_de(ALERTS_SHEET))   # v590 · el nombre de HOY (era «Alarmas»)
 def _invalidate():
     # ⚠️ v339: además de la caché propia hay que tirar el LOTE compartido
     # (`hojas._lote`). Si no, tras escribir el dato seguiría saliendo del lote
