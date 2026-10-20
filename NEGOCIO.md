@@ -375,4 +375,4 @@ Esa tabla sigue siendo responsabilidad de quien cierra la versión. El guardián
 borra o se le cambia el formato, el resultado es ROJO —no verde—, a propósito: sin ella no se puede
 saber a qué versión corresponde este documento.
 
-*Última puesta al día del estado de hecho: 20/10/2026 (v515-v594).*
+*Última puesta al día del estado de hecho: 20/10/2026 (v515-v595).*
