@@ -29,14 +29,6 @@ def compute_belting(hgp, hq, hgpr_list) -> list:
     return out
 
 
-def _mm(v) -> str:
-    try:
-        v = float(v)
-    except Exception:
-        return str(v)
-    return f"{v:.0f}" if abs(v - round(v)) < 0.05 else f"{v:.1f}"
-
-
 def belting_svg(results: list, proyecto: str = "") -> str:
     """Diagrama por elevador (v183, replanteado).
 
@@ -133,7 +125,7 @@ def belting_svg(results: list, proyecto: str = "") -> str:
         p.append(f'<text x="{cx:.1f}" y="279" text-anchor="middle" font-size="9" '
                  f'fill="{_dc}" font-weight="bold">DSTS {dsts:.1f} mm</text>')   # v596 · un decimal, como la tabla
         p.append(f'<text x="{cx:.1f}" y="290" text-anchor="middle" font-size="7.5" '
-                 f'fill="{MUT}">{_dir} · HGPR {_mm(hgpr)}</text>')
+                 f'fill="{MUT}">{_dir} · HGPR {hgpr:.1f}</text>')   # v597 · un decimal, como la tabla
 
     p.append("</svg>")
     return "".join(p)

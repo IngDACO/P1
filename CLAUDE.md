@@ -184,7 +184,7 @@ sitio: **son de la nav muerta**, están solo en el historial de git.
 
 ### Cómo se navega ahora
 **Menú lateral de 2 niveles** (acordeón, `home_ui.sidebar_menu`) + **barra superior**
-(`render_topbar`: botón ← Atrás, buscador —solo gestión, aún sin backend—, versión y campana).
+(`render_topbar`: botón ← Atrás, buscador —solo gestión; busca de verdad desde v330, `home_ui.buscar`—, versión y campana).
 `app.py` ya no enruta nada: llama a `render_topbar` + `render_admin_content` y se acabó.
 
 **Las secciones dependen del ROL** (`home_ui._SECCIONES_ROL` / `_SUBSECCIONES_ROL`):

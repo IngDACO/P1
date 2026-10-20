@@ -126,8 +126,10 @@ print("\n3. Guardar: en inglés, con plural y nombre de archivo")
 _btn(at, "save_rc1").click()
 at.run()
 _reg = at.session_state["_REG"] if "_REG" in at.session_state else []
-chk("⚠️ el resumen en inglés («Case 1 · A 20000 · Lift 1: 650/480, Lift 2: -650/-820»; decía «Caso 1 · E1:»)",
-    bool(_reg) and _reg[-1].get("resumen") == "Case 1 · A 20000 · Lift 1: 650/480, Lift 2: -650/-820",
+# ⚠️ v597 · Al día con su razón (v385): los cortes del resumen llevan el decimal de la tabla (a
+# entero, un 650.5 se guardaba «650» con «650.5» en pantalla). El principio —inglés— no cambia.
+chk("⚠️ el resumen en inglés («Case 1 · A 20000 · Lift 1: 650.0/480.0, Lift 2: -650.0/-820.0»; decía «Caso 1 · E1:»)",
+    bool(_reg) and _reg[-1].get("resumen") == "Case 1 · A 20000 · Lift 1: 650.0/480.0, Lift 2: -650.0/-820.0",
     _reg[-1].get("resumen") if _reg else "")
 chk("…y el PDF «Rail_cutting_case1_Lift_A_<fecha>.pdf» (era «corte_rieles_caso1.pdf»)",
     bool(_reg) and str(_reg[-1].get("filename", "")).startswith("Rail_cutting_case1_Lift_A_"),
@@ -203,7 +205,8 @@ _rt = ET.fromstring(_s1)
 _bandas = [float(r.get("y")) for r in _rt.iter("{http://www.w3.org/2000/svg}rect")
            if r.get("fill") in ("#fcebeb", "#e8f5e9") and float(r.get("height", 0)) < 12
            and float(r.get("width", 0)) == 36]
-_cif = [float(x.get("y")) for x in _rt.iter("{http://www.w3.org/2000/svg}text") if (x.text or "") == "650"]
+# (v597 · la cifra lleva ahora un decimal: «650.0»)
+_cif = [float(x.get("y")) for x in _rt.iter("{http://www.w3.org/2000/svg}text") if (x.text or "") == "650.0"]
 chk("la cifra de una banda fina va ENCIMA (se montaba sobre el suelo)",
     bool(_bandas) and bool(_cif) and min(_cif) < min(_bandas), (_bandas, _cif))
 

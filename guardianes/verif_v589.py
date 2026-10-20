@@ -67,8 +67,12 @@ from core.plumb import compute_plumb, plumb_svg                 # noqa: E402
 _r = compute_plumb({"BKS": 1600, "RAIL": 62, "TKSW": 965, "LengthTemplate": 300, "SF1": 51, "SF2": 51,
                     "BSR": 1985, "BS": 1998, "SG": 300, "TG": 60, "OMEGA_SIDE": "R"})
 _tx = re.findall(r">([^<>]{3,})<", plumb_svg(_r))
+# ⚠️ v597 · Al día con su razón (v385): lo medido y lo derivado lleva UN decimal en toda la
+# plomada («13.0», «0.0»; antes «13», «0», que no casaba con las cifras ni la tabla); las cotas
+# del plano del recuadro de BS siguen enteras («1826», «172»). El principio —en inglés— no cambia.
 chk("el recuadro BS y el de BSR < BS, en inglés: components · diff · to absorb · Z side · Omega side",
-    {"components 1826", "diff 172 mm — check", "to absorb: 13 mm", "Z side (L): 13", "Omega side: 0"} <= set(_tx), _tx)
+    {"components 1826", "diff 172 mm — check", "to absorb: 13.0 mm", "Z side (L): 13.0",
+     "Omega side: 0.0"} <= set(_tx), _tx)
 chk("…y ningún texto del dibujo en español", not [x for x in _tx if ES.search(x)], [x for x in _tx if ES.search(x)])
 
 print("\n4. El cálculo COMPLETO (AppTest, la IA y el correo sustituidos)")

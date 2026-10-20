@@ -7,7 +7,7 @@ import streamlit as st
 from core.i18n import t, d
 import pandas as pd
 
-from core.plumb import compute_plumb, plumb_table, plumb_svg, plumb_iso_svg, plumb_detail_svg, plumb_card_svg
+from core.plumb import compute_plumb, plumb_table_doc, plumb_svg, plumb_iso_svg, plumb_detail_svg, plumb_card_svg
 from core import plan_store
 from core import plan_ui
 from core import estado_vivo
@@ -324,7 +324,9 @@ def render_plumb_tab():
               "RW": f"{r0['rw']:.1f} mm", "d1 / d2": f"{r0['d1']:.1f} / {r0['d2']:.1f} mm"},
         svgs=_svgs,
         tablas=[(d("Per lift — fit and check"), _rows),
-                (d("Template — line positions"), plumb_table(r0))],
+                # ⚠️ v597 · con cabeceras del DOCUMENTO (salía «Línea · X inicial (mm) ·
+                # Desplazada»: `tool_pdf` imprime las claves, y las de `plumb_table` son dato)
+                (d("Template — line positions"), plumb_table_doc(r0))],
         notas=[d("The template (DBP, d1, d2) is the same for the whole shaft; the BSR is measured "
                  "per lift and sets its fit and its check."),
                d("Site check: di + DBP + dd = BSR.")])

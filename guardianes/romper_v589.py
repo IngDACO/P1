@@ -24,9 +24,11 @@ ROTURAS = [
     ("el registro del optimizador vuelve a «Apertura tapada»", "core/optimizer.py",
      [('                    "reason":           t("Opening covered: |RL|={rl} > FRAME={f}",\n',
        '                    "reason":           t("Apertura tapada: |RL|={rl} > FRAME={f}",\n')]),
+    # v597 · re-anclada: la suma de componentes es cota del PLANO y va entera (`_n0`), como el
+    # aviso de la pantalla; `_n` lleva ahora un decimal siempre.
     ("⚠️ el diagrama de plomada vuelve a «componentes»", "core/plumb.py",
-     [("""                 f'{_d("components {x}", x=_n(bsc.get("bs_componentes")))}</text>')\n""",
-       """                 f'componentes {_n(bsc.get("bs_componentes"))}</text>')\n""")]),
+     [("""                 f'{_d("components {x}", x=_n0(bsc.get("bs_componentes")))}</text>')\n""",
+       """                 f'componentes {_n0(bsc.get("bs_componentes"))}</text>')\n""")]),
     ("…y a «lado Omega»", "core/plumb.py",
      [("""                 f'{_d("Omega side: {x}", x=_n(disp.get("omega_sacrificio")))}</text>')\n""",
        """                 f'lado Omega: {_n(disp.get("omega_sacrificio"))}</text>')\n""")]),

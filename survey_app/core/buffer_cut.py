@@ -39,6 +39,16 @@ def _mm(v) -> str:
     return f"{v:.0f}" if abs(v - round(v)) < 0.05 else f"{v:.1f}"
 
 
+def _m1(v) -> str:
+    """v597 · Lo MEDIDO y lo calculado (HKPR, corte), con UN decimal: como la tabla, el resumen
+    guardado y el PDF («cut 20» frente a «Buffer 1: 20.0», visto en producción). `_mm` queda
+    para la cota del plano (HKP), que va entera."""
+    try:
+        return f"{float(v):.1f}"
+    except Exception:
+        return str(v)
+
+
 def buffer_cut_svg(res: dict, proyecto: str = "") -> str:
     """Alzado esquemático del corte de cada buffer (v182, replanteado).
 
@@ -69,7 +79,14 @@ def buffer_cut_svg(res: dict, proyecto: str = "") -> str:
     n = len(bufs)
     paso = max(96, min(150, 660 // max(1, n)))
     LEFT = 78
-    VW = max(460, LEFT + paso * n + 26)
+    bw = min(48, int(paso * 0.5))
+    # ⚠️ v597 · El rótulo «HKP design 520» va anclado a la derecha, a la altura de la línea: se
+    # reserva SU ancho (medido) a la derecha del último buffer. Con 5 buffers la cifra del corte
+    # del último («10.0», un decimal desde v597) lo pisaba — verif_v533 lo vio.
+    _lbl_hkp = f"HKP {_d('design')} {_mm(hkp)}"
+    _fin_buf = LEFT + paso * (n - 0.5) + bw / 2
+    VW = max(460, LEFT + paso * n + 26,
+             int(_fin_buf + 8 + texto_svg.ancho(_lbl_hkp, 8.5, True) + 20 + 1))
     VH = 300
 
     y_stick = 60                 # borde inferior del sticker (referencia)
@@ -83,7 +100,6 @@ def buffer_cut_svg(res: dict, proyecto: str = "") -> str:
     cuts = [float(b["CutBuffer"]) for b in bufs]
     maxc = max((abs(c) for c in cuts), default=0.0)
     esc = (CUT_BAND / maxc) if maxc > 0.05 else 0.0    # mm → px (corte)
-    bw = min(48, int(paso * 0.5))
 
     x0, x1 = LEFT - 44, VW - 20
     p = [f'<svg viewBox="0 0 {VW} {VH}" xmlns="http://www.w3.org/2000/svg" '
@@ -112,7 +128,7 @@ def buffer_cut_svg(res: dict, proyecto: str = "") -> str:
     p.append(f'<line x1="{x0}" y1="{y_hkp}" x2="{x1}" y2="{y_hkp}" '
              f'stroke="{NAVY}" stroke-width="1.3" stroke-dasharray="9,3,2,3"/>')
     p.append(f'<text x="{x1}" y="{y_hkp-4}" text-anchor="end" font-size="8.5" '
-             f'fill="{NAVY}" font-weight="bold">HKP {_d("design")} {_mm(hkp)}</text>')
+             f'fill="{NAVY}" font-weight="bold">{_lbl_hkp}</text>')
 
     # ── Cota de la holgura HKP en el margen izquierdo (no a escala: ≈) ──
     xd = 24
@@ -173,7 +189,7 @@ def buffer_cut_svg(res: dict, proyecto: str = "") -> str:
                 if hslice >= 13:
                     p.append(f'<text x="{cx:.1f}" y="{(yreal+y_hkp)/2+3:.1f}" '
                              f'text-anchor="middle" font-size="8.5" fill="{RED}" '
-                             f'font-weight="bold">{_mm(corte)}</text>')
+                             f'font-weight="bold">{_m1(corte)}</text>')
                 p.append(f'<text x="{cx:.1f}" y="{yreal-4:.1f}" text-anchor="middle" '
                          f'font-size="7.5" fill="{RED}">{_d("real edge")}</text>')
             else:
@@ -188,10 +204,10 @@ def buffer_cut_svg(res: dict, proyecto: str = "") -> str:
         p.append(f'<text x="{cx:.1f}" y="{y_bot+16:.0f}" text-anchor="middle" '
                  f'font-size="8.5" fill="{INK}" font-weight="bold">Buffer {b["n"]}</text>')
         p.append(f'<text x="{cx:.1f}" y="{y_bot+28:.0f}" text-anchor="middle" '
-                 f'font-size="7.5" fill="{MUT}">HKPR {_mm(hkpr)}</text>')
+                 f'font-size="7.5" fill="{MUT}">HKPR {_m1(hkpr)}</text>')
         p.append(f'<text x="{cx:.1f}" y="{y_bot+40:.0f}" text-anchor="middle" '
                  f'font-size="7.5" fill="{_cc}" font-weight="bold">'
-                 f'{_d("cut")} {_mm(corte)}</text>')
+                 f'{_d("cut")} {_m1(corte)}</text>')
 
     # ── Leyenda ──
     # ⚠️ v533 · La nota de escala va en SU línea, debajo. Iba en la misma que los dos rótulos,

@@ -101,6 +101,15 @@ def _mm(v) -> str:
     return f"{v:.0f}" if abs(v - round(v)) < 0.05 else f"{v:.1f}"
 
 
+def _m1(v) -> str:
+    """v597 · Lo MEDIDO y lo calculado (L, cortes), con UN decimal: como la tabla, el resumen
+    guardado y el PDF. `_mm` queda para A (la pila instalada, múltiplo de 2500)."""
+    try:
+        return f"{float(v):.1f}"
+    except Exception:
+        return str(v)
+
+
 def rail_cut_svg(res: dict, caso: int = 1, n2500: int = 0, n5000: int = 0,
                  proyecto: str = "") -> str:
     """Diagrama de los cortes de riel.
@@ -199,13 +208,13 @@ def rail_cut_svg(res: dict, caso: int = 1, n2500: int = 0, n5000: int = 0,
                     _yt = (yc + h / 2 + 3) if h >= 12 else (yc - 3)
                     p.append(f'<text x="{x+18:.1f}" y="{_yt:.1f}" '
                              f'text-anchor="middle" font-size="8.5" fill="{stk}" '
-                             f'font-weight="bold">{_mm(corte)}</text>')
+                             f'font-weight="bold">{_m1(corte)}</text>')
                 p.append(f'<text x="{x+18:.1f}" y="{base+14:.1f}" text-anchor="middle" '
                          f'font-size="7.5" fill="#1f2937">{lbl}</text>')
             p.append(f'<text x="{cx+42:.1f}" y="{base+31:.1f}" text-anchor="middle" '
                      f'font-size="8.5" fill="#1f2937" font-weight="bold">{_d("Lift {n}", n=i + 1)}</text>')   # v593 · era «Elev.»
             p.append(f'<text x="{cx+42:.1f}" y="{base+43:.1f}" text-anchor="middle" '
-                     f'font-size="7.5" fill="#5b6472">L {_mm(e["L"])}</text>')
+                     f'font-size="7.5" fill="#5b6472">L {_m1(e["L"])}</text>')
 
         # ⚠️ v534 · La leyenda en DOS líneas: en una sola, con 1 ascensor (470 de ancho),
         # la frase se salía del dibujo y perdía el final (visto en producción).
@@ -277,7 +286,7 @@ def rail_cut_svg(res: dict, caso: int = 1, n2500: int = 0, n5000: int = 0,
                      f'stroke-dasharray="3,2"/>')
             # Valor del corte, arriba del riel
             p.append(f'<text x="{x+railW/2:.1f}" y="{TOP-6:.0f}" text-anchor="middle" '
-                     f'font-size="8.5" fill="{col}" font-weight="bold">{_mm(v)}</text>')
+                     f'font-size="8.5" fill="{col}" font-weight="bold">{_m1(v)}</text>')
             # Etiqueta del riel al pie
             p.append(f'<text x="{x+railW/2:.1f}" y="{base+13:.0f}" text-anchor="middle" '
                      f'font-size="7.5" fill="#1f2937">{lbl}</text>')

@@ -28,6 +28,13 @@ def _result_matrix(labels, per_elev_values, n):
     return pd.DataFrame(cols, index=labels)
 
 
+def _cfg_mm(n):
+    """v597 · Las columnas de cortes («Lift 1»…) con UN decimal, como el resumen guardado y el
+    PDF (sin formato la tabla quitaba el «.0»: «650» junto a «650.5»). Con su etiqueta (v579)."""
+    return tabla.cfg(extra={f"{d('Lift')} {i+1}": tabla.mm1(t("Lift {n}", n=i + 1))
+                            for i in range(n)})
+
+
 def _firma(*vals) -> tuple:
     """v593 · Las ENTRADAS de un cálculo, para saber si lo de pantalla sigue valiendo."""
     out = []
@@ -106,9 +113,18 @@ def render_rail_cut_tab():
                 st.session_state["rc_lfkk"] = float(lf["LFKK"])
             if lf.get("LFGK") is not None:
                 st.session_state["rc_lfgk"] = float(lf["LFGK"])
-            found = [k for k in ("LFKK", "LFGK") if lf.get(k) is not None]
-            st.success(t("Found in the PDF: {x}. Check or complete below.",
-                         x=", ".join(found) if found else t("none")))
+            # ⚠️ v597 · «no encontrado» es un AVISO, no un éxito: salía en verde «Found in the PDF:
+            # none.» (visto en producción); y si falta una de las dos, se dice cuál.
+            found = [f"{k}={lf[k]:.0f}" for k in ("LFKK", "LFGK") if lf.get(k) is not None]
+            _falta = [k for k in ("LFKK", "LFGK") if lf.get(k) is None]
+            if not found:
+                st.warning(t("LFKK and LFGK were not found in the drawing. Enter them by hand."))
+            elif _falta:
+                st.warning(t("From the drawing: **{x} mm**. {y} was not found: enter it by hand.",
+                             x=", ".join(found), y=_falta[0]))
+            else:
+                st.success(t("From the drawing: **{x} mm**. Check or complete below.",
+                             x=", ".join(found)))
 
     c1, c2 = st.columns(2)
     lfkk = c1.number_input(t("LFKK (mm)"), value=float(st.session_state.get("rc_lfkk", 0.0)),
@@ -207,14 +223,14 @@ def render_rail_cut_tab():
                      ("n", t("Lifts"), str(_e["n"]))], "rc")
             mat = _result_matrix(["CutRC", "CutRCW"], res["elevadores"], _e["n"])
             st.subheader(t("Result — cuts (mm)"))
-            st.dataframe(mat, width="stretch", column_config=tabla.cfg())
+            st.dataframe(mat, width="stretch", column_config=_cfg_mm(_e["n"]))
             # v593 · el signo, dicho junto a la tabla (solo lo decía la leyenda del diagrama)
             st.caption(t("The cut goes on the 1st rail (the bottom one, first installed). "
                          "**Negative = trim** that much off it · **positive = it falls short**: "
                          "add that much. Same signed value as the diagram."))
             with st.expander(t("Detail (RC, RCW)")):
                 det = _result_matrix(["RC", "RCW"], res["elevadores"], _e["n"])
-                st.dataframe(det, width="stretch", column_config=tabla.cfg())
+                st.dataframe(det, width="stretch", column_config=_cfg_mm(_e["n"]))
 
             svg = rail_cut_svg(res, caso=1, n2500=_e["n2500"], n5000=_e["n5000"], proyecto=_pr)
             _titulo_diagrama()
@@ -238,10 +254,12 @@ def render_rail_cut_tab():
                          "add that much.")])
             render_guardar(herramienta="rieles", titulo_pdf=d("rail cutting"),
                            pdf_bytes=_pdf,
-                           # v593 · en inglés (decía «Caso 1 · … E1: …»)
+                           # v593 · en inglés (decía «Caso 1 · … E1: …»). ⚠️ v597 · con el
+                           # decimal de la tabla: redondeaba a entero y un corte de 650.5 se
+                           # guardaba como «650» (redondeo al par) con «650.5» en pantalla
                            resumen=d("Case 1 · A {a} · {x}", a=f"{res['A']:.0f}", x=", ".join(
-                               d("Lift {i}: {c}/{w}", i=i + 1, c=f"{x['CutRC']:.0f}",
-                                 w=f"{x['CutRCW']:.0f}") for i, x in enumerate(res["elevadores"]))),
+                               d("Lift {i}: {c}/{w}", i=i + 1, c=f"{x['CutRC']:.1f}",
+                                 w=f"{x['CutRCW']:.1f}") for i, x in enumerate(res["elevadores"]))),
                            datos=res,
                            nombre_archivo=f"Rail_cutting_case1_{_archivo(_pr, 'shaft')}_{_hoy}.pdf",
                            key="rc1", obra_id=str((_prj or {}).get("ID", "")),   # v592
@@ -324,7 +342,7 @@ def render_rail_cut_tab():
             st.caption(t("Sub-case: {x}", x=_sub_txt))
             mat = _result_matrix(["CutRZ", "CutRO", "CutRF", "CutRB"], res, _e["n"])
             st.subheader(t("Result — cuts (mm)"))
-            st.dataframe(mat, width="stretch", column_config=tabla.cfg())
+            st.dataframe(mat, width="stretch", column_config=_cfg_mm(_e["n"]))
             st.caption(t("The cut (mm) goes on the TOP rail of each line: car RZ, RO · "
                          "counterweight RF, RB."))
 

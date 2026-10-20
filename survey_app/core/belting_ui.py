@@ -161,17 +161,17 @@ def render_belting_tab():
                 st.rerun()
     filas = [{
         d("Lift"):   r["elevador"],
-        "HGPR (mm)": r["hgpr"],
+        "HGPR (mm)": round(float(r["hgpr"]), 1),      # v597 · al décimo, como el DSTS
         "DSTS (mm)": r["dsts"],
         d("Position"): _posicion(r["dsts"]),
     } for r in results]
     st.subheader(t(":material/table_rows: Results (DSTS per lift)"))
     # v596 · el DSTS con UN decimal, como la posición, el resumen y el PDF (salía «21» aquí y
-    # «21.0» al lado; y con un -29.5 la misma columna mezclaba las dos formas). Con su ETIQUETA
-    # (regla de v579: sin ella y sin traducción, la cabecera sería la clave)
+    # «21.0» al lado). v597 · y el HGPR igual («120» y «70.5» en la misma columna, visto en
+    # producción): `tabla.mm1`, con su etiqueta (regla de v579)
     st.dataframe(pd.DataFrame(filas), width="stretch", hide_index=True,
-                 column_config=tabla.cfg(extra={"DSTS (mm)": st.column_config.NumberColumn(
-                     t("DSTS (mm)"), format="%.1f")}))
+                 column_config=tabla.cfg(extra={"HGPR (mm)": tabla.mm1(t("HGPR (mm)")),
+                                                "DSTS (mm)": tabla.mm1(t("DSTS (mm)"))}))
     _formula = d("DSTS = HGPR − HGP({a}) − HQ({b})/1000 = HGPR − {c} mm", a=f"{_hgp:.0f}",
                  b=f"{_hq:.0f}", c=f"{_hgp + _hq / 1000.0:.1f}")
     st.caption(_formula)

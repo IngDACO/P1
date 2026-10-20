@@ -227,6 +227,17 @@ def derecha(label):
         return st.column_config.Column(label)
 
 
+def mm1(label):
+    """Columna NUMÉRICA de una medida en mm, con UN decimal (v597).
+
+    ⚠️ Sin formato, la tabla quita el «.0»: el mismo corte salía «20» en pantalla y «20.0» en el
+    resumen guardado y el PDF, y una columna con 20.0 y 7.5 mezclaba «20» y «7.5» (visto en
+    producción en Buffers y Belting). Los valores van ya redondeados a 1 decimal en Python, así
+    que el formato solo añade el «.0» — no redondea por su cuenta. Con su ETIQUETA (regla v579).
+    """
+    return st.column_config.NumberColumn(label, format="%.1f")
+
+
 def celda(valor, dec: int = 2, simbolo: str = "", vacio: str = "") -> str:
     r"""Número YA FORMATEADO para una celda, o `vacio` cuando NO hay dato (v486).
 

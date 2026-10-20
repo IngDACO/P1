@@ -159,7 +159,11 @@ def render_buffer_cut_tab():
     with st.container(key="cpx_bc_tabla"):
         _PU._bajar_a("cpx_bc_tabla", "_bajar_cpx_bc_tabla", bloque="start")
         st.subheader(t("Result — cuts (mm)"))
-    st.dataframe(pd.DataFrame(filas), width="stretch", hide_index=True, column_config=tabla.cfg())
+    # v597 · UN decimal, como el resumen y el PDF (salía «20» y «7.5» en la misma columna y
+    # «Buffer 1: 20.0» en lo guardado, visto en producción)
+    st.dataframe(pd.DataFrame(filas), width="stretch", hide_index=True,
+                 column_config=tabla.cfg(extra={"HKPR (mm)": tabla.mm1(t("HKPR (mm)")),
+                                                d("Cut (mm)"): tabla.mm1(t("Cut (mm)"))}))
 
     svg = buffer_cut_svg(res, proyecto=_pr)
     with st.container(key="cpx_bc_dibujo"):

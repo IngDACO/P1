@@ -25,20 +25,30 @@ for p in proys:
     # de la demo estuvo sin obras.
     pid, nom = str(p.get("ID", "")), str(p.get("Name", ""))
     h = P.project_hours(nom, p.get("Group"), pid=pid)
-    n = sum(1 for r in fich if T.es_del_proyecto(r, pid, nom))
-    (con if h > 0 else sin).append((pid, nom, h, n))
+    # ⚠️ v597 · Solo cuentan las jornadas CERRADAS: las horas se graban al fichar la salida, así
+    # que una jornada ABIERTA da 0 h con razón (trampa 6). El 21/10/2026 este chequeo se puso
+    # rojo por eso: campo000 fichó en PRJ-0034 a las 06:13 y aún no había salido. Un hueco de
+    # verdad (una jornada cerrada que no suma) sigue saliendo como antes.
+    _suyos = [r for r in fich if T.es_del_proyecto(r, pid, nom)]
+    n = sum(1 for r in _suyos if str(r.get("Clock Out", "") or "").strip())
+    abiertas = len(_suyos) - n
+    (con if h > 0 else sin).append((pid, nom, h, n, abiertas))
 
 print("-- con horas --")
-for pid, nom, h, n in con:
-    print(f"   {pid}  {nom[:34]:<35} {h:>8.1f} h   ({n} fichajes)")
+for pid, nom, h, n, ab in con:
+    print(f"   {pid}  {nom[:34]:<35} {h:>8.1f} h   ({n} fichajes cerrados, {ab} abiertos)")
 print(f"\n-- en 0 --")
-for pid, nom, h, n in sin:
-    marca = "  ← ‼️ TIENE fichajes y marca 0" if n else "  ✓ no tiene fichajes"
-    print(f"   {pid}  {nom[:34]:<35} {h:>8.1f} h   ({n} fichajes){marca}")
+for pid, nom, h, n, ab in sin:
+    marca = ("  ← ‼️ TIENE fichajes cerrados y marca 0" if n else
+             "  ✓ solo una jornada abierta (aún sin horas)" if ab else "  ✓ no tiene fichajes")
+    print(f"   {pid}  {nom[:34]:<35} {h:>8.1f} h   ({n} cerrados, {ab} abiertos){marca}")
 
 malos = [x for x in sin if x[3] > 0]
 print(f"\n   {len(con)} con horas · {len(sin)} en cero, de los cuales "
-      f"{len(malos)} con fichajes sin contar")
+      f"{len(malos)} con fichajes cerrados sin contar")
+# (la sonda SABE ver el fallo: una jornada cerrada que no suma — la del caso conocido-malo)
+_falsa = [{"Clock Out": "2026-10-21 10:00:00", "Hours": "4"}]
+assert sum(1 for r in _falsa if str(r.get("Clock Out", "") or "").strip()) == 1
 print("\n" + ("✅ los ceros son obras sin fichajes: la cartera dice la verdad"
               if not malos else "⚠️ hay ceros con fichajes detrás"))
 sys.exit(0 if not malos else 1)

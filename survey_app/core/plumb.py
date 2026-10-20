@@ -194,16 +194,26 @@ def compute_plumb(inp: dict, survey_disp: dict = None) -> dict:
 
 
 def _n(v) -> str:
-    """mm: entero si lo es, 1 decimal si no.
+    """mm, con UN decimal SIEMPRE (v597).
 
     DBPW = TKSW − 150 + fb arrastra el fb del survey, que va en pasos de 0.5 mm
-    (ver v122): con .0f un 886.5 se rotulaba "886".
+    (ver v122): con .0f un 886.5 se rotulaba "886". ⚠️ v597 · Y «entero si lo es» rotulaba
+    «DBP 1834» con «1834.0» en las cifras, la tabla, el resumen y el PDF de la plomada: la
+    misma cifra, dos formas. Un decimal en todas partes.
     """
     try:
-        v = float(v)
+        return f"{float(v):.1f}"
     except Exception:
         return str(v)
-    return f"{v:.0f}" if abs(v - round(v)) < 0.05 else f"{v:.1f}"
+
+
+def _n0(v) -> str:
+    """v597 · Cotas del PLANO (el chequeo de BS: plano, componentes, diferencia), ENTERAS — como
+    las escribe el aviso de la pantalla («the drawing says 1998 but … = 1990 (diff +8)»)."""
+    try:
+        return f"{float(v):.0f}"
+    except Exception:
+        return str(v)
 
 
 def plumb_svg(res: dict, proyecto: str = "") -> str:
@@ -333,11 +343,11 @@ def plumb_svg(res: dict, proyecto: str = "") -> str:
         p.append(f'<text x="{cx+6}" y="{yb+15}" font-size="8" fill="#c0392b" '
                  f'font-weight="bold">{_d("⚠ BS INCONSISTENT")}</text>')
         p.append(f'<text x="{cx+6}" y="{yb+30}" font-size="7.5" fill="#1f2937">'
-                 f'{_d("drawing")} {_n(bsc.get("bs_plano"))} vs</text>')
+                 f'{_d("drawing")} {_n0(bsc.get("bs_plano"))} vs</text>')
         p.append(f'<text x="{cx+6}" y="{yb+42}" font-size="7.5" fill="#1f2937">'
-                 f'{_d("components {x}", x=_n(bsc.get("bs_componentes")))}</text>')
+                 f'{_d("components {x}", x=_n0(bsc.get("bs_componentes")))}</text>')
         p.append(f'<text x="{cx+6}" y="{yb+54}" font-size="7.5" fill="#c0392b">'
-                 f'{_d("diff {x} mm — check", x=_n(bsc.get("dif")))}</text>')
+                 f'{_d("diff {x} mm — check", x=_n0(bsc.get("dif")))}</text>')
         yb += 70
 
     # Sacrificio Z/Omega (solo modo independiente con BSR &lt; BS)
@@ -652,11 +662,21 @@ def plumb_table(res: dict) -> list:
         moved = abs(d["x"] - d["x0"]) > 1e-6
         rows.append({
             "Línea":          LINE_NAMES.get(name, name),
-            "X inicial (mm)": round(d["x0"], 2),
-            "X final (mm)":   round(d["x"], 2),
+            # v597 · al décimo, como todo lo demás en mm (iba a 2 decimales)
+            "X inicial (mm)": round(d["x0"], 1),
+            "X final (mm)":   round(d["x"], 1),
             "Desplazada":     _d("Yes") if moved else "—",
         })
     return rows
+
+
+def plumb_table_doc(res: dict) -> list:
+    """`plumb_table` con las cabeceras del DOCUMENTO (v597), para `tool_pdf`, que imprime las
+    CLAVES tal cual: el PDF de la plomada salía con «Línea · X inicial (mm) · X final (mm) ·
+    Desplazada». Las claves de `plumb_table` no se tocan (son dato: las leen los informes)."""
+    return [{_d("Line"): f["Línea"], _d("X start (mm)"): f["X inicial (mm)"],
+             _d("X end (mm)"): f["X final (mm)"], _d("Shifted"): f["Desplazada"]}
+            for f in plumb_table(res)]
 
 
 def plumb_checks(res: dict) -> list:

@@ -730,8 +730,11 @@ def render_survey_tab(_ROL, _GRUPO):
             pm1.metric(t("DBP"),  f"{plumb_res['dbp']:.1f} mm")
             pm2.metric(t("DBPW"), f"{plumb_res['dbpw']:.1f} mm")
             pm3.metric("RW",   f"{plumb_res['rw']:.1f} mm")
+            # v597 · las posiciones con UN decimal, como las cifras de arriba y los dibujos
             st.dataframe(pd.DataFrame(plumb_table(plumb_res)),
-                         width="stretch", hide_index=True, column_config=tabla.cfg())
+                         width="stretch", hide_index=True,
+                         column_config=tabla.cfg(extra={"X inicial (mm)": tabla.mm1(t("X start (mm)")),
+                                                        "X final (mm)": tabla.mm1(t("X end (mm)"))}))
             _pr_ = str(st.session_state.get("proyecto", ""))
             _bs = plumb_res.get("bs_check") or {}
             if _bs and not _bs.get("ok", True):
@@ -755,7 +758,8 @@ def render_survey_tab(_ROL, _GRUPO):
                     + plumb_card_svg(plumb_res, proyecto=_pr_) + '</body></html>', 430)
             st.markdown(t("**:material/straighten: On-site check — plumb ↔ real wall distances**"))
             st.dataframe(pd.DataFrame(plumb_checks(plumb_res)),
-                         width="stretch", hide_index=True, column_config=tabla.cfg())
+                         width="stretch", hide_index=True,
+                         column_config=tabla.cfg(extra={"Distancia (mm)": tabla.mm1(t("Distance (mm)"))}))
             if float(all_params.get("LengthTemplate", 0.0)) <= 0:
                 st.info(t(":material/lightbulb: Enter **LengthTemplate** in the parameters to see the full template (point P, cuts C1/C2 and diagonals)."))
         else:

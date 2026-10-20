@@ -17,17 +17,20 @@ BE = "core/belting_ui.py"
 BL = "core/belting.py"
 TOPE_S = 600
 
+# ⚠️ v597 · Re-ancladas con su razón: el formato vive ahora en `tabla.mm1` (lo usan las cuatro
+# herramientas) y `belting._mm` ya no existe — la rotura del diagrama rompía por un NameError, no
+# por el formato; ahora devuelve el «21» a pelo.
+TB = "core/tabla.py"
 ROTURAS = [
     ("⚠️ la columna DSTS vuelve sin formato («21» junto a «21.0»)", BE,
-     [('                 column_config=tabla.cfg(extra={"DSTS (mm)": st.column_config.NumberColumn(\n'
-       '                     t("DSTS (mm)"), format="%.1f")}))\n',
-       '                 column_config=tabla.cfg())\n')]),
-    ("…o con otro formato (sin decimal)", BE,
-     [('format="%.1f")}))\n', 'format="%.0f")}))\n')]),
-    ("…o pierde su etiqueta (la regla de v579)", BE,
-     [('                     t("DSTS (mm)"), format=', '                     format=')]),
+     [('"DSTS (mm)": tabla.mm1(t("DSTS (mm)"))', '"DSTS (mm)": st.column_config.Column(t("DSTS (mm)"))')]),
+    ("…o con otro formato (sin decimal)", TB,
+     [('    return st.column_config.NumberColumn(label, format="%.1f")\n',
+       '    return st.column_config.NumberColumn(label, format="%.0f")\n')]),
+    ("…o pierde su etiqueta (la regla de v579)", TB,
+     [('    return st.column_config.NumberColumn(label, format=', '    return st.column_config.NumberColumn(format=')]),
     ("⚠️ el diagrama vuelve a «DSTS 21 mm»", BL,
-     [("DSTS {dsts:.1f} mm</text>", "DSTS {_mm(dsts)} mm</text>")]),
+     [("DSTS {dsts:.1f} mm</text>", "DSTS {dsts:.0f} mm</text>")]),
 ]
 CONTROL = ("CONTROL: un comentario inocuo no puede poner nada rojo", BE,
            [("def _posicion(dsts) -> str:\n", "def _posicion(dsts) -> str:   # (control)\n")])
