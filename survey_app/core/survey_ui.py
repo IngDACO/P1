@@ -1024,15 +1024,16 @@ def render_survey_tab(_ROL, _GRUPO):
             _pid_sv = str((_prj_sv or {}).get("ID", ""))
             _neutro_sv = ({"ns": 2} if st.session_state.get("_sv_ns_obra") != _pid_sv
                           else None)
-            _n_sv = plan_ui.aplicar(_plano_sv, _mapa_sv, neutros=_neutro_sv)
+            plan_ui.aplicar(_plano_sv, _mapa_sv, neutros=_neutro_sv)
             st.session_state["_sv_ns_obra"] = _pid_sv
-            if _n_sv:
-                # v590 · con su plural y por `t()` (decía «value(s)»)
-                st.caption((t(":green[:material/check_circle:] 1 value taken from the project "
-                              "drawing.") if _n_sv == 1 else
-                            t(":green[:material/check_circle:] {n} values taken from the project "
-                              "drawing.", n=_n_sv))
-                           + " " + t("Check them and fill in the ones measured on site."))
+            # ⚠️ v591 · FIJO mientras esté el plano de la obra. Antes salía solo en la pasada que
+            # RELLENABA los campos («17 values taken…»), y esa misma pasada cambia NS de 2 a 8 y
+            # relanza para redimensionar la matriz: no lo vio nadie (ni en v589 ni en v590, en
+            # producción). La cifra ya la da la línea del plano de arriba («17/17 parameters»).
+            if _plano_sv.get("params"):
+                st.caption(t(":green[:material/check_circle:] The drawing fields come from the "
+                             "project's drawing data. Check them and fill in the ones measured "
+                             "on site."))
             if _plano_sv.get("rail"):
                 st.caption(t(":material/train: Rail from the drawing: **{r}** — adjust RAIL if "
                              "the catalogue does not have it.", r=_plano_sv['rail']))
