@@ -93,6 +93,7 @@ def _cadenas(f):
 
 
 from streamlit.testing.v1 import AppTest                          # noqa: E402
+import pandas as pd                                               # noqa: E402  (v593)
 
 from core import estado_vivo as EV                                # noqa: E402
 
@@ -584,6 +585,16 @@ _cfg = json.loads(_ed[0].proto.columns or "{}") if _ed else {}
 chk("...y su cabecera se pinta en inglés: «Lift 1», «Lift 2»",
     (_cfg.get("Elevador 1") or {}).get("label") == "Lift 1"
     and (_cfg.get("Elevador 2") or {}).get("label") == "Lift 2", _cfg)
+# ⚠️ v593 · Al día con su razón (v385): el caso calculaba con LFKK/LFGK y la matriz en 0, y
+# desde v593 eso NO se calcula a propósito (daba los LF a pelo como «cortes», visto en
+# producción). El principio no cambia —con la ETIQUETA traducida, el cálculo lee sus columnas
+# por la CLAVE «Elevador N»—, así que se le dan datos de verdad antes de pulsar.
+at.number_input(key="rc_lfkk").set_value(1150.0)
+at.number_input(key="rc_lfgk").set_value(980.0)
+at.session_state["rc_in_df"] = pd.DataFrame({"Riel": ["RZ", "RO", "RF", "RB"],
+                                             "Elevador 1": [300.0, 310.0, 280.0, 290.0],
+                                             "Elevador 2": [305.0, 300.0, 285.0, 295.0]})
+at.run()
 at.button(key="rc_calc2").click().run()
 chk("con la etiqueta cambiada, «Calculate cuts (Case 2)» sigue leyendo sus columnas y calcula",
     not at.exception and "RES=True" in [m.value for m in at.markdown],

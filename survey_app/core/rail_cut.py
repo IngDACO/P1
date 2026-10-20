@@ -18,6 +18,7 @@ CASO 2 — el riel a cortar es el ÚLTIMO instalado (el de más arriba):
 """
 
 from core.i18n import d as _d
+from core import texto_svg
 import logging
 import re
 
@@ -100,10 +101,6 @@ def _mm(v) -> str:
     return f"{v:.0f}" if abs(v - round(v)) < 0.05 else f"{v:.1f}"
 
 
-def _esc(s) -> str:
-    return str(s or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-
-
 def rail_cut_svg(res: dict, caso: int = 1, n2500: int = 0, n5000: int = 0,
                  proyecto: str = "") -> str:
     """Diagrama de los cortes de riel.
@@ -122,6 +119,13 @@ def rail_cut_svg(res: dict, caso: int = 1, n2500: int = 0, n5000: int = 0,
 
     cab = ('<text x="18" y="26" font-size="11" fill="#1f2937" font-weight="bold">'
            f'{_d("RAIL CUTTING")}</text>')
+
+    def _obra(VW) -> str:
+        """v593 · El nombre de la obra, MEDIDO para que no pise el título (iba sin medir:
+        uno largo se montaba encima de «RAIL CUTTING»)."""
+        _libre = VW - 36 - texto_svg.ancho(_d("RAIL CUTTING"), 11, True) - 16
+        return (f'<text x="{VW-18}" y="26" text-anchor="end" font-size="9" fill="#1f2937" '
+                f'font-weight="bold">{texto_svg.cabe(proyecto, _libre, 9, True)}</text>')
 
     if caso == 1:
         A = float(res.get("A") or 0)
@@ -145,8 +149,7 @@ def rail_cut_svg(res: dict, caso: int = 1, n2500: int = 0, n5000: int = 0,
              f'({n2500}&#215;2500 + {n5000}&#215;5000) &#183; '
              f'{_d("cut = required &#8722; A")}</text>']
         if proyecto:
-            p.append(f'<text x="{VW-18}" y="26" text-anchor="end" font-size="9" '
-                     f'fill="#1f2937" font-weight="bold">{_esc(proyecto)}</text>')
+            p.append(_obra(VW))
 
         yA = base - A * esc
         p.append(f'<line x1="74" y1="{yA:.1f}" x2="{VW-24}" y2="{yA:.1f}" '
@@ -191,13 +194,16 @@ def rail_cut_svg(res: dict, caso: int = 1, n2500: int = 0, n5000: int = 0,
                     p.append(f'<rect x="{x:.1f}" y="{yc:.1f}" width="36" '
                              f'height="{h:.1f}" fill="{fll}" stroke="{stk}" '
                              f'stroke-width="1.0"/>')
-                    p.append(f'<text x="{x+18:.1f}" y="{yc + h/2 + 3:.1f}" '
+                    # v593 · en una banda más baja que la cifra (650 mm sobre 20 m ≈ 6 px) el
+                    # número se montaba sobre el suelo: va ENCIMA de la banda, dentro de la columna.
+                    _yt = (yc + h / 2 + 3) if h >= 12 else (yc - 3)
+                    p.append(f'<text x="{x+18:.1f}" y="{_yt:.1f}" '
                              f'text-anchor="middle" font-size="8.5" fill="{stk}" '
                              f'font-weight="bold">{_mm(corte)}</text>')
                 p.append(f'<text x="{x+18:.1f}" y="{base+14:.1f}" text-anchor="middle" '
                          f'font-size="7.5" fill="#1f2937">{lbl}</text>')
             p.append(f'<text x="{cx+42:.1f}" y="{base+31:.1f}" text-anchor="middle" '
-                     f'font-size="8.5" fill="#1f2937" font-weight="bold">{_d("Elev.")} {i+1}</text>')
+                     f'font-size="8.5" fill="#1f2937" font-weight="bold">{_d("Lift {n}", n=i + 1)}</text>')   # v593 · era «Elev.»
             p.append(f'<text x="{cx+42:.1f}" y="{base+43:.1f}" text-anchor="middle" '
                      f'font-size="7.5" fill="#5b6472">L {_mm(e["L"])}</text>')
 
@@ -246,8 +252,7 @@ def rail_cut_svg(res: dict, caso: int = 1, n2500: int = 0, n5000: int = 0,
          f'<line x1="26" y1="{base}" x2="{VW-24}" y2="{base}" '
          f'stroke="#1f2937" stroke-width="1.5"/>']
     if proyecto:
-        p.append(f'<text x="{VW-18}" y="26" text-anchor="end" font-size="9" '
-                 f'fill="#1f2937" font-weight="bold">{_esc(proyecto)}</text>')
+        p.append(_obra(VW))
     for i, e in enumerate(elevs):
         ex = left + i * (unit + gelev)
         # Encabezados de grupo
@@ -277,7 +282,7 @@ def rail_cut_svg(res: dict, caso: int = 1, n2500: int = 0, n5000: int = 0,
             p.append(f'<text x="{x+railW/2:.1f}" y="{base+13:.0f}" text-anchor="middle" '
                      f'font-size="7.5" fill="#1f2937">{lbl}</text>')
         p.append(f'<text x="{ex+unit/2:.1f}" y="{base+30:.0f}" text-anchor="middle" '
-                 f'font-size="8.5" fill="#1f2937" font-weight="bold">{_d("Elevator")} {i+1}</text>')
+                 f'font-size="8.5" fill="#1f2937" font-weight="bold">{_d("Lift {n}", n=i + 1)}</text>')   # v593 · era «Elevator»
 
     _cab, _con = COL["cabina"], COL["contra"]
     p.append(f'<rect x="18" y="{VH-26}" width="9" height="9" fill="{_cab}" '

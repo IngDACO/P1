@@ -143,9 +143,14 @@ def render_plumb_tab():
                             step=1, value=int(st.session_state.get("plb_n", 1)), key="plb_n"))
     base = st.session_state.get("plb_bsr_df")
     if base is None or len(base) != n:
+        # ⚠️ v593 · Cambiar el nº de ascensores CONSERVA los BSR tecleados (antes la tabla
+        # nacía entera en 0) y estrena la tabla editable (v542).
+        _prev = [float(x or 0) for x in (list(base["BSR (mm)"]) if base is not None else [])]
         # v534 · «Elevador 1» salía en español; solo cambia lo que se lee (ver rail_cut_ui).
         base = pd.DataFrame({"Elevador": [t("Lift {n}", n=i + 1) for i in range(n)],
-                             "BSR (mm)": [0.0] * n})
+                             "BSR (mm)": (_prev + [0.0] * n)[:n]})
+        if _prev:
+            estado_vivo.tabla_nueva("plb")
     bsr_edit = st.data_editor(base, width="stretch", hide_index=True,
                               num_rows="fixed", disabled=["Elevador"],
                               # v540 · Clave con generación: al cambiar de obra, tabla nueva.
