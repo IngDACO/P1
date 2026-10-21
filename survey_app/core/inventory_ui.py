@@ -181,9 +181,12 @@ def render_inventario(grupo):
     } for a in _rows])
     _ev = st.dataframe(
         df, width="stretch", hide_index=True,
-        on_select="rerun", selection_mode="single-row", key="inv_tbl",
+        # ⚠️ v598 · `single-cell`, como Files en v592: con `single-row` un toque en la celda solo
+        # la enmarcaba (la ficha se abría únicamente marcando la casilla).
+        on_select="rerun", selection_mode="single-cell", key="inv_tbl",
         column_config=tabla.cfg(None, {"Valor": st.column_config.NumberColumn(t("Value"), format="$%,d")}))
-    _sr = list(_ev.selection.rows)
+    _s = _ev.selection            # v598 · la fila de la CELDA tocada (o la de la casilla)
+    _sr = [c[0] for c in (getattr(_s, "cells", None) or [])] or list(getattr(_s, "rows", None) or [])
     if _sr:
         st.session_state["_inv_open"] = str(_rows[_sr[0]].get("ID", ""))
         st.session_state.pop("inv_tbl", None)

@@ -1840,7 +1840,10 @@ def _cartera_lista(proys, alarmas, delays, aheads, costos, pendientes=None,
         })
     _ev = st.dataframe(
         pd.DataFrame(_rows), hide_index=True, width="stretch",
-        on_select="rerun", selection_mode="single-row", key="cart_tbl",
+        # ⚠️ v598 · `single-cell`, como Files en v592: con `single-row` un toque en el NOMBRE solo
+        # enmarcaba la celda y la tira de acciones salía únicamente marcando la casilla (visto en
+        # producción, con «Tap a row and choose what to do with it» debajo).
+        on_select="rerun", selection_mode="single-cell", key="cart_tbl",
         column_config=tabla.cfg(None, {
             "Progress": st.column_config.ProgressColumn(
                 t("Progress"), min_value=0, max_value=100, format="%d%%", width=78),
@@ -1897,7 +1900,8 @@ def _cartera_lista(proys, alarmas, delays, aheads, costos, pendientes=None,
                    f"in {_n} of the jobs shown.")
     st.caption(t(":material/touch_app: Tap a row and choose what to do with it.  Budget = % of the budget used (:orange[:material/warning:] if it went over) and over = over budget."))
     try:
-        _sr = list(_ev.selection.rows)
+        _s = _ev.selection        # v598 · la fila de la CELDA tocada (o la de la casilla)
+        _sr = [c[0] for c in (getattr(_s, "cells", None) or [])] or list(getattr(_s, "rows", None) or [])
     except Exception:
         _sr = []
     if _sr and _sr[0] < len(proys):

@@ -192,10 +192,13 @@ def _tabla(items):
         "Date": str(it.get("Date", ""))[:10],
     } for it in items])
     _ev = st.dataframe(df, width="stretch", hide_index=True,
-                       on_select="rerun", selection_mode="single-row", key="lib_tbl",
+                       # ⚠️ v598 · `single-cell`, como Files en v592: con `single-row` un toque
+                       # en la celda solo la enmarcaba
+                       on_select="rerun", selection_mode="single-cell", key="lib_tbl",
                        column_config=tabla.cfg(None, {
                            "Title": st.column_config.TextColumn(t("Title"), width=280)}))
-    _sr = list(_ev.selection.rows)
+    _s = _ev.selection            # v598 · la fila de la CELDA tocada (o la de la casilla)
+    _sr = [c[0] for c in (getattr(_s, "cells", None) or [])] or list(getattr(_s, "rows", None) or [])
     if _sr and _sr[0] < len(items):
         st.session_state["_lib_open"] = str(items[_sr[0]].get("ID", ""))
         # ⚠️ Se suelta la selección: si no, al volver la tabla la reabre sola (v226/v228).

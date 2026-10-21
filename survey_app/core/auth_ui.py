@@ -1572,12 +1572,15 @@ def _grupo_usuarios(grupo):
     } for u in vista]
     # ⚠️ La clave lleva el FILTRO: la selección es un número de fila, y la fila 3 de
     # «sin contacto» no es la fila 3 de todos — sin esto se abriría otra ficha.
+    # ⚠️ v598 · `single-cell`, como Files en v592: con `single-row` un toque en la celda solo
+    # la enmarcaba (la ficha se abría únicamente marcando la casilla).
     _ev = st.dataframe(pd.DataFrame(_rows), hide_index=True, width="stretch",
-                       on_select="rerun", selection_mode="single-row",
+                       on_select="rerun", selection_mode="single-cell",
                        key=f"gu_tbl_{_filtro or 'todos'}", column_config=tabla.cfg())
     st.caption(t(":material/touch_app: Tap a row to open and manage that person's record.  Credentials: valid / expiring / expired / — not recorded."))
     try:
-        _sr = list(_ev.selection.rows)
+        _s = _ev.selection        # v598 · la fila de la CELDA tocada (o la de la casilla)
+        _sr = [c[0] for c in (getattr(_s, "cells", None) or [])] or list(getattr(_s, "rows", None) or [])
     except Exception:
         _sr = []
     if _sr and _sr[0] < len(vista):
