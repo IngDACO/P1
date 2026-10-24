@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Flujograma — Elevator Survey Analyzer</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<style>
+  body { background:#0d1117; color:#e6edf3; font-family:sans-serif; margin:0; padding:20px; }
+  h1   { text-align:center; color:#58a6ff; margin-bottom:4px; }
+  h2   { text-align:center; color:#8b949e; font-weight:normal; font-size:14px; margin-bottom:24px; }
+  .mermaid { background:#161b22; border-radius:12px; padding:24px; max-width:1600px; margin:0 auto; }
+  .legend  { max-width:900px; margin:24px auto; display:flex; gap:16px; flex-wrap:wrap; }
+  .leg     { background:#161b22; border-radius:8px; padding:10px 16px; font-size:13px; border-left:4px solid; }
+  .l1 { border-color:#58a6ff; } .l2 { border-color:#3fb950; } .l3 { border-color:#f78166; }
+  .l4 { border-color:#e3b341; } .l5 { border-color:#bc8cff; }
+</style>
+</head>
+<body>
+<h1>📐 Elevator Survey Analyzer — Flujo Lógico</h1>
+<h2>IngDACO / P1 · v21+</h2>
+
+<div class="legend">
+  <div class="leg l1">🔵 Entrada / UI Streamlit</div>
+  <div class="leg l2">🟢 Procesamiento / Cálculo</div>
+  <div class="leg l3">🔴 Error / SKIP</div>
+  <div class="leg l4">🟡 Decisión</div>
+  <div class="leg l5">🟣 Salida / Resultados</div>
+</div>
+
+<div class="mermaid">
+flowchart TD
+    START([🚀 App inicializa]) --> INIT["_init_state()\nparams = 0 · config defaults\nsession_state limpio"]
+
+    INIT --> SIDEBAR["SIDEBAR\n📋 Valores PDF extraídos\nleyenda de colores"]
+
+    SIDEBAR --> S1_HDR["━━━ PASO 1: Cargar Planos ━━━"]
+
+    S1_HDR --> PDF_UP{{"¿Nuevo PDF\ncargado?"}}
+    PDF_UP -->|"Sí"| EXTRACT["schindler.extract_from_pdf()\n• visitor_text XY positional\n• regex PARAM=VALUE\n• two-pass visitor + plain text\n• truncación si valor fuera de rango"]
+    EXTRACT --> PDF_OK["Actualizar session_state\ncon parámetros extraídos\nMostrar ✅ encontrados / ⚠️ faltantes"]
+    PDF_OK --> S2_HDR
+    PDF_UP -->|"No / mismo PDF"| S2_HDR
+
+    S2_HDR["━━━ PASO 2: Parámetros ━━━"] --> PDF_FIELDS["Parámetros del PDF — editables\nTKSW BKS TKA TKS TSW\nBGS BKF1 BKF2 BS BT BK\nTK TS SF1 SF2 SG TG"]
+    PDF_FIELDS --> USR_FIELDS["Parámetros del usuario\nBSR · FS · FRAME · RAIL · OFFSET_CABIN"]
+    USR_FIELDS --> CFG["Configuración\nOMEGA_SIDE (R/L)\nWALL_LIMITING (Y/N) → WALL_STOP · WALL_SIDE\nOFFSET_SIDE (R/L)\nCTRL_IN_FRAME (Y/N) → CTRL_SIDE"]
+
+    CFG --> S3_HDR["━━━ PASO 3: Matriz SURVEY ━━━"]
+
+    S3_HDR --> XLS_IN{{"¿Cargar\nExcel?"}}
+    XLS_IN -->|"Sí"| IMPORT["import_survey_excel()\nRestaurar df + params\n+ config completa"]
+    XLS_IN -->|"No"| EDITOR
+    IMPORT --> EDITOR["Data editor\nNS filas × 6 columnas\nWR · FR · OR · WL · FL · OL"]
+    EDITOR --> XLS_OUT["💾 export_survey_excel()\nHoja INFO + hoja CONFIG\n+ hoja SURVEY"]
+
+    XLS_OUT --> S4_HDR["━━━ PASO 4: Calcular ━━━"]
+
+    S4_HDR --> BTN{{"🚀 Botón\n'Calcular'"}}
+    BTN -->|"Click"| SNAP["Snapshot survey_original_input\nConstruir all_params dict\nTotales = última fila"]
+
+    SNAP --> VALID["validate_inputs()\nBKS TKSW TS TK SF1 SF2 RAIL > 0\nBSR > 0\nFS ≥ TSW"]
+    VALID --> VLD_CHK{{"¿Válido?"}}
+    VLD_CHK -->|"❌ Error"| ERR["st.error() + st.stop()"]
+    VLD_CHK -->|"✅ OK"| CLIM
+
+    CLIM["calculate_limits()\n───────────────────\nLIMIT_WR = SF2 + RAIL/2\nLIMIT_WL = SF1 + RAIL/2\nLIMIT_FR = LIMIT_FL = TKSW − 150\nbase = BKS/2 + RAIL/2 − BT/2 − FRAME\nLIMIT_OR / LIMIT_OL (± OFFSET_CABIN)\n───────────────────\nlimit_ob_raw = (SG − TG/2) × 0.3\nOMEGA=R → LIMIT_R=ob_raw · LIMIT_L=SF1×0.3\nOMEGA=L → LIMIT_R=SF2×0.3 · LIMIT_L=ob_raw\n───────────────────\nBC_CALC = TS − TKSW − TK/2 − 25\nFB_MAX_BACK (0 si DIF_TSW_FS > BC_CALC)\nOffsets: FR FL WR WL OR OL\nDimensiones: CS · TL · TLBC"] --> AOFF
+
+    AOFF["apply_offsets()\nWR += Offset_WR · FR += Offset_FR\nWL += Offset_WL · FL += Offset_FL\nOR −= Offset_OR · OL −= Offset_OL"] --> AMAT
+
+    AMAT["analyze_matrix()\nMIN / MAX por columna\nOFF_COUNT (WR/WL/FR/FL: v<lim · OR/OL: v>lim)\nDIF_col\nMAX_OFF_RL (incluye OR/OL si WALL_LIMITING)\nMAX_OFF_FB"] --> SHOW_ADJ
+
+    SHOW_ADJ["Mostrar:\n• Tabla SURVEY ajustada con highlighting\n• Resumen por columna (OFF, niveles, DIF)\n• MAX_OFF_RL · MAX_OFF_FB · BC_CALC · FB_MAX_BACK"]
+
+    SHOW_ADJ --> OPT_START["optimize()\n═══ Barrido RL × FB ═══\nrl_steps = [−MAX_OFF_RL … +MAX_OFF_RL · paso 0.5]\nfb_steps = [−MAX_OFF_FB … +MAX_OFF_FB · paso 0.5]\n\nCaso 1 (WALL): cols = WR FR OR WL FL OL\nCaso 2 (no wall): cols = WR FR WL FL"]
+
+    OPT_START --> RL_LOOP["Por cada rl"]
+    RL_LOOP --> RL_CHK{{"rl<0 y |rl|>LIMIT_R\nó\nrl>0 y |rl|>LIMIT_L?"}}
+    RL_CHK -->|"SKIP físico"| RL_LOOP
+    RL_CHK -->|"OK"| FB_LOOP["Por cada fb"]
+
+    FB_LOOP --> FB_CHK{{"fb > FB_MAX_BACK?"}}
+    FB_CHK -->|"SKIP físico"| FB_LOOP
+    FB_CHK -->|"OK"| APPLY["_apply(rl, fb)\nWR+=rl · FR+=fb · OR−=rl\nWL−=rl · FL+=fb · OL+=rl"]
+
+    APPLY --> WALL_DIR{{"¿Va hacia pared\ny OR/OL en\nWALL_STOP > LIMIT?"}}
+    WALL_DIR -->|"Sí y FS>TSW"| FB_EXTRA["FB extra = FS − TSW\ncabina evade físicamente el muro\nnivel WALL_STOP excluido del conteo\nfb_applied = min(fb+extra, FB_MAX_BACK)"]
+    WALL_DIR -->|"No"| COUNT_V
+    FB_EXTRA --> COUNT_V["Contar OFF por columna\n(con ctrl_in_frame: LIMIT_OR/OL −70 en último nivel)"]
+
+    COUNT_V --> WALL_HARD{{"¿Hacia pared · OR/OL > LIMIT\ny NO se pudo evadir?"}}
+    WALL_HARD -->|"SKIP duro"| FB_LOOP
+    WALL_HARD -->|"VALID"| COMPARE{{"total_off vs\nbest_total_off"}}
+
+    COMPARE -->|"Menor"| NEW_BEST["best_total_off = total_off\nbest_solutions = [solución actual]"]
+    COMPARE -->|"Igual"| ADD_SOL["Agregar a best_solutions"]
+    COMPARE -->|"Mayor"| FB_LOOP
+    NEW_BEST --> FB_LOOP
+    ADD_SOL --> FB_LOOP
+
+    FB_LOOP --> NEXT_RL["Siguiente rl"]
+    NEXT_RL --> RL_LOOP
+
+    RL_LOOP --> TIEBREAK["Desempate:\nbest = min(|RL| + |fb_applied|)"]
+
+    TIEBREAK --> SHOW_OPT["Mostrar resultados optimización:\n• N soluciones con total_off mínimo\n• Matriz final con highlighting + CUT OR/OL\n• Resumen por columna\n• Log: VALID / SKIP físico / SKIP pared"]
+
+    SHOW_OPT --> BS_AN["find_bs_step()\n═══ BSR vs BS ═══"]
+    BS_AN --> BS_CHK{{"BSR ≥ BS?"}}
+    BS_CHK -->|"Sí"| BS_OK["✅ No requiere ajuste de shaft"]
+    BS_CHK -->|"No"| BS_SCAN["Barrer 3 rangos (paso 0.5):\n① ZB: [0, LIMIT_ZB]\n② OB: [LIMIT_ZB, LIMIT_ZB+LIMIT_OB]\n③ Extended: [LIMIT_ZB+LIMIT_OB, 1000]\nRetorna step + rango + nombre"]
+
+    BS_OK --> PERSIST
+    BS_SCAN --> PERSIST["Persistir en session_state.calc_results\nall_params · limits · survey_orig · survey_adj\nlim_map · analysis · optimizer_result · bs_result"]
+
+    PERSIST --> S5_HDR["━━━ PASO 5: Reporte ━━━"]
+    S5_HDR --> BTN_PDF{{"📄 Botón\n'Generar PDF'"}}
+    BTN_PDF -->|"Click"| GEN_PDF["report.generate_report() — ReportLab\n§1 Parámetros entrada (PDF + usuario)\n§2 Dimensiones cabina + diagrama perfil lateral\n§3 Límites geométricos + diagrama sección transversal\n§4 Offsets (FR FL WR WL OR OL)\n§5 Matriz SURVEY original\n§6 Matriz SURVEY ajustada + DIF + estado inicial\n§7 Optimización: params + diagramas RL/FB + log + soluciones\n§8 BSR vs BS"]
+    GEN_PDF --> DL["⬇️ Descargar survey_report.pdf"]
+
+    BTN_PDF -->|"No"| WAIT(["Esperando interacción del usuario"])
+    BTN -->|"No"| WAIT
+
+    style START fill:#1f6feb,stroke:#388bfd,color:#fff
+    style WAIT  fill:#21262d,stroke:#30363d,color:#8b949e
+    style ERR   fill:#6e2c2c,stroke:#f85149,color:#fff
+    style EXTRACT fill:#1c4532,stroke:#3fb950,color:#e6edf3
+    style CLIM   fill:#1c4532,stroke:#3fb950,color:#e6edf3
+    style AOFF   fill:#1c4532,stroke:#3fb950,color:#e6edf3
+    style AMAT   fill:#1c4532,stroke:#3fb950,color:#e6edf3
+    style OPT_START fill:#2d1d56,stroke:#bc8cff,color:#e6edf3
+    style TIEBREAK  fill:#2d1d56,stroke:#bc8cff,color:#e6edf3
+    style SHOW_OPT  fill:#2d1d56,stroke:#bc8cff,color:#e6edf3
+    style GEN_PDF   fill:#3a2100,stroke:#e3b341,color:#e6edf3
+    style DL        fill:#3a2100,stroke:#e3b341,color:#e6edf3
+    style PERSIST   fill:#2d1d56,stroke:#bc8cff,color:#e6edf3
+    style BS_AN     fill:#1c4532,stroke:#3fb950,color:#e6edf3
+</div>
+
+<script>
+  mermaid.initialize({ startOnLoad:true, theme:'dark', flowchart:{ curve:'basis', padding:20 } });
+</script>
+</body>
+</html>
